@@ -35,3 +35,19 @@ la réponse Film/ISS.
 2. Mesurer, à cadrages fixes de la scène J3, l'effet de chacun des six premiers (la sonde de cohérence appareil / sol, témoins d'abord).
 3. Un point non tranché : un commentaire de `renderer.ts` (~8897) dit le mètre d'exposition lu sur une scène où « le Ranger est composé à
    l'affichage » ; `post.wgsl` dit l'appareil dans la couleur de la scène depuis J1-5 — que l'appareil entre ou non dans le mètre est à vérifier.
+
+## Mesure : l'exposition selon le cadrage (13 novembre 2026, ~15:05 UTC)
+
+J0 (`J0_PHASES=framing`, kerr-mini, `remote-results/…-j3-framing`) : la même scène, la même lumière, vue du cockpit, de derrière (`chase`) et de
+trois quarts (`quarter`) ; chaque monture posée l'horloge tournant, puis figée et l'exposition stabilisée ; `renderer.ev(settings)`.
+
+| Profil | cockpit | chase | quarter | A/A (cockpit deux fois) |
+|---|---:|---:|---:|---:|
+| Caméra (décision 32 : la médiane mêlée) | 14,489 EV | **+0,059** | **+0,120** | 0,020 |
+| Neutre | 14,645 EV | **0,000** | **0,000** | 0,000 |
+
+Témoin positif : +1 EV injecté pour la seule `chase`, lu **+1,000**. **Lecture** : au profil neutre, **l'exposition ne dépend pas du cadrage** ;
+au profil Caméra, elle respire de 0,06 à 0,12 EV selon ce qui est dans le champ (la conception, bien sous ses ±0,5 EV). Pour le critère de
+sortie de J3, l'exposition n'est donc pas un réglage compensatoire propre au cadrage, aux deux profils, sur cette scène. **Non mesuré** :
+`shadowKeep` (il dépend de l'altitude, pas de la monture), une scène où ciel et sol se partagent autrement le champ, la nuit.
+

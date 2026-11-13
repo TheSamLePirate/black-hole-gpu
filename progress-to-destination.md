@@ -5036,3 +5036,10 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   la cadence gagnée en retirant du contenu. Recommandation révisée dans [PROBLEMES-A-REGLER](docs/PROBLEMES-A-REGLER.md) : le retirer sur la
   Terre, ou ne le réarmer qu'avec un critère d'image. Rien de changé au jeu ; la décision à Sam.
 
+## 2026-11-13T15:08Z — J3-0 : l'exposition ne dépend pas du cadrage (mesurée)
+
+- **Mesuré** (une phase `framing` ajoutée à J0, kerr-mini) : au profil neutre l'exposition est **identique** au cockpit, derrière l'appareil et de
+  trois quarts (0,000 EV) ; au profil Caméra, **+0,06 / +0,12 EV** (sa respiration voulue, décision 32). Témoins : A/A 0,02 / 0 EV, +1 EV injecté
+  lu +1,000. [Fiche](docs/progress/j3/INVENTAIRE-REGLAGES-2026-11-13.md). Pour la sortie de J3 : l'exposition n'est pas un réglage compensatoire
+  par cadrage sur cette scène. Rien de changé à l'image.
+

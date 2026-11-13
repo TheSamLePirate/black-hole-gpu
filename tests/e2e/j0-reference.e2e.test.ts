@@ -373,6 +373,53 @@ describe.skipIf(!E2E)("J0: the reference flight over Toulon-Hyères", () => {
     300_000,
   );
 
+  // (PLAN-J3 J3-0 — the exposure by framing, J0_PHASES=framing: the same scene, its light the same, seen from the cockpit, behind the craft
+  // (chase) and from its quarter; each mount set with the clock running (a mount set frozen is not applied — E2E-VOLS), ~60 frames, then
+  // frozen and the exposure settled: renderer.ev(settings). The camera profile's meter breathes ±0.5 EV by design (Sam's decision 32): the
+  // neutral profile measured too. Controls (method rule 3): the cockpit twice (the A/A), +1 EV injected for the chase alone (the positive))
+  test.skipIf(!PHASES.includes("framing"))(
+    "J3-0: the exposure by framing — cockpit, chase, quarter; camera and neutral profiles; its controls",
+    async () => {
+      await start("");
+      const at = async (mount: string, look: string, bias = 0) => {
+        await app.js(`(async () => { const f = () => new Promise((q) => requestAnimationFrame(q)); __bh.freeze(false);
+          Object.assign(__bh.settings, { shipMount: "${mount}", lookProfile: "${look}", exposure: ${bias} }); __bh.refresh();
+          for (let i = 0; i < 60; i++) await f(); __bh.freeze(true); __bh.renderer.settleExposure(); for (let i = 0; i < 30; i++) await f(); return 1; })()`);
+        const ev = await app.js<number>(`+__bh.renderer.ev(__bh.settings).toFixed(3)`);
+        await app.cdp
+          .send("Page.captureScreenshot", { format: "png" })
+          .then((x) =>
+            Bun.write(`${OUT}/framing-${mount}-${look}${bias ? "-bias" : ""}.png`, Buffer.from((x as { data: string }).data, "base64")),
+          );
+        return ev - bias;
+      };
+      const row: Record<string, number> = {};
+      for (const look of ["camera", "neutral"]) {
+        row[`cockpit_${look}`] = await at("cockpit", look);
+        row[`chase_${look}`] = await at("chase", look);
+        row[`quarter_${look}`] = await at("quarter", look);
+        row[`cockpitAgain_${look}`] = await at("cockpit", look);
+      }
+      // (the positive control: a per-framing compensation injected — +1 EV for the chase alone —, read back as the exposure in use)
+      const injected = (await at("chase", "neutral", 1)) + 1;
+      const d = (a: string, b: string) => +(row[a]! - row[b]!).toFixed(3);
+      const out2 = {
+        ev: row,
+        aa: { camera: d("cockpitAgain_camera", "cockpit_camera"), neutral: d("cockpitAgain_neutral", "cockpit_neutral") },
+        byFraming: {
+          camera: { chase: d("chase_camera", "cockpit_camera"), quarter: d("quarter_camera", "cockpit_camera") },
+          neutral: { chase: d("chase_neutral", "cockpit_neutral"), quarter: d("quarter_neutral", "cockpit_neutral") },
+        },
+        positive: +(injected - row.chase_neutral!).toFixed(3),
+      };
+      out.framing = out2;
+      console.log(`  J3-0 exposure by framing: ${JSON.stringify(out2)}`);
+      await app.js(`(() => { Object.assign(__bh.settings, { shipMount: "cockpit", exposure: 0 }); return 1; })()`);
+      expect(Math.abs(out2.positive - 1)).toBeLessThan(0.15);
+    },
+    600_000,
+  );
+
   test.skipIf(!PHASES.includes("sustained"))(
     "the same flight again, the machine as long play leaves it",
     () => measureFlight("sustained"),
