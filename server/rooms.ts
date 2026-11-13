@@ -44,6 +44,10 @@ export interface Peer {
   want: number;
   /** his craft's last sample (R7: left in the world when he goes) */
   last: Uint8Array | null;
+  /** his address (the proxy's X-Real-IP, else the socket's): the rooms he creates, his password guesses, counted by it */
+  ip?: string;
+  /** the JSON messages' bucket (RD2: a flood cut — tokens, refilled with time) */
+  bucket?: { at: number; n: number };
 }
 
 interface RoomRec {
@@ -82,7 +86,32 @@ export interface RoomsOptions {
   maxRooms?: number;
   /** the TURN relay (coturn, its REST API's shared secret): credentials of a few hours made for each page */
   turn?: { secret: string; urls: string[] } | null;
+  /** rooms one address may create in an hour (RD2; default 10) */
+  roomsPerHour?: number;
+  /** an empty room kept this long after its last use [ms] (RD2; default 30 days) */
+  keepEmptyMs?: number;
 }
+
+/** RD2 (PLAN-RESEAU-DURCISSEMENT; audit NET-02, NET-03, NET-04, NET-15): the server's own defences, their figures. */
+export const DEFENCE = {
+  /** JSON messages a connection may send: a bucket of 120, refilled 60 a second (a page sends ~20 at most) */
+  bucket: 120,
+  refill: 60,
+  /** wrong passwords from one address to one room before it waits, and the wait [ms] */
+  guesses: 5,
+  guessWindow: 10 * 60_000,
+  guessWait: 30_000,
+};
+
+/** what the others see of a member's device: a public id, the same each time (the crew console follows a pilot across
+ *  reconnections by it) — the device itself, the key to his slot and his world, never published (audit NET-04: copied
+ *  from the roster, it took his place) */
+export const publicId = (device: string) => new Bun.CryptoHasher("sha256").update(`kerr-member:${device}`).digest("hex").slice(0, 16);
+
+/** a password kept salted (argon2id); older rooms' unsalted sha256 still read, and rewritten at their next good guess */
+const hashPass = (p: string) => Bun.password.hashSync(p, { algorithm: "argon2id", memoryCost: 19_456, timeCost: 2 });
+const checkPass = (p: string, stored: string) =>
+  /^[0-9a-f]{64}$/.test(stored) ? sha256(p) === stored : Bun.password.verifySync(p, stored);
 
 const sha256 = (s: string) => new Bun.CryptoHasher("sha256").update(s).digest("hex");
 const clean = (s: unknown, n: number) =>
@@ -123,10 +152,23 @@ export function createRooms(o: RoomsOptions) {
   const live = new Map<string, Live>();
   const dirty = new Set<string>();
   let closed = false;
+  /** the rooms each address created this last hour (their times) */
+  const created = new Map<string, number[]>();
+  /** the wrong passwords per address and room: their times, and until when it waits */
+  const guesses = new Map<string, { at: number[]; until: number }>();
+  const keepEmpty = o.keepEmptyMs ?? 30 * 86_400_000;
+  const purge = () => {
+    if (closed) return;
+    db.query("DELETE FROM rooms WHERE used < ?").run(now() - keepEmpty);
+  };
 
   const load = (code: string): RoomRec | null => {
     const r = db.query("SELECT * FROM rooms WHERE code = ?").get(code) as Record<string, unknown> | null;
     if (!r) return null;
+    if (now() - (r.used as number) > keepEmpty && !live.get(code)?.peers.size) {
+      db.query("DELETE FROM rooms WHERE code = ?").run(code);
+      return null;
+    }
     return {
       code: r.code as string,
       name: r.name as string,
@@ -155,7 +197,7 @@ export function createRooms(o: RoomsOptions) {
     const here = new Set([...l.peers.values()].map((w) => w.data.device));
     const away: AwayCraft[] = Object.entries(l.rec.world)
       .filter(([d, e]) => !here.has(d) && e.craft)
-      .map(([device, e]) => ({ device, name: e.name, colour: e.colour, seen: e.seen, sample: e.craft! }));
+      .map(([device, e]) => ({ device: publicId(device), name: e.name, colour: e.colour, seen: e.seen, sample: e.craft! }));
     for (const w of l.peers.values())
       send(w, { type: "world", away, mine: w === joiner ? l.rec.world[w.data.device]?.craft : undefined });
   };
@@ -168,6 +210,7 @@ export function createRooms(o: RoomsOptions) {
     dirty.clear();
   };
   const timer = setInterval(flush, 2000);
+  const purgeTimer = setInterval(purge, 3600_000);
 
   const newCode = () => {
     for (;;) {
@@ -180,7 +223,13 @@ export function createRooms(o: RoomsOptions) {
   const send = (ws: ServerWebSocket<Peer>, m: ServerMsg) => ws.send(JSON.stringify(m));
   const fail = (ws: ServerWebSocket<Peer>, code: ErrorCode, msg: string, re?: number) => send(ws, { type: "error", re, code, msg });
   const members = (l: Live): Member[] =>
-    [...l.peers.values()].map((w) => ({ slot: w.data.slot, name: w.data.name, colour: w.data.colour, role: w.data.role, device: w.data.device }));
+    [...l.peers.values()].map((w) => ({
+      slot: w.data.slot,
+      name: w.data.name,
+      colour: w.data.colour,
+      role: w.data.role,
+      device: publicId(w.data.device),
+    }));
   const roster = (l: Live) => {
     const m: ServerMsg = { type: "roster", members: members(l) };
     for (const w of l.peers.values()) send(w, m);
@@ -267,15 +316,26 @@ export function createRooms(o: RoomsOptions) {
         return;
       }
       case "create": {
+        // (one address's rooms this last hour bounded — RD2, audit NET-02: 1 000 creations in a second closed the
+        // server to everyone)
+        const ip = P.ip ?? "";
+        const mine = (created.get(ip) ?? []).filter((t) => now() - t < 3600_000);
+        if (mine.length >= (o.roomsPerHour ?? 10)) return fail(ws, "limit", "Too many rooms made from here this hour", m.id);
         const count = (db.query("SELECT COUNT(*) AS n FROM rooms").get() as { n: number }).n;
-        if (count >= (o.maxRooms ?? 1000)) return fail(ws, "limit", "Too many rooms on this server", m.id);
+        if (count >= (o.maxRooms ?? 1000)) {
+          purge();
+          if ((db.query("SELECT COUNT(*) AS n FROM rooms").get() as { n: number }).n >= (o.maxRooms ?? 1000))
+            return fail(ws, "limit", "Too many rooms on this server", m.id);
+        }
+        mine.push(now());
+        created.set(ip, mine);
         const owner = crypto.randomUUID().replace(/-/g, "") + crypto.randomUUID().replace(/-/g, "");
         const t = Number.isFinite(m.t) ? m.t : 0;
         const rec: RoomRec = {
           code: newCode(),
           name: clean(m.name, 40) || `${P.name}'s room`,
           owner: sha256(owner),
-          pass: m.password ? sha256(String(m.password)) : null,
+          pass: m.password ? hashPass(String(m.password).slice(0, 128)) : null,
           clock: { t0: t, h0: now(), warp: 1 },
           created: now(),
           used: now(),
@@ -295,9 +355,28 @@ export function createRooms(o: RoomsOptions) {
           return fresh;
         })();
         if (!l) return fail(ws, "unknown-room", "No such room", m.id);
-        if (l.rec.pass && sha256(String(m.password ?? "")) !== l.rec.pass) {
-          if (!l.peers.size) live.delete(code);
-          return fail(ws, "password", "Wrong password", m.id);
+        if (l.rec.pass) {
+          // (guesses from one address slowed — RD2: five wrong in ten minutes, then half a minute's wait)
+          const key = `${P.ip ?? ""} ${code}`;
+          const g = guesses.get(key) ?? { at: [], until: 0 };
+          if (now() < g.until) {
+            if (!l.peers.size) live.delete(code);
+            return fail(ws, "slow", "Too many wrong passwords: wait a little", m.id);
+          }
+          const pw = String(m.password ?? "").slice(0, 128);
+          if (!checkPass(pw, l.rec.pass)) {
+            g.at = [...g.at.filter((t) => now() - t < DEFENCE.guessWindow), now()];
+            if (g.at.length >= DEFENCE.guesses) g.until = now() + DEFENCE.guessWait;
+            guesses.set(key, g);
+            if (!l.peers.size) live.delete(code);
+            return fail(ws, "password", "Wrong password", m.id);
+          }
+          guesses.delete(key);
+          // (an older room's unsalted password: salted now)
+          if (/^[0-9a-f]{64}$/.test(l.rec.pass)) {
+            l.rec.pass = hashPass(pw);
+            dirty.add(code);
+          }
         }
         if (P.room) leave(ws);
         // (the same device back — a reconnection —: its slot taken back, the stale socket dropped)
@@ -305,6 +384,12 @@ export function createRooms(o: RoomsOptions) {
         for (const [s, w] of l.peers) if (w.data.device === P.device) slot = s;
         if (slot >= 0) {
           const old = l.peers.get(slot)!;
+          // (a slot taken back keeps its role unless the room has a pilot's place for it — audit NET-04: a spectator
+          // back as a pilot made a fifth)
+          if (m.role !== "spectator" && m.role !== "instruments" && old.data.role !== "pilot") {
+            const pilots = [...l.peers.values()].filter((w) => w !== old && w.data.role === "pilot").length;
+            if (pilots >= MAX_PILOTS) return fail(ws, "pilots-full", "Four pilots already fly in this room", m.id);
+          }
           old.data.room = null;
           old.close(4000, "replaced");
         } else {
@@ -386,8 +471,9 @@ export function createRooms(o: RoomsOptions) {
         // (STUN for all; the server's TURN — coturn's "use-auth-secret" — with a username of an expiry and the
         // device, its password that username's HMAC-SHA1 under the shared secret: valid 6 hours)
         const servers: { urls: string | string[]; username?: string; credential?: string }[] = [{ urls: "stun:stun.cloudflare.com:3478" }];
-        if (o.turn?.secret && o.turn.urls.length) {
-          const username = `${Math.floor(now() / 1000) + 6 * 3600}:${P.device.slice(0, 32)}`;
+        // (the relay's credentials for a member of a room only — RD2, audit NET-15: anyone connected had them)
+        if (o.turn?.secret && o.turn.urls.length && P.room) {
+          const username = `${Math.floor(now() / 1000) + 6 * 3600}:${publicId(P.device)}`;
           const credential = new Bun.CryptoHasher("sha1", o.turn.secret).update(username).digest("base64");
           servers.push({ urls: o.turn.urls, username, credential });
         }
@@ -430,7 +516,27 @@ export function createRooms(o: RoomsOptions) {
     upgrade(req: Request, server: Server<Peer>): Response | undefined {
       const origin = req.headers.get("origin");
       if (origin && !(o.origin ?? (() => true))(origin)) return new Response("forbidden", { status: 403 });
-      const data: Peer = { kind: "rooms", hello: false, device: "", name: "", colour: "", role: "pilot", slot: -1, room: null, rate: { at: 0, n: 0 }, want: 1, last: null };
+      // (the address: the proxy's — Nginx Proxy Manager sets X-Real-IP —, else the last X-Forwarded-For hop, else the socket's)
+      const ip =
+        req.headers.get("x-real-ip") ??
+        req.headers.get("x-forwarded-for")?.split(",").pop()?.trim() ??
+        (server as { requestIP?: (r: Request) => { address: string } | null }).requestIP?.(req)?.address ??
+        "";
+      const data: Peer = {
+        kind: "rooms",
+        hello: false,
+        device: "",
+        name: "",
+        colour: "",
+        role: "pilot",
+        slot: -1,
+        room: null,
+        rate: { at: 0, n: 0 },
+        want: 1,
+        last: null,
+        ip,
+        bucket: { at: now(), n: DEFENCE.bucket },
+      };
       return server.upgrade(req, { data }) ? undefined : new Response("expected a WebSocket", { status: 426 });
     },
     websocket: {
@@ -438,6 +544,18 @@ export function createRooms(o: RoomsOptions) {
       message(ws: ServerWebSocket<Peer>, raw: string | Buffer) {
         if (typeof raw === "string") {
           if (raw.length > 65_536) return;
+          // (a flood cut — RD2, audit NET-03: every event was passed on to the room, 5 000 a second as well)
+          const B = ws.data.bucket;
+          if (B) {
+            const t = now();
+            B.n = Math.min(DEFENCE.bucket, B.n + ((t - B.at) / 1000) * DEFENCE.refill);
+            B.at = t;
+            if (B.n < 1) {
+              rejected++;
+              return;
+            }
+            B.n -= 1;
+          }
           let m: ClientMsg;
           try {
             m = JSON.parse(raw) as ClientMsg;
@@ -471,6 +589,11 @@ export function createRooms(o: RoomsOptions) {
         leave(ws);
       },
     },
+    /** a room's stored record (the tests: its password kept salted) */
+    record(code: string) {
+      flush();
+      return load(normCode(code));
+    },
     health() {
       let peers = 0;
       for (const l of live.values()) peers += l.peers.size;
@@ -479,6 +602,7 @@ export function createRooms(o: RoomsOptions) {
     },
     close() {
       clearInterval(timer);
+      clearInterval(purgeTimer);
       flush();
       for (const l of live.values()) save(l.rec);
       closed = true;

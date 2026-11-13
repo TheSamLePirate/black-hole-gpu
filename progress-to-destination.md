@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-13 08:49 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-13 08:58 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous.
@@ -50,8 +50,9 @@ indirects → J3 (lumière, cockpit).
 | Rendu (33d89754) | Retrait R1 des anciens chemins (`singleHistory`, `edgeFoot`, `seaSsrSafe`, `clearCut`, `earthRateOne`, `rasterScaleFree`) | **daté : 14 nov. 2026** ([PLAN-J2 §9 quattuordecies](docs/PLAN-J2-PAGES-RECONSTRUCTION.md)) |
 | Audit vagues 3–4 (1feb2f7f) | 3.3 Sauvegardes | **fait pour l'essentiel** : lot 1 (736b26a2, une clé par sauvegarde, rien écrasé en silence) ; lot 2 (f265f467 : « Reprendre » du vol perdu seulement, un avion a ses points ; carburant, train, volets, freins, maintiens, systèmes des vaisseaux sauvés ; l'activité en cours dite) — e2e 6/6, bun test 2 228/0. Reste : l'état d'une mission ou d'un combat (Sam), les systèmes de l'A320, IndexedDB |
 | Audit vagues 3–4 (1feb2f7f) | 3.1 réseau RD0 + RD1 | **fait** : la frontière d'entrée (`src/net/inbound.ts`) ; un événement mal formé figeait l'image (163 → 0), plus maintenant — e2e `net-inbound` 6/6, net-battle/coop/crew/board verts |
-| Audit vagues 3–4 (1feb2f7f) | 3.2 réseau RD2 | en cours : six défauts reproduits par test (quota, débit, identité publiée, 5ᵉ pilote, mot de passe, expiration) |
-| Audit vagues 3–4 (1feb2f7f) | 3.4–3.7 vol/TARS, 3.10, 4.2, 4.3, 4.8 | à faire, dans cet ordre (état relevé dans [09-priorites-todo](docs/audit-2026-11-10/09-priorites-todo.md)) |
+| Audit vagues 3–4 (1feb2f7f) | 3.2 réseau RD2 | **fait** : le serveur se défend (salles par adresse, débit, mots de passe salés et freinés, identité non publiée, rôle gardé, expiration) — six défauts vus avant, 0/6 → 6/6 |
+| Audit vagues 3–4 (1feb2f7f) | 3.4–3.5 vol (U/F7 des avions, Maj/Alt) | prochain |
+| Audit vagues 3–4 (1feb2f7f) | 3.6–3.7 TARS, 3.10, 4.2, 4.3, 4.8 | à faire, dans cet ordre (état relevé dans [09-priorites-todo](docs/audit-2026-11-10/09-priorites-todo.md)) |
 
 **Fermé récemment** : J2 (13 nov., ΔGPU nul, chemin vers §8 écrit) ; J2-C BC7 étudiée puis **rangée** (Sam : « ne pas le faire maintenant »).
 
@@ -4400,3 +4401,27 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
 - **Non fait** : RD2 (quotas, débit, jeton de reprise) ; les types non lus champ par champ gardent leurs lecteurs ; la
   version par famille d'événements (un type connu d'une autre forme est jeté : recommandation appliquée, décision 3 de
   Sam) ; le serveur de production n'a pas été redéployé par cette session (il se déploie avec `main`, DEPLOY.md).
+
+## 2026-11-13T08:58Z — Audit 3.2 : réseau RD2, le serveur se défend (NET-02, NET-03, NET-04, NET-15)
+
+- **Contribution** (stratégie §19.10, §19.12 ; [PLAN-RESEAU-DURCISSEMENT](docs/PLAN-RESEAU-DURCISSEMENT.md) RD2 ; audit ligne
+  3.2) : le serveur de salles public se défend seul — 10 salles par heure et par adresse (`X-Real-IP` posé par Nginx Proxy
+  Manager), salles vides oubliées après 30 jours, un seau de 120 messages JSON rempli de 60/s par connexion, 5 mots de passe
+  faux puis 30 s d'attente (code `slow`, FR/EN), mots de passe en argon2id (l'ancien sha256 lu puis salé), **l'identifiant
+  d'appareil n'est plus publié** (un identifiant public `publicId` dans la liste, le monde et le nom TURN : la console
+  d'équipage suit toujours un pilote à travers ses reconnexions), le rôle gardé à la reprise d'une place, TURN réservé aux
+  membres d'une salle.
+- **Reproduit avant correction** (`tests/net-server-defence.test.ts`, 0/6 sur le serveur d'avant) : 60 salles d'une adresse
+  sans refus ; 3 000 événements tous relayés ; l'identifiant publié, copié, prenait la place d'un membre ; un spectateur
+  revenu en pilote faisait un 5ᵉ pilote ; 12 mots de passe faux sans frein, stockés en sha256 nu ; aucune expiration.
+  Après : 10 salles puis `limit` (et de nouveau une heure plus tard), 116 événements sur 3 000, l'intrus a sa propre place,
+  `pilots-full`, `slow` dès le 6ᵉ essai, argon2id, la salle de 40 jours oubliée.
+- **Vérifié** : unitaires réseau, équipage, i18n 88/0 (le test TURN existant mis au nouveau contrat : l'identifiant
+  public, pas l'appareil). e2e sur ce Mac : `net-rooms` 5/0 (deux pages et le robot), `net-crew` 2/0 (la console suit un
+  pilote par l'identifiant public), `net-board` 2/0, `net-inbound` 6/0.
+- **Fichiers** : `server/rooms.ts`, `src/net/proto.ts` (`slow`), `src/ui/netpanel.ts`, `src/i18n/fr-net.ts`, tests ; NETWORK.md,
+  NETWORK.fr.md, DEPLOY.md, plan RD.
+- **Non fait** : le relais Deepgram (TA-14 : origine contrôlée, aucune limite) ; NET-05 (deux onglets du même appareil
+  s'expulsent, RD4) ; **le serveur de production se met à jour avec `main` (DEPLOY.md) : sans `X-Real-IP`, toutes les
+  pages partageraient l'adresse du proxy et ses 10 salles par heure** — l'en-tête est posé par défaut par Nginx Proxy
+  Manager, non vérifié en production par cette session.

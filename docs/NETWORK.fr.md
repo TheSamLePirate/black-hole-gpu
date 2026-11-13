@@ -371,6 +371,17 @@ carte 3D du crew, les messages vocaux enregistrés derrière le trou de ver.
   autre version du protocole est refusée aussitôt, et le dit (« rechargez-la »). Avant : un seul `match`, `tel` ou `dock`
   mal formé figeait l'image de tous les membres (une exception avant le rendu, à chaque image) et le serveur rejouait le
   match à chaque arrivant — reproduit, puis fermé, par `tests/e2e/net-inbound`.
+- **Le serveur se défend** (`server/rooms.ts`, depuis le 13 nov. 2026 — RD2) : une adresse crée au plus 10 salles par
+  heure (son adresse : le `X-Real-IP` du proxy) ; une salle vide est oubliée 30 jours après son dernier usage ; les
+  messages JSON d'une connexion passent par un seau de 120, rempli de 60 par seconde (une page en envoie ~20 par seconde ;
+  au-delà, jetés et comptés) ; cinq mots de passe faux d'une adresse pour une salle en dix minutes, puis une
+  demi-minute d'attente (« Trop de mots de passe faux ») ; mots de passe gardés salés (argon2id — l'ancien sha256 d'une
+  salle encore lu, salé à son prochain bon essai) ; l'identifiant d'appareil d'un membre — la clé de sa place et de son
+  monde — ne sort jamais : la liste et le monde montrent un identifiant public, le même à chaque reconnexion (la console
+  d'équipage suit un pilote par lui), le copier ne prend la place de personne ; une place reprise garde son rôle, sauf
+  s'il reste une place de pilote ; les identifiants du relais TURN, à un membre d'une salle seulement. Chaque défaut a
+  d'abord été vu (`tests/net-server-defence.test.ts`, avant la correction : 60 salles d'une adresse, 3 000 événements
+  relayés d'un coup, une place prise par l'identifiant publié, un cinquième pilote, ni frein ni expiration).
 - **L'horloge** (`src/net/clock.ts`) : l'échange de NTP, le décalage du huitième le plus rapide des 64
   derniers échanges ; à moins d'une milliseconde entre deux pages sur une même machine.
 - **Les autres** (`src/net/remote.ts`) : affichés un peu dans le passé — assez pour que l'échantillon
@@ -389,7 +400,8 @@ deux pages à 0,3 ms près.
 
 De bout en bout aussi : `tests/e2e/net-fleet`, `net-share`, `net-crew`, `net-board`, `net-coop`, `net-time` (les
 vaisseaux ensemble, PLAN-VAISSEAUX N1–N6), `tests/e2e/net-gargantua` (près de Gargantua, par le trou de ver), `tests/e2e/net-dock` (s'amarrer ensemble, les contacts, le monde persistant), `tests/e2e/net-space` (en orbite ensemble, le warp de la salle, les cibles), `tests/e2e/net-walk` (à pied ensemble, un passager), `tests/e2e/net-moon` (à pied sur la Lune, À côté à pied), `tests/e2e/net-formation` (deux Mac en patrouille, la dérive), `tests/e2e/net-formation-ap` (le pilote automatique de formation : rejoindre, virer, accélérer, couper, de loin), `tests/e2e/net-flight` (deux F-35 : vus à 8 km, sur le radar, le lien direct, À côté —
-la patrouille, le même écart vu des deux côtés —, la postcombustion vue). Unitaires : `tests/net-inbound.test.ts` (la frontière d'entrée : chaque type lu, les formes du jeu acceptées et les
+la patrouille, le même écart vu des deux côtés —, la postcombustion vue). Unitaires : `tests/net-server-defence.test.ts` (les défenses du serveur : salles par adresse, inondation, identité,
+rôles, mots de passe, expiration), `tests/net-inbound.test.ts` (la frontière d'entrée : chaque type lu, les formes du jeu acceptées et les
 mal formées refusées, les échantillons bornés, le slot d'un lien direct, le serveur qui jette et ne rejoue pas, un
 écouteur qui lève, la page d'un autre protocole refusée), `tests/net-core.test.ts` (les échantillons, l'horloge sous 200 ms et 5 % de pertes, Hermite au
 centimètre, le lissage, le vol du robot), `tests/net-rooms.test.ts` (un vrai serveur : salles, limites, mots

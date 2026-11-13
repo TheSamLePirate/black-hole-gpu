@@ -78,7 +78,8 @@ const ERRORS: Record<string, () => string> = {
   password: () => t("Wrong password"),
   owner: () => t("Only the room's owner can delete it"),
   update: () => t("This page is too old for the room server: reload it"),
-  limit: () => t("The server holds too many rooms"),
+  limit: () => t("Too many rooms: the server's, or those made from here this hour"),
+  slow: () => t("Too many wrong passwords: wait half a minute"),
 };
 const why = (e: unknown) => {
   const code = (e as { code?: string }).code;

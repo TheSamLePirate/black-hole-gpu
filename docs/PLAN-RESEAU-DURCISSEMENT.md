@@ -1,7 +1,8 @@
 # Plan — durcir le réseau : validation, droits, reprise, serveur
 
-**État (13 novembre 2026) : RD0 et RD1 faits** (session de l'audit hors rendu ; [NETWORK.md](NETWORK.md) « The input
-boundary », `src/net/inbound.ts`, e2e `net-inbound`) ; RD2 à suivre ; RD3 attend la décision 1 du §4. *(État d'origine,
+**État (13 novembre 2026) : RD0, RD1 et RD2 faits** (session de l'audit hors rendu ; [NETWORK.md](NETWORK.md) « The
+input boundary », « The server defends itself » ; `src/net/inbound.ts`, `server/rooms.ts`) ; RD3 attend la décision 1 du
+§4 ; RD4, RD5 à suivre. *(État d'origine,
 10 novembre : plan proposé, rien d'implémenté.)* Il vient de l'audit du 10 novembre
 ([04-reseau-equipage.md](audit-2026-11-10/04-reseau-equipage.md), constats NET-01 à NET-33). Il prolonge
 [PLAN-RESEAU.md](PLAN-RESEAU.md) (R0–R8, terminé) et ne recouvre pas
@@ -54,6 +55,17 @@ décodage des échantillons (`decodeCraft` : fini et borné), le serveur (ni rel
 `rejected`), les étapes réseau de l'image gardées (`main.ts`, AR-03 pour le réseau), et la page d'une autre version du
 protocole refusée aussitôt (avant : elle attendait sans fin). Version des événements : un type connu d'une autre forme
 est jeté (décision 3 du §4 : recommandation appliquée en attendant Sam — refuser plutôt que lire à moitié).
+
+**RD2, fait le 13 novembre 2026.** Six défauts vus d'abord par `tests/net-server-defence.test.ts` sur le serveur d'avant :
+60 salles créées d'une adresse sans refus ; 3 000 événements relayés d'un coup ; l'identifiant d'appareil d'un membre
+publié dans la liste, et le copier prenait sa place ; un spectateur revenu comme pilote faisait un cinquième pilote ;
+aucun frein aux mots de passe, gardés en sha256 non salé ; aucune salle jamais oubliée. Corrigés dans `server/rooms.ts` :
+10 salles par heure et par adresse (`X-Real-IP`), salles vides oubliées après 30 jours, un seau de 120 messages JSON
+rempli de 60/s par connexion, 5 mots de passe faux puis 30 s d'attente (code `slow`), argon2id (l'ancien sha256 lu puis
+salé), un identifiant public (`publicId`) à la place de l'identifiant d'appareil dans la liste, le monde et le nom TURN,
+le rôle gardé à la reprise d'une place, TURN réservé aux membres d'une salle. **Pas fait dans RD2** : le relais Deepgram
+(TA-14 : son contrôle d'origine existe dans `server.ts`, aucune limite de débit), deux onglets du même appareil qui
+s'expulsent (NET-05, prévu en RD4).
 
 ## 4. Décisions à prendre par Sam
 

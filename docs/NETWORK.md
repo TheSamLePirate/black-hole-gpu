@@ -347,6 +347,16 @@ messages behind the wormhole.
   page of another protocol version is refused at once and told ("reload it"). Before: one malformed `match`, `tel` or
   `dock` froze every member's image (an exception before the render, each frame) and the server replayed the match to
   each newcomer — reproduced, then closed, by `tests/e2e/net-inbound`.
+- **The server defends itself** (`server/rooms.ts`, since 13 Nov 2026 — RD2): one address creates 10 rooms an hour at
+  most (its address: the proxy's `X-Real-IP`); an empty room is let go 30 days after its last use; a connection's JSON
+  messages ride a bucket of 120 refilled 60 a second (a page sends ~20 a second; past it, dropped and counted); five
+  wrong passwords from one address to one room in ten minutes, then half a minute's wait ("Too many wrong passwords");
+  passwords kept salted (argon2id — an older room's sha256 still read, salted at its next good guess); a member's
+  device — the key to his slot and his world — is never sent out: the roster and the world show a public id, the same
+  at each reconnection (the crew console follows a pilot by it), so copying it takes nobody's place; a slot taken back
+  keeps its role unless the room has a pilot's place for it; the TURN relay's credentials only to a member of a room.
+  Each defect was seen first (`tests/net-server-defence.test.ts`, before the fix: 60 rooms from one address, 3 000
+  events passed on at once, a member's place taken by his published device, a fifth pilot, no slowdown, no expiry).
 - **The clock** (`src/net/clock.ts`): NTP's exchange, the offset of the fastest eighth of the last 64
   exchanges; within a millisecond between two pages on one machine.
 - **The others** (`src/net/remote.ts`): shown a little in the past — late enough for the next sample —, a
@@ -364,7 +374,8 @@ late (95 %: 27 ms), the others shown 60–75 ms late, the two pages' clocks with
 
 End to end too: `tests/e2e/net-fleet`, `net-share`, `net-crew`, `net-board`, `net-coop`, `net-time` (spacecraft
 together, PLAN-VAISSEAUX N1–N6), `tests/e2e/net-gargantua` (by Gargantua, through the wormhole), `tests/e2e/net-dock` (docking together, contacts, the persistent world), `tests/e2e/net-space` (in orbit together, the room's warp, targets), `tests/e2e/net-walk` (on foot together, a passenger's ride), `tests/e2e/net-moon` (on foot on the Moon, Beside on foot), `tests/e2e/net-formation` (two Macs in formation, the drift), `tests/e2e/net-formation-ap` (the formation's autopilot: rejoin, turn, speed-up, let go, from afar), `tests/e2e/net-flight` (two F-35s: seen 8 km off, on the radar, the direct link, Beside —
-formation, the same gap seen by both —, the afterburner seen). Unit: `tests/net-inbound.test.ts` (the input boundary: each kind read, the game's own shapes taken and malformed ones
+formation, the same gap seen by both —, the afterburner seen). Unit: `tests/net-server-defence.test.ts` (the server's own defences: rooms per address, a flood, identity, roles,
+passwords, expiry), `tests/net-inbound.test.ts` (the input boundary: each kind read, the game's own shapes taken and malformed ones
 refused, samples bounded, a direct link's slot, the server's drop and replay, a throwing listener, another protocol's
 page refused), `tests/net-core.test.ts` (the samples, the clock under 200 ms and 5 % lost, the Hermite within a
 centimetre, the smoothing, the bot's flight), `tests/net-rooms.test.ts` (a real server: rooms, limits,

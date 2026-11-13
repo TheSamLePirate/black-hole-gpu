@@ -86,7 +86,17 @@ export interface AwayCraft {
   sample: string;
 }
 
-export type ErrorCode = "update" | "unknown-room" | "full" | "pilots-full" | "password" | "owner" | "bad" | "not-in-room" | "limit";
+export type ErrorCode =
+  | "update"
+  | "unknown-room"
+  | "full"
+  | "pilots-full"
+  | "password"
+  | "owner"
+  | "bad"
+  | "not-in-room"
+  | "limit"
+  | "slow";
 
 /** a reliable event relayed to the room (a shot, a hit, a spawn…; R1+ fill it in) */
 export interface NetEvent {

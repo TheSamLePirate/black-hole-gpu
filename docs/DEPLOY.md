@@ -97,7 +97,10 @@ Portainer ─► recreates the `rooms` service alone (port 3001, its rooms in th
   other's image as it found it. Until the room server has an image, its block is left out.
 - **Nginx Proxy Manager**: the host `stream.samlepirate.org` → `host:3001`, *Websockets Support* on.
 - **Checked by** `https://stream.samlepirate.org/health` (`{ ok, v, build, rooms, live, peers, rejected }` — `rejected`:
-  the events and samples dropped at the input since the start, src/net/inbound.ts, RD1).
+  the events and samples dropped at the input since the start, src/net/inbound.ts, RD1; and since RD2 the JSON
+  messages past a connection's bucket). **RD2 (13 Nov 2026) counts addresses by the `X-Real-IP` header Nginx Proxy
+  Manager sets** — without it, every page would share the proxy's address and its 10 rooms an hour. Passwords are now
+  argon2id; the rooms' older sha256 ones are still read and salted at their next good guess (no migration to run).
 - **Only when the server's code changed** — `server/**`, `src/net/**`, `deploy/Dockerfile.rooms`,
   `deploy/compose.yml`, `deploy/render-compose.sh` or the workflow itself (on main or `reseau`): the players are
   not cut off by every push. Its tests (`net-core`, `net-rooms`) run first; the image holds `server/` and
