@@ -5042,4 +5042,6 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   trois quarts (0,000 EV) ; au profil Caméra, **+0,06 / +0,12 EV** (sa respiration voulue, décision 32). Témoins : A/A 0,02 / 0 EV, +1 EV injecté
   lu +1,000. [Fiche](docs/progress/j3/INVENTAIRE-REGLAGES-2026-11-13.md). Pour la sortie de J3 : l'exposition n'est pas un réglage compensatoire
   par cadrage sur cette scène. Rien de changé à l'image.
+- **Complément (~15:08 UTC)** : l'appareil n'entre pas dans le mètre d'exposition — de trois quarts, dessiné ou caché, 14,638 contre 14,639 EV
+  au profil Caméra (kerr-mini) ; la mesure par cadrage reproduite. Le point 3 de l'inventaire tranché.
 

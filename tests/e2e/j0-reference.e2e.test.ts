@@ -400,6 +400,12 @@ describe.skipIf(!E2E)("J0: the reference flight over Toulon-Hyères", () => {
         row[`quarter_${look}`] = await at("quarter", look);
         row[`cockpitAgain_${look}`] = await at("cockpit", look);
       }
+      // (does the craft enter the meter? — the inventory's open point: the quarter view, the craft much of the field, drawn and not drawn
+      // (debugSkipShip), the camera profile — the one whose meter reads the image)
+      row.quarterCraft_camera = await at("quarter", "camera");
+      await app.js(`(() => { __bh.renderer.debugSkipShip = true; return 1; })()`);
+      row.quarterNoCraft_camera = await at("quarter", "camera");
+      await app.js(`(() => { __bh.renderer.debugSkipShip = false; return 1; })()`);
       // (the positive control: a per-framing compensation injected — +1 EV for the chase alone —, read back as the exposure in use)
       const injected = (await at("chase", "neutral", 1)) + 1;
       const d = (a: string, b: string) => +(row[a]! - row[b]!).toFixed(3);
@@ -411,6 +417,7 @@ describe.skipIf(!E2E)("J0: the reference flight over Toulon-Hyères", () => {
           neutral: { chase: d("chase_neutral", "cockpit_neutral"), quarter: d("quarter_neutral", "cockpit_neutral") },
         },
         positive: +(injected - row.chase_neutral!).toFixed(3),
+        craftInMeter: d("quarterNoCraft_camera", "quarterCraft_camera"),
       };
       out.framing = out2;
       console.log(`  J3-0 exposure by framing: ${JSON.stringify(out2)}`);
