@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, describe, test } from "bun:test";
 import { App, E2E, stopServer } from "./lib/app";
 
+// (a measure — no assertion: its figures and pictures are read, not judged — audit QA-08, tests/e2e-honesty.test.ts)
 // The realtime image's quality in flight (scripts/quality.ts's way, on kerr-mini): from the cockpit, flown straight
 // for FRAMES frames done, then held (targetSpp 0, the clock stopped — the last realtime frame kept, its history
 // with it) and captured; then left to converge (targetSpp 64) and captured again — the reference. Each config
@@ -80,7 +81,7 @@ describe.skipIf(!E2E)("the realtime image's quality in flight, against the conve
           ${PLACES[pl]} __bh.settings.shipMount = "cockpit"; ${CONFIGS[cf]}
           const c = __bh.camera; if (c.jetModes.alt === null) c.jetToggle("ap"); if (c.jetModes.spd === null) c.jetToggle("athr");
           c.jetModes.alt = c.jetFigures()?.h ?? c.jetModes.alt; return 1; })()`);
-        await app.waitFor(`!!__bh.renderer.variantReady`, 180_000).catch(() => {});
+        await app.waitOptional(`!!__bh.renderer.variantReady`, 180_000);
         // (the ground's tiles in; then FRAMES frames flown)
         await app.js(`(async () => { const r = __bh.renderer, frame = () => new Promise((q) => requestAnimationFrame(q));
           const t0 = performance.now(); let calm = 0;

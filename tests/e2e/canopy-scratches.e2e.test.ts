@@ -32,7 +32,7 @@ test.skipIf(!E2E)(
       await app.waitFor(`__bh.fleet.active === "f35"`, 60_000);
       await app.js(`(() => { __bh.game.setDate("2026-07-10T10:00:00Z"); __bh.game.flyAt(36.08, -5.6, 700, 100, 200);
         __bh.settings.shipMount = "cockpit"; __bh.refresh(); __bh.camera.viewReset(); return 1; })()`);
-      await app.waitFor(`__bh.renderer.earthTiles.pending === 0`, 60_000).catch(() => {});
+      await app.waitOptional(`__bh.renderer.earthTiles.pending === 0`, 60_000);
       await Bun.sleep(800);
       await app.js(`(() => { __bh.camera.setLook(0, 38); return 1; })()`);
       await Bun.sleep(1500);

@@ -139,7 +139,7 @@ test.skipIf(!E2E)(
           if (!place) continue;
           await settle(app);
           // (the blades counted by the GPU, read back a few frames late — at the mini's 1.5 fps, seconds)
-          await app.waitFor("__bh.renderer.characterRenderer.stats().roots > 0", 30_000).catch(() => {});
+          await app.waitOptional("__bh.renderer.characterRenderer.stats().roots > 0", 30_000);
           const s = await app.js<{ reason: string; roots: number }>("__bh.renderer.characterRenderer.stats()");
           found[name] = { place, roots: s.roots, reason: s.reason };
           expect(s.reason).toBe("grass");

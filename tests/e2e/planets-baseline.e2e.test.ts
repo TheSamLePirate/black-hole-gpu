@@ -3,6 +3,7 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { App, E2E, stopServer } from "./lib/app";
 import { SPOTS as ALL, preset, SHOWCASE } from "./lib/planet-views";
 
+// (a measure — no assertion: its figures and pictures are read, not judged — audit QA-08, tests/e2e-honesty.test.ts)
 // PLAN-PLANETES-AAA P0 (docs/PLAN-PLANETES-AAA.md): every world's cost and look in the same four views — from orbit, in
 // low flight (3 km up, looking at the horizon), on foot (the walker, third person), and its showcase scene — measured
 // the same way, the Earth's figures the budget no other world may pass in the same view.

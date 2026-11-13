@@ -77,7 +77,7 @@ describe.skipIf(!E2E)("the IGN's orthophotos", () => {
       await Bun.sleep(3000);
       await tilesIn();
       // (the finest the ground under a low craft needs: z 17 at least, within a minute)
-      await app.waitFor(`__bh.renderer.earthTiles.orthoFinest >= 17`, 60_000).catch(() => {});
+      await app.waitOptional(`__bh.renderer.earthTiles.orthoFinest >= 17`, 60_000);
       const r = await app.js<{ z: number; loaded: number; credit: boolean }>(
         `({ z: __bh.renderer.earthTiles.orthoFinest, loaded: __bh.renderer.earthTiles.orthoLoaded, credit: !document.querySelector('[data-testid="ortho-credit"]').hidden })`,
       );
@@ -97,7 +97,7 @@ describe.skipIf(!E2E)("the IGN's orthophotos", () => {
         );
         await Bun.sleep(1500);
         await holdHere();
-        await app.waitFor(`__bh.renderer.earthTiles.orthoFinest >= 17`, 30_000).catch(() => {});
+        await app.waitOptional(`__bh.renderer.earthTiles.orthoFinest >= 17`, 30_000);
         await tilesIn();
         // (in the raster pipeline — the default —, the world frozen, every pixel shaded each frame at the full scale — no
         // dynamic resolution, the raster's shading not one pixel in 2 … 16 —: the cockpit's view ahead, then the ground

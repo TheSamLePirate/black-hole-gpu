@@ -61,7 +61,7 @@ test.skipIf(!E2E)(
       for (let i = 0; i < 20; i++) await f(); __bh.game.setDate("${iso}"); __bh.freeze(true);
       for (let i = 0; i < 120; i++) { __bh.touch(); await f(); } return 1; })()`);
     expect(Math.abs((await app.js<number>(`__bh.settings.fov`)) - FOV)).toBeLessThan(0.002);
-    await app.waitFor(`__bh.renderer.variantQueue.pending === 0 && __bh.renderer.compilingNow.length === 0`, 300_000).catch(() => {});
+    await app.waitOptional(`__bh.renderer.variantQueue.pending === 0 && __bh.renderer.compilingNow.length === 0`, 300_000);
     await Bun.sleep(2000);
     // (the disc: the pixels over 60 % of the brightest, their centroid; the canvas read as shown)
     // (until the disc shows: a frame read while the kernel still compiles is black)

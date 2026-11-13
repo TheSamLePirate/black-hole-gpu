@@ -378,7 +378,7 @@ test.skipIf(!E2E)(
         let seaHdg: number | null = null;
         if (r.seaAim !== undefined) {
           await app.js(`__bh.viewAt(${lat}, ${lon}, { altM: 400, heading: ${hdg.toFixed(1)}, pitch: -20 })`);
-          await app.waitFor(`__bh.renderer.earthTiles.pending === 0`, 60_000).catch(() => {});
+          await app.waitOptional(`__bh.renderer.earthTiles.pending === 0`, 60_000);
           seaHdg = await app.js<number>(`(() => { const D = Math.PI / 180, S = __bh.sys, lat = ${lat}, lon = ${lon};
             const at = (h, d) => { const la = lat + d * Math.cos(h * D) / 111320, lo = lon + d * Math.sin(h * D) / (111320 * Math.cos(lat * D));
               return S.groundAt(la, lo) - S.geoid(la, lo); };

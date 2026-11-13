@@ -202,7 +202,7 @@ describe.skipIf(!E2E)("Q6 I3: the history's ghosts behind the craft's shadow and
           __bh.freeze(true);
           return { ap: c.jetModes.alt !== null, athr: c.jetModes.spd !== null, mount: __bh.settings.shipMount }; })()`);
         if (!ap.ap || !ap.athr) console.log(`  ${pl} ${md}: the autopilot ${ap.ap} / autothrottle ${ap.athr}`);
-        await app.waitFor(`!!__bh.renderer.variantReady`, 120_000).catch(() => {});
+        await app.waitOptional(`!!__bh.renderer.variantReady`, 120_000);
         await app.settled(90_000);
         // (the world in before the flight — and again before the reference: its view the same, its tiles too)
         const world = await app.js<WorldIn>(WORLD_IN(120_000));

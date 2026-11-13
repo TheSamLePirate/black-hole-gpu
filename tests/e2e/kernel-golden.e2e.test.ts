@@ -29,10 +29,10 @@ describe.skipIf(!E2E)(`the tracer's restructured code draws the same images (${M
       const app = await App.boot({ hash: `scene=${encodeURIComponent(scene)}`, width: 640, height: 400 });
       try {
         // (every map in — the Earth's, a planet's finer one streaming in: a render before it drew a coarser world)
-        await app.waitFor("__bh.renderer.earthSettled", 180_000).catch(() => {});
-        await app.waitFor("!__bh.renderer.hdLoading", 180_000).catch(() => {});
+        await app.waitOptional("__bh.renderer.earthSettled", 180_000);
+        await app.waitOptional("!__bh.renderer.hdLoading", 180_000);
         await Bun.sleep(3000);
-        await app.waitFor("!__bh.renderer.hdLoading", 180_000).catch(() => {});
+        await app.waitOptional("!__bh.renderer.hdLoading", 180_000);
         // (the clock and the whole state — the camera, a craft settling on the ground — as recorded, kept beside the image
         // and loaded again to compare: two launches of a scene do not stand at the same place; a preset's stored time can
         // be night, a black image)
@@ -48,10 +48,10 @@ describe.skipIf(!E2E)(`the tracer's restructured code draws the same images (${M
           const s = JSON.parse(readFileSync(state, "utf8")) as { T: number; save: string };
           T = s.T;
           await app.js(`(__bh.freeze(false), __bh.game.importSave(${JSON.stringify(s.save)}, false), __bh.freeze(true), true)`);
-          await app.waitFor("__bh.renderer.earthSettled", 180_000).catch(() => {});
-          await app.waitFor("!__bh.renderer.hdLoading", 180_000).catch(() => {});
+          await app.waitOptional("__bh.renderer.earthSettled", 180_000);
+          await app.waitOptional("!__bh.renderer.hdLoading", 180_000);
           await Bun.sleep(3000);
-          await app.waitFor("!__bh.renderer.hdLoading", 180_000).catch(() => {});
+          await app.waitOptional("!__bh.renderer.hdLoading", 180_000);
         }
         await app.js(`(async () => {
           __bh.freeze(true);

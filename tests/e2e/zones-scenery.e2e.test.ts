@@ -136,7 +136,7 @@ describe.skipIf(!E2E)("an offline zone with the world scenery", () => {
     );
     await app.settled();
     await app.js(`(__bh.game.pause(true), 1)`);
-    await app.waitFor(`__bh.renderer.lastPhase !== "realtime"`, 20_000).catch(() => {});
+    await app.waitOptional(`__bh.renderer.lastPhase !== "realtime"`, 20_000);
     await Bun.sleep(6000);
     expect(await app.js<string>(`__bh.renderer.earthPipelineNow(__bh.settings)`)).toBe("raster");
     if (shots) {

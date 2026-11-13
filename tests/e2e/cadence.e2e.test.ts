@@ -32,7 +32,7 @@ describe.skipIf(!E2E)("Q6 I7: the cadence as the display presents it", () => {
     await app.js(`(() => { __bh.game.setDate("2026-07-10T10:00:00Z"); __bh.game.flyAt(36.08, -5.6, 700, 20, 200);
       __bh.settings.shipMount = "cockpit"; __bh.refresh(); __bh.camera.viewReset();
       const c = __bh.camera; if (c.jetModes.alt === null) c.jetToggle("ap"); if (c.jetModes.spd === null) c.jetToggle("athr"); return 1; })()`);
-    await app.waitFor(`__bh.renderer.earthTiles.pending === 0`, 90_000).catch(() => {});
+    await app.waitOptional(`__bh.renderer.earthTiles.pending === 0`, 90_000);
     await app.settled(60_000);
   }, 300_000);
   afterAll(async () => {

@@ -35,7 +35,7 @@ describe.skipIf(!E2E)("the F-35 pilot's body", () => {
     await app.js(`(() => { __bh.camera.pilot.throttle = 1; __bh.camera.jetToggle("ab"); return 1; })()`);
     await stick({ pitch: 1 });
     // (the sim's own time: a slow page takes longer — waited for, not timed)
-    await app.waitFor(`__bh.camera.gStrain.grey > 0.3`, 45_000).catch(() => {});
+    await app.waitOptional(`__bh.camera.gStrain.grey > 0.3`, 45_000);
     const grey = await app.js<number>(`__bh.camera.gStrain.grey`);
     console.log(`  grey ${grey.toFixed(2)}, felt ${(await app.js<number>(`__bh.camera.gStrain.felt`)).toFixed(1)} g`);
     await shot("body-grey");

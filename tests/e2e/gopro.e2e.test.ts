@@ -42,7 +42,7 @@ test.skipIf(!E2E)(
       await app.waitFor(`__bh.fleet.active === "f35"`, 60_000);
       await app.js(`(() => { __bh.game.setDate("2026-07-10T10:00:00Z"); __bh.game.flyAt(36.08, -5.6, 700, 20, 200);
         __bh.settings.shipMount = "quarter"; __bh.refresh(); return 1; })()`);
-      await app.waitFor(`__bh.renderer.earthTiles.pending === 0`, 90_000).catch(() => {});
+      await app.waitOptional(`__bh.renderer.earthTiles.pending === 0`, 90_000);
       await app.js(`(() => { __bh.freeze(true); document.body.classList.add("hide-ui"); return 1; })()`);
       await app.settled(60_000);
       const rows: Record<string, unknown> = {};

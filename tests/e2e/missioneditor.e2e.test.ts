@@ -130,7 +130,7 @@ describe.skipIf(!E2E)("making missions", () => {
       if (await app.js<boolean>(`document.querySelector("[data-testid=tars-panel]").hidden`)) await app.press("F6", "F6");
       await app.type("Crée-moi une mission : escorter l'A320 AFR123 jusqu'à Nice.");
       await app.press("Enter");
-      await app.waitFor(`__bh.tars.agent.busy`, 5_000).catch(() => {});
+      await app.waitOptional(`__bh.tars.agent.busy`, 5_000);
       await app.waitFor(`!__bh.tars.agent.busy`, 240_000);
       const r = await app.js<{ said: string; actions: string[] }>(
         `({ said: __bh.tars.agent.lastText ?? "", actions: __bh.tars.agent.last.map((a) => (a.ok ? "✓ " : "✗ ") + a.tool) })`,

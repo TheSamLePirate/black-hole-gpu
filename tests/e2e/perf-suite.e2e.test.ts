@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, describe, test } from "bun:test";
 import { App, E2E, stopServer } from "./lib/app";
 
+// (a measure — no assertion: its figures and pictures are read, not judged — audit QA-08, tests/e2e-honesty.test.ts)
 // The render's costs on held scenes (scripts/trace-ab.ts's way, in one build, on kerr-mini): each scene set, its
 // clock held, the view marked changed every frame (__bh.touch: the realtime pass, the same rays each frame); every
 // frame profiled (prof.every = 1) — the trace pass, the probes, the far field's LUT, the reconstruction (resolve,

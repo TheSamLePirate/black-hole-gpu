@@ -101,7 +101,7 @@ describe.skipIf(!E2E)("a room's F-35s: the wingman by the wheel, the free fight"
     console.log(`  Ben on Ana's wing: place #${pos}, ${(await b.js<number>(`__bh.camera.form.last.dist`)).toFixed(1)} m off it`);
     expect(pos).toBe(2);
     // (held a while — both pages' tracers compiled for the place first: two pages on one GPU stall while one compiles)
-    for (const p of [a, b]) await p.waitFor(`__bh.renderer.tracerSettled`, 120_000).catch(() => {});
+    for (const p of [a, b]) await p.waitOptional(`__bh.renderer.tracerSettled`, 120_000);
     let worst = 0;
     const trace: string[] = [];
     for (let i = 0; i < 20; i++) {
@@ -158,7 +158,7 @@ describe.skipIf(!E2E)("a room's F-35s: the wingman by the wheel, the free fight"
     while ((await a.js<string>(`__bh.camera.combat.weapon`)) !== "aim120") await a.press("Equal", "=");
     for (let k = 0; k < 3; k++) {
       await a.press("Enter");
-      await a.waitFor(`__bh.camera.combat.world.ownMissiles().length > 0`, 5000).catch(() => {});
+      await a.waitOptional(`__bh.camera.combat.world.ownMissiles().length > 0`, 5000);
       if (k === 0) {
         await Bun.sleep(1500);
         await shot(a, "fight-fox3");

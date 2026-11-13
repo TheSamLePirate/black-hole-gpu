@@ -2,6 +2,7 @@ import { afterAll, test } from "bun:test";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { App, E2E, stopServer } from "./lib/app";
 
+// (a measure — no assertion: its figures and pictures are read, not judged — audit QA-08, tests/e2e-honesty.test.ts)
 // What a ray of the sky's discs costs (TERRE-UNREAL U8 → U9): the total eclipse of 12 August 2026 over Burgos, the F-35 at
 // 1 800 m on its autopilot, the stabilised telescope on the Sun at 1.6° — the Moon and the Sun's 4-radii rectangle over the
 // whole field, a 4 × 4 block's pixel a frame —; the GPU's time a frame (the median of 30 completions), then the same with a

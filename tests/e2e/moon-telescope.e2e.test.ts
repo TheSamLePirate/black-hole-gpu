@@ -2,6 +2,7 @@ import { afterAll, test } from "bun:test";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { App, E2E, stopServer } from "./lib/app";
 
+// (a measure — no assertion: its figures and pictures are read, not judged — audit QA-08, tests/e2e-honesty.test.ts)
 // The raster's Moon (TERRE-UNREAL U8: the sky's discs at one ray a pixel — trace.wgsl main's layers z ≥ 1 —, four a pixel
 // for a small one): a full Moon over the Beauce at night, the F-35 level at 1 000 m on its autopilot, the cockpit view.
 // 1. The view locked on it (C), the 60° lens: 12 frames in a row of the disc, 1:1, side by side — its limb steady, no

@@ -24,7 +24,7 @@ describe.skipIf(!E2E)("the A320's ground services and pushback", () => {
       return true;
     })()`);
     await app.waitFor("!!__bh.camera.a320Sys", 60_000);
-    await app.waitFor(`!document.body.innerText.includes("Compiling the ray tracer")`, 240_000).catch(() => {});
+    await app.waitOptional(`!document.body.innerText.includes("Compiling the ray tracer")`, 240_000);
     await Bun.sleep(3000);
   }, 400_000);
   afterAll(() => {

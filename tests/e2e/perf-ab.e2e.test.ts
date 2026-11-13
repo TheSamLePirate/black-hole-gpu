@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, describe, test } from "bun:test";
 import { App, E2E, stopServer } from "./lib/app";
 
+// (a measure — no assertion: its figures and pictures are read, not judged — audit QA-08, tests/e2e-honesty.test.ts)
 // The realtime render's costs, one thing at a time, by alternation (Apple's render passes' timestamps overlap: the
 // whole frame's interval tells — snapped to the display's refresh, 20 ms on kerr-mini's 50 Hz —, and the trace
 // pass's own, a compute pass): a steady low flight over the hills north of Tarifa from the cockpit — the real traffic in the
@@ -78,7 +79,7 @@ describe.skipIf(!E2E)("the realtime render's costs, one thing at a time", () => 
     await app.js(`(() => { __bh.game.setDate("2026-07-10T11:00:00Z"); Object.assign(__bh.settings, { weather: "fair", wind: 1, earthClouds: 0 });
       __bh.game.flyAt(45.85, 6.75, 2500, 110, 200); __bh.settings.shipMount = "cockpit"; return 1; })()`);
     await Bun.sleep(1500);
-    await app.waitFor(`!!__bh.renderer.variants.get(__bh.renderer.featureKey)?.rt`, 180_000).catch(() => {});
+    await app.waitOptional(`!!__bh.renderer.variants.get(__bh.renderer.featureKey)?.rt`, 180_000);
     await Bun.sleep(2500);
   }, 240_000);
 
@@ -95,7 +96,7 @@ describe.skipIf(!E2E)("the realtime render's costs, one thing at a time", () => 
       const only = process.env.ONLY?.split(",").map(Number);
       for (const P of only ? set.filter((_, i) => only.includes(i)) : set) {
         await place();
-        await app.waitFor(`!!__bh.renderer.variants.get(__bh.renderer.featureKey)?.rt`, 180_000).catch(() => {});
+        await app.waitOptional(`!!__bh.renderer.variants.get(__bh.renderer.featureKey)?.rt`, 180_000);
         await Bun.sleep(3000);
         const med: Record<"a" | "b", number[]> = { a: [], b: [] };
         const trace: Record<"a" | "b", number[]> = { a: [], b: [] };
@@ -104,7 +105,7 @@ describe.skipIf(!E2E)("the realtime render's costs, one thing at a time", () => 
           const side = k % 2 ? "b" : "a";
           await app.js(`(() => { ${side === "a" ? P.a : P.b}; return 1; })()`);
           await Bun.sleep(1200);
-          await app.waitFor(`!!__bh.renderer.variants.get(__bh.renderer.featureKey)?.rt`, 60_000).catch(() => {});
+          await app.waitOptional(`!!__bh.renderer.variants.get(__bh.renderer.featureKey)?.rt`, 60_000);
           // (each frame done: the interval since the last; each frame profiled: the trace pass's own time)
           const v = await app.js<{
             iv: number[];

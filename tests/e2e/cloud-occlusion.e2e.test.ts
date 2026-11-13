@@ -45,7 +45,7 @@ describe.skipIf(!E2E)("the clouds before the Sun, the Moon and the craft; their 
     await app.js(`(() => { __bh.freeze(false); __bh.settings.animate = true; ${setup}
       const c = __bh.camera; if (c.jetModes.alt === null) c.jetToggle("ap"); if (c.jetModes.spd === null) c.jetToggle("athr");
       c.jetModes.alt = c.jetFigures()?.h ?? c.jetModes.alt; return 1; })()`);
-    await app.waitFor(`!!__bh.renderer.variantReady`, 300_000).catch(() => {});
+    await app.waitOptional(`!!__bh.renderer.variantReady`, 300_000);
     await app.js(`(async () => { const r = __bh.renderer, frame = () => new Promise((q) => requestAnimationFrame(q));
       const t0 = performance.now(); let calm = 0;
       while (performance.now() - t0 < 60000) { const ok = r.earthTiles.pending === 0; calm = ok ? calm || performance.now() : 0;

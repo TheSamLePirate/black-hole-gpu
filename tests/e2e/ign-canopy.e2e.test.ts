@@ -138,7 +138,7 @@ describe.skipIf(!E2E)("the IGN's canopy", () => {
     await shot("on");
     // (the photo alone under the same view: the trees' places against it — the scene taken away)
     await app.js(`(() => { window.__scn = __bh.settings.earthScenery; __bh.settings.earthScenery = "off"; return 1; })()`);
-    await app.waitFor(`__bh.renderer.earthScenery.stats().trees === 0`, 30_000).catch(() => {});
+    await app.waitOptional(`__bh.renderer.earthScenery.stats().trees === 0`, 30_000);
     await shot("ortho");
     await app.js(`(() => { __bh.settings.earthScenery = window.__scn; return 1; })()`);
     // (without: the land cover's — the scene asked again)

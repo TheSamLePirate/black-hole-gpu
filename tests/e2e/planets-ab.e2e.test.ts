@@ -3,6 +3,7 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { App, E2E, stopServer } from "./lib/app";
 import { SPOTS } from "./lib/planet-views";
 
+// (a measure — no assertion: its figures and pictures are read, not judged — audit QA-08, tests/e2e-honesty.test.ts)
 // Two builds A/B on the planets' views (PLAN-PLANETES-AAA, tests/e2e/lib/planet-views.ts), in one Chrome: rounds A B B A
 // (AB_ROUNDS pairs), each side's page loaded and every view measured on it — the GPU's own time a frame at a fixed quality
 // (the tracer's blocks 4 × 4, the raster's one pixel in 2 × 2; the game's governors trade sharpness for time), the profiler

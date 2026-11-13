@@ -41,7 +41,7 @@ test.skipIf(!E2E)(
         for (const v of VIEWS.filter((x) => !process.env.NV_ONLY || x.name === process.env.NV_ONLY)) {
           const place = `__bh.game.flyAt(${v.at.join(", ")}); __bh.settings.shipMount = "cockpit"; __bh.refresh(); __bh.camera.viewReset();`;
           await app.js(`(() => { __bh.game.setDate(${JSON.stringify(n.date)}); ${place} __bh.freeze(true); return 1; })()`);
-          await app.waitFor(`__bh.renderer.earthTiles.pending <= 4`, 30_000).catch(() => {});
+          await app.waitOptional(`__bh.renderer.earthTiles.pending <= 4`, 30_000);
           if (v.at[2]! < 1000) step(`${n.name} ${v.name}: scenery ${JSON.stringify(await sceneryReady(app, 60_000))}`);
           await app.js(`(() => { ${place} return 1; })()`);
           await app.settled(30_000);

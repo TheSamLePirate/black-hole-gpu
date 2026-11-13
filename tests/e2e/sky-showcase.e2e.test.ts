@@ -42,7 +42,7 @@ describe.skipIf(!E2E)("a sunset's crepuscular rays, a shower's rainbow", () => {
       const c = __bh.camera; if (c.jetModes.alt === null) c.jetToggle("ap"); if (c.jetModes.spd === null) c.jetToggle("athr");
       const frame = () => new Promise((q) => requestAnimationFrame(q)); for (let i = 0; i < 10; i++) await frame();
       __bh.freeze(true); __bh.camera.setLook(${look.yaw}, ${look.pitch}); return 1; })()`);
-    await app.waitFor(`!!__bh.renderer.variantReady`, 300_000).catch(() => {});
+    await app.waitOptional(`!!__bh.renderer.variantReady`, 300_000);
     await app.js(`(async () => { const r = __bh.renderer, frame = () => new Promise((q) => requestAnimationFrame(q));
       const t0 = performance.now(); let calm = 0;
       while (performance.now() - t0 < 90000) { const ok = r.earthTiles.pending === 0 && r.compilingNow.length === 0;

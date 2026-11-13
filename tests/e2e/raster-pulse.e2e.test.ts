@@ -2,6 +2,7 @@ import { afterAll, test } from "bun:test";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { App, E2E, stopServer } from "./lib/app";
 
+// (a measure — no assertion: its figures and pictures are read, not judged — audit QA-08, tests/e2e-honesty.test.ts)
 // The raster image's sharpness over time in low flight over Paris — does it pulse (a blur every second or so as the tiles
 // land and the terrain cache bakes its levels again)? The F-35 at 300 m over the city, 120 m/s (level, the nose on the horizon), gear down (the autopilot holds
 // the height, the autothrottle the speed), the cockpit view, the game's own settings (quality "game") but every pixel shaded at the native scale (the raster's
@@ -75,8 +76,7 @@ test.skipIf(!E2E)(
         await Bun.sleep(1000);
         // (placed, held while the city's tiles come in, placed again over the ground they give)
         await app.js(`(() => { ${place} __bh.freeze(true); return 1; })()`);
-        const ground = (cond: string) =>
-          app.waitFor(`(() => { const t = __bh.renderer.earthTiles; return ${cond}; })()`, 120_000).catch(() => {});
+        const ground = (cond: string) => app.waitOptional(`(() => { const t = __bh.renderer.earthTiles; return ${cond}; })()`, 120_000);
         await ground("t.finest >= 14 && t.pending === 0");
         await app.js(`(() => { ${place} return 1; })()`);
         await ground("t.pending === 0");

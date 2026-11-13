@@ -62,7 +62,7 @@ describe.skipIf(!E2E)("the missiles' cues", () => {
     let fired = "";
     for (let k = 0; k < 3; k++) {
       fired = (await a.js<string>(`__bh.camera.combatTrigger("fire") ?? "Fired"`)) ?? "";
-      await a.waitFor(`__bh.camera.combat.world.ownMissiles().length > 0`, 3000).catch(() => {});
+      await a.waitOptional(`__bh.camera.combat.world.ownMissiles().length > 0`, 3000);
       if (await a.js<boolean>(`__bh.camera.combat.world.ownMissiles().length > 0`)) break;
       await Bun.sleep(1500);
     }

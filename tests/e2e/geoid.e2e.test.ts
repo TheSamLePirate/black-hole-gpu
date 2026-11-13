@@ -96,7 +96,7 @@ describe.skipIf(!E2E)("the geoid", () => {
     // (the tiles of each place in: flown over it a moment, the relief settled)
     const at = async (lat: number, lon: number) => {
       await app.js(`(() => { __bh.game.flyAt(${lat}, ${lon}, 800, 90, 120); return 1; })()`);
-      await app.waitFor(`__bh.renderer.earthTiles.pending === 0`, 60_000).catch(() => {});
+      await app.waitOptional(`__bh.renderer.earthTiles.pending === 0`, 60_000);
       await Bun.sleep(1500);
       return app.js<{ g: number; n: number }>(`({ g: __bh.sys.groundAt(${lat}, ${lon}), n: __bh.sys.geoid(${lat}, ${lon}) })`);
     };

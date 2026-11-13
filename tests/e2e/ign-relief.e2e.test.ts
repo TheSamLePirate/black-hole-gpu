@@ -67,7 +67,7 @@ describe.skipIf(!E2E)("the IGN's relief", () => {
       await Bun.sleep(1500);
       await app.js(`(__bh.freeze(true), 1)`);
       await loaded(what);
-      await app.waitFor(`__bh.renderer.earthTiles.finest >= ${what === "with the survey" ? 16 : 14}`, 60_000).catch(() => {});
+      await app.waitOptional(`__bh.renderer.earthTiles.finest >= ${what === "with the survey" ? 16 : 14}`, 60_000);
     };
     // (the held view, every pixel shaded at the full scale — the raster armed again: a small GPU's governor may have given it up)
     const shot = async (name: string) => {

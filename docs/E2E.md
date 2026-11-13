@@ -216,6 +216,7 @@ so order matters within a file. Keep a file under ~2 min. Split a longer one.
 | `app.load(hash)` | navigates again (a fresh page, same Chrome) and waits as boot does; `app.lastLoadMs` |
 | `app.js<T>(expr)` | evaluates `expr` in the page (wrapped in an async function: `await` works, Promises are awaited), returns its JSON value; a page exception rejects with its message |
 | `app.waitFor(expr, ms = 10000)` | polls `expr` every 100 ms until truthy (returns it) or throws with the last value / error |
+| `app.waitOptional(expr, ms = 10000)` | the same, for a wait that may not be met (a picture taken all the same): at its end it **says** what was not met and the last value, and returns null — never `waitFor(…).catch(() => {})`, which let a missing condition go by unseen (audit QA-08; `tests/e2e-honesty.test.ts` refuses it) |
 | `app.press(code, key?, {shift})` | a key down + up by physical code (`KeyW`, `Digit1`, `Space`, `F2`, `Escape`, `Tab`, `Enter`, `Backspace`, `ArrowUp`, `Slash`, …) |
 | `app.hold(code, ms, during?)` | a key held `ms`, `during()` run while down (push-to-talk) |
 | `app.type(text)` | text into the focused field (input-method style: no flight keys fire) |
@@ -327,7 +328,9 @@ returns; the Monitor says so (*page held*).
    those; IGN, OSM and the other sources still load), so a **judged flight** stands on the same ground every day. A
    test whose picture must show the real ground asks `tiles: true` (Sam: images loaded for any visual test — about 235
    files do) and waits for the data (`app.dataSettled()`); the ground then changes under an autopilot while it loads.
-6. **Assert `app.cdp.errors`** at least once per file.
+6. **Assert `app.cdp.errors`** at least once per file. A file without any `expect(` — a measure, a probe — says so in its
+   header (« no assertion »); `tests/e2e-honesty.test.ts` (a unit test, in `bun test`) refuses one that does not, and a
+   swallowed wait (audit QA-08, 13 Nov 2026).
 7. **Clean up**: `app.close()` and `stopServer()` in `afterAll`, so the lock and the port are freed even
    when a test fails.
 8. **Write artifacts under `remote-results/`** (git-ignored, brought back from the mini).

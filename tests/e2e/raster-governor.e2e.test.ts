@@ -86,7 +86,7 @@ test.skipIf(!E2E)(
       await app.js(`(() => { __bh.settings.animate = false; return 1; })()`);
       // (the tracer compiled, the tiles in, the raster's shading kernels compiled)
       await until("__bh.renderer.tracerSettled", 300_000, "the tracer compiled");
-      await app.waitFor("__bh.renderer.earthTiles.pending === 0", 90_000).catch(() => {});
+      await app.waitOptional("__bh.renderer.earthTiles.pending === 0", 90_000);
       await until(
         `(() => { const r = __bh.renderer, v = r.variants.get(r.featureKey); return !!(v && v.shade && v.shadeMark); })()`,
         300_000,
@@ -141,7 +141,7 @@ test.skipIf(!E2E)(
       // carried to each point the day side's darkest alike)
       await app.js(`(() => { __bh.preset("Earth: the Moon's shadow from orbit, 12 Aug 2026"); __bh.resize(); return 1; })()`);
       await until("__bh.renderer.tracerSettled", 300_000, "the orbit's tracer compiled");
-      await app.waitFor("__bh.renderer.earthSettled", 120_000).catch(() => {});
+      await app.waitOptional("__bh.renderer.earthSettled", 120_000);
       const shadow: Record<string, { min: number; mean: number }> = {};
       for (const on of [true, false]) {
         await app.js(`(() => { __bh.renderer.skyAmbientOn = ${on}; __bh.renderer.invalidate(); __bh.touch(); return 1; })()`);

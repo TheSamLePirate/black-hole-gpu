@@ -87,7 +87,7 @@ test.skipIf(!E2E || process.env.RASTER_BENCH !== "1")(
         c.jetModes.alt = c.jetFigures()?.h ?? c.jetModes.alt; __bh.freeze(true); return 1; })()`);
       // (the flight held while the kernels compile and the tiles come — minutes on an M1: flown meanwhile, the autopilot let
       // the jet down onto the ground, its gear broken, the view a crash's)
-      await app.waitFor(`!!__bh.renderer.variantReady`, 300_000).catch(() => {});
+      await app.waitOptional(`!!__bh.renderer.variantReady`, 300_000);
       await app.js(`(async () => { const r = __bh.renderer, frame = () => new Promise((q) => requestAnimationFrame(q));
         const t0 = performance.now(); let calm = 0;
         while (performance.now() - t0 < 120000) { const ok = r.earthTiles.pending === 0; calm = ok ? calm || performance.now() : 0;

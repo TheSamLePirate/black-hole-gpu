@@ -37,7 +37,7 @@ describe.skipIf(!E2E)("the A320 at the gate", () => {
     const note = await app.js<string>(`__bh.game.atStand("LFPG", "C07")`);
     console.log(`  ${note}`);
     await app.waitFor("!!__bh.camera.a320Sys", 60_000);
-    await app.waitFor(`!document.body.innerText.includes("Compiling the ray tracer")`, 240_000).catch(() => {});
+    await app.waitOptional(`!document.body.innerText.includes("Compiling the ray tracer")`, 240_000);
     const r = await app.js<{ via: string[]; len: number; rwy: string | null; park: boolean; d: number; dh: number }>(`(() => {
       const c = __bh.camera, T = c.a320Taxi, s = T.stand, g = c.geoNow();
       const D = Math.PI / 180;

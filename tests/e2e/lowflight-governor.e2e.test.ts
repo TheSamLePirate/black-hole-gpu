@@ -139,8 +139,7 @@ test.skipIf(!E2E)(
         await app.js(`(() => { __bh.game.setDate("2026-07-10T10:30:00Z"); return 1; })()`);
         await Bun.sleep(1000);
         await app.js(`(() => { ${place} __bh.freeze(true); return 1; })()`);
-        const ground = (cond: string) =>
-          app.waitFor(`(() => { const t = __bh.renderer.earthTiles; return ${cond}; })()`, 120_000).catch(() => {});
+        const ground = (cond: string) => app.waitOptional(`(() => { const t = __bh.renderer.earthTiles; return ${cond}; })()`, 120_000);
         await ground("t.finest >= 14 && t.pending === 0");
         await app.js(`(() => { ${place} return 1; })()`);
         await ground("t.orthoFinest >= 17 && t.orthoPending === 0 && t.pending === 0");

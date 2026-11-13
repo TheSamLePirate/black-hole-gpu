@@ -83,7 +83,7 @@ describe.skipIf(!E2E)("the flight school's demonstrations, each whole, watched f
     await app.js(
       `(() => { const c = __bh.camera, f = c.jetFigures(); Object.assign(c.jetModes, { alt: Math.round(__bh.camera.geoNow().alt), hdg: f.hdg, spd: 150 }); return 1; })()`,
     );
-    await app.waitFor(`__bh.renderer.tracerSettled`, 120_000).catch(() => {});
+    await app.waitOptional(`__bh.renderer.tracerSettled`, 120_000);
     await shot("00-alps");
   }, 300_000);
   afterAll(async () => {
@@ -160,7 +160,7 @@ describe.skipIf(!E2E)("the flight school's demonstrations, each whole, watched f
           else if (wall() > E.max) why = `still flying after ${E.max} s at step ${s.st.step}/${s.st.steps} « ${s.st.name} »`;
           else if (!s.st.id && s.st.last) {
             // (its end: then the craft let settle a little — a landing's roll-out to its stop)
-            if (id === "landing" || id === "circuit" || id === "ils") await app.waitFor(`!__bh.camera.ilsRun`, 60_000).catch(() => {});
+            if (id === "landing" || id === "circuit" || id === "ils") await app.waitOptional(`!__bh.camera.ilsRun`, 60_000);
             break;
           }
           if (why) break;

@@ -88,7 +88,7 @@ lecteurs de `shadeLite` et `trace.wgsl` jusqu'à J0, sauf correctif. La ligne 0.
 | 3.7 | TARS : outils du pilote automatique des avions et de l'A320, par les mêmes actions que la console d'équipage | TA-03, TA-10 | M | **fait (13 nov.)**, reproduit avant par test : outil `jet_autopilot` (les actions de la console, `controller/jet-ap-acts.ts`), volets au levier (l'A320 en CONF 1) ; et l'AP de l'A320 dans `apSet` (il basculait à chaque demande) réparé ; e2e `tars-aircraft-tools`. Reste : MCDU/FMGC complet par TARS |
 | 3.8 | Compilation de Jupiter : anticiper dès que la destination est choisie, puis réduire le noyau | GP-20 | M | session du rendu |
 | 3.9 | Garde « fini et borné » dans `resolve`, sonde des pixels non finis (image noire de Jupiter sud) | GP-10 | S | session du rendu |
-| 3.10 | Les e2e qui ne vérifient rien : membres inexistants, fichiers sans `expect`, `waitFor` avalés | QA-08 | M | partiel (13 nov.) : membres inexistants corrigés (`3ae30d6b`) ; restent 19 fichiers sans `expect(`, 94 `waitFor…catch(() => {})` vides dans 71 fichiers (+ ≈ 64 sur plusieurs lignes) |
+| 3.10 | Les e2e qui ne vérifient rien : membres inexistants, fichiers sans `expect`, `waitFor` avalés | QA-08 | M | **fait (13 nov.)** : membres inexistants (`3ae30d6b`) ; attentes avalées converties en `app.waitOptional` (93 dans 70 fichiers ; 1 reste chez la session du rendu), 14 mesures sans `expect(` déclarées « no assertion » ; garde `tests/e2e-honesty.test.ts` (échoue sur l'arbre d'avant). Reste : ~23 `.catch(() => {})` hors attentes |
 
 ### Vague 4 — les fondations de la destination
 

@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { App, E2E, stopServer } from "./lib/app";
 import { J0_FIXED, J0_SCENE } from "./lib/j0-scene";
 
+// (a measure — no assertion: its figures and pictures are read, not judged — audit QA-08, tests/e2e-honesty.test.ts)
 // What a cold launch of each reference scene compiles, and how long until it is drawn (docs/PLAN-LEAN-TRACER-KERNELS.md,
 // P0): a fresh Chrome per case — its own profile, so the browser's shader cache is empty (the system's Metal cache is not:
 // macOS keeps it across profiles, a "cold" start here is warmer than a Windows player's first — unless KC_COLD=1, which

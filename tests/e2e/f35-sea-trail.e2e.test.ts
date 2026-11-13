@@ -33,7 +33,7 @@ test.skipIf(!E2E)(
       await app.js(
         `(async () => { for (let i = 0; i < 10; i++) await new Promise((q) => requestAnimationFrame(q)); __bh.settings.animate = false; return 1; })()`,
       );
-      await app.waitFor(`!!__bh.renderer.variantReady`, 300_000).catch(() => {});
+      await app.waitOptional(`!!__bh.renderer.variantReady`, 300_000);
       await app.js(`(async () => { const r = __bh.renderer, t0 = performance.now(); let calm = 0;
         while (performance.now() - t0 < 120000) { const ok = r.earthTiles.pending === 0; calm = ok ? calm || performance.now() : 0;
           if (calm && performance.now() - calm > 3000) break; await new Promise((q) => requestAnimationFrame(q)); } return 1; })()`);
@@ -52,7 +52,7 @@ test.skipIf(!E2E)(
       expect(wake[0]!.len).toBeGreaterThan(-1.05);
       const frames = (n: number) =>
         app.js(`(async () => { for (let i = 0; i < ${n}; i++) await new Promise((q) => requestAnimationFrame(q)); return 1; })()`);
-      await app.waitFor(`__bh.renderer.terrainRasterStats.primary`, 300_000).catch(() => {});
+      await app.waitOptional(`__bh.renderer.terrainRasterStats.primary`, 300_000);
       await app.js(`(() => { __bh.renderer.tune = {}; return 1; })()`);
       await frames(5);
       await app.waitFor(`(() => { const r = __bh.renderer, v = r.variants.get(r.featureKey); return !!(v && v.shade); })()`, 300_000);

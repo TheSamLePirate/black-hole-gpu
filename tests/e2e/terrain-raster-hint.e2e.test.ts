@@ -77,7 +77,7 @@ test.skipIf(!E2E)(
           for (const mode of ["off", "on"]) {
             await app.js(`(() => { __bh.settings.earthTerrainRasterUse=${mode === "on"}; __bh.touch(); return true; })()`);
             await app.waitFor("__bh.renderer.variantReady", 300_000);
-            if (PLACE.tiles) await app.waitFor("__bh.renderer.earthTiles.pending === 0", 120_000).catch(() => {});
+            if (PLACE.tiles) await app.waitOptional("__bh.renderer.earthTiles.pending === 0", 120_000);
             if (mode === "on")
               await app.waitFor(
                 `__bh.renderer.terrainRasterStats.reason === "pilot" && __bh.renderer.terrainRasterStats.encodedFrames > 5`,

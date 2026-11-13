@@ -19,7 +19,7 @@ describe.skipIf(!E2E)("the views of exception", () => {
     console.log(`  ${await app.js<string>(`__bh.flight.views.fly(${JSON.stringify(id)})`)}`);
     await app.waitFor(`__bh.camera.mission?.run.spec.id === ${JSON.stringify(id)}`, 30_000);
     await Bun.sleep(1500);
-    await app.waitFor(`!!__bh.renderer.variants.get(__bh.renderer.featureKey)?.rt`, 180_000).catch(() => {});
+    await app.waitOptional(`!!__bh.renderer.variants.get(__bh.renderer.featureKey)?.rt`, 180_000);
     await Bun.sleep(settle);
   };
   beforeAll(async () => {

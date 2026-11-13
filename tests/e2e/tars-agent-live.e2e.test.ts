@@ -19,7 +19,7 @@ describe.skipIf(!LIVE)("TARS the agent, live", () => {
     if (await app.js<boolean>(`document.querySelector("[data-testid=tars-panel]").hidden`)) await app.press("F6", "F6");
     await app.type(q);
     await app.press("Enter");
-    await app.waitFor(`__bh.tars.agent.busy`, 5_000).catch(() => {});
+    await app.waitOptional(`__bh.tars.agent.busy`, 5_000);
     await app.waitFor(`!__bh.tars.agent.busy`, 240_000);
     await Bun.sleep(300);
     const r = await app.js<{ said: string; actions: string[]; spent: number }>(`({

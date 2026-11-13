@@ -57,7 +57,7 @@ describe.skipIf(!E2E)("the intro", () => {
     await at(5900);
     await shot("E1-3-logo");
     // (the Worker drew the background; the orb follows the boot — the graphics held: still before the image)
-    await app.waitFor(`!!document.querySelector("#loading").dataset.bg`, 10_000).catch(() => {});
+    await app.waitOptional(`!!document.querySelector("#loading").dataset.bg`, 10_000);
     await at(7600);
     await shot("E1-4-titre");
     // (__bh not there yet — the graphics held: the intro's element says where it stands)

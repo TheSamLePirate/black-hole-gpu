@@ -38,7 +38,7 @@ describe.skipIf(!LIVE)(`TARS directs the flight (${MODEL})`, () => {
     const t0 = Date.now();
     await app.type(q);
     await app.press("Enter");
-    await app.waitFor(`__bh.tars.agent.busy`, 10_000).catch(() => {});
+    await app.waitOptional(`__bh.tars.agent.busy`, 10_000);
     await app.waitFor(`!__bh.tars.agent.busy`, turnMs);
     await Bun.sleep(1500);
     const judge = () =>
@@ -145,7 +145,7 @@ describe.skipIf(!LIVE)(`TARS directs the flight (${MODEL})`, () => {
       `const p = document.querySelector("[data-testid=tars-proposal]"); return { ok: !p.hidden && String(__bh.settings.target) === "mars", why: "proposal " + !p.hidden + " · target " + __bh.settings.target };`,
     );
     await app.click("[data-testid=tars-accept]");
-    await app.waitFor(`__bh.tars.agent.busy`, 10_000).catch(() => {});
+    await app.waitOptional(`__bh.tars.agent.busy`, 10_000);
     await app.waitFor(`!__bh.tars.agent.busy`, 300_000);
     const x = await app.js<{ target: string; soi: string; flying: boolean }>(
       `({ target: String(__bh.settings.target), soi: __bh.game.status().soi, flying: !!__bh.camera.fcPlan()?.executing || ["node", "burns", "transfer"].includes(__bh.camera.pilot.auto) })`,

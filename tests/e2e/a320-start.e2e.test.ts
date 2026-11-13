@@ -24,7 +24,7 @@ describe.skipIf(!E2E)("the A320 started from cold and dark", () => {
       return true;
     })()`);
     await app.waitFor("!!__bh.renderer.ship.deckMats", 60_000);
-    await app.waitFor(`!document.body.innerText.includes("Compiling the ray tracer")`, 240_000).catch(() => {});
+    await app.waitOptional(`!document.body.innerText.includes("Compiling the ray tracer")`, 240_000);
     await app.waitFor("!!__bh.camera.a320Sys", 30_000);
     // (the deck's own maps in: the A320's colour array's seven layers)
     await app.waitFor("__bh.renderer.ship.a320Maps?.albedo?.depthOrArrayLayers === 7", 60_000);

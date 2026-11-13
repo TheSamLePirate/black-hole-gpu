@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-13 09:27 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-13 09:31 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous.
@@ -55,8 +55,9 @@ indirects → J3 (lumière, cockpit).
 | Audit vagues 3–4 (1feb2f7f) | 3.4–3.5 vol | **fait** : U/F7 des avions (ILS, refus dit, manette gardée), Maj/Alt modificateur ou manette, LAND = F7 — le cours revolé 7/7 et 9/9 |
 | Audit vagues 3–4 (1feb2f7f) | 3.6 TARS | **fait** : tour coupé, `saves delete` confirmé, pannes dites, faux ordres hors ligne |
 | Audit vagues 3–4 (1feb2f7f) | 3.7 TARS (outils AP avions/A320) | **fait** : `jet_autopilot` par les actions de la console, volets au levier (CONF 1), l'AP de l'A320 réparé dans `apSet` |
-| Audit vagues 3–4 (1feb2f7f) | 3.10 e2e qui ne vérifient rien | prochain |
-| Audit vagues 3–4 (1feb2f7f) | 4.2, 4.3, 4.8 | à faire, dans cet ordre (état relevé dans [09-priorites-todo](docs/audit-2026-11-10/09-priorites-todo.md)) |
+| Audit vagues 3–4 (1feb2f7f) | 3.10 e2e qui ne vérifient rien | **fait** : `waitOptional` (93 attentes converties), 14 mesures déclarées, garde `e2e-honesty` |
+| Audit vagues 3–4 (1feb2f7f) | 4.2 la politique de temps | prochain (une décision de comportement à te proposer : onglet masqué) |
+| Audit vagues 3–4 (1feb2f7f) | 4.3, 4.8 | à faire, dans cet ordre (état relevé dans [09-priorites-todo](docs/audit-2026-11-10/09-priorites-todo.md)) |
 
 **Fermé récemment** : J2 (13 nov., ΔGPU nul, chemin vers §8 écrit) ; J2-C BC7 étudiée puis **rangée** (Sam : « ne pas le faire maintenant »).
 
@@ -4512,3 +4513,18 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   `src/ai/game-tools.ts`, `src/main.ts` (`setFlaps`), `src/i18n/fr-a320.ts` ; TARS.md, catalogue.
 - **Non fait** : le MCDU, le FMGC complet (plan, approche gérée) et les pannes de l'A320 par TARS ; FX-06 (« tout relâcher »
   par appareil) ; l'agent avec un vrai modèle n'a pas été rejoué (payant, non demandé).
+
+## 2026-11-13T09:31Z — Audit 3.10 : les e2e qui ne vérifient rien (QA-08)
+
+- **Contribution** (stratégie §19.13 : des parcours prouvés, pas supposés ; audit ligne 3.10) : **aucune attente avalée en
+  silence** — `app.waitOptional(expr, ms)` (tests/e2e/lib/app.ts) dit ce qui n'a pas été atteint et la dernière valeur lue ;
+  les 93 `waitFor(…).catch(() => {})` de 70 fichiers convertis mécaniquement (parenthèses équilibrées ; les fichiers de la
+  session du rendu — `j0-*`, `j2*`, `motion-quality` — et les sondes `zz-` laissés : un seul reste chez eux, compté) ; les 14
+  mesures sans `expect(` le disent dans leur en-tête (« no assertion ») ; **un garde** `tests/e2e-honesty.test.ts` (unitaire,
+  dans `bun test`) refuse un nouveau fichier muet ou une attente avalée. Les membres inexistants avaient été corrigés le 11
+  (`3ae30d6b`).
+- **Reproduit avant** : le garde lancé sur l'arbre d'avant (worktree de `HEAD`) : 2 échecs, 81 fichiers signalés ; après : 2/2.
+- **Vérifié** : `tsc`, Biome ; e2e `f35-body` 2/0 (une attente convertie). **Non vérifié** : les 69 autres fichiers convertis
+  n'ont pas été relancés (conversion mécanique, même attente, sans `throw`) ; les ~23 `.catch(() => {})` hors `waitFor`
+  (captures, nettoyages, `settled`) restent, jugés au cas par cas plus tard.
+- **Fichiers** : `tests/e2e/lib/app.ts`, 70 e2e, 14 en-têtes, `tests/e2e-honesty.test.ts` ; E2E.md.

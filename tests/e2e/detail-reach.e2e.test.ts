@@ -44,7 +44,7 @@ describe.skipIf(!E2E)("the detail's reach", () => {
         await app.js(`(() => { __bh.game.quality("realtime"); Object.assign(__bh.settings, { dynamicResolution: false, animate: true, targetSpp: 64 });
           ${PLACES[pl]} __bh.settings.shipMount = "cockpit"; __bh.settings.detailReach = "${rc}"; __bh.settings.animate = false;
           window.__t0 = performance.now(); window.__loaded0 = __bh.renderer.earthTiles.loaded; return 1; })()`);
-        await app.waitFor(`!!__bh.renderer.variantReady`, 180_000).catch(() => {});
+        await app.waitOptional(`!!__bh.renderer.variantReady`, 180_000);
         // (the ground's tiles whole and the scenery built for this reach, a second and a half calm)
         const load = await app.js<{
           ms: number;

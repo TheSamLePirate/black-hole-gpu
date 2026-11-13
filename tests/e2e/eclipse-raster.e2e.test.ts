@@ -2,6 +2,7 @@ import { afterAll, test } from "bun:test";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { App, E2E, stopServer } from "./lib/app";
 
+// (a measure — no assertion: its figures and pictures are read, not judged — audit QA-08, tests/e2e-honesty.test.ts)
 // The total eclipse of 12 August 2026 from over Burgos in the raster (TERRE-UNREAL U8): the sky's discs drawn by main's
 // layers z ≥ 1 — the Moon's and the Sun's rectangles overlapping (the first layer's the pixel), the Sun's out to 4 radii
 // for its corona —, the Moon's limb's relief (limbAt: Baily's beads, the diamond ring). The F-35 at 1 500 m heading for the

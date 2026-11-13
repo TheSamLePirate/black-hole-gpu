@@ -103,7 +103,7 @@ describe.skipIf(!E2E || process.env.RASTER_BENCH !== "1")("the raster's image in
         await app.js(
           `(async () => { for (let i = 0; i < 10; i++) await new Promise((q) => requestAnimationFrame(q)); __bh.settings.animate = false; return 1; })()`,
         );
-        await app.waitFor(`!!__bh.renderer.variantReady`, 300_000).catch(() => {});
+        await app.waitOptional(`!!__bh.renderer.variantReady`, 300_000);
         const raster = MODES[md]!.includes(`earthPipeline = "raster"`);
         await app.js(`(async () => { const r = __bh.renderer, frame = () => new Promise((q) => requestAnimationFrame(q));
           r.prof.enabled = true; r.prof.every = 1;

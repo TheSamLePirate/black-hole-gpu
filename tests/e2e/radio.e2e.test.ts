@@ -54,7 +54,7 @@ describe.skipIf(!E2E)("the flight's radio roles", () => {
     await tool("f35", { action: "fly", id: "bvr" });
     await a.waitFor(`__bh.camera.combat?.status === "run"`, 30_000);
     await a.waitFor(`__bh.voice.said.some((l) => l.speaker === "awacs" && /bandit/i.test(l.text))`, 40_000);
-    await a.waitFor(`document.querySelector("[data-testid=subtitles]")?.dataset.speaker === "awacs"`, 10_000).catch(() => {});
+    await a.waitOptional(`document.querySelector("[data-testid=subtitles]")?.dataset.speaker === "awacs"`, 10_000);
     await shot(a, "darkstar");
     console.log(`  Darkstar: ${(await said(a, "awacs")).join(" | ")}`);
     const dope = (await tool("weapons", { action: "bogey_dope" })) as string;

@@ -31,7 +31,7 @@ describe.skipIf(!E2E)("the replay, its cameras, the trailer, the scenes' photogr
     await app.js(`(() => { __bh.game.setDate("2026-07-10T11:00:00Z"); Object.assign(__bh.settings, { weather: "fair", wind: 1, earthClouds: 0 });
       __bh.game.flyAt(45.85, 6.75, 2500, 110, 200); __bh.settings.shipMount = "chase"; return 1; })()`);
     await Bun.sleep(1500);
-    await app.waitFor(`!!__bh.renderer.variants.get(__bh.renderer.featureKey)?.rt`, 180_000).catch(() => {});
+    await app.waitOptional(`!!__bh.renderer.variants.get(__bh.renderer.featureKey)?.rt`, 180_000);
     await Bun.sleep(2500);
     await shot("alps");
   }, 240_000);
@@ -40,7 +40,7 @@ describe.skipIf(!E2E)("the replay, its cameras, the trailer, the scenes' photogr
     await app.js(`(() => { __bh.game.setDate("2026-07-10T16:30:00Z"); __bh.game.flyAt(43.55, 7.35, 60, 80, 240);
       const c = __bh.camera; c.jetToggle("ap"); c.jetToggle("athr"); c.jetModes.alt = 60; c.jetModes.spd = 250; return 1; })()`);
     await Bun.sleep(1500);
-    await app.waitFor(`!!__bh.renderer.variants.get(__bh.renderer.featureKey)?.rt`, 180_000).catch(() => {});
+    await app.waitOptional(`!!__bh.renderer.variants.get(__bh.renderer.featureKey)?.rt`, 180_000);
     await Bun.sleep(18_000);
     await app.js(`(() => { __bh.camera.jetModes.alt = 1500; return 1; })()`);
     await Bun.sleep(8000);
@@ -146,7 +146,7 @@ describe.skipIf(!E2E)("the replay, its cameras, the trailer, the scenes' photogr
     console.log(`  ${await app.js<string>(`__bh.flight.views.fly("view-grand-canyon")`)}`);
     await app.waitFor(`__bh.camera.mission?.run.spec.id === "view-grand-canyon"`, 30_000);
     await Bun.sleep(1500);
-    await app.waitFor(`!!__bh.renderer.variants.get(__bh.renderer.featureKey)?.rt`, 180_000).catch(() => {});
+    await app.waitOptional(`!!__bh.renderer.variants.get(__bh.renderer.featureKey)?.rt`, 180_000);
     await Bun.sleep(5000);
     await app.js(`(() => { __bh.mode.set("photo"); return 1; })()`);
     await Bun.sleep(3000);

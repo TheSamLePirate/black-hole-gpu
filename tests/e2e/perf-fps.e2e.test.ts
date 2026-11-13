@@ -1,3 +1,4 @@
+// (a measure — no assertion: its figures and pictures are read, not judged — audit QA-08, tests/e2e-honesty.test.ts)
 // (a measuring campaign, not in `bun run e2e`: RASTER_BENCH=1 to run it — as scenery-bench)
 // Frame rates in flight (docs/PLAN-RENDU-RASTER-AAA.md): the F-35 flown — the clock running, the autopilot holding its
 // height, course and speed — over a few places, the details at their most, and for each realtime setting (the traced
@@ -78,7 +79,7 @@ for (const pl of places)
         await app.js(`(async () => { ${PLACES[pl]} ${CONFIGS[cf]} __bh.touch();
           for (let i = 0; i < 3; i++) await new Promise((q) => requestAnimationFrame(q));
           const c = __bh.camera, g = c.geoNow(); if (g) c.jetModes.alt = g.alt; return 1; })()`);
-        await app.waitFor(`!!__bh.renderer.variantReady`, 300_000).catch(() => {});
+        await app.waitOptional(`!!__bh.renderer.variantReady`, 300_000);
         // (settled: the new kernels in, the history refilled)
         await Bun.sleep(4000);
         const m = await app.js<Record<string, number>>(`(async () => { const r = __bh.renderer;

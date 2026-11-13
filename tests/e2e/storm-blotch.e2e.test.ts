@@ -1,3 +1,4 @@
+// (a measure — no assertion: its figures and pictures are read, not judged — audit QA-08, tests/e2e-honesty.test.ts)
 // (a diagnosis, not in `bun run e2e`: STORM_DIAG=1) The storm's sky from the F-35's cockpit at 300 m, the same frozen view drawn
 // with one part at a time switched off — the white squares seen in it (docs/PLAN-PLUIE.md P7): which pass draws them.
 // Shots remote-results/storm-diag/<mode>.png.
@@ -31,7 +32,7 @@ describe.skipIf(!E2E || process.env.STORM_DIAG !== "1")("the storm's white squar
     // (frozen at once — the same view however long the kernels take —, then the kernels and the tiles waited for)
     await app.js(`(async () => { const frame = () => new Promise((q) => requestAnimationFrame(q));
       for (let i = 0; i < 10; i++) await frame(); __bh.freeze(true); return 1; })()`);
-    await app.waitFor(`!!__bh.renderer.variantReady`, 300_000).catch(() => {});
+    await app.waitOptional(`!!__bh.renderer.variantReady`, 300_000);
     await app.js(`(async () => { const r = __bh.renderer, frame = () => new Promise((q) => requestAnimationFrame(q));
       const t0 = performance.now(); let calm = 0;
       while (performance.now() - t0 < 60000) { const ok = r.earthTiles.pending === 0; calm = ok ? calm || performance.now() : 0;
@@ -46,7 +47,7 @@ describe.skipIf(!E2E || process.env.STORM_DIAG !== "1")("the storm's white squar
   test("each part off in turn", async () => {
     for (const m of modes) {
       await app.js(`(() => { ${MODES[m]} __bh.touch(); return 1; })()`);
-      await app.waitFor(`!!__bh.renderer.variantReady`, 300_000).catch(() => {});
+      await app.waitOptional(`!!__bh.renderer.variantReady`, 300_000);
       // (every kernel the mode asks for compiled: no shot of the last one's image)
       await app.js(
         `(async () => { const frame = () => new Promise((q) => requestAnimationFrame(q)); for (let i = 0; i < 30; i++) await frame(); return 1; })()`,

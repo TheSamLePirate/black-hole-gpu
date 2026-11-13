@@ -1,6 +1,7 @@
 import { afterAll, describe, test } from "bun:test";
 import { App, E2E, stopServer } from "./lib/app";
 
+// (a measure — no assertion: its figures and pictures are read, not judged — audit QA-08, tests/e2e-honesty.test.ts)
 // A boot's diagnosis (when App.boot times out): the page's errors and the graphics diagnostic, printed.
 // SCENE=<hash scene>.
 

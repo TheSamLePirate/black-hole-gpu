@@ -30,7 +30,7 @@ describe.skipIf(!E2E)("the A320's windshield in the rain", () => {
       return true;
     })()`);
     await app.waitFor("!!__bh.renderer.ship.deckMats", 60_000);
-    await app.waitFor(`!document.body.innerText.includes("Compiling the ray tracer")`, 240_000).catch(() => {});
+    await app.waitOptional(`!document.body.innerText.includes("Compiling the ray tracer")`, 240_000);
     await app.waitFor("__bh.renderer.ship.a320Maps?.albedo?.depthOrArrayLayers === 7", 60_000);
     await app.waitFor("__bh.renderer.rain && __bh.renderer.rain.rain > 0", 60_000);
     await app.js(`(__bh.camera.setLook(0, 2), true)`);

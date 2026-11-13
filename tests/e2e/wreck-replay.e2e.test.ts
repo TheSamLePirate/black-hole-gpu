@@ -61,7 +61,7 @@ describe.skipIf(!E2E)("a downed aircraft: smoke, the fall, the crash; its replay
     await app.js(`(() => { __bh.game.setDate("2026-07-10T11:00:00Z"); Object.assign(__bh.settings, { weather: "fair", wind: 1, earthClouds: 0 });
       __bh.game.flyAt(45.85, 6.75, 2500, 110, 200); __bh.settings.shipMount = "chase"; return 1; })()`);
     await Bun.sleep(1500);
-    await app.waitFor(`!!__bh.renderer.variants.get(__bh.renderer.featureKey)?.rt`, 180_000).catch(() => {});
+    await app.waitOptional(`!!__bh.renderer.variants.get(__bh.renderer.featureKey)?.rt`, 180_000);
     await Bun.sleep(2500);
     await shot("alps");
   }, 240_000);
@@ -83,7 +83,7 @@ describe.skipIf(!E2E)("a downed aircraft: smoke, the fall, the crash; its replay
       window.__drone = W.addTarget({ kind: "drone", at: [P.p[0] + f[0] * 2500, P.p[1] + f[1] * 2500, agl + 40], hdg: (hdg * 180) / Math.PI, speed: 130, name: "BQM" });
       const q = W.target(window.__drone); q.ai.mode = "course"; q.ai.course = { hdg: (hdg * 180) / Math.PI, alt: q.p[2] };
       return 1; })()`);
-    await app.waitFor(`!!__bh.renderer.variants.get(__bh.renderer.featureKey)?.rt`, 180_000).catch(() => {});
+    await app.waitOptional(`!!__bh.renderer.variants.get(__bh.renderer.featureKey)?.rt`, 180_000);
     await Bun.sleep(12_000);
     // (far off, from the cockpit: its spot in the HUD's box)
     await app.js(`(() => { Object.assign(__bh.settings, { shipMount: "cockpit", fov: 40 }); return 1; })()`);

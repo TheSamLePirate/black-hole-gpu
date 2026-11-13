@@ -51,7 +51,7 @@ test.skipIf(!E2E)(
       await app.waitFor(`__bh.fleet.active === "f35"`, 60_000);
       await app.js(`(() => { __bh.game.setDate("2026-07-10T10:00:00Z"); __bh.game.flyAt(36.08, -5.6, 400, 20, 160);
         __bh.settings.shipMount = "chase"; __bh.refresh(); return 1; })()`);
-      await app.waitFor(`__bh.renderer.earthTiles.pending === 0`, 60_000).catch(() => {});
+      await app.waitOptional(`__bh.renderer.earthTiles.pending === 0`, 60_000);
       await app.js(
         `(() => { document.body.classList.add("hide-ui"); document.getElementById("overlay").style.visibility = "hidden"; return 1; })()`,
       );

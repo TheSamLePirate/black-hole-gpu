@@ -92,7 +92,7 @@ test.skipIf(!E2E)(
         await app.settled();
         await settle(60);
         const meterBefore = await app.js<number>(`__bh.renderer.meterAt`);
-        await app.waitFor(`__bh.renderer.meterAt > ${meterBefore} && __bh.renderer.meterSettled`, 15_000).catch(() => {});
+        await app.waitOptional(`__bh.renderer.meterAt > ${meterBefore} && __bh.renderer.meterSettled`, 15_000);
         const evR = await holdEv();
         const s: Record<string, Pixels> = {};
         for (const [tag, skip] of [

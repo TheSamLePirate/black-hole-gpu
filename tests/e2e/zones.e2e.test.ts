@@ -127,7 +127,7 @@ describe.skipIf(!E2E)("an offline zone", () => {
     // (in the photo mode: outside it a still raster view is held in its realtime frames (renderer.rasterHold), its jitter going
     // on, never converged — the detail measured there swung 3.7 … 8.4 from one run to the next, the same tiles drawn)
     expect(await app.js<string | null>(`__bh.mode.set("photo")`)).toBeNull();
-    await app.waitFor(`__bh.renderer.lastPhase === "converged"`, 120_000).catch(() => {});
+    await app.waitOptional(`__bh.renderer.lastPhase === "converged"`, 120_000);
     await Bun.sleep(2000);
     let detail = await groundDetail();
     for (let k = 0, t0 = Date.now(); k < 20 && Date.now() - t0 < 40_000; k++) {

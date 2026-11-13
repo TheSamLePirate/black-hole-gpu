@@ -60,7 +60,7 @@ test.skipIf(!E2E)(
       out.real = await app
         .waitFor(`__bh.renderer.aerosolSource === "cams"`, 30_000)
         .then(async () => {
-          await app.waitFor(`__bh.renderer.tlutAerosols === __bh.renderer.tlutWanted`, 30_000).catch(() => {});
+          await app.waitOptional(`__bh.renderer.tlutAerosols === __bh.renderer.tlutWanted`, 30_000);
           return app.js(
             `(() => ({ source: __bh.renderer.aerosolSource, k: __bh.renderer.tlutAerosols, aod: +(__bh.renderer.tlutAerosols * 0.028).toFixed(3), credit: !document.querySelector('[data-testid="aerosol-credit"]').hidden }))()`,
           );

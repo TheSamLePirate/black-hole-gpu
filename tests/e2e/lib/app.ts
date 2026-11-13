@@ -435,6 +435,25 @@ export class App {
     throw new Error(`waitFor(${expr}): ${timeout} ms, last ${String(last)}`);
   }
 
+  /**
+   * A wait that may not be met — a picture taken all the same, data that may not come —: the same polling as waitFor, but
+   * at its end it says what was not met and what was last read, and returns null instead of throwing. Before 13 Nov 2026
+   * (audit QA-08) such waits were `waitFor(…).catch(() => {})`: a missing condition went by unseen.
+   */
+  async waitOptional(expr: string, timeout = 10_000): Promise<unknown | null> {
+    try {
+      return await this.waitFor(expr, timeout);
+    } catch (e) {
+      const short = expr.replace(/\s+/g, " ").slice(0, 120);
+      console.log(
+        `  (optional wait not met in ${(timeout / 1000).toFixed(0)} s: ${short} — ${String((e as Error).message ?? e)
+          .replace(/^waitFor\([\s\S]*?\): /, "")
+          .slice(0, 160)})`,
+      );
+      return null;
+    }
+  }
+
   /** A key by its physical code (QWERTY's key text unless given). */
   async press(code: string, key?: string, o: { shift?: boolean } = {}) {
     const k =

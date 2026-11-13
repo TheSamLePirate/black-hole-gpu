@@ -1,6 +1,7 @@
 import { afterAll, describe, test } from "bun:test";
 import { App, E2E, stopServer } from "./lib/app";
 
+// (a measure — no assertion: its figures and pictures are read, not judged — audit QA-08, tests/e2e-honesty.test.ts)
 // How long a scene's tracer takes to compile before its first traced frame (on kerr-mini): booted on one scene
 // (BOOT), then each of SCENES set — the time until a trace pass is drawn (its kernel specialised, compiled), and the
 // graphics diagnostic's compile records. To compare two builds' kernels (a branch against main).

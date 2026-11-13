@@ -57,7 +57,7 @@ describe.skipIf(!E2E)("a player shot down: out of control to the crash, seen fro
         `__bh.net.match.match?.mode === "free" && !!__bh.camera.combat?.world.targets.some((q) => q.peer === ${other} && q.alive)`,
         60_000,
       );
-    for (const p of [a, b]) await p.waitFor(`__bh.renderer.tracerSettled`, 120_000).catch(() => {});
+    for (const p of [a, b]) await p.waitOptional(`__bh.renderer.tracerSettled`, 120_000);
   }, 480_000);
   afterAll(() => {
     b?.close();

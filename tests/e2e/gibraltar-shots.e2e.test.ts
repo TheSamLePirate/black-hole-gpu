@@ -173,7 +173,7 @@ describe.skipIf(!E2E)("three shots along the coast of the Strait of Gibraltar, f
     await app.js(`(() => { __bh.game.setDate("2026-07-10T11:00:00Z"); Object.assign(__bh.settings, { weather: "fair", wind: 1, earthClouds: 0 });
       __bh.game.flyAt(45.85, 6.75, 2500, 110, 200); __bh.settings.shipMount = "cockpit"; return 1; })()`);
     await Bun.sleep(1500);
-    await app.waitFor(`!!__bh.renderer.variants.get(__bh.renderer.featureKey)?.rt`, 180_000).catch(() => {});
+    await app.waitOptional(`!!__bh.renderer.variants.get(__bh.renderer.featureKey)?.rt`, 180_000);
     await Bun.sleep(2000);
     await shot("alps");
   }, 240_000);
@@ -193,7 +193,7 @@ describe.skipIf(!E2E)("three shots along the coast of the Strait of Gibraltar, f
     // (held still while the realtime tracer compiles for the strait's weather: the drone not passed meanwhile)
     await app.js(`(() => { __bh.settings.animate = false; return 1; })()`);
     await Bun.sleep(1500);
-    await app.waitFor(`!!__bh.renderer.variants.get(__bh.renderer.featureKey)?.rt`, 180_000).catch(() => {});
+    await app.waitOptional(`!!__bh.renderer.variants.get(__bh.renderer.featureKey)?.rt`, 180_000);
     await Bun.sleep(1500);
     await app.js(`(() => { __bh.settings.animate = true; return 1; })()`);
     const hi =

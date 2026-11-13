@@ -62,7 +62,7 @@ describe.skipIf(!E2E)("the cost view: each ray's work as a heat map", () => {
     await app.js(`(() => { __bh.game.setDate("2026-07-10T11:00:00Z"); Object.assign(__bh.settings, { weather: "fair", wind: 1, earthClouds: 0 });
       __bh.game.flyAt(45.85, 6.75, 2500, 110, 200); __bh.settings.shipMount = "cockpit"; __bh.game.quality("realtime"); __bh.game.set("realtimeSubsampling", 2); return 1; })()`);
     await Bun.sleep(1500);
-    await app.waitFor(`!!__bh.renderer.variants.get(__bh.renderer.featureKey)?.rt`, 180_000).catch(() => {});
+    await app.waitOptional(`!!__bh.renderer.variants.get(__bh.renderer.featureKey)?.rt`, 180_000);
     await Bun.sleep(2500);
     await app.js(`(() => { __bh.settings.animate = false; return 1; })()`);
     await views("alps", [0, 1]);
@@ -73,7 +73,7 @@ describe.skipIf(!E2E)("the cost view: each ray's work as a heat map", () => {
     await app.js(`(() => { __bh.game.set("weather", "cloudy"); __bh.game.set("earthClouds", 0.3); __bh.game.setDate("2026-07-10T10:00:00Z");
       __bh.game.flyAt(36.1, -5.55, 900, 200, 210); __bh.settings.shipMount = "cockpit"; return 1; })()`);
     await Bun.sleep(1500);
-    await app.waitFor(`!!__bh.renderer.variants.get(__bh.renderer.featureKey)?.rt`, 180_000).catch(() => {});
+    await app.waitOptional(`!!__bh.renderer.variants.get(__bh.renderer.featureKey)?.rt`, 180_000);
     await Bun.sleep(6000);
     await app.js(`(() => { __bh.settings.animate = false; return 1; })()`);
     await views("tarifa");

@@ -86,14 +86,14 @@ test.skipIf(!E2E)(
       await take("lamps");
       await take("lamps2");
       await app.js(`(() => { __bh.settings.earthStreetLamps = false; __bh.touch(); return 1; })()`);
-      await app.waitFor(`(() => { __bh.touch(); return __bh.renderer.earthScenery.stats().pending; })()`, 30_000).catch(() => {});
+      await app.waitOptional(`(() => { __bh.touch(); return __bh.renderer.earthScenery.stats().pending; })()`, 30_000);
       await ready("sc.lamps === 0");
       await app.settled(120_000);
       await take("plain");
       // (SL_STRICT=1: the lamps again — their scene rebuilt as the plain one was: the cost compared on two rebuilt scenes)
       if (process.env.SL_STRICT) {
         await app.js(`(() => { __bh.settings.earthStreetLamps = true; __bh.touch(); return 1; })()`);
-        await app.waitFor(`(() => { __bh.touch(); return __bh.renderer.earthScenery.stats().pending; })()`, 30_000).catch(() => {});
+        await app.waitOptional(`(() => { __bh.touch(); return __bh.renderer.earthScenery.stats().pending; })()`, 30_000);
         await ready("sc.lamps > 0");
         await app.settled(120_000);
         await take("lamps3");

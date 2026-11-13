@@ -80,7 +80,7 @@ describe.skipIf(!E2E)("low flight at sunset: the ground's shading and colour", (
           const c = __bh.camera; if (c.jetModes.alt === null) c.jetToggle("ap"); if (c.jetModes.spd === null) c.jetToggle("athr");
           const frame = () => new Promise((q) => requestAnimationFrame(q)); for (let i = 0; i < 10; i++) await frame();
           __bh.freeze(true); __bh.camera.setLook(0, ${P.pitch ?? -6}); return 1; })()`);
-        await app.waitFor(`!!__bh.renderer.variantReady`, 300_000).catch(() => {});
+        await app.waitOptional(`!!__bh.renderer.variantReady`, 300_000);
         const left =
           await app.js<number>(`(async () => { const r = __bh.renderer, frame = () => new Promise((q) => requestAnimationFrame(q));
           const t0 = performance.now(); let calm = 0;

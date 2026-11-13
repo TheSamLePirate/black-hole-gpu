@@ -104,7 +104,7 @@ describe.skipIf(!E2E)("the shot's GPU cost, RT max at ×8, ×6, ×4, ×3, ×2", 
     await app.js(`(() => { __bh.game.setDate("2026-07-10T11:00:00Z"); Object.assign(__bh.settings, { weather: "fair", wind: 1, earthClouds: 0 });
       __bh.game.flyAt(45.85, 6.75, 2500, 110, 200); __bh.settings.shipMount = "cockpit"; return 1; })()`);
     await Bun.sleep(1500);
-    await app.waitFor(`!!__bh.renderer.variants.get(__bh.renderer.featureKey)?.rt`, 180_000).catch(() => {});
+    await app.waitOptional(`!!__bh.renderer.variants.get(__bh.renderer.featureKey)?.rt`, 180_000);
     await Bun.sleep(2500);
     await app.shot(`${shots ?? "/tmp"}/alps.png`).catch(() => {});
   }, 240_000);
@@ -120,7 +120,7 @@ describe.skipIf(!E2E)("the shot's GPU cost, RT max at ×8, ×6, ×4, ×3, ×2", 
       await app.js(
         `(() => { const c = __bh.camera; c.padlock = false; c.jetToggle("ap"); c.jetToggle("athr"); c.jetModes.alt = 120; c.jetModes.spd = 220; c.jetModes.hdg = 160 * Math.PI / 180; __bh.settings.shipMount = "cockpit"; return 1; })()`,
       );
-      await app.waitFor(`!!__bh.renderer.variants.get(__bh.renderer.featureKey)?.rt`, 180_000).catch(() => {});
+      await app.waitOptional(`!!__bh.renderer.variants.get(__bh.renderer.featureKey)?.rt`, 180_000);
       await Bun.sleep(2000);
       expect(await app.js<number | string>(`__bh.settings.realtimeSubsampling`)).toBe(sub);
       await app.js(SAMPLER);

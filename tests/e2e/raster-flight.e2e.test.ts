@@ -240,7 +240,7 @@ describe.skipIf(!E2E || process.env.RASTER_BENCH !== "1")(
         await app.js(
           `(async () => { for (let i = 0; i < 10; i++) await new Promise((q) => requestAnimationFrame(q)); __bh.settings.animate = false; return 1; })()`,
         );
-        await app.waitFor(`!!__bh.renderer.variantReady`, 300_000).catch(() => {});
+        await app.waitOptional(`!!__bh.renderer.variantReady`, 300_000);
         await app.js(`(async () => { const r = __bh.renderer, frame = () => new Promise((q) => requestAnimationFrame(q));
         const t0 = performance.now(); let calm = 0;
         while (performance.now() - t0 < 120000) { const ok = r.earthTiles.pending === 0; calm = ok ? calm || performance.now() : 0;
@@ -255,7 +255,7 @@ describe.skipIf(!E2E || process.env.RASTER_BENCH !== "1")(
         for (const [i, md] of modes.entries()) {
           const run = runs[i]!;
           await app.js(`(() => { ${MODE_SET[md]} __bh.touch(); return 1; })()`);
-          await app.waitFor(`!!__bh.renderer.variantReady`, 300_000).catch(() => {});
+          await app.waitOptional(`!!__bh.renderer.variantReady`, 300_000);
           await app.js(`(() => { const r = __bh.renderer; r.prof.enabled = true; r.prof.every = 1; r.prof.reset(); return 1; })()`);
           if (MODE_SET[md]!.includes(`earthPipeline = "raster"`))
             await app.waitFor(

@@ -61,7 +61,7 @@ describe.skipIf(!E2E)("the tracer's pipelines specialised as source draw the sam
       let b: Awaited<ReturnType<typeof render>>;
       try {
         // (the Earth's maps and tiles in first: a render while they stream in drew a coarser Earth than the next — kerr-mini)
-        await app.waitFor("__bh.renderer.earthSettled", 180_000).catch(() => {});
+        await app.waitOptional("__bh.renderer.earthSettled", 180_000);
         // (one clock for both: the scene held)
         const T = await app.js<number>("(__bh.freeze(true), __bh.time())");
         a = await render(app, T, false);

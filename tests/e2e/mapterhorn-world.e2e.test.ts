@@ -89,7 +89,7 @@ describe.skipIf(!E2E)("Mapterhorn's world relief", () => {
       await Bun.sleep(1500);
       await app.js(`(__bh.freeze(true), 1)`);
       await loaded(what);
-      await app.waitFor(`__bh.renderer.earthTiles.finest >= ${what === "with" ? 16 : 14}`, 60_000).catch(() => {});
+      await app.waitOptional(`__bh.renderer.earthTiles.finest >= ${what === "with" ? 16 : 14}`, 60_000);
       const pitch = await app.js<number>(`((__bh.camera.attitudeNow().pitch ?? 0) * 180) / Math.PI`);
       expect(Math.abs(pitch)).toBeLessThan(15);
     };
