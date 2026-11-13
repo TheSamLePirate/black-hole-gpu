@@ -32,8 +32,14 @@ cadence mise au contrat actuel (1 sous le matériau) ; sa partie « repli » mis
 
 - **Observé** (kerr-mini, J0 Toulon-Hyères, 10 juillet 19:40 UTC — le Soleil couché —, vue de trois quarts arrière vers l'ouest, profil neutre,
   run `…-j3-skyband4b`, `skyband4-1940-*.png`) : de grandes taches roses, jaunes et vertes, aux bords nets, sur la mer et la côte sous le
-  couchant. Une seule vue ; non reproduit ailleurs ; cause non cherchée (pistes : le ciel reflété par la mer — sonde ou SSR — au crépuscule,
-  la sonde de l'appareil qui le fournit).
+  couchant. Une seule vue ; non reproduit ailleurs.
+- **Rétréci** (~19:14 UTC, phase J0 `seadusk`, trois runs `…-seadusk`, `-seadusk2`, `-seadusk3`, la même vue à 19:40, une source coupée à la
+  fois) : les taches **restent** sans la sonde de la mer (`seaProbeOn`), sans les reflets (SSR et nuages reflétés, `TUNE_GSKIP` 20480), sans
+  les nuages, sans l'eau par région (Kd490, `TUNE_GSKIP` 1024), sans la surface déplacée (`seaSurfaceOn`), sans l'écume en carte du monde ;
+  elles **disparaissent** sans le matériau de l'eau (`liteSkip` 1) et **sans les vagues FFT** (`settings.seaFft` false). **La cause est dans
+  le chemin des vagues FFT** (`sea/fft-gpu.ts`, le tableau de textures de la mer et sa lecture dans `trace.wgsl`). Pistes non vérifiées : une
+  couche du tableau lue pour une autre (les couleurs roses / jaunes / vertes ressemblent à des normales ou des dérivées lues comme une
+  couleur), un niveau de détail au crépuscule.
 
 ## ~~Le premier `renderer.tune` d'une session fige la sonde de lumière de l'appareil~~ — réglé le 13 novembre 2026 (~17:57 UTC) : la sonde de l'appareil gelée pendant la compilation de son noyau à chaque changement de clé
 

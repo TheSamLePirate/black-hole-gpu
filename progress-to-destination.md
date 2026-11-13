@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-13 19:06 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-13 19:14 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous.
@@ -5600,4 +5600,11 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
 - Réalisé : `ship.wgsl` `envSH` rendu à sa forme (64 fils, 9 coefficients), `envSH4` à part (bande 4) ; `ship.ts` le choisit si `skyBand4`.
 - Preuves : **mesuré** (kerr-mini, J0) : la version commune coûtait 0,375–0,385 ms par passage contre 0,154 (payé même éteint) ; séparée,
   0,155–0,161 ms éteint (`…-j3-envsh-cost2`), l'effet allumé retrouvé (`…-j3-skyband4d`). GRAPHICS-PIPELINE D2 mesuré.
+
+## 2026-11-13T19:14Z — Les taches de couleur sur la mer au crépuscule : la cause dans les vagues FFT
+
+- Réalisé : e2e J0 phase `seadusk` (la vue de 19:40, neuf cas : une source coupée à la fois). PROBLEMES rétréci, E2E-CATALOGUE.
+- Preuves : **observé** (kerr-mini, trois runs) : les taches disparaissent sans le matériau de l'eau et sans les vagues FFT ; restent sans la
+  sonde, les reflets, les nuages, le Kd490, la surface, l'écume. Rien de changé dans le code du rendu.
+- Suite : chercher dans `sea/fft-gpu.ts` et la lecture du tableau de textures de la mer (une couche lue pour une autre ?).
 

@@ -32,7 +32,7 @@ import { sceneryReady } from "./lib/plan-views";
 //       screens, the cockpit (the outside view) — between two baseline flights (drift).
 // Output: remote-results/j0/<machine>/ (J0_OUT): j0.json, shots (start, mid-turn, end; each ablation's last frame).
 // J0_PHASES=flight,ablate,sustained (default all; sustained: the flight again after the ablations, the machine hot), ABLATE_S (20), J0_MACHINE (the label: "m1max", "kerr-mini"; default the host name).
-// Other phases, asked by name: agecheck, framing (PLAN-J3 J3-0), keylight, keyair, keysky, skyband4 (J3-1), keyhaze (J3-2), shadows (J3-3), wetbld, cityview, materials (J3-5) (J3-1: the craft's key light against the incident Sun toward
+// Other phases, asked by name: agecheck, framing (PLAN-J3 J3-0), keylight, keyair, keysky, skyband4 (J3-1), keyhaze (J3-2), shadows (J3-3), wetbld, cityview, materials (J3-5), seadusk (PROBLEMES) (J3-1: the craft's key light against the incident Sun toward
 // sunset, ~3 min on kerr-mini; keyair: its air two ways, march and table, ~4 min; keysky: the sky's light two ways, ~4 min).
 // Not a pass/fail on the frame rate: the fiche is written from j0.json (docs/progress/j0/). It fails on a GPU error, a craft not
 // placed, a flight not flown.
@@ -1050,6 +1050,51 @@ describe.skipIf(!E2E)("J0: the reference flight over Toulon-Hyères", () => {
       );
     },
     600_000,
+  );
+
+  // (PROBLEMES — the colour blotches on the sea at dusk, J0_PHASES=seadusk: 19:40 UTC, the view of their first sighting (the quarter from
+  // behind, toward the west, neutral), frozen, the exposure held; as drawn, then one source cut at a time — the sea's probe (seaProbeOn),
+  // the water's material (liteSkip 1), the sea's reflections compiled out (TUNE_GSKIP 20480), the clouds (earthClouds 0) —; shots, which
+  // one takes them away)
+  test.skipIf(!PHASES.includes("seadusk"))(
+    "PROBLEMES: the sea's colour blotches at dusk — as drawn, then the probe, the water, the reflections, the clouds cut one at a time",
+    async () => {
+      await start("");
+      await app.js(`(async () => { const f = () => new Promise((q) => requestAnimationFrame(q)); __bh.freeze(false);
+        __bh.game.setDate("2026-07-10T19:40:00Z"); Object.assign(__bh.settings, { shipMount: "quarter", lookProfile: "neutral", dof: false, motionBlur: 0 });
+        __bh.refresh(); for (let i = 0; i < 90; i++) await f(); __bh.freeze(true); __bh.renderer.settleExposure(); for (let i = 0; i < 30; i++) await f();
+        const ev = __bh.renderer.ev(__bh.settings); Object.assign(__bh.settings, { autoExposure: false, exposure: ev }); return 1; })()`);
+      const cases: [string, string, string][] = [
+        ["asDrawn", "", ""],
+        ["noSeaProbe", "__bh.renderer.seaProbeOn = false;", "__bh.renderer.seaProbeOn = true;"],
+        ["noWater", "__bh.renderer.liteSkip = 1;", "__bh.renderer.liteSkip = 0;"],
+        ["noReflections", "__bh.renderer.tune = { TUNE_GSKIP: 20480 };", "__bh.renderer.tune = {};"],
+        ["noClouds", '__bh.game.set("earthClouds", 0);', `__bh.game.set("earthClouds", ${J0_SCENE.earthClouds});`],
+        // (the sea's water by region — water-kd.ts, Kd490 at 1/12° — off: the clear ocean everywhere, TUNE_GSKIP 1024)
+        ["noKd", "__bh.renderer.tune = { TUNE_GSKIP: 1024 };", "__bh.renderer.tune = {};"],
+        // (the sea's other parts — J0's ablations: its displaced surface, the FFT waves, the foam's world map)
+        ["noSeaSurface", "__bh.renderer.seaSurfaceOn = false;", "__bh.renderer.seaSurfaceOn = true;"],
+        ["noFft", "__bh.settings.seaFft = false; __bh.touch();", "__bh.settings.seaFft = true; __bh.touch();"],
+        ["noFoamWorld", "__bh.renderer.seaFoamWorldOn = false;", "__bh.renderer.seaFoamWorldOn = true;"],
+      ];
+      for (const [name, set, reset] of cases) {
+        await app.js(`(() => { ${set} __bh.refresh(); return 1; })()`);
+        await app.settled(120_000);
+        await app.waitFor("__bh.renderer.compiling.size === 0", 120_000);
+        await app.js(
+          `(async () => { const f = () => new Promise((q) => requestAnimationFrame(q)); for (let i = 0; i < 45; i++) await f(); return 1; })()`,
+        );
+        const x = (await app.cdp.send("Page.captureScreenshot", { format: "png" })) as { data: string };
+        await Bun.write(`${OUT}/seadusk-${name}.png`, Buffer.from(x.data, "base64"));
+        console.log(`  sea dusk: ${name} shot`);
+        await app.js(`(() => { ${reset} __bh.refresh(); return 1; })()`);
+      }
+      await app.js(
+        `(() => { Object.assign(__bh.settings, { autoExposure: true, exposure: 0, shipMount: "cockpit" }); __bh.freeze(false); __bh.game.setDate("${J0_SCENE.date}"); return 1; })()`,
+      );
+      expect(cases.length).toBe(9);
+    },
+    900_000,
   );
 
   test.skipIf(!PHASES.includes("sustained"))(
