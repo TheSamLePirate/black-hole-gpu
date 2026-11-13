@@ -53,9 +53,22 @@ sur ce vol. **À 40 images/s (13 novembre ~10:45 UTC, arbre de 1aa2689d, `J0_FPS
 p50 67,7 ms, la première moitié 20,6 images/s, la seconde 13,5 ; le GPU **1 296 → 389 MHz**, la pression **« Trapping »** (au-delà de Heavy) ;
 run arrêté après le vol (les ablations et le vol soutenu n'auraient mesuré que le bridage). **Facteur de confusion relevé** : `coreaudiod`
 tournait à **~177 % de CPU**, et y tournait encore une fois le Chrome du test fermé — une charge propre à la machine, sans lien avec le jeu,
-qui chauffe le M1 Max (CPU 91,6 °C) ; présente ou non pendant l'essai à 30 : non relevé. **Les deux essais de la borne sont à refaire, la
-machine débarrassée de cette charge** (redémarrer `coreaudiod` demande les droits d'administrateur : à Sam). La valeur de la borne n'est pas
-fixée.
+qui chauffe le M1 Max (CPU 91,6 °C) ; présente ou non pendant l'essai à 30 : non relevé. Les deux essais de la borne sont à refaire, la
+machine débarrassée de cette charge.
+
+**Refaits le 13 novembre (11:47–12:15 UTC, arbre de c78ac6af, `coreaudiod` relancé : 0–4 % de CPU avant et après chaque essai ;
+`remote-results/j0/m1max-cap30-redo`, `…-cap40-redo`)** :
+
+| Borne | Vol frais | Vol soutenu (après les ablations) |
+|---|---|---|
+| 30 images/s | 29,9 images/s, intervalle p95 41,9 ms, GPU p50 23,1 ms à 1 289 MHz | 28,8 images/s, p95 49,8 ms, GPU 30,4 ms à ~850 MHz, Heavy |
+| 40 images/s | **39,4 images/s**, p95 33,7 ms, GPU 24,7 ms (1 296 → 1 114 MHz) | 30,9 images/s, p95 41,8 ms, GPU 31,4 ms à ~880 MHz, Heavy |
+
+**Lecture** : l'effondrement du premier essai à 40 (17,6 images/s, 389 MHz) venait de la charge de `coreaudiod`. Machine propre, le M1 Max tient
+la borne à froid — 30 comme 40 — puis bride, **quelle que soit la borne**, vers 830–890 MHz : son GPU, ~23–25 ms par image à pleine fréquence,
+passe à ~31 ms une fois chaud. **Ce qu'il soutient sur J0 aujourd'hui : ~30 images/s** (28,8 borné à 30, 30,9 borné à 40). La borne ne suffit
+pas à l'empêcher de brider : il faudrait que le GPU tienne nettement sous le budget à fréquence bridée (~31 ms aujourd'hui, pour 33,3 à
+30 images/s). **La valeur de la borne reste à fixer par Sam** sur ce constat (recommandation : 30, le palier soutenu mesuré).
 
 **Le palier 1 est atteint** quand, sur le vol de référence (§3), mesuré deux fois sur le M1 Max dans l'état soutenu,
 **les seuils suivants tiennent tous** — *validés par Sam le 10 novembre* (transposés de §8.3, qui les fixe pour
