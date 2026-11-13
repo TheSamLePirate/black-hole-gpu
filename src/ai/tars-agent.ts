@@ -170,7 +170,7 @@ export class TarsAgent {
       // (stopped — by a new question, which answers, or by « stop » —: over, nothing to say; never null, which main.ts
       // reads as « the model failed » and answers offline: the cut question's orders ran anyway — audit TA-01)
       if (r.cut === "stopped") {
-        this.keep(q, "", r.actions);
+        this.keep(q, "", r.actions, !!o.wake);
         return "";
       }
       // (a model copying a tool call's form into its words: the bracket dropped)
@@ -182,7 +182,7 @@ export class TarsAgent {
       const text =
         r.text ?? (r.actions.length ? (this.failure ?? doneWord(lang, r.cut === "steps" || r.cut === "budget" ? r.cut : "time")) : null);
       if (text === null) return null;
-      this.keep(q, text, r.actions);
+      this.keep(q, text, r.actions, !!o.wake);
       return text;
     } finally {
       if (this.ctl === ctl) {
@@ -193,7 +193,16 @@ export class TarsAgent {
     }
   }
 
-  private keep(q: string, text: string, actions: Action[]) {
+  /**
+   * The turn kept in his memory. A waking is not the pilot speaking: a silent one (« — », nothing done) is not kept, the
+   * others as one line — what woke him —, not its rules' text (up to 600 characters each) as if the pilot had said it
+   * (audit 2026-11-10, TA-16: the 24 turns kept filled with reflexes, the pilot's own words summarized away sooner).
+   */
+  private keep(q: string, text: string, actions: Action[], wake = false) {
+    if (wake) {
+      if (!actions.length && /^[—–-]?$/.test(text.trim())) return;
+      q = wakeLine(q);
+    }
     this.d.memory.add({ at: Date.now(), user: q, tars: text, did: actions.map(actionLine) });
     if (this.d.memory.full)
       void this.d.memory.compact(async (prev, turns) =>
@@ -204,6 +213,12 @@ export class TarsAgent {
 
 /** a waking's steps at most (the pilot's question: agent.ts MAX_STEPS) */
 export const WAKE_STEPS = 6;
+
+/** A waking in one line for his memory: who woke him and on what (triggers.ts wakeText's head), not the rules' text. */
+export function wakeLine(q: string): string {
+  const head = /^\[Woken by your (.*?)\. No pilot is speaking/s.exec(q)?.[1] ?? "a rule";
+  return `(woken by your ${head.replace(/\s+/g, " ").slice(0, 160)})`;
+}
 
 const doneWord = (lang: "fr" | "en", why: "steps" | "time" | "budget") =>
   lang === "fr"

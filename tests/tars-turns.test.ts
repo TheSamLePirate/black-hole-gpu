@@ -81,3 +81,49 @@ test("a waking (TA-06): a few steps at most, its budget looked at before each �
   console.log(`  with budget to spare: ${calls} steps`);
   expect(calls).toBeLessThanOrEqual(6);
 });
+
+test("a waking in the memory (TA-16): a silent one not kept, the others as one line — not as the pilot's 600 characters", async () => {
+  const { wakeText } = await import("../src/ai/triggers");
+  let answer = "—";
+  const talking = {
+    complete: async () => ({ content: answer, tool_calls: undefined }),
+    chat: async () => null,
+    spent: 0,
+  };
+  let data: MemoryData | null = null;
+  const memory = new TarsMemory({ get: () => data, set: (d: MemoryData) => void (data = d) } as never);
+  const A = new TarsAgent({
+    or: talking as never,
+    tools: () => [],
+    memory,
+    personality: () => ({ humour: 0.6, honesty: 0.9 }) as never,
+    lang: () => "en",
+    flight: () => ({}) as never,
+    say: () => {},
+    onAction: () => {},
+    onBusy: () => {},
+  });
+  const rule = {
+    id: "fuel",
+    reflex: true,
+    on: { kind: "fuel" },
+    prompt: "Check the fuel against the plan and warn the pilot if the reserve will be short. ".repeat(7),
+  };
+  const q = wakeText([rule] as never, { kind: "fuel", to: "low", detail: "12 % left" } as never);
+  expect(q.length).toBeGreaterThan(500);
+  // three silent wakings: nothing kept
+  for (let i = 0; i < 3; i++) await A.ask(q, { wake: { left: () => 10 } });
+  expect(memory.turns.length).toBe(0);
+  // one that speaks: kept as one short line, what woke him
+  answer = "Fuel at 12 %: the reserve holds to Edwards.";
+  await A.ask(q, { wake: { left: () => 10 } });
+  expect(memory.turns.length).toBe(1);
+  const t = memory.turns[0]!;
+  expect(t.user.length).toBeLessThan(200);
+  expect(t.user).toContain('reflex "fuel"');
+  expect(t.user).toContain("12 % left");
+  expect(t.tars).toBe(answer);
+  // the pilot's own question: kept word for word, as before
+  await A.ask("how much fuel?");
+  expect(memory.turns.at(-1)!.user).toBe("how much fuel?");
+});
