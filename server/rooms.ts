@@ -75,6 +75,9 @@ interface Live {
   match?: { from: number; ev: Record<string, unknown> };
   /** the room's light delay to its crew's ground stations, set by its owner (AUDIT-CREW priority 6): a newcomer told */
   delay?: { from: number; ev: Record<string, unknown> };
+  /** the members cut — their socket lost, no « leave » said —, held in the roster by slot a while: the others keep their
+   *  track and their direct link, their return takes the slot back (audit NET-11) */
+  cut: Map<number, { m: Member; device: string; timer: ReturnType<typeof setTimeout> }>;
 }
 
 /** what this server does beyond its protocol's version (the welcome's `f`): a newer page asks before it uses them */
@@ -96,6 +99,8 @@ export interface RoomsOptions {
   roomsPerHour?: number;
   /** an empty room kept this long after its last use [ms] (RD2; default 30 days) */
   keepEmptyMs?: number;
+  /** a member cut (his socket lost, no « leave » said) held in the roster this long [ms] (NET-11; default 30 s) */
+  cutGraceMs?: number;
 }
 
 /** RD2 (PLAN-RESEAU-DURCISSEMENT; audit NET-02, NET-03, NET-04, NET-15): the server's own defences, their figures. */
@@ -228,15 +233,16 @@ export function createRooms(o: RoomsOptions) {
 
   const send = (ws: ServerWebSocket<Peer>, m: ServerMsg) => ws.send(JSON.stringify(m));
   const fail = (ws: ServerWebSocket<Peer>, code: ErrorCode, msg: string, re?: number) => send(ws, { type: "error", re, code, msg });
-  const members = (l: Live): Member[] =>
-    [...l.peers.values()].map((w) => ({
-      slot: w.data.slot,
-      name: w.data.name,
-      colour: w.data.colour,
-      role: w.data.role,
-      device: publicId(w.data.device),
-      ...(w.data.away ? { away: true } : {}),
-    }));
+  const memberOf = (w: ServerWebSocket<Peer>): Member => ({
+    slot: w.data.slot,
+    name: w.data.name,
+    colour: w.data.colour,
+    role: w.data.role,
+    device: publicId(w.data.device),
+    ...(w.data.away ? { away: true } : {}),
+  });
+  /** the roster: those here, and those cut a while (marked) */
+  const members = (l: Live): Member[] => [...[...l.peers.values()].map(memberOf), ...[...l.cut.values()].map((c) => ({ ...c.m, cut: true }))];
   const roster = (l: Live) => {
     const m: ServerMsg = { type: "roster", members: members(l) };
     for (const w of l.peers.values()) send(w, m);
@@ -272,13 +278,23 @@ export function createRooms(o: RoomsOptions) {
     for (const p of l.peers.values()) send(p, m);
   };
 
-  const leave = (ws: ServerWebSocket<Peer>) => {
+  const leave = (ws: ServerWebSocket<Peer>, cut = false) => {
     const code = ws.data.room;
     if (!code) return;
     const l = live.get(code);
     ws.data.room = null;
     ws.unsubscribe(`room:${code}`);
     if (!l) return;
+    // (cut — the socket lost, no « leave » said —: held in the roster a while, marked; gone if not back by then)
+    if (cut && l.peers.get(ws.data.slot) === ws && l.peers.size > 1) {
+      const slot = ws.data.slot;
+      const timer = setTimeout(() => {
+        if (l.cut.get(slot)?.timer !== timer) return;
+        l.cut.delete(slot);
+        if (live.get(code) === l && l.peers.size) roster(l);
+      }, o.cutGraceMs ?? 30_000);
+      l.cut.set(slot, { m: memberOf(ws), device: ws.data.device, timer });
+    }
     // (his craft left in the world as it is)
     if (ws.data.last && l.rec.world[ws.data.device]) {
       l.rec.world[ws.data.device]!.craft = Buffer.from(ws.data.last).toString("base64");
@@ -292,6 +308,8 @@ export function createRooms(o: RoomsOptions) {
       rewarp(l, true);
       world(l);
     } else {
+      for (const c of l.cut.values()) clearTimeout(c.timer);
+      l.cut.clear();
       // (nobody left: the world runs on at ×1 until someone comes back)
       if (l.rec.clock.warp !== 1) {
         const h = now();
@@ -358,7 +376,7 @@ export function createRooms(o: RoomsOptions) {
           const rec = isCode(code) ? load(code) : null;
           if (!rec) return null;
           // (a room woken up: its clock carried on as it ran while nobody was in it)
-          const fresh: Live = { rec, peers: new Map() };
+          const fresh: Live = { rec, peers: new Map(), cut: new Map() };
           live.set(code, fresh);
           return fresh;
         })();
@@ -387,6 +405,14 @@ export function createRooms(o: RoomsOptions) {
           }
         }
         if (P.room) leave(ws);
+        // (back from a cut: its held place let go — its slot is its own again, below — NET-11)
+        for (const [s, c] of l.cut)
+          if (c.device === P.device) {
+            clearTimeout(c.timer);
+            l.cut.delete(s);
+          }
+        // (others cut a while: their places and pilots' seats kept for them)
+        const cutOthers = [...l.cut.values()];
         // (the same device back — a reconnection —: its slot taken back, the stale socket dropped)
         let slot = -1;
         for (const [s, w] of l.peers) if (w.data.device === P.device) slot = s;
@@ -401,9 +427,13 @@ export function createRooms(o: RoomsOptions) {
           old.data.room = null;
           old.close(4000, "replaced");
         } else {
-          if (l.peers.size >= MAX_DEVICES) return fail(ws, "full", "The room is full", m.id);
+          if (l.peers.size + cutOthers.length >= MAX_DEVICES) return fail(ws, "full", "The room is full", m.id);
           const role: Role = m.role === "spectator" || m.role === "instruments" ? m.role : "pilot";
-          if (role === "pilot" && [...l.peers.values()].filter((w) => w.data.role === "pilot").length >= MAX_PILOTS)
+          if (
+            role === "pilot" &&
+            [...l.peers.values()].filter((w) => w.data.role === "pilot").length + cutOthers.filter((c) => c.m.role === "pilot").length >=
+              MAX_PILOTS
+          )
             return fail(ws, "pilots-full", "Four pilots already fly in this room", m.id);
           // (his own slot back if it is free — a cut common to all, a server restarted: the first back took « the first free »
           // and the slots, by which scores, teams, formation and roles go, were swapped — audit NET-13 —; else the first free
@@ -414,14 +444,14 @@ export function createRooms(o: RoomsOptions) {
               .filter(([d, e]) => d !== P.device && e.slot !== undefined && now() - e.seen < SLOT_HELD_MS)
               .map(([, e]) => e.slot!),
           );
-          if (mine !== undefined && !l.peers.has(mine)) slot = mine;
+          if (mine !== undefined && !l.peers.has(mine) && !l.cut.has(mine)) slot = mine;
           else {
             slot = 0;
-            while (l.peers.has(slot) || held.has(slot)) slot++;
+            while (l.peers.has(slot) || l.cut.has(slot) || held.has(slot)) slot++;
             // (every place held lately and none free: the first free after all — the room's limits hold)
             if (slot >= MAX_DEVICES) {
               slot = 0;
-              while (l.peers.has(slot)) slot++;
+              while (l.peers.has(slot) || l.cut.has(slot)) slot++;
             }
           }
         }
@@ -622,7 +652,8 @@ export function createRooms(o: RoomsOptions) {
         if (raw[0] === MSG_CRAFT) ws.publish(`room:${P.room}`, raw);
       },
       close(ws: ServerWebSocket<Peer>) {
-        leave(ws);
+        // (a socket lost without « leave »: a cut — NET-11)
+        leave(ws, true);
       },
     },
     /** a room's stored record (the tests: its password kept salted) */

@@ -399,6 +399,15 @@ export class NetClient {
   private earlySignals: { from: number; data: SignalData }[] = [];
 
   private setRoom(r: Room | null) {
+    // (the same room taken back, the same slot — a cut of the server —: the others' tracks and our direct links kept, the
+    // links matched to the roster; before 13 Nov 2026 all cleared and rebuilt, the other craft gone meanwhile — NET-11)
+    const was = this.room;
+    if (r && was && this.mesh && r.code === was.code && r.slot === was.slot) {
+      this.room = r;
+      this.mesh.sync(r.members.map((x) => x.slot));
+      this.emit("room", r);
+      return;
+    }
     this.room = r;
     if (!r) this.earlySignals = [];
     this.remotes.clear();
@@ -550,18 +559,20 @@ export class NetClient {
 
   /** Our craft's sample, sent to the room (its slot, its sequence and its time stamped here). */
   sendCraft(s: Omit<CraftSample, "slot" | "seq" | "t"> & { t?: number }) {
-    if (!this.room || !this.link?.open) return;
+    // (the server cut: the direct links fly on — before 13 Nov 2026 nothing left without the WebSocket, the others froze then
+    // lost us though our links lived; audit NET-11)
+    if (!this.room) return;
     const full: CraftSample = { ...s, slot: this.room.slot, seq: this.seq++ & 0xffff, t: s.t ?? this.roomNow() };
     const buf = encodeCraft(full);
     // (straight to each peer reached; through the server as well while one is not — a duplicate is dropped)
     const reached = this.mesh?.send(buf) ?? new Set<number>();
     const others = this.room.members.filter((m) => m.slot !== this.room!.slot);
     if (reached.size) this.direct++;
-    if (others.some((m) => !reached.has(m.slot))) {
+    if (this.link?.open && others.some((m) => !reached.has(m.slot))) {
       this.link.send(buf);
       this.relayed++;
       this.keptAt = this.now();
-    } else if (this.now() - this.keptAt > 1000 && s.kind !== 4) {
+    } else if (this.link?.open && this.now() - this.keptAt > 1000 && s.kind !== 4) {
       // (all reached directly: the server kept up to date all the same — a second apart —, the world's, R7)
       new Uint8Array(buf)[0] = MSG_KEEP;
       this.link.send(buf);

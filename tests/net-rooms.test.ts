@@ -405,3 +405,46 @@ describe("slots kept across a common cut (NET-13)", () => {
     }
   }, 20_000);
 });
+
+describe("a member cut, not gone (NET-11)", () => {
+  test("a socket lost without « leave »: kept in the roster as cut a while — the others keep his track and their direct link —, taken back at his return; a leave said: gone at once", async () => {
+    const db = `/tmp/kerr-rooms-net11-${process.pid}.sqlite`;
+    const r = createRooms({ db, build: "test", cutGraceMs: 1500 });
+    const srv = Bun.serve({ port: 0, fetch: (req, s) => r.upgrade(req, s as never), websocket: r.websocket });
+    const u = `ws://127.0.0.1:${srv.port}/`;
+    const mk = (device: string, name: string) => new NetClient({ url: u, build: "test", id: { device, name, colour: "#ff8800" } });
+    const a = mk("net11-a", "Ana");
+    const b = mk("net11-b", "Ben");
+    try {
+      const { code } = await a.create("Cut", 0);
+      await b.join(code);
+      await until(() => b.room?.members.length === 2);
+      // (Ana's socket lost — no « leave »)
+      (a as unknown as { link: { close(): void } }).link.close();
+      await until(() => !!b.room?.members.find((m) => m.slot === 0)?.cut, 3000);
+      const during = b.room!.members.map((m) => `${m.name}${m.cut ? " (cut)" : ""}`);
+      // (her way back: the same slot, no longer cut)
+      await until(() => a.status === "online" && !!a.room, 8000);
+      await until(() => b.room?.members.length === 2 && !b.room.members.some((m) => m.cut), 3000);
+      expect(a.room?.slot).toBe(0);
+      // (a leave said: gone at once, not held)
+      a.close();
+      await until(() => b.room?.members.length === 1, 3000);
+      console.log(`  during the cut, Ben's roster: ${during.join(", ")}; Ana back at slot ${0}; her leave: gone at once`);
+      expect(during).toContain("Ana (cut)");
+      // (a cut never back: gone after the grace)
+      const c = mk("net11-c", "Cy");
+      await c.join(code);
+      await until(() => b.room?.members.length === 2);
+      (c as unknown as { link: { close(): void }; closed: boolean }).closed = true;
+      (c as unknown as { link: { close(): void } }).link.close();
+      await until(() => !!b.room?.members.find((m) => m.name === "Cy")?.cut, 3000);
+      await until(() => b.room?.members.length === 1, 4000);
+      b.close();
+    } finally {
+      r.close();
+      srv.stop(true);
+      await Bun.$`rm -f ${db} ${db}-wal ${db}-shm`.nothrow();
+    }
+  }, 30_000);
+});

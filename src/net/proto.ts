@@ -31,6 +31,8 @@ export interface Member {
   device: string;
   /** out of view — his tab put aside (src/game/out-of-view.ts): still in the room, his ask of its pace not counted */
   away?: boolean;
+  /** cut — his socket to the server lost, no « leave » said —: held a while, his craft by the direct link if it lives (NET-11) */
+  cut?: boolean;
 }
 
 export interface RoomInfo {

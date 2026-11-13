@@ -5879,3 +5879,21 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
 - Preuves : **observé** (kerr-mini, Tromsø, 15 déc. 22:00) : aucune bande blanche avec ou sans la borne ; sans A/A l'écart de pixels n'est pas
   attribué. La vue d'origine (les fjords, AM2) reste à revoir avant tout retrait.
 
+## 2026-11-14T08:30Z — Audit NET-11 (RD5, vague 6) : le serveur coupé, les liens directs volent ; la reprise garde pistes et liens
+
+- Contribution : §19 (le vol à plusieurs stable : un redémarrage du serveur de salles ne fige plus les autres) ; audit 2026-11-10, NET-11
+  (PLAN-RESEAU-DURCISSEMENT RD5).
+- Réalisé : `net/client.ts` — `sendCraft` envoie par les liens directs sans le WebSocket (le serveur seulement s'il est joignable) ;
+  `setRoom` : la même salle reprise à la même place garde les pistes et le maillage (`sync` au lieu de tout fermer). `server/rooms.ts` —
+  un socket perdu sans « leave » est une coupure : le membre reste 30 s dans la liste, marqué `cut` (`cutGraceMs`), sa place et son siège de
+  pilote tenus ; son retour reprend la place et le retire des coupés ; un « leave » le retire aussitôt. `proto.ts` (`Member.cut`).
+  NETWORK.md/.fr, E2E-CATALOGUE.
+- Preuves : **reproduit avant** — unitaire `net-rooms` « NET-11 » (un coupé retiré aussitôt de la liste de l'autre) et e2e `net-cut` (deux pages
+  liées en direct, la liaison de la première coupée 3 s ; **sur l'ancien code, le même test** : 0 échantillon envoyé, 0 reçu, 0 piste gardée à la
+  reprise) ; **après** : 3 envoyés, 3 reçus, 3 gardés (en orbite, un échantillon par seconde) ; « Ana (cut) » dans la liste de Ben, reprise à
+  la place 0, départ dit retiré aussitôt, coupé jamais revenu retiré après le délai. Tests réseau verts ; e2e `net-flight`, `net-coop`,
+  `net-board`, `net-rooms`, `net-slot-state` 17/0. Deux erreurs de ma mesure corrigées en route : un blocage CDP qui n'arrête pas un WebSocket,
+  une clé de piste (`place × 8`).
+- Limites : le panneau Réseau ne montre pas encore « coupé » à côté d'un nom ; le reste de RD5 (garde de lien mort, contre-pression, gros
+  messages hors du canal fiable — NET-14, NET-18, NET-19, NET-22, NET-23) non fait ; NET-10 (l'état dur repris) non fait.
+

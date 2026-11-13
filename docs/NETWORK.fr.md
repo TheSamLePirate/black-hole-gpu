@@ -34,6 +34,11 @@ reste entier : rien ne se connecte tant que le joueur ne demande pas une salle, 
   quand la liaison est perdue (le jeu continue, la liaison est retentée et la salle reprise, à la même
   place). Si la salle ne nous reprend plus — supprimée, pleine, son mot de passe changé —, on la quitte et c'est dit
   (« retour au jeu solo ») ; avant le 13 nov. 2026 le refus était avalé et le joueur volait « en salle », seul (audit NET-12).
+  Pendant une coupure de la liaison au serveur, les liens directs continuent : nos échantillons partent encore vers ceux qu'on
+  atteint en WebRTC, et le serveur nous garde 30 s dans la liste de la salle, marqués `cut` — les autres gardent notre piste et
+  leur lien direct ; repris à la même place, nos pistes et nos liens sont gardés, pas reconstruits (avant le 13 nov. 2026, audit
+  NET-11 : plus rien ne partait sans le WebSocket, les autres nous lâchaient aussitôt, et tout était effacé au retour). Un
+  « quitter » dit : parti aussitôt.
 - Une salle accueille 8 appareils, dont 4 pilotes. Le serveur la garde jusqu'à ce que son propriétaire la
   supprime ; son horloge continue quand personne n'y est.
 - **Réglages › Réseau › Menu Réseau** désactivé : aucune trace du réseau dans le jeu.
