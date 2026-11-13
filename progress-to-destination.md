@@ -4731,3 +4731,23 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   du replay continue pendant la reprise GPU. Leurs conditions gardées telles quelles, notées dans `session.ts`.
 - **Suite :** la boucle d'image elle-même (`frame.ts`, AR-03/AR-04) est un gros déplacement dans la zone des leviers du rendu : à faire
   avec la session du rendu et l'accord de Sam.
+
+## 2026-11-13T12:27Z — AR-05 lu par section : la frame CPU en orbite et en F-35 ; les à-coups de la mini-carte trouvés (règles 1 et 3)
+
+- **Contribution à la destination :** §8 (régularité, pics CPU hors du budget GPU) — lire les plafonds avant d'ouvrir un lot.
+- **Mesure (e2e `loop-cpu`, M1 Max, fenêtre visible, tuiles et IGN bloqués, fe61b1dc + ce test) :** la sonde d'abord — A/A Δ p50 0,30–0,40 ms ;
+  3 ms ajoutés à chaque `sim.step` lus **+2,65–2,84 ms dans leur section**, mais seulement +1,9–2,2 ms sur la médiane de la boucle entière
+  (le CPU ajouté chevauche l'attente du GPU) : **les sections sont la mesure, le total de la boucle n'est qu'un contexte**. Orbite
+  (Artemis, ~115 boucles/s) : le HUD de vol 1,7–2,0 ms (pire 11–15), le pas du vol 0,9–1,1, l'encodage du rendu 0,9–1,0, marqueurs et
+  bandes 0,8–1,0 (pire 4–6), **la mini-carte 0,6–0,75 ms en moyenne, 10–13 ms au pire** ; F-35 à 3 000 m (~100/s) : rendu 0,9, vol 0,9,
+  `flightInfo` 0,6, HUD 0,4 ms. Les sondes de diagnostic (saccades, caméra), inactives, sont sous 0,05 ms.
+- **La mini-carte, analysée (sondes temporaires, non commitées) :** profil CPU de 6 s en orbite — 498 ms dans son dessin (≈ 8 ms par dessin, dix
+  par seconde), **75 % dans l'éphéméride** (`helioNow` : la Lune par DE440, le centre de la Terre, Kepler), appelée par les marques, la trace,
+  le plus proche passage et les apsides de notre trajectoire. Compteurs dans `helio()` : ~100 000 appels/s, ~23 000 calculs, **~4 000 instants
+  distincts par seconde dont 6 réutilisés la seconde suivante** — les grilles partent de « maintenant » et de chaque nouvelle prédiction : un
+  mémo plus grand ne gagnerait rien (les calculs valent déjà instants × corps).
+- **Décision (règle 1) :** plafond moyen < 1 ms par image, mais **des à-coups de 8–13 ms dix fois par seconde** en orbite (au-delà d'une image
+  à 120 Hz) : un lot d'expérience se justifie. Proposé, non ouvert : des instants ancrés sur une grille fixe (réutilisés d'un dessin à
+  l'autre), ou la prédiction qui garde les états des corps à ses pas. `helio()` est partagé avec la physique du vol : à faire avec ses tests,
+  pas à la hâte. AR-05 : l'autosauvegarde fermée (mesurée), la mini-carte ouverte (cause établie), les lectures de mise en page de l'A320
+  non mesurées.
