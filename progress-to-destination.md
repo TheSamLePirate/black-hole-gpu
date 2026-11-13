@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-13 22:30 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-13 22:35 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous.
@@ -6067,4 +6067,9 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
 - Limites : 77 messages avec une unité écrite restent (`src/game`, `main.ts`, d'autres de `src/controller` — l'amarrage en m/s, les
   vaisseaux) ; certains demandent une précision que `fSpd` (arrondi à l'unité) n'a pas — un format précis (pieds/seconde, ft/min) à ajouter
   d'abord ; le pas de sélection de l'altitude (10 m) reste métrique.
+
+## 2026-11-13T22:35Z — Le coût des aurores à échelle fixe
+
+- Réalisé : `aurora-cost` `AC_FIXED=1` (échelle tenue). Preuves : **mesuré** (kerr-mini) : au sol nul, orbite +0,95 ms, Jupiter +0,25 ms,
+  schéma de la magnétosphère +2,45 ms — seul ce dernier passe 1 ms, hors du profil principal. PROBLEMES, E2E-CATALOGUE.
 

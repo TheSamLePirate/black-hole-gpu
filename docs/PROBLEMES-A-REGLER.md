@@ -655,6 +655,9 @@ termes à un nœud fautif (43,0666 N, 6,12883 E, niveau 1).
   ajoutés depuis — moins d'évaluations, rien sous 45° de latitude magnétique, aucun noyau au-delà de 1 000 lux —, leur gain enfin mesuré). Jupiter
   +0,4 ms. Depuis 400 km +1,7 ms et le schéma de la magnétosphère +3,35 ms : **échelles différentes entre les côtés** (0,88 / 1,00 et
   0,88 / 0,80) — non lisibles, à refaire à échelle fixe. **Règle 1** : au sol, plus de gain à prendre ; pas de lot de performance.
+- **À échelle fixe** (~22:35 UTC, `AC_FIXED=1`, run `…-aurora-cost-fixed`, kerr-mini) : Tromsø −0,55 ms (nul), **orbite à 400 km +0,95 ms**,
+  Jupiter +0,25 ms, **le schéma de la magnétosphère +2,45 ms** (échelle 1,00 des deux côtés). Règle 1 : seul le schéma passe 1 ms — un mode de
+  visualisation vu de 400 000 km, hors du profil principal (§8) : pas prioritaire ; l'aurore elle-même ne demande plus de lot.
 
 ## ~~Saturne vue de son ombre, l'œil adapté : des artefacts partout~~ — revue le 13 novembre 2026 (~22:20 UTC) : l'adaptation rendue
 

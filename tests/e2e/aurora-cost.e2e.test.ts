@@ -6,7 +6,7 @@ import { App, E2E, stopServer } from "./lib/app";
 // feature off then on, twice (ABAB, the drift averaged out), the GPU frame time's median over 24 readings 300 ms apart
 // (game.perf gpuFrameMs), the render scale noted. Views: Tromsø at Kp 4 looking south; 400 km over Manitoba looking south at
 // Kp 5; 7 000 km over Jupiter's night side at activity 5; the magnetosphere diagram from 400 000 km over the Earth. AC_OUT,
-// AC_ONLY (the views whose name holds it).
+// AC_ONLY (the views whose name holds it), AC_FIXED=1 (the render scale held: dynamic resolution off).
 // Output: remote-results/aurora-cost/cost.json, a shot of each view on. Done when: every view measured both ways, no GPU
 // error. Duration: ~6 min warm (Jupiter's near kernel: ~200 s cold — docs/PROBLEMES-A-REGLER.md).
 const OUT = process.env.AC_OUT ?? "remote-results/aurora-cost";
@@ -42,7 +42,10 @@ test.skipIf(!E2E)(
     const measure = async (name: string, place: string, on: string, off: string) => {
       // (AC_ONLY: the views whose name holds it)
       if (process.env.AC_ONLY && !name.includes(process.env.AC_ONLY)) return;
-      await app.js(`(() => { ${off}; ${place}; return 1; })()`);
+      // (AC_FIXED=1: the render scale held — dynamic resolution off — so that both sides are read at one scale: the orbit's and the
+      // magnetosphere's sides came at 0.88 / 1.00 and 0.88 / 0.80, 13 Nov 2026)
+      const fixed = process.env.AC_FIXED ? "__bh.settings.dynamicResolution = false;" : "";
+      await app.js(`(() => { ${fixed} ${off}; ${place}; return 1; })()`);
       await settle();
       const runs: { off: number[]; on: number[]; scaleOff: number[]; scaleOn: number[] } = { off: [], on: [], scaleOff: [], scaleOn: [] };
       for (let r = 0; r < 2; r++) {
