@@ -1,11 +1,13 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { App, E2E, stopServer } from "./lib/app";
 
-// TARS's Deepgram voice played as it comes (audit 2026-11-10, TA-22): a long line said, its first sound heard on the voice bus
-// (the engine's meter, `busLevels().voice`) — against the old way, which waited for the whole line before playing it
-// (`voiceSynth`: the time to its end). Witnesses (method rule 3): a short line and a long one — the old wait grows with the
-// line, the new first sound does not; two long lines alike. Only with a Deepgram key (the dev relay, .env).
-// Done when: the long lines' first sound heard under half the old wait (over 4 s), no gap between their parts. Duration: ~60 s.
+// TARS's Deepgram voice played as it comes (audit 2026-11-10, TA-22): a long line said, its first sound heard on the
+// voice bus (the engine's meter, `busLevels().voice`) — against the old way, which waited for the whole line before
+// playing it (`voiceSynth`: the time to its end). Witnesses (method rule 3): a short line and a long one — the old wait
+// grows with the line, the new first sound does not; two long lines alike. Only with a Deepgram key (the dev relay,
+// .env).
+// Done when: the long lines' first sound heard under half the old wait (over 4 s), no gap between their parts.
+// Duration: ~60 s.
 
 const KEY = !!process.env.DEEPGRAM_API_KEY;
 process.env.KERR_EAR_RELAY = "1";

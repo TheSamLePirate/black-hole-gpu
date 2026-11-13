@@ -1,11 +1,13 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { App, E2E, stopServer } from "./lib/app";
 
-// The listeners a menu leaves behind (audit 2026-11-10, AR-18: « 418 listeners added, 24 removed — a leak supposed, to confirm
-// by a memory profile after 50 openings »). The pause and its settings opened and closed 50 times by real keys and clicks;
-// the page's live event listeners, DOM nodes and JS heap (CDP Performance.getMetrics, after a garbage collection) read before
-// and after. The probe's witnesses (method rule 3): idle for as long (A/A: nothing grows), and a leak injected — one window
-// listener added at each of 20 openings — seen. Done when: the three measured and said, 50 openings leaving at most 5 listeners and 50 nodes. Duration: ~2 min.
+// The listeners a menu leaves behind (audit 2026-11-10, AR-18: « 418 listeners added, 24 removed — a leak supposed, to
+// confirm by a memory profile after 50 openings »). The pause and its settings opened and closed 50 times by real keys
+// and clicks; the page's live event listeners, DOM nodes and JS heap (CDP Performance.getMetrics, after a garbage
+// collection) read before and after. The probe's witnesses (method rule 3): idle for as long (A/A: nothing grows), and a
+// leak injected — one window listener added at each of 20 openings — seen.
+// Done when: the three measured and said, 50 openings leaving at most 5 listeners and 50 nodes.
+// Duration: ~2 min.
 
 describe.skipIf(!E2E)("the listeners a menu leaves behind", () => {
   let app: App;

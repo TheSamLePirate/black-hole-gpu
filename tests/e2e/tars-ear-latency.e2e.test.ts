@@ -2,11 +2,11 @@ import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { resolve } from "node:path";
 import { App, E2E, stopServer } from "./lib/app";
 
-// TARS's ear: how long from F6 pressed to the first sound sent to Deepgram (audit 2026-11-10, TA-22) — what the pilot says
-// before it is lost. The probe: the ear's steps dated from the key down in its trail (src/ai/listen.ts). Its witnesses
-// (CLAUDE.md, method rule 3): two holds alike (A/A), then the microphone made 500 ms slower — the probe must see it.
-// A tap (the field) closes that early ear unseen. Only with a Deepgram key (the dev relay, .env). Done when: the three holds'
-// « first audio » read, the witnesses hold, a tap shows no listening and asks nothing.
+// TARS's ear: how long from F6 pressed to the first sound sent to Deepgram (audit 2026-11-10, TA-22) — what the pilot
+// says before it is lost. The probe: the ear's steps dated from the key down in its trail (src/ai/listen.ts). Its
+// witnesses (CLAUDE.md, method rule 3): two holds alike (A/A), then the microphone made 500 ms slower — the probe must
+// see it. A tap (the field) closes that early ear unseen. Only with a Deepgram key (the dev relay, .env).
+// Done when: the three holds' « first audio » read, the witnesses hold, a tap shows no listening and asks nothing.
 // Duration: ~40 s.
 
 const KEY = !!process.env.DEEPGRAM_API_KEY;

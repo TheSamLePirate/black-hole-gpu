@@ -5,7 +5,8 @@ import { App, E2E, stopServer } from "./lib/app";
 // craft — you have the controls. An F-35 flying over the Atlantic (tiles off), its autopilot holds, autothrottle and flight plan's
 // NAV engaged, then the key — a real one. Before 13 Nov 2026 the key stopped the mission, the hold and the spacecraft's autopilot
 // but on an aircraft its AP, A/THR and NAV flew on.
-// Done when: after Backspace no hold, no autothrottle, no NAV, no approach, no formation left; said. Duration: ~40 s.
+// Done when: after Backspace no hold, no autothrottle, no NAV, no approach, no formation left; said.
+// Duration: ~40 s.
 
 describe.skipIf(!E2E)("release the controls on an aircraft", () => {
   let app: App;

@@ -3,12 +3,13 @@ import { App, E2E, stopServer } from "./lib/app";
 
 const OUT = "remote-results/tars-duck";
 
-// The voices heard over the engines (audio-engine duck; audit 2026-11-10, TA-13): a line said — TARS's, the callouts, the
-// radio — lowers the engines, the ambience and the music under it (−8 dB), as a room player's voice already did; the pilot
-// speaking (F6 held) lowers them more (−14 dB) and cuts TARS's line being said. Before 13 Nov 2026 only another player's
-// voice lowered anything: TARS was covered by full power, and F6 neither cut him nor lowered the rest.
-// Done when: the engine and music busses' gains drop under a TARS line and come back after it; F6 held drops them further and
-// TARS's line is cut. Duration: ~30 s.
+// The voices heard over the engines (audio-engine duck; audit 2026-11-10, TA-13): a line said — TARS's, the callouts,
+// the radio — lowers the engines, the ambience and the music under it (−8 dB), as a room player's voice already did; the
+// pilot speaking (F6 held) lowers them more (−14 dB) and cuts TARS's line being said. Before 13 Nov 2026 only another
+// player's voice lowered anything: TARS was covered by full power, and F6 neither cut him nor lowered the rest.
+// Done when: the engine and music busses' gains drop under a TARS line and come back after it; F6 held drops them
+// further and TARS's line is cut.
+// Duration: ~30 s.
 
 describe.skipIf(!E2E)("the voices over the engines", () => {
   let app: App;

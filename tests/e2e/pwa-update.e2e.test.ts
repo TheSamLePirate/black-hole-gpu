@@ -3,12 +3,14 @@ import { App, E2E, stopServer } from "./lib/app";
 
 const OUT = "remote-results/pwa-update";
 
-// A new version of the game, installed (audit 2026-11-10, QA-16): its service worker found by an update (the server under
-// KERR_SW_FRESH makes a new build at each ask, as in development) waits for the page to tell it to take over. The player must
-// be offered that: the notice's button runs it, the page reloads onto the new build. Before 13 Nov 2026 only a toast said
-// « reload the page to run it » — no button, and a reload left the old worker in charge (a waiting worker is not activated by
-// reloading its only tab). Done when: the update found, the notice and its button there, its button pressed → the new build
-// in charge (no worker waiting). Duration: ~40 s.
+// A new version of the game, installed (audit 2026-11-10, QA-16): its service worker found by an update (the server
+// under KERR_SW_FRESH makes a new build at each ask, as in development) waits for the page to tell it to take over. The
+// player must be offered that: the notice's button runs it, the page reloads onto the new build. Before 13 Nov 2026 only
+// a toast said « reload the page to run it » — no button, and a reload left the old worker in charge (a waiting worker
+// is not activated by reloading its only tab).
+// Done when: the update found, the notice and its button there, its button pressed → the new build in charge (no worker
+// waiting).
+// Duration: ~40 s.
 
 process.env.KERR_SW_FRESH = "1";
 

@@ -3,10 +3,11 @@ import { App, E2E, stopServer } from "./lib/app";
 
 const OUT = "remote-results/tars-pcd";
 
-// The F-35's panoramic display through TARS (audit 2026-11-10, TA-17): his tool `pcd` — its pages read, the targeting camera
-// (EOTS) shown in the second portal, the right side made one large portal — by the display's own actions (f35/pcd.ts show,
-// full), in the cockpit of an F-35 over the Atlantic (tiles off). Done when: the display's own pages and halves are what the
-// tool asked, the cockpit shot. Duration: ~40 s.
+// The F-35's panoramic display through TARS (audit 2026-11-10, TA-17): his tool `pcd` — its pages read, the targeting
+// camera (EOTS) shown in the second portal, the right side made one large portal — by the display's own actions
+// (f35/pcd.ts show, full), in the cockpit of an F-35 over the Atlantic (tiles off).
+// Done when: the display's own pages and halves are what the tool asked, the cockpit shot.
+// Duration: ~40 s.
 
 describe.skipIf(!E2E)("the panoramic display through TARS", () => {
   let app: App;

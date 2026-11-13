@@ -1,10 +1,11 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { App, E2E, stopServer } from "./lib/app";
 
-// The offline zones through TARS (audit 2026-11-10, TA-17): his tool `offline_zones` on the installed game (its service worker),
-// the Offline tab's own actions — the zones listed, a zone estimated over Chamonix (its size and time, nothing downloaded: no
-// IGN tile asked), a zone unknown refused by name (a removal unconfirmed: tests/tars-tools.test.ts). Done when: the list read, the
-// estimate a size in MB and a time, the refusal said. Duration: ~40 s.
+// The offline zones through TARS (audit 2026-11-10, TA-17): his tool `offline_zones` on the installed game (its service
+// worker), the Offline tab's own actions — the zones listed, a zone estimated over Chamonix (its size and time, nothing
+// downloaded: no IGN tile asked), a zone unknown refused by name (a removal unconfirmed: tests/tars-tools.test.ts).
+// Done when: the list read, the estimate a size in MB and a time, the refusal said.
+// Duration: ~40 s.
 
 describe.skipIf(!E2E)("the offline zones through TARS", () => {
   let app: App;

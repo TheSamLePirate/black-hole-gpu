@@ -3,12 +3,13 @@ import { App, E2E, stopServer } from "./lib/app";
 
 const OUT = "remote-results/tars-settings-panel";
 
-// A setting changed by TARS goes the panel's way (audit 2026-11-10, TA-09): `set_settings` — here by its own command typed in
-// his console, `/set` — is undone by the Lab's Undo like one the player changed, and the quality preset shown follows it.
-// Before 13 Nov 2026 the tool wrote `settings` itself and told the game: the Lab's history never saw it (Undo did nothing),
-// and its preset could stay shown as matching.
+// A setting changed by TARS goes the panel's way (audit 2026-11-10, TA-09): `set_settings` — here by its own command
+// typed in his console, `/set` — is undone by the Lab's Undo like one the player changed, and the quality preset shown
+// follows it. Before 13 Nov 2026 the tool wrote `settings` itself and told the game: the Lab's history never saw it
+// (Undo did nothing), and its preset could stay shown as matching.
 // Done when: after `/set wind 3`, the Lab's Undo is enabled and brings the wind back; after `/set realtimeSteps …` the
-// preset shown is « Custom ». Duration: ~40 s.
+// preset shown is « Custom ».
+// Duration: ~40 s.
 
 describe.skipIf(!E2E)("a setting changed by TARS, the panel's way", () => {
   let app: App;

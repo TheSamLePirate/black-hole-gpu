@@ -3,10 +3,11 @@ import { App, E2E, stopServer } from "./lib/app";
 
 const OUT = "remote-results/tars-room";
 
-// The network room through TARS (audit 2026-11-10, TA-17): his tool `room`, typed in his console as a command (`/tool room …`),
-// on the dev server's real rooms — made, its status read as the model reads it (its code, its members), left — by the Network panel's own actions.
-// Before 13 Nov 2026 TARS had no way to the room. Done when: a room made by the tool, its code the client's, the status
-// naming it, left back to solo. Duration: ~30 s.
+// The network room through TARS (audit 2026-11-10, TA-17): his tool `room`, typed in his console as a command (`/tool
+// room …`), on the dev server's real rooms — made, its status read as the model reads it (its code, its members), left —
+// by the Network panel's own actions. Before 13 Nov 2026 TARS had no way to the room.
+// Done when: a room made by the tool, its code the client's, the status naming it, left back to solo.
+// Duration: ~30 s.
 
 describe.skipIf(!E2E)("the room through TARS", () => {
   let app: App;
