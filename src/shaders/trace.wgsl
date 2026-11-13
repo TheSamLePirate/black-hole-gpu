@@ -15484,6 +15484,20 @@ fn liteFinish(idx: u32, centre: vec2f, pos: vec2f, G: vec3f, rd: vec3f, tH: f32,
 const RASTER_WATER_FLAG = 256u;
 const RASTER_WATER = -5.0;
 fn rasterWaterOn() -> bool { return (u32(P.mouthList[1].y + 0.5) & RASTER_WATER_FLAG) != 0u; }
+// The screen's water tiles (the screen's classification — Sam's decision 1, 13 Nov 2026; renderer encodeWaterTiles): the 8 × 8
+// tiles holding a pixel marked water this frame (RASTER_WATER), listed by a small kernel of their own from the moments — the
+// ground's kernels untouched: a mark written there cost them ~0.8 ms on kerr-mini (J0, 13 Nov 2026) —, the list copied to the
+// stamps' tail, the water's kernels dispatched over it alone (indirect), not the whole screen: launched there with nothing to do,
+// they cost 2.1 ms on kerr-mini
+fn screenTilesX() -> u32 { return (u32(P.res.x) + 7u) / 8u; }
+fn screenTiles() -> u32 { return screenTilesX() * ((u32(P.res.y) + 7u) / 8u); }
+// (the stamps' last four words kept — the sea's stamps —, the tiles' list before them)
+fn screenTileBase() -> u32 { return arrayLength(&stamps) - 4u - screenTiles(); }
+// (a thread of a kernel dispatched over the water's tiles: its pixel — the tile its workgroup was given, its place in it)
+fn waterTilePixel(wid: vec3u, lid: vec3u) -> vec3u {
+  let t = stamps[screenTileBase() + wid.x];
+  return vec3u((t % screenTilesX()) * 8u + lid.x, (t / screenTilesX()) * 8u + lid.y, 0u);
+}
 // a raster pixel's frame jitter (shadeLite, shadeWater alike)
 fn liteJitter(gid: vec2u) -> vec2f {
   if ((P.frame.z & FLAG_TEMPORAL) == 0u) { return vec2f(0.0); }
@@ -16282,7 +16296,9 @@ fn shadeLiteFinish(@builtin(global_invocation_id) gid: vec3u) {
 // seaShade mixed them —, their difference with the mirror they replace added at their weight; then the air and the clouds
 // (liteFinishAt). liteOut read where the LUT is bound (binding 2), the record where the deferred ground's light reads its own (matIn)
 @compute @workgroup_size(8, 8)
-fn shadeWaterFinish(@builtin(global_invocation_id) gid: vec3u) {
+fn shadeWaterFinish(@builtin(workgroup_id) wid: vec3u, @builtin(local_invocation_id) lid: vec3u) {
+  // (dispatched over the water's tiles — waterTilePixel)
+  let gid = waterTilePixel(wid, lid);
   if (gid.x >= u32(P.res.x) || gid.y >= u32(P.res.y)) { return; }
   let idx = gid.y * u32(P.res.x) + gid.x;
   let mk = moments[idx].x;
@@ -16687,7 +16703,9 @@ fn skyFill(@builtin(global_invocation_id) gid: vec3u) {
 // the far clouds, the shallow bed, the foam and the surf —; a river or a lake by inlandWater, their own style; a cascade's
 // white water where the inland water's ground is steep. Then the air and the clouds, as shadeLite's.
 @compute @workgroup_size(8, 8)
-fn shadeWater(@builtin(global_invocation_id) gid: vec3u) {
+fn shadeWater(@builtin(workgroup_id) wid: vec3u, @builtin(local_invocation_id) lid: vec3u) {
+  // (dispatched over the water's tiles — waterTilePixel —, the open sea's kernel too)
+  let gid = waterTilePixel(wid, lid);
   let W = u32(P.res.x);
   let H = u32(P.res.y);
   if (gid.x >= W || gid.y >= H || !rasterPrimary() || !HAS_BODIES || P.near0.w < 0.5) { return; }

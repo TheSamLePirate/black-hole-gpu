@@ -2,10 +2,15 @@ import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { mkdirSync } from "node:fs";
 import { $ } from "bun";
 import { App, E2E, stopServer } from "./lib/app";
-import { intervals, J0_FIXED as J0_FIXED_BASE, J0_SCENE } from "./lib/j0-scene";
+import { intervals, J0_FIXED as J0_FIXED_BASE, J0_SCENE as J0_SCENE_BASE } from "./lib/j0-scene";
 
 // (J0_FPSCAP: the frame rate bounded — settings.fpsCap, whole refreshes of the display — for the palier's judgement « borné et soutenu »,
 // Sam's decision of 13 Nov 2026, J0-CONTRAT §2; 0 or unset: as the profile has it)
+// (J0_START=lat,lon,agl,hdg,speed: the same flight from elsewhere — NOT the J0 contract's scene: an A/B where J0's view misses what
+// is measured — a land view for the water's tiles, 13 Nov 2026 —; its results said apart, never a fiche's)
+const J0_SCENE = process.env.J0_START
+  ? { ...J0_SCENE_BASE, id: `${J0_SCENE_BASE.id}+start`, start: process.env.J0_START.split(",").map(Number) as typeof J0_SCENE_BASE.start }
+  : J0_SCENE_BASE;
 const J0_FIXED = process.env.J0_FPSCAP ? J0_FIXED_BASE.replace(/\}\s*$/, `, fpsCap: ${Number(process.env.J0_FPSCAP)} }`) : J0_FIXED_BASE;
 import { sceneryReady } from "./lib/plan-views";
 
@@ -327,11 +332,13 @@ describe.skipIf(!E2E)("J0: the reference flight over Toulon-Hyères", () => {
           pressure: [th0.pressure ?? null, th1.pressure ?? null],
           compilingSeen: Math.max(0, ...f.samples.map((x) => Number(x.compiling) || 0)),
           tilesPendingMax: Math.max(0, ...f.samples.map((x) => Number(x.tilesPending) || 0)),
-          top: f.passes.slice(0, 10),
+          // (every pass — the empty dispatches' cost too: the water's kernels launched full screen with no water marked, the screen's
+          // tile classification's ceiling)
+          passes: f.passes,
           gpuErrors: f.gpuErrors,
         };
         rows.push(row);
-        console.log(`  J0 ablation ${key}: ${JSON.stringify({ ...row, top: undefined })}`);
+        console.log(`  J0 ablation ${key}: ${JSON.stringify({ ...row, passes: undefined })}`);
         expect(f.gpuErrors).toBe(0);
       }
       out.ablations = rows;

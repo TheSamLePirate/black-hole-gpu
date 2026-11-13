@@ -702,6 +702,9 @@ interface Target {
   polAcc: GPUBuffer; // Σ Stokes Q, U per pixel
   /** shadeLite's surfaces for its finishing pass (tracer-source.ts withLiteSplit) and their bind groups — made at the first lite pass */
   liteOut?: GPUTexture;
+  /** the screen's water tiles' list, compacted each frame — its count the water's kernels' indirect dispatch (renderer
+   *  encodeWaterTiles) */
+  waterTiles?: { out: GPUBuffer; u: GPUBuffer; bind: GPUBindGroup; n: number };
   liteBinds?: {
     lut: GPUTexture | null;
     lite: GPUBindGroup;
@@ -3073,8 +3076,11 @@ export class Renderer {
     // (words past the image: the sky's discs' rectangles — trace.wgsl main's layers z ≥ 1, renderer discRects —, then the frame
     // the raster's open sea was last seen — the last word but one — and its sea drawn — its last word: trace.wgsl shadeWater, renderer
     // seaProbe)
+    // (… and before those last four words, the list of the screen's 8 × 8 tiles holding water — trace.wgsl screenTileBase, renderer
+    // encodeWaterTiles)
+    const tiles = Math.ceil(width / 8) * Math.ceil(height / 8);
     const stamps = d.createBuffer({
-      size: (px + 4 * SKY_DISCS_MAX + 12 + 4) * 4,
+      size: (px + 4 * SKY_DISCS_MAX + 12 + tiles + 4) * 4,
       usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC | GPUBufferUsage.COPY_DST,
     });
     // realtime reconstruction of stale pixels (live view only): horizontal pass of the gather
@@ -3185,6 +3191,8 @@ export class Renderer {
     t.temporal?.buf.destroy();
     t.liteOut?.destroy();
     for (const m of t.liteMat ?? []) m.destroy();
+    t.waterTiles?.out.destroy();
+    t.waterTiles?.u.destroy();
   }
 
   /** the tiles the tracer reads (binding 28): the Moon's while they are drawn, else the Earth's */
@@ -7486,6 +7494,76 @@ export class Renderer {
       computeProfile: (label) => this.prof.pass(label),
     });
   }
+  /**
+   * The screen's water tiles (Sam's decision 1, 13 Nov 2026: the screen classified by tiles, each kernel launched where it serves):
+   * a small kernel of their own — a workgroup an 8 × 8 tile — reads the moments' marks shadeLite and its light's kernel left,
+   * and lists the tiles holding a pixel marked water (RASTER_WATER); the list's count is the indirect dispatch's x (y, z 1), the
+   * list copied to the stamps' tail where the water's kernels read their tile (trace.wgsl waterTilePixel). Returns the indirect
+   * arguments' buffer. Launched over the whole screen with nothing to do, the water's three kernels cost 2.1 ms on kerr-mini (J0,
+   * 13 Nov 2026); the marks written by the ground's kernels instead cost them ~0.8 ms.
+   */
+  private encodeWaterTiles(enc: GPUCommandEncoder, t: Target): GPUBuffer {
+    const n = Math.ceil(t.width / 8) * Math.ceil(t.height / 8);
+    this.waterTilesPipe ??= this.device.createComputePipeline({
+      layout: "auto",
+      compute: {
+        module: this.device.createShaderModule({
+          label: "earth water: tiles",
+          code: `struct TileOut { count: atomic<u32>, y: u32, z: u32, pad: u32, list: array<u32> }
+@group(0) @binding(0) var<storage, read> moments: array<vec2f>;
+@group(0) @binding(1) var<storage, read_write> out: TileOut;
+// (the image's width and height, its tiles across)
+@group(0) @binding(2) var<uniform> U: vec4u;
+var<workgroup> wet: atomic<u32>;
+// (a pixel marked water — trace.wgsl RASTER_WATER, less its kind and a quarter of its cover: (−8, −5])
+@compute @workgroup_size(8, 8)
+fn main(@builtin(global_invocation_id) g: vec3u, @builtin(workgroup_id) w: vec3u, @builtin(local_invocation_index) li: u32) {
+  if (g.x < U.x && g.y < U.y) {
+    let mk = moments[g.y * U.x + g.x].x;
+    if (mk <= -5.0 && mk > -8.0) { atomicOr(&wet, 1u); }
+  }
+  workgroupBarrier();
+  if (li == 0u && atomicLoad(&wet) != 0u) { out.list[atomicAdd(&out.count, 1u)] = w.y * U.z + w.x; }
+}`,
+        }),
+        entryPoint: "main",
+      },
+    });
+    let w = t.waterTiles;
+    if (!w || w.n !== n) {
+      w?.out.destroy();
+      w?.u.destroy();
+      const out = this.device.createBuffer({
+        label: "earth water: tiles' list",
+        size: (4 + n) * 4,
+        usage: GPUBufferUsage.STORAGE | GPUBufferUsage.INDIRECT | GPUBufferUsage.COPY_SRC | GPUBufferUsage.COPY_DST,
+        mappedAtCreation: true,
+      });
+      new Uint32Array(out.getMappedRange(0, 16)).set([0, 1, 1, 0]);
+      out.unmap();
+      const u = this.device.createBuffer({ size: 16, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
+      const bind = this.device.createBindGroup({
+        layout: this.waterTilesPipe.getBindGroupLayout(0),
+        entries: [
+          { binding: 0, resource: { buffer: t.moments } },
+          { binding: 1, resource: { buffer: out } },
+          { binding: 2, resource: { buffer: u } },
+        ],
+      });
+      w = t.waterTiles = { out, u, bind, n };
+    }
+    const base = t.stamps.size / 4 - 4 - n;
+    this.device.queue.writeBuffer(w.u, 0, new Uint32Array([t.width, t.height, Math.ceil(t.width / 8), 0]));
+    enc.clearBuffer(w.out, 0, 4);
+    const p = enc.beginComputePass(this.prof.pass("earth water: tiles"));
+    p.setPipeline(this.waterTilesPipe);
+    p.setBindGroup(0, w.bind);
+    p.dispatchWorkgroups(Math.ceil(t.width / 8), Math.ceil(t.height / 8));
+    p.end();
+    enc.copyBufferToBuffer(w.out, 16, t.stamps, base * 4, n * 4);
+    return w.out;
+  }
+  private waterTilesPipe: GPUComputePipeline | null = null;
   /** the sea's surface drawn this frame (encodeSeaSurface) */
   seaSurfaceDrawn = false;
 
@@ -7546,7 +7624,9 @@ export class Renderer {
       const water = this.rasterWaterNow && fin ? this.traceVariant("shadeWater") : null;
       // (the sea's surface between them — PLAN-MER-WEBGPU S2 —: the water's pass shades it at its exact point)
       if (water) this.encodeSeaSurface(enc, t);
-      if (water) {
+      // (the water's tiles — those shadeLite and its light's kernel marked —: their list, the water's kernels dispatched over it)
+      const wt = water ? this.encodeWaterTiles(enc, t) : null;
+      if (water && wt) {
         const wp = enc.beginComputePass(this.prof.pass("earth water (raster)"));
         // (the sea's reflections deferred — E2 —: the water's kernel writes their record, shadeWaterFinish draws them)
         const wfin = this.waterFinishOf.get(water) ?? null;
@@ -7554,7 +7634,7 @@ export class Renderer {
         wp.setPipeline(water);
         wp.setBindGroup(0, this.hintBindFor(t, hint));
         wp.setBindGroup(1, wb);
-        wp.dispatchWorkgroups(Math.ceil(t.width / 8), Math.ceil(t.height / 8));
+        wp.dispatchWorkgroupsIndirect(wt, 0);
         wp.end();
         // (the open sea's pixels by their own lighter kernel — PLAN-MER-WEBGPU S3 —, the FFT's waves on: P.seafft[0].x 2 written over
         // the frame's parameters before their submission — shadeWater leaves them those pixels)
@@ -7572,7 +7652,7 @@ export class Renderer {
           op.setPipeline(open);
           op.setBindGroup(0, this.hintBindFor(t, hint));
           op.setBindGroup(1, this.waterFinishOf.has(open) && lb.water ? lb.water : lb.lite);
-          op.dispatchWorkgroups(Math.ceil(t.width / 8), Math.ceil(t.height / 8));
+          op.dispatchWorkgroupsIndirect(wt, 0);
           op.end();
         }
         // (the water's air and clouds — the staged water's first step (CHALLENGE-J1-J2 idea 2, Sam's decision of 13 Nov 2026) —:
@@ -7583,7 +7663,9 @@ export class Renderer {
         wf.setPipeline(wfin && lb.waterFinish ? wfin : fin!);
         wf.setBindGroup(0, this.hintBindFor(t, hint));
         wf.setBindGroup(1, wfin && lb.waterFinish ? lb.waterFinish : lb.finish);
-        wf.dispatchWorkgroups(Math.ceil(t.width / 8), Math.ceil(t.height / 8));
+        // (shadeWaterFinish over the water's tiles; shadeLiteFinish — no deferred record — over the whole screen, as for the ground)
+        if (wfin && lb.waterFinish) wf.dispatchWorkgroupsIndirect(wt, 0);
+        else wf.dispatchWorkgroups(Math.ceil(t.width / 8), Math.ceil(t.height / 8));
         wf.end();
       }
     }

@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-13 09:55 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-13 10:55 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous.
@@ -47,7 +47,8 @@ indirects → J3 (lumière, cockpit).
 | Rendu (33d89754) | L'eau étagée — préalables | faits : `liteSkip` réparé, ablation `sea surface` (−0,7 ms) |
 | Rendu (33d89754) | L'eau étagée E1 : l'air et les nuages sortis de `shadeWater` (passe `earth water: finishing`) | **fait, mesuré** (gain maximal lu : l'eau 16,2 ms, `earth water` 12,7) : A/B J0 sur le mini **GPU p50 57,85 → 56,3 ms (−1,55)** ; l'eau par ablation 13,0 → 10,1 ms ([PLAN-MER §6](docs/PLAN-MER-WEBGPU.md)) |
 | Rendu (33d89754) | L'eau étagée E2 : les reflets (SSR, nuages reflétés) dans leur noyau (`shadeWaterFinish`) | **fait, mesuré, gain faible** : plafond lu −4,7 ms, rendu **−0,5 ms** (A/B mini) — le SSR coûte surtout son travail (~2,2 ms, déplacé dans la finition) ; E3 à juger sur un plafond mesuré d'abord |
-| Rendu (33d89754) | La classification de l'écran par tuiles et les lancements indirects | suivant (les noyaux de l'eau et sa finition lancés plein écran) |
+| Rendu (33d89754) | La classification de l'écran par tuiles — lot 1 : les noyaux de l'eau en indirect | **fait, mesuré** : plafond lu 2,1 ms (noyaux de l'eau vides) ; J0 neutre (presque toute la mer), **sur la terre −1,15 ms** (A/B mini) |
+| Rendu (33d89754) | Classification — lot 2 : le sol (`earth lite: light`, sa finition) et des noyaux par classe | à cadrer (plafond à mesurer d'abord) |
 | Rendu (33d89754) | La borne de cadence du M1 Max | 30 images/s : **bride encore** (soutenu 27,8/s, p95 58,6 ms, GPU 881 MHz, pression Heavy — [J0-CONTRAT §2](docs/J0-CONTRAT.md)) ; 40 images/s non mesuré (ce Mac chaud) |
 | Rendu (33d89754) | Retrait R1 des anciens chemins (`singleHistory`, `edgeFoot`, `seaSsrSafe`, `clearCut`, `earthRateOne`, `rasterScaleFree`) | **daté : 14 nov. 2026** ([PLAN-J2 §9 quattuordecies](docs/PLAN-J2-PAGES-RECONSTRUCTION.md)) |
 | Audit vagues 3–4 (1feb2f7f) | 3.3 Sauvegardes | **fait pour l'essentiel** : lot 1 (736b26a2, une clé par sauvegarde, rien écrasé en silence) ; lot 2 (f265f467 : « Reprendre » du vol perdu seulement, un avion a ses points ; carburant, train, volets, freins, maintiens, systèmes des vaisseaux sauvés ; l'activité en cours dite) — e2e 6/6, bun test 2 228/0. Reste : l'état d'une mission ou d'un combat (Sam), les systèmes de l'A320, IndexedDB |
@@ -4575,4 +4576,23 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
 - **Non vérifié** : le M1 Max ; la sonde `zz-sea-compare` ; une image gelée comparée au pixel près ; l'eau intérieure (son SSR reste dans
   `inlandWater`) ; `bun test` complet. **Suite** : la classification de l'écran par tuiles (les noyaux de l'eau et leur finition lancés
   plein écran) ; un SSR moins cher à juger sur l'image ; le retrait R1 le 14.
+
+## 2026-11-13T10:55Z — La classification de l'écran par tuiles, lot 1 : les noyaux de l'eau lancés sur leurs seules tuiles
+
+- **Contribution** (stratégie §24 décision 1 — « chaque noyau lancé là où il sert » ; [PLAN-MER-WEBGPU §6](docs/PLAN-MER-WEBGPU.md),
+  [GRAPHICS-PIPELINE](docs/GRAPHICS-PIPELINE.md) C19t). **Plafond mesuré avant** (règle 1) : sur J0 sans eau, les trois noyaux de l'eau lancés
+  plein écran à vide coûtaient 0,86 + 0,77 + 0,51 = **2,1 ms** (les ablations de J0 relèvent désormais toutes leurs passes).
+- **Réalisé** : un petit module à part (`earth water: tiles`) lit les marques de `moments`, liste les tuiles 8 × 8 qui tiennent un pixel
+  d'eau (dont les crêtes que `sea surface resolve` marque) et fournit les arguments indirects ; la liste est recopiée dans la queue de
+  `stamps` (sa taille : une liste de tuiles avant les quatre derniers mots) ; `shadeWater`, `shadeWaterOpen` et `shadeWaterFinish` lancés en
+  `dispatchWorkgroupsIndirect` et lisant leur tuile (`waterTilePixel`). `j0-reference` : `J0_START` (le même vol parti ailleurs, hors contrat).
+- **Mesuré** (kerr-mini, A/B A B B A, A = a5b2c60b ; `remote-results/…-j0-ab-tiles3`, `…-j0-ab-tiles-land`) : **J0 neutre** — GPU p50
+  57,15 → 56,9 ms, les passes de l'eau 12,3 → 12,05 ms (la vue est presque toute en mer) ; **sur la terre** (plaine du Gapeau, cap 20°) **50,45
+  → 49,3 ms (−1,15)**, les passes de l'eau 1,70 → 1,08 ms ; le module 0,21 ms ; les noyaux du sol inchangés. Images vues (vol en mer, vol sur
+  terre). Statique : `tsc`, `check-wgsl` 82/82, tests des noyaux et du renderer 83/0.
+- **Retiré en cours de lot, mesuré** : marquer les tuiles depuis les noyaux du sol (`shadeLite`, sa lumière) coûtait **+0,8 ms** à ces noyaux
+  (deux A/B, même en n'écrivant le mot qu'une fois) et oubliait les tuiles de crêtes seules.
+- **Non vérifié** : le M1 Max ; d'autres vues (ville, montagne, rivière) ; le PC Windows (indirect sur D3D12) ; `bun test` complet. **Suite** :
+  le lot 2 de la classification (le sol : la lumière et la finition lancées plein écran ; des noyaux par classe) à cadrer sur un plafond
+  mesuré ; le retrait R1 le 14.
 

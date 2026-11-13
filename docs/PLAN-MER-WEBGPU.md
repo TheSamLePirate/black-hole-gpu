@@ -318,3 +318,12 @@ valent pas) ; la sonde `zz-sea-compare` (vues de mer seules) ; une comparaison a
   le SSR dans un noyau de 1,2 k lignes. **Vu une fois** : un run B dont le décor est resté à l'étape « forest » 240 s à l'arrivée (l'attente
   plafonnée l'a dit et arrêté) ; non reproduit aux trois runs B suivants, sans lien établi avec E2.
 
+**La classification de l'écran par tuiles, premier lot : les noyaux de l'eau (13 nov. ~10:05–11:00 UTC)** — décision 1 de Sam (« chaque
+noyau lancé là où il sert »). **Plafond mesuré avant** (règle 1 ; J0 sans eau, toutes les passes relevées) : les trois noyaux de l'eau
+lancés plein écran sans rien à faire coûtaient 0,86 + 0,77 + 0,51 = **2,1 ms**. Réalisé : un petit module (`earth water: tiles`, un
+groupe de 8 × 8 fils par tuile) lit les marques de `moments` et liste les tuiles d'eau ; `shadeWater`, `shadeWaterOpen` et
+`shadeWaterFinish` lancés en indirect sur cette liste (GRAPHICS-PIPELINE C19t). **Mesuré (kerr-mini, A/B A B B A contre a5b2c60b)** :
+J0 neutre (57,15 → 56,9 ms) ; **sur la terre −1,15 ms** (50,45 → 49,3 ; `J0_START` plaine du Gapeau). Deux essais retirés : marquer les
+tuiles depuis les noyaux du sol (`shadeLite`, sa lumière) leur coûtait **+0,8 ms** (deux A/B, même en n'écrivant qu'une fois), et
+oubliait les tuiles où seules les crêtes de `sea surface resolve` sont marquées.
+
