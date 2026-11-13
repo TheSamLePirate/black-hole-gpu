@@ -244,7 +244,7 @@ import { Governor } from "./game/governor";
 import { Persistence } from "./game/persistence";
 import { Session } from "./game/session";
 import { type SimState, simStateOf, type ViewPose, viewPoseOf } from "./game/view-pose";
-import { autosave, saveFromHash, type GameSave } from "./game/save";
+import { autosave, saveFromHash, slots, type GameSave } from "./game/save";
 import { ResumePoints } from "./game/resume-point";
 import { CraftLost } from "./ui/craftlost";
 import { applyF35Variant } from "./f35/variant";
@@ -4175,8 +4175,12 @@ async function main() {
   const quickLoad = () => {
     try {
       panel.toast(tf("Quick load — {0}", tools.load("Quick save")));
-    } catch {
-      panel.toast(t("No quick save yet — F5 makes one"));
+    } catch (e) {
+      // (none, unreadable, or failing to load: each said as it is — before 13 Nov 2026 all were « none yet », audit AR-17)
+      if (slots.unreadable().includes("Quick save"))
+        panel.toast(t("The quick save cannot be read — F5 makes a new one (the old one is kept aside)"));
+      else if (!slots.names().includes("Quick save")) panel.toast(t("No quick save yet — F5 makes one"));
+      else panel.toast(tf("The quick save could not be loaded: {0}", (e as Error).message));
     }
   };
 

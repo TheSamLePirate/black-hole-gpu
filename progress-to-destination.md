@@ -5823,3 +5823,14 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
 - Suite : `earthGround` relevé ensuite (~20:48 UTC, PLAN-J3 §10) — le géométrique partout ; à passer seulement si une couture au bord des
   anneaux se voit au coucher (sa rangée incidente n'existe qu'en raster).
 
+## 2026-11-14T05:50Z — Audit AR-17 (vague 6, le défaut nommé) : le chargement rapide dit pourquoi il ne peut pas
+
+- Contribution : §19 (sauvegardes et reprise lisibles) ; audit 2026-11-10, AR-17 (« `main.ts` traduit toute erreur de chargement rapide en
+  « No quick save yet » »).
+- Réalisé : `main.ts` `quickLoad` — une sauvegarde rapide illisible dite telle (« F5 en crée une nouvelle, l'ancienne mise de côté » — ce que
+  `save.ts` fait), une absente « pas encore », un échec de chargement avec son motif ; FR/EN (`fr-main.ts`). E2E-CATALOGUE.
+- Preuves : **reproduit avant** (e2e `quickload`, ce Mac, fenêtre visible : la sauvegarde abîmée annoncée « No quick save yet ») ; **après**
+  1/1 (chargée, illisible, absente — chacune dite) ; `saves-storage` 4/4.
+- Limites : le reste d'AR-17 — une convention `LIMIT(id)` pour la dette et la règle Biome des promesses flottantes à l'essai — non ouvert
+  (une décision de convention pour tout le dépôt).
+

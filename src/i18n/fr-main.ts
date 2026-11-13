@@ -137,6 +137,9 @@ export default {
     "Sauvegarde automatique impossible — le stockage du navigateur est plein ou bloqué ; sauvegardez à la main (Pause › Sauvegarder) ou exportez",
   "Quick load — {0}": "Chargement rapide — {0}",
   "No quick save yet — F5 makes one": "Pas encore de sauvegarde rapide — F5 en crée une",
+  "The quick save cannot be read — F5 makes a new one (the old one is kept aside)":
+    "La sauvegarde rapide est illisible — F5 en crée une nouvelle (l'ancienne est mise de côté)",
+  "The quick save could not be loaded: {0}": "La sauvegarde rapide n'a pas pu être chargée : {0}",
   "Precision controls": "Commandes de précision",
   "Normal controls": "Commandes normales",
   "The {0} is no aircraft: it flies as a rocket": "{0} n'est pas un aéronef : il vole comme une fusée",
