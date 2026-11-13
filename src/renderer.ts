@@ -3013,7 +3013,9 @@ export class Renderer {
   invalidationsBy: Record<string, number> = {};
   invalidate(cause = "other") {
     this.invalidations++;
-    this.invalidationsBy[cause] = (this.invalidationsBy[cause] ?? 0) + 1;
+    // (?? {}: a renderer made without its fields' initialisers — a test's Object.create — counts too)
+    const by = (this.invalidationsBy ??= {});
+    by[cause] = (by[cause] ?? 0) + 1;
     this.frameTimes.length = 0;
     this.validFrom = this.frameStamp + 1;
     this.epoch = this.frameStamp + 1;
