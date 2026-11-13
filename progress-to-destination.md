@@ -63,7 +63,7 @@ ouverts, sous 1 ms) ; J3 au stade du plan.**
 | Audit vagues 3–4 (1feb2f7f) | 3.10 e2e qui ne vérifient rien | **fait** : `waitOptional` (93 attentes converties), 14 mesures déclarées, garde `e2e-honesty` |
 | Audit vagues 3–4 (1feb2f7f) | 4.2 la politique de temps | **fait** : vol tenu pendant la reprise GPU, cadence vraie, horloge du vol + garde ; l'onglet masqué (choix de Sam) : solo en pause dite, salle sans arrêt (l'absent ne la bloque plus, les autres avertis, remis à l'heure au retour), sauvé en partant, TARS sans réveil ; le ralentissement sous 10 images/s dit — e2e `hidden-tab` 2/2, `fps-truth` 2/2 |
 | Audit vagues 3–4 (1feb2f7f) | 4.8 découper `main()` | **en cours** (accord de Sam : par petits lots) : lot 1 la persistance, lot 2 qui tient le vol (`session.ts`), lots 3–4 les étapes gardées (`frame.ts`, AR-03), lot 5 l'ordre §19.5 pour l'appareil (AR-04 : instruments et poses avant l'encodage, 6,5 → 0,0 ms d'âge) ; restent le gouverneur et les entrées du renderer (leviers du rendu) |
-| Audit vagues 3–4 (1feb2f7f) | 4.3 séparer `Settings` | **fait de ce côté** : garde statique des réglages (AR-21) ; `ViewPose` et `SimState` produits une fois par image et figés (AR-07, `view-pose.ts`) ; **à la session du rendu** : faire prendre `ViewPose` au renderer (choix de Sam) |
+| Audit vagues 3–4 (1feb2f7f) | 4.3 séparer `Settings` | **fait** : garde statique des réglages (AR-21) ; `ViewPose` et `SimState` figés une fois par image (AR-07, `view-pose.ts`) ; le renderer les lit (session du rendu, 77721acf) |
 
 **Fermé récemment** : J2 (13 nov., ΔGPU nul, chemin vers §8 écrit) ; J2-C BC7 étudiée puis **rangée** (Sam : « ne pas le faire maintenant »).
 
@@ -4959,3 +4959,10 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   nuages −5,6, eau (la Seine) −4,9, appareil −4,2, écrans −1,6. La tour Eiffel dessinée en colonne pleine (le cas de J3-5 / J3-6).
 - **Non vérifié** : le M1 Max ; l'image comparée avant / après AR-07 au pixel (le changement ne doit rien changer à l'image : mêmes valeurs lues).
 
+## 2026-11-13T14:11Z — Audit 4.3 fermé : le renderer lit la pose figée (session du rendu, 77721acf)
+
+- La session du rendu a branché `renderer.frame(viewPose, settings, …)` sur la `ViewPose` produite ici (8a69291c) : la vue et le temps
+  lus dans la pose figée de l'image, plus dans `camera.viewSettings()`. Ses vérifications : pas de changement d'image attendu (le renderer
+  n'écrivait ni ne comparait ses réglages), vol de Paris et J0 volés sans erreur, `gpu-startup` aux mêmes 3 échecs antérieurs. 4.3 : fait
+  (AR-21 garde statique, AR-07 des deux côtés). Restent en 4.8 : le gouverneur de résolution (les leviers du rendu) et la sortie des
+  poses de l'appareil dans un module (`cockpit-feed`, AR-12 piste 4).
