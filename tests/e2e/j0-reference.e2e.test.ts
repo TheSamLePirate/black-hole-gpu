@@ -845,6 +845,39 @@ describe.skipIf(!E2E)("J0: the reference flight over Toulon-Hyères", () => {
     600_000,
   );
 
+  // (PROBLEMES — the first renderer.tune of a session leaves the craft's Sun at the hour before, J0_PHASES=tunestall: the date moved to
+  // 19:05 and 18:30 before any tune, then after a first tune (TUNE_AIR_N 8), then after a second (TUNE_AIR_N 4); each time the CPU's Sun
+  // (camera.skyInfo().sun.altDeg), the scene's date (game.date()) and the GPU's (readShipKey().air.table — the transmittance towards
+  // it): where the hour sticks)
+  test.skipIf(!PHASES.includes("tunestall"))(
+    "the first renderer.tune and the hour — the CPU's Sun, the scene's date, the GPU's light, before and after",
+    async () => {
+      await start("");
+      const at = async (utc: string) =>
+        app.js<Record<string, unknown>>(`(async () => { const f = () => new Promise((q) => requestAnimationFrame(q)); __bh.freeze(false);
+          __bh.game.setDate("2026-07-10T${utc}:00Z"); __bh.refresh(); for (let i = 0; i < 40; i++) await f();
+          const k = await __bh.renderer.readShipKey(); const sky = __bh.camera.skyInfo?.();
+          let date = null; try { date = String(__bh.game.date?.() ?? null); } catch (e) { date = "err " + e; }
+          return { utc: "${utc}", cpuSunAlt: sky?.sun?.altDeg ?? null, date, gpuTable: k.air ? +k.air.table.toPrecision(4) : null, tuneKey: JSON.stringify(__bh.renderer.tune) }; })()`);
+      const tune = async (t: string) => {
+        await app.js(`(() => { __bh.renderer.tune = ${t}; return 1; })()`);
+        await app.settled(120_000);
+      };
+      const rows: Record<string, unknown>[] = [];
+      rows.push(await at("19:05"), await at("18:30"));
+      await tune("{ TUNE_AIR_N: 8 }");
+      rows.push(await at("19:05"), await at("18:30"));
+      await tune("{ TUNE_AIR_N: 4 }");
+      rows.push(await at("19:05"), await at("18:30"));
+      await tune("{}");
+      for (const r of rows) console.log(`  tune stall: ${JSON.stringify(r)}`);
+      out.tunestall = rows;
+      await app.js(`(() => { __bh.game.setDate("${J0_SCENE.date}"); return 1; })()`);
+      expect(rows.length).toBe(6);
+    },
+    600_000,
+  );
+
   test.skipIf(!PHASES.includes("sustained"))(
     "the same flight again, the machine as long play leaves it",
     () => measureFlight("sustained"),

@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-13 17:47 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-13 17:51 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous.
@@ -5484,4 +5484,12 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   second (`…-j3-wetbld-ab2`) : luminance moyenne A 78,75 / 78,29, B 79,26 / 78,22, à exposition égale — **pas d'écart au-delà du bruit**, vues
   semblables. Le correctif ne touche que les bâtiments en boîtes ; ceux de ce cadre sont vraisemblablement maillés (non vérifié).
 - Limites : l'effet du correctif reste non observé ; un cadre de bâtiments en boîtes (hors des maillages, une ville Overture) le montrerait.
+
+## 2026-11-13T17:51Z — Outil de mesure : le défaut du premier `renderer.tune` rétréci au GPU
+
+- Réalisé : e2e J0 phase `tunestall` ; PROBLEMES-A-REGLER complété.
+- Preuves : **mesuré** (kerr-mini) : après le premier `tune`, la date et le Soleil du CPU suivent `game.setDate`, la lumière de l'appareil
+  relue du GPU reste à l'heure d'avant jusqu'au `tune` suivant ; `incidentNow` écarté (remis à zéro chaque image). Cause non trouvée.
+- Limites : touche toute mesure de la sonde ou de la lumière de l'appareil qui change l'heure après un premier `tune` ; les ablations de J0
+  (sans changement d'heure) ne sont pas concernées.
 

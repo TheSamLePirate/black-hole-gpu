@@ -37,6 +37,13 @@ cadence mise au contrat actuel (1 sous le matériau) ; sa partie « repli » mis
 - **Précisé** (troisième run, une variante de chauffe `TUNE_AIR_N` 8 lue à 19:05) : la sonde **tourne** (la hauteur de la caméra relue a
   changé, 577,7 → 580,0 m), mais le **Soleil reste à l'heure d'avant** — la transmittance lue 0,0040 (celle de 19:15) pour 0,0468 attendue à
   19:05 : après le premier `tune`, `game.setDate` n'est pas pris (ou les tables de lumière ne sont pas réécrites) jusqu'au changement suivant.
+- **Rétréci** (13 nov., ~17:51 UTC, phase J0 `tunestall`, kerr-mini) : `game.setDate` **est pris** — après le premier `tune`, la date de la scène
+  (`game.date()`) et le Soleil du CPU (`camera.skyInfo().sun.altDeg` 0,73° à 19:05, 6,41° à 18:30) suivent ; **seul le GPU reste** : la
+  transmittance de la lumière de l'appareil relue (`readShipKey().air.table`) 0,341 aux deux heures (celle de 18:30), puis juste après le
+  second `tune` (0,0468 / 0,342). `incidentNow` est remis à zéro chaque image (une valeur restée donnerait le Soleil géométrique, pas l'heure
+  d'avant) : le noyau de la sonde (`env`, `keyLight`) ne tourne pas, ou pas avec les paramètres de l'image, sous la variante du premier
+  `tune`. Pistes non vérifiées : le choix de la variante `env` (`renderer.ts` ~6650, le repli « par les constantes » propre aux sondes) ou la
+  cadence amortie de la sonde après `invalidate()`.
 - **Conséquence** : une ablation ou un A/B par `renderer.tune` qui serait le premier d'une session mesure, pour l'appareil (son éclairage, sa
   sonde, le ciel que la mer reflète), l'état d'avant. La phase `keyair` passe par une variante de chauffe et dit si sa lecture était figée.
 - **Cause non trouvée** : la recherche de variante du renderer (`renderer.ts` ~6650, le noyau `env` couvert par les bits de la clé, sinon par
