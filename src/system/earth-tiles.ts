@@ -34,6 +34,7 @@ import { USA_LUT } from "./usa-colour";
 import { MAPTERHORN_Z1, mapterhornUrl, USA_OUTLINE, usgsImageryUrl } from "./usa-ground";
 import { IGN_MNH } from "./ign-canopy";
 import { ArrivalLog } from "./tile-arrivals";
+import { blockCompress, canBlockCompress } from "./bc-encode";
 import {
   FrameBudget,
   MipBatch,
@@ -1194,6 +1195,144 @@ export class EarthTiles {
       maxSubmits: per.submits!.max,
       per,
     };
+  }
+  /**
+   * PLAN-J2 J2-C, the study (Sam's decision 4: « BC7 étudiée après J2-1 » — a diagnostic, never in play): the 1024² imagery texture's
+   * layers that hold pages (`maxLayers` at most, the orthophotos' first), each copied with its mips into a 2D rgba8 texture, block-
+   * compressed to BC7 by the GPU encoder already in the code (bc-encode.ts, the HD maps'), its time taken (the submissions done), and
+   * both read back through the hardware's own decoding — the PSNR of every mip (over the raw sRGB bytes, the three colours) and the bytes
+   * before and after. Null without the "texture-compression-bc" feature or the filtered imagery.
+   */
+  async bc7Study(maxLayers = 8): Promise<{
+    feature: boolean;
+    layers: { layer: number; kind: string; encodeMs: number; psnrByMip: number[]; rgbaBytes: number; bc7Bytes: number }[];
+    textureRgbaBytes: number;
+  } | null> {
+    const d = this.device;
+    const tex = this.orthoTexture;
+    if (!canBlockCompress(d) || !this.filtered || tex.width <= 1) return { feature: canBlockCompress(d), layers: [], textureRgbaBytes: 0 };
+    const W = tex.width,
+      mips = tex.mipLevelCount;
+    const copyModule = d.createShaderModule({
+      code: `@group(0) @binding(0) var src: texture_2d_array<f32>;
+@group(0) @binding(1) var dst: texture_storage_2d<rgba8unorm, write>;
+@group(0) @binding(2) var<uniform> u: vec4u;
+@compute @workgroup_size(8, 8) fn main(@builtin(global_invocation_id) g: vec3u) {
+  let n = textureDimensions(dst);
+  if (g.x >= n.x || g.y >= n.y) { return; }
+  textureStore(dst, g.xy, textureLoad(src, g.xy, u.x, u.y));
+}`,
+    });
+    const cmpModule = d.createShaderModule({
+      code: `@group(0) @binding(0) var a: texture_2d<f32>;
+@group(0) @binding(1) var b: texture_2d<f32>;
+@group(0) @binding(2) var<storage, read_write> acc: array<atomic<u32>, 4>;
+@group(0) @binding(3) var<uniform> u: vec4u;
+@compute @workgroup_size(8, 8) fn main(@builtin(global_invocation_id) g: vec3u) {
+  let n = textureDimensions(a, u.x);
+  if (g.x >= n.x || g.y >= n.y) { return; }
+  let p = textureLoad(a, g.xy, u.x).rgb * 255.0;
+  let q = textureLoad(b, g.xy, u.x).rgb * 255.0;
+  let e = (p - q) * (p - q);
+  atomicAdd(&acc[0], u32(round(e.x + e.y + e.z)));
+  atomicAdd(&acc[1], 3u);
+  if (max(p.x, max(p.y, p.z)) > 0.0) { atomicAdd(&acc[2], 1u); }
+}`,
+    });
+    const copyPipe = d.createComputePipeline({ layout: "auto", compute: { module: copyModule, entryPoint: "main" } });
+    const cmpPipe = d.createComputePipeline({ layout: "auto", compute: { module: cmpModule, entryPoint: "main" } });
+    const mipBytesOf = (w: number, bpp: number) => {
+      let b = 0;
+      for (let l = 0; l < mips; l++) b += Math.max(1, w >> l) ** 2 * bpp;
+      return b;
+    };
+    // (the layers with pages: the orthophotos' levels, then the relief's imagery — their window held, any published)
+    const want: { layer: number; kind: string }[] = [];
+    for (const [k, O] of this.ortho.entries()) if (O.valid && O.span <= ORTHO_SPAN) want.push({ layer: k, kind: `ortho z${O.z}` });
+    for (const L of this.levels)
+      if (L.valid && L.z <= IMG_Z1 && L.span * TILE <= ORTHO_CLIP) want.push({ layer: IMG_LAYER0 + (L.z - Z0), kind: `relief z${L.z}` });
+    const layers: { layer: number; kind: string; encodeMs: number; psnrByMip: number[]; rgbaBytes: number; bc7Bytes: number }[] = [];
+    for (const w of want.slice(0, maxLayers)) {
+      const flat = d.createTexture({
+        size: [W, W],
+        format: "rgba8unorm",
+        mipLevelCount: mips,
+        usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.STORAGE_BINDING,
+        label: "bc7 study: a layer",
+      });
+      const u = d.createBuffer({ size: 16, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
+      for (let l = 0; l < mips; l++) {
+        d.queue.writeBuffer(u, 0, new Uint32Array([w.layer, l, 0, 0]));
+        const enc = d.createCommandEncoder();
+        const pass = enc.beginComputePass();
+        pass.setPipeline(copyPipe);
+        pass.setBindGroup(
+          0,
+          d.createBindGroup({
+            layout: copyPipe.getBindGroupLayout(0),
+            entries: [
+              { binding: 0, resource: tex.createView({ dimension: "2d-array" }) },
+              { binding: 1, resource: flat.createView({ baseMipLevel: l, mipLevelCount: 1 }) },
+              { binding: 2, resource: { buffer: u } },
+            ],
+          }),
+        );
+        const n = Math.max(1, W >> l);
+        pass.dispatchWorkgroups(Math.ceil(n / 8), Math.ceil(n / 8));
+        pass.end();
+        d.queue.submit([enc.finish()]);
+      }
+      await d.queue.onSubmittedWorkDone();
+      const t0 = performance.now();
+      const bc = blockCompress(d, flat, "bc7");
+      await d.queue.onSubmittedWorkDone();
+      const encodeMs = performance.now() - t0;
+      const psnrByMip: number[] = [];
+      for (let l = 0; l < mips; l++) {
+        const acc = d.createBuffer({ size: 16, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC | GPUBufferUsage.COPY_DST });
+        const rb = d.createBuffer({ size: 16, usage: GPUBufferUsage.MAP_READ | GPUBufferUsage.COPY_DST });
+        d.queue.writeBuffer(u, 0, new Uint32Array([l, 0, 0, 0]));
+        const enc = d.createCommandEncoder();
+        const pass = enc.beginComputePass();
+        pass.setPipeline(cmpPipe);
+        pass.setBindGroup(
+          0,
+          d.createBindGroup({
+            layout: cmpPipe.getBindGroupLayout(0),
+            entries: [
+              { binding: 0, resource: flat.createView() },
+              { binding: 1, resource: bc.createView() },
+              { binding: 2, resource: { buffer: acc } },
+              { binding: 3, resource: { buffer: u } },
+            ],
+          }),
+        );
+        const n = Math.max(1, W >> l);
+        pass.dispatchWorkgroups(Math.ceil(n / 8), Math.ceil(n / 8));
+        pass.end();
+        enc.copyBufferToBuffer(acc, 0, rb, 0, 16);
+        d.queue.submit([enc.finish()]);
+        await rb.mapAsync(GPUMapMode.READ);
+        const r = new Uint32Array(rb.getMappedRange().slice(0));
+        rb.unmap();
+        rb.destroy();
+        acc.destroy();
+        const mse = r[0]! / Math.max(r[1]!, 1);
+        psnrByMip.push(r[2]! === 0 ? Number.NaN : mse === 0 ? 99 : +(10 * Math.log10((255 * 255) / mse)).toFixed(2));
+      }
+      layers.push({
+        layer: w.layer,
+        kind: w.kind,
+        encodeMs: +encodeMs.toFixed(1),
+        psnrByMip,
+        rgbaBytes: mipBytesOf(W, 4),
+        bc7Bytes: mipBytesOf(W, 1),
+      });
+      flat.destroy();
+      bc.destroy();
+      u.destroy();
+    }
+    return { feature: true, layers, textureRgbaBytes: mipBytesOf(W, 4) * tex.depthOrArrayLayers };
   }
   /**
    * PLAN-J2 J2-0 — the leak probe (a diagnostic, off by default; never in play): `leakProbe([r, g, b])` holds the windows as they

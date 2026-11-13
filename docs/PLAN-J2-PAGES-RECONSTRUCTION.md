@@ -1,7 +1,7 @@
 # PLAN-J2 — pages d'imagerie filtrables et reconstruction
 
 **État (13 novembre 2026) : J2 terminé** — J2-0 → J2-8 faits, l'état décidé par Sam le 13 (« ok pour tes recommandations », §9 undecies), la
-[fiche J0 de sortie](progress/j0/FICHE-kerr-mini-2026-11-13-sortie.md) et le bilan du §4 au §9 duodecies ; J2-C (BC7) laissé à Sam.
+[fiche J0 de sortie](progress/j0/FICHE-kerr-mini-2026-11-13-sortie.md) et le bilan du §4 au §9 duodecies ; J2-C étudiée (BC7 : 42–44 dB aux orthophotos, 4 × moins de mémoire, ~1,5–6 ms d'encodage par page) — sa réalisation laissée à Sam.
 **État d'origine (12 novembre 2026) : plan validé par Sam (ses recommandations, §9) ; J2-0 fait — instruments et [fiche de référence](progress/j2/FICHE-J2-0-2026-11-12.md) ; J2-1 fait — table de pages, tuile de la caméra, mips groupés ([fiche J2-1](progress/j2/FICHE-J2-1-2026-11-12.md), §9 ter) ; J2-2 fait — le sol de contact au monde, quelle que soit la caméra ([fiche J2-2](progress/j2/FICHE-J2-2-2026-11-12.md), §9 quater) ; le lot des pointes du fil principal fait — le travail des tuiles borné à 2 ms par image ([fiche](progress/j2/FICHE-J2-pointes-2026-11-12.md), §9 quinquies) ; J2-3 à lancer.** Rien n'est commencé : aucun code, test, e2e ni bench n'a été lancé pour
 l'écrire (session de documentation). L'existant (§2) est relevé dans le code de `main` au 12 novembre (après `4d1201c0`, J1 terminé) ;
 **le code fait foi**, les lignes citées sont celles de ce jour. Origine : [stratégie](ANALYSE-STRATEGIE-RENDU-2026-11-03.md) §15 J2
@@ -113,7 +113,7 @@ chargement met à jour [GRAPHICS-PIPELINE](GRAPHICS-PIPELINE.md) dans le même l
 | **J2-6** (un seul historique : allumé le 13 nov. ; l'échelle variable : non — l'épingle gardée) | **Une reconstruction, l'échelle variable sans pulsation** : quand la TAAU tourne, le temporel natif sans historique long (ou fondu dans la TAAU : un seul historique, à la sortie, §7.18) ; l'échelle interne changée **par petits pas** sans rééchantillonner l'historique de sortie ; l'arrêt et la reprise sans saut d'échelle (l'affinage à la taille de la sortie) ; puis l'épingle `want = rasterTop()` retirée — la résolution dynamique gouverne aussi le raster, au plancher du profil (§8.1 : 2/3 par axe, 0,5 sur preuve) | l'épingle (`main.ts:8957`), le saut 0,75 ↔ 1 à l'arrêt, le double historique long | courbe de netteté le long du vol de J2-0 : **aucun creux > 3 %** à un changement d'échelle ; `motion-quality` en virage ; J0 : intervalle p95/p99 et ΔGPU ; planche (vol, arrêt, reprise) |
 | **J2-7** (Terre : cadence 1 depuis le 13 nov. ; corps : gouverneur gardé) | **Le taux d'ombrage local** (§7.10 : « ajouter ensuite, si utile ») — **à décider sur mesure** : ce que `shade` (restes du raster) et `bodyLite` couvrent et coûtent sur J0 et sur la Lune ; s'ils sont faibles, cadence 1 et `adaptRasterRate` retiré ; sinon une cadence locale (mouvement écran, désocclusion, pixels neufs d'abord) au lieu d'un motif global | `adaptRasterRate` global (si la mesure le permet) | la mesure d'abord (pixels, ms) ; puis planche et ΔGPU |
 | **J2-8** ✅ (13 nov. : `rigidMotionOn` et la désocclusion retirés ; fiche J0 de sortie) | **Retraits et sortie** | `rigidMotionOn` et ses pipelines `terrainVsMot`/`terrainFsMot`/`ringFsMot`, les champs `pd/pr/pu/pf` de l'uniforme (s'il est resté sans lecteur) ; les chemins remplacés par J2-1…J2-7 ; les adaptateurs datés | **fiche J0 de sortie** (kerr-mini + M1 Max), les mesures de sortie du §4, GRAPHICS-PIPELINE, BH-API, progress-to-destination |
-| *J2-C* (option) | **La compression des pages stables** : une page résidente depuis N s encodée en BC7 sur le GPU (`bc-encode.ts`, déjà dans le code), sa mip comprise ; une page neuve reste rgba8 ; **aucune nouvelle dépendance** | une part de la mémoire de l'imagerie (~195 Mo rgba8 calculés aux portées lointaines) | mémoire mesurée ; PSNR des orthophotos contre rgba8 ; aucune pointe à l'encodage ; fonction `texture-compression-bc` présente sur les machines du labo — **à décider par Sam après J2-1** |
+| *J2-C* (option ; **étudiée le 13 nov.**, [fiche](progress/j2/FICHE-J2-C-2026-11-13.md)) | **La compression des pages stables** : une page résidente depuis N s encodée en BC7 sur le GPU (`bc-encode.ts`, déjà dans le code), sa mip comprise ; une page neuve reste rgba8 ; **aucune nouvelle dépendance** | une part de la mémoire de l'imagerie (~195 Mo rgba8 calculés aux portées lointaines) | mémoire mesurée ; PSNR des orthophotos contre rgba8 ; aucune pointe à l'encodage ; fonction `texture-compression-bc` présente sur les machines du labo — **à décider par Sam après J2-1** |
 
 **Le domaine** : la Terre proche (le patch raster et ses anneaux, l'imagerie z 6–18) et la reconstruction de l'image vivante. Hors J2 :
 les autres corps (`moon-tiles.ts`, planètes : J5), l'eau (J4), les nuages et leur historique propre (J4), le décor et son streaming (plan
@@ -595,6 +595,14 @@ nul pour l'ensemble, les leviers nuls, `earthRateOne` −0,3 ms. **Retirés** : 
 avec leur raison** : l'échelle variable (l'épingle gardée, 2/3 coûte 2,1 dB), la voie 1 de J2-4 (l'identité du sol par page, non nécessaire
 à ce jour), J2-C (la compression BC7, à décider par Sam). **Chemin vers §8** : la part « reconstruction et sortie » reste `taau` 3,7 +
 `temporal` 1,8 ms sur kerr-mini (enveloppe 2,0) — J2 ne l'a pas réduite ; la publication tient dans ses 2 ms (p95 1,3).
+
+## 9 terdecies. J2-C, l'étude (13 novembre 2026)
+
+[Fiche J2-C](progress/j2/FICHE-J2-C-2026-11-13.md) (décision 4 : « BC7 étudiée après J2-1 ») : `earthTiles.bc7Study()` et l'e2e `j2c-bc7`,
+au-dessus de la terre, sur le M1 Max et kerr-mini — `texture-compression-bc` présent sur les deux ; orthophotos **42–44 dB** à la mip 0 (38–45
+aux mips), relief 44–50 dB ; une couche 5,6 → 1,4 Mo (la texture 1024² 106 → ~27 Mo) ; l'encodage 20–90 ms la couche, ~1,5–6 ms par page.
+**Recommandation (à Sam)** : réalisable (pages stables, une par image sous le budget des tuiles), à faire seulement si une machine cible manque
+de mémoire.
 
 ## 10. Non vérifié
 

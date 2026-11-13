@@ -4251,3 +4251,13 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
 - **Changé** (documentation seule) : `CLAUDE.md`, `docs/J0-CONTRAT.md` §2 et §11, `docs/ANALYSE-STRATEGIE-RENDU-2026-11-03.md` §24,
   `docs/CHALLENGE-J1-J2-2026-11-13.md` §7. **Non mesuré** : l'essai de la borne de cadence sur le M1 Max ; aucun lot de l'eau commencé.
 - **Suite** : la session du rendu (`33d89754`) prend l'eau étagée ; une seconde session (`1feb2f7f`) les vagues 3 et 4 de l'audit hors rendu.
+
+## 2026-11-13T07:48Z — J2-C : l'étude BC7 des pages d'imagerie (décision 4 de Sam)
+
+- **Contribution** (PLAN-J2 J2-C ; stratégie §7 mémoire, §18 « consolider Basis/KTX2/BC déjà présent, pas de doublon ») : `earthTiles.bc7Study()`
+  (diagnostic) et l'e2e `j2c-bc7` — les pages réelles, au-dessus de la terre, compressées par l'encodeur GPU déjà présent et relues par le
+  matériel. **Mesuré** (M1 Max et kerr-mini, les mêmes PSNR) : orthophotos 42–44 dB à la mip 0 (38–45 aux mips), relief 44–50 dB ; une couche
+  5,6 → 1,4 Mo (la texture 1024² 106 → ~27 Mo) ; encodage 20–90 ms la couche (~1,5–6 ms par page) ; `texture-compression-bc` sur les deux.
+  **Recommandation à Sam** : réalisable (pages stables, une par image sous le budget), seulement si une machine cible manque de mémoire.
+- **Fichiers** : `src/system/earth-tiles.ts` (`bc7Study`), `tests/e2e/j2c-bc7.e2e.test.ts`, fiche `FICHE-J2-C-2026-11-13.md` ; PLAN-J2
+  §9 terdecies, BH-API, E2E-CATALOGUE, carte. **Non vérifié** : le PC Windows ; les couches 2048² ; le coût d'échantillonnage.
