@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-13 20:41 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-13 20:43 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous.
@@ -5779,4 +5779,10 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   été prise pendant les disques du ciel. Docs : PROBLEMES, GRAPHICS-PIPELINE D2, E2E.md.
 - Preuves : **mesuré** (kerr-mini, `…-probe-scale-cost`) : passes de la sonde inchangées au bruit ; `settled()` vérifié sur la phase `framing`
   (`…-settled-check`, passée, aucun « looked at anyway »). Chaque `settled()` coûte 0,3 s de plus.
+
+## 2026-11-13T20:43Z — J3-4 : ce qui se mesure est fait (récapitulatif)
+
+- Réalisé : PLAN-J3 §10 — l'âge des écrans (p95 57 ms en vol), leur coût (−1,1 ms au bruit de la dérive, fiche J0 de sortie : pas un lot de
+  performance), l'exposition avec le cockpit (aucune dépendance au cadrage au profil neutre) : rassemblés. Aucun code.
+- Reste : la borne de l'âge et les lampes de cabine la nuit — des décisions de Sam.
 

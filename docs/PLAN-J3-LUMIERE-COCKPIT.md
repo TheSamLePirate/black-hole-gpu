@@ -242,4 +242,9 @@ Aucun coût de J3 n'est mesuré ; aucun gain n'est promis.
   ou les deux (levier de mesure `TUNE_BLD_*` gardé jusque-là).
   **Quatre variantes (~18:41 UTC, run propre)** : d'en haut 68,84 / tables 69,80 / sans recalage 69,55 / les deux 70,46 (A/A 0,34) — les tuiles
   brun-rouge sombre → terre cuite claire avec les deux ; chacun en rend la moitié. Vues dans la fiche.
+- **J3-4, ce qui se mesure — fait** (récapitulé le 13 nov., ~20:43 UTC) : l'âge des écrans (la sonde de J3-0, témoins passés : le PCD du F-35
+  en vol p95 57 ms — [SONDE-AGE-INSTRUMENTS](progress/j3/SONDE-AGE-INSTRUMENTS-2026-11-13.md)) ; leur coût (la fiche J0 de sortie de J2 :
+  « sans HUD ni écrans » −1,1 ms de GPU, la dérive entre les deux références 1,1 ms — au bruit : **pas un lot de performance**, règle 1) ;
+  l'exposition avec le cockpit en vue (J3-0 `framing` : au profil neutre aucune dépendance au cadrage, cockpit compris). **Reste à Sam** : la
+  borne de l'âge des écrans (une valeur à fixer, la mesure existe) ; les lampes de cabine la nuit (décision en attente, AAA-PROGRESS).
 
