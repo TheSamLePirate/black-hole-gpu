@@ -9,7 +9,7 @@ Cette fiche décrit le code. Le guide du joueur est [docs/TARS.md](../TARS.md) ;
 [PLAN-TARS-AGENT.md](../PLAN-TARS-AGENT.md) (A1–A9, B1–B7, C1–C6). Sa voix, la musique et le contrôle de
 mission : [PLAN-TARS.md](../PLAN-TARS.md) et la fiche 9.
 
-Rédigée le 2026-10-10.
+Rédigée le 2026-10-10 ; nombre d'outils et lignes des fichiers remis au code le 2026-11-13 (audit TA-26).
 
 ---
 
@@ -17,26 +17,26 @@ Rédigée le 2026-10-10.
 
 | Fichier | Lignes | Rôle |
 |---|---:|---|
-| `src/ai/openrouter.ts` | 300 | La clé du joueur (OAuth PKCE sans serveur, ou collée ; gardée dans ce navigateur seulement), `chat` et `complete` (appels d'outils au format OpenAI), le coût de chaque appel, la liste `AGENT_MODELS` |
-| `src/ai/tool-schema.ts` | 97 | Le schéma d'un outil (un sous-ensemble de JSON Schema : chaîne et ses valeurs, nombre et ses bornes, booléen, objet, tableau) et `checkArgs`, qui vérifie les arguments avant d'agir |
-| `src/ai/agent.ts` | 172 | `Agent.turn` : la boucle d'un tour — les appels du modèle dans l'ordre, chaque résultat rendu par l'id de son appel, les bornes (24 pas, 40 min), l'arrêt |
-| `src/ai/tars-agent.ts` | 222 | `TarsAgent` : la consigne (caractère, langue, mode), l'état du vol et la mémoire avant la question, un tour à la fois, le garde-fou « rien fait », oui/non sur une proposition ; `modeTools` ; `runOrders` (hors ligne) |
-| `src/ai/game-tools.ts` | 1444 | Les **43 outils** sur l'interface `GameHost` (construite dans `main.ts`) ; le filet « Before TARS » ; `resolveBody`, `resolveSite` (noms FR / EN) |
+| `src/ai/openrouter.ts` | 343 | La clé du joueur (OAuth PKCE sans serveur, ou collée ; gardée dans ce navigateur seulement), `chat` et `complete` (appels d'outils au format OpenAI), le coût de chaque appel, la liste `AGENT_MODELS` |
+| `src/ai/tool-schema.ts` | 101 | Le schéma d'un outil (un sous-ensemble de JSON Schema : chaîne et ses valeurs, nombre et ses bornes, booléen, objet, tableau) et `checkArgs`, qui vérifie les arguments avant d'agir |
+| `src/ai/agent.ts` | 196 | `Agent.turn` : la boucle d'un tour — les appels du modèle dans l'ordre, chaque résultat rendu par l'id de son appel, les bornes (24 pas, 40 min), l'arrêt |
+| `src/ai/tars-agent.ts` | 269 | `TarsAgent` : la consigne (caractère, langue, mode), l'état du vol et la mémoire avant la question, un tour à la fois, le garde-fou « rien fait », oui/non sur une proposition ; `modeTools` ; `runOrders` (hors ligne) |
+| `src/ai/game-tools.ts` | 3125 | Les **69 outils** sur l'interface `GameHost` (construite dans `main.ts`) ; le filet « Before TARS » ; `resolveBody`, `resolveSite` (noms FR / EN) |
 | `src/ai/settings-tools.ts` | 98 | Les réglages du schéma trouvés par les mots, une valeur vérifiée (bornes, choix, couleurs) |
-| `src/ai/telemetry.ts` | 239 | `telemetry(camera, groupes)` : tout ce que le cockpit et le hub savent, en chiffres ; `AttitudeSampler`, ses canaux échantillonnés pour ses graphes |
-| `src/ai/memory.ts` | 175 | `TarsMemory` : 24 échanges mot pour mot, un résumé écrit par le modèle, 40 notes ; `carry`, `clearTurns`, `compact`, `forget` |
-| `src/ai/triggers.ts` | 227 | `Triggers` : ses réveils — 5 réflexes et les règles qu'on lui donne ; `match(événement)`, `due(heure)` ; `wakeText` |
+| `src/ai/telemetry.ts` | 293 | `telemetry(camera, groupes)` : tout ce que le cockpit et le hub savent, en chiffres ; `AttitudeSampler`, ses canaux échantillonnés pour ses graphes |
+| `src/ai/memory.ts` | 193 | `TarsMemory` : 24 échanges mot pour mot, un résumé écrit par le modèle, 40 notes ; `carry`, `clearTurns`, `compact`, `forget` |
+| `src/ai/triggers.ts` | 251 | `Triggers` : ses réveils — 5 réflexes et les règles qu'on lui donne ; `match(événement)`, `due(heure)` ; `wakeText` |
 | `src/ai/budget.ts` | 42 | `Budget` : ce que ses initiatives coûtent sur l'heure glissante, le plafond (réglage), 20 s entre deux réveils |
-| `src/ai/subagents.ts` | 105 | `runSubagents` : jusqu'à 4 copies de lui en parallèle, outils de lecture et de calcul seulement |
-| `src/ai/commands.ts` | 229 | Pur : les 26 commandes « / » de l'agent, les modes, les savoir-faire, les mentions @ ; `complete`, `parseCommand`, `unmention`, `helpLines` |
-| `src/ai/game-commands.ts` | 462 | Pur : les 76 commandes de jeu (`/target`, `/cockpit`, `/teleport`…) traduites en appels d'outils ; arguments par position ou `clé=valeur` ; `completeGame` ; `/tool` |
-| `src/ai/tars-commands.ts` | 241 | `runCommand` : ce que fait chaque commande de l'agent (une ligne ou une fiche dans la console) |
-| `src/ai/offline-orders.ts` | 101 | Pur : les ordres compris sans modèle (FR / EN), traduits en appels des mêmes outils |
-| `src/ai/listen.ts` | 128 | Le push-to-talk : la reconnaissance vocale du navigateur, F6 tenu |
+| `src/ai/subagents.ts` | 109 | `runSubagents` : jusqu'à 4 copies de lui en parallèle, outils de lecture et de calcul seulement |
+| `src/ai/commands.ts` | 238 | Pur : les 26 commandes « / » de l'agent, les modes, les savoir-faire, les mentions @ ; `complete`, `parseCommand`, `unmention`, `helpLines` |
+| `src/ai/game-commands.ts` | 685 | Pur : les 76 commandes de jeu (`/target`, `/cockpit`, `/teleport`…) traduites en appels d'outils ; arguments par position ou `clé=valeur` ; `completeGame` ; `/tool` |
+| `src/ai/tars-commands.ts` | 248 | `runCommand` : ce que fait chaque commande de l'agent (une ligne ou une fiche dans la console) |
+| `src/ai/offline-orders.ts` | 158 | Pur : les ordres compris sans modèle (FR / EN), traduits en appels des mêmes outils |
+| `src/ai/listen.ts` | 285 | Le push-to-talk : la reconnaissance vocale du navigateur, F6 tenu |
 | `src/ai/tars-online.ts` | 135 | TARS bavard (avant l'agent) : ses réponses et ses remarques par GLM et Jev |
-| `src/ui/tars-panel.ts` | 1060 | Sa console : l'emblème, les onglets, les actions en direct, le suivi, la proposition, les tâches, l'autocomplétion, les modes, la poignée, sa présence console fermée |
-| `src/ui/tars/emblem.ts` | 111 | Ses quatre monolithes animés selon son état (prêt, écoute, réfléchit, agit, parle) |
-| `src/ui/tars/display.ts` | 207 | Ses cartes sur la vue (trois au plus) : graphes en direct ou calculés, fiches, séries `source()` recalculées à chaque image |
+| `src/ui/tars-panel.ts` | 1132 | Sa console : l'emblème, les onglets, les actions en direct, le suivi, la proposition, les tâches, l'autocomplétion, les modes, la poignée, sa présence console fermée |
+| `src/ui/tars/orb.ts` | 239 | Son orbe animé selon son état (prêt, écoute, réfléchit, agit, parle) — les « thinking orbs » (38977554) ont remplacé les quatre monolithes d'`emblem.ts` |
+| `src/ui/tars/display.ts` | 219 | Ses cartes sur la vue (trois au plus) : graphes en direct ou calculés, fiches, séries `source()` recalculées à chaque image |
 | `src/ui/tars/chart.ts` | 286 | Le tracé : des voies sur un axe commun, ou superposées avec une bande de couloir |
 
 Le branchement est dans `src/main.ts` : `tarsTools` (le `GameHost`), `tarsTriggers`, `tarsBudget`,

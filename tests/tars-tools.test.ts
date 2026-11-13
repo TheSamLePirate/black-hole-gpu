@@ -1054,3 +1054,23 @@ test("his wingmen set the Lab's way; his gun's burst held in flight time, not th
   await Bun.sleep(350);
   expect(camera.gunBurst).toBeCloseTo(0.2, 3);
 });
+
+test("the docs say his tools as the code has them: their count, set_craft's crafts (TA-26)", async () => {
+  const { gameTools } = await import("../src/ai/game-tools");
+  const tools = gameTools({ settings: {}, camera: {}, tools: {}, log: () => [] } as unknown as GameHost);
+  const n = tools.length;
+  for (const doc of ["docs/TARS.md", "docs/systemes/10-tars-agent.md", "docs/systemes/README.md"]) {
+    const text = await Bun.file(doc).text();
+    const said = [...text.matchAll(/(\d{2,3})\*{0,2} (?:outils|tools)\b/g)].map((m) => Number(m[1]));
+    expect({ doc, said }).toEqual({ doc, said: said.map(() => n) });
+  }
+  // (and the code sheet's files there: emblem.ts had gone, replaced by the orbs)
+  const sheet = await Bun.file("docs/systemes/10-tars-agent.md").text();
+  const files = [...new Set([...sheet.matchAll(/`(src\/[^`]+\.ts)`/g)].map((m) => m[1]!))];
+  const gone: string[] = [];
+  for (const f of files) if (!(await Bun.file(f).exists())) gone.push(f);
+  expect(gone).toEqual([]);
+  const craft = tools.find((t) => t.name === "set_craft")!;
+  const vessels = (craft.params!.vessel as unknown as { enum: string[] }).enum;
+  for (const v of vessels) expect(craft.description).toContain(v);
+});

@@ -58,7 +58,7 @@ ouverts, sous 1 ms) ; J3 au stade du plan.**
 | Audit vagues 3–4 (1feb2f7f) | 3.1 réseau RD0 + RD1 | **fait** : la frontière d'entrée (`src/net/inbound.ts`) ; un événement mal formé figeait l'image (163 → 0), plus maintenant — e2e `net-inbound` 6/6, net-battle/coop/crew/board verts |
 | Audit vagues 3–4 (1feb2f7f) | 3.2 réseau RD2 | **fait** : le serveur se défend (salles par adresse, débit, mots de passe salés et freinés, identité non publiée, rôle gardé, expiration) — six défauts vus avant, 0/6 → 6/6 |
 | Audit vagues 3–4 (1feb2f7f) | 3.4–3.5 vol | **fait** : U/F7 des avions (ILS, refus dit, manette gardée), Maj/Alt modificateur ou manette, LAND = F7 — le cours revolé 7/7 et 9/9 |
-| Audit vagues 3–4 (1feb2f7f) | 3.6 TARS | **fait** : tour coupé, `saves delete` confirmé, pannes dites, faux ordres hors ligne ; restes TA-06 (réveil borné), TA-12 (troncature redemandée), TA-14 (relais Deepgram borné), TA-15 (un filet « Before TARS » par tour, son échec dit), TA-07 (résumés de mémoire un à la fois), TA-16 (réveils muets hors mémoire, les autres en une ligne), TA-09 (ses réglages dans l'historique du Labo), TA-11 (texte du dehors marqué, l'irréversible refusé dans son tour), TA-13 (les voix au-dessus des moteurs), TA-19 (arguments bornés), TA-18 (outils en SI, datum nommé), TA-21 (ailiers par le Labo, rafale en temps de vol) |
+| Audit vagues 3–4 (1feb2f7f) | 3.6 TARS | **fait** : tour coupé, `saves delete` confirmé, pannes dites, faux ordres hors ligne ; restes TA-06 (réveil borné), TA-12 (troncature redemandée), TA-14 (relais Deepgram borné), TA-15 (un filet « Before TARS » par tour, son échec dit), TA-07 (résumés de mémoire un à la fois), TA-16 (réveils muets hors mémoire, les autres en une ligne), TA-09 (ses réglages dans l'historique du Labo), TA-11 (texte du dehors marqué, l'irréversible refusé dans son tour), TA-13 (les voix au-dessus des moteurs), TA-19 (arguments bornés), TA-18 (outils en SI, datum nommé), TA-21 (ailiers par le Labo, rafale en temps de vol), TA-26 (docs remises au code, gardées) |
 | Audit vagues 3–4 (1feb2f7f) | 3.7 TARS (outils AP avions/A320) | **fait** : `jet_autopilot` par les actions de la console, volets au levier (CONF 1), l'AP de l'A320 réparé dans `apSet` |
 | Audit vagues 3–4 (1feb2f7f) | 3.10 e2e qui ne vérifient rien | **fait** : `waitOptional` (93 attentes converties), 14 mesures déclarées, garde `e2e-honesty` |
 | Audit vagues 3–4 (1feb2f7f) | 4.2 la politique de temps | **fait** : vol tenu pendant la reprise GPU, cadence vraie, horloge du vol + garde ; l'onglet masqué (choix de Sam) : solo en pause dite, salle sans arrêt (l'absent ne la bloque plus, les autres avertis, remis à l'heure au retour), sauvé en partant, TARS sans réveil ; le ralentissement sous 10 images/s dit — e2e `hidden-tab` 2/2, `fps-truth` 2/2 |
@@ -5339,4 +5339,14 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   e2e jetable, ce Mac) ; `bun build` de la page produit les mêmes ressources ; le worker du planificateur n'importe pas ce fichier. Chaque
   fichier de tests TARS, équipage, combat, horloge du vol lancé seul vert ; tsc, biome.
 - Limites : aucun e2e de combat rejoué (la rafale par TARS en vol réel non essayée).
+
+## 2026-11-13T20:05Z — Audit TA-26 : les docs de TARS remises au code, et gardées
+
+- Contribution : tenue des références du code (règle de CLAUDE.md) ; audit 2026-11-10, TA-26 (P3).
+- Réalisé : le nombre d'outils dit par `docs/TARS.md` (68), `docs/systemes/10-tars-agent.md` (43) et `docs/systemes/README.md` (49) remis à 69 ;
+  les lignes des fichiers de la fiche 10 recomptées, sa ligne `emblem.ts` (supprimé par 38977554) remplacée par `orb.ts` ; la description de
+  `set_craft` nomme ses cinq appareils (elle en citait trois). Garde `tars-tools` « TA-26 » : le compte des docs égal à celui du code, chaque
+  fichier `src/…` de la fiche présent, chaque appareil de `set_craft` nommé.
+- Preuves : **reproduit avant** (le garde : 68 et 68 dits, 69 dans le code) ; **après** 29/29 dans `tars-tools` lancé seul.
+- Limites : les comptes de lignes de la fiche ne sont pas gardés (ils bougent à chaque lot) ; datés dans la fiche.
 
