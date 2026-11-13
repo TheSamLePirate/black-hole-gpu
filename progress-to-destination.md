@@ -5133,3 +5133,12 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   Mac ; repassés 3/0 et 2/0 ; mes autres e2e (hidden-tab, saves-storage, loop-cpu) sur `snap` (E2E.md).
 - **Non reproduit, non corrigé :** le panneau ORBIT (« IMPACT EARTH ») sur un F-35 en vol, noté pendant 3.4 : en cockpit et en vue
   extérieure, au-dessus de l'Atlantique, le HUD du F-35 n'en montre rien (sonde temporaire, capture regardée).
+
+## 2026-11-13T16:17Z — FX-03 (le reste : l'abandon dit d'un décollage qui ne quitte pas le sol) : non reproduit, rien corrigé
+
+- **Essai (test unitaire, aide des vols) :** un Lander posé à Tranquillité, `fleet.fuel.lander = 0`, U : il décolle et monte (22 m à
+  5 s, 1,9 km à 30 s, 3,9 km à 40 s) — pas d'état bloqué ; l'ancien (le nez à l'horizontale, aucune poussée) est corrigé depuis
+  2e51b40d. Un garde « abandonné après 30 s au sol » écrit puis **retiré** : sans défaut vu, pas de correction à l'aveugle (règle de
+  méthode du 13 nov.).
+- **Relevé :** les ergols d'un vaisseau ne se lisent pas dans `fleet.fuel` (le Lander « vide » vole) : son propre budget fait foi —
+  à vérifier contre ce que la sauvegarde de l'appareil (3.3, `craftsave.ts`) écrit pour lui.
