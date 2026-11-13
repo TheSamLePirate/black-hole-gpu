@@ -38,7 +38,7 @@ reste entier : rien ne se connecte tant que le joueur ne demande pas une salle, 
   atteint en WebRTC, et le serveur nous garde 30 s dans la liste de la salle, marqués `cut` — les autres gardent notre piste et
   leur lien direct ; repris à la même place, nos pistes et nos liens sont gardés, pas reconstruits (avant le 13 nov. 2026, audit
   NET-11 : plus rien ne partait sans le WebSocket, les autres nous lâchaient aussitôt, et tout était effacé au retour). Un
-  « quitter » dit : parti aussitôt.
+  « quitter » dit : parti aussitôt. Les autres voient « liaison coupée » à côté de nous dans le panneau Réseau, dit à la coupure et au retour.
 - Une salle accueille 8 appareils, dont 4 pilotes. Le serveur la garde jusqu'à ce que son propriétaire la
   supprime ; son horloge continue quand personne n'y est.
 - **Réglages › Réseau › Menu Réseau** désactivé : aucune trace du réseau dans le jeu.

@@ -5894,6 +5894,8 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   la place 0, départ dit retiré aussitôt, coupé jamais revenu retiré après le délai. Tests réseau verts ; e2e `net-flight`, `net-coop`,
   `net-board`, `net-rooms`, `net-slot-state` 17/0. Deux erreurs de ma mesure corrigées en route : un blocage CDP qui n'arrête pas un WebSocket,
   une clé de piste (`place × 8`).
-- Limites : le panneau Réseau ne montre pas encore « coupé » à côté d'un nom ; le reste de RD5 (garde de lien mort, contre-pression, gros
+- Suite (même jour) : le panneau Réseau montre « liaison coupée » à côté d'un membre coupé, un message le dit puis dit son retour (FR/EN) ;
+  e2e `net-cut` le vérifie (puce et journal de la seconde page ; capture `remote-results/net-cut/panel.png` : « LINK CUT », lien « direct »).
+- Limites : le reste de RD5 (garde de lien mort, contre-pression, gros
   messages hors du canal fiable — NET-14, NET-18, NET-19, NET-22, NET-23) non fait ; NET-10 (l'état dur repris) non fait.
 

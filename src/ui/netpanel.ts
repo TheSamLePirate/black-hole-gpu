@@ -98,6 +98,8 @@ export class NetPanel {
   session: NetSession | null = null;
   /** the others out of view, as last told (their changes said) */
   private awaySeen = new Set<number>();
+  /** those whose link to the server was cut, as last told (NET-11) */
+  private cutSeen = new Set<number>();
   /** the room's match (ui/netmatch.ts) */
   match: NetMatch | null = null;
   /** the players' voices (ui/netvoice.ts) */
@@ -174,8 +176,12 @@ export class NetPanel {
         if (m.slot === me) continue;
         if (m.away && !this.awaySeen.has(m.slot)) this.host.toast(tf("{0} is out of view — the room goes on", m.name));
         else if (!m.away && this.awaySeen.has(m.slot)) this.host.toast(tf("{0} is back in view", m.name));
+        // (his link to the server cut, or back — NET-11)
+        if (m.cut && !this.cutSeen.has(m.slot)) this.host.toast(tf("{0}'s link to the server is cut — held a while", m.name));
+        else if (!m.cut && this.cutSeen.has(m.slot)) this.host.toast(tf("{0} is back", m.name));
       }
       this.awaySeen = new Set(members.filter((m) => m.away && m.slot !== me).map((m) => m.slot));
+      this.cutSeen = new Set(members.filter((m) => m.cut && m.slot !== me).map((m) => m.slot));
       this.refresh();
     });
     net.on("room", () => this.refresh());
@@ -920,6 +926,12 @@ export class NetPanel {
         const away = h("em", "netp-chip netp-away", t("out of view"));
         away.dataset.testid = `net-away-${m.slot}`;
         line.append(away);
+      }
+      // (his link to the server cut — held a while, his craft by the direct link if it lives — NET-11)
+      if (m.cut) {
+        const cut = h("em", "netp-chip netp-away", t("link cut"));
+        cut.dataset.testid = `net-cut-${m.slot}`;
+        line.append(cut);
       }
       const sub = h("div", "netp-whosub");
       sub.append(r);

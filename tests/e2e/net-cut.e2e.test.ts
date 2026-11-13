@@ -6,8 +6,8 @@ import { App, E2E, stopServer } from "./lib/app";
 // `sendCraft` left at once without its WebSocket: the second page stopped hearing the first, though their direct link
 // lived; and taken back, the first page cleared every track and closed every link — the other craft vanished until
 // rebuilt.
-// Done when: during the cut the second page still gets the first's samples by the direct link; the room taken back, the
-// first page still has the second's track.
+// Done when: during the cut the second page still gets the first's samples by the direct link and shows its link cut; the room
+// taken back, the first page still has the second's track.
 // Duration: ~1 min.
 
 describe.skipIf(!E2E)("the server cut, the direct link flying on", () => {
@@ -51,6 +51,12 @@ describe.skipIf(!E2E)("the server cut, the direct link flying on", () => {
     // (in orbit the craft's samples go about once a second: 3 s)
     await Bun.sleep(3000);
     const sent = (await a.js<number>(`__bh.net.net.direct`)) - d0;
+    // (the second page told: the first's link cut — its panel's chip, its journal's line)
+    await b.js(`(__bh.net.open(), true)`);
+    await b.waitFor(`!!document.querySelector("[data-testid=net-cut-0]")`, 5000);
+    const told = await b.js<boolean>(`__bh.game.log.events.some((e) => /link to the server is cut|liaison .* coupée/.test(e.text))`);
+    await b.snap("remote-results/net-cut/panel.png");
+    await b.js(`(__bh.net.closePanel(), true)`);
     const s1 = await seqOf(b, 0);
     const still = await a.js<string>(`__bh.net.net.status`);
     const heard = (s1 - s0 + 0x10000) % 0x10000;
@@ -61,6 +67,7 @@ describe.skipIf(!E2E)("the server cut, the direct link flying on", () => {
     await a.waitFor(`__bh.net.net.status === "online" && !!__bh.net.net.room`, 30_000);
     const kept = await a.js<number>(`__bh.net.net.remotes.track(1)?.samples.length ?? 0`);
     console.log(`  taken back: the first page's track of the second, ${kept} samples at once`);
+    expect(told).toBe(true);
     expect(sent).toBeGreaterThan(0);
     expect(heard).toBeGreaterThanOrEqual(Math.max(1, sent - 1));
     expect(kept).toBeGreaterThan(0);

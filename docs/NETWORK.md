@@ -35,7 +35,7 @@ loaded only then.
   While the link to the server is cut, the direct links fly on: our samples still go to those reached by WebRTC, and the
   server keeps us in the room's roster 30 s, marked `cut` — the others keep our track and their direct link; taken back on
   the same slot, our tracks and links are kept, not rebuilt (before 13 Nov 2026, audit NET-11: nothing left without the
-  WebSocket, the others dropped us at once, and all tracks and links were cleared at the return). A « leave » said: gone at once.
+  WebSocket, the others dropped us at once, and all tracks and links were cleared at the return). A « leave » said: gone at once. The others see « link cut » beside us in the Network panel, told when it comes and when we are back.
 - A room holds 8 devices, 4 of them pilots. It is kept on the server until its owner deletes it; its clock
   runs on while nobody is in it.
 - **Settings › Network › Network menu** off: no trace of the network in the game.
