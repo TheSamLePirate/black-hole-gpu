@@ -32,7 +32,7 @@ import { sceneryReady } from "./lib/plan-views";
 //       screens, the cockpit (the outside view) — between two baseline flights (drift).
 // Output: remote-results/j0/<machine>/ (J0_OUT): j0.json, shots (start, mid-turn, end; each ablation's last frame).
 // J0_PHASES=flight,ablate,sustained (default all; sustained: the flight again after the ablations, the machine hot), ABLATE_S (20), J0_MACHINE (the label: "m1max", "kerr-mini"; default the host name).
-// Other phases, asked by name: agecheck, framing (PLAN-J3 J3-0), keylight, keyair, keysky (J3-1), keyhaze (J3-2), shadows (J3-3), wetbld (J3-5) (J3-1: the craft's key light against the incident Sun toward
+// Other phases, asked by name: agecheck, framing (PLAN-J3 J3-0), keylight, keyair, keysky (J3-1), keyhaze (J3-2), shadows (J3-3), wetbld, cityview (J3-5) (J3-1: the craft's key light against the incident Sun toward
 // sunset, ~3 min on kerr-mini; keyair: its air two ways, march and table, ~4 min; keysky: the sky's light two ways, ~4 min).
 // Not a pass/fail on the frame rate: the fiche is written from j0.json (docs/progress/j0/). It fails on a GPU error, a craft not
 // placed, a flight not flown.
@@ -878,6 +878,48 @@ describe.skipIf(!E2E)("J0: the reference flight over Toulon-Hyères", () => {
       expect(rows.length).toBe(6);
     },
     600_000,
+  );
+
+  // (PLAN-J3 J3-5 — the reference views where the buildings' tables count, J0_PHASES=cityview (J0_START over a town): frozen, the data and
+  // scenery in, the exposure settled; two views of the town — aside at 10° (walls), from above at 35° (roofs) — shots, and a 24 × 14 grid of
+  // renderer.surfaceAt samples: what the pixels are (ground, building — a meshed one —, box — a box-drawn one —, tree…), the buildings'
+  // share drawn from their tables vs the photo-coloured meshes. Nothing changed)
+  test.skipIf(!PHASES.includes("cityview"))(
+    "J3-5: a town's reference views — aside and from above; what its pixels are (meshed buildings, boxes, ground)",
+    async () => {
+      await start("");
+      const fov0 = await app.js<number>("__bh.settings.fov");
+      await app.js(`(async () => { const f = () => new Promise((q) => requestAnimationFrame(q)); __bh.freeze(false);
+        __bh.settings.shipMount = "around"; __bh.refresh(); for (let i = 0; i < 30; i++) await f();
+        Object.assign(__bh.camera.outside, { yaw: 30, pitch: 10, dist: 200 });
+        Object.assign(__bh.settings, { dof: false, motionBlur: 0, lookProfile: "neutral", dynamicResolution: false, earthRasterShading: "every", earthRasterScale: 1 });
+        for (let i = 0; i < 150; i++) await f(); __bh.freeze(true); return 1; })()`);
+      const views: Record<string, unknown> = {};
+      for (const [name, pitch] of [
+        ["aside", 10],
+        ["above", 35],
+      ] as const) {
+        await app.js(`(async () => { const f = () => new Promise((q) => requestAnimationFrame(q)); __bh.freeze(false);
+          Object.assign(__bh.camera.outside, { yaw: 30, pitch: ${pitch}, dist: 200 }); for (let i = 0; i < 90; i++) await f(); __bh.freeze(true); return 1; })()`);
+        await app.dataSettled(`J3-5: the town's data (${name})`, { stallMs: 30_000, compileStallMs: 60_000, maxMs: 90_000 });
+        const sc = await sceneryReady(app, 60_000);
+        await app.js(
+          `(async () => { const f = () => new Promise((q) => requestAnimationFrame(q)); __bh.renderer.settleExposure(); for (let i = 0; i < 45; i++) await f(); return 1; })()`,
+        );
+        const x = (await app.cdp.send("Page.captureScreenshot", { format: "png" })) as { data: string };
+        await Bun.write(`${OUT}/cityview-${name}.png`, Buffer.from(x.data, "base64"));
+        const kinds = await app.js<Record<string, number>>(`(async () => { const k = {};
+          for (let j = 0; j < 14; j++) for (let i = 0; i < 24; i++) { const r = await __bh.renderer.surfaceAt((i + 0.5) / 24, 0.1 + 0.8 * (j + 0.5) / 14);
+            const kk = r ? r.kind : "null"; k[kk] = (k[kk] ?? 0) + 1; }
+          return k; })()`);
+        views[name] = { scenery: sc.status, buildings: sc.buildings, meshed: sc.meshedBuildings, kinds };
+        console.log(`  J3-5 city view ${name}: ${JSON.stringify(views[name])}`);
+      }
+      out.cityview = views;
+      await app.js(`(() => { Object.assign(__bh.settings, { shipMount: "cockpit", fov: ${fov0} }); __bh.freeze(false); return 1; })()`);
+      expect(Object.keys(views).length).toBe(2);
+    },
+    900_000,
   );
 
   test.skipIf(!PHASES.includes("sustained"))(

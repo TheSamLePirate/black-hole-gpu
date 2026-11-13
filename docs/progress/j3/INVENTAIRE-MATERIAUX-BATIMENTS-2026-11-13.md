@@ -67,6 +67,15 @@ comptent peu vus d'en haut. **Les albédos sombres des tables ne pèsent donc, e
 le lointain sans maillage, l'étranger (Overture, sans orthophoto nationale). Le levier et sa phase ont été retirés (aucun utilisateur).
 Non vérifié : une vue rasante (murs), une ville étrangère, quels bâtiments du cadre étaient maillés.
 
+## Les vues de référence (13 nov., ~18:26 UTC)
+
+Phase J0 `cityview` (kerr-mini ; monde figé, données et décor chargés ; vues de côté à 10° et d'en haut à 35° ; une grille de 24 × 14
+`renderer.surfaceAt`) : **Lille** (`…-j3-cityview-lille`) 22 / 55 points de bâtiment, **Bruxelles** (`…-j3-cityview-brussels`) 11 / 29, **aucune
+« boîte »** dans les deux. À Lille, les toits proches sont ceux de l'orthophoto IGN ; à **Bruxelles**, sans orthophoto nationale, la photo du sol
+est floue et les toits **bruns et ternes** des tables se voient — c'est là (l'étranger, Overture) que les albédos de J3-5 comptent. Les bâtiments
+de Bruxelles n'y sont chargés que sur une bande (non expliqué : la couverture d'Overture ou une limite du décor — les deux villes comptent
+3 920 bâtiments, une borne possible, non vérifiée).
+
 ## Ce que J3-5 en fera (proposé)
 
 1. Des vues de référence **là où les tables comptent** (une ville étrangère sans orthophoto, des murs vus à hauteur d'homme, le tracé) et un

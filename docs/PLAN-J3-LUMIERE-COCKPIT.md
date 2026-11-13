@@ -217,4 +217,6 @@ Aucun coût de J3 n'est mesuré ; aucun gain n'est promis.
   **Essai (~18:16 UTC)** : tuiles × 2,5 et brique × 1,5 sur Lille vue d'en haut — **aucun changement à l'image** (73,31 / 73,05 / 73,27) : de près au
   raster, les toits viennent de l'orthophoto. Les tables ne comptent qu'où la photo ne colore pas (tracé, lointain, étranger) : les vues de
   référence de J3-5 se feront là. Levier retiré.
+  **Vues de référence (~18:26 UTC, phase `cityview`)** : Lille (toits de l'orthophoto) et Bruxelles (sans orthophoto nationale : les toits des
+  tables, bruns et ternes) — la ville de référence de J3-5 est donc étrangère ; aucune « boîte » dans les deux grilles de `surfaceAt`.
 

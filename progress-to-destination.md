@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-13 18:16 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-13 18:26 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous.
@@ -5541,4 +5541,13 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   échoué sur l'attente des données (l'appareil volant pendant l'attente : figé ensuite).
 - Lecture : de près au raster, les toits en France prennent la photo ; les tables d'albédo ne comptent qu'au tracé, au loin, à l'étranger.
 - Suite : les vues de référence de J3-5 là où les tables comptent (une ville étrangère, des murs à hauteur d'homme).
+
+## 2026-11-13T18:26Z — J3-5 : les vues de référence (Lille, Bruxelles)
+
+- Réalisé : e2e J0 phase `cityview` (deux vues, une grille de `surfaceAt`) ; runs sur Lille et Bruxelles (kerr-mini). Docs : inventaire des
+  matériaux, PLAN-J3 §10, E2E-CATALOGUE.
+- Preuves : **observé** — à Lille les toits viennent de l'orthophoto ; à Bruxelles (sans orthophoto nationale) les toits des tables, bruns et
+  ternes ; aucune « boîte » parmi les points de bâtiment (22 / 55 à Lille, 11 / 29 à Bruxelles). Non vérifié : pourquoi Bruxelles n'a ses
+  bâtiments que sur une bande ; le même total de 3 920 bâtiments dans les deux villes (une borne ?).
+- Suite : J3-5 se jugera sur Bruxelles (ou une ville étrangère) — albédos et métal, décision de Sam.
 
