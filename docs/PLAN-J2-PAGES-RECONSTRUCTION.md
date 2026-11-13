@@ -349,6 +349,27 @@ au plus 0,7, α ≥ 0,3 : une page neuve y passe en quelques images, par le code
 invalidations par cause ; `scene` — caméra, réglage, `touch()` — à part), `trailJs`/`trailSigJs`. **Piège trouvé** : les attentes d'e2e
 qui appellent `__bh.touch()` à chaque image invalident la vue à chaque image (124 sur 125 dans la première mesure).
 
+**Étape B — la conception, à trancher (relevé du code, 13 novembre)**. La passe de visibilité du sol (`terrain-raster.ts`) ne lit ni les
+paramètres des tuiles (`P.tileL`, les fenêtres d'orthophotos) ni la table des pages : elle ne connaît que la grille du cache de hauteurs
+(`terrainSurfaceCache`). Le pixel ne sait donc pas, là où l'identité s'écrit, de quelle page d'imagerie il tient sa couleur. Trois voies :
+
+1. **L'identité du sol écrite par la passe de visibilité** (le contrat validé, décision 7) : lui lier les paramètres des tuiles et une table
+   des générations par page (un tampon de ~1 000 mots, réécrit à la publication), calculer au fragment la page la plus fine qui couvre le
+   point (comme `earthImageryAniso`, sans la lire), écrire `page | génération` dans une plage d'objets réservée au sol ; `identityKept`
+   traite cette plage comme « sol » (pas comme un objet : sinon la coupe des arbres apparus sur le sol ne marche plus), et coupe
+   l'historique tenu là où le mot a changé, sur un drapeau « pages publiées cette image ». Coût : un calcul de tuile par pixel du sol, une
+   liaison de plus ; un lot de plusieurs jours, sa planche et son ΔGPU.
+2. **La page écrite par `shadeLite`** (qui lit déjà l'imagerie et en connaît les poids) dans l'identité : moins de calcul, mais `shadeLite`
+   n'ombre qu'une partie des pixels par image en vue tenue (`rasterRate`) et la passe de visibilité efface l'identité à chaque image —
+   des mots manquants, des coupes parasites.
+3. **Sans identité** : dans la vue tenue, un clamp de l'historique **à l'échelle du bruit** (la boîte 3 × 3 élargie de k écarts-types,
+   au lieu de rien) — un changement réel (une page, un arbre, une ombre) passe en une image, le bruit du quart d'ombrage continue de se
+   moyenner. Générique (toutes les arrivées, le décor compris), peu de code, mais **hors du contrat** de la décision 7 et sans « où » ni
+   « quoi » (pas d'instrument par page).
+
+*Recommandation* : **3 d'abord**, mesurée par la phase `trail` (la page neuve à > 90 % en 2–4 images, la convergence tenue C0-12 ≤ 1 %
+gardée), puis 1 seulement si une lecture par page devient nécessaire (J2-5, la sélection, les diagnostics). **Question pour Sam.**
+
 ## 10. Non vérifié
 
 - **Aucune mesure nouvelle** : les chiffres cités viennent des fiches J0 du 12 novembre, de la fiche T9 et de GRAPHICS-PIPELINE ; les
