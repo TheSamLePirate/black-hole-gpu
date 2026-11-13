@@ -4058,3 +4058,9 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   92 % à 23 ; en mouvement 88 % à 3 ; bruit tenu 0,41 → 0,54 % (≤ 1 % C0-12). `heldFreshBox` (retiré) n'a pas été remesuré.
 - **Changé** : `earth-tiles.ts` (`leakProbe`), `j2-probes` (valeurs brutes par étage), PLAN-J2 §9 septies (encadré de correction) et
   §9 octies (d), BH-API. **Non vérifié** : kerr-mini ; `singleHistory` en vol avec une mesure de netteté qui sépare le bruit.
+
+## 2026-11-13T03:58Z — J2-6 : un seul historique jugé par le PSNR en virage — rien en mouvement, −0,85 dB à l'arrêt
+
+- **Mesuré** (M1 Max, `motion-quality` Alpes virage 30°, A B A après une chauffe) : `singleHistory` en mouvement 46,9 contre 47,1 / 47,2 dB,
+  à l'arrêt 48,3 contre 49,1 / 49,1 dB, netteté 0,92 contre 0,93. Avec la vue tenue (page neuve 3 × plus vite, bruit 0,41 → 0,54 %) :
+  **un arbitrage pour Sam** (PLAN-J2 §9 octies (d)). Levier toujours éteint. **Non vérifié** : kerr-mini ; d'autres scènes.

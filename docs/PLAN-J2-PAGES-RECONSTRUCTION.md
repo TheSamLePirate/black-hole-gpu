@@ -434,10 +434,13 @@ les adaptateurs datés, la fiche J0 de sortie.
 celui qu'avait le natif, passé dans `TU.u.w` — avant, elle lisait le même `TA.k.z`). Aucune compilation nouvelle (81 / 81).
 **Mesuré** (M1 Max en pression « Heavy », un passage par côté) : vue tenue (`trail`) — ~~les premières images un peu plus vite, identique
 à 66 images~~ (mesure fausse, §9 septies) ; **remesuré avec la sonde corrigée : la page neuve à 72 % dès 3 images contre ~0, 86 % à 10
-contre 60 %, le bruit tenu 0,41 → 0,54 %** ; vol J0 (`flight`) — à l'arrêt, l'image en mouvement plus proche de l'affinée
+contre 60 %, le bruit tenu 0,41 → 0,54 %** ; `motion-quality` (Alpes, virage 30°, A B A après une chauffe) — en mouvement **46,9 contre
+47,1 / 47,2 dB** (rien de mesurable), à l'arrêt **48,3 contre 49,1 / 49,1 dB** (−0,85 dB), netteté 0,92 contre 0,93 ; vol J0 (`flight`) — à l'arrêt, l'image en mouvement plus proche de l'affinée
 (rapport 0,76–0,83 contre 0,30–0,65), mais au changement d'échelle forcé 0,75 → 0,625 un **pic plus fort** (+280 % contre +12 %) et au retour
 0,625 → 0,75 un pic moindre (+213 % contre +348 %) ; l'énergie du laplacien compte le bruit (un natif court en ajoute) : **rien de
-concluant**. Temps : 28,1 contre 32,9 ms GPU p50, la chauffe (second passage), pas le levier. **Reste** : J2-6 proprement dit (l'échelle
+concluant**. Temps : 28,1 contre 32,9 ms GPU p50, la chauffe (second passage), pas le levier. **À trancher par Sam** : allumer `singleHistory` — la
+page neuve en vue tenue trois fois plus vite, pour +0,13 point de bruit tenu (sous le 1 % de C0-12) et −0,85 dB à l'arrêt dans le virage
+mesuré ; le pic au changement d'échelle non conclu. **Reste** : J2-6 proprement dit (l'échelle
 par petits pas sans rééchantillonner l'historique de sortie, l'arrêt et la reprise sans saut, l'épingle `want = rasterTop()` retirée) et
 une mesure qui sépare netteté et bruit (PSNR contre une référence à chaque événement), sur kerr-mini.
 
