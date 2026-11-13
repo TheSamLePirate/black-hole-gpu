@@ -5,6 +5,7 @@
 // the benchmark page (a cold load is what it measures).
 
 import { t } from "./i18n";
+import { assetsSeen } from "./pwa/seen";
 
 export interface PwaStats {
   build: string;
@@ -120,7 +121,8 @@ export function installPwa(o: { toast: (msg: string) => void; dev?: boolean }): 
   /**
    * The shell warmed in idle time: what this page loaded before the worker took it over (the first
    * visit: its script and styles, the scene's textures) fetched once more through the worker, which
-   * keeps it — the page then reloads offline whatever the precache list had.
+   * keeps it — the page then reloads offline whatever the precache list had. With them, the files its workers fetched
+   * (src/pwa/seen.ts: the KTX2 transcoder's maps), which the page's resource timings do not list.
    */
   function warmShell() {
     const run = async () => {
@@ -129,6 +131,9 @@ export function installPwa(o: { toast: (msg: string) => void; dev?: boolean }): 
         const u = e.name;
         if (u.startsWith(location.origin) && !u.includes("/__") && !u.includes("sw.js")) seen.add(u.split("#")[0]!);
       }
+      // (and what workers fetched — out of the page's timings; the first visit's transcoder may have started before the worker
+      // held the page: 13 Nov 2026, three of the large maps' KTX2 lost, offline the array fell back to JPEGs never loaded)
+      for (const u of assetsSeen()) if (u.startsWith(location.origin)) seen.add(u);
       for (const u of seen) {
         try {
           if (await caches.match(u)) continue;

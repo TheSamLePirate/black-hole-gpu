@@ -751,6 +751,13 @@ termes à un nœud fautif (43,0666 N, 6,12883 E, niveau 1).
     851 s, 0 échec ; hors ligne 313 596 arbres, 8 000 bâtiments, 447 tuiles de sol, tout de la zone, 0 du réseau). Un seul passage
     vert : à revoir sur d'autres.
 - **Ce que le premier passage réellement hors ligne a montré** (`zones-usa-night`, ce Mac, `run-2026-11-10b.log` et `c.log`) :
+  - *(13 novembre ~22:43 UTC : la cause restante trouvée et réglée — e2e `pwa` instrumenté, kerr-mini. Après une seule visite, hors ligne, 5 cartes
+    échouaient encore (`moon/mars/mercury/jupiter/saturn-HASH.jpg`) : le tableau des grandes cartes (`MAPS_HI`) passe par le transcodeur KTX2,
+    un worker qui démarre avant que le Service Worker tienne la page (enregistré après `Renderer.create`) ; ses premiers fichiers (Terre, Lune,
+    Mars en `.ktx2`) allaient au réseau sans être gardés, et `warmShell` ne lit que les ressources de la page. Hors ligne, le tableau
+    compressé échouait (« Failed to fetch ») et le repli JPEG demandait des fichiers jamais chargés. Réglé : le module KTX2 note ce qu'il fait
+    charger (`src/pwa/seen.ts`), `warmShell` le reprend ; après : Terre, Lune, Mars et les matériaux du sol gardés, hors ligne aucun fichier du
+    jeu en échec (seul `/__deepgram`, le relais du serveur de dev), `pwa` 2/2. Le constat ci-dessous reste l'historique.)*
   - **Après une seule visite, le monde est noir hors ligne.** Les fichiers du jeu sont gardés à l'usage, et la première visite
     les charge avant que le Service Worker tienne la page : au rechargement hors ligne, 24 cartes de planètes (`*-HASH.jpg`)
     et `basis_transcoder.wasm` échouent, le décor reste « away-from-earth », aucune tuile n'est demandée. Avec une seconde

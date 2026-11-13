@@ -4,7 +4,9 @@ import { App, E2E, stopServer } from "./lib/app";
 // The PWA (PLAN-MONDE M1) by a real browser: the Service Worker registered (asked for by `sw=1`: the tests'
 // network blocking does not reach a worker), the shell cached as the page loads, the manifest served;
 // then the network cut — the page reloads from its cache, the scene playable offline; the Earth's tiles
-// kept under their budget.
+// kept under their budget. After a single visit, offline, none of the game's own files (hashed maps, meshes, WASM, workers) may fail.
+// Duration: ~2 min on kerr-mini
+// Done when: the page reloaded offline plays and none of its own files failed
 
 describe.skipIf(!E2E)("the PWA: the app from its cache, offline", () => {
   let app: App;
@@ -37,11 +39,27 @@ describe.skipIf(!E2E)("the PWA: the app from its cache, offline", () => {
       `fetch("manifest.webmanifest").then(async (r) => ({ ok: r.ok, name: (await r.json()).short_name }))`,
     );
     expect(man).toEqual({ ok: true, name: "Kerr" });
-    expect(await app.js<boolean>(`!!document.querySelector('link[rel="manifest"]')`)).toBe(true);
+    // (the files the workers fetched warmed too — src/pwa/seen.ts: on the first visit the KTX2 transcoder starts before the worker
+    // holds the page; 13 Nov 2026 the Earth's, Moon's and Mars's maps were lost, offline the large maps fell back to JPEGs never loaded)
+    await app.waitFor(
+      `(async () => { for (const n of await caches.keys()) for (const r of await (await caches.open(n)).keys()) if (/\\/earth-[0-9a-z]{8}\\.ktx2$/.test(r.url)) return true; return false; })()`,
+      30_000,
+    );
   }, 180_000);
 
   test("offline: the page reloads from its cache and the scene plays", async () => {
     // (the page and its Service Worker cut — lib/cdp.ts offline: the page's alone left the worker's fetches on the network)
+    // (what the page asks and does not get, offline: the game's own files — hashed textures, meshes, WASM — must all come from
+    // the cache after a single visit; 10 Nov 2026 the bodies' maps and the KTX2 transcoder failed, the world black)
+    const asked = new Map<string, string>();
+    const lost = new Map<string, number>();
+    app.cdp.on("Network.requestWillBeSent", (p) => asked.set(String(p.requestId), String((p.request as { url: string }).url)));
+    app.cdp.on("Network.loadingFailed", (p) => {
+      const u = asked.get(String(p.requestId)) ?? "?";
+      if (!/^https?:\/\/localhost:\d+\//.test(u)) return;
+      const k = u.replace(/^https?:\/\/localhost:\d+/, "").replace(/\?.*$/, "");
+      lost.set(k, (lost.get(k) ?? 0) + 1);
+    });
     await app.offline(true);
     try {
       await app.load("scene=Earth: the Blue Marble");
@@ -51,6 +69,12 @@ describe.skipIf(!E2E)("the PWA: the app from its cache, offline", () => {
       const t0 = await app.js<number>("__bh.sim.time");
       await Bun.sleep(1500);
       expect(await app.js<number>("__bh.sim.time")).toBeGreaterThan(t0);
+      await Bun.sleep(5000);
+      const own = [...lost].filter(([k]) => /-[0-9a-z]{8}\.\w+$|\.wasm$|worker[^/]*\.js$/.test(k));
+      console.log(
+        `  the page's own requests that failed offline (${lost.size} paths): ${[...lost].map(([k, n]) => `${n} × ${k}`).join(" · ") || "none"}`,
+      );
+      expect(own).toEqual([]);
     } finally {
       await app.offline(false);
     }

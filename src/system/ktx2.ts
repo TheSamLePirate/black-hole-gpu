@@ -3,6 +3,7 @@
 // Without a worker or a compressed format: RGBA8, as before (the caller's JPEG path otherwise).
 
 import type { KtxReply, KtxRequest, KtxTarget } from "./ktx-worker";
+import { noteAsset } from "../pwa/seen";
 
 let worker: Worker | null = null;
 let failed = false;
@@ -66,11 +67,14 @@ export function ktxLevels(url: string, target: KtxTarget): Promise<{ width: numb
   const w = getWorker();
   if (!w) return Promise.reject(new Error("no KTX2 worker"));
   const id = next++;
+  const href = new URL(url, location.href).href;
+  // (fetched by the worker, out of the page's resource timings: noted for the shell's warming — src/pwa/seen.ts)
+  noteAsset(href);
   return new Promise((resolve, reject) => {
     waiting.set(id, (r) => (r.error ? reject(new Error(r.error)) : resolve({ width: r.width!, height: r.height!, levels: r.levels! })));
     w.postMessage({
       id,
-      url: new URL(url, location.href).href,
+      url: href,
       target,
       wasm: new URL("basis_transcoder.wasm", location.href).href,
     } satisfies KtxRequest);

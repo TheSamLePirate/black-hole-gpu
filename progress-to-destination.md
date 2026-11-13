@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-13 22:35 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-13 22:43 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous.
@@ -6072,4 +6072,15 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
 
 - Réalisé : `aurora-cost` `AC_FIXED=1` (échelle tenue). Preuves : **mesuré** (kerr-mini) : au sol nul, orbite +0,95 ms, Jupiter +0,25 ms,
   schéma de la magnétosphère +2,45 ms — seul ce dernier passe 1 ms, hors du profil principal. PROBLEMES, E2E-CATALOGUE.
+
+## 2026-11-13T22:43Z — Hors ligne après une seule visite : les cartes du transcodeur KTX2 gardées
+
+- Contribution (§7 « préparer les données », reprise et hors ligne de l'expérience §19) : après une seule visite, la page rechargée hors ligne
+  trouve toutes les cartes des corps. Cause : le worker KTX2 démarre avant le Service Worker, ses premiers fichiers (Terre, Lune, Mars) n'étaient
+  pas gardés et `warmShell` ne voit que les ressources de la page ; hors ligne, le repli JPEG demandait 5 cartes jamais chargées.
+- Réalisé : `src/pwa/seen.ts` (les fichiers demandés par un worker), noté par `system/ktx2.ts`, repris par `pwa.ts` `warmShell` ; e2e `pwa` :
+  attente bornée des cartes KTX2 en cache, liste des requêtes du jeu en échec hors ligne (doit être vide).
+- Preuves : **observé** sur kerr-mini — avant (même e2e) 5 cartes en échec, « Compressed planet maps unavailable » ; après, 0 (seul `/__deepgram`,
+  le relais du serveur de dev), `pwa` 2/2 deux fois ; tests unitaires PWA 13/13. Non vérifié : le site de production (même code), les autres
+  workers (ils chargent des tuiles, pas des fichiers du jeu). PROBLEMES, E2E-CATALOGUE, GRAPHICS-PIPELINE (étape 0 du parcours).
 
