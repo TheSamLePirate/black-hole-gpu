@@ -542,7 +542,9 @@ already going (they end on their own; their logs stay in `remote-results/dash/`)
 
 - A new `__bh` member gets its entry in [BH-API.md](BH-API.md) (full path in backquotes).
   `bh-api.e2e.test.ts` fails otherwise; `bun scripts/bh-api.ts --check` lists what's missing.
-- A new e2e file gets a header comment and a row in [E2E-CATALOGUE.md](E2E-CATALOGUE.md).
+- A new e2e file gets a header comment and a row in [E2E-CATALOGUE.md](E2E-CATALOGUE.md) — `tests/e2e-catalogue.test.ts`
+  fails without it (since 13 Nov 2026, audit QA-11); `bun scripts/e2e-catalogue.ts --check` lists the files without a row,
+  `--write` adds them from their headers (section « From their headers », to sort into a theme).
 - A new script that opens Chrome takes the lock: use `launch()` (tests/e2e/lib/cdp.ts) or
   `await chromeLock()` (scripts/lib/chrome-lock.ts) before spawning it.
 - A dashboard change: `bun test tests/dashboard-*.test.ts`, then `bun run dashboard` and look at it.

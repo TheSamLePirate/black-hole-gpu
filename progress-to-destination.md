@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-13 23:28 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-13 23:31 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous.
@@ -65,7 +65,7 @@ ouverts, sous 1 ms) ; J3 au stade du plan.**
 | Audit vagues 3–4 (1feb2f7f) | 4.2 la politique de temps | **fait** : vol tenu pendant la reprise GPU, cadence vraie, horloge du vol + garde ; l'onglet masqué (choix de Sam) : solo en pause dite, salle sans arrêt (l'absent ne la bloque plus, les autres avertis, remis à l'heure au retour), sauvé en partant, TARS sans réveil ; le ralentissement sous 10 images/s dit — e2e `hidden-tab` 2/2, `fps-truth` 2/2 |
 | Audit vagues 3–4 (1feb2f7f) | 4.8 découper `main()` | **fait** (accord de Sam : par petits lots) : lot 1 la persistance, lot 2 qui tient le vol (`session.ts`), lots 3–4 les étapes gardées (`frame.ts`, AR-03), lot 5 l'ordre §19.5 (AR-04), lot 6 `craft-feed.ts`, lot 7 `governor.ts` (confié par la session du rendu) — **fait** : les quatre découpes d'AR-12 (session, frame, gouverneur, poses de l'appareil) |
 | Audit vagues 3–4 (1feb2f7f) | 4.3 séparer `Settings` | **fait** : garde statique des réglages (AR-21) ; `ViewPose` et `SimState` figés une fois par image (AR-07, `view-pose.ts`) ; le renderer les lit (session du rendu, 77721acf) |
-| Audit vague 6 hors rendu (1feb2f7f) | QA-16, QA-18, AR-17, AR-18, réseau RD4/RD5, FX-18, FX-17, FX-07 | **faits** (accord de Sam : « un autre lot d'audit hors rendu ») ; FX-17 en 3 lots (messages, rapport de vol, cadre de piste dans les unités du pilote ; le spatial en SI) ; FX-07 : l'A320 à la manette (sa disposition d'avion de ligne) ; e2e `report` 3/4 (le final de Le Bourget, état périmé : PROBLEMES) ; ensuite QA-11 |
+| Audit vague 6 hors rendu (1feb2f7f) | QA-16, QA-18, AR-17, AR-18, réseau RD4/RD5, FX-18, FX-17, FX-07, QA-11 | **faits** (accord de Sam : « un autre lot d'audit hors rendu ») ; FX-17 en 3 lots (unités du pilote ; le spatial en SI) ; FX-07 l'A320 à la manette ; QA-11 le catalogue des e2e entier (446/446) et gardé ; e2e `report` 3/4 (le final de Le Bourget, état périmé : PROBLEMES) |
 
 **Fermé récemment** : J2 (13 nov., ΔGPU nul, chemin vers §8 écrit) ; J2-C BC7 étudiée puis **rangée** (Sam : « ne pas le faire maintenant »).
 
@@ -6159,3 +6159,20 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   prend plus. Le cours illustré (`apprendre-avions.html`) ne parle pas de la manette : non touché. FX-08 (V et les vues propres à l'A320) :
   non traité ici.
 - Suite : QA-11 (catalogue des e2e) ; FX-08 si Sam le veut dans ce lot d'audit.
+
+## 2026-11-13T23:31Z — Audit QA-11 : le catalogue des e2e entier, et gardé
+
+- Contribution : §19 et la méthode (savoir ce que chaque e2e prouve et ce qu'il coûte avant de lancer une campagne) ; audit 2026-11-10, QA-11.
+- Réalisé : `scripts/e2e-catalogue.ts` (`--check` : les fichiers sans ligne ; `--write` : une ligne écrite depuis l'en-tête du fichier — ce
+  qu'il prouve, son « Done when », sa scène et sa taille, sa durée connue de `durations.json` ou son « Duration ») ; **131 lignes** ajoutées
+  (section « From their headers », à ranger dans leur thème au prochain passage) ; `tests/e2e-catalogue.test.ts` garde le catalogue entier ;
+  l'en-tête de `scripts/e2e.ts` ne dit plus « ~20 min » (149 fichiers chronométrés : 195 min, 8 au-delà de 5 min ; 446 fichiers en tout) ;
+  E2E.md, l'introduction du catalogue.
+- Preuves : **mesuré avant** : 446 fichiers, 315 au catalogue, 131 absents (l'audit en comptait 125 sur 397) ; **après** : 446/446. Témoins de
+  la garde : une ligne retirée (`report`) est vue, le catalogue entier ne donne rien ; le motif de ligne est celui du tableau de bord.
+  Les cinq sondes sans assertion de l'audit déclarent déjà leur nature (lot 3.10, `e2e-honesty`) : rien à faire.
+- Limites : les 131 lignes sont tirées des en-têtes, non relues une à une ni rangées par thème ; les durées absentes de `durations.json`
+  (297 fichiers) restent celles des en-têtes, quand ils en ont. Les lignes des e2e de la session du rendu (`j0-`, `j2`, `motion-quality`)
+  ajoutées au catalogue seul, leurs fichiers non touchés.
+- Suite : la vague 6 hors rendu est faite ; restent NET-19 (canal non fiable, envoi raté côté serveur : un banc d'abord) et les décisions
+  RD3/RD6 de Sam.

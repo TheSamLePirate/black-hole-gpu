@@ -1,6 +1,8 @@
 // The e2e runner (docs/E2E.md): the files named, or all of tests/e2e — here, on kerr-mini, or on kerr-pc.
 //
-//   bun run e2e                              every e2e, here (~20 min)
+//   bun run e2e                              every e2e, here — hours, not minutes: 446 files on 13 Nov 2026, the 149 of them
+//                                            timed (tests/e2e/durations.json) alone 195 min, 8 past 5 min (audit QA-11; before:
+//                                            « ~20 min »); split them — --remote, --each, a theme of docs/E2E-CATALOGUE.md
 //   bun run e2e smoke landing                tests/e2e/smoke.e2e.test.ts and landing's (a name, a path, or a glob's part)
 //   bun run e2e smoke -t "radial wheel"      bun test's own flags after the names (-t: a test's name)
 //   bun run e2e --remote smoke               the same on kerr-mini (bun scripts/remote.ts run): full screen there

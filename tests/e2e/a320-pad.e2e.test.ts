@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { App, E2E, stopServer } from "./lib/app";
 
-// The A320 on an Xbox 360 pad (audit 2026-11-10, FX-07): before 14 Nov 2026 it had no layout of its own — the pad's
+// The A320 on an Xbox 360 pad (audit 2026-11-10, FX-07): before 13 Nov 2026 it had no layout of its own — the pad's
 // general one, a spacecraft's: the left stick pitched and yawed (no roll), the bumpers rolled, X and Y engaged the
 // prograde and retrograde holds the keys refuse an aircraft. A pad of the page's own (navigator.getGamepads replaced),
 // the A320 flown over the sea off Toulon, 2 000 m up.
