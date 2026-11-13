@@ -35,3 +35,14 @@ test("the dictionaries agree where they share an English text", async () => {
 test("every t() / tf() / tr() call reaches the i18n module's (no local t hiding it)", () => {
   expect(shadowedCalls()).toEqual([]);
 }, 30_000);
+
+test("the pilot's messages and a loss's cause in his language: none written as a bare literal (audit FX-18)", async () => {
+  const bare: string[] = [];
+  for await (const f of new Bun.Glob("src/**/*.ts").scan(".")) {
+    const src = await Bun.file(f).text();
+    src.split("\n").forEach((l, i) => {
+      if (/onPilotMessage\?\.\((`|")/.test(l) || /this\.failure = `/.test(l)) bare.push(`${f}:${i + 1}`);
+    });
+  }
+  expect(bare).toEqual([]);
+});

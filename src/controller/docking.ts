@@ -18,7 +18,7 @@ import { stationHulls, vesselHulls, type TriBVH } from "../system/collide";
 import { C_MPS, M_METRES, M_SECONDS } from "../units";
 import { cross, dot as dot3, lin, sub as sub3 } from "../math/vec3";
 import { frameNow } from "../frameclock";
-import { t } from "../i18n";
+import { lang, t, tf } from "../i18n";
 
 import type { CameraController, DockInfo, DockTarget } from "../controls";
 import { onAxesV, unitV } from "./util";
@@ -456,7 +456,7 @@ function stationContact(this: CameraController, p0: NonNullable<ReturnType<Camer
   if (now - this.lastContactMsg > 1500) {
     this.lastContactMsg = now;
     const what = o.id === "iss" ? "ISS" : o.net ? o.net.title : VESSELS[o.id as VesselId].name;
-    this.onPilotMessage?.(`Contact with ${o.net ? what : `the ${what}`} · ${(Math.abs(vn) * C_MPS).toFixed(2)} m/s`);
+    this.onPilotMessage?.(tf("Contact with {0} · {1} m/s", o.net ? what : theName(what), (Math.abs(vn) * C_MPS).toFixed(2)));
   }
 }
 
@@ -505,17 +505,17 @@ function dockCheck(this: CameraController) {
       // for a ring come in too far)
       const why =
         speed >= 0.5
-          ? `${speed.toFixed(2)} m/s — 0.5 at most`
+          ? tf("{0} m/s — 0.5 at most", speed.toFixed(2))
           : g.lateral >= 0.3
-            ? `${g.lateral.toFixed(2)} m off its axis — 0.3 at most`
+            ? tf("{0} m off its axis — 0.3 at most", g.lateral.toFixed(2))
             : g.angle >= 10
-              ? `the ports ${g.angle.toFixed(0)}° apart — 10 at most`
+              ? tf("the ports {0}° apart — 10 at most", g.angle.toFixed(0))
               : g.spin >= SPIN_MAX
-                ? `turning ${g.spin.toFixed(1)}°/s against it — ${SPIN_MAX} at most`
+                ? tf("turning {0}°/s against it — {1} at most", g.spin.toFixed(1), SPIN_MAX)
                 : g.along <= -0.6
-                  ? `${(-g.along).toFixed(2)} m into the port — 0.6 at most`
-                  : `moving away at ${(-g.closing).toFixed(2)} m/s`;
-      this.onPilotMessage?.(`Bounced off ${theTitle(g)}'s port · ${why}`);
+                  ? tf("{0} m into the port — 0.6 at most", (-g.along).toFixed(2))
+                  : tf("moving away at {0} m/s", (-g.closing).toFixed(2));
+      this.onPilotMessage?.(tf("Bounced off {0}'s port · {1}", theTitle(g), why));
     }
     return;
   }
@@ -664,7 +664,7 @@ function netCapture(this: CameraController, g: DockInfo, speed: number) {
   if (P) this.placeOnPose(P);
   this.carryCommit(before, 0.6);
   netDock.onDock?.({ id, port: g.port, ownPort: g.ownPort, c, ax });
-  this.onPilotMessage?.(`Docked to ${g.title} · ${g.name} · ${speed.toFixed(2)} m/s`);
+  this.onPilotMessage?.(tf("Docked to {0} · {1} · {2} m/s", g.title, g.name, speed.toFixed(2)));
   const S = recorder.samples;
   this.onFlightReport?.(
     gradeDocking({
@@ -681,7 +681,10 @@ function netCapture(this: CameraController, g: DockInfo, speed: number) {
 }
 
 /** What it docks to, as a sentence names it: "the ISS", "the Endurance" — another player's, his: "Ana's Endurance". */
-const theTitle = (g: DockInfo) => (isNetTarget(g.target) ? g.title : `the ${g.title}`);
+/** a craft's name with its article in English (« the Endurance »), bare in French (« Endurance ») — the messages' French
+ *  turned not to need one (audit FX-18) */
+const theName = (name: string) => (lang === "fr" ? name : `the ${name}`);
+const theTitle = (g: DockInfo) => (isNetTarget(g.target) ? g.title : theName(g.title));
 
 /** Whether we are the one to latch onto another player's craft (R7): the lighter assembly, or at one mass the
  *  higher slot. */
@@ -745,7 +748,7 @@ function netBumped(this: CameraController, dv: Vec3) {
   );
   this.pilot.omega = [0, 0, 0];
   this.sync();
-  this.onPilotMessage?.(`Struck · ${Math.hypot(...dv).toFixed(2)} m/s`);
+  this.onPilotMessage?.(tf("Struck · {0} m/s", Math.hypot(...dv).toFixed(2)));
 }
 
 /** Let go of another player's craft: the springs push ours 5 cm/s away from its port; the room told. */
@@ -772,7 +775,7 @@ function netUndock(this: CameraController) {
   }
   if (this.pilot.auto === "dock") this.pilot.auto = "none";
   netDock.onUndock?.(D.id);
-  this.onPilotMessage?.(`Undocked from ${D.title}`);
+  this.onPilotMessage?.(tf("Undocked from {0}", D.title));
 }
 
 /**
@@ -825,8 +828,8 @@ function undock(this: CameraController) {
   setHomePose(s, P.X, unitV(repToHomeVec(mouth(s).w, cam.ell, cam.n, cam.fwd)), unitV(repToHomeVec(mouth(s).w, cam.ell, cam.n, cam.up)), V);
   this.sync();
   if (this.pilot.auto === "dock") this.pilot.auto = "none";
-  const names = mine.map((l) => (l.a === me ? l.b : l.a)).map((v) => (v === "iss" ? "the ISS" : `the ${VESSELS[v as VesselId].name}`));
-  this.onPilotMessage?.(`Undocked from ${names.join(" and ")}`);
+  const names = mine.map((l) => (l.a === me ? l.b : l.a)).map((v) => theName(v === "iss" ? "ISS" : VESSELS[v as VesselId].name));
+  this.onPilotMessage?.(tf("Undocked from {0}", names.join(tf(" and "))));
 }
 
 /**

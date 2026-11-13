@@ -1,4 +1,5 @@
 import { frameNow } from "./frameclock";
+import { t } from "./i18n";
 import type { TcasAdvisory } from "./radar/tcas";
 import type { MlsReading } from "./game/mls";
 import { JetPad, type JetPadOut } from "./input/jetpad";
@@ -783,7 +784,7 @@ export class CameraController {
       if (inside) {
         // (nothing: the cabin hides the sky there)
       } else if (this.pickIss(e.clientX - r.left, e.clientY - r.top)) {
-        if (this.s.target !== "iss" && this.selectTarget("iss")) this.onPilotMessage?.("Target: the ISS");
+        if (this.s.target !== "iss" && this.selectTarget("iss")) this.onPilotMessage?.(t("Target: the ISS"));
       } else {
         const body = this.pickAt(e.clientX - r.left, e.clientY - r.top);
         if (body && body !== this.s.target) this.selectTarget(body);

@@ -7,7 +7,7 @@ import { terrainAhead } from "../game/gpws";
 import { gradeLanding } from "../game/report";
 import { advanceToMouth, driftToGlue } from "../system/wormhole-flight";
 import { BELLY, GEARS, gearForces, mulM3, tippedOver, touchdownVerdict, worldTensor, type GearOut } from "../gear";
-import { tf } from "../i18n";
+import { t, tf } from "../i18n";
 import { inv3 } from "../pilot";
 import { blToCartesian, cameraFrame, repPose, repToHolePose, setHolePose, setHomePose, setRepPose } from "../camera";
 import { TUNING } from "../game/tuning";
@@ -191,8 +191,10 @@ function fallStep(this: CameraController, simDt: number, keys: Vec3, fast: boole
       const r = stepLocal(F, L, dtau, zamoToLocal(lin(dirZ, accel, dirZ, 0)), aero, wheels);
       const bodyName = BODY_NAMES[F.id as Body];
       if (r.touchdown)
-        this.onPilotMessage?.(`Touchdown on ${bodyName} · ${r.touchdown.vn.toFixed(1)} m/s down, ${r.touchdown.vh.toFixed(0)} m/s along`);
-      if (r.airborne) this.onPilotMessage?.(`Airborne · ${(Math.hypot(...L.w) * C_MPS).toFixed(0)} m/s`);
+        this.onPilotMessage?.(
+          tf("Touchdown on {0} · {1} m/s down, {2} m/s along", t(bodyName), r.touchdown.vn.toFixed(1), r.touchdown.vh.toFixed(0)),
+        );
+      if (r.airborne) this.onPilotMessage?.(tf("Airborne · {0} m/s", (Math.hypot(...L.w) * C_MPS).toFixed(0)));
       this.properTime += dtau;
       this.landed = L.landed || !!L.rolling;
       const F1 = planetFrame(F.id, t0 + simDt, a, s.massSolar);
@@ -208,11 +210,11 @@ function fallStep(this: CameraController, simDt: number, keys: Vec3, fast: boole
       this.local!.key = this.poseKeyNow();
       // (Miller's giant wave breaking over the craft afloat — landing.ts stepLocal, PLAN-PLANETES-AAA P3)
       if (r.wave) {
-        this.onPilotMessage?.(`The giant wave broke over the ${VESSELS[fleet.active].name}`);
+        this.onPilotMessage?.(tf("The giant wave broke over the {0}", VESSELS[fleet.active].name));
         this.crashed(`${VESSELS[fleet.active].name}: swept away by Miller's giant wave`);
       } else if (r.cloud) {
         // (Mann's frozen cloud struck in flight — P4)
-        this.onPilotMessage?.(`Struck a frozen cloud at ${(r.impact ?? 0).toFixed(0)} m/s`);
+        this.onPilotMessage?.(tf("Struck a frozen cloud at {0} m/s", (r.impact ?? 0).toFixed(0)));
         this.crashed(`${VESSELS[fleet.active].name}: struck one of Mann's frozen clouds at ${(r.impact ?? 0).toFixed(0)} m/s`);
       } else if (r.impact !== null && !was) {
         // (the Ranger rests on its belly: levelled on the ground, nose on the horizon)
@@ -403,7 +405,8 @@ function flyHome(this: CameraController, p: ReturnType<typeof repPose>, vRep: Ve
       this.landed = false;
       X = now.Xq;
       V = lin(now.V, 1, dvT, 1);
-      if (!(rolls && dot3(dvT, upL) <= gSurf * simDt * 1.001)) this.onPilotMessage?.(`Lift-off from ${BODY_NAMES[L.body as Body]}`);
+      if (!(rolls && dot3(dvT, upL) <= gSurf * simDt * 1.001))
+        this.onPilotMessage?.(tf("Lift-off from {0}", tf(BODY_NAMES[L.body as Body])));
     } else {
       const t1 = t0 + simDt;
       if (cat?.fired) {
@@ -472,7 +475,7 @@ function flyHome(this: CameraController, p: ReturnType<typeof repPose>, vRep: Ve
       X = Xg;
       V = lin(groundVelocity(L.body, Xg, t0), 1, dvT, 1);
       if (rolls && dot3(dvT, upL) <= gSurf * simDt * 1.001) this.rolling = { body: L.body };
-      else this.onPilotMessage?.(`Lift-off from ${BODY_NAMES[L.body as Body]}`);
+      else this.onPilotMessage?.(tf("Lift-off from {0}", tf(BODY_NAMES[L.body as Body])));
     } else {
       const t1 = t0 + simDt;
       const X1 = fromBodyFixed(L.body, L.q, t1);
@@ -687,7 +690,7 @@ function flyHome(this: CameraController, p: ReturnType<typeof repPose>, vRep: Ve
       if (press <= 0 && vn >= 0) {
         this.rolling = null;
         this.rollSite = null;
-        this.onPilotMessage?.(`Airborne · ${(Math.hypot(...vt) * C_MPS).toFixed(0)} m/s`);
+        this.onPilotMessage?.(tf("Airborne · {0} m/s", (Math.hypot(...vt) * C_MPS).toFixed(0)));
       } else {
         X = lin(X, 1, n, -gearHeight(ground, X, t) / M_METRES);
         vr = vt;
@@ -900,7 +903,7 @@ function flyHome(this: CameraController, p: ReturnType<typeof repPose>, vRep: Ve
     const name = BODY_NAMES[ground as Body];
     const v = touched.speed;
     if (touched.wheels && this.rolling) {
-      this.onPilotMessage?.(`Touchdown on ${name} · ${v.toFixed(1)} m/s down, ${touched.vh!.toFixed(0)} m/s along`);
+      this.onPilotMessage?.(tf("Touchdown on {0} · {1} m/s down, {2} m/s along", tf(name), v.toFixed(1), touched.vh!.toFixed(0)));
       this.reportLanding(name, "landed", v, touched.vh ?? 0);
     } else {
       const nav = this.ourNav(cameraFrame(s));

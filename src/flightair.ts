@@ -6,6 +6,7 @@
 // Frames: the integrators give the air-relative velocity in their own axes (home, or the planet's local
 // x/y/z) with the ship's axes in the same — its x (left), y (up), z (the nose). SI here (m, s, N).
 
+import { tf } from "./i18n";
 import type { M3 } from "./mounts";
 import { inv3 } from "./pilot";
 import {
@@ -145,12 +146,18 @@ export class AirFlight {
       this.overG = this.g > A.gMax ? this.overG + dt : 0;
       const name = VESSELS[this.vessel].name;
       if (A.shield && this.skin.shield > A.shield.tMax)
-        this.failure = `${name}: the heat shield failed at ${Math.round(this.skin.shield)} K (its limit ${A.shield.tMax} K)`;
+        this.failure = tf("{0}: the heat shield failed at {1} K (its limit {2} K)", name, Math.round(this.skin.shield), A.shield.tMax);
       else if (this.skin.hull > A.hull.tMax)
-        this.failure = `${name}: the hull burnt through at ${Math.round(this.skin.hull)} K (its limit ${A.hull.tMax} K)`;
-      else if (this.overG > 0.25) this.failure = `${name}: broke up under ${this.g.toFixed(1)} g (its limit ${A.gMax} g)`;
+        this.failure = tf("{0}: the hull burnt through at {1} K (its limit {2} K)", name, Math.round(this.skin.hull), A.hull.tMax);
+      else if (this.overG > 0.25) this.failure = tf("{0}: broke up under {1} g (its limit {2} g)", name, this.g.toFixed(1), A.gMax);
       else if (L && airPressure(L.air) > crushLimit(A, this.skin.hull))
-        this.failure = `${name}: the hull crushed at ${(airPressure(L.air) / 1e5).toFixed(0)} bar (its limit ${(crushLimit(A, this.skin.hull) / 1e5).toFixed(0)} bar at ${Math.round(this.skin.hull)} K)`;
+        this.failure = tf(
+          "{0}: the hull crushed at {1} bar (its limit {2} bar at {3} K)",
+          name,
+          (airPressure(L.air) / 1e5).toFixed(0),
+          (crushLimit(A, this.skin.hull) / 1e5).toFixed(0),
+          Math.round(this.skin.hull),
+        );
     }
     if (!out) return [0, 0, 0];
     // (the air's moment over the inertia — the tensor's inverse: an asymmetric body answers off-axis)

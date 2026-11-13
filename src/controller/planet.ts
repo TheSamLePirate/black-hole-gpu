@@ -1,6 +1,7 @@
 // The CameraController — a planet's frame: flight by Gargantua's worlds.
 // (Its methods, out of controls.ts: installed on its prototype — `this` the controller.)
 import { blToCartesian, cameraFrame } from "../camera";
+import { t, tf } from "../i18n";
 import type { Vec3 } from "../physics";
 import { SYSTEM_BODIES, type SystemBody } from "../settings";
 import { availableBodies, bodyCentre, BODY_NAMES, type Body, bodyHill } from "../targeting";
@@ -137,7 +138,7 @@ function surfaceWant(this: CameraController, cam: ReturnType<typeof cameraFrame>
   if (P.auto === "land") {
     if (L.landed) {
       P.setAuto("land");
-      this.onPilotMessage?.(`Landed on ${name}`);
+      this.onPilotMessage?.(tf("Landed on {0}", t(name)));
       return null;
     }
     // vertical speed: what half the margin can stop (v² = 2 a h), no less than a minute from the
@@ -239,7 +240,7 @@ function localCircWant(this: CameraController, cam: ReturnType<typeof cameraFram
   // hand-over left it 1 % above, closed at 0.3 of the orbit's rate: more than 20 minutes for nothing the orbit shows)
   if (Math.abs(d - d0) < 0.03 * d0 && Math.hypot(...sub3(L.w, want)) < 0.002 * vc) {
     P.setAuto("none");
-    this.onPilotMessage?.(`In orbit around ${name}`);
+    this.onPilotMessage?.(tf("In orbit around {0}", t(name)));
     return null;
   }
   const X = blToCartesian(cam.r, cam.theta, cam.phi);

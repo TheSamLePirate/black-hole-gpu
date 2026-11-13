@@ -6041,3 +6041,15 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
 - Preuves : **mesuré** (kerr-mini, `aurora-cost`) : Tromsø de nuit Δ −0,1 ms (était +4,6 ms le 6 nov.), l'aurore dessinée ; les vues d'orbite et
   de la magnétosphère non lisibles (échelles différentes). PROBLEMES : l'entrée close ; à refaire à échelle fixe pour l'orbite.
 
+## 2026-11-14T15:00Z — Audit FX-18 (vague 6) : les messages du pilote et les causes d'une perte dans sa langue
+
+- Contribution : §19 (lisibilité, FR+EN partout) ; audit 2026-11-10, FX-18.
+- Réalisé : 17 messages du pilote (toucher, décollage, en l'air, vague géante, nuage gelé, posé, en orbite, contact, rebond et ses causes,
+  amarré, heurt, désamarré — `controller/motion.ts`, `planet.ts`, `docking.ts`, `controls.ts`) et les 4 causes de perte de `flightair.ts`
+  (bouclier, coque brûlée, dislocation, écrasement) passés par `tf()` ; leurs 20 traductions (`fr-main.ts`), tournées sans article devant les
+  noms qui arrivent nus en français (`theName` : « the Endurance » en anglais, « Endurance » en français). Le chemin `pilotMessage` (toast,
+  écrans, journal) n'employait pas la traduction par motif (`translateTo`) : elles restaient anglaises.
+- Preuves : **reproduit avant** (garde `i18n` « FX-18 » : 21 lieux en littéral) ; **après** : 0, et « every interface text has its French » vert
+  (les 20 nouvelles clés) ; i18n 5/5 ; les tests de vol, d'amarrage, d'atterrissage et de missions qui citent ces messages verts (anglais inchangé).
+- Limites : les unités en dur dans ces messages (m/s, K, bar — FX-17) restent ; « Toucher sur {0} » (traduction déjà là) garde « sur Lune ».
+
