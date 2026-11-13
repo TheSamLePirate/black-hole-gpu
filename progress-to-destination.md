@@ -4635,7 +4635,7 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
 - **Non vérifié** : le relevé est une lecture du code (agent d'exploration), aucune mesure ; rien de J3 n'est codé. **Suite** : la validation de
   Sam ; la borne du M1 Max à refaire une fois `coreaudiod` relancé (Sam).
 
-## 2026-11-13T11:40Z — La suite complète sans autre charge après R1 ; l'inventaire des réglages compensatoires (J3-0, préparation)
+## 2026-11-13T11:35Z — La suite complète sans autre charge après R1 ; l'inventaire des réglages compensatoires (J3-0, préparation)
 
 - **`bun test` complet, kerr-mini seul** (`remote-results/…-r1-bun-test-clean`) : 2 247 réussis, 1 704 sautés (les e2e), **7 échecs, les mêmes
   qu'au passage chargé** — 5 délais de 5 s (`ui-scenes-loading`, `lola-tiles` ×3, `tars-tools`) et 2 assertions (`quals` : un passage du F-35C
