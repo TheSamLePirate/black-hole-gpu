@@ -3,8 +3,8 @@ import { App, E2E, stopServer } from "./lib/app";
 
 // The offline zones through TARS (audit 2026-11-10, TA-17): his tool `offline_zones` on the installed game (its service worker),
 // the Offline tab's own actions — the zones listed, a zone estimated over Chamonix (its size and time, nothing downloaded: no
-// IGN tile asked), a zone unknown refused by name, a removal unconfirmed refused. Done when: the list read, the estimate a size
-// in MB and a time, both refusals said. Duration: ~40 s.
+// IGN tile asked), a zone unknown refused by name (a removal unconfirmed: tests/tars-tools.test.ts). Done when: the list read, the
+// estimate a size in MB and a time, the refusal said. Duration: ~40 s.
 
 describe.skipIf(!E2E)("the offline zones through TARS", () => {
   let app: App;
@@ -25,7 +25,7 @@ describe.skipIf(!E2E)("the offline zones through TARS", () => {
       `__bh.tars.tools().find((t) => t.name === "offline_zones").run(${JSON.stringify(a)}, new AbortController().signal).then((r) => r, (e) => ({ error: String(e.message ?? e) }))`,
     );
 
-  test("listed, estimated, refused by name and unconfirmed", async () => {
+  test("listed, estimated, an unknown zone refused by name", async () => {
     const list = (await tool({ action: "list" })) as { zones: unknown[] };
     const est = (await tool({ action: "estimate", lat: 45.92, lon: 6.87, radiusKm: 10, profile: "valley" })) as {
       sizeMb: number;
