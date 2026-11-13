@@ -244,6 +244,7 @@ import { GOPRO, goproRenderFov, goproRowShare } from "./lens";
 import { visibleTimeout } from "./util/visible-timeout";
 import { gameLog } from "./game/log";
 import { OutOfView } from "./game/out-of-view";
+import { FrameGuard } from "./game/frame";
 import { Persistence } from "./game/persistence";
 import { Session } from "./game/session";
 import { autosave, saveFromHash, type GameSave } from "./game/save";
@@ -8563,6 +8564,26 @@ async function main() {
   let lastStats: FrameStats | null = null;
   /** a network step of the frame on its own: an exception caught, counted (`__bh.net.net.inbound.failed` with the
    *  events'), told once by its message (debug.ts caught) */
+  // the frame's stages in their guards (game/frame.ts — audit AR-03, wave 4.8): a stage that throws said once (a toast, the
+  // journal, the graphics diagnostic), set aside, tried again every 5 s; back, said so
+  const STAGE_NAMES: Record<string, { fr: string; en: string }> = {
+    flight: { fr: "le vol", en: "the flight" },
+    "on foot": { fr: "à pied", en: "on foot" },
+    "flight figures": { fr: "les chiffres du vol", en: "the flight's figures" },
+    missions: { fr: "les missions", en: "the missions" },
+    traffic: { fr: "le trafic", en: "the traffic" },
+    overlays: { fr: "les repères de la vue", en: "the view's marks" },
+    "the flight's drawing": { fr: "le dessin du vol", en: "the flight's drawing" },
+  };
+  const frameGuard = new FrameGuard({
+    say: ({ stage, error, back }) => {
+      const name = STAGE_NAMES[stage] ? tr(STAGE_NAMES[stage]) : stage;
+      if (back) return panel.toast(tf("{0}: working again", name));
+      caught(`frame (${stage})`, error);
+      gpuDiagnostics.record("frame-stage", `${stage}: ${error instanceof Error ? error.message : String(error)}`);
+      panel.toast(tf("A part of the game failed ({0}) — set aside, the image goes on; tried again every 5 s", name));
+    },
+  });
   const netGuard = (what: string, f: () => void) => {
     try {
       f();
@@ -8680,109 +8701,132 @@ async function main() {
     const pauseUp = !!pauseMenu?.isOpen || playerSettings.isOpen;
     if (session.paused || pauseUp) menuPad.tick(camera.pad.poll(), now, titleScreen.isOpen || pauseUp);
     camera.padFrame = !session.paused && pauseUp ? null : undefined;
-    if (session.runs) {
-      // (the flight plan's guidance speaking: a waypoint passed, its end, the bingo)
-      if (camera.nav.say) {
-        panel.toast(camera.nav.say);
-        camera.nav.say = null;
-      }
-      if (camera.chal?.say) {
-        panel.toast(camera.chal.say);
-        camera.chal.say = null;
-      }
-      // (an aerobatic figure: its cues, its marks)
-      if (camera.aero?.say) {
-        panel.toast(camera.aero.say);
-        camera.aero.say = null;
-      }
-      // (the gamepad felt in the hands — V5: the buffet's shaking, a touchdown's jolt; six times a second at most)
-      padFeel(now);
-      // (a fight: what it says, what is heard — the gun, the launches, the explosions at their distance, the
-      // missile warning)
-      const CB = camera.combat;
-      if (CB) {
-        if (CB.say) {
-          panel.toast(CB.say);
-          CB.say = null;
+    // (each stage of the frame in its guard — game/frame.ts, audit AR-03: an exception in one costs that stage, said once, set
+    // aside and tried again every 5 s; never the image — before 13 Nov 2026 the flight's step throwing froze it, 0 frames in 2 s)
+    frameGuard.run("flight", () => {
+      if (session.runs) {
+        // (the flight plan's guidance speaking: a waypoint passed, its end, the bingo)
+        if (camera.nav.say) {
+          panel.toast(camera.nav.say);
+          camera.nav.say = null;
         }
-        sound.combatFrame(
-          CB.world.firing && CB.world.stores.gun > 0,
-          CB.world.missiles.some((m) => m.alive && m.owner === "red" && m.target === -1),
-        );
-        for (const e of CB.events) {
-          if (e.kind === "launch") {
-            sound.combatCue(e.who === "blue" ? "launch" : "enemyLaunch");
-            if (e.who === "blue") replayEv |= EV.LAUNCH;
-          } else if (e.kind === "explode" && CB.last) {
-            const d = Math.hypot(e.p[0] - CB.last.p[0], e.p[1] - CB.last.p[1], e.p[2] - CB.last.p[2]);
-            if (d < 8000) replayEv |= EV.BOOM;
-            sound.combatCue("explode", { dist: d, size: e.size });
-          } else if (e.kind === "hit" && e.on === "player") sound.combatCue("hit");
+        if (camera.chal?.say) {
+          panel.toast(camera.chal.say);
+          camera.chal.say = null;
         }
-        // (TARS as the backseater — I2 —: the missiles at us, the bandits by their BRAA, a hit, a kill called)
-        if (settings.f35ThreatCalls && camera.piloting)
-          for (const c of camera.threatsStep()) {
-            // (the picture Darkstar's — I4 —, the missiles at us TARS's)
-            const awacs = settings.f35RadioRoles !== false && threatRole(c.kind) === "awacs";
-            voice.say({
-              text: c.text,
-              speaker: awacs ? "awacs" : "tars",
-              priority: c.priority,
-              ttl: c.priority === 1 ? 6000 : 12_000,
-              radio: awacs,
-            });
+        // (an aerobatic figure: its cues, its marks)
+        if (camera.aero?.say) {
+          panel.toast(camera.aero.say);
+          camera.aero.say = null;
+        }
+        // (the gamepad felt in the hands — V5: the buffet's shaking, a touchdown's jolt; six times a second at most)
+        padFeel(now);
+        // (a fight: what it says, what is heard — the gun, the launches, the explosions at their distance, the
+        // missile warning)
+        const CB = camera.combat;
+        if (CB) {
+          if (CB.say) {
+            panel.toast(CB.say);
+            CB.say = null;
           }
-        CB.events = [];
-      } else sound.combatFrame(false, false);
-      if (cpuProf.time("flight (camera.update)", () => sim.step(jitterStep ?? dt))) {
-        changed = true;
-        guiDirty = true;
+          sound.combatFrame(
+            CB.world.firing && CB.world.stores.gun > 0,
+            CB.world.missiles.some((m) => m.alive && m.owner === "red" && m.target === -1),
+          );
+          for (const e of CB.events) {
+            if (e.kind === "launch") {
+              sound.combatCue(e.who === "blue" ? "launch" : "enemyLaunch");
+              if (e.who === "blue") replayEv |= EV.LAUNCH;
+            } else if (e.kind === "explode" && CB.last) {
+              const d = Math.hypot(e.p[0] - CB.last.p[0], e.p[1] - CB.last.p[1], e.p[2] - CB.last.p[2]);
+              if (d < 8000) replayEv |= EV.BOOM;
+              sound.combatCue("explode", { dist: d, size: e.size });
+            } else if (e.kind === "hit" && e.on === "player") sound.combatCue("hit");
+          }
+          // (TARS as the backseater — I2 —: the missiles at us, the bandits by their BRAA, a hit, a kill called)
+          if (settings.f35ThreatCalls && camera.piloting)
+            for (const c of camera.threatsStep()) {
+              // (the picture Darkstar's — I4 —, the missiles at us TARS's)
+              const awacs = settings.f35RadioRoles !== false && threatRole(c.kind) === "awacs";
+              voice.say({
+                text: c.text,
+                speaker: awacs ? "awacs" : "tars",
+                priority: c.priority,
+                ttl: c.priority === 1 ? 6000 : 12_000,
+                radio: awacs,
+              });
+            }
+          CB.events = [];
+        } else sound.combatFrame(false, false);
+        if (cpuProf.time("flight (camera.update)", () => sim.step(jitterStep ?? dt))) {
+          changed = true;
+          guiDirty = true;
+        }
       }
-    }
+    });
     // what the renderer draws of the flight (the ship, its flames, the predicted path) — an offline job
     // or a video holds its own
-    characterHud.update(now);
-    footHud.show(camera.character.active && !flightHud.mapView);
-    footHud.update(now);
-    sceneryHitboxes.update(
-      now,
-      camera.character,
-      renderer.earthScenery.contact,
-      settings.fov,
-      settings.sceneryHitboxes && !flightHud.mapView,
-      canvas,
-    );
+    frameGuard.run("on foot", () => {
+      characterHud.update(now);
+      footHud.show(camera.character.active && !flightHud.mapView);
+      footHud.update(now);
+      sceneryHitboxes.update(
+        now,
+        camera.character,
+        renderer.earthScenery.contact,
+        settings.fov,
+        settings.sceneryHitboxes && !flightHud.mapView,
+        canvas,
+      );
+    });
     const pil = flying();
-    const info = pil ? cpuProf.time("flight figures (flightInfo)", () => camera.flightInfo()) : null;
+    const info = pil
+      ? (frameGuard.run("flight figures", () => cpuProf.time("flight figures (flightInfo)", () => camera.flightInfo()), null) ?? null)
+      : null;
     // (flying together: ours sent, the others placed — before the render's figures: their contrails come with ours — ui/netsession.ts)
     // (each in its own guard — RD1, audit AR-03: what another member sent, if it slipped past the input's reading, costs
     // its own step, counted and told once, never the image: before 13 Nov 2026 one malformed event froze every member's)
     netGuard("session", () => netSession.frame(dt));
-    missionHud.tick();
-    instructorPanel.tick();
+    frameGuard.run("missions", () => {
+      missionHud.tick();
+      instructorPanel.tick();
+    });
     // (the real traffic about us: asked when due — off by the setting, offline, far from the Earth)
-    trafficFeed.tick(now / 1000, settings.traffic && camera.piloting ? camera.geoNow() : null, settings.traffic);
-    {
-      const live =
-        trafficFeed.status === "live" && trafficFeed.attribution.length > 0 && (trafficFeed.planes.size > 0 || trafficFeed.ships.size > 0);
-      const txt = live ? trafficFeed.attribution.join(" · ") : "";
-      if (trafficCredit.textContent !== txt) trafficCredit.textContent = txt;
-      trafficCredit.hidden = !live;
-    }
+    frameGuard.run("traffic", () => {
+      trafficFeed.tick(now / 1000, settings.traffic && camera.piloting ? camera.geoNow() : null, settings.traffic);
+      {
+        const live =
+          trafficFeed.status === "live" &&
+          trafficFeed.attribution.length > 0 &&
+          (trafficFeed.planes.size > 0 || trafficFeed.ships.size > 0);
+        const txt = live ? trafficFeed.attribution.join(" · ") : "";
+        if (trafficCredit.textContent !== txt) trafficCredit.textContent = txt;
+        trafficCredit.hidden = !live;
+      }
+    });
     netGuard("match", () => netMatch.frame());
     netGuard("voice", () => netVoice.frame());
     // (who speaks: a mark before his name)
     // (the real traffic's labels and lights — controller/traffic.ts)
-    viewOverlay.trafficMarks =
-      camera.piloting && !replay.active
-        ? [
-            ...(settings.traffic ? [...camera.trafficOverlay(unitsFor(settings).fAlt), ...camera.seaOverlay(unitsFor(settings).fSpd)] : []),
-            ...camera.carrierOverlay(unitsFor(settings).fSpd),
-          ]
-        : [];
-    viewOverlay.netTags = netSession.tags.map((g) => (netVoice.speaking(g.slot) ? { ...g, name: `◉ ${g.name}` } : g));
+    frameGuard.run("overlays", () => {
+      viewOverlay.trafficMarks =
+        camera.piloting && !replay.active
+          ? [
+              ...(settings.traffic
+                ? [...camera.trafficOverlay(unitsFor(settings).fAlt), ...camera.seaOverlay(unitsFor(settings).fSpd)]
+                : []),
+              ...camera.carrierOverlay(unitsFor(settings).fSpd),
+            ]
+          : [];
+      viewOverlay.netTags = netSession.tags.map((g) => (netVoice.speaking(g.slot) ? { ...g, name: `◉ ${g.name}` } : g));
+    });
     if (netSession.ships.length) changed = true;
-    if (!renderer.offlineActive && !replay.active && cpuProf.time("free-fall prediction", () => sim.applyRender(info))) changed = true;
+    if (
+      !renderer.offlineActive &&
+      !replay.active &&
+      frameGuard.run("the flight's drawing", () => cpuProf.time("free-fall prediction", () => sim.applyRender(info)), false)
+    )
+      changed = true;
     // (another player followed: his flame as the flown craft's — ui/netsession.ts)
     netSession.afterRender();
     // (a take records what the view shows: the settings, the clocks, what the renderer draws of the flight)

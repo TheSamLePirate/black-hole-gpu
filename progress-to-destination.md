@@ -61,7 +61,7 @@ ouverts, sous 1 ms) ; J3 au stade du plan.**
 | Audit vagues 3–4 (1feb2f7f) | 3.7 TARS (outils AP avions/A320) | **fait** : `jet_autopilot` par les actions de la console, volets au levier (CONF 1), l'AP de l'A320 réparé dans `apSet` |
 | Audit vagues 3–4 (1feb2f7f) | 3.10 e2e qui ne vérifient rien | **fait** : `waitOptional` (93 attentes converties), 14 mesures déclarées, garde `e2e-honesty` |
 | Audit vagues 3–4 (1feb2f7f) | 4.2 la politique de temps | **fait** : vol tenu pendant la reprise GPU, cadence vraie, horloge du vol + garde ; l'onglet masqué (choix de Sam) : solo en pause dite, salle sans arrêt (l'absent ne la bloque plus, les autres avertis, remis à l'heure au retour), sauvé en partant, TARS sans réveil ; le ralentissement sous 10 images/s dit — e2e `hidden-tab` 2/2, `fps-truth` 2/2 |
-| Audit vagues 3–4 (1feb2f7f) | 4.8 découper `main()` | **en cours** : lot 1 la persistance (`src/game/persistence.ts`), lot 2 qui tient le vol (`src/game/session.ts`, `__bh.held()`) ; la suite (la boucle d'image) est un gros déplacement : avec la session du rendu |
+| Audit vagues 3–4 (1feb2f7f) | 4.8 découper `main()` | **en cours** (accord de Sam : par petits lots) : lot 1 la persistance, lot 2 qui tient le vol (`session.ts`), lot 3 les étapes gardées de la frame (`frame.ts`, AR-03) ; suivants : les autres étapes avant le rendu, puis l'ordre §19.5 (AR-04) |
 | Audit vagues 3–4 (1feb2f7f) | 4.3 séparer `Settings` | en partie : le garde statique des réglages (AR-21) ; `SimState`/`ViewPose` (AR-07) touche `renderer.ts` : avec la session du rendu et l'accord de Sam |
 
 **Fermé récemment** : J2 (13 nov., ΔGPU nul, chemin vers §8 écrit) ; J2-C BC7 étudiée puis **rangée** (Sam : « ne pas le faire maintenant »).
@@ -4837,3 +4837,19 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   regarder par la session de l'audit, qui a branché le vol sur `frameNow` ce matin ; signalé), « every interface text has its French » (deux
   textes du travail en cours, non commité, de cette session). Non refait sur kerr-mini.
 
+## 2026-11-13T13:23Z — Audit 4.8 (lot 3, accord de Sam « par petits lots ») : une étape de la frame qui échoue ne fige plus l'image (AR-03)
+
+- **Contribution à la destination :** §19.5 (la frame en étapes nommées, isolées), §19.8 (préserver l'expérience : un défaut local ne
+  devient pas une panne totale).
+- **Reproduit avant (e2e `frame-guard`, ce Mac, fenêtre visible) :** `sim.step` rendu fautif à chaque image → **0 image dessinée en 2 s**,
+  le journal noyé (« Uncaught Error » à chaque image, ~200 lignes), un toast générique.
+- **Réalisé :** `src/game/frame.ts` (`FrameGuard`) — une étape qui lève une exception : prise, comptée, dite une fois (toast nommant
+  l'étape en FR/EN, journal, diagnostic graphique), le reste de la frame continue ; après 3 images fautives de suite, mise de côté et
+  réessayée toutes les 5 s ; revenue, dite (« le vol : fonctionne de nouveau ») ; une panne intermittente redite au plus toutes les 30 s.
+  Dans la boucle : le vol (le bloc du pas), à pied, les chiffres du vol, les missions, le trafic, les repères de la vue, le dessin du vol
+  (`sim.applyRender`). Le réseau avait déjà ses gardes (RD1).
+- **Preuves :** après : **66–179 images en 2 s** pendant que le pas échoue, dit une fois, le vol repart une fois le pas rétabli — 1/1 ;
+  unitaires `frame-guard` 3/0, garde `flight-clock` (une lecture murale motivée de plus) ; non-régression : `hidden-tab` 2/2 (un premier
+  passage a manqué l'attente « salle à ×0 » en 10 s, rejoué vert : aléa de charge, noté), `aircraft-save` 1/1, `fps-truth` 2/2.
+- **Limites :** les autres étapes avant le rendu (le ciel, les entrées du renderer, le replay, l'enregistrement) et celles d'après
+  (instruments, HUD) ne sont pas encore gardées ; l'ordre §19.5 (instruments avant l'encodage, AR-04) reste à faire — lots suivants.

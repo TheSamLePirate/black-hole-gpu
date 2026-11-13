@@ -553,4 +553,7 @@ export default {
     "Ce PC dessine avec sa puce graphique intégrée : sous Windows, Chrome ne choisit pas seul la carte graphique dédiée. Pour l'utiliser — une image plus fluide et des compilations de shaders bien plus courtes — : Paramètres Windows › Système › Écran › Graphiques › Google Chrome › Performances élevées, puis redémarrez Chrome.",
   "Under 10 images/s: the flight runs at {0} of real time": "Moins de 10 images/s : le vol avance à {0} du temps réel",
   time: "temps",
+  "{0}: working again": "{0} : fonctionne de nouveau",
+  "A part of the game failed ({0}) — set aside, the image goes on; tried again every 5 s":
+    "Une partie du jeu a échoué ({0}) — mise de côté, l'image continue ; nouvel essai toutes les 5 s",
 } satisfies Record<string, string>;
