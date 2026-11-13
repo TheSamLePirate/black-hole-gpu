@@ -332,3 +332,35 @@ export const SEAM_MAP_JS = `(async () => {
   const cv = new OffscreenCanvas(W, H); cv.getContext("2d").putImageData(new ImageData(img, W, H), 0, 0);
   const b = new Uint8Array(await (await cv.convertToBlob({ type: "image/png" })).arrayBuffer());
   let bin = ""; for (let i = 0; i < b.length; i += 32768) bin += String.fromCharCode(...b.subarray(i, i + 32768)); return btoa(bin); })()`;
+
+/**
+ * PLAN-J2 J2-4, step A — in the page: how far a kept read (`a`: before the change) has gone towards another (`z`: the change settled)
+ * in the read `b`, over the pixels where a and z differ by over 20 % of their luminance (the pages repainted): per such pixel
+ * t = (L_b − L_a) / (L_z − L_a), clamped to [−0.5, 1.5]; returns their count, the mean and the share past 0.9 (the new page shown).
+ */
+export const trailJs = (a: string, b: string, z: string) => `(() => {
+  const A = globalThis.__j2[${JSON.stringify(a)}], B = globalThis.__j2[${JSON.stringify(b)}], Z = globalThis.__j2[${JSON.stringify(z)}];
+  if (!A || !B || !Z || A.width !== B.width || Z.width !== A.width || A.height !== B.height) return { error: "sizes differ or a read is missing" };
+  const L = (c, i) => c.exposure * (0.2126 * c.data[i] + 0.7152 * c.data[i + 1] + 0.0722 * c.data[i + 2]);
+  let n = 0, sum = 0, done = 0;
+  for (let i = 0; i < A.data.length; i += 4) {
+    const la = L(A, i), lz = L(Z, i);
+    if (Math.max(la, lz) > 2 || Math.abs(lz - la) < 0.2 * Math.max(la, lz, 0.01)) continue;
+    const t = Math.min(1.5, Math.max(-0.5, (L(B, i) - la) / (lz - la)));
+    n++; sum += t; if (t > 0.9) done++;
+  }
+  return { pixels: n, mean: +(sum / Math.max(n, 1)).toFixed(3), shown: +(done / Math.max(n, 1)).toFixed(3) }; })()`;
+
+/**
+ * J2-4, step A, the moving view's measure (its reads at different places: no pixel to pixel) — in the page: the mean magenta
+ * signature ((R + B)/2 − G over the luminance, × exposure) of read `b` over its pixels drawn and under twice the mid-grey, placed
+ * between the same mean in `a` (green settled: 0 of the way) and in `z` (magenta settled: 1).
+ */
+export const trailSigJs = (a: string, b: string, z: string) => `(() => {
+  const sig = (c) => { let s = 0, n = 0; const d = c.data, e = c.exposure;
+    for (let i = 0; i < d.length; i += 4) { const L = e * (0.2126 * d[i] + 0.7152 * d[i + 1] + 0.0722 * d[i + 2]); if (!(L > 0.005) || L > 2) continue;
+      s += e * (0.5 * (d[i] + d[i + 2]) - d[i + 1]) / L; n++; } return s / Math.max(n, 1); };
+  const A = globalThis.__j2[${JSON.stringify(a)}], B = globalThis.__j2[${JSON.stringify(b)}], Z = globalThis.__j2[${JSON.stringify(z)}];
+  if (!A || !B || !Z) return { error: "a read is missing" };
+  const sa = sig(A), sb = sig(B), sz = sig(Z);
+  return { sigA: +sa.toFixed(4), sigB: +sb.toFixed(4), sigZ: +sz.toFixed(4), way: +((sb - sa) / (sz - sa || 1)).toFixed(3) }; })()`;

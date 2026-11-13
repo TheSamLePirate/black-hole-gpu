@@ -9,6 +9,8 @@ import {
   leverDiffJs,
   SEAM_GEOM_JS,
   SEAM_MAP_JS,
+  trailJs,
+  trailSigJs,
   LEAK_VIEWS,
   leakCompareJs,
   SEAM_JS,
@@ -44,6 +46,12 @@ import {
 //     the levels' own heights), on again: the seams read by the view depth's inverse (lib/j2-probes.ts SEAM_GEOM_JS: pairs across two
 //     levels against pairs inside one) and by the distance (SEAM_JS, J2-0's); a shot and a map of each (SEAM_MAP_JS: the ranks in colour,
 //     the boundary pairs red over 0.25 px, green under). J2_HLOD=0: the IGN's overground off (its A/B).
+//   trail — J2-4, step A (J2_PHASES=trail): how long a page republished takes to show — the leak probe's positive control (every
+//     published imagery page painted) as a controlled arrival: green settled, then magenta at once, the scene's colour read 1, 2, 4,
+//     8, 16, 32, 64 images after (lib/j2-probes.ts trailJs: the share of the repainted pixels past 90 % of the way — held only, the
+//     moving reads at other places —, trailSigJs: the mean magenta signature's way from green to magenta), held (the clock
+//     frozen: rasterHeldAlpha) then moving (the clock running, the craft flying on); the global invalidations counted by cause. The
+//     reads wait on the frames without __bh.touch() — a touch is a changed scene, a global invalidation (the held view restarted).
 // Motion blur off (the reconstruction's sharpness, not the shutter's). J2_OUT (remote-results/j2/<machine>; in an A/B of
 // scripts/ab-e2e.ts its <AB_SIDE><AB_RUN> under it), J2_MACHINE.
 // Not a pass/fail on the numbers: the fiche is written from j2.json (docs/progress/j2/). It fails on a GPU error, a craft not placed.
@@ -148,6 +156,76 @@ describe.skipIf(!E2E)("J2-0: the leak, the seams, the sharpness and the publicat
     return r;
   }
   const writeB64 = (f: string, b64: string | null) => (b64 ? Bun.write(f, Buffer.from(b64, "base64")) : Promise.resolve(0));
+
+  if (PHASES.includes("trail"))
+    for (const v of VIEWS)
+      test(`J2-4 step A, a page republished, how long it takes to show: ${v}`, async () => {
+        const view = LEAK_VIEWS[v];
+        if (!view) throw new Error(`J2_VIEWS: ${v} unknown`);
+        const [lat, lon, agl, hdg, spd] = view.at;
+        const placed = await place(
+          `__bh.game.quality("realtime"); Object.assign(__bh.settings, { dynamicResolution: false, animate: true, targetSpp: 64, motionBlur: 0, lookProfile: "neutral" });
+          __bh.game.setDate("${view.date}"); __bh.game.set("weather", "fair"); __bh.game.set("earthClouds", 0); __bh.game.flyAt(${lat}, ${lon}, ${agl}, ${hdg}, ${spd}); ${CLEAN}`,
+          v,
+        );
+        await app.js(`(() => { document.body.classList.add("hide-ui"); return 1; })()`);
+        const row: Record<string, unknown> = { view: v, what: view.what, placed };
+        const STEPS = [1, 2, 4, 8, 16, 32, 64];
+        for (const mode of ["held", "moving"] as const) {
+          // (green everywhere the imagery is, settled; the clock frozen or running — moving, the craft flies on, the autopilot and
+          // gear held as J0's protocol)
+          await app.js(
+            `(() => { __bh.renderer.earthTiles.leakProbe(${JSON.stringify(SENTINEL_B)}); __bh.renderer.earthTiles.leakProbe(${JSON.stringify(SENTINEL_B)}, { control: true }); return 1; })()`,
+          );
+          if (mode === "moving")
+            await app.js(`(async () => { __bh.freeze(false); const c = __bh.camera, f = () => new Promise((q) => requestAnimationFrame(q));
+              for (let i = 0; i < 90; i++) { await f(); __bh.settings.autoGear = false; c.gearDown = true; c.gearExt = 1; c.gearInit = true;
+                if (c.jetModes.alt === null) c.jetToggle("ap"); if (c.jetModes.spd === null) c.jetToggle("athr");
+                if (c.jetModes.alt !== null && c.jetModes.spd !== null && i > 10) break; }
+              globalThis.__j2gear = setInterval(() => { __bh.settings.autoGear = false; c.gearDown = true; c.gearExt = 1; c.gearInit = true; }, 16); return 1; })()`);
+          row[`converged_${mode}`] = await converged(`${v} trail ${mode} green`);
+          await app.js(keepSceneJs("a"));
+          const inv0 = await app.js<number>(`__bh.renderer.invalidations`);
+          const by0 = await app.js<Record<string, number>>(`({ ...__bh.renderer.invalidationsBy })`);
+          // (magenta at once, then the reads: the frames counted by the renderer's completions)
+          await app.js(
+            `(() => { __bh.renderer.earthTiles.leakProbe(${JSON.stringify(SENTINEL_A)}); globalThis.__j2f0 = __bh.renderer.completedFrames; return 1; })()`,
+          );
+          const reads: Record<string, unknown>[] = [];
+          for (const k of STEPS) {
+            const [at, inv] = await app.js<
+              [number, number]
+            >(`(async () => { const R = __bh.renderer, f = () => new Promise((q) => requestAnimationFrame(q));
+              let n = 0; while (R.completedFrames - globalThis.__j2f0 < ${k} && n++ < 600) await f(); await __bh.renderer.sceneColor(__bh.settings).then((c) => { globalThis.__j2.s${k} = c; }); return [R.completedFrames - globalThis.__j2f0, R.invalidations]; })()`);
+            reads.push({ k, at, invalidations: inv - inv0 });
+          }
+          await converged(`${v} trail ${mode} magenta`);
+          await app.js(keepSceneJs("z"));
+          for (const r of reads)
+            Object.assign(r, await app.js(trailJs("a", `s${r.k}`, "z")), {
+              sig: await app.js(trailSigJs("a", `s${r.k}`, "z")),
+            });
+          row[`trail_${mode}`] = reads;
+          row[`invalidations_${mode}`] = (await app.js<number>(`__bh.renderer.invalidations`)) - inv0;
+          const by1 = await app.js<Record<string, number>>(`({ ...__bh.renderer.invalidationsBy })`);
+          row[`invalidationsBy_${mode}`] = Object.fromEntries(
+            Object.keys(by1)
+              .map((k) => [k, by1[k]! - (by0[k] ?? 0)])
+              .filter(([, n]) => (n as number) > 0),
+          );
+          console.log(
+            `  ${v} trail ${mode}: ${JSON.stringify(reads)} — ${row[`invalidations_${mode}`]} global invalidations ${JSON.stringify(row[`invalidationsBy_${mode}`])}`,
+          );
+          if (mode === "moving") await app.js(`(() => { clearInterval(globalThis.__j2gear); __bh.freeze(true); return 1; })()`);
+          await app.js(`(() => { __bh.renderer.earthTiles.leakProbe(null); globalThis.__j2 = {}; return 1; })()`);
+          if (mode === "held") await place(`__bh.game.flyAt(${lat}, ${lon}, ${agl}, ${hdg}, ${spd});`, `${v} again`);
+        }
+        await app.js(`(() => { document.body.classList.remove("hide-ui"); return 1; })()`);
+        row.gpuErrors = await app.js<number>(`__bh.renderer.gpuErrors`);
+        (out.trail ??= []) as unknown[];
+        (out.trail as unknown[]).push(row);
+        expect(row.gpuErrors).toBe(0);
+      }, 600_000);
 
   if (PHASES.includes("seams"))
     for (const v of VIEWS)

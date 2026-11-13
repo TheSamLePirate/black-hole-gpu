@@ -1823,42 +1823,42 @@ export class Renderer {
       if (this.offline) this.bindTarget(this.offline.target);
     };
     this.earthTiles.onChange = () => {
-      if (!this.offline) this.invalidate();
+      if (!this.offline) this.invalidate("tiles");
     };
     // (another window's texture — the detail's reach —: the bind groups holding the old one rebuilt)
     this.earthTiles.onResize = () => {
       if (this.live) this.bindTarget(this.live);
       if (this.offline) this.bindTarget(this.offline.target);
-      if (!this.offline) this.invalidate();
+      if (!this.offline) this.invalidate("tilesResize");
     };
     this.moonTiles = new MoonTiles(device);
     this.moonTiles.onChange = () => {
-      if (!this.offline) this.invalidate();
+      if (!this.offline) this.invalidate("moon");
     };
     // (the tracer's binding 28 the Moon's atlas while it is drawn, the Earth's else: the bind groups rebuilt)
     this.moonTiles.onSwitch = () => {
       if (this.live) this.bindTarget(this.live);
       if (this.offline) this.bindTarget(this.offline.target);
-      if (!this.offline) this.invalidate();
+      if (!this.offline) this.invalidate("moonSwitch");
     };
     this.earthSurface = new EarthSurface(device, undefined, device.limits.maxSampledTexturesPerShaderStage >= SURFACE_TEXTURE_LIMIT);
     this.surfaceSampler = device.createSampler({ magFilter: "linear", minFilter: "linear", mipmapFilter: "linear", maxAnisotropy: 4 });
     this.earthSurface.onChange = () => {
       if (this.live) this.bindTarget(this.live);
       if (this.offline) this.bindTarget(this.offline.target);
-      if (!this.offline) this.invalidate();
+      if (!this.offline) this.invalidate("surface");
     };
     this.earthSurface.onContent = () => {
-      if (!this.offline) this.invalidate();
+      if (!this.offline) this.invalidate("surfaceContent");
     };
     this.earthScenery = new EarthScenery(device);
     this.earthScenery.onChange = () => {
       if (this.live) this.bindTarget(this.live);
       if (this.offline) this.bindTarget(this.offline.target);
-      if (!this.offline) this.invalidate();
+      if (!this.offline) this.invalidate("scenery");
     };
     this.earthScenery.onContent = () => {
-      if (!this.offline) this.invalidate();
+      if (!this.offline) this.invalidate("sceneryContent");
     };
     this.prof = new GpuProfiler(device);
     // (on whenever the GPU has timestamps: no measurable cost, and the realtime subsampling uses it)
@@ -3003,8 +3003,13 @@ export class Renderer {
   /** Scene changed: previous samples of the live view become stale. */
   /** PLAN-J2 J2-0: the global invalidations since the start (each `invalidate()`; the sharpness probe's rows carry it) */
   invalidations = 0;
-  invalidate() {
+  /** PLAN-J2 J2-4, step A: the same by cause (`scene` — the frame's scene changed: the camera, a setting, `__bh.touch()` —, `tiles`,
+   *  `tilesResize`, `moon`, `moonSwitch`, `surface`, `surfaceContent`, `scenery`, `sceneryContent`, `imagery`; `other` every other
+   *  caller) */
+  invalidationsBy: Record<string, number> = {};
+  invalidate(cause = "other") {
     this.invalidations++;
+    this.invalidationsBy[cause] = (this.invalidationsBy[cause] ?? 0) + 1;
     this.frameTimes.length = 0;
     this.validFrom = this.frameStamp + 1;
     this.epoch = this.frameStamp + 1;
@@ -4320,7 +4325,7 @@ export class Renderer {
       if (t === this.live && this.earthTiles.imagery !== this.imagerySeen && now - this.imageryAt > 500 && this.lastPhase === "converged") {
         this.imagerySeen = this.earthTiles.imagery;
         this.imageryAt = now;
-        if (!this.offline) queueMicrotask(() => this.invalidate());
+        if (!this.offline) queueMicrotask(() => this.invalidate("imagery"));
       }
     }
     f.set(this.earthTiles.params(), 69 * 4);
@@ -11790,7 +11795,7 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
 
     if ((sceneChanged && !this.evRedraw) || timeChanged) this.sceneAt = this.frameMs();
     this.evRedraw = false;
-    if (sceneChanged) this.invalidate();
+    if (sceneChanged) this.invalidate("scene");
     this.configureOutput(s);
     this.prof.begin();
     this.updateWarp(s, time);

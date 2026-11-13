@@ -3929,3 +3929,18 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   (`J2_HLOD`, la carte écrite) ; fiche J2-3 §4–§5, PROBLEMES-A-REGLER (l'entrée barrée, ce qui reste), PLAN-J2 §9 sexies.
 - **Mesuré** : M1 Max, deux passages de la phase `seams` sur `hyeres-low` (1/0 chacun). **Non vérifié** : un filtre de silhouettes ; une
   vue plongeante ; kerr-mini (hors réseau).
+
+## 2026-11-13T02:04Z — J2-4, étape A : une page republiée traîne plus d'une seconde dans une vue tenue
+
+- **Contribution** (PLAN-J2 J2-4, §4 « invalidations locales » ; stratégie §7 « conserver la couverture utile jusqu'à son remplacement
+  cohérent ») : avant de coder l'invalidation locale, ce qu'elle doit corriger, mesuré. Une arrivée contrôlée (la sonde de fuite repeint
+  toutes les pages publiées d'imagerie) dans une vue tenue : **une seule invalidation globale, et la page neuve traîne** — 48 % du chemin
+  en moyenne après 66 images (~1,1 s), 21 % des pixels au-delà de 90 % (historique tenu α 1/48 puis TAAU, que `invalidate()` ne coupe pas
+  en raster). En vol : non mesuré (la sonde n'est pas faite pour une vue qui avance).
+- **Changé** : `src/renderer.ts` (`invalidate(cause)`, `invalidationsBy` : les invalidations par cause, `scene` à part ; aucun
+  changement d'image) ; e2e `j2-probes` phase `trail` (`trailJs`, `trailSigJs`) ; PLAN-J2 §9 septies, BH-API, E2E-CATALOGUE.
+- **Piège trouvé** : une attente d'e2e qui appelle `__bh.touch()` à chaque image invalide la vue à chaque image (124 des 125
+  invalidations de la première mesure, cause `scene`) — les lectures de la mesure attendent sans toucher.
+- **Vérifié** : tsc, biome, e2e `j2-probes` `trail` 1/0 (quatre passages, M1 Max). **Non vérifié** : en vol ; kerr-mini (hors réseau).
+- **Suite** : J2-4 proprement dit — l'identité du sol = page + génération (décision 7 de Sam), la coupe locale de l'historique tenu, les
+  arrivées qui cessent d'appeler `invalidate()`.
