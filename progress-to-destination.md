@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-13 18:32 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-13 18:41 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous.
@@ -5559,4 +5559,13 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   `check-wgsl` 82/82.
 - Lecture : un albédo de table × 2,5 ne rend qu'environ 1 % — le recalage du raster sur la photo (× 0,6–1,5) l'absorbe.
 - Suite : décision de Sam (les tables, le recalage, ou les deux) ; le levier retiré ensuite.
+
+## 2026-11-13T18:41Z — J3-5 : Bruxelles en quatre variantes (tables, recalage) pour la décision de Sam
+
+- Réalisé : levier de mesure `TUNE_BLD_PHOTO` (`trace.wgsl`, 1 par défaut) ; la phase `materials` en cinq vues (dont l'A/A), attendant la fin
+  de toutes les compilations avant chaque vue. Docs : inventaire, PLAN-J3 §10, BH-API.
+- Preuves : **mesuré** (kerr-mini, `…-j3-materials-brussels3`) : d'en haut 68,84 / 69,80 / 69,55 / 70,46, A/A 0,34 ; vues montrées. Un run
+  invalide écarté (compilation en cours). La lecture précédente (« l'essai absorbé, ≈ 1 % ») corrigée : chacun des deux leviers rend environ
+  la moitié de l'effet sur les toits.
+- Suite : décision de Sam ; les leviers retirés ensuite.
 

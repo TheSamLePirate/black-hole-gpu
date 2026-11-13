@@ -86,6 +86,15 @@ de côté 88,59 → 87,58 (A/A 0,58 : dans le bruit). Les toits à tuiles un peu
 le recalage ne borne pas changent. **Lecture** : corriger les tables ne suffit pas au raster ; c'est le recalage sur une photo floue (sans
 orthophoto nationale) qui fixe la clarté des toits à l'étranger. À trancher avec Sam : les tables, le recalage, ou les deux.
 
+## Bruxelles, quatre variantes (13 nov., ~18:41 UTC) — remplace la lecture du paragraphe précédent
+
+Deux runs de plus (`…-materials-brussels2`, `-brussels3`) avec un levier `TUNE_BLD_PHOTO` (0 : les toits du raster non recalés sur la
+photo). Le run 2 est **invalide** (la vue d'essai prise pendant d'autres compilations — les disques du ciel —, arbres manquants : la phase
+attend désormais `renderer.compiling` vide). Le run 3, d'en haut (bâtiments ≈ 9 % de la vue) : tel qu'aujourd'hui **68,84** (A/A 69,18),
+tables éclaircies **69,80**, sans recalage **69,55**, les deux **70,46** ; de côté tout à 0,3 près. **Vu** : les tuiles passent d'un brun-rouge
+sombre à une terre cuite claire avec les deux leviers ; chacun seul en rend environ la moitié — le recalage n'absorbe pas tout l'essai
+(la lecture du run 1, « environ 1 % », venait d'une mesure sur l'image entière). À Sam de choisir sur ces vues.
+
 ## Ce que J3-5 en fera (proposé)
 
 1. Des vues de référence **là où les tables comptent** (une ville étrangère sans orthophoto, des murs vus à hauteur d'homme, le tracé) et un

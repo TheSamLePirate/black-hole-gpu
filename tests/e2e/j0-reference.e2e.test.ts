@@ -924,7 +924,8 @@ describe.skipIf(!E2E)("J0: the reference flight over Toulon-Hyères", () => {
 
   // (PLAN-J3 J3-5 — the buildings' albedo, before / after views for Sam, J0_PHASES=materials (J0_START over a town abroad — Brussels: no
   // national orthophoto, the roofs the tables'): the town aside and from above, frozen, the data and scenery in, the exposure held; as drawn,
-  // then the trial (renderer.tune TUNE_BLD_TILE 2.5, TUNE_BLD_BRICK 1.5 — the inventory's measured ranges), then as drawn again (the A/A);
+  // then the trial (renderer.tune TUNE_BLD_TILE 2.5, TUNE_BLD_BRICK 1.5 — the inventory's measured ranges), the roofs not pulled to the
+  // photograph (TUNE_BLD_PHOTO 0) as drawn and with the trial, then as drawn again (the A/A);
   // shots and the mean luminance. Nothing changed by default)
   test.skipIf(!PHASES.includes("materials"))(
     "J3-5: the buildings' albedo — as drawn, the trial (tiles × 2.5, brick × 1.5), as drawn again; aside and from above",
@@ -964,10 +965,15 @@ describe.skipIf(!E2E)("J0: the reference flight over Toulon-Hyères", () => {
         for (const [name, tune] of [
           ["asDrawn", "{}"],
           ["trial", "{ TUNE_BLD_TILE: 2.5, TUNE_BLD_BRICK: 1.5 }"],
+          ["noPhoto", "{ TUNE_BLD_PHOTO: 0 }"],
+          ["noPhotoTrial", "{ TUNE_BLD_PHOTO: 0, TUNE_BLD_TILE: 2.5, TUNE_BLD_BRICK: 1.5 }"],
           ["asDrawnAgain", "{}"],
         ] as const) {
           await app.js(`(() => { __bh.renderer.tune = ${tune}; __bh.refresh(); return 1; })()`);
           await app.settled(120_000);
+          // (every kernel of the new key compiled — the sky's discs too: run 2 of 13 Nov shot the trial with them still compiling, the
+          // trees missing; settled() waits only the main kernel)
+          await app.waitFor("__bh.renderer.compiling.size === 0", 120_000);
           await app.js(
             `(async () => { const f = () => new Promise((q) => requestAnimationFrame(q)); for (let i = 0; i < 45; i++) await f(); return 1; })()`,
           );

@@ -222,4 +222,6 @@ Aucun coût de J3 n'est mesuré ; aucun gain n'est promis.
   **Bruxelles avant / essai (~18:32 UTC)** : tuiles × 2,5 et brique × 1,5 → la vue d'en haut +0,7 % (68,85 → 69,31, A/A 0,02) — le recalage du
   raster sur la photo absorbe l'essai ; la clarté des toits à l'étranger est celle de la photo floue. Décision de Sam : les tables, le recalage,
   ou les deux (levier de mesure `TUNE_BLD_*` gardé jusque-là).
+  **Quatre variantes (~18:41 UTC, run propre)** : d'en haut 68,84 / tables 69,80 / sans recalage 69,55 / les deux 70,46 (A/A 0,34) — les tuiles
+  brun-rouge sombre → terre cuite claire avec les deux ; chacun en rend la moitié. Vues dans la fiche.
 

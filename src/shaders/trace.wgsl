@@ -266,6 +266,8 @@ override TUNE_MARCH_K: f32 = 0.5;
 // (PLAN-J3 J3-5, a measuring lever: the tiles' and bricks' albedo scale in buildingLook — 1 as drawn)
 override TUNE_BLD_TILE: f32 = 1.0;
 override TUNE_BLD_BRICK: f32 = 1.0;
+// (PLAN-J3 J3-5, a measuring lever: 0 the raster's roofs not pulled toward the photograph's luminance — 1 as drawn)
+override TUNE_BLD_PHOTO: f32 = 1.0;
 // (a ray rising over the ground — its clearance growing —: its steps' share of the distance (5 %: the shell left in ~150 steps;
 // a butte's narrow top, Monument Valley's Mittens, stepped through in bands of sky)
 override TUNE_RISE: f32 = 0.05;
@@ -10406,7 +10408,7 @@ fn rasterBuilding(leaf:u32,dirW:vec3f,tM:f32,photo:vec3f)->RasterBuilding {
   WS_E = vec3f(0.0);
   buildingLook(hit, pL, &alb, &nL);
   RB_ABOVE = max(pL.z - (scenery[g].x + 1.0), 0.0);
-  if (hit.aux.y < 0.0) { alb *= clamp(luminance(photo) / max(luminance(alb), 0.02), 0.6, 1.5); }
+  if (hit.aux.y < 0.0 && TUNE_BLD_PHOTO > 0.5) { alb *= clamp(luminance(photo) / max(luminance(alb), 0.02), 0.6, 1.5); }
   return RasterBuilding(alb, normalize(sceneryGlobal(nL)), WS_S, WS_E, WS_AO);
 }
 fn buildingFaceAt(g:u32,p:vec3f,d:vec3f,t:f32)->SceneryHit {
