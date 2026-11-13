@@ -1043,6 +1043,16 @@ async function main() {
   const tarsPersonality = () => ({ honesty: settings.tarsHonesty, humour: settings.tarsHumour });
   // (through OpenRouter — T6 —: the player's own key; his remarks decided by Jev; the model of the setting)
   const openRouter = new OpenRouter(undefined, undefined, () => settings.tarsModel);
+  // (his model withdrawn by OpenRouter: the default for the session, said — audit TA-20)
+  const modelName = (id: string) => AGENT_MODELS.find((m) => m.id === id)?.name ?? id;
+  openRouter.onModelGone = (gone, used) =>
+    panel.toast(
+      tf(
+        "OpenRouter no longer offers TARS's model {0}: {1} instead (his console's settings to choose another)",
+        modelName(gone),
+        modelName(used),
+      ),
+    );
   const tarsOnline = new TarsOnline(openRouter);
   let tarsBusy = false;
   // (what he knows in every mode: the flight while one is flown, the mode's own situation always — PLAN-MODES-AAA M2)

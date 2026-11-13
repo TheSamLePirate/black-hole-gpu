@@ -186,8 +186,38 @@ export class OpenRouter {
     private key: () => string | null = () => openRouterKey.get(),
     private fetchFn: Fetch = (u, i) => fetch(u, i),
     /** the model the agent thinks with (the setting) */
-    public model: () => string = () => TEXT_MODEL,
+    private chosen: () => string = () => TEXT_MODEL,
   ) {}
+
+  /** the models OpenRouter no longer offers, met this session: the default asked instead (audit TA-20) */
+  private gone = new Set<string>();
+  /** told when the chosen model is found retired — the game says it (main.ts) */
+  onModelGone: ((gone: string, used: string) => void) | null = null;
+
+  /** the model asked: the chosen one, or the default once it was found retired */
+  model(): string {
+    const m = this.chosen();
+    return this.gone.has(m) ? TEXT_MODEL : m;
+  }
+
+  /** A refusal that says the model is not there (retired, renamed): 404, or a 400 naming the model. */
+  private async modelMissing(r: Response, model: string): Promise<boolean> {
+    if (model === TEXT_MODEL || (r.status !== 404 && r.status !== 400)) return false;
+    const text = await r
+      .clone()
+      .text()
+      .catch(() => "");
+    // (OpenRouter's « X is not a valid model ID », « No endpoints found for X »: the model named, found missing — not a 400
+    // on the reasoning or the tools, which may say « this model … » too)
+    return text.includes(model) && /not a valid model|no endpoints found|not found|does not exist|unknown model/i.test(text);
+  }
+
+  /** The chosen model found retired: the default for the session, said once. */
+  private retire(model: string) {
+    if (this.gone.has(model)) return;
+    this.gone.add(model);
+    this.onModelGone?.(model, TEXT_MODEL);
+  }
 
   private headers(k: string) {
     return {
@@ -219,6 +249,13 @@ export class OpenRouter {
           signal: AbortSignal.timeout(o.timeoutMs ?? 12_000),
         });
       let r = await ask();
+      // (the model retired: the default asked — TA-20; looked at first: its 400 is no refusal of the reasoning)
+      const asked = this.model();
+      if (await this.modelMissing(r, asked)) {
+        this.calls++;
+        this.retire(asked);
+        r = await ask();
+      }
       // (the brief reasoning refused: asked without it, for the session)
       if (r.status === 400 && this.noReasoning) {
         this.calls++;
@@ -268,6 +305,14 @@ export class OpenRouter {
           signal,
         });
       let r = await ask();
+      // (the model retired — renamed, withdrawn —: the default asked, for the session, said; before 13 Nov 2026 every turn
+      // failed on it — audit TA-20. Looked at first: its 400 is no refusal of the brief reasoning)
+      const asked = o.model ?? this.model();
+      if (!o.model && (await this.modelMissing(r, asked))) {
+        this.calls++;
+        this.retire(asked);
+        r = await ask();
+      }
       if (r.status === 400 && this.noReasoning) {
         this.calls++;
         this.noReasoning = false;

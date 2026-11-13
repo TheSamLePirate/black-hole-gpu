@@ -196,3 +196,54 @@ test("an answer cut by the token limit (TA-12): asked again once with room, a to
   expect(asked[1]!).toBeGreaterThan(asked[0]!);
   expect(() => JSON.parse(r!.tool_calls![0]!.function.arguments)).not.toThrow();
 });
+
+test("TARS's model retired by OpenRouter (TA-20): the default asked instead, for the session, and said — not a silent failure", async () => {
+  const asked: string[] = [];
+  const f = async (_url: string, init: { body: string }) => {
+    const model = (JSON.parse(init.body) as { model: string }).model;
+    asked.push(model);
+    if (model === "old/retired-model")
+      return new Response(JSON.stringify({ error: { message: "old/retired-model is not a valid model ID", code: 400 } }), { status: 400 });
+    return new Response(JSON.stringify({ choices: [{ finish_reason: "stop", message: { content: "Orbite stable." } }] }), { status: 200 });
+  };
+  const or = new OpenRouter(
+    () => "sk-or-v1-key",
+    f as never,
+    () => "old/retired-model",
+  );
+  const said: string[] = [];
+  or.onModelGone = (gone, used) => said.push(`${gone} → ${used}`);
+  const r = await or.complete([{ role: "user", content: "état ?" }], []);
+  expect(r?.content).toBe("Orbite stable.");
+  expect(or.lastFailure).toBeNull();
+  expect(said).toEqual([`old/retired-model → ${TEXT_MODEL}`]);
+  // (asked once under its retired name, not twice: its refusal not read as one of the brief reasoning)
+  expect(asked).toEqual(["old/retired-model", TEXT_MODEL]);
+  // the session asks the default at once, the change said once
+  await or.chat([{ role: "user", content: "et maintenant ?" }]);
+  expect(asked.slice(-1)).toEqual([TEXT_MODEL]);
+  expect(said.length).toBe(1);
+  // a refusal of the brief reasoning (« this model … ») is no retirement: the model kept
+  let n = 0;
+  const reasoning = new OpenRouter(
+    () => "sk-or-v1-key",
+    (async (_u: string, init: { body: string }) =>
+      n++ === 0 && (JSON.parse(init.body) as { reasoning?: unknown }).reasoning
+        ? new Response(JSON.stringify({ error: { message: "Reasoning is not supported by this model: some/model" } }), { status: 400 })
+        : new Response(JSON.stringify({ choices: [{ message: { content: "ok" } }] }), { status: 200 })) as never,
+    () => "some/model",
+  );
+  const gone2: string[] = [];
+  reasoning.onModelGone = (g) => gone2.push(g);
+  expect((await reasoning.complete([], []))?.content).toBe("ok");
+  expect(gone2).toEqual([]);
+  expect(reasoning.model()).toBe("some/model");
+  // a key refused stays a key refused (no model swap)
+  const k = new OpenRouter(
+    () => "sk-or-v1-key",
+    (async () => new Response("{}", { status: 401 })) as never,
+    () => "old/retired-model",
+  );
+  expect(await k.complete([], [])).toBeNull();
+  expect(k.lastFailure?.why).toBe("key");
+});

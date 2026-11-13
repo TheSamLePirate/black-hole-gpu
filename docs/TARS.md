@@ -136,6 +136,7 @@ Ce qui encadre ces répliques :
   - **La clé** :
     - on l'obtient par « Se connecter avec OpenRouter » (OAuth avec PKCE, sans serveur), ou on la colle ;
     - elle est gardée dans ce navigateur seulement : jamais dans les réglages, une sauvegarde, un export.
+  - **Son modèle retiré** (audit TA-20, 13 nov. 2026) : si OpenRouter ne propose plus le modèle choisi (« not a valid model ID », « No endpoints found » qui le nomment), GLM-5.3 Flash est demandé à sa place pour la session, et le jeu le dit une fois (« OpenRouter ne propose plus le modèle de TARS … ») ; avant, chaque tour échouait dessus. La liste `AGENT_MODELS` et ses prix restent ceux du 09/10/2026, non relus au lancement.
   - **Ses réponses** sont écrites par **GLM-5.3-flash**, avec :
     - son caractère, ses réglages, la langue ;
     - les seules données du vol : aucun chiffre inventé, un danger dit tel quel ;

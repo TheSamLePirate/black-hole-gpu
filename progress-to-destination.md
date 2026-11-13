@@ -58,7 +58,7 @@ ouverts, sous 1 ms) ; J3 au stade du plan.**
 | Audit vagues 3–4 (1feb2f7f) | 3.1 réseau RD0 + RD1 | **fait** : la frontière d'entrée (`src/net/inbound.ts`) ; un événement mal formé figeait l'image (163 → 0), plus maintenant — e2e `net-inbound` 6/6, net-battle/coop/crew/board verts |
 | Audit vagues 3–4 (1feb2f7f) | 3.2 réseau RD2 | **fait** : le serveur se défend (salles par adresse, débit, mots de passe salés et freinés, identité non publiée, rôle gardé, expiration) — six défauts vus avant, 0/6 → 6/6 |
 | Audit vagues 3–4 (1feb2f7f) | 3.4–3.5 vol | **fait** : U/F7 des avions (ILS, refus dit, manette gardée), Maj/Alt modificateur ou manette, LAND = F7 — le cours revolé 7/7 et 9/9 |
-| Audit vagues 3–4 (1feb2f7f) | 3.6 TARS | **fait** : tour coupé, `saves delete` confirmé, pannes dites, faux ordres hors ligne ; restes TA-06 (réveil borné), TA-12 (troncature redemandée), TA-14 (relais Deepgram borné), TA-15 (un filet « Before TARS » par tour, son échec dit), TA-07 (résumés de mémoire un à la fois), TA-16 (réveils muets hors mémoire, les autres en une ligne), TA-09 (ses réglages dans l'historique du Labo), TA-11 (texte du dehors marqué, l'irréversible refusé dans son tour), TA-13 (les voix au-dessus des moteurs), TA-19 (arguments bornés), TA-18 (outils en SI, datum nommé), TA-21 (ailiers par le Labo, rafale en temps de vol), TA-26 (docs remises au code, gardées), TA-24 (moteur audio : Safari interrompu, mesures et worklet sans allocation), TA-22 (l'oreille ouverte dès l'appui : 510 → ~170 ms) |
+| Audit vagues 3–4 (1feb2f7f) | 3.6 TARS | **fait** : tour coupé, `saves delete` confirmé, pannes dites, faux ordres hors ligne ; restes TA-06 (réveil borné), TA-12 (troncature redemandée), TA-14 (relais Deepgram borné), TA-15 (un filet « Before TARS » par tour, son échec dit), TA-07 (résumés de mémoire un à la fois), TA-16 (réveils muets hors mémoire, les autres en une ligne), TA-09 (ses réglages dans l'historique du Labo), TA-11 (texte du dehors marqué, l'irréversible refusé dans son tour), TA-13 (les voix au-dessus des moteurs), TA-19 (arguments bornés), TA-18 (outils en SI, datum nommé), TA-21 (ailiers par le Labo, rafale en temps de vol), TA-26 (docs remises au code, gardées), TA-24 (moteur audio : Safari interrompu, mesures et worklet sans allocation), TA-22 (l'oreille ouverte dès l'appui : 510 → ~170 ms), TA-20 (modèle retiré : le défaut, dit) |
 | Audit vagues 3–4 (1feb2f7f) | 3.7 TARS (outils AP avions/A320) | **fait** : `jet_autopilot` par les actions de la console, volets au levier (CONF 1), l'AP de l'A320 réparé dans `apSet` |
 | Audit vagues 3–4 (1feb2f7f) | 3.10 e2e qui ne vérifient rien | **fait** : `waitOptional` (93 attentes converties), 14 mesures déclarées, garde `e2e-honesty` |
 | Audit vagues 3–4 (1feb2f7f) | 4.2 la politique de temps | **fait** : vol tenu pendant la reprise GPU, cadence vraie, horloge du vol + garde ; l'onglet masqué (choix de Sam) : solo en pause dite, salle sans arrêt (l'absent ne la bloque plus, les autres avertis, remis à l'heure au retour), sauvé en partant, TARS sans réveil ; le ralentissement sous 10 images/s dit — e2e `hidden-tab` 2/2, `fps-truth` 2/2 |
@@ -5400,4 +5400,18 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   bref jamais montré à l'écoute, rien demandé. e2e `tars-ear` 3/3, `tars-agent` + `tars-duck` 14/0 ; unitaires `listen` 8/0 ; tsc.
 - Limites : chaque appui bref ouvre puis ferme une session Deepgram (sous 0,3 s d'audio) ; le `ScriptProcessorNode` (déprécié) et la voix Aura
   qui attend sa synthèse entière restent (un `AudioWorklet` chaud et la lecture en flux : lots suivants) ; mesuré sur micro factice de Chrome.
+
+## 2026-11-13T21:50Z — Audit TA-20 : le modèle de TARS retiré par OpenRouter — le défaut demandé pour la session, et dit
+
+- Contribution : §19 (TARS ne tombe pas en silence) ; audit 2026-11-10, TA-20 (P3).
+- Réalisé : `ai/openrouter.ts` — un refus qui nomme le modèle introuvable (« not a valid model ID », « No endpoints found for … ») fait
+  demander `TEXT_MODEL` (GLM-5.3 Flash), retenu pour la session (`model()`), signalé une fois (`onModelGone`) ; regardé avant le repli du
+  raisonnement bref (son 400 n'est pas un refus du raisonnement, et inversement un « this model … » sur le raisonnement ne retire rien) ;
+  `main.ts` le dit en toast (FR/EN, `fr-tars.ts`). TARS.md.
+- Preuves : **reproduit avant** (unitaire `openrouter` « TA-20 » : un tour sans réponse sur un modèle refusé) ; **après** : la réponse donnée, le
+  défaut demandé ensuite d'emblée, dit une fois, une clé refusée reste « clé », un refus du raisonnement ne retire pas le modèle — 9/9.
+  **Observé en jeu** (sonde e2e jetable, OpenRouter simulé dans la page, ce Mac) : le toast « OpenRouter ne propose plus le modèle de TARS
+  old/retired-model : GLM-5.3 Flash à la place … » et la réponse de TARS.
+- Limites : le catalogue d'OpenRouter n'est pas lu au lancement (la liste et ses prix restent datés du 09/10/2026) ; seul le modèle de TARS
+  a ce repli (Jev a déjà le sien, son alias).
 

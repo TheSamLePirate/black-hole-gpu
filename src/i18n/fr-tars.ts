@@ -342,4 +342,6 @@ export default {
   "TARS's budget per hour": "Budget de TARS par heure",
   "What his own initiatives (reflexes, rules) may cost in an hour through your key; at the ceiling he waits for the hour to roll on. What you ask him is always answered. 0.05 $ ≈ 300 wakings with GLM-5.3 Flash.":
     "Ce que ses propres initiatives (réflexes, réveils) peuvent coûter en une heure par votre clé ; au plafond, il attend que l'heure tourne. Ce que vous lui demandez reçoit toujours sa réponse. 0,05 $ ≈ 300 réveils avec GLM-5.3 Flash.",
+  "OpenRouter no longer offers TARS's model {0}: {1} instead (his console's settings to choose another)":
+    "OpenRouter ne propose plus le modèle de TARS {0} : {1} à la place (les réglages de sa console pour en choisir un autre)",
 } as Record<string, string>;
