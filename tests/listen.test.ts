@@ -297,3 +297,43 @@ test("a Deepgram voice: its PCM read, a line's sound kept for the next time it i
     globalThis.WebSocket = real;
   }
 });
+
+test("a Deepgram voice streamed: each part of its sound handed on as it comes, a sample split across two parts joined (TA-22)", async () => {
+  const { DeepgramVoice } = await import("../src/audio/deepgram-voice");
+  let ws: { onmessage: ((m: { data: unknown }) => void) | null } | null = null;
+  class WS {
+    binaryType = "";
+    onopen: (() => void) | null = null;
+    onmessage: ((m: { data: unknown }) => void) | null = null;
+    onclose: (() => void) | null = null;
+    constructor() {
+      ws = this;
+      setTimeout(() => this.onopen?.(), 0);
+    }
+    send() {}
+    close() {
+      this.onclose?.();
+    }
+  }
+  const real = globalThis.WebSocket;
+  globalThis.WebSocket = WS as never;
+  try {
+    const v = new DeepgramVoice(async () => ({ url: "wss://fake" }));
+    const parts: number[][] = [];
+    const whole = v.synth("Orbite stable.", "aura-2-hector-fr", (s) => parts.push([...s]));
+    await Bun.sleep(5);
+    // the first part, before the line's end: handed on now (its odd byte kept for the next)
+    ws!.onmessage?.({ data: new Uint8Array([0, 0x40, 0]).buffer });
+    expect(parts).toEqual([[0.5]]);
+    ws!.onmessage?.({ data: new Uint8Array([0x40, 0, 0xc0]).buffer });
+    expect(parts).toEqual([[0.5], [0.5, -0.5]]);
+    ws!.onmessage?.({ data: '{"type":"Flushed","sequence_id":0}' });
+    expect([...((await whole) ?? [])]).toEqual([0.5, 0.5, -0.5]);
+    // said again: kept, handed on whole at once
+    const again: number[][] = [];
+    await v.synth("Orbite stable.", "aura-2-hector-fr", (s) => again.push([...s]));
+    expect(again).toEqual([[0.5, 0.5, -0.5]]);
+  } finally {
+    globalThis.WebSocket = real;
+  }
+});

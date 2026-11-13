@@ -37,16 +37,36 @@ export class DeepgramVoice {
 
   constructor(private target: (model: string) => Promise<{ url: string; protocols?: string[] } | null> = speakTarget) {}
 
-  /** A line's sound in a voice (null: out of reach, refused, the time out — 12 s). */
-  async synth(text: string, model: string): Promise<Float32Array | null> {
+  /** A line's sound in a voice (null: out of reach, refused, the time out — 12 s). `part`: each part of it handed on as it
+   *  comes — played at once (engine.ts playStream): the first words ≈ 0.8 s after asking, not after the whole line (up to
+   *  6.8 s measured — audit TA-22); a kept line handed on whole. */
+  async synth(text: string, model: string, part?: (samples: Float32Array) => void): Promise<Float32Array | null> {
     const id = `${model}\n${text}`;
     const kept = this.cache.get(id);
     if (kept) {
       // (kept as the newest)
       this.cache.delete(id);
       this.cache.set(id, kept);
+      part?.(kept);
       return kept;
     }
+    // (a part's last byte when it splits a sample: joined to the next part's first)
+    let odd: number | null = null;
+    const handOn = (b: Uint8Array) => {
+      if (!part) return;
+      let bytes = b;
+      if (odd !== null) {
+        bytes = new Uint8Array(b.length + 1);
+        bytes[0] = odd;
+        bytes.set(b, 1);
+        odd = null;
+      }
+      if (bytes.length & 1) {
+        odd = bytes[bytes.length - 1]!;
+        bytes = bytes.subarray(0, bytes.length - 1);
+      }
+      if (bytes.length) part(fromPcm16(bytes));
+    };
     const t = await this.target(model);
     if (!t) return null;
     const pcm = await new Promise<Uint8Array | null>((done) => {
@@ -77,7 +97,11 @@ export class DeepgramVoice {
         ws.send(JSON.stringify({ type: "Flush" }));
       };
       ws.onmessage = (m) => {
-        if (typeof m.data !== "string") return void chunks.push(new Uint8Array(m.data as ArrayBuffer));
+        if (typeof m.data !== "string") {
+          const b = new Uint8Array(m.data as ArrayBuffer);
+          chunks.push(b);
+          return handOn(b);
+        }
         // (all of it come: closed)
         if (m.data.includes('"Flushed"')) {
           end(true);

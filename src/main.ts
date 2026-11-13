@@ -1944,7 +1944,23 @@ async function main() {
     effect: "robot" | "clean" | "radio",
     fallback: () => Promise<void> | null,
   ): Promise<void> {
-    const pcm = await deepgramVoice.synth(text, model);
+    // (played as its sound comes: the first words ≈ 0.8 s after asking, not after the whole line — up to 6.8 s; audit TA-22)
+    const st = sound.playStream(VOICE_RATE, inside, effect);
+    let any = false;
+    const pcm = await deepgramVoice.synth(
+      text,
+      model,
+      st
+        ? (part) => {
+            any = true;
+            st.push(part);
+          }
+        : undefined,
+    );
+    if (st) {
+      st.end();
+      if (any) return st.done;
+    }
     if (!pcm) return (await fallback()) ?? undefined;
     return (await sound.playRobot(pcm, VOICE_RATE, inside, effect)) ?? undefined;
   }
@@ -8220,6 +8236,8 @@ async function main() {
       earTrail: () => tarsTalk.trail,
       // (a line's Deepgram sound asked: its length in samples — the tests)
       voiceSynth: async (text: string, model: string) => (await deepgramVoice.synth(text, model))?.length ?? 0,
+      // (a line said by a Deepgram voice as the game says it — played as it comes —: resolved once heard)
+      voiceSay: (text: string, model: string) => deepgramSay(text, model, false, "clean", () => null),
       panel: tarsPanel,
     },
     skyLoading,

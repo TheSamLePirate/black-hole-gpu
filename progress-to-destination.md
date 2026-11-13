@@ -58,7 +58,7 @@ ouverts, sous 1 ms) ; J3 au stade du plan.**
 | Audit vagues 3–4 (1feb2f7f) | 3.1 réseau RD0 + RD1 | **fait** : la frontière d'entrée (`src/net/inbound.ts`) ; un événement mal formé figeait l'image (163 → 0), plus maintenant — e2e `net-inbound` 6/6, net-battle/coop/crew/board verts |
 | Audit vagues 3–4 (1feb2f7f) | 3.2 réseau RD2 | **fait** : le serveur se défend (salles par adresse, débit, mots de passe salés et freinés, identité non publiée, rôle gardé, expiration) — six défauts vus avant, 0/6 → 6/6 |
 | Audit vagues 3–4 (1feb2f7f) | 3.4–3.5 vol | **fait** : U/F7 des avions (ILS, refus dit, manette gardée), Maj/Alt modificateur ou manette, LAND = F7 — le cours revolé 7/7 et 9/9 |
-| Audit vagues 3–4 (1feb2f7f) | 3.6 TARS | **fait** : tour coupé, `saves delete` confirmé, pannes dites, faux ordres hors ligne ; restes TA-06 (réveil borné), TA-12 (troncature redemandée), TA-14 (relais Deepgram borné), TA-15 (un filet « Before TARS » par tour, son échec dit), TA-07 (résumés de mémoire un à la fois), TA-16 (réveils muets hors mémoire, les autres en une ligne), TA-09 (ses réglages dans l'historique du Labo), TA-11 (texte du dehors marqué, l'irréversible refusé dans son tour), TA-13 (les voix au-dessus des moteurs), TA-19 (arguments bornés), TA-18 (outils en SI, datum nommé), TA-21 (ailiers par le Labo, rafale en temps de vol), TA-26 (docs remises au code, gardées), TA-24 (moteur audio : Safari interrompu, mesures et worklet sans allocation), TA-22 (l'oreille ouverte dès l'appui : 510 → ~170 ms), TA-20 (modèle retiré : le défaut, dit) |
+| Audit vagues 3–4 (1feb2f7f) | 3.6 TARS | **fait** : tour coupé, `saves delete` confirmé, pannes dites, faux ordres hors ligne ; restes TA-06 (réveil borné), TA-12 (troncature redemandée), TA-14 (relais Deepgram borné), TA-15 (un filet « Before TARS » par tour, son échec dit), TA-07 (résumés de mémoire un à la fois), TA-16 (réveils muets hors mémoire, les autres en une ligne), TA-09 (ses réglages dans l'historique du Labo), TA-11 (texte du dehors marqué, l'irréversible refusé dans son tour), TA-13 (les voix au-dessus des moteurs), TA-19 (arguments bornés), TA-18 (outils en SI, datum nommé), TA-21 (ailiers par le Labo, rafale en temps de vol), TA-26 (docs remises au code, gardées), TA-24 (moteur audio : Safari interrompu, mesures et worklet sans allocation), TA-22 (l'oreille ouverte dès l'appui : 510 → ~170 ms), TA-20 (modèle retiré : le défaut, dit), TA-22 suite (voix Deepgram jouée à mesure : −3 à −5 s sur une ligne longue) |
 | Audit vagues 3–4 (1feb2f7f) | 3.7 TARS (outils AP avions/A320) | **fait** : `jet_autopilot` par les actions de la console, volets au levier (CONF 1), l'AP de l'A320 réparé dans `apSet` |
 | Audit vagues 3–4 (1feb2f7f) | 3.10 e2e qui ne vérifient rien | **fait** : `waitOptional` (93 attentes converties), 14 mesures déclarées, garde `e2e-honesty` |
 | Audit vagues 3–4 (1feb2f7f) | 4.2 la politique de temps | **fait** : vol tenu pendant la reprise GPU, cadence vraie, horloge du vol + garde ; l'onglet masqué (choix de Sam) : solo en pause dite, salle sans arrêt (l'absent ne la bloque plus, les autres avertis, remis à l'heure au retour), sauvé en partant, TARS sans réveil ; le ralentissement sous 10 images/s dit — e2e `hidden-tab` 2/2, `fps-truth` 2/2 |
@@ -5437,4 +5437,21 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
 - Preuves : **documenté** — la fiche de Paris pour le coût ; pour les matériaux, une lecture du code par un agent d'exploration, trois points
   revérifiés à la main ; aucune mesure d'image.
 - Suite : J3-5 commence par des vues de référence et un témoin de luminance connue, puis les albédos et le métal en A/B.
+
+## 2026-11-13T22:30Z — Audit TA-22 (suite) : les voix de Deepgram jouées à mesure — une ligne longue entendue en ~1 s au lieu de 4 à 7 s
+
+- Contribution : §19 (voix, réponse) ; audit 2026-11-10, TA-22. **Gain maximal écrit avant** (règle 1, sonde jetable par le relais, ce Mac) : le
+  premier morceau d'Aura arrive en 745–880 ms quelle que soit la ligne, la ligne entière en 2,0 s (courte) à 6,8 s (longue, 13,6 s de voix) ;
+  le lot ne peut rendre plus que 1,2 à 5,9 s d'attente.
+- Réalisé : `audio/deepgram-voice.ts` `synth(…, part)` rend chaque morceau dès qu'il arrive (un échantillon coupé entre deux morceaux
+  recollé ; une ligne gardée rendue entière) ; `audio/engine.ts` — `voiceChain` (la chaîne d'effets commune : grain, voix nette, radio,
+  place), `playStream` (les morceaux joués à la suite, le premier 120 ms en avance, `voiceGaps` compte un trou), `stopRobot` l'arrête aussi ;
+  `main.ts` `deepgramSay` joue à mesure (l'ancien chemin si le son ne tourne pas) ; `__bh.tars.voiceSay`. AUDIO.md, TARS.md, BH-API, E2E-CATALOGUE.
+- Preuves : **reproduit avant** (unitaire `listen` « streamed » : aucun morceau rendu avant la fin) ; **mesuré après** (e2e `tars-voice-stream`,
+  ce Mac, fenêtre visible, 3 runs dont un écarté pour un défaut de ma mesure — la queue de la ligne précédente lue comme le premier son, corrigé
+  en attendant le silence du bus) : ancienne attente 1,4–2,1 s (courte) et 4,2–6,5 s (longue) ; premier son 0,9–1,4 s et 0,8–1,5 s ; 0 trou.
+  Témoins : l'ancienne attente croît avec la ligne, le premier son non. Unitaires listen/audio verts ; e2e `tars-ear`, `audio-space`,
+  `tars-duck` 13/0 ; tsc, biome.
+- Limites : le premier morceau de Deepgram varie d'une demande à l'autre (0,7–2 s) ; des trous seraient possibles sur un réseau plus lent
+  que la voix (aucun vu ; comptés) ; la voix robot anglaise et la voix système ne changent pas.
 

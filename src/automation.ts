@@ -122,6 +122,8 @@ export interface BhContext {
     spent: () => number;
     earTrail?: () => string[];
     voiceSynth?: (text: string, model: string) => Promise<number>;
+    /** a line said by a Deepgram voice as the game says it (played as it comes): resolved once heard */
+    voiceSay?: (text: string, model: string) => Promise<void>;
     /** his console (ui/tars-panel.ts): shown, his state (its orbs) set — the screenshots of his orbs */
     panel?: TarsPanel;
   };

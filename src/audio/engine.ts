@@ -158,7 +158,14 @@ export class SoundEngine {
       this.robotSrc?.stop();
     } catch {}
     this.robotSrc = null;
+    const st = this.stream;
+    this.stream = null;
+    st?.stop();
   }
+  /** gaps heard in voices played as they come: a part come after the one before had ended (tests: TA-22) */
+  voiceGaps = 0;
+  /** the voice being played as it comes (playStream), null: none */
+  private stream: VoiceStream | null = null;
   /** the radio's hiss under a line said by radio (PLAN-TARS T1), its band */
   private radioHiss: { g: GainNode; src: AudioBufferSourceNode } | null = null;
   private listenerLP!: BiquadFilterNode;
@@ -1868,6 +1875,64 @@ export class SoundEngine {
     });
   }
 
+  /** A voice played as its sound comes (audit TA-22: a Deepgram line heard ≈ 0.8 s after it is asked, not after the
+   *  whole of it — up to 6.8 s measured); null: no sound now. Its parts follow one another without a gap. */
+  playStream(sampleRate: number, inside: boolean, effect: "robot" | "clean" | "radio" = "robot"): VoiceStream | null {
+    if (!this.running || !this.enabled || !this.ctx) return null;
+    const ctx = this.ctx;
+    const ch = voiceChain(ctx, this.busses.voice, inside, this.hrtf, effect);
+    const live = new Set<AudioBufferSourceNode>();
+    let next = 0;
+    let ended = false;
+    let over = false;
+    let heard: () => void = () => {};
+    const done = new Promise<void>((r) => (heard = r));
+    const finish = () => {
+      if (over || !ended || live.size) return;
+      over = true;
+      setTimeout(ch.release, 300);
+      if (this.stream === S) this.stream = null;
+      heard();
+    };
+    const S: VoiceStream = {
+      push: (samples) => {
+        if (ended || !samples.length) return;
+        const buf = ctx.createBuffer(1, samples.length, sampleRate);
+        buf.copyToChannel(samples as Float32Array<ArrayBuffer>, 0);
+        const src = new AudioBufferSourceNode(ctx, { buffer: buf });
+        src.connect(ch.input);
+        // (the first part a little ahead — the next ones' jitter absorbed —, each after the one before; a part come after
+        // the one before had ended: a gap heard, counted)
+        if (next && ctx.currentTime > next) this.voiceGaps++;
+        const at = Math.max(ctx.currentTime + (next ? 0.02 : 0.12), next);
+        src.start(at);
+        next = at + buf.duration;
+        live.add(src);
+        src.onended = () => {
+          live.delete(src);
+          finish();
+        };
+      },
+      end: () => {
+        ended = true;
+        finish();
+      },
+      stop: () => {
+        ended = true;
+        for (const src of live)
+          try {
+            src.stop();
+          } catch {}
+        live.clear();
+        finish();
+      },
+      done,
+    };
+    this.stopRobot();
+    this.stream = S;
+    return S;
+  }
+
   /** The radio's hiss alone, held (the blackout's static — PLAN-TARS T3): 0 off … 1 loud. */
   radioNoise(level: number) {
     if (!this.running || !this.enabled) return;
@@ -1983,33 +2048,7 @@ export function robotVoice(
   inside: boolean,
   hrtf: boolean,
 ): AudioBufferSourceNode {
-  const buf = ctx.createBuffer(1, samples.length, sampleRate);
-  buf.copyToChannel(samples as Float32Array<ArrayBuffer>, 0);
-  const src = new AudioBufferSourceNode(ctx, { buffer: buf });
-  const hp = new BiquadFilterNode(ctx, { type: "highpass", frequency: 110, Q: 0.7 });
-  const pres = new BiquadFilterNode(ctx, { type: "peaking", frequency: 2600, Q: 1, gain: 4 });
-  const dry = new GainNode(ctx, { gain: 0.8 });
-  const comb = new DelayNode(ctx, { delayTime: 0.0045 });
-  const fb = new GainNode(ctx, { gain: 0.32 });
-  const wet = new GainNode(ctx, { gain: 0.3 });
-  const shape = new WaveShaperNode(ctx, { curve: robotCurve() });
-  const pan = new PannerNode(ctx, {
-    panningModel: hrtf ? "HRTF" : "equalpower",
-    distanceModel: "inverse",
-    refDistance: 1,
-    rolloffFactor: 0.2,
-    positionX: inside ? 0.7 : 0,
-    positionY: inside ? -0.1 : 0,
-    positionZ: inside ? 0.5 : -1,
-  });
-  src.connect(hp).connect(pres);
-  pres.connect(dry).connect(shape);
-  pres.connect(comb).connect(fb).connect(comb);
-  comb.connect(wet).connect(shape);
-  shape.connect(pan).connect(out);
-  src.start();
-  src.addEventListener("ended", () => setTimeout(() => pan.disconnect(), 300));
-  return src;
+  return playThrough(ctx, samples, sampleRate, voiceChain(ctx, out, inside, hrtf, "robot"));
 }
 
 /**
@@ -2026,28 +2065,81 @@ export function plainVoice(
   hrtf: boolean,
   radio: boolean,
 ): AudioBufferSourceNode {
+  return playThrough(ctx, samples, sampleRate, voiceChain(ctx, out, inside, hrtf, radio ? "radio" : "clean"));
+}
+
+/** One sound played through a voice's chain, the chain let go a little after it ends. */
+function playThrough(ctx: BaseAudioContext, samples: Float32Array, sampleRate: number, ch: VoiceChain): AudioBufferSourceNode {
   const buf = ctx.createBuffer(1, samples.length, sampleRate);
   buf.copyToChannel(samples as Float32Array<ArrayBuffer>, 0);
   const src = new AudioBufferSourceNode(ctx, { buffer: buf });
-  const hp = new BiquadFilterNode(ctx, { type: "highpass", frequency: radio ? 320 : 90, Q: 0.7 });
-  const lp = new BiquadFilterNode(ctx, { type: "lowpass", frequency: radio ? 3400 : 16000, Q: radio ? 0.9 : 0.5 });
-  const pres = new BiquadFilterNode(ctx, { type: "peaking", frequency: radio ? 1800 : 3000, Q: 1, gain: radio ? 6 : 2 });
-  const gain = new GainNode(ctx, { gain: radio ? 0.9 : 1 });
+  src.connect(ch.input);
+  src.start();
+  src.addEventListener("ended", () => setTimeout(ch.release, 300));
+  return src;
+}
+
+/** A voice's chain of effects: where its sound goes in, and its letting go. */
+interface VoiceChain {
+  input: AudioNode;
+  release: () => void;
+}
+
+/**
+ * A voice's chain: TARS's grit (robot: its presence lifted, a short comb, a soft saturation), a natural voice (clean), or a
+ * radio's band (radio); placed beside the pilot in the cockpit, before him outside (the radio: before him always).
+ */
+function voiceChain(
+  ctx: BaseAudioContext,
+  out: AudioNode,
+  inside: boolean,
+  hrtf: boolean,
+  effect: "robot" | "clean" | "radio",
+): VoiceChain {
+  const beside = inside && effect !== "radio";
   const pan = new PannerNode(ctx, {
     panningModel: hrtf ? "HRTF" : "equalpower",
     distanceModel: "inverse",
     refDistance: 1,
     rolloffFactor: 0.2,
-    positionX: inside && !radio ? 0.7 : 0,
-    positionY: inside && !radio ? -0.1 : 0,
-    positionZ: inside && !radio ? 0.5 : -1,
+    positionX: beside ? 0.7 : 0,
+    positionY: beside ? -0.1 : 0,
+    positionZ: beside ? 0.5 : -1,
   });
-  let chain: AudioNode = src.connect(hp).connect(lp).connect(pres);
+  pan.connect(out);
+  const release = () => pan.disconnect();
+  if (effect === "robot") {
+    const hp = new BiquadFilterNode(ctx, { type: "highpass", frequency: 110, Q: 0.7 });
+    const pres = new BiquadFilterNode(ctx, { type: "peaking", frequency: 2600, Q: 1, gain: 4 });
+    const dry = new GainNode(ctx, { gain: 0.8 });
+    const comb = new DelayNode(ctx, { delayTime: 0.0045 });
+    const fb = new GainNode(ctx, { gain: 0.32 });
+    const wet = new GainNode(ctx, { gain: 0.3 });
+    const shape = new WaveShaperNode(ctx, { curve: robotCurve() });
+    hp.connect(pres);
+    pres.connect(dry).connect(shape);
+    pres.connect(comb).connect(fb).connect(comb);
+    comb.connect(wet).connect(shape);
+    shape.connect(pan);
+    return { input: hp, release };
+  }
+  const radio = effect === "radio";
+  const hp = new BiquadFilterNode(ctx, { type: "highpass", frequency: radio ? 320 : 90, Q: 0.7 });
+  const lp = new BiquadFilterNode(ctx, { type: "lowpass", frequency: radio ? 3400 : 16000, Q: radio ? 0.9 : 0.5 });
+  const pres = new BiquadFilterNode(ctx, { type: "peaking", frequency: radio ? 1800 : 3000, Q: 1, gain: radio ? 6 : 2 });
+  const gain = new GainNode(ctx, { gain: radio ? 0.9 : 1 });
+  let chain: AudioNode = hp.connect(lp).connect(pres);
   if (radio) chain = chain.connect(new WaveShaperNode(ctx, { curve: robotCurve() }));
-  chain.connect(gain).connect(pan).connect(out);
-  src.start();
-  src.addEventListener("ended", () => setTimeout(() => pan.disconnect(), 300));
-  return src;
+  chain.connect(gain).connect(pan);
+  return { input: hp, release };
+}
+
+/** A voice played as its sound comes (Deepgram's, part by part): `push` each part, `end` once all came; `done` when heard. */
+export interface VoiceStream {
+  push(samples: Float32Array): void;
+  end(): void;
+  stop(): void;
+  done: Promise<void>;
 }
 
 /** A soft saturation's curve (TARS's voice: a little grit, its peaks rounded). */

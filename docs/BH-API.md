@@ -2602,6 +2602,7 @@ the handle). It groups the agent, his memory, his tools and the cost, and the vo
 | `spent()` | `() => number` | the OpenRouter spend so far [USD] |
 | `earTrail()` | `() => string[]` | the ear's log (push-to-talk): what the microphone did, step by step |
 | `voiceSynth(text, model)` | `(text: string, model: string) => Promise<number>` | a line rendered by Deepgram's speech (for example `"aura-2-hector-fr"`): its length in samples, 0 when Deepgram gives nothing (`src/audio/deepgram-voice.ts`; it needs a Deepgram key, pasted in TARS's console, or the dev server's relay) |
+| `voiceSay(text, model)` | `(text: string, model: string) => Promise<void>` | a line said by a Deepgram voice as the game says it — played as its sound comes (`main.ts` `deepgramSay`, `sound.playStream`) —, resolved once heard; `tests/e2e/tars-voice-stream.e2e.test.ts` times its first sound on the voice bus |
 | `panel` | `TarsPanel` | his console (`src/ui/tars-panel.ts`): `show()`, `close()`, `setState("idle" \| "listening" \| "thinking" \| "acting" \| "speaking" \| "error")` (his orbs follow it), `levels(level, still)`, `begin`/`action`/`progress`/`todos`/`subagent` (the marks of what runs) |
 
 *Used in:* `tests/e2e/tars-eval.e2e.test.ts` (`__bh.tars.spent()` before and after a turn: the cost in USD),
