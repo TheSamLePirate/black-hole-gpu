@@ -21,12 +21,18 @@ class RocketProcessor extends AudioWorkletProcessor {
   }
 
   private synth = new RocketSynth(sampleRate, (Math.random() * 4294967296) >>> 0);
+  /** the block's controls, one object kept: none made per 128 samples on the audio thread (audit TA-24) */
+  private ctl = { throttle: 0, air: 0, pitch: 1 };
 
   process(_inputs: Float32Array[][], outputs: Float32Array[][], p: Record<string, Float32Array>) {
     const out = outputs[0];
     if (!out?.length) return true;
     const ch = out[0]!;
-    this.synth.process(ch, { throttle: p.throttle![0]!, air: p.air![0]!, pitch: p.pitch![0]! });
+    const c = this.ctl;
+    c.throttle = p.throttle![0]!;
+    c.air = p.air![0]!;
+    c.pitch = p.pitch![0]!;
+    this.synth.process(ch, c);
     for (let k = 1; k < out.length; k++) out[k]!.set(ch);
     return true;
   }

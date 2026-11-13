@@ -111,6 +111,7 @@ quel ordre et de quelle voix : [`TARS.md`](TARS.md) (les annonces, le contrôle 
   de chacun jouée sur le bus « voix » par une radio (passe-haut 320 Hz, passe-bas 3,2 kHz, une légère
   saturation, un souffle tant qu'il parle) avec les tonalités Quindar à chaque début et fin — option *radio*
   du panneau —, son volume à lui ; deux appareils d'un même réseau ne s'entendent pas (une même pièce : l'écho).
+- **Sa vie** (audit TA-24, 13 nov. 2026) : le contexte suspendu onglet caché ou laissé « interrupted » par Safari (un appel, l'audio d'une autre app) repart au geste ou au retour suivant ; les mesures (`busLevels`, l'orbe de TARS qui lit le bus des voix à chaque image) lisent dans des tampons gardés ; le worklet du moteur ne crée aucun objet par bloc de 128 échantillons (`tests/audio-engine-life.test.ts`). Le nombre de nœuds vivants et le coût HRTF restent non mesurés.
 - **Sous une voix**, les moteurs, l'ambiance et la musique baissent (`duck(on, by)`, plusieurs sources, la plus basse l'emporte) : de 8 dB sous la voix d'un joueur du salon (`players`) et sous toute ligne dite — TARS, les annonces, la radio — quand les voix sont actives (`voice`) ; de 14 dB pendant que le pilote parle à TARS (F6 tenu, `ear`), et la ligne de TARS en cours est alors coupée. Avant le 13 nov. 2026 (audit TA-13) seule la voix d'un joueur baissait quelque chose. Mesuré par l'e2e `tars-duck` (gains des bus : moteurs 0,90 → 0,36 sous TARS, 0,18 F6 tenu).
 
 ## Mesurer

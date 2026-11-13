@@ -58,7 +58,7 @@ ouverts, sous 1 ms) ; J3 au stade du plan.**
 | Audit vagues 3–4 (1feb2f7f) | 3.1 réseau RD0 + RD1 | **fait** : la frontière d'entrée (`src/net/inbound.ts`) ; un événement mal formé figeait l'image (163 → 0), plus maintenant — e2e `net-inbound` 6/6, net-battle/coop/crew/board verts |
 | Audit vagues 3–4 (1feb2f7f) | 3.2 réseau RD2 | **fait** : le serveur se défend (salles par adresse, débit, mots de passe salés et freinés, identité non publiée, rôle gardé, expiration) — six défauts vus avant, 0/6 → 6/6 |
 | Audit vagues 3–4 (1feb2f7f) | 3.4–3.5 vol | **fait** : U/F7 des avions (ILS, refus dit, manette gardée), Maj/Alt modificateur ou manette, LAND = F7 — le cours revolé 7/7 et 9/9 |
-| Audit vagues 3–4 (1feb2f7f) | 3.6 TARS | **fait** : tour coupé, `saves delete` confirmé, pannes dites, faux ordres hors ligne ; restes TA-06 (réveil borné), TA-12 (troncature redemandée), TA-14 (relais Deepgram borné), TA-15 (un filet « Before TARS » par tour, son échec dit), TA-07 (résumés de mémoire un à la fois), TA-16 (réveils muets hors mémoire, les autres en une ligne), TA-09 (ses réglages dans l'historique du Labo), TA-11 (texte du dehors marqué, l'irréversible refusé dans son tour), TA-13 (les voix au-dessus des moteurs), TA-19 (arguments bornés), TA-18 (outils en SI, datum nommé), TA-21 (ailiers par le Labo, rafale en temps de vol), TA-26 (docs remises au code, gardées) |
+| Audit vagues 3–4 (1feb2f7f) | 3.6 TARS | **fait** : tour coupé, `saves delete` confirmé, pannes dites, faux ordres hors ligne ; restes TA-06 (réveil borné), TA-12 (troncature redemandée), TA-14 (relais Deepgram borné), TA-15 (un filet « Before TARS » par tour, son échec dit), TA-07 (résumés de mémoire un à la fois), TA-16 (réveils muets hors mémoire, les autres en une ligne), TA-09 (ses réglages dans l'historique du Labo), TA-11 (texte du dehors marqué, l'irréversible refusé dans son tour), TA-13 (les voix au-dessus des moteurs), TA-19 (arguments bornés), TA-18 (outils en SI, datum nommé), TA-21 (ailiers par le Labo, rafale en temps de vol), TA-26 (docs remises au code, gardées), TA-24 (moteur audio : Safari interrompu, mesures et worklet sans allocation) |
 | Audit vagues 3–4 (1feb2f7f) | 3.7 TARS (outils AP avions/A320) | **fait** : `jet_autopilot` par les actions de la console, volets au levier (CONF 1), l'AP de l'A320 réparé dans `apSet` |
 | Audit vagues 3–4 (1feb2f7f) | 3.10 e2e qui ne vérifient rien | **fait** : `waitOptional` (93 attentes converties), 14 mesures déclarées, garde `e2e-honesty` |
 | Audit vagues 3–4 (1feb2f7f) | 4.2 la politique de temps | **fait** : vol tenu pendant la reprise GPU, cadence vraie, horloge du vol + garde ; l'onglet masqué (choix de Sam) : solo en pause dite, salle sans arrêt (l'absent ne la bloque plus, les autres avertis, remis à l'heure au retour), sauvé en partant, TARS sans réveil ; le ralentissement sous 10 images/s dit — e2e `hidden-tab` 2/2, `fps-truth` 2/2 |
@@ -5349,4 +5349,15 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   fichier `src/…` de la fiche présent, chaque appareil de `set_craft` nommé.
 - Preuves : **reproduit avant** (le garde : 68 et 68 dits, 69 dans le code) ; **après** 29/29 dans `tars-tools` lancé seul.
 - Limites : les comptes de lignes de la fiche ne sont pas gardés (ils bougent à chaque lot) ; datés dans la fiche.
+
+## 2026-11-13T20:35Z — Audit TA-24 : le moteur audio repart d'une interruption de Safari ; mesures et worklet sans allocation par image
+
+- Contribution : §19 (préserver l'expérience : l'audio reprend) et §8 (rien d'alloué par image) ; audit 2026-11-10, TA-24 (P3).
+- Réalisé : `audio/engine.ts` — `start()` relance un contexte « interrupted » comme un suspendu ; `rms`/`busLevels` lisent dans un tampon gardé
+  par analyseur (`meterBuf`) ; `audio/engine-worklet.ts` — un objet de commandes gardé au lieu d'un par bloc. AUDIO.md.
+- Preuves : **reproduit avant** (`tests/audio-engine-life.test.ts`, 3 témoins sur l'ancien code : un tampon neuf par lecture, un objet par
+  bloc, aucun `resume` d'un contexte interrompu — un premier « avant » tombait sur `document` absent à l'import, refait avec un document
+  factice, retiré après le fichier) ; **après** 3/3 ; unitaires audio 30/0 ; e2e `audio-space` et `tars-duck` 11/0 (ce Mac, fenêtre visible).
+- Limites : l'état « interrupted » essayé sur un contexte factice, pas sur un vrai Safari ; un `statechange` n'est pas écouté (la relance
+  attend le geste ou le retour suivant) ; nœuds vivants et coût HRTF non mesurés ; le gain en GC non mesuré.
 

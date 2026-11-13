@@ -129,8 +129,16 @@ export interface EngineSpace {
 const clamp = (x: number, a = 0, b = 1) => Math.min(Math.max(x, a), b);
 
 /** An analyser's level now (RMS, dBFS). */
+/** each analyser's buffer, kept: a meter read every frame (TARS's orb on the voice bus) makes none (audit TA-24) */
+const meterBufs = new WeakMap<AnalyserNode, Float32Array>();
+function meterBuf(a: AnalyserNode): Float32Array<ArrayBuffer> {
+  let d = meterBufs.get(a);
+  if (!d || d.length !== a.fftSize) meterBufs.set(a, (d = new Float32Array(a.fftSize)));
+  return d as Float32Array<ArrayBuffer>;
+}
+
 function rms(a: AnalyserNode) {
-  const d = new Float32Array(a.fftSize);
+  const d = meterBuf(a);
   a.getFloatTimeDomainData(d);
   let e = 0;
   for (const x of d) e += x * x;
@@ -260,7 +268,7 @@ export class SoundEngine {
     for (const [k, a] of Object.entries(this.busMeters)) out[k] = rms(a);
     let peak = 0;
     if (this.meter) {
-      const d = new Float32Array(this.meter.fftSize);
+      const d = meterBuf(this.meter);
       this.meter.getFloatTimeDomainData(d);
       for (const x of d) peak = Math.max(peak, Math.abs(x));
     }
@@ -395,7 +403,10 @@ export class SoundEngine {
 
   private start() {
     if (this.started) {
-      if (this.ctx?.state === "suspended" && this.enabled && !document.hidden) void this.ctx.resume();
+      // (suspended — a hidden tab —, or "interrupted": Safari's, a call or another app's audio took it — started again; before
+      // 13 Nov 2026 an interrupted context stayed silent, audit TA-24)
+      const st = this.ctx?.state as string | undefined;
+      if ((st === "suspended" || st === "interrupted") && this.enabled && !document.hidden) void this.ctx!.resume();
       return;
     }
     this.started = true;
