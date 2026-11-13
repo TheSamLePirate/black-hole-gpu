@@ -8959,7 +8959,11 @@ async function main() {
       // (the raster's: its scale in motion the ceiling; lowered only once its shading rate, chosen by the renderer, is at its
       // coarsest — the shading is its cost, not the pixels' count)
       const raster = rasterOn();
-      const lower = Math.max(0.5, renderScale - 0.125),
+      // (PLAN-J2 J2-6 — renderer.rasterScaleFree, off: the raster's scale the governor's too, pinned no more, its floor 2/3 a side —
+      // Sam's decision 6. Measured against it: at 2/3 the turn's PSNR 40.1 against 46.7 dB at 0.75 for 10 % of GPU — the image blurred
+      // for a frame rate; the pin kept)
+      const rasterFree = raster && renderer.rasterScaleFree && renderer.rasterLiteActive;
+      const lower = Math.max(rasterFree ? 2 / 3 : 0.5, renderScale - 0.125),
         higher = Math.min(raster ? rasterTop() : 1, renderScale + 0.125);
       const rateDone = !raster || settings.earthRasterShading !== "auto" || renderer.rasterRateCoarsest;
       const kl = known(lower),
@@ -8973,7 +8977,7 @@ async function main() {
       // (the raster's ground at every pixel — shadeLite —: the scale held at the raster's own — each step resampled the history
       // into the new size at a sample's weight, a blur pulse every few seconds in flight; the image is what is aimed at, at
       // the raster's full scale, not the governor's)
-      else if (raster && renderer.rasterLiteActive) want = rasterTop();
+      else if (raster && renderer.rasterLiteActive && !rasterFree) want = rasterTop();
       else if (!settled) want = renderScale;
       // (down once the blocks are coarse: at the same rays a finer block on a smaller image is no better in
       // motion — measured, equal on Kerr, 2.6 dB worse on Saturn's stars and edges —, the full scale kept)

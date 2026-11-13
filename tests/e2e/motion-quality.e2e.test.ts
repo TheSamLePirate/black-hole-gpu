@@ -41,6 +41,8 @@ const MODES: Record<string, string> = {
   taau75q: `${RASTER} __bh.settings.earthRasterShading = "quarter"; __bh.renderer.taauOn = true; __bh.renderer.taauSigma = 0.5; __bh.renderer.taauSigmaWater = 0.7; __bh.forceScale(0.75);`,
   // (I4: the same at a lower scale — what the TAAU keeps of the image when the governor would go below 75 %)
   taau625q: `${RASTER} __bh.settings.earthRasterShading = "quarter"; __bh.renderer.taauOn = true; __bh.renderer.taauSigma = 0.5; __bh.renderer.taauSigmaWater = 0.7; __bh.forceScale(0.625);`,
+  // (J2-6: the floor of the raster's scale in flight once the governor rules it — 2/3 a side, Sam's decision 6)
+  taau667q: `${RASTER} __bh.settings.earthRasterShading = "quarter"; __bh.renderer.taauOn = true; __bh.renderer.taauSigma = 0.5; __bh.renderer.taauSigmaWater = 0.7; __bh.forceScale(2 / 3);`,
   taau50q: `${RASTER} __bh.settings.earthRasterShading = "quarter"; __bh.renderer.taauOn = true; __bh.renderer.taauSigma = 0.5; __bh.renderer.taauSigmaWater = 0.7; __bh.forceScale(0.5);`,
   // (the water's kernel as the land's — before Q6d)
   taau75qw5: `${RASTER} __bh.settings.earthRasterShading = "quarter"; __bh.renderer.taauOn = true; __bh.renderer.taauSigma = 0.5; __bh.renderer.taauSigmaWater = 0.5; __bh.forceScale(0.75);`,

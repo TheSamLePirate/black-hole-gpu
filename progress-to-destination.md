@@ -4090,3 +4090,12 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   0,75 constant 46,2 dB ; 0,625 constant 37,8 dB ; changement 37,2 dB (−0,56 dB) ; changement avec `singleHistory` **37,8 dB** (aucune
   pulsation). La condition de J2-6 pour une échelle variable ; un argument pour `singleHistory` avant le retrait de l'épingle. Relevé non
   analysé : 8 dB entre 0,75 et 0,625 sur cette vue. **Changé** : `motion-quality` (`+drop`) ; PLAN-J2 §9 octies (e), catalogue.
+
+## 2026-11-13T04:38Z — J2-6 : l'épingle de l'échelle du raster essayée levée — trop chère en image, gardée
+
+- **Contribution** (PLAN-J2 J2-6, décision 6 de Sam ; CLAUDE.md « ne pas gagner une cadence en brouillant l'image ») : `renderer.rasterScaleFree`
+  (éteint) lève l'épingle `want = rasterTop()` (plancher 2/3). Vol J0 (M1 Max bridé) : le gouverneur descend à 2/3, p95 41,5 → 34,3 ms,
+  39,4 contre 34,5 images/s ; mais `motion-quality` (Alpes, virage, `singleHistory` des deux côtés) : **2/3 à 40,1 dB contre 46,6–46,8 dB à
+  0,75** (netteté 0,87 contre 0,93) pour 10 % de GPU. **L'épingle reste.** `singleHistory` et l'épingle découplés.
+- **Changé** : `src/main.ts`, `src/renderer.ts` (`rasterScaleFree`), `motion-quality` (`taau667q`) ; PLAN-J2 §9 octies (e), BH-API,
+  GRAPHICS-PIPELINE. **Non vérifié** : kerr-mini (sa charge ; une autre scène) ; la cause des 6–8 dB sous 0,75.

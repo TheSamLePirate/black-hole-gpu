@@ -459,6 +459,14 @@ flou ; le critère de J2-6 (« |écart| ≤ 3 % » à un changement d'échelle) 
 de J2-6 pour faire varier l'échelle**, et un argument pour allumer `singleHistory` avant de retirer l'épingle `want = rasterTop()`.
 Relevé, non analysé : l'écart de 8 dB entre 0,75 et 0,625 constants sur cette vue (`taau625q`).
 
+**L'épingle, essayée levée** (`renderer.rasterScaleFree`, ÉTEINT ; plancher 2/3 par axe, décision 6) : en vol J0 le gouverneur du M1 Max
+bridé descend aussitôt à **2/3** (98 échantillons sur 113) — intervalle p95 41,5 → 34,3 ms, GPU p50 28,1 → 24,5 ms, 34,5 → 39,4 images/s —,
+mais à 2/3 **le virage perd 6,6 dB** (PSNR en mouvement 40,1 contre 46,6–46,8 dB à 0,75, `singleHistory` des deux côtés ; netteté 0,87 contre
+0,93) pour 10 % de GPU (21,1 contre 23,5 ms). **L'image brouillée pour une cadence** (CLAUDE.md : à ne pas faire) : **l'épingle reste**
+tant qu'une échelle sous 0,75 ne garde pas l'image (la reconstruction elle-même, ou le plancher relevé) — à remesurer sur kerr-mini (sa
+charge n'est pas celle du Mac qui chauffe). Ce que J2-6 livre donc : l'historique unique (sans pulsation au changement d'échelle), pas
+encore l'échelle variable.
+
 ## 9 octies. J2-7, étape A : ce que `shade` et `bodyLite` couvrent et coûtent (13 novembre 2026)
 
 e2e `j2-cover` (nouveau ; M1 Max en pression « Heavy » : les temps indicatifs, les **pixels** fiables) : les `moments` de la vue vivante

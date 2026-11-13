@@ -286,7 +286,8 @@ soumettre (`renderer.ts:10842`).
   cible vivante seule), copié en fin d'image (`keepMotion`) et lu en liaison 54 par `temporal` et `taau` (`disoccluded`) ; éteint, un mot
   de remplacement lié et aucune copie. Mesuré sans gain ([fiche J2-5](progress/j2/FICHE-J2-5-2026-11-13.md)).
   **Un seul historique long** (J2-6 étape A, levier `renderer.singleHistory`, ÉTEINT) : `temporal` à α ≥ 0,5 (`TA.k.z`, le sol porté
-  `TA.m2.w`), `taau` à l'α long (`TU.u.w`) ; aucune passe ni cible nouvelle.
+  `TA.m2.w`), `taau` à l'α long (`TU.u.w`) ; aucune passe ni cible nouvelle. L'épingle de l'échelle du raster en vol se lève à part
+  (`renderer.rasterScaleFree`, ÉTEINT : à 2/3, −6,6 dB en virage pour 10 % de GPU).
 - **Modules** : `TerrainRaster` (distance + profondeur W×H, `sunDepth` 4096×2048, maillages), `SceneryRaster` (indirects,
   listes 32 Mio, tsm), `Ship` (env, SH, ombre 4096×2048, `resolved` W×H, panaches demi-résolution, MSAA), personnage,
   station, Endurance, cartes en surimpression.
