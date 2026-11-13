@@ -10,6 +10,14 @@ const G = globalThis as unknown as Record<string, unknown>;
 const stood = ["document", "addEventListener", "sampleRate", "AudioWorkletProcessor", "registerProcessor"].filter((k) => !(k in G));
 G.document ??= { hidden: false, addEventListener: () => {} };
 G.addEventListener ??= () => {};
+// (the worklet's scope: its processors kept by name as the module registers them, once)
+type Proc = new () => { port: { postMessage(m: unknown): void }; process(i: unknown, o?: unknown, p?: unknown): boolean };
+const procs = new Map<string, Proc>();
+G.sampleRate = 48_000;
+G.AudioWorkletProcessor = class {
+  port = { postMessage: (_m: unknown) => {} };
+};
+G.registerProcessor = (n: string, C: Proc) => void procs.set(n, C);
 afterAll(() => {
   for (const k of stood) delete G[k];
 });
@@ -35,13 +43,12 @@ test("the meters read into kept buffers, not one made per reading", async () => 
 });
 
 test("the rocket's worklet: no object made per block", async () => {
-  let Proc: (new () => { process(i: unknown, o: Float32Array[][], p: Record<string, Float32Array>): boolean }) | null = null;
-  const g = globalThis as unknown as Record<string, unknown>;
-  g.sampleRate = 48_000;
-  g.AudioWorkletProcessor = class {};
-  g.registerProcessor = (_n: string, C: typeof Proc) => void (Proc = C);
   await import("../src/audio/engine-worklet");
-  const p = new Proc!();
+  const p = new (
+    procs.get("kerr-rocket") as unknown as new () => {
+      process(i: unknown, o: Float32Array[][], p: Record<string, Float32Array>): boolean;
+    }
+  )();
   const got: unknown[] = [];
   const P = p as unknown as { synth: { process(ch: Float32Array, c: unknown): void } };
   P.synth = { process: (_ch, c) => void got.push(c) };
@@ -64,4 +71,23 @@ test("a context left interrupted (Safari) started again at the next gesture or r
   E.ctx = { state: "interrupted", resume: async () => void resumed++ };
   E.start();
   expect(resumed).toBe(1);
+});
+
+test("TARS's ear in the worklet: the microphone's 128-sample blocks handed on in parts of 1 024, nothing lost (TA-22)", async () => {
+  const { MIC_PART } = await import("../src/audio/engine-worklet");
+  const Mic = procs.get("kerr-mic");
+  expect(Mic ?? null).not.toBeNull();
+  const m = new Mic!();
+  const parts: Float32Array[] = [];
+  m.port = { postMessage: (x: unknown) => void parts.push(x as Float32Array) };
+  let v = 0;
+  for (let b = 0; b < 17; b++) {
+    const block = new Float32Array(128);
+    for (let i = 0; i < 128; i++) block[i] = (v++ % 1000) / 1000;
+    m.process([[block]]);
+  }
+  // 17 × 128 = 2 176 samples: two parts of 1 024 handed on, in order
+  expect(parts.length).toBe(2);
+  expect(parts[0]!.length).toBe(MIC_PART);
+  expect(parts[1]![0]).toBeCloseTo((1024 % 1000) / 1000, 6);
 });

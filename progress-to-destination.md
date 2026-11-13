@@ -58,7 +58,7 @@ ouverts, sous 1 ms) ; J3 au stade du plan.**
 | Audit vagues 3–4 (1feb2f7f) | 3.1 réseau RD0 + RD1 | **fait** : la frontière d'entrée (`src/net/inbound.ts`) ; un événement mal formé figeait l'image (163 → 0), plus maintenant — e2e `net-inbound` 6/6, net-battle/coop/crew/board verts |
 | Audit vagues 3–4 (1feb2f7f) | 3.2 réseau RD2 | **fait** : le serveur se défend (salles par adresse, débit, mots de passe salés et freinés, identité non publiée, rôle gardé, expiration) — six défauts vus avant, 0/6 → 6/6 |
 | Audit vagues 3–4 (1feb2f7f) | 3.4–3.5 vol | **fait** : U/F7 des avions (ILS, refus dit, manette gardée), Maj/Alt modificateur ou manette, LAND = F7 — le cours revolé 7/7 et 9/9 |
-| Audit vagues 3–4 (1feb2f7f) | 3.6 TARS | **fait** : tour coupé, `saves delete` confirmé, pannes dites, faux ordres hors ligne ; restes TA-06 (réveil borné), TA-12 (troncature redemandée), TA-14 (relais Deepgram borné), TA-15 (un filet « Before TARS » par tour, son échec dit), TA-07 (résumés de mémoire un à la fois), TA-16 (réveils muets hors mémoire, les autres en une ligne), TA-09 (ses réglages dans l'historique du Labo), TA-11 (texte du dehors marqué, l'irréversible refusé dans son tour), TA-13 (les voix au-dessus des moteurs), TA-19 (arguments bornés), TA-18 (outils en SI, datum nommé), TA-21 (ailiers par le Labo, rafale en temps de vol), TA-26 (docs remises au code, gardées), TA-24 (moteur audio : Safari interrompu, mesures et worklet sans allocation), TA-22 (l'oreille ouverte dès l'appui : 510 → ~170 ms), TA-20 (modèle retiré : le défaut, dit), TA-22 suite (voix Deepgram jouée à mesure : −3 à −5 s sur une ligne longue) |
+| Audit vagues 3–4 (1feb2f7f) | 3.6 TARS | **fait** : tour coupé, `saves delete` confirmé, pannes dites, faux ordres hors ligne ; restes TA-06 (réveil borné), TA-12 (troncature redemandée), TA-14 (relais Deepgram borné), TA-15 (un filet « Before TARS » par tour, son échec dit), TA-07 (résumés de mémoire un à la fois), TA-16 (réveils muets hors mémoire, les autres en une ligne), TA-09 (ses réglages dans l'historique du Labo), TA-11 (texte du dehors marqué, l'irréversible refusé dans son tour), TA-13 (les voix au-dessus des moteurs), TA-19 (arguments bornés), TA-18 (outils en SI, datum nommé), TA-21 (ailiers par le Labo, rafale en temps de vol), TA-26 (docs remises au code, gardées), TA-24 (moteur audio : Safari interrompu, mesures et worklet sans allocation), TA-22 (l'oreille ouverte dès l'appui : 510 → ~170 ms), TA-20 (modèle retiré : le défaut, dit), TA-22 suite (voix Deepgram jouée à mesure : −3 à −5 s sur une ligne longue ; micro par worklet : premier son ~90 ms) |
 | Audit vagues 3–4 (1feb2f7f) | 3.7 TARS (outils AP avions/A320) | **fait** : `jet_autopilot` par les actions de la console, volets au levier (CONF 1), l'AP de l'A320 réparé dans `apSet` |
 | Audit vagues 3–4 (1feb2f7f) | 3.10 e2e qui ne vérifient rien | **fait** : `waitOptional` (93 attentes converties), 14 mesures déclarées, garde `e2e-honesty` |
 | Audit vagues 3–4 (1feb2f7f) | 4.2 la politique de temps | **fait** : vol tenu pendant la reprise GPU, cadence vraie, horloge du vol + garde ; l'onglet masqué (choix de Sam) : solo en pause dite, salle sans arrêt (l'absent ne la bloque plus, les autres avertis, remis à l'heure au retour), sauvé en partant, TARS sans réveil ; le ralentissement sous 10 images/s dit — e2e `hidden-tab` 2/2, `fps-truth` 2/2 |
@@ -5462,4 +5462,17 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   l'avaient). Trouvé par l'inventaire des matériaux (fiche mise à jour).
 - Preuves : **vérifié statiquement** (`check-wgsl` 82/82, budget des noyaux 69/69) ; **aucune vue sous la pluie** — l'effet n'est pas observé.
 - Suite : une vue de Paris sous la pluie avant / après, avec les vues de référence de J3-5.
+
+## 2026-11-13T23:00Z — Audit TA-22 (fin) : le micro de l'oreille par un worklet, dans un contexte gardé — le premier son à ~90 ms
+
+- Contribution : §19 (réponse des commandes) ; audit 2026-11-10, TA-22. **Gain maximal écrit avant** (règle 1) : l'attente du premier tampon
+  du `ScriptProcessorNode` (4 096 échantillons, ≈ 85 ms à 48 kHz) et la création d'un contexte à chaque écoute (≈ 80 ms dans la sonde) —
+  ≈ 130 ms au plus ; et le retrait d'une API dépréciée.
+- Réalisé : `audio/engine-worklet.ts` `kerr-mic` (des parts de 1 024 échantillons, ≈ 21 ms) ; `ai/deepgram.ts` — un contexte de l'oreille
+  gardé entre deux écoutes (suspendu quand aucune oreille ne l'utilise), son worklet chargé une fois, le `ScriptProcessorNode` seulement si le
+  worklet ne se charge pas (noté « script processor » dans le journal de l'oreille). AUDIO.md, TARS.md, E2E-CATALOGUE.
+- Preuves : unitaire `audio-engine-life` (17 blocs de 128 → deux parts de 1 024 dans l'ordre) ; **mesuré** (e2e `tars-ear-latency`, ce Mac,
+  fenêtre visible, sonde déjà validée) : premier son 93 / 84 ms (avant ce lot 127–217 ; avant TA-22 508–559), +500 ms injectés → 569 ms ;
+  appui bref invisible ; e2e `tars-ear` 3/3 (la phrase entendue, l'essai de l'oreille des réglages) ; tsc, biome.
+- Limites : le repli `ScriptProcessorNode` reste (worklet introuvable) ; l'« audio prêt » (≈ 78 ms) est maintenant surtout l'accès au micro.
 

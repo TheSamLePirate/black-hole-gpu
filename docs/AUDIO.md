@@ -10,7 +10,7 @@ Tout est synthétisé en direct par la Web Audio API : aucun échantillon, rien 
 | `src/audio/director.ts` | le directeur : lit le vol à chaque image et le traduit en état pour le moteur (`EngineState`) et en signaux |
 | `src/audio/space.ts` | pur : un point du vaisseau dans le repère de l'oreille, la vue à bord ou dehors, la vitesse du son, le Doppler, l'absorption de l'air |
 | `src/audio/rocket.ts` | pur : le moteur-fusée granulaire (le cœur de l'AudioWorklet) |
-| `src/audio/engine-worklet.ts` | l'AudioWorklet du moteur, servi en `audio-worklet.js` (comme les workers) |
+| `src/audio/engine-worklet.ts` | les AudioWorklets, servis en `audio-worklet.js` (comme les workers) : le moteur-fusée (`kerr-rocket`) et le micro de l'oreille de TARS (`kerr-mic`, des parts de 1 024 échantillons pour `ai/deepgram.ts`) |
 | `src/jets.ts` | pur : quels propulseurs tirent et à quel niveau — partagé avec le rendu des panaches ; les grappes RCS |
 | `src/audio/voice.ts` | pur : la file des voix (priorités, coupures, répétitions, lignes périmées), qui parle (`Speaker`), le débit et la hauteur de chacun ; la parole du système |
 | `src/game/radio.ts` | pur : les rôles de la radio du vol (tour, ailiers, AWACS Darkstar, Mother, Paddles), le rôle d'une annonce reconnu à ses mots, la voix Deepgram de chacun |

@@ -160,12 +160,34 @@ export function readResult(data: string): { text: string; final: boolean } | nul
   }
 }
 
+/**
+ * The ear's audio context, kept between listens (suspended between them, resumed at the next) and its worklet loaded once:
+ * a listen no longer makes a context — ≈ 80 ms measured — nor waits for a ScriptProcessorNode's 4 096 samples (≈ 85 ms,
+ * deprecated) before its first sound; the worklet hands on 1 024 (audit TA-22). `worklet` false: it could not load (the
+ * script processor then, as before).
+ */
+let earAudio: Promise<{ ctx: AudioContext; worklet: boolean }> | null = null;
+/** the ears using it now (the settings' ear test and F6's at once: suspended only when none is) */
+let earsLive = 0;
+function earContext(): Promise<{ ctx: AudioContext; worklet: boolean }> {
+  earAudio ??= (async () => {
+    const ctx = new AudioContext();
+    const worklet = await ctx.audioWorklet
+      ?.addModule(new URL("audio-worklet.js", location.href))
+      .then(() => true)
+      .catch(() => false);
+    return { ctx, worklet: !!worklet };
+  })();
+  return earAudio;
+}
+
 /** One turn of listening: the microphone streamed until end(); the last words come before it resolves. */
 export class DeepgramEar {
   private ws: WebSocket | null = null;
   private stream: MediaStream | null = null;
   private ctx: AudioContext | null = null;
-  private node: ScriptProcessorNode | null = null;
+  private node: AudioWorkletNode | ScriptProcessorNode | null = null;
+  private src: MediaStreamAudioSourceNode | null = null;
   private queue: Uint8Array[] = [];
   private ended = false;
   private closed: Promise<void> = Promise.resolve();
@@ -213,21 +235,19 @@ export class DeepgramEar {
         if (r.text) hooks.final(r.text);
       } else hooks.interim(r.text);
     };
-    this.ctx = new AudioContext();
-    // (made after the microphone's grant — an await: the key's gesture may be spent, the context left
-    // suspended, and nothing would be sent)
+    const ear = await earContext();
+    this.ctx = ear.ctx;
+    earsLive++;
+    // (resumed after the microphone's grant — an await: the key's gesture may be spent, the context left suspended, and
+    // nothing would be sent)
     if (this.ctx.state !== "running") await this.ctx.resume().catch(() => {});
-    // (ended meanwhile — a tap on an ear opened at the key's down, TA-22 —: the context already closed by end())
+    // (ended meanwhile — a tap on an ear opened at the key's down, TA-22 —: let go)
     if (this.ended || !this.ctx) return this.stopMic();
-    hooks.note?.(`audio ${this.ctx.state} ${this.ctx.sampleRate} Hz`);
+    hooks.note?.(`audio ${this.ctx.state} ${this.ctx.sampleRate} Hz${ear.worklet ? "" : " (script processor)"}`);
     let sent = 0;
-    const src = this.ctx.createMediaStreamSource(this.stream);
-    // (a script processor: its output left silent, its input sent on — connected to the output, or it would not run)
-    this.node = this.ctx.createScriptProcessor(4096, 1, 1);
     const rate = this.ctx.sampleRate;
-    this.node.onaudioprocess = (e) => {
+    const take = (raw: Float32Array) => {
       if (this.ended) return;
-      const raw = e.inputBuffer.getChannelData(0);
       if (hooks.level) {
         let p = 0;
         for (const v of raw) p = Math.max(p, Math.abs(v));
@@ -238,8 +258,21 @@ export class DeepgramEar {
       if (ws.readyState === WebSocket.OPEN) ws.send(b);
       else if (ws.readyState === WebSocket.CONNECTING) this.queue.push(b);
     };
-    src.connect(this.node);
-    this.node.connect(this.ctx.destination);
+    this.src = this.ctx.createMediaStreamSource(this.stream);
+    if (ear.worklet) {
+      // (the worklet's parts of 1 024: engine-worklet.ts kerr-mic)
+      const node = new AudioWorkletNode(this.ctx, "kerr-mic", { numberOfInputs: 1, numberOfOutputs: 0 });
+      node.port.onmessage = (m) => take(m.data as Float32Array);
+      this.node = node;
+      this.src.connect(node);
+      return;
+    }
+    // (no worklet: a script processor — its output left silent, its input sent on; connected to the output, or it would not run)
+    const sp = this.ctx.createScriptProcessor(4096, 1, 1);
+    sp.onaudioprocess = (e) => take(e.inputBuffer.getChannelData(0));
+    this.node = sp;
+    this.src.connect(sp);
+    sp.connect(this.ctx.destination);
   }
 
   /** The words ended: the microphone off, Deepgram's last results waited for (3 s at most). */
@@ -254,10 +287,17 @@ export class DeepgramEar {
   }
 
   private stopMic() {
+    if (this.node && "port" in this.node) this.node.port.onmessage = null;
     this.node?.disconnect();
+    this.src?.disconnect();
     for (const t of this.stream?.getTracks() ?? []) t.stop();
-    void this.ctx?.close();
+    // (the context kept for the next listen, suspended when no ear uses it: nothing runs between two)
+    if (this.ctx && --earsLive <= 0) {
+      earsLive = 0;
+      void this.ctx.suspend().catch(() => {});
+    }
     this.node = null;
+    this.src = null;
     this.stream = null;
     this.ctx = null;
   }

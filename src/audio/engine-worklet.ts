@@ -39,3 +39,32 @@ class RocketProcessor extends AudioWorkletProcessor {
 }
 
 registerProcessor("kerr-rocket", RocketProcessor);
+
+/** TARS's ear (ai/deepgram.ts): the microphone's samples handed to the page in parts of 1 024 (≈ 21 ms at 48 kHz) — the
+ *  ScriptProcessorNode it replaces (deprecated) waited for 4 096 (≈ 85 ms) before the first (audit TA-22). */
+export const MIC_PART = 1024;
+class MicProcessor extends AudioWorkletProcessor {
+  private part = new Float32Array(MIC_PART);
+  private n = 0;
+
+  process(inputs: Float32Array[][]) {
+    const ch = inputs[0]?.[0];
+    if (!ch) return true;
+    let i = 0;
+    while (i < ch.length) {
+      const k = Math.min(ch.length - i, MIC_PART - this.n);
+      this.part.set(ch.subarray(i, i + k), this.n);
+      this.n += k;
+      i += k;
+      if (this.n === MIC_PART) {
+        // (handed over, not copied: a new part for the next samples)
+        this.port.postMessage(this.part, [this.part.buffer]);
+        this.part = new Float32Array(MIC_PART);
+        this.n = 0;
+      }
+    }
+    return true;
+  }
+}
+
+registerProcessor("kerr-mic", MicProcessor);
