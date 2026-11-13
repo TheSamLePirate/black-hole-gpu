@@ -5547,7 +5547,7 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
 - Réalisé : e2e J0 phase `cityview` (deux vues, une grille de `surfaceAt`) ; runs sur Lille et Bruxelles (kerr-mini). Docs : inventaire des
   matériaux, PLAN-J3 §10, E2E-CATALOGUE.
 - Preuves : **observé** — à Lille les toits viennent de l'orthophoto ; à Bruxelles (sans orthophoto nationale) les toits des tables, bruns et
-  ternes ; aucune « boîte » parmi les points de bâtiment (22 / 55 à Lille, 11 / 29 à Bruxelles). Non vérifié : pourquoi Bruxelles n'a ses
-  bâtiments que sur une bande ; le même total de 3 920 bâtiments dans les deux villes (une borne ?).
+  ternes ; aucune « boîte » parmi les points de bâtiment (22 / 55 à Lille, 11 / 29 à Bruxelles). La bande de Bruxelles : le plafond du décor et
+  son couloir le long de la trajectoire (« les villes par trajectoire ») — 3 920 bâtiments dans les deux villes, ce plafond vraisemblablement.
 - Suite : J3-5 se jugera sur Bruxelles (ou une ville étrangère) — albédos et métal, décision de Sam.
 

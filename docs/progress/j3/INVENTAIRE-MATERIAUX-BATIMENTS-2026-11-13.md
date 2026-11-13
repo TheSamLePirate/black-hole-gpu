@@ -73,8 +73,9 @@ Phase J0 `cityview` (kerr-mini ; monde figé, données et décor chargés ; vues
 `renderer.surfaceAt`) : **Lille** (`…-j3-cityview-lille`) 22 / 55 points de bâtiment, **Bruxelles** (`…-j3-cityview-brussels`) 11 / 29, **aucune
 « boîte »** dans les deux. À Lille, les toits proches sont ceux de l'orthophoto IGN ; à **Bruxelles**, sans orthophoto nationale, la photo du sol
 est floue et les toits **bruns et ternes** des tables se voient — c'est là (l'étranger, Overture) que les albédos de J3-5 comptent. Les bâtiments
-de Bruxelles n'y sont chargés que sur une bande (non expliqué : la couverture d'Overture ou une limite du décor — les deux villes comptent
-3 920 bâtiments, une borne possible, non vérifiée).
+de Bruxelles n'y sont chargés que sur une bande : **le plafond du décor et son couloir le long de la trajectoire** (`earthScenery.stats()`
+`cutBuildings`, `corridorM` — « les villes par trajectoire », décision de Sam du 13 nov.) ; les deux villes à 3 920 bâtiments : vraisemblablement
+ce plafond atteint (sa valeur non lue).
 
 ## Ce que J3-5 en fera (proposé)
 
