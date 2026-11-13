@@ -1104,6 +1104,21 @@ test("the room through TARS (TA-17): its status, made, joined, left, beside a me
     },
     teleport: (slot: number) => calls.push(`beside ${slot}`),
     formation: (slot: number, o?: { side?: string }) => calls.push(`wing ${slot} ${o?.side ?? ""}`),
+    fleetNow: () => [
+      {
+        slot: 2,
+        name: "Brand",
+        colour: "#0f0",
+        me: false,
+        craft: "Lander",
+        where: "orbit · Moon 110 km",
+        dv: "1.2 km/s",
+        life: "O₂ 40 h",
+        fails: 1,
+        range: 2400,
+        closing: -1.5,
+      },
+    ],
   };
   const host = { settings: {}, camera: {}, tools: {}, log: () => [], net } as unknown as GameHost;
   const tool = gameTools(host).find((t) => t.name === "room")!;
@@ -1118,6 +1133,21 @@ test("the room through TARS (TA-17): its status, made, joined, left, beside a me
     { name: "Cooper", role: "pilot", you: true },
     { name: "Brand", role: "pilot", away: true },
   ]);
+  // (the fleet as its tab lists it: the spacecraft flown in the room)
+  expect(await run({ action: "fleet" })).toEqual({
+    fleet: [
+      {
+        name: "Brand",
+        craft: "Lander",
+        where: "orbit · Moon 110 km",
+        dv: "1.2 km/s",
+        life: "O₂ 40 h",
+        failures: 1,
+        rangeM: 2400,
+        closingMs: -1.5,
+      },
+    ],
+  });
   await run({ action: "beside", name: "brand" });
   await run({ action: "formation", name: "Brand", side: "left" });
   await expect(run({ action: "beside", name: "Murph" })).rejects.toThrow(/no member/i);

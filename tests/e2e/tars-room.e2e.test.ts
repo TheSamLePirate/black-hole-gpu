@@ -40,6 +40,12 @@ describe.skipIf(!E2E)("the room through TARS", () => {
     console.log(`  status ${JSON.stringify(st)}`);
     expect(st.code).toBe(code);
     expect(st.members.some((m) => m.you)).toBe(true);
+    // (the fleet, as its tab lists it: alone in the room, none but ours — left out)
+    const fleet = await app.js<{ fleet: unknown[] }>(
+      `__bh.tars.tools().find((t) => t.name === "room").run({ action: "fleet" }, new AbortController().signal)`,
+    );
+    console.log(`  fleet ${JSON.stringify(fleet)}`);
+    expect(fleet.fleet).toEqual([]);
     await run("/tool room action=leave");
     await app.waitFor(`!__bh.net.net?.room`, 10_000);
     console.log(`  room ${code} made by /tool, its status read, left`);

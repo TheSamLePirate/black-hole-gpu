@@ -252,6 +252,13 @@ export class NetPanel {
     });
   }
 
+  /** The fleet as its tab lists it — the pilots flying a spacecraft: craft, where, Δv, life, range — (TARS's room fleet, TA-17). */
+  fleetNow(): ReturnType<typeof fleetRows> {
+    const room = this.net?.room;
+    const S = this.session;
+    return room && S ? fleetRows(room.members, S.spaceTel, room.slot, S.near) : [];
+  }
+
   leave() {
     const code = this.net?.room?.code;
     this.net?.close();
