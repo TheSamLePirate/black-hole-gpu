@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-13 20:36 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-13 20:41 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous.
@@ -5771,4 +5771,12 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   pressé met le nouveau build en place, plus aucun worker en attente ; capture du bandeau.
 - Limites : vérifié avec le serveur de test, pas sur les Pages ; plusieurs onglets ouverts non essayés (le bouton d'un onglet recharge les
   autres par `controllerchange`, supposé).
+
+## 2026-11-13T20:41Z — Le coût de la sonde mise à l'échelle ; `app.settled()` tenu 300 ms
+
+- Réalisé : mesure des passes de la sonde après le correctif (J0, `base,base`) ; `tests/e2e/lib/app.ts` `settled()` — la file des
+  compilations tenue vide 300 ms (jusqu'à cinq tours) : entre deux compilations la file paraissait vide un instant, une vue de J3-5 avait
+  été prise pendant les disques du ciel. Docs : PROBLEMES, GRAPHICS-PIPELINE D2, E2E.md.
+- Preuves : **mesuré** (kerr-mini, `…-probe-scale-cost`) : passes de la sonde inchangées au bruit ; `settled()` vérifié sur la phase `framing`
+  (`…-settled-check`, passée, aucun « looked at anyway »). Chaque `settled()` coûte 0,3 s de plus.
 

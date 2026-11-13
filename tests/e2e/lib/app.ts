@@ -620,11 +620,16 @@ export class App {
     // the scenery, the clouds… — tracerSettled is the scene's kernel alone: a shot then had the pill and a part of the image
     // missing (the observatory's wormhole black, 2 Nov 2026); on their progress, what still compiles said)
     if (ok) {
-      await this.waitProgress(
-        "(() => { const r = __bh.renderer; return !r.compilesPending && !(r.compilingNow ?? []).length; })()",
-        "the kernels beside it",
-        { compileStallMs: Math.max(timeoutMs, 60_000) },
-      ).catch((e) => console.error(`e2e: ${e instanceof Error ? e.message : e} — looked at anyway`));
+      // (held 300 ms clear — between two compiles in a row the queue reads empty for an instant: a shot of 13 Nov 2026 took the sky's
+      // discs compiling, the trees missing, right after settled() — up to five rounds)
+      const idle = "(() => { const r = __bh.renderer; return !r.compilesPending && !(r.compilingNow ?? []).length; })()";
+      for (let round = 0; round < 5; round++) {
+        await this.waitProgress(idle, "the kernels beside it", { compileStallMs: Math.max(timeoutMs, 60_000) }).catch((e) =>
+          console.error(`e2e: ${e instanceof Error ? e.message : e} — looked at anyway`),
+        );
+        const still = await this.js<boolean>(`new Promise((r) => setTimeout(() => r(${idle}), 300))`).catch(() => true);
+        if (still) break;
+      }
     }
     await this.js(
       "new Promise((r) => { let n = 0; const f = () => (++n >= 3 ? r(1) : requestAnimationFrame(f)); requestAnimationFrame(f); })",

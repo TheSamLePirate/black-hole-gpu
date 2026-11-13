@@ -75,7 +75,7 @@ cadence mise au contrat actuel (1 sous le matériau) ; sa partie « repli » mis
   `seaSkyRadiance` par `apScale()`. **Vérifié** (kerr-mini) : la couche du ciel relue est une copie lisse de la sonde, à ~5·10⁻² au lieu de
   ~2·10⁻⁷ (`…-probedump4`) ; à 19:40 les taches ont disparu et la coque de l'appareil reflète le ciel (elle était en silhouette noire :
   ses reflets lisaient la même sonde) (`…-seadusk12`) ; de jour, les vues et l'exposition identiques (14,645 EV, `…-j3-framing-after` contre
-  `…-j3-framing`). Le marcheur : `character-aaa` « the light on foot » (Lune, Terre de jour et de nuit, Mars) passe après le correctif (~20:36 UTC, 29 vérifications) — ses reflets non jugés à part. **Non mesuré** : le coût (une multiplication par texel). Le levier de
+  `…-j3-framing`). Le marcheur : `character-aaa` « the light on foot » (Lune, Terre de jour et de nuit, Mars) passe après le correctif (~20:36 UTC, 29 vérifications) — ses reflets non jugés à part. **Coût** (~20:41 UTC, J0, kerr-mini, `…-probe-scale-cost`) : les passes de la sonde inchangées au bruit (trace 0,454–0,456 ms, GGX 0,166, SH 0,157–0,159, mips 0,038–0,041 contre 0,448–0,453 / 0,166 / 0,155 / 0,037–0,039). Le levier de
   mesure `TUNE_SEA_DBG` retiré (~20:31 UTC), la phase `seadusk` gardée (9 cas) comme garde.
 
 ## ~~Le premier `renderer.tune` d'une session fige la sonde de lumière de l'appareil~~ — réglé le 13 novembre 2026 (~17:57 UTC) : la sonde de l'appareil gelée pendant la compilation de son noyau à chaque changement de clé

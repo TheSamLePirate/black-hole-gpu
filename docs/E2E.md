@@ -353,7 +353,8 @@ returns; the Monitor says so (*page held*).
     compiling beside it — the ground's rays with the scenery, the clouds, the surfaces: `renderer.compilingNow` (the
     pill "Compiling the shaders · …") and `renderer.compilesPending` — draw part of the image or slow every frame while
     they compile. `app.settled()` (and so `app.shot()`) waits for both (`tracerSettled`, then `compilingNow` empty and
-    `compilesPending` 0, 60 s at most, what still compiles printed). After an action that changes the kernel (a scene, a
+    `compilesPending` 0, 60 s at most, what still compiles printed — **held 300 ms clear**, up to five rounds: between two
+    compiles in a row the queue reads empty for an instant, a shot of 13 Nov 2026 caught the sky's discs compiling). After an action that changes the kernel (a scene, a
     tool, a setting), call `await app.settled()` before reading a figure — not a fixed sleep: the observatory's wormhole
     was measured black with the pill still up (2 Nov 2026).
 13. **Shoot each step that matters, look at the shots, show them.** A pass/fail hides what the image shows (Monument
