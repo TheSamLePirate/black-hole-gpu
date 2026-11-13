@@ -182,6 +182,11 @@ Aucun coût de J3 n'est mesuré ; aucun gain n'est promis.
   sonde au coucher jusqu'à 4,8 % (le ciel change vite pendant qu'elle se dessine par parties). **Pas de changement fait** : corriger la fuite
   des harmoniques (un fenêtrage des bandes, ou l'éclairement exact haut/bas de la sonde à côté des harmoniques) change l'aspect de tout
   l'appareil — une décision d'image à présenter avec des vues, pas un réglage.
+  **Le fenêtrage, mesuré et écarté** (~18:45 UTC, run `…-j3-keysky-window`) : les texels de la sonde projetés sur le CPU (contrôle : la
+  projection sans fenêtre = celle du GPU, 1,00 / 0,99), l'éclairement vers le haut sans fenêtre / Hann / Lanczos rapporté à l'exact :
+  12:00 1,10 / 1,02 / 1,01 ; 15:30 1,08 / 1,14 / 1,11 ; 18:30 1,13 / **1,47** / 1,40 ; 19:05 1,06 / 1,15 / 1,14. **Le fenêtrage aggrave l'écart dès
+  que le Soleil baisse** (il tire vers la moyenne de toute la sphère, la lueur de l'horizon comprise) : ce n'est pas le correctif. Restent :
+  plus de bandes (ordre 3, 16 coefficients) ou l'éclairement exact haut / bas de la sonde à côté des harmoniques — à mesurer de même.
   **Reste de J3-1** : l'état lumineux unique (le tampon par image de C-J3-1 : directions, éclairement direct, harmoniques du ciel, nuages),
   ses lecteurs (sol, appareil, décor, eau) branchés dessus ; la sonde de cohérence appareil / sol.
 - **J3-2, premier pas — l'appareil à travers l'air de sa distance** (13 nov., ~17:12 UTC). La coque (`ship.wgsl` `fs`) et les traînées

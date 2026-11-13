@@ -9744,7 +9744,14 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
   /** (PLAN-J3 J3-1) The sky's light on a level surface at the camera from the craft's probe, three ways: `exact` its texels integrated
    *  over the hemisphere above (cos θ dω — the probe whole read back, 512 KB), `sh` its harmonics' (as the craft reads it), `ground` the
    *  ground's clear sky (skyIrradiance); luminances. null off the Earth or before the probe wrote its up */
-  async readShipSky(): Promise<{ exact: number; sh: number; ground: number } | null> {
+  async readShipSky(): Promise<{
+    exact: number;
+    sh: number;
+    ground: number;
+    shCpu: number;
+    shHann: number;
+    shLanczos: number;
+  } | null> {
     const n = ENV_W * ENV_H;
     const size = (n + 7) * 16;
     const st = this.device.createBuffer({ size, usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ });
@@ -9763,17 +9770,55 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
     let e = 0;
     const dth = Math.PI / ENV_H;
     const dph = (2 * Math.PI) / ENV_W;
+    // (and the same texels projected on the nine harmonics — the shader's basis, trace.wgsl shIrradiance —: their irradiance at up plain,
+    // with a Hann window — 0.75, 0.25 on the bands 1, 2 — and a Lanczos one — 0.827, 0.413 —, the ringing the windows take off; plain, it
+    // checks this projection against the GPU's harmonics (sh))
+    const basis = (d: number[]) => {
+      const [x, y, z] = d as [number, number, number];
+      return [
+        0.282095,
+        0.488603 * y,
+        0.488603 * z,
+        0.488603 * x,
+        1.092548 * x * y,
+        1.092548 * y * z,
+        0.315392 * (3 * z * z - 1),
+        1.092548 * x * z,
+        0.546274 * (x * x - y * y),
+      ];
+    };
+    const coef = new Float64Array(9);
     for (let y = 0; y < ENV_H; y++) {
       const th = (y + 0.5) * dth;
       const st2 = Math.sin(th);
       const ct = Math.cos(th);
       for (let x = 0; x < ENV_W; x++) {
         const ph = ((x + 0.5) / ENV_W - 0.5) * 2 * Math.PI;
-        const c = st2 * Math.sin(ph) * up[0]! + ct * up[1]! + st2 * Math.cos(ph) * up[2]!;
-        if (c > 0) e += lum((y * ENV_W + x) * 4) * c * st2;
+        const d = [st2 * Math.sin(ph), ct, st2 * Math.cos(ph)];
+        const L = lum((y * ENV_W + x) * 4);
+        const c = d[0]! * up[0]! + d[1]! * up[1]! + d[2]! * up[2]!;
+        if (c > 0) e += L * c * st2;
+        const b = basis(d);
+        for (let k = 0; k < 9; k++) coef[k] = coef[k]! + L * b[k]! * st2;
       }
     }
-    return { exact: e * dth * dph, sh: lum((n + 5) * 4), ground: lum((n + 4) * 4) };
+    for (let k = 0; k < 9; k++) coef[k] = coef[k]! * dth * dph;
+    const A = [Math.PI, 2.094395, 2.094395, 2.094395, 0.785398, 0.785398, 0.785398, 0.785398, 0.785398];
+    const band = [0, 1, 1, 1, 2, 2, 2, 2, 2];
+    const bu = basis(up);
+    const irr = (w1: number, w2: number) =>
+      Math.max(
+        0,
+        coef.reduce((t, c, k) => t + A[k]! * [1, w1, w2][band[k]!]! * c * bu[k]!, 0),
+      );
+    return {
+      exact: e * dth * dph,
+      sh: lum((n + 5) * 4),
+      ground: lum((n + 4) * 4),
+      shCpu: irr(1, 1),
+      shHann: irr(0.75, 0.25),
+      shLanczos: irr(0.827, 0.413),
+    };
   }
 
   /** Exposure in use [EV]: the setting, plus the meter's with auto exposure. */

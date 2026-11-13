@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-13 18:41 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-13 18:45 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous.
@@ -5568,4 +5568,12 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   invalide écarté (compilation en cours). La lecture précédente (« l'essai absorbé, ≈ 1 % ») corrigée : chacun des deux leviers rend environ
   la moitié de l'effet sur les toits.
 - Suite : décision de Sam ; les leviers retirés ensuite.
+
+## 2026-11-13T18:45Z — J3-1 : le fenêtrage des harmoniques de la sonde, mesuré et écarté
+
+- Réalisé : `renderer.readShipSky()` projette aussi les texels de la sonde sur les neuf harmoniques (CPU) — sans fenêtre, Hann, Lanczos ;
+  la phase `keysky` les rapporte à l'intégrale exacte. Docs : PLAN-J3 §10, BH-API.
+- Preuves : **mesuré** (kerr-mini, `…-j3-keysky-window`) : contrôle — la projection sans fenêtre égale celle du GPU (1,00 / 0,99) ; rapport à
+  l'exact sans fenêtre 1,06–1,13, Hann 1,02–1,47, Lanczos 1,01–1,40 — le fenêtrage aggrave l'écart au Soleil bas. Aucun rendu changé.
+- Suite : mesurer de même l'ordre 3 ou l'éclairement exact haut / bas à côté des harmoniques ; puis présenter à Sam.
 
