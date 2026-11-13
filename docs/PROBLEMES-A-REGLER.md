@@ -598,6 +598,10 @@ termes à un nœud fautif (43,0666 N, 6,12883 E, niveau 1).
   l'indicateur des compilations perdait le libellé d'un noyau quand un autre du même nom finissait (35 s de compilation de Jupiter affichées
   « rien ») — compté maintenant. **Reste** : ~47 s à froid après un voyage de 20 s (le noyau principal partage le GPU avec celui d'un monde sans
   air croisé au départ, 36 s pour rien) ; la spécialisation du noyau des géantes (ce que Mars apporte à leur clé commune) non essayée.
+  **Lu dans le code** (non vérifié en vol) : le corps « proche » est le plus proche en rayons à moins de 300 de ses rayons (`local-patch.ts`
+  `LOCAL_RANGE`) — la Lune jusqu'à ~520 000 km d'elle : en quittant la Terre la caméra passe dans sa portée, sa clé (NEAR_KIND 3) compile
+  pendant le voyage, en concurrence avec celle du but (`main` de Jupiter 42,6 s seul, 47,3 s à côté). Gain d'un correctif ≈ 5 s à l'arrivée
+  (règle 1 : petit) ; il toucherait à la portée du corps proche en transit — pas fait.
 
 ## ~~Le ciel de nuit de la sonde de lumière du Ranger, ~40 fois son sol~~ — réglé le 13 novembre 2026 (~21:41 UTC) : la borne provisoire retirée
 
