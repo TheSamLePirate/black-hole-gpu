@@ -7592,6 +7592,10 @@ async function main() {
       onSettingsChange(keys);
       refreshGui();
     },
+    setSettings: (values) => {
+      panel.setValues(values);
+      refreshGui();
+    },
     key: (a, arg) => keyActions[a]?.(new KeyboardEvent("keydown"), arg),
     applyScene: (name) => panel.applyScene(name),
     screenshot: () => savePNG(),

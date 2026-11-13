@@ -853,3 +853,43 @@ test("the aircraft's autopilot and the A320's flaps: TARS through the crew conso
   await tools.find((t) => t.name === "controls")!.run({ flaps: 0.25 }, signal);
   expect(calls.at(-1)).toBe("flaps 0.25");
 });
+
+test("his settings go the Lab's way — set_settings, sky, interface: one setSettings each, nothing written beside it (TA-09)", async () => {
+  const { gameTools } = await import("../src/ai/game-tools");
+  const { defaultSettings } = await import("../src/settings");
+  const settings = defaultSettings();
+  const sets: Record<string, unknown>[] = [];
+  const host = {
+    settings,
+    camera: {},
+    tools: {},
+    setSettings: (v: Record<string, unknown>) => sets.push(v),
+    changed: () => {
+      throw new Error("written beside the Lab");
+    },
+    close: () => {},
+    hudDensity: () => {},
+    skyGoTo: () => {},
+    log: () => [],
+  } as unknown as GameHost;
+  const tools = gameTools(host);
+  const run = (name: string, a: Record<string, unknown>) => tools.find((t) => t.name === name)!.run(a, new AbortController().signal);
+  const wind0 = settings.wind;
+  const r = (await run("set_settings", {
+    changes: [
+      { key: "wind", value: "3" },
+      { key: "music", value: "off" },
+      { key: "nope", value: "1" },
+    ],
+  })) as {
+    set: Record<string, unknown>;
+    errors?: string[];
+  };
+  expect(r.set).toEqual({ wind: 3, music: false });
+  expect(r.errors?.length).toBe(1);
+  await run("sky", { lines: true });
+  await run("interface", { hudKind: "approach" });
+  expect(sets).toEqual([{ wind: 3, music: false }, { skyLines: true, skyNames: true }, { hudKind: "approach" }]);
+  // (the settings themselves left to the Lab: its history takes the before from them)
+  expect(settings.wind).toBe(wind0);
+});

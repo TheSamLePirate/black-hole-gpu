@@ -109,6 +109,14 @@ export class SettingsPanel {
   setValue(key: Key, value: unknown) {
     this.set(key, value);
   }
+  /** Values set from outside together (TARS's set_settings, sky, interface): one step of the history, the preset shown,
+   *  their effects — as the player's own (audit 2026-11-10, TA-09). */
+  setValues(values: Partial<Record<Key, unknown>>) {
+    this.begin();
+    for (const [k, v] of Object.entries(values) as [Key, unknown][]) this.set(k, v, false);
+    this.commit();
+    this.refresh();
+  }
 
   /** A quality preset applied (its rays, its samples, its render scale) — the player's screen's too. */
   setQuality(q: Quality) {

@@ -58,7 +58,7 @@ ouverts, sous 1 ms) ; J3 au stade du plan.**
 | Audit vagues 3–4 (1feb2f7f) | 3.1 réseau RD0 + RD1 | **fait** : la frontière d'entrée (`src/net/inbound.ts`) ; un événement mal formé figeait l'image (163 → 0), plus maintenant — e2e `net-inbound` 6/6, net-battle/coop/crew/board verts |
 | Audit vagues 3–4 (1feb2f7f) | 3.2 réseau RD2 | **fait** : le serveur se défend (salles par adresse, débit, mots de passe salés et freinés, identité non publiée, rôle gardé, expiration) — six défauts vus avant, 0/6 → 6/6 |
 | Audit vagues 3–4 (1feb2f7f) | 3.4–3.5 vol | **fait** : U/F7 des avions (ILS, refus dit, manette gardée), Maj/Alt modificateur ou manette, LAND = F7 — le cours revolé 7/7 et 9/9 |
-| Audit vagues 3–4 (1feb2f7f) | 3.6 TARS | **fait** : tour coupé, `saves delete` confirmé, pannes dites, faux ordres hors ligne ; restes TA-06 (réveil borné), TA-12 (troncature redemandée), TA-14 (relais Deepgram borné), TA-15 (un filet « Before TARS » par tour, son échec dit), TA-07 (résumés de mémoire un à la fois), TA-16 (réveils muets hors mémoire, les autres en une ligne) |
+| Audit vagues 3–4 (1feb2f7f) | 3.6 TARS | **fait** : tour coupé, `saves delete` confirmé, pannes dites, faux ordres hors ligne ; restes TA-06 (réveil borné), TA-12 (troncature redemandée), TA-14 (relais Deepgram borné), TA-15 (un filet « Before TARS » par tour, son échec dit), TA-07 (résumés de mémoire un à la fois), TA-16 (réveils muets hors mémoire, les autres en une ligne), TA-09 (ses réglages dans l'historique du Labo) |
 | Audit vagues 3–4 (1feb2f7f) | 3.7 TARS (outils AP avions/A320) | **fait** : `jet_autopilot` par les actions de la console, volets au levier (CONF 1), l'AP de l'A320 réparé dans `apSet` |
 | Audit vagues 3–4 (1feb2f7f) | 3.10 e2e qui ne vérifient rien | **fait** : `waitOptional` (93 attentes converties), 14 mesures déclarées, garde `e2e-honesty` |
 | Audit vagues 3–4 (1feb2f7f) | 4.2 la politique de temps | **fait** : vol tenu pendant la reprise GPU, cadence vraie, horloge du vol + garde ; l'onglet masqué (choix de Sam) : solo en pause dite, salle sans arrêt (l'absent ne la bloque plus, les autres avertis, remis à l'heure au retour), sauvé en partant, TARS sans réveil ; le ralentissement sous 10 images/s dit — e2e `hidden-tab` 2/2, `fps-truth` 2/2 |
@@ -5234,4 +5234,17 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
 - Limites : les causes de l'écart au coucher ne sont pas séparées (hypothèses : les harmoniques d'ordre 2 mêlent la lueur de l'horizon et le
   sol éclairé sous l'horizon abaissé ; le ciel clair du sol sans renvoi du sol) ; rien de l'image ne change dans ce lot.
 - Suite : séparer ces parts ; puis le contrat C-J3-1 sur les tables existantes.
+
+## 2026-11-13T17:20Z — Audit TA-09 : un réglage changé par TARS passe par le Labo — son Annuler le reprend
+
+- Contribution : §19 (TARS par les mêmes actions métier que les autres entrées) ; audit 2026-11-10, TA-09.
+- Réalisé : `ui/panel.ts` `setValues` (une étape d'historique, le préréglage affiché, les effets — `set` du panneau) ; `GameHost.setSettings`
+  (`main.ts` : `panel.setValues` puis `refreshGui`) ; `set_settings`, `sky` et `interface` (`ai/game-tools.ts`) n'écrivent plus `settings`
+  eux-mêmes. TARS.md, E2E-CATALOGUE.
+- Preuves : **reproduit avant** par e2e (`tars-settings-panel`, ce Mac, fenêtre visible) : `/set wind 3` tapé dans la console, l'Annuler du
+  Labo restait grisé, le vent non rendu ; **après** 2/2 : Annuler actif, le vent revenu à 1 (toast « Annuler : Vent »). Le préréglage de
+  qualité affiché passait déjà à « Personnalisé » avant : pas un défaut (l'audit le supposait), gardé en garde. Unitaire `tars-tools` « TA-09 »
+  (un `setSettings` par appel, rien écrit à côté) ; tests TARS + crew-actions 50/0 ; e2e-honesty, flight-clock ; tsc, biome.
+- Limites : les autres écritures de `settings` par TARS (`flightMode`, `vessel`, `telescopeSpot`) restent hors de l'historique du Labo — ce
+  sont des états du jeu, pas des réglages qu'un Annuler du Labo devrait reprendre.
 

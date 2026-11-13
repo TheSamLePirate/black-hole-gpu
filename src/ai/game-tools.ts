@@ -121,6 +121,9 @@ export interface GameHost {
   open(panel: Panel): void;
   close(): void;
   changed(keys: (keyof Settings)[]): void;
+  /** settings set the Lab's way (audit TA-09): one step of its history — its Undo takes them back —, the quality preset shown,
+   *  their effects; what a player's change does (SettingsPanel.setValues) */
+  setSettings(values: Partial<Record<keyof Settings, unknown>>): void;
   key(a: KeyAction, arg?: string): void;
   applyScene(name: string): void;
   screenshot(): Promise<unknown>;
@@ -1528,21 +1531,17 @@ export function gameTools(h: GameHost): Tool[] {
         gridHorizontal: { type: "boolean" },
       },
       run: act((a) => {
-        const keys: (keyof Settings)[] = [];
+        const values: Partial<Record<keyof Settings, unknown>> = {};
         const set = (k: "skyLines" | "starNames" | "gridEquatorial" | "gridHorizontal", v: unknown) => {
           if (v === undefined) return;
-          settings[k] = v as boolean;
-          keys.push(k);
-          if (k === "skyLines") {
-            settings.skyNames = v as boolean;
-            keys.push("skyNames");
-          }
+          values[k] = v as boolean;
+          if (k === "skyLines") values.skyNames = v as boolean;
         };
         set("skyLines", a.lines);
         set("starNames", a.starNames);
         set("gridEquatorial", a.gridEquatorial);
         set("gridHorizontal", a.gridHorizontal);
-        if (keys.length) h.changed(keys);
+        if (Object.keys(values).length) h.setSettings(values);
         if (a.goTo !== undefined) {
           const n = fold(String(a.goTo));
           const c = CONSTELLATIONS.findIndex((k) => fold(k.name) === n || fold(k.abbr) === n || fold(FRENCH.get(k.name) ?? "") === n);
@@ -1584,9 +1583,10 @@ export function gameTools(h: GameHost): Tool[] {
         }
         if (a.hudDensity !== undefined) h.hudDensity(a.hudDensity as 0 | 1 | 2);
         if (a.hudKind !== undefined || a.hudViews !== undefined) {
-          if (a.hudKind !== undefined) settings.hudKind = a.hudKind as Settings["hudKind"];
-          if (a.hudViews !== undefined) settings.hudViews = a.hudViews as Settings["hudViews"];
-          h.changed(["hudKind", "hudViews"]);
+          h.setSettings({
+            ...(a.hudKind !== undefined ? { hudKind: a.hudKind } : {}),
+            ...(a.hudViews !== undefined ? { hudViews: a.hudViews } : {}),
+          });
         }
         if (a.screenshot) await h.screenshot();
         return "done";
@@ -2614,18 +2614,19 @@ export function gameTools(h: GameHost): Tool[] {
         const done: Record<string, unknown> = {};
         const errors: string[] = [];
         if (a.quality !== undefined) done.quality = tools.quality(a.quality as Settings["quality"]);
-        const keys: (keyof Settings)[] = [];
+        const values: Partial<Record<keyof Settings, unknown>> = {};
         for (const c of (a.changes as { key: string; value: unknown }[]) ?? []) {
-          const r = checkSetting(c.key, c.value, settings);
+          const r = checkSetting(c.key, c.value, { ...settings, ...values } as Settings);
           if (!r.ok) {
             errors.push(r.error);
             continue;
           }
-          (settings as unknown as Record<string, unknown>)[c.key] = r.value;
-          keys.push(c.key as keyof Settings);
+          values[c.key as keyof Settings] = r.value;
           done[c.key] = r.value;
         }
-        if (keys.length) h.changed(keys);
+        // (the Lab's way: one step of its history, its Undo takes them back — before 13 Nov 2026 written here and told, the
+        // Lab's history never saw them; audit TA-09)
+        if (Object.keys(values).length) h.setSettings(values);
         return errors.length ? { set: done, errors } : { set: done };
       }),
     },
