@@ -5723,3 +5723,12 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
 - Limites : `tars-eval` (modèle réel, payant) non relancé ; un groupe chargé reste chargé (la session peut retrouver les 72) ; le gain de
   latence n'est mesuré que sur le premier jeton.
 
+## 2026-11-14T03:30Z — Contrôle : l'évaluation de TARS sur le vrai modèle après les lots du jour (TA-04, TA-07…TA-26)
+
+- Pourquoi : les lots TARS du 13 nov. (flux de la réponse, cache, outils par contexte, gardes du dehors et des réveils, filet par tour, réglages
+  par le Labo, nouveaux outils) changent ce que le modèle reçoit ; seule une évaluation réelle juge le résultat sur l'état du jeu.
+- Mesuré : `tars-eval` (TARS_LIVE=1, GLM-5.3 Flash, ce Mac, fenêtre visible, sans les vols longs) — 6/6 jugés par l'état du jeu : posé sur la
+  Lune (91 s, 0,0026 $), amarrage à l'ISS (208 s, 0,0043 $), interface (qualité « jeu » et constellations), téléportation vers Jupiter puis
+  « annule » (retour avant la téléportation — le filet par tour), plan proposé (transfert vers la Lune, ×50) ; ≈ 0,015 $ en tout.
+- Limites : les vols longs (TARS_LONG : décollage vers l'orbite, entrée vers Edwards) non relancés ; un seul modèle.
+
