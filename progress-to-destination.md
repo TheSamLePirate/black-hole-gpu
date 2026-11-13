@@ -5045,3 +5045,18 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
 - **Complément (~15:05 UTC)** : l'appareil n'entre pas dans le mètre d'exposition — de trois quarts, dessiné ou caché, 14,638 contre 14,639 EV
   au profil Caméra (kerr-mini) ; la mesure par cadrage reproduite. Le point 3 de l'inventaire tranché.
 
+## 2026-11-13T15:15Z — `quals` (la mer formée) dans la suite complète : ce qui est établi, pas encore la cause
+
+- **Toujours en échec dans la suite complète exécutée** (ici, `tests/*.test.ts`, 2 230 / 1, 9,5 min ; la même séquence que la session du
+  rendu : « No grade 3-wire, Fair 1-wire, Fair 1-wire, Cut 1-wire — 2,00 ») après le chargement de DE440 dans `quals` (5e97bd60) et le
+  vidage de `fleet.free` (session du rendu, a514b897) : un état écrit **en exécutant** des tests, pas seulement en chargeant leurs fichiers.
+- **Relevé temporaire (non commité) au début de la mer formée, suite contre seule :** préréglages, défauts, `VESSELS`, `GEARS`, flotte
+  (complète), Lune, relief : identiques ; diffèrent l'horloge du vol (valeur), la version de l'éphéméride (4 contre 1) et **la pose de
+  l'avion au départ de la qualification** (assiette −8,80° contre −9,27°, cap −1,34° contre −2,82°) — le vol d'équilibrage de `cruise()`
+  diverge déjà avant la qualification ; la suite amplifie l'écart en notes.
+- **Écartés par l'essai :** la valeur de l'horloge du vol ; les éphémérides de la suite (DE440 ×2, JUP365) ; le cache de sol du GCAS ; les
+  globaux de navigateur posés par `cockpit-pages`, `menu`, `pcd` ; les 14 fichiers qui changent un état global (sol, gravité, fond marin,
+  pistes, réfraction, ancres…) exécutés ensemble avant `quals` ; les neuf fichiers liés au porte-avions.
+- **Suite :** une dichotomie qui exécute les tests dans l'ordre de bun (plusieurs suites complètes : ~9,5 min ici, ~2 min par moitié sur
+  kerr-mini) ; et, sur le fond, la mer formée reste au bord de l'échec même seule (un passage « No grade ») : la tenue du pilote automatique
+  à l'appontage par mer de 4,5 m est fragile à un écart d'un demi-degré au départ.
