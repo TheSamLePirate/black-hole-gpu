@@ -444,9 +444,22 @@ export class NetSession {
       this.roomDelay = null;
       this.roomDelayCode = null;
       this.crewAboard.clear();
+      // (what we kept of each player by his slot: let go with the room — kept, a slot of the next room was « handed »,
+      // its craft never drawn; audit NET-13)
+      this.tel.clear();
+      this.handed.clear();
+      this.spaceTel.clear();
+      this.orderAnswers.clear();
+      this.slotDevice.clear();
+      this.rosterSeen = null;
       return;
     }
     this.roomDelayStep();
+    // (on a roster changed only: nothing made per frame)
+    if (net.room.members !== this.rosterSeen) {
+      this.rosterSeen = net.room.members;
+      this.letGoOfLeavers(net.room.members, net.room.slot);
+    }
     const c = this.d.camera;
     const now = performance.now() / 1000;
     // (our co-op role's progress told to the room — N5)
@@ -1697,6 +1710,27 @@ export class NetSession {
 
   /** boarded from our craft docked to his (N3): getting off is back through the hatch, whenever */
   private spaceBoard = false;
+  /** whose device each slot was, as last seen (a slot taken by another device: what we kept of the one before let go) */
+  private slotDevice = new Map<number, string>();
+  /** the roster last looked at (its array: a new one at each change) */
+  private rosterSeen: unknown = null;
+
+  /** A player gone, or his slot another's now: what we kept of him by his slot let go — his telemetry, his craft handed
+   *  over, his spacecraft's state, his answer to an order (audit NET-13: never let go before 13 Nov 2026). */
+  private letGoOfLeavers(members: readonly { slot: number; device: string }[], mine: number) {
+    const here = new Map(members.map((m) => [m.slot, m.device]));
+    const drop = (slot: number) => {
+      this.tel.delete(slot);
+      this.handed.delete(slot);
+      if (slot !== mine) this.spaceTel.delete(slot);
+      this.orderAnswers.delete(slot);
+    };
+    for (const [slot, device] of this.slotDevice) if (here.get(slot) !== device) drop(slot);
+    for (const slot of [...this.tel.keys(), ...this.handed, ...this.spaceTel.keys(), ...this.orderAnswers.keys()])
+      if (slot !== mine && !here.has(slot)) drop(slot);
+    this.slotDevice = here;
+  }
+
   /** those whose craft was handed over (N3): their last samples no craft — not drawn, not docked to, not struck */
   handed = new Set<number>();
   /** riding in the craft we handed over (N3): ours is his now — no craft of our own to get back to */

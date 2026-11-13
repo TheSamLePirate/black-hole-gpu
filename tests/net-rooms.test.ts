@@ -361,3 +361,47 @@ describe("a reconnection refused (NET-12)", () => {
     }
   }, 20_000);
 });
+
+describe("slots kept across a common cut (NET-13)", () => {
+  test("a restart, the second pilot back first: each takes his own slot back, not the first free", async () => {
+    const db = `/tmp/kerr-rooms-net13-${process.pid}.sqlite`;
+    let r = createRooms({ db, build: "test" });
+    let srv = Bun.serve({ port: 0, fetch: (req, s) => r.upgrade(req, s as never), websocket: r.websocket });
+    const port = srv.port;
+    const u = `ws://127.0.0.1:${port}/`;
+    const mk = (device: string, name: string) => new NetClient({ url: u, build: "test", id: { device, name, colour: "#ff8800" } });
+    const a = mk("net13-a", "Ana");
+    const b = mk("net13-b", "Ben");
+    try {
+      const { code } = await a.create("Slots", 0);
+      await b.join(code);
+      expect([a.room?.slot, b.room?.slot]).toEqual([0, 1]);
+      a.close();
+      b.close();
+      await Bun.sleep(50);
+      r.close();
+      srv.stop(true);
+      r = createRooms({ db, build: "test" });
+      srv = Bun.serve({ port, fetch: (req, s) => r.upgrade(req, s as never), websocket: r.websocket });
+      // (the same devices, in the other order)
+      const b2 = mk("net13-b", "Ben");
+      const a2 = mk("net13-a", "Ana");
+      await b2.join(code);
+      await a2.join(code);
+      console.log(`  after the restart: Ben ${b2.room?.slot}, Ana ${a2.room?.slot}`);
+      expect(b2.room?.slot).toBe(1);
+      expect(a2.room?.slot).toBe(0);
+      // (a newcomer takes a slot no one recently held)
+      const c = mk("net13-c", "Cy");
+      await c.join(code);
+      expect(c.room?.slot).toBe(2);
+      a2.close();
+      b2.close();
+      c.close();
+    } finally {
+      r.close();
+      srv.stop(true);
+      await Bun.$`rm -f ${db} ${db}-wal ${db}-shm`.nothrow();
+    }
+  }, 20_000);
+});

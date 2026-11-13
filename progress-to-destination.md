@@ -5858,3 +5858,18 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
 - Preuves : **mesuré** : la sonde de nuit ~10⁻¹⁰–10⁻¹¹ (f32) — l'ancien stockage brut en demi-flottants la rendait nulle à la mer ; les 4·10⁻⁶ du
   6 nov. non reproduits. Suite : revoir la nuit à Tromsø pour la borne provisoire de `seaShade`.
 
+## 2026-11-14T07:20Z — Audit NET-13 (RD4) : les places tiennent après une coupure commune ; l'état d'un joueur part avec lui
+
+- Contribution : §19 (le jeu à plusieurs fiable : identités, scores, rôles) ; audit 2026-11-10, NET-13 (PLAN-RESEAU-DURCISSEMENT RD4).
+- Réalisé : `server/rooms.ts` — le monde de la salle (persisté) retient la place de chaque appareil ; à son retour elle lui est rendue si
+  libre, et une place tenue par un autre appareil vu depuis moins de 10 min est évitée par les nouveaux venus (`SLOT_HELD_MS`) ;
+  `ui/netsession.ts` — `letGoOfLeavers` : à chaque changement de la liste des membres, ce qui est gardé par place (télémétrie, appareil cédé,
+  état de vaisseau, réponse à un ordre) lâché pour une place partie ou passée à un autre appareil ; tout lâché en quittant la salle.
+  NETWORK.md/.fr (et le paragraphe français coupé par l'ajout du NET-05, réparé), E2E-CATALOGUE.
+- Preuves : **reproduit avant** — unitaire `net-rooms` « NET-13 » (redémarrage, Ben revenu le premier : places échangées, Ben 0 / Ana 1) et e2e
+  `net-slot-state` (la place 1 « cédée » dans la première salle le restait dans la seconde, l'appareil de Cy jamais dessiné) ; **après** :
+  Ben 1 / Ana 0, un nouveau venu en 2 ; états par place vides dans la seconde salle ; tests réseau 13/0 ; e2e `net-slot-state`, `net-board`,
+  `net-fleet` 6/0.
+- Limites : l'état servi à l'arrivée et à la reconnexion (amarrages, passagers, scores, rôles co-op, match — le cœur de RD4) reste à faire ;
+  les droits hérités d'un écran d'équipage (NET-13, dernière phrase) dépendent de RD3 (décision de Sam).
+

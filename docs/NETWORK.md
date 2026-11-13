@@ -371,6 +371,11 @@ messages behind the wormhole.
   twice a second, the room's roster and links rebuilt each time — 12 rosters in 3 s, `tests/net-rooms.test.ts`).
   Each defect was seen first (`tests/net-server-defence.test.ts`, before the fix: 60 rooms from one address, 3 000
   events passed on at once, a member's place taken by his published device, a fifth pilot, no slowdown, no expiry).
+  A slot stays its device's across a common cut (a server restarted): the room's world keeps each one's slot, given back at
+  his return and held ten minutes; before 13 Nov 2026 (audit NET-13) each took the first free in his order of arrival — the
+  slots, which carry scores, teams, formations and roles, were swapped. What the page keeps of a player by his slot (his
+  telemetry, his craft handed over, his spacecraft's state, his answer to an order) goes with him, and with the room (before:
+  never — a slot « handed » stayed so in the next room, its craft never drawn).
 - **The clock** (`src/net/clock.ts`): NTP's exchange, the offset of the fastest eighth of the last 64
   exchanges; within a millisecond between two pages on one machine.
 - **The others** (`src/net/remote.ts`): shown a little in the past — late enough for the next sample —, a

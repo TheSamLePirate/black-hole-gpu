@@ -52,6 +52,9 @@ export interface Peer {
   bucket?: { at: number; n: number };
 }
 
+/** how long a device's slot stays kept for it after it was last seen [ms] (its way back after a cut) */
+const SLOT_HELD_MS = 10 * 60_000;
+
 interface RoomRec {
   code: string;
   name: string;
@@ -61,7 +64,8 @@ interface RoomRec {
   created: number;
   used: number;
   /** the devices seen in it: their last name and colour, their craft as they left it (R7: its last sample, base64) */
-  world: Record<string, { name: string; colour: string; seen: number; craft?: string }>;
+  /** each device's place in the room: its name, colour, when last seen, its craft left, its slot (kept across a cut — NET-13) */
+  world: Record<string, { name: string; colour: string; seen: number; craft?: string; slot?: number }>;
 }
 
 interface Live {
@@ -401,8 +405,25 @@ export function createRooms(o: RoomsOptions) {
           const role: Role = m.role === "spectator" || m.role === "instruments" ? m.role : "pilot";
           if (role === "pilot" && [...l.peers.values()].filter((w) => w.data.role === "pilot").length >= MAX_PILOTS)
             return fail(ws, "pilots-full", "Four pilots already fly in this room", m.id);
-          slot = 0;
-          while (l.peers.has(slot)) slot++;
+          // (his own slot back if it is free — a cut common to all, a server restarted: the first back took « the first free »
+          // and the slots, by which scores, teams, formation and roles go, were swapped — audit NET-13 —; else the first free
+          // that no other device held lately — it may be on its way back)
+          const mine = l.rec.world[P.device]?.slot;
+          const held = new Set(
+            Object.entries(l.rec.world)
+              .filter(([d, e]) => d !== P.device && e.slot !== undefined && now() - e.seen < SLOT_HELD_MS)
+              .map(([, e]) => e.slot!),
+          );
+          if (mine !== undefined && !l.peers.has(mine)) slot = mine;
+          else {
+            slot = 0;
+            while (l.peers.has(slot) || held.has(slot)) slot++;
+            // (every place held lately and none free: the first free after all — the room's limits hold)
+            if (slot >= MAX_DEVICES) {
+              slot = 0;
+              while (l.peers.has(slot)) slot++;
+            }
+          }
         }
         P.role = m.role === "spectator" || m.role === "instruments" ? m.role : "pilot";
         // (a newcomer asks for the room's pace: his page takes it — his own ask comes after)
@@ -413,7 +434,7 @@ export function createRooms(o: RoomsOptions) {
         l.peers.set(slot, ws);
         ws.subscribe(`room:${code}`);
         l.rec.used = now();
-        l.rec.world[P.device] = { ...l.rec.world[P.device], name: P.name, colour: P.colour, seen: now() };
+        l.rec.world[P.device] = { ...l.rec.world[P.device], name: P.name, colour: P.colour, seen: now(), slot };
         P.last = null;
         dirty.add(code);
         send(ws, { type: "joined", re: m.id, code, name: l.rec.name, slot, clock: l.rec.clock, members: members(l) });
