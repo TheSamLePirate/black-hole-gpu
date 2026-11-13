@@ -202,7 +202,9 @@ Aucun coût de J3 n'est mesuré ; aucun gain n'est promis.
   arbres et bâtiments 13,5–13,6 %, les deux 8,4–8,5 %** (≈ 62 % de la carte déjà dans les cascades — les bâtiments y sont deux fois), le contact
   +5,6–6,2 % ; **ombre comptée deux fois : 0,08–0,09 % des blocs, sous le bruit** (A/A 2,3–3,2 % — les arbres, les lueurs). Lecture : le produit
   des deux ne se voit pas (ombres franches : 0 × 0) ; le recouvrement est du travail fait deux fois sous 550–750 m, pas une erreur d'image.
-  **Non mesuré** : ce que coûte la part bâtiments de la carte, ni si elle est plus nette que les cascades (1,5 m le texel) — à mesurer avant
-  d'y toucher (règle 1) ; les trous (une référence tracée manque) ; une vallée au Soleil bas (relief + horizons). Un premier run a échoué sur un
+  **Règle 1, lue dans la fiche de Paris** (`…-j3-paris-ref2`, `flight.passes`) : la carte des arbres et bâtiments coûte 1,5–1,7 ms **quand elle
+  est dessinée** — 76 images d'un vol de 70 s (≈ 1 200), soit ≈ 0,1 ms par image en moyenne ; sa couche bâtiments n'est pas chronométrée à part.
+  Retirer les bâtiments de la carte rendrait au plus ≈ 0,1 ms : **pas un lot de performance** ; le recouvrement reste (aucun défaut d'image
+  mesuré). Sa netteté face aux cascades non comparée ; les trous (une référence tracée manque) ; une vallée au Soleil bas (relief + horizons). Un premier run a échoué sur un
   A/A par pixel (8 % de bruit) : mesure passée aux blocs.
 
