@@ -13,6 +13,7 @@ import {
   trailSigJs,
   stageSigJs,
   noiseJs,
+  devJs,
   LEAK_VIEWS,
   leakCompareJs,
   SEAM_JS,
@@ -49,6 +50,8 @@ import {
 //     levels against pairs inside one) and by the distance (SEAM_JS, J2-0's); a shot and a map of each (SEAM_MAP_JS: the ranks in colour,
 //     the boundary pairs red over 0.25 px, green under). J2_HLOD=0: the IGN's overground off (its A/B). C0-12's measure: `seamCrack`
 //     (a fold counts 0); a grazing view mixes ridges in — hyeres-down, the look 35° down, the same edges without them.
+//   pulse — J2-6 (J2_PHASES=pulse): held, the scale forced 0.75 → 0.625 and back (forceScale), the scene's colour read 1–64 images after
+//     each change and its distance to the view settled after (lib/j2-probes.ts devJs: mean |ΔL| / L) against the held view's own noise.
 //   trail — J2-4, step A (J2_PHASES=trail): how long a page republished takes to show — the leak probe's positive control (every
 //     published imagery page painted) as a controlled arrival: green settled, then magenta at once, the scene's colour read 1, 2, 4,
 //     8, 16, 32, 64 images after (lib/j2-probes.ts trailJs: the share of the repainted pixels past 90 % of the way — held only, the
@@ -160,6 +163,62 @@ describe.skipIf(!E2E)("J2-0: the leak, the seams, the sharpness and the publicat
     return r;
   }
   const writeB64 = (f: string, b64: string | null) => (b64 ? Bun.write(f, Buffer.from(b64, "base64")) : Promise.resolve(0));
+
+  // (J2-6 — the pulse of a change of scale, held: J2_PHASES=pulse; J2_EXTRA a lever's side)
+  if (PHASES.includes("pulse"))
+    for (const v of VIEWS)
+      test(`J2-6, the pulse of a change of scale, held: ${v}`, async () => {
+        const view = LEAK_VIEWS[v];
+        if (!view) throw new Error(`J2_VIEWS: ${v} unknown`);
+        const [lat, lon, agl, hdg, spd] = view.at;
+        const placed = await place(
+          `__bh.game.quality("realtime"); Object.assign(__bh.settings, { dynamicResolution: false, animate: true, targetSpp: 64, motionBlur: 0, lookProfile: "neutral" });
+          __bh.game.setDate("${view.date}"); __bh.game.set("weather", "fair"); __bh.game.set("earthClouds", 0); __bh.game.flyAt(${lat}, ${lon}, ${agl}, ${hdg}, ${spd}); ${CLEAN}`,
+          v,
+        );
+        await app.js(`(() => { document.body.classList.add("hide-ui"); return 1; })()`);
+        const row: Record<string, unknown> = { view: v, what: view.what, placed };
+        const frames = (k: number) =>
+          app.js(
+            `(async () => { const R = __bh.renderer, f = () => new Promise((q) => requestAnimationFrame(q)), n0 = R.completedFrames; let n = 0; while (R.completedFrames - n0 < ${k} && n++ < 600) await f(); return R.completedFrames - n0; })()`,
+          );
+        for (const [from, to] of [
+          [0.75, 0.625],
+          [0.625, 0.75],
+        ] as const) {
+          await app.js(`(() => { __bh.forceScale(${from}); return 1; })()`);
+          await converged(`${v} pulse at ${from}`);
+          await frames(120);
+          await app.js(keepSceneJs("p0"));
+          await app.js(`(() => { __bh.forceScale(${to}); return 1; })()`);
+          const reads: { k: number; at: unknown }[] = [];
+          let done = 0;
+          for (const k of [1, 2, 4, 8, 16, 32, 64]) {
+            await frames(k - done);
+            done = k;
+            reads.push({ k, at: await app.js(keepSceneJs(`p${k}`)) });
+          }
+          await frames(120);
+          await app.js(keepSceneJs("pz"));
+          await frames(8);
+          await app.js(keepSceneJs("pz8"));
+          const dev: Record<string, number | null> = {};
+          for (const r of reads) dev[`k${r.k}`] = await app.js<number | null>(devJs(`p${r.k}`, "pz"));
+          const key = `${from}→${to}`;
+          row[key] = {
+            before: await app.js(devJs("p0", "pz")),
+            dev,
+            noise: await app.js(devJs("pz8", "pz")),
+          };
+          console.log(`  ${v} pulse ${key}: ${JSON.stringify(row[key])}`);
+          await app.js(`(() => { globalThis.__j2 = {}; return 1; })()`);
+        }
+        await app.js(`(() => { __bh.forceScale(null); document.body.classList.remove("hide-ui"); return 1; })()`);
+        row.gpuErrors = await app.js<number>(`__bh.renderer.gpuErrors`);
+        (out.pulse ??= []) as unknown[];
+        (out.pulse as unknown[]).push(row);
+        expect(row.gpuErrors).toBe(0);
+      }, 600_000);
 
   if (PHASES.includes("trail"))
     for (const v of VIEWS)

@@ -4074,3 +4074,12 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   13,9 ms** à 1. Recommandation : `adaptRasterRate` retiré du chemin de la Terre (sans effet mesurable), gardé pour les corps.
 - **Changé** : `tests/e2e/j2-cover.e2e.test.ts` ; PLAN-J2 §9 octies (étape A), E2E-CATALOGUE. **Mesuré** : M1 Max « Heavy » (pixels
   fiables, temps indicatifs), 1/0 deux fois. **Non vérifié** : kerr-mini ; les Alpes, une ville ; `shade` pendant une compilation.
+
+## 2026-11-13T04:13Z — J2-6 : un changement d'échelle en vue tenue ne pulse pas — une transition d'une seconde
+
+- **Contribution** (PLAN-J2 J2-6, §4 « pas de flou intermittent aux changements d'échelle ») : phase `pulse` de `j2-probes` (nouvelle) — vue
+  tenue, échelle forcée 0,75 ↔ 0,625, la sortie relue 1–64 images après et comparée à la vue réglée (`devJs`). Écart des deux échelles
+  3,2 % → 2,2–2,5 % à l'image suivante → **0,7 % à 64 images** (bruit 0,25–0,38 %), jamais au-dessus du départ : **pas de pulsation**.
+  `singleHistory` sans effet ici. Le pic d'énergie de J2-0 en vol = le bruit d'un historique perdu. Critère de J2-6 tenu en vue tenue.
+- **Changé** : `tests/e2e/lib/j2-probes.ts` (`devJs`), `tests/e2e/j2-probes.e2e.test.ts` (phase `pulse`) ; PLAN-J2 §9 octies (e).
+- **Mesuré** : M1 Max, 1/0 par côté. **Non vérifié** : en vol (PSNR à l'instant du changement) ; kerr-mini.

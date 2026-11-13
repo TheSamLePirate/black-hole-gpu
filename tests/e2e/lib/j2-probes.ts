@@ -438,3 +438,17 @@ export const noiseJs = (a: string, b: string) => `(() => {
     const r = Math.abs(lb - la) / la; s += r; n++; if (r > 0.02) over++;
   }
   return { pixels: n, mean: +(s / Math.max(n, 1)).toFixed(5), over2: +(over / Math.max(n, 1)).toFixed(4) }; })()`;
+
+/** J2-6 — in the page: how far a kept read `b` is from another `z` (the view settled after a change of scale): their mean |ΔL| / L_z over
+ *  the pixels drawn and under twice the mid-grey — the pulse a change makes, against the held view's own noise (noiseJs) */
+export const devJs = (b: string, z: string) => `(() => {
+  const B = globalThis.__j2[${JSON.stringify(b)}], Z = globalThis.__j2[${JSON.stringify(z)}];
+  if (!B || !Z || B.width !== Z.width || B.height !== Z.height) return null;
+  let s = 0, n = 0;
+  for (let i = 0; i < Z.data.length; i += 4) {
+    const lz = Z.exposure * (0.2126 * Z.data[i] + 0.7152 * Z.data[i + 1] + 0.0722 * Z.data[i + 2]);
+    const lb = B.exposure * (0.2126 * B.data[i] + 0.7152 * B.data[i + 1] + 0.0722 * B.data[i + 2]);
+    if (!(lz > 0.005) || lz > 2 || lb > 2) continue;
+    s += Math.abs(lb - lz) / lz; n++;
+  }
+  return +(s / Math.max(n, 1)).toFixed(5); })()`;

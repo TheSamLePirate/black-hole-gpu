@@ -444,6 +444,17 @@ mesuré ; le pic au changement d'échelle non conclu. **Reste** : J2-6 propremen
 par petits pas sans rééchantillonner l'historique de sortie, l'arrêt et la reprise sans saut, l'épingle `want = rasterTop()` retirée) et
 une mesure qui sépare netteté et bruit (PSNR contre une référence à chaque événement), sur kerr-mini.
 
+## 9 octies (e). J2-6 : la « pulsation » d'un changement d'échelle, mesurée sans le laplacien (13 novembre 2026)
+
+e2e `j2-probes` phase `pulse` (nouvelle) : vue tenue (plaine du Gapeau), l'échelle forcée 0,75 → 0,625 puis retour (`forceScale`), la couleur de
+scène (sortie de la TAAU, taille du canevas) relue 1 à 64 images après et comparée à la vue réglée après le changement (écart moyen |ΔL| / L ;
+`devJs`), contre le bruit de la vue tenue. **Aucune pulsation** : l'écart part de celui des deux échelles (3,2 %), tombe à 2,2–2,5 % dès
+l'image suivante puis décroît régulièrement — **0,7 % à 64 images** contre un bruit de 0,25–0,38 % — sans jamais dépasser son point de
+départ ; une transition d'environ une seconde, pas un creux. `singleHistory` n'y change rien (0,74 contre 0,73 % à 64 images). Le
+« pic d'énergie » de J2-0 en vol (+44 à +118 %) est donc **le bruit d'un historique perdu** — le laplacien compte le bruit —, pas un
+flou ; le critère de J2-6 (« |écart| ≤ 3 % » à un changement d'échelle) est **tenu en vue tenue** par cette mesure. **En vol** : non mesuré
+ainsi (la sonde compare des vues fixes) ; une mesure par PSNR contre référence à l'instant du changement reste à faire.
+
 ## 9 octies. J2-7, étape A : ce que `shade` et `bodyLite` couvrent et coûtent (13 novembre 2026)
 
 e2e `j2-cover` (nouveau ; M1 Max en pression « Heavy » : les temps indicatifs, les **pixels** fiables) : les `moments` de la vue vivante
