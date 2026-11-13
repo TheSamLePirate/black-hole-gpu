@@ -1,0 +1,287 @@
+{
+ "date": "2026-11-13",
+ "machine": "MacBook Pro M1 Max (ce Mac), fenêtre visible",
+ "e2e": "tests/e2e/cut-buildings-trees.e2e.test.ts (E2E_PROBE=1, CT_SIDES=c0,c1,c0 ; vol : CT_CORRIDOR, CT_FLY_S=60)",
+ "what": "le plafond des 32 000 bâtiments gardé autour du centre (c0) ou le long du couloir de l'œil à 2 × l'avance (c1, PLAN-J2 §9 undecies) — Paris, placé 48,8600 N 2,2780 E, 300 m, cap 95°, 90 m/s, vue tenue (regard −7°), même centre de scène 3 445 m devant",
+ "runs": {
+  "frozen": {
+   "sides": [
+    {
+     "side": "c0",
+     "stats": {
+      "centreFromCraftM": 3445,
+      "buildings": 32000,
+      "cutBuildings": 215132,
+      "keptReachM": 2489,
+      "corridorM": 0,
+      "trees": 680567,
+      "clearedTrees": 685785,
+      "workerMs": 31764,
+      "quick": false,
+      "pending": false
+     },
+     "byKind": {
+      "none": [
+       2000,
+       0,
+       0,
+       0,
+       0
+      ],
+      "ground": [
+       548,
+       364,
+       57,
+       24,
+       117
+      ],
+      "building": [
+       0,
+       173,
+       114,
+       97,
+       25
+      ],
+      "tree": [
+       48,
+       17,
+       5,
+       4,
+       2
+      ],
+      "bridgeMesh": [
+       0,
+       0,
+       0,
+       0,
+       1
+      ],
+      "turbine": [
+       0,
+       0,
+       2,
+       2,
+       0
+      ]
+     }
+    },
+    {
+     "side": "c1",
+     "stats": {
+      "centreFromCraftM": 3445,
+      "buildings": 32000,
+      "cutBuildings": 215661,
+      "keptReachM": 1239,
+      "corridorM": 3442,
+      "trees": 679360,
+      "clearedTrees": 665603,
+      "workerMs": 29922,
+      "quick": false,
+      "pending": false
+     },
+     "byKind": {
+      "none": [
+       2000,
+       0,
+       0,
+       0,
+       0
+      ],
+      "ground": [
+       332,
+       251,
+       85,
+       82,
+       132
+      ],
+      "building": [
+       272,
+       274,
+       75,
+       31,
+       14
+      ],
+      "tree": [
+       15,
+       6,
+       14,
+       8,
+       3
+      ],
+      "bridgeMesh": [
+       0,
+       0,
+       0,
+       0,
+       1
+      ],
+      "turbine": [
+       0,
+       0,
+       2,
+       3,
+       0
+      ]
+     }
+    },
+    {
+     "side": "c0",
+     "stats": {
+      "centreFromCraftM": 3445,
+      "buildings": 32000,
+      "cutBuildings": 215132,
+      "keptReachM": 2489,
+      "corridorM": 0,
+      "trees": 680567,
+      "clearedTrees": 685785,
+      "workerMs": 27777,
+      "quick": false,
+      "pending": false
+     },
+     "byKind": {
+      "none": [
+       2000,
+       0,
+       0,
+       0,
+       0
+      ],
+      "ground": [
+       548,
+       364,
+       57,
+       24,
+       117
+      ],
+      "building": [
+       0,
+       173,
+       114,
+       97,
+       25
+      ],
+      "tree": [
+       48,
+       17,
+       5,
+       4,
+       2
+      ],
+      "bridgeMesh": [
+       0,
+       0,
+       0,
+       0,
+       1
+      ],
+      "turbine": [
+       0,
+       0,
+       2,
+       2,
+       0
+      ]
+     }
+    }
+   ]
+  },
+  "flight-110-c0": {
+   "sides": [
+    {
+     "side": "now",
+     "stats": {
+      "centreFromCraftM": 378,
+      "buildings": 32000,
+      "cutBuildings": 229231,
+      "keptReachM": 2476,
+      "corridorM": 0,
+      "trees": 646170,
+      "clearedTrees": 709016,
+      "workerMs": 32074,
+      "quick": false,
+      "pending": true
+     },
+     "byKind": {
+      "none": [
+       2271,
+       0,
+       0,
+       0,
+       0
+      ],
+      "ground": [
+       123,
+       107,
+       94,
+       100,
+       195
+      ],
+      "tree": [
+       1,
+       15,
+       49,
+       22,
+       0
+      ],
+      "building": [
+       107,
+       486,
+       30,
+       0,
+       0
+      ]
+     }
+    }
+   ]
+  },
+  "flight-110-c1": {
+   "sides": [
+    {
+     "side": "now",
+     "stats": {
+      "centreFromCraftM": 3167,
+      "buildings": 32000,
+      "cutBuildings": 215189,
+      "keptReachM": 1226,
+      "corridorM": 3529,
+      "trees": 679385,
+      "clearedTrees": 664799,
+      "workerMs": 40790,
+      "quick": false,
+      "pending": true
+     },
+     "byKind": {
+      "none": [
+       2271,
+       0,
+       0,
+       0,
+       0
+      ],
+      "ground": [
+       116,
+       170,
+       68,
+       112,
+       195
+      ],
+      "tree": [
+       4,
+       143,
+       113,
+       3,
+       0
+      ],
+      "building": [
+       111,
+       294,
+       0,
+       0,
+       0
+      ]
+     }
+    }
+   ]
+  }
+ }
+}

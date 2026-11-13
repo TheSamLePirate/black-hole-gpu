@@ -11,7 +11,8 @@ import { App, E2E, stopServer } from "./lib/app";
 // side the scene's stats (`cutBuildings`, `keptReachM`, `surveyedTrees`, `clearedTrees`, the worker's time), a grid of the
 // visibility's surface (renderer.surfaceAt: tree, building, ground by distance) and a shot. The tree points that turn to ground
 // with `clearCut` are trees on known buildings. CT_PLACE "lat,lon,agl,hdg,v" (default Paris, Passy towards the Louvre), CT_LOOK
-// (the look's pitch, °), CT_OUT (remote-results/cut-trees), CT_SIDES (default "off,on,off"), CT_FLY_S (flown that long in real time
+// (the look's pitch, °), CT_OUT (remote-results/cut-trees), CT_SIDES (default "off,on,off"; c0 / c1: the cap's corridor off / on —
+// PLAN-J2 §9 undecies — instead of clearCut; now: the scene as it is), CT_FLY_S (flown that long in real time
 // before the view is held: the scene drawn the flight's own — a side toggled after it is made for the held craft, led ahead), CT_CLEAR=1
 // (the lever on from the start: the flight's own scenes made with it).
 // Duration: ~5–7 min (three full scenes of Paris).
@@ -34,6 +35,10 @@ test.skipIf(!E2E || process.env.E2E_PROBE !== "1")(
       await app.waitFor(`__bh.fleet.active === "f35"`, 60_000);
       // (CT_CLEAR=1: the lever on from the start — the flight's own scenes made with it, side "now" measuring them)
       if (process.env.CT_CLEAR === "1") await app.js(`(() => { __bh.renderer.earthScenery.clearCut = true; return 1; })()`);
+      // (CT_CLEAR=0: off — on by default since 13 Nov 2026; CT_CORRIDOR=0|1: the cap's corridor — PLAN-J2 §9 undecies, on by default)
+      if (process.env.CT_CLEAR === "0") await app.js(`(() => { __bh.renderer.earthScenery.clearCut = false; return 1; })()`);
+      if (process.env.CT_CORRIDOR)
+        await app.js(`(() => { __bh.renderer.earthScenery.corridor = ${process.env.CT_CORRIDOR === "1"}; return 1; })()`);
       const [lat, lon, agl, hdg, v] = PLACE;
       const place = `__bh.game.setDate("2026-07-10T10:00:00Z"); __bh.game.flyAt(${lat}, ${lon}, ${agl}, ${hdg}, ${v});
         __bh.settings.shipMount = "cockpit"; __bh.refresh(); __bh.camera.viewReset();`;
@@ -64,15 +69,18 @@ test.skipIf(!E2E || process.env.E2E_PROBE !== "1")(
       console.log(`  flight held: ${JSON.stringify(flight)}`);
       const out: Record<string, unknown> = { place: PLACE, look: LOOK, flight, sides: [] as unknown[] };
       for (const [n, side] of SIDES.entries()) {
-        const on = side === "on";
-        if (side !== "now") await app.js(`(() => { __bh.renderer.earthScenery.clearCut = ${on}; __bh.touch(); return 1; })()`);
+        // (sides c0 / c1: the cap's corridor off / on — PLAN-J2 §9 undecies —, clearCut as it is; on / off: clearCut)
+        const corr = side === "c0" || side === "c1";
+        const on = corr ? side === "c1" : side === "on";
+        if (corr) await app.js(`(() => { __bh.renderer.earthScenery.corridor = ${on}; __bh.touch(); return 1; })()`);
+        else if (side !== "now") await app.js(`(() => { __bh.renderer.earthScenery.clearCut = ${on}; __bh.touch(); return 1; })()`);
         // (the scene made with this side's lever, the full one, drawn: logged every 10 s, 240 s at most — a cold Paris is ~60–120 s)
         const t0 = Date.now();
         let last = 0;
         // (side "now": the scene drawn as it is — after CT_FLY_S, the flight's own —, not waited for)
         for (; side !== "now"; ) {
           const s = await app.js<{ ok: boolean; line: string }>(`(() => { const s = __bh.renderer.earthScenery.stats();
-            return { ok: s.clearCutDrawn === ${on} && !s.quick && !s.pending && s.status === "ready",
+            return { ok: (${corr} ? (s.corridorM > 0) === ${on} : s.clearCutDrawn === ${on}) && !s.quick && !s.pending && s.status === "ready",
               line: s.status + " quick " + s.quick + " pending " + s.pending + " drawn " + s.clearCutDrawn + " step " + JSON.stringify(s.progress) }; })()`);
           if (s.ok) break;
           if (Date.now() - t0 > 240_000) throw new Error(`side ${side}: the scene never came (${s.line})`);
@@ -89,7 +97,7 @@ test.skipIf(!E2E || process.env.E2E_PROBE !== "1")(
         >(`(() => { const s = __bh.renderer.earthScenery.stats(), c = __bh.camera.geoNow();
           const d = s.lat === null ? null : Math.round(Math.hypot((s.lat - c.lat) * 111320, (s.lon - c.lon) * 111320 * Math.cos(c.lat * Math.PI / 180)));
           return { centre: [s.lat, s.lon], centreFromCraftM: d, budgetLimited: s.budgetLimited, buildings: s.buildings, bdtopoBuildings: s.bdtopoBuildings,
-            cutBuildings: s.cutBuildings, keptReachM: s.keptReachM, trees: s.trees, surveyedTrees: s.surveyedTrees, clearedTrees: s.clearedTrees,
+            cutBuildings: s.cutBuildings, keptReachM: s.keptReachM, corridorM: s.corridorM, trees: s.trees, surveyedTrees: s.surveyedTrees, clearedTrees: s.clearedTrees,
             cutHousesMs: s.cutHousesMs, quick: s.quick, pending: s.pending, surveyError: s.surveyError, workerMs: Math.round(s.workerMs ?? 0), phases: s.phases, gpuBytes: s.gpuBytes, reach: s.reach }; })()`);
         console.log(`  side ${n} ${side}: ${JSON.stringify(stats)}`);
         // (the visibility's surface on a GX × GY grid: kind and distance — 256 reads at once)

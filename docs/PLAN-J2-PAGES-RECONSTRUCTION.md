@@ -576,6 +576,11 @@ Les recommandations en attente valent décision :
    tenue, §9 octies (e) ; les coutures par la géométrie — faites, C0-12 tenu).
 7. `earthRateOne` (J2-7) gardé allumé ; l'épingle de l'échelle du raster gardée (2/3 : −2,1 dB).
 
+**Faits le même jour** : 1 (§9 decies) ; 3 (la désocclusion retirée, d9b2557b) ; 4 (83a89f7e) ; 5 — `earthScenery.corridor`, le plafond des
+bâtiments gardé le long du couloir de l'œil à l'au-delà du centre (Paris, même scène : 0 → 272 points de bâtiment à moins de 1 km de
+l'appareil, le worker au même temps ; `docs/progress/decor/corridor-2026-11-13.json`) ; l'avance elle-même était déjà réglée sur le temps
+réel de construction (`buildS` = 1,35 × le dernier temps + 3 s) ; 2 — la page neuve passe par l'historique unique (72 % à 3 images).
+
 ## 10. Non vérifié
 
 - **Aucune mesure nouvelle** : les chiffres cités viennent des fiches J0 du 12 novembre, de la fiche T9 et de GRAPHICS-PIPELINE ; les

@@ -529,8 +529,11 @@ export interface SceneryRequest {
   /** the Service Worker controls the page: the Géoplateforme's budget its (sw.ts) — the survey's own gate opened */
   swGate?: boolean;
   /** the survey's trees kept off the footprints of the buildings the cap left out too, not only the kept ones' (the
-   *  scenery's `clearCut`, off by default — PROBLEMES-A-REGLER, 12 Nov 2026) */
+   *  scenery's `clearCut`, on by default since 13 Nov 2026 — PROBLEMES-A-REGLER) */
   clearCut?: boolean;
+  /** the buildings' cap kept by their distance to the corridor the craft flies — from the eye at the request to as far past the
+   *  centre as the centre is past it —, not to the centre alone (the scenery's `corridor`, PLAN-J2 §9 undecies — Sam, 13 Nov 2026) */
+  corridor?: boolean;
 }
 /** the worker's progress through a scene, posted as it goes (the loading status's: ui — data meter): the last step ended,
  *  and in the buildings' step the BD TOPO's or Overture's tiles in and wanted */
@@ -561,6 +564,9 @@ export interface SceneryReply {
   cutHousesMs?: number;
   /** the request's clearCut, as this scene was made */
   clearCut?: boolean;
+  /** the request's corridor, as this scene was made, and its half-length [m] (0: the centre alone — a craft at rest) */
+  corridor?: boolean;
+  corridorM?: number;
   /** of the buildings, the IGN's BD TOPO's over France (I5, bdtopo.ts); its tiles taken */
   bdtopoBuildings?: number;
   bdtopoTiles?: number;

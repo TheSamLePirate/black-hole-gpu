@@ -81,7 +81,10 @@ TAAU garde sous 75 % ») sont à relire avec ce biais.
 
 > **13 novembre 2026 — décision de Sam (« ok pour tes recommandations »)** : `earthScenery.clearCut` **allumé par défaut** (les arbres refusés
 > aux îlots coupés) ; la cause de fond — le plafond gardé autour du seul centre de la scène — traitée par un couloir le long de la
-> trajectoire (PLAN-J2 §9 undecies, en cours).
+> trajectoire — **fait** : `earthScenery.corridor` (allumé) ; Paris, même scène tenue (centre 3,4 km devant) : points de bâtiment à moins de
+> 1 km de l'appareil **0 → 272**, entre 1 et 2 km 173 → 274, le sol nu sous l'appareil 548 → 332, le worker au même temps (~30 s)
+> (`docs/progress/decor/corridor-2026-11-13.json`). Non mesuré : un vol long où la scène suivante tarde (la sonde en vol a vu deux
+> scènes différentes d'un passage à l'autre).
 
 **État (12 nov. 2026, soir)** : **confirmé en vol réel au-dessus de Paris** — les arbres de la canopée IGN couvrent les îlots dont le
 plafond du décor a coupé les bâtiments (la moitié des arbres de la scène) ; et en vol l'appareil sort du disque des bâtiments gardés :

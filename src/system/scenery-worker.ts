@@ -713,6 +713,40 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
     budgetLimited = true;
   };
   const distance = (lat: number, lon: number) => Math.hypot((lat - q.lat) * 111320, wrapLon(lon - q.lon) * 111320 * Math.cos(q.lat * D));
+  // (PLAN-J2 §9 undecies — Sam, 13 Nov 2026: the cap's distance to the corridor the craft flies, q.corridor — the segment from the eye
+  // at the request, A, through the centre to −A, as far past it —, not to the centre alone: in flight over Paris the craft outran the
+  // 2.5 km disc the 32 000 kept and none was in view. A craft at rest (A under 50 m): the centre's disc as before)
+  const cosC = Math.cos(q.lat * D);
+  const corridorA: [number, number] | null = (() => {
+    if (!q.corridor || !q.eye) return null;
+    const ax = wrapLon(q.eye[1] - q.lon) * 111320 * cosC,
+      ay = (q.eye[0] - q.lat) * 111320;
+    return Math.hypot(ax, ay) > 50 ? [ax, ay] : null;
+  })();
+  const corridorM = corridorA ? Math.round(Math.hypot(corridorA[0], corridorA[1])) : 0;
+  const capDistance = (lat: number, lon: number) => {
+    if (!corridorA) return distance(lat, lon);
+    const px = wrapLon(lon - q.lon) * 111320 * cosC,
+      py = (lat - q.lat) * 111320;
+    const [ax, ay] = corridorA;
+    const t = Math.min(Math.max((px * ax + py * ay) / (ax * ax + ay * ay), -1), 1);
+    return Math.hypot(px - t * ax, py - t * ay);
+  };
+  // (a tile's distance to the corridor: the least of its rectangle's from 17 points along it — tilesWithin's own measure)
+  const tileCorridorD = (z: number, x: number, y: number) => {
+    const n = 2 ** z,
+      m = (2 * Math.PI * 6378137 * cosC) / n;
+    let best = Infinity;
+    for (let i = 0; i <= 16; i++) {
+      const s = i / 8 - 1;
+      const lat = q.lat + (s * corridorA![1]) / 111320,
+        lon = q.lon + (s * corridorA![0]) / (111320 * cosC);
+      const fx = ((lon + 180) / 360) * n,
+        fy = ((1 - Math.asinh(Math.tan(lat * D)) / Math.PI) / 2) * n;
+      best = Math.min(best, m * Math.hypot(Math.max(x - fx, 0, fx - x - 1), Math.max(y - fy, 0, fy - y - 1)));
+    }
+    return best;
+  };
   // ---- over France, the IGN's buildings (I5, bdtopo.ts): the BD TOPO's footprints and measured heights for OSM's, its z 15
   // tiles nearest first until the nearest `limit` buildings are in; OSM's kept only where a BD TOPO tile failed
   const bdKey = (lat: number, lon: number) => {
@@ -725,7 +759,12 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
     const out: Choice[] = [],
       covered = new Set<string>();
     let tileCount = 0;
-    const want = bdtopoWanted(q.lat, q.lon, radius, k);
+    // (the corridor's: the nearest it first, the stop judged against it — capDistance)
+    const want = corridorA
+      ? bdtopoWanted(q.lat, q.lon, radius, k)
+          .map((w) => ({ ...w, d: tileCorridorD(BDTOPO_Z, w.x, w.y) }))
+          .sort((p, r) => p.d - r.d)
+      : bdtopoWanted(q.lat, q.lon, radius, k);
     const t = 2 ** BDTOPO_Z;
     const one = async (x: number, y: number) => {
       let raw: ArrayBuffer | null = null;
@@ -780,7 +819,7 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
           const lat = outer.reduce((s, v) => s + v.lat, 0) / outer.length,
             lon = outer.reduce((s, v) => s + v.lon, 0) / outer.length;
           if (index(lat, lon) < 0 || excluded(lat, lon)) continue;
-          out.push({ geo, lat, lon, h, low: 0, d: distance(lat, lon), a });
+          out.push({ geo, lat, lon, h, low: 0, d: capDistance(lat, lon), a });
         }
       }
     };
@@ -895,7 +934,7 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
               lon,
               h: measured ? top - rh! : top,
               low,
-              d: distance(lat, lon),
+              d: capDistance(lat, lon),
               a: {
                 top: !measured,
                 roof: measured ? rh! : null,
@@ -1026,7 +1065,7 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
             lon,
             h,
             low,
-            d: distance(lat, lon),
+            d: capDistance(lat, lon),
             a: {
               top: true,
               roof: null,
@@ -1727,6 +1766,8 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
     clearedTrees,
     cutHousesMs,
     clearCut: q.clearCut === true,
+    corridor: q.corridor === true,
+    corridorM,
     bdtopoBuildings,
     bdtopoTiles: bdtopoTileCount,
     overtureBuildings,

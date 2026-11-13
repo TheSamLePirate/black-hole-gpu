@@ -4204,3 +4204,30 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   `j0-reference`) ; BH-API, GRAPHICS-PIPELINE (+ annexe), PLAN-J2, fiche J2-5, E2E-CATALOGUE.
 - **Vérifié** : tsc, biome, `check-wgsl` 81/81, tests unitaires du renderer 5/0, e2e `surface-id` 1/0 (identité 49/49 ; un premier passage
   échoué faute de décor en 60 s : la séance J0 tournait en même temps sur kerr-mini — deux charges IGN croisées, la règle enfreinte).
+
+## 2026-11-13T07:28Z — Contre-analyse de J0–J2 et du travail du 10 au 13 : où est le temps, l'ordre proposé (documentation)
+
+- **Contribution** (stratégie §8.2, §15 « chemin crédible vers §8 », §20.9) : [CHALLENGE-J1-J2-2026-11-13](docs/CHALLENGE-J1-J2-2026-11-13.md) —
+  les fiches J0 rapprochées de l'enveloppe du §8.2 par famille (M1 Max frais : eau ≥ 4,3 ms pour 1,0 ; ≈ 7 ms de passes de rendu non
+  attribuées ; reconstruction et nuages dans leur enveloppe) ; dix points contestés (l'ordre de J2, les critères de sortie, « forward »
+  dans CLAUDE.md contre la décision du 12, une seule scène juge, l'eau en J4, les leviers, les sondes) ; huit idées (classification par
+  tuiles et lancements indirects, l'eau étagée, l'hypothèse « registres » à vérifier, albédo à pleine taille, cadence bornée, le
+  non-attribué, J0 hors réseau par `tile-replay`, le fil principal) ; un ordre et six décisions pour Sam.
+- **État de preuve** : documenté. Chiffres repris des fiches (`docs/progress/j0/`) et du journal ; les lignes « non attribué » sont
+  calculées par soustraction ; **aucune idée n'est mesurée**. Aucun code modifié, aucun test, e2e ni bench lancé (demande de Sam).
+- **Limites** : `trace.wgsl` et la session `33d89754` lus en partie ; cette session tournait encore (`d9b2557b` + quatre fichiers non
+  commités). Non commité : à Sam de décider. **Suite** : ses décisions du §7 du document.
+
+## 2026-11-13T07:29Z — Les villes : le plafond des bâtiments gardé le long du couloir de vol (décision de Sam)
+
+- **Contribution** (stratégie §19 l'expérience complète — une ville survolée reste une ville — ; §7 préparer les données avant la frame ;
+  PLAN-J2 §9 undecies, point 5) : `earthScenery.corridor` (allumé) — les 32 000 bâtiments gardés par leur distance au segment de l'œil (à la
+  requête) jusqu'à l'au-delà du centre de scène, et les tuiles BD TOPO prises dans cet ordre (`scenery-worker.ts` `capDistance`,
+  `tileCorridorD`) ; l'avance était déjà réglée sur le temps réel de construction (`buildS`).
+- **Mesuré** (M1 Max, sonde `cut-buildings-trees` côtés `c0,c1,c0`, Paris, même scène tenue, centre 3,4 km devant) : points de bâtiment à
+  moins de 1 km de l'appareil **0 → 272**, 1–2 km 173 → 274 ; le sol nu sous l'appareil 548 → 332 ; le worker ~30 s des deux côtés ; le 2ᵉ c0
+  identique au 1ᵉʳ. En vol (60 s à 110 m/s) : les deux passages n'ont pas affiché la même scène — non comparables ; la première scène, couloir
+  allumé, 405 points de bâtiment à moins de 2 km (le 12 nov., la même situation : 0).
+- **Changé** : `src/system/scenery-worker.ts`, `scenery.ts` (`corridor`, clé de scène, `stats().corridorM`), `scenery-data.ts` ; e2e sonde
+  (`c0/c1`, `CT_CORRIDOR`, `CT_CLEAR=0`) ; données `docs/progress/decor/corridor-2026-11-13.json` ; BH-API, GRAPHICS-PIPELINE (étape 10),
+  PROBLEMES, PLAN-J2, E2E-CATALOGUE. **Vérifié** : tsc, biome, tests du décor 103/0. **Non vérifié** : kerr-mini ; un vol long ; d'autres villes.

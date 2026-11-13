@@ -82,6 +82,10 @@ export class EarthScenery {
    *  cut block drew a wood) — **on by default since 13 Nov 2026 (Sam: « ok pour tes recommandations »)**: Paris's trees on cut blocks
    *  1 366 347 → 680 567, +1.4–2.0 s of a warm scene's worker (PROBLEMES-A-REGLER, 12 Nov 2026); a change asks a new scene */
   clearCut = true;
+  /** the buildings' cap kept along the corridor the craft flies — from the eye at the request to as far past the scene's centre as
+   *  the centre is past it — not round the centre alone (PLAN-J2 §9 undecies, Sam's decision 13 Nov 2026: in flight over Paris the
+   *  craft outran the 2.5 km disc its 32 000 buildings filled, 0 building in view); a change asks a new scene */
+  corridor = true;
   private started = 0;
   private attempted = -Infinity;
   private busy = false;
@@ -199,7 +203,10 @@ export class EarthScenery {
     // crossed a 556 m cell at each turn of the head — the camera looked down, a new scene of 35–180 s asked, the old one with
     // its boxes under the craft kept meanwhile: a scene rebuilt over and over, never the one in view)
     const held = this.requestedCentre;
-    if (held && this.requested.endsWith(`:${mode}:${satellite}:${reach}:${this.ign}:${this.overture}:${this.lamps}:${this.clearCut}`)) {
+    if (
+      held &&
+      this.requested.endsWith(`:${mode}:${satellite}:${reach}:${this.ign}:${this.overture}:${this.lamps}:${this.clearCut}:${this.corridor}`)
+    ) {
       const off = Math.hypot((held.lat - wanted.lat / D) * 111320, wrapLon(held.lon - wanted.lon / D) * 111320 * Math.cos(held.lat * D));
       if (off < CENTRE_HOLD_M * reach * (this.fastFlight() ? QUICK_SHARE : 1)) c = held;
     }
@@ -227,7 +234,7 @@ export class EarthScenery {
     // (T8m: or a flight too fast for a full scene — the craft out of its box's half before one is ready —: quick scenes one
     // after the other, each centred where the craft will be — the renderer's lead —, until it slows down)
     const quick = this.fastFlight() || (eyeToDrawn > QUICK_COVER * sceneryBox(0, 0, mode, reach).radius && !this.applied.endsWith(":q"));
-    const key = `${c.key}:${mode}:${satellite}:${reach}:${this.ign}:${this.overture}:${this.lamps}:${this.clearCut}${quick ? ":q" : ""}`;
+    const key = `${c.key}:${mode}:${satellite}:${reach}:${this.ign}:${this.overture}:${this.lamps}:${this.clearCut}:${this.corridor}${quick ? ":q" : ""}`;
     // (waited for — the settled frame, an offline render — until drawn, or failed and waiting to be tried again)
     this.wanted = key !== this.applied && !(key === this.requested && this.lastError);
     // (in flight: the next scene's data fetched ahead — the network idle otherwise until the craft leaves the hold, or while the
@@ -342,6 +349,7 @@ export class EarthScenery {
         overture: this.overture,
         lamps: this.lamps,
         clearCut: this.clearCut,
+        corridor: this.corridor,
         eye: [geo.lat / D, geo.lon / D],
         ...(quick ? { quick: QUICK_SHARE } : {}),
         swGate: swControls(),
@@ -545,6 +553,8 @@ export class EarthScenery {
        *  tree candidates their footprints refused, and that grid's time [ms] */
       cutBuildings: d?.cutBuildings ?? 0,
       keptReachM: d?.keptReachM ?? 0,
+      /** the corridor the cap kept the buildings along, its half-length [m] (0: the centre's disc — a craft at rest, or off) */
+      corridorM: d?.corridorM ?? 0,
       clearedTrees: d?.clearedTrees ?? 0,
       cutHousesMs: d?.cutHousesMs ?? 0,
       clearCut: this.clearCut,
