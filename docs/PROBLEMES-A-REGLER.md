@@ -651,7 +651,7 @@ termes à un nœud fautif (43,0666 N, 6,12883 E, niveau 1).
 - **Piste** : le cache par direction d'Alex (§ 7.5 : une carte octaédrique marchée depuis l'œil, une bande par image, lue par
   la composition) — au-delà de ~100 km sans parallaxe ; la marche à ¼ de résolution recomposée.
 
-## Saturne vue de son ombre, l'œil adapté : des artefacts partout
+## ~~Saturne vue de son ombre, l'œil adapté : des artefacts partout~~ — revue le 13 novembre 2026 (~22:20 UTC) : l'adaptation rendue
 
 - **Constaté le 6 novembre 2026** (AM4, e2e `aurora-giants` sur kerr-mini) : la caméra à un rayon au-dessus du côté nuit de
   Saturne, dans son ombre, l'exposition adaptée au noir (comme pour Jupiter) : l'image se couvre de croissants pixellisés
@@ -660,6 +660,12 @@ termes à un nœud fautif (43,0666 N, 6,12883 E, niveau 1).
 - **Raccord** : l'œil n'est pas adapté à l'ombre de Saturne (`earthSunlight`) ; ses aurores sont calculées mais à leur
   radiance physique, donc invisibles de nuit. **Piste** : relever cette lumière (sonde de pixels) et la corriger, puis
   rendre l'adaptation à Saturne.
+- **Revue** (~22:20 UTC, e2e `aurora-giants` avec une vue `saturn-night` — un rayon au-dessus du point antisolaire, l'œil adapté : Saturne
+  remise dans `earthSunlight` avec Jupiter, Uranus et Neptune — ; run `…-aurora-saturn`) : **ni croissants pixellisés dans le ciel ni trous
+  dans le disque** ; le disque éclairé par les anneaux, les anneaux et les étoiles nets. Reste **un grain** sur la moitié du disque que les
+  anneaux éclairent peu (le bruit de cette lumière faible, vraisemblablement — non sondé). Cause probable du défaut du 6 nov. (non
+  prouvée) : le facteur de niveau des géantes faux au sud (`giantLevel`, réglé ce jour) ou la sonde en demi-flottants (réglée ce jour).
+  L'adaptation à Saturne gardée ; le raccord retiré.
 
 ## ~~Le traceur (pipeline « trace ») au large de Big Sur : une nappe sombre plate jusqu'à l'horizon~~ — non reproduit le 13 novembre 2026
 

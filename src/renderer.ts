@@ -10050,9 +10050,9 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
     // (the giants — AM3–AM4 —: the camera in its shadow, the eye adapts to the dark — its night side, its auroras, its lightning —;
     // the light falling there the night's floor, over the sunlight at Jupiter; the shadow's edge over 2 % of its radius)
     const gid = near ? bodies[near.index]?.id : undefined;
-    // (not Saturn: adapted to its shadow, the tracer's faint wrong light there — blocky crescents all over, holes in the disc —
-    // showed: docs/PROBLEMES-A-REGLER.md)
-    if (near && (gid === "jupiter" || gid === "uranus" || gid === "neptune")) {
+    // (Saturn too since 13 Nov 2026: adapted to its shadow, the tracer's faint wrong light showed there — blocky crescents all over,
+    // holes in the disc, 6 Nov —; looked at again after the giants' level sign and the probe's half floats were fixed: PROBLEMES)
+    if (near && (gid === "jupiter" || gid === "saturn" || gid === "uranus" || gid === "neptune")) {
       const c = near.centre,
         L = near.light;
       const along = -(c[0] * L[0] + c[1] * L[1] + c[2] * L[2]);

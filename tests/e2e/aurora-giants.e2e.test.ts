@@ -42,7 +42,8 @@ test.skipIf(!E2E)(
     try {
       await app.waitProgress("__bh.camera.piloting", "the flight");
       await app.js(`(() => { __bh.game.setDate("2026-12-21T07:00:00Z"); return 1; })()`);
-      // (not Saturn: its shadow's dark-adapted view shows the tracer's faint wrong light — docs/PROBLEMES-A-REGLER.md)
+      // (Saturn since 13 Nov 2026: its shadow's dark-adapted view showed the tracer's faint wrong light — PROBLEMES —, looked at again)
+      await view("saturn-night", "saturn", 1, 60_268e3, 0, -89);
       await view("uranus-night", "uranus", 1, 25_559e3, 0, -89);
       await view("neptune-night", "neptune", 1, 24_764e3, 0, -89);
       gpuErrors = await app.js<number>(`__bh.renderer.gpuErrors`);

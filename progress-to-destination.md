@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-13 22:16 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-13 22:20 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous.
@@ -6016,4 +6016,10 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   balayage normal ; `check-wgsl` 82/82, `tests/giant-clouds.test.ts` 13/13. Trouvé par élimination (exposition, NaN, paramètres, corps,
   variante, carte, tuile écartés pas à pas).
 - Limites : les hauteurs des nuages des géantes dans leur hémisphère sud étaient faussées aussi (0–45° S) — leur image non revue.
+
+## 2026-11-13T22:20Z — Saturne : l'œil s'adapte à son ombre (le raccord retiré)
+
+- Réalisé : `renderer.ts` `earthSunlight` — Saturne avec les autres géantes (l'œil adapté dans son ombre) ; `aurora-giants` une vue `saturn-night`.
+- Preuves : **observé** (kerr-mini, `…-aurora-saturn`) : la vue cohérente, sans les artefacts du 6 nov. ; un grain reste sur la moitié du disque
+  peu éclairée (non sondé).
 
