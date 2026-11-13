@@ -1,5 +1,6 @@
 import index from "./index.html";
 import crew from "./crew/index.html";
+import { EAR_LIMITS, earClosed, earOpened, earRelayRefusal, queueFits } from "./server/ear-relay";
 import { createMoonTiles } from "./server/moon-tiles";
 import { createRooms, type Peer } from "./server/rooms";
 import { createTraffic } from "./server/traffic";
@@ -21,7 +22,13 @@ const dev = process.env.NODE_ENV !== "production";
 // server (a temporary token needs a key of a member's rights; a relay needs none)
 // (and in a test's run — KERR_EAR_RELAY=1 —: its server runs as production)
 const DEEPGRAM = dev || process.env.KERR_EAR_RELAY === "1" ? process.env.DEEPGRAM_API_KEY : undefined;
-type Relay = { path: "listen" | "speak"; query: string; up?: WebSocket; queue: (string | ArrayBuffer | Uint8Array)[] };
+type Relay = {
+  path: "listen" | "speak";
+  query: string;
+  up?: WebSocket;
+  queue: (string | ArrayBuffer | Uint8Array)[];
+  timer?: ReturnType<typeof setTimeout>;
+};
 /** The relay to Deepgram's listen (TARS's ear) or speak (his voice, the radio's: Aura-2): the page's own
  *  settings passed on — these names only, each value a word —, nothing else. */
 function deepgramRelay(path: "listen" | "speak", names: string[]) {
@@ -29,8 +36,9 @@ function deepgramRelay(path: "listen" | "speak", names: string[]) {
     if (!DEEPGRAM) return new Response("disabled", { status: 404 });
     const url = new URL(req.url);
     if (req.headers.get("upgrade")?.toLowerCase() !== "websocket") return Response.json({ ok: true });
-    const origin = req.headers.get("origin");
-    if (origin && new URL(origin).host !== url.host) return new Response("forbidden", { status: 403 });
+    // (this server's own pages only, a few at once — server/ear-relay.ts, audit TA-14)
+    const refused = earRelayRefusal(req);
+    if (refused) return refused;
     const q = new URLSearchParams();
     for (const k of names) for (const v of url.searchParams.getAll(k).slice(0, 12)) if (/^[\w.-]{1,32}$/.test(v)) q.append(k, v);
     return srv.upgrade(req, { data: { path, query: q.toString(), queue: [] } })
@@ -241,6 +249,9 @@ const server = Bun.serve({
     open(ws) {
       if ((ws.data as unknown as Peer).kind === "rooms") return;
       const r = ws.data as unknown as Relay;
+      earOpened();
+      // (a relay's life bounded — the ear's minutes, the voice's line —: closed after it, the key not spent for ever)
+      r.timer = setTimeout(() => ws.close(1008, "time"), 1000 * (r.path === "speak" ? EAR_LIMITS.speakS : EAR_LIMITS.listenS));
       const up = new WebSocket(`wss://api.deepgram.com/v1/${r.path}?${r.query}`, {
         headers: { Authorization: `Token ${DEEPGRAM}` },
       } as never);
@@ -258,11 +269,15 @@ const server = Bun.serve({
       if ((ws.data as unknown as Peer).kind === "rooms") return rooms.websocket.message(ws as never, m as never);
       const r = ws.data as unknown as Relay;
       if (r.up?.readyState === WebSocket.OPEN) r.up.send(m);
-      else r.queue.push(m);
+      // (the queue before Deepgram's side opens: bounded)
+      else if (queueFits(r.queue, m)) r.queue.push(m);
+      else ws.close(1009, "queue");
     },
     close(ws) {
       if ((ws.data as unknown as Peer).kind === "rooms") return rooms.websocket.close(ws as never);
       const r = ws.data as unknown as Relay;
+      earClosed();
+      if (r.timer) clearTimeout(r.timer);
       if (r.up && r.up.readyState <= WebSocket.OPEN) r.up.close();
     },
   },

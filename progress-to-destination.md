@@ -5142,3 +5142,15 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   méthode du 13 nov.).
 - **Relevé :** les ergols d'un vaisseau ne se lisent pas dans `fleet.fuel` (le Lander « vide » vole) : son propre budget fait foi —
   à vérifier contre ce que la sauvegarde de l'appareil (3.3, `craftsave.ts`) écrit pour lui.
+
+## 2026-11-13T16:21Z — Audit TA-14 : le relais Deepgram du serveur de développement réservé à ses pages, borné
+
+- **Contribution à la destination :** §19.8 (sécurité et coût d'un service tiers : la clé de Sam dépensée par ses seules pages).
+- **Reproduit avant :** la règle d'admission (sortie dans `server/ear-relay.ts` telle quelle) laissait entrer une ouverture **sans
+  Origin** (un script, toute machine du réseau local ou du Tailscale) — test `ear-relay` en échec ; aucune durée ni taille bornée.
+- **Réalisé :** `server/ear-relay.ts` — un Origin exigé et égal à l'hôte, quatre relais ouverts au plus (429 au-delà), 15 min pour
+  l'oreille et 2 min pour une voix puis fermé (1008), 4 Mo en attente avant l'ouverture de Deepgram (1009 au-delà) ; `server.ts` s'en sert.
+- **Preuves :** unitaires `ear-relay` 3/0 (l'origine de la page, une autre, aucune ; le plafond des relais ouverts ; la file bornée) ;
+  le vrai serveur de développement (port à part, la clé de `.env`) : une ouverture sans Origin **403**, une d'ailleurs 403 — l'ouverture
+  depuis la page même non rejouée ici (elle ouvrirait Deepgram, facturé). TARS.md.
+- **Relevé (entrée précédente) :** les ergols des vaisseaux sont bien sauvés — `ship.spentBy` (tools.ts), pas `fleet.fuel` (les avions).
