@@ -691,7 +691,7 @@ termes à un nœud fautif (43,0666 N, 6,12883 E, niveau 1).
   Jupiter +0,25 ms, **le schéma de la magnétosphère +2,45 ms** (échelle 1,00 des deux côtés). Règle 1 : seul le schéma passe 1 ms — un mode de
   visualisation vu de 400 000 km, hors du profil principal (§8) : pas prioritaire ; l'aurore elle-même ne demande plus de lot.
 
-## ~~Saturne vue de son ombre, l'œil adapté : des artefacts partout~~ — revue le 13 novembre 2026 (~22:20 UTC) : l'adaptation rendue
+## ~~Saturne vue de son ombre, l'œil adapté : des artefacts partout~~ — revue le 13 novembre 2026 (~22:20 UTC) : l'adaptation rendue ; le grain réduit le 14 (la lumière des anneaux, 4 échantillons stratifiés)
 
 - **Constaté le 6 novembre 2026** (AM4, e2e `aurora-giants` sur kerr-mini) : la caméra à un rayon au-dessus du côté nuit de
   Saturne, dans son ombre, l'exposition adaptée au noir (comme pour Jupiter) : l'image se couvre de croissants pixellisés
@@ -715,6 +715,11 @@ termes à un nœud fautif (43,0666 N, 6,12883 E, niveau 1).
   tirage de la phase du volume des géantes (V7) est l'autre candidat. **Piste** : cette lumière varie lentement sur le disque — la calculer une
   fois par image dans une petite table (latitude × heure locale, beaucoup d'échantillons), lue par pixel ; ou plus d'échantillons stratifiés.
   Vue hors du profil principal (§8) : pas de lot ouvert.
+- **Réglé** (2026-11-13 ~23:33 UTC) : **la source prouvée et réduite** — levier `TUNE_RING_SHINE_N` (échantillons stratifiés par secteur d'azimut de
+  `ringShine`) ; mesure en temps réel (le gel lançait le noyau d'affinage et brouillait la comparaison), deux passages par côté, kerr-mini :
+  changement d'une image à l'autre **19–22 % / 16–17 % avec 1 → 7,4–7,5 % / 5,5 % avec 4** (moitiés haute / basse) ; le coût sous le bruit du
+  compteur GPU sur cette vue (13,6–19,2 ms contre 13,7–16,0, ±3 ms). **4 par défaut** ; vérifié sans réglage : 8,3 % / 5,2 %, Uranus et Neptune
+  dessinées, 0 erreur. Le reste du bruit : le tirage de phase du volume (V7), non sondé.
 
 ## ~~Le traceur (pipeline « trace ») au large de Big Sur : une nappe sombre plate jusqu'à l'horizon~~ — non reproduit le 13 novembre 2026
 

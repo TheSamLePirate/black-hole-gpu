@@ -6,10 +6,19 @@ import { App, E2E, stopServer } from "./lib/app";
 // offset fields (Q3, O8), the same code as Jupiter's (AM3, trace.wgsl auroraGiant; Saturn's too, from Cassini 11, but its
 // shadow's dark-adapted view is left out — docs/PROBLEMES-A-REGLER.md). Each seen from one radius over its antisolar point
 // (sys.subsolar), in its shadow, the eye adapted to the dark, at activity 6. AG_OUT. AG_ONLY=saturn: Saturn alone. AG_GRAIN=1: Saturn's
-// disc's grain measured (fixed or changing, frozen and converged).
+// disc's grain measured (fixed or changing, frozen and converged). AG_TUNE=NAME=value,…: a renderer.tune for every view.
 // Output: remote-results/aurora-giants/*.png, stats.json. Done when: each view shot, the camera in the shadow (eyeIncident
 // < 1e-3), no GPU error. Duration: ~4 min warm; the giants' near kernels compile for minutes cold (docs/PROBLEMES-A-REGLER.md).
 const OUT = process.env.AG_OUT ?? "remote-results/aurora-giants";
+// (AG_TUNE=NAME=value,…: a renderer.tune for every view — a measuring lever, e.g. TUNE_RING_SHINE_N=4)
+const AG_TUNE = JSON.stringify(
+  Object.fromEntries(
+    (process.env.AG_TUNE ?? "")
+      .split(",")
+      .filter((x) => x.includes("="))
+      .map((x) => [x.split("=")[0]!, Number(x.split("=")[1])]),
+  ),
+);
 afterAll(stopServer);
 
 test.skipIf(!E2E)(
@@ -23,7 +32,7 @@ test.skipIf(!E2E)(
     const view = async (name: string, body: string, altR: number, R: number, heading: number, pitch: number) => {
       const why = await app.js<
         string | null
-      >(`(() => { Object.assign(__bh.settings, { aurora: 6, auroraLive: false, magnetosphere: false });
+      >(`(() => { Object.assign(__bh.settings, { aurora: 6, auroraLive: false, magnetosphere: false }); if (${JSON.stringify(AG_TUNE !== "{}")}) __bh.renderer.tune = ${AG_TUNE};
         const ss = __bh.sys.subsolar("${body}");
         return __bh.viewAt(-ss[0], ss[1] + 180, { body: "${body}", altM: ${altR * R}, heading: ${heading}, pitch: ${pitch}, fov: 70 }); })()`);
       expect(why).toBeNull();
@@ -43,8 +52,6 @@ test.skipIf(!E2E)(
       // twice 1.5 s apart, then after 8 s more (converged): over the upper half of the disc (the rings' faint light) and the lower (lit
       // by them), the mean luminance, its spatial spread (coefficient of variation) and the mean change between the two reads)
       if (process.env.AG_GRAIN && name === "saturn-night") {
-        await app.js(`(() => { __bh.freeze(true); return 1; })()`);
-        await Bun.sleep(1000);
         const read = () =>
           app.js<
             number[][]
@@ -54,6 +61,26 @@ test.skipIf(!E2E)(
                 const i = 4 * (y * W + x); v.push(0.2126 * c.data[i] + 0.7152 * c.data[i + 1] + 0.0722 * c.data[i + 2]); }
               out.push(v); }
             return out; })()`);
+        const desc0 = (u: number[], w: number[]) => {
+          const m = u.reduce((x, y) => x + y, 0) / u.length;
+          return +(u.reduce((x, y, i) => x + Math.abs(y - w[i]!), 0) / u.length / Math.max(m, 1e-30)).toFixed(3);
+        };
+        // (first live — the world running, the camera held over the point —: what a player sees, the refining kernel out of it; the GPU's
+        // time a frame, ten reads over 5 s, their median)
+        const ms: number[] = [];
+        for (let k = 0; k < 10; k++) {
+          ms.push(await app.js<number>(`__bh.game.perf({ gpu: true }).gpuFrameMs`));
+          await Bun.sleep(500);
+        }
+        ms.sort((x, y) => x - y);
+        const l0 = await read();
+        await Bun.sleep(1500);
+        const l1 = await read();
+        const live = { gpuMs: +((ms[4]! + ms[5]!) / 2).toFixed(2), upperChange: desc0(l0[0]!, l1[0]!), lowerChange: desc0(l0[1]!, l1[1]!) };
+        stats[`${name}-live`] = live;
+        console.log(`  ${name} live: ${JSON.stringify(live)} (GPU reads ${ms.map((x) => x.toFixed(1)).join(" ")})`);
+        await app.js(`(() => { __bh.freeze(true); return 1; })()`);
+        await Bun.sleep(1000);
         const a = await read();
         await Bun.sleep(1500);
         const b = await read();

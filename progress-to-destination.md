@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-13 23:31 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-13 23:33 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous.
@@ -6176,3 +6176,14 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   ajoutées au catalogue seul, leurs fichiers non touchés.
 - Suite : la vague 6 hors rendu est faite ; restent NET-19 (canal non fiable, envoi raté côté serveur : un banc d'abord) et les décisions
   RD3/RD6 de Sam.
+
+## 2026-11-13T23:33Z — Saturne vue de son ombre : le grain de la lumière des anneaux réduit
+
+- Contribution (qualité d'image, §19 : la stabilité de l'image ; vue hors du profil principal) : `ringShine` prend 4 échantillons stratifiés par
+  secteur d'azimut au lieu d'un tiré au hasard (levier de mesure `TUNE_RING_SHINE_N`, `trace.wgsl`).
+- Preuves : **mesuré** kerr-mini, e2e `aurora-giants` `AG_GRAIN` (sonde nouvelle : témoin positif — le levier fait varier le bruit — et deux
+  passages par côté concordants) : changement d'une image à l'autre 16–22 % → 5,5–7,5 % ; par défaut sans réglage 8,3 / 5,2 %. Le coût : **non
+  chiffré**, sous le bruit du compteur GPU de cette vue (±3 ms). WGSL 82/82, budget des noyaux vert.
+- Limites : le reste du bruit (le volume des géantes, V7) non sondé ; Uranus et Neptune seulement revues dessinées ; le coût à mesurer par
+  horodatage de passe si la vue entrait dans un profil suivi.
+

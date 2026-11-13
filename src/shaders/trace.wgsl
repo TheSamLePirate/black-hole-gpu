@@ -349,6 +349,10 @@ override TUNE_BODY_REJECT: u32 = 1u;
 // near materials (snow, rock), 8 the fine noise's colour and light, 16 the clouds' and the weather's shadows, 32 the
 // tiles' imagery, 64 the surface textures, 128 the sea's shading, 256 the scenery's surfaces)
 override TUNE_GSKIP: u32 = 0u;
+// (the rings' light on a ringed planet — ringShine —: its samples per azimuth sector, stratified in it. 4 since 14 Nov 2026: with 1, Saturn's
+// night side seen with the eye adapted was grain — its live image changing 16–22 % frame to frame, 5.5–7.5 % with 4 (kerr-mini, e2e
+// aurora-giants AG_GRAIN, two runs a side); the cost under the GPU meter's noise there (±3 ms). A measuring lever: 1 the old sampling)
+override TUNE_RING_SHINE_N: u32 = 4u;
 // (0: the coastal swell field's reading compiled out of the water's kernels — a measure of what its presence costs, PLAN-MER-WEBGPU L2)
 override TUNE_SWELL: u32 = 1u;
 // (the scenery's parts left out, to measure them — tests/e2e/raster-shade-ablation: 1 the camera ray's buildings, 2 the trees'
@@ -1940,11 +1944,14 @@ fn ringShine(k: u32, q: vec3f, L: vec3f) -> vec3f {
   let w = outer - inner;
   let az = atan2(q.y, q.x);
   var E = vec3f(0.0);
-  for (var i = 0; i < 10; i++) {
+  let ns = max(TUNE_RING_SHINE_N, 1u);
+  let inv = 1.0 / f32(ns);
+  for (var j = 0u; j < 10u * ns; j++) {
+    let i = i32(j / ns);
     let r = inner + w * (0.25 + 0.5 * f32(i / 5));
     // (the azimuths jittered per ray — the planet's shadow on the rings crossed by a fixed sample made
-    // bands on the night —: noise the frames average)
-    let a = az + 0.5 * (f32(i % 5 - 2) + RND - 0.5);
+    // bands on the night —: noise the frames average; ns samples a sector, stratified within it)
+    let a = az + 0.5 * (f32(i % 5 - 2) + (f32(j % ns) + RND) * inv - 0.5);
     let p = vec3f(r * cos(a), r * sin(a), 0.0);
     let dv = p - q;
     let d2 = dot(dv, dv);
@@ -1952,7 +1959,7 @@ fn ringShine(k: u32, q: vec3f, L: vec3f) -> vec3f {
     let cq = dot(u, q);
     if (cq <= 0.0) { continue; }
     let rl = ringLight(k, p, vec3f(0.0, 0.0, 1.0), L, -u, vec2f(1.0, 0.0));
-    E += rl.rgb * (cq * abs(u.z) * r * 0.5 * w * 0.5 / d2);
+    E += rl.rgb * (cq * abs(u.z) * r * 0.5 * w * 0.5 * inv / d2);
   }
   return E;
 }
