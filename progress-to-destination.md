@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-13 21:57 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-13 22:00 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous.
@@ -5974,4 +5974,10 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
 - Réalisé : `aurora-jupiter` relève l'exposition et la couleur de scène (non finis, max, moyenne). PROBLEMES complété.
 - Preuves : **mesuré** (kerr-mini) : la vue du sud à 0,2 RJ exactement nulle, aucune valeur non finie, l'exposition comme ailleurs. Piste : le
   volume de la géante autour de la caméra. Suite : faire varier l'altitude.
+
+## 2026-11-13T22:00Z — Jupiter noir : la latitude de la caméra (50° S), pas le regard ni la hauteur
+
+- Réalisé : `aurora-jupiter` `AJ_SWEEP=1` (cinq vues voisines). PROBLEMES complété.
+- Preuves : **mesuré** (kerr-mini) : nul au-dessus de 50° S à toute direction et hauteur balayées ; normal à 30° S et 50° N. Suite : les
+  paramètres de l'image dans cette vue (un non-fini).
 

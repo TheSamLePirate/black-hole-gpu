@@ -614,6 +614,12 @@ termes à un nœud fautif (43,0666 N, 6,12883 E, niveau 1).
   marchent (`north-act5` max 0,15, `south-far-act5` à 0,5 RJ max 0,047). **Ni un NaN, ni l'exposition** : le traceur rend un noir absolu.
   **Piste** : la caméra dans l'enveloppe du volume de la géante (PLAN-GEANTES-VOLUME, la hauteur tangente — V3) près de la surface au sud
   (aplatissement 0,065 : à 50° S le rayon est plus court) — tout absorbé ; à vérifier en faisant varier l'altitude.
+- **Balayé** (~22:00 UTC, `AJ_SWEEP=1`, run `…-aurora-jupiter-sweep`) : au-dessus de **50° S**, l'image est nulle **quels que soient le
+  regard** (vers le sud, le nord, l'horizon) **et la hauteur** (0,1 et 0,2 RJ) ; à **30° S** et, en miroir, à **50° N** elle est normale (max
+  0,225 et 0,11). La piste du volume (la hauteur) tombe : **c'est la position de la caméra**, à ces latitudes du sud, qui éteint toute l'image —
+  vraisemblablement un paramètre par image calculé depuis la caméra qui devient non fini (rendu ensuite à 0 par un `max(…, 0)`), ou un
+  chemin choisi par la caméra (la tuile de turbulence des géantes proches, `bakeGiantTile` ; `giantInsideOn`). Prochain pas : relire les
+  paramètres de l'image (`P`) dans cette vue, chercher le non-fini.
 
 ## Le coût de l'aurore terrestre de près, la nuit : +4,6 ms sur le M1
 

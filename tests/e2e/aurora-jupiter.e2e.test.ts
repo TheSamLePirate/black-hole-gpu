@@ -7,7 +7,7 @@ import { App, E2E, stopServer } from "./lib/app";
 // "Jupiter: the auroras from its shadow" (the first view as a gallery scene: scene.png, no interface). Seen from Jupiter's
 // shadow — the camera at its midnight (sys.subsolar), the eye adapted to the dark —: from 7 000 km over 45° N looking north
 // across the oval (activity 5, then 8; Jupiter turned so that the oval's low side faces midnight), from 14 000 km over 50° S
-// looking south, from 36 000 km over 30° S (the oval foreshortened at the limb). AJ_OUT.
+// looking south, from 36 000 km over 30° S (the oval foreshortened at the limb). AJ_OUT. AJ_SWEEP=1: the south view's neighbours too.
 // Output: remote-results/aurora-jupiter/*.png, stats.json. Done when: the aurora kernel in (featureKey 16384), each view shot,
 // the camera in the shadow (renderer eyeIncident < 1e-3), no GPU error. Duration: ~5 min cold (the near-Jupiter kernel's
 // compile, ~200 s), ~2 min warm.
@@ -68,6 +68,15 @@ test.skipIf(!E2E)(
       await view("south-act5", 5, -50, null, 0.2 * RJ, 180, -30);
       // (from 36 000 km over 30° S: the oval foreshortened at the limb)
       await view("south-far-act5", 5, -30, null, 0.5 * RJ, 180, -55);
+      // (AJ_SWEEP=1 — PROBLEMES « Jupiter noir depuis le sud »: the black view's neighbours — the hemisphere, the look toward the pole, the
+      // latitude, the height — each its scene colour's maximum in the log)
+      if (process.env.AJ_SWEEP) {
+        await view("sweep-s50-h02-north", 5, -50, null, 0.2 * RJ, 0, -30);
+        await view("sweep-s50-h01-south", 5, -50, null, 0.1 * RJ, 180, -30);
+        await view("sweep-s30-h02-south", 5, -30, null, 0.2 * RJ, 180, -30);
+        await view("sweep-n50-h02-north", 5, 50, null, 0.2 * RJ, 0, -30);
+        await view("sweep-s50-h02-south-level", 5, -50, null, 0.2 * RJ, 180, 0);
+      }
       // (the scene that shows them — "Jupiter: the auroras from its shadow", settings.ts —: the first view, its date and place
       // its own; the kernel warm from the views; shot without the interface: the gallery's picture)
       await app.js(`(() => { __bh.game.preset("Jupiter: the auroras from its shadow"); return 1; })()`);
