@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-13 22:50 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-13 23:02 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous.
@@ -54,6 +54,7 @@ ouverts, sous 1 ms) ; J3 au stade du plan.**
 | Rendu (33d89754) | Classification — lot 2 : le sol (`earth lite: light`, sa finition) | **non ouvert** : plafond mesuré (vue toute en mer, kerr-mini) 0,33 + 0,22 = 0,55 ms, moins le tri 0,2 — sous 1 ms (règle 1) |
 | Rendu (33d89754) | La borne de cadence du M1 Max | **refaite, `coreaudiod` relancé** : à froid la borne tient (29,9 / 39,4 images/s) ; soutenu, le GPU bride vers 850 MHz quelle que soit la borne — **~30 images/s soutenues sur J0** (28,8 borné à 30, 30,9 à 40) ; **borne fixée provisoirement à 30** (révisable par Sam) ([J0-CONTRAT §2](docs/J0-CONTRAT.md)) |
 | Rendu (33d89754) | Retrait R1 des anciens chemins (`singleHistory`, `edgeFoot`, `seaSsrSafe`, `clearCut`, `earthRateOne`, `rasterScaleFree`) | **fait le 13 nov.** (avancé d'un jour ; [PLAN-J2 §9 quattuordecies](docs/PLAN-J2-PAGES-RECONSTRUCTION.md)) |
+| Rendu (33d89754) | Chargement : le noyau du monde visé compilé pendant le voyage (`prewarmNear`) ; hors ligne après une visite (cartes KTX2 gardées) | **faits, mesurés** (kerr-mini) : arrivée à Jupiter à froid 73,7 → 47 s (A/A ×2) ; hors ligne 5 cartes en échec → 0 (`pwa` 2/2) |
 | Audit vagues 3–4 (1feb2f7f) | 3.3 Sauvegardes | **fait pour l'essentiel** : lot 1 (736b26a2, une clé par sauvegarde, rien écrasé en silence) ; lot 2 (f265f467 : « Reprendre » du vol perdu seulement, un avion a ses points ; carburant, train, volets, freins, maintiens, systèmes des vaisseaux sauvés ; l'activité en cours dite) — e2e 6/6, bun test 2 228/0. Reste : l'état d'une mission ou d'un combat (Sam), les systèmes de l'A320, IndexedDB |
 | Audit vagues 3–4 (1feb2f7f) | 3.1 réseau RD0 + RD1 | **fait** : la frontière d'entrée (`src/net/inbound.ts`) ; un événement mal formé figeait l'image (163 → 0), plus maintenant — e2e `net-inbound` 6/6, net-battle/coop/crew/board verts |
 | Audit vagues 3–4 (1feb2f7f) | 3.2 réseau RD2 | **fait** : le serveur se défend (salles par adresse, débit, mots de passe salés et freinés, identité non publiée, rôle gardé, expiration) — six défauts vus avant, 0/6 → 6/6 |
@@ -6107,3 +6108,18 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   (`game/report.ts`, tout en SI par son propre formateur `metres`, vent de travers en m/s) et le cercle d'erreur du HUD (`circ. {0} ± {1} km`).
   Correction : l'entrée du premier lot porte par erreur « 2026-11-14T15:40Z » ; elle date du 13 novembre vers 22:35 UTC (commit 4230804c).
 - Suite : le rapport d'atterrissage dans les unités du pilote ; puis FX-07 (manette de l'A320 et école) et QA-11 (catalogue des e2e).
+
+## 2026-11-13T23:02Z — Le noyau d'un monde visé compilé pendant le voyage ; l'indicateur des compilations juste
+
+- Contribution (§8 « anticiper les compilations », §19 transitions et voyages) : au départ d'un voyage (G, ⇧G, `goTo`, les visites), le noyau
+  du corps visé est demandé tout de suite (`renderer.prewarmNear`, appelé par `main.ts` `travelTo` ; non urgent, file à deux places comme
+  `prewarmEarthFlight`) ; levier de mesure `prewarmVoyage`. L'indicateur des compilations compte ses libellés (deux « the tracer » à la fois
+  perdaient le libellé).
+- Preuves : **mesuré** kerr-mini, e2e `voyage-prewarm` (nouveau ; témoin positif : le levier change l'attente, A/A serré) — Terre → Jupiter,
+  noyaux à froid : attente à l'arrivée 73,7 / 73,7 s → **46,7 / 47,6 s** ; la clé devinée = celle de l'arrivée. Mesure à froid de Jupiter
+  proche (`aurora-jupiter` `AJ_COLD`) : 60,3 s, 5,2 s à chaud (le 203 s du 6 nov. était le M1 Max). Statique : tsc, biome.
+- Limites : gain plafonné par la durée du voyage (20 s par défaut) ; non mesuré sur le M1 Max et kerr-pc ; les autres destinations (Mars, la
+  Lune, Titan, Vénus) passent par le même code, non revolées une à une. Prochaine étape possible : ne pas compiler le monde croisé au départ
+  (36 s pour rien dans ce voyage), puis la spécialisation du noyau des géantes. GRAPHICS-PIPELINE (parcours 12, table des compilations),
+  BH-API, E2E-CATALOGUE, PROBLEMES.
+

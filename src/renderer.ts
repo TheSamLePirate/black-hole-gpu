@@ -843,6 +843,12 @@ function placeOnBody(near: { centre: Vec3; radius: number; axes: Vec3[] }, mPerM
 /** the airless moons whose ground is their own (trace.wgsl moonOwn — PLAN-PLANETES-AAA P8 A4): their kernel, NEAR_KIND 7 */
 const OWN_GROUND = new Set(["io", "europa", "ganymede", "enceladus"]);
 
+/** the near body's kind in the camera's key (NEAR_KIND — P7): 1 the Earth, 2 another world with air (Mars, the giants), 3 airless,
+ *  5 Titan, 6 Venus, 7 the airless moons with a ground of their own (4: none near — the caller's) */
+function nearKindOf(nb: { id: string; kind: number; surface: number }): number {
+  if (!bodyHasAir(nb.kind, nb.surface)) return OWN_GROUND.has(nb.id) ? 7 : 3;
+  return nb.id === "earth" ? 1 : nb.id === "titan" ? 5 : nb.id === "venus" ? 6 : 2;
+}
 export class Renderer {
   private device: GPUDevice;
   private context: GPUCanvasContext;
@@ -3803,21 +3809,7 @@ export class Renderer {
     // keep "any")
     if (!o.probe && this.nearKinds) {
       const nb = near ? bodies[near.index] : undefined;
-      const kind = !nb
-        ? 4
-        : !bodyHasAir(nb.kind, nb.surface)
-          ? // (the moons with a ground of their own — trace.wgsl moonOwn, P8 A4 —: their kernel, out of the Moon's)
-            OWN_GROUND.has(nb.id)
-            ? 7
-            : 3
-          : nb.id === "earth"
-            ? 1
-            : nb.id === "titan"
-              ? 5
-              : nb.id === "venus"
-                ? 6
-                : 2;
-      this.featureKey |= kind << NEAR_KIND_SHIFT;
+      this.featureKey |= (nb ? nearKindOf(nb) : 4) << NEAR_KIND_SHIFT;
     }
     // (the Ranger's shadow on the near ground: its bounding sphere in the camera's axes; 0: none)
     // (the ship seen from outside — a spectator, the astronaut on foot — casts its shadow too)
@@ -6734,7 +6726,7 @@ export class Renderer {
   ) {
     const t0 = performance.now();
     const label = this.compileLabel(key, entry, quality);
-    this.compiling.add(label);
+    this.compiling.set(label, (this.compiling.get(label) ?? 0) + 1);
     if (entry === "main" && !quality) this.mainStartedAt.set(key, t0);
     let p: GPUComputePipeline;
     try {
@@ -6755,7 +6747,9 @@ export class Renderer {
       this.noteCompile(`${entry}${quality ? " (quality)" : ""}`, key, t0, false);
       throw e;
     } finally {
-      this.compiling.delete(label);
+      const n = (this.compiling.get(label) ?? 1) - 1;
+      if (n > 0) this.compiling.set(label, n);
+      else this.compiling.delete(label);
     }
     this.noteCompile(`${entry}${quality ? " (quality)" : ""}`, key, t0, true);
     // (the pace: a large kernel's cold compile — not one out of the browser's cache —, by its source's size)
@@ -6938,6 +6932,38 @@ export class Renderer {
   /** the compiles queued ahead of a launch dropped (the one running finishes: a compile cannot be cancelled) */
   prewarmStop() {
     this.prewarmKeys.clear();
+    this.voyageKey = -1;
+  }
+  /** (a measuring lever) false: a voyage's goal's kernel not compiled ahead (prewarmNear), as before 13 Nov 2026 */
+  prewarmVoyage = true;
+  /** the key compiled ahead for the voyage under way (prewarmNear); −1: none */
+  voyageKey = -1;
+  /**
+   * A voyage's goal: the kernel of the world it ends by compiled from its start (ANALYSE-STRATEGIE §8, anticipate the compiles) —
+   * the camera's key with that world's near kind (NEAR_KIND), the Earth's own bits (runways, surface, scenery, the terrain's raster)
+   * left out away from it, and the bits a moment there sets (the auroras of an adapted eye, a body's shadow, a dust storm's weather)
+   * not guessed. Not urgent (CompileQueue's second slot: the frame's own pass it); the previous voyage's dropped. Measured
+   * 13 Nov 2026 (kerr-mini, e2e aurora-jupiter AJ_COLD): the near-Jupiter kernels 60 s cold at the arrival, 5 s warm; a voyage
+   * lasts settings.voyageWall (20 s): the head start at most. The e2e: tests/e2e/voyage-prewarm.e2e.test.ts.
+   */
+  prewarmNear(id: string) {
+    const drop = () => {
+      if (this.voyageKey !== -1) this.prewarmKeys.delete(this.voyageKey);
+      this.voyageKey = -1;
+    };
+    drop();
+    if (!this.prewarmVoyage || !this.nearKinds || this.lost || !this.firstFrameDoneAt) return;
+    const nb = this.lastBodies.find((b) => b.id === id);
+    if (!nb) return;
+    const kind = nearKindOf(nb);
+    const EARTH_ONLY = 256 | 4096 | 8192 | FEATURE_TERRAIN_CACHE | FEATURE_TERRAIN_RASTER | FEATURE_RASTER_PRIMARY;
+    let key = this.cameraKey & ~(7 << NEAR_KIND_SHIFT) & ~(16384 | 2048 | 1024);
+    if (kind !== 1) key &= ~EARTH_ONLY;
+    key |= kind << NEAR_KIND_SHIFT;
+    if (key === this.cameraKey || this.variants.get(key)?.rt) return;
+    this.voyageKey = key;
+    this.prewarmKeys.add(key);
+    this.traceVariant("rt", key);
   }
 
   /**
@@ -10933,7 +10959,10 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
    *  compile meter) */
   /** the shaders compiling now, as the player reads them (main.ts: the compile meter) — the kernel, and the scene's features
    *  that made its variant */
-  private compiling = new Set<string>();
+  /** the compiles running, by label, how many each — two of one label at once (the camera's tracer and a key compiled ahead,
+   *  "the tracer" both): a set lost the label when the first ended, the loading said nothing while the second ran (13 Nov 2026,
+   *  e2e voyage-prewarm: 35 s of Jupiter's tracer shown as no compile) */
+  private compiling = new Map<string, number>();
   /** every tracer compile of the session, in order (compileReport) */
   private compileLog: { pipeline: string; key: number; startedAt: number; seconds: number; ok: boolean; beforeFirstImage: boolean }[] = [];
   /** each specialised pipeline's source size [KB] ("key:entry:quality") — the measure of its compile's work */
@@ -10998,7 +11027,7 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
     };
   }
   get compilingNow(): string[] {
-    const out = [...this.compiling];
+    const out = [...this.compiling.keys()];
     if (this.generalCompile.state === "pending") out.push(t("the general tracer"));
     if (this.qualityCompile.state === "pending") out.push(t("the refining tracer"));
     if (this.lutCompile.state === "pending" || this.lutQCompile.state === "pending") out.push(t("the far field"));

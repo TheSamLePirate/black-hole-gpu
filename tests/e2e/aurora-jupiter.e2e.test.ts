@@ -21,12 +21,16 @@ test.skipIf(!E2E)(
     mkdirSync(OUT, { recursive: true });
     const app = await App.boot({ width: 1400, height: 900, hash: "scene=game:artemis", tiles: true });
     const stats: Record<string, unknown> = {};
+    // (AJ_COLD=1: a pipeline constant nudged by a random hair — TUNE_EPS_FAR, the far march's epsilon, 3 → 3.000x — so that the kernels
+    // compile from nothing, the GPU driver's cache missed: the cold compile timed — PROBLEMES « La compilation du noyau de Jupiter proche »)
+    if (process.env.AJ_COLD) await app.js(`(() => { __bh.renderer.tune = { TUNE_EPS_FAR: ${3 + Math.random() * 1e-3} }; return 1; })()`);
     let gpuErrors = -1;
     const view = async (name: string, act: number, lat: number, lon: number | null, alt: number, heading: number, pitch: number) => {
       const why = await app.js<string | null>(`(() => { Object.assign(__bh.settings, { aurora: ${act}, auroraLive: false });
         const ss = __bh.sys.subsolar("jupiter");
         return __bh.viewAt(${lat}, ${lon ?? "ss[1] + 180"}, { body: "jupiter", altM: ${alt}, heading: ${heading}, pitch: ${pitch}, fov: 70 }); })()`);
       expect(why).toBeNull();
+      const tKey = Date.now();
       await app.waitFor(`(__bh.renderer.featureKey & 16384) === 16384`, 60_000);
       // (the near-Jupiter kernel compiles in ~200 s cold on the M1 Max, with or without the auroras — measured 6 Nov 2026: 203 s
       // without, 219 s with —; its progress said every 30 s, 5 min at most)
@@ -35,6 +39,8 @@ test.skipIf(!E2E)(
         await Bun.sleep(5000);
       }
       await app.waitFor(`__bh.renderer.compilesPending === 0`, 30_000);
+      // (the wait timed: the view asked → nothing compiling — PROBLEMES « La compilation du noyau de Jupiter proche »)
+      console.log(`    ${name}: compiled ${((Date.now() - tKey) / 1000).toFixed(1)} s after the view was asked`);
       await Bun.sleep(2500);
       await app.waitFor(`__bh.renderer.compilesPending === 0`, 90_000);
       await Bun.sleep(3000);

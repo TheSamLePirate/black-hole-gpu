@@ -556,7 +556,7 @@ termes à un nœud fautif (43,0666 N, 6,12883 E, niveau 1).
   sans changer l'image) : un `shadowFs` qui écarte les texels hors de la silhouette du houppier vue du Soleil (droite vers le Soleil
   dans le repère unité de la sphère ou du cône), la profondeur restant celle du proxy ; à mesurer (`trees' shadow map`, image).
 
-## La compilation du noyau de Jupiter proche : ~200 s à froid
+## La compilation du noyau de Jupiter proche : ~200 s à froid (M1 Max, 6 nov.) — 60 s sur kerr-mini le 13 nov., ~47 s à l'arrivée d'un voyage depuis le 13
 
 - **Constaté le 6 novembre 2026** (Sam : « 200 s pour Jupiter »), en écrivant l'e2e `aurora-jupiter` (AM3).
 - **Mesuré** sur le MacBook Pro M1 Max, Chrome lancé par l'e2e, cache de pipelines vide : la caméra à 7 000 km au-dessus de
@@ -570,6 +570,15 @@ termes à un nœud fautif (43,0666 N, 6,12883 E, niveau 1).
 - **Piste** : mesurer le temps de compilation par fonction comme pour PLAN-LEAN-TRACER-KERNELS (P0–P10 : la Terre passée de
   134 à 19 s) ; spécialiser le noyau des géantes (ce que la caméra proche n'utilise pas) ; compiler en avance dès que
   Jupiter devient la destination (G, l'Atlas, `near`) — ANALYSE-STRATEGIE §8 « anticiper les compilations ».
+- **Remesuré** (2026-11-13 ~23:02 UTC, kerr-mini ; l'ancien chiffre est du M1 Max, autre machine) : la vue près de Jupiter demandée → plus rien ne compile,
+  **60,3 s à froid** (une constante de pipeline poussée d'un cheveu, `AJ_COLD` : le cache du pilote manqué, comme à chaque nouvelle version) et
+  **5,2 s à chaud** — `main` 42–47 s puis `env` 19–20 s, en série. La clé de Jupiter proche est celle de Mars (NEAR_KIND 2, monde avec air).
+- **Fait : la compilation en avance au départ d'un voyage** (`renderer.prewarmNear`, appelée par `travelTo` — G, ⇧G, `goTo`, les visites) :
+  la clé du corps visé devinée juste (celle de l'arrivée, 2/2) ; e2e `voyage-prewarm`, voyage G de la Terre à Jupiter (20 s), noyaux à froid :
+  attente à l'arrivée **73,7 / 73,7 s → 46,7 / 47,6 s** (A/A serré des deux côtés). Plafond de ce levier : la durée du voyage. **En passant** :
+  l'indicateur des compilations perdait le libellé d'un noyau quand un autre du même nom finissait (35 s de compilation de Jupiter affichées
+  « rien ») — compté maintenant. **Reste** : ~47 s à froid après un voyage de 20 s (le noyau principal partage le GPU avec celui d'un monde sans
+  air croisé au départ, 36 s pour rien) ; la spécialisation du noyau des géantes (ce que Mars apporte à leur clé commune) non essayée.
 
 ## ~~Le ciel de nuit de la sonde de lumière du Ranger, ~40 fois son sol~~ — réglé le 13 novembre 2026 (~21:41 UTC) : la borne provisoire retirée
 

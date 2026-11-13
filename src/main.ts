@@ -2456,6 +2456,8 @@ async function main() {
             ? null
             : departure;
     }
+    // (and the kernel of the world it ends by compiled from its start — renderer.prewarmNear; the voyage's 20 s its head start)
+    renderer.prewarmNear(referenceBody(goal(sim.time).X, sim.time));
     if (cine && C.startCineVoyage(goal, finish, name, target, cine)) {
       touch();
       return null;
