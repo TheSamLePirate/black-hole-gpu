@@ -50,8 +50,15 @@ cadence mise au contrat actuel (1 sous le matériau) ; sa partie « repli » mis
   directions au-dessus de l'horizon vu de la caméra, le reste au ciel clair), ou marquer le sol dans la sonde.
 - **Confirmé** (~19:39 UTC, run `…-seadusk7`, la lecture au niveau 0 — sans flou GGX —) : les taches deviennent des bandes plus fines, roses et
   jaunes, **toujours là** : c'est le contenu de la sonde près de son horizon (son rendu grossier de la mer et des terres, 1,4° le texel, coloré
-  au couchant), le flou des niveaux l'étalant seulement. Le correctif proposé reste : la sonde lue au-dessus d'une marge sur l'horizon, le ciel
-  clair en dessous.
+  au couchant), le flou des niveaux l'étalant seulement.
+- **Révisé** (~20:02 UTC) : la sonde relue et écrite en image (`renderer.readShipProbe`, phase `probedump`, run `…-probedump`) est **lisse** à
+  19:40 — un dégradé, la bande orangée du couchant, aucune plaque verte ou jaune : la lecture « le sol de la sonde coloré » ne tient pas ; et
+  `rUp` est déjà relevé à ≥ 1,15° (les vrais reflets de la côte y sont attendus) — une marge sur l'horizon ne serait pas le correctif.
+  **Nouvelle piste, à mesurer** : le reflet est borné **canal par canal** (`min(seaSky, 4 × skyR)`) — l'orange vif de la sonde au-dessus du
+  ciel clair dans le rouge seulement donne des teintes qui ne sont ni l'un ni l'autre (roses, jaunes, verts). Levier de mesure posé
+  (`TUNE_SEA_DBG` 32 : borné par la luminance, la teinte gardée) ; **non testé** — trois runs bloqués au démarrage de J0 par le chargement de la
+  forêt (240 s, « scenery forest » ; les services IGN et WorldCover répondaient ; une phase au même démarrage passait entre-temps : probablement
+  la canopée IGN limitée par une autre campagne depuis la même adresse).
 
 ## ~~Le premier `renderer.tune` d'une session fige la sonde de lumière de l'appareil~~ — réglé le 13 novembre 2026 (~17:57 UTC) : la sonde de l'appareil gelée pendant la compilation de son noyau à chaque changement de clé
 

@@ -264,7 +264,8 @@ override TUNE_STEP_BODIES: u32 = 1u;
 // (the ground's march: a step's share of the clearance — 0.5, safe for slopes to ~60°; more: a measure)
 override TUNE_MARCH_K: f32 = 0.5;
 // (PROBLEMES, the sea at dusk — a measuring lever in seaShade: 1 the slopes' variances nil, 2 no foam, 4 the normal flat, 8 the probe's
-// mirrored sky not read, 16 its level held at 0 — no GGX blur)
+// mirrored sky not read, 16 its level held at 0 — no GGX blur, 32 its
+// hold by luminance, not channel by channel)
 override TUNE_SEA_DBG: u32 = 0u;
 // (PLAN-J3 J3-5, a measuring lever: the tiles' and bricks' albedo scale in buildingLook — 1 as drawn)
 override TUNE_BLD_TILE: f32 = 1.0;
@@ -9590,7 +9591,10 @@ fn seaShade(q: vec3f, view: vec3f, light: vec3f, Eg: vec3f, sky: vec3f, under: v
     // (filtered by the slopes the pixel does not resolve — their roughness, the probe's GGX level: a rough sea mirrors a blurred
     // sky, a calm one a sharp one — S5)
     let alphaR = sqrt(su2 + sc2);
-    skyR = mix(skyR, min(seaSkyRadiance(rUp, alphaR), 4.0 * skyR), b * P.seafft[6].z * select(1.0, 0.0, (TUNE_SEA_DBG & 8u) != 0u));
+    let seaSky = seaSkyRadiance(rUp, alphaR);
+    // (TUNE_SEA_DBG 32, a measure: the probe's sky held under 4 × the clear sky's luminance, its hue kept — not channel by channel)
+    let seaSkyHeld = select(min(seaSky, 4.0 * skyR), seaSky * min(1.0, 4.0 * luminance(skyR) / max(luminance(seaSky), 1e-30)), (TUNE_SEA_DBG & 32u) != 0u);
+    skyR = mix(skyR, seaSkyHeld, b * P.seafft[6].z * select(1.0, 0.0, (TUNE_SEA_DBG & 8u) != 0u));
     // (another world's sky: its own light probe — the lensed disk, Gargantua, the sky about the craft —, else its harmonics)
     if (SEA_ALIEN) { skyR = select(nearE(fromBody(rUp)) / PI, seaSkyRadiance(rUp, alphaR), P.near3.w < 1.5); }
     skyClear = select(skyClear, skyR, SEA_ALIEN);

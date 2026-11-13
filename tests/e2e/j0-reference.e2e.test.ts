@@ -12,7 +12,7 @@ const J0_SCENE = process.env.J0_START
   ? { ...J0_SCENE_BASE, id: `${J0_SCENE_BASE.id}+start`, start: process.env.J0_START.split(",").map(Number) as typeof J0_SCENE_BASE.start }
   : J0_SCENE_BASE;
 const J0_FIXED = process.env.J0_FPSCAP ? J0_FIXED_BASE.replace(/\}\s*$/, `, fpsCap: ${Number(process.env.J0_FPSCAP)} }`) : J0_FIXED_BASE;
-import { readPng } from "./lib/png";
+import { readPng, writePng } from "./lib/png";
 import { sceneryReady } from "./lib/plan-views";
 
 // J0 — the reference flight scene measured (docs/J0-CONTRAT.md; strategy §15 J0, §22.4 D2 Toulon-Hyères, D3 25 ms on the M1
@@ -32,7 +32,7 @@ import { sceneryReady } from "./lib/plan-views";
 //       screens, the cockpit (the outside view) — between two baseline flights (drift).
 // Output: remote-results/j0/<machine>/ (J0_OUT): j0.json, shots (start, mid-turn, end; each ablation's last frame).
 // J0_PHASES=flight,ablate,sustained (default all; sustained: the flight again after the ablations, the machine hot), ABLATE_S (20), J0_MACHINE (the label: "m1max", "kerr-mini"; default the host name).
-// Other phases, asked by name: agecheck, framing (PLAN-J3 J3-0), keylight, keyair, keysky, skyband4 (J3-1), keyhaze (J3-2), shadows (J3-3), wetbld, cityview, materials (J3-5), seadusk (PROBLEMES) (J3-1: the craft's key light against the incident Sun toward
+// Other phases, asked by name: agecheck, framing (PLAN-J3 J3-0), keylight, keyair, keysky, skyband4 (J3-1), keyhaze (J3-2), shadows (J3-3), wetbld, cityview, materials (J3-5), seadusk, probedump (PROBLEMES) (J3-1: the craft's key light against the incident Sun toward
 // sunset, ~3 min on kerr-mini; keyair: its air two ways, march and table, ~4 min; keysky: the sky's light two ways, ~4 min).
 // Not a pass/fail on the frame rate: the fiche is written from j0.json (docs/progress/j0/). It fails on a GPU error, a craft not
 // placed, a flight not flown.
@@ -1082,6 +1082,7 @@ describe.skipIf(!E2E)("J0: the reference flight over Toulon-Hyères", () => {
         ["flatNormal", "__bh.renderer.tune = { TUNE_SEA_DBG: 4 };", "__bh.renderer.tune = {};"],
         ["noSkyLayer", "__bh.renderer.tune = { TUNE_SEA_DBG: 8 };", "__bh.renderer.tune = {};"],
         ["skyLod0", "__bh.renderer.tune = { TUNE_SEA_DBG: 16 };", "__bh.renderer.tune = {};"],
+        ["skyHoldLum", "__bh.renderer.tune = { TUNE_SEA_DBG: 32 };", "__bh.renderer.tune = {};"],
       ];
       for (const [name, set, reset] of cases) {
         await app.js(`(() => { ${set} __bh.refresh(); return 1; })()`);
@@ -1098,9 +1099,36 @@ describe.skipIf(!E2E)("J0: the reference flight over Toulon-Hyères", () => {
       await app.js(
         `(() => { Object.assign(__bh.settings, { autoExposure: true, exposure: 0, shipMount: "cockpit" }); __bh.freeze(false); __bh.game.setDate("${J0_SCENE.date}"); return 1; })()`,
       );
-      expect(cases.length).toBe(14);
+      expect(cases.length).toBe(15);
     },
     900_000,
+  );
+
+  // (PROBLEMES — the sea at dusk: what the craft's probe holds, J0_PHASES=probedump: at 15:30 and 19:40, the probe read back
+  // (renderer.readShipProbe) and written as a PNG (each scaled by its own 99th percentile's luminance, sRGB) — the horizon's band looked at)
+  test.skipIf(!PHASES.includes("probedump"))(
+    "PROBLEMES: the craft's light probe as it stands — 15:30 and 19:40, written as images",
+    async () => {
+      await start("");
+      for (const utc of ["15:30", "19:40"]) {
+        await app.js(`(async () => { const f = () => new Promise((q) => requestAnimationFrame(q)); __bh.freeze(false);
+          __bh.game.setDate("2026-07-10T${utc}:00Z"); __bh.refresh(); for (let i = 0; i < 120; i++) await f(); __bh.freeze(true);
+          for (let i = 0; i < 30; i++) await f(); return 1; })()`);
+        const p = await app.js<{ w: number; h: number; rgb: number[] }>("__bh.renderer.readShipProbe()");
+        const lum: number[] = [];
+        for (let i = 0; i < p.w * p.h; i++) lum.push(0.2126 * p.rgb[3 * i]! + 0.7152 * p.rgb[3 * i + 1]! + 0.0722 * p.rgb[3 * i + 2]!);
+        const sorted = [...lum].sort((a, b) => a - b);
+        const k = 1 / Math.max(sorted[Math.floor(0.99 * (sorted.length - 1))]!, 1e-30);
+        const out8 = new Uint8Array(p.w * p.h * 3);
+        const srgb = (x: number) => Math.round(255 * Math.min(1, x <= 0.0031308 ? 12.92 * x : 1.055 * x ** (1 / 2.4) - 0.055));
+        for (let i = 0; i < p.w * p.h * 3; i++) out8[i] = srgb(Math.max(0, p.rgb[i]! * k));
+        await Bun.write(`${OUT}/probe-${utc.replace(":", "")}.png`, writePng(p.w, p.h, out8));
+        console.log(`  probe dump ${utc}: written (scale 1/${(1 / k).toExponential(2)})`);
+      }
+      await app.js(`(() => { __bh.freeze(false); __bh.game.setDate("${J0_SCENE.date}"); return 1; })()`);
+      expect(true).toBe(true);
+    },
+    600_000,
   );
 
   test.skipIf(!PHASES.includes("sustained"))(

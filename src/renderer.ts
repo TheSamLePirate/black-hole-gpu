@@ -9845,6 +9845,23 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
     };
   }
 
+  /** (PROBLEMES, the sea at dusk) the craft's light probe as it stands — 256 × 128 texels, rgb radiance on the probe's axes (row 0 its
+   *  zenith, the equirectangular mapping of trace.wgsl env) —, read back for a look: Float32Array of r, g, b per texel */
+  async readShipProbe(): Promise<{ w: number; h: number; rgb: number[] }> {
+    const n = ENV_W * ENV_H;
+    const st = this.device.createBuffer({ size: n * 16, usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ });
+    const enc = this.device.createCommandEncoder();
+    enc.copyBufferToBuffer(this.ship.envBuf, 0, st, 0, n * 16);
+    this.device.queue.submit([enc.finish()]);
+    await st.mapAsync(GPUMapMode.READ);
+    const f = new Float32Array(st.getMappedRange().slice(0));
+    st.unmap();
+    st.destroy();
+    const rgb: number[] = [];
+    for (let i = 0; i < n; i++) rgb.push(f[i * 4]!, f[i * 4 + 1]!, f[i * 4 + 2]!);
+    return { w: ENV_W, h: ENV_H, rgb };
+  }
+
   /** Exposure in use [EV]: the setting, plus the meter's with auto exposure. */
   ev(s: Settings) {
     // (Q6-ISS ISS5: a live stream's camera holding its own exposure — Sen's: the day's, its night black —, unless measured Neutral)

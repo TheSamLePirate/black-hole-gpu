@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-13 19:39 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-13 20:02 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous.
@@ -5731,4 +5731,13 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   Lune (91 s, 0,0026 $), amarrage à l'ISS (208 s, 0,0043 $), interface (qualité « jeu » et constellations), téléportation vers Jupiter puis
   « annule » (retour avant la téléportation — le filet par tour), plan proposé (transfert vers la Lune, ×50) ; ≈ 0,015 $ en tout.
 - Limites : les vols longs (TARS_LONG : décollage vers l'orbite, entrée vers Edwards) non relancés ; un seul modèle.
+
+## 2026-11-13T20:02Z — Les taches sur la mer : la sonde est lisse ; piste du bornage par canal (non testée)
+
+- Réalisé : `renderer.readShipProbe()` et la phase `probedump` (la sonde écrite en image) ; le levier de mesure `TUNE_SEA_DBG` 32 (le reflet
+  borné par la luminance). Docs : PROBLEMES (révisé), BH-API, E2E-CATALOGUE.
+- Preuves : **observé** — la sonde à 19:40 est lisse (run `…-probedump`, repassé `…-probedump2`) : ma lecture précédente (« le sol de la sonde
+  coloré ») est retirée. **Non testé** : le bornage par la luminance — trois runs `seadusk` bloqués au démarrage par la forêt (240 s), sans
+  rapport avec le code (une phase au même démarrage passait entre-temps).
+- Suite : relancer `seadusk` quand l'IGN répond (le cas `skyHoldLum`) ; si les taches partent, le correctif est ce bornage.
 
