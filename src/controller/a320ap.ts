@@ -4,6 +4,7 @@
 // its orders given to the Airbus law (the flight path angle and the bank an autopilot flies), its N1 to the FADEC
 // (src/a320/fcs.ts, the next frame), its FMA and flight directors to the displays.
 
+import { frameNow } from "../frameclock";
 import { CONF, confOf } from "../a320/pose";
 import { detentOf } from "../a320/fadec";
 import { vs1g } from "../a320/du/data";
@@ -40,7 +41,8 @@ const D = 180 / Math.PI;
 /** The ILS the A320 tunes: its plan's destination's runway — an airfield ending it —, else the nearest within 150 km
  *  (checked again every 20 s). */
 function tune(c: CameraController): IlsRunway | null {
-  const now = performance.now();
+  // (the flight's clock — audit AR-08)
+  const now = frameNow();
   // (one set by another — the MCDU's RAD NAV, a test —: kept)
   if (c.a320Ils && c.a320Ils !== tuned.rwy) return c.a320Ils;
   if (c.a320Ils && now - tuned.at < 20_000) return c.a320Ils;

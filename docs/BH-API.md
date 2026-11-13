@@ -649,7 +649,7 @@ The renderer's generation: 1 at start, plus one for each renderer made again on 
 
 ### `__bh.gpu.lose()` → void
 
-Destroys the device on purpose (`renderer.simulateLoss()`): the page then recovers, with a new generation, as a reset (not a reload). Used to test the recovery.
+Destroys the device on purpose (`renderer.simulateLoss()`): the page then recovers, with a new generation, as a reset (not a reload). Used to test the recovery. Since 13 Nov 2026 (audit AR-02, strategy §19.8) the flight is held — its step and its clock — from the loss to the new renderer's first image (e2e `gpu-recovery-hold`).
 
 ```js
 (__bh.gpu.lose(), true)
@@ -1119,7 +1119,7 @@ __bh.game.bodies("ours").find((b) => b.id === "moon").distKm   // km from the sh
 
 ### `__bh.game.ctx` → object (GameContext)
 
-The context given to the tools by main.ts: `{ settings, camera, renderer, time(), setTime(t), preset(name), changed(keys), refresh(), toast(text), fps(), renderScale(), scene: { get(), set(name) } }`. Private field; use the other tools instead. (Writing to it is not a supported path.)
+The context given to the tools by main.ts: `{ settings, camera, renderer, time(), setTime(t), preset(name), changed(keys), refresh(), toast(text), fps(), renderScale(), scene: { get(), set(name) } }`. `fps()`: the frames drawn over the wall's time of the last half-second, whole — since 13 Nov 2026 (audit AR-06) not over the loop's step bounded at 0.1 s, which made a 400 ms stall count for 100 ms (e2e `fps-truth`). Private field; use the other tools instead. (Writing to it is not a supported path.)
 
 *Used in:* none.
 

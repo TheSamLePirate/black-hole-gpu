@@ -451,7 +451,8 @@ function stationContact(this: CameraController, p0: NonNullable<ReturnType<Camer
   setHomePose(s, X, unitV(repToHomeVec(w, cam.ell, cam.n, cam.fwd)), unitV(repToHomeVec(w, cam.ell, cam.n, cam.up)), V);
   this.pilot.omega = [0, 0, 0];
   this.sync();
-  const now = performance.now();
+  // (the flight's clock — audit AR-08)
+  const now = frameNow();
   if (now - this.lastContactMsg > 1500) {
     this.lastContactMsg = now;
     const what = o.id === "iss" ? "ISS" : o.net ? o.net.title : VESSELS[o.id as VesselId].name;

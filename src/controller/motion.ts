@@ -1,5 +1,6 @@
 // The CameraController — free flight and gravity: the camera's and the ship's integrators.
 // (Its methods, out of controls.ts: installed on its prototype — `this` the controller.)
+import { frameNow } from "../frameclock";
 import { f35Variant } from "../f35/variant";
 import { recorder } from "../game/recorder";
 import { terrainAhead } from "../game/gpws";
@@ -1048,7 +1049,8 @@ function releaseRest(this: CameraController, travelling: boolean) {
  * Δv spent, the flight's length; once a touchdown (a bounce's second contact is no new report).
  */
 function reportLanding(this: CameraController, body: string, verdict: "landed" | "hard", sink: number, along: number) {
-  const now = performance.now();
+  // (the flight's clock — frameclock.ts —: a stepped flight's 20 s are its own, not the wall's — audit AR-08)
+  const now = frameNow();
   if (now - (this.reportedAt ?? -1e9) < 20e3) return;
   this.reportedAt = now;
   // (graded at the next frame's start — flyShip —, not within the touchdown's step: the runway's figures

@@ -601,10 +601,14 @@ async function main() {
   // going on where it was (PLAN-MONDE M2); a third loss within a minute, or a device that will not come
   // back: the image frozen, a reload offered
   let recovering = false;
+  /** the flight held — its step, its clock — from a device's loss to the new renderer's first image (strategy §19.8; audit
+   *  AR-02: the flight ran on without an image, a landing or a crash possible unseen); still held if the recovery fails */
+  let simHeld = false;
   const losses: number[] = [];
   const recoverGpu = async (why: string) => {
     if (recovering) return;
     recovering = true;
+    simHeld = true;
     let saved = false;
     try {
       if (settings.autosave) saved = tools.autosaveNow();
@@ -649,8 +653,13 @@ async function main() {
       displayChanged = true;
       // (its compile's stages said again by the new renderer: the first image's closed on its first frame —
       // the splash closes it only once, at the start)
-      const firstFrame = () =>
-        renderer.firstFrameDoneAt > 0 || renderer.lost ? loading.done("pipelines") : requestAnimationFrame(firstFrame);
+      // (the flight let go with it: the new renderer's first image drawn — not before)
+      const firstFrame = () => {
+        if (renderer.firstFrameDoneAt > 0 || renderer.lost) {
+          loading.done("pipelines");
+          if (!renderer.lost) simHeld = false;
+        } else requestAnimationFrame(firstFrame);
+      };
       firstFrame();
       gpuDiagnostics.record("device-recovered", why);
       panel.toast(t("Graphics device restored — the flight goes on"));
@@ -8538,9 +8547,12 @@ async function main() {
     // (never back: the first frame's stamp — its vsync's — may precede the performance.now() taken as the loop
     // began; a negative step put the clock 0.06 s back with the ship's place left where it was — at 7.7 km/s,
     // the station's scene started a kilometre off it, drifting away at a metre a second)
-    const dt = Math.min(0.1, Math.max(0, (now - last) / 1000));
+    // (the wall's time since the last frame, whole — the frame rate's (audit AR-06: counted on the bounded step, a 400 ms gap
+    // was 100 ms and the rate shown optimistic exactly when it stuttered) —, and the step's, bounded to 0.1 s)
+    const wallDt = Math.max(0, (now - last) / 1000);
+    const dt = Math.min(0.1, wallDt);
     // (the flight's clock: the frame's time while it runs — frozen, only the steps move it)
-    if (!frozen && !paused && !replay.active) advanceFrameClock(dt * 1000);
+    if (!frozen && !paused && !replay.active && !simHeld) advanceFrameClock(dt * 1000);
     if (!paused && firstFrame) playedMs += dt * 1000;
     // (the rain's: only while the time runs — paused, the drops stand still)
     if (!frozen && !paused && settings.animate) renderer.rainClock += dt;
@@ -8549,7 +8561,7 @@ async function main() {
     if (loopIv.length > 31) loopIv.shift();
     if (loopIv.length >= 15) renderer.refreshMs = [...loopIv].sort((a, b) => a - b)[loopIv.length >> 1]!;
     last = now;
-    fpsAcc += dt;
+    fpsAcc += wallDt;
     if (fpsAcc > 0.5) {
       fps = fpsN / fpsAcc;
       fpsAcc = 0;
@@ -8586,7 +8598,7 @@ async function main() {
     const pauseUp = !!pauseMenu?.isOpen || playerSettings.isOpen;
     if (paused || pauseUp) menuPad.tick(camera.pad.poll(), now, titleScreen.isOpen || pauseUp);
     camera.padFrame = !paused && pauseUp ? null : undefined;
-    if (!frozen && !paused && !renderer.offlineActive && !replay.active) {
+    if (!frozen && !paused && !renderer.offlineActive && !replay.active && !simHeld) {
       // (the flight plan's guidance speaking: a waypoint passed, its end, the bingo)
       if (camera.nav.say) {
         panel.toast(camera.nav.say);
@@ -8878,7 +8890,7 @@ async function main() {
       }
     }
     if (jitterProbe.active) {
-      const stepped = !frozen && !paused && !renderer.offlineActive && !replay.active ? (jitterStep ?? dt) : 0;
+      const stepped = !frozen && !paused && !renderer.offlineActive && !replay.active && !simHeld ? (jitterStep ?? dt) : 0;
       jitterClock += stepped;
       const b = basis(settings.yaw, settings.pitch, settings.roll);
       const S = camera.piloting ? camera.shipMatrix() : null;

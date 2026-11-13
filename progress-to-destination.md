@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-13 09:31 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-13 09:43 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous.
@@ -56,12 +56,12 @@ indirects → J3 (lumière, cockpit).
 | Audit vagues 3–4 (1feb2f7f) | 3.6 TARS | **fait** : tour coupé, `saves delete` confirmé, pannes dites, faux ordres hors ligne |
 | Audit vagues 3–4 (1feb2f7f) | 3.7 TARS (outils AP avions/A320) | **fait** : `jet_autopilot` par les actions de la console, volets au levier (CONF 1), l'AP de l'A320 réparé dans `apSet` |
 | Audit vagues 3–4 (1feb2f7f) | 3.10 e2e qui ne vérifient rien | **fait** : `waitOptional` (93 attentes converties), 14 mesures déclarées, garde `e2e-honesty` |
-| Audit vagues 3–4 (1feb2f7f) | 4.2 la politique de temps | prochain (une décision de comportement à te proposer : onglet masqué) |
+| Audit vagues 3–4 (1feb2f7f) | 4.2 la politique de temps | **partiel** : vol tenu pendant la reprise GPU, cadence vraie, 5 décisions de vol sur l'horloge du vol + garde ; **l'onglet masqué attend Sam** |
 | Audit vagues 3–4 (1feb2f7f) | 4.3, 4.8 | à faire, dans cet ordre (état relevé dans [09-priorites-todo](docs/audit-2026-11-10/09-priorites-todo.md)) |
 
 **Fermé récemment** : J2 (13 nov., ΔGPU nul, chemin vers §8 écrit) ; J2-C BC7 étudiée puis **rangée** (Sam : « ne pas le faire maintenant »).
 
-**Attend Sam** : rien d'ouvert à ce jour côté rendu. Les seuils p99 et CPU du mini et la valeur de la borne du M1 Max se fixeront sur mesure. Audit (1feb2f7f) : sauver l'état complet d'une mission ou d'un combat, ou seulement le dire comme aujourd'hui (recommandation : le dire) ; avant RD3, le niveau de défense du réseau.
+**Attend Sam** : rien d'ouvert à ce jour côté rendu. Les seuils p99 et CPU du mini et la valeur de la borne du M1 Max se fixeront sur mesure. Audit (1feb2f7f) : sauver l'état complet d'une mission ou d'un combat, ou seulement le dire comme aujourd'hui (recommandation : le dire) ; l'onglet masqué (recommandation : en solo, pause dite sans rattrapage ; en salle, rien d'arrêté, « hors de vue » annoncé, resynchronisation dite) ; avant RD3, le niveau de défense du réseau.
 
 ## Journal
 
@@ -4528,3 +4528,26 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   n'ont pas été relancés (conversion mécanique, même attente, sans `throw`) ; les ~23 `.catch(() => {})` hors `waitFor`
   (captures, nettoyages, `settled`) restent, jugés au cas par cas plus tard.
 - **Fichiers** : `tests/e2e/lib/app.ts`, 70 e2e, 14 en-têtes, `tests/e2e-honesty.test.ts` ; E2E.md.
+
+## 2026-11-13T09:43Z — Audit 4.2 (partie 1) : la politique de temps — le vol tenu pendant la reprise GPU, la cadence vraie, la logique de vol sur l'horloge du vol (AR-02, AR-06, AR-08)
+
+- **Contribution** (stratégie §19.3 domaines de temps, §19.8 reprise ; audit ligne 4.2) : **le vol tenu** (son pas, son horloge)
+  de la perte du périphérique à la première image du nouveau renderer (`simHeld` dans `main.ts` ; avant, `recovering` n'était
+  pas lu par la boucle et retombait avant que le nouveau renderer ait dessiné) ; **la cadence affichée** comptée sur le temps
+  mural entier (`wallDt`), le pas restant borné à 0,1 s ; **cinq décisions de vol** passées sur `frameNow()` (le rapport
+  d'atterrissage, le cache de sol du GCAS, l'ILS de l'A320, les toucher du replay, le message de contact d'amarrage) ; un garde
+  `tests/flight-clock.test.ts` compte par fichier les `performance.now()` restants de `controller/` et `game/`, chacun avec
+  sa raison (mesure de coût, interface, réseau).
+- **Reproduit avant correction** (e2e) : `gpu-recovery-hold` — fenêtre de reprise 1,24 s, le temps du vol avançait au rythme
+  d'avant (Δ 0,0021 M) ; après : Δ 0,0002 M sur 1,27 s, puis le même rythme. `fps-truth` — sous des blocages de 400 ms : 21,5
+  affichées pour 10,9 images finies ; après : 10,2 pour 11,6 (la mesure « avant » refaite par la même méthode en remettant un
+  instant l'ancienne ligne).
+- **Vérifié** : e2e `gpu-recovery` 2/0 (inchangé), `gpu-recovery-hold` 1/0, `fps-truth` 1/0 ; `bun test --parallel` 2 251/4
+  (`landing-flight`, `earth-tiles`, `wormhole-arrival` sous la charge : 25/0 seuls).
+- **Fichiers** : `src/main.ts`, `src/controller/{motion,gcas,a320ap,replay,docking}.ts`, `tests/flight-clock.test.ts`, deux e2e ;
+  BH-API, catalogue.
+- **À décider par Sam** (la suite de 4.2) : **l'onglet masqué**. Recommandation : en solo, la pause dite au retour (« en pause
+  pendant que l'onglet était caché »), sans rattrapage du temps ; en salle, rien d'arrêté (l'horloge de la salle continue), un
+  état « hors de vue » annoncé aux autres et une resynchronisation dite au retour ; les `setInterval` de la page ralentis
+  pendant l'absence. **Non fait** : l'annonce d'un ralentissement sous 10 images/s (le pas borné reste muet) ; l'horloge du vol
+  pour `formation` (liée aux horodatages réseau du chef).

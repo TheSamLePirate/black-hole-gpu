@@ -6,6 +6,7 @@
 // in the assisted levels; not in the direct law (no computer to fly it), nor with the gear down, in a formation, an
 // approach or on the wheels.
 // (Its methods, out of controls.ts: installed on its prototype — `this` the controller.)
+import { frameNow } from "../frameclock";
 import { fleet } from "../fleet";
 import { ACAS, acasConflict, type AcasOther, GCAS, gcasMargin, gcasRecovery } from "../game/gcas";
 import { t, tf } from "../i18n";
@@ -39,7 +40,8 @@ declare module "../controls" {
 const cache = new Map<string, number>();
 let cacheAt = 0;
 export function ground(lat: number, lon: number) {
-  const now = performance.now();
+  // (the flight's clock — audit AR-08)
+  const now = frameNow();
   if (now - cacheAt > 10_000) {
     cache.clear();
     cacheAt = now;

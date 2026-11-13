@@ -3,6 +3,7 @@
 // speed, Mach and load; what it does (the gun, the afterburner, a touchdown, wingmen close). The launches and the
 // explosions the fight's events (main.ts adds them).
 // (Its methods, out of controls.ts: installed on its prototype — `this` the controller.)
+import { frameNow } from "../frameclock";
 import { cameraFrame } from "../camera";
 import { fleet } from "../fleet";
 import { isAircraft } from "../vessels";
@@ -55,7 +56,8 @@ function replayEvents(this: CameraController): number {
   if (this.jetThrust() > 1.01) ev |= EV.AB;
   if ((this.wing?.list ?? []).some((w) => w.alive && w.dist < 40)) ev |= EV.FORM;
   const contact = (this.gearLast?.contact ?? 0) > 0;
-  const now = performance.now();
+  // (the flight's clock: a stepped flight's 3 s in the air are its own — audit AR-08)
+  const now = frameNow();
   if (!contact) this.replayAir ??= now;
   else {
     // (on the ground after 3 s in the air: a touchdown, a trap)
