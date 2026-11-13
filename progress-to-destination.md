@@ -4905,7 +4905,7 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   le Service Worker (cdp.ts le dit : `app.cdp.offline`) — la capture porte le crédit IGN et 528 tuiles de relief : l'IGN a pu être sollicité
   pendant que la session du rendu en avait l'usage. Les e2e de ce lot en orbite ne touchent pas la Terre proche.
 
-## 2026-11-13T13:58Z — La suite réparée revérifiée sur kerr-mini : un seul échec, hors du rendu
+## 2026-11-13T13:43Z — La suite réparée revérifiée sur kerr-mini : un seul échec, hors du rendu
 
 - **Mesuré** (`bun test` complet, kerr-mini seul, `remote-results/…-suite-fixed`) : **2 278 réussis, 1 échec** (contre 7 avant les correctifs de
   b1d03875) — `quals` « sea, the F-35C in a 4.5 m sea ». Il échoue aussi avec les seuls `tests/*.test.ts` sur ce Mac (2 225 / 1), mais ni les 69
