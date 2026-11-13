@@ -4823,7 +4823,7 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
 - **Reste de 4.3 :** AR-07 (`SimState`, `ViewPose` ; le renderer prenant `ViewPose` plutôt que `Settings`) touche `renderer.ts` — réservé
   à la session du rendu, attend Sam ; le tri produit / profil / laboratoire d'AR-21, une décision de produit (Sam).
 
-## 2026-11-13T13:25Z — La suite de tests réparée de ses fuites : de 9 échecs à 2 (aucun du rendu)
+## 2026-11-13T13:22Z — La suite de tests réparée de ses fuites : de 9 échecs à 2 (aucun du rendu)
 
 - **Contribution** (la preuve de chaque lot : une suite complète qui dit vrai). La suite complète échouait sur ce Mac et sur kerr-mini (7–9 échecs
   passant seuls) ; **la cause trouvée** : quatre fichiers remplaçaient `fetch` pour tout le processus sans le rendre (`earth-contact`,
