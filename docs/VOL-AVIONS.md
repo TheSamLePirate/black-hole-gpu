@@ -96,7 +96,8 @@ rentrée atmosphérique ; `pause(false)` sans nouveau placement repart dans l'é
   protection du sol toujours active), passez en **Réaliste** (le vrai F-35) quand les leçons 1 à 6 sont acquises. Le
   niveau **Débutant** fait voler l'avion vers un anneau cyan déplacé au manche.
 - **V** change de vue : la vue **cockpit** (le casque) est celle du pilote ; les vues extérieures aident à comprendre
-  l'attitude. **Échap** met en pause (Espace aussi, hors combat).
+  l'attitude. Seules les vues de l'appareil défilent : celles de l'A320 (hublot, train, haut de la dérive) sur l'A320 seul
+  (avant le 13 nov. 2026, sur tous — audit FX-08). **Échap** met en pause (Espace aussi, hors combat).
 - **⇧X** ramène toujours au vol stable : ailes à plat, légère montée (6°), puis altitude, cap et vitesse tenus (au
   moins 150 m/s). Toute touche de tangage ou de roulis l'annule. C'est le bouton « je suis perdu » ; par code :
   `__bh.camera.recoverStart()`.

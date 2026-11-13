@@ -1636,7 +1636,7 @@ async function main() {
       return { value: name, hint: name === id ? undefined : id };
     }),
     sites: SITES.map((x) => ({ value: x.name, hint: x.body })),
-    mounts: (Object.keys(MOUNTS) as Mount[]).map((m) => ({ value: m, hint: MOUNTS[m].short })),
+    mounts: mountKeys().map((m) => ({ value: m, hint: MOUNTS[m].short })),
     screens: [...SCREENS],
     scenes: Object.keys(presets),
     saves: tools.saves().map((x) => x.name),
@@ -3105,7 +3105,8 @@ async function main() {
       settings.ship = true;
       syncButtons();
     }
-    const keys = Object.keys(MOUNTS) as Mount[];
+    // (the craft's own views: audit FX-08)
+    const keys = mountKeys();
     setMount(keys[(keys.indexOf(settings.shipMount as Mount) + 1) % keys.length]!);
     touch();
   }
@@ -4237,8 +4238,9 @@ async function main() {
     auto: (_, a) => (a !== "takeoff" && a !== "land" && jetOnly() ? undefined : pilotAuto(a as Auto)),
     map: () => flightHud.toggleMapView(),
     mount: (e) => {
-      // (the views' cycle goes through the spectator: after the last of the ship's, before its first)
-      const keys = Object.keys(MOUNTS) as Mount[];
+      // (the views' cycle goes through the spectator: after the last of the ship's, before its first — the craft's own
+      // views alone, as the pad's D-pad: audit FX-08, the A320's window, gear and fin views met on every craft before)
+      const keys = mountKeys();
       const i = keys.indexOf(settings.shipMount as Mount);
       const dir = e.shiftKey ? -1 : 1;
       if (camera.spectating) {

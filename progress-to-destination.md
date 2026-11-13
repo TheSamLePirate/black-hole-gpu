@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-13 23:33 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-13 23:35 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous.
@@ -66,7 +66,7 @@ ouverts, sous 1 ms) ; J3 au stade du plan.**
 | Audit vagues 3–4 (1feb2f7f) | 4.2 la politique de temps | **fait** : vol tenu pendant la reprise GPU, cadence vraie, horloge du vol + garde ; l'onglet masqué (choix de Sam) : solo en pause dite, salle sans arrêt (l'absent ne la bloque plus, les autres avertis, remis à l'heure au retour), sauvé en partant, TARS sans réveil ; le ralentissement sous 10 images/s dit — e2e `hidden-tab` 2/2, `fps-truth` 2/2 |
 | Audit vagues 3–4 (1feb2f7f) | 4.8 découper `main()` | **fait** (accord de Sam : par petits lots) : lot 1 la persistance, lot 2 qui tient le vol (`session.ts`), lots 3–4 les étapes gardées (`frame.ts`, AR-03), lot 5 l'ordre §19.5 (AR-04), lot 6 `craft-feed.ts`, lot 7 `governor.ts` (confié par la session du rendu) — **fait** : les quatre découpes d'AR-12 (session, frame, gouverneur, poses de l'appareil) |
 | Audit vagues 3–4 (1feb2f7f) | 4.3 séparer `Settings` | **fait** : garde statique des réglages (AR-21) ; `ViewPose` et `SimState` figés une fois par image (AR-07, `view-pose.ts`) ; le renderer les lit (session du rendu, 77721acf) |
-| Audit vague 6 hors rendu (1feb2f7f) | QA-16, QA-18, AR-17, AR-18, réseau RD4/RD5, FX-18, FX-17, FX-07, QA-11 | **faits** (accord de Sam : « un autre lot d'audit hors rendu ») ; FX-17 en 3 lots (unités du pilote ; le spatial en SI) ; FX-07 l'A320 à la manette ; QA-11 le catalogue des e2e entier (446/446) et gardé ; e2e `report` 3/4 (le final de Le Bourget, état périmé : PROBLEMES) |
+| Audit vague 6 hors rendu (1feb2f7f) | QA-16, QA-18, AR-17, AR-18, réseau RD4/RD5, FX-18, FX-17, FX-07, QA-11 ; puis les FX hors vague : FX-08 | **faits** (accord de Sam : « un autre lot d'audit hors rendu ») ; FX-17 en 3 lots ; FX-07 l'A320 à la manette ; QA-11 le catalogue 446/446 gardé ; FX-08 V par les vues de l'appareil seul ; e2e `report` 3/4 (le final de Le Bourget, état périmé : PROBLEMES) ; ensuite les autres FX hors vague (FX-11 à 16, 19 à 22) |
 
 **Fermé récemment** : J2 (13 nov., ΔGPU nul, chemin vers §8 écrit) ; J2-C BC7 étudiée puis **rangée** (Sam : « ne pas le faire maintenant »).
 
@@ -6188,3 +6188,14 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
 - Limites : le reste du bruit (le volume des géantes, V7) non sondé ; Uranus et Neptune seulement revues dessinées ; le coût à mesurer par
   horodatage de passe si la vue entrait dans un profil suivi.
 
+## 2026-11-13T23:35Z — Audit FX-08 : V par les vues de l'appareil seul
+
+- Contribution : §19 (le confort caméra, des vues qui ont un sens pour l'appareil piloté) ; audit 2026-11-10, FX-08 (P2, rattaché à aucune
+  vague : traité à la suite de la vague 6 hors rendu).
+- Réalisé : l'action `mount` (V), le bouton de la caméra (`nextMount`) et la liste des vues des commandes « / » de TARS passent par
+  `mountKeys()` (les vues de l'appareil, comme la croix de la manette) au lieu de `Object.keys(MOUNTS)` (`src/main.ts`, trois lignes) ;
+  VOL-AVIONS (la touche V), catalogue.
+- Preuves : **reproduit avant** (e2e `mount-cycle`, vraies touches) : sur le Ranger, V passe par `passenger → gear → tail` (la vue poursuite
+  montrée) ; **après** : plus aucune sur le Ranger, les trois sur l'A320 — 1/1 ; tsc, Biome ; tests des vues verts.
+- Limites : le cycle propose encore à tout appareil les vues `dock`, `missile` et `station` (non marquées `only`) : non tranché ici.
+- Suite : FX-11 à FX-16, FX-19 à FX-22, chacun reproduit d'abord.
