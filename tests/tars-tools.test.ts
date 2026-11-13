@@ -1191,3 +1191,42 @@ test("the offline zones through TARS (TA-17): listed, estimated, added at a plac
   )!;
   await expect(none.run({ action: "list" }, new AbortController().signal)).rejects.toThrow(/offline/i);
 });
+
+test("the F-35's panoramic display through TARS (TA-17): its pages read, a page shown in a portal, a side as one", async () => {
+  const { gameTools } = await import("../src/ai/game-tools");
+  const pcd = {
+    pages: ["TSD", "FCR", "SMS", "FUEL"],
+    halves: ["split", "split"],
+    show(slot: number, page: string) {
+      this.pages[slot] = page;
+      return page;
+    },
+    full(side: number, on: boolean) {
+      this.halves[side] = on ? "full" : "split";
+      return on ? "FULL" : "SPLIT";
+    },
+  };
+  let vessel = "f35";
+  const host = {
+    settings: {
+      get vessel() {
+        return vessel;
+      },
+    },
+    camera: {},
+    tools: {},
+    log: () => [],
+    pcd: () => pcd,
+  } as unknown as GameHost;
+  const tool = gameTools(host).find((t) => t.name === "pcd")!;
+  expect(tool).toBeDefined();
+  const run = (a: Record<string, unknown>) => tool.run(a, new AbortController().signal);
+  expect(await run({ action: "status" })).toEqual({ portals: ["TSD", "FCR", "SMS", "FUEL"], left: "split", right: "split" });
+  await run({ action: "show", portal: 2, page: "EOTS" });
+  await run({ action: "full", side: "right", on: true });
+  expect(pcd.pages).toEqual(["TSD", "EOTS", "SMS", "FUEL"]);
+  expect(pcd.halves).toEqual(["split", "full"]);
+  // (another craft: no panoramic display)
+  vessel = "ranger";
+  await expect(run({ action: "status" })).rejects.toThrow(/F-35/);
+});

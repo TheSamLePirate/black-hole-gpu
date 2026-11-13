@@ -24,6 +24,7 @@ import type { WeaponSel } from "../controller/combat";
 import type { RadarMode } from "../game/radar";
 import type { RecoveryCase } from "../game/trap";
 import { f35Variant } from "../f35/variant";
+import { PCD_PAGES } from "../f35/pcd";
 import type { GameMode } from "../game/modes";
 import type { Auto, Hold } from "../pilot";
 import type { CameraController } from "../controls";
@@ -124,6 +125,13 @@ export interface GameHost {
   /** settings set the Lab's way (audit TA-09): one step of its history — its Undo takes them back —, the quality preset shown,
    *  their effects; what a player's change does (SettingsPanel.setValues) */
   setSettings(values: Partial<Record<keyof Settings, unknown>>): void;
+  /** the F-35's panoramic display (f35/pcd.ts Pcd: its pages, shown by its own actions) — TA-17 */
+  pcd?: () => {
+    pages: readonly string[];
+    halves: readonly ("split" | "full")[];
+    show(slot: number, page: never): string;
+    full(side: 0 | 1, on: boolean): string;
+  };
   /** the offline zones (src/pwa-zones.ts, the settings' Offline tab's own; null: no service worker — the dev page) — TA-17 */
   zones?: () => import("../pwa-zones").Zones | null;
   /** the network's room through its panel's own actions (ui/netpanel.ts NetPanel; null in a page without it) — TA-17 */
@@ -3053,6 +3061,33 @@ export function gameTools(h: GameHost): Tool[] {
         h.skills.save(name, String(a.description), String(a.prompt));
         return `saved as /${name}`;
       },
+    },
+    {
+      name: "pcd",
+      description:
+        "The F-35's panoramic cockpit display (its two halves, four portals left to right 1–4): status — each portal's page, each side split or full; show (portal 1–4, page): TSD (the tactical situation), FCR (the radar), SMS (the stores), EOTS (the targeting camera), AP (the autopilot's panel), MSN (the mission), FCS (the flight controls), ENG, FUEL, STOVL, CNI (radios, navigation), ADI (the attitude), CKL (the checklists), ICAWS (the warnings); full (side: left or right, on): a side shown as one large portal (its first page) or as two.",
+      params: {
+        action: { type: "string", enum: ["status", "show", "full"] },
+        portal: { type: "number", minimum: 1, maximum: 4, integer: true },
+        page: { type: "string", enum: [...PCD_PAGES] },
+        side: { type: "string", enum: ["left", "right"] },
+        on: { type: "boolean" },
+      },
+      required: ["action"],
+      run: act((a) => {
+        if (settings.vessel !== "f35") throw new Error("only the F-35 has a panoramic display (set_craft vessel f35)");
+        const P = h.pcd?.();
+        if (!P) throw new Error("no panoramic display in this page");
+        if (a.action === "show") {
+          if (a.portal === undefined || a.page === undefined) throw new Error("show needs a portal (1–4) and a page");
+          return P.show(Number(a.portal) - 1, a.page as never);
+        }
+        if (a.action === "full") {
+          if (a.side === undefined) throw new Error("full needs a side (left or right)");
+          return P.full(a.side === "right" ? 1 : 0, a.on !== false);
+        }
+        return { portals: [...P.pages], left: P.halves[0], right: P.halves[1] };
+      }),
     },
     {
       name: "offline_zones",

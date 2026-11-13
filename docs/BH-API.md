@@ -612,7 +612,7 @@ __bh.intro().bg === "webgl2" && __bh.intro().lifted
 
 The F-35's panoramic display (`src/f35/pcd.ts`, PLAN-PCD-AAA).
 
-- `pcd`: the display itself: its pages, `portals()` (each portal's `frame`), and `touch(u, v)`.
+- `pcd`: the display itself: its pages, `portals()` (each portal's `frame`), `touch(u, v)`, and its actions `show(slot, page)` (a page in a portal 0–3, left to right) and `full(side, on)` (a side, 0 left or 1 right, as one portal) — TARS's `pcd` tool (audit TA-17).
 - `stats`: its CPU cost since `reset()`, in ms a frame: `frames`, `draws`, `ms` (the mean), `max` (the worst),
   `up` (the uploads) and `read` (the data read).
 

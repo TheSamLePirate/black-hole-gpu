@@ -404,6 +404,32 @@ export class Pcd {
   /** A touch at (u, v) on the display (0…1 across, down) — in a portal: its title's arrows (the page before, the
    *  next), its title (the pages' menu, then a page chosen in it), its corner (the side shown as one portal, or two),
    *  its page's keys at its foot. What it did (null: nothing). */
+  /** A page shown in a portal (0–3, left to right) — as its menu's touch does; TARS's `pcd` tool (audit TA-17). */
+  show(slot: number, page: PcdPage): string {
+    const now = performance.now();
+    this.pages[slot] = page;
+    this.menu = null;
+    for (const P of this.portals())
+      if (P.slot === slot || (P.full && P.slot === (slot & ~1))) {
+        this.forced.add(P.key);
+        this.lastChange = { rect: P.region, at: now };
+      }
+    return page;
+  }
+
+  /** A side (0 left, 1 right) shown as one portal or as two — as its corner's touch does. */
+  full(side: 0 | 1, on: boolean): string {
+    const now = performance.now();
+    this.halves[side] = on ? "full" : "split";
+    this.menu = null;
+    for (const Q of this.portals())
+      if (Q.slot >> 1 === side) {
+        this.forced.add(Q.key);
+        this.lastChange = { rect: Q.region, at: now };
+      }
+    return on ? `${this.pages[2 * side]} FULL` : "SPLIT";
+  }
+
   touch(u: number, v: number): string | null {
     const x = u * PCD_W,
       y = v * PCD_H;

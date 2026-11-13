@@ -7647,6 +7647,7 @@ async function main() {
     // (the room by its panel's own actions, the offline zones by the Offline tab's — TA-17)
     net: netPanel,
     zones: () => pwa.zones ?? null,
+    pcd: () => jetPcd,
     key: (a, arg) => keyActions[a]?.(new KeyboardEvent("keydown"), arg),
     applyScene: (name) => panel.applyScene(name),
     screenshot: () => savePNG(),
