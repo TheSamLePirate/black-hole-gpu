@@ -1478,3 +1478,20 @@ Ce que cela change ici, en propositions (l'ordre attend Sam, analyse §8) :
 **Décisions de Sam (10 novembre, soir)** : la mer d'abord (M1–M4 sur la passe d'eau existante, avant J1, puis la surface
 déplacée M5), en qualité et en coût mesurés ; bathymétrie Terrarium + profil de Dean ; arbres des imposteurs générés
 procéduralement. J1 suit la mer.
+
+## 24. Décisions du 13 novembre : l'eau et les noyaux avant J3, le différé écrit, les paliers bornés
+
+Après J2 (terminé le 13 novembre, [PLAN-J2](PLAN-J2-PAGES-RECONSTRUCTION.md)) et la
+[contre-analyse de J0–J2](CHALLENGE-J1-J2-2026-11-13.md), qui rapproche les fiches J0 de l'enveloppe du §8.2 : sur le M1 Max
+frais, l'eau est à ≥ 4,3 ms pour 1,0, ≈ 7 ms de passes de rendu ne sont pas attribuées, la reconstruction et les nuages sont dans
+leur enveloppe ; l'A/B de tous les lots de J2 a un ΔGPU nul sur kerr-mini. **Décisions de Sam (13 novembre 2026)** :
+
+| # | Décision | Conséquence |
+|---|---|---|
+| 1 | **L'eau et le découpage des noyaux passent avant J3** | L'ordre du §15 devient : J0, J1, J2 (faits) → **l'eau étagée** (surface → éclairage → reflets, le découpage que le sol a reçu ; la part « allègement de la passe d'eau » de J4 avancée) → **la classification de l'écran par tuiles et les lancements indirects** (chaque noyau lancé là où il sert, des noyaux spécialisés par classe) → J3 (lumière, ombres, cockpit) → le reste de J4 (volumes, végétation lointaine) → J5. Préalables : l'ablation de l'eau réparée et celle de `sea surface` dans la fiche J0, le « chemin vers §8 » tenu par famille. Aucun gain n'est mesuré : chaque lot porte son ΔGPU sur J0 |
+| 2 | **kerr-mini a sa propre cible : 25 images/s régulières** (40 ms, deux rafraîchissements à 50 Hz) | Le « profil matériel plus modeste » du §8.1, nommé ; 60 images/s restent la cible du M1 Max ([J0-CONTRAT](J0-CONTRAT.md) §2) |
+| 3 | **Un palier se juge borné et soutenu** | La cadence bornée et la machine chaude ; le vol frais non borné reste une mesure de capacité. L'essai de la borne sur le M1 Max est à faire (J0-CONTRAT §2) |
+| 4 | **« Forward » réécrit** | Les §7.4–7.5 et le titre de J1 disaient « opaque forward » ; mesuré le 11 (+13,6 ms pour le sol), décidé le 12 : **visibilité raster puis ombrage différé en calcul pour le sol dense ; forward pour les grands triangles et les transparences**. CLAUDE.md porte cette formulation ; les §7.4–7.5 se lisent avec elle (leurs contrats de sorties — profondeur, identité, mouvement, couleur — restent) |
+
+En parallèle, une seconde session traite les vagues 3 et 4 de [l'audit](audit-2026-11-10/09-priorites-todo.md) hors rendu
+(sauvegardes, réseau, vol automatique, TARS, politique de temps, `Settings`) : les contrats du §19.

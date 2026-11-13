@@ -22,7 +22,7 @@ rapide. Il dit où part la frame (§5) et donne le témoin de J1 (l'opaque terre
 | | Valeur | Source |
 |---|---|---|
 | Machine du palier | MacBook Pro M1 Max (ce Mac) | D3 |
-| Second témoin | kerr-mini (Mac mini M1, 16 Go), mesuré, pas de palier propre ; son écran est à 50 Hz ; sa fréquence GPU stable en fait la machine de la répartition par poste (§5) | D3, §8.1 |
+| Second témoin | kerr-mini (Mac mini M1, 16 Go) ; son écran est à 50 Hz ; sa fréquence GPU stable en fait la machine de la répartition par poste (§5). **Sa propre cible depuis le 13 novembre : 25 images/s régulières** (40 ms par image nouvelle, deux rafraîchissements) — pas les 60 images/s, qui restent la cible du M1 Max (le 13 : GPU p50 58,4 ms, intervalle alterné 60 / 80 ms) | D3, §8.1 « profil matériel plus modeste », décision de Sam du 13 nov. |
 | Sortie | 1920 × 1080, `devicePixelRatio` 1 | §8.1 profil principal |
 | Navigateur | Chrome (version relevée dans la fiche), WebGPU sur Metal | — |
 | Réglages | **le profil du joueur tel que livré** (qualité, résolution dynamique, décor, look) ; seuls ceux de la scène sont fixés (§3) | — |
@@ -35,6 +35,14 @@ fréquence descend à 76–87 % du maximum pendant le vol mesuré, puis tombe à
 reste (pression « Trapping »). Le vol est donc mesuré **frais** (au sortir du chargement) et **soutenu** (le même vol
 rejoué après les ablations, la machine chaude), chacun avec sa fréquence GPU relevée. §8.3 demande de tenir le profil
 « dans un état thermique stabilisé » : **le palier se juge sur l'état soutenu** — *décision de Sam, 10 novembre*.
+
+**Borné et soutenu** — *décision de Sam, 13 novembre* ([contre-analyse](CHALLENGE-J1-J2-2026-11-13.md) C8, idée 5) : le
+palier se juge **la cadence bornée** (`fpsCap`, ou un verrou sur un nombre entier de rafraîchissements) et la machine
+soutenue ; un vol frais non borné (le 12 : 22,5 ms de GPU à 98–100 °C) reste relevé comme capacité, il ne valide pas le
+palier. **À faire avant la prochaine fiche** : l'essai de la borne sur le M1 Max (bride-t-il encore, borné à 30 puis à
+40 images/s ?) ; la valeur de la borne se fixe sur cet essai, non mesuré à ce jour. Sur kerr-mini, la cible de 25 images/s
+régulières se lit de la même façon : intervalle p50 et p95 ≤ 40 ms, sans alternance 60 / 80 ms (le p99 et le CPU :
+seuils à transposer et à valider avec la première fiche bornée).
 
 **Le palier 1 est atteint** quand, sur le vol de référence (§3), mesuré deux fois sur le M1 Max dans l'état soutenu,
 **les seuils suivants tiennent tous** — *validés par Sam le 10 novembre* (transposés de §8.3, qui les fixe pour
@@ -184,6 +192,9 @@ même commit. Il débloque J1, jugé sur cette scène : l'opaque terrestre en fo
 
 **Prises (Sam, 10 novembre)** : les seuils du palier 1 (§2) ; le palier se juge sur l'état thermique **soutenu** (sur ce
 M1 Max, l'écart avec l'état frais est d'un facteur ≈ 1,7 à 3 selon l'instant).
+
+**Prises (Sam, 13 novembre)** : le palier se juge **borné et soutenu** (§2) ; kerr-mini a sa propre cible, **25 images/s
+régulières** (§2) ; l'eau et le découpage des noyaux passent avant J3 ([stratégie](ANALYSE-STRATEGIE-RENDU-2026-11-03.md) §24).
 
 **Ouvertes** :
 

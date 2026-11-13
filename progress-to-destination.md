@@ -4241,3 +4241,13 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   « reconstruction et sortie » (taau 3,7 + temporal 1,8 ms).
 - **Fichiers** : `docs/progress/j0/FICHE-kerr-mini-2026-11-13-sortie.md`, `j0-kerr-mini-2026-11-13-sortie.json` ; README J0, PLAN-J2.
 - **Vérifié** : `bun test --parallel` 2 212 / 0 ; e2e J0 3/0 sur kerr-mini. **Non vérifié** : le M1 Max en vol (il bride) ; J2-C (Sam).
+
+## 2026-11-13T07:55Z — Décisions de Sam sur la contre-analyse : l'eau et les noyaux avant J3, le mini à 25 images/s, paliers bornés, « forward » réécrit (documentation)
+
+- **Contribution** (stratégie §8.1, §15, §7.4 ; [contre-analyse](docs/CHALLENGE-J1-J2-2026-11-13.md) §7) : quatre décisions consignées —
+  l'eau étagée puis la classification par tuiles avant J3 ; kerr-mini a sa cible, 25 images/s régulières (40 ms) ; un palier se juge
+  borné et soutenu ; « Socle raster forward » remplacé dans CLAUDE.md par la visibilité suivie de l'ombrage différé en calcul (forward
+  pour les grands triangles et les transparences).
+- **Changé** (documentation seule) : `CLAUDE.md`, `docs/J0-CONTRAT.md` §2 et §11, `docs/ANALYSE-STRATEGIE-RENDU-2026-11-03.md` §24,
+  `docs/CHALLENGE-J1-J2-2026-11-13.md` §7. **Non mesuré** : l'essai de la borne de cadence sur le M1 Max ; aucun lot de l'eau commencé.
+- **Suite** : la session du rendu (`33d89754`) prend l'eau étagée ; une seconde session (`1feb2f7f`) les vagues 3 et 4 de l'audit hors rendu.

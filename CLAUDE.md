@@ -97,6 +97,16 @@ en mouvement. Il est acceptable de s'en rapprocher par paliers.** Chaque modific
 ni à améliorer toutes les dimensions à la fois. Les seuils historiques, dont 40 images/s sur M1 Max, peuvent servir de
 paliers intermédiaires explicitement nommés ; ils ne déclarent pas la cible finale atteinte.
 
+**Décisions de Sam du 13 novembre 2026** ([contrat J0](docs/J0-CONTRAT.md) §2, [stratégie](docs/ANALYSE-STRATEGIE-RENDU-2026-11-03.md) §24,
+[contre-analyse](docs/CHALLENGE-J1-J2-2026-11-13.md)) :
+
+- **Un palier se juge borné et soutenu** : la cadence bornée (pas un GPU à 100 % qui chauffe), la machine dans l'état qu'un
+  jeu prolongé lui laisse. Un vol « frais » à 100 °C ne valide rien.
+- **kerr-mini a sa propre cible : 25 images/s régulières** (40 ms, deux rafraîchissements de son écran à 50 Hz) ; les
+  60 images/s restent la cible du M1 Max. Le mini reste la machine des A/B et de la répartition par poste.
+- **L'eau et le découpage des noyaux passent avant J3** : l'eau étagée, puis la classification de l'écran par tuiles et les
+  lancements indirects ; J3 (lumière, cockpit) ensuite.
+
 Suivre qualité effective, sortie/résolution interne, coût complet, régularité, mémoire et âge des informations critiques.
 Ne pas gagner un compteur de cadence en supprimant silencieusement du contenu, en brouillant l'image ou en empilant les
 frames en vol. Distinguer rAF, soumissions, complétions GPU et présentation. Aucune promesse de gain sans preuve adaptée ;
@@ -108,7 +118,10 @@ un changement non mesuré reste indiqué comme tel. Les budgets proposés dans l
   simulation possède l'état et le temps acceptés ; la vue possède sa pose finale ; le renderer possède ses ressources
   GPU et historiques. La qualité graphique ou le déplacement de la caméra ne doivent pas décider implicitement du sol
   de contact de l'appareil. Garder les unités, repères, datums et générations explicites.
-- **Socle raster forward, matériaux explicites, auxiliaires minimaux.** Produire une surface finale exploitable
+- **Socle raster : visibilité puis ombrage différé en calcul pour le sol dense, forward pour les grands triangles et les
+  transparences ; matériaux explicites, auxiliaires minimaux.** (Décisions de Sam des 12 et 13 novembre 2026 : le forward
+  du sol mesuré à +13,6 ms sur J0, le différé confirmé — [PLAN-J1](docs/PLAN-J1-OPAQUE-FORWARD.md) §4 ter. Garder les noyaux
+  de calcul petits et lancés là où ils servent : sur Apple un gros noyau paie le code qu'il contient.) Produire une surface finale exploitable
   (profondeur, identité/génération, mouvement utile, couleur linéaire) ; préserver les transports spécialisés Kerr/Dneg
   dans leur domaine. Partager les modèles de lumière, d'air et de matériaux. Un proxy de visibilité n'est pas
   automatiquement une surface finale pour les autres effets.
