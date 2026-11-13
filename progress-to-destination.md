@@ -5154,3 +5154,13 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   le vrai serveur de développement (port à part, la clé de `.env`) : une ouverture sans Origin **403**, une d'ailleurs 403 — l'ouverture
   depuis la page même non rejouée ici (elle ouvrirait Deepgram, facturé). TARS.md.
 - **Relevé (entrée précédente) :** les ergols des vaisseaux sont bien sauvés — `ship.spentBy` (tools.ts), pas `fleet.fuel` (les avions).
+
+## 2026-11-13T16:22Z — Audit TA-12 : une réponse de TARS coupée par la limite de jetons redemandée avec de la place
+
+- **Reproduit avant (test `openrouter`, réponse simulée) :** `finish_reason: "length"`, un appel d'outil aux arguments à moitié écrits
+  (`{"action":"create","spec":{"na`) rendu tel quel après **une** demande à 600 jetons — d'où « arguments are not valid JSON » et un
+  nouvel essai du modèle au prix de tout le contexte.
+- **Réalisé :** `src/ai/openrouter.ts` `complete()` lit `finish_reason` ; coupée, la demande repart une fois avec ×2,5 jetons (entre
+  1 600 et 4 000), son coût compté.
+- **Preuves :** après : 600 puis 1 600, les arguments entiers — `openrouter`, `tars-agent`, `tars-turns`, `tars-tools`, `orders` verts.
+  Non fait : la fréquence réelle de la coupure (non mesurée), un appel payant.

@@ -251,6 +251,7 @@ export class OpenRouter {
     const timeout = AbortSignal.timeout(o.timeoutMs ?? 40_000);
     const signal = o.signal ? AbortSignal.any([o.signal, timeout]) : timeout;
     try {
+      let maxTokens = o.maxTokens ?? 600;
       const ask = () =>
         this.fetchFn(`${BASE}/api/v1/chat/completions`, {
           method: "POST",
@@ -259,7 +260,7 @@ export class OpenRouter {
             model: o.model ?? this.model(),
             messages,
             ...(tools.length ? { tools, tool_choice: "auto" } : {}),
-            max_tokens: o.maxTokens ?? 600,
+            max_tokens: maxTokens,
             temperature: 0.4,
             usage: { include: true },
             ...(this.noReasoning ? { reasoning: { effort: "low" } } : {}),
@@ -278,8 +279,9 @@ export class OpenRouter {
         return null;
       }
       this.lastFailure = null;
-      const j = (await r.json()) as {
+      type Reply = {
         choices?: {
+          finish_reason?: string;
           message?: {
             content?: string | null;
             tool_calls?: { id: string; type?: "function"; function: { name: string; arguments: string } }[];
@@ -287,7 +289,19 @@ export class OpenRouter {
         }[];
         usage?: { cost?: number };
       };
+      let j = (await r.json()) as Reply;
       this.spent += j.usage?.cost ?? 0;
+      // (cut by the token limit — a tool call's arguments half written, « not valid JSON », the model trying again at the whole
+      // context's price: asked again once, with room — audit TA-12, 13 Nov 2026)
+      if (j.choices?.[0]?.finish_reason === "length") {
+        maxTokens = Math.min(4000, Math.max(1600, Math.round(maxTokens * 2.5)));
+        const r2 = await ask();
+        this.calls++;
+        if (r2.ok) {
+          j = (await r2.json()) as Reply;
+          this.spent += j.usage?.cost ?? 0;
+        }
+      }
       const m = j.choices?.[0]?.message;
       if (!m) return null;
       return { content: m.content ?? null, tool_calls: m.tool_calls?.length ? m.tool_calls : undefined };

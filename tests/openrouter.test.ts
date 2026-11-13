@@ -161,3 +161,38 @@ test("a refusal is told by its cause — the key, the credit, the rate, the netw
     expect([why, or.lastFailure?.why]).toEqual([why, why]);
   }
 });
+
+test("an answer cut by the token limit (TA-12): asked again once with room, a tool call's arguments whole", async () => {
+  const asked: number[] = [];
+  const f = async (_url: string, init: { body: string }) => {
+    const b = JSON.parse(init.body) as { max_tokens: number };
+    asked.push(b.max_tokens);
+    const cut = asked.length === 1;
+    return new Response(
+      JSON.stringify({
+        choices: [
+          {
+            finish_reason: cut ? "length" : "tool_calls",
+            message: {
+              content: null,
+              tool_calls: [
+                {
+                  id: "c1",
+                  type: "function",
+                  function: { name: "mission", arguments: cut ? '{"action":"create","spec":{"na' : '{"action":"create"}' },
+                },
+              ],
+            },
+          },
+        ],
+      }),
+      { status: 200 },
+    );
+  };
+  const or = new OpenRouter(() => "sk-test", f as never);
+  const r = await or.complete([{ role: "user", content: "make a mission" }], [{ type: "function" }]);
+  console.log(`  asked with max_tokens ${asked.join(" then ")}; arguments ${r?.tool_calls?.[0]?.function.arguments}`);
+  expect(asked.length).toBe(2);
+  expect(asked[1]!).toBeGreaterThan(asked[0]!);
+  expect(() => JSON.parse(r!.tool_calls![0]!.function.arguments)).not.toThrow();
+});
