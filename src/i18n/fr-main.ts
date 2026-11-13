@@ -123,6 +123,11 @@ export default {
   "Could not open the controller: {0}": "Impossible d'ouvrir la manette : {0}",
   "Mission stopped — you have the controls": "Mission arrêtée — vous avez les commandes",
   "Quick save — {0}": "Sauvegarde rapide — {0}",
+  "A save named “{0}” already exists — another name, or overwrite it": "Une sauvegarde « {0} » existe déjà — un autre nom, ou écrasez-la",
+  "The browser refused to store it (storage full or private mode)":
+    "Le navigateur a refusé de l'enregistrer (stockage plein ou navigation privée)",
+  "Autosave failed — the browser's storage is full or blocked; save by hand (Pause › Save) or export":
+    "Sauvegarde automatique impossible — le stockage du navigateur est plein ou bloqué ; sauvegardez à la main (Pause › Sauvegarder) ou exportez",
   "Quick load — {0}": "Chargement rapide — {0}",
   "No quick save yet — F5 makes one": "Pas encore de sauvegarde rapide — F5 en crée une",
   "Precision controls": "Commandes de précision",

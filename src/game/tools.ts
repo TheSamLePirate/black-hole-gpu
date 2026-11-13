@@ -58,6 +58,7 @@ import {
   type Pose,
 } from "./place";
 import { autosave, downloadSave, parseSave, saveToHash, slots, type GameSave } from "./save";
+import { t, tf } from "../i18n";
 import { gameLog } from "./log";
 import { runAudit, type AuditReport } from "./audit";
 import type { V3 } from "./orbit";
@@ -1059,9 +1060,14 @@ export class GameTools {
     return save.summary;
   }
 
-  save(name?: string) {
-    const g = this.snapshot(name?.trim() || `Save ${new Date().toLocaleString()}`);
-    if (!slots.put(g)) throw new Error("the browser refused to store it (storage full or private mode)");
+  /** Saves the game under a name (none: one made of the date, never one taken). A name already taken is not
+   *  replaced unless `replace` (the pause's Overwrite, the quick save, TARS's "Before TARS"): it throws. */
+  save(name?: string, o: { replace?: boolean } = {}) {
+    const given = name?.trim();
+    const g = this.snapshot(given || slots.free(`Save ${new Date().toLocaleString()}`));
+    const put = slots.put(g, { replace: !!o.replace });
+    if (put === "exists") throw new Error(tf("A save named “{0}” already exists — another name, or overwrite it", g.name));
+    if (put === "refused") throw new Error(t("The browser refused to store it (storage full or private mode)"));
     this.savedAt = Date.now();
     this.log.add("save", `Saved "${g.name}" — ${g.summary}`, g.time);
     return g.name;
@@ -1079,9 +1085,13 @@ export class GameTools {
     downloadSave(g);
     return g.name;
   }
+  /** A save's file loaded, and kept under its name (one taken: "name (2)"… — never over another). */
   importSave(json: string, store = true) {
     const g = parseSave(json);
-    if (store) slots.put(g);
+    if (store) {
+      g.name = slots.free(g.name);
+      if (slots.put(g) !== "ok") this.log.add("warn", `Not kept: "${g.name}" (storage full or private mode)`, this.ctx.time());
+    }
     return this.load(g);
   }
   /** A link carrying this moment (the plan left out). */

@@ -490,7 +490,7 @@ export function gameTools(h: GameHost): Tool[] {
   /** the net before what cannot be undone */
   const net = () => {
     try {
-      tools.save(UNDO_SAVE);
+      tools.save(UNDO_SAVE, { replace: true });
     } catch {
       /* nothing to save: no game */
     }
@@ -2486,10 +2486,11 @@ export function gameTools(h: GameHost): Tool[] {
     {
       name: "saves",
       description:
-        "Saved games: save (a name), load (a name; the current game saved first as 'Before TARS'), delete, undo: back to 'Before TARS' (the state before TARS's last teleport, load, date change or scene); export (a name, or the game now: downloaded as a file), import (json: a save's file text; loaded and kept), share (a link that opens the game as it is now), autosave (the autosave written now).",
+        "Saved games: save (a name; one taken is refused unless replace: true), load (a name; the current game saved first as 'Before TARS'), delete, undo: back to 'Before TARS' (the state before TARS's last teleport, load, date change or scene); export (a name, or the game now: downloaded as a file), import (json: a save's file text; loaded and kept), share (a link that opens the game as it is now), autosave (the autosave written now).",
       params: {
         action: { type: "string", enum: ["save", "load", "delete", "undo", "export", "import", "share", "autosave"] },
         name: { type: "string" },
+        replace: { type: "boolean" },
         json: { type: "string" },
       },
       required: ["action"],
@@ -2497,7 +2498,7 @@ export function gameTools(h: GameHost): Tool[] {
         const name = a.name !== undefined ? String(a.name) : undefined;
         switch (a.action) {
           case "save":
-            return tools.save(name);
+            return tools.save(name, { replace: a.replace === true });
           case "load":
             if (!name) throw new Error("load needs a name (list_saves_and_scenes)");
             net();

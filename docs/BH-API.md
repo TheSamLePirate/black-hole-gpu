@@ -1100,7 +1100,7 @@ const rep = await __bh.game.audit({ planner: false });
 
 ### `__bh.game.autosaveNow()` → boolean (stored or not; sets `savedAt` when stored)
 
-Writes the autosave slot now, from `snapshot("autosave")`. The game autosaves every `autosaveEvery` s (setting range 2–120, default 10; Settings › Game › Saved games).
+Writes the autosave slot now, from `snapshot("autosave")`. The game autosaves every `autosaveEvery` s (setting range 2–120, default 10; Settings › Game › Saved games). An autosave this version cannot read (a later version's) is first kept aside (`kerr.kept:autosave@<ms>`); false when the browser refuses — the game then says so once (a toast), not every ten seconds.
 
 ```js
 __bh.game.autosaveNow();
@@ -1242,7 +1242,8 @@ outside pressure and what the hull holds now, in Pa; `.margins().p` their ratio)
 
 ### `__bh.game.importSave(json, store = true)` → string
 
-Parses a save from its JSON text, stores it in a slot (unless `store` is false), loads it, and returns its summary. Throws on a bad file.
+Parses a save from its JSON text, stores it in a slot (unless `store` is false — under its name, or `"name (2)"`… when
+that one is taken: never over another save), loads it, and returns its summary. Throws on a bad file.
 
 ```js
 (__bh.freeze(false), __bh.game.importSave(${JSON.stringify(json)}, false), true)
@@ -1513,9 +1514,17 @@ Same as `warp(1)`: real time.
 
 *Used in:* none.
 
-### `__bh.game.save(name?)` → string
+### `__bh.game.save(name?, o = {})` → string
 
-Snapshots the game into a named browser slot and returns the name (default: `"Save <locale date>"`). Journals it. Throws if the browser refuses the storage.
+Snapshots the game into a named browser slot and returns the name (default: `"Save <locale date>"`, made free with
+` (2)`, ` (3)`… if taken). Journals it. **A name already taken is not replaced** unless `o.replace` is true (the pause's
+*Overwrite*, F5's `"Quick save"`, TARS's `"Before TARS"`): it throws « A save named “…” already exists ». Throws, too,
+if the browser refuses the storage (full, private mode) — the other saves untouched.
+
+Storage (since 13 Nov 2026, audit AR-19): one key per save, `kerr.save:<name>`; the former single key `kerr.saves`
+(every save in one JSON) is read and moved one per key at the first access. A save's text that cannot be read (an
+interrupted write, a later version's) is listed by no one but kept: saved again under its name, or the autosave written
+over it, its text is first copied to `kerr.kept:<what>@<ms>` (`slots.kept()`), never overwritten in silence.
 
 ```js
 __bh.game.save("before TMI");

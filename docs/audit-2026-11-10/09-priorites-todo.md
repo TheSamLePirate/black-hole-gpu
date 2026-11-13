@@ -4,7 +4,7 @@ Ce fichier ordonne le travail qui sort de l'audit ([synthèse](README.md)). Il n
 consolidé de tous les plans, qui est au §6 de [07-plans-reste-a-faire.md](07-plans-reste-a-faire.md).
 
 **État au 10 novembre, 09:30 UTC** : la vague 0 est faite sauf 0.4 (l'hébergement des binaires : orientation de Sam, choix
-à venir ; **décidé le 12 novembre : le serveur de Sam**, mise en place à faire) — voir la colonne « État » ; le reste n'est pas commencé. Les tailles sont grossières : S (moins d'un jour), M (quelques jours), L (une à deux
+à venir ; **décidé le 12 novembre : le serveur de Sam**, mise en place à faire) — voir la colonne « État » ; le reste n'est pas commencé. **Vagues 3 et 4 relevées le 13 novembre** (colonne « État ») par la session hors rendu ; les lignes laissées à la session du rendu le disent. Les tailles sont grossières : S (moins d'un jour), M (quelques jours), L (une à deux
 semaines), XL (plus). Aucun gain n'est promis : chaque lot porte la mesure qui le jugera.
 
 ## 1. La règle de tri
@@ -77,32 +77,32 @@ lecteurs de `shadeLite` et `trace.wgsl` jusqu'à J0, sauf correctif. La ligne 0.
 
 À reproduire par un e2e avant de corriger : aucun n'a été rejoué pendant l'audit.
 
-| # | Travail | Constats | Taille |
-|---|---|---|---|
-| 3.1 | Réseau RD0 + RD1 : reproduire puis fermer la frontière d'entrée ; isoler la frame des erreurs d'événement | NET-01, NET-06, NET-07, AR-03 | M |
-| 3.2 | Réseau RD2 : quotas, débit, identité par jeton | NET-02, NET-03, NET-04 | M |
-| 3.3 | Sauvegardes : une clé par sauvegarde, jamais d'écrasement silencieux ; l'état des avions, des missions et des combats sauvé ; « Reprendre » sur le bon instantané | AR-19, AR-09, FX-09, FX-10 | M |
-| 3.4 | Décollage et atterrissage automatiques cohérents : U et F7 des avions, Lander posé ; un refus se dit et rend la main | FX-02, FX-03 | M |
-| 3.5 | Maj et Alt : modificateur ou manette, pas les deux à la fois | FX-01 | S–M |
-| 3.6 | TARS : annulation d'un tour, confirmation de `saves delete`, erreurs réseau dites, « annule » hors ligne | TA-01, TA-02, TA-05, TA-08 | M |
-| 3.7 | TARS : outils du pilote automatique des avions et de l'A320, par les mêmes actions que la console d'équipage | TA-03, TA-10 | M |
-| 3.8 | Compilation de Jupiter : anticiper dès que la destination est choisie, puis réduire le noyau | GP-20 | M |
-| 3.9 | Garde « fini et borné » dans `resolve`, sonde des pixels non finis (image noire de Jupiter sud) | GP-10 | S |
-| 3.10 | Les e2e qui ne vérifient rien : membres inexistants, fichiers sans `expect`, `waitFor` avalés | QA-08 | M |
+| # | Travail | Constats | Taille | État |
+|---|---|---|---|---|
+| 3.1 | Réseau RD0 + RD1 : reproduire puis fermer la frontière d'entrée ; isoler la frame des erreurs d'événement | NET-01, NET-06, NET-07, AR-03 | M | à faire (relevé du 13 nov.) : NET-01, NET-06, NET-07 présents, aucun commit sur `server/`, `src/net/` depuis le 30 oct. ; aucune garde autour des événements ni des `frame` réseau (`main.ts:8604`, `8616`) |
+| 3.2 | Réseau RD2 : quotas, débit, identité par jeton | NET-02, NET-03, NET-04 | M | à faire (13 nov.) : NET-02 à NET-05 présents (plafond global seul `rooms.ts:266`, débit binaire seul `:445`, `device` dans le `roster` `:179`, mot de passe en `sha256` non salé) |
+| 3.3 | Sauvegardes : une clé par sauvegarde, jamais d'écrasement silencieux ; l'état des avions, des missions et des combats sauvé ; « Reprendre » sur le bon instantané | AR-19, AR-09, FX-09, FX-10 | M | à faire (13 nov.) : AR-19 (une clé `kerr.saves`, `save.ts:94`), AR-09/FX-09 (`load` → `newFlight`, `tools.ts:995`), FX-10 (`entryPoint` jamais vidé, `main.ts:7974`) présents ; AR-20 aussi |
+| 3.4 | Décollage et atterrissage automatiques cohérents : U et F7 des avions, Lander posé ; un refus se dit et rend la main | FX-02, FX-03 | M | partiel (13 nov.) : fait — Lander posé (`2e51b40d`), U du F-35 sur piste (`3ae30d6b`), grisés du HUD (`ba4a1fb1`) ; reste — U en vol et F7 loin d'un porte-avions (F-35), U/F7 de l'A320 vont à l'autopilote orbital dont le refus met la manette à 0 (`pilot.ts:402`) ; `VOL-AVIONS` §4.1 et `F35.md:50` faux ; FX-05 (« G ») présent |
+| 3.5 | Maj et Alt : modificateur ou manette, pas les deux à la fois | FX-01 | S–M | à faire (13 nov.) : `piloting.ts:878` inchangé ; aucun test de `pilotInput` |
+| 3.6 | TARS : annulation d'un tour, confirmation de `saves delete`, erreurs réseau dites, « annule » hors ligne | TA-01, TA-02, TA-05, TA-08 | M | à faire (13 nov.) : TA-01 (`tars-agent.ts:163`, `main.ts:1561`), TA-02 (`game-tools.ts:2505`), TA-05 (`openrouter.ts:253`), TA-08 (`offline-orders.ts:43`) présents |
+| 3.7 | TARS : outils du pilote automatique des avions et de l'A320, par les mêmes actions que la console d'équipage | TA-03, TA-10 | M | à faire (13 nov.) : aucun outil TARS pour `apSet`/`navSet` ni l'A320 ; volets arrondis à 0/0,5/1 (`game-tools.ts:1140`) |
+| 3.8 | Compilation de Jupiter : anticiper dès que la destination est choisie, puis réduire le noyau | GP-20 | M | session du rendu |
+| 3.9 | Garde « fini et borné » dans `resolve`, sonde des pixels non finis (image noire de Jupiter sud) | GP-10 | S | session du rendu |
+| 3.10 | Les e2e qui ne vérifient rien : membres inexistants, fichiers sans `expect`, `waitFor` avalés | QA-08 | M | partiel (13 nov.) : membres inexistants corrigés (`3ae30d6b`) ; restent 19 fichiers sans `expect(`, 94 `waitFor…catch(() => {})` vides dans 71 fichiers (+ ≈ 64 sur plusieurs lignes) |
 
 ### Vague 4 — les fondations de la destination
 
-| # | Travail | Sert | Constats | Taille |
-|---|---|---|---|---|
-| 4.1 | **Le service de sol** : le monde possède le support et sa révision ; l'appareil ne lit plus un échantillonneur installé par le renderer | §19.4, §7.4 | AR-01 | L |
-| 4.2 | **La politique de temps** : onglet masqué, reprise GPU, trous, une seule horloge pour la logique de vol | §19.3 | AR-02, AR-08 | M |
-| 4.3 | **Séparer `Settings`** : préférences, scène, état simulé, pose de vue | §19.12 | AR-07, AR-21 | L |
-| 4.4 | **Le contrat de surface** : profondeur finale, identité et génération, mouvement, couleur, derrière une interface ; les 62 lecteurs passent par elle | §7.4, C0-2 | GP-03, GP-04 | L |
-| 4.5 | **Le layout de `Params` vérifié** par un test (WGSL contre TypeScript), puis `webgpu-utils` à J1 | §18.5 | GP-31 | S |
-| 4.6 | **Un gouverneur sur le poste chargé** : cible à taille fixe et viewport dynamique, paliers sans pulsation | §7.14 | GP-06, GP-24, GP-08 | L |
-| 4.7 | **Trancher et retirer** les options coupées ; sortir `shade` et `shadeMark` de la frame en mode « auto » | §20.7 | GP-17, GP-07, GP-18 | M |
-| 4.8 | **Découper `main()`** par responsabilité, en commençant par la boucle d'image (ordre simulation, vue, instruments, rendu) | §19.12 | AR-12, AR-04, AR-05 | L |
-| 4.9 | **L'ordonnanceur unique** du chargement (ST2), sur les morceaux CM2 et CM5 | §7.19 | ST | L |
+| # | Travail | Sert | Constats | Taille | État |
+|---|---|---|---|---|---|
+| 4.1 | **Le service de sol** : le monde possède le support et sa révision ; l'appareil ne lit plus un échantillonneur installé par le renderer | §19.4, §7.4 | AR-01 | L | fait pour l'essentiel (J2-2, `10b758d3`, [PLAN-J2](../PLAN-J2-PAGES-RECONSTRUCTION.md) §9 quater) — session du rendu |
+| 4.2 | **La politique de temps** : onglet masqué, reprise GPU, trous, une seule horloge pour la logique de vol | §19.3 | AR-02, AR-08 | M | partiel (13 nov.) : l'horloge de la frame du renderer (J1-1, `6b66066b`, `e10a43ca`) ; reste AR-02 entier (`dt` borné `main.ts:8481`, `sim.step` sans `recovering` `:8529`, aucun `visibilitychange`) et AR-08 côté vol (14 `performance.now()` de logique dans `controller/`) |
+| 4.3 | **Séparer `Settings`** : préférences, scène, état simulé, pose de vue | §19.12 | AR-07, AR-21 | L | à faire (13 nov.) : le classement `SETTING_KIND` (219 pref, 118 scene, 51 carried) existait déjà ; ni `SimState` ni `ViewPose` |
+| 4.4 | **Le contrat de surface** : profondeur finale, identité et génération, mouvement, couleur, derrière une interface ; les 62 lecteurs passent par elle | §7.4, C0-2 | GP-03, GP-04 | L | session du rendu |
+| 4.5 | **Le layout de `Params` vérifié** par un test (WGSL contre TypeScript), puis `webgpu-utils` à J1 | §18.5 | GP-31 | S | fait (J1-0, `4a37a4b6` : `webgpu-utils`, `src/gen/params-layout.ts`, test et portillon avant push) |
+| 4.6 | **Un gouverneur sur le poste chargé** : cible à taille fixe et viewport dynamique, paliers sans pulsation | §7.14 | GP-06, GP-24, GP-08 | L | session du rendu |
+| 4.7 | **Trancher et retirer** les options coupées ; sortir `shade` et `shadeMark` de la frame en mode « auto » | §20.7 | GP-17, GP-07, GP-18 | M | session du rendu |
+| 4.8 | **Découper `main()`** par responsabilité, en commençant par la boucle d'image (ordre simulation, vue, instruments, rendu) | §19.12 | AR-12, AR-04, AR-05 | L | à faire (13 nov.) : `main()` `main.ts:415-10206`, boucle `8474-9776` ; aucune extraction |
+| 4.9 | **L'ordonnanceur unique** du chargement (ST2), sur les morceaux CM2 et CM5 | §7.19 | ST | L | session du rendu |
 
 ### Vague 5 — la bascule
 

@@ -430,9 +430,9 @@ export class PauseMenu {
           maxlength: "60",
           "data-autofocus": "",
         }) as HTMLInputElement;
-        const doSave = (nm: string) => {
+        const doSave = (nm: string, replace = false) => {
           try {
-            const saved = this.d.tools.save(nm);
+            const saved = this.d.tools.save(nm, { replace });
             this.d.toast(`${tr(T.saved)} — ${saved}`);
             this.ctx = this.d.context();
             this.fillContext();
@@ -446,7 +446,7 @@ export class PauseMenu {
         go.classList.add("m-item", "tt-launch", "pz-go");
         const list = h("div", { class: "pz-saves" });
         for (const g of slots.list()) {
-          const b = button({ label: tr(T.overwrite), testid: "pause-overwrite", onClick: () => doSave(g.name) });
+          const b = button({ label: tr(T.overwrite), testid: "pause-overwrite", onClick: () => doSave(g.name, true) });
           b.classList.add("pz-mini");
           list.append(this.saveRow(g.name, g.summary, g.savedAt, [b]));
         }

@@ -49,4 +49,20 @@ export const store = {
   setJSON(key: string, v: unknown): boolean {
     return store.set(key, JSON.stringify(v));
   },
+  /** this app's keys that begin with `prefix` (as given to get/set: without a preview's subpath) — none when the
+   *  storage is out of reach */
+  keys(prefix: string): string[] {
+    const full = storageKey(prefix);
+    const strip = full.length - prefix.length;
+    const out: string[] = [];
+    try {
+      for (let i = 0; i < localStorage.length; i++) {
+        const k = localStorage.key(i);
+        if (k !== null && k.startsWith(full)) out.push(k.slice(strip));
+      }
+    } catch {
+      /* nothing readable, nothing listed */
+    }
+    return out;
+  },
 };

@@ -71,8 +71,15 @@ export interface GameSave {
   camera?: { gravity: boolean };
 }
 
+// The browser's storage (audit 2026-11-10, AR-19): one key per save — an interrupted write, a later version's
+// text, loses nothing but that save, and its text is kept aside (KEPT), never overwritten in silence; a name
+// already taken is replaced only when asked. Before 13 Nov 2026 every save lived in one JSON under LEGACY: read,
+// then moved one per key.
 const AUTO_KEY = "kerr.autosave";
-const SLOTS_KEY = "kerr.saves";
+const SLOT = "kerr.save:";
+const LEGACY = "kerr.saves";
+/** an unreadable text kept aside: `kerr.kept:<what>@<ms>` (what: "autosave", "save:<name>", "saves") */
+const KEPT = "kerr.kept:";
 
 /** A stored save, checked: a corrupted or foreign one is reported and left out, never half-loaded. */
 function stored(x: unknown, where: string): GameSave | null {
@@ -85,30 +92,135 @@ function stored(x: unknown, where: string): GameSave | null {
   }
 }
 
+/** A stored text read as a save (null: not one — not JSON, not a save, a later version's). */
+function readText(raw: string | null, where: string): GameSave | null {
+  if (raw === null) return null;
+  let x: unknown;
+  try {
+    x = JSON.parse(raw);
+  } catch (e) {
+    caught(where, e);
+    return null;
+  }
+  return stored(x, where);
+}
+
+/** An unreadable text put aside under its own key before its place is written (false: the browser refused —
+ *  then nothing is written over it). */
+function keepAside(what: string, raw: string): boolean {
+  let key = `${KEPT}${what}@${Date.now()}`;
+  for (let k = 2; store.get(key) !== null; k++) key = `${KEPT}${what}@${Date.now()}-${k}`;
+  const ok = store.set(key, raw);
+  caught("save", new Error(ok ? `an unreadable ${what} kept aside as ${key}` : `an unreadable ${what} could not be kept aside`));
+  return ok;
+}
+
+// (the autosave read as readable once — read or written —: not parsed again at every autosave)
+let autoChecked = false;
 export const autosave = {
-  get: () => stored(store.getJSON<unknown>(AUTO_KEY, null), "autosave"),
-  set: (g: GameSave) => store.setJSON(AUTO_KEY, g),
-  clear: () => store.remove(AUTO_KEY),
+  get: () => {
+    const g = readText(store.get(AUTO_KEY), "autosave");
+    if (g) autoChecked = true;
+    return g;
+  },
+  /** false: the browser refused (storage full, private mode), or an unreadable autosave could not be kept aside */
+  set: (g: GameSave) => {
+    if (!autoChecked) {
+      const raw = store.get(AUTO_KEY);
+      if (raw !== null && !readText(raw, "autosave") && !keepAside("autosave", raw)) return false;
+    }
+    const ok = store.setJSON(AUTO_KEY, g);
+    if (ok) autoChecked = true;
+    return ok;
+  },
+  clear: () => {
+    store.remove(AUTO_KEY);
+    autoChecked = false;
+  },
 };
 
-const allSlots = () => store.getJSON<Record<string, unknown>>(SLOTS_KEY, {});
+/** The former single key's saves, moved one per key (those already there kept); its text, unreadable, kept aside.
+ *  Returns what it still holds (a move the browser refused: read from it until the next try). */
+function legacy(): Record<string, unknown> {
+  const raw = store.get(LEGACY);
+  if (raw === null) return {};
+  let all: unknown;
+  try {
+    all = JSON.parse(raw);
+  } catch {
+    all = null;
+  }
+  if (!all || typeof all !== "object" || Array.isArray(all)) {
+    if (keepAside("saves", raw)) store.remove(LEGACY);
+    return {};
+  }
+  const left: Record<string, unknown> = {};
+  for (const [name, g] of Object.entries(all as Record<string, unknown>))
+    if (store.get(SLOT + name) === null && !store.setJSON(SLOT + name, g)) left[name] = g;
+  if (Object.keys(left).length) store.setJSON(LEGACY, left);
+  else store.remove(LEGACY);
+  return left;
+}
+
+/** A save's stored text by its name (its key, or the former single key's while it holds it). */
+function slotText(name: string, old = legacy()): string | null {
+  const raw = store.get(SLOT + name);
+  return raw !== null ? raw : name in old ? JSON.stringify(old[name]) : null;
+}
+
+/** The outcome of storing a save: stored, refused because the name is taken (replace not asked), refused by the
+ *  browser (storage full, private mode — the others untouched). */
+export type PutResult = "ok" | "exists" | "refused";
+
 export const slots = {
-  list: (): GameSave[] =>
-    Object.entries(allSlots())
-      .map(([name, g]) => stored(g, `save "${name}"`))
+  /** every save's name, readable or not */
+  names: (): string[] => {
+    const old = legacy();
+    return [...new Set([...store.keys(SLOT).map((k) => k.slice(SLOT.length)), ...Object.keys(old)])];
+  },
+  list: (): GameSave[] => {
+    const old = legacy();
+    return slots
+      .names()
+      .map((name) => readText(slotText(name, old), `save "${name}"`))
       .filter((g): g is GameSave => !!g)
-      .sort((a, b) => b.savedAt - a.savedAt),
-  get: (name: string) => stored(allSlots()[name], `save "${name}"`),
-  put: (g: GameSave) => {
-    const all = allSlots();
-    all[g.name] = g;
-    return store.setJSON(SLOTS_KEY, all);
+      .sort((a, b) => b.savedAt - a.savedAt);
+  },
+  get: (name: string) => readText(slotText(name), `save "${name}"`),
+  /** a readable save of that name */
+  has: (name: string) => !!slots.get(name),
+  /** the names stored that cannot be read (kept, not listed: saved again under one, its text is kept aside) */
+  unreadable: (): string[] => {
+    const old = legacy();
+    return slots.names().filter((name) => !readText(slotText(name, old), `save "${name}"`));
+  },
+  /** `name`, or the first of "name (2)", "name (3)"… not taken */
+  free: (name: string) => {
+    let k = 2,
+      n = name;
+    while (slots.has(n)) n = `${name} (${k++})`;
+    return n;
+  },
+  put: (g: GameSave, o: { replace?: boolean } = {}): PutResult => {
+    const raw = slotText(g.name);
+    if (raw !== null) {
+      if (readText(raw, `save "${g.name}"`)) {
+        if (!o.replace) return "exists";
+      } else if (!keepAside(`save:${g.name}`, raw)) return "refused";
+    }
+    return store.setJSON(SLOT + g.name, g) ? "ok" : "refused";
   },
   remove: (name: string) => {
-    const all = allSlots();
-    delete all[name];
-    return store.setJSON(SLOTS_KEY, all);
+    const old = legacy();
+    store.remove(SLOT + name);
+    if (name in old) {
+      delete old[name];
+      if (Object.keys(old).length) store.setJSON(LEGACY, old);
+      else store.remove(LEGACY);
+    }
   },
+  /** the unreadable texts kept aside (their keys) */
+  kept: () => store.keys(KEPT),
 };
 
 /** One step up per version: MIGRATIONS[v] takes a save of version v to version v + 1. */

@@ -217,6 +217,7 @@ Every e2e file (`tests/e2e/*.e2e.test.ts`), by theme: what it proves, the scene 
 | file | what it proves | scene(s) booted | ~s on the mini | needs |
 |---|---|---|---|---|
 | saves.e2e.test.ts | A saved flight reloads as it was whatever flew before: the craft, its docks, the entry site, a fall saved after a burn. | default (HUD-gallery states) | 1 | — |
+| saves-storage.e2e.test.ts | Saves one key each (audit AR-19, 13 Nov 2026): the old single key `kerr.saves` moved, nothing lost, a broken save kept unlisted; the pause's Save refuses a name taken (said, the save intact), Overwrite and F5 replace; the name field readable. | `game:artemis` | — (≈ 40 s here) | old saves seeded by `initScript`; tiles blocked |
 | pwa.e2e.test.ts | Service worker registers and caches the shell and manifest; the network cut reloads from cache and the scene plays; tiles kept under budget. | Earth: the Blue Marble, service worker and tiles | 6 | `sw=1`; `tiles: true`; network cut in the test |
 
 ## Exploration planétaire

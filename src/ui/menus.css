@@ -74,8 +74,10 @@
 /* the sub-pages: save, load, the title's confirmation */
 .pz-sub { margin-top: clamp(16px, 4vh, 40px); max-width: 640px; display: flex; flex-direction: column; gap: 14px; }
 .pz-row { display: flex; gap: 10px; align-items: stretch; }
-.pz-row .pz-input { flex: 1; }
-.m-item.pz-go { margin: 0; width: auto; flex: none; padding: 10px 20px; }
+/* (the name's field takes the row, the button its text: .m-item.tt-launch's width 100 %, loaded after, squeezed the field to
+   ~30 px — the name typed unseen, 13 Nov 2026) */
+.pz-row .pz-input { flex: 1; min-width: 12em; }
+.pz-row .m-item.pz-go { margin: 0; width: auto; flex: none; padding: 10px 20px; }
 .pz-text { margin: 0; font: 400 16px / 1.55 var(--m-f-text); color: var(--m-ink); opacity: 0.85; }
 .pz-saves { display: flex; flex-direction: column; gap: 6px; max-height: calc(100vh - var(--m-safe-y) * 2 - 260px); overflow-y: auto; }
 .pz-save { display: flex; gap: 12px; align-items: center; padding: 10px 14px; border: 1px solid var(--m-line); border-radius: 3px; background: rgba(6, 10, 18, 0.6); }

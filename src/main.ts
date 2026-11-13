@@ -4053,7 +4053,7 @@ async function main() {
     });
   const quickSave = () => {
     try {
-      panel.toast(tf("Quick save — {0}", tools.save("Quick save")));
+      panel.toast(tf("Quick save — {0}", tools.save("Quick save", { replace: true })));
     } catch (e) {
       panel.toast((e as Error).message);
     }
@@ -8445,6 +8445,7 @@ async function main() {
   const menuPad = new MenuPad();
   let lastStats: FrameStats | null = null;
   let saveTimer = 0;
+  let autosaveFailTold = false;
   // (the jitter probe: off, nothing gathered; its own clock — the steps the flight was given)
   const jitterProbe = new JitterProbe();
   const camProbe = new CamProbe();
@@ -9135,7 +9136,11 @@ async function main() {
     if (soon && !benchPage && !replay.active) writePrefs(settings);
     if (settings.autosave && firstFrame && !renderer.offlineActive && !replay.active && (saveTimer > settings.autosaveEvery || soon)) {
       saveTimer = 0;
-      cpuProf.time("autosave", () => tools.autosaveNow());
+      // (refused — storage full or blocked —: said once, not every ten seconds; said again after one has taken)
+      const ok = cpuProf.time("autosave", () => tools.autosaveNow());
+      if (!ok && !autosaveFailTold)
+        panel.toast(t("Autosave failed — the browser's storage is full or blocked; save by hand (Pause › Save) or export"));
+      autosaveFailTold = !ok;
     }
     if (soon) saveSoon = false;
     const hudVisible = (pil && !replay.active) || (camera.character.active && flightHud.mapView);

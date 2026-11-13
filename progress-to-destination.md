@@ -4261,3 +4261,28 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   **Recommandation à Sam** : réalisable (pages stables, une par image sous le budget), seulement si une machine cible manque de mémoire.
 - **Fichiers** : `src/system/earth-tiles.ts` (`bc7Study`), `tests/e2e/j2c-bc7.e2e.test.ts`, fiche `FICHE-J2-C-2026-11-13.md` ; PLAN-J2
   §9 terdecies, BH-API, E2E-CATALOGUE, carte. **Non vérifié** : le PC Windows ; les couches 2048² ; le coût d'échantillonnage.
+
+## 2026-11-13T08:01Z — Audit, vagues 3 et 4 hors rendu : l'état relevé ; 3.3, premier lot — une clé par sauvegarde, jamais d'écrasement silencieux
+
+- **Contribution** (stratégie §19.9 sauvegardes et reprise, §19.13 parcours complets ; audit du 10 nov., lignes 3.3, AR-19, AR-20) :
+  session hors rendu (seconde session, décision de Sam du 13 nov.). D'abord **l'état réel des lignes 3.x et 4.x** relevé dans le
+  code et `git log` : colonne « État » ajoutée aux vagues 3 et 4 de `docs/audit-2026-11-10/09-priorites-todo.md` (à faire 3.1,
+  3.2, 3.3, 3.5, 3.6, 3.7, 4.3, 4.8 ; partiel 3.4, 3.10, 4.2 ; fait 4.1, 4.5 ; le reste à la session du rendu). Puis le premier lot
+  de 3.3 : **une clé par sauvegarde** (`kerr.save:<nom>`) au lieu d'un seul JSON ; l'ancienne clé `kerr.saves` lue et déplacée à
+  la première visite ; un texte illisible (écriture interrompue, version plus récente) n'est plus effacé : copié sous
+  `kerr.kept:<quoi>@<ms>` avant que sa place soit réécrite (sauvegarde nommée ou autosauvegarde) ; **un nom déjà pris n'est
+  remplacé que sur demande** (`game.save(nom, { replace })` : le bouton Écraser, F5, « Before TARS » ; l'outil TARS `saves` reçoit
+  `replace`) ; un import ne s'écrit jamais sur une autre sauvegarde (`nom (2)`) ; l'échec d'autosauvegarde dit une fois (toast
+  FR/EN). En passant : le champ du nom de l'écran Sauvegarder était écrasé à ~30 px par la largeur du bouton (`menus.css`).
+- **Reproduit avant correction** (script sur le code d'origine, `localStorage` simulé) : trois sauvegardes dans `kerr.saves`, le
+  texte coupé, une sauvegarde de plus → **il n'en reste qu'une**, le texte coupé perdu ; un même nom deux fois → remplacé en silence ;
+  une autosauvegarde de version 3 → écrasée par la suivante. Après : le texte coupé gardé, « exists », la v3 gardée.
+- **Vérifié** : `tests/save-storage.test.ts` 8/0 (nouveau) ; save, i18n, tars-tools, tars-agent 50/0 ; `tsc` ; Biome sur les
+  fichiers touchés. **e2e** `saves-storage` 3/0 sur ce Mac (Chrome visible, tuiles bloquées, ≈ 40 s) : les deux anciennes sauvegardes
+  listées et déplacées, l'illisible gardée sans être listée, le nom pris refusé et dit (la sauvegarde intacte), Écraser et F5
+  remplacent, le champ du nom à 534 px ; captures `remote-results/saves-storage/`.
+- **Fichiers** : `src/game/save.ts`, `src/util/storage.ts` (`store.keys`), `src/game/tools.ts`, `src/ui/pause.ts`, `src/ui/menus.css`,
+  `src/ai/game-tools.ts`, `src/main.ts` (deux lignes : F5, le toast d'échec), `src/i18n/fr-main.ts` ; BH-API, E2E-CATALOGUE.
+- **Non fait / suite** : IndexedDB et l'écriture hors frame (AR-05 : l'autosauvegarde reste synchrone toutes les 10 s, non mesurée) ;
+  aucun plafond de nombre ni de taille ; pas d'écran pour relire un texte gardé à part. Prochains lots de 3.3 : « Reprendre » sur le
+  bon instantané (FX-10), puis l'état des avions et des activités dans la sauvegarde (FX-09, AR-09).
