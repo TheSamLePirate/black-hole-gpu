@@ -576,6 +576,12 @@ termes à un nœud fautif (43,0666 N, 6,12883 E, niveau 1).
   caméra.
 - **À trouver** : pourquoi le ciel de la sonde est si clair la nuit (échelle du fond de ciel liée à l'exposition ?
   `physicalPoints` des étoiles ?) ; puis retirer la borne.
+- **Relevé du 13 nov.** (~20:54 UTC, phase J0 `probedump` au-dessus de Tromsø à 500 m, `PROBE_DATES` 15 déc. 22:00 et 11:00 UTC, run
+  `…-probedump-tromso`) : la nuit, la sonde (f32) vaut ~1,2·10⁻¹⁰ en haut, ~1·10⁻¹¹ en bas (axes de la sonde) ; le jour d'hiver ~1,6·10⁻⁷ /
+  ~9·10⁻⁸. Les 4·10⁻⁶ du 6 nov. ne se reproduisent pas (le modèle de nuit a changé depuis). **Lié** : jusqu'au 13 nov. la sonde était recopiée
+  brute en demi-flottants — à ~10⁻¹⁰ la nuit, mille fois sous le plus petit normal : le ciel reflété par la mer y était **nul** ; depuis la mise
+  à l'échelle (PROBLEMES ci-dessus, réglé) il est lu. `probeNoStar` écarté (il ne retire que l'astre principal, pas le fond d'étoiles).
+  **Reste** : revoir la nuit à Tromsø avec la mise à l'échelle pour décider si la borne `4 × ciel clair` sert encore.
 
 ## L'aurore de la face nuit invisible quand la caméra est au soleil, dans l'espace
 

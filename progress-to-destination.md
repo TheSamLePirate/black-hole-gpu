@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-13 20:50 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-13 20:54 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous.
@@ -5851,4 +5851,10 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   fichier) ; e2e `net-rooms` 5/5.
 - Limites : le reste de RD4 (l'état servi à l'arrivée et à la reconnexion — amarrages, passagers, scores, rôles, match ; slots stables,
   NET-13) n'est pas fait ; RD5 non ouvert.
+
+## 2026-11-13T20:54Z — Le ciel de nuit de la sonde (Tromsø) relevé
+
+- Réalisé : `probedump` paramétrée (`PROBE_DATES`, les rangées par élévation) ; run au-dessus de Tromsø en décembre. PROBLEMES complété.
+- Preuves : **mesuré** : la sonde de nuit ~10⁻¹⁰–10⁻¹¹ (f32) — l'ancien stockage brut en demi-flottants la rendait nulle à la mer ; les 4·10⁻⁶ du
+  6 nov. non reproduits. Suite : revoir la nuit à Tromsø pour la borne provisoire de `seaShade`.
 

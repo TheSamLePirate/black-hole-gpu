@@ -1103,9 +1103,12 @@ describe.skipIf(!E2E)("J0: the reference flight over Toulon-Hyères", () => {
     "PROBLEMES: the craft's light probe as it stands — 15:30 and 19:40, written as images",
     async () => {
       await start("");
-      for (const utc of ["15:30", "19:40"]) {
+      // (PROBE_DATES="2026-12-15T22:00:00Z,…": other moments — the night's probe, PROBLEMES « le ciel de nuit de la sonde »)
+      const dates = (process.env.PROBE_DATES ?? "2026-07-10T15:30:00Z,2026-07-10T19:40:00Z").split(",");
+      for (const date of dates) {
+        const utc = date.slice(0, 16).replace(/[-:T]/g, "");
         await app.js(`(async () => { const f = () => new Promise((q) => requestAnimationFrame(q)); __bh.freeze(false);
-          __bh.game.setDate("2026-07-10T${utc}:00Z"); __bh.refresh(); for (let i = 0; i < 120; i++) await f(); __bh.freeze(true);
+          __bh.game.setDate("${date}"); __bh.refresh(); for (let i = 0; i < 120; i++) await f(); __bh.freeze(true);
           for (let i = 0; i < 30; i++) await f(); return 1; })()`);
         for (const [what, call] of [
           ["probe", "__bh.renderer.readShipProbe()"],
@@ -1123,7 +1126,23 @@ describe.skipIf(!E2E)("J0: the reference flight over Toulon-Hyères", () => {
           const out8 = new Uint8Array(p.w * p.h * 3);
           const srgb = (x: number) => Math.round(255 * Math.min(1, x <= 0.0031308 ? 12.92 * x : 1.055 * x ** (1 / 2.4) - 0.055));
           for (let i = 0; i < p.w * p.h * 3; i++) out8[i] = srgb(Math.max(0, Number.isFinite(p.rgb[i]!) ? p.rgb[i]! * k : 0));
-          await Bun.write(`${OUT}/${what}-${utc.replace(":", "")}.png`, writePng(p.w, p.h, out8));
+          await Bun.write(`${OUT}/${what}-${utc}.png`, writePng(p.w, p.h, out8));
+          // (the probe's rows by elevation band, their mean luminance: the sky's top, near the horizon, the ground — raw units)
+          if (what === "probe") {
+            const rowLum = (y0: number, y1: number) => {
+              let t = 0,
+                n = 0;
+              for (let y = Math.floor(y0 * p.h); y < Math.floor(y1 * p.h); y++)
+                for (let x = 0; x < p.w; x++) {
+                  t += lum[y * p.w + x]!;
+                  n++;
+                }
+              return (t / n).toExponential(2);
+            };
+            console.log(
+              `  probe dump ${utc}: rows (probe axes) top ${rowLum(0, 0.25)} · upper ${rowLum(0.25, 0.5)} · lower ${rowLum(0.5, 0.75)} · bottom ${rowLum(0.75, 1)}`,
+            );
+          }
           console.log(`  probe dump ${utc}: ${what} written (scale 1/${(1 / k).toExponential(2)})`);
         }
       }
