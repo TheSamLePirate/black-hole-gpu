@@ -4083,3 +4083,10 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   `singleHistory` sans effet ici. Le pic d'énergie de J2-0 en vol = le bruit d'un historique perdu. Critère de J2-6 tenu en vue tenue.
 - **Changé** : `tests/e2e/lib/j2-probes.ts` (`devJs`), `tests/e2e/j2-probes.e2e.test.ts` (phase `pulse`) ; PLAN-J2 §9 octies (e).
 - **Mesuré** : M1 Max, 1/0 par côté. **Non vérifié** : en vol (PSNR à l'instant du changement) ; kerr-mini.
+
+## 2026-11-13T04:25Z — J2-6 : en vol, un seul historique supprime la petite pulsation d'un changement d'échelle
+
+- **Mesuré** (M1 Max, `motion-quality` Alpes virage 30°, mode `+drop` nouveau : 0,625 forcé 8 images avant la capture) : PSNR en mouvement
+  0,75 constant 46,2 dB ; 0,625 constant 37,8 dB ; changement 37,2 dB (−0,56 dB) ; changement avec `singleHistory` **37,8 dB** (aucune
+  pulsation). La condition de J2-6 pour une échelle variable ; un argument pour `singleHistory` avant le retrait de l'épingle. Relevé non
+  analysé : 8 dB entre 0,75 et 0,625 sur cette vue. **Changé** : `motion-quality` (`+drop`) ; PLAN-J2 §9 octies (e), catalogue.

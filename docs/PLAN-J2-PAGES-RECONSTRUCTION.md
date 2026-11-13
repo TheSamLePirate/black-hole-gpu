@@ -452,8 +452,12 @@ scène (sortie de la TAAU, taille du canevas) relue 1 à 64 images après et com
 l'image suivante puis décroît régulièrement — **0,7 % à 64 images** contre un bruit de 0,25–0,38 % — sans jamais dépasser son point de
 départ ; une transition d'environ une seconde, pas un creux. `singleHistory` n'y change rien (0,74 contre 0,73 % à 64 images). Le
 « pic d'énergie » de J2-0 en vol (+44 à +118 %) est donc **le bruit d'un historique perdu** — le laplacien compte le bruit —, pas un
-flou ; le critère de J2-6 (« |écart| ≤ 3 % » à un changement d'échelle) est **tenu en vue tenue** par cette mesure. **En vol** : non mesuré
-ainsi (la sonde compare des vues fixes) ; une mesure par PSNR contre référence à l'instant du changement reste à faire.
+flou ; le critère de J2-6 (« |écart| ≤ 3 % » à un changement d'échelle) est **tenu en vue tenue** par cette mesure. **En vol** (même jour,
+`motion-quality` Alpes, virage 30°, mode `+drop` : 0,625 forcé 8 images avant la capture) : PSNR en mouvement **0,75 constant 46,2 dB,
+0,625 constant 37,8 dB, changement 37,2 dB (−0,56 dB : une petite pulsation, l'historique natif perdu), changement avec `singleHistory`
+37,8 dB (= l'échelle réglée : aucune pulsation)** — l'historique long à la taille de sortie traverse le changement : **c'est la condition
+de J2-6 pour faire varier l'échelle**, et un argument pour allumer `singleHistory` avant de retirer l'épingle `want = rasterTop()`.
+Relevé, non analysé : l'écart de 8 dB entre 0,75 et 0,625 constants sur cette vue (`taau625q`).
 
 ## 9 octies. J2-7, étape A : ce que `shade` et `bodyLite` couvrent et coûtent (13 novembre 2026)
 

@@ -68,6 +68,9 @@ const EXTRAS: Record<string, [string, string]> = {
   disoccall: ["__bh.renderer.disocclusionOn = true; __bh.renderer.disocclusionTol = -10;", "__bh.renderer.disocclusionTol = 0.03;"],
   // (PLAN-J2 J2-6: one long history — the native temporal pass's short while the upsampling runs)
   single: ["__bh.renderer.singleHistory = true;", "__bh.renderer.singleHistory = false;"],
+  // (J2-6: a change of scale in flight — 0.625 forced 8 frames before the first instant's shot: between the two scales' own PSNR if
+  // smooth, under both if it pulses)
+  drop: ["globalThis.__mqDrop = 8;", "globalThis.__mqDrop = 0;"],
 };
 const modeExtras = (md: string) => {
   const on = new Set(md.split("+").slice(1));
@@ -231,6 +234,7 @@ describe.skipIf(!E2E)("Q6: the image in motion, the same motion for every mode",
           r.prof.enabled = true; r.prof.every = 1; r.prof.reset();
           let gpu = 0, turn = 0, ground = 0;
           for (let i = 0; i < ${FRAMES}; i++) {
+            if (globalThis.__mqDrop && i === ${FRAMES} - globalThis.__mqDrop) __bh.forceScale(0.625);
             __bh.step(1 / 30); __bh.touch();
             const last = r.lastDoneAt; let k = 0;
             while (r.lastDoneAt === last && k++ < 120) await frame();
