@@ -4635,3 +4635,16 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
 - **Non vérifié** : le relevé est une lecture du code (agent d'exploration), aucune mesure ; rien de J3 n'est codé. **Suite** : la validation de
   Sam ; la borne du M1 Max à refaire une fois `coreaudiod` relancé (Sam).
 
+## 2026-11-13T11:40Z — La suite complète sans autre charge après R1 ; l'inventaire des réglages compensatoires (J3-0, préparation)
+
+- **`bun test` complet, kerr-mini seul** (`remote-results/…-r1-bun-test-clean`) : 2 247 réussis, 1 704 sautés (les e2e), **7 échecs, les mêmes
+  qu'au passage chargé** — 5 délais de 5 s (`ui-scenes-loading`, `lola-tiles` ×3, `tars-tools`) et 2 assertions (`quals` : un passage du F-35C
+  par mer de 4,5 m à 0 point ; `pois` : 28 requêtes d'autres tests — `data.geopf.fr`, S3 — vues par l'espion réseau du géocodage). **Rejoués
+  seuls sur le mini, tous passent** (`lola-tiles` 5/0, les quatre autres 35/0), comme ici (40/0) : des interactions de la suite (charge,
+  fuites de requêtes entre fichiers), sans lien avec R1. Pas corrigés (hors de ce lot) ; signalés.
+- **J3-0, préparation** (le plan attend Sam) : [l'inventaire des réglages compensatoires](docs/progress/j3/INVENTAIRE-REGLAGES-2026-11-13.md),
+  une lecture du code (deux points revérifiés à la main) — ~30 réglages, la plupart de nuit, de la Lune ou du télescope ; six pèsent sur une scène
+  de jour : le mélange de la médiane du profil Caméra (un choix de Sam, décision 32, pas une compensation), `shadowKeep` (l'altitude de la
+  caméra), les plafonds d'histogramme, les lumières de cabine rapportées à l'affichage, l'écrêtage du ciel reflété par la mer, l'adaptation des
+  villes. Aucune mesure ; rien de changé.
+
