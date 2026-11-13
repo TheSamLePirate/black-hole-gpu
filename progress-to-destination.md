@@ -4140,3 +4140,9 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   sur kerr-mini) puis remesurer `trail`, la voie 1 (identité du sol) seulement si une lecture par page devient nécessaire. PLAN-J2 §9 septies.
 - **Vérifié** : `bun test --parallel` **2 212 / 0** (après le correctif d48f31f0 ; le passage d'avant 2 209 / 3 : ce défaut-là et deux
   délais sous la charge).
+
+## 2026-11-13T06:01Z — J2 : un premier ΔGPU des leviers sur la vue J0 figée (M1 Max, alterné)
+
+- **Mesuré** (e2e `j2-dgpu` nouveau ; six tours allumé/éteint alternés par levier ; M1 Max « Moderate ») : Δ GPU p50 `edgeFoot` 0,00 ± 0,15 ms,
+  `singleHistory` 0,00 ± 0,17, `earthRateOne` +0,42 ± 0,40, `disocclusionOn` +0,32 ± 0,22 — aucun coût net établi. **Pas** le ΔGPU du plan
+  (vol, kerr-mini, hors réseau, comme kerr-pc). PLAN-J2 §9 nonies, E2E-CATALOGUE.

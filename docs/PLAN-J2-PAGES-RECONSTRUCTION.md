@@ -520,6 +520,14 @@ fenêtre de compilation, où `shade` prend les pixels). Vérifié : `j2-cover` (
 1/0. Effet de bord voulu : avec la cadence 1, `shadeMark` n'est plus attendu pour que le raster soit prêt. **Reste** de J2-7 : la cadence
 locale des corps (si utile), son ΔGPU sur kerr-mini.
 
+## 9 nonies. Les leviers de J2 : un premier ΔGPU sur ce Mac, en attendant kerr-mini (13 novembre 2026)
+
+e2e `j2-dgpu` (nouveau) : la vue de J0 **figée** (cockpit du F-35, 500 m au-dessus de la rade), chaque levier allumé et éteint **six fois en
+alternance** (A B B A…, 20 images de mise en place, 60 mesurées) contre la dérive thermique ; M1 Max en pression « Moderate » (GPU 65 →
+87 °C pendant la mesure). Δ du GPU p50 (allumé − éteint), moyenne des tours et son erreur type : **`edgeFoot` 0,00 ± 0,15 ms ;
+`singleHistory` 0,00 ± 0,17 ; `earthRateOne` +0,42 ± 0,40 ; `disocclusionOn` +0,32 ± 0,22** (sa copie des `moments` comprise) — aucun coût
+net établi à 0,2–0,4 ms près. **Ce n'est pas le ΔGPU du plan** (J0 en vol, A B B A entre commits, kerr-mini) : une estimation, vue figée.
+
 ## 10. Non vérifié
 
 - **Aucune mesure nouvelle** : les chiffres cités viennent des fiches J0 du 12 novembre, de la fiche T9 et de GRAPHICS-PIPELINE ; les
