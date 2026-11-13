@@ -9,8 +9,8 @@ import { App, E2E, stopServer } from "./lib/app";
 // across the oval (activity 5, then 8; Jupiter turned so that the oval's low side faces midnight), from 14 000 km over 50° S
 // looking south, from 36 000 km over 30° S (the oval foreshortened at the limb). AJ_OUT. AJ_SWEEP=1: the south view's neighbours too.
 // Output: remote-results/aurora-jupiter/*.png, stats.json. Done when: the aurora kernel in (featureKey 16384), each view shot,
-// the camera in the shadow (renderer eyeIncident < 1e-3), no GPU error. Duration: ~5 min cold (the near-Jupiter kernel's
-// compile, ~200 s), ~2 min warm.
+// the camera in the shadow (renderer eyeIncident < 1e-3), no GPU error. Duration: ~2 min on kerr-mini cold (the near-Jupiter kernels'
+// compile: 60 s there with AJ_COLD, 13 Nov 2026 — 203 s on the M1 Max on 6 Nov), ~1 min warm.
 const OUT = process.env.AJ_OUT ?? "remote-results/aurora-jupiter";
 const RJ = 71_492e3;
 afterAll(stopServer);
@@ -32,8 +32,8 @@ test.skipIf(!E2E)(
       expect(why).toBeNull();
       const tKey = Date.now();
       await app.waitFor(`(__bh.renderer.featureKey & 16384) === 16384`, 60_000);
-      // (the near-Jupiter kernel compiles in ~200 s cold on the M1 Max, with or without the auroras — measured 6 Nov 2026: 203 s
-      // without, 219 s with —; its progress said every 30 s, 5 min at most)
+      // (the near-Jupiter kernel compiled in ~200 s cold on the M1 Max, with or without the auroras — measured 6 Nov 2026: 203 s
+      // without, 219 s with —; 60 s cold on kerr-mini on 13 Nov; its progress said every 30 s, 5 min at most)
       for (let k = 0; k < 60 && (await app.js<number>(`__bh.renderer.compilesPending`)) > 0; k++) {
         if (k % 6 === 0) console.log(`    compiling ${k * 5} s: ${JSON.stringify(await app.js(`__bh.renderer.compilingNow`))}`);
         await Bun.sleep(5000);
