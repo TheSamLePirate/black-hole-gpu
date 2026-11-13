@@ -312,3 +312,36 @@ test("sub-agents: in parallel, reading only, the planners computing without exec
   expect(r[1]!.actions.find((a) => a.tool === "autopilot")!.ok).toBe(false);
   expect(ups).toContain("fuel:done");
 });
+
+test("memory: a summary under way while turns end — the recent turns kept, one summary at a time, a clear not undone (TA-07)", async () => {
+  const m = new TarsMemory(memStore());
+  for (let i = 0; i < TURNS_KEPT + 1; i++) m.add({ at: i, user: `q${i}`, tars: `a${i}` });
+  // (the model's summary takes a while: a turn ends meanwhile, and asks for its own)
+  let calls = 0;
+  const release: (() => void)[] = [];
+  const slow = async (_prev: string, turns: { user: string }[]) => {
+    calls++;
+    await new Promise<void>((r) => release.push(r));
+    return `summary of ${turns.map((t) => t.user).join(",")}`;
+  };
+  const first = m.compact(slow);
+  m.add({ at: 99, user: "q-new", tars: "a-new" });
+  const second = m.compact(slow);
+  while (release.length) release.shift()!();
+  await first;
+  while (release.length) release.shift()!();
+  await second;
+  // the turns not summarized are kept: the newest at the end, never dropped unsummarized
+  expect(m.turns.at(-1)?.user).toBe("q-new");
+  expect(m.turns.length).toBeGreaterThanOrEqual(TURNS_KEPT / 2);
+  expect(calls).toBe(1);
+  expect(m.summary).toContain("q0");
+  // a clear while a summary is under way: the summary not written into the new conversation
+  for (let i = 0; i < TURNS_KEPT + 1; i++) m.add({ at: i, user: `s${i}`, tars: `b${i}` });
+  const third = m.compact(slow);
+  m.clearTurns();
+  while (release.length) release.shift()!();
+  await third;
+  expect(m.summary).toBe("");
+  expect(m.turns.length).toBe(0);
+});

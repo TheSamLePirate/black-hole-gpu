@@ -58,7 +58,7 @@ ouverts, sous 1 ms) ; J3 au stade du plan.**
 | Audit vagues 3–4 (1feb2f7f) | 3.1 réseau RD0 + RD1 | **fait** : la frontière d'entrée (`src/net/inbound.ts`) ; un événement mal formé figeait l'image (163 → 0), plus maintenant — e2e `net-inbound` 6/6, net-battle/coop/crew/board verts |
 | Audit vagues 3–4 (1feb2f7f) | 3.2 réseau RD2 | **fait** : le serveur se défend (salles par adresse, débit, mots de passe salés et freinés, identité non publiée, rôle gardé, expiration) — six défauts vus avant, 0/6 → 6/6 |
 | Audit vagues 3–4 (1feb2f7f) | 3.4–3.5 vol | **fait** : U/F7 des avions (ILS, refus dit, manette gardée), Maj/Alt modificateur ou manette, LAND = F7 — le cours revolé 7/7 et 9/9 |
-| Audit vagues 3–4 (1feb2f7f) | 3.6 TARS | **fait** : tour coupé, `saves delete` confirmé, pannes dites, faux ordres hors ligne ; restes TA-06 (réveil borné), TA-12 (troncature redemandée), TA-14 (relais Deepgram borné), TA-15 (un filet « Before TARS » par tour, son échec dit) |
+| Audit vagues 3–4 (1feb2f7f) | 3.6 TARS | **fait** : tour coupé, `saves delete` confirmé, pannes dites, faux ordres hors ligne ; restes TA-06 (réveil borné), TA-12 (troncature redemandée), TA-14 (relais Deepgram borné), TA-15 (un filet « Before TARS » par tour, son échec dit), TA-07 (résumés de mémoire un à la fois) |
 | Audit vagues 3–4 (1feb2f7f) | 3.7 TARS (outils AP avions/A320) | **fait** : `jet_autopilot` par les actions de la console, volets au levier (CONF 1), l'AP de l'A320 réparé dans `apSet` |
 | Audit vagues 3–4 (1feb2f7f) | 3.10 e2e qui ne vérifient rien | **fait** : `waitOptional` (93 attentes converties), 14 mesures déclarées, garde `e2e-honesty` |
 | Audit vagues 3–4 (1feb2f7f) | 4.2 la politique de temps | **fait** : vol tenu pendant la reprise GPU, cadence vraie, horloge du vol + garde ; l'onglet masqué (choix de Sam) : solo en pause dite, salle sans arrêt (l'absent ne la bloque plus, les autres avertis, remis à l'heure au retour), sauvé en partant, TARS sans réveil ; le ralentissement sous 10 images/s dit — e2e `hidden-tab` 2/2, `fps-truth` 2/2 |
@@ -5201,4 +5201,14 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   refusé est dit. Tests TARS 38/0 (tars-tools, tars-agent, tars-turns, tars), tsc et biome sur les fichiers touchés.
 - Limites : un seul filet (pas de pile : une pile de sauvegardes encombrerait la liste du joueur) ; aucun e2e (le comportement est dans le
   catalogue d'outils, sans rendu).
+
+## 2026-11-13T16:45Z — Audit TA-07 : la mémoire de TARS résumée un résumé à la fois, rien de récent jeté
+
+- Contribution : §19 (TARS, sa mémoire fidèle sur un long vol) ; audit 2026-11-10, TA-07.
+- Réalisé : `ai/memory.ts` `compact` — un seul résumé en cours (un second appel attend le premier) ; les tours coupés sont ceux
+  résumés (par identité), non un compte pris avant les 30 s de la réponse du modèle ; une conversation effacée (`clear`, `/clear`)
+  pendant le résumé n'est pas réécrite. TARS.md.
+- Preuves : **reproduit avant** (unitaire `tars-agent` « TA-07 » : 25 tours, un résumé lent, un 26ᵉ tour et son résumé : il ne restait
+  aucun tour) ; **après** : le tour neuf gardé, un seul appel au modèle, l'effacement respecté. Tests TARS 39/0, tsc et biome.
+- Limites : aucun e2e (mémoire sans rendu).
 

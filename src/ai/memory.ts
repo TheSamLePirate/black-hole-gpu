@@ -110,17 +110,35 @@ export class TarsMemory {
     return this.d.turns.length > TURNS_KEPT;
   }
 
+  /** the summary under way (one at a time) */
+  private compacting: Promise<void> | null = null;
+
   /** The oldest half of the turns folded into the summary: by `summarize` (the model; null: failed — the
-   *  turns then simply dropped, their gist lost but the memory bounded). */
+   *  turns then simply dropped, their gist lost but the memory bounded).
+   *  (One at a time, and the turns summarized cut by themselves, not by a count taken before the model's answer: two
+   *  overlapping — a turn ended during the up to 30 s of a summary — dropped the recent turns unsummarized, 25 then 26
+   *  turns left none — audit 2026-11-10, TA-07. A conversation cleared meanwhile is not written into.) */
   async compact(summarize: ((previous: string, turns: Turn[]) => Promise<string | null>) | null, force = false) {
+    if (this.compacting) return this.compacting;
     if (!this.full && !(force && this.d.turns.length > 2)) return;
-    // (forced — /compact —: all but the last two exchanges folded)
-    const n = force ? this.d.turns.length - 2 : this.d.turns.length - Math.floor(TURNS_KEPT / 2);
-    const old = this.d.turns.slice(0, n);
-    const s = summarize ? await summarize(this.d.summary, old) : null;
-    if (s) this.d.summary = s.trim().slice(0, SUMMARY_CHARS);
-    this.d.turns = this.d.turns.slice(n);
-    this.save();
+    const run = (async () => {
+      const d = this.d;
+      // (forced — /compact —: all but the last two exchanges folded)
+      const n = force ? d.turns.length - 2 : d.turns.length - Math.floor(TURNS_KEPT / 2);
+      const old = d.turns.slice(0, n);
+      const s = summarize ? await summarize(d.summary, old) : null;
+      if (this.d !== d) return;
+      if (s) d.summary = s.trim().slice(0, SUMMARY_CHARS);
+      const gone = new Set(old);
+      d.turns = d.turns.filter((t) => !gone.has(t));
+      this.save();
+    })();
+    this.compacting = run;
+    try {
+      await run;
+    } finally {
+      this.compacting = null;
+    }
   }
 
   /** The note of the last turn's actions, for the head of the question asked now. */
