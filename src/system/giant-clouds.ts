@@ -71,7 +71,9 @@ export function giantLevel(id: GiantId, q: V3): { s: number; kl: number } {
   const c = rho / nl,
     sn = z / ba / nl;
   const s = Math.sqrt(c * c + ba * ba * sn * sn) / (c * c + ba * gpg * sn * sn);
-  return { s, kl: 1 / ((c * rho + (sn * Math.abs(z)) / ba) * s) };
+  // (the signed z: with |z| the south's term turned negative — the level's factor through ∞ near 45° S, negative beyond; the shader's
+  // twin blackened the image over 50° S — 13 Nov 2026)
+  return { s, kl: 1 / ((c * rho + (sn * z) / ba) * s) };
 }
 
 /** the top of a giant's clouds [m over 1 bar]: its highest deck's — 0 for the giants without decks (Uranus, Neptune) */

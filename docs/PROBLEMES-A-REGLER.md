@@ -598,7 +598,7 @@ termes à un nœud fautif (43,0666 N, 6,12883 E, niveau 1).
 - **Piste** : une exposition qui tient compte de ce que la vue regarde (le posemètre lit déjà la scène pour la retenue des
   hautes lumières) plutôt que de la seule lumière incidente, hors de l'atmosphère.
 
-## Jupiter vu de près depuis l'hémisphère sud : l'image parfois toute noire
+## ~~Jupiter vu de près depuis l'hémisphère sud : l'image parfois toute noire~~ — réglé le 13 novembre 2026 (~22:16 UTC) : un signe perdu dans `giantLevel`
 
 - **Constaté le 6 novembre 2026** (AM3, e2e `aurora-jupiter` et une sonde jetable) : la caméra libre à 7 000–14 000 km
   au-dessus de 50–55° S, regardant vers le sud, l'image est entièrement noire, étoiles comprises (luminance moyenne 0,1 sur
@@ -632,6 +632,13 @@ termes à un nœud fautif (43,0666 N, 6,12883 E, niveau 1).
   vues noire et normales. Reste un calcul **dans le noyau**, commun à tous les pixels et fonction de la position de la caméra (la figure
   aplatie de Jupiter vers 50° S, l'air ou le pont de nuages à la verticale de la caméra — `giantInsideOn`, `GI_FAR` —) devenu non fini :
   prochain pas, une sortie de diagnostic du noyau (la valeur au pixel central, par étape) — un lot à part.
+- **Cause et correctif** (~22:16 UTC) : `trace.wgsl` `giantLevel` (et son jumeau `giant-clouds.ts`) prenait `n.y · |z| / ba` — `n.y` signé, `|z|`
+  non : au sud le terme passait négatif, le facteur de niveau traversait l'infini vers 45° S et devenait négatif au-delà ; `giantInsideOn` (la
+  hauteur de la caméra × ce facteur sous le pont de nuages + 450 km) prenait alors la caméra **sous les nuages** : le chemin intérieur
+  absorbait tout, étoiles comprises. Le terme signé (`n.y · z / ba`) rend le facteur symétrique (1,052 à ±50°). **Vérifié** (kerr-mini, run
+  `…-aurora-jupiter-fixed`) : `south-act5` montre étoiles, Voie lactée et l'ovale sud (max 0,095 au lieu de 0) ; les cinq vues du balayage
+  normales ; un test unitaire fige la symétrie (`tests/giant-clouds.test.ts`, 13/13). **Touchait aussi** (non vérifié à l'image) : les hauteurs
+  des ponts et des brumes dans l'hémisphère sud des géantes (le facteur faux de 0 à 45° S), les chiffres du cockpit d'un appareil au sud.
 
 ## Le coût de l'aurore terrestre de près, la nuit : +4,6 ms sur le M1
 

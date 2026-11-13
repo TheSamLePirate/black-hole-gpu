@@ -13206,7 +13206,9 @@ fn giantLevel(m: u32, q: vec3f) -> vec2f {
   let rho = length(q.xy);
   let n = normalize(vec2f(rho, q.z / ba));
   let s = sqrt(n.x * n.x + ba * ba * n.y * n.y) / (n.x * n.x + ba * gpg * n.y * n.y);
-  return vec2f(s, 1.0 / ((n.x * rho + n.y * abs(q.z) / ba) * s));
+  // (n · (rho, z / ba): the signed z — with |z| the south's term turned negative, the level's factor through ∞ near 45° S and negative
+  // beyond: the camera taken under the decks there, the whole image black over 50° S — PROBLEMES, 13 Nov 2026)
+  return vec2f(s, 1.0 / ((n.x * rho + n.y * q.z / ba) * s));
 }
 fn giantVolumeOK(k: u32) -> bool {
   let m = u32(bodies[BV * k + 2u].z) - 4u;

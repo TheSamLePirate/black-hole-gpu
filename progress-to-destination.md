@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-13 22:08 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-13 22:16 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous.
@@ -6007,4 +6007,13 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
 
 - Preuves : **mesuré** (kerr-mini) : carte HD et tuile identiques dans les vues noire et normales. Suite : un lot avec une sortie de
   diagnostic du noyau. Le test `aurora-jupiter` relève désormais l'exposition, la couleur, les paramètres, les corps, la variante, la carte.
+
+## 2026-11-13T22:16Z — Jupiter noir depuis le sud : réglé (un signe dans `giantLevel`)
+
+- Réalisé : `trace.wgsl` `giantLevel` et `src/system/giant-clouds.ts` `giantLevel` — le terme signé (`n.y · z`) au lieu de `n.y · |z|` ; un
+  test unitaire de symétrie nord / sud. PROBLEMES réglé.
+- Preuves : **observé / mesuré** (kerr-mini, `…-aurora-jupiter-fixed`) : la vue du sud montre étoiles et ovale (max 0,095 au lieu de 0), le
+  balayage normal ; `check-wgsl` 82/82, `tests/giant-clouds.test.ts` 13/13. Trouvé par élimination (exposition, NaN, paramètres, corps,
+  variante, carte, tuile écartés pas à pas).
+- Limites : les hauteurs des nuages des géantes dans leur hémisphère sud étaient faussées aussi (0–45° S) — leur image non revue.
 

@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { expect, test } from "bun:test";
 import { GALILEO_LAST, giantAirPanel, giantCalls } from "../src/game/craftpanel";
-import { cloudNoiseG, GIANT_LAYERS, giantDaylight, giantDeckAt, giantFlashes, GiantThunder } from "../src/system/giant-clouds";
+import { cloudNoiseG, GIANT_LAYERS, giantDaylight, giantDeckAt, giantFlashes, GiantThunder, giantLevel } from "../src/system/giant-clouds";
 import { unitsOf } from "../src/ui/unitsys";
 
 // The giants' clouds and lightning on the CPU (PLAN-PLANETES-AAA P11 D5): the twin of trace.wgsl's — its decks, its eyes,
@@ -287,4 +287,22 @@ test("V11: the Sun's light on the clouds × 3, the sky's × 0.55 in the Sun's li
   expect(gi).toContain("let ka = mix(0.85, 0.55, smoothstep(0.05, 0.4, luminance(sunT)));");
   expect(gi).toContain("alb * sig * (GI_KS * S + ka * amb)");
   expect(gi).toContain("0.4 * ka * amb");
+});
+
+// (13 Nov 2026: giantLevel took |z| against a signed normal — the south's level factor went through ∞ near 45° S and negative beyond; the
+// shader's twin took the camera under the decks there, the image black over 50° S — PROBLEMES « Jupiter vu de près depuis le sud »)
+test("the level factor (giantLevel, the shader's twin) is the same north and south, finite and near 1", () => {
+  for (const id of ["jupiter", "saturn"] as const) {
+    const ba = id === "jupiter" ? 0.935126 : 0.902038;
+    for (const deg of [10, 30, 45, 50, 60, 80]) {
+      const r = (deg * Math.PI) / 180;
+      const north = giantLevel(id, [Math.cos(r), 0, Math.sin(r) * ba]);
+      const south = giantLevel(id, [Math.cos(r), 0, -Math.sin(r) * ba]);
+      expect(Number.isFinite(south.kl)).toBe(true);
+      expect(south.kl).toBeGreaterThan(0.5);
+      expect(south.kl).toBeLessThan(2);
+      expect(Math.abs(south.kl - north.kl)).toBeLessThan(1e-9);
+      expect(Math.abs(south.s - north.s)).toBeLessThan(1e-9);
+    }
+  }
 });
