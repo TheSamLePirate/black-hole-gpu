@@ -5,6 +5,7 @@ import { setHomePose } from "../../src/camera";
 import { CameraController } from "../../src/controls";
 import { advanceFrameClock } from "../../src/frameclock";
 import { fleet } from "../../src/fleet";
+import { setMountVessel } from "../../src/mounts";
 import { ourGroundPose, type Pose } from "../../src/game/place";
 import { add, scale } from "../../src/math/vec3";
 import { defaultSettings, presets } from "../../src/settings";
@@ -28,6 +29,12 @@ export const TRANQUILITY = { lat: 0.674, lon: 23.473 };
 export function flight(pose: Pose, hover: boolean, vessel: VesselId = "ranger"): Run {
   setSceneTime(0);
   fleet.active = vessel;
+  // (the camera's mounts as these flights were tuned with — the module's default, the Ranger's —, whatever a test before left: a
+  // module's state, left on the Endurance by craftpanel.test.ts's flyFrom, put an F-35 on its trim off by half a degree, its heavy-sea
+  // qualification graded 2.00 in the full suite against 3.50 alone — 13 Nov 2026. This helper places the camera and the craft follows
+  // through the mounts: with the craft's own — as the game has them — its trims shift (the F-35's high-alpha pass marked 15/20 for
+  // 19.4): placing the craft itself is the helper's next step, not this fix's)
+  setMountVessel("ranger");
   const s = {
     ...defaultSettings(),
     ...presets["Earth: the Blue Marble"]!,

@@ -5068,3 +5068,18 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   reproduit en ~3 min), **mais ni une moitié ni un fichier seul** ne suffit : un état qui s'accumule au fil des vols (compteur, horloge, cache),
   cohérent avec la pose déjà divergente que la session de l'audit relève au début de la qualification. Non résolu.
 
+## 2026-11-13T16:03Z — `quals` (la mer formée) : la cause trouvée et corrigée — le montage de caméra laissé par un autre test ; suite complète 2 231 / 0
+
+- **Reproduit hors de la suite :** les 69 fichiers que bun exécute avant `quals` (dans son ordre) puis `quals` : la même séquence d'échec
+  (2,00). **Dichotomie exécutée** (12 essais) → `tests/craftpanel.test.ts` seul suffit ; dans son dernier test, `flyFrom(starts.endurance)`
+  (`setMountVessel(fleet.active)`, `src/mounts.ts`) laisse le **montage de caméra du module réglé sur l'Endurance**, que rien ne remettait.
+  Confirmé : un seul `setMountVessel("endurance")` avant `quals` seul reproduit exactement l'échec.
+- **Pourquoi la qualification en dépend :** l'aide des vols de test place la caméra, et l'appareil en suit la pose à travers le montage —
+  avec celui de l'Endurance, le F-35 partait de son équilibrage décalé (assiette −9,27° contre −8,80°, cap −2,82° contre −1,34°), et une mer
+  de 4,5 m amplifie l'écart en notes.
+- **Corrigé :** `tests/helpers/flight.ts` remet le montage à la valeur par défaut du module (celle avec laquelle ces vols ont été réglés)
+  au début de chaque vol de test. **Suite complète `tests/*.test.ts` (ce Mac) : 2 231 / 0** ; la mer formée identique seule et dans la
+  suite (OK 2-wire, OK 1-wire, No grade 2-wire, OK 2-wire — 3,50) ; les 69 fichiers + `quals` 384 / 0 ; `aerobatics` 19,4/20.
+- **Relevé au passage :** avec le montage du F-35 lui-même (ce que le jeu a), l'aide décale les équilibrages — la figure en haute incidence
+  passe de 19,4 à 15/20 : l'aide devrait placer l'appareil, pas la caméra (prochaine étape, pas faite). La session du rendu, par sa propre
+  dichotomie dans l'ordre JUnit, était arrivée aux 40 fichiers dont `craftpanel` est le dernier.
