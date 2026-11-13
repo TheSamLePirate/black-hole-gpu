@@ -18,6 +18,7 @@ import {
   LITE_MAT_IN,
   LITE_MAT_OUT,
   LITE_OUT_BINDING,
+  WATER_REFL_RECORD,
   LITE_OUT_FORMAT,
 } from "./system/tracer-source";
 import {
@@ -371,6 +372,7 @@ const VARIANT_ENTRY = {
   shadeLiteLight: "shadeLiteLight",
   shadeWater: "shadeWater",
   shadeWaterOpen: "shadeWaterOpen",
+  shadeWaterFinish: "shadeWaterFinish",
   shadeStars: "shadeStars",
   discs: "discs",
   clouds: "clouds",
@@ -700,7 +702,15 @@ interface Target {
   polAcc: GPUBuffer; // Σ Stokes Q, U per pixel
   /** shadeLite's surfaces for its finishing pass (tracer-source.ts withLiteSplit) and their bind groups — made at the first lite pass */
   liteOut?: GPUTexture;
-  liteBinds?: { lut: GPUTexture | null; lite: GPUBindGroup; finish: GPUBindGroup; mat?: GPUBindGroup; light?: GPUBindGroup };
+  liteBinds?: {
+    lut: GPUTexture | null;
+    lite: GPUBindGroup;
+    finish: GPUBindGroup;
+    mat?: GPUBindGroup;
+    light?: GPUBindGroup;
+    water?: GPUBindGroup;
+    waterFinish?: GPUBindGroup;
+  };
   /** the deferred ground's material record (trace.wgsl matOut/matIn — withLiteDeferred) */
   liteMat?: GPUTexture[];
   /** the catalogue stars splatted by a realtime frame (R8: 3 × u32 fixed point per pixel; live view only) */
@@ -1687,6 +1697,33 @@ export class Renderer {
       });
       this.liteMatLayout = device.createPipelineLayout({ bindGroupLayouts: [this.traceLayout, this.liteMatGroup1Layout] });
       this.liteLightLayout = device.createPipelineLayout({ bindGroupLayouts: [this.traceLayout, this.liteLightGroup1Layout] });
+      // (the staged water's E2 — tracer-source.ts withWaterReflDeferred —: the water's kernels write the sea's reflections' record to
+      // the material record's first three textures, shadeWaterFinish reads them back)
+      this.waterGroup1Layout = device.createBindGroupLayout({
+        label: "earth water (reflections deferred): group 1",
+        entries: [
+          ...lutAerial,
+          { binding: LITE_OUT_BINDING, visibility: C, storageTexture: { access: "write-only", format: LITE_OUT_FORMAT } },
+          ...LITE_MAT_OUT.slice(0, WATER_REFL_RECORD).map((b) => ({
+            binding: b,
+            visibility: C,
+            storageTexture: { access: "write-only" as const, format: "rgba32float" as const },
+          })),
+        ],
+      });
+      this.waterFinishGroup1Layout = device.createBindGroupLayout({
+        label: "earth water: finishing's group 1 (reflections)",
+        entries: [
+          ...lutAerial,
+          ...LITE_MAT_IN.slice(0, WATER_REFL_RECORD).map((b) => ({
+            binding: b,
+            visibility: C,
+            texture: { sampleType: "unfilterable-float" as const },
+          })),
+        ],
+      });
+      this.waterLayout = device.createPipelineLayout({ bindGroupLayouts: [this.traceLayout, this.waterGroup1Layout] });
+      this.waterFinishLayout = device.createPipelineLayout({ bindGroupLayouts: [this.traceLayout, this.waterFinishGroup1Layout] });
     }
     if (this.cloudWriteLayout)
       this.cloudsLayout = device.createPipelineLayout({ bindGroupLayouts: [this.traceLayout, this.cloudWriteLayout] });
@@ -6020,6 +6057,9 @@ export class Renderer {
       /** the open sea's water — shadeWater compiled with WATER_OPEN: the coasts' and the inland water's code out, its pixels the
        *  open sea's (PLAN-MER-WEBGPU S3: a lighter kernel, the Apple GPU's registers) */
       shadeWaterOpen: GPUComputePipeline | null;
+      /** the water's finishing pass with the sea's reflections (trace.wgsl shadeWaterFinish — the staged water's E2,
+       *  tracer-source.ts withWaterReflDeferred) */
+      shadeWaterFinish: GPUComputePipeline | null;
       /** the catalogue's stars over the raster's sky (trace.wgsl shadeStars — TERRE-UNREAL U8) */
       shadeStars: GPUComputePipeline | null;
       /** the sky's discs' own kernel (trace.wgsl main, DISC_ONLY — TERRE-UNREAL U9) */
@@ -6079,6 +6119,7 @@ export class Renderer {
       | "shadeLiteLight"
       | "shadeWater"
       | "shadeWaterOpen"
+      | "shadeWaterFinish"
       | "shadeStars"
       | "discs"
       | "clouds"
@@ -6100,6 +6141,7 @@ export class Renderer {
       shadeLiteLight: null,
       shadeWater: null,
       shadeWaterOpen: null,
+      shadeWaterFinish: null,
       shadeStars: null,
       discs: null,
       clouds: null,
@@ -6131,6 +6173,7 @@ export class Renderer {
         shadeLiteLight: null,
         shadeWater: null,
         shadeWaterOpen: null,
+        shadeWaterFinish: null,
         shadeStars: null,
         discs: null,
         clouds: null,
@@ -6247,6 +6290,31 @@ export class Renderer {
     return lite;
   }
   private liteFinishOf = new WeakMap<GPUComputePipeline, { finish: GPUComputePipeline; light: GPUComputePipeline | null }>();
+  /** a water kernel with its finishing pass (the staged water's E2 — tracer-source.ts withWaterReflDeferred): where the sea's
+   *  reflections are deferred, shadeWaterFinish compiled first and kept with it — the water's pixels would be left without their
+   *  reflections and their air otherwise —; shadeLiteFinish finishes them where they are not */
+  private async waterWithFinish(
+    slot: { shadeWaterFinish: GPUComputePipeline | null },
+    water: () => Promise<GPUComputePipeline | null>,
+    compile: (entry: "shadeWaterFinish") => Promise<GPUComputePipeline | null>,
+  ): Promise<GPUComputePipeline | null> {
+    if (!this.waterReflDefer) return water();
+    const fin = slot.shadeWaterFinish ?? (await compile("shadeWaterFinish"));
+    slot.shadeWaterFinish = fin;
+    if (!fin) return null;
+    const w = await water();
+    if (w) this.waterFinishOf.set(w, fin);
+    return w;
+  }
+  private waterFinishOf = new WeakMap<GPUComputePipeline, GPUComputePipeline>();
+  /** the sea's reflections out of the water's kernels (the staged water's E2): where the device takes the deferred ground's record */
+  private get waterReflDefer() {
+    return this.liteDeferred;
+  }
+  private waterLayout!: GPUPipelineLayout;
+  private waterGroup1Layout!: GPUBindGroupLayout;
+  private waterFinishLayout!: GPUPipelineLayout;
+  private waterFinishGroup1Layout!: GPUBindGroupLayout;
   /** shadeLite's material and light in two kernels (tracer-source.ts withLiteDeferred): the device takes the record's textures */
   private liteDeferred = false;
   private liteMatLayout!: GPUPipelineLayout;
@@ -6258,7 +6326,14 @@ export class Renderer {
   private liteGroup1Layout!: GPUBindGroupLayout;
   /** shadeLite's group 1 for a target (the far field's LUT or its stand-ins, the aerial table, liteOut) and its finishing pass's
    *  (liteOut read where the LUT is bound) */
-  private liteBinds(t: Target): { lite: GPUBindGroup; finish: GPUBindGroup; mat?: GPUBindGroup; light?: GPUBindGroup } {
+  private liteBinds(t: Target): {
+    lite: GPUBindGroup;
+    finish: GPUBindGroup;
+    mat?: GPUBindGroup;
+    light?: GPUBindGroup;
+    water?: GPUBindGroup;
+    waterFinish?: GPUBindGroup;
+  } {
     if (!t.liteOut || t.liteOut.width !== t.width || t.liteOut.height !== t.height) {
       t.liteOut?.destroy();
       t.liteOut = this.device.createTexture({
@@ -6322,6 +6397,27 @@ export class Renderer {
                   { binding: LITE_OUT_BINDING, resource: t.liteOut!.createView() },
                 ],
               }),
+              water: this.device.createBindGroup({
+                label: "earth water (reflections deferred): group 1",
+                layout: this.waterGroup1Layout,
+                entries: [
+                  { binding: 2, resource: lt[0]!.createView() },
+                  { binding: 3, resource: lt[1]!.createView() },
+                  ...this.aerialRead(),
+                  { binding: LITE_OUT_BINDING, resource: t.liteOut!.createView() },
+                  ...LITE_MAT_OUT.slice(0, WATER_REFL_RECORD).map((b, i) => ({ binding: b, resource: t.liteMat![i]!.createView() })),
+                ],
+              }),
+              waterFinish: this.device.createBindGroup({
+                label: "earth water: finishing's group 1 (reflections)",
+                layout: this.waterFinishGroup1Layout,
+                entries: [
+                  { binding: 2, resource: t.liteOut!.createView() },
+                  { binding: 3, resource: this.liteStandIns![1]!.createView() },
+                  ...this.aerialRead(),
+                  ...LITE_MAT_IN.slice(0, WATER_REFL_RECORD).map((b, i) => ({ binding: b, resource: t.liteMat![i]!.createView() })),
+                ],
+              }),
             }
           : {}),
         finish: this.device.createBindGroup({
@@ -6367,6 +6463,7 @@ export class Renderer {
         | "shadeLiteLight"
         | "shadeWater"
         | "shadeWaterOpen"
+        | "shadeWaterFinish"
         | "shadeStars"
         | "discs"
         | "clouds"
@@ -6390,7 +6487,7 @@ export class Renderer {
       if (!R) return;
       if (this.rasterLite) {
         if (!slot.shadeLite) slot.shadeLite = await this.liteWithFinish(slot, compile);
-        if (!slot.shadeWater) slot.shadeWater = await compile("shadeWater");
+        if (!slot.shadeWater) slot.shadeWater = await this.waterWithFinish(slot, () => compile("shadeWater"), compile);
         if (!slot.shadeMark) slot.shadeMark = await compile("shadeMark");
         if (!slot.shadeStars) slot.shadeStars = await compile("shadeStars");
       } else {
@@ -6406,7 +6503,8 @@ export class Renderer {
       if (!slot.shade && this.shadeWanted) slot.shade = await compile("shade");
       if (!slot.discs && this.discsKernel) slot.discs = await compile("discs");
       // (the open sea's water — PLAN-MER-WEBGPU S3 —: shadeWater shades every pixel meanwhile)
-      if (!slot.shadeWaterOpen && this.seaWaterOpenOn) slot.shadeWaterOpen = await compile("shadeWaterOpen");
+      if (!slot.shadeWaterOpen && this.seaWaterOpenOn)
+        slot.shadeWaterOpen = await this.waterWithFinish(slot, () => compile("shadeWaterOpen"), compile);
     };
     const run = async () => {
       // (the raster's first kernels before the tracer only when something already draws this key's trace — the general
@@ -6538,6 +6636,7 @@ export class Renderer {
       | "shadeLiteLight"
       | "shadeWater"
       | "shadeWaterOpen"
+      | "shadeWaterFinish"
       | "shadeStars"
       | "discs"
       | "clouds"
@@ -6609,6 +6708,7 @@ export class Renderer {
       | "shadeLiteLight"
       | "shadeWater"
       | "shadeWaterOpen"
+      | "shadeWaterFinish"
       | "shadeStars"
       | "discs"
       | "clouds"
@@ -6672,6 +6772,7 @@ export class Renderer {
       | "shadeLiteLight"
       | "shadeWater"
       | "shadeWaterOpen"
+      | "shadeWaterFinish"
       | "shadeStars"
       | "discs"
       | "clouds"
@@ -6687,6 +6788,7 @@ export class Renderer {
       coarseProbe: this.coarseProbe,
       leftovers: this.rasterLite && this.leanShade,
       otherUniverse: !this.otherUniverseOut,
+      waterReflDefer: this.waterReflDefer,
     });
     const ep = tracerEntryPoint(entryPoint);
     // (the same pipeline asked again — another key whose constants are the same: the Earth-raster profile's keys, the
@@ -6715,20 +6817,24 @@ export class Renderer {
                 ? this.liteLightLayout
                 : // (the water's — the staged water's first step —: shadeLite's layout, its surface to liteOut for the finishing pass)
                   entryPoint === "shadeWater" || entryPoint === "shadeWaterOpen"
-                  ? this.liteLayout
-                  : entryPoint === "main" ||
-                      entryPoint === "shade" ||
-                      entryPoint === "shadeMark" ||
-                      entryPoint === "shadeLiteFinish" ||
-                      entryPoint === "shadeStars" ||
-                      entryPoint === "skyFill" ||
-                      entryPoint === "discs"
-                    ? this.mainLayout
-                    : entryPoint === "lut"
-                      ? this.lutLayout
-                      : entryPoint === "aerial"
-                        ? this.aerialLayout
-                        : this.tracePipeLayout,
+                  ? this.waterReflDefer
+                    ? this.waterLayout
+                    : this.liteLayout
+                  : entryPoint === "shadeWaterFinish"
+                    ? this.waterFinishLayout
+                    : entryPoint === "main" ||
+                        entryPoint === "shade" ||
+                        entryPoint === "shadeMark" ||
+                        entryPoint === "shadeLiteFinish" ||
+                        entryPoint === "shadeStars" ||
+                        entryPoint === "skyFill" ||
+                        entryPoint === "discs"
+                      ? this.mainLayout
+                      : entryPoint === "lut"
+                        ? this.lutLayout
+                        : entryPoint === "aerial"
+                          ? this.aerialLayout
+                          : this.tracePipeLayout,
         compute: {
           module,
           // (the sky's discs: main's own, its sky's layer and its ground compiled out — DISC_ONLY)
@@ -7442,9 +7548,12 @@ export class Renderer {
       if (water) this.encodeSeaSurface(enc, t);
       if (water) {
         const wp = enc.beginComputePass(this.prof.pass("earth water (raster)"));
+        // (the sea's reflections deferred — E2 —: the water's kernel writes their record, shadeWaterFinish draws them)
+        const wfin = this.waterFinishOf.get(water) ?? null;
+        const wb = wfin && lb.water ? lb.water : lb.lite;
         wp.setPipeline(water);
         wp.setBindGroup(0, this.hintBindFor(t, hint));
-        wp.setBindGroup(1, lb.lite);
+        wp.setBindGroup(1, wb);
         wp.dispatchWorkgroups(Math.ceil(t.width / 8), Math.ceil(t.height / 8));
         wp.end();
         // (the open sea's pixels by their own lighter kernel — PLAN-MER-WEBGPU S3 —, the FFT's waves on: P.seafft[0].x 2 written over
@@ -7462,17 +7571,18 @@ export class Renderer {
           const op = enc.beginComputePass(this.prof.pass("earth water open (raster)"));
           op.setPipeline(open);
           op.setBindGroup(0, this.hintBindFor(t, hint));
-          op.setBindGroup(1, lb.lite);
+          op.setBindGroup(1, this.waterFinishOf.has(open) && lb.water ? lb.water : lb.lite);
           op.dispatchWorkgroups(Math.ceil(t.width / 8), Math.ceil(t.height / 8));
           op.end();
         }
         // (the water's air and clouds — the staged water's first step (CHALLENGE-J1-J2 idea 2, Sam's decision of 13 Nov 2026) —:
         // the finishing pass again, over the pixels both water kernels left in liteOut, RASTER_SPLIT_WATER; the ground's finished
         // before the water read them — seaSSR)
+        // (E2: shadeWaterFinish — the sea's reflections, then the air and the clouds)
         const wf = enc.beginComputePass(this.prof.pass("earth water: finishing"));
-        wf.setPipeline(fin!);
+        wf.setPipeline(wfin && lb.waterFinish ? wfin : fin!);
         wf.setBindGroup(0, this.hintBindFor(t, hint));
-        wf.setBindGroup(1, lb.finish);
+        wf.setBindGroup(1, wfin && lb.waterFinish ? lb.waterFinish : lb.finish);
         wf.dispatchWorkgroups(Math.ceil(t.width / 8), Math.ceil(t.height / 8));
         wf.end();
       }

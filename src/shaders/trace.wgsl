@@ -292,6 +292,11 @@ override DISC_ONLY: bool = false;
 // water's code out — the shallow bed, the surf, the wash, the rivers, the falls —, a lighter kernel: the
 // Apple GPU's registers, every block of shadeWater's ~6–9 ms of the sea's view on kerr-mini)
 override WATER_OPEN: bool = false;
+// (the staged water's E2 — PLAN-MER-WEBGPU §6 —: the sea's reflections — the world's mirror (seaSSR), the far clouds mirrored — out
+// of the water's kernels (renderer: shadeWater, shadeWaterOpen, where the device takes their record — tracer-source.ts
+// withWaterReflDeferred): seaShade leaves what they need in SEA_RR_*, shadeWater writes it to the record, shadeWaterFinish draws
+// them. Measured ceiling on J0, kerr-mini (13 Nov 2026): both compiled out, −4.7 ms of GPU)
+override WATER_REFL_DEFER: bool = false;
 // (1: the wormhole's steps on our side merged into straight pieces for ourSegment while the ray holds straight to a
 // quarter of its pixel; 0: each step's chord on its own, as before)
 override TUNE_MERGE: u32 = 1u;
@@ -961,6 +966,15 @@ var<private> SEA_SHORE: f32 = 0.0;
 // (where the sea's point is in the coastal swell's wave — 0 on a crest, towards 1 seaward of it —, −1 where the field has none:
 // seaShade's, for the wash's timing)
 var<private> SEA_SWELL_S: f32 = -1.0;
+// (seaShade's reflections left for shadeWaterFinish — WATER_REFL_DEFER —: the facet's mirrored direction for seaSSR and the lifted
+// one for the clouds (octahedral, the squashed space's), what they are mixed over — the mirror before them, the clear sky's —, the
+// view's Fresnel and the foam's cover over the sea (their weight: Fv (1 − W)), which of them to draw — 1 the world's, 2 the clouds')
+var<private> SEA_RR_DIRS: vec4f = vec4f(0.0);
+var<private> SEA_RR_REFL: vec3f = vec3f(0.0);
+var<private> SEA_RR_CLEAR: vec3f = vec3f(0.0);
+var<private> SEA_RR_FV: f32 = 0.0;
+var<private> SEA_RR_W: f32 = 0.0;
+var<private> SEA_RR_BITS: u32 = 0u;
 // (another world's sea shaded as the Earth's — Miller's, PLAN-MER-WEBGPU: shadeNear —: the Earth's sky model, clouds, Kd490, ocean
 // mask, surf and SSR left out of seaShade; its sky mirrored from the world's light probe; its water's body the world's own — under,
 // Miller's knee-deep water over its bed as its map has it —, with the bed's caustics)
@@ -9614,6 +9628,13 @@ fn seaShade(q: vec3f, view: vec3f, light: vec3f, Eg: vec3f, sky: vec3f, under: v
   // (another world's — Miller's, in the body raster: SEA_SKY_SSR —: its sky mirrored from the image itself — Gargantua, its disk,
   // whole and sharp —, seaSkySSR)
   var ssrOn = false;
+  // (deferred — WATER_REFL_DEFER, the water's kernels in the raster: RASTER_SHADE there, never another world's sea —: the facet
+  // drawn here, the mirror drawn by shadeWaterFinish; tested by the override alone — !WATER_REFL_DEFER —, so that the source's
+  // specialisation (wgsl-specialise.ts) takes the code it leaves out out of the kernel)
+  SEA_RR_BITS = 0u;
+  SEA_RR_REFL = refl;
+  SEA_RR_CLEAR = skyClear;
+  SEA_RR_FV = Fv;
   if (SEA_ON && (TUNE_GSKIP & 4096u) == 0u) {
     // (liteSkip 2³¹ — an A/B —: the sky's mirror from the probe alone)
     if (SEA_ALIEN) { ssrOn = SEA_SKY_SSR && (liteSkip() & 2147483648u) == 0u; } else if (RASTER_SHADE) { ssrOn = seaAllAround(normalize(q), 8000.0) < 0.995; }
@@ -9628,7 +9649,11 @@ fn seaShade(q: vec3f, view: vec3f, light: vec3f, Eg: vec3f, sky: vec3f, under: v
     let cc = sqrt(max(sc2 - cb * cb, 1e-8));
     let nS = normalize(n - g.x * ca * tun - (g.x * cb + g.y * cc) * tcn);
     let rS = reflect(-V, nS);
-    if (NEAR_DETAIL && dot(rS, normal) > 0.005) {
+    if (WATER_REFL_DEFER && NEAR_DETAIL && dot(rS, normal) > 0.005) {
+      SEA_RR_BITS |= 1u;
+      SEA_RR_DIRS = vec4f(octEncode(rS), SEA_RR_DIRS.zw);
+    }
+    if (!WATER_REFL_DEFER && NEAR_DETAIL && dot(rS, normal) > 0.005) {
       var ssr: vec4f;
       if (SEA_ALIEN) { ssr = seaSkySSR(rS); } else { ssr = seaSSR(SEA_D, normalize(vec3f(rS.xy, rS.z * AIR.ab))); }
       refl = mix(refl, ssr.rgb, ssr.w * P.sea[1].w);
@@ -9639,7 +9664,11 @@ fn seaShade(q: vec3f, view: vec3f, light: vec3f, Eg: vec3f, sky: vec3f, under: v
   // there —: the mirrored ray met at each layer's height — the map's at 3 km, the weather's at their middles —, that point
   // found in the cloud pass's image, its clouds taken where they lie that far along the camera's ray; front to back over
   // the clear sky's mirror; the world's own mirror — seaSSR — first)
-  if (SEA_ON && !SEA_ALIEN && (TUNE_GSKIP & 16384u) == 0u) {
+  if (WATER_REFL_DEFER && SEA_ON && (TUNE_GSKIP & 16384u) == 0u) {
+    SEA_RR_BITS |= 2u;
+    SEA_RR_DIRS = vec4f(SEA_RR_DIRS.xy, octEncode(rUp));
+  }
+  if (!WATER_REFL_DEFER && SEA_ON && !SEA_ALIEN && (TUNE_GSKIP & 16384u) == 0u) {
     let wss = max(max(smoothstep(800.0, 4000.0, length(SEA_D)), 1.0 - P.sea[1].w), 1.0 - P.seafft[6].z) * (1.0 - ssrW);
     let upq = normalize(q);
     let rq = normalize(vec3f(rUp.xy, rUp.z * AIR.ab));
@@ -9760,6 +9789,7 @@ fn seaShade(q: vec3f, view: vec3f, light: vec3f, Eg: vec3f, sky: vec3f, under: v
   }
   // (a debug view of the wakes: their foam red, their ruffle green, their bubbles blue — TUNE_GSKIP 32768)
   if ((TUNE_GSKIP & 32768u) != 0u) { return vec3f(wk.foam, wk.rough * 10.0, wk.bub) * luminance(Eg) / PI; }
+  SEA_RR_W = W;
   return mix(sea, foam, W);
 }
 
@@ -16246,6 +16276,81 @@ fn shadeLiteFinish(@builtin(global_invocation_id) gid: vec3u) {
   let g = textureLoad(lutDirIn, vec2i(gid.xy), 0);
   liteFinishAt(gid.xy, g.rgb, g.a, !wat, wat && mk < RASTER_SPLIT_WATER - 0.25);
 }
+// The water's finishing pass with its reflections (the staged water's E2 — PLAN-MER-WEBGPU §6; tracer-source.ts
+// withWaterReflDeferred): over the pixels shadeWater and shadeWaterOpen left in liteOut (RASTER_SPLIT_WATER), the reflections
+// seaShade left in their record — the world's mirror (seaSSR) along the facet it drew, then the far clouds mirrored over it, as
+// seaShade mixed them —, their difference with the mirror they replace added at their weight; then the air and the clouds
+// (liteFinishAt). liteOut read where the LUT is bound (binding 2), the record where the deferred ground's light reads its own (matIn)
+@compute @workgroup_size(8, 8)
+fn shadeWaterFinish(@builtin(global_invocation_id) gid: vec3u) {
+  if (gid.x >= u32(P.res.x) || gid.y >= u32(P.res.y)) { return; }
+  let idx = gid.y * u32(P.res.x) + gid.x;
+  let mk = moments[idx].x;
+  if (!(mk < RASTER_SPLIT_WATER + 0.1 && mk > RASTER_SPLIT_WATER - 0.6)) { return; }
+  let g = textureLoad(lutDirIn, vec2i(gid.xy), 0);
+  var G = g.rgb;
+  let tM = g.a;
+  let r1 = textureLoad(matIn1, vec2i(gid.xy), 0);
+  let r2 = textureLoad(matIn2, vec2i(gid.xy), 0);
+  let bits = u32(r2.w + 0.5);
+  let c = r1.w;
+  if (bits != 0u && c > 0.0) {
+    let k = u32(P.near1.w);
+    setAir(k);
+    WX_W = select(0.0, P.wx[0].x, HAS_WX && earthOn());
+    WX_Q = normalize(nearCam());
+    let dirs = textureLoad(matIn0, vec2i(gid.xy), 0);
+    let centre = vec2f(gid.xy) + 0.5;
+    let ray = rasterRay(centre + liteJitter(gid.xy), k);
+    let D = toBody(ray.look) * tM;
+    let q = normalize(rasterPoint(ray, tM));
+    let refl0 = r1.rgb;
+    var refl = refl0;
+    var ssrW = 0.0;
+    if ((bits & 1u) != 0u) {
+      let rS = octDecode(dirs.xy);
+      let ssr = seaSSR(D, normalize(vec3f(rS.xy, rS.z * AIR.ab)));
+      refl = mix(refl, ssr.rgb, ssr.w * P.sea[1].w);
+      ssrW = ssr.w * P.sea[1].w;
+    }
+    // (the far clouds mirrored — seaShade's own code, its ray lifted by the unresolved slopes: rUp)
+    if ((bits & 2u) != 0u) {
+      let wss = max(max(smoothstep(800.0, 4000.0, length(D)), 1.0 - P.sea[1].w), 1.0 - P.seafft[6].z) * (1.0 - ssrW);
+      let rUp = octDecode(dirs.zw);
+      let rq = normalize(vec3f(rUp.xy, rUp.z * AIR.ab));
+      let sinE = max(dot(rq, q), 0.02);
+      if (wss > 0.0) {
+        var Tr = 1.0;
+        var cc = vec3f(0.0);
+        var met = false;
+        for (var i = 0u; i < 4u; i++) {
+          var hc = 3000.0;
+          if (i == 0u) {
+            if (P.earth2.y <= 0.0) { continue; }
+          } else {
+            let L = P.wx[i];
+            if (!HAS_WX || P.wx[0].x <= 0.0 || L.z <= 0.0) { continue; }
+            hc = 0.5 * (L.x + L.y);
+          }
+          let sM = hc / sinE;
+          if (sM > 150000.0) { continue; }
+          let sc = seaScreen(D + rq * sM);
+          if (sc.x < 0.0 || sc.x >= P.res.x || sc.y < 0.0 || sc.y >= P.res.y) { continue; }
+          let ca = cloudsAtPixel(sc.xy);
+          if (ca.a <= 0.02) { continue; }
+          if (abs(cloudDepthAtPixel(sc.xy) - sc.z) > 0.35 * sc.z + 500.0) { continue; }
+          cc += Tr * ca.a * ca.rgb;
+          Tr *= 1.0 - ca.a;
+          met = true;
+        }
+        if (met) { refl = mix(refl, r2.rgb * Tr + cc, wss); }
+      }
+    }
+    G += c * (refl - refl0);
+    if (isNan(G.r + G.g + G.b)) { G = g.rgb; }
+  }
+  liteFinishAt(gid.xy, G, tM, false, mk < RASTER_SPLIT_WATER - 0.25);
+}
 // (a raster pixel's surface G given its last touches — the water over it (liteWater's wat), the measures' views — and its finish:
 // shadeLite's, or shadeLiteLight's when its material and its light are two kernels — tracer-source.ts withLiteDeferred)
 fn liteEpilogue(gid: vec2u, idx: u32, centre: vec2f, pos: vec2f, G0: vec3f, rd: vec3f, tH: f32, tM: f32, Ls: vec3f, E: vec3f, k: u32,
@@ -16681,6 +16786,9 @@ fn shadeWater(@builtin(global_invocation_id) gid: vec3u) {
   RASTER_SHADE = true;
   // (the sea's style, or the inland water's — a river's, a lake's: not the sea's calmed)
   var wcol: vec3f;
+  // (the sea's reflections left to shadeWaterFinish — WATER_REFL_DEFER —: none for the inland water; their weight after the wash)
+  SEA_RR_BITS = 0u;
+  var washW = 0.0;
   if (!WATER_OPEN && calm > 0.0) { wcol = inlandWater(q, -rd, Ls, Eg, sky, footSea, kind > 1.5); }
   else {
     // (the pixel's footprint on the sea's axes [m]: the cascades filtered over its ellipse — seaTap)
@@ -16701,6 +16809,7 @@ fn shadeWater(@builtin(global_invocation_id) gid: vec3u) {
       if (SEA_SWELL_S >= 0.0) { wash = (0.25 + 0.75 * exp(-SEA_SWELL_S * 3.5)) * (0.55 + 0.6 * wash); }
       let wW = SEA_SHORE * clamp(Hw / 0.6, 0.15, 1.0) * smoothstep(0.35, 0.75, wash) * P.sea[1].w;
       wcol = mix(wcol, 0.6 / PI * (Eg * max(dot(gq, Ls), 0.0) + sky), wW);
+      washW = wW;
     }
     // (the sea drawn this frame: its stamp in the stamps' last word — renderer seaSeenStamp: the FFT's waves only while
     // some sea is in view, TERRE-UNREAL U6)
@@ -16749,6 +16858,11 @@ fn shadeWater(@builtin(global_invocation_id) gid: vec3u) {
   // (the air and the clouds before the water — liteFinish —: in the finishing pass, run again after the water's — tracer-source.ts
   // withLiteSplit, the staged water's first step: this kernel writes its surface G and distance to liteOut, the pixel marked
   // RASTER_SPLIT_WATER —, out of this kernel as out of shadeLite's)
+  // (E2 — tracer-source.ts withWaterReflDeferred, where the device takes the record —: the reflections' record for shadeWaterFinish —
+  // their directions, the mirror and the clear sky they mix over, their weight in G (the water's cover, out of the wash and the foam,
+  // the view's Fresnel), which of them —, in the deferred ground's material record, free once its light's kernel has read it)
+  // BEGIN_WATER_REFL_OUT
+  // END_WATER_REFL_OUT
   // BEGIN_WATER_OUT
   liteFinish(idx, centre, pos, G, rd, tH, tM, Ls, E, k, false, water > 0.5);
   // END_WATER_OUT

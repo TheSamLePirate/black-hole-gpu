@@ -33,48 +33,51 @@ export const FULL_TRACER_LIMITS: TracerLimits = { maxSampledTexturesPerShaderSta
 /** The tracer's source for a device: trace.wgsl and forest.wgsl composed as Renderer.create() composes them. */
 export function composeTracer(trace: string, forest: string, limits: TracerLimits): string {
   const tex = limits.maxSampledTexturesPerShaderStage;
-  return withLiteDeferred(
-    withLiteSplit(
-      aerialShader(
-        seaShader(
-          sceneryShader(
-            surfaceShader(
-              withOrthoImagery(
-                withTreeImpostors(
-                  withDetailScans(
-                    withGtao(
-                      withHorizonMaps(
-                        withTreeShadow(
-                          withCloudShadow(
-                            withCloudPass(
-                              withSunShadow(
-                                withTerrainRaster(withTerrainCache(withForest(trace, forest)), tex >= RASTER_HINT_TEXTURE_LIMIT),
-                                tex >= SUN_SHADOW_TEXTURE_LIMIT,
+  return withWaterReflDeferred(
+    withLiteDeferred(
+      withLiteSplit(
+        aerialShader(
+          seaShader(
+            sceneryShader(
+              surfaceShader(
+                withOrthoImagery(
+                  withTreeImpostors(
+                    withDetailScans(
+                      withGtao(
+                        withHorizonMaps(
+                          withTreeShadow(
+                            withCloudShadow(
+                              withCloudPass(
+                                withSunShadow(
+                                  withTerrainRaster(withTerrainCache(withForest(trace, forest)), tex >= RASTER_HINT_TEXTURE_LIMIT),
+                                  tex >= SUN_SHADOW_TEXTURE_LIMIT,
+                                ),
+                                tex >= CLOUD_PASS_TEXTURE_LIMIT,
                               ),
-                              tex >= CLOUD_PASS_TEXTURE_LIMIT,
+                              tex >= CLOUD_SHADOW_TEXTURE_LIMIT,
                             ),
-                            tex >= CLOUD_SHADOW_TEXTURE_LIMIT,
+                            tex >= TREE_SHADOW_TEXTURE_LIMIT,
                           ),
-                          tex >= TREE_SHADOW_TEXTURE_LIMIT,
+                          tex >= HORIZON_TEXTURE_LIMIT,
                         ),
-                        tex >= HORIZON_TEXTURE_LIMIT,
+                        tex >= GTAO_TEXTURE_LIMIT,
                       ),
-                      tex >= GTAO_TEXTURE_LIMIT,
+                      tex >= DETAIL_TEXTURE_LIMIT,
                     ),
-                    tex >= DETAIL_TEXTURE_LIMIT,
+                    tex >= IMPOSTOR_TEXTURE_LIMIT,
                   ),
-                  tex >= IMPOSTOR_TEXTURE_LIMIT,
+                  tex >= ORTHO_TEXTURE_LIMIT,
                 ),
-                tex >= ORTHO_TEXTURE_LIMIT,
+                tex >= SURFACE_TEXTURE_LIMIT,
               ),
-              tex >= SURFACE_TEXTURE_LIMIT,
+              limits.maxStorageBuffersPerShaderStage >= SCENERY_STORAGE_LIMIT,
             ),
-            limits.maxStorageBuffersPerShaderStage >= SCENERY_STORAGE_LIMIT,
+            tex >= SEA_TEXTURE_LIMIT,
           ),
-          tex >= SEA_TEXTURE_LIMIT,
+          tex >= AERIAL_TEXTURE_LIMIT,
         ),
-        tex >= AERIAL_TEXTURE_LIMIT,
       ),
+      tex >= LITE_DEFERRED_TEXTURE_LIMIT,
     ),
     tex >= LITE_DEFERRED_TEXTURE_LIMIT,
   );
@@ -110,6 +113,26 @@ ${trace.replace(
 )}`;
 }
 
+/**
+ * The staged water's E2 (PLAN-MER-WEBGPU §6; Sam's decision 1, 13 Nov 2026): the sea's reflections — the world's mirror (seaSSR),
+ * the far clouds mirrored — out of the water's kernels. shadeWater (and shadeWaterOpen), compiled with WATER_REFL_DEFER, write what
+ * seaShade left for them (SEA_RR_*) to a record — the deferred ground's material record's first three textures (matOut0…2), free
+ * once shadeLiteLight has read them —; shadeWaterFinish draws them and finishes the water's pixels. Where the device takes the
+ * deferred ground (its textures exist); the reflections in the water's kernels otherwise.
+ */
+export function withWaterReflDeferred(trace: string, supported: boolean): string {
+  const marker = /\/\/ BEGIN_WATER_REFL_OUT[\s\S]*?\/\/ END_WATER_REFL_OUT/;
+  if (!marker.test(trace)) throw new Error("tracer-source: missing shadeWater's reflections marker");
+  if (!supported) return trace;
+  return trace.replace(
+    marker,
+    () => `textureStore(matOut0, vec2i(gid.xy), SEA_RR_DIRS);
+  textureStore(matOut1, vec2i(gid.xy), vec4f(SEA_RR_REFL, select(0.0, water * (1.0 - washW) * SEA_RR_FV * (1.0 - SEA_RR_W), SEA_RR_BITS != 0u)));
+  textureStore(matOut2, vec2i(gid.xy), vec4f(SEA_RR_CLEAR, f32(SEA_RR_BITS)));`,
+  );
+}
+/** the water's reflections' record: shadeWater writes it (storage, LITE_MAT_OUT's first three), shadeWaterFinish reads it (LITE_MAT_IN's) */
+export const WATER_REFL_RECORD = 3;
 /** Sampled textures per stage for the deferred raster ground's light kernel: the tracer's 33 (DETAIL_TEXTURE_LIMIT) and the
  *  material's record's four (trace.wgsl matIn0…3) */
 export const LITE_DEFERRED_TEXTURE_LIMIT = 37;

@@ -40,6 +40,7 @@ export type TracerEntry =
   | "shadeLiteLight"
   | "shadeWater"
   | "shadeWaterOpen"
+  | "shadeWaterFinish"
   | "shadeStars"
   | "discs"
   | "clouds"
@@ -60,6 +61,7 @@ const REALTIME_GROUND: ReadonlySet<TracerEntry> = new Set([
   "shadeLiteLight",
   "shadeWater",
   "shadeWaterOpen",
+  "shadeWaterFinish",
   "shadeStars",
   "clouds",
   "skyFill",
@@ -82,6 +84,7 @@ const MATERIAL: ReadonlySet<TracerEntry> = new Set([
   "shadeLiteLight",
   "shadeWater",
   "shadeWaterOpen",
+  "shadeWaterFinish",
   "shadeStars",
   "clouds",
 ]);
@@ -103,6 +106,9 @@ export interface TracerConstantsOptions {
   /** the other universe's code — the wormhole, Gargantua's metric and disk — kept in the Earth-raster profile (renderer:
    *  !otherUniverseOut); out by default */
   otherUniverse?: boolean;
+  /** the sea's reflections out of the water's kernels, drawn by shadeWaterFinish (the staged water's E2 — tracer-source.ts
+   *  withWaterReflDeferred; renderer: where the device takes the deferred ground's record) */
+  waterReflDefer?: boolean;
 }
 
 /** The feature bits a key's realtime kernels compile out although the key has them: the other universe's hole — its metric
@@ -133,6 +139,7 @@ export function tracerConstants(key: number, entry: TracerEntry, o: TracerConsta
   return {
     DISC_ONLY: entry === "discs" ? 1 : 0,
     WATER_OPEN: entry === "shadeWaterOpen" ? 1 : 0,
+    WATER_REFL_DEFER: (entry === "shadeWater" || entry === "shadeWaterOpen") && o.waterReflDefer ? 1 : 0,
     HAS_RADIO: has(1),
     HAS_POL: has(2),
     HAS_JET: has(4),

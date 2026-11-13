@@ -53,6 +53,7 @@ const RASTER_ENTRIES: TracerEntry[] = [
   "shadeLiteLight",
   "shadeWater",
   "shadeWaterOpen",
+  "shadeWaterFinish",
   "shadeStars",
   "discs",
   "clouds",
@@ -142,7 +143,8 @@ export const PROFILES: KernelProfile[] = [
   { id: "general", label: "The general kernel (every feature)", key: FEATURES_ALL, entries: ["main", "env", "lut"] },
 ];
 
-/** The constants of a profile's pipeline (the full device: the raster's hint taken). */
+/** The constants of a profile's pipeline (the full device: the raster's hint taken, the water's reflections deferred). */
 export function profileConstants(p: KernelProfile, entry: TracerEntry): Record<string, number> {
-  return tracerConstants(p.key, entry, { quality: p.quality, rasterHint: true });
+  // (the full device takes the deferred ground's record: the sea's reflections out of the water's kernels — E2)
+  return tracerConstants(p.key, entry, { quality: p.quality, rasterHint: true, waterReflDefer: true });
 }

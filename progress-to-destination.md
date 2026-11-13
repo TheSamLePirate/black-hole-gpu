@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-13 09:43 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-13 09:55 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous.
@@ -46,7 +46,8 @@ indirects → J3 (lumière, cockpit).
 |---|---|---|
 | Rendu (33d89754) | L'eau étagée — préalables | faits : `liteSkip` réparé, ablation `sea surface` (−0,7 ms) |
 | Rendu (33d89754) | L'eau étagée E1 : l'air et les nuages sortis de `shadeWater` (passe `earth water: finishing`) | **fait, mesuré** (gain maximal lu : l'eau 16,2 ms, `earth water` 12,7) : A/B J0 sur le mini **GPU p50 57,85 → 56,3 ms (−1,55)** ; l'eau par ablation 13,0 → 10,1 ms ([PLAN-MER §6](docs/PLAN-MER-WEBGPU.md)) |
-| Rendu (33d89754) | L'eau étagée E2 : les reflets (SSR, nuages reflétés) dans leur noyau | à faire |
+| Rendu (33d89754) | L'eau étagée E2 : les reflets (SSR, nuages reflétés) dans leur noyau (`shadeWaterFinish`) | **fait, mesuré, gain faible** : plafond lu −4,7 ms, rendu **−0,5 ms** (A/B mini) — le SSR coûte surtout son travail (~2,2 ms, déplacé dans la finition) ; E3 à juger sur un plafond mesuré d'abord |
+| Rendu (33d89754) | La classification de l'écran par tuiles et les lancements indirects | suivant (les noyaux de l'eau et sa finition lancés plein écran) |
 | Rendu (33d89754) | La borne de cadence du M1 Max | 30 images/s : **bride encore** (soutenu 27,8/s, p95 58,6 ms, GPU 881 MHz, pression Heavy — [J0-CONTRAT §2](docs/J0-CONTRAT.md)) ; 40 images/s non mesuré (ce Mac chaud) |
 | Rendu (33d89754) | Retrait R1 des anciens chemins (`singleHistory`, `edgeFoot`, `seaSsrSafe`, `clearCut`, `earthRateOne`, `rasterScaleFree`) | **daté : 14 nov. 2026** ([PLAN-J2 §9 quattuordecies](docs/PLAN-J2-PAGES-RECONSTRUCTION.md)) |
 | Audit vagues 3–4 (1feb2f7f) | 3.3 Sauvegardes | **fait pour l'essentiel** : lot 1 (736b26a2, une clé par sauvegarde, rien écrasé en silence) ; lot 2 (f265f467 : « Reprendre » du vol perdu seulement, un avion a ses points ; carburant, train, volets, freins, maintiens, systèmes des vaisseaux sauvés ; l'activité en cours dite) — e2e 6/6, bun test 2 228/0. Reste : l'état d'une mission ou d'un combat (Sam), les systèmes de l'A320, IndexedDB |
@@ -4551,3 +4552,27 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   état « hors de vue » annoncé aux autres et une resynchronisation dite au retour ; les `setInterval` de la page ralentis
   pendant l'absence. **Non fait** : l'annonce d'un ralentissement sous 10 images/s (le pas borné reste muet) ; l'horloge du vol
   pour `formation` (liée aux horodatages réseau du chef).
+
+## 2026-11-13T09:55Z — L'eau étagée E2 : les reflets de la mer dans leur noyau (`shadeWaterFinish`) — mesuré, gain faible
+
+- **Contribution** (stratégie §24 décision 1 ; [PLAN-MER-WEBGPU §6](docs/PLAN-MER-WEBGPU.md)) : la deuxième étape de l'eau étagée — les
+  reflets (le SSR `seaSSR`, les nuages lointains reflétés) sortis des noyaux de l'eau. **Plafond mesuré avant** (règle 1) : l'ablation
+  `seaRefl` de J0 (les deux compilés hors) **−4,7 ms** sur kerr-mini.
+- **Réalisé** : `seaShade` compilé avec la constante `WATER_REFL_DEFER` (testée seule, pour que la spécialisation du source retire le code)
+  laisse la facette tirée, la direction relevée, le reflet et le ciel clair qu'ils remplacent et leur poids ; `shadeWater` /
+  `shadeWaterOpen` les écrivent dans les trois premières textures de l'enregistrement du sol différé (`tracer-source.ts
+  withWaterReflDeferred`, mise en page `waterLayout`) ; le nouveau noyau `shadeWaterFinish` les dessine, ajoute la différence et finit le
+  pixel (`earth water: finishing`). Compilé par paire avec l'eau (`renderer.waterWithFinish`) ; là où l'appareil ne prend pas le sol
+  différé, rien ne change. `tracer-kernels` (entrée, constante), `kernel-profiles`, `kernel-budget.json` (2 000 lignes).
+- **Mesuré** (kerr-mini, A = f77c0842, B = l'arbre, A B B A puis A B ; `remote-results/20261113-103133-j0-ab-e2b`, `…-j0-ab-e2c`) :
+  GPU p50 A 55,8 / 56,4 / 56,2 → B 55,5 / 55,8 ms (**−0,5 ms**) ; `earth water` 10,5 → 8,1 ms, `open` 1,1 → 0,9, la finition de l'eau
+  0,8 → 3,0–3,1 ms (l'eau en calcul −0,4). Tailles inlinées `shadeWater` 5,7 → 5,5 k, `shadeWaterOpen` 5,0 → 4,8, `shadeWaterFinish` 1,2.
+  Images : les nuages reflétés présents sur la mer (vues). Statique : `tsc`, `check-wgsl` 82/82, `kernel-budget` 69/0, `pipeline-inventory`.
+- **La leçon** : le plafond était surtout le **travail** du SSR (~2,2 ms sur cette vue), pas la présence de son code — l'hypothèse
+  « registres » ne rend ici que ~0,4 ms. E3 (surface / éclairage) se jugera sur un plafond mesuré de la même façon avant d'être codé.
+- **Vu une fois, non reproduit** : un run B dont le décor est resté à l'étape « forest » 240 s à l'arrivée (l'attente plafonnée l'a dit et
+  arrêté) ; les trois runs B suivants normaux ; aucun lien établi avec E2.
+- **Non vérifié** : le M1 Max ; la sonde `zz-sea-compare` ; une image gelée comparée au pixel près ; l'eau intérieure (son SSR reste dans
+  `inlandWater`) ; `bun test` complet. **Suite** : la classification de l'écran par tuiles (les noyaux de l'eau et leur finition lancés
+  plein écran) ; un SSR moins cher à juger sur l'image ; le retrait R1 le 14.
+

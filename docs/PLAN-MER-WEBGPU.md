@@ -291,8 +291,8 @@ coûte 16,2 ms par image sur kerr-mini, dont `earth water` 12,7 ; sans son maté
 | Étape | Ce qu'elle sort de `shadeWater` | État |
 |---|---|---|
 | **E1** | la fin : l'air et les nuages (`liteFinish`) — la surface écrite dans `liteOut`, le pixel marqué `RASTER_SPLIT_WATER`, la passe de finition du sol (`shadeLiteFinish`) relancée après l'eau (`earth water: finishing`) | **fait, mesuré** (13 nov.) |
-| E2 | les reflets : le SSR (`seaSSR`) et les nuages lointains reflétés — un enregistrement (direction réfléchie, poids `water·(1−W)·Fv`, reflet du ciel) lu par un noyau de reflets qui ajoute la différence | à faire |
-| E3 | la surface et l'éclairage : pentes, écume, profondeur d'un côté ; Soleil, ciel, corps de l'eau de l'autre | à faire, selon E2 |
+| **E2** | les reflets : le SSR (`seaSSR`) et les nuages lointains reflétés — `seaShade` compilé avec `WATER_REFL_DEFER` (constante de pipeline, testée seule : la spécialisation du source retire le code) laisse la facette tirée, la direction relevée, le reflet et le ciel clair qu'ils remplacent et leur poids `water·(1−lavis)·Fv·(1−écume)` ; `shadeWater` les écrit dans les trois premières textures de l'enregistrement du sol différé (libres après `shadeLiteLight`) ; `shadeWaterFinish` les dessine, ajoute la différence et finit le pixel | **fait, mesuré** (13 nov.) — gain faible |
+| E3 | la surface et l'éclairage : pentes, écume, profondeur d'un côté ; Soleil, ciel, corps de l'eau de l'autre | à reconsidérer (leçon de E2 ci-dessous) |
 
 **E1, mesuré (A/B entrelacé A B B A sur J0, kerr-mini, 13 nov. ~08:55–09:05 UTC, A = 22c3179a, B = l'arbre ;
 `remote-results/20261113-095521-j0-ab-watersplit`)** : GPU p50 **57,8 / 57,9 → 56,2 / 56,4 ms (−1,55 ms)**, p95 64,1 → 62,25 ms ;
@@ -302,3 +302,19 @@ par ablation **13,0 → 10,1 ms** (55,0 / 54,8 avec, 44,9 sans — 45,0 ce matin
 semblables (vues). Le SSR ne lit plus les pixels d'eau en cours d'écriture (marqués `RASTER_SPLIT_WATER`, écartés par le test général) :
 `seaSsrSafe` devient sans objet, retiré au lot R1 (PLAN-J2 §9 quattuordecies). **Non mesuré** : le M1 Max (bride : ses ΔGPU de vol ne
 valent pas) ; la sonde `zz-sea-compare` (vues de mer seules) ; une comparaison au pixel près sur image gelée.
+
+**E2, mesuré (kerr-mini, 13 nov. ~09:15–09:50 UTC ; A = f77c0842 (E1), B = l'arbre ; A B B A puis A B :
+`remote-results/20261113-103133-j0-ab-e2b`, `…-j0-ab-e2c`)** :
+- **Le plafond, mesuré avant** (règle 1 ; ablation `seaRefl` de J0 — le SSR et les nuages reflétés compilés hors, `TUNE_GSKIP` 20480 — :
+  base 58,3 / 56,7, sans 52,9 / 52,0) : **−4,7 ms**.
+- **Le résultat** : GPU p50 A 55,8 / 56,4 / 56,2 → B 55,5 / 55,8 ms (**−0,5 ms**, à peine au-dessus de l'écart des A, 0,6) ; par passe
+  `earth water` 10,3–10,6 → 8,1 ms, `earth water open` 1,1–1,2 → 0,9, mais `earth water: finishing` 0,8 → **3,0–3,1 ms** : l'eau en calcul
+  −0,4 ms. Tailles inlinées : `shadeWater` 5,7 → 5,5 k lignes, `shadeWaterOpen` 5,0 → 4,8, `shadeWaterFinish` 1,2.
+- **La leçon** : le plafond de −4,7 ms était surtout **le travail** du SSR (≈ 2,2 ms sur cette vue, désormais dans la finition), pas la
+  présence de son code dans le noyau de l'eau. L'hypothèse « registres » ne rend ici que ~0,4 ms ; E3 (surface / éclairage) se juge donc
+  sur un plafond mesuré de la même façon avant d'être codé. Le SSR isolé se prête à la suite : la classification par tuiles (le lancer
+  sur les seules tuiles d'eau proche d'une terre) et un SSR moins cher (pas, résolution) — ce dernier à juger sur l'image.
+- **Gardé** : aucune image changée (vues : les nuages reflétés sur la mer présents), la course des points blancs supprimée par construction,
+  le SSR dans un noyau de 1,2 k lignes. **Vu une fois** : un run B dont le décor est resté à l'étape « forest » 240 s à l'arrivée (l'attente
+  plafonnée l'a dit et arrêté) ; non reproduit aux trois runs B suivants, sans lien établi avec E2.
+
