@@ -62,7 +62,7 @@ ouverts, sous 1 ms) ; J3 au stade du plan.**
 | Audit vagues 3–4 (1feb2f7f) | 3.7 TARS (outils AP avions/A320) | **fait** : `jet_autopilot` par les actions de la console, volets au levier (CONF 1), l'AP de l'A320 réparé dans `apSet` |
 | Audit vagues 3–4 (1feb2f7f) | 3.10 e2e qui ne vérifient rien | **fait** : `waitOptional` (93 attentes converties), 14 mesures déclarées, garde `e2e-honesty` |
 | Audit vagues 3–4 (1feb2f7f) | 4.2 la politique de temps | **fait** : vol tenu pendant la reprise GPU, cadence vraie, horloge du vol + garde ; l'onglet masqué (choix de Sam) : solo en pause dite, salle sans arrêt (l'absent ne la bloque plus, les autres avertis, remis à l'heure au retour), sauvé en partant, TARS sans réveil ; le ralentissement sous 10 images/s dit — e2e `hidden-tab` 2/2, `fps-truth` 2/2 |
-| Audit vagues 3–4 (1feb2f7f) | 4.8 découper `main()` | **en cours** (accord de Sam : par petits lots) : lot 1 la persistance, lot 2 qui tient le vol (`session.ts`), lots 3–4 les étapes gardées (`frame.ts`, AR-03), lot 5 l'ordre §19.5 pour l'appareil (AR-04, 6,5 → 0,0 ms d'âge), lot 6 `craft-feed.ts` (les poses de l'appareil hors de `main()`) ; reste le gouverneur (leviers du rendu) |
+| Audit vagues 3–4 (1feb2f7f) | 4.8 découper `main()` | **fait** (accord de Sam : par petits lots) : lot 1 la persistance, lot 2 qui tient le vol (`session.ts`), lots 3–4 les étapes gardées (`frame.ts`, AR-03), lot 5 l'ordre §19.5 (AR-04), lot 6 `craft-feed.ts`, lot 7 `governor.ts` (confié par la session du rendu) — **fait** : les quatre découpes d'AR-12 (session, frame, gouverneur, poses de l'appareil) |
 | Audit vagues 3–4 (1feb2f7f) | 4.3 séparer `Settings` | **fait** : garde statique des réglages (AR-21) ; `ViewPose` et `SimState` figés une fois par image (AR-07, `view-pose.ts`) ; le renderer les lit (session du rendu, 77721acf) |
 
 **Fermé récemment** : J2 (13 nov., ΔGPU nul, chemin vers §8 écrit) ; J2-C BC7 étudiée puis **rangée** (Sam : « ne pas le faire maintenant »).
@@ -4993,3 +4993,18 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   2-wire — 3,50, qualifié), 3/0.
 - **Non vérifié :** la suite complète exécutée (d'autres tests y tournent avant : un autre état partagé reste possible) — à la
   prochaine suite complète de la session du rendu, ou sur kerr-mini avec l'accord de Sam.
+
+## 2026-11-13T14:40Z — Audit 4.8 (lot 7, le dernier) : le gouverneur de résolution hors de `main()` (`src/game/governor.ts`, AR-12 piste 3)
+
+- **Confié par la session du rendu** (« à toi » ; ses leviers, déplacés tels quels) : l'échelle dynamique (en mouvement, tenue, celle du
+  raster), le temps GPU mesuré à chaque échelle, le tier promu ou rétrogradé sur ce qu'il mesure, le raster de la Terre proche laissé au
+  tracé quand il est trop lourd et repris quand le tracé n'est pas plus rapide — ~210 lignes et ses 17 variables d'état dans la classe
+  `Governor` (`tick`, `measure`, `force`, `scaleForResize`, `rasterScale`) ; `resize()` reste dans `main()` et lit l'échelle choisie ;
+  `__bh.forceScale` et le contexte des outils passent par lui. Mêmes règles, mêmes seuils, même ordre.
+- **Preuves :** `tsc`, Biome, unitaires `governor` 3/0 (l'échelle forcée et sa libération, celle du raster tenue et en mouvement, le
+  temps GPU moyenné par image finie) et `quality-policy` verts, garde `flight-clock` (deux lectures murales motivées) ; e2e
+  `lowflight-governor` **1/1** (Alpes, tuiles : échelle 0,75, pas de repli), `view-pose`, `fps-truth`, `instruments-age`, `ghost`
+  (l'échelle forcée) verts. `raster-governor` échoue sur « rate ∈ {2, 4, 8, 16} » (rate 1 aux Alpes) — **à l'identique avec l'ancien
+  `main.ts`** rejoué : préexistant, signalé à la session du rendu. IGN sollicité par ces deux e2e, annoncé à la session du rendu (qui n'en
+  lançait pas pendant ce temps). J0 à repasser par elle sur kerr-mini.
+- **4.8 : fait** — les quatre découpes d'AR-12 (l'état de session, la frame gardée, le gouverneur, les poses de l'appareil) et la persistance.

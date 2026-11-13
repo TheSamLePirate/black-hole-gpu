@@ -230,8 +230,8 @@ import { fmtDate, GameTools } from "./game/tools";
 import { rangerStatus, type RangerStatus } from "./game/status";
 import { GameToolsWindow, rangerView } from "./ui/gametools";
 import { applyTuning } from "./game/tuning";
-import { demotionEligible, dynamicResolutionOn, earthDetailFor, promotionEligible } from "./quality-policy";
-import { adapterId, cappedRatio, demoted, promoted, rememberLevel, windowsIntegratedGpu } from "./tier";
+import { dynamicResolutionOn, earthDetailFor } from "./quality-policy";
+import { cappedRatio, windowsIntegratedGpu } from "./tier";
 import { gpuTipText } from "./ui/gpu-tip";
 import { cpuProf } from "./perf";
 import { GOPRO, goproRenderFov, goproRowShare } from "./lens";
@@ -240,6 +240,7 @@ import { gameLog } from "./game/log";
 import { OutOfView } from "./game/out-of-view";
 import { CraftFeed } from "./game/craft-feed";
 import { FrameGuard } from "./game/frame";
+import { Governor } from "./game/governor";
 import { Persistence } from "./game/persistence";
 import { Session } from "./game/session";
 import { type SimState, simStateOf, type ViewPose, viewPoseOf } from "./game/view-pose";
@@ -5574,56 +5575,18 @@ async function main() {
   }
 
   // -------------------------------------------------------------------- sizing
-  // dynamic resolution: a fraction of the pixel ratio (1: as set), lowered when the GPU cannot keep
-  // the frame budget with the subsampling already coarse, raised back when it has room. In motion only:
-  // the camera held, the image refines at the full scale (the moving one kept for the next move)
-  let renderScale = 1;
-  let forcedScale: number | null = null; // (a scale held by the automation: the benches, the tests)
-  let movingScale = 0; // (the scale the motion had, while the camera is held at the full one; 0: none)
-  let heldFor = 0; // (how long the camera has been held [s]: a pause between two inputs is not)
-  let movingFor = 0; // (how long it has moved again [s]: a resize's own fresh frame is not a move)
-  let gpuEma = 0;
-  let scaleTimer = 0;
-  // the frame time measured at each scale (remembered 30 s, then tried again): a lower scale only when
-  // it pays — the frame may be bound elsewhere (the browser's compositing), where a smaller image is
-  // no faster, only blurrier
-  const scaleMs = new Map<number, { ms: number; at: number }>();
-  let scaleHeld = 0; // (how long the scale has held [s]: its first frames, the targets made anew, are not its measure)
-  let measuredFrames = 0;
-  let calibrationWasReady = false;
-  let idleAtCap = 0; // (how long the GPU has idled with the image at the tier's pixel cap [s])
-  let overAtFloor = 0; // (how long the GPU has been over budget at the coarsest block and smallest scale [s])
-  let demotedAt = -Infinity; // (the last demotion [performance.now() ms]: no promotion for a minute after)
-  let rasterOver = 0; // (how long the raster pipeline has been over budget at its floor [s]: the fallback to the traced one)
-  // (the fallback measured: the raster's frame time when it was given up [ms], how long the traced one has flown since [s];
-  // renderer.rasterKept: the traced one proved no faster here — the raster kept, not given up again)
-  let rasterFellMs = 0;
-  let tracedFor = 0;
-  // (the raster pipeline draws the near Earth: its render scale in motion — earthRasterScale, 75 % by default, upscaled by
-  // the display — is the motion's ceiling; the camera held, the full one: the refinement's)
-  const rasterOn = () => forcedScale === null && renderer.rasterPrimaryNow;
-  const rasterTop = () => Math.max(0.5, Math.min(1, settings.earthRasterScale));
-  // (without the dynamic resolution, that scale itself in motion — with it, the governor's under it: below —; null: the scale
-  // as the rest has it)
-  // (moving: for 0.15 s — the frame after a resize is a realtime one whatever the camera does: taken for a move, it put the
-  // motion's scale back, its resize made the next frame realtime again, and a held view went back and forth between the
-  // two scales, its history lost at each, never refined; the same rule as the motion's scale given back, below)
-  const rasterScale = (): number | null =>
-    rasterOn() && !dynamicResolutionOn(settings) && settings.earthRasterScale < 1
-      ? heldFor > 0.4 && !renderer.rasterHold
-        ? 1
-        : movingFor > 0.15
-          ? rasterTop()
-          : renderScale
-      : null;
+  // the resolution governor: the render scale, the tier, the raster pipeline's fallback (game/governor.ts — audit AR-12)
+  const governor: Governor = new Governor({
+    renderer,
+    settings,
+    canvas,
+    resize: () => resize(),
+    toast: (text) => panel.toast(text),
+    benching: () => bench.running,
+  });
   function resize() {
-    const rs = rasterScale();
-    // (a forced scale — __bh.forceScale, a measure's — first: the raster's own taken over it, the frame loop forced it back and called
-    // resize again every frame — the targets made anew, the history lost at each, the image drawn at the raster's scale all along: every
-    // forced scale but 0.75 measured 4–10 dB low — PLAN-J2 J2-6, 13 Nov 2026)
-    if (forcedScale !== null) renderScale = forcedScale;
-    else if (rs !== null) renderScale = rs;
-    else if (!dynamicResolutionOn(settings)) renderScale = 1;
+    // (the scale the governor chose — a forced one first, the raster's, the canvas's without dynamic resolution: game/governor.ts)
+    const renderScale = governor.scaleForResize();
     // (with the dynamic resolution — the Game quality turns it on, any quality may —, the image within
     // the hardware tier's pixel budget, then its scale; without it the ratio asked for: the still image
     // is the point)
@@ -5717,7 +5680,7 @@ async function main() {
     },
     toast: (t) => panel.toast(t),
     fps: () => fps,
-    renderScale: () => renderScale,
+    renderScale: () => governor.renderScale,
     scene: { get: () => currentScene, set: (n) => (currentScene = n && presets[n] ? n : null) },
   });
   const toolsWin = new GameToolsWindow(tools, settings);
@@ -8000,7 +7963,7 @@ async function main() {
       touchDisplay();
     },
     touch,
-    renderScale: () => renderScale,
+    renderScale: () => governor.renderScale,
     gpuPasses: () => {
       if (!renderer.prof.enabled) (renderer.prof.enabled = true), renderer.prof.reset();
       return renderer.prof.table().map((p) => ({ pass: p.label, ms: Math.round(p.ms * 100) / 100 }));
@@ -8324,11 +8287,7 @@ async function main() {
         return { airShake: sim.airShakeGain, step: jitterStep };
       },
     },
-    forceScale: (x: number | null) => {
-      forcedScale = x === null ? null : Math.min(Math.max(x, 0.25), 1);
-      if (forcedScale === null) renderScale = 1;
-      resize();
-    },
+    forceScale: (x: number | null) => governor.force(x),
   });
 
   // -------------------------------------------------------------------- loop
@@ -9043,7 +9002,7 @@ async function main() {
       time: sim.time,
       width: canvas.width,
       height: canvas.height,
-      scale: renderScale,
+      scale: governor.renderScale,
       frame: frameNo,
       fov: lensFov,
     });
@@ -9075,12 +9034,7 @@ async function main() {
       displayChanged = false;
       lastStats = st;
       if (st.offline) renderDialog.update((lastOffline = st.offline));
-      if (renderer.completedFrames !== measuredFrames) {
-        measuredFrames = renderer.completedFrames;
-        // (a frame of the motion's denser rays — Sharpness in motion, a turn —: not this scale's time; counted, a long
-        // turn lowered the scale, and its 30 s memory then held it down after the turn)
-        if (!renderer.lastFrameDense) gpuEma = gpuEma ? 0.9 * gpuEma + 0.1 * renderer.lastGpuMs : renderer.lastGpuMs;
-      }
+      governor.measure();
     }
     if (jitterProbe.active) {
       const stepped = session.runs ? (jitterStep ?? dt) : 0;
@@ -9107,7 +9061,7 @@ async function main() {
         fov: settings.fov,
         W: Math.max(1, Math.round(canvas.clientWidth * devicePixelRatio)),
         H,
-        scale: renderScale,
+        scale: governor.renderScale,
         rate: renderer.rasterRateNow,
         phase: lastStats?.phase ?? "",
         groundPx: (renderer.imageGroundPx * H) / Math.max(renderer.liveHeight || H, 1),
@@ -9164,218 +9118,9 @@ async function main() {
         });
       }
     }
-    // (a compile or a stream begun or ended: the timings measured afresh — the image untouched)
-    const calibrationReady = renderer.calibrationReady;
-    if (calibrationReady !== calibrationWasReady) {
-      calibrationWasReady = calibrationReady;
-      gpuEma = 0;
-      scaleHeld = idleAtCap = overAtFloor = 0;
-      scaleMs.clear();
-      renderer.resetQualityTiming();
-    }
-    // (the camera held for 0.4 s: the full scale, the image refined there; moving again: the motion's)
-    const held = lastStats?.phase === "converging" || lastStats?.phase === "converged";
-    heldFor = held ? heldFor + dt : 0;
-    movingFor = held ? 0 : movingFor + dt;
-    const dynOn = dynamicResolutionOn(settings) && !renderer.offlineActive && forcedScale === null;
-    const terrainInspecting = renderer.terrainRasterInspecting;
-    if (forcedScale !== null && renderScale !== forcedScale) {
-      renderScale = forcedScale;
-      resize();
-    }
-    const rs = rasterScale();
-    if (forcedScale === null && rs !== null && Math.abs(rs - renderScale) > 1e-3) {
-      gpuEma = 0;
-      scaleHeld = 0;
-      resize();
-    } else if (rs === null && forcedScale === null && !dynOn && renderScale !== 1) {
-      // (the raster's scale let go — the traced pipeline, the Earth left —: the canvas's again)
-      resize();
-    } else if (dynOn && rasterOn() && movingFor > 0.15 && renderScale > rasterTop() + 1e-3) {
-      // (the governor's scale in motion under the raster's ceiling — moving for 0.15 s: rasterScale's rule)
-      renderScale = rasterTop();
-      gpuEma = 0;
-      scaleHeld = 0;
-      resize();
-    }
-    if (!terrainInspecting && dynOn && heldFor > 0.4 && renderScale < 1) {
-      movingScale = renderScale;
-      renderScale = 1;
-      gpuEma = 0;
-      scaleHeld = 0;
-      resize();
-    } else if (!terrainInspecting && movingFor > 0.15 && movingScale > 0) {
-      if (dynOn && renderScale !== movingScale) {
-        renderScale = movingScale;
-        gpuEma = 0;
-        scaleHeld = 0;
-        resize();
-      }
-      movingScale = 0;
-    }
-    // (every 1.5 s in motion, by eighths, between half the pixel ratio and all of it)
-    scaleTimer += dt;
-    if (scaleTimer > 1.5) {
-      scaleTimer = 0;
-      // (in motion: moving for 0.15 s — rasterScale's rule; a held view's own resize is not a move)
-      const moving = movingFor > 0.15;
-      const on = dynOn && moving;
-      const block = renderer.realtimeBlockNow;
-      const now = performance.now();
-      scaleHeld += 1.5;
-      const settled = scaleHeld >= 3;
-      if (!terrainInspecting && on && settled && gpuEma > 0) scaleMs.set(renderScale, { ms: gpuEma, at: now });
-      const known = (x: number) => {
-        const m = scaleMs.get(x);
-        return m && now - m.at < 30000 ? m.ms : undefined;
-      };
-      // (the raster's: its scale in motion the ceiling; lowered only once its shading rate, chosen by the renderer, is at its
-      // coarsest — the shading is its cost, not the pixels' count)
-      const raster = rasterOn();
-      // (PLAN-J2 J2-6 — the raster's scale left to the governor, its floor 2/3 a side, Sam's decision 6: measured, at 2/3 the turn's
-      // PSNR 30.4 against 32.5 dB at 0.75 — a full-scale reference — for ~8 % of GPU, the image blurred for a frame rate; the pin
-      // kept, the lever rasterScaleFree retired, lot R1, 13 Nov 2026)
-      const lower = Math.max(0.5, renderScale - 0.125),
-        higher = Math.min(raster ? rasterTop() : 1, renderScale + 0.125);
-      const rateDone = !raster || settings.earthRasterShading !== "auto" || renderer.rasterRateCoarsest;
-      const kl = known(lower),
-        kh = known(higher);
-      const budget = renderer.frameBudget(settings);
-      let want = renderScale;
-      if (forcedScale !== null) want = forcedScale;
-      else if (terrainInspecting) want = renderScale;
-      else if (!dynOn) want = 1;
-      else if (!moving) want = renderScale;
-      // (the raster's ground at every pixel — shadeLite —: the scale held at the raster's own — each step resampled the history
-      // into the new size at a sample's weight, a blur pulse every few seconds in flight; the image is what is aimed at, at
-      // the raster's full scale, not the governor's)
-      else if (raster && renderer.rasterLiteActive) want = rasterTop();
-      else if (!settled) want = renderScale;
-      // (down once the blocks are coarse: at the same rays a finer block on a smaller image is no better in
-      // motion — measured, equal on Kerr, 2.6 dB worse on Saturn's stars and edges —, the full scale kept)
-      else if (gpuEma > 1.2 * budget && block >= 4 && rateDone && (kl === undefined || kl < 0.9 * gpuEma)) want = lower;
-      // (up when the larger scale was measured within the budget, or no slower; not measured lately, when
-      // the frame grown as the pixels would stay within it)
-      else if (
-        higher > renderScale &&
-        (kh !== undefined ? kh <= Math.max(0.85 * budget, 1.1 * gpuEma) : gpuEma * (higher / renderScale) ** 2 < 0.85 * budget)
-      )
-        want = higher;
-      if (want !== renderScale) {
-        renderScale = want;
-        gpuEma = 0; // (measured afresh at the new scale)
-        scaleHeld = 0;
-        resize();
-      }
-      // (the hardware's tier measured, not guessed: at full scale, fine blocks, the GPU's work under half
-      // the budget for 12 s while the tier holds something back — the image's pixels, the precision, or
-      // a weak tier's Earth maps — one tier up, its caps raised and remembered for this adapter; the
-      // scale governor above brings it down again if the larger image does not fit. Never while a Kerr
-      // Bench runs: quality-policy.ts)
-      const capped =
-        on && cappedRatio(settings.pixelRatio, canvas.clientWidth, canvas.clientHeight, renderer.tier.capMpx) < settings.pixelRatio - 1e-3;
-      // (block ≤ 4, not ≤ 2: on a fast GPU in a heavy scene the blocks can settle at 3–4 with the
-      // GPU idle — the promotion would never fire; and a minute's cooldown after a demotion)
-      idleAtCap = promotionEligible({
-        automatic: on,
-        benching: bench.running,
-        stable: renderer.calibrationReady && settled,
-        pixelCapped: capped,
-        precisionCapped: renderer.effectiveQuality(settings).capped,
-        tier: renderer.tier,
-        scale: renderScale,
-        block,
-        sinceDemotionMs: now - demotedAt,
-        measuredMs: gpuEma,
-        budgetMs: budget,
-      })
-        ? idleAtCap + 1.5
-        : 0;
-      if (idleAtCap >= 12) {
-        const up = promoted(renderer.tier);
-        idleAtCap = 0;
-        if (up) {
-          renderer.setTier(up);
-          scaleMs.clear();
-          gpuEma = 0;
-          scaleHeld = 0;
-          resize();
-          if (renderer.adapter) rememberLevel(adapterId(renderer.adapter), up);
-        }
-      }
-      // (and the other way — the promotion's missing half (plan §3.4): over the budget and a half
-      // at the coarsest block and the smallest scale, for 12 s — one tier down, its cap lowered)
-      overAtFloor = demotionEligible({
-        automatic: on,
-        benching: bench.running,
-        stable: renderer.calibrationReady && settled,
-        scale: renderScale,
-        block,
-        measuredMs: gpuEma,
-        budgetMs: budget,
-      })
-        ? overAtFloor + 1.5
-        : 0;
-      // (the raster pipeline too heavy for this device: over the budget and a half at its coarsest shading, its smallest
-      // scale and the coarsest blocks for 12 s, in motion — the traced pipeline for the session, said; the setting changed,
-      // tried again — onSettingsChange)
-      rasterOver =
-        raster &&
-        settings.earthRasterShading === "auto" &&
-        settings.realtimeSubsampling === "auto" &&
-        !bench.running &&
-        moving &&
-        settled &&
-        renderer.rasterRateCoarsest &&
-        block >= 8 &&
-        (!dynOn || renderScale <= 0.5 + 1e-3) &&
-        !renderer.rasterKept &&
-        gpuEma > 1.5 * budget
-          ? rasterOver + 1.5
-          : 0;
-      // (the traced pipeline flown 6 s in motion since the fallback: kept only if it is a tenth faster at least — over a city's
-      // buildings on an M1 it was not, 57 ms a frame at 14 fps and its blocks far blurrier than the raster's floor —, else the
-      // raster back, said)
-      if (renderer.rasterFellBack && rasterFellMs > 0 && moving && settled && gpuEma > 0) {
-        tracedFor += 1.5;
-        if (tracedFor >= 6) {
-          if (gpuEma > 0.9 * rasterFellMs) {
-            renderer.rasterFellBack = false;
-            renderer.rasterKept = true;
-            scaleMs.clear();
-            gpuEma = 0;
-            scaleHeld = 0;
-            resize();
-            panel.toast(t("The near Earth is drawn by the raster pipeline again: the traced one is no faster here"));
-          }
-          rasterFellMs = 0;
-        }
-      }
-      if (rasterOver >= 12) {
-        rasterOver = 0;
-        rasterFellMs = gpuEma;
-        tracedFor = 0;
-        renderer.rasterFellBack = true;
-        scaleMs.clear();
-        gpuEma = 0;
-        scaleHeld = 0;
-        resize();
-        panel.toast(t("The near Earth is drawn by the traced pipeline: the raster one is too heavy for this GPU"));
-      }
-      if (overAtFloor >= 12) {
-        const down = demoted(renderer.tier);
-        overAtFloor = 0;
-        if (down) {
-          renderer.setTier(down);
-          scaleMs.clear();
-          gpuEma = 0;
-          scaleHeld = 0;
-          demotedAt = now;
-          resize();
-          if (renderer.adapter) rememberLevel(adapterId(renderer.adapter), down);
-        }
-      }
-    }
+    // (the resolution governor — game/governor.ts, out of main() since 13 Nov 2026, audit AR-12: the scale, the tier, the raster
+    // pipeline's fallback, decided on what was measured)
+    governor.tick(dt, lastStats?.phase);
     cpuProf.time("overlay (guide, marker)", () => viewOverlay.draw(chart && !renderer.offlineActive ? chart : null, chartKey));
     const hideSceneryCredit = !renderer.earthScenery.active;
     if (sceneryCredit.hidden !== hideSceneryCredit) sceneryCredit.hidden = hideSceneryCredit;
