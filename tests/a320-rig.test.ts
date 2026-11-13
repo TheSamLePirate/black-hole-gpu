@@ -57,6 +57,19 @@ describe("A320 rig", () => {
     }
   });
 
+  test("the maps written in place (audit AR-05, 13 Nov 2026): a call's result owes nothing to the calls before it", async () => {
+    const m = await load();
+    const A = { "gear/gear[0]/position-norm": 0.3, "gear/gear[1]/position-norm": 0.7, "controls/flight/flaps": 0.5 };
+    const B = { "gear/gear[0]/position-norm": 1, "gear/gear[1]/position-norm": 0, "controls/flight/flaps": 0 };
+    const first = rigMatrices(m, A).slice();
+    rigMatrices(m, B, { "engines/engine[0]/n1": 2.1 });
+    expect(rigMatrices(m, A)).toEqual(first);
+    // (the result's buffer the caller's own: the work space not shared with it)
+    const out = rigMatrices(m, A);
+    rigMatrices(m, B);
+    expect(out).toEqual(first);
+  });
+
   test("a node's value: its table, its factor", () => {
     expect(
       nodeValue(

@@ -4795,3 +4795,20 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   (non additive) : p95 7,3–7,8 ms (avant 9,5–13,7), p99 8,3–9,3 (avant 13,6–16,6).
 - **Décision (règle 1) :** `drawOurPaths` ~0,3 ms par dessin, sous le seuil d'un lot : laissé. AR-05 fermé pour l'autosauvegarde et la
   mini-carte ; les lectures de mise en page du cockpit de l'A320 restent non mesurées.
+
+## 2026-11-13T12:44Z — AR-05, le cockpit de l'A320 : le rig sans allocation (−77 % sur sa part, fil principal −8 à −11 %)
+
+- **Contribution à la destination :** §8 (CPU de la frame, pression du ramasse-miettes), dans le cockpit d'avion de ligne.
+- **Mesure d'abord (sonde temporaire : profil CPU de 6 s, A320 en place à Paris – Le Bourget, poste de pilotage, IGN bloqué) :** les
+  lectures de mise en page qu'AR-05 citait pèsent 2,1 ms sur 6 s — négligeables (fermées). Le profil montre ailleurs `rigMatrices`
+  (les matrices des 1 234 nœuds animés du poste, chaque image) à ~500 ms sur 6 s, `ident()` seul 250 ms en temps propre : 2 à 5
+  `Float64Array` allouées par nœud et par image. Plafond (règle 1) ≈ 85 ms par seconde de fil principal, plus d'1 ms par image : lot ouvert.
+- **Réalisé :** `src/a320/rig.ts` — les cartes locales et du monde écrites en place dans un espace de travail par maillage (gardé entre
+  les images), `turnAboutAt`/`mulAt` en place, la même arithmétique dans le même ordre ; les anciennes `mul`, `turnAbout`, `zero` retirées.
+- **Preuves :** **identiques bit à bit** à l'ancienne version (vérification temporaire, l'ancien fichier importé à côté : cellule 171 nœuds
+  et poste 1 234 nœuds, 556 propriétés, six jeux de propriétés et de rotations au hasard, 0 flottant différent) ; unitaires `a320-rig`
+  et `a320-deck` 12/0 dont un nouveau (un appel ne doit rien aux précédents ; le tampon rendu est celui de l'appelant). **A/B Chrome**
+  (deux profils de chaque côté, l'ancien `rig.ts` remis le temps de la mesure) : `rigMatrices` **499 / 526 → 120 / 117 ms** sur 6 s,
+  ramasse-miettes 105 / 65 → 53 / 61 ms, fil principal occupé 3 327 / 3 352 → 2 975 / 3 080 ms. Sous Bun : 0,26–0,29 → 0,19–0,20 ms par appel.
+- **Limites :** M1 Max chargé, profil échantillonné ; la cadence du cockpit n'est pas remesurée (le GPU y décide). Le reste du fil principal
+  du cockpit est surtout l'encodage du rendu (`encodeShipNow`, renderer : pas à moi).

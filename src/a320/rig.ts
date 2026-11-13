@@ -90,45 +90,6 @@ export type Props = Record<string, number | string>;
 /** 3 × 4 affine maps (rows) */
 type M34 = Float64Array;
 const ident = (): M34 => new Float64Array([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0]);
-const zero = (): M34 => new Float64Array(12);
-function mul(A: M34, B: M34): M34 {
-  const o = new Float64Array(12);
-  for (let r = 0; r < 3; r++) {
-    for (let c = 0; c < 4; c++) {
-      let s = c === 3 ? A[r * 4 + 3]! : 0;
-      for (let k = 0; k < 3; k++) s += A[r * 4 + k]! * B[k * 4 + c]!;
-      o[r * 4 + c] = s;
-    }
-  }
-  return o;
-}
-/** A turn by `ang` (rad, right hand) about the line through `p` along `axis`. */
-function turnAbout(p: V3, axis: V3, ang: number): M34 {
-  const l = Math.hypot(...axis) || 1;
-  const [x, y, z] = [axis[0] / l, axis[1] / l, axis[2] / l];
-  const c = Math.cos(ang),
-    s = Math.sin(ang),
-    t = 1 - c;
-  const R = [
-    t * x * x + c,
-    t * x * y - s * z,
-    t * x * z + s * y,
-    t * x * y + s * z,
-    t * y * y + c,
-    t * y * z - s * x,
-    t * x * z - s * y,
-    t * y * z + s * x,
-    t * z * z + c,
-  ];
-  const o = new Float64Array(12);
-  for (let r = 0; r < 3; r++) {
-    o[r * 4] = R[r * 3]!;
-    o[r * 4 + 1] = R[r * 3 + 1]!;
-    o[r * 4 + 2] = R[r * 3 + 2]!;
-    o[r * 4 + 3] = p[r]! - (R[r * 3]! * p[0] + R[r * 3 + 1]! * p[1] + R[r * 3 + 2]! * p[2]);
-  }
-  return o;
-}
 const apply = (M: M34, p: V3): V3 =>
   [0, 1, 2].map((r) => M[r * 4]! * p[0] + M[r * 4 + 1]! * p[1] + M[r * 4 + 2]! * p[2] + M[r * 4 + 3]!) as V3;
 /** The inverse of a rigid map (or the identity where it is singular: a hidden part's). */
@@ -224,6 +185,53 @@ function trackAngles(n: RigNode, tl: V3): [number, number] {
   return [root, slave];
 }
 
+// (the maps written in place — audit AR-05, 13 Nov 2026: the deck's 1 194 nodes allocated two to five Float64Array each a frame,
+// ~87 ms a second of the main thread in the cockpit, a third of it in ident() alone — the same arithmetic, in the same order)
+/** A turn by `ang` about the line through `p` along `axis`, written at `o[k…k+11]` (turnAbout's, in place). */
+function turnAboutAt(o: M34, k: number, p: V3, axis: V3, ang: number) {
+  const l = Math.hypot(...axis) || 1;
+  const x = axis[0] / l,
+    y = axis[1] / l,
+    z = axis[2] / l;
+  const c = Math.cos(ang),
+    s = Math.sin(ang),
+    t = 1 - c;
+  const r00 = t * x * x + c,
+    r01 = t * x * y - s * z,
+    r02 = t * x * z + s * y,
+    r10 = t * x * y + s * z,
+    r11 = t * y * y + c,
+    r12 = t * y * z - s * x,
+    r20 = t * x * z - s * y,
+    r21 = t * y * z + s * x,
+    r22 = t * z * z + c;
+  o[k] = r00;
+  o[k + 1] = r01;
+  o[k + 2] = r02;
+  o[k + 3] = p[0] - (r00 * p[0] + r01 * p[1] + r02 * p[2]);
+  o[k + 4] = r10;
+  o[k + 5] = r11;
+  o[k + 6] = r12;
+  o[k + 7] = p[1] - (r10 * p[0] + r11 * p[1] + r12 * p[2]);
+  o[k + 8] = r20;
+  o[k + 9] = r21;
+  o[k + 10] = r22;
+  o[k + 11] = p[2] - (r20 * p[0] + r21 * p[1] + r22 * p[2]);
+}
+const IDENT = ident();
+/** A · B written at `o[k…]` (mul's, in place; `o` not A's nor B's storage at those places) */
+function mulAt(o: M34, k: number, A: M34, a: number, B: M34, b: number) {
+  for (let r = 0; r < 3; r++) {
+    for (let c = 0; c < 4; c++) {
+      let s = c === 3 ? A[a + r * 4 + 3]! : 0;
+      for (let q = 0; q < 3; q++) s += A[a + r * 4 + q]! * B[b + q * 4 + c]!;
+      o[k + r * 4 + c] = s;
+    }
+  }
+}
+/** each mesh's work space: its nodes' local and world maps, the tracks' angles — kept across frames */
+const rigWork = new WeakMap<A320Mesh, { local: M34; world: M34; tracks: Float64Array }>();
+
 /**
  * Each part's map for the properties (and the spins' angles by property [rad]): 12 floats a part (rows of
  * 3 × 4; part 0 the still airframe), ship.wgsl's partM. The locked-tracks' targets are taken through the maps
@@ -237,43 +245,55 @@ export function rigMatrices(
   passes = 3,
 ): Float32Array<ArrayBuffer> {
   const N = m.nodes;
-  const local: M34[] = N.map(() => ident());
-  const world: M34[] = N.map(() => ident());
-  const tracks = new Float64Array(N.length * 2);
+  let W = rigWork.get(m);
+  if (!W || W.local.length !== N.length * 12) {
+    W = { local: new Float64Array(N.length * 12), world: new Float64Array(N.length * 12), tracks: new Float64Array(N.length * 2) };
+    rigWork.set(m, W);
+  }
+  const { local, world, tracks } = W;
+  local.fill(0);
+  world.fill(0);
+  tracks.fill(0);
+  for (let i = 0; i < N.length; i++) local.set(IDENT, i * 12), world.set(IDENT, i * 12);
   const evalLocal = (i: number) => {
     const n = N[i]!;
+    const k = i * 12;
     switch (n.type) {
       case "rotate":
-        return turnAbout(n.center!, n.axis!, (nodeValue(n, props) * Math.PI) / 180);
+        return turnAboutAt(local, k, n.center!, n.axis!, (nodeValue(n, props) * Math.PI) / 180);
       case "translate": {
         const v = nodeValue(n, props);
-        const o = ident();
-        o[3] = n.axis![0] * v;
-        o[7] = n.axis![1] * v;
-        o[11] = n.axis![2] * v;
-        return o;
+        local.set(IDENT, k);
+        local[k + 3] = n.axis![0] * v;
+        local[k + 7] = n.axis![1] * v;
+        local[k + 11] = n.axis![2] * v;
+        return;
       }
       case "spin":
-        return turnAbout(n.center!, n.axis!, Number(spins[n.prop ?? ""] ?? 0));
+        return turnAboutAt(local, k, n.center!, n.axis!, Number(spins[n.prop ?? ""] ?? 0));
       case "select":
-        return condition(n.cond, props) ? ident() : zero();
+        if (condition(n.cond, props)) local.set(IDENT, k);
+        else local.fill(0, k, k + 12);
+        return;
       case "locked-track":
-        return turnAbout(n.center!, n.lock!, tracks[2 * i]!);
+        return turnAboutAt(local, k, n.center!, n.lock!, tracks[2 * i]!);
       case "slave": {
         const M = N[n.master!]!;
-        return turnAbout(M.slaveCenter!, M.lock!, tracks[2 * n.master! + 1]!);
+        return turnAboutAt(local, k, M.slaveCenter!, M.lock!, tracks[2 * n.master! + 1]!);
       }
     }
-    return ident();
+    local.set(IDENT, k);
   };
   // (the nodes come parents first)
   const settle = () => {
     for (let i = 0; i < N.length; i++) {
-      local[i] = evalLocal(i);
+      evalLocal(i);
       const p = N[i]!.parent;
+      const k = i * 12;
       // (a hidden node — a select not holding — hides everything under it: its map all zeros)
-      const L = local[i]!;
-      world[i] = L[0] === 0 && L[5] === 0 && L[10] === 0 ? zero() : p >= 0 ? mul(world[p]!, L) : L;
+      if (local[k] === 0 && local[k + 5] === 0 && local[k + 10] === 0) world.fill(0, k, k + 12);
+      else if (p >= 0) mulAt(world, k, world, p * 12, local, k);
+      else world.set(local.subarray(k, k + 12), k);
     }
   };
   const hasTracks = N.some((n) => n.type === "locked-track");
@@ -283,8 +303,8 @@ export function rigMatrices(
     for (let i = 0; i < N.length; i++) {
       const n = N[i]!;
       if (n.type !== "locked-track") continue;
-      const T = n.target! >= 0 ? apply(world[n.target!]!, n.targetCenter!) : n.targetCenter!;
-      const P = n.parent >= 0 ? world[n.parent]! : ident();
+      const T = n.target! >= 0 ? apply(world.subarray(n.target! * 12, n.target! * 12 + 12), n.targetCenter!) : n.targetCenter!;
+      const P = n.parent >= 0 ? world.subarray(n.parent * 12, n.parent * 12 + 12) : ident();
       // (a hidden parent: nothing to track)
       if (P[0] === 0 && P[5] === 0 && P[10] === 0) continue;
       const [a, b] = trackAngles(n, apply(invRigid(P), T));
@@ -293,8 +313,8 @@ export function rigMatrices(
     }
   }
   settle();
-  out.set([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0], 0);
-  for (let i = 0; i < N.length; i++) out.set(world[i]!, (i + 1) * 12);
+  out.set(IDENT, 0);
+  out.set(world, 12);
   return out;
 }
 
