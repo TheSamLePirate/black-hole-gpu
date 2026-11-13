@@ -536,6 +536,22 @@ disocclusion,earthRateOff,base,…`. **Refroidi, refait** (parti de « Nominal �
 1 296 → 389 MHz, GPU p50 de base 22,7 → 37,3 ms) — écarts des leviers −11 à +36 ms, sans sens. **Le M1 Max ne peut pas donner le ΔGPU en
 vol de J0** (déjà relevé le 10 nov. : les ablations sur kerr-mini) ; seule l'estimation alternée de la vue figée (`j2-dgpu`) tient ici.
 
+## 9 decies. Le ΔGPU sur J0 mesuré sur kerr-mini (13 novembre 2026, ~07:30 UTC, le mini revenu)
+
+**Les lots, d'un seul A/B** (`j0-reference` vol, `ab-commit` A B B A, A = 72a16452 — après J2-1 —, B = l'arbre à ca99d014 : J2-2, le lot des
+pointes, J2-3, J2-5, le retrait de `rigidMotionOn`, `earthRateOne` allumé ; kerr-mini « Nominal » aux quatre vols) : GPU p50 **A 60,5 / 58,7 ;
+B 59,0 / 58,9 ms** (Δ −0,6, dans l'écart A–A de 1,8), GPU p95 A 67,8 / 65,0 ; B 65,3 / 65,0, intervalle p95 80,5 / 80,1 contre 80,2 / 80,0 ms :
+**ΔGPU nul** pour l'ensemble. `remote-results/2026-11-13T0628-ab-72a16452`.
+
+**Les leviers en vol** (`j0-reference` ablations, ordre symétrique, 11 vols de 40 s, « Nominal » partout ; Δ contre les bases interpolées,
+moyenne des deux moitiés, chacune concordante) : **`singleHistory` −0,04 ms** (p95 −0,8) ; **`edgeFoot` −0,03 ms** (p95 −0,8) ; **désocclusion
++0,43 ms** (+0,42 / +0,44 ; la copie des `moments` et le test) ; **la cadence de la Terre au gouverneur (`earthRateOne` éteint) +0,29 ms** —
+`earthRateOne` (allumé) en gagne ~0,3. Intervalle p95 80 ms partout. `remote-results/20261113-072810-j2-levers-j0`.
+
+**Conséquences** : `singleHistory` et `edgeFoot` **sans coût** sur la machine cible — rien ne retient plus leur allumage que la décision de Sam
+(recommandée pour les deux) ; la désocclusion **coûte 0,43 ms sans gain mesuré** — à garder éteinte, ou à retirer en J2-8 (recommandation) ;
+`earthRateOne` confirmé.
+
 ## 10. Non vérifié
 
 - **Aucune mesure nouvelle** : les chiffres cités viennent des fiches J0 du 12 novembre, de la fiche T9 et de GRAPHICS-PIPELINE ; les

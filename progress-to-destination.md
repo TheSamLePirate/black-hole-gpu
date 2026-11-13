@@ -4158,3 +4158,14 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
 
 - **Essayé** (parti de « Nominal », 57 °C ; 9 vols `j0-reference` ablations) : GPU 1 296 → 389 MHz, base 22,7 → 37,3 ms ; écarts −11 à +36 ms.
   Le M1 Max ne peut pas donner ce ΔGPU (déjà relevé le 10 nov.) ; il attend kerr-mini. PLAN-J2 §9 nonies.
+
+## 2026-11-13T06:45Z — J2 : le ΔGPU sur J0 mesuré sur kerr-mini — les lots nuls, singleHistory et edgeFoot sans coût, la désocclusion +0,43 ms
+
+- **Contribution** (PLAN-J2 §3 « chaque lot : ΔGPU sur J0 sur kerr-mini » ; stratégie §8) : le mini revenu, à froid (« Nominal » partout).
+  **A/B des lots** (A = 72a16452 après J2-1 ; B = l'arbre à ca99d014 : J2-2, pointes, J2-3, J2-5, retrait de `rigidMotionOn`, `earthRateOne` ;
+  A B B A en vol) : GPU p50 A 60,5 / 58,7, B 59,0 / 58,9 ms — **nul**. **Leviers en vol** (11 vols, ordre symétrique) : `singleHistory`
+  −0,04 ms, `edgeFoot` −0,03 ms, désocclusion **+0,43 ms**, `earthRateOne` éteint +0,29 ms (allumé, il gagne ~0,3). Intervalle p95 80 ms partout.
+- **Conséquences** : rien ne retient plus `singleHistory` et `edgeFoot` que la décision de Sam ; la désocclusion coûte sans gain (éteinte ; à
+  retirer en J2-8, recommandé) ; `earthRateOne` confirmé.
+- **Changé** : PLAN-J2 §9 decies, fiches J2-3 et J2-5. Sources : `remote-results/2026-11-13T0628-ab-72a16452`,
+  `remote-results/20261113-072810-j2-levers-j0`. **Non vérifié** : le M1 Max (il bride en vol) ; la fiche J0 de sortie (J2-8).
