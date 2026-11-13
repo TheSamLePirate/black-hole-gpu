@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-13 20:43 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-13 20:47 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous.
@@ -5813,4 +5813,12 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   éléments, libérés avec eux ; les globaux passent par `onEscape` et son retrait.
 - Limites : la console d'équipage (`crew/`, 57 posés / 0 retiré selon l'audit) non mesurée — une autre page, un salon nécessaire ; le tas
   mesuré sur 50 cycles seulement.
+
+## 2026-11-13T20:47Z — J3-7 : la mer du raster éclairée par le Soleil du sol
+
+- Réalisé : `trace.wgsl` `shadeWater` — le Soleil incident (R3) pour l'éclairement, les ombres et le reflet du Soleil de la mer, comme
+  `liteLight` pour le sol ; l'air garde le géométrique. Phase J0 `waterincident`. Docs : PLAN-J3 §10 (relevé des lecteurs), E2E-CATALOGUE.
+- Preuves : **vérifié statiquement** (`check-wgsl` 82/82, budget des noyaux 69/69) ; **mesuré sans effet visible** (kerr-mini, 19:05 : la bande
+  de mer 46,69 / 46,66, A/A 0,02) — pas de témoin positif à l'image : la cohérence du contrat, non un changement observé.
+- Suite : relever les autres lecteurs (le traceur lointain, le sol tracé de près).
 

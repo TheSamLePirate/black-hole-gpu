@@ -247,4 +247,11 @@ Aucun coût de J3 n'est mesuré ; aucun gain n'est promis.
   « sans HUD ni écrans » −1,1 ms de GPU, la dérive entre les deux références 1,1 ms — au bruit : **pas un lot de performance**, règle 1) ;
   l'exposition avec le cockpit en vue (J3-0 `framing` : au profil neutre aucune dépendance au cadrage, cockpit compris). **Reste à Sam** : la
   borne de l'âge des écrans (une valeur à fixer, la mesure existe) ; les lampes de cabine la nuit (décision en attente, AAA-PROGRESS).
+- **J3-7, premier relevé des lecteurs du Soleil** (13 nov., ~20:47 UTC) : le Soleil **incident** est lu par le sol (`shadeLite`, `shadeLiteLight`),
+  les ombres des nuages (`cloudShadow`), la lumière de l'appareil (`keyLight`, J3-1) et, **depuis ce lot, la mer du raster** (`shadeWater` : son
+  éclairement, ses ombres, son reflet du Soleil — `seaShade`, `inlandWater` ; elle lisait le géométrique quand la côte voisine lisait
+  l'incident) ; le **géométrique** reste à l'air (`liteSky`, la diffusion), au disque et aux éclipses (C0-5). Phase J0 `waterincident` (run
+  `…-waterincident`, 19:05) : la bande de mer **ne bouge pas de façon mesurable** à la bascule (46,69 / 46,66, A/A 0,02 — au Soleil bas la mer
+  est éclairée surtout par le ciel qu'elle reflète) : **cohérence du contrat, pas de témoin positif à l'image**. Non relevés encore : le traceur
+  de la Terre lointaine (`earthGround` → `seaShade` avec `Ls`), le sol tracé de près.
 

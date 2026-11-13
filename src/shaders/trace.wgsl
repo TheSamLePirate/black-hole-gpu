@@ -16787,13 +16787,17 @@ fn shadeWater(@builtin(workgroup_id) wid: vec3u, @builtin(local_invocation_id) l
   var n = rasterNormal(centre, terrainRasterHint(centre), k);
   if (dot(n, n) < 0.5) { n = gq; }
   // (liteSkip 4096 — a measure, as shadeLite's —: the Sun's light plain, its shadows not read)
-  var Eg = E * sunThrough(hG, dot(gq, Lp));
-  if ((liteSkip() & 4096u) == 0u) { Eg = liteSun(q, gq, hG, Ls, Lp, Eg, fx, fy, dirW, tM, n, false); }
+  // (PLAN-J3 J3-7: the water lit by the Sun the ground is — the incident one, R3 —, as liteLight: its light, its shadows and its glint;
+  // the air keeps the geometric (liteSky). Before, the raster's sea took the geometric while the shore beside it took the incident)
+  let Li = incidentSun(Lp);
+  let LsI = normalize(squashed(Li, ab));
+  var Eg = E * sunThrough(hG, dot(gq, Li));
+  if ((liteSkip() & 4096u) == 0u) { Eg = liteSun(q, gq, hG, Ls, Li, Eg, fx, fy, dirW, tM, n, false); }
   var sky = liteSky(q, hG, E, Ls, dot(gq, Lp));
   if ((liteSkip() & 4194304u) == 0u) { sky *= earthSkyOpen(gq, hG, n); }
   var G = accum[idx].rgb;
   // (shadeLite's shallow sea: the bed's albedo, lit here)
-  if (accum[idx].w > 1.5) { G *= (Eg * max(dot(gq, Ls), 0.0) + sky) / PI; }
+  if (accum[idx].w > 1.5) { G *= (Eg * max(dot(gq, Li), 0.0) + sky) / PI; }
   SEA_KD = select(seaKd490(gq), 0.0, calm > 0.0);
   // (the relief round the point, read at one call site — four copies of it were 71 % of this kernel —: a river's slope for its
   // falls, four reads ±ds east and north)
@@ -16815,12 +16819,12 @@ fn shadeWater(@builtin(workgroup_id) wid: vec3u, @builtin(local_invocation_id) l
   // (the sea's reflections left to shadeWaterFinish — WATER_REFL_DEFER —: none for the inland water; their weight after the wash)
   SEA_RR_BITS = 0u;
   var washW = 0.0;
-  if (!WATER_OPEN && calm > 0.0) { wcol = inlandWater(q, -rd, Ls, Eg, sky, footSea, kind > 1.5); }
+  if (!WATER_OPEN && calm > 0.0) { wcol = inlandWater(q, -rd, LsI, Eg, sky, footSea, kind > 1.5); }
   else {
     // (the pixel's footprint on the sea's axes [m]: the cascades filtered over its ellipse — seaTap)
     SEA_GX = vec2f(dot(fx, P.sea[0].xyz), dot(fx, P.sea[1].xyz)) * EARTH_RM;
     SEA_GY = vec2f(dot(fy, P.sea[0].xyz), dot(fy, P.sea[1].xyz)) * EARTH_RM;
-    wcol = seaShade(q, -rd, Ls, Eg, sky, G, footSea, 0.0, vec4f(0.0));
+    wcol = seaShade(q, -rd, LsI, Eg, sky, G, footSea, 0.0, vec4f(0.0));
     SEA_GX = vec2f(0.0);
     SEA_GY = vec2f(0.0);
     // (the shore's wash: where the probe found land within metres — a cliff's foot, a beach's edge —, the waves' white breaking

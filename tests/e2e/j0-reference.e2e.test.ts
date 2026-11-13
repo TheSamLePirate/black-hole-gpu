@@ -32,7 +32,7 @@ import { sceneryReady } from "./lib/plan-views";
 //       screens, the cockpit (the outside view) — between two baseline flights (drift).
 // Output: remote-results/j0/<machine>/ (J0_OUT): j0.json, shots (start, mid-turn, end; each ablation's last frame).
 // J0_PHASES=flight,ablate,sustained (default all; sustained: the flight again after the ablations, the machine hot), ABLATE_S (20), J0_MACHINE (the label: "m1max", "kerr-mini"; default the host name).
-// Other phases, asked by name: agecheck, framing (PLAN-J3 J3-0), keylight, keyair, keysky, skyband4 (J3-1), keyhaze (J3-2), shadows (J3-3), wetbld, cityview, materials (J3-5), seadusk, probedump (PROBLEMES) (J3-1: the craft's key light against the incident Sun toward
+// Other phases, asked by name: agecheck, framing (PLAN-J3 J3-0), keylight, keyair, keysky, skyband4 (J3-1), keyhaze (J3-2), waterincident (J3-7), shadows (J3-3), wetbld, cityview, materials (J3-5), seadusk, probedump (PROBLEMES) (J3-1: the craft's key light against the incident Sun toward
 // sunset, ~3 min on kerr-mini; keyair: its air two ways, march and table, ~4 min; keysky: the sky's light two ways, ~4 min).
 // Not a pass/fail on the frame rate: the fiche is written from j0.json (docs/progress/j0/). It fails on a GPU error, a craft not
 // placed, a flight not flown.
@@ -1129,6 +1129,57 @@ describe.skipIf(!E2E)("J0: the reference flight over Toulon-Hyères", () => {
       }
       await app.js(`(() => { __bh.freeze(false); __bh.game.setDate("${J0_SCENE.date}"); return 1; })()`);
       expect(true).toBe(true);
+    },
+    600_000,
+  );
+
+  // (PLAN-J3 J3-7 — the water lit by the ground's Sun, J0_PHASES=waterincident: 19:05 UTC, the quarter view toward the west, frozen, the
+  // exposure held; the incident Sun on, off (renderer.incidentSunOn: the geometric for all), on again (the A/A); the sea's band (the
+  // image's lower third) and the sky's (its upper third) compared — the sea must move with it now, the sky not (the air keeps the
+  // geometric))
+  test.skipIf(!PHASES.includes("waterincident"))(
+    "J3-7: the water lit by the incident Sun — 19:05, on / off / on; the sea's band moves, the sky's not",
+    async () => {
+      await start("");
+      await app.js(`(async () => { const f = () => new Promise((q) => requestAnimationFrame(q)); __bh.freeze(false);
+        __bh.game.setDate("2026-07-10T19:05:00Z"); Object.assign(__bh.settings, { shipMount: "quarter", lookProfile: "neutral", dof: false, motionBlur: 0 });
+        __bh.refresh(); for (let i = 0; i < 90; i++) await f(); __bh.freeze(true); __bh.renderer.settleExposure(); for (let i = 0; i < 30; i++) await f();
+        const ev = __bh.renderer.ev(__bh.settings); Object.assign(__bh.settings, { autoExposure: false, exposure: ev }); return 1; })()`);
+      const shot = async (name: string, on: boolean) => {
+        await app.js(`(async () => { const f = () => new Promise((q) => requestAnimationFrame(q)); __bh.renderer.incidentSunOn = ${on}; __bh.refresh();
+          for (let i = 0; i < 60; i++) await f(); return 1; })()`);
+        const x = (await app.cdp.send("Page.captureScreenshot", { format: "png" })) as { data: string };
+        const bytes = Buffer.from(x.data, "base64");
+        await Bun.write(`${OUT}/waterincident-${name}.png`, bytes);
+        return readPng(new Uint8Array(bytes));
+      };
+      const band = (img: ReturnType<typeof readPng>, y0: number, y1: number) => {
+        let t = 0,
+          n = 0;
+        for (let y = Math.floor(y0 * img.height); y < Math.floor(y1 * img.height); y++)
+          for (let x0 = 0; x0 < Math.floor(0.4 * img.width); x0++) {
+            const i = (y * img.width + x0) * img.channels;
+            t += 0.2126 * img.data[i]! + 0.7152 * img.data[i + 1]! + 0.0722 * img.data[i + 2]!;
+            n++;
+          }
+        return +(t / n).toFixed(2);
+      };
+      const on = await shot("on", true);
+      const off = await shot("off", false);
+      const onAgain = await shot("on-again", true);
+      const row = {
+        seaOn: band(on, 0.62, 0.95),
+        seaOff: band(off, 0.62, 0.95),
+        seaOnAgain: band(onAgain, 0.62, 0.95),
+        skyOn: band(on, 0.1, 0.4),
+        skyOff: band(off, 0.1, 0.4),
+      };
+      console.log(`  J3-7 the water and the incident Sun (the left 40 %): ${JSON.stringify(row)}`);
+      out.waterincident = row;
+      await app.js(
+        `(() => { __bh.renderer.incidentSunOn = true; Object.assign(__bh.settings, { autoExposure: true, exposure: 0, shipMount: "cockpit" }); __bh.freeze(false); __bh.game.setDate("${J0_SCENE.date}"); return 1; })()`,
+      );
+      expect(Math.abs(row.seaOn - row.seaOnAgain)).toBeLessThan(1);
     },
     600_000,
   );
