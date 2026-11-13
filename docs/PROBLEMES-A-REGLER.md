@@ -174,12 +174,16 @@ La « référence à pleine échelle » de `motion-quality` était, en raster, u
 monotone, 2/3 30,4 ; 0,75 32,5 ; 0,80 34,3 dB. Les mesures historiques de `motion-quality` **entre échelles** en raster (Q6, I4 « ce que la
 TAAU garde sous 75 % ») sont à relire avec ce biais.
 
-## « Posé sur un aérodrome » ne s'aligne plus sur sa piste au Bourget (e2e `ground-placement`)
+## ~~« Posé sur un aérodrome » ne s'aligne plus sur sa piste au Bourget (e2e `ground-placement`)~~ — le test était périmé, pas le jeu (13 novembre 2026, ~22:45 UTC)
 
 - **Observé** (12 nov. 2026, kerr-mini) : `game.land("earth", 48.96, 2.44)` répond « landed at 48.96°, 2.44° » au lieu de « lined up
   … » (Δcap 9,015°, décalage −936,86 m de l'axe) — **à l'identique sur 72a16452 et sur J2-2** (A/B `ab-commit`), donc antérieur à J2-2 ;
   les trois autres cas de l'e2e (appareil garé à côté, F-35 et Ranger sur une piste et sur le flanc du Fuji, chaque jambe au sol) passent.
 - **Cause** : non cherchée (hors du lot J2-2) — le choix de l'aérodrome ou de sa piste en service par le placement (`game/place.ts`).
+- **Cause** (13 nov.) : le test posait l'appareil à 48,96°, 2,44° — l'ancienne place du site, faite à la main ; depuis le 2 nov. (fcfd8088) le site
+  est sur le seuil publié de sa piste 25 (48,974°, 2,45825°) : l'ancien point est à 937 m de l'axe, hors de la bande (150 m) — « landed »
+  y est juste. Le test lit maintenant la place du site (`__bh.sys.runways()`) : « lined up, runway 25 », Δcap 0,001°, 0,00 m de l'axe ;
+  `ground-placement` **4/4** (kerr-mini). Leçon : [E2E-VOLS.md](E2E-VOLS.md) §7.
 
 ## Des villes couvertes d'arbres, sans bâtiments proches, dans les e2e (Marseille, Toulon, Manhattan)
 

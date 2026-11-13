@@ -4,6 +4,8 @@ import { App, E2E, stopServer } from "./lib/app";
 // Set down on the ground anywhere (the place panel's "on a ground", the Atlas's "land"): on its gear as the
 // ground under each leg has it — on a runway level, on a hillside (Mount Fuji's flank) tilted with it —, every
 // leg at the same height over the ground, still; its nose where it pointed.
+// Duration: ~2 min on kerr-mini
+// Done when: the Ranger set down on Mount Fuji's flank, every leg on the ground
 
 describe.skipIf(!E2E)("set down on the ground", () => {
   let app: App;
@@ -35,12 +37,14 @@ describe.skipIf(!E2E)("set down on the ground", () => {
   test("set down at an airfield's place: lined up on its runway in use, at its start", async () => {
     const r = await app.js<{ note: string; dh: number; off: number }>(`(() => {
       __bh.freeze(true); __bh.settings.vessel = "ranger"; for (let i = 0; i < 3; i++) __bh.step(1 / 30);
-      const note = __bh.game.land("earth", 48.96, 2.44);
+      // (the site's own place — its published threshold since 2 Nov 2026, fcfd8088; the old hand-placed 48.96°, 2.44° lies 937 m off
+      // the real runway: « landed », rightly — 12 Nov 2026, docs/PROBLEMES-A-REGLER.md)
+      const R = __bh.sys.runways().find((r) => r.site.name.includes("Bourget"));
+      const note = __bh.game.land("earth", R.site.lat, R.site.lon);
       for (let i = 0; i < 30; i++) __bh.step(1 / 30);
       const F = __bh.fleet, t = __bh.sim.time, p = F.pose(F.active, t), mR = 1476.625 * __bh.settings.massSolar;
       const bf = (X) => __bh.sys.bodyFixed("earth", X, t).map((x) => x * mR);
       const q = bf(p.X), nose = bf(p.X.map((x, i) => x + p.ax[2][i] * 1e-9)).map((x, i) => x - q[i]);
-      const R = __bh.sys.runways().find((r) => r.site.name.includes("Bourget"));
       const d = q.map((x, i) => x - R.origin[i]);
       const ln = Math.hypot(...nose);
       const na = (nose[0] * R.along[0] + nose[1] * R.along[1] + nose[2] * R.along[2]) / ln;
