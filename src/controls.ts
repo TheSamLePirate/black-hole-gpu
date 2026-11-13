@@ -314,6 +314,8 @@ export class CameraController {
   tapDblAt = -Infinity;
   keys = new Set<string>();
   codes = new Set<string>();
+  /** the character each physical key held put in `keys` (let go with its key, whatever the keyup's character — FX-12) */
+  private keyOfCode = new Map<string, string>();
   /** A video steps the scene (sim.ts): the user's keys and controller are left out. */
   scripted = false;
   /** A video in a frozen instant: the camera's cinematics go on, the scene's time does not. */
@@ -580,8 +582,14 @@ export class CameraController {
       if ((e.target as HTMLElement | null)?.closest?.("[aria-modal=true]")) return;
       this.keys.add(e.key);
       this.codes.add(e.code);
+      if (e.code) this.keyOfCode.set(e.code, e.key);
     });
     addEventListener("keyup", (e: KeyboardEvent) => {
+      // (the character its key put in let go with it — audit FX-12: on AZERTY `+` is ⇧ and the `=` key; ⇧ let go first,
+      // the keyup carries `=`, and `+` stayed held — the zoom running on — until the window lost the focus)
+      const was = this.keyOfCode.get(e.code);
+      if (was !== undefined) this.keys.delete(was);
+      this.keyOfCode.delete(e.code);
       this.keys.delete(e.key);
       this.codes.delete(e.code);
     });
@@ -589,6 +597,7 @@ export class CameraController {
       this.character.releaseInput();
       this.keys.clear();
       this.codes.clear();
+      this.keyOfCode.clear();
     });
   }
 

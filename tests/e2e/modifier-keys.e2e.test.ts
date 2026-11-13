@@ -50,7 +50,8 @@ describe.skipIf(!E2E)("Shift: a shortcut's modifier or the throttle, never both"
     await app.shot(`${OUT}/1-shift-p.png`);
     expect(after.brake).not.toBe(before.brake);
     expect(after.thr).toBe(0);
-  });
+    // (a bound: the default 5 s ran out in the screenshot while the page compiled — 13 Nov 2026)
+  }, 60_000);
 
   test("Shift held alone: the throttle, as before", async () => {
     await app.hold("ShiftLeft", 900);
@@ -59,5 +60,5 @@ describe.skipIf(!E2E)("Shift: a shortcut's modifier or the throttle, never both"
     await app.shot(`${OUT}/2-shift-alone.png`);
     expect(s.thr).toBeGreaterThan(0.2);
     expect(app.cdp.errors).toEqual([]);
-  });
+  }, 60_000);
 });
