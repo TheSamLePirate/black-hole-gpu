@@ -1528,13 +1528,8 @@ export class EarthTiles {
     this.device.queue.writeTexture({ texture: p.tex, origin: [p.ox, p.oy, p.layer] }, px, { bytesPerRow: TILE * 4 }, [TILE, TILE, 1]);
     this.orthoMips(p.ox, p.oy, p.layer, p.tex);
   }
-  /** PLAN-J2 J2-3 — the imagery's levels faded at their published edge by the filtered footprint's reach (trace.wgsl edgeWeight:
-   *  0 while the hardware's read — the pixel's footprint on the level, anisotropic to 16, its mip — can reach past the edge, 1
-   *  EDGE_BAND texels beyond, as wide as the reach at least), not over a fixed 2–48 texels: the finer level drawn up to its edge.
-   *  The heights keep theirs (the CPU's reader the same — J2-2). The params' on-word 2 (P.tiles.w); off: 1, the fixed fade. **On by
-   *  default since 13 Nov 2026** (PLAN-J2 J2-3 as validated; its proofs: leak 0 on four views, no seam, J0's ΔGPU in flight on kerr-mini
-   *  −0.03 ms — PLAN-J2 §9 decies) */
-  edgeFoot = true;
+  // (PLAN-J2 J2-3 — the imagery's levels faded at their published edge by the filtered footprint's reach, trace.wgsl edgeWeight; the
+  // lever edgeFoot and its old fixed 2–48 texels retired, lot R1, 13 Nov 2026)
   /** the orthophotos (IGN, France — I1): wanted (settings.earthOrtho), their levels, their loads, the tiles they have
    *  not (404: out at sea, abroad — not asked again), loaded */
   orthoOn = true;
@@ -2906,8 +2901,8 @@ export class EarthTiles {
    * The tracer's params (trace.wgsl: P.tiles, P.tileL): the reference (cos, sin of its longitude, the sine
    * of its latitude, on), then per level the reference's place in its valid rectangle [px], the
    * rectangle's corner in its layer [px], its size [px], its pixels per radian, its window's side in its layer [px]
-   * (a power of two, the tracer's wrap: 0 off). The reference's on: 0 none, 1 drawn, 2 drawn with the imagery's edges faded by the
-   * footprint (edgeFoot).
+   * (a power of two, the tracer's wrap: 0 off). The reference's on: 0 none, 2 drawn (its imagery's edges faded by the footprint —
+   * J2-3; 1, the old fixed fade, retired with its lever, lot R1).
    */
   params(): Float32Array {
     const f = new Float32Array(TILE_PARAM_VEC4S * 4);
@@ -2929,7 +2924,7 @@ export class EarthTiles {
       f.set([ax, ay, at.x + ((((v.x0 * TILE) % C) + C) % C), at.y + ((((v.y0 * TILE) % C) + C) % C)], o);
       f.set([(v.x1 - v.x0) * TILE, (v.y1 - v.y0) * TILE, S / TAU, C + 65536 * at.layer], o + 4);
     }
-    f.set([Math.cos(this.lon), Math.sin(this.lon), this.sinLat, on && (this.edgeFoot ? 2 : 1)], 0);
+    f.set([Math.cos(this.lon), Math.sin(this.lon), this.sinLat, on ? 2 : 0], 0);
     return f;
   }
 

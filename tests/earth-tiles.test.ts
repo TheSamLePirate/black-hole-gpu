@@ -100,12 +100,11 @@ test("the heights near the camera are the tiles', the global map's beyond them",
   expect(Math.abs(c.h - field(45.95, 6.9))).toBeLessThan(25);
   // (far off: the global map)
   expect(t.heightAt(dir(10, 100), 1).rem).toBe(1);
-  // (the tracer's params: the reference, a level on — 2: on, the imagery's edges faded by the footprint, edgeFoot, PLAN-J2 J2-3; 1 without)
+  // (the tracer's params: the reference, a level on — 2: on, the imagery's edges faded by the footprint, PLAN-J2 J2-3; its fixed fade, 1,
+  // retired with the lever edgeFoot, lot R1)
   const p = t.params();
   expect(p.length).toBe(TILE_PARAM_VEC4S * 4);
   expect(p[3]).toBe(2);
-  t.edgeFoot = false;
-  expect(t.params()[3]).toBe(1);
 });
 
 test("a level moves with the camera: the part it keeps stays drawn", () => {

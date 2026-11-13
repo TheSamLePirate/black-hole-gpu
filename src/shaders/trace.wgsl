@@ -7514,14 +7514,12 @@ fn tileLights(l: u32, p: vec2f) -> f32 {
 // orthophotos covering it then all it reads — TERRE-UNREAL U6)
 var<private> IMG_LIGHTS: bool = true;
 // PLAN-J2 J2-3 — an imagery level's weight by the distance d [its texels] of the point to its published rectangle's edge (the slots
-// beyond: another page, the wrap, nothing yet). Fixed (P.tiles.w 1): 0 within 2 texels, 1 from 48. At the filtered footprint's scale
-// (P.tiles.w 2 — earthTiles.edgeFoot): 0 while the hardware's read can reach past the edge — `reach` texels: half the footprint's
-// two axes (the pixel's parallelogram on the level, anisotropic to 16) and the chosen mip's texel with its bilinear neighbour —,
-// 1 from EDGE_BAND texels beyond (the levels' seam blended as wide as the reach, EDGE_BAND at least)
+// beyond: another page, the wrap, nothing yet), at the filtered footprint's scale: 0 while the hardware's read can reach past the
+// edge — `reach` texels: half the footprint's two axes (the pixel's parallelogram on the level, anisotropic to 16) and the chosen
+// mip's texel with its bilinear neighbour —, 1 from EDGE_BAND texels beyond (the levels' seam blended as wide as the reach,
+// EDGE_BAND at least). The old fixed fade (0 within 2 texels, 1 from 48) retired with its lever, lot R1, 13 Nov 2026
 const EDGE_BAND: f32 = 12.0;
-fn edgeFootOn() -> bool { return P.tiles.w > 1.5; }
 fn edgeWeight(d: f32, reach: f32) -> f32 {
-  if (!edgeFootOn()) { return smoothstep(2.0, 48.0, d); }
   return smoothstep(reach, reach + max(EDGE_BAND, reach), d);
 }
 // (the reach of a read by gradients gx, gy [the level's texels]: anisotropic to 16, the mip by the long axis over 16 or the short one)
@@ -9928,9 +9926,10 @@ fn seaSSR(D: vec3f, r: vec3f) -> vec4f {
       // their moments and their accum — the mark seen finished, accum still shadeLite's under-water value: the shallow sea's
       // albedo (w 2), the bed's light. Its first steps ~10 m along the mirrored ray land a row or two up: on the M1 Max, the
       // top row of each 8 × 8 workgroup read the one above, in another workgroup — white and cyan points 3 to 13 × the white
-      // on the sea, rows 8 px apart, 100–250 an image in a held view (PROBLEMES-A-REGLER, 12 Nov 2026). seaSsrSafe — a
-      // switch, off by default until Sam decides —: those pixels not read, the sea's mirror there the sky's)
-      if (seaSsrSafe() && mk > 3e30) { return vec4f(0.0); }
+      // on the sea, rows 8 px apart, 100–250 an image in a held view (PROBLEMES-A-REGLER, 12 Nov 2026): those pixels not read,
+      // the sea's mirror there the sky's — always since the lot R1 (13 Nov 2026; the switch seaSsrSafe, on by Sam's decision,
+      // retired): the reflections' kernel (shadeWaterFinish) finishes water pixels while it reads others, the same race)
+      if (mk > 3e30) { return vec4f(0.0); }
       let c = accum[idx];
       if (c.a <= 0.0) { return vec4f(0.0); }
       let uv = sh.xy / P.res.xy;
@@ -15182,10 +15181,6 @@ fn rasterShadeLate() -> bool { return (u32(P.mouthList[1].y + 0.5) & RASTER_SHAD
 const RASTER_NEAR_TREES_FLAG = 2048u;
 const RASTER_NEAR_TREES_M = 80.0;
 fn rasterNearTreesOn() -> bool { return (u32(P.mouthList[1].y + 0.5) & RASTER_NEAR_TREES_FLAG) != 0u; }
-// (renderer.seaSsrSafe, mouthList[1].y + 4096: the sea's screen-space mirror — seaSSR — not reading the water's pixels the water's
-// pass writes as it reads them)
-const RASTER_SSR_SAFE_FLAG = 4096u;
-fn seaSsrSafe() -> bool { return (u32(P.mouthList[1].y + 0.5) & RASTER_SSR_SAFE_FLAG) != 0u; }
 struct RasterRay { look: vec3f, rd: vec3f, kM: f32 };
 // the camera ray through an image point [px]: its look (the camera's frame), its unit direction in the squashed space, and
 // how many metres of the physical ray a unit of it is

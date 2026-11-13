@@ -698,7 +698,7 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
   };
   type Choice = { geo: { lat: number; lon: number }[][]; lat: number; lon: number; h: number; low: number; d: number; a: Attr };
   const choices: Choice[] = [];
-  // (the buildings the cap — `limit`, the nearest the centre kept — left out: counted; with q.clearCut their footprints kept
+  // (the buildings the cap — `limit`, the nearest the centre kept — left out: counted; their footprints kept
   // for the survey's trees alone — its canopy holds them too: without, a cut block's roofs drew a wood —, PROBLEMES 12 Nov 2026)
   const cut: Choice[] = [];
   let cutBuildings = 0,
@@ -707,7 +707,7 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
     choices.sort((a, b) => a.d - b.d);
     if (choices.length <= limit) return;
     cutBuildings += choices.length - limit;
-    if (q.clearCut) for (let i = limit; i < choices.length; i++) cut.push(choices[i]!);
+    for (let i = limit; i < choices.length; i++) cut.push(choices[i]!);
     choices.length = limit;
     keptReachM = Math.round(choices[limit - 1]!.d);
     budgetLimited = true;
@@ -1232,7 +1232,8 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
   // ---- the forests: at most one tree a cell of the world-fixed grid (forest.ts), decided here once —
   // the same tree at the same place whichever scenery holds it (the class, the roads, the ground at its foot)
   // (the survey's canopy holds the buildings too — its surface less its ground —: none of its trees in an OSM footprint)
-  // (q.clearCut: the cap's cut ones too — their own grid, the trees they refuse counted —; the kept ones only, by default)
+  // (the cap's cut ones too — their own grid, the trees they refuse counted —: the lever clearCut, on by Sam's decision, retired with
+  // its old path — the kept ones only —, lot R1, 13 Nov 2026)
   const houses = new Map<number, Primitive[]>(),
     cutHouses = new Map<number, Primitive[]>();
   const houseGrid = (into: Map<number, Primitive[]>, list: Choice[]) => {
@@ -1765,7 +1766,6 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
     keptReachM,
     clearedTrees,
     cutHousesMs,
-    clearCut: q.clearCut === true,
     corridor: q.corridor === true,
     corridorM,
     bdtopoBuildings,

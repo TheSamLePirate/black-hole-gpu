@@ -528,9 +528,6 @@ export interface SceneryRequest {
   quick?: number;
   /** the Service Worker controls the page: the Géoplateforme's budget its (sw.ts) — the survey's own gate opened */
   swGate?: boolean;
-  /** the survey's trees kept off the footprints of the buildings the cap left out too, not only the kept ones' (the
-   *  scenery's `clearCut`, on by default since 13 Nov 2026 — PROBLEMES-A-REGLER) */
-  clearCut?: boolean;
   /** the buildings' cap kept by their distance to the corridor the craft flies — from the eye at the request to as far past the
    *  centre as the centre is past it —, not to the centre alone (the scenery's `corridor`, PLAN-J2 §9 undecies — Sam, 13 Nov 2026) */
   corridor?: boolean;
@@ -557,13 +554,11 @@ export interface SceneryReply {
   /** a survey block's failure (its trees the land cover's) */
   surveyError?: string;
   /** the buildings the cap left out (the nearest the centre kept), the farthest kept one's distance from the centre [m]
-   *  (0: none cut); with `clearCut`, the survey's tree candidates their footprints refused and the time their grid took [ms] */
+   *  (0: none cut); the survey's tree candidates their footprints refused and the time their grid took [ms] */
   cutBuildings?: number;
   keptReachM?: number;
   clearedTrees?: number;
   cutHousesMs?: number;
-  /** the request's clearCut, as this scene was made */
-  clearCut?: boolean;
   /** the request's corridor, as this scene was made, and its half-length [m] (0: the centre alone — a craft at rest) */
   corridor?: boolean;
   corridorM?: number;

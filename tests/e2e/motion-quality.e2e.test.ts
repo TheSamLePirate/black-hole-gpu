@@ -66,8 +66,7 @@ const LOOK = Number(process.env.LOOK ?? 0);
 // (a mode's renderer levers after a "+" — `taau75q+single`: PLAN-J2 J2-6's lever on —; every lever named here set off
 // otherwise, the same mode measured with and without in one run)
 const EXTRAS: Record<string, [string, string]> = {
-  // (PLAN-J2 J2-6: one long history — the native temporal pass's short while the upsampling runs)
-  single: ["__bh.renderer.singleHistory = true;", "__bh.renderer.singleHistory = false;"],
+  // (PLAN-J2 J2-6's one long history: always since the lot R1 — its extra `single` retired with the lever)
   // (J2-6: a change of scale in flight — 0.625 forced 8 frames before the first instant's shot: between the two scales' own PSNR if
   // smooth, under both if it pulses)
   drop: ["globalThis.__mqDrop = 8;", "globalThis.__mqDrop = 0;"],

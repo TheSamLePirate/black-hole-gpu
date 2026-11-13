@@ -4,9 +4,7 @@ import { $ } from "bun";
 import { App, E2E, stopServer } from "./lib/app";
 import { J0_FIXED, J0_SCENE, intervals } from "./lib/j0-scene";
 import {
-  gpuTimesJs,
   keepSceneJs,
-  leverDiffJs,
   SEAM_GEOM_JS,
   SEAM_MAP_JS,
   trailJs,
@@ -42,9 +40,8 @@ import {
 //     to 0.625 and let go (forceScale) — every change of scale the flight makes or is given: the sharpness of every image (renderer.sharpProbe, the Laplacian's
 //     energy of the scene's colour through the canopy), the dips at each change of scale (scaleDips), each pause's moving image
 //     against its refined one; the frames' GPU time.
-//   edge — PLAN-J2 J2-3 (J2_PHASES=edge, before leak): at each view, the imagery's edge fade by the footprint (earthTiles.edgeFoot)
-//     against the fixed one, frozen, A B A (off, on, off again — the drift): the image settled and read each time, the GPU's time of 90
-//     images, the change's map (lib/j2-probes.ts leverDiffJs) and shots. J2_EDGE_FOOT=1: the lever on for the leak phase after it.
+//   (edge — J2-3's A/B of the imagery's edge fade by the footprint against the fixed one — retired with the lever edgeFoot, lot R1,
+//   13 Nov 2026: the footprint's fade the only one)
 //   seams — J2-3, the seams by the geometry (J2_PHASES=seams): at each view, frozen, T3's geomorphose on, off (the positive control:
 //     the levels' own heights), on again: the seams read by the view depth's inverse (lib/j2-probes.ts SEAM_GEOM_JS: pairs across two
 //     levels against pairs inside one) and by the distance (SEAM_JS, J2-0's); a shot and a map of each (SEAM_MAP_JS: the ranks in colour,
@@ -124,7 +121,7 @@ describe.skipIf(!E2E)("J2-0: the leak, the seams, the sharpness and the publicat
   });
 
   /** placed (the clock running: the cockpit mount applied — E2E-VOLS §7), then frozen; the relief in for 3 s; placed again on it;
-   *  J2_EXTRA (JS) run with the placing — a renderer lever's side of an A/B (J2-6: `__bh.renderer.singleHistory = true;`) */
+   *  J2_EXTRA (JS) run with the placing — a renderer lever's side of an A/B (e.g. `__bh.renderer.seaSurfaceOn = false;`) */
   async function place(set: string, label: string) {
     const go = `(async () => { __bh.freeze(false); ${set} ${process.env.J2_EXTRA ?? ""} __bh.settings.shipMount = "cockpit"; __bh.refresh(); __bh.camera.viewReset();
       for (let i = 0; i < 40; i++) await new Promise((q) => requestAnimationFrame(q)); __bh.freeze(true); return __bh.settings.shipMount; })()`;
@@ -360,47 +357,6 @@ describe.skipIf(!E2E)("J2-0: the leak, the seams, the sharpness and the publicat
         expect(row.gpuErrors).toBe(0);
       }, 600_000);
 
-  if (PHASES.includes("edge"))
-    for (const v of VIEWS)
-      test(`J2-3 edge fade, A B A: ${v}`, async () => {
-        const view = LEAK_VIEWS[v];
-        if (!view) throw new Error(`J2_VIEWS: ${v} unknown`);
-        const [lat, lon, agl, hdg, spd] = view.at;
-        const placed = await place(
-          `__bh.game.quality("realtime"); Object.assign(__bh.settings, { dynamicResolution: false, animate: true, targetSpp: 64, motionBlur: 0, lookProfile: "neutral" });
-          __bh.game.setDate("${view.date}"); __bh.game.set("weather", "fair"); __bh.game.set("earthClouds", 0); __bh.game.flyAt(${lat}, ${lon}, ${agl}, ${hdg}, ${spd}); ${CLEAN}`,
-          v,
-        );
-        await app.js(`(() => { document.body.classList.add("hide-ui"); return 1; })()`);
-        const row: Record<string, unknown> = { view: v, what: view.what, placed };
-        const sides: [string, boolean][] = [
-          ["off", false],
-          ["on", true],
-          ["off2", false],
-        ];
-        for (const [k, on] of sides) {
-          await app.js(`(() => { __bh.renderer.earthTiles.edgeFoot = ${on}; __bh.renderer.invalidate?.(); return 1; })()`);
-          row[`converged_${k}`] = await converged(`${v} edge ${k}`);
-          row[`read_${k}`] = await app.js(keepSceneJs(k));
-          row[`gpu_${k}`] = await app.js(gpuTimesJs(90));
-          await app.shot(`${OUT}/edge-${v}-${k}.png`);
-          await writeB64(`${OUT}/edge-${v}-${k}-scene.png`, await app.js<string | null>(scenePngJs(k)));
-          console.log(`  ${v} edge ${k}: gpu ${JSON.stringify(row[`gpu_${k}`])}`);
-        }
-        const d = await app.js<Record<string, unknown> & { png?: string }>(leverDiffJs("off", "on", "off2"));
-        await writeB64(`${OUT}/edge-${v}-map.png`, d.png ?? null);
-        delete d.png;
-        row.diff = d;
-        console.log(`  ${v} edge change: ${JSON.stringify(d)}`);
-        await app.js(
-          `(() => { __bh.renderer.earthTiles.edgeFoot = ${process.env.J2_EDGE_FOOT === "1"}; globalThis.__j2 = {}; document.body.classList.remove("hide-ui"); return 1; })()`,
-        );
-        row.gpuErrors = await app.js<number>(`__bh.renderer.gpuErrors`);
-        (out.edge ??= []) as unknown[];
-        (out.edge as unknown[]).push(row);
-        expect(row.gpuErrors).toBe(0);
-      }, 600_000);
-
   if (PHASES.includes("leak"))
     for (const v of VIEWS)
       test(`leak and seams: ${v}`, async () => {
@@ -414,8 +370,6 @@ describe.skipIf(!E2E)("J2-0: the leak, the seams, the sharpness and the publicat
         );
         await app.js(`(() => { document.body.classList.add("hide-ui"); return 1; })()`);
         const row: Record<string, unknown> = { view: v, what: view.what, placed };
-        // (J2-3: the imagery's edges faded by the footprint, J2_EDGE_FOOT=1 — the leak measured with it)
-        row.edgeFoot = await app.js<boolean>(`(() => (__bh.renderer.earthTiles.edgeFoot = ${process.env.J2_EDGE_FOOT === "1"}))()`);
         row.converged0 = await converged(`${v} reference`);
         row.seams = await app.js(SEAM_JS);
         console.log(`  ${v} seams: ${JSON.stringify(row.seams)}`);

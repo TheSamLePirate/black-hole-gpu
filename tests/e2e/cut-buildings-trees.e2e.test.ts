@@ -7,21 +7,19 @@ import { App, E2E, stopServer } from "./lib/app";
 // roofs too — on the blocks it cut?). A city flown as J0 is (E2E-VOLS §5.4: placed with the clock frozen, the data waited for,
 // placed again, autopilot, autothrottle and gear down held; then the view held for the measure), 300 m over the ground at 90 m/s
 // (under T8m's fast flight: the full scene comes), the cockpit looking a little down at the blocks 0.5–5 km ahead. Then, the
-// scenery's `clearCut` off / on / off (the trees kept off the cut buildings' footprints too — the lever, off by default): each
-// side the scene's stats (`cutBuildings`, `keptReachM`, `surveyedTrees`, `clearedTrees`, the worker's time), a grid of the
-// visibility's surface (renderer.surfaceAt: tree, building, ground by distance) and a shot. The tree points that turn to ground
-// with `clearCut` are trees on known buildings. CT_PLACE "lat,lon,agl,hdg,v" (default Paris, Passy towards the Louvre), CT_LOOK
-// (the look's pitch, °), CT_OUT (remote-results/cut-trees), CT_SIDES (default "off,on,off"; c0 / c1: the cap's corridor off / on —
-// PLAN-J2 §9 undecies — instead of clearCut; now: the scene as it is), CT_FLY_S (flown that long in real time
-// before the view is held: the scene drawn the flight's own — a side toggled after it is made for the held craft, led ahead), CT_CLEAR=1
-// (the lever on from the start: the flight's own scenes made with it).
+// buildings' cap's corridor off / on / off (PLAN-J2 §9 undecies; the trees kept off the cut buildings' footprints too — `clearCut`,
+// always since the lot R1, 13 Nov 2026, its lever retired): each side the scene's stats (`cutBuildings`, `keptReachM`, `surveyedTrees`, `clearedTrees`, the worker's time), a grid of the
+// visibility's surface (renderer.surfaceAt: tree, building, ground by distance) and a shot. CT_PLACE "lat,lon,agl,hdg,v" (default Paris, Passy towards the Louvre), CT_LOOK
+// (the look's pitch, °), CT_OUT (remote-results/cut-trees), CT_SIDES (default "c0,c1,c0"; c0 / c1: the cap's corridor off / on —
+// PLAN-J2 §9 undecies —; now: the scene as it is), CT_FLY_S (flown that long in real time
+// before the view is held: the scene drawn the flight's own — a side toggled after it is made for the held craft, led ahead).
 // Duration: ~5–7 min (three full scenes of Paris).
 // Done when: each side measured and shot, results.json written.
 afterAll(stopServer);
 const OUT = process.env.CT_OUT ?? "remote-results/cut-trees";
 const PLACE = (process.env.CT_PLACE ?? "48.8600,2.2780,300,95,90").split(",").map(Number) as [number, number, number, number, number];
 const LOOK = Number(process.env.CT_LOOK ?? -7);
-const SIDES = (process.env.CT_SIDES ?? "off,on,off").split(",");
+const SIDES = (process.env.CT_SIDES ?? "c0,c1,c0").split(",");
 const GX = 80,
   GY = 45;
 test.skipIf(!E2E || process.env.E2E_PROBE !== "1")(
@@ -33,10 +31,7 @@ test.skipIf(!E2E || process.env.E2E_PROBE !== "1")(
       await app.js(`(() => { Object.assign(__bh.settings, { vessel: "f35", traffic: false, autosave: false, wind: 0, damage: false,
         crashSpeed: 1e9, f35Invulnerable: true, f35AutoProtect: false, weather: "fair", earthClouds: 0 }); return 1; })()`);
       await app.waitFor(`__bh.fleet.active === "f35"`, 60_000);
-      // (CT_CLEAR=1: the lever on from the start — the flight's own scenes made with it, side "now" measuring them)
-      if (process.env.CT_CLEAR === "1") await app.js(`(() => { __bh.renderer.earthScenery.clearCut = true; return 1; })()`);
-      // (CT_CLEAR=0: off — on by default since 13 Nov 2026; CT_CORRIDOR=0|1: the cap's corridor — PLAN-J2 §9 undecies, on by default)
-      if (process.env.CT_CLEAR === "0") await app.js(`(() => { __bh.renderer.earthScenery.clearCut = false; return 1; })()`);
+      // (CT_CORRIDOR=0|1: the cap's corridor from the start — PLAN-J2 §9 undecies, on by default)
       if (process.env.CT_CORRIDOR)
         await app.js(`(() => { __bh.renderer.earthScenery.corridor = ${process.env.CT_CORRIDOR === "1"}; return 1; })()`);
       const [lat, lon, agl, hdg, v] = PLACE;
@@ -69,19 +64,19 @@ test.skipIf(!E2E || process.env.E2E_PROBE !== "1")(
       console.log(`  flight held: ${JSON.stringify(flight)}`);
       const out: Record<string, unknown> = { place: PLACE, look: LOOK, flight, sides: [] as unknown[] };
       for (const [n, side] of SIDES.entries()) {
-        // (sides c0 / c1: the cap's corridor off / on — PLAN-J2 §9 undecies —, clearCut as it is; on / off: clearCut)
+        // (sides c0 / c1: the cap's corridor off / on — PLAN-J2 §9 undecies; now: as it is)
         const corr = side === "c0" || side === "c1";
-        const on = corr ? side === "c1" : side === "on";
+        const on = side === "c1";
+        if (side !== "now" && !corr) throw new Error(`CT_SIDES: ${side} unknown (c0, c1, now — clearCut's on / off retired, lot R1)`);
         if (corr) await app.js(`(() => { __bh.renderer.earthScenery.corridor = ${on}; __bh.touch(); return 1; })()`);
-        else if (side !== "now") await app.js(`(() => { __bh.renderer.earthScenery.clearCut = ${on}; __bh.touch(); return 1; })()`);
         // (the scene made with this side's lever, the full one, drawn: logged every 10 s, 240 s at most — a cold Paris is ~60–120 s)
         const t0 = Date.now();
         let last = 0;
         // (side "now": the scene drawn as it is — after CT_FLY_S, the flight's own —, not waited for)
         for (; side !== "now"; ) {
           const s = await app.js<{ ok: boolean; line: string }>(`(() => { const s = __bh.renderer.earthScenery.stats();
-            return { ok: (${corr} ? (s.corridorM > 0) === ${on} : s.clearCutDrawn === ${on}) && !s.quick && !s.pending && s.status === "ready",
-              line: s.status + " quick " + s.quick + " pending " + s.pending + " drawn " + s.clearCutDrawn + " step " + JSON.stringify(s.progress) }; })()`);
+            return { ok: (s.corridorM > 0) === ${on} && !s.quick && !s.pending && s.status === "ready",
+              line: s.status + " quick " + s.quick + " pending " + s.pending + " corridor " + s.corridorM + " step " + JSON.stringify(s.progress) }; })()`);
           if (s.ok) break;
           if (Date.now() - t0 > 240_000) throw new Error(`side ${side}: the scene never came (${s.line})`);
           if (Date.now() - last > 10_000) {
@@ -147,7 +142,6 @@ test.skipIf(!E2E || process.env.E2E_PROBE !== "1")(
       expect(await app.js<number>("__bh.renderer.gpuErrors")).toBe(0);
       expect(app.cdp.errors).toEqual([]);
     } finally {
-      await app.js(`(() => { __bh.renderer.earthScenery.clearCut = false; return 1; })()`).catch(() => 0);
       app.close();
     }
   },

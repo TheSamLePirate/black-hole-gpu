@@ -1,6 +1,6 @@
 # PLAN-J2 — pages d'imagerie filtrables et reconstruction
 
-**État (13 novembre 2026) : J2 terminé** — J2-0 → J2-8 faits, l'état décidé par Sam le 13 (« ok pour tes recommandations », §9 undecies), la
+**État (13 novembre 2026) : J2 terminé ; le retrait R1 de ses anciens chemins fait le même jour (§9 quattuordecies)** — J2-0 → J2-8 faits, l'état décidé par Sam le 13 (« ok pour tes recommandations », §9 undecies), la
 [fiche J0 de sortie](progress/j0/FICHE-kerr-mini-2026-11-13-sortie.md) et le bilan du §4 au §9 duodecies ; J2-C étudiée (BC7 : 42–44 dB aux orthophotos, 4 × moins de mémoire, ~1,5–6 ms d'encodage par page) — sa réalisation laissée à Sam.
 **État d'origine (12 novembre 2026) : plan validé par Sam (ses recommandations, §9) ; J2-0 fait — instruments et [fiche de référence](progress/j2/FICHE-J2-0-2026-11-12.md) ; J2-1 fait — table de pages, tuile de la caméra, mips groupés ([fiche J2-1](progress/j2/FICHE-J2-1-2026-11-12.md), §9 ter) ; J2-2 fait — le sol de contact au monde, quelle que soit la caméra ([fiche J2-2](progress/j2/FICHE-J2-2-2026-11-12.md), §9 quater) ; le lot des pointes du fil principal fait — le travail des tuiles borné à 2 ms par image ([fiche](progress/j2/FICHE-J2-pointes-2026-11-12.md), §9 quinquies) ; J2-3 à lancer.** Rien n'est commencé : aucun code, test, e2e ni bench n'a été lancé pour
 l'écrire (session de documentation). L'existant (§2) est relevé dans le code de `main` au 12 novembre (après `4d1201c0`, J1 terminé) ;
@@ -606,20 +606,25 @@ aux mips), relief 44–50 dB ; une couche 5,6 → 1,4 Mo (la texture 1024² 106 
 **Recommandation (à Sam)** : réalisable (pages stables, une par image sous le budget des tuiles), à faire seulement si une machine cible manque
 de mémoire.
 
-## 9 quattuordecies. Le lot de retrait R1 : les anciens chemins des leviers allumés par Sam — **daté : 14 novembre 2026**
+## 9 quattuordecies. Le lot de retrait R1 : les anciens chemins des leviers allumés par Sam — **fait le 13 novembre 2026** (daté d'abord au 14, avancé : rien ne l'attendait)
 
 Règle de méthode 2 (décision de Sam, 13 novembre 2026, CLAUDE.md ; contre-analyse C6) : un levier allumé par décision de Sam perd son ancien
-chemin au lot de retrait suivant ; seuls les leviers de mesure restent. Le lot R1, **le 14 novembre 2026**, après l'étape 1 de l'eau étagée
+chemin au lot de retrait suivant ; seuls les leviers de mesure restent. Le lot R1 — daté au 14 novembre, **fait le 13, ~11:05 UTC** —, après l'étape 1 de l'eau étagée
 (mesurée), retire :
 
 | Levier (allumé le) | Ce qui part | Ce qui reste |
 |---|---|---|
 | `renderer.singleHistory` (13 nov., §9 undecies) | le levier, l'historique long natif séparé (le chemin `false`) ; l'ablation `singleHistory` de J0 | l'historique court natif, la TAAU longue (`TU.u.w`), le sol porté (`TA.m2.w`) |
 | `earthTiles.edgeFoot` (13 nov.) | le levier, `P.tiles.w` = 1 et sa branche dans `trace.wgsl` ; l'ablation `edgeFoot` de J0 | `P.tiles.w` = 2 |
-| `renderer.seaSsrSafe` (13 nov.) | le levier, le bit raster 4096 (`RASTER_SSR_SAFE_FLAG`) et le test `mk > 3e30` de `seaSSR` : **sans objet depuis l'eau étagée** (13 nov. : les pixels d'eau en cours d'écriture portent `RASTER_SPLIT_WATER`, écartés par le test général `mk < 1e29`) | — |
+| `renderer.seaSsrSafe` (13 nov.) | le levier et le bit raster 4096 (`RASTER_SSR_SAFE_FLAG`) | **le test `mk > 3e30` de `seaSSR`, toujours** — corrigé au retrait : la table disait « sans objet depuis l'eau étagée », mais depuis E2 le SSR tourne dans `shadeWaterFinish`, qui finit des pixels d'eau pendant qu'il lit les autres : la même course |
 | `earthScenery.clearCut` (13 nov.) | le levier et le chemin `false` (les coupés du plafond sans leur grille) | le relevé des coupés, toujours |
 | `renderer.earthRateOne` (13 nov.) | le levier et la cadence > 1 **de la Terre** ; l'ablation `earthRateOff` de J0 | la cadence des autres mondes (`bodyLite`, `shadeMark`) |
 | `renderer.rasterScaleFree` (éteint, non adopté) | le levier et sa condition dans `main.ts resize()` | — |
+
+Retirés aussi avec eux : l'e2e `j2-dgpu` (il ne mesurait que ces leviers), la phase `edge` de `j2-probes`, l'extra `+single` de
+`motion-quality`, les côtés `on`/`off` de `cut-buildings-trees` (le couloir `c0`/`c1` par défaut), les ablations `singleHistory`, `edgeFoot`,
+`earthRateOff` de J0. Vérifié : `tsc`, `check-wgsl` 82/82, tests ciblés 30/0, J0 sur kerr-mini (0 erreur GPU, image vue ; son GPU p50 non
+comparable : la suite `bun test` tournait en même temps sur le CPU du mini), `bun test` complet sur le mini (voir le journal).
 
 Restent, leviers de mesure : les bits de `liteSkip`, `seaSurfaceOn`, `seaProbeOn`, `seaFoamWorldOn`, `renderer.tune`, `debugSkip*`. Preuve du lot :
 `tsc`, `check-wgsl`, `bun test`, J0 sur kerr-mini (ΔGPU nul attendu : les chemins retirés ne tournaient plus), `pipeline-inventory`.

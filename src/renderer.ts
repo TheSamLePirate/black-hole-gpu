@@ -387,9 +387,6 @@ const RASTER_WATER_FLAG = 256;
 const RASTER_SHADE_LATE_FLAG = 1024;
 /** the parameters' raster bit for the trees near the camera taken by the rays' kernel (trace.wgsl RASTER_NEAR_TREES_FLAG) */
 const RASTER_NEAR_TREES_FLAG = 2048;
-/** the parameters' raster bit for the sea's screen-space mirror kept off the water's own pixels (trace.wgsl
- *  RASTER_SSR_SAFE_FLAG — renderer.seaSsrSafe) */
-const RASTER_SSR_SAFE_FLAG = 4096;
 /** within this the trees are the rays' kernel's (trace.wgsl RASTER_NEAR_TREES_M) [m] */
 const RASTER_NEAR_TREES_M = 80;
 /** the temporal pass's least weight of a fresh pixel with the raster's ground at every pixel (taParams[0]'s 1/16 otherwise) */
@@ -4571,9 +4568,9 @@ export class Renderer {
     // (PLAN-J2 J2-7: on the Earth with its material — shadeLite shades every ground pixel whatever the rate; the rate governs only
     // shade's leftovers, none counted on J0 nor over the Gapeau (e2e j2-cover) — the rate 1, adaptRasterRate's choice there changing
     // nothing measured (the material's cost 4.4 at 16, 4.1 ms at 1); the governor kept for the bodies — bodyLite follows it, 3.7
-    // against 13.9 ms on the Moon — and until the material is compiled. earthRateOne: the switch back)
+    // against 13.9 ms on the Moon — and until the material is compiled; its lever earthRateOne retired, lot R1, 13 Nov 2026)
     // (the material run at the frame before — rasterLiteNow: the variant's key not yet this frame's here)
-    const earthOne = this.earthRateOne && !this.bodyRasterNow && s.earthRasterShading === "auto" && this.rasterLite && this.rasterLiteNow;
+    const earthOne = !this.bodyRasterNow && s.earthRasterShading === "auto" && this.rasterLite && this.rasterLiteNow;
     this.rasterRate = this.bodyRasterNow ? Math.min(this.rasterRateFor(s), 4) : earthOne ? 1 : this.rasterRateFor(s);
     // (the cloud pass's bit — CLOUD_PASS_FLAG — set once it is drawn this frame: dispatchTrace, when the frame's key is whole)
     this.cloudPassDrawn = false;
@@ -5698,24 +5695,14 @@ export class Renderer {
   /** the frame's frozen description (src/frame-desc.ts; PLAN-J1 J1-1): built at renderer.frame()'s start — its id, its real clock
    *  read once, the flight's and the scene's clocks, the camera now and before */
   frameDesc: FrameDesc | null = null;
-  /** PLAN-J2 J2-6 — one long history (Sam's decision 5): while the temporal upsampling runs, the native temporal pass keeps a short
-   *  one (its least α raised to `singleNativeAlpha`, the carried ground's too) and the upsampling the long one (its least α the one
-   *  the native pass had — TU.u.w); off: both long. **On by default since 13 Nov 2026** (Sam's decision 5, its proofs made: J0's ΔGPU in
-   *  flight on kerr-mini −0.04 ms, a turn's PSNR neutral, the held view's new page 3 × faster, held noise 0.41 → 0.54 % — PLAN-J2 §9 decies) */
-  singleHistory = true;
-  /** PLAN-J2 J2-7 — the Earth's raster shading rate 1 while its material (shadeLite) runs, adaptRasterRate's choice not used there
-   *  (it governed only shade's leftovers: none on J0 nor over land — e2e j2-cover); off: the governor's rate as before */
-  earthRateOne = true;
+  /** PLAN-J2 J2-6 — one long history (Sam's decision 5; the lever `singleHistory` retired with its old path, lot R1, 13 Nov 2026):
+   *  while the temporal upsampling runs, the native temporal pass keeps a short one (its least α raised to `singleNativeAlpha`, the
+   *  carried ground's too) and the upsampling the long one (its least α the one the native pass had — TU.u.w) */
   singleNativeAlpha = 0.5;
-  /** PLAN-J2 J2-6 — the raster's scale in flight left to the dynamic resolution (main.ts: the pin `want = rasterTop()` lifted, its floor
-   *  2/3 a side — Sam's decision 6). Off: measured, the governor of a throttled M1 Max takes it to 2/3 at once — the turn's PSNR 30.4
-   *  against 32.5 dB at 0.75 against a full-scale reference (0.80: 34.3), for ~8 % of GPU: the image blurred for a frame rate
-   *  (CLAUDE.md) — kept off until a scale under 0.75 keeps the image */
-  rasterScaleFree = false;
-  /** the upsampling's least α this frame when singleHistory splits them (0: theirs shared, TA.k.z) */
+  /** the upsampling's least α this frame (0: theirs shared, TA.k.z — the upsampling not running) */
   private taauLongAlpha = 0;
   private nativeAlphaFor(t: Target, a: number): number {
-    const single = this.singleHistory && this.taauWanted(t);
+    const single = this.taauWanted(t);
     this.taauLongAlpha = single ? a : 0;
     return single ? Math.max(a, this.singleNativeAlpha) : a;
   }
@@ -7294,8 +7281,7 @@ export class Renderer {
         RASTER_LITE_FLAG +
         (this.rasterWaterNow ? RASTER_WATER_FLAG : 0) +
         (shadeLate ? RASTER_SHADE_LATE_FLAG : 0) +
-        (this.nearTreesNow ? RASTER_NEAR_TREES_FLAG : 0) +
-        (this.seaSsrSafe ? RASTER_SSR_SAFE_FLAG : 0);
+        (this.nearTreesNow ? RASTER_NEAR_TREES_FLAG : 0);
       this.device.queue.writeBuffer(this.paramBuf, (MOUTH_LIST_AT + 4) * 4, this.paramsF.subarray(MOUTH_LIST_AT + 4, MOUTH_LIST_AT + 8));
     }
     // (the cloud pass: the clouds marched once a texel of half the image, before the rays that read them)
@@ -8254,7 +8240,7 @@ fn main(@builtin(global_invocation_id) g: vec3u, @builtin(workgroup_id) w: vec3u
         // (held — the camera still, the clock stopped —: its least α down to rasterHeldAlpha, the history averaging ~1/α frames —
         // the jittered quarter-shading's noise floor, ~2 % a pixel frame to frame, converging instead: C0-12's ≤ 1 % frozen; any
         // move or tick gives the third back at once)
-        // (PLAN-J2 J2-6, one long history — singleHistory, the temporal upsampling running —: this pass's own short, its least α
+        // (PLAN-J2 J2-6, one long history — the temporal upsampling running —: this pass's own short, its least α
         // raised to singleNativeAlpha; the long one the upsampling's alone, its α the one this pass had — TU.u.w)
         this.nativeAlphaFor(
           t,
@@ -10410,12 +10396,6 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
    *  system/earth-shore.ts —, one read a near sea pixel; the waves' white within ~12 m of it): on — measured on kerr-mini,
    *  +0.2–0.8 ms of the water's pass over coastal views (T7.md); false: neither the bake nor the wash */
   shoreWash = true;
-  /** the sea's screen-space mirror (trace.wgsl seaSSR) kept off the water's own pixels — those the water's pass writes while it
-   *  reads them, other workgroups' threads, their mark and colour in no order: the shallow sea's albedo, the bed's light read
-   *  as the world's light — white and cyan points on the sea, the top row of each 8 × 8 workgroup (M1 Max, 12 Nov 2026,
-   *  PROBLEMES-A-REGLER). **On by default since 13 Nov 2026 (Sam: « ok pour tes recommandations »)**: the sea's mirror there the sky's
-   *  — the points 127–277 → 0, the image −0.2–0.3 % in a drift of 1.1 % (A B A B A, M1 Max) */
-  seaSsrSafe = true;
   /** the live view's raster wanted and eligible at the last frame (writeParams): what rasterHold holds */
   private rasterEligibleNow = false;
   /** the clouds' transmittance map seen from the Sun (trace.wgsl cloudShadow — docs/PLAN-NUAGES-AAA.md N3; read by
@@ -12199,9 +12179,7 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
     // (the raster's shading rate this frame, when the governor chooses it — earthRasterShading "auto")
     // (J2-7: the Earth's rate fixed at 1 under its material — no measure for the governor then)
     const rate =
-      this.rasterPrimaryOn && s.earthRasterShading === "auto" && !(this.earthRateOne && this.rasterLiteNow && !this.bodyRasterNow)
-        ? this.rasterRate
-        : 0;
+      this.rasterPrimaryOn && s.earthRasterShading === "auto" && !(this.rasterLiteNow && !this.bodyRasterNow) ? this.rasterRate : 0;
     const generation = this.timingGeneration;
     // (J2-0's instruments, off by default: the tiles' publication closed for this image, the image's sharpness)
     this.earthTiles.pubFrame();

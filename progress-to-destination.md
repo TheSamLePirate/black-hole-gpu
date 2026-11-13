@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-13 10:56 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-13 11:10 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous.
@@ -48,9 +48,9 @@ indirects → J3 (lumière, cockpit).
 | Rendu (33d89754) | L'eau étagée E1 : l'air et les nuages sortis de `shadeWater` (passe `earth water: finishing`) | **fait, mesuré** (gain maximal lu : l'eau 16,2 ms, `earth water` 12,7) : A/B J0 sur le mini **GPU p50 57,85 → 56,3 ms (−1,55)** ; l'eau par ablation 13,0 → 10,1 ms ([PLAN-MER §6](docs/PLAN-MER-WEBGPU.md)) |
 | Rendu (33d89754) | L'eau étagée E2 : les reflets (SSR, nuages reflétés) dans leur noyau (`shadeWaterFinish`) | **fait, mesuré, gain faible** : plafond lu −4,7 ms, rendu **−0,5 ms** (A/B mini) — le SSR coûte surtout son travail (~2,2 ms, déplacé dans la finition) ; E3 à juger sur un plafond mesuré d'abord |
 | Rendu (33d89754) | La classification de l'écran par tuiles — lot 1 : les noyaux de l'eau en indirect | **fait, mesuré** : plafond lu 2,1 ms (noyaux de l'eau vides) ; J0 neutre (presque toute la mer), **sur la terre −1,15 ms** (A/B mini) |
-| Rendu (33d89754) | Classification — lot 2 : le sol (`earth lite: light`, sa finition) et des noyaux par classe | à cadrer (plafond à mesurer d'abord) |
+| Rendu (33d89754) | Classification — lot 2 : le sol (`earth lite: light`, sa finition) | **non ouvert** : plafond mesuré (vue toute en mer, kerr-mini) 0,33 + 0,22 = 0,55 ms, moins le tri 0,2 — sous 1 ms (règle 1) |
 | Rendu (33d89754) | La borne de cadence du M1 Max | 30 images/s : bride (soutenu 27,8/s, 881 MHz) ; 40 images/s : **s'effondre dès le vol frais** (17,6/s, 389 MHz, « Trapping ») — **mais `coreaudiod` tourne à ~177 % de CPU sur ce Mac, hors du jeu** : les deux essais à refaire machine nettoyée ([J0-CONTRAT §2](docs/J0-CONTRAT.md)) |
-| Rendu (33d89754) | Retrait R1 des anciens chemins (`singleHistory`, `edgeFoot`, `seaSsrSafe`, `clearCut`, `earthRateOne`, `rasterScaleFree`) | **daté : 14 nov. 2026** ([PLAN-J2 §9 quattuordecies](docs/PLAN-J2-PAGES-RECONSTRUCTION.md)) |
+| Rendu (33d89754) | Retrait R1 des anciens chemins (`singleHistory`, `edgeFoot`, `seaSsrSafe`, `clearCut`, `earthRateOne`, `rasterScaleFree`) | **fait le 13 nov.** (avancé d'un jour ; [PLAN-J2 §9 quattuordecies](docs/PLAN-J2-PAGES-RECONSTRUCTION.md)) |
 | Audit vagues 3–4 (1feb2f7f) | 3.3 Sauvegardes | **fait pour l'essentiel** : lot 1 (736b26a2, une clé par sauvegarde, rien écrasé en silence) ; lot 2 (f265f467 : « Reprendre » du vol perdu seulement, un avion a ses points ; carburant, train, volets, freins, maintiens, systèmes des vaisseaux sauvés ; l'activité en cours dite) — e2e 6/6, bun test 2 228/0. Reste : l'état d'une mission ou d'un combat (Sam), les systèmes de l'A320, IndexedDB |
 | Audit vagues 3–4 (1feb2f7f) | 3.1 réseau RD0 + RD1 | **fait** : la frontière d'entrée (`src/net/inbound.ts`) ; un événement mal formé figeait l'image (163 → 0), plus maintenant — e2e `net-inbound` 6/6, net-battle/coop/crew/board verts |
 | Audit vagues 3–4 (1feb2f7f) | 3.2 réseau RD2 | **fait** : le serveur se défend (salles par adresse, débit, mots de passe salés et freinés, identité non publiée, rôle gardé, expiration) — six défauts vus avant, 0/6 → 6/6 |
@@ -4604,4 +4604,19 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
 - **Facteur de confusion** : `coreaudiod` à ~177 % de CPU, encore après la fermeture du Chrome du test — une charge de la machine, pas du jeu ;
   CPU 91,6 °C. Les essais de la borne (30 et 40) sont à refaire sans elle ; la relancer demande les droits d'administrateur (Sam).
 - **Non conclu** : la valeur de la borne ; la part du bridage due à cette charge.
+
+## 2026-11-13T11:10Z — Le retrait R1 des anciens chemins de J2 ; le lot 2 de la classification non ouvert (plafond mesuré sous 1 ms)
+
+- **Contribution** (règle de méthode 2 de Sam : un levier allumé par sa décision perd son ancien chemin au lot de retrait suivant ;
+  [PLAN-J2 §9 quattuordecies](docs/PLAN-J2-PAGES-RECONSTRUCTION.md), daté au 14, fait le 13).
+- **Retiré** : `renderer.singleHistory` (le double historique long), `earthTiles.edgeFoot` (le fondu fixe 2–48 texels, `P.tiles.w` = 1),
+  `renderer.earthRateOne` (la cadence > 1 de la Terre sous son matériau), `renderer.rasterScaleFree` (`main.ts` : l'échelle épinglée, toujours),
+  `earthScenery.clearCut` (les arbres des bâtiments coupés, toujours effacés ; sa clé de scène, ses statistiques), `renderer.seaSsrSafe` (le
+  levier et son bit — **le rejet `mk > 3e30` gardé, toujours** : la table de R1 le disait sans objet, mais depuis E2 `shadeWaterFinish` finit des
+  pixels d'eau en lisant les autres : la même course ; corrigé dans le plan). Avec eux : l'e2e `j2-dgpu`, la phase `edge` de `j2-probes`, l'extra
+  `+single` de `motion-quality`, les côtés `on`/`off` de `cut-buildings-trees`, trois ablations de J0. BH-API, GRAPHICS-PIPELINE, catalogue.
+- **Vérifié** : `tsc`, Biome, `check-wgsl` 82/82, tests ciblés 30/0, `earth-tiles` ; J0 sur kerr-mini 0 erreur GPU, image vue (son GPU p50 non
+  comparable : la suite `bun test` tournait en même temps sur le CPU du mini) ; `bun test` complet sur kerr-mini : 7 échecs, tous rejoués seuls ici sans échec (8 fichiers, 40/0) — 5 délais de 5 s et 2 assertions (qualifications du F-35C, géocodage) sous la charge du mini, qui faisait tourner J0 en même temps.
+- **Le lot 2 de la classification, non ouvert** (règle 1) : sur une vue toute en mer (`J0_START=42.95,6.25,500,180,140`, kerr-mini), la lumière
+  du sol et sa finition lancées à vide coûtent 0,33 + 0,22 ms ; moins le tri (~0,2 ms), le lot rendrait moins de 0,4 ms.
 
