@@ -207,4 +207,10 @@ Aucun coût de J3 n'est mesuré ; aucun gain n'est promis.
   Retirer les bâtiments de la carte rendrait au plus ≈ 0,1 ms : **pas un lot de performance** ; le recouvrement reste (aucun défaut d'image
   mesuré). Sa netteté face aux cascades non comparée ; les trous (une référence tracée manque) ; une vallée au Soleil bas (relief + horizons). Un premier run a échoué sur un
   A/A par pixel (8 % de bruit) : mesure passée aux blocs.
+- **J3-5, préparation — l'inventaire des matériaux des bâtiments** (13 nov., ~17:32 UTC) :
+  [INVENTAIRE-MATERIAUX-BATIMENTS](progress/j3/INVENTAIRE-MATERIAUX-BATIMENTS-2026-11-13.md) — lecture du code (trois points revérifiés) :
+  aucun métal (le zinc un gris diffus à F0 0,06, la tôle sans spéculaire), le reflet sur une irradiance plate et non la sonde commune, le
+  spéculaire éteint au-delà de ~26 cm le pixel, les tuiles du nord (Y ≈ 0,10) et la brique (≈ 0,145) sombres face aux valeurs mesurées, le verre
+  des murs-rideaux à F0 0,10 ; raster et tracé divergent (recalage photo, ambiante, mouillé). Proposé : vues de référence et témoin, albédos et
+  métaux physiques, le reflet dans la sonde de J3-1, une fonction pour les deux chemins — **rien de fait**, chaque point à juger en A/B.
 

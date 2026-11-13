@@ -1,0 +1,64 @@
+# J3-5 (préparation) — les matériaux des bâtiments tels que le rendu les dessine (13 novembre 2026)
+
+[PLAN-J3](../../PLAN-J3-LUMIERE-COCKPIT.md) J3-5 : « toits et murs vers des paramètres physiques (albédo, rugosité, métal, verre réfléchissant
+le ciel commun de J3-1) ». Avant tout changement, ce que le code donne aujourd'hui. **Lecture du code seulement** (agent d'exploration ; trois
+points revérifiés à la main : les tuiles du nord `roofs.ts:117`, le recalage sur l'orthophoto `trace.wgsl:10402`, le verre des fenêtres
+`trace.wgsl:10246`) ; aucune mesure, rien de changé. Les numéros de ligne sont ceux de `main` au 13 novembre (après `ec6aec40`).
+
+## D'où viennent les valeurs
+
+- Empaquetage : `scenery-data.ts` `buildingPacked` (bits 0–3 le toit, 4–7 le mur, puis étages, plans, forme…).
+- Albédos : `roofs.ts` `roofColour` / `wallColour` (l. 111–154), **linéaires** (commentaire l. 108), chaque bâtiment entre deux valeurs selon
+  sa graine. Une couleur OSM / Overture (`colour`, `roof_color`) les remplace (`scenery-worker.ts:1463`), convertie de sRGB et resserrée
+  (0,05 + 0,55 × …, saturation moitié — `roofs.ts:181`).
+- Le facteur d'albédo global du sol (`P.earth2.z` = 0,8) ne touche pas ces tables (seulement les bâtiments maillés U2 sans feuille).
+
+## Le tableau (Y : luminance calculée des valeurs lues)
+
+| Classe | id | Albédo linéaire [Y] | Spéculaire (`WS_S`, F0 de Schlick) | Métal | Où |
+|---|---|---|---|---|---|
+| Toit tuiles, sud / Méditerranée | 1 | (0,38 0,20 0,12)→(0,32 0,22 0,16) [≈ 0,23] | aucun | non | roofs.ts:116 |
+| Toit tuiles, ailleurs | 1 | (0,17 0,088 0,064)→(0,13 0,088 0,07) [≈ 0,10] | aucun | non | roofs.ts:117 |
+| Toit ardoise | 2 | (0,065 0,072 0,085)→(0,095 0,098 0,105) [0,07–0,10] | aucun | non | roofs.ts:119 |
+| Toit zinc | 3 | (0,27 0,29 0,31)→(0,21 0,23 0,25) [0,23–0,29] | 0,06 × près | non (gris diffus) | roofs.ts:121 ; trace:10265, 10273 |
+| Toit béton (terrasse) | 4 | (0,20 0,195 0,18)→(0,11 0,11 0,105) [0,11–0,20] | aucun | non | roofs.ts:124 |
+| Toit tôle | 5 | (0,32 0,33 0,34)→(0,20 0,24 0,22) [0,23–0,33] | **aucun** | non | roofs.ts:126 |
+| Mur enduit / inconnu | 0, 5, 9 | froid (0,58 0,56 0,50)→(0,46 0,42 0,34) ; chaud (0,60 0,50 0,36)→(0,55 0,38 0,30) [0,41–0,56] | fenêtres seules | non | roofs.ts:148–151 |
+| Mur pierre | 1 | (0,50 0,44 0,33)→(0,40 0,37 0,31) [0,37–0,45] | fenêtres seules | non | roofs.ts:137 |
+| Mur meulière | 2 | (0,34 0,23 0,13)→(0,28 0,21 0,15) [0,22–0,25] | fenêtres seules | non | roofs.ts:139 |
+| Mur béton | 3 | (0,34 0,33 0,31)→(0,26 0,26 0,25) [0,26–0,33] | fenêtres seules | non | roofs.ts:141 |
+| Mur brique | 4 | (0,30 0,11 0,065)→(0,24 0,12 0,08) [≈ 0,145] | fenêtres seules | non | roofs.ts:143 |
+| Mur bois | 6 | (0,19 0,11 0,055)→(0,12 0,08 0,05) [0,09–0,12] | fenêtres seules | non | roofs.ts:145 |
+| Mur-rideau (verre) | 7 | vitres ≈ 0,08 ; meneaux (0,16 0,17 0,18) | **0,10** (vitres) | non | roofs.ts:147 ; trace:10199–10217 |
+| Fenêtres (autres murs) | — | (0,035 0,045 0,055) | 0,04 × près | non | trace:10246 |
+
+Modulations par pixel : ×(0,85 + 0,15 bruit) sur tout bâtiment ; toits en pente : rangs ×(0,72…1)(0,85…1,15), patine ×(0,82 + 0,18 bruit),
+AO 0,9 ; toits plats : ×(0,85 + 0,25 bruit…) ; murs : AO 0,385–0,55, ×0,78 au loin (les fenêtres sombres), ligne d'étage ×(1 − 0,12…).
+Estimation de l'agent (non mesurée) : à l'écran, ≈ ×0,65 sur les toits en pente, ×0,6 sur les murs lointains.
+
+## Ce qui ressort (à confirmer en image avant de changer quoi que ce soit)
+
+- **Aucun métal** : `WS_S` n'est qu'un F0 diélectrique ; le zinc est un gris diffus à F0 0,06 (un métal : F0 ≈ 0,5 et plus, diffus nul) ; la tôle
+  n'a pas de spéculaire du tout.
+- **Le reflet ne voit pas le ciel commun** : le miroir ajoute `ciel/π × 1,3 × AO` avec une irradiance plate (`skyFlat` tracé, `liteSky` raster) ;
+  la direction réfléchie ne sert qu'au reflet du Soleil. Le reflet s'ajoute au diffus entier (pas de 1 − F).
+- **Le spéculaire s'éteint au loin** : fenêtres, zinc et lucarnes × « près » — au-delà d'environ 26 cm par pixel (120–260 m), F0 = 0 ; seuls les
+  murs-rideaux gardent 0,10.
+- **Albédos face aux valeurs mesurées usuelles** : tuiles du nord ≈ 0,10 (usuel 0,25–0,35 : bien trop sombre ; la patine les descend encore
+  vers 0,065 à l'écran) ; brique ≈ 0,145 (0,2–0,3 : basse) ; bois 0,09–0,12 (sombre) ; ardoise, enduit, pierre plausibles ; béton des murs
+  un peu bas. Le verre des murs-rideaux : F0 0,10 (verre flotté ≈ 0,04) et un diffus de 0,08.
+- **La couleur du toit et sa classe peuvent diverger** : la couleur vient du premier plan du bâtiment (`scenery-worker.ts:1464`), la classe de
+  chaque partie (`:1495`).
+- **Raster et tracé diffèrent** : le raster recale l'albédo du toit sur l'orthophoto (× 0,6–1,5, `trace.wgsl:10402`), le tracé non ; la lumière
+  ambiante diffère (`sky × 0,6 × AO` tracé ; `skyOnFace`, renvoi, Lune au raster) ; la pluie et la neige sur les bâtiments au raster seul ; les
+  bâtiments en boîtes reçoivent au raster le facteur de mouillé du sol (× 0,58) au lieu de celui des bâtiments (× 0,75, `:16030`) ;
+  possiblement un GGX du sol en plus sur ces boîtes (`:16139`, **non vérifié**).
+
+## Ce que J3-5 en fera (proposé)
+
+1. Des vues de référence (Paris au Soleil, une ville du nord à tuiles) et un témoin : un matériau de luminance connue posé dans la scène.
+2. Les albédos ramenés aux valeurs mesurées (tuiles du nord, brique, bois), un vrai métal (zinc, tôle : F0 coloré, diffus nul, une rugosité),
+   le verre à F0 0,04, le reflet dans la sonde commune de J3-1 plutôt qu'une irradiance plate, sans extinction au loin (une rugosité qui croît
+   avec l'empreinte du pixel plutôt qu'un F0 qui tombe à 0).
+3. Une seule fonction de matériau pour les deux chemins (raster, tracé), le recalage sur la photo conservé là où il est voulu.
+Chaque point se juge sur des vues A/B et son coût ; aucun n'est fait.

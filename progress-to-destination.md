@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-13 17:26 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-13 17:32 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous.
@@ -48,7 +48,7 @@ ouverts, sous 1 ms) ; J3 au stade du plan.**
 | Rendu (33d89754) | L'eau étagée — préalables | faits : `liteSkip` réparé, ablation `sea surface` (−0,7 ms) |
 | Rendu (33d89754) | L'eau étagée E1 : l'air et les nuages sortis de `shadeWater` (passe `earth water: finishing`) | **fait, mesuré** (gain maximal lu : l'eau 16,2 ms, `earth water` 12,7) : A/B J0 sur le mini **GPU p50 57,85 → 56,3 ms (−1,55)** ; l'eau par ablation 13,0 → 10,1 ms ([PLAN-MER §6](docs/PLAN-MER-WEBGPU.md)) |
 | Rendu (33d89754) | L'eau étagée E2 : les reflets (SSR, nuages reflétés) dans leur noyau (`shadeWaterFinish`) | **fait, mesuré, gain faible** : plafond lu −4,7 ms, rendu **−0,5 ms** (A/B mini) — le SSR coûte surtout son travail ; **E3 non ouvert** (seule la présence du code pourrait rendre, ~0,4 ms mesurés par E2) |
-| Rendu (33d89754) | **J3 — lumière, ombres, cockpit** | **mené selon les recommandations du plan** (consigne « continue » de Sam ; [PLAN-J3](docs/PLAN-J3-LUMIERE-COCKPIT.md) §10, ses 5 questions ouvertes) ; **J3-1 commencé : l'appareil éclairé par le Soleil incident du sol** (mesuré : direction exacte, éclairement ×193 à 19:15 UTC sur J0) ; **son air, sonde : la marche de l'appareil et la table du sol à 0,2 % — rien à changer** ; **la lumière du ciel, sonde : l'appareil +2–5 % sur le sol de jour, +10–12 % au coucher — les harmoniques de sa sonde en font +8–13 %, son ciel tracé est à −5…+9 % du sol (une décision d'image à présenter)** ; **J3-2 commencé : l'appareil et ses traînées à travers l'air de leur distance** (mesuré : vues 300 m / 3 km / 10 km, coût ≈ 0,2 ms au bruit) ; **J3-3 : les ombres du sol par propriétaire mesurées à Paris — recouvrement 8,5 % de l'image, aucun double compte visible** ; de J3-0 : l'inventaire des réglages compensatoires, **la sonde de l'âge des instruments** (témoins passés ; PCD en vol p95 57 ms), **la référence de ville sur Paris** (GPU p50 53,2 ms sur le mini ; le décor premier poste, −8,4 ms) |
+| Rendu (33d89754) | **J3 — lumière, ombres, cockpit** | **mené selon les recommandations du plan** (consigne « continue » de Sam ; [PLAN-J3](docs/PLAN-J3-LUMIERE-COCKPIT.md) §10, ses 5 questions ouvertes) ; **J3-1 commencé : l'appareil éclairé par le Soleil incident du sol** (mesuré : direction exacte, éclairement ×193 à 19:15 UTC sur J0) ; **son air, sonde : la marche de l'appareil et la table du sol à 0,2 % — rien à changer** ; **la lumière du ciel, sonde : l'appareil +2–5 % sur le sol de jour, +10–12 % au coucher — les harmoniques de sa sonde en font +8–13 %, son ciel tracé est à −5…+9 % du sol (une décision d'image à présenter)** ; **J3-2 commencé : l'appareil et ses traînées à travers l'air de leur distance** (mesuré : vues 300 m / 3 km / 10 km, coût ≈ 0,2 ms au bruit) ; **J3-3 : les ombres du sol par propriétaire mesurées à Paris — recouvrement 8,5 % de l'image, aucun double compte visible** ; **J3-5 préparé : l'inventaire des matériaux des bâtiments** (aucun métal, reflet sur ciel plat, tuiles du nord sombres) ; de J3-0 : l'inventaire des réglages compensatoires, **la sonde de l'âge des instruments** (témoins passés ; PCD en vol p95 57 ms), **la référence de ville sur Paris** (GPU p50 53,2 ms sur le mini ; le décor premier poste, −8,4 ms) |
 | Rendu (33d89754) | AR-07 (vague 4.3, décision de Sam relayée) : le renderer sur `ViewPose` | **fait** : `renderer.frame(viewPose, settings, …)` ; Paris et J0 volés sans erreur, `gpu-startup` sans nouvel échec |
 | Rendu (33d89754) | La classification de l'écran par tuiles — lot 1 : les noyaux de l'eau en indirect | **fait, mesuré** : plafond lu 2,1 ms (noyaux de l'eau vides) ; J0 neutre (presque toute la mer), **sur la terre −1,15 ms** (A/B mini) |
 | Rendu (33d89754) | Classification — lot 2 : le sol (`earth lite: light`, sa finition) | **non ouvert** : plafond mesuré (vue toute en mer, kerr-mini) 0,33 + 0,22 = 0,55 ms, moins le tri 0,2 — sous 1 ms (règle 1) |
@@ -5426,4 +5426,15 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   Le premier run a échoué sur un A/A par pixel (8 % de bruit), corrigé par les blocs.
 - Limites : coût et netteté de la part bâtiments de la carte non mesurés ; trous non mesurés (pas de référence) ; la vallée au Soleil bas reste à faire.
 - Suite : la part bâtiments de la carte — son coût (ablation) et sa netteté face aux cascades — avant toute décision ; la vallée au Soleil bas.
+
+## 2026-11-13T17:32Z — J3-3 clos par la règle 1 pour la carte des bâtiments ; J3-5 : l'inventaire des matériaux des bâtiments
+
+- Contribution : PLAN-J3 J3-3 (la part bâtiments de la carte d'ombre du décor, gain maximal lu) et J3-5 (matériaux identifiés vers des
+  paramètres physiques), préparation documentée.
+- Réalisé : PLAN-J3 §10 — la carte des arbres et bâtiments coûte 1,5–1,7 ms sur ≈ 76 images de 70 s (fiche de Paris), ≈ 0,1 ms par image :
+  pas un lot de performance ; [INVENTAIRE-MATERIAUX-BATIMENTS](docs/progress/j3/INVENTAIRE-MATERIAUX-BATIMENTS-2026-11-13.md) (nouveau, dans
+  la carte `docs/README.md`).
+- Preuves : **documenté** — la fiche de Paris pour le coût ; pour les matériaux, une lecture du code par un agent d'exploration, trois points
+  revérifiés à la main ; aucune mesure d'image.
+- Suite : J3-5 commence par des vues de référence et un témoin de luminance connue, puis les albédos et le métal en A/B.
 
