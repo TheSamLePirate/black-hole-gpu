@@ -484,19 +484,32 @@ export function gameTools(h: GameHost): Tool[] {
       .slice(mark)
       .map((e) => e.text)
       .slice(-6);
-  /** a call wrapped: its result and what the game said meanwhile */
+  /** the turns netted (their signals), and a net that could not be saved — see net() */
+  const netted = new WeakSet<AbortSignal>();
+  const netLost = new WeakMap<AbortSignal, string>();
+  /** a call wrapped: its result and what the game said meanwhile (and that it has no undo, see net()) */
   const act = (fn: (a: Args, signal: AbortSignal) => unknown) => async (a: Args, signal: AbortSignal) => {
     const mark = h.log().length;
+    netLost.delete(signal);
     const r = await fn(a, signal);
     const said = since(mark);
-    return said.length ? { result: r ?? "done", game: said } : (r ?? "done");
+    const lost = netLost.get(signal);
+    const out = said.length ? { result: r ?? "done", game: said } : (r ?? "done");
+    return lost ? { ...(typeof out === "object" ? out : { result: out }), undo: `none: ${lost}` } : out;
   };
-  /** the net before what cannot be undone */
-  const net = () => {
+  /**
+   * The net before what cannot be undone: the game saved as "Before TARS" once per turn (its signal), at its first such
+   * act — so undo goes back to before the turn, not before its last act (audit 2026-11-10, TA-15: a turn that teleported
+   * then moved the date came back only to after the teleport). Its failure (storage full, private mode) is not swallowed:
+   * the call's result says there is no undo.
+   */
+  const net = (signal: AbortSignal) => {
+    if (netted.has(signal)) return;
+    netted.add(signal);
     try {
       tools.save(UNDO_SAVE, { replace: true });
-    } catch {
-      /* nothing to save: no game */
+    } catch (e) {
+      netLost.set(signal, `the game could not be saved first (${e instanceof Error ? e.message : String(e)})`);
     }
   };
   const body = (name: unknown) => {
@@ -634,7 +647,7 @@ export function gameTools(h: GameHost): Tool[] {
         pitch: { type: "number", minimum: -8, maximum: 68 },
       },
       required: ["action"],
-      run: act((a) => {
+      run: act((a, signal) => {
         const c = camera.character;
         let error: string | null = null;
         switch (a.action) {
@@ -650,7 +663,7 @@ export function gameTools(h: GameHost): Tool[] {
             if (a.lat === undefined || a.lon === undefined) error = "start needs lat and lon";
             else if (!WALK_BODIES.includes(world)) error = `cannot walk on "${world}": ${WALK_BODIES.join(", ")}`;
             else {
-              net();
+              net(signal);
               error = c.start(world, Number(a.lat), Number(a.lon));
             }
             break;
@@ -1418,8 +1431,8 @@ export function gameTools(h: GameHost): Tool[] {
       description:
         "Move the clock (the world moves, the ship is carried with its body; a plan is dropped): an ISO date (UTC), or a step in hours/days (negative: back), or 'now' (the real date). Saved first as 'Before TARS'.",
       params: { date: { type: "string" }, hours: { type: "number", minimum: -1e6, maximum: 1e6 }, now: { type: "boolean" } },
-      run: act((a) => {
-        net();
+      run: act((a, signal) => {
+        net(signal);
         if (a.now) return tools.setDate(new Date().toISOString());
         if (a.date !== undefined) return tools.setDate(String(a.date));
         if (a.hours !== undefined) return tools.jumpTo(tools.now() + ((a.hours as number) * 3600) / (4.925490947e-6 * settings.massSolar));
@@ -1587,11 +1600,11 @@ export function gameTools(h: GameHost): Tool[] {
         mode: { type: "string", enum: ["ship", "foot", "free", "photo"] },
         bar: { type: "string", enum: ["show", "hide"] },
       },
-      run: act((a) => {
+      run: act((a, signal) => {
         if (!h.mode) return { ok: false, error: "no modes here" };
         if (a.bar) h.mode.hideBar(a.bar === "hide");
         // (on foot may set the walker down elsewhere: the net first)
-        if (a.mode === "foot" && h.mode.get() !== "foot") net();
+        if (a.mode === "foot" && h.mode.get() !== "foot") net(signal);
         const error = a.mode ? h.mode.set(a.mode as GameMode) : null;
         return { ok: !error, error, mode: h.mode.get() };
       }),
@@ -1609,7 +1622,7 @@ export function gameTools(h: GameHost): Tool[] {
         to: { type: "string", enum: ["orbit", "land", "walk", "camera", "tripod"] },
       },
       required: ["action"],
-      run: act(async (a) => {
+      run: act(async (a, signal) => {
         const A = h.atlas;
         if (!A) return { ok: false, error: "no Atlas here" };
         const body = a.body as "earth" | "moon" | "mars" | undefined;
@@ -1626,7 +1639,7 @@ export function gameTools(h: GameHost): Tool[] {
               ? { body: found[0].body as "earth" | "moon" | "mars", lat: found[0].lat, lon: found[0].lon, name: found[0].name }
               : null;
         if (!p) return { ok: false, error: "no place: give lat and lon, or a query that finds one" };
-        net();
+        net(signal);
         const error = A.go((a.to as "orbit" | "land" | "walk" | "camera" | "tripod" | undefined) ?? "camera", p);
         return { ok: !error, error, place: p };
       }),
@@ -1641,7 +1654,7 @@ export function gameTools(h: GameHost): Tool[] {
         way: { type: "string", enum: ["go", "live", "render"] },
       },
       required: ["action"],
-      run: act(async (a) => {
+      run: act(async (a, signal) => {
         const S = h.skyEvents;
         if (!S) return { ok: false, error: "no sky events here" };
         if (a.action === "open") {
@@ -1658,7 +1671,7 @@ export function gameTools(h: GameHost): Tool[] {
         }
         if (!a.id) return { ok: false, error: "take needs an id from the list" };
         // (go and live move the tripod and the clock: the net first; render only fills a dialog)
-        if (a.way !== "render") net();
+        if (a.way !== "render") net(signal);
         const error = S.take(String(a.id), (a.way as "go" | "live" | "render" | undefined) ?? "go");
         return { ok: !error, error };
       }),
@@ -1743,7 +1756,7 @@ export function gameTools(h: GameHost): Tool[] {
         id: { type: "string" },
       },
       required: ["action"],
-      run: act((a) => {
+      run: act((a, signal) => {
         const F = h.f35;
         if (!F) return { error: "not available" };
         switch (a.action) {
@@ -1753,7 +1766,7 @@ export function gameTools(h: GameHost): Tool[] {
             return { challenges: F.challenges(), fights: F.fights() };
           case "prepare":
             if (!a.field) throw new Error("prepare needs a field (f35 fields lists them)");
-            net();
+            net(signal);
             // (an airfield of the world by its code: its tile fetched first — then found at once: PLAN-RADAR-AAA RD13)
             return Promise.resolve(
               /^[A-Za-z0-9-]{3,7}$/.test(String(a.field).trim()) ? fieldByCode(String(a.field)).catch(() => null) : null,
@@ -1769,13 +1782,13 @@ export function gameTools(h: GameHost): Tool[] {
             );
           case "fly":
             if (!a.id) throw new Error("fly needs an id (f35 challenges lists them)");
-            net();
+            net(signal);
             return F.fly(String(a.id));
           case "figures":
             return { figures: F.figures() };
           case "figure":
             if (!a.id) throw new Error("figure needs an id (f35 figures lists them) or box");
-            net();
+            net(signal);
             return F.figure(String(a.id), a.mode === "watch" ? "watch" : "fly");
           default:
             return F.abort();
@@ -2399,7 +2412,7 @@ export function gameTools(h: GameHost): Tool[] {
         days: { type: "number", minimum: 1, maximum: 120 },
       },
       required: ["action"],
-      run: act((a) => {
+      run: act((a, signal) => {
         const O = h.observe;
         if (!O) return { error: "not available" };
         if (a.action === "open") return O.open(a.name ? String(a.name) : undefined), "the observatory opened";
@@ -2421,7 +2434,7 @@ export function gameTools(h: GameHost): Tool[] {
         }
         const at = a.at === undefined || a.at === "now" ? undefined : a.at === "best" ? ("best" as const) : Date.parse(String(a.at));
         if (typeof at === "number" && !Number.isFinite(at)) throw new Error(`not a date: ${a.at}`);
-        if (at !== undefined) net();
+        if (at !== undefined) net(signal);
         const why = O.look(String(a.name), at);
         if (why) throw new Error(why);
         return `the telescope on ${a.name}`;
@@ -2455,9 +2468,9 @@ export function gameTools(h: GameHost): Tool[] {
         headingDeg: { type: "number", minimum: 0, maximum: 360 },
       },
       required: ["mode"],
-      run: act(async (a) => {
+      run: act(async (a, signal) => {
         const where = await placeOf(a);
-        net();
+        net(signal);
         const b = () => {
           if (where) return where.body;
           throw new Error("give a place: query, site, or body with lat/lon");
@@ -2516,7 +2529,7 @@ export function gameTools(h: GameHost): Tool[] {
     {
       name: "saves",
       description:
-        "Saved games: save (a name; one taken is refused unless replace: true), delete (cannot be undone: ask the pilot first, then call it again with confirm: true), load (a name; the current game saved first as 'Before TARS'), delete, undo: back to 'Before TARS' (the state before TARS's last teleport, load, date change or scene); export (a name, or the game now: downloaded as a file), import (json: a save's file text; loaded and kept), share (a link that opens the game as it is now), autosave (the autosave written now).",
+        "Saved games: save (a name; one taken is refused unless replace: true), delete (cannot be undone: ask the pilot first, then call it again with confirm: true), load (a name; the current game saved first as 'Before TARS'), delete, undo: back to 'Before TARS' (the state before TARS's last turn that teleported, loaded, changed the date or started a scene — taken once per turn, at its first such act); export (a name, or the game now: downloaded as a file), import (json: a save's file text; loaded and kept), share (a link that opens the game as it is now), autosave (the autosave written now).",
       params: {
         action: { type: "string", enum: ["save", "load", "delete", "undo", "export", "import", "share", "autosave"] },
         name: { type: "string" },
@@ -2525,14 +2538,14 @@ export function gameTools(h: GameHost): Tool[] {
         json: { type: "string" },
       },
       required: ["action"],
-      run: act((a) => {
+      run: act((a, signal) => {
         const name = a.name !== undefined ? String(a.name) : undefined;
         switch (a.action) {
           case "save":
             return tools.save(name, { replace: a.replace === true });
           case "load":
             if (!name) throw new Error("load needs a name (list_saves_and_scenes)");
-            net();
+            net(signal);
             return tools.load(name);
           case "delete":
             if (!name) throw new Error("delete needs a name");
@@ -2546,7 +2559,7 @@ export function gameTools(h: GameHost): Tool[] {
             return `exported ${name ?? "the game now"} (a file downloaded)`;
           case "import":
             if (!a.json) throw new Error("import needs json: a save file's text");
-            net();
+            net(signal);
             return tools.importSave(String(a.json));
           case "share":
             return { link: tools.shareLink() };
@@ -2564,7 +2577,7 @@ export function gameTools(h: GameHost): Tool[] {
         "Start a scene or a mission by its name (list_saves_and_scenes): the world, the ship, the time it sets. Saved first as 'Before TARS'.",
       params: { name: { type: "string" } },
       required: ["name"],
-      run: act((a) => {
+      run: act((a, signal) => {
         const n = fold(String(a.name));
         const all = h.scenes();
         const hit =
@@ -2572,7 +2585,7 @@ export function gameTools(h: GameHost): Tool[] {
           all.find((s) => fold(s).includes(n)) ??
           MISSIONS.find((m) => fold(m.title.en).includes(n) || fold(m.title.fr).includes(n))?.scene;
         if (!hit) throw new Error(`no scene named "${a.name}"`);
-        net();
+        net(signal);
         h.applyScene(hit);
         return `scene: ${hit}`;
       }),

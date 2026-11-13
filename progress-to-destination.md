@@ -58,7 +58,7 @@ ouverts, sous 1 ms) ; J3 au stade du plan.**
 | Audit vagues 3–4 (1feb2f7f) | 3.1 réseau RD0 + RD1 | **fait** : la frontière d'entrée (`src/net/inbound.ts`) ; un événement mal formé figeait l'image (163 → 0), plus maintenant — e2e `net-inbound` 6/6, net-battle/coop/crew/board verts |
 | Audit vagues 3–4 (1feb2f7f) | 3.2 réseau RD2 | **fait** : le serveur se défend (salles par adresse, débit, mots de passe salés et freinés, identité non publiée, rôle gardé, expiration) — six défauts vus avant, 0/6 → 6/6 |
 | Audit vagues 3–4 (1feb2f7f) | 3.4–3.5 vol | **fait** : U/F7 des avions (ILS, refus dit, manette gardée), Maj/Alt modificateur ou manette, LAND = F7 — le cours revolé 7/7 et 9/9 |
-| Audit vagues 3–4 (1feb2f7f) | 3.6 TARS | **fait** : tour coupé, `saves delete` confirmé, pannes dites, faux ordres hors ligne |
+| Audit vagues 3–4 (1feb2f7f) | 3.6 TARS | **fait** : tour coupé, `saves delete` confirmé, pannes dites, faux ordres hors ligne ; restes TA-06 (réveil borné), TA-12 (troncature redemandée), TA-14 (relais Deepgram borné), TA-15 (un filet « Before TARS » par tour, son échec dit) |
 | Audit vagues 3–4 (1feb2f7f) | 3.7 TARS (outils AP avions/A320) | **fait** : `jet_autopilot` par les actions de la console, volets au levier (CONF 1), l'AP de l'A320 réparé dans `apSet` |
 | Audit vagues 3–4 (1feb2f7f) | 3.10 e2e qui ne vérifient rien | **fait** : `waitOptional` (93 attentes converties), 14 mesures déclarées, garde `e2e-honesty` |
 | Audit vagues 3–4 (1feb2f7f) | 4.2 la politique de temps | **fait** : vol tenu pendant la reprise GPU, cadence vraie, horloge du vol + garde ; l'onglet masqué (choix de Sam) : solo en pause dite, salle sans arrêt (l'absent ne la bloque plus, les autres avertis, remis à l'heure au retour), sauvé en partant, TARS sans réveil ; le ralentissement sous 10 images/s dit — e2e `hidden-tab` 2/2, `fps-truth` 2/2 |
@@ -5189,4 +5189,16 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   premier `tune` peut toucher d'autres phases qui changent l'heure après un premier `tune` (les ablations de J0 ne le font pas).
 - Suite : l'état lumineux unique de C-J3-1 (le contrat des tables existantes : `TABLE_SUN`, sa rangée incidente, `TABLE_SKY`, `TABLE_SH`), la
   lumière du ciel de l'appareil (sa sonde) contre celle du sol (`skyAmbient`) — une sonde de même forme.
+
+## 2026-11-13T16:31Z — Audit TA-15 : un filet « Before TARS » par tour, pris à son premier acte irréversible ; son échec dit
+
+- Contribution : §19 (TARS revient en arrière « avec la fidélité annoncée ») ; audit 2026-11-10 vague 3 (TARS), TA-15.
+- Réalisé : `ai/game-tools.ts` — `net(signal)` : la sauvegarde « Before TARS » prise une fois par tour (son signal), au premier acte qui ne
+  se défait pas (charger, déplacer, la date, une scène, à pied) ; un échec de sauvegarde (stockage plein, navigation privée) n'est plus avalé :
+  le résultat de l'appel porte `undo: none: …`. La description de `saves undo` et le prompt de TARS le disent (`tars-agent.ts`). TARS.md.
+- Preuves : **reproduit avant** (unitaire `tars-tools` « one 'Before TARS' per turn » sur l'ancien `game-tools.ts` : un tour Paris → Alpes →
+  événement du ciel laissait le filet aux Alpes) ; **après** : annuler revient à Paris, le tour suivant reprend son propre filet, le stockage
+  refusé est dit. Tests TARS 38/0 (tars-tools, tars-agent, tars-turns, tars), tsc et biome sur les fichiers touchés.
+- Limites : un seul filet (pas de pile : une pile de sauvegardes encombrerait la liste du joueur) ; aucun e2e (le comportement est dans le
+  catalogue d'outils, sans rendu).
 

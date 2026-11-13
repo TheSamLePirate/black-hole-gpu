@@ -610,9 +610,9 @@ test("TARS's new teleports save 'Before TARS' first: atlas go, sky event go/live
     changed: () => {},
     log: () => [],
   } as unknown as GameHost;
-  const tools = gameTools(host),
-    signal = new AbortController().signal;
-  const run = (name: string, a: Record<string, unknown>) => tools.find((t) => t.name === name)!.run(a, signal);
+  const tools = gameTools(host);
+  // (each call its own turn — its own signal: one net per turn, TA-15)
+  const run = (name: string, a: Record<string, unknown>) => tools.find((t) => t.name === name)!.run(a, new AbortController().signal);
   await run("atlas", { action: "go", lat: 45, lon: 6, to: "walk" });
   await run("sky_events", { action: "take", id: "trails", way: "go" });
   await run("sky_events", { action: "take", id: "trails", way: "render" });
@@ -620,6 +620,50 @@ test("TARS's new teleports save 'Before TARS' first: atlas go, sky event go/live
   await run("set_mode", { mode: "foot" });
   const save = `save ${UNDO_SAVE}`;
   expect(calls).toEqual([save, "go walk", save, "take trails go", "take trails render", save, "mode foot", "mode foot"]);
+});
+
+test("one 'Before TARS' per turn, taken at its first act that cannot be undone; a net not saved is said (TA-15)", async () => {
+  const { gameTools, UNDO_SAVE } = await import("../src/ai/game-tools");
+  // the game's state: where it is; a save keeps it, undo brings it back
+  let at = "Paris";
+  const saved = new Map<string, string>();
+  let full = false;
+  const host = {
+    settings: {},
+    camera: { character: { state: () => ({}) } },
+    tools: {
+      save: (n: string) => {
+        if (full) throw new Error("The browser refused to store it (storage full or private mode)");
+        saved.set(n, at);
+      },
+      load: (n: string) => ((at = saved.get(n)!), `loaded ${n}`),
+    },
+    atlas: { search: async () => [], go: (to: string) => ((at = to), null), open: () => {} },
+    skyEvents: { take: (id: string) => ((at = `${at} + ${id}`), null), list: async () => [], open: () => null },
+    mode: { get: () => "ship", set: () => null, hideBar: () => {} },
+    changed: () => {},
+    log: () => [],
+  } as unknown as GameHost;
+  const tools = gameTools(host);
+  const run = (signal: AbortSignal, name: string, a: Record<string, unknown>) => tools.find((t) => t.name === name)!.run(a, signal);
+  // a turn that goes somewhere, then takes a sky event there: undo goes back to before the turn — Paris
+  const turn = new AbortController().signal;
+  await run(turn, "atlas", { action: "go", lat: 45, lon: 6, to: "Alps" });
+  await run(turn, "sky_events", { action: "take", id: "trails", way: "go" });
+  expect(at).toBe("Alps + trails");
+  expect(saved.get(UNDO_SAVE)).toBe("Paris");
+  await run(new AbortController().signal, "saves", { action: "undo" });
+  expect(at).toBe("Paris");
+  // the next turn nets again (its own state before it)
+  await run(new AbortController().signal, "atlas", { action: "go", lat: 45, lon: 6, to: "Moon" });
+  expect(saved.get(UNDO_SAVE)).toBe("Paris");
+  await run(new AbortController().signal, "atlas", { action: "go", lat: 45, lon: 6, to: "Mars" });
+  expect(saved.get(UNDO_SAVE)).toBe("Moon");
+  // the storage refuses: the act is done, its result says there is no undo
+  full = true;
+  const r = (await run(new AbortController().signal, "atlas", { action: "go", lat: 45, lon: 6, to: "Venus" })) as { undo?: string };
+  expect(at).toBe("Venus");
+  expect(String(r.undo)).toContain("storage full");
 });
 
 test("place_ship by a place's name: a runway exactly, an address through the Atlas's search, the ways to be put there", async () => {
