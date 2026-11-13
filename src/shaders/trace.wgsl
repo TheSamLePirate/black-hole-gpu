@@ -263,6 +263,9 @@ override TUNE_SMOKE_STEP: f32 = 0.5;
 override TUNE_STEP_BODIES: u32 = 1u;
 // (the ground's march: a step's share of the clearance — 0.5, safe for slopes to ~60°; more: a measure)
 override TUNE_MARCH_K: f32 = 0.5;
+// (PLAN-J3 J3-5, a measuring lever: the tiles' and bricks' albedo scale in buildingLook — 1 as drawn)
+override TUNE_BLD_TILE: f32 = 1.0;
+override TUNE_BLD_BRICK: f32 = 1.0;
 // (a ray rising over the ground — its clearance growing —: its steps' share of the distance (5 %: the shell left in ~150 steps;
 // a butte's narrow top, Monument Valley's Mittens, stepped through in bands of sky)
 override TUNE_RISE: f32 = 0.05;
@@ -10186,6 +10189,10 @@ fn buildingLook(hit:SceneryHit,p:vec3f,alb:ptr<function,vec3f>,n:ptr<function,ve
   let id=g;
   // (a wall's hit has its coordinate along it — a mansard's steep brisis is roof)
   let wall=hit.aux.y>0.0;
+  // (PLAN-J3 J3-5, a measuring lever for Sam's views — renderer.tune —: the tiles' and the bricks' albedo scaled, 1 as drawn; the inventory
+  // found the north's tiles at Y ≈ 0.10 and brick ≈ 0.145 against 0.25–0.35 and 0.2–0.3 measured. Removed once judged)
+  if(!wall&&roofMat==1u){*alb*=TUNE_BLD_TILE;}
+  if(wall&&wallMat==4u){*alb*=TUNE_BLD_BRICK;}
   if(wall){
     // (the sky a wall sees: half of it, less at its foot)
     WS_AO=0.55*(0.7+0.3*smoothstep(0.0,4.0,p.z-base));

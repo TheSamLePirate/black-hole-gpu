@@ -219,4 +219,7 @@ Aucun coût de J3 n'est mesuré ; aucun gain n'est promis.
   référence de J3-5 se feront là. Levier retiré.
   **Vues de référence (~18:26 UTC, phase `cityview`)** : Lille (toits de l'orthophoto) et Bruxelles (sans orthophoto nationale : les toits des
   tables, bruns et ternes) — la ville de référence de J3-5 est donc étrangère ; aucune « boîte » dans les deux grilles de `surfaceAt`.
+  **Bruxelles avant / essai (~18:32 UTC)** : tuiles × 2,5 et brique × 1,5 → la vue d'en haut +0,7 % (68,85 → 69,31, A/A 0,02) — le recalage du
+  raster sur la photo absorbe l'essai ; la clarté des toits à l'étranger est celle de la photo floue. Décision de Sam : les tables, le recalage,
+  ou les deux (levier de mesure `TUNE_BLD_*` gardé jusque-là).
 

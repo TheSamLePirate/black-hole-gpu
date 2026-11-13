@@ -77,6 +77,15 @@ de Bruxelles n'y sont chargés que sur une bande : **le plafond du décor et son
 `cutBuildings`, `corridorM` — « les villes par trajectoire », décision de Sam du 13 nov.) ; les deux villes à 3 920 bâtiments : vraisemblablement
 ce plafond atteint (sa valeur non lue).
 
+## Bruxelles, avant / essai (13 nov., ~18:32 UTC)
+
+Le levier de mesure `TUNE_BLD_TILE` / `TUNE_BLD_BRICK` (`trace.wgsl` `buildingLook`, 1 par défaut ; **gardé jusqu'à la décision de Sam**, puis
+retiré) ; phase J0 `materials` (kerr-mini, `…-j3-materials-brussels`), tuiles × 2,5, brique × 1,5 : d'en haut **68,85 → 69,31** (A/A 0,02),
+de côté 88,59 → 87,58 (A/A 0,58 : dans le bruit). Les toits à tuiles un peu plus pâles, vers le saumon : **un facteur 2,5 n'en rend qu'environ
+1 %** — le recalage du raster sur la photo (`trace.wgsl:10402`, × 0,6–1,5 vers la luminance de la photo) l'absorbe ; seuls la teinte et ce que
+le recalage ne borne pas changent. **Lecture** : corriger les tables ne suffit pas au raster ; c'est le recalage sur une photo floue (sans
+orthophoto nationale) qui fixe la clarté des toits à l'étranger. À trancher avec Sam : les tables, le recalage, ou les deux.
+
 ## Ce que J3-5 en fera (proposé)
 
 1. Des vues de référence **là où les tables comptent** (une ville étrangère sans orthophoto, des murs vus à hauteur d'homme, le tracé) et un

@@ -32,7 +32,7 @@ import { sceneryReady } from "./lib/plan-views";
 //       screens, the cockpit (the outside view) — between two baseline flights (drift).
 // Output: remote-results/j0/<machine>/ (J0_OUT): j0.json, shots (start, mid-turn, end; each ablation's last frame).
 // J0_PHASES=flight,ablate,sustained (default all; sustained: the flight again after the ablations, the machine hot), ABLATE_S (20), J0_MACHINE (the label: "m1max", "kerr-mini"; default the host name).
-// Other phases, asked by name: agecheck, framing (PLAN-J3 J3-0), keylight, keyair, keysky (J3-1), keyhaze (J3-2), shadows (J3-3), wetbld, cityview (J3-5) (J3-1: the craft's key light against the incident Sun toward
+// Other phases, asked by name: agecheck, framing (PLAN-J3 J3-0), keylight, keyair, keysky (J3-1), keyhaze (J3-2), shadows (J3-3), wetbld, cityview, materials (J3-5) (J3-1: the craft's key light against the incident Sun toward
 // sunset, ~3 min on kerr-mini; keyair: its air two ways, march and table, ~4 min; keysky: the sky's light two ways, ~4 min).
 // Not a pass/fail on the frame rate: the fiche is written from j0.json (docs/progress/j0/). It fails on a GPU error, a craft not
 // placed, a flight not flown.
@@ -918,6 +918,72 @@ describe.skipIf(!E2E)("J0: the reference flight over Toulon-Hyères", () => {
       out.cityview = views;
       await app.js(`(() => { Object.assign(__bh.settings, { shipMount: "cockpit", fov: ${fov0} }); __bh.freeze(false); return 1; })()`);
       expect(Object.keys(views).length).toBe(2);
+    },
+    900_000,
+  );
+
+  // (PLAN-J3 J3-5 — the buildings' albedo, before / after views for Sam, J0_PHASES=materials (J0_START over a town abroad — Brussels: no
+  // national orthophoto, the roofs the tables'): the town aside and from above, frozen, the data and scenery in, the exposure held; as drawn,
+  // then the trial (renderer.tune TUNE_BLD_TILE 2.5, TUNE_BLD_BRICK 1.5 — the inventory's measured ranges), then as drawn again (the A/A);
+  // shots and the mean luminance. Nothing changed by default)
+  test.skipIf(!PHASES.includes("materials"))(
+    "J3-5: the buildings' albedo — as drawn, the trial (tiles × 2.5, brick × 1.5), as drawn again; aside and from above",
+    async () => {
+      await start("");
+      const fov0 = await app.js<number>("__bh.settings.fov");
+      await app.js(`(async () => { const f = () => new Promise((q) => requestAnimationFrame(q)); __bh.freeze(false);
+        __bh.settings.shipMount = "around"; __bh.refresh(); for (let i = 0; i < 30; i++) await f();
+        Object.assign(__bh.camera.outside, { yaw: 30, pitch: 10, dist: 200 });
+        Object.assign(__bh.settings, { dof: false, motionBlur: 0, lookProfile: "neutral", dynamicResolution: false, earthRasterShading: "every", earthRasterScale: 1 });
+        for (let i = 0; i < 150; i++) await f(); __bh.freeze(true); return 1; })()`);
+      const lum = (bytes: Buffer) => {
+        const img = readPng(new Uint8Array(bytes));
+        let t = 0,
+          n = 0;
+        for (let y = Math.floor(0.1 * img.height); y < Math.floor(0.9 * img.height); y++)
+          for (let x0 = 0; x0 < img.width; x0++) {
+            const i = (y * img.width + x0) * img.channels;
+            t += 0.2126 * img.data[i]! + 0.7152 * img.data[i + 1]! + 0.0722 * img.data[i + 2]!;
+            n++;
+          }
+        return +(t / n).toFixed(2);
+      };
+      const rows: Record<string, Record<string, number>> = {};
+      for (const [view, pitch] of [
+        ["aside", 10],
+        ["above", 35],
+      ] as const) {
+        await app.js(`(async () => { const f = () => new Promise((q) => requestAnimationFrame(q)); __bh.renderer.tune = {}; __bh.freeze(false);
+          Object.assign(__bh.camera.outside, { yaw: 30, pitch: ${pitch}, dist: 200 }); for (let i = 0; i < 90; i++) await f(); __bh.freeze(true);
+          Object.assign(__bh.settings, { autoExposure: true, exposure: 0 }); return 1; })()`);
+        await app.dataSettled(`J3-5: the town's data (${view})`, { stallMs: 30_000, compileStallMs: 60_000, maxMs: 90_000 });
+        await sceneryReady(app, 60_000);
+        await app.js(`(async () => { const f = () => new Promise((q) => requestAnimationFrame(q)); __bh.renderer.settleExposure(); for (let i = 0; i < 30; i++) await f();
+          const ev = __bh.renderer.ev(__bh.settings); Object.assign(__bh.settings, { autoExposure: false, exposure: ev }); return 1; })()`);
+        const row: Record<string, number> = {};
+        for (const [name, tune] of [
+          ["asDrawn", "{}"],
+          ["trial", "{ TUNE_BLD_TILE: 2.5, TUNE_BLD_BRICK: 1.5 }"],
+          ["asDrawnAgain", "{}"],
+        ] as const) {
+          await app.js(`(() => { __bh.renderer.tune = ${tune}; __bh.refresh(); return 1; })()`);
+          await app.settled(120_000);
+          await app.js(
+            `(async () => { const f = () => new Promise((q) => requestAnimationFrame(q)); for (let i = 0; i < 45; i++) await f(); return 1; })()`,
+          );
+          const x = (await app.cdp.send("Page.captureScreenshot", { format: "png" })) as { data: string };
+          const bytes = Buffer.from(x.data, "base64");
+          await Bun.write(`${OUT}/materials-${view}-${name}.png`, bytes);
+          row[name] = lum(bytes);
+        }
+        rows[view] = row;
+        console.log(`  J3-5 the buildings' albedo trial (${view}): mean luminance ${JSON.stringify(row)}`);
+      }
+      out.materials = rows;
+      await app.js(
+        `(() => { __bh.renderer.tune = {}; Object.assign(__bh.settings, { autoExposure: true, exposure: 0, shipMount: "cockpit", fov: ${fov0} }); __bh.freeze(false); return 1; })()`,
+      );
+      for (const r of Object.values(rows)) expect(Math.abs(r.asDrawn! - r.asDrawnAgain!)).toBeLessThan(2);
     },
     900_000,
   );

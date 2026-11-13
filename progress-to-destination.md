@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-13 18:26 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-13 18:32 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous.
@@ -5550,4 +5550,13 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   ternes ; aucune « boîte » parmi les points de bâtiment (22 / 55 à Lille, 11 / 29 à Bruxelles). La bande de Bruxelles : le plafond du décor et
   son couloir le long de la trajectoire (« les villes par trajectoire ») — 3 920 bâtiments dans les deux villes, ce plafond vraisemblablement.
 - Suite : J3-5 se jugera sur Bruxelles (ou une ville étrangère) — albédos et métal, décision de Sam.
+
+## 2026-11-13T18:32Z — J3-5 : Bruxelles avant / essai — le recalage sur la photo fixe la clarté des toits
+
+- Réalisé : un levier de mesure `TUNE_BLD_TILE` / `TUNE_BLD_BRICK` (1 par défaut, gardé jusqu'à la décision de Sam) ; phase J0 `materials`
+  (deux vues, avant / essai / avant) sur Bruxelles. Docs : inventaire, PLAN-J3 §10, BH-API (`tune`), E2E-CATALOGUE.
+- Preuves : **mesuré** (kerr-mini, `…-j3-materials-brussels`) : d'en haut 68,85 → 69,31 (A/A 0,02), de côté dans le bruit ; vues montrées.
+  `check-wgsl` 82/82.
+- Lecture : un albédo de table × 2,5 ne rend qu'environ 1 % — le recalage du raster sur la photo (× 0,6–1,5) l'absorbe.
+- Suite : décision de Sam (les tables, le recalage, ou les deux) ; le levier retiré ensuite.
 
