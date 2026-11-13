@@ -80,6 +80,7 @@ const ERRORS: Record<string, () => string> = {
   update: () => t("This page is too old for the room server: reload it"),
   limit: () => t("Too many rooms: the server's, or those made from here this hour"),
   slow: () => t("Too many wrong passwords: wait half a minute"),
+  replaced: () => t("The room was opened in another tab of this browser: this one left it"),
 };
 const why = (e: unknown) => {
   const code = (e as { code?: string }).code;

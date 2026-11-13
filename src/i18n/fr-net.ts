@@ -245,4 +245,6 @@ export default {
   "{0} is out of view — the room goes on": "{0} est hors de vue — la salle continue",
   "{0} is back in view": "{0} est de retour",
   "out of view": "hors de vue",
+  "The room was opened in another tab of this browser: this one left it":
+    "La salle a été ouverte dans un autre onglet de ce navigateur : celui-ci l'a quittée",
 } satisfies Record<string, string>;

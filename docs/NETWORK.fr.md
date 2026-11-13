@@ -390,6 +390,10 @@ carte 3D du crew, les messages vocaux enregistrés derrière le trou de ver.
   monde — ne sort jamais : la liste et le monde montrent un identifiant public, le même à chaque reconnexion (la console
   d'équipage suit un pilote par lui), le copier ne prend la place de personne ; une place reprise garde son rôle, sauf
   s'il reste une place de pilote ; les identifiants du relais TURN, à un membre d'une salle seulement. Chaque défaut a
+  Deux onglets d'un même navigateur en partagent l'appareil : le dernier qui rejoint prend la place, et l'autre — son socket
+  lâché, « replaced » — quitte la salle et le dit (« La salle a été ouverte dans un autre onglet de ce navigateur : celui-ci l'a
+  quittée »), sans se reconnecter (avant le 13 nov. 2026, audit NET-05 : il se reconnectait, reprenait la place, et les deux
+  onglets s'expulsaient deux fois par seconde — 12 listes des membres en 3 s, `tests/net-rooms.test.ts`).
   d'abord été vu (`tests/net-server-defence.test.ts`, avant la correction : 60 salles d'une adresse, 3 000 événements
   relayés d'un coup, une place prise par l'identifiant publié, un cinquième pilote, ni frein ni expiration).
 - **L'horloge** (`src/net/clock.ts`) : l'échange de NTP, le décalage du huitième le plus rapide des 64

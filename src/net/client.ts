@@ -174,12 +174,31 @@ export class NetClient {
         colour: this.o.id.colour,
       });
     link.onmessage = (m) => this.onMessage(m);
-    link.onclose = () => this.lost();
+    // (each link's close its own: a stale one's — closed late, the page already on a new link — not this one's)
+    link.onclose = (why) => {
+      if (this.link === link) this.lost(why);
+    };
     return this.welcomed;
   }
 
-  private lost() {
+  private lost(why?: string) {
     if (this.pingTimer) clearTimeout(this.pingTimer);
+    // (the room taken by another tab of this browser — the same device: the server let this socket go, "replaced". Reconnecting
+    // took it back and the other tab was let go in turn: two tabs expelled each other twice a second, the whole room's roster and
+    // links rebuilt each time — audit NET-05, 13 Nov 2026. The newest tab keeps the room; this one leaves it, said, not taken back)
+    if (why === "replaced") {
+      this.link = null;
+      this.closed = true;
+      this.welcomed = null;
+      this.welcome?.ko(new Error("replaced"));
+      this.welcome = null;
+      for (const p of this.pending.values()) p.ko(new Error("replaced"));
+      this.pending.clear();
+      this.setRoom(null);
+      this.setStatus("off");
+      this.emit("error", { code: "replaced", msg: "The room was opened in another tab of this browser" });
+      return;
+    }
     this.link = null;
     this.welcomed = null;
     this.welcome?.ko(new Error("offline"));

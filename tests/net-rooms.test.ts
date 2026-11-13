@@ -130,6 +130,26 @@ describe("the room server", () => {
     b.close();
   });
 
+  test("the same device in two tabs (NET-05): the newest keeps the room, the other leaves it — no expulsion loop", async () => {
+    const a = client("Ana", "same-device");
+    const b = client("Ana", "same-device");
+    const { code } = await a.create("Two tabs", 0);
+    await until(() => a.clock.synced);
+    let rosters = 0;
+    a.on("roster", () => rosters++);
+    b.on("roster", () => rosters++);
+    await b.join(code);
+    // (3 s: a loop at ~2 Hz would replace one by the other again and again — a roster each time)
+    await Bun.sleep(3000);
+    const r = { a: a.room?.code ?? null, b: b.room?.code ?? null, rosters, aStatus: a.status };
+    console.log(`  after 3 s: the first tab in ${r.a}, the second in ${r.b}, rosters ${r.rosters}, the first's status ${r.aStatus}`);
+    expect(r.b).toBe(code);
+    expect(r.a).toBeNull();
+    expect(r.rosters).toBeLessThan(4);
+    a.close();
+    b.close();
+  });
+
   test("the persistent world (R7): a craft left where its pilot went, shown to the others; his again when he is back", async () => {
     const a = client("Ana", "dev-ana-world");
     const b = client("Ben", "dev-ben-world");

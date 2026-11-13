@@ -100,7 +100,9 @@ export type ErrorCode =
   | "bad"
   | "not-in-room"
   | "limit"
-  | "slow";
+  | "slow"
+  /** (the page's own, not the server's) the room taken by another tab of the same browser — the same device: this one left it */
+  | "replaced";
 
 /** a reliable event relayed to the room (a shot, a hit, a spawn…; R1+ fill it in) */
 export interface NetEvent {

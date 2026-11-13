@@ -5105,3 +5105,17 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
 - Reste : l'état lumineux unique de C-J3-1 (un tampon par image, lu par le sol, l'appareil, le décor, l'eau), la sonde de cohérence appareil /
   sol ; J3-2 ensuite.
 
+## 2026-11-13T16:08Z — Audit NET-05 (P1) : deux onglets d'un même navigateur ne s'expulsent plus en boucle
+
+- **Contribution à la destination :** §19.8 (préserver l'expérience : une salle utilisable quand un joueur ouvre un second onglet —
+  le cas courant d'un lien `#join=`).
+- **Reproduit avant (test `net-rooms`, vrai serveur de salles, deux clients du même appareil) :** en 3 s, **12 listes des membres**,
+  et chacun se croyant dans la salle : le serveur lâche l'ancien socket (« replaced »), l'onglet se reconnecte 0,5 s plus tard, reprend la
+  place, lâche l'autre…
+- **Réalisé :** `src/net/client.ts` — une fermeture « replaced » sur le lien vivant est terminale : l'onglet quitte la salle, le dit
+  (erreur `replaced` du panneau Réseau, FR/EN) et ne se reconnecte pas ; le plus récent garde la salle. Et la fermeture d'un ancien lien
+  — arrivée après une vraie coupure et une reconnexion — ne touche plus le lien courant (elle relançait `lost()` sur lui).
+- **Preuves :** après : le premier onglet hors de la salle, statut « off », le second dedans, **2 listes** en 3 s ; `net-rooms` (dont la
+  reconnexion d'un même appareil qui reprend sa place), `net-inbound`, `net-server-defence`, `i18n` : 28/0. Non fait : un e2e à deux
+  onglets du même Chrome (le message dans le panneau, vu à l'image).
+- **Docs :** NETWORK.md/.fr.md.

@@ -363,6 +363,10 @@ messages behind the wormhole.
   device — the key to his slot and his world — is never sent out: the roster and the world show a public id, the same
   at each reconnection (the crew console follows a pilot by it), so copying it takes nobody's place; a slot taken back
   keeps its role unless the room has a pilot's place for it; the TURN relay's credentials only to a member of a room.
+  Two tabs of one browser share its device: the newest tab joining takes the slot, and the other — its socket let go as
+  "replaced" — leaves the room and says so ("The room was opened in another tab of this browser: this one left it"),
+  not reconnecting (before 13 Nov 2026, audit NET-05: it reconnected, took the slot back, and the two tabs expelled each other
+  twice a second, the room's roster and links rebuilt each time — 12 rosters in 3 s, `tests/net-rooms.test.ts`).
   Each defect was seen first (`tests/net-server-defence.test.ts`, before the fix: 60 rooms from one address, 3 000
   events passed on at once, a member's place taken by his published device, a fifth pilot, no slowdown, no expiry).
 - **The clock** (`src/net/clock.ts`): NTP's exchange, the offset of the fastest eighth of the last 64
