@@ -3,6 +3,7 @@
 // autopilots ask applies), the pilot's messages kept.
 import { setHomePose } from "../../src/camera";
 import { CameraController } from "../../src/controls";
+import { advanceFrameClock } from "../../src/frameclock";
 import { fleet } from "../../src/fleet";
 import { ourGroundPose, type Pose } from "../../src/game/place";
 import { add, scale } from "../../src/math/vec3";
@@ -51,6 +52,10 @@ export function flight(pose: Pose, hover: boolean, vessel: VesselId = "ranger"):
   const fly = (seconds: number, until?: () => boolean) => {
     const n = Math.round(seconds * 30);
     for (let i = 0; i < n; i++) {
+      // (the flight's clock moved by the step, as __bh.step does — frameclock.ts: the decisions that wait "20 s" read it;
+      // left still here, they waited for ever — the landing's report once per flight, 13 Nov 2026 — or, on the wall's clock
+      // before audit 4.2, as long as the machine's load made the test last)
+      advanceFrameClock(1000 / 30);
       c.flyShip(1 / 30, null as never);
       if (Number.isFinite(c.shipTime)) c.time = c.shipTime;
       if (until?.()) return i / 30;

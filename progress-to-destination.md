@@ -4924,3 +4924,20 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   p95 56,6, max 64,1. **Limite** : un écran inchangé n'est pas renvoyé (son âge n'est alors pas celui de l'information) ; la mesure du délai
   donnée → affichage demanderait d'instrumenter `main.ts` (partagé) : non fait. Rien de changé à l'image.
 
+## 2026-11-13T13:52Z — `quals` (la mer formée) dans la suite complète : mon 4.2 écarté par l'essai ; l'horloge du vol avancée par l'aide des tests
+
+- **Signalé par la session du rendu (13:25 / 13:55 UTC) :** `tests/quals.test.ts` « sea, the F-35C in a 4.5 m sea » échoue dans la suite
+  complète (ici et sur kerr-mini, 4 fois sur 4 ; un passage « No grade » à 0 point), passe seul ; aucun sous-ensemble ne le reproduit ;
+  piste : les décisions de vol mises sur `frameNow` à 4.2 (AR-08). (L'autre échec signalé, `i18n`, était mon travail alors non commité :
+  ses deux textes ont leur français depuis 1e6192cd.)
+- **Essais (unitaires, ce Mac) :** seule, la qualification est déterministe (OK 2-wire, OK 1-wire, No grade 1-wire, Fair 1-wire — 3,25).
+  Inchangée (**mêmes notes au passage près**) : l'horloge du vol avancée de 5 000 s avant elle ; l'horloge avancée à chaque pas de vol ;
+  le cache de sol du GCAS empoisonné (3 000 m autour de 40° N 35° O), horloge figée comme avancée ; avec les neuf fichiers liés au
+  porte-avions avant elle (68/0). Le rapport d'atterrissage (limité à un par 20 s de `frameNow`) n'entre pas dans la note de l'appontage.
+  **Les cinq décisions mises sur `frameNow` ne sont donc pas la cause** dans tout ce que j'ai pu reproduire ; la cause reste un état partagé
+  du processus de la suite complète, non trouvé.
+- **Réalisé quand même :** `tests/helpers/flight.ts` — chaque pas de `fly()` avance l'horloge du vol (`advanceFrameClock`), comme
+  `__bh.step` : un vol de test attend désormais ses « 20 s » dans son propre temps (avant 4.2 : celles du mur, autant que la charge de la
+  machine ; après : jamais). Les 59 fichiers qui volent par elle : **296 / 0**.
+- **Non fait :** la suite complète, seule à reproduire l'échec (35 min de CPU ici pendant les mesures de la session du rendu ; kerr-mini
+  proposé par elle, mais la consigne de Sam le réserve à son accord). La bissection reste à faire.
