@@ -5675,5 +5675,6 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
 - Preuves : **observé** (kerr-mini, `…-seadusk4/5/6`) : les taches disparaissent seulement sans la lecture du ciel reflété (`seaSkyRadiance`) —
   ni les variances, ni l'écume, ni la normale, ni le niveau de lecture n'en sont la cause. Lecture non vérifiée : la sonde vue sous l'horizon
   (son sol coloré au couchant) reflétée comme du ciel.
-- Suite : un correctif dans le chantier de l'eau (ne lire de la sonde que le ciel) ; `seaProbeOn` éteint devrait aussi couper la lecture.
+- Suite : un correctif dans le chantier de l'eau (ne lire de la sonde que le ciel). (`seaProbeOn` éteint laisse la lecture : la sonde reste
+  tracée pour l'appareil à l'écran — pas un défaut, lu ensuite dans `seaFftParams`.)
 

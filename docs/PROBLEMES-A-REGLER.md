@@ -43,7 +43,8 @@ cadence mise au contrat actuel (1 sous le matériau) ; sa partie « repli » mis
 - **Trouvé** (~19:34 UTC, runs `…-seadusk4/5/6`, un levier de mesure `TUNE_SEA_DBG` dans `seaShade` / `seaSkyRadiance`) : les taches restent
   sans les variances LEAN (1), sans l'écume (2), la normale à plat (4), la lecture plafonnée au niveau 2 (16) ; elles **disparaissent sans la
   lecture du ciel reflété** (8 : `seaSkyRadiance`, la couche du ciel du tableau FFT — la sonde de l'appareil, `takeSky`). Couper `seaProbeOn`
-  ne les ôtait pas : la couche, plus mise à jour, restait lue (`P.seafft[6].z`). **Lecture** (non vérifiée) : près de l'horizon, la mer reflète
+  ne les ôtait pas : la sonde reste tracée pour l'appareil à l'écran (`seaProbeOn` ne commande que celle de la mer sans appareil), fraîche,
+  donc lue (`P.seafft[6].z`, moins d'une seconde) — pas un défaut. **Lecture** (non vérifiée) : près de l'horizon, la mer reflète
   ce que la sonde voit sous l'horizon visible — son sol grossier, coloré, éclairé par le couchant — alors que ce chemin (PLAN-MER-WEBGPU S5)
   devait refléter le ciel, le monde étant le SSR. Correctif à choisir dans le chantier de l'eau : ne lire de la sonde que le ciel (les
   directions au-dessus de l'horizon vu de la caméra, le reste au ciel clair), ou marquer le sol dans la sonde.
