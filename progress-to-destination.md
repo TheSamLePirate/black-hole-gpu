@@ -5060,3 +5060,11 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
 - **Suite :** une dichotomie qui exécute les tests dans l'ordre de bun (plusieurs suites complètes : ~9,5 min ici, ~2 min par moitié sur
   kerr-mini) ; et, sur le fond, la mer formée reste au bord de l'échec même seule (un passage « No grade ») : la tenue du pilote automatique
   à l'appontage par mer de 4,5 m est fragile à un écart d'un demi-degré au départ.
+
+## 2026-11-13T14:48Z — quals « mer formée » : la dichotomie exécutée — un effet cumulatif, pas un fichier
+
+- Hors du rendu, transmis à la session de l'audit (dont c'est le code). L'ordre d'exécution de bun relevé (rapport JUnit : quals 324ᵉ sur 434) ;
+  dichotomie exécutée sur ce Mac : l'échec tient à **40 fichiers** (flight-quality … craftpanel, `bun test <ces 40> tests/quals.test.ts` le
+  reproduit en ~3 min), **mais ni une moitié ni un fichier seul** ne suffit : un état qui s'accumule au fil des vols (compteur, horloge, cache),
+  cohérent avec la pose déjà divergente que la session de l'audit relève au début de la qualification. Non résolu.
+
