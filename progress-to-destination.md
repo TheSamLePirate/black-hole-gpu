@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-13 19:14 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-13 19:34 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous.
@@ -5668,4 +5668,12 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   liste lue, Chamonix 10 km « vallée » estimé à 1 852 Mo / 51 min / 24 587 tuiles, zone inconnue refusée — 1/1 ; rien téléchargé.
 - Limites : `add` réel (un téléchargement IGN) non lancé en e2e (un IGN à la fois, et sa taille) ; restent sans outil la flotte et les
   messages du salon, le PCD, les capteurs.
+
+## 2026-11-13T19:34Z — Les taches sur la mer au crépuscule : le ciel reflété par la sonde
+
+- Réalisé : un levier de mesure `TUNE_SEA_DBG` (`trace.wgsl` `seaShade`, `seaSkyRadiance` ; 0 par défaut) ; phase `seadusk` à 15 cas.
+- Preuves : **observé** (kerr-mini, `…-seadusk4/5/6`) : les taches disparaissent seulement sans la lecture du ciel reflété (`seaSkyRadiance`) —
+  ni les variances, ni l'écume, ni la normale, ni le niveau de lecture n'en sont la cause. Lecture non vérifiée : la sonde vue sous l'horizon
+  (son sol coloré au couchant) reflétée comme du ciel.
+- Suite : un correctif dans le chantier de l'eau (ne lire de la sonde que le ciel) ; `seaProbeOn` éteint devrait aussi couper la lecture.
 

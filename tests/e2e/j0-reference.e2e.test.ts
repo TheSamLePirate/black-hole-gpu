@@ -1076,6 +1076,12 @@ describe.skipIf(!E2E)("J0: the reference flight over Toulon-Hyères", () => {
         ["noSeaSurface", "__bh.renderer.seaSurfaceOn = false;", "__bh.renderer.seaSurfaceOn = true;"],
         ["noFft", "__bh.settings.seaFft = false; __bh.touch();", "__bh.settings.seaFft = true; __bh.touch();"],
         ["noFoamWorld", "__bh.renderer.seaFoamWorldOn = false;", "__bh.renderer.seaFoamWorldOn = true;"],
+        // (inside the FFT's path — seaShade's measuring lever TUNE_SEA_DBG: the slopes' variances, the foam, the normal)
+        ["noVariance", "__bh.renderer.tune = { TUNE_SEA_DBG: 1 };", "__bh.renderer.tune = {};"],
+        ["noFoam", "__bh.renderer.tune = { TUNE_SEA_DBG: 2 };", "__bh.renderer.tune = {};"],
+        ["flatNormal", "__bh.renderer.tune = { TUNE_SEA_DBG: 4 };", "__bh.renderer.tune = {};"],
+        ["noSkyLayer", "__bh.renderer.tune = { TUNE_SEA_DBG: 8 };", "__bh.renderer.tune = {};"],
+        ["skyLod2", "__bh.renderer.tune = { TUNE_SEA_DBG: 16 };", "__bh.renderer.tune = {};"],
       ];
       for (const [name, set, reset] of cases) {
         await app.js(`(() => { ${set} __bh.refresh(); return 1; })()`);
@@ -1092,7 +1098,7 @@ describe.skipIf(!E2E)("J0: the reference flight over Toulon-Hyères", () => {
       await app.js(
         `(() => { Object.assign(__bh.settings, { autoExposure: true, exposure: 0, shipMount: "cockpit" }); __bh.freeze(false); __bh.game.setDate("${J0_SCENE.date}"); return 1; })()`,
       );
-      expect(cases.length).toBe(9);
+      expect(cases.length).toBe(14);
     },
     900_000,
   );
