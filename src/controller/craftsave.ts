@@ -12,7 +12,9 @@ import type { Thermal } from "../aero";
 import { fleet } from "../fleet";
 import { t, tr } from "../i18n";
 import type { SystemsState } from "../game/systems";
-import type { StovlState } from "./stovl";
+import { noStovl, type StovlState } from "./stovl";
+import { noJetModes } from "../game/jet";
+import { noNav } from "./fplan";
 import { VESSEL_IDS, type VesselId } from "../vessels";
 import type { CameraController } from "../controls";
 
@@ -103,6 +105,47 @@ export function restoreCraft(c: CameraController, b: CraftSave) {
   c.jetResume = modes.alt !== null || modes.hdg !== null || modes.spd !== null || modes.ab ? { modes, frames: 90 } : null;
   if (b.stovl) c.stovl = structuredClone(b.stovl);
   if (b.skin) c.airFlight.skin = { ...c.airFlight.skin, ...b.skin };
+}
+
+/** A craft's own configuration, kept for it while another is flown (audit FX-14: one set of gear, flaps, brakes, air brake
+ *  served every craft — the Ranger came in orbit with the F-35's gear and flaps, the F-35 back on its runway gear up). */
+export interface CraftConfig {
+  gear: { down: boolean; ext: number };
+  flaps: number;
+  brake: number;
+  airBrake: number;
+  stovl: StovlState;
+}
+
+/** The flown craft's configuration now (fleet.config keeps it while another is flown). */
+export function captureConfig(c: CameraController): CraftConfig {
+  const cfg = c.airFlight.cfg;
+  return {
+    gear: { down: c.gearDown, ext: c.gearExt },
+    flaps: cfg.flaps ?? 0,
+    brake: cfg.brake ?? 0,
+    airBrake: c.airBrake,
+    stovl: structuredClone(c.stovl),
+  };
+}
+
+/** The craft now flown given its own configuration — as it was left, or, never flown, its gear decided by its height at
+ *  the next frame (down on a ground, up in the air), its flaps and brakes in; the jet's holds, the NAV and the spoilers
+ *  let go (they flew the craft left). */
+export function applyConfig(c: CameraController, k: CraftConfig | undefined) {
+  if (k) {
+    c.gearInit = true;
+    c.gearDown = k.gear.down;
+    c.gearExt = k.gear.ext;
+  } else c.gearInit = false;
+  c.airFlight.cfg.flaps = k?.flaps ?? 0;
+  c.airFlight.cfg.brake = k?.brake ?? 0;
+  c.airBrake = k?.airBrake ?? 0;
+  c.stovl = k ? structuredClone(k.stovl) : noStovl();
+  c.jetModes = noJetModes();
+  c.jetResume = null;
+  c.nav = noNav();
+  c.groundSpoilers = false;
 }
 
 /** An activity under way when the game is saved — an air mission, a fight, a challenge, a lesson: named in the save, it

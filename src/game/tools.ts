@@ -1004,6 +1004,8 @@ export class GameTools {
       fleet.free = structuredClone(save.fleet.free);
       fleet.links = structuredClone(save.fleet.links);
     }
+    // (the other crafts' gear and flaps: not the flight flown before the load's — each found as never flown since)
+    fleet.config = {};
     fleet.active = save.fleet?.active ?? s.vessel;
     s.vessel = fleet.active;
     setMountVessel(fleet.active);

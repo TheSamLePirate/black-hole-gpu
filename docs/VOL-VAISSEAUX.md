@@ -638,7 +638,10 @@ le long de la géodésique (`gyroscopes`). Attitude « sur rails » (posée cin�
 ### 3.4 Modes de vol dans l'air
 
 `settings.flightMode` : `"rocket"`, `"plane"` (défaut), `"sf"` ; ne s'applique qu'aux appareils `flies` (Ranger,
-Lander). Changer d'appareil met `flightMode = isPlane(id) ? "plane" : "rocket"` (le Lander passe en `rocket`).
+Lander). Changer d'appareil met `flightMode = isPlane(id) ? "plane" : "rocket"` (le Lander passe en `rocket`). Chaque appareil garde son
+train, ses volets, ses freins, son aérofrein et son STOVL pendant qu'un autre vole (`fleet.config`, depuis le 13 nov. 2026 — audit FX-14 :
+avant, le Ranger arrivait en orbite avec le train et les volets du F-35, et le F-35 retrouvé sur sa piste avait le train rentré) ; un appareil
+jamais piloté a son train décidé par sa hauteur.
 
 | Mode | Comportement | Condition |
 |---|---|---|

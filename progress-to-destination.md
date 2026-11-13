@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-13 23:40 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-13 23:46 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous.
@@ -66,7 +66,7 @@ ouverts, sous 1 ms) ; J3 au stade du plan.**
 | Audit vagues 3–4 (1feb2f7f) | 4.2 la politique de temps | **fait** : vol tenu pendant la reprise GPU, cadence vraie, horloge du vol + garde ; l'onglet masqué (choix de Sam) : solo en pause dite, salle sans arrêt (l'absent ne la bloque plus, les autres avertis, remis à l'heure au retour), sauvé en partant, TARS sans réveil ; le ralentissement sous 10 images/s dit — e2e `hidden-tab` 2/2, `fps-truth` 2/2 |
 | Audit vagues 3–4 (1feb2f7f) | 4.8 découper `main()` | **fait** (accord de Sam : par petits lots) : lot 1 la persistance, lot 2 qui tient le vol (`session.ts`), lots 3–4 les étapes gardées (`frame.ts`, AR-03), lot 5 l'ordre §19.5 (AR-04), lot 6 `craft-feed.ts`, lot 7 `governor.ts` (confié par la session du rendu) — **fait** : les quatre découpes d'AR-12 (session, frame, gouverneur, poses de l'appareil) |
 | Audit vagues 3–4 (1feb2f7f) | 4.3 séparer `Settings` | **fait** : garde statique des réglages (AR-21) ; `ViewPose` et `SimState` figés une fois par image (AR-07, `view-pose.ts`) ; le renderer les lit (session du rendu, 77721acf) |
-| Audit vague 6 hors rendu (1feb2f7f) | QA-16, QA-18, AR-17, AR-18, réseau RD4/RD5, FX-18, FX-17, FX-07, QA-11 ; puis les FX hors vague : FX-08, FX-12 | **faits** (accord de Sam : « un autre lot d'audit hors rendu ») ; FX-17 en 3 lots ; FX-07 l'A320 à la manette ; QA-11 le catalogue 446/446 gardé ; FX-08 V par les vues de l'appareil seul ; FX-12 les touches collées ; e2e `report` 3/4 (le final de Le Bourget, état périmé : PROBLEMES) ; ensuite les autres FX hors vague (FX-11, 13 à 16, 19 à 22) |
+| Audit vague 6 hors rendu (1feb2f7f) | QA-16, QA-18, AR-17, AR-18, réseau RD4/RD5, FX-18, FX-17, FX-07, QA-11 ; puis les FX hors vague : FX-08, FX-12, FX-14 (FX-15 déjà réglé le 11 nov., FX-16 tranché par Sam) | **faits** (accord de Sam : « un autre lot d'audit hors rendu ») ; FX-17 en 3 lots ; FX-07 l'A320 à la manette ; QA-11 le catalogue 446/446 gardé ; FX-08 V par les vues de l'appareil seul ; FX-12 les touches collées ; FX-14 chaque appareil sa configuration ; e2e `report` 3/4 (le final de Le Bourget, état périmé : PROBLEMES) ; ensuite les autres FX hors vague (FX-11, FX-13 — un choix pour Sam —, FX-19 à 22) |
 
 **Fermé récemment** : J2 (13 nov., ΔGPU nul, chemin vers §8 écrit) ; J2-C BC7 étudiée puis **rangée** (Sam : « ne pas le faire maintenant »).
 
@@ -6211,3 +6211,20 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
 - Limites : l'effet sur le zoom n'est pas observé dans la vue de pilotage testée (la distance n'y bouge pas) — seule la touche collée l'est ;
   l'« impact secondaire » de l'audit (`=` et `−` du combat qui zoomeraient aussi) reste supposé, non reproduit.
 - Suite : FX-11, FX-13 à FX-16, FX-19 à FX-22.
+
+## 2026-11-13T23:46Z — Audit FX-14 : chaque appareil sa configuration (FX-15 déjà réglé, FX-16 tranché)
+
+- Contribution : §7 (« une responsabilité commune avant plusieurs lecteurs » : l'état de configuration d'un appareil est le sien, pas celui
+  du dernier piloté) et §19 ; audit 2026-11-10, FX-14 (P2, hors vague).
+- Réalisé : `CraftConfig`, `captureConfig`, `applyConfig` (`controller/craftsave.ts`) ; `fleet.config` (`src/fleet.ts`, vidé au début d'une
+  scène et à un chargement) ; `switchVessel` (`controller/fleet.ts`, ses deux chemins) range la configuration de l'appareil quitté et rend
+  celle du nouveau — jamais piloté : train décidé par sa hauteur, volets, freins et aérofrein rentrés ; les modes du jet, le NAV et les
+  aérofreins au sol relâchés. BH-API (`vessel`), VOL-VAISSEAUX, catalogue.
+- Preuves : **reproduit avant** (e2e `craft-switch-config`) : le Ranger en orbite `gear: true, flaps: 1, airBrake: 1` (ceux du F-35), le F-35
+  retrouvé sur sa piste `gear: false` ; **après** : le Ranger `gear: false, flaps: 0, airBrake: 0`, le F-35 `gear: true, flaps: 1` — 1/1 ;
+  `fleet-switch` 2/2, `aircraft-save` 1/1 ; 10 fichiers de tests unitaires voisins verts ; tsc.
+- **FX-15** (l'anneau de l'Endurance sous un maintien) : **déjà réglé** le 11 nov. (a79c1b70, `tests/pilot.test.ts`, VOL-VAISSEAUX §5.6) —
+  rien refait. **FX-16** (limites non appliquées) : tranché par Sam le 11 nov. (« les limites des avions laissées telles quelles ») — non rouvert.
+- Limites : les configurations des appareils non pilotés ne sont pas dans la sauvegarde (seul l'appareil piloté l'est, `craftsave`) : après un
+  chargement, chacun est retrouvé comme jamais piloté.
+- Suite : FX-11 (TAT/SAT de l'A320), FX-19 à FX-22 ; FX-13 (⇧M) attend un choix de Sam.

@@ -105,6 +105,8 @@ export class Fleet {
   }
   /** the coasting ones (not flown, not docked to something that carries them) */
   free: Partial<Record<VesselId, FreeState>> = {};
+  /** the crafts not flown: their own gear, flaps, brakes (controller/craftsave.ts — audit FX-14), given back when flown */
+  config: Partial<Record<VesselId, import("./controller/craftsave").CraftConfig>> = {};
   /** each spacecraft's systems — its consumables, its failures (game/systems.ts, controller/systems.ts) */
   systems: Partial<Record<VesselId, import("./game/systems").SystemsState>> = {};
   /** the craft left on Gargantua's side, coasting on their geodesics (controller/holeendurance.ts) */
@@ -505,6 +507,7 @@ setGear(GEARS[fleet.active]!.height);
 export function fleetStart(t: number, active: VesselId): Record<SpacecraftId, Pose> {
   fleet.active = active;
   fleet.free = {};
+  fleet.config = {};
   fleet.hole = {};
   fleet.systems = {};
   fleet.links = [];

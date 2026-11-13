@@ -1,6 +1,7 @@
 // The CameraController — the fleet: the craft flown and switched.
 // (Its methods, out of controls.ts: installed on its prototype — `this` the controller.)
 import { timeRate } from "../clock";
+import { applyConfig, captureConfig } from "./craftsave";
 import { cameraFrame, setHomePose } from "../camera";
 import type { Vec3 } from "../physics";
 import { type Body, onOurSide } from "../targeting";
@@ -169,9 +170,13 @@ function switchVessel(this: CameraController, id: VesselId): string | null {
     const old = fleet.active;
     const me = this.activePoseNow();
     if (me && !fleet.assembly(old).includes("iss")) fleet.setFree(old, me, t, this.coastCom(), this.groundBody());
+    // (each craft its own gear, flaps and brakes — audit FX-14)
+    fleet.config[old] = captureConfig(this);
     fleet.active = id;
     s.vessel = id;
     setMountVessel(id);
+    applyConfig(this, fleet.config[id]);
+    delete fleet.config[id];
     this.onJetStart();
     this.pilot.auto = "none";
     this.pilot.hold = "none";
@@ -194,9 +199,13 @@ function switchVessel(this: CameraController, id: VesselId): string | null {
   // (the new one left on a ground — the F-35 on its runway —: found there at rest, not in the air)
   const leftOn = fleet.free[id]?.ground?.body;
   for (const v of fleet.assembly(id)) if (v !== "iss") delete fleet.free[v];
+  // (each craft its own gear, flaps and brakes — audit FX-14: the Ranger came in orbit with the F-35's gear and flaps)
+  fleet.config[old] = captureConfig(this);
   fleet.active = id;
   s.vessel = id;
   setMountVessel(id);
+  applyConfig(this, fleet.config[id]);
+  delete fleet.config[id];
   this.pilot.auto = "none";
   this.pilot.hold = "none";
   this.pilot.throttle = 0;
