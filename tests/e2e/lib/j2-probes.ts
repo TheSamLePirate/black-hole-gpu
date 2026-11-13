@@ -249,7 +249,9 @@ export const gpuTimesJs = (n = 90) => `(async () => {
  * two levels by their sign — the coarser side nearer or farther than its finer neighbour predicts: a ridge hiding a farther ground (an
  * occlusion the threshold of 3 slopes lets through in a grazing view) was thought always "farther", but its near side's steep slope
  * flips it: no separation (J2-3, measured) —; `seamEven`/`innerEven` the steps where the two sides' slopes are within a factor 2 (a
- * grazing ridge left out, a seam on even ground kept). Pairs across two
+ * grazing ridge left out, a seam on even ground kept); `seamCrack`/`innerCrack` the crack — each side's line carried across the pair:
+ * met between its two pixels, the surface whole and folded only (a coarser level's facet against a finer level's relief: 0), else the
+ * least of their gaps there, over the slope — C0-12's measure (a fold is not a seam). Pairs across two
  * levels (`seam`) against pairs inside one (`inner`, the control: the relief's own curvature and the depth's precision); steps over 3
  * counted apart (`silhouettes`: occlusion edges, a crack over ~2 px). A seam the geometry leaves shows as `seam` over `inner`;
  * renderer.rasterMorphOn off (T3's geomorphose) is the positive control — the levels' own heights, apart by up to metres.
@@ -264,7 +266,7 @@ export const SEAM_GEOM_JS = `(async () => {
   const st = bpr / 4, ty = Math.tan((__bh.settings.fov * Math.PI) / 360), tx = ty * W / H;
   const lv = (x, y) => { const i = y * st + x * 4, c = Math.floor(raw[i + 3] / 262144); return c >= 1 && c <= 56 && raw[i + 1] <= 0 && raw[i] > 0 ? c : 0; };
   const w = (x, y) => { const nx = ((x + 0.5) / W) * 2 - 1, ny = ((y + 0.5) / H) * 2 - 1; return Math.hypot(nx * tx, ny * ty, 1) / raw[y * st + x * 4]; };
-  const seam = [], inner = [], seamJ = [], innerJ = [], byPair = {}, seamEven = [], innerEven = [], innerBy = {}; let silSeam = 0, silInner = 0, groundPx = 0, nearer = 0, farther = 0;
+  const seam = [], inner = [], seamJ = [], innerJ = [], byPair = {}, seamEven = [], innerEven = [], innerBy = {}, seamCrack = [], innerCrack = []; let silSeam = 0, silInner = 0, groundPx = 0, nearer = 0, farther = 0;
   for (let y = 2; y < H - 2; y++) for (let x = 2; x < W - 2; x++) {
     const m = lv(x, y); if (!m) continue;
     groundPx++;
@@ -291,6 +293,12 @@ export const SEAM_GEOM_JS = `(async () => {
       // steep there and flat beyond — left out —; a seam on even ground keeps its two sides alike)
       const sa = Math.abs(w0 - wm), sb = Math.abs(w2 - w1);
       const even = Math.max(sa, sb) <= 2 * Math.min(sa, sb);
+      // (the crack: each side's line — through its two pixels — carried across the pair; met between the two pixels, the surface is
+      // whole there, folded only — a coarser level's facet meeting a finer level's relief, continuous but not smooth: 0 —; not met,
+      // the least of their gaps at the pair's two pixels, over the slope — a step, a crack)
+      const Dx = w0 - (w1 - (w2 - w1)), Dx1 = w0 + (w0 - wm) - w1;
+      const crack = Dx * Dx1 <= 0 ? 0 : Math.min(Math.abs(Dx), Math.abs(Dx1)) / slope;
+      (across ? seamCrack : innerCrack).push(crack);
       if (even) (across ? seamEven : innerEven).push(J);
       // (the control by level: inside each level, its even pairs' steps — a far level's own facets, a pixel or two wide in a grazing
       // view, fold between the pixels as a seam would)
@@ -311,6 +319,7 @@ export const SEAM_GEOM_JS = `(async () => {
     // (the steps over 0.25 px by their sign — no separation: a grazing ridge's steep near side flips it —; the steps where the two
     // sides' slopes are alike, the seams on even ground against the same inside a level)
     signs: { nearer, farther }, seamEven: stats(seamEven), innerEven: stats(innerEven),
+    seamCrack: stats(seamCrack), innerCrack: stats(innerCrack),
     innerEvenByRank: Object.fromEntries(Object.entries(innerBy).map(([k, v]) => [k, { n: v.n, share0_25: +(v.over / v.n).toFixed(3) }])),
     byPair: Object.fromEntries(Object.entries(byPair).sort((p, q) => q[1].n - p[1].n).map(([k, v]) => [k, { n: v.n, share0_25: +(v.over0_25 / v.n).toFixed(3), mean: +(v.sum / v.n).toFixed(3), even: v.even, evenShare0_25: +(v.evenOver / Math.max(v.even, 1)).toFixed(3) }])) };
 })()`;

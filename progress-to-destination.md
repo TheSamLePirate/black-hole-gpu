@@ -3957,3 +3957,14 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   ses paires régulières) ; fiche J2-3 §4–§5, PROBLEMES-A-REGLER (rouverte), PLAN-J2 §9 sexies.
 - **Mesuré** : M1 Max, phase `seams` (3 vues, puis `hyeres-low` deux fois), 3/0 et 1/0. **Non vérifié** : les hauteurs du cache aux bords
   à Hyères, géomorphose appliquée (la prochaine mesure) ; kerr-mini.
+
+## 2026-11-13T02:27Z — J2-3, coutures : la fissure mesurée — C0-12 tenu dans les Alpes et à Hyères vers La Crau
+
+- **Contribution** (PLAN-J2 §4, C0-12) : la « marche » comptait aussi les plis (deux niveaux qui se rejoignent, leurs pentes cassées). La
+  **fissure** (`SEAM_GEOM_JS` `seamCrack` : la droite de chaque côté prolongée, croisée entre les deux pixels = surface entière) :
+  géomorphose allumée, Alpes p95 **0,004 px**, `hyeres-diag` p95 **0,18 px** — **C0-12 tenu** — ; `hyeres-low` p95 0,77 px (11,9 % > 0,25 px
+  contre 2,4 % à l'intérieur), crêtes non séparées ; sans géomorphose 20–28 % partout. Lu dans le code et écartés : l'origine des hauteurs
+  du niveau grossier, la réfraction (millimétrique).
+- **Changé** : `tests/e2e/lib/j2-probes.ts` (`seamCrack`, `innerCrack`) ; fiche J2-3 §4–§5, PROBLEMES-A-REGLER, PLAN-J2 §9 sexies.
+- **Mesuré** : M1 Max, phase `seams` sur 3 vues, 3/0. **Non vérifié** : une vue plongeante sur la plaine du Gapeau (séparer crêtes et
+  fissures) ; kerr-mini.
