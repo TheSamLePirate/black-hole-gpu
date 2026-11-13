@@ -189,8 +189,11 @@ Aucun coût de J3 n'est mesuré ; aucun gain n'est promis.
   portée et l'échelle viennent de `keyLight` (`sh[12]`) ; les traînées perdent leur `exp(−d/120 km)` ad hoc. Interrupteur de comparaison
   `renderer.shipAirAllowed`. **Mesuré** (kerr-mini, J0, `J0_PHASES=keyhaze`, vue « around » de côté, champ resserré) : écart avec / sans
   (p99 du cadre central, 0–255) **10 à 300 m, 33 à 3 km, 59 à 10 km** ; A/A 1,3 — l'appareil lointain prend la brume du sol voisin (vues).
-  Coût sur J0 (ablation `shipAir`, cockpit) : 0,25–0,7 ms avant la coupure à 50 m, **≈ 0,2 ms après, au bruit**. **Non fait** : les
-  panaches, les feux et leurs halos, les verrières (`jetGlass`) sans air ; la nuit (la part lunaire de la table) ; l'air au-delà de la
+  Coût sur J0 (ablation `shipAir`, cockpit) : 0,25–0,7 ms avant la coupure à 50 m, **≈ 0,2 ms après, au bruit**. **Puis (~17:16 UTC)** :
+  les flammes (`plumeFs`) et le halo des feux (`lampFs`) atténués par la transmittance de leur distance (des émissions : pas de diffusion
+  ajoutée) ; run `…-j3-keyhaze5` : mesures reproduites, aucune erreur WebGPU, postcombustion allumée — mais la vue (revenue de 10 km) ne
+  montre pas la flamme, et les feux n'ont pas été dessinés (de jour) : leur chemin non vérifié à l'exécution. **Non fait** : les verrières
+  (`jetGlass`) sans air ; la nuit (la part lunaire de la table) ; l'air au-delà de la
   table (au-dessus de l'air, une autre planète). Trois runs du test ont échoué sur la mise en place de la vue avant celui-ci (le montage
   « chase » ignore la distance ; le passage à « around » replace la caméra ; la moyenne noyait l'appareil lointain).
 

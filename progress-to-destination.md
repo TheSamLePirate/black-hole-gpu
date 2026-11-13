@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-13 17:12 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-13 17:16 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous.
@@ -5376,4 +5376,13 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
 - Limites : panaches, feux, verrières sans air ; la part lunaire (nuit) ignorée ; la portée de la table vient de la sonde (une image ou deux de
   retard, figée si la lumière principale s'éteint).
 - Suite : les feux et panaches ; puis J3-3 (les ombres reçues par l'appareil), selon l'ordre du plan.
+
+## 2026-11-13T17:16Z — J3-2 : les flammes et les feux à travers l'air
+
+- Réalisé : `ship.wgsl` `plumeFs` et `lampFs` passent par `shipAir` (émissions : la transmittance seule) ; `ship.ts` leurs groupes de liaison
+  (le tampon de la sonde, la table aérienne ; les feux recréés à chaque génération) ; e2e `keyhaze` : la postcombustion allumée, les erreurs
+  WebGPU comptées. Docs : PLAN-J3 §10, GRAPHICS-PIPELINE (ligne E12a inchangée sur le principe), journal.
+- Preuves : run `…-j3-keyhaze5` (kerr-mini) : 10 / 33 / 60, A/A 2, **0 erreur WebGPU** ; `check-wgsl` 82/82. **Non vérifié** : la flamme à l'image
+  (la vue revenait de 10 km), les feux (non dessinés de jour) — leur chemin n'a pas tourné.
+- Suite : les verrières ; une vue de nuit pour les feux ; J3-3.
 

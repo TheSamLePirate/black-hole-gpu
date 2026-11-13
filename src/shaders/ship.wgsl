@@ -1534,7 +1534,8 @@ fn plumeFs(in: POut) -> @location(0) vec4f {
     sum += col * (dens * dt);
   }
   let gain = select(select(2.0, 0.8, main) * J.p.w, 1.2, J.d.w > 1.5);
-  return vec4f(sum * gain * S.jet.y, 0.0);
+  // (J3-2: a flame's light dimmed by the air between it and the eye — an emission: its transmittance alone)
+  return shipAir((S.model * vec4f(in.q, 1.0)).xyz, vec4f(sum * gain * S.jet.y, 0.0));
 }
 
 // ------------------------------------------------------------------------------------ re-entry
@@ -1907,7 +1908,8 @@ fn lampFs(in: LOut) -> @location(0) vec4f {
     let ca = dot(normalize((S.model * vec4f(B.xyz, 0.0)).xyz), normalize(-c));
     g *= 0.06 + 4.0 * smoothstep(B.w - 0.2, 1.0, ca);
   }
-  return vec4f(S.lamp[3u * in.i + 1u].rgb * g * (1.0 - smoothstep(0.7, 1.0, d)) * S.jet.y, 0.0);
+  // (J3-2: the glare dimmed by the air between the lamp and the eye)
+  return shipAir(in.c, vec4f(S.lamp[3u * in.i + 1u].rgb * g * (1.0 - smoothstep(0.7, 1.0, d)) * S.jet.y, 0.0));
 }
 
 // ------------------------------------------------------------------------------------ composite

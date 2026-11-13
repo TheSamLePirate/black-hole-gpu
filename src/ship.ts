@@ -475,6 +475,7 @@ interface ShipTargetRes {
   trailMoments?: GPUBuffer;
   /** the lamps' glare's bind group, with this target's traced depths */
   lampBind?: GPUBindGroup;
+  lampGen?: number;
   lampMoments?: GPUBuffer;
   /** the shading's bind group, with this target's traced image and depths (and the bindings' generation) */
   bind?: GPUBindGroup;
@@ -1861,17 +1862,19 @@ export class ShipRenderer {
     this.bindGen++;
 
     // (the hull's passes read the instances: the F-35's parts posed)
-    const pb = (p: GPURenderPipeline, jets = true) =>
+    // (air: the flames read the air between them and the eye — J3-2 shipAir: the probe's buffer, the aerial table)
+    const pb = (p: GPURenderPipeline, jets = true, air = false) =>
       d.createBindGroup({
         layout: p.getBindGroupLayout(0),
         entries: [
           { binding: 0, resource: { buffer: this.uniform } },
           ...(jets ? [{ binding: 9, resource: { buffer: this.jetBuf } }] : [{ binding: 12, resource: { buffer: this.instBuf } }]),
+          ...(air ? [{ binding: 1, resource: { buffer: this.shBuf } }, ...this.aerialEntries()] : []),
         ],
       });
     this.plumeBinds = {
-      plume: pb(this.pipes.plume),
-      plumeIn: pb(this.pipes.plumeIn),
+      plume: pb(this.pipes.plume, true, true),
+      plumeIn: pb(this.pipes.plumeIn, true, true),
       hullDepth: pb(this.pipes.hullDepth, false),
       glow: pb(this.pipes.glow, false),
       dist: pb(this.pipes.dist, false),
@@ -3202,15 +3205,19 @@ export class ShipRenderer {
         pp.draw(6, this.trailCount);
       }
       if (lamps) {
-        if (!res.lampBind || res.lampMoments !== mb) {
+        if (!res.lampBind || res.lampMoments !== mb || res.lampGen !== this.bindGen) {
           res.lampBind = this.device.createBindGroup({
             layout: this.pipes.lamp.getBindGroupLayout(0),
             entries: [
               { binding: 0, resource: { buffer: this.uniform } },
               { binding: 11, resource: { buffer: mb } },
+              // (J3-2: the glare dimmed by the air — shipAir)
+              { binding: 1, resource: { buffer: this.shBuf } },
+              ...this.aerialEntries(),
             ],
           });
           res.lampMoments = mb;
+          res.lampGen = this.bindGen;
         }
         pp.setPipeline(this.pipes.lamp);
         pp.setBindGroup(0, res.lampBind);

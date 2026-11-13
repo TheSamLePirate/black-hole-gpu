@@ -677,6 +677,16 @@ describe.skipIf(!E2E)("J0: the reference flight over Toulon-Hyères", () => {
         rows[`d${dist}`] = diff(on, off);
         if (dist === 10000) rows.aa = diff(off, await shot(`${dist}-off2`, dist, false));
       }
+      // (the flames and the lamps read the air too — their bind groups changed with it —: the afterburner lit, seen from 200 m aside,
+      // the page's WebGPU errors counted — none)
+      const err0 = await app.js<number>("__bh.renderer.gpuErrors");
+      await app.js(`(async () => { const f = () => new Promise((q) => requestAnimationFrame(q)); __bh.freeze(false);
+        Object.assign(__bh.settings, { fov: ${fov0} }); Object.assign(__bh.camera.outside, { yaw: 150, pitch: 4, dist: 200 });
+        __bh.camera.jetToggle("ab"); for (let i = 0; i < 120; i++) await f(); return 1; })()`);
+      const ab = (await app.cdp.send("Page.captureScreenshot", { format: "png" })) as { data: string };
+      await Bun.write(`${OUT}/keyhaze-afterburner.png`, Buffer.from(ab.data, "base64"));
+      await app.js(`(() => { __bh.camera.jetToggle("ab"); return 1; })()`);
+      rows.gpuErrors = (await app.js<number>("__bh.renderer.gpuErrors")) - err0;
       await app.js(
         `(() => { __bh.renderer.shipAirAllowed = true; Object.assign(__bh.settings, { shipMount: "cockpit", fov: ${fov0} }); return 1; })()`,
       );
@@ -684,6 +694,7 @@ describe.skipIf(!E2E)("J0: the reference flight over Toulon-Hyères", () => {
       out.keyhaze = rows;
       expect(rows.d10000!).toBeGreaterThan(rows.d300!);
       expect(rows.d10000!).toBeGreaterThan(3 * rows.aa!);
+      expect(rows.gpuErrors).toBe(0);
     },
     900_000,
   );
