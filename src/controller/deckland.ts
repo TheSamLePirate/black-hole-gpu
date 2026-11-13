@@ -22,6 +22,7 @@ import { f35Variant } from "../f35/variant";
 import { STOVL } from "../f35/stovl";
 import { C_MPS } from "../units";
 import { t, tf } from "../i18n";
+import { unitsOf } from "../ui/unitsys";
 import type { PilotInput } from "../pilot";
 import { deckOf } from "./carriers";
 import { earthView } from "./netcraft";
@@ -260,7 +261,7 @@ function deckTakeoff(this: CameraController, mode?: "short" | "vertical"): strin
   this.onRadio?.(
     vto
       ? tf("{0}, Mother: cleared for a vertical take-off. Converting.", "F-35B")
-      : tf("{0}, Mother: cleared for a short take-off, {1} m of deck. Converting.", "F-35B", Math.round(run)),
+      : tf("{0}, Mother: cleared for a short take-off, {1} of deck. Converting.", "F-35B", unitsOf(this.s.units).fAlt(run)),
   );
   return vto ? tf("Vertical take-off from {0}", CARRIER[on.kind].name) : tf("Short take-off from {0}", CARRIER[on.kind].name);
 }

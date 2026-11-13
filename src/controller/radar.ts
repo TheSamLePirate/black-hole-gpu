@@ -12,6 +12,7 @@ import { fleet } from "../fleet";
 import { interceptCues } from "../game/intercept";
 import { AIR_RADARS, Radar, type RadarObject, type RadarOwn, type RadarSpec, type V3 } from "../game/radar";
 import { t, tf } from "../i18n";
+import { unitsOf } from "../ui/unitsys";
 import { bodyFixedOf, groundRelief } from "../system/our-surface";
 import { geodeticToCart, WGS84_A, WGS84_F } from "../system/ellipsoid";
 import { MISSILES } from "../game/combat";
@@ -204,7 +205,7 @@ function radarStep(this: CameraController, dt: number) {
       const T = id ? this.radar.tracks.get(id) : null;
       if (T) {
         this.radarLockWant = undefined;
-        this.onPilotMessage?.(tf("Locked: {0} · {1} km", T.name, (Math.hypot(...T.r) / 1000).toFixed(1)));
+        this.onPilotMessage?.(tf("Locked: {0} · {1}", T.name, unitsOf(this.s.units).fDist(Math.hypot(...T.r))));
       }
     }
   }
@@ -339,19 +340,19 @@ function pictureSelect(this: CameraController, id: string | null, how: "click" |
   }
   const T = P?.byId.get(id);
   if (!T) return t("No such track");
-  const km = (Math.hypot(...T.r) / 1000).toFixed(1);
+  const km = unitsOf(this.s.units).fDist(Math.hypot(...T.r));
   if (this.pictureSelected === id && how === "click") {
     const R = this.radar;
-    if (R.lock === id) return tf("Locked: {0} · {1} km", T.name, km);
+    if (R.lock === id) return tf("Locked: {0} · {1}", T.name, km);
     if (R.tracks.has(id) && R.lockOn(id)) {
       if (R.mode === "RWS") R.mode = "TWS";
-      return tf("Locked: {0} · {1} km", T.name, km);
+      return tf("Locked: {0} · {1}", T.name, km);
     }
     return tf("{0}: not a radar track — the radar cannot lock it", T.name);
   }
   this.pictureSelected = id;
   this.pictureSelectedSeen = this.radarT;
-  return tf("Selected: {0} · {1} km", T.name, km);
+  return tf("Selected: {0} · {1}", T.name, km);
 }
 
 /** The radar's next lock (Tab): the track selected if the radar holds it, else the next; what to say. */
@@ -362,7 +363,7 @@ function radarLockNext(this: CameraController): string {
   if (sel && this.radar.lock !== sel && this.radar.tracks.has(sel) && this.radar.lockOn(sel)) {
     if (this.radar.mode === "RWS") this.radar.mode = "TWS";
     const T = this.radar.tracks.get(sel)!;
-    return tf("Locked: {0} · {1} km", T.name, (Math.hypot(...T.r) / 1000).toFixed(1));
+    return tf("Locked: {0} · {1}", T.name, unitsOf(this.s.units).fDist(Math.hypot(...T.r)));
   }
   const had = this.radar.lock;
   const id = this.radar.lockNext();
@@ -376,7 +377,7 @@ function radarLockNext(this: CameraController): string {
   }
   this.radarLockWant = undefined;
   if (!T) return t("Lock dropped");
-  return tf("Locked: {0} · {1} km", T.name, (Math.hypot(...T.r) / 1000).toFixed(1));
+  return tf("Locked: {0} · {1}", T.name, unitsOf(this.s.units).fDist(Math.hypot(...T.r)));
 }
 
 /** The radar's next mode (RWS → TWS → STT): what to say. */

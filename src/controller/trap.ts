@@ -28,6 +28,7 @@ import {
 import { f35Variant } from "../f35/variant";
 import { fleet } from "../fleet";
 import { t, tf } from "../i18n";
+import { unitsOf } from "../ui/unitsys";
 import type { PilotInput } from "../pilot";
 import { fromBodyFixed, groundVelocity, type Platform, platformUnder, toBodyFixed } from "../system/our-surface";
 import { C_MPS, M_METRES } from "../units";
@@ -355,7 +356,7 @@ function catLaunch(this: CameraController, n = 0): string | null {
     m.hdg = (this.jetFigures()?.hdg ?? Number.NaN) || null;
     m.spd = 150;
     this.jetAthr.reset();
-    this.onPilotMessage?.(tf("Off the catapult: {0} m/s over the deck", v.toFixed(0)));
+    this.onPilotMessage?.(tf("Off the catapult: {0} over the deck", unitsOf(this.s.units).fSpd(v)));
   };
   this.onRadio?.(tf("{0}, Mother: on cat {1}. Tension — run it up.", "F-35C", n + 1));
   return tf("Catapult {0} on {1}", n + 1, CARRIER[kind].name);

@@ -590,4 +590,18 @@ export default {
   "Struck · {0} m/s": "Heurt · {0} m/s",
   "Undocked from {0}": "Désamarré — {0}",
   " and ": " et ",
+  // (the aircraft's messages in the pilot's units — audit FX-17, 13 Nov 2026: the value comes written with its unit)
+  "Altitude {0} selected": "Altitude {0} sélectionnée",
+  "Speed {0} selected": "Vitesse {0} sélectionnée",
+  "Autopilot: altitude {0}, heading {1}°": "Pilote automatique : altitude {0}, cap {1}°",
+  "Autothrottle: {0} — the throttle keys set the speed": "Auto-manette : {0} — les touches des gaz règlent la vitesse",
+  "Locked: {0} · {1}": "Verrouillé : {0} · {1}",
+  "Selected: {0} · {1}": "Sélectionné : {0} · {1}",
+  "ILS {0}: the 3° slope runs into the relief {1} out — refused": "ILS {0} : la pente de 3° rencontre le relief à {1} — refusée",
+  "the relief {0} under the slope {1} out": "le relief à {0} sous la pente à {1}",
+  "ILS approach: {0}, {1}": "Approche ILS : {0}, {1}",
+  "{0}, Mother: cleared for a short take-off, {1} of deck. Converting.":
+    "{0}, ici Mother : autorisé au décollage court, {1} de pont. Conversion.",
+  "Off the catapult: {0} over the deck": "Sorti de la catapulte : {0} par rapport au pont",
+  "{0}: {1}°, {2}°, heading {3}°, {4}": "{0} : {1}°, {2}°, cap {3}°, {4}",
 } satisfies Record<string, string>;

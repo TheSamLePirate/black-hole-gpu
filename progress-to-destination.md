@@ -6053,3 +6053,18 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   (les 20 nouvelles clés) ; i18n 5/5 ; les tests de vol, d'amarrage, d'atterrissage et de missions qui citent ces messages verts (anglais inchangé).
 - Limites : les unités en dur dans ces messages (m/s, K, bar — FX-17) restent ; « Toucher sur {0} » (traduction déjà là) garde « sur Lune ».
 
+## 2026-11-14T15:40Z — Audit FX-17 (premier lot) : les messages des avions dans les unités du pilote
+
+- Contribution : §19 (lisibilité ; le métrique par défaut, l'impérial en option — mêmes unités au HUD et dans les messages) ; audit 2026-11-10, FX-17.
+- Réalisé : `unitsOf(this.s.units)` dans les messages de l'autopilote du jet (altitude, vitesse sélectionnées, AP, A/THR — `controller/jet.ts`),
+  du radar (verrouillé, sélectionné — `radar.ts`), de l'ILS (relief, approche — `ils.ts`), du pont (décollage court — `deckland.ts`), de la
+  catapulte (`trap.ts`) et de l'apparition d'un porte-avions (`carriers.ts` : des nœuds écrits en dur, et en anglais seul) ; leurs clés sans
+  unité et leurs traductions (`fr-main.ts`). En métrique, les textes inchangés (la ligne du porte-avions passe de kt à m/s : le métrique par
+  défaut).
+- Preuves : **reproduit avant** (`tests/units-messages.test.ts` : en impérial, « Altitude 3050 m selected », « 129 m/s ») ; **après** : « 10007 ft »,
+  « 251 kt », et en métrique « 3000 m », « 200 m/s » ; i18n 5/5 ; les tests du radar, de l'ILS, du pont, de la catapulte, du porte-avions, du
+  F-35 et de l'équipage verts.
+- Limites : 77 messages avec une unité écrite restent (`src/game`, `main.ts`, d'autres de `src/controller` — l'amarrage en m/s, les
+  vaisseaux) ; certains demandent une précision que `fSpd` (arrondi à l'unité) n'a pas — un format précis (pieds/seconde, ft/min) à ajouter
+  d'abord ; le pas de sélection de l'altitude (10 m) reste métrique.
+

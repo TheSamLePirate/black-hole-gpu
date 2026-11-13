@@ -5,6 +5,8 @@
 // the craft lands on them, rests on them carried along, takes off from them —; a craft set down on one (a scene's
 // start, a test's, TARS's).
 // (Its methods, out of controls.ts: installed on its prototype — `this` the controller.)
+import { tf } from "../i18n";
+import { unitsOf } from "../ui/unitsys";
 import { shipLights, shipMotion } from "../game/shiptypes";
 import { azAltAt } from "../eclipse/earth-moon";
 import { J2000_MS } from "../system/timescale";
@@ -117,7 +119,15 @@ function carrierSpawn(
   };
   this.carriers = [...(this.carriers ?? []).filter((c) => c.kind !== kind), sp];
   deckOf(kind);
-  return `${CARRIER[kind].name}: ${lat.toFixed(3)}°, ${lon.toFixed(3)}°, heading ${Math.round((sp.heading * 180) / Math.PI)}°, ${Math.round(sp.speed * 1.943844)} kt`;
+  // (in the pilot's units and language — audit FX-17, FX-18: knots written in, English only before 13 Nov 2026)
+  return tf(
+    "{0}: {1}°, {2}°, heading {3}°, {4}",
+    CARRIER[kind].name,
+    lat.toFixed(3),
+    lon.toFixed(3),
+    Math.round((sp.heading * 180) / Math.PI),
+    unitsOf(this.s.units).fSpd(sp.speed),
+  );
 }
 
 function carrierClear(this: CameraController) {

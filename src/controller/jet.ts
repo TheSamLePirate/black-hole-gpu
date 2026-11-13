@@ -9,6 +9,7 @@ import { fleet } from "../fleet";
 import { JET, jetCommands, noJetModes } from "../game/jet";
 import { formGrace } from "./formation";
 import { t, tf } from "../i18n";
+import { unitsOf } from "../ui/unitsys";
 import type { PilotInput } from "../pilot";
 import { seaAltitudeOver, solidBody } from "../system/our-surface";
 import { C_MPS, M_METRES } from "../units";
@@ -81,7 +82,7 @@ function apSet(this: CameraController, want: { alt?: number; hdg?: number; spd?:
   if (want.alt !== undefined && apOn()) {
     m.alt = Math.round(Math.max(0, Math.min(20_000, want.alt)) / 10) * 10;
     if (N.on.v) N.on.v = false;
-    said.push(tf("Altitude {0} m selected", m.alt));
+    said.push(tf("Altitude {0} selected", unitsOf(this.s.units).fAlt(m.alt)));
   }
   if (want.hdg !== undefined && apOn()) {
     m.hdg = ((want.hdg % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI) || 0;
@@ -91,7 +92,7 @@ function apSet(this: CameraController, want: { alt?: number; hdg?: number; spd?:
   if (want.spd !== undefined && m.spd !== null) {
     m.spd = Math.round(Math.max(30, Math.min(700, want.spd)));
     if (N.on.v) N.on.v = false;
-    said.push(tf("Speed {0} m/s selected", m.spd));
+    said.push(tf("Speed {0} selected", unitsOf(this.s.units).fSpd(m.spd)));
   }
   return said.join(" — ") || t("The autopilot as it was");
 }
@@ -138,7 +139,11 @@ function jetToggle(this: CameraController, what: "ap" | "athr" | "ab"): string {
     m.alt = Math.round(f.h / 10) * 10;
     m.hdg = Number.isFinite(f.hdg) ? Math.round(f.hdg / D) * D : null;
     this.jetCws.pitch = this.jetCws.roll = false;
-    return tf("Autopilot: altitude {0} m, heading {1}°", Math.round(m.alt), Math.round((((m.hdg ?? 0) / D) % 360) + 360) % 360);
+    return tf(
+      "Autopilot: altitude {0}, heading {1}°",
+      unitsOf(this.s.units).fAlt(m.alt),
+      Math.round((((m.hdg ?? 0) / D) % 360) + 360) % 360,
+    );
   }
   if (m.spd !== null) {
     m.spd = null;
@@ -148,7 +153,7 @@ function jetToggle(this: CameraController, what: "ap" | "athr" | "ab"): string {
   m.ab = false;
   this.jetAthr.reset();
   this.jetCws.thr = this.pilot.throttle;
-  return tf("Autothrottle: {0} m/s — the throttle keys set the speed", m.spd);
+  return tf("Autothrottle: {0} — the throttle keys set the speed", unitsOf(this.s.units).fSpd(m.spd));
 }
 
 /**

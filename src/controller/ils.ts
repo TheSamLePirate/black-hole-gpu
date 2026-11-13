@@ -26,6 +26,7 @@ import { gcDist } from "../game/flightplan";
 import { landingEnd, RUNWAY_LENGTH, reciprocal, type Site, SITES } from "../game/sites";
 import { fleet } from "../fleet";
 import { t, tf } from "../i18n";
+import { unitsOf } from "../ui/unitsys";
 import type { PilotInput } from "../pilot";
 import { daysOf } from "../system/solar";
 import { isAircraft, VESSELS } from "../vessels";
@@ -215,9 +216,9 @@ function ilsStart(
   const clear = o.base ? null : glideClearanceOf(W);
   const id = `${W.icao ?? W.name} ${runwayId(W.hdg, W.des)}`;
   if (clear && clear.minM < 0)
-    return tf("ILS {0}: the 3° slope runs into the relief {1} km out — refused", id, (clear.atM / 1000).toFixed(1));
+    return tf("ILS {0}: the 3° slope runs into the relief {1} out — refused", id, unitsOf(this.s.units).fDist(clear.atM));
   const warn = clear?.thin
-    ? ` — ${tf("the relief {0} m under the slope {1} km out", Math.round(clear.minM), (clear.atM / 1000).toFixed(1))}`
+    ? ` — ${tf("the relief {0} under the slope {1} out", unitsOf(this.s.units).fAlt(clear.minM), unitsOf(this.s.units).fDist(clear.atM))}`
     : "";
   // (the A320 flies its own: its FMGC tuned on that runway, vectored to the localizer, APPR armed — controller/a320ap.ts)
   if (fleet.active === "a320") {
@@ -233,7 +234,7 @@ function ilsStart(
         ? tf("{0} approach: hold at the initial fix, expect the ILS {1}", W.icao ?? W.name, runwayId(W.hdg, W.des))
         : tf("{0} approach: cleared ILS {1}", W.icao ?? W.name, runwayId(W.hdg, W.des)),
   );
-  return tf("ILS approach: {0}, {1} km", id, Math.round(gcDist(g, W) / 1000)) + warn;
+  return tf("ILS approach: {0}, {1}", id, unitsOf(this.s.units).fDist(gcDist(g, W), 0)) + warn;
 }
 
 /** A world runway's level as measured (src/world/runways3d.ts: the median of the bare relief under it, as the relief
