@@ -5518,3 +5518,11 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
 - Limites : pendant ce temps la sonde tourne sans les constantes de la nouvelle clé (le décor non vu par elle, un `tune` non appliqué) ;
   `tracerSettled` n'attend toujours pas le noyau `env` (non changé : il touche toutes les attentes des e2e).
 
+## 2026-11-13T23:35Z — Audit TA-17 (la part documentaire) : TARS.md ne dit plus « tout le jeu »
+
+- Réalisé : `docs/TARS.md` — trois affirmations « tout le jeu » remises au vrai : vérifié dans `ai/game-tools.ts` qu'aucun outil ne couvre le
+  réseau (salon, flotte, messages), les zones hors ligne, les pages du PCD du F-35 (`show_screen` n'ouvre que des écrans du vaisseau), les
+  capteurs ; voyage de caméra et systèmes du vaisseau par `press_key` seulement.
+- Preuves : lu dans le code (recherche des domaines dans les 69 outils et la liste `SCREENS`). Aucun test.
+- Limites : les outils manquants ne sont pas ajoutés (TA-17 : « au fil des chantiers » ; hors des vagues 3–4) ; TA-04 (vague 6) non ouvert.
+
