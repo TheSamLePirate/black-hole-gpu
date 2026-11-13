@@ -25,7 +25,9 @@ import {
   type RoomClock,
   type RoomInfo,
   type ServerMsg,
+  decodeCraft,
 } from "../src/net/proto";
+import { readEvent } from "../src/net/inbound";
 
 export interface Peer {
   kind: "rooms";
@@ -112,6 +114,8 @@ const WARP_LEAD = 150;
 export function createRooms(o: RoomsOptions) {
   const now = o.now ?? (() => performance.timeOrigin + performance.now());
   const build = o.build ?? "dev";
+  /** the events and samples dropped at the input (src/net/inbound.ts; health()) */
+  let rejected = 0;
   const db = new Database(o.db, { create: true });
   db.run("PRAGMA journal_mode = WAL");
   db.run(`CREATE TABLE IF NOT EXISTS rooms (
@@ -391,8 +395,13 @@ export function createRooms(o: RoomsOptions) {
       }
       case "event": {
         if (!P.room) return fail(ws, "not-in-room", "Not in a room");
-        let ev = m.ev && typeof m.ev === "object" ? m.ev : null;
-        if (!ev || typeof ev.kind !== "string") return;
+        // (read as the clients read it — src/net/inbound.ts —: a malformed one neither passed on nor kept for newcomers;
+        // before 13 Nov 2026 a match of no fields froze every member's image and was replayed to each newcomer)
+        let ev = readEvent(m.ev);
+        if (!ev) {
+          rejected++;
+          return;
+        }
         // (the room's light delay: its owner's alone — his token checked here, never passed on —, kept for newcomers)
         if (ev.kind === "room-delay") {
           const l = live.get(P.room);
@@ -441,6 +450,11 @@ export function createRooms(o: RoomsOptions) {
         // a craft's sample: its slot stamped, passed on to the room's others
         const P = ws.data;
         if (!P.room || raw.byteLength !== CRAFT_BYTES || (raw[0] !== MSG_CRAFT && raw[0] !== MSG_KEEP)) return;
+        // (a sample that is not one — not finite, out of its bounds —: neither passed on nor kept as the world's)
+        if (!decodeCraft(raw, true)) {
+          rejected++;
+          return;
+        }
         const t = now();
         if (t - P.rate.at > 1000) P.rate = { at: t, n: 0 };
         if (++P.rate.n > 150) return;
@@ -461,7 +475,7 @@ export function createRooms(o: RoomsOptions) {
       let peers = 0;
       for (const l of live.values()) peers += l.peers.size;
       const rooms = (db.query("SELECT COUNT(*) AS n FROM rooms").get() as { n: number }).n;
-      return { ok: true, v: PROTO_VERSION, build, rooms, live: live.size, peers };
+      return { ok: true, v: PROTO_VERSION, build, rooms, live: live.size, peers, rejected };
     },
     close() {
       clearInterval(timer);

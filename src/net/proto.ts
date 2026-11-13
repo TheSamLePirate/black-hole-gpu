@@ -213,9 +213,37 @@ export function encodeCraft(s: CraftSample): ArrayBuffer {
   return b;
 }
 
-export function decodeCraft(b: ArrayBuffer | Uint8Array): CraftSample | null {
+/** The bounds a sample must keep (audit NET-07): a place within ~70 AU [m], a speed under light's [m/s], rates and
+ *  accelerations a craft can have. */
+const P_MAX = 1e13,
+  V_MAX = 3e8,
+  W_MAX = 1e3,
+  A_MAX = 1e6;
+
+/** A sample read (null: not one — too short, another message, or a field not finite or out of its bounds: before
+ *  13 Nov 2026 a NaN or infinite time poisoned the sender's track for good, a NaN place reached a follower's camera).
+ *  `anyType`: a kept sample's (MSG_KEEP) read as well — the server's check. */
+export function decodeCraft(b: ArrayBuffer | Uint8Array, anyType = false): CraftSample | null {
   const buf = b instanceof Uint8Array ? b : new Uint8Array(b);
-  if (buf.byteLength < CRAFT_BYTES || buf[0] !== MSG_CRAFT) return null;
+  if (buf.byteLength < CRAFT_BYTES || (buf[0] !== MSG_CRAFT && !(anyType && buf[0] === MSG_KEEP))) return null;
+  const s = readCraft(buf);
+  const ok = (x: number[], max: number) => x.every((v) => Number.isFinite(v) && Math.abs(v) < max);
+  if (
+    !Number.isFinite(s.t) ||
+    !ok(s.p, P_MAX) ||
+    !ok(s.v, V_MAX) ||
+    !ok(s.w, W_MAX) ||
+    !ok(s.a, A_MAX) ||
+    (s.frame !== FRAME_FIXED && s.frame !== FRAME_INERTIAL) ||
+    (s.body >= BODIES.length && s.body !== 255) ||
+    s.kind >= KINDS.length ||
+    !Number.isFinite(s.vis.alpha)
+  )
+    return null;
+  return s;
+}
+
+function readCraft(buf: Uint8Array): CraftSample {
   const d = new DataView(buf.buffer, buf.byteOffset, CRAFT_BYTES);
   const f3 = (o: number): [number, number, number] => [d.getFloat32(o, true), d.getFloat32(o + 4, true), d.getFloat32(o + 8, true)];
   const q = [0, 1, 2, 3].map((k) => d.getInt16(52 + 2 * k, true) / 32767) as [number, number, number, number];

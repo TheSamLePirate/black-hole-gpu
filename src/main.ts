@@ -8453,6 +8453,20 @@ async function main() {
   let lastStats: FrameStats | null = null;
   let saveTimer = 0;
   let autosaveFailTold = false;
+  /** a network step of the frame on its own: an exception caught, counted (`__bh.net.net.inbound.failed` with the
+   *  events'), told once by its message (debug.ts caught) */
+  const netGuard = (what: string, f: () => void) => {
+    try {
+      f();
+    } catch (e) {
+      const I = netPanel.net?.inbound;
+      if (I) {
+        I.failed++;
+        I.lastFailure = `frame ${what}: ${e instanceof Error ? e.message : String(e)}`.slice(0, 200);
+      }
+      caught(`net frame (${what})`, e);
+    }
+  };
   // (the jitter probe: off, nothing gathered; its own clock — the steps the flight was given)
   const jitterProbe = new JitterProbe();
   const camProbe = new CamProbe();
@@ -8609,7 +8623,9 @@ async function main() {
     const pil = flying();
     const info = pil ? cpuProf.time("flight figures (flightInfo)", () => camera.flightInfo()) : null;
     // (flying together: ours sent, the others placed — before the render's figures: their contrails come with ours — ui/netsession.ts)
-    netSession.frame(dt);
+    // (each in its own guard — RD1, audit AR-03: what another member sent, if it slipped past the input's reading, costs
+    // its own step, counted and told once, never the image: before 13 Nov 2026 one malformed event froze every member's)
+    netGuard("session", () => netSession.frame(dt));
     missionHud.tick();
     instructorPanel.tick();
     // (the real traffic about us: asked when due — off by the setting, offline, far from the Earth)
@@ -8621,8 +8637,8 @@ async function main() {
       if (trafficCredit.textContent !== txt) trafficCredit.textContent = txt;
       trafficCredit.hidden = !live;
     }
-    netMatch.frame();
-    netVoice.frame();
+    netGuard("match", () => netMatch.frame());
+    netGuard("voice", () => netVoice.frame());
     // (who speaks: a mark before his name)
     // (the real traffic's labels and lights — controller/traffic.ts)
     viewOverlay.trafficMarks =

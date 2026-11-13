@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-13 08:29 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-13 08:49 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous.
@@ -49,8 +49,9 @@ indirects → J3 (lumière, cockpit).
 | Rendu (33d89754) | La borne de cadence du M1 Max | 30 images/s : **bride encore** (soutenu 27,8/s, p95 58,6 ms, GPU 1291 → ~900 MHz, pression Heavy) ; 40 images/s à mesurer (ce Mac refroidi) |
 | Rendu (33d89754) | Retrait R1 des anciens chemins (`singleHistory`, `edgeFoot`, `seaSsrSafe`, `clearCut`, `earthRateOne`, `rasterScaleFree`) | **daté : 14 nov. 2026** ([PLAN-J2 §9 quattuordecies](docs/PLAN-J2-PAGES-RECONSTRUCTION.md)) |
 | Audit vagues 3–4 (1feb2f7f) | 3.3 Sauvegardes | **fait pour l'essentiel** : lot 1 (736b26a2, une clé par sauvegarde, rien écrasé en silence) ; lot 2 (f265f467 : « Reprendre » du vol perdu seulement, un avion a ses points ; carburant, train, volets, freins, maintiens, systèmes des vaisseaux sauvés ; l'activité en cours dite) — e2e 6/6, bun test 2 228/0. Reste : l'état d'une mission ou d'un combat (Sam), les systèmes de l'A320, IndexedDB |
-| Audit vagues 3–4 (1feb2f7f) | 3.1 réseau RD0 + RD1 | en cours (reproduire les événements mal formés, puis la frontière d'entrée) |
-| Audit vagues 3–4 (1feb2f7f) | 3.2 RD2, 3.4–3.7 vol/TARS, 3.10, 4.2, 4.3, 4.8 | à faire, dans cet ordre (état relevé dans [09-priorites-todo](docs/audit-2026-11-10/09-priorites-todo.md)) |
+| Audit vagues 3–4 (1feb2f7f) | 3.1 réseau RD0 + RD1 | **fait** : la frontière d'entrée (`src/net/inbound.ts`) ; un événement mal formé figeait l'image (163 → 0), plus maintenant — e2e `net-inbound` 6/6, net-battle/coop/crew/board verts |
+| Audit vagues 3–4 (1feb2f7f) | 3.2 réseau RD2 | en cours : six défauts reproduits par test (quota, débit, identité publiée, 5ᵉ pilote, mot de passe, expiration) |
+| Audit vagues 3–4 (1feb2f7f) | 3.4–3.7 vol/TARS, 3.10, 4.2, 4.3, 4.8 | à faire, dans cet ordre (état relevé dans [09-priorites-todo](docs/audit-2026-11-10/09-priorites-todo.md)) |
 
 **Fermé récemment** : J2 (13 nov., ΔGPU nul, chemin vers §8 écrit) ; J2-C BC7 étudiée puis **rangée** (Sam : « ne pas le faire maintenant »).
 
@@ -4372,3 +4373,30 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   (unités, armes, chronologie) reste à décider par Sam (recommandation : non pour l'instant — chaque activité a son propre
   « recommencer » ; le dire suffit) ; le message d'activité n'a pas été vu en jeu (vérifié par test unitaire seulement) ; le
   coût de l'instantané toutes les 10 s (`cpuProf` « resume point ») non mesuré ; IndexedDB et autosauvegarde hors frame (AR-05).
+
+## 2026-11-13T08:55Z — Audit 3.1 : réseau RD0 + RD1, la frontière d'entrée (NET-01, NET-06, NET-07, NET-21 en partie, AR-03 pour le réseau)
+
+- **Contribution** (stratégie §19.10 même monde, §19.8 reprise ; [PLAN-RESEAU-DURCISSEMENT](docs/PLAN-RESEAU-DURCISSEMENT.md) RD0,
+  RD1 ; audit ligne 3.1) : **ce qu'envoie un autre membre est une donnée, jamais une confiance.** `src/net/inbound.ts`
+  (`readEvent` : l'enveloppe, et douze types lus champ par champ — `match`, `matchEnd`, `cs`, `dock`, `tel`, `bump`, `board`,
+  `wingCrash`, `hit`, `hitWing`, `down`, `crash`, ceux que le jeu garde et relit à chaque image) ; le client lit chaque
+  événement, isole et compte ses écouteurs (`__bh.net.net.inbound`), filtre les échantillons (finis, bornés, d'un membre, un
+  temps à moins d'une minute de la salle étirée par son allure) et écrit le slot d'un lien direct à la réception (NET-06) ;
+  `decodeCraft` refuse le non fini et l'hors bornes ; le serveur ne relaie ni ne garde pour les arrivants ce qui n'est pas
+  lu (`/health` : `rejected`) ; les trois étapes réseau de l'image sont gardées (`main.ts`) ; une page d'une autre version
+  du protocole est refusée aussitôt (avant : elle attendait sans fin — reproduit par un test unitaire).
+- **Reproduit avant correction** (e2e `net-inbound`, une page + un client Bun pour pair) : `match` sans champs → **163 → 0
+  images GPU en 2 s**, 278 exceptions ; `tel` de chaînes et `dock` sans place (l'appareil du pair à 200 m) → 64 → 0 ; un
+  échantillon NaN gardé dans la piste ; le `match` invalide rejoué à l'arrivant. Un `bump` NaN était déjà refusé
+  (`netBumped`) : pas de correction là.
+- **Vérifié** : unitaires `net-inbound` (nouveau : chaque type lu, les formes du jeu acceptées, les mal formées refusées ;
+  serveur, client, liens directs, version), `net-rooms`, `net-core`, équipage : 78/0 ; e2e `net-battle` 4/0 (vrais matchs,
+  missiles, coups à travers la frontière), `net-coop` 3/0, `net-crew` 2/0, `net-board` 2/0 ; **`net-inbound` 6/6 après** (ce Mac,
+  fenêtre visible, tuiles et IGN bloqués) : chaque cas jeté par le serveur (`rejected` +1), la page dessine toujours ; relayés
+  par un serveur qui ne lit pas (un plus ancien), les trois sont jetés par la page elle-même ; l'arrivant ne reçoit plus le
+  mauvais `match`.
+- **Fichiers** : `src/net/inbound.ts`, `src/net/client.ts`, `src/net/proto.ts`, `src/net/p2p.ts`, `server/rooms.ts`, `src/main.ts`
+  (la garde réseau de l'image) ; NETWORK.md, NETWORK.fr.md, DEPLOY.md, PLAN-RESEAU-DURCISSEMENT, BH-API, E2E-CATALOGUE.
+- **Non fait** : RD2 (quotas, débit, jeton de reprise) ; les types non lus champ par champ gardent leurs lecteurs ; la
+  version par famille d'événements (un type connu d'une autre forme est jeté : recommandation appliquée, décision 3 de
+  Sam) ; le serveur de production n'a pas été redéployé par cette session (il se déploie avec `main`, DEPLOY.md).

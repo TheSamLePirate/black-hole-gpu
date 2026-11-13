@@ -358,6 +358,19 @@ carte 3D du crew, les messages vocaux enregistrés derrière le trou de ver.
 - **Le protocole** (`src/net/proto.ts`) : du JSON pour la vie de la salle, des échantillons binaires de
   104 octets pour les engins (position en float64, vitesse, attitude, rotation, accélération, ce que montre
   l'engin : manette, postcombustion, train, volets, STOVL, commandes de vol, α, CL, Mach).
+- **La frontière d'entrée** (`src/net/inbound.ts`, depuis le 13 nov. 2026 — PLAN-RESEAU-DURCISSEMENT RD1) : ce
+  qu'envoie un autre membre est une donnée, jamais une confiance. Chaque événement relayé est lu avant que le jeu le
+  voie — son enveloppe (un objet, un type court, un `to` qui est un slot) et, pour les types que le jeu garde et relit à
+  chaque image (`match`, `matchEnd`, `cs`, `dock`, `tel`, `bump`, `board`, `wingCrash`, `hit`, `hitWing`, `down`,
+  `crash`), chacun de ses champs : fini, borné, de sa forme ; sinon il est jeté et compté. Un écouteur qui lève une
+  exception est compté (`__bh.net.net.inbound`), jamais relancé dans l'image ; les étapes réseau de l'image sont gardées
+  de même. Les échantillons : finis et dans leurs bornes (une place à moins de ~70 UA, une vitesse sous celle de la
+  lumière), d'un membre de la salle, un temps à moins d'une minute de celui de la salle (étirée par son allure) ; celui
+  d'un lien direct porte le slot du lien, pas celui qu'a écrit l'émetteur. Le serveur lit de même : un événement ou un
+  échantillon mal formé n'est ni relayé ni gardé pour les arrivants (`/health` les compte : `rejected`). Une page d'une
+  autre version du protocole est refusée aussitôt, et le dit (« rechargez-la »). Avant : un seul `match`, `tel` ou `dock`
+  mal formé figeait l'image de tous les membres (une exception avant le rendu, à chaque image) et le serveur rejouait le
+  match à chaque arrivant — reproduit, puis fermé, par `tests/e2e/net-inbound`.
 - **L'horloge** (`src/net/clock.ts`) : l'échange de NTP, le décalage du huitième le plus rapide des 64
   derniers échanges ; à moins d'une milliseconde entre deux pages sur une même machine.
 - **Les autres** (`src/net/remote.ts`) : affichés un peu dans le passé — assez pour que l'échantillon
@@ -376,8 +389,12 @@ deux pages à 0,3 ms près.
 
 De bout en bout aussi : `tests/e2e/net-fleet`, `net-share`, `net-crew`, `net-board`, `net-coop`, `net-time` (les
 vaisseaux ensemble, PLAN-VAISSEAUX N1–N6), `tests/e2e/net-gargantua` (près de Gargantua, par le trou de ver), `tests/e2e/net-dock` (s'amarrer ensemble, les contacts, le monde persistant), `tests/e2e/net-space` (en orbite ensemble, le warp de la salle, les cibles), `tests/e2e/net-walk` (à pied ensemble, un passager), `tests/e2e/net-moon` (à pied sur la Lune, À côté à pied), `tests/e2e/net-formation` (deux Mac en patrouille, la dérive), `tests/e2e/net-formation-ap` (le pilote automatique de formation : rejoindre, virer, accélérer, couper, de loin), `tests/e2e/net-flight` (deux F-35 : vus à 8 km, sur le radar, le lien direct, À côté —
-la patrouille, le même écart vu des deux côtés —, la postcombustion vue). Unitaires : `tests/net-core.test.ts` (les échantillons, l'horloge sous 200 ms et 5 % de pertes, Hermite au
+la patrouille, le même écart vu des deux côtés —, la postcombustion vue). Unitaires : `tests/net-inbound.test.ts` (la frontière d'entrée : chaque type lu, les formes du jeu acceptées et les
+mal formées refusées, les échantillons bornés, le slot d'un lien direct, le serveur qui jette et ne rejoue pas, un
+écouteur qui lève, la page d'un autre protocole refusée), `tests/net-core.test.ts` (les échantillons, l'horloge sous 200 ms et 5 % de pertes, Hermite au
 centimètre, le lissage, le vol du robot), `tests/net-rooms.test.ts` (un vrai serveur : salles, limites, mots
 de passe, la place reprise à la reconnexion, la suppression par le propriétaire, les salles gardées après un
 redémarrage). De bout en bout : `tests/e2e/net-rooms` (la page solo intacte, une salle depuis le menu pause,
-une page par le lien, le robot, les horloges, le départ).
+une page par le lien, le robot, les horloges, le départ), `tests/e2e/net-inbound` (le `match`, la télémétrie,
+l'amarrage et les échantillons mal formés d'un pair : la page continue de dessiner, l'arrivant ne reçoit pas le
+mauvais match).

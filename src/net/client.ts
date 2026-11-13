@@ -21,6 +21,7 @@ import {
 } from "./proto";
 import { DEFAULT_ICE, p2pAvailable, PeerMesh, type SignalData } from "./p2p";
 import { RemoteRegistry } from "./remote";
+import { inboundStats, isSlot, readEvent } from "./inbound";
 import { LabLink, type LabSettings, type Link, type Payload, WsLink } from "./transport";
 
 export type NetStatus = "off" | "connecting" | "online" | "offline";
@@ -131,8 +132,21 @@ export class NetClient {
       );
   }
 
+  /** what crossed the input boundary (inbound.ts): events taken and dropped, listeners that threw, samples dropped */
+  readonly inbound = inboundStats();
+
+  /** Each listener on its own: one that throws — another member's event the game cannot read — is counted and told
+   *  once (the console, the journal), never thrown on into the link's handler or the frame (audit AR-03, NET-01). */
   private emit<K extends keyof Events>(k: K, x: Events[K]) {
-    for (const f of this.listeners.get(k) ?? []) (f as (x: Events[K]) => void)(x);
+    for (const f of this.listeners.get(k) ?? [])
+      try {
+        (f as (x: Events[K]) => void)(x);
+      } catch (e) {
+        this.inbound.failed++;
+        const kind = k === "event" ? `:${String((x as { ev?: { kind?: unknown } }).ev?.kind ?? "?").slice(0, 32)}` : "";
+        this.inbound.lastFailure = `${k}${kind}: ${e instanceof Error ? e.message : String(e)}`.slice(0, 200);
+        if (this.inbound.failed <= 3 || this.inbound.failed % 100 === 0) console.warn(`net ${this.inbound.lastFailure}`, e);
+      }
   }
 
   private setStatus(s: NetStatus) {
@@ -221,13 +235,34 @@ export class NetClient {
     this.pingTimer = setTimeout(() => this.ping(), n);
   }
 
+  /** A sample come by a direct link: the link's slot written in it — the sender's own byte is not trusted (audit
+   *  NET-06: a peer spoke for another's craft). */
+  private onPeerData(buf: ArrayBuffer, slot: number) {
+    if (!isSlot(slot)) return;
+    const u = new Uint8Array(buf.slice(0));
+    u[1] = slot;
+    this.onMessage(u.buffer);
+  }
+
+  /** A sample taken in: finite and bounded (proto.ts decodeCraft), from a member of the room other than us, its time
+   *  near the room's — a minute, stretched by the room's pace (audit NET-07: a time far ahead kept every later one out). */
+  private takeSample(u: Uint8Array) {
+    const s = decodeCraft(u);
+    const R = this.room;
+    if (!R) return;
+    const now = this.roomNow();
+    const far = 60 * Math.max(1, Math.abs(this.roomWarp()));
+    if (!s || s.slot === R.slot || !R.members.some((m) => m.slot === s.slot) || (Number.isFinite(now) && Math.abs(s.t - now) > far)) {
+      this.inbound.samplesRejected++;
+      return;
+    }
+    this.remotes.push(s, now - s.t);
+  }
+
   private onMessage(raw: Payload) {
     if (typeof raw !== "string") {
       const u = new Uint8Array(raw);
-      if (u[0] === MSG_CRAFT) {
-        const s = decodeCraft(u);
-        if (s && this.room && s.slot !== this.room.slot) this.remotes.push(s, this.roomNow() - s.t);
-      }
+      if (u[0] === MSG_CRAFT) this.takeSample(u);
       return;
     }
     let m: ServerMsg;
@@ -258,9 +293,18 @@ export class NetClient {
         }
         this.emit("roster", m.members);
         return;
-      case "event":
-        this.emit("event", { from: m.from, ev: m.ev });
+      case "event": {
+        // (read at the boundary — inbound.ts —: a malformed one dropped and counted, never handed to the game)
+        const ev = readEvent(m.ev);
+        if (!ev || !isSlot(m.from)) {
+          this.inbound.rejected++;
+          this.inbound.lastRejected = String((m.ev as { kind?: unknown } | null)?.kind ?? "?").slice(0, 32);
+          return;
+        }
+        this.inbound.events++;
+        this.emit("event", { from: m.from, ev });
         return;
+      }
       case "world": {
         const dec = (b64: string) => {
           const b = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
@@ -294,6 +338,11 @@ export class NetClient {
           this.pending.get(m.re)!.ko(Object.assign(new Error(m.msg), { code: m.code }));
           this.pending.delete(m.re);
         } else {
+          // (refused before the welcome — a page of another protocol: "update" —: said at once, not left waiting)
+          if (this.welcome) {
+            this.welcome.ko(Object.assign(new Error(m.msg), { code: m.code }));
+            this.welcome = null;
+          }
           // (the room deleted under us: out of it)
           if (m.code === "unknown-room") this.setRoom(null);
           this.emit("error", { code: m.code, msg: m.msg });
@@ -321,7 +370,7 @@ export class NetClient {
       this.mesh = new PeerMesh({
         self: () => this.room?.slot ?? -1,
         signal: (to, data) => this.sendMsg({ type: "signal", to, data }),
-        onData: (buf) => this.onMessage(buf),
+        onData: (buf, slot) => this.onPeerData(buf, slot),
         ice: this.o.ice ?? this.iceServers ?? DEFAULT_ICE,
         onVoice: (slot, stream) => this.emit("voice", { slot, stream }),
       });

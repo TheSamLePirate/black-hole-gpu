@@ -335,6 +335,18 @@ messages behind the wormhole.
 - **The protocol** (`src/net/proto.ts`): JSON for the room's business, 104-byte binary samples for the
   craft (float64 position, velocity, attitude, spin, acceleration, what the craft shows: throttle,
   afterburner, gear, flaps, STOVL, the flight controls' commands, α, CL, Mach).
+- **The input boundary** (`src/net/inbound.ts`, since 13 Nov 2026 — PLAN-RESEAU-DURCISSEMENT RD1): what another member
+  sends is data, never trusted. Each relayed event is read before the game sees it — its envelope (an object, a short
+  kind, a `to` slot) and, for the kinds the game keeps and reads every frame (`match`, `matchEnd`, `cs`, `dock`, `tel`,
+  `bump`, `board`, `wingCrash`, `hit`, `hitWing`, `down`, `crash`), every field: finite, bounded, of its shape; one that
+  is not is dropped and counted. A listener that throws is counted (`__bh.net.net.inbound`), never thrown into the
+  frame; the network's steps of the frame are guarded the same way. Samples: finite and within their bounds (a place
+  within ~70 AU, a speed under light's), from a member of the room, a time within a minute of the room's (stretched by
+  its pace); a direct link's sample carries the link's slot, not the one the sender wrote. The server reads the same
+  way: a malformed event or sample is neither passed on nor kept for newcomers (`/health` counts them: `rejected`). A
+  page of another protocol version is refused at once and told ("reload it"). Before: one malformed `match`, `tel` or
+  `dock` froze every member's image (an exception before the render, each frame) and the server replayed the match to
+  each newcomer — reproduced, then closed, by `tests/e2e/net-inbound`.
 - **The clock** (`src/net/clock.ts`): NTP's exchange, the offset of the fastest eighth of the last 64
   exchanges; within a millisecond between two pages on one machine.
 - **The others** (`src/net/remote.ts`): shown a little in the past — late enough for the next sample —, a
@@ -352,8 +364,11 @@ late (95 %: 27 ms), the others shown 60–75 ms late, the two pages' clocks with
 
 End to end too: `tests/e2e/net-fleet`, `net-share`, `net-crew`, `net-board`, `net-coop`, `net-time` (spacecraft
 together, PLAN-VAISSEAUX N1–N6), `tests/e2e/net-gargantua` (by Gargantua, through the wormhole), `tests/e2e/net-dock` (docking together, contacts, the persistent world), `tests/e2e/net-space` (in orbit together, the room's warp, targets), `tests/e2e/net-walk` (on foot together, a passenger's ride), `tests/e2e/net-moon` (on foot on the Moon, Beside on foot), `tests/e2e/net-formation` (two Macs in formation, the drift), `tests/e2e/net-formation-ap` (the formation's autopilot: rejoin, turn, speed-up, let go, from afar), `tests/e2e/net-flight` (two F-35s: seen 8 km off, on the radar, the direct link, Beside —
-formation, the same gap seen by both —, the afterburner seen). Unit: `tests/net-core.test.ts` (the samples, the clock under 200 ms and 5 % lost, the Hermite within a
+formation, the same gap seen by both —, the afterburner seen). Unit: `tests/net-inbound.test.ts` (the input boundary: each kind read, the game's own shapes taken and malformed ones
+refused, samples bounded, a direct link's slot, the server's drop and replay, a throwing listener, another protocol's
+page refused), `tests/net-core.test.ts` (the samples, the clock under 200 ms and 5 % lost, the Hermite within a
 centimetre, the smoothing, the bot's flight), `tests/net-rooms.test.ts` (a real server: rooms, limits,
 passwords, a reconnection's slot, the owner's delete, the rooms kept across a restart). End to end:
 `tests/e2e/net-rooms` (the solo page untouched, a room from the pause menu, a page by the link, the bot,
-the clocks, leaving).
+the clocks, leaving), `tests/e2e/net-inbound` (a peer's malformed match, telemetry, dock and samples: the page keeps
+drawing, the newcomer is not sent the bad match).

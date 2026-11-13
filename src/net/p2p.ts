@@ -32,7 +32,9 @@ export interface MeshOptions {
   /** a signal to another member, through the room server */
   signal: (to: number, data: SignalData) => void;
   /** a sample come straight from a peer */
-  onData: (buf: ArrayBuffer) => void;
+  /** a sample come by a direct link, with that link's slot (the receiver stamps it: the sender's own byte is not trusted —
+   *  audit NET-06) */
+  onData: (buf: ArrayBuffer, slot: number) => void;
   ice: RTCIceServer[];
   /** another's voice come (a stream to play), or gone (null) */
   onVoice?: (slot: number, stream: MediaStream | null) => void;
@@ -110,7 +112,7 @@ export class PeerMesh {
     ch.onmessage = (e) => {
       if (!(e.data instanceof ArrayBuffer)) return;
       L.bytes.down += e.data.byteLength;
-      this.o.onData(e.data);
+      this.o.onData(e.data, L.slot);
     };
   }
 

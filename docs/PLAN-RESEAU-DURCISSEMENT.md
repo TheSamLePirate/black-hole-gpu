@@ -1,6 +1,8 @@
 # Plan — durcir le réseau : validation, droits, reprise, serveur
 
-**État (10 novembre 2026) : plan proposé, rien d'implémenté.** Il vient de l'audit du 10 novembre
+**État (13 novembre 2026) : RD0 et RD1 faits** (session de l'audit hors rendu ; [NETWORK.md](NETWORK.md) « The input
+boundary », `src/net/inbound.ts`, e2e `net-inbound`) ; RD2 à suivre ; RD3 attend la décision 1 du §4. *(État d'origine,
+10 novembre : plan proposé, rien d'implémenté.)* Il vient de l'audit du 10 novembre
 ([04-reseau-equipage.md](audit-2026-11-10/04-reseau-equipage.md), constats NET-01 à NET-33). Il prolonge
 [PLAN-RESEAU.md](PLAN-RESEAU.md) (R0–R8, terminé) et ne recouvre pas
 [PLAN-SERVICES-SERVEUR-AAA.md](PLAN-SERVICES-SERVEUR-AAA.md) (comptes, services : jamais commencé). Le code fait foi.
@@ -39,6 +41,19 @@ serveur n'a ni quota ni limite de débit. Enfin l'état « dur » (amarrages, pa
 | **RD7 — restes** | Altitude du panache par l'ellipsoïde ; vitesse float32 près de Gargantua ; tampon de gigue par lien ; port 3001, en-tête Origin ; erreurs serveur traduites ; redémarrage du serveur seulement quand `server/` change | NET-20, NET-28 à NET-33 | S | — |
 
 Ordre conseillé : RD0, RD1, RD2 (le serveur est public), puis RD3, RD4, RD5. RD6 attend une décision de Sam.
+
+**RD0 et RD1, faits le 13 novembre 2026.** RD0 : l'e2e `net-inbound` (une page dans une salle du serveur de test, un
+client Bun pour pair) a vu sur le code d'avant **tout ce que l'audit prévoyait** — `{kind:"match", m:{id:"x"}}` : 163 →
+0 images GPU en 2 s, 278 exceptions (`A.pilots is not iterable`, `reading 'limit'`) ; un `tel` de chaînes et un `dock`
+sans place, l'appareil du pair visible à 200 m : image figée aussi (64 → 0) ; un échantillon NaN gardé dans la piste
+du pair ; le `match` invalide rejoué par le serveur à l'arrivant. Un `bump` NaN, lui, était déjà refusé
+(`netBumped`). RD1 : `src/net/inbound.ts` (`readEvent` : l'enveloppe, et douze types lus champ par champ — ceux que le
+jeu garde et relit à chaque image ; les autres types gardent leurs propres lecteurs), le client (événements lus,
+écouteurs isolés et comptés, échantillons bornés et datés, slot du lien direct écrit à la réception — NET-06), le
+décodage des échantillons (`decodeCraft` : fini et borné), le serveur (ni relayé ni gardé pour les arrivants ; `/health`
+`rejected`), les étapes réseau de l'image gardées (`main.ts`, AR-03 pour le réseau), et la page d'une autre version du
+protocole refusée aussitôt (avant : elle attendait sans fin). Version des événements : un type connu d'une autre forme
+est jeté (décision 3 du §4 : recommandation appliquée en attendant Sam — refuser plutôt que lire à moitié).
 
 ## 4. Décisions à prendre par Sam
 
