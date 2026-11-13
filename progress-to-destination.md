@@ -5027,3 +5027,12 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
 - J0, vol de 70 s avec `src/game/governor.ts` (l'extraction stricte de la session de l'audit) : GPU p50 **56,5 ms**, p95 62,6, 17,7 images/s, 1 278 MHz
   — dans la fourchette des vols du jour (55,5–57,2) : rien de changé ; l'âge du PCD p95 56,2 ms. `remote-results/…-gov-check`.
 
+## 2026-11-13T14:56Z — Le tracé contre le raster sur J0 (kerr-mini) : 3 × plus rapide, au prix de l'image
+
+- **Mesuré** (une ablation `traced` ajoutée à J0 — le pipeline tracé pour la Terre proche ; référence / tracé / référence) : GPU p50 raster
+  57,3 / 55,3 ms, **tracé 19,9 ms (50 images/s)** ; les images : en tracé, les nuages presque tous perdus, la mer plate et floue, les écrans du
+  cockpit brouillés. `remote-results/…-j0-traced`.
+- **Conséquence** : le repli dormant (entrée précédente), réarmé, garderait ce tracé sur le mini (son contrôle de 6 s ne juge que la vitesse) :
+  la cadence gagnée en retirant du contenu. Recommandation révisée dans [PROBLEMES-A-REGLER](docs/PROBLEMES-A-REGLER.md) : le retirer sur la
+  Terre, ou ne le réarmer qu'avec un critère d'image. Rien de changé au jeu ; la décision à Sam.
+

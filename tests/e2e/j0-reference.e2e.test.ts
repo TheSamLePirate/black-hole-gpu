@@ -75,6 +75,9 @@ const ABLATIONS: Record<string, { label: string; set: string }> = {
   // (the staged water's E2 ceiling — PLAN-MER-WEBGPU §6, method rule 1 —: the sea's reflections compiled out of the water's kernels —
   // the world's mirror (seaSSR, TUNE_GSKIP 4096) and the far clouds mirrored (16384) —, their code's presence and work: what moving
   // them to their own kernel can return at most; the kernels compiled again for it)
+  // (the traced pipeline for the near Earth instead of the raster — the cost of the raster's fallback, dormant on the Earth since J2-7:
+  // PROBLEMES-A-REGLER, 13 Nov 2026 — its kernel compiled before the flight)
+  traced: { label: "pipeline tracé au lieu du raster", set: `__bh.game.set("earthPipeline", "trace");` },
   seaRefl: { label: "sans reflets de la mer (SSR, nuages reflétés : compilés hors)", set: `__bh.renderer.tune = { TUNE_GSKIP: 20480 };` },
 };
 // (13 Nov 2026, Sam's decision 1: the water's two ablations in every fiche — its material, valid since liteSkip's bits are carried by
@@ -242,7 +245,7 @@ describe.skipIf(!E2E)("J0: the reference flight over Toulon-Hyères", () => {
    * scenery: a jump back to the start reloads them, and the first ablations of the first run measured that reload (10 images/s)
    * —; then the clock running, the autopilot and autothrottle engaged until they hold, gear down; 3 s settling */
   async function start(set: string) {
-    await app.js(`(() => { __bh.freeze(false); __bh.game.importSave(${JSON.stringify(save)}, false); __bh.freeze(true); __bh.renderer.liteSkip = 0; __bh.renderer.tune = {}; __bh.renderer.debugSkipShip = false; __bh.renderer.ship.debugSkip.clear();
+    await app.js(`(() => { __bh.freeze(false); __bh.game.importSave(${JSON.stringify(save)}, false); __bh.freeze(true); __bh.renderer.liteSkip = 0; __bh.renderer.tune = {}; if (__bh.settings.earthPipeline !== "raster") __bh.game.set("earthPipeline", "raster"); __bh.renderer.debugSkipShip = false; __bh.renderer.ship.debugSkip.clear();
       Object.assign(__bh.renderer, { seaSurfaceOn: true, seaProbeOn: true, seaFoamWorldOn: true }); __bh.settings.seaFft = true;
       document.body.classList.remove("hide-ui"); Object.assign(__bh.settings, ${J0_FIXED}, ${hud}); __bh.settings.shipMount = "cockpit"; __bh.refresh();
       __bh.camera.viewReset(); ${set} return 1; })()`);

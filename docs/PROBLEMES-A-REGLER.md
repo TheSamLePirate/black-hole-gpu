@@ -20,8 +20,12 @@ il attend la cadence 16 et le repli. **Le filet du GPU faible — le tracé si l
 **Ce qui est à décider (Sam)** : (a) le rendre atteignable — `rasterRateCoarsest` vrai quand la cadence de la Terre est fixée par son matériau,
 l'épinglage de l'échelle compté comme son plancher —, mais alors il peut se déclencher sur kerr-mini pendant J0 (GPU p50 ~55 ms) et chez un
 joueur à GPU faible, la vue basculant au tracé (le contrôle de 6 s le rend si le tracé n'est pas plus rapide) ; (b) le retirer sur la Terre (le
-raster toujours, un plancher de qualité à la place). **Recommandation** : (a), après une mesure du tracé contre le raster sur kerr-mini dans J0
-(si le tracé n'y est pas plus rapide, le contrôle de 6 s ramène le raster aussitôt et (b) devient la conclusion). L'e2e : sa vérification de
+raster toujours, un plancher de qualité à la place). ~~Recommandation : (a), après une mesure du tracé contre le raster~~ — **mesuré le
+13 nov. (~14:55 UTC, kerr-mini, J0, ablation `traced` : `remote-results/…-j0-traced`)** : le tracé **19,9 ms** de GPU (50 images/s) contre
+**57,3 / 55,3 ms** au raster — mais **au prix de l'image** : les nuages presque tous perdus, la mer plate et floue, les écrans du cockpit brouillés
+(vues comparées). Le contrôle de 6 s du gouverneur ne juge que la vitesse : réarmé, le repli garderait ce tracé dégradé sur le mini — gagner la
+cadence en retirant du contenu, ce que CLAUDE.md interdit. **Recommandation révisée : (b)**, le repli retiré sur la Terre (le raster toujours,
+son plancher de qualité à régler) ; ou (a) seulement avec un critère d'image en plus de la vitesse. L'e2e : sa vérification de
 cadence mise au contrat actuel (1 sous le matériau) ; sa partie « repli » mise de côté jusqu'à la décision.
 
 ## La page figée quand le rectangle publié d'un niveau du relief ne couvre plus la tuile de la caméra (relevé par la sonde de fuite de J2-0)
