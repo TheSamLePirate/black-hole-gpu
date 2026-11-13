@@ -4822,3 +4822,18 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
 - **État mesuré :** aucun écart aujourd'hui (372 contrôles, 388 réglages) — un garde contre la régression, pas une correction.
 - **Reste de 4.3 :** AR-07 (`SimState`, `ViewPose` ; le renderer prenant `ViewPose` plutôt que `Settings`) touche `renderer.ts` — réservé
   à la session du rendu, attend Sam ; le tri produit / profil / laboratoire d'AR-21, une décision de produit (Sam).
+
+## 2026-11-13T13:25Z — La suite de tests réparée de ses fuites : de 9 échecs à 2 (aucun du rendu)
+
+- **Contribution** (la preuve de chaque lot : une suite complète qui dit vrai). La suite complète échouait sur ce Mac et sur kerr-mini (7–9 échecs
+  passant seuls) ; **la cause trouvée** : quatre fichiers remplaçaient `fetch` pour tout le processus sans le rendre (`earth-contact`,
+  `earth-tiles`, `ign-relief`, `zones`) — les fichiers suivants attendaient une réponse jamais venue (`lola-tiles` ×3, le suivi du chargement,
+  TARS : 5 s) — et deux laissaient leurs tuiles charger après leur fin (`earth-pages`, le mien du 12 nov. ; `earth-tiles-cm1` : ses tuiles
+  refusées ré-essayées 2–30 s plus tard) — leurs requêtes vues par les espions de `pois` (géocodage) et de `zones`.
+- **Réalisé** : `EarthTiles.dispose()` (tous les chargements abandonnés, la génération changée, plus aucune requête de minuterie) ; les deux
+  fichiers fuyants l'appellent ; les quatre rendent `fetch` ; l'espion du géocodage ne compte que ses géocodeurs.
+- **Mesuré** (ce Mac, `bun test` complet) : 2 257 / **9 échecs** → **2 275 / 2 échecs**. Les deux restants ne sont pas du rendu : les
+  qualifications du F-35C par mer de 4,5 m (passent seules ; le vol semé, la mer à graine fixe — une dépendance au temps réel sous charge, à
+  regarder par la session de l'audit, qui a branché le vol sur `frameNow` ce matin ; signalé), « every interface text has its French » (deux
+  textes du travail en cours, non commité, de cette session). Non refait sur kerr-mini.
+

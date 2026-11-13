@@ -1,4 +1,4 @@
-import { expect, test } from "bun:test";
+import { afterAll, expect, test } from "bun:test";
 import { withGpuStubs } from "./lib/gpu-stubs";
 import { published } from "./lib/published-tiles";
 import { geodeticToCart, WGS84_A, WGS84_F } from "../src/system/ellipsoid";
@@ -8,6 +8,12 @@ import type { Vec3 } from "../src/physics";
 // The IGN's relief (I2, src/system/earth-tiles.ts): a height's source in its float's last bit — a survey's (the IGN's) or the
 // global data's —, the data's own resolution taken from it, and one WMS-R request a Web Mercator tile.
 
+// (the real fetch given back after this file: replaced for the whole process, the files after it — lola-tiles' local server, the loading
+// tracker, TARS's tools — waited on a fetch that never answered, timed out at 5 s in the full suite, 13 Nov 2026)
+const realFetch = globalThis.fetch;
+afterAll(() => {
+  globalThis.fetch = realFetch;
+});
 globalThis.fetch = (() => new Promise(() => {})) as unknown as typeof fetch;
 (globalThis as { GPUTextureUsage?: unknown }).GPUTextureUsage ??= { TEXTURE_BINDING: 4, COPY_DST: 2 };
 const fakeDevice = () =>

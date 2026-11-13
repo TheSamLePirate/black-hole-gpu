@@ -1889,6 +1889,21 @@ export class EarthTiles {
     this.onChange?.();
   }
 
+  /** let go (dispose): no request any more — a retry's timer, an arrival's — and every pending chain's generation stale */
+  private disposed = false;
+  /** The tiles let go for good (a test's end; a renderer dropping them): every load aborted, the crafts' ground's too, every timer's
+   *  chain left without a request — a refused tile's retry, an imagery's later try fired seconds after and asked the network from
+   *  whatever ran then (the full test suite's later files, 13 Nov 2026) */
+  dispose() {
+    this.disposed = true;
+    this.gen++;
+    if (this.reqTimer !== null) clearTimeout(this.reqTimer);
+    this.reqTimer = null;
+    this.clear();
+    for (const c of this.inflight.values()) c.abort();
+    this.inflight.clear();
+    for (const r of this.refining.values()) r.ctl.abort();
+  }
   /** Drops every level (the Earth far, or the tiles switched off). */
   clear() {
     // (J2-2: the crafts' ground's loads kept — the camera far, the ground under a craft still its own)
@@ -2133,6 +2148,7 @@ export class EarthTiles {
   /** J2 (the peaks): an arrival's request — at once if none ran in this image, else at the next one (the frame's `update` asks each
    *  image; none coming — a still view converged —, a timer) */
   private requestSoon() {
+    if (this.disposed) return;
     this.frame.tick(performance.now());
     if (this.reqImage === this.frame.image) return this.requestLater();
     this.request(cx0(this.priorityLon), this.prioritySinLat);

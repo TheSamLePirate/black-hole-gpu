@@ -103,6 +103,9 @@ test("geocode: Nominatim only when asked, failures not kept, one request a secon
   let photonUp = false;
   globalThis.fetch = (async (u: URL | string) => {
     const url = new URL(String(u));
+    // (the geocoders' requests alone: in the full suite, other modules' timers — a tile's load, an imagery's — reach this same global
+    // fetch while the test runs (GIBS, EOX seen, 13 Nov 2026): answered nothing, not counted)
+    if (!url.host.startsWith("photon") && !url.host.startsWith("nominatim")) return new Response("", { status: 404 });
     calls.push({ host: url.host, at: Date.now() });
     if (url.host.startsWith("photon")) {
       if (!photonUp) return new Response("down", { status: 503 });

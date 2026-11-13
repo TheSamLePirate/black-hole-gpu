@@ -1,4 +1,4 @@
-import { expect, test } from "bun:test";
+import { afterAll, expect, test } from "bun:test";
 import { withGpuStubs } from "./lib/gpu-stubs";
 import { published } from "./lib/published-tiles";
 import type { Vec3 } from "../src/physics";
@@ -27,6 +27,12 @@ import { cartToGeodetic, geodeticToCart, WGS84_A, WGS84_F } from "../src/system/
 
 // (no GPU, no network: the textures a stub, the loads never answering — the tiles put in by hand)
 (globalThis as { GPUTextureUsage?: unknown }).GPUTextureUsage ??= { TEXTURE_BINDING: 4, COPY_DST: 2 };
+// (the real fetch given back after this file: replaced for the whole process, the files after it — lola-tiles' local server, the loading
+// tracker, TARS's tools — waited on a fetch that never answered, timed out at 5 s in the full suite, 13 Nov 2026)
+const realFetch = globalThis.fetch;
+afterAll(() => {
+  globalThis.fetch = realFetch;
+});
 globalThis.fetch = (() => new Promise(() => {})) as unknown as typeof fetch;
 const fakeDevice = () =>
   ({

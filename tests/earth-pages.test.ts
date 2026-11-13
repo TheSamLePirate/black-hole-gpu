@@ -1,4 +1,4 @@
-import { expect, test } from "bun:test";
+import { afterAll, expect, test } from "bun:test";
 import { withGpuStubs } from "./lib/gpu-stubs";
 import { FrameBudget, MipBatch, PagePublisher, TILE_FRAME_IDLE_MS, TILE_START_WINDOW, TILE_STARVE_IMAGES } from "../src/system/earth-pages";
 import { cameraOutX, cameraOutY, EarthTiles, TILE, Z0, Z1 } from "../src/system/earth-tiles";
@@ -10,7 +10,17 @@ import type { Vec3 } from "../src/physics";
 // rectangle grows over a page only once published, and never leaves out the camera's tile it held (step A).
 
 (globalThis as { GPUTextureUsage?: unknown }).GPUTextureUsage ??= { TEXTURE_BINDING: 4, COPY_DST: 2, RENDER_ATTACHMENT: 16 };
+// (no network: a load never answers — the real fetch given back after this file: the tests after it in the same process — pois, zones —
+// saw this file's loads reach their own fetch spies, 13 Nov 2026)
+const realFetch = globalThis.fetch;
 globalThis.fetch = (() => new Promise(() => {})) as unknown as typeof fetch;
+// (every EarthTiles made here, their loads aborted after the file — before the real fetch is given back)
+const made: EarthTiles[] = [];
+const track = (t: EarthTiles) => (made.push(t), t);
+afterAll(() => {
+  for (const t of made) t.dispose();
+  globalThis.fetch = realFetch;
+});
 const deg = Math.PI / 180;
 const camAt = (lat: number, lon: number, h: number): Vec3 => geodeticToCart(1, WGS84_F, lat * deg, lon * deg, h / WGS84_A);
 /** a fake device counting its submissions and writes */
@@ -107,7 +117,7 @@ test("the camera near its window's edge: the window recentred (step A) — never
 
 test("a tile put is drawn only once published: its heights, its rectangle, its generation; the mips of all in one submission", () => {
   const { dev, n } = counting();
-  const t = new EarthTiles(dev, true);
+  const t = track(new EarthTiles(dev, true));
   const cam = camAt(45.9, 6.87, 2);
   t.update(cam, 1e-3);
   const wanted = t.wanted().filter(([z]) => z <= 10);
@@ -141,7 +151,7 @@ test("a tile put is drawn only once published: its heights, its rectangle, its g
 
 test("a published tile written again (its finer heights): the old ones drawn until the publication, the new ones after", () => {
   const { dev } = counting();
-  const t = new EarthTiles(dev, true);
+  const t = track(new EarthTiles(dev, true));
   t.update(camAt(45.9, 6.87, 2), 1e-3);
   for (const [z, x, y] of t.wanted().filter(([z]) => z <= 9)) t.put(z, x, y, new Float32Array(TILE * TILE).fill(500));
   t.publish(Number.POSITIVE_INFINITY);
@@ -159,7 +169,7 @@ test("a published tile written again (its finer heights): the old ones drawn unt
 
 test("step A: a level's rectangle grows round the camera's tile — never a larger one without it", () => {
   const { dev } = counting();
-  const t = new EarthTiles(dev, true);
+  const t = track(new EarthTiles(dev, true));
   // (a camera moving east: the loads' centre a few tiles ahead of it at z 14)
   const lat = 45.9,
     lon = 6.87;
@@ -281,7 +291,7 @@ test("the image's budget: the starts while they fit, the rest at the next image;
 });
 
 test("the loads started under the image's budget: the camera's tile first, the others at the next images, none lost", () => {
-  const t = new EarthTiles(withGpuStubs(counting().dev));
+  const t = track(new EarthTiles(withGpuStubs(counting().dev)));
   const inflight = (t as unknown as { inflight: Map<string, unknown> }).inflight;
   // (a budget nothing fits in: the starts refused TILE_STARVE_IMAGES images in a row, then one let go — the camera's own tile, the
   // finest)

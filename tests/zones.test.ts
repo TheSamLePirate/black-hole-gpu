@@ -1,4 +1,4 @@
-import { expect, test } from "bun:test";
+import { afterAll, expect, test } from "bun:test";
 import { withGpuStubs } from "./lib/gpu-stubs";
 import { published } from "./lib/published-tiles";
 import type { Vec3 } from "../src/physics";
@@ -43,6 +43,12 @@ import {
 // (no GPU: the textures a stub; the network a recorder refusing every request — the URLs the loads ask, kept)
 (globalThis as { GPUTextureUsage?: unknown }).GPUTextureUsage ??= { TEXTURE_BINDING: 4, COPY_DST: 2 };
 const asked = new Set<string>();
+// (the real fetch given back after this file: replaced for the whole process, the files after it — lola-tiles' local server, the loading
+// tracker, TARS's tools — waited on a fetch that never answered, timed out at 5 s in the full suite, 13 Nov 2026)
+const realFetch = globalThis.fetch;
+afterAll(() => {
+  globalThis.fetch = realFetch;
+});
 globalThis.fetch = ((url: string | URL | Request) => {
   asked.add(String(url instanceof Request ? url.url : url));
   return Promise.reject(new Error("offline"));
