@@ -532,7 +532,9 @@ net établi à 0,2–0,4 ms près. **Ce n'est pas le ΔGPU du plan** (J0 en vol,
 base, leviers, base, leviers à rebours, base ; vols de 40 s) : **sans verdict** — le Mac est passé de « Moderate » à « Heavy » pendant la
 série, le GPU p50 de base 26,2 → 32,2 → 36,1 ms ; contre les bases interpolées, chaque levier −0,2 à +1,2 ms selon sa moitié de série, dans
 la dérive. À refaire **refroidi** (le palier du plan sur le M1 Max) ou sur kerr-mini : `J0_PHASES=ablate J0_ORDER=base,singleHistory,edgeFoot,
-disocclusion,earthRateOff,base,…`.
+disocclusion,earthRateOff,base,…`. **Refroidi, refait** (parti de « Nominal », 57 °C, 9 vols) : le Mac bride **dès le deuxième vol** (GPU
+1 296 → 389 MHz, GPU p50 de base 22,7 → 37,3 ms) — écarts des leviers −11 à +36 ms, sans sens. **Le M1 Max ne peut pas donner le ΔGPU en
+vol de J0** (déjà relevé le 10 nov. : les ablations sur kerr-mini) ; seule l'estimation alternée de la vue figée (`j2-dgpu`) tient ici.
 
 ## 10. Non vérifié
 

@@ -4153,3 +4153,8 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   la série (« Moderate » → « Heavy ») ; leviers −0,2 à +1,2 ms contre les bases interpolées, dans la dérive : **rien d'établi**. À refaire
   refroidi ou sur kerr-mini (la commande dans PLAN-J2 §9 nonies). **Changé** : `tests/e2e/j0-reference.e2e.test.ts` (les ablations, leur
   remise à zéro au départ de chaque vol).
+
+## 2026-11-13T06:20Z — J2 : le ΔGPU en vol J0 refait sur le M1 Max refroidi — il bride dès le deuxième vol
+
+- **Essayé** (parti de « Nominal », 57 °C ; 9 vols `j0-reference` ablations) : GPU 1 296 → 389 MHz, base 22,7 → 37,3 ms ; écarts −11 à +36 ms.
+  Le M1 Max ne peut pas donner ce ΔGPU (déjà relevé le 10 nov.) ; il attend kerr-mini. PLAN-J2 §9 nonies.
