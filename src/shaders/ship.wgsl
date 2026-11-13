@@ -222,8 +222,9 @@ fn envGGX(@builtin(global_invocation_id) gid: vec3u) {
   textureStore(envOut, gid.xy, vec4f(acc / max(wsum, 1e-6), 1.0));
 }
 
-// (PLAN-J3 J3-1: bands 0–2 and band 4 — 18 a thread; 32 threads: 9 KB of the 16 KB a group may hold)
-var<workgroup> shAcc: array<array<vec3f, 18>, 32>;
+var<workgroup> shAcc: array<array<vec3f, 9>, 64>;
+// (PLAN-J3 J3-1, envSH4: bands 0–2 and band 4 — 18 a thread; 32 threads: 9 KB of the 16 KB a group may hold)
+var<workgroup> shAcc4: array<array<vec3f, 18>, 32>;
 
 fn shBasis(d: vec3f) -> array<f32, 9> {
   return array<f32, 9>(
@@ -243,8 +244,49 @@ fn shBasis4(d: vec3f) -> array<f32, 9> {
     0.625836 * (x * x * (x * x - 3.0 * y * y) - y * y * (3.0 * x * x - y * y)));
 }
 
-@compute @workgroup_size(32)
+@compute @workgroup_size(64)
 fn envSH(@builtin(local_invocation_id) lid: vec3u) {
+  var acc: array<vec3f, 9>;
+  let n = ENV_W * ENV_H;
+  for (var i = lid.x; i < n; i += 64u) {
+    let x = i % ENV_W;
+    let y = i / ENV_W;
+    let v = (f32(y) + 0.5) / f32(ENV_H);
+    let d = envDir((f32(x) + 0.5) / f32(ENV_W), v);
+    let dw = (2.0 * PI / f32(ENV_W)) * (PI / f32(ENV_H)) * sin(v * PI); // solid angle
+    let L = envIn[i].rgb * dw;
+    let b = shBasis(d);
+    for (var k = 0u; k < 9u; k++) { acc[k] += L * b[k]; }
+  }
+  shAcc[lid.x] = acc;
+  workgroupBarrier();
+  if (lid.x != 0u) { return; }
+  var tot: array<vec3f, 9>;
+  for (var t = 0u; t < 64u; t++) {
+    for (var k = 0u; k < 9u; k++) { tot[k] += shAcc[t][k]; }
+  }
+  for (var k = 0u; k < 9u; k++) { shOut[k] = vec4f(tot[k], 0.0); }
+  // dominant direction of the light (luminance of the L1 band) and how directional it is
+  // (|L1| / L0 = √3 for a single distant source)
+  let lum = vec3f(0.2126, 0.7152, 0.0722);
+  let l1 = vec3f(dot(tot[3], lum), dot(tot[1], lum), dot(tot[2], lum));
+  let l0 = max(dot(tot[0], lum), 1e-20);
+  let m = length(l1);
+  shOut[9] = vec4f(select(vec3f(0.0, 1.0, 0.0), l1 / m, m > 0.0), clamp(m / (1.7320508 * l0), 0.0, 1.0));
+  // the key light (the near world's star, analytic — trace.wgsl keyLight — the probe without it): its
+  // direction and the disc's angular radius, its irradiance and on (0/1); on, it is the dominant light —
+  // the hull's shadow map, its shadow on the ground
+  let key = envIn[n + 1u];
+  shOut[10] = envIn[n];
+  shOut[11] = key;
+  // (PLAN-J3 J3-2: the aerial table's reach and the metres per unit — trace.wgsl keyLight —, for shipAir; none where not written)
+  shOut[12] = select(vec4f(0.0), envIn[n + 7u], arrayLength(&envIn) >= n + 8u);
+  if (key.w > 0.5) { shOut[9] = vec4f(normalize(envIn[n].xyz), 1.0); }
+}
+
+// (PLAN-J3 J3-1: envSH with band 4 — ship.skyBand4 on; its cost 0.38 ms a run on kerr-mini against envSH's 0.15)
+@compute @workgroup_size(32)
+fn envSH4(@builtin(local_invocation_id) lid: vec3u) {
   var acc: array<vec3f, 18>;
   let n = ENV_W * ENV_H;
   for (var i = lid.x; i < n; i += 32u) {
@@ -259,12 +301,12 @@ fn envSH(@builtin(local_invocation_id) lid: vec3u) {
     let b4 = shBasis4(d);
     for (var k = 0u; k < 9u; k++) { acc[9u + k] += L * b4[k]; }
   }
-  shAcc[lid.x] = acc;
+  shAcc4[lid.x] = acc;
   workgroupBarrier();
   if (lid.x != 0u) { return; }
   var tot: array<vec3f, 18>;
   for (var t = 0u; t < 32u; t++) {
-    for (var k = 0u; k < 18u; k++) { tot[k] += shAcc[t][k]; }
+    for (var k = 0u; k < 18u; k++) { tot[k] += shAcc4[t][k]; }
   }
   for (var k = 0u; k < 9u; k++) { shOut[k] = vec4f(tot[k], 0.0); }
   // (PLAN-J3 J3-1: band 4 after the rest — sh[13..21] —, read by irradiance when S.air.w is on)

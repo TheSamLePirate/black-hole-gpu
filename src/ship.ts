@@ -687,6 +687,8 @@ export class ShipRenderer {
     down: GPUComputePipeline;
     ggx: GPUComputePipeline;
     sh: GPUComputePipeline;
+    /** (PLAN-J3 J3-1) envSH with band 4 — skyBand4 on */
+    sh4: GPUComputePipeline;
     ship: GPURenderPipeline;
     shipJet: GPURenderPipeline;
     shadow: GPURenderPipeline;
@@ -707,7 +709,7 @@ export class ShipRenderer {
     ownMask: GPURenderPipeline;
     ctl: GPURenderPipeline;
   };
-  private envBinds: { copy: GPUBindGroup[]; down: GPUBindGroup[]; ggx: GPUBindGroup[]; sh: GPUBindGroup } | null = null;
+  private envBinds: { copy: GPUBindGroup[]; down: GPUBindGroup[]; ggx: GPUBindGroup[]; sh: GPUBindGroup; sh4: GPUBindGroup } | null = null;
   /** the shading's bindings but the traced image (one bind group per target: shipBindFor) */
   private shipEntries: GPUBindGroupEntry[] | null = null;
   private shadowBind: GPUBindGroup | null = null;
@@ -869,6 +871,7 @@ export class ShipRenderer {
       down: cp("envDown"),
       ggx: cp("envGGX"),
       sh: cp("envSH"),
+      sh4: cp("envSH4"),
       ship: d.createRenderPipeline({
         layout: "auto",
         vertex,
@@ -1802,6 +1805,13 @@ export class ShipRenderer {
           { binding: 3, resource: { buffer: this.shBuf } },
         ],
       }),
+      sh4: d.createBindGroup({
+        layout: this.pipes.sh4.getBindGroupLayout(0),
+        entries: [
+          { binding: 0, resource: { buffer: this.envBuf } },
+          { binding: 3, resource: { buffer: this.shBuf } },
+        ],
+      }),
     };
     const samp = d.createSampler({
       magFilter: "linear",
@@ -1924,8 +1934,9 @@ export class ShipRenderer {
     });
     pass.end();
     pass = enc.beginComputePass(this.pass("ship probe: SH"));
-    pass.setPipeline(this.pipes.sh);
-    pass.setBindGroup(0, this.envBinds.sh);
+    // (band 4 only when asked — its kernel 0.38 ms a run against 0.15 —: PLAN-J3 J3-1)
+    pass.setPipeline(this.skyBand4 ? this.pipes.sh4 : this.pipes.sh);
+    pass.setBindGroup(0, this.skyBand4 ? this.envBinds.sh4 : this.envBinds.sh);
     pass.dispatchWorkgroups(1);
     pass.end();
   }

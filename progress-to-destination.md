@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-13 18:57 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-13 19:06 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous.
@@ -5594,4 +5594,10 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   positif, au pixel (26 000 pixels, ≈ 10 par canal). `check-wgsl` 82/82. Deux runs d'abord illisibles (silhouette, cadre trop grand), montrés.
   **Non mesuré** : le coût de `envSH` modifié.
 - Suite : décision de Sam (bande 4 allumée ou non) ; la cause des taches sur la mer.
+
+## 2026-11-13T19:06Z — J3-1 : le coût de la bande 4 mesuré, retiré du chemin par défaut
+
+- Réalisé : `ship.wgsl` `envSH` rendu à sa forme (64 fils, 9 coefficients), `envSH4` à part (bande 4) ; `ship.ts` le choisit si `skyBand4`.
+- Preuves : **mesuré** (kerr-mini, J0) : la version commune coûtait 0,375–0,385 ms par passage contre 0,154 (payé même éteint) ; séparée,
+  0,155–0,161 ms éteint (`…-j3-envsh-cost2`), l'effet allumé retrouvé (`…-j3-skyband4d`). GRAPHICS-PIPELINE D2 mesuré.
 

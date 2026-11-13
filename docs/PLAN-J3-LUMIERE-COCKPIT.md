@@ -196,8 +196,10 @@ Aucun coût de J3 n'est mesuré ; aucun gain n'est promis.
   `skyband4` (run `…-j3-skyband4c`, l'appareil vu d'en haut, exposition tenue) : de jour aucun effet (12:00 : 59,65 / 59,65) ; le Soleil couché
   (19:40, le ciel seul) **l'appareil ≈ 8 % plus sombre** (26 000 pixels changés de ≈ 10 par canal ; la moyenne du cadre −0,14 seulement :
   l'appareil petit). Deux runs d'abord sans effet lisible (vue de trois quarts arrière : une silhouette ; le cadre noyant l'appareil). **Décision
-  de Sam** : allumer la bande 4 (l'ancien chemin retiré ensuite) ou non. Coût de `envSH` non mesuré (deux fois moins de fils, deux fois plus
-  de coefficients).
+  de Sam** : allumer la bande 4 (l'ancien chemin retiré ensuite) ou non. **Coût** (~19:06 UTC, J0, kerr-mini) : le noyau à bande 4 0,375–0,385 ms
+  par passage contre 0,154 — payé d'abord même éteint ; séparé depuis en deux points d'entrée (`envSH` d'origine, `envSH4` seulement si
+  `skyBand4`) : éteint, 0,155–0,161 ms (`…-j3-envsh-cost2`) ; allumé, l'effet retrouvé (`…-j3-skyband4d`, 19:40 −0,22 sur le cadre). Le passage
+  ne tourne qu'environ une image sur 35 : ≈ 0,007 ms par image allumé.
   **Reste de J3-1** : l'état lumineux unique (le tampon par image de C-J3-1 : directions, éclairement direct, harmoniques du ciel, nuages),
   ses lecteurs (sol, appareil, décor, eau) branchés dessus ; la sonde de cohérence appareil / sol.
 - **J3-2, premier pas — l'appareil à travers l'air de sa distance** (13 nov., ~17:12 UTC). La coque (`ship.wgsl` `fs`) et les traînées
