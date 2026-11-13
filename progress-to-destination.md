@@ -3889,3 +3889,30 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   complète pas encore là), pas exactement la scène du vol sans levier.
 - **Suite, décision de Sam** : allumer `clearCut` ou non ; et la cause de fond — le plafond gardé autour d'un centre que l'appareil dépasse
   (garder par distance à la trajectoire/caméra, plafond des villes, scène plus rapide, avance selon le temps réel de construction).
+
+## 2026-11-13T01:36Z — J2-3 réduit : le fondu de bord de l'imagerie à l'échelle de l'empreinte (levier éteint), la fuite toujours nulle, les coutures mesurées par la géométrie
+
+- **Contribution** (stratégie §15 J2 « absence de fuite entre pages » ; §7 « mips et filtrage corrects » ; PLAN-J2 J2-3, réduit sous les
+  recommandations de la fiche J2-0 — questions 1 et 5 —, **non encore confirmées par Sam** : le changement d'image derrière un levier
+  éteint) : le poids d'un niveau d'imagerie près du bord de sa page publiée suit ce que la lecture filtrée du matériel peut atteindre, au
+  lieu de 48 texels fixes ; la sélection des niveaux débarrassée des restes d'avant T9 ; une mesure des coutures qui conclut.
+- **Changé** : `src/shaders/trace.wgsl` (`edgeWeight`, `edgeReachGrad`, `edgeReachLod`, `EDGE_BAND` ; `earthImageryAniso` : `duv`/`nf`
+  retirés, dérivées de l'empreinte une fois pour tous les niveaux, `TUNE_ANISO` documenté pour ce qu'il fait ; `earthImagery` : portée de
+  sa mip) ; `src/system/earth-tiles.ts` (`edgeFoot = false`, `P.tiles.w` = 2 ; aucune compilation) ; e2e `j2-probes` : vue `hyeres-diag`,
+  phases `edge` (A B A figé, `leverDiffJs`, `gpuTimesJs`) et `seams` (`SEAM_GEOM_JS` : l'inverse de la profondeur de vue, la marche signée,
+  par bord de rang/pas ; géomorphose éteinte comme témoin positif), `J2_EDGE_FOOT=1` pour la fuite ; fiche
+  `docs/progress/j2/FICHE-J2-3-2026-11-13.md` ; PLAN-J2 (tableau, §9 sexies), BH-API (`earthTiles.edgeFoot`), GRAPHICS-PIPELINE (lecture
+  de l'imagerie, annexe et tailles régénérées), E2E-CATALOGUE, PROBLEMES-A-REGLER (la marche de Hyères), carte de la doc.
+- **Mesuré** (M1 Max, fenêtre visible ; kerr-mini hors réseau) : **fuite levier allumé 0 pixel imputable** sur trois vues (au-delà de 0,5 :
+  3 / 1 / 0 contre un témoin 2 / 1 / 1 ; les pixels > 2 : un halo de lumières vives, le bandeau d'alarme du cockpit ; témoins positifs
+  0,68–0,74 Mpx) ; image : changement en lignes le long des bords de fenêtres (le niveau fin rendu 36–40 texels plus près de son bord),
+  écart moyen 0,74 / 0,75 / 0,41 % contre une dérive éteint/éteint de 0,73 / 0,79 / 0,42 %, aucune couture à l'œil ; GPU : Hyères dans le
+  bruit (17,7 / 18,1 / 18,0 ms), Alpes non conclu (24,0 → 44,8 → 43,9 ms : la relecture éteinte aussi — pression thermique « Heavy »).
+  **Coutures par la géométrie** : Alpes, C0-12 tenu (part > 0,25 px 6 % aux bords contre 11 % dans un niveau ; géomorphose éteinte 39 %) ;
+  **Hyères, une marche résiduelle** aux bords de rangs 2|3, 3|4, 4|5 (29–42 % contre 7–18 %, la géomorphose en retire la moitié), cause non
+  établie.
+- **Vérifié** : `check-wgsl` 81/81, tsc, biome, tests unitaires ciblés 56/0 (tuiles, pages, ortho, paramètres, contact, Lune, WGSL),
+  `pipeline-inventory --check` puis `--write --sizes`, e2e `j2-probes` 4/0, 2/0, 3/0, 1/0. **Non vérifié** : le ΔGPU sur J0 (kerr-mini) ;
+  `bun test` complet ; d'autres GPU que l'Apple ; le gain de couverture compté en pixels.
+- **Suite** : décision de Sam (allumer `edgeFoot` après le ΔGPU sur kerr-mini ; confirmer J2-3 réduit, sans gouttières) ; la marche de
+  Hyères (A/B du sur-sol IGN) avant la sortie de J2 ; puis J2-4 (l'invalidation locale par l'identité du sol).

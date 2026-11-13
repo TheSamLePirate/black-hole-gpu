@@ -53,6 +53,18 @@ connue ou supposée, la piste. Une entrée réglée est barrée avec le commit q
   inchangée. **Reste ouvert** : 1 image par vol à 3,1–3,2 ms, dont 1,7–2,7 ms dans le simple enregistrement d'une arrivée (`put`, hors de
   tout chemin coûteux : pause du ramasse-miettes probable, A en montre aussi) — critère non tenu strictement ; la mesure sur kerr-mini.
 
+## Une marche aux bords des niveaux du raster près de Hyères, géomorphose allumée (relevé par J2-3, 13 novembre 2026)
+
+Mesurée par la géométrie (e2e `j2-probes`, phase `seams`, [fiche J2-3](progress/j2/FICHE-J2-3-2026-11-13.md) §4 ; M1 Max, vues tenues) :
+l'inverse de la profondeur de vue, affine sur un plan, de part et d'autre des bords de niveaux. **Alpes** (Arve, 2 500 m) : aucune marche
+au-delà du relief lui-même — C0-12 tenu. **Hyères** (plaine du Gapeau 300 m ; vers La Crau 150 m) : une marche résiduelle de p50
+0,06–0,18 px, p95 0,8–1,1 px, **29–42 % des paires au-dessus de 0,25 px** (même niveau : 7–18 %) ; la géomorphose n'en retire que la
+moitié (éteinte : 39–55 %). Aux bords **rang 3 | 4** (45 %), **4 | 5** (61 %), **2 | 3** (26 %) ; aucune entre deux pas d'un même rang.
+Pas de trou (pas de ciel vu à travers). **Cause non établie.** Pistes : le sur-sol IGN (MNH, `settings.earthIgnSilhouettes`, I6) sur les
+niveaux lointains et pas sur les fins ; une source de hauteurs différente d'un rang à l'autre près de la côte (RGE ALTI, LiDAR,
+Terrarium). **Prochaine mesure** : la phase `seams` en A/B du sur-sol (`J2_VIEWS=hyeres-low`, un rechargement IGN : seule sur les deux
+Mac). Critère de sortie de J2 (§4 : coutures ≤ 0,25 px).
+
 ## « Posé sur un aérodrome » ne s'aligne plus sur sa piste au Bourget (e2e `ground-placement`)
 
 - **Observé** (12 nov. 2026, kerr-mini) : `game.land("earth", 48.96, 2.44)` répond « landed at 48.96°, 2.44° » au lieu de « lined up

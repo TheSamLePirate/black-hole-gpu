@@ -14,6 +14,13 @@ export const LEAK_VIEWS: Record<string, { what: string; at: [number, number, num
   },
   // (motion-quality's Alps: the Arve's valley and the glaciers, 2 500 m over the sea's level the flyAt's ground)
   alps: { what: "vallée de l'Arve vers l'est, 2 500 m sol, cap 110°", at: [45.85, 6.75, 2500, 110, 140], date: "2026-07-10T11:00:00Z" },
+  // (J2-3: lower and across the tiles' axes — the footprints diagonal on the windows, their edges near: north of Hyères towards
+  // La Crau and Toulon, 150 m)
+  "hyeres-diag": {
+    what: "de Hyères vers La Crau, 150 m sol, cap 235° (en diagonale des tuiles)",
+    at: [43.135, 6.14, 150, 235, 140],
+    date: "2026-07-10T10:00:00Z",
+  },
 };
 
 /** the two sentinels (8-bit sRGB): magenta and green — a leak is what changes between them, a magenta signature */
@@ -190,3 +197,99 @@ export function scaleDips(rows: SharpRowT[], n = 8, settle = 20) {
     }
   return out;
 }
+
+/**
+ * PLAN-J2 J2-3 — in the page: what a lever changed in the image (a: off, b: on, c: off again — the control, the drift of two reads
+ * of the same side). Per pixel the change of luminance |L_b − L_a| / max(L_a, 0.01) (× exposure), the control's |L_c − L_a| the
+ * same way; pixels over twice the mid-grey in any read left out (`bright`). Counts over 2 %, 5 %, 20 %, their rows by tenth of the
+ * image, the mean change; a PNG (base64): grey the image (a), orange where b differs from a by over 5 % and the control by under 2 %,
+ * blue the bright points left out.
+ */
+export const leverDiffJs = (a: string, b: string, c: string) => `(async () => {
+  const A = globalThis.__j2[${JSON.stringify(a)}], B = globalThis.__j2[${JSON.stringify(b)}], C = globalThis.__j2[${JSON.stringify(c)}];
+  if (!A || !B || !C || A.width !== B.width || A.height !== B.height || C.width !== A.width) return { error: "sizes differ or a read is missing" };
+  const W = A.width, H = A.height, a = A.data, b = B.data, c = C.data, ea = A.exposure, eb = B.exposure, ec = C.exposure;
+  const T = [0.02, 0.05, 0.2], n = [0, 0, 0], nc = [0, 0, 0], rows = new Array(10).fill(0);
+  let bright = 0, sum = 0, sumc = 0, px = 0;
+  const lum = (d, i, e) => e * (0.2126 * d[i] + 0.7152 * d[i + 1] + 0.0722 * d[i + 2]);
+  const img = new Uint8ClampedArray(W * H * 4);
+  for (let i = 0, p = 0; p < W * H; p++, i += 4) {
+    const La = lum(a, i, ea), Lb = lum(b, i, eb), Lc = lum(c, i, ec);
+    if (Math.max(La, Lb, Lc) > 2) { bright++; img[i] = 0; img[i + 1] = 90; img[i + 2] = 255; img[i + 3] = 255; continue; }
+    const r = Math.abs(Lb - La) / Math.max(La, 0.01), rc = Math.abs(Lc - La) / Math.max(La, 0.01);
+    px++; sum += r; sumc += rc;
+    for (let k = 0; k < 3; k++) { if (r > T[k]) n[k]++; if (rc > T[k]) nc[k]++; }
+    const g = Math.round(255 * Math.min(1, La / (1 + La)));
+    const hot = r > 0.05 && rc < 0.02;
+    if (hot) rows[Math.min(9, Math.floor((10 * Math.floor(p / W)) / H))]++;
+    img[i] = hot ? 255 : g; img[i + 1] = hot ? 150 : g; img[i + 2] = hot ? 0 : g; img[i + 3] = 255;
+  }
+  const cv = new OffscreenCanvas(W, H); cv.getContext("2d").putImageData(new ImageData(img, W, H), 0, 0);
+  const bytes = new Uint8Array(await (await cv.convertToBlob({ type: "image/png" })).arrayBuffer());
+  let bin = ""; for (let i = 0; i < bytes.length; i += 32768) bin += String.fromCharCode(...bytes.subarray(i, i + 32768));
+  return { width: W, height: H, pixels: px, bright, changed: { over2: n[0], over5: n[1], over20: n[2] }, control: { over2: nc[0], over5: nc[1], over20: nc[2] },
+    meanChange: +(sum / Math.max(px, 1)).toFixed(5), meanControl: +(sumc / Math.max(px, 1)).toFixed(5), hotRowsByTenth: rows, png: btoa(bin) }; })()`;
+
+/** in the page: the GPU's time of the next `n` images (renderer.lastGpuMs, those > 0): p50, p95, the count */
+export const gpuTimesJs = (n = 90) => `(async () => {
+  const R = __bh.renderer, v = [], frame = () => new Promise((q) => requestAnimationFrame(q));
+  for (let i = 0; i < ${n}; i++) { __bh.touch(); await frame(); if (R.lastGpuMs > 0) v.push(R.lastGpuMs); }
+  v.sort((p, q) => p - q); const at = (f) => v.length ? +v[Math.min(v.length - 1, Math.floor(f * v.length))].toFixed(3) : null;
+  return { n: v.length, p50: at(0.5), p95: at(0.95) }; })()`;
+
+/**
+ * PLAN-J2 J2-3 (question 5 of the J2-0 fiche) — the seams between the raster's levels by the geometry: the visibility's distance
+ * target read back as SEAM_JS does, each ground pixel's view depth's inverse w = |ray| / distance (the raster's projection a pinhole —
+ * terrain-raster.ts terrainVs: the ray (ndc.x · tan½fovₓ, ndc.y · tan½fov_y, 1) —: on a plane, w is affine on the screen, its steps
+ * from pixel to pixel equal, whatever the perspective — the distance's own curvature, SEAM_JS's doubt, gone). At each pair of
+ * neighbour ground pixels with one more of the same level on each side, the pair's step against its two sides' mean step: `excess` =
+ * |Δw_pair| / mean(|Δw_side|) − 1, in pixels of the surface's own slope (0: one plane; 1: a pixel's worth of jump) — a fold between
+ * two facets of different slopes counts there too; `seamStep`/`innerStep` the step alone (the pair's change less its sides' mean
+ * signed slope, over their mean magnitude: 0 on any continuous fold, s on a step of s pixels). Pairs across two
+ * levels (`seam`) against pairs inside one (`inner`, the control: the relief's own curvature and the depth's precision); steps over 3
+ * counted apart (`silhouettes`: occlusion edges, a crack over ~2 px). A seam the geometry leaves shows as `seam` over `inner`;
+ * renderer.rasterMorphOn off (T3's geomorphose) is the positive control — the levels' own heights, apart by up to metres.
+ */
+export const SEAM_GEOM_JS = `(async () => {
+  const R = __bh.renderer, tr = R.terrainRaster, tex = tr?.distanceTexture?.(), dev = R.device;
+  if (!tex) return { none: true };
+  const W = tex.width, H = tex.height, bpr = Math.ceil(W * 16 / 256) * 256;
+  const buf = dev.createBuffer({ size: bpr * H, usage: GPUBufferUsage.MAP_READ | GPUBufferUsage.COPY_DST });
+  const e = dev.createCommandEncoder(); e.copyTextureToBuffer({ texture: tex }, { buffer: buf, bytesPerRow: bpr }, [W, H]); dev.queue.submit([e.finish()]);
+  await buf.mapAsync(GPUMapMode.READ); const raw = new Float32Array(buf.getMappedRange().slice(0)); buf.unmap(); buf.destroy();
+  const st = bpr / 4, ty = Math.tan((__bh.settings.fov * Math.PI) / 360), tx = ty * W / H;
+  const lv = (x, y) => { const i = y * st + x * 4, c = Math.floor(raw[i + 3] / 262144); return c >= 1 && c <= 56 && raw[i + 1] <= 0 && raw[i] > 0 ? c : 0; };
+  const w = (x, y) => { const nx = ((x + 0.5) / W) * 2 - 1, ny = ((y + 0.5) / H) * 2 - 1; return Math.hypot(nx * tx, ny * ty, 1) / raw[y * st + x * 4]; };
+  const seam = [], inner = [], seamJ = [], innerJ = [], byPair = {}; let silSeam = 0, silInner = 0, groundPx = 0;
+  for (let y = 2; y < H - 2; y++) for (let x = 2; x < W - 2; x++) {
+    const m = lv(x, y); if (!m) continue;
+    groundPx++;
+    for (const [dx, dy] of [[1, 0], [0, 1]]) {
+      const m1 = lv(x + dx, y + dy);
+      if (!m1 || lv(x - dx, y - dy) !== m || lv(x + 2 * dx, y + 2 * dy) !== m1) continue;
+      const across = m1 !== m;
+      // (the inner pairs sampled — one in 16 —: the control needs their distribution, not all of them)
+      if (!across && ((x + 3 * y) & 15) !== 0) continue;
+      const wm = w(x - dx, y - dy), w0 = w(x, y), w1 = w(x + dx, y + dy), w2 = w(x + 2 * dx, y + 2 * dy);
+      const slope = Math.max(0.5 * (Math.abs(w0 - wm) + Math.abs(w2 - w1)), 1e-7 * w0);
+      const r = Math.abs(w1 - w0) / slope;
+      if (r > 3) { if (across) silSeam++; else silInner++; continue; }
+      (across ? seam : inner).push(Math.abs(r - 1));
+      // (the step itself: the pair's change less the mean of its sides' signed slopes — 0 on a fold, a facet's kink, whatever the two
+      // slopes; s on a step s —, over their mean magnitude: a jump in pixels of the surface's slope)
+      const J = Math.abs((w1 - w0) - 0.5 * ((w0 - wm) + (w2 - w1))) / slope;
+      (across ? seamJ : innerJ).push(J);
+      // (by the two sides' codes — 1 + the rank from the patch + 8 × the mesh's step, terrain-raster-hint.ts rasterGroundCode —: which
+      // boundary — two ranks, or two steps of one rank)
+      if (across) {
+        const c = (k) => "r" + ((k - 1) % 8) + "s" + Math.floor((k - 1) / 8), key = m < m1 ? c(m) + "|" + c(m1) : c(m1) + "|" + c(m);
+        const b = (byPair[key] ??= { n: 0, over0_25: 0, sum: 0 }); b.n++; b.sum += J; if (J > 0.25) b.over0_25++;
+      }
+    }
+  }
+  const stats = (v) => { v.sort((p, q) => p - q); const q = (f) => v.length ? +v[Math.min(v.length - 1, Math.floor(f * v.length))].toFixed(3) : 0;
+    return { n: v.length, p50: q(0.5), p95: q(0.95), p99: q(0.99), max: q(1), over0_25: v.filter((t) => t > 0.25).length, share0_25: v.length ? +(v.filter((t) => t > 0.25).length / v.length).toFixed(4) : 0 }; };
+  return { W, H, groundPx, morph: R.rasterMorphOn, seam: { ...stats(seam), silhouettes: silSeam }, inner: { ...stats(inner), silhouettes: silInner, sampled: "1/16" },
+    seamStep: stats(seamJ), innerStep: stats(innerJ),
+    byPair: Object.fromEntries(Object.entries(byPair).sort((p, q) => q[1].n - p[1].n).map(([k, v]) => [k, { n: v.n, share0_25: +(v.over0_25 / v.n).toFixed(3), mean: +(v.sum / v.n).toFixed(3) }])) };
+})()`;

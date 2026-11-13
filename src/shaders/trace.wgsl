@@ -7498,6 +7498,25 @@ fn tileLights(l: u32, p: vec2f) -> f32 {
 // (the coarser levels' night lights — their alpha — wanted: the raster's material says when its ground is in the day, the
 // orthophotos covering it then all it reads — TERRE-UNREAL U6)
 var<private> IMG_LIGHTS: bool = true;
+// PLAN-J2 J2-3 — an imagery level's weight by the distance d [its texels] of the point to its published rectangle's edge (the slots
+// beyond: another page, the wrap, nothing yet). Fixed (P.tiles.w 1): 0 within 2 texels, 1 from 48. At the filtered footprint's scale
+// (P.tiles.w 2 — earthTiles.edgeFoot): 0 while the hardware's read can reach past the edge — `reach` texels: half the footprint's
+// two axes (the pixel's parallelogram on the level, anisotropic to 16) and the chosen mip's texel with its bilinear neighbour —,
+// 1 from EDGE_BAND texels beyond (the levels' seam blended as wide as the reach, EDGE_BAND at least)
+const EDGE_BAND: f32 = 12.0;
+fn edgeFootOn() -> bool { return P.tiles.w > 1.5; }
+fn edgeWeight(d: f32, reach: f32) -> f32 {
+  if (!edgeFootOn()) { return smoothstep(2.0, 48.0, d); }
+  return smoothstep(reach, reach + max(EDGE_BAND, reach), d);
+}
+// (the reach of a read by gradients gx, gy [the level's texels]: anisotropic to 16, the mip by the long axis over 16 or the short one)
+fn edgeReachGrad(gx: vec2f, gy: vec2f) -> f32 {
+  let a = length(gx);
+  let b = length(gy);
+  return 0.5 * (a + b) + 1.5 * max(max(min(a, b), max(a, b) / 16.0), 1.0);
+}
+// (the reach of a read at a mip lod: its texel with its bilinear neighbour)
+fn edgeReachLod(lod: f32) -> f32 { return 1.5 * exp2(clamp(lod, 0.0, 12.0)); }
 fn earthImagery(q: vec3f, foot: f32) -> TileImage {
   var o: TileImage;
   o.c = vec4f(0.0);
@@ -7522,7 +7541,7 @@ fn earthImagery(q: vec3f, foot: f32) -> TileImage {
     if (wz <= 0.0) { continue; }
     let p = a.xy + vec2f(dlon, -dM) * b.z;
     let d = min(min(p.x, p.y), min(b.x - p.x, b.y - p.y));
-    var w = wz * smoothstep(2.0, 48.0, d);
+    var w = wz * edgeWeight(d, edgeReachLod(bodies[ORTHO_OFF + 3u * k + 2u].w - zf));
     if (w <= 0.0) { continue; }
     // (T9a: its window filtered by the hardware in linear light, at the footprint's mip; its coverage the weight — a tile the
     // IGN has not, alpha 0)
@@ -7554,7 +7573,7 @@ fn earthImagery(q: vec3f, foot: f32) -> TileImage {
     if (wz <= 0.0) { continue; }
     let p = a.xy + vec2f(dlon, -dM) * b.z;
     let d = min(min(p.x, p.y), min(b.x - p.x, b.y - p.y));
-    var w = wz * smoothstep(2.0, 48.0, d);
+    var w = wz * edgeWeight(d, edgeReachLod(f32(TILE_Z0 + l) - zf));
     if (w <= 0.0) { continue; }
     // (T9b: the day's colour filtered by the hardware in linear light, at the footprint's mip — the maps' -srgb views decode
     // the same way: the two meet without a seam —, its coverage the weight; the night's lights by hand from the relief's
@@ -7587,35 +7606,34 @@ fn earthImagery(q: vec3f, foot: f32) -> TileImage {
   }
   return o;
 }
-// The tiles' imagery over a pixel's footprint (its axes fx, fy on the unit sphere), filtered anisotropically: read at the
-// level of the footprint's short axis, n taps spread along the long one (n its elongation, TUNE_ANISO at most) — one read at
-// the long axis's level (the isotropic) blurred a grazing ground both ways: in level flight, the city a kilometre ahead
-// drawn as a mush of its average colours, sharp only once a still view had accumulated hundreds of samples
+// The tiles' imagery over a pixel's footprint (its axes fx, fy on the unit sphere), filtered anisotropically by the hardware (T9a,
+// T9b: each level read by the footprint's gradients, anisotropic to 16, its mips in linear light). The levels weighed by the
+// footprint (zf) and by their edge (edgeWeight), the coverage the weight, the orthophotos over the relief's levels. TUNE_ANISO
+// does one thing now: the level's choice — the footprint's size taken as its long axis over its elongation (TUNE_ANISO at most),
+// the short one where less elongated; the reads themselves are the hardware's (before T9: TUNE_ANISO taps by hand along the long
+// axis — a single read at the long axis's level blurred a grazing ground both ways)
 fn earthImageryAniso(gq: vec3f, fx: vec3f, fy: vec3f) -> TileImage {
-  // (TERRE-UNREAL U6: the taps' places on the tiles from the centre's and its axis's — linear over a pixel's footprint —, not
-  // each from its own atan2 and atanh; each level's window read once for all its taps; the sRGB curve once a level, over the
-  // taps' mean)
   let la = length(fx);
   let lb = length(fy);
   let fMaj = max(la, lb);
   let fMin = max(min(la, lb), 1e-12);
-  let n = u32(clamp(ceil(fMaj / fMin - 0.25), 1.0, f32(max(TUNE_ANISO, 1u))));
+  let n = clamp(ceil(fMaj / fMin - 0.25), 1.0, f32(max(TUNE_ANISO, 1u)));
   var o: TileImage;
   o.c = vec4f(0.0);
   o.w = 0.0;
   o.o = 0.0;
   if (P.tiles.w < 0.5) { return o; }
-  let ax = select(fy, fx, la >= lb);
-  let foot = select(fMaj, max(fMaj / f32(n), fMin), n > 1u) * EARTH_RM;
+  let foot = select(fMaj, max(fMaj / n, fMin), n > 1.0) * EARTH_RM;
   let q = gq;
   let cosLat = sqrt(max(1.0 - q.z * q.z, 1e-12));
   let uv0 = imageryUv(q);
-  // (along the long axis, across its whole length: the taps at (i + ½)/n − ½ of it — its length on the tiles by their
-  // derivatives at the point, d atan2(y, x) and d atanh(z): no difference of two nearby places, their float32 rounding in it)
-  var duv = vec2f(0.0);
-  if (n > 1u) { duv = vec2f((q.x * ax.y - q.y * ax.x) / max(dot(q.xy, q.xy), 1e-12), -ax.z / max(1.0 - q.z * q.z, 1e-12)); }
   let zf = log2(EARTH_RM * TAU * cosLat / (256.0 * max(foot, 0.1)));
-  let nf = f32(n);
+  // (the footprint's axes on the tiles' Mercator [rad]: d atan2(y, x) and −d atanh(z) at the point — no difference of two nearby
+  // places, their float32 rounding in it —; each level's in its texels × its pixels per radian)
+  let ixy = 1.0 / max(dot(q.xy, q.xy), 1e-12);
+  let iz = 1.0 / max(1.0 - q.z * q.z, 1e-12);
+  let mx = vec2f((q.x * fx.y - q.y * fx.x) * ixy, -fx.z * iz);
+  let my = vec2f((q.x * fy.y - q.y * fy.x) * ixy, -fy.z * iz);
   var fine = vec3f(0.0);
   var wf = 0.0;
   for (var kk = 0; kk < i32(ORTHO_LEVELS); kk++) {
@@ -7628,15 +7646,13 @@ fn earthImageryAniso(gq: vec3f, fx: vec3f, fy: vec3f) -> TileImage {
     if (wz <= 0.0) { continue; }
     let p0 = a.xy + uv0 * b.z;
     let d = min(min(p0.x, p0.y), min(b.x - p0.x, b.y - p0.y));
-    let w = wz * smoothstep(2.0, 48.0, d);
+    let gx = mx * b.z;
+    let gy = my * b.z;
+    let w = wz * edgeWeight(d, edgeReachGrad(gx, gy));
     if (w <= 0.0) { continue; }
-    // (T9a: the hardware's anisotropic filter along the pixel's footprint — its axes on the window by the derivatives of the
-    // longitude and of the Mercator latitude, d atan2(y, x) and d atanh(z) —, its mips in linear light; its coverage the
-    // weight)
-    let gs = b.z / cc.y;
-    let gx = vec2f((q.x * fx.y - q.y * fx.x) / max(dot(q.xy, q.xy), 1e-12), -fx.z / max(1.0 - q.z * q.z, 1e-12)) * gs;
-    let gy = vec2f((q.x * fy.y - q.y * fy.x) / max(dot(q.xy, q.xy), 1e-12), -fy.z / max(1.0 - q.z * q.z, 1e-12)) * gs;
-    let sm = orthoGrad(k, cc.y, (a.zw + p0) / cc.y, gx, gy);
+    // (T9a: the hardware's anisotropic filter along the pixel's footprint on the window — its gradients over the window's side —,
+    // its mips in linear light; its coverage the weight)
+    let sm = orthoGrad(k, cc.y, (a.zw + p0) / cc.y, gx / cc.y, gy / cc.y);
     if (sm.a < 0.004) { continue; }
     let lin = sm.rgb / sm.a;
     let wc = w * sm.a;
@@ -7660,12 +7676,12 @@ fn earthImageryAniso(gq: vec3f, fx: vec3f, fy: vec3f) -> TileImage {
     if (wz <= 0.0) { continue; }
     let p0 = a.xy + uv0 * b.z;
     let d = min(min(p0.x, p0.y), min(b.x - p0.x, b.y - p0.y));
-    let w = wz * smoothstep(2.0, 48.0, d);
+    let gx = mx * b.z;
+    let gy = my * b.z;
+    let w = wz * edgeWeight(d, edgeReachGrad(gx, gy));
     if (w <= 0.0) { continue; }
-    // (T9b: the hardware's anisotropic filter along the pixel's footprint — its axes in the level's texels by the derivatives
-    // of the longitude and of the Mercator latitude —, its mips in linear light; its coverage the weight)
-    let gx = vec2f((q.x * fx.y - q.y * fx.x) / max(dot(q.xy, q.xy), 1e-12), -fx.z / max(1.0 - q.z * q.z, 1e-12)) * b.z;
-    let gy = vec2f((q.x * fy.y - q.y * fy.x) / max(dot(q.xy, q.xy), 1e-12), -fy.z / max(1.0 - q.z * q.z, 1e-12)) * b.z;
+    // (T9b: the hardware's anisotropic filter along the pixel's footprint — its gradients in the level's texels —, its mips in
+    // linear light; its coverage the weight)
     let sm = tileImgGrad(l, p0, gx, gy);
     if (sm.a < 0.004) { continue; }
     let wc = w * sm.a;

@@ -4,7 +4,10 @@ import { $ } from "bun";
 import { App, E2E, stopServer } from "./lib/app";
 import { J0_FIXED, J0_SCENE, intervals } from "./lib/j0-scene";
 import {
+  gpuTimesJs,
   keepSceneJs,
+  leverDiffJs,
+  SEAM_GEOM_JS,
   LEAK_VIEWS,
   leakCompareJs,
   SEAM_JS,
@@ -33,10 +36,16 @@ import {
 //     to 0.625 and let go (forceScale) — every change of scale the flight makes or is given: the sharpness of every image (renderer.sharpProbe, the Laplacian's
 //     energy of the scene's colour through the canopy), the dips at each change of scale (scaleDips), each pause's moving image
 //     against its refined one; the frames' GPU time.
+//   edge — PLAN-J2 J2-3 (J2_PHASES=edge, before leak): at each view, the imagery's edge fade by the footprint (earthTiles.edgeFoot)
+//     against the fixed one, frozen, A B A (off, on, off again — the drift): the image settled and read each time, the GPU's time of 90
+//     images, the change's map (lib/j2-probes.ts leverDiffJs) and shots. J2_EDGE_FOOT=1: the lever on for the leak phase after it.
+//   seams — J2-3, the seams by the geometry (J2_PHASES=seams): at each view, frozen, T3's geomorphose on, off (the positive control:
+//     the levels' own heights), on again: the seams read by the view depth's inverse (lib/j2-probes.ts SEAM_GEOM_JS: pairs across two
+//     levels against pairs inside one) and by the distance (SEAM_JS, J2-0's); a shot of each.
 // Motion blur off (the reconstruction's sharpness, not the shutter's). J2_OUT (remote-results/j2/<machine>; in an A/B of
 // scripts/ab-e2e.ts its <AB_SIDE><AB_RUN> under it), J2_MACHINE.
 // Not a pass/fail on the numbers: the fiche is written from j2.json (docs/progress/j2/). It fails on a GPU error, a craft not placed.
-// Duration: ~4 min for leak (2 views), ~3 min for flight, on kerr-mini (cold boot included).
+// Duration: ~4 min for leak (2 views), ~2 min a view for edge, ~3 min for flight, on kerr-mini (cold boot included).
 // Done when: each view's seams and leak read and its leak map written, the flight's stages, sharpness and publication logged, j2.json written, no GPU error.
 
 const MACHINE = process.env.J2_MACHINE ?? (await $`hostname -s`.quiet().text()).trim();
@@ -136,6 +145,79 @@ describe.skipIf(!E2E)("J2-0: the leak, the seams, the sharpness and the publicat
   }
   const writeB64 = (f: string, b64: string | null) => (b64 ? Bun.write(f, Buffer.from(b64, "base64")) : Promise.resolve(0));
 
+  if (PHASES.includes("seams"))
+    for (const v of VIEWS)
+      test(`J2-3 seams by the geometry, morph on/off/on: ${v}`, async () => {
+        const view = LEAK_VIEWS[v];
+        if (!view) throw new Error(`J2_VIEWS: ${v} unknown`);
+        const [lat, lon, agl, hdg, spd] = view.at;
+        const placed = await place(
+          `__bh.game.quality("realtime"); Object.assign(__bh.settings, { dynamicResolution: false, animate: true, targetSpp: 64, motionBlur: 0, lookProfile: "neutral" });
+          __bh.game.setDate("${view.date}"); __bh.game.set("weather", "fair"); __bh.game.set("earthClouds", 0); __bh.game.flyAt(${lat}, ${lon}, ${agl}, ${hdg}, ${spd}); ${CLEAN}`,
+          v,
+        );
+        await app.js(`(() => { document.body.classList.add("hide-ui"); return 1; })()`);
+        const row: Record<string, unknown> = { view: v, what: view.what, placed };
+        for (const [k, on] of [
+          ["on", true],
+          ["off", false],
+          ["on2", true],
+        ] as const) {
+          await app.js(`(() => { __bh.renderer.rasterMorphOn = ${on}; __bh.renderer.invalidate?.(); return 1; })()`);
+          row[`converged_${k}`] = await converged(`${v} morph ${k}`);
+          row[`geom_${k}`] = await app.js(SEAM_GEOM_JS);
+          row[`dist_${k}`] = await app.js(SEAM_JS);
+          await app.shot(`${OUT}/seams-${v}-morph-${k}.png`);
+          console.log(`  ${v} seams, morph ${k}: ${JSON.stringify(row[`geom_${k}`])}`);
+        }
+        await app.js(`(() => { __bh.renderer.rasterMorphOn = true; document.body.classList.remove("hide-ui"); return 1; })()`);
+        row.gpuErrors = await app.js<number>(`__bh.renderer.gpuErrors`);
+        (out.seams ??= []) as unknown[];
+        (out.seams as unknown[]).push(row);
+        expect(row.gpuErrors).toBe(0);
+      }, 600_000);
+
+  if (PHASES.includes("edge"))
+    for (const v of VIEWS)
+      test(`J2-3 edge fade, A B A: ${v}`, async () => {
+        const view = LEAK_VIEWS[v];
+        if (!view) throw new Error(`J2_VIEWS: ${v} unknown`);
+        const [lat, lon, agl, hdg, spd] = view.at;
+        const placed = await place(
+          `__bh.game.quality("realtime"); Object.assign(__bh.settings, { dynamicResolution: false, animate: true, targetSpp: 64, motionBlur: 0, lookProfile: "neutral" });
+          __bh.game.setDate("${view.date}"); __bh.game.set("weather", "fair"); __bh.game.set("earthClouds", 0); __bh.game.flyAt(${lat}, ${lon}, ${agl}, ${hdg}, ${spd}); ${CLEAN}`,
+          v,
+        );
+        await app.js(`(() => { document.body.classList.add("hide-ui"); return 1; })()`);
+        const row: Record<string, unknown> = { view: v, what: view.what, placed };
+        const sides: [string, boolean][] = [
+          ["off", false],
+          ["on", true],
+          ["off2", false],
+        ];
+        for (const [k, on] of sides) {
+          await app.js(`(() => { __bh.renderer.earthTiles.edgeFoot = ${on}; __bh.renderer.invalidate?.(); return 1; })()`);
+          row[`converged_${k}`] = await converged(`${v} edge ${k}`);
+          row[`read_${k}`] = await app.js(keepSceneJs(k));
+          row[`gpu_${k}`] = await app.js(gpuTimesJs(90));
+          await app.shot(`${OUT}/edge-${v}-${k}.png`);
+          await writeB64(`${OUT}/edge-${v}-${k}-scene.png`, await app.js<string | null>(scenePngJs(k)));
+          console.log(`  ${v} edge ${k}: gpu ${JSON.stringify(row[`gpu_${k}`])}`);
+        }
+        const d = await app.js<Record<string, unknown> & { png?: string }>(leverDiffJs("off", "on", "off2"));
+        await writeB64(`${OUT}/edge-${v}-map.png`, d.png ?? null);
+        delete d.png;
+        row.diff = d;
+        console.log(`  ${v} edge change: ${JSON.stringify(d)}`);
+        await app.js(
+          `(() => { __bh.renderer.earthTiles.edgeFoot = ${process.env.J2_EDGE_FOOT === "1"}; globalThis.__j2 = {}; document.body.classList.remove("hide-ui"); return 1; })()`,
+        );
+        row.gpuErrors = await app.js<number>(`__bh.renderer.gpuErrors`);
+        (out.edge ??= []) as unknown[];
+        (out.edge as unknown[]).push(row);
+        expect(row.gpuErrors).toBe(0);
+      }, 600_000);
+
   if (PHASES.includes("leak"))
     for (const v of VIEWS)
       test(`leak and seams: ${v}`, async () => {
@@ -149,6 +231,8 @@ describe.skipIf(!E2E)("J2-0: the leak, the seams, the sharpness and the publicat
         );
         await app.js(`(() => { document.body.classList.add("hide-ui"); return 1; })()`);
         const row: Record<string, unknown> = { view: v, what: view.what, placed };
+        // (J2-3: the imagery's edges faded by the footprint, J2_EDGE_FOOT=1 — the leak measured with it)
+        row.edgeFoot = await app.js<boolean>(`(() => (__bh.renderer.earthTiles.edgeFoot = ${process.env.J2_EDGE_FOOT === "1"}))()`);
         row.converged0 = await converged(`${v} reference`);
         row.seams = await app.js(SEAM_JS);
         console.log(`  ${v} seams: ${JSON.stringify(row.seams)}`);
