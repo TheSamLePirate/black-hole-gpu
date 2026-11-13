@@ -1134,6 +1134,8 @@ export class GameTools {
     const r2 = (x: number) => Math.round(x * 100) / 100;
     return {
       loopFps: r2(cpuProf.loopFps),
+      /** the loop's iterations finished since the page began (its end reached) */
+      loops: cpuProf.loopCount,
       renderFps: r2(cpuProf.renderFps),
       worstLoopMs: r2(cpuProf.worstLoop),
       gpuFrameMs: r2(r.lastGpuMs),

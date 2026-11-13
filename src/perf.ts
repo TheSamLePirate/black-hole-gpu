@@ -69,6 +69,10 @@ export class CpuProfiler {
     }
   }
 
+  /** the loop's iterations finished since the page began — its end reached (a stage that threw before it skipped it) */
+  get loopCount(): number {
+    return this.loopN;
+  }
   /** the main loop's iterations over the last LOOP_KEEP (~10 s): their median, 95th and 99th percentiles and worst [ms] */
   loopStats(): { n: number; p50: number; p95: number; p99: number; max: number } {
     const n = Math.min(this.loopN, CpuProfiler.LOOP_KEEP);

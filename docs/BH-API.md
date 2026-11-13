@@ -1446,6 +1446,7 @@ Where the frame's time goes. `o.gpu !== false` (the default) switches on the GPU
 | field | meaning |
 |---|---|
 | `loopFps`, `renderFps`, `worstLoopMs`| the loop's and the rendered frame rates; the worst loop time [ms] |
+| `loops` | the loop's iterations finished since the page began — its end reached (13 Nov 2026: a stage that threw skipped it, e2e `frame-guard`) |
 | `gpuFrameMs`, `gpuPassesMs`, `gpuProfiled`, `gpuSupported` | GPU time per frame, its passes' total, the frames profiled, whether timestamps are supported |
 | `image` | the canvas size, e.g. `"1920×1080"` |
 | `pixelRatio`, `renderScale`, `quality`, `budgetMs`, `block` | the pixel ratio, dynamic-resolution fraction, quality level, the realtime frame budget [ms], realtime block |

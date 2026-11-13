@@ -8581,6 +8581,12 @@ async function main() {
     traffic: { fr: "le trafic", en: "the traffic" },
     overlays: { fr: "les repères de la vue", en: "the view's marks" },
     "the flight's drawing": { fr: "le dessin du vol", en: "the flight's drawing" },
+    replay: { fr: "le replay", en: "the replay" },
+    sky: { fr: "le ciel", en: "the sky" },
+    voyage: { fr: "le voyage", en: "the voyage" },
+    instruments: { fr: "les instruments", en: "the instruments" },
+    music: { fr: "la musique", en: "the music" },
+    "the frame's state": { fr: "l'état de l'image", en: "the frame's state" },
   };
   const frameGuard = new FrameGuard({
     say: ({ stage, error, back }) => {
@@ -8863,8 +8869,10 @@ async function main() {
       settings.fpsCap > 0 &&
       !renderer.offlineActive &&
       (capN > 0 ? (now - renderedAt) / rfMs < capN - 0.5 : now - renderedAt < 1000 / settings.fpsCap - 0.25 * (rfMs || 4));
-    if (!capped) cpuProf.time("sky chart", () => updateChart());
-    skyPanel.refresh();
+    frameGuard.run("sky", () => {
+      if (!capped) cpuProf.time("sky chart", () => updateChart());
+      skyPanel.refresh();
+    });
     // (the flown ship's ground, kept for its gear — a spectator's too, the view gone thousands of km: the Moon's
     // finer maps pinned, the Earth's tiles round it when the view is off the Earth. What is drawn on the Earth —
     // tiles, surface, scenery, their shadows — follows the camera whenever it is there; the streaming's lead, the
@@ -8916,51 +8924,53 @@ async function main() {
     }
     renderer.meterSpot = telescopeSpot();
     // (the replay — S3 —: its frame drawn again under its camera; else the flight kept on the tape, while it runs)
-    if (replay.active && !renderer.offlineActive) {
-      replay.frame(dt);
-      changed = true;
-    } else if (session.moving && !renderer.offlineActive && settings.animate && camera.piloting && !camera.spectating) {
-      tape.tick(dt);
-      const smp = camera.replaySample();
-      if (smp) {
-        // (the trails' state kept every 5 s, and at the tape's start)
-        const snap = tape.clock - trailSnapAt >= TRAIL_SNAP_S || !tape.frames.length;
-        const kept = tape.push(
-          smp,
-          camera.replayEvents() | replayEv,
-          {
-            pose: Object.fromEntries(REPLAY_KEYS.map((k) => [k, settings[k]])) as Partial<Settings>,
-            time: sim.time,
-            water: renderer.water.clock,
-            exp: renderer.autoExposureEV,
-            thrust: renderer.shipThrust,
-            plasma: renderer.shipPlasma,
-            jet: renderer.jetPose && { ...renderer.jetPose },
-            ...((S) =>
-              S
-                ? {
-                    others: othersTo(renderer.combatOthers.slice(0, 24), (v) => mulSt(S, v)),
-                  }
-                : { others: [] })(camAxesNow()),
-            wakes: renderer.seaWakes,
-            trail: camera.contrailStep,
-            trailSnap: snap ? camera.contrails.snapshot() : undefined,
-            booms: ((C) =>
-              C?.last && C.booms.length
-                ? C.booms.map((b) => ({
-                    w: enuToEcef(smp, [b.p[0] - C.last!.p[0], b.p[1] - C.last!.p[1], b.p[2] - C.last!.p[2]]),
-                    age: C.t - b.t,
-                    size: b.size,
-                  }))
-                : [])(camera.combat),
-          },
-          replayFocus(smp),
-        );
-        if (kept && snap) trailSnapAt = tape.clock;
+    frameGuard.run("replay", () => {
+      if (replay.active && !renderer.offlineActive) {
+        replay.frame(dt);
+        changed = true;
+      } else if (session.moving && !renderer.offlineActive && settings.animate && camera.piloting && !camera.spectating) {
+        tape.tick(dt);
+        const smp = camera.replaySample();
+        if (smp) {
+          // (the trails' state kept every 5 s, and at the tape's start)
+          const snap = tape.clock - trailSnapAt >= TRAIL_SNAP_S || !tape.frames.length;
+          const kept = tape.push(
+            smp,
+            camera.replayEvents() | replayEv,
+            {
+              pose: Object.fromEntries(REPLAY_KEYS.map((k) => [k, settings[k]])) as Partial<Settings>,
+              time: sim.time,
+              water: renderer.water.clock,
+              exp: renderer.autoExposureEV,
+              thrust: renderer.shipThrust,
+              plasma: renderer.shipPlasma,
+              jet: renderer.jetPose && { ...renderer.jetPose },
+              ...((S) =>
+                S
+                  ? {
+                      others: othersTo(renderer.combatOthers.slice(0, 24), (v) => mulSt(S, v)),
+                    }
+                  : { others: [] })(camAxesNow()),
+              wakes: renderer.seaWakes,
+              trail: camera.contrailStep,
+              trailSnap: snap ? camera.contrails.snapshot() : undefined,
+              booms: ((C) =>
+                C?.last && C.booms.length
+                  ? C.booms.map((b) => ({
+                      w: enuToEcef(smp, [b.p[0] - C.last!.p[0], b.p[1] - C.last!.p[1], b.p[2] - C.last!.p[2]]),
+                      age: C.t - b.t,
+                      size: b.size,
+                    }))
+                  : [])(camera.combat),
+            },
+            replayFocus(smp),
+          );
+          if (kept && snap) trailSnapAt = tape.clock;
+        }
+        // (a craft set elsewhere — a scene, a jump —: the tape begun afresh)
+        else if (tape.frames.length) tape.clear();
       }
-      // (a craft set elsewhere — a scene, a jump —: the tape begun afresh)
-      else if (tape.frames.length) tape.clear();
-    }
+    });
     replayEv = 0;
     // (a still view refines, traced, in the photo mode alone: paused or held, the raster draws on)
     renderer.rasterHold = !photoMode?.isOpen;
@@ -9084,8 +9094,10 @@ async function main() {
     }
     // (the camera's smoothness sensor — src/camera/metrics.ts, PLAN-CAMERA-AAA CAM0 —: the view's place from the body
     // it is nearest, on that body's ground for ours — its turn and an orbit's motion not the view's —, look, field)
-    voyageHud.update(camera.viewController().voyage, settings);
-    tourStep();
+    frameGuard.run("voyage", () => {
+      voyageHud.update(camera.viewController().voyage, settings);
+      tourStep();
+    });
     if (camProbe.active && st) {
       const vc = camera.viewController();
       const w = vc.rigWorld();
@@ -9414,569 +9426,579 @@ async function main() {
       now,
       fleet.active === "a320" ? "airliner" : isAircraft(fleet.active) ? (camera.combat?.status === "run" ? "fight" : "plane") : null,
     );
-    if (pil && info) {
-      // the cockpit's screens: the telemetry, drawn (a few times a second, while the cabin is seen)
-      if (
-        renderer.ship.cabinShown &&
-        cockpitScreens.draw({
-          info,
-          status,
-          settings,
-          time: sim.time,
-          runway: camera.runwayView(),
-          chrono:
-            cockpitChrono.running || cockpitChrono.seconds() > 0 ? { s: cockpitChrono.seconds(), running: cockpitChrono.running } : null,
-          systems: camera.systemsInfo(),
-          ticks: camera.sysTicks,
-          rcs: camera.rcsMode ?? "rotate",
-          met: !isAircraft(fleet.active) && Number.isFinite(camera.metT0) ? sim.time * M_SECONDS - camera.metT0 : null,
-        })
-      ) {
-        renderer.ship.updateScreens(cockpitScreens.canvas);
-        renderer.cockpitGlow = cockpitScreens.glow;
-      }
-      // the cockpit's dashboard: the local up and the motion on the ship's axes, the speed, the height
-      {
-        const S = info.S as number[][];
-        const toShip = (v: number[] | null | undefined) =>
-          v ? ([0, 1, 2].map((i) => S[0]![i]! * v[0]! + S[1]![i]! * v[1]! + S[2]![i]! * v[2]!) as [number, number, number]) : null;
-        const up = toShip(info.dirs.radialOut as number[] | null),
-          fwd = toShip(info.dirs.prograde as number[] | null);
-        renderer.cockpitDash = {
-          up: up ?? [0, 1, 0],
-          fwd: fwd ?? [0, 0, 1],
-          speed: (status?.speed ?? 0) / 1000,
-          alt: status?.altKm ?? 0,
-          time: performance.now() / 1000,
-        };
-        // (the Ranger's landing gear, drawn when out — its oleos as the gear's physics has them)
-        {
-          const legs = GEARS.ranger!.legs;
-          const gl = camera.gearLast?.legs;
-          renderer.shipGear = {
-            ext: settings.vessel === "ranger" ? camera.gearExt : 0,
-            comp: legs.map((L, k) => Math.min(Math.max(gl?.[k]?.comp ?? 0, 0), L.stroke)),
-          };
+    // (after the render: the instruments, the HUD, the sound — a stage that throws here skipped the rest of the frame, every frame)
+    frameGuard.run("instruments", () => {
+      if (pil && info) {
+        // the cockpit's screens: the telemetry, drawn (a few times a second, while the cabin is seen)
+        if (
+          renderer.ship.cabinShown &&
+          cockpitScreens.draw({
+            info,
+            status,
+            settings,
+            time: sim.time,
+            runway: camera.runwayView(),
+            chrono:
+              cockpitChrono.running || cockpitChrono.seconds() > 0 ? { s: cockpitChrono.seconds(), running: cockpitChrono.running } : null,
+            systems: camera.systemsInfo(),
+            ticks: camera.sysTicks,
+            rcs: camera.rcsMode ?? "rotate",
+            met: !isAircraft(fleet.active) && Number.isFinite(camera.metT0) ? sim.time * M_SECONDS - camera.metT0 : null,
+          })
+        ) {
+          renderer.ship.updateScreens(cockpitScreens.canvas);
+          renderer.cockpitGlow = cockpitScreens.glow;
         }
-        // (the F-35's moving parts: its control surfaces as its flight controls move them, its gear, its
-        // nozzle, its canopy — src/f35/pose.ts)
-        if (settings.vessel === "f35") {
-          const gl = camera.gearLast?.legs;
-          const legs = GEARS.f35!.legs;
-          const th = renderer.shipThrust;
-          const L = camera.airFlight.last;
-          const onGround = !!camera.gearLast && camera.gearLast.contact > 0;
-          const speed = status?.speed ?? 0;
-          renderer.jetPose = jetPoser.step(
-            (jetIn = {
+        // the cockpit's dashboard: the local up and the motion on the ship's axes, the speed, the height
+        {
+          const S = info.S as number[][];
+          const toShip = (v: number[] | null | undefined) =>
+            v ? ([0, 1, 2].map((i) => S[0]![i]! * v[0]! + S[1]![i]! * v[1]! + S[2]![i]! * v[2]!) as [number, number, number]) : null;
+          const up = toShip(info.dirs.radialOut as number[] | null),
+            fwd = toShip(info.dirs.prograde as number[] | null);
+          renderer.cockpitDash = {
+            up: up ?? [0, 1, 0],
+            fwd: fwd ?? [0, 0, 1],
+            speed: (status?.speed ?? 0) / 1000,
+            alt: status?.altKm ?? 0,
+            time: performance.now() / 1000,
+          };
+          // (the Ranger's landing gear, drawn when out — its oleos as the gear's physics has them)
+          {
+            const legs = GEARS.ranger!.legs;
+            const gl = camera.gearLast?.legs;
+            renderer.shipGear = {
+              ext: settings.vessel === "ranger" ? camera.gearExt : 0,
+              comp: legs.map((L, k) => Math.min(Math.max(gl?.[k]?.comp ?? 0, 0), L.stroke)),
+            };
+          }
+          // (the F-35's moving parts: its control surfaces as its flight controls move them, its gear, its
+          // nozzle, its canopy — src/f35/pose.ts)
+          if (settings.vessel === "f35") {
+            const gl = camera.gearLast?.legs;
+            const legs = GEARS.f35!.legs;
+            const th = renderer.shipThrust;
+            const L = camera.airFlight.last;
+            const onGround = !!camera.gearLast && camera.gearLast.contact > 0;
+            const speed = status?.speed ?? 0;
+            renderer.jetPose = jetPoser.step(
+              (jetIn = {
+                dt,
+                // (the pilot's: the roll left-positive — pilot.ts —; here right-positive)
+                torque: th ? [th.torque[0], th.torque[1], -th.torque[2]] : [0, 0, 0],
+                rates: ((r) => [camera.pilot.omega[0] / r[0], camera.pilot.omega[1] / r[1], -camera.pilot.omega[2] / r[2]])(
+                  VESSELS.f35.fbw!.rates,
+                ) as [number, number, number],
+                throttle: th?.throttle ?? 0,
+                afterburner: (th?.boost ?? 1) > 1.01,
+                alpha: L?.out.alpha ?? 0,
+                flaps: camera.airFlight.cfg.flaps ?? 0,
+                brake: camera.airFlight.cfg.brake ?? 0,
+                gear: camera.gearExt,
+                comp: legs.map((Lg, k) => Math.min(Math.max(gl?.[k]?.comp ?? 0, 0), Lg.stroke)) as [number, number, number],
+                onGround,
+                groundSpeed: speed,
+                steer: onGround ? (th?.torque[1] ?? 0) : 0,
+                parked: onGround && speed < 0.5 && (th?.throttle ?? 0) <= 0.02 && !camera.stovl.on,
+                stovl: camera.stovl.conv,
+                nozzle: camera.stovl.swivel,
+                fan: camera.stovl.fan,
+              }),
+            );
+            // (another player followed: his surfaces, his gear, his nozzle — ui/netsession.ts)
+            if (netSession.followJet) renderer.jetPose = netSession.followJet;
+          } else jetIn = null;
+          // (the A320's: its surfaces as its flight controls move them, its slats and flaps by configuration, its
+          // spoilers, its gear and doors, its fans, its lights — src/a320/pose.ts)
+          if (settings.vessel === "a320") {
+            renderer.ship.setA320Livery(settings.a320Livery);
+            const gl = camera.gearLast?.legs;
+            const legs = GEARS.a320!.legs;
+            const th = renderer.shipThrust;
+            const L = camera.airFlight.last;
+            const onGround = !!camera.gearLast && camera.gearLast.contact > 0;
+            const speed = status?.speed ?? 0;
+            const r = VESSELS.a320.fbw!.rates;
+            const cmd = (k: number, sgn: number) =>
+              Math.min(Math.max(sgn * (0.55 * (th?.torque[k] ?? 0) + (0.75 * camera.pilot.omega[k]!) / r[k]!), -1, 1), 1);
+            const F = camera.a320;
+            const n1s: [number, number] = F ? [F.engines[0].n1, F.engines[1].n1] : [0, 0];
+            const deckOut = deckExterior(deckPoser.props);
+            renderer.a320Pose = a320Poser.step({
               dt,
-              // (the pilot's: the roll left-positive — pilot.ts —; here right-positive)
-              torque: th ? [th.torque[0], th.torque[1], -th.torque[2]] : [0, 0, 0],
-              rates: ((r) => [camera.pilot.omega[0] / r[0], camera.pilot.omega[1] / r[1], -camera.pilot.omega[2] / r[2]])(
-                VESSELS.f35.fbw!.rates,
-              ) as [number, number, number],
-              throttle: th?.throttle ?? 0,
-              afterburner: (th?.boost ?? 1) > 1.01,
-              alpha: L?.out.alpha ?? 0,
-              flaps: camera.airFlight.cfg.flaps ?? 0,
-              brake: camera.airFlight.cfg.brake ?? 0,
+              pitch: cmd(0, 1),
+              yaw: cmd(1, 1),
+              // (the pilot's roll left-positive — pilot.ts —; here right-positive)
+              roll: cmd(2, -1),
+              trim: 0,
+              flapLever: Math.round((camera.airFlight.cfg.flaps ?? 0) * 4),
+              ias: Math.sqrt((2 * (L?.out.q ?? 0)) / 1.225) * 1.9438,
+              speedBrake: camera.airBrake,
+              groundSpoilers: camera.groundSpoilers && onGround ? 1 : 0,
               gear: camera.gearExt,
               comp: legs.map((Lg, k) => Math.min(Math.max(gl?.[k]?.comp ?? 0, 0), Lg.stroke)) as [number, number, number],
               onGround,
               groundSpeed: speed,
               steer: onGround ? (th?.torque[1] ?? 0) : 0,
-              parked: onGround && speed < 0.5 && (th?.throttle ?? 0) <= 0.02 && !camera.stovl.on,
-              stovl: camera.stovl.conv,
-              nozzle: camera.stovl.swivel,
-              fan: camera.stovl.fan,
-            }),
-          );
-          // (another player followed: his surfaces, his gear, his nozzle — ui/netsession.ts)
-          if (netSession.followJet) renderer.jetPose = netSession.followJet;
-        } else jetIn = null;
-        // (the A320's: its surfaces as its flight controls move them, its slats and flaps by configuration, its
-        // spoilers, its gear and doors, its fans, its lights — src/a320/pose.ts)
-        if (settings.vessel === "a320") {
-          renderer.ship.setA320Livery(settings.a320Livery);
-          const gl = camera.gearLast?.legs;
-          const legs = GEARS.a320!.legs;
-          const th = renderer.shipThrust;
-          const L = camera.airFlight.last;
-          const onGround = !!camera.gearLast && camera.gearLast.contact > 0;
-          const speed = status?.speed ?? 0;
-          const r = VESSELS.a320.fbw!.rates;
-          const cmd = (k: number, sgn: number) =>
-            Math.min(Math.max(sgn * (0.55 * (th?.torque[k] ?? 0) + (0.75 * camera.pilot.omega[k]!) / r[k]!), -1, 1), 1);
-          const F = camera.a320;
-          const n1s: [number, number] = F ? [F.engines[0].n1, F.engines[1].n1] : [0, 0];
-          const deckOut = deckExterior(deckPoser.props);
-          renderer.a320Pose = a320Poser.step({
-            dt,
-            pitch: cmd(0, 1),
-            yaw: cmd(1, 1),
-            // (the pilot's roll left-positive — pilot.ts —; here right-positive)
-            roll: cmd(2, -1),
-            trim: 0,
-            flapLever: Math.round((camera.airFlight.cfg.flaps ?? 0) * 4),
-            ias: Math.sqrt((2 * (L?.out.q ?? 0)) / 1.225) * 1.9438,
-            speedBrake: camera.airBrake,
-            groundSpoilers: camera.groundSpoilers && onGround ? 1 : 0,
-            gear: camera.gearExt,
-            comp: legs.map((Lg, k) => Math.min(Math.max(gl?.[k]?.comp ?? 0, 0), Lg.stroke)) as [number, number, number],
-            onGround,
-            groundSpeed: speed,
-            steer: onGround ? (th?.torque[1] ?? 0) : 0,
-            n1: n1s,
-            reverser: F ? [F.engines[0].rev, F.engines[1].rev] : [0, 0],
-            fcs: F,
-            alpha: ((L?.out.alpha ?? 0) * 180) / Math.PI,
-            landingLights: settings.landingLights || deckOut.landingOut,
-            wipers: deckOut.wipers,
-            // (its doors opened by its ground services — src/a320/services.ts)
-            doors: camera.a320Ground?.doors(),
-          });
-          // (its ground vehicles about it, the pushback's tug at its nose — controller/a320ground.ts)
-          {
-            const gv = camera.a320Ground?.vehicles() ?? [];
-            const po = camera.a320PushOut;
-            if (po && po.attach > 0) gv.push(tugVehicle(po.bar, po.attach));
-            renderer.a320Ground = gv.length ? gv : null;
-          }
-          // (the lights its switches turn off: the taxi, turn-off and wing lights — ship.ts)
-          Object.assign(renderer.a320Pose.props, {
-            "deck/taxi": deckOut.taxi ? 1 : 0,
-            "deck/turnoff": deckOut.turnoff ? 1 : 0,
-            "deck/wing": deckOut.wing ? 1 : 0,
-            // (its wings' bend under their load — src/a320/flex.ts —: the tip's rise [m])
-            "sim/wing-flex": camera.a320WingTip,
-          });
-          // (its windshield — src/a320/glass.ts —: the wipers by their knobs on DC 1, the arms posed outside by them; the
-          // frost in icing, the window heat clearing it; the rain on the glass, seen from inside)
-          {
-            const P = deckPoser.props;
-            const G = a320GlassSim;
-            // (reached by the e2e: its frost laid, its wipers read)
-            (renderer as unknown as { a320GlassSim: typeof G }).a320GlassSim = G;
-            const num = (k: string, d = 0) => Number(P[k] ?? d) || 0;
-            const dc1 = num("systems/electrical/bus/dc-1", 28) >= 25;
-            const wp = G.wipers.map((w, k) => w.step(num(`controls/switches/wiper${k ? "R" : "L"}spd`), dc1, dt)) as [number, number];
-            renderer.a320Pose.props["fdm/jsbsim/fcs/left-wiper-pos-norm"] = wp[0];
-            renderer.a320Pose.props["fdm/jsbsim/fcs/right-wiper-pos-norm"] = wp[1];
-            const ac = Math.max(
-              num("systems/electrical/bus/ac-1"),
-              num("systems/electrical/bus/ac-2"),
-              num("systems/electrical/bus/ac-ess"),
-            );
-            const rain = renderer.rain && !renderer.rain.dust ? Math.min(renderer.rain.rain, 1.3) : 0;
-            const oatC = (L?.air?.T ?? 288.15) - 273.15;
-            // (the de-icing truck's fluid: the frost washed off the glass too — src/a320/services.ts)
-            if (camera.a320Ground?.on.has("deice") && camera.a320Ground.deiceLeft > 0) G.frost.ice = Math.max(G.frost.ice - dt / 30, 0);
-            const frost = G.frost.step(
-              {
-                oatC,
-                // (the moisture: the rain, or a cloud layer the craft is in — the weather's)
-                wet: Math.max(
-                  rain,
-                  ...(camera.weatherNow?.layers ?? []).map((l) => {
-                    const h = camera.airFlight.cfg.agl ?? 0;
-                    return h >= l.base && h <= l.top ? l.cover : 0;
-                  }),
-                ),
-                heat: num("controls/ice-protection/windowprobeheat-output") > 0.5 && ac >= 110,
-                onGround,
-              },
-              settings.animate && !session.frozen ? dt : 0,
-            );
-            renderer.a320Glass = {
-              rain,
-              clock: renderer.rainClock,
-              airspeed: L?.speed ?? 0,
-              frost,
-              wipers: wp,
-              rates: [G.wipers[0].shaderRate, G.wipers[1].shaderRate],
-            };
-          }
-          // (its flight deck — from inside, its switches all the time: the side stick as the pilot moves it, the levers,
-          // the pedals; the game's state on its switches — src/a320/deck.ts, deckgame.ts)
-          deckSync(deckGame, deckPoser.props);
-          // (the ECAM's aurals: FlightGear's recordings, played by its sound files on the warnings' properties the ECAM
-          // writes — src/a320/sound —; its queue emptied)
-          camera.a320Ecam?.takeAurals();
-          {
-            const tq = th?.torque ?? [0, 0, 0];
-            const c1 = (x: number) => Math.min(Math.max(x, -1), 1);
-            const deckProps = deckPoser.step({
-              dt,
-              stick: [c1(tq[0]!), c1(-tq[2]!)],
-              pedals: onGround ? 0 : c1(tq[1]!),
-              tiller: onGround ? c1(tq[1]!) : 0,
-              gearDown: camera.gearDown,
+              n1: n1s,
+              reverser: F ? [F.engines[0].rev, F.engines[1].rev] : [0, 0],
               fcs: F,
-              lever: camera.pilot.throttle,
-              reverse: camera.a320Reverse && onGround && camera.pilot.throttle <= 0.01 ? 1 : 0,
-              flapLever: Math.round((camera.airFlight.cfg.flaps ?? 0) * 4),
-              speedBrake: camera.airBrake,
-              spoilersArmed: !!camera.groundSpoilers,
-              parkBrake: camera.a320Park,
-              // (the buses: the systems', once they run)
-              powered: camera.a320Sys ? undefined : true,
+              alpha: ((L?.out.alpha ?? 0) * 180) / Math.PI,
+              landingLights: settings.landingLights || deckOut.landingOut,
+              wipers: deckOut.wipers,
+              // (its doors opened by its ground services — src/a320/services.ts)
+              doors: camera.a320Ground?.doors(),
             });
-            renderer.a320Deck = settings.shipMount === "cockpit" || settings.shipMount === "cabin" ? deckProps : null;
-            // (the control under the pointer lit: its objects — ship.ts deckHover)
-            const hc = renderer.a320Deck && deckCtl ? deckCtl.control(deckCtl.focus) : null;
-            const dm = renderer.ship.a320DeckMesh;
-            renderer.ship.deckHover = hc && dm ? hc.objects.map((o) => dm.objects.indexOf(o)).filter((k) => k >= 0) : null;
-            // (its displays — src/a320/du —, drawn while the deck is: two a frame at most, into the atlas)
-            const deckMesh = renderer.ship.a320DeckMesh;
-            if (renderer.a320Deck && deckMesh && renderer.ship.deckMats) {
-              duSet ??= renderer.a320Du = new DuSet(deckMesh.screens, deckMesh.texts, a320Mcdus());
-              renderer.ship.updateDu(duSet.frame(performance.now() / 1000, duData(camera, settings, deckProps, dateOf(sim.time))));
+            // (its ground vehicles about it, the pushback's tug at its nose — controller/a320ground.ts)
+            {
+              const gv = camera.a320Ground?.vehicles() ?? [];
+              const po = camera.a320PushOut;
+              if (po && po.attach > 0) gv.push(tugVehicle(po.bar, po.attach));
+              renderer.a320Ground = gv.length ? gv : null;
             }
-            // (a checklist's item shown: a ring over its control — ui/a320page.ts)
-            const mk = renderer.a320Deck && deckMarker.at ? renderer.ship.cabinProject(deckMarker.at) : null;
-            if (mk && Math.abs(mk[0]) < 1.1 && Math.abs(mk[1]) < 1.1) {
-              const b = canvas.getBoundingClientRect();
-              deckMarker.el.style.display = "block";
-              deckMarker.el.style.left = `${b.left + ((mk[0] + 1) / 2) * b.width}px`;
-              deckMarker.el.style.top = `${b.top + ((1 - mk[1]) / 2) * b.height}px`;
-            } else deckMarker.el.style.display = "none";
+            // (the lights its switches turn off: the taxi, turn-off and wing lights — ship.ts)
+            Object.assign(renderer.a320Pose.props, {
+              "deck/taxi": deckOut.taxi ? 1 : 0,
+              "deck/turnoff": deckOut.turnoff ? 1 : 0,
+              "deck/wing": deckOut.wing ? 1 : 0,
+              // (its wings' bend under their load — src/a320/flex.ts —: the tip's rise [m])
+              "sim/wing-flex": camera.a320WingTip,
+            });
+            // (its windshield — src/a320/glass.ts —: the wipers by their knobs on DC 1, the arms posed outside by them; the
+            // frost in icing, the window heat clearing it; the rain on the glass, seen from inside)
+            {
+              const P = deckPoser.props;
+              const G = a320GlassSim;
+              // (reached by the e2e: its frost laid, its wipers read)
+              (renderer as unknown as { a320GlassSim: typeof G }).a320GlassSim = G;
+              const num = (k: string, d = 0) => Number(P[k] ?? d) || 0;
+              const dc1 = num("systems/electrical/bus/dc-1", 28) >= 25;
+              const wp = G.wipers.map((w, k) => w.step(num(`controls/switches/wiper${k ? "R" : "L"}spd`), dc1, dt)) as [number, number];
+              renderer.a320Pose.props["fdm/jsbsim/fcs/left-wiper-pos-norm"] = wp[0];
+              renderer.a320Pose.props["fdm/jsbsim/fcs/right-wiper-pos-norm"] = wp[1];
+              const ac = Math.max(
+                num("systems/electrical/bus/ac-1"),
+                num("systems/electrical/bus/ac-2"),
+                num("systems/electrical/bus/ac-ess"),
+              );
+              const rain = renderer.rain && !renderer.rain.dust ? Math.min(renderer.rain.rain, 1.3) : 0;
+              const oatC = (L?.air?.T ?? 288.15) - 273.15;
+              // (the de-icing truck's fluid: the frost washed off the glass too — src/a320/services.ts)
+              if (camera.a320Ground?.on.has("deice") && camera.a320Ground.deiceLeft > 0) G.frost.ice = Math.max(G.frost.ice - dt / 30, 0);
+              const frost = G.frost.step(
+                {
+                  oatC,
+                  // (the moisture: the rain, or a cloud layer the craft is in — the weather's)
+                  wet: Math.max(
+                    rain,
+                    ...(camera.weatherNow?.layers ?? []).map((l) => {
+                      const h = camera.airFlight.cfg.agl ?? 0;
+                      return h >= l.base && h <= l.top ? l.cover : 0;
+                    }),
+                  ),
+                  heat: num("controls/ice-protection/windowprobeheat-output") > 0.5 && ac >= 110,
+                  onGround,
+                },
+                settings.animate && !session.frozen ? dt : 0,
+              );
+              renderer.a320Glass = {
+                rain,
+                clock: renderer.rainClock,
+                airspeed: L?.speed ?? 0,
+                frost,
+                wipers: wp,
+                rates: [G.wipers[0].shaderRate, G.wipers[1].shaderRate],
+              };
+            }
+            // (its flight deck — from inside, its switches all the time: the side stick as the pilot moves it, the levers,
+            // the pedals; the game's state on its switches — src/a320/deck.ts, deckgame.ts)
+            deckSync(deckGame, deckPoser.props);
+            // (the ECAM's aurals: FlightGear's recordings, played by its sound files on the warnings' properties the ECAM
+            // writes — src/a320/sound —; its queue emptied)
+            camera.a320Ecam?.takeAurals();
+            {
+              const tq = th?.torque ?? [0, 0, 0];
+              const c1 = (x: number) => Math.min(Math.max(x, -1), 1);
+              const deckProps = deckPoser.step({
+                dt,
+                stick: [c1(tq[0]!), c1(-tq[2]!)],
+                pedals: onGround ? 0 : c1(tq[1]!),
+                tiller: onGround ? c1(tq[1]!) : 0,
+                gearDown: camera.gearDown,
+                fcs: F,
+                lever: camera.pilot.throttle,
+                reverse: camera.a320Reverse && onGround && camera.pilot.throttle <= 0.01 ? 1 : 0,
+                flapLever: Math.round((camera.airFlight.cfg.flaps ?? 0) * 4),
+                speedBrake: camera.airBrake,
+                spoilersArmed: !!camera.groundSpoilers,
+                parkBrake: camera.a320Park,
+                // (the buses: the systems', once they run)
+                powered: camera.a320Sys ? undefined : true,
+              });
+              renderer.a320Deck = settings.shipMount === "cockpit" || settings.shipMount === "cabin" ? deckProps : null;
+              // (the control under the pointer lit: its objects — ship.ts deckHover)
+              const hc = renderer.a320Deck && deckCtl ? deckCtl.control(deckCtl.focus) : null;
+              const dm = renderer.ship.a320DeckMesh;
+              renderer.ship.deckHover = hc && dm ? hc.objects.map((o) => dm.objects.indexOf(o)).filter((k) => k >= 0) : null;
+              // (its displays — src/a320/du —, drawn while the deck is: two a frame at most, into the atlas)
+              const deckMesh = renderer.ship.a320DeckMesh;
+              if (renderer.a320Deck && deckMesh && renderer.ship.deckMats) {
+                duSet ??= renderer.a320Du = new DuSet(deckMesh.screens, deckMesh.texts, a320Mcdus());
+                renderer.ship.updateDu(duSet.frame(performance.now() / 1000, duData(camera, settings, deckProps, dateOf(sim.time))));
+              }
+              // (a checklist's item shown: a ring over its control — ui/a320page.ts)
+              const mk = renderer.a320Deck && deckMarker.at ? renderer.ship.cabinProject(deckMarker.at) : null;
+              if (mk && Math.abs(mk[0]) < 1.1 && Math.abs(mk[1]) < 1.1) {
+                const b = canvas.getBoundingClientRect();
+                deckMarker.el.style.display = "block";
+                deckMarker.el.style.left = `${b.left + ((mk[0] + 1) / 2) * b.width}px`;
+                deckMarker.el.style.top = `${b.top + ((1 - mk[1]) / 2) * b.height}px`;
+              } else deckMarker.el.style.display = "none";
+            }
           }
-        }
-        // (the A320's taxi guidance in the view — ui/taxiguide.ts —: its route ahead on the ground, the next turn)
-        taxiGuide.frame(
-          camera,
-          fleet.active === "a320" && settings.ship ? (p) => renderer.ship.cabinProject(p) : null,
-          () => canvas.getBoundingClientRect(),
-          settings.units,
-        );
-        // (the F-35 chosen: its display's fonts, canvas and mips readied while the browser idles — no stall at the
-        // cockpit's first look)
-        if (settings.vessel === "f35" && !pcdWarm) {
-          pcdWarm = true;
-          (window.requestIdleCallback ?? ((f: () => void) => setTimeout(f, 200)))(() => {
-            jetPcd.warm();
-            renderer.ship.warmJetScreen(jetPcd.canvas);
-          });
-        }
-        // (the F-35's panoramic display, seen from its seat: drawn at 10 Hz, onto the dashboard)
-        if (settings.vessel === "f35" && (settings.shipMount === "cockpit" || settings.shipMount === "cabin")) {
-          const t0 = performance.now();
-          // (its data read every 100 ms, its parts drawn in turn — one a frame —, only those uploaded)
-          // (the designation cursor on a page of it: drawn there — PLAN-RADAR-AAA constat 29)
-          const T = camera.tdc;
-          jetPcd.tdc = T.on && T.screen?.kind === "pcd" ? { u: T.x, v: T.y } : null;
-          const parts = jetPcd.frame(t0, () => {
-            const al = alertsOf({ ...info, status, animate: settings.animate, fmtM: () => "" }).map((a) => ({
-              text: a.text,
-              level: a.level,
-            }));
-            const d = pcdData(camera, settings, renderer.jetPose, al, dateOf(sim.time));
-            pcdStats.read += performance.now() - t0;
-            return d;
-          });
-          renderer.pcdLook = jetPcd.look(t0, settings.f35PcdBrightness, settings.f35PcdStyle === "cinematic");
-          // (the parts drawn gathered and sent together — one copy of their union, one pass of mips — every 66 ms at
-          // most, at once after a touch: a third of the uploads, a delay no eye sees)
-          pcdPending.push(...parts);
-          const touched = (jetPcd.lastTouch?.at ?? -Infinity) > pcdSentAt;
-          if (pcdPending.length && (touched || t0 - pcdSentAt >= 66)) {
-            const t1 = performance.now();
-            const x0 = Math.min(...pcdPending.map((r) => r.x)),
-              y0 = Math.min(...pcdPending.map((r) => r.y));
-            const x1 = Math.max(...pcdPending.map((r) => r.x + r.w)),
-              y1 = Math.max(...pcdPending.map((r) => r.y + r.h));
-            renderer.ship.updateJetScreen(jetPcd.canvas, [{ x: x0, y: y0, w: x1 - x0, h: y1 - y0 }]);
-            pcdPending.length = 0;
-            pcdSentAt = t0;
-            pcdStats.draws++;
-            pcdStats.up += performance.now() - t1;
+          // (the A320's taxi guidance in the view — ui/taxiguide.ts —: its route ahead on the ground, the next turn)
+          taxiGuide.frame(
+            camera,
+            fleet.active === "a320" && settings.ship ? (p) => renderer.ship.cabinProject(p) : null,
+            () => canvas.getBoundingClientRect(),
+            settings.units,
+          );
+          // (the F-35 chosen: its display's fonts, canvas and mips readied while the browser idles — no stall at the
+          // cockpit's first look)
+          if (settings.vessel === "f35" && !pcdWarm) {
+            pcdWarm = true;
+            (window.requestIdleCallback ?? ((f: () => void) => setTimeout(f, 200)))(() => {
+              jetPcd.warm();
+              renderer.ship.warmJetScreen(jetPcd.canvas);
+            });
           }
-          const dt = performance.now() - t0;
-          pcdStats.frames++;
-          pcdStats.ms += dt;
-          pcdStats.max = Math.max(pcdStats.max, dt);
+          // (the F-35's panoramic display, seen from its seat: drawn at 10 Hz, onto the dashboard)
+          if (settings.vessel === "f35" && (settings.shipMount === "cockpit" || settings.shipMount === "cabin")) {
+            const t0 = performance.now();
+            // (its data read every 100 ms, its parts drawn in turn — one a frame —, only those uploaded)
+            // (the designation cursor on a page of it: drawn there — PLAN-RADAR-AAA constat 29)
+            const T = camera.tdc;
+            jetPcd.tdc = T.on && T.screen?.kind === "pcd" ? { u: T.x, v: T.y } : null;
+            const parts = jetPcd.frame(t0, () => {
+              const al = alertsOf({ ...info, status, animate: settings.animate, fmtM: () => "" }).map((a) => ({
+                text: a.text,
+                level: a.level,
+              }));
+              const d = pcdData(camera, settings, renderer.jetPose, al, dateOf(sim.time));
+              pcdStats.read += performance.now() - t0;
+              return d;
+            });
+            renderer.pcdLook = jetPcd.look(t0, settings.f35PcdBrightness, settings.f35PcdStyle === "cinematic");
+            // (the parts drawn gathered and sent together — one copy of their union, one pass of mips — every 66 ms at
+            // most, at once after a touch: a third of the uploads, a delay no eye sees)
+            pcdPending.push(...parts);
+            const touched = (jetPcd.lastTouch?.at ?? -Infinity) > pcdSentAt;
+            if (pcdPending.length && (touched || t0 - pcdSentAt >= 66)) {
+              const t1 = performance.now();
+              const x0 = Math.min(...pcdPending.map((r) => r.x)),
+                y0 = Math.min(...pcdPending.map((r) => r.y));
+              const x1 = Math.max(...pcdPending.map((r) => r.x + r.w)),
+                y1 = Math.max(...pcdPending.map((r) => r.y + r.h));
+              renderer.ship.updateJetScreen(jetPcd.canvas, [{ x: x0, y: y0, w: x1 - x0, h: y1 - y0 }]);
+              pcdPending.length = 0;
+              pcdSentAt = t0;
+              pcdStats.draws++;
+              pcdStats.up += performance.now() - t1;
+            }
+            const dt = performance.now() - t0;
+            pcdStats.frames++;
+            pcdStats.ms += dt;
+            pcdStats.max = Math.max(pcdStats.max, dt);
+          }
+          // (the cockpit's controls: each where the flight has it, lit by its mode — PLAN-COCKPIT)
+          // (each moving part travelling there: a lever moved by a key or an autopilot seen going — K5)
+          if (renderer.ship.cabinShown)
+            renderer.cockpitControls = poseData(
+              cockpitTravel.step(
+                controlStates(camera, settings, cockpitChrono, {
+                  hover: camera.cockpit?.input.hover ?? null,
+                  pressed: camera.cockpit?.input.pressed ?? null,
+                }),
+                dt,
+              ),
+            );
         }
-        // (the cockpit's controls: each where the flight has it, lit by its mode — PLAN-COCKPIT)
-        // (each moving part travelling there: a lever moved by a key or an autopilot seen going — K5)
-        if (renderer.ship.cabinShown)
-          renderer.cockpitControls = poseData(
-            cockpitTravel.step(
-              controlStates(camera, settings, cockpitChrono, {
-                hover: camera.cockpit?.input.hover ?? null,
-                pressed: camera.cockpit?.input.pressed ?? null,
-              }),
-              dt,
+        // (drawn with the image: on the loop's turns that rendered one — the markers then match the view
+        // shown, not a pose one or two frames ahead of it)
+        // (the benchmark measures the image alone: the HUD hidden and not drawn)
+        if ((st || !flightHud.drawn) && !bench.running)
+          cpuProf.time(
+            "flight HUD (total)",
+            () => (
+              (flightHud.spectating = camera.spectating ? { at: renderer.shipPlace?.t ?? null, follow: camera.spectatorFollow } : null),
+              flightHud.update({ ...info, probe: renderer.planetProbes.get(settings.target) ?? null, status }, sim.time)
             ),
           );
-      }
-      // (drawn with the image: on the loop's turns that rendered one — the markers then match the view
-      // shown, not a pose one or two frames ahead of it)
-      // (the benchmark measures the image alone: the HUD hidden and not drawn)
-      if ((st || !flightHud.drawn) && !bench.running)
-        cpuProf.time(
-          "flight HUD (total)",
-          () => (
-            (flightHud.spectating = camera.spectating ? { at: renderer.shipPlace?.t ?? null, follow: camera.spectatorFollow } : null),
-            flightHud.update({ ...info, probe: renderer.planetProbes.get(settings.target) ?? null, status }, sim.time)
-          ),
-        );
-      // (the landing's callouts — PLAN-TARS T2 —: the radio heights, minimums, sink rate, the warnings said)
-      if (settings.ship && camera.piloting && !camera.spectating && fleet.active !== "a320") {
-        const sf = info.surface;
-        const app = camera.entryRun?.app;
-        for (const l of callouts.update({
-          inAir: !!sf && !sf.landed && !sf.rolling,
-          agl: sf?.alt ?? Number.NaN,
-          vz: sf?.vVert ?? 0,
-          final: !!app?.final,
-          hp: app?.hp,
-          dh: RUNWAY_DH,
-          alerts: flightHud.alerts,
-          now: performance.now(),
-          auto: camera.pilot.auto,
-          gpws: gpwsOf(info, groundAlertsOf(settings.vessel, settings.groundAlerts)),
-          tcas:
-            settings.tcas === false
-              ? undefined
-              : { ta: camera.tcas.some((a) => a.level === "TA"), ra: camera.tcas.find((a) => a.sense)?.sense ?? null },
-        }))
-          voice.say(l);
-      }
-      // (mission control — PLAN-TARS T3 —: its lines on the flight's moments, each when it arrives)
-      if (settings.ship && camera.piloting && !camera.spectating && status) {
-        const wall = performance.now();
-        const Msec = 4.925490947e-6 * settings.massSolar;
-        if (wall - earthLight.at > 2000) {
-          const nav = status.side === "ours" ? camera.ourNav(cameraFrame(settings)) : null;
-          const E = nav ? ourState("earth", nav.t).pos : null;
-          earthLight = {
-            s: nav && E ? Math.hypot(nav.X[0] - E[0], nav.X[1] - E[1], nav.X[2] - E[2]) * Msec : 0,
-            at: wall,
-          };
+        // (the landing's callouts — PLAN-TARS T2 —: the radio heights, minimums, sink rate, the warnings said)
+        if (settings.ship && camera.piloting && !camera.spectating && fleet.active !== "a320") {
+          const sf = info.surface;
+          const app = camera.entryRun?.app;
+          for (const l of callouts.update({
+            inAir: !!sf && !sf.landed && !sf.rolling,
+            agl: sf?.alt ?? Number.NaN,
+            vz: sf?.vVert ?? 0,
+            final: !!app?.final,
+            hp: app?.hp,
+            dh: RUNWAY_DH,
+            alerts: flightHud.alerts,
+            now: performance.now(),
+            auto: camera.pilot.auto,
+            gpws: gpwsOf(info, groundAlertsOf(settings.vessel, settings.groundAlerts)),
+            tcas:
+              settings.tcas === false
+                ? undefined
+                : { ta: camera.tcas.some((a) => a.level === "TA"), ra: camera.tcas.find((a) => a.sense)?.sense ?? null },
+          }))
+            voice.say(l);
         }
-        const A = info.air;
-        const rv = camera.entryRun?.app?.final ? camera.runwayView() : null;
-        const ph = phaseWatch.current;
-        // (another's craft ours — a spectator's, a passenger's —: his flight, not ours to call)
-        if (camera.puppet) capcom.reset();
-        else
-          capcomDue.push(
-            ...capcom.update({
-              units: settings.units,
-              now: wall,
-              side: status.side,
-              stage: ph?.stage ?? null,
-              mode: ph?.mode ?? null,
-              callsign: VESSELS[fleet.active].name,
-              orbit: status.orbit ? { apKm: status.orbit.apKm, peKm: status.orbit.peKm } : null,
-              entry: camera.entryRun?.phase ?? null,
-              site: camera.entryRun?.site?.name ?? null,
-              final: rv ? { rwy: rv.rwy, des: rv.des, wind: rv.wind ? { from: rv.wind.from, u10: rv.wind.u10 } : null } : null,
-              plasma: A?.inAir ? Math.min(Math.max((Math.log10(Math.max(A.heat, 1)) - 4.6) / 1.7, 0), 1) : 0,
-              stopped: !!camera.ourLanded && !camera.rolling,
-              docked: !!info.links.length,
-              grade: lastGrade,
-              failed: !!camera.airFlight.failure,
-              lightS: earthLight.s,
-              warp: settings.timeSpeed * Msec,
-            }),
-          );
-        for (let k = capcomDue.length - 1; k >= 0; k--) if (capcomDue[k]!.at <= wall) voice.say(capcomDue.splice(k, 1)[0]!.line);
-        // (the score: the moment's piece — none: silence)
-        const ph2 = phaseWatch.current;
-        const plasmaNow = A?.inAir ? Math.min(Math.max((Math.log10(Math.max(A.heat, 1)) - 4.6) / 1.7, 0), 1) : 0;
-        const soiR = status.soi ? solarBody(status.soi)?.radius : undefined;
-        const scoreIn = {
-          now: wall / 1000,
-          mode: ph2?.mode ?? null,
-          stage: ph2?.stage ?? null,
-          side: status.side,
-          plasma: plasmaNow,
-          final: !!camera.entryRun?.app?.final,
-          agl: info.surface?.alt ?? Number.POSITIVE_INFINITY,
-          r: info.region === "hole" ? info.r : Number.POSITIVE_INFINITY,
-          body: status.soi ?? null,
-          docking: !!camera.dockAuto || (!!info.dock && !info.dock.docked && info.dock.range < 300),
-          inAir: !!A?.inAir,
-          airspeed: A?.inAir ? A.speed : 0,
-          nearWorld: soiR !== undefined && Number.isFinite(status.altKm) && status.altKm < (7 * soiR * M_METRES) / 1e3,
-        };
-        const moment = score.moment(scoreIn);
-        musicCue = {
-          m: moment,
-          context: score.context(scoreIn),
-          intensity: flightIntensity({
-            throttle: camera.pilot.engineNow,
+        // (mission control — PLAN-TARS T3 —: its lines on the flight's moments, each when it arrives)
+        if (settings.ship && camera.piloting && !camera.spectating && status) {
+          const wall = performance.now();
+          const Msec = 4.925490947e-6 * settings.massSolar;
+          if (wall - earthLight.at > 2000) {
+            const nav = status.side === "ours" ? camera.ourNav(cameraFrame(settings)) : null;
+            const E = nav ? ourState("earth", nav.t).pos : null;
+            earthLight = {
+              s: nav && E ? Math.hypot(nav.X[0] - E[0], nav.X[1] - E[1], nav.X[2] - E[2]) * Msec : 0,
+              at: wall,
+            };
+          }
+          const A = info.air;
+          const rv = camera.entryRun?.app?.final ? camera.runwayView() : null;
+          const ph = phaseWatch.current;
+          // (another's craft ours — a spectator's, a passenger's —: his flight, not ours to call)
+          if (camera.puppet) capcom.reset();
+          else
+            capcomDue.push(
+              ...capcom.update({
+                units: settings.units,
+                now: wall,
+                side: status.side,
+                stage: ph?.stage ?? null,
+                mode: ph?.mode ?? null,
+                callsign: VESSELS[fleet.active].name,
+                orbit: status.orbit ? { apKm: status.orbit.apKm, peKm: status.orbit.peKm } : null,
+                entry: camera.entryRun?.phase ?? null,
+                site: camera.entryRun?.site?.name ?? null,
+                final: rv ? { rwy: rv.rwy, des: rv.des, wind: rv.wind ? { from: rv.wind.from, u10: rv.wind.u10 } : null } : null,
+                plasma: A?.inAir ? Math.min(Math.max((Math.log10(Math.max(A.heat, 1)) - 4.6) / 1.7, 0), 1) : 0,
+                stopped: !!camera.ourLanded && !camera.rolling,
+                docked: !!info.links.length,
+                grade: lastGrade,
+                failed: !!camera.airFlight.failure,
+                lightS: earthLight.s,
+                warp: settings.timeSpeed * Msec,
+              }),
+            );
+          for (let k = capcomDue.length - 1; k >= 0; k--) if (capcomDue[k]!.at <= wall) voice.say(capcomDue.splice(k, 1)[0]!.line);
+          // (the score: the moment's piece — none: silence)
+          const ph2 = phaseWatch.current;
+          const plasmaNow = A?.inAir ? Math.min(Math.max((Math.log10(Math.max(A.heat, 1)) - 4.6) / 1.7, 0), 1) : 0;
+          const soiR = status.soi ? solarBody(status.soi)?.radius : undefined;
+          const scoreIn = {
+            now: wall / 1000,
+            mode: ph2?.mode ?? null,
+            stage: ph2?.stage ?? null,
+            side: status.side,
             plasma: plasmaNow,
-            mach: A?.inAir ? A.mach : 0,
+            final: !!camera.entryRun?.app?.final,
             agl: info.surface?.alt ?? Number.POSITIVE_INFINITY,
-            g: A?.inAir ? (A.g ?? 1) : 1,
-            alarm: flightHud.alerts.some((a) => a.level === "warning"),
-          }),
-        };
-        // (TARS — PLAN-TARS T5b —: what he knows of the flight, for when he is asked; his remarks unasked)
-        const fuel = info.engine.fuel;
-        tarsView = {
-          body: status.soiName ?? null,
-          altKm: Number.isFinite(status.altKm) ? status.altKm : null,
-          status: status.label ?? null,
-          landed: !!camera.ourLanded,
-          docked: !!info.links.length,
-          speed: Number.isFinite(status.speed) ? status.speed : null,
-          fuel: fuel ? fuel.fraction : null,
-          dv: fuel ? fuel.dvLeft * C_MPS : null,
-          target: status.target ? { name: status.target.name, distKm: status.target.distKm } : null,
-          next: status.next ? { kind: status.next.kind, name: status.next.name, inS: status.next.inS } : null,
-          stage: ph2?.stage ?? null,
-          auto: camera.pilot.auto,
-          dtau: status.side === "gargantua" ? ((info as { dtau?: number }).dtau ?? null) : null,
-        };
-        const said = (m: TarsMoment | null) => {
-          if (!m || !settings.tarsRemarks) return;
-          // (online: Jev decides whether it is worth saying, GLM says it; offline: his written lines)
-          if (online()) {
-            const st = tarsView!;
+            r: info.region === "hole" ? info.r : Number.POSITIVE_INFINITY,
+            body: status.soi ?? null,
+            docking: !!camera.dockAuto || (!!info.dock && !info.dock.docked && info.dock.range < 300),
+            inAir: !!A?.inAir,
+            airspeed: A?.inAir ? A.speed : 0,
+            nearWorld: soiR !== undefined && Number.isFinite(status.altKm) && status.altKm < (7 * soiR * M_METRES) / 1e3,
+          };
+          const moment = score.moment(scoreIn);
+          musicCue = {
+            m: moment,
+            context: score.context(scoreIn),
+            intensity: flightIntensity({
+              throttle: camera.pilot.engineNow,
+              plasma: plasmaNow,
+              mach: A?.inAir ? A.mach : 0,
+              agl: info.surface?.alt ?? Number.POSITIVE_INFINITY,
+              g: A?.inAir ? (A.g ?? 1) : 1,
+              alarm: flightHud.alerts.some((a) => a.level === "warning"),
+            }),
+          };
+          // (TARS — PLAN-TARS T5b —: what he knows of the flight, for when he is asked; his remarks unasked)
+          const fuel = info.engine.fuel;
+          tarsView = {
+            body: status.soiName ?? null,
+            altKm: Number.isFinite(status.altKm) ? status.altKm : null,
+            status: status.label ?? null,
+            landed: !!camera.ourLanded,
+            docked: !!info.links.length,
+            speed: Number.isFinite(status.speed) ? status.speed : null,
+            fuel: fuel ? fuel.fraction : null,
+            dv: fuel ? fuel.dvLeft * C_MPS : null,
+            target: status.target ? { name: status.target.name, distKm: status.target.distKm } : null,
+            next: status.next ? { kind: status.next.kind, name: status.next.name, inS: status.next.inS } : null,
+            stage: ph2?.stage ?? null,
+            auto: camera.pilot.auto,
+            dtau: status.side === "gargantua" ? ((info as { dtau?: number }).dtau ?? null) : null,
+          };
+          const said = (m: TarsMoment | null) => {
+            if (!m || !settings.tarsRemarks) return;
+            // (online: Jev decides whether it is worth saying, GLM says it; offline: his written lines)
+            if (online()) {
+              const st = tarsView!;
+              void tarsOnline
+                .remark(
+                  m,
+                  st,
+                  tarsPersonality(),
+                  lang,
+                  wall,
+                  flightHud.alerts.map((a) => a.id),
+                )
+                .then((r) => r && voice.say({ text: r, speaker: "tars", priority: 3, ttl: 20_000 }));
+              return;
+            }
+            const r = tars.remark(m, wall, tarsPersonality());
+            if (r) voice.say({ text: r, speaker: "tars", priority: 3, ttl: 20_000 });
+          };
+          // (online, every two minutes of flight: a look — the pilot stuck, a mistake — Jev deciding)
+          if (online() && settings.tarsRemarks && wall - tarsLook > 120_000 && ph2?.mode === "flight") {
+            tarsLook = wall;
             void tarsOnline
               .remark(
-                m,
-                st,
+                "routine look",
+                tarsView!,
                 tarsPersonality(),
                 lang,
                 wall,
                 flightHud.alerts.map((a) => a.id),
               )
               .then((r) => r && voice.say({ text: r, speaker: "tars", priority: 3, ttl: 20_000 }));
-            return;
           }
-          const r = tars.remark(m, wall, tarsPersonality());
-          if (r) voice.say({ text: r, speaker: "tars", priority: 3, ttl: 20_000 });
-        };
-        // (online, every two minutes of flight: a look — the pilot stuck, a mistake — Jev deciding)
-        if (online() && settings.tarsRemarks && wall - tarsLook > 120_000 && ph2?.mode === "flight") {
-          tarsLook = wall;
-          void tarsOnline
-            .remark(
-              "routine look",
-              tarsView!,
-              tarsPersonality(),
-              lang,
-              wall,
-              flightHud.alerts.map((a) => a.id),
-            )
-            .then((r) => r && voice.say({ text: r, speaker: "tars", priority: 3, ttl: 20_000 }));
+          if (moment !== tarsMoment) {
+            said(moment === "liftoff" || moment === "wormhole" || moment === "gargantua" || moment === "miller" ? moment : null);
+            tarsMoment = moment;
+          }
+          if (fuel && fuel.fraction < 0.15 && !tarsFuelLow) said("fuel-low");
+          tarsFuelLow = !!fuel && fuel.fraction < 0.15;
+          if (info.links.length && !tarsDocked) said("docked");
+          tarsDocked = !!info.links.length;
+          // (the blackout: the static on the radio while it lasts)
+          if (capcom.blackout !== staticOn && settings.sound) sound.radioNoise((staticOn = capcom.blackout) ? 1 : 0);
         }
-        if (moment !== tarsMoment) {
-          said(moment === "liftoff" || moment === "wormhole" || moment === "gargantua" || moment === "miller" ? moment : null);
-          tarsMoment = moment;
+        // (the flight's recorder — game/recorder.ts —: the tablet's TELEMETRY page, its CSV)
+        if (settings.ship && camera.piloting && status && info.region !== "hole") {
+          const A = info.air;
+          recorder.push({
+            t: sim.time * M_SECONDS,
+            alt: status.altKm * 1000,
+            speed: shownSpeed(info).v * C_MPS,
+            vz: status.vVert,
+            g: A?.g ?? 0,
+            q: A?.q ?? 0,
+            mach: A?.mach ?? 0,
+            heat: A?.heat ?? 0,
+            throttle: info.throttle,
+            dv: camera.spent * C_MPS,
+            fuel: info.engine.fuel ? info.engine.fuel.fraction : null,
+            // (a spacecraft's channels — PLAN-VAISSEAUX X8)
+            ...(isAircraft(fleet.active)
+              ? {}
+              : (() => {
+                  const Y = info.systems;
+                  const dk = info.dock;
+                  const b = camera.fcBudget().dv;
+                  return {
+                    dvLeft: Number.isFinite(b) ? b : null,
+                    dvPlan: (info.plan?.nodes ?? []).reduce((a, n) => a + Math.hypot(...n.dv), 0) * C_MPS,
+                    battery: Y ? Y.battery / Math.max(Y.batteryKWh, 1e-9) : null,
+                    o2: Y && Number.isFinite(Y.o2Hours) ? Y.o2Hours : null,
+                    dockRange: dk ? dk.range : null,
+                    dockClosing: dk ? dk.closing : null,
+                    earthGap: Math.max(0, sim.time * M_SECONDS - camera.properTime * M_SECONDS),
+                  };
+                })()),
+          });
         }
-        if (fuel && fuel.fraction < 0.15 && !tarsFuelLow) said("fuel-low");
-        tarsFuelLow = !!fuel && fuel.fraction < 0.15;
-        if (info.links.length && !tarsDocked) said("docked");
-        tarsDocked = !!info.links.length;
-        // (the blackout: the static on the radio while it lasts)
-        if (capcom.blackout !== staticOn && settings.sound) sound.radioNoise((staticOn = capcom.blackout) ? 1 : 0);
-      }
-      // (the flight's recorder — game/recorder.ts —: the tablet's TELEMETRY page, its CSV)
-      if (settings.ship && camera.piloting && status && info.region !== "hole") {
-        const A = info.air;
-        recorder.push({
-          t: sim.time * M_SECONDS,
-          alt: status.altKm * 1000,
-          speed: shownSpeed(info).v * C_MPS,
-          vz: status.vVert,
-          g: A?.g ?? 0,
-          q: A?.q ?? 0,
-          mach: A?.mach ?? 0,
-          heat: A?.heat ?? 0,
-          throttle: info.throttle,
-          dv: camera.spent * C_MPS,
-          fuel: info.engine.fuel ? info.engine.fuel.fraction : null,
-          // (a spacecraft's channels — PLAN-VAISSEAUX X8)
-          ...(isAircraft(fleet.active)
-            ? {}
-            : (() => {
-                const Y = info.systems;
-                const dk = info.dock;
-                const b = camera.fcBudget().dv;
-                return {
-                  dvLeft: Number.isFinite(b) ? b : null,
-                  dvPlan: (info.plan?.nodes ?? []).reduce((a, n) => a + Math.hypot(...n.dv), 0) * C_MPS,
-                  battery: Y ? Y.battery / Math.max(Y.batteryKWh, 1e-9) : null,
-                  o2: Y && Number.isFinite(Y.o2Hours) ? Y.o2Hours : null,
-                  dockRange: dk ? dk.range : null,
-                  dockClosing: dk ? dk.closing : null,
-                  earthGap: Math.max(0, sim.time * M_SECONDS - camera.properTime * M_SECONDS),
-                };
-              })()),
+        // (a spacecraft's phases reported as they end — PLAN-VAISSEAUX X8: ascent, insertion, rendezvous, entry)
+        camera.phaseReportStep(status ?? null);
+        // (a space lesson's frame — X9 —, a challenge's — X10)
+        camera.spaceCourseFrame(dt, status ?? null);
+        camera.spaceChallengeFrame(dt, status ?? null);
+        camera.spaceMissionFrame(dt, status ?? null);
+        netSession.instruments(info, status ?? null);
+        flightComputer.show(flightHud.mapView);
+        tablet.setVisible(flightHud.mapView);
+        tablet.tick(now);
+        flightComputer.update();
+        // (the A320's passenger at his window: its frame round the view — PLAN-A320 A13)
+        windowFrame.hidden = !(fleet.active === "a320" && settings.shipMount === "passenger" && !camera.spectating);
+        // (the camera's pose on the ship — or the spectator's view of it —: the engine placed, S1)
+        const earPose = camera.spectating
+          ? renderer.shipPlace
+          : renderer.shipPose
+            ? shipToCamera(renderer.shipPose, settings.shipLookYaw, settings.shipLookPitch)
+            : null;
+        cpuProf.time("sound", () =>
+          // (a spectator far from the ship: its engines, its air out of earshot — two kilometres)
+          audio.update(dt, {
+            flying: !camera.spectating || (renderer.shipPlace?.dist ?? Infinity) < 2000,
+            live: settings.animate && !session.frozen,
+            info,
+            status,
+            fired: camera.pilot.fired,
+            pose: earPose,
+            spectator: camera.spectating,
+            standing: camera.cine.shot === "pass" || camera.cine.shot === "tracking",
+            thrust: renderer.shipThrust,
+            gear: camera.gearLast,
+            groundWind: camera.weatherNow?.wind.u10 ?? 0,
+            // (the A320's recordings — src/a320/sound —, heard in the cockpit or outside)
+            craft: a320Voices(
+              dt,
+              !camera.spectating && (settings.shipMount === "cockpit" || settings.shipMount === "cabin"),
+              info,
+              earPose,
+            ),
+            // (the F-35's turbofan: its spool, its thrust over its full wet thrust, its afterburner, its lift fan)
+            jet:
+              settings.vessel === "f35"
+                ? {
+                    spool: camera.pilot.engineNow,
+                    thrust: (camera.pilot.engineNow * camera.jetThrust()) / 1.47,
+                    ab: camera.abLevel,
+                    fan: camera.stovl.clutch * camera.pilot.engineNow,
+                  }
+                : null,
+            // (the rain heard where it falls — none held with the time)
+            rain: renderer.rain && !renderer.rain.dust && settings.animate && session.moving ? renderer.rain.rain : 0,
+          }),
+        );
+      } else {
+        flightComputer.show(false);
+        tablet.setVisible(false);
+        windowFrame.hidden = true;
+        audio.update(dt, {
+          flying: false,
+          live: false,
+          info: null,
+          status: null,
+          fired: camera.pilot.fired,
+          rain: renderer.rain && !renderer.rain.dust && settings.animate && session.moving ? renderer.rain.rain : 0,
         });
       }
-      // (a spacecraft's phases reported as they end — PLAN-VAISSEAUX X8: ascent, insertion, rendezvous, entry)
-      camera.phaseReportStep(status ?? null);
-      // (a space lesson's frame — X9 —, a challenge's — X10)
-      camera.spaceCourseFrame(dt, status ?? null);
-      camera.spaceChallengeFrame(dt, status ?? null);
-      camera.spaceMissionFrame(dt, status ?? null);
-      netSession.instruments(info, status ?? null);
-      flightComputer.show(flightHud.mapView);
-      tablet.setVisible(flightHud.mapView);
-      tablet.tick(now);
-      flightComputer.update();
-      // (the A320's passenger at his window: its frame round the view — PLAN-A320 A13)
-      windowFrame.hidden = !(fleet.active === "a320" && settings.shipMount === "passenger" && !camera.spectating);
-      // (the camera's pose on the ship — or the spectator's view of it —: the engine placed, S1)
-      const earPose = camera.spectating
-        ? renderer.shipPlace
-        : renderer.shipPose
-          ? shipToCamera(renderer.shipPose, settings.shipLookYaw, settings.shipLookPitch)
-          : null;
-      cpuProf.time("sound", () =>
-        // (a spectator far from the ship: its engines, its air out of earshot — two kilometres)
-        audio.update(dt, {
-          flying: !camera.spectating || (renderer.shipPlace?.dist ?? Infinity) < 2000,
-          live: settings.animate && !session.frozen,
-          info,
-          status,
-          fired: camera.pilot.fired,
-          pose: earPose,
-          spectator: camera.spectating,
-          standing: camera.cine.shot === "pass" || camera.cine.shot === "tracking",
-          thrust: renderer.shipThrust,
-          gear: camera.gearLast,
-          groundWind: camera.weatherNow?.wind.u10 ?? 0,
-          // (the A320's recordings — src/a320/sound —, heard in the cockpit or outside)
-          craft: a320Voices(dt, !camera.spectating && (settings.shipMount === "cockpit" || settings.shipMount === "cabin"), info, earPose),
-          // (the F-35's turbofan: its spool, its thrust over its full wet thrust, its afterburner, its lift fan)
-          jet:
-            settings.vessel === "f35"
-              ? {
-                  spool: camera.pilot.engineNow,
-                  thrust: (camera.pilot.engineNow * camera.jetThrust()) / 1.47,
-                  ab: camera.abLevel,
-                  fan: camera.stovl.clutch * camera.pilot.engineNow,
-                }
-              : null,
-          // (the rain heard where it falls — none held with the time)
-          rain: renderer.rain && !renderer.rain.dust && settings.animate && session.moving ? renderer.rain.rain : 0,
-        }),
-      );
-    } else {
-      flightComputer.show(false);
-      tablet.setVisible(false);
-      windowFrame.hidden = true;
-      audio.update(dt, {
-        flying: false,
-        live: false,
-        info: null,
-        status: null,
-        fired: camera.pilot.fired,
-        rain: renderer.rain && !renderer.rain.dust && settings.animate && session.moving ? renderer.rain.rain : 0,
-      });
-    }
+    });
     // (the music — audio/music.ts —: every frame, whatever is flown or not: the flight's cue when it is known,
     // walking on a world, else none — the panel's listening over it)
-    if (camera.character.active) musicCue = { m: null, context: "onFoot", intensity: 0.4 };
-    else if (!(settings.ship && camera.piloting && !camera.spectating)) musicCue = { m: null, context: null, intensity: 0.5 };
-    music.update(musicCue.m, { context: musicCue.context, intensity: musicCue.intensity, enabled: settings.sound && settings.music });
+    frameGuard.run("music", () => {
+      if (camera.character.active) musicCue = { m: null, context: "onFoot", intensity: 0.4 };
+      else if (!(settings.ship && camera.piloting && !camera.spectating)) musicCue = { m: null, context: null, intensity: 0.5 };
+      music.update(musicCue.m, { context: musicCue.context, intensity: musicCue.intensity, enabled: settings.sound && settings.music });
+    });
     hudTimer += dt;
     if (hudTimer > 0.15 && lastStats) {
       hudTimer = 0;

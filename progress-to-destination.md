@@ -61,7 +61,7 @@ ouverts, sous 1 ms) ; J3 au stade du plan.**
 | Audit vagues 3–4 (1feb2f7f) | 3.7 TARS (outils AP avions/A320) | **fait** : `jet_autopilot` par les actions de la console, volets au levier (CONF 1), l'AP de l'A320 réparé dans `apSet` |
 | Audit vagues 3–4 (1feb2f7f) | 3.10 e2e qui ne vérifient rien | **fait** : `waitOptional` (93 attentes converties), 14 mesures déclarées, garde `e2e-honesty` |
 | Audit vagues 3–4 (1feb2f7f) | 4.2 la politique de temps | **fait** : vol tenu pendant la reprise GPU, cadence vraie, horloge du vol + garde ; l'onglet masqué (choix de Sam) : solo en pause dite, salle sans arrêt (l'absent ne la bloque plus, les autres avertis, remis à l'heure au retour), sauvé en partant, TARS sans réveil ; le ralentissement sous 10 images/s dit — e2e `hidden-tab` 2/2, `fps-truth` 2/2 |
-| Audit vagues 3–4 (1feb2f7f) | 4.8 découper `main()` | **en cours** (accord de Sam : par petits lots) : lot 1 la persistance, lot 2 qui tient le vol (`session.ts`), lot 3 les étapes gardées de la frame (`frame.ts`, AR-03) ; suivants : les autres étapes avant le rendu, puis l'ordre §19.5 (AR-04) |
+| Audit vagues 3–4 (1feb2f7f) | 4.8 découper `main()` | **en cours** (accord de Sam : par petits lots) : lot 1 la persistance, lot 2 qui tient le vol (`session.ts`), lots 3–4 les étapes gardées de la frame (`frame.ts`, AR-03 : douze étapes, avant et après le rendu) ; suivant proposé : l'ordre §19.5 (AR-04), avec la session du rendu |
 | Audit vagues 3–4 (1feb2f7f) | 4.3 séparer `Settings` | **fait de ce côté** : garde statique des réglages (AR-21) ; `ViewPose` et `SimState` produits une fois par image et figés (AR-07, `view-pose.ts`) ; **à la session du rendu** : faire prendre `ViewPose` au renderer (choix de Sam) |
 
 **Fermé récemment** : J2 (13 nov., ΔGPU nul, chemin vers §8 écrit) ; J2-C BC7 étudiée puis **rangée** (Sam : « ne pas le faire maintenant »).
@@ -4869,3 +4869,18 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   `aircraft-save` verts.
 - **Pour la session du rendu (choix de Sam) :** faire prendre `ViewPose` (et `SimState` pour l'engin) à `renderer.frame` au lieu de
   `Settings` entier ; la pose est déjà calculée là où le renderer est appelé (`main.ts`, juste avant `renderer.frame`).
+
+## 2026-11-13T13:31Z — Audit 4.8 (lot 4) : les étapes d'après le rendu gardées — une exception dans les instruments ne saute plus la fin de la frame
+
+- **Reproduit avant (e2e `frame-guard`, ancien `main.ts` remis le temps de la mesure) :** `__bh.audio.update` (appelé dans le bloc des
+  instruments, après le rendu) rendu fautif → la fin de la frame (le profileur, la musique, les chiffres du HUD) **atteinte 0 fois en 1,5 s**,
+  le journal noyé (« Uncaught Error » à chaque image). L'image, elle, restait dessinée (le rendu passe avant). Un premier essai avait lu
+  `loopCpu.n`, plafonné à 600 : non probant des deux côtés — remplacé par `perf().loops` (les itérations terminées, sans plafond ;
+  BH-API).
+- **Réalisé :** dans la boucle, gardés aussi : le replay et la bande, le ciel (carte et panneau), le voyage et la visite, les instruments
+  et le HUD (le bloc d'après le rendu, ~560 lignes, tel quel), la musique ; noms d'étapes FR/EN. Douze étapes en tout (lots 3–4).
+- **Preuves :** après : **181 fins de frame en 1,5 s** pendant que les instruments échouent, dit une fois ; le pas du vol fautif :
+  83–111 images en 2 s — `frame-guard` 2/2 ; `aircraft-save` 1/1, `f35-body` 2/2 ; unitaires `frame-guard`, `flight-clock`, `i18n` verts.
+- **Limites :** restent hors garde le gouverneur de résolution (les leviers du rendu) et les écritures des entrées du renderer avant
+  `renderer.frame`. L'ordre §19.5 (AR-04 : instruments et poses avant l'encodage, une image d'âge en moins) change l'ordre du travail
+  GPU mesuré par la session du rendu : proposé, à faire avec elle.
