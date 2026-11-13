@@ -4146,3 +4146,10 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
 - **Mesuré** (e2e `j2-dgpu` nouveau ; six tours allumé/éteint alternés par levier ; M1 Max « Moderate ») : Δ GPU p50 `edgeFoot` 0,00 ± 0,15 ms,
   `singleHistory` 0,00 ± 0,17, `earthRateOne` +0,42 ± 0,40, `disocclusionOn` +0,32 ± 0,22 — aucun coût net établi. **Pas** le ΔGPU du plan
   (vol, kerr-mini, hors réseau, comme kerr-pc). PLAN-J2 §9 nonies, E2E-CATALOGUE.
+
+## 2026-11-13T06:09Z — J2 : le ΔGPU des leviers en vol J0 essayé sur le M1 Max — sans verdict (le Mac a chauffé)
+
+- **Essayé** (`j0-reference`, ablations nouvelles pour les leviers de J2, ordre symétrique, 11 vols) : GPU p50 de base 26,2 → 36,1 ms au fil de
+  la série (« Moderate » → « Heavy ») ; leviers −0,2 à +1,2 ms contre les bases interpolées, dans la dérive : **rien d'établi**. À refaire
+  refroidi ou sur kerr-mini (la commande dans PLAN-J2 §9 nonies). **Changé** : `tests/e2e/j0-reference.e2e.test.ts` (les ablations, leur
+  remise à zéro au départ de chaque vol).

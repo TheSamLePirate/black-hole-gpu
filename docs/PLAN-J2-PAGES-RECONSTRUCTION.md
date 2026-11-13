@@ -528,6 +528,12 @@ alternance** (A B B A…, 20 images de mise en place, 60 mesurées) contre la d�
 `singleHistory` 0,00 ± 0,17 ; `earthRateOne` +0,42 ± 0,40 ; `disocclusionOn` +0,32 ± 0,22** (sa copie des `moments` comprise) — aucun coût
 net établi à 0,2–0,4 ms près. **Ce n'est pas le ΔGPU du plan** (J0 en vol, A B B A entre commits, kerr-mini) : une estimation, vue figée.
 
+**En vol aussi, essayé** (`j0-reference`, ablations nouvelles `singleHistory`, `edgeFoot`, `disocclusion`, `earthRateOff` ; ordre symétrique
+base, leviers, base, leviers à rebours, base ; vols de 40 s) : **sans verdict** — le Mac est passé de « Moderate » à « Heavy » pendant la
+série, le GPU p50 de base 26,2 → 32,2 → 36,1 ms ; contre les bases interpolées, chaque levier −0,2 à +1,2 ms selon sa moitié de série, dans
+la dérive. À refaire **refroidi** (le palier du plan sur le M1 Max) ou sur kerr-mini : `J0_PHASES=ablate J0_ORDER=base,singleHistory,edgeFoot,
+disocclusion,earthRateOff,base,…`.
+
 ## 10. Non vérifié
 
 - **Aucune mesure nouvelle** : les chiffres cités viennent des fiches J0 du 12 novembre, de la fiche T9 et de GRAPHICS-PIPELINE ; les

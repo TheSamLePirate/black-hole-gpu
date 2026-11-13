@@ -56,6 +56,12 @@ const ABLATIONS: Record<string, { label: string; set: string }> = {
   // "ship: shading (MSAA)" and "ship: shadow map" at 18–23 ms in the first run, but render passes overlap on Apple — GP-09)
   ship: { label: "sans dessin de l'appareil (debugSkipShip ; son masque reste)", set: `__bh.renderer.debugSkipShip = true;` },
   shipShadow: { label: "sans carte d'ombre de l'appareil", set: `__bh.renderer.ship.debugSkip.add("shadow");` },
+  // (PLAN-J2's levers, each turned on — or, earthRateOne on by default, off —: their ΔGPU in J0's flight; J0_ORDER=base,singleHistory,
+  // edgeFoot,disocclusion,earthRateOff,base,… — a symmetric order against the drift)
+  singleHistory: { label: "un seul historique long (J2-6, allumé)", set: `__bh.renderer.singleHistory = true;` },
+  edgeFoot: { label: "fondu de bord de l'imagerie à l'empreinte (J2-3, allumé)", set: `__bh.renderer.earthTiles.edgeFoot = true;` },
+  disocclusion: { label: "désocclusion (J2-5, allumée)", set: `__bh.renderer.disocclusionOn = true;` },
+  earthRateOff: { label: "cadence d'ombrage de la Terre au gouverneur (J2-7 éteint)", set: `__bh.renderer.earthRateOne = false;` },
   // (the sea's parts — PLAN-MER-WEBGPU —: J0_ORDER=base,seaSurface,seaFft,seaProbe,seaFoam,base to run them)
   seaSurface: { label: "mer plate (sans surface déplacée)", set: `__bh.renderer.seaSurfaceOn = false;` },
   seaFft: { label: "sans vagues FFT", set: `__bh.settings.seaFft = false; __bh.touch();` },
@@ -210,7 +216,7 @@ describe.skipIf(!E2E)("J0: the reference flight over Toulon-Hyères", () => {
    * —; then the clock running, the autopilot and autothrottle engaged until they hold, gear down; 3 s settling */
   async function start(set: string) {
     await app.js(`(() => { __bh.freeze(false); __bh.game.importSave(${JSON.stringify(save)}, false); __bh.freeze(true); __bh.renderer.liteSkip = 0; __bh.renderer.debugSkipShip = false; __bh.renderer.ship.debugSkip.clear();
-      Object.assign(__bh.renderer, { seaSurfaceOn: true, seaProbeOn: true, seaFoamWorldOn: true }); __bh.settings.seaFft = true;
+      Object.assign(__bh.renderer, { seaSurfaceOn: true, seaProbeOn: true, seaFoamWorldOn: true, singleHistory: false, disocclusionOn: false, earthRateOne: true }); __bh.settings.seaFft = true; __bh.renderer.earthTiles.edgeFoot = false;
       document.body.classList.remove("hide-ui"); Object.assign(__bh.settings, ${J0_FIXED}, ${hud}); __bh.settings.shipMount = "cockpit"; __bh.refresh();
       __bh.camera.viewReset(); ${set} return 1; })()`);
     await app.settled(120_000);
