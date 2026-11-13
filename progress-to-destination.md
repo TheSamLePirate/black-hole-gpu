@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-13 08:20 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-13 08:29 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous.
@@ -45,13 +45,16 @@ indirects → J3 (lumière, cockpit).
 | Session (T3) | Lot | État |
 |---|---|---|
 | Rendu (33d89754) | L'eau étagée — préalables | faits : `liteSkip` réparé, ablation `sea surface` (−0,7 ms) |
-| Rendu (33d89754) | La borne de cadence du M1 Max (30 puis 40 images/s : bride-t-il encore ?) | à faire avant la prochaine fiche |
-| Audit vagues 3–4 (1feb2f7f) | 3.3 Sauvegardes | lot 1 poussé (736b26a2, une clé par sauvegarde) ; FX-10 « Reprendre » en cours |
-| Audit vagues 3–4 (1feb2f7f) | 3.1–3.2 réseau, 3.4–3.7 vol/TARS, 3.10, 4.2, 4.3, 4.8 | à faire, dans cet ordre ([09-priorites-todo](docs/audit-2026-11-10/09-priorites-todo.md)) |
+| Rendu (33d89754) | L'eau étagée — étape 1 : l'air et les nuages sortis de `shadeWater` (passe `earth water: finishing`) | **gain maximal lu dans la fiche : `earth water` 12,7 ms sur le mini (l'eau entière 16,2 ; −13,0 par ablation) — l'étape ne peut rendre plus que la part de `liteFinish` dans ce noyau** ; codée, J0 sur le mini en cours |
+| Rendu (33d89754) | La borne de cadence du M1 Max | 30 images/s : **bride encore** (soutenu 27,8/s, p95 58,6 ms, GPU 1291 → ~900 MHz, pression Heavy) ; 40 images/s à mesurer (ce Mac refroidi) |
+| Rendu (33d89754) | Retrait R1 des anciens chemins (`singleHistory`, `edgeFoot`, `seaSsrSafe`, `clearCut`, `earthRateOne`, `rasterScaleFree`) | **daté : 14 nov. 2026** ([PLAN-J2 §9 quattuordecies](docs/PLAN-J2-PAGES-RECONSTRUCTION.md)) |
+| Audit vagues 3–4 (1feb2f7f) | 3.3 Sauvegardes | **fait pour l'essentiel** : lot 1 (736b26a2, une clé par sauvegarde, rien écrasé en silence) ; lot 2 (f265f467 : « Reprendre » du vol perdu seulement, un avion a ses points ; carburant, train, volets, freins, maintiens, systèmes des vaisseaux sauvés ; l'activité en cours dite) — e2e 6/6, bun test 2 228/0. Reste : l'état d'une mission ou d'un combat (Sam), les systèmes de l'A320, IndexedDB |
+| Audit vagues 3–4 (1feb2f7f) | 3.1 réseau RD0 + RD1 | en cours (reproduire les événements mal formés, puis la frontière d'entrée) |
+| Audit vagues 3–4 (1feb2f7f) | 3.2 RD2, 3.4–3.7 vol/TARS, 3.10, 4.2, 4.3, 4.8 | à faire, dans cet ordre (état relevé dans [09-priorites-todo](docs/audit-2026-11-10/09-priorites-todo.md)) |
 
 **Fermé récemment** : J2 (13 nov., ΔGPU nul, chemin vers §8 écrit) ; J2-C BC7 étudiée puis **rangée** (Sam : « ne pas le faire maintenant »).
 
-**Attend Sam** : rien d'ouvert à ce jour. Les seuils p99 et CPU du mini et la valeur de la borne du M1 Max se fixeront sur mesure.
+**Attend Sam** : rien d'ouvert à ce jour côté rendu. Les seuils p99 et CPU du mini et la valeur de la borne du M1 Max se fixeront sur mesure. Audit (1feb2f7f) : sauver l'état complet d'une mission ou d'un combat, ou seulement le dire comme aujourd'hui (recommandation : le dire) ; avant RD3, le niveau de défense du réseau.
 
 ## Journal
 
