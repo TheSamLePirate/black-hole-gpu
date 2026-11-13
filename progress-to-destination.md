@@ -62,7 +62,7 @@ ouverts, sous 1 ms) ; J3 au stade du plan.**
 | Audit vagues 3–4 (1feb2f7f) | 3.7 TARS (outils AP avions/A320) | **fait** : `jet_autopilot` par les actions de la console, volets au levier (CONF 1), l'AP de l'A320 réparé dans `apSet` |
 | Audit vagues 3–4 (1feb2f7f) | 3.10 e2e qui ne vérifient rien | **fait** : `waitOptional` (93 attentes converties), 14 mesures déclarées, garde `e2e-honesty` |
 | Audit vagues 3–4 (1feb2f7f) | 4.2 la politique de temps | **fait** : vol tenu pendant la reprise GPU, cadence vraie, horloge du vol + garde ; l'onglet masqué (choix de Sam) : solo en pause dite, salle sans arrêt (l'absent ne la bloque plus, les autres avertis, remis à l'heure au retour), sauvé en partant, TARS sans réveil ; le ralentissement sous 10 images/s dit — e2e `hidden-tab` 2/2, `fps-truth` 2/2 |
-| Audit vagues 3–4 (1feb2f7f) | 4.8 découper `main()` | **en cours** (accord de Sam : par petits lots) : lot 1 la persistance, lot 2 qui tient le vol (`session.ts`), lots 3–4 les étapes gardées (`frame.ts`, AR-03), lot 5 l'ordre §19.5 pour l'appareil (AR-04 : instruments et poses avant l'encodage, 6,5 → 0,0 ms d'âge) ; restent le gouverneur et les entrées du renderer (leviers du rendu) |
+| Audit vagues 3–4 (1feb2f7f) | 4.8 découper `main()` | **en cours** (accord de Sam : par petits lots) : lot 1 la persistance, lot 2 qui tient le vol (`session.ts`), lots 3–4 les étapes gardées (`frame.ts`, AR-03), lot 5 l'ordre §19.5 pour l'appareil (AR-04, 6,5 → 0,0 ms d'âge), lot 6 `craft-feed.ts` (les poses de l'appareil hors de `main()`) ; reste le gouverneur (leviers du rendu) |
 | Audit vagues 3–4 (1feb2f7f) | 4.3 séparer `Settings` | **fait** : garde statique des réglages (AR-21) ; `ViewPose` et `SimState` figés une fois par image (AR-07, `view-pose.ts`) ; le renderer les lit (session du rendu, 77721acf) |
 
 **Fermé récemment** : J2 (13 nov., ΔGPU nul, chemin vers §8 écrit) ; J2-C BC7 étudiée puis **rangée** (Sam : « ne pas le faire maintenant »).
@@ -4966,3 +4966,16 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   n'écrivait ni ne comparait ses réglages), vol de Paris et J0 volés sans erreur, `gpu-startup` aux mêmes 3 échecs antérieurs. 4.3 : fait
   (AR-21 garde statique, AR-07 des deux côtés). Restent en 4.8 : le gouverneur de résolution (les leviers du rendu) et la sortie des
   poses de l'appareil dans un module (`cockpit-feed`, AR-12 piste 4).
+
+## 2026-11-13T14:16Z — Audit 4.8 (lot 6) : les poses et instruments de l'appareil hors de `main()` (`src/game/craft-feed.ts`, AR-12)
+
+- **Réalisé :** le bloc des poses et instruments de l'appareil (écrans de la cabine, tableau de bord, amortisseurs, gouvernes, train,
+  tuyère, feux et pare-brise du F-35 et de l'A320, écrans et poste de l'A320, guidage au roulage, PCD du F-35, commandes de la cabine —
+  ≈ 300 lignes, telles quelles) devient `CraftFeed.frame(pil, info, status, dt)` ; ses 21 dépendances passent par un objet typé ; le
+  module possède l'état qu'il est seul à lire (les dernières entrées de pose du F-35 — `__bh.jetIn()` les lit par lui —, les écrans de
+  l'A320, les régions en attente du PCD et leur cadence) ; `main.ts` −310 lignes, dix imports en moins. Toujours dans l'étape gardée
+  « les poses de l'appareil », avant l'encodage.
+- **Preuves (comportement inchangé) :** `tsc`, Biome ; e2e `instruments-age` 1/1 (0,0 ms d'âge à l'encodage), `f35-body` 2/2,
+  `aircraft-save` 1/1, `frame-guard` 2/2 ; le poste de l'A320 vu à Edwards (sonde temporaire : écrans, pose, poste, pare-brise présents,
+  aucune étape en échec — capture `remote-results/a320-deck-craftfeed.png` ; Edwards choisi pour ne pas solliciter l'IGN).
+- **Reste de 4.8 :** le gouverneur de résolution (AR-12 piste 3, `governor.ts`) — les leviers du rendu : à la session du rendu.
