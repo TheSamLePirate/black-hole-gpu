@@ -285,3 +285,43 @@ test("TARS's steps sent in one session (TA-04): its id the same on every call â€
   await or2.complete([], []);
   expect(bodies.at(-1)!.session_id).not.toBe(ids[0]);
 });
+
+test("a reply streamed (TA-04): the words told as they come, the tool calls gathered from their parts, the usage kept; JSON still read", async () => {
+  const { readReply } = await import("../src/ai/openrouter");
+  const ev = (o: unknown) => `data: ${JSON.stringify(o)}\n\n`;
+  const sse = [
+    ev({ choices: [{ delta: { content: "Orbite " } }] }),
+    ev({ choices: [{ delta: { content: "stable. Je vise" } }] }),
+    ev({ choices: [{ delta: { content: " la Lune." } }] }),
+    ev({ choices: [{ delta: { tool_calls: [{ index: 0, id: "c1", function: { name: "set_target", arguments: '{"na' } }] } }] }),
+    ev({ choices: [{ delta: { tool_calls: [{ index: 0, function: { arguments: 'me":"Moon"}' } }] } }] }),
+    ev({
+      choices: [{ delta: {}, finish_reason: "tool_calls" }],
+      usage: { cost: 0.0004, prompt_tokens: 100, prompt_tokens_details: { cached_tokens: 90 } },
+    }),
+    "data: [DONE]\n\n",
+  ].join("");
+  // (cut anywhere: a line split across two reads)
+  const bytes = new TextEncoder().encode(sse);
+  const body = new ReadableStream({
+    start(c) {
+      for (let i = 0; i < bytes.length; i += 37) c.enqueue(bytes.slice(i, i + 37));
+      c.close();
+    },
+  });
+  const seen: string[] = [];
+  const j = await readReply(new Response(body, { headers: { "content-type": "text/event-stream" } }), (t) => seen.push(t));
+  expect(seen).toEqual(["Orbite ", "Orbite stable. Je vise", "Orbite stable. Je vise la Lune."]);
+  expect(j.choices?.[0]?.message?.content).toBe("Orbite stable. Je vise la Lune.");
+  expect(j.choices?.[0]?.message?.tool_calls).toEqual([
+    { id: "c1", type: "function", function: { name: "set_target", arguments: '{"name":"Moon"}' } },
+  ]);
+  expect(j.choices?.[0]?.finish_reason).toBe("tool_calls");
+  expect(j.usage?.prompt_tokens_details?.cached_tokens).toBe(90);
+  // a stream asked, JSON answered (a stub, a proxy): read as JSON
+  const plain = await readReply(
+    new Response(JSON.stringify({ choices: [{ message: { content: "ok" } }] }), { headers: { "content-type": "application/json" } }),
+    () => {},
+  );
+  expect(plain.choices?.[0]?.message?.content).toBe("ok");
+});

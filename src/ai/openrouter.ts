@@ -33,6 +33,87 @@ export type Fetch = (url: string, init?: RequestInit) => Promise<Response>;
 /** A call's usage as OpenRouter reports it: its cost, its input tokens and those read from the provider's cache. */
 type Usage = { cost?: number; prompt_tokens?: number; prompt_tokens_details?: { cached_tokens?: number } };
 
+/** A completion's reply, as one JSON or streamed. */
+type Reply = {
+  choices?: {
+    finish_reason?: string;
+    message?: {
+      content?: string | null;
+      tool_calls?: { id: string; type?: "function"; function: { name: string; arguments: string } }[];
+    };
+  }[];
+  usage?: Usage;
+};
+
+/**
+ * A reply read: whole (JSON), or streamed (server-sent events — `onText` told the words so far as they come; the tool calls
+ * gathered by their index, their arguments in parts; the usage of the last event). A stream asked and JSON answered (a
+ * proxy, a test's stub): read as JSON.
+ */
+export async function readReply(r: Response, onText?: (soFar: string) => void): Promise<Reply> {
+  if (!onText || !r.body || !(r.headers.get("content-type") ?? "").includes("text/event-stream")) return (await r.json()) as Reply;
+  const reader = r.body.getReader();
+  const dec = new TextDecoder();
+  let buf = "";
+  let text = "";
+  let finish: string | undefined;
+  let usage: Usage | undefined;
+  const calls: { id: string; type: "function"; function: { name: string; arguments: string } }[] = [];
+  const line = (l: string) => {
+    if (!l.startsWith("data:")) return;
+    const data = l.slice(5).trim();
+    if (!data || data === "[DONE]") return;
+    let ev: {
+      choices?: {
+        finish_reason?: string | null;
+        delta?: {
+          content?: string | null;
+          tool_calls?: { index?: number; id?: string; function?: { name?: string; arguments?: string } }[];
+        };
+      }[];
+      usage?: Usage;
+    };
+    try {
+      ev = JSON.parse(data);
+    } catch {
+      return;
+    }
+    if (ev.usage) usage = ev.usage;
+    const c = ev.choices?.[0];
+    if (!c) return;
+    if (c.finish_reason) finish = c.finish_reason;
+    const d = c.delta;
+    if (d?.content) {
+      text += d.content;
+      onText(text);
+    }
+    for (const t of d?.tool_calls ?? []) {
+      const k = t.index ?? calls.length;
+      calls[k] ??= { id: t.id ?? `call_${k}`, type: "function", function: { name: "", arguments: "" } };
+      if (t.id) calls[k]!.id = t.id;
+      if (t.function?.name) calls[k]!.function.name += t.function.name;
+      if (t.function?.arguments) calls[k]!.function.arguments += t.function.arguments;
+    }
+  };
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buf += dec.decode(value, { stream: true });
+    let n = buf.indexOf("\n");
+    while (n >= 0) {
+      line(buf.slice(0, n).trim());
+      buf = buf.slice(n + 1);
+      n = buf.indexOf("\n");
+    }
+  }
+  line(buf.trim());
+  const tool_calls = calls.filter(Boolean);
+  return {
+    choices: [{ finish_reason: finish, message: { content: text || null, ...(tool_calls.length ? { tool_calls } : {}) } }],
+    usage,
+  };
+}
+
 /** The key: this browser's (none: offline). */
 export const openRouterKey = {
   get(): string | null {
@@ -301,7 +382,9 @@ export class OpenRouter {
   async complete(
     messages: unknown[],
     tools: unknown[],
-    o: { signal?: AbortSignal; timeoutMs?: number; maxTokens?: number; model?: string } = {},
+    /** `onText`: the answer's words so far as they are written (the reply streamed): his first sentence said before the
+     *  rest is written — 0.3–1.4 s measured (audit TA-04) */
+    o: { signal?: AbortSignal; timeoutMs?: number; maxTokens?: number; model?: string; onText?: (soFar: string) => void } = {},
   ): Promise<{
     content: string | null;
     tool_calls?: { id: string; type?: "function"; function: { name: string; arguments: string } }[];
@@ -310,6 +393,7 @@ export class OpenRouter {
     if (!k) return null;
     const timeout = AbortSignal.timeout(o.timeoutMs ?? 40_000);
     const signal = o.signal ? AbortSignal.any([o.signal, timeout]) : timeout;
+    let stream = !!o.onText;
     try {
       let maxTokens = o.maxTokens ?? 600;
       const ask = () =>
@@ -324,6 +408,7 @@ export class OpenRouter {
             max_tokens: maxTokens,
             temperature: 0.4,
             usage: { include: true },
+            ...(stream ? { stream: true } : {}),
             ...(this.noReasoning ? { reasoning: { effort: "low" } } : {}),
           }),
           signal,
@@ -348,26 +433,18 @@ export class OpenRouter {
         return null;
       }
       this.lastFailure = null;
-      type Reply = {
-        choices?: {
-          finish_reason?: string;
-          message?: {
-            content?: string | null;
-            tool_calls?: { id: string; type?: "function"; function: { name: string; arguments: string } }[];
-          };
-        }[];
-        usage?: Usage;
-      };
-      let j = (await r.json()) as Reply;
+      let j = await readReply(r, stream ? o.onText : undefined);
       this.count(j.usage);
       // (cut by the token limit — a tool call's arguments half written, « not valid JSON », the model trying again at the whole
       // context's price: asked again once, with room — audit TA-12, 13 Nov 2026)
       if (j.choices?.[0]?.finish_reason === "length") {
         maxTokens = Math.min(4000, Math.max(1600, Math.round(maxTokens * 2.5)));
+        // (asked again whole: its words already said are not said twice)
+        stream = false;
         const r2 = await ask();
         this.calls++;
         if (r2.ok) {
-          j = (await r2.json()) as Reply;
+          j = await readReply(r2);
           this.count(j.usage);
         }
       }

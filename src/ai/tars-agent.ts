@@ -101,7 +101,7 @@ export class TarsAgent {
     // (his tools as his mode allows: all when acting; reading, showing, proposing when proposing; reading and
     // showing when observing)
     this.agent = new Agent(
-      (m, fns, signal) => d.or.complete(m, fns, { signal }),
+      (m, fns, signal, onText) => d.or.complete(m, fns, { signal, onText }),
       () => modeTools(d.tools(), d.mode?.() ?? "act"),
     );
   }
@@ -139,7 +139,46 @@ export class TarsAgent {
    * (WAKE_STEPS) and the hour's budget looked at before each (`left`: what is left of it [$], this turn's spending counted) —
    * audit TA-06: a waking checked its budget once, at its start, then kept the pilot's 24 steps and spent past it.
    */
-  async ask(q: string, o: { wake?: { left: () => number } } = {}): Promise<string | null> {
+  /** the step being said as it comes, and what of it was said */
+  private saidStep = -1;
+  private saidText = "";
+
+  /** A step's words so far: its whole sentences not yet said, said (a leading « [actions …] » waited out and dropped). */
+  private said(soFar: string, step: number, say: (s: string) => void) {
+    if (step !== this.saidStep) {
+      this.saidStep = step;
+      this.saidText = "";
+    }
+    let t = soFar.replace(/^\s+/, "");
+    if (/^\[/.test(t)) {
+      if (!t.includes("]")) return;
+      t = t.replace(/^\[(?:actions?|tools?)[^\]]*\]\s*/i, "");
+    }
+    // (up to the last sentence's end: « . », « ! », « ? », « … » followed by a space)
+    const m = /^[\s\S]*[.!?…](?=\s)/.exec(t);
+    if (!m) return;
+    const upTo = m[0].trim();
+    if (upTo.length <= this.saidText.length || !upTo.startsWith(this.saidText)) return;
+    const next = upTo.slice(this.saidText.length).trim();
+    this.saidText = upTo;
+    if (next) say(next);
+  }
+
+  /** what of his last answer was already said as it was written (streamed sentences): the caller says the rest */
+  spoken = "";
+
+  /** The rest of an answer not yet said (its sentences said as they came off). */
+  unspoken(text: string): string {
+    const s = this.spoken.trim();
+    if (!s) return text;
+    return text.startsWith(s) ? text.slice(s.length).trim() : text.includes(s) ? text.slice(text.indexOf(s) + s.length).trim() : "";
+  }
+
+  async ask(q: string, o: { wake?: { left: () => number }; sentence?: (s: string) => void } = {}): Promise<string | null> {
+    // (what the question before said as it came: forgotten — kept, the next answer was neither said as it came nor at its end)
+    this.spoken = "";
+    this.saidStep = -1;
+    this.saidText = "";
     this.stop();
     const ctl = new AbortController();
     this.ctl = ctl;
@@ -164,6 +203,8 @@ export class TarsAgent {
           unacted: () => ((this.d.mode?.() ?? "act") === "act" && parseOrders(q).length ? UNACTED : null),
           // (a waking: a few steps, its budget looked at — TA-06 —, and nothing that cannot be undone — Sam, 13 Nov 2026)
           ...(o.wake ? { maxSteps: WAKE_STEPS, canContinue: () => o.wake!.left() > 0, outside: true } : {}),
+          // (his sentences said as they are written — audit TA-04: the first one 0.3–1.4 s before the whole answer)
+          ...(o.sentence ? { onText: (soFar: string, step: number) => this.said(soFar, step, o.sentence!) } : {}),
         },
       );
       this.last = r.actions;
@@ -176,6 +217,8 @@ export class TarsAgent {
       }
       // (a model copying a tool call's form into its words: the bracket dropped)
       if (r.text) r.text = r.text.replace(/^\s*\[(?:actions?|tools?)[^\]]*\]\s*/i, "").trim() || null;
+      // (what was said as it came: the answer's own step only — a step before it, its words said then, is not the answer)
+      this.spoken = r.step !== undefined && r.step === this.saidStep ? this.saidText : "";
       // (the model's failure by its cause — the key, the credit, the network —: said, not « it takes too long » — audit
       // TA-05; with nothing done, null still: main.ts answers offline, then says why)
       const F = this.d.or.lastFailure;

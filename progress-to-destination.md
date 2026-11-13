@@ -58,7 +58,7 @@ ouverts, sous 1 ms) ; J3 au stade du plan.**
 | Audit vagues 3–4 (1feb2f7f) | 3.1 réseau RD0 + RD1 | **fait** : la frontière d'entrée (`src/net/inbound.ts`) ; un événement mal formé figeait l'image (163 → 0), plus maintenant — e2e `net-inbound` 6/6, net-battle/coop/crew/board verts |
 | Audit vagues 3–4 (1feb2f7f) | 3.2 réseau RD2 | **fait** : le serveur se défend (salles par adresse, débit, mots de passe salés et freinés, identité non publiée, rôle gardé, expiration) — six défauts vus avant, 0/6 → 6/6 |
 | Audit vagues 3–4 (1feb2f7f) | 3.4–3.5 vol | **fait** : U/F7 des avions (ILS, refus dit, manette gardée), Maj/Alt modificateur ou manette, LAND = F7 — le cours revolé 7/7 et 9/9 |
-| Audit vagues 3–4 (1feb2f7f) | 3.6 TARS | **fait** : tour coupé, `saves delete` confirmé, pannes dites, faux ordres hors ligne ; restes TA-06 (réveil borné), TA-12 (troncature redemandée), TA-14 (relais Deepgram borné), TA-15 (un filet « Before TARS » par tour, son échec dit), TA-07 (résumés de mémoire un à la fois), TA-16 (réveils muets hors mémoire, les autres en une ligne), TA-09 (ses réglages dans l'historique du Labo), TA-11 (texte du dehors marqué, l'irréversible refusé dans son tour), TA-13 (les voix au-dessus des moteurs), TA-19 (arguments bornés), TA-18 (outils en SI, datum nommé), TA-21 (ailiers par le Labo, rafale en temps de vol), TA-26 (docs remises au code, gardées), TA-24 (moteur audio : Safari interrompu, mesures et worklet sans allocation), TA-22 (l'oreille ouverte dès l'appui : 510 → ~170 ms), TA-20 (modèle retiré : le défaut, dit), TA-22 suite (voix Deepgram jouée à mesure : −3 à −5 s sur une ligne longue ; micro par worklet : premier son ~90 ms) ; décisions de Sam : réveils sans irréversible (fait), TA-25 et TA-23 laissés tels quels (documentés) ; TA-04 lot 1 (cache du fournisseur : une étape −66 à −83 %) |
+| Audit vagues 3–4 (1feb2f7f) | 3.6 TARS | **fait** : tour coupé, `saves delete` confirmé, pannes dites, faux ordres hors ligne ; restes TA-06 (réveil borné), TA-12 (troncature redemandée), TA-14 (relais Deepgram borné), TA-15 (un filet « Before TARS » par tour, son échec dit), TA-07 (résumés de mémoire un à la fois), TA-16 (réveils muets hors mémoire, les autres en une ligne), TA-09 (ses réglages dans l'historique du Labo), TA-11 (texte du dehors marqué, l'irréversible refusé dans son tour), TA-13 (les voix au-dessus des moteurs), TA-19 (arguments bornés), TA-18 (outils en SI, datum nommé), TA-21 (ailiers par le Labo, rafale en temps de vol), TA-26 (docs remises au code, gardées), TA-24 (moteur audio : Safari interrompu, mesures et worklet sans allocation), TA-22 (l'oreille ouverte dès l'appui : 510 → ~170 ms), TA-20 (modèle retiré : le défaut, dit), TA-22 suite (voix Deepgram jouée à mesure : −3 à −5 s sur une ligne longue ; micro par worklet : premier son ~90 ms) ; décisions de Sam : réveils sans irréversible (fait), TA-25 et TA-23 laissés tels quels (documentés) ; TA-04 lot 1 (cache du fournisseur : une étape −66 à −83 %) et lot 2 (réponse dite au fil de l'eau : −0,2 à −1,1 s) |
 | Audit vagues 3–4 (1feb2f7f) | 3.7 TARS (outils AP avions/A320) | **fait** : `jet_autopilot` par les actions de la console, volets au levier (CONF 1), l'AP de l'A320 réparé dans `apSet` |
 | Audit vagues 3–4 (1feb2f7f) | 3.10 e2e qui ne vérifient rien | **fait** : `waitOptional` (93 attentes converties), 14 mesures déclarées, garde `e2e-honesty` |
 | Audit vagues 3–4 (1feb2f7f) | 4.2 la politique de temps | **fait** : vol tenu pendant la reprise GPU, cadence vraie, horloge du vol + garde ; l'onglet masqué (choix de Sam) : solo en pause dite, salle sans arrêt (l'absent ne la bloque plus, les autres avertis, remis à l'heure au retour), sauvé en partant, TARS sans réveil ; le ralentissement sous 10 images/s dit — e2e `hidden-tab` 2/2, `fps-truth` 2/2 |
@@ -5623,4 +5623,22 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   `tars-agent` 12/0.
 - Limites : les outils par contexte (moins d'outils envoyés) et la voix en flux du texte final restent à faire ; la latence n'est pas mesurée ;
   le prix lu en cache dépend du fournisseur routé.
+
+## 2026-11-14T00:30Z — Audit TA-04 (lot 2) : la réponse de TARS dite au fil de l'eau
+
+- Contribution : §19 (réponse, voix) ; audit 2026-11-10, TA-04 (piste « streaming du texte final vers la voix »).
+- **Gain maximal écrit avant** (règle 1 ; vraie clé, GLM, étape finale avec les 69 outils, script jetable) : la première phrase complète
+  arrive 0,3 à 1,4 s avant la fin de la réponse — tout ce que ce lot peut rendre.
+- Réalisé : `ai/openrouter.ts` — `complete(…, { onText })` demande le flux et le lit (`readReply` : le texte à mesure, les appels d'outils
+  recollés par index, l'usage du dernier événement ; du JSON reçu reste lu comme avant) ; la redemande « longueur » (TA-12) reste entière ;
+  `ai/agent.ts` — le flux passé à une étape seulement si sa réponse ne peut pas être renvoyée (« rien fait »), l'étape de la réponse rendue ;
+  `ai/tars-agent.ts` — ses phrases entières dites dès qu'elles sont écrites (un « [actions …] » de tête attendu et retiré), `unspoken()` le
+  reste ; `main.ts` les dit et ne redit que le reste. TARS.md.
+- Preuves : unitaires `openrouter` (flux coupé n'importe où, appels recollés, JSON) et `tars-turns` (phrases puis reste ; une réponse
+  renvoyée jamais dite ; **un défaut trouvé à la mesure en vrai** — l'état « déjà dit » d'une question restait à la suivante, sa réponse ni
+  dite au fil de l'eau ni à la fin : reproduit par le test sans la remise à zéro, corrigé) ; **mesuré en vrai** (classe `TarsAgent`, deux
+  séries de 4 questions) : première phrase 0,2 à 1,1 s avant la fin ; e2e `tars-agent` 12/0 ; tsc, biome.
+- Limites : les outils par contexte non faits (gain en coût petit avec le cache, risque d'un outil manquant) ; une phrase dite pendant une
+  étape qui appelle ensuite des outils est un commentaire d'étape (montré aussi dans la console, comme avant) ; un « stop » ne rattrape pas
+  une phrase déjà partie.
 

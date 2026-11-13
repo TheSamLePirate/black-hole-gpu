@@ -43,6 +43,8 @@ export type Complete = (
   messages: AgentMessage[],
   tools: ReturnType<typeof toFunction>[],
   signal: AbortSignal,
+  /** the reply's words so far as they are written (streamed; omitted: whole) */
+  onText?: (soFar: string) => void,
 ) => Promise<{ content: string | null; tool_calls?: ToolCall[] } | null>;
 
 /** One action of a turn: the tool, its arguments, what came back. */
@@ -60,6 +62,8 @@ export interface TurnResult {
   actions: Action[];
   /** why the turn ended early: "stopped", "steps", "time", "budget" (its `canContinue` said no); null: answered */
   cut: "stopped" | "steps" | "time" | "budget" | null;
+  /** the step whose words are the answer (`onText`'s step), -1: none */
+  step?: number;
 }
 
 export const MAX_STEPS = 24;
@@ -105,6 +109,8 @@ export class Agent {
       /** looked at before each step after the first: false ends the turn ("budget") — a waking's budget (audit TA-06) */
       canContinue?: () => boolean;
       /** no pilot speaking (a waking): what is guarded refused from the start, as after outside text (Sam, 13 Nov 2026) */
+      /** a step's words as they are written (step: its index) — not on a step whose words may be sent back (`unacted`) */
+      onText?: (soFar: string, step: number) => void;
       outside?: boolean;
     } = {},
   ): Promise<TurnResult> {
@@ -124,14 +130,16 @@ export class Agent {
       if (signal.aborted) return { text: null, actions, cut: "stopped" };
       if (this.now() - t0 > MAX_TURN_MS) return { text: null, actions, cut: "time" };
       if (step > 0 && o.canContinue && !o.canContinue()) return { text: null, actions, cut: "budget" };
-      const r = await this.complete(messages, fns, signal);
+      // (streamed — his words said as they come — unless these words may be sent back as « nothing done »: then not one said)
+      const stream = o.onText && !(!actions.length && !nudged && o.unacted?.("·")) ? (t: string) => o.onText!(t, step) : undefined;
+      const r = await this.complete(messages, fns, signal, stream);
       if (signal.aborted) return { text: null, actions, cut: "stopped" };
       if (!r) return { text: null, actions, cut: null };
       const calls = r.tool_calls ?? [];
       if (!calls.length) {
         const text = r.content?.trim() || null;
         const back = !actions.length && !nudged && text ? (o.unacted?.(text) ?? null) : null;
-        if (!back) return { text, actions, cut: null };
+        if (!back) return { text, actions, cut: null, step };
         nudged = true;
         messages.push({ role: "assistant", content: text } as ChatMessage, { role: "user", content: back });
         continue;

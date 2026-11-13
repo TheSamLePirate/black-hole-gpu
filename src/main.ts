@@ -1587,8 +1587,11 @@ async function main() {
       return;
     }
     let text: string | null = null;
+    let fromAgent = false;
     if (online()) {
-      const a = await tarsAgent.ask(q);
+      // (his sentences said as he writes them — audit TA-04 —; the rest once his answer is whole)
+      const a = await tarsAgent.ask(q, { sentence: (s) => voice.say({ text: s, speaker: "tars", priority: 2 }) });
+      fromAgent = a !== null;
       // ("": stopped — nothing to say; null: the model failed — the orders understood offline, his written line)
       if (a === "") return;
       text = a;
@@ -1612,7 +1615,8 @@ async function main() {
     }
     refreshGui();
     tarsPanel.answer(text ?? r.text);
-    voice.say({ text: text ?? r.text, speaker: "tars", priority: 2 });
+    const rest = fromAgent && text !== null ? tarsAgent.unspoken(text) : (text ?? r.text);
+    if (rest) voice.say({ text: rest, speaker: "tars", priority: 2 });
     // (an autopilot he engaged, or a plan: followed to its end)
     tarsFollowStart();
   }

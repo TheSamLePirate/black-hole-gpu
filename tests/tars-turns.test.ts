@@ -180,3 +180,58 @@ test("a waking (no pilot speaking) cannot do what cannot be undone — Sam's dec
   await A.ask("Supprime la sauvegarde Campaign, je confirme.");
   expect(deleted).toBe(1);
 });
+
+test("his answer said as he writes it (TA-04): each whole sentence at once, the rest at the end — none when it may be sent back", async () => {
+  let parts = ["[actions: none] Orbite ", "stable. Je vise", " la Lune. Le carburant", " tient."];
+  let calls = 0;
+  const streaming = {
+    complete: async (_m: unknown, _f: unknown, o: { onText?: (t: string) => void }) => {
+      calls++;
+      let soFar = "";
+      for (const p of parts) {
+        soFar += p;
+        o.onText?.(soFar);
+      }
+      return { content: soFar, tool_calls: undefined };
+    },
+    chat: async () => null,
+    spent: 0,
+  };
+  let data: MemoryData | null = null;
+  const memory = new TarsMemory({ get: () => data, set: (d: MemoryData) => void (data = d) } as never);
+  const A = new TarsAgent({
+    or: streaming as never,
+    tools: () => [],
+    memory,
+    personality: () => ({ humour: 0.6, honesty: 0.9 }) as never,
+    lang: () => "fr",
+    flight: () => ({}) as never,
+    say: () => {},
+    onAction: () => {},
+    onBusy: () => {},
+  });
+  const said: string[] = [];
+  const text = await A.ask("Où en est-on ?", { sentence: (s) => said.push(s) });
+  expect(said).toEqual(["Orbite stable.", "Je vise la Lune."]);
+  expect(text).toBe("Orbite stable. Je vise la Lune. Le carburant tient.");
+  expect(A.unspoken(text!)).toBe("Le carburant tient.");
+  // a second question answered the same way: said again as it comes, not taken for the first's (found live, 13 Nov 2026)
+  const again: string[] = [];
+  const text2 = await A.ask("Et maintenant ?", { sentence: (s) => again.push(s) });
+  expect(again).toEqual(["Orbite stable.", "Je vise la Lune."]);
+  expect(A.unspoken(text2!)).toBe("Le carburant tient.");
+  // an order answered with nothing done is sent back once (« nothing done »): that first answer never said; the second may be
+  parts = ["J'ai visé Mars. ", "C'est fait."];
+  const said2: string[] = [];
+  calls = 0;
+  const second = ["Je vise Mars maintenant. ", "Voilà."];
+  const real = streaming.complete;
+  streaming.complete = async (m, f, o) => {
+    if (calls === 1) parts = second;
+    return real(m, f, o);
+  };
+  await A.ask("Vise Mars.", { sentence: (s) => said2.push(s) });
+  expect(calls).toBe(2);
+  expect(said2).not.toContain("J'ai visé Mars.");
+  expect(said2).toEqual(["Je vise Mars maintenant."]);
+});
