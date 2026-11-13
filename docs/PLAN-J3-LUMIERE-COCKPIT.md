@@ -254,4 +254,10 @@ Aucun coût de J3 n'est mesuré ; aucun gain n'est promis.
   `…-waterincident`, 19:05) : la bande de mer **ne bouge pas de façon mesurable** à la bascule (46,69 / 46,66, A/A 0,02 — au Soleil bas la mer
   est éclairée surtout par le ciel qu'elle reflète) : **cohérence du contrat, pas de témoin positif à l'image**. Non relevés encore : le traceur
   de la Terre lointaine (`earthGround` → `seaShade` avec `Ls`), le sol tracé de près.
+  **`earthGround` relevé** (~20:48 UTC, lecture du code, `trace.wgsl` ~10908–11140) : le Soleil **géométrique** partout — son éclairement (`mu0`,
+  `sunThrough`), les ombres des nuages (`qs`), du décor (`sceneryShadow`), du relief (`earthTerrainShadow`, `earthHorizonLight`), le relief
+  photographique (`photoNdl`, `photoRelightK`), la mer (`seaShade`). À passer à l'incident (comme `liteLight`) : ces lecteurs ; à garder
+  géométriques : l'air (`skySeen`, le ciel), l'éclipse (`sunSeen`), la neige (sa saison). **Non fait** : la rangée incidente n'est écrite qu'avec le
+  raster de la Terre — le pipeline tracé ne la lit pas (le géométrique, sans écart) ; en raster, `earthGround` ne dessine que les pixels hors des
+  anneaux (le lointain) : l'effet à vérifier serait une couture d'éclairage au bord des anneaux au coucher, pas encore observée.
 
