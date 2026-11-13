@@ -4231,3 +4231,13 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
 - **Changé** : `src/system/scenery-worker.ts`, `scenery.ts` (`corridor`, clé de scène, `stats().corridorM`), `scenery-data.ts` ; e2e sonde
   (`c0/c1`, `CT_CORRIDOR`, `CT_CLEAR=0`) ; données `docs/progress/decor/corridor-2026-11-13.json` ; BH-API, GRAPHICS-PIPELINE (étape 10),
   PROBLEMES, PLAN-J2, E2E-CATALOGUE. **Vérifié** : tsc, biome, tests du décor 103/0. **Non vérifié** : kerr-mini ; un vol long ; d'autres villes.
+
+## 2026-11-13T07:40Z — J2 : la sortie — fiche J0 de sortie (kerr-mini) et bilan du §4
+
+- **Contribution** (stratégie §15, jalon J2 ; PLAN-J2 §4, J2-8) : la fiche J0 de sortie sur l'état décidé par Sam (5c420e09) — GPU p50 58,4 /
+  p95 64,4 ms, intervalle p95 80,1 ms, 17,1/s ; soutenu GPU p50 57,4 ms ; couverture utile à froid 56,3 s ; ablations nuages −6,3, décor −2,0,
+  HUD −1,1 ms. Bilan du §4 dans PLAN-J2 §9 duodecies : fuite 0, coutures C0-12 tenues, aucune pulsation d'échelle, la page neuve tenue par
+  l'historique unique, coût nul ; non gagné : l'avantage en virage (égalité), l'échelle variable (épingle gardée), la part
+  « reconstruction et sortie » (taau 3,7 + temporal 1,8 ms).
+- **Fichiers** : `docs/progress/j0/FICHE-kerr-mini-2026-11-13-sortie.md`, `j0-kerr-mini-2026-11-13-sortie.json` ; README J0, PLAN-J2.
+- **Vérifié** : `bun test --parallel` 2 212 / 0 ; e2e J0 3/0 sur kerr-mini. **Non vérifié** : le M1 Max en vol (il bride) ; J2-C (Sam).
