@@ -687,6 +687,15 @@ termes à un nœud fautif (43,0666 N, 6,12883 E, niveau 1).
   anneaux éclairent peu (le bruit de cette lumière faible, vraisemblablement — non sondé). Cause probable du défaut du 6 nov. (non
   prouvée) : le facteur de niveau des géantes faux au sud (`giantLevel`, réglé ce jour) ou la sonde en demi-flottants (réglée ce jour).
   L'adaptation à Saturne gardée ; le raccord retiré.
+- **Le grain sondé** (2026-11-13 ~23:08 UTC, kerr-mini, e2e `aurora-giants` `AG_ONLY=saturn AG_GRAIN=1`, run `…-saturn-grain`) : **du bruit, pas une
+  texture** — monde figé, la couleur de la scène relue à 1,5 s puis 8 s d'écart change de **18–29 %** en moyenne (|Δ| sur la moyenne) ; dispersion
+  spatiale 0,68 (moitié haute, peu éclairée, luminance 0,0024) et 0,34 (moitié basse, 0,045). Figée, l'image devient un bruit fin pixel par pixel ;
+  les taches marbrées de la vue vivante sont ce bruit lissé par l'accumulation. (Le noyau d'affinage compilait encore : la vue figée n'a pas
+  convergé.) **Source probable, non isolée** (les 32 bits de `TUNE_GSKIP` sont pris) : la lumière des anneaux (`ringShine`, `trace.wgsl`) — la
+  seule sur la face nuit, 10 échantillons aux azimuts tirés à chaque rayon à travers le bord net de l'ombre de la planète sur les anneaux ; le
+  tirage de la phase du volume des géantes (V7) est l'autre candidat. **Piste** : cette lumière varie lentement sur le disque — la calculer une
+  fois par image dans une petite table (latitude × heure locale, beaucoup d'échantillons), lue par pixel ; ou plus d'échantillons stratifiés.
+  Vue hors du profil principal (§8) : pas de lot ouvert.
 
 ## ~~Le traceur (pipeline « trace ») au large de Big Sur : une nappe sombre plate jusqu'à l'horizon~~ — non reproduit le 13 novembre 2026
 
