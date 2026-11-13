@@ -4786,3 +4786,12 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   identiques ; captures `remote-results/map-lattice-{before,after}.png`.
 - **Limites :** M1 Max chargé, profil échantillonné (100 µs) : les ms sont relatives. Les à-coups en jeu ne sont pas remesurés par le
   profileur de sections (trop bruité pour cet écart). Reste dans le dessin : `drawOurPaths` (~18 ms/6 s).
+
+## 2026-11-13T12:39Z — AR-05, la mini-carte remesurée en jeu : ses à-coups de 10–13 ms ramenés à 2,9 ms
+
+- **Mesure (e2e `loop-cpu`, M1 Max, fenêtre visible, 51157510 ; sonde vérifiée : A/A Δ p50 0,20 ms, témoin +3 ms lu +2,75 dans sa section) :**
+  en orbite (Artemis, 120 boucles/s), la section de la mini-carte **0,13–0,22 ms en moyenne, 2,9 ms au pire** — avant les deux leviers
+  (dbf1dbbf) 0,6–0,75 et **10–13 ms** ; le HUD de vol entier au pire 6,2–6,5 ms (avant 11–15). La boucle entière, en contexte seulement
+  (non additive) : p95 7,3–7,8 ms (avant 9,5–13,7), p99 8,3–9,3 (avant 13,6–16,6).
+- **Décision (règle 1) :** `drawOurPaths` ~0,3 ms par dessin, sous le seuil d'un lot : laissé. AR-05 fermé pour l'autosauvegarde et la
+  mini-carte ; les lectures de mise en page du cockpit de l'A320 restent non mesurées.
