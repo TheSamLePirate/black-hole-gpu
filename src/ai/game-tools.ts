@@ -20,7 +20,6 @@ import { KNOWLEDGE_PAGES, type KnowledgeLang, type KnowledgePage, readKnowledge,
 import type { MissionSpec } from "../game/mission";
 import { completeMission, type MissionPatch, patchMission, type Resolver, type Sketch } from "../game/missionedit";
 import { aspectOf, bearingOf, clockOf } from "../game/threats";
-import { unitsOf } from "../ui/unitsys";
 import type { WeaponSel } from "../controller/combat";
 import type { RadarMode } from "../game/radar";
 import type { RecoveryCase } from "../game/trap";
@@ -1841,7 +1840,7 @@ export function gameTools(h: GameHost): Tool[] {
     {
       name: "traffic",
       description:
-        "The aircraft about the player (the real traffic heard, the room's pilots, the wingmen, a fight's craft — the radar's picture in the F-35 in the air, else the traffic heard): « quels avions autour ? », « intercepte l'AFR123 ». list: the nearest (maxKm, else 60; n, else 12) — callsign, type, registration, distance, bearing, clock (12 the nose), altitude and its difference, heading, speed, aspect (hot: towards us). info: one by its callsign (name). intercept: the F-35's intercept flown on it (name) — the run, the rejoin, the shadow 300 m behind it on its left; it flies the throttle and the stick itself (touching the controls lets it go: leave them). join: in formation on it (an airliner: at our place in the formation chosen; another: its shadow). stop: the intercept or formation let go (altitude, heading and speed held).",
+        "The aircraft about the player (the real traffic heard, the room's pilots, the wingmen, a fight's craft — the radar's picture in the F-35 in the air, else the traffic heard): « quels avions autour ? », « intercepte l'AFR123 ». list: the nearest (maxKm, else 60; n, else 12) — callsign, type, registration, distM, bearing, clock (12 the nose), altM (over the sea) and altDiffM, heading, speedMs, aspect (hot: towards us). info: one by its callsign (name). intercept: the F-35's intercept flown on it (name) — the run, the rejoin, the shadow 300 m behind it on its left; it flies the throttle and the stick itself (touching the controls lets it go: leave them). join: in formation on it (an airliner: at our place in the formation chosen; another: its shadow). stop: the intercept or formation let go (altitude, heading and speed held).",
       params: {
         action: { type: "string", enum: ["list", "info", "intercept", "join", "stop"] },
         name: { type: "string", description: "a callsign, registration or name (AFR123, F-GKXA, Two)" },
@@ -1851,7 +1850,7 @@ export function gameTools(h: GameHost): Tool[] {
       required: ["action"],
       run: act((a) => {
         const c = h.camera;
-        const u = unitsOf(settings.units);
+        // (SI, as every tool — audit TA-18: the pilot's units here before 13 Nov 2026 —; the model says them in his)
         const g = c.geoNow();
         const hdg = (c.attitudeNow() as { heading?: number }).heading ?? g?.track ?? 0;
         const row = (x: ReturnType<typeof c.aircraftAround>[number]) => {
@@ -1862,13 +1861,14 @@ export function gameTools(h: GameHost): Tool[] {
             reg: x.reg || undefined,
             source: { trf: "traffic", net: "room", wng: "wingman", rwg: "room's wingman", cmb: "fight" }[x.source] ?? x.source,
             iff: x.iff,
-            dist: u.fDist(d),
+            distM: Math.round(d),
             bearingDeg: bearingOf(x.r),
             clock: clockOf(x.r, hdg),
-            alt: g ? u.fAlt(g.alt + x.r[2]!) : undefined,
-            altDiff: u.fAlt(x.r[2]!),
+            // (over the sea: ours, geoNow's, and its difference)
+            altM: g ? Math.round(g.alt + x.r[2]!) : undefined,
+            altDiffM: Math.round(x.r[2]!),
             headingDeg: Math.hypot(x.v[0]!, x.v[1]!) > 3 ? bearingOf(x.v) : undefined,
-            speed: u.fSpd(Math.hypot(x.v[0]!, x.v[1]!, x.v[2]!)),
+            speedMs: Math.round(Math.hypot(x.v[0]!, x.v[1]!, x.v[2]!)),
             aspect: aspectOf(x.r, x.v),
             onGround: x.gnd || undefined,
           };
@@ -2201,7 +2201,7 @@ export function gameTools(h: GameHost): Tool[] {
     {
       name: "carrier",
       description:
-        "The carriers at sea (the Gerald R. Ford: catapults and wires; the Kiev and the Implacable: short take-offs and vertical landings), each with two frigates as escort, steaming into the wind at their speed, the same in a room for everyone. spawn: one set off (kind; at lat/lon, else 4 km ahead of the craft; heading [°], else into the wind). qual: a carrier qualification flown by the autopilot (qual: day, night — the clock set to night there —, sea — a heavy sea, a swell of 4.4 m —; passes, else 4), graded pass by pass by the LSO, its average said: qualified at 3.0. land: the flown craft set down on its deck (x across — port + —, z along — bow + — [m]; else aft of its island), carried along with it. recover: the F-35B's autopilot lands it there as a real one does — up the port side, a hover alongside, across over the spot, down — the LSO calling it and grading the touchdown (the nearest carrier, else kind; light enough to hover: some 2 t of fuel at most); the F-35C's recovery onto the Ford's wires by its case (case: I — the initial 3 NM astern, the break past the bow, the downwind, the 180, the groove —, II — the descent to ten miles then the break —, III — the marshal 21 NM astern on the final bearing, marshal: laps of its hold, then down to the platform, dirty at ten miles, the glide path —, straight: from the gate; else by the hour and the weather: night or a low ceiling III, clouds II, else I). takeoff: the F-35B off the deck it stands on — a short take-off when the deck's run allows its weight (some 150 m full), else vertical when light enough (vertical: true asks for it); the F-35 on a runway (off a deck): its automatic take-off, up to the holds 1 500 m over the field. status: those at sea, where, their speed. clear: none at sea any more.",
+        "The carriers at sea (the Gerald R. Ford: catapults and wires; the Kiev and the Implacable: short take-offs and vertical landings), each with two frigates as escort, steaming into the wind at their speed, the same in a room for everyone. spawn: one set off (kind; at lat/lon, else 4 km ahead of the craft; heading [°], else into the wind). qual: a carrier qualification flown by the autopilot (qual: day, night — the clock set to night there —, sea — a heavy sea, a swell of 4.4 m —; passes, else 4), graded pass by pass by the LSO, its average said: qualified at 3.0. land: the flown craft set down on its deck (x across — port + —, z along — bow + — [m]; else aft of its island), carried along with it. recover: the F-35B's autopilot lands it there as a real one does — up the port side, a hover alongside, across over the spot, down — the LSO calling it and grading the touchdown (the nearest carrier, else kind; light enough to hover: some 2 t of fuel at most); the F-35C's recovery onto the Ford's wires by its case (case: I — the initial 5.6 km astern, the break past the bow, the downwind, the 180, the groove —, II — the descent to 18.5 km then the break —, III — the marshal 39 km astern on the final bearing, marshal: laps of its hold, then down to the platform, dirty at 18.5 km, the glide path —, straight: from the gate; else by the hour and the weather: night or a low ceiling III, clouds II, else I). takeoff: the F-35B off the deck it stands on — a short take-off when the deck's run allows its weight (some 150 m full), else vertical when light enough (vertical: true asks for it); the F-35 on a runway (off a deck): its automatic take-off, up to the holds 1 500 m over the field. status: those at sea, where, their speed. clear: none at sea any more.",
       params: {
         action: { type: "string", enum: ["spawn", "land", "recover", "takeoff", "qual", "status", "clear"] },
         vertical: { type: "boolean" },
@@ -2225,7 +2225,7 @@ export function gameTools(h: GameHost): Tool[] {
             lat: +P.lat.toFixed(4),
             lon: +P.lon.toFixed(4),
             headingDeg: Math.round((sp.heading * 180) / Math.PI),
-            speedKt: Math.round(sp.speed * 1.943844),
+            speedMs: +sp.speed.toFixed(1),
           }));
         if (a.action === "clear") {
           c.carrierClear();
@@ -2266,7 +2266,7 @@ export function gameTools(h: GameHost): Tool[] {
     {
       name: "flight_plan",
       description:
-        "A plane's flight plan (the F-35): its waypoints over the Earth, flown by LNAV (lateral) and VNAV (vertical) on the autopilot. show: the plan (waypoints with their altitude and speed constraints, the cruise level and speed, the reserve, LNAV/VNAV on, the active point). add: a waypoint — query (an airfield, a place, an address, coordinates) or lat/lon, its altM and spdMs constraints, at an index (default the end). remove (index), clear, cruise (altM, spdMs, reserveKg), direct (index: flown direct from here), nav (lnav, vnav: on or off).",
+        "A plane's flight plan (the F-35): its waypoints over the Earth, flown by LNAV (lateral) and VNAV (vertical) on the autopilot. show: the plan (waypoints with their altitude and speed constraints, the cruise level and speed, the reserve, LNAV/VNAV on, the active point). add: a waypoint — query (an airfield, a place, an address, coordinates) or lat/lon, its altM (m over the sea) and spdMs constraints, at an index (default the end). remove (index), clear, cruise (altM over the sea, spdMs, reserveKg), direct (index: flown direct from here), nav (lnav, vnav: on or off).",
       params: {
         action: { type: "string", enum: ["show", "add", "remove", "clear", "cruise", "direct", "nav"] },
         query: { type: "string" },

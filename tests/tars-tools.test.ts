@@ -3,6 +3,7 @@ import { type GameHost, keyCatalog, resolveBody, resolveSite } from "../src/ai/g
 import { checkSetting, findSettings } from "../src/ai/settings-tools";
 import { orderReply, parseOrders } from "../src/ai/offline-orders";
 import { defaultSettings } from "../src/settings";
+import type { Param } from "../src/ai/tool-schema";
 
 // PLAN-TARS-AGENT A2: what TARS's tools resolve before they act — a body or a site by its name in either
 // language, every key of the game, a setting found by words (French too) and a value checked against the
@@ -982,8 +983,7 @@ test("every tool's numbers bounded, latitudes and longitudes alike, strings capp
   const tools = gameTools({ settings: {}, camera: {}, tools: {}, log: () => [] } as unknown as GameHost);
   const open: string[] = [];
   const geo: string[] = [];
-  type P = import("../src/ai/tool-schema").Param;
-  const walk = (p: P, at: string) => {
+  const walk = (p: Param, at: string) => {
     if (p.type === "number") {
       // (a chart's points are the data shown: any finite number)
       if ((p.minimum === undefined || p.maximum === undefined) && !at.startsWith("show_chart.series")) open.push(at);
@@ -1001,4 +1001,34 @@ test("every tool's numbers bounded, latitudes and longitudes alike, strings capp
   expect(checkArgs(say, JSON.stringify({ text: "Orbit stable." })).ok).toBe(true);
   const saves = tools.find((t) => t.name === "saves")!;
   expect(checkArgs(saves, JSON.stringify({ action: "import", json: "x".repeat(200_000) })).ok).toBe(true);
+});
+
+test("the tools in SI with their datum named — the carrier's speed, the traffic, no nautical miles (TA-18)", async () => {
+  const { gameTools } = await import("../src/ai/game-tools");
+  const settings = { units: "imperial" };
+  const camera = {
+    carrierNow: () => [{ sp: { kind: "ford", heading: Math.PI / 2, speed: 14.4 }, P: { lat: 43, lon: 6 } }],
+    geoNow: () => ({ lat: 43, lon: 6, alt: 3000, track: 0 }),
+    attitudeNow: () => ({ heading: 0 }),
+    aircraftAround: () => [
+      { name: "AFR123", type: "A320", reg: "F-GKXA", source: "trf", iff: "neutral", r: [10_000, 0, 500], v: [200, 0, 0] },
+    ],
+  };
+  const host = { settings, camera, tools: {}, log: () => [] } as unknown as GameHost;
+  const tools = gameTools(host);
+  const run = (name: string, a: Record<string, unknown>) => tools.find((t) => t.name === name)!.run(a, new AbortController().signal);
+  const ford = ((await run("carrier", { action: "status" })) as Record<string, unknown>[])[0]!;
+  expect(ford.speedMs).toBeCloseTo(14.4, 1);
+  expect(ford.speedKt).toBeUndefined();
+  const t = (await run("traffic", { action: "list" })) as { nearest: Record<string, unknown>[] };
+  const x = t.nearest[0]!;
+  // (numbers, in metres and metres per second — the altitude over the sea —, whatever the pilot's units)
+  expect(x.distM).toBe(Math.round(Math.hypot(10_000, 0, 500)));
+  expect(x.altM).toBe(3500);
+  expect(x.altDiffM).toBe(500);
+  expect(x.speedMs).toBe(200);
+  // no nautical miles, knots or feet in what the tools say of themselves
+  for (const tool of tools) expect(`${tool.name}: ${tool.description}`).not.toMatch(/\b(NM|knots?|kt|feet|ft|ten miles)\b/);
+  // the flight plan's altitudes said over the sea
+  expect(tools.find((x) => x.name === "flight_plan")!.description).toMatch(/over the sea/);
 });

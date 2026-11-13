@@ -58,7 +58,7 @@ ouverts, sous 1 ms) ; J3 au stade du plan.**
 | Audit vagues 3–4 (1feb2f7f) | 3.1 réseau RD0 + RD1 | **fait** : la frontière d'entrée (`src/net/inbound.ts`) ; un événement mal formé figeait l'image (163 → 0), plus maintenant — e2e `net-inbound` 6/6, net-battle/coop/crew/board verts |
 | Audit vagues 3–4 (1feb2f7f) | 3.2 réseau RD2 | **fait** : le serveur se défend (salles par adresse, débit, mots de passe salés et freinés, identité non publiée, rôle gardé, expiration) — six défauts vus avant, 0/6 → 6/6 |
 | Audit vagues 3–4 (1feb2f7f) | 3.4–3.5 vol | **fait** : U/F7 des avions (ILS, refus dit, manette gardée), Maj/Alt modificateur ou manette, LAND = F7 — le cours revolé 7/7 et 9/9 |
-| Audit vagues 3–4 (1feb2f7f) | 3.6 TARS | **fait** : tour coupé, `saves delete` confirmé, pannes dites, faux ordres hors ligne ; restes TA-06 (réveil borné), TA-12 (troncature redemandée), TA-14 (relais Deepgram borné), TA-15 (un filet « Before TARS » par tour, son échec dit), TA-07 (résumés de mémoire un à la fois), TA-16 (réveils muets hors mémoire, les autres en une ligne), TA-09 (ses réglages dans l'historique du Labo), TA-11 (texte du dehors marqué, l'irréversible refusé dans son tour), TA-13 (les voix au-dessus des moteurs), TA-19 (arguments bornés) |
+| Audit vagues 3–4 (1feb2f7f) | 3.6 TARS | **fait** : tour coupé, `saves delete` confirmé, pannes dites, faux ordres hors ligne ; restes TA-06 (réveil borné), TA-12 (troncature redemandée), TA-14 (relais Deepgram borné), TA-15 (un filet « Before TARS » par tour, son échec dit), TA-07 (résumés de mémoire un à la fois), TA-16 (réveils muets hors mémoire, les autres en une ligne), TA-09 (ses réglages dans l'historique du Labo), TA-11 (texte du dehors marqué, l'irréversible refusé dans son tour), TA-13 (les voix au-dessus des moteurs), TA-19 (arguments bornés), TA-18 (outils en SI, datum nommé) |
 | Audit vagues 3–4 (1feb2f7f) | 3.7 TARS (outils AP avions/A320) | **fait** : `jet_autopilot` par les actions de la console, volets au levier (CONF 1), l'AP de l'A320 réparé dans `apSet` |
 | Audit vagues 3–4 (1feb2f7f) | 3.10 e2e qui ne vérifient rien | **fait** : `waitOptional` (93 attentes converties), 14 mesures déclarées, garde `e2e-honesty` |
 | Audit vagues 3–4 (1feb2f7f) | 4.2 la politique de temps | **fait** : vol tenu pendant la reprise GPU, cadence vraie, horloge du vol + garde ; l'onglet masqué (choix de Sam) : solo en pause dite, salle sans arrêt (l'absent ne la bloque plus, les autres avertis, remis à l'heure au retour), sauvé en partant, TARS sans réveil ; le ralentissement sous 10 images/s dit — e2e `hidden-tab` 2/2, `fps-truth` 2/2 |
@@ -5312,4 +5312,17 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   caractères acceptée) ; **après** : vert. Tests TARS, équipage, réseau 275/0 ; e2e `tars-agent` 12/0 ; tsc, biome.
 - Limites : les bornes choisies d'après les descriptions et les usages du code, non d'une mesure ; une longitude 0…360 donnée par le modèle
   est maintenant refusée avec son motif (il se corrige).
+
+## 2026-11-13T19:10Z — Audit TA-18 : les outils de TARS en SI, le datum nommé ; un test de TA-19 qui cassait son fichier seul
+
+- Contribution : §19 et la règle WGS84 du projet (altitudes au-dessus de la mer nommées) ; audit 2026-11-10, TA-18 (P3).
+- Réalisé : `ai/game-tools.ts` — `traffic` rend `distM`, `altM` (au-dessus de la mer, celle de `geoNow`), `altDiffM`, `speedMs` (avant : textes
+  dans les unités du joueur) ; `carrier status` `speedMs` (avant `speedKt`) ; la description des cas de récupération en km (3 NM, dix milles,
+  21 NM avant) ; `flight_plan` : `altM` et l'altitude de croisière dites au-dessus de la mer (`wpAlt` : `field.elev` + tour de piste, MSL). TARS.md.
+- Preuves : **reproduit avant** (garde `tars-tools` « TA-18 » : `speedKt` rendu, `speedMs` absent) ; **après** : vert, aucun NM/kt/ft dans les
+  descriptions. Chaque fichier de tests TARS/équipage lancé seul vert ; tsc, biome.
+- **Défaut trouvé et corrigé** : mon test TA-19 (945e5b2b) écrivait `type P = import("…").Param` dans le corps d'une fonction ; Bun charge
+  alors `assets/ephemeris/de440.bin` comme du JS et `tests/tars-tools.test.ts` tombait entier quand on le lançait seul (passant dans un lot
+  de fichiers). Trouvé par bissection dans un worktree propre (807ff7f9 et b3a4f676 verts, 945e5b2b rouge) ; l'import de type mis en tête.
+- Limites : aucun e2e (sorties d'outils sans rendu) ; les modèles réels n'ont pas été rejoués sur les nouveaux champs.
 
