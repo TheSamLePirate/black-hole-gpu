@@ -12,7 +12,7 @@ services:
     restart: unless-stopped
 # rooms-begin
   rooms:
-    image: ghcr.io/thesamlepirate/black-hole-gpu:rooms-4d78042-44.1
+    image: ghcr.io/thesamlepirate/black-hole-gpu:rooms-de74ac1-45.1
     ports:
       - "3001:3001"
     volumes:
@@ -38,7 +38,7 @@ services:
   # Mercury's MESSENGER 665 m and Ceres's Dawn HAMO 137 m (0.5 GB each, ~0.3 GB of tiles); then it exits (a later start only
   # checks them)
   moon-tiles:
-    image: ghcr.io/thesamlepirate/black-hole-gpu:rooms-4d78042-44.1
+    image: ghcr.io/thesamlepirate/black-hole-gpu:rooms-de74ac1-45.1
     command: ["sh", "-c", "bun server/moon-build.ts --body moon --out /moon/lola && bun server/moon-build.ts --body mars --out /moon/mars && bun server/moon-build.ts --body mercury --out /moon/mercury && bun server/moon-build.ts --body ceres --out /moon/ceres"]
     volumes:
       - moon-data:/moon
