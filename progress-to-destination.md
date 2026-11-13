@@ -5986,3 +5986,14 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
 - Réalisé : `aurora-jupiter` relève les non-finis de `renderer.paramsF`. PROBLEMES complété.
 - Preuves : **mesuré** (kerr-mini) : aucun non-fini dans les paramètres. Suite : relire les tables et textures calculées depuis la caméra.
 
+## 2026-11-14T13:00Z — Audit NET-10 (RD4, troisième lot) : un arrivant apprend les rôles co-op, le défi de salle et les résultats
+
+- Réalisé : `ui/netsession.ts` `tellHardState` — à chaque arrivée, chacun redit aussi son rôle co-op (avec sa mission : `coop` again), sa part
+  du défi de salle (`rchal` pour qui l'a proposé, `rchal-in` pour qui l'a pris) et ses 8 derniers résultats (`rpt`) ; à la réception, la
+  mission ou le défi déjà connus ne sont ni recommencés ni redemandés (seul le rôle ou le preneur compté), un résultat déjà connu n'est pas
+  doublé, rien n'est redit en message. NETWORK.md/.fr, E2E-CATALOGUE.
+- Preuves : **reproduit avant** — e2e `net-board` (un client arrivant après le défi : aucun résultat entendu) et `net-coop` (un arrivant pendant
+  la seconde mission : aucun rôle entendu ; ce contrôle repassé sur l'ancien `netsession.ts`) ; **après** : les deux résultats (Ana, Ben), les
+  deux rôles (endurance, ranger) entendus, les tableaux des pages non doublés ; `net-board` 3/3, `net-coop` 3/3.
+- Limites : l'état « abattus » d'un match en cours vient de sa feuille d'événements (le match lui-même est rejoué par le serveur) ; NET-19 non fait.
+

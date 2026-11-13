@@ -773,12 +773,23 @@ export class NetSession {
           // (another's result — N4: the room's board)
           const R = resultOf((ev as unknown as { r?: unknown }).r, from, this.nameOf(from), Date.now());
           if (!R) return;
+          // (said again to a newcomer — NET-10 —: kept once, not said twice)
+          const again = !!(ev as unknown as { again?: unknown }).again;
+          const known = this.results.some(
+            (x) => x.slot === R.slot && x.ref === R.ref && x.title === R.title && x.score === R.score && x.letter === R.letter,
+          );
+          if (again && known) return;
           this.addResult(R);
-          this.d.toast(tf("{0} — {1}: {2}", R.name, refTitle(R), resultText(R)));
+          if (!again) this.d.toast(tf("{0} — {1}: {2}", R.name, refTitle(R), resultText(R)));
         } else if (e.kind === "rchal") {
           // (a room challenge proposed — N4: the same start for all who take it, the others ghosts)
           const id = (ev as unknown as { id?: unknown }).id;
           if (typeof id !== "string" || !/^[\w-]{1,40}$/.test(id) || !this.d.spaceChallenge) return;
+          // (said again — NET-10 —: the one we know kept, its taker counted, not asked twice)
+          if (this.roomChal?.id === id) {
+            this.roomChal.slots.add(from);
+            return;
+          }
           this.roomChal = { id, by: from, slots: new Set([from]), at: Date.now() };
           const title = refTitle({ ref: `challenge:${id}`, title: id });
           const answer = (yes: boolean) => {
@@ -796,6 +807,12 @@ export class NetSession {
           const c0 = ev as unknown as { id?: unknown; role?: unknown };
           const M = COOP_MISSIONS.find((m) => m.id === c0.id);
           if (!M || !M.roles.some((r) => r.id === c0.role) || !this.d.coopStart) return;
+          // (the mission we know, said again — NET-10 —: its role's pilot set, nothing begun anew, not asked twice)
+          if (this.coop?.id === M.id) {
+            const r = this.coop.roles.get(c0.role as string);
+            if (r && (r.slot === null || r.slot === from)) r.slot = from;
+            return;
+          }
           this.coop = {
             id: M.id,
             roles: new Map(M.roles.map((r) => [r.id, { slot: null, i: 0, n: r.objectives.length, ended: false, ok: false }])),
@@ -1755,6 +1772,16 @@ export class NetSession {
     if (L) net.event({ kind: "dock", to: L.host, port: L.port, ownPort: L.ownPort, c: L.c, ax: L.ax, again: true });
     if (this.follow?.why === "passenger")
       net.event({ kind: "board", to: this.follow.slot, ...(this.handedOver ? { gone: true } : {}), again: true });
+    // (our co-op role — its mission with it: a newcomer learns both —, our part in the room challenge, our latest results)
+    if (this.coop?.mine) net.event({ kind: "coop", id: this.coop.id, role: this.coop.mine, again: true });
+    const RC = this.roomChal;
+    if (RC?.slots.has(me)) net.event({ kind: RC.by === me ? "rchal" : "rchal-in", id: RC.id, again: true });
+    for (const R of this.results.filter((x) => x.slot === me).slice(-8))
+      net.event({
+        kind: "rpt",
+        r: { kind: R.kind, title: R.title, score: R.score, letter: R.letter, ref: R.ref, medal: R.medal, metric: R.metric },
+        again: true,
+      });
   }
 
   /** those whose craft was handed over (N3): their last samples no craft — not drawn, not docked to, not struck */

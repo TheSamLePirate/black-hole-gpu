@@ -1,4 +1,5 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import { NetClient } from "../../src/net/client";
 import { App, E2E, stopServer } from "./lib/app";
 
 // PLAN-VAISSEAUX N5: a co-op mission with roles, two browsers — Ana proposes "the Moon together" from the missions
@@ -78,6 +79,26 @@ describe.skipIf(!E2E)("a co-op mission with roles (N5)", () => {
     await b.waitFor(`!!document.querySelector('[data-testid="net-coop"]')`, 10_000);
     await b.click('[data-testid="net-coop-yes"]');
     await a.waitFor(`__bh.net.session.coop?.id === "coop-rescue" && __bh.net.session.coop.roles.get("ranger").slot === ${sb}`, 20_000);
+    // (a newcomer told the mission and who holds each role — NET-10: before, nothing; a role then « free » to him, taken twice)
+    const c = new NetClient({
+      url: new URL("/net", a.url).href.replace(/^http/, "ws"),
+      build: "bot",
+      id: { device: `coop-newcomer-${Date.now()}`, name: "Cy", colour: "#ffcc33" },
+    });
+    const roles: { from: number; role: unknown }[] = [];
+    c.on("event", (x: { from: number; ev: { kind: string; id?: unknown; role?: unknown } }) => {
+      if (x.ev.kind === "coop" && x.ev.id === "coop-rescue") roles.push({ from: x.from, role: x.ev.role });
+    });
+    try {
+      await c.join(code, "spectator");
+      const t0 = Date.now();
+      while (roles.length < 2 && Date.now() - t0 < 6000) await Bun.sleep(100);
+      console.log(`  the newcomer heard the roles: ${JSON.stringify(roles)}`);
+      expect(roles.some((r) => r.role === "endurance")).toBe(true);
+      expect(roles.some((r) => r.from === sb && r.role === "ranger")).toBe(true);
+    } finally {
+      c.close();
+    }
     await b.js(`(() => { __bh.net.leave(); return 1; })()`);
     await a.waitFor(`__bh.net.session.coop.roles.get("ranger").slot === null`, 20_000);
     await a.js(`(__bh.net.openTab("results"), 1)`);

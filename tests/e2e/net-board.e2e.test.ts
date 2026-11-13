@@ -1,4 +1,5 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import { NetClient } from "../../src/net/client";
 import { App, E2E, stopServer } from "./lib/app";
 
 // PLAN-VAISSEAUX N4: the room's challenges and board, two browsers, both in Rangers — Ana proposes "docking against
@@ -75,4 +76,30 @@ describe.skipIf(!E2E)("the room's challenges and board (N4)", () => {
     expect(a.cdp.errors).toEqual([]);
     expect(b.cdp.errors).toEqual([]);
   }, 90_000);
+
+  test("a newcomer told the room's board (NET-10): each one's results said again to one who joins", async () => {
+    const code = await a.js<string>(`__bh.net.net.room.code`);
+    const c = new NetClient({
+      url: new URL("/net", a.url).href.replace(/^http/, "ws"),
+      build: "bot",
+      id: { device: `board-newcomer-${Date.now()}`, name: "Cy", colour: "#ffcc33" },
+    });
+    const heard: { from: number; kind: string; ref?: unknown }[] = [];
+    c.on("event", (x: { from: number; ev: { kind: string; r?: { ref?: unknown } } }) =>
+      heard.push({ from: x.from, kind: x.ev.kind, ref: x.ev.r?.ref }),
+    );
+    try {
+      await c.join(code, "spectator");
+      const t0 = Date.now();
+      while (heard.filter((h) => h.kind === "rpt").length < 2 && Date.now() - t0 < 6000) await Bun.sleep(100);
+      const rpts = heard.filter((h) => h.kind === "rpt");
+      console.log(`  the newcomer heard: ${JSON.stringify(rpts)} (Ana ${sa}, Ben ${sb})`);
+      expect(rpts.some((h) => h.from === sa && h.ref === "challenge:dock-clock")).toBe(true);
+      expect(rpts.some((h) => h.from === sb && h.ref === "challenge:dock-clock")).toBe(true);
+      // (the pages' own boards not doubled by it)
+      expect(await a.js<number>(`__bh.net.session.results.filter((r) => r.ref === "challenge:dock-clock").length`)).toBe(2);
+    } finally {
+      c.close();
+    }
+  }, 30_000);
 });

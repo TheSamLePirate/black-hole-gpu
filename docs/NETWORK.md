@@ -38,7 +38,8 @@ loaded only then.
   WebSocket, the others dropped us at once, and all tracks and links were cleared at the return). A « leave » said: gone at once. The others see « link cut » beside us in the Network panel, told when it comes and when we are back.
   Someone joining, or back from a cut, is told each one's hard state again — a craft docked to another's, a passenger, a
   craft handed over — (marked `again`: no « docked to you » said twice); before 13 Nov 2026 (audit NET-10) these were said
-  once, and a newcomer saw a docked craft free. Co-op roles, the room's challenge and scores are not yet told again.
+  once, and a newcomer saw a docked craft free. So are one's co-op role (and its mission), one's part in the room challenge and one's latest results (the board) — kept
+  once, not said twice.
   A link half dead — no pong for 6 s — is judged dead, closed and tried again (before 13 Nov 2026, audit NET-23: « online »
   until a TCP error); with more than 64 kB queued on the WebSocket, our relayed samples are skipped, not stacked behind (the
   direct links' own rule).
