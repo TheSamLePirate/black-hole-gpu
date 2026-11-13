@@ -198,6 +198,58 @@ test("an ear of our own: its words shown as they come, the last ones in before t
   expect(log.failed.at(-1)).toBe("other:unsupported");
 });
 
+test("our ear opened at the key's down when the microphone is granted: the first words kept; a tap closes it unseen (TA-22)", async () => {
+  const log = { heard: [] as string[], states: [] as boolean[] };
+  let starts = 0;
+  let ends = 0;
+  const ear = { start: async () => void starts++, end: async () => void ends++ };
+  const host = {
+    lang: () => "fr" as const,
+    hearing: () => {},
+    heard: (t: string) => log.heard.push(t),
+    failed: () => {},
+    state: (on: boolean) => log.states.push(on),
+  };
+  const ptt = new PushToTalk(
+    host,
+    () => null,
+    () => 0,
+    async () => ear,
+    () => true,
+  );
+  // a hold: the ear listening at once, shown listening only once it is a hold
+  ptt.down();
+  await Bun.sleep(0);
+  expect(starts).toBe(1);
+  expect(log.states).toEqual([]);
+  await Bun.sleep(320);
+  expect(log.states).toEqual([true]);
+  expect(ptt.up()).toBe(false);
+  await Bun.sleep(0);
+  expect(log.states).toEqual([true, false]);
+  // a tap: the field opened, the ear closed, nothing shown nor asked
+  ptt.down();
+  await Bun.sleep(0);
+  expect(starts).toBe(2);
+  expect(ptt.up()).toBe(true);
+  await Bun.sleep(0);
+  expect(ends).toBe(2);
+  expect(log.states).toEqual([true, false]);
+  expect(log.heard.length).toBe(1);
+  // the microphone not granted yet: as before, after the hold (no prompt on a tap)
+  const p2 = new PushToTalk(
+    host,
+    () => null,
+    () => 0,
+    async () => ear,
+    () => false,
+  );
+  p2.down();
+  await Bun.sleep(0);
+  expect(starts).toBe(2);
+  p2.up();
+});
+
 // His voices by Deepgram (audio/deepgram-voice.ts): the sound sent back, the same line not asked twice
 import { DeepgramVoice, fromPcm16 } from "../src/audio/deepgram-voice";
 

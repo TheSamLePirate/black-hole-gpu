@@ -1723,6 +1723,15 @@ async function main() {
   const deepgramVoice = new DeepgramVoice();
   const MIC_KEY = "kerr.tars.mic";
   // speaking to TARS (PLAN-TARS-AGENT A5): his key held listens, released sends; a tap is his field
+  // (the microphone's grant, followed: our ear may then open at the key's down)
+  let micGranted = false;
+  void navigator.permissions
+    ?.query({ name: "microphone" as PermissionName })
+    .then((p) => {
+      micGranted = p.state === "granted";
+      p.onchange = () => void (micGranted = p.state === "granted");
+    })
+    .catch(() => {});
   const tarsTalk = new PushToTalk(
     {
       lang: () => lang,
@@ -1773,6 +1782,8 @@ async function main() {
       if (!target && settings.tarsEar === "deepgram") throw new Error("deepgram-none");
       return target ? new DeepgramEar(target, store.get(MIC_KEY) ?? "") : null;
     },
+    // (our ear opened at the key's down once the microphone is granted — no prompt on a tap —: the first words kept, audit TA-22)
+    () => settings.tarsEar !== "browser" && micGranted,
   );
   /** his key (F6, or as bound) pressed: held, it listens; tapped, his field — or (the setting) pressed to start
    *  listening and again to end */

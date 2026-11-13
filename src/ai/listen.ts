@@ -56,6 +56,8 @@ export class PushToTalk {
   private finals = "";
   private interim = "";
   private holdTimer: ReturnType<typeof setTimeout> | null = null;
+  /** when the key went down (the ear's steps dated from it in the trail: « 412 ms ear first audio » — audit TA-22) */
+  private downAt = 0;
   private held = false;
   /** listening asked for — the key held, the microphone switched on — until released or switched off */
   private wanted = false;
@@ -76,7 +78,12 @@ export class PushToTalk {
     private now: () => number = () => performance.now(),
     /** an ear of our own for this turn, if one is within reach (null: the browser's recognition) */
     private ear: (() => Promise<Ear | null>) | null = null,
+    /** whether our ear may open at the key's down — the microphone already granted: no prompt on a tap (audit TA-22) */
+    private early: () => boolean = () => false,
   ) {}
+
+  /** our ear opened at the key's down, not shown yet: a hold shows it, a tap closes it unseen */
+  private quiet = false;
 
   /** a way to listen: the browser's recognition, or a microphone (for an ear of our own) */
   static get supported() {
@@ -87,10 +94,38 @@ export class PushToTalk {
   down() {
     if (this.held) return;
     this.held = true;
+    this.downAt = this.now();
+    // (our ear opened now — the microphone granted —: the words said as the key goes down kept; before 13 Nov 2026 it
+    // opened after the hold, the first sound sent ≈ 510 ms after the key — audit TA-22, measured by tars-ear-latency)
+    if (this.ear && !this.listening && !this.earNow && !this.earPending && this.early()) {
+      this.quiet = true;
+      this.begin();
+      void this.startEar(this.ear);
+    }
     this.holdTimer = setTimeout(() => {
       this.holdTimer = null;
-      if (this.held) this.start();
+      if (!this.held) return;
+      if (this.quiet) this.reveal();
+      else this.start();
     }, HOLD_MS);
+  }
+
+  /** The words so far forgotten, listening wanted. */
+  private begin() {
+    this.finals = "";
+    this.interim = "";
+    this.error = "";
+    this.quickEnds = 0;
+    this.wanted = true;
+  }
+
+  /** Our early ear, a hold now: shown listening. */
+  private reveal() {
+    this.quiet = false;
+    if (!this.wanted) return;
+    this.listening = true;
+    this.host.state(true);
+    if (this.text()) this.host.hearing(this.text());
   }
 
   /** The key up: a tap (true: open the field) or the end of the words. */
@@ -100,6 +135,12 @@ export class PushToTalk {
     if (this.holdTimer) {
       clearTimeout(this.holdTimer);
       this.holdTimer = null;
+      // (a tap: our early ear closed, nothing shown nor asked)
+      if (this.quiet) {
+        this.quiet = false;
+        this.wanted = false;
+        if (this.earNow) void this.endEar();
+      }
       return true;
     }
     this.stop();
@@ -109,11 +150,7 @@ export class PushToTalk {
   /** Listening on, until stop(): the words so far kept across the recognition's own ends. */
   start() {
     if (this.listening) return;
-    this.finals = "";
-    this.interim = "";
-    this.error = "";
-    this.quickEnds = 0;
-    this.wanted = true;
+    this.begin();
     this.listening = true;
     this.host.state(true);
     if (this.ear) void this.startEar(this.ear);
@@ -142,24 +179,30 @@ export class PushToTalk {
       return this.finish();
     }
     this.earPending = false;
+    // (opened early and none of our own here: the browser's recognition waits for the hold, as before)
+    if (!ear && this.quiet) {
+      this.quiet = false;
+      this.wanted = false;
+      return;
+    }
     if (!ear) return this.wanted ? this.recognise() : this.finish();
     if (!this.wanted) return this.finish();
     this.earNow = ear;
-    this.trail.push("ear start");
+    this.trail.push(`${Math.round(this.now() - this.downAt)} ms ear start`);
     await ear.start({
       interim: (t) => {
         this.interim = t;
         if (t) this.quickEnds = 0;
-        this.host.hearing(this.text());
+        if (!this.quiet) this.host.hearing(this.text());
       },
       final: (t) => {
         this.finals += `${t} `;
         this.interim = "";
-        this.host.hearing(this.text());
+        if (!this.quiet) this.host.hearing(this.text());
       },
       level: (v) => this.host.level?.(v),
       note: (what) => {
-        this.trail.push(`ear ${what}`);
+        this.trail.push(`${Math.round(this.now() - this.downAt)} ms ear ${what}`);
         if (this.trail.length > 60) this.trail.splice(0, this.trail.length - 60);
       },
       error: (code) => {

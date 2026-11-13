@@ -217,6 +217,8 @@ export class DeepgramEar {
     // (made after the microphone's grant — an await: the key's gesture may be spent, the context left
     // suspended, and nothing would be sent)
     if (this.ctx.state !== "running") await this.ctx.resume().catch(() => {});
+    // (ended meanwhile — a tap on an ear opened at the key's down, TA-22 —: the context already closed by end())
+    if (this.ended || !this.ctx) return this.stopMic();
     hooks.note?.(`audio ${this.ctx.state} ${this.ctx.sampleRate} Hz`);
     let sent = 0;
     const src = this.ctx.createMediaStreamSource(this.stream);
