@@ -1757,6 +1757,9 @@ async function main() {
         )
       ),
       state: (on) => {
+        // (the pilot speaking: the rest lowered further, TARS's line being said cut — audit TA-13)
+        sound.duck(on, "ear");
+        if (on && voice.queue.current?.speaker === "tars") voice.cut();
         tarsPanel.listening(on);
         tarsPanel.setState(on ? "listening" : tarsBusy ? "thinking" : "idle");
       },
@@ -1800,12 +1803,16 @@ async function main() {
       subtitles.show(l, settings.subtitles && !(l.speaker === "tars" && tarsPanel.open));
       if (l.speaker === "tars") tarsPanel.setState("speaking");
       if (l.radio && settings.sound) sound.radio(true);
+      // (a line said heard over the engines: they, the ambience and the music lowered under it — audit TA-13; the voices
+      // off — subtitles alone —: nothing to hear over them)
+      if (settings.voice) sound.duck(true, "voice");
     },
     onEnd: (l) => {
       subtitles.end(l);
       if (l.speaker === "tars" && tarsPanel.currentState === "speaking")
         tarsPanel.setState(tarsBusy ? "thinking" : tarsFollow ? "acting" : "idle");
       if (l.radio && settings.sound) sound.radio(false);
+      sound.duck(false, "voice");
     },
     // (the game's own voices, played by its audio: Deepgram's Aura-2 — TARS's through his grit, the radio's
     // through its band —, or TARS's robot in English — PLAN-TARS T5a; null: the system's speaks it)

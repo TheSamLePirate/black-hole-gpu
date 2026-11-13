@@ -2414,7 +2414,7 @@ when the sound is off.
 | `alarm(id, on, kind?)` | `(id: string, on: boolean, kind?: "caution" \| "warning") => void` | a looping alarm, by id, until switched off (`kind` defaults to `"warning"`; off when the context is not running or the sound is off) |
 | `stopRobot()` | `() => void` | cuts TARS's own voice now |
 | `otherLevel` | number 0…1 | the other players' engine level (`net-time.e2e.test.ts`) |
-| `meter`, `duck`, `playSample`, `combatCue`, `boomAt`, `thunderAt` | | the meter, the ducking, one sample, a fight's cue, a sonic boom and a thunderclap placed in space (no test calls them) |
+| `meter`, `duck(on, by)` (by: `players`, `voice`, `ear`), `playSample`, `combatCue`, `boomAt`, `thunderAt` | | the meter, the ducking, one sample, a fight's cue, a sonic boom and a thunderclap placed in space (no test calls them) |
 
 ```js
 // the score's test: a key starts the audio, then the music bus is heard

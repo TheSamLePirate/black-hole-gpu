@@ -58,7 +58,7 @@ ouverts, sous 1 ms) ; J3 au stade du plan.**
 | Audit vagues 3–4 (1feb2f7f) | 3.1 réseau RD0 + RD1 | **fait** : la frontière d'entrée (`src/net/inbound.ts`) ; un événement mal formé figeait l'image (163 → 0), plus maintenant — e2e `net-inbound` 6/6, net-battle/coop/crew/board verts |
 | Audit vagues 3–4 (1feb2f7f) | 3.2 réseau RD2 | **fait** : le serveur se défend (salles par adresse, débit, mots de passe salés et freinés, identité non publiée, rôle gardé, expiration) — six défauts vus avant, 0/6 → 6/6 |
 | Audit vagues 3–4 (1feb2f7f) | 3.4–3.5 vol | **fait** : U/F7 des avions (ILS, refus dit, manette gardée), Maj/Alt modificateur ou manette, LAND = F7 — le cours revolé 7/7 et 9/9 |
-| Audit vagues 3–4 (1feb2f7f) | 3.6 TARS | **fait** : tour coupé, `saves delete` confirmé, pannes dites, faux ordres hors ligne ; restes TA-06 (réveil borné), TA-12 (troncature redemandée), TA-14 (relais Deepgram borné), TA-15 (un filet « Before TARS » par tour, son échec dit), TA-07 (résumés de mémoire un à la fois), TA-16 (réveils muets hors mémoire, les autres en une ligne), TA-09 (ses réglages dans l'historique du Labo), TA-11 (texte du dehors marqué, l'irréversible refusé dans son tour) |
+| Audit vagues 3–4 (1feb2f7f) | 3.6 TARS | **fait** : tour coupé, `saves delete` confirmé, pannes dites, faux ordres hors ligne ; restes TA-06 (réveil borné), TA-12 (troncature redemandée), TA-14 (relais Deepgram borné), TA-15 (un filet « Before TARS » par tour, son échec dit), TA-07 (résumés de mémoire un à la fois), TA-16 (réveils muets hors mémoire, les autres en une ligne), TA-09 (ses réglages dans l'historique du Labo), TA-11 (texte du dehors marqué, l'irréversible refusé dans son tour), TA-13 (les voix au-dessus des moteurs) |
 | Audit vagues 3–4 (1feb2f7f) | 3.7 TARS (outils AP avions/A320) | **fait** : `jet_autopilot` par les actions de la console, volets au levier (CONF 1), l'AP de l'A320 réparé dans `apSet` |
 | Audit vagues 3–4 (1feb2f7f) | 3.10 e2e qui ne vérifient rien | **fait** : `waitOptional` (93 attentes converties), 14 mesures déclarées, garde `e2e-honesty` |
 | Audit vagues 3–4 (1feb2f7f) | 4.2 la politique de temps | **fait** : vol tenu pendant la reprise GPU, cadence vraie, horloge du vol + garde ; l'onglet masqué (choix de Sam) : solo en pause dite, salle sans arrêt (l'absent ne la bloque plus, les autres avertis, remis à l'heure au retour), sauvé en partant, TARS sans réveil ; le ralentissement sous 10 images/s dit — e2e `hidden-tab` 2/2, `fps-truth` 2/2 |
@@ -5288,4 +5288,16 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
 - Preuves : **documenté**, relevé dans le code (`gpu-tables.ts`, `renderer.ts`, nombres d'appels comptés dans `trace.wgsl` / `ship.wgsl`) ;
   rien de neuf mesuré dans ce lot.
 - Suite : J3-1 reste ouvert sur la fuite des harmoniques (une décision d'image) ; J3-2 (l'air sur l'appareil et ses traînées) selon l'ordre du plan.
+
+## 2026-11-13T18:15Z — Audit TA-13 : les voix au-dessus des moteurs — toute ligne dite baisse le reste, F6 tenu plus encore et coupe TARS
+
+- Contribution : §19 (préserver l'expérience : lisibilité des voix, réponse des commandes) ; audit 2026-11-10, TA-13.
+- Réalisé : `audio/engine.ts` `duck(on, by)` — plusieurs sources (`players` la voix d'un joueur, `voice` une ligne dite, `ear` le pilote qui
+  parle), la plus basse l'emporte (−8 dB, −14 dB pour `ear`) ; `main.ts` : la file des voix baisse le reste au début de chaque ligne (voix
+  actives) et le rend à sa fin ; l'écoute (F6) baisse plus et coupe la ligne de TARS en cours. AUDIO.md, BH-API, E2E-CATALOGUE.
+- Preuves : **reproduit avant** par e2e `tars-duck` (ce Mac, fenêtre visible) : sous une ligne de TARS les gains moteurs/musique/ambiance
+  restaient 0,90/0,60/0,50, F6 tenu laissait TARS parler ; **après** 2/2 : 0,36/0,24/0,20 sous TARS (−8,0 dB), 0,18/0,12/0,10 F6 tenu
+  (−14 dB), TARS coupé, 0,90 revenu. Unitaires audio + voix 32/0, tsc.
+- Limites : mesuré sur les gains de mixage, pas en niveau de sortie dBFS ni à l'oreille ; une voix système (Web Speech) reste hors de
+  l'`AudioContext` (pas de mixage ni de spatialisation : hors de ce lot) ; le micro sur haut-parleurs non essayé.
 

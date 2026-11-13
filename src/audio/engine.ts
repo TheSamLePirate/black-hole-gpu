@@ -325,9 +325,17 @@ export class SoundEngine {
     return this.ctx && this.busses ? { ctx: this.ctx, bus: this.busses.voice } : null;
   }
 
-  /** Someone speaking: the engines, the ambience and the score lowered (−8 dB) under him; or back. */
-  duck(on: boolean) {
-    const f = on ? 0.4 : 1;
+  /** who lowers the rest now, and how far (a gain): see duck() */
+  private ducks = new Map<string, number>();
+
+  /** Someone speaking: the engines, the ambience and the score lowered under him; or back. By who: a room player's voice
+   *  ("players") and a line said — TARS, the callouts, the radio — ("voice") −8 dB; the pilot speaking to TARS ("ear")
+   *  −14 dB. The lowest holds while several speak. (Before 13 Nov 2026 only a player's voice lowered anything: TARS was
+   *  covered by full power — audit 2026-11-10, TA-13.) */
+  duck(on: boolean, by: "players" | "voice" | "ear" = "players") {
+    if (on) this.ducks.set(by, by === "ear" ? 0.2 : 0.4);
+    else this.ducks.delete(by);
+    const f = Math.min(1, ...this.ducks.values());
     if (f === this.duckF) return;
     this.duckF = f;
     this.setMix({});
