@@ -975,3 +975,30 @@ test("outside text read in a turn is data, not orders: what cannot be undone ref
   await direct.turn([], "delete the save Campaign, I confirm");
   expect(deleted).toEqual(["Campaign"]);
 });
+
+test("every tool's numbers bounded, latitudes and longitudes alike, strings capped (TA-19)", async () => {
+  const { gameTools } = await import("../src/ai/game-tools");
+  const { checkArgs, STRING_MAX } = await import("../src/ai/tool-schema");
+  const tools = gameTools({ settings: {}, camera: {}, tools: {}, log: () => [] } as unknown as GameHost);
+  const open: string[] = [];
+  const geo: string[] = [];
+  type P = import("../src/ai/tool-schema").Param;
+  const walk = (p: P, at: string) => {
+    if (p.type === "number") {
+      // (a chart's points are the data shown: any finite number)
+      if ((p.minimum === undefined || p.maximum === undefined) && !at.startsWith("show_chart.series")) open.push(at);
+      if (/(^|\.)lat$/.test(at) && (p.minimum !== -90 || p.maximum !== 90)) geo.push(`${at} ${p.minimum}…${p.maximum}`);
+      if (/(^|\.)lon$/.test(at) && (p.minimum !== -180 || p.maximum !== 180)) geo.push(`${at} ${p.minimum}…${p.maximum}`);
+    } else if (p.type === "array") walk(p.items, `${at}[]`);
+    else if (p.type === "object") for (const [k, q] of Object.entries(p.properties)) walk(q, `${at}.${k}`);
+  };
+  for (const t of tools) for (const [k, p] of Object.entries(t.params ?? {})) walk(p, `${t.name}.${k}`);
+  expect(open).toEqual([]);
+  expect(geo).toEqual([]);
+  // a string past its cap refused before anything runs (a save's file, a mission's JSON: their own, larger)
+  const say = tools.find((t) => t.name === "say")!;
+  expect(checkArgs(say, JSON.stringify({ text: "x".repeat(STRING_MAX + 1) })).ok).toBe(false);
+  expect(checkArgs(say, JSON.stringify({ text: "Orbit stable." })).ok).toBe(true);
+  const saves = tools.find((t) => t.name === "saves")!;
+  expect(checkArgs(saves, JSON.stringify({ action: "import", json: "x".repeat(200_000) })).ok).toBe(true);
+});

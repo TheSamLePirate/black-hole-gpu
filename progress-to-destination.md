@@ -58,7 +58,7 @@ ouverts, sous 1 ms) ; J3 au stade du plan.**
 | Audit vagues 3–4 (1feb2f7f) | 3.1 réseau RD0 + RD1 | **fait** : la frontière d'entrée (`src/net/inbound.ts`) ; un événement mal formé figeait l'image (163 → 0), plus maintenant — e2e `net-inbound` 6/6, net-battle/coop/crew/board verts |
 | Audit vagues 3–4 (1feb2f7f) | 3.2 réseau RD2 | **fait** : le serveur se défend (salles par adresse, débit, mots de passe salés et freinés, identité non publiée, rôle gardé, expiration) — six défauts vus avant, 0/6 → 6/6 |
 | Audit vagues 3–4 (1feb2f7f) | 3.4–3.5 vol | **fait** : U/F7 des avions (ILS, refus dit, manette gardée), Maj/Alt modificateur ou manette, LAND = F7 — le cours revolé 7/7 et 9/9 |
-| Audit vagues 3–4 (1feb2f7f) | 3.6 TARS | **fait** : tour coupé, `saves delete` confirmé, pannes dites, faux ordres hors ligne ; restes TA-06 (réveil borné), TA-12 (troncature redemandée), TA-14 (relais Deepgram borné), TA-15 (un filet « Before TARS » par tour, son échec dit), TA-07 (résumés de mémoire un à la fois), TA-16 (réveils muets hors mémoire, les autres en une ligne), TA-09 (ses réglages dans l'historique du Labo), TA-11 (texte du dehors marqué, l'irréversible refusé dans son tour), TA-13 (les voix au-dessus des moteurs) |
+| Audit vagues 3–4 (1feb2f7f) | 3.6 TARS | **fait** : tour coupé, `saves delete` confirmé, pannes dites, faux ordres hors ligne ; restes TA-06 (réveil borné), TA-12 (troncature redemandée), TA-14 (relais Deepgram borné), TA-15 (un filet « Before TARS » par tour, son échec dit), TA-07 (résumés de mémoire un à la fois), TA-16 (réveils muets hors mémoire, les autres en une ligne), TA-09 (ses réglages dans l'historique du Labo), TA-11 (texte du dehors marqué, l'irréversible refusé dans son tour), TA-13 (les voix au-dessus des moteurs), TA-19 (arguments bornés) |
 | Audit vagues 3–4 (1feb2f7f) | 3.7 TARS (outils AP avions/A320) | **fait** : `jet_autopilot` par les actions de la console, volets au levier (CONF 1), l'AP de l'A320 réparé dans `apSet` |
 | Audit vagues 3–4 (1feb2f7f) | 3.10 e2e qui ne vérifient rien | **fait** : `waitOptional` (93 attentes converties), 14 mesures déclarées, garde `e2e-honesty` |
 | Audit vagues 3–4 (1feb2f7f) | 4.2 la politique de temps | **fait** : vol tenu pendant la reprise GPU, cadence vraie, horloge du vol + garde ; l'onglet masqué (choix de Sam) : solo en pause dite, salle sans arrêt (l'absent ne la bloque plus, les autres avertis, remis à l'heure au retour), sauvé en partant, TARS sans réveil ; le ralentissement sous 10 images/s dit — e2e `hidden-tab` 2/2, `fps-truth` 2/2 |
@@ -5300,4 +5300,16 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   (−14 dB), TARS coupé, 0,90 revenu. Unitaires audio + voix 32/0, tsc.
 - Limites : mesuré sur les gains de mixage, pas en niveau de sortie dBFS ni à l'oreille ; une voix système (Web Speech) reste hors de
   l'`AudioContext` (pas de mixage ni de spatialisation : hors de ce lot) ; le micro sur haut-parleurs non essayé.
+
+## 2026-11-13T18:40Z — Audit TA-19 : les arguments des outils de TARS bornés, ses chaînes plafonnées
+
+- Contribution : §19 (TARS par des contrats d'actions vérifiés) ; audit 2026-11-10, TA-19 (P3).
+- Réalisé : `ai/tool-schema.ts` — `maxLength` d'une chaîne, `STRING_MAX` 4 000 par défaut ; `ai/game-tools.ts` — les 34 nombres sans bornes
+  bornés d'après leurs descriptions (événements, photos multiples, ISS, trafic `maxKm`/`n`, `jet_mode`, porte-avions `passes`/cap/x/z,
+  `hide_display`, `schedule.simTimeS`), toutes les latitudes −90…90 et longitudes −180…180 (deux allaient à 360) ; `saves.json` 5 Mo,
+  `mission.mission` 50 000. TARS.md.
+- Preuves : **reproduit avant** (garde `tars-tools` « TA-19 » : 35 nombres ouverts, deux longitudes à 360, une chaîne d'un million de
+  caractères acceptée) ; **après** : vert. Tests TARS, équipage, réseau 275/0 ; e2e `tars-agent` 12/0 ; tsc, biome.
+- Limites : les bornes choisies d'après les descriptions et les usages du code, non d'une mesure ; une longitude 0…360 donnée par le modèle
+  est maintenant refusée avec son motif (il se corrige).
 

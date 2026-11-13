@@ -5,13 +5,16 @@
 // is answered with what was wrong, so the model corrects itself; it never reaches the game.
 
 export type Param =
-  | { type: "string"; description?: string; enum?: readonly string[] }
+  | { type: "string"; description?: string; enum?: readonly string[]; maxLength?: number }
   | { type: "number"; description?: string; minimum?: number; maximum?: number; integer?: boolean }
   | { type: "boolean"; description?: string }
   | { type: "array"; description?: string; items: Param; maxItems?: number }
   | { type: "object"; description?: string; properties: Record<string, Param>; required?: readonly string[] };
 
 export type Args = Record<string, unknown>;
+
+/** a string's length at most when its parameter names none [characters] (audit TA-19: none was capped) */
+export const STRING_MAX = 4000;
 
 export interface ToolSpec {
   name: string;
@@ -39,6 +42,7 @@ function wrong(p: Param, v: unknown, at: string): string | null {
   switch (p.type) {
     case "string":
       if (typeof v !== "string") return `${at} must be a string`;
+      if (v.length > (p.maxLength ?? STRING_MAX)) return `${at} is at most ${p.maxLength ?? STRING_MAX} characters (got ${v.length})`;
       if (p.enum && !p.enum.includes(v)) return `${at} must be one of ${p.enum.join(", ")} (got "${v}")`;
       return null;
     case "number":
