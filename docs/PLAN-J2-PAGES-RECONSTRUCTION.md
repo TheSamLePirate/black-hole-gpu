@@ -376,6 +376,16 @@ touchent le même mécanisme** : à faire ensemble, ou J2-6 d'abord.
 *Recommandation* : **3 d'abord**, mesurée par la phase `trail` (la page neuve à > 90 % en 2–4 images, la convergence tenue C0-12 ≤ 1 %
 gardée), puis 1 seulement si une lecture par page devient nécessaire (J2-5, la sélection, les diagnostics). **Question pour Sam.**
 
+## 9 octies (a). J2-5, étape A : la référence avant la désocclusion (13 novembre 2026)
+
+e2e `motion-quality` (M1 Max, `PLACES=alps MODES=taau75q TURN=30`, code 9526be8f — le profil de J0 : TAAU à 0,75) : virage de 30°
+mesuré au premier instant et après accumulation contre sa référence affinée — **PSNR 41,6 dB en mouvement, 42,2 dB à l'arrêt ; netteté
+0,93 / 0,92** ; `temporal` 0,56 ms, `taau` 1,41 ms (M1 Max en pression « Heavy » : temps indicatifs). La différence avec la référence (×6)
+montre le détail du relief un peu adouci partout (le rééchantillonnage) et **une frange claire le long de la crête sur le ciel** — la
+traînée de silhouette que vise J2-5. **Prochaine étape** : la profondeur de l'image d'avant gardée (copie de la profondeur conservée du
+raster en fin d'image, comme l'identité), le test de désocclusion au point d'historique dans `temporal` et `taau`, derrière un levier ;
+la même mesure, plus `ghost` (l'appareil vu de dessus) ; le sort de `rigidMotionOn` tranché avec.
+
 ## 9 octies. J2-7 : ce qui est déjà chiffré, ce qui attend (13 novembre 2026)
 
 Le coût de `shade` (les restes du raster que le traceur reprend) est déjà dans la [fiche J0 kerr-mini du 12 nov.](progress/j0/FICHE-kerr-mini-2026-11-12.md) :

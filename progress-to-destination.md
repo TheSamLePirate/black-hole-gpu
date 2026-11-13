@@ -3978,3 +3978,10 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
 - **Changé** : `tests/e2e/lib/j2-probes.ts` (`LEAK_VIEWS` : `look`, vue `hyeres-down`), `tests/e2e/j2-probes.e2e.test.ts` (le regard
   posé) ; fiche J2-3, PROBLEMES, PLAN-J2. **Mesuré** : M1 Max, 1/0. **Non vérifié** : kerr-mini ; la fuite et l'A/B du levier sur la vue
   plongeante.
+
+## 2026-11-13T02:36Z — J2-5, étape A : la référence de l'image en virage avant la désocclusion
+
+- **Contribution** (PLAN-J2 J2-5 ; §4 « avantage à qualité comparable, en virage ») : la mesure avant le code. e2e `motion-quality`, Alpes,
+  virage de 30°, profil de J0 (TAAU 0,75), M1 Max : PSNR **41,6 dB** en mouvement, 42,2 dB à l'arrêt, netteté 0,93 / 0,92 ; la différence à
+  la référence montre une frange claire le long de la crête sur le ciel (la traînée de silhouette visée) et le détail adouci partout.
+- **Changé** : PLAN-J2 §9 octies (a) (aucun code). **Non vérifié** : `ghost` ; kerr-mini ; les temps (M1 Max en pression « Heavy »).
