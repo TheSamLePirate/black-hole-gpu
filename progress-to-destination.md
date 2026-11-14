@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-14 16:44 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-14 16:46 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous.
@@ -6597,3 +6597,14 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   **NET-16** (TURN sans salle) : **déjà réglé** au lot RD2 (`ice` ne donne le relais qu'à un membre d'une salle).
 - Limites : le plafond de 64 non éprouvé par un test (seule la purge l'est) ; le retrait d'un appareil par le propriétaire (piste de
   l'audit) non fait ; `server/rooms.ts` touché : le serveur de salles se redéploie.
+
+## 2026-11-14T16:46Z — Audit QA-05 : un seul Bun partout (QA-24 déjà réglé)
+
+- Contribution : la reproductibilité (ce qui passe ici passe en CI et en production) ; audit 2026-11-10, QA-05 (P2).
+- Réalisé : `.bun-version` (1.3.14, la version de ce Mac, du contrôle de pré-push et de la CI du serveur de salles) ; les quatre `setup-bun` de
+  `pages.yml` l'écrivent en clair (deux jobs peuvent manquer leur checkout : un fichier lu y serait fragile) ; l'image du serveur de salles
+  passe de `oven/bun:1.3-alpine` à `1.3.14-alpine` ; `tests/bun-version.test.ts` tient tout cela égal au fichier, et au Bun qui le lance.
+- Preuves : **avant** (journal de la dernière CI du site réussie) : « Downloading … bun-v1.4.4 », `bun install v1.4.4`, contre 1.3.14 ici ;
+  **après** : la garde 1/1, les deux workflows valides en YAML ; la CI du site et la construction de l'image à vérifier après la poussée
+  (suivi ci-dessous). **QA-24** (la référence stratégique hors de Git) : **déjà réglé** — `docs/ANALYSE-STRATEGIE-RENDU-2026-11-03.md` suivi.
+- Limites : la garde échoue sur une machine du labo dont le Bun diffère (kerr-mini, kerr-pc) — voulu : la dérive y est dite.
