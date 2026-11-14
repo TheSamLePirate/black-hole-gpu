@@ -18,6 +18,14 @@ L'e2e `report` : le test du Lander et celui des unités portés sur l'autopilote
 depuis 5 km — **4/4** (13 nov., plus tard) ; **les états eux-mêmes restent périmés**. `hub-graph` lit le même état 06 (son graphe seul : non touché). **Piste** : refaire l'état 06 en volant l'approche (`glideTo`, puis
 `snapshot` au final) — ou porter le test sur une approche volée. Les autres états de la galerie (`tests/hud/states/`) sont à revérifier.
 
+## L'e2e `shootdown` instable : le Tab ne verrouille pas toujours sa cible (relevé le 14 novembre 2026)
+
+**Constat (observé, ce Mac, fenêtre visible, trois passages)** : `tests/e2e/shootdown.e2e.test.ts` 3/4 à chaque fois, l'échec changeant de
+test — deux fois « the frigate ahead » (`engage` : quatre Tab, `locked()` reste `null`), une fois « the airliner head-on », **sur le dernier
+commit comme avec une retouche** (QA-09 : la pause du naufrage remplacée par une condition — retirée, faute d'avoir pu l'atteindre).
+**Cause non cherchée** : la portée ou le mode du radar vers une cible de surface, l'ordre du Tab, ou le temps laissé entre deux Tab (300 ms).
+**Piste** : lire `__bh.camera.radar.tracks` et le verrou après chaque Tab dans l'e2e.
+
 ## ~~L'e2e `hub-graph` : plus de graphe dans la carte du hub une seconde après le chargement~~ (relevé le 13 novembre 2026) — réglé le 14 novembre 2026 : l'état périmé, pas le graphe
 
 **Cause établie (lue dans le code, 14 nov.)** : la carte de l'autopilote d'entrée ne porte un graphe que sur la finale (`controller/lowthrust.ts` : `rw?.final && rw.fix ? this.glideAssist(rw) : {}`) ; l'état 06 du 7 oct., à 1,7 km de l'axe d'aujourd'hui, remettait les gaz et repartait « On the approach », sans graphe par construction. Les changements de `flighthud.ts` d'alors (le `remeasure()` de la carte) n'y étaient pour rien. Avec l'état 06 refait (ci-dessus) : `hub-graph` 1/1 sur kerr-mini. Le constat d'origine :
