@@ -396,7 +396,7 @@
   "waits": 3
  },
  "shootdown.e2e.test.ts": {
-  "sleeps": 1,
+  "sleeps": 0,
   "waits": 3
  },
  "sky-events.e2e.test.ts": {

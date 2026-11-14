@@ -89,9 +89,11 @@ describe.skipIf(!E2E)("low over the sea: a drone, an airliner, a frigate — loc
   const crashed = (name: string) => `(() => { const q = ${Q(name)}; return !!q.wreck && !Number.isNaN(q.wreck.crashedAt); })()`;
 
   beforeAll(async () => {
+    // (the sea's own life off: its sailing boats and ferries are radar tracks Tab goes through before the frigate — four Tab did not
+    // always reach it, the test failing one time in two; PROBLEMES, 14 Nov 2026)
     app = await App.boot({ width: 1600, height: 1000, lang: "fr", hash: "scene=game:artemis", tiles: true });
     await app.js(
-      `(() => { Object.assign(__bh.settings, { vessel: "f35", traffic: false, f35Invulnerable: true, f35EnemyMissiles: false, f35AutoProtect: false, showFps: true }); return 1; })()`,
+      `(() => { Object.assign(__bh.settings, { vessel: "f35", traffic: false, seaLife: false, f35Invulnerable: true, f35EnemyMissiles: false, f35AutoProtect: false, showFps: true }); return 1; })()`,
     );
     await app.waitFor(`__bh.fleet.active === "f35"`, 30_000);
   }, 300_000);
@@ -223,7 +225,9 @@ describe.skipIf(!E2E)("low over the sea: a drone, an airliner, a frigate — loc
     await app.press("Escape");
     await Bun.sleep(300);
     await shot("frigate-1-hit");
-    await Bun.sleep(8000);
+    // (its smoke trailing as it sinks — a condition, not 8 s of sleep: audit QA-09)
+    await app.waitOptional(`(__bh.renderer.shipContrails?.n ?? 0) > 0`, 20_000);
+    await Bun.sleep(2000);
     const f = await tgt("Frigate");
     console.log(`  sinking: ${f.z.toFixed(1)} m; smoke segments ${await app.js<number>(`__bh.renderer.shipContrails?.n ?? 0`)}`);
     await shot("frigate-2-sinking");

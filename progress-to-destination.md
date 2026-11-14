@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-14 18:08 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-14 18:24 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous.
@@ -6705,3 +6705,11 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
 - Preuves : **observé** : `f35-pcd` 3/3 (0,131 ms par image sur 307 images). `shootdown` : la pause du naufrage remplacée puis **retirée** —
   le passage jamais atteint : le fichier échoue à 3/4 sur le dernier commit comme avec la retouche, le Tab ne verrouillant pas toujours sa
   cible (frégate deux fois, avion de ligne une fois) ; noté dans PROBLEMES.
+
+## 2026-11-14T18:24Z — L'e2e `shootdown` : la frégate verrouillée à coup sûr (et sa pause en condition)
+
+- Réalisé : `shootdown` coupe la vie marine (`seaLife: false`) — ses voiliers et ferries sont des pistes radar que Tab parcourait avant la
+  frégate ; la pause du naufrage (8 s) devient l'attente de sa fumée. Cliquet mis à jour. PROBLEMES.
+- Preuves : **sonde** (Tab par Tab) : « Verrouillé : L'Espérance · 6,0 km », « Pen Duick · 14,5 km », « Mega Express · 19,8 km », puis
+  seulement « Frigate » au quatrième ; **après** : la frégate verrouillée et coulée sur les deux passages (fumée : 559 et 1 114 segments) ;
+  passage 1 **4/4**, passage 2 3/4 — l'avion de ligne non abattu par l'AIM-9X en 60 s, un autre aléa, noté ouvert.

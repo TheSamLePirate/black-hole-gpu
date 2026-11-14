@@ -18,13 +18,16 @@ L'e2e `report` : le test du Lander et celui des unités portés sur l'autopilote
 depuis 5 km — **4/4** (13 nov., plus tard) ; **les états eux-mêmes restent périmés**. `hub-graph` lit le même état 06 (son graphe seul : non touché). **Piste** : refaire l'état 06 en volant l'approche (`glideTo`, puis
 `snapshot` au final) — ou porter le test sur une approche volée. Les autres états de la galerie (`tests/hud/states/`) sont à revérifier.
 
-## L'e2e `shootdown` instable : le Tab ne verrouille pas toujours sa cible (relevé le 14 novembre 2026)
+## L'e2e `shootdown` instable : le Tab ne verrouille pas toujours sa cible (relevé le 14 novembre 2026) — la frégate réglée, l'avion de ligne ouvert
 
 **Constat (observé, ce Mac, fenêtre visible, trois passages)** : `tests/e2e/shootdown.e2e.test.ts` 3/4 à chaque fois, l'échec changeant de
 test — deux fois « the frigate ahead » (`engage` : quatre Tab, `locked()` reste `null`), une fois « the airliner head-on », **sur le dernier
 commit comme avec une retouche** (QA-09 : la pause du naufrage remplacée par une condition — retirée, faute d'avoir pu l'atteindre).
-**Cause non cherchée** : la portée ou le mode du radar vers une cible de surface, l'ordre du Tab, ou le temps laissé entre deux Tab (300 ms).
-**Piste** : lire `__bh.camera.radar.tracks` et le verrou après chaque Tab dans l'e2e.
+**Cause trouvée pour la frégate (sonde, 14 nov.)** : Tab parcourt aussi les navires de la vie marine (`seaLife` : « L'Espérance », « Pen
+Duick », « Mega Express »…), que le test ne coupait pas (`traffic: false` ne vise que le trafic réel) : la frégate ne venait qu'au quatrième
+Tab, ou pas. **Réglé dans le test** (`seaLife: false`) : la frégate verrouillée et coulée deux fois sur deux. **Reste ouvert** : une fois sur
+deux, l'AIM-9X tiré face à face sur l'avion de ligne (8 km, 450 m au-dessus de la mer) ne l'abat pas en 60 s — un tir manqué (leurre, géométrie
+ou la mer), cause non cherchée.
 
 ## ~~L'e2e `hub-graph` : plus de graphe dans la carte du hub une seconde après le chargement~~ (relevé le 13 novembre 2026) — réglé le 14 novembre 2026 : l'état périmé, pas le graphe
 
