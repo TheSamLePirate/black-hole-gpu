@@ -542,6 +542,9 @@ already going (they end on their own; their logs stay in `remote-results/dash/`)
 
 - A new `__bh` member gets its entry in [BH-API.md](BH-API.md) (full path in backquotes).
   `bh-api.e2e.test.ts` fails otherwise; `bun scripts/bh-api.ts --check` lists what's missing.
+- No new long wait: `tests/e2e-waits.test.ts` holds each file's fixed sleeps of 5 s or more and its waits past 120 s where they
+  were on 14 Nov 2026 (`tests/e2e-waits.json`, audit QA-09) — wait on a condition, 30–60 s, failing with what is missing;
+  after removing some, `E2E_WAITS=update bun test tests/e2e-waits.test.ts` writes the counts again.
 - A new e2e file gets a header comment and a row in [E2E-CATALOGUE.md](E2E-CATALOGUE.md) — `tests/e2e-catalogue.test.ts`
   fails without it (since 13 Nov 2026, audit QA-11); `bun scripts/e2e-catalogue.ts --check` lists the files without a row,
   `--write` adds them from their headers (section « From their headers », to sort into a theme).

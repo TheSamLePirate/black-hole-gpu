@@ -1,0 +1,466 @@
+{
+ "a320-cine.e2e.test.ts": {
+  "sleeps": 0,
+  "waits": 1
+ },
+ "a320-deck.e2e.test.ts": {
+  "sleeps": 0,
+  "waits": 1
+ },
+ "a320-ecam.e2e.test.ts": {
+  "sleeps": 0,
+  "waits": 1
+ },
+ "a320-effects.e2e.test.ts": {
+  "sleeps": 0,
+  "waits": 1
+ },
+ "a320-gate.e2e.test.ts": {
+  "sleeps": 0,
+  "waits": 2
+ },
+ "a320-rain.e2e.test.ts": {
+  "sleeps": 2,
+  "waits": 1
+ },
+ "a320-services.e2e.test.ts": {
+  "sleeps": 2,
+  "waits": 1
+ },
+ "a320-start.e2e.test.ts": {
+  "sleeps": 1,
+  "waits": 1
+ },
+ "aar.e2e.test.ts": {
+  "sleeps": 0,
+  "waits": 2
+ },
+ "assist-dock.e2e.test.ts": {
+  "sleeps": 0,
+  "waits": 1
+ },
+ "assistlevel.e2e.test.ts": {
+  "sleeps": 1,
+  "waits": 0
+ },
+ "aurora-cost.e2e.test.ts": {
+  "sleeps": 1,
+  "waits": 0
+ },
+ "aurora-giants.e2e.test.ts": {
+  "sleeps": 2,
+  "waits": 0
+ },
+ "aurora-jupiter.e2e.test.ts": {
+  "sleeps": 3,
+  "waits": 0
+ },
+ "aurora-mars.e2e.test.ts": {
+  "sleeps": 1,
+  "waits": 0
+ },
+ "boot-debug.e2e.test.ts": {
+  "sleeps": 1,
+  "waits": 0
+ },
+ "cases.e2e.test.ts": {
+  "sleeps": 1,
+  "waits": 0
+ },
+ "character-aaa.e2e.test.ts": {
+  "sleeps": 0,
+  "waits": 3
+ },
+ "character.e2e.test.ts": {
+  "sleeps": 0,
+  "waits": 3
+ },
+ "cloud-occlusion.e2e.test.ts": {
+  "sleeps": 0,
+  "waits": 1
+ },
+ "copilot.e2e.test.ts": {
+  "sleeps": 1,
+  "waits": 2
+ },
+ "cost-view.e2e.test.ts": {
+  "sleeps": 1,
+  "waits": 2
+ },
+ "course.e2e.test.ts": {
+  "sleeps": 2,
+  "waits": 4
+ },
+ "crew-aar.e2e.test.ts": {
+  "sleeps": 0,
+  "waits": 2
+ },
+ "deckland.e2e.test.ts": {
+  "sleeps": 0,
+  "waits": 1
+ },
+ "detail-reach.e2e.test.ts": {
+  "sleeps": 0,
+  "waits": 1
+ },
+ "disc-cost.e2e.test.ts": {
+  "sleeps": 1,
+  "waits": 0
+ },
+ "earth-scenery.e2e.test.ts": {
+  "sleeps": 0,
+  "waits": 3
+ },
+ "eclipse-raster.e2e.test.ts": {
+  "sleeps": 0,
+  "waits": 1
+ },
+ "f35-flight-ops.e2e.test.ts": {
+  "sleeps": 0,
+  "waits": 1
+ },
+ "f35-intercept.e2e.test.ts": {
+  "sleeps": 1,
+  "waits": 1
+ },
+ "f35-pcd.e2e.test.ts": {
+  "sleeps": 1,
+  "waits": 0
+ },
+ "f35-sea-trail.e2e.test.ts": {
+  "sleeps": 0,
+  "waits": 2
+ },
+ "f35-wingmen.e2e.test.ts": {
+  "sleeps": 1,
+  "waits": 1
+ },
+ "flight-quality.e2e.test.ts": {
+  "sleeps": 0,
+  "waits": 1
+ },
+ "forest-aaa.e2e.test.ts": {
+  "sleeps": 0,
+  "waits": 2
+ },
+ "geoid.e2e.test.ts": {
+  "sleeps": 1,
+  "waits": 0
+ },
+ "gibraltar-shots.e2e.test.ts": {
+  "sleeps": 0,
+  "waits": 2
+ },
+ "grass-aaa.e2e.test.ts": {
+  "sleeps": 1,
+  "waits": 5
+ },
+ "ground-details.e2e.test.ts": {
+  "sleeps": 0,
+  "waits": 1
+ },
+ "ground-sunset.e2e.test.ts": {
+  "sleeps": 0,
+  "waits": 1
+ },
+ "hud-runway.e2e.test.ts": {
+  "sleeps": 1,
+  "waits": 0
+ },
+ "ils-runway.e2e.test.ts": {
+  "sleeps": 1,
+  "waits": 0
+ },
+ "ils.e2e.test.ts": {
+  "sleeps": 1,
+  "waits": 0
+ },
+ "instructor.e2e.test.ts": {
+  "sleeps": 1,
+  "waits": 0
+ },
+ "jetmodes.e2e.test.ts": {
+  "sleeps": 1,
+  "waits": 1
+ },
+ "kernel-equivalence.e2e.test.ts": {
+  "sleeps": 0,
+  "waits": 2
+ },
+ "kernel-golden.e2e.test.ts": {
+  "sleeps": 0,
+  "waits": 7
+ },
+ "knowledge.e2e.test.ts": {
+  "sleeps": 0,
+  "waits": 1
+ },
+ "loop-cpu.e2e.test.ts": {
+  "sleeps": 1,
+  "waits": 0
+ },
+ "lowflight-governor.e2e.test.ts": {
+  "sleeps": 2,
+  "waits": 0
+ },
+ "magnetosphere-diagram.e2e.test.ts": {
+  "sleeps": 1,
+  "waits": 0
+ },
+ "menu-listeners.e2e.test.ts": {
+  "sleeps": 1,
+  "waits": 0
+ },
+ "missioneditor.e2e.test.ts": {
+  "sleeps": 0,
+  "waits": 1
+ },
+ "missionmap.e2e.test.ts": {
+  "sleeps": 1,
+  "waits": 0
+ },
+ "moon-telescope.e2e.test.ts": {
+  "sleeps": 1,
+  "waits": 1
+ },
+ "motion-quality.e2e.test.ts": {
+  "sleeps": 0,
+  "waits": 1
+ },
+ "multiexposure.e2e.test.ts": {
+  "sleeps": 1,
+  "waits": 0
+ },
+ "music-panel.e2e.test.ts": {
+  "sleeps": 1,
+  "waits": 0
+ },
+ "music.e2e.test.ts": {
+  "sleeps": 2,
+  "waits": 0
+ },
+ "net-coop.e2e.test.ts": {
+  "sleeps": 0,
+  "waits": 1
+ },
+ "net-dock.e2e.test.ts": {
+  "sleeps": 1,
+  "waits": 1
+ },
+ "net-formation-ap.e2e.test.ts": {
+  "sleeps": 3,
+  "waits": 0
+ },
+ "net-formation.e2e.test.ts": {
+  "sleeps": 0,
+  "waits": 1
+ },
+ "net-moon.e2e.test.ts": {
+  "sleeps": 1,
+  "waits": 0
+ },
+ "net-orders.e2e.test.ts": {
+  "sleeps": 0,
+  "waits": 2
+ },
+ "net-rooms.e2e.test.ts": {
+  "sleeps": 1,
+  "waits": 0
+ },
+ "net-shotdown.e2e.test.ts": {
+  "sleeps": 1,
+  "waits": 0
+ },
+ "net-space.e2e.test.ts": {
+  "sleeps": 1,
+  "waits": 0
+ },
+ "offline-settings.e2e.test.ts": {
+  "sleeps": 0,
+  "waits": 1
+ },
+ "ortho.e2e.test.ts": {
+  "sleeps": 1,
+  "waits": 0
+ },
+ "paris-night-flight.e2e.test.ts": {
+  "sleeps": 2,
+  "waits": 0
+ },
+ "perf-ab.e2e.test.ts": {
+  "sleeps": 1,
+  "waits": 2
+ },
+ "perf-fps.e2e.test.ts": {
+  "sleeps": 0,
+  "waits": 1
+ },
+ "photo-video.e2e.test.ts": {
+  "sleeps": 0,
+  "waits": 2
+ },
+ "place-docked.e2e.test.ts": {
+  "sleeps": 0,
+  "waits": 1
+ },
+ "probe-coarse.e2e.test.ts": {
+  "sleeps": 0,
+  "waits": 2
+ },
+ "pwa.e2e.test.ts": {
+  "sleeps": 1,
+  "waits": 0
+ },
+ "rain-glass.e2e.test.ts": {
+  "sleeps": 0,
+  "waits": 1
+ },
+ "rain.e2e.test.ts": {
+  "sleeps": 0,
+  "waits": 1
+ },
+ "ranger-radar.e2e.test.ts": {
+  "sleeps": 1,
+  "waits": 0
+ },
+ "raster-companion.e2e.test.ts": {
+  "sleeps": 0,
+  "waits": 1
+ },
+ "raster-diagnose.e2e.test.ts": {
+  "sleeps": 1,
+  "waits": 0
+ },
+ "raster-flight.e2e.test.ts": {
+  "sleeps": 0,
+  "waits": 2
+ },
+ "raster-motion.e2e.test.ts": {
+  "sleeps": 0,
+  "waits": 1
+ },
+ "raster-paths.e2e.test.ts": {
+  "sleeps": 0,
+  "waits": 2
+ },
+ "raster-primary.e2e.test.ts": {
+  "sleeps": 0,
+  "waits": 1
+ },
+ "raster-pulse.e2e.test.ts": {
+  "sleeps": 1,
+  "waits": 0
+ },
+ "raster-shade-ablation.e2e.test.ts": {
+  "sleeps": 0,
+  "waits": 1
+ },
+ "refraction-wgs84.e2e.test.ts": {
+  "sleeps": 0,
+  "waits": 2
+ },
+ "relief-codec.e2e.test.ts": {
+  "sleeps": 1,
+  "waits": 0
+ },
+ "relief-toggle-flight.e2e.test.ts": {
+  "sleeps": 1,
+  "waits": 0
+ },
+ "s1-missions.e2e.test.ts": {
+  "sleeps": 0,
+  "waits": 2
+ },
+ "s2-views.e2e.test.ts": {
+  "sleeps": 1,
+  "waits": 2
+ },
+ "s3-replay.e2e.test.ts": {
+  "sleeps": 4,
+  "waits": 3
+ },
+ "scenery-bench.e2e.test.ts": {
+  "sleeps": 0,
+  "waits": 1
+ },
+ "sea-cost.e2e.test.ts": {
+  "sleeps": 2,
+  "waits": 0
+ },
+ "sea-depth-probe.e2e.test.ts": {
+  "sleeps": 1,
+  "waits": 0
+ },
+ "sea-fft.e2e.test.ts": {
+  "sleeps": 1,
+  "waits": 0
+ },
+ "sea-life.e2e.test.ts": {
+  "sleeps": 1,
+  "waits": 0
+ },
+ "sea-motion.e2e.test.ts": {
+  "sleeps": 1,
+  "waits": 0
+ },
+ "shootdown-gpu.e2e.test.ts": {
+  "sleeps": 2,
+  "waits": 3
+ },
+ "shootdown.e2e.test.ts": {
+  "sleeps": 1,
+  "waits": 3
+ },
+ "sky-events.e2e.test.ts": {
+  "sleeps": 0,
+  "waits": 1
+ },
+ "sky-showcase.e2e.test.ts": {
+  "sleeps": 0,
+  "waits": 1
+ },
+ "storm-blotch.e2e.test.ts": {
+  "sleeps": 0,
+  "waits": 3
+ },
+ "tars-agent-live.e2e.test.ts": {
+  "sleeps": 0,
+  "waits": 1
+ },
+ "tars-eval.e2e.test.ts": {
+  "sleeps": 0,
+  "waits": 1
+ },
+ "terrain-raster-hint.e2e.test.ts": {
+  "sleeps": 0,
+  "waits": 3
+ },
+ "terrain-raster.e2e.test.ts": {
+  "sleeps": 0,
+  "waits": 1
+ },
+ "voyage-prewarm.e2e.test.ts": {
+  "sleeps": 0,
+  "waits": 1
+ },
+ "world-runway.e2e.test.ts": {
+  "sleeps": 1,
+  "waits": 1
+ },
+ "wreck-replay.e2e.test.ts": {
+  "sleeps": 2,
+  "waits": 2
+ },
+ "zones-scenery.e2e.test.ts": {
+  "sleeps": 4,
+  "waits": 0
+ },
+ "zones-usa-night.e2e.test.ts": {
+  "sleeps": 2,
+  "waits": 0
+ },
+ "zones.e2e.test.ts": {
+  "sleeps": 3,
+  "waits": 0
+ }
+}

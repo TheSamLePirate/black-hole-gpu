@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-14 17:37 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-14 17:38 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous.
@@ -6667,3 +6667,16 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   `build-pages.ts` est vue (TS2322), retirée. Avant, ils n'étaient jamais typés (lu dans `tsconfig.json`).
 - Limites : les scripts ponctuels (bancs, captures, conversions) restent hors du contrôle ; le bundle de 7,4 Mo et les 0,49 Mo de
   commentaires WGSL (le reste de QA-15) relèvent de la performance de démarrage, non ouverts.
+
+## 2026-11-14T17:38Z — Audit QA-09 (le cliquet) : plus aucune nouvelle attente longue dans les e2e
+
+- Contribution : la règle de Sam (pas d'e2e qui attende des minutes en silence : 30–60 s, un échec qui dit ce qui manque) tenue par une garde ;
+  audit 2026-11-10, QA-09 (P2 — sa première marche : arrêter la croissance ; la réduction des attentes existantes reste à faire).
+- Réalisé : `tests/e2e-waits.test.ts` compte, par fichier e2e, les pauses fixes de 5 s ou plus et les attentes (`waitFor`, `waitOptional`,
+  `until`) de plus de 120 s ; `tests/e2e-waits.json` les fige au 14 nov. — un fichier peut en perdre, pas en gagner ; un nouveau n'en a
+  aucune. E2E.md.
+- Preuves : **mesuré** : 85 pauses ≥ 5 s et 121 attentes > 120 s dans 116 fichiers (l'audit en comptait 82 et 124 le 10 nov.) ; témoins :
+  le compte (une pause de 5 s et une attente de 10 min comptées, 4,999 s et 120 s non) ; le cliquet (une pause de 9 s ajoutée à
+  `stuck-keys` : refusée), retirée — 2/2.
+- Limites : les attentes existantes ne sont pas réduites ; les délais des tests eux-mêmes (`}, 600_000)`) ne sont pas comptés ; un délai
+  écrit par une variable échappe au compte.
