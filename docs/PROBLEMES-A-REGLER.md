@@ -16,6 +16,16 @@ L'e2e `report` : le test du Lander et celui des unités portés sur l'autopilote
 depuis 5 km — **4/4** (13 nov., plus tard) ; **les états eux-mêmes restent périmés**. `hub-graph` lit le même état 06 (son graphe seul : non touché). **Piste** : refaire l'état 06 en volant l'approche (`glideTo`, puis
 `snapshot` au final) — ou porter le test sur une approche volée. Les autres états de la galerie (`tests/hud/states/`) sont à revérifier.
 
+## L'e2e `hub-graph` : plus de graphe dans la carte du hub une seconde après le chargement (relevé le 13 novembre 2026)
+
+**Constat (observé, sonde e2e, ce Mac)** : chargé l'état 06 (le final du Ranger) ou l'état 05 (son plané), le petit graphe de la carte du hub
+est là à 0,3 s, puis tout son bloc est masqué (`fl-hub-graph` en `display: none` : `drawHubGraph` reçoit `G = null`, l'assistant ne donne plus
+de graphe) dès que l'autopilote d'entrée passe « On the approach » — en 1 à 2 s ; avec l'état 06, après une remise de gaz à 1,7 km de l'axe.
+Le clic du test tombe alors sur la vue. **Cause non établie** : les états périmés (voir plus haut) ou un graphe d'approche retiré ;
+`src/ui/flighthud.ts` était en cours de modification par la session du rendu pendant la mesure (la page servait ses changements non commités).
+Les quatre autres e2e de la galerie (`hub-card` 2/2, `telemetry` 1/1, `hud-layout` 10/10, `saves` 3/3) passent depuis que leur démarrage est
+borné (ils tombaient tous sur les 5 s par défaut de `beforeAll`). **Piste** : refaire les états ; vérifier si l'approche doit avoir son graphe.
+
 ## ~~Le toucher dit deux fois dans la page~~ (relevé le 13 novembre 2026, e2e `report`) — réglé le 13 novembre 2026 : chaque message du pilote était journalisé deux fois
 
 **Constat (observé)** : le Lander posé par son autopilote près de Kennedy, dans la page : le journal du jeu a deux lignes « Touchdown on Earth ·

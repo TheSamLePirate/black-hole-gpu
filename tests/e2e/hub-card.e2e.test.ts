@@ -20,7 +20,7 @@ describe.skipIf(!E2E)("the hub's card", () => {
   let app: App;
   beforeAll(async () => {
     app = await App.boot({ width: 1440, height: 900, hash: "scene=game:artemis" });
-  });
+  }, 180_000);
   afterAll(() => {
     app?.close();
     stopServer();

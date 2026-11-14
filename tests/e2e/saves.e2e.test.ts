@@ -25,7 +25,7 @@ describe.skipIf(!E2E)("a saved flight reloads as it was", () => {
   let app: App;
   beforeAll(async () => {
     app = await App.boot();
-  });
+  }, 180_000);
   afterAll(() => {
     app?.close();
     stopServer();

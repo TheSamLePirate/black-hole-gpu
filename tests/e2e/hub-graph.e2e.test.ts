@@ -16,7 +16,7 @@ describe.skipIf(!E2E)("the hub's graph, large", () => {
       `!!document.querySelector("[data-testid=assist-graph-small]") && document.querySelector("[data-testid=assist-graph-small]").getBoundingClientRect().height > 40`,
       15_000,
     );
-  });
+  }, 180_000);
   afterAll(() => {
     app?.close();
     stopServer();

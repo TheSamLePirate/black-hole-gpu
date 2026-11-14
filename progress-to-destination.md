@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-14 15:16 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-14 15:23 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous.
@@ -6452,3 +6452,13 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   `pilot`) ; **reproduit avant** (e2e `journal-once`) : `[info no-time, pilot t]` pour un mot du pilote comme pour un toucher ; **après**
   `[pilot t]` — 1/1 ; `aircraft-autokeys` 3/3 (il lit les toasts au journal) ; tsc.
 - Limites : les autres toasts restent journalisés en « info » sans heure, comme avant.
+
+## 2026-11-14T15:23Z — Les e2e de la galerie du HUD : leur démarrage borné ; `hub-graph` noté
+
+- Contribution : la preuve des parcours (§19.13) — des e2e qui mesurent au lieu de tomber avant de commencer.
+- Réalisé : `beforeAll` borné à 180 s dans `hub-card`, `telemetry`, `hud-layout`, `hub-graph`, `saves` (tous tombaient sur les 5 s par défaut
+  de bun, avant leur premier test — leçon déjà notée à E2E-VOLS §7). PROBLEMES : `hub-graph`.
+- Preuves : **observé** (ce Mac, fenêtre visible) : avant, 0/5 fichiers (chacun « a beforeEach/afterEach hook timed out ») ; après, `hub-card` 2/2,
+  `telemetry` 1/1, `hud-layout` 10/10, `saves` 3/3 ; `hub-graph` 0/1 — son graphe masqué dès que l'autopilote passe à l'approche (sonde),
+  cause non établie (états périmés, ou `flighthud.ts` en cours de modification par la session du rendu) : noté, non corrigé.
+- Limites : les états de `tests/hud/states/` restent à refaire (des vols complets par le banc, `LAB_STATES=1`).

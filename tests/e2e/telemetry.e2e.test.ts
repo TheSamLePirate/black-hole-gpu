@@ -11,7 +11,7 @@ describe.skipIf(!E2E)("the flight's telemetry", () => {
     app = await App.boot({ width: 1440, height: 900, hash: "scene=game:artemis" });
     const json = await Bun.file(`${import.meta.dir}/../hud/states/05-glide.json`).text();
     await app.js(`(__bh.freeze(false), __bh.game.importSave(${JSON.stringify(json)}, false), true)`);
-  });
+  }, 180_000);
   afterAll(() => {
     app?.close();
     stopServer();
