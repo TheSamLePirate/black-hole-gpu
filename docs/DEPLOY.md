@@ -38,7 +38,9 @@ Portainer (stack "kerr", from the `deploy` branch, polling) ─► new commit �
 - **Both revisions side by side**: a `snapshot` job reads the heads of main and of the preview branch, then the
   jobs `main` and `preview` verify and build each exact revision in parallel — types, `bunx biome ci .`,
   `scripts/check-repo-size.ts --base HEAD^1`, the shaders (`check-wgsl.ts`), the forests' tracer
-  (`check-forest.ts`), the unit tests, `bun run build:pages` — and `site` assembles their builds (main at the
+  (`check-forest.ts`), the unit tests, `bun run build:pages`, then the build opened in a headless Chrome
+  (`scripts/site-smoke.ts`: the game up and a first frame, no error — audit QA-02; informational for its first runs, its time
+  on the runner's SwiftShader measured before it gates) — and `site` assembles their builds (main at the
   root, the preview under `/test/`). main gates the deployment; a preview that fails is reported (a warning on
   the run) and left out, the site deploying with main alone.
 - **main's build cached by its commit**: once verified, main's build is saved in the Actions cache as

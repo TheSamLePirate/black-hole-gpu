@@ -34,6 +34,7 @@
     "scripts/pipeline-inventory.ts",
     "scripts/e2e-catalogue.ts",
     "scripts/remote.ts",
+    "scripts/site-smoke.ts",
     "scripts/lib"
   ],
   "exclude": ["tests/e2e/zz-*"]

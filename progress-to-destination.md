@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-14 18:59 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-14 19:03 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous.
@@ -6754,3 +6754,16 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   (toutes les 5 s avant, même plafond de 150 s). Les autres pauses de ces fichiers sont des fenêtres de mesure (une tenue sur 20 s, une
   dérive sur 10 s) : gardées. Cliquet mis à jour.
 - Preuves : **observé** (ce Mac) : `wreck-replay` 3/3 (582 segments de fumée), `net-formation-ap` 4/4 (tenue à 5,19 m de la place sur 20 s).
+
+## 2026-11-14T19:03Z — Audit QA-02 (premier pas) : le site construit ouvert dans un navigateur avant d'être livré
+
+- Contribution : la livraison vérifiée là où le joueur la reçoit (le build — ses chemins, son précache, son Service Worker —, jamais ouvert
+  par un navigateur avant la production) ; audit 2026-11-10, QA-02 (P1).
+- Réalisé : `scripts/site-smoke.ts` sert un build (`_site/` par défaut) en fichiers statiques, l'ouvre dans un Chrome headless (SwiftShader
+  sous Linux) et exige le jeu debout — `__bh`, le renderer, une première image — sans erreur, dans un temps borné ; ajouté au job `main` de
+  `pages.yml` après le build, **informatif pour ses premiers passages** (`continue-on-error`, 240 s), le temps du runner à lire avant d'en
+  faire une porte. Typé (tsconfig). E2E.md, DEPLOY.md.
+- Preuves : **observé** (ce Mac) : le build actuel debout en 13,1 s, sans erreur ; **témoin positif** : une copie du build dont le bundle lève
+  une exception — « FAIL — errors after the first frame », sortie 1. Le passage en CI : à lire au run de ce commit.
+- Limites : une fumée, pas les e2e : ceux-ci tournent toujours contre `server.ts` ; le précache et la portée du Service Worker ne sont
+  qu'exercés au chargement, pas vérifiés un par un.

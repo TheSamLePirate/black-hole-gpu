@@ -542,6 +542,9 @@ already going (they end on their own; their logs stay in `remote-results/dash/`)
 
 - A new `__bh` member gets its entry in [BH-API.md](BH-API.md) (full path in backquotes).
   `bh-api.e2e.test.ts` fails otherwise; `bun scripts/bh-api.ts --check` lists what's missing.
+- The built site in a browser: `bun scripts/site-smoke.ts [_site]` serves the build as static files, opens it in a headless Chrome
+  and wants the game up — its handle, its renderer, a first frame — with no error (audit QA-02; in the Pages CI after the build,
+  informational for its first runs). The e2e themselves run against `server.ts`, not the build.
 - No new long wait: `tests/e2e-waits.test.ts` holds each file's fixed sleeps of 5 s or more and its waits past 120 s where they
   were on 14 Nov 2026 (`tests/e2e-waits.json`, audit QA-09) — wait on a condition, 30–60 s, failing with what is missing;
   after removing some, `E2E_WAITS=update bun test tests/e2e-waits.test.ts` writes the counts again.
