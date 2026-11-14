@@ -1,6 +1,6 @@
 import index from "./index.html";
 import crew from "./crew/index.html";
-import { EAR_LIMITS, earClosed, earOpened, earRelayRefusal, queueFits } from "./server/ear-relay";
+import { EAR_LIMITS, earClosed, earOpened, earRelayRefusal, foreignOrigin, queueFits } from "./server/ear-relay";
 import { createMoonTiles } from "./server/moon-tiles";
 import { createRooms, type Peer } from "./server/rooms";
 import { createTraffic } from "./server/traffic";
@@ -74,6 +74,8 @@ const server = Bun.serve({
     "/__snapshot": {
       POST: async (req) => {
         if (!dev) return new Response("disabled", { status: 404 });
+        // (this server's own pages only — audit QA-20: a script of the local network or the Tailscale wrote files here)
+        if (foreignOrigin(req)) return new Response("forbidden", { status: 403 });
         const name = new URL(req.url).searchParams.get("name")?.replace(/[^\w.-]/g, "") || "snapshot";
         const file = /\.(png|jpg|webp|exr|json|mp4)$/.test(name) ? name : `${name}.png`;
         await Bun.write(`snapshots/${file}`, await req.arrayBuffer());

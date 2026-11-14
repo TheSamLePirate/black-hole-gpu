@@ -14,19 +14,22 @@ export const EAR_LIMITS = {
 
 let openNow = 0;
 
+/** Whether a request comes from another origin than this server's own pages: a browser's page always says where it comes from;
+ *  none — a script, any machine of the local network — or another's: foreign (the relay, and the dev server's other writing routes —
+ *  `/__snapshot`, audit QA-20). */
+export function foreignOrigin(req: Request): boolean {
+  const origin = req.headers.get("origin");
+  if (!origin) return true;
+  try {
+    return new URL(origin).host !== new URL(req.url).host;
+  } catch {
+    return true;
+  }
+}
+
 /** Whether a WebSocket upgrade to the relay is let in: null — yes —, else the refusal to send. */
 export function earRelayRefusal(req: Request): Response | null {
-  const url = new URL(req.url);
-  const origin = req.headers.get("origin");
-  // (a browser's page always says where it comes from; none — a script — or another's: refused)
-  if (!origin) return new Response("forbidden", { status: 403 });
-  let host = "";
-  try {
-    host = new URL(origin).host;
-  } catch {
-    return new Response("forbidden", { status: 403 });
-  }
-  if (host !== url.host) return new Response("forbidden", { status: 403 });
+  if (foreignOrigin(req)) return new Response("forbidden", { status: 403 });
   if (openNow >= EAR_LIMITS.open) return new Response("busy", { status: 429 });
   return null;
 }

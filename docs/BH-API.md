@@ -508,7 +508,7 @@ Hides the top bar (`true`) or shows it again (`false`). The choice is remembered
 
 ### `__bh.snapshot(name?: string)` → Promise<Response>
 
-Exports the current view as a PNG (`renderer.exportPNG(settings)`) and POSTs it to the dev server at `/__snapshot?name=…` (`snapshots/<name>.png`, default name `"snapshot"`). The POST goes to `server.ts`, which answers 404 `disabled` outside dev (the `fetch` does not throw). Run it in the dev server only.
+Exports the current view as a PNG (`renderer.exportPNG(settings)`) and POSTs it to the dev server at `/__snapshot?name=…` (`snapshots/<name>.png`, default name `"snapshot"`; the server's own pages only — a POST without `Origin` or from another origin is refused, 403, since 13 Nov 2026, audit QA-20). The POST goes to `server.ts`, which answers 404 `disabled` outside dev (the `fetch` does not throw). Run it in the dev server only.
 
 ```js
 await __bh.snapshot("pass-2")

@@ -29,3 +29,13 @@ test("the queue before Deepgram opens: bounded", async () => {
   while (queueFits(q, chunk)) q.push(chunk);
   expect(q.length).toBe(Math.floor(EAR_LIMITS.queueBytes / chunk.byteLength));
 });
+
+test("the dev server's own pages only (audit QA-20): no Origin, another's — foreign; its own — not", async () => {
+  const { foreignOrigin } = await import("../server/ear-relay");
+  const at = (origin?: string) =>
+    new Request("http://192.168.1.20:3000/__snapshot?name=x.png", { method: "POST", headers: origin ? { origin } : {} });
+  expect(foreignOrigin(at())).toBe(true);
+  expect(foreignOrigin(at("http://evil.example"))).toBe(true);
+  expect(foreignOrigin(at("not a url"))).toBe(true);
+  expect(foreignOrigin(at("http://192.168.1.20:3000"))).toBe(false);
+});

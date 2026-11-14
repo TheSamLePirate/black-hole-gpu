@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-14 16:17 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-14 16:19 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous.
@@ -6502,3 +6502,14 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   et 9), les autres écrans à leur cadence (ND 10, E/WD 10, SD 5) ; **0,99 ms de fil principal par image, contre 0,68 avant (+0,31 ms)** ;
   le premier essai, sans l'échéance tenue, donnait 22,9 Hz pour 0,73 ms. Tests A320 verts ; tsc.
 - Limites : processeur seulement ; kerr-mini non mesuré ; le coût GPU des copies à l'atlas (143 envois/s contre 95) non lu.
+
+## 2026-11-14T16:19Z — Audit QA-20 : le serveur de dev n'écrit plus pour un inconnu
+
+- Contribution : la sûreté de l'outillage du labo (le serveur de dev écoute le réseau local et le Tailscale) ; audit 2026-11-10, QA-20 (P2,
+  hors vague).
+- Réalisé : `foreignOrigin(req)` (`server/ear-relay.ts`), le contrôle d'origine du relais Deepgram (déjà fait au lot TA-14) mis en commun ;
+  la route `/__snapshot` (`server.ts`) l'applique : un POST sans `Origin` ou d'une autre origine est refusé. BH-API (`snapshot`).
+- Preuves : **reproduit avant** (le serveur de dev lancé à part, `curl`) : POST sans `Origin` → 200, d'une origine étrangère → 200, le fichier
+  écrit dans `snapshots/` ; **après** 403, 403, et 200 depuis la page du serveur elle-même ; `ear-relay.test` 4/4 (le cas ajouté) ; tsc.
+- Limites : le serveur écoute toujours toutes les interfaces (le labo et l'iPad y accèdent) ; les routes de lecture restent ouvertes
+  (filtrées par motif, sans traversée vue par l'audit).
