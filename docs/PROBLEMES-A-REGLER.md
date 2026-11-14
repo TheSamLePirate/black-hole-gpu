@@ -12,8 +12,8 @@ avant les lots de sauvegarde du 13 nov.** (arbre de travail à f84bee82 : « 171
 de son contact) part à 27 m : 23 m/s, train cédé, pas de carte ; la protection du sol (X1b, 18 oct.) le mettait d'abord en stationnaire.
 **Cause supposée** : le sol passé au WGS84 et au géoïde (I0, 23 oct.), et les sites posés sur leurs vrais seuils le 2 nov. (fcfd8088 ; la
 même cause a déjà mis Le Bourget à 937 m de l'axe dans un autre e2e, E2E-VOLS §7) : l'état garde le site de son entrée et des positions d'avant.
-L'e2e `report` : le test du Lander et celui des unités portés sur l'autopilote d'atterrissage (Kennedy) — 3/4 ; **reste le final de Le
-Bourget**. `hub-graph` lit le même état 06 (son graphe seul : non touché). **Piste** : refaire l'état 06 en volant l'approche (`glideTo`, puis
+L'e2e `report` : le test du Lander et celui des unités portés sur l'autopilote d'atterrissage (Kennedy), celui de Le Bourget sur l'ILS du F-35B
+depuis 5 km — **4/4** (13 nov., plus tard) ; **les états eux-mêmes restent périmés**. `hub-graph` lit le même état 06 (son graphe seul : non touché). **Piste** : refaire l'état 06 en volant l'approche (`glideTo`, puis
 `snapshot` au final) — ou porter le test sur une approche volée. Les autres états de la galerie (`tests/hud/states/`) sont à revérifier.
 
 ## Le toucher dit deux fois dans la page (relevé le 13 novembre 2026, e2e `report`)

@@ -1,10 +1,13 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import { fromRunway, ILS } from "../../src/game/ils";
+import { RUNWAY_LENGTH, SITES } from "../../src/game/sites";
 import { App, E2E, stopServer } from "./lib/app";
 
 // The flight's report (PLAN-HUB HB4): flown from the HUD gallery's states to their end — the final
 // approach to its touchdown at Le Bourget, the docking to its capture at the ISS —, the report's card
 // comes up: its grade (A … F, out of 20), each figure judged; Escape closes it; the journal says it. The
 // Lander put down beside Kennedy's runway (not rolling): graded on its site, not on the runway's axis
+// The Le Bourget landing flown by the F-35B's ILS from 5 km out (13 Nov 2026: the gallery's state 06 had gone stale).
 // (before: 54 m off it, a D; then on its distance to the last flight's site, Le Bourget — a C); a save loaded closes the last flight's card (before: it stayed over the next).
 // The card in the pilot's units (audit FX-17): with the imperial option, its sink in ft/min and its speed in kt (before 13 Nov 2026: m/s).
 // Done when: each card comes up graded, Escape closes it, the imperial card writes ft/min and kt.
@@ -62,7 +65,19 @@ describe.skipIf(!E2E)("the flight's report", () => {
   };
 
   test("a landing: touched down at Le Bourget, graded; Escape closes it", async () => {
-    const r = await fly("06-final", 120_000);
+    // (the F-35B on Le Bourget's final, 5 km out on its glideslope, landed by the ILS — the HUD gallery's state 06, the Ranger's
+    // final there, goes around 1.7 km off the axis since the sites sat on their real thresholds: PROBLEMES, 13 Nov 2026)
+    const B = SITES.find((x) => x.icao === "LFPB")!;
+    const W = { name: B.name, lat: B.lat, lon: B.lon, hdg: B.rwy!, elev: B.elev!, len: RUNWAY_LENGTH };
+    const p = fromRunway(W, -5000, 0);
+    const h = (ILS.gpi + 5000) * Math.tan((ILS.glide * Math.PI) / 180);
+    await app.js(`(() => { __bh.freeze(false); __bh.settings.vessel = "f35"; return 1; })()`);
+    await app.waitFor(`__bh.fleet.active === "f35"`, 30_000);
+    await app.js(`(() => { __bh.settings.wind = 0; __bh.game.flyAt(${p.lat}, ${p.lon}, ${h.toFixed(0)}, ${W.hdg}, 90);
+      __bh.fleet.fuel.f35 = 3000; __bh.camera.gearDown = true; return 1; })()`);
+    await Bun.sleep(800);
+    console.log(`  ${await app.js<string>(`__bh.camera.ilsStart("LFPB")`)}`);
+    const r = await card(150_000);
     expect(r.title).toContain("Le Bourget");
     // (the autopilot's landing: soft, on the axis — the card's text in the failure: an F seen once in three runs,
     // the runway read within the touchdown's step, its frame not yet the craft's — now graded the frame after)
