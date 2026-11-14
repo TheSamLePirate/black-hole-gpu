@@ -49,8 +49,14 @@ const cdp = await launch({ width: 1280, height: 800 });
 const fail = async (why: string) => {
   console.error(`site-smoke: FAIL — ${why}`);
   if (cdp.errors.length) console.error(`  the page's errors:\n${cdp.errors.map((e) => `    ${e.split("\n")[0]}`).join("\n")}`);
-  const diag = await js<unknown>(`(() => { try { return __bh.graphicsDiagnostic(); } catch { return null; } })()`).catch(() => null);
-  if (diag) console.error(`  the graphics diagnostic: ${JSON.stringify(diag).slice(0, 1500)}`);
+  // (what the page shows and how far it went — its text, its boot's stages, the adapter —, to read on a runner)
+  const seen = await js<unknown>(`(async () => {
+    const out = { text: (document.body?.innerText ?? "").replace(/\\s+/g, " ").slice(0, 600), bh: typeof globalThis.__bh };
+    try { out.marks = __bh.boot().marks.map((m) => m.name + "@" + Math.round(m.t)); } catch (e) { out.marks = String(e); }
+    try { out.diag = JSON.stringify(__bh.graphicsDiagnostic()).slice(0, 1200); } catch (e) { out.diag = String(e); }
+    try { const a = await navigator.gpu?.requestAdapter(); out.adapter = a ? { info: a.info?.description || a.info?.vendor, tex: a.limits.maxSampledTexturesPerShaderStage, sto: a.limits.maxStorageBuffersPerShaderStage, buf: a.limits.maxBufferSize } : null; } catch (e) { out.adapter = String(e); }
+    return out; })()`).catch((e) => String(e));
+  console.error(`  what the page shows: ${JSON.stringify(seen, null, 1).slice(0, 4000)}`);
   cdp.close();
   server.stop(true);
   process.exit(1);
