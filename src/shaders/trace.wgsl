@@ -9385,6 +9385,7 @@ fn seaWaterOf(k: f32) -> mat2x3f {
 // roughness alpha in the probe's equirectangular mapping (probeRadiance's); the rows held off the half's edges — the repeat
 // sampler would reach the other half. d: the body's axes.
 const SEA_SKY_LAYER = 16u;
+// (seaSkyRadiance begin)
 fn seaSkyRadiance(d: vec3f, alpha: f32) -> vec3f {
   let c = camAxes(fromBody(d));
   let u = atan2(c.x, c.z) / TAU + 0.5;
@@ -9395,6 +9396,7 @@ fn seaSkyRadiance(d: vec3f, alpha: f32) -> vec3f {
   // a few frames of it)
   return textureSampleLevel(seaFft, seaSamp, vec2f(u, v), i32(SEA_SKY_LAYER), lod).rgb / apScale();
 }
+// (seaSkyRadiance end)
 fn seaShade(q: vec3f, view: vec3f, light: vec3f, Eg: vec3f, sky: vec3f, under: vec3f, footM: f32, calm: f32, mirror: vec4f) -> vec3f {
   // (another world's: q its surface's own normal — Miller's giant wave's slope under the chop)
   let normal = select(geoQ(q), normalize(q), SEA_ALIEN);

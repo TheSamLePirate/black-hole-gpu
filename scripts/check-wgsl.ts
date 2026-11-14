@@ -34,6 +34,7 @@ import { withHorizonMaps } from "../src/system/horizon-maps";
 import { ORTHO_MIP_WGSL, withOrthoImagery } from "../src/system/earth-tiles";
 import { CHROME, withGpuPage } from "./lib/headless-gpu";
 import { PROFILES, profileConstants, tracerSource } from "./lib/kernel-profiles";
+import { composeTracer } from "../src/system/tracer-source";
 import { specialiseWgsl } from "./lib/wgsl-inline";
 import { tracerEntryPoint } from "../src/system/tracer-kernels";
 
@@ -65,6 +66,15 @@ shaders["trace.wgsl without the aerial table, surface textures, scenery"] = aeri
   sceneryShader(surfaceShader(traced, false), false),
   false,
 );
+// (the tracer as the renderer composes it for the smaller devices — composeTracer —: WebGPU's default limits, 16 sampled textures and 8
+// storage buffers, then 18 — under the sea's FFT (19): a reader of a cut binding left behind failed there, the game not starting —
+// audit, 14 Nov 2026; tests/tracer-limits.test.ts checks the names, this the browser's compile)
+for (const tex of [16, 18])
+  shaders[`trace.wgsl composed for ${tex} sampled textures, 8 storage buffers`] = composeTracer(
+    shaders["trace.wgsl"]!,
+    shaders["forest.wgsl"]!,
+    { maxSampledTexturesPerShaderStage: tex, maxStorageBuffersPerShaderStage: 8 },
+  );
 shaders["the orthophotos' mips (system/earth-tiles.ts)"] = ORTHO_MIP_WGSL;
 shaders["the shore's distances' bake (system/earth-shore.ts)"] = earthShoreShader();
 shaders["the coastal swell field's bake (system/earth-swell.ts, L1)"] = earthSwellShader(TERRAIN_CACHE_N, WGS84_A, SWELL_NODE_VEC4S);

@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-14 20:07 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-14 20:12 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous.
@@ -6812,3 +6812,15 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
 - Domaine du rendu (trace.wgsl) : **signalé à sa session**, noté dans PROBLEMES ; non corrigé ici. `check-wgsl` ne compile pas cette variante.
 - Suite : l'étape `site-smoke` reste informative tant que ce défaut n'est pas corrigé ; ensuite, une porte. Une variante « petit GPU » dans
   `check-wgsl` attraperait ces défauts plus tôt (à proposer).
+
+### 2026-11-14 20:12 UTC — Le jeu démarre de nouveau sur les GPU à 16–18 textures (la limite par défaut de WebGPU)
+
+- **Contribution à la destination :** §19 (le parcours joueur complet, la reprise sur tout appareil) et §7 (une variante de shader par
+  capacité, sans lecteur orphelin) — défaut relevé par l'audit (1feb2f7f), dans le domaine du rendu.
+- **Réalisé :** `sea/fft-gpu.ts` `seaShader` coupe aussi `seaSkyRadiance` (marqueurs dans `trace.wgsl`, substitut `nearE`), refuse une source
+  sans ses marqueurs ; `tests/tracer-limits.test.ts` (aucune liaison coupée encore nommée, 40 compositions) ; `scripts/check-wgsl.ts` compile le
+  traceur composé à 16 et 18 textures. PROBLEMES (entrée de l'audit barrée).
+- **Preuves :** test unitaire 2/2 (témoin positif : l'ancien code y échoue en nommant `seaFft`, `seaSamp`) ; `check-wgsl` 84/84 (l'ancien :
+  « unresolved value 'seaFft' » aux deux variantes) ; `site-smoke` sur `_site` construit : `gpuTextures=16` OK (8,6 s), `24` OK.
+  **Non vérifié** : un vrai appareil à 16 textures ; l'aspect de la mer sans FFT (inchangé hors du ciel reflété, dont le poids était déjà 0).
+- **Suite :** l'audit fera de l'étape `site-smoke` de la CI une barrière.

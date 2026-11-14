@@ -35,13 +35,26 @@ export const SEA_TEXTURE_LIMIT = 19;
 
 /** The tracer without the sea's texture (a device taking fewer): its bindings out, its FFT waves the trains. */
 export function seaShader(code: string, supported: boolean): string {
+  // (the stubs' markers: missing, a reader of the removed binding would stay — the device without it then fails to compile the tracer)
+  for (const m of ["seaWavesFft", "seaSkyRadiance"])
+    if (!code.includes(`// (${m} begin)`) || !code.includes(`// (${m} end)`))
+      throw new Error(`seaShader: the tracer's ${m} markers are missing`);
   if (supported) return code;
-  return code
-    .replace(/^@group\(0\) @binding\((33|34)\).*\n/gm, "")
-    .replace(
-      /\/\/ \(seaWavesFft begin\)[\s\S]*?\/\/ \(seaWavesFft end\)/,
-      "fn seaWavesFft(q: vec3f, tu: vec3f, tc: vec3f, footM: f32) -> SeaWaves { return seaWaves(q, tu, tc, footM); }\nfn seaSurfaceHit(look: vec3f, t: f32, m: f32) -> f32 { return t; }",
-    );
+  return (
+    code
+      .replace(/^@group\(0\) @binding\((33|34)\).*\n/gm, "")
+      .replace(
+        /\/\/ \(seaWavesFft begin\)[\s\S]*?\/\/ \(seaWavesFft end\)/,
+        "fn seaWavesFft(q: vec3f, tu: vec3f, tc: vec3f, footM: f32) -> SeaWaves { return seaWaves(q, tu, tc, footM); }\nfn seaSurfaceHit(look: vec3f, t: f32, m: f32) -> f32 { return t; }",
+      )
+      // (the sea's mirrored sky lives in the same texture array — S5, the layer SEA_SKY_LAYER —: without it, the probe's harmonics, as another
+      // world's sea reads them; on the Earth its weight is 0 there anyway — seaFftParams writes nothing without the FFT. Left in, it named the
+      // removed binding: "unresolved value 'seaFft'", the game not starting on a device of 16–18 sampled textures — audit, 14 Nov 2026)
+      .replace(
+        /\/\/ \(seaSkyRadiance begin\)[\s\S]*?\/\/ \(seaSkyRadiance end\)/,
+        "fn seaSkyRadiance(d: vec3f, alpha: f32) -> vec3f { return nearE(fromBody(d)) / PI; }",
+      )
+  );
 }
 
 export class SeaFft {

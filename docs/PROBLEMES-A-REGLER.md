@@ -4,7 +4,15 @@ Problèmes constatés, pas encore réglés. Chaque entrée : la date (UTC), ce q
 connue ou supposée, la piste. Une entrée réglée est barrée avec le commit qui la règle, pas effacée.
 
 
-## Le jeu ne démarre pas sur un GPU à 16–18 textures échantillonnées : `seaFft` non résolu dans trace.wgsl (relevé le 14 novembre 2026)
+## ~~Le jeu ne démarre pas sur un GPU à 16–18 textures échantillonnées : `seaFft` non résolu dans trace.wgsl~~ (relevé le 14 novembre 2026)
+— réglé le 14 novembre 2026
+
+**Cause établie** : la coupe de la mer FFT (`sea/fft-gpu.ts` `seaShader`) retirait la liaison et la région `seaWavesFft`, mais `seaSkyRadiance`
+(le ciel que la mer reflète, PLAN-MER S5, couche `SEA_SKY_LAYER` du même tableau de textures) la lisait hors de cette région. **Réglé** : ses
+marqueurs et son substitut (les harmoniques de la sonde, `nearE`, comme la mer d'un autre monde ; sur la Terre son poids y est 0) ; `seaShader`
+refuse une source sans ses marqueurs. **Gardes** : `tests/tracer-limits.test.ts` (40 compositions de 16 à 48 textures, 8 à 16 tampons : aucune
+liaison coupée encore nommée ; témoin positif : l'ancien `seaShader` y nomme `seaFft`, `seaSamp`) ; `check-wgsl` compile le traceur composé à
+16 et 18 textures (84/84 ; l'ancien : « 9371:29 unresolved value 'seaFft' »). `site-smoke` `gpuTextures=16` OK en 8,6 s, `24` OK. Le constat :
 
 **Constat (observé, CI et ce Mac)** : le site construit, ouvert par `scripts/site-smoke.ts` sous SwiftShader en CI (16 textures, 10 tampons de
 stockage par étage), affiche « trace.wgsl failed to compile: 9370:29 unresolved value 'seaFft' » — pas de jeu (runs 43632741249, 43634230192).
