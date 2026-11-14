@@ -7,7 +7,8 @@
 //   bun scripts/check-wgsl.ts        (CHROME=/path/to/chrome to choose the browser)
 //
 // Exit 1 on a compile error. Without a WebGPU adapter (a machine with neither GPU nor SwiftShader) it
-// says so and exits 0: nothing could be checked, nothing is known to be broken.
+// says so and exits 0: nothing could be checked, nothing is known to be broken — except in CI (CI set): there it exits 1, the
+// shaders' check lost is a failure, not a silence (audit QA-26: the runner's Chrome losing SwiftShader would have gone unseen).
 import { Glob } from "bun";
 import { earthShoreShader } from "../src/system/earth-shore";
 import { SWELL_NODE_VEC4S } from "../src/system/earth-shore-layout";
@@ -126,7 +127,7 @@ try {
   );
   if (!v?.adapter) {
     console.warn(`check-wgsl: no WebGPU adapter in this browser (${CHROME}) — nothing checked`);
-    process.exit(0);
+    process.exit(process.env.CI ? 1 : 0);
   }
   let bad = 0;
   for (const [name, errs] of Object.entries(v.out!)) {

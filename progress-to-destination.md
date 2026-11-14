@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-14 17:10 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-14 17:13 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous.
@@ -6631,3 +6631,13 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   témoin (une route de dev retirée : vue) ; QA-14 (workers non hachés sur Pages) laissé : son en-tête de Pages supposé, non mesuré, le site
   servi par nginx où l'audit le juge tenu.
 - Limites : les deux listes restent deux (une table commune serait un pas de plus) ; la garde empêche qu'elles divergent.
+
+## 2026-11-14T17:13Z — Audit QA-26 : en CI, la vérification des shaders perdue est un échec
+
+- Contribution : la garde des shaders (82 modules compilés par le Chrome de la CI à chaque poussée) ne peut plus se taire ; audit 2026-11-10,
+  QA-26 (P3).
+- Réalisé : `scripts/check-wgsl.ts` sort en 1 sans adaptateur WebGPU quand `CI` est défini (GitHub le fixe) ; ailleurs, une machine sans GPU,
+  l'avertissement et 0 comme avant.
+- Preuves : **reproduit avant** (`CHROME` pointé sur un Chrome lancé WebGPU coupé, `CI=1`) : « nothing checked », sortie **0** ; **après** :
+  sortie **1** en CI, 0 hors CI ; le vrai Chrome : 82/82 shaders compilés, sortie 0. Le build du site suivant suivi (ci-dessous).
+- Limites : les autres points de QA-26 (les jobs de prévisualisation — retirés le 10 nov. —, `bh-api --check` hors CI) non traités.
