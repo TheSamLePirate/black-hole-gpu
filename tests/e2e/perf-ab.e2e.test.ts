@@ -203,7 +203,10 @@ describe.skipIf(!E2E)("the realtime render's costs, one thing at a time", () => 
         // to wait for the others)
         for (const side of [P.b, P.a]) {
           await app.js(`(() => { ${side}; __bh.refresh(); return 1; })()`);
-          await app.waitOptional("__bh.renderer.compiling.size === 0 && __bh.renderer.tracerSettled", 120_000);
+          await app.waitOptional(
+            "__bh.renderer.compiling.size === 0 && __bh.renderer.tracerSettled && __bh.renderer.kernelsSettled",
+            120_000,
+          );
         }
         const med: Record<"a" | "b", number[]> = { a: [], b: [] };
         const trace: Record<"a" | "b", number[]> = { a: [], b: [] };

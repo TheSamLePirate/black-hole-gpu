@@ -6864,10 +6864,9 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
 
 - **Contribution à la destination :** §8 (aucun changement non mesuré : le coût des corrections de J3-1 et J3-3).
 - **Réalisé :** `perf-ab` `SET=j3` (un A/A, les ombres d'arbres découpées / les proxies entiers, `skyFlat` nouveau / ancien) ; avant
-  l'alternance de chaque paire, ses deux côtés compilés (une paire qui recompile — un `tune` — ne mesurait que sa compilation).
-- **Preuves (mesuré, kerr-mini froid — GPU nominal, 39 °C —, Tarifa 900 m, A B B A A B)** : A/A −1,6 / +1,5 ms ; ombres découpées +1,0 (×4),
-  −0,5 (×6) : **au bruit** ; `skyFlat` −0,9 (×6) : **au bruit** ; à ×4 +22,3 ms **non concluant** — le côté réglé par `renderer.tune` porte le
-  passage du traceur de 5,9 à 10,8 ms à lui seul (un noyau compilé par `tune` n'est pas celui du jeu) : une paire `tune` ne mesure pas un
-  changement de code seul.
-- **Limites :** un coût de `skyFlat` à ×4 non établi (attendu : quelques opérations par pixel de sol) — à mesurer par deux révisions
-  (`ab-commit`) plutôt que par `tune`.
+  l'alternance de chaque paire, ses deux côtés compilés et leurs noyaux en place (`kernelsSettled`).
+- **Preuves (mesuré, kerr-mini froid — GPU nominal, 39 °C —, Tarifa 900 m, A B B A A B)** : ombres découpées +1,0 (×4), −0,5 (×6), A/A
+  −1,6 / +1,5 : **au bruit** ; `skyFlat` (second passage, noyaux attendus) +1,2 (×4), −1,0 (×6), le passage du traceur 6,0 / 6,0 ms, A/A
+  −0,8 / −0,4 : **au bruit**. Le premier passage avait lu +22,3 ms à ×4 (traceur 5,9 → 10,8) : le côté B mesuré avant ses noyaux (le
+  préchauffage n'attendait pas `kernelsSettled`) — corrigé, l'écart disparu.
+- **Limites :** une vue (Tarifa, jour) ; J0 et le M1 Max non mesurés.
