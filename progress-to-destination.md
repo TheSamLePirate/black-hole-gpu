@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-14 20:43 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-14 21:04 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous.
@@ -6848,3 +6848,14 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   9,24–9,58 (A/A 0,00 / 0,34), sol au soleil 3,0 → 3,3–3,7 % ; GPU p50 174 / 174–176 ms (au bruit) ; 0 erreur WebGPU. check-wgsl 84/84, tsc.
   **Non mesuré** : J0, le M1 Max, une vue d'en haut à Soleil haut.
 - **Limites / suite :** les bords des ombres d'arbres francs et opaques (non traités) ; l'ombre reçue par l'appareil (question 3).
+
+### 2026-11-14 21:04 UTC — J3-7 : le contrat des deux Soleils tenu par un test
+
+- **Contribution à la destination :** §7 (une responsabilité, des lecteurs nommés) — PLAN-J3 J3-7, contrat C-J3-1.
+- **Réalisé :** `tests/sun-readers.test.ts` : les fonctions du traceur composé qui lisent le Soleil incident (cinq, nommées) et celles qui gardent
+  le géométrique (le ciel, l'air, le disque, les éclipses, le sol tracé lointain) ; `liteLight` : le ciel à `mu0g`, le Soleil direct à `mu0`.
+  PLAN-J3 §10. Aucun changement de rendu.
+- **Preuves :** 2/2 ; témoin positif (le ciel du sol passé à la hauteur incidente : 1 échec), source restaurée.
+- **Limites :** le pipeline tracé de près n'est pas couvert (le géométrique partout, par conception aujourd'hui). Les ombres d'arbres
+  translucides (un houppier laisse passer la lumière) : les deux chemins — carte et rayons — sont opaques ; un facteur de transmission serait
+  un choix d'apparence sans référence mesurée, non fait.

@@ -311,3 +311,8 @@ Aucun coût de J3 n'est mesuré ; aucun gain n'est promis.
   leurs proxies circonscrits (~1,9 × le disque d'un houppier rond) ; `scenery-raster.ts` `shadowFs` n'en garde que le houppier vu du Soleil
   (`renderer.treeShadowCut`, vrai par défaut). Chamonix (vue de [PROBLEMES](PROBLEMES-A-REGLER.md)) : +13–17 % de luminance, sol au soleil 3,0 →
   3,3–3,7 %, GPU au bruit. Non mesuré : J0 (la carte n'y est redessinée qu'une image sur ~16), le M1 Max.
+- **J3-7, les lecteurs du Soleil tenus par un test** (14 nov., ~21:04 UTC) : `tests/sun-readers.test.ts` fige le contrat — le Soleil
+  **incident** lu par `shadeLite`, `shadeLiteLight`, `shadeWater`, `cloudShadow`, `keyLight` (et eux seuls) ; le **géométrique** par `liteSky`
+  (la hauteur `mu0g` de `liteLight`), `skySeen`, `sunSeen`, `skyFlat`, `nightFloor`, `earthGround`. Témoin positif : le ciel du sol passé à la
+  hauteur incidente le fait échouer. Un lecteur déplacé sans que le contrat change échoue là. Non couvert : le pipeline tracé de près (le
+  géométrique partout, la rangée incidente n'y étant pas écrite — relevé du 13 nov.).
