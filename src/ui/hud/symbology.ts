@@ -261,6 +261,9 @@ export interface SymInfo {
   ils?: { id: string; loc: number | null; gs: number | null; dme: number; phase: string; auto: boolean } | null;
   /** the relief about us for the radar's scope (its place, heading, height; the ground's height at a place) */
   relief?: { lat: number; lon: number; hdg: number; alt: number; at: (lat: number, lon: number) => number } | null;
+  /** the scope's relief already drawn by the page (radarRelief, at the scope's last range — scopeRange.m): used as it is when given —
+   *  the HUD drawn away from the page needs no height sampler (`relief.at`, the one thing of its data a worker could not be sent) */
+  reliefImg?: HTMLCanvasElement | OffscreenCanvas | ImageBitmap | null;
   /** the Auto-GCAS's and Auto-ACAS's state: flying up, the ground near, an escape */
   gcas?: { flyUp: boolean; near: boolean; escape: string | null } | null;
   /** the beginner's ring: where the jet is aimed (its heading and flight path [rad]) */
@@ -2703,7 +2706,7 @@ function drawWeapons(
  *  twentieth of the range, turned 3°, the range changed — twice a second at most. */
 const RELIEF_N = 48;
 let reliefImg: { canvas: HTMLCanvasElement | OffscreenCanvas; key: string; at: number } | null = null;
-function radarRelief(R: NonNullable<SymInfo["relief"]>, range: number): HTMLCanvasElement | OffscreenCanvas {
+export function radarRelief(R: NonNullable<SymInfo["relief"]>, range: number): HTMLCanvasElement | OffscreenCanvas {
   const D0 = Math.PI / 180;
   const RE = 6_371_008.8;
   const step = range / 10;
@@ -2804,7 +2807,7 @@ function drawRadar(
   // (the relief under it, heading up — redrawn twice a second at most: radarRelief)
   const rel = s.f35RadarRelief !== false ? F.i.relief : null;
   if (rel) {
-    const img = radarRelief(rel, range);
+    const img = F.i.reliefImg ?? radarRelief(rel, range);
     ctx.save();
     ctx.beginPath();
     ctx.arc(cx, cy, rad, 0, 2 * Math.PI);

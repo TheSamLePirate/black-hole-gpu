@@ -33,7 +33,7 @@ import type { RangerStatus } from "../game/status";
 import { fmtS } from "./gametools";
 import { blinkOn } from "./clock";
 import { cpuProf } from "../perf";
-import { drawSymbology, hudHits, paintBoom, paintMotor } from "./hud/symbology";
+import { drawSymbology, hudHits, paintBoom, paintMotor, radarRelief, scopeRange } from "./hud/symbology";
 import { SpeedFx, speedFxLevel } from "./speedfx";
 import { Map3D } from "./map3d/map3d";
 import type { WeatherState } from "../weather";
@@ -75,7 +75,12 @@ const HUD_GRAPH: GraphPalette = {
 };
 
 /** (with the target planet's light probe, from the renderer: see system/planet-probe.ts) */
-export type Info = ReturnType<CameraController["flightInfo"]> & { probe?: PlanetProbe | null; status?: RangerStatus | null };
+export type Info = ReturnType<CameraController["flightInfo"]> & {
+  probe?: PlanetProbe | null;
+  status?: RangerStatus | null;
+  /** the scope's relief drawn by the page for the symbology (hud/symbology.ts SymInfo.reliefImg) */
+  reliefImg?: HTMLCanvasElement | OffscreenCanvas | ImageBitmap | null;
+};
 type V3 = [number, number, number];
 
 /** The top bar's box on the screen (ui/topbar.ts), null when hidden: the HUD's panels keep below it. */
@@ -2627,6 +2632,9 @@ export class FlightHud {
     const T = i.status?.orbit?.period;
     const quarter = T && Number.isFinite(T) && T / 4 > 90 ? T / 4 : undefined;
     const fut = this.future?.([10, 30, 60, ...(quarter ? [quarter] : [])]) ?? null;
+    // (the scope's relief drawn here, at its last range — its own cache: twice a second at most —: the symbology takes it made, its height
+    // sampler needed on the page alone; the first frame — no range yet — it draws its own)
+    i.reliefImg = i.relief && this.s.f35RadarRelief !== false && scopeRange.m > 0 ? radarRelief(i.relief, scopeRange.m) : null;
     // (a measure for a HUD drawn in a worker: what of its frame data a structuredClone would refuse — off unless the e2e sets the probe)
     const probe = (globalThis as { __hudCloneProbe?: Set<string> }).__hudCloneProbe;
     if (probe) noteUnclonable({ s: this.s, i, future: fut, runway: this.runway?.() ?? null }, probe);

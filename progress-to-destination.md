@@ -6408,3 +6408,9 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   corrigée avant toute conclusion.
 - Limites : sur QWERTY, plus de touche directe pour les réglages en vol (Échap, ⌘K, la barre d'outils) — c'est le choix fait.
 - Suite : FX-20 (« Continuer sans dégâts » pour ce vol seulement — choix de Sam).
+
+## 2026-11-14T15:05Z — Le HUD vers un worker, étape 3 : l'image du relief du radar faite par la page
+
+- `SymInfo.reliefImg` (flighthud la fait, la symbologie la prend) : la seule donnée non clonable du vol J0 n'est plus nécessaire au dessin.
+  **Vérifié** : `radar-relief` 2/2, tests HUD 151/151. Rien de gagné encore (le worker vient ensuite). [Fiche CPU](docs/progress/j0/FICHE-CPU-kerr-mini-2026-11-14.md).
+

@@ -105,3 +105,10 @@ kerr-mini) : **un seul chemin**, `i.relief.at` (l'échantillonneur de hauteurs d
 réglages, `SymInfo`, la vue du futur, la piste — se clone tel quel. **Suite** : préparer l'image du relief côté page (deux fois par seconde au
 plus) et l'envoyer faite ; sonder les autres modes (A320, Ranger, combat, approche) avant le worker.
 
+### Étape 3 (~15:05 UTC) : l'image du relief faite par la page
+
+`flighthud.ts` dessine l'image du relief du radar (`radarRelief`, son cache : deux fois par seconde au plus) à la portée du dernier dessin
+(`scopeRange.m`) et la passe faite (`SymInfo.reliefImg`) ; la symbologie la prend telle quelle, sinon (première image) la fait elle-même. Sur
+la page, le même dessin ; pour un worker, l'échantillonneur de hauteurs (`relief.at`) n'aura plus à voyager. **Vérifié** : e2e `radar-relief` 2/2
+(le massif rouge, les vallées vertes, à 40 puis 10 km), tests HUD 151/151, tsc.
+
