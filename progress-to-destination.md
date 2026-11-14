@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-14 17:58 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-14 18:08 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous.
@@ -6698,3 +6698,10 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   1,5°, −1,4°) ; `instructor` **4/4 — il échouait aussi sur le dernier commit** (3/4 : « instructor-debrief » absent) : une sonde a montré
   13 échantillons au lâcher, quand le débrief en demande plus de 15 — le jeu fait ce qu'il doit, le test lâchait trop tôt.
 - Limites : la pause de 20 s de `course` (un test TARS en direct, avec une clé payante) non touchée.
+
+## 2026-11-14T18:08Z — Audit QA-09 : la mesure du PCD sur ses images ; `shootdown` noté instable
+
+- Réalisé : `f35-pcd` mesure le coût de l'écran sur 300 images comptées (20 s au plus) au lieu de 10 s de pause ; cliquet mis à jour.
+- Preuves : **observé** : `f35-pcd` 3/3 (0,131 ms par image sur 307 images). `shootdown` : la pause du naufrage remplacée puis **retirée** —
+  le passage jamais atteint : le fichier échoue à 3/4 sur le dernier commit comme avec la retouche, le Tab ne verrouillant pas toujours sa
+  cible (frégate deux fois, avion de ligne une fois) ; noté dans PROBLEMES.

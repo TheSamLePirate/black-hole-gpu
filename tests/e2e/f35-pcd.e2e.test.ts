@@ -105,7 +105,8 @@ describe.skipIf(!E2E)("the F-35's panoramic display by the mouse", () => {
 
   test("its cost: under the 0.70 ms a frame it had before Q1, no frame over 8 ms", async () => {
     await app.js("(__bh.pcd.stats.reset(), true)");
-    await Bun.sleep(10_000);
+    // (a window of 300 frames measured — counted, not 10 s of sleep: audit QA-09)
+    await app.waitFor("__bh.pcd.stats.frames >= 300", 20_000);
     const s = await app.js<{ frames: number; ms: number; max: number; up: number; read: number }>("({ ...__bh.pcd.stats })");
     console.log(
       `  the display: ${(s.ms / s.frames).toFixed(3)} ms a frame (upload ${(s.up / s.frames).toFixed(3)}, data ${(s.read / s.frames).toFixed(3)}), worst ${s.max.toFixed(2)} ms (${s.frames} frames)`,
