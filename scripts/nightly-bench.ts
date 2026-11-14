@@ -83,10 +83,16 @@ async function run(pull: boolean) {
   } else {
     const out = join(DIR, `run-${at.slice(0, 10)}`);
     const log = join(DIR, "log.txt");
-    const r =
-      await $`E2E=1 E2E_HEADED=0 J0_PHASES=flight J0_MACHINE=nightly J0_OUT=${out} bun test tests/e2e/j0-reference.e2e.test.ts --timeout 900000 > ${log} 2>&1`
-        .cwd(ROOT)
-        .nothrow();
+    // (J0's flight, its output kept in log.txt — Bun.spawn: Bun's shell takes no « > file 2>&1 »)
+    const p = Bun.spawn(["bun", "test", "tests/e2e/j0-reference.e2e.test.ts", "--timeout", "900000"], {
+      cwd: ROOT,
+      env: { ...process.env, E2E: "1", E2E_HEADED: "0", J0_PHASES: "flight", J0_MACHINE: "nightly", J0_OUT: out },
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    const [o, e] = await Promise.all([new Response(p.stdout).text(), new Response(p.stderr).text()]);
+    const r = { exitCode: await p.exited };
+    writeFileSync(log, o + e);
     const file = join(out, "j0.json");
     if (existsSync(file)) {
       // (j0.json's flight: its whole flight's statistics — scripts/j0-fiche.ts reads the same)
