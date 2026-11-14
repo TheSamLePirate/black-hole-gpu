@@ -696,3 +696,38 @@ export class CrewGate {
     return "ok";
   }
 }
+
+/**
+ * The orders a pilot hears, bounded at their arrival (audit 2026-11-10, NET-25): before any answer and before the light's delay
+ * holds them — a screen flooding the pilot (malformed orders answered one by one, a timer each behind a ground station's delay)
+ * is not answered past its pace, its held orders capped. Over: dropped, unanswered.
+ */
+export class CrewInbox {
+  private tokens = new Map<number, { t: number; n: number }>();
+  private held = new Map<number, number>();
+  constructor(
+    private rate = 4,
+    private burst = 8,
+    private maxHeld = 16,
+  ) {}
+  /** an order heard from `from` now [ms]: let in? */
+  pass(from: number, now: number): boolean {
+    const b = this.tokens.get(from) ?? { t: now, n: this.burst };
+    b.n = Math.min(this.burst, b.n + ((now - b.t) / 1000) * this.rate);
+    b.t = now;
+    this.tokens.set(from, b);
+    if (b.n < 1) return false;
+    b.n -= 1;
+    return true;
+  }
+  /** an order put behind the light's delay: room for it? (then `release` when it falls due) */
+  hold(from: number): boolean {
+    const n = this.held.get(from) ?? 0;
+    if (n >= this.maxHeld) return false;
+    this.held.set(from, n + 1);
+    return true;
+  }
+  release(from: number) {
+    this.held.set(from, Math.max(0, (this.held.get(from) ?? 1) - 1));
+  }
+}

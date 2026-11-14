@@ -321,7 +321,7 @@ FLIGHT.
 - **Carte système** : toucher un corps ouvre un menu : « Prendre pour cible », « Mission vers … — aperçu ».
 - **Orbite** : on fait glisser une poussée du plan le long de l'orbite. Son nouveau temps s'affiche pendant le geste
   (Kepler) et la poussée est déplacée d'autant (`sp.node`).
-- Comme toujours, « tout sauf piloter » : liste blanche, verrou du pilote, 4 ordres par seconde. Un ordre refusé l'est
+- Comme toujours, « tout sauf piloter » : liste blanche, verrou du pilote, 4 ordres par seconde — bornés dès leur arrivée chez le pilote (une rafale de 8 par écran, 16 au plus en attente du délai lumière ; au-delà, abandonnés sans réponse : audit NET-25, 13 nov. 2026). Un ordre refusé l'est
   avec sa raison, dans la langue de la console (français ou anglais).
 
 ## Commandes tactiles et radio

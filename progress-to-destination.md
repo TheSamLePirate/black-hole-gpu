@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-14 16:26 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-14 16:30 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous.
@@ -6524,3 +6524,14 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   deleted » ; **après** « Cette salle n’existe plus. » — 1/1 ; les tests unitaires d'équipage verts, `crew-craft` 4/4 ; tsc.
   **QA-19** (trois `innerHTML` sans échappement) : l'origine des noms remontée — la table statique des sites (`SITES`, `sitesOf`) et les
   destinations de l'ordinateur de vol, aucune donnée externe ni partagée — **pas de défaut reproductible**, rien changé.
+
+## 2026-11-14T16:30Z — Audit NET-25 : les ordres d'équipage bornés dès leur arrivée
+
+- Contribution : §19 (la salle partagée tenue face à un écran bavard ou bogué : mémoire et diffusion bornées) ; audit 2026-11-10, NET-25
+  (P2, hors vague ; pas une question de droits — RD3 reste à Sam).
+- Réalisé : `CrewInbox` (`src/net/crewcmd.ts`) — par écran, une rafale de 8 puis 4 ordres/s, 16 au plus en attente du délai lumière ;
+  `netsession.ts` le consulte à la réception d'un `crew-cmd` adressé au pilote, avant toute réponse et toute minuterie ; au-delà, l'ordre est
+  abandonné sans réponse. CREW.md, catalogue.
+- Preuves : **reproduit avant** (e2e `crew-flood` : un client de test, joint en instruments, envoie 200 ordres mal formés d'un coup) : **119**
+  réponses (`crew-ack` diffusés) ; **après** : **8** — 1/1 ; `crew-inbox.test` 1/1 ; `crew-actions` 7/7 (les ordres réels) ; tsc.
+- Limites : la file retardée sous délai non mesurée en e2e (le plafond est au test unitaire) ; NET-33 (petites fuites) non traité.

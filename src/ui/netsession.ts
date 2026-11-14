@@ -66,7 +66,7 @@ import { SYSTEMS } from "../game/systems";
 import { propellantKg, spentFor } from "../game/propellant";
 import { fuelOn } from "../engine";
 import type { ManeuverNode } from "../maneuver";
-import { type Act, readCrewAck, sayOf } from "../net/crewcmd";
+import { type Act, CrewInbox, readCrewAck, sayOf } from "../net/crewcmd";
 import { lang } from "../i18n";
 import { sound } from "../audio/engine";
 import { roomCraft } from "../net/spacefleet";
@@ -189,6 +189,8 @@ export class NetSession {
   private crewSent = -Infinity;
   /** the crew's orders carried out (docs/PLAN-CREW-ACTIONS.md), made at the first one heard */
   private crewExecOf: CrewExec | null = null;
+  /** the crew's orders bounded at their arrival (audit NET-25) */
+  private crewInbox = new CrewInbox();
   private get crewExec() {
     const d = this.d;
     this.crewExecOf ??= new CrewExec({
@@ -555,9 +557,17 @@ export class NetSession {
           // (a ground station's order: the light's time held here — whatever its console did —, refused behind the
           // wormhole; one aboard, accepted: at once — AUDIT-CREW priority 6)
           const G = e.to === net.room?.slot ? this.groundOf(from) : null;
+          // (bounded at their arrival, before any answer or timer — audit NET-25: 200 malformed orders at once were answered 119
+          // times; behind a delay, a timer each)
+          if (e.to === net.room?.slot && !this.crewInbox.pass(from, performance.now())) return;
           if (G?.cut) return void this.crewExec.refuseCut(net, from, ev);
-          if (G && G.delay > 0.05) setTimeout(() => void this.crewExec.handle(net, from, ev), G.delay * 1000);
-          else void this.crewExec.handle(net, from, ev);
+          if (G && G.delay > 0.05) {
+            if (!this.crewInbox.hold(from)) return;
+            setTimeout(() => {
+              this.crewInbox.release(from);
+              void this.crewExec.handle(net, from, ev);
+            }, G.delay * 1000);
+          } else void this.crewExec.handle(net, from, ev);
         } else if (e.kind === "crew-aboard" && e.to === net.room?.slot) {
           // (a crew screen asks for a station aboard: the pilot's agreement — its orders live then, no light's time)
           const m = net.room?.members.find((x) => x.slot === from);
