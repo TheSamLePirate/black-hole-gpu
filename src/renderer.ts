@@ -11160,6 +11160,10 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
    *  for comparisons (off: the rays towards the Sun, as before) */
   private treeShadow = false;
   treeShadowOn = true;
+  /** (PLAN-J3 J3-3) the trees' shadow map cut to their crowns' silhouettes from the Sun (scenery-raster.ts shadowFs) — not their
+   *  circumscribed proxies, ~1.9 × a round crown's disc; false: the proxies whole, as before 14 Nov 2026 (a comparison) */
+  treeShadowCut = true;
+  private tsmCut = true;
   /** Q4 L2a — the ground's ambient occlusion (system/gtao.ts): bound on this device, its pass, its stand-in; gtaoOn the switch */
   private gtaoBound = false;
   /** (Q7 L8) the ground's detail scans: bound, their texture */
@@ -11992,8 +11996,11 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
         fr[15]! > 0.5 &&
         (!this.tsmValid ||
           this.tsmRevision !== sc.revision ||
-          fr.some((x, i) => i !== 15 && Math.abs(x - this.tsmFrame[i]!) > (i >= 12 ? 1 : 1e-3)));
+          fr.some((x, i) => i !== 15 && Math.abs(x - this.tsmFrame[i]!) > (i >= 12 ? 1 : 1e-3)) ||
+          this.tsmCut !== this.treeShadowCut);
       this.tsmRedraw = moved;
+      this.sceneryRaster.shadowCut = this.treeShadowCut;
+      if (moved) this.tsmCut = this.treeShadowCut;
       if (fr[15]! < 0.5) this.tsmValid = false;
       if (moved) {
         this.tsmNext.set(fr);

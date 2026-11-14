@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-14 20:37 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-14 20:43 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous.
@@ -6836,3 +6836,15 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   10 % la médiane des sept précédentes écrite aux alertes), `install` (l'agent du mini, 03 h 30), `fetch` (ici : l'historique dans
   `docs/perf/nightly-mini.jsonl`). `tests/nightly-bench.test.ts` : ses témoins (20 % vu, 5 % et l'identique non). **L'A/A** (deux mesures de suite)
   en file sur le mini (job `nightly-aa`, derrière les jobs J3) — règle 3 : l'agent installé après lui seulement.
+
+### 2026-11-14 20:43 UTC — J3-3 : les ombres d'arbres à la largeur de leur houppier
+
+- **Contribution à la destination :** §7 (les ombres, un propriétaire par échelle ; la carte des arbres juste) — PLAN-J3 J3-3, PROBLEMES
+  « les bandes jaunes » (mis de côté le 12 nov. par Sam jusqu'à J1, fait).
+- **Réalisé :** `src/system/scenery-raster.ts` : la passe `trees' shadow map` a un fragment (`shadowFs`) qui écarte les texels hors du houppier
+  vu du Soleil — sphère unité ou cône unité dans le repère du houppier ; les troncs entiers ; `renderer.treeShadowCut` (vrai par défaut, la carte
+  redessinée à sa bascule). GRAPHICS-PIPELINE (C6e), PROBLEMES, PLAN-J3 §10.
+- **Preuves (mesuré, kerr-mini, `forest-wind` à la vue de Chamonix, `WIND_AB=treeShadowCut`, deux passes)** : luminance de l'image 8,17 →
+  9,24–9,58 (A/A 0,00 / 0,34), sol au soleil 3,0 → 3,3–3,7 % ; GPU p50 174 / 174–176 ms (au bruit) ; 0 erreur WebGPU. check-wgsl 84/84, tsc.
+  **Non mesuré** : J0, le M1 Max, une vue d'en haut à Soleil haut.
+- **Limites / suite :** les bords des ombres d'arbres francs et opaques (non traités) ; l'ombre reçue par l'appareil (question 3).

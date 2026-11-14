@@ -667,6 +667,12 @@ termes à un nœud fautif (43,0666 N, 6,12883 E, niveau 1).
   presque deux fois trop larges, opaques et à bords francs. **Correctif proposé, écrit puis mis de côté** (Sam, même jour : J1 d'abord,
   sans changer l'image) : un `shadowFs` qui écarte les texels hors de la silhouette du houppier vue du Soleil (droite vers le Soleil
   dans le repère unité de la sphère ou du cône), la profondeur restant celle du proxy ; à mesurer (`trees' shadow map`, image).
+- **Le correctif fait le 14 novembre 2026 (~20:43 UTC)** (PLAN-J3 J3-3, après J1) : `scenery-raster.ts` `shadowFs` — un texel de la carte n'est
+  gardé que si sa droite vers le Soleil traverse le houppier (la sphère unité, ou le cône unité : sa base, son flanc) ; les troncs entiers ; levier
+  de comparaison `renderer.treeShadowCut` (vrai par défaut). **Mesuré** (kerr-mini, la vue du constat, `forest-wind` `WIND_AB=treeShadowCut`) :
+  l'image +13 à +17 % de luminance moyenne (8,17 → 9,24–9,58 ; A/A 0,00 et 0,34), le sol au soleil (> 40) 3,0 → 3,3–3,7 % ; GPU p50 inchangé
+  au bruit (174 / 174–176 ms, cette vue très lourde) ; aucune erreur WebGPU. **Les bandes restent** en partie : les trouées entre des ombres
+  allongées par le Soleil rasant (incidence ≈ 74°) — l'aspect attendu ; leur netteté (bords francs, opaques) non traitée.
 
 ## ~~La lumière de l'appareil en retard après un saut d'horloge (le ciel d'avant gardé des minutes)~~ — réglé le 13 novembre 2026 (~23:58 UTC)
 

@@ -403,11 +403,62 @@ fn sunClip(p: vec3f) -> vec4f {
   let q = p - sun.c.xyz;
   return vec4f(dot(q, sun.r.xyz) / sun.r.w, dot(q, sun.u.xyz) / sun.u.w, clamp(0.5 - dot(q, sun.l.xyz) / (2.0 * sun.l.w), 0.0, 1.0), 1.0);
 }
-// The trees' proxies from the Sun (their shadow map): the same shapes, the shadow lists
-@vertex fn shadowVs(@location(0) m: vec4f, @builtin(instance_index) ii: u32) -> @builtin(position) vec4f {
+// The trees' proxies from the Sun (their shadow map): the same shapes, the shadow lists. The proxies are circumscribed — an
+// octahedron covers ~1.9 × its round crown's disc seen from above, a pyramid 1.27 × its cone's —: shadowFs keeps only the texels
+// whose line to the Sun crosses the crown itself (in the crown's unit frame: the unit sphere, or the unit cone — apex at 0, its base
+// disc of radius 1 at z = −1), so the shadow is the crown's, not its proxy's (PLAN-J3 J3-3, PROBLEMES « les bandes jaunes »:
+// the trees' shadows nearly twice too wide). sun.c.w 2: cut (1: the proxies whole, as before — a comparison)
+struct ShadowV {
+  @builtin(position) clip: vec4f,
+  @location(0) q: vec3f,
+  @location(1) @interpolate(flat) l: vec3f,
+  @location(2) @interpolate(flat) kind: u32,
+};
+@vertex fn shadowVs(@location(0) m: vec4f, @builtin(instance_index) ii: u32) -> ShadowV {
   let k = listsIn[LIST * CAP + ii];
-  let p = proxyPoint(m, treeOf(k, forestHead(u32(forestData(2u).x))));
-  return select(sunClip(p.xyz), vec4f(2.0, 2.0, 0.5, 1.0), p.w > 0.5);
+  let t = treeOf(k, forestHead(u32(forestData(2u).x)));
+  let p = proxyPoint(m, t);
+  var o: ShadowV;
+  o.clip = select(sunClip(p.xyz), vec4f(2.0, 2.0, 0.5, 1.0), p.w > 0.5);
+  let part = u32(m.w);
+  o.q = m.xyz;
+  // (the line to the Sun in the crown's unit frame: its axes over the crown's radii)
+  let L = sun.l.xyz;
+  o.l = select(L / max(vec3f(t.r.x, t.r.x, t.r.z), vec3f(1e-3)), vec3f(L.xy / max(t.r.x, 1e-3), L.z / max(t.r.y, 1e-3)), part == 1u);
+  o.kind = select(2u, part, part < 2u && sun.c.w > 1.5);
+  return o;
+}
+@fragment fn shadowFs(i: ShadowV) {
+  if (i.kind == 2u) { return; }
+  let L = normalize(i.l);
+  let q = i.q;
+  if (i.kind == 0u) {
+    let s = dot(q, L);
+    if (dot(q, q) - s * s > 1.0) { discard; }
+    return;
+  }
+  // (the unit cone: the base disc crossed, or its side x² + y² = z² between z −1 and 0)
+  var hit = false;
+  if (abs(L.z) > 1e-6) {
+    let b = q.xy + ((-1.0 - q.z) / L.z) * L.xy;
+    hit = dot(b, b) <= 1.0;
+  }
+  let a = dot(L.xy, L.xy) - L.z * L.z;
+  let bq = 2.0 * (dot(q.xy, L.xy) - q.z * L.z);
+  let c = dot(q.xy, q.xy) - q.z * q.z;
+  if (!hit && abs(a) > 1e-6) {
+    let D = bq * bq - 4.0 * a * c;
+    if (D >= 0.0) {
+      let r = sqrt(D);
+      let z0 = q.z + ((-bq - r) / (2.0 * a)) * L.z;
+      let z1 = q.z + ((-bq + r) / (2.0 * a)) * L.z;
+      hit = (z0 >= -1.0 && z0 <= 0.0) || (z1 >= -1.0 && z1 <= 0.0);
+    }
+  } else if (!hit && abs(bq) > 1e-9) {
+    let z = q.z + (-c / bq) * L.z;
+    hit = z >= -1.0 && z <= 0.0;
+  }
+  if (!hit) { discard; }
 }
 @vertex fn proxyVs(@location(0) m: vec4f, @builtin(instance_index) ii: u32) -> V {
   var o: V;
@@ -800,6 +851,11 @@ export class SceneryRaster {
   private meshShadowPipe: GPURenderPipeline | null = null;
   private sunU: GPUBuffer;
   private sunOn = false;
+  private sunData = new Float32Array(16);
+  private sunNone = new Float32Array(16);
+  /** (PLAN-J3 J3-3) the trees' shadow map cut to their crowns' silhouettes from the Sun — not their circumscribed proxies (~1.9 × a round
+   *  crown's disc); false: the proxies whole, as before 14 Nov 2026 (a comparison) */
+  shadowCut = true;
   private meshes: GPUBuffer[] = [];
   private meshCounts: number[] = [];
   private frameU: GPUBuffer;
@@ -977,6 +1033,8 @@ export class SceneryRaster {
             constants: { LIST: LISTS + 1 + l },
             buffers: [{ arrayStride: 16, attributes: [{ shaderLocation: 0, offset: 0, format: "float32x4" }] }],
           },
+          // (the crown's own silhouette from the Sun: the proxy's texels outside it discarded — shadowFs)
+          fragment: { module: this.module, entryPoint: "shadowFs", targets: [] },
           primitive: { topology: "triangle-list", cullMode: "none" },
           depthStencil: depthOnly,
         })
@@ -1141,7 +1199,12 @@ export class SceneryRaster {
     q.writeBuffer(this.draws, 0, this.reset);
     // (the Sun's view: its trees culled into the shadow lists when it is to be drawn — encodeShadow —; else none)
     this.sunOn = !!sun && sun[15]! > 0.5 && this.shadowReady;
-    if (sun) q.writeBuffer(this.sunU, 0, (this.sunOn ? sun : new Float32Array(16)) as Float32Array<ArrayBuffer>);
+    if (sun) {
+      // (c.w: 1 on; 2 on, the trees' proxies cut to their crowns — shadowFs, shadowCut)
+      this.sunData.set(this.sunOn ? sun : this.sunNone);
+      if (this.sunOn) this.sunData[15] = this.shadowCut ? 2 : 1;
+      q.writeBuffer(this.sunU, 0, this.sunData);
+    }
     const groups = Math.ceil(forestCells / 64);
     const gx = Math.min(groups, 65535);
     const pass = enc.beginComputePass(descriptor);

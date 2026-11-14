@@ -307,3 +307,7 @@ Aucun coût de J3 n'est mesuré ; aucun gain n'est promis.
   du `smoothstep`, un écart de ~0,05° de définition amplifié) ; la place de la caméra (à 0,17° près) prend sa table entière : appareil / sol
   **0,87–1,08 de −7,5 à −12,7°** (run `…-j3-coh-foot`, A/A ≤ 5 %). Sous −15° l'écart restant est le plancher de nuit du sol (`EARTH_NIGHT`,
   5 × le réel par calibrage Q2) que l'appareil n'a pas : **question 7 pour Sam** (§8).
+- **J3-3, la largeur des ombres d'arbres** (14 nov., ~20:43 UTC ; ne dépend pas de la question 3) : la carte d'ombre des arbres dessinait
+  leurs proxies circonscrits (~1,9 × le disque d'un houppier rond) ; `scenery-raster.ts` `shadowFs` n'en garde que le houppier vu du Soleil
+  (`renderer.treeShadowCut`, vrai par défaut). Chamonix (vue de [PROBLEMES](PROBLEMES-A-REGLER.md)) : +13–17 % de luminance, sol au soleil 3,0 →
+  3,3–3,7 %, GPU au bruit. Non mesuré : J0 (la carte n'y est redessinée qu'une image sur ~16), le M1 Max.
