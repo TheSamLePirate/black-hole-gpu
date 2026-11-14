@@ -387,6 +387,13 @@ export class CameraController {
   /** the flight's number: a new one at each newFlight (a scene, a placement, a load) — what belongs to a flight is kept
    *  with it (game/resume-point.ts) */
   flightGen = 0;
+  /** the flight spared its damage (« Go on without damage » on the craft-lost screen — audit FX-20, Sam's choice: this flight
+   *  only, the setting left as it is): its number, −1 none */
+  noDamageGen = -1;
+  /** the damage on now: the setting, unless this flight was spared it */
+  get damageOn() {
+    return this.s.damage && this.noDamageGen !== this.flightGen;
+  }
   /** the flight's end — a landing's, a docking's —: its figures graded (game/report.ts), for the HUD's card */
   /** the flight graded (null: the last report let go — a new flight) */
   onFlightReport?: (r: FlightReport | null) => void;

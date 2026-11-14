@@ -1502,7 +1502,7 @@ function airAfter(this: CameraController, dtSec: number, acc: Vec3, dtPilot: num
   const thrust = ax.map((a) => (dot3(acc, a) / Math.max(Math.hypot(...a), 1e-12)) * aU) as Vec3;
   const mp = fleet.massProps();
   const was = this.airFlight.failure;
-  const alpha = this.airFlight.after(dtSec, thrust, mp.mass, mp.I, s.damage);
+  const alpha = this.airFlight.after(dtSec, thrust, mp.mass, mp.I, this.damageOn);
   if (this.airFlight.inAir) for (let i = 0; i < 3; i++) this.pilot.omega[i] = this.pilot.omega[i]! - alpha[i]! * dtPilot;
   // (the pilot's eyes: the normal load, signed — the air's force up the craft's top over its weight)
   const L = this.airFlight.last;

@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-14 15:05 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-14 15:09 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous.
@@ -68,7 +68,7 @@ ouverts, sous 1 ms) ; J3 au stade du plan.**
 | Audit vagues 3–4 (1feb2f7f) | 4.2 la politique de temps | **fait** : vol tenu pendant la reprise GPU, cadence vraie, horloge du vol + garde ; l'onglet masqué (choix de Sam) : solo en pause dite, salle sans arrêt (l'absent ne la bloque plus, les autres avertis, remis à l'heure au retour), sauvé en partant, TARS sans réveil ; le ralentissement sous 10 images/s dit — e2e `hidden-tab` 2/2, `fps-truth` 2/2 |
 | Audit vagues 3–4 (1feb2f7f) | 4.8 découper `main()` | **fait** (accord de Sam : par petits lots) : lot 1 la persistance, lot 2 qui tient le vol (`session.ts`), lots 3–4 les étapes gardées (`frame.ts`, AR-03), lot 5 l'ordre §19.5 (AR-04), lot 6 `craft-feed.ts`, lot 7 `governor.ts` (confié par la session du rendu) — **fait** : les quatre découpes d'AR-12 (session, frame, gouverneur, poses de l'appareil) |
 | Audit vagues 3–4 (1feb2f7f) | 4.3 séparer `Settings` | **fait** : garde statique des réglages (AR-21) ; `ViewPose` et `SimState` figés une fois par image (AR-07, `view-pose.ts`) ; le renderer les lit (session du rendu, 77721acf) |
-| Audit vague 6 hors rendu (1feb2f7f) | QA-16, QA-18, AR-17, AR-18, réseau RD4/RD5, FX-18, FX-17, FX-07, QA-11 ; puis les FX hors vague : FX-08, FX-12, FX-14, FX-19 (tendance), FX-22, FX-13 (FX-11 et FX-15 déjà réglés le 11 nov., FX-16 tranché par Sam) | **faits** (accord de Sam : « un autre lot d'audit hors rendu ») ; FX-17 en 3 lots ; FX-07 l'A320 à la manette ; QA-11 le catalogue 446/446 gardé ; FX-08 V par les vues de l'appareil seul ; FX-12 les touches collées ; FX-14 chaque appareil sa configuration ; FX-19 la tendance de vitesse sur le temps du vol ; FX-13 ⇧M au vol d'abord (choix de Sam) ; e2e `report` 3/4 (le final de Le Bourget, état périmé : PROBLEMES) ; ensuite les autres FX hors vague (FX-20 « pour ce vol seulement », choix de Sam, en cours ; FX-19 la fraîcheur des écrans, à mesurer ; FX-21 des fonctions à finir) |
+| Audit vague 6 hors rendu (1feb2f7f) | QA-16, QA-18, AR-17, AR-18, réseau RD4/RD5, FX-18, FX-17, FX-07, QA-11 ; puis les FX hors vague : FX-08, FX-12, FX-14, FX-19 (tendance), FX-22, FX-13, FX-20 (FX-11 et FX-15 déjà réglés le 11 nov., FX-16 tranché par Sam) | **faits** (accord de Sam : « un autre lot d'audit hors rendu ») ; FX-17 en 3 lots ; FX-07 l'A320 à la manette ; QA-11 le catalogue 446/446 gardé ; FX-08 V par les vues de l'appareil seul ; FX-12 les touches collées ; FX-14 chaque appareil sa configuration ; FX-19 la tendance de vitesse sur le temps du vol ; FX-13 ⇧M au vol d'abord, FX-20 sans dégâts pour ce vol seulement (choix de Sam) ; e2e `report` 3/4 (le final de Le Bourget, état périmé : PROBLEMES) ; ensuite les autres FX hors vague ( FX-19 la fraîcheur des écrans, à mesurer ; FX-21 des fonctions à finir) |
 
 **Fermé récemment** : J2 (13 nov., ΔGPU nul, chemin vers §8 écrit) ; J2-C BC7 étudiée puis **rangée** (Sam : « ne pas le faire maintenant »).
 
@@ -6414,3 +6414,16 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
 - `SymInfo.reliefImg` (flighthud la fait, la symbologie la prend) : la seule donnée non clonable du vol J0 n'est plus nécessaire au dessin.
   **Vérifié** : `radar-relief` 2/2, tests HUD 151/151. Rien de gagné encore (le worker vient ensuite). [Fiche CPU](docs/progress/j0/FICHE-CPU-kerr-mini-2026-11-14.md).
 
+## 2026-11-14T15:09Z — Audit FX-20 : « Continuer sans dégâts » pour ce vol seulement (choix de Sam)
+
+- Contribution : §19 (les choix du joueur tenus : un clic après un crash ne change plus un réglage porté par ses sauvegardes) ; audit
+  2026-11-10, FX-20. Décision de Sam (13 nov., question posée) : « pour ce vol seulement ».
+- Réalisé : `camera.noDamageGen` (le numéro du vol épargné) et `camera.damageOn` (le réglage, sauf ce vol) dans `src/controls.ts` ; le crash,
+  les limites de l'air et `airInfo().damage` le lisent (`computer.ts`, `piloting.ts`) ; le bouton ne touche plus `settings.damage`, son
+  message dit « pour ce vol » (FR/EN) ; les boutons de l'écran de perte ont leurs `data-testid`. VOL-AVIONS, VOL-VAISSEAUX, BH-API, catalogue.
+- Preuves : **reproduit avant** (e2e `undamaged-flight`, F-35 perdu, vrai clic) : `settings.damage` à faux, et toujours faux au vol suivant ;
+  **après** : le réglage gardé, ce vol sans dégâts (un second crash ne perd pas l'appareil), le vol suivant avec — 1/1 ; i18n, tests de vol,
+  `craftsave`, `resume-point` verts ; tsc (hors `flighthud.ts`, en cours chez l'autre session).
+- Limites : « Reprendre » charge un instantané (un nouveau vol) : les dégâts y reviennent — voulu.
+- Suite : restent FX-19 (la fraîcheur des écrans, à mesurer d'abord) et FX-21 (fonctions à moitié finies : du travail de plan) ; NET-19
+  (un banc d'abord) ; RD3/RD6 attendent Sam.

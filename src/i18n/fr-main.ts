@@ -168,8 +168,8 @@ export default {
   "Flaps full": "Volets sortis",
   "Air brake out": "Aérofrein sorti",
   "Air brake in": "Aérofrein rentré",
-  "Damage off — the air's limits are alarms only (Settings › Game › Ground & air)":
-    "Dégâts désactivés — les limites de l'air ne sont plus que des alarmes (Réglages › Jeu › Sol et air)",
+  "Damage off for this flight — the air's limits are alarms only until the next one":
+    "Dégâts coupés pour ce vol — les limites de l'air ne sont que des alarmes jusqu'au prochain",
   "Take stopped at {0} s (10 minutes at most) — Render › Video renders it":
     "Prise arrêtée à {0} s (10 minutes au plus) — Rendu › Vidéo la rend",
   "That link's saved game could not be read: {0}": "La partie sauvegardée de ce lien n'a pas pu être lue : {0}",

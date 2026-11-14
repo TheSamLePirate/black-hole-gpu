@@ -72,7 +72,7 @@ remplaçant `c.pilotInput` (le manche) pour un geste précis (leçon 3).
 affiche l'écran de perte — « **Reprendre N s plus tôt** » (depuis le 13 nov. 2026 : un point gardé toutes les 10 s de
 vol stable sous 2,5 g, le plus récent d'au moins 15 s ; « Reprendre avant la rentrée » pour un vaisseau entré dans l'air ;
 seulement le vol et l'appareil perdus — un nouveau placement, une scène, un chargement les oublient ; e2e
-`resume-point`), « **Continuer sans dégâts** » (le réglage `damage` coupé, le temps relancé), « **Recommencer la scène** ».
+`resume-point`), « **Continuer sans dégâts** » (pour ce vol seulement : le réglage `damage` gardé, les dégâts revenus au vol suivant — depuis le 13 nov. 2026, choix de Sam, audit FX-20 ; avant, le réglage coupé pour de bon ; le temps relancé), « **Recommencer la scène** ».
 **F5 / F9** (sauvegarde et chargement rapides) rendent aussi l'état de l'avion : carburant, train, volets, aérofreins,
 poussée, maintiens ALT/HDG/A/T et postcombustion, STOVL (e2e `aircraft-save`) ; pas les systèmes de l'A320 (FMGC,
 MCDU, pannes armées), ni une formation, une interception, un ravitaillement, un ILS ou un appontage en cours ; une

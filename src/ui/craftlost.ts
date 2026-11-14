@@ -47,10 +47,11 @@ export class CraftLost {
     p.textContent = why;
     const row = document.createElement("div");
     row.className = "cl-row";
-    const btn = (label: string, fn: (() => void) | null, main = false) => {
+    const btn = (id: string, label: string, fn: (() => void) | null, main = false) => {
       if (!fn) return;
       const b = document.createElement("button");
       b.textContent = label;
+      b.dataset.testid = `cl-${id}`;
       if (main) b.className = "cl-main";
       b.onclick = () => {
         this.hide();
@@ -58,9 +59,9 @@ export class CraftLost {
       };
       row.append(b);
     };
-    btn(a.resumeAgo != null ? tr(T.resumeAgo).replace("{0}", String(a.resumeAgo)) : tr(T.resume), a.resume, true);
-    btn(tr(T.undamaged), a.undamaged);
-    btn(tr(T.restart), a.restart);
+    btn("resume", a.resumeAgo != null ? tr(T.resumeAgo).replace("{0}", String(a.resumeAgo)) : tr(T.resume), a.resume, true);
+    btn("undamaged", tr(T.undamaged), a.undamaged);
+    btn("restart", tr(T.restart), a.restart);
     box.append(code, h, p, row);
     r.append(box);
     document.body.append(r);

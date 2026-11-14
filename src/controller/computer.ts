@@ -1091,7 +1091,7 @@ function airVelocity(this: CameraController, va: Vec3): Vec3 {
 
 /** A crash (the damage on): the craft lost. */
 function crashed(this: CameraController, why: string) {
-  if (!this.s.damage || this.airFlight.failure) return;
+  if (!this.damageOn || this.airFlight.failure) return;
   this.airFlight.failure = why;
   this.onCraftLost?.(why);
 }
@@ -1252,7 +1252,7 @@ function airInfo(this: CameraController) {
     // (the outside pressure, what the hull holds now: the giants' depths — D1c)
     pressure: A.pressure(),
     failure: A.failure,
-    damage: this.s.damage,
+    damage: this.damageOn,
     body: A.body,
     rolling: !!this.rolling || !!this.local?.L.rolling,
     mode: this.flightModeNow(),

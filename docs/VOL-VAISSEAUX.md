@@ -65,8 +65,8 @@ nœud » une image plus tard).
 **Après une perte** (rupture, chaleur, crash) : en solo le jeu se met en **pause** et affiche l'écran de perte —
 « **Reprendre avant la rentrée** » (l'instantané de la dernière seconde avant l'air épais, au-dessus de 1 km/s ; sinon
 « **Reprendre N s plus tôt** » : un point gardé toutes les 10 s de vol stable dans l'air, le plus récent d'au moins 15 s ;
-depuis le 13 nov. 2026, seulement le vol et l'appareil perdus — e2e `resume-point`), « **Continuer sans dégâts** » (le
-réglage `damage` coupé), « **Recommencer la scène** ». Une sauvegarde rend aussi les consommables et pannes du vaisseau
+depuis le 13 nov. 2026, seulement le vol et l'appareil perdus — e2e `resume-point`), « **Continuer sans dégâts** » (pour
+ce vol seulement, le réglage `damage` gardé — depuis le 13 nov. 2026, audit FX-20), « **Recommencer la scène** ». Une sauvegarde rend aussi les consommables et pannes du vaisseau
 (`fleet.systems`) et sa peau ; une mission, un défi ou une leçon en cours ne reprend pas (dit). Par code : un nouveau placement efface la panne (`c.airFlight.failure`) mais ne ferme ni
 l'écran ni la pause : cliquer un de ses boutons (`document.querySelector(".craft-lost button").click()` depuis la
 console). `__bh.game.pause(false)` sans nouveau placement repart dans l'épave, la panne toujours là.

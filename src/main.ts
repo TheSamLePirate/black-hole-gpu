@@ -8128,12 +8128,14 @@ async function main() {
           }
         : null,
       resumeAgo: point?.kind === "recent" ? Math.max(1, Math.round(resumePoints.airTime - point.at)) : null,
+      // (this flight only, the setting left as it is — audit FX-20, Sam's choice, 13 Nov 2026: before, the damage setting off for good,
+      // saves included)
       undamaged: () => {
-        settings.damage = false;
+        camera.noDamageGen = camera.flightGen;
         camera.airFlight.failure = null;
         settings.animate = true;
-        onSettingsChange(["damage", "animate"]);
-        panel.toast(t("Damage off — the air's limits are alarms only (Settings › Game › Ground & air)"));
+        onSettingsChange(["animate"]);
+        panel.toast(t("Damage off for this flight — the air's limits are alarms only until the next one"));
       },
       restart: currentScene ? () => applyPreset(currentScene!) : null,
     });
