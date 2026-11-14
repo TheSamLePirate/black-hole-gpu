@@ -22,6 +22,19 @@ const SHIP: Pair[] = [
   sk("glass-sr"),
   sk("glass-flat"),
   sk("plume"),
+  // (its shadow map, its hulls — the traffic's too —, its depth pre-pass: ship.ts debugSkip)
+  sk("shadow"),
+  sk("hull"),
+  sk("pre"),
+  // (the craft small on the image — the chase camera —: its geometry's cost, vertices and shadow map, more than its pixels: what a level of
+  // detail could take — PLAN-J3 J3-6, docs/progress/j3/FICHE-J3-6-MESHOPT-2026-11-14.md)
+  {
+    name: "the craft's raster seen from the chase camera",
+    a: `__bh.settings.shipMount = "chase"; __bh.renderer.debugSkipShip = false`,
+    b: `__bh.settings.shipMount = "chase"; __bh.renderer.debugSkipShip = true`,
+  },
+  // (the A/A: nothing changed between the sides — the noise of a pair's Δ, method rule 3)
+  { name: "A/A (nothing changed)", a: "void 0", b: "void 0" },
 ];
 /** SET=trace: what each ray costs in the trace pass (its timestamps, every frame profiled — a compute pass: its own
  *  time, unlike the render passes'), at ×2 where the trace is most of the frame — the cost that keeps ×1 away */
@@ -102,7 +115,9 @@ describe.skipIf(!E2E)("the realtime render's costs, one thing at a time", () => 
         const trace: Record<"a" | "b", number[]> = { a: [], b: [] };
         const cpu: Record<"a" | "b", string> = { a: "", b: "" };
         for (let k = 0; k < 6; k++) {
-          const side = k % 2 ? "b" : "a";
+          // (A B B A A B: a linear drift of the frame — the tiles finishing, the GPU warming — cancels; A B A B A B gave B the later turns,
+          // an A/A read −2.0 ms on kerr-mini, 14 Nov 2026)
+          const side = (["a", "b", "b", "a", "a", "b"] as const)[k]!;
           await app.js(`(() => { ${side === "a" ? P.a : P.b}; return 1; })()`);
           await Bun.sleep(1200);
           await app.waitOptional(`!!__bh.renderer.variants.get(__bh.renderer.featureKey)?.rt`, 60_000);

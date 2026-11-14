@@ -44,6 +44,10 @@ quantification** — l'étape qui perd de l'information et donne d'ordinaire l'e
   plafond est déjà mesuré pour l'appareil piloté** : sur J0 (kerr-mini, 10 nov., [GRAPHICS-PIPELINE](../../GRAPHICS-PIPELINE.md) §8.4), sauter
   son dessin (`debugSkipShip`) rend **0,25 ms** — réordonner ou simplifier le F-35 ne peut pas rendre davantage : **règle 1, pas un lot de
   performance**. Le trafic et les porte-avions (vus en nombre près d'un aéroport ou en mer) ne sont pas chiffrés : à mesurer avant tout lot.
+  **Revu le même jour** (~00:23 UTC, kerr-mini, `perf-ab` `SET=ship`, Tarifa, A B B A A B, A/A +1,2 ms) : l'appareil entier coûte **3 à 6 ms** là
+  (l'ablation J0 ci-dessus le contredit, non tranché — PROBLEMES), **mais dans l'ombrage de ses pixels** : sa passe de profondeur préalable, la
+  géométrie seule, est au bruit. Un niveau de détail ou un réordonnancement n'y prendrait presque rien : la conclusion tient. Le trafic réel du
+  détroit (`perf-ab` paire « the real traffic ») : +0,4 ms, au bruit.
 - **Niveaux de détail** : le simplificateur atteint 50 % des triangles avec une erreur ≤ 0,07 % de l'étendue sur le Ranger, le Lander et les
   porte-avions, et 25 % à ≤ 1 % sur les porte-avions — l'usage le plus prometteur (le trafic lointain, les porte-avions vus de loin), à
   rapprocher du coût par passe des appareils quand il sera mesuré. Le CRJ900 plafonne à 85 % (coutures d'attributs : 10 252 sommets utiles sur

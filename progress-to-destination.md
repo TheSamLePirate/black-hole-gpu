@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-14 00:07 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-14 00:23 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous.
@@ -6272,4 +6272,13 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
 - Contribution (§8 régularité du fil principal ; la mesure que la fiche J2 « pointes » laissait au mini) : vol J0, `j2-probes` — en vol 2 images
   sur 1 010 au-delà de 2 ms (`request()` max 2,1 ms, publication max 1,9), au chargement 12 sur 1 140 (max 3,7). **Mesuré**, un passage ;
   aucun changement de code. PROBLEMES.
+
+## 2026-11-14T00:23Z — Le dessin de l'appareil mesuré : 3 à 6 ms sur kerr-mini ; l'outil `perf-ab` débiaisé
+
+- Contribution (§8, coût complet par famille ; règle 3 pour l'outil) : `perf-ab` alterne ses côtés A B B A A B (A B A B A B donnait −2,0 ms à un
+  A/A) et décompose l'appareil (carte d'ombre, coques, profondeur préalable, vue extérieure, A/A). **Mesuré** (kerr-mini, Tarifa en cockpit) :
+  l'appareil entier −2,9 à −5,6 ms (6 passages), ses coques −3,1 à −5,5, en vue extérieure −5,8 à −7,5 ; la géométrie seule au bruit ; le
+  trafic réel du détroit au bruit. Contredit l'ablation J0 du 10 nov. (−0,25 ms) : noté dans GRAPHICS-PIPELINE §8.4 et PROBLEMES, non tranché.
+- Limites : une scène, une machine ; verrières et panaches non tranchés ; pas encore sur J0. Prochaine étape : la décomposition de `ship.wgsl`
+  `fs` (règle 1 : plafond 3–6 ms), puis la même mesure sur J0.
 
