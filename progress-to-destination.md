@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-14 02:31 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-14 02:43 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous.
@@ -6356,4 +6356,11 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
 - **Vérifié en production** : \`pwa\` contre GitHub Pages (\`E2E_URL\`, le test compte maintenant l'origine de la page) — hors ligne après une
   visite, 0 fichier en échec, 2/2 (le correctif KTX2 de 8a2129a8). Leçon : après un envoi, regarder la CI de déploiement — un test de doc
   peut bloquer la production pendant des heures sans bruit.
+
+## 2026-11-14T02:43Z — CPU : le guetteur de TARS ne calcule plus la réfraction par couches chaque seconde
+
+- Contribution (§8.3, la régularité de la boucle ; 7b80113d) : `skyNow(…, layered)`, `skyInfo({ layered: false })` pour le guetteur d'événements de
+  TARS (la phase d'éclipse seule) ; `j0-reference` `J0_ALLOC_PROFILE=1` (les allocations par fonction, objets ramassés compris). **Mesuré** (vol
+  J0, kerr-mini) : 145 Mo/s alloués, dont 32 dans ce rapport ; après, la réfraction par couches absente des tranches longues (−224 ms sur 35 s,
+  ~7,5 ms une fois par seconde) ; boucle p95 8,4 ms (un passage). [Fiche CPU](docs/progress/j0/FICHE-CPU-kerr-mini-2026-11-14.md), BH-API.
 

@@ -33,3 +33,15 @@ reconstructions (la découpe change à chaque pas : aucune évitée), sommets é
 ≈ 0,1 ms par image en moyenne). La boucle p95 9,0–9,1 → 8,6–8,9 ms : **dans le bruit**, non revendiquée. Reste par reconstruction ≈ 1,15 ms
 (la copie de 1,5 Mo d'indices vers le GPU, le filtrage).
 
+## Deuxième lot (~02:43 UTC) : le ciel de TARS une fois par seconde
+
+Le relevé des allocations (`J0_ALLOC_PROFILE=1` : HeapProfiler échantillonné, objets ramassés compris — **145 Mo/s alloués** en vol) a montré
+32 Mo/s dans la réfraction par couches (`apparentElevation` → `refraction` → `bendingUp`, 60 × 4 000 pas, un tableau par pas) ; le profil CPU,
+`apparentElevation` 224 ms en 35 s. Son appelant : le guetteur d'événements de TARS (`main.ts`, une fois par seconde) qui lisait
+`camera.skyInfo()` **pour la seule phase d'une éclipse** — le rapport de réfraction complet calculé, ~7,5 ms, puis jeté. Maintenant
+`skyInfo({ layered: false })` (`skyNow` sans ce rapport) ; la télémétrie de TARS le garde quand elle le demande. **Mesuré** (vol J0, kerr-mini, un
+passage) : `apparentElevation` absent des tranches longues ; leur total 4 207–4 345 → 4 018 ms ; la boucle p95 8,4 ms (8,6–9,1 avant — un passage,
+dans le bruit mais du bon côté, le mécanisme établi). Tests du ciel et de la réfraction 20/20.
+
+Reste dans les allocations : les hauteurs du sol (`heightAt`, `refine`), `calibrationReady` (un accesseur, 2 Mo/s), les corps (`seenFrom`).
+
