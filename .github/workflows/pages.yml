@@ -195,12 +195,12 @@ jobs:
           bun test --parallel --timeout 30000 --reporter=junit --reporter-outfile=junit.xml
           bun run build:pages
           tar -cf site-main.tar -C _site .
-      # (the built site opened in a browser before it ships — audit QA-02: none was; its first frame on SwiftShader here.
-      # Informational for its first runs, its time measured on the runner — then a gate)
+      # (the built site opened in a browser before it ships — audit QA-02: none was. A gate up to the renderer made — the shaders
+      # compiled, where a 16-texture device's `seaFft` broke it on 14 Nov 2026 —; what follows reported: the runner's SwiftShader
+      # loses its device after the renderer — Sam's choice: « la fumée en porte »)
       - if: steps.built.outputs.cache-hit != 'true'
-        continue-on-error: true
         timeout-minutes: 6
-        run: bun scripts/site-smoke.ts _site --timeout 240
+        run: bun scripts/site-smoke.ts _site --timeout 240 --until renderer
       - if: always() && steps.built.outputs.cache-hit != 'true'
         uses: actions/upload-artifact@v4
         with:

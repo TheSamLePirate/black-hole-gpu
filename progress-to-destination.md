@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-14 20:12 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-14 20:37 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous.
@@ -6824,3 +6824,15 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   « unresolved value 'seaFft' » aux deux variantes) ; `site-smoke` sur `_site` construit : `gpuTextures=16` OK (8,6 s), `24` OK.
   **Non vérifié** : un vrai appareil à 16 textures ; l'aspect de la mer sans FFT (inchangé hors du ciel reflété, dont le poids était déjà 0).
 - **Suite :** l'audit fera de l'étape `site-smoke` de la CI une barrière.
+
+## 2026-11-14T20:37Z — QA-02 : la fumée en porte (choix de Sam) ; QA-12 : le banc de nuit écrit, son A/A en file sur le mini
+
+- **QA-02** : `seaFft` corrigé par la session du rendu (62b99b61) — vérifié ici (`gpuTextures=16` et 24 : le jeu dessine). En CI (run
+  43636295115) le renderer se fait désormais (13,8 s), puis SwiftShader perd l'appareil (noté dans PROBLEMES). L'étape de `pages.yml` devient
+  une **porte jusqu'au renderer** (`site-smoke --until renderer` : les shaders compilés — ce que le défaut cassait), la suite rapportée ; témoin :
+  un bundle qui lève dès son chargement fait échouer la porte. E2E.md, DEPLOY.md.
+- **QA-12** (Sam : « banc de nuit sur le mini ») : `scripts/nightly-bench.ts` — `run` (la machine reposée, attendue Nominal 20 min au plus ;
+  `j0-reference` en `J0_PHASES=flight` ; ses chiffres ajoutés à `~/.kerr-lab/nightly/history.jsonl` ; une nuit dont le GPU p50 dépasse de plus de
+  10 % la médiane des sept précédentes écrite aux alertes), `install` (l'agent du mini, 03 h 30), `fetch` (ici : l'historique dans
+  `docs/perf/nightly-mini.jsonl`). `tests/nightly-bench.test.ts` : ses témoins (20 % vu, 5 % et l'identique non). **L'A/A** (deux mesures de suite)
+  en file sur le mini (job `nightly-aa`, derrière les jobs J3) — règle 3 : l'agent installé après lui seulement.

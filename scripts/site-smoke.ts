@@ -2,7 +2,11 @@
 // artefact deployed: its relative paths, its precache, its Service Worker's scope reached production with no browser ever loading
 // them; a black screen at start would have passed CI).
 //
-//   bun scripts/site-smoke.ts [dir=_site] [--hash scene=game:artemis] [--timeout 90]
+//   bun scripts/site-smoke.ts [dir=_site] [--hash scene=game:artemis] [--timeout 90] [--until renderer|frame]
+//
+// --until renderer (the CI's gate, Sam's choice of 14 Nov 2026): failing up to the renderer made — the page, its shaders compiled
+// (the stage the 16-texture `seaFft` defect broke) —, what follows (a first frame, a device lost on the runner's SwiftShader) reported,
+// not failed on. --until frame (the default): failing up to a first frame.
 //
 // `dir` served as static files on localhost (WebGPU wants a secure context); a headless Chrome (SwiftShader on Linux, the GPU on
 // a Mac) opens it; the game must come up — its automation handle, its renderer, a first frame drawn — within the time, with no
@@ -20,6 +24,7 @@ const flag = (name: string, def: string) => {
 const dir = args.find((a) => !a.startsWith("--") && args[args.indexOf(a) - 1]?.startsWith("--") !== true) ?? "_site";
 const hash = flag("hash", "scene=game:artemis");
 const timeoutS = Number(flag("timeout", "90"));
+const untilStage = flag("until", "frame");
 
 if (!existsSync(join(dir, "index.html"))) {
   console.error(`site-smoke: ${dir}/index.html missing — build the site first (bun run build)`);
@@ -83,6 +88,25 @@ console.log(`site-smoke: ${dir} at ${url}`);
 await cdp.send("Page.enable");
 await cdp.send("Page.navigate", { url });
 await until(`typeof globalThis.__bh === "object" && !!__bh.renderer`, "the game's automation handle and its renderer");
+if (untilStage === "renderer") {
+  // (the gate passed: what follows reported — a first frame or not, an error or not —, the exit 0)
+  const counted = cdp.errors.length;
+  const t1 = Date.now();
+  let framed = false;
+  while (!framed && Date.now() - t1 < 60_000) {
+    framed = await js<boolean>(`(() => { try { return __bh.gpu.frames().completedFrames > 0; } catch { return false; } })()`).catch(
+      () => false,
+    );
+    if (!framed) await Bun.sleep(500);
+  }
+  const after = cdp.errors.slice(counted).filter((e) => !benign(e));
+  console.log(
+    `site-smoke: the gate passed (the renderer made) — then ${framed ? "a first frame drawn" : "no first frame within 60 s"}${after.length ? `, errors after it (reported, not counted):\n${after.map((e) => `    ${e.split("\n")[0]}`).join("\n")}` : ", no error"}`,
+  );
+  cdp.close();
+  server.stop(true);
+  process.exit(0);
+}
 await until(`__bh.gpu.frames().completedFrames > 0 || Number.isFinite(__bh.boot().firstImage)`, "a first frame drawn");
 // (a few seconds more for what a first frame sets off — its workers, its Service Worker)
 await Bun.sleep(3000);

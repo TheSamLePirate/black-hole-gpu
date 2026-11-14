@@ -35,6 +35,7 @@
     "scripts/e2e-catalogue.ts",
     "scripts/remote.ts",
     "scripts/site-smoke.ts",
+    "scripts/nightly-bench.ts",
     "scripts/lib"
   ],
   "exclude": ["tests/e2e/zz-*"]
