@@ -611,12 +611,13 @@ termes à un nœud fautif (43,0666 N, 6,12883 E, niveau 1).
   d'ombre −1,2 ; la profondeur préalable au bruit. **Retirés** : les « −10,5 à −12,1 ms à 30 m » et « −5,9 à −7,0 ms des flammes » — chaque fois la
   première paire d'un passage, mesurée pendant que le sol et le décor de Tarifa arrivaient encore (son côté A 66–68 ms au lieu de 62–64) : un
   biais de 4 à 6 ms que l'ordre A B B A A B n'annule pas (non linéaire) ; `perf-ab` attend maintenant les données avant la première paire.
+- **Reproduit** (second passage identique, A/A −0,1) : −4,5 / −3,8 / −5,3 / −5,8 / **−2,6** / −4,5 ; verrières +0,9, flammes +1,2, brume +0,2.
 - **Lecture** : le coût est le dessin des coques (le F-35 : 93 000 triangles, MSAA 4×, et le trafic du détroit), **pas leur ombrage** : environ
   2 ms qui restent quand l'appareil est minuscule (300 m) — la part de leurs sommets (le nuanceur principal, ses 18 flottants interpolés : la
   profondeur préalable, mêmes triangles et position seule, ne coûte rien) — et le reste avec la surface couverte.
 - **Contradiction** avec GRAPHICS-PIPELINE §8.4 (J0, 10 nov., −0,25 ms « masque gardé ») : scène et méthode différentes, non tranchée.
 - **Règle 1** : plafond ≈ 2 ms pour la géométrie (des niveaux de détail du F-35 à distance, moins de sorties interpolées), 2–5 ms au total
-  selon la vue ; à confirmer sur J0 et avec un second passage avant tout lot.
+  selon la vue ; deux passages concordants — reste à le voir sur J0 avant tout lot.
 
 ## La compilation du noyau de Jupiter proche : ~200 s à froid (M1 Max, 6 nov.) — 60 s sur kerr-mini le 13 nov., ~47 s à l'arrivée d'un voyage depuis le 13
 
