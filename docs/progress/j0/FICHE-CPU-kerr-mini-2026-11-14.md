@@ -63,3 +63,12 @@ fois par colonne et par ligne — **les mêmes flottants au bit près** (`tests/
 Restent au temps propre : la conversion géodésique (`cartToGeodetic`, 191 ms — itérative, ses résultats tenus exacts : pas touchée), le dessin du
 HUD (texte, traits), les éphémérides.
 
+## Où s'arrêter (~03:08 UTC) — règle 1
+
+Après les quatre lots, chaque poste restant identifié rend **≤ 0,1–0,2 ms par image** : la mesure des panneaux du HUD (`hud/layout.ts`
+`panels`, déjà en cache 250 ms, ~1,6 ms quatre fois par seconde : `getBoundingClientRect` et styles calculés), la conversion géodésique
+(`cartToGeodetic`, itérative, exacte), les éphémérides (`solarState` deux fois par corps et par image pour le temps de lumière), le décor de la
+navigation dans le système de Gargantua (`as`, ~3 Mo/s alloués), la publication des tuiles (budgétée par J2). **Règle 1** : un lot plafonné sous
+1 ms ne s'ouvre pas pour la cadence — ces postes ne se traitent qu'ensemble, par un chantier de fond (le renderer préparant moins chaque
+image, du travail vers des workers) ou par une décision de Sam sur la fraîcheur du HUD (redessiné moins souvent : ≈ 1,4 ms par image en jeu).
+
