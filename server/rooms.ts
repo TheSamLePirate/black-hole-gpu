@@ -57,6 +57,8 @@ export interface Peer {
 
 /** how long a device's slot stays kept for it after it was last seen [ms] (its way back after a cut) */
 const SLOT_HELD_MS = 10 * 60_000;
+/** a room's world at most: its devices remembered (audit NET-17 — every console and spectator stayed for ever) */
+const WORLD_MAX = 64;
 
 interface RoomRec {
   code: string;
@@ -205,6 +207,17 @@ export function createRooms(o: RoomsOptions) {
     for (const w of l.peers.values())
       if (w.data.last && l.rec.world[w.data.device])
         l.rec.world[w.data.device]!.craft = Buffer.from(w.data.last).toString("base64");
+  };
+  /** A room's world kept to those it serves (audit NET-17): a device with no craft left — a crew console (a new one at each load),
+   *  a spectator — forgotten past the slot's memory; at most WORLD_MAX, the oldest seen let go first; those here kept. */
+  const pruneWorld = (l: Live) => {
+    const here = new Set([...l.peers.values()].map((w) => w.data.device));
+    const W = l.rec.world;
+    for (const [d, e] of Object.entries(W)) if (!here.has(d) && !e.craft && now() - e.seen > SLOT_HELD_MS) delete W[d];
+    const old = Object.entries(W)
+      .filter(([d]) => !here.has(d))
+      .sort((a, b) => a[1].seen - b[1].seen);
+    for (let k = 0; Object.keys(W).length > WORLD_MAX && k < old.length; k++) delete W[old[k]![0]];
   };
   /** the craft of those away (R7): to everyone in the room — and to a newcomer his own, as he left it */
   /** a craft left in a state that holds without its pilot — landed, parked, or in orbit (carried on by Kepler) —; not one
@@ -474,6 +487,7 @@ export function createRooms(o: RoomsOptions) {
         ws.subscribe(`room:${code}`);
         l.rec.used = now();
         l.rec.world[P.device] = { ...l.rec.world[P.device], name: P.name, colour: P.colour, seen: now(), slot };
+        pruneWorld(l);
         P.last = null;
         dirty.add(code);
         send(ws, { type: "joined", re: m.id, code, name: l.rec.name, slot, clock: l.rec.clock, members: members(l) });

@@ -277,6 +277,9 @@ date en salle.
   retour dans la salle, **Reprendre mon engin** (le panneau de la salle) vous remet dessus, là où il est. Un engin
   laissé en vol dans l'air n'est pas montré aux autres (il y resterait figé — audit NET-18, 13 nov. 2026) ; son pilote le
   reprend toujours.
+  Le monde garde ceux qu'il sert : un appareil sans engin laissé — une console d'équipage, un spectateur — est oublié dix minutes après
+  son départ, et une salle se souvient de 64 appareils au plus, les plus anciennement vus oubliés d'abord (audit NET-17, 13 nov. 2026 :
+  chacun restait pour toujours).
 
 Mesuré sur kerr-mini (`tests/e2e/net-dock`) : le Ranger de Ben dérivant à 15 cm/s sur le moyeu avant de
 l'Endurance d'Ana : accroché, tenu à moins d'un millimètre de là où son engin le porte, vu sur son moyeu (à

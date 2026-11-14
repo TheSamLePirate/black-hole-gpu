@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-14 16:41 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-14 16:44 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous.
@@ -6585,3 +6585,15 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   **Non vérifié en jeu** : aucun e2e ni mesure du streaming (le changement ne touche que la frontière des 60 km et des 2 000 km, à 0–21 km près).
 - **Limites / suite :** rien ne change sous ~40 km ni au-dessus de ~2 020 km ; entre les deux, le relief et les cartes fines s'arrêtent
   désormais à la vraie hauteur.
+
+## 2026-11-14T16:44Z — Audit NET-17 : le monde d'une salle durable borné (et NET-16 vérifié)
+
+- Contribution : la tenue des salles durables (le monde persistant, R7) ; audit 2026-11-10, NET-17 (P2, rangé dans RD2 mais non fait).
+- Réalisé : `pruneWorld` (`server/rooms.ts`), à chaque arrivée : un appareil sans engin laissé (une console d'équipage — un appareil neuf
+  à chaque chargement —, un spectateur) oublié dix minutes après son départ (la mémoire de place) ; 64 appareils au plus par salle, les plus
+  anciennement vus oubliés d'abord ; ceux présents gardés. `tests/net-world-bound.test.ts`. NETWORK.md/.fr.
+- Preuves : **reproduit avant** (le serveur réel, son horloge avancée de 11 min : 40 consoles venues et reparties, puis une) : **42**
+  appareils gardés dans la base ; **après** **2** — 1/1 ; `net-rooms`, `net-server-defence`, `net-core` verts (36/36) ; tsc.
+  **NET-16** (TURN sans salle) : **déjà réglé** au lot RD2 (`ice` ne donne le relais qu'à un membre d'une salle).
+- Limites : le plafond de 64 non éprouvé par un test (seule la purge l'est) ; le retrait d'un appareil par le propriétaire (piste de
+  l'audit) non fait ; `server/rooms.ts` touché : le serveur de salles se redéploie.
