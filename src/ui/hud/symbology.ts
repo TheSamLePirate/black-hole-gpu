@@ -2702,17 +2702,21 @@ function drawWeapons(
  *  red, within 300 m below amber, lower green brighter higher, the sea dark blue); kept and redrawn when we have moved a
  *  twentieth of the range, turned 3°, the range changed — twice a second at most. */
 const RELIEF_N = 48;
-let reliefImg: { canvas: HTMLCanvasElement; key: string; at: number } | null = null;
-function radarRelief(R: NonNullable<SymInfo["relief"]>, range: number): HTMLCanvasElement {
+let reliefImg: { canvas: HTMLCanvasElement | OffscreenCanvas; key: string; at: number } | null = null;
+function radarRelief(R: NonNullable<SymInfo["relief"]>, range: number): HTMLCanvasElement | OffscreenCanvas {
   const D0 = Math.PI / 180;
   const RE = 6_371_008.8;
   const step = range / 10;
   const key = `${range}|${Math.round((R.lat * D0 * RE) / step)}|${Math.round((R.lon * D0 * RE * Math.cos(R.lat * D0)) / step)}|${Math.round(R.hdg / (3 * D0))}|${Math.round(R.alt / 100)}`;
   const now = performance.now();
   if (reliefImg && (reliefImg.key === key || now - reliefImg.at < 500)) return reliefImg.canvas;
-  const canvas = reliefImg?.canvas ?? document.createElement("canvas");
+  // (an OffscreenCanvas where there is one — no page needed: the HUD's drawing kept free of the DOM, the first step towards drawing it in a
+  // worker, docs/progress/j0/FICHE-CPU-kerr-mini-2026-11-14.md; the same pixels)
+  const canvas =
+    reliefImg?.canvas ??
+    (typeof OffscreenCanvas !== "undefined" ? new OffscreenCanvas(RELIEF_N, RELIEF_N) : document.createElement("canvas"));
   canvas.width = canvas.height = RELIEF_N;
-  const g = canvas.getContext("2d")!;
+  const g = canvas.getContext("2d") as CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D;
   const im = g.createImageData(RELIEF_N, RELIEF_N);
   const c = Math.cos(R.hdg),
     sn = Math.sin(R.hdg);

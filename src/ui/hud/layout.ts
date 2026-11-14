@@ -26,8 +26,19 @@ const visible = (e: HTMLElement) => {
   return cs.display !== "none" && cs.visibility !== "hidden";
 };
 
+/**
+ * Where the page's figures come from: the panels' boxes and the view's size, read on the page by default; a HUD drawn away from the page
+ * (in a worker — docs/progress/j0/FICHE-CPU-kerr-mini-2026-11-14.md) is given them instead (`layoutSource`). Unset: as before.
+ */
+let given: { panels: () => Box[]; view: () => { w: number; h: number } } | null = null;
+export function layoutSource(src: { panels: () => Box[]; view: () => { w: number; h: number } } | null) {
+  given = src;
+}
+const viewSize = () => given?.view() ?? { w: innerWidth, h: innerHeight };
+
 /** The panels shown now (cached 250 ms; measured again when the window's size changes). */
 export function panels(now = performance.now()): Box[] {
+  if (given) return given.panels();
   if (typeof document === "undefined") return [];
   const sz = `${innerWidth}x${innerHeight}`;
   if (sz === size && now - at < 250) return cache;
@@ -63,14 +74,15 @@ export function fit(
   o: { reach?: number; margin?: number; skip?: string; others?: Box[] } = {},
 ): Box | null {
   // (no page — a test drawing on a recorder —: where it wants to be)
-  if (typeof innerWidth === "undefined") return want;
+  if (!given && typeof innerWidth === "undefined") return want;
+  const { w: vw, h: vh } = viewSize();
   const m = o.margin ?? 6;
   const reach = o.reach ?? 400;
   const blocks = [...panels(), ...(o.others ?? [])].filter((b) => b.id !== o.skip);
   const [dx, dy] = dir === "up" ? [0, -1] : dir === "down" ? [0, 1] : dir === "left" ? [-1, 0] : [1, 0];
   for (let d = 0; d <= reach; d += 2) {
     const b = { ...want, x: want.x + dx * d, y: want.y + dy * d };
-    if (b.x < m || b.y < m || b.x + b.w > innerWidth - m || b.y + b.h > innerHeight - m) return null;
+    if (b.x < m || b.y < m || b.x + b.w > vw - m || b.y + b.h > vh - m) return null;
     if (!blocks.some((p) => overlap(b, p, m))) return b;
   }
   return null;

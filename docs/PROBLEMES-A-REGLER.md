@@ -634,6 +634,12 @@ termes à un nœud fautif (43,0666 N, 6,12883 E, niveau 1).
   (l'effacement et la résolution du MSAA) mais les pixels de l'appareil : resserrer la boîte ne rendrait presque rien. Le levier reste le MSAA
   lui-même (question 6 de PLAN-J3).
 
+## Le HUD : l'oscilloscope spatial touche la carte du hub d'un pixel (e2e `hud-layout`, état « 02-circ »)
+
+- **Constaté** (14 nov. 2026, ~03:21 UTC, kerr-mini) : `.fl-hubcard [1106,783,258,265] × space-scope [1267,560,314,224]` — **aussi avec le code
+  d'avant** (`hud/layout.ts` de HEAD remis pour l'essai) : antérieur. `fit` garde 6 px de marge avec les panneaux qu'il connaît : la carte du hub
+  n'était sans doute pas encore dans sa mesure (en cache 250 ms) quand l'oscilloscope a été placé. Non cherché plus loin.
+
 ## La compilation du noyau de Jupiter proche : ~200 s à froid (M1 Max, 6 nov.) — 60 s sur kerr-mini le 13 nov., ~47 s à l'arrivée d'un voyage depuis le 13
 
 - **Constaté le 6 novembre 2026** (Sam : « 200 s pour Jupiter »), en écrivant l'e2e `aurora-jupiter` (AM3).

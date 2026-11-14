@@ -86,3 +86,14 @@ rend à la page : les cibles cliquables (`hudHits`), les boîtes dessinées (`la
 synchronisation est mal faite — à mesurer (l'âge des instruments, la sonde de J3-0) avant et après. **Plafond** (règle 1) : ≈ 1,4 ms par image de la
 boucle sur kerr-mini.
 
+### Le chantier commencé (~03:21 UTC) — étape 1 : la symbologie sans le DOM
+
+- **La référence de son risque** : l'âge des écrans du cockpit (J0 `agecheck`, kerr-mini) p50 18,1 / p95 55,8 ms (A/A 18,8 / 55,9 ; le témoin
+  positif — écrans gelés — vu à plusieurs secondes). (L'âge du HUD de la toile lui-même n'a pas de sonde : à écrire avec le worker — le HUD et
+  l'image d'une même boucle aujourd'hui.)
+- **Fait** : l'image du relief du radar sur un `OffscreenCanvas` quand il existe (`symbology.ts` `radarRelief`, les mêmes pixels) ; les panneaux
+  et la taille de la vue donnés au placement (`hud/layout.ts` `layoutSource` : par défaut la page, comme avant) — test unitaire ; tests du HUD
+  100/100 ; e2e `hud-layout` 9/10, l'état « 02-circ » échouant aussi sans ce changement (PROBLEMES). **Reste** : les données par image clonables
+  (`SymInfo` porte des fonctions : l'échantillonneur de relief, la vue du futur, la piste), les pistes proches, la langue, le retour des cibles
+  cliquables et des boîtes dessinées, le worker lui-même et la sonde de l'âge du HUD.
+

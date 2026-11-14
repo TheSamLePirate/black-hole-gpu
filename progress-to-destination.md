@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-14 03:13 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-14 03:21 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous.
@@ -6380,4 +6380,11 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
 - **Mesuré** (kerr-mini, `perf-ab` `SET=ship`, `ship.lastBox` nouveau) : cockpit et chase, boîte 100 % de l'image (−3,8 / −6,7 ms) ; 30 m, 22 %
   (−5,0) ; 300 m, 8 % (−2,6) ; A/A −0,2 — le coût suit les pixels de l'appareil, pas l'aire de la boîte : pas de lot « boîte serrée ». PROBLEMES,
   BH-API.
+
+## 2026-11-14T03:21Z — Le HUD vers un worker, étape 1 : la symbologie sans le DOM
+
+- Contribution (§7 « travail CPU lourd en préparation/workers », la boucle CPU ≈ 1,4 ms de HUD par image) : `radarRelief` sur `OffscreenCanvas`,
+  `layoutSource` (panneaux et vue donnés) ; comportement inchangé par défaut. **Vérifié** : tests HUD 100/100 + 1 nouveau ; `hud-layout` 9/10 —
+  l'échec « 02-circ » antérieur (reproduit sans le changement, PROBLEMES). Référence de l'âge des écrans (agecheck) : p95 55,8 ms. Rien de gagné
+  encore : le gain viendra du worker. [Fiche CPU](docs/progress/j0/FICHE-CPU-kerr-mini-2026-11-14.md).
 
