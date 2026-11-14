@@ -51,7 +51,7 @@ import { hudShownFor } from "./hud/declutter";
 import { HudKindChooser, hudInView, hudKindName, type HudKind } from "../game/hudkind";
 import type { BarPiece } from "./topbar";
 import { safeFrame } from "./hud/safe";
-import { type Box, fit } from "./hud/layout";
+import { type Box, fit, remeasure } from "./hud/layout";
 import { noteUnclonable } from "./hud/clone-probe";
 import { hudMode, shownSpeed } from "./hud/model";
 import { t, tf } from "../i18n";
@@ -651,7 +651,7 @@ export class FlightHud {
     this.lastGraph = H?.graph ?? null;
     this.drawBig();
     if (!H) {
-      if (!C.hidden) (C.hidden = true), (this.hubSig = "");
+      if (!C.hidden) (C.hidden = true), (this.hubSig = ""), (this.hubBoxH = -1), remeasure();
       return;
     }
     const esc = (t: string) => t.replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" })[c]!);
@@ -701,7 +701,17 @@ export class FlightHud {
         : "") +
       (H.next ? `<div class="fl-hub-next">${esc(H.next)}</div>` : "");
     this.boundHubCard();
+    // (its box changed — shown, or a row more or less, its top moved: anchored at the bottom, it grows upwards —: the HUD's placing
+    // measures the panels again, not in 250 ms — the space scope was placed against the card's old top, a pixel under it, e2e hud-layout
+    // « 02-circ », 14 Nov 2026; the layout already flushed above: its height costs nothing more)
+    const hh = C.offsetHeight;
+    if (hh !== this.hubBoxH) {
+      this.hubBoxH = hh;
+      remeasure();
+    }
   }
+  /** the hub card's height when the HUD's placing last measured it [CSS px] */
+  private hubBoxH = -1;
 
   /**
    * The card's height bounded: its top kept under the mission's bar — on a short window, or with a long
