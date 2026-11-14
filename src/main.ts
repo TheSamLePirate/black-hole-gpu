@@ -1360,8 +1360,9 @@ async function main() {
         })(),
         // (an eclipse at the camera's place: its phase — PLAN-CIEL C11)
         eclipse:
-          (camera as unknown as { skyInfo?: () => { eclipse?: { phase: string } } | null })
-            .skyInfo?.()
+          // (the eclipse's phase alone: the layered refraction's report left out — 7.5 ms a second on kerr-mini, 14 Nov 2026)
+          (camera as unknown as { skyInfo?: (o?: { layered?: boolean }) => { eclipse?: { phase: string } } | null })
+            .skyInfo?.({ layered: false })
             ?.eclipse?.phase.replace("none", "") ?? "",
       };
       const was = tarsSeen;
@@ -8007,7 +8008,7 @@ async function main() {
   realWeather.onUpdate = metarTick;
   // (the sky in figures for TARS's telemetry: system/sky-now.ts)
   // (and the horizons' state — H4: the world's maps, the Earth's levels)
-  (camera as unknown as { skyInfo: () => unknown }).skyInfo = () => {
+  (camera as unknown as { skyInfo: (o?: { layered?: boolean }) => unknown }).skyInfo = (o?: { layered?: boolean }) => {
     // (R1: the real weather's air for the layered model's figures, when the weather is the real one)
     const w = settings.weather === "real" ? renderer.weatherReal : undefined;
     const real = w?.model
@@ -8018,7 +8019,7 @@ async function main() {
             source: `METAR (QNH, T, dew point): ${w.report?.split(" ")[0] ?? ""}`,
           }
         : undefined;
-    const sky = skyNow(settings, sim.time, renderer.refractivity(settings), real);
+    const sky = skyNow(settings, sim.time, renderer.refractivity(settings), real, o?.layered !== false);
     return sky ? { ...sky, horizons: renderer.horizonStatus(settings) } : null;
   };
   // (the map's weather layer: the real weather's own — the day's clouds, each station's)

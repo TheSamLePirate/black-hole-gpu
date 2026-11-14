@@ -303,7 +303,47 @@ describe.skipIf(!E2E)("J0: the reference flight over Toulon-Hyères", () => {
       await app.cdp.send("Profiler.setSamplingInterval", { interval: 200 });
       await app.cdp.send("Profiler.start");
     }
+    // (J0_ALLOC_PROFILE=1: the allocations over the second half, sampled (CDP HeapProfiler, one sample every 64 KB allocated): who feeds the
+    // collector — its pauses of 11–20 ms seen in the CPU profile, 14 Nov 2026 — by allocating function, its bytes a second)
+    const allocProfile = process.env.J0_ALLOC_PROFILE === "1" && tag === "flight";
+    if (allocProfile) {
+      await app.cdp.send("HeapProfiler.enable");
+      // (the collected objects counted too — by default only those still alive at the stop)
+      await app.cdp.send("HeapProfiler.startSampling", {
+        samplingInterval: 65536,
+        includeObjectsCollectedByMajorGC: true,
+        includeObjectsCollectedByMinorGC: true,
+      });
+    }
+    const tAlloc = Date.now();
     const b = await app.js<Flown>(flyJs(J0_SCENE.flightS - half, false));
+    if (allocProfile) {
+      type HNode = {
+        callFrame: { functionName: string; url: string; lineNumber: number; columnNumber: number };
+        selfSize: number;
+        children: HNode[];
+      };
+      const { profile } = await app.cdp.send<{ profile: { head: HNode } }>("HeapProfiler.stopSampling", {}, 60);
+      const secs = (Date.now() - tAlloc) / 1000;
+      const by = new Map<string, number>();
+      const walk = (n: HNode, path: string[]) => {
+        const f = `${n.callFrame.functionName || "(anonymous)"}:${n.callFrame.lineNumber + 1}:${n.callFrame.columnNumber + 1}`;
+        const p2 = [...path, f];
+        if (n.selfSize > 0) {
+          const key = p2.slice(-3).join(" < ");
+          by.set(key, (by.get(key) ?? 0) + n.selfSize);
+        }
+        for (const c of n.children) walk(c, p2);
+      };
+      walk(profile.head, []);
+      const total = [...by.values()].reduce((a, x) => a + x, 0);
+      console.log(
+        `  J0 allocations (sampled), ${(total / secs / 1e6).toFixed(1)} MB/s over ${secs.toFixed(0)} s; the heaviest (MB/s, the last three frames):`,
+      );
+      for (const [k, v] of [...by].sort((x, y) => y[1] - x[1]).slice(0, 25))
+        console.log(`    ${(v / secs / 1e6).toFixed(2).padStart(6)}  ${k}`);
+      await Bun.write(`${OUT}/flight-second-half.heapprofile`, JSON.stringify(profile));
+    }
     console.log(`  J0 the raster's rings since the start: ${JSON.stringify(await app.js(`__bh.renderer.terrainRasterStats.ringBuilds`))}`);
     if (cpuProfile) {
       const { profile: pr } = await app.cdp.send<{ profile: CdpProfile }>("Profiler.stop", {}, 60);

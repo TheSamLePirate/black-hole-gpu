@@ -48,7 +48,15 @@ export interface SkyNow {
 }
 
 /** The sky now at the camera (null: not over a world of ours). n0: the air's sea-level refractivity drawn. */
-export function skyNow(s: Settings, t: number, n0: number, realAir?: AirState & { source: string }): SkyNow | null {
+export function skyNow(
+  s: Settings,
+  t: number,
+  n0: number,
+  realAir?: AirState & { source: string },
+  /** false: the layered model's report left out — a bisection of 60 rays of 4 000 steps each, ~7.5 ms on kerr-mini: TARS's event watcher,
+   *  once a second for the eclipse's phase alone, made one of the loop's long iterations a second (J0's CPU profile, 14 Nov 2026) */
+  layered = true,
+): SkyNow | null {
   const cam = cameraFrame(s, t);
   const hz = horizonAt(s, cam, t);
   if (!hz) return null;
@@ -97,10 +105,12 @@ export function skyNow(s: Settings, t: number, n0: number, realAir?: AirState & 
       ? {
           refractivity: Number(n0.toPrecision(4)),
           horizonArcmin: r1(bending(0, h, n0) / (D / 60)),
-          layered: (() => {
-            const L = layeredReport(n0, h, sun.altDeg, realAir);
-            return { ...L, sunApparentAltDeg: L.apparentAltDeg };
-          })(),
+          layered: layered
+            ? (() => {
+                const L = layeredReport(n0, h, sun.altDeg, realAir);
+                return { ...L, sunApparentAltDeg: L.apparentAltDeg };
+              })()
+            : undefined,
         }
       : null,
     sun,

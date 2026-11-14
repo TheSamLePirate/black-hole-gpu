@@ -1890,7 +1890,7 @@ aircraft fly: [VOL-AVIONS.md](VOL-AVIONS.md); recipes: [E2E-VOLS.md](E2E-VOLS.md
 | `nav` / `mission` / `missionAbort()` | 5 / 7 / 4 | | the plane's flight plan; an **air** mission flown (not `__bh.mission`) |
 | `a320`, `a320Sys`, `a320Props`, `a320Park` | 6 / 5 / 6 / 6 | | the A320's FCS, systems, FlightGear property bag (`"systems/hydraulic/green-psi"`…), parking brake |
 | `entryRun` / `entrySite` | 10 / 8 | | the entry autopilot's run (`phase: "plan" \| "wait" \| "burn" \| "entry" \| "glide"`, `tBurn`, `dv`, `bank`…; read the approach from `entryRun.app`); where it comes down (set it before `setAuto("entry")`) |
-| `skyInfo()` | 11 | | the sky now: `sun.altDeg`, `sun.lightAltDeg`, `heightM`, `refraction`… (patched on the instance by main.ts) |
+| `skyInfo(o?)` | 11 | | the sky now: `sun.altDeg`, `sun.lightAltDeg`, `heightM`, `refraction`… (patched on the instance by main.ts); `{ layered: false }` leaves out `refraction.layered` (the layered model's report: ~7.5 ms on kerr-mini — TARS's event watcher asks it so, once a second, since 14 Nov 2026) |
 | `viewController()` / `viewSettings()` | 11 / 4 | | the spectator's controller when one is out, else this one; the settings drawn |
 | `netOwn()` | 5 | `→ { p, v, fwd, up, right, h } \| null` | our craft as the network sends it (Earth-fixed m, m/s; `h` over the mean radius) |
 
