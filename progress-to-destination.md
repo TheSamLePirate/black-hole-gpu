@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-14 01:03 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-14 01:16 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous.
@@ -57,6 +57,7 @@ ouverts, sous 1 ms) ; J3 au stade du plan.**
 | Rendu (33d89754) | Chargement : le noyau du monde visé compilé pendant le voyage (`prewarmNear`) ; hors ligne après une visite (cartes KTX2 gardées) | **faits, mesurés** (kerr-mini) : arrivée à Jupiter à froid 73,7 → 47 s (A/A ×2) ; hors ligne 5 cartes en échec → 0 (`pwa` 2/2) |
 | Rendu (33d89754) | Saturne vue de son ombre : le grain de la lumière des anneaux | **fait, mesuré** (kerr-mini) : 16–22 % → 5,5–7,5 % d'une image à l'autre (4 échantillons stratifiés) ; coût sous le bruit du compteur |
 | Rendu (33d89754) | J3-1 : la sonde de cohérence appareil / sol (§4) ; la sonde de l'appareil réécrite après un saut d'horloge | **faits, mesurés** (kerr-mini) : direction ≤ 0,00004°, air ≤ 0,3 %, ciel 1,003–1,006 au coucher (était 1,2–1,8 après un saut de 5 min) |
+| Rendu (33d89754) | Le coût de l'appareil (le dessin du F-35) | **mesuré** (kerr-mini) : 3,5–4,5 ms — Tarifa deux passages propres, J0 −3,3/−3,6 ; ses coques, ≈ 2 ms de sommets vu de loin ; le −0,25 du 10 nov. périmé ; lot possible (niveaux de détail) |
 | Audit vagues 3–4 (1feb2f7f) | 3.3 Sauvegardes | **fait pour l'essentiel** : lot 1 (736b26a2, une clé par sauvegarde, rien écrasé en silence) ; lot 2 (f265f467 : « Reprendre » du vol perdu seulement, un avion a ses points ; carburant, train, volets, freins, maintiens, systèmes des vaisseaux sauvés ; l'activité en cours dite) — e2e 6/6, bun test 2 228/0. Reste : l'état d'une mission ou d'un combat (Sam), les systèmes de l'A320, IndexedDB |
 | Audit vagues 3–4 (1feb2f7f) | 3.1 réseau RD0 + RD1 | **fait** : la frontière d'entrée (`src/net/inbound.ts`) ; un événement mal formé figeait l'image (163 → 0), plus maintenant — e2e `net-inbound` 6/6, net-battle/coop/crew/board verts |
 | Audit vagues 3–4 (1feb2f7f) | 3.2 réseau RD2 | **fait** : le serveur se défend (salles par adresse, débit, mots de passe salés et freinés, identité non publiée, rôle gardé, expiration) — six défauts vus avant, 0/6 → 6/6 |
@@ -6298,4 +6299,10 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   300 m ; ses coques −2,3 à −5,4 ; ombrage, verrières, flammes, brume au bruit. Leviers ajoutés : `debugSkip` `own`, `plume-occl`,
   `plume-jets`, `trails`, `lamps`.
 - Lecture : ≈ 2 ms de sommets quand l'appareil est loin — un lot de niveaux de détail possible (règle 1), à confirmer (second passage, J0).
+
+## 2026-11-14T01:16Z — Sur J0 aussi, l'appareil coûte 3,3 à 3,6 ms (le −0,25 du 10 novembre périmé)
+
+- **Mesuré** (kerr-mini, `j0-reference` `J0_PHASES=flight,ablate J0_ORDER=base,ship,base,ship,base`, 1 278 MHz, « Nominal », code 2fd187c0) :
+  GPU p50 55,3–56,4 → 52,0–52,2 ms. La contradiction avec Tarifa levée ; GRAPHICS-PIPELINE §8.4 (l'ancien chiffre marqué périmé), PROBLEMES,
+  fiche J3-6, État courant.
 

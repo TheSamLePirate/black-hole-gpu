@@ -50,7 +50,7 @@ quantification** — l'étape qui perd de l'information et donne d'ordinaire l'e
   — minuscule à l'image ; ses coques −2,3 à −5,4 ; son ombrage (même un gris constant), ses verrières, ses flammes au bruit. **La conclusion
   change en partie** : environ 2 ms restent quand l'appareil est minuscule — la part de ses sommets (le nuanceur principal ; la profondeur
   préalable, position seule, ne coûte rien). **Des niveaux de détail du F-35 à distance pourraient rendre jusqu'à ≈ 2 ms** (règle 1 : un lot
-  possible, à confirmer par un second passage et sur J0) ; le réordonnancement seul, moins sûr (le coût est-il le cache des sommets ou leurs
+  possible : un second passage concorde, et l'ablation J0 refaite donne −3,3 à −3,6 ms pour l'appareil — le −0,25 ci-dessus est périmé) ; le réordonnancement seul, moins sûr (le coût est-il le cache des sommets ou leurs
   sorties interpolées ? non séparé). Le trafic réel du
   détroit (`perf-ab` paire « the real traffic ») : +0,4 ms, au bruit.
 - **Niveaux de détail** : le simplificateur atteint 50 % des triangles avec une erreur ≤ 0,07 % de l'étendue sur le Ranger, le Lander et les

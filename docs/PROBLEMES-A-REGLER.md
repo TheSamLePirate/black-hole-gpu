@@ -615,9 +615,12 @@ termes à un nœud fautif (43,0666 N, 6,12883 E, niveau 1).
 - **Lecture** : le coût est le dessin des coques (le F-35 : 93 000 triangles, MSAA 4×, et le trafic du détroit), **pas leur ombrage** : environ
   2 ms qui restent quand l'appareil est minuscule (300 m) — la part de leurs sommets (le nuanceur principal, ses 18 flottants interpolés : la
   profondeur préalable, mêmes triangles et position seule, ne coûte rien) — et le reste avec la surface couverte.
-- **Contradiction** avec GRAPHICS-PIPELINE §8.4 (J0, 10 nov., −0,25 ms « masque gardé ») : scène et méthode différentes, non tranchée.
+- **Sur J0** (~01:16 UTC, l'ablation `ship` de `j0-reference`, ordre base, ship, base, ship, base, kerr-mini à 1 278 MHz, « Nominal ») : GPU p50
+  56,4 / 55,3 / 55,3 ms contre **52,2 / 52,0** sans le dessin de l'appareil — **−3,3 à −3,6 ms** ; le −0,25 du 10 nov. (GRAPHICS-PIPELINE §8.4)
+  **périmé**. Les deux scènes concordent : l'appareil, 3,5 à 4,5 ms sur kerr-mini (cible 40 ms).
 - **Règle 1** : plafond ≈ 2 ms pour la géométrie (des niveaux de détail du F-35 à distance, moins de sorties interpolées), 2–5 ms au total
-  selon la vue ; deux passages concordants — reste à le voir sur J0 avant tout lot.
+  selon la vue ; deux passages concordants à Tarifa, et J0 d'accord : un lot possible (les niveaux de détail du F-35 vu de loin, les sorties
+  du nuanceur de sommets), à proposer avec son plafond.
 
 ## La compilation du noyau de Jupiter proche : ~200 s à froid (M1 Max, 6 nov.) — 60 s sur kerr-mini le 13 nov., ~47 s à l'arrivée d'un voyage depuis le 13
 
