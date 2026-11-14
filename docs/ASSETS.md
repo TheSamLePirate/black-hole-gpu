@@ -33,7 +33,7 @@ Each binary under `assets/` is the output of a script, from a source kept outsid
 | `assets/detail` | `scripts/build-detail-scans.py` | five ambientCG materials (CC0), basisu UASTC |
 | `assets/noise` | `scripts/build-blue-noise.ts` | procedural (void-and-cluster, deterministic seeds) |
 | `assets/title`, `assets/scenes` | `scripts/build-title-maps.py`, `title-art.ts`, `logo-render.ts`, `scene-thumbs.ts` | the game's own maps and renders |
-| `assets/lens/lensdirt.jpg` | — | **origin not recorded** (versioned by 2e80e8a3; to be traced or replaced) |
+| `assets/lens/lensdirt.jpg` | — (a copy) | the texture pack's `assets/tex/base/lensdirt-low.jpg` (git-ignored; used since c4443ece, 4 Oct 2026, versioned by 2e80e8a3); **its author and licence not recorded** — the pack's `credits.txt` does not name it: to be traced or replaced |
 
 Most craft and traffic meshes share one format (the `.bin` "TRFC" / the craft's: a 40-byte header, 8 or 10 interleaved floats a
 vertex, 32-bit indices — gzipped on the wire by Pages and the server); the F-35, the A320, the ISS and the astronaut have their own. Their compression and levels of detail by meshoptimizer were evaluated on

@@ -327,4 +327,5 @@ Aucun coût de J3 n'est mesuré ; aucun gain n'est promis.
 - **J3-6, les sources des maillages écrites** (14 nov., ~22:35 UTC ; ne dépend pas de la question 4) : `docs/ASSETS.md` dit pour chaque
   dossier d'appareils, de trafic, de porte-avions, de pistes, de textures de détail, de bruit et de titre le script qui le construit et sa
   source (licence quand elle est connue : FlightGear GPL v2, ambientCG CC0, OurAirports domaine public ; les modèles fournis : non notées) ;
-  le format commun des maillages et l'évaluation de meshoptimizer. Trouvé : `assets/lens/lensdirt.jpg` sans origine notée.
+  le format commun des maillages et l'évaluation de meshoptimizer. Trouvé : `assets/lens/lensdirt.jpg` vient du pack `assets/tex/base/` (git-ignoré), dont le `credits.txt` ne
+  le nomme pas — auteur et licence à retrouver, ou l'image à remplacer.
