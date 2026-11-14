@@ -612,15 +612,17 @@ termes à un nœud fautif (43,0666 N, 6,12883 E, niveau 1).
   première paire d'un passage, mesurée pendant que le sol et le décor de Tarifa arrivaient encore (son côté A 66–68 ms au lieu de 62–64) : un
   biais de 4 à 6 ms que l'ordre A B B A A B n'annule pas (non linéaire) ; `perf-ab` attend maintenant les données avant la première paire.
 - **Reproduit** (second passage identique, A/A −0,1) : −4,5 / −3,8 / −5,3 / −5,8 / **−2,6** / −4,5 ; verrières +0,9, flammes +1,2, brume +0,2.
-- **Lecture** : le coût est le dessin des coques (le F-35 : 93 000 triangles, MSAA 4×, et le trafic du détroit), **pas leur ombrage** : environ
-  2 ms qui restent quand l'appareil est minuscule (300 m) — la part de leurs sommets (le nuanceur principal, ses 18 flottants interpolés : la
-  profondeur préalable, mêmes triangles et position seule, ne coûte rien) — et le reste avec la surface couverte.
+- **Lecture** : le coût est le dessin des coques (le F-35 : 93 000 triangles, MSAA 4×, et le trafic du détroit), **pas leur ombrage**, et il
+  croît avec la surface couverte (4–6 ms de près). **Vu de loin, rien d'établi** (~01:21 UTC) : à 300 m l'appareil entier −1,9 et ses coques seules
+  −1,5, pour un A/A +1,3 — au bord du bruit ; et 90 000 sommets ne pèsent presque rien pour ce GPU (hors ligne : depuis le cockpit, 3 % des
+  triangles opaques du F-35 sont dans le champ) : la « part des sommets ≈ 2 ms » écrite plus tôt était une lecture trop forte — **retirée**.
+  Restent, pour le coût de près : la rastérisation MSAA 4× (deux fois : la profondeur préalable puis l'ombrage), les coûts fixes des passes.
 - **Sur J0** (~01:16 UTC, l'ablation `ship` de `j0-reference`, ordre base, ship, base, ship, base, kerr-mini à 1 278 MHz, « Nominal ») : GPU p50
   56,4 / 55,3 / 55,3 ms contre **52,2 / 52,0** sans le dessin de l'appareil — **−3,3 à −3,6 ms** ; le −0,25 du 10 nov. (GRAPHICS-PIPELINE §8.4)
   **périmé**. Les deux scènes concordent : l'appareil, 3,5 à 4,5 ms sur kerr-mini (cible 40 ms).
-- **Règle 1** : plafond ≈ 2 ms pour la géométrie (des niveaux de détail du F-35 à distance, moins de sorties interpolées), 2–5 ms au total
-  selon la vue ; deux passages concordants à Tarifa, et J0 d'accord : un lot possible (les niveaux de détail du F-35 vu de loin, les sorties
-  du nuanceur de sommets), à proposer avec son plafond.
+- **Règle 1** : plafond 4–6 ms de près (cockpit, « chase », 30 m) sur kerr-mini, deux passages à Tarifa et J0 d'accord ; **le levier n'est pas
+  nommé** (ni l'ombrage, ni les verrières, ni les flammes, ni la composition) — à chercher par une capture de trame GPU ou un levier du MSAA
+  avant tout lot. Un niveau de détail vu de loin : gain non établi (≤ 2 ms, au bord du bruit).
 
 ## La compilation du noyau de Jupiter proche : ~200 s à froid (M1 Max, 6 nov.) — 60 s sur kerr-mini le 13 nov., ~47 s à l'arrivée d'un voyage depuis le 13
 

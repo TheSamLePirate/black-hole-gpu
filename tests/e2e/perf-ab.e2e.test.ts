@@ -83,6 +83,12 @@ const SHIP: Pair[] = [
     a: `__bh.settings.shipMount = "around"; Object.assign(__bh.camera.outside, { yaw: 60, pitch: 4, dist: 30 }); __bh.settings.heatHaze = true`,
     b: `__bh.settings.shipMount = "around"; Object.assign(__bh.camera.outside, { yaw: 60, pitch: 4, dist: 30 }); __bh.settings.heatHaze = false`,
   },
+  // (from 300 m — the craft a few dozen pixels —: its hulls alone, the passes kept: what its vertices cost, against the passes' own overheads)
+  {
+    name: "the craft from 300 m: its hulls (debugSkip hull)",
+    a: `__bh.settings.shipMount = "around"; Object.assign(__bh.camera.outside, { yaw: 60, pitch: 4, dist: 300 }); __bh.renderer.ship.debugSkip.delete("hull")`,
+    b: `__bh.settings.shipMount = "around"; Object.assign(__bh.camera.outside, { yaw: 60, pitch: 4, dist: 300 }); __bh.renderer.ship.debugSkip.add("hull")`,
+  },
   // (the A/A: nothing changed between the sides — the noise of a pair's Δ, method rule 3)
   { name: "A/A (nothing changed)", a: "void 0", b: "void 0" },
 ];
