@@ -108,6 +108,23 @@ const TRACE: Pair[] = [
   { name: "sea FFT → wave trains", a: `__bh.game.set("seaFft", true)`, b: `__bh.game.set("seaFft", false)` },
   { name: "weather cloudy → fair (HAS_WX)", a: `__bh.game.set("weather", "cloudy")`, b: `__bh.game.set("weather", "fair")` },
 ];
+/** SET=j3: PLAN-J3's levers of 14 Nov 2026 — their cost on the frame (quality fixes: rule 1 asks their cost, not a gain) — the trees'
+ *  shadow map cut to the crowns (scenery-raster.ts shadowFs) and skyFlat's dim fallback (TUNE_SKYFLAT_DIM: a tracer recompile — both
+ *  sides compiled before the alternation) */
+const J3: Pair[] = [
+  // (the A/A: nothing changed — the alternation's own noise)
+  { name: "A/A (nothing changed)", a: "__bh.renderer.treeShadowCut = true", b: "__bh.renderer.treeShadowCut = true" },
+  {
+    name: "the trees' shadows cut to their crowns → their proxies whole",
+    a: "__bh.renderer.treeShadowCut = true",
+    b: "__bh.renderer.treeShadowCut = false",
+  },
+  {
+    name: "skyFlat's dim fallback carried down → the old one",
+    a: "__bh.renderer.tune = {}",
+    b: "__bh.renderer.tune = { TUNE_SKYFLAT_DIM: 0 }",
+  },
+];
 const ALL: Pair[] = [
   { name: "the craft's raster (cockpit, the others)", a: "__bh.renderer.debugSkipShip = false", b: "__bh.renderer.debugSkipShip = true" },
   { name: "the real traffic", a: `__bh.game.set("traffic", true)`, b: `__bh.game.set("traffic", false)` },
@@ -164,7 +181,7 @@ describe.skipIf(!E2E)("the realtime render's costs, one thing at a time", () => 
           __bh.game.set("earthClouds", 0.3); __bh.settings.shipLookPitch = 0; __bh.forceScale(null); __bh.renderer.prof.enabled = true; __bh.renderer.prof.every = 1;
           __bh.game.flyAt(36.1, -5.55, 900, 0, 210); __bh.settings.shipMount = "cockpit"; const c = __bh.camera;
           if (c.jetModes.alt === null) c.jetToggle("ap"); if (c.jetModes.spd === null) c.jetToggle("athr"); c.jetModes.alt = 900; c.jetModes.spd = 210; c.jetModes.hdg = 0; return 1; })()`);
-      const set = process.env.SET === "ship" ? SHIP : process.env.SET === "trace" ? TRACE : ALL;
+      const set = process.env.SET === "ship" ? SHIP : process.env.SET === "trace" ? TRACE : process.env.SET === "j3" ? J3 : ALL;
       // (ONLY=0,3: those pairs alone)
       const only = process.env.ONLY?.split(",").map(Number);
       let first = true;
@@ -182,6 +199,12 @@ describe.skipIf(!E2E)("the realtime render's costs, one thing at a time", () => 
         }
         await app.waitOptional(`!!__bh.renderer.variants.get(__bh.renderer.featureKey)?.rt`, 180_000);
         await Bun.sleep(3000);
+        // (a pair that compiles — a tune —: both sides compiled before the alternation, its 1.2 s per side not a compile's; nothing
+        // to wait for the others)
+        for (const side of [P.b, P.a]) {
+          await app.js(`(() => { ${side}; __bh.refresh(); return 1; })()`);
+          await app.waitOptional("__bh.renderer.compiling.size === 0 && __bh.renderer.tracerSettled", 120_000);
+        }
         const med: Record<"a" | "b", number[]> = { a: [], b: [] };
         const trace: Record<"a" | "b", number[]> = { a: [], b: [] };
         const cpu: Record<"a" | "b", string> = { a: "", b: "" };

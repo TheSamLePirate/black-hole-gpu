@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-14 21:04 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-14 21:25 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous.
@@ -6859,3 +6859,15 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
 - **Limites :** le pipeline tracé de près n'est pas couvert (le géométrique partout, par conception aujourd'hui). Les ombres d'arbres
   translucides (un houppier laisse passer la lumière) : les deux chemins — carte et rayons — sont opaques ; un facteur de transmission serait
   un choix d'apparence sans référence mesurée, non fait.
+
+### 2026-11-14 21:25 UTC — Le coût des deux corrections d'image du soir, mesuré sur le vol de Tarifa
+
+- **Contribution à la destination :** §8 (aucun changement non mesuré : le coût des corrections de J3-1 et J3-3).
+- **Réalisé :** `perf-ab` `SET=j3` (un A/A, les ombres d'arbres découpées / les proxies entiers, `skyFlat` nouveau / ancien) ; avant
+  l'alternance de chaque paire, ses deux côtés compilés (une paire qui recompile — un `tune` — ne mesurait que sa compilation).
+- **Preuves (mesuré, kerr-mini froid — GPU nominal, 39 °C —, Tarifa 900 m, A B B A A B)** : A/A −1,6 / +1,5 ms ; ombres découpées +1,0 (×4),
+  −0,5 (×6) : **au bruit** ; `skyFlat` −0,9 (×6) : **au bruit** ; à ×4 +22,3 ms **non concluant** — le côté réglé par `renderer.tune` porte le
+  passage du traceur de 5,9 à 10,8 ms à lui seul (un noyau compilé par `tune` n'est pas celui du jeu) : une paire `tune` ne mesure pas un
+  changement de code seul.
+- **Limites :** un coût de `skyFlat` à ×4 non établi (attendu : quelques opérations par pixel de sol) — à mesurer par deux révisions
+  (`ab-commit`) plutôt que par `tune`.
