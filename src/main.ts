@@ -2449,7 +2449,8 @@ async function main() {
       const g0 = goal(sim.time);
       const q = toBodyFixed("earth", g0.X, sim.time);
       const R = solarBody("earth")!.radius;
-      const altKm = ((Math.hypot(...q) - R) * M_METRES) / 1e3;
+      // (its height over WGS84 — audit NET-28's rule: |q| − R, a sphere of the equator's radius, said 58 km for 70 over Paris)
+      const altKm = (cartToGeodetic(R, WGS84_F, q).h * M_METRES) / 1e3;
       departure =
         referenceBody(g0.X, sim.time) === "earth" && altKm < 60
           ? { by: "voyage", c: q.map((x) => x / R) as [number, number, number], altKm }

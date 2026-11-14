@@ -10,6 +10,7 @@ import { JetPoser } from "../f35/pose";
 import type { CraftState } from "../net/remote";
 import { fromBodyFixed, groundVelocity, solidBody, toBodyFixed } from "../system/our-surface";
 import { bodyAxes, solarBody } from "../system/solar";
+import { cartToGeodetic, flatteningOf } from "../system/ellipsoid";
 import { ourState, repToHomeVec } from "../system/our-side";
 import { betaToCoord, zamoBeta } from "../landing";
 import { mapToRest } from "../system/local-patch";
@@ -98,6 +99,13 @@ const scale = (a: Vec3, k: number): Vec3 => [a[0] * k, a[1] * k, a[2] * k];
 const unit = (a: Vec3): Vec3 => scale(a, 1 / (Math.hypot(...a) || 1));
 
 /** a quaternion (x, y, z, w) → its matrix's columns: the craft's forward, up and right (proto.ts) */
+/** A remote craft's height over its body's figure [m] — the WGS84 ellipsoid on the Earth, the giants' spheroids, a sphere elsewhere
+ *  (audit NET-28: `|p| − radius`, a mean sphere, was up to ±11 km off on the Earth — the plume's air density read from it).
+ *  `q`: its place fixed to the body [M]. */
+export function figureHeight(body: string, q: Vec3): number {
+  return cartToGeodetic(solarBody(body)!.radius, flatteningOf(body), q).h * M_METRES;
+}
+
 export function quatAxes(q: [number, number, number, number]): { fwd: Vec3; up: Vec3; right: Vec3 } {
   const [x, y, z, w] = q;
   return {
@@ -472,13 +480,13 @@ function netShips(
       X = fromBodyFixed(body, scale(s.p as Vec3, 1 / M_METRES), t);
       axesHome = [scale(ax.right, -1), ax.up, ax.fwd].map(toHome) as [Vec3, Vec3, Vec3];
       vH = toHome(s.v as Vec3);
-      h = Math.hypot(...s.p) - solarBody(body)!.radius * M_METRES;
+      h = figureHeight(body, scale(s.p as Vec3, 1 / M_METRES));
     } else {
       const B = ourState(body, t);
       X = [0, 1, 2].map((k) => B.pos[k]! + s.p[k]! / M_METRES) as Vec3;
       axesHome = [scale(ax.right, -1), ax.up, ax.fwd];
       vH = s.v as Vec3;
-      h = Math.hypot(...s.p) - solarBody(body)!.radius * M_METRES;
+      h = figureHeight(body, toBodyFixed(body, X, t));
     }
     const link = mine ? attached!.get(s.slot) : undefined;
     if (link && mine) {

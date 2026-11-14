@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-14 16:34 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-14 16:41 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous.
@@ -6559,3 +6559,16 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   `/health` répond `ok`.
 - Limites : l'image Docker elle-même non construite ici (pas de Docker sur ce Mac) ; ce commit, touchant le workflow, redéploie une fois le
   serveur.
+
+## 2026-11-14T16:41Z — Audit NET-28 : la hauteur des appareils distants sur WGS84 (et celle du but d'un voyage)
+
+- Contribution : la règle permanente « la Terre est WGS84 partout » (CLAUDE.md) ; audit 2026-11-10, NET-28 (P3).
+- Réalisé : `figureHeight(corps, q)` (`src/controller/netcraft.ts`) — la hauteur sur la figure du corps (WGS84 sur la Terre, les sphéroïdes des
+  géantes, une sphère ailleurs) — remplace `|p| − rayon` dans le placement des appareils distants (la densité de l'air de leur panache) ;
+  le même défaut dans `src/main.ts` (l'altitude du but d'un voyage, qui décide du préchargement de la Terre — CM3) corrigé par
+  `cartToGeodetic`. `tests/netcraft-height.test.ts`.
+- Preuves : **reproduit** (le test chiffre l'ancienne formule) : au sol de Paris, la sphère (de rayon équatorial) disait **−12 081 m**, à
+  3 000 m **−9 081 m** ; **après** 0,0 et 3 000,0 m (WGS84) ; la Lune inchangée ; `net-core`, `net-picture`, `net-inbound`, `crew-craft` verts ;
+  `voyage-prewarm` 1/1 ; tsc.
+- Limites : la décision de préchargement (seuil de 60 km) voit désormais la vraie hauteur : un but entre ~48 et 60 km d'altitude sphérique
+  au-dessus des latitudes moyennes n'est plus compté « bas » — signalé à la session du rendu (CM3).
