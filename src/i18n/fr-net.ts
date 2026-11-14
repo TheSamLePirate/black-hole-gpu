@@ -67,6 +67,7 @@ export default {
   "On the ground beside {0}": "Au sol, à côté de {0}",
   "In formation off {0}'s right wing — {1} m": "En formation à droite de {0} — {1} m",
   "Not in a room": "Pas dans une salle",
+  "The page spoke to the room server out of turn: reload it": "La page a parlé au serveur des salles hors de son ordre : rechargez-la",
   Beside: "À côté",
   "Put my craft off {0}'s right wing, at its speed": "Placer mon engin à droite de {0}, à sa vitesse",
   "direct, local": "direct, local",

@@ -4,6 +4,7 @@
 // time a room is asked for: the solo game never connects.
 
 import "./netpanel.css";
+import type { ErrorCode } from "../net/proto";
 import { t, tf } from "../i18n";
 import { loadNet, netLoaded, netParams, serverUrl, type NetModule } from "../net/load";
 import { store } from "../util/storage";
@@ -71,7 +72,8 @@ const ROLE_NAMES: Record<Role, () => string> = {
   instruments: () => t("Instruments"),
 };
 
-const ERRORS: Record<string, () => string> = {
+// (every code the protocol has its words — src/net/proto.ts ErrorCode; « bad » had none: audit QA-10, 14 Nov 2026)
+const ERRORS: Record<ErrorCode, () => string> = {
   "unknown-room": () => t("No room with that code"),
   full: () => t("The room is full (8 devices)"),
   "pilots-full": () => t("Four pilots already fly in this room: join as a spectator"),
@@ -82,10 +84,15 @@ const ERRORS: Record<string, () => string> = {
   slow: () => t("Too many wrong passwords: wait half a minute"),
   replaced: () => t("The room was opened in another tab of this browser: this one left it"),
   rejoin: () => t("Back online, but the room did not take us back (gone, full or its password changed): back to the solo game"),
+  bad: () => t("The page spoke to the room server out of turn: reload it"),
+  "not-in-room": () => t("Not in a room"),
 };
+/** a code's words, or undefined when it is not one of the protocol's */
+const errorText = (code: string | undefined) => (code && Object.hasOwn(ERRORS, code) ? ERRORS[code as ErrorCode]() : undefined);
 const why = (e: unknown) => {
   const code = (e as { code?: string }).code;
-  if (code && ERRORS[code]) return ERRORS[code]!();
+  const said = errorText(code);
+  if (said) return said;
   return (e as Error).message === "offline" || (e as Error).message === "timeout"
     ? t("The room server cannot be reached")
     : String((e as Error).message ?? e);
@@ -186,7 +193,7 @@ export class NetPanel {
     });
     net.on("room", () => this.refresh());
     net.on("world", () => this.refresh());
-    net.on("error", (e) => this.host.toast(ERRORS[e.code]?.() ?? e.msg));
+    net.on("error", (e) => this.host.toast(errorText(e.code) ?? e.msg));
     this.net = net;
     return net;
   }

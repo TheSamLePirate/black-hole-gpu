@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-14 21:40 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-14 21:42 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous.
@@ -6904,3 +6904,11 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   une orbite circulaire revenue à son point au bout d'une période, à l'opposé à mi-période ; J2 à l'équateur ≈ 0,011 m/s², vers le centre) ;
   réseau verts, `net-space` 3/3 (l'orbite partagée, qui lit `keplerOf`/`pertOf`) ; tsc, Biome.
 - Limites : `main.ts`, `crew/main.ts`, `netmatch.ts`, `netpanel.ts`, `tars-panel.ts`, `fc/computer.ts`, `panel.ts` restent sans test direct.
+
+## 2026-11-14T21:42Z — Audit QA-10 (un pas de plus) : les erreurs du serveur, un mot pour chaque code — vérifié par le type
+
+- Réalisé : `src/crew/errors.ts` (sorti de `crew/main.ts`) et la table du jeu (`ui/netpanel.ts`) typées `Record<ErrorCode, …>` : chaque code du
+  protocole a ses mots, un code ajouté sans eux ne compile plus. Trouvé ainsi : **`bad`** (« hello first ») n'avait de traduction ni dans la
+  console ni dans le jeu (le texte anglais du serveur passait), ni `not-in-room` dans le jeu — ajoutés (FR/EN). `tests/crew-errors.test.ts`.
+- Preuves : tsc (les deux tables complètes, sinon refusées) ; `crew-errors` 1/1 (chaque code, deux langues, distincts ; un code inconnu : aucun) ;
+  i18n ; `crew-errors-fr` 1/1 ; crew, crew-lang, crew-actions, net-core verts.
