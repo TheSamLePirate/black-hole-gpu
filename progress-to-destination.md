@@ -6489,5 +6489,5 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
 
 - **Mesuré** (kerr-mini, J0 `coherence` 12:00 → 23:30 UTC, la hauteur du Soleil relevée) : le ciel tracé rejoint son plancher de nuit vers
   −17 à −19° (7,5× à −12,7°) ; le ciel clair du sol décroît sans plancher (4,7·10⁻¹⁶ à −25°). PROBLEMES (observatoire : la direction visée, pas la
-  durée du crépuscule), PLAN-J3 §10 (la sonde de cohérence ne vaut que jusqu'à −15° ; le sol de nuit à vérifier).
+  durée du crépuscule), PLAN-J3 §10 (la sonde de cohérence ne vaut que jusqu'à −15° : le sol a bien son plancher de nuit — `nightFloor`, une table de référence — que la sonde ne relit pas).
 

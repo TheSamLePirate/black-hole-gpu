@@ -283,6 +283,8 @@ Aucun coût de J3 n'est mesuré ; aucun gain n'est promis.
 - **La sonde de cohérence la nuit** (15:43 UTC, J0 `coherence` jusqu'à −25° de Soleil, `sunAlt` ajouté) : le ciel clair du sol (`skyAmbient`,
   `skyIrradiance`) **n'a pas de plancher de nuit** — il décroît d'un facteur ~10 tous les 2° jusqu'à 4,7·10⁻¹⁶ à −24,8° — quand le ciel tracé de
   l'appareil se pose sur le fond de nuit (~4,8·10⁻¹² dès −17°) : le rapport appareil / sol 4,8 à −17°, 104 à −21°, 10 490 à −25°. Les bornes de la
-  sonde valent de jour et au crépuscule (jusqu'à −15°). **Non vérifié** : si le sol de nuit reçoit ailleurs le fond de nuit et la Lune (`liteSky`) —
-  à lire avant d'appeler cela un défaut.
+  sonde valent de jour et au crépuscule (jusqu'à −15°). **Lu ensuite** : le sol reçoit bien un plancher — `liteSky` prend le maximum de la table
+  et de `nightFloor` (le fond de nuit `EARTH_NIGHT`, et `twilightGround`, une table d'éclairement horizontal de référence : 400 lux au coucher,
+  3,4 à la fin du crépuscule civil, 0,008 à la fin du nautique) — : **pas un défaut de rendu, une limite de la sonde**, qui ne relit que la table
+  (`envBuf` + 4). Suite possible : relire le maximum comme le sol le prend, pour juger la cohérence la nuit (une rangée de plus dans `envBuf`).
 
