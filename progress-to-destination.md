@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-14 01:47 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-14 01:54 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous.
@@ -6333,4 +6333,10 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
 - **Mesuré** (kerr-mini, `j0-reference` ablations `bloom`, `sharpen`, `haze`, nouvelles ; références 56,9 / 55,7 ms) : 55,1 / 55,4 / 55,8 — dans
   l'écart des références. Les ≈ 10 ms « non attribués » de la fiche du 13 nov. restent à trouver ailleurs (passes de rendu : masques, profondeur
   d'occlusion, affichage) ; GRAPHICS-PIPELINE §8.4, E2E-CATALOGUE.
+
+## 2026-11-14T01:54Z — La boucle CPU de J0 par fonction (kerr-mini)
+
+- Contribution (§8.3, le budget CPU) : \`j0-reference\` \`J0_CPU_PROFILE=1\` et \`tests/e2e/lib/cpu-profile.ts\` ; [fiche](docs/progress/j0/FICHE-CPU-kerr-mini-2026-11-14.md).
+  **Mesuré** : ≈ 7 ms de script par image — le renderer 2,7, le pas du vol 1,5, le HUD 1,4 (le HUD du F-35 1,0), les tuiles 0,6 — sans point
+  chaud unique ; la boucle p95 9,0 ms (cible 4).
 

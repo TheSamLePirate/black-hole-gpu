@@ -2,6 +2,7 @@ import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { mkdirSync } from "node:fs";
 import { $ } from "bun";
 import { App, E2E, stopServer } from "./lib/app";
+import { type CdpProfile, longRuns } from "./lib/cpu-profile";
 import { intervals, J0_FIXED as J0_FIXED_BASE, J0_SCENE as J0_SCENE_BASE } from "./lib/j0-scene";
 
 // (J0_FPSCAP: the frame rate bounded — settings.fpsCap, whole refreshes of the display — for the palier's judgement « borné et soutenu »,
@@ -292,7 +293,23 @@ describe.skipIf(!E2E)("J0: the reference flight over Toulon-Hyères", () => {
       .send("Page.captureScreenshot", { format: "png" })
       .then((s) => Bun.write(`${OUT}/${tag}-turn.png`, Buffer.from((s as { data: string }).data, "base64")));
     const thermalMid = await thermal();
+    // (J0_CPU_PROFILE=1: Chrome's CPU profile over the second half — the main loop's long iterations, ≥ 4 ms of script in a row, and the
+    // functions they were spent in (lib/cpu-profile.ts): what makes the loop's 95th percentile — 8.5 ms on kerr-mini for 4 aimed at)
+    const cpuProfile = process.env.J0_CPU_PROFILE === "1" && tag === "flight";
+    if (cpuProfile) {
+      await app.cdp.send("Profiler.enable");
+      await app.cdp.send("Profiler.setSamplingInterval", { interval: 200 });
+      await app.cdp.send("Profiler.start");
+    }
     const b = await app.js<Flown>(flyJs(J0_SCENE.flightS - half, false));
+    if (cpuProfile) {
+      const { profile: pr } = await app.cdp.send<{ profile: CdpProfile }>("Profiler.stop", {}, 60);
+      await Bun.write(`${OUT}/flight-second-half.cpuprofile`, JSON.stringify(pr));
+      const lr = longRuns(pr, 4, 30);
+      out.cpuLongRuns = lr;
+      console.log(`  J0 CPU, the loop's long runs (≥ 4 ms of script): ${lr.runs} runs, ${lr.totalMs} ms, longest ${lr.longest.join(" ")}`);
+      for (const x of lr.fns) console.log(`    ${String(x.inclMs).padStart(7)} incl ${String(x.selfMs).padStart(6)} self  ${x.f}`);
+    }
     await app.cdp
       .send("Page.captureScreenshot", { format: "png" })
       .then((s) => Bun.write(`${OUT}/${tag}-end.png`, Buffer.from((s as { data: string }).data, "base64")));
