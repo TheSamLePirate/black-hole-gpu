@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-14 21:50 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-14 22:14 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous.
@@ -6933,3 +6933,15 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   1,4 s. Aucun plafond abaissé encore : il faut des mesures de plusieurs lancements (ici et le mini).
 - **Suite** : rassembler les journaux des prochaines campagnes, puis abaisser les plafonds par appel et réécrire `tests/e2e-waits.json`.
 
+### 2026-11-14 22:14 UTC — PLAN-J3 question 3 : l'ombre du décor sur l'appareil, prête derrière un levier
+
+- **Contribution à la destination :** §7 (l'appareil dans les ombres du monde, comme le sol) — la mesure pour que Sam tranche la question 3.
+- **Réalisé :** `trace.wgsl` `keyLight` lit la carte des arbres et bâtiments au point de la caméra (`P.scenery[3]`) — sans `HAS_SCENERY`,
+  que le profil raster compile à 0 dans la sonde (la cause du −1 du lot précédent) ; levier de mesure `TUNE_SHIP_SCENERY_SHADOW` (0) ;
+  `readShipSky().sceneryAtCraft` (rangée +8 de la sonde) ; phase J0 `craftshade` (cherche un point à l'ombre, puis éteint / allumé / éteint).
+  PLAN-J3 §5, §8 question 3.
+- **Preuves (mesuré, kerr-mini, run `…-craftshade3`)** : à 48,89184 N 2,24155 E, 30 m, 18:00 UTC, cockpit : la carte des bâtiments 0 (à
+  l'ombre), celle des arbres 1 ; allumé, le nez de l'avion passe du plein soleil à l'ombre (captures) ; centre de l'image 63,70 → 62,77, A/A
+  0,04. check-wgsl 84/84, budget des noyaux 69/69, tsc.
+- **Limites :** lu à la caméra (les vues extérieures : la caméra, pas l'appareil) ; la bascule à la cadence de la sonde ; ΔGPU non mesuré
+  (deux lectures de carte par passage de la sonde). Allumer : la décision de Sam.

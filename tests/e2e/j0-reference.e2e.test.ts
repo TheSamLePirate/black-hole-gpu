@@ -33,7 +33,7 @@ import { sceneryReady } from "./lib/plan-views";
 //       screens, the cockpit (the outside view) — between two baseline flights (drift).
 // Output: remote-results/j0/<machine>/ (J0_OUT): j0.json, shots (start, mid-turn, end; each ablation's last frame).
 // J0_PHASES=flight,ablate,sustained (default all; sustained: the flight again after the ablations, the machine hot), ABLATE_S (20), J0_MACHINE (the label: "m1max", "kerr-mini"; default the host name).
-// Other phases, asked by name: agecheck, framing (PLAN-J3 J3-0), keylight, keyair, keysky, skyband4, coherence (J3-1), keyhaze (J3-2), waterincident (J3-7), shadows (J3-3), wetbld, cityview, materials (J3-5), seadusk, probedump, tracedview (PROBLEMES), twilightdim (J3-1), nightfloor (J3 question 7), nightbands (PROBLEMES) (J3-1: the craft's key light against the incident Sun toward
+// Other phases, asked by name: agecheck, framing (PLAN-J3 J3-0), keylight, keyair, keysky, skyband4, coherence (J3-1), keyhaze (J3-2), waterincident (J3-7), shadows (J3-3), wetbld, cityview, materials (J3-5), seadusk, probedump, tracedview (PROBLEMES), twilightdim (J3-1), nightfloor (J3 question 7), nightbands (PROBLEMES), craftshade (J3 question 3) (J3-1: the craft's key light against the incident Sun toward
 // sunset, ~3 min on kerr-mini; keyair: its air two ways, march and table, ~4 min; keysky: the sky's light two ways, ~4 min; coherence: the three gaps in one read per hour, ~5 min).
 // Not a pass/fail on the frame rate: the fiche is written from j0.json (docs/progress/j0/). It fails on a GPU error, a craft not
 // placed, a flight not flown.
@@ -1404,6 +1404,89 @@ describe.skipIf(!E2E)("J0: the reference flight over Toulon-Hyères", () => {
         `(() => { Object.assign(__bh.settings, { autoExposure: true, exposure: 0, shipMount: "cockpit" }); __bh.freeze(false); __bh.game.setDate("${J0_SCENE.date}"); return 1; })()`,
       );
       expect(Object.keys(rows).length).toBe(cases.length);
+    },
+    900_000,
+  );
+
+  // (PLAN-J3 §8 question 3 — the scenery's shadow on the craft, J0_PHASES=craftshade (CS_PLACE "lat,lon,aglM,heading", CS_UTC): the craft
+  // held 50 m up in a La Défense tower's shadow at 18:00 UTC (the Sun west, ~25° up — Tour First 231 m, 200 m east of it); the relief's
+  // shadow on the craft is there already (trace.wgsl keyRelief), the trees' and buildings' not: TUNE_SHIP_SCENERY_SHADOW 1 reads their map at
+  // the craft. Read: the map's values at the craft (readShipSky().sceneryAtCraft); then off / on / off, the exposure held, the quarter view —
+  // the frame's centre (the craft) — shots for Sam)
+  test.skipIf(!PHASES.includes("craftshade"))(
+    "J3 question 3: the scenery's shadow on the craft — its map read at the craft, off / on / off; shots for Sam",
+    async () => {
+      await start("");
+      const [lat, lon, agl, hdg] = (process.env.CS_PLACE ?? "48.8922,2.2421,30,280").split(",").map(Number);
+      const utc = process.env.CS_UTC ?? "18:00";
+      // (the cockpit: the camera — where the map is read, P.scenery[3] — is the craft; a grid about the place, 40 m steps, until the
+      // buildings' layer reads a shadow there — the first under 0.5 —, 60 s of data at most first)
+      const at = (la: number, lo: number) =>
+        app.js(`(async () => { const f = () => new Promise((q) => requestAnimationFrame(q)); __bh.freeze(false);
+          __bh.game.setDate("2026-07-10T${utc}:00Z"); __bh.game.flyAt(${la}, ${lo}, ${agl}, ${hdg}, 80);
+          Object.assign(__bh.settings, { shipMount: "cockpit", lookProfile: "neutral", dof: false, motionBlur: 0, autoExposure: true, exposure: 0 });
+          __bh.refresh(); for (let i = 0; i < 6; i++) await f(); __bh.freeze(true); for (let i = 0; i < 80; i++) await f();
+          const s = await __bh.renderer.readShipSky(); return s ? s.sceneryAtCraft : null; })()`);
+      await at(lat!, lon!);
+      await app
+        .waitFor(
+          "(() => { const r = __bh.renderer; return r.earthTiles.pending === 0 && !r.earthScenery.stats().pending && r.earthScenery.stats().status === 'ready'; })()",
+          60_000,
+        )
+        .catch(() => console.log("  craft shade: the place's data still arriving after 60 s"));
+      let found: [number, number] = [lat!, lon!];
+      let best = 2;
+      search: for (let r = 0; r <= 4; r++)
+        for (let dy = -r; dy <= r; dy++)
+          for (let dx = -r; dx <= r; dx++) {
+            if (Math.max(Math.abs(dx), Math.abs(dy)) !== r) continue;
+            const la = lat! + (dy * 40) / 111_200;
+            const lo = lon! + (dx * 40) / (111_200 * Math.cos((lat! * Math.PI) / 180));
+            const m = await at(la, lo);
+            if (m && m[1] >= 0 && m[1] < best) (best = m[1]), (found = [la, lo]);
+            if (best < 0.5) break search;
+          }
+      console.log(`  craft shade: the buildings' map at the craft ${best.toFixed(3)} at ${found[0].toFixed(5)}, ${found[1].toFixed(5)}`);
+      await at(found[0], found[1]);
+      await app.js(`(async () => { const f = () => new Promise((q) => requestAnimationFrame(q)); for (let i = 0; i < 60; i++) await f();
+        __bh.renderer.settleExposure(); for (let i = 0; i < 30; i++) await f(); const ev = __bh.renderer.ev(__bh.settings);
+        Object.assign(__bh.settings, { autoExposure: false, exposure: ev }); return 1; })()`);
+      const rows: Record<string, number | number[]> = {};
+      const one = async (name: string) => {
+        await app.settled(120_000);
+        await app.waitFor("__bh.renderer.compiling.size === 0 && __bh.renderer.kernelsSettled", 120_000);
+        await app.js(
+          `(async () => { const f = () => new Promise((q) => requestAnimationFrame(q)); for (let i = 0; i < 60; i++) await f(); return 1; })()`,
+        );
+        const sky = await app.js<{ sceneryAtCraft: [number, number] } | null>("__bh.renderer.readShipSky()");
+        const x = (await app.cdp.send("Page.captureScreenshot", { format: "png" })) as { data: string };
+        const bytes = Buffer.from(x.data, "base64");
+        await Bun.write(`${OUT}/craftshade-${name}.png`, bytes);
+        const img = readPng(new Uint8Array(bytes));
+        let t = 0,
+          n = 0;
+        for (let y = Math.floor(0.4 * img.height); y < Math.floor(0.8 * img.height); y++)
+          for (let xx = Math.floor(0.35 * img.width); xx < Math.floor(0.85 * img.width); xx++) {
+            const i = (y * img.width + xx) * img.channels;
+            t += 0.2126 * img.data[i]! + 0.7152 * img.data[i + 1]! + 0.0722 * img.data[i + 2]!;
+            n++;
+          }
+        rows[`${name}Craft`] = +(t / n).toFixed(2);
+        rows[`${name}Map`] = sky ? sky.sceneryAtCraft.map((v) => +v.toFixed(3)) : [];
+      };
+      await one("off");
+      await app.js(`(() => { __bh.renderer.tune = { TUNE_SHIP_SCENERY_SHADOW: 1 }; __bh.refresh(); return 1; })()`);
+      await one("on");
+      await app.js(`(() => { __bh.renderer.tune = {}; __bh.refresh(); return 1; })()`);
+      await one("offAgain");
+      console.log(
+        `  J3 craft shade (${found[0].toFixed(5)}, ${found[1].toFixed(5)}, ${agl} m, ${utc} UTC, cockpit): ${JSON.stringify(rows)}`,
+      );
+      out.craftshade = rows;
+      await app.js(
+        `(() => { __bh.renderer.tune = {}; Object.assign(__bh.settings, { autoExposure: true, exposure: 0, shipMount: "cockpit" }); __bh.freeze(false); __bh.game.setDate("${J0_SCENE.date}"); return 1; })()`,
+      );
+      expect(Math.abs((rows.offCraft as number) - (rows.offAgainCraft as number))).toBeLessThan(2);
     },
     900_000,
   );

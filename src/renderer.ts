@@ -9814,6 +9814,7 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
     ground: number;
     groundTaken: number;
     groundFloor: number;
+    sceneryAtCraft: [number, number];
     shCpu: number;
     shHann: number;
     shLanczos: number;
@@ -9824,7 +9825,7 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
     shE0: number;
   } | null> {
     const n = ENV_W * ENV_H;
-    const size = (n + 7) * 16;
+    const size = (n + 9) * 16;
     const st = this.device.createBuffer({ size, usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ });
     const enc = this.device.createCommandEncoder();
     enc.copyBufferToBuffer(this.ship.envBuf, 0, st, 0, size);
@@ -9922,6 +9923,9 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
       groundTaken: f[(n + 4) * 4 + 3]!,
       // (the night's floor alone — the twilight reference or the night's —, its luminance: which of the two the ground took)
       groundFloor: f[(n + 5) * 4 + 3]!,
+      // (the scenery's shadow at the craft as its key light reads it — trees', buildings' (0 shadowed … 1 lit), −1 off the map; PLAN-J3 §8
+      // question 3 — TUNE_SHIP_SCENERY_SHADOW applies it)
+      sceneryAtCraft: [f[(n + 8) * 4 + 1]!, f[(n + 8) * 4 + 2]!] as [number, number],
       shCpu: irr(1, 1),
       shHann: irr(0.75, 0.25),
       shLanczos: irr(0.827, 0.413),

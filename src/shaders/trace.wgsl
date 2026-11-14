@@ -274,6 +274,11 @@ override TUNE_BLD_PHOTO: f32 = 1.0;
 // sea and hills as by day under a nautical twilight's sky — while the craft got the table (×0.88–0.93). 0: the old fallback, a measuring
 // lever (renderer.tune), to retire with J3-R)
 override TUNE_SKYFLAT_DIM: u32 = 1u;
+// (PLAN-J3 §8 question 3, a measuring lever — off as drawn: the craft's key light through the scenery's shadow map at the craft — the
+// trees' and buildings' layers at the camera's place, keyLight —; the relief's is there already, keyRelief)
+override TUNE_SHIP_SCENERY_SHADOW: u32 = 0u;
+// (the scenery's shadow at the craft as keyLight read it — x trees', y buildings', −1 off the map or none —: envBuf + 8, a measure)
+var<private> SHIP_SC_OCC: vec2f = vec2f(-1.0);
 // (a ray rising over the ground — its clearance growing —: its steps' share of the distance (5 %: the shell left in ~150 steps;
 // a butte's narrow top, Monument Valley's Mittens, stepped through in bands of sky)
 override TUNE_RISE: f32 = 0.05;
@@ -17384,6 +17389,18 @@ fn keyLight() {
     if (isEarth(kn) && P.eclipse.w > 0.0) { E *= sunSeen(nearCam(), rd); }
   }
   if (luminance(E) > 0.0) { E *= keyRelief(kn, normalize(squashed(toBody(L), squashOf(kn)))); }
+  // (the scenery's shadow — the trees', the buildings' — at the craft: the camera's own place in their map, P.scenery[3]; not behind
+  // HAS_SCENERY — the Earth-raster profile compiles the probe without the scenery's code, the map and its parameters are there)
+  if (isEarth(kn) && P.scenery[0].w > 0.5 && P.scenery[2].w > 0.5) {
+    let sp = P.scenery[3].xyz;
+    SHIP_SC_OCC = vec2f(treeShadowAt(sp), buildingShadowAt(sp));
+    if (TUNE_SHIP_SCENERY_SHADOW != 0u) {
+      var s = 1.0;
+      if (SHIP_SC_OCC.x >= 0.0) { s = min(s, SHIP_SC_OCC.x); }
+      if (SHIP_SC_OCC.y >= 0.0) { s = min(s, SHIP_SC_OCC.y); }
+      E *= s;
+    }
+  }
   // (to the probe's axes: the transpose of envX…Z)
   let Lp = vec3f(dot(L, P.envX.xyz), dot(L, P.envY.xyz), dot(L, P.envZ.xyz));
   let n = ENV_W * ENV_H;
@@ -17399,7 +17416,7 @@ fn env(@builtin(global_invocation_id) gid: vec3u) {
     if (key) { keyLight(); } else { envBuf[ENV_W * ENV_H + 1u] = vec4f(0.0); }
     // (the scale the probe is stored at in its half-float textures — ship.wgsl envCopy —: the frame's pre-exposure, as the aerial
     // table's; raw, a dusk's radiance ~2e-7 fell among the half floats' subnormals — the sea's mirrored sky in coloured steps, 13 Nov)
-    if (arrayLength(&envBuf) >= ENV_W * ENV_H + 9u) { envBuf[ENV_W * ENV_H + 8u] = vec4f(apScale(), 0.0, 0.0, 0.0); }
+    if (arrayLength(&envBuf) >= ENV_W * ENV_H + 9u) { envBuf[ENV_W * ENV_H + 8u] = vec4f(apScale(), SHIP_SC_OCC, 0.0); }
   }
   probeNoStar = key;
   // (envCfg.z: 1 every texel; 0 one of each 2×2 block, 2 one of each 4×4 — envCfg.y picks which)
