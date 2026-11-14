@@ -665,6 +665,10 @@ termes à un nœud fautif (43,0666 N, 6,12883 E, niveau 1).
   ciel bleu de crépuscule (2026-01-11 17:32 UTC, « au mieux près de Saturne »), la bouche à peine visible dans le cercle. Les 5 autres tests
   passent. Déjà noté en échec à la fin de PLAN-CAMERA-AAA (29 oct.). **Non tranché** : le ciel du soir plus clair depuis (modèles du ciel et du
   crépuscule revus) ou l'autre univers plus sombre dans la bouche ; à comparer à une version d'octobre (`ab-commit`).
+- **Tenté** (même jour) : `ab-commit 3f825497` (14 oct., le posemètre spot) + `ab-e2e` sur kerr-mini — le serveur de développement d'alors
+  échoue en `EMFILE` (trop de fichiers ouverts, même `ulimit -n 65536`) ; en `NODE_ENV=production` il sert, mais **le harnais e2e d'aujourd'hui ne
+  démarre pas sa page** (`beforeAll` expiré à 200 s) : pas de côté A. Le côté B redonne 1,30. Pour trancher : un harnais d'époque (le test et
+  `lib/` de ce commit), ou une sonde du ciel et de la bouche séparés (la luminance du ciel à la même heure, l'autre univers seul).
 
 ## La compilation du noyau de Jupiter proche : ~200 s à froid (M1 Max, 6 nov.) — 60 s sur kerr-mini le 13 nov., ~47 s à l'arrivée d'un voyage depuis le 13
 
