@@ -387,6 +387,9 @@ class AssetPill {
     if (show === this.on && !show) return;
     this.on = show;
     this.root.classList.toggle("show", show);
+    // (hidden, its text emptied: left in the page — a status, aria-live — it still said "Compiling the ray tracer for this scene · 2 s"
+    // over a ready tracer, read by a screen reader and by the A320's e2e as a compile going on — audit 1feb2f7f, 14 Nov 2026)
+    if (!show) this.label.textContent = "";
     if (show && !this.raf) this.raf = requestAnimationFrame(this.frame);
   }
 
@@ -395,6 +398,7 @@ class AssetPill {
     const pending = loading.pending;
     if (!pending.length) {
       this.root.classList.remove("show");
+      this.label.textContent = "";
       this.on = false;
       return;
     }
