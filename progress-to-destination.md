@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-14 16:33 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-14 16:34 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous.
@@ -6547,3 +6547,15 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   RD0) ; la minuterie de 10 s par requête non annulée — une fermeture gardée 10 s par requête, rare, sans effet observé : notée, non changée ;
   les écouteurs de `netsession` liés à la vie du client : sans fuite observée, non changés.
 - Limites : `server/rooms.ts` touché : le serveur de salles se redéploie (NET-20).
+
+## 2026-11-14T16:34Z — Audit NET-20 : le serveur de salles ne redémarre plus pour un fichier du client
+
+- Contribution : §19 (la reprise et la continuité d'une salle : une retouche du client ne coupe plus les joueurs) ; audit 2026-11-10, NET-20 (P2).
+- Réalisé : le déclencheur de `.github/workflows/rooms.yml` ne suit plus tout `src/net/**` mais les fichiers de `src/` que le serveur importe
+  (`src/net/proto.ts`, `src/net/inbound.ts`, `src/system/lola-codec.ts`) ; `deploy/Dockerfile.rooms` ne copie qu'eux ;
+  `tests/rooms-deploy.test.ts` calcule les imports transitifs du serveur et garde le déclencheur et l'image à leur mesure. DEPLOY.md.
+- Preuves : **reproduit avant** (la garde : `src/net/client.ts` déclenchait le redéploiement) ; **après** : les trois fichiers suivis et
+  copiés, `client.ts`, `remote.ts`, `qr.ts` non suivis — 1/1 ; le serveur lancé depuis un dossier qui ne contient que ce que l'image copie :
+  `/health` répond `ok`.
+- Limites : l'image Docker elle-même non construite ici (pas de Docker sur ce Mac) ; ce commit, touchant le workflow, redéploie une fois le
+  serveur.

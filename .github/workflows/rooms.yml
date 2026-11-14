@@ -11,7 +11,10 @@ on:
     branches: [main, reseau]
     paths:
       - "server/**"
-      - "src/net/**"
+      # (the files of src/ the server imports — no more: a client's file under src/net/ restarted it in production, the rooms' state
+      # in memory lost; audit NET-20 — tests/rooms-deploy.test.ts keeps this list its imports')
+      - "src/net/proto.ts"
+      - "src/net/inbound.ts"
       - "src/system/lola-codec.ts"
       - "deploy/Dockerfile.rooms"
       - "deploy/compose.yml"

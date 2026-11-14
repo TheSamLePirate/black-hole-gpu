@@ -4,7 +4,9 @@
 FROM oven/bun:1.3-alpine
 WORKDIR /app
 COPY server/ server/
-COPY src/net/ src/net/
+# (the files of src/net/ it imports — tests/rooms-deploy.test.ts —, not the client's)
+COPY src/net/proto.ts src/net/proto.ts
+COPY src/net/inbound.ts src/net/inbound.ts
 # (the Moon's relief tiles' codec — server/moon-tiles.ts —: a file alone, no import)
 COPY src/system/lola-codec.ts src/system/lola-codec.ts
 ARG BUILD_SHA=dev

@@ -88,7 +88,7 @@ The network's rooms ([PLAN-RESEAU.md](PLAN-RESEAU.md)): `server/main.ts` in Bun,
 service.
 
 ```
-push main / reseau touching server/, src/net/ ─► rooms.yml: the network's tests, deploy/Dockerfile.rooms
+push main / reseau touching server/ or the src/ files it imports ─► rooms.yml: the network's tests, deploy/Dockerfile.rooms
                            → ghcr.io/thesamlepirate/black-hole-gpu:rooms-<sha⁷>-<run>.<attempt> (the site's public package)
                          ─► a commit on `deploy`: compose.yml naming it beside the site's image
 Portainer ─► recreates the `rooms` service alone (port 3001, its rooms in the `rooms-data` volume)
@@ -102,10 +102,11 @@ Portainer ─► recreates the `rooms` service alone (port 3001, its rooms in th
   messages past a connection's bucket). **RD2 (13 Nov 2026) counts addresses by the `X-Real-IP` header Nginx Proxy
   Manager sets** — without it, every page would share the proxy's address and its 10 rooms an hour. Passwords are now
   argon2id; the rooms' older sha256 ones are still read and salted at their next good guess (no migration to run).
-- **Only when the server's code changed** — `server/**`, `src/net/**`, `deploy/Dockerfile.rooms`,
+- **Only when the server's code changed** — `server/**`, the files of `src/` it imports (`src/net/proto.ts`, `src/net/inbound.ts`,
+  `src/system/lola-codec.ts` — kept by `tests/rooms-deploy.test.ts`; before 13 Nov 2026 all of `src/net/**`: a client's file restarted it, audit NET-20), `deploy/Dockerfile.rooms`,
   `deploy/compose.yml`, `deploy/render-compose.sh` or the workflow itself (on main or `reseau`): the players are
   not cut off by every push. Its tests (`net-core`, `net-rooms`) run first; the image holds `server/` and
-  `src/net/` alone (Bun, no dependency, the rooms in SQLite on `/data`).
+  those three files alone (Bun, no dependency, the rooms in SQLite on `/data`).
 - A page is told to reload when its protocol is older than the server's previous one; the server can lag
   the page by Portainer's poll (2 min), which the protocol's N/N−1 covers.
 
