@@ -40,9 +40,10 @@ quantification** — l'étape qui perd de l'information et donne d'ordinaire l'e
 - **Taille transférée** : sans quantification, le gain sur gzip va de **−34 %** (Ranger) à **+26 %** (pétrolier ; cargo +18 %, CRJ900 +19 % : plus gros) ; sur l'ensemble évalué,
   12,7 → 12,0 Mo, **−5 %**. Le gain réel de meshopt viendrait de la quantification des positions, normales et UV : une perte de précision à décider et à
   vérifier à l'image (et le décodeur dans le bundle). **Pas un gain de chargement établi.**
-- **GPU** : le réordonnancement réduit les sommets transformés par triangle de 3 à 40 % (Endurance 2,48 → 1,53, Lander 1,81 → 1,10). Le coût
-  des appareils dans l'image n'a pas été mesuré à part ; **règle 1** : sans fiche qui le chiffre, ce n'est pas un lot de performance (les
-  appareils sont quelques dizaines de milliers de triangles par image).
+- **GPU** : le réordonnancement réduit les sommets transformés par triangle de 3 à 40 % (Endurance 2,48 → 1,53, Lander 1,81 → 1,10). **Le
+  plafond est déjà mesuré pour l'appareil piloté** : sur J0 (kerr-mini, 10 nov., [GRAPHICS-PIPELINE](../../GRAPHICS-PIPELINE.md) §8.4), sauter
+  son dessin (`debugSkipShip`) rend **0,25 ms** — réordonner ou simplifier le F-35 ne peut pas rendre davantage : **règle 1, pas un lot de
+  performance**. Le trafic et les porte-avions (vus en nombre près d'un aéroport ou en mer) ne sont pas chiffrés : à mesurer avant tout lot.
 - **Niveaux de détail** : le simplificateur atteint 50 % des triangles avec une erreur ≤ 0,07 % de l'étendue sur le Ranger, le Lander et les
   porte-avions, et 25 % à ≤ 1 % sur les porte-avions — l'usage le plus prometteur (le trafic lointain, les porte-avions vus de loin), à
   rapprocher du coût par passe des appareils quand il sera mesuré. Le CRJ900 plafonne à 85 % (coutures d'attributs : 10 252 sommets utiles sur
