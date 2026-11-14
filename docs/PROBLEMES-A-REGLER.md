@@ -3,6 +3,16 @@
 Problèmes constatés, pas encore réglés. Chaque entrée : la date (UTC), ce qui est mesuré ou observé et sa source, la cause
 connue ou supposée, la piste. Une entrée réglée est barrée avec le commit qui la règle, pas effacée.
 
+
+## Le jeu ne démarre pas sur un GPU à 16–18 textures échantillonnées : `seaFft` non résolu dans trace.wgsl (relevé le 14 novembre 2026)
+
+**Constat (observé, CI et ce Mac)** : le site construit, ouvert par `scripts/site-smoke.ts` sous SwiftShader en CI (16 textures, 10 tampons de
+stockage par étage), affiche « trace.wgsl failed to compile: 9370:29 unresolved value 'seaFft' » — pas de jeu (runs 43632741249, 43634230192).
+**Reproduit ici** : `bun scripts/site-smoke.ts _site --hash "scene=game:artemis&gpuTextures=16"` → le même texte (9350:29) ; avec
+`gpuTextures=24` → OK. **Cause probable** : `seaFft` (@binding(33)) n'existe que si `maxSampledTexturesPerShaderStage >= SEA_TEXTURE_LIMIT`
+(19 — `renderer.ts:1372`, `sea/fft-gpu.ts:34`), ses usages (trace.wgsl ≈ 9232–9253, la mer FFT du 10 nov.) restent dans la variante compilée
+sans lui. 16 est la limite par défaut de WebGPU : des appareils modestes sont touchés. **Domaine du rendu** (trace.wgsl) : signalé à sa session
+le 14 nov., non corrigé ici. `check-wgsl` (82/82 en CI) ne compile pas cette variante.
 ## ~~Des rayures horizontales dans le ciel de nuit, l'exposition relevée~~ (relevé le 14 novembre 2026, J0 `nightfloor`) — non reproduit en
 régime établi : un transitoire
 

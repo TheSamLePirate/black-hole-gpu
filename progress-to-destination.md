@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-14 19:53 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-14 20:07 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous.
@@ -6803,3 +6803,12 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
 - **Limites / suite :** recommandation à Sam : éteint (rien à gagner en jeu). Le levier retiré quand Sam aura répondu. Les rayures du ciel
   de nuit : **reprises à 19:59 UTC** (phase `nightbands`, cinq cas : tel que dessiné, convergé, chaque rayon, raster entier, tracé) — profondeur
   1,0–1,6 %, aucune bande : un transitoire de l'historique 20 images après un saut d'exposition de 6 IL monde figé, pas un défaut ; PROBLEMES barré.
+
+## 2026-11-14T20:07Z — QA-02 : la fumée en CI trouve un défaut réel — le jeu ne démarre pas sous 19 textures
+
+- **Observé en CI** (run 43634230192, SwiftShader : 16 textures échantillonnées, 10 tampons) avec le rapport ajouté : la page montre « trace.wgsl
+  failed to compile: 9370:29 unresolved value 'seaFft' » — le jeu ne démarre pas. **Reproduit ici** (`gpuTextures=16` : le même ; 24 : OK).
+  `seaFft` n'existe que sous `SEA_TEXTURE_LIMIT` (19) ; ses usages de la mer FFT (10 nov.) restent dans la variante sans lui.
+- Domaine du rendu (trace.wgsl) : **signalé à sa session**, noté dans PROBLEMES ; non corrigé ici. `check-wgsl` ne compile pas cette variante.
+- Suite : l'étape `site-smoke` reste informative tant que ce défaut n'est pas corrigé ; ensuite, une porte. Une variante « petit GPU » dans
+  `check-wgsl` attraperait ces défauts plus tôt (à proposer).
