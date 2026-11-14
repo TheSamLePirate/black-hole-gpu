@@ -296,12 +296,15 @@ describe.skipIf(!E2E)("J0: the reference flight over Toulon-Hyères", () => {
     // (J0_CPU_PROFILE=1: Chrome's CPU profile over the second half — the main loop's long iterations, ≥ 4 ms of script in a row, and the
     // functions they were spent in (lib/cpu-profile.ts): what makes the loop's 95th percentile — 8.5 ms on kerr-mini for 4 aimed at)
     const cpuProfile = process.env.J0_CPU_PROFILE === "1" && tag === "flight";
+    // (J0_RING_OLD=1: the raster's rings rebuilt at every window step, as before 14 Nov 2026 — terrainRaster.ringReuse false: the A/B)
+    if (process.env.J0_RING_OLD === "1") await app.js(`(() => { __bh.renderer.terrainRaster.ringReuse = false; return 1; })()`);
     if (cpuProfile) {
       await app.cdp.send("Profiler.enable");
       await app.cdp.send("Profiler.setSamplingInterval", { interval: 200 });
       await app.cdp.send("Profiler.start");
     }
     const b = await app.js<Flown>(flyJs(J0_SCENE.flightS - half, false));
+    console.log(`  J0 the raster's rings since the start: ${JSON.stringify(await app.js(`__bh.renderer.terrainRasterStats.ringBuilds`))}`);
     if (cpuProfile) {
       const { profile: pr } = await app.cdp.send<{ profile: CdpProfile }>("Profiler.stop", {}, 60);
       await Bun.write(`${OUT}/flight-second-half.cpuprofile`, JSON.stringify(pr));

@@ -22,3 +22,14 @@
 Pas de point chaud unique : ≈ 7 ms par image répartis en postes de 0,2 à 2,7 ms. Les 4 ms du 95ᵉ centile demandent plusieurs lots (le HUD
 moins souvent redessiné qu'à chaque image — une question de fraîcheur des instruments, à décider —, le renderer préparant moins chaque image,
 du travail vers des workers), pas un correctif. **Non mesuré** : le M1 Max ; la première moitié du vol (le virage).
+
+## Premier lot (~02:10 UTC) : les anneaux du raster
+
+\`drawRing\` reconstruisait à chaque pas de fenêtre le maillage d'un anneau : ses sommets (la grille du niveau, la même pour toute fenêtre)
+réécrits, ses triangles filtrés coin par coin, un tableau neuf de 1,5 Mo. Maintenant : les sommets écrits seulement quand le niveau change,
+le filtrage sur les boîtes des triangles calculées une fois par grille (\`ringCut\`, le même ensemble — \`tests/terrain-ring-cut.test.ts\`, 64 découpes),
+un tableau de travail réutilisé. **Mesuré** (compteur \`terrainRasterStats.ringBuilds\`, vol J0, kerr-mini, un passage par variante) : 283
+reconstructions (la découpe change à chaque pas : aucune évitée), sommets écrits 6 fois au lieu de 99, **temps 393–425 → 326 ms** (−20 à −25 %,
+≈ 0,1 ms par image en moyenne). La boucle p95 9,0–9,1 → 8,6–8,9 ms : **dans le bruit**, non revendiquée. Reste par reconstruction ≈ 1,15 ms
+(la copie de 1,5 Mo d'indices vers le GPU, le filtrage).
+

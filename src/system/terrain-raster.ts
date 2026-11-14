@@ -450,8 +450,59 @@ export interface TerrainRing {
   /** its rank from the patch (1 the first ring): its seams' mark (T2) */
   rank: number;
 }
+/** each triangle's corners' box (min x, max x, min y, max y — grid units) of a ring's grid, once a grid (they are shared: plainGrids) */
+const ringBoxCache = new WeakMap<object, Float32Array>();
+function ringBoxes(mesh: { vertices: Float32Array; indices: Uint32Array }): Float32Array {
+  let b = ringBoxCache.get(mesh);
+  if (b) return b;
+  const v = mesh.vertices,
+    ix = mesh.indices;
+  b = new Float32Array((ix.length / 3) * 4);
+  for (let t = 0, i = 0; i < ix.length; t += 4, i += 3) {
+    const a = 3 * ix[i]!,
+      c = 3 * ix[i + 1]!,
+      e = 3 * ix[i + 2]!;
+    b[t] = Math.min(v[a]!, v[c]!, v[e]!);
+    b[t + 1] = Math.max(v[a]!, v[c]!, v[e]!);
+    b[t + 2] = Math.min(v[a + 1]!, v[c + 1]!, v[e + 1]!);
+    b[t + 3] = Math.max(v[a + 1]!, v[c + 1]!, v[e + 1]!);
+  }
+  ringBoxCache.set(mesh, b);
+  return b;
+}
+
+let ringScratch = new Uint32Array(0);
+/** A ring's triangles kept: those not wholly inside the finer level (x = v·ratio + hole in (RING_OVERLAP, last − RING_OVERLAP) at their
+ *  three corners) — tests/terrain-ring-cut.test.ts: the same set as the corners tested one by one. `kept` is a shared scratch array: its
+ *  first `n` read before the next call */
+export function ringCut(mesh: { vertices: Float32Array; indices: Uint32Array }, hole: readonly number[], ratio: number) {
+  const ix = mesh.indices;
+  const last = TERRAIN_CACHE_N - 1;
+  const box = ringBoxes(mesh);
+  const lo = (RING_OVERLAP - hole[0]!) / ratio,
+    hi = (last - RING_OVERLAP - hole[0]!) / ratio,
+    loY = (RING_OVERLAP - hole[1]!) / ratio,
+    hiY = (last - RING_OVERLAP - hole[1]!) / ratio;
+  // (into one scratch array, grown when needed, not a new one at each step: 1.5 MB a rebuild, four a second in flight — the collector's
+  // work; the caller copies its first n out before the next call)
+  if (ringScratch.length < ix.length) ringScratch = new Uint32Array(ix.length);
+  const kept = ringScratch;
+  let n = 0;
+  for (let t = 0, i = 0; i < ix.length; t += 4, i += 3)
+    if (!(box[t]! > lo && box[t + 1]! < hi && box[t + 2]! > loY && box[t + 3]! < hiY)) {
+      kept[n++] = ix[i]!;
+      kept[n++] = ix[i + 1]!;
+      kept[n++] = ix[i + 2]!;
+    }
+  return { kept, n };
+}
+
 interface RingState {
   key: string;
+  /** its cut (level, the finer level's hole, the ratio) and the level its vertices were written for: a window's step alone changes neither
+   *  — the rings' grid is the level's, the same for every window (terrain-raster-mesh.ts plainGrids) */
+  cutKey: string;
+  vertexLevel: number;
   indexCount: number;
   vertex: GPUBuffer;
   index: GPUBuffer;
@@ -655,6 +706,8 @@ export class TerrainRaster {
       const d = this.device;
       r = {
         key: "",
+        cutKey: "",
+        vertexLevel: -1,
         indexCount: 0,
         vertex: d.createBuffer({ size: RASTER_MESH_VERTEX_BYTES, usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST }),
         index: d.createBuffer({ size: RASTER_MESH_INDEX_BYTES, usage: GPUBufferUsage.INDEX | GPUBufferUsage.COPY_DST }),
@@ -1100,31 +1153,35 @@ export class TerrainRaster {
   private drawRing(pass: GPURenderPassEncoder, pipe: GPURenderPipeline, r: RingState, ring: TerrainRing, sources: TerrainCacheSources) {
     const d = this.device;
     const key = `${ring.level}:${ring.window.i}:${ring.window.j}:${ring.hole[0]}:${ring.hole[1]}:${ring.ratio}`;
+    const cut = `${ring.level}:${ring.hole[0]}:${ring.hole[1]}:${ring.ratio}`;
+    if (key !== r.key && this.ringReuse && cut === r.cutKey && r.vertexLevel === ring.level) {
+      // (the window stepped, its cut the same: its buffers as they are — the grid is the level's, placed by the uniform)
+      this.ringStats.kept++;
+      r.key = key;
+    }
     if (key !== r.key) {
+      const t0 = performance.now();
+      this.ringStats.rebuilt++;
       // (a plain grid — the runways' cuts are the patch's, near —, its cells under the finer level left out: the triangles
       // whose corners all fall inside it, its edge's band of RING_OVERLAP nodes kept — drawn both, the nearer kept, no crack;
       // cut out of the mesh, not discarded: the depth test early, no hidden ground shaded twice)
       const mesh = terrainRasterMesh(ring.window, ring.level, new Float32Array(4));
       const v = mesh.vertices;
-      const last = TERRAIN_CACHE_N - 1;
-      const inside = (k: number) => {
-        const x = v[3 * k]! * ring.ratio + ring.hole[0],
-          y = v[3 * k + 1]! * ring.ratio + ring.hole[1];
-        return x > RING_OVERLAP && x < last - RING_OVERLAP && y > RING_OVERLAP && y < last - RING_OVERLAP;
-      };
-      const ix = mesh.indices;
-      const kept = new Uint32Array(ix.length);
-      let n = 0;
-      for (let i = 0; i < ix.length; i += 3)
-        if (!(inside(ix[i]!) && inside(ix[i + 1]!) && inside(ix[i + 2]!))) {
-          kept[n++] = ix[i]!;
-          kept[n++] = ix[i + 1]!;
-          kept[n++] = ix[i + 2]!;
-        }
-      d.queue.writeBuffer(r.vertex, 0, v);
+      // (a triangle is cut out when its three corners fall inside the finer level, x = v·ratio + hole in (RING_OVERLAP, last −
+      // RING_OVERLAP): in the grid's own units, its corners' box strictly within that rectangle — the boxes worked out once a grid
+      // (ringBoxes), four comparisons a triangle; the same triangles as the corners tested one by one, 14 Nov 2026)
+      const { kept, n } = ringCut(mesh, ring.hole, ring.ratio);
+      // (its vertices only when its level changed: the same grid for every window and cut of a level)
+      if (!this.ringReuse || r.vertexLevel !== ring.level) {
+        d.queue.writeBuffer(r.vertex, 0, v);
+        r.vertexLevel = ring.level;
+        this.ringStats.vertexWrites++;
+      }
       d.queue.writeBuffer(r.index, 0, kept, 0, n);
       r.indexCount = n;
       r.key = key;
+      r.cutKey = cut;
+      this.ringStats.ms += performance.now() - t0;
     }
     const old = r.sources;
     if (!r.heightBind || !old || !(Object.keys(sources) as (keyof TerrainCacheSources)[]).every((k) => old[k] === sources[k])) {
@@ -1344,9 +1401,15 @@ export class TerrainRaster {
     return true;
   }
 
+  /** (a measuring lever, true) a ring's buffers kept when its window stepped and its cut did not, its vertices written only when its level
+   *  changed — false: rebuilt at every step, as before 14 Nov 2026 (J0's CPU profile: drawRing 0.27 ms an image on kerr-mini) */
+  ringReuse = true;
+  /** the rings' rebuilds since the start: kept (a step, the same cut), rebuilt (a cut changed), the vertices written, their CPU time [ms] */
+  ringStats = { kept: 0, rebuilt: 0, vertexWrites: 0, ms: 0 };
   stats() {
     const a = this.attachments;
     return {
+      ringBuilds: { ...this.ringStats, ms: +this.ringStats.ms.toFixed(1) },
       compiled: this.mesh !== null,
       error: this.error,
       active: this.active,

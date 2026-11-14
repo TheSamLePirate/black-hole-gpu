@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-14 01:54 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-14 02:10 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous.
@@ -6339,4 +6339,11 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
 - Contribution (§8.3, le budget CPU) : \`j0-reference\` \`J0_CPU_PROFILE=1\` et \`tests/e2e/lib/cpu-profile.ts\` ; [fiche](docs/progress/j0/FICHE-CPU-kerr-mini-2026-11-14.md).
   **Mesuré** : ≈ 7 ms de script par image — le renderer 2,7, le pas du vol 1,5, le HUD 1,4 (le HUD du F-35 1,0), les tuiles 0,6 — sans point
   chaud unique ; la boucle p95 9,0 ms (cible 4).
+
+## 2026-11-14T02:10Z — CPU : les anneaux du raster reconstruits moins cher (−20 à −25 %)
+
+- Contribution (§8.3, la boucle CPU ; premier lot de la [fiche CPU](docs/progress/j0/FICHE-CPU-kerr-mini-2026-11-14.md)) : \`terrain-raster.ts\`
+  \`drawRing\` — sommets écrits au seul changement de niveau, \`ringCut\` (boîtes des triangles, même ensemble : test unitaire, 64 découpes),
+  tableau d'indices réutilisé ; levier \`ringReuse\`, compteur \`ringBuilds\`. **Mesuré** (vol J0, kerr-mini) : 393–425 → 326 ms de reconstruction
+  sur le vol, sommets 99 → 6 écritures ; la boucle p95 dans le bruit (non revendiquée). Image inchangée par construction (mêmes triangles).
 
