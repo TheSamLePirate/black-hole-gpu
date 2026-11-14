@@ -175,6 +175,10 @@ cadence mise au contrat actuel (1 sous le matériau) ; sa partie « repli » mis
   37–40 → 5–7 par vol (dont la plupart à 2,1 ms, la résolution du chronomètre) ; au chargement `request()` 8,3–8,8 → 2,6–4,1 ms ; image
   inchangée. **Reste ouvert** : 1 image par vol à 3,1–3,2 ms, dont 1,7–2,7 ms dans le simple enregistrement d'une arrivée (`put`, hors de
   tout chemin coûteux : pause du ramasse-miettes probable, A en montre aussi) — critère non tenu strictement ; la mesure sur kerr-mini.
+- **Mesuré sur kerr-mini** (2026-11-14 ~00:07 UTC, e2e `j2-probes` `J2_PHASES=flight`, code 9c1c5fd8, run `…-j2-pointes-mini`, un passage) : **en vol, 2
+  images sur 1 010 au-delà de 2 ms** de travail des tuiles ; `request()` p95 1,2 ms, max 2,1 ; publication p95 1,2, max 1,9 ; l'écriture des
+  pages (`put`) max 2,9 ; le halo max 2,0. **Au chargement** : 12 sur 1 140, `request()` max 3,7, `put` max 3,8. Le mini tient donc le lot comme
+  le M1 Max (5–7 par vol) : le critère presque tenu en vol, pas au chargement.
 
 ## ~~Une marche sous le pixel aux bords des niveaux du raster près de Hyères~~ — pas une couture : des plis et des crêtes ; C0-12 tenu (J2-3, 13 novembre 2026)
 

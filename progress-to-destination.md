@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-14 00:02 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-14 00:07 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous.
@@ -6266,4 +6266,10 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   simplification à 50 % ≤ 0,07 % d'erreur sur 4 maillages ; transfert gzip de Pages et du serveur vérifié (en-têtes). Non mesuré : la
   quantification, le décodage dans le navigateur, le coût GPU des appareils.
 - Limites : F-35, A320, ISS, astronaute non évalués (autres en-têtes) ; décision à Sam (question 4) ; aucune dépendance ajoutée.
+
+## 2026-11-14T00:07Z — Les pointes des tuiles mesurées sur kerr-mini (J2, lot « pointes »)
+
+- Contribution (§8 régularité du fil principal ; la mesure que la fiche J2 « pointes » laissait au mini) : vol J0, `j2-probes` — en vol 2 images
+  sur 1 010 au-delà de 2 ms (`request()` max 2,1 ms, publication max 1,9), au chargement 12 sur 1 140 (max 3,7). **Mesuré**, un passage ;
+  aucun changement de code. PROBLEMES.
 
