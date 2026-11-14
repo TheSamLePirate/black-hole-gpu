@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-14 17:07 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-14 17:10 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous.
@@ -6619,3 +6619,15 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   serveur de salles construite sur `oven/bun:1.3.14-alpine`, en production (`/health` : build d854d21).
 - Limites : pas de `tsc` ni de Biome dans ce job (`main` les passe au contrôle de pré-push) ; aucun test du relais de trafic (`server/traffic.ts`)
   n'existe à ajouter.
+
+## 2026-11-14T17:10Z — Audit QA-13 : un seul build, et les workers de production et de dev tenus égaux
+
+- Contribution : la reproductibilité de la livraison (ce que sert le dev est ce que livre la production) ; audit 2026-11-10, QA-13 (P2).
+- Réalisé : `bun run build` est le build de production (`bun scripts/build-pages.ts`, comme `build:pages` que la CI lance) au lieu d'une
+  ligne de 1 500 caractères incomplète ; `tests/build-entries.test.ts` compare les workers construits par `build-pages.ts` à ceux que sert
+  `server.ts` (même nom, même source). README.
+- Preuves : **reproduit avant** (`bun run build`) : `dist/` sans `mirage-worker.js`, `intro-worker.js`, `net.js`, `runways/`, `precache.json`,
+  `version.json`, `openrouter.html` ; **après** : `_site/` les a tous ; la garde 2/2 (12 workers de part et d'autre, mêmes sources) et son
+  témoin (une route de dev retirée : vue) ; QA-14 (workers non hachés sur Pages) laissé : son en-tête de Pages supposé, non mesuré, le site
+  servi par nginx où l'audit le juge tenu.
+- Limites : les deux listes restent deux (une table commune serait un pas de plus) ; la garde empêche qu'elles divergent.

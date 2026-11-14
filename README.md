@@ -21,8 +21,8 @@ bun test           # physics unit tests (geodesics, closed-form Kerr solutions, 
 bun run typecheck  # tsc --noEmit
 bun run check      # what the CI verifies: biome ci, tsc, the WGSL
 bun run e2e        # the end-to-end suite in Chrome (tests/e2e; slow — scripts/remote.ts runs it on another Mac)
-bun run build      # static bundle in dist/ (+ the planner's worker)
-bun run build:pages  # the GitHub Pages site in _site/ (app, workers, gallery, docs/comment-jouer.html)
+bun run build      # the site in _site/ (app, every worker, gallery, docs) — the same as build:pages, which CI runs
+bun run build:pages  # the same
 bun run gallery    # the scene gallery's pictures recaptured and compared (visual regression; dev server running)
 bun scripts/bench.ts             # frame-time benchmark of the reference scenes (headless Chrome, dev server running)
 bun scripts/build-sky.ts <dir>   # rebuild assets/sky/ from the NASA map + HYG catalogue (see assets/sky/README.md)
