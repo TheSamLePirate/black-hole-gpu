@@ -3893,7 +3893,11 @@ async function main() {
     flightHud.setDensity(2); // clean: the view, the captions, the warnings
   };
   const flying = () => camera.piloting && !camera.cinematic && !renderer.offlineActive && !camera.character.active;
-  panel.flightKeys = (e) => (flying() || camera.character.active) && (e.key === "m" || e.key === "M") && !e.shiftKey;
+  // (flying, the panel leaves M — the map — and any key the flight binds: on QWERTY ⇧M is the NAV's, it both toggled the NAV and
+  // opened the settings before 13 Nov 2026 — audit FX-13, Sam's choice: the flight first; on AZERTY ⇧M is free and opens them)
+  panel.flightKeys = (e) =>
+    ((flying() || camera.character.active) && (e.key === "m" || e.key === "M") && !e.shiftKey) ||
+    (flying() && matchKey(e, true, false, effectiveBindings())?.layer === "flight");
   camera.onPadAction = (a) => {
     if (renderer.offlineActive) return;
     if (camera.character.active) {

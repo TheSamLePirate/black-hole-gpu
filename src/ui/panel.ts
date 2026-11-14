@@ -1,5 +1,5 @@
 import { isTyping } from "../controls";
-import { freeCameraKeys } from "../input/bindings";
+import { freeCameraKeys, keyFor } from "../input/bindings";
 import { KEYMAP } from "../input/keymap";
 import { t, tf, tr } from "../i18n";
 import { h, icon, modal } from "./kit";
@@ -1091,7 +1091,15 @@ export class SettingsPanel {
             "section",
             {},
             h("h4", { class: "k-label" }, t(title)),
-            h("dl", {}, ...rows.flatMap((r) => [h("dt", {}, t(r.keys)), h("dd", {}, t(r.text))])),
+            h(
+              "dl",
+              {},
+              ...rows.flatMap((r) => {
+                // (its keys as this keyboard prints them — audit FX-13)
+                const live = r.liveKeys ? (r.bind ?? []).map((b) => keyFor(b.do, b.arg, b.layer)).filter((x): x is string => !!x) : [];
+                return [h("dt", {}, live.length ? live.join(" · ") : t(r.keys)), h("dd", {}, t(r.text))];
+              }),
+            ),
           ),
         ),
         this.o.connectController

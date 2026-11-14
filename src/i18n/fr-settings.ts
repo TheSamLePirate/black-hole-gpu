@@ -1550,7 +1550,8 @@ export default {
   "In the menus": "Dans les menus",
   "D-pad or left stick ▲ ▼ · A choose · B back · Start leaves the pause":
     "Croix ou stick gauche ▲ ▼ · A choisir · B retour · Start quitte la pause",
-  "Settings · search them (flying: ⇧M)": "Réglages · les rechercher (en vol : ⇧M)",
+  "Settings · search them (flying: ⇧M when the flight does not use that key — else Esc › Settings or ⌘K)":
+    "Réglages · les rechercher (en vol : ⇧M si le vol n'utilise pas cette touche — sinon Échap › Réglages ou ⌘K)",
   "Game tools (developers: a local build or ?dev) — status, placement, targets, time, performance":
     "Outils de jeu (développeurs : build local ou ?dev) — état, placement, cibles, temps, performances",
   "Details & physical readouts": "Détails et mesures physiques",

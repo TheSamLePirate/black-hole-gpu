@@ -647,7 +647,7 @@ la Terre. Un crash en solo met la partie en pause (§5.3).
 | AP · autothrottle (F-35) ; AP1 · A/THR (A320) | ' · ⇧' |
 | STOVL (F-35B) · autofrein (A320) | ⇧B |
 | Repoussage (A320) | Fin |
-| NAV · panneau de plan de vol | ⇧M · ⇧O |
+| NAV · panneau de plan de vol | ⇧M · ⇧O (par la touche physique : ⇧ et « , » sur AZERTY ; en vol, sur QWERTY, ⇧M est le NAV seul — avant le 13 nov. 2026 il ouvrait aussi les réglages, audit FX-13) |
 | Volets : F-35 0 → ½ → plein ; A320 0 → 1 → 2 → 3 → FULL | P |
 | Aérofrein | ⇧P |
 | Train (8 s par sens) | G |

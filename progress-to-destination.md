@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-14 03:25 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-14 15:05 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous.
@@ -68,7 +68,7 @@ ouverts, sous 1 ms) ; J3 au stade du plan.**
 | Audit vagues 3–4 (1feb2f7f) | 4.2 la politique de temps | **fait** : vol tenu pendant la reprise GPU, cadence vraie, horloge du vol + garde ; l'onglet masqué (choix de Sam) : solo en pause dite, salle sans arrêt (l'absent ne la bloque plus, les autres avertis, remis à l'heure au retour), sauvé en partant, TARS sans réveil ; le ralentissement sous 10 images/s dit — e2e `hidden-tab` 2/2, `fps-truth` 2/2 |
 | Audit vagues 3–4 (1feb2f7f) | 4.8 découper `main()` | **fait** (accord de Sam : par petits lots) : lot 1 la persistance, lot 2 qui tient le vol (`session.ts`), lots 3–4 les étapes gardées (`frame.ts`, AR-03), lot 5 l'ordre §19.5 (AR-04), lot 6 `craft-feed.ts`, lot 7 `governor.ts` (confié par la session du rendu) — **fait** : les quatre découpes d'AR-12 (session, frame, gouverneur, poses de l'appareil) |
 | Audit vagues 3–4 (1feb2f7f) | 4.3 séparer `Settings` | **fait** : garde statique des réglages (AR-21) ; `ViewPose` et `SimState` figés une fois par image (AR-07, `view-pose.ts`) ; le renderer les lit (session du rendu, 77721acf) |
-| Audit vague 6 hors rendu (1feb2f7f) | QA-16, QA-18, AR-17, AR-18, réseau RD4/RD5, FX-18, FX-17, FX-07, QA-11 ; puis les FX hors vague : FX-08, FX-12, FX-14, FX-19 (tendance), FX-22 (FX-11 et FX-15 déjà réglés le 11 nov., FX-16 tranché par Sam) | **faits** (accord de Sam : « un autre lot d'audit hors rendu ») ; FX-17 en 3 lots ; FX-07 l'A320 à la manette ; QA-11 le catalogue 446/446 gardé ; FX-08 V par les vues de l'appareil seul ; FX-12 les touches collées ; FX-14 chaque appareil sa configuration ; FX-19 la tendance de vitesse sur le temps du vol ; e2e `report` 3/4 (le final de Le Bourget, état périmé : PROBLEMES) ; ensuite les autres FX hors vague (FX-13 et FX-20 : des choix pour Sam ; FX-19 la fraîcheur des écrans, à mesurer ; FX-21 des fonctions à finir) |
+| Audit vague 6 hors rendu (1feb2f7f) | QA-16, QA-18, AR-17, AR-18, réseau RD4/RD5, FX-18, FX-17, FX-07, QA-11 ; puis les FX hors vague : FX-08, FX-12, FX-14, FX-19 (tendance), FX-22, FX-13 (FX-11 et FX-15 déjà réglés le 11 nov., FX-16 tranché par Sam) | **faits** (accord de Sam : « un autre lot d'audit hors rendu ») ; FX-17 en 3 lots ; FX-07 l'A320 à la manette ; QA-11 le catalogue 446/446 gardé ; FX-08 V par les vues de l'appareil seul ; FX-12 les touches collées ; FX-14 chaque appareil sa configuration ; FX-19 la tendance de vitesse sur le temps du vol ; FX-13 ⇧M au vol d'abord (choix de Sam) ; e2e `report` 3/4 (le final de Le Bourget, état périmé : PROBLEMES) ; ensuite les autres FX hors vague (FX-20 « pour ce vol seulement », choix de Sam, en cours ; FX-19 la fraîcheur des écrans, à mesurer ; FX-21 des fonctions à finir) |
 
 **Fermé récemment** : J2 (13 nov., ΔGPU nul, chemin vers §8 écrit) ; J2-C BC7 étudiée puis **rangée** (Sam : « ne pas le faire maintenant »).
 
@@ -6394,3 +6394,17 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   (l'échantillonneur de l'image du relief du radar) ; tout le reste se clone. Suite : l'image du relief faite côté page ; les autres modes à
   sonder. [Fiche CPU](docs/progress/j0/FICHE-CPU-kerr-mini-2026-11-14.md).
 
+## 2026-11-14T15:05Z — Audit FX-13 : ⇧M en vol, une seule chose (le vol d'abord — choix de Sam)
+
+- Contribution : §19 (la réponse des commandes : une touche, un effet) ; audit 2026-11-10, FX-13. Décision de Sam (13 nov., question posée) :
+  « le vol prioritaire ».
+- Réalisé : en vol, le panneau des réglages laisse toute touche que le vol lie (`panel.flightKeys` consulte `matchKey`, couche « flight » —
+  `src/main.ts`) ; l'aide affiche les touches d'une ligne marquée `liveKeys` telles que le clavier les imprime (`keyFor` : la disposition,
+  les touches redéfinies — `src/input/keymap.ts`, `src/ui/panel.ts`), la ligne du NAV d'abord ; la ligne des réglages dit « en vol : ⇧M si le
+  vol n'utilise pas cette touche — sinon Échap › Réglages ou ⌘K » (FR/EN). VOL-AVIONS, MENUS, catalogue.
+- Preuves : **reproduit avant** (e2e `shift-m`, vrais événements CDP, F-35 en vol) : QWERTY ⇧M → « NAV: no flight plan… » **et** le panneau
+  ouvert ; AZERTY (M sur `Semicolon`) → le panneau seul ; **après** : QWERTY le NAV seul, panneau fermé ; AZERTY le panneau seul — 1/1 ;
+  i18n, keymap, bindings, pilot-modifiers verts. Une première mesure lisait un mauvais élément (la racine de l'app au lieu de `#panel`) :
+  corrigée avant toute conclusion.
+- Limites : sur QWERTY, plus de touche directe pour les réglages en vol (Échap, ⌘K, la barre d'outils) — c'est le choix fait.
+- Suite : FX-20 (« Continuer sans dégâts » pour ce vol seulement — choix de Sam).

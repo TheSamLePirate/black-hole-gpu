@@ -112,6 +112,9 @@ export interface KeyRow {
   keys: string;
   text: string;
   bind?: KeyBind[];
+  /** the help shows its binds' keys as the keyboard prints them (the layout's, the player's own) rather than `keys` — a key
+   *  bound by its code lies elsewhere on another layout: the NAV's ⇧M is ⇧ and « , » on AZERTY (audit FX-13) */
+  liveKeys?: boolean;
 }
 
 export interface KeySection {
@@ -290,6 +293,7 @@ export const KEYMAP: KeySection[] = [
       },
       {
         keys: "⇧M · ⇧O",
+        liveKeys: true,
         text: "A plane's flight plan: NAV — the autopilot flying it (LNAV the route, VNAV its altitudes and speeds; the stick takes them off) · the flight plan's panel: its waypoints edited on the map, its fuel, the bingo; a spacecraft: its mission plan — the burns, the spheres crossed, the Δv against the tanks', executed from it",
         bind: [fly("KeyM", "jetSystem", { arg: "nav", shift: true }), fly("KeyO", "route", { shift: true })],
       },
@@ -505,7 +509,10 @@ export const KEYMAP: KeySection[] = [
   {
     title: "Interface",
     rows: [
-      { keys: "M · ⌘K", text: "Settings · search them (flying: ⇧M)" },
+      {
+        keys: "M · ⌘K",
+        text: "Settings · search them (flying: ⇧M when the flight does not use that key — else Esc › Settings or ⌘K)",
+      },
       {
         keys: "F1 · F2 · F3 · F4",
         text: "The game's modes: Ship · On foot · Free camera (anywhere in the system; a ship flies on) · Photo (renders, videos) — the top bar's tabs",
