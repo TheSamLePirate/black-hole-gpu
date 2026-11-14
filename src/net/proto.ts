@@ -324,4 +324,14 @@ export const emptyVisual = (): Visual => ({
 /** A room's code: 6 letters and digits, the ambiguous ones (0 O 1 I L) left out. */
 export const CODE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
 export const isCode = (s: string) => new RegExp(`^[${CODE_ALPHABET}]{6}$`).test(s);
+
+/** A room's code: six characters of the alphabet, each as likely as any other — the random bytes past the last whole round of the
+ *  alphabet (248 of 256) drawn again: `byte % 31` made its first eight characters an eighth more likely (audit NET-33). */
+export function randomCode(bytes: (n: number) => Uint8Array = (n) => crypto.getRandomValues(new Uint8Array(n))): string {
+  const n = CODE_ALPHABET.length;
+  const top = 256 - (256 % n);
+  let out = "";
+  while (out.length < 6) for (const b of bytes(6)) if (b < top && out.length < 6) out += CODE_ALPHABET[b % n];
+  return out;
+}
 export const normCode = (s: string) => s.toUpperCase().replace(/[^A-Z0-9]/g, "");

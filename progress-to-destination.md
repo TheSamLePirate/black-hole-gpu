@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-14 16:30 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-14 16:33 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous.
@@ -6535,3 +6535,15 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
 - Preuves : **reproduit avant** (e2e `crew-flood` : un client de test, joint en instruments, envoie 200 ordres mal formés d'un coup) : **119**
   réponses (`crew-ack` diffusés) ; **après** : **8** — 1/1 ; `crew-inbox.test` 1/1 ; `crew-actions` 7/7 (les ordres réels) ; tsc.
 - Limites : la file retardée sous délai non mesurée en e2e (le plafond est au test unitaire) ; NET-33 (petites fuites) non traité.
+
+## 2026-11-14T16:33Z — Audit NET-33 : le code des salles sans biais ; le reste vérifié
+
+- Contribution : la solidité du réseau (des codes de salle aussi difficiles à deviner que leur longueur le promet) ; audit 2026-11-10, NET-33 (P3).
+- Réalisé : `randomCode()` (`src/net/proto.ts`) tire par rejet les octets au-delà du dernier tour complet de l'alphabet (248 sur 256) ;
+  `server/rooms.ts` l'emploie. `tests/room-code.test.ts`.
+- Preuves : **témoin** (la mesure sur l'ancienne formule `octet % 31`) : les huit premiers caractères plus fréquents d'un huitième (> 1,08) ;
+  **après** égaux à 3 % près sur 40 000 codes ; `net-rooms`, `net-server-defence` verts (25/25) ; tsc.
+  Les autres points de NET-33 : la piste fantôme d'un joueur parti — **déjà réglée** (`takeSample` rejette un slot qui n'est plus membre, lot
+  RD0) ; la minuterie de 10 s par requête non annulée — une fermeture gardée 10 s par requête, rare, sans effet observé : notée, non changée ;
+  les écouteurs de `netsession` liés à la vie du client : sans fuite observée, non changés.
+- Limites : `server/rooms.ts` touché : le serveur de salles se redéploie (NET-20).

@@ -6,7 +6,7 @@
 import { Database } from "bun:sqlite";
 import type { Server, ServerWebSocket } from "bun";
 import {
-  CODE_ALPHABET,
+  randomCode,
   type ClientMsg,
   CRAFT_BYTES,
   type ErrorCode,
@@ -235,8 +235,7 @@ export function createRooms(o: RoomsOptions) {
 
   const newCode = () => {
     for (;;) {
-      const bytes = crypto.getRandomValues(new Uint8Array(6));
-      const c = [...bytes].map((b) => CODE_ALPHABET[b % CODE_ALPHABET.length]).join("");
+      const c = randomCode();
       if (!live.has(c) && !load(c)) return c;
     }
   };
