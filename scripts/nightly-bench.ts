@@ -69,7 +69,8 @@ async function run(pull: boolean) {
     await $`git -C ${ROOT} fetch -q origin main && git -C ${ROOT} merge -q --ff-only origin/main`.nothrow();
     await $`bun install --frozen-lockfile`.cwd(ROOT).quiet().nothrow();
   }
-  const commit = (await $`git -C ${ROOT} rev-parse --short HEAD`.nothrow().quiet().text()).trim() || "unknown";
+  // (a remote job's copy has no .git: remote.ts gives it the commit it was sent from)
+  const commit = (await $`git -C ${ROOT} rev-parse --short HEAD`.nothrow().quiet().text()).trim() || process.env.KERR_COMMIT || "unknown";
   const at = new Date().toISOString();
   // (the machine rested: its pressure Nominal — waited for, 20 min at most —, else the night skipped, said)
   let th = thermalNow(120);
