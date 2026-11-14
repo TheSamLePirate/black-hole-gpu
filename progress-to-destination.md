@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-14 15:25 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-14 15:39 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous.
@@ -6477,3 +6477,11 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
 - Limites : processeur seulement (le coût GPU des copies à l'atlas n'est pas lu) ; une machine ; kerr-mini non mesuré. Aucune recommandation
   de changement sans décision de Sam : +2 ms par image pèsent face aux 16,7 ms du palier à 60 images/s ; un PFD à 30 Hz (~+0,4 ms, calculé)
   serait un compromis.
+
+## 2026-11-14T15:39Z — L'observatoire : le trou de ver attendu en nuit astronomique ; le crépuscule du modèle en question
+
+- **Mesuré** (kerr-mini, `observatory` `OBS_SHIFT_H`) : la bouche du trou de ver 1,4× le ciel au « meilleur moment » (Soleil −12°), 6,3× en
+  pleine nuit — l'échec venait du ciel. **Fait** : `seeingRule` du trou de ver, Soleil sous −18° (test unitaire) ; 1,86× alors (encore < 2).
+  **Ouvert** : le ciel du modèle à −18° ~4× la pleine nuit — à mesurer contre une référence. PROBLEMES. `hud-layout` 10/10 et `title-ship` 7/7 avant
+  cela (lots précédents).
+

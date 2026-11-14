@@ -42,12 +42,15 @@ export interface SeeingRule {
 }
 
 /** The rule a thing is seen by: the Sun by day (a filter), the Moon in any sky, Mercury and Venus in the twilight
- *  (never far from the Sun), the rest in a dark sky, high enough out of the haze. */
+ *  (never far from the Sun), the wormhole's mouth in the astronomical night, the rest in a dark sky, high enough out of the haze. */
 export function seeingRule(o: Observable): SeeingRule {
   if (o.kind === "body" && o.id === "sun") return { minAlt: 5, sunUnder: null };
   if (o.kind === "body" && o.id === "moon") return { minAlt: 5, sunUnder: null };
   if (o.kind === "body" && (o.id === "mercury" || o.id === "venus")) return { minAlt: 5, sunUnder: -6 };
   if (o.kind === "iss") return { minAlt: 10, sunUnder: -4 };
+  // (the wormhole's mouth: faint — the other universe on black wants the astronomical night, the Sun under −18°: at −12°, its best moment
+  // for a mouth setting early, the sky round it was as bright as its core — e2e observatory, the spot 1.3×, 6× two hours later; 14 Nov 2026)
+  if (o.kind === "wormhole") return { minAlt: 10, sunUnder: -18 };
   return { minAlt: 10, sunUnder: -12 };
 }
 

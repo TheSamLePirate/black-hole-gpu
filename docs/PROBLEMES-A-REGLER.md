@@ -669,6 +669,13 @@ termes à un nœud fautif (43,0666 N, 6,12883 E, niveau 1).
   échoue en `EMFILE` (trop de fichiers ouverts, même `ulimit -n 65536`) ; en `NODE_ENV=production` il sert, mais **le harnais e2e d'aujourd'hui ne
   démarre pas sa page** (`beforeAll` expiré à 200 s) : pas de côté A. Le côté B redonne 1,30. Pour trancher : un harnais d'époque (le test et
   `lib/` de ce commit), ou une sonde du ciel et de la bouche séparés (la luminance du ciel à la même heure, l'autre univers seul).
+- **Sondé** (~15:39 UTC, `OBS_SHIFT_H`) : **la bouche est intacte, c'est le ciel**. Au « meilleur moment » de l'observatoire le Soleil n'était
+  qu'à −12,2° (crépuscule nautique : la règle de l'observatoire, `system/observing.ts`, −12° pour tout objet faible ; le meilleur moment, le plus
+  haut, tombe au début de la fenêtre pour une bouche qui se couche tôt) — 1,42× ; deux heures plus tard, Soleil −21,7°, **6,27×**. **Fait** : le
+  trou de ver veut la nuit astronomique (`seeingRule` : Soleil sous −18°, test unitaire) — son meilleur moment 18:09, Soleil −18,1° : **1,86×**,
+  encore sous 2. **Reste ouvert** : le ciel du modèle à −18° est ~4 fois celui de la pleine nuit (4,7·10⁻¹³ contre 1,2·10⁻¹³) — le crépuscule réel
+  y est presque éteint : un crépuscule du modèle trop long ? À mesurer contre une courbe de référence (luminance au zénith selon la profondeur du
+  Soleil) avant d'y toucher ; le seuil du test laissé tel quel.
 
 ## La compilation du noyau de Jupiter proche : ~200 s à froid (M1 Max, 6 nov.) — 60 s sur kerr-mini le 13 nov., ~47 s à l'arrivée d'un voyage depuis le 13
 

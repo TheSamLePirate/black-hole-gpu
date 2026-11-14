@@ -172,7 +172,24 @@ describe.skipIf(!E2E)("the observatory", () => {
     expect(await app.js<boolean>(`!!__bh.renderer.meterSpot`)).toBe(true);
     // (shot before it is judged: a failure seen)
     if (SHOTS) await app.shot(`${SHOTS}/observe-wormhole.png`);
-    console.log(`  wormhole spot: core ${read?.core.toPrecision(3)}, sky ${read?.sky.toPrecision(3)}`);
+    console.log(
+      `  wormhole spot: core ${read?.core.toPrecision(3)}, sky ${read?.sky.toPrecision(3)} — the Sun ${(await app.js<number>("__bh.camera.skyInfo({ layered: false })?.sun.altDeg ?? NaN")).toFixed(1)}° at ${await app.js<string>("__bh.game.date()")}`,
+    );
+    // (OBS_SHIFT_H=n: the clock moved n hours on, the mouth still held in the telescope, the spot read again — the twilight's sky or the mouth?
+    // PROBLEMES « L'observatoire : la bouche du trou de ver à peine plus claire que le ciel », 14 Nov 2026)
+    if (process.env.OBS_SHIFT_H) {
+      await app.js(
+        `(() => { const d = new Date(__bh.game.date()); d.setTime(d.getTime() + ${Number(process.env.OBS_SHIFT_H)} * 3600e3); __bh.game.setDate(d.toISOString()); return 1; })()`,
+      );
+      await Bun.sleep(4000);
+      const r2 = await app.js<{ core: number; sky: number } | null>(`__bh.renderer.spotRead`);
+      const sun2 = await app.js<number>("__bh.camera.skyInfo({ layered: false })?.sun.altDeg ?? NaN");
+      const alt2 = await app.js<number>(`__bh.mx.framedView().alt`);
+      console.log(
+        `  ${process.env.OBS_SHIFT_H} h later: core ${r2?.core.toPrecision(3)}, sky ${r2?.sky.toPrecision(3)} (${r2 ? (r2.core / r2.sky).toFixed(2) : "?"}×) — the Sun ${sun2.toFixed(1)}°, the mouth ${alt2.toFixed(1)}° up`,
+      );
+      if (SHOTS) await app.shot(`${SHOTS}/observe-wormhole-later.png`);
+    }
     // (the mouth's core well over the sky behind it: the black point set there, the other universe on black)
     expect(read!.core / read!.sky).toBeGreaterThan(2);
     await tool("camera", { spot: false });

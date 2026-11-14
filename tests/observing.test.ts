@@ -59,3 +59,9 @@ test("the sky's light; the wormhole's mouth has a place in the sky like any body
   const m = spotOf({ kind: "wormhole" }, PARIS.lat, PARIS.lon, JAN10)!;
   expect(Number.isFinite(m.alt) && Number.isFinite(m.az)).toBe(true);
 });
+
+test("the wormhole's mouth wants the astronomical night: its windows start with the Sun under −18°", async () => {
+  const { seeingRule } = await import("../src/system/observing");
+  expect(seeingRule({ kind: "wormhole" })).toEqual({ minAlt: 10, sunUnder: -18 });
+  expect(seeingRule({ kind: "body", id: "saturn" }).sunUnder).toBe(-12);
+});
