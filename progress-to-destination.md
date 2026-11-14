@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-14 18:45 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-14 18:51 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous.
@@ -6721,3 +6721,9 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   le rayon de 8 m, et l'avion survit — ses dégâts (110 × (1 − 0,4 · écart / 8)) passent sous ses 80 points au-delà de 5,5 m ; le jeu fait ce
   qu'il doit, le test supposait un tir suffisant. **Après** : trois passages **4/4** (le second tir n'a pas eu à servir dans ces trois-là :
   sa branche n'est donc pas observée).
+
+## 2026-11-14T18:51Z — Audit QA-09 : deux pauses de plus en conditions (radar du Ranger, interception du F-35)
+
+- Réalisé : `ranger-radar` attend le contact proche sur le scope du HUD (puis 2 s, pour que l'absence du lointain veuille dire quelque chose)
+  au lieu de 6 s ; `f35-intercept` attend d'être à moins de 150 m de sa place derrière la cible au lieu de 10 s. Cliquet mis à jour.
+- Preuves : **observé** (ce Mac) : `ranger-radar` 2/2 (« NOSE: near true, far false ») ; `f35-intercept` 2/2 (79 m de la place).

@@ -56,7 +56,8 @@ describe.skipIf(!E2E)("the F-35's intercept", () => {
     await shot("icpt-run");
     // (the sim's own time: a slow page takes longer — waited for, not timed)
     await app.waitFor(`__bh.camera.icpt?.phase === "shadow"`, 420_000);
-    await Bun.sleep(10_000);
+    // (settled in its slot — a condition, not 10 s of sleep: audit QA-09)
+    await app.waitOptional(`__bh.camera.icpt?.phase === "shadow" && __bh.camera.icpt.last.dist < 150`, 30_000);
     const S = await app.js<{ phase: string; dist: number; ann: string }>(
       `(() => { const I = __bh.camera.icpt; return { phase: I.phase, dist: I.last.dist, ann: __bh.camera.jetModes.icpt }; })()`,
     );

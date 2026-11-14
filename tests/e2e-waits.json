@@ -116,7 +116,7 @@
   "waits": 1
  },
  "f35-intercept.e2e.test.ts": {
-  "sleeps": 1,
+  "sleeps": 0,
   "waits": 1
  },
  "f35-sea-trail.e2e.test.ts": {
@@ -306,10 +306,6 @@
  "rain.e2e.test.ts": {
   "sleeps": 0,
   "waits": 1
- },
- "ranger-radar.e2e.test.ts": {
-  "sleeps": 1,
-  "waits": 0
  },
  "raster-companion.e2e.test.ts": {
   "sleeps": 0,

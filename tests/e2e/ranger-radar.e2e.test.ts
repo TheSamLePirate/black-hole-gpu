@@ -36,7 +36,9 @@ describe.skipIf(!E2E)("the Ranger's nose radar", () => {
 
   test("the Ranger in the air: NOSE on, the fighter at 50 km held, the one at 120 km not; on the HUD's scope", async () => {
     await app.waitFor(`__bh.camera.radar.tracks.has("tst:near")`, 15_000);
-    await Bun.sleep(6000);
+    // (the near one on the HUD's scope — a condition, not 6 s of sleep: audit QA-09 —, 2 s more for the far one to show if it wrongly would)
+    await app.waitOptional(`(__bh.camera.flightInfo().radar?.contacts ?? []).some((k) => k.id === "tst:near")`, 15_000);
+    await Bun.sleep(2000);
     const R = await app.js<{
       spec: string | null;
       near: boolean;
