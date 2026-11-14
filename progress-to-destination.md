@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-14 21:42 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-14 21:45 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous.
@@ -6912,3 +6912,11 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   console ni dans le jeu (le texte anglais du serveur passait), ni `not-in-room` dans le jeu — ajoutés (FR/EN). `tests/crew-errors.test.ts`.
 - Preuves : tsc (les deux tables complètes, sinon refusées) ; `crew-errors` 1/1 (chaque code, deux langues, distincts ; un code inconnu : aucun) ;
   i18n ; `crew-errors-fr` 1/1 ; crew, crew-lang, crew-actions, net-core verts.
+
+## 2026-11-14T21:45Z — QA-02 : la CI rejouée ici (`site-smoke --swiftshader`) — la perte d'appareil propre au runner Linux
+
+- Réalisé : `site-smoke --swiftshader` lance Chrome sur l'adaptateur WebGPU de SwiftShader (16 textures, celui du runner) ; la lecture du
+  dossier ne prend plus la valeur d'un drapeau pour lui. E2E.md, PROBLEMES.
+- Preuves : **observé** (ce Mac, SwiftShader sur macOS) : le renderer à 19,0 s, la première image à 26,3 s, aucune erreur — la chute du processus
+  GPU vue en CI juste après le renderer **n'est pas reproduite** : elle tient au runner Linux (le Vulkan de SwiftShader, sa mémoire), pas aux
+  limites de SwiftShader ni au jeu. La porte `--until renderer` en CI reste juste.

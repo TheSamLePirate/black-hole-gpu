@@ -4,6 +4,7 @@
 //
 //   bun scripts/site-smoke.ts [dir=_site] [--hash scene=game:artemis] [--timeout 90] [--until renderer|frame]
 //
+// --swiftshader: Chrome on SwiftShader's WebGPU adapter (16 textures — the CI runner's), to replay the CI here.
 // --until renderer (the CI's gate, Sam's choice of 14 Nov 2026): failing up to the renderer made — the page, its shaders compiled
 // (the stage the 16-texture `seaFft` defect broke) —, what follows (a first frame, a device lost on the runner's SwiftShader) reported,
 // not failed on. --until frame (the default): failing up to a first frame.
@@ -21,7 +22,9 @@ const flag = (name: string, def: string) => {
   const i = args.indexOf(`--${name}`);
   return i >= 0 && args[i + 1] ? args[i + 1]! : def;
 };
-const dir = args.find((a) => !a.startsWith("--") && args[args.indexOf(a) - 1]?.startsWith("--") !== true) ?? "_site";
+// (the flags with a value — their value is not the folder; --swiftshader has none)
+const VALUED = new Set(["--hash", "--timeout", "--until"]);
+const dir = args.find((a, i) => !a.startsWith("--") && !VALUED.has(args[i - 1] ?? "")) ?? "_site";
 const hash = flag("hash", "scene=game:artemis");
 const timeoutS = Number(flag("timeout", "90"));
 const untilStage = flag("until", "frame");
@@ -50,7 +53,13 @@ const url = `http://127.0.0.1:${server.port}/#${hash}`;
  *  device-lost:destroyed as no failure; a new device follows) —: said, not failed on */
 const benign = (e: string) => /^WebGPU device lost: Device was destroyed/.test(e);
 const t0 = Date.now();
-const cdp = await launch({ width: 1280, height: 800 });
+const cdp = await launch({
+  width: 1280,
+  height: 800,
+  ...(args.includes("--swiftshader")
+    ? { args: ["--use-webgpu-adapter=swiftshader", "--enable-unsafe-swiftshader", "--use-angle=swiftshader"] }
+    : {}),
+});
 const fail = async (why: string) => {
   console.error(`site-smoke: FAIL — ${why}`);
   if (cdp.errors.length) console.error(`  the page's errors:\n${cdp.errors.map((e) => `    ${e.split("\n")[0]}`).join("\n")}`);

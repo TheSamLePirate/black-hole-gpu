@@ -545,7 +545,7 @@ already going (they end on their own; their logs stay in `remote-results/dash/`)
 - The built site in a browser: `bun scripts/site-smoke.ts [_site]` serves the build as static files, opens it in a headless Chrome
   and wants the game up — its handle, its renderer, a first frame — with no error (audit QA-02). In the Pages CI after the build it
   is a gate up to the renderer (`--until renderer`: the shaders compiled — the 16-texture `seaFft` defect it found on 14 Nov 2026
-  broke that), a first frame reported only (the runner's SwiftShader loses its device after it). The e2e themselves run against
+  broke that), a first frame reported only (the runner's SwiftShader loses its device after it). `--swiftshader` replays the runner's adapter here (16 textures; on macOS it draws). The e2e themselves run against
   `server.ts`, not the build.
 - No new long wait: `tests/e2e-waits.test.ts` holds each file's fixed sleeps of 5 s or more and its waits past 120 s where they
   were on 14 Nov 2026 (`tests/e2e-waits.json`, audit QA-09) — wait on a condition, 30–60 s, failing with what is missing;
