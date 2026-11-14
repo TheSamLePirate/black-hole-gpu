@@ -18,6 +18,23 @@
     "noUnusedLocals": true,
     "noImplicitReturns": true
   },
-  "include": ["src", "tests", "server.ts", "scripts/dashboard", "scripts/e2e.ts", "scripts/bh-api.ts"],
+  "include": [
+    "src",
+    "tests",
+    "server.ts",
+    "server",
+    "scripts/dashboard",
+    "scripts/e2e.ts",
+    "scripts/bh-api.ts",
+    "scripts/build-pages.ts",
+    "scripts/build-scenery-worker.ts",
+    "scripts/check-wgsl.ts",
+    "scripts/check-repo-size.ts",
+    "scripts/pre-push.ts",
+    "scripts/pipeline-inventory.ts",
+    "scripts/e2e-catalogue.ts",
+    "scripts/remote.ts",
+    "scripts/lib"
+  ],
   "exclude": ["tests/e2e/zz-*"]
 }

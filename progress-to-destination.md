@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-14 17:32 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-14 17:37 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous.
@@ -6655,3 +6655,15 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   **QA-26 vérifié en CI** (commit a50e7457) : « 82 / 82 shaders compile (google) ».
 - Limites : l'en-tête est cru tel que le mandataire le pose : si le port 3001 est joignable en direct (NET-31, la configuration du serveur de
   Sam), un client peut le falsifier — comme pour les quotas des salles depuis RD2.
+
+## 2026-11-14T17:37Z — Audit QA-15 (en partie) : les scripts de la livraison et le serveur de salles typés en CI
+
+- Contribution : la sûreté de la livraison (le build, ses gardes et le serveur de production vérifiés comme le jeu) ; audit 2026-11-10, QA-15
+  (P3 — sa part « scripts non typés » ; le bundle d'un bloc et les commentaires WGSL non touchés).
+- Réalisé : `tsconfig.json` inclut `server/` et les scripts dont dépendent la CI et le contrôle de pré-push (`build-pages`,
+  `build-scenery-worker`, `check-wgsl`, `check-repo-size`, `pre-push`, `pipeline-inventory`, `e2e-catalogue`, `remote`, `scripts/lib`) :
+  `bun run typecheck` (CI, pré-push) les vérifie désormais.
+- Preuves : **mesuré** : `tsc` sur ces fichiers ajoutés — 0 erreur (aucune correction nécessaire) ; **témoin** : une erreur injectée dans
+  `build-pages.ts` est vue (TS2322), retirée. Avant, ils n'étaient jamais typés (lu dans `tsconfig.json`).
+- Limites : les scripts ponctuels (bancs, captures, conversions) restent hors du contrôle ; le bundle de 7,4 Mo et les 0,49 Mo de
+  commentaires WGSL (le reste de QA-15) relèvent de la performance de démarrage, non ouverts.
