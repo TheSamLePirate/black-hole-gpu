@@ -154,7 +154,8 @@ test("the guidance updated every 2 s: a handful of bank reversals, the load unde
   expect(rise).toBeLessThan(1.2e3);
   const m = miss(start(), flown.end.x, earth.carry(place, flown.t));
   expect(Math.abs(m.dist - 40e3) / 1e3).toBeLessThan(15);
-}, 60000);
+  // (12 s on an M1 Max; on the CI's runner 29, 56, then 72 s — the deploy of 2cadacca failed on its old 60 s, 14 Nov 2026: three times its worst)
+}, 180_000);
 
 test("the deorbit from a 400 km orbit: a burn found whose entry ends over the place", () => {
   const r0 = R + 400e3,
