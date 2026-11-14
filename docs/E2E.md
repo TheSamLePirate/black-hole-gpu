@@ -550,6 +550,9 @@ already going (they end on their own; their logs stay in `remote-results/dash/`)
 - No new long wait: `tests/e2e-waits.test.ts` holds each file's fixed sleeps of 5 s or more and its waits past 120 s where they
   were on 14 Nov 2026 (`tests/e2e-waits.json`, audit QA-09) — wait on a condition, 30–60 s, failing with what is missing;
   after removing some, `E2E_WAITS=update bun test tests/e2e-waits.test.ts` writes the counts again.
+- A long wait's cap lowered from its measures, not blind: each `App.waitFor` of 60 s or more writes its file, line, cap and the
+  time it took to `remote-results/e2e-waits.jsonl` (`E2E_WAITS_LOG=<file>` elsewhere, `0` off); `bun scripts/e2e-waits.ts
+  [logs…] [--over 120]` sums each call site up and proposes a cap (twice its longest, 60 s at least) for a wait always met.
 - A new e2e file gets a header comment and a row in [E2E-CATALOGUE.md](E2E-CATALOGUE.md) — `tests/e2e-catalogue.test.ts`
   fails without it (since 13 Nov 2026, audit QA-11); `bun scripts/e2e-catalogue.ts --check` lists the files without a row,
   `--write` adds them from their headers (section « From their headers », to sort into a theme).

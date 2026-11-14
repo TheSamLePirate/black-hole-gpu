@@ -3,6 +3,9 @@
 // (an invisible overlay once swallowed the pointer while scripted .click() calls kept passing).
 import { type Cdp, launch } from "./cdp";
 import { recorder } from "./telemetry";
+import { appendFileSync, mkdirSync } from "node:fs";
+import { hostname } from "node:os";
+import { dirname } from "node:path";
 
 const KEYCODES: Record<string, number> = {
   Escape: 27,
@@ -210,6 +213,28 @@ export function describeReady(p: ReadyProbe | null): string {
   if (p.failed) parts.push(`${p.failed} tiles failed`);
   if (p.fps) parts.push(p.fps);
   return parts.join(" · ") || "ready";
+}
+
+/**
+ * The long waits measured (audit 2026-11-10, QA-09: 121 waits past 120 s, their real length unknown — a cap lowered blind makes a
+ * false failure): each wait of 60 s or more, its call's file and line, its cap and how long it took, appended to
+ * remote-results/e2e-waits.jsonl (E2E_WAITS_LOG to choose; "0": none). `bun scripts/e2e-waits.ts` reads them: what each cap could be.
+ */
+function noteWait(timeout: number, took: number, met: boolean) {
+  if (timeout < 60_000 || process.env.E2E_WAITS_LOG === "0") return;
+  const at = (new Error().stack ?? "")
+    .split("\n")
+    .map((l) => /tests\/e2e\/([\w.-]+\.e2e\.test\.ts):(\d+)/.exec(l))
+    .find(Boolean);
+  if (!at) return;
+  const file = process.env.E2E_WAITS_LOG || "remote-results/e2e-waits.jsonl";
+  try {
+    mkdirSync(dirname(file), { recursive: true });
+    appendFileSync(
+      file,
+      `${JSON.stringify({ file: at[1], line: Number(at[2]), cap: timeout, took, met, on: hostname(), t: new Date().toISOString() })}\n`,
+    );
+  } catch {}
 }
 
 export class App {
@@ -426,12 +451,16 @@ export class App {
     let last: unknown;
     while (Date.now() - t0 < timeout) {
       try {
-        if ((last = await this.js(expr))) return last;
+        if ((last = await this.js(expr))) {
+          noteWait(timeout, Date.now() - t0, true);
+          return last;
+        }
       } catch (e) {
         last = e;
       }
       await Bun.sleep(100);
     }
+    noteWait(timeout, Date.now() - t0, false);
     throw new Error(`waitFor(${expr}): ${timeout} ms, last ${String(last)}`);
   }
 

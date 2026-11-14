@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-14 21:45 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-14 21:50 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous.
@@ -6920,3 +6920,16 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
 - Preuves : **observé** (ce Mac, SwiftShader sur macOS) : le renderer à 19,0 s, la première image à 26,3 s, aucune erreur — la chute du processus
   GPU vue en CI juste après le renderer **n'est pas reproduite** : elle tient au runner Linux (le Vulkan de SwiftShader, sa mémoire), pas aux
   limites de SwiftShader ni au jeu. La porte `--until renderer` en CI reste juste.
+
+### 2026-11-14 21:50 UTC — QA-09 (un pas) : les longues attentes des e2e mesurées avant d'être abaissées
+
+- **Contribution** : outillage de test (§19.13, la fiabilité des parcours) ; les 121 attentes de plus de 120 s ne s'abaissent pas à
+  l'aveugle — un plafond trop court fabrique de faux échecs. Hors rendu.
+- **Changements** : `tests/e2e/lib/app.ts` — `waitFor` note chaque attente de 60 s ou plus (fichier et ligne du test, plafond, temps
+  pris, atteinte ou non) dans `remote-results/e2e-waits.jsonl` (ignoré par git ; `E2E_WAITS_LOG`) ; `scripts/e2e-waits.ts` les résume
+  par appel et propose un plafond (deux fois le plus long, 60 s au moins, seulement pour une attente toujours atteinte) ;
+  `tests/e2e-waits-summary.test.ts` ; E2E.md ; tsconfig.
+- **Preuve** : test unitaire 1/1 ; témoin réel : `a320-du-cost` (ici, fenêtre visible) 1/1, son attente de 60 s ligne 31 notée à
+  1,4 s. Aucun plafond abaissé encore : il faut des mesures de plusieurs lancements (ici et le mini).
+- **Suite** : rassembler les journaux des prochaines campagnes, puis abaisser les plafonds par appel et réécrire `tests/e2e-waits.json`.
+
