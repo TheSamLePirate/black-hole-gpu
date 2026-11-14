@@ -100,6 +100,20 @@ terminal.
 
 ---
 
+## Le banc de nuit du mini (QA-12)
+
+Chaque nuit à 03 h 30, kerr-mini mesure le vol de référence J0 dans son propre clone de `main` (`scripts/nightly-bench.ts`, agent
+`org.samlepirate.kerr-nightly`, décision de Sam du 14 novembre 2026) : son clone mis à `origin/main`, la machine attendue au repos
+(pression thermique Nominal, 20 min au plus, sinon la nuit sautée et dite), puis `j0-reference` en `J0_PHASES=flight`. Le GPU p50,
+p95, la durée d'image et la cadence s'ajoutent à `~/.kerr-lab/nightly/history.jsonl` du mini ; une nuit dont le GPU p50 dépasse de plus de
+10 % la médiane des sept précédentes s'écrit dans `~/.kerr-lab/nightly/alerts.md`.
+
+- **Lire** : `bun scripts/nightly-bench.ts fetch` (ici) ajoute les nuits nouvelles à `docs/perf/nightly-mini.jsonl` (suivi par Git) et
+  montre les dernières et les alertes.
+- **Le bruit** : A/A du 14 nov. (deux mesures de suite) : 57,20 et 57,10 ms de GPU p50 — 0,2 % ; la limite de 10 % est loin au-dessus.
+- **Réinstaller** (sur le mini) : `bun scripts/nightly-bench.ts install`. Le banc prend le verrou Chrome du mini : un job de `remote.ts` en
+  cours le fait attendre.
+
 ## L'iPad
 
 Un **iPad** est branché en USB au mini : `scripts/ipad.ts` y pilote Safari (vérification, vol orbite →

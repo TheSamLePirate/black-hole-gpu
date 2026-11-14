@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-14 21:25 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-14 21:35 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous.
@@ -6870,3 +6870,15 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   −0,8 / −0,4 : **au bruit**. Le premier passage avait lu +22,3 ms à ×4 (traceur 5,9 → 10,8) : le côté B mesuré avant ses noyaux (le
   préchauffage n'attendait pas `kernelsSettled`) — corrigé, l'écart disparu.
 - **Limites :** une vue (Tarifa, jour) ; J0 et le M1 Max non mesurés.
+
+## 2026-11-14T21:35Z — QA-12 : le banc de nuit installé sur le mini (A/A à 0,2 %) ; QA-02 : la porte verte en CI
+
+- Contribution : §8 (le coût suivi sans geste, une régression vue la nuit qui la porte) ; audit 2026-11-10, QA-12 (P1) et QA-02 (P1).
+- Réalisé : `scripts/nightly-bench.ts` corrigé (J0 lancé par `Bun.spawn` — le shell de Bun refusait la redirection : le premier A/A avait échoué
+  en 0 s ; le commit d'une copie distante par `KERR_COMMIT`) ; **l'agent installé** sur kerr-mini (`org.samlepirate.kerr-nightly`, 03 h 30, son
+  clone mis à 3e0971a4) ; `docs/perf/nightly-mini.jsonl` (les nuits rapatriées) ; REMOTE-TESTS.md (la section du banc).
+- Preuves : **mesuré** — l'A/A règle 3 (kerr-mini, J0 en vol, deux mesures de suite, la machine Nominal) : GPU p50 **57,20** et **57,10 ms**
+  (0,2 %), p95 62,4 / 62,3 ms, 17,5 / 17,6 images/s — la limite de 10 % loin au-dessus du bruit ; témoins du verdict (unitaires). **QA-02 en CI**
+  (run 43641654170) : la porte passe (le renderer fait), puis SwiftShader perd l'appareil — rapporté, non compté.
+- Limites : la première nuit réelle (le clone mis à jour, l'agent lancé seul) à vérifier demain (`fetch`) ; l'alerte reste un fichier sur le mini,
+  lue par `fetch` (pas de notification poussée).

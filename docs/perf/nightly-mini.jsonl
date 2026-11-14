@@ -1,0 +1,2 @@
+{"at":"2026-11-14T21:13:22.043Z","commit":"unknown","ok":true,"thermal":"Nominal (pm) · GPU 708/1278 MHz (55 %) active 3.3 % · GPU ? °C CPU 37.5 °C · GPU 0 W · sys 11.7 W · state nominal","gpuP50":57.2,"gpuP95":62.4,"p50":50.1,"p95":66.7,"imagesPerS":17.5}
+{"at":"2026-11-14T21:16:01.651Z","commit":"unknown","ok":true,"thermal":"Nominal (pm) · GPU 1278/1278 MHz (100 %) active 99.9 % · GPU ? °C CPU 55.4 °C · GPU 5.7 W · sys 19.9 W · state nominal","gpuP50":57.1,"gpuP95":62.3,"p50":50.1,"p95":66.7,"imagesPerS":17.6}
