@@ -597,7 +597,9 @@ de 70 s, 1920 × 1080, échelle 0,75, profil du joueur. Passes de calcul, moyenn
 Par ablation sur images terminées (kerr-mini, fréquence stable) : nuages −5,8 ms, décor −3,8, HUD et panneaux −1,4,
 ombre de l'appareil −0,7, dessin de l'appareil sauté (`debugSkipShip`, son masque gardé) −0,25 (**périmé** : remesuré le 14 nov. ~01:16 UTC,
 même ablation, kerr-mini à 1 278 MHz, code 2fd187c0 : GPU p50 55,3–56,4 → 52,0–52,2 ms, **−3,3 à −3,6 ms**, deux fois), matériau de l'eau dans
-`shadeLite` 0,0.
+`shadeLite` 0,0. **Les effets de sortie** (14 nov. ~01:47 UTC, même ablation, kerr-mini 1 278 MHz, « Nominal », références 56,9 puis 55,7 ms
+— la première avec des tuiles en attente) : sans bloom 55,1, sans accentuation (RCAS) 55,4, sans brume de chaleur 55,8 — chacun ≤ 1 ms, dans
+l'écart des références : les « ≈ 10 ms non attribués » de la fiche du 13 nov. ne sont pas là.
 **Les passes `ship: …` et `display` (37–49 ms par horodatage) ne coûtent donc presque rien** : GP-09 confirmé par
 ablation. **Contredit le 14 nov.** (kerr-mini, `perf-ab` `SET=ship`, Tarifa en cockpit, intervalles d'images sans synchro, A B B A A B,
 A/A +0,8 ms, les données attendues avant la première paire) : l'appareil sauté entier −4,4 ms en cockpit, −5,1 en « chase », −2,1 vu de 300 m ;

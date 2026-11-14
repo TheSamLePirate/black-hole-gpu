@@ -84,6 +84,11 @@ const ABLATIONS: Record<string, { label: string; set: string }> = {
   seaRefl: { label: "sans reflets de la mer (SSR, nuages reflétés : compilés hors)", set: `__bh.renderer.tune = { TUNE_GSKIP: 20480 };` },
   // (PLAN-J3 J3-2: the craft seen through the air of its distance — ship.wgsl shipAir, two reads of the aerial table a craft pixel —: its cost)
   shipAir: { label: "sans l'air sur l'appareil (J3-2)", set: `__bh.renderer.shipAirAllowed = false;` },
+  // (the output's own effects — the ≈ 10 ms the 13 Nov fiche left unattributed on kerr-mini, the display among them —: the bloom (its
+  // levels and their composite), the sharpening after the temporal pass, the jet's heat haze; J0_ORDER=base,bloom,sharpen,haze,base)
+  bloom: { label: "sans bloom", set: `__bh.settings.bloom = 0;` },
+  sharpen: { label: "sans accentuation (RCAS)", set: `__bh.settings.sharpen = 0;` },
+  haze: { label: "sans brume de chaleur", set: `__bh.settings.heatHaze = false;` },
 };
 // (13 Nov 2026, Sam's decision 1: the water's two ablations in every fiche — its material, valid since liteSkip's bits are carried by
 // bitcast, and the sea's surface, the largest render pass, no owner measured before)

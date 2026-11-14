@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-14 01:38 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-14 01:47 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous.
@@ -6327,4 +6327,10 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   panneau (`gpuPasses`) et `perf-ab` `PASSES` ne gardent que les passes mesurées récemment — « sky (waiting) » affichait 14 ms en plein vol, la
   valeur du démarrage. Les lecteurs des horizons gardent la dernière valeur (`table()`). Test unitaire `tests/gpuprof.test.ts` (1/1), tsc.
   **Vérifié en jeu** (kerr-mini, `perf-ab` `PASSES=1`, vol au-dessus de Tarifa) : « sky (waiting) » absent de la table. BH-API.
+
+## 2026-11-14T01:47Z — J0 : les effets de sortie mesurés (bloom, accentuation, brume de chaleur ≤ 1 ms chacun)
+
+- **Mesuré** (kerr-mini, `j0-reference` ablations `bloom`, `sharpen`, `haze`, nouvelles ; références 56,9 / 55,7 ms) : 55,1 / 55,4 / 55,8 — dans
+  l'écart des références. Les ≈ 10 ms « non attribués » de la fiche du 13 nov. restent à trouver ailleurs (passes de rendu : masques, profondeur
+  d'occlusion, affichage) ; GRAPHICS-PIPELINE §8.4, E2E-CATALOGUE.
 
