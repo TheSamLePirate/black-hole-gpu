@@ -33,7 +33,7 @@ import { sceneryReady } from "./lib/plan-views";
 //       screens, the cockpit (the outside view) — between two baseline flights (drift).
 // Output: remote-results/j0/<machine>/ (J0_OUT): j0.json, shots (start, mid-turn, end; each ablation's last frame).
 // J0_PHASES=flight,ablate,sustained (default all; sustained: the flight again after the ablations, the machine hot), ABLATE_S (20), J0_MACHINE (the label: "m1max", "kerr-mini"; default the host name).
-// Other phases, asked by name: agecheck, framing (PLAN-J3 J3-0), keylight, keyair, keysky, skyband4, coherence (J3-1), keyhaze (J3-2), waterincident (J3-7), shadows (J3-3), wetbld, cityview, materials (J3-5), seadusk, probedump, tracedview (PROBLEMES), twilightdim (J3-1), nightfloor (J3 question 7) (J3-1: the craft's key light against the incident Sun toward
+// Other phases, asked by name: agecheck, framing (PLAN-J3 J3-0), keylight, keyair, keysky, skyband4, coherence (J3-1), keyhaze (J3-2), waterincident (J3-7), shadows (J3-3), wetbld, cityview, materials (J3-5), seadusk, probedump, tracedview (PROBLEMES), twilightdim (J3-1), nightfloor (J3 question 7), nightbands (PROBLEMES) (J3-1: the craft's key light against the incident Sun toward
 // sunset, ~3 min on kerr-mini; keyair: its air two ways, march and table, ~4 min; keysky: the sky's light two ways, ~4 min; coherence: the three gaps in one read per hour, ~5 min).
 // Not a pass/fail on the frame rate: the fiche is written from j0.json (docs/progress/j0/). It fails on a GPU error, a craft not
 // placed, a flight not flown.
@@ -1341,6 +1341,69 @@ describe.skipIf(!E2E)("J0: the reference flight over Toulon-Hyères", () => {
       for (const r of Object.values(rows)) expect(Math.abs(r.offCraft! - r.offAgainCraft!)).toBeLessThan(1);
       const deep = rows["21:40"] ?? Object.values(rows).at(-1)!;
       expect(deep.on6Craft! - deep.off6Craft!).toBeGreaterThan(1);
+    },
+    900_000,
+  );
+
+  // (PROBLEMES — the night sky's horizontal bands, J0_PHASES=nightbands: at 21:40 UTC (Sun −19°) the quarter view 6 stops over the game's
+  // exposure showed bands ~10–11 rows apart, 7 to 24 in green. Which part makes them: as drawn; frozen 4 s more (the history converged); every
+  // ray traced (realtimeSubsampling 1); the raster shaded whole, no dynamic resolution; the traced pipeline. Per case the sky's row means
+  // (rows 100–300, columns 200–600): their mean and the mean jump between neighbouring rows over it — the bands' depth — and a shot)
+  test.skipIf(!PHASES.includes("nightbands"))(
+    "PROBLEMES: the night sky's bands 6 stops up — as drawn, converged, every ray, the raster whole, traced; their depth per case",
+    async () => {
+      await start("");
+      await app.js(`(async () => { const f = () => new Promise((q) => requestAnimationFrame(q)); __bh.freeze(false);
+        __bh.game.setDate("2026-07-10T${process.env.NB_UTC ?? "21:40"}:00Z"); Object.assign(__bh.settings, { shipMount: "quarter", lookProfile: "neutral", dof: false, motionBlur: 0, autoExposure: true, exposure: 0 });
+        __bh.refresh(); for (let i = 0; i < 90; i++) await f(); __bh.freeze(true); __bh.renderer.settleExposure(); for (let i = 0; i < 30; i++) await f();
+        const ev = __bh.renderer.ev(__bh.settings); Object.assign(__bh.settings, { autoExposure: false, exposure: ev + 6 }); return 1; })()`);
+      const cases: [string, string, string, number][] = [
+        ["drawn", "", "", 20],
+        ["converged", "", "", 240],
+        ["everyRay", "__bh.settings.realtimeSubsampling = 1;", "__bh.settings.realtimeSubsampling = 'auto';", 60],
+        [
+          "rasterWhole",
+          "Object.assign(__bh.settings, { earthRasterShading: 'every', dynamicResolution: false });",
+          "Object.assign(__bh.settings, { earthRasterShading: 'auto', dynamicResolution: true });",
+          60,
+        ],
+        ["traced", "__bh.settings.earthPipeline = 'trace';", "__bh.settings.earthPipeline = 'raster';", 60],
+      ];
+      const rows: Record<string, { mean: number; depth: number; pipeline: string }> = {};
+      for (const [name, set, reset, frames] of cases) {
+        await app.js(`(() => { ${set} __bh.touch?.(); __bh.refresh(); return 1; })()`);
+        await app.settled(120_000);
+        await app.js(
+          `(async () => { const f = () => new Promise((q) => requestAnimationFrame(q)); for (let i = 0; i < ${frames}; i++) await f(); return 1; })()`,
+        );
+        const pipeline = await app.js<string>("__bh.renderer.earthPipelineNow(__bh.settings)");
+        const x = (await app.cdp.send("Page.captureScreenshot", { format: "png" })) as { data: string };
+        const bytes = Buffer.from(x.data, "base64");
+        await Bun.write(`${OUT}/nightbands-${name}.png`, bytes);
+        const img = readPng(new Uint8Array(bytes));
+        const sx = img.width / 1920;
+        const m: number[] = [];
+        for (let y = Math.floor(100 * sx); y < Math.floor(300 * sx); y++) {
+          let t = 0,
+            n = 0;
+          for (let xx = Math.floor(200 * sx); xx < Math.floor(600 * sx); xx++) {
+            t += img.data[(y * img.width + xx) * img.channels + 1]!;
+            n++;
+          }
+          m.push(t / n);
+        }
+        const mean = m.reduce((a, b) => a + b, 0) / m.length;
+        let jump = 0;
+        for (let i = 1; i < m.length; i++) jump += Math.abs(m[i]! - m[i - 1]!);
+        rows[name] = { mean: +mean.toFixed(2), depth: +(jump / (m.length - 1) / Math.max(mean, 1e-3)).toFixed(3), pipeline };
+        console.log(`  night bands ${name}: ${JSON.stringify(rows[name])}`);
+        await app.js(`(() => { ${reset} __bh.touch?.(); __bh.refresh(); return 1; })()`);
+      }
+      out.nightbands = rows;
+      await app.js(
+        `(() => { Object.assign(__bh.settings, { autoExposure: true, exposure: 0, shipMount: "cockpit" }); __bh.freeze(false); __bh.game.setDate("${J0_SCENE.date}"); return 1; })()`,
+      );
+      expect(Object.keys(rows).length).toBe(cases.length);
     },
     900_000,
   );

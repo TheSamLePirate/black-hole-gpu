@@ -6801,4 +6801,5 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
 - **Preuves (mesuré, kerr-mini, J0)** : à l'exposition du jeu, aucune différence (appareil 0,77 / 0,77, A/A ≤ 0,07 ; sol 0,03 — noir) ; à
   +6 IL (21:40, Soleil −19°) l'appareil 6,7 → 24,9, le sol 4,6 / 4,5 (témoin positif : le levier agit). check-wgsl 82/82, tsc.
 - **Limites / suite :** recommandation à Sam : éteint (rien à gagner en jeu). Le levier retiré quand Sam aura répondu. Les rayures du ciel
-  de nuit, cause non cherchée.
+  de nuit : **reprises à 19:59 UTC** (phase `nightbands`, cinq cas : tel que dessiné, convergé, chaque rayon, raster entier, tracé) — profondeur
+  1,0–1,6 %, aucune bande : un transitoire de l'historique 20 images après un saut d'exposition de 6 IL monde figé, pas un défaut ; PROBLEMES barré.

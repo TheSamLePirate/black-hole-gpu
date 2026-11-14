@@ -3,7 +3,14 @@
 Problèmes constatés, pas encore réglés. Chaque entrée : la date (UTC), ce qui est mesuré ou observé et sa source, la cause
 connue ou supposée, la piste. Une entrée réglée est barrée avec le commit qui la règle, pas effacée.
 
-## Des rayures horizontales dans le ciel de nuit, l'exposition relevée (relevé le 14 novembre 2026, J0 `nightfloor`)
+## ~~Des rayures horizontales dans le ciel de nuit, l'exposition relevée~~ (relevé le 14 novembre 2026, J0 `nightfloor`) — non reproduit en
+régime établi : un transitoire
+
+**Repris (mesuré, kerr-mini, même jour, phase J0 `nightbands`)** : même vue, même heure, +6 IL réglés avant d'attendre le traceur compilé — la
+profondeur des bandes (le saut moyen d'une ligne à la suivante sur la moyenne) **1,0–1,6 %** dans les cinq cas : tel que dessiné, convergé
+(4 s de plus), chaque rayon tracé (`realtimeSubsampling` 1), le raster ombré en entier sans résolution dynamique, le pipeline tracé ; aucune
+bande à l'image. Les bandes du premier relevé venaient 20 images après un saut d'exposition de 6 IL, monde figé : **un transitoire de
+l'historique** après un changement d'exposition, pas un défaut du ciel. Le constat d'origine :
 
 **Constat (observé, kerr-mini, J0 à 21:40 UTC — Soleil −19° —, vue quarter, exposition du jeu + 6 IL)** : le ciel au-dessus de l'horizon fait des
 bandes horizontales régulières, une période de ~10–11 lignes de l'image, la luminance (canal vert, colonnes 200–600) allant de 7 à 24 d'une
