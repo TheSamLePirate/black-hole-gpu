@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-14 19:03 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-14 19:33 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous.
@@ -6767,3 +6767,13 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   une exception — « FAIL — errors after the first frame », sortie 1. Le passage en CI : à lire au run de ce commit.
 - Limites : une fumée, pas les e2e : ceux-ci tournent toujours contre `server.ts` ; le précache et la portée du Service Worker ne sont
   qu'exercés au chargement, pas vérifiés un par un.
+
+## 2026-11-14T19:33Z — QA-02 : la fumée en CI, premier passage lu
+
+- **Observé en CI** (run 43630021104, ubuntu, SwiftShader) : « FAIL — the game's automation handle and its renderer: an error first » au bout
+  de 12,6 s, l'erreur « WebGPU device lost: Device was destroyed » (l'étape informative : le déploiement s'est fait). Le jeu lui-même ne compte
+  pas un appareil *détruit* comme une panne (`renderer.ts` : `gpuDiagnostics.record(…, info.reason !== "destroyed")`), mais l'écrit en
+  `console.error`.
+- Réalisé : `site-smoke` dit ce cas sans échouer (le même jugement que le diagnostic du jeu), va jusqu'à la première image ou au plafond, et
+  imprime le diagnostic graphique en cas d'échec. Ici : OK en 5,5 s ; le témoin (bundle cassé) échoue toujours.
+- Suite : lire le prochain passage en CI — le jeu reprend-il après ce `destroy` sous SwiftShader ? Ensuite seulement en faire une porte.

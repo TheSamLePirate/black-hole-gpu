@@ -41,11 +41,16 @@ const server = Bun.serve({
   },
 });
 const url = `http://127.0.0.1:${server.port}/#${hash}`;
+/** an error the game itself does not count as a failure — a device destroyed on purpose (renderer.ts: gpuDiagnostics records
+ *  device-lost:destroyed as no failure; a new device follows) —: said, not failed on */
+const benign = (e: string) => /^WebGPU device lost: Device was destroyed/.test(e);
 const t0 = Date.now();
 const cdp = await launch({ width: 1280, height: 800 });
 const fail = async (why: string) => {
   console.error(`site-smoke: FAIL — ${why}`);
   if (cdp.errors.length) console.error(`  the page's errors:\n${cdp.errors.map((e) => `    ${e.split("\n")[0]}`).join("\n")}`);
+  const diag = await js<unknown>(`(() => { try { return __bh.graphicsDiagnostic(); } catch { return null; } })()`).catch(() => null);
+  if (diag) console.error(`  the graphics diagnostic: ${JSON.stringify(diag).slice(0, 1500)}`);
   cdp.close();
   server.stop(true);
   process.exit(1);
@@ -62,7 +67,7 @@ const js = async <T>(expr: string): Promise<T> => {
 const until = async (expr: string, what: string) => {
   while (!(await js<boolean>(`(() => { try { return !!(${expr}); } catch { return false; } })()`).catch(() => false))) {
     if (Date.now() - t0 > timeoutS * 1000) await fail(`${what}: not within ${timeoutS} s`);
-    if (cdp.errors.length) await fail(`${what}: an error first`);
+    if (cdp.errors.some((e) => !benign(e))) await fail(`${what}: an error first`);
     await Bun.sleep(250);
   }
   console.log(`  ${what} (${((Date.now() - t0) / 1000).toFixed(1)} s)`);
@@ -75,7 +80,8 @@ await until(`typeof globalThis.__bh === "object" && !!__bh.renderer`, "the game'
 await until(`__bh.gpu.frames().completedFrames > 0 || Number.isFinite(__bh.boot().firstImage)`, "a first frame drawn");
 // (a few seconds more for what a first frame sets off — its workers, its Service Worker)
 await Bun.sleep(3000);
-if (cdp.errors.length) await fail("errors after the first frame");
+if (cdp.errors.some((e) => !benign(e))) await fail("errors after the first frame");
+for (const e of cdp.errors.filter(benign)) console.log(`  (said, not counted: ${e.split("\n")[0]})`);
 const boot = await js<{ marks?: { name: string; t: number }[]; firstImage?: number }>(
   `(() => { try { const b = __bh.boot(); return { marks: b.marks, firstImage: b.firstImage }; } catch { return {}; } })()`,
 );
