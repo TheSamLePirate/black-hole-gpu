@@ -43,11 +43,7 @@ import type { CraftState } from "../net/remote";
 import type { Renderer } from "../renderer";
 import type { Settings } from "../settings";
 import { netRadar } from "./hud/symbology";
-import { cartToGeodetic, WGS84_A, WGS84_F } from "../system/ellipsoid";
 import { C_MPS, M_METRES, M_SECONDS } from "../units";
-import { keplerProp } from "../system/our-plan";
-import { zonalAccel } from "../system/geopotential";
-import { solarBody } from "../system/solar";
 import { vesselHulls } from "../system/collide";
 import { dockedFrame, isAircraft, type VesselId, VESSELS } from "../vessels";
 import { awayWords } from "../game/out-of-view";
@@ -71,6 +67,7 @@ import { lang } from "../i18n";
 import { sound } from "../audio/engine";
 import { roomCraft } from "../net/spacefleet";
 import { unitsFor } from "./unitsys";
+import { formatAge, keplerOf, parkedAt, pertOf, steady } from "./netsession-pure";
 import {
   isSpaceOrder,
   orderAsk,
@@ -91,35 +88,6 @@ const AWAY_SLOT = 200;
 
 /** a craft's door off its side [m] (controller/character.ts accessOffset) */
 const ACCESS: Record<VesselId, number> = { ranger: 9, lander: 13, endurance: 75, f35: 8, a320: 12 };
-
-/** an Earth-fixed place [m] and nose → geodetic latitude, longitude, heading [°] */
-function parkedAt(p: Vec3, fwd: Vec3) {
-  const g = cartToGeodetic(WGS84_A, WGS84_F, p);
-  const north: Vec3 = [-Math.sin(g.lat) * Math.cos(g.lon), -Math.sin(g.lat) * Math.sin(g.lon), Math.cos(g.lat)];
-  const east: Vec3 = [-Math.sin(g.lon), Math.cos(g.lon), 0];
-  const D = 180 / Math.PI;
-  const dot = (a: Vec3, b: Vec3) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
-  return { lat: g.lat * D, lon: g.lon * D, heading: (Math.atan2(dot(fwd, east), dot(fwd, north)) * D + 360) % 360 };
-}
-
-/** a body's pull at p (its inertial frame [m]) besides its centre's — its flattening: J2, J3, J4 — at scene time t
- *  [s], in m/s² (the game's own model: geopotential.ts) */
-function pertOf(body: number, p: Vec3, t: number): Vec3 {
-  const id = NET_BODIES[body] ?? "";
-  const b = solarBody(id);
-  if (!b) return [0, 0, 0];
-  const z = zonalAccel(id, b.mass, scale3(p, 1 / M_METRES), t / M_SECONDS);
-  return z ? scale3(z as Vec3, (C_MPS * C_MPS) / M_METRES) : [0, 0, 0];
-}
-
-/** a coasting craft carried along its orbit about a body (the body's inertial frame, m and m/s) by dt [s] */
-function keplerOf(body: number, p: Vec3, v: Vec3, dt: number): { p: Vec3; v: Vec3 } | null {
-  const b = solarBody(NET_BODIES[body] ?? "");
-  if (!b || !(b.mass > 0)) return null;
-  const o = keplerProp(b.mass, scale3(p, 1 / M_METRES), scale3(v, 1 / C_MPS), dt / M_SECONDS);
-  return { p: scale3(o.r as Vec3, M_METRES), v: scale3(o.v as Vec3, C_MPS) };
-}
-const scale3 = (a: Vec3, k: number): Vec3 => [a[0] * k, a[1] * k, a[2] * k];
 
 export interface NetTag {
   slot: number;
@@ -163,27 +131,6 @@ const clamp = (x: number, a: number, b: number) => Math.min(Math.max(x, a), b);
 
 /** On the ground: the gear touching, the craft set down (parked: no gear contact then), or within 3 m of it. */
 const onGround = (c: CameraController, h: number | undefined) => (c.gearLast?.contact ?? 0) > 0 || !!c.landed || (h ?? 99) < 3;
-
-/** Another's last three samples consistent with one another (each where the one before's motion put it, within
- *  50 m): not a placement's jump. */
-function steady(S: { t: number; p: number[]; v: number[] }[] | undefined) {
-  if (!S || S.length < 3) return false;
-  for (let i = S.length - 2; i < S.length; i++) {
-    const a = S[i - 1]!,
-      b = S[i]!;
-    const h = b.t - a.t;
-    if (h <= 0 || h > 1) return false;
-    if (Math.hypot(...b.p.map((x, k) => x - a.p[k]! - a.v[k]! * h)) > 50) return false;
-  }
-  return true;
-}
-
-/** an age said short: 4 min, 2 h 10, 3 d */
-function formatAge(s: number): string {
-  if (s < 3600) return tf("{0} min", Math.max(1, Math.round(s / 60)));
-  if (s < 86400 * 2) return tf("{0} h {1}", Math.floor(s / 3600), String(Math.floor((s % 3600) / 60)).padStart(2, "0"));
-  return tf("{0} d", Math.round(s / 86400));
-}
 
 export class NetSession {
   private crewSent = -Infinity;

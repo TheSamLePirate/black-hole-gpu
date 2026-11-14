@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-14 21:36 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-14 21:40 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous.
@@ -6892,3 +6892,15 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   sonde ne reçoit pas le décor. Essai retiré (aucun code mort). PLAN-J3 §5, §8.
 - **Preuves :** run `…-craftshade` (kerr-mini) : `sceneryAtCraft` −1 / −1 aux trois passages ; l'image identique (64,32 / 64,30 / 64,40).
 - **Suite :** donner le décor (paramètres, carte) au noyau de la sonde — un lot à chiffrer — si Sam veut l'ombre du décor sur l'appareil.
+
+## 2026-11-14T21:40Z — Audit QA-10 (un pas) : les décisions pures de la session réseau sorties et testées
+
+- Contribution : la piste de l'audit — pas de course à la couverture : sortir des gros fichiers d'orchestration leurs décisions pures et les
+  tester ; audit 2026-11-10, QA-10 (P2). `src/ui/netsession.ts` (2 157 lignes) n'était importé par aucun test.
+- Réalisé : `src/ui/netsession-pure.ts` — `parkedAt` (le lieu et le cap d'un appareil garé, sur WGS84), `steady` (les derniers échantillons
+  d'un autre se suivent-ils), `formatAge`, `keplerOf` (un appareil sur son orbite), `pertOf` (la traction de l'aplatissement du corps) —, sortis
+  tels quels ; `tests/netsession-pure.test.ts`.
+- Preuves : 4/4 (le cap à l'est 90°, au nord 0°, à l'ouest 270° ; un saut de 80 m, un trou de 2 s, trop peu d'échantillons : pas d'accord ;
+  une orbite circulaire revenue à son point au bout d'une période, à l'opposé à mi-période ; J2 à l'équateur ≈ 0,011 m/s², vers le centre) ;
+  réseau verts, `net-space` 3/3 (l'orbite partagée, qui lit `keplerOf`/`pertOf`) ; tsc, Biome.
+- Limites : `main.ts`, `crew/main.ts`, `netmatch.ts`, `netpanel.ts`, `tars-panel.ts`, `fc/computer.ts`, `panel.ts` restent sans test direct.
