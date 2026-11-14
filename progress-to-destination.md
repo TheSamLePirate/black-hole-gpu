@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-14 23:07 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-14 23:13 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous.
@@ -34,7 +34,7 @@ les preuves restent dans les entrées datées du journal, dessous.
 
 | Machine | GPU p50 mesuré | Cible | Plus gros poste |
 |---|---:|---:|---|
-| kerr-mini | 58,4 ms (5c420e09, 13 nov.) ; **56,3 ms avec l'eau E1** (A/B, 13 nov.) | 40 ms (25 images/s régulières) | l'eau : 16,2 ms ; sans son matériau −13,0 ms (−10,1 avec E1) |
+| kerr-mini | 58,4 ms (5c420e09, 13 nov.) ; **56,3 ms avec l'eau E1** (A/B, 13 nov.) ; **57,3 ms le 15 nov.** (0bb2aa86, un vol, après les corrections de J3) | 40 ms (25 images/s régulières) | l'eau : 16,2 ms ; sans son matériau −13,0 ms (−10,1 avec E1) |
 | M1 Max | 22,5 ms, **frais** (12 nov., 98–100 °C) — non valable comme palier | 16,7 ms (60 images/s), bornée et soutenue | l'eau : 5,3 ms pour une enveloppe de 1,0 |
 
 **L'ordre décidé** (stratégie §24) : l'eau étagée (surface → éclairage → reflets) → la classification de l'écran par tuiles et les lancements
@@ -6975,3 +6975,12 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
 - **Limites** : `s3-replay` garde 3 échecs, ceux de sa vidéo de bande-annonce (PROBLEMES, non examinés : rendu hors ligne). Les
   autres attentes longues restent à mesurer.
 
+### 2026-11-14 23:13 UTC — J0 après les corrections de J3 ; le critère de cohérence de J3 borné au crépuscule
+
+- **Contribution à la destination :** §8 (le chiffre de référence tenu à jour) ; PLAN-J3 §4 (la sortie de J3, en mesures).
+- **Réalisé :** un vol J0 de référence sur kerr-mini (0bb2aa86) ; la phase `coherence` lit 20:00 et 20:20 par défaut et borne le ciel de
+  l'appareil sur ce que prend le sol à 0,82–1,20 de 0 à −13°. PLAN-J3 §4, §10 ; État courant (la ligne kerr-mini).
+- **Preuves (mesuré, kerr-mini froid — nominal, 34 °C)** : J0 GPU p50 **57,3 ms**, p95 62,4 (1 230 images, 17,6 images/s ; âge des
+  instruments p50 18,6, p95 56,2 ms) — contre 58,4 (13 nov.) et 56,3 (A/B de l'eau E1) : pas de régression lisible sur un vol (bruit
+  ~±1,6). Cohérence : 0,91 (−7,5°), 0,94 (−10,2°), A/A ≤ 1,2 %, la phase passe.
+- **Limites :** un seul vol J0 (pas d'A/B contre le 13 nov.) ; le M1 Max non mesuré ; la cible du mini (40 ms) reste à 17 ms.

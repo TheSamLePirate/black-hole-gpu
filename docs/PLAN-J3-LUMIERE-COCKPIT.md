@@ -92,6 +92,9 @@ avant / après au même cadrage. ΔGPU sur J0 (kerr-mini) et sur la scène J3 (J
 
 - La scène J3 (J3-0) aux cadrages fixes : aucune différence de réglage entre cadrages (l'inventaire de J3-0 vidé ou justifié) ; la sonde de
   cohérence appareil / sol sous un seuil à fixer sur mesure (A/A et témoin positif d'abord).
+  **Fixé le 15 nov. pour le jour et le crépuscule** (phase J0 `coherence`, ses heures par défaut jusqu'à −10°) : direction ≤ max(0,05°, 3 ×
+  A/A), air ≤ 0,5 %, ciel 0,90–1,15 (le jour, jusqu'à −5°), **ciel de l'appareil / ce que prend le sol 0,82–1,20 de 0 à −13°** (mesuré
+  0,87–1,08 ; témoin positif : l'ancien repli de `skyFlat`, 0,008 à −7,5°). La nuit (sous −13°) : la question 7.
 - Le coût complet sur kerr-mini et le M1 Max (borné et soutenu, J0-CONTRAT §2) : pas de régression de J0 au-delà du bruit sans un gain d'image
   écrit ; le chemin vers §8 tenu par famille.
 - Les instruments : âge médian et 95ᵉ centile mesurés et bornés.
@@ -329,3 +332,5 @@ Aucun coût de J3 n'est mesuré ; aucun gain n'est promis.
   source (licence quand elle est connue : FlightGear GPL v2, ambientCG CC0, OurAirports domaine public ; les modèles fournis : non notées) ;
   le format commun des maillages et l'évaluation de meshoptimizer. Trouvé : `assets/lens/lensdirt.jpg` vient du pack `assets/tex/base/` (git-ignoré), dont le `credits.txt` ne
   le nomme pas — auteur et licence à retrouver, ou l'image à remplacer.
+- **Le critère §4 au crépuscule** (2026-11-14 23:13 UTC) : la phase `coherence` lit aussi 20:00 et 20:20 par défaut et borne le ciel de l'appareil
+  sur ce que prend le sol à 0,82–1,20 de 0 à −13° — kerr-mini : 0,91 (−7,5°), 0,94 (−10,2°), A/A ≤ 1,2 % ; passe.

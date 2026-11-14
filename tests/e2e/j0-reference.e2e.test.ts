@@ -757,7 +757,7 @@ describe.skipIf(!E2E)("J0: the reference flight over Toulon-Hyères", () => {
       );
       await app.settled(120_000);
       const rows: Record<string, Record<string, number | null>> = {};
-      for (const utc of (process.env.COH_TIMES ?? "12:00,18:30,19:05,19:15").split(",")) {
+      for (const utc of (process.env.COH_TIMES ?? "12:00,18:30,19:05,19:15,20:00,20:20").split(",")) {
         const a = await read(utc, true);
         const b = await read(utc, true);
         const off = await read(utc, false);
@@ -813,6 +813,13 @@ describe.skipIf(!E2E)("J0: the reference flight over Toulon-Hyères", () => {
         if (r.takenOverTable !== null && r.sunAlt! > 5)
           expect(Math.abs(r.takenOverTable! - 1), `taken = table by day ${utc}`).toBeLessThan(0.05);
         if (r.takenOverTable !== null && r.sunAlt! < -18) expect(r.takenOverTable!, `the floor at night ${utc}`).toBeGreaterThan(2);
+        // (PLAN-J3 §4 at dusk: the craft's sky over what the ground takes — measured 14 Nov 2026 after skyFlat's two fixes, −4.6 to −12.7°:
+        // 0.87–1.08, A/A ≤ 5 % — within 0.82–1.20; under −13° the ground's night floor (EARTH_NIGHT, Q2's ×5) leaves the craft's real sky
+        // at 0.24–0.56 of it, reported — PLAN-J3 question 7)
+        if (r.skyExactTaken !== null && r.sunAlt! <= 0 && r.sunAlt! > -13) {
+          expect(r.skyExactTaken!, `dusk: the craft's sky over the ground's ${utc}`).toBeGreaterThan(0.82);
+          expect(r.skyExactTaken!, `dusk: the craft's sky over the ground's ${utc}`).toBeLessThan(1.2);
+        }
       }
       for (const [utc, r] of Object.entries(rows)) {
         if (r.dirGap !== null) expect(r.dirGap!, `direction ${utc}`).toBeLessThan(Math.max(0.05, 3 * r.dirAA!));
