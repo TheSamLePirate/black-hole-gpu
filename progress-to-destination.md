@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-14 15:23 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-14 15:25 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous.
@@ -6462,3 +6462,18 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   `telemetry` 1/1, `hud-layout` 10/10, `saves` 3/3 ; `hub-graph` 0/1 — son graphe masqué dès que l'autopilote passe à l'approche (sonde),
   cause non établie (états périmés, ou `flighthud.ts` en cours de modification par la session du rendu) : noté, non corrigé.
 - Limites : les états de `tests/hud/states/` restent à refaire (des vols complets par le banc, `LAB_STATES=1`).
+
+## 2026-11-14T15:25Z — FX-19 mesuré : ce que coûtent les écrans de l'A320
+
+- Contribution : §8 (le coût complet par poste, avant toute décision) et §19 (la fraîcheur des instruments) ; audit 2026-11-10, FX-19. Règle 1 :
+  la mesure d'abord ; aucune cadence changée.
+- Réalisé : e2e de mesure `tests/e2e/a320-du-cost.e2e.test.ts` — l'A320 au poste au-dessus de la mer, 8 s : la cadence réelle de chaque écran
+  (ses dessins comptés), son temps de dessin (`DuSet.cost`), le temps des envois à l'atlas (`ship.updateDu` chronométré). Catalogue.
+- Preuves : **mesuré** (ce Mac, M1 Max, fenêtre visible, f6b623d1+, 72–76 images/s) ; règle 3 : **témoin positif** (2 ms injectées au PFD1 : 0,54 →
+  2,52 ms) et **A/A** (PFD1 0,54 / 0,57 ms). Cadences : PFD 18 Hz (0,54 ms le dessin), ISIS 9 Hz (0,24), ND 9 Hz (0,12), E/WD 9 Hz (0,25),
+  SD 4,7 Hz, MCDU 4,6 Hz, DCDU 1,9 Hz, textes du poste 3,7 Hz (0,37) ; envois 93–95/s, 0,21–0,24 ms chacun (côté processeur). **Les écrans
+  coûtent 0,68 ms de fil principal par image aujourd'hui.** Les deux PFD et l'ISIS à chaque image : **~2,7 ms par image — calculé** depuis ces
+  coûts (dessin + envoi), non mesuré ; le partage « deux écrans par image » de `DuSet.frame` serait aussi à revoir.
+- Limites : processeur seulement (le coût GPU des copies à l'atlas n'est pas lu) ; une machine ; kerr-mini non mesuré. Aucune recommandation
+  de changement sans décision de Sam : +2 ms par image pèsent face aux 16,7 ms du palier à 60 images/s ; un PFD à 30 Hz (~+0,4 ms, calculé)
+  serait un compromis.
