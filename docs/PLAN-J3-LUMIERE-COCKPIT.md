@@ -142,6 +142,9 @@ et que l'outillage fonctionne sous Bun ; rien d'autre. Ni l'un ni l'autre n'est 
 6. **Le MSAA de l'appareil** (14 nov., [PROBLEMES](PROBLEMES-A-REGLER.md) « Le dessin de l'appareil coûte 4 à 5 ms ») : sa passe en MSAA 4× coûte
    4 à 5 ms sur kerr-mini (cible 40 ms), mesuré deux fois ; en 1× ses bords en escalier, lissés par l'accumulation temporelle seule. Garder le
    4×, ou passer à 1× (levier `SHIP_MSAA` prêt) ?
+7. **Le plancher de nuit de l'appareil** (14 nov.) : la nuit sans Lune, le sol reçoit le plancher calibré `EARTH_NIGHT` (~0,01 lux, 5 × le
+   réel « pour que le sol se devine ») et l'appareil le ciel tracé, proche du réel : l'appareil 0,24 fois le sol sous −17°. Lui donner le même
+   plancher (l'appareil se devine aussi, 4 × plus clair la nuit), ou le laisser au ciel réel ?
 
 ## 9. Non vérifié
 
@@ -296,3 +299,7 @@ Aucun coût de J3 n'est mesuré ; aucun gain n'est promis.
   appareil / sol 0,006–0,015 → 0,92–0,95, le sol à l'image 125,6 → 69,8 et 85,3 → 25,6 (phase `twilightdim`, A/A ≤ 1,5). Les bornes du
   ciel de la sonde ramenées à −5° (mesurées jusque-là : les harmoniques 1,46 à −7,5°). **Restent** : −10…−13° l'appareil 1,7–1,8 × le sol ;
   la nuit profonde 0,24 × (le plancher `EARTH_NIGHT` ≈ 4 × le ciel de nuit tracé).
+  **Puis le pied du crépuscule** (~19:45 UTC) : à −10…−13° l'écart venait du rapport de transport de `skyFlat` (deux nombres presque nuls au pied
+  du `smoothstep`, un écart de ~0,05° de définition amplifié) ; la place de la caméra (à 0,17° près) prend sa table entière : appareil / sol
+  **0,87–1,08 de −7,5 à −12,7°** (run `…-j3-coh-foot`, A/A ≤ 5 %). Sous −15° l'écart restant est le plancher de nuit du sol (`EARTH_NIGHT`,
+  5 × le réel par calibrage Q2) que l'appareil n'a pas : **question 7 pour Sam** (§8).

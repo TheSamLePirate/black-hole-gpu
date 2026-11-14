@@ -14,9 +14,12 @@ trop sombre pour être mis à l'échelle (son Soleil sous ~−4°), à « l'anci
 profonde) prend le ciel de la caméra ramené à lui (facteurs ≤ 1) ; un lieu plus éclairé (vu d'orbite, hors de l'ombre de la Lune) garde
 l'ancien modèle. Levier de mesure `TUNE_SKYFLAT_DIM` 0 (l'ancien, `renderer.tune`), à retirer avec J3-R. **Mesuré après** (A/B, 3ᵉ passage) :
 le sol 0,94–0,97 de sa table, l'appareil / le sol 0,92–0,95 ; à l'image le sol 125,6 → 69,8 (20:00) et 85,3 → 25,6 (20:10), A/A ≤ 1,5. `twilight-sky`,
-`eclipse-raster` (Burgos), `night-views` passent. **Restent** (relevés, non réglés) : à −10…−13° l'appareil 1,7–1,8 fois le sol (la fin
-de `smoothstep`, puis le plancher) ; la nuit profonde, l'appareil 0,24 fois le sol (le plancher `EARTH_NIGHT` ≈ 4 fois le ciel de nuit tracé —
-le même écart que l'observatoire, plus bas).
+`eclipse-raster` (Burgos), `night-views` passent. **Puis (même jour, ~19:45 UTC)** : à −10…−13° l'appareil 1,7–1,8 fois le sol — au pied du
+`smoothstep`, le rapport de deux nombres presque nuls amplifiait un écart de ~0,05° entre la hauteur du Soleil de la cuisson et celle du sol
+(la place de la caméra 0,54 de sa table à −10,2°, rien au-delà de −10,4°) ; **réglé** (à 0,17° près de la caméra, sa table entière) : appareil /
+sol **0,87–1,08 de −7,5 à −12,7°**. **Reste**, voulu : sous −15°, l'appareil 0,24–0,56 fois le sol — le plancher du sol (`EARTH_NIGHT`, ~0,01 lux,
+cinq fois le ciel réel d'une nuit sans Lune « pour que le sol se devine », calibrage Q2) quand l'appareil reçoit le ciel tracé, proche du
+réel : donner ce plancher à l'appareil serait un choix d'image (PLAN-J3 §8).
 
 
 ## ~~Les états de la galerie du HUD périmés : le final de Le Bourget remet les gaz, le Lander tombe de 27 m~~ (relevé le 13 novembre 2026, e2e `report`) — réglé le 14 novembre 2026 : les états 05, 06 et 09 refaits sur le sol d'aujourd'hui

@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-14 19:33 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-14 19:45 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous.
@@ -56,7 +56,7 @@ ouverts, sous 1 ms) ; J3 au stade du plan.**
 | Rendu (33d89754) | Retrait R1 des anciens chemins (`singleHistory`, `edgeFoot`, `seaSsrSafe`, `clearCut`, `earthRateOne`, `rasterScaleFree`) | **fait le 13 nov.** (avancé d'un jour ; [PLAN-J2 §9 quattuordecies](docs/PLAN-J2-PAGES-RECONSTRUCTION.md)) |
 | Rendu (33d89754) | Chargement : le noyau du monde visé compilé pendant le voyage (`prewarmNear`) ; hors ligne après une visite (cartes KTX2 gardées) | **faits, mesurés** (kerr-mini) : arrivée à Jupiter à froid 73,7 → 47 s (A/A ×2) ; hors ligne 5 cartes en échec → 0 (`pwa` 2/2) |
 | Rendu (33d89754) | Saturne vue de son ombre : le grain de la lumière des anneaux | **fait, mesuré** (kerr-mini) : 16–22 % → 5,5–7,5 % d'une image à l'autre (4 échantillons stratifiés) ; coût sous le bruit du compteur |
-| Rendu (33d89754) | J3-1 : la sonde de cohérence appareil / sol (§4) ; la sonde de l'appareil réécrite après un saut d'horloge | **faits, mesurés** (kerr-mini) : direction ≤ 0,00004°, air ≤ 0,3 %, ciel 1,003–1,006 au coucher (était 1,2–1,8 après un saut de 5 min) ; **14 nov. : la sonde relit ce que prend le sol — elle a trouvé le sol éclairé comme de jour au crépuscule nautique (115–185 × sa table), réparé** : appareil / sol 0,006 → 0,93 à −7,5…−9° |
+| Rendu (33d89754) | J3-1 : la sonde de cohérence appareil / sol (§4) ; la sonde de l'appareil réécrite après un saut d'horloge | **faits, mesurés** (kerr-mini) : direction ≤ 0,00004°, air ≤ 0,3 %, ciel 1,003–1,006 au coucher (était 1,2–1,8 après un saut de 5 min) ; **14 nov. : la sonde relit ce que prend le sol — elle a trouvé le sol éclairé comme de jour au crépuscule nautique (115–185 × sa table), réparé** : appareil / sol 0,006 → 0,93 à −7,5…−9°, puis 0,87–1,08 jusqu'à −12,7° (le pied du crépuscule) ; sous −15° le plancher de nuit du sol (question 7 à Sam) |
 | Rendu (33d89754) | Le coût de l'appareil (le dessin du F-35) | **mesuré** (kerr-mini) : 3,5–4,5 ms — Tarifa deux passages propres, J0 −3,3/−3,6 ; **le MSAA 4× de sa passe : 4–5 ms** (levier `SHIP_MSAA`, deux passages) ; le −0,25 du 10 nov. périmé ; 1× ou 4× : question 6 de PLAN-J3 à Sam |
 | Audit vagues 3–4 (1feb2f7f) | 3.3 Sauvegardes | **fait pour l'essentiel** : lot 1 (736b26a2, une clé par sauvegarde, rien écrasé en silence) ; lot 2 (f265f467 : « Reprendre » du vol perdu seulement, un avion a ses points ; carburant, train, volets, freins, maintiens, systèmes des vaisseaux sauvés ; l'activité en cours dite) — e2e 6/6, bun test 2 228/0. Reste : l'état d'une mission ou d'un combat (Sam), les systèmes de l'A320, IndexedDB |
 | Audit vagues 3–4 (1feb2f7f) | 3.1 réseau RD0 + RD1 | **fait** : la frontière d'entrée (`src/net/inbound.ts`) ; un événement mal formé figeait l'image (163 → 0), plus maintenant — e2e `net-inbound` 6/6, net-battle/coop/crew/board verts |
@@ -6777,3 +6777,16 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
 - Réalisé : `site-smoke` dit ce cas sans échouer (le même jugement que le diagnostic du jeu), va jusqu'à la première image ou au plafond, et
   imprime le diagnostic graphique en cas d'échec. Ici : OK en 5,5 s ; le témoin (bundle cassé) échoue toujours.
 - Suite : lire le prochain passage en CI — le jeu reprend-il après ce `destroy` sous SwiftShader ? Ensuite seulement en faire une porte.
+
+### 2026-11-14 19:45 UTC — J3-1 : le pied du crépuscule (−10…−13°), appareil et sol rejoints
+
+- **Contribution à la destination :** §7 (le même ciel pour le sol et l'appareil) — PLAN-J3 J3-1, critère §4 ; suite du lot précédent.
+- **Réalisé :** `trace.wgsl` `skyFlat` : à 0,003 de cosinus (0,17°) de la hauteur du Soleil de la caméra, un lieu prend la table entière (le
+  rapport de transport des `smoothstep`, deux nombres presque nuls au pied, amplifiait un écart de définition de ~0,05° entre la cuisson —
+  `skyAmbient` : l'up géocentrique, le Soleil écrasé — et les lecteurs). PLAN-J3 §8 question 7 (le plancher de nuit de l'appareil), §10 ;
+  PROBLEMES.
+- **Preuves (mesuré, kerr-mini, J0, run `…-j3-coh-foot`)** : sol pris / table 1,00 de −7,5 à −12,7° (avant 0,54 à −10,2°, 0,67 — le plancher —
+  à −12,7°) ; appareil / sol **0,87–1,08** (avant 1,7–1,8 à −10…−13°), A/A ≤ 5 % ; `twilightdim` passe (sol 135,5 → 87,2 à 20:00, A/A 1,9) ;
+  `twilight-sky` passe (inchangé). check-wgsl 82/82. **Non mesuré** : ΔGPU (trois opérations), le M1 Max.
+- **Limites / suite :** sous −15°, l'appareil 0,24–0,56 fois le sol : le plancher calibré du sol (`EARTH_NIGHT`, 5 × le réel par choix Q2) que
+  l'appareil n'a pas — question 7 à Sam.

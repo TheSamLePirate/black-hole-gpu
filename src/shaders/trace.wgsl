@@ -5562,10 +5562,16 @@ fn skyFlat(q: vec3f, h: f32, E: vec3f, mu0: f32, sk: f32) -> vec3f {
   if (TUNE_SKYFLAT_DIM == 0u) { return mix(old, carried, trust); }
   // (a place no brighter than the camera's — its Sun no higher, its eclipse no deeper — the camera's sky carried down, its
   // factors ≤ 1, however dim the camera's own: the twilight's ground as lit as the sky above it; brighter places keep the old model)
-  let down = s * min(smoothstep(-0.18, 0.25, mu0) / max(wc, 1e-6), 1.0) * min(sk / max(skc, 1e-6), 1.0);
+  // (within 0.003 of the camera's Sun height — 0.17°: the bake's up and Sun and the readers' differ by ~0.05° — a place is the camera's and
+  // takes its table whole: at the smoothstep's foot the ratio of two vanishing numbers gave the camera's own place 0.54 of its table at
+  // −10.2° and nothing past −10.4°, the table still lit (J0 coherence, 14 Nov 2026))
+  let mu0c = bodies[SKY_OFF + 1u].w;
+  let mu0n = min(mu0 + 0.003, max(mu0, mu0c));
+  let rSun = select(min(smoothstep(-0.18, 0.25, mu0n) / max(wc, 1e-6), 1.0), 1.0, mu0n >= mu0c);
+  let down = s * rSun * min(sk / max(skc, 1e-6), 1.0);
   // (no brighter: its Sun no higher than the camera's, and its sky no less eclipsed — a camera in totality looking out of the Moon's
   // shadow keeps the old model there, not its own dark sky)
-  let below = (1.0 - smoothstep(0.0, 0.05, mu0 - bodies[SKY_OFF + 1u].w)) * (1.0 - smoothstep(0.0, 0.05, sk - skc));
+  let below = (1.0 - smoothstep(0.0, 0.05, mu0 - mu0c)) * (1.0 - smoothstep(0.0, 0.05, sk - skc));
   return mix(mix(old, down, below), carried, trust);
 }
 // the same over the sun's irradiance E (the clouds' light is written as E × factors)
