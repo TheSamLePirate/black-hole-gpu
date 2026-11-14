@@ -33,7 +33,7 @@ import { sceneryReady } from "./lib/plan-views";
 //       screens, the cockpit (the outside view) — between two baseline flights (drift).
 // Output: remote-results/j0/<machine>/ (J0_OUT): j0.json, shots (start, mid-turn, end; each ablation's last frame).
 // J0_PHASES=flight,ablate,sustained (default all; sustained: the flight again after the ablations, the machine hot), ABLATE_S (20), J0_MACHINE (the label: "m1max", "kerr-mini"; default the host name).
-// Other phases, asked by name: agecheck, framing (PLAN-J3 J3-0), keylight, keyair, keysky, skyband4, coherence (J3-1), keyhaze (J3-2), waterincident (J3-7), shadows (J3-3), wetbld, cityview, materials (J3-5), seadusk, probedump, tracedview (PROBLEMES) (J3-1: the craft's key light against the incident Sun toward
+// Other phases, asked by name: agecheck, framing (PLAN-J3 J3-0), keylight, keyair, keysky, skyband4, coherence (J3-1), keyhaze (J3-2), waterincident (J3-7), shadows (J3-3), wetbld, cityview, materials (J3-5), seadusk, probedump, tracedview (PROBLEMES), twilightdim (J3-1) (J3-1: the craft's key light against the incident Sun toward
 // sunset, ~3 min on kerr-mini; keyair: its air two ways, march and table, ~4 min; keysky: the sky's light two ways, ~4 min; coherence: the three gaps in one read per hour, ~5 min).
 // Not a pass/fail on the frame rate: the fiche is written from j0.json (docs/progress/j0/). It fails on a GPU error, a craft not
 // placed, a flight not flown.
@@ -730,7 +730,16 @@ describe.skipIf(!E2E)("J0: the reference flight over Toulon-Hyères", () => {
         dir: number[];
         lift: number | null;
         air: { march: number; table: number; skyGround: number; skyCraft: number } | null;
-        sky: { exact: number; ground: number; bandsProbe: number[]; bandsGround: number[]; gridE: number; shE0: number } | null;
+        sky: {
+          exact: number;
+          ground: number;
+          groundTaken: number;
+          groundFloor: number;
+          bandsProbe: number[];
+          bandsGround: number[];
+          gridE: number;
+          shE0: number;
+        } | null;
       };
       const read = async (utc: string, incident: boolean) =>
         app.js<K>(`(async () => { const f = () => new Promise((q) => requestAnimationFrame(q)); const r = __bh.renderer;
@@ -740,7 +749,7 @@ describe.skipIf(!E2E)("J0: the reference flight over Toulon-Hyères", () => {
           let lift = null;
           if (n && I) { const G = n.axes.map((a) => a[0] * n.light[0] + a[1] * n.light[1] + a[2] * n.light[2]);
             const d = (G[0] * I[0] + G[1] * I[1] + G[2] * I[2]) / Math.hypot(...G) / Math.hypot(...I); lift = Math.acos(Math.min(1, d)) * 180 / Math.PI; }
-          return { dir: k.dir, lift, air: k.air, sky: sky ? { exact: sky.exact, ground: sky.ground, bandsProbe: sky.bandsProbe, bandsGround: sky.bandsGround, gridE: sky.gridE, shE0: sky.shE0 } : null }; })()`);
+          return { dir: k.dir, lift, air: k.air, sky: sky ? { exact: sky.exact, ground: sky.ground, groundTaken: sky.groundTaken, groundFloor: sky.groundFloor, bandsProbe: sky.bandsProbe, bandsGround: sky.bandsGround, gridE: sky.gridE, shE0: sky.shE0 } : null }; })()`);
       const p = (x: number) => +x.toPrecision(4);
       // (COH_OLD=1: the probe not written over when the Sun jumps — renderer.probeSunJump false —, as before 14 Nov: the A/B of that fix)
       await app.js(
@@ -770,6 +779,13 @@ describe.skipIf(!E2E)("J0: the reference flight over Toulon-Hyères", () => {
           // (the Sun's geometric height then [°]: the twilight's depth — the sky's light against it, a reference's curve)
           sunAlt: p(await app.js<number>("__bh.camera.skyInfo({ layered: false })?.sun.altDeg ?? NaN")),
           craftSkyExact: a.sky ? p(a.sky.exact) : null,
+          // (14 Nov 2026: what the ground takes — its clear sky or the night's floor, the greater (liteSky) —: the table alone has no floor, so
+          // past −15° the ratio over it said nothing; over what the ground takes, the coherence at night. Read twice: its A/A)
+          groundTaken: a.sky ? p(a.sky.groundTaken) : null,
+          floorOverTable: a.sky && a.sky.ground > 0 ? p(a.sky.groundFloor / a.sky.ground) : null,
+          takenOverTable: a.sky && a.sky.ground > 0 ? p(a.sky.groundTaken / a.sky.ground) : null,
+          skyExactTaken: a.sky && a.sky.groundTaken > 0 ? p(a.sky.exact / a.sky.groundTaken) : null,
+          skyExactTakenAgain: b.sky && b.sky.groundTaken > 0 ? p(b.sky.exact / b.sky.groundTaken) : null,
         };
         // (radiance by radiance: the probe's elevation bands over the ground grid's — rows at 0.9°, 6.5°, 17.6°, 61.6° —, and the ground's
         // irradiance two ways at the sea's level, its grid integrated and its harmonics: where the two ways part)
@@ -791,11 +807,22 @@ describe.skipIf(!E2E)("J0: the reference flight over Toulon-Hyères", () => {
         `  J3-1 coherence, clouds 0.9 at 12:00: harmonics ${rows["12:00"]!.skyHarmonicsClouds} (clear ${rows["12:00"]!.skyHarmonics})`,
       );
       out.coherence = rows;
+      // (the taken sky's controls (rule 3): by day the floor does not bite — what the ground takes is its table, within 5 % —; in the deep
+      // night (Sun under −18°, COH_TIMES) it does — over twice the table; its bounds on the craft's sky set once measured, not before)
+      for (const [utc, r] of Object.entries(rows)) {
+        if (r.takenOverTable !== null && r.sunAlt! > 5)
+          expect(Math.abs(r.takenOverTable! - 1), `taken = table by day ${utc}`).toBeLessThan(0.05);
+        if (r.takenOverTable !== null && r.sunAlt! < -18) expect(r.takenOverTable!, `the floor at night ${utc}`).toBeGreaterThan(2);
+      }
       for (const [utc, r] of Object.entries(rows)) {
         if (r.dirGap !== null) expect(r.dirGap!, `direction ${utc}`).toBeLessThan(Math.max(0.05, 3 * r.dirAA!));
         // (the air's bound where the Sun still comes through — the table's transmittance over 5 % —: below, a ratio of two vanishing
         // transmittances at the horizon's grazing — 0.87–0.90 at 19:20, the table 0.02 % —, reported only)
         if (r.air !== null && r.airTable! > 0.05) expect(Math.abs(r.air! - 1), `air ${utc}`).toBeLessThan(0.005);
+        // (the sky's bounds over the ground's table: by day and in the civil twilight, to −5° — where they were measured (14 Nov, 20:00 at −7.5°:
+        // the harmonics 1.46); below, the table falls
+        // past the night's floor and the ratio over it says nothing: over what the ground takes, skyExactTaken, reported)
+        if (!(r.sunAlt! > -5)) continue;
         expect(r.skyExact!, `sky exact ${utc}`).toBeGreaterThan(0.9);
         expect(r.skyExact!, `sky exact ${utc}`).toBeLessThan(1.15);
         expect(r.skyHarmonics!, `sky harmonics ${utc}`).toBeGreaterThan(0.9);
@@ -1176,6 +1203,86 @@ describe.skipIf(!E2E)("J0: the reference flight over Toulon-Hyères", () => {
       for (const r of Object.values(rows)) expect(Math.abs(r.asDrawn! - r.asDrawnAgain!)).toBeLessThan(2);
     },
     900_000,
+  );
+
+  // (PLAN-J3 J3-1 — skyFlat's dim fallback, J0_PHASES=twilightdim (TWI_TIMES other moments): the coherence probe found the ground lit
+  // 115–185 × its own clear sky at −7.5…−9° (the old bluish tenth of the Sun's, where the camera's sky is too dim to scale) while the craft
+  // gets that sky; since 14 Nov the camera's sky is carried down instead (TUNE_SKYFLAT_DIM 1, the default). As drawn, the old fallback
+  // (TUNE_SKYFLAT_DIM 0), as drawn again (the A/A), the exposure held at the first's; the world's data in first (the first run's A/A at
+  // noon, 3.9 levels, was the tiles still arriving); the quarter view (the craft and the ground, westward); per moment: shots, the frame's
+  // lower half (the ground) and centre (the craft) mean luminances, the probe's ground taken over its table, the craft's sky over it)
+  test.skipIf(!PHASES.includes("twilightdim"))(
+    "J3-1: skyFlat's dim fallback — the twilight's ground as drawn / the old fallback / as drawn, the exposure held; shots and the probe",
+    async () => {
+      await start("");
+      // (the world's data in before the first shot: tiles, imagery, scenery — bounded, what is missing said)
+      await app
+        .waitFor(
+          "(() => { const r = __bh.renderer; return r.earthTiles.pending === 0 && r.earthTiles.orthoPending === 0 && !r.earthScenery.stats().pending; })()",
+          60_000,
+        )
+        .catch(() => console.log("  twilight dim: the world's data still arriving after 60 s — the A/A will say if it mattered"));
+      const times = (process.env.TWI_TIMES ?? "12:00,19:40,20:00,20:10,20:20").split(",");
+      const ev: Record<string, number> = {};
+      const rows: Record<string, Record<string, number | null>> = {};
+      const p = (x: number) => +x.toPrecision(4);
+      const shoot = async (utc: string, name: string) => {
+        const e = await app.js<number>(`(async () => { const f = () => new Promise((q) => requestAnimationFrame(q)); __bh.freeze(false);
+          __bh.game.setDate("2026-07-10T${utc}:00Z"); Object.assign(__bh.settings, { shipMount: "quarter", lookProfile: "neutral", dof: false, motionBlur: 0, autoExposure: true, exposure: 0 });
+          __bh.refresh(); for (let i = 0; i < 90; i++) await f(); __bh.freeze(true); __bh.renderer.settleExposure(); for (let i = 0; i < 30; i++) await f();
+          const auto = __bh.renderer.ev(__bh.settings); Object.assign(__bh.settings, { autoExposure: false, exposure: ${ev[utc] ?? "auto"} }); for (let i = 0; i < 20; i++) await f(); return auto; })()`);
+        if (ev[utc] === undefined) ev[utc] = e;
+        const x = (await app.cdp.send("Page.captureScreenshot", { format: "png" })) as { data: string };
+        const bytes = Buffer.from(x.data, "base64");
+        await Bun.write(`${OUT}/twilightdim-${utc.replace(":", "")}-${name}.png`, bytes);
+        const img = readPng(new Uint8Array(bytes));
+        const mean = (x0: number, x1: number, y0: number, y1: number) => {
+          let t = 0,
+            n = 0;
+          for (let y = Math.floor(y0 * img.height); y < Math.floor(y1 * img.height); y++)
+            for (let xx = Math.floor(x0 * img.width); xx < Math.floor(x1 * img.width); xx++) {
+              const i = (y * img.width + xx) * img.channels;
+              t += 0.2126 * img.data[i]! + 0.7152 * img.data[i + 1]! + 0.0722 * img.data[i + 2]!;
+              n++;
+            }
+          return +(t / n).toFixed(2);
+        };
+        const sky = await app.js<{ exact: number; ground: number; groundTaken: number } | null>(
+          "(async () => { const s = await __bh.renderer.readShipSky(); return s && { exact: s.exact, ground: s.ground, groundTaken: s.groundTaken }; })()",
+        );
+        const row = (rows[utc] ??= {});
+        row[`${name}Ground`] = mean(0, 1, 0.6, 1);
+        row[`${name}Craft`] = mean(0.35, 0.65, 0.35, 0.65);
+        row[`${name}TakenOverTable`] = sky && sky.ground > 0 ? p(sky.groundTaken / sky.ground) : null;
+        row[`${name}CraftOverTaken`] = sky && sky.groundTaken > 0 ? p(sky.exact / sky.groundTaken) : null;
+        row[`${name}AutoEv`] = p(e);
+      };
+      const lever = async (on: boolean) => {
+        await app.js(`(() => { __bh.renderer.tune = ${on ? "{}" : "{ TUNE_SKYFLAT_DIM: 0 }"}; __bh.refresh(); return 1; })()`);
+        await app.settled(120_000);
+        await app.waitFor("__bh.renderer.compiling.size === 0", 120_000);
+      };
+      for (const utc of times) await shoot(utc, "drawn");
+      await lever(false);
+      for (const utc of times) await shoot(utc, "old");
+      await lever(true);
+      for (const utc of times) await shoot(utc, "drawnAgain");
+      for (const utc of times) console.log(`  J3-1 twilight dim (${utc}): ${JSON.stringify(rows[utc])}`);
+      out.twilightdim = rows;
+      await app.js(
+        `(() => { __bh.renderer.tune = {}; Object.assign(__bh.settings, { autoExposure: true, exposure: 0, shipMount: "cockpit" }); __bh.freeze(false); __bh.game.setDate("${J0_SCENE.date}"); return 1; })()`,
+      );
+      // (the probe's positive: where the old fallback lit the ground over 10 × its sky, as drawn it takes its sky — under 2 ×; the image's:
+      // there the old fallback's ground differs from the drawn one by over 4 × the A/A — as drawn twice, with the world's data still
+      // streaming (run 2 of 14 Nov: 7.7 levels at noon, 14 at 20:00, against 64 between the two))
+      const lit = Object.values(rows).filter((r) => (r.oldTakenOverTable ?? 0) > 10);
+      expect(lit.length).toBeGreaterThan(0);
+      for (const r of lit) {
+        expect(r.drawnTakenOverTable!).toBeLessThan(2);
+        expect(Math.abs(r.drawnGround! - r.drawnAgainGround!)).toBeLessThan(0.25 * Math.abs(r.oldGround! - r.drawnGround!));
+      }
+    },
+    1_200_000,
   );
 
   // (PLAN-J3 J3-1 — the sky's light on the craft with band 4 of its probe's harmonics, J0_PHASES=skyband4: the craft from above (around,

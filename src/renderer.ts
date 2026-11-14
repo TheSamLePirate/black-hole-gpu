@@ -9769,7 +9769,7 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
    *  radius [rad], its irradiance's luminance and on (0/1) — read back (PLAN-J3 J3-1: the craft lit by the ground's Sun); `air`, its
    *  probe on the Earth (the key's air two ways at the camera — envBuf after the key —): `march` the transmittance along its ray
    *  (earthLookNoGround: the one lighting the craft), `table` the ground's (sunThrough), their luminances; `cloud` the clouds' share
-   *  (−1 none read), `h` the camera's air height [m]; `skyGround` / `skyCraft` the sky's light on a level surface at the camera, the
+   *  (−1 none read), `h` the camera's air height [m]; `skyGround` / `skyCraft` (`skyGroundTaken`: what the ground takes — that or the night's floor, liteSky) the sky's light on a level surface at the camera, the
    *  ground's clear sky (skyIrradiance) and the craft's probe (its harmonics: clouds and all), luminances (−1 none); null off the Earth or
    *  without air (the key's last value kept there) */
   async readShipKey(): Promise<{
@@ -9777,7 +9777,7 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
     rs: number;
     e: number;
     on: boolean;
-    air: { march: number; table: number; cloud: number; h: number; skyGround: number; skyCraft: number } | null;
+    air: { march: number; table: number; cloud: number; h: number; skyGround: number; skyGroundTaken: number; skyCraft: number } | null;
   }> {
     const st = this.device.createBuffer({ size: 96, usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ });
     const enc = this.device.createCommandEncoder();
@@ -9790,7 +9790,18 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
     st.destroy();
     const lum = (o: number) => 0.2126 * f[o]! + 0.7152 * f[o + 1]! + 0.0722 * f[o + 2]!;
     const sky = (o: number) => (f[o]! < 0 ? -1 : lum(o));
-    const air = f[15]! < 0 ? null : { march: lum(8), table: lum(12), cloud: f[11]!, h: f[15]!, skyGround: sky(16), skyCraft: sky(20) };
+    const air =
+      f[15]! < 0
+        ? null
+        : {
+            march: lum(8),
+            table: lum(12),
+            cloud: f[11]!,
+            h: f[15]!,
+            skyGround: sky(16),
+            skyGroundTaken: f[16]! < 0 ? -1 : f[19]!,
+            skyCraft: sky(20),
+          };
     return { dir: [f[0]!, f[1]!, f[2]!], rs: f[3]!, e: lum(4), on: f[7]! > 0.5, air };
   }
 
@@ -9801,6 +9812,8 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
     exact: number;
     sh: number;
     ground: number;
+    groundTaken: number;
+    groundFloor: number;
     shCpu: number;
     shHann: number;
     shLanczos: number;
@@ -9905,6 +9918,10 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
       exact: e * dth * dph,
       sh: lum((n + 5) * 4),
       ground: lum((n + 4) * 4),
+      // (what the ground takes of its sky — the clear sky carried, or the night's floor, the greater: trace.wgsl liteSky —, its luminance)
+      groundTaken: f[(n + 4) * 4 + 3]!,
+      // (the night's floor alone — the twilight reference or the night's —, its luminance: which of the two the ground took)
+      groundFloor: f[(n + 5) * 4 + 3]!,
       shCpu: irr(1, 1),
       shHann: irr(0.75, 0.25),
       shLanczos: irr(0.827, 0.413),

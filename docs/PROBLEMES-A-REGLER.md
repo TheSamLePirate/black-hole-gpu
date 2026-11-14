@@ -3,6 +3,21 @@
 Problèmes constatés, pas encore réglés. Chaque entrée : la date (UTC), ce qui est mesuré ou observé et sa source, la cause
 connue ou supposée, la piste. Une entrée réglée est barrée avec le commit qui la règle, pas effacée.
 
+## ~~Le sol éclairé comme de jour au crépuscule nautique (Soleil −5 à −10°)~~ (relevé le 14 novembre 2026, sonde de cohérence J0) — réglé le 14 novembre 2026
+
+**Constat (mesuré, kerr-mini, J0 `coherence` et `twilightdim`, 14 nov.)** : de −7,5 à −9° de Soleil, le ciel que prend le sol (`liteSky` :
+`skyFlat`, ou le plancher de nuit) valait **115 à 185 fois sa propre table** (`skyIrradiance`) et ~500 à 740 fois la référence calibrée du
+crépuscule (`twilightGround`), quand l'appareil recevait la table (×0,88–0,93) : à l'image, une mer bleue et des collines vertes de plein jour
+sous un ciel de crépuscule, l'appareil 70 à 160 fois plus sombre que le sol. **Cause** : `skyFlat` revenait, quand le ciel de la caméra est
+trop sombre pour être mis à l'échelle (son Soleil sous ~−4°), à « l'ancien modèle » — un dixième bleuté du Soleil, `smoothstep(−0,18 ; 0,25 ; μ0)`,
+éteint seulement vers −10,4°. **Réglé** : un lieu pas plus éclairé que celui de la caméra (son Soleil pas plus haut, son éclipse pas moins
+profonde) prend le ciel de la caméra ramené à lui (facteurs ≤ 1) ; un lieu plus éclairé (vu d'orbite, hors de l'ombre de la Lune) garde
+l'ancien modèle. Levier de mesure `TUNE_SKYFLAT_DIM` 0 (l'ancien, `renderer.tune`), à retirer avec J3-R. **Mesuré après** (A/B, 3ᵉ passage) :
+le sol 0,94–0,97 de sa table, l'appareil / le sol 0,92–0,95 ; à l'image le sol 125,6 → 69,8 (20:00) et 85,3 → 25,6 (20:10), A/A ≤ 1,5. `twilight-sky`,
+`eclipse-raster` (Burgos), `night-views` passent. **Restent** (relevés, non réglés) : à −10…−13° l'appareil 1,7–1,8 fois le sol (la fin
+de `smoothstep`, puis le plancher) ; la nuit profonde, l'appareil 0,24 fois le sol (le plancher `EARTH_NIGHT` ≈ 4 fois le ciel de nuit tracé —
+le même écart que l'observatoire, plus bas).
+
 
 ## ~~Les états de la galerie du HUD périmés : le final de Le Bourget remet les gaz, le Lander tombe de 27 m~~ (relevé le 13 novembre 2026, e2e `report`) — réglé le 14 novembre 2026 : les états 05, 06 et 09 refaits sur le sol d'aujourd'hui
 

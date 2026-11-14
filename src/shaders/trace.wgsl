@@ -268,6 +268,12 @@ override TUNE_BLD_TILE: f32 = 1.0;
 override TUNE_BLD_BRICK: f32 = 1.0;
 // (PLAN-J3 J3-5, a measuring lever: 0 the raster's roofs not pulled toward the photograph's luminance — 1 as drawn)
 override TUNE_BLD_PHOTO: f32 = 1.0;
+// (PLAN-J3 J3-1 — skyFlat's dim fallback, 14 Nov 2026: where the camera's own clear sky is too dim to scale — the Sun 4–10° under its
+// horizon —, a place no brighter than the camera's (its Sun no higher, its eclipse no deeper) takes that sky carried down to it (scaled by
+// ≤ 1), not the old bluish tenth of the Sun's, which lit the ground 115–185 × its own table at −7.5…−9° (J0 coherence, kerr-mini) — a
+// sea and hills as by day under a nautical twilight's sky — while the craft got the table (×0.88–0.93). 0: the old fallback, a measuring
+// lever (renderer.tune), to retire with J3-R)
+override TUNE_SKYFLAT_DIM: u32 = 1u;
 // (a ray rising over the ground — its clearance growing —: its steps' share of the distance (5 %: the shell left in ~150 steps;
 // a butte's narrow top, Monument Valley's Mittens, stepped through in bands of sky)
 override TUNE_RISE: f32 = 0.05;
@@ -5552,7 +5558,15 @@ fn skyFlat(q: vec3f, h: f32, E: vec3f, mu0: f32, sk: f32) -> vec3f {
   let wc = smoothstep(-0.18, 0.25, bodies[SKY_OFF + 1u].w);
   let skc = bodies[SKY_OFF + 2u].w;
   let carried = s * (smoothstep(-0.18, 0.25, mu0) / max(wc, 0.02)) * (sk / max(skc, 0.02));
-  return mix(old, carried, smoothstep(0.02, 0.1, wc) * smoothstep(0.02, 0.1, skc));
+  let trust = smoothstep(0.02, 0.1, wc) * smoothstep(0.02, 0.1, skc);
+  if (TUNE_SKYFLAT_DIM == 0u) { return mix(old, carried, trust); }
+  // (a place no brighter than the camera's — its Sun no higher, its eclipse no deeper — the camera's sky carried down, its
+  // factors ≤ 1, however dim the camera's own: the twilight's ground as lit as the sky above it; brighter places keep the old model)
+  let down = s * min(smoothstep(-0.18, 0.25, mu0) / max(wc, 1e-6), 1.0) * min(sk / max(skc, 1e-6), 1.0);
+  // (no brighter: its Sun no higher than the camera's, and its sky no less eclipsed — a camera in totality looking out of the Moon's
+  // shadow keeps the old model there, not its own dark sky)
+  let below = (1.0 - smoothstep(0.0, 0.05, mu0 - bodies[SKY_OFF + 1u].w)) * (1.0 - smoothstep(0.0, 0.05, sk - skc));
+  return mix(mix(old, down, below), carried, trust);
 }
 // the same over the sun's irradiance E (the clouds' light is written as E × factors)
 fn skyFlatFactor(q: vec3f, h: f32, E: vec3f, mu0: f32, sk: f32) -> vec3f {
@@ -17343,8 +17357,13 @@ fn keyLight() {
       let upB = geoQ(nearCam());
       let upW = fromBody(upB);
       let upP = normalize(vec3f(dot(upW, P.envX.xyz), dot(upW, P.envY.xyz), dot(upW, P.envZ.xyz)));
-      envBuf[ENV_W * ENV_H + 4u] = select(vec4f(-1.0), vec4f(skyIrradiance(airHeight(nearCam()), upB), 0.0), isEarth(kn));
-      envBuf[ENV_W * ENV_H + 5u] = select(vec4f(-1.0), vec4f(shIrradiance(upP), 0.0), isEarth(kn));
+      // (w: what the ground takes of it — liteSky: the clear sky as carried, or the night's floor over the star's light, the greater —
+      // the luminance; the table alone has no floor and falls past the night's — PLAN-J3 §10, the probe at night, 14 Nov 2026)
+      let mu0g = dot(upB, airPhysicalDirection(toBody(lt.dir)));
+      let taken = max(skyFlat(upB, airHeight(nearCam()), lt.e, mu0g, 1.0), lt.e * nightFloor(1.0, mu0g));
+      envBuf[ENV_W * ENV_H + 4u] = select(vec4f(-1.0), vec4f(skyIrradiance(airHeight(nearCam()), upB), luminance(taken)), isEarth(kn));
+      // (w: the night's floor alone over the star's light — the reference twilight table or the night's —: which of the two the ground took)
+      envBuf[ENV_W * ENV_H + 5u] = select(vec4f(-1.0), vec4f(shIrradiance(upP), luminance(lt.e * nightFloor(1.0, mu0g))), isEarth(kn));
       // (the up direction on the probe's axes: the CPU integrates the probe's texels over its hemisphere — renderer.readShipSky)
       envBuf[ENV_W * ENV_H + 6u] = vec4f(upP, select(-1.0, 1.0, isEarth(kn)));
     }

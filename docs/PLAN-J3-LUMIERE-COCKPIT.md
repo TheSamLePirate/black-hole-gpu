@@ -288,3 +288,11 @@ Aucun coût de J3 n'est mesuré ; aucun gain n'est promis.
   3,4 à la fin du crépuscule civil, 0,008 à la fin du nautique) — : **pas un défaut de rendu, une limite de la sonde**, qui ne relit que la table
   (`envBuf` + 4). Suite possible : relire le maximum comme le sol le prend, pour juger la cohérence la nuit (une rangée de plus dans `envBuf`).
 
+- **La sonde de cohérence relit ce que prend le sol ; le crépuscule nautique réparé** (14 nov., ~18:58 UTC). La sonde écrit à côté de la
+  table ce que le sol prend vraiment (`liteSky` : `skyFlat` ou le plancher, le plus grand — `readShipSky().groundTaken`, `groundFloor`).
+  Témoins : de jour pris = table (1,000), la nuit profonde le plancher (×57 à −19°), A/A ≤ 6 %. **Elle a trouvé un défaut** : de −7,5 à −9° le
+  sol prenait 115–185 fois sa table (l'ancien modèle de `skyFlat`, un dixième du Soleil) — à l'image, la mer et les collines de plein jour
+  sous un ciel de crépuscule ; **réglé** (`skyFlat` : le ciel de la caméra ramené aux lieux pas plus éclairés ; [PROBLEMES](PROBLEMES-A-REGLER.md)) :
+  appareil / sol 0,006–0,015 → 0,92–0,95, le sol à l'image 125,6 → 69,8 et 85,3 → 25,6 (phase `twilightdim`, A/A ≤ 1,5). Les bornes du
+  ciel de la sonde ramenées à −5° (mesurées jusque-là : les harmoniques 1,46 à −7,5°). **Restent** : −10…−13° l'appareil 1,7–1,8 × le sol ;
+  la nuit profonde 0,24 × (le plancher `EARTH_NIGHT` ≈ 4 × le ciel de nuit tracé).
