@@ -118,7 +118,9 @@ describe.skipIf(!E2E)("a downed aircraft: smoke, the fall, the crash; its replay
     expect(booms.some((s) => s > 2)).toBe(true);
     await Bun.sleep(500);
     await shot("crash");
-    await Bun.sleep(7000);
+    // (its smoke risen — a condition, not 7 s of sleep: audit QA-09)
+    await app.waitOptional(`(__bh.renderer.shipContrails?.n ?? 0) > 0`, 20_000);
+    await Bun.sleep(2000);
     await shot("crash-smoke");
     const n = await app.js<number>(`__bh.renderer.shipContrails?.n ?? 0`);
     console.log(`  the smoke's segments: ${n}`);

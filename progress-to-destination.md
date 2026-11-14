@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-14 18:51 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-14 18:59 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous.
@@ -56,7 +56,7 @@ ouverts, sous 1 ms) ; J3 au stade du plan.**
 | Rendu (33d89754) | Retrait R1 des anciens chemins (`singleHistory`, `edgeFoot`, `seaSsrSafe`, `clearCut`, `earthRateOne`, `rasterScaleFree`) | **fait le 13 nov.** (avancé d'un jour ; [PLAN-J2 §9 quattuordecies](docs/PLAN-J2-PAGES-RECONSTRUCTION.md)) |
 | Rendu (33d89754) | Chargement : le noyau du monde visé compilé pendant le voyage (`prewarmNear`) ; hors ligne après une visite (cartes KTX2 gardées) | **faits, mesurés** (kerr-mini) : arrivée à Jupiter à froid 73,7 → 47 s (A/A ×2) ; hors ligne 5 cartes en échec → 0 (`pwa` 2/2) |
 | Rendu (33d89754) | Saturne vue de son ombre : le grain de la lumière des anneaux | **fait, mesuré** (kerr-mini) : 16–22 % → 5,5–7,5 % d'une image à l'autre (4 échantillons stratifiés) ; coût sous le bruit du compteur |
-| Rendu (33d89754) | J3-1 : la sonde de cohérence appareil / sol (§4) ; la sonde de l'appareil réécrite après un saut d'horloge | **faits, mesurés** (kerr-mini) : direction ≤ 0,00004°, air ≤ 0,3 %, ciel 1,003–1,006 au coucher (était 1,2–1,8 après un saut de 5 min) |
+| Rendu (33d89754) | J3-1 : la sonde de cohérence appareil / sol (§4) ; la sonde de l'appareil réécrite après un saut d'horloge | **faits, mesurés** (kerr-mini) : direction ≤ 0,00004°, air ≤ 0,3 %, ciel 1,003–1,006 au coucher (était 1,2–1,8 après un saut de 5 min) ; **14 nov. : la sonde relit ce que prend le sol — elle a trouvé le sol éclairé comme de jour au crépuscule nautique (115–185 × sa table), réparé** : appareil / sol 0,006 → 0,93 à −7,5…−9° |
 | Rendu (33d89754) | Le coût de l'appareil (le dessin du F-35) | **mesuré** (kerr-mini) : 3,5–4,5 ms — Tarifa deux passages propres, J0 −3,3/−3,6 ; **le MSAA 4× de sa passe : 4–5 ms** (levier `SHIP_MSAA`, deux passages) ; le −0,25 du 10 nov. périmé ; 1× ou 4× : question 6 de PLAN-J3 à Sam |
 | Audit vagues 3–4 (1feb2f7f) | 3.3 Sauvegardes | **fait pour l'essentiel** : lot 1 (736b26a2, une clé par sauvegarde, rien écrasé en silence) ; lot 2 (f265f467 : « Reprendre » du vol perdu seulement, un avion a ses points ; carburant, train, volets, freins, maintiens, systèmes des vaisseaux sauvés ; l'activité en cours dite) — e2e 6/6, bun test 2 228/0. Reste : l'état d'une mission ou d'un combat (Sam), les systèmes de l'A320, IndexedDB |
 | Audit vagues 3–4 (1feb2f7f) | 3.1 réseau RD0 + RD1 | **fait** : la frontière d'entrée (`src/net/inbound.ts`) ; un événement mal formé figeait l'image (163 → 0), plus maintenant — e2e `net-inbound` 6/6, net-battle/coop/crew/board verts |
@@ -6727,3 +6727,30 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
 - Réalisé : `ranger-radar` attend le contact proche sur le scope du HUD (puis 2 s, pour que l'absence du lointain veuille dire quelque chose)
   au lieu de 6 s ; `f35-intercept` attend d'être à moins de 150 m de sa place derrière la cible au lieu de 10 s. Cliquet mis à jour.
 - Preuves : **observé** (ce Mac) : `ranger-radar` 2/2 (« NOSE: near true, far false ») ; `f35-intercept` 2/2 (79 m de la place).
+
+### 2026-11-14 18:58 UTC — J3-1 : le crépuscule nautique du sol réparé, trouvé par la sonde de cohérence
+
+- **Contribution à la destination :** §7 (un état lumineux commun : le sol et l'appareil reçoivent le même ciel) — PLAN-J3 J3-1 et le
+  critère de sortie §4 (la sonde de cohérence), étendu au crépuscule et à la nuit.
+- **Réalisé :** la sonde écrit ce que le sol prend vraiment (`trace.wgsl` `keyLight` : `liteSky` = `skyFlat` ou le plancher de nuit, et le
+  plancher seul ; `renderer.readShipSky().groundTaken/groundFloor`, `readShipKey().air.skyGroundTaken`) ; **`skyFlat` réparé** : là où le ciel
+  de la caméra est trop sombre pour être mis à l'échelle (Soleil sous ~−4°), un lieu pas plus éclairé prend ce ciel ramené à lui (facteurs ≤ 1)
+  au lieu de « l'ancien modèle » (un dixième du Soleil, éteint vers −10,4°) ; garde de l'éclipse (un lieu moins éclipsé garde l'ancien) ;
+  levier de mesure `TUNE_SKYFLAT_DIM` 0 = l'ancien (retrait J3-R). Phase J0 `twilightdim` (A/B à l'image) ; bornes du ciel de `coherence`
+  ramenées à −5° (là où elles ont été mesurées). BH-API, PROBLEMES (entrée barrée), PLAN-J3 §10.
+- **Preuves (mesuré, kerr-mini, J0)** : avant, à −7,5…−9°, le sol prenait **115–185 ×** sa table (le plancher 0,21–0,25 × : ce n'était pas
+  lui), l'appareil / le sol **0,006–0,015** ; après **0,92–0,95**, le sol 0,94–0,97 de sa table. Image (vue quarter, exposition tenue) : le sol
+  125,6 → 69,8 (20:00) et 85,3 → 25,6 (20:10), A/A ≤ 1,5 (3ᵉ passage ; les deux premiers : A/A 3,9–14 avec le décor encore en chargement, borne
+  passée au quart de l'effet). Témoins de la sonde : pris = table de jour (1,000), le plancher la nuit (×57 à −19°), A/A ≤ 6 %. `twilight-sky`
+  (×1,41 / 2,26 / 1,11 de la table de référence, borne 2,5), `eclipse-raster`, `night-views` passent. check-wgsl 82/82, tsc, biome.
+  **Non mesuré** : ΔGPU (quelques opérations dans `skyFlat`, une rangée de la sonde ; attendu au bruit) ; le M1 Max ; une vue depuis l'orbite
+  sur le terminateur (la branche « plus éclairé » garde l'ancien modèle, non regardée).
+- **Limites / suite :** −10…−13° l'appareil 1,7–1,8 × le sol ; la nuit profonde 0,24 × (le plancher `EARTH_NIGHT` ≈ 4 × le ciel de nuit tracé —
+  à trancher avec la calibration de la nuit, Q2). Le levier `TUNE_SKYFLAT_DIM` et la branche de l'ancien modèle au retrait J3-R.
+
+## 2026-11-14T18:59Z — Audit QA-09 : la fumée d'une épave attendue ; la patrouille interrogée chaque seconde
+
+- Réalisé : `wreck-replay` attend la fumée de l'épave au lieu de 7 s ; `net-formation-ap` demande la distance à la place toutes les secondes
+  (toutes les 5 s avant, même plafond de 150 s). Les autres pauses de ces fichiers sont des fenêtres de mesure (une tenue sur 20 s, une
+  dérive sur 10 s) : gardées. Cliquet mis à jour.
+- Preuves : **observé** (ce Mac) : `wreck-replay` 3/3 (582 segments de fumée), `net-formation-ap` 4/4 (tenue à 5,19 m de la place sur 20 s).

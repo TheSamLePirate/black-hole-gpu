@@ -76,7 +76,8 @@ describe.skipIf(!E2E)("formation flight's autopilot", () => {
     const log: string[] = [];
     let d = Infinity;
     while (Date.now() - t0 < 150_000) {
-      await Bun.sleep(5000);
+      // (asked every second — every 5 s before: audit QA-09)
+      await Bun.sleep(1000);
       d = await slot();
       log.push(`${Math.round((Date.now() - t0) / 1000)} s ${d.toFixed(1)} m`);
       if (d < 5) break;

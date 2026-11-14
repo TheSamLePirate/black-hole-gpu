@@ -236,7 +236,7 @@
   "waits": 1
  },
  "net-formation-ap.e2e.test.ts": {
-  "sleeps": 3,
+  "sleeps": 2,
   "waits": 0
  },
  "net-formation.e2e.test.ts": {
@@ -432,7 +432,7 @@
   "waits": 1
  },
  "wreck-replay.e2e.test.ts": {
-  "sleeps": 2,
+  "sleeps": 1,
   "waits": 2
  },
  "zones-scenery.e2e.test.ts": {
