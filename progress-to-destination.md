@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-14 00:40 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-14 01:03 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous.
@@ -6289,4 +6289,13 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   l'ombrage au bruit, même réduit à un gris ; l'appareil vu de 30 m −12,1 ms, de 300 m au bruit ; moitié des triangles −2,7 contre −6,7.
 - Lecture : le coût fixe par pixel des passes de l'appareil (MSAA, mouvement, composition, masque) — prochaine décomposition ; meshoptimizer
   et les niveaux de détail n'y changeraient rien. PROBLEMES, fiche J3-6, BH-API. Non vérifié : J0, le M1 Max.
+
+## 2026-11-14T01:03Z — Le coût de l'appareil, mesure propre : 2 à 5 ms, ses coques, ≈ 2 ms de sommets ; deux chiffres retirés
+
+- Contribution (§8, règle 3 sur l'outil) : `perf-ab` attend les données avant la première paire — elle gonflait chaque fois son écart de 4–6 ms
+  (Tarifa encore en chargement) ; les « −12 ms à 30 m » et « −7 ms des flammes » d'avant en venaient : **retirés** (PROBLEMES, GRAPHICS-PIPELINE,
+  fiche J3-6, leçon E2E-VOLS §7). **Mesuré** (kerr-mini, un passage propre, A/A +0,8) : l'appareil −4,4 (cockpit), −5,1 (chase), −2,1 vu de
+  300 m ; ses coques −2,3 à −5,4 ; ombrage, verrières, flammes, brume au bruit. Leviers ajoutés : `debugSkip` `own`, `plume-occl`,
+  `plume-jets`, `trails`, `lamps`.
+- Lecture : ≈ 2 ms de sommets quand l'appareil est loin — un lot de niveaux de détail possible (règle 1), à confirmer (second passage, J0).
 

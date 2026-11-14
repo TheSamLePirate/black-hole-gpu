@@ -599,8 +599,9 @@ ombre de l'appareil −0,7, dessin de l'appareil sauté (`debugSkipShip`, son ma
 `shadeLite` 0,0.
 **Les passes `ship: …` et `display` (37–49 ms par horodatage) ne coûtent donc presque rien** : GP-09 confirmé par
 ablation. **Contredit le 14 nov.** (kerr-mini, `perf-ab` `SET=ship`, Tarifa en cockpit, intervalles d'images sans synchro, A B B A A B,
-A/A +1,2 ms) : l'appareil sauté entier −2,9 à −5,6 ms (six passages), ses coques −3,1 à −5,5, vu de la caméra « chase » −5,8 à −7,5 —
-[PROBLEMES](PROBLEMES-A-REGLER.md) « Le dessin de l'appareil coûte 3 à 6 ms » ; la contradiction (scène, méthode, masque gardé) non tranchée. Le M1 Max bride sa fréquence GPU en jeu prolongé (389–1 296 MHz) : ses ablations ne se comparent pas.
+A/A +0,8 ms, les données attendues avant la première paire) : l'appareil sauté entier −4,4 ms en cockpit, −5,1 en « chase », −2,1 vu de 300 m ;
+ses coques −2,3 (cockpit) à −5,4 (30 m) ; son ombrage, ses verrières, ses flammes au bruit — [PROBLEMES](PROBLEMES-A-REGLER.md) « Le dessin de
+l'appareil coûte 2 à 5 ms » ; la contradiction (scène, méthode, masque gardé) non tranchée. Le M1 Max bride sa fréquence GPU en jeu prolongé (389–1 296 MHz) : ses ablations ne se comparent pas.
 
 **Une vue de mer, 10 novembre 2026, code `4c222776`** (mesuré, kerr-mini à 1 278 MHz, 1920 × 1080, échelle 0,75, caméra libre
 au large de Hyères, Soleil bas ; sonde `sea-compare`, [analyse](ANALYSE-MER-LITTORAL-VEGETATION-2026-11-10.md) §2.3) : image

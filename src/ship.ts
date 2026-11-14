@@ -3147,6 +3147,8 @@ export class ShipRenderer {
       // (the A320's flight deck too: its own instance)
       for (const dr of this.draws) {
         if (dr.inst !== 0 && dr.mesh !== this.deckMesh) continue;
+        // (debugSkip "own", a measure: the mask cleared, not drawn — what its redraw of the mesh costs)
+        if (this.debugSkip.has("own")) continue;
         mp.setVertexBuffer(0, dr.mesh.vbuf);
         mp.setIndexBuffer(dr.mesh.ibuf, "uint32");
         mp.drawIndexed(dr.cabin ? this.cockpit!.solid : (dr.mesh.solid ?? dr.mesh.count), 1, 0, 0, dr.inst);
@@ -3192,19 +3194,20 @@ export class ShipRenderer {
         }),
       );
       // (the lamps alone: hidden by rays — writeUniform —, the hull's depth not needed)
-      if (jets || re.glow || re.sheath || trails) {
+      // (debugSkip "plume-occl", "plume-jets", "trails", "lamps" — measures: the pass's parts one at a time)
+      if ((jets || re.glow || re.sheath || trails) && !this.debugSkip.has("plume-occl")) {
         pp.setPipeline(this.pipes.hullDepth);
         pp.setBindGroup(0, B.hullDepth);
         pp.setVertexBuffer(0, occl.m.vbuf);
         pp.setIndexBuffer(occl.m.ibuf, "uint32");
         pp.drawIndexed(occl.n);
       }
-      for (const inside of [false, true]) {
+      for (const inside of this.debugSkip.has("plume-jets") ? [] : [false, true]) {
         pp.setPipeline(inside ? this.pipes.plumeIn : this.pipes.plume);
         pp.setBindGroup(0, inside ? B.plumeIn : B.plume);
         for (let i = 0; i < this.jetCount; i++) if (this.jetInside[i] === inside) pp.draw(36, 1, 0, i);
       }
-      if (trails) {
+      if (trails && !this.debugSkip.has("trails")) {
         if (!res.trailBind || res.trailMoments !== mb || res.trailGen !== this.bindGen) {
           res.trailBind = this.device.createBindGroup({
             layout: this.pipes.trail.getBindGroupLayout(0),
@@ -3223,7 +3226,7 @@ export class ShipRenderer {
         pp.setBindGroup(0, res.trailBind);
         pp.draw(6, this.trailCount);
       }
-      if (lamps) {
+      if (lamps && !this.debugSkip.has("lamps")) {
         if (!res.lampBind || res.lampMoments !== mb || res.lampGen !== this.bindGen) {
           res.lampBind = this.device.createBindGroup({
             layout: this.pipes.lamp.getBindGroupLayout(0),

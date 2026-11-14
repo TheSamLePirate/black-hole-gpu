@@ -592,31 +592,31 @@ termes à un nœud fautif (43,0666 N, 6,12883 E, niveau 1).
   `probeSunJump`. **Mesuré** (même balayage) : 1,20 / 1,35 / 1,50 / 1,80 → **1,003 / 1,004 / 1,003 / 1,006** ; midi inchangé (0,957). Coût : au
   temps réel, quatre images de sonde de plus par minute de jeu (non chronométré).
 
-## Le dessin de l'appareil coûte 3 à 12 ms sur kerr-mini selon sa taille à l'image (et non 0,25 ms)
+## Le dessin de l'appareil coûte 2 à 5 ms sur kerr-mini (et non 0,25 ms) — ses coques, en partie leurs sommets
 
-- **Mesuré** (00:23 UTC ; kerr-mini, 2026-11-14, e2e `perf-ab` `SET=ship SUBS=4 NOVSYNC=disable-gpu-vsync` (fenêtre 1600 × 1000, F-35 en cockpit à 900 m au nord de
-Tarifa, nuageux, sous-échantillonnage ×4 ; côtés A B B A A B ; témoin A/A +1,2 ms, −2,0 ms avec l'ancien ordre A B A B A B)) : l'appareil sauté entier (`debugSkipShip`) **−2,9 / −3,5 / −3,9 / −4,6 / −4,7 / −5,6 ms** sur une
-  image de 54–59 ms (six passages) ; ses coques seules (`ship.debugSkip` `hull` — le cockpit, la cellule) **−3,1 / −4,9 / −5,5 ms** ; vu de la caméra
-  « chase » **−5,8 / −7,1 / −7,4 / −7,5 ms** ; la passe de profondeur préalable (`pre`, la géométrie seule) et la carte d'ombre au bruit ; les
-  verrières, leurs modes et les panaches non tranchés (des écarts de 0 à −3,6 ms qui se contredisent : à refaire avec l'ordre A B B A A B).
-- **Contradiction** avec GRAPHICS-PIPELINE §8.4 : sur J0 (10 nov.), l'ablation « dessin de l'appareil sauté, son masque gardé » donnait −0,25 ms
-  et concluait que les passes `ship: …` ne coûtent presque rien. Différences : la scène (J0 au-dessus de la mer, ici des collines nuageuses), la
-  méthode (ablation sur images terminées contre intervalles d'images sans synchro), le masque gardé là. Non tranchée.
-- **Décomposé** (~00:40 UTC, même méthode, A/A entre −1,2 et +3,0 ms selon le passage) : **pas le calcul de l'ombrage** — `fs` privé de la
-  carte d'ombre (−1,7), de la réflexion d'écran (+1,7), du spéculaire de la sonde (+1,8), des trois (+0,6), et même réduit à un gris constant
-  (+1,5 : levier `ship.debugFs`, un masque dans l'uniforme, sans recompilation) : tout au bruit ; verrières −2,5 (à la limite), panaches, carte
-  d'ombre, profondeur préalable au bruit. **Mais la surface** : la moitié des triangles de chaque coque (`hull-half`) −2,7 contre −6,7 entières ;
-  l'appareil vu de 30 m (grand) **−12,1 ms**, de 300 m (quelques dizaines de pixels) −3,0 (au bruit). **Lecture** : le coût suit les pixels que
-  l'appareil couvre, pas sa géométrie ni son ombrage — le coût fixe par pixel de ses passes (MSAA 4× en rgba16f, le mouvement en rgba32f, la
-  composition dans la scène, le masque). Un niveau de détail ou meshoptimizer n'y changerait rien ([fiche J3-6](progress/j3/FICHE-J3-6-MESHOPT-2026-11-14.md)).
-- **Puis** (~00:44 UTC) : l'appareil vu de 30 m −10,5 ms (reproduit) ; composé dans la scène ou après elle (`renderer.shipInScene`, la passe de
-  mouvement et la composition comprises) **−0,8, au bruit** ; les attachements MSAA sont déjà résolus et jetés (`storeOp: "discard"`), pas
-  stockés. Les horodatages par passe (`perf-ab` `PASSES=1`) ne tranchent pas : les passes de rendu d'Apple se chevauchent, et une passe sautée
-  garde sa dernière valeur dans `prof.table()`. **Restent** : la rastérisation MSAA 4× elle-même, le masque propre (`ship: own mask`, le
-  maillage redessiné), l'effet de l'appareil sur les passes de la Terre derrière lui. **L'outil suivant** : une capture de trame GPU (Metal,
-  ou WebGPU Inspector, §18 — en développement) de la passe de l'appareil sur kerr-mini.
-- **Règle 1** : plafond 3–12 ms sur kerr-mini selon la taille de l'appareil à l'image (cible 40 ms) — un lot de performance possible quand la
-  passe responsable sera nommée ; puis la même mesure sur J0 pour lever la contradiction.
+- **Mesure propre** (14 nov., ~01:03 UTC ; kerr-mini, e2e `perf-ab` `SET=ship SUBS=4 NOVSYNC=disable-gpu-vsync`, fenêtre 1600 × 1000, F-35 à
+  900 m au nord de Tarifa, côtés A B B A A B, **les données attendues avant la première paire** ; A/A +0,8 ms) — Δ de l'image en sautant :
+
+  | Ce qui est sauté | Δ |
+  |---|---:|
+  | l'appareil entier, depuis le cockpit (`debugSkipShip`) | −4,4 |
+  | ses coques (`ship.debugSkip` `hull`), depuis le cockpit | −2,3 |
+  | l'appareil entier, caméra « chase » | −5,1 |
+  | l'appareil entier vu de 30 m / de 300 m (monture « around ») | −5,3 / **−2,1** |
+  | ses coques, vu de 30 m | −5,4 |
+  | ses verrières / flammes et feux / brume de chaleur, vu de 30 m | −0,2 / +0,2 / +0,1 |
+
+  Avant (mêmes runs, autres positions — valables) : l'ombrage des coques au bruit, même réduit à un gris constant (`ship.debugFs` 8) ; ses
+  parties (ombre, réflexion d'écran, spéculaire) au bruit ; la composition dans la scène (`shipInScene`) −0,8 ; le masque propre +0,9 ; la carte
+  d'ombre −1,2 ; la profondeur préalable au bruit. **Retirés** : les « −10,5 à −12,1 ms à 30 m » et « −5,9 à −7,0 ms des flammes » — chaque fois la
+  première paire d'un passage, mesurée pendant que le sol et le décor de Tarifa arrivaient encore (son côté A 66–68 ms au lieu de 62–64) : un
+  biais de 4 à 6 ms que l'ordre A B B A A B n'annule pas (non linéaire) ; `perf-ab` attend maintenant les données avant la première paire.
+- **Lecture** : le coût est le dessin des coques (le F-35 : 93 000 triangles, MSAA 4×, et le trafic du détroit), **pas leur ombrage** : environ
+  2 ms qui restent quand l'appareil est minuscule (300 m) — la part de leurs sommets (le nuanceur principal, ses 18 flottants interpolés : la
+  profondeur préalable, mêmes triangles et position seule, ne coûte rien) — et le reste avec la surface couverte.
+- **Contradiction** avec GRAPHICS-PIPELINE §8.4 (J0, 10 nov., −0,25 ms « masque gardé ») : scène et méthode différentes, non tranchée.
+- **Règle 1** : plafond ≈ 2 ms pour la géométrie (des niveaux de détail du F-35 à distance, moins de sorties interpolées), 2–5 ms au total
+  selon la vue ; à confirmer sur J0 et avec un second passage avant tout lot.
 
 ## La compilation du noyau de Jupiter proche : ~200 s à froid (M1 Max, 6 nov.) — 60 s sur kerr-mini le 13 nov., ~47 s à l'arrivée d'un voyage depuis le 13
 

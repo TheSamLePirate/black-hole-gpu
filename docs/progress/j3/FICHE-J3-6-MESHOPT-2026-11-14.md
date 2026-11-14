@@ -45,9 +45,13 @@ quantification** — l'étape qui perd de l'information et donne d'ordinaire l'e
   son dessin (`debugSkipShip`) rend **0,25 ms** — réordonner ou simplifier le F-35 ne peut pas rendre davantage : **règle 1, pas un lot de
   performance**. Le trafic et les porte-avions (vus en nombre près d'un aéroport ou en mer) ne sont pas chiffrés : à mesurer avant tout lot.
   **Revu le même jour** (~00:23 UTC, kerr-mini, `perf-ab` `SET=ship`, Tarifa, A B B A A B, A/A +1,2 ms) : l'appareil entier coûte **3 à 6 ms** là
-  (l'ablation J0 ci-dessus le contredit, non tranché — PROBLEMES), **et ce coût suit les pixels qu'il couvre** : vu de 30 m −12,1 ms, de 300 m
-  au bruit ; sa passe de profondeur préalable (la géométrie seule) et son ombrage réduit à un gris constant au bruit. Un niveau de détail ou un
-  réordonnancement n'y prendrait presque rien : la conclusion tient. Le trafic réel du
+  (l'ablation J0 ci-dessus le contredit, non tranché — PROBLEMES). **Mesure propre** (~01:03 UTC, les données attendues avant la première paire ;
+  des chiffres plus forts relevés plus tôt étaient biaisés, retirés) : l'appareil entier −4,4 ms en cockpit, −5,3 vu de 30 m, **−2,1 vu de 300 m**
+  — minuscule à l'image ; ses coques −2,3 à −5,4 ; son ombrage (même un gris constant), ses verrières, ses flammes au bruit. **La conclusion
+  change en partie** : environ 2 ms restent quand l'appareil est minuscule — la part de ses sommets (le nuanceur principal ; la profondeur
+  préalable, position seule, ne coûte rien). **Des niveaux de détail du F-35 à distance pourraient rendre jusqu'à ≈ 2 ms** (règle 1 : un lot
+  possible, à confirmer par un second passage et sur J0) ; le réordonnancement seul, moins sûr (le coût est-il le cache des sommets ou leurs
+  sorties interpolées ? non séparé). Le trafic réel du
   détroit (`perf-ab` paire « the real traffic ») : +0,4 ms, au bruit.
 - **Niveaux de détail** : le simplificateur atteint 50 % des triangles avec une erreur ≤ 0,07 % de l'étendue sur le Ranger, le Lander et les
   porte-avions, et 25 % à ≤ 1 % sur les porte-avions — l'usage le plus prometteur (le trafic lointain, les porte-avions vus de loin), à
@@ -56,9 +60,9 @@ quantification** — l'étape qui perd de l'information et donne d'ordinaire l'e
 
 ## Recommandation (pour la question 4)
 
-Ne pas adopter meshoptimizer **pour la taille** aujourd'hui (gain nul sans quantification). Le garder comme **outil de construction des niveaux
-de détail** du trafic et des porte-avions, à ouvrir quand le coût des appareils dans l'image sera chiffré (règle 1) — il s'intègre sans ajustement
-sous Bun, hors du bundle. Rien n'est changé en attendant.
+Ne pas adopter meshoptimizer **pour la taille** aujourd'hui (gain nul sans quantification). L'adopter, si Sam le veut, comme **outil de
+construction des niveaux de détail** — d'abord du F-35 vu de loin (≈ 2 ms de sommets mesurés à 300 m sur kerr-mini, ci-dessus), puis du trafic
+et des porte-avions — : il s'intègre sans ajustement sous Bun, hors du bundle. Rien n'est changé en attendant.
 
 ## Reproduire
 

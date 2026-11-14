@@ -60,6 +60,29 @@ const SHIP: Pair[] = [
     a: `__bh.settings.shipMount = "around"; Object.assign(__bh.camera.outside, { yaw: 60, pitch: 4, dist: 30 }); __bh.renderer.shipInScene = true`,
     b: `__bh.settings.shipMount = "around"; Object.assign(__bh.camera.outside, { yaw: 60, pitch: 4, dist: 30 }); __bh.renderer.shipInScene = false`,
   },
+  // (the own mask's redraw of the mesh, from 30 m: ship.ts debugSkip "own")
+  {
+    name: "the craft from 30 m: its own mask's redraw",
+    a: `__bh.settings.shipMount = "around"; Object.assign(__bh.camera.outside, { yaw: 60, pitch: 4, dist: 30 }); __bh.renderer.ship.debugSkip.delete("own")`,
+    b: `__bh.settings.shipMount = "around"; Object.assign(__bh.camera.outside, { yaw: 60, pitch: 4, dist: 30 }); __bh.renderer.ship.debugSkip.add("own")`,
+  },
+  {
+    name: "the craft from 30 m: its hulls (debugSkip hull)",
+    a: `__bh.settings.shipMount = "around"; Object.assign(__bh.camera.outside, { yaw: 60, pitch: 4, dist: 30 }); __bh.renderer.ship.debugSkip.delete("hull")`,
+    b: `__bh.settings.shipMount = "around"; Object.assign(__bh.camera.outside, { yaw: 60, pitch: 4, dist: 30 }); __bh.renderer.ship.debugSkip.add("hull")`,
+  },
+  // (from 30 m, the other parts: its glass, its flames and lamps, its shadow map)
+  ...["glass", "plume", "shadow", "plume-occl", "plume-jets", "trails", "lamps"].map((part) => ({
+    name: `the craft from 30 m: ${part}`,
+    a: `__bh.settings.shipMount = "around"; Object.assign(__bh.camera.outside, { yaw: 60, pitch: 4, dist: 30 }); __bh.renderer.ship.debugSkip.delete("${part}")`,
+    b: `__bh.settings.shipMount = "around"; Object.assign(__bh.camera.outside, { yaw: 60, pitch: 4, dist: 30 }); __bh.renderer.ship.debugSkip.add("${part}")`,
+  })),
+  // (from 30 m, the jet's heat haze — display.wgsl haze, read from the flames' pass —: settings.heatHaze)
+  {
+    name: "the craft from 30 m: heat haze",
+    a: `__bh.settings.shipMount = "around"; Object.assign(__bh.camera.outside, { yaw: 60, pitch: 4, dist: 30 }); __bh.settings.heatHaze = true`,
+    b: `__bh.settings.shipMount = "around"; Object.assign(__bh.camera.outside, { yaw: 60, pitch: 4, dist: 30 }); __bh.settings.heatHaze = false`,
+  },
   // (the A/A: nothing changed between the sides — the noise of a pair's Δ, method rule 3)
   { name: "A/A (nothing changed)", a: "void 0", b: "void 0" },
 ];
@@ -134,8 +157,19 @@ describe.skipIf(!E2E)("the realtime render's costs, one thing at a time", () => 
       const set = process.env.SET === "ship" ? SHIP : process.env.SET === "trace" ? TRACE : ALL;
       // (ONLY=0,3: those pairs alone)
       const only = process.env.ONLY?.split(",").map(Number);
+      let first = true;
       for (const P of only ? set.filter((_, i) => only.includes(i)) : set) {
         await place();
+        // (the first pair after the flight to Tarifa: its ground and scenery still coming — the frame falling for a minute — inflated its Δ by
+        // 4–6 ms whatever it was, 14 Nov 2026 (the shadow map first −4.7, second −1.2): the data waited first, 60 s at most, said)
+        if (first) {
+          first = false;
+          await app.waitOptional(
+            `(() => { const r = __bh.renderer; return r.earthTiles.pending === 0 && r.earthTiles.orthoPending === 0 && !r.earthScenery.stats().pending && r.compilesPending === 0; })()`,
+            60_000,
+          );
+          await Bun.sleep(5000);
+        }
         await app.waitOptional(`!!__bh.renderer.variants.get(__bh.renderer.featureKey)?.rt`, 180_000);
         await Bun.sleep(3000);
         const med: Record<"a" | "b", number[]> = { a: [], b: [] };
