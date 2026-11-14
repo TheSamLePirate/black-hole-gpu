@@ -52,6 +52,7 @@ import { HudKindChooser, hudInView, hudKindName, type HudKind } from "../game/hu
 import type { BarPiece } from "./topbar";
 import { safeFrame } from "./hud/safe";
 import { type Box, fit } from "./hud/layout";
+import { noteUnclonable } from "./hud/clone-probe";
 import { hudMode, shownSpeed } from "./hud/model";
 import { t, tf } from "../i18n";
 import { drawGraph, type AssistGraph, type GraphPalette } from "./hud/graph";
@@ -2626,6 +2627,9 @@ export class FlightHud {
     const T = i.status?.orbit?.period;
     const quarter = T && Number.isFinite(T) && T / 4 > 90 ? T / 4 : undefined;
     const fut = this.future?.([10, 30, 60, ...(quarter ? [quarter] : [])]) ?? null;
+    // (a measure for a HUD drawn in a worker: what of its frame data a structuredClone would refuse — off unless the e2e sets the probe)
+    const probe = (globalThis as { __hudCloneProbe?: Set<string> }).__hudCloneProbe;
+    if (probe) noteUnclonable({ s: this.s, i, future: fut, runway: this.runway?.() ?? null }, probe);
     drawSymbology({
       ctx,
       W,

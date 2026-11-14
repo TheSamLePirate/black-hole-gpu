@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-14 03:21 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-14 03:25 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous.
@@ -6387,4 +6387,10 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   `layoutSource` (panneaux et vue donnés) ; comportement inchangé par défaut. **Vérifié** : tests HUD 100/100 + 1 nouveau ; `hud-layout` 9/10 —
   l'échec « 02-circ » antérieur (reproduit sans le changement, PROBLEMES). Référence de l'âge des écrans (agecheck) : p95 55,8 ms. Rien de gagné
   encore : le gain viendra du worker. [Fiche CPU](docs/progress/j0/FICHE-CPU-kerr-mini-2026-11-14.md).
+
+## 2026-11-14T03:25Z — Le HUD vers un worker, étape 2 : ses données clonables, mesuré
+
+- `hud/clone-probe.ts` (inactif par défaut) et `J0_HUD_CLONE=1`. **Mesuré** (vol J0, F-35) : une seule donnée non clonable, `i.relief.at`
+  (l'échantillonneur de l'image du relief du radar) ; tout le reste se clone. Suite : l'image du relief faite côté page ; les autres modes à
+  sonder. [Fiche CPU](docs/progress/j0/FICHE-CPU-kerr-mini-2026-11-14.md).
 

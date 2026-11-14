@@ -97,3 +97,11 @@ boucle sur kerr-mini.
   (`SymInfo` porte des fonctions : l'échantillonneur de relief, la vue du futur, la piste), les pistes proches, la langue, le retour des cibles
   cliquables et des boîtes dessinées, le worker lui-même et la sonde de l'âge du HUD.
 
+### Étape 2 (~03:25 UTC) : ce qui ne passerait pas à un worker, mesuré
+
+`hud/clone-probe.ts` (`noteUnclonable` : fonctions, éléments de la page, instances de classe, par chemin ; test unitaire), appelé une fois par
+image par `flighthud.ts` quand `globalThis.__hudCloneProbe` est posé ; `j0-reference` `J0_HUD_CLONE=1`. **Mesuré** (vol J0, F-35 en cockpit,
+kerr-mini) : **un seul chemin**, `i.relief.at` (l'échantillonneur de hauteurs de l'image du relief du radar). Le reste des données du HUD —
+réglages, `SymInfo`, la vue du futur, la piste — se clone tel quel. **Suite** : préparer l'image du relief côté page (deux fois par seconde au
+plus) et l'envoyer faite ; sonder les autres modes (A320, Ranger, combat, approche) avant le worker.
+

@@ -315,6 +315,10 @@ describe.skipIf(!E2E)("J0: the reference flight over Toulon-Hyères", () => {
         includeObjectsCollectedByMinorGC: true,
       });
     }
+    // (J0_HUD_CLONE=1: what of the HUD's frame data a structuredClone would refuse, over the second half — hud/clone-probe.ts: the list to
+    // make clonable before drawing the HUD in a worker)
+    const hudClone = process.env.J0_HUD_CLONE === "1" && tag === "flight";
+    if (hudClone) await app.js(`(() => { globalThis.__hudCloneProbe = new Set(); return 1; })()`);
     const tAlloc = Date.now();
     const b = await app.js<Flown>(flyJs(J0_SCENE.flightS - half, false));
     if (allocProfile) {
@@ -343,6 +347,14 @@ describe.skipIf(!E2E)("J0: the reference flight over Toulon-Hyères", () => {
       for (const [k, v] of [...by].sort((x, y) => y[1] - x[1]).slice(0, 25))
         console.log(`    ${(v / secs / 1e6).toFixed(2).padStart(6)}  ${k}`);
       await Bun.write(`${OUT}/flight-second-half.heapprofile`, JSON.stringify(profile));
+    }
+    if (hudClone) {
+      const paths = await app.js<string[]>(
+        `(() => { const p = [...globalThis.__hudCloneProbe].sort(); delete globalThis.__hudCloneProbe; return p; })()`,
+      );
+      out.hudUnclonable = paths;
+      console.log(`  J0 the HUD's frame data a structuredClone would refuse (${paths.length}):`);
+      for (const p of paths) console.log(`    ${p}`);
     }
     console.log(`  J0 the raster's rings since the start: ${JSON.stringify(await app.js(`__bh.renderer.terrainRasterStats.ringBuilds`))}`);
     if (cpuProfile) {
