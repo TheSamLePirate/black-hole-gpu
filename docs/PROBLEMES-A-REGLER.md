@@ -609,8 +609,14 @@ Tarifa, nuageux, sous-échantillonnage ×4 ; côtés A B B A A B ; témoin A/A +
   l'appareil vu de 30 m (grand) **−12,1 ms**, de 300 m (quelques dizaines de pixels) −3,0 (au bruit). **Lecture** : le coût suit les pixels que
   l'appareil couvre, pas sa géométrie ni son ombrage — le coût fixe par pixel de ses passes (MSAA 4× en rgba16f, le mouvement en rgba32f, la
   composition dans la scène, le masque). Un niveau de détail ou meshoptimizer n'y changerait rien ([fiche J3-6](progress/j3/FICHE-J3-6-MESHOPT-2026-11-14.md)).
-- **Règle 1** : plafond 3–12 ms sur kerr-mini selon la taille de l'appareil à l'image (cible 40 ms) — un lot de performance possible ; suite :
-  ces passes une à une (`renderer.shipInScene`, le MSAA), puis la même mesure sur J0 pour lever la contradiction.
+- **Puis** (~00:44 UTC) : l'appareil vu de 30 m −10,5 ms (reproduit) ; composé dans la scène ou après elle (`renderer.shipInScene`, la passe de
+  mouvement et la composition comprises) **−0,8, au bruit** ; les attachements MSAA sont déjà résolus et jetés (`storeOp: "discard"`), pas
+  stockés. Les horodatages par passe (`perf-ab` `PASSES=1`) ne tranchent pas : les passes de rendu d'Apple se chevauchent, et une passe sautée
+  garde sa dernière valeur dans `prof.table()`. **Restent** : la rastérisation MSAA 4× elle-même, le masque propre (`ship: own mask`, le
+  maillage redessiné), l'effet de l'appareil sur les passes de la Terre derrière lui. **L'outil suivant** : une capture de trame GPU (Metal,
+  ou WebGPU Inspector, §18 — en développement) de la passe de l'appareil sur kerr-mini.
+- **Règle 1** : plafond 3–12 ms sur kerr-mini selon la taille de l'appareil à l'image (cible 40 ms) — un lot de performance possible quand la
+  passe responsable sera nommée ; puis la même mesure sur J0 pour lever la contradiction.
 
 ## La compilation du noyau de Jupiter proche : ~200 s à froid (M1 Max, 6 nov.) — 60 s sur kerr-mini le 13 nov., ~47 s à l'arrivée d'un voyage depuis le 13
 

@@ -53,6 +53,13 @@ const SHIP: Pair[] = [
   },
   // (half of each hull's triangles drawn: the geometry's share — ship.ts debugSkip "hull-half")
   sk("hull-half"),
+  // (the craft from 30 m composed into the scene — its motion pass, its composition, J1-5 — or over it after the history, as before:
+  // renderer.shipInScene)
+  {
+    name: "the craft from 30 m: into the scene → after it",
+    a: `__bh.settings.shipMount = "around"; Object.assign(__bh.camera.outside, { yaw: 60, pitch: 4, dist: 30 }); __bh.renderer.shipInScene = true`,
+    b: `__bh.settings.shipMount = "around"; Object.assign(__bh.camera.outside, { yaw: 60, pitch: 4, dist: 30 }); __bh.renderer.shipInScene = false`,
+  },
   // (the A/A: nothing changed between the sides — the noise of a pair's Δ, method rule 3)
   { name: "A/A (nothing changed)", a: "void 0", b: "void 0" },
 ];
@@ -153,6 +160,11 @@ describe.skipIf(!E2E)("the realtime render's costs, one thing at a time", () => 
           med[side].push(mid(v.iv));
           trace[side].push(mid(v.tr));
           // (the main thread's share: its sections per loop, the loop's rate — what limits when the GPU does not)
+          // (PASSES=1: the profiler's passes on this side — Apple's render passes overlap: a pointer, not a measure)
+          if (k >= 4 && process.env.PASSES)
+            console.log(
+              `      ${side} passes: ${await app.js<string>(`__bh.renderer.prof.table().filter((x) => x.last > 0.3).sort((p, q) => q.last - p.last).slice(0, 14).map((x) => x.label + " " + x.last.toFixed(1)).join(" · ")`)}`,
+            );
           if (k >= 4)
             cpu[side] = await app.js<string>(`(() => { const p = __bh.game.perf(); const c = p.cpu.reduce((a, x) => a + x.ms, 0);
               const tr = p.gpu.find((g) => g.pass === "trace");
