@@ -52,7 +52,9 @@ describe.skipIf(!E2E)("the A320's ground services and pushback", () => {
     console.log(`  ${r.join(" · ")}`);
     // (the meshes fetched, the catering's boxes up — 20 s —, the doors open)
     await app.waitFor(`__bh.renderer.a320Ground?.length >= 11 && __bh.renderer.ship.has("gs-tug") !== undefined`, 30_000);
-    await Bun.sleep(21_000);
+    // (the front left door open — a condition, not 21 s of sleep: audit QA-09 —, then a moment for the others)
+    await app.waitFor(`(__bh.renderer.a320Pose?.props["sim/model/door-positions/doorl1/position-norm"] ?? 0) > 0.9`, 40_000);
+    await Bun.sleep(1500);
     const d = await app.js<number[]>(
       `[0, 1, 2, 3].map((k) => __bh.renderer.a320Pose.props["sim/model/door-positions/" + ["doorl1", "doorl4", "doorr1", "doorr4"][k] + "/position-norm"])`,
     );

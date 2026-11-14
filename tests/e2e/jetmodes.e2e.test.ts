@@ -69,10 +69,11 @@ describe.skipIf(!E2E)("the autopilot's new modes", () => {
   test("an orbit over the Mont Blanc", async () => {
     await app.js(`(() => { __bh.game.flyAt(45.80, 6.80, 1500, 0, 200); const c = __bh.camera; c.jetModes.alt = Math.round(c.geoNow().alt); c.jetToggle("athr");
       return c.orbitStart({ lat: 45.8326, lon: 6.8652, radius: 5000, dir: 1 }); })()`);
-    await Bun.sleep(30_000);
-    const r = await app.js<number>(
-      `(() => { const g = __bh.camera.geoNow(), D = Math.PI / 180; return Math.hypot((g.lon - 6.8652) * D * 6371008.8 * Math.cos(45.83 * D), (g.lat - 45.8326) * D * 6371008.8); })()`,
-    );
+    // (the orbit settled on its circle — a condition, not 30 s of sleep (audit QA-09) —, still on it 3 s later)
+    const radius = `(() => { const g = __bh.camera.geoNow(), D = Math.PI / 180; return Math.hypot((g.lon - 6.8652) * D * 6371008.8 * Math.cos(45.83 * D), (g.lat - 45.8326) * D * 6371008.8); })()`;
+    await app.waitFor(`Math.abs(${radius} - 5000) < 600`, 60_000);
+    await Bun.sleep(3000);
+    const r = await app.js<number>(radius);
     await around(270, 25, 120);
     await shot("orbit");
     console.log(`  orbiting the Mont Blanc at ${r.toFixed(0)} m`);

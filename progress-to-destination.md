@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-14 17:38 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-14 17:48 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous.
@@ -6680,3 +6680,11 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   `stuck-keys` : refusée), retirée — 2/2.
 - Limites : les attentes existantes ne sont pas réduites ; les délais des tests eux-mêmes (`}, 600_000)`) ne sont pas comptés ; un délai
   écrit par une variable échappe au compte.
+
+## 2026-11-14T17:48Z — Audit QA-09 : deux des pires pauses des e2e de vol remplacées par leurs conditions
+
+- Réalisé : `jetmodes` (l'orbite du Mont Blanc) attend son rayon dans la bande (60 s au plus) puis le revérifie 3 s plus tard, au lieu de
+  30 s de pause ; `a320-services` attend la porte avant gauche ouverte (40 s au plus), au lieu de 21 s. `tests/e2e-waits.json` mis à jour.
+- Preuves : **observé** (ce Mac, fenêtre visible) : `jetmodes` 4/4 (l'orbite à 5 375 m), `a320-services` 3/3 (les quatre portes à 1,00).
+- Limites : `hud-runway` et `world-runway` gardent leurs 21 s : le niveau des pistes est remesuré à 20 s par conception (`runways3d.ts`),
+  une condition attendrait autant — laissés.
