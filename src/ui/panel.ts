@@ -181,14 +181,15 @@ export class SettingsPanel {
   /** while set, messages wait for it (the loading screen) */
   holdToasts: Promise<void> | null = null;
 
-  toast(msg: string) {
+  toast(msg: string, o: { log?: boolean } = {}) {
     if (this.holdToasts) {
-      this.holdToasts.then(() => this.toast(msg));
+      this.holdToasts.then(() => this.toast(msg, o));
       return;
     }
     // (a stack of three at most, the newest below; each shown long enough to be read — 2.2 s, more for
-    // a long one —; the same message again refreshes it; all of them in the journal)
-    gameLog.add("info", msg);
+    // a long one —; the same message again refreshes it; all of them in the journal — unless its caller writes it there
+    // itself: the pilot's messages, with their time and kind, were in it twice before 13 Nov 2026)
+    if (o.log !== false) gameLog.add("info", msg);
     const same = [...this.toastEl.children].find((e) => e.textContent === msg) as HTMLElement | undefined;
     const el = same ?? h("div", { class: "sp-toast" }, msg);
     if (!same) {

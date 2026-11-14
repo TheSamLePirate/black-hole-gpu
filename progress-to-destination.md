@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-14 15:14 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-14 15:16 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous.
@@ -6442,3 +6442,13 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   seuils. Catalogue, PROBLEMES.
 - Preuves : **observé** (ce Mac, fenêtre visible) : `report` **4/4** — « ILS approach: LFPB 25, 5 km », la carte notée, Échap la ferme.
 - Limites : les états de `tests/hud/states/` restent périmés (`hub-graph` lit encore le 06, pour son graphe seul) ; les refaire reste à faire.
+
+## 2026-11-14T15:16Z — Chaque message du pilote une fois au journal
+
+- Contribution : §19 (le journal de vol, lu par le joueur, le débriefing et TARS, sans doublons) ; défaut relevé par cette session (PROBLEMES).
+- Réalisé : `panel.toast(msg, { log: false })` (`src/ui/panel.ts`) pour un appelant qui journalise lui-même ; le gestionnaire des messages du
+  pilote (`src/main.ts`) l'emploie. PROBLEMES (barré), catalogue.
+- Preuves : cause trouvée par une sonde (pile capturée : une seule émission par `flyHome` ; deux lignes au journal, `info` sans heure et
+  `pilot`) ; **reproduit avant** (e2e `journal-once`) : `[info no-time, pilot t]` pour un mot du pilote comme pour un toucher ; **après**
+  `[pilot t]` — 1/1 ; `aircraft-autokeys` 3/3 (il lit les toasts au journal) ; tsc.
+- Limites : les autres toasts restent journalisés en « info » sans heure, comme avant.

@@ -3866,7 +3866,8 @@ async function main() {
     netSession.shareReport(r);
   };
   events.on("pilotMessage", ({ text, t }) => {
-    panel.toast(text);
+    // (the journal's line the pilot's, below — not the toast's too)
+    panel.toast(text, { log: false });
     cockpitScreens.message(text);
     gameLog.add(/crash/i.test(text) ? "warn" : "pilot", text, t);
   });

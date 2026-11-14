@@ -16,12 +16,17 @@ L'e2e `report` : le test du Lander et celui des unités portés sur l'autopilote
 depuis 5 km — **4/4** (13 nov., plus tard) ; **les états eux-mêmes restent périmés**. `hub-graph` lit le même état 06 (son graphe seul : non touché). **Piste** : refaire l'état 06 en volant l'approche (`glideTo`, puis
 `snapshot` au final) — ou porter le test sur une approche volée. Les autres états de la galerie (`tests/hud/states/`) sont à revérifier.
 
-## Le toucher dit deux fois dans la page (relevé le 13 novembre 2026, e2e `report`)
+## ~~Le toucher dit deux fois dans la page~~ (relevé le 13 novembre 2026, e2e `report`) — réglé le 13 novembre 2026 : chaque message du pilote était journalisé deux fois
 
 **Constat (observé)** : le Lander posé par son autopilote près de Kennedy, dans la page : le journal du jeu a deux lignes « Touchdown on Earth ·
 … » identiques avant « Landing · Earth — A » ; le même vol dans le contrôleur seul (`tests/helpers/flight.ts`, 1 km et 300 m) n'en dit qu'une.
 **Cause non cherchée** : deux chemins écrivent ce message (`fallStep` et `flyHome`, `controller/motion.ts`) ; le pas de la page en prend
 peut-être deux. **Piste** : compter les messages dans l'e2e, puis voir lequel des deux chemins parle.
+
+**Réglé** (13 nov., plus tard) : la cause n'était pas le vol — une seule émission (`flyHome`, pile capturée) — mais le journal : le
+gestionnaire des messages du pilote (`main.ts`) les montrait par `panel.toast`, qui écrit chaque toast au journal (« info », sans heure), puis les
+y écrivait comme le pilote. **Tous** les messages du pilote étaient doublés. `panel.toast(msg, { log: false })` pour eux ; e2e `journal-once` :
+avant `[info no-time, pilot t]`, après `[pilot t]`.
 
 ## Le repli du raster vers le pipeline tracé ne s'arme plus sur la Terre (relevé le 13 novembre 2026, e2e `raster-governor`)
 
