@@ -6326,5 +6326,5 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
 - Contribution (§8, des outils de mesure vrais — règle 3) : `GpuProfiler` date chaque passe (`at`), `table(maxAge)` ; `game.perf().gpu`, le
   panneau (`gpuPasses`) et `perf-ab` `PASSES` ne gardent que les passes mesurées récemment — « sky (waiting) » affichait 14 ms en plein vol, la
   valeur du démarrage. Les lecteurs des horizons gardent la dernière valeur (`table()`). Test unitaire `tests/gpuprof.test.ts` (1/1), tsc.
-  Non vérifié en jeu (statique et unitaire). BH-API.
+  **Vérifié en jeu** (kerr-mini, `perf-ab` `PASSES=1`, vol au-dessus de Tarifa) : « sky (waiting) » absent de la table. BH-API.
 
