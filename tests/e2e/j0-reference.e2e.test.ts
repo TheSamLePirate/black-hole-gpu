@@ -767,6 +767,8 @@ describe.skipIf(!E2E)("J0: the reference flight over Toulon-Hyères", () => {
           skyExactAgain: b.sky && b.sky.ground > 0 ? p(b.sky.exact / b.sky.ground) : null,
           // (the two ways' own values — luminances, the scene's units —: which one leaves the other at sunset)
           groundSky: a.sky ? p(a.sky.ground) : null,
+          // (the Sun's geometric height then [°]: the twilight's depth — the sky's light against it, a reference's curve)
+          sunAlt: p(await app.js<number>("__bh.camera.skyInfo({ layered: false })?.sun.altDeg ?? NaN")),
           craftSkyExact: a.sky ? p(a.sky.exact) : null,
         };
         // (radiance by radiance: the probe's elevation bands over the ground grid's — rows at 0.9°, 6.5°, 17.6°, 61.6° —, and the ground's

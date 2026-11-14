@@ -280,4 +280,9 @@ Aucun coût de J3 n'est mesuré ; aucun gain n'est promis.
   en gzip) : encodage sans perte **−5 % au total** (Ranger −34 %, pétrolier +26 %) ; réordonnancement : sommets transformés −3 à −40 % (gain
   en ms non mesuré : règle 1) ; simplification à 50 % ≤ 0,07 % d'erreur sur Ranger, Lander, porte-avions. **Recommandation** : pas pour la
   taille sans quantification ; comme outil des niveaux de détail du trafic et des porte-avions quand leur coût sera chiffré.
+- **La sonde de cohérence la nuit** (15:43 UTC, J0 `coherence` jusqu'à −25° de Soleil, `sunAlt` ajouté) : le ciel clair du sol (`skyAmbient`,
+  `skyIrradiance`) **n'a pas de plancher de nuit** — il décroît d'un facteur ~10 tous les 2° jusqu'à 4,7·10⁻¹⁶ à −24,8° — quand le ciel tracé de
+  l'appareil se pose sur le fond de nuit (~4,8·10⁻¹² dès −17°) : le rapport appareil / sol 4,8 à −17°, 104 à −21°, 10 490 à −25°. Les bornes de la
+  sonde valent de jour et au crépuscule (jusqu'à −15°). **Non vérifié** : si le sol de nuit reçoit ailleurs le fond de nuit et la Lune (`liteSky`) —
+  à lire avant d'appeler cela un défaut.
 

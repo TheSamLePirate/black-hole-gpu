@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-14 15:39 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-14 15:43 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous.
@@ -6484,4 +6484,10 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   pleine nuit — l'échec venait du ciel. **Fait** : `seeingRule` du trou de ver, Soleil sous −18° (test unitaire) ; 1,86× alors (encore < 2).
   **Ouvert** : le ciel du modèle à −18° ~4× la pleine nuit — à mesurer contre une référence. PROBLEMES. `hud-layout` 10/10 et `title-ship` 7/7 avant
   cela (lots précédents).
+
+## 2026-11-14T15:43Z — Le crépuscule mesuré : il finit à −17/−19° comme le réel ; le ciel clair du sol sans plancher de nuit
+
+- **Mesuré** (kerr-mini, J0 `coherence` 12:00 → 23:30 UTC, la hauteur du Soleil relevée) : le ciel tracé rejoint son plancher de nuit vers
+  −17 à −19° (7,5× à −12,7°) ; le ciel clair du sol décroît sans plancher (4,7·10⁻¹⁶ à −25°). PROBLEMES (observatoire : la direction visée, pas la
+  durée du crépuscule), PLAN-J3 §10 (la sonde de cohérence ne vaut que jusqu'à −15° ; le sol de nuit à vérifier).
 

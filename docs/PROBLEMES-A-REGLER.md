@@ -676,6 +676,10 @@ termes à un nœud fautif (43,0666 N, 6,12883 E, niveau 1).
   encore sous 2. **Reste ouvert** : le ciel du modèle à −18° est ~4 fois celui de la pleine nuit (4,7·10⁻¹³ contre 1,2·10⁻¹³) — le crépuscule réel
   y est presque éteint : un crépuscule du modèle trop long ? À mesurer contre une courbe de référence (luminance au zénith selon la profondeur du
   Soleil) avant d'y toucher ; le seuil du test laissé tel quel.
+- **Mesuré ensuite** (~15:43 UTC, J0 `coherence` de midi à la nuit, Toulon 10 juillet, `sunAlt` relevé) : **le crépuscule du modèle finit où il doit**
+  — le ciel tracé (sonde de l'appareil, fond de nuit compris) vaut 7,5× son plancher de nuit à −12,7°, 2,3× à −15,1°, 1,1× à −17,2°, 1,0× à −19,2°
+  (le crépuscule réel s'éteint à −18°). Les 4× de l'observatoire à −18° tiennent donc plutôt à la direction visée (bas sur l'ouest, du côté du
+  Soleil couché) qu'à un crépuscule trop long. Le seuil du test (> 2) reste une question de moment choisi, pas de modèle.
 
 ## La compilation du noyau de Jupiter proche : ~200 s à froid (M1 Max, 6 nov.) — 60 s sur kerr-mini le 13 nov., ~47 s à l'arrivée d'un voyage depuis le 13
 
