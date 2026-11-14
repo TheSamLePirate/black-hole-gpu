@@ -172,7 +172,7 @@ describe.skipIf(!E2E)("the observatory", () => {
     expect(await app.js<boolean>(`!!__bh.renderer.meterSpot`)).toBe(true);
     // (shot before it is judged: a failure seen)
     if (SHOTS) await app.shot(`${SHOTS}/observe-wormhole.png`);
-    console.log(`  wormhole spot: core ${read?.core.toFixed(4)}, sky ${read?.sky.toFixed(4)}`);
+    console.log(`  wormhole spot: core ${read?.core.toPrecision(3)}, sky ${read?.sky.toPrecision(3)}`);
     // (the mouth's core well over the sky behind it: the black point set there, the other universe on black)
     expect(read!.core / read!.sky).toBeGreaterThan(2);
     await tool("camera", { spot: false });

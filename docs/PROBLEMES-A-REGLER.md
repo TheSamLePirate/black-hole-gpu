@@ -658,6 +658,14 @@ termes à un nœud fautif (43,0666 N, 6,12883 E, niveau 1).
   son ancien haut. `flighthud.ts` redemande la mesure (`hud/layout.ts` `remeasure`) quand la carte apparaît, disparaît ou change de hauteur
   — pas à chaque mise à jour : une mesure coûte ~1,6 ms. `hud-layout` **10/10 deux fois** (9/10 avant, deux fois) ; tests HUD 151/151.
 
+## L'observatoire : la bouche du trou de ver à peine plus claire que le ciel au télescope (e2e `observatory`, 1 sur 6)
+
+- **Constaté** (14 nov. 2026, ~15:27 UTC, kerr-mini, trois passages) : « the wormhole: found as Gargantua… » — le posemètre spot lit le cœur de la
+  bouche **1,32 / 1,33 / 1,83 fois** le ciel derrière (le test veut > 2) ; valeurs brutes 3,5·10⁻¹¹ contre 1,9·10⁻¹¹. Capture (`E2E_SHOTS`) :
+  ciel bleu de crépuscule (2026-01-11 17:32 UTC, « au mieux près de Saturne »), la bouche à peine visible dans le cercle. Les 5 autres tests
+  passent. Déjà noté en échec à la fin de PLAN-CAMERA-AAA (29 oct.). **Non tranché** : le ciel du soir plus clair depuis (modèles du ciel et du
+  crépuscule revus) ou l'autre univers plus sombre dans la bouche ; à comparer à une version d'octobre (`ab-commit`).
+
 ## La compilation du noyau de Jupiter proche : ~200 s à froid (M1 Max, 6 nov.) — 60 s sur kerr-mini le 13 nov., ~47 s à l'arrivée d'un voyage depuis le 13
 
 - **Constaté le 6 novembre 2026** (Sam : « 200 s pour Jupiter »), en écrivant l'e2e `aurora-jupiter` (AM3).

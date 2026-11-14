@@ -6,6 +6,8 @@ import { App, E2E, stopServer } from "./lib/app";
 // (their picture, how hard and how long); launches by real clicks: the Lander landed on the Moon, the Endurance in
 // Martian orbit, the Ranger on Gargantua's side of the wormhole — each craft the one flown.
 // SHOTS=1: its screens captured in docs/progress/title-aaa.
+// Duration: ~2 min on kerr-mini
+// Done when: every mission's briefing read from the pause's title, its labels whole
 
 const SHOTS = process.env.SHOTS === "1" ? "docs/progress/title-aaa" : process.env.SHOTS;
 
@@ -31,6 +33,10 @@ describe.skipIf(!E2E)("by ship, on the title", () => {
   /** the title open (from the game: the pause's Title), then By ship */
   const toShip = async (fromGame = false) => {
     if (fromGame) {
+      // (the entry's veil of the scene just launched gone first — it holds up to 15 s for the departure's ground (CM3, 12 Nov 2026) and
+      // covers the pause's buttons: « pause-title is not clickable: div.en-veil.on », 14 Nov 2026)
+      const veiled = await app.waitOptional(`!document.querySelector("[data-testid=entry]")`, 30_000);
+      if (veiled === null) console.log("  the entry's veil still up after 30 s — clicked anyway");
       await app.press("Escape");
       await app.waitFor(`!!document.querySelector("[data-testid=pause]")`);
       await settle();
