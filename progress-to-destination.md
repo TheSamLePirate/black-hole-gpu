@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-13 23:58 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-14 00:02 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous.
@@ -6257,4 +6257,13 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
 - Limites : le coût de la réécriture non chronométré (4 images de sonde par ¼° de Soleil : une minute de jeu au temps réel) ; l'écart des
   harmoniques (+3–18 %) reste la question de la bande 4 (Sam) ; l'air au ras de l'horizon (0,90 sur 0,02 %) relevé seulement ; un seul passage
   final (les lectures répétées servent d'A/A). BH-API, GRAPHICS-PIPELINE D1, E2E-CATALOGUE, PROBLEMES, PLAN-J3 §10.
+
+## 2026-11-14T00:02Z — J3-6 : meshoptimizer évalué sur nos maillages (rien d'adopté)
+
+- Contribution (§18 bibliothèques, la méthode de CLAUDE.md avant adoption ; PLAN-J3 question 4) : [fiche](docs/progress/j3/FICHE-J3-6-MESHOPT-2026-11-14.md)
+  — version 1.3.0, MIT, Bun sans ajustement ; mesures sur 8 maillages d'appareils et de trafic.
+- Preuves : **mesuré** (hors du dépôt, sur nos `.bin`) — encodage sans perte contre gzip −5 % au total (−34 % à +26 %) ; ACMR −3 à −40 % ;
+  simplification à 50 % ≤ 0,07 % d'erreur sur 4 maillages ; transfert gzip de Pages et du serveur vérifié (en-têtes). Non mesuré : la
+  quantification, le décodage dans le navigateur, le coût GPU des appareils.
+- Limites : F-35, A320, ISS, astronaute non évalués (autres en-têtes) ; décision à Sam (question 4) ; aucune dépendance ajoutée.
 

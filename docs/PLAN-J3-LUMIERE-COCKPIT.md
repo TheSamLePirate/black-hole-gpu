@@ -272,4 +272,9 @@ Aucun coût de J3 n'est mesuré ; aucun gain n'est promis.
   anneaux (le lointain) : l'effet à vérifier serait une couture d'éclairage au bord des anneaux au coucher. **Regardé** (~20:50 UTC, J0 à 3 000 m
   vers l'ouest à 19:05, `…-waterincident-far`) : **aucune couture visible** ; la bascule incident / géométrique ne change que des zones
   localisées (31 000 pixels sur 2,07 millions, le reflet du Soleil, l'appareil). `earthGround` laissé tel quel.
+- **J3-6, l'évaluation de meshoptimizer** (2026-11-14, ~00:02 UTC ; la question 4 du §8 reste à Sam) : [fiche](progress/j3/FICHE-J3-6-MESHOPT-2026-11-14.md) — 1.3.0, MIT,
+  sous Bun sans ajustement, installé hors du dépôt. Sur 8 maillages au format commun, contre gzip (Pages et le serveur transfèrent les `.bin`
+  en gzip) : encodage sans perte **−5 % au total** (Ranger −34 %, pétrolier +26 %) ; réordonnancement : sommets transformés −3 à −40 % (gain
+  en ms non mesuré : règle 1) ; simplification à 50 % ≤ 0,07 % d'erreur sur Ranger, Lander, porte-avions. **Recommandation** : pas pour la
+  taille sans quantification ; comme outil des niveaux de détail du trafic et des porte-avions quand leur coût sera chiffré.
 
