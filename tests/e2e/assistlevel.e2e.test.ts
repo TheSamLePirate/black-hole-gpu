@@ -43,7 +43,8 @@ describe.skipIf(!E2E)("the levels of assistance", () => {
     await Bun.sleep(400);
     await shot("ring");
     const ring = await app.js<number>(`__bh.camera.aimRing.hdg * 180 / Math.PI`);
-    await Bun.sleep(10_000);
+    // (the jet on the ring's heading — a condition, not 10 s of sleep: audit QA-09)
+    await app.waitOptional(`Math.abs(((__bh.camera.attitudeNow().heading * 180 / Math.PI - ${ring} + 540) % 360) - 180) < 1.5`, 30_000);
     const a1 = await att();
     const turned = ((a1.hdg - a0.hdg + 540) % 360) - 180;
     const onRing = ((a1.hdg - ring + 540) % 360) - 180;

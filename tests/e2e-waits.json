@@ -39,10 +39,6 @@
   "sleeps": 0,
   "waits": 1
  },
- "assistlevel.e2e.test.ts": {
-  "sleeps": 1,
-  "waits": 0
- },
  "aurora-cost.e2e.test.ts": {
   "sleeps": 1,
   "waits": 0
@@ -172,10 +168,6 @@
   "waits": 0
  },
  "ils.e2e.test.ts": {
-  "sleeps": 1,
-  "waits": 0
- },
- "instructor.e2e.test.ts": {
   "sleeps": 1,
   "waits": 0
  },

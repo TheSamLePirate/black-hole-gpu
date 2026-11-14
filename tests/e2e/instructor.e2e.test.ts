@@ -66,6 +66,9 @@ describe.skipIf(!E2E)("the instructor and the flight school", () => {
     const call = await app.js<string>(`__bh.camera.instr.last.text`);
     console.log(`  the instructor: ${call}`);
     expect(call.length).toBeGreaterThan(3);
+    // (flown long enough to be judged — more than 15 samples (controller/instructor.ts) —: let go before, no debrief, as meant; the
+    // call now comes after 13 — 14 Nov 2026)
+    await app.waitFor(`(__bh.camera.instr?.samples.length ?? 0) > 16`, 30_000);
     await app.js(`(() => { __bh.camera.ilsOff(); return 1; })()`);
     await app.waitFor(`!!document.querySelector('[data-testid="instructor-debrief"]')`, 10_000);
     await Bun.sleep(600);
@@ -78,7 +81,8 @@ describe.skipIf(!E2E)("the instructor and the flight school", () => {
   test("the loop demonstrated: its trace over the figure, its mark said — no debrief screen over a demonstration", async () => {
     await app.js(`(() => { __bh.camera.instrLast = null; __bh.flight.school.demo("loop"); return 1; })()`);
     await app.waitFor(`__bh.camera.aero?.status === "fly"`, 30_000);
-    await Bun.sleep(14_000);
+    // (the figure's diagram on the panel — a condition, not 14 s of sleep: audit QA-09)
+    await app.waitOptional(`!!document.querySelector('[data-testid="instructor-panel"]:not([hidden]) .ins-diagram')`, 30_000);
     await shot("loop-panel");
     expect(await app.js<boolean>(`!!document.querySelector('[data-testid="instructor-panel"]:not([hidden]) .ins-diagram')`)).toBe(true);
     await app.waitFor(`!!__bh.camera.instrLast`, 60_000);

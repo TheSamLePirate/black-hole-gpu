@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-14 17:48 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-14 17:58 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous.
@@ -6688,3 +6688,13 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
 - Preuves : **observé** (ce Mac, fenêtre visible) : `jetmodes` 4/4 (l'orbite à 5 375 m), `a320-services` 3/3 (les quatre portes à 1,00).
 - Limites : `hud-runway` et `world-runway` gardent leurs 21 s : le niveau des pistes est remesuré à 20 s par conception (`runways3d.ts`),
   une condition attendrait autant — laissés.
+
+## 2026-11-14T17:58Z — Audit QA-09 : deux pauses de plus en conditions ; l'e2e `instructor` réparé
+
+- Réalisé : `assistlevel` attend le cap à 1,5° de l'anneau (30 s au plus) au lieu de 10 s ; `instructor` attend le diagramme de la figure au
+  lieu de 14 s ; son test de l'ILS à la main attend que le vol soit assez long pour être jugé (plus de 15 échantillons) avant de lâcher
+  l'ILS. `tests/e2e-waits.json` mis à jour.
+- Preuves : **observé** (ce Mac) : `assistlevel` 3/3 (un premier essai à 3° rendait la main au bord de la tolérance, −3,0° : resserré à
+  1,5°, −1,4°) ; `instructor` **4/4 — il échouait aussi sur le dernier commit** (3/4 : « instructor-debrief » absent) : une sonde a montré
+  13 échantillons au lâcher, quand le débrief en demande plus de 15 — le jeu fait ce qu'il doit, le test lâchait trop tôt.
+- Limites : la pause de 20 s de `course` (un test TARS en direct, avec une clé payante) non touchée.
