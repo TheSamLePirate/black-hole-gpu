@@ -629,6 +629,10 @@ termes à un nœud fautif (43,0666 N, 6,12883 E, niveau 1).
   mouvement, des bords qui sautillent. **Décision de Sam** (PLAN-J3 §8, question 6) : garder le 4× (son prix, 4–5 ms) ou passer à 1× (l'appareil
   lissé par l'accumulation temporelle seule — aujourd'hui son poids d'image ≥ 0,5, `CRAFT_ALPHA` : à revoir alors) ; rien n'est changé.
 - Un niveau de détail vu de loin : gain non établi (≤ 2 ms, au bord du bruit).
+- **La boîte de la passe n'est pas le levier** (~03:13 UTC ; `ship.lastBox`, relevé par `perf-ab` `SET=ship`) : cockpit et « chase » 100 % de
+  l'image (1440 × 810), coût −3,8 / −6,7 ms ; vu de 30 m 22 %, −5,0 ; de 300 m 8 %, −2,6 (A/A −0,2) — le coût ne suit pas l'aire de la boîte
+  (l'effacement et la résolution du MSAA) mais les pixels de l'appareil : resserrer la boîte ne rendrait presque rien. Le levier reste le MSAA
+  lui-même (question 6 de PLAN-J3).
 
 ## La compilation du noyau de Jupiter proche : ~200 s à froid (M1 Max, 6 nov.) — 60 s sur kerr-mini le 13 nov., ~47 s à l'arrivée d'un voyage depuis le 13
 

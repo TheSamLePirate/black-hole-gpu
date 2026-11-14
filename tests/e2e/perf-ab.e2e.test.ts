@@ -215,6 +215,14 @@ describe.skipIf(!E2E)("the realtime render's costs, one thing at a time", () => 
               return "CPU " + c.toFixed(1) + " ms (" + p.cpu.slice(0, 3).map((x) => x.section + " " + x.ms.toFixed(1)).join(", ") + "), loop " + p.loopFps.toFixed(0) + "/s, trace " + (tr ? tr.ms.toFixed(1) : "?") + " ms"; })()`);
         }
         await app.js(`(() => { ${P.a}; return 1; })()`);
+        // (the craft's box this side A — its share of the image: its MSAA's area)
+        if (process.env.SET === "ship") {
+          const bx = await app.js<number[]>("__bh.renderer.ship.lastBox");
+          if (bx.length === 6)
+            console.log(
+              `      the craft's box: ${bx[2]} × ${bx[3]} of ${bx[4]} × ${bx[5]} (${Math.round((100 * bx[2]! * bx[3]!) / (bx[4]! * bx[5]!))} %)`,
+            );
+        }
         // (SHOTS=1: side A's picture, frozen and settled — for a look at what the pair's lever changes, e.g. the craft's MSAA)
         if (process.env.SHOTS) {
           mkdirSync("remote-results/perf-ab", { recursive: true });

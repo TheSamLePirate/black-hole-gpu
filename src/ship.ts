@@ -1915,6 +1915,8 @@ export class ShipRenderer {
    *  at all (a flat grey: the geometry's cost alone) — the
    *  hull's shading's parts priced by A/B (tests/e2e/perf-ab.e2e.test.ts SET=ship); a uniform, no recompile */
   debugFs = 0;
+  /** the last box the craft's pass drew in: [x, y, w, h, image w, image h] (a measure — its MSAA's area) */
+  lastBox: number[] = [];
   /** the craft's pass's samples this page (SHIP_MSAA: 4, or 1 set before the load as a measure) */
   readonly msaa = SHIP_MSAA;
   private glassPipe?: (mode: number, a320?: boolean) => GPURenderPipeline;
@@ -2827,6 +2829,8 @@ export class ShipRenderer {
       bh = up(sc[3], H);
     const x0 = Math.min(Math.max(sc[0], 0), W - bw),
       y0 = Math.min(Math.max(sc[1], 0), H - bh);
+    // (read by the measures: the box's share of the image — its MSAA's clear and resolve follow its area)
+    this.lastBox = [x0, y0, bw, bh, W, H];
     if (!res.box || res.box.w !== bw || res.box.h !== bh) {
       const old = res.box;
       if (old)
