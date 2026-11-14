@@ -14,7 +14,8 @@ import type { El, SvgDoc } from "./svg";
 const ALIGN_S = 4;
 
 export class Isis extends Display {
-  override hz = 10;
+  // (30 Hz, as the PFDs — audit FX-19)
+  override hz = 30;
   private el: Record<string, El> = {};
   /** the centre of the attitude (AI_center's — the horizon's frame), the hundreds drum's digit height */
   private aiCenter: [number, number] = [512, 512];

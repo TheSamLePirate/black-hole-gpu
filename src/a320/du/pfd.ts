@@ -93,7 +93,8 @@ const roundAlt = (x: number) => (x * 0.2 - Math.trunc(x * 0.2) < 0.5 ? 5 * Math.
 const pad = (n: number, w: number) => String(Math.abs(Math.trunc(n))).padStart(w, "0");
 
 export class Pfd extends Display {
-  override hz = 20;
+  // (30 Hz — Sam, 13 Nov 2026, audit FX-19: at 20 its attitude stepped in a fast roll; every frame ~2 ms more, 30 the compromise)
+  override hz = 30;
   /** the aircraft symbol's centre (AI_center's), the turn's pivot */
   private ai: [number, number] = [445.26, 513.17];
   /** the trend shown (−1, 0, 1: PFD.nas's hysteresis) */

@@ -309,7 +309,7 @@ export class CraftFeed {
             const hc = renderer.a320Deck && deckCtl ? deckCtl.control(deckCtl.focus) : null;
             const dm = renderer.ship.a320DeckMesh;
             renderer.ship.deckHover = hc && dm ? hc.objects.map((o) => dm.objects.indexOf(o)).filter((k) => k >= 0) : null;
-            // (its displays — src/a320/du —, drawn while the deck is: two a frame at most, into the atlas)
+            // (its displays — src/a320/du —, drawn while the deck is: three a frame at most, into the atlas)
             const deckMesh = renderer.ship.a320DeckMesh;
             if (renderer.a320Deck && deckMesh && renderer.ship.deckMats) {
               this.duSet ??= renderer.a320Du = new DuSet(deckMesh.screens, deckMesh.texts, a320Mcdus());

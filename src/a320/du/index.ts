@@ -1,5 +1,5 @@
 // The A320's displays (docs/PLAN-A320.md, A7): the PFDs, the NDs, the E/WD, the SD, the ISIS, the DCDUs — each drawn on
-// its own 1024² canvas at its own rate (two a frame at most: the PFDs first, then whoever waited longest), then
+// its own 1024² canvas at its own rate (three a frame at most: the PFDs first, then whoever waited longest), then
 // copied into its cell of the displays' atlas (ship.ts updateDu — the deck's screens sample it: deck.ts screens).
 // The MCDUs' come with A9.
 
@@ -125,9 +125,9 @@ export class DuSet {
     void loadFont().then(() => (this.fontReady = true));
   }
 
-  /** The displays due now drawn (two at most; the latest first, by their periods — the PFDs' short: a slow frame rate
-   *  starves none): their canvases and cells for the atlas. */
-  frame(now: number, data: DuData | null, most = 2): DuPart[] {
+  /** The displays due now drawn (three at most — two before the PFDs and the ISIS went to 30 Hz, audit FX-19; the latest first,
+   *  by their periods — the PFDs' short: a slow frame rate starves none): their canvases and cells for the atlas. */
+  frame(now: number, data: DuData | null, most = 3): DuPart[] {
     this.drawn = [];
     if (!this.fontReady) return [];
     const late = (u: (typeof this.units)[number]) => (now - u.due) * u.d.hz;
@@ -137,7 +137,9 @@ export class DuSet {
       .slice(0, most);
     const out: DuPart[] = [];
     for (const u of due) {
-      u.due = now + 1 / u.d.hz;
+      // (its next due a period after this one, not after now: a 30 Hz display drawn at 76 frames a second kept its 30 — counted from now,
+      // a period rounded up to whole frames, it fell to 22; never caught up past a period — a pause, a slow frame)
+      u.due = Math.max(u.due + 1 / u.d.hz, now);
       const ctx = u.ctx;
       ctx.setTransform(1, 0, 0, 1, 0, 0);
       ctx.globalAlpha = 1;

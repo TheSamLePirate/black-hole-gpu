@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-14 15:43 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-14 16:17 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous.
@@ -6491,3 +6491,14 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   −17 à −19° (7,5× à −12,7°) ; le ciel clair du sol décroît sans plancher (4,7·10⁻¹⁶ à −25°). PROBLEMES (observatoire : la direction visée, pas la
   durée du crépuscule), PLAN-J3 §10 (la sonde de cohérence ne vaut que jusqu'à −15° : le sol a bien son plancher de nuit — `nightFloor`, une table de référence — que la sonde ne relit pas).
 
+## 2026-11-14T16:17Z — FX-19 : les PFD et l'ISIS de l'A320 à 30 Hz (choix de Sam)
+
+- Contribution : §19 (la fraîcheur et la lisibilité des instruments : l'assiette sans crans en roulis rapide) et §8 (son coût mesuré) ; audit
+  2026-11-10, FX-19. Décision de Sam (13 nov., question posée après la mesure) : « PFD et ISIS à 30 Hz ».
+- Réalisé : `Pfd.hz` 20 → 30, `Isis.hz` 10 → 30 (`src/a320/du/pfd.ts`, `isis.ts`) ; la file des écrans en dessine trois par image au plus (deux
+  avant : `DuSet.frame`) ; l'échéance suivante d'un écran part de la précédente, non de l'instant du dessin (`src/a320/du/index.ts`) — sinon
+  une période s'arrondissait à des images entières : 22 Hz pour 30 demandés, et chaque écran sous sa cadence (ND 9,1 Hz pour 10).
+- Preuves : **mesuré** (e2e `a320-du-cost`, ce Mac, M1 Max, 75–76 images/s ; témoin positif et A/A repassés) : PFD 29,9 Hz, ISIS 30 Hz (avant 18
+  et 9), les autres écrans à leur cadence (ND 10, E/WD 10, SD 5) ; **0,99 ms de fil principal par image, contre 0,68 avant (+0,31 ms)** ;
+  le premier essai, sans l'échéance tenue, donnait 22,9 Hz pour 0,73 ms. Tests A320 verts ; tsc.
+- Limites : processeur seulement ; kerr-mini non mesuré ; le coût GPU des copies à l'atlas (143 envois/s contre 95) non lu.
