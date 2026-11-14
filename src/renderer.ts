@@ -12773,7 +12773,7 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
   /** The Earth's maps and terrain tiles the view wants are in (none loading). */
   get earthSettled() {
     return (
-      !this.earthTiles.pending &&
+      !this.earthTiles.anyPending &&
       !this.earthSurface.pending &&
       !this.earthScenery.pending &&
       !this.earthHeld &&

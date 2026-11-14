@@ -45,3 +45,12 @@ dans le bruit mais du bon côté, le mécanisme établi). Tests du ciel et de la
 
 Reste dans les allocations : les hauteurs du sol (`heightAt`, `refine`), `calibrationReady` (un accesseur, 2 Mo/s), les corps (`seenFrom`).
 
+## Troisième lot (~02:47 UTC) : `earthSettled` sans compter les tuiles
+
+`renderer.earthSettled` (lu par le gouverneur, `calibrationReady`, plusieurs fois par image) demandait `earthTiles.pending` — le compte entier,
+une clé texte bâtie pour chaque tuile voulue (71 ms sur 35 s, 2 Mo/s alloués). Maintenant `earthTiles.anyPending`, arrêté à la première tuile
+manquante (le même booléen : assertions `anyPending === pending > 0` ajoutées aux tests des tuiles, 22/22). **Mesuré** (vol J0, kerr-mini,
+`J0_ALLOC_PROFILE`) : allocations **145 → 110 Mo/s** avec le lot précédent (la réfraction de TARS), `calibrationReady` absent du relevé ;
+boucle p95 8,9 ms dans ce passage (8,4–9,1 selon les passages : le bruit). Les allocations restantes sont réparties (≤ 3 Mo/s chacune : la
+navigation dans le système de Gargantua, les hauteurs du sol, les corps).
+

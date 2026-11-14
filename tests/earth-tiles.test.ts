@@ -85,10 +85,12 @@ test("the heights near the camera are the tiles', the global map's beyond them",
   const cam = camAt(45.9, 6.87, 2);
   t.update(cam, 1e-3);
   expect(t.pending).toBe(16 * (Z1 - Z0 + 1));
+  expect(t.anyPending).toBe(t.pending > 0);
   // (no level drawn before all its tiles are in)
   expect(t.heightAt(dir(45.9, 6.87), 1).rem).toBe(1);
   fill(t);
   expect(t.pending).toBe(0);
+  expect(t.anyPending).toBe(t.pending > 0);
   expect(t.finest).toBe(Z1);
   for (const [lat, lon] of [
     [45.9, 6.87],
@@ -120,9 +122,11 @@ test("a level moves with the camera: the part it keeps stays drawn", () => {
   // (2 km east: the finest window shifts a column; until its new tiles are in, what it keeps is drawn)
   t.update(camAt(45.9, 6.896, 2), 1e-3);
   expect(t.pending).toBeGreaterThan(0);
+  expect(t.anyPending).toBe(t.pending > 0);
   expect(t.heightAt(dir(45.9, 6.896), 1).rem).toBe(0);
   fill(t);
   expect(t.pending).toBe(0);
+  expect(t.anyPending).toBe(t.pending > 0);
 });
 
 test("the sources switched (the IGN's relief, the orthophotos): the tiles drawn stay the ground until each is in again", () => {
@@ -141,11 +145,13 @@ test("the sources switched (the IGN's relief, the orthophotos): the tiles drawn 
     const stamp = t.stamp;
     // (every tile asked again — the finer levels off without the relief —, the ground the same meanwhile)
     expect(t.pending).toBeGreaterThan(0);
+    expect(t.anyPending).toBe(t.pending > 0);
     const s = t.heightAt(at, 1);
     expect(s.rem).toBe(0);
     expect(Math.abs(s.h - before.h)).toBeLessThan(5);
     fill(t);
     expect(t.pending).toBe(0);
+    expect(t.anyPending).toBe(t.pending > 0);
     // (taken again whole: the ground built from the tiles redone)
     expect(t.stamp).toBeGreaterThan(stamp);
     expect(Math.abs(t.heightAt(at, 1).h - before.h)).toBeLessThan(5);
@@ -226,6 +232,7 @@ test("tiles that will not load keep the ground: a runway's the same, no terrace 
   const tiles = t as unknown as { levels: unknown[]; fromFallback(L: unknown, x: number, y: number): Float32Array };
   for (const [z, x, y] of t.wanted()) t.put(z, x, y, tiles.fromFallback(tiles.levels[z - Z0], x, y));
   expect(t.pending).toBe(0);
+  expect(t.anyPending).toBe(t.pending > 0);
   // (on the graded runway: the same ground to a decimetre — read at the nearest texel it rose by tens of metres)
   along.forEach((q, k) => {
     expect(runwayWeight(q)).toBe(1);
@@ -315,6 +322,7 @@ test("the detail's reach: windows of 8 tiles, the tiles left kept and drawn agai
   expect(t.heightAt(dir(45.9, 6.87), 1).rem).toBe(1);
   fill(t);
   expect(t.pending).toBe(0);
+  expect(t.anyPending).toBe(t.pending > 0);
   // (the heights the same as through 4 tiles, out farther: 8 km off on the finest level — a 4-tile window's 2.5 km)
   for (const [lat, lon] of [
     [45.9, 6.87],
@@ -339,6 +347,7 @@ test("the detail's reach: windows of 8 tiles, the tiles left kept and drawn agai
   // (12 km east and back: the finest windows' columns left kept, drawn again from memory — none to load)
   t.update(camAt(45.9, 7.025, 2), 1e-3);
   expect(t.pending).toBeGreaterThan(0);
+  expect(t.anyPending).toBe(t.pending > 0);
   fill(t);
   expect(inner.cache.size).toBeGreaterThan(0);
   t.update(cam, 1e-3);
@@ -451,6 +460,7 @@ test("T10: the 4-tile levels packed by quadrants — 6 layers of 2048² where th
     t.update(cam, 1e-3);
     fill(t);
     expect(t.pending).toBe(0);
+    expect(t.anyPending).toBe(t.pending > 0);
     const levels = (
       t as unknown as {
         levels: {
@@ -538,6 +548,7 @@ test("a window drawn before it is whole (T8i): the heights read near its edge, n
     t.put(z, x, y, h);
   }
   expect(t.pending).toBeGreaterThan(0);
+  expect(t.anyPending).toBe(t.pending > 0);
   // (the ground under the camera drawn already)
   expect(t.heightAt(dir(45.9, 6.87), 1).rem).toBeLessThan(1);
   // (each partial level's rectangle read near its right and bottom edges — 1.5 to 4 texels in, where the edge's weight starts and

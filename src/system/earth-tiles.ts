@@ -1828,6 +1828,17 @@ export class EarthTiles {
   }
 
   /** the tiles wanted and not yet in — their national source's heights included (refine) */
+  /** whether any tile is pending — `pending > 0`, stopped at the first: the frame's checks (renderer.earthSettled, the governor's
+   *  calibration) asked the whole count, a string key built for every wanted tile, several times an image (14 Nov 2026, J0's profile) */
+  get anyPending(): boolean {
+    for (const [key, r] of this.refining) if (!r.surface && r.L.key[this.slotOf(r.L, r.x, r.y)] === key) return true;
+    for (const L of this.levels) {
+      if (!L.want) continue;
+      for (let y = L.want.y0; y < L.want.y1; y++)
+        for (let x = L.want.x0; x < L.want.x1; x++) if (L.key[this.slotOf(L, x, y)] !== this.keyOf(L, x, y)) return true;
+    }
+    return this.pages.count((j) => j.slot[0] !== "o") > 0;
+  }
   get pending() {
     let k = 0;
     // (the far silhouettes' second pass not counted: the tile's IGN ground is in — the waits for the ground, the e2e's too, not

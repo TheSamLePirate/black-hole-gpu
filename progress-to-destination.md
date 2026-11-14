@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-14 02:43 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-14 02:47 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous.
@@ -6363,4 +6363,10 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   TARS (la phase d'éclipse seule) ; `j0-reference` `J0_ALLOC_PROFILE=1` (les allocations par fonction, objets ramassés compris). **Mesuré** (vol
   J0, kerr-mini) : 145 Mo/s alloués, dont 32 dans ce rapport ; après, la réfraction par couches absente des tranches longues (−224 ms sur 35 s,
   ~7,5 ms une fois par seconde) ; boucle p95 8,4 ms (un passage). [Fiche CPU](docs/progress/j0/FICHE-CPU-kerr-mini-2026-11-14.md), BH-API.
+
+## 2026-11-14T02:47Z — CPU : `earthSettled` par `earthTiles.anyPending` ; allocations 145 → 110 Mo/s
+
+- Contribution (§8.3) : le compte des tuiles en attente (une clé texte par tuile voulue, plusieurs fois par image) remplacé là où un booléen
+  suffit ; même résultat (tests 22/22). **Mesuré** (vol J0, kerr-mini) : allocations 145 → 110 Mo/s avec le lot de la réfraction de TARS ;
+  boucle p95 dans le bruit (8,4–9,1). [Fiche CPU](docs/progress/j0/FICHE-CPU-kerr-mini-2026-11-14.md).
 
