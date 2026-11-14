@@ -59,6 +59,23 @@ describe.skipIf(!E2E)("a saved flight reloads as it was", () => {
     expect(Math.abs(dock.altKm - 425)).toBeLessThan(15);
   }, 120_000);
 
+  // (the gallery's states recorded again on 14 Nov 2026 over today's ground — WGS84, geoid, sites on their real thresholds: the
+  // Lander's of 1 Oct, left 0.6 m over a ground since moved, fell 27 m and broke its gear on load; the new one descends 150 m up)
+  test("the Lander's descent, flown from its load: its landing autopilot sets it down", async () => {
+    await load("09-lander-descent");
+    expect(await app.js<string>("__bh.camera.pilot.auto")).toBe("land");
+    // (the page's loop holds the simulation here — no game scene booted —: its time stepped by hand, 1/30 s at a time, up to 40 s)
+    let s = { label: "", altKm: 0, auto: "" };
+    for (let k = 0; k < 40 && s.label !== "LANDED"; k++)
+      s = await app.js<typeof s>(
+        `(() => { for (let i = 0; i < 30; i++) __bh.step(1 / 30); const s = __bh.game.status(); return { label: s.label, altKm: s.altKm, auto: __bh.camera.pilot.auto }; })()`,
+      );
+    const said = await app.js<string>(`__bh.game.log.events.filter((e) => /Touchdown/.test(e.text)).map((e) => e.text).pop() ?? ""`);
+    console.log(`  the Lander after its load: ${s.label}, autopilot ${s.auto} — ${said || "no touchdown said"}`);
+    expect(s.label).toBe("LANDED");
+    expect(said).toMatch(/Touchdown/);
+  }, 60_000);
+
   test("the docking: on the port's axis, at its range — not turned and moved by the last view's attach point", async () => {
     await load("07-rollout");
     await load("10-dock");

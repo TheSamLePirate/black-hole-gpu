@@ -4,7 +4,9 @@ Problèmes constatés, pas encore réglés. Chaque entrée : la date (UTC), ce q
 connue ou supposée, la piste. Une entrée réglée est barrée avec le commit qui la règle, pas effacée.
 
 
-## Les états de la galerie du HUD périmés : le final de Le Bourget remet les gaz, le Lander tombe de 27 m (relevé le 13 novembre 2026, e2e `report`)
+## ~~Les états de la galerie du HUD périmés : le final de Le Bourget remet les gaz, le Lander tombe de 27 m~~ (relevé le 13 novembre 2026, e2e `report`) — réglé le 14 novembre 2026 : les états 05, 06 et 09 refaits sur le sol d'aujourd'hui
+
+**Réglé (observé, kerr-mini et ce Mac, 14 nov.)** : 05 (le plané) et 06 (le final) sont ceux du labo de vol (`LAB_STATES=1 bun scripts/flightlab.ts run --only '^entry-bourget-i51$'`, PASS, posé à 0,9 m de l'axe ; 06 = le passage au profil `outer`, 14 km du seuil, 2,5 km de haut, la carte « on the final » et son graphe) ; 09 est le Lander en descente sous l'autopilote d'atterrissage, 147 m au-dessus de la piste de Kennedy (enregistré par `hoverOver` + `setAuto("land")`, comme l'original : un état en vol, pas posé). Rechargé, il se pose (« Touchdown on Earth · 0,7 m/s down », nouveau test de `saves`). Les sept e2e de la galerie passent sur kerr-mini : `hub-graph` 1/1, `hub-card` 2/2, `telemetry` 1/1, `hud-layout` 10/10, `saves` 4/4, `saves-storage` 4/4, `report` 4/4. Les états 01–04, 07, 08, 10 n'ont pas été refaits (`hud-layout` et `saves` passent avec eux). Trouvé en route : un état pris **en roulage** après le toucher (le Lander posé, le Ranger qui roule) a `ship.landed = null` alors que son résumé dit LANDED : son sol n'est pas dans la sauvegarde (`landed` ne lit que `ourLanded`, pas `rolling`). Comment il se recharge, temps en marche, **non vérifié** (mes sondes l'ont lu temps arrêté : voir E2E-VOLS §7) ; à suivre si une sauvegarde au roulage doit valoir (E2E-VOLS §7). Le constat d'origine, gardé :
 
 **Constat (observé, e2e headed sur ce Mac, 13 nov. 22:50–23:20 UTC)** : `tests/hud/states/06-final.json` (7 oct. 2026) chargé, l'autopilote d'entrée
 du Ranger remet les gaz dès les premières secondes — « Go-around: 1718 m off the axis at the minima » — et ne se pose pas en 90 s ; **même chose
@@ -16,7 +18,9 @@ L'e2e `report` : le test du Lander et celui des unités portés sur l'autopilote
 depuis 5 km — **4/4** (13 nov., plus tard) ; **les états eux-mêmes restent périmés**. `hub-graph` lit le même état 06 (son graphe seul : non touché). **Piste** : refaire l'état 06 en volant l'approche (`glideTo`, puis
 `snapshot` au final) — ou porter le test sur une approche volée. Les autres états de la galerie (`tests/hud/states/`) sont à revérifier.
 
-## L'e2e `hub-graph` : plus de graphe dans la carte du hub une seconde après le chargement (relevé le 13 novembre 2026)
+## ~~L'e2e `hub-graph` : plus de graphe dans la carte du hub une seconde après le chargement~~ (relevé le 13 novembre 2026) — réglé le 14 novembre 2026 : l'état périmé, pas le graphe
+
+**Cause établie (lue dans le code, 14 nov.)** : la carte de l'autopilote d'entrée ne porte un graphe que sur la finale (`controller/lowthrust.ts` : `rw?.final && rw.fix ? this.glideAssist(rw) : {}`) ; l'état 06 du 7 oct., à 1,7 km de l'axe d'aujourd'hui, remettait les gaz et repartait « On the approach », sans graphe par construction. Les changements de `flighthud.ts` d'alors (le `remeasure()` de la carte) n'y étaient pour rien. Avec l'état 06 refait (ci-dessus) : `hub-graph` 1/1 sur kerr-mini. Le constat d'origine :
 
 **Constat (observé, sonde e2e, ce Mac)** : chargé l'état 06 (le final du Ranger) ou l'état 05 (son plané), le petit graphe de la carte du hub
 est là à 0,3 s, puis tout son bloc est masqué (`fl-hub-graph` en `display: none` : `drawHubGraph` reçoit `G = null`, l'assistant ne donne plus
