@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-14 02:10 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-14 02:31 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous.
@@ -6346,4 +6346,14 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   \`drawRing\` — sommets écrits au seul changement de niveau, \`ringCut\` (boîtes des triangles, même ensemble : test unitaire, 64 découpes),
   tableau d'indices réutilisé ; levier \`ringReuse\`, compteur \`ringBuilds\`. **Mesuré** (vol J0, kerr-mini) : 393–425 → 326 ms de reconstruction
   sur le vol, sommets 99 → 6 écritures ; la boucle p95 dans le bruit (non revendiquée). Image inchangée par construction (mêmes triangles).
+
+## 2026-11-14T02:31Z — Le déploiement rétabli (rien déployé depuis le 13 nov. 19:45 UTC) ; le hors-ligne vérifié en production
+
+- **Constaté** : la CI de déploiement échouait depuis b33a4c71 (audit TA-04, 13 nov. 19:45 UTC) — un seul test, la cohérence doc/code des outils
+  de TARS (TA-26), lisait « 44 outils au lieu de 72 » (une mesure juste de \`docs/TARS.md\`) comme le compte des outils. Toute la production (Pages
+  et samlepirate.org) restait à \`ad09e53\`. **Réglé** (9d78dca3) : « 44 des 72 outils envoyés » ; CI verte, Pages à \`9d78dca\`, la branche
+  \`deploy\` poussée (le serveur la relève à son tour).
+- **Vérifié en production** : \`pwa\` contre GitHub Pages (\`E2E_URL\`, le test compte maintenant l'origine de la page) — hors ligne après une
+  visite, 0 fichier en échec, 2/2 (le correctif KTX2 de 8a2129a8). Leçon : après un envoi, regarder la CI de déploiement — un test de doc
+  peut bloquer la production pendant des heures sans bruit.
 

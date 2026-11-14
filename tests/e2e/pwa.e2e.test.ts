@@ -53,11 +53,13 @@ describe.skipIf(!E2E)("the PWA: the app from its cache, offline", () => {
     // the cache after a single visit; 10 Nov 2026 the bodies' maps and the KTX2 transcoder failed, the world black)
     const asked = new Map<string, string>();
     const lost = new Map<string, number>();
+    // (the page's own origin and path — localhost here, the site with E2E_URL: the deployed build checked the same way)
+    const base = await app.js<string>(`new URL("./", location.href).href`);
     app.cdp.on("Network.requestWillBeSent", (p) => asked.set(String(p.requestId), String((p.request as { url: string }).url)));
     app.cdp.on("Network.loadingFailed", (p) => {
       const u = asked.get(String(p.requestId)) ?? "?";
-      if (!/^https?:\/\/localhost:\d+\//.test(u)) return;
-      const k = u.replace(/^https?:\/\/localhost:\d+/, "").replace(/\?.*$/, "");
+      if (!u.startsWith(base)) return;
+      const k = `/${u.slice(base.length).replace(/\?.*$/, "")}`;
       lost.set(k, (lost.get(k) ?? 0) + 1);
     });
     await app.offline(true);

@@ -862,7 +862,9 @@ termes à un nœud fautif (43,0666 N, 6,12883 E, niveau 1).
     Mars en `.ktx2`) allaient au réseau sans être gardés, et `warmShell` ne lit que les ressources de la page. Hors ligne, le tableau
     compressé échouait (« Failed to fetch ») et le repli JPEG demandait des fichiers jamais chargés. Réglé : le module KTX2 note ce qu'il fait
     charger (`src/pwa/seen.ts`), `warmShell` le reprend ; après : Terre, Lune, Mars et les matériaux du sol gardés, hors ligne aucun fichier du
-    jeu en échec (seul `/__deepgram`, le relais du serveur de dev), `pwa` 2/2. Le constat ci-dessous reste l'historique.)*
+    jeu en échec (seul `/__deepgram`, le relais du serveur de dev), `pwa` 2/2. **Vérifié en production** le 14 nov. (~02:31 UTC, GitHub Pages
+    `9d78dca`, `pwa` lancé contre le site — `E2E_URL` —, kerr-mini) : hors ligne après une seule visite, 0 fichier en échec, 2/2. Le constat
+    ci-dessous reste l'historique.)*
   - **Après une seule visite, le monde est noir hors ligne.** Les fichiers du jeu sont gardés à l'usage, et la première visite
     les charge avant que le Service Worker tienne la page : au rechargement hors ligne, 24 cartes de planètes (`*-HASH.jpg`)
     et `basis_transcoder.wasm` échouent, le décor reste « away-from-earth », aucune tuile n'est demandée. Avec une seconde
