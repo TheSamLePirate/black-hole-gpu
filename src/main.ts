@@ -8048,7 +8048,8 @@ async function main() {
     renderScale: () => governor.renderScale,
     gpuPasses: () => {
       if (!renderer.prof.enabled) (renderer.prof.enabled = true), renderer.prof.reset();
-      return renderer.prof.table().map((p) => ({ pass: p.label, ms: Math.round(p.ms * 100) / 100 }));
+      // (the passes running now: one left behind — the waiting sky after the start — kept its last value)
+      return renderer.prof.table(60).map((p) => ({ pass: p.label, ms: Math.round(p.ms * 100) / 100 }));
     },
     resetPasses: () => {
       renderer.prof.enabled = true;

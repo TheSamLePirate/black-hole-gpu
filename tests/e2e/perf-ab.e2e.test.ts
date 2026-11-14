@@ -207,7 +207,7 @@ describe.skipIf(!E2E)("the realtime render's costs, one thing at a time", () => 
           // (PASSES=1: the profiler's passes on this side — Apple's render passes overlap: a pointer, not a measure)
           if (k >= 4 && process.env.PASSES)
             console.log(
-              `      ${side} passes: ${await app.js<string>(`__bh.renderer.prof.table().filter((x) => x.last > 0.3).sort((p, q) => q.last - p.last).slice(0, 14).map((x) => x.label + " " + x.last.toFixed(1)).join(" · ")`)}`,
+              `      ${side} passes: ${await app.js<string>(`__bh.renderer.prof.table(30).filter((x) => x.last > 0.3).sort((p, q) => q.last - p.last).slice(0, 14).map((x) => x.label + " " + x.last.toFixed(1)).join(" · ")`)}`,
             );
           if (k >= 4)
             cpu[side] = await app.js<string>(`(() => { const p = __bh.game.perf(); const c = p.cpu.reduce((a, x) => a + x.ms, 0);

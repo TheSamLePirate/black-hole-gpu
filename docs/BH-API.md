@@ -884,7 +884,7 @@ The other members tests read:
 | `hdGeneration` | number | each set of finer maps published counts one (H1b: the world, its mode, its relief swapped at once) |
 | `looked` | array | the worlds with measured heights the view looks at (main.ts `lookedBodiesNow`, 4 times a second): `{ map, dN, inView, nearView }` — `dN` its distance in its radii; the relief alone goes to the nearest in view past `reliefAt` (8 × `hdAt`'s reach, ~3° of field for the Moon from the Earth), kept while within half a field and twice the reach, freed 3 s after |
 | `earthMaps` | object (private) | the Earth's map set; `earthMaps.tier`: `"med" \| "high" \| null` (null: the placeholder before the maps load; `earthMaps.heights` is null then too) |
-| `prof` | GpuProfiler | the GPU profiler (`src/gpuprof.ts`): `enabled` (false), `supported` (needs `timestamp-query`), `every` (8: one frame in N profiled), `frames`, `frameMs` (the last profiled frame's GPU time summed over passes), `table()` → `{ label, ms, last, n }[]` (most expensive first), `reset()`, `traceMs()`. **On Apple, turning it on costs ~10 ms a frame and the passes' stamps overlap**: measure whole frames with it off (`gpu.frames().durationsMs`) |
+| `prof` | GpuProfiler | the GPU profiler (`src/gpuprof.ts`): `enabled` (false), `supported` (needs `timestamp-query`), `every` (8: one frame in N profiled), `frames`, `frameMs` (the last profiled frame's GPU time summed over passes), `table(maxAge?)` → `{ label, ms, last, n, at }[]` (most expensive first; `at` the profiled frame it was last measured in; with `maxAge`, only the passes measured within that many profiled frames — a pass no longer run keeps its last value otherwise: 14 Nov 2026, the start's waiting sky read 14 ms in a flight), `reset()`, `traceMs()`. **On Apple, turning it on costs ~10 ms a frame and the passes' stamps overlap**: measure whole frames with it off (`gpu.frames().durationsMs`) |
 | `moonTiles` | object | the Moon's tiles: `pending`, `drawn`, `enabled`, `failed`, `imagery`, `world` |
 | `refrPublished` / `tlutPublished` | string / boolean | the refraction tables' air (`""` none) / the transmittance table published |
 
@@ -1466,7 +1466,7 @@ Where the frame's time goes. `o.gpu !== false` (the default) switches on the GPU
 | `terrainRaster` | `renderer.terrainRasterStats`: raster inspector's eligibility, compilation, encoded draws, selected patch and current/retired memory; no completed-frame or image-accuracy claim |
 | `cpu` | `[{ section, ms, worst }]` main-thread sections |
 | `loopCpu` | `{ n, p50, p95, p99, max }` the main loop's CPU time per iteration over the last 600 (~10 s) [ms]: the frame's CPU budget as a distribution (strategy analysis §8.3) |
-| `gpu` | `[{ pass, ms, last, frames }]` GPU passes |
+| `gpu` | `[{ pass, ms, last, frames }]` GPU passes measured within the last 60 profiled frames (`prof.table(60)`, since 14 Nov 2026) |
 | `earthSurface`, `earthScenery` | their `stats()` |
 | `streaming` | `{ leadM, lookAheadSeconds, gazeM }` |
 | `character`, `grass` | `camera.character.state()`, `characterRenderer.stats()` |

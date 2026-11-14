@@ -1179,7 +1179,8 @@ export class GameTools {
       cpu: cpuProf.table().map((c) => ({ section: c.label, ms: r2(c.ms), worst: r2(c.max) })),
       // (the main loop's iterations' distribution over ~10 s: §8.3's CPU budget at the 95th percentile)
       loopCpu: ((l) => ({ n: l.n, p50: r2(l.p50), p95: r2(l.p95), p99: r2(l.p99), max: r2(l.max) }))(cpuProf.loopStats()),
-      gpu: r.prof.table().map((p) => ({ pass: p.label, ms: r2(p.ms), last: r2(p.last), frames: p.n })),
+      // (the passes measured within the last 60 profiled frames — a pass no longer run kept its last value, 14 Nov 2026)
+      gpu: r.prof.table(60).map((p) => ({ pass: p.label, ms: r2(p.ms), last: r2(p.last), frames: p.n })),
     };
   }
 

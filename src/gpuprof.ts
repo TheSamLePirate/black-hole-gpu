@@ -10,6 +10,9 @@ export interface PassTime {
   ms: number;
   last: number;
   n: number;
+  /** the profiled frame it was last measured in (GpuProfiler.frames then): a pass that no longer runs keeps its last value — 14 Nov 2026,
+   *  "sky (waiting)" read 14 ms in a flight long after the start's compile had ended */
+  at: number;
 }
 
 export class GpuProfiler {
@@ -132,10 +135,11 @@ export class GpuProfiler {
               sum += ms;
             });
             for (const [l, ms] of seen) {
-              const p = this.stats.get(l) ?? { label: l, ms, last: ms, n: 0 };
+              const p = this.stats.get(l) ?? { label: l, ms, last: ms, n: 0, at: 0 };
               p.ms = p.n ? 0.9 * p.ms + 0.1 * ms : ms;
               p.last = ms;
               p.n++;
+              p.at = this.frames;
               this.stats.set(l, p);
             }
             this.frames++;
@@ -153,9 +157,12 @@ export class GpuProfiler {
     return p && p.n > 2 ? p.last : 0;
   }
 
-  /** The passes, most expensive first. */
-  table(): PassTime[] {
-    return [...this.stats.values()].sort((a, b) => b.ms - a.ms);
+  /** The passes, most expensive first; `maxAge`: only those measured within that many profiled frames (what runs now — a pass left
+   *  behind keeps its last value: the horizons' occasional bake wants it, a table of the frame does not) */
+  table(maxAge?: number): PassTime[] {
+    const all = [...this.stats.values()];
+    const now = maxAge === undefined ? all : all.filter((p) => this.frames - p.at <= maxAge);
+    return now.sort((a, b) => b.ms - a.ms);
   }
   reset() {
     this.stats.clear();

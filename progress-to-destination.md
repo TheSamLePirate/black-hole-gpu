@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-14 01:36 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-14 01:38 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous.
@@ -6320,4 +6320,11 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   l'appareil rend −4,4 à −5,8 ms en 4×, −1,1 à +0,2 en 1× (30 m : −3,3 / −0,3) — le MSAA coûte 4 à 5 ms. La profondeur MSAA sans
   `TEXTURE_BINDING` (rien ne la lit) : sans effet mesuré, gardée. Captures 4× / 1× regardées (bords en escalier en 1×), non commitées.
 - Décision à Sam (PLAN-J3 §8 question 6) : 4× ou 1× ; rien n'est changé. PROBLEMES, GRAPHICS-PIPELINE E12a, BH-API, E2E-CATALOGUE.
+
+## 2026-11-14T01:38Z — Le profileur GPU ne montre plus les passes qui ne tournent plus
+
+- Contribution (§8, des outils de mesure vrais — règle 3) : `GpuProfiler` date chaque passe (`at`), `table(maxAge)` ; `game.perf().gpu`, le
+  panneau (`gpuPasses`) et `perf-ab` `PASSES` ne gardent que les passes mesurées récemment — « sky (waiting) » affichait 14 ms en plein vol, la
+  valeur du démarrage. Les lecteurs des horizons gardent la dernière valeur (`table()`). Test unitaire `tests/gpuprof.test.ts` (1/1), tsc.
+  Non vérifié en jeu (statique et unitaire). BH-API.
 
