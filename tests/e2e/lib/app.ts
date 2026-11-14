@@ -220,9 +220,9 @@ export function describeReady(p: ReadyProbe | null): string {
  * false failure): each wait of 60 s or more, its call's file and line, its cap and how long it took, appended to
  * remote-results/e2e-waits.jsonl (E2E_WAITS_LOG to choose; "0": none). `bun scripts/e2e-waits.ts` reads them: what each cap could be.
  */
-function noteWait(timeout: number, took: number, met: boolean) {
+function noteWait(site: string | undefined, timeout: number, took: number, met: boolean) {
   if (timeout < 60_000 || process.env.E2E_WAITS_LOG === "0") return;
-  const at = (new Error().stack ?? "")
+  const at = (site ?? "")
     .split("\n")
     .map((l) => /tests\/e2e\/([\w.-]+\.e2e\.test\.ts):(\d+)/.exec(l))
     .find(Boolean);
@@ -447,12 +447,14 @@ export class App {
   }
 
   async waitFor(expr: string, timeout = 10_000) {
+    // (the caller's line read now: after the first await, the stack no longer has it)
+    const site = timeout >= 60_000 ? new Error().stack : undefined;
     const t0 = Date.now();
     let last: unknown;
     while (Date.now() - t0 < timeout) {
       try {
         if ((last = await this.js(expr))) {
-          noteWait(timeout, Date.now() - t0, true);
+          noteWait(site, timeout, Date.now() - t0, true);
           return last;
         }
       } catch (e) {
@@ -460,7 +462,7 @@ export class App {
       }
       await Bun.sleep(100);
     }
-    noteWait(timeout, Date.now() - t0, false);
+    noteWait(site, timeout, Date.now() - t0, false);
     throw new Error(`waitFor(${expr}): ${timeout} ms, last ${String(last)}`);
   }
 
@@ -613,10 +615,32 @@ export class App {
     } else if (type === "up") {
       this.mouseDown = null;
       await this.cdp.send("Input.dispatchMouseEvent", { type: "mouseReleased", x, y, button, clickCount: 1, modifiers });
-    } else await this.cdp.send("Input.dispatchMouseEvent", { type: "mouseWheel", x, y, deltaX: 0, deltaY: o.deltaY ?? 100, modifiers });
+    } else {
+      // (a visible window on a Retina screen: Chrome scales CDP's wheel deltas by the screen's factor, not the page's
+      // emulated one — 50 sent, 100 read, each notch acting twice (a320-deck, 14 Nov 2026). Learnt once, by a step the
+      // page's first listener swallows: the game never sees it)
+      if (this.wheelScale === undefined) {
+        await this.js(`(() => { window.__wheelCal = 0; const f = (e) => { window.__wheelCal = e.deltaY; e.stopImmediatePropagation(); e.preventDefault(); removeEventListener("wheel", f, true); };
+          addEventListener("wheel", f, { capture: true, passive: false }); return 1; })()`);
+        await this.cdp.send("Input.dispatchMouseEvent", { type: "mouseWheel", x, y, deltaX: 0, deltaY: 100, modifiers: 0 });
+        await Bun.sleep(50);
+        const read = Number(await this.js(`window.__wheelCal`));
+        this.wheelScale = read > 0 ? read / 100 : 1;
+      }
+      await this.cdp.send("Input.dispatchMouseEvent", {
+        type: "mouseWheel",
+        x,
+        y,
+        deltaX: 0,
+        deltaY: (o.deltaY ?? 100) / this.wheelScale,
+        modifiers,
+      });
+    }
     await Bun.sleep(30);
   }
   private mouseDown: "left" | "right" | null = null;
+  /** the wheel's delta as the page reads it for one sent (1 headless, the screen's factor in a visible window) */
+  private wheelScale: number | undefined;
 
   /**
    * Fingers on the screen (CSS px): each step, every finger's point; the first step puts them down, the

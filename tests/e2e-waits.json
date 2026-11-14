@@ -1,35 +1,19 @@
 {
- "a320-cine.e2e.test.ts": {
-  "sleeps": 0,
-  "waits": 1
- },
- "a320-deck.e2e.test.ts": {
-  "sleeps": 0,
-  "waits": 1
- },
- "a320-ecam.e2e.test.ts": {
-  "sleeps": 0,
-  "waits": 1
- },
- "a320-effects.e2e.test.ts": {
-  "sleeps": 0,
-  "waits": 1
- },
  "a320-gate.e2e.test.ts": {
   "sleeps": 0,
-  "waits": 2
+  "waits": 1
  },
  "a320-rain.e2e.test.ts": {
   "sleeps": 2,
-  "waits": 1
+  "waits": 0
  },
  "a320-services.e2e.test.ts": {
   "sleeps": 1,
-  "waits": 1
+  "waits": 0
  },
  "a320-start.e2e.test.ts": {
   "sleeps": 1,
-  "waits": 1
+  "waits": 0
  },
  "aar.e2e.test.ts": {
   "sleeps": 0,
@@ -357,11 +341,11 @@
  },
  "s2-views.e2e.test.ts": {
   "sleeps": 1,
-  "waits": 2
+  "waits": 1
  },
  "s3-replay.e2e.test.ts": {
-  "sleeps": 4,
-  "waits": 3
+  "sleeps": 2,
+  "waits": 0
  },
  "scenery-bench.e2e.test.ts": {
   "sleeps": 0,
@@ -389,11 +373,11 @@
  },
  "shootdown-gpu.e2e.test.ts": {
   "sleeps": 2,
-  "waits": 3
+  "waits": 1
  },
  "shootdown.e2e.test.ts": {
   "sleeps": 0,
-  "waits": 3
+  "waits": 1
  },
  "sky-events.e2e.test.ts": {
   "sleeps": 0,
@@ -433,7 +417,7 @@
  },
  "wreck-replay.e2e.test.ts": {
   "sleeps": 1,
-  "waits": 2
+  "waits": 0
  },
  "zones-scenery.e2e.test.ts": {
   "sleeps": 4,

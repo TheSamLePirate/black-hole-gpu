@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-14 22:35 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-14 23:07 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous.
@@ -6957,3 +6957,21 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   fournis (`assets/porte-avion/`) dites « non notées ».
 - **Limites :** `assets/lens/lensdirt.jpg` sans origine notée (à retrouver ou remplacer) ; les versions des outils (Blender, basisu) seulement
   là où les scripts les disent.
+
+### 2026-11-14 23:07 UTC — QA-09 (suite) : les longues attentes mesurées, 18 retirées ; deux défauts trouvés par la mesure
+
+- **Contribution** : la fiabilité et la durée des parcours de test (§19.13) ; un défaut de contenu réglé (une vue d'exception). Hors rendu.
+- **Mesure** : 8 e2e ici (fenêtre visible) avec le journal des attentes (`scripts/e2e-waits.ts`). L'attente de compilation de
+  `a320-deck` n'aboutissait jamais : 240 s perdues à chaque lancement (le texte de la pastille restait ; défaut du moteur noté dans
+  PROBLEMES, la session du rendu prévenue). Le site d'une attente est maintenant lu avant le premier `await` (avant, une partie manquait).
+- **Changements** : les 8 e2e de l'A320 et 5 e2e de vol et de replay (`s3-replay`, `s2-views`, `shootdown`, `shootdown-gpu`,
+  `wreck-replay`) attendent le moteur sur sa progression (`app.settled(60_000)`), plus le texte de la pastille ni la variante 180–240 s.
+  `s3-replay` enregistre sa bande sur sa longueur, plus par deux pauses fixes. `app.mouse("wheel")` étalonne le facteur de la molette
+  (Retina en fenêtre visible : chaque cran comptait double, `a320-deck` échouait 3 fois).
+  Jeu : `src/game/views.ts` `nextDusk`, la vue des aurores en été (voir PROBLEMES).
+- **Preuve** : `a320-deck` 7/7 (0 avant le correctif de la molette, 4/7), `a320-gate` 4/4, `shootdown` 4/4, `wreck-replay` 3/3, `s2-views` 6/6
+  (échouait avant, ancienne version comprise) ; test unitaire `s2-views` 5/5 (le cas d'été échouait avant : Soleil à 43°).
+  Garde des attentes : 75 → 73 pauses, 121 → 103 longues attentes (`tests/e2e-waits.json`).
+- **Limites** : `s3-replay` garde 3 échecs, ceux de sa vidéo de bande-annonce (PROBLEMES, non examinés : rendu hors ligne). Les
+  autres attentes longues restent à mesurer.
+

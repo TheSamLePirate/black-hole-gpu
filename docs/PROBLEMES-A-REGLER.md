@@ -4,6 +4,34 @@ Problèmes constatés, pas encore réglés. Chaque entrée : la date (UTC), ce q
 connue ou supposée, la piste. Une entrée réglée est barrée avec le commit qui la règle, pas effacée.
 
 
+## ~~La vue « Les aurores sur les fjords des Lofoten » volée en plein jour quand la date du jeu est en été~~ (relevé le 14 novembre 2026, e2e `s2-views`) — réglé le même jour
+
+- **Constat** : l'e2e `s2-views` échouait dans sa suite complète, pas seul : après les Alpes (`setDate` au 10 juillet), la vue des aurores
+  démarrait à midi, le Soleil à 43°, sans aurores (leur bit de noyau jamais posé, l'œil adapté au jour). Seule, elle prenait la date
+  de l'horloge (novembre), nuit noire.
+- **Cause** : `views.ts` cherchait « une heure après le crépuscule » à −12° dans les 36 h. À 68° N, de mai à août, le Soleil ne descend
+  jamais à −12° : `null`, puis le repli `?? now`.
+- **Correction** : `nextDusk` passe aux jours suivants, jusqu'à la première nuit qui descend 4° plus bas que −12° (depuis le 10 juillet :
+  le 8 septembre, 21 h 34 UTC, Soleil à −14,8°). La carte dit « La prochaine nuit noire ». Test `s2-views` (unité) 5/5, e2e 6/6, capture.
+
+## L'e2e `s3-replay` : la vidéo brouillon de la bande-annonce ne produit aucune image en 120 s (relevé le 14 novembre 2026)
+
+- **Constat** : ce Mac en fenêtre visible. Après la bande-annonce, `replay.video(true)` rend `null` (accepté), mais
+  `videoState().frame` ne dépasse pas 6 en 120 s. Le rendu reste en cours, et les deux tests suivants échouent en cascade (« Un rendu est
+  en cours : attendez-le »). Le 3ᵉ test (la bande, 26,1 s) passe.
+- **Non examiné plus loin** : la vidéo passe par le rendu hors ligne (`renderDialog.startVideo`, plan `take`), le domaine du moteur. À
+  reproduire en headless et sur le mini avant d'en chercher la cause.
+
+## La pastille « Compiling the ray tracer for this scene » reste affichée sur une scène immobile (relevé le 14 novembre 2026, e2e `a320-deck`)
+
+- **Constat** : A320 au sol au Bourget (`lineUp`), vue cockpit, ce Mac en fenêtre visible : la pastille du bas affiche « Compiling the
+  ray tracer for this scene · 2 s », figée, pendant au moins 60 s. Lus toutes les 10 s : `renderer.tracerSettled` vrai, `compilesPending` 0,
+  `compilingNow` vide. Le joueur voit une compilation qui ne finit pas. L'e2e qui attendait ce texte perdait 240 s à chaque lancement.
+- **Cause probable** (non corrigée : `src/renderer.ts`, le périmètre de la session du rendu, prévenue) : `noteSceneTracer(!traced)` n'est
+  appelé que hors de la phase `converged` (l. ~12551). Le retour anticipé de la phase convergée passe avant. Quand l'image converge,
+  le stage `scene-tracer` n'est jamais fermé.
+- **Côté tests** : les 8 e2e de l'A320 attendent maintenant `app.settled(60_000)`, pas le texte.
+
 ## ~~Le jeu ne démarre pas sur un GPU à 16–18 textures échantillonnées : `seaFft` non résolu dans trace.wgsl~~ (relevé le 14 novembre 2026)
 — réglé le 14 novembre 2026
 

@@ -57,6 +57,17 @@ test("the Moon just risen ahead; the auroras' night dark; the carrier's Sun 2° 
   expect(whenAltitude("sun", 42.6, 7.4, 2, NOW, false)).not.toBeNull();
 });
 
+test("the auroras' night dark in summer too: the first night dark enough, not a sunlit flight (14 Nov 2026)", () => {
+  // (68° N from May to August: the Sun never 12° down — the view flew by day, the auroras' kernel never in)
+  for (const now of [Date.UTC(2026, 6, 10, 11), Date.UTC(2026, 4, 20, 0), Date.UTC(2026, 11, 1, 12)]) {
+    const t = Date.parse(viewSpec("view-aurora", now)!.time!.utc!);
+    const sun = altitudeAt("sun", 68.3 * D, 14.3 * D, 0, t);
+    console.log(`  from ${new Date(now).toISOString().slice(0, 10)}: ${new Date(t).toISOString()}, the Sun ${sun.toFixed(1)}°`);
+    expect(sun).toBeLessThan(-13);
+    expect(t).toBeGreaterThan(now - 2 * 3_600_000);
+  }
+});
+
 const world = (own: Partial<MissionWorld["own"]> & { lat: number; lon: number }, o: Partial<MissionWorld> = {}): MissionWorld => ({
   own: { alt: 300, landed: false, lost: false, ...own },
   unit: () => null,

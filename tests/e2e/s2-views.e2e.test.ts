@@ -19,7 +19,7 @@ describe.skipIf(!E2E)("the views of exception", () => {
     console.log(`  ${await app.js<string>(`__bh.flight.views.fly(${JSON.stringify(id)})`)}`);
     await app.waitFor(`__bh.camera.mission?.run.spec.id === ${JSON.stringify(id)}`, 30_000);
     await Bun.sleep(1500);
-    await app.waitOptional(`!!__bh.renderer.variants.get(__bh.renderer.featureKey)?.rt`, 180_000);
+    await app.settled(60_000);
     await Bun.sleep(settle);
   };
   beforeAll(async () => {
@@ -53,7 +53,12 @@ describe.skipIf(!E2E)("the views of exception", () => {
   test("the auroras over the Lofoten: their kernel in, their curtains to the south", async () => {
     await fly("view-aurora", 8000);
     expect(await app.js<number>(`__bh.settings.aurora`)).toBe(4);
-    expect(await app.js<number>(`__bh.renderer.featureKey & 16384`)).toBe(16384);
+    // (their kernel bit set once the eye is dark-adapted — renderer: eyeIncident < 0.01 —: after the Alps by day, a while; waited on,
+    // its time said — 14 Nov 2026: the bit read at once failed after the Alps, passed alone)
+    const t0 = Date.now();
+    await app.waitFor(`(__bh.renderer.featureKey & 16384) === 16384`, 60_000);
+    console.log(`  the auroras' kernel bit after ${((Date.now() - t0) / 1000).toFixed(1)} s more`);
+    await app.settled(60_000);
     await app.js(
       `(() => { const c = __bh.camera; c.jetToggle("ap"); c.jetToggle("athr"); c.jetModes.alt = 1300; c.jetModes.hdg = Math.PI; c.jetModes.spd = 170; return 1; })()`,
     );

@@ -24,7 +24,8 @@ describe.skipIf(!E2E)("the A320's ECAM and its failures", () => {
       return true;
     })()`);
     await app.waitFor("!!__bh.renderer.ship.deckMats", 60_000);
-    await app.waitOptional(`!document.body.innerText.includes("Compiling the ray tracer")`, 240_000);
+    // (the scene's tracer in, on its progress — not the pill's text: on a still scene it stayed up, 240 s lost each run, 14 Nov 2026)
+    await app.settled(60_000);
     await app.waitFor("!!__bh.camera.a320Ecam", 30_000);
     await app.waitFor("__bh.renderer.ship.a320Maps?.albedo?.depthOrArrayLayers === 7", 60_000);
     await Bun.sleep(2000);

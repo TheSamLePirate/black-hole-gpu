@@ -46,6 +46,28 @@ export interface ScenePhoto {
 
 /** When a body crosses a height [°] at a place (rising or setting), first after `from` within `span` [ms]; null:
  *  none. Scanned every 5 minutes, bisected to a few seconds. */
+/**
+ * The first dusk with the Sun `deg` down from `from` on, days later if need be: from May to August at 68° N the Sun never goes
+ * 12° down — the auroras' view then began by day, their kernel never in (14 Nov 2026). Each day's darkest moment (its solar
+ * midnight, 4° deeper than `deg`) read first; that night's dusk searched in (null: none in a year).
+ */
+export function nextDusk(lat: number, lon: number, deg: number, from: number): number | null {
+  const first = whenAltitude("sun", lat, lon, deg, from, false);
+  if (first !== null) return first;
+  const DAY = 24 * HOUR;
+  // (the solar midnight: noon's opposite, 12 h − lon/15 after 0 h UTC)
+  const midnight = ((((24 - lon / 15) * HOUR) % DAY) + DAY) % DAY;
+  for (let d = 0; d < 370; d++) {
+    const day = Math.floor(from / DAY + d) * DAY;
+    const m = day + midnight;
+    // (a night 4° darker than `deg` at its deepest: not one that only grazes it)
+    if (m < from || altitudeAt("sun", lat * D, lon * D, 0, m) > deg - 4) continue;
+    const t = whenAltitude("sun", lat, lon, deg, m - 14 * HOUR, false, 14 * HOUR);
+    if (t !== null && t >= from) return t;
+  }
+  return null;
+}
+
 export function whenAltitude(
   id: string,
   lat: number,
@@ -243,12 +265,12 @@ export const VIEWS: ExceptionalView[] = [
     },
     title: L("Les aurores sur les fjords des Lofoten", "The auroras over the Lofoten's fjords"),
     place: L("Trollfjord, Norvège", "Trollfjord, Norway"),
-    when: L("Cette nuit, une heure après le crépuscule", "Tonight, an hour after dusk"),
+    when: L("La prochaine nuit noire, une heure après le crépuscule", "The next dark night, an hour after dusk"),
     weather: L("Ciel clair, aurores Kp 4", "Clear sky, auroras at Kp 4"),
     challenge: L("Remonter le fjord à moins de 400 m sous les aurores", "Fly up the fjord below 400 m under the auroras"),
     make: (now) => {
       const at = { lat: 68.3, lon: 14.3 };
-      const dark = whenAltitude("sun", at.lat, at.lon, -12, now - 2 * HOUR, false) ?? now;
+      const dark = nextDusk(at.lat, at.lon, -12, now - 2 * HOUR) ?? now;
       return routeMission({
         id: "view-aurora",
         title: L("Les aurores sur les fjords des Lofoten", "The auroras over the Lofoten's fjords"),
