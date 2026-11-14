@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-14 23:13 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-14 23:20 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous.
@@ -6984,3 +6984,14 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   instruments p50 18,6, p95 56,2 ms) — contre 58,4 (13 nov.) et 56,3 (A/B de l'eau E1) : pas de régression lisible sur un vol (bruit
   ~±1,6). Cohérence : 0,91 (−7,5°), 0,94 (−10,2°), A/A ≤ 1,2 %, la phase passe.
 - **Limites :** un seul vol J0 (pas d'A/B contre le 13 nov.) ; le M1 Max non mesuré ; la cible du mini (40 ms) reste à 17 ms.
+
+### 2026-11-14 23:20 UTC — La vidéo brouillon de la bande-annonce rendue à nouveau (e2e `s3-replay`)
+
+- **Contribution** : une fonction produit rendue utilisable (§19, captures et vidéos ; la bande-annonce du replay S3). Hors moteur.
+- **Constat et cause** : une image brouillon toutes les 25 à 45 s en vol bas (2 à 3 h pour 240 images). L'image avait ses échantillons, mais
+  sa fin attendait `earthSettled`, faux tant que des tuiles du relief arrivaient pour la nouvelle position (sonde ; aucune compilation).
+- **Changement** : `src/renderdialog.ts` `encodeFrame` — une image brouillon est prise 1,5 s après ses échantillons ; une vidéo finale
+  attend toujours ses données. PROBLEMES mis à jour.
+- **Preuve** : sonde après le correctif, 15 images en 30 s (avant : 1 en 50 à 80 s) ; `s3-replay` 6/6 (brouillon de 239 images ;
+  avant 3/6) ; capture de l'image brouillon. Non mesuré : le temps d'une vidéo finale (inchangé).
+

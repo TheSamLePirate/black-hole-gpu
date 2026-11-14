@@ -14,13 +14,16 @@ connue ou supposée, la piste. Une entrée réglée est barrée avec le commit q
 - **Correction** : `nextDusk` passe aux jours suivants, jusqu'à la première nuit qui descend 4° plus bas que −12° (depuis le 10 juillet :
   le 8 septembre, 21 h 34 UTC, Soleil à −14,8°). La carte dit « La prochaine nuit noire ». Test `s2-views` (unité) 5/5, e2e 6/6, capture.
 
-## L'e2e `s3-replay` : la vidéo brouillon de la bande-annonce ne produit aucune image en 120 s (relevé le 14 novembre 2026)
+## ~~La vidéo brouillon de la bande-annonce : 25 à 45 s par image en vol bas (e2e `s3-replay`, aucune image en 120 s)~~ (relevé le 14 novembre 2026) — réglé le 15 novembre 2026
 
-- **Constat** : ce Mac en fenêtre visible. Après la bande-annonce, `replay.video(true)` rend `null` (accepté), mais
-  `videoState().frame` ne dépasse pas 6 en 120 s. Le rendu reste en cours, et les deux tests suivants échouent en cascade (« Un rendu est
-  en cours : attendez-le »). Le 3ᵉ test (la bande, 26,1 s) passe.
-- **Non examiné plus loin** : la vidéo passe par le rendu hors ligne (`renderDialog.startVideo`, plan `take`), le domaine du moteur. À
-  reproduire en headless et sur le mini avant d'en chercher la cause.
+- **Constat** : ce Mac en fenêtre visible. `replay.video(true)` acceptée, mais une image toutes les 25 à 45 s (prévu : 250 ms en brouillon) ;
+  les 240 images d'un brouillon auraient pris 2 à 3 heures. Les deux tests suivants échouaient en cascade (« Un rendu est en cours »).
+- **Cause** (sonde, toutes les 10 s) : l'image a ses échantillons (`offlineState.progress` 1, puis jusqu'à 1 884 spp), mais
+  `renderer.ts` ne la dit finie que quand `earthSettled` est vrai. En vol bas à 250 m/s, chaque image déplace la caméra, et
+  `earthTiles.anyPending` (parfois le décor) reste vrai pendant des dizaines de secondes. Aucune compilation en cours.
+- **Correction** (`src/renderdialog.ts`, sans toucher au moteur) : une image **brouillon** est prise 1,5 s après avoir ses échantillons,
+  même si des tuiles arrivent encore. Une vidéo finale attend toujours ses données (rien n'entre entre deux images). Après : environ
+  une image toutes les 2 s, `s3-replay` 6/6 (brouillon de 239 images).
 
 ## La pastille « Compiling the ray tracer for this scene » reste affichée sur une scène immobile (relevé le 14 novembre 2026, e2e `a320-deck`)
 

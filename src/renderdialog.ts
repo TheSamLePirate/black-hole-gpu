@@ -486,11 +486,21 @@ export function setupRenderDialog(d: DialogDeps) {
   videoBox.addEventListener("toggle", () => videoBox.open && fillShots());
 
   /** Waits for the offline frame, then encodes it. */
-  const encodeFrame = async (run: { stop: boolean }, writer: VideoWriter, opts: OfflineOptions, time: number) => {
+  // (a draft's frame, its samples in, taken this long after even with the Earth's tiles or scenery still coming: a final frame waits
+  // for them — none comes in between two frames —, a draft did as well, 25–45 s a frame in a low flight, the trailer's 240 frames
+  // 2–3 hours, 14 Nov 2026)
+  const DRAFT_DATA_WAIT_MS = 1500;
+  const encodeFrame = async (run: { stop: boolean }, writer: VideoWriter, opts: OfflineOptions, time: number, draft = false) => {
     d.renderer.startOffline(d.settings, time, opts);
+    let sampled = 0;
     while (!d.renderer.offlineState?.done && !run.stop) {
-      if (d.renderer.offlineState?.error) throw new Error(d.renderer.offlineState.error);
+      const o = d.renderer.offlineState;
+      if (o?.error) throw new Error(o.error);
       if (!d.renderer.offlineActive) throw new Error("Render cancelled");
+      if (draft && o && o.progress >= 1) {
+        sampled ||= performance.now();
+        if (performance.now() - sampled > DRAFT_DATA_WAIT_MS) break;
+      }
       await sleep(20);
     }
     if (run.stop) return;
@@ -611,7 +621,7 @@ export function setupRenderDialog(d: DialogDeps) {
           d.applyState(f.state);
           const dtM = Number.isFinite(prevTime) ? Math.abs(f.state.time - prevTime) : 0;
           prevTime = f.state.time;
-          await encodeFrame(run, writer, { ...base, shutter: draft ? 0 : shutter * dtM }, f.state.time);
+          await encodeFrame(run, writer, { ...base, shutter: draft ? 0 : shutter * dtM }, f.state.time, draft);
         }
       } else {
         // the scene goes on: the simulation's step (1/60 s at most), the user's inputs left out
@@ -639,7 +649,7 @@ export function setupRenderDialog(d: DialogDeps) {
           }
           sim.applyRender(cam.piloting && !cam.cinematic ? cam.flightInfo() : null);
           cam.enabled = false;
-          await encodeFrame(run, writer, { ...base, shutter: draft ? 0 : shutter * (frozen ? 0 : rate / fps) }, sim.time);
+          await encodeFrame(run, writer, { ...base, shutter: draft ? 0 : shutter * (frozen ? 0 : rate / fps) }, sim.time, draft);
         }
       }
       if (!run.stop) {
