@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-14 17:13 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-14 17:32 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous.
@@ -6641,3 +6641,17 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
 - Preuves : **reproduit avant** (`CHROME` pointé sur un Chrome lancé WebGPU coupé, `CI=1`) : « nothing checked », sortie **0** ; **après** :
   sortie **1** en CI, 0 hors CI ; le vrai Chrome : 82/82 shaders compilés, sortie 0. Le build du site suivant suivi (ci-dessous).
 - Limites : les autres points de QA-26 (les jobs de prévisualisation — retirés le 10 nov. —, `bh-api --check` hors CI) non traités.
+
+## 2026-11-14T17:32Z — Audit QA-21 : le relais de trafic freine chaque joueur, pas tous ensemble (QA-26 vérifié en CI)
+
+- Contribution : le trafic réel (avions, navires — monde partagé de §19) servi à tous les joueurs, un client trop rapide ne privant plus
+  les autres ; audit 2026-11-10, QA-21 (P2).
+- Réalisé : `clientAddress(req, server)` (`server/address.ts`) — `X-Real-IP` posé par le mandataire, sinon le dernier saut de
+  `X-Forwarded-For`, sinon la socket — mis en commun : les quotas des salles (RD2) et désormais l'allure du relais de trafic
+  (`server/main.ts`, qui prenait l'adresse de la socket, celle du mandataire). `tests/client-address.test.ts`. DEPLOY.md.
+- Preuves : **reproduit avant** (le serveur de production lancé ici, deux « joueurs » derrière une même socket, 6 requêtes chacun sur
+  `/traffic/plane`, sans appel externe) : `… 200 429 429` ; **après** : 12 × 200 ; un joueur seul à 12 requêtes freiné aux deux dernières
+  (la limite tient) ; `net-rooms`, `net-server-defence`, `rooms-deploy` 26/26 ; `client-address` 1/1 ; tsc.
+  **QA-26 vérifié en CI** (commit a50e7457) : « 82 / 82 shaders compile (google) ».
+- Limites : l'en-tête est cru tel que le mandataire le pose : si le port 3001 est joignable en direct (NET-31, la configuration du serveur de
+  Sam), un client peut le falsifier — comme pour les quotas des salles depuis RD2.

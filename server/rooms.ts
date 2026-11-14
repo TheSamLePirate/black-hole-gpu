@@ -4,6 +4,7 @@
 // stream.samlepirate.org) and on the dev server (server.ts, /net).
 
 import { Database } from "bun:sqlite";
+import { clientAddress } from "./address";
 import type { Server, ServerWebSocket } from "bun";
 import {
   randomCode,
@@ -613,11 +614,7 @@ export function createRooms(o: RoomsOptions) {
       const origin = req.headers.get("origin");
       if (origin && !(o.origin ?? (() => true))(origin)) return new Response("forbidden", { status: 403 });
       // (the address: the proxy's — Nginx Proxy Manager sets X-Real-IP —, else the last X-Forwarded-For hop, else the socket's)
-      const ip =
-        req.headers.get("x-real-ip") ??
-        req.headers.get("x-forwarded-for")?.split(",").pop()?.trim() ??
-        (server as { requestIP?: (r: Request) => { address: string } | null }).requestIP?.(req)?.address ??
-        "";
+      const ip = clientAddress(req, server);
       const data: Peer = {
         kind: "rooms",
         hello: false,

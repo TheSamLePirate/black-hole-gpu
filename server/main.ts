@@ -2,6 +2,7 @@
 // at any path, /health and /version; SQLite in $DATA; stopped cleanly (the rooms written) on SIGTERM.
 
 import { createMoonTiles, DEM_PATHS } from "./moon-tiles";
+import { clientAddress } from "./address";
 import { createRooms, defaultOrigin } from "./rooms";
 import { createTraffic } from "./traffic";
 
@@ -32,7 +33,8 @@ const server = Bun.serve({
   port,
   async fetch(req, srv) {
     const url = new URL(req.url);
-    if (url.pathname.startsWith("/traffic")) return (await traffic.handle(req, srv.requestIP(req)?.address)) ?? new Response(null, { status: 404 });
+    // (its pace by the player's address, not the proxy's — audit QA-21)
+    if (url.pathname.startsWith("/traffic")) return (await traffic.handle(req, clientAddress(req, srv))) ?? new Response(null, { status: 404 });
     const w = worlds.find((x) => url.pathname.startsWith(x.prefix));
     if (w) return (await w.svc.handle(url)) ?? new Response(null, { status: 404 });
     if (url.pathname === "/health") return Response.json(rooms.health(), { headers: { "access-control-allow-origin": "*" } });

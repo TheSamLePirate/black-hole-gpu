@@ -100,7 +100,7 @@ Portainer ─► recreates the `rooms` service alone (port 3001, its rooms in th
 - **Checked by** `https://stream.samlepirate.org/health` (`{ ok, v, build, rooms, live, peers, rejected }` — `rejected`:
   the events and samples dropped at the input since the start, src/net/inbound.ts, RD1; and since RD2 the JSON
   messages past a connection's bucket). **RD2 (13 Nov 2026) counts addresses by the `X-Real-IP` header Nginx Proxy
-  Manager sets** — without it, every page would share the proxy's address and its 10 rooms an hour. Passwords are now
+  Manager sets** (the traffic relay's pace too, since a later lot that day — `server/address.ts`, audit QA-21) — without it, every page would share the proxy's address and its 10 rooms an hour. Passwords are now
   argon2id; the rooms' older sha256 ones are still read and salted at their next good guess (no migration to run).
 - **Only when the server's code changed** — `server/**`, the files of `src/` it imports (`src/net/proto.ts`, `src/net/inbound.ts`,
   `src/system/lola-codec.ts` — kept by `tests/rooms-deploy.test.ts`; before 13 Nov 2026 all of `src/net/**`: a client's file restarted it, audit NET-20), `deploy/Dockerfile.rooms`,
