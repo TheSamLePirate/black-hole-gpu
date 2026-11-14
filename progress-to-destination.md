@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-14 16:19 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-14 16:26 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous.
@@ -6513,3 +6513,14 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   écrit dans `snapshots/` ; **après** 403, 403, et 200 depuis la page du serveur elle-même ; `ear-relay.test` 4/4 (le cas ajouté) ; tsc.
 - Limites : le serveur écoute toujours toutes les interfaces (le labo et l'iPad y accèdent) ; les routes de lecture restent ouvertes
   (filtrées par motif, sans traversée vue par l'audit).
+
+## 2026-11-14T16:26Z — Audit NET-32 : les erreurs du serveur dans la langue de la console d'équipage ; QA-19 vérifié sans défaut
+
+- Contribution : §19 (une interface entière dans la langue du joueur, FR/EN) ; audit 2026-11-10, NET-32 (P3) et QA-19 (P3), hors vague.
+- Réalisé : `SERVER_ERRORS` (`src/crew/main.ts`) traduit par leur code les erreurs du serveur de salles (les onze codes connus), pour la
+  connexion comme pour celles qui arrivent hors requête (« la salle supprimée », « ouverte dans un autre onglet »…) ; le texte du serveur
+  seulement pour un code inconnu. Catalogue.
+- Preuves : **reproduit avant** (e2e `crew-errors-fr` : console en français, la salle supprimée par son propriétaire) : « The room was
+  deleted » ; **après** « Cette salle n’existe plus. » — 1/1 ; les tests unitaires d'équipage verts, `crew-craft` 4/4 ; tsc.
+  **QA-19** (trois `innerHTML` sans échappement) : l'origine des noms remontée — la table statique des sites (`SITES`, `sitesOf`) et les
+  destinations de l'ordinateur de vol, aucune donnée externe ni partagée — **pas de défaut reproductible**, rien changé.

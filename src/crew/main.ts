@@ -160,6 +160,29 @@ $("microphone").addEventListener("click", () => {
   else notice(L("Rejoignez d’abord une salle.", "Join a room first."));
 });
 
+/** The room server's errors in the console's language, by their code (the game's own: ui/netpanel.ts ERRORS). */
+const SERVER_ERRORS: Record<string, () => string> = {
+  password: () => L("Mot de passe incorrect.", "Wrong password."),
+  "unknown-room": () => L("Cette salle n’existe plus.", "This room no longer exists."),
+  full: () => L("La salle accueille déjà huit appareils.", "The room already has eight devices."),
+  update: () => L("Rechargez cette page pour mettre le réseau à jour.", "Reload this page to update the network."),
+  "pilots-full": () => L("Quatre pilotes volent déjà dans cette salle.", "Four pilots already fly in this room."),
+  owner: () => L("Seul le propriétaire de la salle peut le faire.", "Only the room's owner can do that."),
+  limit: () =>
+    L(
+      "Trop de salles : celles du serveur, ou celles créées d’ici cette heure.",
+      "Too many rooms: the server's, or those made from here this hour.",
+    ),
+  slow: () => L("Trop de mots de passe faux : attendez une demi-minute.", "Too many wrong passwords: wait half a minute."),
+  replaced: () =>
+    L(
+      "La salle a été ouverte dans un autre onglet de ce navigateur : celui-ci l’a quittée.",
+      "The room was opened in another tab of this browser: this one left it.",
+    ),
+  rejoin: () => L("De retour en ligne, mais la salle ne nous a pas repris.", "Back online, but the room did not take us back."),
+  "not-in-room": () => L("Pas dans une salle.", "Not in a room."),
+};
+
 async function join(roomCode: string, displayName: string, pass = "") {
   if (busy) return;
   const normal = normCode(roomCode);
@@ -192,15 +215,10 @@ async function join(roomCode: string, displayName: string, pass = "") {
     // (a spacecraft followed: the station's own view)
     if (profile === "space") setView(station.view);
   } catch (error) {
-    const errors: Record<string, string> = {
-      password: L("Mot de passe incorrect.", "Wrong password."),
-      "unknown-room": L("Cette salle n’existe plus.", "This room no longer exists."),
-      full: L("La salle accueille déjà huit appareils.", "The room already has eight devices."),
-      update: L("Rechargez cette page pour mettre le réseau à jour.", "Reload this page to update the network."),
-    };
     const key = error && typeof error === "object" && "code" in error ? String(error.code) : "";
     $("join-error").textContent =
-      errors[key] ?? L("Connexion impossible. Vérifiez le réseau et réessayez.", "Cannot connect. Check the network and try again.");
+      SERVER_ERRORS[key]?.() ??
+      L("Connexion impossible. Vérifiez le réseau et réessayez.", "Cannot connect. Check the network and try again.");
     if (!net.room) net.close();
   } finally {
     busy = false;
@@ -236,7 +254,9 @@ net.on("room", () => {
   rosterKey = "";
   pilotKey = "";
 });
-net.on("error", ({ msg }) => notice(msg));
+// (by its code, in the console's language — audit NET-32: the server's English text was shown as it came, « The room was deleted »
+// on a French console)
+net.on("error", ({ code, msg }) => notice(SERVER_ERRORS[code]?.() ?? msg));
 net.on("roster", () => {
   rosterKey = "";
   refresh();
