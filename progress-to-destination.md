@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-14 16:46 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-14 17:07 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous.
@@ -6608,3 +6608,14 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   **après** : la garde 1/1, les deux workflows valides en YAML ; la CI du site et la construction de l'image à vérifier après la poussée
   (suivi ci-dessous). **QA-24** (la référence stratégique hors de Git) : **déjà réglé** — `docs/ANALYSE-STRATEGIE-RENDU-2026-11-03.md` suivi.
 - Limites : la garde échoue sur une machine du labo dont le Bun diffère (kerr-mini, kerr-pc) — voulu : la dérive y est dite.
+
+## 2026-11-14T17:07Z — Audit QA-07 : le serveur de salles déployé depuis main seul, vérifié par ses tests ; QA-05 vérifié en CI
+
+- Contribution : la sûreté du déploiement (aucune branche ancienne ne remet un vieux serveur en production) ; audit 2026-11-10, QA-07 (P2).
+- Réalisé : `rooms.yml` ne se déclenche plus que sur `main` (`reseau`, à son 16 octobre, l'aurait fait) ; son job lance sept fichiers de tests
+  du serveur au lieu de trois (sa défense, son monde borné, ses codes, les chemins de son déploiement ajoutés). DEPLOY.md.
+- Preuves : **lu** (`git ls-remote` : `reseau` à a7da8d28, 16 oct.) ; les sept fichiers ensemble ici : 45/45 ; YAML valide ; la garde des
+  chemins et celle de Bun vertes. **QA-05 vérifié en CI** (commit d854d219) : le site construit en `bun install v1.3.14`, déployé ; l'image du
+  serveur de salles construite sur `oven/bun:1.3.14-alpine`, en production (`/health` : build d854d21).
+- Limites : pas de `tsc` ni de Biome dans ce job (`main` les passe au contrôle de pré-push) ; aucun test du relais de trafic (`server/traffic.ts`)
+  n'existe à ajouter.
