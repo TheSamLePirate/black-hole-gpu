@@ -597,18 +597,33 @@ export function enlarge(h: Float32Array, k: number, x: number, y: number): Float
     ox = (x - ((x >> k) << k)) * side,
     oy = (y - ((y >> k) << k)) * side;
   const out = new Float32Array(TILE * TILE);
-  for (let j = 0; j < TILE; j++)
+  // (a column's source and weight, a row's: worked out once — functions of i, of j alone; the same values, the same sums, as each
+  // pixel's own before — 14 Nov 2026, J0's CPU profile: this on the page's thread, 172 ms in 35 s of flight on kerr-mini)
+  const cx = new Int32Array(TILE),
+    wx = new Float64Array(TILE),
+    cy = new Int32Array(TILE),
+    wy = new Float64Array(TILE);
+  for (let i = 0; i < TILE; i++) {
+    const fx = Math.min(Math.max(ox + ((i + 0.5) * side) / TILE - 0.5, 0), TILE - 1);
+    cx[i] = Math.min(Math.floor(fx), TILE - 2);
+    wx[i] = fx - cx[i]!;
+    const fy = Math.min(Math.max(oy + ((i + 0.5) * side) / TILE - 0.5, 0), TILE - 1);
+    cy[i] = Math.min(Math.floor(fy), TILE - 2);
+    wy[i] = fy - cy[i]!;
+  }
+  for (let j = 0; j < TILE; j++) {
+    const r0 = cy[j]! * TILE,
+      r1 = r0 + TILE,
+      ty = wy[j]!,
+      o = j * TILE;
     for (let i = 0; i < TILE; i++) {
-      const fx = Math.min(Math.max(ox + ((i + 0.5) * side) / TILE - 0.5, 0), TILE - 1),
-        fy = Math.min(Math.max(oy + ((j + 0.5) * side) / TILE - 0.5, 0), TILE - 1);
-      const x0 = Math.min(Math.floor(fx), TILE - 2),
-        y0 = Math.min(Math.floor(fy), TILE - 2);
-      const tx = fx - x0,
-        ty = fy - y0;
-      const a = h[y0 * TILE + x0]! + (h[y0 * TILE + x0 + 1]! - h[y0 * TILE + x0]!) * tx;
-      const b = h[(y0 + 1) * TILE + x0]! + (h[(y0 + 1) * TILE + x0 + 1]! - h[(y0 + 1) * TILE + x0]!) * tx;
-      out[j * TILE + i] = a + (b - a) * ty;
+      const x0 = cx[i]!,
+        tx = wx[i]!;
+      const a = h[r0 + x0]! + (h[r0 + x0 + 1]! - h[r0 + x0]!) * tx;
+      const b = h[r1 + x0]! + (h[r1 + x0 + 1]! - h[r1 + x0]!) * tx;
+      out[o + i] = a + (b - a) * ty;
     }
+  }
   markFine(out, false);
   return out;
 }

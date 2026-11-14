@@ -54,3 +54,12 @@ manquante (le même booléen : assertions `anyPending === pending > 0` ajoutées
 boucle p95 8,9 ms dans ce passage (8,4–9,1 selon les passages : le bruit). Les allocations restantes sont réparties (≤ 3 Mo/s chacune : la
 navigation dans le système de Gargantua, les hauteurs du sol, les corps).
 
+## Quatrième lot (~03:07 UTC) : l'agrandissement des tuiles de relief au-delà de z 15
+
+Au temps propre, le profil J0 nomme `enlarge` (`earth-tiles.ts` : une tuile z 16–17 tirée de son parent z 15 de Terrarium, bilinéaire, sur le
+fil de la page) : 172 ms en 35 s. Chaque pixel recalculait la source et le poids de sa colonne et de sa ligne ; ils sont maintenant calculés une
+fois par colonne et par ligne — **les mêmes flottants au bit près** (`tests/earth-tiles-enlarge.test.ts`, 25 cas contre l'ancien calcul).
+**Mesuré** : 0,276 → 0,172 ms par tuile (Bun, M1 Max, micro-banc ; ×1,6) ; dans le jeu, ≈ 0,1 ms par image au mieux — non mesuré en vol.
+Restent au temps propre : la conversion géodésique (`cartToGeodetic`, 191 ms — itérative, ses résultats tenus exacts : pas touchée), le dessin du
+HUD (texte, traits), les éphémérides.
+

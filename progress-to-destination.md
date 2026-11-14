@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-14 02:47 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-14 03:07 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous.
@@ -6369,4 +6369,9 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
 - Contribution (§8.3) : le compte des tuiles en attente (une clé texte par tuile voulue, plusieurs fois par image) remplacé là où un booléen
   suffit ; même résultat (tests 22/22). **Mesuré** (vol J0, kerr-mini) : allocations 145 → 110 Mo/s avec le lot de la réfraction de TARS ;
   boucle p95 dans le bruit (8,4–9,1). [Fiche CPU](docs/progress/j0/FICHE-CPU-kerr-mini-2026-11-14.md).
+
+## 2026-11-14T03:07Z — CPU : l'agrandissement des tuiles de relief ×1,6, au bit près
+
+- Contribution (§8.3) : `earth-tiles.ts` `enlarge` — sources et poids par colonne et ligne, une fois ; mêmes flottants (test bit à bit, 25 cas).
+  **Mesuré** (micro-banc, M1 Max) : 0,276 → 0,172 ms par tuile ; en vol non mesuré (≤ 0,1 ms par image attendu). [Fiche CPU](docs/progress/j0/FICHE-CPU-kerr-mini-2026-11-14.md).
 
