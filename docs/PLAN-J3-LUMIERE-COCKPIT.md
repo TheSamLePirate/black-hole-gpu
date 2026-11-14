@@ -324,3 +324,7 @@ Aucun coût de J3 n'est mesuré ; aucun gain n'est promis.
   (la hauteur `mu0g` de `liteLight`), `skySeen`, `sunSeen`, `skyFlat`, `nightFloor`, `earthGround`. Témoin positif : le ciel du sol passé à la
   hauteur incidente le fait échouer. Un lecteur déplacé sans que le contrat change échoue là. Non couvert : le pipeline tracé de près (le
   géométrique partout, la rangée incidente n'y étant pas écrite — relevé du 13 nov.).
+- **J3-6, les sources des maillages écrites** (14 nov., ~22:35 UTC ; ne dépend pas de la question 4) : `docs/ASSETS.md` dit pour chaque
+  dossier d'appareils, de trafic, de porte-avions, de pistes, de textures de détail, de bruit et de titre le script qui le construit et sa
+  source (licence quand elle est connue : FlightGear GPL v2, ambientCG CC0, OurAirports domaine public ; les modèles fournis : non notées) ;
+  le format commun des maillages et l'évaluation de meshoptimizer. Trouvé : `assets/lens/lensdirt.jpg` sans origine notée.

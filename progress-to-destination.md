@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-14 22:14 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-14 22:35 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous.
@@ -6945,3 +6945,15 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   0,04. check-wgsl 84/84, budget des noyaux 69/69, tsc.
 - **Limites :** lu à la caméra (les vues extérieures : la caméra, pas l'appareil) ; la bascule à la cadence de la sonde ; ΔGPU non mesuré
   (deux lectures de carte par passage de la sonde). Allumer : la décision de Sam.
+
+### 2026-11-14 22:35 UTC — J3-6 : les sources des maillages et des packs écrites dans ASSETS.md
+
+- **Contribution à la destination :** §18 (la chaîne d'assets reproductible : d'où vient chaque pack, par quel script) — PLAN-J3 J3-6, sans
+  l'adoption de meshoptimizer (question 4).
+- **Réalisé :** `docs/ASSETS.md` : 11 rangées ajoutées (l'A320 et ses véhicules de piste — FlightGear, GPL v2 —, le trafic, les navires, le
+  ravitailleur, les missiles et unités au sol procéduraux, les porte-avions, les pistes — OurAirports —, les textures de détail — ambientCG,
+  CC0 —, le bruit bleu, le titre et les vignettes, la poussière d'objectif) ; le format commun des maillages ; l'évaluation de meshoptimizer.
+- **Preuves :** relu dans les en-têtes des scripts et les README (`assets/a320/README.md`) ; aucune licence inventée — celles des modèles
+  fournis (`assets/porte-avion/`) dites « non notées ».
+- **Limites :** `assets/lens/lensdirt.jpg` sans origine notée (à retrouver ou remplacer) ; les versions des outils (Blender, basisu) seulement
+  là où les scripts les disent.

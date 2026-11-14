@@ -23,6 +23,22 @@ Each binary under `assets/` is the output of a script, from a source kept outsid
 | `assets/iss` | `scripts/build-iss.py` (Blender) | NASA's ISS2.glb |
 | `assets/f35` | `scripts/build-f35.py` (Blender), `scripts/build-f35-maps.py` | the F-35 GLB ([README](../assets/f35/README.md), git-ignored `assets/airplanes/`) |
 | `assets/character` | `scripts/build-astronaut.ts` | the licensed astronaut ([README](../assets/character/README.md)) |
+| `assets/a320` | `scripts/build-a320.py`, `build-a320-maps.py`, `build-a320-cockpit.py`, `build-a320-sounds.py` (Blender, Python) | FlightGear's A320-family, rev. `fec1ecba`, GNU GPL v2 ([README](../assets/a320/README.md), `LICENSE`) |
+| `assets/traffic` (`a320`, `crj900`, `cargo`, `tanker`, `ferry`, `trawler`, `sailboat`, `frigate`) | `scripts/build-airliners.ts`; `build-ships.py` (Blender) then `build-ships.ts` | the supplied A320 GLB, CRJ-900 OBJ and container ship FBX (git-ignored `assets/porte-avion/`; their licences as supplied, not recorded here); the ferry, trawler, sailing boat and frigate drawn by `build-ships.ts` |
+| `assets/traffic` (`mrtt`, `drogue`, `probe`, `lamp-*`) | `scripts/build-tanker.ts` | the A320's mesh repainted, the pods, hose and probe procedural |
+| `assets/traffic` (`gs-*`) | `scripts/build-a320-services.py` | FlightGear's `Models/Services` (GNU GPL v2; the tug after XPGoodWay's) |
+| `assets/traffic` (`msl-*`, `gu-*`) | `scripts/build-missiles.ts`, `scripts/build-ground-units.ts` | procedural (no licence to carry) |
+| `assets/carriers` | `scripts/build-carriers.py` (Blender) then `build-carriers.ts` | the supplied carrier models (git-ignored `assets/porte-avion/`; licences as supplied, not recorded here) |
+| `assets/runways/v1` | `scripts/build-runways.ts` | OurAirports (public domain; `assets/runways/raw/`, git-ignored) |
+| `assets/detail` | `scripts/build-detail-scans.py` | five ambientCG materials (CC0), basisu UASTC |
+| `assets/noise` | `scripts/build-blue-noise.ts` | procedural (void-and-cluster, deterministic seeds) |
+| `assets/title`, `assets/scenes` | `scripts/build-title-maps.py`, `title-art.ts`, `logo-render.ts`, `scene-thumbs.ts` | the game's own maps and renders |
+| `assets/lens/lensdirt.jpg` | — | **origin not recorded** (versioned by 2e80e8a3; to be traced or replaced) |
+
+Most craft and traffic meshes share one format (the `.bin` "TRFC" / the craft's: a 40-byte header, 8 or 10 interleaved floats a
+vertex, 32-bit indices — gzipped on the wire by Pages and the server); the F-35, the A320, the ISS and the astronaut have their own. Their compression and levels of detail by meshoptimizer were evaluated on
+14 Nov 2026 ([FICHE-J3-6-MESHOPT](progress/j3/FICHE-J3-6-MESHOPT-2026-11-14.md): lossless encoding −5 % over gzip in all, the simplifier
+≤ 0.07 % error at half the triangles); not adopted — PLAN-J3 question 4.
 
 `docs/img`, `docs/video` and `docs/perf` hold captures, the gallery's videos and the benchmark's
 reports. Each script's header says how to run it again.
