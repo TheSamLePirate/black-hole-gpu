@@ -401,6 +401,12 @@ const LIFT_AT = SHREF_AT + 2 * 16;
 const AIR_AT = LIFT_AT + 16;
 const SHIP_UNIFORM_BYTES = AIR_AT + 16;
 const INST_FLOATS = 20;
+/**
+ * The craft's pass's samples (its shading's pipelines, its box's colour and depth): 4, its MSAA; 1 (a measure, read once at the
+ * construction: globalThis.__shipMsaa = 1 before the page loads — tests/e2e/perf-ab.e2e.test.ts SHIP_MSAA) drawn straight into its
+ * resolved image. PROBLEMES « Le dessin de l'appareil coûte 2 à 5 ms »: its cost follows its pixels, not its shading — the MSAA's share.
+ */
+const SHIP_MSAA = (globalThis as { __shipMsaa?: number }).__shipMsaa === 1 ? 1 : 4;
 /** the posed aircraft's parts at most (the F-35's 119 — src/f35/model.ts —, the A320's 172 — src/a320/rig.ts), and how
  *  many aircraft drawn with their parts posed */
 const MAX_PARTS = 192;
@@ -863,7 +869,7 @@ export class ShipRenderer {
         },
         primitive: { topology: "triangle-list", cullMode: "none" },
         depthStencil: { format: "depth32float", depthWriteEnabled: false, depthCompare: "greater-equal" },
-        multisample: { count: 4 },
+        multisample: { count: SHIP_MSAA },
       });
     this.glassPipe = glassPipe;
     this.pipes = {
@@ -882,7 +888,7 @@ export class ShipRenderer {
         // (reversed depth in float: a hatch at a metre and a craft tens of kilometres off, both exact;
         // after the depth pre-pass: the nearest surface only)
         depthStencil: { format: "depth32float", depthWriteEnabled: true, depthCompare: "greater-equal" },
-        multisample: { count: 4 },
+        multisample: { count: SHIP_MSAA },
       }),
       // (the F-35's meshes: their maps alone — ship.wgsl HULL_JET)
       shipJet: d.createRenderPipeline({
@@ -891,7 +897,7 @@ export class ShipRenderer {
         fragment: { module, entryPoint: "fs", targets: [{ format: "rgba16float" }], constants: { HULL_JET: 1 } },
         primitive: { topology: "triangle-list", cullMode: "back", frontFace: "ccw" },
         depthStencil: { format: "depth32float", depthWriteEnabled: true, depthCompare: "greater-equal" },
-        multisample: { count: 4 },
+        multisample: { count: SHIP_MSAA },
       }),
       // the craft's images in the sea: under it, mirrored (their winding reversed), after the craft — nearer than
       // them nothing is drawn —, their depth their own
@@ -901,7 +907,7 @@ export class ShipRenderer {
         fragment: { module, entryPoint: "fs", targets: [{ format: "rgba16float" }], constants: { MIRROR: 1 } },
         primitive: { topology: "triangle-list", cullMode: "back", frontFace: "cw" },
         depthStencil: { format: "depth32float", depthWriteEnabled: true, depthCompare: "greater" },
-        multisample: { count: 4 },
+        multisample: { count: SHIP_MSAA },
       }),
       shadow: d.createRenderPipeline({
         layout: "auto",
@@ -1010,7 +1016,7 @@ export class ShipRenderer {
         fragment: { module, entryPoint: "fsCabin", targets: [{ format: "rgba16float" }] },
         primitive: { topology: "triangle-list", cullMode: "back", frontFace: "ccw" },
         depthStencil: { format: "depth32float", depthWriteEnabled: true, depthCompare: "greater-equal" },
-        multisample: { count: 4 },
+        multisample: { count: SHIP_MSAA },
       }),
       ctl: d.createRenderPipeline({
         layout: "auto",
@@ -1018,7 +1024,7 @@ export class ShipRenderer {
         fragment: { module, entryPoint: "fsCabin", targets: [{ format: "rgba16float" }] },
         primitive: { topology: "triangle-list", cullMode: "back", frontFace: "ccw" },
         depthStencil: { format: "depth32float", depthWriteEnabled: true, depthCompare: "greater-equal" },
-        multisample: { count: 4 },
+        multisample: { count: SHIP_MSAA },
       }),
       glass: d.createRenderPipeline({
         layout: "auto",
@@ -1038,7 +1044,7 @@ export class ShipRenderer {
         },
         primitive: { topology: "triangle-list", cullMode: "none" },
         depthStencil: { format: "depth32float", depthWriteEnabled: false, depthCompare: "greater-equal" },
-        multisample: { count: 4 },
+        multisample: { count: SHIP_MSAA },
       }),
       jetGlass: glassPipe(0),
       // the flown craft's own opaque parts alone, covered or not (the next frame's cockpit mask)
@@ -1055,7 +1061,7 @@ export class ShipRenderer {
         fragment: { module, entryPoint: "hullDepthFs", targets: [{ format: "rgba16float", writeMask: 0 }] },
         primitive: { topology: "triangle-list", cullMode: "back", frontFace: "ccw" },
         depthStencil: { format: "depth32float", depthWriteEnabled: true, depthCompare: "greater" },
-        multisample: { count: 4 },
+        multisample: { count: SHIP_MSAA },
       }),
       comp: d.createRenderPipeline({
         layout: "auto",
@@ -1909,6 +1915,8 @@ export class ShipRenderer {
    *  at all (a flat grey: the geometry's cost alone) — the
    *  hull's shading's parts priced by A/B (tests/e2e/perf-ab.e2e.test.ts SET=ship); a uniform, no recompile */
   debugFs = 0;
+  /** the craft's pass's samples this page (SHIP_MSAA: 4, or 1 set before the load as a measure) */
+  readonly msaa = SHIP_MSAA;
   private glassPipe?: (mode: number, a320?: boolean) => GPURenderPipeline;
   /** the glass's pipeline with the A320's code (GLASS_A320): made when one is first drawn */
   private a320GlassPipe?: GPURenderPipeline;
@@ -2830,12 +2838,13 @@ export class ShipRenderer {
       res.box = {
         w: bw,
         h: bh,
-        color: d.createTexture({ size, format: "rgba16float", sampleCount: 4, usage: GPUTextureUsage.RENDER_ATTACHMENT }),
+        color: d.createTexture({ size, format: "rgba16float", sampleCount: SHIP_MSAA, usage: GPUTextureUsage.RENDER_ATTACHMENT }),
         depth: d.createTexture({
           size,
           format: "depth32float",
-          sampleCount: 4,
-          usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING,
+          sampleCount: SHIP_MSAA,
+          // (an attachment only — nothing samples it; TEXTURE_BINDING dropped 14 Nov 2026, no cost change measured)
+          usage: GPUTextureUsage.RENDER_ATTACHMENT,
         }),
         // (read by the composition — PLAN-J1 J1-5)
         small: d.createTexture({
@@ -2902,13 +2911,16 @@ export class ShipRenderer {
     const rp = enc.beginRenderPass(
       this.pass("ship: shading (MSAA)", {
         colorAttachments: [
-          {
-            view: b.color.createView(),
-            resolveTarget: b.small.createView(),
-            loadOp: "clear",
-            storeOp: "discard",
-            clearValue: [0, 0, 0, 0],
-          },
+          SHIP_MSAA === 4
+            ? {
+                view: b.color.createView(),
+                resolveTarget: b.small.createView(),
+                loadOp: "clear",
+                storeOp: "discard",
+                clearValue: [0, 0, 0, 0],
+              }
+            : // (one sample — a measure —: drawn straight into the resolved image)
+              { view: b.small.createView(), loadOp: "clear", storeOp: "store", clearValue: [0, 0, 0, 0] },
         ],
         depthStencilAttachment: { view: b.depth.createView(), depthClearValue: 0, depthLoadOp: "clear", depthStoreOp: "discard" },
       }),

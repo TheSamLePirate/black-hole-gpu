@@ -139,6 +139,9 @@ et que l'outillage fonctionne sous Bun ; rien d'autre. Ni l'un ni l'autre n'est 
 3. **L'ombre reçue par l'appareil** (J3-3) : la voulez-vous dans J3 (coût à mesurer), ou plus tard ?
 4. **La chaîne d'assets** (J3-6) : meshoptimizer adopté pour les appareils ?
 5. **L'exposition la nuit** (PROBLEMES : elle suit la lumière reçue par la caméra, la face nocturne reste noire) : dans J3 ou à part ?
+6. **Le MSAA de l'appareil** (14 nov., [PROBLEMES](PROBLEMES-A-REGLER.md) « Le dessin de l'appareil coûte 4 à 5 ms ») : sa passe en MSAA 4× coûte
+   4 à 5 ms sur kerr-mini (cible 40 ms), mesuré deux fois ; en 1× ses bords en escalier, lissés par l'accumulation temporelle seule. Garder le
+   4×, ou passer à 1× (levier `SHIP_MSAA` prêt) ?
 
 ## 9. Non vérifié
 

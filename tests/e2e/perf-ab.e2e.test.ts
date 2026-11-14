@@ -1,4 +1,5 @@
 import { afterAll, beforeAll, describe, test } from "bun:test";
+import { mkdirSync } from "node:fs";
 import { App, E2E, stopServer } from "./lib/app";
 
 // (a measure — no assertion: its figures and pictures are read, not judged — audit QA-08, tests/e2e-honesty.test.ts)
@@ -132,7 +133,10 @@ describe.skipIf(!E2E)("the realtime render's costs, one thing at a time", () => 
       hash: "scene=game:artemis",
       tiles: true,
       args: process.env.NOVSYNC ? process.env.NOVSYNC.split(",").map((f) => `--${f}`) : [],
+      // (SHIP_MSAA=1: the craft's pass at one sample — ship.ts SHIP_MSAA, read once at the load: its Δ against the 4 samples' runs)
+      initScript: process.env.SHIP_MSAA === "1" ? "globalThis.__shipMsaa = 1;" : undefined,
     });
+    console.log(`  the craft's pass's samples: ${await app.js<number>("__bh.renderer.ship.msaa")}`);
     await app.js(
       `(() => { Object.assign(__bh.settings, { vessel: "f35", traffic: true, f35AutoProtect: true, showFps: true }); return 1; })()`,
     );
@@ -211,6 +215,14 @@ describe.skipIf(!E2E)("the realtime render's costs, one thing at a time", () => 
               return "CPU " + c.toFixed(1) + " ms (" + p.cpu.slice(0, 3).map((x) => x.section + " " + x.ms.toFixed(1)).join(", ") + "), loop " + p.loopFps.toFixed(0) + "/s, trace " + (tr ? tr.ms.toFixed(1) : "?") + " ms"; })()`);
         }
         await app.js(`(() => { ${P.a}; return 1; })()`);
+        // (SHOTS=1: side A's picture, frozen and settled — for a look at what the pair's lever changes, e.g. the craft's MSAA)
+        if (process.env.SHOTS) {
+          mkdirSync("remote-results/perf-ab", { recursive: true });
+          await app.js(`(() => { __bh.freeze(true); return 1; })()`);
+          await Bun.sleep(1500);
+          await app.shot(`remote-results/perf-ab/${process.env.SHIP_MSAA === "1" ? "msaa1" : "msaa4"}-${set.indexOf(P)}.png`);
+          await app.js(`(() => { __bh.freeze(false); return 1; })()`);
+        }
         const m = (x: number[]) => [...x].sort((p, q) => p - q)[x.length >> 1]!;
         const A = m(med.a),
           B = m(med.b);

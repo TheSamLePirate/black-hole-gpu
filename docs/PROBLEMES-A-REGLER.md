@@ -592,7 +592,7 @@ termes à un nœud fautif (43,0666 N, 6,12883 E, niveau 1).
   `probeSunJump`. **Mesuré** (même balayage) : 1,20 / 1,35 / 1,50 / 1,80 → **1,003 / 1,004 / 1,003 / 1,006** ; midi inchangé (0,957). Coût : au
   temps réel, quatre images de sonde de plus par minute de jeu (non chronométré).
 
-## Le dessin de l'appareil coûte 2 à 5 ms sur kerr-mini (et non 0,25 ms) — ses coques, en partie leurs sommets
+## Le dessin de l'appareil coûte 4 à 5 ms sur kerr-mini (et non 0,25 ms) — le MSAA 4× de sa passe
 
 - **Mesure propre** (14 nov., ~01:03 UTC ; kerr-mini, e2e `perf-ab` `SET=ship SUBS=4 NOVSYNC=disable-gpu-vsync`, fenêtre 1600 × 1000, F-35 à
   900 m au nord de Tarifa, côtés A B B A A B, **les données attendues avant la première paire** ; A/A +0,8 ms) — Δ de l'image en sautant :
@@ -620,9 +620,15 @@ termes à un nœud fautif (43,0666 N, 6,12883 E, niveau 1).
 - **Sur J0** (~01:16 UTC, l'ablation `ship` de `j0-reference`, ordre base, ship, base, ship, base, kerr-mini à 1 278 MHz, « Nominal ») : GPU p50
   56,4 / 55,3 / 55,3 ms contre **52,2 / 52,0** sans le dessin de l'appareil — **−3,3 à −3,6 ms** ; le −0,25 du 10 nov. (GRAPHICS-PIPELINE §8.4)
   **périmé**. Les deux scènes concordent : l'appareil, 3,5 à 4,5 ms sur kerr-mini (cible 40 ms).
-- **Règle 1** : plafond 4–6 ms de près (cockpit, « chase », 30 m) sur kerr-mini, deux passages à Tarifa et J0 d'accord ; **le levier n'est pas
-  nommé** (ni l'ombrage, ni les verrières, ni les flammes, ni la composition) — à chercher par une capture de trame GPU ou un levier du MSAA
-  avant tout lot. Un niveau de détail vu de loin : gain non établi (≤ 2 ms, au bord du bruit).
+- **Le levier nommé : le MSAA 4× de sa passe** (~01:36 UTC ; `SHIP_MSAA`, une constante lue au chargement — `globalThis.__shipMsaa = 1` avant la
+  page, `perf-ab` `SHIP_MSAA=1` —, la passe dessinée alors droit dans son image résolue). En 1×, sauter l'appareil ne rend plus que **−0,9 / +0,2
+  ms (cockpit), −0,8 / −1,1 (chase), −3,3 / −0,3 (30 m)**, contre −4,4 à −4,8 / −5,1 à −5,6 / −5,3 à −5,8 en 4× (deux passages chaque) : **le
+  MSAA de l'appareil coûte 4 à 5 ms sur kerr-mini**. Retirer l'usage `TEXTURE_BINDING` de sa profondeur multiéchantillonnée (que rien ne lit) :
+  sans effet mesuré (gardé, l'usage juste). **L'image** (captures `perf-ab` `SHOTS=1`, vue à 30 m, kerr-mini, non commitées — budget des
+  binaires plein) : en 1× les bords de l'appareil en escalier (ventre, dérives), ses petits feux et lignes fines scintillent davantage ; en
+  mouvement, des bords qui sautillent. **Décision de Sam** (PLAN-J3 §8, question 6) : garder le 4× (son prix, 4–5 ms) ou passer à 1× (l'appareil
+  lissé par l'accumulation temporelle seule — aujourd'hui son poids d'image ≥ 0,5, `CRAFT_ALPHA` : à revoir alors) ; rien n'est changé.
+- Un niveau de détail vu de loin : gain non établi (≤ 2 ms, au bord du bruit).
 
 ## La compilation du noyau de Jupiter proche : ~200 s à froid (M1 Max, 6 nov.) — 60 s sur kerr-mini le 13 nov., ~47 s à l'arrivée d'un voyage depuis le 13
 
