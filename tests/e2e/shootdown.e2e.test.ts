@@ -198,7 +198,17 @@ describe.skipIf(!E2E)("low over the sea: a drone, an airliner, a frigate — loc
     await steer(null);
     await shot("liner-0-ahead");
     console.log(`  ${(await tgt("Airliner")).d.toFixed(0)} m: ${await engage("Airliner", "aim9x")}`);
-    await app.waitFor(`!${Q("Airliner")}.alive`, 60_000);
+    // (a proximity burst past 5.5 m deals less than the airliner's 80 points — game/combat.ts: 110 × (1 − 0.4 · miss / fuze) —: one
+    // AIM-9X does not always down it, as a pilot finds; then he fires again (14 Nov 2026: the test failed one run in two))
+    for (let shotN = 1; shotN <= 3; shotN++) {
+      const id = await app.js<number>(`${Q("Airliner")}.id`);
+      await app.waitFor(`!${Q("Airliner")}.alive || !__bh.camera.combat.world.missiles.some((m) => m.alive && m.target === ${id})`, 60_000);
+      if (!(await tgt("Airliner")).alive || shotN === 3) break;
+      console.log(`  the airliner still flying after the AIM-9X: another`);
+      await app.press("Enter");
+      await Bun.sleep(300);
+    }
+    await app.waitFor(`!${Q("Airliner")}.alive`, 10_000);
     await Bun.sleep(250);
     await shot("liner-1-hit");
     await Bun.sleep(4000);

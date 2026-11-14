@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-14 18:24 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-14 18:45 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous.
@@ -6713,3 +6713,11 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
 - Preuves : **sonde** (Tab par Tab) : « Verrouillé : L'Espérance · 6,0 km », « Pen Duick · 14,5 km », « Mega Express · 19,8 km », puis
   seulement « Frigate » au quatrième ; **après** : la frégate verrouillée et coulée sur les deux passages (fumée : 559 et 1 114 segments) ;
   passage 1 **4/4**, passage 2 3/4 — l'avion de ligne non abattu par l'AIM-9X en 60 s, un autre aléa, noté ouvert.
+
+## 2026-11-14T18:45Z — L'e2e `shootdown` stable : l'avion de ligne retiré au besoin
+
+- Réalisé : `shootdown` tire un autre AIM-9X si l'avion de ligne survit au premier (trois au plus), comme un pilote. PROBLEMES (barré).
+- Preuves : **sonde** (le missile suivi toutes les 500 ms) : dans le passage raté, l'AIM-9X fuse à ~27 m de trajectoire, son dernier pas sous
+  le rayon de 8 m, et l'avion survit — ses dégâts (110 × (1 − 0,4 · écart / 8)) passent sous ses 80 points au-delà de 5,5 m ; le jeu fait ce
+  qu'il doit, le test supposait un tir suffisant. **Après** : trois passages **4/4** (le second tir n'a pas eu à servir dans ces trois-là :
+  sa branche n'est donc pas observée).

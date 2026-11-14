@@ -18,7 +18,7 @@ L'e2e `report` : le test du Lander et celui des unités portés sur l'autopilote
 depuis 5 km — **4/4** (13 nov., plus tard) ; **les états eux-mêmes restent périmés**. `hub-graph` lit le même état 06 (son graphe seul : non touché). **Piste** : refaire l'état 06 en volant l'approche (`glideTo`, puis
 `snapshot` au final) — ou porter le test sur une approche volée. Les autres états de la galerie (`tests/hud/states/`) sont à revérifier.
 
-## L'e2e `shootdown` instable : le Tab ne verrouille pas toujours sa cible (relevé le 14 novembre 2026) — la frégate réglée, l'avion de ligne ouvert
+## ~~L'e2e `shootdown` instable : le Tab ne verrouille pas toujours sa cible~~ (relevé le 14 novembre 2026) — réglé le 14 novembre 2026 : la vie marine coupée, un second tir si besoin
 
 **Constat (observé, ce Mac, fenêtre visible, trois passages)** : `tests/e2e/shootdown.e2e.test.ts` 3/4 à chaque fois, l'échec changeant de
 test — deux fois « the frigate ahead » (`engage` : quatre Tab, `locked()` reste `null`), une fois « the airliner head-on », **sur le dernier
@@ -28,6 +28,10 @@ Duick », « Mega Express »…), que le test ne coupait pas (`traffic: false` n
 Tab, ou pas. **Réglé dans le test** (`seaLife: false`) : la frégate verrouillée et coulée deux fois sur deux. **Reste ouvert** : une fois sur
 deux, l'AIM-9X tiré face à face sur l'avion de ligne (8 km, 450 m au-dessus de la mer) ne l'abat pas en 60 s — un tir manqué (leurre, géométrie
 ou la mer), cause non cherchée.
+
+**Réglé aussi (sonde, 14 nov.)** : l'AIM-9X arrivait bien à 25–27 m et fusait (rayon 8 m) ; ses dégâts, 110 × (1 − 0,4 · écart / 8), passent sous
+les 80 points de l'avion de ligne au-delà de 5,5 m d'écart : un missile ne l'abat pas toujours — le jeu fait ce qu'il doit. Le test tire de
+nouveau si la cible survit (trois au plus). Trois passages : **4/4, 4/4, 4/4** (le second tir n'a pas eu à servir dans ces trois-là).
 
 ## ~~L'e2e `hub-graph` : plus de graphe dans la carte du hub une seconde après le chargement~~ (relevé le 13 novembre 2026) — réglé le 14 novembre 2026 : l'état périmé, pas le graphe
 
