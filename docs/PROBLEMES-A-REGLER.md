@@ -12,7 +12,11 @@ connue ou supposée, la piste. Une entrée réglée est barrée avec le commit q
 marqueurs et son substitut (les harmoniques de la sonde, `nearE`, comme la mer d'un autre monde ; sur la Terre son poids y est 0) ; `seaShader`
 refuse une source sans ses marqueurs. **Gardes** : `tests/tracer-limits.test.ts` (40 compositions de 16 à 48 textures, 8 à 16 tampons : aucune
 liaison coupée encore nommée ; témoin positif : l'ancien `seaShader` y nomme `seaFft`, `seaSamp`) ; `check-wgsl` compile le traceur composé à
-16 et 18 textures (84/84 ; l'ancien : « 9371:29 unresolved value 'seaFft' »). `site-smoke` `gpuTextures=16` OK en 8,6 s, `24` OK. Le constat :
+16 et 18 textures (84/84 ; l'ancien : « 9371:29 unresolved value 'seaFft' »). `site-smoke` `gpuTextures=16` OK en 8,6 s, `24` OK. **En CI après le
+correctif** (run 43636295115, 62b99b61, SwiftShader) : le traceur compile (`shader-validation`, `core-pipeline-compilation@9395`,
+`tracer-compilation@11523`), puis « WebGPU device lost: Device was destroyed » / « Instance dropped in popErrorScope » — le processus GPU de
+Chrome tombe aux premières images (la page ne détruit pas le device : `release`/`simulateLoss` seuls l'appellent) ; **autre cause, non
+cherchée** : le dessin émulé par SwiftShader (trop long, mémoire ?) ; non reproduit ici (Metal). L'étape `site-smoke` reste informative. Le constat :
 
 **Constat (observé, CI et ce Mac)** : le site construit, ouvert par `scripts/site-smoke.ts` sous SwiftShader en CI (16 textures, 10 tampons de
 stockage par étage), affiche « trace.wgsl failed to compile: 9370:29 unresolved value 'seaFft' » — pas de jeu (runs 43632741249, 43634230192).
