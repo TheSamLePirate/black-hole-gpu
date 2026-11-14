@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-14 21:35 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-14 21:36 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous.
@@ -6882,3 +6882,13 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   (run 43641654170) : la porte passe (le renderer fait), puis SwiftShader perd l'appareil — rapporté, non compté.
 - Limites : la première nuit réelle (le clone mis à jour, l'agent lancé seul) à vérifier demain (`fetch`) ; l'alerte reste un fichier sur le mini,
   lue par `fetch` (pas de notification poussée).
+
+### 2026-11-14 21:36 UTC — PLAN-J3 question 3 relevée : le relief ombre déjà l'appareil, le décor non (et pourquoi)
+
+- **Contribution à la destination :** §7 (les ombres, un propriétaire par échelle) — l'état réel de la question 3 avant que Sam la tranche.
+- **Réalisé :** relevé : `keyRelief` (trace.wgsl) ombre l'appareil par le relief sur la Terre depuis le 1ᵉʳ oct. 2026 (faadd571) — le
+  contrat C-J3-1 le disait hors contrat, corrigé. Essai : la carte des arbres et bâtiments lue au point de l'appareil dans `keyLight`
+  (levier de mesure, phase J0 `craftshade`, La Défense, 50 m, dans l'ombre d'une tour à 18:00 UTC) — **lu −1** (hors carte) : le noyau de la
+  sonde ne reçoit pas le décor. Essai retiré (aucun code mort). PLAN-J3 §5, §8.
+- **Preuves :** run `…-craftshade` (kerr-mini) : `sceneryAtCraft` −1 / −1 aux trois passages ; l'image identique (64,32 / 64,30 / 64,40).
+- **Suite :** donner le décor (paramètres, carte) au noyau de la sonde — un lot à chiffrer — si Sam veut l'ombre du décor sur l'appareil.

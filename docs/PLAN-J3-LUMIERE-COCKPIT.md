@@ -115,7 +115,7 @@ avant / après au même cadrage. ΔGPU sur J0 (kerr-mini) et sur la scène J3 (J
 
   **Garanties mesurées** (J0, kerr-mini, 13 nov., §10) : la direction du Soleil de l'appareil = celle du sol (≤ 0,0002°) ; sa traversée de l'air
   = celle du sol (≤ 0,2 %) ; la lumière du ciel sur une surface horizontale : sonde exacte à −5…+9 % du ciel clair du sol, ses harmoniques +8…13 %
-  au-dessus de la sonde exacte. **Hors du contrat aujourd'hui** : les ombres du relief, des arbres et des bâtiments sur l'appareil (J3-3), l'air
+  au-dessus de la sonde exacte. **Hors du contrat aujourd'hui** : les ombres des arbres et des bâtiments sur l'appareil (J3-3 ; celle du relief y est — `keyRelief`, corrigé le 14 nov.), l'air
   entre l'appareil et la caméra (J3-2).
 - **C-J3-2 (ombres)** : une table des échelles et de leurs propriétaires, leurs portées et leurs fondus.
 - **C-J3-3 (air)** : la distance et le repère de chaque lecteur de la table aérienne.
@@ -136,7 +136,11 @@ et que l'outillage fonctionne sous Bun ; rien d'autre. Ni l'un ni l'autre n'est 
 
 1. **La scène J3** : ville (Paris bas) ou montagne (Alpes) — ou les deux, la ville d'abord ?
 2. **L'ordre** proposé (§3) : d'accord ?
-3. **L'ombre reçue par l'appareil** (J3-3) : la voulez-vous dans J3 (coût à mesurer), ou plus tard ?
+3. **L'ombre reçue par l'appareil** (J3-3) : la voulez-vous dans J3 (coût à mesurer), ou plus tard ? **Relevé le 14 nov.** : **le relief l'ombre déjà** — `trace.wgsl`
+   `keyRelief`, une marche vers le Soleil au-dessus du relief (48 pas) à la place de l'appareil, depuis le 1ᵉʳ octobre 2026 (faadd571) ; le §5 le
+   disait hors contrat, corrigé. **Le décor (arbres, bâtiments) non** : un essai de lecture de leur carte d'ombre au point de l'appareil, dans
+   `keyLight`, a lu −1 (hors carte) à La Défense dans l'ombre d'une tour — le noyau de la sonde (`env`) ne reçoit pas le décor (ses
+   paramètres ou sa carte) : le lot demande d'abord de le lui donner, plus gros qu'un levier ; essai retiré.
 4. **La chaîne d'assets** (J3-6) : meshoptimizer adopté pour les appareils ?
 5. **L'exposition la nuit** (PROBLEMES : elle suit la lumière reçue par la caméra, la face nocturne reste noire) : dans J3 ou à part ?
 6. **Le MSAA de l'appareil** (14 nov., [PROBLEMES](PROBLEMES-A-REGLER.md) « Le dessin de l'appareil coûte 4 à 5 ms ») : sa passe en MSAA 4× coûte
