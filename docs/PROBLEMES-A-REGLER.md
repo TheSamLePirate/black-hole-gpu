@@ -592,7 +592,7 @@ termes à un nœud fautif (43,0666 N, 6,12883 E, niveau 1).
   `probeSunJump`. **Mesuré** (même balayage) : 1,20 / 1,35 / 1,50 / 1,80 → **1,003 / 1,004 / 1,003 / 1,006** ; midi inchangé (0,957). Coût : au
   temps réel, quatre images de sonde de plus par minute de jeu (non chronométré).
 
-## Le dessin de l'appareil coûte 3 à 6 ms sur kerr-mini (et non 0,25 ms)
+## Le dessin de l'appareil coûte 3 à 12 ms sur kerr-mini selon sa taille à l'image (et non 0,25 ms)
 
 - **Mesuré** (00:23 UTC ; kerr-mini, 2026-11-14, e2e `perf-ab` `SET=ship SUBS=4 NOVSYNC=disable-gpu-vsync` (fenêtre 1600 × 1000, F-35 en cockpit à 900 m au nord de
 Tarifa, nuageux, sous-échantillonnage ×4 ; côtés A B B A A B ; témoin A/A +1,2 ms, −2,0 ms avec l'ancien ordre A B A B A B)) : l'appareil sauté entier (`debugSkipShip`) **−2,9 / −3,5 / −3,9 / −4,6 / −4,7 / −5,6 ms** sur une
@@ -602,10 +602,15 @@ Tarifa, nuageux, sous-échantillonnage ×4 ; côtés A B B A A B ; témoin A/A +
 - **Contradiction** avec GRAPHICS-PIPELINE §8.4 : sur J0 (10 nov.), l'ablation « dessin de l'appareil sauté, son masque gardé » donnait −0,25 ms
   et concluait que les passes `ship: …` ne coûtent presque rien. Différences : la scène (J0 au-dessus de la mer, ici des collines nuageuses), la
   méthode (ablation sur images terminées contre intervalles d'images sans synchro), le masque gardé là. Non tranchée.
-- **Lecture** : le coût est dans l'ombrage des pixels de l'appareil (MSAA, `ship.wgsl` `fs` : harmoniques, réflexions de l'écran, air), pas
-  dans sa géométrie — un niveau de détail ou meshoptimizer n'y changerait presque rien ([fiche J3-6](progress/j3/FICHE-J3-6-MESHOPT-2026-11-14.md)).
-- **Règle 1** : plafond 3–6 ms sur kerr-mini (cible 40 ms) — un lot de performance possible ; d'abord la décomposition de `fs` par A/B
-  (A B B A A B), puis la même mesure sur J0 pour lever la contradiction.
+- **Décomposé** (~00:40 UTC, même méthode, A/A entre −1,2 et +3,0 ms selon le passage) : **pas le calcul de l'ombrage** — `fs` privé de la
+  carte d'ombre (−1,7), de la réflexion d'écran (+1,7), du spéculaire de la sonde (+1,8), des trois (+0,6), et même réduit à un gris constant
+  (+1,5 : levier `ship.debugFs`, un masque dans l'uniforme, sans recompilation) : tout au bruit ; verrières −2,5 (à la limite), panaches, carte
+  d'ombre, profondeur préalable au bruit. **Mais la surface** : la moitié des triangles de chaque coque (`hull-half`) −2,7 contre −6,7 entières ;
+  l'appareil vu de 30 m (grand) **−12,1 ms**, de 300 m (quelques dizaines de pixels) −3,0 (au bruit). **Lecture** : le coût suit les pixels que
+  l'appareil couvre, pas sa géométrie ni son ombrage — le coût fixe par pixel de ses passes (MSAA 4× en rgba16f, le mouvement en rgba32f, la
+  composition dans la scène, le masque). Un niveau de détail ou meshoptimizer n'y changerait rien ([fiche J3-6](progress/j3/FICHE-J3-6-MESHOPT-2026-11-14.md)).
+- **Règle 1** : plafond 3–12 ms sur kerr-mini selon la taille de l'appareil à l'image (cible 40 ms) — un lot de performance possible ; suite :
+  ces passes une à une (`renderer.shipInScene`, le MSAA), puis la même mesure sur J0 pour lever la contradiction.
 
 ## La compilation du noyau de Jupiter proche : ~200 s à froid (M1 Max, 6 nov.) — 60 s sur kerr-mini le 13 nov., ~47 s à l'arrivée d'un voyage depuis le 13
 

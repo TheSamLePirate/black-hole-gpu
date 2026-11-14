@@ -1905,6 +1905,10 @@ export class ShipRenderer {
    *  pre-pass), "hull" (the craft's solid triangles), "glass" (the F-35's canopy and visor; "glass-sr" without the
    *  traced image's reflection, "glass-flat" a flat tint), "plume" (the flames, trails, lamps). */
   debugSkip = new Set<string>();
+  /** (a measuring mask, 0 in play — ship.wgsl fs, S.air.x): 1 no shadow map read, 2 no screen reflection, 4 no probe specular, 8 no shading
+   *  at all (a flat grey: the geometry's cost alone) — the
+   *  hull's shading's parts priced by A/B (tests/e2e/perf-ab.e2e.test.ts SET=ship); a uniform, no recompile */
+  debugFs = 0;
   private glassPipe?: (mode: number, a320?: boolean) => GPURenderPipeline;
   /** the glass's pipeline with the A320's code (GLASS_A320): made when one is first drawn */
   private a320GlassPipe?: GPURenderPipeline;
@@ -2477,7 +2481,7 @@ export class ShipRenderer {
       new Float32Array(G ? [G.rain, G.clock, G.airspeed, G.frost, ...G.wipers, ...G.rates] : [0, 0, 0, 0, 0, 0, 0, 0]),
     );
     this.device.queue.writeBuffer(this.uniform, LIFT_AT, new Float32Array(sea && v.lift ? v.lift : [0, 0, 0, 0]));
-    this.device.queue.writeBuffer(this.uniform, AIR_AT, new Float32Array([0, 0, v.airOn ? 1 : 0, this.skyBand4 ? 1 : 0]));
+    this.device.queue.writeBuffer(this.uniform, AIR_AT, new Float32Array([this.debugFs, 0, v.airOn ? 1 : 0, this.skyBand4 ? 1 : 0]));
     // (the flown craft's x and y axes in C — the columns of R —, else the camera's: S.shRefA/B, read by no shader since the map's
     // frame went back to the camera's, 5 Nov — its slots kept for the layout; to retire with the uniform's next reshuffle)
     this.device.queue.writeBuffer(
@@ -2971,7 +2975,9 @@ export class ShipRenderer {
       }
       rp.setVertexBuffer(0, dr.mesh.vbuf);
       rp.setIndexBuffer(dr.mesh.ibuf, "uint32");
-      rp.drawIndexed(dr.mesh.solid ?? dr.mesh.count, 1, 0, 0, dr.inst);
+      // (debugSkip "hull-half", a measure: the first half of each hull's triangles — is its cost the geometry's? PLAN-J3 J3-6)
+      const n = dr.mesh.solid ?? dr.mesh.count;
+      rp.drawIndexed(this.debugSkip.has("hull-half") ? Math.floor(n / 6) * 3 : n, 1, 0, 0, dr.inst);
     });
     // the craft's images in the sea, where nothing else is drawn
     const mirrored = v.sea ? this.draws.filter((dr) => dr.mirror) : [];

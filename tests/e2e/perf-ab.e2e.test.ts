@@ -33,6 +33,26 @@ const SHIP: Pair[] = [
     a: `__bh.settings.shipMount = "chase"; __bh.renderer.debugSkipShip = false`,
     b: `__bh.settings.shipMount = "chase"; __bh.renderer.debugSkipShip = true`,
   },
+  // (the hulls' shading by part — ship.debugFs, a uniform mask: 1 the shadow map's 16 taps, 2 the screen reflection, 4 the probe's specular)
+  { name: "hull shading: shadow map read", a: "__bh.renderer.ship.debugFs = 0", b: "__bh.renderer.ship.debugFs = 1" },
+  { name: "hull shading: screen reflection", a: "__bh.renderer.ship.debugFs = 0", b: "__bh.renderer.ship.debugFs = 2" },
+  { name: "hull shading: probe specular", a: "__bh.renderer.ship.debugFs = 0", b: "__bh.renderer.ship.debugFs = 4" },
+  { name: "hull shading: all three", a: "__bh.renderer.ship.debugFs = 0", b: "__bh.renderer.ship.debugFs = 7" },
+  { name: "hull shading: none (a flat grey)", a: "__bh.renderer.ship.debugFs = 0", b: "__bh.renderer.ship.debugFs = 8" },
+  // (the same geometry, its pixels changed: the craft seen from 30 m — large — and from 300 m — a few dozen pixels —, the "around" mount
+  // (chase keeps its own offset): the cost that stays at 300 m is its vertices', the rest its pixels')
+  {
+    name: "the craft's raster from 30 m (around)",
+    a: `__bh.settings.shipMount = "around"; Object.assign(__bh.camera.outside, { yaw: 60, pitch: 4, dist: 30 }); __bh.renderer.debugSkipShip = false`,
+    b: `__bh.settings.shipMount = "around"; Object.assign(__bh.camera.outside, { yaw: 60, pitch: 4, dist: 30 }); __bh.renderer.debugSkipShip = true`,
+  },
+  {
+    name: "the craft's raster from 300 m (around)",
+    a: `__bh.settings.shipMount = "around"; Object.assign(__bh.camera.outside, { yaw: 60, pitch: 4, dist: 300 }); __bh.renderer.debugSkipShip = false`,
+    b: `__bh.settings.shipMount = "around"; Object.assign(__bh.camera.outside, { yaw: 60, pitch: 4, dist: 300 }); __bh.renderer.debugSkipShip = true`,
+  },
+  // (half of each hull's triangles drawn: the geometry's share — ship.ts debugSkip "hull-half")
+  sk("hull-half"),
   // (the A/A: nothing changed between the sides — the noise of a pair's Δ, method rule 3)
   { name: "A/A (nothing changed)", a: "void 0", b: "void 0" },
 ];

@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-14 00:23 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-14 00:40 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous.
@@ -6281,4 +6281,12 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   trafic réel du détroit au bruit. Contredit l'ablation J0 du 10 nov. (−0,25 ms) : noté dans GRAPHICS-PIPELINE §8.4 et PROBLEMES, non tranché.
 - Limites : une scène, une machine ; verrières et panaches non tranchés ; pas encore sur J0. Prochaine étape : la décomposition de `ship.wgsl`
   `fs` (règle 1 : plafond 3–6 ms), puis la même mesure sur J0.
+
+## 2026-11-14T00:40Z — Le coût de l'appareil décomposé : il suit ses pixels, pas sa géométrie ni son ombrage
+
+- Contribution (§8, règle 1 avant un lot) : leviers de mesure `ship.debugFs` (masque dans l'uniforme : ombre, réflexion, spéculaire, gris
+  constant) et `hull-half` ; `perf-ab` `SET=ship` (30 m / 300 m, moitié des triangles). **Mesuré** (kerr-mini, Tarifa, A B B A A B, A/A ±3 ms) :
+  l'ombrage au bruit, même réduit à un gris ; l'appareil vu de 30 m −12,1 ms, de 300 m au bruit ; moitié des triangles −2,7 contre −6,7.
+- Lecture : le coût fixe par pixel des passes de l'appareil (MSAA, mouvement, composition, masque) — prochaine décomposition ; meshoptimizer
+  et les niveaux de détail n'y changeraient rien. PROBLEMES, fiche J3-6, BH-API. Non vérifié : J0, le M1 Max.
 

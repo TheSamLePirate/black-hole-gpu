@@ -930,6 +930,8 @@ fn pcdLight(uv: vec2f, dx: vec2f, dy: vec2f, cosV: f32) -> vec3f {
 
 @fragment
 fn fs(in: VOut, @builtin(front_facing) front: bool) -> @location(0) vec4f {
+  // (S.air.x bit 8 — ship.debugFs, a measure —: a flat grey at once, the shading left out: what the geometry, its raster and its MSAA cost alone)
+  if ((u32(S.air.x) & 8u) != 0u) { return vec4f(vec3f(0.18) * S.light.x, 1.0); }
   // (the space station before it: hidden there — the station is composited first, into the traced image)
   if (S.box.z > 0.0) {
     let dims = vec2f(textureDimensions(scene));
@@ -1324,7 +1326,10 @@ fn fs(in: VOut, @builtin(front_facing) front: bool) -> @location(0) vec4f {
   let shOn = I.flags.y > 0.5;
   // (its shadow map read once: the key light below is this same light — its 16 compared taps were read twice)
   var sd = 1.0;
-  if (shOn) { sd = shadowAt(pR, ng, dom.xyz); }
+  // (S.air.x: a measuring mask — ship.debugFs, 0 always in play —: 1 no shadow map read, 2 no screen reflection, 4 no probe specular, 8 no
+  // shading at all — fs's first line)
+  let dbg = u32(S.air.x);
+  if (shOn && (dbg & 1u) == 0u) { sd = shadowAt(pR, ng, dom.xyz); }
   // (the A320's flight deck: its sky seen through its windows, and that light bounced about its grey panels — the
   // ceiling lit from below by the floor and the panels: half the light from all sides alike, whiter, the occlusion
   // softer)
@@ -1353,10 +1358,11 @@ fn fs(in: VOut, @builtin(front_facing) front: bool) -> @location(0) vec4f {
   // the probe elsewhere; rougher ones the probe (one cone of taps, as sharp as the smoother layer)
   let cr = clamp(0.05 * S.mat.z, 0.03, 1.0);
   let ar = min(rough, cr);
-  let sr = screenRefl(r, ar * ar);
+  let sr = select(screenRefl(r, ar * ar), vec4f(0.0), (dbg & 2u) != 0u);
   let wB = sr.w * (1.0 - smoothstep(0.1, 0.3, rough));
   let wC = sr.w * (1.0 - smoothstep(0.1, 0.3, cr));
-  var col = mix(envSpec(r, rough), sr.rgb, wB) * fss * occS + (emsE + kd) * E / PI * occD;
+  let es = select(envSpec(r, rough), E / PI, (dbg & 4u) != 0u);
+  var col = mix(es, sr.rgb, wB) * fss * occS + (emsE + kd) * E / PI * occD;
 
   // the key light (a star, a disc of angular radius rs): Lambert and GGX on the base, the varnish's own
   // sharp highlight on top — shadowed by the hull (its shadow map, from this light)
@@ -1391,7 +1397,8 @@ fn fs(in: VOut, @builtin(front_facing) front: bool) -> @location(0) vec4f {
   // clear coat: a thin varnish (F0 = 0.04, roughness 0.05) that darkens what is below by its Fresnel
   let cab = envAB(cr, nv);
   let fc = (0.04 * cab.x + cab.y) * coat;
-  col = col * (1.0 - fc) + mix(envSpec(r, cr), sr.rgb, wC) * fc * occS + key * (1.0 - keyFc) + keyCoat;
+  let esC = select(envSpec(r, cr), E / PI, (dbg & 4u) != 0u);
+  col = col * (1.0 - fc) + mix(esC, sr.rgb, wC) * fc * occS + key * (1.0 - keyFc) + keyCoat;
   // re-entry: the faces meeting the air glow (visual, driven by ρ v³ — the heat does nothing yet)
   let pl = S.plasma.w;
   if (pl > 0.0) {

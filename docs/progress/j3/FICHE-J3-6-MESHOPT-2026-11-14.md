@@ -45,8 +45,9 @@ quantification** — l'étape qui perd de l'information et donne d'ordinaire l'e
   son dessin (`debugSkipShip`) rend **0,25 ms** — réordonner ou simplifier le F-35 ne peut pas rendre davantage : **règle 1, pas un lot de
   performance**. Le trafic et les porte-avions (vus en nombre près d'un aéroport ou en mer) ne sont pas chiffrés : à mesurer avant tout lot.
   **Revu le même jour** (~00:23 UTC, kerr-mini, `perf-ab` `SET=ship`, Tarifa, A B B A A B, A/A +1,2 ms) : l'appareil entier coûte **3 à 6 ms** là
-  (l'ablation J0 ci-dessus le contredit, non tranché — PROBLEMES), **mais dans l'ombrage de ses pixels** : sa passe de profondeur préalable, la
-  géométrie seule, est au bruit. Un niveau de détail ou un réordonnancement n'y prendrait presque rien : la conclusion tient. Le trafic réel du
+  (l'ablation J0 ci-dessus le contredit, non tranché — PROBLEMES), **et ce coût suit les pixels qu'il couvre** : vu de 30 m −12,1 ms, de 300 m
+  au bruit ; sa passe de profondeur préalable (la géométrie seule) et son ombrage réduit à un gris constant au bruit. Un niveau de détail ou un
+  réordonnancement n'y prendrait presque rien : la conclusion tient. Le trafic réel du
   détroit (`perf-ab` paire « the real traffic ») : +0,4 ms, au bruit.
 - **Niveaux de détail** : le simplificateur atteint 50 % des triangles avec une erreur ≤ 0,07 % de l'étendue sur le Ranger, le Lander et les
   porte-avions, et 25 % à ≤ 1 % sur les porte-avions — l'usage le plus prometteur (le trafic lointain, les porte-avions vus de loin), à
