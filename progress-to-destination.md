@@ -6427,3 +6427,10 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
 - Limites : « Reprendre » charge un instantané (un nouveau vol) : les dégâts y reviennent — voulu.
 - Suite : restent FX-19 (la fraîcheur des écrans, à mesurer d'abord) et FX-21 (fonctions à moitié finies : du travail de plan) ; NET-19
   (un banc d'abord) ; RD3/RD6 attendent Sam.
+
+## 2026-11-14T15:09Z — Le HUD dans un worker : arrêté sur mesure (gain ≤ 0,8 ms, règle 1)
+
+- **Mesuré** (kerr-mini, e2e `hud-clone` nouveau) : envoyer les données du HUD du F-35 coûte 0,2 ms par image (p95 0,8) ; les HUD de l'A320,
+  du Ranger et du Lander n'empruntent pas la symbologie. Un worker rendrait ≤ 0,8 ms par image : sous 1 ms, avec un risque de retard des
+  instruments — **pas de lot**. Les étapes 1–3 (sans effet sur l'image) restent. [Fiche CPU](docs/progress/j0/FICHE-CPU-kerr-mini-2026-11-14.md).
+

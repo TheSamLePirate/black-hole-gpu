@@ -112,3 +112,13 @@ plus) et l'envoyer faite ; sonder les autres modes (A320, Ranger, combat, approc
 la page, le même dessin ; pour un worker, l'échantillonneur de hauteurs (`relief.at`) n'aura plus à voyager. **Vérifié** : e2e `radar-relief` 2/2
 (le massif rouge, les vallées vertes, à 40 puis 10 km), tests HUD 151/151, tsc.
 
+### Étape 4 (~15:09 UTC) : le prix de l'envoi — le chantier arrêté sur mesure (règle 1)
+
+e2e `hud-clone` (nouveau ; F-35, A320, Ranger, Lander en cockpit au-dessus de Toulon, 4 s chacun, la sonde posée ; et le temps d'un
+`structuredClone` des données du HUD, l'échantillonneur et l'image du relief ôtés). **Mesuré** (kerr-mini) : **F-35** — `relief.at` et
+`reliefImg` seuls (l'image se transférerait) ; la copie **0,2 ms en médiane, 0,8 ms au 95ᵉ centile** par image. **A320, Ranger, Lander** —
+aucune image n'a passé par la symbologie : leur HUD prend d'autres chemins ; la symbologie coûteuse (≈ 1,0 ms) est celle du F-35.
+**Conclusion** : un worker rendrait ≈ 1,0 − 0,2 = **0,8 ms par image au plus** à la boucle, ses pointes en reprenant une part — **sous 1 ms
+(règle 1)**, avec le risque d'une image de retard des instruments. **Le chantier s'arrête là**, faute de gain suffisant ; les étapes 1–3 restent
+(sans effet sur l'image, utiles à une autre découpe). La boucle ne se gagnera pas par ce seul poste.
+

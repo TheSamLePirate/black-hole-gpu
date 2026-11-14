@@ -2637,7 +2637,18 @@ export class FlightHud {
     i.reliefImg = i.relief && this.s.f35RadarRelief !== false && scopeRange.m > 0 ? radarRelief(i.relief, scopeRange.m) : null;
     // (a measure for a HUD drawn in a worker: what of its frame data a structuredClone would refuse — off unless the e2e sets the probe)
     const probe = (globalThis as { __hudCloneProbe?: Set<string> }).__hudCloneProbe;
-    if (probe) noteUnclonable({ s: this.s, i, future: fut, runway: this.runway?.() ?? null }, probe);
+    if (probe) {
+      noteUnclonable({ s: this.s, i, future: fut, runway: this.runway?.() ?? null }, probe);
+      // (and what sending it would cost the page: a structuredClone of it, the height sampler and the made image left out — timed)
+      const t0 = performance.now();
+      structuredClone({
+        s: this.s,
+        i: { ...i, relief: i.relief ? { ...i.relief, at: undefined } : i.relief, reliefImg: null },
+        future: fut,
+        runway: this.runway?.() ?? null,
+      });
+      ((globalThis as { __hudCloneMs?: number[] }).__hudCloneMs ??= []).push(performance.now() - t0);
+    }
     drawSymbology({
       ctx,
       W,
