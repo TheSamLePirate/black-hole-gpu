@@ -106,7 +106,8 @@ struct Ship {
   // [m] at a distance d [m], z the fade's angle [rad], w 1 on —, along the sea's up (sea.xyz)
   lift: vec4f,
   // (PLAN-J3 J3-2) the air between the eye and the craft: z 1 when the tracer's aerial table is written this frame (its reach and the
-  // metres per unit in sh[12], from the probe's kernel); w 1: the sky's light with band 4 of the harmonics (J3-1, a comparison)
+  // metres per unit in sh[12], from the probe's kernel); w 1: the sky's light with band 4 of the harmonics (J3-1, a comparison); y 1: the
+  // night's floor of the ground on the craft too (sh[12].w — PLAN-J3 §8 question 7, a comparison)
   air: vec4f,
 };
 
@@ -708,6 +709,9 @@ fn irradiance(n: vec3f) -> vec3f {
     let b4 = shBasis4(toProbe(n));
     for (var k = 0u; k < 9u; k++) { e += -0.1308997 * b4[k] * sh[13u + k].rgb; }
   }
+  // (PLAN-J3 §8 question 7 — S.air.y on, a comparison until Sam judges: the craft takes the night's floor the ground takes — EARTH_NIGHT,
+  // ~0.01 lux, five times the real moonless sky, its tint —, the greater of it and its sky, as liteSky does; sh[12].w its luminance)
+  if (S.air.y > 0.5) { return max(e, sh[12].w * vec3f(0.817, 1.021, 1.328)); }
   return max(e, vec3f(0.0));
 }
 

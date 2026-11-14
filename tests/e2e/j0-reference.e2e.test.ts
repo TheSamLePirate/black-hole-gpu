@@ -33,7 +33,7 @@ import { sceneryReady } from "./lib/plan-views";
 //       screens, the cockpit (the outside view) — between two baseline flights (drift).
 // Output: remote-results/j0/<machine>/ (J0_OUT): j0.json, shots (start, mid-turn, end; each ablation's last frame).
 // J0_PHASES=flight,ablate,sustained (default all; sustained: the flight again after the ablations, the machine hot), ABLATE_S (20), J0_MACHINE (the label: "m1max", "kerr-mini"; default the host name).
-// Other phases, asked by name: agecheck, framing (PLAN-J3 J3-0), keylight, keyair, keysky, skyband4, coherence (J3-1), keyhaze (J3-2), waterincident (J3-7), shadows (J3-3), wetbld, cityview, materials (J3-5), seadusk, probedump, tracedview (PROBLEMES), twilightdim (J3-1) (J3-1: the craft's key light against the incident Sun toward
+// Other phases, asked by name: agecheck, framing (PLAN-J3 J3-0), keylight, keyair, keysky, skyband4, coherence (J3-1), keyhaze (J3-2), waterincident (J3-7), shadows (J3-3), wetbld, cityview, materials (J3-5), seadusk, probedump, tracedview (PROBLEMES), twilightdim (J3-1), nightfloor (J3 question 7) (J3-1: the craft's key light against the incident Sun toward
 // sunset, ~3 min on kerr-mini; keyair: its air two ways, march and table, ~4 min; keysky: the sky's light two ways, ~4 min; coherence: the three gaps in one read per hour, ~5 min).
 // Not a pass/fail on the frame rate: the fiche is written from j0.json (docs/progress/j0/). It fails on a GPU error, a craft not
 // placed, a flight not flown.
@@ -1283,6 +1283,66 @@ describe.skipIf(!E2E)("J0: the reference flight over Toulon-Hyères", () => {
       }
     },
     1_200_000,
+  );
+
+  // (PLAN-J3 §8 question 7 — the craft's night floor, J0_PHASES=nightfloor (NF_TIMES other moments): under −15° the ground takes its
+  // calibrated night floor (EARTH_NIGHT, ~0.01 lux, five times the real moonless sky) and the craft the traced sky — 0.24 × the ground at
+  // −19°. renderer.ship.nightFloor gives the craft the same floor. Off (as drawn), on, off again (the A/A), the exposure held; the quarter
+  // view; shots, the frame's centre (the craft) and lower half (the ground) — views for Sam)
+  test.skipIf(!PHASES.includes("nightfloor"))(
+    "J3 question 7: the craft's night floor — off / on / off at night, the exposure held; shots for Sam",
+    async () => {
+      await start("");
+      const rows: Record<string, Record<string, number>> = {};
+      for (const utc of (process.env.NF_TIMES ?? "20:40,21:40,22:40").split(",")) {
+        await app.js(`(async () => { const f = () => new Promise((q) => requestAnimationFrame(q)); __bh.freeze(false);
+          __bh.game.setDate("2026-07-10T${utc}:00Z"); Object.assign(__bh.settings, { shipMount: "quarter", lookProfile: "neutral", dof: false, motionBlur: 0, autoExposure: true, exposure: 0 });
+          __bh.refresh(); for (let i = 0; i < 90; i++) await f(); __bh.freeze(true); __bh.renderer.settleExposure(); for (let i = 0; i < 30; i++) await f();
+          const ev = __bh.renderer.ev(__bh.settings); Object.assign(__bh.settings, { autoExposure: false, exposure: ev }); return 1; })()`);
+        const row: Record<string, number> = {};
+        const ev0 = await app.js<number>("__bh.settings.exposure");
+        // (at the game's exposure — the eye adapted to the night: I/(I + I_eye) — and 6 stops over it, a photograph's: whether it shows at all)
+        for (const [name, on, up] of [
+          ["off", false, 0],
+          ["on", true, 0],
+          ["offAgain", false, 0],
+          ["off6", false, 6],
+          ["on6", true, 6],
+        ] as const) {
+          await app.js(`(async () => { const f = () => new Promise((q) => requestAnimationFrame(q)); __bh.renderer.ship.nightFloor = ${on}; __bh.settings.exposure = ${ev0} + ${up}; __bh.refresh();
+            for (let i = 0; i < 20; i++) await f(); return 1; })()`);
+          const x = (await app.cdp.send("Page.captureScreenshot", { format: "png" })) as { data: string };
+          const bytes = Buffer.from(x.data, "base64");
+          await Bun.write(`${OUT}/nightfloor-${utc.replace(":", "")}-${name}.png`, bytes);
+          const img = readPng(new Uint8Array(bytes));
+          const mean = (x0: number, x1: number, y0: number, y1: number) => {
+            let t = 0,
+              n = 0;
+            for (let y = Math.floor(y0 * img.height); y < Math.floor(y1 * img.height); y++)
+              for (let xx = Math.floor(x0 * img.width); xx < Math.floor(x1 * img.width); xx++) {
+                const i = (y * img.width + xx) * img.channels;
+                t += 0.2126 * img.data[i]! + 0.7152 * img.data[i + 1]! + 0.0722 * img.data[i + 2]!;
+                n++;
+              }
+            return +(t / n).toFixed(2);
+          };
+          row[`${name}Craft`] = mean(0.45, 0.85, 0.45, 0.8);
+          row[`${name}Ground`] = mean(0, 0.35, 0.75, 1);
+        }
+        rows[utc] = row;
+        console.log(`  J3 night floor (${utc}): ${JSON.stringify(row)}`);
+      }
+      out.nightfloor = rows;
+      await app.js(
+        `(() => { __bh.renderer.ship.nightFloor = false; Object.assign(__bh.settings, { autoExposure: true, exposure: 0, shipMount: "cockpit" }); __bh.freeze(false); __bh.game.setDate("${J0_SCENE.date}"); return 1; })()`,
+      );
+      // (the A/A: off twice within 1 level; the positive — the lever acts —: 6 stops up, in the deep night, the craft brighter with the floor
+      // (run 1 of 14 Nov: at the game's exposure no difference at all — 0.77 / 0.77, the craft's lamps alone —, the ground 0.03))
+      for (const r of Object.values(rows)) expect(Math.abs(r.offCraft! - r.offAgainCraft!)).toBeLessThan(1);
+      const deep = rows["21:40"] ?? Object.values(rows).at(-1)!;
+      expect(deep.on6Craft! - deep.off6Craft!).toBeGreaterThan(1);
+    },
+    900_000,
   );
 
   // (PLAN-J3 J3-1 — the sky's light on the craft with band 4 of its probe's harmonics, J0_PHASES=skyband4: the craft from above (around,

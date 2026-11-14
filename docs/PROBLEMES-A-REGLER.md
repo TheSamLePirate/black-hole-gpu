@@ -3,6 +3,14 @@
 Problèmes constatés, pas encore réglés. Chaque entrée : la date (UTC), ce qui est mesuré ou observé et sa source, la cause
 connue ou supposée, la piste. Une entrée réglée est barrée avec le commit qui la règle, pas effacée.
 
+## Des rayures horizontales dans le ciel de nuit, l'exposition relevée (relevé le 14 novembre 2026, J0 `nightfloor`)
+
+**Constat (observé, kerr-mini, J0 à 21:40 UTC — Soleil −19° —, vue quarter, exposition du jeu + 6 IL)** : le ciel au-dessus de l'horizon fait des
+bandes horizontales régulières, une période de ~10–11 lignes de l'image, la luminance (canal vert, colonnes 200–600) allant de 7 à 24 d'une
+bande à l'autre. À l'exposition du jeu, invisible (le ciel ~0). **Cause non cherchée** (supposées : le sous-échantillonnage du temps réel par
+blocs, ou un ciel dessiné par bandes, au bruit d'une nuit très sombre amplifié). **Piste** : la même vue à +6 IL monde figé, un raster ombré
+en entier (`earthRasterShading: "every"`), puis le tracé seul ; la photo de nuit (mode photo, exposition longue) la montrerait.
+
 ## ~~Le sol éclairé comme de jour au crépuscule nautique (Soleil −5 à −10°)~~ (relevé le 14 novembre 2026, sonde de cohérence J0) — réglé le 14 novembre 2026
 
 **Constat (mesuré, kerr-mini, J0 `coherence` et `twilightdim`, 14 nov.)** : de −7,5 à −9° de Soleil, le ciel que prend le sol (`liteSky` :

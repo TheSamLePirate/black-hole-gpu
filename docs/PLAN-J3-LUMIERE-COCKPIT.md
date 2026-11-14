@@ -144,7 +144,11 @@ et que l'outillage fonctionne sous Bun ; rien d'autre. Ni l'un ni l'autre n'est 
    4×, ou passer à 1× (levier `SHIP_MSAA` prêt) ?
 7. **Le plancher de nuit de l'appareil** (14 nov.) : la nuit sans Lune, le sol reçoit le plancher calibré `EARTH_NIGHT` (~0,01 lux, 5 × le
    réel « pour que le sol se devine ») et l'appareil le ciel tracé, proche du réel : l'appareil 0,24 fois le sol sous −17°. Lui donner le même
-   plancher (l'appareil se devine aussi, 4 × plus clair la nuit), ou le laisser au ciel réel ?
+   plancher (l'appareil se devine aussi, 4 × plus clair la nuit), ou le laisser au ciel réel ? **Mesuré** (14 nov., J0 `nightfloor`, levier
+   `renderer.ship.nightFloor`, éteint) : **à l'exposition du jeu, aucune différence** — l'œil adapté à la nuit (`earthSunlight`) laisse l'appareil
+   et le sol noirs (appareil 0,77 / 0,77, ses feux seuls ; sol 0,03) ; **à +6 IL** (une photo) l'appareil 6,7 → 24,9, le sol 4,6 : une silhouette
+   noire devient une coque gris-bleu lisible. Recommandation : le laisser éteint (rien à gagner en jeu) ; l'allumer si la photo de nuit doit
+   montrer l'appareil.
 
 ## 9. Non vérifié
 

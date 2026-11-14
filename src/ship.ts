@@ -1751,6 +1751,9 @@ export class ShipRenderer {
   private aerial: { a: GPUTexture; b: GPUTexture; samp: GPUSampler } | null = null;
   /** (PLAN-J3 J3-1) the sky's light on the craft with band 4 of its probe's harmonics (ship.wgsl irradiance): a comparison until Sam judges */
   skyBand4 = false;
+  /** (PLAN-J3 §8 question 7) the craft takes the ground's night floor (EARTH_NIGHT, the twilight's reference) as the least of its sky —
+   *  a comparison until Sam judges; off as drawn */
+  nightFloor = false;
   setAerial(a: GPUTexture, b: GPUTexture, samp: GPUSampler) {
     this.aerial = { a, b, samp };
     // (bound with the rest once the craft is loaded — load(); again now if it is)
@@ -2491,7 +2494,11 @@ export class ShipRenderer {
       new Float32Array(G ? [G.rain, G.clock, G.airspeed, G.frost, ...G.wipers, ...G.rates] : [0, 0, 0, 0, 0, 0, 0, 0]),
     );
     this.device.queue.writeBuffer(this.uniform, LIFT_AT, new Float32Array(sea && v.lift ? v.lift : [0, 0, 0, 0]));
-    this.device.queue.writeBuffer(this.uniform, AIR_AT, new Float32Array([this.debugFs, 0, v.airOn ? 1 : 0, this.skyBand4 ? 1 : 0]));
+    this.device.queue.writeBuffer(
+      this.uniform,
+      AIR_AT,
+      new Float32Array([this.debugFs, this.nightFloor ? 1 : 0, v.airOn ? 1 : 0, this.skyBand4 ? 1 : 0]),
+    );
     // (the flown craft's x and y axes in C — the columns of R —, else the camera's: S.shRefA/B, read by no shader since the map's
     // frame went back to the camera's, 5 Nov — its slots kept for the layout; to retire with the uniform's next reshuffle)
     this.device.queue.writeBuffer(

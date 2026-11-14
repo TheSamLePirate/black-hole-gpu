@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-14 19:45 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-14 19:53 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous.
@@ -6790,3 +6790,15 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   `twilight-sky` passe (inchangé). check-wgsl 82/82. **Non mesuré** : ΔGPU (trois opérations), le M1 Max.
 - **Limites / suite :** sous −15°, l'appareil 0,24–0,56 fois le sol : le plancher calibré du sol (`EARTH_NIGHT`, 5 × le réel par choix Q2) que
   l'appareil n'a pas — question 7 à Sam.
+
+### 2026-11-14 19:53 UTC — PLAN-J3 question 7 mesurée : le plancher de nuit de l'appareil, invisible en jeu
+
+- **Contribution à la destination :** §7 / J3-1 (le même ciel pour l'appareil et le sol) — la mesure qui manquait pour que Sam tranche la
+  question 7, sans changer l'image.
+- **Réalisé :** levier de comparaison `renderer.ship.nightFloor` (éteint) : la sonde écrit le plancher de nuit du sol (`EARTH_NIGHT`, la
+  table du crépuscule) dans `sh[12].w`, `ship.wgsl` `irradiance` en prend le maximum (uniforme `S.air.y`) ; phase J0 `nightfloor` (A/B à
+  l'exposition du jeu et à +6 IL). PLAN-J3 §8 question 7, PROBLEMES (des rayures dans le ciel de nuit à +6 IL).
+- **Preuves (mesuré, kerr-mini, J0)** : à l'exposition du jeu, aucune différence (appareil 0,77 / 0,77, A/A ≤ 0,07 ; sol 0,03 — noir) ; à
+  +6 IL (21:40, Soleil −19°) l'appareil 6,7 → 24,9, le sol 4,6 / 4,5 (témoin positif : le levier agit). check-wgsl 82/82, tsc.
+- **Limites / suite :** recommandation à Sam : éteint (rien à gagner en jeu). Le levier retiré quand Sam aura répondu. Les rayures du ciel
+  de nuit, cause non cherchée.
