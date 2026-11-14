@@ -3066,8 +3066,10 @@ async function main() {
     const b = solarBody(id);
     if (!b || b.kind === "star") return null;
     const q = toBodyFixed(id, p.X, sim.time);
-    const r = Math.hypot(...q);
-    return { body: id, c: q.map((x) => x / b.radius) as [number, number, number], altKm: ((r - b.radius) * M_METRES) / 1e3 };
+    // (its height over the body's figure — WGS84 on the Earth, the giants' spheroids —: `|q| − radius`, a sphere of the equator's
+    // radius, said −12 km on the ground at Paris, and kept the relief's "low" ship (renderer: < 60 km) 12 km too high there)
+    const h = cartToGeodetic(b.radius, flatteningOf(id), q).h;
+    return { body: id, c: q.map((x) => x / b.radius) as [number, number, number], altKm: (h * M_METRES) / 1e3 };
   }
 
   /** PLAN-J2 J2-2 (Sam, 12 Nov 2026): the craft the free camera follows — an airliner of the traffic, a ship, a wingman, another

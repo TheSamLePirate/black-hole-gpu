@@ -6572,3 +6572,16 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   `voyage-prewarm` 1/1 ; tsc.
 - Limites : la décision de préchargement (seuil de 60 km) voit désormais la vraie hauteur : un but entre ~48 et 60 km d'altitude sphérique
   au-dessus des latitudes moyennes n'est plus compté « bas » — signalé à la session du rendu (CM3).
+
+### 2026-11-14 16:43 UTC — Le focus du vaisseau sur WGS84 (suite de NET-28 côté rendu)
+
+- **Contribution à la destination :** §7 « une responsabilité commune » et règle WGS84 de CLAUDE.md : le monde décide de ce qu'il streame
+  autour de l'appareil sur sa vraie hauteur. Le départ (CM3) et le focus du vaisseau lisent maintenant la même hauteur sur la même figure.
+- **Réalisé :** `src/main.ts` `shipFocus()` : `altKm` = `cartToGeodetic(radius, flatteningOf(body), q).h` au lieu de `|q| − radius`
+  (une sphère au rayon équatorial). Ses lecteurs dans le renderer : les cartes `high` sous 2 000 km et les fenêtres de relief du vaisseau
+  « bas » sous 60 km. BH-API (ligne `departure`).
+- **Preuves :** vérifié par script (les deux formules, mêmes points) : sol de Paris ancien −12,081 km → 0,000 ; 60 km au-dessus de Paris
+  ancien 47,919 km (compté bas à tort) → 60,000 ; pôle −21,385 → 0 ; équateur 0 → 0 (témoin A/A). tsc et biome au pre-push.
+  **Non vérifié en jeu** : aucun e2e ni mesure du streaming (le changement ne touche que la frontière des 60 km et des 2 000 km, à 0–21 km près).
+- **Limites / suite :** rien ne change sous ~40 km ni au-dessus de ~2 020 km ; entre les deux, le relief et les cartes fines s'arrêtent
+  désormais à la vraie hauteur.
