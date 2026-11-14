@@ -72,3 +72,17 @@ navigation dans le système de Gargantua (`as`, ~3 Mo/s alloués), la publicatio
 1 ms ne s'ouvre pas pour la cadence — ces postes ne se traitent qu'ensemble, par un chantier de fond (le renderer préparant moins chaque
 image, du travail vers des workers) ou par une décision de Sam sur la fraîcheur du HUD (redessiné moins souvent : ≈ 1,4 ms par image en jeu).
 
+## Le chantier de fond le plus gros sans décision : le HUD dans un worker (étude, ~03:14 UTC — rien de fait)
+
+Le HUD coûte ≈ 1,4 ms par image sur le fil de la page (le HUD du F-35, `drawSymbology`, ≈ 1,0 ms ; les écrans du cockpit — `portal`, `tsd` —
+≈ 0,25 ms). Le dessiner dans un worker sur un `OffscreenCanvas` ne change ni l'image ni la fraîcheur des instruments (toujours à chaque image) :
+c'est le lot de fond sans décision qui rendrait le plus. **Ce qu'il faut** (lu dans le code, 14 nov.) : `src/ui/hud/symbology.ts`, 3 522 lignes,
+et ses modules (`jethud`, `kindhud`, `radar/symbols`, `world/runwaydraw`, `hudkit`) dans le worker ; envoyer à chaque image ses données
+(`SymFrame` : réglages, `SymInfo`, la vue du futur, la piste, la densité — des objets à rendre clonables) ; lui donner ce qu'il lit sur la page :
+les boîtes des panneaux (`hud/layout.ts` `panels`, mesurées dans le DOM — à envoyer quand elles changent), les pistes proches
+(`world/runways.ts` `fieldsNearCached` — leurs données chargées sur la page), la langue (`i18n`), l'horloge du clignotement ; reprendre ce qu'il
+rend à la page : les cibles cliquables (`hudHits`), les boîtes dessinées (`layout.drawn`, que l'e2e « rien ne se recouvre » lit) ; remplacer son
+`document.createElement("canvas")` (l'image du relief) par un `OffscreenCanvas`. **Risque** : une image de retard du HUD sur la scène si la
+synchronisation est mal faite — à mesurer (l'âge des instruments, la sonde de J3-0) avant et après. **Plafond** (règle 1) : ≈ 1,4 ms par image de la
+boucle sur kerr-mini.
+
