@@ -150,3 +150,7 @@ Les plafonds de J5-1 au beau temps, de J5-2 par corps et la parité du repli tra
   l'A/A ; PLAN-J3 (ajout au tableau de J3-R), BH-API, GRAPHICS-PIPELINE. Vérifié : tsc, biome, `check-wgsl` 84/84, budgets des noyaux.
   Restent : les leviers de mesure (§5 et J4) ; le repli tracé de la Terre (gardé, réglage 3) ; `ship.skyBand4` et `ship.nightFloor` (éteints,
   options sans autre usage — à retirer à la confirmation de Sam, PLAN-J3).
+- **J5-R terminé** (2026-11-15 06:30 UTC) : `ship.skyBand4` (son noyau `envSH4`, la bande 4 de `sh[13..21]`) et `ship.nightFloor` retirés —
+  ship.wgsl, ship.ts —, leurs phases J0 `skyband4` et `nightfloor` aussi ; BH-API, GRAPHICS-PIPELINE (D2, annexe régénérée), E2E-CATALOGUE.
+  Vérifié : tsc, biome, `check-wgsl` 84/84. Il ne reste aucun ancien chemin de levier allumé depuis J3 ; restent les leviers de mesure et le
+  repli tracé de la Terre (gardé, réglage 3).

@@ -106,8 +106,7 @@ struct Ship {
   // [m] at a distance d [m], z the fade's angle [rad], w 1 on —, along the sea's up (sea.xyz)
   lift: vec4f,
   // (PLAN-J3 J3-2) the air between the eye and the craft: z 1 when the tracer's aerial table is written this frame (its reach and the
-  // metres per unit in sh[12], from the probe's kernel); w 1: the sky's light with band 4 of the harmonics (J3-1, a comparison); y 1: the
-  // night's floor of the ground on the craft too (sh[12].w — PLAN-J3 §8 question 7, a comparison)
+  // metres per unit in sh[12], from the probe's kernel); y, w unused (band 4 and the night floor, retired at J5-R)
   air: vec4f,
 };
 
@@ -233,8 +232,6 @@ fn envGGX(@builtin(global_invocation_id) gid: vec3u) {
 }
 
 var<workgroup> shAcc: array<array<vec3f, 9>, 64>;
-// (PLAN-J3 J3-1, envSH4: bands 0–2 and band 4 — 18 a thread; 32 threads: 9 KB of the 16 KB a group may hold)
-var<workgroup> shAcc4: array<array<vec3f, 18>, 32>;
 
 fn shBasis(d: vec3f) -> array<f32, 9> {
   return array<f32, 9>(
@@ -242,16 +239,6 @@ fn shBasis(d: vec3f) -> array<f32, 9> {
     0.488603 * d.y, 0.488603 * d.z, 0.488603 * d.x,
     1.092548 * d.x * d.y, 1.092548 * d.y * d.z, 0.315392 * (3.0 * d.z * d.z - 1.0),
     1.092548 * d.x * d.z, 0.546274 * (d.x * d.x - d.y * d.y));
-}
-// (PLAN-J3 J3-1) the real harmonics' band 4 — the clamped cosine's next band (band 3's is zero): the order-2 harmonics lent the sky
-// 6–13 % too much on a level surface against the probe's exact integral, band 4 brings it to 2–4 % (J0, kerr-mini, 13 Nov)
-fn shBasis4(d: vec3f) -> array<f32, 9> {
-  let x = d.x; let y = d.y; let z = d.z; let z2 = z * z;
-  return array<f32, 9>(
-    2.503343 * x * y * (x * x - y * y), -1.770131 * y * z * (3.0 * x * x - y * y), 0.946175 * x * y * (7.0 * z2 - 1.0),
-    -0.669047 * y * z * (7.0 * z2 - 3.0), 0.105786 * (35.0 * z2 * z2 - 30.0 * z2 + 3.0), -0.669047 * x * z * (7.0 * z2 - 3.0),
-    0.473087 * (x * x - y * y) * (7.0 * z2 - 1.0), -1.770131 * x * z * (x * x - 3.0 * y * y),
-    0.625836 * (x * x * (x * x - 3.0 * y * y) - y * y * (3.0 * x * x - y * y)));
 }
 
 @compute @workgroup_size(64)
@@ -296,52 +283,6 @@ fn envSH(@builtin(local_invocation_id) lid: vec3u) {
   if (key.w > 0.5) { shOut[9] = vec4f(normalize(envIn[n].xyz), 1.0); }
 }
 
-// (PLAN-J3 J3-1: envSH with band 4 — ship.skyBand4 on; its cost 0.38 ms a run on kerr-mini against envSH's 0.15)
-@compute @workgroup_size(32)
-fn envSH4(@builtin(local_invocation_id) lid: vec3u) {
-  var acc: array<vec3f, 18>;
-  let n = ENV_W * ENV_H;
-  for (var i = lid.x; i < n; i += 32u) {
-    let x = i % ENV_W;
-    let y = i / ENV_W;
-    let v = (f32(y) + 0.5) / f32(ENV_H);
-    let d = envDir((f32(x) + 0.5) / f32(ENV_W), v);
-    let dw = (2.0 * PI / f32(ENV_W)) * (PI / f32(ENV_H)) * sin(v * PI); // solid angle
-    let L = envIn[i].rgb * dw;
-    let b = shBasis(d);
-    for (var k = 0u; k < 9u; k++) { acc[k] += L * b[k]; }
-    let b4 = shBasis4(d);
-    for (var k = 0u; k < 9u; k++) { acc[9u + k] += L * b4[k]; }
-  }
-  shAcc4[lid.x] = acc;
-  workgroupBarrier();
-  if (lid.x != 0u) { return; }
-  var tot: array<vec3f, 18>;
-  for (var t = 0u; t < 32u; t++) {
-    for (var k = 0u; k < 18u; k++) { tot[k] += shAcc4[t][k]; }
-  }
-  for (var k = 0u; k < 9u; k++) { shOut[k] = vec4f(tot[k], 0.0); }
-  // (PLAN-J3 J3-1: band 4 after the rest — sh[13..21] —, read by irradiance when S.air.w is on)
-  for (var k = 0u; k < 9u; k++) { shOut[13u + k] = vec4f(tot[9u + k], 0.0); }
-  // dominant direction of the light (luminance of the L1 band) and how directional it is
-  // (|L1| / L0 = √3 for a single distant source)
-  let lum = vec3f(0.2126, 0.7152, 0.0722);
-  let l1 = vec3f(dot(tot[3], lum), dot(tot[1], lum), dot(tot[2], lum));
-  let l0 = max(dot(tot[0], lum), 1e-20);
-  let m = length(l1);
-  shOut[9] = vec4f(select(vec3f(0.0, 1.0, 0.0), l1 / m, m > 0.0), clamp(m / (1.7320508 * l0), 0.0, 1.0));
-  // the key light (the near world's star, analytic — trace.wgsl keyLight — the probe without it): its
-  // direction and the disc's angular radius, its irradiance and on (0/1); on, it is the dominant light —
-  // the hull's shadow map, its shadow on the ground
-  let key = envIn[n + 1u];
-  shOut[10] = envIn[n];
-  shOut[11] = key;
-  // (PLAN-J3 J3-2: the aerial table's reach and the metres per unit — trace.wgsl keyLight —, for shipAir; none where not written)
-  shOut[12] = select(vec4f(0.0), envIn[n + 7u], arrayLength(&envIn) >= n + 8u);
-  // (the probe's storage scale, for its GGX levels' readers — envSpec)
-  shOut[22] = vec4f(probeScaleIn(), 0.0, 0.0, 0.0);
-  if (key.w > 0.5) { shOut[9] = vec4f(normalize(envIn[n].xyz), 1.0); }
-}
 
 // ------------------------------------------------------------------------------------ the ship
 @group(0) @binding(0) var<uniform> S: Ship;
@@ -704,14 +645,8 @@ fn irradiance(n: vec3f) -> vec3f {
   let A = array<f32, 9>(PI, 2.094395, 2.094395, 2.094395, 0.785398, 0.785398, 0.785398, 0.785398, 0.785398);
   var e = vec3f(0.0);
   for (var k = 0u; k < 9u; k++) { e += A[k] * b[k] * sh[k].rgb; }
-  // (PLAN-J3 J3-1, band 4 — S.air.w on, a comparison until Sam judges: A₄ = −π/24)
-  if (S.air.w > 0.5 && arrayLength(&sh) >= 22u) {
-    let b4 = shBasis4(toProbe(n));
-    for (var k = 0u; k < 9u; k++) { e += -0.1308997 * b4[k] * sh[13u + k].rgb; }
-  }
-  // (PLAN-J3 §8 question 7 — S.air.y on, a comparison until Sam judges: the craft takes the night's floor the ground takes — EARTH_NIGHT,
-  // ~0.01 lux, five times the real moonless sky, its tint —, the greater of it and its sky, as liteSky does; sh[12].w its luminance)
-  if (S.air.y > 0.5) { return max(e, sh[12].w * vec3f(0.817, 1.021, 1.328)); }
+  // (band 4 of the harmonics and the ground's night floor on the craft — PLAN-J3 J3-1, §8 question 7: comparisons, off as drawn — retired
+  // with their levers ship.skyBand4 and ship.nightFloor at J5-R, 15 Nov 2026)
   return max(e, vec3f(0.0));
 }
 

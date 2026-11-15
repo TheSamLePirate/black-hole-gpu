@@ -693,8 +693,6 @@ export class ShipRenderer {
     down: GPUComputePipeline;
     ggx: GPUComputePipeline;
     sh: GPUComputePipeline;
-    /** (PLAN-J3 J3-1) envSH with band 4 — skyBand4 on */
-    sh4: GPUComputePipeline;
     ship: GPURenderPipeline;
     shipJet: GPURenderPipeline;
     shadow: GPURenderPipeline;
@@ -715,7 +713,7 @@ export class ShipRenderer {
     ownMask: GPURenderPipeline;
     ctl: GPURenderPipeline;
   };
-  private envBinds: { copy: GPUBindGroup[]; down: GPUBindGroup[]; ggx: GPUBindGroup[]; sh: GPUBindGroup; sh4: GPUBindGroup } | null = null;
+  private envBinds: { copy: GPUBindGroup[]; down: GPUBindGroup[]; ggx: GPUBindGroup[]; sh: GPUBindGroup } | null = null;
   /** the shading's bindings but the traced image (one bind group per target: shipBindFor) */
   private shipEntries: GPUBindGroupEntry[] | null = null;
   private shadowBind: GPUBindGroup | null = null;
@@ -810,7 +808,7 @@ export class ShipRenderer {
       d.queue.writeBuffer(b, 0, new Float32Array([Math.max(l / (SPEC_MIPS - 1), 0.02), RAW_MIPS, GGX_SAMPLES[l]!, 0]));
       this.ggxBufs.push(b);
     }
-    this.shBuf = d.createBuffer({ size: 24 * 16, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC }); // (+ band 4: sh[13..21], J3-1)
+    this.shBuf = d.createBuffer({ size: 24 * 16, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC }); // (sh[13..21] free since band 4 was retired at J5-R; sh[22] the probe's scale)
     this.uniform = d.createBuffer({ size: SHIP_UNIFORM_BYTES, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
     this.jetBuf = d.createBuffer({ size: this.jetData.byteLength, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST });
     this.trailBuf = d.createBuffer({ size: MAX_SEGMENTS * SEG_FLOATS * 4, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST });
@@ -877,7 +875,6 @@ export class ShipRenderer {
       down: cp("envDown"),
       ggx: cp("envGGX"),
       sh: cp("envSH"),
-      sh4: cp("envSH4"),
       ship: d.createRenderPipeline({
         layout: "auto",
         vertex,
@@ -1749,11 +1746,6 @@ export class ShipRenderer {
   private bindGen = 0;
   /** (PLAN-J3 J3-2) the tracer's aerial table (renderer.ts aerialTex), read by the hull and the trails (ship.wgsl shipAir); set once */
   private aerial: { a: GPUTexture; b: GPUTexture; samp: GPUSampler } | null = null;
-  /** (PLAN-J3 J3-1) the sky's light on the craft with band 4 of its probe's harmonics (ship.wgsl irradiance): a comparison until Sam judges */
-  skyBand4 = false;
-  /** (PLAN-J3 §8 question 7) the craft takes the ground's night floor (EARTH_NIGHT, the twilight's reference) as the least of its sky —
-   *  a comparison until Sam judges; off as drawn */
-  nightFloor = false;
   setAerial(a: GPUTexture, b: GPUTexture, samp: GPUSampler) {
     this.aerial = { a, b, samp };
     // (bound with the rest once the craft is loaded — load(); again now if it is)
@@ -1809,13 +1801,6 @@ export class ShipRenderer {
       ),
       sh: d.createBindGroup({
         layout: this.pipes.sh.getBindGroupLayout(0),
-        entries: [
-          { binding: 0, resource: { buffer: this.envBuf } },
-          { binding: 3, resource: { buffer: this.shBuf } },
-        ],
-      }),
-      sh4: d.createBindGroup({
-        layout: this.pipes.sh4.getBindGroupLayout(0),
         entries: [
           { binding: 0, resource: { buffer: this.envBuf } },
           { binding: 3, resource: { buffer: this.shBuf } },
@@ -1951,9 +1936,8 @@ export class ShipRenderer {
     });
     pass.end();
     pass = enc.beginComputePass(this.pass("ship probe: SH"));
-    // (band 4 only when asked — its kernel 0.38 ms a run against 0.15 —: PLAN-J3 J3-1)
-    pass.setPipeline(this.skyBand4 ? this.pipes.sh4 : this.pipes.sh);
-    pass.setBindGroup(0, this.skyBand4 ? this.envBinds.sh4 : this.envBinds.sh);
+    pass.setPipeline(this.pipes.sh);
+    pass.setBindGroup(0, this.envBinds.sh);
     pass.dispatchWorkgroups(1);
     pass.end();
   }
@@ -2494,11 +2478,7 @@ export class ShipRenderer {
       new Float32Array(G ? [G.rain, G.clock, G.airspeed, G.frost, ...G.wipers, ...G.rates] : [0, 0, 0, 0, 0, 0, 0, 0]),
     );
     this.device.queue.writeBuffer(this.uniform, LIFT_AT, new Float32Array(sea && v.lift ? v.lift : [0, 0, 0, 0]));
-    this.device.queue.writeBuffer(
-      this.uniform,
-      AIR_AT,
-      new Float32Array([this.debugFs, this.nightFloor ? 1 : 0, v.airOn ? 1 : 0, this.skyBand4 ? 1 : 0]),
-    );
+    this.device.queue.writeBuffer(this.uniform, AIR_AT, new Float32Array([this.debugFs, 0, v.airOn ? 1 : 0, 0]));
     // (the flown craft's x and y axes in C — the columns of R —, else the camera's: S.shRefA/B, read by no shader since the map's
     // frame went back to the camera's, 5 Nov — its slots kept for the layout; to retire with the uniform's next reshuffle)
     this.device.queue.writeBuffer(

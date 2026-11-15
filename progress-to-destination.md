@@ -7411,3 +7411,12 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   Mesuré ensuite (kerr-mini, J0 vol) : GPU p50 57,2 ms (57,3 le 15 nov. avant J4) — pas de régression ; e2e passé.
 - Limites : retirés sous des réglages provisoires — un retour de Sam passe par l'historique git.
 - Suite : `ship.skyBand4`, `ship.nightFloor` à la confirmation de Sam ; les décisions d'image de PLAN-J5 §3.
+
+### 2026-11-15 06:30 UTC — J5-R terminé : la bande 4 et le plancher de nuit de l'appareil retirés
+
+- Contribution à la destination : règle 2 menée au bout pour J3–J5 ; moins de code et une compilation de moins (`envSH4`).
+- Réalisé : `ship.skyBand4` (`envSH4`, `shBasis4`, la lecture de `sh[13..21]`) et `ship.nightFloor` retirés (ship.wgsl, ship.ts) ; phases J0
+  `skyband4`, `nightfloor` retirées ; PLAN-J3, PLAN-J5, BH-API, GRAPHICS-PIPELINE, E2E-CATALOGUE.
+- Preuves : statiques (tsc, biome, `check-wgsl` 84/84) ; les deux options étaient éteintes : l'image dessinée ne change pas.
+- Limites : retirés sous le réglage provisoire « éteints » (retour par git).
+- Suite : les décisions d'image de PLAN-J5 §3 ; le lot d'assets des arbres proches.

@@ -385,5 +385,6 @@ Aucun coût de J3 n'est mesuré ; aucun gain n'est promis.
   révisables) : `TUNE_SKYFLAT_DIM`, `treeShadowCut` et `TUNE_SHIP_SCENERY_SHADOW` **perdent leur ancien chemin** (la phase J0 `twilightdim`,
   seule à se servir du premier, retirée avec lui ; les paires de `perf-ab SET=j3` réduites à l'A/A ; `craftshade` dessine deux fois — l'A/A ;
   `coherence` garde ses témoins positifs : le Soleil incident, les nuages). Revenir sur l'un d'eux : le rétablir depuis l'historique git
-  (commit de J5-R). `incidentSunOn`, `shipAirAllowed` restent (leviers de mesure) ; `ship.skyBand4`, `ship.nightFloor` (éteints) attendent
-  toujours la confirmation de Sam.
+  (commit de J5-R). `incidentSunOn`, `shipAirAllowed` restent (leviers de mesure). **Même jour, 06:30 UTC** : `ship.skyBand4` (et son noyau
+  `envSH4`) et `ship.nightFloor` — éteints, comparaisons sans autre usage — retirés avec leurs phases J0 `skyband4` et `nightfloor`, sous la
+  même consigne (réglage provisoire « éteints » ; retour possible par l'historique git).
