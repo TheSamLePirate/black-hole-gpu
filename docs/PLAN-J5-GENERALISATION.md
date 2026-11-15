@@ -117,3 +117,9 @@ Les plafonds de J5-1 au beau temps, de J5-2 par corps et la parité du repli tra
   `shown` (les time-lapses veulent une taille stable), l'état rendu après chaque export. Couleur : export contre écran 1,33 niveau en moyenne
   (dont l'interface restée à l'écran : le bloc le plus éloigné est le panneau avionique). Non vérifié : la vidéo des rendus (cible hors
   ligne, inchangée), le HDR (écran de ce Mac).
+- **J5-0, la houle à demi-résolution essayée et retirée** (2026-11-15 05:57 UTC) : la passe de J4-4 reprise, un texel par bloc de 2 × 2 (au
+  premier pixel de mer du bloc, lu par les quatre ; `TUNE_SWELL_HALF`), sonde `coast-swell` A/B (kerr-mini, trois passages) : vue de 250 m
+  passe 70,7 / 70,7 / 70,7 contre houle dans les noyaux 71,3 / 71,3 / 71,5 (**−0,7 ms**) ; vue de 6 m 58,7 / 57,8 / 58,4 contre 58,8 / 58,9 /
+  58,7 (**−0,5**) ; compilée hors 69,2 et 56,2. Images au même instant figé : à 6 m identiques (0,58 contre 0,53 au témoin A/A). Sous 1 ms
+  (règle 1) : **non gardée** (patch hors du dépôt). La passe garde ~0,8–1,1 ms de temps mesuré même aux trois quarts de ses fils sortis
+  aussitôt — son coût n'est pas son calcul. La houle reste à +2 à +3,5 ms sur une côte proche : un prix d'image assumé, non un lot.

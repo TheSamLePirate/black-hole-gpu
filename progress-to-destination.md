@@ -7362,3 +7362,13 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   0,12 ; +1 EV 23,65. La perte d'historique après un export : lue dans le code, non mesurée.
 - Limites : le HDR (hdrMap) non vérifié ; l'interface DOM reste hors de l'export (voulu : l'image seule).
 - Suite : J5-R (le repli tracé de la Terre : sa parité à vérifier, la décision de Sam) ; le lot d'assets des arbres proches à proposer.
+
+### 2026-11-15 05:57 UTC — J5-0 : la houle à demi-résolution, −0,5 à −0,7 ms — non gardée
+
+- Contribution à la destination : le dernier arbitrage de J5-0 chiffré (règle 1 appliquée).
+- Réalisé : essai (la passe de houle de J4-4, un texel par 2 × 2), mesuré, retiré ; PLAN-J5 §5.
+- Preuves (mesuré, kerr-mini, trois passages) : 250 m −0,7 ms, 6 m −0,5 ms contre la houle dans les noyaux ; images à 6 m identiques au
+  témoin près.
+- Limites : la vue de 250 m montre un écart d'image (3,6 contre 1,0 au témoin), comme au premier essai de J4-4 et non au second — non
+  élucidé ; sans objet puisque l'essai est retiré.
+- Suite : J5-R (le repli tracé, à la décision de Sam) ; les questions de PLAN-J5 §3 portées à Sam.
