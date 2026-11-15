@@ -14,6 +14,16 @@ connue ou supposée, la piste. Une entrée réglée est barrée avec le commit q
 - **Correction** : `nextDusk` passe aux jours suivants, jusqu'à la première nuit qui descend 4° plus bas que −12° (depuis le 10 juillet :
   le 8 septembre, 21 h 34 UTC, Soleil à −14,8°). La carte dit « La prochaine nuit noire ». Test `s2-views` (unité) 5/5, e2e 6/6, capture.
 
+## ~~Le ravitaillement en vol automatique jamais autorisé : l'avion dépasse le panier à 5 m/s~~ (relevé le 14 novembre 2026, e2e `aar`, `crew-aar`) — réglé le même jour
+
+- **Constat** : `aar` 1/3, `crew-aar` 2/3 (« cleared » jamais vrai en 90 s, pas de contact en 300 s). Sonde : la loi approche à 4–6 m/s,
+  dépasse le panier et va jusqu'à 237 m devant lui. Sa manette passe de 0 à 1 (en 4 s : 251 fois 0, 41 fois 1).
+- **Cause** : `aarJet` dérive notre vitesse de nos places successives (`(P.p − lastP) / dt`). Or la place lue est celle que le pas
+  précédent a laissée : le déplacement mesuré appartient au `dt` d'avant. Aux images inégales du jeu (8, 16, 25 ms), la vitesse lue alterne
+  70 et 680 m/s. Les tests sans tête, à pas égaux (1/30 s), ne le voyaient pas.
+- **Correction** : `controller/aar.ts` divise le déplacement par le pas qui l'a produit (`lastDt`). Nouveau test sans tête sur des pas inégaux
+  (échoue sur l'ancien code, passe sur le nouveau) ; `aar.test.ts` 4/4 ; e2e `aar` 3/3 (5 934 kg à bord), `crew-aar` 3/3.
+
 ## ~~La vidéo brouillon de la bande-annonce : 25 à 45 s par image en vol bas (e2e `s3-replay`, aucune image en 120 s)~~ (relevé le 14 novembre 2026) — réglé le 15 novembre 2026
 
 - **Constat** : ce Mac en fenêtre visible. `replay.video(true)` acceptée, mais une image toutes les 25 à 45 s (prévu : 250 ms en brouillon) ;

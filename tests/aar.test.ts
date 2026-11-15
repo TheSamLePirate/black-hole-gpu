@@ -1,5 +1,6 @@
 import { afterEach, expect, test } from "bun:test";
 import { gcasForget } from "../src/controller/gcas";
+import { advanceFrameClock } from "../src/frameclock";
 import { AAR, aarNew, aarStep, basketFree, gapOf, hoseDir, trailPoint } from "../src/game/aar";
 import { fleet } from "../src/fleet";
 import { VESSELS } from "../src/vessels";
@@ -138,3 +139,33 @@ test("assisted: held on the basket's line, the throttle closes — forward in, b
   expect(bank).toBeLessThan(1);
   expect(said.some((s) => /turning/.test(s))).toBe(false);
 }, 300_000);
+
+test("auto on uneven frames — 8, 8 and 25 ms by turns, as the game's —: cleared, the contact, the fuel taken (14 Nov 2026)", () => {
+  // (our speed read from our places over the wrong step beat the throttle from cut to full: never cleared in the game, while the
+  // even steps above flew it)
+  const { c } = cruise(6000, 215, 0.7);
+  c.jetModes.alt = Math.round(c.geoNow().alt);
+  c.jetModes.hdg = c.attitudeNow().heading;
+  c.jetToggle("athr");
+  c.s.f35AarMode = "auto";
+  fleet.fuel.f35 = VESSELS.f35.fuelKg! - 800;
+  const said: string[] = [];
+  c.onRadio = (s) => said.push(s);
+  expect(c.tankerStart({ near: true })).toMatch(/TEXACO 11/);
+  const steps = [1 / 120, 1 / 120, 1 / 40];
+  const seen = new Set<string>();
+  for (let i = 0, t = 0; t < 300; i++) {
+    const dt = steps[i % 3]!;
+    t += dt;
+    advanceFrameClock(dt * 1000);
+    c.flyShip(dt, null as never);
+    if (Number.isFinite(c.shipTime)) c.time = c.shipTime;
+    const A = c.aar;
+    if (A) seen.add(`${A.stage}:${A.s.phase}`);
+    if (!A && seen.size > 1) break;
+  }
+  console.log(`  ${[...seen].join(" → ")}`);
+  expect(seen.has("hose:contact")).toBe(true);
+  expect(said.some((s) => /transfer complete/.test(s))).toBe(true);
+}, 300_000);
+

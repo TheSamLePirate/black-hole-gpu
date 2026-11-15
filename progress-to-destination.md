@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-15 00:09 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-15 00:19 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous.
@@ -7016,3 +7016,18 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   captures avant / après (des toits terre cuite au lieu de brun-rouge sombre) ; `roofs.test.ts` 27/27.
 - **Limites :** les autres matériaux de l'inventaire (bois sombre, aucun métal, le verre, le reflet sur une irradiance plate) non touchés ;
   le recalage à l'étranger reste un choix de Sam.
+
+### 2026-11-15 00:19 UTC — Le ravitaillement en vol automatique rétabli dans le jeu (les images inégales)
+
+- **Contribution** : une fonction de vol rendue à nouveau fiable à la cadence réelle (§19, réponse des commandes ; §8 : une loi de vol
+  qui ne dépend pas de la régularité des images). Hors rendu.
+- **Trouvé par** la deuxième série de mesures des attentes (QA-09) : `aar` et `crew-aar` en échec. Sondes en jeu : la chaîne des modes
+  (aarJet seul), les écrivains de la manette (la loi elle-même, 0 ↔ 1), puis dt et déplacement à chaque appel (la place lue a un pas de
+  retard). Reproduit sans tête à pas inégaux (8, 8, 25 ms).
+- **Changement** : `src/controller/aar.ts` (`lastDt` : le déplacement divisé par son propre pas) ; `tests/aar.test.ts` (vol automatique sur
+  pas inégaux) ; E2E-VOLS §7 (la leçon : les pas égaux cachent ce défaut), PROBLEMES.
+- **Preuve** : témoin (le nouveau test échoue sur l'ancien code) ; `aar.test.ts` 4/4 ; e2e `aar` 3/3, `crew-aar` 3/3 (ce Mac, fenêtre
+  visible). Non vérifié : d'autres lois qui liraient la place du joueur de la même façon. La formation et l'interception lisent `P.v`,
+  à vérifier.
+- **Vu en passant** : pendant le contact, une annonce « Climb, climb! » (signée RANGER) ; à examiner.
+

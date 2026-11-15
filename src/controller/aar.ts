@@ -76,8 +76,10 @@ export interface AarCtl {
   thrI?: number;
   /** our pitch against the tanker's [rad], eased */
   pitch?: number;
-  /** our last place in the fight's frame, our velocity from it */
+  /** our last place in the fight's frame, our velocity from it; the step it was moved by — the place read is the one the
+   *  step before left [s] */
   lastP?: number[];
+  lastDt?: number;
   vel?: number[];
   /** the last metres' trim (across, up [m]): the bias between the tip and the basket taken away */
   trim: [number, number];
@@ -263,11 +265,16 @@ function aarJet(
   // (our velocity in the fight's frame from our places there — the one the frame is given, the air's through the
   // geodetic projection, is off by a few tenths of a percent: a metre a second at 200 m/s, the hose's whole range in a
   // few seconds)
-  if (A.lastP && dt > 0) {
-    const raw = mul(sub(P.p, A.lastP), 1 / dt);
-    A.vel = A.vel ? add(A.vel, mul(sub(raw, A.vel), Math.min(1, dt / 0.3))) : raw;
+  // (the place read here is the one the last step left: its move over that step's own time — over this one's, uneven
+  // frames of 8, 16 and 25 ms read 70 and 680 m/s by turns, the throttle beating from cut to full, the contact never
+  // cleared: 14 Nov 2026, e2e aar; even steps, as in the tests, hid it)
+  const moved = A.lastDt ?? dt;
+  if (A.lastP && moved > 0) {
+    const raw = mul(sub(P.p, A.lastP), 1 / moved);
+    A.vel = A.vel ? add(A.vel, mul(sub(raw, A.vel), Math.min(1, moved / 0.3))) : raw;
   }
   A.lastP = [...P.p];
+  A.lastDt = dt;
   const vP = A.vel ?? P.v;
   // (the probe out — in again once cleared to depart)
   A.probe = clamp(A.probe + ((A.leftAt === null ? 1 : -1) * dt) / AAR.probeTime, 0, 1);
