@@ -39,6 +39,7 @@ au-dessus de 1,6 ms dans les mesures de J4.
 | **J5-2** | **Les autres corps droits** : la Lune, Mars, les mondes de PLAN-PLANETES-AAA sur le même socle raster (visibilité, `shadeLite`, eau où il y en a), leurs scènes de référence et leurs fiches | à lire par scène | fiche par corps | L |
 | **J5-3** | **La marche et les transitions** : le personnage (character e2e), l'orbite → le sol, la Terre → l'espace ; ce que chaque transition laisse dans l'historique (contrat de la reconstruction) | qualité (transitions) | e2e de parcours, images | L |
 | **J5-4** | **HDR/SDR/exports** : la sortie de l'image (hdrMap, AgX), les captures et les vidéos sur la même chaîne que l'écran | qualité | captures SDR sur kerr-mini (mesures de couleur), exports | M |
+| **J5-5** | **L'eau à demi-rythme** (ajouté le 15 nov. après la répartition de J0) : un pixel sur deux par image, des groupes de 32 fils | J0 −8,4 ms (une tuile sur deux sautée) | ΔGPU J0 et à 30 m, captures — **allumé : −6,0 à −7,2 ms** (§5) | M |
 | **J5-R** | **Le retrait des chemins terrestres redondants** : le tracé de la Terre proche (repli dormant depuis J2-7, PROBLEMES) et les options sans utilisateur — après validation de la parité ; une décision de Sam | compilation et code | suite, J0, `kernel-budget` | M |
 
 **Ordre recommandé** : J5-0 d'abord (les décisions d'image sont la seule voie mesurée vers 40 ms : elles reviennent à Sam), puis J5-1
@@ -154,3 +155,17 @@ Les plafonds de J5-1 au beau temps, de J5-2 par corps et la parité du repli tra
   ship.wgsl, ship.ts —, leurs phases J0 `skyband4` et `nightfloor` aussi ; BH-API, GRAPHICS-PIPELINE (D2, annexe régénérée), E2E-CATALOGUE.
   Vérifié : tsc, biome, `check-wgsl` 84/84. Il ne reste aucun ancien chemin de levier allumé depuis J3 ; restent les leviers de mesure et le
   repli tracé de la Terre (gardé, réglage 3).
+- **J5-5 (lot neuf) : l'eau à demi-rythme — allumée** (2026-11-15 07:26 UTC) : la répartition de J0 refaite (kerr-mini, une ablation chacune,
+  référence 55,9) : eau −10,3, nuages −6,0, appareil −3,9, décor −2,4, écrans −1,25, bloom −1,15, mer déplacée −0,95, accentuation −0,95,
+  brume de chaleur −0,85, ombre de l'appareil −0,75 ms. **Plafond lu** (règle 1) : une tuile d'eau sur deux sautée entière, J0 **−8,4 ms**
+  (`earth water` 11,7 → 5,9, sa finition 4,5 → 2,3) ; un pixel sur deux en damier dans la même vague : rien (11,9 ms) ; la moitié des fils
+  d'un groupe de 64 sortis : rien (11,4) — le coût suit les groupes lancés. **Fait** : `WATER_HALF` — des groupes de 32 fils par tuile
+  (`WATER_WG_Y` 4), un pixel du damier chacun (tourné chaque image), son résultat écrit aussi au pixel voisin de sa paire (moments, `liteOut`,
+  l'enregistrement des reflets) ; le voisin ombré quand celui du damier n'est pas de l'eau (sinon des points blancs le long des côtes, vus et
+  corrigés). Une première voie (le voisin marqué `RASTER_STALE`, rebâti par `resolve`) cassait l'image (bruit cyan : la reconstruction ne
+  trouvait pas l'eau fraîche — non élucidé) : abandonnée. **Mesuré** (kerr-mini) : J0 **−6,0 à −6,4 ms** (50,0 / 51,0 et 53,7 / 54,0 contre
+  56,7–60,2 selon le passage) ; à 30 m sur la mer **−6,6 / −7,2** ; les captures au même instant du vol : la mer, les îles, la côte
+  identiques. **Allumé par défaut** (réglage provisoire, révisable par Sam : `renderer.waterHalfRate`), l'ancien chemin gardé pour l'A/B
+  (`renderer.tune = { WATER_HALF: 0, WATER_WG_Y: 8 }`, ablation J0 `waterFull`) jusqu'au prochain lot de retrait. Non vérifié : le reflet du
+  Soleil intense (scintillement possible au demi-rythme), la houle proche ; la finition de l'eau reste pleine (4,2 ms : son demi-rythme, le
+  lot suivant possible, ~2 ms).

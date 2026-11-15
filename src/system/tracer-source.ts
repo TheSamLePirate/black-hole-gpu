@@ -103,7 +103,11 @@ export function withLiteSplit(trace: string): string {
   trace = trace.replace(
     water,
     () => `moments[idx] = vec2f(select(RASTER_SPLIT_WATER, RASTER_SPLIT_WATER - 0.5, water > 0.5), tM / EARTH_RM * bodyRadius(k));
-  textureStore(liteOut, vec2i(gid.xy), vec4f(G, tM));`,
+  textureStore(liteOut, vec2i(gid.xy), vec4f(G, tM));
+  if (WATER_HALF && WATER_PAIR_ON) {
+    moments[WATER_PAIR.y * u32(P.res.x) + WATER_PAIR.x] = moments[idx];
+    textureStore(liteOut, vec2i(WATER_PAIR), vec4f(G, tM));
+  }`,
   );
   return `@group(1) @binding(${LITE_OUT_BINDING}) var liteOut: texture_storage_2d<${LITE_OUT_FORMAT}, write>;
 ${trace.replace(
@@ -128,7 +132,12 @@ export function withWaterReflDeferred(trace: string, supported: boolean): string
     marker,
     () => `textureStore(matOut0, vec2i(gid.xy), SEA_RR_DIRS);
   textureStore(matOut1, vec2i(gid.xy), vec4f(SEA_RR_REFL, select(0.0, water * (1.0 - washW) * SEA_RR_FV * (1.0 - SEA_RR_W), SEA_RR_BITS != 0u)));
-  textureStore(matOut2, vec2i(gid.xy), vec4f(SEA_RR_CLEAR, f32(SEA_RR_BITS)));`,
+  textureStore(matOut2, vec2i(gid.xy), vec4f(SEA_RR_CLEAR, f32(SEA_RR_BITS)));
+  if (WATER_HALF && WATER_PAIR_ON) {
+    textureStore(matOut0, vec2i(WATER_PAIR), SEA_RR_DIRS);
+    textureStore(matOut1, vec2i(WATER_PAIR), vec4f(SEA_RR_REFL, select(0.0, water * (1.0 - washW) * SEA_RR_FV * (1.0 - SEA_RR_W), SEA_RR_BITS != 0u)));
+    textureStore(matOut2, vec2i(WATER_PAIR), vec4f(SEA_RR_CLEAR, f32(SEA_RR_BITS)));
+  }`,
   );
 }
 /** the water's reflections' record: shadeWater writes it (storage, LITE_MAT_OUT's first three), shadeWaterFinish reads it (LITE_MAT_IN's) */

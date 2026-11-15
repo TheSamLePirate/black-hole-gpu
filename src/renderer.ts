@@ -5519,6 +5519,12 @@ export class Renderer {
   /** (PLAN-J5 J5-1, a measure) the clouds' sunward march off at run time — its code still in the kernel: against the ablation that
    *  compiles it out (renderer.tune TUNE_CLOUD_LIGHT 0), what of its cost is its work and what its presence */
   cloudLightRuntimeOff = false;
+  /** (PLAN-J5 J5-5) the water at half rate — trace.wgsl WATER_HALF, its kernels compiled for it (a workgroup of 32 threads a tile):
+   *  one pixel in two shaded a frame (a checkerboard turned each frame), its result written to the pixel beside it too, the temporal
+   *  history holding both within two frames. Measured (kerr-mini, 15 Nov 2026): J0 −6.0 to −6.4 ms, 30 m over the sea −6.6 / −7.2, the
+   *  sea's image the same in both. On by default since then (provisional, revisable by Sam); read at the water kernels' compile. The A/B
+   *  without recompiling the renderer: renderer.tune = { WATER_HALF: 0, WATER_WG_Y: 8 } (the old path) */
+  waterHalfRate = true;
   /** (PLAN-J5 J5-3, a measure) the walker on the Earth drawn by the raster — its walking grid still sent (P.walk[0].w 2: trace.wgsl
    *  rasterPrimary) —; false: the traced pipeline while walking, as ever (its march meets the grid the feet stand on) */
   walkRasterOn = false;
@@ -6821,6 +6827,7 @@ export class Renderer {
       leftovers: this.rasterLite && this.leanShade,
       otherUniverse: !this.otherUniverseOut,
       waterReflDefer: this.waterReflDefer,
+      waterHalf: this.waterHalfRate,
     });
     const ep = tracerEntryPoint(entryPoint);
     // (the same pipeline asked again — another key whose constants are the same: the Earth-raster profile's keys, the

@@ -16748,12 +16748,46 @@ fn skyFill(@builtin(global_invocation_id) gid: vec3u) {
 // cascades near), Cox–Munk's glint, the mirror averaged over the unresolved slopes, the world mirrored in it near (seaSSR),
 // the far clouds, the shallow bed, the foam and the surf —; a river or a lake by inlandWater, their own style; a cascade's
 // white water where the inland water's ground is steep. Then the air and the clouds, as shadeLite's.
-@compute @workgroup_size(8, 8)
+// (PLAN-J5 J5-5 — WATER_HALF: the water at half rate, a workgroup of 32 threads a tile — WATER_WG_Y 4 —, each a pixel of the tile's
+// checkerboard turned each frame; the other pixels left to the resolve. Its kernel's cost follows the workgroups' threads, not the
+// pixels shaded: half of 64 threads out at once returned nothing, 15 Nov 2026)
+// (a pixel's moments.x marking it water this frame — RASTER_WATER less its kind and cover)
+fn waterMarked(m: f32) -> bool { return m <= RASTER_WATER && m > RASTER_WATER - 3.0; }
+override WATER_HALF: bool = false;
+override WATER_WG_Y: u32 = 8u;
+// (WATER_HALF: the pixel beside the one shaded, left this frame — its pair —, and whether it is water: shadeWater's output written to it too)
+var<private> WATER_PAIR: vec2u = vec2u(0u);
+var<private> WATER_PAIR_ON: bool = false;
+@compute @workgroup_size(8, WATER_WG_Y)
 fn shadeWater(@builtin(workgroup_id) wid: vec3u, @builtin(local_invocation_id) lid: vec3u) {
   // (dispatched over the water's tiles — waterTilePixel —, the open sea's kernel too)
-  let gid = waterTilePixel(wid, lid);
+  var gid = waterTilePixel(wid, lid);
   let W = u32(P.res.x);
   let H = u32(P.res.y);
+  // (PLAN-J5 J5-5 — the water at half rate, WATER_HALF (renderer.waterHalfRate) —: a pixel in two shaded a frame, a checkerboard
+  // turned each frame, a workgroup of 32 threads a tile (WATER_WG_Y 4), a pixel each —; its result written to its pair too, the pixel beside
+  // it left this frame — the temporal history, the checkerboard turning, has both within two frames)
+  if (WATER_HALF) {
+    let i = lid.y * 8u + lid.x;
+    let o = waterTilePixel(wid, vec3u(0u));
+    let r = i / 4u;
+    let c = (i % 4u) * 2u + ((o.y + r + P.frame.x) & 1u);
+    gid = o + vec3u(c, r, 0u);
+    var np = o + vec3u(c ^ 1u, r, 0u);
+    if (np.x < W && np.y < H) {
+      let nw = waterMarked(moments[np.y * W + np.x].x);
+      // (the checkerboard's pixel not water — the shore, a crest's edge — and its pair water: the pair shaded, else no one would)
+      if (nw && (gid.x >= W || gid.y >= H || !waterMarked(moments[gid.y * W + gid.x].x))) {
+        let t = gid;
+        gid = np;
+        np = t;
+        WATER_PAIR_ON = false;
+      } else {
+        WATER_PAIR = np.xy;
+        WATER_PAIR_ON = nw;
+      }
+    }
+  }
   if (gid.x >= W || gid.y >= H || !rasterPrimary() || !HAS_BODIES || P.near0.w < 0.5) { return; }
   let idx = gid.y * W + gid.x;
   let mk = moments[idx].x;
