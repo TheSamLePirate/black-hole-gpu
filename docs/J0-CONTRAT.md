@@ -44,6 +44,11 @@ palier. **À faire avant la prochaine fiche** : l'essai de la borne sur le M1 Ma
 régulières se lit de la même façon : intervalle p50 et p95 ≤ 40 ms, sans alternance 60 / 80 ms (le p99 et le CPU :
 seuils à transposer et à valider avec la première fiche bornée).
 
+**Palier intermédiaire du mini — *décision de Sam, 15 novembre 2026, 16:08 UTC*** : après PLAN-J5 (l'eau à demi-rythme, la FFT en deux
+passes ; aucun compromis d'image accepté), **~48 ms de GPU sur J0 est nommé palier intermédiaire de kerr-mini** ; la cible de 25 images/s
+(40 ms) reste la destination du mini, reprise plus tard. Le plan reprend sa suite (lumière, contenu) ; ce palier ne déclare pas la cible
+atteinte.
+
 **Premier essai de la borne (M1 Max, 13 novembre 2026 ~08:10–08:21 UTC, arbre de a371c946, `J0_FPSCAP=30`,
 `remote-results/j0/m1max-cap30`)** : **borné à 30 images/s, le M1 Max bride encore.** Le vol frais tient la borne (30,0 images/s,
 intervalle p50 33,3 / p95 42,1 ms, GPU p50 21,4 ms à 1 291 MHz, occupé ~87 %) ; après les ablations, le vol soutenu ne la tient plus :

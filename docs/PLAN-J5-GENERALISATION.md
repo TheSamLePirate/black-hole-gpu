@@ -299,3 +299,5 @@ Les plafonds de J5-1 au beau temps, de J5-2 par corps et la parité du repli tra
   fragile (le bord du masque) — non ouvert. **Bilan** : après la FFT (−0,9), les leviers sans effet sur l'image qui restent lus sont
   chacun sous 1 ms ; **les 40 ms du mini (J0 ~49–51) ne paraissent pas atteignables sans un compromis d'image ou une refonte d'un gros poste**
   (les nuages 6,3, l'eau 5,0 — leurs noyaux) — à Sam.
+- **Décision de Sam : palier intermédiaire du mini ~48 ms accepté** (2026-11-15 16:08 UTC) : nommé au [contrat J0](J0-CONTRAT.md) §2 ;
+  les 40 ms plus tard ; le plan reprend sa suite (lumière, contenu). **PLAN-J5 fermé.**

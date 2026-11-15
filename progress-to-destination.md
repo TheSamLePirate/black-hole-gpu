@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-15 15:45 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-15 16:07 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous.
@@ -34,7 +34,7 @@ les preuves restent dans les entrées datées du journal, dessous.
 
 | Machine | GPU p50 mesuré | Cible | Plus gros poste |
 |---|---:|---:|---|
-| kerr-mini | **~48 ms (15 nov., l'eau et sa finition à demi-rythme — J5-5, confirmée par Sam ; A/B : 48,1 contre 55,6)** ; 52,0 ms (984e821d, l'eau seule) ; 58,4 ms (5c420e09, 13 nov.) ; **56,3 ms avec l'eau E1** (A/B, 13 nov.) ; **57,3 ms le 15 nov.** (0bb2aa86, un vol, après les corrections de J3) | 40 ms (25 images/s régulières) | l'eau : 16,2 ms ; sans son matériau −13,0 ms (−10,1 avec E1) |
+| kerr-mini | **palier intermédiaire ~48 ms nommé par Sam (15 nov., 16:08)** ; **~48 ms (15 nov., l'eau et sa finition à demi-rythme — J5-5, confirmée par Sam ; A/B : 48,1 contre 55,6)** ; 52,0 ms (984e821d, l'eau seule) ; 58,4 ms (5c420e09, 13 nov.) ; **56,3 ms avec l'eau E1** (A/B, 13 nov.) ; **57,3 ms le 15 nov.** (0bb2aa86, un vol, après les corrections de J3) | 40 ms (25 images/s régulières) | l'eau : 16,2 ms ; sans son matériau −13,0 ms (−10,1 avec E1) |
 | M1 Max | 22,5 ms, **frais** (12 nov., 98–100 °C) — non valable comme palier ; **15 nov., borné à 30 avec l'eau à demi-rythme : 19,1 ms en vol, 23,1 soutenu, 30 images/s tenues** ; avant : beau temps 21,3 / 21,4 ms tenu soutenu ; orage 28,6 en vol, décroche en soutenu (14,6 images/s, 986 MHz) — chaleur héritée : parti froid, l'orage tient 30 soutenu (27,9 ms)** | 16,7 ms (60 images/s), bornée et soutenue | l'eau : 5,3 ms pour une enveloppe de 1,0 |
 
 **L'ordre décidé** (stratégie §24) : l'eau étagée (surface → éclairage → reflets) → la classification de l'écran par tuiles et les lancements
@@ -70,7 +70,7 @@ ouverts, sous 1 ms) ; J3 au stade du plan.**
 | Audit vagues 3–4 (1feb2f7f) | 4.8 découper `main()` | **fait** (accord de Sam : par petits lots) : lot 1 la persistance, lot 2 qui tient le vol (`session.ts`), lots 3–4 les étapes gardées (`frame.ts`, AR-03), lot 5 l'ordre §19.5 (AR-04), lot 6 `craft-feed.ts`, lot 7 `governor.ts` (confié par la session du rendu) — **fait** : les quatre découpes d'AR-12 (session, frame, gouverneur, poses de l'appareil) |
 | Audit vagues 3–4 (1feb2f7f) | 4.3 séparer `Settings` | **fait** : garde statique des réglages (AR-21) ; `ViewPose` et `SimState` figés une fois par image (AR-07, `view-pose.ts`) ; le renderer les lit (session du rendu, 77721acf) |
 | Audit vague 6 hors rendu (1feb2f7f) | QA-16, QA-18, AR-17, AR-18, réseau RD4/RD5, FX-18, FX-17, FX-07, QA-11 ; puis les FX hors vague : FX-08, FX-12, FX-14, FX-19 (tendance), FX-22, FX-13, FX-20 (FX-11 et FX-15 déjà réglés le 11 nov., FX-16 tranché par Sam) | **faits** (accord de Sam : « un autre lot d'audit hors rendu ») ; FX-17 en 3 lots ; FX-07 l'A320 à la manette ; QA-11 le catalogue 446/446 gardé ; FX-08 V par les vues de l'appareil seul ; FX-12 les touches collées ; FX-14 chaque appareil sa configuration ; FX-19 la tendance de vitesse sur le temps du vol ; FX-13 ⇧M au vol d'abord, FX-20 sans dégâts pour ce vol seulement (choix de Sam) ; e2e `report` 4/4 (sans les états périmés de la galerie) ; ensuite les autres FX hors vague ( FX-19 la fraîcheur des écrans, à mesurer ; FX-21 des fonctions à finir) |
-| PLAN-APPROCHES (1feb2f7f) | AP0a, AP1, AP2 | **faits (15 nov.)** : nav.dat lié aux pistes ; l'approche choisie (état, choix auto par vent, aide, longueur, sens d'arrivée) ; la jonction planifiée (dans l'axe, ou vent arrière + base, jamais au-dessus du terrain, 300 m sur le relief, paliers jusqu'à la pente) — e2e `approach-auto` 5/5, `approach-join` 4/4 (Nice), sans navigateur 8/8 à Edwards. Suite : AP0b (CIFP), AP3 (A320) |
+| PLAN-APPROCHES (1feb2f7f) | AP0a, AP1, AP2, AP0b | **faits (15 nov.)** : nav.dat lié aux pistes ; le CIFP de la FAA (9 568 approches publiées des États-Unis, entières) ; l'approche choisie (état, choix auto par vent, aide, longueur, sens d'arrivée) ; la jonction planifiée (dans l'axe, ou vent arrière + base, jamais au-dessus du terrain, 300 m sur le relief, paliers jusqu'à la pente) — e2e `approach-auto` 5/5, `approach-join` 4/4 (Nice), sans navigateur 8/8 à Edwards. Suite : AP3 (A320) |
 
 **Fermé récemment** : J2 (13 nov., ΔGPU nul, chemin vers §8 écrit) ; J2-C BC7 étudiée puis **rangée** (Sam : « ne pas le faire maintenant »).
 
@@ -7831,3 +7831,45 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   une 22R) : AP7. Le chemin n'est encore dessiné nulle part (AP4–AP5). La 22R de Nice reste choisie du nord-est : sa pente passe le
   contrôle (la crête est au-delà de 18,5 km), la jonction la tient au-dessus. L'A320 suit encore son IAF (AP3).
 - **Suite** : AP0b (le CIFP de la FAA), puis AP3 (l'A320 sur le même chemin).
+
+### 2026-11-15 16:07 UTC — PLAN-APPROCHES AP0b : les approches publiées des États-Unis (le CIFP de la FAA), entières
+
+- **Contribution** : §19 (la donnée réelle, la même pour le pilote, le crew et TARS) ; §18 (aucune dépendance ajoutée : le format
+  ARINC 424 lu par ~300 lignes pures) ; PLAN-APPROCHES AP0, niveau 1 de ses données.
+- **Changements** :
+  - `scripts/cifp.ts` (pur) : le CIFP lu à ses colonnes ARINC 424-18. Les approches (PF) avec leurs points (PC, PG, PN, PI, EA,
+    D, DB), les localizers (PI : fréquence, catégorie, axe vrai par la déclinaison, glide), la variation des terrains (PA ; caps
+    magnétiques → vrais).
+  - Les segments : `HF/PI → HM`, `VI/CI/FC → CF`, `AF → RF` (convertis et comptés). Contraintes « au-dessus / au-dessous /
+    entre » en m sur la mer, vitesses ; la remise de gaz après le point de remise de gaz.
+  - `scripts/build-approaches.ts` : le dernier `CIFP_*.zip` de `raw/` lu, chaque procédure liée à une extrémité de nos pistes
+    (petits terrains : K + identifiant ; extrémité renumérotée ou sans sa lettre de côté si elle est seule et sur le même axe à
+    20° près), écrite dans les mêmes tuiles (`p`).
+  - `world/approaches.ts` : `cifpApproach`, `approachesOf` les met en premier à leur extrémité (nav.dat gardé pour une autre
+    sorte) ; RNAV à pente : DH 250 ft dite.
+  - Crédits (source unique `credits.ts`) et ASSETS avec les deux conditions de la FAA.
+- **Preuve** :
+  - Lecture : 10 171 procédures, 9 629 lues (496 indirectes sans piste, 35 back courses, 10 sans premier point), 132 points non
+    placés sur ~115 000.
+  - Liées : **9 568** (336 sur une extrémité renommée), 61 écartées et listées (`report.json`) ; 9 566 visibles dans le jeu.
+    Tuiles : 473, ~6,5 Mo de JSON (binaires 600,7 Mo / 700).
+  - Tests : `cifp` 5/5 (KSFO ILS 28R lu entier : CAT III, 111,70, 297,8° vrai, 4 transitions, CEPIN « ≥ 3 000 ft », remise de
+    gaz VIKYU + attente ; le choix automatique y prend un ILS 28 publié) ; `approaches` 6/6.
+  - e2e `approach-auto` 5/5 : KSFO servie, 15 approches publiées, ILS 28R et ses 4 transitions.
+- **Trouvé en route, corrigé** :
+  - Les noms de pistes sans zéro (KLAX « 6L » contre « 06L ») perdaient les approches publiées de leur extrémité.
+  - `approach-auto` attendait encore la 13 de Toulon-Hyères depuis le nord : AP2 l'écarte pour le relief (sa pente passe à 20 m
+    des collines au nord-ouest de Hyères) ; la 23 est prise. Le test l'affirme désormais, et la leçon 7 de VOL-AVIONS est corrigée.
+- **Limites** :
+  - **Notes d'erreur de la FAA non relayées** : ses pages refusent la lecture automatique (403). L'archive n'en porte pas ; à lire
+    à la main à la prochaine mise à jour (ASSETS).
+  - Les transitions et la remise de gaz publiées ne sont pas encore volées : le F-35 vole sa jonction (AP2), l'A320 son IAF (AP3).
+    Rien n'est encore dessiné (AP4–AP5). Les RF (arcs) sont gardés sans leur centre.
+  - nav.dat reste au cycle 2013 hors des États-Unis.
+- **Suite** : AP3 (l'A320 sur le chemin : FMGC, MCDU ARR/VIA, RAD NAV réel).
+
+### 2026-11-15 16:08 UTC — Décision de Sam : le palier intermédiaire du mini à ~48 ms ; PLAN-J5 fermé
+
+- Contribution : §8 — le palier nommé (J0-CONTRAT §2), la cible de 40 ms gardée pour plus tard ; le plan reprend la lumière et le contenu.
+- Réalisé : J0-CONTRAT §2, PLAN-J5 §5 (fermé), État courant.
+- Limites : la cible de 25 images/s du mini non atteinte (J0 ~49–51 ms mesuré aujourd'hui).
