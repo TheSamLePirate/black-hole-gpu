@@ -1,8 +1,8 @@
 # PLAN-J6 — Les parcours complets (stratégie §19.13)
 
-**État (2026-11-15 19:25 UTC)** : **J6-1 à J6-5 faits** — leurs parcours passent ; cinq défauts trouvés et corrigés (le décollage
+**État (2026-11-15 19:28 UTC)** : **J6-1 à J6-5 faits, J6-6 fait en solo** — leurs parcours passent ; cinq défauts trouvés et corrigés (le décollage
 automatique, le décor en vol rapide, l'arrivée de la météo réelle d'un coup, le repos au sol jamais atteint, l'A320 rechargé dans l'état de la
-préférence). J6-6 ensuite. Les jalons J0 à J5 ont été menés (PLAN-J1 à PLAN-J5) ; le 15 novembre,
+préférence). J6-6 en salle, puis J6-7. Les jalons J0 à J5 ont été menés (PLAN-J1 à PLAN-J5) ; le 15 novembre,
 Sam a nommé **~48 ms de GPU sur J0 le palier intermédiaire de kerr-mini** ([J0-CONTRAT](J0-CONTRAT.md) §2) et demandé de reprendre la
 suite du plan, lumière et contenu. La stratégie ([ANALYSE-STRATEGIE](ANALYSE-STRATEGIE-RENDU-2026-11-03.md) §19.13) demande que les jalons
 « transportent l'expérience en même temps que les passes » : **un parcours n'est terminé ni avec une scène vide, ni avec un état choisi
@@ -126,3 +126,9 @@ L'inventaire du §1 vient de la lecture du catalogue et des en-têtes : aucun te
   la hauteur gardés après F1 et après le mode photo. **Relevé** : le mode photo fige le monde (l'appareil ne bouge pas pendant, reprend après —
   le comportement voulu) ; le retour par F1, un blocage de 317 ms ; en caméra libre l'alarme « GEAR UP · TOO LOW » de l'appareil reste
   affichée. Aucun défaut corrigé (aucun trouvé). Suite : J6-6 (la perte du GPU).
+- **J6-6 fait en solo : la perte du GPU en vol** (2026-11-15 19:28 UTC) : e2e `parcours-gpu` — le F-35 à 300 m au-dessus des Maures sous
+  pilote automatique, `__bh.gpu.lose()`, le manche tenu 1,2 s pendant la reprise. **Mesuré** (kerr-mini) : la reprise 1,96 s, le temps du
+  monde tenu pendant (3·10⁻⁵ M, sous le dixième d'une image) puis reparti ; à la première image où il repart, le sol de contact sous l'appareil
+  à son niveau (z 17 / 17) ; le relief republié (z 17) et l'écran du cockpit renvoyé (63 ms) en 3,7 s ; l'image non noire (luminance moyenne
+  69 → 69,7) ; le manche pendant la reprise n'a rien piloté (hauteur 668 → 675 m, maintiens inchangés). Aucun défaut trouvé. **Reste** : la
+  perte en salle réseau (un serveur de salle dans l'e2e — un second lot). Suite : J6-7 (TARS pendant une transition).
