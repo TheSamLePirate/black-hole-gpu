@@ -10,6 +10,11 @@ describe.skipIf(!E2E)("the spacecraft's crew orders (K6)", () => {
   let app: App;
   const crew = (js: string) => `document.querySelector('#crew-frame').contentWindow.${js}`;
   const doc = (js: string) => `document.querySelector('#crew-frame').contentDocument.${js}`;
+  // (the console sure the simulator takes orders, its instruments fresh: the docking's 18 000 steps in one block froze the page
+  // for seconds, its room's link closed after them, the instruments dropped until it came back — 15 Nov 2026, the undocking and the
+  // map's target refused unsaid)
+  const takesOrders = (selector: string) =>
+    app.waitFor(`${crew("__crew.actions.can('space').ok")} && !${doc(`querySelector(${JSON.stringify(selector)})`)}?.disabled`, 30_000);
   const click = async (selector: string) => {
     await app.js(`(${doc(`querySelector(${JSON.stringify(selector)})`)}.click(), true)`);
     await app.waitFor(`!${crew("__crew.actions.busy")}`, 6000);
@@ -84,8 +89,15 @@ describe.skipIf(!E2E)("the spacecraft's crew orders (K6)", () => {
     expect(keep.msg).toMatch(/Désamarrer d'abord/);
     expect(await app.js<boolean>("!!__bh.camera.docked")).toBe(true);
     expect(await app.js<string>("__bh.camera.pilot.auto")).not.toBe("keep");
+    await takesOrders("#fc-undock");
+    const before = (await lastBoard()) as { at?: number };
     await click("#fc-undock");
-    expect((await lastBoard()).ok).toBe(true);
+    // (its answer waited for — a new line on the board —: the pilot's, sent once its link is back)
+    await app.waitOptional(`${crew("__crew.actions.board[0]?.at")} !== ${before.at ?? 0}`, 30_000);
+    // (its answer said before it is checked: 15 Nov 2026, refused with nothing said)
+    const undock = await lastBoard();
+    console.log(`  undock: ${JSON.stringify(undock)}`);
+    expect(undock.ok).toBe(true);
     expect(await app.js<boolean>("!!__bh.camera.docked")).toBe(false);
   }, 180_000);
 
@@ -95,8 +107,11 @@ describe.skipIf(!E2E)("the spacecraft's crew orders (K6)", () => {
     // (the finger's pick: the view's own handler — the body at the menu's place)
     await app.js(crew(`__crew.views.onBody("moon", 300, 300)`));
     await app.waitFor(`!!${doc(`querySelector('[data-act="sp.target"].ctx-body-target, #ctx-body-target')`)}`, 3000);
+    await takesOrders("#ctx-body-target");
     await click("#ctx-body-target");
-    await app.waitFor(`__bh.settings.target === "moon"`, 6000);
+    const ok = await app.waitOptional(`__bh.settings.target === "moon"`, 6000);
+    if (!ok) console.log(`  target: ${await app.js<string>("__bh.settings.target")}; the board: ${JSON.stringify(await lastBoard())}`);
+    expect(await app.js<string>("__bh.settings.target")).toBe("moon");
   }, 60_000);
 
   test("the orbit: a burn moved two minutes later", async () => {

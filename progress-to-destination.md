@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-15 08:12 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-15 08:28 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous.
@@ -7556,3 +7556,17 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   établi (règle 3 : pas de témoin positif) ; aucun chiffre n'en est tiré.
 - Limites : la cause reste inconnue.
 - Suite : à reprendre avec un témoin positif de la copie (un marquage connu injecté), avant toute conclusion.
+
+### 2026-11-15 08:28 UTC — L'e2e `crew-space-actions` réparé : les ordres de la console après une longue boucle figée
+
+- **Constat** : 3/5, le désamarrage et la cible prise sur la carte « refusés » sans réponse ; le même résultat sur le code d'avant.
+- **Cause** (sondes : `CrewInbox` laissait tout passer, rien n'était envoyé ; le bouton désactivé, « ce simulateur ne reçoit pas
+  d'ordres » ; côté pilote, `client.event` refuse les instruments) : le test amarre en 18 000 pas d'un seul bloc. La page reste figée des
+  secondes, le lien de la salle se ferme après, les instruments (événements mous) sont abandonnés, et la console, sans instantané depuis
+  plus de 3 s, tient le simulateur pour muet. Découper la boucle a été essayé : la boucle d'images, entre les blocs, fait perdre l'ISS à
+  l'autopilote d'amarrage (« out of reach »).
+- **Changement** (le test seul) : avant chaque ordre, il attend que la console reprenne (ordres acceptés **et** bouton actif), puis la
+  réponse au tableau ; il dit la réponse avant de la vérifier. 5/5, deux fois. E2E-VOLS §7.
+- **Non tranché** : l'autopilote d'amarrage qui perd l'ISS quand les images tournent pendant des pas figés (`freeze` + `__bh.step`). Le jeu
+  normal amarre (`dock-undock`) ; noté ici seulement.
+
