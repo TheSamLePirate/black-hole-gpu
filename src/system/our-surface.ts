@@ -187,11 +187,24 @@ for (const [id, f] of craters) reliefs.set(id, f);
  * A body's measured heights, while the tracer draws them (its finer maps in: the Moon's LOLA, Mars's
  * MOLA — hd-maps.ts): under its craters, height [m] at a unit direction on its axes; null: the craters alone.
  */
-export function setGroundHeights(id: string, f: ((q: Vec3) => number) | null) {
+export function setGroundHeights(id: string, f: (((q: Vec3) => number) & { bare?: (q: Vec3) => number }) | null) {
   const c = craters.get(id);
   if (f) reliefs.set(id, c ? (q) => f(q) + c(q) : f);
   else if (c) reliefs.set(id, c);
   else reliefs.delete(id);
+  // (the same ground from the data alone, when its sampler has it — terrain.ts earthHeightSampler `bare` —: approaches judged on it)
+  const b = f?.bare;
+  if (b) bares.set(id, c ? (q) => b(q) + c(q) : b);
+  else bares.delete(id);
+}
+
+const bares = new Map<string, (g: Vec3) => number>();
+
+/** The ground's height from the data alone [m] — the relief without its procedural detail (PLAN-APPROCHES, Sam's decision of 16 Nov
+ *  2026: the approaches' slopes and guidance judged on it) —, else the ground as drawn (`groundRelief`). */
+export function groundBare(id: string, q: Vec3): number {
+  const f = bares.get(id);
+  return f ? f(figureAt(id, q).g) : groundRelief(id, q);
 }
 
 /**

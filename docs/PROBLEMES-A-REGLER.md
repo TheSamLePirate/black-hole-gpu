@@ -12,8 +12,10 @@ GA TRK/SRS), nouveau tour ; mais le second passage arrive au-dessus de la pente 
 ALT* à 168 m du sol, puis OP CLB — pas posé en 20 min. Cause supposée : (1) le détail procédural du relief (`earthDetail`) sous la
 trouée d'approche — des bosses de 10 à 50 m avant le seuil d'une piste aplanie ; (2) la jonction refaite après une remise de gaz
 au-dessus de la piste (`joinFrom` depuis l'axe, l'altitude de la remise de gaz gardée) trop haute pour une capture du G/S par en
-dessous. Piste : la question 4 de PLAN-APPROCHES §9 (le relief sans détail sous la trouée) ; une jonction après remise de gaz qui
-redescend sous le faisceau avant l'interception.
+dessous. Piste : la question 4 de PLAN-APPROCHES §9 — **décidée le 16 nov. : les données seules** (les pentes jugées sans le détail) ; **demandé
+à la session du rendu : aplanir le détail sous les trouées d'approche des pistes du monde** (`terrain.ts`, comme sous la piste — la
+collision le garde aujourd'hui) ; côté approches : une jonction après remise de gaz qui redescend sous le faisceau avant l'interception.
+Rejoué le 16 nov. sur le juge des données : toujours non posé (le détail sous la trouée inchangé).
 
 
 ## ~~La vue « Les aurores sur les fjords des Lofoten » volée en plein jour quand la date du jeu est en été~~ (relevé le 14 novembre 2026, e2e `s2-views`) — réglé le même jour

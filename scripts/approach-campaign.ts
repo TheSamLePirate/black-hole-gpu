@@ -9,8 +9,8 @@
 //     1 500 m over the threshold or 600 m over the relief there —: its entry, whether its last floor stands over the glideslope at
 //     the join (the slope met late, below a ridge), its points over their legs' ground;
 //   - the craft that can land there: the F-35 (1 500 m, a hard surface), the A320 (2 000 m, paved).
-// The relief is the world map's (assets/earth/relief-high.bin, some 2 km a texel) with the game's procedural detail (terrain.ts
-// earthHeightSampler without tiles) — what the game judges on before the fine tiles flown over come: a coarse judge, said as such. Out: docs/progress/approches/ap10-campaign.json (every end) and ap10-campaign.md (the table, the refusals by
+// The relief is the world map's (assets/earth/relief-high.bin, some 2 km a texel) through the game's sampler, judged on its `bare`
+// ground — the data alone, no procedural detail (Sam, 16 Nov 2026) — what the game judges on before the fine tiles come: coarse, said. Out: docs/progress/approches/ap10-campaign.json (every end) and ap10-campaign.md (the table, the refusals by
 // reason, the worst cases).
 //
 //   bun scripts/approach-campaign.ts [--limit N] [--only ICAO,…] [--sample]   (--sample: ap10-sample.json picked again — the e2e's)
@@ -19,13 +19,12 @@ import { readdirSync } from "node:fs";
 import { planJoin, PLAN } from "../src/game/approach-plan";
 import { fromRunway, glideClearance, glideHeight, type IlsRunway } from "../src/game/ils";
 import { loadGeoid } from "../src/system/geoid";
-import { geoidDeg } from "../src/system/geoid-grid";
 import { loadHeights } from "../src/system/heights-file";
-import { bodyFixedOf, groundRelief, setGroundHeights } from "../src/system/our-surface";
+import { setGroundHeights } from "../src/system/our-surface";
 import { earthHeightSampler } from "../src/terrain";
 import { type Approach, approachesOf, decodeApproachTile } from "../src/world/approaches";
 import { type Airfield, decodeTile } from "../src/world/runways";
-import { runwayOfApproach } from "../src/controller/approach";
+import { groundMsl, runwayOfApproach } from "../src/controller/approach";
 
 const args = process.argv.slice(2);
 const limit = Number(args[args.indexOf("--limit") + 1]) || Number.POSITIVE_INFINITY;
@@ -35,11 +34,10 @@ const fileGet = async (u: string) => new Response(Bun.file(u.replace(/^.*?assets
 // (the geoid and the relief: the sea's height over the ellipsoid, the ground's — the world map, no detail)
 await loadGeoid((u) => fileGet(u));
 const H = await loadHeights("assets/earth/relief-high.bin", fileGet);
-// (the game's own sampler without its tiles — the map, its detail, the geoid —: the relief the game judges a slope on before the fine
-// tiles come; the map's texels alone said Raton's 20 clear, the game refused it, AP10b)
+// (the game's own sampler without its tiles — the map, the geoid; the approaches judged on its `bare` ground, the data alone: Sam's
+// decision of 16 Nov 2026, PLAN-APPROCHES §9 q. 4 — groundMsl, controller/approach.ts)
 const sampler = earthHeightSampler(H.map, H.W, H.H);
-setGroundHeights("earth", (q) => sampler(q));
-const groundMsl = (lat: number, lon: number) => Math.max(groundRelief("earth", bodyFixedOf("earth", lat, lon, 0)) - geoidDeg(lat, lon), 0);
+setGroundHeights("earth", sampler);
 
 // the approach tiles: their records and the FAA's, by field
 const recs = new Map<string, { records: ReturnType<typeof decodeApproachTile> }>();
@@ -298,7 +296,7 @@ await Bun.write("docs/progress/approches/ap10-campaign.json", `${JSON.stringify(
 const md = [
   `# AP10 — la campagne sur toutes les pistes (${out.date.slice(0, 16).replace("T", " ")} UTC)`,
   "",
-  `Produit par \`bun scripts/approach-campaign.ts\` — relief : la carte mondiale (relief-high.bin, ~2 km le texel) et le détail procédural du jeu, sans les tuiles fines : un juge grossier, celui du jeu avant l'arrivée des tuiles.`,
+  `Produit par \`bun scripts/approach-campaign.ts\` — relief : les données seules (la carte mondiale relief-high.bin, ~2 km le texel, sans le détail procédural — décision de Sam du 16 nov.), sans les tuiles fines : un juge grossier, celui du jeu avant l'arrivée des tuiles.`,
   "",
   `**${total.ends} extrémités**, toutes avec une approche (${total.real} réelles, ${total.ends - total.real} construites) ; pente dégagée ${total.ok}, mince ${total.thin}, construite écartée « relief » ${total.relief}, construite refusée (la pente rencontre le relief) ${total.refused}, réelle volée comme publiée malgré la carte du relief ${total.warned} ; jonction dont le dernier palier dépasse la pente à 16 km : ${total.floorOver} ; un point de jonction à moins de 290 m du sol : ${total.joinUnder290} ; en ${total.seconds} s.`,
   "",

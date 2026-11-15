@@ -12,7 +12,7 @@ import { isAircraft } from "../vessels";
 import { fleet } from "../fleet";
 import { t, tf } from "../i18n";
 import { geoidDeg } from "../system/geoid";
-import { bodyFixedOf, groundRelief } from "../system/our-surface";
+import { bodyFixedOf, groundBare } from "../system/our-surface";
 import { wgs84Direct, wgs84Inverse } from "../system/ellipsoid";
 import { daysOf } from "../system/solar";
 import { weatherAt, windFromAt } from "../weather";
@@ -385,9 +385,11 @@ export function runwayOfApproach(f: Airfield, a: Approach, ground: (lat: number,
   return W;
 }
 
-/** The ground's height over the sea at a place [m] (the relief over the ellipsoid less the geoid; the sea 0). */
+/** The ground's height over the sea at a place [m] (the relief over the ellipsoid less the geoid; the sea 0) — from the data alone,
+ *  the procedural detail left out: the approaches' slopes, their joins' floors, the guidance's heights judged on it (Sam, 16 Nov 2026,
+ *  PLAN-APPROCHES §9 q. 4 — on the detail 360 of the F-35's airfields had no end to fly, 92 on the data). */
 export const groundMsl = (lat: number, lon: number) =>
-  Math.max(groundRelief("earth", bodyFixedOf("earth", lat, lon, 0)) - geoidDeg(lat, lon), 0);
+  Math.max(groundBare("earth", bodyFixedOf("earth", lat, lon, 0)) - geoidDeg(lat, lon), 0);
 
 /** A field's built approach a controller could not give: its glideslope not clear of the relief known (game/ils.ts
  *  glideClearance « thin »), or its safe height round the legs over the slope at the join (`boxOverSlope`). */

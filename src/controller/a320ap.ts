@@ -14,8 +14,6 @@ import { t, tf } from "../i18n";
 import { unitsOf } from "../ui/unitsys";
 import { fromRunway, glideHeight, ILS, ilsReading, type IlsRunway, onRunway, runwayId } from "../game/ils";
 import { gcCourse, gcDist } from "../game/flightplan";
-import { geoidDeg } from "../system/geoid";
-import { bodyFixedOf, groundRelief } from "../system/our-surface";
 import type { PilotInput } from "../pilot";
 import { findRunway, runwayOf, syncRunwayLevel } from "./ils";
 import { groundMsl } from "./approach";
@@ -234,7 +232,7 @@ function legsGround(W: IlsRunway): number {
   for (let d = 4000; d <= 26_000; d += 1000)
     for (let x = -7000; x <= 7000; x += 1000) {
       const p = fromRunway(W, -d, x);
-      top = Math.max(top, groundRelief("earth", bodyFixedOf("earth", p.lat, p.lon, 0)) - geoidDeg(p.lat, p.lon));
+      top = Math.max(top, groundMsl(p.lat, p.lon));
     }
   return top;
 }
@@ -247,7 +245,7 @@ function safeProfile(W: IlsRunway): number[] {
     for (let a = d - 2000; a <= d + 2000; a += 500)
       for (let x = -2000; x <= 2000; x += 1000) {
         const p = fromRunway(W, -Math.max(a, 0), x);
-        top = Math.max(top, groundRelief("earth", bodyFixedOf("earth", p.lat, p.lon, 0)) - geoidDeg(p.lat, p.lon));
+        top = Math.max(top, groundMsl(p.lat, p.lon));
       }
     return top;
   };

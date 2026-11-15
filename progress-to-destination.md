@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-15 22:23 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-15 23:51 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous. Ce qui est fermé quitte le tableau « En cours » pour la ligne « Fermé récemment ».
@@ -47,7 +47,7 @@ J4 (fermé, sortie non atteinte), J5 et J6 (fermés).
 |---|---|---|
 | Rendu (33d89754) | J4 / J5 — l'eau, les volumes, la généralisation | **fermés** ([PLAN-J4](docs/PLAN-J4-VOLUMES.md), [PLAN-J5](docs/PLAN-J5-GENERALISATION.md)) : l'eau à demi-rythme (J5-5, −6,0 à −6,4 ms, l'image la même) ; le sol à demi-rythme laissé au joueur (J5-6, réglage « demi » : −1,9 à −3,2 ms ; « auto » à chaque pixel) ; la FFT de la mer en deux passes (−0,9 ms) ; la carte d'ombre des arbres (−2,8 ms, forêt) ; Sam a refusé les arbitrages d'image (MSAA 1×, petits arbres, nuages amortis). Postes lourds restants : l'eau 16,2, les nuages d'orage 16,5, le décor d'une forêt ~7 ms |
 | Rendu (33d89754) | Mesures tenues | la borne du M1 Max **à 30** : essayée à 40 le 15 au soir, non tenue (soutenu 26,4 et 34,5 images/s, deux runs — [J0-CONTRAT §2](docs/J0-CONTRAT.md)) ; le coût de l'appareil 3,5–4,5 ms, dont le MSAA 4× 4–5 ms (gardé) |
-| PLAN-APPROCHES (1feb2f7f) | [PLAN-APPROCHES](docs/PLAN-APPROCHES.md) | **AP0 à AP10 faits (15 nov.)** : données réelles, choix, jonction, A320, carte, radar, TSD, crew, HUD, directeur de vol, roue, options, audio, campagne mondiale (66 914 extrémités, toutes avec une approche) et échantillon volé (F-35 9/9 sur la piste, A320 4/5 et un refus motivé, **OIFK rouge** — PROBLEMES). **Question 4 à Sam** : le relief sur lequel juger les pentes construites (avec ou sans le détail procédural : 360 ou 92 terrains refusés). **Reste : AP-R (retraits)** |
+| PLAN-APPROCHES (1feb2f7f) | [PLAN-APPROCHES](docs/PLAN-APPROCHES.md) | **AP0 à AP10 faits (16 nov.)** : données réelles, choix, jonction, A320, carte, radar, TSD, crew, HUD, directeur de vol, roue, options, audio, campagne mondiale (66 914 extrémités, toutes avec une approche) et échantillon volé (F-35 9/9 sur la piste, A320 4/5 et un refus motivé, **OIFK rouge**). Q4 décidée (Sam, 16 nov.) : pentes jugées sur les données seules (91 terrains F-35 refusés, 360 avec le détail). **Demande à la session du rendu : aplanir le détail procédural sous les trouées d'approche** (`terrain.ts` — PROBLEMES). **Reste : AP-R (retraits)** |
 | Audit vagues 3–4 et 6 (1feb2f7f) | [09-priorites-todo](docs/audit-2026-11-10/09-priorites-todo.md) | **faits** : 3.1–3.2 réseau (RD0–RD2), 3.3 sauvegardes (une clé par sauvegarde ; avion, systèmes des vaisseaux et de l'A320 — ce dernier par J6-4), 3.4–3.5 vol, 3.6–3.7 TARS, 3.10 e2e honnêtes, 4.2 temps et onglet masqué, 4.3 `Settings`/`ViewPose`, 4.8 `main()` découpé ; vague 6 hors rendu (QA, AR, RD4/RD5, FX). **Reste** : l'état d'une mission ou d'un combat (Sam), IndexedDB et l'autosauvegarde hors frame (AR-05), FX-19 (fraîcheur des écrans, à mesurer), FX-21 |
 
 **Fermé récemment** : **J3** (15 nov., confirmé par Sam ; J3-R fait 20:48) ; **le repli du raster vers le tracé retiré** (15 nov., 20:48, décision (b)) ; **PLAN-J6** (15 nov., 20:35 : les neuf parcours en e2e, sept défauts corrigés) ; l'eau étagée E1 (−1,55 ms) et E2 (−0,5 ms), E3 non ouvert ; la classification lot 1 (sur terre −1,15 ms), lot 2 non ouvert
@@ -8425,3 +8425,18 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
 - Limites : le seuil est jugé sur les images finies, en mouvement — un GPU faible immobile (vue tenue) n'est pas jugé ; un refus vaut pour
   l'appareil (le rétablir : effacer `kerr.lowrate-refused`).
 - Suite : aucune décision de Sam en attente de ce lot.
+
+### 2026-11-15 23:51 UTC — PLAN-APPROCHES : la décision de Sam sur le relief des approches (question 4) appliquée
+
+- Contribution à la destination : « une responsabilité commune avant plusieurs lecteurs » — le relief des données distingué du détail
+  procédural de l'image : le guidage juge sur les données, le dessin garde son détail ; une demande nommée à la session qui possède le terrain.
+- Décision (Sam, 16 nov. 2026, choix recommandé) : juger les pentes des approches construites et les hauteurs des guidages sur le relief
+  des données seules ; demander à la session du rendu d'aplanir le détail sous les trouées d'approche.
+- Réalisé : `terrain.ts` `earthHeightSampler` expose `.bare` (le même sol sans `earthDetail` ; le comportement du jeu inchangé) ;
+  `our-surface.ts` le garde (`groundBare`) ; `controller/approach.ts` `groundMsl` le lit — pente, boîte, jonctions, niveau des seuils,
+  raidissement ; `controller/a320ap.ts` (relief des branches et profil de sécurité de l'A320) sur `groundMsl` ; la campagne jugée de même.
+- Preuves (mesuré / observé) : campagne — terrains du F-35 sans extrémité volable **91** sur 6 269 (360 avec le détail), de l'A320 35 sur
+  3 625 ; construites refusées 3 586, réelles contredites 81 ; échantillon : F-35 **9/9** sur la piste (ici), A320 4/5 + KTNX refusée, OIFK
+  toujours non posé (kerr-mini) ; tests unitaires 40/40.
+- Limites : la collision garde le détail sous les trouées (à la session du rendu) ; OIFK reste ouvert (PROBLEMES).
+- Suite : AP-R (les retraits).

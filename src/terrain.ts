@@ -640,7 +640,9 @@ export function earthHeightSampler(
 ) {
   const texelA = (EARTH_RM * 2 * Math.PI) / W;
   const fromMap = mapHeightSampler(map, W, H);
-  return (q: V3, foot = 0.05): number => {
+  // (`bare`: the same ground without the procedural detail — the data's alone, the tiles' or the map's, graded —: what an approach is
+  // judged on, a decision of Sam's of 16 Nov 2026 (PLAN-APPROCHES §9 q. 4): the detail is no data, it refused real airfields)
+  const sample = (q: V3, foot: number, detail: boolean): number => {
     let h0: number, res: number;
     const t = tiles?.(q, foot);
     if (t && t.rem < 1) {
@@ -653,6 +655,9 @@ export function earthHeightSampler(
     const g = graded?.(q);
     const flat = g?.flat ?? 0;
     if (g && g.level > 0) h0 += (g.elev - h0) * g.level;
-    return Math.max(h0 + (flat < 1 ? (1 - flat) * earthDetail(q, h0, foot, res) : 0), 0) + geoidAt(q);
+    return Math.max(h0 + (detail && flat < 1 ? (1 - flat) * earthDetail(q, h0, foot, res) : 0), 0) + geoidAt(q);
   };
+  return Object.assign((q: V3, foot = 0.05): number => sample(q, foot, true), {
+    bare: (q: V3, foot = 0.05): number => sample(q, foot, false),
+  });
 }

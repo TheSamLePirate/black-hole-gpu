@@ -384,10 +384,8 @@ captures montrées dans T3, ses docs, une entrée au journal.
 2. ~~AP7 : la touche de « toutes les pistes » et le défaut du réglage~~ — **décidé le 15 nov. : activé par défaut ; bascule par
    la roue et le Labo, sans touche** (les touches de vol presque toutes prises).
 3. ~~AP6 : quels postes du crew peuvent armer une approche~~ — **décidé le 15 nov. : tous les postes.**
-4. **AP10 (ouverte) : sur quel relief juger la pente d'une approche construite ?** Le jeu la juge sur le relief qu'il a — avant les
-   tuiles fines, la carte mondiale **et son détail procédural** (`terrain.ts` `earthDetail`) : la campagne compte alors 8 559 extrémités
-   construites refusées, 360 terrains du F-35 sans extrémité volable (203 de l'A320) ; sur la carte seule, 3 740 et 92. Le détail
-   n'est pas une donnée : il refuse des approches et fait des bosses avant le seuil (le rebond de l'A320 à OIFK). Recommandation : juger
-   la pente (et la hauteur sur le sol des guidages) sur le relief des données seul — tuiles ou carte, sans le détail —, et aplanir le
-   détail sous la trouée d'approche des pistes du monde comme sous la piste elle-même (domaine du rendu : `terrain.ts`, à confier à sa
-   session).
+4. ~~AP10 : sur quel relief juger la pente d'une approche construite~~ — **décidé le 16 nov. : les données seules.** Les pentes, les
+   paliers des jonctions et les hauteurs des guidages se jugent sur le relief des données (tuiles ou carte, sans le détail procédural
+   `earthDetail` — `terrain.ts` `earthHeightSampler(...).bare`, `our-surface.ts` `groundBare`, `controller/approach.ts` `groundMsl`) :
+   91 terrains du F-35 sans extrémité volable (360 avec le détail). **Demandé à la session du rendu** : aplanir le détail sous les
+   trouées d'approche des pistes du monde, comme sous la piste (la collision le garde aujourd'hui : le rebond de l'A320 à OIFK).
