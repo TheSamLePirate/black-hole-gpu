@@ -24,6 +24,14 @@ Les autres passes de l'air restent à peu près fixes (couvert / pluie) : `cloud
 - **L'enveloppe par profil (J4-6, réglage provisoire du §8)** : sur kerr-mini (cible 40 ms), aucun profil n'est tenu ; l'écart va de 17 ms (beau
   temps) à 38 ms (orage).
 
+## La part de la lumière dans la passe des nuages (orage, ablations, ~03:18 UTC)
+
+Run `…-j4-cloudlight` (kerr-mini froid) : références 77,7 / 75,2 ms (moyenne 76,45) ; **sans marche vers le Soleil** (`TUNE_CLOUD_LIGHT` 0 :
+la colonne de la couche) **67,1 ms (−9,4)** ; la marche en 4 pas au lieu de 6 (`CLOUD_NEAR_N` 4) 75,7 ms (−0,75, au bruit). **La lumière des
+nuages de la météo — sa marche vers le Soleil à chaque échantillon — fait l'essentiel de la passe sous orage** ; le nombre de pas n'y est pas :
+c'est l'appel lui-même. Plafond pour un cache de lumière (§7.9) : ~9,4 ms sous orage. Q5 C6 avait mesuré la qualité de ces marches (4 pas :
+la lumière d'un orage +14 niveaux) — un cache se juge contre la marche, à l'image.
+
 ## Non vérifié
 
 Un vol par profil (A/A de J0 ~±1,6 ms) ; le M1 Max non mesuré ; la part des éclairs et de la couche haute de l'orage non séparée.

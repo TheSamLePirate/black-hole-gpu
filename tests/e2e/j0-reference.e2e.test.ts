@@ -94,6 +94,10 @@ const ABLATIONS: Record<string, { label: string; set: string }> = {
   // (PLAN-J4 J4-0 — the weather's own share, under J0_WEATHER=storm: « sans nuages » sets earthClouds 0, the weather's layers — wxCloud,
   // the rain, the lightning — stay (storm: clouds (half) 16.5 ms, the ablation −0.6 ms, 15 Nov 2026); the weather back to fair, the cover kept)
   weather: { label: "météo beau temps (la couverture gardée)", set: `__bh.game.set("weather", "fair");` },
+  // (PLAN-J4 J4-2's split of the clouds' pass — its light: the sunward march (TUNE_CLOUD_LIGHT 0: the layer's column instead), its steps
+  // (CLOUD_NEAR_N 4 for 6 — Q5 C6: a storm's light +14 levels off with 4) —, recompiles, measures only)
+  cloudLight: { label: "nuages sans marche vers le Soleil (colonne)", set: `__bh.renderer.tune = { TUNE_CLOUD_LIGHT: 0 };` },
+  cloudNear4: { label: "marche vers le Soleil en 4 pas (6)", set: `__bh.renderer.tune = { CLOUD_NEAR_N: 4 };` },
 };
 // (13 Nov 2026, Sam's decision 1: the water's two ablations in every fiche — its material, valid since liteSkip's bits are carried by
 // bitcast, and the sea's surface, the largest render pass, no owner measured before)

@@ -141,3 +141,8 @@ Le relevé du §2 vient d'une lecture du code et des documents (agent d'explorat
   pluie 67,3, orage 77,8 ms (kerr-mini, [fiche](progress/j4/FICHE-PROFILS-METEO-kerr-mini-2026-11-15.md)) ; le coût suit la passe des nuages
   (5 → 16,5 ms), la pluie ne pèse rien de lisible. Plafond de J4-2 : 7 à 11 ms de passe au-dessus du beau temps. **Aucun profil tenu** sur la
   cible du mini (40 ms) : l'enveloppe est écrite, l'écart aussi (17 à 38 ms).
+- **J4-2, la lumière plutôt que le vide** (2026-11-15 03:18 UTC) : sous orage, la marche vers le Soleil de chaque échantillon des nuages de la
+  météo coûte **9,4 ms** (ablation `cloudLight` : la colonne à sa place) ; 4 pas au lieu de 6 : −0,75 (au bruit). Le lot J4-2 se recentre
+  donc sur **le cache de lumière** du contrat des volumes (§7.9 : la profondeur optique vers le Soleil précalculée par volume, lue par
+  échantillon) plutôt que sur la grille d'occupation (une couche pleine n'a pas de vide à sauter) ; plafond 9,4 ms sous orage. À juger à
+  l'image contre la marche (Q5 C6). Non commencé.
