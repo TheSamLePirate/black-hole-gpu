@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-15 21:16 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-15 22:00 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous. Ce qui est fermé quitte le tableau « En cours » pour la ligne « Fermé récemment ».
@@ -46,7 +46,7 @@ J4 (fermé, sortie non atteinte), J5 et J6 (fermés).
 | Session (T3) | Lot | État |
 |---|---|---|
 | Rendu (33d89754) | J4 / J5 — l'eau, les volumes, la généralisation | **fermés** ([PLAN-J4](docs/PLAN-J4-VOLUMES.md), [PLAN-J5](docs/PLAN-J5-GENERALISATION.md)) : l'eau à demi-rythme (J5-5, −6,0 à −6,4 ms, l'image la même) ; le sol à demi-rythme laissé au joueur (J5-6, réglage « demi » : −1,9 à −3,2 ms ; « auto » à chaque pixel) ; la FFT de la mer en deux passes (−0,9 ms) ; la carte d'ombre des arbres (−2,8 ms, forêt) ; Sam a refusé les arbitrages d'image (MSAA 1×, petits arbres, nuages amortis). Postes lourds restants : l'eau 16,2, les nuages d'orage 16,5, le décor d'une forêt ~7 ms |
-| Rendu (33d89754) | Mesures tenues | la borne du M1 Max **à 30, provisoire** (soutenu, le GPU bride vers 850 MHz quelle que soit la borne — [J0-CONTRAT §2](docs/J0-CONTRAT.md)) ; le coût de l'appareil 3,5–4,5 ms, dont le MSAA 4× 4–5 ms (gardé) |
+| Rendu (33d89754) | Mesures tenues | la borne du M1 Max **à 30** : essayée à 40 le 15 au soir, non tenue (frais 32,3 / 35,4, soutenu 26,4 images/s ; un second soutenu à refaire, ce Mac libre — [J0-CONTRAT §2](docs/J0-CONTRAT.md)) ; le coût de l'appareil 3,5–4,5 ms, dont le MSAA 4× 4–5 ms (gardé) |
 | PLAN-APPROCHES (1feb2f7f) | [PLAN-APPROCHES](docs/PLAN-APPROCHES.md) | **AP0 à AP9 et AP10a faits (15 nov.)** : données réelles, choix, jonction, A320, carte, radar, TSD, crew, HUD, directeur de vol, roue, options, audio ; AP10a : la campagne sur les 66 914 extrémités du monde (toutes avec une approche ; 92 terrains du F-35 sans extrémité volable, sur le relief grossier), deux défauts corrigés. **Reste : AP10b (échantillon volé), AP-R (retraits)** |
 | Audit vagues 3–4 et 6 (1feb2f7f) | [09-priorites-todo](docs/audit-2026-11-10/09-priorites-todo.md) | **faits** : 3.1–3.2 réseau (RD0–RD2), 3.3 sauvegardes (une clé par sauvegarde ; avion, systèmes des vaisseaux et de l'A320 — ce dernier par J6-4), 3.4–3.5 vol, 3.6–3.7 TARS, 3.10 e2e honnêtes, 4.2 temps et onglet masqué, 4.3 `Settings`/`ViewPose`, 4.8 `main()` découpé ; vague 6 hors rendu (QA, AR, RD4/RD5, FX). **Reste** : l'état d'une mission ou d'un combat (Sam), IndexedDB et l'autosauvegarde hors frame (AR-05), FX-19 (fraîcheur des écrans, à mesurer), FX-21 |
 
@@ -57,11 +57,11 @@ J4 (fermé, sortie non atteinte), J5 et J6 (fermés).
 
 **Décidé par Sam (15 nov., ~19:55 UTC, « j'accepte tes recommandations »)** : PLAN-J3 §8 confirmé tel quel (J3-R peut retirer les anciens
 chemins) ; le repli du raster vers le tracé **retiré sur la Terre** (b, fait le 15 à 20:48) ; la borne
-du M1 Max : **essai à 40 à refaire** avant de la figer (30 jusque-là ; un essai du 15 à 20:44–21:02 non retenu — le GPU partagé avec l'e2e d'une autre session —, à refaire au calme) ; les seuils p99 et CPU du mini **fixés à la reprise de la cible 40 ms** ;
+du M1 Max : **essai à 40 à refaire** avant de la figer (**refait le 15 au soir : 40 non tenu** — frais 32,3 et 35,4, soutenu 26,4 images/s — ; **la borne reste à 30** ; un second vol soutenu valable reste à faire, ce Mac libre — threeRTearth y rendait) ; les seuils p99 et CPU du mini **fixés à la reprise de la cible 40 ms** ;
 l'état d'une mission ou d'un combat **non sauvé, dit** ; le réseau **« entre amis »**, RD3 non ouvert ([J0-CONTRAT](docs/J0-CONTRAT.md) §2,
 [PLAN-RESEAU-DURCISSEMENT](docs/PLAN-RESEAU-DURCISSEMENT.md) §4).
 
-**Attend Sam** : rien d'ouvert à ce jour (les seuils du mini et la borne du M1 Max attendent leurs mesures, pas une décision).
+**Attend Sam** : rien d'ouvert à ce jour (les seuils du mini attendent la reprise de la cible 40 ms ; la borne du M1 Max mesurée le 15 au soir : 30 gardé).
 
 ## Journal
 
@@ -8367,3 +8367,17 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
 - Preuves : `e2e-waits`, `e2e-catalogue`, `e2e-honesty` et les autres gardes des e2e 15/15 ; e2e `raster-governor` 1/1 sur kerr-mini (run
   `20261115-221939-raster-governor-norepli2` : 15 s sous 8 ms de budget, la Terre en raster, GPU 38,3 ms). Leçon : le hook d'avant poussée
   ne lance pas `bun test` ; après la modification d'un e2e, lancer ses gardes avant de pousser.
+
+### 2026-11-15 22:00 UTC — La borne du M1 Max essayée à 40 : non tenue, la borne reste à 30
+
+- Contribution à la destination : §8 et décision de Sam du 13 novembre (un palier se juge borné et soutenu) ; sa décision du 15 (~19:55) :
+  refaire l'essai à 40 avant de figer la valeur.
+- Réalisé : J0 borné à 40 sur ce M1 Max, chaque run lancé machine au calme (2 min de GPU sous 25 %, aucun Chrome de test), surveillé
+  pendant le run (un rendu `threert-render` relevé toutes les 10 s). J0-CONTRAT §2 complété.
+- Preuves (mesuré, `remote-results/j0/m1max-cap40-1115-*`, arbre 8ed1b550/2469ffa5) : run 3 — frais 32,3 images/s, GPU 30,5 ms (919 →
+  816 MHz) ; soutenu **26,4 images/s**, p95 50,7, GPU 36,7 ms (663 MHz, Heavy). Run 5 — frais 35,4 images/s, GPU 27,7 ms ; le reste
+  faussé (`threert-render` dès 21:49:29). Runs 1, 2 et 4 non retenus (le GPU partagé avec un e2e d'une autre session, puis avec
+  threeRTearth). Les captures du virage, frais et soutenu, montrent la même image.
+- Limites : un seul vol soutenu valable sur les deux demandés par Sam ; la machine n'a jamais été froide ce soir (départs à ~900 MHz,
+  ~80 °C) ; ce Mac est partagé avec un autre projet GPU (threeRTearth) — une mesure ici doit vérifier qu'il ne tourne pas.
+- Suite : la borne reste à 30 sur le M1 Max ; le second vol soutenu à 40, ce Mac libre, ne changerait la valeur que s'il tenait 40.

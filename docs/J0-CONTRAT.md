@@ -83,6 +83,21 @@ figer la valeur ; 30 reste la borne de ses fiches jusqu'à cet essai. Aucun gain
 d'une autre session (occupé à 94 % à 592 MHz avant le Chrome du test ; des passes d'ordinaire sous la milliseconde à ~20 ms) ; le premier run
 a perdu sa connexion en vol. À refaire la machine au calme.
 
+**Refait le 15 novembre (21:16–21:58 UTC, arbre de 8ed1b550/2469ffa5, `J0_FPSCAP=40`, ce M1 Max ; chaque run lancé après 2 min de GPU sous
+25 % et sans autre Chrome de test ; `remote-results/j0/m1max-cap40-1115-{3,4,5}`)** :
+
+| Run | Vol frais | Vol soutenu | Valable |
+|---|---|---|---|
+| 3 | 32,3 images/s, intervalle p95 41,8 ms, GPU 30,5 ms (919 → 816 MHz, Moderate) | **26,4 images/s**, p95 50,7, GPU 36,7 ms (663 MHz, Heavy) | oui |
+| 4 | — | — | non : `threert-render` (projet threeRTearth) a rendu de 21:28 à 21:34 UTC pendant le run |
+| 5 | 35,4 images/s, p95 35,0, GPU 27,7 ms (890 → 851 MHz) | — | le vol frais seul : `threert-render` dès 21:49:29 (relevé toutes les 10 s), ablations et soutenu faussés |
+
+**Lecture** : borné à 40, le M1 Max ne tient 40 images/s ni frais (32,3 et 35,4 : la machine, occupée toute la soirée, part déjà à
+~900 MHz) ni soutenu (26,4, sous les 30 que la borne de 30 tenait le matin même, 23,1 ms) : à 40 il chauffe plus et soutient moins.
+**La borne reste à 30 images/s sur le M1 Max** (la valeur des fiches inchangée). Un seul vol soutenu valable sur les deux demandés : le
+second, à refaire ce Mac libre (aucun rendu d'un autre projet), ne changerait la valeur que s'il tenait 40, ce que les trois vols frais
+mesurés ce soir ne font pas.
+
 **Le palier 1 est atteint** quand, sur le vol de référence (§3), mesuré deux fois sur le M1 Max dans l'état soutenu,
 **les seuils suivants tiennent tous** — *validés par Sam le 10 novembre* (transposés de §8.3, qui les fixe pour
 le profil 60 : p95 au budget, p99 à 1,5 fois) :
