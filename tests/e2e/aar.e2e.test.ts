@@ -69,5 +69,12 @@ describe.skipIf(!E2E)("the air refuelling", () => {
     const fuel = await app.js<number>(`__bh.fleet.fuel.f35`);
     console.log(`  after the refuelling: ${fuel.toFixed(0)} kg aboard`);
     expect(fuel).toBeGreaterThan(5700);
+    // (the TCAS in TA ONLY while refuelling: no resolution advisory said against the tanker — 14 Nov 2026, "Climb, climb!" through the
+    // contact before)
+    const ra = await app.js<string[]>(
+      `__bh.voice.said.filter((l) => /Climb, climb|Descend, descend|Montez, montez|Descendez, descendez/.test(l.text)).map((l) => l.text)`,
+    );
+    console.log(`  resolution advisories said: ${ra.length}`);
+    expect(ra).toEqual([]);
   }, 500_000);
 });

@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-15 00:25 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-15 00:31 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous.
@@ -7059,4 +7059,10 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
 - **Limites** : la plupart viennent d'un seul lancement, sur ce Mac (M1 Max, fenêtre visible). Ces e2e n'ont pas été relancés après
   l'abaissement, sauf `aar` et `crew-aar` (les mêmes attentes, plafond plus haut). Laissées telles quelles : `f35-wingmen:97` (l'issue
   d'un combat varie trop) et les attentes de compilation (`f35-sea-trail`).
+
+### 2026-11-15 00:31 UTC — Le TCAS en TA ONLY vérifié dans le jeu (e2e `aar`)
+
+- L'e2e `aar` vérifie désormais qu'aucune résolution (« Climb, climb! », « Descend, descend! », en anglais et en français) n'est dite
+  sur tout le ravitaillement. Ce Mac, fenêtre visible : 3/3, 0 résolution, 5 933 kg à bord. Pendant le contact, la seule annonce est
+  « TEXACO 11: fuel flowing ». Ce qui restait à vérifier dans l'entrée précédente est fait.
 
