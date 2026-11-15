@@ -1,8 +1,8 @@
 # PLAN-J6 — Les parcours complets (stratégie §19.13)
 
-**État (2026-11-15 19:33 UTC)** : **J6-1 à J6-5 et J6-7 faits, J6-6 fait en solo** — leurs parcours passent ; cinq défauts trouvés et corrigés (le décollage
+**État (2026-11-15 19:38 UTC)** : **les huit lots joués : J6-1 à J6-5, J6-7, J6-8 faits, J6-6 fait en solo** — leurs parcours passent ; cinq défauts trouvés et corrigés (le décollage
 automatique, le décor en vol rapide, l'arrivée de la météo réelle d'un coup, le repos au sol jamais atteint, l'A320 rechargé dans l'état de la
-préférence). Reste : J6-6 en salle, J6-8. Les jalons J0 à J5 ont été menés (PLAN-J1 à PLAN-J5) ; le 15 novembre,
+préférence). Reste : J6-6 en salle réseau ; dans J6-7, la commande périmée et l'annulation. Les jalons J0 à J5 ont été menés (PLAN-J1 à PLAN-J5) ; le 15 novembre,
 Sam a nommé **~48 ms de GPU sur J0 le palier intermédiaire de kerr-mini** ([J0-CONTRAT](J0-CONTRAT.md) §2) et demandé de reprendre la
 suite du plan, lumière et contenu. La stratégie ([ANALYSE-STRATEGIE](ANALYSE-STRATEGIE-RENDU-2026-11-03.md) §19.13) demande que les jalons
 « transportent l'expérience en même temps que les passes » : **un parcours n'est terminé ni avec une scène vide, ni avec un état choisi
@@ -139,3 +139,14 @@ L'inventaire du §1 vient de la lecture du catalogue et des en-têtes : aucun te
   montée à 19 m/s, train rentré. Le même chemin que le pilote (`apSet`, J6-1). Corrigé au passage : l'engagement seul pendant le roulage
   répétait « tenus à la fin du décollage » ; il dit désormais que ses maintiens s'engagent à sa fin. Non joué ici : une commande devenue
   périmée et l'annulation selon le point de reprise. Suite : J6-8 (la montée vers l'orbite).
+- **J6-8 fait : la montée vers l'orbite** (2026-11-15 19:38 UTC) : e2e `parcours-orbite` — le Ranger sur le pas de tir du Cap, son décollage
+  orbital par la vraie touche U, l'horloge par tranches de 10 s de vol (300 pas), quelques images rendues entre. **Mesuré** (kerr-mini) : en
+  orbite (195 × 206 km, rapport d'ascension A 19,7/20) en 49 tranches ; **aucun saut** de hauteur sur 14 700 pas (chaque pas dans ce que couvre
+  sa vitesse de montée), l'horloge jamais en arrière ; l'exposition de 13,8 à 14,8, au plus 1,03 d'une tranche à l'autre (relevée). Un premier
+  passage avait compté 7 « sauts » : un défaut du test (la vitesse de montée inconnue au premier pas d'une tranche), corrigé. Aucun défaut du jeu.
+- **Bilan de PLAN-J6** (19:38 UTC) : les neuf parcours ont chacun un e2e de bout en bout (`parcours-ville`, `parcours-meteo`, `parcours-debarquer`,
+  `parcours-reprise`, `parcours-camera` — P5 et P8 —, `parcours-gpu`, `parcours-tars`, `parcours-orbite`) ; cinq défauts du jeu trouvés et corrigés
+  (le décollage automatique qui oubliait les choix du pilote, le décor qui ne suivait pas un vol rapide, la météo réelle arrivée d'un coup, le repos
+  au sol jamais atteint, l'A320 rechargé dans l'état de la préférence) ; relevés sans correction : le blocage à l'arrivée d'une météo (compilation),
+  le blocage au retour par F1 (317 ms), la vitesse verticale résiduelle au sol ; laissé à la session des approches : la remise de gaz de l'approche
+  planifiée vers la 31 de Toulon-Hyères. Restent : la perte du GPU en salle réseau ; la commande périmée et l'annulation de TARS.

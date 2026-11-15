@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-15 19:50 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-15 19:38 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous. Ce qui est fermé quitte le tableau « En cours » pour la ligne « Fermé récemment ».
@@ -8188,3 +8188,11 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   `takeoff-armed` 1/1 ; i18n et tests du jet passent.
 - Limites : la commande périmée et l'annulation non jouées.
 - Suite : J6-8.
+
+### 2026-11-15 19:38 UTC — J6-8 fait : la montée vers l'orbite ; les neuf parcours ont leur e2e
+
+- Contribution : §19.13 — le dernier parcours joué ; PLAN-J6 joué en entier sauf la salle réseau (J6-6) et la commande périmée (J6-7).
+- Réalisé : e2e `parcours-orbite` ; PLAN-J6 (bilan).
+- Preuves (mesuré, kerr-mini) : en orbite 195 × 206 km en 49 tranches de 10 s, aucun saut de hauteur sur 14 700 pas, l'horloge en avant,
+  l'exposition 13,8–14,8.
+- Suite : la perte du GPU en salle réseau ; la commande périmée de TARS ; les blocages relevés (météo, F1).
