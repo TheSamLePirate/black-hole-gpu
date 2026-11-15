@@ -19,7 +19,16 @@ test.skipIf(!E2E)(
         expect(await app.js<string | null>("__bh.renderer.characterRenderer.model.error")).toBeNull();
         await app.js("(()=>{for(let i=0;i<30;i++)__bh.step(1/60);__bh.touch();return true;})()");
         await app.waitFor("__bh.renderer.characterRenderer.ready", 60000);
-        await app.waitFor("__bh.renderer.variantReady && __bh.renderer.calibrationReady && !__bh.renderer.hdLoading", 240000);
+        // (failing, said what was missing — each term and calibrationReady's own: a run on kerr-mini, 15 Nov 2026, waited 240 s on the Moon
+        // when a probe with the same settings was ready in 10 s)
+        await app
+          .waitFor("__bh.renderer.variantReady && __bh.renderer.calibrationReady && !__bh.renderer.hdLoading", 240000)
+          .catch(async (e) => {
+            const why = await app.js(
+              `(() => { const r = __bh.renderer; return JSON.stringify({ body: "${body}", variantReady: r.variantReady, calibrationReady: r.calibrationReady, hdLoading: r.hdLoading, earthSettled: r.earthSettled, queue: r.variantQueue?.pending, compiles: [r.generalCompile?.state, r.qualityCompile?.state, r.lutCompile?.state, r.lutQCompile?.state], compiling: r.compilingNow ?? null, key: r.featureKey, givenUp: !!r.variants?.get(r.featureKey)?.rtGivenUp, tiles: r.earthTiles?.pending }); })()`,
+            );
+            throw new Error(`${(e as Error).message} — ${why}`);
+          });
         if (body !== "earth") await captureLoadedCharacter(app, `character-${body}`);
         expect(await app.js<number>("__bh.renderer.gpuErrors")).toBe(0);
         expect(await app.js<boolean>("__bh.camera.character.state().grounded")).toBe(true);

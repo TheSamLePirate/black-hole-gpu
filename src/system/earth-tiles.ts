@@ -1849,8 +1849,7 @@ export class EarthTiles {
     for (const [key, r] of this.refining) if (!r.surface && r.L.key[this.slotOf(r.L, r.x, r.y)] === key) return true;
     for (const L of this.levels) {
       if (!L.want) continue;
-      for (let y = L.want.y0; y < L.want.y1; y++)
-        for (let x = L.want.x0; x < L.want.x1; x++) if (L.key[this.slotOf(L, x, y)] !== this.keyOf(L, x, y)) return true;
+      for (let y = L.want.y0; y < L.want.y1; y++) for (let x = L.want.x0; x < L.want.x1; x++) if (this.waiting(L, x, y)) return true;
     }
     return this.pages.count((j) => j.slot[0] !== "o") > 0;
   }
@@ -1861,8 +1860,7 @@ export class EarthTiles {
     for (const [key, r] of this.refining) if (!r.surface && r.L.key[this.slotOf(r.L, r.x, r.y)] === key) k++;
     for (const L of this.levels) {
       if (!L.want) continue;
-      for (let y = L.want.y0; y < L.want.y1; y++)
-        for (let x = L.want.x0; x < L.want.x1; x++) if (L.key[this.slotOf(L, x, y)] !== this.keyOf(L, x, y)) k++;
+      for (let y = L.want.y0; y < L.want.y1; y++) for (let x = L.want.x0; x < L.want.x1; x++) if (this.waiting(L, x, y)) k++;
     }
     // (J2-1: in, not yet published — queued for an image's publication)
     return k + this.pages.count((j) => j.slot[0] !== "o");
@@ -1900,6 +1898,15 @@ export class EarthTiles {
     let z = 0;
     for (const L of this.levels) if (L.valid) z = L.z;
     return z;
+  }
+
+  /** A wanted tile not in its slot and not failed: on its way. A failed one — its load refused, asked again later (failures, until its
+   *  first success) — is counted as failed (`failed`, the pill's « … failed »), not as coming: counted as coming, a tile the network
+   *  never gives — offline, a source down, an e2e's blocked hosts — held `earthSettled` false for good, and with it a photograph's or an
+   *  offline render's settled frame and the calibration (character e2e on the Earth, 240 s, 15 Nov 2026) */
+  private waiting(L: Level, x: number, y: number): boolean {
+    const key = this.keyOf(L, x, y);
+    return L.key[this.slotOf(L, x, y)] !== key && !this.failures.has(key);
   }
 
   private keyOf(L: Level, x: number, y: number) {

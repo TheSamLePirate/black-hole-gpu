@@ -604,3 +604,25 @@ test("the network audit: what is in flight for tiles the windows have left dropp
     expect(x >= w.x0 - 1 && x < w.x1 + 1 && y >= w.y0 - 1 && y < w.y1 + 1).toBe(true);
   }
 });
+
+test("tiles the network refuses are failed, not coming: the Earth settles without them (offline, a source down, blocked hosts)", () => {
+  // (before 15 Nov 2026 a tile whose load had failed stayed « pending » for good when no parent stood in — earthSettled false: a
+  // photograph's and an offline render's settled frame, the calibration, waited forever — character e2e on the Earth, 240 s, its hosts
+  // blocked). The counting rule: wanted, not in, and not failed — the failed ones counted as failed (the pill's « … failed »).
+  const t = published(new EarthTiles(withGpuStubs(fakeDevice())));
+  t.update(camAt(44.2, 4.15, 2), 1e-3);
+  const wanted = t.wanted();
+  expect(wanted.length).toBeGreaterThan(0);
+  expect(t.pending).toBe(wanted.length);
+  // (every one refused, as its load's catch records it — failures, until its first success)
+  const inner = t as unknown as { failures: Map<string, { n: number; at: number }> };
+  for (const [z, x, y] of wanted) inner.failures.set(`${z}/${x}/${y}`, { n: 1, at: performance.now() + 1000 });
+  expect(t.pending).toBe(0);
+  expect(t.anyPending).toBe(false);
+  // (one of them in at last — its failure cleared by its success —: still none pending)
+  const [z0, x0, y0] = wanted[0]!;
+  inner.failures.delete(`${z0}/${x0}/${y0}`);
+  expect(t.pending).toBe(1);
+  expect(t.anyPending).toBe(true);
+  t.dispose();
+});

@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-15 02:41 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-15 02:49 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous.
@@ -7155,3 +7155,14 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
 - `course` (le panneau de TARS, 6 s), `music-panel` (le niveau de la musique, 6 s), `music` (la fin du fondu, 9 s) attendent leur condition,
   20 s au plus. Relancés : 3/3 (1 sauté, TARS en direct), 3/3, 2/2. Garde : 69 → 66 pauses.
 
+### 2026-11-15 02:49 UTC — La Terre se pose sans réseau ; le piéton ne détruit plus une texture encore lue
+
+- **Contribution à la destination :** §7 (le monde possède ses supports : une tuile absente n'est pas « à venir » pour toujours) et §19
+  (photos, rendus, hors ligne) ; un défaut WebGPU du parcours à pied.
+- **Réalisé :** `src/system/earth-tiles.ts` : une tuile voulue mais en échec (refusée, redemandée plus tard) n'est plus comptée « en attente »
+  (`waiting`) — `earthSettled` devient vrai sans elle ; `tests/earth-tiles.test.ts` (la règle, témoin positif : l'ancien code y échoue).
+  `src/character-renderer.ts` : sa profondeur et son occlusion lâchées au lieu d'être détruites (une passe de la même image les lisait).
+  `tests/e2e/character.e2e.test.ts` : l'attente dit chaque terme manquant. PROBLEMES (l'entrée de l'audit, ses points du rendu).
+- **Preuves :** tuiles 18/18 ; `character` 2/2 sur kerr-mini (avant : 240 s d'attente sur la Terre, puis 2 erreurs WebGPU) ; tsc, biome.
+- **Limites :** la mémoire des textures lâchées rendue par le ramasse-miettes (rare : sortie du mode à pied, changement de taille) ; les
+  e2e qui attendent `pending === 0` passent désormais avec des tuiles en échec (comptées dans `failed`, que la pastille affiche).

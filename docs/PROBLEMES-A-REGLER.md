@@ -27,6 +27,13 @@ connue ou supposée, la piste. Une entrée réglée est barrée avec le commit q
 - **`character-aaa` « the light on foot »** : `renderer.characterLight()` rend `null` (Lune) ; **« after a teleport »** : le décor
   `degraded` au lieu de `ready`. **`character`** : `variantReady && calibrationReady && !hdLoading` jamais vrai en 240 s. Domaine du
   rendu (éclairage du piéton, décor, calibration) : session du rendu prévenue, non examiné ici.
+  **Repris par la session du rendu (2026-11-15 02:49 UTC)** : sur kerr-mini, « the light on foot » et « after a teleport » **passent** (la charge de ce
+  Mac pendant la mesure, supposée). `character` **réglé** — deux défauts du jeu : (1) une tuile de relief refusée par le réseau restait
+  « en attente » pour toujours (aucun parent pour la remplacer) : `earthSettled` jamais vrai sur la Terre — le test bloque ses hôtes (`tiles:
+  false`), 528 tuiles ; une photo ou un rendu hors ligne y aurait attendu sans fin — `earth-tiles.ts` : une tuile en échec compte comme échouée
+  (`tests/earth-tiles.test.ts`, témoin positif) ; (2) puis, au chargement d'une sauvegarde, « Destroyed texture (RG16Float 1440×810) used in a
+  submit » : le rendu du piéton détruisait sa texture d'occlusion au milieu d'une image où l'appareil l'avait déjà lue — `character-renderer.ts`
+  les lâche au lieu de les détruire. `character` 2/2 sur kerr-mini ; son attente dit maintenant ce qui manque.
 - **`offline-settings`** : la zone hors ligne s'est mise en pause à 192 / 8 038 et n'était pas prête en 420 s. Lancé après une dizaine
   d'e2e qui lisent l'IGN : une limitation du débit (429) est possible. À relancer seul avant de conclure.
 

@@ -475,12 +475,13 @@ export class CharacterRenderer {
     this.groundStamp = -1;
     this.clearTrample = true;
     this.bladeCounts = [0, 0, 0];
+    // (let go, not destroyed: a frame's commands may still name them — the vessel's pass reads the occluder, encoded before this reset in
+    // the same frame — and a texture destroyed before its submit is a WebGPU error: « Destroyed texture … used in a submit » on leaving the
+    // walk, a save loaded — character e2e, 15 Nov 2026; their memory freed once nothing holds them, the vessel's bind groups made again)
     if (this.depth) {
-      this.depth.destroy();
       this.depth = null;
       this.size = "";
     }
-    this.occluderTex?.destroy();
     this.occluderTex = null;
     this.groups.clear();
     this.probeKey = [];
@@ -812,8 +813,7 @@ export class CharacterRenderer {
     }
     this.active = true;
     if (key !== this.size) {
-      this.depth?.destroy();
-      this.occluderTex?.destroy();
+      // (the old ones let go, not destroyed — the same reason as reset's: this frame's commands may still name them)
       this.depth = this.d.createTexture({ size: [width, height], format: "depth32float", usage: GPUTextureUsage.RENDER_ATTACHMENT });
       this.occluderTex = this.d.createTexture({
         size: [width, height],
