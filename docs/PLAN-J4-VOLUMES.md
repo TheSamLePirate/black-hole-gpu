@@ -151,3 +151,7 @@ Le relevé du §2 vient d'une lecture du code et des documents (agent d'explorat
   (`TUNE_CLV_FRAME_CACHE`) : le repère fait une fois par fil — **~2 ms plus lent** (75,8 / 74,0 contre 78,6 / 76,6 / 75,4 : les registres tenus
   sur toute la boucle, Apple) : **retiré**. Piste suivante, non essayée : le volume lu par l'échantillonneur matériel (une texture 3D filtrée,
   une lecture au lieu de huit — le format r16float pour être filtrable, une liaison de plus).
+  **Son plafond mesuré** (03:38 UTC, levier temporaire `TUNE_CLV_NEAREST`, retiré) : une lecture au lieu de huit −1,1 / −0,95 ms
+  (orage, deux passages) — l'échantillonneur matériel rendrait **~1 ms au plus** : pas un lot (règle 1). **J4-2 fermé pour l'instant** : la
+  lumière des nuages coûte ~9,8 ms sous orage, dont le cache existant rend déjà ~5 ms ; les leviers lisibles (pas, repère, lectures) rendent
+  chacun ≤ 1,6 ms — le reste tient à la structure du noyau (sa taille, ses registres) : à reprendre avec le découpage des noyaux.
