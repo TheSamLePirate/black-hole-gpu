@@ -35,10 +35,7 @@ test("the card's lines and the fixes by role: Marseille's ILS 31R; San Francisco
   expect(approachText(lfml.find((a) => a.id === "C31R")!)).toBe("Built 31R · 3.0°");
   const ksfo = of(field("KSFO"));
   const a = ksfo.find((x) => x.id === "I28R")!;
-  const fx = approachFixes(
-    a,
-    a.transitions.find((t) => t[0]?.fix === "ARCHI") ?? null,
-  );
+  const fx = approachFixes(a, a.transitions.find((t) => t[0]?.fix === "ARCHI") ?? null);
   expect(fx.map((f) => `${f.role} ${f.name}`)).toEqual([
     "IAF ARCHI",
     "fix ZILED",
