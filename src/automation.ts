@@ -157,6 +157,8 @@ export interface BhContext {
   simState(): import("./game/view-pose").SimState | null;
   /** Holds the render scale (0.25 … 1; null: the governor's again) — the benches, the tests */
   forceScale(x: number | null): void;
+  /** the playable floor's proposal shown now (quality-policy LOW_RATE_FLOOR) — false: nothing to propose, or refused on this device */
+  offerLighter(rate?: number): boolean;
   /** the flight's jitter probe (src/jitter): its samples by frame and their analysis by cause */
   jitter: unknown;
   /** the camera's smoothness sensor (src/camera/metrics.ts): its samples by frame and its faults */
@@ -709,6 +711,7 @@ export function installBh(c: BhContext) {
       simState: () => c.simState(),
       /** holds the render scale (the image rendered at that share of the canvas, upscaled by the display); null: released */
       forceScale: (x: number | null) => c.forceScale(x),
+      offerLighter: (rate?: number) => c.offerLighter(rate),
       /** the flight's jitter probe (src/jitter, docs/progress/JITTER-VOL.md): start(max?), stop(), mark(label), samples(from?),
        *  report({ from, to, sigma }) — the image's jitter in pixels a frame by cause (flight, rig, camera shake, display
        *  shake, pacing) */

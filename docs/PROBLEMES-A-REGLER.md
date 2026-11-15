@@ -300,8 +300,16 @@ leur remise à zéro au changement de réglage (`main.ts`), leurs deux messages 
 reste au choix du joueur). Sur les autres astres le repli n'était pas atteignable (leur cadence plafonne à 4, il en demandait 16) : retiré
 avec. L'e2e `raster-governor` vérifie désormais l'inverse — le budget serré à 8 ms pendant 15 s (plus que les 12 s du repli), le raster
 jamais quitté : **passé sur kerr-mini** (run `20261115-214344-raster-governor-norepli`, 1/1, GPU 36,4 ms sous ce budget, la Terre en raster
-à chaque relevé). **Reste** (hors de ce retrait) : le plancher de qualité du raster sur un GPU faible, à régler — aujourd'hui celui du
-gouverneur (échelle, blocs, palier de matériel).
+à chaque relevé). **Le plancher, réglé le 15 novembre (23:46 UTC)** — relu : sous le matériau l'échelle est épinglée (0,75) et la rétrogradation de palier
+demandait 0,5 : sur la Terre en raster, plus aucun levier n'agissait. **Décision de Sam (15 nov., ~23:30 UTC) : proposer, pas imposer,
+sous 15 images/s soutenues.** Le gouverneur (`slowFor`) compte les images finies par seconde en mouvement sur le raster (rien en
+compilation, page visible, aucun bench) ; sous 15 pendant 12 s, il demande à `main.ts` de proposer un cran plus léger dans le panneau de
+proposition de TARS (Accepter / Refuser) — l'échelle du raster en mouvement au cran suivant du menu, le décor équilibré, la distance de
+détail un cran plus près (`quality-policy.ts` `lighterSettings`). Un oui : appliqué par le chemin des réglages, dit ; le cran suivant
+proposé si l'image reste sous le seuil. Un non : retenu sur l'appareil. Rien ne change sans l'accord du joueur. Les e2e démarrent avec
+le refus posé (aucune proposition sur une mesure). Vérifié : `tests/low-rate-offer.test.ts` 3/3 (témoin positif à 10 images/s, négatifs
+à 30 et 16, page masquée, bench, caméra immobile, tracé) ; e2e `low-rate-offer` 2/2 sur kerr-mini (clics réels). **Non mesuré** : la
+cadence gagnée par un cran (dépend de la machine).
 
 ## ~~Des taches de couleur sur la mer au crépuscule~~ — réglé le 13 novembre 2026 (~20:29 UTC) : la sonde en demi-flottants sous-normaux
 

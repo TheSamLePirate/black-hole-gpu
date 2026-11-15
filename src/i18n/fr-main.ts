@@ -628,4 +628,10 @@ export default {
   "Orbit: {0}, to the {1}": "Orbite : {0}, vers la {1}",
   "Terrain following: {0} over the ground": "Suivi de terrain : {0} au-dessus du sol",
   "Rendezvous: {0} · {1}": "Rendez-vous : {0} · {1}",
+  // (the playable floor — quality-policy LOW_RATE_FLOOR, Sam's decision of 15 Nov 2026: proposed, not imposed)
+  "Lighter settings for this graphics card": "Des réglages plus légers pour cette carte graphique",
+  "The image runs at {0} images a second here, under the playable floor of {1}. One step lighter would fly more smoothly; nothing changes unless you accept.":
+    "L'image tourne ici à {0} images par seconde, sous le plancher jouable de {1}. Un cran plus léger volerait plus régulièrement ; rien ne change si vous n'acceptez pas.",
+  "images a second": "images par seconde",
+  "Lighter settings applied — {0} in the settings puts them back": "Réglages allégés — {0} dans les réglages les remet",
 } satisfies Record<string, string>;

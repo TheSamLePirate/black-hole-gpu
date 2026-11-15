@@ -231,7 +231,7 @@ import { fmtDate, GameTools } from "./game/tools";
 import { rangerStatus, type RangerStatus } from "./game/status";
 import { GameToolsWindow, rangerView } from "./ui/gametools";
 import { applyTuning } from "./game/tuning";
-import { dynamicResolutionOn, earthDetailFor } from "./quality-policy";
+import { dynamicResolutionOn, earthDetailFor, LOW_RATE_FLOOR, LOW_RATE_REFUSED_KEY, lighterSettings } from "./quality-policy";
 import { cappedRatio, windowsIntegratedGpu } from "./tier";
 import { gpuTipText } from "./ui/gpu-tip";
 import { cpuProf } from "./perf";
@@ -5682,7 +5682,51 @@ async function main() {
     canvas,
     resize: () => resize(),
     benching: () => bench.running,
+    hidden: () => document.hidden,
+    offerLighter: (rate) => offerLighter(rate),
   });
+  // (the playable floor — Sam's decision of 15 Nov 2026: proposed, not imposed —: one step lighter, said with its figures, applied
+  // through the settings' own path only on the player's yes; a no remembered on this device. False: nothing proposed.)
+  function offerLighter(rate: number): boolean {
+    try {
+      if (localStorage.getItem(LOW_RATE_REFUSED_KEY)) return false;
+    } catch {}
+    const next = lighterSettings(settings);
+    const keys = Object.keys(next) as (keyof typeof next)[];
+    if (!keys.length) return false;
+    // (named as the settings name them — their labels, translated)
+    const def = (k: string) => SCHEMA_BY_KEY.get(k as keyof Settings) as ChoiceDef | undefined;
+    const shown = (k: string, v: unknown) => {
+      const o = def(k)?.options?.find((x) => Math.abs(Number(x.value) - Number(v)) < 1e-3 || x.value === v);
+      return o ? t(o.label) : String(v);
+    };
+    tarsPanel.propose(
+      {
+        title: t("Lighter settings for this graphics card"),
+        summary: tf(
+          "The image runs at {0} images a second here, under the playable floor of {1}. One step lighter would fly more smoothly; nothing changes unless you accept.",
+          rate.toFixed(0),
+          LOW_RATE_FLOOR,
+        ),
+        steps: keys.map((k) => `${t(def(k)?.label ?? k)} : ${shown(k, settings[k])} → ${shown(k, next[k])}`),
+        figures: [{ label: t("images a second"), value: rate.toFixed(1) }],
+      },
+      (yes) => {
+        tarsPanel.propose(null);
+        if (yes) {
+          for (const k of keys) panel.setValue(k, next[k]);
+          // (still under the floor afterwards: the next step proposed in turn)
+          governor.lowRateOffered = false;
+          panel.toast(tf("Lighter settings applied — {0} in the settings puts them back", t("The Earth")));
+        } else {
+          try {
+            localStorage.setItem(LOW_RATE_REFUSED_KEY, "1");
+          } catch {}
+        }
+      },
+    );
+    return true;
+  }
   function resize() {
     // (the scale the governor chose — a forced one first, the raster's, the canvas's without dynamic resolution: game/governor.ts)
     const renderScale = governor.scaleForResize();
@@ -8422,6 +8466,8 @@ async function main() {
       },
     },
     forceScale: (x: number | null) => governor.force(x),
+    // (the playable floor's proposal shown now, as the governor shows it under 15 images a second held 12 s — the e2e's way to it)
+    offerLighter: (rate = 10) => offerLighter(rate),
   });
 
   // -------------------------------------------------------------------- loop

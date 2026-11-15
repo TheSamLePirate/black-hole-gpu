@@ -282,6 +282,16 @@ Re-reads the canvas size and resizes the renderer's targets to `pixelRatio` time
 
 Holds the render scale for the image (0.25 … 1, values out of range are clamped), upscaled by the display; `null` releases it to the governor and puts `renderScale` back to 1. Calls `resize()` itself. The way to sweep resolution in a measure (not `pixelRatio`). Used by 6 e2e files (`raster-motion`, `raster-flight`, `perf-ab`, `lowflight-governor`, `ghost`, `motion-quality`).
 
+### `__bh.offerLighter(rate = 10)` → boolean
+
+The playable floor's proposal shown now, as the governor shows it when the image runs under `LOW_RATE_FLOOR` (15) images a second for
+`LOW_RATE_HOLD_S` (12) s in motion on the raster, nothing compiling, the page seen, no bench (`src/game/governor.ts` `slowFor`; Sam's
+decision of 15 Nov 2026: proposed, not imposed). In TARS's proposal panel: one step lighter (`quality-policy.ts` `lighterSettings` —
+the raster's motion scale the settings' next one down, the scenery balanced, the detail's reach one step nearer), `rate` said. Accept
+(`data-testid=tars-accept`): applied through the settings' own path (`panel.setValue`), said by a toast, the next step proposed if still
+under the floor. Refuse (`tars-refuse`): `localStorage["kerr.lowrate-refused"]` set — never proposed again on this device (the e2e set
+it at boot: no proposal over a measure). False: nothing left lighter, or refused here. *Used in:* `tests/e2e/low-rate-offer.e2e.test.ts`.
+
 ### `__bh.jitter` → object
 
 The flight's jitter probe (`src/jitter/probe.ts`, `src/jitter/analyze.ts`; docs/progress/JITTER-VOL.md). While on, it records
@@ -868,7 +878,7 @@ The other members tests read:
 | `terrainRasterInspecting` | boolean (read-only) | a terrain diagnostic (the inspector, the height cache, the hints without the raster pipeline) was requested in an eligible camera frame, even while compiling or blocked by its pixel budget; automatic block, scale and tier calibration are paused until it is disabled or leaves that domain — not for the raster pipeline itself, governed as the traced one |
 | `rasterPrimaryNow` | boolean (read-only) | the last camera frame drew the near Earth by the raster pipeline (its patch's pixels shaded by `shade`); false while its kernels compile (the trace takes them), off the Earth, walking, offline |
 | `earthPipelineNow(s)` | method → `"raster" \| "trace"` | the near Earth's pipeline for settings `s`: `s.earthPipeline` (its fallback to the traced one, `rasterFellBack`/`rasterKept`, retired on Sam's decision (b), 15 Nov 2026) |
-| `rasterRateCoarsest` | boolean (read-only) | the raster's automatic shading rate (`settings.earthRasterShading` `"auto"`) is at its coarsest, one pixel in sixteen — the governor's floor: only then the render scale lowered, then the fallback |
+| `rasterRateCoarsest` | boolean (read-only) | the raster's automatic shading rate (`settings.earthRasterShading` `"auto"`) is at its coarsest, one pixel in sixteen — the governor's floor: only then the render scale lowered (the fallback to the traced pipeline retired, 15 Nov 2026) |
 | `lightning` | Lightning | a storm's lightning about the camera (system/lightning.ts, N5): `strike(east, north, ground?, h?)` a flash now [m from the camera]; `distance(f)` a flash's from the camera [m], its height over the camera's (`eyeH`); `drain()` the flashes born since (main.ts: the thunder) |
 | `cloudPassOn`, `cloudHistoryOn`, `cloudPassStats` | boolean, boolean, object (read-only) | the half-resolution cloud pass (trace.wgsl `clouds`, N1) and its own history (post.wgsl `cloudTemporal`) — switches for comparisons, default true; `cloudPassStats`: `{ drawn, history, supported, on }` this frame |
 | `cloudShadowOn`, `skyAmbientOn`, `sunShadowOn`, `treeShadowOn` | boolean | the clouds' transmittance map from the Sun (N3), the physical sky light (N2b: `skyIrradiance`, carried to each point by its Sun's height and eclipse), the relief's shadow map, the trees' and buildings' shadow map — switches for comparisons, default true where the device binds them |

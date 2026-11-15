@@ -91,12 +91,12 @@ a perdu sa connexion en vol. À refaire la machine au calme.
 | 3 | 32,3 images/s, intervalle p95 41,8 ms, GPU 30,5 ms (919 → 816 MHz, Moderate) | **26,4 images/s**, p95 50,7, GPU 36,7 ms (663 MHz, Heavy) | oui |
 | 4 | — | — | non : `threert-render` (projet threeRTearth) a rendu de 21:28 à 21:34 UTC pendant le run |
 | 5 | 35,4 images/s, p95 35,0, GPU 27,7 ms (890 → 851 MHz) | — | le vol frais seul : `threert-render` dès 21:49:29 (relevé toutes les 10 s), ablations et soutenu faussés |
+| 6 (22:33–22:44, parti à 60 °C) | — (`threert-render` de 22:35:09 à 22:35:49, pendant ce vol) | **34,5 images/s**, p95 34,9, GPU 28,1 ms (781 MHz, Heavy) | le soutenu seul |
 
 **Lecture** : borné à 40, le M1 Max ne tient 40 images/s ni frais (32,3 et 35,4 : la machine, occupée toute la soirée, part déjà à
 ~900 MHz) ni soutenu (26,4, sous les 30 que la borne de 30 tenait le matin même, 23,1 ms) : à 40 il chauffe plus et soutient moins.
-**La borne reste à 30 images/s sur le M1 Max** (la valeur des fiches inchangée). Un seul vol soutenu valable sur les deux demandés : le
-second, à refaire ce Mac libre (aucun rendu d'un autre projet), ne changerait la valeur que s'il tenait 40, ce que les trois vols frais
-mesurés ce soir ne font pas.
+**La borne reste à 30 images/s sur le M1 Max** (la valeur des fiches inchangée). Les deux vols soutenus valables (runs 3 et 6) : 26,4 et
+34,5 images/s — 40 non tenu ; leur écart dit combien l'état de la machine pèse (le run 6 parti à 60 °C, le run 3 après une soirée chargée).
 
 **Le palier 1 est atteint** quand, sur le vol de référence (§3), mesuré deux fois sur le M1 Max dans l'état soutenu,
 **les seuils suivants tiennent tous** — *validés par Sam le 10 novembre* (transposés de §8.3, qui les fixe pour

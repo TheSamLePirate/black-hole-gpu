@@ -121,3 +121,28 @@ export function earthDetailFor(
     reach: modest && s.detailReach === DEFAULTS.detailReach && s.detailReach !== "normal" ? "normal" : s.detailReach,
   };
 }
+
+/** The playable floor (Sam's decision, 15 Nov 2026 — the raster's fallback to the traced pipeline retired, decision (b)): under
+ *  LOW_RATE_FLOOR images a second held LOW_RATE_HOLD_S seconds in flight on the raster, lighter settings are proposed to the player,
+ *  applied only if accepted — « proposer, pas imposer »: no image changed without the player's yes. */
+export const LOW_RATE_FLOOR = 15;
+export const LOW_RATE_HOLD_S = 12;
+/** the device's refusal remembered (not proposed again on it); the e2e set it at boot — no proposal over a measure */
+export const LOW_RATE_REFUSED_KEY = "kerr.lowrate-refused";
+
+export type LighterSettings = Partial<Pick<Settings, "earthRasterScale" | "earthScenery" | "detailReach">>;
+/** the raster's motion scales the settings offer (ui/schema.ts earthRasterScale's options — tests/low-rate-offer.test.ts holds them
+ *  equal), finest first */
+export const RASTER_SCALES = [1, 0.833, 0.75, 0.667] as const;
+/** One step lighter than these, on what costs most and shows least: the raster's motion scale the next one down in the settings'
+ *  list (the held view refines at the full one anyway), the scenery balanced, the detail's reach one step nearer. Only what is not
+ *  already at its lightest; empty: nothing left to propose. */
+export function lighterSettings(s: Pick<Settings, "earthRasterScale" | "earthScenery" | "detailReach">): LighterSettings {
+  const o: LighterSettings = {};
+  const down = RASTER_SCALES.find((v) => v < s.earthRasterScale - 1e-3);
+  if (down !== undefined) o.earthRasterScale = down;
+  if (s.earthScenery === "high") o.earthScenery = "balanced";
+  if (s.detailReach === "veryFar") o.detailReach = "far";
+  else if (s.detailReach === "far") o.detailReach = "normal";
+  return o;
+}

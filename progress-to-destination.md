@@ -46,7 +46,7 @@ J4 (fermé, sortie non atteinte), J5 et J6 (fermés).
 | Session (T3) | Lot | État |
 |---|---|---|
 | Rendu (33d89754) | J4 / J5 — l'eau, les volumes, la généralisation | **fermés** ([PLAN-J4](docs/PLAN-J4-VOLUMES.md), [PLAN-J5](docs/PLAN-J5-GENERALISATION.md)) : l'eau à demi-rythme (J5-5, −6,0 à −6,4 ms, l'image la même) ; le sol à demi-rythme laissé au joueur (J5-6, réglage « demi » : −1,9 à −3,2 ms ; « auto » à chaque pixel) ; la FFT de la mer en deux passes (−0,9 ms) ; la carte d'ombre des arbres (−2,8 ms, forêt) ; Sam a refusé les arbitrages d'image (MSAA 1×, petits arbres, nuages amortis). Postes lourds restants : l'eau 16,2, les nuages d'orage 16,5, le décor d'une forêt ~7 ms |
-| Rendu (33d89754) | Mesures tenues | la borne du M1 Max **à 30** : essayée à 40 le 15 au soir, non tenue (frais 32,3 / 35,4, soutenu 26,4 images/s ; un second soutenu à refaire, ce Mac libre — [J0-CONTRAT §2](docs/J0-CONTRAT.md)) ; le coût de l'appareil 3,5–4,5 ms, dont le MSAA 4× 4–5 ms (gardé) |
+| Rendu (33d89754) | Mesures tenues | la borne du M1 Max **à 30** : essayée à 40 le 15 au soir, non tenue (soutenu 26,4 et 34,5 images/s, deux runs — [J0-CONTRAT §2](docs/J0-CONTRAT.md)) ; le coût de l'appareil 3,5–4,5 ms, dont le MSAA 4× 4–5 ms (gardé) |
 | PLAN-APPROCHES (1feb2f7f) | [PLAN-APPROCHES](docs/PLAN-APPROCHES.md) | **AP0 à AP10 faits (15 nov.)** : données réelles, choix, jonction, A320, carte, radar, TSD, crew, HUD, directeur de vol, roue, options, audio, campagne mondiale (66 914 extrémités, toutes avec une approche) et échantillon volé (F-35 9/9 sur la piste, A320 4/5 et un refus motivé, **OIFK rouge** — PROBLEMES). **Question 4 à Sam** : le relief sur lequel juger les pentes construites (avec ou sans le détail procédural : 360 ou 92 terrains refusés). **Reste : AP-R (retraits)** |
 | Audit vagues 3–4 et 6 (1feb2f7f) | [09-priorites-todo](docs/audit-2026-11-10/09-priorites-todo.md) | **faits** : 3.1–3.2 réseau (RD0–RD2), 3.3 sauvegardes (une clé par sauvegarde ; avion, systèmes des vaisseaux et de l'A320 — ce dernier par J6-4), 3.4–3.5 vol, 3.6–3.7 TARS, 3.10 e2e honnêtes, 4.2 temps et onglet masqué, 4.3 `Settings`/`ViewPose`, 4.8 `main()` découpé ; vague 6 hors rendu (QA, AR, RD4/RD5, FX). **Reste** : l'état d'une mission ou d'un combat (Sam), IndexedDB et l'autosauvegarde hors frame (AR-05), FX-19 (fraîcheur des écrans, à mesurer), FX-21 |
 
@@ -57,9 +57,11 @@ J4 (fermé, sortie non atteinte), J5 et J6 (fermés).
 
 **Décidé par Sam (15 nov., ~19:55 UTC, « j'accepte tes recommandations »)** : PLAN-J3 §8 confirmé tel quel (J3-R peut retirer les anciens
 chemins) ; le repli du raster vers le tracé **retiré sur la Terre** (b, fait le 15 à 20:48) ; la borne
-du M1 Max : **essai à 40 à refaire** avant de la figer (**refait le 15 au soir : 40 non tenu** — frais 32,3 et 35,4, soutenu 26,4 images/s — ; **la borne reste à 30** ; un second vol soutenu valable reste à faire, ce Mac libre — threeRTearth y rendait) ; les seuils p99 et CPU du mini **fixés à la reprise de la cible 40 ms** ;
+du M1 Max : **essai à 40 à refaire** avant de la figer (**refait le 15 au soir : 40 non tenu** — soutenu 26,4 et 34,5 images/s sur deux runs valables — ; **la borne reste à 30**) ; les seuils p99 et CPU du mini **fixés à la reprise de la cible 40 ms** ;
 l'état d'une mission ou d'un combat **non sauvé, dit** ; le réseau **« entre amis »**, RD3 non ouvert ([J0-CONTRAT](docs/J0-CONTRAT.md) §2,
 [PLAN-RESEAU-DURCISSEMENT](docs/PLAN-RESEAU-DURCISSEMENT.md) §4).
+
+**Fermé aussi** : le plancher du raster sur GPU faible (15 nov., 23:46, proposer sous 15 images/s, décision de Sam).
 
 **Attend Sam** : rien d'ouvert à ce jour (les seuils du mini attendent la reprise de la cible 40 ms ; la borne du M1 Max mesurée le 15 au soir : 30 gardé).
 
@@ -8405,3 +8407,21 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
 - Limites, décision attendue : **question 4 à Sam** (PLAN-APPROCHES §9) — juger les pentes construites sur le relief des données seul et
   aplanir le détail sous les trouées d'approche (recommandé ; domaine du rendu), ou garder le juge actuel.
 - Suite : AP-R (les retraits) ; OIFK après la décision.
+
+### 2026-11-15 23:46 UTC — Le plancher du raster sur GPU faible : proposer, pas imposer (décision de Sam) ; le second soutenu à 40
+
+- Contribution à la destination : §8 (aucune cadence gagnée en retirant du contenu sans le dire) et §19 (l'expérience sur une machine
+  modeste) ; la suite du retrait du repli (décision (b)).
+- Réalisé : constat — sous le matériau l'échelle est épinglée et la rétrogradation de palier exigeait 0,5 : plus aucun levier sur la
+  Terre en raster. Décision de Sam (15 nov., ~23:30 UTC) : proposer, sous 15 images/s soutenues. `quality-policy.ts` (`LOW_RATE_FLOOR`,
+  `lighterSettings`, `RASTER_SCALES`), `game/governor.ts` (`slowFor`, la cadence des images finies, 12 s), `main.ts` (`offerLighter` :
+  le panneau de proposition de TARS, appliqué par `panel.setValue`), `__bh.offerLighter` (BH-API), le refus posé au démarrage des e2e
+  (`tests/e2e/lib/app.ts`), FR. **Borne 40 du M1 Max, second soutenu** (run 6, parti à 60 °C) : 34,5 images/s, p95 34,9, GPU 28,1 ms
+  (781 MHz) — son vol frais faussé par threeRTearth (22:35:09–22:35:49), écarté ; J0-CONTRAT §2 : deux soutenus valables, 26,4 et 34,5,
+  la borne reste à 30.
+- Preuves : `low-rate-offer.test.ts` 3/3 (témoins positif et négatifs), `governor`, `i18n`, `flight-clock`, gardes des e2e ; `tsc`, biome ;
+  e2e `low-rate-offer` 2/2 sur kerr-mini (run `20261116-004533-low-rate-offer`, clics réels : proposé avec ses trois crans, accepté puis
+  refusé). Non mesuré : la cadence gagnée par un cran.
+- Limites : le seuil est jugé sur les images finies, en mouvement — un GPU faible immobile (vue tenue) n'est pas jugé ; un refus vaut pour
+  l'appareil (le rétablir : effacer `kerr.lowrate-refused`).
+- Suite : aucune décision de Sam en attente de ce lot.

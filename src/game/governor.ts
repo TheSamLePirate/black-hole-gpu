@@ -5,7 +5,7 @@
 // was there — the same rules, the same thresholds, the same order —, this module owning the state only it decides on; main's
 // resize() reads the scale it chose.
 
-import { demotionEligible, dynamicResolutionOn, promotionEligible } from "../quality-policy";
+import { demotionEligible, dynamicResolutionOn, LOW_RATE_FLOOR, LOW_RATE_HOLD_S, promotionEligible } from "../quality-policy";
 import type { Renderer } from "../renderer";
 import type { Settings } from "../settings";
 import { adapterId, cappedRatio, demoted, promoted, rememberLevel } from "../tier";
@@ -18,6 +18,11 @@ export interface GovernorDeps {
   resize(): void;
   /** a Kerr Bench running: no tier changed meanwhile */
   benching(): boolean;
+  /** the playable floor crossed (the image rate under LOW_RATE_FLOOR for LOW_RATE_HOLD_S s in flight on the raster): lighter settings
+   *  proposed to the player — main.ts; absent, nothing proposed */
+  offerLighter?(rate: number): void;
+  /** the page hidden: no frames, no rate judged */
+  hidden?(): boolean;
 }
 
 export class Governor {
@@ -49,6 +54,14 @@ export class Governor {
   overAtFloor = 0;
   /** the last demotion [performance.now() ms]: no promotion for a minute after */
   demotedAt = -Infinity;
+
+  /** how long the image rate has been under the playable floor, in flight on the raster [s] (Sam's decision of 15 Nov 2026: proposed,
+   *  not imposed — quality-policy LOW_RATE_FLOOR) */
+  slowFor = 0;
+  /** the lighter settings proposed this session and not yet answered by a yes (a yes: proposed again if still under the floor) */
+  lowRateOffered = false;
+  private rateFrames = -1;
+  private rateAt = 0;
 
   constructor(private d: GovernorDeps) {}
 
@@ -170,6 +183,21 @@ export class Governor {
       const now = performance.now();
       this.scaleHeld += 1.5;
       const settled = this.scaleHeld >= 3;
+      // (the playable floor: the images finished per second over this window, in flight on the raster, nothing compiling, the page
+      // seen, no bench — under 15 for 12 s: lighter settings proposed once, applied only on the player's yes)
+      const frames = renderer.completedFrames;
+      const rate = this.rateFrames >= 0 && now > this.rateAt ? ((frames - this.rateFrames) * 1000) / (now - this.rateAt) : Infinity;
+      this.rateFrames = frames;
+      this.rateAt = now;
+      this.slowFor =
+        this.rasterOn() && moving && calibrationReady && !this.d.benching() && !this.d.hidden?.() && rate < LOW_RATE_FLOOR
+          ? this.slowFor + 1.5
+          : 0;
+      if (this.slowFor >= LOW_RATE_HOLD_S && !this.lowRateOffered && this.d.offerLighter) {
+        this.lowRateOffered = true;
+        this.slowFor = 0;
+        this.d.offerLighter(rate);
+      }
       if (!terrainInspecting && on && settled && this.gpuEma > 0) this.scaleMs.set(this.renderScale, { ms: this.gpuEma, at: now });
       const known = (x: number) => {
         const m = this.scaleMs.get(x);
