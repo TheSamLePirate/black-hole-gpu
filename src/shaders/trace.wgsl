@@ -271,13 +271,10 @@ override TUNE_BLD_PHOTO: f32 = 1.0;
 // (PLAN-J3 J3-1 — skyFlat's dim fallback, 14 Nov 2026: where the camera's own clear sky is too dim to scale — the Sun 4–10° under its
 // horizon —, a place no brighter than the camera's (its Sun no higher, its eclipse no deeper) takes that sky carried down to it (scaled by
 // ≤ 1), not the old bluish tenth of the Sun's, which lit the ground 115–185 × its own table at −7.5…−9° (J0 coherence, kerr-mini) — a
-// sea and hills as by day under a nautical twilight's sky — while the craft got the table (×0.88–0.93). 0: the old fallback, a measuring
-// lever (renderer.tune), to retire with J3-R)
-override TUNE_SKYFLAT_DIM: u32 = 1u;
+// sea and hills as by day under a nautical twilight's sky — while the craft got the table (×0.88–0.93); the old fallback and its lever
+// TUNE_SKYFLAT_DIM retired at J5-R, 15 Nov 2026 — skyFlat)
 // (PLAN-J3 §8 question 3 — on since 15 Nov 2026, the plan's recommendation, revisable by Sam: the craft's key light through the scenery's
-// shadow map at the craft — the trees' and buildings' layers at the camera's place, keyLight —, as the relief's — keyRelief —: in a
-// tower's shadow its nose was lit as in full sun (La Défense, J0 craftshade). 0: as before — a measuring lever)
-override TUNE_SHIP_SCENERY_SHADOW: u32 = 1u;
+// shadow map at the craft — keyLight —; its lever TUNE_SHIP_SCENERY_SHADOW and the old path retired at J5-R, 15 Nov 2026)
 // (the scenery's shadow at the craft as keyLight read it — x trees', y buildings', −1 off the map or none —: envBuf + 8, a measure)
 var<private> SHIP_SC_OCC: vec2f = vec2f(-1.0);
 // (a ray rising over the ground — its clearance growing —: its steps' share of the distance (5 %: the shell left in ~150 steps;
@@ -5566,7 +5563,6 @@ fn skyFlat(q: vec3f, h: f32, E: vec3f, mu0: f32, sk: f32) -> vec3f {
   let skc = bodies[SKY_OFF + 2u].w;
   let carried = s * (smoothstep(-0.18, 0.25, mu0) / max(wc, 0.02)) * (sk / max(skc, 0.02));
   let trust = smoothstep(0.02, 0.1, wc) * smoothstep(0.02, 0.1, skc);
-  if (TUNE_SKYFLAT_DIM == 0u) { return mix(old, carried, trust); }
   // (a place no brighter than the camera's — its Sun no higher, its eclipse no deeper — the camera's sky carried down, its
   // factors ≤ 1, however dim the camera's own: the twilight's ground as lit as the sky above it; brighter places keep the old model)
   // (within 0.003 of the camera's Sun height — 0.17°: the bake's up and Sun and the readers' differ by ~0.05° — a place is the camera's and
@@ -17398,12 +17394,10 @@ fn keyLight() {
   if (isEarth(kn) && P.scenery[0].w > 0.5 && P.scenery[2].w > 0.5) {
     let sp = P.scenery[3].xyz;
     SHIP_SC_OCC = vec2f(treeShadowAt(sp), buildingShadowAt(sp));
-    if (TUNE_SHIP_SCENERY_SHADOW != 0u) {
-      var s = 1.0;
-      if (SHIP_SC_OCC.x >= 0.0) { s = min(s, SHIP_SC_OCC.x); }
-      if (SHIP_SC_OCC.y >= 0.0) { s = min(s, SHIP_SC_OCC.y); }
-      E *= s;
-    }
+    var s = 1.0;
+    if (SHIP_SC_OCC.x >= 0.0) { s = min(s, SHIP_SC_OCC.x); }
+    if (SHIP_SC_OCC.y >= 0.0) { s = min(s, SHIP_SC_OCC.y); }
+    E *= s;
   }
   // (to the probe's axes: the transpose of envX…Z)
   let Lp = vec3f(dot(L, P.envX.xyz), dot(L, P.envY.xyz), dot(L, P.envZ.xyz));

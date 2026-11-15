@@ -108,22 +108,11 @@ const TRACE: Pair[] = [
   { name: "sea FFT → wave trains", a: `__bh.game.set("seaFft", true)`, b: `__bh.game.set("seaFft", false)` },
   { name: "weather cloudy → fair (HAS_WX)", a: `__bh.game.set("weather", "cloudy")`, b: `__bh.game.set("weather", "fair")` },
 ];
-/** SET=j3: PLAN-J3's levers of 14 Nov 2026 — their cost on the frame (quality fixes: rule 1 asks their cost, not a gain) — the trees'
- *  shadow map cut to the crowns (scenery-raster.ts shadowFs) and skyFlat's dim fallback (TUNE_SKYFLAT_DIM: a tracer recompile — both
- *  sides compiled before the alternation) */
+/** SET=j3: PLAN-J3's levers of 14 Nov 2026 — the trees' shadows cut to their crowns and skyFlat's dim fallback — measured (their cost at
+ *  noise level, 15 Nov 2026) and their old paths retired at J5-R: only the A/A is left */
 const J3: Pair[] = [
   // (the A/A: nothing changed — the alternation's own noise)
-  { name: "A/A (nothing changed)", a: "__bh.renderer.treeShadowCut = true", b: "__bh.renderer.treeShadowCut = true" },
-  {
-    name: "the trees' shadows cut to their crowns → their proxies whole",
-    a: "__bh.renderer.treeShadowCut = true",
-    b: "__bh.renderer.treeShadowCut = false",
-  },
-  {
-    name: "skyFlat's dim fallback carried down → the old one",
-    a: "__bh.renderer.tune = {}",
-    b: "__bh.renderer.tune = { TUNE_SKYFLAT_DIM: 0 }",
-  },
+  { name: "A/A (nothing changed)", a: "void 0", b: "void 0" },
 ];
 const ALL: Pair[] = [
   { name: "the craft's raster (cockpit, the others)", a: "__bh.renderer.debugSkipShip = false", b: "__bh.renderer.debugSkipShip = true" },

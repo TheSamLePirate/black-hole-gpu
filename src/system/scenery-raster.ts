@@ -853,9 +853,6 @@ export class SceneryRaster {
   private sunOn = false;
   private sunData = new Float32Array(16);
   private sunNone = new Float32Array(16);
-  /** (PLAN-J3 J3-3) the trees' shadow map cut to their crowns' silhouettes from the Sun — not their circumscribed proxies (~1.9 × a round
-   *  crown's disc); false: the proxies whole, as before 14 Nov 2026 (a comparison) */
-  shadowCut = true;
   private meshes: GPUBuffer[] = [];
   private meshCounts: number[] = [];
   private frameU: GPUBuffer;
@@ -1200,9 +1197,9 @@ export class SceneryRaster {
     // (the Sun's view: its trees culled into the shadow lists when it is to be drawn — encodeShadow —; else none)
     this.sunOn = !!sun && sun[15]! > 0.5 && this.shadowReady;
     if (sun) {
-      // (c.w: 1 on; 2 on, the trees' proxies cut to their crowns — shadowFs, shadowCut)
+      // (c.w: 2 on, the trees' proxies cut to their crowns — shadowFs; the proxies whole, its lever treeShadowCut, retired at J5-R)
       this.sunData.set(this.sunOn ? sun : this.sunNone);
-      if (this.sunOn) this.sunData[15] = this.shadowCut ? 2 : 1;
+      if (this.sunOn) this.sunData[15] = 2;
       q.writeBuffer(this.sunU, 0, this.sunData);
     }
     const groups = Math.ceil(forestCells / 64);

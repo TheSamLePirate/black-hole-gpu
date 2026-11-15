@@ -7401,3 +7401,12 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   capture : imposteurs insuffisants de près.
 - Limites : un lieu ; l'image tracée à pied est floue (×8) — non traitée.
 - Suite : les décisions de Sam (PLAN-J5 §3).
+
+### 2026-11-15 06:22 UTC — J5-R : trois anciens chemins retirés
+
+- Contribution à la destination : règle 2 (un levier allumé perd son ancien chemin au lot de retrait suivant) ; moins de code dans le traceur.
+- Réalisé : `TUNE_SKYFLAT_DIM`, `TUNE_SHIP_SCENERY_SHADOW`, `treeShadowCut` et leurs anciens chemins retirés (trace.wgsl, renderer.ts,
+  scenery-raster.ts) ; J0 `twilightdim` retirée, `craftshade` et `perf-ab SET=j3` à l'A/A ; PLAN-J3, PLAN-J5, BH-API, GRAPHICS-PIPELINE.
+- Preuves : statiques (tsc, biome, `check-wgsl` 84/84, `kernel-budget`) ; aucun chemin gardé ne change (les nouveaux étaient les défauts).
+- Limites : retirés sous des réglages provisoires — un retour de Sam passe par l'historique git.
+- Suite : `ship.skyBand4`, `ship.nightFloor` à la confirmation de Sam ; les décisions d'image de PLAN-J5 §3.

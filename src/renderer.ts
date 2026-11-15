@@ -9938,7 +9938,7 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
       // (the night's floor alone — the twilight reference or the night's —, its luminance: which of the two the ground took)
       groundFloor: f[(n + 5) * 4 + 3]!,
       // (the scenery's shadow at the craft as its key light reads it — trees', buildings' (0 shadowed … 1 lit), −1 off the map; PLAN-J3 §8
-      // question 3 — TUNE_SHIP_SCENERY_SHADOW applies it)
+      // question 3 — keyLight applies it)
       sceneryAtCraft: [f[(n + 8) * 4 + 1]!, f[(n + 8) * 4 + 2]!] as [number, number],
       shCpu: irr(1, 1),
       shHann: irr(0.75, 0.25),
@@ -11178,10 +11178,6 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
    *  for comparisons (off: the rays towards the Sun, as before) */
   private treeShadow = false;
   treeShadowOn = true;
-  /** (PLAN-J3 J3-3) the trees' shadow map cut to their crowns' silhouettes from the Sun (scenery-raster.ts shadowFs) — not their
-   *  circumscribed proxies, ~1.9 × a round crown's disc; false: the proxies whole, as before 14 Nov 2026 (a comparison) */
-  treeShadowCut = true;
-  private tsmCut = true;
   /** the trees' shadow map's redraws since the page started (a measure: their rate in flight) */
   tsmDraws = 0;
   /** Q4 L2a — the ground's ambient occlusion (system/gtao.ts): bound on this device, its pass, its stand-in; gtaoOn the switch */
@@ -12021,11 +12017,8 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
         fr[15]! > 0.5 &&
         (!this.tsmValid ||
           this.tsmRevision !== sc.revision ||
-          fr.some((x, i) => i !== 15 && Math.abs(x - this.tsmFrame[i]!) > (i >= 12 ? 1 : 1e-3)) ||
-          this.tsmCut !== this.treeShadowCut);
+          fr.some((x, i) => i !== 15 && Math.abs(x - this.tsmFrame[i]!) > (i >= 12 ? 1 : 1e-3)));
       this.tsmRedraw = moved;
-      this.sceneryRaster.shadowCut = this.treeShadowCut;
-      if (moved) this.tsmCut = this.treeShadowCut;
       if (fr[15]! < 0.5) this.tsmValid = false;
       if (moved) {
         this.tsmNext.set(fr);

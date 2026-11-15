@@ -380,3 +380,10 @@ Aucun coût de J3 n'est mesuré ; aucun gain n'est promis.
   | `ship.skyBand4`, `ship.nightFloor` (éteints) | — | **retirer** si Sam confirme « éteints » : comparaisons sans autre usage |
 
   Aucun ancien chemin à retirer aujourd'hui : chaque levier allumé pendant J3 est le témoin d'une mesure, ou attend la confirmation de Sam.
+
+  **Ajout du 15 novembre (06:22 UTC), J5-R** — sous la consigne « continue le plan » (avancer sans attendre, les réglages provisoires
+  révisables) : `TUNE_SKYFLAT_DIM`, `treeShadowCut` et `TUNE_SHIP_SCENERY_SHADOW` **perdent leur ancien chemin** (la phase J0 `twilightdim`,
+  seule à se servir du premier, retirée avec lui ; les paires de `perf-ab SET=j3` réduites à l'A/A ; `craftshade` dessine deux fois — l'A/A ;
+  `coherence` garde ses témoins positifs : le Soleil incident, les nuages). Revenir sur l'un d'eux : le rétablir depuis l'historique git
+  (commit de J5-R). `incidentSunOn`, `shipAirAllowed` restent (leviers de mesure) ; `ship.skyBand4`, `ship.nightFloor` (éteints) attendent
+  toujours la confirmation de Sam.

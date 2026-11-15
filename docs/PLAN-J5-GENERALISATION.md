@@ -143,3 +143,10 @@ Les plafonds de J5-1 au beau temps, de J5-2 par corps et la parité du repli tra
   pied, le tracé est aujourd'hui **le moins cher** (34 ms, sous la cible de 40 du mini) et sans question de contact ; le raster y coûte le
   double même sans les arbres proches tracés. **J5-3 fermé** : la marche reste tracée ; son flou (le tracé sous-échantillonné ×8) est sa
   limite d'image connue. Rouvrir avec des arbres proches en géométrie (assets) et un ombrage du sol proche moins cher.
+- **J5-R, les anciens chemins retirés** (2026-11-15 06:22 UTC) — sous la consigne « continue le plan » (avancer sans attendre les décisions de
+  Sam, les réglages provisoires révisables ; le retour possible par l'historique git) : `TUNE_SKYFLAT_DIM` (l'ancien repli bleuté du sol au
+  crépuscule), `TUNE_SHIP_SCENERY_SHADOW` (l'appareil sans l'ombre du décor), `treeShadowCut` (les proxies entiers dans la carte d'ombre des
+  arbres) — trace.wgsl, renderer.ts, scenery-raster.ts ; la phase J0 `twilightdim` retirée, `craftshade` réduite à l'A/A, `perf-ab SET=j3` à
+  l'A/A ; PLAN-J3 (ajout au tableau de J3-R), BH-API, GRAPHICS-PIPELINE. Vérifié : tsc, biome, `check-wgsl` 84/84, budgets des noyaux.
+  Restent : les leviers de mesure (§5 et J4) ; le repli tracé de la Terre (gardé, réglage 3) ; `ship.skyBand4` et `ship.nightFloor` (éteints,
+  options sans autre usage — à retirer à la confirmation de Sam, PLAN-J3).
