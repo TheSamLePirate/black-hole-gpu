@@ -1,8 +1,8 @@
 # PLAN-J6 — Les parcours complets (stratégie §19.13)
 
-**État (2026-11-15 19:18 UTC)** : **J6-1 à J6-4 faits** — leurs parcours passent ; cinq défauts trouvés et corrigés (le décollage
+**État (2026-11-15 19:25 UTC)** : **J6-1 à J6-5 faits** — leurs parcours passent ; cinq défauts trouvés et corrigés (le décollage
 automatique, le décor en vol rapide, l'arrivée de la météo réelle d'un coup, le repos au sol jamais atteint, l'A320 rechargé dans l'état de la
-préférence). J6-5 ensuite. Les jalons J0 à J5 ont été menés (PLAN-J1 à PLAN-J5) ; le 15 novembre,
+préférence). J6-6 ensuite. Les jalons J0 à J5 ont été menés (PLAN-J1 à PLAN-J5) ; le 15 novembre,
 Sam a nommé **~48 ms de GPU sur J0 le palier intermédiaire de kerr-mini** ([J0-CONTRAT](J0-CONTRAT.md) §2) et demandé de reprendre la
 suite du plan, lumière et contenu. La stratégie ([ANALYSE-STRATEGIE](ANALYSE-STRATEGIE-RENDU-2026-11-03.md) §19.13) demande que les jalons
 « transportent l'expérience en même temps que les passes » : **un parcours n'est terminé ni avec une scène vide, ni avec un état choisi
@@ -119,3 +119,10 @@ L'inventaire du §1 vient de la lecture du catalogue et des en-têtes : aucun te
   F-35 garé : carburant, train, freins tels quels, U : en l'air en 9,3 s ; `aircraft-save` 1/1. Non vérifié : l'échec sur le code d'avant
   (l'en-tête du test le décrit par la lecture du code). Limites : le détail des systèmes de l'A320 (alimentation au sol, portes, services)
   toujours pas sauvegardé — seul l'état de départ. Suite : J6-5 (caméra libre et photo en vol).
+- **J6-5 fait : caméra libre et mode photo en vol** (2026-11-15 19:25 UTC) : e2e `parcours-camera` — le F-35 à 300 m au-dessus des Maures
+  sous pilote automatique ; F3 (vraie touche), la caméra placée à 6 km (`viewAt`), 20 s ; F1 ; F4 (mode photo) 6 s, Échap. **Mesuré**
+  (kerr-mini, 2 509 images) : l'horloge jamais en arrière ; aucun saut de l'appareil (le plus grand pas d'une image 7 m à 140 m/s, 14 au retour
+  par F1) ; le niveau du sol de contact sous l'appareil tenu à chaque image, la caméra à 6 km comprise ; les maintiens (680 m, 090°, 140 m/s) et
+  la hauteur gardés après F1 et après le mode photo. **Relevé** : le mode photo fige le monde (l'appareil ne bouge pas pendant, reprend après —
+  le comportement voulu) ; le retour par F1, un blocage de 317 ms ; en caméra libre l'alarme « GEAR UP · TOO LOW » de l'appareil reste
+  affichée. Aucun défaut corrigé (aucun trouvé). Suite : J6-6 (la perte du GPU).
