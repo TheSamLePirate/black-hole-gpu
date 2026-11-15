@@ -7539,7 +7539,7 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
 - `crew-space-actions` (e2e) : 3/5, les mêmes deux échecs (amarrage, cible prise sur la carte) sur le code d'avant ce changement :
   examinés dans l'entrée suivante.
 
-### 2026-11-15 08:23 UTC — J5-6 : le sol à demi-rythme, plus lent — retiré
+### 2026-11-15 08:12 UTC — J5-6 : le sol à demi-rythme, plus lent — retiré
 
 - Contribution à la destination : une piste fermée sur mesure (règle 1), sa leçon écrite.
 - Réalisé : `LITE_HALF` essayé (le voisin classé en entier, son matériau repris), mesuré, retiré ; PLAN-J5 §3 et §5.

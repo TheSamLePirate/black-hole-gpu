@@ -180,7 +180,7 @@ Les plafonds de J5-1 au beau temps, de J5-2 par corps et la parité du repli tra
   Lot ouvrable (au-dessus de 1 ms), mais lourd : le noyau le plus chargé du sol, chaque voisin à classer, le détail des photos à garder en
   mouvement — non ouvert dans cette session. **M1 Max** (J0 borné à 30, l'eau à demi-rythme) : vol 30 images/s, GPU p50 **19,1 ms** (21,3
   avant), soutenu 30 images/s, 23,1 ms (horloge 1 286 → 1 076 MHz).
-- **J5-6 essayé et retiré** (2026-11-15 08:23 UTC) : `LITE_HALF` — des groupes de 32 fils, chaque fil le pixel du damier puis son voisin (une
+- **J5-6 essayé et retiré** (2026-11-15 08:12 UTC) : `LITE_HALF` — des groupes de 32 fils, chaque fil le pixel du damier puis son voisin (une
   boucle, un seul site d'appel : la première version en avait deux et doublait le noyau inliné, budgets cassés, corrigée avant la mesure),
   le voisin classé en entier, son matériau repris du premier quand les deux sont le sol nu à la même profondeur. **Mesuré** (kerr-mini, A/B
   deux fois) : J0 **49,3 / 49,5 contre 48,5–48,6 ms (+0,9)**, la forêt des Maures **55,9 / 55,1 contre 53,4 / 52,2 (+2,7)** ; `earth lite`
