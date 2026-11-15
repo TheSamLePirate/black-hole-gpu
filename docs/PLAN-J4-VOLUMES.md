@@ -203,3 +203,8 @@ Le relevé du §2 vient d'une lecture du code et des documents (agent d'explorat
   52,9 (≈ −0,8), les arbres de moins de 6 px laissés à la photo (2,5 aujourd'hui) 51,0 (≈ −2,7), sans décor 45,1 (≈ −8,6). Le plus gros
   levier lisible est **le seuil des petits arbres** — une décision d'image (des arbres de 2,5 à 6 px rendus à la photo), à mesurer en A/B
   répété et à juger sur images avant toute proposition à Sam ; ablations J0 `treeShadowOff`, `noImpostors`, `treeMinPx6` ajoutées.
+- **Après J4 : l'enveloppe sur le M1 Max** (2026-11-15 06:07 UTC) : J0 sur ce Mac (fenêtre visible), **borné à 30 images/s** (`J0_FPSCAP=30`,
+  la borne provisoire), vol puis vol soutenu (la machine chaude) — **beau temps** : 30 images/s tenues dans les deux, GPU p50 21,3 / 21,4 ms,
+  horloge 1 290 → 1 288 MHz ; **orage** : en vol 29,9 images/s, GPU p50 28,6 ; **soutenu, il décroche** — 21,5 images/s sur le vol, la
+  seconde moitié 14,6 (intervalle médian 84 ms), horloge 1 244 → 986 MHz. Le profil lourd ne se tient pas borné et soutenu sur le M1 Max ;
+  le beau temps tient la borne de 30.

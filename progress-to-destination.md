@@ -35,7 +35,7 @@ les preuves restent dans les entrées datées du journal, dessous.
 | Machine | GPU p50 mesuré | Cible | Plus gros poste |
 |---|---:|---:|---|
 | kerr-mini | 58,4 ms (5c420e09, 13 nov.) ; **56,3 ms avec l'eau E1** (A/B, 13 nov.) ; **57,3 ms le 15 nov.** (0bb2aa86, un vol, après les corrections de J3) | 40 ms (25 images/s régulières) | l'eau : 16,2 ms ; sans son matériau −13,0 ms (−10,1 avec E1) |
-| M1 Max | 22,5 ms, **frais** (12 nov., 98–100 °C) — non valable comme palier | 16,7 ms (60 images/s), bornée et soutenue | l'eau : 5,3 ms pour une enveloppe de 1,0 |
+| M1 Max | 22,5 ms, **frais** (12 nov., 98–100 °C) — non valable comme palier ; **15 nov., borné à 30 : beau temps 21,3 / 21,4 ms tenu soutenu ; orage 28,6 en vol, décroche en soutenu (14,6 images/s, 986 MHz)** | 16,7 ms (60 images/s), bornée et soutenue | l'eau : 5,3 ms pour une enveloppe de 1,0 |
 
 **L'ordre décidé** (stratégie §24) : l'eau étagée (surface → éclairage → reflets) → la classification de l'écran par tuiles et les lancements
 indirects → J3 (lumière, cockpit). **Au 13 nov. : l'eau étagée et la classification closes (E1, E2, tuiles de l'eau faits ; E3 et le lot 2 non
@@ -7372,3 +7372,14 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
 - Limites : la vue de 250 m montre un écart d'image (3,6 contre 1,0 au témoin), comme au premier essai de J4-4 et non au second — non
   élucidé ; sans objet puisque l'essai est retiré.
 - Suite : J5-R (le repli tracé, à la décision de Sam) ; les questions de PLAN-J5 §3 portées à Sam.
+
+### 2026-11-15 06:07 UTC — J0 sur le M1 Max, borné à 30 : le beau temps tient, l'orage décroche en soutenu
+
+- Contribution à la destination : la règle « borné et soutenu » (décision de Sam, 13 nov.) appliquée au profil lourd de J4 sur la machine
+  cible des 60 images/s ; J5-2 relu et clos (les corps déjà en raster).
+- Réalisé : deux J0 (vol + soutenu) sur ce Mac, `J0_FPSCAP=30` ; PLAN-J4 §10, PLAN-J5 §5.
+- Preuves (mesuré, M1 Max, fenêtre visible) : beau temps 30 / 30 images/s, GPU p50 21,3 / 21,4 ms, 1 290 MHz ; orage en vol 29,9 images/s,
+  GPU 28,6 ; orage soutenu 21,5 images/s, seconde moitié 14,6, horloge 986 MHz.
+- Limites : un passage par profil ; la température avant l'orage était celle du vol au beau temps (enchaînés) — le décrochage peut en
+  hériter ; la cause du saut de 28,6 à ~84 ms (plus que l'horloge) non élucidée.
+- Suite : les questions de PLAN-J5 §3 à Sam (arbres, MSAA, repli tracé) ; le lot d'assets des arbres proches à proposer.

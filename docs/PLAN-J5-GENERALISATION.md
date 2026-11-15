@@ -123,3 +123,7 @@ Les plafonds de J5-1 au beau temps, de J5-2 par corps et la parité du repli tra
   58,7 (**−0,5**) ; compilée hors 69,2 et 56,2. Images au même instant figé : à 6 m identiques (0,58 contre 0,53 au témoin A/A). Sous 1 ms
   (règle 1) : **non gardée** (patch hors du dépôt). La passe garde ~0,8–1,1 ms de temps mesuré même aux trois quarts de ses fils sortis
   aussitôt — son coût n'est pas son calcul. La houle reste à +2 à +3,5 ms sur une côte proche : un prix d'image assumé, non un lot.
+- **J5-2, les autres corps : déjà sur le socle raster** (2026-11-15 06:00 UTC, relu) : PLAN-PLANETES-AAA a porté le raster à tous les mondes
+  solides (`bodyLite`) ; mesurés le 15 nov. (kerr-mini, `planets-baseline`) : Lune vol bas 25,9 / à pied 30,5 ms, Mars 40,8 / 27,3 — sous la
+  Terre en vol bas (43,0) et à pied dans le raster (la Terre seule y est tracée, J5-3). Rien à porter ; leurs fiches par scène restent celles
+  de PLAN-PLANETES-AAA. **J5-2 clos.**
