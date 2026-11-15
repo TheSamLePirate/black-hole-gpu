@@ -665,7 +665,13 @@ async function main() {
       };
       firstFrame();
       gpuDiagnostics.record("device-recovered", why);
-      panel.toast(t("Graphics device restored — the flight goes on"));
+      // (in a network room — PLAN-J6 J6-6 —: the room's clock went on, the scene set back on its hour: said, as a return from out of view)
+      // (netPanel made further down: a loss during the start, before it, reads none)
+      let inRoom = false;
+      try {
+        inRoom = !!netPanel.net?.room;
+      } catch {}
+      panel.toast(inRoom ? t("Graphics device restored — back on the room's hour") : t("Graphics device restored — the flight goes on"));
     } catch (error) {
       gpuDiagnostics.record("device-recovery-failed", error, true);
       giveUp(`${why}; ${(error as Error).message}`);

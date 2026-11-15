@@ -1,8 +1,8 @@
 # PLAN-J6 — Les parcours complets (stratégie §19.13)
 
-**État (2026-11-15 19:45 UTC)** : **les huit lots joués : J6-1 à J6-5, J6-7, J6-8 faits, J6-6 fait en solo** — leurs parcours passent ; cinq défauts trouvés et corrigés (le décollage
+**État (2026-11-15 19:58 UTC)** : **les huit lots faits** (J6-6 en solo et en salle) — leurs parcours passent ; cinq défauts trouvés et corrigés (le décollage
 automatique, le décor en vol rapide, l'arrivée de la météo réelle d'un coup, le repos au sol jamais atteint, l'A320 rechargé dans l'état de la
-préférence). Reste : J6-6 en salle réseau ; dans J6-7, l'annulation selon le point de reprise. Les jalons J0 à J5 ont été menés (PLAN-J1 à PLAN-J5) ; le 15 novembre,
+préférence). Reste : dans J6-7, l'annulation selon le point de reprise. Les jalons J0 à J5 ont été menés (PLAN-J1 à PLAN-J5) ; le 15 novembre,
 Sam a nommé **~48 ms de GPU sur J0 le palier intermédiaire de kerr-mini** ([J0-CONTRAT](J0-CONTRAT.md) §2) et demandé de reprendre la
 suite du plan, lumière et contenu. La stratégie ([ANALYSE-STRATEGIE](ANALYSE-STRATEGIE-RENDU-2026-11-03.md) §19.13) demande que les jalons
 « transportent l'expérience en même temps que les passes » : **un parcours n'est terminé ni avec une scène vide, ni avec un état choisi
@@ -156,3 +156,10 @@ L'inventaire du §1 vient de la lecture du catalogue et des en-têtes : aucun te
   `jetReady` le laissait passer). **Corrigé** : `apSet` (le chemin de TARS et de l'équipage) refuse d'abord un appareil qui n'est ni le F-35 ni
   l'A320 et le dit. **Mesuré** (kerr-mini) : `parcours-tars` 2/2, `tars-aircraft-tools` 2/2, `release-all` 1/1 ; unitaires (messages, équipage,
   TARS) 120/120. Reste dans J6-7 : l'annulation selon le point de reprise.
+- **J6-6 en salle réseau** (2026-11-15 19:58 UTC) : e2e `parcours-gpu-salle` — deux pages, Ana crée une salle, Ben la rejoint en pilote, Ben
+  perd son GPU. **Mesuré** (kerr-mini, trois passages) : la reprise de Ben 1,5–1,7 s ; le temps de la salle continue pour Ana pendant ce temps
+  (au même rythme) — la retenue du vol solo ne tient pas la salle — ; Ben reste dans la salle, recalé sur son heure à 0,16–0,31 s. **Trouvé** :
+  rien ne le lui disait (« Graphics device restored — the flight goes on »). **Corrigé** : dans une salle, « Graphics device restored — back on
+  the room's hour » (`main.ts`, FR « retour à l'heure de la salle »), comme au retour d'un onglet masqué. `gpu-recovery` 2/2,
+  `gpu-recovery-hold` 1/1. `gpu-startup` : la perte pendant l'initialisation passe ; trois autres de ses tests échouent (le LUT de qualité,
+  le noyau adaptatif, `prof.table`) — sans rapport avec ce message, non rejoués sur la révision d'avant.

@@ -549,6 +549,7 @@ export default {
     "Le périphérique graphique a été réinitialisé ({0}). Rechargez la page pour continuer.",
   "The graphics device was reset ({0}) — restarting it": "Le périphérique graphique a été réinitialisé ({0}) — redémarrage",
   "Graphics device restored — the flight goes on": "Périphérique graphique rétabli — le vol continue",
+  "Graphics device restored — back on the room's hour": "Périphérique graphique rétabli — retour à l'heure de la salle",
   "Your flight was saved.": "Votre vol a été sauvegardé.",
   "Your flight could not be saved automatically.": "Votre vol n'a pas pu être sauvegardé automatiquement.",
   "No first image after 15 min. Last graphics stage: {0}. The browser did not provide a precise cause.":
