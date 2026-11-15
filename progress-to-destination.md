@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-15 00:02 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-15 00:09 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous.
@@ -7006,3 +7006,13 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   le nez à l'ombre ; `coherence` passe ; check-wgsl 84/84. La borne de l'âge : vérifiée sur le vol J0 du 15 nov. (p95 56,2, jamais 0).
 - **Limites :** l'ombre du décor lue à la caméra (en vue extérieure : la caméra) et mise à jour à la cadence de la sonde, comme celle du
   relief ; ΔGPU non mesuré (deux lectures de carte par passage de la sonde). Restent à Sam : les lampes de cabine, les toits hors de France.
+
+### 2026-11-15 00:09 UTC — J3-5 : les tuiles du nord et la brique aux albédos mesurés
+
+- **Contribution à la destination :** §7 (des matériaux explicites, physiques) — PLAN-J3 J3-5, le premier point de l'inventaire du 13 nov.
+- **Réalisé :** `src/system/roofs.ts` : les tuiles du nord ×2,5 et la brique ×1,5 dans leurs tables (luminances ~0,25 et ~0,22, contre
+  0,10 et 0,145 — l'inventaire : « bien trop sombre », « basse ») ; le recalage des toits sur l'orthophoto inchangé. PLAN-J3 §8, §10.
+- **Preuves (mesuré, kerr-mini, phase J0 `materials` à Bruxelles)** : d'en haut 68,84 (13 nov.) → **69,82**, A/A 0,30 ; de côté 88,58 → 88,75 ;
+  captures avant / après (des toits terre cuite au lieu de brun-rouge sombre) ; `roofs.test.ts` 27/27.
+- **Limites :** les autres matériaux de l'inventaire (bois sombre, aucun métal, le verre, le reflet sur une irradiance plate) non touchés ;
+  le recalage à l'étranger reste un choix de Sam.

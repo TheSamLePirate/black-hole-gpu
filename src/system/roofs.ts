@@ -111,10 +111,12 @@ const lerp3 = (a: number[], b: number[], t: number) => a.map((v, i) => v + (b[i]
 export function roofColour(mat: RoofMaterial, region: Region, s: number): [number, number, number] {
   switch (mat) {
     case RoofMaterial.Tiles:
-      // (the south's canal tiles orange and pale, the north's mechanical ones red-brown, some weathered dark)
+      // (the south's canal tiles orange and pale, the north's mechanical ones red-brown, some weathered dark — 15 Nov 2026, PLAN-J3 J3-5:
+      // the north's raised from a luminance of ~0.10 to ~0.25, the measured clay tiles' 0.25–0.35 (they were the inventory's darkest roof,
+      // ~0.065 on screen with their patina); where an orthophotograph colours the roofs the raster pulls them to it anyway)
       return region === "france-south" || region === "mediterranean"
         ? lerp3([0.38, 0.2, 0.12], [0.32, 0.22, 0.16], s)
-        : lerp3([0.17, 0.088, 0.064], [0.13, 0.088, 0.07], s);
+        : lerp3([0.425, 0.22, 0.16], [0.325, 0.22, 0.175], s);
     case RoofMaterial.Slate:
       return lerp3([0.065, 0.072, 0.085], [0.095, 0.098, 0.105], s);
     case RoofMaterial.Zinc:
@@ -140,7 +142,8 @@ export function wallColour(mat: WallMaterial, region: Region, s: number): [numbe
     case WallMaterial.Concrete:
       return lerp3([0.34, 0.33, 0.31], [0.26, 0.26, 0.25], s);
     case WallMaterial.Brick:
-      return lerp3([0.3, 0.11, 0.065], [0.24, 0.12, 0.08], s);
+      // (15 Nov 2026, J3-5: from a luminance of ~0.145 to ~0.22, the measured red brick's 0.2–0.3)
+      return lerp3([0.45, 0.165, 0.098], [0.36, 0.18, 0.12], s);
     case WallMaterial.Wood:
       return lerp3([0.19, 0.11, 0.055], [0.12, 0.08, 0.05], s);
     case WallMaterial.Glass:

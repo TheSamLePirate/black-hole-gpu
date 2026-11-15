@@ -174,8 +174,9 @@ avancer sans attendre, comme la borne provisoire du M1 Max) :
 | 6. Le MSAA de l'appareil | 4× gardé (l'état actuel) ; `SHIP_MSAA` 1 prêt | 4–5 ms sur kerr-mini contre des bords en escalier |
 | 7. Le plancher de nuit de l'appareil | **éteint** (`ship.nightFloor`) | invisible à l'exposition du jeu |
 | J3-4 : la borne de l'âge des écrans | **p95 < 70 ms, aucun jamais envoyé** — assertée par le vol J0 | mesuré 57 (13 nov.), 56,2 (15 nov.) |
+| J3-5 : les albédos des tables | **tuiles du nord et brique relevées** aux valeurs mesurées (luminance ~0,10 → ~0,25 ; ~0,145 → ~0,22 — `roofs.ts`) ; le recalage sur la photo gardé | l'inventaire du 13 nov. ; Bruxelles d'en haut 68,84 → 69,82 (A/A 0,30) |
 
-Restent à Sam : les lampes de cabine la nuit (AAA-PROGRESS), les toits hors de France (J3-5 : les tables, le recalage, ou les deux).
+Restent à Sam : les lampes de cabine la nuit (AAA-PROGRESS) ; le recalage des toits sur la photo à l'étranger (J3-5 : le garder ou non — les tables, elles, relevées).
 
 ## 9. Non vérifié
 
@@ -350,3 +351,7 @@ Aucun coût de J3 n'est mesuré ; aucun gain n'est promis.
   le nomme pas — auteur et licence à retrouver, ou l'image à remplacer.
 - **Le critère §4 au crépuscule** (2026-11-14 23:13 UTC) : la phase `coherence` lit aussi 20:00 et 20:20 par défaut et borne le ciel de l'appareil
   sur ce que prend le sol à 0,82–1,20 de 0 à −13° — kerr-mini : 0,91 (−7,5°), 0,94 (−10,2°), A/A ≤ 1,2 % ; passe.
+- **J3-5, les tables relevées** (2026-11-15 00:09 UTC) : `roofs.ts` — tuiles du nord (0,17 0,088 0,064)→(0,425 0,22 0,16) et brique (0,30 0,11 0,065)→
+  (0,45 0,165 0,098), luminances ~0,25 et ~0,22, dans les plages mesurées (0,25–0,35 ; 0,2–0,3). Bruxelles (sans orthophoto nationale) d'en
+  haut 68,84 → 69,82, de côté 88,58 → 88,75 (A/A 0,30 / 0,08) : des toits terre cuite au lieu de brun-rouge sombre. En France, les toits proches
+  restent ceux de l'orthophoto (le recalage). `tests/roofs.test.ts` 27/27.
