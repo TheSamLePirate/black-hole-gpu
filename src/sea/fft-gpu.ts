@@ -63,12 +63,10 @@ export class SeaFft {
   private h0: GPUBuffer;
   private fld: GPUBuffer;
   private foam: GPUBuffer;
-  private pipes: Record<"spectrum" | "rows" | "cols" | "assemble" | "mip" | "foamWorld", GPUComputePipeline>;
+  private pipes: Record<"rowsSpec" | "colsAssemble" | "mip" | "foamWorld", GPUComputePipeline>;
   private binds: {
-    spectrum: GPUBindGroup;
-    rows: GPUBindGroup;
-    cols: GPUBindGroup;
-    assemble: GPUBindGroup;
+    rowsSpec: GPUBindGroup;
+    colsAssemble: GPUBindGroup;
     mips: GPUBindGroup[];
     foam: GPUBindGroup[];
   };
@@ -118,10 +116,8 @@ export class SeaFft {
     const pipe = (entryPoint: string) =>
       d.createComputePipeline({ layout: "auto", compute: { module, entryPoint }, label: `seafft ${entryPoint}` });
     this.pipes = {
-      spectrum: pipe("spectrum"),
-      rows: pipe("rows"),
-      cols: pipe("cols"),
-      assemble: pipe("assemble"),
+      rowsSpec: pipe("rowsSpec"),
+      colsAssemble: pipe("colsAssemble"),
       mip: pipe("mip"),
       foamWorld: pipe("foamWorld"),
     };
@@ -130,14 +126,12 @@ export class SeaFft {
     const level = (l: number, dim: "2d-array" = "2d-array") =>
       this.texture.createView({ dimension: dim, baseMipLevel: l, mipLevelCount: 1 });
     this.binds = {
-      spectrum: bg(this.pipes.spectrum, [
+      rowsSpec: bg(this.pipes.rowsSpec, [
         { binding: 0, resource: { buffer: this.uniform } },
         { binding: 1, resource: { buffer: this.h0 } },
         { binding: 2, resource: { buffer: this.fld } },
       ]),
-      rows: bg(this.pipes.rows, [{ binding: 2, resource: { buffer: this.fld } }]),
-      cols: bg(this.pipes.cols, [{ binding: 2, resource: { buffer: this.fld } }]),
-      assemble: bg(this.pipes.assemble, [
+      colsAssemble: bg(this.pipes.colsAssemble, [
         { binding: 0, resource: { buffer: this.uniform } },
         { binding: 2, resource: { buffer: this.fld } },
         { binding: 3, resource: level(0) },
@@ -227,6 +221,7 @@ export class SeaFft {
     phys: SeaPhysics = EARTH_SEA,
     active = C,
     foam: FoamFrame | null = null,
+    split?: (step: string) => GPUComputePassDescriptor,
   ) {
     if (!this.ready) return;
     this.runs++;
@@ -262,25 +257,30 @@ export class SeaFft {
     );
     const A = Math.min(Math.max(Math.round(active), 1), C);
     this.active = A;
-    const p = enc.beginComputePass(desc);
-    p.setPipeline(this.pipes.spectrum);
-    p.setBindGroup(0, this.binds.spectrum);
-    p.dispatchWorkgroups(N / 8, N / 8, A);
-    p.setPipeline(this.pipes.rows);
-    p.setBindGroup(0, this.binds.rows);
-    p.dispatchWorkgroups(1, N, 4 * A);
-    p.setPipeline(this.pipes.cols);
-    p.setBindGroup(0, this.binds.cols);
-    p.dispatchWorkgroups(1, N, 4 * A);
-    p.setPipeline(this.pipes.assemble);
-    p.setBindGroup(0, this.binds.assemble);
-    p.dispatchWorkgroups(N / 8, N / 8, A);
+    // (split — a measure —: each step its own pass, its descriptor from split(step): the steps' costs apart)
+    let p = enc.beginComputePass(split ? split("modes and rows") : desc);
+    const next = (step: string) => {
+      if (!split) return;
+      p.end();
+      p = enc.beginComputePass(split(step));
+    };
+    // (the modes and the rows, then the columns and the assembly: a workgroup a row — a column — of a cascade, its four fields together;
+    // 2.6 / 2.3 → 1.6 / 1.4 ms on J0 against the four passes before, the texture the same — kerr-mini, 15 Nov 2026, e2e sea-fft-fused)
+    p.setPipeline(this.pipes.rowsSpec);
+    p.setBindGroup(0, this.binds.rowsSpec);
+    p.dispatchWorkgroups(1, N, A);
+    next("columns and assembly");
+    p.setPipeline(this.pipes.colsAssemble);
+    p.setBindGroup(0, this.binds.colsAssemble);
+    p.dispatchWorkgroups(1, N, A);
     // (the world's foam, then its pair's mips with the cascades')
     if (foam) {
+      next("foam");
       p.setPipeline(this.pipes.foamWorld);
       p.setBindGroup(0, this.binds.foam[this.foamParity]!);
       p.dispatchWorkgroups(N / 8, N / 8, 2);
     }
+    next("mips");
     p.setPipeline(this.pipes.mip);
     for (let l = 1; l < SEA_LEVELS; l++) {
       const w = Math.max(1, N >> l);

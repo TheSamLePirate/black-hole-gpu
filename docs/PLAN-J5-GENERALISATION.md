@@ -279,3 +279,15 @@ Les plafonds de J5-1 au beau temps, de J5-2 par corps et la parité du repli tra
 - **Décision de Sam : J5-6 laissé au joueur** (2026-11-15 14:16 UTC) : « auto » garde le matériau de la Terre à chaque pixel (aucun
   compromis d'image) ; le réglage « demi » (et plus grossier) l'applique pour qui le choisit (db50c54e). J5-6 fermé ; la cible des 40 ms
   du mini attend une autre voie.
+- **Une autre voie, sans effet sur l'image : les plafonds relus, la FFT de la mer fusionnée** (2026-11-15 14:42 UTC). **Fiche des ablations
+  sur le code actuel** (kerr-mini, J0, base ≈ 50,9 ms) : nuages −6,3 ; appareil −5,3 ; matériau de l'eau −5,0 ; **vagues FFT −4,8** ; décor
+  −2,7 ; surface de la mer −1,6 ; interfaces −1,5 ; ombre de l'appareil −1,3 ; marche des nuages vers le Soleil −1,3. L'appareil a déjà sa
+  pré-passe de profondeur et pas d'ombrage par échantillon. **La passe `sea fft` découpée** (levier de mesure `seaFftSplitProfile`) : spectre
+  0,49, lignes 0,39, colonnes 0,51, assemblage 0,54, mips 0,30, écume 0,14 — **2,35 ms, le plafond de ce lot**. **Fait** : le spectre calculé
+  dans la passe des lignes, l'assemblage dans celle des colonnes, un groupe par ligne / colonne d'une cascade traitant ses quatre champs
+  ensemble (les facteurs de rotation en table partagée) — 4 passes → 2, les champs une seule fois en mémoire (~36 → 12 Mo par image). **Juste** :
+  sonde ancien / fusionné (la FFT encodée par la sonde à une horloge tenue, la texture relue) : les statistiques des couches identiques
+  (écart 0), **A/A 0, témoin positif** (les vagues 0,1 s plus tard) 0,78 ; la sonde, d'abord invalide (le monde figé ne réencode pas la FFT :
+  tout à 0, le témoin seul bougeait), corrigée avant d'en tirer un chiffre. **Mesuré** (A/B ×2, même vol) : la passe **2,58 / 2,27 →
+  1,63 / 1,39 ms (−0,9)** ; GPU p50 de l'image 52,4 / 49,7 → 52,0 / 48,9 (dans le bruit d'un vol). Ancien chemin retiré (règle 2) ; la
+  sonde aussi (sans ancien chemin, plus rien à comparer).

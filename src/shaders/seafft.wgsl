@@ -4,7 +4,8 @@
 // (h̃(k,t) = h̃₀(k) e^{iωt} + conj(h̃₀(−k)) e^{−iωt}, deep water ω = √(g k)), the fields they make — the height,
 // its horizontal displacement (the choppy crests: −i k/|k| λ h̃), its slopes, the displacement's derivatives (the
 // surface's Jacobian: where it folds, the crests break) — two real fields to a complex array; their inverse FFT
-// (rows, then columns: a radix-2 transform of 256 in a workgroup's memory); then, into a texture array, a cascade's three
+// (rows, then columns: a radix-2 transform of 256 in a workgroup's memory, a row's — a column's — four fields together; the modes
+// computed in the rows' pass, the texture written in the columns': two passes, the fields once through memory — 15 Nov 2026); then, into a texture array, a cascade's three
 // layers, 3c + j — (Dx, height, Dz, Jacobian); (slope x, slope z, their squares); (the foam lying, the foam made, the slopes'
 // product, 0) — and their mips: the mips' means are the slopes' first and second moments, their full covariance (LEAN,
 // the cross term with it — a swell crossing the wind's sea leans the glint). The foam the breaking crests leave (N6b): where a
@@ -50,10 +51,7 @@ const REPEAT: f32 = 1024.0;
 fn cmul(a: vec2f, b: vec2f) -> vec2f { return vec2f(a.x * b.x - a.y * b.y, a.x * b.y + a.y * b.x); }
 
 // the modes now and their fields: A = Dx + i Dz, B = height + i slope x, C = slope z + i ∂Dx/∂x, D = ∂Dz/∂z + i ∂Dx/∂z
-@compute @workgroup_size(8, 8, 1)
-fn spectrum(@builtin(global_invocation_id) id: vec3u) {
-  if (id.x >= N || id.y >= N) { return; }
-  let c = id.z;
+fn modes(c: u32, id: vec2u) -> array<vec2f, 4> {
   let o = id.y * N + id.x;
   let L = F.L[c];
   let mx = select(i32(id.x), i32(id.x) - i32(N), id.x >= N / 2u);
@@ -82,53 +80,69 @@ fn spectrum(@builtin(global_invocation_id) id: vec3u) {
   let dzz = h * (lam * k.y * kn.y);
   let dxz = h * (lam * k.x * kn.y);
   // (two real fields in one complex array: X + iY's spectrum = X̃ + iỸ)
-  let base = c * 4u * N * N;
-  fld[base + o] = dx + vec2f(-dz.y, dz.x);
-  fld[base + N * N + o] = h + vec2f(-sx.y, sx.x);
-  fld[base + 2u * N * N + o] = sz + vec2f(-dxx.y, dxx.x);
-  fld[base + 3u * N * N + o] = dzz + vec2f(-dxz.y, dxz.x);
+  return array<vec2f, 4>(dx + vec2f(-dz.y, dz.x), h + vec2f(-sx.y, sx.x), sz + vec2f(-dxx.y, dxx.x), dzz + vec2f(-dxz.y, dxz.x));
 }
 
-var<workgroup> buf: array<vec2f, 256>;
+// the four fields of a row or a column in the workgroup's memory (256 each), the transform's twiddles (e^{2πij/N}, j < N/2)
+var<workgroup> fb: array<vec2f, 1024>;
+var<workgroup> tw: array<vec2f, 128>;
 
 fn bitrev(x: u32) -> u32 { return reverseBits(x) >> (32u - LOGN); }
+fn twiddles(i: u32) {
+  if (i < N / 2u) {
+    let a = TAU * f32(i) / f32(N);
+    tw[i] = vec2f(cos(a), sin(a));
+  }
+}
 
-// one 256-point inverse transform in the workgroup's memory (decimation in time, its input loaded bit-reversed)
-fn transform(i: u32) {
+// four 256-point inverse transforms at once in the workgroup's memory (decimation in time, their inputs loaded bit-reversed): each
+// stage's 4 × 128 butterflies over the 256 threads, two each — the twiddle of a stage s at pos: e^{iπ pos / 2^s} = tw[pos · N / 2^{s+1}]
+fn transform4(i: u32) {
   for (var s = 0u; s < LOGN; s++) {
     workgroupBarrier();
     let half = 1u << s;
-    if (i < N / 2u) {
-      let pos = i % half;
-      let a = (i / half) * 2u * half + pos;
+    for (var r = 0u; r < 2u; r++) {
+      let q = i + r * N;
+      let f = (q / (N / 2u)) * N;
+      let bi = q % (N / 2u);
+      let pos = bi % half;
+      let a = f + (bi / half) * 2u * half + pos;
       let b = a + half;
-      let ang = TAU * f32(pos) / f32(2u * half);
-      let w = vec2f(cos(ang), sin(ang));
-      let x = buf[a];
-      let y = cmul(w, buf[b]);
-      buf[a] = x + y;
-      buf[b] = x - y;
+      let w = tw[pos << (LOGN - 1u - s)];
+      let x = fb[a];
+      let y = cmul(w, fb[b]);
+      fb[a] = x + y;
+      fb[b] = x - y;
     }
   }
   workgroupBarrier();
 }
 
-// the rows: a workgroup a row of an array (id.y the row, id.z the array)
+// the modes and the rows (a workgroup a row of a cascade — id.y the row, id.z the cascade): each thread its mode's four fields
+// (modes), their four rows transformed together, written to fld — the spectrum's own pass and its round trip through memory gone
 @compute @workgroup_size(256, 1, 1)
-fn rows(@builtin(local_invocation_id) l: vec3u, @builtin(workgroup_id) g: vec3u) {
-  let base = g.z * N * N + g.y * N;
-  buf[bitrev(l.x)] = fld[base + l.x];
-  transform(l.x);
-  fld[base + l.x] = buf[l.x];
+fn rowsSpec(@builtin(local_invocation_id) l: vec3u, @builtin(workgroup_id) g: vec3u) {
+  let c = g.z;
+  twiddles(l.x);
+  let m = modes(c, vec2u(l.x, g.y));
+  let r = bitrev(l.x);
+  for (var f = 0u; f < 4u; f++) { fb[f * N + r] = m[f]; }
+  transform4(l.x);
+  let base = c * 4u * N * N + g.y * N + l.x;
+  for (var f = 0u; f < 4u; f++) { fld[base + f * N * N] = fb[f * N + l.x]; }
 }
 
-// the columns
+// the columns and the assembly (a workgroup a column of a cascade): its four fields' columns transformed together, then each
+// thread its pixel's fields into the texture (assembleAt) — the fields' second round trip and the assembly's pass gone
 @compute @workgroup_size(256, 1, 1)
-fn cols(@builtin(local_invocation_id) l: vec3u, @builtin(workgroup_id) g: vec3u) {
-  let base = g.z * N * N + g.y;
-  buf[bitrev(l.x)] = fld[base + l.x * N];
-  transform(l.x);
-  fld[base + l.x * N] = buf[l.x];
+fn colsAssemble(@builtin(local_invocation_id) l: vec3u, @builtin(workgroup_id) g: vec3u) {
+  let c = g.z;
+  twiddles(l.x);
+  let base = c * 4u * N * N + g.y;
+  let r = bitrev(l.x);
+  for (var f = 0u; f < 4u; f++) { fb[f * N + r] = fld[base + f * N * N + l.x * N]; }
+  transform4(l.x);
+  assembleAt(c, vec2u(g.y, l.x), fb[l.x], fb[N + l.x], fb[2u * N + l.x], fb[3u * N + l.x]);
 }
 
 @group(0) @binding(3) var outTex: texture_storage_2d_array<rgba16float, write>;
@@ -138,16 +152,8 @@ fn cols(@builtin(local_invocation_id) l: vec3u, @builtin(workgroup_id) g: vec3u)
 const FOAM_LIFE = vec4f(5.0, 3.0, 1.5, 0.8);
 
 // the fields into the texture: a cascade's (Dx, height, Dz, Jacobian), (slope x, slope z, their squares), (foam, slopes' product)
-@compute @workgroup_size(8, 8, 1)
-fn assemble(@builtin(global_invocation_id) id: vec3u) {
-  if (id.x >= N || id.y >= N) { return; }
-  let c = id.z;
+fn assembleAt(c: u32, id: vec2u, A: vec2f, B: vec2f, C: vec2f, D: vec2f) {
   let o = id.y * N + id.x;
-  let base = c * 4u * N * N;
-  let A = fld[base + o];
-  let B = fld[base + N * N + o];
-  let C = fld[base + 2u * N * N + o];
-  let D = fld[base + 3u * N * N + o];
   let J = (1.0 + C.y) * (1.0 + D.x) - D.y * D.y;
   textureStore(outTex, vec2u(id.xy), 3u * c, vec4f(A.x, B.x, A.y, J));
   textureStore(outTex, vec2u(id.xy), 3u * c + 1u, vec4f(B.y, C.x, B.y * B.y, C.x * C.x));

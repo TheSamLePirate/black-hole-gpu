@@ -75,6 +75,8 @@ const ABLATIONS: Record<string, { label: string; set: string }> = {
   // (the sea's parts — PLAN-MER-WEBGPU —: J0_ORDER=base,seaSurface,seaFft,seaProbe,seaFoam,base to run them)
   seaSurface: { label: "mer plate (sans surface déplacée)", set: `__bh.renderer.seaSurfaceOn = false;` },
   seaFft: { label: "sans vagues FFT", set: `__bh.settings.seaFft = false; __bh.touch();` },
+  // (the FFT's steps' costs apart — renderer.seaFftSplitProfile, a measure: each its own pass in the profile)
+  seaFftSplit: { label: "vagues FFT profilées par étape (mesure)", set: `__bh.renderer.seaFftSplitProfile = true;` },
   seaProbe: { label: "sans sonde au-dessus de la mer", set: `__bh.renderer.seaProbeOn = false;` },
   seaFoam: { label: "sans écume en carte du monde", set: `__bh.renderer.seaFoamWorldOn = false;` },
   // (the staged water's E2 ceiling — PLAN-MER-WEBGPU §6, method rule 1 —: the sea's reflections compiled out of the water's kernels —
@@ -294,7 +296,7 @@ describe.skipIf(!E2E)("J0: the reference flight over Toulon-Hyères", () => {
    * scenery: a jump back to the start reloads them, and the first ablations of the first run measured that reload (10 images/s)
    * —; then the clock running, the autopilot and autothrottle engaged until they hold, gear down; 3 s settling */
   async function start(set: string) {
-    await app.js(`(() => { __bh.freeze(false); __bh.game.importSave(${JSON.stringify(save)}, false); __bh.freeze(true); __bh.renderer.liteSkip = 0; __bh.renderer.tune = {}; __bh.settings.earthRasterShading = "auto"; if (__bh.settings.earthPipeline !== "raster") __bh.game.set("earthPipeline", "raster"); __bh.renderer.debugSkipShip = false; __bh.renderer.ship.debugSkip.clear(); __bh.renderer.shipAirAllowed = true; __bh.renderer.cloudLightRuntimeOff = false; __bh.renderer.treeShadowOn = true; __bh.renderer.treeImpostorsOn = true; __bh.renderer.treeMinPx = 2.5;
+    await app.js(`(() => { __bh.freeze(false); __bh.game.importSave(${JSON.stringify(save)}, false); __bh.freeze(true); __bh.renderer.liteSkip = 0; __bh.renderer.tune = {}; __bh.settings.earthRasterShading = "auto"; __bh.renderer.seaFftSplitProfile = false; if (__bh.settings.earthPipeline !== "raster") __bh.game.set("earthPipeline", "raster"); __bh.renderer.debugSkipShip = false; __bh.renderer.ship.debugSkip.clear(); __bh.renderer.shipAirAllowed = true; __bh.renderer.cloudLightRuntimeOff = false; __bh.renderer.treeShadowOn = true; __bh.renderer.treeImpostorsOn = true; __bh.renderer.treeMinPx = 2.5;
       Object.assign(__bh.renderer, { seaSurfaceOn: true, seaProbeOn: true, seaFoamWorldOn: true }); __bh.settings.seaFft = true;
       document.body.classList.remove("hide-ui"); Object.assign(__bh.settings, ${J0_FIXED}, ${hud}); __bh.settings.shipMount = "cockpit"; __bh.refresh();
       __bh.camera.viewReset(); ${set} return 1; })()`);

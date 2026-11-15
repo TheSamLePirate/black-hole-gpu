@@ -5519,6 +5519,9 @@ export class Renderer {
   /** (PLAN-J5 J5-1, a measure) the clouds' sunward march off at run time — its code still in the kernel: against the ablation that
    *  compiles it out (renderer.tune TUNE_CLOUD_LIGHT 0), what of its cost is its work and what its presence */
   cloudLightRuntimeOff = false;
+  /** (a measure) the sea's FFT profiled step by step — each its own pass, `sea fft: modes and rows`, `: columns and assembly`, `: foam`,
+   *  `: mips` —: their costs apart */
+  seaFftSplitProfile = false;
   /** (PLAN-J5 J5-3, a measure) the walker on the Earth drawn by the raster — its walking grid still sent (P.walk[0].w 2: trace.wgsl
    *  rasterPrimary) —; false: the traced pipeline while walking, as ever (its march meets the grid the feet stand on) */
   walkRasterOn = false;
@@ -7186,6 +7189,7 @@ export class Renderer {
         this.seaPhys,
         this.seaFftActive,
         this.seaFoamWorldOn ? this.seaFoamFrame : null,
+        this.seaFftSplitProfile ? (step) => this.prof.pass(`sea fft: ${step}`) : undefined,
       );
       this.seaFftDue = false;
     }
