@@ -2,7 +2,7 @@ import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { App, E2E, stopServer } from "./lib/app";
 
 // TARS the copilot's hands (docs/PLAN-AVIATION-AAA.md, I2): first the Alps as ever; then a fight (two bandits from
-// the north) — TARS calling them by their BRAA as the radar finds them; with TARS_LIVE=1 and the owner's key, asked
+// the north) — Darkstar, the AWACS, calling them by their BRAA as the radar finds them (TARS the missiles at us); with TARS_LIVE=1 and the owner's key, asked
 // to lock one and fire an AMRAAM, the threats called as they come —; then the real traffic about Paris — « quels
 // avions autour ? », one intercepted by its callsign —; a mission modified by a sentence. (E2E_SHOTS=<dir>: the views.)
 
@@ -64,13 +64,18 @@ describe.skipIf(!E2E)("TARS the copilot: threats, weapons, traffic, missions", (
     await shot("alps");
   }, 120_000);
 
-  test("a fight: the two bandits called by their BRAA as the radar finds them", async () => {
-    await app.js(`(() => { Object.assign(__bh.settings, { f35Invulnerable: true, f35ThreatCalls: true }); return 1; })()`);
+  test("a fight: the two bandits called by their BRAA as the radar finds them — Darkstar's picture (I4), the radio roles on", async () => {
+    // (since I4 — 16 Oct 2026 — the picture is the AWACS's, the missiles at us TARS's: the test waited for TARS's line, a
+    // speaker it never has with the radio roles on, by default — 14 Nov 2026)
+    await app.js(
+      `(() => { Object.assign(__bh.settings, { f35Invulnerable: true, f35ThreatCalls: true, f35RadioRoles: true }); return 1; })()`,
+    );
     await tool("f35", { action: "fly", id: "bvr" });
     await app.waitFor(`__bh.camera.combat?.status === "run"`, 30_000);
-    await app.waitFor(`__bh.voice.said.some((l) => l.speaker === "tars" && /bandit/i.test(l.text))`, 30_000);
-    const c = await calls();
-    console.log(`  TARS: ${c.filter((x) => /bandit/i.test(x)).join(" | ")}`);
+    await app.waitFor(`__bh.voice.said.some((l) => l.speaker === "awacs" && /bandit/i.test(l.text))`, 30_000);
+    const c = await app.js<string[]>(`__bh.voice.said.filter((l) => l.speaker === "awacs").map((l) => l.text)`);
+    expect(await app.js<boolean>(`__bh.voice.said.some((l) => l.speaker === "tars" && /bandit/i.test(l.text))`)).toBe(false);
+    console.log(`  DARKSTAR: ${c.filter((x) => /bandit/i.test(x)).join(" | ")}`);
     expect(c.some((x) => /^2 bandits, le plus proche \d{3}, \d+ km, \d+ m, de face$/.test(x))).toBe(true);
     await Bun.sleep(1500);
     await shot("bandits");

@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-15 00:22 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-15 00:24 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous.
@@ -7041,4 +7041,12 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
 - **Preuve** : `tcas` + `aar` + `radar` 35/35 sans tête. L'e2e `aar` n'a pas été relancé après ce changement : la page n'est pas
   vérifiée en jeu pour l'absence d'annonce.
 - **Non tranché** : la signature « RANGER » des annonces sur tous les appareils.
+
+### 2026-11-15 00:24 UTC — L'e2e `copilot` remis à jour : les bandits annoncés par Darkstar depuis I4
+
+- **Constat** : `copilot` 1 échec, il attendait que TARS annonce les bandits. Depuis I4 (16 oct.), avec les rôles radio actifs (par défaut),
+  c'est l'AWACS Darkstar qui les annonce (`threatRole`, `main.ts`), et TARS seulement les missiles qui nous visent : le test était périmé,
+  pas le jeu.
+- **Changement** : le test attend la ligne de Darkstar et vérifie que TARS ne la dit pas ; en-tête et catalogue.
+- **Preuve** : `copilot` 2/2 (3 sautés : TARS en direct), « 2 bandits, le plus proche 358, 69 km, 8200 m, de face » de Darkstar.
 
