@@ -91,10 +91,6 @@
   "sleeps": 0,
   "waits": 1
  },
- "f35-sea-trail.e2e.test.ts": {
-  "sleeps": 0,
-  "waits": 2
- },
  "f35-wingmen.e2e.test.ts": {
   "sleeps": 1,
   "waits": 1
@@ -177,7 +173,7 @@
  },
  "moon-telescope.e2e.test.ts": {
   "sleeps": 1,
-  "waits": 1
+  "waits": 0
  },
  "motion-quality.e2e.test.ts": {
   "sleeps": 0,
@@ -372,10 +368,6 @@
   "waits": 3
  },
  "terrain-raster.e2e.test.ts": {
-  "sleeps": 0,
-  "waits": 1
- },
- "voyage-prewarm.e2e.test.ts": {
   "sleeps": 0,
   "waits": 1
  },

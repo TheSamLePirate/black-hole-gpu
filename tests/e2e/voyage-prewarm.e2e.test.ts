@@ -25,7 +25,7 @@ test.skipIf(!E2E)(
       );
       // (the Earth's own kernels, cold under the nudge, compiled before the voyage: the queue empty at its start)
       await app.settled();
-      await app.waitFor(`__bh.renderer.compilesPending === 0`, 240_000);
+      await app.waitFor(`__bh.renderer.compilesPending === 0`, 120_000);
       await app.press("F3", "F3");
       await app.waitFor(`__bh.camera.spectating`, 10_000);
       await app.js(`(() => { __bh.camera.viewController().s.target = "jupiter"; __bh.settings.target = "jupiter"; return 1; })()`);

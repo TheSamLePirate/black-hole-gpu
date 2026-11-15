@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-15 09:19 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-15 09:24 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous.
@@ -7626,4 +7626,10 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
 - Lecture : les deux mesures du 14 (57,2 / 57,1 ms, commit non noté) précèdent les lots de la session du rendu de cette nuit. L'écart n'est
   **pas** un A/B : ce n'est ni le même commit, ni l'heure de la nuit. Pas encore de base (il en faut 3 nuits) ; la première alerte possible
   viendra après trois nuits.
+
+### 2026-11-15 09:24 UTC — QA-09 : six attentes de préparation du moteur ramenées à 120 s (mesurées bien en dessous)
+
+- `moon-telescope:38` (600 s, 21 s mesurées), `f35-sea-trail:36/55/58/63` (300 s, 0 à 59 s), `voyage-prewarm:28` (240 s, 0 s) : à 120 s. Ce sont des
+  compilations et des préparations, plus lentes sur le mini que sur ce Mac : 120 s et non le double du temps mesuré. Relancés ici : 1/1 chacun.
+  Garde : 95 → 91 attentes de plus de 120 s.
 

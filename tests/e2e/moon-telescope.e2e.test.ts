@@ -35,7 +35,7 @@ test.skipIf(!E2E)(
       if (c.jetModes.alt === null) c.jetToggle("ap"); if (c.jetModes.spd === null) c.jetToggle("athr");
       if (c.jetModes.spd !== null) c.jetModes.spd = 130; __bh.settings.target = "moon"; return 1; })()`);
     await app
-      .waitFor(`__bh.renderer.rasterLiteActive && __bh.renderer.variantQueue.pending === 0 && __bh.renderer.discsDrawn > 0`, 600_000)
+      .waitFor(`__bh.renderer.rasterLiteActive && __bh.renderer.variantQueue.pending === 0 && __bh.renderer.discsDrawn > 0`, 120_000)
       .catch(() => console.warn("  raster kernels not all in"));
     // (the view on the Moon)
     if (!(await app.js<boolean>(`__bh.settings.lookAt`))) await app.press("KeyC");
