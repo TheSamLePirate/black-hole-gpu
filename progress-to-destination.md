@@ -7578,7 +7578,8 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   GRAPHICS-PIPELINE, E2E-CATALOGUE, PLAN-J5 §3 et §5.
 - Preuves : statiques (tsc, biome, `check-wgsl` 84/84, tests des noyaux) ; le chemin gardé est celui mesuré (−7,4 ms).
 - Limites : la cible de 40 ms du mini n'est pas atteinte (~48 ms) ; aucune voie sans perte d'image au-dessus de 1 ms connue à ce jour.
-- Suite : J0 de contrôle ; la reconstruction des pixels laissés (pour J5-6) à reprendre avec un témoin positif.
+- Mesuré ensuite (kerr-mini, e83549c0, J0 vol) : GPU p50 49,7 ms, 20,1 images/s — pas de régression (48–52 selon les passages du jour).
+- Suite : la reconstruction des pixels laissés (pour J5-6) à reprendre avec un témoin positif.
 
 ### 2026-11-15 08:35 UTC — Décisions de Sam (15 nov.) sur l'audit en attente : QA-03, QA-06, NET-31, QA-23
 
