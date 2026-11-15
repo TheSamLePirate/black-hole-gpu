@@ -2,7 +2,8 @@
 // plan's destination, else the nearest ahead (±60° of the track), else the nearest —, then its end and approach by a score said in
 // clear, what a controller would give:
 //
-// 1. the wind: a tail wind over 10 kt, a cross wind over the craft's limit — out; from 5 kt, the end into the wind first;
+// 1. the wind: a tail wind over 10 kt, a cross wind over the craft's limit — out; from 5 kt, the end into the wind first; a built
+//    approach whose glideslope is not clear of the relief — out (Nice's 22R over Mont Agel's slopes: 15 Nov 2026);
 // 2. the aid: an ILS (its category higher first), then a localizer (LOC, LDA, SDF, IGS), then the built approach;
 // 3. the runway's length: a tight one (less than 300 m past the craft's least) paid for;
 // 4. the way in: the path to the approach's IF and the turn to it — at equal wind and aid, the end « in line » wins.
@@ -68,7 +69,14 @@ function aidScore(a: Approach): number {
  * The approach the field's list gives the asker: the best of those not out, or — every one out — the least bad one, said
  * (its reason first). Null: no approach at all.
  */
-export function chooseApproach(f: Airfield, list: readonly Approach[], asker: Asker, wind: Wind): Choice | null {
+export function chooseApproach(
+  f: Airfield,
+  list: readonly Approach[],
+  asker: Asker,
+  wind: Wind,
+  /** a built approach's glideslope under the clearance asked over the relief (game/ils.ts glideClearance « thin ») */
+  thin: (a: Approach) => boolean = () => false,
+): Choice | null {
   if (!list.length) return null;
   const windy = wind.spd >= CHOICE.windFrom;
   const table: Scored[] = list.map((a) => {
@@ -88,6 +96,8 @@ export function chooseApproach(f: Airfield, list: readonly Approach[], asker: As
     else if (rw && asker.paved && rw.surface !== "paved") out = "surface";
     else if (head < -CHOICE.tailMax) out = "tail wind";
     else if (cross > asker.xwind) out = "cross wind";
+    // (a real approach is published clear of its obstacles: only a built one is checked — on the relief known)
+    else if (a.source === "built" && thin(a)) out = "relief";
     // (a tight runway paid for: its margin past the craft's least counted up to 300 m — beyond, the way in decides)
     const margin = rw ? Math.min(Math.max(rw.len - asker.minLen, 0), 300) / 30 : 0;
     const score = (windy ? head * 4 : 0) + aidScore(a) + margin - (a.approx ? 5 : 0) - pathKm * 0.6;

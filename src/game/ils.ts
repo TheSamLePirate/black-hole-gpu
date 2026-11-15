@@ -7,6 +7,7 @@
 // arrival's and the departure's fixes for a flight plan. Pure: the craft's state in, what to fly out.
 
 import { type Racetrack, holdRadius, racetrackHeading } from "./racetrack";
+import { floorAt, followJoin, type JoinPlan } from "./approach-plan";
 
 const D = Math.PI / 180;
 const R_EARTH = 6_371_008.8;
@@ -149,6 +150,10 @@ export interface IlsRun {
   vs?: number;
   /** the touchdown: where along, across, its sink [m/s] */
   touch?: { along: number; across: number; vs: number };
+  /** the join planned (game/approach-plan.ts — PLAN-APPROCHES AP2): its points, the one flown to; `replan` asked (a missed
+   *  approach, round again) — the controller plans it, with the ground */
+  join?: { plan: JoinPlan; i: number };
+  replan?: boolean;
 }
 
 export const newIlsRun = (rwy: IlsRunway, hold = 0, base = false): IlsRun => ({
@@ -216,6 +221,9 @@ export function ilsStep(
     // (climb straight ahead to 600 m over the field, then round again: the initial fix)
     if (r.h > 600) {
       R.phase = "toIaf";
+      // (round again by a new join from where the missed approach left us — not the fixed initial fix ahead)
+      R.join = undefined;
+      R.replan = true;
       R.loc = R.gs = false;
       R.said.delete("Localizer captured");
       R.said.delete("Glideslope captured");
@@ -252,6 +260,28 @@ export function ilsStep(
   }
   // the initial fix, its hold
   const iafH = Math.max(gsHeight(-ILS.iaf), 600);
+  // the join planned (PLAN-APPROCHES AP2): its points followed — a downwind, a base, or straight in at 30° — to the final; the
+  // localizer intercepted as before once on its last leg (or crossed heading in), or established already
+  if (R.phase === "toIaf" && R.join && R.hold <= 0) {
+    const J = R.join;
+    const headingIn = Math.cos(wrap(own.trk - crs)) > 0.3;
+    const established =
+      r.along < -1500 && Math.abs(r.across) < 300 && Math.cos(wrap(own.trk - crs)) > 0.96 && r.gsIn && Math.abs(r.gs) < 1.5;
+    const lastLeg = J.i >= J.plan.pts.length - 1;
+    const f = followJoin(J.plan, J.i, W, own);
+    J.i = f.i;
+    if (
+      established ||
+      f.i >= J.plan.pts.length ||
+      (lastLeg && r.locIn && r.along < -ILS.faf - 2500 && Math.abs(r.across) < 6000 && headingIn)
+    )
+      R.phase = "intercept";
+    else {
+      const gamma = clamp(Math.atan2(f.alt - own.alt, Math.max(f.dist, 3000)), -6 * D, 8 * D);
+      const toJoin = Math.hypot(r.along + 16_000, r.across);
+      return { gamma, bank: steer(f.crs), spd: toJoin > 12_000 ? 160 : 130, gear: false, flaps: 0 };
+    }
+  }
   if (R.phase === "toIaf" || R.phase === "hold") {
     // (on the localizer's beam already, far enough, heading roughly down the course: intercepted from here)
     const headingIn = Math.cos(wrap(own.trk - crs)) > 0.3;
@@ -310,16 +340,20 @@ export function ilsStep(
     const above = R.loc && r.along < 0 && r.h > gsHeight(r.along) + 30;
     // (else, inside the initial fix: just under the path where we are — met from below, as an approach is flown —;
     // farther: the initial fix's height — never the height the approach began at, 1 300 m kept down the final)
-    const hHold = above
-      ? Math.max(gsHeight(r.along) - 40, 120)
-      : r.along > -ILS.iaf
-        ? Math.max(Math.min(gsHeight(r.along) - 30, iafH), 150)
-        : iafH;
+    // (and never under the join's step-down until the glideslope is captured: a ridge under the localizer's outer part held
+    // over — PLAN-APPROCHES AP2; Nice's built 22R from the north-east went 125 m over Mont Agel's slopes before)
+    const hHold = Math.max(
+      above ? Math.max(gsHeight(r.along) - 40, 120) : r.along > -ILS.iaf ? Math.max(Math.min(gsHeight(r.along) - 30, iafH), 150) : iafH,
+      R.join ? floorAt(R.join.plan, r.along) - W.elev : Number.NEGATIVE_INFINITY,
+    );
     // (the glideslope captured from below — or, established inside the final fix already, within a dot of it either
-    // way: placed on a short final a little low, it went round at once)
+    // way: placed on a short final a little low, it went round at once) — never where the step-down is over the slope: the
+    // slope there under a ridge, held over it until past)
+    const underFloor = !!R.join && floorAt(R.join.plan, r.along) > W.elev + gsHeight(r.along);
     if (
       R.loc &&
       r.gsIn &&
+      !underFloor &&
       (r.gs <= 0.05 || (r.along > -ILS.faf - 2000 && Math.abs(r.gs) < 1.2) || (r.h - gsHeight(r.along) < 15 && r.gs < 0.4))
     ) {
       R.gs = true;

@@ -109,3 +109,12 @@ remplace « la plus longue, face au vent ». `apprendre-avions` revolé en entie
   avait cassé son train lors d'un premier essai), 20/20, toucher à 666 m, 0,7 m de l'axe.
 La page `apprendre-avions.html` dit encore « l'approche ILS du Bourget » sans piste : vraie.
 
+
+## 2026-11-15 — PLAN-APPROCHES AP2 : la jonction planifiée, la leçon 7 revolée
+
+L'ILS ne vole plus droit vers un point initial fixe à 18,5 km : il planifie sa jonction (dans l'axe depuis l'arrière de la
+finale, sinon vent arrière à 6 km de son côté puis base ; 300 m sur le relief). La recette du cours ne change pas (`ilsStart`),
+son comportement si : `apprendre-avions` revolé **7/7** — leçon 7 (Edwards, 12 km dans l'axe) ILS 23L 20/20, toucher à 270 m,
+0,5 m de l'axe ; leçon 10 (A320, Le Bourget) ILS 07 20/20, 666 m. La page et VOL-AVIONS décrivent la jonction (le schéma dit
+« jonction 16 km » au lieu de « IAF 18,5 km »). Les départs de loin sont vérifiés par `approach-join` (Nice, 4/4) et sans
+navigateur à Edwards (8/8), pas par le cours.

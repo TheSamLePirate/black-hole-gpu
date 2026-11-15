@@ -325,7 +325,12 @@ export const LESSONS: Lesson[] = [
     axes: { x: "To the threshold", y: "Height" },
     path: ilsPath(),
     steps: [
-      { name: "Initial fix", detail: "18.5 km out on the axis, at the glideslope's height or above — a hold there if asked.", at: 0 },
+      {
+        name: "Joining the final",
+        detail:
+          "Straight in from behind the final; else a downwind 6 km off on your side, then a base — never over the field. Each leg 300 m over the relief; a hold at the initial fix if asked.",
+        at: 0,
+      },
       {
         name: "Localizer",
         detail: "Intercepted at 30–45°, led as the needle moves: wings level as it centres.",

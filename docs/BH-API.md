@@ -449,7 +449,15 @@ LDA/SDF/IGS, « C… » built), with its generation `approachGen` counted at eac
   (`loc { lat, lon, crs, freq [kHz], ident, cat, range }`, `gs { …, angle }`, `dme`, `markers`) then the built one — `final`,
   `transitions`, `missed` legs (ARINC 424 types, heights over the sea), `dh { m, why }`.
 
-*Used in:* `approach-auto.e2e.test.ts`, `apprendre-avions.e2e.test.ts` (through `ilsStart`).
+The join (PLAN-APPROCHES AP2, `game/approach-plan.ts`): planned at the engagement, and again after a missed approach, in
+`camera.ilsRun.join = { plan: { entry: "straight" | "vectors", pts: [{ name: "INT" | "DW" | "BASE" | "JOIN", x, y, lat, lon, alt }],
+msa, floors: [{ x, m }] }, i }` — `x`, `y` the runway's frame [m] (along the final from the threshold, across it), `alt` and `m`
+over the sea; `i` the point flown to. Straight in from behind the final (on its line: no point, the localizer intercepted at once);
+else a downwind 6 km off the final on the craft's side, out to 24 km, a base to the join 16 km out. Each point ≥ its legs' ground
++ 300 m; `floors` the step-down held until the glideslope is captured (the slope not captured where it is under it). A built
+approach whose slope is « thin » over the relief is out of the choice (`choice.table[].out === "relief"`).
+
+*Used in:* `approach-auto.e2e.test.ts`, `approach-join.e2e.test.ts`, `apprendre-avions.e2e.test.ts` (through `ilsStart`).
 
 On the A320 the same call flies its FMGC (`camera.a320Approach`, `controller/a320ap.ts`), state in `camera.a320App`:
 - the ILS is tuned on that end;

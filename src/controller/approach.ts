@@ -6,11 +6,13 @@
 // (Its methods, out of controls.ts: installed on its prototype — `this` the controller.)
 
 import { type Asker, type Choice, chooseApproach, chooseField, type Wind } from "../game/approach-choice";
-import { type IlsRunway, runwayId } from "../game/ils";
+import { glideClearance, type IlsRunway, runwayId } from "../game/ils";
 import { RUNWAY_LENGTH, reciprocal, type Site, SITES } from "../game/sites";
 import { isAircraft } from "../vessels";
 import { fleet } from "../fleet";
 import { t, tf } from "../i18n";
+import { geoidDeg } from "../system/geoid";
+import { bodyFixedOf, groundRelief } from "../system/our-surface";
 import { daysOf } from "../system/solar";
 import { weatherAt, windFromAt } from "../weather";
 import { type Approach, approachesFor, approachTileIn, loadApproachTile } from "../world/approaches";
@@ -263,30 +265,39 @@ function approachResolve(
   else if (runway) {
     list = list.filter((x) => endOf(x.rwy) === endOf(runway));
     if (!list.length) return { say: tf("ILS: no runway {0} at {1}", runway, f.icao || f.ident) };
-    choice = chooseApproach(f, list, asker, windAt(this, f));
+    choice = chooseApproach(f, list, asker, windAt(this, f), thinOver(f));
     a = choice?.a;
   } else {
-    choice = chooseApproach(f, list, asker, windAt(this, f));
+    choice = chooseApproach(f, list, asker, windAt(this, f), thinOver(f));
     a = choice?.a;
   }
   if (!a) return { say: tf("ILS: no runway at {0}", f.icao || f.ident) };
-  const rw = f.runways.find((r) => r.le === a.rwy || r.he === a.rwy);
   const resolved: ApproachResolved = { field: f, approach: a, fieldWhy, choice, gen: this.approachGen };
   this.approachLast = resolved;
+  return { resolved, W: runwayOfApproach(f, a) };
+}
+
+/** The approach's runway frame for the ILS (its threshold, final course, level, the runway's length). */
+function runwayOfApproach(f: Airfield, a: Approach): IlsRunway {
+  const rw = f.runways.find((r) => r.le === a.rwy || r.he === a.rwy);
   return {
-    resolved,
-    W: {
-      name: f.name,
-      icao: f.icao || f.ident,
-      lat: a.thr.lat,
-      lon: a.thr.lon,
-      hdg: a.crs,
-      elev: a.thr.elev,
-      len: rw?.len ?? 2500,
-      des: a.rwy,
-    },
+    name: f.name,
+    icao: f.icao || f.ident,
+    lat: a.thr.lat,
+    lon: a.thr.lon,
+    hdg: a.crs,
+    elev: a.thr.elev,
+    len: rw?.len ?? 2500,
+    des: a.rwy,
   };
 }
+
+/** The ground's height over the sea at a place [m] (the relief over the ellipsoid less the geoid; the sea 0). */
+export const groundMsl = (lat: number, lon: number) =>
+  Math.max(groundRelief("earth", bodyFixedOf("earth", lat, lon, 0)) - geoidDeg(lat, lon), 0);
+
+/** A field's built approach whose glideslope is not clear of the relief known (game/ils.ts glideClearance « thin »). */
+const thinOver = (f: Airfield) => (a: Approach) => glideClearance(runwayOfApproach(f, a), groundMsl).thin;
 
 /** The resolution's reason said: « LFML ILS 31R — head wind 6 m/s, CAT I », « LFTH 23 built — the nearest ahead ». */
 export function sayResolved(r: ApproachResolved, units: { fSpd: (v: number) => string }): string {

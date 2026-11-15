@@ -1,6 +1,11 @@
 # Plan — les approches et les pistes, AAA (pilote, crew, roue)
 
-**État (2026-11-15) : AP0a et AP1 faits.** AP0a : nav.dat lié à nos pistes, `world/approaches.ts`, une approche à chaque extrémité.
+**État (2026-11-15) : AP0a, AP1 et AP2 faits.** AP2 : la jonction planifiée (`game/approach-plan.ts`) — dans l'axe depuis
+l'arrière de la finale, sinon vent arrière à 6 km du côté de l'avion puis base vers la finale à 16 km ; chaque branche à 300 m sur le
+relief, des paliers jusqu'à la capture de la pente ; replanifiée après une remise de gaz ; une approche construite dont la pente rase le
+relief écartée du choix (« relief »). Reste d'AP2 : les antennes réelles du LOC/GS (le LOC est encore placé au-delà du seuil opposé) —
+reporté à AP3 avec le RAD NAV. Vu à l'e2e, pour AP7 : la boîte « RWY » du HUD lit le site du jeu le plus proche (« RWY 23 · Nice »
+pendant une 22R), pas l'approche choisie. AP0a : nav.dat lié à nos pistes, `world/approaches.ts`, une approche à chaque extrémité.
 AP1 : l'état « approche choisie » (`controller/approach.ts`, sauvé avec le vol), `approachSelect` vérifié, le choix automatique
 (`game/approach-choice.ts` : le vent, l'aide, une piste trop juste, le sens d'arrivée ; le terrain devant), l'ILS du F-35 et le FMGC de
 l'A320 qui le lisent, le plan de vol qui garde sa piste, TARS (`list`, `select`, `auto`, `state`) et `__bh`. **AP0b** (le CIFP de la
@@ -302,7 +307,7 @@ captures montrées dans T3, ses docs, une entrée au journal.
 |---|---|---|
 | **AP0 — données** (AP0a fait le 15 nov. : nav.dat ; AP0b : le CIFP, après AP2) | Accepter l'accord de téléchargement du CIFP (domaine public, §3) ; chercher une source libre plus récente que nav.dat 2013 ; `scripts/build-approaches.ts` (nav.dat : LOC/GS/DME/balises ; CIFP : PF/PI/PG/PC/EA/D) ; rapprochement géométrique (§3) ; tuiles `assets/approaches/v1` ; rapport de couverture (rattachés, renumérotés, écartés, segments non convertis) ; CREDITS/ASSETS ; `world/approaches.ts` + tests purs (LFML, LFPG, KSFO, BIKF renumérotée, EDDT écarté, une LDA) | Rapport chiffré ; tests verts ; taille mesurée |
 | **AP1 — choix et état** (fait le 15 nov.) | `ApproachSel` dans la simulation, `approachSelect`, choix auto (§4.3) avec sa raison, approche construite pour toute extrémité, sauvegarde, TARS et `__bh` ; F-35 et A320 lisent la sélection ; le plan de vol fige son approche | Test pur des cas (4 quadrants × vent nul/fort × 1/2/3 pistes) ; e2e `approach-auto` : enclenché de 4 côtés de Toulon-Hyères, l'extrémité attendue est prise |
-| **AP2 — planificateur + F-35** | `game/approach-plan.ts` (entrées, profil, relief, replanification) ; `ilsStep` en suiveur de segments ; LOC/GS sur les antennes réelles | e2e `approach-join` F-35 : 4 départs à 30–50 km, haut et bas, établi avant le FAF, pas de demi-tour à l'IAF, au-dessus du relief (Nice ou Chambéry pour le relief), note ≥ actuelle |
+| **AP2 — planificateur + F-35** (fait le 15 nov.) | `game/approach-plan.ts` (entrées, profil, relief, replanification) ; `ilsStep` en suiveur de segments ; LOC/GS sur les antennes réelles | e2e `approach-join` F-35 : 4 départs à 30–50 km, haut et bas, établi avant le FAF, pas de demi-tour à l'IAF, au-dessus du relief (Nice ou Chambéry pour le relief), note ≥ actuelle |
 | **AP3 — A320** | FMGC en NAV sur le chemin, APPR à l'IF ; MCDU ARR/VIA ; RAD NAV réel ; ND avec l'approche ; télémétrie A320 | e2e `a320-approach-join` mêmes départs ; `a320-mcdu` étendu |
 | **AP4 — carte tactique** | Fiche enrichie, sélection graphique (extrémité, approche), tracé (plume, fixes, chemin, remise de gaz, attente), profil vertical | e2e `jetmap-approach` : clic LFML → 31R ILS → armer → tracé et AP sur la bonne ; captures |
 | **AP5 — radar, TSD, ND** | Terrains cliquables au radar du HUD et à la TSD ; approche tracée ; page ILS de la TSD | e2e `radar-approach` : sélection par le radar ; A/B de coût ±1 % |

@@ -409,13 +409,13 @@ c.apSet({ ap: true, athr: true, alt: 3000, hdg: 90 * Math.PI / 180, spd: 200 });
 <line x1="20" y1="190" x2="620" y2="190" class="st-line" stroke-width="2"/><rect x="560" y="186" width="60" height="8" fill="var(--line)"/>
 <path d="M30 60 H120 L560 190" stroke="var(--accent)" stroke-width="3" fill="none"/>
 <g font-size="12" text-anchor="middle">
-<circle cx="70" cy="60" r="5" fill="var(--accent)"/><text x="70" y="48">IAF 18,5 km</text>
+<circle cx="70" cy="60" r="5" fill="var(--accent)"/><text x="70" y="48">jonction 16 km</text>
 <circle cx="120" cy="60" r="5" fill="var(--accent)"/><text x="230" y="58" text-anchor="start">← pente rejointe par en dessous</text>
 <circle cx="330" cy="122" r="5" fill="var(--warn)"/><text x="340" y="108" text-anchor="start">FAF 9,3 km : train, volets, stable</text>
 <circle cx="510" cy="176" r="5" fill="var(--bad)"/><text x="520" y="160" text-anchor="start">minimums 60 m</text>
 <text x="560" y="214">arrondi 14 m</text></g></svg>
 <figcaption>L'ILS : un alignement (localizer) et une pente de 3° (glideslope). Au HUD, les points de pente à droite, ceux d'alignement en bas, des losanges magenta, la phase (IAF, LOC, LOC GS, FLARE, ROLL, GA).</figcaption></figure>
-<p><b>Conditions</b> : un avion en l'air ; une piste nommée à toute distance, sinon la plus proche à moins de 150 km ; l'approche coupe l'autopilote en cours et vole elle-même jusqu'au point initial, l'alignement, la pente, l'arrondi ; elle refuse une pente qui rentre dans le relief.</p>
+<p><b>Conditions</b> : un avion en l'air ; une piste nommée à toute distance, sinon le terrain choisi, la destination du plan de vol, ou le plus proche <b>devant</b> à moins de 150 km. L'extrémité est choisie comme un contrôleur le ferait : le vent, l'aide réelle (ILS), la longueur, le sens d'arrivée. L'approche coupe l'autopilote en cours et vole elle-même la <b>jonction</b> — dans l'axe si l'avion arrive par l'arrière de la finale, sinon un vent arrière à 6 km de son côté puis une étape de base, jamais au-dessus du terrain, chaque branche à 300 m au moins au-dessus du relief —, puis l'alignement, la pente, l'arrondi ; elle refuse une pente qui rentre dans le relief.</p>
 <p><b>Au clavier</b> : Tab › Navigation › <b>Approche ILS</b> (la piste face au vent, ou une piste choisie dans la sous-roue). Toucher le manche ou la manette repasse en manuel. Stable aux minimums, on continue ; sinon <b>remise de gaz</b> droit devant.</p>
 <details><summary>Par <code>__bh</code></summary>
 <pre>const c = __bh.camera;

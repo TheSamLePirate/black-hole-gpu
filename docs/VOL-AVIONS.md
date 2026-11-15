@@ -348,7 +348,8 @@ puis lire le journal : `__bh.game.log.events.filter(e => e.kind === "pilot")` co
 
 | Point | Chiffres |
 |---|---|
-| Point d'approche initiale (IAF) | **18,5 km** dans l'axe, en palier à la hauteur de la pente à ce point (≈ 1 000 m sol) |
+| Jonction (depuis le 15 nov. 2026) | **dans l'axe** si l'avion arrive par l'arrière de la finale ; sinon un **guidage** : vent arrière à **6 km** de l'axe, de son côté, jusqu'à 24 km du seuil, puis une étape de base vers la finale à **16 km** — jamais au-dessus du terrain, jamais de demi-tour à un point fixe. Chaque branche à **300 m** au moins au-dessus du relief ; la jonction sous la pente (≈ 800 m sol) ; un palier au-dessus d'une crête sous l'alignement, la pente rejointe après |
+| Point d'approche initiale (IAF) | **18,5 km** dans l'axe : l'attente s'y fait quand elle est demandée (`{ hold }`) |
 | Alignement | intercepté à 30–45°, ailes à plat quand l'aiguille se centre |
 | Pente | rejointe **en palier, par en dessous** : la descente commence quand le losange se centre (~4 m/s à 85 m/s) — jamais en plongeant depuis au-dessus |
 | Point d'approche finale (FAF) | **9,3 km** : train, volets, vitesse, stable — aiguilles à moins d'un point |
@@ -363,7 +364,10 @@ route) à moins de 150 km. L'extrémité et l'approche sont choisies comme un co
 (A320 : 2 000 m) ; enfin le **sens d'arrivée** — par vent calme, l'extrémité dont l'approche vient du côté de l'avion (venu du
 nord à Toulon-Hyères : la 13 ; de l'est : la 23). Le message dit le choix et sa raison (« LFML ILS 31R — CAT I »). L'approche coupe la formation, l'interception, le STOVL et l'autopilote en cours, puis vole
 elle-même (`ilsRun.phase` : `toIaf`, `intercept`, `final`, `flare`, `rollout`, `missed`, `done` ; et `base`, `hold`),
-sort le train et les volets, coupe la manette à l'arrondi. Elle refuse une pente qui rentre dans le relief.
+sort le train et les volets, coupe la manette à l'arrondi. Elle refuse une pente qui rentre dans le relief ; le choix
+automatique écarte une approche **construite** dont la pente rase le relief (« relief » : la 22R construite de Nice, au-dessus des
+pentes du mont Agel). Le plan de jonction se lit dans `ilsRun.join.plan` (`entry` : `straight` ou `vectors`, `pts` : `INT`, `DW`,
+`BASE`, `JOIN` avec leur hauteur au-dessus de la mer, `floors` : les paliers jusqu'à la capture de la pente).
 
 **Au clavier** : Tab › Navigation › **Approche ILS** (le choix de la piste dans la sous-roue). Le HUD montre en vert
 les points de pente à droite, ceux de l'alignement en bas, des losanges magenta, et la phase (`IAF`, `LOC`, `LOC GS`,

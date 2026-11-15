@@ -273,6 +273,14 @@ export const CREDITS: CreditSection[] = [
         url: "https://ourairports.com/data/",
       },
       {
+        what: {
+          fr: "Les ILS du monde (localizers, glides, DME, balises)",
+          en: "The world's ILS (localizers, glides, DME, marker beacons)",
+        },
+        who: "FlightGear's nav.dat, cycle 2013.10, © Robin A. Peel · GNU GPL v2 or later — tied to the runways by scripts/build-approaches.ts. Not for real navigation",
+        url: "https://sourceforge.net/p/flightgear/fgdata/ci/next/tree/Navaids/",
+      },
+      {
         what: { fr: "Les adresses", en: "The addresses" },
         who: "Photon (komoot) · Nominatim — OpenStreetMap",
         url: "https://photon.komoot.io",

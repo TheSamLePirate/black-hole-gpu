@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-15 15:09 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-15 15:45 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous.
@@ -70,6 +70,7 @@ ouverts, sous 1 ms) ; J3 au stade du plan.**
 | Audit vagues 3–4 (1feb2f7f) | 4.8 découper `main()` | **fait** (accord de Sam : par petits lots) : lot 1 la persistance, lot 2 qui tient le vol (`session.ts`), lots 3–4 les étapes gardées (`frame.ts`, AR-03), lot 5 l'ordre §19.5 (AR-04), lot 6 `craft-feed.ts`, lot 7 `governor.ts` (confié par la session du rendu) — **fait** : les quatre découpes d'AR-12 (session, frame, gouverneur, poses de l'appareil) |
 | Audit vagues 3–4 (1feb2f7f) | 4.3 séparer `Settings` | **fait** : garde statique des réglages (AR-21) ; `ViewPose` et `SimState` figés une fois par image (AR-07, `view-pose.ts`) ; le renderer les lit (session du rendu, 77721acf) |
 | Audit vague 6 hors rendu (1feb2f7f) | QA-16, QA-18, AR-17, AR-18, réseau RD4/RD5, FX-18, FX-17, FX-07, QA-11 ; puis les FX hors vague : FX-08, FX-12, FX-14, FX-19 (tendance), FX-22, FX-13, FX-20 (FX-11 et FX-15 déjà réglés le 11 nov., FX-16 tranché par Sam) | **faits** (accord de Sam : « un autre lot d'audit hors rendu ») ; FX-17 en 3 lots ; FX-07 l'A320 à la manette ; QA-11 le catalogue 446/446 gardé ; FX-08 V par les vues de l'appareil seul ; FX-12 les touches collées ; FX-14 chaque appareil sa configuration ; FX-19 la tendance de vitesse sur le temps du vol ; FX-13 ⇧M au vol d'abord, FX-20 sans dégâts pour ce vol seulement (choix de Sam) ; e2e `report` 4/4 (sans les états périmés de la galerie) ; ensuite les autres FX hors vague ( FX-19 la fraîcheur des écrans, à mesurer ; FX-21 des fonctions à finir) |
+| PLAN-APPROCHES (1feb2f7f) | AP0a, AP1, AP2 | **faits (15 nov.)** : nav.dat lié aux pistes ; l'approche choisie (état, choix auto par vent, aide, longueur, sens d'arrivée) ; la jonction planifiée (dans l'axe, ou vent arrière + base, jamais au-dessus du terrain, 300 m sur le relief, paliers jusqu'à la pente) — e2e `approach-auto` 5/5, `approach-join` 4/4 (Nice), sans navigateur 8/8 à Edwards. Suite : AP0b (CIFP), AP3 (A320) |
 
 **Fermé récemment** : J2 (13 nov., ΔGPU nul, chemin vers §8 écrit) ; J2-C BC7 étudiée puis **rangée** (Sam : « ne pas le faire maintenant »).
 
@@ -7800,3 +7801,33 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
 - **Limites** : la rejointe n'est pas encore planifiée — toujours `toIaf` (AP2) ; les approches CIFP (AP0b) ; rien d'affiché encore sur la
   carte ou le radar (AP4–AP5).
 
+
+### 2026-11-15 15:52 UTC — PLAN-APPROCHES AP2 : la jonction planifiée — jamais au-dessus du terrain, au-dessus du relief
+
+- **Contribution** : §19 (l'atterrissage fiable de loin, la même jonction pour le pilote, le crew et TARS) ; PLAN-APPROCHES AP2,
+  la seconde cause du §2.2 : un point initial fixe dans l'axe, rejoint en ligne droite d'où que l'on vienne.
+- **Changements** :
+  - `src/game/approach-plan.ts` (pur) : `planJoin` — dans l'axe depuis l'arrière de la finale (sur la ligne : aucune branche,
+    l'alignement intercepté aussitôt ; sinon un point à 30°) ; ailleurs un guidage : vent arrière à 6 km de l'axe du côté de
+    l'avion jusqu'à 24 km, base vers la jonction à 16 km. Chaque point ≥ le sol de ses branches + 300 m ; des paliers (`floors`)
+    jusqu'à la capture de la pente. `followJoin` : la branche suivie, le virage anticipé (rayon à 30° d'inclinaison).
+  - `src/game/ils.ts` : la phase `toIaf` suit la jonction ; l'interception tient les paliers et ne capture pas la pente là où
+    elle passe dessous ; la remise de gaz replanifie depuis où elle laisse l'avion. `src/controller/ils.ts` planifie au premier pas.
+  - Le choix (`approach-choice.ts`) écarte une approche **construite** dont la pente rase le relief (« relief ») ; `groundMsl`
+    est commun (`controller/approach.ts`).
+  - Le moniteur de la leçon ILS décrit la jonction (EN/FR) ; 15 textes d'AP1 sans français complétés (la garde i18n l'a vu).
+- **Preuve** :
+  - Sans navigateur, Edwards (`tests/approach-join.test.ts`), 4 côtés × haut/bas, 23L imposée : **8/8 posés à 20/20**, établis
+    13–16 km avant le seuil. Même vol sur l'ancien code (HEAD afc8430c) : venant d'au-delà du terrain, passage à **1,1 km** du
+    terrain, remise des gaz, **pas posé en 15 min** (2 départs sur 8, haut et bas) ; le nouveau garde 6 km. Une crête sous l'alignement : survolée à 282 m
+    (consigne 300). Plan : 4 cas purs.
+  - e2e `approach-join` (Nice, relief réel) **4/4** : sud-ouest bas (04R dans l'axe, établi 18,9 km), nord haut (04L guidé, 14,7 km,
+    864 m sol au moins), nord-est haut (22R construite, 18,4 km, 286 m sol au moins), sud-est bas (04R guidé, 14,7 km) — tous 20/20,
+    toucher 533–570 m. **Premier passage : le nord-est descendait à 125 m du relief** (la pente prise par au-dessus avant la crête) :
+    d'où les paliers et la capture retenue.
+  - `apprendre-avions` revolé 7/7 ; `approach-choice` 7/7 ; ILS 6/6 ; i18n, catalogue, attentes verts.
+- **Limites** : le LOC et la pente sont encore placés à nos constantes (antenne au-delà du seuil opposé), pas aux antennes réelles
+  de nav.dat — reporté à AP3 avec le RAD NAV. La boîte « RWY » du HUD lit le site du jeu le plus proche (« RWY 23 · Nice » pendant
+  une 22R) : AP7. Le chemin n'est encore dessiné nulle part (AP4–AP5). La 22R de Nice reste choisie du nord-est : sa pente passe le
+  contrôle (la crête est au-delà de 18,5 km), la jonction la tient au-dessus. L'A320 suit encore son IAF (AP3).
+- **Suite** : AP0b (le CIFP de la FAA), puis AP3 (l'A320 sur le même chemin).

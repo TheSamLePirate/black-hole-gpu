@@ -5,7 +5,7 @@
 // flight plan, and its end: the approach engaged as the plan reaches its runway.
 // (Its methods, out of controls.ts: installed on its prototype — `this` the controller.)
 import { fieldCached, fieldsNear } from "../world/runways";
-import { sayResolved } from "./approach";
+import { groundMsl, sayResolved } from "./approach";
 import { worldRunwaySites, worldSite } from "../world/fieldsite";
 import { worldRunwaysNow } from "../world/runways3d";
 import { approachSpeed } from "../game/trap";
@@ -21,8 +21,7 @@ import {
   newIlsRun,
   runwayId,
 } from "../game/ils";
-import { geoidDeg } from "../system/geoid";
-import { bodyFixedOf, groundRelief } from "../system/our-surface";
+import { planJoin } from "../game/approach-plan";
 import { gcDist } from "../game/flightplan";
 import { landingEnd, RUNWAY_LENGTH, reciprocal, type Site, SITES } from "../game/sites";
 import { fleet } from "../fleet";
@@ -273,7 +272,7 @@ export function syncRunwayLevel(rwy: IlsRunway) {
 /** The glideslope's clearance over the Earth's relief as the physics knows it (its heights over the ellipsoid less the
  *  geoid: over the sea) — game/ils.ts glideClearance. */
 export function glideClearanceOf(W: IlsRunway) {
-  return glideClearance(W, (lat, lon) => Math.max(groundRelief("earth", bodyFixedOf("earth", lat, lon, 0)) - geoidDeg(lat, lon), 0));
+  return glideClearance(W, groundMsl);
 }
 
 /** Cleared out of the hold: the approach begun. */
@@ -303,6 +302,12 @@ function guide(c: CameraController, R: IlsRun) {
   if (!g) return null;
   const dt = memo ? Math.min(Math.max((now - memo.at) * 4.925490947e-6 * c.s.massSolar, 0), 0.25) : 0;
   const onGround = !!(c.rolling || c.ourLanded || (c.gearLast?.contact ?? 0) > 0);
+  // (the join planned from here — PLAN-APPROCHES AP2 —: at the approach's first frame, and again after a missed approach; not
+  // for a hold at the initial fix, nor a visual circuit's base)
+  if (R.phase === "toIaf" && R.hold <= 0 && (!R.join || R.replan)) {
+    R.join = { plan: planJoin(R.rwy, { lat: g.lat, lon: g.lon, alt: g.alt, trk: g.track }, groundMsl), i: 0 };
+    R.replan = false;
+  }
   const out = ilsStep(R, { lat: g.lat, lon: g.lon, alt: g.alt, trk: g.track, gs: g.gs, vs: g.vs, onGround }, vAppOf(), dt);
   memo = { at: now, out };
   if (out?.call) c.onRadio?.(SAY[out.call]?.() ?? out.call);

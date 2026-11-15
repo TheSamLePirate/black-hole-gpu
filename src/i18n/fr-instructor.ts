@@ -51,9 +51,9 @@ export default {
   "ILS approach": "Approche ILS",
   "To a runway in any weather: the localizer's centreline and the 3° glideslope down to the minimums, the flare, the touchdown in the zone.":
     "Vers une piste par tous les temps : l'axe du localizer et le glide à 3° jusqu'aux minimums, l'arrondi, le toucher dans la zone.",
-  "Initial fix": "Point d'approche initiale",
-  "18.5 km out on the axis, at the glideslope's height or above — a hold there if asked.":
-    "À 18,5 km dans l'axe, à la hauteur du glide ou au-dessus — une attente si elle est demandée.",
+  "Joining the final": "Rejoindre la finale",
+  "Straight in from behind the final; else a downwind 6 km off on your side, then a base — never over the field. Each leg 300 m over the relief; a hold at the initial fix if asked.":
+    "Droit dans l'axe depuis l'arrière de la finale ; sinon un vent arrière à 6 km de votre côté, puis une étape de base — jamais au-dessus du terrain. Chaque branche à 300 m au-dessus du relief ; une attente au point initial si elle est demandée.",
   "Intercepted at 30–45°, led as the needle moves: wings level as it centres.":
     "Intercepté à 30–45°, en anticipant le mouvement de l'aiguille : ailes à plat quand elle se centre.",
   "Met from below: the descent begun as the diamond centres — some 4 m/s down at 85 m/s.":

@@ -119,3 +119,22 @@ test("Le Bourget, the A320 (2 000 m): never its 09/27 of 1 854 m — overrun the
     expect(`${brg}: ${c.a.rwy === "27" || c.a.rwy === "09"}`).toBe(`${brg}: false`);
   }
 });
+
+test("a built approach whose slope is not clear of the relief left out (« relief ») — Nice's 22R over Mont Agel, 15 Nov 2026", () => {
+  // (from the east, calm: 23 in line; its slope « thin » over a ridge: 05 taken, 23 said out for the relief)
+  const list = approachesOf(one, []);
+  const thin = (a: { rwy: string }) => a.rwy === "23";
+  const c = chooseApproach(one, list, at(50), calm, thin)!;
+  expect(c.a.rwy).toBe("05");
+  expect(c.table.find((s) => s.a.rwy === "23")!.out).toBe("relief");
+  // (a real approach is published clear: never left out by it)
+  expect(
+    chooseApproach(
+      one,
+      list.map((a) => ({ ...a, source: "navdat" as const })),
+      at(50),
+      calm,
+      thin,
+    )!.a.rwy,
+  ).toBe("23");
+});
