@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-15 17:55 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-15 18:09 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous.
@@ -71,7 +71,7 @@ ouverts, sous 1 ms) ; J3 au stade du plan.**
 | Audit vagues 3–4 (1feb2f7f) | 4.8 découper `main()` | **fait** (accord de Sam : par petits lots) : lot 1 la persistance, lot 2 qui tient le vol (`session.ts`), lots 3–4 les étapes gardées (`frame.ts`, AR-03), lot 5 l'ordre §19.5 (AR-04), lot 6 `craft-feed.ts`, lot 7 `governor.ts` (confié par la session du rendu) — **fait** : les quatre découpes d'AR-12 (session, frame, gouverneur, poses de l'appareil) |
 | Audit vagues 3–4 (1feb2f7f) | 4.3 séparer `Settings` | **fait** : garde statique des réglages (AR-21) ; `ViewPose` et `SimState` figés une fois par image (AR-07, `view-pose.ts`) ; le renderer les lit (session du rendu, 77721acf) |
 | Audit vague 6 hors rendu (1feb2f7f) | QA-16, QA-18, AR-17, AR-18, réseau RD4/RD5, FX-18, FX-17, FX-07, QA-11 ; puis les FX hors vague : FX-08, FX-12, FX-14, FX-19 (tendance), FX-22, FX-13, FX-20 (FX-11 et FX-15 déjà réglés le 11 nov., FX-16 tranché par Sam) | **faits** (accord de Sam : « un autre lot d'audit hors rendu ») ; FX-17 en 3 lots ; FX-07 l'A320 à la manette ; QA-11 le catalogue 446/446 gardé ; FX-08 V par les vues de l'appareil seul ; FX-12 les touches collées ; FX-14 chaque appareil sa configuration ; FX-19 la tendance de vitesse sur le temps du vol ; FX-13 ⇧M au vol d'abord, FX-20 sans dégâts pour ce vol seulement (choix de Sam) ; e2e `report` 4/4 (sans les états périmés de la galerie) ; ensuite les autres FX hors vague ( FX-19 la fraîcheur des écrans, à mesurer ; FX-21 des fonctions à finir) |
-| PLAN-APPROCHES (1feb2f7f) | AP0a, AP1, AP2, AP0b, AP3a, AP3b | **faits (15 nov.)** : nav.dat lié aux pistes ; le CIFP de la FAA (9 568 approches publiées des États-Unis, entières) ; l'approche choisie (état, choix auto par vent, aide, longueur, sens d'arrivée) ; la jonction planifiée (dans l'axe, ou vent arrière + base, jamais au-dessus du terrain, 300 m sur le relief, paliers jusqu'à la pente) — e2e `approach-auto` 5/5, `approach-join` 4/4 (Nice), sans navigateur 8/8 à Edwards. l'A320 vole la même jonction (e2e `a320-approach-join` 4/4). MCDU ARRIVAL/VIA, RAD NAV réel, arrivée publiée volée en NAV (KSFO via ARCHI, 20/20). Suite : AP3c (ND) puis AP4 |
+| PLAN-APPROCHES (1feb2f7f) | AP0a, AP1, AP2, AP0b, AP3 | **faits (15 nov.)** : nav.dat lié aux pistes ; le CIFP de la FAA (9 568 approches publiées des États-Unis, entières) ; l'approche choisie (état, choix auto par vent, aide, longueur, sens d'arrivée) ; la jonction planifiée (dans l'axe, ou vent arrière + base, jamais au-dessus du terrain, 300 m sur le relief, paliers jusqu'à la pente) — e2e `approach-auto` 5/5, `approach-join` 4/4 (Nice), sans navigateur 8/8 à Edwards. l'A320 vole la même jonction (e2e `a320-approach-join` 4/4). MCDU ARRIVAL/VIA, RAD NAV réel, arrivée publiée volée en NAV (KSFO via ARCHI, 20/20). l'approche au ND. Suite : AP4 (carte tactique) |
 
 **Fermé récemment** : J2 (13 nov., ΔGPU nul, chemin vers §8 écrit) ; J2-C BC7 étudiée puis **rangée** (Sam : « ne pas le faire maintenant »).
 
@@ -7995,3 +7995,19 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
 - Limites : un blocage de 84–433 ms à l'arrivée (le noyau de la météo compilé alors) non traité ; `weather-panel` « la couche météo de la
   carte » échoue (un clic masqué, PROBLEMES) ; le parcours sur kerr-mini seulement.
 - Suite : J6-3, se poser puis débarquer.
+
+### 2026-11-15 18:09 UTC — PLAN-APPROCHES AP3c : l'approche sur le ND de l'A320
+
+- **Contribution** : §19 (la lisibilité des instruments : l'approche choisie se voit là où l'équipage la vole) ; PLAN-APPROCHES AP3
+  (« ND avec l'approche »).
+- **Changements** : `a320/du/nd-data.ts` `appr` — l'approche engagée (la résolution de l'ILS), sinon celle de la destination du
+  plan (`approachForField`), recalculée seulement quand ce qui la décide change (le choix lit le relief) ; `a320/du/nd.ts` : la
+  piste (blanc), l'axe de finale sur 10 NM (pointillés blancs), la remise de gaz depuis le seuil (pointillés cyan, comme l'Airbus) ;
+  ROSE LS : le cap et « indicatif fréquence » du localizer réel (au lieu du cap tiré du numéro de piste) ; VOL-AVIONS §4.2.
+- **Preuve** : e2e `a320-approach-join` **4/4** de nouveau (20/20 à Nice) avec l'image du ND une fois établi : 503–537 pixels
+  cyan au centre (la ligne de remise de gaz ; les étiquettes cyan hors de la fenêtre) ; tests A320 (glass, MCDU, approche) 12/12.
+- **Limites** : la remise de gaz construite revient à l'IF, sa ligne repasse donc sur la finale ; le ND ne dessine pas encore les
+  transitions non insérées ni l'attente publiée ; le e2e dure ~10 min (quatre vols complets, au-delà des 1–2 min visés) ; la
+  télémétrie de l'A320 reste (AP6).
+- **Suite** : AP4 — la carte tactique (fiche, sélection graphique, tracé de l'approche, profil vertical).
+

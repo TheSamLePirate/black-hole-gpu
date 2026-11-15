@@ -768,6 +768,10 @@ La loi avion exige le mode `"plane"`, **q > 300 Pa** et aucun maintien.
   toujours nul (ALT CST jamais produit). Vitesse gérée : V2+10 au décollage, 250 kt sous FL100, ECON (indice de coût 30),
   vitesses d'approche par configuration. FCU par code : `spdTurn/Push/Pull`, `hdgTurn…`, `altTurn…`, `vsTurn…`,
   `ap1Toggle`, `athrToggle`, `locToggle`, `apprToggle`… (SPD 100–399 kt, ALT 100–49 000 ft).
+- **ND** (`a320/du/nd.ts`, `nd-data.ts`) : le plan (vert, l'arrivée publiée comprise), les terrains, le trafic, la carte du
+  terrain au sol ; **l'approche** (PLAN-APPROCHES AP3c) — engagée, sinon celle de la destination — : sa piste (blanc), son axe
+  de finale sur 10 NM (pointillés blancs), sa remise de gaz (pointillés cyan) ; en ROSE LS, le cap et l'indicatif/fréquence du
+  localizer réel (« IGWQ 111.70 »), cap vrai.
 - **Systèmes** : les 13 fichiers de systèmes JSBSim de FlightGear (1 102 composants) et le Nasal porté (électricité,
   pneumatique, hydraulique, carburant, ADIRS, APU, feu) sur un même sac de propriétés. Démarrages `a320Start` :
   `cold`, `apu`, `ready` (défaut) ; `air` en vol. Hydraulique : vert, bleu, jaune ; train sur le vert, roue avant et

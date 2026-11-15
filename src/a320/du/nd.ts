@@ -286,6 +286,7 @@ export class Nd extends Display {
   /** the flight plan: its legs green (dashed when LNAV is off), the active leg's "to" white, the others green
    *  diamonds; the airfields' points stars; the constraints (EFIS CSTR) magenta; the waypoints' names */
   private route(ctx: Ctx, F: Frame, X: NdExtra, d: DuData, cstr: boolean, _wpt: boolean) {
+    this.approach(ctx, F, X);
     const W = X.route;
     if (W.length < 1) return;
     const P = W.map((w) => this.xy(F, w.lat, w.lon));
@@ -338,6 +339,48 @@ export class Nd extends Display {
         );
       }
     });
+  }
+
+  /** The approach (PLAN-APPROCHES AP3c): the runway landed on (white), its final course drawn back 10 NM from the threshold
+   *  (white, dashed — where the localizer is met), the missed approach from the threshold (cyan, as the Airbus draws it). */
+  private approach(ctx: Ctx, F: Frame, X: NdExtra) {
+    const A = X.appr;
+    if (!A) return;
+    const [tx, ty] = this.xy(F, A.thr[0], A.thr[1]);
+    const [fx, fy] = this.xy(F, A.far[0], A.far[1]);
+    // (10 NM back along the final: the course's reverse from the threshold, flat offsets — a distance)
+    const back = ((A.crs + 180) * Math.PI) / 180;
+    const k = 10 * 1852;
+    const lat = A.thr[0] + (Math.cos(back) * k) / 111_320;
+    const lon = A.thr[1] + (Math.sin(back) * k) / (111_320 * Math.cos((A.thr[0] * Math.PI) / 180));
+    const [bx, by] = this.xy(F, lat, lon);
+    ctx.strokeStyle = COL.white;
+    ctx.lineWidth = 3;
+    ctx.setLineDash([18, 14]);
+    ctx.beginPath();
+    ctx.moveTo(tx, ty);
+    ctx.lineTo(bx, by);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.lineWidth = 9;
+    ctx.beginPath();
+    ctx.moveTo(tx, ty);
+    ctx.lineTo(fx, fy);
+    ctx.stroke();
+    if (A.missed.length) {
+      ctx.strokeStyle = COL.cyan;
+      ctx.lineWidth = 4;
+      ctx.setLineDash([16, 12]);
+      ctx.beginPath();
+      ctx.moveTo(tx, ty);
+      for (const [la, lo] of A.missed) {
+        const [x, y] = this.xy(F, la, lo);
+        ctx.lineTo(x, y);
+      }
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
+    if (tx > -60 && tx < 1084 && ty > -60 && ty < 1084) text(ctx, `RW${A.rwy}`, tx + 22, ty + 30, 26, COL.white, "left");
   }
 
   /** The airport's map (OANS): its taxiways grey, its runways white, the taxi route left magenta, the stand going
@@ -423,9 +466,11 @@ export class Nd extends Display {
   private ils(ctx: Ctx, F: Frame, d: DuData) {
     const I = d.ils;
     const { cx, cy, R } = F;
-    // (the course: the runway's from its name — "ILS 27 LFPB" — the game's true headings; none: the heading)
+    // (the course: the approach's own — its localizer's, true (PLAN-APPROCHES AP3c) —, else the runway's from its name — "ILS 27
+    // LFPB" — the game's true headings; none: the heading)
+    const A = d.nd?.appr ?? null;
     const m = I ? /ILS (\d\d)/.exec(I.id) : null;
-    const crs = m ? Number(m[1]) * 10 : Math.round(d.heading);
+    const crs = A ? Math.round(A.crs) : m ? Number(m[1]) * 10 : Math.round(d.heading);
     const rel = (crs - d.heading) * D;
     ctx.save();
     ctx.translate(cx, cy);
@@ -487,7 +532,9 @@ export class Nd extends Display {
       ctx.stroke();
     }
     // (the ILS's name, course and DME, at the top right)
-    text(ctx, I ? I.id.replace(/^ILS \d\d[LCR]?\s*/, "ILS ") : "ILS1", 1010, 40, 28, COL.magenta, "right");
+    // (the localizer's identifier and frequency — the real ones of the approach —, else the ILS's name)
+    const label = A?.loc ? `${A.loc.ident} ${A.loc.freq.toFixed(2)}` : I ? I.id.replace(/^ILS \d\d[LCR]?\s*/, "ILS ") : "ILS1";
+    text(ctx, label, 1010, 40, 28, COL.magenta, "right");
     text(ctx, `CRS ${String(((crs % 360) + 360) % 360).padStart(3, "0")}°`, 1010, 76, 28, COL.magenta, "right");
     if (I) text(ctx, `DME ${I.dme.toFixed(1)}`, 1010, 112, 28, COL.magenta, "right");
   }

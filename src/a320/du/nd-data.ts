@@ -56,6 +56,24 @@ export interface NdExtra {
   /** on the ground at an airport whose network is in (controller/a320taxi.ts — Airbus's OANS): its taxiways and
    *  runways within 2.5 km (lat, lon of each end, its kind), the taxi route left, the stand, the next turn's taxiway */
   taxi: NdTaxi | null;
+  appr: NdApproach | null;
+}
+
+/** The approach the arrival flies (PLAN-APPROCHES AP3c): engaged (the ILS's resolution), else the plan's destination's (the
+ *  selection, else the choice seen from the plan's previous point). */
+export interface NdApproach {
+  /** ours (« I28R »), its runway's end, the airfield */
+  id: string;
+  rwy: string;
+  field: string;
+  /** the threshold and the far end [°], the final course [° true] */
+  thr: [number, number];
+  far: [number, number];
+  crs: number;
+  /** the localizer: its identifier, frequency [MHz], category */
+  loc: { ident: string; freq: number; cat?: string } | null;
+  /** the missed approach's placed points from the threshold [°] */
+  missed: [number, number][];
 }
 
 export interface NdTaxi {
@@ -140,5 +158,46 @@ function build(c: CameraController): NdExtra | null {
         adviseKt: T.cue?.adviseKt ?? 0,
       }
     : null;
-  return { route, active, dist, brg, ete, nav: N.on.l, fields, traffic, taxi };
+  return { route, active, dist, brg, ete, nav: N.on.l, fields, traffic, taxi, appr: approachOf(c) };
+}
+
+/** The approach shown (see NdApproach) — worked out again only when what decides it changes (the choice reads the relief). */
+let apprMemo: { key: string; v: NdApproach | null } = { key: "", v: null };
+function approachOf(c: CameraController): NdApproach | null {
+  const W = c.nav.route.wps;
+  const dest = W.at(-1);
+  const engaged = (c.a320App || c.ilsRun) && c.approachLast ? c.approachLast : null;
+  const code = dest?.field ? (dest.field.icao ?? dest.name) : null;
+  const prev = W.at(-2);
+  const key = engaged
+    ? `e|${engaged.field.ident}|${engaged.approach.id}|${engaged.gen}`
+    : code
+      ? `p|${code}|${prev?.name}|${prev?.lat.toFixed(3)}|${c.approachGen}`
+      : "";
+  if (key === apprMemo.key) return apprMemo.v;
+  let a = engaged?.approach ?? null;
+  let f = engaged?.field ?? null;
+  if (!a && code) {
+    const r = c.approachForField(code, prev ?? null);
+    // (the field not in yet: asked — tried again next time)
+    if (!r) return null;
+    a = r.a;
+    f = r.f;
+  }
+  const end = a && f ? f.runways.find((x) => x.le === a.rwy || x.he === a.rwy) : undefined;
+  const v: NdApproach | null =
+    a && f
+      ? {
+          id: a.id,
+          rwy: a.rwy,
+          field: f.icao || f.ident,
+          thr: [a.thr.lat, a.thr.lon],
+          far: end ? (end.le === a.rwy ? [end.lat2, end.lon2] : [end.lat1, end.lon1]) : [a.thr.lat, a.thr.lon],
+          crs: a.crs,
+          loc: a.loc ? { ident: a.loc.ident, freq: a.loc.freq / 1000, ...(a.loc.cat ? { cat: a.loc.cat } : {}) } : null,
+          missed: a.missed.filter((l) => l.lat !== undefined && l.lon !== undefined).map((l) => [l.lat!, l.lon!]),
+        }
+      : null;
+  apprMemo = { key, v };
+  return v;
 }

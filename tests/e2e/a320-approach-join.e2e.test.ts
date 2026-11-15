@@ -12,8 +12,8 @@ import { placeLow } from "./lib/place";
 //
 // Done when: from each of the four departures, the join's plan is made (its entry, its points' heights over the relief said),
 // LOC and G/S are captured before the final fix (9.3 km), never a round again, never nearer the field than 3 km before the
-// final, never under 250 m over the ground on the join, down in the touchdown zone, graded over 14/20.
-// Duration: about 7 min (the boot, the A320 taken, four placings on the relief's tiles, four flights of 8–17 min of sim time — 410 s here).
+// final, never under 250 m over the ground on the join, down in the touchdown zone, graded over 14/20; the ND, once established, draws the missed approach (cyan).
+// Duration: about 10 min (the boot, the A320 taken, four placings on the relief's tiles, four flights of 8–17 min of sim time, the ND's pictures — 621 s here).
 
 interface Leg {
   name: string;
@@ -116,6 +116,26 @@ describe.skipIf(!E2E)("the A320's join over the relief (Nice)", () => {
       );
       if (!at) console.log(`  the flight, every 20 s:\n    ${j.trace.join("\n    ")}`);
       await shot(`a320-approach-join-${L.from}-established`);
+      // (the ND — PLAN-APPROCHES AP3c —: the runway, its final course, the missed approach in cyan; its picture kept)
+      await app.js(`(() => { __bh.freeze(false); return 1; })()`);
+      await app.waitFor(`!!__bh.renderer.a320Du`, 10_000);
+      await Bun.sleep(1200);
+      const nd = await app.js<{ cyan: number; png: string }>(`(async () => {
+        const cv = __bh.renderer.a320Du.canvasOf("ND1");
+        const x = cv.getContext("2d").getImageData(0, 0, 1024, 1024).data;
+        // (in the middle only — x 300–724, y 300–950 —: the TRU and range labels, cyan too, are outside it)
+        let k = 0;
+        for (let y = 300; y < 950; y++) for (let X = 300; X < 724; X++) { const i = 4 * (y * 1024 + X); if (x[i] < 80 && x[i + 1] > 180 && x[i + 2] > 220) k++; }
+        const b = await cv.convertToBlob({ type: "image/png" });
+        const u = new Uint8Array(await b.arrayBuffer());
+        let s = ""; for (let i = 0; i < u.length; i += 8192) s += String.fromCharCode(...u.subarray(i, i + 8192));
+        __bh.freeze(true);
+        return { cyan: k, png: btoa(s) };
+      })()`);
+      console.log(`  the ND: ${nd.cyan} cyan pixels (the missed approach)`);
+      if (shots) await Bun.write(`${shots}/a320-approach-join-${L.from}-nd.png`, Buffer.from(nd.png, "base64"));
+      // (about 500 at Nice, 15 Nov 2026: the missed approach's line — the cyan labels outside the window counted none)
+      expect(nd.cyan).toBeGreaterThan(150);
       expect(j.phase).toMatch(/^(LOC|LAND).*\/G\/S/);
       expect(at!.along).toBeLessThan(-9300);
       expect(j.minAgl).toBeGreaterThan(250);
