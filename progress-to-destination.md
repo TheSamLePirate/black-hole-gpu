@@ -7321,3 +7321,14 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   connue (−9,8 le 15 nov. à 03:18).
 - Limites : sous orage seulement (au beau temps ≈ 0) ; le M1 Max non mesuré.
 - Suite : J5-1 ouvrable pour le profil lourd (plafond ~2,7 ms) ; J5-2 par les scènes de référence des autres corps.
+
+### 2026-11-15 05:30 UTC — J5-2 : les corps de référence ; J5-3 : la marche sur la Terre est tracée
+
+- Contribution à la destination : stratégie §15 J5 (« à la marche ») — le parcours à pied sur la Terre mesuré ; il sort du raster.
+- Réalisé : J5-1 rangé avec ses chiffres (le découpage demanderait ~130 Mo de listes d'échantillons) ; levier de mesure
+  `renderer.walkRasterOn` (trace.wgsl `rasterPrimary` accepte `P.walk[0].w` 2 ; `terrainRasterEligible`) ; option `WALK_RASTER=1` de
+  `planets-baseline` ; PLAN-J5 §5.
+- Preuves (mesuré, kerr-mini) : Terre vol bas 43,0 ms, à pied 54,6 (tracé) ; Lune 25,9 / 30,5 ; Mars 40,8 / 27,3. À pied sur la Terre :
+  raster 67,3 ms (à échelle fixe 67,8) contre tracé 54,8 (115,8) — les captures : raster net, tracé flou avec un losange blanc.
+- Limites : le contact des pieds en raster non vérifié ; une seule vue (Chamonix) ; le M1 Max non mesuré.
+- Suite : J5-3 — l'e2e du personnage en raster (pieds, ombres), puis la proposition d'allumer le raster à pied.

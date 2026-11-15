@@ -327,7 +327,7 @@ chargement), carte 3D. Leur coût GPU n'est pas mesuré : il tombe dans l'interv
 
 ### 5.1 Quels groupes de passes pour quel chemin
 
-| Groupe | Tracé (espace, Gargantua, Terre > 100 km ou `trace`) | Terre raster | Autre monde raster | Convergence (vue fixe, photo) | Offline |
+| Groupe | Tracé (espace, Gargantua, Terre > 100 km ou `trace`, **le marcheur sur la Terre**) | Terre raster | Autre monde raster | Convergence (vue fixe, photo) | Offline |
 |---|---|---|---|---|---|
 | A1 warp, A2 planet probe | oui | oui | oui | oui | non |
 | B1 horizon bake | corps HD | — | oui | oui | non |
@@ -343,6 +343,11 @@ chargement), carte 3D. Leur coût GPU n'est pas mesuré : il tombe dans l'interv
 | C15–C19 astres, étoiles, shade, lite, eau | non | oui | `body lite` seul | non | non |
 | D sonde env | vaisseau/marcheur | ≥ 1 frame sur 2 | oui | tant que spp < 32 | oui |
 | E5–E6 temporal, taau | oui | oui | oui | relais seul | non |
+
+**Le marcheur sur la Terre est tracé** (`terrainRasterEligible` : `!walking` ; trace.wgsl `rasterPrimary` : `P.walk[0].w < 0.5`) : la marche du
+traceur rencontre la grille de sol que ses pieds touchent. Mesuré le 15 nov. 2026 (PLAN-J5 J5-3, kerr-mini, Chamonix) : tracé 54,8 ms (×8,
+à échelle fixe 115,8), le raster — levier de mesure `renderer.walkRasterOn` — 67,3 ms (chaque pixel, à échelle fixe 67,8), son image nette ;
+le contact des pieds en raster reste à vérifier.
 
 Le mode photo laisse converger la vue fixe sur le noyau de qualité (`rasterHold`, `main.ts:8660`) ; un PNG repasse
 `encodePost` + display dans sa propre soumission (`renderDisplayed`, `renderer.ts:11390`). Le télescope n'a pas de chemin

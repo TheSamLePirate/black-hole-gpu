@@ -8556,7 +8556,9 @@ var<private> RHINT_TOL: f32 = 1.0;
 fn rasterHintTol(px: vec2f) -> f32 { return pow(TUNE_RING_TOL, terrainRasterLevelStep(px)); }
 // The raster's primary visibility (earthPipeline "raster", docs/PLAN-RENDU-RASTER-AAA.md étape 1): the pixels the patch
 // covers are shaded one a pixel by the kernel shade, not traced by main (renderer: mouthList[1].y)
-fn rasterPrimary() -> bool { return HAS_TERRAIN_RASTER && P.mouthList[1].y > 0.5 && P.walk[0].w < 0.5; }
+// (the walker on the Earth: the traced pipeline — its march meets the walking grid the feet stand on —; P.walk[0].w 2: the grid sent,
+// the raster kept — renderer.walkRasterOn, PLAN-J5 J5-3's measure)
+fn rasterPrimary() -> bool { return HAS_TERRAIN_RASTER && P.mouthList[1].y > 0.5 && (P.walk[0].w < 0.5 || P.walk[0].w > 1.5); }
 // moments.x of a pixel shade wrote (post.wgsl gatherH leaves it out of the stale pixels' reconstruction: the ground's
 // dense samples bled into the sky's sparse ones at the horizon); above any Σ luminance² a realtime frame writes there
 const RASTER_MARK = 1e30;

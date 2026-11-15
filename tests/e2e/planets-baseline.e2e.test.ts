@@ -12,7 +12,7 @@ import { SPOTS as ALL, preset, SHOWCASE } from "./lib/planet-views";
 // same rays each frame). Each view: the GPU's own time a frame with the profiler off (renderer.completedDurations, the
 // median of FRAMES — the timestamps cost ~10 ms a frame on Apple), the frame's interval, then the passes' split with the
 // profiler on (trace, probes, LUT, reconstruction), and a screenshot.
-//   ONLY=earth,miller (bodies), VIEWS=orbit,low,foot,cine, FRAMES=90, OUT=remote-results/planets-baseline
+//   ONLY=earth,miller (bodies), VIEWS=orbit,low,foot,cine, FRAMES=90, OUT=remote-results/planets-baseline, WALK_RASTER=1
 // Duration: ~1 min a view once its kernels are compiled (first ones: several minutes) — ~45–70 min for all on an M1 Max.
 // Done when: every view measured, baseline.json and the shots written.
 
@@ -60,6 +60,8 @@ describe.skipIf(!E2E)("P0: every world's cost and look in the same four views", 
       tiles: true,
     });
     await app.js(`(() => { Object.assign(__bh.settings, { showFps: true, autosave: false }); return 1; })()`);
+    // (WALK_RASTER=1 — PLAN-J5 J5-3, a measure —: the walker on the Earth drawn by the raster, renderer.walkRasterOn; else traced)
+    if (process.env.WALK_RASTER === "1") await app.js(`(() => { __bh.renderer.walkRasterOn = true; return 1; })()`);
   }, 300_000);
 
   afterAll(() => {

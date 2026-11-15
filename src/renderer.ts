@@ -4428,7 +4428,7 @@ export class Renderer {
       const eye = homePosition(s)!;
       const q = toBodyFixed("earth", eye, time).map((v) => v * M_METRES) as Vec3;
       const delta = q.map((v, i) => v - walking.origin[i]!) as Vec3;
-      f.set([dot3(delta, walking.right), dot3(delta, walking.up), dot3(delta, walking.forward), 1], at);
+      f.set([dot3(delta, walking.right), dot3(delta, walking.up), dot3(delta, walking.forward), this.walkRasterOn ? 2 : 1], at);
       f.set([...walking.right, TABLE_WALK], at + 4);
       f.set([...walking.up, walking.size], at + 8);
       f.set([...walking.forward, walking.step], at + 12);
@@ -4537,7 +4537,7 @@ export class Renderer {
       s.band === "visible" &&
       s.renderMode === "physical" &&
       (this.tuneKey === 0 || rasterWanted) &&
-      !walking &&
+      (!walking || this.walkRasterOn) &&
       earthSurface &&
       Math.abs(earthSurface.lat) <= TERRAIN_CACHE_MAX_LAT &&
       earthSurface.h * WGS84_A < 100_000
@@ -5519,6 +5519,9 @@ export class Renderer {
   /** (PLAN-J5 J5-1, a measure) the clouds' sunward march off at run time — its code still in the kernel: against the ablation that
    *  compiles it out (renderer.tune TUNE_CLOUD_LIGHT 0), what of its cost is its work and what its presence */
   cloudLightRuntimeOff = false;
+  /** (PLAN-J5 J5-3, a measure) the walker on the Earth drawn by the raster — its walking grid still sent (P.walk[0].w 2: trace.wgsl
+   *  rasterPrimary) —; false: the traced pipeline while walking, as ever (its march meets the grid the feet stand on) */
+  walkRasterOn = false;
   /** PLAN-MER-WEBGPU S2: the sea's crests drawn before the land behind them where it stands over the waves (A/B lever) */
   seaCrestsOverLand = true;
   /** the frame's parameters' index of P.seafft[0].x (writeParams): encodeLite writes 2 there when the open sea's kernel runs */

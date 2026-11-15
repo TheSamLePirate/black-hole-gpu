@@ -77,3 +77,17 @@ Les plafonds de J5-1 au beau temps, de J5-2 par corps et la parité du repli tra
   ≈ 2,7 ms** : ce qu'un noyau de nuages découpé (la lumière hors du noyau de la marche) pourrait rendre au plus, **sous orage seulement**
   (au beau temps la lumière entière ≈ 0). Lot possible (au-dessus de 1 ms), à ouvrir avec le profil lourd ; son travail (6 ms) ne bouge
   qu'avec moins d'échantillons ou un cache plus large — des décisions d'image.
+- **J5-1, non ouvert comme découpage** (2026-11-15 05:22 UTC) : la lumière d'un échantillon dépend de la place que la marche lui trouve ; un
+  noyau à part demanderait la liste des échantillons par texel (≈ 16 × 16 o par texel en demi-résolution : ~130 Mo) ; le volume de lumière
+  (voxels de 1,5 km, `CLV_N` 64 sur 96 km) ne peut remplacer la marche proche (180 m, pas de 60 m) sans perdre l'ombre propre des cumulus.
+  Les leviers restants sont des décisions d'image : la marche proche en 1 pas (−1,6 ms, J4-2) ou moins d'échantillons. **J5-1 rangé** avec
+  ses chiffres (présence ~2,7 ms sous orage, 0 au beau temps) ; à rouvrir si le profil lourd devient une cible de Sam.
+- **J5-2, les corps de référence mesurés ; J5-3, la marche sur la Terre** (2026-11-15 05:30 UTC) : `planets-baseline` (kerr-mini, vues du
+  viewer, échelle fixe à part) — Terre vol bas 43,0 ms (raster) ; **Terre à pied 54,6 ms, tracée** (trace 30,8 ; à échelle fixe 115,5) ;
+  Lune vol bas 25,9 / à pied 30,5 ; Mars vol bas 40,8 / à pied 27,3 (raster 1/4). **Trouvé** : sur la Terre la marche coupe le raster
+  (`rasterPrimary()` : `P.walk[0].w < 0.5` ; `terrainRasterEligible` : `!walking`) — le marcheur garde le pipeline tracé, dont la marche
+  rencontre la grille de sol que ses pieds touchent. **Mesuré** (levier `renderer.walkRasterOn`, la grille toujours envoyée,
+  `WALK_RASTER=1` de `planets-baseline`) : à pied sur la Terre, raster **67,3 ms** (chaque pixel ombré, ×16, échelle 0,75 ; à échelle fixe
+  67,8) contre tracé **54,8 ms** (×8, échelle 1 ; à échelle fixe 115,8) — à qualité comparable le raster coûte ~40 % de moins, et son image
+  est nette (le tracé : flou, un losange blanc sur le versant). **Reste à établir** avant de l'allumer : le contact des pieds (la grille
+  du marcheur contre le maillage du raster), sur un e2e du personnage, en raster.
