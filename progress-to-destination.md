@@ -7539,3 +7539,10 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
 - `crew-space-actions` (e2e) : 3/5, les mêmes deux échecs (amarrage, cible prise sur la carte) sur le code d'avant ce changement :
   examinés dans l'entrée suivante.
 
+### 2026-11-15 08:23 UTC — J5-6 : le sol à demi-rythme, plus lent — retiré
+
+- Contribution à la destination : une piste fermée sur mesure (règle 1), sa leçon écrite.
+- Réalisé : `LITE_HALF` essayé (le voisin classé en entier, son matériau repris), mesuré, retiré ; PLAN-J5 §3 et §5.
+- Preuves (mesuré, kerr-mini, deux A/B) : J0 +0,9 ms, forêt +2,7 ; `earth lite` 3,75 → 4,5 et 6,4 → 9,4 ms.
+- Limites : la reconstruction par `resolve` (le voisin non traité) non élucidée — c'est elle qui donnerait le plafond de 2,3 ms.
+- Suite : élucider pourquoi le voisin `RASTER_STALE` de l'eau ne se rebâtissait pas (le bruit cyan), puis rouvrir J5-6 par cette voie.

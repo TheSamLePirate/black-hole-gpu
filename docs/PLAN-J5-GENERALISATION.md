@@ -40,7 +40,7 @@ au-dessus de 1,6 ms dans les mesures de J4.
 | **J5-3** | **La marche et les transitions** : le personnage (character e2e), l'orbite → le sol, la Terre → l'espace ; ce que chaque transition laisse dans l'historique (contrat de la reconstruction) | qualité (transitions) | e2e de parcours, images | L |
 | **J5-4** | **HDR/SDR/exports** : la sortie de l'image (hdrMap, AgX), les captures et les vidéos sur la même chaîne que l'écran | qualité | captures SDR sur kerr-mini (mesures de couleur), exports | M |
 | **J5-5** | **L'eau à demi-rythme** (ajouté le 15 nov. après la répartition de J0) : un pixel sur deux par image, des groupes de 32 fils | J0 −8,4 ms (une tuile sur deux sautée) | ΔGPU J0 et à 30 m, captures — **allumé : −6,0 à −7,2 ms** (§5) | M |
-| **J5-6** | **Le matériau du sol à demi-rythme** (`shadeLite`, sa lumière) : le même schéma que l'eau, le voisin classé (eau, arbres, ponts) et sa photo gardée | **J0 ~2,3 ms** (lu : `earth lite` 3,8 → 2,0, sa lumière 1,3 → 0,8) ; plus sur la terre | ΔGPU J0 et forêt, images en mouvement (le détail des photos) | L |
+| **J5-6** | **Le matériau du sol à demi-rythme** (`shadeLite`, sa lumière) : le même schéma que l'eau, le voisin classé (eau, arbres, ponts) et sa photo gardée | **J0 ~2,3 ms** (lu : `earth lite` 3,8 → 2,0, sa lumière 1,3 → 0,8) ; plus sur la terre | ΔGPU J0 et forêt, images en mouvement (le détail des photos) — **essayé : plus lent (+0,9 J0, +2,7 forêt), retiré** (§5) | L |
 | **J5-R** | **Le retrait des chemins terrestres redondants** : le tracé de la Terre proche (repli dormant depuis J2-7, PROBLEMES) et les options sans utilisateur — après validation de la parité ; une décision de Sam | compilation et code | suite, J0, `kernel-budget` | M |
 
 **Ordre recommandé** : J5-0 d'abord (les décisions d'image sont la seule voie mesurée vers 40 ms : elles reviennent à Sam), puis J5-1
@@ -180,3 +180,11 @@ Les plafonds de J5-1 au beau temps, de J5-2 par corps et la parité du repli tra
   Lot ouvrable (au-dessus de 1 ms), mais lourd : le noyau le plus chargé du sol, chaque voisin à classer, le détail des photos à garder en
   mouvement — non ouvert dans cette session. **M1 Max** (J0 borné à 30, l'eau à demi-rythme) : vol 30 images/s, GPU p50 **19,1 ms** (21,3
   avant), soutenu 30 images/s, 23,1 ms (horloge 1 286 → 1 076 MHz).
+- **J5-6 essayé et retiré** (2026-11-15 08:23 UTC) : `LITE_HALF` — des groupes de 32 fils, chaque fil le pixel du damier puis son voisin (une
+  boucle, un seul site d'appel : la première version en avait deux et doublait le noyau inliné, budgets cassés, corrigée avant la mesure),
+  le voisin classé en entier, son matériau repris du premier quand les deux sont le sol nu à la même profondeur. **Mesuré** (kerr-mini, A/B
+  deux fois) : J0 **49,3 / 49,5 contre 48,5–48,6 ms (+0,9)**, la forêt des Maures **55,9 / 55,1 contre 53,4 / 52,2 (+2,7)** ; `earth lite`
+  3,75 → 4,5 et 6,4 → 9,4 ms. **Leçon** : le coût du matériau du sol n'est pas `liteMaterial` (la photo), mais la classification et le rayon
+  de chaque pixel — le voisin les refait ; le plafond lu (−2,3 ms) supposait le voisin non traité, ce que seule une reconstruction (celle
+  qui a échoué pour l'eau : le voisin `RASTER_STALE` rebâti par `resolve`) donnerait. **Retiré** (patch hors du dépôt) ; à reprendre avec
+  cette reconstruction élucidée.
