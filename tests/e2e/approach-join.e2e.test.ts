@@ -28,6 +28,7 @@ const LFMN = { lat: 43.6584, lon: 7.2159 };
 const DEPARTURES: Leg[] = [
   { name: "south-west, low over the sea, in line", from: 225, km: 40, agl: 600, hdg: 45 },
   { name: "north, high over the mountains", from: 0, km: 40, agl: 2500, hdg: 180 },
+  // (here the built 22R — over Monaco's hills — is left out for the relief since AP3: ILS 04L by vectors)
   { name: "north-east, beyond the field over the relief", from: 45, km: 35, agl: 2000, hdg: 225 },
   { name: "south-east, low over the sea", from: 135, km: 40, agl: 600, hdg: 315 },
 ];

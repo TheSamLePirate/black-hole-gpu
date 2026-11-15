@@ -7,7 +7,7 @@
 // arrival's and the departure's fixes for a flight plan. Pure: the craft's state in, what to fly out.
 
 import { type Racetrack, holdRadius, racetrackHeading } from "./racetrack";
-import { floorAt, followJoin, type JoinPlan } from "./approach-plan";
+import { floorAt, followJoin, type JoinPlan, PLAN } from "./approach-plan";
 
 const D = Math.PI / 180;
 const R_EARTH = 6_371_008.8;
@@ -345,6 +345,9 @@ export function ilsStep(
     const hHold = Math.max(
       above ? Math.max(gsHeight(r.along) - 40, 120) : r.along > -ILS.iaf ? Math.max(Math.min(gsHeight(r.along) - 30, iafH), 150) : iafH,
       R.join ? floorAt(R.join.plan, r.along) - W.elev : Number.NEGATIVE_INFINITY,
+      // (before the join, the last leg's own floor: the localizer taken early, off the axis over the relief its leg crosses —
+      // Nice's 22R from the north-east skimmed Monaco's hills, 15 Nov 2026)
+      R.join && r.along < -PLAN.join ? (R.join.plan.pts.at(-1)?.floor ?? Number.NEGATIVE_INFINITY) - W.elev : Number.NEGATIVE_INFINITY,
     );
     // (the glideslope captured from below — or, established inside the final fix already, within a dot of it either
     // way: placed on a short final a little low, it went round at once) — never where the step-down is over the slope: the

@@ -18,6 +18,8 @@ import { geoidDeg } from "../system/geoid";
 import { bodyFixedOf, groundRelief } from "../system/our-surface";
 import type { PilotInput } from "../pilot";
 import { findRunway, runwayOf, syncRunwayLevel } from "./ils";
+import { groundMsl } from "./approach";
+import { floorAt, followJoin, type JoinPlan, PLAN, planJoin } from "../game/approach-plan";
 import type { CameraController } from "../controls";
 
 declare module "../controls" {
@@ -194,10 +196,12 @@ void CONF;
 // ------------------------------------------------------------------------------------------------ the ILS approach
 
 /** The A320's ILS approach as the controller vectors it (Sam, 5 Nov 2026: the approaches of Toulon-Hyères flown by the
- *  flight lab; the F-35's own procedure is game/ils.ts): the runway's end chosen tuned; `entry` — to a point 22 km out on
- *  the axis, 6 km to the side the craft is on —, `intercept` — aimed at the axis 13 km out (~34°), APPR armed —, `final` — the FMGC's
- *  LOC, G/S, LAND, FLARE, ROLL OUT. The configuration set as a crew sets it, each step once the speed allows; the
- *  touchdown measured on that runway. */
+ *  flight lab; the F-35's own procedure is game/ils.ts): the runway's end chosen tuned; `entry` — the join planned
+ *  (game/approach-plan.ts, PLAN-APPROCHES AP3: straight in from behind the final, else a downwind 6 km off on the craft's side
+ *  and a base, each leg 300 m over the relief — the FCU's heading and altitude along it) —, `intercept` — aimed at the axis
+ *  13 km out (~34°), APPR armed —, `final` — the FMGC's LOC, G/S, LAND, FLARE, ROLL OUT. The configuration set as a crew sets
+ *  it, each step once the speed allows; the touchdown measured on that runway. (Before 15 Nov 2026 the entry was a fixed point
+ *  22 km out, 6 km aside, reached straight: from beyond the field, over it.) */
 export interface A320App {
   rwy: IlsRunway;
   leg: "entry" | "intercept" | "final";
@@ -207,10 +211,16 @@ export interface A320App {
   /** the final's safe heights [m over the sea], every 500 m from the threshold out (`safeProfile`) */
   safe: number[];
   touch: { along: number; across: number; vs: number } | null;
+  /** the join flown: its plan, the point flown to (game/approach-plan.ts) — planned again after a round again */
+  join: { plan: JoinPlan; i: number };
 }
 
-const ENTRY_ALONG = 22_000;
-const ENTRY_OFF = 6_000;
+/** The join from where the craft is. */
+const joinFrom = (W: IlsRunway, g: { lat: number; lon: number; alt: number; track: number }) => ({
+  plan: planJoin(W, { lat: g.lat, lon: g.lon, alt: g.alt, trk: g.track }, groundMsl, { descDeg: 2.5 }),
+  i: 0,
+});
+
 const INTERCEPT_ALONG = 13_000;
 
 /** The highest ground under the approach's legs [m over the sea]: the axis from 4 to 26 km out, 7 km either side. */
@@ -254,7 +264,15 @@ function a320Approach(this: CameraController, W: IlsRunway): string {
   this.ilsRun = null;
   const o = onRunway(W, g);
   const altFt = Math.ceil(Math.max(W.elev * FT + 2000, legsGround(W) * FT + 1000) / 100) * 100;
-  this.a320App = { rwy: W, leg: "entry", side: o.across >= 0 ? 1 : -1, altFt, safe: safeProfile(W), touch: null };
+  this.a320App = {
+    rwy: W,
+    leg: "entry",
+    side: o.across >= 0 ? 1 : -1,
+    altFt,
+    safe: safeProfile(W),
+    touch: null,
+    join: joinFrom(W, g),
+  };
   return tf("ILS approach: {0}, {1}", `${W.icao ?? W.name} ${runwayId(W.hdg, W.des)}`, unitsOf(this.s.units).fDist(gcDist(g, W), 0));
 }
 
@@ -301,23 +319,37 @@ function a320AppStep(c: CameraController, F: Fmgc, i: FmgcIn, onWheels: boolean)
     }
     return;
   }
-  if (/^(LOC|LAND|FLARE|ROLL)/.test(F.lat)) A.leg = "final";
+  // (the join's legs before its last: the localizer not taken yet — placed on its line too high, the A320 captured it at once
+  // and skipped the dogleg its height asked: over Nice's runway at 1 250 m, 15 Nov 2026)
+  const joinLeft = A.leg === "entry" && A.join.i < A.join.plan.pts.length - 1;
+  if (/^(LOC|LAND|FLARE|ROLL)/.test(F.lat) && !joinLeft) A.leg = "final";
   const onSlope = /^(G\/S|LAND|FLARE|ROLL)/.test(F.vert);
   // (on the localizer without the glideslope near the runway — high over it, never under the beam —: round again)
   if (A.leg === "final" && !onSlope && o.along > -4000) {
     A.leg = "entry";
     A.side = o.across >= 0 ? 1 : -1;
+    A.join = joinFrom(W, g);
     if (F.apprArm) F.apprToggle();
   }
   if (!F.athr) F.athrToggle();
   if (!F.ap) F.ap1Toggle(i);
+  let joinFt: number | null = null;
   if (A.leg !== "final") {
     let hdg = W.hdg;
     if (A.leg === "entry") {
-      const E = fromRunway(W, -ENTRY_ALONG, A.side * ENTRY_OFF);
-      const placed = o.along < -14_000 && o.along > -45_000 && Math.sign(o.across) === A.side && Math.abs(o.across) < 9000;
-      if (gcDist(g, E) < 1500 || placed) A.leg = "intercept";
-      else hdg = gcCourse(g, E) * D;
+      // (the join's legs: the heading to the next point, turned onto the one after at the turn's lead; its height)
+      const J = A.join;
+      const f = followJoin(J.plan, J.i, W, { lat: g.lat, lon: g.lon, alt: g.alt, trk: g.track, gs: g.gs });
+      J.i = f.i;
+      const headingIn = Math.cos(((g.track * D - W.hdg) * Math.PI) / 180) > 0.3;
+      const lastLeg = f.i >= J.plan.pts.length - 1;
+      if (f.i >= J.plan.pts.length || (lastLeg && o.along < -ILS.faf - 2500 && Math.abs(o.across) < 6000 && headingIn)) A.leg = "intercept";
+      else {
+        hdg = f.crs * D;
+        // (the airliner level along its join at its approach altitude — a step at each point dragged its speed to 88 kt in
+        // OP DES with the flaps out —, higher only where a leg's relief asks)
+        joinFt = Math.max(A.altFt, f.floor * FT);
+      }
     }
     if (A.leg === "intercept") {
       // (aimed at the axis 13 km out — closed on the place, not a fixed heading the drift would bend —, within 45° of the
@@ -329,26 +361,38 @@ function a320AppStep(c: CameraController, F: Fmgc, i: FmgcIn, onWheels: boolean)
       if ((Math.sign(o.across) === -A.side && Math.abs(o.across) > 2000) || o.along > -ILS.faf + 2000) {
         A.leg = "entry";
         A.side = o.across >= 0 ? 1 : -1;
+        A.join = joinFrom(W, g);
       }
     }
     if (F.lat !== "HDG") F.hdgPull(i);
     F.hdg = Math.round(wrap360(hdg)) || 360;
-    if (!F.apprArm) F.apprToggle();
+    // (APPR armed on the join's last leg, the intercept: LOC and G/S then captured as the axis comes)
+    const arm = A.leg !== "entry" || A.join.i >= A.join.plan.pts.length - 1;
+    if (F.apprArm !== arm) F.apprToggle();
   }
   // (the altitude: the entry's, high enough over the whole box; from the intercept on, stepped down under the glideslope —
   // 60 m below the beam where the craft is, its capture from below as the FMGC flies it —, never under the segment's safe
   // height (the relief 2 km round and ahead, 150 m over it). The entry's alone left the A320 280 m over the beam at the
   // localizer over Toulon-Hyères' hills: no glideslope, the runway overflown — the flight lab, 5 Nov 2026)
   if (!onSlope) {
-    let ft = A.altFt;
+    let ft = joinFt ?? A.altFt;
     if (A.leg !== "entry") {
       const d = Math.max(-o.along, 0);
       const below = W.elev + (d + ILS.gpi) * Math.tan((ILS.glide * Math.PI) / 180) - 60;
-      ft = Math.min(A.altFt, Math.max(below, safeAt(A, d)) * FT);
+      // (and never under the join's step-down: a ridge under the localizer's outer part held over — AP2)
+      const lastFloor = o.along < -PLAN.join ? (A.join.plan.pts.at(-1)?.floor ?? Number.NEGATIVE_INFINITY) : Number.NEGATIVE_INFINITY;
+      ft = Math.max(Math.min(A.altFt, Math.max(below, safeAt(A, d)) * FT), Math.max(floorAt(A.join.plan, o.along), lastFloor) * FT);
     }
     ft = Math.ceil(ft / 100) * 100;
+    // (a target moved while the altitude is being captured — the join's next leg lower —: pulled again, as an FCU change
+    // during ALT* reverts it on the Airbus; else the capture's law chased a target it was not made for: the A320 pitched up
+    // at 82 % N1, 96 kt, over the runway — 15 Nov 2026, AP3)
+    const moved = F.vert === "ALT*" && Math.abs(F.alt - ft) >= 200 && Math.abs(i.alt - ft) > 250;
+    // (a descent towards an altitude now above — a round again's, 5 000 ft —, or a climb towards one below: pulled the right
+    // way; else the FMGC went on down in OP DES to an altitude over it — into the ground east of Nice, 15 Nov 2026, AP3)
+    const wrongWay = (/DES$/.test(F.vert) && ft > i.alt + 100) || (/CLB$/.test(F.vert) && F.vert !== "SRS" && ft < i.alt - 100);
     F.alt = ft;
-    if (!/^(OP|EXP|G\/S|LAND|FLARE|ALT\*|CLB|DES)/.test(F.vert) && Math.abs(i.alt - ft) > 250) F.altPull(i);
+    if (moved || wrongWay || (!/^(OP|EXP|G\/S|LAND|FLARE|ALT\*|CLB|DES)/.test(F.vert) && Math.abs(i.alt - ft) > 250)) F.altPull(i);
   }
   // (the configuration, a step at a time as the speed allows: CONF 1 within 35 km, 2 on the intercept, the gear on the
   // glideslope or within 12 km, 3 with the gear, FULL inside the final fix)

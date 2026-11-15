@@ -6,7 +6,7 @@
 // (Its methods, out of controls.ts: installed on its prototype — `this` the controller.)
 
 import { type Asker, type Choice, chooseApproach, chooseField, type Wind } from "../game/approach-choice";
-import { glideClearance, type IlsRunway, runwayId } from "../game/ils";
+import { fromRunway, glideClearance, ILS, type IlsRunway, runwayId } from "../game/ils";
 import { RUNWAY_LENGTH, reciprocal, type Site, SITES } from "../game/sites";
 import { isAircraft } from "../vessels";
 import { fleet } from "../fleet";
@@ -296,8 +296,28 @@ function runwayOfApproach(f: Airfield, a: Approach): IlsRunway {
 export const groundMsl = (lat: number, lon: number) =>
   Math.max(groundRelief("earth", bodyFixedOf("earth", lat, lon, 0)) - geoidDeg(lat, lon), 0);
 
-/** A field's built approach whose glideslope is not clear of the relief known (game/ils.ts glideClearance « thin »). */
-const thinOver = (f: Airfield) => (a: Approach) => glideClearance(runwayOfApproach(f, a), groundMsl).thin;
+/** A field's built approach a controller could not give: its glideslope not clear of the relief known (game/ils.ts
+ *  glideClearance « thin »), or its safe height round the legs over the slope at the join (`boxOverSlope`). */
+const thinOver = (f: Airfield) => (a: Approach) => {
+  const W = runwayOfApproach(f, a);
+  return glideClearance(W, groundMsl).thin || boxOverSlope(W);
+};
+
+/**
+ * Whether the relief round an approach's outer part (4–26 km out, 7 km either side, + 1 000 ft — where the join and its legs
+ * lie) is over the glideslope at the join (16 km) + 150 m: the slope met from below nowhere — Nice's 22R from the north-east,
+ * over Monaco's hills and Mont Agel's slopes: 5 000 ft there, the slope at 2 800 ft. The A320 overflew the runway at 1 250 m,
+ * the F-35 was established 8 km out (15 Nov 2026, AP3).
+ */
+export function boxOverSlope(W: IlsRunway): boolean {
+  let top = 0;
+  for (let d = 4000; d <= 26_000; d += 1000)
+    for (let x = -7000; x <= 7000; x += 1000) {
+      const p = fromRunway(W, -d, x);
+      top = Math.max(top, groundMsl(p.lat, p.lon));
+    }
+  return top + 1000 * 0.3048 > W.elev + (16_000 + ILS.gpi) * Math.tan((ILS.glide * Math.PI) / 180) + 150;
+}
 
 /** The resolution's reason said: « LFML ILS 31R — head wind 6 m/s, CAT I », « LFTH 23 built — the nearest ahead ». */
 export function sayResolved(r: ApproachResolved, units: { fSpd: (v: number) => string }): string {

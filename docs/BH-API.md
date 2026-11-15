@@ -454,18 +454,26 @@ LDA/SDF/IGS, « C… » built), with its generation `approachGen` counted at eac
   courses true), `dh { m, why }`.
 
 The join (PLAN-APPROCHES AP2, `game/approach-plan.ts`): planned at the engagement, and again after a missed approach, in
-`camera.ilsRun.join = { plan: { entry: "straight" | "vectors", pts: [{ name: "INT" | "DW" | "BASE" | "JOIN", x, y, lat, lon, alt }],
-msa, floors: [{ x, m }] }, i }` — `x`, `y` the runway's frame [m] (along the final from the threshold, across it), `alt` and `m`
+`camera.ilsRun.join` (and `camera.a320App.join`, AP3) `= { plan: { entry: "straight" | "vectors", pts: [{ name: "DOG" | "INT" | "DW" |
+"BASE" | "JOIN", x, y, lat, lon, alt, floor }], msa, floors: [{ x, m }] }, i }` — `x`, `y` the runway's frame [m] (along the final from the threshold, across it), `alt` and `m`
 over the sea; `i` the point flown to. Straight in from behind the final (on its line: no point, the localizer intercepted at once);
 else a downwind 6 km off the final on the craft's side, out to 24 km, a base to the join 16 km out. Each point ≥ its legs' ground
-+ 300 m; `floors` the step-down held until the glideslope is captured (the slope not captured where it is under it). A built
-approach whose slope is « thin » over the relief is out of the choice (`choice.table[].out === "relief"`).
++ 300 m (`floor`: its legs' ground, 2 km either side, + 300 m); `floors` the step-down — the highest floor still ahead held until
+the glideslope is captured (the slope not captured where it is under it). Too high to reach the join at 3° (the A320: 2.5°), track
+miles: a dogleg `DOG` on the craft's side straight in, the base pushed out on vectors; each point no lower than the craft's height
+less the path to it at that slope. A built approach is out of the choice (`choice.table[].out === "relief"`) when its slope is
+« thin » over the relief, or when the relief round its outer part (4–26 km out, 7 km either side, + 1 000 ft) is over the slope at
+the join (`boxOverSlope`, `controller/approach.ts`: Nice's 22R from the north-east).
 
-*Used in:* `approach-auto.e2e.test.ts`, `approach-join.e2e.test.ts`, `apprendre-avions.e2e.test.ts` (through `ilsStart`).
+*Used in:* `approach-auto.e2e.test.ts`, `approach-join.e2e.test.ts`, `a320-approach-join.e2e.test.ts`, `apprendre-avions.e2e.test.ts`
+(through `ilsStart`).
 
 On the A320 the same call flies its FMGC (`camera.a320Approach`, `controller/a320ap.ts`), state in `camera.a320App`:
 - the ILS is tuned on that end;
-- vectors lead to an entry point 22 km out, then the axis is aimed at 13 km out, APPR armed;
+- `leg: "entry"` flies the join planned (above; AP3, 15 Nov 2026 — before, a fixed entry point 22 km out reached straight): the
+  FCU's heading along its legs, its altitude level at the approach's (`altFt`), higher where a leg's relief asks; APPR armed on
+  its last leg only; then `intercept`: the axis aimed at 13 km out; a round again plans the join anew. An FCU target moved during
+  ALT*, or one now the other way of an OP DES/CLB, is pulled again;
 - LOC, G/S, LAND, FLARE and ROLL OUT follow;
 - the flaps and the gear go out a step at a time;
 - the touchdown is graded in `camera.ilsLast`.

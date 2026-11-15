@@ -1,6 +1,8 @@
 # Plan — les approches et les pistes, AAA (pilote, crew, roue)
 
-**État (2026-11-15) : AP0a, AP1, AP2 et AP0b faits.** AP0b : le CIFP de la FAA (cycle 2611, domaine public) lu par
+**État (2026-11-15) : AP0a, AP1, AP2, AP0b et AP3a faits.** AP3a : l'A320 vole la même jonction (FCU en HDG et altitude, APPR
+sur la dernière branche) ; le planificateur ajoute des milles quand l'avion est trop haut, tient ses paliers jusqu'à l'obstacle passé,
+et une approche construite que le relief rend impossible est écartée. Reste d'AP3 : MCDU ARR/VIA, RAD NAV réel, ND, télémétrie. AP0b : le CIFP de la FAA (cycle 2611, domaine public) lu par
 `scripts/cifp.ts` — 9 568 approches publiées des États-Unis sur nos pistes (ILS, LOC, LDA, RNAV, VOR, NDB ; leurs transitions,
 finales, remises de gaz, contraintes), préférées à nav.dat à leur extrémité ; tuiles 6,4 Mo ; relais des notes d'erreur de la
 FAA à faire à la main (ses pages refusent la lecture automatique). AP2 : la jonction planifiée (`game/approach-plan.ts`) — dans l'axe depuis

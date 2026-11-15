@@ -7,7 +7,7 @@
 // - vectors: else — inside the join, abeam the field, beyond it —: a downwind 6 km off the final on the craft's side, parallel to
 //   it and out past the join, then a base onto the final at ~35°: never over the field, never a turn back at a fix;
 // - the heights: the join under the glideslope (met from below), the downwind 300 m higher; each never under the ground along its
-//   leg + 300 m (its ground read every 500 m, on the leg and 1 km either side); from the join to the final fix a step-down, the
+//   leg + 300 m (its ground read every 500 m, on the leg and 2 km either side); from the join to the final fix a step-down, the
 //   least height until the glideslope is captured (a ridge under the localizer's outer part: held over, the slope met from above
 //   past it). A built approach whose glideslope itself is not clear is left out of the choice (game/approach-choice.ts « relief »).
 //
@@ -33,6 +33,11 @@ export const PLAN = {
   underGs: 50,
   minJoin: 450,
   dwAbove: 300,
+  /** the steepest descent planned to the join [°]: too high for it, track miles added (a dogleg, a base farther out) */
+  descDeg: 3,
+  /** the dogleg's offset and the base's push at most [m] */
+  dogMax: 15_000,
+  pushMax: 20_000,
 } as const;
 
 export interface PathPoint {
@@ -42,8 +47,9 @@ export interface PathPoint {
   /** the place [°] */
   lat: number;
   lon: number;
-  /** the height to be at, over the sea [m] */
+  /** the height to be at, over the sea [m]; the least its legs' relief allows (their ground + 300 m) */
   alt: number;
+  floor: number;
   name: string;
 }
 
@@ -58,13 +64,12 @@ export interface JoinPlan {
   floors: { x: number; m: number }[];
 }
 
-/** The step-down's least height at `along` [m over the sea] (−∞ inside the final fix, or none). */
+/** The step-down's least height at `along` [m over the sea] — the highest still ahead (−∞ inside the final fix, or none). */
 export function floorAt(plan: JoinPlan, along: number): number {
+  // (a step-down holds until its obstacle is passed: the highest floor of the samples at or ahead of the craft — each covers
+  // the 3 km ahead of it, the one just behind it included —; a craft let down before a ridge could not climb back over it)
   let m = Number.NEGATIVE_INFINITY;
-  // (the sample at or behind the craft — each covers the 3 km ahead of it —; before the first one, the first)
-  for (const f of plan.floors) if (f.x <= along && f.x > along - 1000) m = Math.max(m, f.m);
-  const first = plan.floors[0];
-  if (first && along < first.x) m = Math.max(m, first.m);
+  for (const f of plan.floors) if (f.x > along - 1000) m = Math.max(m, f.m);
   return m;
 }
 
@@ -78,7 +83,7 @@ function stepDown(W: IlsRunway, x0: number, ground: (lat: number, lon: number) =
 
 const gsHeight = (along: number) => (ILS.gpi - along) * Math.tan(ILS.glide * D);
 
-/** The highest ground along a leg (on it and 1 km either side, every 500 m) [m over the sea]. */
+/** The highest ground along a leg (on it and 2 km either side, every 500 m) [m over the sea]. */
 function legGround(W: IlsRunway, a: { x: number; y: number }, b: { x: number; y: number }, ground: (lat: number, lon: number) => number) {
   const len = Math.hypot(b.x - a.x, b.y - a.y);
   const n = Math.max(1, Math.ceil(len / 500));
@@ -88,7 +93,8 @@ function legGround(W: IlsRunway, a: { x: number; y: number }, b: { x: number; y:
   for (let i = 0; i <= n; i++) {
     const x = a.x + ((b.x - a.x) * i) / n,
       y = a.y + ((b.y - a.y) * i) / n;
-    for (const s of [-1000, 0, 1000]) {
+    // (2 km either side: a turn at 170 m/s cuts its corner by about that)
+    for (const s of [-2000, -1000, 0, 1000, 2000]) {
       const p = fromRunway(W, x - uy * s, y + ux * s);
       top = Math.max(top, ground(p.lat, p.lon));
     }
@@ -104,7 +110,10 @@ export function planJoin(
   W: IlsRunway,
   own: { lat: number; lon: number; alt: number; trk: number },
   ground: (lat: number, lon: number) => number,
+  /** the craft's planned descent [°] (the A320's 2.5: slowing down as it descends) */
+  opts: { descDeg?: number } = {},
 ): JoinPlan {
+  const descDeg = opts.descDeg ?? PLAN.descDeg;
   const o = onRunway(W, { ...own, alt: own.alt });
   const crs = W.hdg * D;
   const hJoin = W.elev + Math.max(gsHeight(-PLAN.join) - PLAN.underGs, PLAN.minJoin);
@@ -115,13 +124,18 @@ export function planJoin(
   // (the side: the craft's own — or, near the axis, the one its track turns to)
   const trkRel = Math.atan2(Math.sin(own.trk - crs), Math.cos(own.trk - crs));
   const side = Math.abs(o.across) > 1000 ? Math.sign(o.across) : trkRel >= 0 ? 1 : -1;
-  if (o.along < -ILS.faf - 2500 && Math.abs(o.across) < 3000 && Math.abs(trkRel) < PLAN.intDeg * D) {
+  // (too high to reach the join at the planned descent from where it is — and over the step-down's highest floor —: not « on the
+  // line », track miles added below; the A320 on Nice's 22R line 2 200 m up stayed over the slope to the runway)
+  const lineFloors = stepDown(W, o.along, ground);
+  const topFloor = Math.max(hJoin, ...lineFloors.map((f) => f.m));
+  const lowEnough = own.alt - hJoin <= Math.max(-PLAN.join - o.along, 0) * Math.tan(descDeg * D) || own.alt <= topFloor + 150;
+  if (o.along < -ILS.faf - 2500 && Math.abs(o.across) < 3000 && Math.abs(trkRel) < PLAN.intDeg * D && lowEnough) {
     // (on the final's line already, heading in, outside the final fix: the localizer intercepted from here — no detour)
     return {
       entry: "straight",
       pts: [],
       msa: legGround(W, { x: o.along, y: o.across }, { x: -ILS.faf, y: 0 }, ground) + PLAN.clear,
-      floors: stepDown(W, o.along, ground),
+      floors: lineFloors,
     };
   }
   if (o.along < pIntX) {
@@ -139,19 +153,55 @@ export function planJoin(
     raw.push({ x: -PLAN.join - PLAN.dwPast, y, name: "BASE", dw: true });
   }
   raw.push({ ...J, name: "JOIN" });
+  // (too high to make the join at the planned descent: track miles added — a dogleg on the craft's side straight in, the base
+  // pushed out on vectors — as a controller does; from 3 000 m 45 km out behind the final, the A320 met the slope 6.5 km out)
+  const pathLen = (pts: { x: number; y: number }[]) => {
+    let L = 0,
+      a = { x: o.along, y: o.across };
+    for (const p of pts) (L += Math.hypot(p.x - a.x, p.y - a.y)), (a = p);
+    return L;
+  };
+  const need = (own.alt - hJoin) / Math.tan(descDeg * D);
+  if (pathLen(raw) < need) {
+    if (entry === "straight") {
+      const t0 = raw[0]!;
+      const mid = { x: (o.along + t0.x) / 2, y: (o.across + t0.y) / 2 };
+      let lo = 0,
+        hi: number = PLAN.dogMax;
+      const at = (Y: number) => ({ x: mid.x, y: mid.y + side * Y, name: "DOG" });
+      for (let k = 0; k < 24; k++) {
+        const Y = (lo + hi) / 2;
+        if (pathLen([at(Y), ...raw]) < need) lo = Y;
+        else hi = Y;
+      }
+      raw.unshift(at(hi));
+    } else {
+      const base = raw.find((p) => p.name === "BASE")!;
+      base.x -= Math.min((need - pathLen(raw)) / 2, PLAN.pushMax);
+    }
+  }
   // the heights: the join's, the downwind's above; each at least its legs' ground + clearance
   const start = { x: o.along, y: o.across };
   const legs = [start, ...raw];
   const legTop: number[] = [];
   for (let i = 1; i < legs.length; i++) legTop.push(legGround(W, legs[i - 1]!, legs[i]!, ground) + PLAN.clear);
-  const floors = stepDown(W, J.x, ground);
+  // (from where the craft is: the localizer may be taken before the join — the intercept begun on the last leg)
+  const floors = stepDown(W, Math.min(o.along, J.x), ground);
+  // (the descent spread along the way: each point no lower than the craft's height less the path to it at the planned slope)
+  const cum: number[] = [];
+  {
+    let L = 0,
+      a = { x: o.along, y: o.across };
+    for (const p of raw) (L += Math.hypot(p.x - a.x, p.y - a.y)), (a = p), cum.push(L);
+  }
   const pts: PathPoint[] = raw.map((p, i) => {
-    const want = p.dw ? hJoin + PLAN.dwAbove : hJoin;
+    const nominal = p.dw ? hJoin + PLAN.dwAbove : hJoin;
+    const want = p.name === "JOIN" ? hJoin : Math.max(nominal, own.alt - cum[i]! * Math.tan(descDeg * D));
     // (the join: over the step-down's first part too — the localizer's outer kilometres flown at its height)
     const after = p.name === "JOIN" ? floorAt({ floors } as JoinPlan, J.x) : Number.NEGATIVE_INFINITY;
     const floor = Math.max(legTop[i] ?? Number.NEGATIVE_INFINITY, legTop[i + 1] ?? Number.NEGATIVE_INFINITY, after);
     const g = fromRunway(W, p.x, p.y);
-    return { x: p.x, y: p.y, lat: g.lat, lon: g.lon, alt: Math.max(want, floor), name: p.name };
+    return { x: p.x, y: p.y, lat: g.lat, lon: g.lon, alt: Math.max(want, floor), floor, name: p.name };
   });
   return { entry, pts, msa: Math.max(...legTop), floors };
 }
@@ -166,7 +216,7 @@ export function followJoin(
   i: number,
   W: IlsRunway,
   own: { lat: number; lon: number; alt: number; trk: number; gs: number },
-): { i: number; crs: number; alt: number; dist: number } {
+): { i: number; crs: number; alt: number; floor: number; dist: number } {
   const o = onRunway(W, { ...own, alt: own.alt });
   const crs0 = W.hdg * D;
   const toRad = (x: number, y: number) => {
@@ -185,8 +235,8 @@ export function followJoin(
     const turn = Math.abs(Math.atan2(Math.sin(outCrs - legCrs), Math.cos(outCrs - legCrs)));
     const radius = Math.max(own.gs, 60) ** 2 / (9.80665 * Math.tan(30 * D));
     const lead = Math.max(800, radius * Math.tan(turn / 2));
-    if (dist > lead) return { i: k, crs: legCrs, alt: p.alt, dist };
+    if (dist > lead) return { i: k, crs: legCrs, alt: p.alt, floor: p.floor, dist };
   }
   // (done — or none to fly: on the final's line already)
-  return { i: k, crs: crs0, alt: plan.pts.at(-1)?.alt ?? own.alt, dist: 0 };
+  return { i: k, crs: crs0, alt: plan.pts.at(-1)?.alt ?? own.alt, floor: plan.pts.at(-1)?.floor ?? Number.NEGATIVE_INFINITY, dist: 0 };
 }

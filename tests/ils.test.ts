@@ -129,11 +129,16 @@ test("a hold asked: a lap of the racetrack at the initial fix, then the approach
   expect(c.ilsLast!.touch!.along).toBeLessThan(900);
 }, 300_000);
 
-test("far too high on the glideslope: over the threshold above minimums — the missed approach, round again", () => {
+test("far too high on the glideslope: given track miles at the engagement; on the final, over the threshold above minimums — the missed approach, round again", () => {
   const { c, fly } = approachFrom(-12_500, 0, 2500, W.hdg, 110);
   const radio: string[] = [];
   c.onRadio = (s) => radio.push(s);
   c.ilsStart("KEDW");
+  // (2 500 m up 12.5 km out: since AP2–AP3 (15 Nov 2026) not a dive at the slope — a join with track miles planned)
+  fly(1, () => false);
+  expect(c.ilsRun!.join!.plan.pts.length).toBeGreaterThan(0);
+  // (the missed approach itself: on the final that high — as if established and pushed up —, over the threshold above minimums)
+  Object.assign(c.ilsRun!, { phase: "final", loc: true, gs: true });
   fly(300, () => {
     if (process.env.TRACE && Math.round((c.ilsRun?.t ?? 0) * 30) % 60 === 0) {
       const g = c.geoNow()!;

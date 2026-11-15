@@ -156,20 +156,21 @@ test("the plan: straight in from behind, a downwind on the craft's side from bey
 
 test("a ridge under the localizer's outer part (Nice's 22R, 15 Nov 2026): the step-down holds over it, the slope met past it", () => {
   // (a 1 000 m ridge 20–24 km out on the axis — beyond the slope's own check (18.5 km), the slope 60–270 m over it —; the craft
-  // on the line, 32 km out, 2 000 m up)
+  // on the line, 32 km out, 1 400 m up: at the step-down's height, on the line — 2 000 m up it is given track miles, below)
   const ridge = (lat: number, lon: number) => {
     const g = ilsReading(W, { lat, lon, alt: 0 });
     return g.along < -20_000 && g.along > -24_000 && Math.abs(g.across) < 1500 ? W.elev + 1000 : W.elev;
   };
   const p = fromRunway(W, -32_000, 0);
-  const plan = planJoin(W, { ...p, alt: W.elev + 2000, trk: W.hdg * D }, ridge);
+  const plan = planJoin(W, { ...p, alt: W.elev + 1400, trk: W.hdg * D }, ridge);
   expect(plan.entry).toBe("straight");
+  expect(plan.pts.length).toBe(0);
   expect(floorAt(plan, -25_000)).toBeGreaterThanOrEqual(W.elev + 1300);
   expect(floorAt(plan, -21_000)).toBeGreaterThanOrEqual(W.elev + 1300);
   expect(floorAt(plan, -15_000)).toBeLessThan(W.elev + 400);
   // flown: never under 300 m over the ridge, established before the final fix, down — the ridge as the physics reads the
   // ground (the relief read at the place's geodetic normal: its latitude the normal's)
-  const { c, fly } = placed(-32_000, 0, 2000, W.hdg, 170);
+  const { c, fly } = placed(-32_000, 0, 1400, W.hdg, 170);
   setGroundHeights("earth", (g) => ridge(Math.asin(g[2]) / D, Math.atan2(g[1], g[0]) / D));
   console.log(`  ${c.ilsStart("KEDW", { runway: "23L" })}`);
   let least = Number.POSITIVE_INFINITY;
@@ -189,3 +190,22 @@ test("a ridge under the localizer's outer part (Nice's 22R, 15 Nov 2026): the st
   expect(est).toBeLessThan(-ILS.faf);
   expect(c.ilsLast!.touch!.along).toBeLessThan(900);
 }, 300_000);
+
+test("too high for the join at 3° (the A320 2 200 m up on Nice's 22R line): track miles — a dogleg, its points over the relief", () => {
+  const ridge = (lat: number, lon: number) => {
+    const g = ilsReading(W, { lat, lon, alt: 0 });
+    return g.along < -20_000 && g.along > -24_000 && Math.abs(g.across) < 1500 ? W.elev + 1000 : W.elev;
+  };
+  const p = fromRunway(W, -32_000, 0);
+  const plan = planJoin(W, { ...p, alt: W.elev + 2200, trk: W.hdg * D }, ridge);
+  expect(plan.pts.map((q) => q.name)).toEqual(["DOG", "JOIN"]);
+  // (the way long enough for 3°: 2 200 m less the join's height over its length)
+  let L = 0;
+  let a = { x: -32_000, y: 0 };
+  for (const q of plan.pts) (L += Math.hypot(q.x - a.x, q.y - a.y)), (a = q);
+  expect(L * Math.tan(3 * D)).toBeGreaterThanOrEqual(W.elev + 2200 - plan.pts.at(-1)!.alt - 1);
+  for (const q of plan.pts) expect(q.alt).toBeGreaterThanOrEqual(q.floor);
+  // (from behind at 3 000 m, 45 km out, 4 km off — the A320 met the slope 6.5 km out before —: a dogleg too)
+  const far = fromRunway(W, -45_000, 4000);
+  expect(planJoin(W, { ...far, alt: W.elev + 3000, trk: W.hdg * D }, () => W.elev).pts[0]!.name).toBe("DOG");
+});

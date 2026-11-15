@@ -372,8 +372,10 @@ sud à Toulon-Hyères : la 31 ; de l'est : la 23 ; du nord, la 13 construite est
 nord-ouest de Hyères — : la 23). Le message dit le choix et sa raison (« LFML ILS 31R — CAT I »). L'approche coupe la formation, l'interception, le STOVL et l'autopilote en cours, puis vole
 elle-même (`ilsRun.phase` : `toIaf`, `intercept`, `final`, `flare`, `rollout`, `missed`, `done` ; et `base`, `hold`),
 sort le train et les volets, coupe la manette à l'arrondi. Elle refuse une pente qui rentre dans le relief ; le choix
-automatique écarte une approche **construite** dont la pente rase le relief (« relief » : la 22R construite de Nice, au-dessus des
-pentes du mont Agel). Le plan de jonction se lit dans `ilsRun.join.plan` (`entry` : `straight` ou `vectors`, `pts` : `INT`, `DW`,
+automatique écarte une approche **construite** dont la pente rase le relief, ou dont le relief autour de la jonction (4 à 26 km,
+7 km de part et d'autre, + 1 000 ft) passe au-dessus de la pente (« relief » : la 22R construite de Nice, au-dessus de Monaco et du
+mont Agel — prise depuis le nord-est, l'A320 survolait la piste à 1 250 m). Trop haut pour rejoindre à 3° (l'A320 : 2,5°), il
+reçoit des milles en plus : un crochet de son côté (`DOG`), ou une étape de base repoussée. Le plan de jonction se lit dans `ilsRun.join.plan` (`entry` : `straight` ou `vectors`, `pts` : `INT`, `DW`,
 `BASE`, `JOIN` avec leur hauteur au-dessus de la mer, `floors` : les paliers jusqu'à la capture de la pente).
 
 **Au clavier** : Tab › Navigation › **Approche ILS** (le choix de la piste dans la sous-roue). Le HUD montre en vert
@@ -468,7 +470,7 @@ atterrissage automatique, roulage —, en sachant ce que fait l'automatisme à c
 | 6 | Montée initiale | **G** (train rentré) ; au-dessus de 1 500 ft, levier en **CL** : l'A/THR, **déjà armé** au décollage, devient actif ; volets rentrés par étapes **au levier du poste** en accélérant au-delà de F puis S (P ne fait que **monter** d'un cran et passe de FULL à 0) | FMA `THR CLB` · `CLB` · `NAV` |
 | 7 | Autopilote | **'** (ù) = **AP1** — accepté au sol ou **≥ 5 s après le décollage et ≥ 100 ft**. **Ne pas presser ⇧'** : l'A/THR est déjà armé (⇧' le couperait) | FMA `AP1`, `A/THR` |
 | 8 | Croisière | le **FCU** au poste (cliquer : SPD, HDG, ALT, V/S ; tirer = sélecté, pousser = géré) ; **⇧M** : NAV sur le plan de vol | FMA `ALT`, `SPEED` |
-| 9 | Descente et approche | ALT du FCU plus bas, tirer : `OP DES` ; volets par étapes à **FULL** (becs 27°, volets 35° — ~30 s), **G** train ; Tab › Navigation › **Approche ILS** | FMA `LOC*`→`LOC`, `G/S*`→`G/S`, vitesse VAPP |
+| 9 | Descente et approche | ALT du FCU plus bas, tirer : `OP DES` ; volets par étapes à **FULL** (becs 27°, volets 35° — ~30 s), **G** train ; Tab › Navigation › **Approche ILS** : le FMGC vole la jonction comme un contrôleur la donnerait (cap et altitude du FCU : dans l'axe, ou vent arrière et base, jamais au-dessus du terrain ; APPR armé sur la dernière branche) | FMA `HDG`, puis `LOC*`→`LOC`, `G/S*`→`G/S`, vitesse VAPP |
 | 10 | Atterrissage | avec l'AP : `LAND` sous 400 ft, **`FLARE` à 50 ft (seulement avec l'AP)**, `ROLL OUT` ; manettes au **ralenti** au toucher | toucher < 3 m/s (≈ 600 ft/min) |
 | 11 | Freinage | **⇧Z** inverseurs (au sol, ralenti), **⇧B** autofrein (LO 1,7 · MED 3,0 · MAX m/s², MAX au sol seulement) ; spoilers sol automatiques | sorti de piste < 30 kt |
 | 12 | Au poste | la tour donne un poste libre ; frein de parc | — |

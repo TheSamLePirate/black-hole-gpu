@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-15 16:07 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-15 17:28 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous.
@@ -71,7 +71,7 @@ ouverts, sous 1 ms) ; J3 au stade du plan.**
 | Audit vagues 3–4 (1feb2f7f) | 4.8 découper `main()` | **fait** (accord de Sam : par petits lots) : lot 1 la persistance, lot 2 qui tient le vol (`session.ts`), lots 3–4 les étapes gardées (`frame.ts`, AR-03), lot 5 l'ordre §19.5 (AR-04), lot 6 `craft-feed.ts`, lot 7 `governor.ts` (confié par la session du rendu) — **fait** : les quatre découpes d'AR-12 (session, frame, gouverneur, poses de l'appareil) |
 | Audit vagues 3–4 (1feb2f7f) | 4.3 séparer `Settings` | **fait** : garde statique des réglages (AR-21) ; `ViewPose` et `SimState` figés une fois par image (AR-07, `view-pose.ts`) ; le renderer les lit (session du rendu, 77721acf) |
 | Audit vague 6 hors rendu (1feb2f7f) | QA-16, QA-18, AR-17, AR-18, réseau RD4/RD5, FX-18, FX-17, FX-07, QA-11 ; puis les FX hors vague : FX-08, FX-12, FX-14, FX-19 (tendance), FX-22, FX-13, FX-20 (FX-11 et FX-15 déjà réglés le 11 nov., FX-16 tranché par Sam) | **faits** (accord de Sam : « un autre lot d'audit hors rendu ») ; FX-17 en 3 lots ; FX-07 l'A320 à la manette ; QA-11 le catalogue 446/446 gardé ; FX-08 V par les vues de l'appareil seul ; FX-12 les touches collées ; FX-14 chaque appareil sa configuration ; FX-19 la tendance de vitesse sur le temps du vol ; FX-13 ⇧M au vol d'abord, FX-20 sans dégâts pour ce vol seulement (choix de Sam) ; e2e `report` 4/4 (sans les états périmés de la galerie) ; ensuite les autres FX hors vague ( FX-19 la fraîcheur des écrans, à mesurer ; FX-21 des fonctions à finir) |
-| PLAN-APPROCHES (1feb2f7f) | AP0a, AP1, AP2, AP0b | **faits (15 nov.)** : nav.dat lié aux pistes ; le CIFP de la FAA (9 568 approches publiées des États-Unis, entières) ; l'approche choisie (état, choix auto par vent, aide, longueur, sens d'arrivée) ; la jonction planifiée (dans l'axe, ou vent arrière + base, jamais au-dessus du terrain, 300 m sur le relief, paliers jusqu'à la pente) — e2e `approach-auto` 5/5, `approach-join` 4/4 (Nice), sans navigateur 8/8 à Edwards. Suite : AP3 (A320) |
+| PLAN-APPROCHES (1feb2f7f) | AP0a, AP1, AP2, AP0b, AP3a | **faits (15 nov.)** : nav.dat lié aux pistes ; le CIFP de la FAA (9 568 approches publiées des États-Unis, entières) ; l'approche choisie (état, choix auto par vent, aide, longueur, sens d'arrivée) ; la jonction planifiée (dans l'axe, ou vent arrière + base, jamais au-dessus du terrain, 300 m sur le relief, paliers jusqu'à la pente) — e2e `approach-auto` 5/5, `approach-join` 4/4 (Nice), sans navigateur 8/8 à Edwards. l'A320 vole la même jonction (e2e `a320-approach-join` 4/4). Suite : AP3b (MCDU ARR/VIA, RAD NAV réel) |
 
 **Fermé récemment** : J2 (13 nov., ΔGPU nul, chemin vers §8 écrit) ; J2-C BC7 étudiée puis **rangée** (Sam : « ne pas le faire maintenant »).
 
@@ -7905,3 +7905,36 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
 - Preuves (mesuré, kerr-mini, un passage) : une scène rapide 3 à 17 s, dont 2 à 16 s de tuiles de bâtiments ; 71 points de bâtiment devant à
   l'arrivée (0 aux trois passages précédents).
 - Suite : une boîte rapide décalée vers l'avant, jugée sur plusieurs passages.
+
+### 2026-11-15 17:28 UTC — PLAN-APPROCHES AP3a : l'A320 vole la jonction planifiée ; le planificateur rend des milles, tient ses paliers, refuse une approche que le relief rend impossible
+
+- **Contribution** : §19 (l'atterrissage de l'avion de ligne, fiable de loin) ; PLAN-APPROCHES AP3, son cœur : le FMGC de l'A320 sur
+  le chemin.
+- **Changements** :
+  - `controller/a320ap.ts` : la phase `entry` suit la jonction de `game/approach-plan.ts` (cap du FCU, altitude à palier à
+    l'altitude d'approche, relevée où le relief d'une branche le demande), au lieu d'un point fixe à 22 km rejoint en ligne droite.
+    APPR armé seulement sur la dernière branche. Une remise de gaz replanifie.
+  - Deux défauts du pilotage de l'altitude corrigés :
+    - une cible changée pendant ALT* (l'A320 cabrait à 82 % N1, 96 kt) ;
+    - une cible au-dessus d'un OP DES (après une remise de gaz, l'A320 continuait à descendre jusqu'à 60 m du sol à l'est de Nice).
+  - `game/approach-plan.ts` :
+    - trop haut pour rejoindre à 3° (l'A320 : 2,5°) : des milles en plus (un crochet `DOG` de son côté, ou la base repoussée), la
+      descente répartie sur le chemin ;
+    - un palier tenu jusqu'à ce que son obstacle soit passé ;
+    - le relief d'une branche lu à 2 km de part et d'autre ;
+    - avant la jonction, le plancher de la dernière branche tenu.
+  - `controller/approach.ts` `boxOverSlope` : une approche construite dont le relief autour de la jonction passe au-dessus de la
+    pente est écartée (« relief »). C'est la 22R de Nice, depuis le nord-est.
+- **Preuve** :
+  - Sans navigateur, piste d'essai, 4 côtés × haut/bas : **A320 8/8 à 20/20**, 0 remise de gaz, établi 12,5–12,6 km, terrain à
+    5,6 km au moins. Le même vol sur l'ancien code (HEAD 4e86d6d3) : depuis l'arrière à 3 000 m, pente prise à **0,7 km**, une
+    remise de gaz, terrain à 2,2 km ; au-delà du terrain : passage à **3,1–3,2 km**.
+  - F-35 : jonction 8/8, crête 254 m (consigne 300), ILS 6/6, piste trop haute → milles (nouveau test).
+  - e2e à Nice : **`a320-approach-join` 4/4** (20/20 ; le nord-est prend l'ILS 04L guidé) ; `approach-join` (F-35) **4/4** ;
+    `approach-auto` 5/5.
+- **Limites** :
+  - Le crochet `DOG` n'est encore dessiné nulle part (AP4).
+  - L'A320 vole en HDG (guidage radar), pas en NAV sur les transitions publiées du CIFP : AP3b/AP4.
+  - Le e2e A320 dure ~7 min (quatre vols complets).
+  - La crête du test F-35 est survolée à 254 m, sous la consigne de 300 m : dépassement de la tenue d'altitude.
+- **Suite** : AP3b — MCDU ARR/VIA (choisir l'approche et sa transition), RAD NAV sur la fréquence réelle, ND.

@@ -127,3 +127,9 @@ pendant le roulage prenaient le manche du décollage pour celui du pilote et, l�
 choix faits pendant le décollage sont **armés** et deviennent ses maintiens à sa fin. Revérifié sur kerr-mini : `apprendre-avions` **7/7**
 (leçon 3 : en l'air en 10,8 s, assiette 20,1°, axe 0,3°, 2 200 m / 210 m/s tenus) ; `takeoff-armed` 1/1 (2 500 m, 270°, 150 m/s armés à
 16 s, tenus — 1 110 m au-dessus du terrain à 70 s, cap 269°). La page dit l'armement.
+
+## 2026-11-15 — PLAN-APPROCHES AP3a : l'A320 sur la jonction, le cours revolé
+
+Le FMGC de l'A320 vole désormais la jonction planifiée (cap et altitude du FCU, APPR armé sur la dernière branche) ; la leçon 10
+(VOL-AVIONS, étape 9) le dit. La recette ne change pas : `apprendre-avions` revolé **7/7** — leçon 10 (Le Bourget) ILS 07 20/20,
+toucher à 666 m, 0,7 m de l'axe ; leçon 7 (Edwards) ILS 23L 20/20, 270 m. Les départs de loin : `a320-approach-join` (Nice, 4/4).
