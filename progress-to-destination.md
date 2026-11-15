@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-15 18:23 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-15 18:40 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous.
@@ -71,7 +71,7 @@ ouverts, sous 1 ms) ; J3 au stade du plan.**
 | Audit vagues 3–4 (1feb2f7f) | 4.8 découper `main()` | **fait** (accord de Sam : par petits lots) : lot 1 la persistance, lot 2 qui tient le vol (`session.ts`), lots 3–4 les étapes gardées (`frame.ts`, AR-03), lot 5 l'ordre §19.5 (AR-04), lot 6 `craft-feed.ts`, lot 7 `governor.ts` (confié par la session du rendu) — **fait** : les quatre découpes d'AR-12 (session, frame, gouverneur, poses de l'appareil) |
 | Audit vagues 3–4 (1feb2f7f) | 4.3 séparer `Settings` | **fait** : garde statique des réglages (AR-21) ; `ViewPose` et `SimState` figés une fois par image (AR-07, `view-pose.ts`) ; le renderer les lit (session du rendu, 77721acf) |
 | Audit vague 6 hors rendu (1feb2f7f) | QA-16, QA-18, AR-17, AR-18, réseau RD4/RD5, FX-18, FX-17, FX-07, QA-11 ; puis les FX hors vague : FX-08, FX-12, FX-14, FX-19 (tendance), FX-22, FX-13, FX-20 (FX-11 et FX-15 déjà réglés le 11 nov., FX-16 tranché par Sam) | **faits** (accord de Sam : « un autre lot d'audit hors rendu ») ; FX-17 en 3 lots ; FX-07 l'A320 à la manette ; QA-11 le catalogue 446/446 gardé ; FX-08 V par les vues de l'appareil seul ; FX-12 les touches collées ; FX-14 chaque appareil sa configuration ; FX-19 la tendance de vitesse sur le temps du vol ; FX-13 ⇧M au vol d'abord, FX-20 sans dégâts pour ce vol seulement (choix de Sam) ; e2e `report` 4/4 (sans les états périmés de la galerie) ; ensuite les autres FX hors vague ( FX-19 la fraîcheur des écrans, à mesurer ; FX-21 des fonctions à finir) |
-| PLAN-APPROCHES (1feb2f7f) | AP0a, AP1, AP2, AP0b, AP3, AP4 | **faits (15 nov.)** : nav.dat lié aux pistes ; le CIFP de la FAA (9 568 approches publiées des États-Unis, entières) ; l'approche choisie (état, choix auto par vent, aide, longueur, sens d'arrivée) ; la jonction planifiée (dans l'axe, ou vent arrière + base, jamais au-dessus du terrain, 300 m sur le relief, paliers jusqu'à la pente) — e2e `approach-auto` 5/5, `approach-join` 4/4 (Nice), sans navigateur 8/8 à Edwards. l'A320 vole la même jonction (e2e `a320-approach-join` 4/4). MCDU ARRIVAL/VIA, RAD NAV réel, arrivée publiée volée en NAV (KSFO via ARCHI, 20/20). l'approche au ND. la carte tactique (fiche, sélection au clic, tracé, profil — e2e jetmap-approach 3/3). Suite : AP5 (radar, TSD) |
+| PLAN-APPROCHES (1feb2f7f) | AP0a, AP1, AP2, AP0b, AP3, AP4, AP5 | **faits (15 nov.)** : nav.dat lié aux pistes ; le CIFP de la FAA (9 568 approches publiées des États-Unis, entières) ; l'approche choisie (état, choix auto par vent, aide, longueur, sens d'arrivée) ; la jonction planifiée (dans l'axe, ou vent arrière + base, jamais au-dessus du terrain, 300 m sur le relief, paliers jusqu'à la pente) — e2e `approach-auto` 5/5, `approach-join` 4/4 (Nice), sans navigateur 8/8 à Edwards. l'A320 vole la même jonction (e2e `a320-approach-join` 4/4). MCDU ARRIVAL/VIA, RAD NAV réel, arrivée publiée volée en NAV (KSFO via ARCHI, 20/20). l'approche au ND. la carte tactique (fiche, sélection au clic, tracé, profil — e2e jetmap-approach 3/3). le radar du HUD et la TSD (choix au clic et au toucher, approche dessinée — e2e radar-approach 3/3). Suite : AP6 (crew) |
 
 **Fermé récemment** : J2 (13 nov., ΔGPU nul, chemin vers §8 écrit) ; J2-C BC7 étudiée puis **rangée** (Sam : « ne pas le faire maintenant »).
 
@@ -8045,4 +8045,30 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   - la jonction n'est dessinée qu'une fois engagée (pas de prévision avant l'armement) ;
   - garde e2e-catalogue : `parcours-debarquer` (session du rendu) sans sa ligne.
 - **Suite** : AP5 — le radar du HUD et la TSD : terrains cliquables, approche tracée, page ILS ; A/B de coût ±1 %.
+
+### 2026-11-15 18:40 UTC — PLAN-APPROCHES AP5 : les approches sur le radar du HUD et la TSD du F-35
+
+- **Contribution** : §19 (choisir et voir l'approche là où le pilote regarde en vol) ; PLAN-APPROCHES §5.2 ; le dessin partagé
+  d'AP4 réutilisé (un module, trois écrans).
+- **Changements** :
+  - Radar du HUD (`ui/hud/symbology.ts`) : les terrains et les parties de l'approche (axes, seuils) deviennent des points de clic
+    (`field:`, `appr:`, `rwy:`). L'approche engagée ou choisie y est dessinée (`telemetry.ts appr`). `main.ts scopePick` : un
+    clic ou le TDC choisit l'approche avec la même action que la carte.
+  - TSD (`f35/pcd.ts`, `cockpit.ts`) : les terrains (zone de 44 px) et les parties de l'approche (36 px) se touchent, action
+    `approach` ; l'approche y est dessinée ; l'en-tête nomme l'approche choisie (cap et distance à son seuil) au lieu du terrain
+    le plus proche.
+  - Les pistes gardent la priorité (radar : passe 1 pistes, puis terrains ; TSD : zones « basses » après les autres).
+- **Preuve** :
+  - e2e `radar-approach` **3/3** : point LFML cliqué → LFML choisi, I31R dessiné ; l'axe d'une autre approche cliqué → choisie ;
+    toucher TSD → « Approach: LFML I31R (TSD) ».
+  - `tdc` 3/3 et `radar-select` 5/5 de nouveau. **Trouvé** : le TDC posé sur un drone au-dessus d'Edwards choisissait le
+    terrain (`tdc` 1/3, la référence sans AP5 3/3 sur un worktree) ; d'où la priorité aux pistes.
+  - Coût (section « HUD: markers & tapes », approche dessinée ou non, A A B B A B de 4 s) : B − A = −0,017 ms puis +0,287 ms,
+    pour un A/A de 0,22 puis 0,15 ms. Aucun coût mesurable à cette résolution ; sonde sans témoin positif, chiffre indicatif.
+- **Limites** :
+  - pas de fiche compacte au radar (le clic choisit et le dit en toast) ;
+  - les étiquettes de l'approche peuvent se superposer aux noms des pistes sur un radar chargé ;
+  - la page ILS dédiée de la TSD (§5.2) n'existe pas ; l'en-tête en tient lieu ;
+  - l'A/B de coût n'est pas une mesure GPU (dessin 2D sur le fil principal).
+- **Suite** : AP6 — le crew (actions `app.*`, fiche partagée, terrains au radar crew, vue Approche, callouts).
 

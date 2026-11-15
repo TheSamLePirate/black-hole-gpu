@@ -382,9 +382,15 @@ export class FlightHud {
       py = y * dpr;
     let best: string | null = null,
       bd = Infinity;
-    for (const h of hudHits) {
-      const d = Math.hypot(h.x - px, h.y - py);
-      if (d <= h.r && d < bd) (bd = d), (best = h.id);
+    // (a track first: the airfields' and the approach's spots — PLAN-APPROCHES AP5 — only where no track is in reach; the TDC
+    // steered onto a drone over an airfield picked the airfield)
+    for (const pass of [false, true]) {
+      for (const h of hudHits) {
+        if (/^(field|appr|rwy):/.test(h.id) !== pass) continue;
+        const d = Math.hypot(h.x - px, h.y - py);
+        if (d <= h.r && d < bd) (bd = d), (best = h.id);
+      }
+      if (best) break;
     }
     return best;
   }

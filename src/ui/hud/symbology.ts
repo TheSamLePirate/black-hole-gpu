@@ -24,6 +24,7 @@ import type { InterceptCues } from "../../game/intercept";
 import { unitsFor } from "../unitsys";
 import { drawSym, PAL, type SymSide, symColour } from "../../radar/symbols";
 import { drawFields } from "../../world/runwaydraw";
+import { drawApproach } from "../../world/approach-draw";
 import { fieldShown, fieldsNearCached } from "../../world/runways";
 import { drawApproachHud, drawSpaceHud, drawSpaceScope, type ApproachHudInfo, type SpaceHudInfo } from "./kindhud";
 import { t, tf } from "../../i18n";
@@ -261,6 +262,8 @@ export interface SymInfo {
   ils?: { id: string; loc: number | null; gs: number | null; dme: number; phase: string; auto: boolean } | null;
   /** the relief about us for the radar's scope (its place, heading, height; the ground's height at a place) */
   relief?: { lat: number; lon: number; hdg: number; alt: number; at: (lat: number, lon: number) => number } | null;
+  /** the approach engaged or chosen (PLAN-APPROCHES AP5): drawn on the scope — its axis, fixes, join —, its parts to click */
+  appr?: import("../../world/approach-draw").MapApproach | null;
   /** the scope's relief already drawn by the page (radarRelief, at the scope's last range — scopeRange.m): used as it is when given —
    *  the HUD drawn away from the page needs no height sampler (`relief.at`, the one thing of its data a worker could not be sent) */
   reliefImg?: HTMLCanvasElement | OffscreenCanvas | ImageBitmap | null;
@@ -2881,7 +2884,18 @@ function drawRadar(
       mpp: 1 / k,
       k: dpr * 0.9,
       labels: range <= 40_000,
+      // (each a place to click — PLAN-APPROCHES AP5: its approach chosen)
+      hit: (f, x, y) => hudHits.push({ id: `field:${f.icao || f.ident}`, x, y, r: 10 * dpr }),
     });
+    // the approach engaged or chosen (AP5): its axis and cone, its fixes, its join, its missed approach; its parts to click
+    if (F.i.appr)
+      drawApproach(ctx, F.i.appr, {
+        at: toScope,
+        k: dpr * 0.9,
+        from: F.i.appr.engaged ? [RL.lat, RL.lon] : undefined,
+        alt: (m) => `${Math.round(unitsFor(s).alt(m))}`,
+        hit: (w, x, y) => hudHits.push({ id: w.approach ? `appr:${w.approach}` : `rwy:${w.rwy}`, x, y, r: 9 * dpr }),
+      });
     ctx.restore();
   }
   // gates: a bar across the way they are flown, numbered

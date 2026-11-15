@@ -5864,13 +5864,24 @@ async function main() {
     }
     const D = scopeRange.disc;
     if (!D) return null;
-    return camera.pictureSelect(flightHud.pickTrack(D.x + x * D.r, D.y - y * D.r)) || null;
+    return scopePick(flightHud.pickTrack(D.x + x * D.r, D.y - y * D.r)) || null;
+  };
+  // (what a click on the scope picked: a track — selected —, or an airfield, an approach's axis, a runway's threshold — the
+  // approach chosen there, PLAN-APPROCHES AP5: the same action as the map's, the MCDU's, TARS's)
+  const scopePick = (id: string | null): string => {
+    const m = id ? /^(field|appr|rwy):(.+)$/.exec(id) : null;
+    if (!m) return camera.pictureSelect(id);
+    const A = camera.approachMapData();
+    const by = t("radar");
+    if (m[1] === "field") return camera.approachSelect({ field: m[2]! }, by);
+    if (m[1] === "appr") return camera.approachSelect({ field: A?.field ?? "auto", approach: m[2]! }, by);
+    return camera.approachSelect({ field: A?.field ?? "auto", rwy: m[2]!, approach: "auto" }, by);
   };
   // (a click in the view, flying in the air: a track selected — on the HUD's scope, in the view —, never a body; the
   // void: the selection let go — PLAN-RADAR-AAA RD9)
   camera.onTrackPick = (x, y) => {
     if (!camera.piloting || !camera.airFlight.inAir || !camera.picture) return false;
-    const said = camera.pictureSelect(flightHud.pickTrack(x, y));
+    const said = scopePick(flightHud.pickTrack(x, y));
     if (said) panel.toast(said);
     return true;
   };
@@ -5922,6 +5933,16 @@ async function main() {
               : a.mode === "tf"
                 ? pcdTool("jet_mode", { action: "tf", aglM: 150 })
                 : pcdTool("jet_mode", { action: a.mode });
+      case "approach":
+        // (the TSD's airfields and approaches — PLAN-APPROCHES AP5: the same action as the map's)
+        return camera.approachSelect(
+          a.approach
+            ? { field: a.field, approach: a.approach }
+            : a.rwy
+              ? { field: a.field, rwy: a.rwy, approach: "auto" }
+              : { field: a.field },
+          "TSD",
+        );
     }
   };
   camera.onJetStart = () => {

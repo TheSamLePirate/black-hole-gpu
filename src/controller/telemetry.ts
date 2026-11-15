@@ -239,6 +239,8 @@ export interface FlightInfo {
   /** the relief about us for the radar's scope (the F-35 over the Earth): where we are, our heading [rad] and height
    *  [m over the sea], the ground's height at a place [m] (controller/gcas.ts's cache) */
   relief: { lat: number; lon: number; hdg: number; alt: number; at: (lat: number, lon: number) => number } | null;
+  /** the approach engaged or chosen, drawn on the scope (PLAN-APPROCHES AP5: controller/approach.ts approachMapData) */
+  appr: import("../world/approach-draw").MapApproach | null;
   /** the F-35's avionics' status (f35/cockpit.ts avionicsData), null: not the F-35 */
   avionics: ReturnType<typeof avionicsData> | null;
   /** a challenge flown: its banner, its next gates (controller/challenge.ts) */
@@ -552,6 +554,7 @@ function flightInfo(this: CameraController): FlightInfo {
       const hd = (this.attitudeNow() as { heading?: number }).heading;
       return g ? { lat: g.lat, lon: g.lon, hdg: hd !== undefined && Number.isFinite(hd) ? hd : g.track, alt: g.alt, at: ground } : null;
     })(),
+    appr: this.airRadar() ? this.approachMapData() : null,
     gcas: this.gcas
       ? { flyUp: this.gcas.flyUp, near: this.gcas.clear < 2 * this.gcas.margin, escape: this.gcas.escape?.name ?? null }
       : null,

@@ -353,6 +353,7 @@ export default {
   "by vectors": "par guidage radar",
   // the tactical map's approaches (PLAN-APPROCHES AP4)
   map: "carte",
+  radar: "radar",
   PROF: "PROF",
   "The approach's vertical profile": "Le profil vertical de l'approche",
   head: "face",

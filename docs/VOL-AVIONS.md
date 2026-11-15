@@ -385,6 +385,10 @@ approche publiée. Sur la carte, l'approche choisie (cyan) ou volée (magenta) :
 jonction prévue, la remise de gaz ; un clic sur l'axe d'une autre approche ou sur un seuil la choisit ; **PROF** montre le profil
 vertical (le relief, la pente, les repères, l'avion).
 
+**Au radar** (AP5) : sur le radar du HUD, un clic sur un terrain choisit son approche (automatique) et la dessine ; un clic sur
+l'axe d'une autre approche, ou sur un seuil, la choisit. Sur la TSD du F-35, le même au toucher, et l'en-tête nomme l'approche
+choisie (son cap et sa distance au seuil).
+
 **Au clavier** : Tab › Navigation › **Approche ILS** (le choix de la piste dans la sous-roue). Le HUD montre en vert
 les points de pente à droite, ceux de l'alignement en bas, des losanges magenta, et la phase (`IAF`, `LOC`, `LOC GS`,
 `FLARE`, `ROLL`, `GA`). Toucher le manche ou la manette repasse en manuel.

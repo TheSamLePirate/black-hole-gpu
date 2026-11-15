@@ -5,6 +5,7 @@
 // flight controls (the surfaces as they stand), the engine, the fuel, the STOVL, the navigation, the standby
 // attitude, the checklists. Pure drawing from a PcdData — no state of the flight read here.
 
+import { drawApproach, type MapApproach } from "../world/approach-draw";
 import { drawFields } from "../world/runwaydraw";
 import { type Airfield, fieldShown } from "../world/runways";
 import { drawSym, PAL, type SymSide, symColour } from "../radar/symbols";
@@ -30,7 +31,10 @@ export type PcdAction =
   | { kind: "nav"; l?: boolean; v?: boolean }
   /** a mode: the ILS (to the nearest field) or its cancel, an orbit here, a holding pattern, the terrain following,
    *  the modes off, the go-around */
-  | { kind: "apMode"; mode: "ils" | "ilsOff" | "orbit" | "hold" | "tf" | "off" | "goAround" };
+  | { kind: "apMode"; mode: "ils" | "ilsOff" | "orbit" | "hold" | "tf" | "off" | "goAround" }
+  /** an airfield, an approach's axis or a runway's threshold touched on the TSD: the approach chosen there (PLAN-APPROCHES
+   *  AP5 — the same action as the tactical map's, the MCDU's, TARS's) */
+  | { kind: "approach"; field: string; approach?: string; rwy?: string };
 
 /** An airfield on the map (lat, lon [°], its runway's heading [°], its name and ICAO code). */
 export interface PcdField {
@@ -170,6 +174,8 @@ export interface PcdData {
   }[];
   /** the world's airfields about the craft (src/world/runways.ts — PLAN-RADAR-AAA RD11), the nearest first */
   world?: Airfield[];
+  /** the approach engaged or chosen (PLAN-APPROCHES AP5: controller/approach.ts approachMapData) */
+  appr?: MapApproach | null;
   /** the craft's trace and the path ahead (controller/owntrack.ts — PLAN-RADAR-AAA RD15) */
   trail?: { lat: number; lon: number }[];
   pred?: { lat: number; lon: number; t: number }[];
@@ -326,9 +332,13 @@ export class Pcd {
   /** the IR picture's grain (made once) */
   private grain: OffscreenCanvas | null = null;
   /** each slot's buttons inside its page (the AP's), as last drawn: where, what they do */
-  private hits = new Map<number, { r: PcdRect; act: () => string | null }[]>();
+  private hits = new Map<number, { r: PcdRect; act: () => string | null; low?: boolean }[]>();
   /** the portal being drawn (its symbols' touch targets go to its hits) */
   private drawSlot = 0;
+  /** A place a touch asks an action of (an airfield, an approach's part — PLAN-APPROCHES AP5), `h` its half size [px]. */
+  private touchAt(x: number, y: number, h: number, a: PcdAction) {
+    this.hits.get(this.drawSlot)?.push({ r: { x: x - h, y: y - h, w: 2 * h, h: 2 * h }, act: () => this.act?.(a) ?? null, low: true });
+  }
   /** A track's symbol a touch selects (PLAN-RADAR-AAA RD9). */
   private symHit(x: number, y: number, id: string | undefined) {
     if (!id) return;
@@ -475,7 +485,10 @@ export class Pcd {
         redraw(!!hit);
         return hit ? hit.page : null;
       }
-      const hit = this.hits.get(k)?.find((b) => x >= b.r.x && x <= b.r.x + b.r.w && y >= b.r.y && y <= b.r.y + b.r.h);
+      // (a track's or a key's spot before an airfield's or an approach's — `low`, PLAN-APPROCHES AP5)
+      const inside = (b: { r: PcdRect }) => x >= b.r.x && x <= b.r.x + b.r.w && y >= b.r.y && y <= b.r.y + b.r.h;
+      const list = this.hits.get(k) ?? [];
+      const hit = list.find((b) => !b.low && inside(b)) ?? list.find((b) => b.low && inside(b));
       if (hit) {
         const said = hit.act();
         redraw(false);
@@ -1158,8 +1171,33 @@ export class Pcd {
         k: 2,
         labels: !this.declutter,
         box: { x: r.x, y: r.y, w: r.w, h: r.h },
+        // (each a place to touch: its approach chosen — PLAN-APPROCHES AP5)
+        hit: (f, x, y) => this.touchAt(x, y, 22, { kind: "approach", field: f.icao || f.ident }),
       },
     );
+    // the approach engaged (magenta) or chosen (cyan): its axis and cone, fixes, join, missed approach — its parts to touch
+    if (d.appr) {
+      const A = d.appr;
+      g.save();
+      g.beginPath();
+      g.rect(r.x, r.y, r.w, r.h);
+      g.clip();
+      drawApproach(g, A, {
+        at: (la, lo) => where(la, lo),
+        k: 2,
+        from: A.engaged ? [d.lat, d.lon] : undefined,
+        alt: (m) => `${Math.round(this.u.alt(m))}`,
+        hit: (w, x, y) =>
+          // (36 px: a track's are 40 — the tests tell them apart by their size)
+          this.touchAt(x, y, 18, {
+            kind: "approach",
+            field: A.field,
+            ...(w.approach ? { approach: w.approach } : {}),
+            ...(w.rwy ? { rwy: w.rwy } : {}),
+          }),
+      });
+      g.restore();
+    }
     // a mission's places: the zones to reach (amber, the waiting dashed), the SAMs' reach (red, dashed)
     for (const m of d.marks ?? []) {
       const [x, y] = where(m.lat, m.lon);
@@ -1360,8 +1398,28 @@ export class Pcd {
     g.lineTo(cx - 14, cy + 14);
     g.closePath();
     g.fill();
-    // the nearest field's bearing and distance
-    const near = nearest(d);
+    // the approach chosen — its field, its id, the bearing and distance to its threshold (PLAN-APPROCHES AP5) —, else the
+    // nearest field's
+    const near = d.appr ? null : nearest(d);
+    if (d.appr) {
+      const A = d.appr;
+      const p1 = (d.lat * Math.PI) / 180,
+        p2 = (A.thr.lat * Math.PI) / 180,
+        dl = ((A.thr.lon - d.lon) * Math.PI) / 180;
+      const brg =
+        ((Math.atan2(Math.sin(dl) * Math.cos(p2), Math.cos(p1) * Math.sin(p2) - Math.sin(p1) * Math.cos(p2) * Math.cos(dl)) * 180) /
+          Math.PI +
+          360) %
+        360;
+      const dist = 6_371_008.8 * Math.acos(Math.min(1, Math.sin(p1) * Math.sin(p2) + Math.cos(p1) * Math.cos(p2) * Math.cos(dl)));
+      this.text(
+        `${A.field} ${A.id}  ${String(Math.round(brg)).padStart(3, "0")}°  ${this.u.dist(dist).toFixed(1)} ${this.u.distName}`,
+        r.x + 16,
+        r.y + 26,
+        A.engaged ? C.magenta : C.cyan,
+        24,
+      );
+    }
     if (near) {
       this.text(
         `${near.f.icao ?? near.f.name.slice(0, 8)}  ${String(Math.round(near.brg)).padStart(3, "0")}°  ${this.u.dist(near.dist).toFixed(1)} ${this.u.distName}`,

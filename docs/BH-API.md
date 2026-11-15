@@ -2178,7 +2178,11 @@ Selects a track on all the pilot's screens (`null`: none).
 ### `__bh.radar.hits()` → `{id, x, y, r}[]`
 
 What a click in the view may select this frame (RD9): the HUD's scope's symbols and the tracks seen in the view, their
-place and reach in CSS px.
+place and reach in CSS px. Since PLAN-APPROCHES AP5 the scope's airfields (`field:<code>`), the drawn approach's axes
+(`appr:<id>`) and thresholds (`rwy:<end>`) too: a click on one chooses the approach there (`approachSelect`, « radar »). The
+TSD's (`__bh.pcd.pcd.hits`): an airfield's touch spot 44 px, an approach's part 36 px (a track's 40), its action `{ kind:
+"approach", field, approach?, rwy? }`; its header names the approach chosen (field, id, bearing and distance to its threshold)
+in place of the nearest field.
 
 ### `__bh.radar.scope()` → `{range, disc}`
 

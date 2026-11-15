@@ -1,6 +1,8 @@
 # Plan — les approches et les pistes, AAA (pilote, crew, roue)
 
-**État (2026-11-15) : AP0a, AP1, AP2, AP0b, AP3 (a, b, c) et AP4 faits.** AP4 : la carte tactique — la fiche de terrain
+**État (2026-11-15) : AP0a, AP1, AP2, AP0b, AP3 (a, b, c), AP4 et AP5 faits.** AP5 : sur le radar du HUD et la TSD du F-35,
+les terrains et les parties de l'approche cliquables (son choix), l'approche dessinée (le module partagé), l'en-tête de la TSD sur
+l'approche choisie ; les pistes gardent la priorité au clic et au TDC ; coût non mesurable à cette résolution (A/B indicatif). AP4 : la carte tactique — la fiche de terrain
 (choix auto et raison, extrémités, vent, approches, Armer, Auto, Guidage/Par sa transition), l'approche dessinée (cône, repères et
 altitudes, jonction, remise de gaz, attente ; les autres en discret, cliquables), le profil vertical (PROF) ; le dessin partagé
 `world/approach-draw.ts` pour le radar et le crew (AP5, AP6). AP3b : la page ARRIVAL du MCDU (approches réelles et
@@ -320,7 +322,7 @@ captures montrées dans T3, ses docs, une entrée au journal.
 | **AP2 — planificateur + F-35** (fait le 15 nov.) | `game/approach-plan.ts` (entrées, profil, relief, replanification) ; `ilsStep` en suiveur de segments ; LOC/GS sur les antennes réelles | e2e `approach-join` F-35 : 4 départs à 30–50 km, haut et bas, établi avant le FAF, pas de demi-tour à l'IAF, au-dessus du relief (Nice ou Chambéry pour le relief), note ≥ actuelle |
 | **AP3 — A320** (fait le 15 nov., sauf la télémétrie) | FMGC en NAV sur le chemin, APPR à l'IF ; MCDU ARR/VIA ; RAD NAV réel ; ND avec l'approche ; télémétrie A320 | e2e `a320-approach-join` mêmes départs ; `a320-mcdu` étendu |
 | **AP4 — carte tactique** (fait le 15 nov.) | Fiche enrichie, sélection graphique (extrémité, approche), tracé (plume, fixes, chemin, remise de gaz, attente), profil vertical | e2e `jetmap-approach` : clic LFML → 31R ILS → armer → tracé et AP sur la bonne ; captures |
-| **AP5 — radar, TSD, ND** | Terrains cliquables au radar du HUD et à la TSD ; approche tracée ; page ILS de la TSD | e2e `radar-approach` : sélection par le radar ; A/B de coût ±1 % |
+| **AP5 — radar, TSD, ND** (fait le 15 nov.) | Terrains cliquables au radar du HUD et à la TSD ; approche tracée ; page ILS de la TSD | e2e `radar-approach` : sélection par le radar ; A/B de coût ±1 % |
 | **AP6 — crew** | Actions `app.*` ; fiche partagée ; terrains au radar crew ; vue « Approche » ; boîte APP ; télémétrie et DME ; callouts | e2e `crew-approach` : le crew choisit et arme, le pilote voit la même sélection et l'AP la vole ; `crew-actions` étendu |
 | **AP7 — HUD et directeur de vol** | Toutes les pistes (bascule, réglage, touche proposée), repères d'approche, FD F-35/A320/crew | e2e `hud-runways-all` (captures LFPG multipistes, avec/sans) ; e2e FD : en manuel scripté sur les barres, établi ; A/B ±1 % |
 | **AP8 — roue et options** | Secteur « Approche » (§5.4), options du Labo (§5.6), touche | e2e par entrée réelle (CDP) de la roue ; `settings` vert |
