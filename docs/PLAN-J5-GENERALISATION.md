@@ -65,3 +65,9 @@ Les plafonds de J5-1 au beau temps, de J5-2 par corps et la parité du repli tra
   photo jaune apparaissent où la forêt était d'un vert sombre uniforme ; à 4 px, la différence est faible. L'écart pixel à pixel base / 6 px
   est de l'ordre de l'écart entre deux références (le vol bouge) : la planche, pas un chiffre, montre la différence. **Aucune décision prise** :
   le choix 2,5 / 4 / 6 revient à Sam (question 1).
+- **J5-0, le MSAA de l'appareil chiffré ; J5-1, son plafond au beau temps** (2026-11-15 05:12 UTC) : `perf-ab SET=ship` (Tarifa, kerr-mini,
+  ×4, trois alternances), ce que coûte le dessin de l'appareil — MSAA 4× : cockpit 3,4 ms, autour à 30 m 5,1, poursuite 4,8 ; MSAA 1× :
+  ≈ 0, 1,0, 2,5 — **le 1× rendrait ≈ 3,4 ms au cockpit, 4,1 autour, 2,3 en poursuite** (A/A 0,7 et 0,0). **Image** : à 1×, les bords de
+  l'appareil en escalier (ventre, dérives) que l'historique ne lisse pas (planche dans T3, non commitée). **Aucune décision** : question 1.
+  **J5-1** : la marche de lumière des nuages au beau temps sur J0 (ablation `cloudLight`, deux fois) **≈ 0 ms** (55,9 / 55,2 contre 55,3 /
+  55,2) — le découpage du noyau des nuages ne paierait que sous ciel chargé (~9,8 ms sous orage) : son plafond est celui du profil lourd.

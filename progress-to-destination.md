@@ -7299,3 +7299,14 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
 - Limites : une seule vue ; le M1 Max non mesuré ; aucune décision prise.
 - Suite : J5-0 pour le MSAA de l'appareil (planche 4× / 1×, le levier `SHIP_MSAA` prêt) et la houle à demi-résolution (à écrire avant de
   la chiffrer), puis J5-1 (le noyau des nuages découpé : son plafond au beau temps à lire d'abord).
+
+### 2026-11-15 05:12 UTC — J5-0 : le MSAA de l'appareil chiffré ; J5-1 : plafond nul au beau temps
+
+- Contribution à la destination : les arbitrages d'image de J5-0 chiffrés pour Sam ; le plafond de J5-1 lu (règle 1).
+- Réalisé : mesures et planches ; PLAN-J5 §5.
+- Preuves (mesuré, kerr-mini) : le dessin de l'appareil, MSAA 4× / 1× — cockpit 3,4 / ≈ 0 ms, autour 5,1 / 1,0, poursuite 4,8 / 2,5
+  (`perf-ab SET=ship`, trois alternances, A/A 0,7 / 0,0) ; à 1× les bords en escalier (captures figées, même vue) ; la lumière des nuages au
+  beau temps sur J0 ≈ 0 ms (deux fois).
+- Limites : aucune décision d'image prise (petits arbres, MSAA : question 1 de PLAN-J5) ; le M1 Max non mesuré.
+- Suite : J5-1 reste un lot du profil lourd (orage) ; la houle à demi-résolution à écrire puis chiffrer (J5-0) ; J5-2 (les autres corps) par
+  ses scènes de référence.
