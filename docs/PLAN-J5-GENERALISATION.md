@@ -131,3 +131,11 @@ Les plafonds de J5-1 au beau temps, de J5-2 par corps et la parité du repli tra
   solides (`bodyLite`) ; mesurés le 15 nov. (kerr-mini, `planets-baseline`) : Lune vol bas 25,9 / à pied 30,5 ms, Mars 40,8 / 27,3 — sous la
   Terre en vol bas (43,0) et à pied dans le raster (la Terre seule y est tracée, J5-3). Rien à porter ; leurs fiches par scène restent celles
   de PLAN-PLANETES-AAA. **J5-2 clos.**
+- **J5-3b, les arbres proches par leurs imposteurs ; J5-3 fermé** (2026-11-15 06:20 UTC) : la distance des imposteurs rendue réglable
+  (`IMPOSTOR_NEAR_M` devient une constante surchargeable, 200 m par défaut ; `renderer.tune = { IMPOSTOR_NEAR_M: -100 }` : tous les arbres
+  du matériau par leurs imposteurs), sonde `walk-raster` voie `imp` (kerr-mini) : tracé 33,9 / 34,0 ms ; raster 103,9 ; arbres proches au
+  matériau 70,2 ; **par leurs imposteurs 69,9** (`earth shade` 14,2, `earth lite` + lumière 26,6) — même coût, image à peine meilleure (la
+  résolution des imposteurs ne tient pas à quelques mètres : taches floues, un conifère transparent, le sol à travers). **Conclusion** : à
+  pied, le tracé est aujourd'hui **le moins cher** (34 ms, sous la cible de 40 du mini) et sans question de contact ; le raster y coûte le
+  double même sans les arbres proches tracés. **J5-3 fermé** : la marche reste tracée ; son flou (le tracé sous-échantillonné ×8) est sa
+  limite d'image connue. Rouvrir avec des arbres proches en géométrie (assets) et un ombrage du sol proche moins cher.

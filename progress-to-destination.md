@@ -7392,3 +7392,12 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   (décrochage à 14,6 images/s) est due à la chaleur héritée des passages enchaînés — gardée, corrigée ici.
 - Limites : un passage ; un jeu long et chaud (au-delà du vol soutenu de J0) non mesuré.
 - Suite : J5-3b (les arbres proches par leurs imposteurs : sonde en cours).
+
+### 2026-11-15 06:20 UTC — J5-3 fermé : à pied, le tracé reste le moins cher
+
+- Contribution à la destination : la marche (stratégie §15 J5) — le pipeline de la marche tranché sur mesure.
+- Réalisé : `IMPOSTOR_NEAR_M` surchargeable (levier de mesure, défaut inchangé 200 m) ; voie `imp` de la sonde `walk-raster` ; PLAN-J5.
+- Preuves (mesuré, kerr-mini, Chamonix) : tracé 33,9 / 34,0 ms ; raster 103,9 ; arbres proches au matériau 70,2 ; par leurs imposteurs 69,9 ;
+  capture : imposteurs insuffisants de près.
+- Limites : un lieu ; l'image tracée à pied est floue (×8) — non traitée.
+- Suite : les décisions de Sam (PLAN-J5 §3).

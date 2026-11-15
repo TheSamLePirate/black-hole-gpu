@@ -198,7 +198,8 @@ export function withTreeImpostors(trace: string, supported: boolean): string {
     `
 @group(0) @binding(${IMPOSTOR_BINDING}) var impTex: texture_2d_array<f32>;
 const IMPOSTOR_BOUND = true;
-const IMPOSTOR_NEAR_M = ${IMPOSTOR_NEAR_M.toFixed(1)};
+// (an override — PLAN-J5 J5-3b, a measure: renderer.tune { IMPOSTOR_NEAR_M: -100 } the near trees from their impostors too)
+override IMPOSTOR_NEAR_M: f32 = ${IMPOSTOR_NEAR_M.toFixed(1)};
 const IMP_ASPECT = array<f32, ${IMPOSTOR_LAYERS}>(${arr(aspects)});
 const IMP_HALF = array<f32, ${IMPOSTOR_LAYERS}>(${arr(halves)});
 const CANOPY_LAYER = ${CANOPY_LAYER};
