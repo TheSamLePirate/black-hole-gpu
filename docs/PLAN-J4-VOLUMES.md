@@ -74,7 +74,7 @@ Chaque lot de performance écrit d'abord son gain maximal, lu dans une fiche ; c
 | **J4-2** | **Le saut du vide** : une grille d'occupation hiérarchique pour `cloudVolume` | `clouds (half)` 5,15 ms (J0) ; **16,5 ms sur J0 sous orage** (15 nov.) | ΔGPU J0 et scène lourde | M |
 | **J4-3** | **Les caches de lumière spécialisés** : `cloudShadow`, `cloudLightVolume`, `skyAmbient` compilés depuis le module spécialisé | compilation (temps de chargement), coût de passe à mesurer | temps de compilation, ΔGPU | S |
 | **J4-4** | **La passe d'eau propre** : sa disposition à elle (PLAN-MER), la houle côtière en passe séparée | famille eau 16,2 ms (mini) ; houle **+3,3–3,5 ms sur une côte, +0,8 sur J0** (15 nov.) | ΔGPU J0 et côte — **la passe de houle essayée : −0,4 à +0,3 ms, retirée** (§10) | L |
-| **J4-5** | **La végétation lointaine collective** : tuiles de canopée par classe, moyenne exacte, imposteurs à profondeur fiable | décor −2,0 ms (mini) | images lointaines, ΔGPU | M |
+| **J4-5** | **La végétation lointaine collective** : tuiles de canopée par classe, moyenne exacte, imposteurs à profondeur fiable | décor −2,0 ms (mini) ; **sur la forêt −10,2 ms, la portée lointaine −0,95** (15 nov.) | images lointaines, ΔGPU — **non ouvert (≈ 1 ms) ; la carte d'ombre des arbres redessinée à chaque image corrigée : −2,8 ms** (§10) | M |
 | **J4-6** | **Le profil météo lourd** : son enveloppe écrite et tenue sur la scène de J4-0 | **la météo d'orage 20,8 ms sur J0** (15 nov., [fiche](progress/j4/FICHE-ORAGE-kerr-mini-2026-11-15.md)) ; `clouds (half)` 16,5 ms | fiche | M |
 | **J4-R** | Retrait des anciens chemins des leviers allumés pendant J4 | — | suite, J0 | S |
 
@@ -174,3 +174,13 @@ Le relevé du §2 vient d'une lecture du code et des documents (agent d'explorat
   la déplacer ne le réduit pas (la leçon du 11 nov. confirmée par l'autre bout). **Retirée** (patchs gardés hors du dépôt) ; gardés : la
   phase J0 `swell`, l'option `SWELL_PASSES=all`. Ce qui rendrait ce coût : faire moins de travail (la houle à demi-résolution, ou
   seulement où le champ tient des crêtes résolues) — une décision d'image, non un déplacement ; non ouvert.
+- **J4-5, la végétation lointaine : plafond lu, et un défaut trouvé à côté** (2026-11-15 04:32 UTC) : J0 parti au-dessus de la forêt des Maures
+  (`J0_START=43.22,6.33,300,90,140`, kerr-mini) : **sans décor −10,2 ms** (55,4 → 45,2), **la portée lointaine** (« balanced » : 3–4 km au
+  lieu de 4,5–6, ablation `sceneryNear` ajoutée) **−0,95 ms** — la végétation lointaine plafonne vers 1 ms (règle 1) ; ce que le lot visait
+  existe d'ailleurs (imposteurs V2c jusqu'à 6,25 km, leur profondeur reprise par le sol ; tuiles de canopée V1 par classe au-delà —
+  PLAN-VEGETATION-V2). **Non ouvert comme lot de performance.** **Le défaut** : la carte d'ombre des arbres (`trees' shadow map`) était
+  redessinée **à chaque image** en vol — son centre calé sur 128 m dans le plan du Soleil mais pas le long du Soleil, où il suivait la
+  caméra au mètre près. **Corrigé** : calé aussi sur cet axe (128 m dans sa profondeur de ±3 km) ; levier `renderer.tsmSnapAlong` (l'A/B,
+  retiré à J4-R), compteur `tsmDraws`, ablation J0 `tsmEveryFrame`. **Mesuré** (A B A B A, Maures, kerr-mini) : GPU p50 **53,1 contre
+  55,9 ms (−2,8)** ; redessins 36 par vol de 20 s contre 359 (le témoin : la cause vue). Images au même instant du vol semblables (captures
+  `ablate-*`). Non mesuré : J0 (peu d'arbres), le M1 Max.
