@@ -32,6 +32,12 @@ nuages de la météo — sa marche vers le Soleil à chaque échantillon — fai
 c'est l'appel lui-même. Plafond pour un cache de lumière (§7.9) : ~9,4 ms sous orage. Q5 C6 avait mesuré la qualité de ces marches (4 pas :
 la lumière d'un orage +14 niveaux) — un cache se juge contre la marche, à l'image.
 
+## Ce que rend le volume de lumière, et un essai retiré (~03:30 UTC)
+
+Runs `…-j4-cloudlight2`, `…-j4-clvframe` (orage) : la marche proche réduite à 1 pas −1,6 ms ; sans lumière marchée −9,8 ; **le volume de
+lumière non lu (`clvSkip`) +4,9 ms** — il rend déjà ~5 ms ; son repère calculé une fois par fil (essai `TUNE_CLV_FRAME_CACHE`) : ~2 ms plus
+lent que l'ancien chemin (75,8 / 74,0 contre 78,6 / 76,6 / 75,4, la dérive descendante comprise) — les registres, retiré.
+
 ## Non vérifié
 
 Un vol par profil (A/A de J0 ~±1,6 ms) ; le M1 Max non mesuré ; la part des éclairs et de la couche haute de l'orage non séparée.

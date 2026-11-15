@@ -143,6 +143,11 @@ Le relevé du §2 vient d'une lecture du code et des documents (agent d'explorat
   cible du mini (40 ms) : l'enveloppe est écrite, l'écart aussi (17 à 38 ms).
 - **J4-2, la lumière plutôt que le vide** (2026-11-15 03:18 UTC) : sous orage, la marche vers le Soleil de chaque échantillon des nuages de la
   météo coûte **9,4 ms** (ablation `cloudLight` : la colonne à sa place) ; 4 pas au lieu de 6 : −0,75 (au bruit). Le lot J4-2 se recentre
-  donc sur **le cache de lumière** du contrat des volumes (§7.9 : la profondeur optique vers le Soleil précalculée par volume, lue par
-  échantillon) plutôt que sur la grille d'occupation (une couche pleine n'a pas de vide à sauter) ; plafond 9,4 ms sous orage. À juger à
-  l'image contre la marche (Q5 C6). Non commencé.
+  donc sur **la lumière** plutôt que sur la grille d'occupation (une couche pleine n'a pas de vide à sauter).
+  **Correction (même nuit, 03:30 UTC)** : le cache de lumière **existe déjà** (Q5, `cloudLightVolume` : chaque échantillon marche ses
+  180 premiers mètres et lit le reste dans le volume) ; ablations sous orage (moyenne des références 77,5) : la marche proche en 1 pas −1,6 ms ;
+  sans lumière marchée −9,8 ; **sans le volume** (`clvSkip`, la marche à sa place) **+4,9** — il rend déjà ~5 ms. Les ~8 ms restants sont la
+  lecture du volume (son repère `clvFrame` recalculé et huit lectures du tampon `bodies` par échantillon) et le poids du code. **Essai**
+  (`TUNE_CLV_FRAME_CACHE`) : le repère fait une fois par fil — **~2 ms plus lent** (75,8 / 74,0 contre 78,6 / 76,6 / 75,4 : les registres tenus
+  sur toute la boucle, Apple) : **retiré**. Piste suivante, non essayée : le volume lu par l'échantillonneur matériel (une texture 3D filtrée,
+  une lecture au lieu de huit — le format r16float pour être filtrable, une liaison de plus).

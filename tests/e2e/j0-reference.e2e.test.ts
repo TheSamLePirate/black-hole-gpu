@@ -98,6 +98,11 @@ const ABLATIONS: Record<string, { label: string; set: string }> = {
   // (CLOUD_NEAR_N 4 for 6 — Q5 C6: a storm's light +14 levels off with 4) —, recompiles, measures only)
   cloudLight: { label: "nuages sans marche vers le Soleil (colonne)", set: `__bh.renderer.tune = { TUNE_CLOUD_LIGHT: 0 };` },
   cloudNear4: { label: "marche vers le Soleil en 4 pas (6)", set: `__bh.renderer.tune = { CLOUD_NEAR_N: 4 };` },
+  cloudNear1: { label: "marche vers le Soleil en 1 pas (6)", set: `__bh.renderer.tune = { CLOUD_NEAR_N: 1 };` },
+  // (J4-2: the light volume's read skipped — TUNE_GSKIP 4194304: the near march to 3.8 km instead —: what the volume saves, +4.9 ms
+  // under a storm without it, 15 Nov 2026; its frame made once a thread instead of at each sample was tried and dropped — ~2 ms slower,
+  // the registers it held over the loop)
+  clvSkip: { label: "volume de lumière non lu (la marche à sa place)", set: `__bh.renderer.tune = { TUNE_GSKIP: 4194304 };` },
 };
 // (13 Nov 2026, Sam's decision 1: the water's two ablations in every fiche — its material, valid since liteSkip's bits are carried by
 // bitcast, and the sea's surface, the largest render pass, no owner measured before)
