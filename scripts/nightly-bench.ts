@@ -202,6 +202,17 @@ async function install(dryNow: boolean) {
     // (no hooks: the mini's Git has no git-lfs, its LFS hook failed the clone — the files stay pointers, as in its other clone)
     await $`git -c core.hooksPath=/dev/null clone -q ${ROOT} ${CLONE}`.nothrow();
     await $`git -C ${CLONE} remote set-url origin ${url}`;
+    // (the LFS files kept as their pointers, as the mini's other clone has them: its global filter names a git-lfs it does not have,
+    // the checkout stopped at the first one — J0 needs none of them)
+    for (const [k, v] of [
+      ["filter.lfs.process", ""],
+      ["filter.lfs.smudge", "cat"],
+      ["filter.lfs.clean", "cat"],
+      ["filter.lfs.required", "false"],
+      ["core.hooksPath", "/dev/null"],
+    ])
+      await $`git -C ${CLONE} config ${k} ${v}`;
+    await $`git -C ${CLONE} checkout -q -f HEAD`.nothrow();
     await $`bun install --frozen-lockfile`.cwd(CLONE).quiet().nothrow();
   }
   const args = ["scripts/nightly-bench.ts", "run", "--pull", ...(dryNow ? ["--dry"] : [])];
