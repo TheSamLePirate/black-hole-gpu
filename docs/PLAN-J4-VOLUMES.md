@@ -127,3 +127,7 @@ Le relevé du §2 vient d'une lecture du code et des documents (agent d'explorat
   GPU p50 **77,8 ms** (57,3 au beau temps) ; l'ablation `weather` (ajoutée : la météo au beau temps, la couverture gardée) **−20,8 ms** — tout le
   surcoût ; « sans nuages » (`earthClouds` 0) −0,6 / −1,7 seulement ; `clouds (half)` 16,5 ms (5,15 au beau temps) ; eau −13,0, appareil −7,7.
   [Fiche](progress/j4/FICHE-ORAGE-kerr-mini-2026-11-15.md). Reste de J4-0 : la scène de traversée de nuages (le cumulus de Tarifa).
+- **J4-0, la traversée de nuages mesurée** (2026-11-15 01:44 UTC) : J0 à 1 900 m dans la couche de cumulus de « cloudy » (1 200–2 600 m) :
+  GPU p50 **60,0 ms** (+2,7 sur J0), `clouds (half)` 6,2 ms, la météo ≈ 0 ; l'appareil dans le nuage au virage (capture).
+  [Fiche](progress/j4/FICHE-TRAVERSEE-kerr-mini-2026-11-15.md). **J4-0 fait** (sur kerr-mini ; le M1 Max reste) : beau temps 57,3, traversée
+  60,0, orage 77,8 ms — l'orage seul est un poste lourd.

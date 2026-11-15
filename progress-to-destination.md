@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-15 01:37 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-15 01:44 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous.
@@ -49,7 +49,7 @@ ouverts, sous 1 ms) ; J3 au stade du plan.**
 | Rendu (33d89754) | L'eau étagée E1 : l'air et les nuages sortis de `shadeWater` (passe `earth water: finishing`) | **fait, mesuré** (gain maximal lu : l'eau 16,2 ms, `earth water` 12,7) : A/B J0 sur le mini **GPU p50 57,85 → 56,3 ms (−1,55)** ; l'eau par ablation 13,0 → 10,1 ms ([PLAN-MER §6](docs/PLAN-MER-WEBGPU.md)) |
 | Rendu (33d89754) | L'eau étagée E2 : les reflets (SSR, nuages reflétés) dans leur noyau (`shadeWaterFinish`) | **fait, mesuré, gain faible** : plafond lu −4,7 ms, rendu **−0,5 ms** (A/B mini) — le SSR coûte surtout son travail ; **E3 non ouvert** (seule la présence du code pourrait rendre, ~0,4 ms mesurés par E2) |
 | Rendu (33d89754) | **J3 — lumière, ombres, cockpit** | **mené (2026-11-15)** : J3-0 à J3-7 et J3-R faits ou réglés provisoirement selon les recommandations du plan ([PLAN-J3](docs/PLAN-J3-LUMIERE-COCKPIT.md) §8 : le tableau, révisable par Sam) ; le crépuscule du sol réparé, les ombres d'arbres et du décor justes, les toits et la brique aux albédos mesurés, la cohérence appareil / sol bornée jusqu'à −13° |
-| Rendu (33d89754) | **J4 — l'eau et les volumes** | **plan écrit (2026-11-15)** : [PLAN-J4](docs/PLAN-J4-VOLUMES.md) — lots J4-0 à J4-R, plafonds lus (nuages 5,15 ms sur J0, 29,8 en orage ; eau 16,2 ; décor 2,0) ; questions réglées provisoirement ; **J4-0 : le profil lourd mesuré** (J0 sous orage 77,8 ms, la météo d'orage −20,8 ms à elle seule) ; la traversée de nuages ensuite |
+| Rendu (33d89754) | **J4 — l'eau et les volumes** | **plan écrit (2026-11-15)** : [PLAN-J4](docs/PLAN-J4-VOLUMES.md) — lots J4-0 à J4-R, plafonds lus (nuages 5,15 ms sur J0, 29,8 en orage ; eau 16,2 ; décor 2,0) ; questions réglées provisoirement ; **J4-0 fait sur kerr-mini** : beau temps 57,3, traversée de cumulus 60,0, orage 77,8 ms (la météo d'orage −20,8 ms à elle seule) ; J4-1 ensuite |
 | Rendu (33d89754) | AR-07 (vague 4.3, décision de Sam relayée) : le renderer sur `ViewPose` | **fait** : `renderer.frame(viewPose, settings, …)` ; Paris et J0 volés sans erreur, `gpu-startup` sans nouvel échec |
 | Rendu (33d89754) | La classification de l'écran par tuiles — lot 1 : les noyaux de l'eau en indirect | **fait, mesuré** : plafond lu 2,1 ms (noyaux de l'eau vides) ; J0 neutre (presque toute la mer), **sur la terre −1,15 ms** (A/B mini) |
 | Rendu (33d89754) | Classification — lot 2 : le sol (`earth lite: light`, sa finition) | **non ouvert** : plafond mesuré (vue toute en mer, kerr-mini) 0,33 + 0,22 = 0,55 ms, moins le tri 0,2 — sous 1 ms (règle 1) |
@@ -7119,3 +7119,12 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   −0,6 / −1,7, l'eau −13,0, l'appareil −7,7 ; `clouds (half)` 16,5 ms (5,15). A/A jusqu'à 3,8 ms.
 - **Limites :** un passage par cas ; le M1 Max non mesuré ; la part de la pluie et des éclairs non séparée ; la scène de traversée de nuages
   reste à faire.
+
+### 2026-11-15 01:44 UTC — J4-0 : la traversée de nuages mesurée — 60,0 ms, la météo « cloudy » au bruit
+
+- **Contribution à la destination :** §15 J4 (la sortie : « traversée de nuages dans une enveloppe explicite ») : la scène et son chiffre.
+- **Réalisé :** le vol J0 à 1 900 m sous « cloudy » (dans la couche de cumulus) avec l'ablation météo ; la
+  [fiche](docs/progress/j4/FICHE-TRAVERSEE-kerr-mini-2026-11-15.md) ; PLAN-J4 §10.
+- **Preuves (mesuré, kerr-mini froid)** : GPU p50 60,0 ms, p95 70,7 ; `clouds (half)` 6,2 ms ; météo au beau temps ≈ 0 (A/A 1,2) ; capture au
+  virage : l'appareil dans le nuage.
+- **Limites :** le M1 Max ; la stabilité dans le nuage (J4-1).
