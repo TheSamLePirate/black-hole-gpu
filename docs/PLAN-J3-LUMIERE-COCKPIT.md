@@ -1,6 +1,9 @@
 # PLAN-J3 — lumière, ombres et cockpit cohérents
 
-**État (13 novembre 2026, ~16:05 UTC) : plan proposé, à valider par Sam ; mené selon ses recommandations (la ville d'abord, l'ordre du §3) sous la consigne « continue » de Sam — J3-0 mesuré en partie, J3-1 commencé (§10).** Les 5 questions du §8 restent ouvertes. Origine :
+**État (2026-11-15 00:59 UTC) : J3 mené — ses lots J3-0 à J3-7 et J3-R faits ou réglés provisoirement selon les recommandations du plan,
+chacun daté au §8 (le tableau des réglages provisoires) et au §10 ; tous révisables par Sam, les anciens chemins retirés à sa confirmation (J3-R).**
+
+**État d'origine (13 novembre 2026, ~16:05 UTC) : plan proposé, à valider par Sam ; mené selon ses recommandations (la ville d'abord, l'ordre du §3) sous la consigne « continue » de Sam — J3-0 mesuré en partie, J3-1 commencé (§10).** Les 5 questions du §8 restent ouvertes. Origine :
 [stratégie](ANALYSE-STRATEGIE-RENDU-2026-11-03.md) §15 J3 (« raccorder un état lumineux partagé, cascades et profondeurs des objets ;
 préserver les instruments ; attribuer correctement l'air aux distances ; conserver les corrections de réfraction dans leur portée ; ajouter
 les matériaux de bâtiments identifiés, le détail de surface et les premiers assets préparés par une chaîne de production reproductible ») et
@@ -175,8 +178,13 @@ avancer sans attendre, comme la borne provisoire du M1 Max) :
 | 7. Le plancher de nuit de l'appareil | **éteint** (`ship.nightFloor`) | invisible à l'exposition du jeu |
 | J3-4 : la borne de l'âge des écrans | **p95 < 70 ms, aucun jamais envoyé** — assertée par le vol J0 | mesuré 57 (13 nov.), 56,2 (15 nov.) |
 | J3-5 : les albédos des tables | **tuiles du nord et brique relevées** aux valeurs mesurées (luminance ~0,10 → ~0,25 ; ~0,145 → ~0,22 — `roofs.ts`) ; le recalage sur la photo gardé | l'inventaire du 13 nov. ; Bruxelles d'en haut 68,84 → 69,82 (A/A 0,30) |
+| Les lampes de cabine la nuit (J3-4, AAA-PROGRESS) | **inchangées** | aucune mesure de l'atténuation voulue ; les écrans comme sources : 0,09/255, négligeables |
+| Le recalage des toits sur la photo, à l'étranger (J3-5) | **gardé** | l'état actuel ; les tables, elles, relevées |
+| Le verre des murs-rideaux, le zinc, les reflets lointains (J3-5) | **inchangés** | sans référence nette (un verre traité réfléchit plus que le flotté ; un reflet lointain scintillerait) |
+| Le Soleil du sol tracé de près (J3-7) | **géométrique, inchangé** | le pipeline tracé est le repli dormant du raster (décision) ; le contrat des deux Soleils tenu par `tests/sun-readers.test.ts` |
 
-Restent à Sam : les lampes de cabine la nuit (AAA-PROGRESS) ; le recalage des toits sur la photo à l'étranger (J3-5 : le garder ou non — les tables, elles, relevées).
+
+Tout est réglé provisoirement ; à Sam de confirmer ou de changer chaque ligne (les anciens chemins retirés ensuite, J3-R).
 
 ## 9. Non vérifié
 
