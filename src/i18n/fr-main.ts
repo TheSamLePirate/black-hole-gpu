@@ -606,7 +606,7 @@ export default {
   "Autothrottle: {0} — the throttle keys set the speed": "Auto-manette : {0} — les touches des gaz règlent la vitesse",
   "Locked: {0} · {1}": "Verrouillé : {0} · {1}",
   "Selected: {0} · {1}": "Sélectionné : {0} · {1}",
-  "ILS {0}: the 3° slope runs into the relief {1} out — refused": "ILS {0} : la pente de 3° rencontre le relief à {1} — refusée",
+  "ILS {0}: the {1}° slope runs into the relief {2} out — refused": "ILS {0} : la pente de {1}° rencontre le relief à {2} — refusée",
   "the relief {0} under the slope {1} out": "le relief à {0} sous la pente à {1}",
   "ILS approach: {0}, {1}": "Approche ILS : {0}, {1}",
   "{0}, Mother: cleared for a short take-off, {1} of deck. Converting.":

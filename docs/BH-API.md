@@ -484,6 +484,9 @@ On the A320 the same call flies its FMGC (`camera.a320Approach`, `controller/a32
 - the flaps and the gear go out a step at a time;
 - the touchdown is graded in `camera.ilsLast`.
 
+`approachAudio()` says the approach flown in the headset: `{ key, ident, marker }` — its localizer's ident once received, the
+marker beacon (nav.dat's) over which the craft is (PLAN-APPROCHES AP9). The clearance is said on the radio with real values when an
+approach is engaged (« Sofia approach: cleared ILS approach runway 09, descend 2000 m, QNH 1013 »; no altitude when established).
 `ilsOff()` disarms it; `ilsGoAround()` asks the missed approach (the F-35's climbs ahead and rounds again, the A320's levers to
 TOGA — PLAN-APPROCHES AP8; TARS's and the crew's « go around » use it). `approachPreview()` says what an engagement now would fly
 without recording it, `approachFields()` the airfields to choose from (the plan's destination, the selected, the nearest ahead).
@@ -2496,6 +2499,7 @@ when the sound is off.
 | `radio(on, staticLevel?)` | `(on: boolean, staticLevel = 0) => void` | the radio's squelch and hiss on the voice bus |
 | `alarm(id, on, kind?)` | `(id: string, on: boolean, kind?: "caution" \| "warning") => void` | a looping alarm, by id, until switched off (`kind` defaults to `"warning"`; off when the context is not running or the sound is off) |
 | `stopRobot()` | `() => void` | cuts TARS's own voice now |
+| `morse(ident)` / `marker(kind)` / `approachHeard()` | `(ident: string) => void` / `(kind: "O" \| "M" \| "I" \| null) => void` / `() => { idents, lastIdent, markers: { O, M, I }, marker }` | an approach in the headset (PLAN-APPROCHES AP9): a localizer's ident keyed in Morse (1 020 Hz, 7 words a minute); the marker beacon heard now (400, 1 300, 3 000 Hz — kept keyed half a second ahead while called every frame); what was heard so far (tests). The director plays them from `camera.approachAudio()` as `ilsIdentAudio` and `markerAudio` ask. *Used in:* `tests/e2e/approach-audio.e2e.test.ts` |
 | `otherLevel` | number 0…1 | the other players' engine level (`net-time.e2e.test.ts`) |
 | `meter`, `duck(on, by)` (by: `players`, `voice`, `ear`), `playSample`, `combatCue`, `boomAt`, `thunderAt` | | the meter, the ducking, one sample, a fight's cue, a sonic boom and a thunderclap placed in space (no test calls them) |
 

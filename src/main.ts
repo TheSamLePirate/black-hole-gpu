@@ -9583,6 +9583,8 @@ async function main() {
                 : null,
             // (the rain heard where it falls — none held with the time)
             rain: renderer.rain && !renderer.rain.dust && settings.animate && session.moving ? renderer.rain.rain : 0,
+            // (the approach's ident and markers — PLAN-APPROCHES AP9)
+            approach: camera.ilsRun || camera.a320App ? camera.approachAudio() : null,
           }),
         );
       } else {

@@ -51,6 +51,8 @@ import { BODY_NAMES } from "../targeting";
 import { GARGANTUA_SYSTEM } from "../system/bodies";
 import { SOLAR_BODIES, solarBody } from "../system/solar";
 import { FRENCH, lang as uiLang, tr, type Text } from "../i18n";
+import { sayResolved } from "../controller/approach";
+import { unitsFor } from "../ui/unitsys";
 import { findSettings, checkSetting } from "./settings-tools";
 import { CONSTELLATIONS, NAMED_STARS } from "../skychart";
 import {
@@ -2111,9 +2113,12 @@ export function gameTools(h: GameHost): Tool[] {
     {
       name: "approach",
       description:
-        "The aircraft's instrument approaches (F-35, A320) and procedures — in the US the FAA's published ones (CIFP: ILS, LOC, RNAV, VOR — their transitions, altitudes, missed approach), elsewhere real ILS from nav.dat (FlightGear, 2013), an approach built at every other runway end. ils: an ILS approach flown by the autopilot (field: ICAO or name, else the one selected, else the flight plan's destination, else the nearest ahead; runway: its number — « 13 », « 23L », or both ends « 05/23 » — else the end and approach chosen: the wind (a tail wind over 5 m/s out, from 2.6 m/s the one into it), the runway's length, the aid (ILS, its category, then a localizer, then built), the way in (the end whose approach comes from the craft's side)) — the join planned (straight in from behind the final, else a downwind 6 km off on the craft's side and a base; never over the field, 300 m over the relief, track miles when too high), the localizer and the 3° glideslope captured, the gear and flaps at the final fix, minimums at 60 m (not stable: the missed approach, round again), the flare, braked to a stop, graded out of 20; hold: laps of the racetrack at the initial fix first (0: none; 99: until cleared). clear: out of the hold, the approach begun. off: the approach given up (the needles gone). status: the approach flown (its phase, the needles in dots, the distance) and the last one's grade. runways: the airfield's runways an ILS can take (each end, its length, the one in use), the default one. procedures: the flight plan given its departure's fix (after an airfield it starts from) and its arrival's — a published approach's transition and final fixes with their altitudes, the approach engaged at its IF; else the initial and final fixes — LNAV then hands over to the ILS, on the plan's runway. list: an airfield's approaches (each end's, their kind, source — FAA CIFP, nav.dat or built —, frequency, category, slope). select: the approach chosen (field, runway, approach id like « I31R », « R28R-Z » or « C05 »; via: a published transition by its first fix « ARCHI », « none » for vectors: each left out or « auto » is chosen when flown) — what every screen and the crew show, the ILS flies. auto: the selection back to automatic. state: the selection and what was last flown, with why.",
+        "The aircraft's instrument approaches (F-35, A320) and procedures — in the US the FAA's published ones (CIFP: ILS, LOC, RNAV, VOR — their transitions, altitudes, missed approach), elsewhere real ILS from nav.dat (FlightGear, 2013), an approach built at every other runway end. ils: an ILS approach flown by the autopilot (field: ICAO or name, else the one selected, else the flight plan's destination, else the nearest ahead; runway: its number — « 13 », « 23L », or both ends « 05/23 » — else the end and approach chosen: the wind (a tail wind over the player's limit out — 5.1 m/s by default —, from 2.6 m/s the one into it), the runway's length, the aid (ILS, its category, then a localizer, then built), the way in (the end whose approach comes from the craft's side)) — the join planned (straight in from behind the final, else a downwind 6 km off on the craft's side and a base; never over the field, 300 m over the relief, track miles when too high), the localizer and the glideslope captured (its published slope — 3° mostly, Marseille's 31R 4° —), the clearance said with the join's altitude and the QNH, the localizer's ident in Morse and the marker beacons heard, the gear and flaps at the final fix, minimums at 60 m (not stable: the missed approach, round again), the flare, braked to a stop, graded out of 20; hold: laps of the racetrack at the initial fix first (0: none; 99: until cleared). clear: out of the hold, the approach begun. off: the approach given up (the needles gone). status: the approach flown (its phase, the needles in dots, the distance) and the last one's grade. runways: the airfield's runways an ILS can take (each end, its length, the one in use), the default one. procedures: the flight plan given its departure's fix (after an airfield it starts from) and its arrival's — a published approach's transition and final fixes with their altitudes, the approach engaged at its IF; else the initial and final fixes — LNAV then hands over to the ILS, on the plan's runway. list: an airfield's approaches (each end's, their kind, source — FAA CIFP, nav.dat or built —, frequency, category, slope). select: the approach chosen (field, runway, approach id like « I31R », « R28R-Z » or « C05 »; via: a published transition by its first fix « ARCHI », « none » for vectors: each left out or « auto » is chosen when flown) — what every screen and the crew show, the ILS flies. auto: the selection back to automatic. state: the selection and what was last flown, with why. preview: what « ils » would fly now — the airfield, the approach, its source, slope and ident, why — without engaging it. goaround: the missed approach of the approach flown (F-35: climb ahead and round again; A320: the levers to TOGA).",
       params: {
-        action: { type: "string", enum: ["ils", "clear", "off", "status", "runways", "procedures", "list", "select", "auto", "state"] },
+        action: {
+          type: "string",
+          enum: ["ils", "clear", "off", "status", "runways", "procedures", "list", "select", "auto", "state", "preview", "goaround"],
+        },
         field: { type: "string" },
         runway: { type: "string" },
         approach: { type: "string" },
@@ -2177,6 +2182,29 @@ export function gameTools(h: GameHost): Tool[] {
             return c.approachSelect({ field: "auto", rwy: "auto", approach: "auto" }, "TARS");
           case "state":
             return c.approachState();
+          // (PLAN-APPROCHES AP9 — §5.7: the choice said before arming; the missed approach)
+          case "preview": {
+            const p = c.approachPreview({ name: a.field ? String(a.field) : undefined, runway: a.runway ? String(a.runway) : undefined });
+            if (p === "loading") return "The airfield's data coming — ask again in a moment";
+            if ("say" in p) return p.say;
+            return {
+              field: p.field.icao || p.field.ident,
+              approach: p.approach.id,
+              kind: p.approach.kind,
+              runway: p.approach.rwy,
+              source:
+                p.approach.source === "cifp"
+                  ? `FAA CIFP ${p.approach.cycle ?? ""}`.trim()
+                  : p.approach.source === "navdat"
+                    ? "nav.dat 2013"
+                    : "built",
+              slopeDeg: +p.approach.angle.toFixed(1),
+              ident: p.approach.loc?.ident ?? null,
+              why: sayResolved(p, unitsFor(settings)),
+            };
+          }
+          case "goaround":
+            return c.ilsGoAround();
           default:
             return { flown: c.ilsInfo(), last: c.ilsLast ?? null };
         }

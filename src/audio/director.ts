@@ -3,6 +3,7 @@
 // influence, landings, alarms) and the thrusters and cabin (continuous, see engine.ts). Also the
 // interface's clicks, delegated from the DOM.
 
+import type { MarkerKind } from "../game/approach-audio";
 import type { Settings } from "../settings";
 import { t } from "../i18n";
 import type { RangerStatus } from "../game/status";
@@ -83,6 +84,8 @@ function arrived(text: string): boolean {
 export class SoundDirector {
   /** the last Mach number (the boom when it crosses 1) */
   private mach = 0;
+  /** the approach whose ident was keyed (PLAN-APPROCHES AP9) */
+  private identKey = "";
   private prev: {
     sas: boolean;
     hold: string;
@@ -344,10 +347,22 @@ export class SoundDirector {
       jet?: { spool: number; thrust: number; ab: number; fan: number } | null;
       /** a craft heard by its recordings (the A320's — src/a320/sound: FlightGear's): its voices this frame */
       craft?: CraftVoice[] | null;
+      /** the approach flown in the headset (PLAN-APPROCHES AP9 — controller/ils.ts approachAudio): its localizer's ident when
+       *  received, the marker beacon over which the craft passes */
+      approach?: { key: string; ident: string | null; marker: MarkerKind | null } | null;
     },
   ) {
     const s = this.s;
     const { info, status, flying } = o;
+    // (the approach's ident keyed once an approach — its localizer received: the pilot identifies the aid —; the markers while
+    // over them; each as the player's settings ask)
+    const ap = flying && s.sound ? (o.approach ?? null) : null;
+    if (ap?.ident && s.ilsIdentAudio && this.identKey !== ap.key) {
+      this.identKey = ap.key;
+      sound.morse(ap.ident);
+    }
+    if (!ap) this.identKey = "";
+    sound.marker(ap && s.markerAudio ? ap.marker : null);
     // ---- continuous: thrusters, cabin, wind
     // (a craft heard by its recordings: no rocket's synthesis under them)
     const fresh = flying && performance.now() - o.fired.at < 300 && !o.craft?.length;

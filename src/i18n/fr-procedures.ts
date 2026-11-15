@@ -8,6 +8,15 @@ export default {
   Flare: "Arrondi",
   "Go around — the missed approach": "Remise des gaz — approche interrompue",
   "ILS: on the runway already": "ILS : déjà sur la piste",
+  "{0} approach: cleared {1} approach runway {2}, descend {3}, QNH {4}":
+    "{0} approche : autorisé approche {1} piste {2}, descendez {3}, QNH {4}",
+  "{0} approach: cleared {1} approach runway {2}, QNH {3}": "{0} approche : autorisé approche {1} piste {2}, QNH {3}",
+  "{0} approach: cleared {1} approach runway {2}, climb {3}, QNH {4}":
+    "{0} approche : autorisé approche {1} piste {2}, montez {3}, QNH {4}",
+  "{0} approach: cleared {1} approach runway {2}, maintain {3}, QNH {4}":
+    "{0} approche : autorisé approche {1} piste {2}, maintenez {3}, QNH {4}",
+  visual: "à vue",
+  localizer: "localizer",
   wheel: "roue",
   selected: "sélectionné",
   "tail wind {0}": "vent arrière {0}",

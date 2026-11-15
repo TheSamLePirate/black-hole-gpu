@@ -14,6 +14,7 @@ import {
   departureFix,
   glideClearance,
   ilsGrade,
+  glideOf,
   ilsReading,
   type IlsRun,
   type IlsRunway,
@@ -22,6 +23,7 @@ import {
   runwayId,
 } from "../game/ils";
 import { planJoin } from "../game/approach-plan";
+import { type MarkerKind, markerOver } from "../game/approach-audio";
 import { gcDist, type Waypoint } from "../game/flightplan";
 import type { Approach } from "../world/approaches";
 import { landingEnd, RUNWAY_LENGTH, reciprocal, type Site, SITES } from "../game/sites";
@@ -30,6 +32,7 @@ import { t, tf } from "../i18n";
 import { unitsOf } from "../ui/unitsys";
 import type { PilotInput } from "../pilot";
 import { daysOf } from "../system/solar";
+import { weatherAt } from "../weather";
 import { isAircraft, VESSELS } from "../vessels";
 import type { CameraController } from "../controls";
 
@@ -45,6 +48,7 @@ declare module "../controls" {
     ilsInfo: typeof ilsInfo;
     ilsClear: typeof ilsClear;
     ilsGoAround: typeof ilsGoAround;
+    approachAudio: typeof approachAudio;
     flightDirector: typeof flightDirector;
     routeProcedures: typeof routeProcedures;
   }
@@ -234,23 +238,33 @@ function ilsStart(
   const clear = o.base ? null : glideClearanceOf(W);
   const id = `${W.icao ?? W.name} ${runwayId(W.hdg, W.des)}`;
   if (clear && clear.minM < 0)
-    return tf("ILS {0}: the 3° slope runs into the relief {1} out — refused", id, unitsOf(this.s.units).fDist(clear.atM));
+    return tf(
+      "ILS {0}: the {1}° slope runs into the relief {2} out — refused",
+      id,
+      glideOf(W).toFixed(1),
+      unitsOf(this.s.units).fDist(clear.atM),
+    );
   const warn = clear?.thin
     ? ` — ${tf("the relief {0} under the slope {1} out", unitsOf(this.s.units).fAlt(clear.minM), unitsOf(this.s.units).fDist(clear.atM))}`
     : "";
   // (the A320 flies its own: its FMGC tuned on that runway, vectored to the localizer, APPR armed — controller/a320ap.ts)
   if (fleet.active === "a320") {
     const said = this.a320Approach(W);
-    this.onRadio?.(tf("{0} approach: cleared ILS {1}", W.icao ?? W.name, runwayId(W.hdg, W.des)));
+    // (the clearance with its real values: the approach, the runway, the join's altitude, the QNH — PLAN-APPROCHES AP9)
+    this.onRadio?.(clearance(this, W, this.a320App ? this.a320App.altFt * 0.3048 : null), "tower");
     return said + (why ? ` · ${why}` : "") + warn;
   }
   this.ilsRun = newIlsRun(W, o.hold ?? 0, o.base);
+  // (the join planned now — guide() would at its first frame —: its first altitude said in the clearance)
+  if (!o.base && !(o.hold && o.hold > 0))
+    this.ilsRun.join = { plan: planJoin(W, { lat: g.lat, lon: g.lon, alt: g.alt, trk: g.track }, groundMsl), i: 0 };
   this.onRadio?.(
     o.base
       ? tf("{0} tower: cleared to land, runway {1}", W.icao ?? W.name, runwayId(W.hdg, W.des))
       : o.hold
         ? tf("{0} approach: hold at the initial fix, expect the ILS {1}", W.icao ?? W.name, runwayId(W.hdg, W.des))
-        : tf("{0} approach: cleared ILS {1}", W.icao ?? W.name, runwayId(W.hdg, W.des)),
+        : clearance(this, W, this.ilsRun.join?.plan.pts[0]?.alt ?? null),
+    "tower",
   );
   return tf("ILS approach: {0}, {1}", id, unitsOf(this.s.units).fDist(gcDist(g, W), 0)) + (why ? ` · ${why}` : "") + warn;
 }
@@ -313,6 +327,59 @@ function ilsOff(this: CameraController, why?: string) {
   if (!this.ilsRun) return;
   this.ilsRun = null;
   if (why) this.onPilotMessage?.(why);
+}
+
+/** The station's name in a call: the airfield's city (« Marseille »), else its code or name. */
+const stationOf = (c: CameraController, W: IlsRunway) => {
+  const L = c.approachLast;
+  const mine = L && (L.field.icao === W.icao || L.field.ident === W.icao);
+  return (mine && L.field.city) || W.icao || W.name;
+};
+
+/** The QNH at a place [hPa]: the airfield's report's (the real weather), else the standard 1013. */
+function qnhAt(c: CameraController, lat: number, lon: number): number {
+  if (c.s.weather === "fair") return 1013;
+  const w = weatherAt(c.s, { body: "earth", lat, lon }, daysOf(c.nowTime()), c.weatherReal);
+  return Math.round(w.air?.qnh ?? 1013);
+}
+
+/**
+ * The approach's clearance with its real values (PLAN-APPROCHES AP9 — §5.7): « Marseille approach: cleared ILS approach runway
+ * 31R, descend 2 000 ft, QNH 1013 » — the approach's kind (the one resolved), the runway's designation, the join's first altitude
+ * rounded as a controller gives it (100 ft, 50 m), the QNH.
+ */
+function clearance(c: CameraController, W: IlsRunway, altM0: number | null): string {
+  const L = c.approachLast;
+  // (established already — on the localizer, heading down the course, within the glideslope's reach as game/ils.ts judges it —:
+  // no altitude given, the approach flown from there)
+  const g = c.geoNow();
+  const r = g ? ilsReading(W, g) : null;
+  const established =
+    !!r &&
+    !!g &&
+    r.along < -1500 &&
+    Math.abs(r.across) < 300 &&
+    Math.cos(g.track - (W.hdg * Math.PI) / 180) > 0.96 &&
+    r.gsIn &&
+    Math.abs(r.gs) < 1.5;
+  const altM = established ? null : altM0;
+  const k = L && L.approach.rwy === W.des ? L.approach.kind : "ILS";
+  const what = k === "VIS" ? t("visual") : k === "LOC" ? t("localizer") : k;
+  const u = unitsOf(c.s.units);
+  const imperial = u.fAlt(0).endsWith("ft");
+  const alt = altM === null ? null : imperial ? Math.round(altM / 0.3048 / 100) * 100 * 0.3048 : Math.round(altM / 50) * 50;
+  const rwy = runwayId(W.hdg, W.des);
+  const q = qnhAt(c, W.lat, W.lon);
+  // (descend, climb or maintain: from the altitude flown now — a join over a ridge may be above it)
+  const now = c.geoNow()?.alt ?? Number.NaN;
+  if (alt === null || !(alt > 0)) return tf("{0} approach: cleared {1} approach runway {2}, QNH {3}", stationOf(c, W), what, rwy, q);
+  const key =
+    Number.isFinite(now) && alt > now + 60
+      ? "{0} approach: cleared {1} approach runway {2}, climb {3}, QNH {4}"
+      : Number.isFinite(now) && alt > now - 60
+        ? "{0} approach: cleared {1} approach runway {2}, maintain {3}, QNH {4}"
+        : "{0} approach: cleared {1} approach runway {2}, descend {3}, QNH {4}";
+  return tf(key, stationOf(c, W), what, rwy, u.fAlt(alt), q);
 }
 
 /** The approach's speed for the jet now [m/s] (its mass on its wing at the approach's incidence). */
@@ -422,6 +489,25 @@ function flightDirector(this: CameraController): FlightDirector | null {
   const out = guide(this, R);
   if (!out || out.idle) return null;
   return { gamma: out.gamma, bank: out.bank, dGamma: out.gamma - gammaNow, dBank: out.bank - bankNow, src: "ils" };
+}
+
+/**
+ * The approach in the headset (PLAN-APPROCHES AP9): the approach flown's localizer ident once received, the marker beacon over
+ * which the craft passes (nav.dat's — world/approaches.ts `markers`; game/approach-audio.ts). Null: no approach flown, or its
+ * aid unknown (a built approach has neither).
+ */
+function approachAudio(this: CameraController): { key: string; ident: string | null; marker: MarkerKind | null } | null {
+  const W = this.ilsRun?.rwy ?? this.a320App?.rwy;
+  const g = W ? this.geoNow() : null;
+  const L = this.approachLast;
+  if (!W || !g || !L || L.approach.rwy !== W.des || (L.field.icao || L.field.ident) !== W.icao) return null;
+  const A = L.approach;
+  const r = ilsReading(W, g);
+  return {
+    key: `${W.icao} ${A.id}`,
+    ident: A.loc && r.locIn ? A.loc.ident : null,
+    marker: markerOver(A.markers, g, A.loc?.crs ?? A.crs, W.elev),
+  };
 }
 
 /** What the HUD shows of the approach: the runway, the needles (dots), the distance, its phase. Null: none flown. */
@@ -545,6 +631,7 @@ export function installIls(C: { prototype: CameraController }) {
     ilsInfo,
     ilsClear,
     ilsGoAround,
+    approachAudio,
     routeProcedures,
     flightDirector,
   });

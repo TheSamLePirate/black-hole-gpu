@@ -395,6 +395,13 @@ choisie (son cap et sa distance au seuil).
 les points de pente à droite, ceux de l'alignement en bas, des losanges magenta, et la phase (`IAF`, `LOC`, `LOC GS`,
 `FLARE`, `ROLL`, `GA`). Toucher le manche ou la manette repasse en manuel.
 
+**À l'écoute** (PLAN-APPROCHES AP9) : à l'engagement, le contrôle donne l'autorisation avec les vraies valeurs (« Sofia approche :
+autorisé approche ILS piste 09, descendez 2000 m, QNH 1013 » — montez, maintenez ou descendez selon l'altitude de la jonction ; aucune
+altitude si l'appareil est déjà établi ; le QNH du METAR en météo réelle, 1013 sinon). Dès que le localizer est reçu, son **indicatif en
+morse** (1 020 Hz : « ISL » à Sofia) — l'aide identifiée avant d'être volée ; puis les **radiobalises** de nav.dat survolées : extérieure
+(400 Hz, traits), médiane (1 300 Hz, point-trait), intérieure (3 000 Hz, points). Réglages Jeu › Approches (`ilsIdentAudio`,
+`markerAudio`).
+
 **Le directeur de vol** (PLAN-APPROCHES AP7b, depuis le 15 nov. 2026) : en manuel, le guidage de l'approche reste au HUD — un
 **cercle magenta à ailettes** (le repère de guidage) et un pointillé depuis le vecteur vitesse. Il est placé à la **pente
 demandée** et décalé du côté où il faut **incliner** (d'un tiers de l'inclinaison qui manque, 8° au plus) : amener le vecteur

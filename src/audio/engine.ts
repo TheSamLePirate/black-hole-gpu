@@ -15,6 +15,7 @@
 // The context starts on the first user gesture (browsers keep audio off until then) and sleeps
 // while the page is hidden.
 
+import { IDENT_HZ, MARKERS, type MarkerKind, morseTimes } from "../game/approach-audio";
 import type { CraftVoice } from "../a320/sound/types";
 import { CraftVoices, type Ear, SampleBank } from "./samples";
 
@@ -1600,6 +1601,41 @@ export class SoundEngine {
     mod.start(t);
     car.stop(t + dur + 0.05);
     mod.stop(t + dur + 0.05);
+  }
+
+  /** what an approach made heard (PLAN-APPROCHES AP9 — tests): the idents keyed, the last; each marker's passages */
+  private heard = { idents: 0, lastIdent: "", markers: { O: 0, M: 0, I: 0 } as Record<MarkerKind, number> };
+  /** the marker sounding now and the audio clock its keying is scheduled to [s] */
+  private mk: { kind: MarkerKind | null; until: number } = { kind: null, until: 0 };
+
+  /** A localizer's ident keyed in Morse (1 020 Hz, some 7 words a minute), on the beeps' bus (PLAN-APPROCHES AP9). */
+  morse(ident: string) {
+    if (!this.ctx || !this.enabled) return;
+    for (const k of morseTimes(ident)) this.tone(IDENT_HZ, k.at, k.dur, { level: 0.1, type: "sine", attack: 0.004 });
+    this.heard.idents++;
+    this.heard.lastIdent = ident;
+  }
+
+  /** The marker beacon heard now (null: none): its keying scheduled half a second ahead while it lasts — called every frame. */
+  marker(kind: MarkerKind | null) {
+    if (!this.ctx) return;
+    const now = this.ctx.currentTime;
+    if (kind !== this.mk.kind) {
+      this.mk = { kind, until: now };
+      if (kind) this.heard.markers[kind]++;
+    }
+    if (!kind || !this.enabled) return;
+    const M = MARKERS[kind];
+    for (let n = 0; this.mk.until < now + 0.5 && n < 16; n++) {
+      const at = Math.max(this.mk.until - now, 0);
+      for (const k of M.keys) this.tone(M.hz, at + k.at, k.dur, { level: 0.08, type: "sine", attack: 0.004 });
+      this.mk.until = now + at + M.period;
+    }
+  }
+
+  /** What an approach made heard so far (tests). */
+  approachHeard() {
+    return { ...this.heard, markers: { ...this.heard.markers }, marker: this.mk.kind };
   }
 
   /** Plays a cue of the flight computer (or of the interface). */

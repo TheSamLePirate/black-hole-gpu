@@ -8,7 +8,7 @@
 // heights' file format), read bilinearly (geoid-grid.ts) — within 7 cm rms of the 5′ grid, 2.5 m at worst. Until
 // it is in (loadGeoid, with the Earth's maps), N reads 0: the sea on the ellipsoid, as before.
 
-import geoidUrl from "../../assets/earth/geoid-egm2008-15.bin";
+import geoidUrl from "../../assets/earth/geoid-egm2008-15.bin" with { type: "file" };
 import { setGeoid } from "./geoid-grid";
 import { type HeightMap, loadHeights } from "./heights-file";
 

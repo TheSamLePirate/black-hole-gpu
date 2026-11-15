@@ -60,7 +60,7 @@ export const PLAYER_MENU: PlayerGroup[] = [
   {
     tab: "game",
     title: { fr: "Approches", en: "Approaches" },
-    keys: ["approachAutoTailwindKt", "approachShowBuilt", "approachPathOnMap", "approachProfile"],
+    keys: ["approachAutoTailwindKt", "approachShowBuilt", "approachPathOnMap", "approachProfile", "ilsIdentAudio", "markerAudio"],
   },
   {
     tab: "game",

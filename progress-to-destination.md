@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-15 20:35 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-15 20:56 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous. Ce qui est fermé quitte le tableau « En cours » pour la ligne « Fermé récemment ».
@@ -48,7 +48,7 @@ J4 (fermé, sortie non atteinte) et J5 (fermé) ; **en cours : J6, les parcours 
 | Rendu (33d89754) | J3 — lumière, ombres, cockpit | **mené (15 nov.)** : J3-0 à J3-7 et J3-R faits ou réglés provisoirement selon les recommandations de [PLAN-J3](docs/PLAN-J3-LUMIERE-COCKPIT.md) §8 ; le crépuscule du sol réparé (appareil / sol 0,87–1,08 jusqu'à −12,7°), ombres d'arbres et du décor, albédos mesurés. **Confirmé par Sam (15 nov., ~19:55)** ; reste J3-R (les anciens chemins) |
 | Rendu (33d89754) | J4 / J5 — l'eau, les volumes, la généralisation | **fermés** ([PLAN-J4](docs/PLAN-J4-VOLUMES.md), [PLAN-J5](docs/PLAN-J5-GENERALISATION.md)) : l'eau à demi-rythme (J5-5, −6,0 à −6,4 ms, l'image la même) ; le sol à demi-rythme laissé au joueur (J5-6, réglage « demi » : −1,9 à −3,2 ms ; « auto » à chaque pixel) ; la FFT de la mer en deux passes (−0,9 ms) ; la carte d'ombre des arbres (−2,8 ms, forêt) ; Sam a refusé les arbitrages d'image (MSAA 1×, petits arbres, nuages amortis). Postes lourds restants : l'eau 16,2, les nuages d'orage 16,5, le décor d'une forêt ~7 ms |
 | Rendu (33d89754) | Mesures tenues | la borne du M1 Max **à 30, provisoire** (soutenu, le GPU bride vers 850 MHz quelle que soit la borne — [J0-CONTRAT §2](docs/J0-CONTRAT.md)) ; le coût de l'appareil 3,5–4,5 ms, dont le MSAA 4× 4–5 ms (gardé) |
-| PLAN-APPROCHES (1feb2f7f) | [PLAN-APPROCHES](docs/PLAN-APPROCHES.md) | **AP0 à AP8 faits (15 nov.)** : données réelles (nav.dat, CIFP de la FAA), choix automatique, jonction planifiée, A320 (MCDU, ND), carte, radar, TSD, crew, toutes les pistes au HUD, directeur de vol (F-35, A320, crew), pente publiée ; AP8 : le secteur « Approche » de la roue (F-35 et A320, `approach-wheel` 2/2 en entrée réelle) et les options du Labo ; la remise de gaz sur l'ILS (crew, TARS, roue). **Reste : AP9 (radio, audio), AP10 (tous les aéroports), AP-R (retraits)** |
+| PLAN-APPROCHES (1feb2f7f) | [PLAN-APPROCHES](docs/PLAN-APPROCHES.md) | **AP0 à AP9 faits (15 nov.)** : données réelles (nav.dat, CIFP), choix automatique, jonction planifiée, A320, carte, radar, TSD, crew, toutes les pistes au HUD, directeur de vol, pente publiée, la roue « Approche » et les options ; AP9 : l'autorisation avec les vraies valeurs, l'indicatif en morse, les radiobalises (`approach-audio` 4/4, témoins positif et négatif). **Reste : AP10 (tous les aéroports), AP-R (retraits)** |
 | Audit vagues 3–4 et 6 (1feb2f7f) | [09-priorites-todo](docs/audit-2026-11-10/09-priorites-todo.md) | **faits** : 3.1–3.2 réseau (RD0–RD2), 3.3 sauvegardes (une clé par sauvegarde ; avion, systèmes des vaisseaux et de l'A320 — ce dernier par J6-4), 3.4–3.5 vol, 3.6–3.7 TARS, 3.10 e2e honnêtes, 4.2 temps et onglet masqué, 4.3 `Settings`/`ViewPose`, 4.8 `main()` découpé ; vague 6 hors rendu (QA, AR, RD4/RD5, FX). **Reste** : l'état d'une mission ou d'un combat (Sam), IndexedDB et l'autosauvegarde hors frame (AR-05), FX-19 (fraîcheur des écrans, à mesurer), FX-21 |
 
 **Fermé récemment** : **PLAN-J6** (15 nov., 20:35 : les neuf parcours en e2e, sept défauts corrigés) ; l'eau étagée E1 (−1,55 ms) et E2 (−0,5 ms), E3 non ouvert ; la classification lot 1 (sur terre −1,15 ms), lot 2 non ouvert
@@ -8296,3 +8296,24 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
 - Preuves (mesuré) : l'annulation rend la place, le carburant, le train et les volets (kerr-mini, `parcours-tars` 3/3) ; la CI de `main` verte et
   le site déployé après la correction de l'horloge (run 43756771531) ; `parcours-meteo` avec l'horloge du vol : le fondu tenu (0,03 en une image).
 - Suite : les décisions de Sam du 15 nov. — J3-R, le repli du raster retiré sur la Terre, la borne du M1 Max essayée à 40.
+
+### 2026-11-15 20:56 UTC — PLAN-APPROCHES AP9 : l'approche à l'écoute — l'autorisation, l'indicatif en morse, les radiobalises
+
+- Contribution à la destination : §19 (l'expérience complète, l'audio en fait partie : ce qu'un pilote entend sur une approche réelle,
+  avec les données réelles) ; méthode, règle 3 : la sonde nouvelle (le spectre de la voie « beeps ») a son témoin positif et son négatif.
+- Réalisé : `game/approach-audio.ts` (morse international à 7 mots/min ; les radiobalises de l'annexe 10 de l'OACI — 400 Hz traits,
+  1 300 Hz point-trait, 3 000 Hz points ; le faisceau ±40° le long, ±75° en travers) ; `SoundEngine.morse/marker/approachHeard` ;
+  `SoundDirector` : l'indicatif une fois par approche (le localizer reçu), la balise tant qu'on la survole ; `camera.approachAudio()` ;
+  réglages `ilsIdentAudio`, `markerAudio` (Jeu › Approches, FR) ; `ilsStart` : l'autorisation avec l'approche résolue, la désignation,
+  l'altitude de la jonction (arrondie à 50 m / 100 ft ; montez, maintenez ou descendez ; rien si établi) et le QNH (METAR en météo réelle,
+  1013 sinon) — l'A320 aussi ; le refus de pente dit sa vraie pente ; l'outil `approach` de TARS : `preview`, `goaround`, sa description
+  en SI ; `system/geoid.ts` : la grille `.bin` importée `with { type: "file" }` (le chargeur de Bun la lisait comme du JS dans
+  `tars-tools` seul, depuis que `game-tools` importe `controller/approach`) ; docs : VOL-AVIONS (leçon 7), BH-API, plan.
+- Preuves (observé, M1 Max, ce lot) : e2e `approach-audio` **4/4** à Sofia 09 (nav.dat : localizer ISL, balises O, M, I) — autorisation
+  « Sofia approach: cleared ILS approach runway 09, QNH 1013 » établi, « … descend 2000 m, QNH 1013 » engagé à 30 km ; l'indicatif
+  « ISL » joué une fois ; O, M, I comptés, leur pic sur le spectre de « beeps » à 99, 75 et 65 dB au-dessus de la bande voisine
+  (10–20 bins) ; témoin négatif, la balise extérieure repassée réglage coupé : aucun compte, 1,0 dB. Tests unitaires : `approach-audio`
+  3/3, `tars-tools` 32/32, `approach-choice`, `approach-join`, `ils`, `crew-actions`, réglages, i18n verts.
+- Non vérifié : l'écoute sur kerr-mini (sortie SDR) ; le niveau des tons dans le mix réel au casque (mesuré au bus, pas à l'oreille) ;
+  l'A320 en e2e audio (le même chemin, `a320App`).
+- Suite : AP10 — la campagne sur toutes les pistes (approche, chemin, relief, refus motivés), puis AP-R.

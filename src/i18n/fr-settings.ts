@@ -1071,6 +1071,12 @@ export default {
   "All the airport's runways": "Toutes les pistes de l'aéroport",
   Approaches: "Approches",
   kt: "kt",
+  "The localizer's ident in Morse": "L'indicatif du localizer en morse",
+  "Once the approach's localizer is received, its ident keyed in Morse in the headset (1 020 Hz, about 7 words a minute) — the aid identified before it is flown (PLAN-APPROCHES AP9). The sound on.":
+    "Dès que le localizer de l'approche est reçu, son indicatif en morse dans le casque (1 020 Hz, environ 7 mots par minute) — l'aide identifiée avant d'être volée (PLAN-APPROCHES AP9). Le son activé.",
+  "Marker beacons": "Radiobalises (markers)",
+  "Over the approach's marker beacons (nav.dat's): the outer's 400 Hz dashes, the middle's 1 300 Hz dot-dash, the inner's 3 000 Hz dots, as long as the craft is in their fan.":
+    "Au-dessus des radiobalises de l'approche (celles de nav.dat) : les traits à 400 Hz de l'extérieure, le point-trait à 1 300 Hz de la médiane, les points à 3 000 Hz de l'intérieure, tant que l'appareil est dans leur faisceau.",
   "The approach drawn on the maps": "L'approche tracée sur les cartes",
   "The approach chosen (cyan) or flown (magenta) on the tactical map, the HUD's radar and the F-35's TSD: its localizer's cone, its fixes and their altitudes, the join planned, the missed approach, the hold.":
     "L'approche choisie (cyan) ou volée (magenta) sur la carte tactique, le radar du HUD et la TSD du F-35 : le cône de son alignement, ses repères et leurs altitudes, la jonction prévue, la remise de gaz, l'attente.",

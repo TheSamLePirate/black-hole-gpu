@@ -560,6 +560,8 @@ export interface Settings {
   approachProfile: boolean; // the approach's vertical profile under the tactical map (AP4's PROF; AP8: a setting)
   approachAutoTailwindKt: number; // the automatic choice leaves out an end with more tail wind than this [kt] (AP8; 10 by default)
   approachShowBuilt: boolean; // the built approaches listed too — the wheel, the airfield's card — beside the real ones (AP8)
+  ilsIdentAudio: boolean; // the localizer's ident keyed in Morse in the headset once received (PLAN-APPROCHES AP9)
+  markerAudio: boolean; // the marker beacons' tones over them (outer 400 Hz, middle 1 300 Hz, inner 3 000 Hz — AP9)
   hudHover: boolean; // the vertical landing: drift scope, vertical speed, the stop burn, the touchdown spot
   keyHints: boolean; // the keys that matter now, in a strip that fades (ui/keyhints.ts)
   uiScale: number; // the interface's panels, menus and dock, scaled (0.8 … 1.5)
@@ -958,6 +960,8 @@ export function defaultSettings(): Settings {
     approachProfile: false,
     approachAutoTailwindKt: 10,
     approachShowBuilt: true,
+    ilsIdentAudio: true,
+    markerAudio: true,
     hudHover: true,
     keyHints: true,
     uiScale: 1,
@@ -2394,6 +2398,8 @@ export const SETTING_KIND: Record<keyof Settings, SettingKind> = {
   approachProfile: "pref",
   approachAutoTailwindKt: "pref",
   approachShowBuilt: "pref",
+  ilsIdentAudio: "pref",
+  markerAudio: "pref",
   hudHover: "pref",
   keyHints: "pref",
   uiScale: "pref",
