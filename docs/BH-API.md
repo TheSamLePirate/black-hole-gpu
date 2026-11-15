@@ -423,12 +423,33 @@ end is `{ id, rwy, len, wind }`:
 - `wind` marks the end in use (into the wind, or the published one in fair weather).
 
 Every paved runway of 900 m or more is listed (its runway tile in), the longest first. `auto` is the end taken when none is
-asked: the longest runway, into the wind.
+asked — since 15 Nov 2026 (PLAN-APPROCHES AP1) the automatic choice below, not « the longest runway, into the wind ».
 
 `ilsStart(field, { runway, hold?, rwy?, base? })` engages the approach on that end: « 13 », « RWY 05 », « 23L », or both ends « 05/23 » for that
 runway's end in use. It **always returns a message**: on success `"ILS approach: <rwy>, N km"`; a refusal (`"ILS: …"`, `"… refused"`) when the field has no such runway, or when the 3° slope runs into the relief
 (`glideClearance`, `game/ils.ts`) — test the text, not null. On the A320 it hands the approach to its own FMGC (`a320Approach`; its fields in knots, feet, degrees). When the margin over the relief is thin, it says so. Each end of `ilsRunways` also
 carries `clearM`, the slope's least clearance [m].
+
+### `__bh.camera.approachSelect(sel, by?)` / `approachState()` / `approachResolve(o?)` · `__bh.sys.approaches(code)`
+
+The approach chosen (PLAN-APPROCHES AP1, `src/controller/approach.ts`): the simulation's state `approachSel = { field, rwy, approach,
+entry }`, each « auto » or named (`field` an ICAO code, `rwy` an end « 31R », `approach` an id « I31R » — ILS —, « L… » LOC, « X… »
+LDA/SDF/IGS, « C… » built), with its generation `approachGen` counted at each change; saved with the flight (the `craft` block).
+- `approachSelect({ field?, rwy?, approach?, entry? }, by)` changes it, checked: the field known (fetched when its tile is not in:
+  « its data coming »), the end and the approach its own; a new field puts its end and approach back to « auto ». **Returns a
+  message** (« Approach: LFTH C23 (test) », « Approach: LFTH has no runway 99 »).
+- `approachState()` → `{ sel, gen, resolved }` — `resolved`: what was last flown: `{ field, rwy, approach, kind, source: "navdat" |
+  "built", fieldWhy: "named" | "selected" | "plan" | "ahead" | "nearest", why: { wind: { head, cross } | null, aid, way: { km, turn } } }`.
+- `approachResolve({ name?, runway? })` → the ILS's runway and the resolution, `{ say }` (a refusal) or « loading » — what
+  `ilsStart` uses: the field named, else selected, else the flight plan's destination, else the nearest **ahead** (±60° of the track)
+  within 150 km (the game's own sites too); its end and approach selected, else chosen (`game/approach-choice.ts`): a tail wind over
+  10 kt or a cross wind past the craft's limit out, from 5 kt the end into the wind; then the aid (ILS by category, LOC, built);
+  a tight runway paid for (A320: 2 000 m; F-35: 1 500 m); then the way in (the path to the approach's IF and the turns).
+- `__bh.sys.approaches(code)` → every approach of the airfield (`world/approaches.ts`, async): each end's real ones from nav.dat
+  (`loc { lat, lon, crs, freq [kHz], ident, cat, range }`, `gs { …, angle }`, `dme`, `markers`) then the built one — `final`,
+  `transitions`, `missed` legs (ARINC 424 types, heights over the sea), `dh { m, why }`.
+
+*Used in:* `approach-auto.e2e.test.ts`, `apprendre-avions.e2e.test.ts` (through `ilsStart`).
 
 On the A320 the same call flies its FMGC (`camera.a320Approach`, `controller/a320ap.ts`), state in `camera.a320App`:
 - the ILS is tuned on that end;

@@ -128,6 +128,8 @@ const pending = new Map<string, Promise<Airfield[]>>();
 let clock = 0;
 /** a tile arrived: the maps redraw */
 export const runwaysEvents = { onLoad: (_key: string) => {} };
+/** a tile arrived, for the modules that follow the runways' (the approaches' tiles fetched with them: world/approaches.ts) */
+export const runwayTileListeners = new Set<(key: string) => void>();
 
 /** a fetch that failed (offline, the network down): not asked again before RETRY_MS — the maps ask every frame; offline, 445
  *  requests in a minute on four files (zones-usa-night, 10 Nov 2026) */
@@ -177,6 +179,7 @@ export async function loadTile(key: string): Promise<Airfield[]> {
         }
         loadedCount++;
         runwaysEvents.onLoad(key);
+        for (const f of runwayTileListeners) f(key);
         return fields;
       })
       .catch(() => {

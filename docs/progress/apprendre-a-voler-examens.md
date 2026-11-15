@@ -99,3 +99,13 @@ cours, au clavier, inchangées et non revolées.
 
 Les copies et les rapports (non commités) étaient dans le dossier de travail de la session :
 `learner-*.md`, `exam-*.md`, `learner2-*.md`.
+
+## 2026-11-15 — PLAN-APPROCHES AP1 : le choix de l'approche changé, les leçons ILS revolées
+
+Le choix automatique de l'extrémité et de l'approche (le vent, l'aide réelle de nav.dat, une piste trop juste, le sens d'arrivée)
+remplace « la plus longue, face au vent ». `apprendre-avions` revolé en entier, ce Mac, fenêtre visible : **7/7**.
+- Leçon 7 (Edwards) : l'**ILS 23L** réel (CAT I) choisi, 20/20, toucher à 270 m, 0,5 m de l'axe, −1,9 m/s.
+- Leçon 10 (l'A320 du Bourget) : l'**ILS 07** réel choisi (la 09/27, 1 854 m, écartée pour l'A320 : il s'y était posé trop long et
+  avait cassé son train lors d'un premier essai), 20/20, toucher à 666 m, 0,7 m de l'axe.
+La page `apprendre-avions.html` dit encore « l'approche ILS du Bourget » sans piste : vraie.
+

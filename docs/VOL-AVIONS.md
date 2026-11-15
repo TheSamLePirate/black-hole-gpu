@@ -355,8 +355,13 @@ puis lire le journal : `__bh.game.log.events.filter(e => e.kind === "pilot")` co
 | Minimums | **60 m** : stable, on continue ; sinon remise de gaz droit devant |
 | Arrondi | à **14 m**, descente < 1 m/s, ralenti, toucher **150–900 m** après le seuil |
 
-**Conditions** : un avion (F-35, A320), en l'air ; une piste nommée est acceptée à toute distance, sans nom la plus
-proche à moins de 150 km. L'approche coupe la formation, l'interception, le STOVL et l'autopilote en cours, puis vole
+**Conditions** : un avion (F-35, A320), en l'air ; une piste nommée est acceptée à toute distance. Sans nom, le terrain
+est celui choisi (`approachSelect`), sinon la destination du plan de vol, sinon le plus proche **devant** l'avion (à ±60° de la
+route) à moins de 150 km. L'extrémité et l'approche sont choisies comme un contrôleur le ferait (PLAN-APPROCHES, depuis le
+15 nov. 2026) : un vent arrière de plus de 10 kt l'exclut, dès 5 kt l'extrémité face au vent passe d'abord ; puis l'aide réelle
+(l'ILS de nav.dat, la plus haute catégorie, puis un localizer, puis l'approche construite) ; une piste trop juste est écartée
+(A320 : 2 000 m) ; enfin le **sens d'arrivée** — par vent calme, l'extrémité dont l'approche vient du côté de l'avion (venu du
+nord à Toulon-Hyères : la 13 ; de l'est : la 23). Le message dit le choix et sa raison (« LFML ILS 31R — CAT I »). L'approche coupe la formation, l'interception, le STOVL et l'autopilote en cours, puis vole
 elle-même (`ilsRun.phase` : `toIaf`, `intercept`, `final`, `flare`, `rollout`, `missed`, `done` ; et `base`, `hold`),
 sort le train et les volets, coupe la manette à l'arrondi. Elle refuse une pente qui rentre dans le relief.
 
@@ -368,8 +373,9 @@ les points de pente à droite, ceux de l'alignement en bas, des losanges magenta
 
 ```js
 const c = __bh.camera;
-c.ilsRunways("KEDW");                         // les pistes possibles, celle face au vent marquée
-c.ilsStart("KEDW");                           // la piste face au vent ; { runway: "<numéro>" } pour en choisir une
+c.ilsRunways("KEDW");                         // les pistes possibles ; .auto = l'extrémité que le choix prendrait
+c.approachSelect({ field: "LFTH", approach: "C23" }); // choisir (sinon tout « auto ») ; c.approachState() la relit
+c.ilsStart("KEDW");                           // l'extrémité choisie ; { runway: "<numéro>" } pour en imposer une
                                               // rend toujours un message : "ILS approach: …" ou "ILS: …" (refus)
 // puis avancer jusqu'à c.ilsRun === null ; c.ilsLast = { rwy, score, notes, touch: { along, across, vs } }
 ```
@@ -529,7 +535,7 @@ Les recettes de ce cours ont été volées telles quelles par l'e2e `tests/e2e/a
 | 4 — palier sous `apSet`, puis virage à la main | 3 000 m, 270°, 200 m/s tenus exactement ; virage vers 000° à 2 999–3 000 m sans toucher S (touche tenue jusqu'à 29° : 41° atteints) |
 | 7 — ILS d'Edwards depuis 12 km | 20/20 : toucher à 470 m du seuil, 0,6 m de l'axe, −0,8 m/s |
 | 8 — le F-35B posé verticalement sur le Ford (`deckLand`) | posé à 0,5 m du point, 1,2 m/s, « OK » |
-| 10 — l'A320 du Bourget | décollage TOGA en 28 s, AP1 engagé (FMA `MAN TOGA · SRS · RWY TRK`, A/THR armé) ; ILS depuis 19 km : 20/20, toucher à 786 m, 1,1 m de l'axe |
+| 10 — l'A320 du Bourget | décollage TOGA en 28 s, AP1 engagé (FMA `MAN TOGA · SRS · RWY TRK`, A/THR armé) ; ILS depuis 19 km : 20/20, toucher à 786 m, 1,1 m de l'axe — revolé le 15 nov. 2026 (PLAN-APPROCHES AP1) : l'ILS **07** réel de nav.dat choisi, 20/20, toucher à 666 m, 0,7 m de l'axe |
 | Après un crash | pause et écran de perte ; un placement efface la panne, l'écran reste ; « Continuer sans dégâts » relance |
 
 Six sur six, deux passages complets identiques. Non vérifiés en jeu : le tour de piste et le vol bas sur Paris à la

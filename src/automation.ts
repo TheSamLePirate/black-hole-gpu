@@ -61,6 +61,8 @@ import type { Pwa } from "./pwa";
 import type { NetLight } from "./ui/net-light";
 import type { GameMode, ModeState } from "./game/modes";
 import { DeckPicker } from "./a320/deckpick";
+import { fieldByCode } from "./world/runways";
+import { approachesForAsync } from "./world/approaches";
 
 /** the A320 deck's picker (a320DeckAt: the controls seen from the seat) */
 let deckPick: DeckPicker | null = null;
@@ -655,6 +657,11 @@ export function installBh(c: BhContext) {
         bodyFixed: (id: string, X: [number, number, number], t: number) => toBodyFixed(id, X, t),
         /** a home-frame point's height over a body's ground as drawn and flown [m] (the gear's measure: tests) */
         heightOverGround: (id: string, X: [number, number, number], t: number) => gearHeight(id, X, t) + GEAR,
+        /** an airfield's approaches (world/approaches.ts — PLAN-APPROCHES AP0): every end's, real (nav.dat) then built; fetched */
+        approaches: async (code: string) => {
+          const f = await fieldByCode(code);
+          return f ? approachesForAsync(f) : [];
+        },
         /** the geoid's N [m] at a latitude, longitude [°]: the sea's surface over the WGS84 ellipsoid (system/geoid.ts;
          *  0 until its map is in) */
         geoid: (lat: number, lon: number) => geoidDeg(lat, lon),

@@ -38,6 +38,8 @@ export interface CraftSave {
   stovl?: StovlState;
   /** the skin's temperatures [K] */
   skin?: Thermal;
+  /** the approach chosen (PLAN-APPROCHES AP1: controller/approach.ts) — its parts « auto » or named */
+  approach?: { field: string; rwy: string; approach: string; entry: string };
 }
 
 const num = (x: unknown): x is number => typeof x === "number" && Number.isFinite(x);
@@ -65,6 +67,7 @@ export function captureCraft(c: CameraController): CraftSave {
     jet: { alt: j.alt, hdg: j.hdg, spd: j.spd, ab: j.ab, ...(j.bankMax !== undefined ? { bankMax: j.bankMax } : {}) },
     stovl: c.stovl.on ? structuredClone(c.stovl) : undefined,
     skin: { ...c.airFlight.skin },
+    approach: { ...c.approachSel },
   };
 }
 
@@ -82,6 +85,8 @@ export function checkCraft(x: unknown): CraftSave | null {
   if (J.bankMax !== undefined && !num(J.bankMax)) return null;
   if (b.stovl !== undefined && (!b.stovl || typeof b.stovl.on !== "boolean")) return null;
   if (b.skin !== undefined && (!b.skin || !num(b.skin.shield) || !num(b.skin.hull))) return null;
+  const A = b.approach;
+  if (A !== undefined && (!A || ![A.field, A.rwy, A.approach, A.entry].every((v) => typeof v === "string" && v.length <= 12))) return null;
   return b;
 }
 
@@ -105,6 +110,11 @@ export function restoreCraft(c: CameraController, b: CraftSave) {
   c.jetResume = modes.alt !== null || modes.hdg !== null || modes.spd !== null || modes.ab ? { modes, frames: 90 } : null;
   if (b.stovl) c.stovl = structuredClone(b.stovl);
   if (b.skin) c.airFlight.skin = { ...c.airFlight.skin, ...b.skin };
+  // (the approach chosen as saved — none saved: automatic; its generation counted, the screens follow)
+  c.approachSel = b.approach
+    ? { field: b.approach.field, rwy: b.approach.rwy, approach: b.approach.approach, entry: b.approach.entry as "auto" }
+    : { field: "auto", rwy: "auto", approach: "auto", entry: "auto" };
+  c.approachGen++;
 }
 
 /** A craft's own configuration, kept for it while another is flown (audit FX-14: one set of gear, flaps, brakes, air brake

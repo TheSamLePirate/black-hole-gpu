@@ -15,6 +15,7 @@
 import { ISS_CAMERA_IDS, type IssCameraId } from "../system/iss-cameras";
 import { apEngage, apNav, apSelect } from "../controller/jet-ap-acts";
 import { type Airfield, fieldByCode } from "../world/runways";
+import { approachesForAsync, sourceLabel } from "../world/approaches";
 import { runwaySitesNear, siteByName, worldSite } from "../world/fieldsite";
 import { KNOWLEDGE_PAGES, type KnowledgeLang, type KnowledgePage, readKnowledge, searchKnowledge } from "./knowledge";
 import type { MissionSpec } from "../game/mission";
@@ -2108,11 +2109,12 @@ export function gameTools(h: GameHost): Tool[] {
     {
       name: "approach",
       description:
-        "The F-35's instrument approaches and procedures. ils: an ILS approach flown by the autopilot to a runway (field: ICAO or name, else the nearest within 150 km; runway: its number — « 13 », « 23L », or both ends « 05/23 » for that runway into the wind — else the longest runway, its end into the wind) — to the initial fix 18.5 km out, the localizer and the 3° glideslope captured, the gear and flaps at the final fix, minimums at 60 m (not stable: the missed approach, round again), the flare, braked to a stop, graded out of 20; hold: laps of the racetrack at the initial fix first (0: none; 99: until cleared). clear: out of the hold, the approach begun. off: the approach given up (the needles gone). status: the approach flown (its phase, the needles in dots, the distance) and the last one's grade. runways: the airfield's runways an ILS can take (each end, its length, the one in use), the default one. procedures: the flight plan given its departure's fix (after an airfield it starts from) and its arrival's (the initial and final fixes before the airfield it ends at) — LNAV then hands over to the ILS at the initial fix.",
+        "The aircraft's instrument approaches (F-35, A320) and procedures — real ILS from nav.dat (FlightGear, 2013) where they exist, an approach built at every other runway end. ils: an ILS approach flown by the autopilot (field: ICAO or name, else the one selected, else the flight plan's destination, else the nearest ahead; runway: its number — « 13 », « 23L », or both ends « 05/23 » — else the end and approach chosen: the wind (a tail wind over 5 m/s out, from 2.6 m/s the one into it), the runway's length, the aid (ILS, its category, then a localizer, then built), the way in (the end whose approach comes from the craft's side)) — to the initial fix 18.5 km out, the localizer and the 3° glideslope captured, the gear and flaps at the final fix, minimums at 60 m (not stable: the missed approach, round again), the flare, braked to a stop, graded out of 20; hold: laps of the racetrack at the initial fix first (0: none; 99: until cleared). clear: out of the hold, the approach begun. off: the approach given up (the needles gone). status: the approach flown (its phase, the needles in dots, the distance) and the last one's grade. runways: the airfield's runways an ILS can take (each end, its length, the one in use), the default one. procedures: the flight plan given its departure's fix (after an airfield it starts from) and its arrival's (the initial and final fixes before the airfield it ends at) — LNAV then hands over to the ILS at the initial fix, on the plan's runway. list: an airfield's approaches (each end's, their kind, source — nav.dat or built —, frequency, category, slope). select: the approach chosen (field, runway, approach id like « I31R » or « C05 »: each left out or « auto » is chosen when flown) — what every screen and the crew show, the ILS flies. auto: the selection back to automatic. state: the selection and what was last flown, with why.",
       params: {
-        action: { type: "string", enum: ["ils", "clear", "off", "status", "runways", "procedures"] },
+        action: { type: "string", enum: ["ils", "clear", "off", "status", "runways", "procedures", "list", "select", "auto", "state"] },
         field: { type: "string" },
         runway: { type: "string" },
+        approach: { type: "string" },
         hold: { type: "number", minimum: 0, maximum: 99 },
       },
       required: ["action"],
@@ -2140,6 +2142,37 @@ export function gameTools(h: GameHost): Tool[] {
             return "ILS approach off";
           case "procedures":
             return c.routeProcedures();
+          case "list":
+            return (async () => {
+              const code = a.field ? String(a.field) : c.approachSel.field !== "auto" ? c.approachSel.field : c.approachLast?.field.icao;
+              if (!code) return "Name an airfield (field)";
+              const f = await fieldByCode(code);
+              if (!f) return `No airfield called ${code}`;
+              return {
+                field: f.icao || f.ident,
+                approaches: (await approachesForAsync(f)).map((x) => ({
+                  id: x.id,
+                  runway: x.rwy,
+                  kind: x.kind,
+                  source: sourceLabel(x),
+                  ...(x.loc ? { ident: x.loc.ident, freqMHz: x.loc.freq / 1000, category: x.loc.cat ?? null } : {}),
+                  slopeDeg: x.angle,
+                })),
+              };
+            })();
+          case "select":
+            return c.approachSelect(
+              {
+                ...(a.field ? { field: String(a.field) } : {}),
+                ...(a.runway ? { rwy: String(a.runway) } : {}),
+                ...(a.approach ? { approach: String(a.approach) } : {}),
+              },
+              "TARS",
+            );
+          case "auto":
+            return c.approachSelect({ field: "auto", rwy: "auto", approach: "auto" }, "TARS");
+          case "state":
+            return c.approachState();
           default:
             return { flown: c.ilsInfo(), last: c.ilsLast ?? null };
         }

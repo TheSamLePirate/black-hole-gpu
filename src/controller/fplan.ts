@@ -193,7 +193,9 @@ function navStep(this: CameraController, inp: PilotInput, f: { h: number; hdg: n
     const end = N.route.wps.at(-1);
     if (/^IAF\d\d[LCR]?$/.test(N.route.wps[o.passed]?.name ?? "") && end?.field && N.on.l) {
       N.on = { l: false, v: false };
-      N.say = this.ilsStart(end.field.icao ?? end.name);
+      // (the plan's runway flown — its IAF names it —, not chosen again by the wind of now: PLAN-APPROCHES AP1, before 15 Nov
+      // 2026 a wind turned put the jet at the other runway's IAF)
+      N.say = this.ilsStart(end.field.icao ?? end.name, { runway: N.route.wps[o.passed]!.name.slice(3) });
       return;
     }
   }

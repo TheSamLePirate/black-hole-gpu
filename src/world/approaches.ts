@@ -8,7 +8,7 @@
 // are true [°]. A game's data, not navigation: never for real flight (the FAA's condition on its CIFP, kept for all of them).
 
 import { wgs84Direct, wgs84Inverse } from "../system/ellipsoid";
-import { type Airfield, type Runway, tileKey } from "./runways";
+import { type Airfield, type Runway, runwayTileListeners, tileKey } from "./runways";
 
 export type ApproachKind = "ILS" | "LOC" | "LDA" | "SDF" | "IGS" | "RNAV" | "VOR" | "NDB" | "VIS";
 export type ApproachSource = "cifp" | "navdat" | "built";
@@ -263,7 +263,13 @@ let indexP: Promise<void> | null = null;
 
 /** The tile of a place fetched (once; a tile without real approaches is none to fetch). */
 export async function loadApproachTile(lat: number, lon: number): Promise<void> {
-  const key = tileKey(lat, lon);
+  return loadApproachKey(tileKey(lat, lon));
+}
+
+// (fetched with the runways' own tile: there before an approach is asked — PLAN-APPROCHES AP1; the map, the radar load them)
+runwayTileListeners.add((key) => void loadApproachKey(key));
+
+async function loadApproachKey(key: string): Promise<void> {
   if (tiles.has(key)) return;
   indexP ??= fetch(`${base}index.json`)
     .then((r) => (r.ok ? r.json() : null))
@@ -295,6 +301,11 @@ export async function loadApproachTile(lat: number, lon: number): Promise<void> 
       .finally(() => pending.delete(key));
   pending.set(key, p);
   await p;
+}
+
+/** Whether a place's tile is in (fetched, or known to have none). */
+export function approachTileIn(lat: number, lon: number): boolean {
+  return tiles.has(tileKey(lat, lon));
 }
 
 /** A field's approaches with its tile's real ones when it is in (the built ones only, until it comes). */

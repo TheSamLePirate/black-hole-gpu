@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-15 14:39 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-15 15:09 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous.
@@ -7772,3 +7772,31 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   `discard`, sa pré-passe en place.
 - Limites : aucun gain livré par ce lot ; les cascades par mer visible (~0,5 ms) non ouvertes.
 - Suite : les 40 ms du mini demandent un compromis d'image ou la refonte des noyaux des nuages ou de l'eau — décision de Sam.
+
+### 2026-11-15 15:09 UTC — PLAN-APPROCHES AP1 : l'approche choisie et le bon choix automatique (le problème de Sam)
+
+- **Contribution** : §19 (l'atterrissage, la même action métier pour la roue, la carte, le crew, TARS) ; PLAN-APPROCHES AP1, la cause
+  principale du §2.2 : l'extrémité choisie sans le sens d'arrivée.
+- **Changements** :
+  - `src/game/approach-choice.ts` (pur) choisit d'abord le terrain : celui choisi, sinon la destination du plan, sinon le plus proche devant
+    (±60°). Puis l'extrémité et l'approche, dans cet ordre : vent arrière > 10 kt ou travers hors limite écartés, dès 5 kt face au vent ;
+    l'aide réelle (ILS par catégorie > localizer > construite) ; une piste trop juste pénalisée (A320 2 000 m) ; le sens d'arrivée (chemin
+    jusqu'à l'IF, virages). La raison est dite.
+  - `src/controller/approach.ts` : `approachSel` dans la simulation, sa génération, `approachSelect` vérifié, `approachState`,
+    `approachResolve` ; les sites du jeu deviennent des terrains (`siteField`). La sélection est sauvée dans le bloc `craft`.
+  - `ilsStart` (F-35, et le FMGC de l'A320) résout par là, sa raison dans le message ; le plan de vol vole la piste de son IAF (fin du
+    rechoix, `fplan.ts`).
+  - Tuiles d'approches préchargées avec celles des pistes ; TARS `approach` : `list`, `select`, `auto`, `state` ; `__bh.sys.approaches`.
+- **Preuve** :
+  - Tests purs : `approach-choice` 6/6 (4 quadrants × calme/vent × 1/2/3 pistes ; LFML ILS 31R du sud-est, 13L CAT III du nord-ouest ;
+    vent arrière écarté ; Le Bourget, l'A320 jamais sur 09/27).
+  - Unitaires ILS, A320, plan, sauvegarde, TARS : 467/467 et TARS 32/32.
+  - e2e : `approach-auto` 5/5 (de 4 côtés de Toulon-Hyères : 13, 23, 31, 05 ; sans nom : le plus proche devant ; venté : l'extrémité face
+    au vent ; l'A320 hors de la 13/31 de 1 900 m ; une sélection volée et gardée à travers une sauvegarde) ; `apprendre-avions` revolé
+    7/7 (Edwards ILS 23L 20/20 ; Le Bourget ILS 07 20/20).
+- **Trouvé en route, corrigé** :
+  - Le terrain du monde qui porte le code d'un site du jeu (KEDW) ne chargeait pas ses approches : ILS 23L invisible.
+  - L'A320 a pris l'ILS 27 du Bourget (1 854 m) et cassé son train en roulant ; d'où les 2 000 m et la pénalité de piste juste.
+- **Limites** : la rejointe n'est pas encore planifiée — toujours `toIaf` (AP2) ; les approches CIFP (AP0b) ; rien d'affiché encore sur la
+  carte ou le radar (AP4–AP5).
+

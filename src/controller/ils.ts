@@ -5,6 +5,7 @@
 // flight plan, and its end: the approach engaged as the plan reaches its runway.
 // (Its methods, out of controls.ts: installed on its prototype — `this` the controller.)
 import { fieldCached, fieldsNear } from "../world/runways";
+import { sayResolved } from "./approach";
 import { worldRunwaySites, worldSite } from "../world/fieldsite";
 import { worldRunwaysNow } from "../world/runways3d";
 import { approachSpeed } from "../game/trap";
@@ -116,7 +117,9 @@ function ilsRunways(this: CameraController, name?: string): { field: string; aut
     const w = landingEnd(x, this.s, days, this.weatherReal);
     ends.push(choice(x, x.len, w), choice(reciprocal(x), x.len, w));
   }
-  const autoRwy = runwayOf(this, site);
+  // (« auto »: the end the approach would take now — the same choice as ilsStart's, PLAN-APPROCHES AP1 —, else the former one)
+  const r = this.approachResolve({ name: site.icao ?? site.name });
+  const autoRwy = r !== "loading" && "W" in r ? r.W : runwayOf(this, site);
   const auto = ends.find(
     (e) =>
       Math.abs(e.rwy.lat - autoRwy.lat) < 2e-3 && Math.abs(e.rwy.lon - autoRwy.lon) < 2e-3 && e.id === runwayId(autoRwy.hdg, autoRwy.des),
@@ -191,8 +194,30 @@ function ilsStart(
   if (!isAircraft(fleet.active)) return t("ILS: the F-35, the A320");
   const g = this.geoNow();
   if (!g || this.rolling || this.ourLanded) return t("ILS: in the air");
-  const site = o.rwy ? null : findRunway(this, name);
-  if (!site && !o.rwy) return name ? tf("ILS: no runway called {0}", name) : t("ILS: no runway within 150 km");
+  // (the approach chosen — PLAN-APPROCHES AP1, controller/approach.ts —: the field selected, else the plan's destination, else the
+  // nearest ahead; its end and approach selected or picked by the wind, the aid and the way in. Before 15 Nov 2026: the nearest
+  // field's longest runway, its first end in fair weather — from the other side, flown over and turned back)
+  let W: IlsRunway | null = o.rwy ?? null;
+  let why = "";
+  if (!W) {
+    const r = this.approachResolve({ name, runway: o.runway, ready: () => this.onPilotMessage?.(this.ilsStart(name, o)) });
+    if (r === "loading") return t("ILS: the airfield's data coming — engaged as it arrives");
+    if ("W" in r) {
+      W = r.W;
+      why = sayResolved(r.resolved, unitsOf(this.s.units));
+    } else {
+      // (the game's own sites the world's tiles have not — the shuttle's runways —: the former way)
+      const site = findRunway(this, name);
+      if (!site) return r.say;
+      W = runwayOf(this, site);
+      if (o.runway) {
+        const ch = this.ilsRunways(name ?? site.icao ?? site.name);
+        const pick = ch ? pickRunway(ch.ends, o.runway) : null;
+        if (!pick) return tf("ILS: no runway {0} at {1}", o.runway, site.icao ?? site.name);
+        W = pick.rwy;
+      }
+    }
+  }
   if (this.form) this.formOff();
   if (this.icpt) this.icptOff();
   this.trapRun = null;
@@ -203,15 +228,6 @@ function ilsStart(
   if (this.pilot.auto !== "none") this.pilot.setAuto(this.pilot.auto);
   this.pilot.auto = "none";
   this.nav.on = { l: false, v: false };
-  // (a visual circuit's base and final — `base`: from the downwind, round onto the centreline)
-  let W = o.rwy ?? runwayOf(this, site!);
-  // (a runway chosen — its number: the airfield's other runway, or the other end —, among the airfield's)
-  if (!o.rwy && o.runway) {
-    const ch = this.ilsRunways(name ?? site!.icao ?? site!.name);
-    const pick = ch ? pickRunway(ch.ends, o.runway) : null;
-    if (!pick) return tf("ILS: no runway {0} at {1}", o.runway, site!.icao ?? site!.name);
-    W = pick.rwy;
-  }
   // (the slope over the relief: one that runs into the ground refused; a thin margin flown, said)
   const clear = o.base ? null : glideClearanceOf(W);
   const id = `${W.icao ?? W.name} ${runwayId(W.hdg, W.des)}`;
@@ -224,7 +240,7 @@ function ilsStart(
   if (fleet.active === "a320") {
     const said = this.a320Approach(W);
     this.onRadio?.(tf("{0} approach: cleared ILS {1}", W.icao ?? W.name, runwayId(W.hdg, W.des)));
-    return said + warn;
+    return said + (why ? ` · ${why}` : "") + warn;
   }
   this.ilsRun = newIlsRun(W, o.hold ?? 0, o.base);
   this.onRadio?.(
@@ -234,7 +250,7 @@ function ilsStart(
         ? tf("{0} approach: hold at the initial fix, expect the ILS {1}", W.icao ?? W.name, runwayId(W.hdg, W.des))
         : tf("{0} approach: cleared ILS {1}", W.icao ?? W.name, runwayId(W.hdg, W.des)),
   );
-  return tf("ILS approach: {0}, {1}", id, unitsOf(this.s.units).fDist(gcDist(g, W), 0)) + warn;
+  return tf("ILS approach: {0}, {1}", id, unitsOf(this.s.units).fDist(gcDist(g, W), 0)) + (why ? ` · ${why}` : "") + warn;
 }
 
 /** A world runway's level as measured (src/world/runways3d.ts: the median of the bare relief under it, as the relief
