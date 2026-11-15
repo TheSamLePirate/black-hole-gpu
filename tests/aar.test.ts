@@ -78,7 +78,8 @@ function refuel(
   let tMax = 0,
     worst = 0,
     bank = 0,
-    hoseT = 0;
+    hoseT = 0,
+    ra = 0;
   const pin = c.pilotInput.bind(c);
   let t = 0;
   c.pilotInput = (pad) => ({ ...pin(pad), ...(input?.(t, c) ?? {}) });
@@ -92,6 +93,8 @@ function refuel(
         const q = c.combat!.world.targets.find((x) => x.id === A.tanker)!;
         bank = Math.max(bank, Math.acos(Math.min(1, q.up[2])) * (180 / Math.PI));
       }
+      // (the TCAS in TA ONLY while it refuels: no "Climb, climb!" for the tanker metres ahead)
+      if (A.stage === "hose") ra += (c.tcas ?? []).filter((a) => a.level === "RA").length;
       if (A.s.phase === "contact") {
         tMax = Math.max(tMax, A.s.takeup);
         worst = Math.max(worst, A.s.closure);
@@ -100,11 +103,11 @@ function refuel(
     return !c.aar && seen.size > 1;
   });
   c.pilotInput = pin;
-  return { c, said, seen, tMax, full, bank };
+  return { c, said, seen, tMax, full, bank, ra };
 }
 
 test("auto: the jet's systems fly it — pre-contact, the contact, the fuel taken, back out, cleared to depart", () => {
-  const { c, said, seen, full, bank } = refuel("auto", 400);
+  const { c, said, seen, full, bank, ra } = refuel("auto", 400);
   console.log(`  ${[...seen].join(" → ")} · ${said.filter((s) => /TEXACO|Refuel/.test(s)).join(" · ")}`);
   expect(seen.has("hose:contact")).toBe(true);
   expect(said.some((s) => /fuel flowing/.test(s))).toBe(true);
@@ -116,6 +119,8 @@ test("auto: the jet's systems fly it — pre-contact, the contact, the fuel take
   expect(c.gcas?.escape ?? null).toBeNull();
   // (the tanker held straight and level while it refuels: no turn, no disconnect for it)
   expect(bank).toBeLessThan(1);
+  // (no resolution advisory against the tanker — 14 Nov 2026: some 3 000 steps of them through the contact before)
+  expect(ra).toBe(0);
 }, 300_000);
 
 test("assisted: held on the basket's line, the throttle closes — forward in, back out once full", () => {

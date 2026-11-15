@@ -14,6 +14,16 @@ connue ou supposée, la piste. Une entrée réglée est barrée avec le commit q
 - **Correction** : `nextDusk` passe aux jours suivants, jusqu'à la première nuit qui descend 4° plus bas que −12° (depuis le 10 juillet :
   le 8 septembre, 21 h 34 UTC, Soleil à −14,8°). La carte dit « La prochaine nuit noire ». Test `s2-views` (unité) 5/5, e2e 6/6, capture.
 
+## ~~« Climb, climb! » pendant tout le contact d'un ravitaillement en vol~~ (relevé le 14 novembre 2026, capture de l'e2e `aar`) — réglé le même jour
+
+- **Constat** : pendant le contact, l'annonce « Climb, climb! » (signée RANGER). Sans tête, sur le vol automatique : le TCAS donne des RA
+  pendant toute la phase au panier (environ 3 000 pas, « climb » et « descend » en alternance).
+- **Cause** : le ravitailleur, à quelques mètres, se rapproche lentement. Pour le TCAS II, c'est un intrus dans son volume, en rapprochement.
+- **Correction** : le TCAS passe en TA ONLY pendant un ravitaillement (`tcasAdvise(…, taOnly)`, `controller/radar.ts`), comme le fait un
+  pilote ravitaillé. Tests : `tcas.test.ts` (même géométrie : RA, puis TA en TA ONLY), le vol automatique de `aar.test.ts` (0 RA). RADAR.md et .fr.
+- **Non tranché** : les annonces sont signées « RANGER » sur tous les appareils (`ui/subtitles.ts`, la voix des annonces), F-35 et A320
+  compris. Un choix de nom, laissé tel quel.
+
 ## ~~Le ravitaillement en vol automatique jamais autorisé : l'avion dépasse le panier à 5 m/s~~ (relevé le 14 novembre 2026, e2e `aar`, `crew-aar`) — réglé le même jour
 
 - **Constat** : `aar` 1/3, `crew-aar` 2/3 (« cleared » jamais vrai en 90 s, pas de contact en 300 s). Sonde : la loi approche à 4–6 m/s,

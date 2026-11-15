@@ -45,3 +45,11 @@ test("out of its reach: none", () => {
   expect(tcasAdvise(own, 3000, [{ id: "far", r: [0, TCAS.range + 100, 0], v: [0, 0, 0] }])).toEqual([]);
   expect(tcasAdvise(own, 3000, [{ id: "hi", r: [0, 1000, TCAS.height + 100], v: [0, 0, 0] }])).toEqual([]);
 });
+
+test("TA ONLY — the receiver while it refuels —: the tanker 12 m ahead closing at 1 m/s a TA, no RA (14 Nov 2026)", () => {
+  const tanker = [{ id: "texaco", r: [0, 12, 3] as [number, number, number], v: [0, 209, 0] as [number, number, number] }];
+  expect(tcasAdvise([0, 210, 0], 6000, tanker)[0]!.level).toBe("RA");
+  const a = tcasAdvise([0, 210, 0], 6000, tanker, undefined, true)[0]!;
+  expect(a.level).toBe("TA");
+  expect(a.sense).toBeUndefined();
+});

@@ -43,6 +43,7 @@ Il classe chaque transpondeur comme le TCAS II :
 - **avis de trafic (TA)** : le point de rapprochement maximal à 40 s ;
 - **avis de résolution (RA)** : à 25 s, sur un intrus qui se rapproche. Il demande de monter ou de descendre, à
   l'écart de là où passera l'intrus. Pas de RA sous 300 m sol.
+  Pas de RA non plus pendant un ravitaillement en vol (TA ONLY, comme le règle le ravitaillé) : le ravitailleur, à quelques mètres, reste un TA.
 
 Où on le voit et l'entend :
 

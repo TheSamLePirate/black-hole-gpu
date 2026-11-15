@@ -55,9 +55,10 @@ export const TCAS = {
 /**
  * The advisories (the others within the TCAS's reach, the most urgent first): `ownV` the craft's velocity over the
  * ground [m/s], `agl` its height over the ground [m] (the RAs inhibited low), `theirRa` an intruder's own RA's sense
- * by its id (coordinated: ours the other way).
+ * by its id (coordinated: ours the other way); `taOnly` the RAs left out — the receiver's TCAS in TA ONLY while it refuels,
+ * as the procedure asks: the tanker metres ahead, closing at a walking pace, is no conflict (14 Nov 2026).
  */
-export function tcasAdvise(ownV: V3, agl: number, others: TcasOther[], theirRa?: Map<string, RaSense>): TcasAdvisory[] {
+export function tcasAdvise(ownV: V3, agl: number, others: TcasOther[], theirRa?: Map<string, RaSense>, taOnly = false): TcasAdvisory[] {
   const out: TcasAdvisory[] = [];
   for (const o of others) {
     const d = Math.hypot(o.r[0], o.r[1]);
@@ -82,7 +83,7 @@ export function tcasAdvise(ownV: V3, agl: number, others: TcasOther[], theirRa?:
     if (within(TCAS.taDmod, TCAS.taZthr, TCAS.taTau)) level = "TA";
     let sense: RaSense | undefined;
     // (an RA only on one closing: a wingman alongside, inside the volume but holding his place, a TA)
-    if (agl > TCAS.raFloor && Number.isFinite(tau) && within(TCAS.raDmod, TCAS.raZthr, TCAS.raTau)) {
+    if (!taOnly && agl > TCAS.raFloor && Number.isFinite(tau) && within(TCAS.raDmod, TCAS.raZthr, TCAS.raTau)) {
       level = "RA";
       const ask = theirRa?.get(o.id);
       if (ask) sense = ask === "climb" ? "descend" : "climb";

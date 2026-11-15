@@ -57,6 +57,7 @@ The TCAS grades each transponder:
 - **RA** (resolution advisory): within 25 s, only on a closing intruder.
   - It says climb or descend, away from where the intruder will pass (the intruder's own RA heeded).
   - It is inhibited under 1 000 ft over the ground.
+  - It is inhibited while the craft refuels in the air (TA ONLY, as a receiver sets it): the tanker a few metres ahead stays a TA.
 
 Where it shows:
 

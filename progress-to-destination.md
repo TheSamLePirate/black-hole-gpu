@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-15 00:19 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-15 00:22 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous.
@@ -7030,4 +7030,15 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   visible). Non vérifié : d'autres lois qui liraient la place du joueur de la même façon. La formation et l'interception lisent `P.v`,
   à vérifier.
 - **Vu en passant** : pendant le contact, une annonce « Climb, climb! » (signée RANGER) ; à examiner.
+
+### 2026-11-15 00:22 UTC — Le TCAS en TA ONLY pendant un ravitaillement en vol
+
+- **Contribution** : la lisibilité des annonces en vol (§19, instruments et voix) ; hors rendu.
+- **Constat** : la capture de l'e2e `aar` montrait « Climb, climb! » pendant le contact. Reproduit sans tête : RA pendant toute la phase
+  au panier.
+- **Changement** : `src/radar/tcas.ts` (`taOnly`), `src/controller/radar.ts` (TA ONLY tant que `aar` est actif) ; tests `tcas.test.ts`
+  et `aar.test.ts` (0 RA) ; RADAR.md et .fr, PROBLEMES.
+- **Preuve** : `tcas` + `aar` + `radar` 35/35 sans tête. L'e2e `aar` n'a pas été relancé après ce changement : la page n'est pas
+  vérifiée en jeu pour l'absence d'annonce.
+- **Non tranché** : la signature « RANGER » des annonces sur tous les appareils.
 
