@@ -251,6 +251,8 @@ export interface RunwayView {
   site: Site;
   /** its approach chart's fixes still ahead (game/procedures.ts, A5): where the eye sees them, their heights [m] */
   fixes: { id: string; h: number; d: Vec3; r: number }[];
+  /** the airport's other runways (PLAN-APPROCHES AP7 — settings.hudAllRunways): their outlines, their ends' numbers */
+  others?: { le: string; he: string; corners: { d: Vec3; r: number }[] }[];
 }
 
 /** A row of the hub's card: its name, its value — and, past its mark, how bad: "warn" (amber), "bad" (red). */

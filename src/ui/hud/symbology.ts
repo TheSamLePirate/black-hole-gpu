@@ -1442,6 +1442,25 @@ function drawRunway(
   const U = unitsFor(F.s);
   const len = (m: number) =>
     U.sys === "metric" ? (m >= 1000 ? `${(m / 1000).toFixed(1)} km` : `${Math.round(m)} m`) : m >= 1852 ? U.fDist(m, 1) : U.fAlt(m);
+  // the airport's other runways (PLAN-APPROCHES AP7 — settings.hudAllRunways, on by default): their outlines toned down, their ends'
+  // numbers — the runway landed on drawn over them, bright
+  for (const o of rw.others ?? []) {
+    if (!o.corners.every(front)) continue;
+    const q = o.corners.map((c) => pr(c.d)!);
+    stroke(
+      () => {
+        q.forEach((p, j) => (j ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1])));
+        ctx.closePath();
+      },
+      "rgba(200, 225, 245, 0.45)",
+      1.2,
+    );
+    const mid = (a: [number, number], b: [number, number]): [number, number] => [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
+    const e1 = mid(q[0]!, q[3]!),
+      e2 = mid(q[1]!, q[2]!);
+    if (inside(e1, 4 * dpr)) text(o.le, e1[0], e1[1] + 12 * dpr, "rgba(200, 225, 245, 0.75)", 10, "center", true);
+    if (inside(e2, 4 * dpr)) text(o.he, e2[0], e2[1] + 12 * dpr, "rgba(200, 225, 245, 0.75)", 10, "center", true);
+  }
   // the outline (its far end first: the near one may be behind the eye on the ground)
   if (rw.corners.every(front)) {
     const pts = rw.corners.map((q) => pr(q.d)!);

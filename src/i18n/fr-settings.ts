@@ -1068,6 +1068,9 @@ export default {
   "Where the predicted path meets the ground (a red reticle on the spot, as the ground turns now) or the air's top (amber, the entry), or Gargantua's horizon — with the countdown; off screen, an arrow at the edge.":
     "Où la trajectoire prédite rencontre le sol (un réticule rouge sur le point, selon la rotation actuelle du sol) ou le sommet de l'atmosphère (ambre, l'entrée), ou l'horizon de Gargantua — avec le compte à rebours ; hors écran, une flèche au bord.",
   "Runway & approach": "Piste et approche",
+  "All the airport's runways": "Toutes les pistes de l'aéroport",
+  "Besides the runway landed on (always shown), the airport's other runways on the HUD: their outlines toned down, their numbers at their ends — to see which is which at a big airport (PLAN-APPROCHES AP7; on by default, Sam's choice).":
+    "En plus de la piste d'atterrissage (toujours affichée), les autres pistes de l'aéroport au HUD : leur contour atténué, leurs numéros à leurs extrémités — pour s'y retrouver dans un grand aéroport (PLAN-APPROCHES AP7 ; activé par défaut, choix de Sam).",
   "The runway in reach (the entry's, or the nearest within 80 km): its outline where it is, its centreline 15 km back, the aim point of the glide path — the flight path vector on it, the craft on its glide path —, the distance and the offset from the axis, the glide path's error on the final, FLARE.":
     "La piste à portée (celle de l'entrée, ou la plus proche à moins de 80 km) : son contour là où elle est, son axe sur 15 km en arrière, le point visé du plan de descente — le vecteur trajectoire dessus, l'engin sur son plan —, la distance et l'écart à l'axe, l'erreur de plan en finale, FLARE.",
   "Vertical landing": "Atterrissage vertical",

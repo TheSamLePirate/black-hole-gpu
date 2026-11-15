@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-15 19:08 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-15 19:19 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous.
@@ -71,7 +71,7 @@ ouverts, sous 1 ms) ; J3 au stade du plan.**
 | Audit vagues 3–4 (1feb2f7f) | 4.8 découper `main()` | **fait** (accord de Sam : par petits lots) : lot 1 la persistance, lot 2 qui tient le vol (`session.ts`), lots 3–4 les étapes gardées (`frame.ts`, AR-03), lot 5 l'ordre §19.5 (AR-04), lot 6 `craft-feed.ts`, lot 7 `governor.ts` (confié par la session du rendu) — **fait** : les quatre découpes d'AR-12 (session, frame, gouverneur, poses de l'appareil) |
 | Audit vagues 3–4 (1feb2f7f) | 4.3 séparer `Settings` | **fait** : garde statique des réglages (AR-21) ; `ViewPose` et `SimState` figés une fois par image (AR-07, `view-pose.ts`) ; le renderer les lit (session du rendu, 77721acf) |
 | Audit vague 6 hors rendu (1feb2f7f) | QA-16, QA-18, AR-17, AR-18, réseau RD4/RD5, FX-18, FX-17, FX-07, QA-11 ; puis les FX hors vague : FX-08, FX-12, FX-14, FX-19 (tendance), FX-22, FX-13, FX-20 (FX-11 et FX-15 déjà réglés le 11 nov., FX-16 tranché par Sam) | **faits** (accord de Sam : « un autre lot d'audit hors rendu ») ; FX-17 en 3 lots ; FX-07 l'A320 à la manette ; QA-11 le catalogue 446/446 gardé ; FX-08 V par les vues de l'appareil seul ; FX-12 les touches collées ; FX-14 chaque appareil sa configuration ; FX-19 la tendance de vitesse sur le temps du vol ; FX-13 ⇧M au vol d'abord, FX-20 sans dégâts pour ce vol seulement (choix de Sam) ; e2e `report` 4/4 (sans les états périmés de la galerie) ; ensuite les autres FX hors vague ( FX-19 la fraîcheur des écrans, à mesurer ; FX-21 des fonctions à finir) |
-| PLAN-APPROCHES (1feb2f7f) | AP0a, AP1, AP2, AP0b, AP3, AP4, AP5, AP6 | **faits (15 nov.)** : nav.dat lié aux pistes ; le CIFP de la FAA (9 568 approches publiées des États-Unis, entières) ; l'approche choisie (état, choix auto par vent, aide, longueur, sens d'arrivée) ; la jonction planifiée (dans l'axe, ou vent arrière + base, jamais au-dessus du terrain, 300 m sur le relief, paliers jusqu'à la pente) — e2e `approach-auto` 5/5, `approach-join` 4/4 (Nice), sans navigateur 8/8 à Edwards. l'A320 vole la même jonction (e2e `a320-approach-join` 4/4). MCDU ARRIVAL/VIA, RAD NAV réel, arrivée publiée volée en NAV (KSFO via ARCHI, 20/20). l'approche au ND. la carte tactique (fiche, sélection au clic, tracé, profil — e2e jetmap-approach 3/3). le radar du HUD et la TSD (choix au clic et au toucher, approche dessinée — e2e radar-approach 3/3). le crew choisit et arme (e2e crew-approach 2/2). radar et ND du crew, vue Approche, appels (crew-approach 5/5). Suite : AP7 (question Q2 à Sam) |
+| PLAN-APPROCHES (1feb2f7f) | AP0a, AP1, AP2, AP0b, AP3, AP4, AP5, AP6, AP7a | **faits (15 nov.)** : nav.dat lié aux pistes ; le CIFP de la FAA (9 568 approches publiées des États-Unis, entières) ; l'approche choisie (état, choix auto par vent, aide, longueur, sens d'arrivée) ; la jonction planifiée (dans l'axe, ou vent arrière + base, jamais au-dessus du terrain, 300 m sur le relief, paliers jusqu'à la pente) — e2e `approach-auto` 5/5, `approach-join` 4/4 (Nice), sans navigateur 8/8 à Edwards. l'A320 vole la même jonction (e2e `a320-approach-join` 4/4). MCDU ARRIVAL/VIA, RAD NAV réel, arrivée publiée volée en NAV (KSFO via ARCHI, 20/20). l'approche au ND. la carte tactique (fiche, sélection au clic, tracé, profil — e2e jetmap-approach 3/3). le radar du HUD et la TSD (choix au clic et au toucher, approche dessinée — e2e radar-approach 3/3). le crew choisit et arme (e2e crew-approach 2/2). radar et ND du crew, vue Approche, appels (crew-approach 5/5). toutes les pistes au HUD (Q2 tranchée : activé par défaut, sans touche). Suite : AP7b (directeur de vol) |
 
 **Fermé récemment** : J2 (13 nov., ΔGPU nul, chemin vers §8 écrit) ; J2-C BC7 étudiée puis **rangée** (Sam : « ne pas le faire maintenant »).
 
@@ -8155,3 +8155,24 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   repris, U : en l'air en 9,3 s) ; `aircraft-save` 1/1.
 - Limites : le détail des systèmes de l'A320 non sauvegardé ; l'échec sur l'ancien code non rejoué.
 - Suite : J6-5.
+
+### 2026-11-15 19:19 UTC — PLAN-APPROCHES AP7a : toutes les pistes de l'aéroport au HUD (décision de Sam : activé par défaut, sans touche)
+
+- **Décision de Sam (Q2 du plan, 15 nov.)** : « toutes les pistes » **activé par défaut** ; la bascule par la roue et le Labo,
+  **sans touche** (ma recommandation était « désactivé » ; les touches de vol sont presque toutes prises — la recommandation
+  « sans touche » retenue).
+- **Contribution** : §19 (la lisibilité des instruments dans un grand aéroport : quelle piste est laquelle) ; PLAN-APPROCHES §5.5.
+- **Changements** :
+  - `controller/lowthrust.ts` : `otherRunways` / `othersSeen` — les autres pistes du terrain, chacune dans son propre repère,
+    projetées comme la piste d'atterrissage, avec son cache. Les bandes d'hélicoptère et les pistes de moins de 300 m sont
+    écartées.
+  - Le HUD (`symbology.ts`) les dessine en atténué, leurs numéros aux extrémités ; la piste d'atterrissage passe par-dessus.
+  - Le site de l'ILS porte sa désignation publiée : la boîte affiche « 27R », plus « 27 » (le défaut vu à AP2 à Nice, réglé).
+  - `settings.hudAllRunways` (vrai par défaut), au Labo et au menu du joueur, en anglais et en français. HUD.md, plan (Q2),
+    catalogue.
+- **Preuve** : e2e `hud-runways-all` **1/1** : sur la finale 27R de Roissy, les trois autres pistes (08L/26R, 08R/26L, 09R/27L ;
+  la bande « 08H/26H » écartée au second passage), la boîte « 27R » ; l'option coupée, la piste seule ; captures. Tests
+  symbologie + ILS 12/12 ; réglages et i18n verts. Coût de dessin non mesuré (quelques contours de plus au HUD 2D).
+- **Limites** : la roue n'a pas encore son secteur « Approche » (AP8) ; le directeur de vol reste (AP7b).
+- **Suite** : AP7b — le directeur de vol (repère de guidage F-35, barres FD A320 et crew).
+

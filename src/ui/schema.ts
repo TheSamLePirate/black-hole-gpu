@@ -3730,6 +3730,16 @@ export const SCHEMA: ControlDef[] = [
     keywords: "hud runway approach glide slope localizer aim flare landing",
   },
   {
+    key: "hudAllRunways",
+    type: "toggle",
+    section: "game",
+    group: "HUD aids",
+    label: "All the airport's runways",
+    effect: "none",
+    help: "Besides the runway landed on (always shown), the airport's other runways on the HUD: their outlines toned down, their numbers at their ends — to see which is which at a big airport (PLAN-APPROCHES AP7; on by default, Sam's choice).",
+    keywords: "hud runways all airport other runways numbers approach",
+  },
+  {
     key: "hudHover",
     type: "toggle",
     section: "game",

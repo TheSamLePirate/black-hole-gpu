@@ -174,6 +174,7 @@ export const PLAYER_MENU: PlayerGroup[] = [
       "hudFuture",
       "hudImpact",
       "hudRunway",
+      "hudAllRunways",
       "hudHover",
       "hudBurn",
       "hudDock",

@@ -1,6 +1,8 @@
 # Plan — les approches et les pistes, AAA (pilote, crew, roue)
 
-**État (2026-11-15) : AP0a, AP1, AP2, AP0b, AP3 (a, b, c), AP4, AP5 et AP6 faits.** AP6a : le crew — actions `app.*` (tous les
+**État (2026-11-15) : AP0a, AP1, AP2, AP0b, AP3 (a, b, c), AP4, AP5, AP6 et AP7a faits.** AP7a : toutes les pistes de l'aéroport
+au HUD (`hudAllRunways`, activé par défaut — décision de Sam, Q2 ; réglage au Labo, la roue à AP8), la désignation publiée dans la
+boîte de piste (« 27R »). Reste d'AP7 (AP7b) : le directeur de vol F-35/A320/crew. AP6a : le crew — actions `app.*` (tous les
 postes), boîte APP (approches réelles et construites, transition, Choisir/Auto/Armer/Remise de gaz, état choisi/volé), l'état de
 l'approche et celle de l'A320 dans la télémétrie, le DME corrigé. AP6b : les terrains et l'approche au radar et au ND
 du crew (touchés, ils la choisissent), la vue « Approche » (plan, repères, profil), les appels de l'approche dits à l'équipage. Non
@@ -357,6 +359,6 @@ captures montrées dans T3, ses docs, une entrée au journal.
 ## 9. Questions à Sam (à poser au lot concerné, avec une recommandation)
 
 1. ~~AP0 : la redistribution du CIFP~~ — **levée le 15 nov.** : domaine public, redistribuable sous ses deux conditions (§3).
-2. AP7 : la touche de « toutes les pistes » et le défaut du réglage (recommandation : désactivé par défaut, la piste choisie
-   toujours visible).
+2. ~~AP7 : la touche de « toutes les pistes » et le défaut du réglage~~ — **décidé le 15 nov. : activé par défaut ; bascule par
+   la roue et le Labo, sans touche** (les touches de vol presque toutes prises).
 3. ~~AP6 : quels postes du crew peuvent armer une approche~~ — **décidé le 15 nov. : tous les postes.**

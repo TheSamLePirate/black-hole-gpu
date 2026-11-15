@@ -555,6 +555,7 @@ export interface Settings {
   hudFuture: boolean; // the ship's places to come: +10, +30, +60 s, a quarter of the orbit
   hudImpact: boolean; // where the path meets the ground (or the air's top, the horizon), its countdown
   hudRunway: boolean; // the runway in reach: its outline, centreline, aim point, the offsets, FLARE
+  hudAllRunways: boolean; // the airport's other runways too, toned down, their numbers (PLAN-APPROCHES AP7: Sam, on by default)
   hudHover: boolean; // the vertical landing: drift scope, vertical speed, the stop burn, the touchdown spot
   keyHints: boolean; // the keys that matter now, in a strip that fades (ui/keyhints.ts)
   uiScale: number; // the interface's panels, menus and dock, scaled (0.8 … 1.5)
@@ -948,6 +949,7 @@ export function defaultSettings(): Settings {
     hudFuture: true,
     hudImpact: true,
     hudRunway: true,
+    hudAllRunways: true,
     hudHover: true,
     keyHints: true,
     uiScale: 1,
@@ -2379,6 +2381,7 @@ export const SETTING_KIND: Record<keyof Settings, SettingKind> = {
   hudFuture: "pref",
   hudImpact: "pref",
   hudRunway: "pref",
+  hudAllRunways: "pref",
   hudHover: "pref",
   keyHints: "pref",
   uiScale: "pref",

@@ -1,6 +1,7 @@
 // The CameraController — low thrust, and the views of the flight the interface reads (telemetry, runway, hub, future).
 // (Its methods, out of controls.ts: installed on its prototype — `this` the controller.)
 import { worldRunwaysNow } from "../world/runways3d";
+import { fieldCached } from "../world/runways";
 import { nearWormhole, type WormholePath } from "../system/wormhole-predict";
 import { tunnelEntrySide, wormholeMapPose } from "../system/wormhole-map";
 import { blToCartesian, cameraFrame } from "../camera";
@@ -2739,6 +2740,8 @@ export interface RunwayGeo {
   aim: RunwayLoc;
   gates: RunwayLoc[][];
   fixes: RunwayLoc[];
+  /** the airport's other runways (AP7): each its site (its threshold, heading), level and corners in its own frame */
+  others?: { site: Site; hT: number; le: string; he: string; corners: RunwayLoc[] }[];
 }
 type EntryFr = NonNullable<ReturnType<CameraController["entryFrame"]>>;
 
@@ -2780,7 +2783,72 @@ function runwayProject(c: CameraController, v: RunwayView, g: RunwayGeo): Runway
     aim: see(g.aim),
     gates: g.gates.map((q) => q.map(see)),
     fixes: v.fixes.map((f, k) => ({ ...f, ...see(g.fixes[k]!) })),
+    ...(g.others ? { others: othersSeen(cam, fr, g.others) } : {}),
   };
+}
+
+/** A runway end's opposite: its number + 18, its side swapped (« 27R » → « 09L »). */
+const oppositeEnd = (d: string) => {
+  const m = /^(\d{1,2})([LCR]?)$/.exec(d);
+  if (!m) return d;
+  const n = ((Number(m[1]) + 17) % 36) + 1;
+  return `${String(n).padStart(2, "0")}${{ L: "R", R: "L", C: "C" }[m[2] as "L" | "R" | "C"] ?? ""}`;
+};
+
+/** The airport's other runways where the eye sees them (AP7): each by its own frame. */
+function othersSeen(cam: ReturnType<typeof cameraFrame>, fr: EntryFr, others: NonNullable<RunwayGeo["others"]>) {
+  return others.map((o) => {
+    const see = runwaySeer(cam, fr, runwayAxes(fr, o.site, o.hT));
+    return { le: o.le, he: o.he, corners: o.corners.map(see) };
+  });
+}
+
+/**
+ * The airport's other runways (PLAN-APPROCHES AP7 — settings.hudAllRunways, on by default: Sam, 15 Nov 2026): the world airfield
+ * of the runway landed on (its code, else the approach resolved), its runways but that one — each a site at its first threshold
+ * on its heading, its level, its outline in its own frame. On the Earth only.
+ */
+function otherRunways(c: CameraController, fr: EntryFr, site: Site): RunwayGeo["others"] {
+  if (c.s.hudAllRunways === false || fr.body !== "earth") return undefined;
+  const f = (site.icao ? fieldCached(site.icao) : null) ?? c.approachLast?.field ?? null;
+  if (!f || Math.abs(f.lat - site.lat) > 0.1 || Math.abs(f.lon - site.lon) > 0.15) return undefined;
+  const D = Math.PI / 180;
+  const same = (h: number) => Math.abs(Math.cos((h - (site.rwy ?? 0)) * D)) > 0.998;
+  const out: NonNullable<RunwayGeo["others"]> = [];
+  for (const r of f.runways) {
+    // (a seaplane's water, a helicopter's strip — « 08H/26H » at Roissy —, a pad: not a runway)
+    if (r.surface === "water" || !r.len || r.len < 300 || /H$/i.test(r.le) || /H$/i.test(r.he)) continue;
+    // (the runway landed on left out: its axis, and its threshold within its length)
+    const near = Math.hypot((r.lat1 - site.lat) * 111_320, (r.lon1 - site.lon) * 111_320 * Math.cos(site.lat * D));
+    const near2 = Math.hypot((r.lat2 - site.lat) * 111_320, (r.lon2 - site.lon) * 111_320 * Math.cos(site.lat * D));
+    if (same(r.hdg) && Math.min(near, near2) < 200) continue;
+    const s: Site = {
+      body: "earth",
+      name: f.name,
+      lat: r.lat1,
+      lon: r.lon1,
+      runway: true,
+      rwy: r.hdg,
+      elev: r.elev1 || f.elev,
+      len: r.len,
+    };
+    const hT = runwayLevel(fr, s);
+    const w = (r.wid || 45) / 2;
+    out.push({
+      site: s,
+      hT,
+      le: r.le,
+      he: r.he,
+      corners: [
+        [0, -w, 0],
+        [r.len, -w, 0],
+        [r.len, w, 0],
+        [0, w, 0],
+      ],
+    });
+    if (out.length >= 8) break;
+  }
+  return out.length ? out : undefined;
 }
 
 /** A runway's threshold height over its world's figure [m]: the ground drawn there (the Earth's: its relief over
@@ -2827,7 +2895,19 @@ function runwayBuild(this: CameraController): { v: RunwayView; geo: RunwayGeo } 
   // Toulon-Hyères, graded D on the other's axis; the flight lab, 5 Nov 2026)
   const I = this.ilsRun?.rwy ?? this.a320App?.rwy;
   if (!site && I && fr.body === "earth")
-    site = { body: "earth", name: I.name, lat: I.lat, lon: I.lon, runway: true, rwy: I.hdg, icao: I.icao, elev: I.elev, len: I.len };
+    // (its published designation too — « 27R », not « 27 » from the heading: the HUD's box, PLAN-APPROCHES AP7)
+    site = {
+      body: "earth",
+      name: I.name,
+      lat: I.lat,
+      lon: I.lon,
+      runway: true,
+      rwy: I.hdg,
+      icao: I.icao,
+      elev: I.elev,
+      len: I.len,
+      ...(I.des ? { des: [I.des, oppositeEnd(I.des)] as const } : {}),
+    };
   if (!site) {
     if (agl > 20e3) return null;
     let best = 80e3;
@@ -2949,7 +3029,8 @@ function runwayBuild(this: CameraController): { v: RunwayView; geo: RunwayGeo } 
   const fixes = (R?.ga ? procedureFor(site).missed.filter((f) => R.ga!.phase === "climb" || f.id === "MAHF") : procedureFor(site).fixes)
     .filter((f) => (R?.ga ? true : f.along > sAl + 200) && f.along - sAl < 40e3)
     .map((f) => ({ id: f.id, h: f.h, p: at(f.along, f.across, f.h) }));
-  const geo: RunwayGeo = { site, hT, corners, line, aim, gates, fixes: fixes.map((f) => f.p) };
+  const others = otherRunways(this, fr, site);
+  const geo: RunwayGeo = { site, hT, corners, line, aim, gates, fixes: fixes.map((f) => f.p), ...(others ? { others } : {}) };
   const v: RunwayView = {
     papi,
     gates: gates.map((g) => g.map(see)),
@@ -2979,6 +3060,7 @@ function runwayBuild(this: CameraController): { v: RunwayView; geo: RunwayGeo } 
     site,
     // (the fixes where the eye sees them, and their heights)
     fixes: fixes.map((f) => ({ id: f.id, h: f.h, ...see(f.p) })),
+    ...(others ? { others: othersSeen(cam, fr, others) } : {}),
   };
   return { v, geo };
 }
