@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-15 08:35 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-15 09:14 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous.
@@ -7606,3 +7606,13 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
 - Preuves (mesuré, kerr-mini, trois images) : les lignes de mer à `RASTER_MARK` 1e30 (non 4e30), le cockpit à −1 (le témoin).
 - Limites : le chemin exact de la mer de J0 (et pourquoi pas « eau ») non encore suivi.
 - Suite : suivre une ligne de mer à travers `shadeLite`, `liteEpilogue` et les noyaux de l'eau ; puis la reconstruction et J5-6.
+
+### 2026-11-15 09:14 UTC — QA-09 : les longues attentes de cinq e2e du rendu mesurées, des plafonds proposés à la session du rendu
+
+- `kernel-golden`, `grass-aaa`, `earth-scenery`, `terrain-raster-hint` et `storm-blotch` lancés sur ce Mac, en fenêtre visible, sans rien modifier.
+  Plafonds proposés (2 × le plus long mesuré, 60 s au moins) pour 14 attentes, envoyés à la session du rendu, à qui ces fichiers
+  appartiennent ; par exemple `terrain-raster-hint:79`, 300 → 60 s sur 24 mesures (0,9 s au plus). La garde reste à 95 tant qu'ils ne sont pas
+  abaissés.
+- Échecs vus et transmis : `kernel-golden` 0/5 (pas un défaut : ses images de référence manquent, mode compare sans record) ;
+  `grass-aaa` 1/3 (deux `null`) ; `earth-scenery` 3/4 (décor pas prêt en 120 s, peut-être l'IGN) ; `storm-blotch` sauté.
+
