@@ -193,6 +193,24 @@ gestionnaire des messages du pilote (`main.ts`) les montrait par `panel.toast`, 
 y écrivait comme le pilote. **Tous** les messages du pilote étaient doublés. `panel.toast(msg, { log: false })` pour eux ; e2e `journal-once` :
 avant `[info no-time, pilot t]`, après `[pilot t]`.
 
+## Le décor ne suit pas un vol rapide : en arrivant sur une ville à 150 m/s, aucun bâtiment devant (relevé le 15 novembre 2026, PLAN-J6 J6-1)
+
+**État (15 nov. 2026, 17:02 UTC)** : relevé, non corrigé. Le parcours `parcours-ville` (le F-35 décolle de Toulon-Hyères, vole vers le
+centre de Toulon à 500 m et 150 m/s) : **en arrivant à 1,5 km du centre, la grille de visibilité devant le cockpit (48 × 27,
+`renderer.surfaceAt`) ne compte ni bâtiment ni arbre à moins de 5 km** — la ville n'est que la photo aérienne (capture
+`3-over-toulon.png`) ; dans le regard arrière 30 s plus tard, quelques bâtiments à plus de 2 km. Trois passages, le même résultat.
+
+- **Mesuré** (kerr-mini, l'état du décor à chaque tranche de 10 s) : en vol au-delà de 120 m/s le décor enchaîne des scènes
+  « rapides » (`fastFlight`, boîte de 0,35 fois la portée), toujours « refreshing », l'étape **`forest`** presque à chaque relevé ;
+  1 800 à 3 900 bâtiments par scène (32 000 au repos), 65 000 à 233 000 arbres ; le centre de la scène dessinée **0,2 à 2,3 km** de
+  l'avion.
+- **Cause supposée, non vérifiée** : l'avance du centre (`aheadFocus` / `buildLead`, `renderer.ts`) est plafonnée à 1,2 fois le rayon
+  d'une scène rapide ; une scène prend plus de temps que cette avance ne couvre à 150 m/s (le travail de la forêt dominant), elle
+  arrive donc derrière l'avion et la vue devant reste vide.
+- **À faire** (PLAN-J6 J6-1) : le temps de chaque étape du worker en vol rapide (`stats().phases`) ; puis l'ordre des étapes (les
+  bâtiments avant la forêt dans une scène rapide), le budget d'arbres d'une scène rapide, ou l'avance. Le parcours relève
+  `buildingsNear` sans l'asserter jusqu'à la correction.
+
 ## Le repli du raster vers le pipeline tracé ne s'arme plus sur la Terre (relevé le 13 novembre 2026, e2e `raster-governor`)
 
 **Constat (lu dans le code, 13 nov. ~14:40 UTC)** : le gouverneur (`src/game/governor.ts`, extrait de `main.ts` le 13) ne donne la Terre au

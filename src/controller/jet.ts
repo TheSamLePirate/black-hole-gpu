@@ -71,6 +71,26 @@ function apSet(this: CameraController, want: { alt?: number; hdg?: number; spd?:
   // F-35's holds, always empty here, every ask toggled its AP1)
   if (fleet.active === "a320") return this.a320FcuSet(want);
   if (!jetReady(this)) return t("The jet's systems: in plane mode (F)");
+  // (the F-35's automatic take-off running — controller/runwaytakeoff.ts —: the selections armed for its end, its holds then theirs;
+  // engaged now, the holds took the run's stick for the pilot's hand — PLAN-J6 J6-1)
+  if (this.rwyRun) {
+    if (want.ap === false || want.athr === false) return t("Automatic take-off: U or the stick takes it back");
+    const sel = (this.rwyRun.sel ??= {});
+    const said: string[] = [];
+    if (want.alt !== undefined) {
+      sel.alt = Math.round(Math.max(0, Math.min(20_000, want.alt)) / 10) * 10;
+      said.push(tf("Altitude {0} armed", unitsOf(this.s.units).fAlt(sel.alt)));
+    }
+    if (want.hdg !== undefined) {
+      sel.hdg = ((want.hdg % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI) || 0;
+      said.push(tf("Heading {0}° armed", String(Math.round(sel.hdg / D) % 360).padStart(3, "0")));
+    }
+    if (want.spd !== undefined) {
+      sel.spd = Math.round(Math.max(30, Math.min(700, want.spd)));
+      said.push(tf("Speed {0} armed", unitsOf(this.s.units).fSpd(sel.spd)));
+    }
+    return `${said.length ? `${said.join(" — ")} — ` : ""}${t("held at the take-off's end")}`;
+  }
   const m = this.jetModes;
   const N = this.nav;
   const said: string[] = [];
@@ -125,6 +145,8 @@ function jetToggle(this: CameraController, what: "ap" | "athr" | "ab"): string {
     this.jetCws.thr = this.pilot.throttle;
     return m.ab ? t("Afterburner on — the thrust ×1.5, the propellant ×3") : t("Afterburner off");
   }
+  // (the F-35's automatic take-off running: its holds come on at its end — engaged now, they took its stick for the pilot's hand)
+  if (this.rwyRun) return t("Automatic take-off: its holds come on at its end — U or the stick takes it back");
   const f = this.jetFigures();
   if (!f || this.rolling) return t("The autopilot's holds: in the air");
   if (this.pilot.auto !== "none") this.pilot.setAuto(this.pilot.auto);

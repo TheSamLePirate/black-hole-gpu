@@ -1,6 +1,7 @@
 # PLAN-J6 — Les parcours complets (stratégie §19.13)
 
-**État (2026-11-15 16:10 UTC)** : plan écrit, aucun lot ouvert. Les jalons J0 à J5 ont été menés (PLAN-J1 à PLAN-J5) ; le 15 novembre,
+**État (2026-11-15 17:02 UTC)** : J6-1 ouvert — son parcours écrit et volé ; deux défauts trouvés, l'un corrigé (le décollage
+automatique), l'autre relevé (le décor en vol rapide). Les jalons J0 à J5 ont été menés (PLAN-J1 à PLAN-J5) ; le 15 novembre,
 Sam a nommé **~48 ms de GPU sur J0 le palier intermédiaire de kerr-mini** ([J0-CONTRAT](J0-CONTRAT.md) §2) et demandé de reprendre la
 suite du plan, lumière et contenu. La stratégie ([ANALYSE-STRATEGIE](ANALYSE-STRATEGIE-RENDU-2026-11-03.md) §19.13) demande que les jalons
 « transportent l'expérience en même temps que les passes » : **un parcours n'est terminé ni avec une scène vide, ni avec un état choisi
@@ -60,3 +61,17 @@ L'inventaire du §1 vient de la lecture du catalogue et des en-têtes : aucun te
 ## 5. Avancement
 
 - **Plan écrit** (2026-11-15 16:10 UTC).
+- **J6-1, le parcours volé ; deux défauts** (2026-11-15 17:02 UTC) : e2e `parcours-ville` — le F-35 décolle de Toulon-Hyères par la vraie
+  touche U, vole vers le centre de Toulon à 500 m et 150 m/s (son relèvement repris toutes les 10 s), vire au-dessus de la ville, le
+  regard arrière, le cockpit de nouveau ; à chaque image l'âge des écrans, les trous du relief sous la caméra, les blocages, le GPU.
+  **Premier défaut, corrigé** : réglé pendant la montée du décollage automatique (cap, altitude, vitesse), le pilote automatique était
+  ignoré — l'avion en palier à ~100 m et 210 m/s sur l'axe de la piste, jusqu'aux collines des Maures : les maintiens, engagés pendant
+  le roulage, prenaient le manche du décollage pour celui du pilote et, lâchés, tenaient la hauteur du moment. Les choix faits pendant le
+  décollage sont désormais **armés** et deviennent ses maintiens à sa fin (`apSet` → `rwyRun.sel`, `jetToggle` y répond sans engager) ;
+  e2e `takeoff-armed` (Edwards, pas à pas : sans choix, terrain + 1 500 m / axe / 210 m/s ; armés 2 500 m / 270° / 150 m/s, tenus) ;
+  `apprendre-avions` **7/7** revolé. **Second défaut, relevé** : en arrivant sur Toulon, aucun bâtiment ni arbre devant à moins de 5 km —
+  le décor, en scènes « rapides » au-delà de 120 m/s, arrive derrière l'avion ([PROBLEMES](PROBLEMES-A-REGLER.md), « Le décor ne suit pas un
+  vol rapide ») : relevé, non asserté. **Mesuré** (kerr-mini, trois passages) : en l'air 10,3 s après U ; **aucun trou du relief** sous la
+  caméra de tout le vol ; l'âge des écrans p95 **58,2 ms** dans le cockpit (l'extérieur ne les dessine pas : leur âge y grandit, 14,9 s, hors de
+  l'assertion) ; le plus long blocage de la page 68–83 ms ; GPU p50 45–57 ms en vol, 64 ms dans la vue extérieure. Suite : le décor en vol
+  rapide (le temps de chaque étape du worker, l'ordre bâtiments / forêt, l'avance), puis asserter les bâtiments proches.

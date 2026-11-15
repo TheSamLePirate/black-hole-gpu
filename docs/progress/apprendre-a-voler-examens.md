@@ -118,3 +118,12 @@ son comportement si : `apprendre-avions` revolé **7/7** — leçon 7 (Edwards, 
 0,5 m de l'axe ; leçon 10 (A320, Le Bourget) ILS 07 20/20, 666 m. La page et VOL-AVIONS décrivent la jonction (le schéma dit
 « jonction 16 km » au lieu de « IAF 18,5 km »). Les départs de loin sont vérifiés par `approach-join` (Nice, 4/4) et sans
 navigateur à Edwards (8/8), pas par le cours.
+
+## 2026-11-15 — PLAN-J6 J6-1 : le décollage automatique arme les choix du pilote, la leçon 3 revolée
+
+Le parcours « décoller puis virer en ville » (e2e `parcours-ville`) a trouvé le F-35, après U, en palier à ~100 m et 210 m/s sur l'axe de
+la piste, le pilote automatique réglé pendant la montée (cap, altitude, vitesse) ignoré, jusqu'à une colline : les maintiens engagés
+pendant le roulage prenaient le manche du décollage pour celui du pilote et, lâchés à sa fin, tenaient la hauteur du moment. Depuis, les
+choix faits pendant le décollage sont **armés** et deviennent ses maintiens à sa fin. Revérifié sur kerr-mini : `apprendre-avions` **7/7**
+(leçon 3 : en l'air en 10,8 s, assiette 20,1°, axe 0,3°, 2 200 m / 210 m/s tenus) ; `takeoff-armed` 1/1 (2 500 m, 270°, 150 m/s armés à
+16 s, tenus — 1 110 m au-dessus du terrain à 70 s, cap 269°). La page dit l'armement.

@@ -593,6 +593,14 @@ export default {
   // (the aircraft's messages in the pilot's units — audit FX-17, 13 Nov 2026: the value comes written with its unit)
   "Altitude {0} selected": "Altitude {0} sélectionnée",
   "Speed {0} selected": "Vitesse {0} sélectionnée",
+  // (the F-35's automatic take-off: the selections armed for its end — PLAN-J6 J6-1, 15 Nov 2026)
+  "Altitude {0} armed": "Altitude {0} armée",
+  "Heading {0}° armed": "Cap {0}° armé",
+  "Speed {0} armed": "Vitesse {0} armée",
+  "held at the take-off's end": "tenus à la fin du décollage",
+  "Automatic take-off: U or the stick takes it back": "Décollage automatique : U ou le manche le reprennent",
+  "Automatic take-off: its holds come on at its end — U or the stick takes it back":
+    "Décollage automatique : ses maintiens s'engagent à sa fin — U ou le manche le reprennent",
   "Autopilot: altitude {0}, heading {1}°": "Pilote automatique : altitude {0}, cap {1}°",
   "Autothrottle: {0} — the throttle keys set the speed": "Auto-manette : {0} — les touches des gaz règlent la vitesse",
   "Locked: {0} · {1}": "Verrouillé : {0} · {1}",

@@ -220,7 +220,12 @@ et le dit (« Airborne — gear up, climbing to … »). Le manche, la manette t
 reste désarmé pendant ce décollage (comme sur le vrai, au décollage). Par code : `app.press("KeyU")` (la vraie touche),
 ou `__bh.camera.runwayTakeoff()` (le même départ ; il rend un message, `null` hors du sol ou sans le F-35). Réussi
 quand `c.rwyRun === null`, `c.gearDown === false` et `c.jetModes.alt` ≈ terrain + 1 500. Vérifié en jeu (e2e
-`apprendre-avions`, 11 nov.) : en l'air en 10,8 s, assiette 20,1° au plus, l'axe à 0,3°, 1 348 m et 201 m/s à 45 s.
+`apprendre-avions`, 11 nov. ; revolé le 15 nov.) : en l'air en 10,8 s, assiette 20,1° au plus, l'axe à 0,3°, 1 348 m et 201 m/s à 45 s.
+**Pendant ce décollage, l'altitude, le cap et la vitesse choisis sont armés** (depuis le 15 novembre 2026) : ils deviennent
+les maintiens à sa fin, à la place des siens (« Altitude 2500 m armed — … — held at the take-off's end ») ; les touches
+du pilote automatique y répondent que ses maintiens s'engagent à la fin. Avant, les choisir en montée engageait les
+maintiens trop tôt : ils prenaient le manche du décollage pour celui du pilote et, lâchés, tenaient la hauteur du
+moment — l'avion en palier à ~100 m et 210 m/s (e2e `takeoff-armed`, PLAN-J6 J6-1).
 Près d'un porte-avions, U fait le décollage court ou la catapulte.
 
 ## Leçon 4 — Tenir un palier, virer, monter, descendre
@@ -736,7 +741,10 @@ La loi avion exige le mode `"plane"`, **q > 300 Pa** et aucun maintien.
   vaisseaux) ; seulement le G-LOC et les dégâts de combat.
 - **U / F7** : sur une piste, U fait le **décollage automatique** du F-35 (`controller/runwaytakeoff.ts`, `RWY_TAKEOFF` :
   roulage plein gaz + PC, axe à la roue avant, rotation à 67 m/s, montée à ~8 m/s, maintiens à 110 m/s et 100 m —
-  terrain + 1 500 m, cap de la piste, 210 m/s, PC coupée —, GCAS désarmé pendant `rwyRun`) ; avant le 11 novembre 2026
+  terrain + 1 500 m, cap de la piste, 210 m/s, PC coupée —, GCAS désarmé pendant `rwyRun` ; **depuis le 15 novembre 2026**
+  `apSet` pendant `rwyRun` arme ses cibles dans `rwyRun.sel` — les maintiens à la fin du décollage —, `jetToggle("ap"/"athr")`
+  y répond sans engager : engagés pendant le roulage, leurs reprises au manche (CWS) prenaient les entrées du décollage pour
+  celles du pilote et recalaient l'altitude tenue sur la hauteur du moment, ~100 m — e2e `takeoff-armed`) ; avant le 11 novembre 2026
   il lançait le décollage orbital, refusé (poussée/poids 0,59 < 1,05). Sur un pont : le décollage court ou la
   catapulte (`deckTakeoff`). **Depuis le 13 novembre 2026** (audit FX-02, e2e `aircraft-autokeys`) : **F7** loin d'un
   porte-avions engage l'**approche ILS** sur la piste la plus proche (150 km au plus, `ilsStart` — l'A320 par son FMGC),

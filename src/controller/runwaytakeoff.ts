@@ -47,6 +47,10 @@ export interface RwyRun {
   /** the runway's heading [rad, clockwise from true north] and the field's height over the sea [m] */
   hdg: number;
   field: number;
+  /** the pilot's selections during the run — the keys, apSet (the cockpit's, TARS's, the crew's) —: armed, the holds' targets at its end
+   *  (PLAN-J6 J6-1: engaged during the run, the holds took the run's stick for the pilot's hand and, let go, held the height of the moment —
+   *  ~100 m over the field at 210 m/s) */
+  sel?: { alt?: number; hdg?: number; spd?: number };
 }
 
 declare module "../controls" {
@@ -141,15 +145,18 @@ function rwyStep(this: CameraController, inp: PilotInput, dt: number) {
   this.gearDown = false;
   if (this.jetModes.ab) this.jetToggle("ab");
   const m = this.jetModes;
-  m.alt = R.field + RWY_TAKEOFF.climbM;
-  m.hdg = R.hdg;
-  m.spd = RWY_TAKEOFF.climbSpeed;
+  // (the pilot's selections armed during the run, else the run's own)
+  m.alt = R.sel?.alt ?? R.field + RWY_TAKEOFF.climbM;
+  m.hdg = R.sel?.hdg ?? R.hdg;
+  m.spd = R.sel?.spd ?? RWY_TAKEOFF.climbSpeed;
+  this.jetCws.pitch = false;
+  this.jetCws.roll = false;
   end(
     tf(
       "Airborne — gear up, climbing to {0} m on {1}°, {2} m/s",
       Math.round(m.alt),
-      Math.round((((R.hdg * 180) / Math.PI) % 360) + 360) % 360,
-      RWY_TAKEOFF.climbSpeed,
+      Math.round((((m.hdg * 180) / Math.PI) % 360) + 360) % 360,
+      m.spd,
     ),
   );
 }
