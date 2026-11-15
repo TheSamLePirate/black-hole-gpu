@@ -1,7 +1,8 @@
 # PLAN-J6 — Les parcours complets (stratégie §19.13)
 
-**État (2026-11-15 19:13 UTC)** : **J6-1, J6-2 et J6-3 faits** — leurs parcours passent ; quatre défauts trouvés et corrigés (le
-décollage automatique, le décor en vol rapide, l'arrivée de la météo réelle d'un coup, le repos au sol jamais atteint). J6-4 ensuite. Les jalons J0 à J5 ont été menés (PLAN-J1 à PLAN-J5) ; le 15 novembre,
+**État (2026-11-15 19:18 UTC)** : **J6-1 à J6-4 faits** — leurs parcours passent ; cinq défauts trouvés et corrigés (le décollage
+automatique, le décor en vol rapide, l'arrivée de la météo réelle d'un coup, le repos au sol jamais atteint, l'A320 rechargé dans l'état de la
+préférence). J6-5 ensuite. Les jalons J0 à J5 ont été menés (PLAN-J1 à PLAN-J5) ; le 15 novembre,
 Sam a nommé **~48 ms de GPU sur J0 le palier intermédiaire de kerr-mini** ([J0-CONTRAT](J0-CONTRAT.md) §2) et demandé de reprendre la
 suite du plan, lumière et contenu. La stratégie ([ANALYSE-STRATEGIE](ANALYSE-STRATEGIE-RENDU-2026-11-03.md) §19.13) demande que les jalons
 « transportent l'expérience en même temps que les passes » : **un parcours n'est terminé ni avec une scène vide, ni avec un état choisi
@@ -109,3 +110,12 @@ L'inventaire du §1 vient de la lecture du catalogue et des en-têtes : aucun te
   (kerr-mini) : à l'arrêt 0 m en 10 s ; sortie par ⇧K, 2,8 m de marche aller-retour toujours au sol, retour à bord, U : en l'air en 10,2 s ;
   le sol de contact identique sous deux réglages (0,328 / 0,328 m, z 17). `apprendre-avions` 7/7, `landing` 5/5, tests du train et des
   atterrissages 46/46. Reste : pourquoi la vitesse verticale n'est pas amortie (PROBLEMES). Suite : J6-4 (reprendre un avion au sol).
+- **J6-4 fait : reprendre un avion au sol** (2026-11-15 19:18 UTC) : e2e `parcours-reprise` — à Edwards (tuiles coupées), F5 par la vraie
+  touche, la préférence de départ de l'A320 changée, l'appareil placé ailleurs, F9. **Trouvé** : la sauvegarde ne gardait rien des systèmes de
+  l'A320 (« Not in it: the A320's systems bag ») — rechargé, il repartait de la préférence du joueur (`a320Start`), un A320 sauvegardé froid
+  revenait moteurs en marche (la préférence « prêt ») et inversement. **Corrigé** : `craftsave` garde son état de départ au sol (`a320` : cold,
+  apu, ready — les moteurs, l'APU) et le chargement le rend (`a320StartLoad`, `controller/a320.ts`). **Mesuré** (kerr-mini) : `parcours-reprise`
+  3/3 — l'A320 froid revenu froid (préférence « prêt »), prêt revenu moteurs en marche (préférence « froid ») puis roulant à la manette ; le
+  F-35 garé : carburant, train, freins tels quels, U : en l'air en 9,3 s ; `aircraft-save` 1/1. Non vérifié : l'échec sur le code d'avant
+  (l'en-tête du test le décrit par la lecture du code). Limites : le détail des systèmes de l'A320 (alimentation au sol, portes, services)
+  toujours pas sauvegardé — seul l'état de départ. Suite : J6-5 (caméra libre et photo en vol).

@@ -74,8 +74,9 @@ vol stable sous 2,5 g, le plus récent d'au moins 15 s ; « Reprendre avant la r
 seulement le vol et l'appareil perdus — un nouveau placement, une scène, un chargement les oublient ; e2e
 `resume-point`), « **Continuer sans dégâts** » (pour ce vol seulement : le réglage `damage` gardé, les dégâts revenus au vol suivant — depuis le 13 nov. 2026, choix de Sam, audit FX-20 ; avant, le réglage coupé pour de bon ; le temps relancé), « **Recommencer la scène** ».
 **F5 / F9** (sauvegarde et chargement rapides) rendent aussi l'état de l'avion : carburant, train, volets, aérofreins,
-poussée, maintiens ALT/HDG/A/T et postcombustion, STOVL (e2e `aircraft-save`) ; pas les systèmes de l'A320 (FMGC,
-MCDU, pannes armées), ni une formation, une interception, un ravitaillement, un ILS ou un appontage en cours ; une
+poussée, maintiens ALT/HDG/A/T et postcombustion, STOVL (e2e `aircraft-save`) ; **de l'A320 au sol, l'état de départ de ses
+systèmes** — froid et sombre, l'APU, prêt (moteurs en marche) — rendu tel que sauvegardé, non celui de la préférence « Départ de l'A320 »
+(depuis le 15 nov. 2026, e2e `parcours-reprise`) ; pas le détail de ses systèmes (ni FMGC, MCDU, pannes armées), ni une formation, une interception, un ravitaillement, un ILS ou un appontage en cours ; une
 mission, un combat ou un défi en cours ne reprend pas — la sauvegarde et le chargement le disent. Vérifié en jeu
 (e2e `apprendre-avions`). Par code : un nouveau placement (`lineUp`, `flyAt`…) efface la panne
 (`airFlight.failure`) mais ne ferme **ni l'écran de perte ni la pause** : cliquer un de ses boutons

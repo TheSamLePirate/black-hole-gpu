@@ -5,7 +5,7 @@
 // throttle only: F5 then F9 in an F-35 gave full tanks, the gear by the height, the flaps up, the holds off.
 //
 // Its own version (`v`), in a v2 save as an optional block: an older game ignores it, a malformed one is left out
-// (the flight still loads). Not in it: the A320's systems bag, its FMGC and MCDU, armed failures (made anew — the A320's
+// (the flight still loads). Not in it: the A320's systems bag (since 15 Nov 2026 its start state — cold, APU, ready —, `a320`), its FMGC and MCDU, armed failures (made anew — the A320's
 // fuel comes back through the fleet's), a formation, an intercept, a refuelling, an ILS or a deck's recovery under way.
 
 import type { Thermal } from "../aero";
@@ -40,6 +40,8 @@ export interface CraftSave {
   skin?: Thermal;
   /** the approach chosen (PLAN-APPROCHES AP1: controller/approach.ts) — its parts « auto » or named */
   approach?: { field: string; rwy: string; approach: string; entry: string; via?: string };
+  /** (PLAN-J6 J6-4) the A320 on the ground: its systems' start state (cold and dark, the APU's, ready) — its bag itself not saved */
+  a320?: "cold" | "apu" | "ready";
 }
 
 const num = (x: unknown): x is number => typeof x === "number" && Number.isFinite(x);
@@ -68,7 +70,16 @@ export function captureCraft(c: CameraController): CraftSave {
     stovl: c.stovl.on ? structuredClone(c.stovl) : undefined,
     skin: { ...c.airFlight.skin },
     approach: { ...c.approachSel },
+    ...(a320State(c) ? { a320: a320State(c)! } : {}),
   };
+}
+
+/** (PLAN-J6 J6-4) the A320 on the ground: its systems' start state now — the engines running: ready; the APU available: the APU's;
+ *  else cold and dark (its whole bag is not saved: the load starts its systems from that state, not from the player's setting) */
+function a320State(c: CameraController): "cold" | "apu" | "ready" | null {
+  if (fleet.active !== "a320" || !c.a320 || !(c.rolling || c.ourLanded)) return null;
+  if (c.a320.engines.some((e) => e.running)) return "ready";
+  return Number(c.a320Props?.["systems/apu/available"] ?? 0) > 0 ? "apu" : "cold";
 }
 
 /** A block read from a save: checked, null when it is not one (told by the caller). */
@@ -93,6 +104,7 @@ export function checkCraft(x: unknown): CraftSave | null {
       (A.via !== undefined && (typeof A.via !== "string" || A.via.length > 12)))
   )
     return null;
+  if (b.a320 !== undefined && !["cold", "apu", "ready"].includes(b.a320)) return null;
   return b;
 }
 
@@ -127,6 +139,8 @@ export function restoreCraft(c: CameraController, b: CraftSave) {
       }
     : { field: "auto", rwy: "auto", approach: "auto", entry: "auto", via: "auto" };
   c.approachGen++;
+  // (the A320's systems from their saved state at their next creation — newFlight dropped them)
+  c.a320StartLoad = b.a320 ?? null;
 }
 
 /** A craft's own configuration, kept for it while another is flown (audit FX-14: one set of gear, flaps, brakes, air brake

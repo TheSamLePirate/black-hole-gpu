@@ -1676,7 +1676,7 @@ Private in the class, callable at runtime: turns the Ranger on (`settings.ship =
 
 ### `__bh.game.snapshot(name = "autosave")` → GameSave
 
-A save object, not stored: `{ v: 2, name, savedAt, summary, scene, settings, time, ship: { piloting, sas, hold, auto, throttle, precision, speedMode, landed, spent, spentBy, properTime, tunnelEntry, entrySite, entryPlan }, fleet, plan, camera, craft, activity }`. Its `settings` are the scene's and what it carries (not the player's own). `craft` (`{ v: 1, fuel, payload, systems?, gear: { down, ext }, flaps, brake, airBrake, engine, jet: { alt, hdg, spd, ab, bankMax? }, stovl?, skin? }`, controller/craftsave.ts) is the craft's own state; `activity` (`{ kind, title }` or null) the mission, fight, challenge or lesson under way — named, not saved. Pass it to `load()`.
+A save object, not stored: `{ v: 2, name, savedAt, summary, scene, settings, time, ship: { piloting, sas, hold, auto, throttle, precision, speedMode, landed, spent, spentBy, properTime, tunnelEntry, entrySite, entryPlan }, fleet, plan, camera, craft, activity }`. Its `settings` are the scene's and what it carries (not the player's own). `craft` (`{ v: 1, fuel, payload, systems?, gear: { down, ext }, flaps, brake, airBrake, engine, jet: { alt, hdg, spd, ab, bankMax? }, stovl?, skin?, approach?, a320? }`, controller/craftsave.ts — `a320`, since 15 Nov 2026: the A320 on the ground, its systems' start state `"cold"` \| `"apu"` \| `"ready"`, given back at the load instead of `settings.a320Start`) is the craft's own state; `activity` (`{ kind, title }` or null) the mission, fight, challenge or lesson under way — named, not saved. Pass it to `load()`.
 
 ```js
 __bh.game.snapshot("wx").settings.weather   // a scene setting, e.g. the weather

@@ -36,7 +36,9 @@ function a320Step(this: CameraController, dt: number, onWheels: boolean): A320Fc
   // (its systems — src/a320/systems —, made with it: on the ground as the settings start it — cold and dark, the
   // APU's, ready —, in flight running; the engines the FADEC's as they are)
   if (!this.a320Sys || fresh) {
-    const state: StartState = onWheels ? (this.s.a320Start ?? "ready") : "air";
+    // (a load's: the systems' state saved — craftsave `a320`, PLAN-J6 J6-4 —, else the setting's)
+    const state: StartState = onWheels ? (this.a320StartLoad ?? this.s.a320Start ?? "ready") : "air";
+    this.a320StartLoad = null;
     A.setEngines(state === "ready" || state === "air");
     this.a320Sys = new A320Systems(this.a320Props);
     this.a320Sys.reset(state, sysFrame(this, A, onWheels));

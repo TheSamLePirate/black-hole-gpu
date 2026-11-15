@@ -1175,6 +1175,9 @@ export class CameraController {
   /** the A320's systems (src/a320/systems — controller/a320.ts): made with its first frame on its deck's bag, which
    *  stays across flights (main.ts shares it with the deck's controls and displays) */
   a320Sys: import("./a320/systems").A320Systems | null = null;
+  /** (PLAN-J6 J6-4) the A320's systems' start state a load gives back — its save's (craftsave `a320`), taken at its next creation on the
+   *  ground instead of the player's `a320Start`; null: the setting's */
+  a320StartLoad: "cold" | "apu" | "ready" | null = null;
   a320Props: import("./a320/rig").Props = {};
   /** its failures (src/a320/failures.ts — controller/a320.ts), kept across flights (cleared at each), its ADRs and
    *  what they read last; a failure happening told (main.ts: the toast, the log) */
