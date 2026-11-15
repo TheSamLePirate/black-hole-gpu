@@ -131,3 +131,9 @@ Le relevé du §2 vient d'une lecture du code et des documents (agent d'explorat
   GPU p50 **60,0 ms** (+2,7 sur J0), `clouds (half)` 6,2 ms, la météo ≈ 0 ; l'appareil dans le nuage au virage (capture).
   [Fiche](progress/j4/FICHE-TRAVERSEE-kerr-mini-2026-11-15.md). **J4-0 fait** (sur kerr-mini ; le M1 Max reste) : beau temps 57,3, traversée
   60,0, orage 77,8 ms — l'orage seul est un poste lourd.
+- **J4-3, non ouvert (règle 1)** (2026-11-15 03:04 UTC) : le plafond en temps d'image est le coût entier des trois passes — `clouds' shadow map`
+  1,3 ms, `clouds' light volume` 0,2 ms sur la traversée (kerr-mini), `sky ambient` sous le bruit —, dont la spécialisation ne reprendrait
+  qu'une part ; en compilation, à chaud sur Apple, chaque noyau du traceur compile en ≤ 0,3 s (3,9 s pour tous, sonde du 15 nov. ; les trois
+  caches sortis du journal des diagnostics, plafonné à 32 événements). **Ce qui le rouvrirait** : leur compilation sous D3D12 (le module entier
+  y coûtait le plus — PLAN-LEAN-TRACER-KERNELS), mesurée par `scripts/d3d12-compile-proxy.ts` (outillage Tint/DXC non installé ici ni sur le
+  mini) ou sur kerr-pc.

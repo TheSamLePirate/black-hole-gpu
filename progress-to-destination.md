@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-15 02:49 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-15 03:04 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous.
@@ -7166,3 +7166,11 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
 - **Preuves :** tuiles 18/18 ; `character` 2/2 sur kerr-mini (avant : 240 s d'attente sur la Terre, puis 2 erreurs WebGPU) ; tsc, biome.
 - **Limites :** la mémoire des textures lâchées rendue par le ramasse-miettes (rare : sortie du mode à pied, changement de taille) ; les
   e2e qui attendent `pending === 0` passent désormais avec des tuiles en échec (comptées dans `failed`, que la pastille affiche).
+
+### 2026-11-15 03:04 UTC — J4-3 non ouvert : son plafond lu
+
+- **Contribution à la destination :** règle 1 (un lot de performance écrit son plafond avant d'être ouvert) — PLAN-J4 J4-3.
+- **Réalisé :** une sonde (non gardée) des temps de compilation sur kerr-mini : les noyaux du traceur ≤ 0,3 s chacun à chaud, 3,9 s en tout ;
+  les trois caches de lumière des nuages hors du journal (32 événements au plus) ; leurs passes 1,3 + 0,2 ms sur la traversée. PLAN-J4 §10 :
+  non ouvert, ce qui le rouvrirait (la compilation sous D3D12).
+- **Preuves :** mesuré (kerr-mini, à chaud) ; le froid et D3D12 non mesurés.
