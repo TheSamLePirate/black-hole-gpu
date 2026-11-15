@@ -140,17 +140,19 @@ describe.skipIf(!E2E)("the A320 started from cold and dark", () => {
       [0, "Left engine cutoff"],
       [1, "Right engine cutoff"],
     ] as const) {
+      const t0 = Date.now();
       await click(sw);
       expect(await app.js<string>(`document.querySelector("[data-testid=cockpit-tip]").textContent`)).not.toContain("Not wired");
       expect(await prop(`controls/engines/engine${k ? "[1]" : ""}/cutoff-switch`)).toBe(0);
-      await Bun.sleep(8000);
       if (k === 0) {
+        // (its start under way — FlightGear's state 2, the ignition on, cranking past 1 —, waited for: not 8 s slept, 15 Nov 2026)
+        await app.waitFor(`Number(__bh.camera.a320Props["engines/engine/state"] ?? 0) >= 2`, 60_000);
         await app.js(`(__bh.camera.setLook(0, -18), true)`);
         await Bun.sleep(800);
         await shot(app, "a320-start-eng1-cranking");
       }
-      const t = await until(`__bh.camera.a320.engines[${k}].running`, 150);
-      console.log(`  ENG ${k + 1} at idle ${(t + 8).toFixed(0)} s after its MASTER`);
+      await until(`__bh.camera.a320.engines[${k}].running`, 150);
+      console.log(`  ENG ${k + 1} at idle ${((Date.now() - t0) / 1000).toFixed(0)} s after its MASTER`);
     }
     await Bun.sleep(3000);
     expect(await prop("engines/engine/state")).toBe(3);

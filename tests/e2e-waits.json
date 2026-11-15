@@ -7,14 +7,6 @@
   "sleeps": 2,
   "waits": 0
  },
- "a320-services.e2e.test.ts": {
-  "sleeps": 1,
-  "waits": 0
- },
- "a320-start.e2e.test.ts": {
-  "sleeps": 1,
-  "waits": 0
- },
  "aar.e2e.test.ts": {
   "sleeps": 0,
   "waits": 1

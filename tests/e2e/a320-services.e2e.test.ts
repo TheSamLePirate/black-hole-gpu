@@ -98,7 +98,10 @@ describe.skipIf(!E2E)("the A320's ground services and pushback", () => {
     );
     expect(await app.js<string>(`__bh.camera.a320PushCmd("straight")`)).toBeTruthy();
     await view("tail", 0, -24, 0);
-    await Bun.sleep(12_000);
+    // (pushed 8 m — what is checked below —, waited for: not 12 s slept, 15 Nov 2026)
+    const movedExpr = `(() => { const g = __bh.camera.geoNow(), D = Math.PI / 180;
+      return Math.hypot((g.lat - ${p0.lat}) * D * 6371000, (g.lon - ${p0.lon}) * D * 6371000 * Math.cos(g.lat * D)); })()`;
+    await app.waitFor(`${movedExpr} > 8`, 45_000);
     await shot(app, "a320-push-nose");
     await view("quarter", 0, -8, 0);
     await Bun.sleep(4000);

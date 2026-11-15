@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-15 02:27 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-15 02:33 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous.
@@ -7143,4 +7143,10 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
 - Les pistes du monde remesurent leur niveau à 5 puis 20 s, quand le relief fin arrive (`world/runways3d.ts`). `world-runway` et `hud-runway`
   dormaient 21 s pour cela. Le jeu expose maintenant le nombre de mesures faites (`RunwayFrame.world.measured`, BH-API), et les deux tests
   attendent la deuxième (60 s au plus). Relancés : `world-runway` 2/2, `hud-runway` 1/1. Garde : 73 → 71 pauses.
+
+### 2026-11-15 02:33 UTC — QA-09 : deux pauses de l'A320 remplacées par l'état de l'avion
+
+- `a320-services` : la poussée attend 8 m parcourus (ce que le test vérifie ensuite) au lieu de 12 s ; 3/3, poussé de 18,8 m à 5,5 km/h.
+- `a320-start` : la capture du démarrage attend l'allumage (état FlightGear 2) au lieu de 8 s ; le temps jusqu'au ralenti est compté depuis
+  le MASTER. 3/3, chaque moteur au ralenti en 48 s. Garde : 71 → 69 pauses.
 
