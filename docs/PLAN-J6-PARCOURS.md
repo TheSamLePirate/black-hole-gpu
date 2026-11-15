@@ -1,7 +1,7 @@
 # PLAN-J6 — Les parcours complets (stratégie §19.13)
 
-**État (2026-11-15 17:02 UTC)** : J6-1 ouvert — son parcours écrit et volé ; deux défauts trouvés, l'un corrigé (le décollage
-automatique), l'autre relevé (le décor en vol rapide). Les jalons J0 à J5 ont été menés (PLAN-J1 à PLAN-J5) ; le 15 novembre,
+**État (2026-11-15 17:40 UTC)** : **J6-1 fait** — son parcours passe ; deux défauts trouvés et corrigés (le décollage automatique, le
+décor en vol rapide). J6-2 ensuite. Les jalons J0 à J5 ont été menés (PLAN-J1 à PLAN-J5) ; le 15 novembre,
 Sam a nommé **~48 ms de GPU sur J0 le palier intermédiaire de kerr-mini** ([J0-CONTRAT](J0-CONTRAT.md) §2) et demandé de reprendre la
 suite du plan, lumière et contenu. La stratégie ([ANALYSE-STRATEGIE](ANALYSE-STRATEGIE-RENDU-2026-11-03.md) §19.13) demande que les jalons
 « transportent l'expérience en même temps que les passes » : **un parcours n'est terminé ni avec une scène vide, ni avec un état choisi
@@ -78,3 +78,7 @@ L'inventaire du §1 vient de la lecture du catalogue et des en-têtes : aucun te
 - **Le décor en vol rapide, le temps de ses étapes** (2026-11-15 17:18 UTC) : un quatrième passage, `stats().phases` relevé : une scène
   rapide passe 2 à 16 s sur ses tuiles de bâtiments (la « forêt » affichée est l'étape suivante, ~0,5 s) ; ce passage : 71 points de bâtiment
   devant à l'arrivée (0 aux trois autres). La suite : une boîte rapide décalée vers l'avant, mesurée sur plusieurs passages ([PROBLEMES](PROBLEMES-A-REGLER.md)).
+- **J6-1 : le décor suit le vol rapide** (2026-11-15 17:40 UTC) : l'avance d'une scène rapide portée de 1,2 à 2,5 fois son rayon
+  (`renderer.sceneryQuickLead`) ; deux passages : 36–38 points de bâtiment devant en arrivant sur Toulon (0 à trois passages sur quatre avant),
+  83–97 à moins de 2 km dans le regard arrière ; GPU au même niveau. Le parcours asserte désormais les bâtiments devant ; **il passe** (deux
+  fois). **J6-1 fait** ; le levier gardé pour les comparaisons. Suite : J6-2 (l'approche sous météo dégradée).

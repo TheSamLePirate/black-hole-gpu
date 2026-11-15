@@ -193,7 +193,11 @@ gestionnaire des messages du pilote (`main.ts`) les montrait par `panel.toast`, 
 y écrivait comme le pilote. **Tous** les messages du pilote étaient doublés. `panel.toast(msg, { log: false })` pour eux ; e2e `journal-once` :
 avant `[info no-time, pilot t]`, après `[pilot t]`.
 
-## Le décor ne suit pas un vol rapide : en arrivant sur une ville à 150 m/s, aucun bâtiment devant (relevé le 15 novembre 2026, PLAN-J6 J6-1)
+## ~~Le décor ne suit pas un vol rapide : en arrivant sur une ville à 150 m/s, aucun bâtiment devant~~ (relevé le 15 novembre 2026, PLAN-J6 J6-1) — corrigé le même jour
+
+> **15 nov. 2026, 17:40 UTC — corrigé** : l'avance d'une scène rapide portée de 1,2 à **2,5** fois son rayon (`renderer.sceneryQuickLead`) :
+> en arrivant sur Toulon, **36–38** points de bâtiment devant (0 à trois passages sur quatre avant) ; le regard arrière **83–97** à moins de
+> 2 km (~0 avant) ; GPU au même niveau (kerr-mini, deux passages de `parcours-ville`, qui l'asserte désormais).
 
 **État (15 nov. 2026, 17:02 UTC)** : relevé, non corrigé. Le parcours `parcours-ville` (le F-35 décolle de Toulon-Hyères, vole vers le
 centre de Toulon à 500 m et 150 m/s) : **en arrivant à 1,5 km du centre, la grille de visibilité devant le cockpit (48 × 27,

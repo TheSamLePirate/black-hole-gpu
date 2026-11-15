@@ -9,9 +9,10 @@ import { J0_FIXED, J0_SCENE } from "./lib/j0-scene";
 // page's gaps (a frozen page), the F-35's panoramic display's age (ship.displayAges — J3-0's bound, p95 < 70 ms, asserted where it is seen: the cockpit's segments), the relief's
 // cover under the camera (earthTiles.coverAt: a "hole", a level published without the camera's tile — recorded), the GPU's time.
 // Over the city: the visibility's surface on a grid (renderer.surfaceAt: buildings, trees, ground by distance — buildings within
-// 2 km recorded — not asserted until the scenery keeps up with a fast flight, PROBLEMES). Shots at each key state. Asserted: airborne within 20 s of U, no GCAS, the turn made over the city, the
-// instruments' age, no GPU error, the page never frozen over 1 s. Recorded (PLAN-J6 §3: thresholds still to read):
+// 2 km on arriving, ahead, asserted present — PROBLEMES). Shots at each key state. Asserted: airborne within 20 s of U, no GCAS, the turn made over the city, the
+// instruments' age, buildings ahead on arriving, no GPU error, the page never frozen over 1 s. Recorded (PLAN-J6 §3: thresholds still to read):
 // the holes' share, the GPU time by segment.
+// PV_QUICK_LEAD (default 2.5, the game's): renderer.sceneryQuickLead, the fast flight's scenery lead (a measure, PROBLEMES).
 // Duration: ~6 min on kerr-mini (the airfield's data, the take-off, ~2 min of flight, the city's turn, the view back).
 // Done when: the view back held 15 s and the cockpit back, parcours-ville.json written.
 afterAll(stopServer);
@@ -27,7 +28,7 @@ test.skipIf(!E2E)(
     const out: Record<string, unknown> = { startedAt: new Date().toISOString() };
     try {
       await app.js(`(() => { Object.assign(__bh.settings, ${J0_FIXED}); Object.assign(__bh.settings, { dof: false, motionBlur: 0, damage: false });
-        return 1; })()`);
+        __bh.renderer.sceneryQuickLead = ${Number(process.env.PV_QUICK_LEAD ?? 2.5)}; return 1; })()`);
       // (the craft switched first — asynchronous —, then lined up: E2E-VOLS §7)
       await app.waitFor(`__bh.fleet.active === "f35"`, 60_000);
       // (the airfield's tile first — a world airfield, lined up by its code once its tile is in (game.lineUp): placed over J0's start,
@@ -177,8 +178,9 @@ test.skipIf(!E2E)(
       expect(said.some((m) => /GCAS/.test(m))).toBe(false);
       expect(p95).toBeLessThan(70);
       expect(gapMax).toBeLessThan(1000);
-      // (buildings near: recorded, not asserted — in a 150 m/s flight the scenery's quick scenes come behind the craft, none ahead
-      // within 5 km on arriving over Toulon: PROBLEMES-A-REGLER, « Le décor ne suit pas un vol rapide », PLAN-J6 J6-1; asserted once fixed)
+      // (buildings near — on arriving, ahead of the cockpit, within 2 km: before the fast flight's scenery lead was lengthened (15 Nov
+      // 2026, renderer.sceneryQuickLead 1.2 → 2.5) none in 3 runs of 4; since 36–38 — PROBLEMES-A-REGLER, « Le décor ne suit pas un vol rapide »)
+      expect(arrival.buildingsNear).toBeGreaterThan(0);
       expect(Math.abs(((((hdgEnd - 180) % 360) + 540) % 360) - 180)).toBeLessThan(60);
       expect(await app.js<number>("__bh.renderer.gpuErrors")).toBe(0);
     } finally {

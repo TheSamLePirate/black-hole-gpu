@@ -4369,7 +4369,7 @@ export class Renderer {
                 this.earthScenery.buildS(),
                 // (a full scene's centre 0.6 of its radius ahead at most — farther, mostly new ground: its sources fetched anew, a
                 // rebuild of 60 s on the final —; a quick one's 1.2: chained, each where the craft will be)
-                (this.earthScenery.fastFlight() ? 1.2 : 0.6) * this.earthScenery.nextRadius(),
+                (this.earthScenery.fastFlight() ? this.sceneryQuickLead : 0.6) * this.earthScenery.nextRadius(),
               ) ?? (Math.hypot(...gazeS) > 0 ? gazeS : lead),
             )
           : null,
@@ -5522,6 +5522,11 @@ export class Renderer {
   /** (a measure) the sea's FFT profiled step by step — each its own pass, `sea fft: modes and rows`, `: columns and assembly`, `: foam`,
    *  `: mips` —: their costs apart */
   seaFftSplitProfile = false;
+  /** (PLAN-J6 J6-1) a fast flight's quick scenery scene centred at most this many of its radii ahead (aheadFocus). 2.5 since 15 Nov 2026:
+   *  at 1.2 (before), ready ~10 s later, its box ~0.5 km ahead of a craft at 150 m/s — the cockpit looking 1–5 km ahead saw none of it, 0
+   *  buildings ahead on arriving over Toulon in 3 runs of 4; at 2.5, 36–38 ahead and 83–97 within 2 km looking back (e2e parcours-ville,
+   *  kerr-mini, 2 runs). Kept as a lever for comparisons */
+  sceneryQuickLead = 2.5;
   /** (PLAN-J5 J5-3, a measure) the walker on the Earth drawn by the raster — its walking grid still sent (P.walk[0].w 2: trace.wgsl
    *  rasterPrimary) —; false: the traced pipeline while walking, as ever (its march meets the grid the feet stand on) */
   walkRasterOn = false;
