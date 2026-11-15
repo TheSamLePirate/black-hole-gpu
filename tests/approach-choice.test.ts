@@ -147,3 +147,13 @@ test("a built approach whose slope is not clear of the relief left out (« relie
     )!.a.rwy,
   ).toBe("23");
 });
+
+test("the runway's level: the data's, unless the relief stands over it by more than 150 m (OurAirports' 0 m at Minsk — AP10)", async () => {
+  const { runwayOfApproach } = await import("../src/controller/approach");
+  const f = field([rwy("05", "23", 50)]);
+  const a = approachesOf(f, [])[0]!;
+  const at = (g: number) => runwayOfApproach({ ...f }, { ...a, thr: { ...a.thr, elev: 0 } }, () => g).elev;
+  expect(at(100)).toBe(0);
+  expect(at(149)).toBe(0);
+  expect(at(205)).toBe(205);
+});

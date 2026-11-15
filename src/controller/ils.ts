@@ -237,16 +237,24 @@ function ilsStart(
   // (the slope over the relief: one that runs into the ground refused; a thin margin flown, said)
   const clear = o.base ? null : glideClearanceOf(W);
   const id = `${W.icao ?? W.name} ${runwayId(W.hdg, W.des)}`;
-  if (clear && clear.minM < 0)
+  // (a real approach — nav.dat's, the FAA's — is published clear of its obstacles: flown, the relief known said if it disagrees; only
+  // a built one is refused. PLAN-APPROCHES AP10: the campaign over every runway found 94 real ones refused on the world map's coarse
+  // relief — Marseille's 31R among them while its tiles came, 15 Nov 2026)
+  const L = this.approachLast;
+  const real = !!L && L.approach.source !== "built" && L.approach.rwy === W.des && (L.field.icao || L.field.ident) === W.icao;
+  if (clear && clear.minM < 0 && !real)
     return tf(
       "ILS {0}: the {1}° slope runs into the relief {2} out — refused",
       id,
       glideOf(W).toFixed(1),
       unitsOf(this.s.units).fDist(clear.atM),
     );
-  const warn = clear?.thin
-    ? ` — ${tf("the relief {0} under the slope {1} out", unitsOf(this.s.units).fAlt(clear.minM), unitsOf(this.s.units).fDist(clear.atM))}`
-    : "";
+  const warn =
+    clear && clear.minM < 0
+      ? ` — ${tf("the relief known over the published slope {0} out — flown as published", unitsOf(this.s.units).fDist(clear.atM))}`
+      : clear?.thin
+        ? ` — ${tf("the relief {0} under the slope {1} out", unitsOf(this.s.units).fAlt(clear.minM), unitsOf(this.s.units).fDist(clear.atM))}`
+        : "";
   // (the A320 flies its own: its FMGC tuned on that runway, vectored to the localizer, APPR armed — controller/a320ap.ts)
   if (fleet.active === "a320") {
     const said = this.a320Approach(W);

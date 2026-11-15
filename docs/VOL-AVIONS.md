@@ -373,7 +373,10 @@ localizer, puis l'approche construite) ; une piste trop juste est écartée
 sud à Toulon-Hyères : la 31 ; de l'est : la 23 ; du nord, la 13 construite est écartée — sa pente passe sur les collines au
 nord-ouest de Hyères — : la 23). Le message dit le choix et sa raison (« LFML ILS 31R — CAT I »). L'approche coupe la formation, l'interception, le STOVL et l'autopilote en cours, puis vole
 elle-même (`ilsRun.phase` : `toIaf`, `intercept`, `final`, `flare`, `rollout`, `missed`, `done` ; et `base`, `hold`),
-sort le train et les volets, coupe la manette à l'arrondi. Elle refuse une pente qui rentre dans le relief ; le choix
+sort le train et les volets, coupe la manette à l'arrondi. Elle refuse une approche **construite** dont la pente rentre dans le
+relief (une approche réelle, publiée dégagée de ses obstacles, est volée comme publiée — le relief connu qui la contredit est dit ; avant
+AP10, refusée aussi : 94 dans le monde, Marseille 31R pendant l'arrivée de ses tuiles) ; l'altitude d'un seuil que les données mettent
+plus de 150 m sous le relief (OurAirports à 0 m à Minsk) est prise au relief ; le choix
 automatique écarte une approche **construite** dont la pente rase le relief, ou dont le relief autour de la jonction (4 à 26 km,
 7 km de part et d'autre, + 1 000 ft) passe au-dessus de la pente (« relief » : la 22R construite de Nice, au-dessus de Monaco et du
 mont Agel — prise depuis le nord-est, l'A320 survolait la piste à 1 250 m). Trop haut pour rejoindre à 3° (l'A320 : 2,5°), il

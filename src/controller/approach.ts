@@ -356,16 +356,19 @@ function pick(
   return { field: f, approach: a, fieldWhy, choice, gen: c.approachGen };
 }
 
-/** The approach's runway frame for the ILS (its threshold, final course, level, the runway's length). */
-function runwayOfApproach(f: Airfield, a: Approach): IlsRunway {
+/** The approach's runway frame for the ILS (its threshold, final course, level, the runway's length). The level the data's — unless
+ *  the relief at the threshold stands over it by more than 150 m: OurAirports' elevation missing or wrong (Minsk's UMMA and UMDD at
+ *  0 m): the slope under the ground, every end refused — the relief's then (PLAN-APPROCHES AP10). */
+export function runwayOfApproach(f: Airfield, a: Approach, ground: (lat: number, lon: number) => number = groundMsl): IlsRunway {
   const rw = f.runways.find((r) => r.le === a.rwy || r.he === a.rwy);
+  const under = ground(a.thr.lat, a.thr.lon);
   return {
     name: f.name,
     icao: f.icao || f.ident,
     lat: a.thr.lat,
     lon: a.thr.lon,
     hdg: a.crs,
-    elev: a.thr.elev,
+    elev: under > a.thr.elev + 150 ? under : a.thr.elev,
     len: rw?.len ?? 2500,
     des: a.rwy,
     // (its published slope — Marseille's 31R at 4°: checked against the relief at 3° it was refused, 15 Nov 2026 —; flown at it)

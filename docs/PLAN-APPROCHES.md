@@ -15,7 +15,11 @@ boîte de piste (« 27R »). AP7b : le directeur de vol — `flightDirector()` c
 HUD du F-35 le repère de guidage sur l'approche, en automatique comme à la main ; l'A320 : ses barres FD (FMGC) et l'approche qui ne
 réengage plus l'AP1 coupé par le pilote ; le crew : barres FD au PFD ; la pente publiée de chaque approche (Marseille 31R à 4°)
 lue par les aiguilles, le guidage et le contrôle du relief (fin du « 3° partout ») ; un échec de chargement des index de pistes et
-d'approches n'est plus gardé pour la session. Suite : AP10 (tous les aéroports), AP-R (retraits). AP6a : le crew — actions `app.*` (tous les
+d'approches n'est plus gardé pour la session. **AP10a fait** : la campagne pure (`scripts/approach-campaign.ts`,
+[ap10-campaign.md](progress/approches/ap10-campaign.md)) sur les 66 914 extrémités du monde — toutes avec une approche ; deux défauts
+corrigés : une approche réelle n'est plus refusée par le contrôle de pente (94 l'étaient, sur le relief grossier), l'altitude d'un seuil
+sous le relief de plus de 150 m prise au relief (OurAirports à 0 m) ; les refus restants comptés et compris (relief grossier : canyons,
+falaises, plateaux). Suite : AP10b (l'échantillon volé), AP-R (retraits). AP6a : le crew — actions `app.*` (tous les
 postes), boîte APP (approches réelles et construites, transition, Choisir/Auto/Armer/Remise de gaz, état choisi/volé), l'état de
 l'approche et celle de l'A320 dans la télémétrie, le DME corrigé. AP6b : les terrains et l'approche au radar et au ND
 du crew (touchés, ils la choisissent), la vue « Approche » (plan, repères, profil), les appels de l'approche dits à l'équipage. Non

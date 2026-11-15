@@ -1,0 +1,1475 @@
+{
+ "date": "2026-11-15T21:15:48.057Z",
+ "relief": "relief-high.bin (world map, no tiles)",
+ "total": {
+  "ends": 66914,
+  "withApproach": 66914,
+  "real": 8270,
+  "ok": 58107,
+  "thin": 3615,
+  "relief": 1371,
+  "refused": 3740,
+  "warned": 81,
+  "f35Fields": {
+   "fields": 6269,
+   "noneFlyable": 92,
+   "examples": [
+    "SLPO",
+    "OYSY",
+    "PHDH",
+    "SCCY",
+    "FASB",
+    "YNNT",
+    "UMDD",
+    "01MT",
+    "KHCR",
+    "KP-0038",
+    "KP-0027",
+    "SKSM"
+   ]
+  },
+  "a320Fields": {
+   "fields": 3625,
+   "noneFlyable": 36,
+   "examples": [
+    "SLPO",
+    "OYSY",
+    "PHDH",
+    "UMDD",
+    "KHCR",
+    "KP-0038",
+    "KP-0027",
+    "LTAW",
+    "LTCB",
+    "MHLC",
+    "ZUHY",
+    "HALL"
+   ]
+  },
+  "floorOver": 1653,
+  "joinUnder290": 0,
+  "vectors": 66914,
+  "seconds": 117
+ },
+ "table": [
+  {
+   "cat": "ILS",
+   "ends": 3128,
+   "ok": 3001,
+   "thin": 107,
+   "relief": 0,
+   "refused": 0,
+   "warned": 20,
+   "floorOver": 9,
+   "f35": 3065,
+   "a320": 2515
+  },
+  {
+   "cat": "LOC",
+   "ends": 261,
+   "ok": 232,
+   "thin": 22,
+   "relief": 0,
+   "refused": 0,
+   "warned": 7,
+   "floorOver": 0,
+   "f35": 197,
+   "a320": 78
+  },
+  {
+   "cat": "LDA/SDF/IGS",
+   "ends": 20,
+   "ok": 14,
+   "thin": 3,
+   "relief": 0,
+   "refused": 0,
+   "warned": 3,
+   "floorOver": 0,
+   "f35": 17,
+   "a320": 12
+  },
+  {
+   "cat": "RNAV/VOR/NDB",
+   "ends": 4861,
+   "ok": 4678,
+   "thin": 132,
+   "relief": 0,
+   "refused": 0,
+   "warned": 51,
+   "floorOver": 15,
+   "f35": 2319,
+   "a320": 536
+  },
+  {
+   "cat": "built",
+   "ends": 58644,
+   "ok": 50182,
+   "thin": 3351,
+   "relief": 1371,
+   "refused": 3740,
+   "warned": 0,
+   "floorOver": 1629,
+   "f35": 9425,
+   "a320": 5640
+  },
+  {
+   "cat": "renumbered",
+   "ends": 659,
+   "ok": 627,
+   "thin": 21,
+   "relief": 0,
+   "refused": 0,
+   "warned": 11,
+   "floorOver": 3,
+   "f35": 448,
+   "a320": 352
+  },
+  {
+   "cat": "approx",
+   "ends": 38183,
+   "ok": 32695,
+   "thin": 2183,
+   "relief": 663,
+   "refused": 2639,
+   "warned": 3,
+   "floorOver": 913,
+   "f35": 1783,
+   "a320": 959
+  },
+  {
+   "cat": "not paved",
+   "ends": 36200,
+   "ok": 31090,
+   "thin": 2009,
+   "relief": 655,
+   "refused": 2442,
+   "warned": 4,
+   "floorOver": 887,
+   "f35": 0,
+   "a320": 0
+  },
+  {
+   "cat": "high (> 1 500 m)",
+   "ends": 2489,
+   "ok": 1457,
+   "thin": 255,
+   "relief": 257,
+   "refused": 501,
+   "warned": 19,
+   "floorOver": 380,
+   "f35": 779,
+   "a320": 511
+  },
+  {
+   "cat": "mountain (+1 000 m within 20 km)",
+   "ends": 3269,
+   "ok": 1122,
+   "thin": 286,
+   "relief": 767,
+   "refused": 1074,
+   "warned": 20,
+   "floorOver": 1123,
+   "f35": 993,
+   "a320": 622
+  },
+  {
+   "cat": "short (< 1 500 m)",
+   "ends": 50301,
+   "ok": 43360,
+   "thin": 2774,
+   "relief": 967,
+   "refused": 3167,
+   "warned": 33,
+   "floorOver": 1249,
+   "f35": 0,
+   "a320": 0
+  }
+ ],
+ "refusedReal": [
+  {
+   "field": "PHHN",
+   "end": "08",
+   "kind": "RNAV",
+   "source": "cifp",
+   "cats": [
+    "RNAV/VOR/NDB",
+    "mountain (+1 000 m within 20 km)",
+    "short (< 1 500 m)"
+   ],
+   "len": 1145,
+   "surface": "paved",
+   "elev": 24,
+   "clear": -274,
+   "atM": 18500,
+   "outcome": "warned",
+   "joins": [
+    {
+     "from": "behind",
+     "entry": "straight",
+     "floorOver": false,
+     "minOver": null
+    },
+    {
+     "from": "beyond",
+     "entry": "vectors",
+     "floorOver": true,
+     "minOver": 445
+    }
+   ],
+   "f35": false,
+   "a320": false
+  },
+  {
+   "field": "K6A4",
+   "end": "24",
+   "kind": "RNAV",
+   "source": "cifp",
+   "cats": [
+    "RNAV/VOR/NDB",
+    "renumbered",
+    "short (< 1 500 m)"
+   ],
+   "len": 1371,
+   "surface": "paved",
+   "elev": 683,
+   "clear": -86,
+   "atM": 1000,
+   "outcome": "warned",
+   "joins": [
+    {
+     "from": "behind",
+     "entry": "straight",
+     "floorOver": false,
+     "minOver": null
+    },
+    {
+     "from": "beyond",
+     "entry": "vectors",
+     "floorOver": false,
+     "minOver": 445
+    }
+   ],
+   "f35": false,
+   "a320": false
+  },
+  {
+   "field": "LFKF",
+   "end": "23",
+   "kind": "ILS",
+   "source": "navdat",
+   "cats": [
+    "ILS"
+   ],
+   "len": 2482,
+   "surface": "paved",
+   "elev": 26,
+   "clear": -86,
+   "atM": 1000,
+   "outcome": "warned",
+   "joins": [
+    {
+     "from": "behind",
+     "entry": "straight",
+     "floorOver": false,
+     "minOver": null
+    },
+    {
+     "from": "beyond",
+     "entry": "vectors",
+     "floorOver": false,
+     "minOver": 849
+    }
+   ],
+   "f35": true,
+   "a320": true
+  },
+  {
+   "field": "K6A4",
+   "end": "06",
+   "kind": "RNAV",
+   "source": "cifp",
+   "cats": [
+    "RNAV/VOR/NDB",
+    "renumbered",
+    "short (< 1 500 m)"
+   ],
+   "len": 1371,
+   "surface": "paved",
+   "elev": 683,
+   "clear": -76,
+   "atM": 1000,
+   "outcome": "warned",
+   "joins": [
+    {
+     "from": "behind",
+     "entry": "straight",
+     "floorOver": false,
+     "minOver": null
+    },
+    {
+     "from": "beyond",
+     "entry": "vectors",
+     "floorOver": false,
+     "minOver": 793
+    }
+   ],
+   "f35": false,
+   "a320": false
+  },
+  {
+   "field": "ZPLJ",
+   "end": "02",
+   "kind": "ILS",
+   "source": "navdat",
+   "cats": [
+    "ILS",
+    "high (> 1 500 m)"
+   ],
+   "len": 3002,
+   "surface": "paved",
+   "elev": 2234,
+   "clear": -72,
+   "atM": 1000,
+   "outcome": "warned",
+   "joins": [
+    {
+     "from": "behind",
+     "entry": "straight",
+     "floorOver": false,
+     "minOver": null
+    },
+    {
+     "from": "beyond",
+     "entry": "vectors",
+     "floorOver": false,
+     "minOver": 533
+    }
+   ],
+   "f35": true,
+   "a320": true
+  },
+  {
+   "field": "PACX",
+   "end": "02",
+   "kind": "RNAV",
+   "source": "cifp",
+   "cats": [
+    "RNAV/VOR/NDB",
+    "not paved",
+    "short (< 1 500 m)"
+   ],
+   "len": 1213,
+   "surface": "dirt",
+   "elev": 314,
+   "clear": -69,
+   "atM": 1000,
+   "outcome": "warned",
+   "joins": [
+    {
+     "from": "behind",
+     "entry": "straight",
+     "floorOver": false,
+     "minOver": null
+    },
+    {
+     "from": "beyond",
+     "entry": "vectors",
+     "floorOver": false,
+     "minOver": 696
+    }
+   ],
+   "f35": false,
+   "a320": false
+  },
+  {
+   "field": "KDUB",
+   "end": "29",
+   "kind": "RNAV",
+   "source": "cifp",
+   "cats": [
+    "RNAV/VOR/NDB",
+    "high (> 1 500 m)",
+    "mountain (+1 000 m within 20 km)"
+   ],
+   "len": 1844,
+   "surface": "paved",
+   "elev": 2206,
+   "clear": -67,
+   "atM": 1000,
+   "outcome": "warned",
+   "joins": [
+    {
+     "from": "behind",
+     "entry": "straight",
+     "floorOver": false,
+     "minOver": null
+    },
+    {
+     "from": "beyond",
+     "entry": "vectors",
+     "floorOver": false,
+     "minOver": 874
+    }
+   ],
+   "f35": true,
+   "a320": false
+  },
+  {
+   "field": "PAML",
+   "end": "18",
+   "kind": "RNAV",
+   "source": "cifp",
+   "cats": [
+    "RNAV/VOR/NDB",
+    "approx",
+    "not paved",
+    "short (< 1 500 m)"
+   ],
+   "len": 1036,
+   "surface": "dirt",
+   "elev": 84,
+   "clear": -65,
+   "atM": 1000,
+   "outcome": "warned",
+   "joins": [
+    {
+     "from": "behind",
+     "entry": "straight",
+     "floorOver": false,
+     "minOver": null
+    },
+    {
+     "from": "beyond",
+     "entry": "vectors",
+     "floorOver": false,
+     "minOver": 845
+    }
+   ],
+   "f35": false,
+   "a320": false
+  },
+  {
+   "field": "ESUT",
+   "end": "33",
+   "kind": "ILS",
+   "source": "navdat",
+   "cats": [
+    "ILS"
+   ],
+   "len": 1596,
+   "surface": "paved",
+   "elev": 458,
+   "clear": -65,
+   "atM": 1000,
+   "outcome": "warned",
+   "joins": [
+    {
+     "from": "behind",
+     "entry": "straight",
+     "floorOver": false,
+     "minOver": null
+    },
+    {
+     "from": "beyond",
+     "entry": "vectors",
+     "floorOver": false,
+     "minOver": 638
+    }
+   ],
+   "f35": true,
+   "a320": false
+  },
+  {
+   "field": "PAKT",
+   "end": "11",
+   "kind": "ILS",
+   "source": "cifp",
+   "cats": [
+    "ILS"
+   ],
+   "len": 2278,
+   "surface": "paved",
+   "elev": 25,
+   "clear": -56,
+   "atM": 1000,
+   "outcome": "warned",
+   "joins": [
+    {
+     "from": "behind",
+     "entry": "straight",
+     "floorOver": false,
+     "minOver": null
+    },
+    {
+     "from": "beyond",
+     "entry": "vectors",
+     "floorOver": false,
+     "minOver": 705
+    }
+   ],
+   "f35": true,
+   "a320": true
+  },
+  {
+   "field": "KTEX",
+   "end": "09",
+   "kind": "LOC",
+   "source": "cifp",
+   "cats": [
+    "LOC",
+    "high (> 1 500 m)"
+   ],
+   "len": 2093,
+   "surface": "paved",
+   "elev": 2762,
+   "clear": -53,
+   "atM": 1000,
+   "outcome": "warned",
+   "joins": [
+    {
+     "from": "behind",
+     "entry": "straight",
+     "floorOver": false,
+     "minOver": null
+    },
+    {
+     "from": "beyond",
+     "entry": "vectors",
+     "floorOver": false,
+     "minOver": 981
+    }
+   ],
+   "f35": true,
+   "a320": true
+  },
+  {
+   "field": "LZZI",
+   "end": "06",
+   "kind": "ILS",
+   "source": "navdat",
+   "cats": [
+    "ILS",
+    "short (< 1 500 m)"
+   ],
+   "len": 1138,
+   "surface": "paved",
+   "elev": 310,
+   "clear": -49,
+   "atM": 1000,
+   "outcome": "warned",
+   "joins": [
+    {
+     "from": "behind",
+     "entry": "straight",
+     "floorOver": false,
+     "minOver": null
+    },
+    {
+     "from": "beyond",
+     "entry": "vectors",
+     "floorOver": false,
+     "minOver": 708
+    }
+   ],
+   "f35": false,
+   "a320": false
+  },
+  {
+   "field": "KEGE",
+   "end": "25",
+   "kind": "LDA",
+   "source": "cifp",
+   "cats": [
+    "LDA/SDF/IGS",
+    "high (> 1 500 m)",
+    "mountain (+1 000 m within 20 km)"
+   ],
+   "len": 2428,
+   "surface": "paved",
+   "elev": 1996,
+   "clear": -43,
+   "atM": 1000,
+   "outcome": "warned",
+   "joins": [
+    {
+     "from": "behind",
+     "entry": "straight",
+     "floorOver": false,
+     "minOver": null
+    },
+    {
+     "from": "beyond",
+     "entry": "vectors",
+     "floorOver": false,
+     "minOver": 591
+    }
+   ],
+   "f35": true,
+   "a320": true
+  },
+  {
+   "field": "CYLW",
+   "end": "16",
+   "kind": "ILS",
+   "source": "navdat",
+   "cats": [
+    "ILS",
+    "mountain (+1 000 m within 20 km)"
+   ],
+   "len": 2224,
+   "surface": "paved",
+   "elev": 433,
+   "clear": -41,
+   "atM": 1000,
+   "outcome": "warned",
+   "joins": [
+    {
+     "from": "behind",
+     "entry": "straight",
+     "floorOver": false,
+     "minOver": null
+    },
+    {
+     "from": "beyond",
+     "entry": "vectors",
+     "floorOver": false,
+     "minOver": 710
+    }
+   ],
+   "f35": true,
+   "a320": true
+  },
+  {
+   "field": "CYYF",
+   "end": "16",
+   "kind": "LOC",
+   "source": "navdat",
+   "cats": [
+    "LOC",
+    "mountain (+1 000 m within 20 km)"
+   ],
+   "len": 1814,
+   "surface": "paved",
+   "elev": 344,
+   "clear": -40,
+   "atM": 1000,
+   "outcome": "warned",
+   "joins": [
+    {
+     "from": "behind",
+     "entry": "straight",
+     "floorOver": false,
+     "minOver": null
+    },
+    {
+     "from": "beyond",
+     "entry": "vectors",
+     "floorOver": false,
+     "minOver": 577
+    }
+   ],
+   "f35": true,
+   "a320": false
+  },
+  {
+   "field": "KDSV",
+   "end": "14",
+   "kind": "RNAV",
+   "source": "cifp",
+   "cats": [
+    "RNAV/VOR/NDB",
+    "short (< 1 500 m)"
+   ],
+   "len": 1024,
+   "surface": "paved",
+   "elev": 194,
+   "clear": -37,
+   "atM": 1000,
+   "outcome": "warned",
+   "joins": [
+    {
+     "from": "behind",
+     "entry": "straight",
+     "floorOver": false,
+     "minOver": null
+    },
+    {
+     "from": "beyond",
+     "entry": "vectors",
+     "floorOver": false,
+     "minOver": 721
+    }
+   ],
+   "f35": false,
+   "a320": false
+  },
+  {
+   "field": "KAXX",
+   "end": "17",
+   "kind": "RNAV",
+   "source": "cifp",
+   "cats": [
+    "RNAV/VOR/NDB",
+    "high (> 1 500 m)"
+   ],
+   "len": 2709,
+   "surface": "paved",
+   "elev": 2537,
+   "clear": -36,
+   "atM": 1000,
+   "outcome": "warned",
+   "joins": [
+    {
+     "from": "behind",
+     "entry": "straight",
+     "floorOver": false,
+     "minOver": null
+    },
+    {
+     "from": "beyond",
+     "entry": "vectors",
+     "floorOver": false,
+     "minOver": 687
+    }
+   ],
+   "f35": true,
+   "a320": true
+  },
+  {
+   "field": "SVMI",
+   "end": "10",
+   "kind": "ILS",
+   "source": "navdat",
+   "cats": [
+    "ILS",
+    "mountain (+1 000 m within 20 km)"
+   ],
+   "len": 3504,
+   "surface": "paved",
+   "elev": 72,
+   "clear": -32,
+   "atM": 1000,
+   "outcome": "warned",
+   "joins": [
+    {
+     "from": "behind",
+     "entry": "straight",
+     "floorOver": false,
+     "minOver": null
+    },
+    {
+     "from": "beyond",
+     "entry": "vectors",
+     "floorOver": false,
+     "minOver": 838
+    }
+   ],
+   "f35": true,
+   "a320": true
+  },
+  {
+   "field": "KO02",
+   "end": "25",
+   "kind": "RNAV",
+   "source": "cifp",
+   "cats": [
+    "RNAV/VOR/NDB",
+    "renumbered",
+    "short (< 1 500 m)"
+   ],
+   "len": 1370,
+   "surface": "paved",
+   "elev": 1491,
+   "clear": -31,
+   "atM": 1000,
+   "outcome": "warned",
+   "joins": [
+    {
+     "from": "behind",
+     "entry": "straight",
+     "floorOver": false,
+     "minOver": null
+    },
+    {
+     "from": "beyond",
+     "entry": "vectors",
+     "floorOver": false,
+     "minOver": 673
+    }
+   ],
+   "f35": false,
+   "a320": false
+  },
+  {
+   "field": "KIPT",
+   "end": "09",
+   "kind": "RNAV",
+   "source": "cifp",
+   "cats": [
+    "RNAV/VOR/NDB"
+   ],
+   "len": 1970,
+   "surface": "paved",
+   "elev": 157,
+   "clear": -31,
+   "atM": 1000,
+   "outcome": "warned",
+   "joins": [
+    {
+     "from": "behind",
+     "entry": "straight",
+     "floorOver": false,
+     "minOver": null
+    },
+    {
+     "from": "beyond",
+     "entry": "vectors",
+     "floorOver": false,
+     "minOver": 801
+    }
+   ],
+   "f35": true,
+   "a320": false
+  },
+  {
+   "field": "K22N",
+   "end": "08",
+   "kind": "RNAV",
+   "source": "cifp",
+   "cats": [
+    "RNAV/VOR/NDB",
+    "short (< 1 500 m)"
+   ],
+   "len": 915,
+   "surface": "paved",
+   "elev": 163,
+   "clear": -30,
+   "atM": 1000,
+   "outcome": "warned",
+   "joins": [
+    {
+     "from": "behind",
+     "entry": "straight",
+     "floorOver": false,
+     "minOver": null
+    },
+    {
+     "from": "beyond",
+     "entry": "vectors",
+     "floorOver": false,
+     "minOver": 672
+    }
+   ],
+   "f35": false,
+   "a320": false
+  },
+  {
+   "field": "KLHV",
+   "end": "27R",
+   "kind": "RNAV",
+   "source": "cifp",
+   "cats": [
+    "RNAV/VOR/NDB",
+    "short (< 1 500 m)"
+   ],
+   "len": 1161,
+   "surface": "paved",
+   "elev": 169,
+   "clear": -29,
+   "atM": 1000,
+   "outcome": "warned",
+   "joins": [
+    {
+     "from": "behind",
+     "entry": "straight",
+     "floorOver": false,
+     "minOver": null
+    },
+    {
+     "from": "beyond",
+     "entry": "vectors",
+     "floorOver": false,
+     "minOver": 964
+    }
+   ],
+   "f35": false,
+   "a320": false
+  },
+  {
+   "field": "SELT",
+   "end": "18",
+   "kind": "ILS",
+   "source": "navdat",
+   "cats": [
+    "ILS",
+    "high (> 1 500 m)",
+    "mountain (+1 000 m within 20 km)"
+   ],
+   "len": 3694,
+   "surface": "paved",
+   "elev": 2801,
+   "clear": -27,
+   "atM": 1000,
+   "outcome": "warned",
+   "joins": [
+    {
+     "from": "behind",
+     "entry": "straight",
+     "floorOver": false,
+     "minOver": null
+    },
+    {
+     "from": "beyond",
+     "entry": "vectors",
+     "floorOver": true,
+     "minOver": 429
+    }
+   ],
+   "f35": true,
+   "a320": true
+  },
+  {
+   "field": "KSBS",
+   "end": "32",
+   "kind": "RNAV",
+   "source": "cifp",
+   "cats": [
+    "RNAV/VOR/NDB",
+    "high (> 1 500 m)",
+    "mountain (+1 000 m within 20 km)",
+    "short (< 1 500 m)"
+   ],
+   "len": 1348,
+   "surface": "paved",
+   "elev": 2096,
+   "clear": -27,
+   "atM": 1000,
+   "outcome": "warned",
+   "joins": [
+    {
+     "from": "behind",
+     "entry": "straight",
+     "floorOver": false,
+     "minOver": null
+    },
+    {
+     "from": "beyond",
+     "entry": "vectors",
+     "floorOver": false,
+     "minOver": 504
+    }
+   ],
+   "f35": false,
+   "a320": false
+  },
+  {
+   "field": "K22N",
+   "end": "26",
+   "kind": "RNAV",
+   "source": "cifp",
+   "cats": [
+    "RNAV/VOR/NDB",
+    "short (< 1 500 m)"
+   ],
+   "len": 915,
+   "surface": "paved",
+   "elev": 155,
+   "clear": -27,
+   "atM": 1000,
+   "outcome": "warned",
+   "joins": [
+    {
+     "from": "behind",
+     "entry": "straight",
+     "floorOver": false,
+     "minOver": null
+    },
+    {
+     "from": "beyond",
+     "entry": "vectors",
+     "floorOver": false,
+     "minOver": 685
+    }
+   ],
+   "f35": false,
+   "a320": false
+  },
+  {
+   "field": "KN82",
+   "end": "05",
+   "kind": "VOR",
+   "source": "cifp",
+   "cats": [
+    "RNAV/VOR/NDB",
+    "short (< 1 500 m)"
+   ],
+   "len": 1085,
+   "surface": "paved",
+   "elev": 167,
+   "clear": -26,
+   "atM": 1000,
+   "outcome": "warned",
+   "joins": [
+    {
+     "from": "behind",
+     "entry": "straight",
+     "floorOver": false,
+     "minOver": null
+    },
+    {
+     "from": "beyond",
+     "entry": "vectors",
+     "floorOver": false,
+     "minOver": 713
+    }
+   ],
+   "f35": false,
+   "a320": false
+  },
+  {
+   "field": "KIPT",
+   "end": "27",
+   "kind": "ILS",
+   "source": "cifp",
+   "cats": [
+    "ILS"
+   ],
+   "len": 1970,
+   "surface": "paved",
+   "elev": 160,
+   "clear": -26,
+   "atM": 1000,
+   "outcome": "warned",
+   "joins": [
+    {
+     "from": "behind",
+     "entry": "straight",
+     "floorOver": false,
+     "minOver": null
+    },
+    {
+     "from": "beyond",
+     "entry": "vectors",
+     "floorOver": false,
+     "minOver": 685
+    }
+   ],
+   "f35": true,
+   "a320": false
+  },
+  {
+   "field": "KCZG",
+   "end": "03",
+   "kind": "RNAV",
+   "source": "cifp",
+   "cats": [
+    "RNAV/VOR/NDB",
+    "short (< 1 500 m)"
+   ],
+   "len": 1190,
+   "surface": "paved",
+   "elev": 253,
+   "clear": -26,
+   "atM": 1000,
+   "outcome": "warned",
+   "joins": [
+    {
+     "from": "behind",
+     "entry": "straight",
+     "floorOver": false,
+     "minOver": null
+    },
+    {
+     "from": "beyond",
+     "entry": "vectors",
+     "floorOver": false,
+     "minOver": 586
+    }
+   ],
+   "f35": false,
+   "a320": false
+  },
+  {
+   "field": "K4V0",
+   "end": "24",
+   "kind": "RNAV",
+   "source": "cifp",
+   "cats": [
+    "RNAV/VOR/NDB",
+    "renumbered",
+    "high (> 1 500 m)"
+   ],
+   "len": 1923,
+   "surface": "paved",
+   "elev": 1608,
+   "clear": -25,
+   "atM": 1000,
+   "outcome": "warned",
+   "joins": [
+    {
+     "from": "behind",
+     "entry": "straight",
+     "floorOver": false,
+     "minOver": null
+    },
+    {
+     "from": "beyond",
+     "entry": "vectors",
+     "floorOver": false,
+     "minOver": 565
+    }
+   ],
+   "f35": true,
+   "a320": false
+  },
+  {
+   "field": "LDSP",
+   "end": "05",
+   "kind": "ILS",
+   "source": "navdat",
+   "cats": [
+    "ILS"
+   ],
+   "len": 2543,
+   "surface": "paved",
+   "elev": 21,
+   "clear": -25,
+   "atM": 1000,
+   "outcome": "warned",
+   "joins": [
+    {
+     "from": "behind",
+     "entry": "straight",
+     "floorOver": false,
+     "minOver": null
+    },
+    {
+     "from": "beyond",
+     "entry": "vectors",
+     "floorOver": false,
+     "minOver": 806
+    }
+   ],
+   "f35": true,
+   "a320": true
+  },
+  {
+   "field": "KAFO",
+   "end": "34",
+   "kind": "RNAV",
+   "source": "cifp",
+   "cats": [
+    "RNAV/VOR/NDB",
+    "high (> 1 500 m)"
+   ],
+   "len": 2144,
+   "surface": "paved",
+   "elev": 1896,
+   "clear": -24,
+   "atM": 1000,
+   "outcome": "warned",
+   "joins": [
+    {
+     "from": "behind",
+     "entry": "straight",
+     "floorOver": false,
+     "minOver": null
+    },
+    {
+     "from": "beyond",
+     "entry": "vectors",
+     "floorOver": false,
+     "minOver": 507
+    }
+   ],
+   "f35": true,
+   "a320": true
+  },
+  {
+   "field": "KN27",
+   "end": "23",
+   "kind": "RNAV",
+   "source": "cifp",
+   "cats": [
+    "RNAV/VOR/NDB",
+    "short (< 1 500 m)"
+   ],
+   "len": 1308,
+   "surface": "paved",
+   "elev": 218,
+   "clear": -24,
+   "atM": 1000,
+   "outcome": "warned",
+   "joins": [
+    {
+     "from": "behind",
+     "entry": "straight",
+     "floorOver": false,
+     "minOver": null
+    },
+    {
+     "from": "beyond",
+     "entry": "vectors",
+     "floorOver": false,
+     "minOver": 668
+    }
+   ],
+   "f35": false,
+   "a320": false
+  },
+  {
+   "field": "KK09",
+   "end": "04",
+   "kind": "RNAV",
+   "source": "cifp",
+   "cats": [
+    "RNAV/VOR/NDB",
+    "short (< 1 500 m)"
+   ],
+   "len": 935,
+   "surface": "paved",
+   "elev": 519,
+   "clear": -22,
+   "atM": 1000,
+   "outcome": "warned",
+   "joins": [
+    {
+     "from": "behind",
+     "entry": "straight",
+     "floorOver": false,
+     "minOver": null
+    },
+    {
+     "from": "beyond",
+     "entry": "vectors",
+     "floorOver": false,
+     "minOver": 731
+    }
+   ],
+   "f35": false,
+   "a320": false
+  },
+  {
+   "field": "KHTF",
+   "end": "18",
+   "kind": "RNAV",
+   "source": "cifp",
+   "cats": [
+    "RNAV/VOR/NDB"
+   ],
+   "len": 1529,
+   "surface": "paved",
+   "elev": 363,
+   "clear": -22,
+   "atM": 1000,
+   "outcome": "warned",
+   "joins": [
+    {
+     "from": "behind",
+     "entry": "straight",
+     "floorOver": false,
+     "minOver": null
+    },
+    {
+     "from": "beyond",
+     "entry": "vectors",
+     "floorOver": false,
+     "minOver": 804
+    }
+   ],
+   "f35": true,
+   "a320": false
+  },
+  {
+   "field": "KUKI",
+   "end": "15",
+   "kind": "LOC",
+   "source": "cifp",
+   "cats": [
+    "LOC",
+    "short (< 1 500 m)"
+   ],
+   "len": 1346,
+   "surface": "paved",
+   "elev": 187,
+   "clear": -21,
+   "atM": 1000,
+   "outcome": "warned",
+   "joins": [
+    {
+     "from": "behind",
+     "entry": "straight",
+     "floorOver": false,
+     "minOver": null
+    },
+    {
+     "from": "beyond",
+     "entry": "vectors",
+     "floorOver": false,
+     "minOver": 711
+    }
+   ],
+   "f35": false,
+   "a320": false
+  },
+  {
+   "field": "O60",
+   "end": "32",
+   "kind": "RNAV",
+   "source": "cifp",
+   "cats": [
+    "RNAV/VOR/NDB",
+    "short (< 1 500 m)"
+   ],
+   "len": 969,
+   "surface": "paved",
+   "elev": 82,
+   "clear": -21,
+   "atM": 1000,
+   "outcome": "warned",
+   "joins": [
+    {
+     "from": "behind",
+     "entry": "straight",
+     "floorOver": false,
+     "minOver": null
+    },
+    {
+     "from": "beyond",
+     "entry": "vectors",
+     "floorOver": false,
+     "minOver": 925
+    }
+   ],
+   "f35": false,
+   "a320": false
+  },
+  {
+   "field": "PAHO",
+   "end": "22",
+   "kind": "RNAV",
+   "source": "cifp",
+   "cats": [
+    "RNAV/VOR/NDB"
+   ],
+   "len": 2010,
+   "surface": "paved",
+   "elev": 21,
+   "clear": -21,
+   "atM": 1000,
+   "outcome": "warned",
+   "joins": [
+    {
+     "from": "behind",
+     "entry": "straight",
+     "floorOver": false,
+     "minOver": null
+    },
+    {
+     "from": "beyond",
+     "entry": "vectors",
+     "floorOver": false,
+     "minOver": 622
+    }
+   ],
+   "f35": true,
+   "a320": true
+  },
+  {
+   "field": "LSZB",
+   "end": "14",
+   "kind": "ILS",
+   "source": "navdat",
+   "cats": [
+    "ILS",
+    "mountain (+1 000 m within 20 km)"
+   ],
+   "len": 1727,
+   "surface": "paved",
+   "elev": 508,
+   "clear": -20,
+   "atM": 1000,
+   "outcome": "warned",
+   "joins": [
+    {
+     "from": "behind",
+     "entry": "straight",
+     "floorOver": false,
+     "minOver": null
+    },
+    {
+     "from": "beyond",
+     "entry": "vectors",
+     "floorOver": false,
+     "minOver": 1000
+    }
+   ],
+   "f35": true,
+   "a320": false
+  },
+  {
+   "field": "KIPT",
+   "end": "12",
+   "kind": "RNAV",
+   "source": "cifp",
+   "cats": [
+    "RNAV/VOR/NDB",
+    "short (< 1 500 m)"
+   ],
+   "len": 1307,
+   "surface": "paved",
+   "elev": 159,
+   "clear": -20,
+   "atM": 1000,
+   "outcome": "warned",
+   "joins": [
+    {
+     "from": "behind",
+     "entry": "straight",
+     "floorOver": false,
+     "minOver": null
+    },
+    {
+     "from": "beyond",
+     "entry": "vectors",
+     "floorOver": false,
+     "minOver": 697
+    }
+   ],
+   "f35": false,
+   "a320": false
+  },
+  {
+   "field": "KCAG",
+   "end": "25",
+   "kind": "RNAV",
+   "source": "cifp",
+   "cats": [
+    "RNAV/VOR/NDB",
+    "high (> 1 500 m)"
+   ],
+   "len": 1709,
+   "surface": "paved",
+   "elev": 1888,
+   "clear": -18,
+   "atM": 1000,
+   "outcome": "warned",
+   "joins": [
+    {
+     "from": "behind",
+     "entry": "straight",
+     "floorOver": false,
+     "minOver": null
+    },
+    {
+     "from": "beyond",
+     "entry": "vectors",
+     "floorOver": false,
+     "minOver": 656
+    }
+   ],
+   "f35": true,
+   "a320": false
+  }
+ ]
+}
