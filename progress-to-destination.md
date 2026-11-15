@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-15 00:31 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-15 00:34 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous.
@@ -7066,3 +7066,10 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   sur tout le ravitaillement. Ce Mac, fenêtre visible : 3/3, 0 résolution, 5 933 kg à bord. Pendant le contact, la seule annonce est
   « TEXACO 11: fuel flowing ». Ce qui restait à vérifier dans l'entrée précédente est fait.
 
+### 2026-11-15 00:34 UTC — J3-5 : le bois ; J3-R : les retraits datés
+
+- **Contribution à la destination :** §7 (matériaux physiques) ; règle 2 (aucun levier sans retrait daté).
+- **Réalisé :** `roofs.ts` : murs de bois × 1,8 (luminance ~0,10 → ~0,19) ; PLAN-J3 §10 : le tableau des leviers allumés pendant J3, leur
+  ancien chemin et leur retrait (tous des témoins de mesure ou en attente de Sam : aucun à retirer aujourd'hui).
+- **Preuves :** `roofs.test.ts` 20/20 ; l'image du bois non mesurée (aucune vue de référence avec des murs de bois).
+- **Limites :** verre, zinc, reflets lointains laissés (choix d'apparence sans référence nette, écrits au plan).

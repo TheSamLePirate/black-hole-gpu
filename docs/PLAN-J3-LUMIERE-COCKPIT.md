@@ -355,3 +355,20 @@ Aucun coût de J3 n'est mesuré ; aucun gain n'est promis.
   (0,45 0,165 0,098), luminances ~0,25 et ~0,22, dans les plages mesurées (0,25–0,35 ; 0,2–0,3). Bruxelles (sans orthophoto nationale) d'en
   haut 68,84 → 69,82, de côté 88,58 → 88,75 (A/A 0,30 / 0,08) : des toits terre cuite au lieu de brun-rouge sombre. En France, les toits proches
   restent ceux de l'orthophoto (le recalage). `tests/roofs.test.ts` 27/27.
+- **J3-5, le bois** (2026-11-15 00:34 UTC) : `roofs.ts` — les murs de bois × 1,8 (luminance 0,09–0,12 → 0,15–0,22, le bois patiné et lasuré) ;
+  `roofs.test.ts` passe ; image non mesurée (aucune vue de référence n'a de murs de bois). Laissés, des choix d'apparence sans référence
+  nette : le verre des murs-rideaux (F0 0,10 : un verre traité peut réfléchir bien plus que le flotté à 0,04), le zinc en métal, le reflet des
+  fenêtres au loin (coupé au-delà de ~26 cm le pixel : le rendre ferait scintiller).
+- **J3-R, les retraits datés** (2026-11-15 00:34 UTC ; règle 2 : un levier allumé perd son ancien chemin au lot de retrait suivant ; les leviers de
+  mesure restent) :
+
+  | Levier allumé | Ancien chemin | Retrait |
+  |---|---|---|
+  | `incidentSunOn` (J3-1, la lumière de l'appareil au Soleil incident) | le Soleil géométrique de `keyLight` | **garder** : témoin positif de `coherence` (levier de mesure) |
+  | `shipAirAllowed` (J3-2, l'air de l'appareil) | l'appareil sans l'air de sa distance | **garder** : ablation de mesure |
+  | `TUNE_SKYFLAT_DIM` (J3-1, le crépuscule du sol) | l'ancien dixième du Soleil de `skyFlat` | **garder** : témoin positif de `twilightdim` et des bornes de `coherence` au crépuscule |
+  | `treeShadowCut` (J3-3, les ombres d'arbres découpées) | les proxies entiers dans la carte | **garder** : comparaison de `forest-wind` ; au lot de retrait qui suivra la confirmation de Sam, sinon |
+  | `TUNE_SHIP_SCENERY_SHADOW` (question 3) | l'appareil sans l'ombre du décor | **garder** jusqu'à la confirmation de Sam (réglage provisoire), puis mesure (`craftshade`) |
+  | `ship.skyBand4`, `ship.nightFloor` (éteints) | — | **retirer** si Sam confirme « éteints » : comparaisons sans autre usage |
+
+  Aucun ancien chemin à retirer aujourd'hui : chaque levier allumé pendant J3 est le témoin d'une mesure, ou attend la confirmation de Sam.

@@ -145,7 +145,8 @@ export function wallColour(mat: WallMaterial, region: Region, s: number): [numbe
       // (15 Nov 2026, J3-5: from a luminance of ~0.145 to ~0.22, the measured red brick's 0.2–0.3)
       return lerp3([0.45, 0.165, 0.098], [0.36, 0.18, 0.12], s);
     case WallMaterial.Wood:
-      return lerp3([0.19, 0.11, 0.055], [0.12, 0.08, 0.05], s);
+      // (15 Nov 2026, J3-5: × 1.8 — from a luminance of 0.09–0.12 to 0.15–0.22, weathered and stained wood's; the inventory's « sombre »)
+      return lerp3([0.34, 0.2, 0.1], [0.22, 0.145, 0.09], s);
     case WallMaterial.Glass:
       return lerp3([0.06, 0.08, 0.1], [0.08, 0.09, 0.09], s);
     default: {
