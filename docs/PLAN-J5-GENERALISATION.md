@@ -1,7 +1,11 @@
 # PLAN-J5 — la généralisation contrôlée, après une J4 hors budget
 
-**État (15 novembre 2026, 04:55 UTC) : plan proposé, à valider par Sam ; mené selon ses recommandations sous la consigne « continue le
-plan » (comme PLAN-J3 et PLAN-J4), chaque réglage provisoire daté et révisable.** Jalon de la [stratégie](ANALYSE-STRATEGIE-RENDU-2026-11-03.md)
+**État (15 novembre 2026, 06:10 UTC) : mené jusqu'aux décisions de Sam** sous la consigne « continue le plan » (comme PLAN-J3 et PLAN-J4),
+chaque réglage provisoire daté et révisable. **Fait** : J5-0 chiffré (petits arbres 4 px −0,7 / 6 px −1,75 ms ; MSAA 1× ≈ −3,4 ms au cockpit ;
+houle demi-résolution −0,5 / −0,7, non gardée) ; J5-1 rangé (présence ~2,7 ms sous orage, 0 au beau temps) ; J5-2 clos (les corps déjà en
+raster) ; J5-3 : la marche sur la Terre reste tracée — le raster à pied attend des arbres proches en géométrie (59 ms de restes à Chamonix) ;
+J5-4 : l'export de la vue vivante sort l'image montrée (corrigé). **Attend Sam** : les arbitrages d'image (petits arbres, MSAA), le lot
+d'assets des arbres proches, le repli tracé (J5-R) — §3. Jalon de la [stratégie](ANALYSE-STRATEGIE-RENDU-2026-11-03.md)
 §15 J5 : « étendre aux autres corps droits, à la marche puis aux transitions ; finaliser HDR/SDR/exports ; conserver les phénomènes
 scientifiques sur le chemin spécialisé ; retirer les portions terrestres historiques devenues redondantes après validation de la parité ».
 **Sortie** : *un renderer produit principal par domaine, pas une nouvelle option permanente parmi cinq compromis.*
