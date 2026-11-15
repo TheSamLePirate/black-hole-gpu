@@ -7471,7 +7471,7 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   sortis tels quels dans `src/ui/netmatch-pure.ts` ; `tests/netmatch-pure.test.ts` 3/3 (un point 500 m au nord, 40 m plus haut : est
   < 5 cm, nord 500, haut 40). Tests du match et du réseau 105/105 ; e2e `net-coop` 3/3.
 
-### 2026-11-15 08:05 UTC — Le M1 Max borné à 60, avec l'eau à demi-rythme : il bride, ~32 images/s
+### 2026-11-15 07:49 UTC — Le M1 Max borné à 60, avec l'eau à demi-rythme : il bride, ~32 images/s
 
 - Contribution à la destination : la cible des 60 images/s du M1 Max (§8) relue avec le défaut du jour.
 - Réalisé : J0 vol + soutenu, `J0_FPSCAP=60`, ce Mac parti « Nominal ».
