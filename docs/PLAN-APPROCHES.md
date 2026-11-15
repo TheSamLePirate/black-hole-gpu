@@ -24,6 +24,8 @@ Les e2e suivent [E2E-VOLS](E2E-VOLS.md) (vols, tuiles, temps) : placements dans 
 | Assistance en manuel | **Directeur de vol + AP** : en manuel, aiguilles LOC/GS **et directeur de vol** sur l'approche choisie ; l'AP d'approche (F7 du F-35, APPR de l'A320) vole la même. F-35 et A320 (et tout avion à venir) ; les vaisseaux (MLS du Ranger) hors du plan |
 | HUD : toutes les pistes | **Réglage du Labo + entrée de la roue + une touche** ; la piste choisie mise en avant, les autres en contour discret avec leur nom |
 | Visuel | **Les approches tracées sur la carte et le radar** (pilote et crew) |
+| Droits du crew (15 nov., second tour) | **Tous les postes du crew** peuvent choisir, armer, annuler une approche et commander la remise de gaz |
+| Données FAA (15 nov., second tour) | Domaine public, redistribuables ; leurs deux conditions tenues (§3) — la question 1 du §9 levée |
 
 ## 1. La sortie, en faits vérifiables
 
@@ -103,7 +105,7 @@ non livrés) ; à défaut, une approche par défaut (`createDefaultApproach`, `s
 
 | Niveau | Source | Contenu | Couverture | Licence |
 |---|---|---|---|---|
-| **1 — publiée, à jour** | **FAA CIFP** (ARINC 424, cycle de 28 jours, [téléchargement](https://www.faa.gov/air_traffic/flight_info/aeronav/digital_products/cifp/download/)) | Approches complètes ILS/LOC/LDA/RNAV/VOR/NDB : transitions, IAF/IF/FAF/MAP, contraintes d'altitude et de vitesse, remises de gaz, attentes ; ILS (enregistrements PI), pistes (PG), points (PC/EA), balises | États-Unis (+ SID/STAR du Canada et d'Amérique latine) | Gratuite ; **le statut (œuvre du gouvernement américain, domaine public) et l'accord de téléchargement à vérifier au lot AP0** avant toute redistribution |
+| **1 — publiée, à jour** | **FAA CIFP** (ARINC 424, cycle de 28 jours, [téléchargement](https://www.faa.gov/air_traffic/flight_info/aeronav/digital_products/cifp/download/)) | Approches complètes ILS/LOC/LDA/RNAV/VOR/NDB : transitions, IAF/IF/FAF/MAP, contraintes d'altitude et de vitesse, remises de gaz, attentes ; ILS (enregistrements PI), pistes (PG), points (PC/EA), balises | États-Unis (+ SID/STAR du Canada et d'Amérique latine) | **Domaine public** ([FAQ de la FAA](https://www.faa.gov/air_traffic/flight_info/aeronav/faq) : « all digital products published by the FAA are in the public domain »), redistribution permise ; l'accord du CIFP ajoute deux conditions : **ne pas servir à la navigation réelle** (un jeu : mention dans la fiche et ASSETS) et **relayer les erreurs signalées par la FAA** (données reconstruites à chaque cycle, notes d'erreur du cycle reprises dans ASSETS) |
 | **2 — ILS réels mondiaux** | **nav.dat de FlightGear** (Robin Peel, cycle 2013.10, `fgdata/Navaids/nav.dat.gz`) | LOC (types 4/5) : position de l'antenne, **axe vrai**, fréquence, portée, indicatif, catégorie ; GS (6) : position, élévation, **pente réelle** (codée `pente×100000 + axe` : LFML 31R `400314.020` = 4,00°) ; balises OM/MM/IM (7–9) ; DME (12/13) | 3 501 localizers (2 781 CAT I, 210 CAT II, 201 CAT III, LDA/IGS), 3 197 glides | **GPL v2 ou ultérieure** (en-tête du fichier ; comme l'A320 déjà intégré) : en-tête de copyright conservé, crédit dans CREDITS.md et ASSETS.md |
 | **3 — construite** | Notre code, à la manière de FlightGear | Axe de la piste, IF/FAF, glide de 3° (ou la pente de la piste si un ILS est connu), rejointe ; marquée « construite » | Toutes les autres extrémités (34 030 pistes) | — |
 
@@ -238,7 +240,7 @@ Entrée : position, route, vitesse, altitude, l'approche choisie, le relief (`gr
 
 ### 5.3 Console crew (outils complets)
 
-- **Actions** (mêmes actions métier, validées, droits du poste) : `app.select {field, rwy, approach, entry}`, `app.auto`,
+- **Actions** (mêmes actions métier, validées ; **tous les postes**, décision de Sam du 15 nov.) : `app.select {field, rwy, approach, entry}`, `app.auto`,
   `app.arm`, `app.clear`, `app.goAround`, `app.hold {laps}` ; `ap.ils` étendu de `rwy`/`approach` (compatibilité gardée).
 - **Fiche de terrain** partagée avec le pilote (même module de rendu des fiches) : clic (et clic droit) sur un terrain de la
   carte, du globe, du ND **et du radar crew** (qui dessinera les terrains).
@@ -296,7 +298,7 @@ captures montrées dans T3, ses docs, une entrée au journal.
 
 | Lot | Contenu | Fait quand |
 |---|---|---|
-| **AP0 — données** | Vérifier la licence et l'accord du CIFP ; chercher une source libre plus récente que nav.dat 2013 ; `scripts/build-approaches.ts` (nav.dat : LOC/GS/DME/balises ; CIFP : PF/PI/PG/PC/EA/D) ; rapprochement géométrique (§3) ; tuiles `assets/approaches/v1` ; rapport de couverture (rattachés, renumérotés, écartés, segments non convertis) ; CREDITS/ASSETS ; `world/approaches.ts` + tests purs (LFML, LFPG, KSFO, BIKF renumérotée, EDDT écarté, une LDA) | Rapport chiffré ; tests verts ; taille mesurée |
+| **AP0 — données** | Accepter l'accord de téléchargement du CIFP (domaine public, §3) ; chercher une source libre plus récente que nav.dat 2013 ; `scripts/build-approaches.ts` (nav.dat : LOC/GS/DME/balises ; CIFP : PF/PI/PG/PC/EA/D) ; rapprochement géométrique (§3) ; tuiles `assets/approaches/v1` ; rapport de couverture (rattachés, renumérotés, écartés, segments non convertis) ; CREDITS/ASSETS ; `world/approaches.ts` + tests purs (LFML, LFPG, KSFO, BIKF renumérotée, EDDT écarté, une LDA) | Rapport chiffré ; tests verts ; taille mesurée |
 | **AP1 — choix et état** | `ApproachSel` dans la simulation, `approachSelect`, choix auto (§4.3) avec sa raison, approche construite pour toute extrémité, sauvegarde, TARS et `__bh` ; F-35 et A320 lisent la sélection ; le plan de vol fige son approche | Test pur des cas (4 quadrants × vent nul/fort × 1/2/3 pistes) ; e2e `approach-auto` : enclenché de 4 côtés de Toulon-Hyères, l'extrémité attendue est prise |
 | **AP2 — planificateur + F-35** | `game/approach-plan.ts` (entrées, profil, relief, replanification) ; `ilsStep` en suiveur de segments ; LOC/GS sur les antennes réelles | e2e `approach-join` F-35 : 4 départs à 30–50 km, haut et bas, établi avant le FAF, pas de demi-tour à l'IAF, au-dessus du relief (Nice ou Chambéry pour le relief), note ≥ actuelle |
 | **AP3 — A320** | FMGC en NAV sur le chemin, APPR à l'IF ; MCDU ARR/VIA ; RAD NAV réel ; ND avec l'approche ; télémétrie A320 | e2e `a320-approach-join` mêmes départs ; `a320-mcdu` étendu |
@@ -331,9 +333,7 @@ captures montrées dans T3, ses docs, une entrée au journal.
 
 ## 9. Questions à Sam (à poser au lot concerné, avec une recommandation)
 
-1. AP0 : si la licence du CIFP n'autorise pas la redistribution sur le site — le garder hors ligne (lab) ou s'en passer ?
-   (recommandation : s'en passer, garder nav.dat + construites).
+1. ~~AP0 : la redistribution du CIFP~~ — **levée le 15 nov.** : domaine public, redistribuable sous ses deux conditions (§3).
 2. AP7 : la touche de « toutes les pistes » et le défaut du réglage (recommandation : désactivé par défaut, la piste choisie
    toujours visible).
-3. AP6 : quels postes du crew peuvent armer une approche (recommandation : comme `ap.*` aujourd'hui, avec l'accord du pilote
-   si le poste n'a pas les droits de pilotage).
+3. ~~AP6 : quels postes du crew peuvent armer une approche~~ — **décidé le 15 nov. : tous les postes.**
