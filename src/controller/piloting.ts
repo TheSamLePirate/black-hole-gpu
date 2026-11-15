@@ -2,7 +2,7 @@ import { RING } from "./ring";
 import { tunnelEntrySide } from "../system/wormhole-map";
 import { ASSIST } from "./assistlevel";
 import { timeRate } from "../clock";
-import { climateT2m, weatherAt, windFromAt } from "../weather";
+import { climateT2m, weatherAt, weatherFadeCut, weatherHere, windFromAt } from "../weather";
 import { recorder } from "../game/recorder";
 import { tunnelState } from "../wormhole";
 // The CameraController — piloting: the controls, the holds, the autopilots, the entry and the landing.
@@ -199,6 +199,8 @@ function modGate(c: CameraController, which: "up" | "down", held: boolean): bool
  */
 function newFlight(this: CameraController) {
   this.flightGen++;
+  // (a placement: the weather as it is, no source's arrival fading in — weather.ts weatherHere)
+  weatherFadeCut();
   this.jetResume = null;
   this.metT0 = Number.NaN;
   this.gStrain.reset();
@@ -1094,7 +1096,13 @@ function flyShip(this: CameraController, dt: number, pad: ReturnType<GamepadInpu
         const dtSec = s.animate ? timeRate(s) * dt * Msec0 : 0;
         const V = this.airFlight.last?.speed ?? 0;
         // (the weather over this place — weather.ts: the setting's preset, a draw, the airfields' report)
-        const wx = (this.weatherNow = weatherAt(s, { body: nav.ref, lat, lon }, daysOf(nav.t), this.weatherReal));
+        const wx = (this.weatherNow = weatherHere(
+          s,
+          { body: nav.ref, lat, lon },
+          daysOf(nav.t),
+          this.weatherReal,
+          performance.now() / 1000,
+        ));
         const w = this.weather.step(wx.wind, h, lat, lon, daysOf(nav.t), V, dtSec);
         const up = unitV(d);
         const east = unitV(cross(unitV(spinVector(b, nav.t)), up));

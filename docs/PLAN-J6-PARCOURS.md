@@ -1,7 +1,7 @@
 # PLAN-J6 — Les parcours complets (stratégie §19.13)
 
-**État (2026-11-15 17:40 UTC)** : **J6-1 fait** — son parcours passe ; deux défauts trouvés et corrigés (le décollage automatique, le
-décor en vol rapide). J6-2 ensuite. Les jalons J0 à J5 ont été menés (PLAN-J1 à PLAN-J5) ; le 15 novembre,
+**État (2026-11-15 18:03 UTC)** : **J6-1 et J6-2 faits** — leurs parcours passent ; trois défauts trouvés et corrigés (le décollage
+automatique, le décor en vol rapide, l'arrivée de la météo réelle d'un coup). J6-3 ensuite. Les jalons J0 à J5 ont été menés (PLAN-J1 à PLAN-J5) ; le 15 novembre,
 Sam a nommé **~48 ms de GPU sur J0 le palier intermédiaire de kerr-mini** ([J0-CONTRAT](J0-CONTRAT.md) §2) et demandé de reprendre la
 suite du plan, lumière et contenu. La stratégie ([ANALYSE-STRATEGIE](ANALYSE-STRATEGIE-RENDU-2026-11-03.md) §19.13) demande que les jalons
 « transportent l'expérience en même temps que les passes » : **un parcours n'est terminé ni avec une scène vide, ni avec un état choisi
@@ -82,3 +82,16 @@ L'inventaire du §1 vient de la lecture du catalogue et des en-têtes : aucun te
   (`renderer.sceneryQuickLead`) ; deux passages : 36–38 points de bâtiment devant en arrivant sur Toulon (0 à trois passages sur quatre avant),
   83–97 à moins de 2 km dans le regard arrière ; GPU au même niveau. Le parcours asserte désormais les bâtiments devant ; **il passe** (deux
   fois). **J6-1 fait** ; le levier gardé pour les comparaisons. Suite : J6-2 (l'approche sous météo dégradée).
+- **J6-2 : l'approche sous météo dégradée ; la météo réelle n'arrive plus d'un coup** (2026-11-15 18:03 UTC) : e2e `parcours-meteo` — le F-35
+  au large d'Hyères, l'ILS de Toulon-Hyères engagé (`ilsStart` choisit la 31 et la construit), la météo réelle choisie en approche, son METAR
+  servi par la page (pluie, 2 500 m, BKN 600 ft, 250° 18 kt rafales 28) ; puis le manche tenu 1,5 s. **Trouvé** : la source arrivée en vol
+  **basculait en une image** — la météo de l'image (brume, couche, pluie) toute en une image, le vent du vol de rien à 20 m/s. **Corrigé** :
+  `weather.ts` `weatherHere` — une source qui arrive ou change, la météo réelle déjà choisie, fondue en 20 s (`WEATHER_FADE_S`), une seule
+  horloge et une seule transition pour le vol (`piloting`) et l'image (`renderer.weatherParams`), chacun à sa place ; un réglage choisi et un
+  placement (`newFlight` → `weatherFadeCut`) restent immédiats. **Mesuré** (kerr-mini) : la plus grande part du changement de l'image en une image
+  **1 → 0,03**, le plus grand saut du vent en une image **18,7 → 1,15 m/s** ; la physique et l'image lisent le même état (`camera.weatherReal ===
+  renderer.weatherReal`) ; le manche prioritaire (le pilote automatique de l'ILS lâché, ses aiguilles gardées — `ilsRun.manual`) ; GPU p50 ~50
+  ms beau temps, 55–83 ms à l'arrivée et sous la pluie (le noyau de la météo compilé à l'arrivée : un blocage de 84 à 433 ms selon le passage —
+  relevé). Tests : `weather-fade` 3/3 (unitaires), `metar` 2/2 (il attend la fin du fondu ; son second test daté du 12 août passe désormais par
+  l'archive d'Open-Meteo, accepté), `weather-panel` W3 (la base de la couche comparée au sol du bloc — le géoïde, −29 m à Cap Canaveral). Suite :
+  J6-3 (se poser puis débarquer) ; la compilation du noyau de la météo à l'arrivée d'une source (le blocage).

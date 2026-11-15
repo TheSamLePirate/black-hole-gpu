@@ -70,12 +70,12 @@ describe.skipIf(!E2E)("the real weather: an airfield's METAR", () => {
     expect(st.wx).toBe(300);
     await app.waitFor(`document.querySelector("[data-testid=weather-category]").dataset.category === "LIFR"`, 3000);
     await app.waitFor(`document.querySelector(".wx-says").textContent.includes("LFPB 080600Z")`, 3000);
-    // (the image: the tracer's fog from it — its extinction, 3.912 / 300 m)
-    await Bun.sleep(1500);
-    // (the weather block's z: wx[0].z)
+    // (the image: the tracer's fog from it — its extinction, 3.912 / 300 m — once the report's arrival has faded in: weather.ts
+    // weatherHere, WEATHER_FADE_S 20 s since 15 Nov 2026, PLAN-J6 J6-2; the weather block's z: wx[0].z)
+    await app.waitFor(`Math.abs(__bh.renderer.weatherBlock[2] - ${3.912 / 300}) < 5e-6`, 30_000);
     expect(await app.js<number>(`__bh.renderer.weatherBlock[2]`)).toBeCloseTo(3.912 / 300, 5);
     await app.press("Escape");
-  }, 150_000);
+  }, 180_000);
 
   test("another day, at Burgos: Open-Meteo's model; in 2067, a plausible draw — the panel says which", async () => {
     await app.js(`(__bh.game.land("earth", 42.5, -2.5), __bh.game.setDate("2026-08-12T18:30:00Z"), true)`);
@@ -86,9 +86,13 @@ describe.skipIf(!E2E)("the real weather: an airfield's METAR", () => {
       layers: __bh.camera.weatherReal.layers.length,
       T: __bh.camera.weatherReal.model.T,
     }))()`);
-    expect(st.asked.some((u) => u.includes("api.open-meteo.com/v1/forecast?latitude=42.50&longitude=-2.50&start_date=2026-08-12"))).toBe(
-      true,
-    );
+    // (the forecast's host while the day is within its reach of today, the archive's after — openmeteo.ts openMeteoUrl: the test's day,
+    // 12 Aug 2026, went to the archive in November 2026; either asked for that place and day)
+    expect(
+      st.asked.some(
+        (u) => /open-meteo\.com\/v1\/(forecast|archive)\?/.test(u) && u.includes("latitude=42.50&longitude=-2.50&start_date=2026-08-12"),
+      ),
+    ).toBe(true);
     expect(st.why).toBe("model");
     expect(st.layers).toBe(0);
     expect(st.T).toBeGreaterThan(30);

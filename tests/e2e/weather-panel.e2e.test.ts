@@ -99,7 +99,9 @@ describe.skipIf(!E2E)("the weather's panel", () => {
     const over = await wx();
     // (its weight, its two decks above the sea — the ground's height added —, their covers; the weather's kernel)
     expect(over.p[0]).toBe(1);
-    expect(over.p[4]).toBeGreaterThanOrEqual(600);
+    // (the deck's base over the ground the block carries — p[16]: over the sea, the geoid's N, −29 m at Cape Canaveral; the absolute
+    // 600 m read 571 there since the sea lies on the geoid, 23 Oct 2026)
+    expect(over.p[4] - over.p[16]).toBeGreaterThanOrEqual(600);
     expect(over.p[6]).toBeCloseTo(0.95, 5);
     expect(over.p[10]).toBeCloseTo(0.5, 5);
     expect(over.key & 1024).toBe(1024);

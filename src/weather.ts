@@ -221,6 +221,81 @@ export function randomWeather(body: string, lat: number, lon: number, days: numb
  * The weather now at a place: the setting's preset, a draw, or the airfields' report (W7: `real`, its
  * state when it came in — else fair).
  */
+// ---- the weather's arrival in flight (PLAN-J6 J6-2, strategy §19.13 « a source arriving without an arbitrary break »): with the real
+// weather chosen, its source arriving or changing — a METAR fetched after the choice, a new report, the model's next hour — faded in over
+// WEATHER_FADE_S rather than switched in one image (before: the flight's wind 0 → 20 m/s and the image's weather all at once, e2e
+// parcours-meteo). One clock and one transition for both readers — the flight (piloting) and the image (renderer weatherParams) —,
+// each reading its own place: the previous source's weather there blended with the new one's. A setting chosen (a preset, the wind's
+// level, real on or off) and a placement (camera.newFlight → weatherFadeCut) take effect at once, as before.
+/** the fade's length [s] */
+export const WEATHER_FADE_S = 20;
+const fade = { real: null as WeatherState | null, prev: null as WeatherState | null, t0: Number.NEGATIVE_INFINITY, setting: "" };
+/** a placement, a new flight: the weather as it is now, no fade under way */
+export function weatherFadeCut() {
+  fade.prev = null;
+  fade.t0 = Number.NEGATIVE_INFINITY;
+}
+/** a's numbers blended towards b's (k 0 … 1): the visibility geometrically, the layers by rank (a missing one at no cover), the
+ *  rest b's */
+export function blendWeather(a: WeatherState, b: WeatherState, k: number): WeatherState {
+  const l = (x: number, y: number) => x + (y - x) * k;
+  const layers: CloudLayer[] = [];
+  for (let i = 0; i < Math.max(a.layers.length, b.layers.length); i++) {
+    const x = a.layers[i],
+      y = b.layers[i];
+    const from = x ?? { ...y!, cover: 0 },
+      to = y ?? { ...x!, cover: 0 };
+    layers.push({ ...to, base: l(from.base, to.base), top: l(from.top, to.top), cover: l(from.cover, to.cover) });
+  }
+  // (the wind's direction the short way round; a turning one — null — the new one's)
+  let fromDeg = b.wind.from;
+  if (a.wind.from !== null && b.wind.from !== null) {
+    const turn = ((((b.wind.from - a.wind.from) % 360) + 540) % 360) - 180;
+    fromDeg = (((a.wind.from + turn * k) % 360) + 360) % 360;
+  }
+  return {
+    ...b,
+    wind: {
+      ...b.wind,
+      u10: l(a.wind.u10, b.wind.u10),
+      gust: l(a.wind.gust, b.wind.gust),
+      shear: l(a.wind.shear, b.wind.shear),
+      from: fromDeg,
+    },
+    visibility: Math.exp(l(Math.log(Math.max(a.visibility, 1)), Math.log(Math.max(b.visibility, 1)))),
+    fogTop: l(a.fogTop, b.fogTop),
+    layers,
+    rain: l(a.rain, b.rain),
+    dust: l(a.dust, b.dust),
+  };
+}
+/** The weather here as the flight and the image read it: weatherAt, the real weather's arrival faded in (above). `nowS`: one clock
+ *  for both readers [s] (performance.now() / 1000). */
+export function weatherHere(
+  s: { weather: WeatherPreset; wind: WindLevel },
+  place: { body: string; lat: number; lon: number },
+  days: number,
+  real: WeatherState | null,
+  nowS: number,
+): WeatherState {
+  const setting = `${s.weather}|${s.wind}`;
+  if (setting !== fade.setting) {
+    fade.setting = setting;
+    fade.real = real;
+    weatherFadeCut();
+  } else if (s.weather === "real" && real !== fade.real) {
+    // (the source arrived or changed: from what was flown — the previous source's, or the fair weather it stood in for)
+    fade.prev = fade.real ?? presetWeather("fair", s.wind);
+    fade.real = real;
+    fade.t0 = nowS;
+  }
+  const w = weatherAt(s, place, days, real);
+  const k = (nowS - fade.t0) / WEATHER_FADE_S;
+  if (!fade.prev || !(k < 1)) return w;
+  const was = weatherAt(s, place, days, fade.prev);
+  return blendWeather(was, w, k * k * (3 - 2 * k));
+}
+
 export function weatherAt(
   s: { weather: WeatherPreset; wind: WindLevel },
   place: { body: string; lat: number; lon: number },

@@ -193,6 +193,12 @@ gestionnaire des messages du pilote (`main.ts`) les montrait par `panel.toast`, 
 y écrivait comme le pilote. **Tous** les messages du pilote étaient doublés. `panel.toast(msg, { log: false })` pour eux ; e2e `journal-once` :
 avant `[info no-time, pilot t]`, après `[pilot t]`.
 
+## Le bouton de la couche météo de la carte masqué par la carte elle-même (relevé le 15 novembre 2026, e2e `weather-panel`)
+
+**État (15 nov. 2026, 18:03 UTC)** : relevé en passant (PLAN-J6 J6-2), non étudié. `weather-panel` › « the planisphere's weather layer » : le
+clic réel sur `[data-testid=map-weather]` refusé — `div.fl-mapbar.m3-bar > button.fl-mapwx > div.fl-maptabs > canvas.fl-map >
+div.m3-stage.gpu` au-dessus (kerr-mini, un passage). Hors du périmètre de J6-2 ; à reproduire puis à donner à qui tient la carte.
+
 ## ~~Le décor ne suit pas un vol rapide : en arrivant sur une ville à 150 m/s, aucun bâtiment devant~~ (relevé le 15 novembre 2026, PLAN-J6 J6-1) — corrigé le même jour
 
 > **15 nov. 2026, 17:40 UTC — corrigé** : l'avance d'une scène rapide portée de 1,2 à **2,5** fois son rayon (`renderer.sceneryQuickLead`) :
