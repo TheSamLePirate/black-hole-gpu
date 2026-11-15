@@ -33,6 +33,8 @@ export interface Asker {
   minLen: number;
   paved: boolean;
   xwind: number;
+  /** the most tail wind accepted [m/s] (the player's setting — PLAN-APPROCHES AP8); absent: CHOICE.tailMax (10 kt) */
+  tailMax?: number;
 }
 
 /** The limits of the choice: a tail wind over this out [m/s], the wind counted from this [m/s]. */
@@ -94,7 +96,7 @@ export function chooseApproach(
     let out: string | null = null;
     if (rw && rw.len < asker.minLen) out = "short";
     else if (rw && asker.paved && rw.surface !== "paved") out = "surface";
-    else if (head < -CHOICE.tailMax) out = "tail wind";
+    else if (head < -(asker.tailMax ?? CHOICE.tailMax)) out = "tail wind";
     else if (cross > asker.xwind) out = "cross wind";
     // (a real approach is published clear of its obstacles: only a built one is checked — on the relief known)
     else if (a.source === "built" && thin(a)) out = "relief";

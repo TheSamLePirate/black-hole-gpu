@@ -80,6 +80,15 @@ test("a tail wind over 10 kt left out — the end into it taken though it is beh
   expect(c.table.find((s) => s.a.rwy === "05")!.out).toBe("tail wind");
 });
 
+test("the player's tail-wind limit (the Labo — PLAN-APPROCHES AP8): 12 kt behind accepted with 15, left out with 10 or 5", () => {
+  const w: Wind = { from: 230, spd: 12 * KT };
+  const out = (kt: number) =>
+    chooseApproach(one, approachesOf(one, []), { ...at(50), tailMax: kt * KT }, w)!.table.find((s) => s.a.rwy === "05")!.out;
+  expect(out(15)).toBeNull();
+  expect(out(10)).toBe("tail wind");
+  expect(out(5)).toBe("tail wind");
+});
+
 test("Marseille, calm: from the south-east its 31R ILS, from the north-west its 13L CAT III", () => {
   const raw = readFileSync("assets/runways/v1/t8_1.json", "utf8");
   const lfml = decodeTile(JSON.parse(raw)).find((f) => f.icao === "LFML")!;

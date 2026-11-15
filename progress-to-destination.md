@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-15 20:10 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-15 20:27 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous. Ce qui est fermé quitte le tableau « En cours » pour la ligne « Fermé récemment ».
@@ -49,7 +49,7 @@ J4 (fermé, sortie non atteinte) et J5 (fermé) ; **en cours : J6, les parcours 
 | Rendu (33d89754) | J3 — lumière, ombres, cockpit | **mené (15 nov.)** : J3-0 à J3-7 et J3-R faits ou réglés provisoirement selon les recommandations de [PLAN-J3](docs/PLAN-J3-LUMIERE-COCKPIT.md) §8 ; le crépuscule du sol réparé (appareil / sol 0,87–1,08 jusqu'à −12,7°), ombres d'arbres et du décor, albédos mesurés. **Confirmé par Sam (15 nov., ~19:55)** ; reste J3-R (les anciens chemins) |
 | Rendu (33d89754) | J4 / J5 — l'eau, les volumes, la généralisation | **fermés** ([PLAN-J4](docs/PLAN-J4-VOLUMES.md), [PLAN-J5](docs/PLAN-J5-GENERALISATION.md)) : l'eau à demi-rythme (J5-5, −6,0 à −6,4 ms, l'image la même) ; le sol à demi-rythme laissé au joueur (J5-6, réglage « demi » : −1,9 à −3,2 ms ; « auto » à chaque pixel) ; la FFT de la mer en deux passes (−0,9 ms) ; la carte d'ombre des arbres (−2,8 ms, forêt) ; Sam a refusé les arbitrages d'image (MSAA 1×, petits arbres, nuages amortis). Postes lourds restants : l'eau 16,2, les nuages d'orage 16,5, le décor d'une forêt ~7 ms |
 | Rendu (33d89754) | Mesures tenues | la borne du M1 Max **à 30, provisoire** (soutenu, le GPU bride vers 850 MHz quelle que soit la borne — [J0-CONTRAT §2](docs/J0-CONTRAT.md)) ; le coût de l'appareil 3,5–4,5 ms, dont le MSAA 4× 4–5 ms (gardé) |
-| PLAN-APPROCHES (1feb2f7f) | [PLAN-APPROCHES](docs/PLAN-APPROCHES.md) | **AP0 à AP7 faits (15 nov.)** : données réelles (nav.dat, CIFP de la FAA), choix automatique, jonction planifiée, A320 (MCDU, ND), carte, radar, TSD, crew, toutes les pistes au HUD ; AP7b : le directeur de vol (repère du HUD du F-35, barres de l'A320 et du crew, `fd-approach` 2/2 volé à la main), la pente publiée de chaque approche (Marseille 31R à 4°). **Reste : AP8 (roue, options), AP9 (radio, audio), AP10 (tous les aéroports), AP-R (retraits)** |
+| PLAN-APPROCHES (1feb2f7f) | [PLAN-APPROCHES](docs/PLAN-APPROCHES.md) | **AP0 à AP8 faits (15 nov.)** : données réelles (nav.dat, CIFP de la FAA), choix automatique, jonction planifiée, A320 (MCDU, ND), carte, radar, TSD, crew, toutes les pistes au HUD, directeur de vol (F-35, A320, crew), pente publiée ; AP8 : le secteur « Approche » de la roue (F-35 et A320, `approach-wheel` 2/2 en entrée réelle) et les options du Labo ; la remise de gaz sur l'ILS (crew, TARS, roue). **Reste : AP9 (radio, audio), AP10 (tous les aéroports), AP-R (retraits)** |
 | Audit vagues 3–4 et 6 (1feb2f7f) | [09-priorites-todo](docs/audit-2026-11-10/09-priorites-todo.md) | **faits** : 3.1–3.2 réseau (RD0–RD2), 3.3 sauvegardes (une clé par sauvegarde ; avion, systèmes des vaisseaux et de l'A320 — ce dernier par J6-4), 3.4–3.5 vol, 3.6–3.7 TARS, 3.10 e2e honnêtes, 4.2 temps et onglet masqué, 4.3 `Settings`/`ViewPose`, 4.8 `main()` découpé ; vague 6 hors rendu (QA, AR, RD4/RD5, FX). **Reste** : l'état d'une mission ou d'un combat (Sam), IndexedDB et l'autosauvegarde hors frame (AR-05), FX-19 (fraîcheur des écrans, à mesurer), FX-21 |
 
 **Fermé récemment** : l'eau étagée E1 (−1,55 ms) et E2 (−0,5 ms), E3 non ouvert ; la classification lot 1 (sur terre −1,15 ms), lot 2 non ouvert
@@ -8262,3 +8262,30 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   un vol avancé pas à pas. Le quota du test inchangé.
 - Vérifié : `flight-clock`, `weather-fade`, `weather`, jet et atterrissages 38/38 (unitaires) ; `parcours-meteo` et la CI après la poussée (ci-dessous
   si besoin). Leçon : le hook d'avant poussée ne lance pas les tests unitaires — lancer les ciblés avant de pousser un changement de logique de vol.
+
+### 2026-11-15 20:27 UTC — PLAN-APPROCHES AP8 : le secteur « Approche » de la roue et les options du Labo
+
+- Contribution à la destination : §19 (l'expérience complète : choisir, armer et quitter une approche sans quitter le vol, au même
+  endroit sur le F-35 et l'A320) ; « les fonctions produit accessibles à TARS via les mêmes actions » — la roue appelle
+  `approachSelect`, `ilsStart`, `ilsOff`, `ilsGoAround`, `ilsClear`, comme la carte, le radar, le crew et TARS.
+- Réalisé : `src/ui/approach-wheel.ts` (Auto et sa raison ; terrain › destination, sélection, les cinq plus proches devant ; piste ›
+  longueur, vent, en service ; approche › ILS/LOC/RNAV/construite et leur source ; entrée › guidage, transition publiée, attente
+  d'un tour ou jusqu'à autorisation ; armer/désarmer, remise de gaz, autorisé ; affichages ›) branché dans la roue du F-35
+  (`main.ts`, en secteur de premier niveau) et celle de l'A320 (`spacewheel.ts`) — l'ancien « Navigation › Approche ILS » et sa
+  sous-roue de pistes retirés (`ilsItems` supprimé) ; `controller/approach.ts` : `approachResolve` scindé (`pick`), `approachPreview`
+  (le choix sans l'enregistrer — `approachLast`, lu par le crew comme « volée », n'est plus touché par un simple aperçu),
+  `approachFields` ; `controller/ils.ts` `ilsGoAround()` (F-35 : la phase `missed` ; A320 : manettes TOGA) — l'outil
+  `flight_action go_around` de TARS et du crew n'atteignait que l'autopilote d'entrée des vaisseaux et répondait « pas d'approche » sur
+  un ILS ; réglages `approachAutoTailwindKt` (lu par `chooseApproach` via `Asker.tailMax`), `approachShowBuilt` (la fiche du terrain),
+  `approachPathOnMap` (carte tactique, radar du HUD, TSD), `approachProfile` (le PROF de la carte, autrefois en localStorage, repris
+  une fois) — schéma, menu Jeu › Approches, FR ; docs : F35 (EN/FR), VOL-AVIONS (leçons 7, 10), apprendre-avions.html, BH-API,
+  catalogue, plan.
+- Preuves (observé, M1 Max, ce lot) : e2e `approach-wheel` **2/2** en entrée réelle (Tab tenu, pointeur et clics CDP ; près de
+  Marseille : « Auto — LFMA 32 built », terrains LFMA/LFML/LFMY/LFMI/LFMV, extrémités 13L/31R/13R/31L, « ILS 31R » choisi puis armé,
+  « Toutes les pistes » basculé deux fois, la remise de gaz comptée — le F-35, déjà au-dessus de 600 m, repart aussitôt —,
+  désarmé) ; `ils-runway` **1/1** réécrit sur le secteur (Toulon-Hyères : Piste (LFTH) › 13, armé : ILS 13 LFTH) ; tests unitaires :
+  `approach-choice` 8/8 (le seuil de vent arrière du joueur : 12 kt acceptés avec 15, écartés avec 10 et 5), `spacepad` 5/5 (le
+  secteur en tête de la roue de l'A320), réglages/schéma/menu 118/118, i18n 5/5. Captures : docs/progress/approches/ap8-*.jpg.
+- Non vérifié : la remise de gaz depuis la console du crew rejouée en e2e (le chemin `flight_action` corrigé, testé par la roue) ;
+  la roue de l'A320 en e2e (vérifiée sans navigateur) ; les options en vol au-delà de « Toutes les pistes ».
+- Suite : AP9 — la radio et l'audio (indicatif en morse, balises, appels).

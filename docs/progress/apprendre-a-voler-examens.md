@@ -148,3 +148,8 @@ plus réengagé) et la pente publiée de chaque approche (3° le plus souvent, 4
 **7/7** (l'ILS 23L d'Edwards ; LFPB 07 de l'A320 : 20/20, toucher à 669 m, 0,7 m de l'axe, −0,67 m/s), `fd-approach` 2/2 (la recette
 « à la main sur le directeur » volée par une main scriptée, F-35 et A320, établis à 11,2 km), `crew-approach` 5/5. Les recettes
 existantes ne changent pas ; l'étape 9 bis est nouvelle, volée par `fd-approach`.
+
+**15 novembre 2026, soir — PLAN-APPROCHES AP8 (la roue).** Le chemin de la roue change dans le cours (leçon 7, leçon 10 étape 9 ;
+apprendre-avions.html) : Tab › **Approche** (au lieu de Navigation › Approche ILS et de sa sous-roue de pistes). Les recettes de vol
+ne changent pas ; `apprendre-avions` n'utilise pas la roue. Revérifié : `approach-wheel` 2/2 et `ils-runway` 1/1 (le choix de la
+piste à la roue, en français, à Toulon-Hyères), par entrée réelle.

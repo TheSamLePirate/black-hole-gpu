@@ -4,8 +4,8 @@ import { App, E2E, stopServer } from "./lib/app";
 
 // The ILS's runway chosen (Sam, 5 Nov 2026: « quand il y a deux pistes, permets de choisir celle pour l'ILS »): the F-35 at
 // 1 500 m north-west of Toulon-Hyères (LFTH: 05/23 and 13/31), in French. The airfield's runways as the action lists them
-// (camera.ilsRunways: each end, its length, the one in use); then by real input — Tab held, « Navigation », « Approche ILS », the sub-wheel
-// of its runways, « Piste 13 » clicked — the approach engaged on 13, its needles read; then « 05/23 » asked by number (that
+// (camera.ilsRunways: each end, its length, the one in use); then by real input — Tab held, « Approche » (PLAN-APPROCHES AP8), « Piste (LFTH) », the sub-wheel
+// of its runways, « 13 » clicked, « Armer l'approche » — the approach engaged on 13, its needles read; then « 05/23 » asked by number (that
 // runway, its end in use) and a runway the field lacks refused.
 // Output: remote-results/ils-runway/ (IR_OUT): wheel.png, sub-wheel.png, approach.png.
 // Done when: the ends listed, 13 flown from the wheel, 05/23 resolved, 18 refused, no GPU error. Duration: ~1.5 min.
@@ -45,35 +45,48 @@ test.skipIf(!E2E)(
       );
       expect(ch.ends.map((e) => e.id)).toEqual(expect.arrayContaining(["05", "23", "13", "31"]));
 
-      // (the wheel: Tab held, « Navigation », « Approche ILS » — its sub-wheel of runways —, « Piste 13 » clicked)
+      // (the wheel — PLAN-APPROCHES AP8: its « Approche » sector, in place of « Navigation › Approche ILS » and its sub-wheel of
+      // runways —: Tab held, « Approche », « Piste (LFTH) », « 13 » clicked; then « Armer l'approche »)
       await app.js(`(() => { document.activeElement?.blur?.(); return 1; })()`);
       const tab = { code: "Tab", key: "Tab", windowsVirtualKeyCode: 9 };
-      await app.cdp.send("Input.dispatchKeyEvent", { type: "rawKeyDown", ...tab });
-      await app.waitFor(`!!document.querySelector("[data-testid=wheel]")`, 3000);
-      await pointAt("^Navigation");
-      await Bun.sleep(300);
-      await app.cdp.send("Input.dispatchKeyEvent", { type: "keyUp", ...tab });
-      await app.waitFor(`/Approche ILS/.test(document.querySelector("[data-testid=wheel]")?.textContent ?? "")`, 3000);
-      await pointAt("Approche ILS");
+      const click = async (re: string) => {
+        await pointAt(re);
+        await Bun.sleep(200);
+        // (aimed again: the screenshot or a slow frame may have moved the pointer — a synthetic move that picked the opposite sector)
+        const p = await pointAt(re);
+        await app.mouse("down", p.x, p.y);
+        await app.mouse("up", p.x, p.y);
+      };
+      const openApproach = async () => {
+        await app.cdp.send("Input.dispatchKeyEvent", { type: "rawKeyDown", ...tab });
+        await app.waitFor(`!!document.querySelector("[data-testid=wheel]")`, 3000);
+        await pointAt("^Approche");
+        await Bun.sleep(300);
+        await app.cdp.send("Input.dispatchKeyEvent", { type: "keyUp", ...tab });
+        await app.waitFor(`/Piste \\(LFTH\\)/.test(document.querySelector("[data-testid=wheel]")?.textContent ?? "")`, 3000);
+      };
+      await openApproach();
+      await pointAt("Piste \\(LFTH\\)");
       await Bun.sleep(300);
       await app.shot(`${OUT}/wheel.png`);
-      // (aimed again: the screenshot moves the pointer — a synthetic move that picked the opposite sector)
-      const ils = await pointAt("Approche ILS");
-      await app.mouse("down", ils.x, ils.y);
-      await app.mouse("up", ils.x, ils.y);
-      await app.waitFor(`/Piste 13/.test(document.querySelector("[data-testid=wheel]")?.textContent ?? "")`, 3000).catch(async (e) => {
-        await app.shot(`${OUT}/sub-missing.png`);
-        console.log(
-          `  the wheel then: ${await app.js<string>(`document.querySelector("[data-testid=wheel]")?.textContent ?? "closed"`)}; ILS ${await app.js<string>(`JSON.stringify(__bh.camera.ilsInfo())`)}`,
-        );
-        throw e;
-      });
-      await pointAt("Piste 13");
+      await click("Piste \\(LFTH\\)");
+      await app
+        .waitFor(`[...document.querySelectorAll("[data-testid=wheel] .rw-label b")].some((b) => b.textContent === "13")`, 3000)
+        .catch(async (e) => {
+          await app.shot(`${OUT}/sub-missing.png`);
+          console.log(
+            `  the wheel then: ${await app.js<string>(`document.querySelector("[data-testid=wheel]")?.textContent ?? "closed"`)}`,
+          );
+          throw e;
+        });
+      await pointAt("^13$");
       await Bun.sleep(300);
       await app.shot(`${OUT}/sub-wheel.png`);
-      const at = await pointAt("Piste 13");
-      await app.mouse("down", at.x, at.y);
-      await app.mouse("up", at.x, at.y);
+      await click("^13$");
+      await app.waitFor(`__bh.camera.approachSel.rwy === "13"`, 5000);
+      await app.waitFor(`!document.querySelector("[data-testid=wheel]")`, 3000);
+      await openApproach();
+      await click("^Armer l'approche");
       await app.waitFor(`!!__bh.camera.ilsRun`, 5000);
       const info = await app.js<{ id: string }>(`__bh.camera.ilsInfo()`);
       console.log(`  the wheel's approach: ${info.id}`);

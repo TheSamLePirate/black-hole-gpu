@@ -40,6 +40,8 @@ export interface SpaceWheelState {
   mission: boolean;
   route: boolean;
   ils: boolean;
+  /** an aircraft's « Approach » sector (ui/approach-wheel.ts — PLAN-APPROCHES AP8): in place of the « ILS approach » item */
+  approach?: WheelItem | null;
   /** in a room (N1: its fleet); another pilot's craft targeted: his name (its orders) */
   room?: boolean;
   netTarget?: string | null;
@@ -263,7 +265,7 @@ export function spaceWheel(S: SpaceWheelState, A: SpaceWheelActions): WheelItem[
           ? [
               { label: { fr: "Plan de vol", en: "Flight plan" }, on: S.route, run: A.route },
               { label: { fr: "Carte de mission", en: "Mission map" }, on: S.mission, run: A.missionMap },
-              { label: { fr: "Approche ILS", en: "ILS approach" }, on: S.ils, run: A.ilsToggle },
+              ...(S.approach ? [] : [{ label: { fr: "Approche ILS", en: "ILS approach" }, on: S.ils, run: A.ilsToggle }]),
               { label: { fr: "Préparer un vol", en: "Prepare a flight" }, run: A.hub },
             ]
           : []),
@@ -306,5 +308,7 @@ export function spaceWheel(S: SpaceWheelState, A: SpaceWheelActions): WheelItem[
       ],
     },
   ];
+  // (an aircraft's approach: a sector of its own, at the top)
+  if (S.approach) items.unshift(S.approach);
   return items;
 }

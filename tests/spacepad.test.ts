@@ -140,6 +140,10 @@ test("the spacecraft's wheel: its eleven sectors; the nine holds; each craft its
   // (the Ranger in space: no aircraft entries; flown as a plane: back)
   expect(labels(sub(R, "Navigation"))).not.toContain("ILS approach");
   expect(labels(sub(spaceWheel(state({ planeMode: true }), acts), "Navigation"))).toContain("ILS approach");
+  // (an aircraft — the A320 —: its « Approach » sector at the top, in place of the ILS item — PLAN-APPROCHES AP8)
+  const AP = spaceWheel(state({ planeMode: true, approach: { label: { fr: "Approche", en: "Approach" }, sub: [] } }), acts);
+  expect(labels(AP)[0]).toBe("Approach");
+  expect(labels(sub(AP, "Navigation"))).not.toContain("ILS approach");
   // (the Endurance: its ring, no gear, no landing autopilot)
   const E = spaceWheel(state({ vessel: "endurance", lands: false, ringRpm: 4 }), acts);
   expect(labels(sub(E, "Systems"))).toContain("Ring + (4.0 rpm)");

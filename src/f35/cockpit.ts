@@ -192,7 +192,7 @@ export function pcdData(
     // (the world's airfields within 200 km — PLAN-RADAR-AAA RD11 —, the TSD's level of detail its own)
     world: fieldsNearCached("pcd", (geo.lat * 180) / Math.PI, (geo.lon * 180) / Math.PI, 200_000, undefined, 1000).slice(0, 400),
     // (the approach engaged or chosen — PLAN-APPROCHES AP5 —: drawn on the TSD, its parts to touch)
-    appr: c.approachMapData(),
+    appr: c.s.approachPathOnMap ? c.approachMapData() : null,
     // (the picture's missiles — RD8 —: the TSD's, their targets and their ends)
     msls: RH?.missiles ?? [],
     // (its trace, the last five minutes, and its path ahead, three minutes — PLAN-RADAR-AAA RD15)

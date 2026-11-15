@@ -221,6 +221,8 @@ export interface FlightHudActions {
   /** the tactical map's approaches (PLAN-APPROCHES AP4): an action on a field's approach, a field's card's approaches */
   approachAction?(action: import("./jetmap").ApproachAction, field: string, arg?: string): void;
   fieldCard?(f: import("../world/runways").Airfield): import("../world/approach-draw").FieldCard | null;
+  /** a player's setting changed from a screen (the map's PROF): written */
+  prefChanged?(): void;
   /** the flown craft's tank filled from a docked craft (controller/refuel.ts) */
   refuel?(): void;
   /** the HUD's kind: the next of automatic, atmosphere, space, approach (⇧²) */
@@ -1398,6 +1400,7 @@ export class FlightHud {
     this.jetMap.onField = (a, f) => this.act.fieldAction?.(a, f);
     this.jetMap.onApproach = (a, field, arg) => this.act.approachAction?.(a, field, arg);
     this.jetMap.fieldInfo = (f) => this.act.fieldCard?.(f) ?? null;
+    this.jetMap.onPref = () => this.act.prefChanged?.();
     this.ground = new GroundTrack(this.s);
     this.ground.realWeather = () => this.mapWeather.real();
     this.ground.dayMosaic = () => this.mapWeather.mosaic();

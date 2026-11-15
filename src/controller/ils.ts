@@ -44,6 +44,7 @@ declare module "../controls" {
     ilsFrame: typeof ilsFrame;
     ilsInfo: typeof ilsInfo;
     ilsClear: typeof ilsClear;
+    ilsGoAround: typeof ilsGoAround;
     flightDirector: typeof flightDirector;
     routeProcedures: typeof routeProcedures;
   }
@@ -285,6 +286,28 @@ function ilsClear(this: CameraController): string {
   return tf("Cleared ILS {0}", runwayId(R.rwy.hdg, R.rwy.des));
 }
 
+/**
+ * The missed approach asked (the wheel, the crew, TARS — PLAN-APPROCHES AP8): the F-35's approach climbs straight ahead to 600 m
+ * and rounds again by a new join (game/ils.ts « missed »); the A320's levers to TOGA, as its pilot does — its FMGC's GA TRK and SRS,
+ * its approach flown again from where it is. What to say. (Before AP8 the crew's « go around » reached only the spacecraft's entry
+ * autopilot: « no runway approach » on an ILS.)
+ */
+function ilsGoAround(this: CameraController): string {
+  if (this.a320App) {
+    if (this.ourLanded || this.rolling) return t("ILS: in the air");
+    this.pilot.throttle = 1;
+    return t("Go around — the missed approach");
+  }
+  const R = this.ilsRun;
+  if (!R) return t("ILS: no approach flown");
+  if (R.phase === "rollout" || R.phase === "done") return t("ILS: on the runway already");
+  if (R.phase === "missed") return t("Go around — the missed approach");
+  R.phase = "missed";
+  R.missed++;
+  this.onRadio?.(SAY["Go around"]!());
+  return t("Go around — the missed approach");
+}
+
 function ilsOff(this: CameraController, why?: string) {
   if (this.a320App) this.a320ApproachOff();
   if (!this.ilsRun) return;
@@ -513,5 +536,16 @@ export function publishedArrival(a: Approach, via: string | null, from: { lat: n
 }
 
 export function installIls(C: { prototype: CameraController }) {
-  Object.assign(C.prototype, { ilsStart, ilsRunways, ilsOff, ilsJet, ilsFrame, ilsInfo, ilsClear, routeProcedures, flightDirector });
+  Object.assign(C.prototype, {
+    ilsStart,
+    ilsRunways,
+    ilsOff,
+    ilsJet,
+    ilsFrame,
+    ilsInfo,
+    ilsClear,
+    ilsGoAround,
+    routeProcedures,
+    flightDirector,
+  });
 }

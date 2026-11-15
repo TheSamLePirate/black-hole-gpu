@@ -61,6 +61,8 @@ declare module "../controls" {
     approachSelect: typeof approachSelect;
     approachState: typeof approachState;
     approachResolve: typeof approachResolve;
+    approachPreview: typeof approachPreview;
+    approachFields: typeof approachFields;
     approachReason: typeof approachReason;
     approachForField: typeof approachForField;
     approachesAt: typeof approachesAt;
@@ -90,7 +92,9 @@ function askerOf(c: CameraController): Asker | null {
   const g = c.geoNow();
   if (!g) return null;
   const track = g.gs > 20 ? ((((g.track * 180) / Math.PI) % 360) + 360) % 360 : Number.NaN;
-  return { lat: g.lat, lon: g.lon, track, ...needs() };
+  // (the most tail wind accepted: the player's — PLAN-APPROCHES AP8, the Labo; 10 kt by default)
+  const tail = Number(c.s.approachAutoTailwindKt);
+  return { lat: g.lat, lon: g.lon, track, ...needs(), ...(Number.isFinite(tail) ? { tailMax: Math.max(tail, 0) * KT } : {}) };
 }
 
 /** A game's own site (sites.ts SITES: one runway, its two ends named) as an airfield: the same choice for all, no tile needed. */
@@ -240,14 +244,70 @@ function approachResolve(
   this: CameraController,
   o: { name?: string; runway?: string; ready?: () => void } = {},
 ): { W: IlsRunway; resolved: ApproachResolved } | { say: string } | "loading" {
-  if (!isAircraft(fleet.active)) return { say: t("ILS: the F-35, the A320") };
+  const r = pick(this, o);
+  if (r === "loading" || "say" in r) return r;
+  this.approachLast = r;
+  return { resolved: r, W: runwayOfApproach(r.field, r.approach) };
+}
+
+/**
+ * What an engagement now would fly — the airfield, its end and approach, why — without engaging nor recording it (PLAN-APPROCHES
+ * AP8: the wheel's « Auto — LFML ILS 31R »). « loading »: the airfield's data coming.
+ */
+function approachPreview(
+  this: CameraController,
+  o: { name?: string; runway?: string } = {},
+): ApproachResolved | { say: string } | "loading" {
+  return pick(this, o);
+}
+
+/** The airfields an approach could go to now (the wheel's « Airfield »): the plan's destination, the one selected, the nearest
+ *  ahead (5 at most) — each once, with why and its distance [m]. */
+function approachFields(this: CameraController): { code: string; name: string; why: "plan" | "selected" | "ahead"; dist: number }[] {
   const asker = askerOf(this);
+  if (!asker) return [];
+  const out: { code: string; name: string; why: "plan" | "selected" | "ahead"; dist: number }[] = [];
+  const add = (f: Airfield | null, why: "plan" | "selected" | "ahead") => {
+    const code = f ? f.icao || f.ident : "";
+    if (!f || !code || out.some((x) => x.code === code)) return;
+    out.push({ code, name: f.name, why, dist: wgs84Inverse(asker.lat, asker.lon, f.lat, f.lon).d });
+  };
+  const dest = this.nav.route?.wps.at(-1)?.field?.icao;
+  if (dest) add(fieldCached(dest), "plan");
+  if (this.approachSel.field !== "auto") add(fieldCached(this.approachSel.field), "selected");
+  const N = needs();
+  const near = fieldsNear(asker.lat, asker.lon, 150_000, (x) =>
+    x.runways.some((w) => w.len >= N.minLen && (!N.paved || w.surface === "paved")),
+  );
+  const ahead = near
+    .map((f) => {
+      const g = wgs84Inverse(asker.lat, asker.lon, f.lat, f.lon);
+      const brg = ((((g.az * 180) / Math.PI) % 360) + 360) % 360;
+      const off = Number.isFinite(asker.track) ? Math.abs(((brg - asker.track + 540) % 360) - 180) : 0;
+      return { f, d: g.d, off };
+    })
+    .filter((x) => x.off <= 60)
+    .sort((a, b) => a.d - b.d);
+  for (const x of ahead) {
+    if (out.filter((y) => y.why === "ahead").length >= 5) break;
+    add(x.f, "ahead");
+  }
+  return out;
+}
+
+/** The airfield, its end and approach for an engagement now (`approachResolve`, `approachPreview`). */
+function pick(
+  c: CameraController,
+  o: { name?: string; runway?: string; ready?: () => void },
+): ApproachResolved | { say: string } | "loading" {
+  if (!isAircraft(fleet.active)) return { say: t("ILS: the F-35, the A320") };
+  const asker = askerOf(c);
   if (!asker) return { say: t("ILS: in the air") };
-  const S = this.approachSel;
+  const S = c.approachSel;
   const ready = o.ready ?? (() => {});
   let f: Airfield | null = null,
     fieldWhy = "named";
-  const named = o.name ?? (S.field !== "auto" ? S.field : this.nav.route?.wps.at(-1)?.field?.icao);
+  const named = o.name ?? (S.field !== "auto" ? S.field : c.nav.route?.wps.at(-1)?.field?.icao);
   if (named) {
     const x = fieldNamed(named, ready);
     if (x === "loading") return "loading";
@@ -266,10 +326,10 @@ function approachResolve(
         fromSite.add(sf);
         near.push(sf);
       }
-    const c = chooseField(near, asker);
-    if (!c) return { say: t("ILS: no runway within 150 km") };
-    f = c.f;
-    fieldWhy = c.ahead ? "ahead" : "nearest";
+    const ch = chooseField(near, asker);
+    if (!ch) return { say: t("ILS: no runway within 150 km") };
+    f = ch.f;
+    fieldWhy = ch.ahead ? "ahead" : "nearest";
   }
   // (its real approaches: their tile fetched first — once; until then the built ones would be all it has. A game's site not
   // waited for: its own runway is the one it has)
@@ -286,16 +346,14 @@ function approachResolve(
   else if (runway) {
     list = list.filter((x) => endOf(x.rwy) === endOf(runway));
     if (!list.length) return { say: tf("ILS: no runway {0} at {1}", runway, f.icao || f.ident) };
-    choice = chooseApproach(f, list, asker, windAt(this, f), thinOver(f));
+    choice = chooseApproach(f, list, asker, windAt(c, f), thinOver(f));
     a = choice?.a;
   } else {
-    choice = chooseApproach(f, list, asker, windAt(this, f), thinOver(f));
+    choice = chooseApproach(f, list, asker, windAt(c, f), thinOver(f));
     a = choice?.a;
   }
   if (!a) return { say: tf("ILS: no runway at {0}", f.icao || f.ident) };
-  const resolved: ApproachResolved = { field: f, approach: a, fieldWhy, choice, gen: this.approachGen };
-  this.approachLast = resolved;
-  return { resolved, W: runwayOfApproach(f, a) };
+  return { field: f, approach: a, fieldWhy, choice, gen: c.approachGen };
 }
 
 /** The approach's runway frame for the ILS (its threshold, final course, level, the runway's length). */
@@ -455,7 +513,8 @@ function approachCard(this: CameraController, f: Airfield): FieldCard {
   const S = this.approachSel;
   const mine = S.field === f.icao || S.field === f.ident;
   const ends: FieldCard["ends"] = [];
-  for (const a of list) {
+  // (the built approaches listed as the player asks — PLAN-APPROCHES AP8, `approachShowBuilt`; the automatic choice above unchanged)
+  for (const a of list.filter((x) => this.s.approachShowBuilt !== false || x.source !== "built")) {
     let e = ends.find((x) => endOf(x.rwy) === endOf(a.rwy));
     if (!e) {
       const calm = wind.spd < 0.5;
@@ -501,6 +560,8 @@ export function installApproach(C: { prototype: CameraController }) {
     approachSelect,
     approachState,
     approachResolve,
+    approachPreview,
+    approachFields,
     approachReason,
     approachForField,
     approachesAt,

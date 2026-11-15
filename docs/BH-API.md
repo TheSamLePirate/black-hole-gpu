@@ -484,8 +484,12 @@ On the A320 the same call flies its FMGC (`camera.a320Approach`, `controller/a32
 - the flaps and the gear go out a step at a time;
 - the touchdown is graded in `camera.ilsLast`.
 
-`ilsOff()` disarms it. The wheel's « Navigation › Approche ILS » and TARS's
-`approach` tool (`runway`, and `action: "runways"`) use the same calls. *Used in:* `tests/e2e/ils-runway.e2e.test.ts`.
+`ilsOff()` disarms it; `ilsGoAround()` asks the missed approach (the F-35's climbs ahead and rounds again, the A320's levers to
+TOGA — PLAN-APPROCHES AP8; TARS's and the crew's « go around » use it). `approachPreview()` says what an engagement now would fly
+without recording it, `approachFields()` the airfields to choose from (the plan's destination, the selected, the nearest ahead).
+The wheel's « Approach » sector (ui/approach-wheel.ts) and TARS's
+`approach` tool (`runway`, and `action: "runways"`) use the same calls. *Used in:* `tests/e2e/ils-runway.e2e.test.ts`,
+`tests/e2e/approach-wheel.e2e.test.ts`.
 
 ### `__bh.issCamera(id: "sen-nadir" | "sen-horizon" | "sen-docking" | "nasa-harmony" | "back")` → string \| null
 

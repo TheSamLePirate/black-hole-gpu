@@ -87,8 +87,13 @@ export class JetMap {
   fieldInfo: (f: Airfield) => FieldCard | null = () => null;
   /** where the approach's parts were drawn [CSS px], for the clicks */
   private apprHits: { approach?: string; rwy?: string; x: number; y: number }[] = [];
-  /** the vertical profile shown under the map (AP4) */
-  profile = false;
+  /** the vertical profile shown under the map (AP4; AP8: the player's setting `approachProfile`, PROF sets it) */
+  get profile() {
+    return !!this.s.approachProfile;
+  }
+  /** a setting changed here (PROF): written with the player's own */
+  onPref: () => void = () => {};
+  private profBtn: HTMLElement | null = null;
   private card: HTMLDivElement;
   private last: JetMapData | null = null;
   private wheelAcc = 0;
@@ -138,15 +143,16 @@ export class JetMap {
     up.textContent = this.northUp ? "N" : t("HDG");
     // (the approach's vertical profile under the map — PLAN-APPROCHES AP4)
     const prof = btn(t("PROF"), t("The approach's vertical profile"), "jm-prof", () => {
-      this.profile = !this.profile;
+      this.s.approachProfile = !this.s.approachProfile;
       prof.classList.toggle("on", this.profile);
-      try {
-        localStorage.setItem("kerr.jetmap.profile", this.profile ? "1" : "0");
-      } catch {}
+      this.onPref();
     });
+    // (before AP8 the browser kept it apart — kerr.jetmap.profile —: taken into the setting once)
     try {
-      this.profile = localStorage.getItem("kerr.jetmap.profile") === "1";
+      if (localStorage.getItem("kerr.jetmap.profile") === "1") this.s.approachProfile = true;
+      localStorage.removeItem("kerr.jetmap.profile");
     } catch {}
+    this.profBtn = prof;
     prof.classList.toggle("on", this.profile);
     this.stage.append(this.cv, bar, this.credit, this.card);
     this.tiles.onLoad = () => this.draw(this.last);
@@ -619,6 +625,7 @@ export class JetMap {
     c.stroke();
     c.fill();
     c.restore();
+    this.profBtn?.classList.toggle("on", this.profile);
     if (this.profile && d.appr?.profile) this.drawProfile(c, d, w, h);
     // the range, the orientation, the ground speed
     c.fillStyle = "rgba(220, 240, 250, 0.95)";

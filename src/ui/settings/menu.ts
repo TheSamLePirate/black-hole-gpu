@@ -59,6 +59,11 @@ export const PLAYER_MENU: PlayerGroup[] = [
   },
   {
     tab: "game",
+    title: { fr: "Approches", en: "Approaches" },
+    keys: ["approachAutoTailwindKt", "approachShowBuilt", "approachPathOnMap", "approachProfile"],
+  },
+  {
+    tab: "game",
     title: { fr: "Pilotage", en: "Flying" },
     keys: ["flightMode", "turnRate", "gyroscopes", "autoGear", "gearForgiving", "crashSpeed", "wind", "damage", "antigrav"],
   },

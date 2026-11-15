@@ -559,7 +559,7 @@ function flightInfo(this: CameraController): FlightInfo {
       const hd = (this.attitudeNow() as { heading?: number }).heading;
       return g ? { lat: g.lat, lon: g.lon, hdg: hd !== undefined && Number.isFinite(hd) ? hd : g.track, alt: g.alt, at: ground } : null;
     })(),
-    appr: this.airRadar() ? this.approachMapData() : null,
+    appr: this.airRadar() && this.s.approachPathOnMap ? this.approachMapData() : null,
     gcas: this.gcas
       ? { flyUp: this.gcas.flyUp, near: this.gcas.clear < 2 * this.gcas.margin, escape: this.gcas.escape?.name ?? null }
       : null,

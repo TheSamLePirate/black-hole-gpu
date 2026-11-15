@@ -556,6 +556,10 @@ export interface Settings {
   hudImpact: boolean; // where the path meets the ground (or the air's top, the horizon), its countdown
   hudRunway: boolean; // the runway in reach: its outline, centreline, aim point, the offsets, FLARE
   hudAllRunways: boolean; // the airport's other runways too, toned down, their numbers (PLAN-APPROCHES AP7: Sam, on by default)
+  approachPathOnMap: boolean; // the approach chosen or flown drawn on the tactical map, the HUD's radar, the TSD (PLAN-APPROCHES AP8)
+  approachProfile: boolean; // the approach's vertical profile under the tactical map (AP4's PROF; AP8: a setting)
+  approachAutoTailwindKt: number; // the automatic choice leaves out an end with more tail wind than this [kt] (AP8; 10 by default)
+  approachShowBuilt: boolean; // the built approaches listed too — the wheel, the airfield's card — beside the real ones (AP8)
   hudHover: boolean; // the vertical landing: drift scope, vertical speed, the stop burn, the touchdown spot
   keyHints: boolean; // the keys that matter now, in a strip that fades (ui/keyhints.ts)
   uiScale: number; // the interface's panels, menus and dock, scaled (0.8 … 1.5)
@@ -950,6 +954,10 @@ export function defaultSettings(): Settings {
     hudImpact: true,
     hudRunway: true,
     hudAllRunways: true,
+    approachPathOnMap: true,
+    approachProfile: false,
+    approachAutoTailwindKt: 10,
+    approachShowBuilt: true,
     hudHover: true,
     keyHints: true,
     uiScale: 1,
@@ -2382,6 +2390,10 @@ export const SETTING_KIND: Record<keyof Settings, SettingKind> = {
   hudImpact: "pref",
   hudRunway: "pref",
   hudAllRunways: "pref",
+  approachPathOnMap: "pref",
+  approachProfile: "pref",
+  approachAutoTailwindKt: "pref",
+  approachShowBuilt: "pref",
   hudHover: "pref",
   keyHints: "pref",
   uiScale: "pref",

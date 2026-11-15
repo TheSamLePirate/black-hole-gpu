@@ -1235,13 +1235,15 @@ export function gameTools(h: GameHost): Tool[] {
     {
       name: "flight_action",
       description:
-        "go_around: on a runway approach under the entry autopilot, the missed approach flown; undock; release: stops the mission, the hold, the autopilot; acknowledge: the master caution silenced.",
+        "go_around: on a runway approach — the entry autopilot's, or an ILS approach (F-35: climb ahead and round again; A320: the levers to TOGA) — the missed approach flown; undock; release: stops the mission, the hold, the autopilot; acknowledge: the master caution silenced.",
       params: { action: { type: "string", enum: ["go_around", "undock", "release", "acknowledge"] } },
       required: ["action"],
       run: act((a) => {
         switch (a.action) {
           case "go_around":
-            return camera.goAround() ? "going around" : "no runway approach to go around from";
+            // (a runway approach under the entry autopilot; else an ILS — the F-35's, the A320's: PLAN-APPROCHES AP8)
+            if (camera.goAround()) return "going around";
+            return camera.ilsRun || camera.a320App ? camera.ilsGoAround() : "no runway approach to go around from";
           case "undock":
             if (!camera.docked) return "not docked";
             camera.undock();

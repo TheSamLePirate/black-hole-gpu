@@ -1056,8 +1056,8 @@ export default {
   "In the air: a chevron beside the flight path vector — above its wings the craft gains speed, below it loses it (the climb angle that speed rate would buy); the load in g against the craft's limit.":
     "Dans l'air : un chevron à côté du vecteur trajectoire — au-dessus de ses ailes l'engin accélère, en dessous il ralentit (l'angle de montée que ce taux de vitesse permettrait) ; la charge en g face à la limite de l'engin.",
   "Flight director": "Directeur de vol",
-  "In the air with the flight computer: a magenta cue where it wants the flight path (its climb angle and heading) — put the flight path vector on it.":
-    "Dans l'air avec l'ordinateur de vol : un repère magenta là où il veut la trajectoire (son angle de montée et son cap) — placez-y le vecteur trajectoire.",
+  "In the air with the flight computer: a magenta cue where it wants the flight path (its climb angle and heading) — put the flight path vector on it. On an ILS approach, flown by the autopilot or by hand, the same cue on the approach's guidance (PLAN-APPROCHES AP7b).":
+    "Dans l'air avec l'ordinateur de vol : un repère magenta là où il veut la trajectoire (son angle de montée et son cap) — placez-y le vecteur trajectoire. Sur une approche ILS, volée par le pilote automatique ou à la main, le même repère sur le guidage de l'approche (PLAN-APPROCHES AP7b).",
   "Predicted path in the view": "Trajectoire prédite dans la vue",
   "The ship's predicted free fall drawn in perspective over the view (cyan dashes), hidden where its body stands in front of it — both universes (on Gargantua's side the lensed tube, Y, draws it instead when on).":
     "La chute libre prédite du vaisseau tracée en perspective sur la vue (tirets cyan), masquée là où son corps la cache — dans les deux univers (côté Gargantua, le tube lentillé, Y, la trace à la place quand il est activé).",
@@ -1069,6 +1069,20 @@ export default {
     "Où la trajectoire prédite rencontre le sol (un réticule rouge sur le point, selon la rotation actuelle du sol) ou le sommet de l'atmosphère (ambre, l'entrée), ou l'horizon de Gargantua — avec le compte à rebours ; hors écran, une flèche au bord.",
   "Runway & approach": "Piste et approche",
   "All the airport's runways": "Toutes les pistes de l'aéroport",
+  Approaches: "Approches",
+  kt: "kt",
+  "The approach drawn on the maps": "L'approche tracée sur les cartes",
+  "The approach chosen (cyan) or flown (magenta) on the tactical map, the HUD's radar and the F-35's TSD: its localizer's cone, its fixes and their altitudes, the join planned, the missed approach, the hold.":
+    "L'approche choisie (cyan) ou volée (magenta) sur la carte tactique, le radar du HUD et la TSD du F-35 : le cône de son alignement, ses repères et leurs altitudes, la jonction prévue, la remise de gaz, l'attente.",
+  "The approach's vertical profile": "Le profil vertical de l'approche",
+  "Under the tactical map, the approach's vertical profile: the relief under the final, the slope, the fixes at their altitudes, the craft (the map's PROF button sets it too).":
+    "Sous la carte tactique, le profil vertical de l'approche : le relief sous la finale, la pente, les repères à leurs altitudes, l'appareil (le bouton PROF de la carte le règle aussi).",
+  "Most tail wind the automatic choice accepts": "Vent arrière maximal du choix automatique",
+  "The automatic choice of an approach leaves out a runway's end with more tail wind than this (10 kt by default, as a controller would); from 5 kt the end into the wind comes first.":
+    "Le choix automatique d'une approche écarte une extrémité de piste avec plus de vent arrière que ceci (10 kt par défaut, comme un contrôleur) ; dès 5 kt, l'extrémité face au vent passe d'abord.",
+  "Built approaches listed": "Approches construites dans les listes",
+  "Besides the real approaches (nav.dat, the FAA's), the ones the game builds for a runway without any (a 3° slope on its axis) in the wheel's and the airfield card's lists. The automatic choice still takes a built one where there is no real one.":
+    "En plus des approches réelles (nav.dat, celles de la FAA), celles que le jeu construit pour une piste qui n'en a pas (une pente de 3° dans son axe), dans les listes de la roue et de la fiche du terrain. Le choix automatique prend toujours une approche construite là où il n'y en a pas de réelle.",
   "Besides the runway landed on (always shown), the airport's other runways on the HUD: their outlines toned down, their numbers at their ends — to see which is which at a big airport (PLAN-APPROCHES AP7; on by default, Sam's choice).":
     "En plus de la piste d'atterrissage (toujours affichée), les autres pistes de l'aéroport au HUD : leur contour atténué, leurs numéros à leurs extrémités — pour s'y retrouver dans un grand aéroport (PLAN-APPROCHES AP7 ; activé par défaut, choix de Sam).",
   "The runway in reach (the entry's, or the nearest within 80 km): its outline where it is, its centreline 15 km back, the aim point of the glide path — the flight path vector on it, the craft on its glide path —, the distance and the offset from the axis, the glide path's error on the final, FLARE.":
