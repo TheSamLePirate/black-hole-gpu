@@ -264,3 +264,15 @@ Les plafonds de J5-1 au beau temps, de J5-2 par corps et la parité du repli tra
   « auto » garde le matériau à chaque pixel sur la Terre ; le réglage « demi » (et plus grossier) l'applique désormais aussi au matériau —
   l'arbitrage (−2,5 à −6 ms contre ce léger peigné en mouvement) est à Sam, qui a refusé les compromis d'image le 15 nov. Vérifié :
   `check-wgsl` 84/84, budgets des noyaux, tests des noyaux, tsc, inventaire.
+- **Décision de Sam : « améliorer d'abord » ; deux essais, aucun ne garde le gain sans l'image** (2026-11-15 10:53 UTC) : Sam (vers 10:35) veut
+  la texture nette entre les pixels rebâtis avant d'allumer. Le détail d'albédo (`RASTER_DETAIL`) ne couvre pas les houppiers
+  (`rasterAlbedo` vaut 0 sur un arbre) : ce n'est pas le levier. **(1) Le pixel laissé pesé comme un pixel rebâti dans le temporel**
+  (`TA.k.w`, et non 1 : son estampille, d'une image, est dans la fenêtre — `validFrom` remonte en vol) : coût nul (47,5 / 47,0 contre
+  47,3 / 47,4 ms), mais les houppiers **traînent** dans le sens du mouvement (l'historique pèse plus) au lieu du peigné — pas mieux. La
+  mesure de netteté (gradients horizontal / vertical sur trois zones) **échoue à son A/A** (la même configuration varie autant que l'effet :
+  7,27 / 7,75 ; 7,61 / 7,13) : aucun de ses chiffres ne compte, jugement à l'œil sur recadrages au même instant. **(2) Les arbres à chaque
+  pixel** (une seconde tranche du lancement, `z` 1 : le complément du motif, ses arbres seuls ; `shadeMark` les laisse frais) : les Maures
+  **55,9 / 55,6 contre 54,6 / 53,7 ms (+1,3 à +1,9 — plus lent que la base)**, J0 49,4 / 48,5 contre 51,9 / 49,6 (−2,5 / −1,1). Les deux
+  retirés (patchs hors du dépôt : `j5-6-stale-weight-trial.patch`, `j5-6-trees-every-pixel-trial.patch`). **Constat** : le gain du demi-rythme
+  vient surtout des arbres, et c'est eux que la reconstruction adoucit en mouvement ; « demi » reste au choix du joueur, « auto » à chaque
+  pixel. **À Sam** : accepter ce léger adoucissement des houppiers en mouvement pour −2 à −6 ms, ou laisser J5-6 au réglage du joueur.
