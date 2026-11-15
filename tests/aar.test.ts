@@ -144,7 +144,7 @@ test("auto on uneven frames — 8, 8 and 25 ms by turns, as the game's —: clea
   // (our speed read from our places over the wrong step beat the throttle from cut to full: never cleared in the game, while the
   // even steps above flew it)
   const { c } = cruise(6000, 215, 0.7);
-  c.jetModes.alt = Math.round(c.geoNow().alt);
+  c.jetModes.alt = Math.round(c.geoNow()!.alt);
   c.jetModes.hdg = c.attitudeNow().heading;
   c.jetToggle("athr");
   c.s.f35AarMode = "auto";
@@ -168,4 +168,3 @@ test("auto on uneven frames — 8, 8 and 25 ms by turns, as the game's —: clea
   expect(seen.has("hose:contact")).toBe(true);
   expect(said.some((s) => /transfer complete/.test(s))).toBe(true);
 }, 300_000);
-
