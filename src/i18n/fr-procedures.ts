@@ -8,7 +8,8 @@ export default {
   Flare: "Arrondi",
   "Go around — the missed approach": "Remise des gaz — approche interrompue",
   "ILS: on the runway already": "ILS : déjà sur la piste",
-  "the relief known over the published slope {0} out — flown as published": "le relief connu au-dessus de la pente publiée à {0} — volée comme publiée",
+  "the relief known over the published slope {0} out — flown as published":
+    "le relief connu au-dessus de la pente publiée à {0} — volée comme publiée",
   "{0} approach: cleared {1} approach runway {2}, descend {3}, QNH {4}":
     "{0} approche : autorisé approche {1} piste {2}, descendez {3}, QNH {4}",
   "{0} approach: cleared {1} approach runway {2}, QNH {3}": "{0} approche : autorisé approche {1} piste {2}, QNH {3}",
