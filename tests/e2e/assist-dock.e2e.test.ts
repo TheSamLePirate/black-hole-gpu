@@ -41,7 +41,7 @@ describe.skipIf(!E2E)("the docking assisted", () => {
     await app.waitFor(`(__bh.camera.hubInfo()?.say ?? []).some((l) => l.startsWith("CONTACT IN"))`, 30_000);
     // (and on to the capture: the ring on the port, the craft held — the station 60 m off at the start, not drifting)
     const t0 = performance.now();
-    await app.waitFor(`!!__bh.camera.docked`, 360_000);
+    await app.waitFor(`!!__bh.camera.docked`, 240_000);
     console.log(`  docked ${((performance.now() - t0) / 1000).toFixed(0)} s after the countdown`);
   }, 600_000);
 });

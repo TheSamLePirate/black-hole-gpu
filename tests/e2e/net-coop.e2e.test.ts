@@ -60,7 +60,7 @@ describe.skipIf(!E2E)("a co-op mission with roles (N5)", () => {
   test("Ana spins the ring up at the keyboard, Ben's descent eased: both roles done — the mission won on both screens", async () => {
     await a.js(`(__bh.net.closePanel?.(), document.querySelector('[data-testid="net-panel"] .k-close, .k-modal .k-x')?.click(), 1)`);
     for (let k = 0; k < 3; k++) await a.press("BracketRight", "]", { shift: true });
-    await a.waitFor(`__bh.net.session.coop.roles.get("endurance").ended`, 180_000);
+    await a.waitFor(`__bh.net.session.coop.roles.get("endurance").ended`, 60_000);
     await b.js(
       `(() => { const R = __bh.camera.spaceMission; R.M = { ...R.M, objectives: R.M.objectives.map(() => ({ text: "x", done: { time: 1 } })) }; return 1; })()`,
     );

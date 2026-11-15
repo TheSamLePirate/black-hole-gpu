@@ -17,7 +17,7 @@ describe.skipIf(!E2E)("placing a docked craft", () => {
 
   test("docked, then placed near Jupiter: there, undocked", async () => {
     await app.js(`(__bh.game.target("iss"), __bh.camera.pilot.setAuto("dock"), true)`);
-    await app.waitFor(`__bh.camera.docked`, 300_000);
+    await app.waitFor(`__bh.camera.docked`, 250_000);
     await app.js(`(__bh.game.near("jupiter", { altKm: 50000 }), true)`);
     await Bun.sleep(1500);
     expect(await app.js<boolean>(`__bh.camera.docked`)).toBe(false);

@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-15 01:30 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-15 01:33 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous.
@@ -7103,4 +7103,10 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   de 1,80 m). La collision sur les triangles est juste, l'hypothèse du test ne tient plus ; une question de conception à trancher, rien
   changé (sonde, capture non commitée, bissection à 6aee50fe). Les échecs d'éclairage, de décor et de calibration du piéton reviennent à la session du
   rendu. `offline-settings` est à relancer seul (IGN).
+
+### 2026-11-15 01:33 UTC — QA-09 : 5 plafonds de plus abaissés (troisième série), revérifiés
+
+- `photo-video:40/57` (3 s mesurées, 180 → 60 s), `net-coop:63` (28,5 s, 180 → 60 s), `assist-dock:44` (115,5 s, 360 → 240 s),
+  `place-docked:20` (122,3 s, 300 → 250 s). Garde : 99 → 96 attentes de plus de 120 s. Relancés après l'abaissement : `photo-video` 3/3,
+  `net-coop` 3/3. Les attentes du rendu (`moon-telescope`, `character-aaa`) n'ont pas été touchées.
 

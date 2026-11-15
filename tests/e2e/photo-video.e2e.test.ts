@@ -37,7 +37,7 @@ describe.skipIf(!E2E)("the photo mode's films", () => {
     })()`);
     await app.click("[data-testid=photo-draft]");
     await app.waitFor(`/\\d+ \\/ 24/.test(document.querySelector("[data-testid=photo-video-progress]")?.textContent ?? "")`, 30_000);
-    await app.waitFor(`!!document.querySelector("[data-testid=video-preview]")`, 180_000);
+    await app.waitFor(`!!document.querySelector("[data-testid=video-preview]")`, 60_000);
     expect(await playerDuration()).toBeCloseTo(1, 1);
     expect(await app.js<boolean>(`!!document.querySelector("[data-testid=video-preview-final]")`)).toBe(true);
     await app.click("[data-testid=video-preview-close]");
@@ -54,7 +54,7 @@ describe.skipIf(!E2E)("the photo mode's films", () => {
     expect(shots.find((s) => s.id === "director")!.available).toBe(false);
     expect((await run(`{ action: "start", shot: "director", draft: true }`)).ok).toBe(false);
     expect((await run(`{ action: "start", shot: "live", seconds: 1, fps: 24, draft: true }`)).ok).toBe(true);
-    await app.waitFor(`!!document.querySelector("[data-testid=video-preview]")`, 180_000);
+    await app.waitFor(`!!document.querySelector("[data-testid=video-preview]")`, 60_000);
     expect(await playerDuration()).toBeCloseTo(1, 1);
     await app.click("[data-testid=video-preview-close]");
   }, 240_000);

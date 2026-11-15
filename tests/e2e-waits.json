@@ -207,10 +207,6 @@
   "sleeps": 2,
   "waits": 0
  },
- "net-coop.e2e.test.ts": {
-  "sleeps": 0,
-  "waits": 1
- },
  "net-dock.e2e.test.ts": {
   "sleeps": 1,
   "waits": 1
@@ -262,10 +258,6 @@
  "perf-fps.e2e.test.ts": {
   "sleeps": 0,
   "waits": 1
- },
- "photo-video.e2e.test.ts": {
-  "sleeps": 0,
-  "waits": 2
  },
  "place-docked.e2e.test.ts": {
   "sleeps": 0,
