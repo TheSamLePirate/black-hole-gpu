@@ -4632,6 +4632,20 @@ async function main() {
     gwKg: () => fleet.massProps().mass,
     fobKg: () => camera.a320?.fuel ?? fleet.fuel.a320 ?? 0,
     now: () => dateOf(sim.time),
+    // (PLAN-APPROCHES AP3: ARRIVAL and RAD NAV on the simulation's approach state)
+    approaches: (code) => camera.approachesAt(code),
+    approachSel: () => camera.approachSel,
+    selectApproach: (sel) => {
+      const gen = camera.approachGen;
+      const say = camera.approachSelect(sel, "MCDU");
+      return { ok: camera.approachGen > gen, say };
+    },
+    arrivalApproach: () => {
+      const W = camera.nav.route.wps;
+      const d = W.at(-1);
+      return d?.field ? (camera.approachForField(d.field.icao ?? d.name, W.at(-2) ?? null)?.a ?? null) : null;
+    },
+    insertArrival: () => camera.routeProcedures(),
   };
   let mcdus: [Mcdu, Mcdu] | null = null;
   const a320Mcdus = () => (mcdus ??= [new Mcdu(0, mcduHost), new Mcdu(1, mcduHost)]);
@@ -8196,6 +8210,7 @@ async function main() {
     settings,
     renderer,
     camera,
+    a320Mcdu: (side) => (fleet.active === "a320" ? a320Mcdus()[side] : null),
     sim,
     tools,
     bench,

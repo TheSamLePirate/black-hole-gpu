@@ -32,6 +32,9 @@ export function ilsOf(m: Mcdu): { id: string; freq: string; course: number; auto
   const dest = m.host.route().wps.at(-1);
   const rwy = dest?.field?.rwy;
   if (F.ils) return { id: F.ils.id, freq: freqOf(F.ils.id), course: F.ils.course, auto: false };
+  // (the arrival's approach's own localizer — real: its identifier, frequency, course — PLAN-APPROCHES AP3)
+  const a = m.host.arrivalApproach?.();
+  if (a?.loc) return { id: a.loc.ident, freq: (a.loc.freq / 1000).toFixed(2), course: Math.round(a.loc.crs) % 360 || 360, auto: true };
   if (!dest || rwy === undefined) return null;
   const id = `I${dest.name.slice(1, 4)}`;
   return { id, freq: freqOf(id + String(Math.round(rwy))), course: Math.round(rwy) % 360 || 360, auto: true };

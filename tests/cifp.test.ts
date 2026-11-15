@@ -39,10 +39,10 @@ test("KSFO's ILS 28R read whole: localizer, transitions, final, missed approach;
   expect(p.transitions.map((t) => t.name).sort()).toEqual(["ARCHI", "DUMBA", "EDDYY", "SIDBY"]);
   expect(p.final.map((l) => l.fix)).toEqual(["CEPIN", "AXMUL", "RW28R"]);
   // (CEPIN: J — at or above 3 000 ft, the glide met at 1 800)
-  expect(p.final[0]!.alt).toEqual([Math.round(3000 * FT), null]);
+  expect(p.final[0]!.alt).toEqual([Math.round(3000 * FT * 10) / 10, null]);
   expect(p.final[0]!.lat).toBeCloseTo(37.536, 3);
   expect(p.missed.map((l) => `${l.t} ${l.fix}`)).toEqual(["CF VIKYU", "HM VIKYU"]);
-  expect(p.missed[0]!.alt![0]).toBe(Math.round(3000 * FT));
+  expect(p.missed[0]!.alt![0]).toBe(Math.round(3000 * FT * 10) / 10);
 });
 
 const fields = new Map<string, Airfield>();

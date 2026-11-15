@@ -84,6 +84,8 @@ export interface BhContext {
   settings: Settings;
   renderer: Renderer;
   camera: CameraController;
+  /** the A320's MCDUs (src/a320/mcdu): the captain's 0, the first officer's 1 — null on another craft (PLAN-APPROCHES AP3) */
+  a320Mcdu?: (side: 0 | 1) => import("./a320/mcdu/mcdu").Mcdu | null;
   sim: Simulation;
   tools: GameTools;
   bench: KerrBench;
@@ -444,6 +446,9 @@ export function installBh(c: BhContext) {
       /** where a cockpit control is in the view (its box's centre): ndc (y up), or null (cockpit/controls.ts ids) */
       /** The A320's flight deck (A6): a control (its FlightGear label, or an object of it) — the middle of its object as
        *  posed now, in the ship's frame, and that point in the view (ndc; null behind the eye) */
+      /** the A320's MCDU (0 the captain's, 1 the first officer's): its page (`pageId`), its scratchpad, its keys
+       *  (`button`, `lsk`, `page`, `arrow`) and its screen (`current.screen(m)`) — null on another craft */
+      a320Mcdu: (side: 0 | 1 = 0) => c.a320Mcdu?.(side) ?? null,
       a320DeckAt: (what: string) => {
         const m = renderer.ship.a320DeckMesh;
         const mats = renderer.ship.deckMats;

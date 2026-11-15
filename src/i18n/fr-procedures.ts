@@ -347,5 +347,9 @@ export default {
   "head wind {0}": "vent de face {0}",
   "the plan's destination": "la destination du plan",
   "the nearest ahead": "le plus proche devant",
+  "Approach: {0} {1} has no transition {2}": "Approche : {0} {1} n'a pas de transition {2}",
+  "Approach: a transition with its approach ({0})": "Approche : une transition avec son approche ({0})",
+  "via {0}": "par {0}",
+  "by vectors": "par guidage radar",
   "ILS: the airfield's data coming — engaged as it arrives": "ILS : les données du terrain arrivent — engagée à leur arrivée",
 } satisfies Record<string, string>;

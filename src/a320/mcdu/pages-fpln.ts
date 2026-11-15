@@ -6,6 +6,7 @@
 // —; DIR TO — a waypoint typed or chosen, then INSERT.
 
 import type { Waypoint } from "../../game/flightplan";
+import type { Approach } from "../../world/approaches";
 import type { LskResult, Mcdu, Page } from "./mcdu";
 import { brackets, MC, type Line, padR, type Run, run, type Screen } from "./screen";
 import { distAlong, fieldWp, hhmm, legInto, parseLatLon, parsePbd, tons, trip } from "./util";
@@ -185,6 +186,8 @@ const latrev: Page = {
       { l: [run("<RETURN")] },
     ];
     if (m.latRev === 0 && w?.field) lines[0]!.l = [run("<DEPARTURE")];
+    // (the destination's: its arrival — PLAN-APPROCHES AP3)
+    if (m.latRev > 0 && m.latRev === R.wps.length - 1 && w?.field && m.host.approaches) lines[0]!.r = [run("ARRIVAL>")];
     return {
       title: [run("LAT REV ", MC.white), run("FROM ", MC.white, true), run(w?.name ?? "----", MC.green)],
       lines,
@@ -195,6 +198,12 @@ const latrev: Page = {
     const i = m.latRev;
     const key = `${side}${n}`;
     if (key === "L6") return m.open("fpln");
+    if (key === "R1" && i > 0 && i === R.wps.length - 1 && R.wps[i]?.field && m.host.approaches) {
+      m.arrTop = 0;
+      m.arrMode = "appr";
+      m.arrApp = m.arrVia = null;
+      return m.open("arrival");
+    }
     if (key === "L1") {
       if (i === 0) return "notallowed";
       m.host.directTo(i);
@@ -285,4 +294,119 @@ const dirto: Page = {
   },
 };
 
-export const FPLN_PAGES: Record<string, Page> = { fpln, latrev, dirto };
+/** The destination's code and its approaches (the host's: real and built). */
+function arrivalOf(m: Mcdu): { code: string; list: Approach[] } | null {
+  const dest = m.host.route().wps.at(-1);
+  if (!dest?.field) return null;
+  const code = dest.field.icao ?? dest.name;
+  const list = m.host.approaches?.(code);
+  return list ? { code, list } : null;
+}
+const srcOf = (a: Approach) => (a.source === "cifp" ? "FAA" : a.source === "navdat" ? "NAVDAT" : "BUILT");
+// (the published transitions only — the CIFP's —: a built approach's IAF on the axis is no VIA)
+const viasOf = (a: Approach) => (a.source === "cifp" ? a.transitions.map((t) => t[0]?.fix ?? "").filter(Boolean) : []);
+
+/**
+ * ARRIVAL (PLAN-APPROCHES AP3, the A320's FMS): the destination's approaches — ILS, LOC, RNAV, VOR… the FAA's published ones, nav.dat's
+ * ILS, the built ones —, then the chosen one's transitions (VIAS); INSERT selects it (the simulation's approach state: the crew,
+ * TARS and the ILS read the same) and puts its fixes in the plan. Temporary choices yellow, the active one green.
+ */
+const arrival: Page = {
+  screen(m): Screen {
+    const A = arrivalOf(m);
+    const sel = m.host.approachSel?.();
+    const active = A && sel && (sel.field === A.code || A.list.some((a) => a.field === sel.field)) ? sel : null;
+    const app = m.arrApp ?? (active && active.approach !== "auto" ? active.approach : null);
+    const via = m.arrVia ?? (active && active.via !== "auto" ? active.via : null);
+    const tmp = m.arrApp !== null || m.arrVia !== null;
+    const col = tmp ? MC.yellow : MC.green;
+    const lines: Line[] = [
+      {
+        ls: [run(" APPR"), run("      VIA", MC.white)],
+        l: [run(app ?? "------", app ? col : MC.white), run(`  ${via ?? (app ? "NO VIA" : "------")}`, via || app ? col : MC.white)],
+      },
+    ];
+    const a = A?.list.find((x) => x.id === app) ?? null;
+    const items: { label: string; right: string }[] =
+      m.arrMode === "via" && a
+        ? [{ label: "NO VIA", right: "VECTORS" }, ...viasOf(a).map((v) => ({ label: v, right: "" }))]
+        : (A?.list ?? []).map((x) => ({
+            label: x.id,
+            right: `${x.kind}${x.loc?.cat ? ` CAT ${x.loc.cat}` : ""} ${srcOf(x)}`,
+          }));
+    m.arrTop = Math.min(Math.max(m.arrTop, 0), Math.max(items.length - 3, 0));
+    lines.push(
+      m.arrMode === "via"
+        ? { ls: [run(" VIAS")], l: [run("<APPR")] }
+        : { ls: [run(" APPR AVAILABLE")], l: a && viasOf(a).length ? [run("<VIAS")] : [] },
+    );
+    for (let k = 0; k < 3; k++) {
+      const it = items[m.arrTop + k];
+      lines.push(it ? { l: [run(`<${it.label}`, MC.cyan)], r: [run(it.right, MC.green, true)] } : {});
+    }
+    lines.push(tmp ? { l: [run("<TMPY", MC.amber)], r: [run("INSERT*", MC.amber)] } : { l: [run("<RETURN")] });
+    return {
+      title: [run("ARRIVAL ", MC.white), run("TO ", MC.white, true), run(A?.code ?? "----", MC.green)],
+      lines,
+      ud: items.length > 3,
+    };
+  },
+  lsk(m, side, n): LskResult {
+    const A = arrivalOf(m);
+    if (!A) return "notindb";
+    const key = `${side}${n}`;
+    const sel = m.host.approachSel?.();
+    const app = m.arrApp ?? (sel && sel.approach !== "auto" ? sel.approach : null);
+    const a = A.list.find((x) => x.id === app) ?? null;
+    if (key === "L6") {
+      if (m.arrApp !== null || m.arrVia !== null) {
+        m.arrApp = m.arrVia = null;
+        return;
+      }
+      return m.open("fpln");
+    }
+    if (key === "R6") {
+      if (m.arrApp === null && m.arrVia === null) return;
+      const via = m.arrVia === null ? "auto" : m.arrVia === "NO VIA" ? "none" : m.arrVia;
+      const r = m.host.selectApproach?.({ field: A.code, approach: app ?? "auto", via });
+      if (!r?.ok) return "notallowed";
+      m.host.insertArrival?.();
+      m.arrApp = m.arrVia = null;
+      return m.open("fpln");
+    }
+    if (key === "L2") {
+      if (m.arrMode === "via") m.arrMode = "appr";
+      else if (a && viasOf(a).length) m.arrMode = "via";
+      m.arrTop = 0;
+      return;
+    }
+    if (side === "L" && n >= 3 && n <= 5) {
+      if (m.arrMode === "via" && a) {
+        const k = m.arrTop + n - 3;
+        if (k === 0) m.arrVia = "NO VIA";
+        else {
+          const v = viasOf(a)[k - 1];
+          if (!v) return;
+          m.arrVia = v;
+        }
+        if (m.arrApp === null) m.arrApp = a.id;
+        return;
+      }
+      const x = A.list[m.arrTop + n - 3];
+      if (!x) return;
+      m.arrApp = x.id;
+      m.arrVia = null;
+      if (viasOf(x).length) (m.arrMode = "via"), (m.arrTop = 0);
+      return;
+    }
+    return "notallowed";
+  },
+  arrow(m, dir) {
+    if (dir === "up") m.arrTop++;
+    else if (dir === "down") m.arrTop = Math.max(m.arrTop - 1, 0);
+    else return false;
+    return true;
+  },
+};
+
+export const FPLN_PAGES: Record<string, Page> = { fpln, latrev, dirto, arrival };

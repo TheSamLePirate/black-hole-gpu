@@ -13,6 +13,7 @@ import { fleet } from "../fleet";
 import { t, tf } from "../i18n";
 import { geoidDeg } from "../system/geoid";
 import { bodyFixedOf, groundRelief } from "../system/our-surface";
+import { wgs84Inverse } from "../system/ellipsoid";
 import { daysOf } from "../system/solar";
 import { weatherAt, windFromAt } from "../weather";
 import { type Approach, approachesFor, approachTileIn, loadApproachTile } from "../world/approaches";
@@ -28,9 +29,16 @@ export interface ApproachSel {
   /** the approach's id (« I31R », « C31R ») */
   approach: string | "auto";
   entry: "auto" | "straight" | "vectors" | "iaf";
+  /** the published transition flown (its first fix's name: « ARCHI »), when the approach has some (the CIFP's — AP3);
+   *  « none »: vectors to its final, no transition; « auto »: the one whose first fix is the nearest */
+  via: string | "auto" | "none";
 }
 
-export const AUTO_SEL: ApproachSel = { field: "auto", rwy: "auto", approach: "auto", entry: "auto" };
+export const AUTO_SEL: ApproachSel = { field: "auto", rwy: "auto", approach: "auto", entry: "auto", via: "auto" };
+
+/** An approach's published transitions by name: the first fix of each (the IAF's) — « vectors » always possible besides; a built
+ *  approach's own (its IAF on the axis) is no VIA to choose. */
+export const viasOf = (a: Approach) => (a.source === "cifp" ? a.transitions.map((t) => t[0]?.fix ?? "").filter(Boolean) : []);
 
 /** What an engaged approach resolved to, with why. */
 export interface ApproachResolved {
@@ -52,6 +60,8 @@ declare module "../controls" {
     approachState: typeof approachState;
     approachResolve: typeof approachResolve;
     approachReason: typeof approachReason;
+    approachForField: typeof approachForField;
+    approachesAt: typeof approachesAt;
   }
 }
 
@@ -153,6 +163,9 @@ function approachSelect(this: CameraController, sel: Partial<ApproachSel>, by = 
     if (sel.rwy === undefined) next.rwy = "auto";
     if (sel.approach === undefined) next.approach = "auto";
   }
+  // (another approach: its transition back to « auto » unless given with it)
+  if (sel.via === undefined && (next.approach !== this.approachSel.approach || next.field !== this.approachSel.field)) next.via = "auto";
+  next.via ??= "auto";
   if (next.field !== "auto") {
     const f = fieldNamed(next.field, () => this.approachSelect(sel, by));
     if (f === "loading") return tf("Approach: {0} — its data coming", next.field);
@@ -166,7 +179,11 @@ function approachSelect(this: CameraController, sel: Partial<ApproachSel>, by = 
       const a = list.find((x) => x.id === next.approach.toUpperCase());
       if (!a) return tf("Approach: {0} has no approach {1}", next.field, next.approach);
       next.rwy = a.rwy;
-    }
+      next.approach = a.id;
+      if (next.via !== "auto" && next.via !== "none" && !viasOf(a).includes(next.via.toUpperCase()))
+        return tf("Approach: {0} {1} has no transition {2}", next.field, a.id, next.via);
+      if (next.via !== "auto" && next.via !== "none") next.via = next.via.toUpperCase();
+    } else if (next.via !== "auto") return tf("Approach: a transition with its approach ({0})", next.via);
   } else if (next.rwy !== "auto" || next.approach !== "auto") return t("Approach: an airfield first");
   this.approachSel = next;
   this.approachGen++;
@@ -182,7 +199,7 @@ function approachReason(this: CameraController, by = ""): string {
     s.field === "auto"
       ? t("automatic")
       : s.approach !== "auto"
-        ? `${s.field} ${s.approach}`
+        ? `${s.field} ${s.approach}${s.via === "none" ? ` ${t("by vectors")}` : s.via !== "auto" ? ` ${tf("via {0}", s.via)}` : ""}`
         : s.rwy !== "auto"
           ? tf("{0} runway {1}", s.field, s.rwy)
           : tf("{0}, its runway automatic", s.field);
@@ -319,6 +336,48 @@ export function boxOverSlope(W: IlsRunway): boolean {
   return top + 1000 * 0.3048 > W.elev + (16_000 + ILS.gpi) * Math.tan((ILS.glide * Math.PI) / 180) + 150;
 }
 
+/**
+ * The approach a flight would fly at an airfield, without being in the air (the flight plan's arrival, the MCDU's pages): the one
+ * selected there, else the automatic choice seen from `from` (the plan's previous point) towards the field — its track that way.
+ * Null: the field not known yet (its tile coming: asked), or no approach.
+ */
+function approachForField(
+  this: CameraController,
+  code: string,
+  from: { lat: number; lon: number } | null,
+): { f: Airfield; a: Approach; via: string | null } | null {
+  const f = knownField(code);
+  if (!f) return null;
+  if (!approachTileIn(f.lat, f.lon)) void loadApproachTile(f.lat, f.lon);
+  const list = approachesFor(f);
+  const S = this.approachSel;
+  const mine = S.field === f.icao || S.field === f.ident;
+  const named = mine && S.approach !== "auto" ? list.find((x) => x.id === S.approach) : undefined;
+  if (named) return { f, a: named, via: S.via !== "auto" ? S.via : null };
+  const at = from ?? this.geoNow() ?? { lat: f.lat, lon: f.lon };
+  const g = wgs84Inverse(at.lat, at.lon, f.lat, f.lon);
+  const track = g.d > 2000 ? ((((g.az * 180) / Math.PI) % 360) + 360) % 360 : Number.NaN;
+  const pool = mine && S.rwy !== "auto" ? list.filter((x) => endOf(x.rwy) === endOf(S.rwy)) : list;
+  const c = chooseApproach(f, pool.length ? pool : list, { lat: at.lat, lon: at.lon, track, ...needs() }, windAt(this, f), thinOver(f));
+  return c ? { f, a: c.a, via: null } : null;
+}
+
+/** An airfield known now (the world's, else the game's own site); else its tile asked and null. */
+function knownField(code: string): Airfield | null {
+  const site = siteNamed(code);
+  const f = fieldCached(code) ?? (site ? siteField(site) : null);
+  if (!f) void fieldByCode(code);
+  return f;
+}
+
+/** An airfield's approaches now (its tile asked when not in: the built ones until it comes); null: the field not known yet. */
+function approachesAt(this: CameraController, code: string): Approach[] | null {
+  const f = knownField(code);
+  if (!f) return null;
+  if (!approachTileIn(f.lat, f.lon)) void loadApproachTile(f.lat, f.lon);
+  return approachesFor(f);
+}
+
 /** The resolution's reason said: « LFML ILS 31R — head wind 6 m/s, CAT I », « LFTH 23 built — the nearest ahead ». */
 export function sayResolved(r: ApproachResolved, units: { fSpd: (v: number) => string }): string {
   const a = r.approach;
@@ -336,5 +395,5 @@ export function sayResolved(r: ApproachResolved, units: { fSpd: (v: number) => s
 export function installApproach(C: { prototype: CameraController }) {
   // (the state's first values on the prototype: each controller's own once it changes — approachSelect sets new objects)
   Object.assign(C.prototype, { approachSel: AUTO_SEL, approachGen: 0, approachLast: null });
-  Object.assign(C.prototype, { approachSelect, approachState, approachResolve, approachReason });
+  Object.assign(C.prototype, { approachSelect, approachState, approachResolve, approachReason, approachForField, approachesAt });
 }

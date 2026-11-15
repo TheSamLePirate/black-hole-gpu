@@ -4,7 +4,8 @@ import { App, E2E, stopServer } from "./lib/app";
 // PLAN-A320 A6: the A320's flight deck worked with the mouse, by real pointer events (CDP), from the captain's seat
 // lined up at Le Bourget — over a control its tip names it (FlightGear's label, in French); a click on the strobe
 // switch lights the strobes, the wheel puts it back; the autobrake's MED button arms the autobrake; the parking brake's
-// handle sets it; the flap lever turned a notch; the thrust levers dragged forward; the annunciators' test switch.
+// handle sets it; the flap lever turned a notch; the thrust levers dragged forward; the annunciators' test switch; the MCDU's
+// INIT, and its ARRIVAL (PLAN-APPROCHES AP3): to KSFO, the FAA's ILS 28R via ARCHI inserted by its keys, RAD NAV on IGWQ 111.70.
 
 /** where the shots go (E2E_SHOTS=dir; none: not taken) */
 const shots = process.env.E2E_SHOTS;
@@ -190,4 +191,53 @@ describe.skipIf(!E2E)("the A320's flight deck by the mouse", () => {
     await Bun.sleep(1500);
     await shot(app, "a320-deck-mcdu");
   }, 120_000);
+
+  test("ARRIVAL (PLAN-APPROCHES AP3): to KSFO, LAT REV at the destination, its FAA ILS 28R via ARCHI inserted by the keys; RAD NAV on IGWQ", async () => {
+    // (San Francisco's tile in — its runways, its approaches: INIT knows only the fields whose tile is in)
+    await app.js(`__bh.sys.approaches("KSFO").then((l) => l.length)`);
+    const key = async (name: string) => click(await aim(name));
+    // (the MCDU's page keys and its slew key: their objects on the deck — f-pln.cpt, radnav.cpt, up.cpt)
+    const [fpln, radnav, up] = ["f-pln.cpt", "radnav.cpt", "up.cpt"];
+    await key("init.cpt");
+    for (const k of "LFPG/KSFO") await key(k === "/" ? "/.cpt" : `${k.toLowerCase()}.cpt`);
+    await key("R1.cpt");
+    expect(await app.js<string>(`__bh.camera.nav.route.wps.at(-1).name`)).toBe("KSFO");
+    // (F-PLN: the destination's line — LAT REV —, ARRIVAL>)
+    await key(fpln);
+    const line = await app.js<number>(`__bh.camera.nav.route.wps.length - 1 + 1`);
+    await key(`L${Math.min(line, 6)}.cpt`);
+    expect(await app.js<string>(`__bh.a320Mcdu(0).pageId`)).toBe("latrev");
+    await key("R1.cpt");
+    expect(await app.js<string>(`__bh.a320Mcdu(0).pageId`)).toBe("arrival");
+    // (the list scrolled to the ILS 28R — the slew key —, chosen; then its VIAS scrolled to ARCHI, chosen; INSERT)
+    const k = await app.js<number>(`__bh.camera.approachesAt("KSFO").findIndex((a) => a.id === "I28R")`);
+    expect(k).toBeGreaterThanOrEqual(0);
+    for (let i = 0; i < k; i++) await key(up);
+    await key("L3.cpt");
+    expect(await app.js<string | null>(`__bh.a320Mcdu(0).arrApp`)).toBe("I28R");
+    const j = await app.js<number>(
+      `__bh.camera.approachesAt("KSFO").find((a) => a.id === "I28R").transitions.findIndex((t) => t[0].fix === "ARCHI") + 1`,
+    );
+    for (let i = 0; i < Math.max(j - 2, 0); i++) await key(up);
+    await key(`L${3 + j - Math.max(j - 2, 0)}.cpt`);
+    expect(await app.js<string | null>(`__bh.a320Mcdu(0).arrVia`)).toBe("ARCHI");
+    await app.js(`(__bh.camera.setLook(30, -38), __bh.settings.fov = 40, true)`);
+    await Bun.sleep(800);
+    await shot(app, "a320-deck-arrival");
+    await key("R6.cpt");
+    const st = await app.js<{ field: string; approach: string; via: string }>(`__bh.camera.approachSel`);
+    expect(st).toMatchObject({ field: "KSFO", approach: "I28R", via: "ARCHI" });
+    const wps = await app.js<string[]>(`__bh.camera.nav.route.wps.map((w) => w.name)`);
+    console.log(`  the plan: ${wps.join(" ")}`);
+    expect(wps.slice(-7)).toEqual(["ARCHI", "ZILED", "GIRRR", "DUMBA", "CEPIN", "AXMUL", "KSFO"]);
+    // (RAD NAV: the real localizer)
+    await key(radnav);
+    const ls = await app.js<string>(
+      `(() => { const m = __bh.a320Mcdu(0); return (m.current.screen(m).lines[2].l ?? []).map((r) => r.t).join(""); })()`,
+    );
+    expect(ls).toBe("IGWQ/111.70");
+    await app.js(`(__bh.camera.setLook(30, -38), __bh.settings.fov = 40, true)`);
+    await Bun.sleep(800);
+    await shot(app, "a320-deck-radnav");
+  }, 180_000);
 });

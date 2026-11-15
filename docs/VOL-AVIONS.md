@@ -470,6 +470,7 @@ atterrissage automatique, roulage —, en sachant ce que fait l'automatisme à c
 | 6 | Montée initiale | **G** (train rentré) ; au-dessus de 1 500 ft, levier en **CL** : l'A/THR, **déjà armé** au décollage, devient actif ; volets rentrés par étapes **au levier du poste** en accélérant au-delà de F puis S (P ne fait que **monter** d'un cran et passe de FULL à 0) | FMA `THR CLB` · `CLB` · `NAV` |
 | 7 | Autopilote | **'** (ù) = **AP1** — accepté au sol ou **≥ 5 s après le décollage et ≥ 100 ft**. **Ne pas presser ⇧'** : l'A/THR est déjà armé (⇧' le couperait) | FMA `AP1`, `A/THR` |
 | 8 | Croisière | le **FCU** au poste (cliquer : SPD, HDG, ALT, V/S ; tirer = sélecté, pousser = géré) ; **⇧M** : NAV sur le plan de vol | FMA `ALT`, `SPEED` |
+| 8 bis | Préparer l'arrivée | MCDU : F-PLN, la ligne de la destination (LAT REV) › **ARRIVAL>** : l'approche (aux États-Unis celles de la FAA — ILS, LOC, RNAV, VOR —, ailleurs l'ILS de nav.dat ou l'approche construite), sa **VIA** (transition publiée, ou NO VIA : guidage radar), **INSERT*** | le plan reçoit la transition et la finale (leurs altitudes) ; en NAV, l'approche s'enclenche à l'IF, sur l'axe ; RAD NAV : le localizer réel (KSFO 28R : IGWQ 111.70) |
 | 9 | Descente et approche | ALT du FCU plus bas, tirer : `OP DES` ; volets par étapes à **FULL** (becs 27°, volets 35° — ~30 s), **G** train ; Tab › Navigation › **Approche ILS** : le FMGC vole la jonction comme un contrôleur la donnerait (cap et altitude du FCU : dans l'axe, ou vent arrière et base, jamais au-dessus du terrain ; APPR armé sur la dernière branche) | FMA `HDG`, puis `LOC*`→`LOC`, `G/S*`→`G/S`, vitesse VAPP |
 | 10 | Atterrissage | avec l'AP : `LAND` sous 400 ft, **`FLARE` à 50 ft (seulement avec l'AP)**, `ROLL OUT` ; manettes au **ralenti** au toucher | toucher < 3 m/s (≈ 600 ft/min) |
 | 11 | Freinage | **⇧Z** inverseurs (au sol, ralenti), **⇧B** autofrein (LO 1,7 · MED 3,0 · MAX m/s², MAX au sol seulement) ; spoilers sol automatiques | sorti de piste < 30 kt |
@@ -762,7 +763,7 @@ La loi avion exige le mode `"plane"`, **q > 300 Pa** et aucun maintien.
   appliquée que par le FMGC (dans le FADEC, `min(n1Cmd, max(levier, n1Cmd))` vaut `n1Cmd`).
 - **FMGC** (`a320/fmgc/fmgc.ts`, colle `controller/a320ap.ts`) : **AP1/AP2 s'enclenchent au sol ou ≥ 5 s après le
   décollage et ≥ 100 ft radiosonde** ; le stick au-delà de 0,5 le déconnecte. Latéral : HDG/TRK (2,5°/° d'écart, ≤ 25°),
-  NAV (LNAV du jeu), LOC*/LOC, RWY/ROLL OUT. Vertical : SRS/CLB/OP CLB, DES/OP DES, ALT*/ALT, V/S, FPA, G/S, LAND sous
+  NAV (LNAV du jeu ; passer l'IF d'une arrivée publiée en NAV enclenche l'approche — PLAN-APPROCHES AP3), LOC*/LOC, RWY/ROLL OUT. Vertical : SRS/CLB/OP CLB, DES/OP DES, ALT*/ALT, V/S, FPA, G/S, LAND sous
   400 ft, **FLARE à 50 ft seulement avec l'AP**, ROLL OUT. Remise de gaz TOGA. EXPED ne fait que renommer ; `cstr` est
   toujours nul (ALT CST jamais produit). Vitesse gérée : V2+10 au décollage, 250 kt sous FL100, ECON (indice de coût 30),
   vitesses d'approche par configuration. FCU par code : `spdTurn/Push/Pull`, `hdgTurn…`, `altTurn…`, `vsTurn…`,

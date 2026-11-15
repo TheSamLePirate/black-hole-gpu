@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-15 17:28 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-15 17:55 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous.
@@ -71,7 +71,7 @@ ouverts, sous 1 ms) ; J3 au stade du plan.**
 | Audit vagues 3–4 (1feb2f7f) | 4.8 découper `main()` | **fait** (accord de Sam : par petits lots) : lot 1 la persistance, lot 2 qui tient le vol (`session.ts`), lots 3–4 les étapes gardées (`frame.ts`, AR-03), lot 5 l'ordre §19.5 (AR-04), lot 6 `craft-feed.ts`, lot 7 `governor.ts` (confié par la session du rendu) — **fait** : les quatre découpes d'AR-12 (session, frame, gouverneur, poses de l'appareil) |
 | Audit vagues 3–4 (1feb2f7f) | 4.3 séparer `Settings` | **fait** : garde statique des réglages (AR-21) ; `ViewPose` et `SimState` figés une fois par image (AR-07, `view-pose.ts`) ; le renderer les lit (session du rendu, 77721acf) |
 | Audit vague 6 hors rendu (1feb2f7f) | QA-16, QA-18, AR-17, AR-18, réseau RD4/RD5, FX-18, FX-17, FX-07, QA-11 ; puis les FX hors vague : FX-08, FX-12, FX-14, FX-19 (tendance), FX-22, FX-13, FX-20 (FX-11 et FX-15 déjà réglés le 11 nov., FX-16 tranché par Sam) | **faits** (accord de Sam : « un autre lot d'audit hors rendu ») ; FX-17 en 3 lots ; FX-07 l'A320 à la manette ; QA-11 le catalogue 446/446 gardé ; FX-08 V par les vues de l'appareil seul ; FX-12 les touches collées ; FX-14 chaque appareil sa configuration ; FX-19 la tendance de vitesse sur le temps du vol ; FX-13 ⇧M au vol d'abord, FX-20 sans dégâts pour ce vol seulement (choix de Sam) ; e2e `report` 4/4 (sans les états périmés de la galerie) ; ensuite les autres FX hors vague ( FX-19 la fraîcheur des écrans, à mesurer ; FX-21 des fonctions à finir) |
-| PLAN-APPROCHES (1feb2f7f) | AP0a, AP1, AP2, AP0b, AP3a | **faits (15 nov.)** : nav.dat lié aux pistes ; le CIFP de la FAA (9 568 approches publiées des États-Unis, entières) ; l'approche choisie (état, choix auto par vent, aide, longueur, sens d'arrivée) ; la jonction planifiée (dans l'axe, ou vent arrière + base, jamais au-dessus du terrain, 300 m sur le relief, paliers jusqu'à la pente) — e2e `approach-auto` 5/5, `approach-join` 4/4 (Nice), sans navigateur 8/8 à Edwards. l'A320 vole la même jonction (e2e `a320-approach-join` 4/4). Suite : AP3b (MCDU ARR/VIA, RAD NAV réel) |
+| PLAN-APPROCHES (1feb2f7f) | AP0a, AP1, AP2, AP0b, AP3a, AP3b | **faits (15 nov.)** : nav.dat lié aux pistes ; le CIFP de la FAA (9 568 approches publiées des États-Unis, entières) ; l'approche choisie (état, choix auto par vent, aide, longueur, sens d'arrivée) ; la jonction planifiée (dans l'axe, ou vent arrière + base, jamais au-dessus du terrain, 300 m sur le relief, paliers jusqu'à la pente) — e2e `approach-auto` 5/5, `approach-join` 4/4 (Nice), sans navigateur 8/8 à Edwards. l'A320 vole la même jonction (e2e `a320-approach-join` 4/4). MCDU ARRIVAL/VIA, RAD NAV réel, arrivée publiée volée en NAV (KSFO via ARCHI, 20/20). Suite : AP3c (ND) puis AP4 |
 
 **Fermé récemment** : J2 (13 nov., ΔGPU nul, chemin vers §8 écrit) ; J2-C BC7 étudiée puis **rangée** (Sam : « ne pas le faire maintenant »).
 
@@ -7948,3 +7948,37 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   83–97 dans le regard arrière à moins de 2 km ; GPU p50 en vol au même niveau (45–57 ms) ; le parcours passe deux fois.
 - Limites : deux passages seulement ; d'autres vitesses et altitudes non mesurées.
 - Suite : J6-2, l'approche sous météo dégradée.
+
+### 2026-11-15 17:55 UTC — PLAN-APPROCHES AP3b : la page ARRIVAL du MCDU, RAD NAV réel, l'arrivée publiée volée en NAV
+
+- **Contribution** : §19 (préparer et voler une arrivée réelle comme un équipage, la même action pour le MCDU, TARS et le crew) ;
+  PLAN-APPROCHES AP3 (« MCDU ARR/VIA ; RAD NAV réel », « FMGC en NAV sur le chemin, APPR à l'IF »).
+- **Changements** :
+  - MCDU (`a320/mcdu/pages-fpln.ts`) :
+    - LAT REV à la destination : `ARRIVAL>` ;
+    - la page ARRIVAL : les approches du terrain (source FAA, NAVDAT ou BUILT, sorte et catégorie), puis les VIA publiées de
+      la CIFP (NO VIA : guidage radar), choix temporaires en jaune, `<TMPY`, `INSERT*` ;
+    - RAD NAV (`pages-misc.ts`) : le localizer réel de l'approche (KSFO 28R : IGWQ 111.70, axe vrai), au lieu d'une fréquence
+      calculée.
+  - L'état « approche choisie » : `via` (le premier point d'une transition, « none », « auto »), vérifié, sauvé. Nouveaux :
+    `approachesAt`, `approachForField` (l'approche d'un terrain sans être en vol, vue du point précédent du plan).
+  - Le plan (`routeProcedures`) :
+    - une approche publiée apporte sa transition et sa finale, avec leurs altitudes, marquées `proc` ;
+    - passer l'IF en NAV (le jet ou le FMGC de l'A320) enclenche l'approche, sur l'axe ;
+    - TARS `approach select` prend `via` ;
+    - `__bh.a320Mcdu(side)`.
+- **Preuve** :
+  - Sans navigateur : `a320-published-arrival` — plan LFPG→KSFO par la VIA ARCHI, NAV par ARCHI, ZILED, GIRRR, DUMBA, CEPIN,
+    approche enclenchée à CEPIN, LOC/G/S établis à 18,7 km, **posé 28R 20/20** ; `a320-mcdu` 6/6 (ARRIVAL, VIA, INSERT, RAD
+    NAV) ; `cifp`, `approaches`, TARS 32/32 et les gardes verts.
+  - e2e `a320-deck` **8/8** : les touches du MCDU cliquées sur le poste (pointeur réel) — INIT LFPG/KSFO, F-PLN, LAT REV,
+    ARRIVAL, ILS 28R, VIA ARCHI, INSERT : le plan LFPG DEP08L ARCHI…AXMUL KSFO ; RAD NAV « IGWQ/111.70 ».
+  - Tuiles : altitudes CIFP au décimètre (7 000 ft relu 7 000, pas 7 001), 6,7 Mo.
+- **Limites** :
+  - Le cap de RAD NAV est vrai, pas magnétique.
+  - Le FMGC ne gère pas les contraintes d'altitude (`cstr` toujours nul) : le FCU les suit à la main.
+  - Les approches nav.dat et construites gardent leurs points IAF/FAF anciens dans le plan (retrait AP-R).
+  - Rien n'est encore dessiné sur le ND ni sur la carte (AP3c, AP4).
+  - Garde e2e-catalogue : `parcours-meteo.e2e.test.ts` (session du rendu) sans sa ligne — pas de ce lot.
+- **Suite** : AP3c (l'approche au ND), puis AP4 (carte tactique).
+

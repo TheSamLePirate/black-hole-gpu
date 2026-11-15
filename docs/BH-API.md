@@ -435,7 +435,8 @@ carries `clearM`, the slope's least clearance [m].
 The approach chosen (PLAN-APPROCHES AP1, `src/controller/approach.ts`): the simulation's state `approachSel = { field, rwy, approach,
 entry }`, each « auto » or named (`field` an ICAO code, `rwy` an end « 31R », `approach` an id « I31R » — ILS —, « L… » LOC, « X… »
 LDA/SDF/IGS, « C… » built), with its generation `approachGen` counted at each change; saved with the flight (the `craft` block).
-- `approachSelect({ field?, rwy?, approach?, entry? }, by)` changes it, checked: the field known (fetched when its tile is not in:
+- `approachSelect({ field?, rwy?, approach?, entry?, via? }, by)` changes it, checked (`via`, AP3: a published transition of the
+  approach by its first fix « ARCHI », « none » for vectors, « auto » the nearest): the field known (fetched when its tile is not in:
   « its data coming »), the end and the approach its own; a new field puts its end and approach back to « auto ». **Returns a
   message** (« Approach: LFTH C23 (test) », « Approach: LFTH has no runway 99 »).
 - `approachState()` → `{ sel, gen, resolved }` — `resolved`: what was last flown: `{ field, rwy, approach, kind, source: "navdat" |
@@ -445,6 +446,11 @@ LDA/SDF/IGS, « C… » built), with its generation `approachGen` counted at eac
   within 150 km (the game's own sites too); its end and approach selected, else chosen (`game/approach-choice.ts`): a tail wind over
   10 kt or a cross wind past the craft's limit out, from 5 kt the end into the wind; then the aid (ILS by category, LOC, built);
   a tight runway paid for (A320: 2 000 m; F-35: 1 500 m); then the way in (the path to the approach's IF and the turns).
+- `approachesAt(code)` → the airfield's approaches now (its tile asked; null: the field not known yet); `approachForField(code, from)`
+  → `{ f, a, via }`: the approach a flight would fly there without being in the air — the selection, else the automatic choice
+  seen from `from` (the flight plan's arrival, the MCDU's ARRIVAL and RAD NAV). `routeProcedures()` puts a published (CIFP)
+  approach's transition and final in the plan (`proc: { kind: "arr", rwy, approach, join }`; passing the IF — `join` — in NAV,
+  the jet's or the A320's FMGC, engages the approach).
 - `__bh.sys.approaches(code)` → every approach of the airfield (`world/approaches.ts`, async): each end's real ones — in the US the
   FAA's published ones (`source: "cifp"`, cycle « 2611 »: ILS, LOC, LDA, RNAV « R28R-Z », VOR « V13L », NDB, with their own
   transitions, final and missed approach, altitude constraints and speeds), elsewhere nav.dat's ILS (`source: "navdat"`, nav.dat's
@@ -2491,6 +2497,13 @@ await app.js(`__sound.busLevels().music`); // dBFS of the music bus
 The A320's flight deck (PLAN-A320 A6): a control — its FlightGear label, or one of its objects — the middle of its object
 as posed now, in the ship's frame [m] (hidden from the captain's eye: the nearest of its faces' middles that is seen), and
 that point in the view (ndc, y up; null behind the eye). Null before the deck's mesh is loaded or for an unknown control.
+
+### `__bh.a320Mcdu(side = 0)` → `Mcdu \| null`
+
+The A320's MCDU (`src/a320/mcdu/mcdu.ts`; 0 the captain's, 1 the first officer's — null on another craft): its page (`pageId`:
+`fpln`, `latrev`, `arrival`, `radnav`…), its scratchpad (`sp`), its keys (`button(k)`, `lsk("L" | "R", n)`, `page(name)`,
+`arrow(dir)`) and its screen (`current.screen(m)`: the lines' runs). ARRIVAL's temporary choices: `arrApp`, `arrVia`, `arrMode`
+(PLAN-APPROCHES AP3). *Used in:* `tests/e2e/a320-deck.e2e.test.ts` (its keys clicked on the deck, the pages read).
 
 ### `__bh.audio` → SoundDirector
 

@@ -26,6 +26,9 @@ export interface Waypoint {
   spd?: number;
   /** an airfield (the departure, the arrival, a diversion): its runway's level [m] */
   field?: { icao?: string; elev: number; rwy?: number };
+  /** a procedure's point (PLAN-APPROCHES AP3): the arrival's — its runway's end and approach; `join`: the approach's IF, where
+   *  the approach is engaged (on its axis) */
+  proc?: { kind: "dep" | "arr"; rwy?: string; approach?: string; join?: boolean };
 }
 
 export interface FlightPlan {

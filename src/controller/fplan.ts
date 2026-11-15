@@ -185,17 +185,20 @@ function navStep(this: CameraController, inp: PilotInput, f: { h: number; hdg: n
   const o = N.lnav.step(g, g.gs, g.track, Number.isFinite(f.hdg) ? f.hdg : g.track);
   N.last.l = o;
   if (!o) return;
-  if (!N.on.l && !N.on.v) return;
+  // (the A320 flies the plan through its FMGC — its lateral mode NAV —, not the jet's LNAV: its points passed count the same)
+  const fmgcNav = this.a320Fmgc?.lat === "NAV";
+  if (!N.on.l && !N.on.v && !fmgcNav) return;
   if (o.passed >= 0) {
     const nx = N.route.wps[o.active];
     N.say = tf("{0} passed — {1} next", N.route.wps[o.passed]?.name ?? "", nx?.name ?? "");
     // (the arrival's initial fix passed — P4: the plan's end flown as an ILS approach to its runway)
     const end = N.route.wps.at(-1);
-    if (/^IAF\d\d[LCR]?$/.test(N.route.wps[o.passed]?.name ?? "") && end?.field && N.on.l) {
+    const P0 = N.route.wps[o.passed];
+    if ((P0?.proc?.join || /^IAF\d\d[LCR]?$/.test(P0?.name ?? "")) && end?.field && (N.on.l || fmgcNav)) {
       N.on = { l: false, v: false };
-      // (the plan's runway flown — its IAF names it —, not chosen again by the wind of now: PLAN-APPROCHES AP1, before 15 Nov
-      // 2026 a wind turned put the jet at the other runway's IAF)
-      N.say = this.ilsStart(end.field.icao ?? end.name, { runway: N.route.wps[o.passed]!.name.slice(3) });
+      // (the plan's runway flown — its IAF names it, or the published approach's IF (AP3) —, not chosen again by the wind of
+      // now: PLAN-APPROCHES AP1, before 15 Nov 2026 a wind turned put the jet at the other runway's IAF)
+      N.say = this.ilsStart(end.field.icao ?? end.name, { runway: P0!.proc?.rwy ?? P0!.name.slice(3) });
       return;
     }
   }

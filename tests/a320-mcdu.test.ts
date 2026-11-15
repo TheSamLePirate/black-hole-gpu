@@ -6,6 +6,10 @@ import { newPlan } from "../src/game/flightplan";
 import { Fms } from "../src/a320/fmgc/fms";
 import { Mcdu } from "../src/a320/mcdu/mcdu";
 import type { McduHost } from "../src/a320/mcdu/types";
+import { readdirSync, readFileSync } from "node:fs";
+import { publishedArrival } from "../src/controller/ils";
+import { type Approach, approachesOf, decodeApproachTile } from "../src/world/approaches";
+import { decodeTile, tileKey } from "../src/world/runways";
 import type { Airfield } from "../src/world/runways";
 
 const field = (icao: string, lat: number, lon: number, elev: number, hdg: number): Airfield =>
@@ -210,5 +214,73 @@ describe("A320 MCDU", () => {
     expect(s).toContain("INIT");
     expect(s).toContain("FROM/TO");
     expect(s).toContain("LFPG");
+  });
+
+  test("ARRIVAL (PLAN-APPROCHES AP3): KSFO's approaches from the FAA, its ILS 28R and its VIA ARCHI inserted, RAD NAV on its localizer", () => {
+    // (San Francisco as the game has it: its runways, its tile's approaches — the CIFP's whole)
+    let ksfo: Airfield | undefined;
+    for (const n of readdirSync("assets/runways/v1"))
+      if (/^t-?\d/.test(n) && !ksfo)
+        ksfo = decodeTile(JSON.parse(readFileSync(`assets/runways/v1/${n}`, "utf8"))).find((f) => f.icao === "KSFO");
+    const t = decodeApproachTile(JSON.parse(readFileSync(`assets/approaches/v1/t${tileKey(ksfo!.lat, ksfo!.lon)}.json`, "utf8")));
+    const list: Approach[] = approachesOf(
+      ksfo!,
+      t.records.filter((r) => r.f === "KSFO"),
+      t.cycle,
+      t.cifp.filter((r) => r.f === "KSFO"),
+      t.cifpCycle,
+    );
+    const { h, route } = host();
+    let sel = { field: "auto", approach: "auto", via: "auto" };
+    Object.assign(h, {
+      field: (c: string) => (c === "KSFO" ? (ksfo ?? null) : (FIELDS[c] ?? null)),
+      approaches: (c: string) => (c === "KSFO" ? list : null),
+      approachSel: () => sel,
+      selectApproach: (x: typeof sel) => ((sel = x), { ok: list.some((a) => a.id === x.approach), say: "" }),
+      arrivalApproach: () => list.find((a) => a.id === sel.approach) ?? null,
+      insertArrival: () => {
+        const a = list.find((x) => x.id === sel.approach)!;
+        route.wps.splice(route.wps.length - 1, 0, ...publishedArrival(a, sel.via === "auto" ? null : sel.via, route.wps[0]!));
+        return "";
+      },
+    } satisfies Partial<McduHost>);
+    const m = mcdu(h);
+    m.page("init");
+    m.sp = "LFPG/KSFO";
+    m.lsk("R", 1);
+    m.page("f-pln");
+    // (LAT REV at the destination: ARRIVAL>)
+    m.lsk("L", 2);
+    expect(m.pageId).toBe("latrev");
+    const txt = (L?: { t: string }[]) => (L ?? []).map((r) => r.t).join("");
+    expect(txt(m.current.screen(m).lines[0]!.r)).toBe("ARRIVAL>");
+    m.lsk("R", 1);
+    expect(m.pageId).toBe("arrival");
+    // (the list: the published ILS 28R among them, its source said; scrolled to it)
+    const ids = list.map((a) => a.id);
+    const k = ids.indexOf("I28R");
+    m.arrTop = k;
+    expect(txt(m.current.screen(m).lines[2]!.l)).toBe("<I28R");
+    expect(txt(m.current.screen(m).lines[2]!.r)).toMatch(/ILS CAT III FAA/);
+    m.lsk("L", 3);
+    // (its VIAS shown: NO VIA, then ARCHI, DUMBA, EDDYY, SIDBY)
+    expect(m.arrMode).toBe("via");
+    const vias = [3, 4, 5].map((n) => txt(m.current.screen(m).lines[n - 1]!.l));
+    expect(vias[0]).toBe("<NO VIA");
+    const at = vias.indexOf("<ARCHI");
+    m.lsk("L", at >= 0 ? at + 3 : 4);
+    expect(m.arrVia).toBe(at >= 0 ? "ARCHI" : m.arrVia);
+    m.arrVia = "ARCHI";
+    m.lsk("R", 6);
+    expect(sel).toEqual({ field: "KSFO", approach: "I28R", via: "ARCHI" });
+    // (the plan: the transition's fixes then the final's, its IF marked where the approach is engaged)
+    expect(route.wps.map((w) => w.name)).toEqual(["LFPG", "ARCHI", "ZILED", "GIRRR", "DUMBA", "CEPIN", "AXMUL", "KSFO"]);
+    expect(route.wps.find((w) => w.name === "CEPIN")!.proc).toMatchObject({ kind: "arr", rwy: "28R", join: true });
+    expect(Math.round(route.wps[1]!.alt! / 0.3048)).toBe(7000);
+    // (RAD NAV: the real localizer — IGWQ 111.70, its course true)
+    m.page("radnav");
+    const ls = txt(m.current.screen(m).lines[2]!.l);
+    expect(ls).toBe("IGWQ/111.70");
+    expect(txt(m.current.screen(m).lines[3]!.l)).toBe("298");
   });
 });

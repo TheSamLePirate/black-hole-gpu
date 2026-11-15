@@ -22,7 +22,8 @@ import {
   runwayId,
 } from "../game/ils";
 import { planJoin } from "../game/approach-plan";
-import { gcDist } from "../game/flightplan";
+import { gcDist, type Waypoint } from "../game/flightplan";
+import type { Approach } from "../world/approaches";
 import { landingEnd, RUNWAY_LENGTH, reciprocal, type Site, SITES } from "../game/sites";
 import { fleet } from "../fleet";
 import { t, tf } from "../i18n";
@@ -405,8 +406,8 @@ function routeProcedures(this: CameraController): string {
   const W = this.nav.route.wps;
   if (W.length < 2) return t("Procedures: a plan from an airfield or to one");
   const added: string[] = [];
-  const strip = (name: string) => /^(IAF|FAF|DEP)\d\d[LCR]?$/.test(name);
-  this.nav.route.wps = W.filter((w) => !strip(w.name));
+  const strip = (w: (typeof W)[number]) => !!w.proc || /^(IAF|FAF|DEP)\d\d[LCR]?$/.test(w.name);
+  this.nav.route.wps = W.filter((w) => !strip(w));
   const P = this.nav.route.wps;
   // (the game's own field, else a world airfield's by its code — its tile in: PLAN-RADAR-AAA RD13)
   const siteOf = (w: (typeof P)[number]) => {
@@ -424,14 +425,53 @@ function routeProcedures(this: CameraController): string {
     P.splice(1, 0, { name: d.name, lat: d.lat, lon: d.lon, alt: d.alt });
     added.push(d.name);
   }
-  const last = siteOf(P[P.length - 1]!);
-  if (last) {
+  // (the arrival: an approach the FAA publishes — its transition and final fixes, their altitudes —, else the built fixes)
+  const end = P[P.length - 1]!;
+  const pub = end.field ? this.approachForField(end.field.icao ?? end.name, P.at(-2) ?? null) : null;
+  const pubPts = pub && pub.a.source === "cifp" ? publishedArrival(pub.a, pub.via, P.at(-2) ?? end) : [];
+  const last = pubPts.length ? undefined : siteOf(end);
+  if (pubPts.length) {
+    P.splice(P.length - 1, 0, ...pubPts);
+    added.push(...pubPts.map((w) => w.name));
+  } else if (last) {
     const fx = arrivalFixes(runwayOf(this, last));
     P.splice(P.length - 1, 0, ...fx.map((f) => ({ name: f.name, lat: f.lat, lon: f.lon, alt: f.alt })));
     added.push(...fx.map((f) => f.name));
   }
   this.routeChanged();
   return added.length ? tf("Procedures: {0}", added.join(", ")) : t("Procedures: a plan from an airfield or to one");
+}
+
+/**
+ * A published approach's arrival as the flight plan's points: its transition (the one named, else the one whose first fix is the
+ * nearest the plan's point before) then its final up to the runway — each with its altitude (at or above, else at or below) —;
+ * the final's first fix (the IF) marked where the approach is engaged.
+ */
+export function publishedArrival(a: Approach, via: string | null, from: { lat: number; lon: number }): Waypoint[] {
+  const named = via && via !== "none" ? a.transitions.find((t) => t[0]?.fix === via) : undefined;
+  const tr =
+    via === "none"
+      ? []
+      : (named ??
+        [...a.transitions]
+          .filter((t) => t[0]?.lat !== undefined)
+          .sort((x, y) => gcDist(from, x[0] as { lat: number; lon: number }) - gcDist(from, y[0] as { lat: number; lon: number }))[0] ??
+        []);
+  const iff = a.final[0]?.fix;
+  const out: Waypoint[] = [];
+  for (const l of [...tr, ...a.final]) {
+    if (l.lat === undefined || l.lon === undefined || !l.fix || /^RW/.test(l.fix)) continue;
+    if (out.at(-1)?.name === l.fix) continue;
+    const alt = l.alt?.[0] ?? l.alt?.[1] ?? undefined;
+    out.push({
+      name: l.fix,
+      lat: l.lat,
+      lon: l.lon,
+      ...(alt != null ? { alt } : {}),
+      proc: { kind: "arr", rwy: a.rwy, approach: a.id, ...(l.fix === iff ? { join: true } : {}) },
+    });
+  }
+  return out;
 }
 
 export function installIls(C: { prototype: CameraController }) {

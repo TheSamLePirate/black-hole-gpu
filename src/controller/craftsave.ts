@@ -39,7 +39,7 @@ export interface CraftSave {
   /** the skin's temperatures [K] */
   skin?: Thermal;
   /** the approach chosen (PLAN-APPROCHES AP1: controller/approach.ts) — its parts « auto » or named */
-  approach?: { field: string; rwy: string; approach: string; entry: string };
+  approach?: { field: string; rwy: string; approach: string; entry: string; via?: string };
 }
 
 const num = (x: unknown): x is number => typeof x === "number" && Number.isFinite(x);
@@ -86,7 +86,13 @@ export function checkCraft(x: unknown): CraftSave | null {
   if (b.stovl !== undefined && (!b.stovl || typeof b.stovl.on !== "boolean")) return null;
   if (b.skin !== undefined && (!b.skin || !num(b.skin.shield) || !num(b.skin.hull))) return null;
   const A = b.approach;
-  if (A !== undefined && (!A || ![A.field, A.rwy, A.approach, A.entry].every((v) => typeof v === "string" && v.length <= 12))) return null;
+  if (
+    A !== undefined &&
+    (!A ||
+      ![A.field, A.rwy, A.approach, A.entry].every((v) => typeof v === "string" && v.length <= 12) ||
+      (A.via !== undefined && (typeof A.via !== "string" || A.via.length > 12)))
+  )
+    return null;
   return b;
 }
 
@@ -112,8 +118,14 @@ export function restoreCraft(c: CameraController, b: CraftSave) {
   if (b.skin) c.airFlight.skin = { ...c.airFlight.skin, ...b.skin };
   // (the approach chosen as saved — none saved: automatic; its generation counted, the screens follow)
   c.approachSel = b.approach
-    ? { field: b.approach.field, rwy: b.approach.rwy, approach: b.approach.approach, entry: b.approach.entry as "auto" }
-    : { field: "auto", rwy: "auto", approach: "auto", entry: "auto" };
+    ? {
+        field: b.approach.field,
+        rwy: b.approach.rwy,
+        approach: b.approach.approach,
+        entry: b.approach.entry as "auto",
+        via: b.approach.via ?? "auto",
+      }
+    : { field: "auto", rwy: "auto", approach: "auto", entry: "auto", via: "auto" };
   c.approachGen++;
 }
 

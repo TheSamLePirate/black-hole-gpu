@@ -55,6 +55,11 @@ export class Mcdu implements McduApi {
   dataPage = 1;
   /** the DIR TO's waypoint chosen (its index) before it is done */
   dirSel: number | null = null;
+  /** ARRIVAL's list's first shown, the approach and the transition chosen (temporary, yellow) before INSERT */
+  arrTop = 0;
+  arrApp: string | null = null;
+  arrVia: string | null = null;
+  arrMode: "appr" | "via" = "appr";
   private clrAt = -1e9;
   /** a local message (the MCDU's own: FORMAT ERROR…), shown before the FMGC's */
   private msg: string | null = null;

@@ -2,6 +2,7 @@
 // lskbutton, rskbutton, pagebutton, arrowbutton —, the computer's keyboard in its keyboard mode) and what it works on
 // (the host: the FMS's data, the FMGC, the game's flight plan, the place, the weights, the airfields).
 
+import type { Approach } from "../../world/approaches";
 import type { Airfield } from "../../world/runways";
 import type { FlightPlan } from "../../game/flightplan";
 import type { Fmgc } from "../fmgc/fmgc";
@@ -26,6 +27,14 @@ export interface McduHost {
   fobKg(): number;
   /** the time now (UTC) */
   now(): Date;
+  /** PLAN-APPROCHES AP3 — an airfield's approaches (real — the FAA's CIFP, nav.dat's ILS — and built; null: not known yet),
+   *  the approach selected (controller/approach.ts approachSel), its change (checked, said), the approach the plan's arrival
+   *  flies (selected, else chosen), the arrival put in the plan (its published fixes) */
+  approaches?(code: string): Approach[] | null;
+  approachSel?(): { field: string; approach: string; via: string };
+  selectApproach?(sel: { field: string; approach: string; via: string }): { ok: boolean; say: string };
+  arrivalApproach?(): Approach | null;
+  insertArrival?(): string;
 }
 
 /** What a MCDU's keys are: FlightGear's names (MCDU.nas). */

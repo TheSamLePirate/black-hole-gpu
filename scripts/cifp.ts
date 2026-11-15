@@ -179,8 +179,9 @@ const PT: Record<string, Leg["t"]> = {
 /** An altitude constraint [m over the sea]: at or above, at or below (ARINC 424's description codes). */
 function constraint(d: string, a1: number | null, a2: number | null): [number | null, number | null] | undefined {
   if (a1 === null) return undefined;
-  const m1 = Math.round(a1 * FT),
-    m2 = a2 === null ? null : Math.round(a2 * FT);
+  // (to the decimetre: 7 000 ft comes back 7 000, not 7 001)
+  const m1 = Math.round(a1 * FT * 10) / 10,
+    m2 = a2 === null ? null : Math.round(a2 * FT * 10) / 10;
   switch (d) {
     case "+":
     case "H":
