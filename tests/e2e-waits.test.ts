@@ -17,7 +17,8 @@ export function longWaits(src: string): { sleeps: number; waits: number } {
   let sleeps = 0;
   for (const m of src.matchAll(/Bun\.sleep\(\s*([\d_]+)\s*\)/g)) if (ms(m[1]!) >= 5000) sleeps++;
   let waits = 0;
-  for (const m of src.matchAll(/\.(?:waitFor|waitOptional|until)\([^;]*?,\s*([\d_]+)\s*\)/g)) if (ms(m[1]!) > 120_000) waits++;
+  // (the cap is the call's last argument: `near("Airliner", 8000), 150_000)` — the lazy match took the 8000 and missed the cap, 15 Nov 2026)
+  for (const m of src.matchAll(/\.(?:waitFor|waitOptional|until)\([^;]*,\s*([\d_]+)\s*\)/g)) if (ms(m[1]!) > 120_000) waits++;
   return { sleeps, waits };
 }
 
@@ -27,6 +28,11 @@ for (const f of files) {
   const w = longWaits(readFileSync(join(DIR, f), "utf8"));
   if (w.sleeps || w.waits) now[f] = w;
 }
+
+test("a cap after another number in the call: counted (15 Nov 2026)", () => {
+  expect(longWaits(`await app.waitFor(near("Airliner", 8000), 150_000);`).waits).toBe(1);
+  expect(longWaits(`await app.waitFor(near("Airliner", 8000), 60_000);`).waits).toBe(0);
+});
 
 test("the count's witnesses: a sleep of 5 s and a wait of 10 min counted; shorter ones not", () => {
   expect(
