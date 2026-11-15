@@ -83,7 +83,7 @@ test.skipIf(!E2E)(
               scenery: (() => { const q = R.earthScenery.stats(); const km = q.lat === null ? null
                 : +(Math.hypot((q.lat - g.lat) * 111, (q.lon - g.lon) * 111 * Math.cos(g.lat * Math.PI / 180))).toFixed(1);
                 return { centreKm: km, buildings: q.bdtopoBuildings + q.overtureBuildings, trees: q.trees, quick: q.quick, status: q.status,
-                  progress: q.progress, corridorM: q.corridorM }; })() } }; })()`);
+                  progress: q.progress, corridorM: q.corridorM, phases: q.phases }; })() } }; })()`);
       // (the visibility's surface on a 48 × 27 grid — renderer.surfaceAt: kind and distance —, by kind and distance band)
       const surface = async (name: string) => {
         const grid = await app.js<{ kind: string; d: number }[]>(`(async () => {

@@ -204,12 +204,15 @@ centre de Toulon à 500 m et 150 m/s) : **en arrivant à 1,5 km du centre, la gr
   « rapides » (`fastFlight`, boîte de 0,35 fois la portée), toujours « refreshing », l'étape **`forest`** presque à chaque relevé ;
   1 800 à 3 900 bâtiments par scène (32 000 au repos), 65 000 à 233 000 arbres ; le centre de la scène dessinée **0,2 à 2,3 km** de
   l'avion.
-- **Cause supposée, non vérifiée** : l'avance du centre (`aheadFocus` / `buildLead`, `renderer.ts`) est plafonnée à 1,2 fois le rayon
-  d'une scène rapide ; une scène prend plus de temps que cette avance ne couvre à 150 m/s (le travail de la forêt dominant), elle
-  arrive donc derrière l'avion et la vue devant reste vide.
-- **À faire** (PLAN-J6 J6-1) : le temps de chaque étape du worker en vol rapide (`stats().phases`) ; puis l'ordre des étapes (les
-  bâtiments avant la forêt dans une scène rapide), le budget d'arbres d'une scène rapide, ou l'avance. Le parcours relève
-  `buildingsNear` sans l'asserter jusqu'à la correction.
+- **Le temps des étapes** (18:20 UTC, `stats().phases` à chaque tranche, un quatrième passage) : l'étiquette « forest » est celle de
+  l'étape **suivante** (`next`) ; le temps d'une scène rapide va à la **construction des tuiles de bâtiments** (entre `bdtopo` et `before
+  forest` : **2 à 16 s**), la forêt ~0,5 s, le reste < 1 s ; une scène rapide finie en 3 à 17 s. Ce passage-là : **71** points de bâtiment
+  devant à l'arrivée (0 aux trois autres) — selon le moment où la scène se termine.
+- **Cause supposée, non vérifiée** : la boîte d'une scène rapide (0,35 fois la portée) centrée près de l'avion (l'avance de `buildLead`
+  plafonnée à 1,2 fois son rayon) couvre mal ce que voit le cockpit à 500 m (le sol de 1 à 5 km devant) ; selon l'instant, la ville
+  visée est dans la boîte ou non.
+- **À faire** (PLAN-J6 J6-1) : asserter sur plusieurs passages (la variance : 0 à 71) ; essayer une boîte rapide décalée vers l'avant
+  (couvrir le sol vu) ou des tuiles de bâtiments plus rapides ; le parcours relève `buildingsNear` sans l'asserter jusque-là.
 
 ## Le repli du raster vers le pipeline tracé ne s'arme plus sur la Terre (relevé le 13 novembre 2026, e2e `raster-governor`)
 

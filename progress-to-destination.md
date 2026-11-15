@@ -7897,3 +7897,11 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   Toulon, aucun bâtiment devant à moins de 5 km (trois passages).
 - Limites : le décor en vol rapide non corrigé (relevé, non asserté) ; le parcours non volé sur ce Mac.
 - Suite : le décor en vol rapide (temps des étapes du worker, ordre bâtiments / forêt, avance), puis asserter les bâtiments proches.
+
+### 2026-11-15 18:20 UTC — J6-1 : le temps des étapes du décor en vol rapide
+
+- Réalisé : le parcours relève `stats().phases` ; PROBLEMES et PLAN-J6 corrigés (la cause supposée « la forêt » était l'étiquette de l'étape
+  suivante).
+- Preuves (mesuré, kerr-mini, un passage) : une scène rapide 3 à 17 s, dont 2 à 16 s de tuiles de bâtiments ; 71 points de bâtiment devant à
+  l'arrivée (0 aux trois passages précédents).
+- Suite : une boîte rapide décalée vers l'avant, jugée sur plusieurs passages.

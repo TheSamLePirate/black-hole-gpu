@@ -75,3 +75,6 @@ L'inventaire du §1 vient de la lecture du catalogue et des en-têtes : aucun te
   caméra de tout le vol ; l'âge des écrans p95 **58,2 ms** dans le cockpit (l'extérieur ne les dessine pas : leur âge y grandit, 14,9 s, hors de
   l'assertion) ; le plus long blocage de la page 68–83 ms ; GPU p50 45–57 ms en vol, 64 ms dans la vue extérieure. Suite : le décor en vol
   rapide (le temps de chaque étape du worker, l'ordre bâtiments / forêt, l'avance), puis asserter les bâtiments proches.
+- **Le décor en vol rapide, le temps de ses étapes** (2026-11-15 18:20 UTC) : un quatrième passage, `stats().phases` relevé : une scène
+  rapide passe 2 à 16 s sur ses tuiles de bâtiments (la « forêt » affichée est l'étape suivante, ~0,5 s) ; ce passage : 71 points de bâtiment
+  devant à l'arrivée (0 aux trois autres). La suite : une boîte rapide décalée vers l'avant, mesurée sur plusieurs passages ([PROBLEMES](PROBLEMES-A-REGLER.md)).
