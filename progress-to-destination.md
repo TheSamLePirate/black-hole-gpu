@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-15 19:38 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-15 19:39 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous. Ce qui est fermé quitte le tableau « En cours » pour la ligne « Fermé récemment ».
@@ -45,7 +45,7 @@ J4 (fermé, sortie non atteinte) et J5 (fermé) ; **en cours : J6, les parcours 
 
 | Session (T3) | Lot | État |
 |---|---|---|
-| Rendu (33d89754) | **J6 — les parcours complets** ([PLAN-J6](docs/PLAN-J6-PARCOURS.md)) | **J6-1 à J6-5 et J6-7 faits, J6-6 fait en solo** (15 nov.) ; six défauts trouvés et corrigés : le décollage automatique arme les choix du pilote ; le décor suit le vol rapide (`sceneryQuickLead` 2,5 : 36–38 bâtiments devant à l'arrivée, 0 avant) ; la météo réelle fondue sur 20 s (avant, d'un coup) ; le repos au sol jugé dans le plan du sol (on débarque après l'ILS) ; l'A320 rechargé dans son état sauvegardé ; TARS dit « armé » pendant le décollage. Relevé, non corrigé : un blocage de 317 ms au retour par F1 (J6-5). **Reste : J6-6 en salle, J6-8 (sol → orbite)** |
+| Rendu (33d89754) | **J6 — les parcours complets** ([PLAN-J6](docs/PLAN-J6-PARCOURS.md)) | **les neuf parcours ont leur e2e** (15 nov., 19:39) : J6-1 à J6-5, J6-7, J6-8 faits, J6-6 en solo ; cinq défauts corrigés (décollage automatique, décor en vol rapide, météo réelle fondue, repos au sol, A320 rechargé) ; restent la perte du GPU en salle et la commande périmée de TARS |
 | Rendu (33d89754) | J3 — lumière, ombres, cockpit | **mené (15 nov.)** : J3-0 à J3-7 et J3-R faits ou réglés provisoirement selon les recommandations de [PLAN-J3](docs/PLAN-J3-LUMIERE-COCKPIT.md) §8 ; le crépuscule du sol réparé (appareil / sol 0,87–1,08 jusqu'à −12,7°), ombres d'arbres et du décor, albédos mesurés. Ses questions attendent Sam (ci-dessous) |
 | Rendu (33d89754) | J4 / J5 — l'eau, les volumes, la généralisation | **fermés** ([PLAN-J4](docs/PLAN-J4-VOLUMES.md), [PLAN-J5](docs/PLAN-J5-GENERALISATION.md)) : l'eau à demi-rythme (J5-5, −6,0 à −6,4 ms, l'image la même) ; le sol à demi-rythme laissé au joueur (J5-6, réglage « demi » : −1,9 à −3,2 ms ; « auto » à chaque pixel) ; la FFT de la mer en deux passes (−0,9 ms) ; la carte d'ombre des arbres (−2,8 ms, forêt) ; Sam a refusé les arbitrages d'image (MSAA 1×, petits arbres, nuages amortis). Postes lourds restants : l'eau 16,2, les nuages d'orage 16,5, le décor d'une forêt ~7 ms |
 | Rendu (33d89754) | Mesures tenues | la borne du M1 Max **à 30, provisoire** (soutenu, le GPU bride vers 850 MHz quelle que soit la borne — [J0-CONTRAT §2](docs/J0-CONTRAT.md)) ; le coût de l'appareil 3,5–4,5 ms, dont le MSAA 4× 4–5 ms (gardé) |
