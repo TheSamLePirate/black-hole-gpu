@@ -200,6 +200,8 @@ avant `[info no-time, pilot t]`, après `[pilot t]`.
 `rolling`** et **glisse de 2,65 à 2,71 m en 10 s** (trois passages) — vers le 165° pour un cap de 51° : de côté, un peu en arrière —, freins à
 1, manette à 0, ses trois roues au sol, **aucun lacet** (0,03°), **aucun vent** (`windNow` nul). Il n'atteint donc jamais le repos
 (`motion.ts` : moins de 0,05 m/s) et Maj+K répond **« Land the vessel before going out. »** (0,28–0,30 m/s).
+- **L'interface le dit posé** : à l'arrêt, le bandeau propose « Craft landed — ⇧K Leave the craft » (capture `1-stopped.png`), puis la sortie
+  est refusée — l'interface et `character.disembark` (qui exige `ourLanded`) ne lisent pas le même état.
 - Écarté : aligné par `lineUp` (posé d'emblée), il ne bouge pas, horloge à pas fixes ou en temps réel, à Edwards comme à Toulon-Hyères ;
   `groundVelocity` concorde avec le repère tournant de la Terre (différences finies de `fromBodyFixed` : 0,015–0,033 m/s).
 - À chercher : les forces latérales des pneus à l'arrêt (`gear.ts`, l'adhérence de côté à une vitesse longitudinale nulle), la pente
