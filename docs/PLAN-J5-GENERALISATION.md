@@ -214,3 +214,13 @@ Les plafonds de J5-1 au beau temps, de J5-2 par corps et la parité du repli tra
   ombrée par `shadeWater`, finie en eau par `shadeWaterFinish`) n'est pas celui que la mer de J0 suit à 500 m — ou la couverture d'eau y
   vaut ≤ 0,5. C'est le point de départ de la suite : suivre une ligne de mer de J0 à travers `shadeLite` (son `liteWater`, la condition
   « early » `P.sea[1].w ≥ 0,999`), `liteEpilogue` et les noyaux de l'eau, avant de rouvrir la reconstruction et J5-6.
+- **Correction : mes sondes regardaient la piste du Bourget** (2026-11-15 09:27 UTC) : `stale-probe`, `sea-marks` et `export-parity`
+  appliquaient `J0_FIXED` (changement d'appareil asynchrone) puis plaçaient l'avion aussitôt — le changement le remettait sur la piste du
+  Bourget (E2E-VOLS §7, « appareil changé ou placé dans le mauvais ordre ») : **aucune mer à l'écran**. Les constats de 08:23, 08:47 et
+  08:58 (la mer « finie comme un sol », le témoin 777777 absent) ne valent donc rien sur la mer ; la mesure d'`export-parity` vaut pour
+  la piste (sa conclusion — la taille de l'export — reste juste). `sea-marks` corrigé (attendre `fleet.active === "f35"`, placer, attendre,
+  replacer) : **la mer de J0 est bien finie en eau (`RASTER_MARK` × 4, 4e30) au moment du `resolve`** — le modèle était juste. Reprise du
+  voisin laissé à la reconstruction (levier `TUNE_WATER_PAIR_STALE`) : l'image se couvre de **points blancs** (le défaut se reproduit),
+  mais l'avion, sans manette ni monde figé, était descendu à 0 m pendant l'attente — la mesure n'est pas concluante. Levier retiré (patch
+  hors du dépôt) ; la suite demande une scène tenue (le monde figé hors de la convergence tracée, ou l'avion en palier) avant de chercher
+  la cause.

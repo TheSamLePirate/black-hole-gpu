@@ -7633,3 +7633,11 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   compilations et des préparations, plus lentes sur le mini que sur ce Mac : 120 s et non le double du temps mesuré. Relancés ici : 1/1 chacun.
   Garde : 95 → 91 attentes de plus de 120 s.
 
+### 2026-11-15 09:27 UTC — Correction : mes sondes de la reconstruction regardaient la piste du Bourget
+
+- Contribution à la destination : une erreur de méthode corrigée (les entrées de 08:23, 08:47 et 08:58 portaient sur une piste, pas la mer).
+- Réalisé : `sea-marks` corrigé (l'appareil changé avant d'être placé) ; levier `TUNE_WATER_PAIR_STALE` essayé puis retiré ; PLAN-J5 §5.
+- Preuves (mesuré, kerr-mini) : la mer de J0, vue enfin, est finie en eau (4e30) au `resolve`, le cockpit à −1 (témoin) ; le voisin laissé
+  à la reconstruction donne des points blancs — scène non tenue (l'avion à 0 m), non concluant.
+- Limites : la cause du défaut de reconstruction reste inconnue ; J5-6 fermé ; J0 ~48–50 ms sur le mini.
+- Suite : une scène tenue pour la sonde (avion en palier ou monde figé hors convergence), puis la reconstruction.
