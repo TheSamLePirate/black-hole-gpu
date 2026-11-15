@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-15 01:33 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-15 01:37 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous.
@@ -49,7 +49,7 @@ ouverts, sous 1 ms) ; J3 au stade du plan.**
 | Rendu (33d89754) | L'eau étagée E1 : l'air et les nuages sortis de `shadeWater` (passe `earth water: finishing`) | **fait, mesuré** (gain maximal lu : l'eau 16,2 ms, `earth water` 12,7) : A/B J0 sur le mini **GPU p50 57,85 → 56,3 ms (−1,55)** ; l'eau par ablation 13,0 → 10,1 ms ([PLAN-MER §6](docs/PLAN-MER-WEBGPU.md)) |
 | Rendu (33d89754) | L'eau étagée E2 : les reflets (SSR, nuages reflétés) dans leur noyau (`shadeWaterFinish`) | **fait, mesuré, gain faible** : plafond lu −4,7 ms, rendu **−0,5 ms** (A/B mini) — le SSR coûte surtout son travail ; **E3 non ouvert** (seule la présence du code pourrait rendre, ~0,4 ms mesurés par E2) |
 | Rendu (33d89754) | **J3 — lumière, ombres, cockpit** | **mené (2026-11-15)** : J3-0 à J3-7 et J3-R faits ou réglés provisoirement selon les recommandations du plan ([PLAN-J3](docs/PLAN-J3-LUMIERE-COCKPIT.md) §8 : le tableau, révisable par Sam) ; le crépuscule du sol réparé, les ombres d'arbres et du décor justes, les toits et la brique aux albédos mesurés, la cohérence appareil / sol bornée jusqu'à −13° |
-| Rendu (33d89754) | **J4 — l'eau et les volumes** | **plan écrit (2026-11-15)** : [PLAN-J4](docs/PLAN-J4-VOLUMES.md) — lots J4-0 à J4-R, plafonds lus (nuages 5,15 ms sur J0, 29,8 en orage ; eau 16,2 ; décor 2,0) ; questions réglées provisoirement ; J4-0 (les scènes) ensuite |
+| Rendu (33d89754) | **J4 — l'eau et les volumes** | **plan écrit (2026-11-15)** : [PLAN-J4](docs/PLAN-J4-VOLUMES.md) — lots J4-0 à J4-R, plafonds lus (nuages 5,15 ms sur J0, 29,8 en orage ; eau 16,2 ; décor 2,0) ; questions réglées provisoirement ; **J4-0 : le profil lourd mesuré** (J0 sous orage 77,8 ms, la météo d'orage −20,8 ms à elle seule) ; la traversée de nuages ensuite |
 | Rendu (33d89754) | AR-07 (vague 4.3, décision de Sam relayée) : le renderer sur `ViewPose` | **fait** : `renderer.frame(viewPose, settings, …)` ; Paris et J0 volés sans erreur, `gpu-startup` sans nouvel échec |
 | Rendu (33d89754) | La classification de l'écran par tuiles — lot 1 : les noyaux de l'eau en indirect | **fait, mesuré** : plafond lu 2,1 ms (noyaux de l'eau vides) ; J0 neutre (presque toute la mer), **sur la terre −1,15 ms** (A/B mini) |
 | Rendu (33d89754) | Classification — lot 2 : le sol (`earth lite: light`, sa finition) | **non ouvert** : plafond mesuré (vue toute en mer, kerr-mini) 0,33 + 0,22 = 0,55 ms, moins le tri 0,2 — sous 1 ms (règle 1) |
@@ -7110,3 +7110,12 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   `place-docked:20` (122,3 s, 300 → 250 s). Garde : 99 → 96 attentes de plus de 120 s. Relancés après l'abaissement : `photo-video` 3/3,
   `net-coop` 3/3. Les attentes du rendu (`moon-telescope`, `character-aaa`) n'ont pas été touchées.
 
+### 2026-11-15 01:37 UTC — J4-0 : le profil lourd mesuré — J0 sous orage, la météo coûte 20,8 ms
+
+- **Contribution à la destination :** §8 et §15 J4 (« pas d'annonce de réussite sur le seul ciel clair ») : la scène lourde et son coût par poste.
+- **Réalisé :** `tests/e2e/lib/j0-scene.ts` : `J0_WEATHER` (la scène J0 sous une autre météo, son propre identifiant) ; l'ablation `weather`
+  dans J0 (la météo au beau temps, la couverture gardée) ; la [fiche](docs/progress/j4/FICHE-ORAGE-kerr-mini-2026-11-15.md) ; PLAN-J4 §3, §10.
+- **Preuves (mesuré, kerr-mini froid)** : J0 sous orage GPU p50 77,8 ms (57,3 au beau temps) ; la météo −20,8 ms, la couverture seule
+  −0,6 / −1,7, l'eau −13,0, l'appareil −7,7 ; `clouds (half)` 16,5 ms (5,15). A/A jusqu'à 3,8 ms.
+- **Limites :** un passage par cas ; le M1 Max non mesuré ; la part de la pluie et des éclairs non séparée ; la scène de traversée de nuages
+  reste à faire.

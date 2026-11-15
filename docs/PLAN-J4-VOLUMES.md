@@ -71,11 +71,11 @@ Chaque lot de performance écrit d'abord son gain maximal, lu dans une fiche ; c
 |---|---|---|---|---|
 | **J4-0** | **Les scènes J4** : la traversée de nuages (J0-CONTRAT : « à définir avant J4 ») et le profil lourd (côte, pluie, sous les nuages — §13) en e2e de référence comme J0 ; leur fiche par famille (nuages, eau, décor, météo) | — | fiche, A/A | M |
 | **J4-1** | **Le contrat des nuages** : la confiance et le mouvement du vent dans `cloudTemporal` (l'historique lié au vent, §7.9) ; les nuages dans le mouvement de l'image | qualité (fantômes en vol, traînées sous le vent) | images en mouvement, sonde de stabilité | M |
-| **J4-2** | **Le saut du vide** : une grille d'occupation hiérarchique pour `cloudVolume` | `clouds (half)` 5,15 ms (J0) ; 13,7 couvert, 29,8 orage (5 nov.) | ΔGPU J0 et scène lourde | M |
+| **J4-2** | **Le saut du vide** : une grille d'occupation hiérarchique pour `cloudVolume` | `clouds (half)` 5,15 ms (J0) ; **16,5 ms sur J0 sous orage** (15 nov.) | ΔGPU J0 et scène lourde | M |
 | **J4-3** | **Les caches de lumière spécialisés** : `cloudShadow`, `cloudLightVolume`, `skyAmbient` compilés depuis le module spécialisé | compilation (temps de chargement), coût de passe à mesurer | temps de compilation, ΔGPU | S |
 | **J4-4** | **La passe d'eau propre** : sa disposition à elle (PLAN-MER), la houle côtière en passe séparée | famille eau 16,2 ms (mini) ; houle +2,0–2,6 ms sur une côte | ΔGPU J0 et côte | L |
 | **J4-5** | **La végétation lointaine collective** : tuiles de canopée par classe, moyenne exacte, imposteurs à profondeur fiable | décor −2,0 ms (mini) | images lointaines, ΔGPU | M |
-| **J4-6** | **Le profil météo lourd** : son enveloppe écrite et tenue sur la scène de J4-0 | orage 29,8 ms la passe (ancien) | fiche | M |
+| **J4-6** | **Le profil météo lourd** : son enveloppe écrite et tenue sur la scène de J4-0 | **la météo d'orage 20,8 ms sur J0** (15 nov., [fiche](progress/j4/FICHE-ORAGE-kerr-mini-2026-11-15.md)) ; `clouds (half)` 16,5 ms | fiche | M |
 | **J4-R** | Retrait des anciens chemins des leviers allumés pendant J4 | — | suite, J0 | S |
 
 **Ordre recommandé** : J4-0 → J4-1 → J4-2 → J4-3 → J4-6 → J4-4 → J4-5 → J4-R (les scènes d'abord ; les nuages, premier poste hors eau ; la passe
@@ -123,3 +123,7 @@ Le relevé du §2 vient d'une lecture du code et des documents (agent d'explorat
 ## 10. Avancement
 
 - **Le plan** (15 novembre) : écrit ; les questions du §8 réglées provisoirement.
+- **J4-0, le profil lourd mesuré** (2026-11-15 01:37 UTC) : J0 sous orage (`J0_WEATHER=storm`, couverture 0,9 — sa propre scène) sur kerr-mini :
+  GPU p50 **77,8 ms** (57,3 au beau temps) ; l'ablation `weather` (ajoutée : la météo au beau temps, la couverture gardée) **−20,8 ms** — tout le
+  surcoût ; « sans nuages » (`earthClouds` 0) −0,6 / −1,7 seulement ; `clouds (half)` 16,5 ms (5,15 au beau temps) ; eau −13,0, appareil −7,7.
+  [Fiche](progress/j4/FICHE-ORAGE-kerr-mini-2026-11-15.md). Reste de J4-0 : la scène de traversée de nuages (le cumulus de Tarifa).

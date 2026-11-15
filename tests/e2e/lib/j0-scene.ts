@@ -7,14 +7,17 @@
 // of 70° that crosses the coastline towards La Londe and the Maures: sea and its glint (the sun low in the west), the coast, the
 // relief, the IGN imagery and relief, the towns' buildings, scattered clouds. 10 July 2026, 15:30 UTC (17:30 local).
 
+// (PLAN-J4 J4-0 — the heavy profile: J0_WEATHER=storm flies the same scene under a storm — its own id, never compared with J0's own as if
+// the same; the clouds' cover the preset's — J0_CLOUDS another)
+const J0_WEATHER = process.env.J0_WEATHER ?? "fair";
 export const J0_SCENE = {
-  id: "toulon-hyeres-v1",
+  id: J0_WEATHER === "fair" ? "toulon-hyeres-v1" : `toulon-hyeres-v1-${J0_WEATHER}`,
   /** the start: lat, lon [° WGS84], height over the ground (here the sea) [m], heading [° true], speed [m/s] */
   start: [43.06, 6.32, 500, 270, 140] as [number, number, number, number, number],
   /** UTC */
   date: "2026-07-10T15:30:00Z",
-  weather: "fair",
-  earthClouds: 0.5,
+  weather: J0_WEATHER,
+  earthClouds: Number(process.env.J0_CLOUDS ?? (J0_WEATHER === "fair" ? 0.5 : 0.9)),
   /** the turn: started TURN_AT_S after the measure begins, to this heading [° true] */
   turnAtS: 25,
   turnTo: 340,

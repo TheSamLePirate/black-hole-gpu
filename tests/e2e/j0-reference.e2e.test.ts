@@ -33,6 +33,7 @@ import { sceneryReady } from "./lib/plan-views";
 //       screens, the cockpit (the outside view) — between two baseline flights (drift).
 // Output: remote-results/j0/<machine>/ (J0_OUT): j0.json, shots (start, mid-turn, end; each ablation's last frame).
 // J0_PHASES=flight,ablate,sustained (default all; sustained: the flight again after the ablations, the machine hot), ABLATE_S (20), J0_MACHINE (the label: "m1max", "kerr-mini"; default the host name).
+// J0_WEATHER=storm (PLAN-J4 J4-0: the heavy profile — the same scene under a storm, its own id; J0_CLOUDS its cover, 0.9 by default).
 // Other phases, asked by name: agecheck, framing (PLAN-J3 J3-0), keylight, keyair, keysky, skyband4, coherence (J3-1), keyhaze (J3-2), waterincident (J3-7), shadows (J3-3), wetbld, cityview, materials (J3-5), seadusk, probedump, tracedview (PROBLEMES), twilightdim (J3-1), nightfloor (J3 question 7), nightbands (PROBLEMES), craftshade (J3 question 3) (J3-1: the craft's key light against the incident Sun toward
 // sunset, ~3 min on kerr-mini; keyair: its air two ways, march and table, ~4 min; keysky: the sky's light two ways, ~4 min; coherence: the three gaps in one read per hour, ~5 min).
 // Not a pass/fail on the frame rate: the fiche is written from j0.json (docs/progress/j0/). It fails on a GPU error, a craft not
@@ -90,6 +91,9 @@ const ABLATIONS: Record<string, { label: string; set: string }> = {
   bloom: { label: "sans bloom", set: `__bh.settings.bloom = 0;` },
   sharpen: { label: "sans accentuation (RCAS)", set: `__bh.settings.sharpen = 0;` },
   haze: { label: "sans brume de chaleur", set: `__bh.settings.heatHaze = false;` },
+  // (PLAN-J4 J4-0 — the weather's own share, under J0_WEATHER=storm: « sans nuages » sets earthClouds 0, the weather's layers — wxCloud,
+  // the rain, the lightning — stay (storm: clouds (half) 16.5 ms, the ablation −0.6 ms, 15 Nov 2026); the weather back to fair, the cover kept)
+  weather: { label: "météo beau temps (la couverture gardée)", set: `__bh.game.set("weather", "fair");` },
 };
 // (13 Nov 2026, Sam's decision 1: the water's two ablations in every fiche — its material, valid since liteSkip's bits are carried by
 // bitcast, and the sea's surface, the largest render pass, no owner measured before)
