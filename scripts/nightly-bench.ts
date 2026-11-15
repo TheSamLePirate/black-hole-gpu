@@ -4,15 +4,22 @@
 // rested first (its thermal pressure Nominal, waited for); its figures appended to a history; a night whose GPU p50 passes the last
 // nights' median by more than 10 % written to the alerts.
 //
-//   bun scripts/nightly-bench.ts run [--pull]     (on the mini: --pull updates its clone to origin/main first)
-//   bun scripts/nightly-bench.ts install          (on the mini: its LaunchAgent, each night at 03:30)
+//   bun scripts/nightly-bench.ts run [--pull] [--dry]   (on the mini: --pull updates its clone to origin/main first; --dry all
+//                                                        but J0 — the way launchd runs it checked without the GPU)
+//   bun scripts/nightly-bench.ts install [--dry-now]     (on the mini, over ssh: its own clone ~/kerr-nightly/black-hole-gpu,
+//                                                        its LaunchAgent each night at 03:30; --dry-now: a dry run by launchd now)
 //   bun scripts/nightly-bench.ts fetch [--host kerr-mini]   (here: its history and alerts into docs/perf/nightly-mini.jsonl)
 //
-// Its history and alerts: ~/.kerr-lab/nightly/ on the machine that runs it (history.jsonl, alerts.md, the runs' j0.json and log).
+// Its history and alerts: ~/.kerr-lab/nightly/ on the machine that runs it (history.jsonl, alerts.md, progress.log, the runs'
+// j0.json and log).
+//
+// (15 Nov 2026: its first night never ran — launchd's bun, its working folder in ~/Documents, waited in getcwd on macOS's privacy
+// consent (TCC), a dialog no one saw; ssh has the access, launchd not. Its own clone outside ~/Documents since, the remote runner's
+// GPU lock taken while J0 flies — the other sessions' night jobs on the same GPU —, each step written to progress.log.)
 
-import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { appendFileSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { $ } from "bun";
 import { thermalLine, thermalNow, thermalWarning } from "./lib/thermal";
 
@@ -55,6 +62,50 @@ const DIR = join(homedir(), ".kerr-lab", "nightly");
 const HISTORY = join(DIR, "history.jsonl");
 const ALERTS = join(DIR, "alerts.md");
 const ROOT = join(import.meta.dir, "..");
+const PROGRESS = join(DIR, "progress.log");
+/** the nightly's own clone: outside ~/Documents, which launchd's processes may not read without a consent no one gives at night */
+const CLONE = join(homedir(), "kerr-nightly", "black-hole-gpu");
+/** the remote runner's GPU lock (scripts/remote-runner.ts takeGpu): one renderer at a time on the machine */
+const GPU_LOCK = join(homedir(), "kerr-runner", "gpu.lock");
+const say = (what: string) => {
+  try {
+    mkdirSync(DIR, { recursive: true });
+    appendFileSync(PROGRESS, `${new Date().toISOString()} ${what}\n`);
+  } catch {}
+};
+const alive = (pid: number) => {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+};
+/** The runner's GPU lock taken (a dead holder's taken over), `maxMs` at most: true when held. */
+async function takeGpu(maxMs: number): Promise<boolean> {
+  if (!existsSync(dirname(GPU_LOCK))) return true;
+  const t0 = Date.now();
+  for (;;) {
+    try {
+      mkdirSync(GPU_LOCK);
+      writeFileSync(join(GPU_LOCK, "owner"), JSON.stringify({ id: "nightly", pid: process.pid }));
+      return true;
+    } catch {
+      try {
+        const o = JSON.parse(readFileSync(join(GPU_LOCK, "owner"), "utf8")) as { pid: number };
+        if (!alive(o.pid)) rmSync(GPU_LOCK, { recursive: true, force: true });
+      } catch {}
+      if (Date.now() - t0 > maxMs) return false;
+      await Bun.sleep(5000);
+    }
+  }
+}
+function dropGpu() {
+  try {
+    if ((JSON.parse(readFileSync(join(GPU_LOCK, "owner"), "utf8")) as { pid: number }).pid === process.pid)
+      rmSync(GPU_LOCK, { recursive: true, force: true });
+  } catch {}
+}
 const readRows = (file: string): NightRow[] =>
   existsSync(file)
     ? readFileSync(file, "utf8")
@@ -63,28 +114,42 @@ const readRows = (file: string): NightRow[] =>
         .map((l) => JSON.parse(l) as NightRow)
     : [];
 
-async function run(pull: boolean) {
+async function run(pull: boolean, dry = false) {
   mkdirSync(DIR, { recursive: true });
+  say(`start in ${ROOT}${dry ? " (dry)" : ""}`);
   if (pull) {
     await $`git -C ${ROOT} fetch -q origin main && git -C ${ROOT} merge -q --ff-only origin/main`.nothrow();
     await $`bun install --frozen-lockfile`.cwd(ROOT).quiet().nothrow();
   }
   // (a remote job's copy has no .git: remote.ts gives it the commit it was sent from)
   const commit = (await $`git -C ${ROOT} rev-parse --short HEAD`.nothrow().quiet().text()).trim() || process.env.KERR_COMMIT || "unknown";
+  say(`at ${commit}`);
   const at = new Date().toISOString();
+  if (dry) {
+    say(`dry: J0 not flown — the way checked; thermal ${thermalLine(thermalNow(120))}`);
+    console.log(`nightly (dry): ${commit} in ${ROOT}, ${thermalLine(thermalNow(120))}`);
+    return;
+  }
+  // (the GPU the remote runner's jobs share: waited for, 90 min at most — then the machine rested after them)
+  const held = await takeGpu(90 * 60_000);
+  say(held ? "GPU lock taken" : "GPU lock not free in 90 min");
   // (the machine rested: its pressure Nominal — waited for, 20 min at most —, else the night skipped, said)
   let th = thermalNow(120);
-  for (let i = 0; i < 40 && thermalWarning(th); i++) {
+  for (let i = 0; held && i < 40 && thermalWarning(th); i++) {
     await Bun.sleep(30_000);
     th = thermalNow(120);
   }
   const row: NightRow = { at, commit, ok: false, thermal: thermalLine(th) };
-  if (thermalWarning(th)) {
+  say(`thermal: ${thermalLine(th)}`);
+  if (!held) {
+    row.note = "skipped: the GPU busy all night (the remote runner's lock)";
+  } else if (thermalWarning(th)) {
     row.note = `skipped: ${thermalWarning(th)}`;
   } else {
     const out = join(DIR, `run-${at.slice(0, 10)}`);
     const log = join(DIR, "log.txt");
     // (J0's flight, its output kept in log.txt — Bun.spawn: Bun's shell takes no « > file 2>&1 »)
+    say("J0 flying");
     const p = Bun.spawn(["bun", "test", "tests/e2e/j0-reference.e2e.test.ts", "--timeout", "900000"], {
       cwd: ROOT,
       env: { ...process.env, E2E: "1", E2E_HEADED: "0", J0_PHASES: "flight", J0_MACHINE: "nightly", J0_OUT: out },
@@ -105,6 +170,8 @@ async function run(pull: boolean) {
     }
     if (!row.ok) row.note = `J0's flight not measured (exit ${r.exitCode}; ${log})`;
   }
+  dropGpu();
+  say(row.ok ? `measured: GPU p50 ${row.gpuP50} ms` : `not measured: ${row.note}`);
   const before = readRows(HISTORY);
   appendFileSync(HISTORY, `${JSON.stringify(row)}\n`);
   const v = judge(row, before);
@@ -120,21 +187,31 @@ async function run(pull: boolean) {
   process.exit(row.ok || row.note?.startsWith("skipped") ? 0 : 1);
 }
 
-async function install() {
+async function install(dryNow: boolean) {
   const bun = process.execPath;
-  const label = "org.samlepirate.kerr-nightly";
+  const label = dryNow ? "org.samlepirate.kerr-nightly-dry" : "org.samlepirate.kerr-nightly";
   const plist = join(homedir(), "Library", "LaunchAgents", `${label}.plist`);
   mkdirSync(DIR, { recursive: true });
+  // (its own clone, from this one — hard links, quick —, its origin the remote's: the nights never read ~/Documents)
+  if (!existsSync(join(CLONE, ".git"))) {
+    mkdirSync(dirname(CLONE), { recursive: true });
+    const url = (await $`git -C ${ROOT} remote get-url origin`.quiet().text()).trim();
+    await $`git clone -q ${ROOT} ${CLONE}`;
+    await $`git -C ${CLONE} remote set-url origin ${url}`;
+    await $`bun install --frozen-lockfile`.cwd(CLONE).quiet().nothrow();
+  }
+  const args = ["scripts/nightly-bench.ts", "run", "--pull", ...(dryNow ? ["--dry"] : [])];
   writeFileSync(
     plist,
     `<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0"><dict>
   <key>Label</key><string>${label}</string>
-  <key>ProgramArguments</key><array><string>${bun}</string><string>scripts/nightly-bench.ts</string><string>run</string><string>--pull</string></array>
-  <key>WorkingDirectory</key><string>${ROOT}</string>
+  <key>ProgramArguments</key><array><string>${bun}</string>${args.map((a) => `<string>${a}</string>`).join("")}</array>
+  <key>WorkingDirectory</key><string>${CLONE}</string>
+  <key>ProcessType</key><string>Interactive</string>
   <key>EnvironmentVariables</key><dict><key>PATH</key><string>${join(homedir(), ".bun/bin")}:/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin</string></dict>
-  <key>StartCalendarInterval</key><dict><key>Hour</key><integer>3</integer><key>Minute</key><integer>30</integer></dict>
+  ${dryNow ? "<key>RunAtLoad</key><true/>" : "<key>StartCalendarInterval</key><dict><key>Hour</key><integer>3</integer><key>Minute</key><integer>30</integer></dict>"}
   <key>StandardOutPath</key><string>${join(DIR, "agent.out")}</string>
   <key>StandardErrorPath</key><string>${join(DIR, "agent.err")}</string>
 </dict></plist>
@@ -142,7 +219,7 @@ async function install() {
   );
   await $`launchctl unload ${plist}`.nothrow().quiet();
   await $`launchctl load ${plist}`.nothrow();
-  console.log(`nightly: ${plist} loaded — each night at 03:30, in ${ROOT}`);
+  console.log(`nightly: ${plist} loaded — ${dryNow ? "a dry run now" : "each night at 03:30"}, in ${CLONE}`);
 }
 
 async function fetchHistory(host: string) {
@@ -170,11 +247,11 @@ async function fetchHistory(host: string) {
 if (import.meta.main) {
   const [cmd = "run"] = process.argv.slice(2);
   const hostAt = process.argv.indexOf("--host");
-  if (cmd === "run") await run(process.argv.includes("--pull"));
-  else if (cmd === "install") await install();
+  if (cmd === "run") await run(process.argv.includes("--pull"), process.argv.includes("--dry"));
+  else if (cmd === "install") await install(process.argv.includes("--dry-now"));
   else if (cmd === "fetch") await fetchHistory(hostAt > 0 ? process.argv[hostAt + 1]! : "kerr-mini");
   else {
-    console.error("nightly-bench: run [--pull] | install | fetch [--host kerr-mini]");
+    console.error("nightly-bench: run [--pull] [--dry] | install [--dry-now] | fetch [--host kerr-mini]");
     process.exit(1);
   }
 }

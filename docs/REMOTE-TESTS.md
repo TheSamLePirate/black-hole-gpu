@@ -108,6 +108,13 @@ Chaque nuit à 03 h 30, kerr-mini mesure le vol de référence J0 dans son propr
 p95, la durée d'image et la cadence s'ajoutent à `~/.kerr-lab/nightly/history.jsonl` du mini ; une nuit dont le GPU p50 dépasse de plus de
 10 % la médiane des sept précédentes s'écrit dans `~/.kerr-lab/nightly/alerts.md`.
 
+- **Son clone est `~/kerr-nightly/black-hole-gpu`, hors de `~/Documents`** (15 nov. 2026) : lancé par launchd, bun restait bloqué
+  dans `getcwd` sur un dossier de `~/Documents`, en attente d'un consentement de confidentialité macOS (TCC) que personne ne donne la
+  nuit (ssh a cet accès, launchd non). La première nuit n'a donc jamais tourné. `install` (par ssh, depuis le clone de `Documents`)
+  crée ce clone par liens physiques et met son `origin` sur GitHub. Le banc prend le verrou GPU du runner (`~/kerr-runner/gpu.lock`,
+  90 min au plus), pour ne pas voler en même temps que les tâches de nuit des autres sessions, puis attend la machine au repos. Chaque
+  étape s'écrit dans `~/.kerr-lab/nightly/progress.log`. `install --dry-now` fait tourner launchd une fois, sans J0, pour vérifier le
+  chemin.
 - **Lire** : `bun scripts/nightly-bench.ts fetch` (ici) ajoute les nuits nouvelles à `docs/perf/nightly-mini.jsonl` (suivi par Git) et
   montre les dernières et les alertes.
 - **Le bruit** : A/A du 14 nov. (deux mesures de suite) : 57,20 et 57,10 ms de GPU p50 — 0,2 % ; la limite de 10 % est loin au-dessus.
