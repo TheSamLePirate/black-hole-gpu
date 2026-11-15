@@ -207,3 +207,10 @@ Les plafonds de J5-1 au beau temps, de J5-2 par corps et la parité du repli tra
   `shadeWaterFinish` (autre cible, autre moment, ou ces pixels finis par `shadeLiteFinish`) : **aucun chiffre de cette sonde ne vaut** (règle 3),
   ni ceux de 08:23. Retirée (patch hors du dépôt). Reprendre demande de comprendre d'abord par quel chemin la mer de J0 est finie — un
   outillage de débogage du GPU (lire un pixel à chaque passe) plutôt qu'une copie.
+- **Comment la mer de J0 est marquée au moment du `resolve`** (2026-11-15 08:58 UTC) : sonde `sea-marks` (E2E_PROBE ; `renderer.traceColumn`, le
+  diagnostic de HORIZON-FLICKER, copié juste après le `resolve`), une colonne de l'horizon au cockpit, trois images — **témoin passé** (les
+  lignes du cockpit lisent −1). **Constat** : la mer porte `RASTER_MARK` × 1 (1e30, « fini comme un sol »), pas × 4 (4e30, « fini comme de
+  l'eau » — `rasterMark(…, water)`), à l'estampille de l'image. Le chemin que je supposais (l'eau marquée `RASTER_WATER` par `shadeLite`,
+  ombrée par `shadeWater`, finie en eau par `shadeWaterFinish`) n'est pas celui que la mer de J0 suit à 500 m — ou la couverture d'eau y
+  vaut ≤ 0,5. C'est le point de départ de la suite : suivre une ligne de mer de J0 à travers `shadeLite` (son `liteWater`, la condition
+  « early » `P.sea[1].w ≥ 0,999`), `liteEpilogue` et les noyaux de l'eau, avant de rouvrir la reconstruction et J5-6.

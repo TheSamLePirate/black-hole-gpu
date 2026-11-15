@@ -7598,3 +7598,11 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
 - Preuves : mesuré (kerr-mini) — 0 pixel à 777777 sur 583 200, la mer à `RASTER_MARK` 1e30 et l'estampille de l'image.
 - Limites : la cause (cible, moment, chemin de finition de la mer) inconnue ; J5-6 reste fermé ; J0 ~48–50 ms sur le mini.
 - Suite : un outil qui lit un pixel donné à chaque passe, avant de rouvrir la reconstruction.
+
+### 2026-11-15 08:58 UTC — La mer de J0 au moment du resolve : finie comme un sol
+
+- Contribution à la destination : un fait établi (témoin passé) qui corrige le modèle sur lequel reposait la reconstruction (J5-6).
+- Réalisé : sonde `sea-marks` (E2E_PROBE) sur `renderer.traceColumn` ; PLAN-J5 §5 ; E2E-CATALOGUE.
+- Preuves (mesuré, kerr-mini, trois images) : les lignes de mer à `RASTER_MARK` 1e30 (non 4e30), le cockpit à −1 (le témoin).
+- Limites : le chemin exact de la mer de J0 (et pourquoi pas « eau ») non encore suivi.
+- Suite : suivre une ligne de mer à travers `shadeLite`, `liteEpilogue` et les noyaux de l'eau ; puis la reconstruction et J5-6.
