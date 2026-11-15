@@ -58,7 +58,7 @@ describe.skipIf(!E2E)("the F-35B's recovery on a carrier", () => {
     const said = await app.js<string>(`__bh.camera.deckLand("ford")`);
     console.log(`  ${said}`);
     expect(said).toContain("Deck landing on");
-    await app.waitFor(`["alongside", "cross", "descend", "down"].includes(__bh.camera.deckRun?.phase) || !__bh.camera.deckRun`, 150_000);
+    await app.waitFor(`["alongside", "cross", "descend", "down"].includes(__bh.camera.deckRun?.phase) || !__bh.camera.deckRun`, 100_000);
     await app.waitFor(`__bh.camera.deckRun?.phase !== "alongside"`, 90_000);
     await around(250, 10, 70);
     await shot("deck-alongside");

@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-15 00:24 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-15 00:25 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous.
@@ -7049,4 +7049,14 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   pas le jeu.
 - **Changement** : le test attend la ligne de Darkstar et vérifie que TARS ne la dit pas ; en-tête et catalogue.
 - **Preuve** : `copilot` 2/2 (3 sautés : TARS en direct), « 2 bandits, le plus proche 358, 69 km, 8200 m, de face » de Darkstar.
+
+### 2026-11-15 00:25 UTC — QA-09 : 14 plafonds d'attente de vol abaissés d'après leurs mesures
+
+- **Changement** : 14 attentes d'une condition de vol (pas de compilation : celles-là dépendent de la machine), dans 9 e2e (`aar`, `crew-aar`,
+  `course`, `deckland`, `f35-intercept`, `net-orders`, `s1-missions`, `s2-views`, `shootdown`, `wreck-replay`) : plafond à deux fois le temps
+  le plus long mesuré. Par exemple, `aar:41` et `crew-aar:57` mesurées vers 62 s sur 6 lancements (150/180 s → 120 s) ; `shootdown:218` 6,1 s
+  (120 → 60 s) ; `net-orders:51` 5,1 s (180 → 60 s). Garde : 103 → 99 attentes de plus de 120 s.
+- **Limites** : la plupart viennent d'un seul lancement, sur ce Mac (M1 Max, fenêtre visible). Ces e2e n'ont pas été relancés après
+  l'abaissement, sauf `aar` et `crew-aar` (les mêmes attentes, plafond plus haut). Laissées telles quelles : `f35-wingmen:97` (l'issue
+  d'un combat varie trop) et les attentes de compilation (`f35-sea-trail`).
 

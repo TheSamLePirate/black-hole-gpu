@@ -38,7 +38,7 @@ describe.skipIf(!E2E)("the air refuelling", () => {
       c.jetModes.hdg = c.attitudeNow().heading; c.jetToggle("athr"); __bh.fleet.fuel.f35 = 4600; return 1; })()`);
     await Bun.sleep(1500);
     console.log(`  ${await app.js<string>(`__bh.camera.tankerStart({ near: true })`)}`);
-    await app.waitFor(`__bh.camera.aar?.stage === "hose"`, 150_000);
+    await app.waitFor(`__bh.camera.aar?.stage === "hose"`, 120_000);
     await Bun.sleep(3000);
     // (from behind and to the left, above: the tanker ahead, its right hose to us)
     await view("around", { yaw: -35, pitch: 10, dist: 55 });

@@ -109,7 +109,7 @@ describe.skipIf(!E2E)("a downed aircraft: smoke, the fall, the crash; its replay
     // (its crash: the explosion, the smoke rising)
     await app.waitFor(
       `(() => { const q = __bh.camera.combat.world.target(window.__drone); return !!q.wreck && !Number.isNaN(q.wreck.crashedAt); })()`,
-      120_000,
+      60_000,
     );
     await app.js(`(() => { window.__crashEnd = __bh.flight.replay.tape().end; return 1; })()`);
     const booms = await app.js<number[]>(`__bh.camera.combat.booms.map((b) => b.size)`);

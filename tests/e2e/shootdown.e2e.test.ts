@@ -194,7 +194,7 @@ describe.skipIf(!E2E)("low over the sea: a drone, an airliner, a frigate — loc
     await steer("Airliner");
     const a0 = await tgt("Airliner");
     console.log(`  the airliner: ${a0.d.toFixed(0)} m, ${a0.z.toFixed(0)} m over the sea, alive ${a0.alive}`);
-    await app.waitFor(near("Airliner", 8000), 150_000);
+    await app.waitFor(near("Airliner", 8000), 90_000);
     await steer(null);
     await shot("liner-0-ahead");
     console.log(`  ${(await tgt("Airliner")).d.toFixed(0)} m: ${await engage("Airliner", "aim9x")}`);
@@ -215,7 +215,7 @@ describe.skipIf(!E2E)("low over the sea: a drone, an airliner, a frigate — loc
     const h = await head();
     console.log(`  falling, the head ${h.yaw.toFixed(0)}°, ${h.pitch.toFixed(0)}°, the lens ${h.fov.toFixed(0)}°`);
     await shot("liner-2-falling");
-    await app.waitFor(crashed("Airliner"), 120_000);
+    await app.waitFor(crashed("Airliner"), 60_000);
     await Bun.sleep(300);
     await shot("liner-3-crash");
     expect(await app.js<number>(`__bh.camera.combat.booms.filter((b) => b.size > 2).length`)).toBeGreaterThan(0);
@@ -225,7 +225,7 @@ describe.skipIf(!E2E)("low over the sea: a drone, an airliner, a frigate — loc
 
   test("the frigate ahead: Tab to it, a JSM sea-skimming, the explosion, the frigate burning, sinking", async () => {
     await steer("Frigate");
-    await app.waitFor(near("Frigate", 20000), 150_000);
+    await app.waitFor(near("Frigate", 20000), 90_000);
     await steer(null);
     await shot("frigate-0-ahead");
     console.log(`  ${(await tgt("Frigate")).d.toFixed(0)} m: ${await engage("Frigate", "jsm")}`);

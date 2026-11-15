@@ -16,7 +16,7 @@ describe.skipIf(!E2E)("the F-35's intercept", () => {
   };
   beforeAll(async () => {
     app = await App.boot({ width: 1600, height: 1000, hash: "scene=game:artemis", tiles: false });
-    await app.waitFor("__bh.camera.piloting", 120_000);
+    await app.waitFor("__bh.camera.piloting", 60_000);
     await app.js(`(() => { __bh.settings.vessel = "f35"; __bh.settings.wind = 0; return 1; })()`);
     await app.waitFor(`__bh.fleet.active === "f35"`, 30_000);
   }, 180_000);

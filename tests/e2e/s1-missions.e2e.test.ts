@@ -86,7 +86,7 @@ describe.skipIf(!E2E)("the missions of exception", () => {
     await a.js(`(() => { __bh.camera.outside = { yaw: 2.6, pitch: 0.25, dist: 90 }; return 1; })()`);
     await Bun.sleep(1500);
     await shot(a, "diamond");
-    await a.waitFor(`(__bh.camera.mission?.run.apart.passes ?? 0) >= 1`, 150_000);
+    await a.waitFor(`(__bh.camera.mission?.run.apart.passes ?? 0) >= 1`, 130_000);
     console.log(`  passes: ${await a.js<number>(`__bh.camera.mission.run.apart.passes`)}`);
     await a.js(`(() => { __bh.settings.shipMount = "chase"; __bh.camera.missionAbort(); __bh.settings.wingmen = 0; return 1; })()`);
   }, 300_000);

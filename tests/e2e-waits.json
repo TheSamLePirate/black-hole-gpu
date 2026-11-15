@@ -17,7 +17,7 @@
  },
  "aar.e2e.test.ts": {
   "sleeps": 0,
-  "waits": 2
+  "waits": 1
  },
  "assist-dock.e2e.test.ts": {
   "sleeps": 0,
@@ -72,10 +72,6 @@
   "waits": 4
  },
  "crew-aar.e2e.test.ts": {
-  "sleeps": 0,
-  "waits": 2
- },
- "deckland.e2e.test.ts": {
   "sleeps": 0,
   "waits": 1
  },
@@ -233,7 +229,7 @@
  },
  "net-orders.e2e.test.ts": {
   "sleeps": 0,
-  "waits": 2
+  "waits": 1
  },
  "net-rooms.e2e.test.ts": {
   "sleeps": 1,

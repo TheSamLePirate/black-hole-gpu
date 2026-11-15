@@ -48,7 +48,7 @@ describe.skipIf(!E2E)("the leader's orders", () => {
     );
     // (Ben in formation on her: Beside first — far — then his place)
     console.log(`  Ben: ${await b.js<string>(`__bh.net.formation(${sa})`)}`);
-    await b.waitFor(`(__bh.camera.form?.last?.dist ?? 1e9) < 15`, 180_000);
+    await b.waitFor(`(__bh.camera.form?.last?.dist ?? 1e9) < 15`, 60_000);
   }, 480_000);
   afterAll(() => {
     b?.close();
@@ -101,7 +101,7 @@ describe.skipIf(!E2E)("the leader's orders", () => {
     expect(turned).toBeLessThan(110);
     await a.js(`__bh.camera.flightOrder("rejoin")`);
     await b.waitFor(`__bh.camera.form?.slot === ${sa}`, 10_000);
-    await b.waitFor(`(__bh.camera.form?.last?.dist ?? 1e9) < 15`, 240_000).catch(async (e) => {
+    await b.waitFor(`(__bh.camera.form?.last?.dist ?? 1e9) < 15`, 180_000).catch(async (e) => {
       console.log(`  Ben: ${await benSays()}`);
       throw e;
     });

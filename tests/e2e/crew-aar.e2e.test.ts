@@ -54,7 +54,7 @@ describe.skipIf(!E2E)("crew — air refuelling", () => {
   }, 60_000);
 
   test("behind the hose: the phases at the console (PFD's AAR box), the way it is flown changed from it", async () => {
-    await app.waitFor(`__bh.camera.aar?.stage === "hose"`, 180_000);
+    await app.waitFor(`__bh.camera.aar?.stage === "hose"`, 120_000);
     await app.waitFor(`${crew.w("__crew.model.own()?.snapshot?.aar?.stage")} === "hose"`, 5000);
     const a = (await aar())!;
     console.log(`  console: ${a.phase} · ${a.mode}`);

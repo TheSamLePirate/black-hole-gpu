@@ -83,7 +83,7 @@ describe.skipIf(!E2E)("the guided lessons", () => {
     await Bun.sleep(4000);
     await shot("handover");
     expect(await app.js<string>(`document.querySelector('[data-testid="course-panel"]')?.textContent ?? ""`)).toContain("À VOUS");
-    await app.waitFor(`!!document.querySelector('[data-testid="instructor-debrief"]')`, 300_000);
+    await app.waitFor(`!!document.querySelector('[data-testid="instructor-debrief"]')`, 260_000);
     await Bun.sleep(600);
     await shot("debrief");
     const s = await app.js<number>(`__bh.camera.instrLast.debrief.score`);
@@ -97,7 +97,7 @@ describe.skipIf(!E2E)("the guided lessons", () => {
     await app.js(`(() => { __bh.flight.school.guided("formation"); return 1; })()`);
     await app.waitFor(`__bh.camera.course?.id === "formation" && !!__bh.camera.course.run`, 30_000);
     await app.js(`(() => { __bh.settings.shipMount = "chase"; return 1; })()`);
-    await app.waitFor(`__bh.camera.course?.run?.steps[__bh.camera.course.run.i]?.who === "you"`, 240_000);
+    await app.waitFor(`__bh.camera.course?.run?.steps[__bh.camera.course.run.i]?.who === "you"`, 150_000);
     await Bun.sleep(3000);
     await shot("formation");
     const v = await app.js<Record<string, number>>(`__bh.camera.courseSample()?.v ?? {}`);

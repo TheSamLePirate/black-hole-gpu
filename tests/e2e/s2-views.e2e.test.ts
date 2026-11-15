@@ -76,7 +76,7 @@ describe.skipIf(!E2E)("the views of exception", () => {
     await app.js(
       `(() => { const c = __bh.camera; c.jetToggle("ap"); c.jetToggle("athr"); c.jetModes.alt = 15000; c.jetModes.spd = 470; return 1; })()`,
     );
-    await app.waitFor(`(__bh.camera.mission?.run.apart.totality ?? 0) > 15`, 240_000);
+    await app.waitFor(`(__bh.camera.mission?.run.apart.totality ?? 0) > 15`, 180_000);
     await shot("totality");
     // (the Sun eclipsed: some 80° to the right and 24° up — the outside camera turned to it, below the jet)
     for (const [k, yaw] of [
