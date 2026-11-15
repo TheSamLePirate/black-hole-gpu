@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-15 04:29 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-15 04:54 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous.
@@ -7280,3 +7280,10 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   52,9, arbres de moins de 6 px à la photo 51,0, sans décor 45,1. L'écart des deux références (2,2 ms) rend chaque chiffre indicatif.
 - Limites : un passage ; aucune image comparée ; le seuil des petits arbres change l'image — à décider par Sam après A/B répété et planche.
 - Suite : A/B répété du seuil `treeMinPx` (2,5 / 4 / 6) avec planche, avant une proposition.
+
+### 2026-11-15 04:54 UTC — `offline-settings` : l'attente de la zone suit sa progression
+
+- Relancé seul : le même échec qu'avec les autres, la zone « pas prête en 420 s ». Le test dit maintenant où elle en est : elle avançait
+  (7 296 / 8 038 chaînes à 421 s, aucun échec), seulement plus lentement à la fin. L'attente suit la progression (dite toutes les 30 s,
+  échec si arrêtée 150 s ou au-delà de 15 min). 4/4, prête en ~340 s, 391 Mo. Garde : 96 → 95. PROBLEMES, E2E-VOLS §7.
+

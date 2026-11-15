@@ -34,8 +34,10 @@ connue ou supposée, la piste. Une entrée réglée est barrée avec le commit q
   (`tests/earth-tiles.test.ts`, témoin positif) ; (2) puis, au chargement d'une sauvegarde, « Destroyed texture (RG16Float 1440×810) used in a
   submit » : le rendu du piéton détruisait sa texture d'occlusion au milieu d'une image où l'appareil l'avait déjà lue — `character-renderer.ts`
   les lâche au lieu de les détruire. `character` 2/2 sur kerr-mini ; son attente dit maintenant ce qui manque.
-- **`offline-settings`** : la zone hors ligne s'est mise en pause à 192 / 8 038 et n'était pas prête en 420 s. Lancé après une dizaine
-  d'e2e qui lisent l'IGN : une limitation du débit (429) est possible. À relancer seul avant de conclure.
+- ~~**`offline-settings`** : la zone hors ligne pas prête en 420 s~~ — réglé le 15 nov. : relancé seul, le même échec, mais la zone
+  **avançait** (7 296 / 8 038 chaînes à 421 s, 0 échec, les dernières tuiles de l'IGN plus lentes que les premières). Le plafond fixe
+  était trop court pour un téléchargement réseau. L'attente suit maintenant la progression (dite toutes les 30 s ; échec si elle
+  s'arrête 150 s ou dépasse 15 min). 4/4, la zone prête en ~340 s (391 Mo).
 
 ## ~~« Climb, climb! » pendant tout le contact d'un ravitaillement en vol~~ (relevé le 14 novembre 2026, capture de l'e2e `aar`) — réglé le même jour
 

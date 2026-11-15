@@ -223,10 +223,6 @@
   "sleeps": 1,
   "waits": 0
  },
- "offline-settings.e2e.test.ts": {
-  "sleeps": 0,
-  "waits": 1
- },
  "ortho.e2e.test.ts": {
   "sleeps": 1,
   "waits": 0
