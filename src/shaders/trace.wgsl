@@ -274,9 +274,10 @@ override TUNE_BLD_PHOTO: f32 = 1.0;
 // sea and hills as by day under a nautical twilight's sky — while the craft got the table (×0.88–0.93). 0: the old fallback, a measuring
 // lever (renderer.tune), to retire with J3-R)
 override TUNE_SKYFLAT_DIM: u32 = 1u;
-// (PLAN-J3 §8 question 3, a measuring lever — off as drawn: the craft's key light through the scenery's shadow map at the craft — the
-// trees' and buildings' layers at the camera's place, keyLight —; the relief's is there already, keyRelief)
-override TUNE_SHIP_SCENERY_SHADOW: u32 = 0u;
+// (PLAN-J3 §8 question 3 — on since 15 Nov 2026, the plan's recommendation, revisable by Sam: the craft's key light through the scenery's
+// shadow map at the craft — the trees' and buildings' layers at the camera's place, keyLight —, as the relief's — keyRelief —: in a
+// tower's shadow its nose was lit as in full sun (La Défense, J0 craftshade). 0: as before — a measuring lever)
+override TUNE_SHIP_SCENERY_SHADOW: u32 = 1u;
 // (the scenery's shadow at the craft as keyLight read it — x trees', y buildings', −1 off the map or none —: envBuf + 8, a measure)
 var<private> SHIP_SC_OCC: vec2f = vec2f(-1.0);
 // (a ray rising over the ground — its clearance growing —: its steps' share of the distance (5 %: the shell left in ~150 steps;

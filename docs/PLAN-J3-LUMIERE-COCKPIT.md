@@ -161,6 +161,22 @@ et que l'outillage fonctionne sous Bun ; rien d'autre. Ni l'un ni l'autre n'est 
    noire devient une coque gris-bleu lisible. Recommandation : le laisser éteint (rien à gagner en jeu) ; l'allumer si la photo de nuit doit
    montrer l'appareil.
 
+**Réglées provisoirement le 2026-11-15 (00:02 UTC), selon les recommandations du plan — révisables par Sam** (consigne de la session :
+avancer sans attendre, comme la borne provisoire du M1 Max) :
+
+| Question | Réglage provisoire | Sur quoi |
+|---|---|---|
+| 1. La scène J3 | la ville (Paris) d'abord | la référence relevée le 13 nov. ([fiche](progress/j3/FICHE-PARIS-2026-11-13.md)) |
+| 2. L'ordre | celui du §3, suivi | — |
+| 3. L'ombre reçue par l'appareil | **allumée** : le relief (`keyRelief`, depuis le 1ᵉʳ oct.) et le décor (`TUNE_SHIP_SCENERY_SHADOW` 1 par défaut ; 0 : avant) | La Défense : le nez, éclairé en plein soleil dans l'ombre d'une tour, passe à l'ombre ; deux lectures de carte par passage de la sonde |
+| 4. meshoptimizer | non adopté pour la taille ; gardé pour les niveaux de détail le jour où leur coût sera chiffré | [fiche J3-6](progress/j3/FICHE-J3-6-MESHOPT-2026-11-14.md) |
+| 5. L'exposition la nuit | à part (hors J3) | — |
+| 6. Le MSAA de l'appareil | 4× gardé (l'état actuel) ; `SHIP_MSAA` 1 prêt | 4–5 ms sur kerr-mini contre des bords en escalier |
+| 7. Le plancher de nuit de l'appareil | **éteint** (`ship.nightFloor`) | invisible à l'exposition du jeu |
+| J3-4 : la borne de l'âge des écrans | **p95 < 70 ms, aucun jamais envoyé** — assertée par le vol J0 | mesuré 57 (13 nov.), 56,2 (15 nov.) |
+
+Restent à Sam : les lampes de cabine la nuit (AAA-PROGRESS), les toits hors de France (J3-5 : les tables, le recalage, ou les deux).
+
 ## 9. Non vérifié
 
 Le relevé du §2 vient d'une lecture du code (agent d'exploration, 13 novembre), pas de mesures ; les numéros de ligne sont ceux de ce jour.

@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-14 23:20 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-15 00:02 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous.
@@ -6995,3 +6995,14 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
 - **Preuve** : sonde après le correctif, 15 images en 30 s (avant : 1 en 50 à 80 s) ; `s3-replay` 6/6 (brouillon de 239 images ;
   avant 3/6) ; capture de l'image brouillon. Non mesuré : le temps d'une vidéo finale (inchangé).
 
+### 2026-11-15 00:02 UTC — PLAN-J3 : les questions réglées provisoirement ; l'ombre du décor sur l'appareil allumée ; l'âge des écrans borné
+
+- **Contribution à la destination :** §7 (l'appareil dans les ombres du monde) ; PLAN-J3 §8 tenu — chaque question réglée provisoirement
+  sur sa recommandation et sa mesure, révisable par Sam.
+- **Réalisé :** `TUNE_SHIP_SCENERY_SHADOW` 1 par défaut (l'ombre des arbres et bâtiments sur la lumière de l'appareil ; 0 : avant) ; le vol
+  J0 asserte l'âge des écrans (p95 < 70 ms, aucun jamais envoyé) ; PLAN-J3 §8 : le tableau des réglages provisoires (1 ville, 2 ordre, 3
+  allumée, 4 non adopté, 5 à part, 6 4× gardé, 7 éteint, J3-4 borne).
+- **Preuves (mesuré, kerr-mini)** : `craftshade` (La Défense, 30 m, 18:00 UTC, cockpit) : tel que dessiné 63,90, avant 64,57, A/A 0,04 —
+  le nez à l'ombre ; `coherence` passe ; check-wgsl 84/84. La borne de l'âge : vérifiée sur le vol J0 du 15 nov. (p95 56,2, jamais 0).
+- **Limites :** l'ombre du décor lue à la caméra (en vue extérieure : la caméra) et mise à jour à la cadence de la sonde, comme celle du
+  relief ; ΔGPU non mesuré (deux lectures de carte par passage de la sonde). Restent à Sam : les lampes de cabine, les toits hors de France.

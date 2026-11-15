@@ -393,6 +393,14 @@ describe.skipIf(!E2E)("J0: the reference flight over Toulon-Hyères", () => {
     expect(a.gpuErrors + b.gpuErrors).toBe(0);
     expect(a.flightFailure ?? b.flightFailure).toBeNull();
     expect(frames.length).toBeGreaterThan(J0_SCENE.flightS * 5);
+    // (PLAN-J3 J3-4 — the instruments' age bounded, provisionally — the plan's recommendation of 15 Nov 2026, revisable by Sam: measured
+    // p95 57 ms (13 Nov), 56.2 (15 Nov, kerr-mini); its probe's controls passed (J0_PHASES=agecheck): p95 under 70 ms, every image's
+    // screens uploaded at least once)
+    const age = (out[tag] as { instrumentAge: { never: number; p95: number } | null }).instrumentAge;
+    if (age) {
+      expect(age.never, "images whose screens were never uploaded").toBe(0);
+      expect(age.p95, "the instruments' age p95 [ms]").toBeLessThan(70);
+    }
   }
 
   test.skipIf(!PHASES.includes("flight"))("the measured flight: the coast, the turn", () => measureFlight("flight"), 300_000);
@@ -1421,7 +1429,7 @@ describe.skipIf(!E2E)("J0: the reference flight over Toulon-Hyères", () => {
   // the craft. Read: the map's values at the craft (readShipSky().sceneryAtCraft); then off / on / off, the exposure held, the quarter view —
   // the frame's centre (the craft) — shots for Sam)
   test.skipIf(!PHASES.includes("craftshade"))(
-    "J3 question 3: the scenery's shadow on the craft — its map read at the craft, off / on / off; shots for Sam",
+    "J3 question 3: the scenery's shadow on the craft — its map read at the craft, as drawn / before / as drawn; shots for Sam",
     async () => {
       await start("");
       const [lat, lon, agl, hdg] = (process.env.CS_PLACE ?? "48.8922,2.2421,30,280").split(",").map(Number);
@@ -1481,11 +1489,12 @@ describe.skipIf(!E2E)("J0: the reference flight over Toulon-Hyères", () => {
         rows[`${name}Craft`] = +(t / n).toFixed(2);
         rows[`${name}Map`] = sky ? sky.sceneryAtCraft.map((v) => +v.toFixed(3)) : [];
       };
-      await one("off");
-      await app.js(`(() => { __bh.renderer.tune = { TUNE_SHIP_SCENERY_SHADOW: 1 }; __bh.refresh(); return 1; })()`);
-      await one("on");
+      // (as drawn — the scenery's shadow on, since 15 Nov —, the lever off — as before —, as drawn again)
+      await one("drawn");
+      await app.js(`(() => { __bh.renderer.tune = { TUNE_SHIP_SCENERY_SHADOW: 0 }; __bh.refresh(); return 1; })()`);
+      await one("before");
       await app.js(`(() => { __bh.renderer.tune = {}; __bh.refresh(); return 1; })()`);
-      await one("offAgain");
+      await one("drawnAgain");
       console.log(
         `  J3 craft shade (${found[0].toFixed(5)}, ${found[1].toFixed(5)}, ${agl} m, ${utc} UTC, cockpit): ${JSON.stringify(rows)}`,
       );
@@ -1493,7 +1502,7 @@ describe.skipIf(!E2E)("J0: the reference flight over Toulon-Hyères", () => {
       await app.js(
         `(() => { __bh.renderer.tune = {}; Object.assign(__bh.settings, { autoExposure: true, exposure: 0, shipMount: "cockpit" }); __bh.freeze(false); __bh.game.setDate("${J0_SCENE.date}"); return 1; })()`,
       );
-      expect(Math.abs((rows.offCraft as number) - (rows.offAgainCraft as number))).toBeLessThan(2);
+      expect(Math.abs((rows.drawnCraft as number) - (rows.drawnAgainCraft as number))).toBeLessThan(2);
     },
     900_000,
   );
