@@ -112,16 +112,14 @@ test.skipIf(!E2E)(
 
       // (the budget squeezed — 8 ms, far under what the raster costs here — for 15 s, beyond the 12 s the old fallback waited: the raster
       // kept — no fallback to the traced pipeline on the Earth, Sam's decision (b) of 15 Nov 2026, docs/PROBLEMES-A-REGLER.md)
-      await app.js(`(() => { __bh.settings.realtimeBudget = 8; window.__left = 0; window.__leftT = setInterval(() => {
-        if (!__bh.renderer.rasterPrimaryNow || __bh.renderer.earthPipelineNow(__bh.settings) !== "raster") window.__left++; }, 100); return 1; })()`);
-      await Bun.sleep(15_000);
-      const squeezed = await app.js<{
-        left: number;
-        pipe: string;
-        primary: boolean;
-        gpuMs: number;
-      }>(`(() => { clearInterval(window.__leftT);
-        const r = __bh.renderer; return { left: window.__left, pipe: r.earthPipelineNow(__bh.settings), primary: r.rasterPrimaryNow, gpuMs: +r.lastGpuMs.toFixed(1) }; })()`);
+      // (watched in the page every 100 ms for 15 s — ended at the first frame the Earth leaves the raster, said with its second)
+      const squeezed = await app.js<{ left: number; atS: number; pipe: string; primary: boolean; gpuMs: number }>(`(async () => {
+        const r = __bh.renderer, t0 = performance.now(); __bh.settings.realtimeBudget = 8; let left = 0, atS = -1;
+        while (performance.now() - t0 < 15000) {
+          await new Promise((q) => setTimeout(q, 100));
+          if (!r.rasterPrimaryNow || r.earthPipelineNow(__bh.settings) !== "raster") { left++; atS = +((performance.now() - t0) / 1000).toFixed(1); break; }
+        }
+        return { left, atS, pipe: r.earthPipelineNow(__bh.settings), primary: r.rasterPrimaryNow, gpuMs: +r.lastGpuMs.toFixed(1) }; })()`);
       out.squeezed = squeezed;
       console.log(`  budget 8 ms for 15 s: ${JSON.stringify(squeezed)}`);
       await app.shot("remote-results/rg-alps-squeezed.png");

@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-15 20:56 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-15 21:16 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous. Ce qui est fermé quitte le tableau « En cours » pour la ligne « Fermé récemment ».
@@ -47,7 +47,7 @@ J4 (fermé, sortie non atteinte), J5 et J6 (fermés).
 |---|---|---|
 | Rendu (33d89754) | J4 / J5 — l'eau, les volumes, la généralisation | **fermés** ([PLAN-J4](docs/PLAN-J4-VOLUMES.md), [PLAN-J5](docs/PLAN-J5-GENERALISATION.md)) : l'eau à demi-rythme (J5-5, −6,0 à −6,4 ms, l'image la même) ; le sol à demi-rythme laissé au joueur (J5-6, réglage « demi » : −1,9 à −3,2 ms ; « auto » à chaque pixel) ; la FFT de la mer en deux passes (−0,9 ms) ; la carte d'ombre des arbres (−2,8 ms, forêt) ; Sam a refusé les arbitrages d'image (MSAA 1×, petits arbres, nuages amortis). Postes lourds restants : l'eau 16,2, les nuages d'orage 16,5, le décor d'une forêt ~7 ms |
 | Rendu (33d89754) | Mesures tenues | la borne du M1 Max **à 30, provisoire** (soutenu, le GPU bride vers 850 MHz quelle que soit la borne — [J0-CONTRAT §2](docs/J0-CONTRAT.md)) ; le coût de l'appareil 3,5–4,5 ms, dont le MSAA 4× 4–5 ms (gardé) |
-| PLAN-APPROCHES (1feb2f7f) | [PLAN-APPROCHES](docs/PLAN-APPROCHES.md) | **AP0 à AP9 faits (15 nov.)** : données réelles (nav.dat, CIFP), choix automatique, jonction planifiée, A320, carte, radar, TSD, crew, toutes les pistes au HUD, directeur de vol, pente publiée, la roue « Approche » et les options ; AP9 : l'autorisation avec les vraies valeurs, l'indicatif en morse, les radiobalises (`approach-audio` 4/4, témoins positif et négatif). **Reste : AP10 (tous les aéroports), AP-R (retraits)** |
+| PLAN-APPROCHES (1feb2f7f) | [PLAN-APPROCHES](docs/PLAN-APPROCHES.md) | **AP0 à AP9 et AP10a faits (15 nov.)** : données réelles, choix, jonction, A320, carte, radar, TSD, crew, HUD, directeur de vol, roue, options, audio ; AP10a : la campagne sur les 66 914 extrémités du monde (toutes avec une approche ; 92 terrains du F-35 sans extrémité volable, sur le relief grossier), deux défauts corrigés. **Reste : AP10b (échantillon volé), AP-R (retraits)** |
 | Audit vagues 3–4 et 6 (1feb2f7f) | [09-priorites-todo](docs/audit-2026-11-10/09-priorites-todo.md) | **faits** : 3.1–3.2 réseau (RD0–RD2), 3.3 sauvegardes (une clé par sauvegarde ; avion, systèmes des vaisseaux et de l'A320 — ce dernier par J6-4), 3.4–3.5 vol, 3.6–3.7 TARS, 3.10 e2e honnêtes, 4.2 temps et onglet masqué, 4.3 `Settings`/`ViewPose`, 4.8 `main()` découpé ; vague 6 hors rendu (QA, AR, RD4/RD5, FX). **Reste** : l'état d'une mission ou d'un combat (Sam), IndexedDB et l'autosauvegarde hors frame (AR-05), FX-19 (fraîcheur des écrans, à mesurer), FX-21 |
 
 **Fermé récemment** : **J3** (15 nov., confirmé par Sam ; J3-R fait 20:48) ; **le repli du raster vers le tracé retiré** (15 nov., 20:48, décision (b)) ; **PLAN-J6** (15 nov., 20:35 : les neuf parcours en e2e, sept défauts corrigés) ; l'eau étagée E1 (−1,55 ms) et E2 (−0,5 ms), E3 non ouvert ; la classification lot 1 (sur terre −1,15 ms), lot 2 non ouvert
@@ -8336,3 +8336,34 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
 - Non vérifié : l'écoute sur kerr-mini (sortie SDR) ; le niveau des tons dans le mix réel au casque (mesuré au bus, pas à l'oreille) ;
   l'A320 en e2e audio (le même chemin, `a320App`).
 - Suite : AP10 — la campagne sur toutes les pistes (approche, chemin, relief, refus motivés), puis AP-R.
+
+### 2026-11-15 21:16 UTC — PLAN-APPROCHES AP10a : la campagne sur toutes les pistes du monde
+
+- Contribution à la destination : §19 (une fonction produit qui tient partout, pas seulement aux terrains essayés) ; la preuve à grande
+  échelle d'un contrat (« chaque extrémité reçoit une approche », décision de Sam), sans navigateur, en deux minutes.
+- Réalisé : `scripts/approach-campaign.ts` — chaque extrémité (66 914, l'eau écartée comme le jeu le fait) avec ses approches comme le jeu
+  les fait (`approachesOf`), sa pente sur le relief (`glideClearance` à son angle), la boîte de la jonction (`boxOverSlope`), deux jonctions
+  planifiées (derrière la finale, au-delà du terrain), le F-35 et l'A320 ; sortie
+  [ap10-campaign.md](docs/progress/approches/ap10-campaign.md) et `.json`. Deux défauts trouvés et corrigés : (1) `ilsStart` refusait une
+  approche **réelle** dont la pente rencontrait le relief connu — 94 dans le monde sur la carte grossière (23 ILS), Marseille 31R pendant
+  l'arrivée de ses tuiles — : une approche publiée est volée comme publiée, le relief qui la contredit dit ; seule une construite est
+  refusée ; (2) l'altitude d'un seuil que les données mettent plus de 150 m sous le relief (OurAirports à 0 m : Minsk UMMA) prise au
+  relief (`runwayOfApproach`, exportée et réutilisée par la campagne).
+- Preuves (mesuré, M1 Max, la carte mondiale du relief `relief-high.bin`, sans les tuiles fines) : 66 914 extrémités, **toutes avec une
+  approche** (8 270 réelles, 58 644 construites) ; pente dégagée 58 107, mince 3 615, construite écartée « relief » 1 371, construite
+  refusée 3 740 (6 508 avant le correctif d'altitude), réelle contredite par le relief grossier 81 (volée) ; aucun point de jonction à
+  moins de 290 m du sol ; terrains du F-35 sans extrémité volable 92 sur 6 269 (179 avant), de l'A320 36 sur 3 625 (79 avant) — canyons,
+  falaises, hauts plateaux lissés par la carte (Seiyoun, Potosí, Dillingham…). Test unitaire : le niveau du seuil (9/9).
+- Non vérifié : les refus restants avec les tuiles fines (le jeu les a en vol ; la campagne ne les charge pas) ; l'échantillon volé
+  (AP10b, à faire).
+- Suite : AP10b — l'échantillon volé stratifié (ILS réel, LDA, renumérotée, construite, approchée, herbe, altitude, montagne, courte),
+  F-35 et A320 ; puis AP-R.
+
+### 2026-11-15 21:20 UTC — CI rouge sur 8ed1b550 réparée : l'attente fixe de `raster-governor` remplacée
+
+- Réalisé : le cliquet des attentes longues (`tests/e2e-waits.test.ts`, QA-09) refusait le `Bun.sleep(15_000)` ajouté au retrait du repli ;
+  l'e2e surveille désormais dans la page, toutes les 100 ms pendant 15 s, et s'arrête au premier relevé où la Terre quitte le raster (la
+  seconde dite). Le quota n'a pas été relevé.
+- Preuves : `e2e-waits`, `e2e-catalogue`, `e2e-honesty` et les autres gardes des e2e 15/15 ; e2e `raster-governor` 1/1 sur kerr-mini (run
+  `20261115-221939-raster-governor-norepli2` : 15 s sous 8 ms de budget, la Terre en raster, GPU 38,3 ms). Leçon : le hook d'avant poussée
+  ne lance pas `bun test` ; après la modification d'un e2e, lancer ses gardes avant de pousser.
