@@ -231,7 +231,7 @@ Les plafonds de J5-1 au beau temps, de J5-2 par corps et la parité du repli tra
   vert un pixel laissé rebâti de pixels frais, magenta aucun) : **toute la mer verte** — le `resolve` rebâtit chaque pixel laissé. Le cyan
   naît donc **après** lui : le temporel ou le TAAU (dont l'entrée est `t.hdr`). Prochaine étape : la même peinture dans le temporel, puis
   le TAAU. Leviers et peinture retirés (patch hors du dépôt).
-- **La reconstruction : ce n'est pas le temporel** (2026-11-15 10:02 UTC) : la même scène J0 tenue, le pixel laissé prenant dans le temporel
+- **La reconstruction : ce n'est pas le temporel** (2026-11-15 09:53 UTC) : la même scène J0 tenue, le pixel laissé prenant dans le temporel
   la couleur reconstruite seule, sans historique (bit de mesure de `R.f.w`) : **toujours le bruit cyan** — la couleur que le `resolve`
   rebâtit est elle-même fausse, alors que sa peinture montrait des voisins frais trouvés partout. Or `liteFinish` écrit la couleur finale
   dans l'`accum` de l'eau fraîche (et la mer est juste en mode normal). **Question ouverte, précise** : que lit `loadAvg` des voisins frais au
