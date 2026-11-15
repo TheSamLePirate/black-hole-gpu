@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-15 01:44 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-15 02:20 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous.
@@ -7128,3 +7128,13 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
 - **Preuves (mesuré, kerr-mini froid)** : GPU p50 60,0 ms, p95 70,7 ; `clouds (half)` 6,2 ms ; météo au beau temps ≈ 0 (A/A 1,2) ; capture au
   virage : l'appareil dans le nuage.
 - **Limites :** le M1 Max ; la stabilité dans le nuage (J4-1).
+
+### 2026-11-15 02:20 UTC — QA-09, quatrième série : `shootdown-gpu` et `world-runway` réparés (tests périmés), 5 plafonds de plus
+
+- **`shootdown-gpu`** 1/6 → 6/6 : les deux causes réglées le 14 dans `shootdown` (la vie marine prenait la cible au Tab avant la frégate ;
+  un AIM-9X n'abat pas toujours l'avion de ligne : nouveau tir, 3 au plus).
+- **`world-runway`** 1/2 → 2/2 : le test, du 21 octobre, comparait la hauteur du relief (sur l'ellipsoïde depuis le géoïde du 23 octobre)
+  à l'altitude de la piste (au-dessus de la mer), avec un écart de 49,4 m, le N de Toulouse. Il soustrait maintenant `__bh.sys.geoid`.
+- **Plafonds** (mesurés) : `world-runway` 400 → 250 et 190 s (122,7 et 90,3 s), `shootdown-gpu` 150 → 70 et 60 s (31 et 29 s),
+  `voyage-prewarm:37` 120 → 60 s (20 s). La garde ne comptait pas ceux de `shootdown-gpu` : son motif s'arrête au premier nombre de l'appel.
+

@@ -34,7 +34,7 @@ test.skipIf(!E2E)(
       await app.waitFor(`!!__bh.camera.viewController().voyage`, 10_000);
       const ahead = await app.js<number>(`__bh.renderer.voyageKey >>> 0`);
       console.log(`  voyage begun, lever ${off ? "off" : "on"}: the key compiled ahead ${ahead === 4294967295 ? "none" : ahead}`);
-      await app.waitFor(`!__bh.camera.viewController().voyage`, 120_000);
+      await app.waitFor(`!__bh.camera.viewController().voyage`, 60_000);
       const tArr = Date.now();
       // (a few frames by Jupiter: its key the frame's)
       await Bun.sleep(500);

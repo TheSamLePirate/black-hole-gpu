@@ -84,7 +84,7 @@ describe.skipIf(!E2E)("the shot's GPU cost, RT max at ×8, ×6, ×4, ×3, ×2", 
   beforeAll(async () => {
     app = await App.boot({ width: 1600, height: 1000, lang: "fr", hash: "scene=game:artemis", tiles: true });
     await app.js(
-      `(() => { Object.assign(__bh.settings, { vessel: "f35", traffic: false, f35Invulnerable: true, f35EnemyMissiles: false, f35AutoProtect: false, showFps: true }); return 1; })()`,
+      `(() => { Object.assign(__bh.settings, { vessel: "f35", traffic: false, seaLife: false, f35Invulnerable: true, f35EnemyMissiles: false, f35AutoProtect: false, showFps: true }); return 1; })()`,
     );
     await app.waitFor(`__bh.fleet.active === "f35"`, 30_000);
   }, 300_000);
@@ -139,10 +139,22 @@ describe.skipIf(!E2E)("the shot's GPU cost, RT max at ×8, ×6, ×4, ×3, ×2", 
       await padlock(false);
       await phase("cruise 2");
       // the airliner
-      await app.waitFor(near("Airliner", 8000), 150_000);
+      await app.waitFor(near("Airliner", 8000), 70_000);
       await engage("Airliner", "aim9x");
       await phase("liner shot");
-      await app.waitFor(`!${Q("Airliner")}.alive`, 60_000);
+      // (one AIM-9X does not always down the airliner — a proximity burst deals less than its 80 points —: fired again, as in
+      // shootdown.e2e; and the sea life off: its ships came before the frigate on Tab — the same two causes, 15 Nov 2026)
+      for (let shotN = 1; shotN <= 3; shotN++) {
+        const id = await app.js<number>(`${Q("Airliner")}.id`);
+        await app.waitFor(
+          `!${Q("Airliner")}.alive || !__bh.camera.combat.world.missiles.some((m) => m.alive && m.target === ${id})`,
+          60_000,
+        );
+        if (!(await app.js<boolean>(`${Q("Airliner")}.alive`)) || shotN === 3) break;
+        await app.press("Enter");
+        await Bun.sleep(300);
+      }
+      await app.waitFor(`!${Q("Airliner")}.alive`, 10_000);
       await phase("liner fall");
       await app.waitFor(crashed("Airliner"), 120_000);
       await phase("liner crash");
@@ -150,7 +162,7 @@ describe.skipIf(!E2E)("the shot's GPU cost, RT max at ×8, ×6, ×4, ×3, ×2", 
       await padlock(false);
       await phase("cruise 3");
       // the frigate
-      await app.waitFor(near("Frigate", 20000), 150_000);
+      await app.waitFor(near("Frigate", 20000), 60_000);
       await engage("Frigate", "jsm");
       await phase("frigate shot");
       await app.waitFor(`!${Q("Frigate")}.alive`, 150_000);

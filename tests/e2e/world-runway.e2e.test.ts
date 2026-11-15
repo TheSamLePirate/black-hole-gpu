@@ -38,10 +38,12 @@ describe.skipIf(!E2E)("a world runway, flat, landed on", () => {
       len: number;
       hw: number;
       heights: number[];
+      N: number;
       site: { lat: number; lon: number; rwy: number };
     }>(`(() => {
       const r = __bh.sys.runways().filter((r) => r.world?.field === "LFBO").sort((a, b) => b.len - a.len)[0];
       const D = Math.PI / 180, heights = [];
+      let N = 0;
       for (let k = 0; k <= 8; k++) {
         const a = r.len * k / 8, q = r.origin.map((v, i) => v + r.along[i] * a);
         // (its geodetic place: WGS84's — not the geocentric angle)
@@ -49,13 +51,17 @@ describe.skipIf(!E2E)("a world runway, flat, landed on", () => {
         const pr = Math.hypot(q[0], q[1]), th = Math.atan2(q[2] * A, pr * B);
         const lat = Math.atan2(q[2] + ep2 * B * Math.sin(th) ** 3, pr - e2 * A * Math.cos(th) ** 3) / D, lon = Math.atan2(q[1], q[0]) / D;
         heights.push(__bh.relief("earth", lat, lon));
+        if (k === 4) N = __bh.sys.geoid(lat, lon);
       }
-      return { elev: r.elev, len: r.len, hw: r.halfWidth, heights, site: { lat: r.site.lat, lon: r.site.lon, rwy: r.site.rwy } };
+      return { elev: r.elev, len: r.len, hw: r.halfWidth, heights, N, site: { lat: r.site.lat, lon: r.site.lon, rwy: r.site.rwy } };
     })()`);
     console.log(`  LFBO ${r.len} m × ${2 * r.hw} m at ${r.elev} m: down its axis ${r.heights.map((h) => h.toFixed(1)).join(" ")}`);
     const spread = Math.max(...r.heights) - Math.min(...r.heights);
     expect(spread).toBeLessThan(0.5);
-    expect(Math.abs(r.heights[4]! - r.elev)).toBeLessThan(0.5);
+    // (the relief over the ellipsoid, the runway's elevation over the sea: N between them — since the geoid, 23 Oct 2026; the test, of the
+    // 21st, compared them as one: 49.4 m off at Toulouse, its N — E2E-VOLS §7 « datum confondu »)
+    console.log(`  the geoid there: N ${r.N.toFixed(1)} m`);
+    expect(Math.abs(r.heights[4]! - r.N - r.elev)).toBeLessThan(0.5);
     expect(r.elev).toBeGreaterThan(120);
     expect(r.elev).toBeLessThan(180);
   }, 120_000);
@@ -85,7 +91,7 @@ describe.skipIf(!E2E)("a world runway, flat, landed on", () => {
     console.log(`  the HUD's runway: ${rv.name}, ${rv.len} m`);
     expect(rv.len).toBeGreaterThan(3000);
     // (the final from the cockpit, 6 km out)
-    await app.waitFor(`(() => { const R = __bh.camera.ilsRun; return !R || (__bh.camera.ilsInfo()?.dme ?? 1e9) < 6; })()`, 400_000);
+    await app.waitFor(`(() => { const R = __bh.camera.ilsRun; return !R || (__bh.camera.ilsInfo()?.dme ?? 1e9) < 6; })()`, 250_000);
     const phase = await app.js<{ phase: string; missed: number }>(
       `({ phase: __bh.camera.ilsRun?.phase, missed: __bh.camera.ilsRun?.missed ?? 0 })`,
     );
@@ -93,7 +99,7 @@ describe.skipIf(!E2E)("a world runway, flat, landed on", () => {
     expect(phase.missed).toBe(0);
     expect(phase.phase).toMatch(/final|flare/);
     await shot("final");
-    await app.waitFor(`!__bh.camera.ilsRun || (__bh.camera.rolling && __bh.camera.geoNow().gs < 15)`, 400_000);
+    await app.waitFor(`!__bh.camera.ilsRun || (__bh.camera.rolling && __bh.camera.geoNow().gs < 15)`, 190_000);
     const end = await app.js<{ landed: boolean; gs: number; off: number | null; last: unknown }>(`(() => {
       const c = __bh.camera, g = c.geoNow();
       const r = __bh.sys.runways().filter((r) => r.world?.field === "LFBO").sort((a, b) => b.len - a.len)[0];
