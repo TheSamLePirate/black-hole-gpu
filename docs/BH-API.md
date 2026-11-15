@@ -458,8 +458,9 @@ LDA/SDF/IGS, « C… » built), with its generation `approachGen` counted at eac
   a tight runway paid for (A320: 2 000 m; F-35: 1 500 m); then the way in (the path to the approach's IF and the turns).
 - `approachesAt(code)` → the airfield's approaches now (its tile asked; null: the field not known yet); `approachForField(code, from)`
   → `{ f, a, via }`: the approach a flight would fly there without being in the air — the selection, else the automatic choice
-  seen from `from` (the flight plan's arrival, the MCDU's ARRIVAL and RAD NAV). `routeProcedures()` puts a published (CIFP)
-  approach's transition and final in the plan (`proc: { kind: "arr", rwy, approach, join }`; passing the IF — `join` — in NAV,
+  seen from `from` (the flight plan's arrival, the MCDU's ARRIVAL and RAD NAV). `routeProcedures()` puts the chosen
+  approach's transition and final in the plan — the FAA's, nav.dat's or the built one's legs (« IA23L, IF23L, FF23L »; AP-R: the fixed
+  « IAF23L, FAF23L » kept only for a game's own site without an approach) (`proc: { kind: "arr", rwy, approach, join }`; passing the IF — `join` — in NAV,
   the jet's or the A320's FMGC, engages the approach).
 - `__bh.sys.approaches(code)` → every approach of the airfield (`world/approaches.ts`, async): each end's real ones — in the US the
   FAA's published ones (`source: "cifp"`, cycle « 2611 »: ILS, LOC, LDA, RNAV « R28R-Z », VOR « V13L », NDB, with their own

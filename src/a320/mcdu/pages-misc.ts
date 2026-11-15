@@ -25,24 +25,16 @@ const PHASE_NAME: Record<string, string> = {
 };
 const fl = (x: number | null) => (x === null ? "-----" : `FL${String(Math.round(x)).padStart(3, "0")}`);
 
-/** the ILS of the arrival runway (or the one entered): its identifier, its frequency (a localizer's: odd tenths from
- *  108.10 to 111.95), its course */
+/** the ILS of the arrival runway (or the one entered): its identifier, its frequency (the database's — the arrival's real localizer;
+ *  none made up), its course */
 export function ilsOf(m: Mcdu): { id: string; freq: string; course: number; auto: boolean } | null {
   const F = m.host.fms;
-  const dest = m.host.route().wps.at(-1);
-  const rwy = dest?.field?.rwy;
-  if (F.ils) return { id: F.ils.id, freq: freqOf(F.ils.id), course: F.ils.course, auto: false };
   // (the arrival's approach's own localizer — real: its identifier, frequency, course — PLAN-APPROCHES AP3)
   const a = m.host.arrivalApproach?.();
-  if (a?.loc) return { id: a.loc.ident, freq: (a.loc.freq / 1000).toFixed(2), course: Math.round(a.loc.crs) % 360 || 360, auto: true };
-  if (!dest || rwy === undefined) return null;
-  const id = `I${dest.name.slice(1, 4)}`;
-  return { id, freq: freqOf(id + String(Math.round(rwy))), course: Math.round(rwy) % 360 || 360, auto: true };
-}
-function freqOf(s: string): string {
-  let h = 0;
-  for (const ch of s) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
-  return (108.1 + 0.2 * (h % 20)).toFixed(2);
+  const real = a?.loc ? { id: a.loc.ident, freq: (a.loc.freq / 1000).toFixed(2), course: Math.round(a.loc.crs) % 360 || 360 } : null;
+  // (one entered: its frequency the database's when it is that localizer, else none known — AP-R: no frequency made up from a hash)
+  if (F.ils) return { id: F.ils.id, freq: real && real.id === F.ils.id ? real.freq : "---.--", course: F.ils.course, auto: false };
+  return real ? { ...real, auto: true } : null;
 }
 
 const prog: Page = {

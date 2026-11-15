@@ -4,7 +4,7 @@
 // only shown (the stick taken: the needles stay); its calls; its grade. The arrival's and departure's fixes for a
 // flight plan, and its end: the approach engaged as the plan reaches its runway.
 // (Its methods, out of controls.ts: installed on its prototype — `this` the controller.)
-import { fieldCached, fieldsNear } from "../world/runways";
+import { fieldCached } from "../world/runways";
 import { groundMsl, sayResolved } from "./approach";
 import { worldRunwaySites, worldSite } from "../world/fieldsite";
 import { worldRunwaysNow } from "../world/runways3d";
@@ -100,7 +100,10 @@ export interface IlsChoice {
  *  world airfield), both its ends — the one the wind picks now marked —, the longest runway first; `auto` the end the
  *  approach takes when none is chosen (the longest runway, into the wind). Null: no airfield. */
 function ilsRunways(this: CameraController, name?: string): { field: string; auto: IlsChoice; ends: IlsChoice[] } | null {
-  const site = findRunway(this, name);
+  // (no name: the airfield the approach's choice takes — AP-R: « the nearest within 150 km » retired, one choice for all)
+  const pv = name ? null : this.approachPreview();
+  const code = name ?? (pv && pv !== "loading" && !("say" in pv) ? pv.field.icao || pv.field.ident : null);
+  const site = code ? findRunway(this, code) : null;
   if (!site) return null;
   const f = site.icao ? fieldCached(site.icao) : null;
   const sites = f ? worldRunwaySites(f) : [];
@@ -156,36 +159,20 @@ export function pickRunway(ends: IlsChoice[], asked: string): IlsChoice | null {
   return of.find((e) => e.wind) ?? of[0] ?? null;
 }
 
-/** The runway named (ICAO or name), else the nearest within 150 km. */
-export function findRunway(c: CameraController, name?: string): Site | null {
+/** The runway named (ICAO or name): the game's own site, else the world's airfield by its code (its tile in), its longest paved
+ *  runway. (AP-R: its « nearest within 150 km » without a name retired — the approach's choice, controller/approach.ts, is the one
+ *  way an airfield is picked.) */
+export function findRunway(_c: CameraController, name: string): Site | null {
   const fields = SITES.filter((x) => x.body === "earth" && x.runway && x.rwy !== undefined);
-  if (name) {
-    const n = name.trim().toLowerCase();
-    const site =
-      fields.find((x) => x.icao?.toLowerCase() === n || x.name.toLowerCase() === n) ??
-      fields.find((x) => x.name.toLowerCase().includes(n)) ??
-      null;
-    if (site) return site;
-    // (any airfield of the world by its code — its tile in: the flight plan's, the maps' —, its longest paved runway)
-    const f = fieldCached(name);
-    return f ? worldSite(f) : null;
-  }
-  const g = c.geoNow();
-  if (!g) return null;
-  let best: Site | null = null,
-    bd = 150_000;
-  for (const x of fields) {
-    const d = gcDist(g, x);
-    if (d < bd) (bd = d), (best = x);
-  }
-  // (the world's airfields with a paved runway of 1 800 m nearer)
-  for (const f of fieldsNear(g.lat, g.lon, Math.min(bd, 150_000), (x) => x.runways.some((w) => w.surface === "paved" && w.len >= 1800))) {
-    const s = worldSite(f);
-    if (!s) continue;
-    const d = gcDist(g, s);
-    if (d < bd) (bd = d), (best = s);
-  }
-  return best;
+  const n = name.trim().toLowerCase();
+  const site =
+    fields.find((x) => x.icao?.toLowerCase() === n || x.name.toLowerCase() === n) ??
+    fields.find((x) => x.name.toLowerCase().includes(n)) ??
+    null;
+  if (site) return site;
+  // (any airfield of the world by its code — its tile in: the flight plan's, the maps' —, its longest paved runway)
+  const f = fieldCached(name);
+  return f ? worldSite(f) : null;
 }
 
 /**
@@ -213,7 +200,7 @@ function ilsStart(
       why = sayResolved(r.resolved, unitsOf(this.s.units));
     } else {
       // (the game's own sites the world's tiles have not — the shuttle's runways —: the former way)
-      const site = findRunway(this, name);
+      const site = name ? findRunway(this, name) : null;
       if (!site) return r.say;
       W = runwayOf(this, site);
       if (o.runway) {
@@ -580,10 +567,12 @@ function routeProcedures(this: CameraController): string {
     P.splice(1, 0, { name: d.name, lat: d.lat, lon: d.lon, alt: d.alt });
     added.push(d.name);
   }
-  // (the arrival: an approach the FAA publishes — its transition and final fixes, their altitudes —, else the built fixes)
+  // (the arrival: the approach chosen there — the FAA's, nav.dat's or the one built: its transition and final fixes, their altitudes
+  // (AP-R: the fixed IAF/FAF of every runway retired where an approach has its own legs) —; a game's own site without one: its
+  // initial and final fixes on its axis)
   const end = P[P.length - 1]!;
   const pub = end.field ? this.approachForField(end.field.icao ?? end.name, P.at(-2) ?? null) : null;
-  const pubPts = pub && pub.a.source === "cifp" ? publishedArrival(pub.a, pub.via, P.at(-2) ?? end) : [];
+  const pubPts = pub ? publishedArrival(pub.a, pub.via, P.at(-2) ?? end) : [];
   const last = pubPts.length ? undefined : siteOf(end);
   if (pubPts.length) {
     P.splice(P.length - 1, 0, ...pubPts);

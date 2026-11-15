@@ -163,8 +163,9 @@ test("a flight plan to Edwards with its procedures: LNAV to the initial fix, the
     { name: "KEDW", lat: KEDW.lat, lon: KEDW.lon, field: { icao: "KEDW", elev: KEDW.elev!, rwy: KEDW.rwy } },
   ];
   c.routeChanged();
-  expect(c.routeProcedures()).toBe("Procedures: IAF23L, FAF23L");
-  expect(c.nav.route.wps.map((w) => w.name)).toEqual(["HERE", "IAF23L", "FAF23L", "KEDW"]);
+  // (the approach's own legs — its transition and final, AP-R: the fixed IAF/FAF retired where an approach has them)
+  expect(c.routeProcedures()).toBe("Procedures: IA23L, IF23L, FF23L");
+  expect(c.nav.route.wps.map((w) => w.name)).toEqual(["HERE", "IA23L", "IF23L", "FF23L", "KEDW"]);
   c.navToggle("both");
   const toIls = fly(600, () => !!c.ilsRun);
   const t = fly(600, () => !c.ilsRun);

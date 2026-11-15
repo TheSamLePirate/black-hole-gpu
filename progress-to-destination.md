@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-15 23:51 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-15 23:55 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous. Ce qui est fermé quitte le tableau « En cours » pour la ligne « Fermé récemment ».
@@ -47,10 +47,9 @@ J4 (fermé, sortie non atteinte), J5 et J6 (fermés).
 |---|---|---|
 | Rendu (33d89754) | J4 / J5 — l'eau, les volumes, la généralisation | **fermés** ([PLAN-J4](docs/PLAN-J4-VOLUMES.md), [PLAN-J5](docs/PLAN-J5-GENERALISATION.md)) : l'eau à demi-rythme (J5-5, −6,0 à −6,4 ms, l'image la même) ; le sol à demi-rythme laissé au joueur (J5-6, réglage « demi » : −1,9 à −3,2 ms ; « auto » à chaque pixel) ; la FFT de la mer en deux passes (−0,9 ms) ; la carte d'ombre des arbres (−2,8 ms, forêt) ; Sam a refusé les arbitrages d'image (MSAA 1×, petits arbres, nuages amortis). Postes lourds restants : l'eau 16,2, les nuages d'orage 16,5, le décor d'une forêt ~7 ms |
 | Rendu (33d89754) | Mesures tenues | la borne du M1 Max **à 30** : essayée à 40 le 15 au soir, non tenue (soutenu 26,4 et 34,5 images/s, deux runs — [J0-CONTRAT §2](docs/J0-CONTRAT.md)) ; le coût de l'appareil 3,5–4,5 ms, dont le MSAA 4× 4–5 ms (gardé) |
-| PLAN-APPROCHES (1feb2f7f) | [PLAN-APPROCHES](docs/PLAN-APPROCHES.md) | **AP0 à AP10 faits (16 nov.)** : données réelles, choix, jonction, A320, carte, radar, TSD, crew, HUD, directeur de vol, roue, options, audio, campagne mondiale (66 914 extrémités, toutes avec une approche) et échantillon volé (F-35 9/9 sur la piste, A320 4/5 et un refus motivé, **OIFK rouge**). Q4 décidée (Sam, 16 nov.) : pentes jugées sur les données seules (91 terrains F-35 refusés, 360 avec le détail). **Demande à la session du rendu : aplanir le détail procédural sous les trouées d'approche** (`terrain.ts` — PROBLEMES). **Reste : AP-R (retraits)** |
 | Audit vagues 3–4 et 6 (1feb2f7f) | [09-priorites-todo](docs/audit-2026-11-10/09-priorites-todo.md) | **faits** : 3.1–3.2 réseau (RD0–RD2), 3.3 sauvegardes (une clé par sauvegarde ; avion, systèmes des vaisseaux et de l'A320 — ce dernier par J6-4), 3.4–3.5 vol, 3.6–3.7 TARS, 3.10 e2e honnêtes, 4.2 temps et onglet masqué, 4.3 `Settings`/`ViewPose`, 4.8 `main()` découpé ; vague 6 hors rendu (QA, AR, RD4/RD5, FX). **Reste** : l'état d'une mission ou d'un combat (Sam), IndexedDB et l'autosauvegarde hors frame (AR-05), FX-19 (fraîcheur des écrans, à mesurer), FX-21 |
 
-**Fermé récemment** : **J3** (15 nov., confirmé par Sam ; J3-R fait 20:48) ; **le repli du raster vers le tracé retiré** (15 nov., 20:48, décision (b)) ; **PLAN-J6** (15 nov., 20:35 : les neuf parcours en e2e, sept défauts corrigés) ; l'eau étagée E1 (−1,55 ms) et E2 (−0,5 ms), E3 non ouvert ; la classification lot 1 (sur terre −1,15 ms), lot 2 non ouvert
+**Fermé récemment** : **PLAN-APPROCHES** (16 nov. : AP0–AP10 et AP-R menés — données réelles, choix, jonction, A320, carte, radar, TSD, crew, HUD, directeur de vol, roue, audio, campagne mondiale et échantillon volé ; ouverts : OIFK et l'aplanissement du détail sous les trouées, demandé à la session du rendu — [PROBLEMES](docs/PROBLEMES-A-REGLER.md)) ; **J3** (15 nov., confirmé par Sam ; J3-R fait 20:48) ; **le repli du raster vers le tracé retiré** (15 nov., 20:48, décision (b)) ; **PLAN-J6** (15 nov., 20:35 : les neuf parcours en e2e, sept défauts corrigés) ; l'eau étagée E1 (−1,55 ms) et E2 (−0,5 ms), E3 non ouvert ; la classification lot 1 (sur terre −1,15 ms), lot 2 non ouvert
 (sous 1 ms) ; AR-07 (le renderer sur `ViewPose`) ; le retrait R1 des anciens chemins (13 nov.) ; le noyau du monde visé compilé pendant le voyage
 (Jupiter à froid 73,7 → 47 s) ; le grain des anneaux de Saturne ; J2 (13 nov.) ; J2-C BC7 rangée (Sam). Le plafond des binaires suivis monté à
 700 Mo (Sam, f4bba608).
@@ -8440,3 +8439,16 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   toujours non posé (kerr-mini) ; tests unitaires 40/40.
 - Limites : la collision garde le détail sous les trouées (à la session du rendu) ; OIFK reste ouvert (PROBLEMES).
 - Suite : AP-R (les retraits).
+
+### 2026-11-15 23:55 UTC — PLAN-APPROCHES AP-R : les retraits ; le plan mené
+
+- Contribution à la destination : règle de méthode 2 (un levier remplacé perd son ancien chemin) — un seul chemin par responsabilité :
+  le choix d'un terrain et d'une approche (`controller/approach.ts`), ses branches dans le plan de vol, ses fréquences réelles.
+- Réalisé : la fréquence ILS inventée du MCDU (hachage de l'identifiant) retirée — la vraie (le localizer de l'arrivée) ou « ---.-- » ;
+  `findRunway` sans nom (« la plus proche à 150 km ») retiré — `ilsRunways()` et l'accord automatique de l'A320 passent par le choix
+  d'approche ; les IAF/FAF fixes du plan de vol remplacés par la transition et la finale de l'approche choisie, réelle ou construite
+  (`routeProcedures` ; gardés pour un site propre au jeu sans approche) ; `ilsItems` (déjà en AP8) ; docs BH-API, VOL-AVIONS (leçon 9), plan.
+- Preuves (observé) : tests `ils` (le plan vers Edwards : « IA23L, IF23L, FF23L », l'ILS pris après 198 s, posé 20/20), `a320-ap`,
+  `a320-mcdu`, `a320-published-arrival` verts (15/15).
+- Limites : OIFK (PROBLEMES) ; l'aplanissement du détail sous les trouées d'approche, demandé à la session du rendu.
+- Suite : le plan mené ; reprendre OIFK après l'aplanissement.

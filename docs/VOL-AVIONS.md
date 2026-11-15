@@ -455,7 +455,9 @@ F-35C (`__bh.settings.f35Variant = "C"`, une image plus tard) `c.catLaunch(0)`, 
 
 **Au clavier** : **⇧O** ouvre le plan de vol sur la carte (un clic ajoute un point, sur un aérodrome l'aérodrome ;
 altitude et vitesse par point ; carburant à l'arrivée et bingo). **⇧M** : la **NAV** — LNAV suit les branches, VNAV
-la montée et une descente à 3° ; la fin du plan passe la main à l'ILS. Le HUD montre `LNAV · VNAV` et le prochain
+la montée et une descente à 3° ; la fin du plan passe la main à l'ILS (les procédures du plan : la transition et la finale de l'approche
+choisie — « IA23L, IF23L, FF23L » à Edwards ; l'approche s'enclenche à l'IF ; depuis AP-R, plus d'IAF/FAF fixes là où l'approche a ses
+branches). Le HUD montre `LNAV · VNAV` et le prochain
 point (magenta). Le manche coupe la NAV.
 
 **Autres modes** (Tab › Navigation › Modes du pilote automatique) : orbite autour d'un point, hippodrome d'attente,

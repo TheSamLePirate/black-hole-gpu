@@ -16,7 +16,7 @@ import { fromRunway, glideHeight, ILS, ilsReading, type IlsRunway, onRunway, run
 import { gcCourse, gcDist } from "../game/flightplan";
 import type { PilotInput } from "../pilot";
 import { findRunway, runwayOf, syncRunwayLevel } from "./ils";
-import { groundMsl } from "./approach";
+import { groundMsl, runwayOfApproach } from "./approach";
 import { floorAt, followJoin, type JoinPlan, PLAN, planJoin } from "../game/approach-plan";
 import type { CameraController } from "../controls";
 
@@ -49,8 +49,13 @@ function tune(c: CameraController): IlsRunway | null {
   if (c.a320Ils && now - tuned.at < 20_000) return c.a320Ils;
   tuned.at = now;
   const end = c.nav.route.wps.at(-1);
-  const site = end?.field ? findRunway(c, end.field.icao ?? end.name) : findRunway(c);
-  c.a320Ils = tuned.rwy = site ? runwayOf(c, site) : null;
+  // (the plan's destination, else the airfield the approach's choice takes — AP-R: « the nearest » retired)
+  const site = end?.field ? findRunway(c, end.field.icao ?? end.name) : null;
+  if (site) c.a320Ils = tuned.rwy = runwayOf(c, site);
+  else {
+    const pv = c.approachPreview();
+    c.a320Ils = tuned.rwy = pv !== "loading" && !("say" in pv) ? runwayOfApproach(pv.field, pv.approach) : null;
+  }
   return c.a320Ils;
 }
 const tuned: { at: number; rwy: IlsRunway | null } = { at: -Infinity, rwy: null };
