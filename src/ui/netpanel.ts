@@ -4,10 +4,10 @@
 // time a room is asked for: the solo game never connects.
 
 import "./netpanel.css";
-import type { ErrorCode } from "../net/proto";
 import { t, tf } from "../i18n";
 import { loadNet, netLoaded, netParams, serverUrl, type NetModule } from "../net/load";
 import { store } from "../util/storage";
+import { ago, crewLinkOf, errorText, type Known, rememberRoom, why } from "./netpanel-pure";
 import { button, el as h, modal } from "./kit";
 import { netRadar } from "./hud/symbology";
 import type { NetMatch } from "./netmatch";
@@ -31,13 +31,6 @@ export interface NetHost {
   crewActions?: { get(): boolean; set(on: boolean): void };
 }
 
-interface Known {
-  code: string;
-  name: string;
-  owner?: string;
-  used: number;
-}
-
 const ID_KEY = "kerr.net.id";
 const ROOMS_KEY = "kerr.net.rooms";
 export const NET_COLOURS = ["#7fd4ff", "#ff8a5c", "#8dff9a", "#ffd84d", "#d68bff", "#ff6f91"];
@@ -55,10 +48,7 @@ function identity(): { device: string; name: string; colour: string } {
 
 const known = () => store.getJSON<Known[]>(ROOMS_KEY, []).filter((r) => r && typeof r.code === "string");
 function remember(r: Known) {
-  const list = known().filter((k) => k.code !== r.code);
-  const prev = known().find((k) => k.code === r.code);
-  list.unshift({ ...prev, ...r, owner: r.owner ?? prev?.owner });
-  store.setJSON(ROOMS_KEY, list.slice(0, 20));
+  store.setJSON(ROOMS_KEY, rememberRoom(known(), r));
 }
 const forget = (code: string) =>
   store.setJSON(
@@ -70,32 +60,6 @@ const ROLE_NAMES: Record<Role, () => string> = {
   pilot: () => t("Pilot"),
   spectator: () => t("Spectator"),
   instruments: () => t("Instruments"),
-};
-
-// (every code the protocol has its words — src/net/proto.ts ErrorCode; « bad » had none: audit QA-10, 14 Nov 2026)
-const ERRORS: Record<ErrorCode, () => string> = {
-  "unknown-room": () => t("No room with that code"),
-  full: () => t("The room is full (8 devices)"),
-  "pilots-full": () => t("Four pilots already fly in this room: join as a spectator"),
-  password: () => t("Wrong password"),
-  owner: () => t("Only the room's owner can delete it"),
-  update: () => t("This page is too old for the room server: reload it"),
-  limit: () => t("Too many rooms: the server's, or those made from here this hour"),
-  slow: () => t("Too many wrong passwords: wait half a minute"),
-  replaced: () => t("The room was opened in another tab of this browser: this one left it"),
-  rejoin: () => t("Back online, but the room did not take us back (gone, full or its password changed): back to the solo game"),
-  bad: () => t("The page spoke to the room server out of turn: reload it"),
-  "not-in-room": () => t("Not in a room"),
-};
-/** a code's words, or undefined when it is not one of the protocol's */
-const errorText = (code: string | undefined) => (code && Object.hasOwn(ERRORS, code) ? ERRORS[code as ErrorCode]() : undefined);
-const why = (e: unknown) => {
-  const code = (e as { code?: string }).code;
-  const said = errorText(code);
-  if (said) return said;
-  return (e as Error).message === "offline" || (e as Error).message === "timeout"
-    ? t("The room server cannot be reached")
-    : String((e as Error).message ?? e);
 };
 
 export class NetPanel {
@@ -301,7 +265,7 @@ export class NetPanel {
 
   crewLink(code = this.net?.room?.code): string | null {
     if (!code) return null;
-    return `${new URL("crew/", location.href).href}#join=${code}${netParams.get("server") ? `&server=${encodeURIComponent(netParams.get("server")!)}` : ""}`;
+    return crewLinkOf(location.href, code, netParams.get("server"));
   }
 
   /** The same screens panel for TARS: a lightweight instruments link and QR. */
@@ -1086,13 +1050,4 @@ export class NetPanel {
     }
     if (this.busy) B.append(h("p", "netp-stat", t("Connecting…")));
   }
-}
-
-/** how long ago [a time in ms], said short */
-function ago(ms: number) {
-  const s = (Date.now() - ms) / 1000;
-  if (!(s > 0)) return "";
-  if (s < 3600) return tf("{0} min ago", Math.max(1, Math.round(s / 60)));
-  if (s < 86400) return tf("{0} h ago", Math.round(s / 3600));
-  return tf("{0} d ago", Math.round(s / 86400));
 }

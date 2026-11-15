@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-15 08:07 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-15 08:09 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous.
@@ -7522,4 +7522,13 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   que le DOM. `tests/crew-tiles.test.ts` 4/4 : un appareil muet depuis 3 s, l'altitude en km au-delà de 99 999 m, la flèche de la vitesse
   verticale, le carburant en kg et son alarme, une évasion, un impact nommé dans le titre, « posé » en français. Tests de l'équipage
   57/57 ; e2e `crew-craft` 4/4.
+
+### 2026-11-15 08:09 UTC — Audit QA-10 (un pas) : les décisions du panneau des salles sorties et testées
+
+- `src/ui/netpanel.ts` (1 055 lignes, jamais importé par un test) : une salle gardée parmi les connues (en tête, ce qu'on en savait gardé,
+  20 au plus), une erreur du serveur dite dans les mots du pilote, « il y a combien de temps », le lien de la console d'équipage. Sortis
+  dans `src/ui/netpanel-pure.ts` (`rememberRoom`, `errorText`, `why`, `ago`, `crewLinkOf`) ; `tests/netpanel-pure.test.ts` 3/3 ; e2e
+  `net-rooms` 5/5.
+- QA-10 à ce jour (logique pure testée) : `netsession`, erreurs de l'équipage, `netmatch`, `fc/computer`, `tars-panel`, `panel`, tuiles de
+  l'équipage, `netpanel`.
 
