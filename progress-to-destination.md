@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-15 18:09 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-15 18:23 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous.
@@ -71,7 +71,7 @@ ouverts, sous 1 ms) ; J3 au stade du plan.**
 | Audit vagues 3–4 (1feb2f7f) | 4.8 découper `main()` | **fait** (accord de Sam : par petits lots) : lot 1 la persistance, lot 2 qui tient le vol (`session.ts`), lots 3–4 les étapes gardées (`frame.ts`, AR-03), lot 5 l'ordre §19.5 (AR-04), lot 6 `craft-feed.ts`, lot 7 `governor.ts` (confié par la session du rendu) — **fait** : les quatre découpes d'AR-12 (session, frame, gouverneur, poses de l'appareil) |
 | Audit vagues 3–4 (1feb2f7f) | 4.3 séparer `Settings` | **fait** : garde statique des réglages (AR-21) ; `ViewPose` et `SimState` figés une fois par image (AR-07, `view-pose.ts`) ; le renderer les lit (session du rendu, 77721acf) |
 | Audit vague 6 hors rendu (1feb2f7f) | QA-16, QA-18, AR-17, AR-18, réseau RD4/RD5, FX-18, FX-17, FX-07, QA-11 ; puis les FX hors vague : FX-08, FX-12, FX-14, FX-19 (tendance), FX-22, FX-13, FX-20 (FX-11 et FX-15 déjà réglés le 11 nov., FX-16 tranché par Sam) | **faits** (accord de Sam : « un autre lot d'audit hors rendu ») ; FX-17 en 3 lots ; FX-07 l'A320 à la manette ; QA-11 le catalogue 446/446 gardé ; FX-08 V par les vues de l'appareil seul ; FX-12 les touches collées ; FX-14 chaque appareil sa configuration ; FX-19 la tendance de vitesse sur le temps du vol ; FX-13 ⇧M au vol d'abord, FX-20 sans dégâts pour ce vol seulement (choix de Sam) ; e2e `report` 4/4 (sans les états périmés de la galerie) ; ensuite les autres FX hors vague ( FX-19 la fraîcheur des écrans, à mesurer ; FX-21 des fonctions à finir) |
-| PLAN-APPROCHES (1feb2f7f) | AP0a, AP1, AP2, AP0b, AP3 | **faits (15 nov.)** : nav.dat lié aux pistes ; le CIFP de la FAA (9 568 approches publiées des États-Unis, entières) ; l'approche choisie (état, choix auto par vent, aide, longueur, sens d'arrivée) ; la jonction planifiée (dans l'axe, ou vent arrière + base, jamais au-dessus du terrain, 300 m sur le relief, paliers jusqu'à la pente) — e2e `approach-auto` 5/5, `approach-join` 4/4 (Nice), sans navigateur 8/8 à Edwards. l'A320 vole la même jonction (e2e `a320-approach-join` 4/4). MCDU ARRIVAL/VIA, RAD NAV réel, arrivée publiée volée en NAV (KSFO via ARCHI, 20/20). l'approche au ND. Suite : AP4 (carte tactique) |
+| PLAN-APPROCHES (1feb2f7f) | AP0a, AP1, AP2, AP0b, AP3, AP4 | **faits (15 nov.)** : nav.dat lié aux pistes ; le CIFP de la FAA (9 568 approches publiées des États-Unis, entières) ; l'approche choisie (état, choix auto par vent, aide, longueur, sens d'arrivée) ; la jonction planifiée (dans l'axe, ou vent arrière + base, jamais au-dessus du terrain, 300 m sur le relief, paliers jusqu'à la pente) — e2e `approach-auto` 5/5, `approach-join` 4/4 (Nice), sans navigateur 8/8 à Edwards. l'A320 vole la même jonction (e2e `a320-approach-join` 4/4). MCDU ARRIVAL/VIA, RAD NAV réel, arrivée publiée volée en NAV (KSFO via ARCHI, 20/20). l'approche au ND. la carte tactique (fiche, sélection au clic, tracé, profil — e2e jetmap-approach 3/3). Suite : AP5 (radar, TSD) |
 
 **Fermé récemment** : J2 (13 nov., ΔGPU nul, chemin vers §8 écrit) ; J2-C BC7 étudiée puis **rangée** (Sam : « ne pas le faire maintenant »).
 
@@ -8010,4 +8010,39 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   transitions non insérées ni l'attente publiée ; le e2e dure ~10 min (quatre vols complets, au-delà des 1–2 min visés) ; la
   télémétrie de l'A320 reste (AP6).
 - **Suite** : AP4 — la carte tactique (fiche, sélection graphique, tracé de l'approche, profil vertical).
+
+### 2026-11-15 18:23 UTC — PLAN-APPROCHES AP4 : les approches sur la carte tactique (fiche, choix au clic, tracé, profil)
+
+- **Contribution** : §19 (choisir graphiquement l'approche et la voir, pour le pilote ; le même dessin et les mêmes actions pour le
+  radar et le crew ensuite) ; PLAN-APPROCHES §5.1.
+- **Changements** :
+  - `src/world/approach-draw.ts` (pur, partagé) : `MapApproach`, `drawApproach` — le cône du localizer, les repères par rôle
+    (IAF, IF, FAF ; noms, altitudes dans les unités du joueur), la jonction depuis l'avion, la remise de gaz en tirets,
+    l'attente ; les autres approches en discret ; chaque partie cliquable. `FieldCard`, `approachText`.
+  - `controller/approach.ts` : `approachMapData` (l'approche engagée, sinon choisie, sinon celle de la destination ; en cache)
+    et `approachCard`.
+  - `ui/jetmap.ts` :
+    - la fiche : le choix auto et sa raison ; chaque extrémité, le vent sur elle, ses approches en pastilles ; Armer, Auto,
+      Guidage / Par sa transition, Direct, Ajouter au plan — les actions en tête ;
+    - un clic sur l'axe d'une approche ou sur un seuil la choisit (le point du terrain prioritaire quand il est plus près) ;
+    - le bouton PROF : le profil vertical.
+  - Le câblage passe par `flighthud.ts` et `main.ts`, avec les mêmes actions métier que le MCDU et TARS. Français ajouté.
+- **Preuve** :
+  - e2e `jetmap-approach` **3/3** (clics réels) :
+    - la fiche de LFML (Auto : ILS 31R CAT I ; ILS 13L CAT III 110.30, 31R 111.15 4,0°…) ;
+    - 31R choisi par sa pastille, puis une autre approche par un clic sur son axe, puis 31R de nouveau ;
+    - « Armer l'approche » : l'ILS 31R, engagé, dessiné avec sa jonction ; PROF affiché.
+  - `approach-draw` 2/2 (lignes, rôles des repères, parties cliquables).
+  - Captures : `docs/progress/approches/ap4-jetmap-*.jpg`.
+- **Trouvés en route** :
+  - `approachCard` n'était pas installé sur le contrôleur (la fiche ne s'ouvrait pas) ;
+  - le bouton PROF n'était créé qu'au clic sur HDG ;
+  - le bouton « Armer » était caché sous les crédits : il passe en tête de la fiche.
+  - Le seuil d'une approche volait le clic du terrain à grande échelle.
+- **Limites** :
+  - le profil couvre 25 km et ne montre pas un avion plus loin ;
+  - l'attente est dessinée côté droit par défaut (le sens publié n'est pas lu) ;
+  - la jonction n'est dessinée qu'une fois engagée (pas de prévision avant l'armement) ;
+  - garde e2e-catalogue : `parcours-debarquer` (session du rendu) sans sa ligne.
+- **Suite** : AP5 — le radar du HUD et la TSD : terrains cliquables, approche tracée, page ILS ; A/B de coût ±1 %.
 

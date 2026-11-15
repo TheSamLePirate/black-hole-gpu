@@ -3488,8 +3488,28 @@ async function main() {
         route: N.route.wps.map((p, k) => ({ lat: p.lat, lon: p.lon, name: p.name, active: k === active })),
         // (the A320's taxi route left — controller/a320taxi.ts)
         taxi: camera.a320Taxi?.route?.pts.slice(camera.a320Taxi.cue?.i ?? 0),
+        // (the approach engaged or chosen — PLAN-APPROCHES AP4)
+        appr: camera.approachMapData(),
       };
     },
+    // (the tactical map's approaches — PLAN-APPROCHES AP4: the same actions as the MCDU, TARS and the crew)
+    approachAction: (action, field, arg) => {
+      const said =
+        action === "arm"
+          ? camera.ilsStart(field)
+          : camera.approachSelect(
+              action === "choose"
+                ? { field, approach: arg ?? "auto" }
+                : action === "end"
+                  ? { field, rwy: arg ?? "auto", approach: "auto" }
+                  : action === "auto"
+                    ? { field, rwy: "auto", approach: "auto" }
+                    : { via: action === "vectors" ? "none" : "auto" },
+              t("map"),
+            );
+      panel.toast(said);
+    },
+    fieldCard: (f) => camera.approachCard(f),
     selectTrack: (id) => {
       const said = camera.pictureSelect(id);
       if (said) panel.toast(said);

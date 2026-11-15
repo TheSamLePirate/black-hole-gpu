@@ -1,6 +1,9 @@
 # Plan — les approches et les pistes, AAA (pilote, crew, roue)
 
-**État (2026-11-15) : AP0a, AP1, AP2, AP0b et AP3 (a, b, c) faits.** AP3b : la page ARRIVAL du MCDU (approches réelles et
+**État (2026-11-15) : AP0a, AP1, AP2, AP0b, AP3 (a, b, c) et AP4 faits.** AP4 : la carte tactique — la fiche de terrain
+(choix auto et raison, extrémités, vent, approches, Armer, Auto, Guidage/Par sa transition), l'approche dessinée (cône, repères et
+altitudes, jonction, remise de gaz, attente ; les autres en discret, cliquables), le profil vertical (PROF) ; le dessin partagé
+`world/approach-draw.ts` pour le radar et le crew (AP5, AP6). AP3b : la page ARRIVAL du MCDU (approches réelles et
 construites, VIA publiées, INSERT) sur l'état « approche choisie » (`via` ajouté), RAD NAV sur le localizer réel, l'arrivée publiée
 mise dans le plan et volée en NAV jusqu'à l'IF où l'approche s'enclenche ; TARS `select` avec `via`. AP3c : le ND de l'A320 dessine l'approche (sa piste, son axe sur 10 NM, sa remise de gaz en cyan) et le localizer réel en ROSE LS. Reste du lot AP3 au plan : la télémétrie de l'A320 (avec AP6, son DME). AP3a : l'A320 vole la même jonction (FCU en HDG et altitude, APPR
 sur la dernière branche) ; le planificateur ajoute des milles quand l'avion est trop haut, tient ses paliers jusqu'à l'obstacle passé,
@@ -316,7 +319,7 @@ captures montrées dans T3, ses docs, une entrée au journal.
 | **AP1 — choix et état** (fait le 15 nov.) | `ApproachSel` dans la simulation, `approachSelect`, choix auto (§4.3) avec sa raison, approche construite pour toute extrémité, sauvegarde, TARS et `__bh` ; F-35 et A320 lisent la sélection ; le plan de vol fige son approche | Test pur des cas (4 quadrants × vent nul/fort × 1/2/3 pistes) ; e2e `approach-auto` : enclenché de 4 côtés de Toulon-Hyères, l'extrémité attendue est prise |
 | **AP2 — planificateur + F-35** (fait le 15 nov.) | `game/approach-plan.ts` (entrées, profil, relief, replanification) ; `ilsStep` en suiveur de segments ; LOC/GS sur les antennes réelles | e2e `approach-join` F-35 : 4 départs à 30–50 km, haut et bas, établi avant le FAF, pas de demi-tour à l'IAF, au-dessus du relief (Nice ou Chambéry pour le relief), note ≥ actuelle |
 | **AP3 — A320** (fait le 15 nov., sauf la télémétrie) | FMGC en NAV sur le chemin, APPR à l'IF ; MCDU ARR/VIA ; RAD NAV réel ; ND avec l'approche ; télémétrie A320 | e2e `a320-approach-join` mêmes départs ; `a320-mcdu` étendu |
-| **AP4 — carte tactique** | Fiche enrichie, sélection graphique (extrémité, approche), tracé (plume, fixes, chemin, remise de gaz, attente), profil vertical | e2e `jetmap-approach` : clic LFML → 31R ILS → armer → tracé et AP sur la bonne ; captures |
+| **AP4 — carte tactique** (fait le 15 nov.) | Fiche enrichie, sélection graphique (extrémité, approche), tracé (plume, fixes, chemin, remise de gaz, attente), profil vertical | e2e `jetmap-approach` : clic LFML → 31R ILS → armer → tracé et AP sur la bonne ; captures |
 | **AP5 — radar, TSD, ND** | Terrains cliquables au radar du HUD et à la TSD ; approche tracée ; page ILS de la TSD | e2e `radar-approach` : sélection par le radar ; A/B de coût ±1 % |
 | **AP6 — crew** | Actions `app.*` ; fiche partagée ; terrains au radar crew ; vue « Approche » ; boîte APP ; télémétrie et DME ; callouts | e2e `crew-approach` : le crew choisit et arme, le pilote voit la même sélection et l'AP la vole ; `crew-actions` étendu |
 | **AP7 — HUD et directeur de vol** | Toutes les pistes (bascule, réglage, touche proposée), repères d'approche, FD F-35/A320/crew | e2e `hud-runways-all` (captures LFPG multipistes, avec/sans) ; e2e FD : en manuel scripté sur les barres, établi ; A/B ±1 % |

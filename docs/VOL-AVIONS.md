@@ -378,6 +378,13 @@ mont Agel — prise depuis le nord-est, l'A320 survolait la piste à 1 250 m). T
 reçoit des milles en plus : un crochet de son côté (`DOG`), ou une étape de base repoussée. Le plan de jonction se lit dans `ilsRun.join.plan` (`entry` : `straight` ou `vectors`, `pts` : `INT`, `DW`,
 `BASE`, `JOIN` avec leur hauteur au-dessus de la mer, `floors` : les paliers jusqu'à la capture de la pente).
 
+**À la carte tactique** (PLAN-APPROCHES AP4) : un clic sur un terrain ouvre sa fiche — le choix automatique et sa raison,
+chaque extrémité avec le vent sur elle et ses approches (« ILS 31R · 111.15 · 4.0° · CAT I · nav.dat 2013 ») — : un clic sur une
+approche la choisit, **Armer l'approche** l'enclenche, **Auto** rend le choix automatique, **Guidage / Par sa transition** pour une
+approche publiée. Sur la carte, l'approche choisie (cyan) ou volée (magenta) : son cône, ses repères et leurs altitudes, la
+jonction prévue, la remise de gaz ; un clic sur l'axe d'une autre approche ou sur un seuil la choisit ; **PROF** montre le profil
+vertical (le relief, la pente, les repères, l'avion).
+
 **Au clavier** : Tab › Navigation › **Approche ILS** (le choix de la piste dans la sous-roue). Le HUD montre en vert
 les points de pente à droite, ceux de l'alignement en bas, des losanges magenta, et la phase (`IAF`, `LOC`, `LOC GS`,
 `FLARE`, `ROLL`, `GA`). Toucher le manche ou la manette repasse en manuel.

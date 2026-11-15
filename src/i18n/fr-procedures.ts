@@ -351,5 +351,14 @@ export default {
   "Approach: a transition with its approach ({0})": "Approche : une transition avec son approche ({0})",
   "via {0}": "par {0}",
   "by vectors": "par guidage radar",
+  // the tactical map's approaches (PLAN-APPROCHES AP4)
+  map: "carte",
+  PROF: "PROF",
+  "The approach's vertical profile": "Le profil vertical de l'approche",
+  head: "face",
+  tail: "arrière",
+  Vectors: "Guidage",
+  "By its transition": "Par sa transition",
+  "Arm the approach": "Armer l'approche",
   "ILS: the airfield's data coming — engaged as it arrives": "ILS : les données du terrain arrivent — engagée à leur arrivée",
 } satisfies Record<string, string>;

@@ -14,6 +14,7 @@ import { drawSym, PAL, type SymSide, sideFor, symColour } from "../radar/symbols
 import type { Settings } from "../settings";
 import { unitsFor } from "./unitsys";
 import { drawFields } from "../world/runwaydraw";
+import { drawApproach, type FieldCard, type MapApproach } from "../world/approach-draw";
 import { type Airfield, fieldShown, fieldsNearCached, RUNWAYS_CREDIT, runwaysEvents } from "../world/runways";
 
 /** What the map draws (main.ts gathers it from the controller). */
@@ -34,7 +35,13 @@ export interface JetMapData {
   taxi?: { lat: number; lon: number }[];
   /** the trails' clock now [s] (the tracks' histories' — RD7) */
   trailT?: number;
+  /** the approach engaged or chosen (PLAN-APPROCHES AP4: controller/approach.ts approachMapData) */
+  appr?: MapApproach | null;
 }
+
+/** What the map asks of the approaches (PLAN-APPROCHES AP4): an approach chosen, a runway's end, back to automatic, the approach
+ *  armed (engaged), its join by vectors or by its published transition. */
+export type ApproachAction = "choose" | "end" | "auto" | "arm" | "vectors" | "iaf";
 
 /** The range's steps: the centre to the nearer edge [km]. */
 export const JETMAP_RANGES = [2, 5, 10, 20, 40, 80, 160, 320] as const;
@@ -74,6 +81,14 @@ export class JetMap {
   onField: (action: "direct" | "add", f: Airfield) => void = () => {};
   /** where each airfield was drawn [CSS px], for the clicks */
   private fieldHits: { f: Airfield; x: number; y: number }[] = [];
+  /** an approach's action (AP4): from the card, a click on an approach drawn or a runway's end */
+  onApproach: (action: ApproachAction, field: string, arg?: string) => void = () => {};
+  /** an airfield's approaches for its card (AP4) */
+  fieldInfo: (f: Airfield) => FieldCard | null = () => null;
+  /** where the approach's parts were drawn [CSS px], for the clicks */
+  private apprHits: { approach?: string; rwy?: string; x: number; y: number }[] = [];
+  /** the vertical profile shown under the map (AP4) */
+  profile = false;
   private card: HTMLDivElement;
   private last: JetMapData | null = null;
   private wheelAcc = 0;
@@ -121,6 +136,18 @@ export class JetMap {
       if (Number.isInteger(r) && r >= 0 && r < JETMAP_RANGES.length) this.range = r;
     } catch {}
     up.textContent = this.northUp ? "N" : t("HDG");
+    // (the approach's vertical profile under the map — PLAN-APPROCHES AP4)
+    const prof = btn(t("PROF"), t("The approach's vertical profile"), "jm-prof", () => {
+      this.profile = !this.profile;
+      prof.classList.toggle("on", this.profile);
+      try {
+        localStorage.setItem("kerr.jetmap.profile", this.profile ? "1" : "0");
+      } catch {}
+    });
+    try {
+      this.profile = localStorage.getItem("kerr.jetmap.profile") === "1";
+    } catch {}
+    prof.classList.toggle("on", this.profile);
     this.stage.append(this.cv, bar, this.credit, this.card);
     this.tiles.onLoad = () => this.draw(this.last);
     const was = runwaysEvents.onLoad;
@@ -158,7 +185,25 @@ export class JetMap {
         const d = Math.hypot(h.x - x, h.y - y);
         if (d < bd) (bd = d), (best = h.id);
       }
-      // (no track there: an airfield's card — RD11)
+      // (no track there: an approach drawn or a runway's end — AP4 —, then an airfield's card — RD11)
+      if (!best && this.last?.appr) {
+        let ba: (typeof this.apprHits)[number] | null = null,
+          da = 12;
+        for (const h of this.apprHits) {
+          const d = Math.hypot(h.x - x, h.y - y);
+          if (d < da) (da = d), (ba = h);
+        }
+        // (an airfield's dot nearer than the part: its card — far out, a runway's end lies on its field's dot)
+        const df = Math.min(...this.fieldHits.map((h) => Math.hypot(h.x - x, h.y - y)), Number.POSITIVE_INFINITY);
+        if (ba && df <= da + 2) ba = null;
+        if (ba) {
+          const F = this.last.appr.field;
+          if (ba.approach) this.onApproach("choose", F, ba.approach);
+          else if (ba.rwy) this.onApproach("end", F, ba.rwy);
+          this.draw(this.last);
+          return;
+        }
+      }
       if (!best) {
         let bf: Airfield | null = null,
           df = 14;
@@ -193,8 +238,81 @@ export class JetMap {
         `${w.le}/${w.he} · ${Math.round(U.alt(w.len))} ${U.altName} · ${(SURF[w.surface] ?? SURF.unknown!)()}${w.lit ? " · ☼" : ""}${w.approx ? " ≈" : ""}`,
         "jm-card-row",
       );
+    // (its approaches — PLAN-APPROCHES AP4 —: the automatic choice and why; each end, the wind on it, its approaches to choose)
+    const info = this.fieldInfo(f);
+    const code = f.icao || f.ident;
+    const act = (a: ApproachAction, arg?: string) => {
+      this.onApproach(a, code, arg);
+      this.showCard(f);
+      this.draw(this.last);
+    };
+    // (the actions' row here, above the approaches: first in reach — the card long at a big field, its foot under the credits)
+    const actsAt = document.createElement("div");
+    c.append(actsAt);
+    if (info) {
+      const sel = info.selected;
+      const auto = !sel || (sel.approach === "auto" && sel.rwy === "auto");
+      row(`${auto ? "● " : ""}${t("Auto")}: ${info.auto ? info.auto.why : "—"}`, "jm-card-auto");
+      const spd = (v: number) => `${Math.round(U.spd(Math.abs(v)))} ${U.spdName}`;
+      for (const e of info.ends) {
+        const w = e.head === null ? "" : ` · ${e.head >= 0 ? t("head") : t("tail")} ${spd(e.head)}, ${t("across")} ${spd(e.cross ?? 0)}`;
+        const r = document.createElement("div");
+        r.className = "jm-card-end";
+        const lab = document.createElement("span");
+        lab.textContent = `${e.rwy}${w}`;
+        r.append(lab);
+        for (const ap of e.approaches) {
+          const b = document.createElement("button");
+          b.className = `jm-chip${sel?.approach === ap.id ? " on" : ""}`;
+          b.textContent = ap.text;
+          b.dataset.testid = `jm-appr-${ap.id}`;
+          b.onclick = (ev) => {
+            ev.stopPropagation();
+            act("choose", ap.id);
+          };
+          r.append(b);
+        }
+        c.append(r);
+      }
+      // (the chosen approach's transitions: by vectors, or by its published transition)
+      const chosen = info.ends.flatMap((e) => e.approaches).find((x) => x.id === sel?.approach);
+      if (chosen?.vias.length) {
+        const r = document.createElement("div");
+        r.className = "jm-card-acts";
+        for (const [a, label, on] of [
+          ["vectors", t("Vectors"), sel?.via === "none"],
+          ["iaf", t("By its transition"), sel?.via !== "none"],
+        ] as const) {
+          const b = document.createElement("button");
+          b.textContent = label;
+          b.className = on ? "on" : "";
+          b.dataset.testid = `jm-${a}`;
+          b.onclick = (ev) => {
+            ev.stopPropagation();
+            act(a);
+          };
+          r.append(b);
+        }
+        c.append(r);
+      }
+    }
     const acts = document.createElement("div");
     acts.className = "jm-card-acts";
+    if (info)
+      for (const [a, label] of [
+        ["arm", t("Arm the approach")],
+        ["auto", t("Auto")],
+      ] as const) {
+        const b = document.createElement("button");
+        b.textContent = label;
+        b.dataset.testid = `jm-${a}`;
+        b.onclick = (e) => {
+          e.stopPropagation();
+          act(a);
+          if (a === "arm") c.hidden = true;
+        };
+        acts.append(b);
+      }
     for (const [a, label] of [
       ["direct", t("Direct")],
       ["add", t("Add to the plan")],
@@ -217,7 +335,7 @@ export class JetMap {
       c.hidden = true;
     };
     acts.append(x);
-    c.append(acts);
+    actsAt.replaceWith(acts);
     c.hidden = false;
   }
 
@@ -392,6 +510,16 @@ export class JetMap {
       box: { x: 0, y: 0, w, h },
       hit: (f, x, y) => this.fieldHits.push({ f, x, y }),
     });
+    // the approach (PLAN-APPROCHES AP4): engaged magenta, chosen cyan — its cone, fixes, join, missed approach, hold; the
+    // field's others faint, each a place to click
+    this.apprHits = [];
+    if (d.appr)
+      drawApproach(c, d.appr, {
+        at: (la, lo) => at(la, lo),
+        from: d.appr.engaged ? [d.lat, d.lon] : undefined,
+        alt: (m) => `${Math.round(U.alt(m))} ${U.altName}`,
+        hit: (what, x, y) => this.apprHits.push({ ...what, x, y }),
+      });
     // the tracks: the common symbology — the IFF as the sensors know it (the truth's faded where they hold nothing)
     this.hits = [];
     for (const P of d.tracks) {
@@ -491,10 +619,92 @@ export class JetMap {
     c.stroke();
     c.fill();
     c.restore();
+    if (this.profile && d.appr?.profile) this.drawProfile(c, d, w, h);
     // the range, the orientation, the ground speed
     c.fillStyle = "rgba(220, 240, 250, 0.95)";
     c.font = "700 11px Rajdhani, sans-serif";
     c.textAlign = "left";
     c.fillText(`${U.dist(R).toFixed(R < 10_000 ? 1 : 0)} ${U.distName} · ${this.northUp ? t("NORTH UP") : t("HDG UP")}`, 6, h - 6);
+  }
+
+  /** Where the approach's parts were drawn [CSS px] (tests). */
+  approachHitsNow() {
+    return this.apprHits.slice();
+  }
+
+  /** The approach's vertical profile in a band at the map's foot (AP4): the relief under the final, the 3° slope from the
+   *  threshold, the fixes at their altitudes, the craft where it is along the final — 25 km out to the runway. */
+  private drawProfile(c: CanvasRenderingContext2D, d: JetMapData, w: number, h: number) {
+    const A = d.appr!;
+    const P = A.profile!;
+    const U = unitsFor(this.s);
+    const bh = Math.round(h * 0.3),
+      y0 = h - bh - 18,
+      x0 = 8,
+      x1 = w - 8;
+    // (the craft along the final: its distance before the threshold [m], flat offsets)
+    const cosL = Math.cos((A.thr.lat * Math.PI) / 180);
+    const along = (lat: number, lon: number) => {
+      const e = (lon - A.thr.lon) * 111_320 * cosL,
+        n = (lat - A.thr.lat) * 111_320;
+      const cr = (A.crs * Math.PI) / 180;
+      return -(e * Math.sin(cr) + n * Math.cos(cr));
+    };
+    const L = 25_000;
+    const glide = (m: number) => P.elev + 15 + m * Math.tan((3 * Math.PI) / 180);
+    const top = Math.max(glide(L), ...P.ground, ...A.fixes.map((f) => f.alt?.[0] ?? f.alt?.[1] ?? 0), d.alt) * 1.1;
+    const X = (m: number) => x1 - ((x1 - x0) * Math.min(Math.max(m, 0), L)) / L;
+    const Y = (z: number) => y0 + bh - (bh * (z - Math.min(P.elev, 0))) / Math.max(top - Math.min(P.elev, 0), 1);
+    c.save();
+    c.fillStyle = "rgba(5, 9, 14, 0.82)";
+    c.strokeStyle = "rgba(95, 210, 255, 0.35)";
+    c.lineWidth = 1;
+    c.fillRect(x0, y0, x1 - x0, bh);
+    c.strokeRect(x0, y0, x1 - x0, bh);
+    // the relief
+    c.fillStyle = "rgba(150, 120, 80, 0.55)";
+    c.beginPath();
+    c.moveTo(X(0), y0 + bh);
+    P.ground.forEach((z, k) => c.lineTo(X(k * 1000), Y(z)));
+    c.lineTo(X(L), y0 + bh);
+    c.closePath();
+    c.fill();
+    // the slope (3°: the glide's, or the descent's)
+    c.strokeStyle = A.engaged ? "rgba(255, 92, 225, 0.9)" : "rgba(95, 230, 255, 0.9)";
+    c.lineWidth = 1.6;
+    c.beginPath();
+    c.moveTo(X(0), Y(glide(0)));
+    c.lineTo(X(L), Y(glide(L)));
+    c.stroke();
+    // the fixes at their altitudes
+    c.font = "600 10px Rajdhani, sans-serif";
+    c.textAlign = "center";
+    c.fillStyle = c.strokeStyle;
+    for (const F of A.fixes) {
+      const m = along(F.lat, F.lon);
+      if (m < 0 || m > L) continue;
+      const z = F.alt?.[0] ?? F.alt?.[1] ?? null;
+      const x = X(m);
+      c.beginPath();
+      c.moveTo(x, y0 + bh);
+      c.lineTo(x, z !== null ? Y(z) : y0 + 4);
+      c.setLineDash([2, 3]);
+      c.stroke();
+      c.setLineDash([]);
+      c.fillText(F.name, x, y0 + 12);
+      if (z !== null) c.fillText(`${Math.round(U.alt(z))}`, x, Y(z) - 4);
+    }
+    // the craft
+    const m = along(d.lat, d.lon);
+    if (m > 0 && m < L) {
+      c.fillStyle = "#ffffff";
+      c.beginPath();
+      c.arc(X(m), Y(d.alt), 4, 0, 2 * Math.PI);
+      c.fill();
+    }
+    c.fillStyle = "rgba(220, 240, 250, 0.85)";
+    c.textAlign = "left";
+    c.fillText(`${A.id} · ${U.dist(L).toFixed(0)} ${U.distName} → ${A.rwy} · ${U.altName}`, x0 + 4, y0 + bh - 4);
+    c.restore();
   }
 }

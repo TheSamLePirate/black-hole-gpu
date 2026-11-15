@@ -13,10 +13,12 @@ import { fleet } from "../fleet";
 import { t, tf } from "../i18n";
 import { geoidDeg } from "../system/geoid";
 import { bodyFixedOf, groundRelief } from "../system/our-surface";
-import { wgs84Inverse } from "../system/ellipsoid";
+import { wgs84Direct, wgs84Inverse } from "../system/ellipsoid";
 import { daysOf } from "../system/solar";
 import { weatherAt, windFromAt } from "../weather";
 import { type Approach, approachesFor, approachTileIn, loadApproachTile } from "../world/approaches";
+import { approachFixes, approachLabel, approachText, type FieldCard, holdOf, type MapApproach } from "../world/approach-draw";
+import { unitsFor } from "../ui/unitsys";
 import { type Airfield, fieldByCode, fieldCached, fieldsNear } from "../world/runways";
 import type { CameraController } from "../controls";
 
@@ -62,6 +64,8 @@ declare module "../controls" {
     approachReason: typeof approachReason;
     approachForField: typeof approachForField;
     approachesAt: typeof approachesAt;
+    approachMapData: typeof approachMapData;
+    approachCard: typeof approachCard;
   }
 }
 
@@ -378,6 +382,102 @@ function approachesAt(this: CameraController, code: string): Approach[] | null {
   return approachesFor(f);
 }
 
+/**
+ * The approach the screens draw (world/approach-draw.ts — PLAN-APPROCHES AP4): the one engaged (with its join planned), else the
+ * selected airfield's, else the flight plan's destination's — its fixes (its transition when one is chosen), missed approach,
+ * hold, and the field's other approaches. Worked out again only when what decides it changes.
+ */
+function approachMapData(this: CameraController): MapApproach | null {
+  const S = this.approachSel;
+  const engaged = (this.ilsRun || this.a320App) && this.approachLast ? this.approachLast : null;
+  const join = this.ilsRun?.join ?? this.a320App?.join ?? null;
+  const W = this.nav.route.wps;
+  const dest = W.at(-1);
+  const code = S.field !== "auto" ? S.field : dest?.field ? (dest.field.icao ?? dest.name) : null;
+  const key = engaged
+    ? `e|${engaged.field.ident}|${engaged.approach.id}|${engaged.gen}`
+    : code
+      ? `s|${code}|${S.approach}|${S.via}|${S.rwy}|${this.approachGen}|${W.at(-2)?.name ?? ""}`
+      : "";
+  if (!key) return null;
+  if (mapMemo.key === key && mapMemo.join === join && mapMemo.i === join?.i && mapMemo.v) return mapMemo.v;
+  let a: Approach | null = engaged?.approach ?? null;
+  let f: Airfield | null = engaged?.field ?? null;
+  let via: string | null = null;
+  if (!a && code) {
+    const r = this.approachForField(code, S.field !== "auto" ? null : (W.at(-2) ?? null));
+    if (!r) return null;
+    a = r.a;
+    f = r.f;
+    via = r.via;
+  }
+  if (!a || !f) return null;
+  const tr = via && via !== "none" ? (a.transitions.find((t) => t[0]?.fix === via) ?? null) : null;
+  const v: MapApproach = {
+    id: a.id,
+    field: f.icao || f.ident,
+    rwy: a.rwy,
+    label: approachLabel(a),
+    thr: { lat: a.thr.lat, lon: a.thr.lon },
+    crs: a.crs,
+    cone: !!a.loc,
+    fixes: approachFixes(a, tr),
+    missed: a.missed.filter((l) => l.lat !== undefined && l.lon !== undefined).map((l) => [l.lat!, l.lon!]),
+    hold: holdOf(a),
+    join: engaged && join ? join.plan.pts.slice(join.i).map((p): [number, number] => [p.lat, p.lon]) : [],
+    engaged: !!engaged,
+    profile: {
+      elev: a.thr.elev,
+      ground: Array.from({ length: 26 }, (_, k) => {
+        const p = wgs84Direct(a.thr.lat, a.thr.lon, ((a.crs + 180) * Math.PI) / 180, k * 1000);
+        return groundMsl(p.lat, p.lon);
+      }),
+    },
+    others: approachesFor(f)
+      .filter((x) => x.id !== a.id && x.source !== "built")
+      .map((x) => ({ id: x.id, rwy: x.rwy, label: approachLabel(x), thr: { lat: x.thr.lat, lon: x.thr.lon }, crs: x.crs })),
+  };
+  mapMemo = { key, join, i: join?.i, v };
+  return v;
+}
+/** An airfield's card's approaches (world/approach-draw.ts FieldCard — the tactical map, the crew): per end, the approaches and
+ *  the wind on it; the automatic choice from where the craft is, its reason; the selection there. */
+function approachCard(this: CameraController, f: Airfield): FieldCard {
+  if (!approachTileIn(f.lat, f.lon)) void loadApproachTile(f.lat, f.lon);
+  const list = approachesFor(f);
+  const code = f.icao || f.ident;
+  const wind = windAt(this, f);
+  const g = this.geoNow();
+  const asker = g ? askerOf(this) : null;
+  const c = asker ? chooseApproach(f, list, asker, wind, thinOver(f)) : null;
+  const S = this.approachSel;
+  const mine = S.field === f.icao || S.field === f.ident;
+  const ends: FieldCard["ends"] = [];
+  for (const a of list) {
+    let e = ends.find((x) => endOf(x.rwy) === endOf(a.rwy));
+    if (!e) {
+      const calm = wind.spd < 0.5;
+      const r = ((wind.from - a.crs) * Math.PI) / 180;
+      e = {
+        rwy: a.rwy,
+        head: calm ? null : wind.spd * Math.cos(r),
+        cross: calm ? null : Math.abs(wind.spd * Math.sin(r)),
+        approaches: [],
+      };
+      ends.push(e);
+    }
+    e.approaches.push({ id: a.id, text: approachText(a), vias: viasOf(a) });
+  }
+  return {
+    field: code,
+    auto: c ? { id: c.a.id, why: sayResolved({ field: f, approach: c.a, fieldWhy: "named", choice: c, gen: 0 }, unitsFor(this.s)) } : null,
+    selected: mine ? { rwy: S.rwy, approach: S.approach, via: S.via } : null,
+    ends,
+  };
+}
+
+let mapMemo: { key: string; join: unknown; i: number | undefined; v: MapApproach | null } = { key: "", join: null, i: undefined, v: null };
+
 /** The resolution's reason said: « LFML ILS 31R — head wind 6 m/s, CAT I », « LFTH 23 built — the nearest ahead ». */
 export function sayResolved(r: ApproachResolved, units: { fSpd: (v: number) => string }): string {
   const a = r.approach;
@@ -395,5 +495,14 @@ export function sayResolved(r: ApproachResolved, units: { fSpd: (v: number) => s
 export function installApproach(C: { prototype: CameraController }) {
   // (the state's first values on the prototype: each controller's own once it changes — approachSelect sets new objects)
   Object.assign(C.prototype, { approachSel: AUTO_SEL, approachGen: 0, approachLast: null });
-  Object.assign(C.prototype, { approachSelect, approachState, approachResolve, approachReason, approachForField, approachesAt });
+  Object.assign(C.prototype, {
+    approachSelect,
+    approachState,
+    approachResolve,
+    approachReason,
+    approachForField,
+    approachesAt,
+    approachMapData,
+    approachCard,
+  });
 }

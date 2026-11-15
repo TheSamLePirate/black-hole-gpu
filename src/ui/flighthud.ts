@@ -218,6 +218,9 @@ export interface FlightHudActions {
   selectTrack?(id: string | null): void;
   /** an airfield's card on the tactical map: flown direct, added to the flight plan (RD11) */
   fieldAction?(action: "direct" | "add", f: import("../world/runways").Airfield): void;
+  /** the tactical map's approaches (PLAN-APPROCHES AP4): an action on a field's approach, a field's card's approaches */
+  approachAction?(action: import("./jetmap").ApproachAction, field: string, arg?: string): void;
+  fieldCard?(f: import("../world/runways").Airfield): import("../world/approach-draw").FieldCard | null;
   /** the flown craft's tank filled from a docked craft (controller/refuel.ts) */
   refuel?(): void;
   /** the HUD's kind: the next of automatic, atmosphere, space, approach (⇧²) */
@@ -1387,6 +1390,8 @@ export class FlightHud {
     this.jetMap = new JetMap(this.s);
     this.jetMap.onSelect = (id) => this.act.selectTrack?.(id);
     this.jetMap.onField = (a, f) => this.act.fieldAction?.(a, f);
+    this.jetMap.onApproach = (a, field, arg) => this.act.approachAction?.(a, field, arg);
+    this.jetMap.fieldInfo = (f) => this.act.fieldCard?.(f) ?? null;
     this.ground = new GroundTrack(this.s);
     this.ground.realWeather = () => this.mapWeather.real();
     this.ground.dayMosaic = () => this.mapWeather.mosaic();

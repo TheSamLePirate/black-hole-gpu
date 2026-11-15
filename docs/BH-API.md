@@ -2203,7 +2203,13 @@ drawn) — where the wheel steps its range (P11). *Used in:* `tests/e2e/radar-se
 
 The flight HUD (ui/flighthud.ts). `tacMap` is its tactical map (ui/jetmap.ts, PLAN-RADAR-AAA RD15): `rangeKm`, `range`
 (the step), `northUp`, `hitsNow()` (where each track was drawn, in CSS px on its canvas), `draw(data)`. `tacRangeKm()`
-gives the range, `pickTrack(x, y)` the track under a click in the view.
+gives the range, `pickTrack(x, y)` the track under a click in the view. PLAN-APPROCHES AP4: `fieldHitsNow()` (each airfield
+drawn: its code, x, y), `approachHitsNow()` (the approach's parts to click: `{ approach }` on an axis 6 NM out, `{ rwy }` at a
+threshold), `profile` (the vertical profile under the map, the PROF button); a field's card (`[data-testid=jm-card]`) lists the
+automatic choice and why, each end's wind and approaches (chips `jm-appr-<id>`), « Arm the approach » (`jm-arm`), « Auto »,
+« Vectors » / « By its transition », « Direct », « Add to the plan ». The data: `camera.approachMapData()` (the approach
+engaged, else selected, else the plan's destination's — `world/approach-draw.ts` MapApproach: its fixes by role, missed
+approach, hold, join, profile, the field's others) and `camera.approachCard(field)` (FieldCard).
 
 ### `__bh.radar.stats()` → `{n, bySource, ms}`
 
