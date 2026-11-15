@@ -1,0 +1,67 @@
+# PLAN-J5 — la généralisation contrôlée, après une J4 hors budget
+
+**État (15 novembre 2026, 04:55 UTC) : plan proposé, à valider par Sam ; mené selon ses recommandations sous la consigne « continue le
+plan » (comme PLAN-J3 et PLAN-J4), chaque réglage provisoire daté et révisable.** Jalon de la [stratégie](ANALYSE-STRATEGIE-RENDU-2026-11-03.md)
+§15 J5 : « étendre aux autres corps droits, à la marche puis aux transitions ; finaliser HDR/SDR/exports ; conserver les phénomènes
+scientifiques sur le chemin spécialisé ; retirer les portions terrestres historiques devenues redondantes après validation de la parité ».
+**Sortie** : *un renderer produit principal par domaine, pas une nouvelle option permanente parmi cinq compromis.*
+
+Le code fait foi. Les trois règles de méthode (CLAUDE.md) s'appliquent à chaque lot : le gain maximal lu dans une fiche avant un lot de
+performance, l'ancien chemin d'un levier allumé retiré au lot de retrait suivant, une sonde neuve passée par ses témoins.
+
+## 1. Le point de départ : J4 n'a pas atteint sa sortie
+
+La stratégie le dit (§15, « si un jalon manque ses objectifs ») : **ne pas généraliser une architecture qui reste hors budget** ; identifier le
+coût réel par poste, modifier une hypothèse ciblée, documenter l'écart et l'arbitrage produit. Au 15 novembre ([PLAN-J4 §10](PLAN-J4-VOLUMES.md)) :
+
+| Poste (kerr-mini) | Mesuré | Source | Ce qui le réduirait |
+|---|---:|---|---|
+| L'eau sur J0 | 16,2 ms (`earth water` 12,7) | fiche J0 de sortie de J2 | les étapes E1/E2 et les tuiles faites ; la houle : son travail (J4-4) |
+| La houle côtière, côte proche | +3,3 à +3,5 ms (+0,8 sur J0) | sonde `coast-swell`, 15 nov. | faire moins : demi-résolution, ou seulement où ses crêtes sont résolues (décision d'image) |
+| Les nuages sous orage | 16,5 ms (`clouds (half)`), dont leur lumière ~9,8 | PLAN-J4 J4-2 | la structure du noyau des nuages (son découpage) |
+| Le décor au-dessus d'une forêt | ~8,6 ms (Maures, après la carte d'ombre) | PLAN-J4 §10, un passage | le seuil des petits arbres (≈ −2,7 ms, décision d'image) ; la carte d'ombre des arbres (≈ −1,4) |
+| L'appareil (F-35) | 3,5–4,5 ms, dont le MSAA 4× 4–5 ms | PLAN-J3 question 6 | `SHIP_MSAA` 1 (décision d'image, levier prêt) |
+
+Sur la cible du mini (40 ms) J0 est à 53–57 ms : **l'écart de ~15 ms ne se ferme qu'avec des décisions d'image** (petits arbres, MSAA de
+l'appareil, résolution de la houle) **ou avec un découpage des noyaux de l'eau et des nuages** — aucun levier sans coût d'image ne reste
+au-dessus de 1,6 ms dans les mesures de J4.
+
+## 2. Les lots proposés
+
+| Lot | Contenu | Plafond lu (règle 1) | Preuve | Taille |
+|---|---|---|---|---|
+| **J5-0** | **Les arbitrages d'image chiffrés** : pour chaque levier qui change l'image — le seuil des petits arbres (`treeMinPx` 2,5 / 4 / 6), le MSAA de l'appareil (4× / 1×), la houle à demi-résolution —, son gain en A/B répété et sa planche au même instant, posés devant Sam | petits arbres ≈ 2,7 ms, MSAA 4–5, houle ≤ 3,5 sur une côte | A/B A B C répétés, planches | M |
+| **J5-1** | **Le noyau des nuages découpé** : la marche de densité et la lumière en deux noyaux (comme le sol différé et l'eau étagée), pour que la lumière cesse de peser par sa présence | la lumière des nuages ~9,8 ms sous orage, ~2 ms au beau temps (à lire) | ΔGPU J0 beau temps et orage | L |
+| **J5-2** | **Les autres corps droits** : la Lune, Mars, les mondes de PLAN-PLANETES-AAA sur le même socle raster (visibilité, `shadeLite`, eau où il y en a), leurs scènes de référence et leurs fiches | à lire par scène | fiche par corps | L |
+| **J5-3** | **La marche et les transitions** : le personnage (character e2e), l'orbite → le sol, la Terre → l'espace ; ce que chaque transition laisse dans l'historique (contrat de la reconstruction) | qualité (transitions) | e2e de parcours, images | L |
+| **J5-4** | **HDR/SDR/exports** : la sortie de l'image (hdrMap, AgX), les captures et les vidéos sur la même chaîne que l'écran | qualité | captures SDR sur kerr-mini (mesures de couleur), exports | M |
+| **J5-R** | **Le retrait des chemins terrestres redondants** : le tracé de la Terre proche (repli dormant depuis J2-7, PROBLEMES) et les options sans utilisateur — après validation de la parité ; une décision de Sam | compilation et code | suite, J0, `kernel-budget` | M |
+
+**Ordre recommandé** : J5-0 d'abord (les décisions d'image sont la seule voie mesurée vers 40 ms : elles reviennent à Sam), puis J5-1
+(le poste lourd sans coût d'image), J5-2 → J5-3 → J5-4, J5-R en dernier.
+
+## 3. Questions pour Sam
+
+1. **Les arbitrages d'image (J5-0)** : accepter, au vu des planches, des arbres de moins de 4 (ou 6) px laissés à la photo ; le MSAA de
+   l'appareil à 1× ; la houle à demi-résolution ?
+2. **Le découpage du noyau des nuages (J5-1)** avant la généralisation, ou la généralisation d'abord ?
+3. **Le repli tracé de la Terre (J5-R)** : le retirer une fois la parité vérifiée, ou le garder comme filet des GPU faibles ?
+
+**Réglées provisoirement le 15 novembre, selon les recommandations du plan — révisables par Sam** : 1. aucune décision d'image prise : les
+planches et les chiffres sont produits (J5-0), le choix reste à Sam ; 2. J5-1 avant la généralisation ; 3. le repli gardé jusqu'à sa décision.
+
+## 4. Non vérifié
+
+Les plafonds de J5-1 au beau temps, de J5-2 par corps et la parité du repli tracé ne sont pas mesurés. Aucun gain n'est promis.
+
+## 5. Avancement
+
+- **Le plan** (15 novembre, 04:55 UTC) : écrit après la fermeture de J4 ; les questions du §3 réglées provisoirement (aucune décision
+  d'image prise).
+- **J5-0, le seuil des petits arbres chiffré** (2026-11-15 05:00 UTC) : J0 parti au-dessus des Maures (kerr-mini), A B C A B C A —
+  références 54,4 (la première, chaude) / 52,4 / 52,5 ms ; arbres de moins de 4 px laissés à la photo **51,75 ms (−0,7)** (52,1 / 51,4) ; de
+  moins de 6 px **50,7 ms (−1,75)** (50,8 / 50,6) — moins que l'estimation d'un seul passage (−2,7). **Image** (captures de fin de vol, même
+  instant du même vol) : les pentes proches inchangées ; **sur les versants lointains, à 6 px, la forêt s'éclaircit** — les trouées et la
+  photo jaune apparaissent où la forêt était d'un vert sombre uniforme ; à 4 px, la différence est faible. L'écart pixel à pixel base / 6 px
+  est de l'ordre de l'écart entre deux références (le vol bouge) : la planche, pas un chiffre, montre la différence. **Aucune décision prise** :
+  le choix 2,5 / 4 / 6 revient à Sam (question 1).

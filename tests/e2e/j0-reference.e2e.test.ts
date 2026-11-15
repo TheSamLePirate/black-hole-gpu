@@ -113,6 +113,7 @@ const ABLATIONS: Record<string, { label: string; set: string }> = {
   // instead), the far trees drawn as shapes (no impostors), the raster's smallest trees left to the imagery from 6 px (2.5))
   treeShadowOff: { label: "sans carte d'ombre des arbres (les rayons)", set: `__bh.renderer.treeShadowOn = false;` },
   noImpostors: { label: "arbres lointains en formes (sans imposteurs)", set: `__bh.renderer.treeImpostorsOn = false;` },
+  treeMinPx4: { label: "arbres de moins de 4 px laissés à la photo (2,5)", set: `__bh.renderer.treeMinPx = 4;` },
   treeMinPx6: { label: "arbres de moins de 6 px laissés à la photo (2,5)", set: `__bh.renderer.treeMinPx = 6;` },
 };
 // (13 Nov 2026, Sam's decision 1: the water's two ablations in every fiche — its material, valid since liteSkip's bits are carried by
