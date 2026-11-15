@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-15 07:39 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-15 07:44 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous.
@@ -7463,3 +7463,11 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   noyaux, `check-wgsl` 84/84.
 - Limites : le reflet intense du Soleil et la houle proche non vérifiés ; le M1 Max non mesuré avec ce défaut.
 - Suite : J0 vol de référence et le M1 Max ; puis le poste suivant (les nuages, 6 ms ; l'appareil, 3,9).
+
+### 2026-11-15 07:44 UTC — Audit QA-10 (un pas) : les décisions pures du match en réseau sorties et testées
+
+- `src/ui/netmatch.ts` (1 165 lignes, jamais importé par un test) : son horloge (`fmtClock`), la ligne d'un pilote au classement selon le
+  mode (`rankingLine`, en anglais et en français) et la place d'un point dans le repère local du combat (`enuOffset`, sur la normale WGS84)
+  sortis tels quels dans `src/ui/netmatch-pure.ts` ; `tests/netmatch-pure.test.ts` 3/3 (un point 500 m au nord, 40 m plus haut : est
+  < 5 cm, nord 500, haut 40). Tests du match et du réseau 105/105 ; e2e `net-coop` 3/3.
+

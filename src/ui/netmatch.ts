@@ -16,6 +16,7 @@ import { proxyGone } from "../controller/fightproxy";
 import { crashView, FALL_CAP, fallStep, startFall } from "../game/wreckfall";
 import { geodeticNormal, WGS84_A, WGS84_F } from "../system/ellipsoid";
 import { heightOverGround } from "../system/our-surface";
+import { enuOffset, fmtClock, rankingLine } from "./netmatch-pure";
 import { M_METRES } from "../units";
 import { fleet } from "../fleet";
 import type { GameTools } from "../game/tools";
@@ -67,7 +68,6 @@ interface CombatState {
 
 const r1 = (x: number) => Math.round(x * 10) / 10;
 const r3 = (x: number) => Math.round(x * 1000) / 1000;
-const fmtClock = (s: number) => `${Math.floor(Math.max(0, s) / 60)}:${String(Math.floor(Math.max(0, s) % 60)).padStart(2, "0")}`;
 const WEAPON: Record<string, string> = {
   aim9x: "AIM-9X",
   aim120: "AIM-120",
@@ -404,14 +404,9 @@ export class NetMatch {
     const own = at && C?.last ? c.netOwn() : null;
     let w: V3 | null = near;
     if (at && own && C?.last) {
-      const U = geodeticNormal(WGS84_A, WGS84_F, own.p);
-      const el = Math.hypot(U[0], U[1]) || 1;
-      const E = [-U[1] / el, U[0] / el, 0];
-      const N = [U[1] * E[2]! - U[2] * E[1]!, U[2] * E[0]! - U[0] * E[2]!, U[0] * E[1]! - U[1] * E[0]!];
-      const d = [at[0] - own.p[0], at[1] - own.p[1], at[2] - own.p[2]];
-      const dt = (a: number[]) => d[0]! * a[0]! + d[1]! * a[1]! + d[2]! * a[2]!;
+      const o = enuOffset(own.p, at);
       const P = C.last.p;
-      w = [P[0] + dt(E), P[1] + dt(N), P[2] + dt(U)];
+      w = [P[0] + o[0], P[1] + o[1], P[2] + o[2]];
     }
     if (C && w) {
       const p: V3 = [w[0], w[1], broke ? w[2] : C.world.groundZ(w[0], w[1])];
@@ -540,18 +535,7 @@ export class NetMatch {
     return S.ranking().map((r) => ({
       slot: r.slot,
       name: this.nameOf(r.slot),
-      line:
-        m.mode === "race"
-          ? r.result === null || !Number.isFinite(r.result)
-            ? t("not finished")
-            : `${r.result.toFixed(1)} s${r.medal ? ` · ${r.medal}` : ""}`
-          : m.mode === "landing"
-            ? r.result === null
-              ? t("not landed")
-              : `${Math.round(r.result)}/100${r.medal ? ` · ${r.medal}` : ""}`
-            : m.mode === "coop"
-              ? tf("{0} downed · {1} hits", r.ai, r.hits)
-              : tf("{0} kills · {1} deaths · {2} hits", r.kills, r.deaths, r.hits),
+      line: rankingLine(m.mode, r),
     }));
   }
 
