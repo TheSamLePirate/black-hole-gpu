@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-15 09:59 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-15 10:02 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous.
@@ -7670,4 +7670,12 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
 - **Changement** (le test seul) : pas de dégâts pendant ces placements (rétablis ensuite) ; si le F-35 n'est pas pris, le test dit l'état
   du vol. La pause de 6 s après l'autopilote est remplacée par l'attente de l'altitude vérifiée. 3/3, deux fois (146 m au-dessus de la mer,
   N 46,4 m). Garde : 66 → 65 pauses.
+
+### 2026-11-15 10:02 UTC — QA-09 arrêté là (décision de Sam, 15 nov. : « s'arrêter là »)
+
+- Bilan : attentes de plus de 120 s, 121 → 91 ; pauses fixes de 5 s ou plus, 85 → 65. Toutes les attentes mesurables hors rendu sont
+  abaissées. Les plafonds du rendu ont été proposés à sa session, qui décide.
+- Ce qui reste : fichiers du rendu, vols mesurés au-delà de 60 s, fenêtres de mesure voulues, tests de TARS en direct.
+- La garde `tests/e2e-waits.test.ts` empêche ces comptes de remonter, et le journal `remote-results/e2e-waits.jsonl` de chaque e2e continue
+  de mesurer. Pas de cible zéro.
 
