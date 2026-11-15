@@ -89,7 +89,9 @@ function apSet(this: CameraController, want: { alt?: number; hdg?: number; spd?:
       sel.spd = Math.round(Math.max(30, Math.min(700, want.spd)));
       said.push(tf("Speed {0} armed", unitsOf(this.s.units).fSpd(sel.spd)));
     }
-    return `${said.length ? `${said.join(" — ")} — ` : ""}${t("held at the take-off's end")}`;
+    // (engaged alone — no target —: the holds come on at its end; targets: theirs, armed)
+    if (!said.length) return t("Automatic take-off: its holds come on at its end — U or the stick takes it back");
+    return `${said.join(" — ")} — ${t("held at the take-off's end")}`;
   }
   const m = this.jetModes;
   const N = this.nav;

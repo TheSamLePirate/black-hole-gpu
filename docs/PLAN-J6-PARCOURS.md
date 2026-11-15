@@ -1,8 +1,8 @@
 # PLAN-J6 — Les parcours complets (stratégie §19.13)
 
-**État (2026-11-15 19:28 UTC)** : **J6-1 à J6-5 faits, J6-6 fait en solo** — leurs parcours passent ; cinq défauts trouvés et corrigés (le décollage
+**État (2026-11-15 19:33 UTC)** : **J6-1 à J6-5 et J6-7 faits, J6-6 fait en solo** — leurs parcours passent ; cinq défauts trouvés et corrigés (le décollage
 automatique, le décor en vol rapide, l'arrivée de la météo réelle d'un coup, le repos au sol jamais atteint, l'A320 rechargé dans l'état de la
-préférence). J6-6 en salle, puis J6-7. Les jalons J0 à J5 ont été menés (PLAN-J1 à PLAN-J5) ; le 15 novembre,
+préférence). Reste : J6-6 en salle, J6-8. Les jalons J0 à J5 ont été menés (PLAN-J1 à PLAN-J5) ; le 15 novembre,
 Sam a nommé **~48 ms de GPU sur J0 le palier intermédiaire de kerr-mini** ([J0-CONTRAT](J0-CONTRAT.md) §2) et demandé de reprendre la
 suite du plan, lumière et contenu. La stratégie ([ANALYSE-STRATEGIE](ANALYSE-STRATEGIE-RENDU-2026-11-03.md) §19.13) demande que les jalons
 « transportent l'expérience en même temps que les passes » : **un parcours n'est terminé ni avec une scène vide, ni avec un état choisi
@@ -132,3 +132,10 @@ L'inventaire du §1 vient de la lecture du catalogue et des en-têtes : aucun te
   à son niveau (z 17 / 17) ; le relief republié (z 17) et l'écran du cockpit renvoyé (63 ms) en 3,7 s ; l'image non noire (luminance moyenne
   69 → 69,7) ; le manche pendant la reprise n'a rien piloté (hauteur 668 → 675 m, maintiens inchangés). Aucun défaut trouvé. **Reste** : la
   perte en salle réseau (un serveur de salle dans l'e2e — un second lot). Suite : J6-7 (TARS pendant une transition).
+- **J6-7 fait : TARS pendant une transition** (2026-11-15 19:33 UTC) : e2e `parcours-tars` — le décollage automatique lancé par U, pendant son
+  roulage le pilote écrit à TARS « Cap 270, 2 500 m, 150 m/s » (le modèle simulé dans la page, sans clé : `jet_autopilot`, puis ses mots
+  répètent le retour de l'outil). **Mesuré** (kerr-mini) : le retour dit la vérité de l'état — « Altitude 2500 m armée — Cap 270° armé — Vitesse
+  150 m/s armée — tenus à la fin du décollage » (aucun « sélectionné ») — ; à la fin du décollage les maintiens 2 500 m / 270° / 150 m/s, en
+  montée à 19 m/s, train rentré. Le même chemin que le pilote (`apSet`, J6-1). Corrigé au passage : l'engagement seul pendant le roulage
+  répétait « tenus à la fin du décollage » ; il dit désormais que ses maintiens s'engagent à sa fin. Non joué ici : une commande devenue
+  périmée et l'annulation selon le point de reprise. Suite : J6-8 (la montée vers l'orbite).
