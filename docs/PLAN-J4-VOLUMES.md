@@ -137,3 +137,7 @@ Le relevé du §2 vient d'une lecture du code et des documents (agent d'explorat
   caches sortis du journal des diagnostics, plafonné à 32 événements). **Ce qui le rouvrirait** : leur compilation sous D3D12 (le module entier
   y coûtait le plus — PLAN-LEAN-TRACER-KERNELS), mesurée par `scripts/d3d12-compile-proxy.ts` (outillage Tint/DXC non installé ici ni sur le
   mini) ou sur kerr-pc.
+- **J4-6, l'enveloppe par profil écrite** (2026-11-15 03:11 UTC) : J0 sous chaque préréglage — beau temps 57,3, traversée 60,0, couvert 67,9,
+  pluie 67,3, orage 77,8 ms (kerr-mini, [fiche](progress/j4/FICHE-PROFILS-METEO-kerr-mini-2026-11-15.md)) ; le coût suit la passe des nuages
+  (5 → 16,5 ms), la pluie ne pèse rien de lisible. Plafond de J4-2 : 7 à 11 ms de passe au-dessus du beau temps. **Aucun profil tenu** sur la
+  cible du mini (40 ms) : l'enveloppe est écrite, l'écart aussi (17 à 38 ms).
