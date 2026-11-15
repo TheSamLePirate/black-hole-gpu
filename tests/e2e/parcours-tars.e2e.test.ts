@@ -7,7 +7,9 @@ import { App, E2E, stopServer } from "./lib/app";
 // « selected » (no success announced without its effect: before 15 Nov 2026 the holds engaged mid-run were lost at its end) —; at the
 // take-off's end the holds are the ones asked; the jet climbing.
 // Duration: ~1 min on kerr-mini.
-// Done when: the take-off ended and the holds read.
+// Then a command gone stale: « Monte à 4000 m » asked of the F-35 in flight, the model's answer slow (3 s), the craft changed to the Ranger
+// meanwhile — the call checked against the state when it runs: refused, said, nothing engaged.
+// Done when: the take-off ended and the holds read; the stale command answered.
 const MODEL = `(() => {
   window.__or = [];
   const real = window.fetch.bind(window);
@@ -26,6 +28,14 @@ const MODEL = `(() => {
       if (!tools.length) {
         window.__tools = (body.tools ?? []).map((t) => t.function.name);
         return reply({ content: null, tool_calls: [call("j", "jet_autopilot", { hdgDeg: 270, alt: 2500, spd: 150, ap: true, athr: true })] });
+      }
+      return reply({ content: "Retour : " + tools[0].content });
+    }
+    // (a slow answer — 3 s —: the state may change before the call runs; the words repeat what the tool gave back)
+    if (/Monte à 4000/.test(q)) {
+      if (!tools.length) {
+        await new Promise((r) => setTimeout(r, 3000));
+        return reply({ content: null, tool_calls: [call("s", "jet_autopilot", { alt: 4000, ap: true })] });
       }
       return reply({ content: "Retour : " + tools[0].content });
     }
@@ -78,5 +88,26 @@ describe.skipIf(!E2E)("J6-7: TARS during the automatic take-off — the truth of
     expect(end.holds).toEqual([2500, 270, 150]);
     expect(end.vs).toBeGreaterThan(2);
     expect(end.gear).toBe(false);
+  }, 120_000);
+
+  test("a command gone stale: « Monte à 4000 m » asked of the F-35, the craft changed to the Ranger before the call runs — refused, nothing changed", async () => {
+    await app.js(`(() => { __bh.game.flyAt(34.9, -117.9, 2000, 90, 180); return 1; })()`);
+    await Bun.sleep(1500);
+    await app.type("Monte à 4000 m.");
+    await app.press("Enter");
+    await app.waitFor(`__bh.tars.agent.busy`, 10_000);
+    // (while the model thinks: the craft changed — the jet's autopilot no more the one flown)
+    await app.js(`(() => { __bh.settings.vessel = "ranger"; return 1; })()`);
+    await app.waitFor(`__bh.fleet.active === "ranger"`, 20_000);
+    await app.waitFor(`(__bh.tars.agent.lastText ?? "").startsWith("Retour")`, 20_000);
+    const r = await app.js<{ text: string; holds: unknown; vessel: string }>(`(() => { const m = __bh.camera.jetModes;
+      return { text: __bh.tars.agent.lastText, holds: [m.alt, m.hdg, m.spd], vessel: __bh.fleet.active }; })()`);
+    console.log(`  the stale command: ${JSON.stringify(r)}`);
+    // (the call checked against the state when it runs: the jet's systems refused on the Ranger — said, nothing engaged)
+    expect(r.vessel).toBe("ranger");
+    expect(r.text).not.toMatch(/sélectionnée|selected|armée|armed/i);
+    expect(r.holds).toEqual([null, null, null]);
+    // (the reason the true one — the craft —, not « in the air »)
+    expect(r.text).toMatch(/F-35/);
   }, 120_000);
 });

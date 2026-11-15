@@ -13,7 +13,7 @@ import { unitsOf } from "../ui/unitsys";
 import type { PilotInput } from "../pilot";
 import { seaAltitudeOver, solidBody } from "../system/our-surface";
 import { C_MPS, M_METRES } from "../units";
-import { VESSELS } from "../vessels";
+import { isAircraft, VESSELS } from "../vessels";
 import { wetRatio } from "../f35/engine";
 import { STOVL } from "../f35/stovl";
 import type { CameraController } from "../controls";
@@ -70,6 +70,8 @@ function apSet(this: CameraController, want: { alt?: number; hdg?: number; spd?:
   // (the A320's: its FCU and its FMGC's AP and A/THR, read as they are — controller/a320ap.ts; audit TA-03: judged by the
   // F-35's holds, always empty here, every ask toggled its AP1)
   if (fleet.active === "a320") return this.a320FcuSet(want);
+  // (another craft than the aircraft — a command gone stale, the craft changed since: PLAN-J6 J6-7 —: said so, not « in the air »)
+  if (!isAircraft(fleet.active)) return t("The autopilot's selectors: the F-35's and the A320's only");
   if (!jetReady(this)) return t("The jet's systems: in plane mode (F)");
   // (the F-35's automatic take-off running — controller/runwaytakeoff.ts —: the selections armed for its end, its holds then theirs;
   // engaged now, the holds took the run's stick for the pilot's hand — PLAN-J6 J6-1)

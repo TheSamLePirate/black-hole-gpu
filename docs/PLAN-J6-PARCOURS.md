@@ -1,8 +1,8 @@
 # PLAN-J6 — Les parcours complets (stratégie §19.13)
 
-**État (2026-11-15 19:38 UTC)** : **les huit lots joués : J6-1 à J6-5, J6-7, J6-8 faits, J6-6 fait en solo** — leurs parcours passent ; cinq défauts trouvés et corrigés (le décollage
+**État (2026-11-15 19:45 UTC)** : **les huit lots joués : J6-1 à J6-5, J6-7, J6-8 faits, J6-6 fait en solo** — leurs parcours passent ; cinq défauts trouvés et corrigés (le décollage
 automatique, le décor en vol rapide, l'arrivée de la météo réelle d'un coup, le repos au sol jamais atteint, l'A320 rechargé dans l'état de la
-préférence). Reste : J6-6 en salle réseau ; dans J6-7, la commande périmée et l'annulation. Les jalons J0 à J5 ont été menés (PLAN-J1 à PLAN-J5) ; le 15 novembre,
+préférence). Reste : J6-6 en salle réseau ; dans J6-7, l'annulation selon le point de reprise. Les jalons J0 à J5 ont été menés (PLAN-J1 à PLAN-J5) ; le 15 novembre,
 Sam a nommé **~48 ms de GPU sur J0 le palier intermédiaire de kerr-mini** ([J0-CONTRAT](J0-CONTRAT.md) §2) et demandé de reprendre la
 suite du plan, lumière et contenu. La stratégie ([ANALYSE-STRATEGIE](ANALYSE-STRATEGIE-RENDU-2026-11-03.md) §19.13) demande que les jalons
 « transportent l'expérience en même temps que les passes » : **un parcours n'est terminé ni avec une scène vide, ni avec un état choisi
@@ -150,3 +150,9 @@ L'inventaire du §1 vient de la lecture du catalogue et des en-têtes : aucun te
   au sol jamais atteint, l'A320 rechargé dans l'état de la préférence) ; relevés sans correction : le blocage à l'arrivée d'une météo (compilation),
   le blocage au retour par F1 (317 ms), la vitesse verticale résiduelle au sol ; laissé à la session des approches : la remise de gaz de l'approche
   planifiée vers la 31 de Toulon-Hyères. Restent : la perte du GPU en salle réseau ; la commande périmée et l'annulation de TARS.
+- **J6-7 : la commande devenue périmée** (2026-11-15 19:45 UTC) : `parcours-tars`, second test — « Monte à 4000 m » demandé au F-35 en vol, la
+  réponse du modèle simulé lente (3 s), l'appareil changé pour le Ranger entre-temps. **Trouvé** : l'appel, revalidé à son exécution, était bien
+  refusé et rien n'était engagé, mais pour une fausse raison (« Les tenues du pilote automatique : en vol » — le Ranger vole en mode avion,
+  `jetReady` le laissait passer). **Corrigé** : `apSet` (le chemin de TARS et de l'équipage) refuse d'abord un appareil qui n'est ni le F-35 ni
+  l'A320 et le dit. **Mesuré** (kerr-mini) : `parcours-tars` 2/2, `tars-aircraft-tools` 2/2, `release-all` 1/1 ; unitaires (messages, équipage,
+  TARS) 120/120. Reste dans J6-7 : l'annulation selon le point de reprise.

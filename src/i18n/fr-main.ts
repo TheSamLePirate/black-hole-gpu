@@ -594,6 +594,7 @@ export default {
   "Altitude {0} selected": "Altitude {0} sélectionnée",
   "Speed {0} selected": "Vitesse {0} sélectionnée",
   // (the F-35's automatic take-off: the selections armed for its end — PLAN-J6 J6-1, 15 Nov 2026)
+  "The autopilot's selectors: the F-35's and the A320's only": "Les sélecteurs du pilote automatique : ceux du F-35 et de l'A320 seulement",
   "Altitude {0} armed": "Altitude {0} armée",
   "Heading {0}° armed": "Cap {0}° armé",
   "Speed {0} armed": "Vitesse {0} armée",
