@@ -193,6 +193,18 @@ gestionnaire des messages du pilote (`main.ts`) les montrait par `panel.toast`, 
 y écrivait comme le pilote. **Tous** les messages du pilote étaient doublés. `panel.toast(msg, { log: false })` pour eux ; e2e `journal-once` :
 avant `[info no-time, pilot t]`, après `[pilot t]`.
 
+## Après le roulage de l'ILS, le F-35 ne s'arrête jamais : il glisse de côté, freins serrés — on ne peut pas débarquer (relevé le 15 novembre 2026, PLAN-J6 J6-3)
+
+**État (15 nov. 2026, 18:45 UTC)** : relevé, cause non trouvée. Le parcours `parcours-debarquer` : l'ILS 05 de Toulon-Hyères depuis une finale de
+9 km, toucher 19,5/20 (640 m, 1,6 m de l'axe, −1,2 m/s), aucun rebond, roulage jusqu'à ~0 ; puis, sans rien toucher, l'avion **reste
+`rolling`** et **glisse de 2,65 à 2,71 m en 10 s** (trois passages) — vers le 165° pour un cap de 51° : de côté, un peu en arrière —, freins à
+1, manette à 0, ses trois roues au sol, **aucun lacet** (0,03°), **aucun vent** (`windNow` nul). Il n'atteint donc jamais le repos
+(`motion.ts` : moins de 0,05 m/s) et Maj+K répond **« Land the vessel before going out. »** (0,28–0,30 m/s).
+- Écarté : aligné par `lineUp` (posé d'emblée), il ne bouge pas, horloge à pas fixes ou en temps réel, à Edwards comme à Toulon-Hyères ;
+  `groundVelocity` concorde avec le repère tournant de la Terre (différences finies de `fromBodyFixed` : 0,015–0,033 m/s).
+- À chercher : les forces latérales des pneus à l'arrêt (`gear.ts`, l'adhérence de côté à une vitesse longitudinale nulle), la pente
+  transversale de la piste nivelée sous les roues, l'état laissé par la fin de l'ILS (`ilsFrame`).
+
 ## Le bouton de la couche météo de la carte masqué par la carte elle-même (relevé le 15 novembre 2026, e2e `weather-panel`)
 
 **État (15 nov. 2026, 18:03 UTC)** : relevé en passant (PLAN-J6 J6-2), non étudié. `weather-panel` › « the planisphere's weather layer » : le

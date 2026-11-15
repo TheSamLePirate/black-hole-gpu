@@ -1,7 +1,8 @@
 # PLAN-J6 — Les parcours complets (stratégie §19.13)
 
-**État (2026-11-15 18:03 UTC)** : **J6-1 et J6-2 faits** — leurs parcours passent ; trois défauts trouvés et corrigés (le décollage
-automatique, le décor en vol rapide, l'arrivée de la météo réelle d'un coup). J6-3 ensuite. Les jalons J0 à J5 ont été menés (PLAN-J1 à PLAN-J5) ; le 15 novembre,
+**État (2026-11-15 18:45 UTC)** : **J6-1 et J6-2 faits** — leurs parcours passent ; trois défauts trouvés et corrigés (le décollage
+automatique, le décor en vol rapide, l'arrivée de la météo réelle d'un coup). **J6-3 ouvert** : son parcours écrit, bloqué par un défaut
+relevé (l'avion glisse après le roulage de l'ILS : on ne peut pas débarquer). Les jalons J0 à J5 ont été menés (PLAN-J1 à PLAN-J5) ; le 15 novembre,
 Sam a nommé **~48 ms de GPU sur J0 le palier intermédiaire de kerr-mini** ([J0-CONTRAT](J0-CONTRAT.md) §2) et demandé de reprendre la
 suite du plan, lumière et contenu. La stratégie ([ANALYSE-STRATEGIE](ANALYSE-STRATEGIE-RENDU-2026-11-03.md) §19.13) demande que les jalons
 « transportent l'expérience en même temps que les passes » : **un parcours n'est terminé ni avec une scène vide, ni avec un état choisi
@@ -95,3 +96,11 @@ L'inventaire du §1 vient de la lecture du catalogue et des en-têtes : aucun te
   relevé). Tests : `weather-fade` 3/3 (unitaires), `metar` 2/2 (il attend la fin du fondu ; son second test daté du 12 août passe désormais par
   l'archive d'Open-Meteo, accepté), `weather-panel` W3 (la base de la couche comparée au sol du bloc — le géoïde, −29 m à Cap Canaveral). Suite :
   J6-3 (se poser puis débarquer) ; la compilation du noyau de la météo à l'arrivée d'une source (le blocage).
+- **J6-3 ouvert : se poser puis débarquer — bloqué** (2026-11-15 18:45 UTC) : e2e `parcours-debarquer` (finale directe de 9 km sur la piste
+  que l'ILS choisit — le départ de J0 par l'approche planifiée vers la 31 « construite » partait en remise de gaz et ne se posait pas en 300 s :
+  donné à la session PLAN-APPROCHES, dont c'est le chantier en cours). **Mesuré** (kerr-mini, cinq passages) : ILS 05, **19,5/20**, toucher à
+  640 m et 1,6 m de l'axe, −1,2 m/s, **aucun rebond** ; le sol de contact sous l'appareil le même niveau (z 17) sous deux réglages graphiques
+  (`detailReach` normal / veryFar, décor balanced / full ; hauteurs 0,312 / 0,311 m, l'avion ayant glissé entre les deux lectures) ; **puis
+  l'avion glisse de 2,7 m en 10 s, freins serrés, sans vent ni lacet** — jamais au repos, la sortie refusée (« Land the vessel before going
+  out. ») ([PROBLEMES](PROBLEMES-A-REGLER.md)). Le parcours échoue en le disant. Suite : la cause du glissement (les pneus à l'arrêt, la pente
+  de la piste), puis la marche, le retour à bord et le redécollage.
