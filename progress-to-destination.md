@@ -35,7 +35,7 @@ les preuves restent dans les entrées datées du journal, dessous.
 | Machine | GPU p50 mesuré | Cible | Plus gros poste |
 |---|---:|---:|---|
 | kerr-mini | 58,4 ms (5c420e09, 13 nov.) ; **56,3 ms avec l'eau E1** (A/B, 13 nov.) ; **57,3 ms le 15 nov.** (0bb2aa86, un vol, après les corrections de J3) | 40 ms (25 images/s régulières) | l'eau : 16,2 ms ; sans son matériau −13,0 ms (−10,1 avec E1) |
-| M1 Max | 22,5 ms, **frais** (12 nov., 98–100 °C) — non valable comme palier ; **15 nov., borné à 30 : beau temps 21,3 / 21,4 ms tenu soutenu ; orage 28,6 en vol, décroche en soutenu (14,6 images/s, 986 MHz)** | 16,7 ms (60 images/s), bornée et soutenue | l'eau : 5,3 ms pour une enveloppe de 1,0 |
+| M1 Max | 22,5 ms, **frais** (12 nov., 98–100 °C) — non valable comme palier ; **15 nov., borné à 30 : beau temps 21,3 / 21,4 ms tenu soutenu ; orage 28,6 en vol, décroche en soutenu (14,6 images/s, 986 MHz) — chaleur héritée : parti froid, l'orage tient 30 soutenu (27,9 ms)** | 16,7 ms (60 images/s), bornée et soutenue | l'eau : 5,3 ms pour une enveloppe de 1,0 |
 
 **L'ordre décidé** (stratégie §24) : l'eau étagée (surface → éclairage → reflets) → la classification de l'écran par tuiles et les lancements
 indirects → J3 (lumière, cockpit). **Au 13 nov. : l'eau étagée et la classification closes (E1, E2, tuiles de l'eau faits ; E3 et le lot 2 non
@@ -7383,3 +7383,12 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
 - Limites : un passage par profil ; la température avant l'orage était celle du vol au beau temps (enchaînés) — le décrochage peut en
   hériter ; la cause du saut de 28,6 à ~84 ms (plus que l'horloge) non élucidée.
 - Suite : les questions de PLAN-J5 §3 à Sam (arbres, MSAA, repli tracé) ; le lot d'assets des arbres proches à proposer.
+
+### 2026-11-15 06:16 UTC — Correction : sur le M1 Max l'orage tient 30 images/s soutenu, d'un départ froid
+
+- Contribution à la destination : la règle « borné et soutenu » relue avec une machine dans un état connu.
+- Réalisé : J0 sous orage seul, après retour à « Nominal » (attente bornée sur `scripts/thermal.ts`) ; PLAN-J4 §10, état courant.
+- Preuves (mesuré, M1 Max) : vol 30 images/s, GPU p50 27,9 ms ; soutenu 30 images/s, 27,9 ms, 1 290 → 1 294 MHz. L'entrée de 06:07
+  (décrochage à 14,6 images/s) est due à la chaleur héritée des passages enchaînés — gardée, corrigée ici.
+- Limites : un passage ; un jeu long et chaud (au-delà du vol soutenu de J0) non mesuré.
+- Suite : J5-3b (les arbres proches par leurs imposteurs : sonde en cours).

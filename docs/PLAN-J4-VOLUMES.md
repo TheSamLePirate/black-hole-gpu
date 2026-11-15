@@ -208,3 +208,7 @@ Le relevé du §2 vient d'une lecture du code et des documents (agent d'explorat
   horloge 1 290 → 1 288 MHz ; **orage** : en vol 29,9 images/s, GPU p50 28,6 ; **soutenu, il décroche** — 21,5 images/s sur le vol, la
   seconde moitié 14,6 (intervalle médian 84 ms), horloge 1 244 → 986 MHz. Le profil lourd ne se tient pas borné et soutenu sur le M1 Max ;
   le beau temps tient la borne de 30.
+- **Correction (2026-11-15 06:16 UTC) — l’orage soutenu sur le M1 Max, parti froid** : la machine revenue à « Nominal », J0 sous orage seul,
+  borné à 30 : vol 30 images/s (GPU p50 27,9), **soutenu 30 images/s (27,9, horloge 1 290 → 1 294 MHz)** — il tient. Le décrochage de
+  06:07 (14,6 images/s, 986 MHz) héritait de la chaleur des passages enchaînés (le beau temps juste avant, la pression « Moderate » relevée
+  ensuite) : l'enveloppe du M1 Max, bornée à 30, tient au beau temps et sous orage d'un départ normal ; un long jeu chaud reste à mesurer.
