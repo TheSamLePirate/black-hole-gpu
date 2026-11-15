@@ -60,7 +60,7 @@
   "waits": 2
  },
  "course.e2e.test.ts": {
-  "sleeps": 2,
+  "sleeps": 1,
   "waits": 4
  },
  "crew-aar.e2e.test.ts": {
@@ -187,12 +187,8 @@
   "sleeps": 1,
   "waits": 0
  },
- "music-panel.e2e.test.ts": {
-  "sleeps": 1,
-  "waits": 0
- },
  "music.e2e.test.ts": {
-  "sleeps": 2,
+  "sleeps": 1,
   "waits": 0
  },
  "net-dock.e2e.test.ts": {

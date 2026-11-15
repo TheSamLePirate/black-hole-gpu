@@ -70,7 +70,8 @@ describe.skipIf(!E2E)("the guided lessons", () => {
     await app.waitFor(`!!__bh.camera.course?.run`, 30_000);
     // (TARS's turn: his panel)
     await app.waitFor(`__bh.camera.course?.run?.i === 1`, 30_000);
-    await Bun.sleep(6000);
+    // (his panel up, waited for — what is checked below —: not 6 s slept, 15 Nov 2026)
+    await app.waitFor(`(document.querySelector('[data-testid="course-panel"]')?.textContent ?? "").includes("TARS")`, 20_000);
     await shot("tars-turn");
     expect(await app.js<string>(`document.querySelector('[data-testid="course-panel"]')?.textContent ?? ""`)).toContain("TARS");
     // (a steady pilot from the handover: each step as asked)

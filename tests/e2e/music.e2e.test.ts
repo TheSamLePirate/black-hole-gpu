@@ -31,8 +31,8 @@ describe.skipIf(!E2E)("the score at the great moments", () => {
   test("the music off: silence", async () => {
     await app.js(`(__bh.settings.music = false, true)`);
     await app.waitFor(`__bh.music.moment === null`, 5_000);
-    await Bun.sleep(9000);
-    // (its fade-out: 8 s)
+    // (its fade-out, 8 s, waited for to its end — what is checked —: not 9 s slept, 15 Nov 2026)
+    await app.waitFor(`__sound.busLevels().music < -60`, 20_000);
     expect(await app.js<number>(`__sound.busLevels().music`)).toBeLessThan(-60);
     await app.js(`(__bh.settings.music = true, true)`);
   }, 30_000);

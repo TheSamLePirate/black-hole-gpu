@@ -24,7 +24,8 @@ describe.skipIf(!E2E)("the music panel", () => {
       `(()=>{[...document.querySelectorAll('#music-pop .mp-theme')].find(b=>b.textContent.includes('Ascent')).click();return true})()`,
     );
     await app.waitFor(`__bh.music.state().theme === "ascent"`, 5000);
-    await Bun.sleep(6000);
+    // (its level up — what is checked —, waited for: not 6 s slept, 15 Nov 2026)
+    await app.waitFor(`__sound.busLevels().music > -45`, 20_000);
     expect(await app.js<number>(`__sound.busLevels().music`)).toBeGreaterThan(-45);
     const st = await app.js<{ playing: boolean; section: string; chord: number[] }>(`__bh.music.state()`);
     expect(st.playing).toBe(true);
