@@ -118,6 +118,9 @@ const ABLATIONS: Record<string, { label: string; set: string }> = {
     label: "matériau du sol, une tuile sur deux (mesure, image cassée)",
     set: `__bh.renderer.tune = { TUNE_LITE_HALF_TILES: 1 };`,
   },
+  // (PLAN-J5 J5-6: the ground's material at the rate's pattern — earthRasterShading "half": a pixel in two shaded a frame, the others
+  // rebuilt by the resolve —; "auto" keeps the Earth's material at every pixel)
+  liteHalf: { label: "matériau du sol à demi-rythme (J5-6)", set: `__bh.settings.earthRasterShading = "half";` },
   sceneryNear: { label: "décor à portée « balanced » (3–4 km)", set: `__bh.settings.earthScenery = "balanced";` },
   // (after J4 — the forest's cost by part, over the Maures (J0_START): the trees' shadow map not drawn nor read (the rays towards the Sun
   // instead), the far trees drawn as shapes (no impostors), the raster's smallest trees left to the imagery from 6 px (2.5))
@@ -291,7 +294,7 @@ describe.skipIf(!E2E)("J0: the reference flight over Toulon-Hyères", () => {
    * scenery: a jump back to the start reloads them, and the first ablations of the first run measured that reload (10 images/s)
    * —; then the clock running, the autopilot and autothrottle engaged until they hold, gear down; 3 s settling */
   async function start(set: string) {
-    await app.js(`(() => { __bh.freeze(false); __bh.game.importSave(${JSON.stringify(save)}, false); __bh.freeze(true); __bh.renderer.liteSkip = 0; __bh.renderer.tune = {}; if (__bh.settings.earthPipeline !== "raster") __bh.game.set("earthPipeline", "raster"); __bh.renderer.debugSkipShip = false; __bh.renderer.ship.debugSkip.clear(); __bh.renderer.shipAirAllowed = true; __bh.renderer.cloudLightRuntimeOff = false; __bh.renderer.treeShadowOn = true; __bh.renderer.treeImpostorsOn = true; __bh.renderer.treeMinPx = 2.5;
+    await app.js(`(() => { __bh.freeze(false); __bh.game.importSave(${JSON.stringify(save)}, false); __bh.freeze(true); __bh.renderer.liteSkip = 0; __bh.renderer.tune = {}; __bh.settings.earthRasterShading = "auto"; if (__bh.settings.earthPipeline !== "raster") __bh.game.set("earthPipeline", "raster"); __bh.renderer.debugSkipShip = false; __bh.renderer.ship.debugSkip.clear(); __bh.renderer.shipAirAllowed = true; __bh.renderer.cloudLightRuntimeOff = false; __bh.renderer.treeShadowOn = true; __bh.renderer.treeImpostorsOn = true; __bh.renderer.treeMinPx = 2.5;
       Object.assign(__bh.renderer, { seaSurfaceOn: true, seaProbeOn: true, seaFoamWorldOn: true }); __bh.settings.seaFft = true;
       document.body.classList.remove("hide-ui"); Object.assign(__bh.settings, ${J0_FIXED}, ${hud}); __bh.settings.shipMount = "cockpit"; __bh.refresh();
       __bh.camera.viewReset(); ${set} return 1; })()`);

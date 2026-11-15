@@ -7477,19 +7477,21 @@ export class Renderer {
       // return at each, a dispatch of the tracer's size over the whole image for nothing, ~0.6 ms on an M1 — TERRE-UNREAL U6.
       // But a bridge's deck is the rays' — shadeLite leaves it them —: with bridges in the scenery, run; skipped, the bridges
       // were not drawn at all, the river seen through them. And the trees near the camera — nearTreesNow —: theirs too)
+      // (at a rate above 1 too since PLAN-J5 J5-6 — the material at the rate's pattern —: the pixels it leaves marked all the same)
       const liteAll =
         this.rasterLiteNow &&
-        this.rasterRate === 1 &&
         (this.sceneryRaster?.meshes3d ?? true) &&
         this.shadeSkip &&
         this.earthScenery.bridgeCount === 0 &&
         !this.nearTreesNow;
-      if (!liteAll) {
-        const sp = enc.beginComputePass(this.prof.pass("earth shade (raster)"));
-        sp.setPipeline(shade);
+      if (!liteAll || mark) {
+        const sp = enc.beginComputePass(this.prof.pass(liteAll ? "earth raster: left pixels" : "earth shade (raster)"));
         sp.setBindGroup(0, this.hintBindFor(t, hint));
         sp.setBindGroup(1, t.lut ? t.lut.read : this.lutDummy!);
-        sp.dispatchWorkgroups(Math.ceil(sx / 8), Math.ceil(sy / 8));
+        if (!liteAll) {
+          sp.setPipeline(shade);
+          sp.dispatchWorkgroups(Math.ceil(sx / 8), Math.ceil(sy / 8));
+        }
         if (mark) {
           sp.setPipeline(mark);
           sp.dispatchWorkgroups(Math.ceil(t.width / 8), Math.ceil(t.height / 8));
@@ -7651,11 +7653,18 @@ fn main(@builtin(global_invocation_id) g: vec3u, @builtin(workgroup_id) w: vec3u
     }
     if (lite) {
       const lb = this.liteBinds(t);
+      // (the rate's pattern — PLAN-J5 J5-6: a thread a pixel shaded, packed —, the material's, its light's and its finishing's kernels;
+      // the others left marked — shadeMark)
+      const rate = this.rasterRate;
+      const bw = rate >= 8 ? 4 : rate > 1 ? 2 : 1;
+      const bh = rate >= 16 ? 4 : rate > 2 ? 2 : 1;
+      const gx = Math.ceil(Math.ceil(t.width / bw) / 8),
+        gy = Math.ceil(Math.ceil(t.height / bh) / 8);
       const lp = enc.beginComputePass(this.prof.pass("earth lite (raster)"));
       lp.setPipeline(lite);
       lp.setBindGroup(0, this.hintBindFor(t, hint));
       lp.setBindGroup(1, this.liteDeferred ? lb.mat! : lb.lite);
-      lp.dispatchWorkgroups(Math.ceil(t.width / 8), Math.ceil(t.height / 8));
+      lp.dispatchWorkgroups(gx, gy);
       lp.end();
       const pair = this.liteFinishOf.get(lite);
       // (deferred — withLiteDeferred —: the light's kernel over the material's record)
@@ -7664,7 +7673,7 @@ fn main(@builtin(global_invocation_id) g: vec3u, @builtin(workgroup_id) w: vec3u
         gp.setPipeline(pair.light);
         gp.setBindGroup(0, this.hintBindFor(t, hint));
         gp.setBindGroup(1, lb.light!);
-        gp.dispatchWorkgroups(Math.ceil(t.width / 8), Math.ceil(t.height / 8));
+        gp.dispatchWorkgroups(gx, gy);
         gp.end();
       }
       // (its finishing pass — the air and the clouds before the surfaces it left in liteOut: tracer-source.ts withLiteSplit)
@@ -7674,7 +7683,7 @@ fn main(@builtin(global_invocation_id) g: vec3u, @builtin(workgroup_id) w: vec3u
         fp.setPipeline(fin);
         fp.setBindGroup(0, this.hintBindFor(t, hint));
         fp.setBindGroup(1, lb.finish);
-        fp.dispatchWorkgroups(Math.ceil(t.width / 8), Math.ceil(t.height / 8));
+        fp.dispatchWorkgroups(gx, gy);
         fp.end();
       }
       // (the water's needs its finishing pass — the staged water's first step: its pixels' air and clouds there —; none without it)

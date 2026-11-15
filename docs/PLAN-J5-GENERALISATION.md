@@ -40,7 +40,7 @@ au-dessus de 1,6 ms dans les mesures de J4.
 | **J5-3** | **La marche et les transitions** : le personnage (character e2e), l'orbite → le sol, la Terre → l'espace ; ce que chaque transition laisse dans l'historique (contrat de la reconstruction) | qualité (transitions) | e2e de parcours, images | L |
 | **J5-4** | **HDR/SDR/exports** : la sortie de l'image (hdrMap, AgX), les captures et les vidéos sur la même chaîne que l'écran | qualité | captures SDR sur kerr-mini (mesures de couleur), exports | M |
 | **J5-5** | **L'eau à demi-rythme** (ajouté le 15 nov. après la répartition de J0) : un pixel sur deux par image, des groupes de 32 fils | J0 −8,4 ms (une tuile sur deux sautée) | ΔGPU J0 et à 30 m, captures — **allumé : −6,0 à −7,2 ms** (§5) | M |
-| **J5-6** | **Le matériau du sol à demi-rythme** (`shadeLite`, sa lumière) : le même schéma que l'eau, le voisin classé (eau, arbres, ponts) et sa photo gardée | **J0 ~2,3 ms** (lu : `earth lite` 3,8 → 2,0, sa lumière 1,3 → 0,8) ; plus sur la terre | ΔGPU J0 et forêt, images en mouvement (le détail des photos) — **essayé : plus lent (+0,9 J0, +2,7 forêt), retiré** (§5) | L |
+| **J5-6** | **Le matériau du sol à demi-rythme** (`shadeLite`, sa lumière) : le même schéma que l'eau, le voisin classé (eau, arbres, ponts) et sa photo gardée | **J0 ~2,3 ms** (lu : `earth lite` 3,8 → 2,0, sa lumière 1,3 → 0,8) ; plus sur la terre | ΔGPU J0 et forêt, images en mouvement (le détail des photos) — **essayé : plus lent (+0,9 J0, +2,7 forêt), retiré** (§5) ; **refait par la reconstruction (15 nov.) : J0 −1,9 à −3,2 ms, les Maures −5,7 à −6,3 ; les houppiers un peu « peignés » en mouvement — par le réglage « demi », « auto » inchangé : à Sam** | L |
 | **J5-R** | **Le retrait des chemins terrestres redondants** : le tracé de la Terre proche (repli dormant depuis J2-7, PROBLEMES) et les options sans utilisateur — après validation de la parité ; une décision de Sam | compilation et code | suite, J0, `kernel-budget` | M |
 
 **Ordre recommandé** : J5-0 d'abord (les décisions d'image sont la seule voie mesurée vers 40 ms : elles reviennent à Sam), puis J5-1
@@ -252,3 +252,15 @@ Les plafonds de J5-1 au beau temps, de J5-2 par corps et la parité du repli tra
   — ; (2) un pixel d'**eau** laissé non : il ne doit être ni lu par `seaSSR`, ni repris par son propre `accum` ; (3) le rythme vu par `post.wgsl`
   (`R.f.y`) doit être celui de l'image. Levier et sonde retirés (patch hors du dépôt : `stale-reconstruction-probe.patch`) ; l'extension de
   `traceColumn` gardée (BH-API).
+- **J5-6 refait par la reconstruction ; à Sam** (2026-11-15 10:32 UTC) : le matériau de la Terre suit la cadence du raster comme `bodyLite`
+  et `shade` — un fil par pixel du motif, serrés (`rasterPixel`), `shadeLite`, `shadeLiteLight` et `shadeLiteFinish` lancés sur la largeur
+  divisée ; `shadeMark` marque aussi les pixels du matériau laissés (`RASTER_STALE`, leur couleur gardée : rien n'y écrit) et passe seul quand
+  `liteAll` ; l'eau à demi-rythme, dont le damier est le motif de la cadence 2, n'a plus de voisin à écrire (il est laissé, rebâti). **Gain
+  maximal lu** : ~2,3 ms sur J0 (la tuile sur deux), plus sur la terre. **Mesuré** (kerr-mini, ablation J0 `liteHalf` =
+  `earthRasterShading` « demi », A/B ×2) : **J0 47,9 / 47,5 contre 51,1 / 49,4 ms** ; **les Maures (`J0_START=43.22,6.33,300,90,140`)
+  47,7 / 47,3 contre 54,0 / 53,0** ; 0 erreur GPU. **Image** : la mer et les îles de J0 les mêmes ; la forêt en vol, la netteté (gradient
+  moyen sur trois zones) dans l'écart A/A (base contre base au même instant : 11,85–13,04 ; demi 12,05–12,74), mais à l'œil les houppiers un
+  peu « peignés » horizontalement (la reconstruction 2 × 1 ; le détail d'albédo — RASTER_DETAIL — coupé sous le TAAU). **Non allumé** :
+  « auto » garde le matériau à chaque pixel sur la Terre ; le réglage « demi » (et plus grossier) l'applique désormais aussi au matériau —
+  l'arbitrage (−2,5 à −6 ms contre ce léger peigné en mouvement) est à Sam, qui a refusé les compromis d'image le 15 nov. Vérifié :
+  `check-wgsl` 84/84, budgets des noyaux, tests des noyaux, tsc, inventaire.

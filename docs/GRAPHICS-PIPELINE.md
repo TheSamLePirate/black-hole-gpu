@@ -138,8 +138,8 @@ R reconstruction/sortie, S ombres/sondes amorties, Z hors budget (diagnostic, ch
 | C14 | `trace` / `trace (converging)` | `renderer.ts:6450` | trace `main` (`rt` ou `q`) ; temps réel : un rayon par bloc (16×16 sous 1,5 km en raster) | toujours, noyau compilé | groupe 0 + LUT → **`accum`**, **`moments`**, **`stamps`**, `stars`, `polAcc` | V/M |
 | C15 | `trace (discs)` | `renderer.ts:6492` | trace `main` + `DISC_ONLY` | raster, astres à l'écran | → `accum`… dans leurs rectangles | M |
 | C16 | `stars (raster)` | `renderer.ts:6500` | trace `shadeStars`, un fil par étoile (≤120 000) | raster, étoiles splattées | → `t.stars` | R |
-| C17 | `earth shade (raster)` | `renderer.ts:6512` | trace `shade` (+ `shadeMark`) | raster et **pas `liteAll`** : ponts, arbres < 80 m, boîtes marquées | → `accum`… pour les restes | M |
-| C18 | `earth lite (raster)` / `body lite (raster)`, puis `earth lite: light`, `earth lite: finishing` | `encodeLite` | trace `shadeLite` ; **différé (11 nov., `withLiteDeferred`, l'appareil prenant 37 textures)** : `shadeLite` ne fait plus que le **matériau** (`liteMaterial`, 6,7 k lignes inlinées) et écrit son enregistrement — 4 `rgba32float` `matOut0…3`, groupe 1 liaisons 14–17 : albédo et distance ; normale (oct), drapeaux (arbre, verre, classe, route), lumières de nuit ; l'émission unique (transmission d'arbre, fenêtres, feux de piste) et la part d'orthophoto ; verre/AO de bâtiment ou pavage/couvert de route, humidité, ondes —, le pixel marqué `RASTER_MAT` (−11,5) ; `shadeLiteLight` (2,4 k lignes) relit (liaisons 18–21), retrouve rayon, point, lumière, empreinte et l'eau (`liteWater`), éclaire (`liteLight`) et finit (`liteEpilogue`) vers `liteOut` ; mesuré forêt kerr-mini : 18,1 + 18,4 + 3,0 ms (39,5 contre 42,1) ; **découpé (11 nov., `tracer-source.ts` `withLiteSplit`)** : il écrit la radiance de surface et la distance dans `liteOut` (`rgba32float`, groupe 1 liaison 13, sa propre mise en page `liteLayout`) et marque le pixel `RASTER_SPLIT` (−9,5) ; `shadeLiteFinish` (trace, 0,8 k lignes inlinées) met l'air et les nuages (`liteFinishAt` → `liteFinish`), `liteOut` lu à la place de la LUT (groupe 1 liaison 2) ; les deux compilés par paire (`liteWithFinish`) — mesuré sur kerr-mini (Toulon, forêt à 120 m) : 46 → 41 + 3 ms ; Terre : un fil par pixel, chaque frame ; **l'eau classée d'abord (`liteWater`) : la pleine mer profonde sort aussitôt ; la mer peu profonde aussi, après la seule lecture de l'imagerie (son albédo dans `accum`, `w` = 2)** (S2 et S3, 10 nov. ; `liteSkip` 2³⁰ l'A/B des deux) ; autres corps : `bodyLite` → `shadeNear`, dont la mer de Miller ombrée par le `seaShade` de la Terre (`SEA_ALIEN`, 10 nov.) ; à une cadence > 1 son `shadeMark` (mise en page `mainLayout`) dans la même passe, **le groupe 1 de la LUT relié avant lui** (11 nov. : le groupe 1 du matériau laissé lié invalidait la passe sur la Lune — erreur WebGPU à chaque image, vue par l'e2e `apprendre-vaisseaux`) | `shadeLite` compilé | → `accum`, `moments`, `stamps` | M |
+| C17 | `earth shade (raster)` ; `earth raster: left pixels` | `renderer.ts:6512` | trace `shade` (+ `shadeMark`) ; **`shadeMark` seul** quand `liteAll` et une cadence > 1 (PLAN-J5 J5-6, 15 nov.) | raster et **pas `liteAll`** : ponts, arbres < 80 m, boîtes marquées ; `shadeMark` à toute cadence > 1 — **il marque aussi les pixels du matériau de la Terre laissés** (`RASTER_STALE`, l'albédo et la profondeur), que le `resolve` rebâtit | → `accum`… pour les restes ; `moments` des pixels laissés | M |
+| C18 | `earth lite (raster)` / `body lite (raster)`, puis `earth lite: light`, `earth lite: finishing` | `encodeLite` | trace `shadeLite` ; **différé (11 nov., `withLiteDeferred`, l'appareil prenant 37 textures)** : `shadeLite` ne fait plus que le **matériau** (`liteMaterial`, 6,7 k lignes inlinées) et écrit son enregistrement — 4 `rgba32float` `matOut0…3`, groupe 1 liaisons 14–17 : albédo et distance ; normale (oct), drapeaux (arbre, verre, classe, route), lumières de nuit ; l'émission unique (transmission d'arbre, fenêtres, feux de piste) et la part d'orthophoto ; verre/AO de bâtiment ou pavage/couvert de route, humidité, ondes —, le pixel marqué `RASTER_MAT` (−11,5) ; `shadeLiteLight` (2,4 k lignes) relit (liaisons 18–21), retrouve rayon, point, lumière, empreinte et l'eau (`liteWater`), éclaire (`liteLight`) et finit (`liteEpilogue`) vers `liteOut` ; mesuré forêt kerr-mini : 18,1 + 18,4 + 3,0 ms (39,5 contre 42,1) ; **découpé (11 nov., `tracer-source.ts` `withLiteSplit`)** : il écrit la radiance de surface et la distance dans `liteOut` (`rgba32float`, groupe 1 liaison 13, sa propre mise en page `liteLayout`) et marque le pixel `RASTER_SPLIT` (−9,5) ; `shadeLiteFinish` (trace, 0,8 k lignes inlinées) met l'air et les nuages (`liteFinishAt` → `liteFinish`), `liteOut` lu à la place de la LUT (groupe 1 liaison 2) ; les deux compilés par paire (`liteWithFinish`) — mesuré sur kerr-mini (Toulon, forêt à 120 m) : 46 → 41 + 3 ms ; Terre : un fil par pixel, chaque frame — **à une cadence > 1 (`earthRasterShading` « demi »… ; « auto » garde 1 sous le matériau), un fil par pixel du motif, serrés (`rasterPixel`), le matériau, sa lumière et sa finition lancés sur la largeur divisée ; les autres marqués par `shadeMark` (PLAN-J5 J5-6, 15 nov. : « demi » mesuré J0 −1,9 à −3,2 ms, les Maures −5,7 à −6,3, kerr-mini, A/B ×2)** ; **l'eau classée d'abord (`liteWater`) : la pleine mer profonde sort aussitôt ; la mer peu profonde aussi, après la seule lecture de l'imagerie (son albédo dans `accum`, `w` = 2)** (S2 et S3, 10 nov. ; `liteSkip` 2³⁰ l'A/B des deux) ; autres corps : `bodyLite` → `shadeNear`, dont la mer de Miller ombrée par le `seaShade` de la Terre (`SEA_ALIEN`, 10 nov.) ; à une cadence > 1 son `shadeMark` (mise en page `mainLayout`) dans la même passe, **le groupe 1 de la LUT relié avant lui** (11 nov. : le groupe 1 du matériau laissé lié invalidait la passe sur la Lune — erreur WebGPU à chaque image, vue par l'e2e `apprendre-vaisseaux`) | `shadeLite` compilé | → `accum`, `moments`, `stamps` | M |
 | C18b | `sea surface` (rendu) puis `sea surface resolve` (calcul) | `encodeSeaSurface` → `TerrainRaster.encodeSea` | `terrain-raster.ts` `seaVs`/`seaFs` (CDLOD de `sea/surface-nodes.ts`, 16² quads par nœud, 200–900 nœuds) et `seaResolve` | Terre, sous 3 km au-dessus de la mer, FFT prête, `seaSurfaceOn` (PLAN-MER-WEBGPU S2) | lit `moments` (pixels de pleine mer), la visibilité, la FFT, la table des rivages (une crête gardée devant le sol plus haut que les vagues, son point en mer : `seaCrestsOverLand`) → cible r32float + profondeur propres → `moments.y` (la distance de la surface déplacée) → `shadeWater` | W |
 | C19 | `earth water (raster)` | `encodeLite` | trace `shadeWater`, pleine résolution ; la distance de la surface lue dans `moments.y` (celle de `sea surface` où elle est dessinée) ; l'albédo du fond laissé par `shadeLite` (`accum.w` = 2) éclairé ici ; le SSR seulement à moins de 8 km d'une terre (`seaAllAround`, une lecture du masque de mer) ; **le SSR lit `moments`/`accum` d'autres pixels, dont ceux d'eau que cette même passe écrit (marque 4e30, autres groupes de travail, sans ordre) : cause des points blancs/cyan de la mer (M1 Max, 12 nov.) — écartés (`mk > 3e30`) depuis le 13 nov. (décision de Sam), toujours depuis le lot R1 (le levier `seaSsrSafe` retiré : `shadeWaterFinish`, qui finit des pixels d'eau en lisant les autres, a la même course)** ; **l'eau étagée, première étape (13 nov., `withLiteSplit`, décision 1 de Sam) : sa fin — l'air et les nuages, `liteFinish` — sortie du noyau : il écrit la radiance de sa surface et la distance dans `liteOut` (mise en page `liteLayout`, groupe 1 `lite`) et marque le pixel `RASTER_SPLIT_WATER` (−10,25 ; −10,75 si l'eau couvre plus de la moitié du pixel) — C19d les finit ; **E2 (13 nov.) : compilé avec `WATER_REFL_DEFER` (mise en page `waterLayout` : `liteOut` et `matOut0…2`, liaisons 13–16), il laisse les reflets de la mer à C19d — leur enregistrement dans les trois premières textures du sol différé** ; ses pixels ne sont plus lus par le SSR pendant qu'il les écrit (la course des points blancs disparaît par construction)** ; **la houle côtière (L1–L2) y coûte +2,0 / +2,2 ms sur une côte** (sonde `coast-swell`, toutes les passes relevées, kerr-mini, 15 nov., 0234f17c : allumée contre compilée hors, rien ailleurs) ; **sa passe à part (`shadeSwell`, J4-4) essayée et retirée** : −0,4 à +0,3 ms, le travail déplacé, pas réduit ([PLAN-J4 §10](PLAN-J4-VOLUMES.md)) ; **à demi-rythme depuis le 15 nov. 2026 (PLAN-J5 J5-5, `WATER_HALF`, réglage provisoire)** : un pixel sur deux par image (damier tourné chaque image), des groupes de 32 fils par tuile (`WATER_WG_Y` 4), le résultat écrit aussi au pixel voisin de la paire (l'historique a les deux en deux images ; le voisin ombré quand celui du damier n'est pas de l'eau) — **J0 −6,0 à −6,4 ms, à 30 m sur la mer −6,6 / −7,2 (kerr-mini), l'image la même** ; la moitié des fils d'un groupe de 64 sortis ne rendait rien (le coût suit les groupes) ; **confirmé par Sam le 15 nov. : le seul chemin, l'ancien et son levier retirés (J5-R2)** ; **sa finition (C19d) au même demi-rythme** (le pixel fini recopié au voisin) : J0 −7,4 ms en tout (48,1 contre 55,6) | Terre, noyau prêt, sa passe de finition compilée | → `liteOut`, `moments`… + mot « mer vue » → sonde de mer | W |
 | C19c | `earth water open (raster)` | `encodeLite` | trace `shadeWater` compilé avec `WATER_OPEN` (entrée `shadeWaterOpen`) : les pixels de pleine mer — sans fond connu à 60 m, sans rivage à portée du lavis, pas d'eau intérieure —, le code des côtes et de l'eau intérieure retiré (PLAN-MER-WEBGPU S3) ; `shadeWater` les lui laisse (`P.seafft[0].x` = 2) ; **sa fin vers `liteOut` comme `shadeWater` (13 nov.)** | noyau compilé (après l'image), FFT de la mer active, `seaWaterOpenOn` | → `liteOut`, `moments` | W |
@@ -234,7 +234,7 @@ Juste avant `keepMotion` : `earthTiles.pubFrame()` (J2-0 : clôt les compteurs d
 `earthTiles.pubProbe`), puis F5 si demandé. Puis `submit()` (`renderer.ts:8919`) : **un `queue.submit`**, `onSubmittedWorkDone` alimente `lastGpuMs`, le bloc du
 traceur (`adaptBlock`) et le taux de shading raster (`adaptRasterRate` — **depuis J2-7, 13 nov., pour les corps seulement** : sur la Terre,
 le matériau `shadeLite` tournant, la cadence vaut 1 (le levier `earthRateOne` retiré, lot R1, 13 nov.) ; elle ne gouvernait que les restes de `shade`, 0 pixel mesuré —
-e2e `j2-cover`). Une frame **convergée et inchangée** revient sans
+e2e `j2-cover`) ; **une cadence fixe (« demi », « quart »…) s'applique au matériau aussi depuis J5-6 (15 nov.)**, « auto » gardant 1 sur la Terre). Une frame **convergée et inchangée** revient sans
 soumettre (`renderer.ts:10842`).
 
 ---
@@ -695,9 +695,9 @@ Paris jusqu'à `earthSettled` » chronométré par étape.
 
 <!-- pipeline-inventory:begin (bun scripts/pipeline-inventory.ts --write) -->
 
-_Généré le 2026-11-15T06:29:05Z sur `c13df0be` (arbre de travail). Ne pas éditer à la main : relancer l'outil._
+_Généré le 2026-11-15T10:31:42Z sur `6709ab09` (arbre de travail). Ne pas éditer à la main : relancer l'outil._
 
-**110 sites de création de pipeline** (70 rendu, 40 calcul, dont 46 asynchrones) et 42 `createShaderModule` dans 30 fichiers ; **42 programmes WGSL** (15 fichiers .wgsl, 27 chaînes dans le TypeScript) ; **67 libellés de passes** du profileur GPU (+ 11 sites à libellé dynamique).
+**110 sites de création de pipeline** (70 rendu, 40 calcul, dont 46 asynchrones) et 42 `createShaderModule` dans 30 fichiers ; **42 programmes WGSL** (15 fichiers .wgsl, 27 chaînes dans le TypeScript) ; **66 libellés de passes** du profileur GPU (+ 11 sites à libellé dynamique).
 
 #### A.1 Sites de création de pipeline, par fichier
 
@@ -767,12 +767,12 @@ _Généré le 2026-11-15T06:29:05Z sur `c13df0be` (arbre de travail). Ne pas éd
 | `src/renderer.ts:1942` | compute async | — | — |
 | `src/renderer.ts:1980` | compute async | — | — |
 | `src/renderer.ts:6840` | compute async | — | `ep` |
-| `src/renderer.ts:7564` | compute | — | — |
-| `src/renderer.ts:8606` | compute | — | — |
-| `src/renderer.ts:10786` | compute async | `clouds` | `cloudShadow` |
-| `src/renderer.ts:10868` | compute async | `sky ambient write` | `cloudLightVolume` |
-| `src/renderer.ts:10950` | compute async | — | `skyAmbient` |
-| `src/renderer.ts:13004` | compute async | — | `probe` |
+| `src/renderer.ts:7566` | compute | — | — |
+| `src/renderer.ts:8615` | compute | — | — |
+| `src/renderer.ts:10795` | compute async | `clouds` | `cloudShadow` |
+| `src/renderer.ts:10877` | compute async | `sky ambient write` | `cloudLightVolume` |
+| `src/renderer.ts:10959` | compute async | — | `skyAmbient` |
+| `src/renderer.ts:13034` | compute async | — | `probe` |
 | `src/sea/fft-gpu.ts:119` | compute | — | — |
 | `src/ship.ts:831` | compute | — | `vs` |
 | `src/ship.ts:851` | render | — | `fsJetGlass` |
@@ -855,7 +855,7 @@ _Généré le 2026-11-15T06:29:05Z sur `c13df0be` (arbre de travail). Ne pas éd
 
 | source | lignes | points d'entrée |
 |---|---:|---|
-| `src/shaders/trace.wgsl` | 17636 | 18 entrées : cloudLightVolume, aerial, lut, main, shade, shadeMark, shadeLiteFinish, shadeWaterFinish, shadeLiteLight, shadeLite, skyFill, shadeWater, clouds, skyAmbient, cloudShadow, env, probe, shadeStars |
+| `src/shaders/trace.wgsl` | 17714 | 18 entrées : cloudLightVolume, aerial, lut, main, shade, shadeMark, shadeLiteFinish, shadeWaterFinish, shadeLiteLight, shadeLite, skyFill, shadeWater, clouds, skyAmbient, cloudShadow, env, probe, shadeStars |
 | `src/shaders/ship.wgsl` | 2713 | 34 entrées : envCopy, envDown, envGGX, envSH, ctlVs, depthVs, vs, mirrorVs, shadowVs, fs, hullDepthVs, hullDepthFs, ownMaskFs, plumeVs, plumeFs, glowVs, glowFs, distVs, distFs, sheathVs, sheathFs, trailVs, trailFs, lampVs, lampFs, compVs, compFs, fsCabin, fsCabinGlass, fsJetGlass, motionVs, motionFs, composeColor, composeSurface |
 | `src/shaders/post.wgsl` | 1396 | 18 entrées : gatherH, atrous, beamH, beamV, polgrid, resolve, down, downShip, dof, flareMeter, up, meter, stars, motionBlur, temporal, occlusion, cloudTemporal, taau |
 | `src/shaders/display.wgsl` | 949 | vs (v), fs (f) |
@@ -892,9 +892,9 @@ _Généré le 2026-11-15T06:29:05Z sur `c13df0be` (arbre de travail). Ne pas éd
 | `src/shaders/mips.wgsl` | 23 | vs (v), fs (f) |
 | `src/system/earth-tiles.ts:376` | 18 | vs (v), fs (f) |
 | `src/vegetation/tree-impostors.ts:144` | 17 | down (c) |
-| `src/renderer.ts:7569` | 16 | main (c) |
+| `src/renderer.ts:7571` | 16 | main (c) |
 | `src/system/earth-tiles.ts:1242` | 14 | main (c) |
-| `src/renderer.ts:8610` | 10 | main (c) |
+| `src/renderer.ts:8619` | 10 | main (c) |
 | `src/system/terrain-cache.ts:165` | 9 | main (c) |
 | `src/system/earth-tiles.ts:1232` | 8 | main (c) |
 
@@ -924,36 +924,35 @@ _Généré le 2026-11-15T06:29:05Z sur `c13df0be` (arbre de travail). Ne pas éd
 | `sky (waiting)` | `src/renderer.ts:7391` | 1 |
 | `trace (discs)` | `src/renderer.ts:7448` | 1 |
 | `stars (raster)` | `src/renderer.ts:7456` | 1 |
-| `earth shade (raster)` | `src/renderer.ts:7488` | 1 |
-| `earth water: tiles` | `src/renderer.ts:7615` | 1 |
-| `body lite (raster)` | `src/renderer.ts:7638` | 1 |
-| `earth lite (raster)` | `src/renderer.ts:7654` | 1 |
-| `earth lite: light` | `src/renderer.ts:7663` | 1 |
-| `earth lite: finishing` | `src/renderer.ts:7673` | 1 |
-| `earth water (raster)` | `src/renderer.ts:7687` | 1 |
-| `earth water open (raster)` | `src/renderer.ts:7708` | 1 |
-| `earth water: finishing` | `src/renderer.ts:7719` | 1 |
-| `beam` | `src/renderer.ts:7777` | 1 |
-| `temporal` | `src/renderer.ts:8351` | 2 |
-| `taau` | `src/renderer.ts:8524` | 1 |
-| `stars` | `src/renderer.ts:8565` | 1 |
-| `motion blur` | `src/renderer.ts:8698` | 1 |
-| `occlusion depth` | `src/renderer.ts:8731` | 1 |
-| `denoise` | `src/renderer.ts:8763` | 1 |
-| `polarization` | `src/renderer.ts:8866` | 1 |
-| `depth of field` | `src/renderer.ts:8954` | 1 |
-| `lens flare meter` | `src/renderer.ts:8964` | 1 |
-| `light meter` | `src/renderer.ts:8988` | 1 |
-| `display` | `src/renderer.ts:10414` | 2 |
-| `clouds' shadow map` | `src/renderer.ts:10818` | 1 |
-| `clouds' light volume` | `src/renderer.ts:10899` | 1 |
-| `sky ambient` | `src/renderer.ts:10981` | 1 |
-| `clouds' history` | `src/renderer.ts:11523` | 1 |
-| `body raster heights` | `src/renderer.ts:11858` | 1 |
-| `scenery raster cull` | `src/renderer.ts:12045` | 1 |
-| `ground occlusion` | `src/renderer.ts:12085` | 1 |
-| `trees' shadow map` | `src/renderer.ts:12090` | 1 |
-| `horizon bake` | `src/renderer.ts:12361` | 1 |
+| `earth water: tiles` | `src/renderer.ts:7617` | 1 |
+| `body lite (raster)` | `src/renderer.ts:7640` | 1 |
+| `earth lite (raster)` | `src/renderer.ts:7663` | 1 |
+| `earth lite: light` | `src/renderer.ts:7672` | 1 |
+| `earth lite: finishing` | `src/renderer.ts:7682` | 1 |
+| `earth water (raster)` | `src/renderer.ts:7696` | 1 |
+| `earth water open (raster)` | `src/renderer.ts:7717` | 1 |
+| `earth water: finishing` | `src/renderer.ts:7728` | 1 |
+| `beam` | `src/renderer.ts:7786` | 1 |
+| `temporal` | `src/renderer.ts:8360` | 2 |
+| `taau` | `src/renderer.ts:8533` | 1 |
+| `stars` | `src/renderer.ts:8574` | 1 |
+| `motion blur` | `src/renderer.ts:8707` | 1 |
+| `occlusion depth` | `src/renderer.ts:8740` | 1 |
+| `denoise` | `src/renderer.ts:8772` | 1 |
+| `polarization` | `src/renderer.ts:8875` | 1 |
+| `depth of field` | `src/renderer.ts:8963` | 1 |
+| `lens flare meter` | `src/renderer.ts:8973` | 1 |
+| `light meter` | `src/renderer.ts:8997` | 1 |
+| `display` | `src/renderer.ts:10423` | 2 |
+| `clouds' shadow map` | `src/renderer.ts:10827` | 1 |
+| `clouds' light volume` | `src/renderer.ts:10908` | 1 |
+| `sky ambient` | `src/renderer.ts:10990` | 1 |
+| `clouds' history` | `src/renderer.ts:11532` | 1 |
+| `body raster heights` | `src/renderer.ts:11888` | 1 |
+| `scenery raster cull` | `src/renderer.ts:12075` | 1 |
+| `ground occlusion` | `src/renderer.ts:12115` | 1 |
+| `trees' shadow map` | `src/renderer.ts:12120` | 1 |
+| `horizon bake` | `src/renderer.ts:12391` | 1 |
 | `ship probe: mips` | `src/ship.ts:1919` | 1 |
 | `ship probe: GGX` | `src/ship.ts:1931` | 1 |
 | `ship probe: SH` | `src/ship.ts:1938` | 1 |
@@ -974,14 +973,14 @@ Libellés dynamiques (calculés à l'exécution) :
 
 - `src/gpuprof.ts:66` — `label`
 - `src/renderer.ts:7440` — `label`
-- `src/renderer.ts:7550` — `label`
-- `src/renderer.ts:7551` — `label`
-- `src/renderer.ts:8881` — `label`
-- `src/renderer.ts:11436` — `label`
-- `src/renderer.ts:11864` — `label`
-- `src/renderer.ts:11895` — `label`
-- `src/renderer.ts:12070` — `label`
-- `src/renderer.ts:12115` — `label`
+- `src/renderer.ts:7552` — `label`
+- `src/renderer.ts:7553` — `label`
+- `src/renderer.ts:8890` — `label`
+- `src/renderer.ts:11445` — `label`
+- `src/renderer.ts:11894` — `label`
+- `src/renderer.ts:11925` — `label`
+- `src/renderer.ts:12100` — `label`
+- `src/renderer.ts:12145` — `label`
 - `src/ship.ts:787` — `label`
 
 #### A.3b Passes jamais chronométrées (ni libellé du profileur, ni horodatage transmis)
@@ -1002,8 +1001,8 @@ Leur coût n'apparaît que dans l'intervalle de complétion de la frame (ou d'un
 | render pass | `src/mipgen.ts:69` |
 | render pass | `src/noise3d.ts:124` |
 | render pass | `src/renderer.ts:5566` |
-| compute pass | `src/renderer.ts:8625` |
-| compute pass | `src/renderer.ts:13023` |
+| compute pass | `src/renderer.ts:8634` |
+| compute pass | `src/renderer.ts:13053` |
 | render pass | `src/ship.ts:3275` |
 | render pass | `src/ship.ts:3288` |
 | render pass | `src/ship.ts:3348` |

@@ -15196,9 +15196,9 @@ fn shadeMark(@builtin(global_invocation_id) gid: vec3u) {
     return;
   }
   let k = u32(P.near1.w);
-  // (the ground shadeLite shades at every pixel: fresh, not left — the Earth's; another world's, bodyLite, at the rate's)
+  // (the Earth's material — shadeLite — at the rate's pattern too since PLAN-J5 J5-6: its pixels left marked as the rays' are; another
+  // world's, bodyLite, without the albedo)
   let body = !hasAir(k) && bodyKind(k) != 0u;
-  if (!body && rasterLiteTakes(vec2f(gid.xy) + 0.5, k)) { return; }
   if (body) {
     moments[idx] = vec2f(rasterStale(0.0), d / P.near4.w * bodyRadius(k));
     return;
@@ -16327,7 +16327,10 @@ const RASTER_SPLIT_WATER = -10.25;
 // twice a frame: after the ground — its RASTER_SPLIT pixels —, then after the water — shadeWater's, RASTER_SPLIT_WATER: not blended
 // with the history, its water's mark kept — each pass's pixels its own (the first finished before the water reads them: seaSSR)
 @compute @workgroup_size(8, 8)
-fn shadeLiteFinish(@builtin(global_invocation_id) gid: vec3u) {
+fn shadeLiteFinish(@builtin(global_invocation_id) gp: vec3u) {
+  // (the rate's pattern — J5-6 —: its threads packed as shadeLite's)
+  let rate = rasterRate();
+  let gid = select(gp, vec3u(rasterPixel(gp.xy, rate, P.frame.x), 0u), rate > 1u);
   if (gid.x >= u32(P.res.x) || gid.y >= u32(P.res.y)) { return; }
   let idx = gid.y * u32(P.res.x) + gid.x;
   let mk = moments[idx].x;
@@ -16507,7 +16510,10 @@ fn liteMatStore(px: vec2u, m: LiteMat, tM: f32, isTree: bool, bo: bool) {
 // and footprint found again as shadeLite found them, its water read again —, lit (liteLight), its last touches and its finish
 // (liteEpilogue: its surface to liteOut for shadeLiteFinish)
 @compute @workgroup_size(8, 8)
-fn shadeLiteLight(@builtin(global_invocation_id) gid: vec3u) {
+fn shadeLiteLight(@builtin(global_invocation_id) gp: vec3u) {
+  // (the rate's pattern — J5-6 —: its threads packed as shadeLite's)
+  let rate = rasterRate();
+  let gid = select(gp, vec3u(rasterPixel(gp.xy, rate, P.frame.x), 0u), rate > 1u);
   let W = u32(P.res.x);
   if (gid.x >= W || gid.y >= u32(P.res.y)) { return; }
   let idx = gid.y * W + gid.x;
@@ -16582,7 +16588,8 @@ fn shadeLiteLight(@builtin(global_invocation_id) gid: vec3u) {
   liteEpilogue(gid.xy, idx, centre, pos, G, rd, tH, tM, Ls, E, k, mesh, isTree, wat, gq, hG, at);
 }
 @compute @workgroup_size(8, 8)
-fn shadeLite(@builtin(global_invocation_id) gid: vec3u, @builtin(workgroup_id) wid: vec3u) {
+fn shadeLite(@builtin(global_invocation_id) gp: vec3u, @builtin(workgroup_id) wid: vec3u) {
+  var gid = gp;
   let W = u32(P.res.x);
   let H = u32(P.res.y);
   if (!rasterPrimary() || !HAS_BODIES || P.near0.w < 0.5) { return; }
@@ -16601,6 +16608,10 @@ fn shadeLite(@builtin(global_invocation_id) gid: vec3u, @builtin(workgroup_id) w
     return;
   }
   if (NEAR_KIND == 3u || NEAR_KIND == 7u) { return; }
+  // (PLAN-J5 J5-6 — the shading rate above 1, earthRasterShading —: a thread a pixel of the frame's pattern, packed as shade's and
+  // bodyLite's — the dispatch's width divided —; the others left to the reconstruction, shadeMark's RASTER_STALE: their colour kept)
+  let rate = rasterRate();
+  if (rate > 1u) { gid = vec3u(rasterPixel(gp.xy, rate, P.frame.x), 0u); }
   if (gid.x >= W || gid.y >= H) { return; }
   if (!isEarth(k) || !hasAir(k) || !earthOn()) { return; }
   let idx = gid.y * W + gid.x;
