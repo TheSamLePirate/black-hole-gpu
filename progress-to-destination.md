@@ -7332,3 +7332,14 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   raster 67,3 ms (à échelle fixe 67,8) contre tracé 54,8 (115,8) — les captures : raster net, tracé flou avec un losange blanc.
 - Limites : le contact des pieds en raster non vérifié ; une seule vue (Chamonix) ; le M1 Max non mesuré.
 - Suite : J5-3 — l'e2e du personnage en raster (pieds, ombres), puis la proposition d'allumer le raster à pied.
+
+### 2026-11-15 05:35 UTC — J5-3 : le raster à pied n'est pas prêt (le noyau des restes à 81 ms)
+
+- Contribution à la destination : stratégie §15 J5 (« à la marche ») — l'obstacle mesuré, le lot suivant nommé.
+- Réalisé : sonde e2e `walk-raster` (E2E_PROBE : le marcheur à Chamonix, tracé / raster / tracé, GPU et passes, captures) ; PLAN-J5 §5.
+- Preuves (mesuré, kerr-mini) : tracé 36,5 / 35,0 ms, raster 105,4 ms ; passes (profileur allumé) : `earth shade (raster)` 81 ms en raster —
+  les restes tracés du raster couvrent l'avant-plan à hauteur d'homme ; image raster nette mais striée, marcheur fantôme. Témoin : les deux
+  passages tracés (A/A 36,5 / 35,0).
+- Limites : un lieu ; le M1 Max non mesuré ; la vue « à pied » de `planets-baseline` regarde de haut et ne représente pas la marche.
+- Suite : J5-3a — le champ proche en raster (arbres proches et restes de `shade`), plafond `earth shade` 81 ms à pied ; ou J5-4 (HDR/SDR/exports)
+  si Sam préfère.

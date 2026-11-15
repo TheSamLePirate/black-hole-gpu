@@ -91,3 +91,12 @@ Les plafonds de J5-1 au beau temps, de J5-2 par corps et la parité du repli tra
   67,8) contre tracé **54,8 ms** (×8, échelle 1 ; à échelle fixe 115,8) — à qualité comparable le raster coûte ~40 % de moins, et son image
   est nette (le tracé : flou, un losange blanc sur le versant). **Reste à établir** avant de l'allumer : le contact des pieds (la grille
   du marcheur contre le maillage du raster), sur un e2e du personnage, en raster.
+- **J5-3, le raster à pied, en jeu : pas prêt** (2026-11-15 05:35 UTC) : sonde `walk-raster` (E2E_PROBE, neuve : le marcheur debout à
+  Chamonix dans `game:artemis`, tracé / raster / tracé, la caméra à la troisième personne) — **tracé 36,5 / 35,0 ms** (profileur éteint),
+  **raster 105,4 ms** ; profileur allumé : tracé 24,3 / 24,5, raster 133,3 dont **`earth shade (raster)` 81 ms** — le noyau des restes du
+  raster (les arbres à moins de 80 m, les ponts, les boîtes marquées, tracés) prend presque tout l'avant-plan à hauteur d'homme. Image : le
+  sol net mais strié, **le marcheur en traînée fantôme**. (La vue « à pied » de `planets-baseline` — 67,3 contre 54,8 ms — regarde la
+  ville d'en haut : elle ne représente pas la marche.) **Conclusion** : la marche en raster attend **le champ proche en raster** (les arbres
+  proches et les restes de `shade` dessinés, non tracés) et le marcheur dans l'historique du raster ; le levier `walkRasterOn` reste un
+  levier de mesure, éteint. Prochain lot possible : J5-3a, « le champ proche en raster », son plafond lu sur cette sonde (`earth shade`
+  81 ms à pied).
