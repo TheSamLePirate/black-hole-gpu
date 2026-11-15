@@ -31,6 +31,8 @@ await $`mkdir -p _site/earth-surface && cp -R assets/earth-surface/v1 _site/eart
 // (the world's airfields and runways — scripts/build-runways.ts, PLAN-RADAR-AAA RD10 —: the game's and the crew's)
 // (the crew's console fetches them from ../runways/: one copy)
 await $`mkdir -p _site/runways && cp -R assets/runways/v1 _site/runways/`;
+// (the approaches' real data — PLAN-APPROCHES AP0 —, their tiles beside the runways')
+await $`mkdir -p _site/approaches && cp -R assets/approaches/v1 _site/approaches/`;
 await $`cp vendor/basis/basis_transcoder.wasm _site/basis_transcoder.wasm`;
 await $`mkdir -p _site/docs/video`;
 await $`cp -R gallery/. _site/docs/`;

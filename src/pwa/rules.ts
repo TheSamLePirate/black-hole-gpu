@@ -148,7 +148,8 @@ export function tileKind(
     return url.includes("list-type=") ? "overture-list" : url.includes("/base.pmtiles") ? "overture-base" : "overture";
   if (url.includes("mapproxy.terrascope.be")) return "cover";
   if (url.includes("tile.openstreetmap.org")) return "map";
-  if (url.includes("/runways/")) return "runways";
+  // (the approaches' tiles — PLAN-APPROCHES — kept as the runways', their neighbours)
+  if (url.includes("/runways/") || url.includes("/approaches/")) return "runways";
   if (url.includes(".terrain")) return "mesh";
   if (url.includes("terrarium")) return "terrarium";
   return "imagery";

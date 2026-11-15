@@ -1,6 +1,9 @@
 # Plan — les approches et les pistes, AAA (pilote, crew, roue)
 
-**État (2026-11-15) : plan proposé, rien d'implémenté.** Écrit par la session d'analyse ; à mener par la session de
+**État (2026-11-15) : AP0a fait** (nav.dat lié à nos pistes, `world/approaches.ts`, une approche à chaque extrémité). **AP0b**
+(le CIFP de la FAA, cycle 2611 téléchargé dans `assets/approaches/raw/`) remis après AP1–AP2 : le problème que Sam veut voir résolu
+d'abord est le choix et la rejointe, que nav.dat et les approches construites suffisent à servir. **Plan mené par la session de
+l'audit (1feb2f7f)**, au départ proposé, rien d'implémenté. Écrit par la session d'analyse ; à mener par la session de
 l'audit (T3 1feb2f7f). Le code fait foi : relire l'existant cité (§2) avant chaque lot, une correction intégrée entre-temps
 ne redevient pas une tâche.
 
@@ -298,7 +301,7 @@ captures montrées dans T3, ses docs, une entrée au journal.
 
 | Lot | Contenu | Fait quand |
 |---|---|---|
-| **AP0 — données** | Accepter l'accord de téléchargement du CIFP (domaine public, §3) ; chercher une source libre plus récente que nav.dat 2013 ; `scripts/build-approaches.ts` (nav.dat : LOC/GS/DME/balises ; CIFP : PF/PI/PG/PC/EA/D) ; rapprochement géométrique (§3) ; tuiles `assets/approaches/v1` ; rapport de couverture (rattachés, renumérotés, écartés, segments non convertis) ; CREDITS/ASSETS ; `world/approaches.ts` + tests purs (LFML, LFPG, KSFO, BIKF renumérotée, EDDT écarté, une LDA) | Rapport chiffré ; tests verts ; taille mesurée |
+| **AP0 — données** (AP0a fait le 15 nov. : nav.dat ; AP0b : le CIFP, après AP2) | Accepter l'accord de téléchargement du CIFP (domaine public, §3) ; chercher une source libre plus récente que nav.dat 2013 ; `scripts/build-approaches.ts` (nav.dat : LOC/GS/DME/balises ; CIFP : PF/PI/PG/PC/EA/D) ; rapprochement géométrique (§3) ; tuiles `assets/approaches/v1` ; rapport de couverture (rattachés, renumérotés, écartés, segments non convertis) ; CREDITS/ASSETS ; `world/approaches.ts` + tests purs (LFML, LFPG, KSFO, BIKF renumérotée, EDDT écarté, une LDA) | Rapport chiffré ; tests verts ; taille mesurée |
 | **AP1 — choix et état** | `ApproachSel` dans la simulation, `approachSelect`, choix auto (§4.3) avec sa raison, approche construite pour toute extrémité, sauvegarde, TARS et `__bh` ; F-35 et A320 lisent la sélection ; le plan de vol fige son approche | Test pur des cas (4 quadrants × vent nul/fort × 1/2/3 pistes) ; e2e `approach-auto` : enclenché de 4 côtés de Toulon-Hyères, l'extrémité attendue est prise |
 | **AP2 — planificateur + F-35** | `game/approach-plan.ts` (entrées, profil, relief, replanification) ; `ilsStep` en suiveur de segments ; LOC/GS sur les antennes réelles | e2e `approach-join` F-35 : 4 départs à 30–50 km, haut et bas, établi avant le FAF, pas de demi-tour à l'IAF, au-dessus du relief (Nice ou Chambéry pour le relief), note ≥ actuelle |
 | **AP3 — A320** | FMGC en NAV sur le chemin, APPR à l'IF ; MCDU ARR/VIA ; RAD NAV réel ; ND avec l'approche ; télémétrie A320 | e2e `a320-approach-join` mêmes départs ; `a320-mcdu` étendu |

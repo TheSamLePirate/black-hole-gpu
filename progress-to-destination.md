@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-15 10:53 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-15 14:39 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous.
@@ -7733,3 +7733,21 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
 - Limites : le gain du demi-rythme vient des arbres, que la reconstruction adoucit en mouvement.
 - Suite : décision de Sam (accepter l'adoucissement ou laisser « demi » au joueur) ; J0 ~48–50 ms sur le mini.
 - Décision de Sam (14:16 UTC) : laissé au joueur ; J5-6 fermé.
+
+### 2026-11-15 14:39 UTC — PLAN-APPROCHES AP0a : les ILS réels de nav.dat liés à nos pistes, une approche à chaque extrémité
+
+- **Contribution** : §19 (préserver l'expérience : l'atterrissage, la donnée réelle partagée par le pilote, le crew et TARS), PLAN-APPROCHES
+  AP0. Pas de rendu touché.
+- **Données** : `scripts/build-approaches.ts` lit nav.dat (FlightGear, cycle 2013.10, GPL v2+) : LOC, glides (pente réelle), DME, balises.
+  Rattachement à nos pistes par nom, sinon par géométrie (antenne au-delà de l'extrémité opposée, ±3°, < 1,5 km). Résultat : **3259 sur
+  3501 localizers** (2750 par nom, 509 par géométrie, les pistes renumérotées depuis 2013, dont BIKF 02 → 01) ;
+  écartés : 74 terrains fermés (EDDT…), 58 pistes introuvables, 110 axes trop décalés, 1 glide impossible
+  (KEDW, 20°). Écart d'axe : médiane 0.12°, 90ᵉ centile 0.76°. 454 tuiles, ~660 Ko de JSON (`assets/approaches/v1`,
+  alignées sur les pistes, servies par le serveur, Pages et la PWA).
+- **Modèle** : `src/world/approaches.ts` (pur, jeu et crew) — l'approche réelle (antenne, axe, pente, fréquence, catégorie, DME, balises)
+  avec des segments construits, et pour **chaque extrémité de chaque piste** une approche construite à la manière de FlightGear (IAF
+  12 NM, IF 8 NM à seuil + 2 000 ft, FAF à l'interception d'un glide de 3°, remise de gaz) ; hauteur de décision par catégorie, dite.
+- **Preuve** : `tests/approaches.test.ts` 6/6 (LFML 31R 4°/111,15, LFPG 8 ILS CAT III, KSFO 28R ILS et LDA, BIKF renumérotée, EDDT
+  écarté, géométrie construite, une approche à chaque extrémité de 7 terrains). Aucune source libre plus récente que 2013 trouvée.
+- **Suite** : AP1 (l'état « approche choisie » et le choix automatique), AP2 (le planificateur et le F-35), puis AP0b (le CIFP).
+
