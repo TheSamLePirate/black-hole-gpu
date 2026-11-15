@@ -100,6 +100,9 @@ describe.skipIf(!E2E)("the geoid", () => {
       await Bun.sleep(1500);
       return app.js<{ g: number; n: number }>(`({ g: __bh.sys.groundAt(${lat}, ${lon}), n: __bh.sys.geoid(${lat}, ${lon}) })`);
     };
+    // (no damage while these placings load their tiles: 800 m over the relief before it is in, a craft met the ground as it came, the
+    // game paused on its loss — the next test's F-35 never taken, 15 Nov 2026; E2E-VOLS §7 « un crash met en pause »)
+    await app.js(`(() => { window.__damage = __bh.settings.damage; __bh.settings.damage = false; return 1; })()`);
     const sea = await at(42.6, 6.0); // off Toulon
     const ocean = await at(28.3, -80.3); // off Cape Canaveral
     const paris = await at(48.8606, 2.3376); // the Louvre's courtyard
@@ -112,16 +115,26 @@ describe.skipIf(!E2E)("the geoid", () => {
     expect(ocean.n).toBeLessThan(-25);
     expect(paris.g - paris.n).toBeGreaterThan(25);
     expect(paris.g - paris.n).toBeLessThan(50);
+    await app.js(`(() => { __bh.settings.damage = window.__damage; return 1; })()`);
   }, 240_000);
 
   test("low over the sea off Toulon, in the cockpit: 150 m on the altimeter, the sea 150 m below", async () => {
-    await app.js(`(() => { __bh.settings.vessel = "f35"; __bh.settings.traffic = false; return 1; })()`);
-    await app.waitFor(`__bh.fleet.active === "f35"`, 30_000);
+    await app.js(
+      `(() => { const c = __bh.camera, m = c.onPilotMessage; window.__said = []; c.onPilotMessage = (x, ...r) => { __said.push(String(x)); return m?.(x, ...r); }; __bh.settings.vessel = "f35"; __bh.settings.traffic = false; return 1; })()`,
+    );
+    // (not taken: what the flight was doing said — 15 Nov 2026, the F-35 never taken after the first two tests, alone it was)
+    if (!(await app.waitOptional(`__bh.fleet.active === "f35"`, 30_000)))
+      console.log(
+        `  not switched: ${JSON.stringify(await app.js(`({ active: __bh.fleet.active, vessel: __bh.settings.vessel, piloting: __bh.camera.piloting, frozen: __bh.frozen?.() ?? null, time: __bh.time(), frames: __bh.renderer.completedFrames, held: __bh.held?.() ?? null, animate: __bh.settings.animate, timeSpeed: __bh.settings.timeSpeed, menu: __bh.menu?.state?.() ?? null, lost: document.querySelector("[data-testid=cl-restart]")?.closest("[role=dialog], dialog, .modal, div")?.innerText?.slice(0, 200) ?? null, said: window.__said })`))}; a second on: time ${await new Promise((ok) => setTimeout(ok, 1000)).then(() => app.js("__bh.time()"))}`,
+      );
+    expect(await app.js<string>("__bh.fleet.active")).toBe("f35");
     await app.js(`(() => { __bh.game.setDate("2026-07-10T16:30:00Z"); Object.assign(__bh.settings, { weather: "fair", wind: 1, earthClouds: 0 });
       __bh.game.flyAt(42.6, 6.0, 150, 20, 150); __bh.settings.shipMount = "cockpit"; return 1; })()`);
     await Bun.sleep(1500);
     await app.js(`(() => { const c = __bh.camera; c.jetToggle("ap"); c.jetToggle("athr"); return 1; })()`);
-    await Bun.sleep(6000);
+    // (the altitude held, waited for — what is checked below; held over the ellipsoid it would settle 49 m low and never come —:
+    // not 6 s slept, 15 Nov 2026)
+    await app.waitFor(`Math.abs(__bh.camera.geoNow().alt - 150) < 25`, 30_000);
     const r = await app.js<{ alt: number; n: number }>(
       `(() => { const g = __bh.camera.geoNow(); return { alt: g.alt, n: __bh.sys.geoid(g.lat, g.lon) }; })()`,
     );

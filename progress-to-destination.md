@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-15 09:24 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-15 09:59 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous.
@@ -7659,3 +7659,15 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
 - Preuves (mesuré, kerr-mini) : sans historique, la mer reste cyan et bruitée (captures `ablate-*`) ; avec la peinture du `resolve`, verte.
 - Limites : la cause (ce que contiennent les `accum` voisins au `resolve`) non lue.
 - Suite : lire les `accum` voisins au `resolve` (`traceColumn` les copie déjà) à côté d'un pixel laissé ; corriger ; rouvrir J5-6.
+
+### 2026-11-15 09:59 UTC — L'e2e `geoid` réparé (2/3 → 3/3) : un crash pendant ses placements mettait le jeu en pause
+
+- **Constat** : le 3ᵉ test (F-35 à 150 m au-dessus de la mer devant Toulon) ne prenait jamais le F-35, mais seulement à la suite des deux
+  premiers (seul, ou avec l'un des deux, il passait). Le même échec sur le code d'avant.
+- **Cause** (le test le dit maintenant) : `settings.animate` à faux et la fenêtre « appareil perdu » affichée. Le 2ᵉ test place le Ranger à
+  800 m au-dessus de trois sites pour charger leurs tuiles ; l'appareil a rencontré le relief en arrivant, et le jeu s'est mis en pause.
+  Le changement d'appareil, fait au pas de vol, n'arrivait plus.
+- **Changement** (le test seul) : pas de dégâts pendant ces placements (rétablis ensuite) ; si le F-35 n'est pas pris, le test dit l'état
+  du vol. La pause de 6 s après l'autopilote est remplacée par l'attente de l'altitude vérifiée. 3/3, deux fois (146 m au-dessus de la mer,
+  N 46,4 m). Garde : 66 → 65 pauses.
+

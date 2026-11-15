@@ -103,10 +103,6 @@
   "sleeps": 0,
   "waits": 2
  },
- "geoid.e2e.test.ts": {
-  "sleeps": 1,
-  "waits": 0
- },
  "gibraltar-shots.e2e.test.ts": {
   "sleeps": 0,
   "waits": 2
