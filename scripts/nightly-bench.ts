@@ -118,7 +118,7 @@ async function run(pull: boolean, dry = false) {
   mkdirSync(DIR, { recursive: true });
   say(`start in ${ROOT}${dry ? " (dry)" : ""}`);
   if (pull) {
-    await $`git -C ${ROOT} fetch -q origin main && git -C ${ROOT} merge -q --ff-only origin/main`.nothrow();
+    await $`git -C ${ROOT} -c core.hooksPath=/dev/null fetch -q origin main && git -C ${ROOT} -c core.hooksPath=/dev/null merge -q --ff-only origin/main`.nothrow();
     await $`bun install --frozen-lockfile`.cwd(ROOT).quiet().nothrow();
   }
   // (a remote job's copy has no .git: remote.ts gives it the commit it was sent from)
@@ -193,10 +193,14 @@ async function install(dryNow: boolean) {
   const plist = join(homedir(), "Library", "LaunchAgents", `${label}.plist`);
   mkdirSync(DIR, { recursive: true });
   // (its own clone, from this one — hard links, quick —, its origin the remote's: the nights never read ~/Documents)
-  if (!existsSync(join(CLONE, ".git"))) {
+  if (existsSync(join(CLONE, ".git"))) {
+    const url = (await $`git -C ${ROOT} remote get-url origin`.quiet().text()).trim();
+    await $`git -C ${CLONE} remote set-url origin ${url}`.nothrow();
+  } else {
     mkdirSync(dirname(CLONE), { recursive: true });
     const url = (await $`git -C ${ROOT} remote get-url origin`.quiet().text()).trim();
-    await $`git clone -q ${ROOT} ${CLONE}`;
+    // (no hooks: the mini's Git has no git-lfs, its LFS hook failed the clone — the files stay pointers, as in its other clone)
+    await $`git -c core.hooksPath=/dev/null clone -q ${ROOT} ${CLONE}`.nothrow();
     await $`git -C ${CLONE} remote set-url origin ${url}`;
     await $`bun install --frozen-lockfile`.cwd(CLONE).quiet().nothrow();
   }
