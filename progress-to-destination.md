@@ -7454,7 +7454,7 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   `character` (scène figée, décor coupé, sans tuiles) trouve les trois signaux prêts en 0 à 40 s par corps (`hdLoading` vaut `null`, que le
   test lit comme fini). Les échecs de la nuit étaient passagers ; notés comme tels dans PROBLEMES, la session du rendu prévenue.
 
-### 2026-11-15 07:47 UTC — J5-5b : la finition de l'eau au demi-rythme, J0 ~48 ms
+### 2026-11-15 07:41 UTC — J5-5b : la finition de l'eau au demi-rythme, J0 ~48 ms
 
 - Contribution à la destination : §8 — l'écart à la cible du mini (40 ms) ramené à ~8 ms.
 - Réalisé : `shadeWaterFinish` avec `WATER_HALF` (trace.wgsl : `waterSplit`, le pixel fini recopié au voisin), `tracerConstants` ;
