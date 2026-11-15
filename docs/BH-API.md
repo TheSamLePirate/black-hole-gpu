@@ -445,9 +445,13 @@ LDA/SDF/IGS, « C… » built), with its generation `approachGen` counted at eac
   within 150 km (the game's own sites too); its end and approach selected, else chosen (`game/approach-choice.ts`): a tail wind over
   10 kt or a cross wind past the craft's limit out, from 5 kt the end into the wind; then the aid (ILS by category, LOC, built);
   a tight runway paid for (A320: 2 000 m; F-35: 1 500 m); then the way in (the path to the approach's IF and the turns).
-- `__bh.sys.approaches(code)` → every approach of the airfield (`world/approaches.ts`, async): each end's real ones from nav.dat
-  (`loc { lat, lon, crs, freq [kHz], ident, cat, range }`, `gs { …, angle }`, `dme`, `markers`) then the built one — `final`,
-  `transitions`, `missed` legs (ARINC 424 types, heights over the sea), `dh { m, why }`.
+- `__bh.sys.approaches(code)` → every approach of the airfield (`world/approaches.ts`, async): each end's real ones — in the US the
+  FAA's published ones (`source: "cifp"`, cycle « 2611 »: ILS, LOC, LDA, RNAV « R28R-Z », VOR « V13L », NDB, with their own
+  transitions, final and missed approach, altitude constraints and speeds), elsewhere nav.dat's ILS (`source: "navdat"`, nav.dat's
+  kept at an end for a kind the CIFP has not there) — (`loc { lat, lon, crs, freq [kHz], ident, cat, range }`, `gs { …, angle }`,
+  `dme`, `markers`; `was`: the runway's name in the data when ours differs) then the built one — `final`, `transitions`, `missed`
+  legs (ARINC 424 types: `IF TF CF DF RF HM CA VA`, the others mapped; `alt [at or above, at or below]` over the sea, `spd` m/s,
+  courses true), `dh { m, why }`.
 
 The join (PLAN-APPROCHES AP2, `game/approach-plan.ts`): planned at the engagement, and again after a missed approach, in
 `camera.ilsRun.join = { plan: { entry: "straight" | "vectors", pts: [{ name: "INT" | "DW" | "BASE" | "JOIN", x, y, lat, lon, alt }],

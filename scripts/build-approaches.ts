@@ -7,14 +7,20 @@
 // and counted; a field closed or gone left out and counted. With each its glide (its real slope), its DME, its marker beacons.
 //
 // Out: assets/approaches/v1/t<la>_<lo>.json — the runways' tiles (world/runways.ts tileKey): each tied localizer as a record —,
-// report.json (the counts and what was left out, by reason). The FAA's CIFP (public domain) comes in AP0b.
+// report.json (the counts and what was left out, by reason).
+//
+// AP0b: the FAA's CIFP (public domain, assets/approaches/raw/CIFP_<yymmdd>.zip, the latest — scripts/cifp.ts): the US's published
+// approaches whole (transitions, final, missed approach, their altitudes), each on one of our runway's ends — in the same tiles,
+// beside nav.dat's (`p`); the game prefers them at their end (world/approaches.ts approachesOf).
 //
 //   bun scripts/build-approaches.ts            # → assets/approaches/v1/
 
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { gunzipSync } from "node:zlib";
 import { wgs84Inverse } from "../src/system/ellipsoid";
+import { type CifpRecord, legRecord, runwayEnd } from "../src/world/approaches";
 import { type Airfield, decodeTile, type Runway, tileKey } from "../src/world/runways";
+import { readCifp } from "./cifp";
 
 const RAW = "assets/approaches/raw";
 const OUT = "assets/approaches/v1";
@@ -179,6 +185,29 @@ export function catOf(name: string): string | undefined {
   return m ? m[1]!.toUpperCase() : undefined;
 }
 
+/**
+ * Our runway's end for a CIFP procedure's: the same name; else, when it alone fits, the same number without its side (PAGK 15L —
+ * our 15), or the number one off with the same side (a runway renumbered: the CIFP current, OurAirports behind — PABT 02, our 01).
+ */
+export function cifpEnd(f: Airfield, rwy: string): string | null {
+  // (our own spelling of it: KLAX's 6L is the CIFP's 06L)
+  const z = (e: string) => e.replace(/^0+(?=\d)/, "").toUpperCase();
+  const same = f.runways.flatMap((r) => [r.le, r.he]).find((e) => e && z(e) === z(rwy));
+  if (same) return same;
+  const num = Number(rwy.slice(0, 2)),
+    side = rwy.slice(2);
+  const ends = f.runways.flatMap((r) => [r.le, r.he]).filter(Boolean);
+  const pick = (ok: (e: string) => boolean) => {
+    const c = ends.filter(ok);
+    return c.length === 1 ? c[0]! : null;
+  };
+  const n = (e: string) => Number(/^\d+/.exec(e)?.[0]);
+  return (
+    pick((e) => n(e) === num) ??
+    pick((e) => e.replace(/^\d+/, "") === side && Math.min(Math.abs(n(e) - num), 36 - Math.abs(n(e) - num)) === 1)
+  );
+}
+
 if (import.meta.main) {
   const text = gunzipSync(readFileSync(`${RAW}/nav.dat.gz`)).toString("latin1");
   const nav = readNavDat(text);
@@ -203,6 +232,7 @@ if (import.meta.main) {
   }
   const locs = nav.filter((r) => r.type === 4 || r.type === 5);
   const tiles = new Map<string, ApproachRecord[]>();
+  const pubs = new Map<string, CifpRecord[]>();
   const report = {
     cycle,
     localizers: locs.length,
@@ -280,23 +310,87 @@ if (import.meta.main) {
     p90: Math.round(offs[Math.floor(offs.length * 0.9)]! * 100) / 100,
     over1: offs.filter((x) => x > 1).length,
   };
+  // the FAA's CIFP: its latest cycle's archive
+  const zips = readdirSync(RAW)
+    .filter((n) => /^CIFP_\d{6}\.zip$/.test(n))
+    .sort();
+  const cifp = {
+    cycle: "",
+    effective: "",
+    read: {} as object,
+    tied: 0,
+    renamed: 0,
+    left: {} as Record<string, number>,
+    leftOut: [] as string[],
+  };
+  if (zips.length) {
+    const unz = Bun.spawnSync(["unzip", "-p", `${RAW}/${zips.at(-1)}`, "FAACIFP18"], { stdout: "pipe" });
+    const d = readCifp(new TextDecoder("latin1").decode(unz.stdout));
+    Object.assign(cifp, { cycle: d.cycle, effective: d.effective, read: d.report });
+    for (const p of d.procs) {
+      // (a small US field: the FAA's location identifier, ours with a K before it — 02A is K02A)
+      const f = byCode.get(p.field) ?? byCode.get(`K${p.field}`);
+      let end = f ? cifpEnd(f, p.rwy) : null;
+      // (a renamed end kept only on the same course: within 20° of the procedure's final)
+      const pc = p.loc?.crs ?? [...p.final].reverse().find((l) => l.crs !== undefined)?.crs;
+      if (f && end && endName(end) !== endName(p.rwy) && pc !== undefined && angDiff(runwayEnd(f, end)!.crs, pc) > 20) end = null;
+      const why = !f ? "field" : !end ? "runway" : null;
+      if (why || !f || !end) {
+        cifp.left[why!] = (cifp.left[why!] ?? 0) + 1;
+        cifp.leftOut.push(`${p.field} ${p.code}: ${why}`);
+        continue;
+      }
+      const rec: CifpRecord = {
+        f: f.ident,
+        id: p.id,
+        code: p.code,
+        k: p.kind,
+        r: end,
+        ...(endName(end) !== endName(p.rwy) ? { was: p.rwy } : {}),
+        ...(p.loc
+          ? {
+              loc: [
+                q5(p.loc.lat),
+                q5(p.loc.lon),
+                Math.round(p.loc.crs * 10) / 10,
+                p.loc.freq,
+                p.loc.ident,
+                ...(p.loc.cat ? [p.loc.cat] : []),
+              ] as CifpRecord["loc"],
+            }
+          : {}),
+        ...(p.loc?.gs ? { gs: [q5(p.loc.gs.lat), q5(p.loc.gs.lon), p.loc.gs.elev, p.loc.gs.angle] as CifpRecord["gs"] } : {}),
+        ...(p.angle && !p.loc?.gs ? { va: p.angle } : {}),
+        tr: p.transitions.map((t) => [t.name, t.legs.map(legRecord)]),
+        fin: p.final.map(legRecord),
+        ma: p.missed.map(legRecord),
+      };
+      const tk = tileKey(f.lat, f.lon);
+      pubs.set(tk, [...(pubs.get(tk) ?? []), rec]);
+      cifp.tied++;
+      if (endName(end) !== endName(p.rwy)) cifp.renamed++;
+    }
+  }
   if (existsSync(OUT)) rmSync(OUT, { recursive: true });
   mkdirSync(OUT, { recursive: true });
   let bytes = 0;
-  for (const [tk, list] of tiles) {
-    const json = JSON.stringify({ v: 1, src: { navdat: cycle }, a: list });
+  const keys = [...new Set([...tiles.keys(), ...pubs.keys()])];
+  for (const tk of keys) {
+    const a = tiles.get(tk) ?? [],
+      p = pubs.get(tk) ?? [];
+    const json = JSON.stringify({ v: 1, src: { navdat: cycle, ...(p.length ? { cifp: cifp.cycle } : {}) }, a, ...(p.length ? { p } : {}) });
     bytes += json.length;
     writeFileSync(`${OUT}/t${tk}.json`, json);
   }
   const index = {
     v: 1,
     built: new Date().toISOString().slice(0, 10),
-    credit: `nav.dat ${cycle} (Robin A. Peel, GPL v2+, via FlightGear)`,
-    tiles: Object.fromEntries([...tiles].map(([k, v]) => [k, v.length])),
+    credit: `nav.dat ${cycle} (Robin A. Peel, GPL v2+, via FlightGear)${cifp.cycle ? `; FAA CIFP ${cifp.cycle} (public domain, not for navigation)` : ""}`,
+    tiles: Object.fromEntries(keys.map((k) => [k, (tiles.get(k)?.length ?? 0) + (pubs.get(k)?.length ?? 0)])),
   };
   writeFileSync(`${OUT}/index.json`, JSON.stringify(index));
-  writeFileSync(`${OUT}/report.json`, `${JSON.stringify({ ...report, bytes, tiles: tiles.size }, null, 1)}\n`);
+  writeFileSync(`${OUT}/report.json`, `${JSON.stringify({ ...report, cifp, bytes, tiles: keys.length }, null, 1)}\n`);
   console.log(
-    `build-approaches: nav.dat ${cycle}: ${report.localizers} localizers, ${report.tied} tied (${report.byName} by name, ${report.byGeometry} by geometry, ${report.renumbered} renumbered, ${report.offsetAids} offset aids), left out ${JSON.stringify(report.left)}; course off p50 ${report.offDeg.p50}°, p90 ${report.offDeg.p90}°; ${tiles.size} tiles, ${(bytes / 1024).toFixed(0)} KB`,
+    `build-approaches: nav.dat ${cycle}: ${report.localizers} localizers, ${report.tied} tied (${report.byName} by name, ${report.byGeometry} by geometry, ${report.renumbered} renumbered, ${report.offsetAids} offset aids), left out ${JSON.stringify(report.left)}; course off p50 ${report.offDeg.p50}°, p90 ${report.offDeg.p90}°; CIFP ${cifp.cycle}: ${cifp.tied} tied, left out ${JSON.stringify(cifp.left)}; ${keys.length} tiles, ${(bytes / 1024).toFixed(0)} KB`,
   );
 }

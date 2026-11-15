@@ -12,6 +12,7 @@ import { type Airfield, type Runway, runwayTileListeners, tileKey } from "./runw
 
 export type ApproachKind = "ILS" | "LOC" | "LDA" | "SDF" | "IGS" | "RNAV" | "VOR" | "NDB" | "VIS";
 export type ApproachSource = "cifp" | "navdat" | "built";
+// (heights over the sea, courses true; the CIFP's magnetic courses turned true by its airport's variation at build time)
 
 /** A leg of a procedure (ARINC 424's path terminators, the few an approach needs). */
 export interface Leg {
@@ -81,6 +82,61 @@ export interface ApproachRecord {
   off: number;
 }
 
+/** A leg in a tile: [type, fix, lat, lon, course ° true, at or above m, at or below m, speed m/s] — nulls where none, the trailing
+ *  ones dropped. */
+export type LegRecord = [
+  Leg["t"],
+  string?,
+  (number | null)?,
+  (number | null)?,
+  (number | null)?,
+  (number | null)?,
+  (number | null)?,
+  (number | null)?,
+];
+
+/** A procedure of the FAA's CIFP in a tile (scripts/build-approaches.ts, AP0b): the US's published approaches, whole. */
+export interface CifpRecord {
+  f: string;
+  /** ours (« I28R », « R19R-Z ») and as coded (« R19RZ ») */
+  id: string;
+  code: string;
+  k: ApproachKind;
+  r: string;
+  /** its runway's name in the CIFP when ours differs (renumbered, or our data without its side letter) */
+  was?: string;
+  /** the localizer: lat, lon, course ° true, frequency kHz, ident, category */
+  loc?: [number, number, number, number, string, string?];
+  /** the glide: lat, lon, elevation m, slope ° */
+  gs?: [number, number, number, number];
+  /** the final's vertical angle [°] */
+  va?: number;
+  tr: [string, LegRecord[]][];
+  fin: LegRecord[];
+  ma: LegRecord[];
+}
+
+/** A tile's leg back to a leg. */
+export function legOf(r: LegRecord): Leg {
+  const [t, fix, lat, lon, crs, lo, hi, spd] = r;
+  return {
+    t,
+    ...(fix ? { fix } : {}),
+    ...(lat != null && lon != null ? { lat, lon } : {}),
+    ...(crs != null ? { crs } : {}),
+    ...(lo != null || hi != null ? { alt: [lo ?? null, hi ?? null] as [number | null, number | null] } : {}),
+    ...(spd != null ? { spd } : {}),
+  };
+}
+
+/** A leg to a tile's leg (places to 1e-5°, about a metre). */
+export function legRecord(l: Leg): LegRecord {
+  const q = (x: number | undefined) => (x === undefined ? null : Math.round(x * 1e5) / 1e5);
+  const r: LegRecord = [l.t, l.fix ?? "", q(l.lat), q(l.lon), l.crs ?? null, l.alt?.[0] ?? null, l.alt?.[1] ?? null, l.spd ?? null];
+  while (r.length > 1 && (r[r.length - 1] === null || r[r.length - 1] === "")) r.pop();
+  return r;
+}
+
 const FT = 0.3048;
 const NM = 1852;
 /** the built procedure's distances and heights, FlightGear's (createDefaultApproach: 12 NM at the threshold + 4 000 ft, 8 NM at
@@ -96,6 +152,7 @@ export function decisionHeight(kind: ApproachKind, cat: string | undefined, appr
     return { m: 200 * FT, why: "CAT I: 200 ft" };
   }
   if (kind === "VIS") return { m: 250 * FT, why: "built: 250 ft" };
+  if (kind === "RNAV" && cat === "V") return { m: 250 * FT, why: "RNAV with a vertical path: 250 ft" };
   return { m: 400 * FT, why: `${kind}, no glide: 400 ft` };
 }
 
@@ -193,6 +250,51 @@ export function realApproach(f: Airfield, r: ApproachRecord, cycle: string): App
   };
 }
 
+/** A published approach of the FAA's CIFP: its own transitions, final and missed approach; its localizer, glide; on our runway's
+ *  threshold (the game's runway, the same as drawn). */
+export function cifpApproach(f: Airfield, r: CifpRecord, cycle: string): Approach | null {
+  const e = runwayEnd(f, r.r);
+  if (!e) return null;
+  const fin = r.fin.map(legOf);
+  // (the final's course: the localizer's, else the last leg's to the runway, else the runway's)
+  const lastCrs = [...fin].reverse().find((l) => l.crs !== undefined)?.crs;
+  const crs = r.loc ? r.loc[2] : (lastCrs ?? e.crs);
+  const angle = r.gs ? r.gs[3] : (r.va ?? 3);
+  const cat = r.loc?.[5] ?? (r.k === "RNAV" && r.va ? "V" : undefined);
+  return {
+    id: r.id,
+    field: f.ident,
+    rwy: r.r,
+    kind: r.k,
+    source: "cifp",
+    cycle,
+    thr: e.thr,
+    crs,
+    angle,
+    tch: BUILT.tchFt * FT,
+    ...(r.loc
+      ? {
+          loc: {
+            lat: r.loc[0],
+            lon: r.loc[1],
+            crs: r.loc[2],
+            freq: r.loc[3],
+            ident: r.loc[4],
+            ...(r.loc[5] ? { cat: r.loc[5] } : {}),
+            range: 18,
+          },
+        }
+      : {}),
+    ...(r.gs ? { gs: { lat: r.gs[0], lon: r.gs[1], elev: r.gs[2], angle: r.gs[3] } } : {}),
+    dh: decisionHeight(r.k, cat, e.rw.approx),
+    transitions: r.tr.map(([, legs]) => legs.map(legOf)),
+    final: fin,
+    missed: r.ma.map(legOf),
+    ...(r.was ? { was: r.was } : {}),
+    ...(e.rw.approx ? { approx: true } : {}),
+  };
+}
+
 /** The approach built for an end without a real aid (or beside it): the runway's axis, a 3° glide. */
 export function builtApproach(f: Airfield, rwy: string): Approach | null {
   const e = runwayEnd(f, rwy);
@@ -220,18 +322,30 @@ const landable = (rw: Runway) => rw.surface !== "water";
  * Every approach of a field: at each end of each runway its real ones (ILS first, the highest category first) then the one built
  * for it — every end has at least one. `records`: the field's records from its tile.
  */
-export function approachesOf(f: Airfield, records: readonly ApproachRecord[], cycle = "2013.10"): Approach[] {
+export function approachesOf(
+  f: Airfield,
+  records: readonly ApproachRecord[],
+  cycle = "2013.10",
+  cifp: readonly CifpRecord[] = [],
+  cifpCycle = "",
+): Approach[] {
   const out: Approach[] = [];
-  const rank = (a: Approach) => (a.kind === "ILS" ? 0 : a.kind === "LOC" ? 1 : 2) * 10 - (a.loc?.cat?.length ?? 0);
+  const rank = (a: Approach) =>
+    ({ ILS: 0, LOC: 1, LDA: 2, SDF: 2, IGS: 2, RNAV: 3, VOR: 4, NDB: 5, VIS: 6 })[a.kind] * 10 - (a.loc?.cat?.length ?? 0);
   for (const rw of f.runways.filter(landable))
     for (const end of [rw.le, rw.he]) {
       if (!end) continue;
+      // (the FAA's published ones first — current, whole —; nav.dat's for a kind the CIFP does not have at that end)
+      const pub = cifp
+        .filter((r) => r.f === f.ident && r.r === end)
+        .map((r) => cifpApproach(f, r, cifpCycle))
+        .filter((a): a is Approach => !!a);
+      const kinds = new Set(pub.map((a) => a.kind));
       const real = records
         .filter((r) => r.f === f.ident && r.r === end)
         .map((r) => realApproach(f, r, cycle))
-        .filter((a): a is Approach => !!a)
-        .sort((a, b) => rank(a) - rank(b));
-      out.push(...real);
+        .filter((a): a is Approach => !!a && !kinds.has(a.kind));
+      out.push(...[...pub, ...real].sort((a, b) => rank(a) - rank(b)));
       const b = builtApproach(f, end);
       if (b) out.push(b);
     }
@@ -239,11 +353,13 @@ export function approachesOf(f: Airfield, records: readonly ApproachRecord[], cy
 }
 
 /** A tile's records and its data's cycle. */
-export function decodeApproachTile(json: { v: number; src?: { navdat?: string }; a: ApproachRecord[] }): {
+export function decodeApproachTile(json: { v: number; src?: { navdat?: string; cifp?: string }; a?: ApproachRecord[]; p?: CifpRecord[] }): {
   cycle: string;
   records: ApproachRecord[];
+  cifpCycle: string;
+  cifp: CifpRecord[];
 } {
-  return { cycle: json.src?.navdat ?? "2013.10", records: json.a ?? [] };
+  return { cycle: json.src?.navdat ?? "2013.10", records: json.a ?? [], cifpCycle: json.src?.cifp ?? "", cifp: json.p ?? [] };
 }
 
 // ---------------------------------------------------------------------------------------------------- the tiles, on demand
@@ -253,7 +369,7 @@ let base = "approaches/v1/";
 export function setApproachesBase(url: string) {
   base = url.endsWith("/") ? url : `${url}/`;
 }
-const tiles = new Map<string, { cycle: string; records: ApproachRecord[]; used: number }>();
+const tiles = new Map<string, ReturnType<typeof decodeApproachTile> & { used: number }>();
 const pending = new Map<string, Promise<void>>();
 let clock = 0;
 /** a tile arrived: what shows approaches redraws */
@@ -281,7 +397,7 @@ async function loadApproachKey(key: string): Promise<void> {
     });
   await indexP;
   if (!index?.[key]) {
-    tiles.set(key, { cycle: "", records: [], used: ++clock });
+    tiles.set(key, { cycle: "", records: [], cifpCycle: "", cifp: [], used: ++clock });
     return;
   }
   const p =
@@ -312,7 +428,13 @@ export function approachTileIn(lat: number, lon: number): boolean {
 export function approachesFor(f: Airfield): Approach[] {
   const t = tiles.get(tileKey(f.lat, f.lon));
   if (t) t.used = ++clock;
-  return approachesOf(f, t?.records.filter((r) => r.f === f.ident) ?? [], t?.cycle || "2013.10");
+  return approachesOf(
+    f,
+    t?.records.filter((r) => r.f === f.ident) ?? [],
+    t?.cycle || "2013.10",
+    t?.cifp.filter((r) => r.f === f.ident) ?? [],
+    t?.cifpCycle ?? "",
+  );
 }
 
 /** The same, its tile awaited. */

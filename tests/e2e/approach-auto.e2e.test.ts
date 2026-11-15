@@ -2,14 +2,16 @@ import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { App, E2E, stopServer } from "./lib/app";
 
 // The approach chosen automatically (docs/PLAN-APPROCHES.md AP1): the F-35 placed 40 km from Toulon-Hyères on each of its four
-// sides, flying towards it, calm; the ILS engaged by the airfield's name — the end whose approach comes from that side taken (13
-// from the north, 23 from the east, 31 from the south, 05 from the west), its reason said —; engaged without a name, the nearest
+// sides, flying towards it, calm; the ILS engaged by the airfield's name — the end whose approach comes from that side taken (23
+// from the east, 31 from the south, 05 from the west; from the north the built 13 is left out for the relief — its slope over the
+// hills north-west of Hyères, PLAN-APPROCHES AP2 — and 23 taken), its reason said —; engaged without a name, the nearest
 // ahead; a windy day: the end with the wind ahead whatever the side; the A320 its 2 000 m kept; the approach state the same everywhere
 // (`approachState`). Before 15 Nov 2026 the first end was always taken in fair weather: from the other side, the jet flew over.
 //
-// Done when: the four sides take 13, 23, 31, 05; a selection (LFTH C23) flown from the south and kept through a save; LFML's list
+// Done when: the four sides take 23 (13 out: « relief »), 23, 31, 05; a selection (LFTH C23) flown from the south and kept through a save; LFML's list
 // has its real ILS 31R; unnamed from the west takes LFTH 05; the « windy » weather takes an end with the wind ahead from the
-// west; the A320 from the south takes 05 or 23 (31, 1 900 m, short for it); the state names what was flown.
+// west; the A320 from the south takes 05 or 23 (31, 1 900 m, short for it); the state names what was flown; KSFO's list has the
+// FAA's published ILS 28R (its four transitions) and RNAV 28R-Z (AP0b).
 // Duration: about 1 min 30 (four placings and engagements, a craft switched; no flight flown out).
 
 describe.skipIf(!E2E)("the approach chosen automatically", () => {
@@ -41,7 +43,10 @@ describe.skipIf(!E2E)("the approach chosen automatically", () => {
     const r = await app.js<{ rwy: string; field: string; state: unknown }>(
       `(() => { const R = __bh.camera.ilsRun?.rwy ?? __bh.camera.a320App?.rwy; return { rwy: R.des, field: R.icao, state: __bh.camera.approachState() }; })()`,
     );
-    console.log(`  ${said} → ${r.field} ${r.rwy}`);
+    const table = await app.js<string>(
+      `(__bh.camera.approachLast?.choice?.table ?? []).map((s) => s.a.id + ":" + (s.out ?? s.score.toFixed(1))).join(" ")`,
+    );
+    console.log(`  ${said} → ${r.field} ${r.rwy} [${table}]`);
     return r;
   };
   beforeAll(async () => {
@@ -57,11 +62,20 @@ describe.skipIf(!E2E)("the approach chosen automatically", () => {
   });
 
   test("calm, from each side of Toulon-Hyères: the end whose approach comes from there", async () => {
-    const want: Record<number, string> = { 0: "13", 90: "23", 180: "31", 270: "05" };
+    // (from the north the built 13 out for the relief — 15 Nov 2026, AP2 —: its slope's least clearance said)
+    const want: Record<number, string> = { 0: "23", 90: "23", 180: "31", 270: "05" };
     for (const from of [0, 90, 180, 270]) {
       await place(from);
       const r = await engage("LFTH");
       expect(`${from}: ${r.field} ${r.rwy}`).toBe(`${from}: LFTH ${want[from]}`);
+      if (from === 0) {
+        const c13 = await app.js<{ out: string | null; clear: number | undefined }>(`(() => {
+          const s = __bh.camera.approachLast.choice.table.find((x) => x.a.id === "C13");
+          const e = __bh.camera.ilsRunways("LFTH")?.ends.find((x) => x.id === "13");
+          return { out: s?.out ?? null, clear: e?.clearM }; })()`);
+        console.log(`  C13 from the north: ${c13.out}, its slope's least clearance ${c13.clear?.toFixed(0)} m`);
+        expect(c13.out).toBe("relief");
+      }
     }
     await shot("approach-auto-west");
   }, 180_000);
@@ -113,6 +127,13 @@ describe.skipIf(!E2E)("the approach chosen automatically", () => {
     const i31r = lfml.find((a) => a.id === "I31R");
     expect(i31r).toMatchObject({ kind: "ILS", source: "navdat" });
     expect(i31r!.loc!.freq).toBe(111150);
+    // (in the US the FAA's published approaches, served in the same tiles — AP0b: KSFO's ILS 28R whole, its RNAV ones)
+    const ksfo = await app.js<{ id: string; source: string; transitions: unknown[] }[]>(`__bh.sys.approaches("KSFO")`);
+    const pub = ksfo.find((a) => a.id === "I28R");
+    console.log(`  KSFO: ${ksfo.filter((a) => a.source === "cifp").length} published (CIFP), I28R ${pub?.transitions.length} transitions`);
+    expect(pub).toMatchObject({ source: "cifp" });
+    expect(pub!.transitions.length).toBe(4);
+    expect(ksfo.some((a) => a.id === "R28R-Z" && a.source === "cifp")).toBe(true);
     await app.js(`(() => { __bh.camera.approachSelect({ field: "auto" }); return 1; })()`);
   }, 120_000);
 });

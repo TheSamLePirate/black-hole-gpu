@@ -281,6 +281,14 @@ export const CREDITS: CreditSection[] = [
         url: "https://sourceforge.net/p/flightgear/fgdata/ci/next/tree/Navaids/",
       },
       {
+        what: {
+          fr: "Les approches publiées des États-Unis (transitions, finales, remises de gaz)",
+          en: "The United States' published approaches (transitions, finals, missed approaches)",
+        },
+        who: "FAA CIFP, cycle 2611 (public domain) — read by scripts/cifp.ts. Not for real navigation; the FAA's error notes relayed in docs/ASSETS.md",
+        url: "https://www.faa.gov/air_traffic/flight_info/aeronav/digital_products/cifp/",
+      },
+      {
         what: { fr: "Les adresses", en: "The addresses" },
         who: "Photon (komoot) · Nominatim — OpenStreetMap",
         url: "https://photon.komoot.io",

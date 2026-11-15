@@ -1,0 +1,38 @@
+HDR04                                 CODED INSTRUMENT FLIGHT PROCEDURES VOLUME 2611  EFFECTIVE 29 OCT 2026                         
+SUSAP KSFOK2ASFO     0     118YHN37370770W122223150E014000013         1800018000C    MNAR    SAN FRANCISCO INTL            142461513
+SUSAP KSFOK2CARCHI K20    C     N37292687W121523195                       E0127     NAR           ARCHI                    142512605
+SUSAP KSFOK2CZILED K20    W     N37294425W121572956                       E0127     NAR           ZILED                    143532605
+SUSAP KSFOK2CGIRRR K20    W     N37295856W122013805                       E0128     NAR           GIRRR                    142812504
+SUSAP KSFOK2CDUMBA K20    C     N37301266W122054613                       E0128     NAR           DUMBA                    142682605
+SUSAP KSFOK2CCEPIN K20    C     N37320943W122102235                       E0128     NAR           CEPIN                    142592605
+SUSAP KSFOK2CAXMUL K20    C     N37341745W122152591                       E0128     NAR           AXMUL                    142532605
+SUSAP KSFOK2CVIKYU K20    C     N37424864W122354634                       E0129     NAR           VIKYU                    143452605
+SUSAP KSFOK2CEDDYY K20    W     N37222965W122070750                       E0127     NAR           EDDYY                    142712605
+SUSAP KSFOK2CSIDBY K20    W     N37270256W122084109                       E0128     NAR           SIDBY                    143322605
+SUSAP KSFOK2GRW28R   0118702840 N37365011W122212901         -0028700013030055200IIGWQ3                                     149832104
+SUSAP KSFOK2IIGWQ3   011170RW28RN37374636W1222343122838N37365140W1222143120628 10650329300E01405500008                     149841905
+SUSAP KSFOK2FI28R  AARCHI 010ARCHIK2PC0E  A    IF                                   07000     18000                 0 PS   148211810
+SUSAP KSFOK2FI28R  AARCHI 020ZILEDK2PC0E    010TF                                 + 06000                           0 PS   148221804
+SUSAP KSFOK2FI28R  AARCHI 030GIRRRK2PC0E    010TF                                 + 05000                           0 PS   148231804
+SUSAP KSFOK2FI28R  AARCHI 040DUMBAK2PC0E    010TF                                 + 04000                           0 PS   148241804
+SUSAP KSFOK2FI28R  AARCHI 050CEPINK2PC0EE B    CF IGWQK2      1038012028380042PI  + 03000                           0 PS   148251503
+SUSAP KSFOK2FI28R  ADUMBA 010DUMBAK2PC0E  A    IF                                             18000                 0 NS   148261503
+SUSAP KSFOK2FI28R  ADUMBA 020CEPINK2PC0EE B    CF IGWQK2      1038012028380042PI  + 03000                           0 NS   148271503
+SUSAP KSFOK2FI28R  AEDDYY 010EDDYYK2PC0E  A    IF                                   06000     18000240              0-PS   148281804
+SUSAP KSFOK2FI28R  AEDDYY 020SIDBYK2PC0E    010TF                                 + 04000                           0 PS   148291804
+SUSAP KSFOK2FI28R  AEDDYY 030CEPINK2PC0EE B 010TF IGWQK2      10380120        PI  + 03000                           0 PS   148302205
+SUSAP KSFOK2FI28R  ASIDBY 010SIDBYK2PC0E  A    IF                                             18000                 0 PS   148311810
+SUSAP KSFOK2FI28R  ASIDBY 020CEPINK2PC0EE B 010TF IGWQK2      10380120        PI  + 03000                           0 PS   148322205
+SUSAP KSFOK2FI28R  I      010CEPINK2PC0E  I    IF IGWQK2      10380120        PI  J 030000180018000                 0 NS   148331310
+SUSAP KSFOK2FI28R  I      020AXMULK2PC0E  F    CF IGWQK2      1038007428400046PI  H 0180001800            SFO   K2D 0 NS   148342107
+SUSAP KSFOK2FI28R  I      030RW28RK2PG0GY M    CF IGWQK2      1038002028400054PI    00068             -300          0 NS   148351309
+SUSAP KSFOK2FI28R  I      040VIKYUK2PC0EYM     CF SFO K2      2811012028110130D   + 03000                           0 NS   148361310
+SUSAP KSFOK2FI28R  I      050VIKYUK2PC0EE  R   HM                     2811T010    + 03000                           0 NS   148371310
+SUSAP 0B8 K6FVOR-A AFLIBB 010FLIBBK6EA0E       IF                                             18000                 3 NC   808891702
+SUSAP 0B8 K6FVOR-A AFLIBB 020GON  K6D 0VY      TF                                 + 02000                           3 NC   808902107
+SUSAP 0B8 K6FVOR-A AFLIBB 030GON  K6D 0VE AL   HF                     1829T010    + 02000                           3 NC   808912107
+SUSAP 0B8 K6FVOR-A S      020GON  K6D 0V  F    IF GON K6      00000000        D   + 02000     18000       GON   K6D 3 NC   808921702
+SUSAP 0B8 K6FVOR-A S      030MAFYAK6PC0EY M    CF GON K6      1830004718290047D     00007              000          3 NC   808932204
+SUSAP 0B8 K6FVOR-A S      040         0  M     CA                     1829        + 00407                           3 NC   808942107
+SUSAP 0B8 K6FVOR-A S      050GON  K6D 0VY  L   DF                                 + 02000                           3 NC   808951702
+SUSAP 0B8 K6FVOR-A S      060GON  K6D 0VE  L   HM                     1829T010    + 02000                           3 NC   808962107

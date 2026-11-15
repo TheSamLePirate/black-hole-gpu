@@ -7852,7 +7852,7 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   - Lecture : 10 171 procédures, 9 629 lues (496 indirectes sans piste, 35 back courses, 10 sans premier point), 132 points non
     placés sur ~115 000.
   - Liées : **9 568** (336 sur une extrémité renommée), 61 écartées et listées (`report.json`) ; 9 566 visibles dans le jeu.
-    Tuiles : 473, ~6,5 Mo de JSON (binaires 600,7 Mo / 700).
+    Tuiles : 473, 6,4 Mo de JSON (binaires 600,7 Mo / 700).
   - Tests : `cifp` 5/5 (KSFO ILS 28R lu entier : CAT III, 111,70, 297,8° vrai, 4 transitions, CEPIN « ≥ 3 000 ft », remise de
     gaz VIKYU + attente ; le choix automatique y prend un ILS 28 publié) ; `approaches` 6/6.
   - e2e `approach-auto` 5/5 : KSFO servie, 15 approches publiées, ILS 28R et ses 4 transitions.

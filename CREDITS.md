@@ -49,6 +49,7 @@ them in More… › Credits.
 - [The buildings outside France, their roofs; the wind turbines](https://docs.overturemaps.org/attribution/) — © Overture Maps Foundation (ODbL, with OpenStreetMap's; Microsoft and Google footprints)
 - [The world's airfields and runways](https://ourairports.com/data/) — OurAirports (public domain) — built into tiles by scripts/build-runways.ts
 - [The world's ILS (localizers, glides, DME, marker beacons)](https://sourceforge.net/p/flightgear/fgdata/ci/next/tree/Navaids/) — FlightGear's nav.dat, cycle 2013.10, © Robin A. Peel · GNU GPL v2 or later — tied to the runways by scripts/build-approaches.ts. Not for real navigation
+- [The United States' published approaches (transitions, finals, missed approaches)](https://www.faa.gov/air_traffic/flight_info/aeronav/digital_products/cifp/) — FAA CIFP, cycle 2611 (public domain) — read by scripts/cifp.ts. Not for real navigation; the FAA's error notes relayed in docs/ASSETS.md
 - [The addresses](https://photon.komoot.io) — Photon (komoot) · Nominatim — OpenStreetMap
 - [The weather](https://open-meteo.com) — Open-Meteo · CC BY 4.0
 - [The METARs](https://metar.vatsim.net) — VATSIM

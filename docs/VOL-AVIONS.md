@@ -360,9 +360,11 @@ puis lire le journal : `__bh.game.log.events.filter(e => e.kind === "pilot")` co
 est celui choisi (`approachSelect`), sinon la destination du plan de vol, sinon le plus proche **devant** l'avion (à ±60° de la
 route) à moins de 150 km. L'extrémité et l'approche sont choisies comme un contrôleur le ferait (PLAN-APPROCHES, depuis le
 15 nov. 2026) : un vent arrière de plus de 10 kt l'exclut, dès 5 kt l'extrémité face au vent passe d'abord ; puis l'aide réelle
-(l'ILS de nav.dat, la plus haute catégorie, puis un localizer, puis l'approche construite) ; une piste trop juste est écartée
+(l'ILS réel — aux États-Unis celui publié par la FAA, son CIFP, ailleurs celui de nav.dat —, la plus haute catégorie, puis un
+localizer, puis l'approche construite) ; une piste trop juste est écartée
 (A320 : 2 000 m) ; enfin le **sens d'arrivée** — par vent calme, l'extrémité dont l'approche vient du côté de l'avion (venu du
-nord à Toulon-Hyères : la 13 ; de l'est : la 23). Le message dit le choix et sa raison (« LFML ILS 31R — CAT I »). L'approche coupe la formation, l'interception, le STOVL et l'autopilote en cours, puis vole
+sud à Toulon-Hyères : la 31 ; de l'est : la 23 ; du nord, la 13 construite est écartée — sa pente passe sur les collines au
+nord-ouest de Hyères — : la 23). Le message dit le choix et sa raison (« LFML ILS 31R — CAT I »). L'approche coupe la formation, l'interception, le STOVL et l'autopilote en cours, puis vole
 elle-même (`ilsRun.phase` : `toIaf`, `intercept`, `final`, `flare`, `rollout`, `missed`, `done` ; et `base`, `hold`),
 sort le train et les volets, coupe la manette à l'arrondi. Elle refuse une pente qui rentre dans le relief ; le choix
 automatique écarte une approche **construite** dont la pente rase le relief (« relief » : la 22R construite de Nice, au-dessus des
