@@ -43,8 +43,8 @@ describe.skipIf(!E2E)("the HUD's runway on the runway", () => {
 
   test("6 km out on LFBO's axis: the threshold where it is; the view turned in a pause, the outline with it", async () => {
     await app.waitFor(`__bh.sys.runways().some((r) => r.world?.field === "LFBO" && r.len > 3000)`, 60_000);
-    // (its level measured again as the finer relief came: 20 s)
-    await Bun.sleep(21_000);
+    // (its level measured again as the finer relief came — the second measure, 20 s after it was brought in — waited for, not slept)
+    await app.waitFor(`__bh.sys.runways().some((r) => r.world?.field === "LFBO" && r.len > 3000 && (r.world.measured ?? 0) >= 2)`, 60_000);
     const st = await app.js<{ lat: number; lon: number; hdg: number }>(`(() => {
       const r = __bh.sys.runways().filter((r) => r.world?.field === "LFBO").sort((a, b) => b.len - a.len)[0];
       const q = r.origin.map((v, i) => v - r.along[i] * 6000);

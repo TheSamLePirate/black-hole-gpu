@@ -31,8 +31,8 @@ describe.skipIf(!E2E)("a world runway, flat, landed on", () => {
 
   test("LFBO's runways brought in, their levels measured; the ground flat down the longest", async () => {
     await app.waitFor(`__bh.sys.runways().some((r) => r.world?.field === "LFBO" && r.len > 3000)`, 60_000);
-    // (its level measured again as the finer relief came: 20 s)
-    await Bun.sleep(21_000);
+    // (its level measured again as the finer relief came — the second measure, 20 s after it was brought in — waited for, not slept)
+    await app.waitFor(`__bh.sys.runways().some((r) => r.world?.field === "LFBO" && r.len > 3000 && (r.world.measured ?? 0) >= 2)`, 60_000);
     const r = await app.js<{
       elev: number;
       len: number;

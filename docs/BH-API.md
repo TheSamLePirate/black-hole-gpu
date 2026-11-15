@@ -2021,9 +2021,11 @@ runways levelled, the sea at the geoid. Synchronous.
 
 The Earth's runways as drawn (`sites.ts` `EARTH_RUNWAYS`): each its `site`, its threshold's `origin` on the WGS84
 surface (body-fixed metres), the unit `p` (the threshold's geodetic up), `along` (the landing direction) and `across`
-(its right), its `elev` [m]. The paved strip is `RUNWAY_LENGTH` = 4 500 m from the threshold.
+(its right), its `elev` [m]. The paved strip is `RUNWAY_LENGTH` = 4 500 m from the threshold. A world runway (OurAirports,
+PLAN-RADAR-AAA RD13) carries `world: { field, measuring, measured }`: its airfield's code, its level being measured, and how many times
+it has been measured (`measured`: 1 at 5 s, 2 at 20 s after it was brought in — the finer relief's; a test waits for 2).
 
-*Used in:* `ground-placement.e2e.test.ts`, `runway-placement.e2e.test.ts`.
+*Used in:* `ground-placement.e2e.test.ts`, `runway-placement.e2e.test.ts`, `world-runway.e2e.test.ts`, `hud-runway.e2e.test.ts`.
 
 ### `__bh.sys.geodetic()` → `{body, lat, lon, altM, radiusM} | null`
 

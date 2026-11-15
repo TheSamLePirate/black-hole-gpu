@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-15 02:20 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-15 02:27 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous.
@@ -7137,4 +7137,10 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   à l'altitude de la piste (au-dessus de la mer), avec un écart de 49,4 m, le N de Toulouse. Il soustrait maintenant `__bh.sys.geoid`.
 - **Plafonds** (mesurés) : `world-runway` 400 → 250 et 190 s (122,7 et 90,3 s), `shootdown-gpu` 150 → 70 et 60 s (31 et 29 s),
   `voyage-prewarm:37` 120 → 60 s (20 s). La garde ne comptait pas ceux de `shootdown-gpu` : son motif s'arrête au premier nombre de l'appel.
+
+### 2026-11-15 02:27 UTC — QA-09 : deux pauses de 21 s remplacées par l'état du jeu (le niveau d'une piste du monde)
+
+- Les pistes du monde remesurent leur niveau à 5 puis 20 s, quand le relief fin arrive (`world/runways3d.ts`). `world-runway` et `hud-runway`
+  dormaient 21 s pour cela. Le jeu expose maintenant le nombre de mesures faites (`RunwayFrame.world.measured`, BH-API), et les deux tests
+  attendent la deuxième (60 s au plus). Relancés : `world-runway` 2/2, `hud-runway` 1/1. Garde : 73 → 71 pauses.
 

@@ -180,7 +180,7 @@ export interface RunwayFrame {
   flags: number;
   /** a world runway (src/world/runways3d.ts — PLAN-RADAR-AAA RD13): its airfield's code; its level being measured
    *  (left out of the grading meanwhile: the relief under it read bare) */
-  world?: { field: string; measuring: boolean };
+  world?: { field: string; measuring: boolean; measured?: number };
 }
 /** A runway as drawn [m] (trace.wgsl: runwayShade): the graded strip's paved middle, 4.5 km from its threshold. */
 export const RUNWAY_LENGTH = 4500;

@@ -135,10 +135,6 @@
   "sleeps": 0,
   "waits": 1
  },
- "hud-runway.e2e.test.ts": {
-  "sleeps": 1,
-  "waits": 0
- },
  "ils-runway.e2e.test.ts": {
   "sleeps": 1,
   "waits": 0
@@ -400,7 +396,7 @@
   "waits": 1
  },
  "world-runway.e2e.test.ts": {
-  "sleeps": 1,
+  "sleeps": 0,
   "waits": 1
  },
  "wreck-replay.e2e.test.ts": {

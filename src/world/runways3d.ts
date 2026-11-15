@@ -90,6 +90,8 @@ export function worldRunwaysUpdate(lat: number, lon: number, now: number, force 
     if ((k.measured === 0 && now - k.born > 5_000) || (k.measured === 1 && now - k.born > 20_000)) {
       k.frame.elev = k.frame.site.elev = measure(k.frame);
       k.measured++;
+      // (how many times measured, read by the tests that wait for the second — the finer relief's — rather than 21 s)
+      k.frame.world!.measured = k.measured;
       changed = true;
     }
   if (now - lastAt < 1500) return changed;
