@@ -9,6 +9,7 @@ export type CrewView =
   | "dash"
   | "pfd"
   | "nd"
+  | "approach"
   | "map"
   | "globe"
   | "radar"
@@ -38,7 +39,7 @@ export function profileOf(s: Pick<InstrumentSnapshot, "craft" | "caps" | "sys"> 
 /** Each profile's views, in their order: the F-35's tactical first (its mission, its flight, its sensors), the
  *  spacecraft's its orbit and its flight computer. */
 export const PROFILE_VIEWS: Record<CrewProfile, CrewView[]> = {
-  jet: ["air", "pfd", "nd", "radar", "map", "globe", "dash", "plan", "schematic", "telemetry"],
+  jet: ["air", "pfd", "nd", "approach", "radar", "map", "globe", "dash", "plan", "schematic", "telemetry"],
   space: ["sdash", "orbit", "system", "navball", "dock", "budget", "eecom", "timeline", "rel", "ground", "globe", "telemetry"],
 };
 

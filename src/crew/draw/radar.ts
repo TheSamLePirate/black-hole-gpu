@@ -4,6 +4,9 @@
 import { relative } from "../model";
 import { C, deg360, fmt, missileCue, type Pen, polar, SIDE, TAU, trailDots, unitSymbol, type Point, type Rect } from "./kit";
 import type { Scene } from "./scene";
+import { drawFields } from "../../world/runwaydraw";
+import { drawApproach } from "../../world/approach-draw";
+import { fieldShown, fieldsNearCached } from "../../world/runways";
 import { L } from "../lang";
 
 export interface RadarOpts {
@@ -11,7 +14,7 @@ export interface RadarOpts {
   north: boolean;
   sensor: boolean;
   selected: string | null;
-  pick?: (pt: Point, what: { slot?: number; contact?: string; wp?: number }) => void;
+  pick?: (pt: Point, what: { slot?: number; contact?: string; wp?: number; field?: string; approach?: string; rwy?: string }) => void;
 }
 
 interface Blip {
@@ -229,6 +232,36 @@ export function drawRadar(p: Pen, r: Rect, sc: Scene, o: RadarOpts) {
       align: "center",
       weight: 700,
     });
+  }
+  // the world's airfields and the approach (PLAN-APPROCHES AP6 — the crew's radar drew none): the fields a place to touch (their
+  // approach chosen), the approach engaged or chosen with its parts
+  if (own?.geo) {
+    const g0 = own.geo;
+    const at = (lat: number, lon: number): Point | null => {
+      const qq = polar(g0.lat, g0.lon, lat, lon);
+      if (qq.d > o.range * 1.05) return null;
+      const a = qq.b - up;
+      return [cx + Math.sin(a) * qq.d * k, cy - Math.cos(a) * qq.d * k];
+    };
+    c.save();
+    c.beginPath();
+    c.arc(cx, cy, R, 0, TAU);
+    c.clip();
+    drawFields(c, fieldsNearCached(`crad${o.range}`, g0.lat, g0.lon, o.range, (f) => fieldShown(f, o.range * 2.5)).slice(0, 60), {
+      at,
+      mpp: 1 / k,
+      labels: o.range <= 80_000,
+      hit: (f, x, y) => o.pick?.([x, y], { field: f.icao || f.ident }),
+    });
+    const A = sc.snap?.apprMap;
+    if (A)
+      drawApproach(c, A, {
+        at,
+        from: A.engaged ? [g0.lat, g0.lon] : undefined,
+        alt: (m) => fmt(u.alt(m)),
+        hit: (w, x, y) => o.pick?.([x, y], { field: A.field, ...w }),
+      });
+    c.restore();
   }
   // the blips, brightest just swept
   const inRange = blips.filter((b) => Math.hypot(b.e, b.n) <= o.range * 1.05);

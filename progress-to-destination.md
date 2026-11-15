@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-15 18:53 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-15 19:08 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous.
@@ -71,7 +71,7 @@ ouverts, sous 1 ms) ; J3 au stade du plan.**
 | Audit vagues 3–4 (1feb2f7f) | 4.8 découper `main()` | **fait** (accord de Sam : par petits lots) : lot 1 la persistance, lot 2 qui tient le vol (`session.ts`), lots 3–4 les étapes gardées (`frame.ts`, AR-03), lot 5 l'ordre §19.5 (AR-04), lot 6 `craft-feed.ts`, lot 7 `governor.ts` (confié par la session du rendu) — **fait** : les quatre découpes d'AR-12 (session, frame, gouverneur, poses de l'appareil) |
 | Audit vagues 3–4 (1feb2f7f) | 4.3 séparer `Settings` | **fait** : garde statique des réglages (AR-21) ; `ViewPose` et `SimState` figés une fois par image (AR-07, `view-pose.ts`) ; le renderer les lit (session du rendu, 77721acf) |
 | Audit vague 6 hors rendu (1feb2f7f) | QA-16, QA-18, AR-17, AR-18, réseau RD4/RD5, FX-18, FX-17, FX-07, QA-11 ; puis les FX hors vague : FX-08, FX-12, FX-14, FX-19 (tendance), FX-22, FX-13, FX-20 (FX-11 et FX-15 déjà réglés le 11 nov., FX-16 tranché par Sam) | **faits** (accord de Sam : « un autre lot d'audit hors rendu ») ; FX-17 en 3 lots ; FX-07 l'A320 à la manette ; QA-11 le catalogue 446/446 gardé ; FX-08 V par les vues de l'appareil seul ; FX-12 les touches collées ; FX-14 chaque appareil sa configuration ; FX-19 la tendance de vitesse sur le temps du vol ; FX-13 ⇧M au vol d'abord, FX-20 sans dégâts pour ce vol seulement (choix de Sam) ; e2e `report` 4/4 (sans les états périmés de la galerie) ; ensuite les autres FX hors vague ( FX-19 la fraîcheur des écrans, à mesurer ; FX-21 des fonctions à finir) |
-| PLAN-APPROCHES (1feb2f7f) | AP0a, AP1, AP2, AP0b, AP3, AP4, AP5, AP6a | **faits (15 nov.)** : nav.dat lié aux pistes ; le CIFP de la FAA (9 568 approches publiées des États-Unis, entières) ; l'approche choisie (état, choix auto par vent, aide, longueur, sens d'arrivée) ; la jonction planifiée (dans l'axe, ou vent arrière + base, jamais au-dessus du terrain, 300 m sur le relief, paliers jusqu'à la pente) — e2e `approach-auto` 5/5, `approach-join` 4/4 (Nice), sans navigateur 8/8 à Edwards. l'A320 vole la même jonction (e2e `a320-approach-join` 4/4). MCDU ARRIVAL/VIA, RAD NAV réel, arrivée publiée volée en NAV (KSFO via ARCHI, 20/20). l'approche au ND. la carte tactique (fiche, sélection au clic, tracé, profil — e2e jetmap-approach 3/3). le radar du HUD et la TSD (choix au clic et au toucher, approche dessinée — e2e radar-approach 3/3). le crew choisit et arme (e2e crew-approach 2/2). Suite : AP6b (radar crew, vue Approche, callouts) puis AP7 |
+| PLAN-APPROCHES (1feb2f7f) | AP0a, AP1, AP2, AP0b, AP3, AP4, AP5, AP6 | **faits (15 nov.)** : nav.dat lié aux pistes ; le CIFP de la FAA (9 568 approches publiées des États-Unis, entières) ; l'approche choisie (état, choix auto par vent, aide, longueur, sens d'arrivée) ; la jonction planifiée (dans l'axe, ou vent arrière + base, jamais au-dessus du terrain, 300 m sur le relief, paliers jusqu'à la pente) — e2e `approach-auto` 5/5, `approach-join` 4/4 (Nice), sans navigateur 8/8 à Edwards. l'A320 vole la même jonction (e2e `a320-approach-join` 4/4). MCDU ARRIVAL/VIA, RAD NAV réel, arrivée publiée volée en NAV (KSFO via ARCHI, 20/20). l'approche au ND. la carte tactique (fiche, sélection au clic, tracé, profil — e2e jetmap-approach 3/3). le radar du HUD et la TSD (choix au clic et au toucher, approche dessinée — e2e radar-approach 3/3). le crew choisit et arme (e2e crew-approach 2/2). radar et ND du crew, vue Approche, appels (crew-approach 5/5). Suite : AP7 (question Q2 à Sam) |
 
 **Fermé récemment** : J2 (13 nov., ΔGPU nul, chemin vers §8 écrit) ; J2-C BC7 étudiée puis **rangée** (Sam : « ne pas le faire maintenant »).
 
@@ -8112,4 +8112,25 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   - le contrôle de pente utilise 3° même pour un ILS publié à 4° (LFML 31R) : à revoir avec les pentes réelles (AP3 l'a
     reporté).
 - **Suite** : AP6b, puis AP7 (HUD « toutes les pistes », directeur de vol — poser Q2 à Sam).
+
+### 2026-11-15 19:08 UTC — PLAN-APPROCHES AP6b : l'approche au radar et au ND du crew, la vue « Approche », les appels
+
+- **Contribution** : §19 (l'équipage voit, choisit et suit l'approche comme le pilote) ; PLAN-APPROCHES §5.3 ; le dessin partagé
+  (`world/approach-draw.ts`) sur un quatrième écran, le profil désormais partagé aussi (`drawApproachProfile`, la carte tactique
+  le réutilise).
+- **Changements** :
+  - Instantané : `apprMap` (l'approche dessinée), lu par `readMapApproach` — nombres finis, listes bornées, mots coupés.
+  - Radar du crew : les terrains (il n'en dessinait aucun) et l'approche ; ND : l'approche. Toucher un terrain, un axe ou un
+    seuil la choisit (`app.select`, les pistes et contacts gardant la priorité).
+  - Vue « Approche » (`crew/draw/approach.ts`) : plan, mots et profil ; « relief max sous la finale » dit tel quel, pas une
+    MSA.
+  - Appels de l'approche tirés des phases de l'ILS dans l'instantané (alignement, glide, minimums sous 61 m, arrondi, toucher,
+    remise de gaz) : dits dans la console, le dernier gardé dans la boîte APP.
+- **Preuve** : e2e `crew-approach` **5/5** — l'approche de l'instantané (3 repères, 2 autres, profil de 26 points), la vue
+  Approche (capture), un clic réel sur LFML au radar du crew choisit LFML chez le pilote, sur la finale armé : « Glide capturé ».
+  Tests crew 139/139. **Trouvé** : un pointeur synthétique ne passe pas `setPointerCapture` (test passé au clic réel) ; armer
+  juste après un placement : l'ordre « jet » encore refusé quelques instants (le test l'attend).
+- **Limites** : pas de fiche complète au clic sur la carte ou le globe du crew ; la vue Approche ne montre pas l'avion hors de sa
+  fenêtre de 32 km ; les appels sont déduits côté console (pas la voix du pilote).
+- **Suite** : AP7 — HUD « toutes les pistes » et directeur de vol ; poser Q2 à Sam (touche, défaut).
 

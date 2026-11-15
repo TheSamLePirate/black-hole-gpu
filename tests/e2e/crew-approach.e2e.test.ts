@@ -8,8 +8,9 @@ import { App, E2E, stopServer } from "./lib/app";
 //
 // Done when: the crew's list has I31R (« ILS 31R · 111.15 · 4.0° · CAT I · nav.dat 2013 »); « Choose » sets the pilot's selection to
 // LFML I31R (its generation up); « Arm » engages the ILS on 31R (approachLast I31R); the crew's box reads « LFML I31R » chosen and
-// flown; « Cancel the ILS » ends it.
-// Duration: about 1 min (the boot, the room, the console joined; four orders).
+// flown; « Cancel the ILS » ends it; the crew's snapshot carries the approach drawn and its Approach view shows it; an airfield
+// tapped on the crew's radar chooses it on the pilot's side; on the final, armed, the crew is told « glideslope captured ».
+// Duration: about 1 min 30 (the boot, the room, the console joined; the orders; a few seconds of a final flown).
 
 describe.skipIf(!E2E)("the approach from the crew", () => {
   let app: App;
@@ -94,4 +95,68 @@ describe.skipIf(!E2E)("the approach from the crew", () => {
     await press("#mcp-ils-off");
     await app.waitFor(`!__bh.camera.ilsRun`, 5000);
   }, 60_000);
+
+  test("the approach drawn for the crew: in its snapshot; its Approach view — plan, fixes, profile", async () => {
+    await app.js(`(() => { __bh.camera.approachSelect({ field: "LFML", approach: "I31R" }); return 1; })()`);
+    await app.waitFor(`document.querySelector('#crew-frame').contentWindow.__crew.model.own()?.snapshot?.apprMap?.id === "I31R"`, 10_000);
+    const m = await app.js<{ fixes: number; others: number; ground: number }>(
+      `(() => { const A = document.querySelector('#crew-frame').contentWindow.__crew.model.own().snapshot.apprMap;
+        return { fixes: A.fixes.length, others: A.others.length, ground: A.profile.ground.length }; })()`,
+    );
+    console.log(`  the snapshot's approach: ${JSON.stringify(m)}`);
+    expect(m.fixes).toBeGreaterThan(1);
+    expect(m.ground).toBe(26);
+    await app.js(crew("__crew.setView('approach')"));
+    await Bun.sleep(1500);
+    if (shots) await app.shot(`${shots}/crew-approach-view.png`);
+  }, 30_000);
+
+  test("an airfield tapped on the crew's radar: its approach chosen on the pilot's side", async () => {
+    await app.js(`(() => { __bh.camera.approachSelect({ field: "auto" }); return 1; })()`);
+    await app.js(crew("__crew.setView('radar')"));
+    await app.waitFor(
+      `(document.querySelector('#crew-frame').contentWindow.__crew.views.picks ?? []).some((p) => p.field === "LFML")`,
+      10_000,
+    );
+    // (a real click — the page's mouse — on the field's dot: the frame's place, the canvas's, the dot's)
+    const q = await app.js<{
+      x: number;
+      y: number;
+    }>(`(() => { const F = document.querySelector('#crew-frame'), fr = F.getBoundingClientRect();
+      const V = F.contentWindow.__crew.views, b = V.canvas.getBoundingClientRect();
+      const p = V.picks.find((p) => p.field === "LFML" && !p.approach && !p.rwy).point;
+      return { x: fr.left + b.left + p[0], y: fr.top + b.top + p[1] }; })()`);
+    await app.mouse("move", q.x, q.y);
+    await app.mouse("down", q.x, q.y);
+    await app.mouse("up", q.x, q.y);
+    await app.waitFor(`__bh.camera.approachState().sel.field === "LFML"`, 8000);
+    if (shots) await app.shot(`${shots}/crew-approach-radar.png`);
+  }, 30_000);
+
+  test("the calls said to the crew: on the final, armed — « glideslope captured »", async () => {
+    // (12 km out on 31R's axis at its glideslope, heading in: the localizer and the glideslope met within seconds)
+    await app.js(`(() => { const D = Math.PI / 180; __bh.camera.approachSelect({ field: "LFML", approach: "I31R" });
+      const a = __bh.camera.approachMapData();
+      const back = (a.crs + 180) * D, d = 12000 / 6371000, la = a.thr.lat * D, lo = a.thr.lon * D;
+      const lat = Math.asin(Math.sin(la) * Math.cos(d) + Math.cos(la) * Math.sin(d) * Math.cos(back));
+      const lon = lo + Math.atan2(Math.sin(back) * Math.sin(d) * Math.cos(la), Math.cos(d) - Math.sin(la) * Math.sin(lat));
+      __bh.game.flyAt(lat / D, lon / D, 640, a.crs, 95); __bh.fleet.fuel.f35 = 3000; return 1; })()`);
+    await app.waitFor(`!!__bh.camera.geoNow() && __bh.camera.geoNow().gs > 60`, 10_000);
+    await app.js(crew("__crew.setView('pfd')"));
+    await app.waitFor(`!!${doc("#mcp-app-arm")}`, 5000);
+    // (the console allowed the flight's orders again — the craft just placed)
+    await app.waitFor(crew("__crew.actions.can('jet').ok"), 10_000);
+    await press("#mcp-app-arm");
+    await Bun.sleep(4000);
+    console.log(
+      `  armed on the final: ${JSON.stringify(await app.js(crew("__crew.actions.board[0]")))} · pilot ${await app.js<string>(`String(__bh.camera.ilsRun?.phase)`)} · crew ${await app.js<string>(`String(document.querySelector('#crew-frame').contentWindow.__crew.model.own()?.snapshot?.ils?.phase)`)}`,
+    );
+    await app.waitFor(
+      `/Glide capturé|Glideslope captured/.test(${doc("#notice")}.textContent + ${doc("#mcp-app-state")}.textContent)`,
+      40_000,
+    );
+    const said = await app.js<string>(`${doc("#mcp-app-state")}.textContent`);
+    console.log(`  the crew's box: ${said}`);
+    await press("#mcp-ils-off");
+  }, 90_000);
 });

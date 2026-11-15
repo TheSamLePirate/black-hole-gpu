@@ -486,6 +486,8 @@ export function crewSnapshot(
       mass: fin(i.mass),
     },
     ils: i.ils ? { id: i.ils.id, loc: i.ils.loc, gs: i.ils.gs, dme: i.ils.dme, phase: i.ils.phase } : null,
+    // (the approach drawn — the crew's radar, ND and Approach view — PLAN-APPROCHES AP6)
+    apprMap: c.approachMapData(),
     // (the approach chosen and the one flown — PLAN-APPROCHES AP6: the crew's APP box reads it)
     appr: ((S, L) => ({
       sel: { field: S.field, rwy: S.rwy, approach: S.approach, via: S.via },

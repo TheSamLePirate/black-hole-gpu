@@ -14,7 +14,7 @@ import { drawSym, PAL, type SymSide, sideFor, symColour } from "../radar/symbols
 import type { Settings } from "../settings";
 import { unitsFor } from "./unitsys";
 import { drawFields } from "../world/runwaydraw";
-import { drawApproach, type FieldCard, type MapApproach } from "../world/approach-draw";
+import { drawApproach, drawApproachProfile, type FieldCard, type MapApproach } from "../world/approach-draw";
 import { type Airfield, fieldShown, fieldsNearCached, RUNWAYS_CREDIT, runwaysEvents } from "../world/runways";
 
 /** What the map draws (main.ts gathers it from the controller). */
@@ -632,79 +632,19 @@ export class JetMap {
     return this.apprHits.slice();
   }
 
-  /** The approach's vertical profile in a band at the map's foot (AP4): the relief under the final, the 3° slope from the
-   *  threshold, the fixes at their altitudes, the craft where it is along the final — 25 km out to the runway. */
+  /** The approach's vertical profile in a band at the map's foot (AP4 — the shared drawing: world/approach-draw.ts). */
   private drawProfile(c: CanvasRenderingContext2D, d: JetMapData, w: number, h: number) {
-    const A = d.appr!;
-    const P = A.profile!;
     const U = unitsFor(this.s);
-    const bh = Math.round(h * 0.3),
-      y0 = h - bh - 18,
-      x0 = 8,
-      x1 = w - 8;
-    // (the craft along the final: its distance before the threshold [m], flat offsets)
-    const cosL = Math.cos((A.thr.lat * Math.PI) / 180);
-    const along = (lat: number, lon: number) => {
-      const e = (lon - A.thr.lon) * 111_320 * cosL,
-        n = (lat - A.thr.lat) * 111_320;
-      const cr = (A.crs * Math.PI) / 180;
-      return -(e * Math.sin(cr) + n * Math.cos(cr));
-    };
-    const L = 25_000;
-    const glide = (m: number) => P.elev + 15 + m * Math.tan((3 * Math.PI) / 180);
-    const top = Math.max(glide(L), ...P.ground, ...A.fixes.map((f) => f.alt?.[0] ?? f.alt?.[1] ?? 0), d.alt) * 1.1;
-    const X = (m: number) => x1 - ((x1 - x0) * Math.min(Math.max(m, 0), L)) / L;
-    const Y = (z: number) => y0 + bh - (bh * (z - Math.min(P.elev, 0))) / Math.max(top - Math.min(P.elev, 0), 1);
-    c.save();
-    c.fillStyle = "rgba(5, 9, 14, 0.82)";
-    c.strokeStyle = "rgba(95, 210, 255, 0.35)";
-    c.lineWidth = 1;
-    c.fillRect(x0, y0, x1 - x0, bh);
-    c.strokeRect(x0, y0, x1 - x0, bh);
-    // the relief
-    c.fillStyle = "rgba(150, 120, 80, 0.55)";
-    c.beginPath();
-    c.moveTo(X(0), y0 + bh);
-    P.ground.forEach((z, k) => c.lineTo(X(k * 1000), Y(z)));
-    c.lineTo(X(L), y0 + bh);
-    c.closePath();
-    c.fill();
-    // the slope (3°: the glide's, or the descent's)
-    c.strokeStyle = A.engaged ? "rgba(255, 92, 225, 0.9)" : "rgba(95, 230, 255, 0.9)";
-    c.lineWidth = 1.6;
-    c.beginPath();
-    c.moveTo(X(0), Y(glide(0)));
-    c.lineTo(X(L), Y(glide(L)));
-    c.stroke();
-    // the fixes at their altitudes
-    c.font = "600 10px Rajdhani, sans-serif";
-    c.textAlign = "center";
-    c.fillStyle = c.strokeStyle;
-    for (const F of A.fixes) {
-      const m = along(F.lat, F.lon);
-      if (m < 0 || m > L) continue;
-      const z = F.alt?.[0] ?? F.alt?.[1] ?? null;
-      const x = X(m);
-      c.beginPath();
-      c.moveTo(x, y0 + bh);
-      c.lineTo(x, z !== null ? Y(z) : y0 + 4);
-      c.setLineDash([2, 3]);
-      c.stroke();
-      c.setLineDash([]);
-      c.fillText(F.name, x, y0 + 12);
-      if (z !== null) c.fillText(`${Math.round(U.alt(z))}`, x, Y(z) - 4);
-    }
-    // the craft
-    const m = along(d.lat, d.lon);
-    if (m > 0 && m < L) {
-      c.fillStyle = "#ffffff";
-      c.beginPath();
-      c.arc(X(m), Y(d.alt), 4, 0, 2 * Math.PI);
-      c.fill();
-    }
-    c.fillStyle = "rgba(220, 240, 250, 0.85)";
-    c.textAlign = "left";
-    c.fillText(`${A.id} · ${U.dist(L).toFixed(0)} ${U.distName} → ${A.rwy} · ${U.altName}`, x0 + 4, y0 + bh - 4);
-    c.restore();
+    const bh = Math.round(h * 0.3);
+    drawApproachProfile(
+      c,
+      d.appr!,
+      { x: 8, y: h - bh - 18, w: w - 16, h: bh },
+      { lat: d.lat, lon: d.lon, alt: d.alt },
+      {
+        alt: (m) => `${Math.round(U.alt(m))}`,
+        label: `${U.dist(25_000).toFixed(0)} ${U.distName} · ${U.altName}`,
+      },
+    );
   }
 }

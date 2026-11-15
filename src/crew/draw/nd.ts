@@ -1,6 +1,7 @@
 // The navigation display: the compass's arc (heading up) or rose (north up), the plan's legs and points, the path
 // predicted, the descent's top, the wind, and everything about — the players, the real traffic (TCAS's diamonds and
 // their relative heights), a mission's units, the ships, the zones, the pilot's own radar tracks.
+import { drawApproach } from "../../world/approach-draw";
 import { drawFields } from "../../world/runwaydraw";
 import { fieldShown, fieldsNearCached } from "../../world/runways";
 import { relative } from "../model";
@@ -32,7 +33,7 @@ export interface NdOpts {
   arc: boolean;
   sensor: boolean;
   /** what can be picked: a player's slot, a contact's id */
-  pick?: (pt: Point, what: { slot?: number; contact?: string; wp?: number }) => void;
+  pick?: (pt: Point, what: { slot?: number; contact?: string; wp?: number; field?: string; approach?: string; rwy?: string }) => void;
 }
 
 /** the display in r; its geometry back (the craft's place on it, pixels a metre, the bearing up) for the touches */
@@ -84,7 +85,19 @@ export function drawNd(p: Pen, r: Rect, sc: Scene, o: NdOpts): { cx: number; cy:
       mpp: 1 / k,
       labels: true,
       marked: new Set((snap?.route ?? []).map((q) => q.name.toUpperCase())),
+      // (each a place to touch: its approach chosen — PLAN-APPROCHES AP6)
+      hit: (f, x, y) => o.pick?.([x, y], { field: f.icao || f.ident }),
     });
+  // the approach engaged or chosen (PLAN-APPROCHES AP6 — the pilot's: its axis, fixes, join, missed approach); its parts to touch
+  if (geo && snap?.apprMap) {
+    const A = snap.apprMap;
+    drawApproach(c, A, {
+      at,
+      from: A.engaged ? [geo.lat, geo.lon] : undefined,
+      alt: (m) => fmt(u.alt(m)),
+      hit: (w, x, y) => o.pick?.([x, y], { field: A.field, ...w }),
+    });
+  }
   // the mission's zones, the SAMs' reach
   for (const z of sc.zones) {
     const q = at(z.lat, z.lon);

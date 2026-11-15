@@ -333,10 +333,20 @@ const NOTES: Record<CrewView, [string, string]> = {
     "Horizon, rubans vitesse et altitude, cap, modes du pilote automatique",
     "Horizon, speed and altitude tapes, heading, autopilot modes",
   ],
-  nd: ["Pincer pour la portée · toucher un joueur ou un contact", "Pinch for the range · tap a player or a contact"],
+  nd: [
+    "Pincer pour la portée · toucher un joueur, un contact ou un terrain (son approche)",
+    "Pinch for the range · tap a player, a contact or an airfield (its approach)",
+  ],
+  approach: [
+    "L'approche choisie ou volée, comme une carte d'approche : vue en plan, repères, profil",
+    "The approach chosen or flown, as an approach chart: plan view, fixes, profile",
+  ],
   map: ["Glisser pour déplacer · pincer pour zoomer · toucher un joueur", "Drag to move · pinch to zoom · tap a player"],
   globe: ["Glisser pour tourner · pincer pour zoomer", "Drag to turn · pinch to zoom"],
-  radar: ["Pincer pour la portée · toucher un contact", "Pinch for the range · tap a contact"],
+  radar: [
+    "Pincer pour la portée · toucher un contact, ou un terrain (son approche)",
+    "Pinch for the range · tap a contact, or an airfield (its approach)",
+  ],
   schematic: ["Glisser pour faire défiler les systèmes", "Drag to scroll the systems"],
   plan: ["Profil vertical et branches · glisser pour faire défiler", "Vertical profile and legs · drag to scroll"],
   telemetry: [
@@ -689,6 +699,7 @@ const ICONS: Record<CrewView, string> = {
   dash: '<rect x="3" y="3" width="8" height="8" rx="2"/><rect x="13" y="3" width="8" height="5" rx="2"/><rect x="13" y="10" width="8" height="11" rx="2"/><rect x="3" y="13" width="8" height="8" rx="2"/>',
   pfd: '<circle cx="12" cy="12" r="9"/><path d="M3 13h18M8 12h-3M19 12h-3M10 12l2 2 2-2"/>',
   nd: '<path d="M4 18a9 9 0 0 1 16 0"/><path d="M12 18l-2.5-6L12 4l2.5 8z"/>',
+  approach: '<path d="M4 20h16"/><path d="M12 20V9"/><path d="M5 6l7 3 7-3"/>',
   map: '<path d="M3 6l6-2 6 2 6-2v14l-6 2-6-2-6 2z"/><path d="M9 4v14M15 6v14"/>',
   globe: '<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3 3 3 15 0 18M12 3c-3 3-3 15 0 18"/>',
   radar: '<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><path d="M12 12l6-6"/>',
@@ -1154,6 +1165,44 @@ function buildMcp() {
     apprState,
   );
   fillVias();
+  // (the approach's calls — PLAN-APPROCHES AP6: the ILS's phases on the pilot's instruments said to the crew as they change —
+  // the localizer, the glideslope, the minimums, the flare, the touchdown, a go-around; the last kept in the box)
+  let callPhase = "";
+  let callMins = false;
+  let lastCall = "";
+  const CALLS: [RegExp, [string, string]][] = [
+    [/^intercept$/, ["Interception de l'alignement", "Intercepting the localizer"]],
+    [/^LOC(?!\*)/, ["Alignement capturé", "Localizer captured"]],
+    [/^final$|\/G\/S$/, ["Glide capturé", "Glideslope captured"]],
+    [/^hold$/, ["En attente", "Holding"]],
+    [/^flare$|^FLARE/, ["Arrondi", "Flare"]],
+    [/^rollout$|^ROLL OUT/, ["Toucher", "Touchdown"]],
+    [/^missed$/, ["Remise de gaz", "Go around"]],
+  ];
+  setInterval(() => {
+    const snap = snapNow();
+    const I = snap?.ils;
+    const ph = I?.phase ?? "";
+    if (!I) {
+      callPhase = "";
+      callMins = false;
+      return;
+    }
+    if (ph !== callPhase) {
+      const hit = CALLS.find(([re]) => re.test(ph) && !re.test(callPhase));
+      callPhase = ph;
+      if (hit) {
+        lastCall = L(...hit[1]);
+        notice(`${L("Approche", "Approach")} · ${lastCall}`);
+      }
+    }
+    const agl = snap?.flight?.agl;
+    if (!callMins && /^final$|G\/S|LAND/.test(ph) && typeof agl === "number" && agl < 61) {
+      callMins = true;
+      lastCall = L("Minimums", "Minimums");
+      notice(`${L("Approche", "Approach")} · ${lastCall}`);
+    }
+  }, 250);
   // (what is chosen — its generation — and what was flown, and why: read from the pilot's instruments)
   setInterval(() => {
     const A = snapNow()?.appr;
@@ -1164,7 +1213,7 @@ function buildMcp() {
         ? L("auto", "auto")
         : `${s.field} ${s.approach !== "auto" ? s.approach : s.rwy !== "auto" ? s.rwy : L("(auto)", "(auto)")}${s.via !== "auto" ? ` · ${s.via === "none" ? L("guidage", "vectors") : s.via}` : ""}`;
     const flown = A.flown ? ` — ${L("volée", "flown")} : ${A.flown.why}` : "";
-    apprState.textContent = `${L("Choisie", "Chosen")} : ${chosen}${flown}`;
+    apprState.textContent = `${L("Choisie", "Chosen")} : ${chosen}${flown}${lastCall ? ` · ${lastCall}` : ""}`;
   }, 1000);
   app.append(appBox);
   const modes = document.createElement("details");
@@ -2151,6 +2200,15 @@ views.onGround = (at, x, y) => {
         ]
       : []),
   ]);
+};
+// (an airfield, an approach or its threshold touched on the radar or the ND: the approach chosen there — PLAN-APPROCHES AP6, the
+// same action as the APP box's)
+views.onApproach = (what) => {
+  void fire(null, "app.select", {
+    field: what.field.slice(0, 12),
+    ...(what.approach ? { approach: what.approach.slice(0, 12) } : {}),
+    ...(what.rwy ? { rwy: what.rwy.slice(0, 8) } : {}),
+  });
 };
 views.onContact = (id, x = stage.clientWidth / 2, y = stage.clientHeight / 2) => {
   views.selectedContact = id;

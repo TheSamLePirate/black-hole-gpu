@@ -279,3 +279,86 @@ export function approachText(a: Approach): string {
   if (a.approx) parts.push("≈");
   return parts.join(" · ");
 }
+
+/**
+ * The approach's vertical profile (PLAN-APPROCHES AP4, AP6 — the tactical map's band, the crew's Approach view): the relief under
+ * the final, the 3° slope from the threshold, the fixes at their altitudes, the craft where it is along the final — 25 km out to
+ * the runway, the runway on the right.
+ */
+export function drawApproachProfile(
+  c: Ctx,
+  A: MapApproach,
+  box: { x: number; y: number; w: number; h: number },
+  craft: { lat: number; lon: number; alt: number } | null,
+  o: { alt: (m: number) => string; label: string; k?: number },
+) {
+  const P = A.profile;
+  if (!P) return;
+  const k = o.k ?? 1;
+  const { x: x0, y: y0, w: bw, h: bh } = box;
+  const x1 = x0 + bw;
+  // (a place's distance before the threshold along the final [m], flat offsets)
+  const cosL = Math.cos((A.thr.lat * Math.PI) / 180);
+  const along = (lat: number, lon: number) => {
+    const e = (lon - A.thr.lon) * 111_320 * cosL,
+      n = (lat - A.thr.lat) * 111_320;
+    const cr = (A.crs * Math.PI) / 180;
+    return -(e * Math.sin(cr) + n * Math.cos(cr));
+  };
+  const L = 25_000;
+  const glide = (m: number) => P.elev + 15 + m * Math.tan((3 * Math.PI) / 180);
+  const top = Math.max(glide(L), ...P.ground, ...A.fixes.map((f) => f.alt?.[0] ?? f.alt?.[1] ?? 0), craft?.alt ?? 0) * 1.1;
+  const base = Math.min(P.elev, 0);
+  const X = (m: number) => x1 - (bw * Math.min(Math.max(m, 0), L)) / L;
+  const Y = (z: number) => y0 + bh - (bh * (z - base)) / Math.max(top - base, 1);
+  c.save();
+  c.fillStyle = "rgba(5, 9, 14, 0.82)";
+  c.strokeStyle = "rgba(95, 210, 255, 0.35)";
+  c.lineWidth = 1 * k;
+  c.fillRect(x0, y0, bw, bh);
+  c.strokeRect(x0, y0, bw, bh);
+  c.fillStyle = "rgba(150, 120, 80, 0.55)";
+  c.beginPath();
+  c.moveTo(X(0), y0 + bh);
+  P.ground.forEach((z, i) => c.lineTo(X(i * 1000), Y(z)));
+  c.lineTo(X(L), y0 + bh);
+  c.closePath();
+  c.fill();
+  const col = A.engaged ? "rgba(255, 92, 225, 0.9)" : "rgba(95, 230, 255, 0.9)";
+  c.strokeStyle = col;
+  c.lineWidth = 1.6 * k;
+  c.beginPath();
+  c.moveTo(X(0), Y(glide(0)));
+  c.lineTo(X(L), Y(glide(L)));
+  c.stroke();
+  c.font = `600 ${10 * k}px Rajdhani, sans-serif`;
+  c.textAlign = "center";
+  c.fillStyle = col;
+  for (const F of A.fixes) {
+    const m = along(F.lat, F.lon);
+    if (m < 0 || m > L) continue;
+    const z = F.alt?.[0] ?? F.alt?.[1] ?? null;
+    const x = X(m);
+    c.beginPath();
+    c.moveTo(x, y0 + bh);
+    c.lineTo(x, z !== null ? Y(z) : y0 + 4 * k);
+    c.setLineDash([2 * k, 3 * k]);
+    c.stroke();
+    c.setLineDash([]);
+    c.fillText(F.name, x, y0 + 12 * k);
+    if (z !== null) c.fillText(o.alt(z), x, Y(z) - 4 * k);
+  }
+  if (craft) {
+    const m = along(craft.lat, craft.lon);
+    if (m > 0 && m < L) {
+      c.fillStyle = "#ffffff";
+      c.beginPath();
+      c.arc(X(m), Y(craft.alt), 4 * k, 0, 2 * Math.PI);
+      c.fill();
+    }
+  }
+  c.fillStyle = "rgba(220, 240, 250, 0.85)";
+  c.textAlign = "left";
+  c.fillText(`${A.id} → ${A.rwy} · ${o.label}`, x0 + 4 * k, y0 + bh - 4 * k);
+  c.restore();
+}

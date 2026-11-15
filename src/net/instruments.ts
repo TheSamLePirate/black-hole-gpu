@@ -1,6 +1,7 @@
 // A display-only snapshot for the independent crew page. SI, degrees for geographic coordinates,
 // radians for angles (heading, attitude, track); radar offsets east/north/up in metres. No dependency on the simulator.
 // Version 1 grows only by optional blocks: an older console ignores them, a newer one shows what an older pilot sends.
+import type { MapApproach } from "../world/approach-draw";
 import { type InstrumentSpace, readSpace } from "./instruments-space";
 import { type PicBlock, readPicBlock } from "./picture";
 export const INSTRUMENT_KEYS = ["alt", "speed", "vz", "g", "q", "mach", "heat", "throttle", "fuel", "tau"] as const;
@@ -165,6 +166,8 @@ export interface InstrumentSnapshot extends InstrumentSpace {
   ils?: { id: string; loc: number | null; gs: number | null; dme: number; phase: string } | null;
   /** the approach chosen (PLAN-APPROCHES AP6): the selection — each part « auto » or named — and its generation; what was last
    *  flown (the airfield, the approach, its kind and source, why) */
+  /** the approach drawn (PLAN-APPROCHES AP6: world/approach-draw.ts MapApproach — the crew's radar, ND, Approach view) */
+  apprMap?: MapApproach | null;
   appr?: {
     sel: { field: string; rwy: string; approach: string; via: string };
     gen: number;
@@ -420,6 +423,7 @@ export function readInstruments(x: unknown): InstrumentSnapshot | null {
     nav: readNav(x.nav),
     sys: readSystems(x.sys),
     ils: ils ? { id: label(ils.id, 32), loc: opt(ils.loc), gs: opt(ils.gs), dme: ils.dme as number, phase: label(ils.phase, 16) } : null,
+    apprMap: readMapApproach(x.apprMap),
     appr:
       ap && apSel
         ? {
@@ -524,5 +528,50 @@ export function readInstruments(x: unknown): InstrumentSnapshot | null {
           .map((w) => label(w, 16))
           .filter(Boolean)
       : [],
+  };
+}
+
+/** The approach drawn, read from a pilot's instruments (PLAN-APPROCHES AP6): its numbers finite, its lists bounded, its words cut. */
+export function readMapApproach(x: unknown): MapApproach | null {
+  if (!record(x) || !record(x.thr) || !finite(x.thr.lat) || !finite(x.thr.lon) || !finite(x.crs)) return null;
+  const ll = (p: unknown): [number, number] | null =>
+    Array.isArray(p) && finite(p[0]) && finite(p[1]) && Math.abs(p[0]) <= 90 && Math.abs(p[1]) <= 180 ? [p[0], p[1]] : null;
+  const lls = (a: unknown, n: number) =>
+    Array.isArray(a)
+      ? a
+          .slice(0, n)
+          .map(ll)
+          .filter((p): p is [number, number] => !!p)
+      : [];
+  const alt = (a: unknown): [number | null, number | null] | undefined =>
+    Array.isArray(a) ? [finite(a[0]) ? a[0] : null, finite(a[1]) ? a[1] : null] : undefined;
+  const roles = ["IAF", "IF", "FAF", "MAP", "fix"] as const;
+  const fixes = (Array.isArray(x.fixes) ? x.fixes : []).slice(0, 24).flatMap((f: unknown) => {
+    if (!record(f) || !finite(f.lat) || !finite(f.lon)) return [];
+    const role = roles.includes(f.role as (typeof roles)[number]) ? (f.role as (typeof roles)[number]) : "fix";
+    const a = alt(f.alt);
+    return [{ name: label(f.name, 8), lat: f.lat, lon: f.lon, ...(a ? { alt: a } : {}), role }];
+  });
+  const others = (Array.isArray(x.others) ? x.others : []).slice(0, 16).flatMap((o: unknown) => {
+    if (!record(o) || !record(o.thr) || !finite(o.thr.lat) || !finite(o.thr.lon) || !finite(o.crs)) return [];
+    return [{ id: label(o.id, 12), rwy: label(o.rwy, 4), label: label(o.label, 48), thr: { lat: o.thr.lat, lon: o.thr.lon }, crs: o.crs }];
+  });
+  const H = record(x.hold) && finite(x.hold.lat) && finite(x.hold.lon) && finite(x.hold.crs) ? x.hold : null;
+  const P = record(x.profile) && finite(x.profile.elev) && Array.isArray(x.profile.ground) ? x.profile : null;
+  return {
+    id: label(x.id, 12),
+    field: label(x.field, 12),
+    rwy: label(x.rwy, 4),
+    label: label(x.label, 48),
+    thr: { lat: x.thr.lat, lon: x.thr.lon },
+    crs: x.crs,
+    cone: x.cone === true,
+    fixes,
+    missed: lls(x.missed, 16),
+    hold: H ? { lat: H.lat as number, lon: H.lon as number, crs: H.crs as number, right: H.right !== false } : null,
+    join: lls(x.join, 8),
+    engaged: x.engaged === true,
+    profile: P ? { elev: P.elev as number, ground: (P.ground as unknown[]).slice(0, 26).map((z) => (finite(z) ? z : 0)) } : null,
+    others,
   };
 }

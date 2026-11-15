@@ -7,6 +7,7 @@ import { unitsOf, type UnitSys } from "../ui/unitsys";
 import { C, clamp, Pen, type Point, type Rect } from "./draw/kit";
 import { Smoother, targets, type Scene } from "./draw/scene";
 import { drawPfd } from "./draw/pfd";
+import { drawApproachView } from "./draw/approach";
 import { drawNd } from "./draw/nd";
 import { drawGeo } from "./draw/geo";
 import { wgs84Direct } from "../system/ellipsoid";
@@ -45,6 +46,7 @@ const VIEW_WORDS: Record<CrewView, [string, string]> = {
   dash: ["Tableau", "Dashboard"],
   pfd: ["Vol", "Flight"],
   nd: ["Navigation", "Navigation"],
+  approach: ["Approche", "Approach"],
   map: ["Carte", "Map"],
   globe: ["Globe", "Globe"],
   radar: ["Radar", "Radar"],
@@ -55,7 +57,18 @@ const VIEW_WORDS: Record<CrewView, [string, string]> = {
 /** a view's name in the console's language */
 export const viewName = (v: CrewView) => L(...VIEW_WORDS[v]);
 const wrap = (a: number) => ((((a + 180) % 360) + 360) % 360) - 180;
-type Pick = { point: Point; slot?: number; contact?: string; wp?: number; view?: CrewView; r?: Rect };
+type Pick = {
+  point: Point;
+  slot?: number;
+  contact?: string;
+  wp?: number;
+  view?: CrewView;
+  r?: Rect;
+  /** an airfield, an approach's axis or threshold (PLAN-APPROCHES AP6) */
+  field?: string;
+  approach?: string;
+  rwy?: string;
+};
 type Where = { lat: number; lon: number };
 
 /** The scopes' ranges [m]: the game's radars' steps (2 … 320 km), then the space's (1 000, 10 000 km) — PLAN-RADAR-AAA P11. */
@@ -143,6 +156,8 @@ export class CrewViews {
   onSelect: (slot: number) => void = () => {};
   onInspect: () => void = () => {};
   onContact: (id: string, x?: number, y?: number) => void = () => {};
+  /** an airfield, an approach or a threshold touched on the radar or the ND: the approach chosen there (PLAN-APPROCHES AP6) */
+  onApproach: (what: { field: string; approach?: string; rwy?: string }) => void = () => {};
   onOpen: (view: CrewView) => void = () => {};
   /** the flight plan touched (PLAN-CREW-ACTIONS A2): a waypoint (its index, where on the screen), the ground (where
    *  on the Earth, where on the screen), a waypoint dragged to a new place */
@@ -277,11 +292,18 @@ export class CrewViews {
         const row = this.picks.find(
           (p) => p.wp !== undefined && p.r && x >= p.r.x && x <= p.r.x + p.r.w && y >= p.r.y && y <= p.r.y + p.r.h,
         );
-        const near = this.nearest(x, y, 26, (p) => !p.view && !p.r);
+        // (a player, a contact, a point first; an airfield or an approach's part — AP6 — only where none is near)
+        const near = this.nearest(x, y, 26, (p) => !p.view && !p.r && !p.field) ?? this.nearest(x, y, 26, (p) => !!p.field);
         const panel = this.picks.find((p) => p.view && p.r && x >= p.r.x && x <= p.r.x + p.r.w && y >= p.r.y && y <= p.r.y + p.r.h);
         if (row) this.onWp(row.wp!, x, y);
         else if (near?.slot !== undefined) this.onSelect(near.slot);
         else if (near?.contact) this.onContact(near.contact, x, y);
+        else if (near?.field)
+          this.onApproach({
+            field: near.field,
+            ...(near.approach ? { approach: near.approach } : {}),
+            ...(near.rwy ? { rwy: near.rwy } : {}),
+          });
         else if (near?.wp !== undefined) this.onWp(near.wp, x, y);
         else if (panel?.view) this.onOpen(panel.view);
         else if (this.view === "map" || this.view === "nd" || this.view === "ground") {
@@ -482,7 +504,7 @@ export class CrewViews {
     this.picks = [];
     const sc = this.scene();
     const r: Rect = { x: 8, y: 8, w: this.W - 16, h: this.H - 16 };
-    const pick = (point: Point, what: { slot?: number; contact?: string; wp?: number }) => this.picks.push({ point, ...what });
+    const pick = (point: Point, what: Omit<Pick, "point">) => this.picks.push({ point, ...what });
     this.unproject = null;
     if (this.follow && sc.own?.geo) {
       this.lat = sc.own.geo.lat;
@@ -541,6 +563,10 @@ export class CrewViews {
       case "pfd":
         p.panel(r);
         drawPfd(p, r, sc);
+        break;
+      case "approach":
+        // (the approach chosen or flown as a chart — PLAN-APPROCHES AP6)
+        drawApproachView(p, r, sc);
         break;
       case "nd": {
         const g = drawNd(p, r, sc, { range: this.range, north: this.north, arc: r.h > 300 && !this.north, sensor: this.sensor, pick });
