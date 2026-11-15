@@ -7692,3 +7692,21 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
 - Limites : rien de livré au joueur ; le levier forçait le rythme de `post.wgsl` par la clé du tune (faux une image sur quatre).
 - Suite : J5-6 — `shadeLite` à demi-rythme (groupes de 32 fils, le voisin marqué `RASTER_STALE` sans être classé), le rythme de l'image
   donné à `post.wgsl`, l'eau laissée tenue hors du miroir.
+
+### 2026-11-15 10:31 UTC — PLAN-APPROCHES écrit (analyse) : pourquoi l'AP ILS prend la mauvaise approche de loin, et le plan AAA des approches
+
+- Contribution : la stratégie §19 (« préserver toute l'expérience » : l'atterrissage, les instruments, le crew, TARS sur les mêmes
+  actions métier). Pas de rendu touché. Le plan est à mener par la session de l'audit (1feb2f7f).
+- Fait : [docs/PLAN-APPROCHES.md](docs/PLAN-APPROCHES.md) et sa ligne dans [docs/README.md](docs/README.md). Les décisions de Sam
+  du 15 nov. y sont reprises : faire comme FlightGear, rien de payant ; toutes les pistes ; le directeur de vol en plus de l'AP ;
+  toutes les pistes au HUD par une option du Labo, la roue et une touche ; les approches tracées sur la carte et le radar.
+- Diagnostic, par lecture du code. La piste « auto » ignore le sens d'arrivée : par beau temps, c'est toujours la première
+  extrémité (`landingEnd`, `game/sites.ts:369`). La rejointe va en direct sur un IAF fixe à 18,5 km, d'où un survol du terrain
+  et un demi-tour (`game/ils.ts:255-282`). Le relief n'est pas vérifié hors de la finale. La descente n'est pas planifiée. Et
+  au passage de l'IAF, le plan de vol rechoisit la piste (`controller/fplan.ts:192`).
+- Mesure (en lecture seule, ni test ni e2e) : `nav.dat` de FlightGear (GPL v2+, cycle 2013.10) croisé avec
+  `assets/runways/v1`. Sur 3 501 localizers, 2 845 se rattachent tels quels (81 %), 582 tombent sur des pistes renumérotées
+  depuis et 74 sur des terrains fermés. L'écart d'axe médian est de 0,12°.
+- FlightGear est cloné à côté du dépôt pour référence (`../flightgear`, et `../fgdata` limité à Navaids).
+- Non vérifié : la licence de redistribution du FAA CIFP (lot AP0) ; aucun vol lancé.
+- Suite : AP0 (données) puis AP1 (choix automatique et état de l'approche choisie), AP2 (planificateur et F-35).
