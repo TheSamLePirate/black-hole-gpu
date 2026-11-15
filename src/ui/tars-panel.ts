@@ -23,6 +23,7 @@ import { MODE_WORDS, type Mode, type Suggestion } from "../ai/commands";
 import { checkDeepgramKey, deepgramKey } from "../ai/deepgram";
 import { earKeyLine } from "./ear-key";
 import { type SettingsTabHost, TarsSettingsTab } from "./tars/settings-tab";
+import { exchangeLabel, rememberAsked, stepAsked } from "./tars-panel-pure";
 
 export interface TarsPanelHost {
   /** a question asked */
@@ -100,7 +101,6 @@ const KIND_WORDS: Record<string, Text> = {
 const POS_KEY = "kerr.tars.console";
 /** the questions asked, for ↑ ↓ (C2) */
 const HISTORY_KEY = "kerr.tars.asked";
-const HISTORY_MAX = 60;
 
 /** the tools whose result is for him, not the pilot: their step shown without it */
 const QUIET = new Set([
@@ -438,11 +438,12 @@ export class TarsPanel {
       // (↑ ↓: the questions asked before — C2)
       if ((e.key === "ArrowUp" || e.key === "ArrowDown") && !this.keyMode && this.asked.length) {
         const up = e.key === "ArrowUp";
-        if (this.askedAt < 0 && !up) return;
-        if (this.askedAt < 0) this.draft = this.input.value;
+        if (this.askedAt < 0 && up) this.draft = this.input.value;
+        const step = stepAsked(this.asked, this.askedAt, up, this.draft);
+        if (!step) return;
         e.preventDefault();
-        this.askedAt = up ? Math.min(this.asked.length - 1, this.askedAt + 1) : this.askedAt - 1;
-        this.input.value = this.askedAt < 0 ? this.draft : this.asked[this.asked.length - 1 - this.askedAt]!;
+        this.askedAt = step.at;
+        this.input.value = step.text;
         return;
       }
       if (e.key === "Escape") {
@@ -489,11 +490,7 @@ export class TarsPanel {
       return;
     }
     if (!q) return this.close();
-    if (this.asked.at(-1) !== q) {
-      this.asked.push(q);
-      this.asked.splice(0, Math.max(0, this.asked.length - HISTORY_MAX));
-      store.setJSON(HISTORY_KEY, this.asked);
-    }
+    if (rememberAsked(this.asked, q)) store.setJSON(HISTORY_KEY, this.asked);
     this.host.ask(q);
   }
 
@@ -820,8 +817,7 @@ export class TarsPanel {
     for (const t of m.turns.slice(-7, -1)) {
       const li = el("li");
       // (a waking of his own: what woke him, not his instruction to himself)
-      const woke = /^\[Woken by your [^—]*— (.*?)\. No pilot/.exec(t.user);
-      li.append(el("span", "tp-h-you", woke ? `⚡ ${woke[1]}` : t.user), el("span", "tp-h-tars", t.tars || "—"));
+      li.append(el("span", "tp-h-you", exchangeLabel(t.user)), el("span", "tp-h-tars", t.tars || "—"));
       this.history.append(li);
     }
     this.history.scrollTop = this.history.scrollHeight;

@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-15 07:53 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-15 07:59 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous.
@@ -35,7 +35,7 @@ les preuves restent dans les entrées datées du journal, dessous.
 | Machine | GPU p50 mesuré | Cible | Plus gros poste |
 |---|---:|---:|---|
 | kerr-mini | **~48 ms (15 nov., l'eau et sa finition à demi-rythme — J5-5, A/B : 48,1 contre 55,6)** ; 52,0 ms (984e821d, l'eau seule) ; 58,4 ms (5c420e09, 13 nov.) ; **56,3 ms avec l'eau E1** (A/B, 13 nov.) ; **57,3 ms le 15 nov.** (0bb2aa86, un vol, après les corrections de J3) | 40 ms (25 images/s régulières) | l'eau : 16,2 ms ; sans son matériau −13,0 ms (−10,1 avec E1) |
-| M1 Max | 22,5 ms, **frais** (12 nov., 98–100 °C) — non valable comme palier ; **15 nov., borné à 30 : beau temps 21,3 / 21,4 ms tenu soutenu ; orage 28,6 en vol, décroche en soutenu (14,6 images/s, 986 MHz) — chaleur héritée : parti froid, l'orage tient 30 soutenu (27,9 ms)** | 16,7 ms (60 images/s), bornée et soutenue | l'eau : 5,3 ms pour une enveloppe de 1,0 |
+| M1 Max | 22,5 ms, **frais** (12 nov., 98–100 °C) — non valable comme palier ; **15 nov., borné à 30 avec l'eau à demi-rythme : 19,1 ms en vol, 23,1 soutenu, 30 images/s tenues** ; avant : beau temps 21,3 / 21,4 ms tenu soutenu ; orage 28,6 en vol, décroche en soutenu (14,6 images/s, 986 MHz) — chaleur héritée : parti froid, l'orage tient 30 soutenu (27,9 ms)** | 16,7 ms (60 images/s), bornée et soutenue | l'eau : 5,3 ms pour une enveloppe de 1,0 |
 
 **L'ordre décidé** (stratégie §24) : l'eau étagée (surface → éclairage → reflets) → la classification de l'écran par tuiles et les lancements
 indirects → J3 (lumière, cockpit). **Au 13 nov. : l'eau étagée et la classification closes (E1, E2, tuiles de l'eau faits ; E3 et le lot 2 non
@@ -7488,4 +7488,21 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   Hohmann (une poussée pour intercepter, deux pour rejoindre). `fc` et `kepler` 10/10.
 - Vérifié dans le jeu (sonde e2e, non commitée) : le calculateur ouvert par l'outil `show_screen` de TARS, ses onglets dessinés, aucune
   erreur de page.
+
+### 2026-11-15 08:05 UTC — J5-6 : le plafond du sol à demi-rythme (~2,3 ms) ; le M1 Max à 19,1 ms
+
+- Contribution à la destination : le prochain poste chiffré (règle 1) ; le palier du M1 Max relu avec l'eau à demi-rythme.
+- Réalisé : levier de mesure `TUNE_LITE_HALF_TILES` (shadeLite, une tuile sur deux sautée entière) et ablation J0 `liteHalfTiles` ; lot J5-6
+  inscrit dans PLAN-J5 ; J0 borné à 30 sur ce Mac.
+- Preuves (mesuré) : kerr-mini — `earth lite` 3,8 → 2,0 ms, sa lumière 1,3 → 0,8 (le total −7 ms compte aussi l'eau non marquée) ; M1 Max —
+  vol 19,1 ms, soutenu 23,1, 30 images/s tenues.
+- Limites : J5-6 non ouvert (refonte du noyau du sol, risque sur le détail en mouvement) ; J0 reste à ~48 ms sur le mini pour 40.
+- Suite : J5-6, puis les arbitrages d'image (PLAN-J5 §3) si Sam les accepte.
+
+### 2026-11-15 07:59 UTC — Audit QA-10 (un pas) : l'historique de la console de TARS sorti et testé
+
+- `src/ui/tars-panel.ts` (1 132 lignes, jamais importé par un test) : ce qui a été demandé gardé (pas deux fois de suite, les 60 derniers),
+  parcouru avec ↑ ↓ comme l'historique d'un terminal (le brouillon rendu en dessous), un réveil de TARS nommé par ce qui l'a réveillé.
+  Sortis dans `src/ui/tars-panel-pure.ts` (`rememberAsked`, `stepAsked`, `exchangeLabel`) ; `tests/tars-panel-pure.test.ts` 3/3 ; tests
+  de TARS 94/94 ; e2e `tars-agent` 12/12 (son ↑ compris).
 
