@@ -17,6 +17,7 @@ import { linkFor, Outbox, type Station, type StationId, STATIONS, stationOf } fr
 import { checklistOf } from "./checklists";
 import { craftTiles, craftViews, type CrewProfile, profileOf, type TileKey, viewIn } from "./profile";
 import { tileValue } from "./tile-value";
+import { profileBadge, stationWhere } from "./badge";
 import { CrewActions, type Done } from "./actions";
 import { ACTS, type Act, AUTOS, autoWords, HOLDS, holdWords, MANEUVERS, maneuverWords } from "../net/crewcmd";
 import type { Args } from "../ai/tool-schema";
@@ -701,22 +702,8 @@ function syncBadge() {
   // (aboard on the pilot's agreement: waiting for it, or refused — then on the ground, its light's time)
   const asked = model.selected !== null ? aboardAsked.get(model.selected) : undefined;
   const accepted = model.selected === null || model.aboardWith(model.selected);
-  const where =
-    station.place === "aboard" && accepted
-      ? L("à bord", "aboard")
-      : station.place === "aboard" && asked !== "no"
-        ? L("à bord · en attente du pilote", "aboard · waiting for the pilot")
-        : link.cut
-          ? L("sol · liaison coupée", "ground · link cut")
-          : link.delay >= 0.5
-            ? `${L("sol", "ground")} +${dur(link.delay)}`
-            : L("sol", "ground");
-  $("profile-badge").textContent =
-    profile === "jet"
-      ? `${c?.name ?? "F-35"} · ${L("TACTIQUE", "TACTICAL")}`.toUpperCase()
-      : profile === "space"
-        ? `${L("VAISSEAU", "SPACECRAFT")} · ${c?.name ?? ""} — ${station.call} · ${where}`.toUpperCase()
-        : "";
+  const where = stationWhere(station.place, accepted, asked, link);
+  $("profile-badge").textContent = profileBadge(profile, c?.name, station.call, where);
   $("profile-badge").classList.toggle("cut", link.cut);
 }
 /** the console's profile now (PLAN-VAISSEAUX K2 — profile.ts): the craft followed's — its views, its tiles, its theme */

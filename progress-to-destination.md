@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-15 08:09 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-15 08:12 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous.
@@ -7531,4 +7531,11 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   `net-rooms` 5/5.
 - QA-10 à ce jour (logique pure testée) : `netsession`, erreurs de l'équipage, `netmatch`, `fc/computer`, `tars-panel`, `panel`, tuiles de
   l'équipage, `netpanel`.
+
+### 2026-11-15 08:12 UTC — Audit QA-10 (un pas) : le badge de la console d'équipage sorti et testé
+
+- `src/crew/main.ts` : où se trouve le poste (à bord, en attente du pilote, au sol avec le temps de la lumière ou la liaison coupée) et la
+  ligne du badge, sortis de `syncBadge()` dans `src/crew/badge.ts` ; `tests/crew-badge.test.ts` 2/2.
+- `crew-space-actions` (e2e) : 3/5, les mêmes deux échecs (amarrage, cible prise sur la carte) sur le code d'avant ce changement :
+  examinés dans l'entrée suivante.
 
