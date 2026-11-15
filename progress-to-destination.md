@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-15 08:02 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-15 08:07 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous.
@@ -7514,4 +7514,12 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   `tests/panel-pure.test.ts` 4/4, `settings-schema` vert ; e2e `settings` 7/7.
 - QA-10 à ce jour : `netsession`, `crew/errors`, `netmatch`, `fc/computer`, `tars-panel`, `panel` ont leur logique pure testée ; restent
   `main.ts`, `crew/main.ts` (câblage) et ce que le rendu possède.
+
+### 2026-11-15 08:07 UTC — Audit QA-10 (un pas) : les tuiles de la console d'équipage sorties et testées
+
+- `src/crew/main.ts` (2 318 lignes, jamais importé par un test) : ce que montre chaque tuile (chiffre, unité, état, titre) depuis les
+  mesures et l'instantané de l'appareil, sorti tel quel de `tiles()` dans `src/crew/tile-value.ts` (`tileValue`). `tiles()` ne fait plus
+  que le DOM. `tests/crew-tiles.test.ts` 4/4 : un appareil muet depuis 3 s, l'altitude en km au-delà de 99 999 m, la flèche de la vitesse
+  verticale, le carburant en kg et son alarme, une évasion, un impact nommé dans le titre, « posé » en français. Tests de l'équipage
+  57/57 ; e2e `crew-craft` 4/4.
 
