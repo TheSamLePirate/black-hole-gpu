@@ -34,7 +34,7 @@ les preuves restent dans les entrées datées du journal, dessous.
 
 | Machine | GPU p50 mesuré | Cible | Plus gros poste |
 |---|---:|---:|---|
-| kerr-mini | **52,0 ms (984e821d, 15 nov., l'eau à demi-rythme — J5-5)** ; 58,4 ms (5c420e09, 13 nov.) ; **56,3 ms avec l'eau E1** (A/B, 13 nov.) ; **57,3 ms le 15 nov.** (0bb2aa86, un vol, après les corrections de J3) | 40 ms (25 images/s régulières) | l'eau : 16,2 ms ; sans son matériau −13,0 ms (−10,1 avec E1) |
+| kerr-mini | **~48 ms (15 nov., l'eau et sa finition à demi-rythme — J5-5, A/B : 48,1 contre 55,6)** ; 52,0 ms (984e821d, l'eau seule) ; 58,4 ms (5c420e09, 13 nov.) ; **56,3 ms avec l'eau E1** (A/B, 13 nov.) ; **57,3 ms le 15 nov.** (0bb2aa86, un vol, après les corrections de J3) | 40 ms (25 images/s régulières) | l'eau : 16,2 ms ; sans son matériau −13,0 ms (−10,1 avec E1) |
 | M1 Max | 22,5 ms, **frais** (12 nov., 98–100 °C) — non valable comme palier ; **15 nov., borné à 30 : beau temps 21,3 / 21,4 ms tenu soutenu ; orage 28,6 en vol, décroche en soutenu (14,6 images/s, 986 MHz) — chaleur héritée : parti froid, l'orage tient 30 soutenu (27,9 ms)** | 16,7 ms (60 images/s), bornée et soutenue | l'eau : 5,3 ms pour une enveloppe de 1,0 |
 
 **L'ordre décidé** (stratégie §24) : l'eau étagée (surface → éclairage → reflets) → la classification de l'écran par tuiles et les lancements
@@ -7454,3 +7454,12 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   `character` (scène figée, décor coupé, sans tuiles) trouve les trois signaux prêts en 0 à 40 s par corps (`hdLoading` vaut `null`, que le
   test lit comme fini). Les échecs de la nuit étaient passagers ; notés comme tels dans PROBLEMES, la session du rendu prévenue.
 
+### 2026-11-15 07:47 UTC — J5-5b : la finition de l'eau au demi-rythme, J0 ~48 ms
+
+- Contribution à la destination : §8 — l'écart à la cible du mini (40 ms) ramené à ~8 ms.
+- Réalisé : `shadeWaterFinish` avec `WATER_HALF` (trace.wgsl : `waterSplit`, le pixel fini recopié au voisin), `tracerConstants` ;
+  GRAPHICS-PIPELINE C19, PLAN-J5.
+- Preuves (mesuré, kerr-mini, A B A B A) : 48,1 / 48,0 / 48,2 contre 55,9 / 55,2 ms (`waterFull`) ; captures : la mer identique. Tests des
+  noyaux, `check-wgsl` 84/84.
+- Limites : le reflet intense du Soleil et la houle proche non vérifiés ; le M1 Max non mesuré avec ce défaut.
+- Suite : J0 vol de référence et le M1 Max ; puis le poste suivant (les nuages, 6 ms ; l'appareil, 3,9).

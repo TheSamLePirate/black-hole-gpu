@@ -16341,14 +16341,35 @@ fn shadeLiteFinish(@builtin(global_invocation_id) gid: vec3u) {
 // seaShade left in their record — the world's mirror (seaSSR) along the facet it drew, then the far clouds mirrored over it, as
 // seaShade mixed them —, their difference with the mirror they replace added at their weight; then the air and the clouds
 // (liteFinishAt). liteOut read where the LUT is bound (binding 2), the record where the deferred ground's light reads its own (matIn)
-@compute @workgroup_size(8, 8)
+@compute @workgroup_size(8, WATER_WG_Y)
 fn shadeWaterFinish(@builtin(workgroup_id) wid: vec3u, @builtin(local_invocation_id) lid: vec3u) {
   // (dispatched over the water's tiles — waterTilePixel)
-  let gid = waterTilePixel(wid, lid);
-  if (gid.x >= u32(P.res.x) || gid.y >= u32(P.res.y)) { return; }
-  let idx = gid.y * u32(P.res.x) + gid.x;
+  var gid = waterTilePixel(wid, lid);
+  let W = u32(P.res.x);
+  let H = u32(P.res.y);
+  // (PLAN-J5 J5-5 — WATER_HALF —: as shadeWater, a pixel of the tile's checkerboard a thread, its result copied to the pixel beside it —
+  // shadeWater wrote both, the same —; that one finished when the checkerboard's is not the water's)
+  var pi = 0xffffffffu;
+  if (WATER_HALF) {
+    let i = lid.y * 8u + lid.x;
+    let o = waterTilePixel(wid, vec3u(0u));
+    let r = i / 4u;
+    let c = (i % 4u) * 2u + ((o.y + r + P.frame.x) & 1u);
+    gid = o + vec3u(c, r, 0u);
+    var np = o + vec3u(c ^ 1u, r, 0u);
+    if (np.x < W && np.y < H) {
+      let nw = waterSplit(moments[np.y * W + np.x].x);
+      if (nw && (gid.x >= W || gid.y >= H || !waterSplit(moments[gid.y * W + gid.x].x))) {
+        gid = np;
+      } else if (nw) {
+        pi = np.y * W + np.x;
+      }
+    }
+  }
+  if (gid.x >= W || gid.y >= H) { return; }
+  let idx = gid.y * W + gid.x;
   let mk = moments[idx].x;
-  if (!(mk < RASTER_SPLIT_WATER + 0.1 && mk > RASTER_SPLIT_WATER - 0.6)) { return; }
+  if (!waterSplit(mk)) { return; }
   let g = textureLoad(lutDirIn, vec2i(gid.xy), 0);
   var G = g.rgb;
   let tM = g.a;
@@ -16412,6 +16433,11 @@ fn shadeWaterFinish(@builtin(workgroup_id) wid: vec3u, @builtin(local_invocation
     if (isNan(G.r + G.g + G.b)) { G = g.rgb; }
   }
   liteFinishAt(gid.xy, G, tM, false, mk < RASTER_SPLIT_WATER - 0.25);
+  if (pi != 0xffffffffu) {
+    accum[pi] = accum[idx];
+    moments[pi] = moments[idx];
+    stamps[pi] = stamps[idx];
+  }
 }
 // (a raster pixel's surface G given its last touches — the water over it (liteWater's wat), the measures' views — and its finish:
 // shadeLite's, or shadeLiteLight's when its material and its light are two kernels — tracer-source.ts withLiteDeferred)
@@ -16753,6 +16779,8 @@ fn skyFill(@builtin(global_invocation_id) gid: vec3u) {
 // pixels shaded: half of 64 threads out at once returned nothing, 15 Nov 2026)
 // (a pixel's moments.x marking it water this frame — RASTER_WATER less its kind and cover)
 fn waterMarked(m: f32) -> bool { return m <= RASTER_WATER && m > RASTER_WATER - 3.0; }
+// (a pixel's moments.x marking it the water's kernel's, left for its finishing — RASTER_SPLIT_WATER, less a half over half its water)
+fn waterSplit(m: f32) -> bool { return m < RASTER_SPLIT_WATER + 0.1 && m > RASTER_SPLIT_WATER - 0.6; }
 override WATER_HALF: bool = false;
 override WATER_WG_Y: u32 = 8u;
 // (WATER_HALF: the pixel beside the one shaded, left this frame — its pair —, and whether it is water: shadeWater's output written to it too)

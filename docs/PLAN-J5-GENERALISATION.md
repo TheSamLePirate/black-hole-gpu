@@ -169,3 +169,7 @@ Les plafonds de J5-1 au beau temps, de J5-2 par corps et la parité du repli tra
   (`renderer.tune = { WATER_HALF: 0, WATER_WG_Y: 8 }`, ablation J0 `waterFull`) jusqu'au prochain lot de retrait. Non vérifié : le reflet du
   Soleil intense (scintillement possible au demi-rythme), la houle proche ; la finition de l'eau reste pleine (4,2 ms : son demi-rythme, le
   lot suivant possible, ~2 ms).
+- **J5-5b, la finition de l'eau au demi-rythme** (2026-11-15 07:47 UTC) : `shadeWaterFinish` compilé avec `WATER_HALF` comme les noyaux de
+  l'eau (groupes de 32 fils, le pixel du damier fini et recopié — accum, moments, stamps — au voisin de sa paire). Mesuré (kerr-mini, A/B deux
+  fois) : J0 **48,1 / 48,0 / 48,2 ms contre 55,9 / 55,2** sans le demi-rythme (`waterFull`) — **−7,4 ms en tout** (la finition ~2 de plus) ;
+  captures au même instant : la mer, les îles, la côte identiques. **J0 sur le mini : ~48 ms** pour une cible de 40.

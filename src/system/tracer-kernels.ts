@@ -143,7 +143,9 @@ export function tracerConstants(key: number, entry: TracerEntry, o: TracerConsta
     WATER_OPEN: entry === "shadeWaterOpen" ? 1 : 0,
     WATER_REFL_DEFER: (entry === "shadeWater" || entry === "shadeWaterOpen") && o.waterReflDefer ? 1 : 0,
     // (PLAN-J5 J5-5 — the water at half rate: a pixel in two a frame, a workgroup of 32 threads a tile; renderer.waterHalfRate)
-    ...((entry === "shadeWater" || entry === "shadeWaterOpen") && o.waterHalf !== false ? { WATER_HALF: 1, WATER_WG_Y: 4 } : {}),
+    ...((entry === "shadeWater" || entry === "shadeWaterOpen" || entry === "shadeWaterFinish") && o.waterHalf !== false
+      ? { WATER_HALF: 1, WATER_WG_Y: 4 }
+      : {}),
     HAS_RADIO: has(1),
     HAS_POL: has(2),
     HAS_JET: has(4),
