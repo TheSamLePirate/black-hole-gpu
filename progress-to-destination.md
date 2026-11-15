@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-15 04:18 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-15 04:29 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous.
@@ -7232,3 +7232,16 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
 - Limites / transitions restantes : la houle reste à +3,3–3,5 ms sur une côte proche ; la réduire demande de faire moins (demi-résolution,
   ou seulement où ses crêtes sont résolues) — une décision d'image, non prise. Non mesuré : le M1 Max.
 - Suite : J4-5 (la végétation lointaine), puis J4-R.
+
+### 2026-11-15 04:29 UTC — QA-12 : la première nuit du banc n'a pas tourné ; la cause trouvée et réglée
+
+- **Constat** : à 05 h 22, aucune ligne pour la nuit du 15 ; le processus lancé à 03 h 30 n'avait ni enfant ni fichier ouvert. `sample` :
+  bloqué dans `getcwd`/`open`. Lancé par launchd, bun lisait son dossier de travail dans `~/Documents`, et macOS (TCC) attendait un
+  consentement que personne ne donne la nuit. L'A/A du 14 était passé par ssh, qui a cet accès.
+- **Correction** (`scripts/nightly-bench.ts`) : un clone propre `~/kerr-nightly/black-hole-gpu`, hors de `Documents`, créé par `install`
+  (liens physiques, `origin` sur GitHub, sans crochets ; fichiers LFS gardés en pointeurs, le mini n'ayant pas git-lfs, comme son autre
+  clone). Le verrou GPU du runner est pris (90 min au plus) : une tâche de nuit de la session du rendu occupait justement le GPU de 04 h 19
+  à 05 h 21. Ensuite, attente de la machine au repos, chaque étape dans `progress.log`, et `run --dry` / `install --dry-now`. REMOTE-TESTS.
+- **Preuve** : un essai à sec lancé par launchd sur le mini (04:28 UTC) démarre dans le nouveau clone, se met à jour (78e3e2e2) et lit
+  l'état thermique. L'agent de nuit est rechargé. **Pas encore de mesure de nuit** : la première est attendue le 16 à 03 h 30.
+
