@@ -8252,3 +8252,13 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
 - Non vérifié : l'A/B de coût ±1 % du plan (un repère en canvas 2D et un calcul par image, non mesurés) ; la main scriptée n'est pas un pilote (ses gains sont réglés pour chaque appareil — tirée à
   fond à 147 kt, l'A320 entrait en α floor, comportement juste du simulateur).
 - Suite : AP8 — la roue « Approche » (toutes les pistes, le directeur, le choix) et les options du Labo.
+
+### 2026-11-15 20:12 UTC — CI rouge depuis J6-2 réparée : le fondu de la météo sur l'horloge du vol (AR-08)
+
+- Cause : J6-2 (8cbc5814) donnait `performance.now()` comme horloge au fondu de la météo réelle dans `flyShip` (`controller/piloting.ts`) ; ce
+  fondu change le vent volé, c'est de la logique de vol — `tests/flight-clock.test.ts` (AR-08) le refusait : « piloting.ts: 5 (allowed 4) ».
+  La CI de `main` rouge et le site non déployé depuis 17 h 53 UTC (signalé par la session d'analyse).
+- Correction : `frameNow() / 1000` (`frameclock.ts`) pour les deux lecteurs du fondu — le vol et le renderer — : une seule horloge, qui suit aussi
+  un vol avancé pas à pas. Le quota du test inchangé.
+- Vérifié : `flight-clock`, `weather-fade`, `weather`, jet et atterrissages 38/38 (unitaires) ; `parcours-meteo` et la CI après la poussée (ci-dessous
+  si besoin). Leçon : le hook d'avant poussée ne lance pas les tests unitaires — lancer les ciblés avant de pousser un changement de logique de vol.

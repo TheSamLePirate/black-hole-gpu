@@ -1101,7 +1101,8 @@ function flyShip(this: CameraController, dt: number, pad: ReturnType<GamepadInpu
           { body: nav.ref, lat, lon },
           daysOf(nav.t),
           this.weatherReal,
-          performance.now() / 1000,
+          // (the flight's clock — frameclock.ts, AR-08: the fade changes the wind flown; it follows a stepped flight too)
+          frameNow() / 1000,
         ));
         const w = this.weather.step(wx.wind, h, lat, lon, daysOf(nav.t), V, dtSec);
         const up = unitV(d);

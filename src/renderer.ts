@@ -5255,8 +5255,8 @@ export class Renderer {
       lon = (surface.lon * 180) / Math.PI;
     // (R6a-ciel: the eye's height over the sea — the geoid's —, its mirages' tables)
     if (live) this.updateMirage(s, altKm * 1000 - geoidN(surface.lat, surface.lon), { lat, lon, ms: utcOf(time) });
-    // (the real weather's arrival faded in, on the flight's clock — weather.ts weatherHere, PLAN-J6 J6-2)
-    const w = weatherHere(s, { body: "earth", lat, lon }, daysOf(time), this.weatherReal, performance.now() / 1000);
+    // (the real weather's arrival faded in, on the flight's clock — frameclock.ts, the same as the flight's; weather.ts weatherHere, PLAN-J6 J6-2)
+    const w = weatherHere(s, { body: "earth", lat, lon }, daysOf(time), this.weatherReal, frameNow() / 1000);
     if (w.layers.length === 0 && w.fogTop <= 0 && w.visibility >= 30e3) return out;
     // (the sea's surface at the geoid: the ground never under it)
     const ground = Math.max(groundRelief("earth", bodyFixedOf("earth", lat, lon, 0)), geoidN(surface.lat, surface.lon));

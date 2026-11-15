@@ -270,7 +270,7 @@ export function blendWeather(a: WeatherState, b: WeatherState, k: number): Weath
   };
 }
 /** The weather here as the flight and the image read it: weatherAt, the real weather's arrival faded in (above). `nowS`: one clock
- *  for both readers [s] (performance.now() / 1000). */
+ *  for both readers [s] (the flight's: frameclock.ts frameNow() / 1000 — AR-08). */
 export function weatherHere(
   s: { weather: WeatherPreset; wind: WindLevel },
   place: { body: string; lat: number; lon: number },
