@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-15 09:14 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-15 09:19 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous.
@@ -7615,4 +7615,15 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   abaissés.
 - Échecs vus et transmis : `kernel-golden` 0/5 (pas un défaut : ses images de référence manquent, mode compare sans record) ;
   `grass-aaa` 1/3 (deux `null`) ; `earth-scenery` 3/4 (décor pas prêt en 120 s, peut-être l'IGN) ; `storm-blotch` sauté.
+
+### 2026-11-15 09:19 UTC — QA-12 : la première vraie mesure du banc, par son agent launchd (lancé à la main, de jour)
+
+- L'agent `org.samlepirate.kerr-nightly` lancé sur kerr-mini (`launchctl kickstart`), sans attendre 03 h 30 : le chemin de la nuit en entier, du
+  nouveau clone `~/kerr-nightly` (mis à jour : ef1dab95) au verrou GPU du runner pris, à la machine Nominal, à J0 en vol, à la ligne
+  d'historique. **Mesuré** (kerr-mini, 15 nov. 09:15 UTC, ef1dab95) : GPU p50 **46,0 ms**, p95 51,6, durée d'image p50 50,0 / p95 66,6 ms,
+  21,8 images/s. `docs/perf/nightly-mini.jsonl` (3 lignes).
+- Le verrou GPU a joué : une tâche de la session du rendu attendait et l'a pris dès qu'il a été rendu.
+- Lecture : les deux mesures du 14 (57,2 / 57,1 ms, commit non noté) précèdent les lots de la session du rendu de cette nuit. L'écart n'est
+  **pas** un A/B : ce n'est ni le même commit, ni l'heure de la nuit. Pas encore de base (il en faut 3 nuits) ; la première alerte possible
+  viendra après trois nuits.
 
