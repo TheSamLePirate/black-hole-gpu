@@ -237,3 +237,18 @@ Les plafonds de J5-1 au beau temps, de J5-2 par corps et la parité du repli tra
   dans l'`accum` de l'eau fraîche (et la mer est juste en mode normal). **Question ouverte, précise** : que lit `loadAvg` des voisins frais au
   moment du `resolve` — lire leurs `accum` (r, g, b, a) par `traceColumn` (qui les copie déjà), à côté d'un pixel laissé. Outillage retiré
   (patchs hors du dépôt : `stale-resolve-debug.patch`, `stale-temporal-debug.patch`).
+- **La reconstruction des pixels laissés : élucidée — c'est le miroir de la mer** (2026-11-15 10:19 UTC) : `traceColumn` étendu (chaque ligne,
+  ses 32 pixels : `moments.x`, l'`accum` et son poids, l'estampille, la sortie du `resolve`) ; la fenêtre ±2 px du `resolve` relevée autour
+  d'un pixel laissé dans le vol J0 tenu (levier de mesure `TUNE_WATER_PAIR_STALE`, kerr-mini, trois passages). **Constat** : un pixel d'eau
+  laissé (−3) garde dans `accum` la valeur sous-marine que `shadeLite` vient d'écrire (le fond, poids 2 ; luminance 0,003–0,2 contre 8e-6 pour
+  l'eau), **pas sa couleur de l'image d'avant** ; or `seaSSR` (le miroir de la mer, dans `shadeWaterFinish`) accepte un pixel `RASTER_STALE`
+  comme reflet — prévu pour le sol laissé, qui garde sa couleur — : des pixels d'eau **frais** (4e30) reflètent ces valeurs (des points
+  ×100–×1 000, épars), et la reconstruction les étale autour d'eux — le bruit cyan ; l'exposition automatique baisse alors ×6 (la mer brille).
+  **Témoin** : le miroir n'acceptant plus ces pixels sous le levier, la fenêtre est propre — le pixel laissé rebâti vaut ses voisins frais
+  (0,0124 contre 0,0124 ; 0,00673 contre 0,00672), l'exposition celle de la base, la capture la même que la base. **La reconstruction du
+  `resolve` est juste** ; reste une image sur quatre où le `resolve` n'a pas pris sa voie (le rythme forcé du levier, lu par la clé du
+  tune, faux à cette image : un défaut du levier, pas de la reconstruction). GPU : 51,7 contre 51,3 ms (le levier ne retire rien : la copie
+  vers le voisin ne coûtait rien). **Conséquences pour J5-6** : (1) un pixel du sol laissé par `shadeLite` garde sa couleur — rien n'y écrit
+  — ; (2) un pixel d'**eau** laissé non : il ne doit être ni lu par `seaSSR`, ni repris par son propre `accum` ; (3) le rythme vu par `post.wgsl`
+  (`R.f.y`) doit être celui de l'image. Levier et sonde retirés (patch hors du dépôt : `stale-reconstruction-probe.patch`) ; l'extension de
+  `traceColumn` gardée (BH-API).

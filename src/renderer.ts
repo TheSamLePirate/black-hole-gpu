@@ -11690,7 +11690,20 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
     if (!t) return Promise.resolve(null);
     const x = Math.min(Math.max(Math.round(xFrac * t.width), 0), t.width - 32);
     type Rows = { mean: number[]; px: number[] };
-    return new Promise<{ stamp: number; validFrom: number; acc: Rows; res: Rows; tem: Rows; m: number[]; stale: number[] }[]>((resolve) => {
+    type Row = { m: number[]; acc: number[]; w: number[]; st: number[] };
+    return new Promise<
+      {
+        stamp: number;
+        validFrom: number;
+        acc: Rows;
+        res: Rows;
+        tem: Rows;
+        m: number[];
+        row: (k: number) => Row;
+        resRow: (k: number) => number[];
+        stale: number[];
+      }[]
+    >((resolve) => {
       this.colTrace = {
         x,
         y0,
@@ -11705,19 +11718,19 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
             const st = new Uint32Array(f.st.getMappedRange().slice(0));
             const acc = new Float32Array(f.acc.getMappedRange().slice(0));
             const mom = new Float32Array(f.mom.getMappedRange().slice(0));
-            const half = (b: GPUBuffer) => {
-              const u = new Uint16Array(b.getMappedRange().slice(0));
-              const h = (v: number) => {
-                const e = (v >> 10) & 31,
-                  m = v & 1023;
-                return (e ? 2 ** (e - 15) * (1 + m / 1024) : 2 ** -14 * (m / 1024)) * (v & 0x8000 ? -1 : 1);
-              };
-              const at = (k: number, i: number) => lum(h(u[k * 128 + 4 * i]!), h(u[k * 128 + 4 * i + 1]!), h(u[k * 128 + 4 * i + 2]!));
-              return {
-                mean: Array.from({ length: n }, (_, k) => Array.from({ length: 32 }, (_, i) => at(k, i)).reduce((a, b) => a + b, 0) / 32),
-                px: Array.from({ length: n }, (_, k) => at(k, 0)),
-              };
+            const h = (v: number) => {
+              const e = (v >> 10) & 31,
+                m = v & 1023;
+              return (e ? 2 ** (e - 15) * (1 + m / 1024) : 2 ** -14 * (m / 1024)) * (v & 0x8000 ? -1 : 1);
             };
+            const halfAt = (u: Uint16Array) => (k: number, i: number) =>
+              lum(h(u[k * 128 + 4 * i]!), h(u[k * 128 + 4 * i + 1]!), h(u[k * 128 + 4 * i + 2]!));
+            const resAt = halfAt(new Uint16Array(f.res.getMappedRange().slice(0)));
+            const temAt = halfAt(new Uint16Array(f.tem.getMappedRange().slice(0)));
+            const half = (at: (k: number, i: number) => number) => ({
+              mean: Array.from({ length: n }, (_, k) => Array.from({ length: 32 }, (_, i) => at(k, i)).reduce((a, b) => a + b, 0) / 32),
+              px: Array.from({ length: n }, (_, k) => at(k, 0)),
+            });
             const accAt = (k: number, i: number) => {
               const o = 4 * (32 * k + i);
               return lum(acc[o]!, acc[o + 1]!, acc[o + 2]!) / Math.max(acc[o + 3]!, 1e-6);
@@ -11731,9 +11744,17 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
                 ),
                 px: Array.from({ length: n }, (_, k) => accAt(k, 0)),
               },
-              res: half(f.res),
-              tem: half(f.tem),
-              m: Array.from({ length: n }, (_, k) => mom[2 * k]!),
+              res: half(resAt),
+              tem: half(temAt),
+              m: Array.from({ length: n }, (_, k) => mom[64 * k]!),
+              // (each row's 32 pixels: moments.x, accum's luminance / weight and its weight, the resolve's luminance, the stamp)
+              row: (k: number) => ({
+                m: Array.from({ length: 32 }, (_, i) => mom[64 * k + 2 * i]!),
+                acc: Array.from({ length: 32 }, (_, i) => accAt(k, i)),
+                w: Array.from({ length: 32 }, (_, i) => acc[4 * (32 * k + i) + 3]!),
+                st: Array.from({ length: 32 }, (_, i) => st[32 * k + i]!),
+              }),
+              resRow: (k: number) => Array.from({ length: 32 }, (_, i) => resAt(k, i)),
               validFrom: f.validFrom,
               // (each row's share of the strip's pixels older than the frame's valid stamp — the reconstruction's "stale")
               stale: Array.from(
@@ -11758,7 +11779,7 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
       acc: mk(512 * c.n),
       res: mk(256 * c.n),
       tem: mk(256 * c.n),
-      mom: mk(8 * c.n),
+      mom: mk(256 * c.n),
       st: mk(128 * c.n),
       stamp: this.frameStamp,
       validFrom: this.validFrom,
@@ -11766,7 +11787,7 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
     for (let k = 0; k < c.n; k++) {
       enc.copyBufferToBuffer(t.stamps, ((c.y0 + k) * t.width + c.x) * 4, f.st, 128 * k, 128);
       enc.copyBufferToBuffer(t.accum, ((c.y0 + k) * t.width + c.x) * 16, f.acc, 512 * k, 512);
-      enc.copyBufferToBuffer(t.moments, ((c.y0 + k) * t.width + c.x) * 8, f.mom, 8 * k, 8);
+      enc.copyBufferToBuffer(t.moments, ((c.y0 + k) * t.width + c.x) * 8, f.mom, 256 * k, 256);
     }
     enc.copyTextureToBuffer({ texture: t.hdr, mipLevel: 0, origin: [c.x, c.y0] }, { buffer: f.res, bytesPerRow: 256 }, [32, c.n]);
     c.frames.push(f);
