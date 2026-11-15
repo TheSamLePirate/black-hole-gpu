@@ -204,8 +204,12 @@ avant `[info no-time, pilot t]`, après `[pilot t]`.
   est refusée — l'interface et `character.disembark` (qui exige `ourLanded`) ne lisent pas le même état.
 - Écarté : aligné par `lineUp` (posé d'emblée), il ne bouge pas, horloge à pas fixes ou en temps réel, à Edwards comme à Toulon-Hyères ;
   `groundVelocity` concorde avec le repère tournant de la Terre (différences finies de `fromBodyFixed` : 0,015–0,033 m/s).
-- À chercher : les forces latérales des pneus à l'arrêt (`gear.ts`, l'adhérence de côté à une vitesse longitudinale nulle), la pente
-  transversale de la piste nivelée sous les roues, l'état laissé par la fin de l'ILS (`ilsFrame`).
+- **Les roues au repos par rapport au sol** (19:00 UTC, un sixième passage) : charges 32 kN (avant), 79 et 79 kN (principales), **glissement
+  latéral 0 sur les trois**, roue avant non braquée, aucun frein au pied, rotation nulle : les pneus se voient immobiles par rapport à la
+  vitesse du sol de référence, et la position de l'avion dérive pourtant de 0,27 m/s (≈ 1,1·10⁻⁵ de sa vitesse absolue, ~25 km/s avec la
+  Terre). **Piste** : l'intégration de l'état de roulage (`motion.ts`, la position avancée à la vitesse absolue, la vitesse du sol prise à un
+  autre instant ou à un autre pas que la position) — l'avion « posé » (`landedAt`, tenu dans le repère du sol) ne dérive pas ; et pourquoi la
+  condition de repos (`still`, moins de 0,05 m/s relatifs) ne se déclenche pas si les roues se voient au repos.
 
 ## Le bouton de la couche météo de la carte masqué par la carte elle-même (relevé le 15 novembre 2026, e2e `weather-panel`)
 

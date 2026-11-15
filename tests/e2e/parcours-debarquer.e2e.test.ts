@@ -92,7 +92,9 @@ test.skipIf(!E2E)(
           brake: c.airInfo?.()?.brake ?? null, thr: +(c.pilot?.throttle ?? -1).toFixed(2),
           turnDeg: +((((c.attitudeNow().heading ?? 0) * 180 / Math.PI - h0) + 540) % 360 - 180).toFixed(2),
           northM: +((g.lat - g0.lat) * 111320).toFixed(2), eastM: +((g.lon - g0.lon) * 111320 * Math.cos(g.lat * Math.PI / 180)).toFixed(2),
-          hdg: +((c.attitudeNow().heading ?? 0) * 180 / Math.PI).toFixed(1), gear: c.gearLast?.contact ?? null, wind: c.windNow }; })()`);
+          hdg: +((c.attitudeNow().heading ?? 0) * 180 / Math.PI).toFixed(1), gear: c.gearLast?.contact ?? null, wind: c.windNow,
+          legs: (c.gearLast?.legs ?? []).map((l) => [Math.round(l.load), +(l.slip ?? 0).toFixed(3)]), steer: +(c.noseSteer ?? 0).toFixed(3),
+          omega: (c.pilot?.omega ?? []).map((x) => +x.toFixed(4)), toe: c.toeBrake ?? null }; })()`);
       out.rest = rest;
       console.log(`  at rest, 10 s: ${JSON.stringify(rest)}`);
       // (the contact ground under the craft, under two graphics settings: the same height and level)
