@@ -204,7 +204,7 @@ avant `[info no-time, pilot t]`, après `[pilot t]`.
   est refusée — l'interface et `character.disembark` (qui exige `ourLanded`) ne lisent pas le même état.
 - Écarté : aligné par `lineUp` (posé d'emblée), il ne bouge pas, horloge à pas fixes ou en temps réel, à Edwards comme à Toulon-Hyères ;
   `groundVelocity` concorde avec le repère tournant de la Terre (différences finies de `fromBodyFixed` : 0,015–0,033 m/s).
-- **Les roues au repos par rapport au sol** (19:00 UTC, un sixième passage) : charges 32 kN (avant), 79 et 79 kN (principales), **glissement
+- **Les roues au repos par rapport au sol** (18:52 UTC, un sixième passage) : charges 32 kN (avant), 79 et 79 kN (principales), **glissement
   latéral 0 sur les trois**, roue avant non braquée, aucun frein au pied, rotation nulle : les pneus se voient immobiles par rapport à la
   vitesse du sol de référence, et la position de l'avion dérive pourtant de 0,27 m/s (≈ 1,1·10⁻⁵ de sa vitesse absolue, ~25 km/s avec la
   Terre). **Piste** : l'intégration de l'état de roulage (`motion.ts`, la position avancée à la vitesse absolue, la vitesse du sol prise à un
