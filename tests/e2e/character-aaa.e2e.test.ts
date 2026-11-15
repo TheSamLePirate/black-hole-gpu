@@ -69,39 +69,42 @@ test.skipIf(!E2E)(
       const hull = await app.js<{ distanceM: number; half: number[] } | null>("__bh.camera.character.state().hull");
       expect(hull).not.toBeNull();
       expect(hull!.distanceM).toBeGreaterThan(0.3);
-      // (ten seconds towards the hull's centre: stopped against it, never inside)
-      const walk = await app.js<{ closest: number; inside: number }>(`(() => {
+      // (ten seconds towards the nearest leg of its landing gear: stopped against it, never in it. Its belly is 1.85 m over his
+      // feet — he walks under it, between the legs —: the gear is what stops him (Sam, 15 Nov 2026: « viser une roue »; until then
+      // the gear was no contact at all, he walked through the wheels)
+      const walk = await app.js<{ legs: number; start: number; end: number; blocked: number }>(`(() => {
         const c = __bh.camera.character, h = c.vesselHull(), up = c.up();
-        const d = h.centre.map((v, i) => v - c.q[i]), k = d[0] * up[0] + d[1] * up[1] + d[2] * up[2];
-        const flat = d.map((v, i) => v - up[i] * k), n = Math.hypot(...flat);
+        const k = h.centre.reduce((s, v, i) => s + (v - c.q[i]) * up[i], 0);
+        const base = h.centre.map((v, i) => v - up[i] * k);
+        let leg = null, legs = 0, best = Infinity;
+        for (let x = -h.half[0]; x <= h.half[0]; x += 0.25)
+          for (let z = -h.half[2]; z <= h.half[2]; z += 0.25) {
+            const q = base.map((v, i) => v + h.axes[0][i] * x + h.axes[2][i] * z);
+            if (!c.vesselBlocked(q)) continue;
+            legs++;
+            const d = Math.hypot(...q.map((v, i) => v - c.q[i]));
+            if (d < best) (best = d), (leg = q);
+          }
+        if (!leg) return { legs, start: NaN, end: NaN, blocked: 0 };
+        const d = leg.map((v, i) => v - c.q[i]), kk = d[0] * up[0] + d[1] * up[1] + d[2] * up[2];
+        const flat = d.map((v, i) => v - up[i] * kk), n = Math.hypot(...flat);
         c.heading = flat.map((v) => v / n); c.yaw = 0; c.pitch = 0.12;
         c.move(1, 0, 10);
-        // (the walker's capsule against the box — its axis, feet to head: the landed Ranger's body is on its gear, its
-        // belly above head height, so the head meets its edge while the feet are still metres from the box)
-        const box = h, capsule = () => {
-          let m = Infinity;
-          for (let y = 0.3; y <= 1.5 + 1e-9; y += 0.15) {
-            const p = c.q.map((v, j) => v + up[j] * y);
-            const l = p.map((v, j) => v - box.centre[j]);
-            const out = box.axes.map((a, j) => Math.max(0, Math.abs(a[0] * l[0] + a[1] * l[1] + a[2] * l[2]) - box.half[j]));
-            m = Math.min(m, Math.hypot(...out));
-          }
-          return m;
-        };
-        let closest = Infinity, inside = 0;
+        let blocked = 0;
         for (let i = 0; i < 1200; i++) {
           __bh.step(1 / 120);
-          const d = capsule();
-          closest = Math.min(closest, d);
-          // (the box bounds the mesh the walk stops against: a few mm under the capsule's 0.3 m at its edge is the
-          // mesh inside the box, not the walker in the hull)
-          if (d < 0.25) inside++;
+          if (c.vesselBlocked(c.q)) blocked++;
         }
         c.move(0, 0, 0);
-        return { closest, inside };
+        const flatTo = (q) => { const e = q.map((v, i) => v - c.q[i]), m = e[0] * up[0] + e[1] * up[1] + e[2] * up[2]; return Math.hypot(...e.map((v, i) => v - up[i] * m)); };
+        return { legs, start: best, end: flatTo(leg), blocked };
       })()`);
-      expect(walk.inside).toBe(0);
-      expect(walk.closest).toBeLessThan(1.5);
+      console.log(
+        `  the gear: ${walk.legs} cells blocked on the ground; walked from ${walk.start.toFixed(1)} m to ${walk.end.toFixed(2)} m of its nearest leg, ${walk.blocked} steps inside`,
+      );
+      expect(walk.legs).toBeGreaterThan(0);
+      expect(walk.blocked).toBe(0);
+      expect(walk.end).toBeLessThan(1.2);
       // (the hull beyond him, he drawn over it: the landed Ranger's belly is above his head, so the camera looks up at
       // it — low behind him, its line rising through his head into the belly. Facing the hull again — the walk,
       // stopped against it, slid him along it and turned him —; the first framing whose line of sight through him

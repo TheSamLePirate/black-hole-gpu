@@ -1,7 +1,8 @@
 import { cameraFrame } from "../camera";
 import { properBodyAxes } from "../system/local-patch";
 import { sphericalFrame } from "../wormhole";
-import { vesselHulls } from "../system/collide";
+import { TriBVH, vesselHulls } from "../system/collide";
+import { gearMesh } from "../gear-mesh";
 // Planet-fixed walking. All contact arithmetic is float64 metres; the vessel remains the pilot.
 import { WalkingGround } from "./walking-ground";
 import type { CameraController } from "../controls";
@@ -62,6 +63,17 @@ export const tangent = (up: Vec3, f: Vec3): Vec3 => {
   const v = sub(f, scale(up, dot(f, up)));
   return len(v) > 1e-7 ? unit(v) : unit(cross(Math.abs(up[0]) < 0.8 ? [1, 0, 0] : [0, 1, 0], up));
 };
+/** The Ranger's landing gear for contacts (gear-mesh.ts, every oleo out): its triangles' BVH, made once. */
+let gearHull: { bvh: TriBVH; lo: number[]; hi: number[] } | null = null;
+function rangerGear() {
+  if (gearHull) return gearHull;
+  const g = gearMesh();
+  const n = g.verts.length / 10;
+  const pos = new Float32Array(n * 3);
+  for (let i = 0; i < n; i++) pos.set(g.verts.subarray(10 * i, 10 * i + 3), 3 * i);
+  return (gearHull = { bvh: new TriBVH(pos, g.idx), lo: [...g.lo], hi: [...g.hi] });
+}
+
 export class PlanetCharacter {
   readonly groundPatch = new WalkingGround();
   terrainRevision: () => number = () => 0;
@@ -608,9 +620,16 @@ export class PlanetCharacter {
     const up = this.up(q);
     const a = this.toShip(add(q, up, Math.min(radius, height / 2)))!,
       b = this.toShip(add(q, up, Math.max(height - radius, height / 2)))!;
-    if ([0, 1, 2].some((k) => Math.max(a[k]!, b[k]!) + radius < vessel.lo[k]! || Math.min(a[k]!, b[k]!) - radius > vessel.hi[k]!))
-      return false;
-    return vessel.bvh.capsule(a, b, radius);
+    const off = (lo: ArrayLike<number>, hi: ArrayLike<number>) =>
+      [0, 1, 2].some((k) => Math.max(a[k]!, b[k]!) + radius < lo[k]! || Math.min(a[k]!, b[k]!) - radius > hi[k]!);
+    if (!off(vessel.lo, vessel.hi) && vessel.bvh.capsule(a, b, radius)) return true;
+    // (the Ranger's landing gear, out: its own mesh — gear-mesh.ts —, not the hull's; its legs and wheels stop him too. Without it
+    // he walked through the wheels — the hull's lowest triangle 1.85 m over his feet: 15 Nov 2026, e2e character-aaa)
+    if (this.c.s.vessel === "ranger" && this.c.gearExt > 0.5) {
+      const G = rangerGear();
+      if (!off(G.lo, G.hi) && G.bvh.capsule(a, b, radius)) return true;
+    }
+    return false;
   }
   private integrate(dt: number, f: number, r: number, run: boolean) {
     const up = this.up(),

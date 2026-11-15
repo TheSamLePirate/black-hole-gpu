@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-15 04:54 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-15 07:18 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous.
@@ -7421,3 +7421,14 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   Mesuré ensuite (kerr-mini, J0 vol) : GPU p50 56,7 ms (57,2 après la première partie de J5-R) — pas de régression ; e2e passé.
 - Limites : retirés sous le réglage provisoire « éteints » (retour par git).
 - Suite : les décisions d'image de PLAN-J5 §3 ; le lot d'assets des arbres proches.
+
+### 2026-11-15 07:18 UTC — Le piéton arrêté par le train du Ranger (choix de Sam : « viser une roue »)
+
+- **Défaut trouvé en appliquant le choix** : le train sorti du Ranger (`gear-mesh.ts`, un maillage à part) n'était dans aucune collision.
+  Seuls les triangles de la coque comptaient, et le piéton traversait les roues : la sonde au sol trouvait 0 cellule bloquée.
+- **Changement** : `src/controller/character.ts` (`vesselBlocked` teste aussi la BVH du train quand il est sorti, construite une fois) ;
+  `character-aaa` marche vers la jambe la plus proche (trouvée par la même collision), plus vers le centre de la boîte.
+- **Preuve** : `character-aaa` « in front of the landed vessel » 1/1 (76 cellules bloquées, arrêté à 0,59 m, 0 pas dedans) ; tests du
+  piéton 54/54. Les autres échecs du piéton (lumière, décor, calibration) restent au rendu. Les cours de vol ne changent pas
+  (rien sur le train à pied).
+
