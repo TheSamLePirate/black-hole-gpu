@@ -1,0 +1,62 @@
+# PLAN-J6 — Les parcours complets (stratégie §19.13)
+
+**État (2026-11-15 16:10 UTC)** : plan écrit, aucun lot ouvert. Les jalons J0 à J5 ont été menés (PLAN-J1 à PLAN-J5) ; le 15 novembre,
+Sam a nommé **~48 ms de GPU sur J0 le palier intermédiaire de kerr-mini** ([J0-CONTRAT](J0-CONTRAT.md) §2) et demandé de reprendre la
+suite du plan, lumière et contenu. La stratégie ([ANALYSE-STRATEGIE](ANALYSE-STRATEGIE-RENDU-2026-11-03.md) §19.13) demande que les jalons
+« transportent l'expérience en même temps que les passes » : **un parcours n'est terminé ni avec une scène vide, ni avec un état choisi
+parce qu'il est favorable au renderer**. Ce plan fait des neuf parcours de référence des tests qui les jouent d'un bout à l'autre et des
+lots qui corrigent ce qu'ils trouvent. Le code fait foi.
+
+## 1. Le point de départ : chaque condition testée seule, aucun parcours entier
+
+Inventaire du 15 novembre (lecture de [E2E-CATALOGUE](E2E-CATALOGUE.md) et des en-têtes des tests ; aucun test lancé) :
+
+| Parcours | Déjà couvert (e2e) | Condition jamais vérifiée |
+|---|---|---|
+| P1. Reprendre un avion au sol | `aircraft-save` (F-35), `saves`, `quickload`, `a320-start`, `a320-services`, `a320-gate`, `gear`, `cockpit`, `fleet-switch` | l'A320 jamais dans une sauvegarde ; l'état rendu contre le niveau de sauvegarde **annoncé** ; le support prêt avant le roulage **après une reprise** |
+| P2. Décoller puis virer en ville | `title-departure`, `runway-placement`, `apprendre-avions`, `j2-page-camera` (trous, **mesurés**), `cut-buildings-trees` (sonde), `buildings`, `city-shadows`, `city-flicker`, `traffic-*`, `instruments-age` (en orbite), `j0-reference` (coût, mesuré) | trou sous le regard arrière **asserté** ; le décor proche gardé contre le centre du chargement ; l'âge des instruments dans un virage bas en ville ; rien n'enchaîne décollage, ville, trafic et ombres |
+| P3. Approcher sous météo dégradée | `metar`, `weather-panel`, `weather-grid`, `rain`, `rain-glass`, `a320-rain`, `cloud-volume-fade`, `runway-wind`, `approach-auto`, `ils`, `assist-final` | la **même** météo pour la physique et l'image ; une source qui arrive en vol sans rupture ; la priorité des commandes manuelles sous la météo ; la cadence avec la météo |
+| P4. Se poser puis débarquer | `landing`, `gear`, `character`, `character-aaa`, `gargantua-ground`, `ground-placement`, `modes` | la physique indépendante du niveau de qualité ; le contact suivi de l'atterrissage à la marche ; la caméra de marche libre d'obstacles ; le pilotage après être remonté |
+| P5. S'éloigner en caméra libre | `spectator`, `j2-contact-camera` (mesuré), `ground-camera-warp`, `camera-travel`, `camera-smooth`, `view-pose` | un avion **en vol** gardant son sol (asserté) ; son état simulé avant / après F3 → F1 ; l'ordre des horloges |
+| P6. Passer vers l'orbite et observer | `assist-climb`, `apprendre-vaisseaux`, `camera-voyage`, `ellipsoid`, `geoid`, `refraction-wgs84`, `twilight-sky`, `look-profile`, `planets-baseline` | une montée sol → orbite sans saut de datum ni d'origine (assertée) ; la qualité cohérente (mesurée seulement) ; les approximations expliquées au joueur |
+| P7. Masquer / reprendre, reconstruire le GPU | `gpu-recovery`, `gpu-recovery-hold`, `gpu-startup`, `hidden-tab`, `fps-truth`, `net-cut` | la perte du GPU **en salle** ; textures, tuiles et cockpit après la recréation ; le contact de la nouvelle génération avant la reprise ; les commandes pendant la reprise |
+| P8. Filmer puis revenir au jeu | `photo-video`, `s3-replay`, `multiexposure`, `sky-events`, `modes`, `scene-color`, `export-parity` | la fidélité annoncée contre le fichier ; les systèmes et l'autopilote d'un avion en vol après le mode photo ; les événements pendant une capture |
+| P9. Commander TARS pendant une transition | `tars`, `tars-agent`, `tars-eval` (en direct seulement), `tars-aircraft-tools`, `tars-settings-panel`, `tars-room` | TARS **pendant** une transition ; une commande périmée revalidée ou interrompue ; l'annulation selon le point de reprise |
+
+## 2. Les lots
+
+Chaque lot : **un e2e de parcours** qui joue le parcours d'un bout à l'autre, dans le profil principal (raster, cockpit), ses données
+attendues avant chaque mesure ([E2E-VOLS](E2E-VOLS.md)), ses conditions **assertées** (une mesure seulement relevée n'est pas une
+condition), des captures aux états clés ; puis la correction de ce qu'il trouve. Une sonde nouvelle passe ses témoins (règle 3).
+
+| Lot | Parcours | Contenu | Fini quand |
+|---|---|---|---|
+| **J6-1** | P2 (lumière, contenu) | décollage d'un aérodrome près d'une ville (Toulon-Hyères → Toulon, ou Orly → Paris), virage bas au-dessus des bâtiments, l'après-midi puis au soleil rasant : trous sous le regard arrière (la mesure de `j2-page-camera` assertée), bâtiments proches présents (`cut-buildings-trees`), ombres, trafic, âge des instruments, coût de la scène | le parcours passe sur kerr-mini et sur ce Mac ; ses défauts corrigés ou écrits dans PROBLEMES |
+| **J6-2** | P3 | une approche aux instruments sous pluie et plafond bas : la même météo lue par la physique et par l'image, un METAR qui change en vol, les commandes manuelles reprises, la cadence | idem |
+| **J6-3** | P4 | atterrir, rouler, s'arrêter, descendre, marcher autour, remonter, redécoller ; le contact suivi en continu ; deux niveaux de qualité comparés (la physique la même) | idem |
+| **J6-4** | P1 | sauvegarder un A320 et un F-35 au parking, moteurs coupés puis en marche ; recharger : l'état rendu selon le niveau annoncé, le support au sol avant le roulage | idem |
+| **J6-5** | P5, P8 | en vol : caméra libre loin puis retour, mode photo puis retour — l'état simulé avant / après, le sol de contact gardé, l'autopilote | idem |
+| **J6-6** | P7 | la perte du GPU en vol, en solo puis en salle : la reprise, les textures et le contact de la nouvelle génération, les commandes | idem |
+| **J6-7** | P9 | TARS pendant un voyage ou une montée : une commande devenue périmée, l'annulation | idem (modèle scripté, sans clé) |
+| **J6-8** | P6 | la montée sol → orbite sans saut de datum ni d'origine, l'exposition le long du chemin | idem |
+
+**Ordre recommandé** : J6-1 → J6-2 → J6-3 → J6-4 → J6-5 → J6-6 → J6-7 → J6-8 (la lumière et le contenu d'abord, comme demandé ; puis le
+vol de bout en bout ; les transitions ensuite).
+
+## 3. Questions pour Sam
+
+1. **L'ordre** : J6-1 (décoller puis virer en ville) d'abord ?
+2. **La ville de J6-1** : Toulon (la scène J0 voisine, la mer et la ville) ou Paris (la ville dense, la référence de J3) ?
+3. **Les conditions mesurées aujourd'hui** (trous arrière, décor proche, âge des instruments) : les asserter avec les seuils relevés
+   (p. ex. l'âge des instruments p95 < 70 ms, déjà asserté sur J0), ou d'abord les relever sur chaque parcours ?
+
+**Réglées provisoirement (2026-11-15 16:10 UTC), selon les recommandations — révisables par Sam** : l'ordre du §2 ; Toulon pour J6-1 (la
+scène J0 connue, la mer et la ville, l'aérodrome) ; les seuils déjà relevés assertés, les autres relevés d'abord.
+
+## 4. Non vérifié
+
+L'inventaire du §1 vient de la lecture du catalogue et des en-têtes : aucun test n'a été relancé pour l'écrire.
+
+## 5. Avancement
+
+- **Plan écrit** (2026-11-15 16:10 UTC).
