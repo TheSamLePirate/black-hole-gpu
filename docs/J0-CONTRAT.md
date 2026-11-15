@@ -42,7 +42,9 @@ soutenue ; un vol frais non borné (le 12 : 22,5 ms de GPU à 98–100 °C) rest
 palier. **À faire avant la prochaine fiche** : l'essai de la borne sur le M1 Max (bride-t-il encore, borné à 30 puis à
 40 images/s ?) ; la valeur de la borne se fixe sur cet essai, non mesuré à ce jour. Sur kerr-mini, la cible de 25 images/s
 régulières se lit de la même façon : intervalle p50 et p95 ≤ 40 ms, sans alternance 60 / 80 ms (le p99 et le CPU :
-seuils à transposer et à valider avec la première fiche bornée).
+seuils à transposer et à valider avec la première fiche bornée). **Décision de Sam (15 nov., ~19:55 UTC)** : ces deux seuils
+se fixent quand la cible de 40 ms sera reprise, sur la première fiche bornée du mini — pas avant (le palier intermédiaire ~48 ms
+n'en a pas besoin) ; point de départ, la règle du M1 Max : p99 ≤ 1,5 × le budget (60 ms) ; le CPU mesuré sur le mini, non recopié.
 
 **Palier intermédiaire du mini — *décision de Sam, 15 novembre 2026, 16:08 UTC*** : après PLAN-J5 (l'eau à demi-rythme, la FFT en deux
 passes ; aucun compromis d'image accepté), **~48 ms de GPU sur J0 est nommé palier intermédiaire de kerr-mini** ; la cible de 25 images/s
@@ -74,7 +76,9 @@ la borne à froid — 30 comme 40 — puis bride, **quelle que soit la borne**, 
 passe à ~31 ms une fois chaud. **Ce qu'il soutient sur J0 aujourd'hui : ~30 images/s** (28,8 borné à 30, 30,9 borné à 40). La borne ne suffit
 pas à l'empêcher de brider : il faudrait que le GPU tienne nettement sous le budget à fréquence bridée (~31 ms aujourd'hui, pour 33,3 à
 30 images/s). **La borne est fixée provisoirement à 30 images/s sur le M1 Max** (13 novembre, « la valeur de la borne se fixe sur cet essai » :
-le palier soutenu mesuré ; `J0_FPSCAP=30` pour ses fiches) — **révisable par Sam**.
+le palier soutenu mesuré ; `J0_FPSCAP=30` pour ses fiches) — **révisable par Sam**. **Décision de Sam (15 nov., ~19:55 UTC)** :
+**refaire l'essai de la borne à 40** maintenant que l'eau à demi-rythme a allégé le GPU (borné à 30 : 23,1 ms soutenu), avant de
+figer la valeur ; 30 reste la borne de ses fiches jusqu'à cet essai. Aucun gain promis : à 40 le GPU travaille et chauffe plus.
 
 **Le palier 1 est atteint** quand, sur le vol de référence (§3), mesuré deux fois sur le M1 Max dans l'état soutenu,
 **les seuils suivants tiennent tous** — *validés par Sam le 10 novembre* (transposés de §8.3, qui les fixe pour

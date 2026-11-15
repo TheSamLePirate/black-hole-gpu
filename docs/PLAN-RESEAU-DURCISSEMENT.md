@@ -1,8 +1,8 @@
 # Plan — durcir le réseau : validation, droits, reprise, serveur
 
 **État (13 novembre 2026) : RD0, RD1 et RD2 faits** (session de l'audit hors rendu ; [NETWORK.md](NETWORK.md) « The
-input boundary », « The server defends itself » ; `src/net/inbound.ts`, `server/rooms.ts`) ; RD3 attend la décision 1 du
-§4 ; RD4, RD5 à suivre. *(État d'origine,
+input boundary », « The server defends itself » ; `src/net/inbound.ts`, `server/rooms.ts`) ; RD3 non ouvert : Sam a choisi « entre amis »
+(décision 1 du §4, 15 nov.) ; RD4, RD5 à suivre. *(État d'origine,
 10 novembre : plan proposé, rien d'implémenté.)* Il vient de l'audit du 10 novembre
 ([04-reseau-equipage.md](audit-2026-11-10/04-reseau-equipage.md), constats NET-01 à NET-33). Il prolonge
 [PLAN-RESEAU.md](PLAN-RESEAU.md) (R0–R8, terminé) et ne recouvre pas
@@ -71,6 +71,8 @@ s'expulsent (NET-05, prévu en RD4).
 
 1. **Niveau de défense visé.** « Entre amis » (RD1, RD2, RD4, RD5 suffisent) ou « salles publiques avec des inconnus »
    (RD3 devient obligatoire, et la détection des coups ne peut plus rester chez le tireur).
+   **Décidé par Sam le 2026-11-15 (~19:55 UTC) : « entre amis »** — RD3 n'est pas ouvert ; il le sera le jour où des salles
+   publiques seront annoncées (alors aussi la détection des coups hors du tireur). Cohérent avec les droits du crew (tous les postes).
 2. **Ce qui est commun à la salle** (RD6) : météo, trafic, pannes.
 3. **Compatibilité entre versions** : un client ancien est-il refusé à l'entrée (simple) ou toléré (schémas tolérants) ?
 

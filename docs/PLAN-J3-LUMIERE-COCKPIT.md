@@ -3,6 +3,10 @@
 **État (2026-11-15 00:59 UTC) : J3 mené — ses lots J3-0 à J3-7 et J3-R faits ou réglés provisoirement selon les recommandations du plan,
 chacun daté au §8 (le tableau des réglages provisoires) et au §10 ; tous révisables par Sam, les anciens chemins retirés à sa confirmation (J3-R).**
 
+**Décision de Sam (2026-11-15 ~19:55 UTC) : les réglages du §8 sont confirmés tels quels** (« j'accepte tes recommandations ») — la question 6
+(MSAA) l'était déjà (4× gardé : aucun compromis d'image, 15 nov.). **J3-R peut retirer les anciens chemins** que ces réglages rendent sans
+utilisateur (règle 2), les leviers de mesure gardés.
+
 **État d'origine (13 novembre 2026, ~16:05 UTC) : plan proposé, à valider par Sam ; mené selon ses recommandations (la ville d'abord, l'ordre du §3) sous la consigne « continue » de Sam — J3-0 mesuré en partie, J3-1 commencé (§10).** Les 5 questions du §8 restent ouvertes. Origine :
 [stratégie](ANALYSE-STRATEGIE-RENDU-2026-11-03.md) §15 J3 (« raccorder un état lumineux partagé, cascades et profondeurs des objets ;
 préserver les instruments ; attribuer correctement l'air aux distances ; conserver les corrections de réfraction dans leur portée ; ajouter
@@ -185,6 +189,7 @@ avancer sans attendre, comme la borne provisoire du M1 Max) :
 
 
 Tout est réglé provisoirement ; à Sam de confirmer ou de changer chaque ligne (les anciens chemins retirés ensuite, J3-R).
+**Confirmé par Sam le 2026-11-15 (~19:55 UTC) : chaque ligne telle quelle** ; J3-R retire ensuite les anciens chemins sans utilisateur.
 
 ## 9. Non vérifié
 

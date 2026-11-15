@@ -46,7 +46,7 @@ J4 (fermé, sortie non atteinte) et J5 (fermé) ; **en cours : J6, les parcours 
 | Session (T3) | Lot | État |
 |---|---|---|
 | Rendu (33d89754) | **J6 — les parcours complets** ([PLAN-J6](docs/PLAN-J6-PARCOURS.md)) | **les neuf parcours ont leur e2e** (15 nov., 19:39) : J6-1 à J6-5, J6-7, J6-8 faits, J6-6 en solo ; cinq défauts corrigés (décollage automatique, décor en vol rapide, météo réelle fondue, repos au sol, A320 rechargé) ; la commande périmée de TARS refusée à juste raison ; la perte du GPU en salle jouée (retour sur l'heure de la salle, dit) ; reste l'annulation de TARS |
-| Rendu (33d89754) | J3 — lumière, ombres, cockpit | **mené (15 nov.)** : J3-0 à J3-7 et J3-R faits ou réglés provisoirement selon les recommandations de [PLAN-J3](docs/PLAN-J3-LUMIERE-COCKPIT.md) §8 ; le crépuscule du sol réparé (appareil / sol 0,87–1,08 jusqu'à −12,7°), ombres d'arbres et du décor, albédos mesurés. Ses questions attendent Sam (ci-dessous) |
+| Rendu (33d89754) | J3 — lumière, ombres, cockpit | **mené (15 nov.)** : J3-0 à J3-7 et J3-R faits ou réglés provisoirement selon les recommandations de [PLAN-J3](docs/PLAN-J3-LUMIERE-COCKPIT.md) §8 ; le crépuscule du sol réparé (appareil / sol 0,87–1,08 jusqu'à −12,7°), ombres d'arbres et du décor, albédos mesurés. **Confirmé par Sam (15 nov., ~19:55)** ; reste J3-R (les anciens chemins) |
 | Rendu (33d89754) | J4 / J5 — l'eau, les volumes, la généralisation | **fermés** ([PLAN-J4](docs/PLAN-J4-VOLUMES.md), [PLAN-J5](docs/PLAN-J5-GENERALISATION.md)) : l'eau à demi-rythme (J5-5, −6,0 à −6,4 ms, l'image la même) ; le sol à demi-rythme laissé au joueur (J5-6, réglage « demi » : −1,9 à −3,2 ms ; « auto » à chaque pixel) ; la FFT de la mer en deux passes (−0,9 ms) ; la carte d'ombre des arbres (−2,8 ms, forêt) ; Sam a refusé les arbitrages d'image (MSAA 1×, petits arbres, nuages amortis). Postes lourds restants : l'eau 16,2, les nuages d'orage 16,5, le décor d'une forêt ~7 ms |
 | Rendu (33d89754) | Mesures tenues | la borne du M1 Max **à 30, provisoire** (soutenu, le GPU bride vers 850 MHz quelle que soit la borne — [J0-CONTRAT §2](docs/J0-CONTRAT.md)) ; le coût de l'appareil 3,5–4,5 ms, dont le MSAA 4× 4–5 ms (gardé) |
 | PLAN-APPROCHES (1feb2f7f) | [PLAN-APPROCHES](docs/PLAN-APPROCHES.md) | **AP0 à AP6 et AP7a faits (15 nov.)** : nav.dat lié aux pistes (3 259 / 3 501 localizers), le CIFP de la FAA (9 568 approches publiées des États-Unis) ; l'approche choisie (choix auto par vent, aide, longueur, sens d'arrivée) ; la jonction planifiée (jamais au-dessus du terrain, 300 m sur le relief) — `approach-join` 4/4 à Nice, 8/8 sans navigateur à Edwards ; l'A320 (même jonction, MCDU ARRIVAL/VIA, RAD NAV réel, ND) ; la carte tactique, le radar du HUD, la TSD et le crew (choix au clic, tracé, vue « Approche », appels) ; toutes les pistes au HUD (Q2 : activé par défaut, sans touche). **Reste : AP7b (directeur de vol), AP8 (roue, options), AP9 (radio, audio), AP10 (tous les aéroports), AP-R (retraits)** ; la fiche de terrain au clic de la carte et du globe du crew |
@@ -57,11 +57,13 @@ J4 (fermé, sortie non atteinte) et J5 (fermé) ; **en cours : J6, les parcours 
 (Jupiter à froid 73,7 → 47 s) ; le grain des anneaux de Saturne ; J2 (13 nov.) ; J2-C BC7 rangée (Sam). Le plafond des binaires suivis monté à
 700 Mo (Sam, f4bba608).
 
-**Attend Sam** : les questions de [PLAN-J3](docs/PLAN-J3-LUMIERE-COCKPIT.md), réglées provisoirement selon ses recommandations (dont le plancher
-de nuit du sol sous −15°) ; **le repli du raster vers le tracé, dormant sur la Terre depuis J2-7** ([PROBLEMES-A-REGLER](docs/PROBLEMES-A-REGLER.md) :
-recommandation (b), le retirer sur la Terre ; en attendant il reste dormant, son code non retiré) ; la borne du M1 Max (30, révisable) ; les seuils
-p99 et CPU du mini, à fixer sur mesure. Audit : sauver l'état complet d'une mission ou d'un combat, ou seulement le dire comme aujourd'hui
-(recommandation : le dire) ; avant RD3, le niveau de défense du réseau.
+**Décidé par Sam (15 nov., ~19:55 UTC, « j'accepte tes recommandations »)** : PLAN-J3 §8 confirmé tel quel (J3-R peut retirer les anciens
+chemins) ; le repli du raster vers le tracé **retiré sur la Terre** (b, retrait à faire — [PROBLEMES](docs/PROBLEMES-A-REGLER.md)) ; la borne
+du M1 Max : **essai à 40 à refaire** avant de la figer (30 jusque-là) ; les seuils p99 et CPU du mini **fixés à la reprise de la cible 40 ms** ;
+l'état d'une mission ou d'un combat **non sauvé, dit** ; le réseau **« entre amis »**, RD3 non ouvert ([J0-CONTRAT](docs/J0-CONTRAT.md) §2,
+[PLAN-RESEAU-DURCISSEMENT](docs/PLAN-RESEAU-DURCISSEMENT.md) §4).
+
+**Attend Sam** : rien d'ouvert à ce jour (les seuils du mini et la borne du M1 Max attendent leurs mesures, pas une décision).
 
 ## Journal
 
@@ -8214,3 +8216,14 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   `gpu-recovery` 2/2, `gpu-recovery-hold` 1/1.
 - Limites : trois tests de `gpu-startup` échouent (LUT de qualité, noyau adaptatif, `prof.table`), sans rapport établi, non rejoués avant.
 - Suite : l'annulation de TARS selon le point de reprise ; les blocages relevés.
+
+### 2026-11-15 19:58 UTC — Décisions de Sam : PLAN-J3 confirmé, repli tracé retiré sur la Terre, borne M1 Max à réessayer à 40, mission non sauvée, réseau « entre amis »
+
+- Contribution : §15 J3 (sortie confirmée), §8 (contrat de performance : borne et seuils), §19.9 (sauvegardes), §19.10 (même monde) — six
+  questions ouvertes fermées par Sam sur les recommandations de la session d'analyse.
+- Réalisé (documenté) : PLAN-J3 (état, §8 confirmé) ; PROBLEMES-A-REGLER (le repli : (b) décidé, retrait à faire) ; J0-CONTRAT §2 (borne :
+  essai à 40 ; seuils p99/CPU du mini à la reprise de 40 ms) ; PLAN-RESEAU-DURCISSEMENT (en-tête, §4 décision 1 : « entre amis ») ;
+  audit 09-priorites-todo ligne 3.3 (mission et combat : le dire) ; État courant.
+- Preuve : décisions écrites, aucun code changé, aucune mesure faite par cette session.
+- Suite : session du rendu (après J6) — J3-R (anciens chemins sans utilisateur), le retrait du repli sur la Terre et de la partie « repli »
+  de `raster-governor`, l'essai de la borne à 40 sur le M1 Max (état soutenu, deux passages).

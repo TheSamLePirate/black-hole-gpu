@@ -272,6 +272,10 @@ cadence en retirant du contenu, ce que CLAUDE.md interdit. **Recommandation rév
 son plancher de qualité à régler) ; ou (a) seulement avec un critère d'image en plus de la vitesse. L'e2e : sa vérification de
 cadence mise au contrat actuel (1 sous le matériau) ; sa partie « repli » mise de côté jusqu'à la décision.
 
+**Décision de Sam (2026-11-15 ~19:55 UTC) : (b)** — le repli vers le tracé est retiré sur la Terre (le raster toujours, son plancher de
+qualité à régler) ; le code du repli sur la Terre et la partie « repli » de l'e2e `raster-governor` sont à retirer (lot de la session du
+rendu, après J6). Reste ouvert ici jusqu'à ce retrait.
+
 ## ~~Des taches de couleur sur la mer au crépuscule~~ — réglé le 13 novembre 2026 (~20:29 UTC) : la sonde en demi-flottants sous-normaux
 
 - **Observé** (kerr-mini, J0 Toulon-Hyères, 10 juillet 19:40 UTC — le Soleil couché —, vue de trois quarts arrière vers l'ouest, profil neutre,
