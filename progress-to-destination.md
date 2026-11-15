@@ -34,7 +34,7 @@ les preuves restent dans les entrées datées du journal, dessous.
 
 | Machine | GPU p50 mesuré | Cible | Plus gros poste |
 |---|---:|---:|---|
-| kerr-mini | 58,4 ms (5c420e09, 13 nov.) ; **56,3 ms avec l'eau E1** (A/B, 13 nov.) ; **57,3 ms le 15 nov.** (0bb2aa86, un vol, après les corrections de J3) | 40 ms (25 images/s régulières) | l'eau : 16,2 ms ; sans son matériau −13,0 ms (−10,1 avec E1) |
+| kerr-mini | **52,0 ms (984e821d, 15 nov., l'eau à demi-rythme — J5-5)** ; 58,4 ms (5c420e09, 13 nov.) ; **56,3 ms avec l'eau E1** (A/B, 13 nov.) ; **57,3 ms le 15 nov.** (0bb2aa86, un vol, après les corrections de J3) | 40 ms (25 images/s régulières) | l'eau : 16,2 ms ; sans son matériau −13,0 ms (−10,1 avec E1) |
 | M1 Max | 22,5 ms, **frais** (12 nov., 98–100 °C) — non valable comme palier ; **15 nov., borné à 30 : beau temps 21,3 / 21,4 ms tenu soutenu ; orage 28,6 en vol, décroche en soutenu (14,6 images/s, 986 MHz) — chaleur héritée : parti froid, l'orage tient 30 soutenu (27,9 ms)** | 16,7 ms (60 images/s), bornée et soutenue | l'eau : 5,3 ms pour une enveloppe de 1,0 |
 
 **L'ordre décidé** (stratégie §24) : l'eau étagée (surface → éclairage → reflets) → la classification de l'écran par tuiles et les lancements
@@ -7445,4 +7445,5 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   version intermédiaire montrait des points blancs aux côtes : corrigée et revérifiée) ; `check-wgsl` 84/84, tests des noyaux.
 - Limites : le reflet intense du Soleil et la houle proche non vérifiés ; la finition de l'eau reste à pleine cadence (4,2 ms) ; allumé
   sous réglage provisoire.
-- Suite : le vol J0 de référence avec ce défaut (en cours) ; la finition de l'eau au demi-rythme (~2 ms possibles).
+- Mesuré ensuite (kerr-mini, 984e821d) : **J0 vol GPU p50 52,0 ms** (56,7–57,3 avant) ; ablation `waterFull` 55,2 contre 49,8 / 49,7.
+- Suite : la finition de l'eau au demi-rythme (~2 ms possibles).
