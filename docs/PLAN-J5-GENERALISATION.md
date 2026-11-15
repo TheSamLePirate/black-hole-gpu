@@ -291,3 +291,11 @@ Les plafonds de J5-1 au beau temps, de J5-2 par corps et la parité du repli tra
   tout à 0, le témoin seul bougeait), corrigée avant d'en tirer un chiffre. **Mesuré** (A/B ×2, même vol) : la passe **2,58 / 2,27 →
   1,63 / 1,39 ms (−0,9)** ; GPU p50 de l'image 52,4 / 49,7 → 52,0 / 48,9 (dans le bruit d'un vol). Ancien chemin retiré (règle 2) ; la
   sonde aussi (sans ancien chemin, plus rien à comparer).
+- **L'appareil par parties ; ce qui reste sans compromis d'image** (2026-11-15 14:52 UTC) : ablations J0 (kerr-mini, base ≈ 49,2 ms) — la
+  **coque −3,9 ms**, l'appareil entier −4,4, la verrière −1,0, la passe de tuyère et le redessin du masque au bruit. La coque coûte par ses
+  pixels (MSAA, composition — la fiche J3-6 : son ombrage réduit à un gris au bruit), ses passes MSAA résolvent déjà dans la tuile
+  (`storeOp: "discard"`), sa pré-passe de profondeur existe : pas de levier sûr. Les cascades de la FFT choisies par la mer **visible**
+  (le nez cache la mer sous l'avion : la plus fine, 4,9 m, calculée pour rien depuis le cockpit) rendraient ~0,4–0,6 ms, par un critère
+  fragile (le bord du masque) — non ouvert. **Bilan** : après la FFT (−0,9), les leviers sans effet sur l'image qui restent lus sont
+  chacun sous 1 ms ; **les 40 ms du mini (J0 ~49–51) ne paraissent pas atteignables sans un compromis d'image ou une refonte d'un gros poste**
+  (les nuages 6,3, l'eau 5,0 — leurs noyaux) — à Sam.

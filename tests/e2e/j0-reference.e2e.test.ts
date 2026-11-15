@@ -71,6 +71,11 @@ const ABLATIONS: Record<string, { label: string; set: string }> = {
   // "ship: shading (MSAA)" and "ship: shadow map" at 18–23 ms in the first run, but render passes overlap on Apple — GP-09)
   ship: { label: "sans dessin de l'appareil (debugSkipShip ; son masque reste)", set: `__bh.renderer.debugSkipShip = true;` },
   shipShadow: { label: "sans carte d'ombre de l'appareil", set: `__bh.renderer.ship.debugSkip.add("shadow");` },
+  // (the craft's parts one at a time — ship.debugSkip, measures: its exhaust's pass, its own mask's redraw, its canopy, its depth pre-pass)
+  shipPlume: { label: "appareil sans sa passe de tuyère (mesure)", set: `__bh.renderer.ship.debugSkip.add("plume");` },
+  shipOwn: { label: "appareil sans le redessin de son masque (mesure)", set: `__bh.renderer.ship.debugSkip.add("own");` },
+  shipGlass: { label: "appareil sans sa verrière (mesure)", set: `__bh.renderer.ship.debugSkip.add("glass");` },
+  shipHull: { label: "appareil sans sa coque (mesure)", set: `__bh.renderer.ship.debugSkip.add("hull");` },
   // (PLAN-J2's levers — singleHistory, edgeFoot, earthRateOne — measured here, their old paths retired with them, lot R1, 13 Nov 2026)
   // (the sea's parts — PLAN-MER-WEBGPU —: J0_ORDER=base,seaSurface,seaFft,seaProbe,seaFoam,base to run them)
   seaSurface: { label: "mer plate (sans surface déplacée)", set: `__bh.renderer.seaSurfaceOn = false;` },

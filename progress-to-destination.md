@@ -7763,3 +7763,12 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
 - Limites : J0 reste ~49–51 ms ; les mips de la FFT (~0,3–0,5 ms) non touchés.
 - Suite : les plus gros postes restants (nuages 6,3, appareil 5,3, eau 5,0) — chercher leurs coûts de structure (présence de code,
   mémoire), sans toucher l'image.
+
+### 2026-11-15 14:52 UTC — L’appareil par parties ; le bilan des leviers sans compromis d'image
+
+- Contribution à la destination : §8 — la carte des coûts de J0 complétée (PLAN-J5 §5).
+- Réalisé : ablations J0 `shipPlume`, `shipOwn`, `shipGlass`, `shipHull` (mesures) ; E2E-CATALOGUE.
+- Preuves (mesuré, kerr-mini) : coque −3,9 ms, appareil −4,4, verrière −1,0, tuyère et masque au bruit ; ses passes MSAA déjà en
+  `discard`, sa pré-passe en place.
+- Limites : aucun gain livré par ce lot ; les cascades par mer visible (~0,5 ms) non ouvertes.
+- Suite : les 40 ms du mini demandent un compromis d'image ou la refonte des noyaux des nuages ou de l'eau — décision de Sam.
