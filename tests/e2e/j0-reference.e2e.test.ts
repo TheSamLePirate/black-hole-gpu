@@ -34,7 +34,7 @@ import { sceneryReady } from "./lib/plan-views";
 // Output: remote-results/j0/<machine>/ (J0_OUT): j0.json, shots (start, mid-turn, end; each ablation's last frame).
 // J0_PHASES=flight,ablate,sustained (default all; sustained: the flight again after the ablations, the machine hot), ABLATE_S (20), J0_MACHINE (the label: "m1max", "kerr-mini"; default the host name).
 // J0_WEATHER=storm (PLAN-J4 J4-0: the heavy profile — the same scene under a storm, its own id; J0_CLOUDS its cover, 0.9 by default).
-// Other phases, asked by name: agecheck, framing (PLAN-J3 J3-0), keylight, keyair, keysky, skyband4, coherence (J3-1), keyhaze (J3-2), waterincident (J3-7), shadows (J3-3), wetbld, cityview, materials (J3-5), seadusk, probedump, tracedview (PROBLEMES), twilightdim (J3-1), nightfloor (J3 question 7), nightbands (PROBLEMES), craftshade (J3 question 3) (J3-1: the craft's key light against the incident Sun toward
+// Other phases, asked by name: agecheck, framing (PLAN-J3 J3-0), keylight, keyair, keysky, skyband4, coherence (J3-1), keyhaze (J3-2), waterincident (J3-7), shadows (J3-3), wetbld, cityview, materials (J3-5), seadusk, probedump, tracedview (PROBLEMES), twilightdim (J3-1), nightfloor (J3 question 7), nightbands (PROBLEMES), craftshade (J3 question 3), cloudlag (J4-1) (J3-1: the craft's key light against the incident Sun toward
 // sunset, ~3 min on kerr-mini; keyair: its air two ways, march and table, ~4 min; keysky: the sky's light two ways, ~4 min; coherence: the three gaps in one read per hour, ~5 min).
 // Not a pass/fail on the frame rate: the fiche is written from j0.json (docs/progress/j0/). It fails on a GPU error, a craft not
 // placed, a flight not flown.
@@ -1516,6 +1516,72 @@ describe.skipIf(!E2E)("J0: the reference flight over Toulon-Hyères", () => {
         `(() => { __bh.renderer.tune = {}; Object.assign(__bh.settings, { autoExposure: true, exposure: 0, shipMount: "cockpit" }); __bh.freeze(false); __bh.game.setDate("${J0_SCENE.date}"); return 1; })()`,
       );
       expect(Math.abs((rows.drawnCraft as number) - (rows.drawnAgainCraft as number))).toBeLessThan(2);
+    },
+    900_000,
+  );
+
+  // (PLAN-J4 J4-1 — the clouds' history behind their drift, J0_PHASES=cloudlag: the free camera fixed 1 900 m over Toulon facing the
+  // « cloudy » cumulus — the time running, the weather's clouds drifting with its wind —; image A taken running, then the world frozen and
+  // the history left to converge: image B, the same instant's reference. |A − B| over the upper frame (the clouds) — the history's lag
+  // behind the drift, and the amortisation's own noise. Controls (rule 3): the time stopped — A/A: the noise alone —; the time × 30 —
+  // positive: thirty times the drift a frame. Each case twice)
+  test.skipIf(!PHASES.includes("cloudlag"))(
+    "J4-1: the clouds' history behind their drift — running against the same instant converged; stopped (A/A), × 30 (positive)",
+    async () => {
+      await start("");
+      const speed0 = await app.js<number>("__bh.settings.timeSpeed");
+      const rows: Record<string, number[]> = {};
+      const shot = async (file?: string) => {
+        const x = (await app.cdp.send("Page.captureScreenshot", { format: "png" })) as { data: string };
+        const bytes = Buffer.from(x.data, "base64");
+        if (file) await Bun.write(file, bytes);
+        return readPng(new Uint8Array(bytes));
+      };
+      for (const [name, k] of [
+        ["stopped", 0],
+        ["realtime", 1],
+        ["x30", 30],
+        ["stopped2", 0],
+        ["realtime2", 1],
+        ["x30b", 30],
+      ] as const) {
+        await app.js(`(async () => { const f = () => new Promise((q) => requestAnimationFrame(q)); __bh.freeze(false);
+          __bh.game.set("weather", "cloudy"); __bh.game.setDate("2026-07-10T15:30:00Z");
+          const why = __bh.viewAt(43.06, 6.32, { altM: 1900, heading: 270, pitch: 2, fov: 50 }); if (why) throw new Error(why);
+          Object.assign(__bh.settings, { lookProfile: "neutral", dof: false, motionBlur: 0, autoExposure: true, exposure: 0 });
+          document.body.classList.add("hide-ui"); __bh.refresh(); for (let i = 0; i < 30; i++) await f(); return 1; })()`);
+        await app.settled(120_000);
+        // (the exposure the free view settles to, then held: A and B under the same one)
+        await app.js(`(async () => { const f = () => new Promise((q) => requestAnimationFrame(q)); __bh.renderer.settleExposure(); for (let i = 0; i < 30; i++) await f();
+          Object.assign(__bh.settings, { autoExposure: false, exposure: __bh.renderer.ev(__bh.settings) });
+          __bh.settings.timeSpeed = ${speed0} * ${k}; __bh.refresh(); for (let i = 0; i < 150; i++) await f(); return 1; })()`);
+        const A = await shot(`${OUT}/cloudlag-${name}-A.png`);
+        await app.js(`(async () => { const f = () => new Promise((q) => requestAnimationFrame(q)); __bh.freeze(true); __bh.touch();
+          for (let i = 0; i < 120; i++) await f(); return 1; })()`);
+        const B = await shot(`${OUT}/cloudlag-${name}-B.png`);
+        let t = 0,
+          n = 0;
+        const diffs: number[] = [];
+        for (let y = Math.floor(0.08 * A.height); y < Math.floor(0.5 * A.height); y += 2)
+          for (let xx = 0; xx < A.width; xx += 2) {
+            const i = (y * A.width + xx) * A.channels;
+            const la = 0.2126 * A.data[i]! + 0.7152 * A.data[i + 1]! + 0.0722 * A.data[i + 2]!;
+            const lb = 0.2126 * B.data[i]! + 0.7152 * B.data[i + 1]! + 0.0722 * B.data[i + 2]!;
+            const d = Math.abs(la - lb);
+            t += d;
+            n++;
+            diffs.push(d);
+          }
+        diffs.sort((a, b) => a - b);
+        rows[name] = [+(t / n).toFixed(3), +diffs[Math.floor(0.99 * (diffs.length - 1))]!.toFixed(2)];
+        console.log(`  J4-1 cloud lag ${name}: mean |A−B| ${rows[name]![0]}, p99 ${rows[name]![1]}`);
+      }
+      out.cloudlag = rows;
+      await app.js(
+        `(() => { document.body.classList.remove("hide-ui"); __bh.settings.timeSpeed = ${speed0}; Object.assign(__bh.settings, { autoExposure: true }); __bh.game.set("weather", "${J0_SCENE.weather}"); __bh.freeze(false); return 1; })()`,
+      );
+      // (the positive: × 30 beyond twice the stopped noise)
+      expect(rows.x30![0]!).toBeGreaterThan(2 * rows.stopped![0]!);
     },
     900_000,
   );

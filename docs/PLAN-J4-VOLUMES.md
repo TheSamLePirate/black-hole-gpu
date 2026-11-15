@@ -155,3 +155,8 @@ Le relevé du §2 vient d'une lecture du code et des documents (agent d'explorat
   (orage, deux passages) — l'échantillonneur matériel rendrait **~1 ms au plus** : pas un lot (règle 1). **J4-2 fermé pour l'instant** : la
   lumière des nuages coûte ~9,8 ms sous orage, dont le cache existant rend déjà ~5 ms ; les leviers lisibles (pas, repère, lectures) rendent
   chacun ≤ 1,6 ms — le reste tient à la structure du noyau (sa taille, ses registres) : à reprendre avec le découpage des noyaux.
+- **J4-1, la sonde du retard des nuages, et le lot non ouvert** (2026-11-15 03:45 UTC) : phase J0 `cloudlag` (la caméra libre fixe à 1 900 m face aux
+  cumulus de « cloudy », le temps en marche ; l'image en marche contre le même instant convergé). Témoins (règle 3) : A/A (temps arrêté) moyenne
+  |A−B| 0,056, p99 1 ; positif (× 30) 0,27–0,35, p99 7–9 — passés. **Au temps réel : 0,09–0,10, p99 2–2,2** — un niveau de plus que le bruit,
+  invisible. Le vent dans l'historique ne corrigerait rien de visible au temps réel ; il compterait en temps accéléré. **Non ouvert** ; la sonde
+  gardée (vent plus fort, nuages proches, accélérations).
