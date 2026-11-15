@@ -12,7 +12,6 @@ import {
   QUALITY_KEYS,
   SCENE_GROUPS,
   SCHEMA,
-  SCHEMA_BY_KEY,
   SECTIONS,
   type ChoiceDef,
   type ControlDef,
@@ -22,9 +21,9 @@ import {
 import { store } from "../util/storage";
 import { gameLog } from "../game/log";
 import { decimalsFor, formatValue, fromSlider, sameValue, sliderPercent, toSlider } from "./settings/values";
+import { type Diff, describeDiff, diffFromDefaults, matchesControl, matchingQuality, mergedSettings } from "./panel-pure";
 
 type Key = keyof Settings;
-type Diff = { key: Key; before: unknown; after: unknown }[];
 
 export interface PanelOptions {
   settings: Settings;
@@ -252,8 +251,7 @@ export class SettingsPanel {
   }
 
   private describe(d: Diff) {
-    if (d.length === 1) return t(SCHEMA_BY_KEY.get(d[0]!.key)?.label ?? String(d[0]!.key));
-    return tf("{0} settings", d.length);
+    return describeDiff(d);
   }
 
   private applyValues(entries: [Key, unknown][]) {
@@ -531,24 +529,12 @@ export class SettingsPanel {
   }
 
   private diffFromDefaults(): Partial<Settings> {
-    const d = this.o.defaults();
-    const out: Record<string, unknown> = {};
-    for (const k of Object.keys(this.s) as Key[]) {
-      if (k === "pixelRatio") continue;
-      if (!sameValue(this.s[k], d[k])) out[k] = this.s[k];
-    }
-    return out as Partial<Settings>;
+    return diffFromDefaults(this.s, this.o.defaults());
   }
 
   /** Applies a (partial) settings object on top of the defaults (or of the current state). */
   private applyObject(obj: Partial<Settings>, fromDefaults: boolean) {
-    const d = this.o.defaults();
-    const target: Record<string, unknown> = fromDefaults ? { ...d, pixelRatio: this.s.pixelRatio } : { ...this.s };
-    for (const [k, v] of Object.entries(obj)) {
-      if (!(k in d)) continue;
-      const dv = (d as unknown as Record<string, unknown>)[k];
-      if (k === "realtimeSubsampling" ? v === "auto" || typeof v === "number" : typeof v === typeof dv) target[k] = v;
-    }
+    const target = mergedSettings(obj, this.o.defaults(), this.s, fromDefaults);
     this.begin();
     const entries: [Key, unknown][] = [];
     for (const k of Object.keys(target) as Key[]) if (!sameValue(this.s[k], target[k])) entries.push([k, target[k]]);
@@ -558,10 +544,7 @@ export class SettingsPanel {
 
   // ---------------------------------------------------------------------------------- quality
   private matchingQuality(): Quality | null {
-    const q = this.s.quality;
-    const ref = QUALITY[q];
-    if (!ref) return null;
-    return (Object.keys(ref) as (keyof typeof ref)[]).every((k) => sameValue(ref[k], this.s[k])) ? q : null;
+    return matchingQuality(this.s);
   }
 
   private renderQuality() {
@@ -650,9 +633,7 @@ export class SettingsPanel {
 
   private matches(d: ControlDef, q: string) {
     // (the search finds a setting by its words in either language)
-    const hay =
-      `${d.label} ${d.group} ${d.section} ${d.help ?? ""} ${d.keywords ?? ""} ${String(d.key)} ${t(d.label)} ${t(d.group)} ${t(d.help ?? "")}`.toLowerCase();
-    return q.split(/\s+/).every((w) => hay.includes(w));
+    return matchesControl(d, q);
   }
 
   private renderBody() {

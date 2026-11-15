@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-15 07:59 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-15 08:02 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous.
@@ -7505,4 +7505,13 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   parcouru avec ↑ ↓ comme l'historique d'un terminal (le brouillon rendu en dessous), un réveil de TARS nommé par ce qui l'a réveillé.
   Sortis dans `src/ui/tars-panel-pure.ts` (`rememberAsked`, `stepAsked`, `exchangeLabel`) ; `tests/tars-panel-pure.test.ts` 3/3 ; tests
   de TARS 94/94 ; e2e `tars-agent` 12/12 (son ↑ compris).
+
+### 2026-11-15 08:02 UTC — Audit QA-10 (un pas) : les décisions du panneau du Labo sorties et testées
+
+- `src/ui/panel.ts` (1 190 lignes, jamais importé par un test) : le contenu d'un préréglage (les réglages loin de leurs valeurs par défaut,
+  jamais le rapport de pixels), un import posé sur les valeurs par défaut (clés inconnues et mauvais types écartés), la qualité encore
+  tenue, la recherche d'un réglage par ses mots dans les deux langues, le nom d'une annulation. Sortis dans `src/ui/panel-pure.ts` ;
+  `tests/panel-pure.test.ts` 4/4, `settings-schema` vert ; e2e `settings` 7/7.
+- QA-10 à ce jour : `netsession`, `crew/errors`, `netmatch`, `fc/computer`, `tars-panel`, `panel` ont leur logique pure testée ; restent
+  `main.ts`, `crew/main.ts` (câblage) et ce que le rendu possède.
 
