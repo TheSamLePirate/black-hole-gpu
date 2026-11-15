@@ -217,6 +217,13 @@ avant `[info no-time, pilot t]`, après `[pilot t]`.
   autre instant ou à un autre pas que la position) — l'avion « posé » (`landedAt`, tenu dans le repère du sol) ne dérive pas ; et pourquoi la
   condition de repos (`still`, moins de 0,05 m/s relatifs) ne se déclenche pas si les roues se voient au repos.
 
+## Deux tests de `gpu-startup` échouent : le LUT de qualité et le noyau adaptatif n'atteignent pas l'état attendu (relevé le 15 novembre 2026)
+
+**État (15 nov. 2026, 20:35 UTC)** : relevé en passant (PLAN-J6 J6-6), non étudié. `gpu-startup` › « the quality LUT starts compiling as the quality
+kernel lands » : `qualityCompile.state === "pending" && lutWanted` jamais vrai en 30 s ; « failed adaptive kernel … » : `pipelineStatus.quality ===
+"failed"` jamais vrai en 30 s (kerr-mini, deux passages). Un troisième (« variants retain … ») échouait par son faux renderer (`prof.table` absent
+depuis H5, 3 nov.) : corrigé dans le test. Aucun lien établi avec les lots du jour ; non rejoués sur une révision antérieure.
+
 ## Le bouton de la couche météo de la carte masqué par la carte elle-même (relevé le 15 novembre 2026, e2e `weather-panel`)
 
 **État (15 nov. 2026, 18:03 UTC)** : relevé en passant (PLAN-J6 J6-2), non étudié. `weather-panel` › « the planisphere's weather layer » : le

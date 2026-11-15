@@ -9,7 +9,9 @@ import { App, E2E, stopServer } from "./lib/app";
 // Duration: ~1 min on kerr-mini.
 // Then a command gone stale: « Monte à 4000 m » asked of the F-35 in flight, the model's answer slow (3 s), the craft changed to the Ranger
 // meanwhile — the call checked against the state when it runs: refused, said, nothing engaged.
-// Done when: the take-off ended and the holds read; the stale command answered.
+// Then the undo as its checkpoint covers it: « Emmène-moi au-dessus de Paris » (place_ship — the game saved first as « Before TARS »), then
+// « Annule » (saves undo): the place, the fuel, the gear and the flaps as before the turn.
+// Done when: the take-off ended and the holds read; the stale command answered; the teleport undone.
 const MODEL = `(() => {
   window.__or = [];
   const real = window.fetch.bind(window);
@@ -38,6 +40,14 @@ const MODEL = `(() => {
         return reply({ content: null, tool_calls: [call("s", "jet_autopilot", { alt: 4000, ap: true })] });
       }
       return reply({ content: "Retour : " + tools[0].content });
+    }
+    if (/Emmène-moi au-dessus de Paris/.test(q)) {
+      if (!tools.length) return reply({ content: null, tool_calls: [call("p", "place_ship", { mode: "fly", body: "earth", lat: 48.85, lon: 2.35, aglM: 1500, headingDeg: 0, speedMs: 180 })] });
+      return reply({ content: "Placé : " + tools[0].content });
+    }
+    if (/Annule/.test(q)) {
+      if (!tools.length) return reply({ content: null, tool_calls: [call("u", "saves", { action: "undo" })] });
+      return reply({ content: "Annulé : " + tools[0].content });
     }
     return reply({ content: "Rien à signaler." });
   };
@@ -109,5 +119,37 @@ describe.skipIf(!E2E)("J6-7: TARS during the automatic take-off — the truth of
     expect(r.holds).toEqual([null, null, null]);
     // (the reason the true one — the craft —, not « in the air »)
     expect(r.text).toMatch(/F-35/);
+  }, 120_000);
+
+  test("undone as the checkpoint covers it: « Emmène-moi au-dessus de Paris », then « Annule » — the place, the fuel, the gear and the flaps back", async () => {
+    await app.js(`(() => { __bh.settings.vessel = "f35"; return 1; })()`);
+    await app.waitFor(`__bh.fleet.active === "f35"`, 20_000);
+    const before = await app.js<{ lat: number; lon: number; fuel: number; gear: boolean; flaps: number }>(`(() => {
+      __bh.game.flyAt(34.9, -117.9, 2000, 90, 180); const c = __bh.camera;
+      __bh.fleet.fuel.f35 = 3000; c.gearInit = true; c.gearDown = true; c.gearExt = 1; c.airFlight.cfg.flaps = 0.5;
+      const g = c.geoNow(); return { lat: g.lat, lon: g.lon, fuel: Math.round(__bh.fleet.fuel.f35), gear: c.gearDown, flaps: c.airFlight.cfg.flaps }; })()`);
+    await Bun.sleep(1000);
+    await app.type("Emmène-moi au-dessus de Paris.");
+    await app.press("Enter");
+    await app.waitFor(`(__bh.tars.agent.lastText ?? "").startsWith("Placé")`, 30_000);
+    const there = await app.js<{ lat: number; lon: number; fuel: number; text: string }>(
+      `(() => { const g = __bh.camera.geoNow(); return { lat: g.lat, lon: g.lon, fuel: Math.round(__bh.fleet.fuel.f35), text: __bh.tars.agent.lastText }; })()`,
+    );
+    await app.type("Annule.");
+    await app.press("Enter");
+    await app.waitFor(`(__bh.tars.agent.lastText ?? "").startsWith("Annulé")`, 30_000);
+    await Bun.sleep(1500);
+    const back = await app.js<{ lat: number; lon: number; fuel: number; gear: boolean; flaps: number; text: string }>(`(() => {
+      const c = __bh.camera, g = c.geoNow(); return { lat: g.lat, lon: g.lon, fuel: Math.round(__bh.fleet.fuel.f35), gear: c.gearDown, flaps: c.airFlight.cfg.flaps,
+        text: __bh.tars.agent.lastText }; })()`);
+    console.log(`  undo: before ${JSON.stringify(before)}; at Paris ${JSON.stringify(there)}; back ${JSON.stringify(back)}`);
+    // (Paris reached, then back where the turn found it — a few km of flight meanwhile —, its craft as the save covers it)
+    expect(Math.abs(there.lat - 48.85)).toBeLessThan(0.2);
+    expect(Math.abs(back.lat - before.lat)).toBeLessThan(0.1);
+    expect(Math.abs(back.lon - before.lon)).toBeLessThan(0.1);
+    expect(Math.abs(back.fuel - before.fuel)).toBeLessThan(60);
+    expect(back.gear).toBe(true);
+    expect(back.flaps).toBe(0.5);
+    expect(back.text).not.toMatch(/undo: none/);
   }, 120_000);
 });

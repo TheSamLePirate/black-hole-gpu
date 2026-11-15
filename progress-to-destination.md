@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-15 20:27 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-15 20:35 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous. Ce qui est fermé quitte le tableau « En cours » pour la ligne « Fermé récemment ».
@@ -45,14 +45,13 @@ J4 (fermé, sortie non atteinte) et J5 (fermé) ; **en cours : J6, les parcours 
 
 | Session (T3) | Lot | État |
 |---|---|---|
-| Rendu (33d89754) | **J6 — les parcours complets** ([PLAN-J6](docs/PLAN-J6-PARCOURS.md)) | **les neuf parcours ont leur e2e** (15 nov., 19:39) : J6-1 à J6-5, J6-7, J6-8 faits, J6-6 en solo ; cinq défauts corrigés (décollage automatique, décor en vol rapide, météo réelle fondue, repos au sol, A320 rechargé) ; la commande périmée de TARS refusée à juste raison ; la perte du GPU en salle jouée (retour sur l'heure de la salle, dit) ; reste l'annulation de TARS |
 | Rendu (33d89754) | J3 — lumière, ombres, cockpit | **mené (15 nov.)** : J3-0 à J3-7 et J3-R faits ou réglés provisoirement selon les recommandations de [PLAN-J3](docs/PLAN-J3-LUMIERE-COCKPIT.md) §8 ; le crépuscule du sol réparé (appareil / sol 0,87–1,08 jusqu'à −12,7°), ombres d'arbres et du décor, albédos mesurés. **Confirmé par Sam (15 nov., ~19:55)** ; reste J3-R (les anciens chemins) |
 | Rendu (33d89754) | J4 / J5 — l'eau, les volumes, la généralisation | **fermés** ([PLAN-J4](docs/PLAN-J4-VOLUMES.md), [PLAN-J5](docs/PLAN-J5-GENERALISATION.md)) : l'eau à demi-rythme (J5-5, −6,0 à −6,4 ms, l'image la même) ; le sol à demi-rythme laissé au joueur (J5-6, réglage « demi » : −1,9 à −3,2 ms ; « auto » à chaque pixel) ; la FFT de la mer en deux passes (−0,9 ms) ; la carte d'ombre des arbres (−2,8 ms, forêt) ; Sam a refusé les arbitrages d'image (MSAA 1×, petits arbres, nuages amortis). Postes lourds restants : l'eau 16,2, les nuages d'orage 16,5, le décor d'une forêt ~7 ms |
 | Rendu (33d89754) | Mesures tenues | la borne du M1 Max **à 30, provisoire** (soutenu, le GPU bride vers 850 MHz quelle que soit la borne — [J0-CONTRAT §2](docs/J0-CONTRAT.md)) ; le coût de l'appareil 3,5–4,5 ms, dont le MSAA 4× 4–5 ms (gardé) |
 | PLAN-APPROCHES (1feb2f7f) | [PLAN-APPROCHES](docs/PLAN-APPROCHES.md) | **AP0 à AP8 faits (15 nov.)** : données réelles (nav.dat, CIFP de la FAA), choix automatique, jonction planifiée, A320 (MCDU, ND), carte, radar, TSD, crew, toutes les pistes au HUD, directeur de vol (F-35, A320, crew), pente publiée ; AP8 : le secteur « Approche » de la roue (F-35 et A320, `approach-wheel` 2/2 en entrée réelle) et les options du Labo ; la remise de gaz sur l'ILS (crew, TARS, roue). **Reste : AP9 (radio, audio), AP10 (tous les aéroports), AP-R (retraits)** |
 | Audit vagues 3–4 et 6 (1feb2f7f) | [09-priorites-todo](docs/audit-2026-11-10/09-priorites-todo.md) | **faits** : 3.1–3.2 réseau (RD0–RD2), 3.3 sauvegardes (une clé par sauvegarde ; avion, systèmes des vaisseaux et de l'A320 — ce dernier par J6-4), 3.4–3.5 vol, 3.6–3.7 TARS, 3.10 e2e honnêtes, 4.2 temps et onglet masqué, 4.3 `Settings`/`ViewPose`, 4.8 `main()` découpé ; vague 6 hors rendu (QA, AR, RD4/RD5, FX). **Reste** : l'état d'une mission ou d'un combat (Sam), IndexedDB et l'autosauvegarde hors frame (AR-05), FX-19 (fraîcheur des écrans, à mesurer), FX-21 |
 
-**Fermé récemment** : l'eau étagée E1 (−1,55 ms) et E2 (−0,5 ms), E3 non ouvert ; la classification lot 1 (sur terre −1,15 ms), lot 2 non ouvert
+**Fermé récemment** : **PLAN-J6** (15 nov., 20:35 : les neuf parcours en e2e, sept défauts corrigés) ; l'eau étagée E1 (−1,55 ms) et E2 (−0,5 ms), E3 non ouvert ; la classification lot 1 (sur terre −1,15 ms), lot 2 non ouvert
 (sous 1 ms) ; AR-07 (le renderer sur `ViewPose`) ; le retrait R1 des anciens chemins (13 nov.) ; le noyau du monde visé compilé pendant le voyage
 (Jupiter à froid 73,7 → 47 s) ; le grain des anneaux de Saturne ; J2 (13 nov.) ; J2-C BC7 rangée (Sam). Le plafond des binaires suivis monté à
 700 Mo (Sam, f4bba608).
@@ -8289,3 +8288,11 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
 - Non vérifié : la remise de gaz depuis la console du crew rejouée en e2e (le chemin `flight_action` corrigé, testé par la roue) ;
   la roue de l'A320 en e2e (vérifiée sans navigateur) ; les options en vol au-delà de « Toutes les pistes ».
 - Suite : AP9 — la radio et l'audio (indicatif en morse, balises, appels).
+
+### 2026-11-15 20:35 UTC — J6-7 entier, PLAN-J6 fait ; la CI de nouveau verte
+
+- Contribution : §19.13 — le dernier morceau (l'annulation de TARS selon son point de reprise) ; les neuf parcours ont leur e2e.
+- Réalisé : `parcours-tars` (troisième test) ; `gpu-startup` (son faux renderer : `prof.table`) ; PROBLEMES (deux tests de `gpu-startup`), PLAN-J6.
+- Preuves (mesuré) : l'annulation rend la place, le carburant, le train et les volets (kerr-mini, `parcours-tars` 3/3) ; la CI de `main` verte et
+  le site déployé après la correction de l'horloge (run 43756771531) ; `parcours-meteo` avec l'horloge du vol : le fondu tenu (0,03 en une image).
+- Suite : les décisions de Sam du 15 nov. — J3-R, le repli du raster retiré sur la Terre, la borne du M1 Max essayée à 40.

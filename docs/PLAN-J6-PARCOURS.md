@@ -1,8 +1,8 @@
 # PLAN-J6 — Les parcours complets (stratégie §19.13)
 
-**État (2026-11-15 19:58 UTC)** : **les huit lots faits** (J6-6 en solo et en salle) — leurs parcours passent ; cinq défauts trouvés et corrigés (le décollage
+**État (2026-11-15 20:35 UTC)** : **PLAN-J6 fait** — les huit lots, J6-6 en solo et en salle, J6-7 entier — leurs parcours passent ; cinq défauts trouvés et corrigés (le décollage
 automatique, le décor en vol rapide, l'arrivée de la météo réelle d'un coup, le repos au sol jamais atteint, l'A320 rechargé dans l'état de la
-préférence). Reste : dans J6-7, l'annulation selon le point de reprise. Les jalons J0 à J5 ont été menés (PLAN-J1 à PLAN-J5) ; le 15 novembre,
+préférence). Rien ne reste du plan ; les relevés non traités sont au bilan. Les jalons J0 à J5 ont été menés (PLAN-J1 à PLAN-J5) ; le 15 novembre,
 Sam a nommé **~48 ms de GPU sur J0 le palier intermédiaire de kerr-mini** ([J0-CONTRAT](J0-CONTRAT.md) §2) et demandé de reprendre la
 suite du plan, lumière et contenu. La stratégie ([ANALYSE-STRATEGIE](ANALYSE-STRATEGIE-RENDU-2026-11-03.md) §19.13) demande que les jalons
 « transportent l'expérience en même temps que les passes » : **un parcours n'est terminé ni avec une scène vide, ni avec un état choisi
@@ -163,3 +163,7 @@ L'inventaire du §1 vient de la lecture du catalogue et des en-têtes : aucun te
   the room's hour » (`main.ts`, FR « retour à l'heure de la salle »), comme au retour d'un onglet masqué. `gpu-recovery` 2/2,
   `gpu-recovery-hold` 1/1. `gpu-startup` : la perte pendant l'initialisation passe ; trois autres de ses tests échouent (le LUT de qualité,
   le noyau adaptatif, `prof.table`) — sans rapport avec ce message, non rejoués sur la révision d'avant.
+- **J6-7 entier : l'annulation selon le point de reprise** (2026-11-15 20:35 UTC) : `parcours-tars`, troisième test — « Emmène-moi au-dessus de
+  Paris » (`place_ship` : le jeu sauvé d'abord sous « Before TARS »), puis « Annule » (`saves undo`). **Mesuré** (kerr-mini) : Paris atteint (le
+  placement remplit les réservoirs : 6 125 kg), puis de retour à Edwards à quelques centaines de mètres (le vol entre-temps) avec 3 000 kg, le
+  train sorti, les volets à 0,5 — ce que la sauvegarde couvre (J6-4). `parcours-tars` 3/3. **PLAN-J6 fait.**

@@ -450,7 +450,7 @@ describe.skipIf(!E2E)("WebGPU startup and quality failures", () => {
           const renderer = Object.assign(Object.create(source), {
             tier: { level: 1, capMpx: 0.9, label: "test" }, inFlight: 0, offline: null, lost: null,
             livePol: !!settings.polarization, sampleIndex, lastPhase: "converged", chartDirty: false,
-            configureOutput() {}, probePlanets() {}, prof: { begin() {} },
+            configureOutput() {}, probePlanets() {}, prof: { begin() {}, pass() { return {}; }, table() { return []; } },
             device: { createCommandEncoder() { return { clearBuffer() {} }; } },
           });
           let captured = null;
