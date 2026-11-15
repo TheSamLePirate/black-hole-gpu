@@ -5522,6 +5522,9 @@ export class Renderer {
   /** (PLAN-J5 J5-3, a measure) the walker on the Earth drawn by the raster — its walking grid still sent (P.walk[0].w 2: trace.wgsl
    *  rasterPrimary) —; false: the traced pipeline while walking, as ever (its march meets the grid the feet stand on) */
   walkRasterOn = false;
+  /** (PLAN-J5 J5-3a, a measure) the trees within 80 m of the camera given to the rays' kernel (shade) — their crowns carved, what stands
+   *  behind them found —; false: to the material like the others (a ring of bare ground round each crown up close) */
+  nearTreesRays = true;
   /** PLAN-MER-WEBGPU S2: the sea's crests drawn before the land behind them where it stands over the waves (A/B lever) */
   seaCrestsOverLand = true;
   /** the frame's parameters' index of P.seafft[0].x (writeParams): encodeLite writes 2 there when the open sea's kernel runs */
@@ -7336,6 +7339,7 @@ export class Renderer {
       // crowns and finds what stands behind them — the material tests a proxy's tree alone, a ring of bare ground round each
       // crown up close —; only while shade runs — ready, the camera low near the scenery: it is then dispatched, encodeRaster)
       this.nearTreesNow =
+        this.nearTreesRays &&
         !shadeLate &&
         !this.bodyRasterNow &&
         this.earthScenery.active &&

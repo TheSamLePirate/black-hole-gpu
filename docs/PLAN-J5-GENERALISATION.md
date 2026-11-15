@@ -100,3 +100,11 @@ Les plafonds de J5-1 au beau temps, de J5-2 par corps et la parité du repli tra
   proches et les restes de `shade` dessinés, non tracés) et le marcheur dans l'historique du raster ; le levier `walkRasterOn` reste un
   levier de mesure, éteint. Prochain lot possible : J5-3a, « le champ proche en raster », son plafond lu sur cette sonde (`earth shade`
   81 ms à pied).
+- **J5-3a, le champ proche en raster : son obstacle mesuré** (2026-11-15 05:38 UTC) : sonde `walk-raster` à Chamonix, une troisième voie —
+  le raster, les arbres à moins de 80 m laissés au matériau (levier de mesure `renderer.nearTreesRays` false) : profileur allumé, raster
+  132,8 ms dont `earth shade` 80,2 ; **arbres proches au matériau 77,8 ms, `earth shade` 21,0** ; tracé 24,6 / 25,0. Les arbres proches
+  coûtent ~59 ms au noyau des restes ; au matériau ils deviennent **leurs volumes lisses** (ellipsoïdes, cônes — capture `raster-near`),
+  et le reste (`shade` 21 ms : boîtes de bâtiments sans triangles, ponts ; `earth lite` + lumière 27 ms) garde le raster à pied trois fois
+  plus cher que le tracé ; le marcheur reste fantôme. **Conclusion** : la marche en raster attend **des arbres proches en géométrie** (maillages
+  ou cartes à alpha, LOD — la chaîne d'assets, §18 meshoptimizer) et le marcheur dans l'historique — un lot d'assets et de rendu (L), non
+  ouvert ici. La marche reste tracée ; `walkRasterOn` et `nearTreesRays` restent des leviers de mesure (éteint, allumé).

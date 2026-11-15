@@ -7343,3 +7343,12 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
 - Limites : un lieu ; le M1 Max non mesuré ; la vue « à pied » de `planets-baseline` regarde de haut et ne représente pas la marche.
 - Suite : J5-3a — le champ proche en raster (arbres proches et restes de `shade`), plafond `earth shade` 81 ms à pied ; ou J5-4 (HDR/SDR/exports)
   si Sam préfère.
+
+### 2026-11-15 05:38 UTC — J5-3a : les arbres proches, 59 ms du noyau des restes à pied
+
+- Contribution à la destination : la marche en raster (stratégie §15 J5) — son obstacle chiffré et nommé (les arbres proches en géométrie).
+- Réalisé : levier de mesure `renderer.nearTreesRays` ; troisième voie de la sonde `walk-raster` ; BH-API, PLAN-J5.
+- Preuves (mesuré, kerr-mini, profileur allumé) : raster 132,8 ms (`earth shade` 80,2) ; arbres proches au matériau 77,8 ms (`earth shade`
+  21,0) ; tracé 24,6 / 25,0 (A/A). Capture : les arbres proches deviennent des volumes lisses.
+- Limites : un lieu ; aucune décision ; le M1 Max non mesuré.
+- Suite : J5-4 (HDR/SDR/exports) ; le lot d'assets des arbres proches à proposer à Sam (la marche en raster en dépend).

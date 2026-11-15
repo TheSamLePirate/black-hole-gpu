@@ -5,7 +5,8 @@ import { App, E2E, stopServer } from "./lib/app";
 // scenery's tiles in), the scene's clock held, the third-person camera; each way its frames' GPU time over 4 s and a shot — the feet
 // against the ground the image draws (the raster's mesh from the height cache, the tracer's march on the walker's own grid).
 // Duration: ~4 min on kerr-mini.
-// Done when: both ways measured and shot, at Chamonix then at WALK_SPOTS' other places.
+// (and the raster with the near trees left to the material — renderer.nearTreesRays false —: the rays' share of the near field)
+// Done when: the three ways measured and shot, at Chamonix then at WALK_SPOTS' other places.
 afterAll(stopServer);
 const OUT = process.env.WALK_OUT ?? "remote-results/walk-raster";
 const SPOTS = (process.env.WALK_SPOTS ?? "45.92,6.87").split(";").map((s) => s.split(",").map(Number) as [number, number]);
@@ -15,13 +16,14 @@ test.skipIf(!E2E || process.env.E2E_PROBE !== "1")(
     const app = await App.boot({ width: 1600, height: 900, hash: "scene=game:artemis", tiles: true });
     try {
       for (const [lat, lon] of SPOTS) {
-        for (const on of [false, true, false]) {
-          await app.js(`(() => { __bh.renderer.walkRasterOn = ${on};
+        // (false: traced; true: the raster; "near": the raster with the near trees the material's too — renderer.nearTreesRays false)
+        for (const on of [false, true, "near", false] as const) {
+          await app.js(`(() => { __bh.renderer.walkRasterOn = ${on !== false}; __bh.renderer.nearTreesRays = ${on !== "near"};
             Object.assign(__bh.settings, { traffic: false, autosave: false, damage: false, showFps: true, dof: false, motionBlur: 0 });
             __bh.game.setDate("2026-07-10T10:30:00Z");
             const r = __bh.camera.character.start("earth", ${lat}, ${lon}); for (let i = 0; i < 30; i++) __bh.step(1 / 60); __bh.touch(); return r ?? 1; })()`);
           await app
-            .dataSettled(`walk ${lat},${lon} ${on ? "raster" : "traced"}`, { maxMs: 90_000 })
+            .dataSettled(`walk ${lat},${lon} ${on === false ? "traced" : on === true ? "raster" : "raster-near"}`, { maxMs: 90_000 })
             .catch((e) => console.log(`(not settled: ${String(e).slice(0, 160)})`));
           await app.settled();
           const r = await app.js<{ gpu: number[]; raster: boolean; passes: unknown }>(`(async () => {
@@ -47,10 +49,11 @@ test.skipIf(!E2E || process.env.E2E_PROBE !== "1")(
             }),
           );
           await app.js(`(() => { document.body.classList.add("hide-ui"); return 1; })()`);
-          await app.shot(`${OUT}/walk-${lat}-${lon}-${on ? "raster" : "traced"}.png`);
+          await app.shot(`${OUT}/walk-${lat}-${lon}-${on === false ? "traced" : on === true ? "raster" : "raster-near"}.png`);
           await app.js(`(() => { document.body.classList.remove("hide-ui"); return 1; })()`);
         }
       }
+      await app.js(`(() => { __bh.renderer.walkRasterOn = false; __bh.renderer.nearTreesRays = true; return 1; })()`);
       expect(await app.js<number>("__bh.renderer.gpuErrors")).toBe(0);
     } finally {
       app.close();
