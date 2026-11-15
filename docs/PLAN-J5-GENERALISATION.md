@@ -201,3 +201,9 @@ Les plafonds de J5-1 au beau temps, de J5-2 par corps et la parité du repli tra
   deviennent des constantes, `renderer.waterHalfRate`, l'option `waterHalf` de `tracerConstants` et l'ablation J0 `waterFull` retirés (règle
   2). Vérifié : tsc, biome, `check-wgsl` 84/84, tests des noyaux. **J0 sur le mini ~48 ms : la cible de 40 attend une autre voie que l'image
   (la reconstruction des pixels laissés, à élucider — J5-6) ou une nouvelle décision.**
+- **La sonde de la reconstruction, son témoin positif : échoué** (2026-11-15 08:47 UTC) : la finition de l'eau marquant ses pixels d'une
+  estampille impossible (777777, `TUNE_WATER_STAMP`), la copie des `moments`/`stamps` prise juste après elle n'en montre **aucune** — la mer y
+  est « fraîche » (`RASTER_MARK` 1e30, l'estampille de l'image), finie comme un sol (`water` faux). La copie ne voit pas ce qu'écrit
+  `shadeWaterFinish` (autre cible, autre moment, ou ces pixels finis par `shadeLiteFinish`) : **aucun chiffre de cette sonde ne vaut** (règle 3),
+  ni ceux de 08:23. Retirée (patch hors du dépôt). Reprendre demande de comprendre d'abord par quel chemin la mer de J0 est finie — un
+  outillage de débogage du GPU (lire un pixel à chaque passe) plutôt qu'une copie.

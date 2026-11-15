@@ -7590,3 +7590,11 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
 - **QA-06 — « git revert suffit »** : pas de retour de Pages par commit.
 - **NET-31 (le port 3001 publié) et QA-23 (les licences d'assets) — « plus tard »** : rien de changé.
 
+### 2026-11-15 08:47 UTC — La sonde des pixels laissés : témoin positif échoué
+
+- Contribution à la destination : aucune avancée mesurable — la règle 3 appliquée à l'outil d'enquête de J5-6.
+- Réalisé : témoin positif (`TUNE_WATER_STAMP` : la finition de l'eau estampille 777777 ce qu'elle finit) ; la copie après les passes de l'eau
+  n'en montre aucun — l'outil ne voit pas ce qu'il devait ; retiré (patch hors du dépôt) ; PLAN-J5 §5.
+- Preuves : mesuré (kerr-mini) — 0 pixel à 777777 sur 583 200, la mer à `RASTER_MARK` 1e30 et l'estampille de l'image.
+- Limites : la cause (cible, moment, chemin de finition de la mer) inconnue ; J5-6 reste fermé ; J0 ~48–50 ms sur le mini.
+- Suite : un outil qui lit un pixel donné à chaque passe, avant de rouvrir la reconstruction.
