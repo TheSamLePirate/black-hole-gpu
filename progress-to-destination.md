@@ -7651,3 +7651,11 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   rebâtit chaque pixel laissé. Témoin de la peinture : elle change bien l'image (toute la mer recolorée).
 - Limites : l'étape fautive (temporel ou TAAU) pas encore isolée.
 - Suite : peindre de même le temporel, puis le TAAU ; corriger ; rouvrir J5-6 (plafond ~2,3 ms).
+
+### 2026-11-15 10:02 UTC — La reconstruction des pixels laissés : pas le temporel ; la couleur rebâtie est fausse
+
+- Contribution à la destination : l'enquête de J5-6 rétrécie encore — le défaut est dans la couleur que le `resolve` rebâtit.
+- Réalisé : mesure dans le vol J0 tenu, le temporel court-circuité pour les pixels laissés ; retirée ; PLAN-J5 §5.
+- Preuves (mesuré, kerr-mini) : sans historique, la mer reste cyan et bruitée (captures `ablate-*`) ; avec la peinture du `resolve`, verte.
+- Limites : la cause (ce que contiennent les `accum` voisins au `resolve`) non lue.
+- Suite : lire les `accum` voisins au `resolve` (`traceColumn` les copie déjà) à côté d'un pixel laissé ; corriger ; rouvrir J5-6.
