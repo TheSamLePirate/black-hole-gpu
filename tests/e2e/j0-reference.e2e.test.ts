@@ -109,6 +109,11 @@ const ABLATIONS: Record<string, { label: string; set: string }> = {
   swell: { label: "sans houle côtière (lecture compilée hors)", set: `__bh.renderer.tune = { TUNE_SWELL: 0 };` },
   // (J4-5's ceiling — the far vegetation —: the scenery's reach cut to "balanced" (3–4 km for 4.5–6), the far ring's trees and buildings out)
   sceneryNear: { label: "décor à portée « balanced » (3–4 km)", set: `__bh.settings.earthScenery = "balanced";` },
+  // (after J4 — the forest's cost by part, over the Maures (J0_START): the trees' shadow map not drawn nor read (the rays towards the Sun
+  // instead), the far trees drawn as shapes (no impostors), the raster's smallest trees left to the imagery from 6 px (2.5))
+  treeShadowOff: { label: "sans carte d'ombre des arbres (les rayons)", set: `__bh.renderer.treeShadowOn = false;` },
+  noImpostors: { label: "arbres lointains en formes (sans imposteurs)", set: `__bh.renderer.treeImpostorsOn = false;` },
+  treeMinPx6: { label: "arbres de moins de 6 px laissés à la photo (2,5)", set: `__bh.renderer.treeMinPx = 6;` },
 };
 // (13 Nov 2026, Sam's decision 1: the water's two ablations in every fiche — its material, valid since liteSkip's bits are carried by
 // bitcast, and the sea's surface, the largest render pass, no owner measured before)
@@ -275,7 +280,7 @@ describe.skipIf(!E2E)("J0: the reference flight over Toulon-Hyères", () => {
    * scenery: a jump back to the start reloads them, and the first ablations of the first run measured that reload (10 images/s)
    * —; then the clock running, the autopilot and autothrottle engaged until they hold, gear down; 3 s settling */
   async function start(set: string) {
-    await app.js(`(() => { __bh.freeze(false); __bh.game.importSave(${JSON.stringify(save)}, false); __bh.freeze(true); __bh.renderer.liteSkip = 0; __bh.renderer.tune = {}; if (__bh.settings.earthPipeline !== "raster") __bh.game.set("earthPipeline", "raster"); __bh.renderer.debugSkipShip = false; __bh.renderer.ship.debugSkip.clear(); __bh.renderer.shipAirAllowed = true;
+    await app.js(`(() => { __bh.freeze(false); __bh.game.importSave(${JSON.stringify(save)}, false); __bh.freeze(true); __bh.renderer.liteSkip = 0; __bh.renderer.tune = {}; if (__bh.settings.earthPipeline !== "raster") __bh.game.set("earthPipeline", "raster"); __bh.renderer.debugSkipShip = false; __bh.renderer.ship.debugSkip.clear(); __bh.renderer.shipAirAllowed = true; __bh.renderer.treeShadowOn = true; __bh.renderer.treeImpostorsOn = true; __bh.renderer.treeMinPx = 2.5;
       Object.assign(__bh.renderer, { seaSurfaceOn: true, seaProbeOn: true, seaFoamWorldOn: true }); __bh.settings.seaFft = true;
       document.body.classList.remove("hide-ui"); Object.assign(__bh.settings, ${J0_FIXED}, ${hud}); __bh.settings.shipMount = "cockpit"; __bh.refresh();
       __bh.camera.viewReset(); ${set} return 1; })()`);

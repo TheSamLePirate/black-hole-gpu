@@ -198,3 +198,8 @@ Le relevé du §2 vient d'une lecture du code et des documents (agent d'explorat
   sous orage (16,5 ms, dont leur lumière ~9,8), le décor au-dessus d'une forêt (~7 ms hors de la carte d'ombre : les arbres proches et
   moyens). J4 est **fermé** ; selon la stratégie §15 (« si un jalon manque ses objectifs »), la suite identifie le coût réel par poste avant de
   généraliser (J5).
+- **Après J4 : le décor d'une forêt par poste, indicatif** (2026-11-15 05:00 UTC) : Maures, un passage par ablation (kerr-mini ; les deux
+  références 54,8 et 52,6 ms — 2,2 ms d'écart, à lire comme ordre de grandeur) : sans carte d'ombre des arbres 52,3 (≈ −1,4), sans imposteurs
+  52,9 (≈ −0,8), les arbres de moins de 6 px laissés à la photo (2,5 aujourd'hui) 51,0 (≈ −2,7), sans décor 45,1 (≈ −8,6). Le plus gros
+  levier lisible est **le seuil des petits arbres** — une décision d'image (des arbres de 2,5 à 6 px rendus à la photo), à mesurer en A/B
+  répété et à juger sur images avant toute proposition à Sam ; ablations J0 `treeShadowOff`, `noImpostors`, `treeMinPx6` ajoutées.

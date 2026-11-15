@@ -7271,3 +7271,12 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   40 ms ; le M1 Max non mesuré pour J4.
 - Suite : selon la stratégie §15 (« si un jalon manque ses objectifs »), identifier le coût réel par poste avant J5 — l'eau (16,2 ms), les
   nuages d'orage (16,5), le décor au-dessus d'une forêt (~7 ms) ; un plan J5 qui le dise.
+
+### 2026-11-15 05:00 UTC — Le décor d'une forêt par poste (indicatif, un passage)
+
+- Contribution à la destination : le coût réel par poste avant J5 (stratégie §15) — le décor au-dessus d'une forêt.
+- Réalisé : ablations J0 `treeShadowOff`, `noImpostors`, `treeMinPx6` ; PLAN-J4 §10, E2E-CATALOGUE.
+- Preuves (mesuré, un passage, kerr-mini, Maures à 300 m) : références 54,8 / 52,6 ms ; sans carte d'ombre des arbres 52,3, sans imposteurs
+  52,9, arbres de moins de 6 px à la photo 51,0, sans décor 45,1. L'écart des deux références (2,2 ms) rend chaque chiffre indicatif.
+- Limites : un passage ; aucune image comparée ; le seuil des petits arbres change l'image — à décider par Sam après A/B répété et planche.
+- Suite : A/B répété du seuil `treeMinPx` (2,5 / 4 / 6) avec planche, avant une proposition.
