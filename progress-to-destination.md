@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-15 07:18 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-15 07:39 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous.
@@ -7447,3 +7447,10 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   sous réglage provisoire.
 - Mesuré ensuite (kerr-mini, 984e821d) : **J0 vol GPU p50 52,0 ms** (56,7–57,3 avant) ; ablation `waterFull` 55,2 contre 49,8 / 49,7.
 - Suite : la finition de l'eau au demi-rythme (~2 ms possibles).
+
+### 2026-11-15 07:39 UTC — Les échecs de lumière, de décor et de préparation du piéton non reproduits
+
+- Relancés seuls : `character` 2/2, `character-aaa` 4/4 (avec le nouveau test du train). Une sonde avec les réglages exacts de
+  `character` (scène figée, décor coupé, sans tuiles) trouve les trois signaux prêts en 0 à 40 s par corps (`hdLoading` vaut `null`, que le
+  test lit comme fini). Les échecs de la nuit étaient passagers ; notés comme tels dans PROBLEMES, la session du rendu prévenue.
+

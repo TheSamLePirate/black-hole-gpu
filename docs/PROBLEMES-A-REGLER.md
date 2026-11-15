@@ -14,7 +14,7 @@ connue ou supposée, la piste. Une entrée réglée est barrée avec le commit q
 - **Correction** : `nextDusk` passe aux jours suivants, jusqu'à la première nuit qui descend 4° plus bas que −12° (depuis le 10 juillet :
   le 8 septembre, 21 h 34 UTC, Soleil à −14,8°). La carte dit « La prochaine nuit noire ». Test `s2-views` (unité) 5/5, e2e 6/6, capture.
 
-## Le piéton passe sous le ventre du Ranger posé, à 5 cm près (réglé : le train l'arrête) ; trois autres échecs des e2e du piéton (relevé le 15 novembre 2026)
+## ~~Le piéton passe sous le ventre du Ranger posé ; trois autres échecs des e2e du piéton~~ (relevé le 15 novembre 2026) — réglé (le train l'arrête) ; les trois autres non reproduits
 
 - **`character-aaa` « in front of the landed vessel »** (40 et 43 pas dans la boîte de la coque, deux lancements). Sonde : le piéton marche
   vers le centre de la coque et passe **sous** le ventre, entre les roues du train. Le point le plus bas du maillage est 1,85 m au-dessus de
@@ -27,9 +27,11 @@ connue ou supposée, la piste. Une entrée réglée est barrée avec le commit q
   à part de la coque ; la sonde au sol trouvait 0 cellule bloquée), et le piéton traversait les roues. Réglé : `controller/character.ts`
   ajoute le train sorti (sa BVH, faite une fois) à `vesselBlocked`. Le test marche vers la jambe la plus proche : 76 cellules bloquées,
   arrêté à 0,59 m, 0 pas dedans ; tests du piéton 54/54.
-- **`character-aaa` « the light on foot »** : `renderer.characterLight()` rend `null` (Lune) ; **« after a teleport »** : le décor
-  `degraded` au lieu de `ready`. **`character`** : `variantReady && calibrationReady && !hdLoading` jamais vrai en 240 s. Domaine du
-  rendu (éclairage du piéton, décor, calibration) : session du rendu prévenue, non examiné ici.
+- ~~**`character-aaa` « the light on foot »** : `renderer.characterLight()` rend `null` (Lune) ; **« after a teleport »** : le décor
+  `degraded` au lieu de `ready`. **`character`** : `variantReady && calibrationReady && !hdLoading` jamais vrai en 240 s.~~ **Non
+  reproduits** le 15 nov. (~05 h 30 UTC) : `character` 2/2 et `character-aaa` 4/4 au même endroit. Une sonde avec les réglages exacts
+  de `character` trouve les trois signaux prêts en 0 à 40 s par corps. Échecs passagers (machine chargée par les séries d'e2e de la nuit,
+  ou corrigés entre-temps par la session du rendu), à surveiller.
   **Repris par la session du rendu (2026-11-15 02:49 UTC)** : sur kerr-mini, « the light on foot » et « after a teleport » **passent** (la charge de ce
   Mac pendant la mesure, supposée). `character` **réglé** — deux défauts du jeu : (1) une tuile de relief refusée par le réseau restait
   « en attente » pour toujours (aucun parent pour la remplacer) : `earthSettled` jamais vrai sur la Terre — le test bloque ses hôtes (`tiles:
