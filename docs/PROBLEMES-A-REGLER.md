@@ -204,7 +204,7 @@ centre de Toulon à 500 m et 150 m/s) : **en arrivant à 1,5 km du centre, la gr
   « rapides » (`fastFlight`, boîte de 0,35 fois la portée), toujours « refreshing », l'étape **`forest`** presque à chaque relevé ;
   1 800 à 3 900 bâtiments par scène (32 000 au repos), 65 000 à 233 000 arbres ; le centre de la scène dessinée **0,2 à 2,3 km** de
   l'avion.
-- **Le temps des étapes** (18:20 UTC, `stats().phases` à chaque tranche, un quatrième passage) : l'étiquette « forest » est celle de
+- **Le temps des étapes** (17:18 UTC, `stats().phases` à chaque tranche, un quatrième passage) : l'étiquette « forest » est celle de
   l'étape **suivante** (`next`) ; le temps d'une scène rapide va à la **construction des tuiles de bâtiments** (entre `bdtopo` et `before
   forest` : **2 à 16 s**), la forêt ~0,5 s, le reste < 1 s ; une scène rapide finie en 3 à 17 s. Ce passage-là : **71** points de bâtiment
   devant à l'arrivée (0 aux trois autres) — selon le moment où la scène se termine.

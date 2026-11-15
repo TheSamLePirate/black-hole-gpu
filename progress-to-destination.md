@@ -7898,7 +7898,7 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
 - Limites : le décor en vol rapide non corrigé (relevé, non asserté) ; le parcours non volé sur ce Mac.
 - Suite : le décor en vol rapide (temps des étapes du worker, ordre bâtiments / forêt, avance), puis asserter les bâtiments proches.
 
-### 2026-11-15 18:20 UTC — J6-1 : le temps des étapes du décor en vol rapide
+### 2026-11-15 17:18 UTC — J6-1 : le temps des étapes du décor en vol rapide
 
 - Réalisé : le parcours relève `stats().phases` ; PROBLEMES et PLAN-J6 corrigés (la cause supposée « la forêt » était l'étiquette de l'étape
   suivante).
