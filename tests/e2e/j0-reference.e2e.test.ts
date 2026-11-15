@@ -115,6 +115,11 @@ const ABLATIONS: Record<string, { label: string; set: string }> = {
   // (J4-5's ceiling — the far vegetation —: the scenery's reach cut to "balanced" (3–4 km for 4.5–6), the far ring's trees and buildings out)
   // (PLAN-J5 J5-5: the water at half rate on by default since 15 Nov 2026 — waterFull, every water pixel a frame, the old path: its cost)
   waterFull: { label: "eau à chaque pixel (avant J5-5)", set: `__bh.renderer.tune = { WATER_HALF: 0, WATER_WG_Y: 8 };` },
+  // (PLAN-J5: the ground's material — shadeLite — a tile in two skipped whole: its half rate's ceiling; a measure, the image broken)
+  liteHalfTiles: {
+    label: "matériau du sol, une tuile sur deux (mesure, image cassée)",
+    set: `__bh.renderer.tune = { TUNE_LITE_HALF_TILES: 1 };`,
+  },
   sceneryNear: { label: "décor à portée « balanced » (3–4 km)", set: `__bh.settings.earthScenery = "balanced";` },
   // (after J4 — the forest's cost by part, over the Maures (J0_START): the trees' shadow map not drawn nor read (the rays towards the Sun
   // instead), the far trees drawn as shapes (no impostors), the raster's smallest trees left to the imagery from 6 px (2.5))

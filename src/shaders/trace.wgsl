@@ -16582,10 +16582,12 @@ fn shadeLiteLight(@builtin(global_invocation_id) gid: vec3u) {
   liteEpilogue(gid.xy, idx, centre, pos, G, rd, tH, tM, Ls, E, k, mesh, isTree, wat, gq, hG, at);
 }
 @compute @workgroup_size(8, 8)
-fn shadeLite(@builtin(global_invocation_id) gid: vec3u) {
+fn shadeLite(@builtin(global_invocation_id) gid: vec3u, @builtin(workgroup_id) wid: vec3u) {
   let W = u32(P.res.x);
   let H = u32(P.res.y);
   if (!rasterPrimary() || !HAS_BODIES || P.near0.w < 0.5) { return; }
+  // (a measure — PLAN-J5, TUNE_LITE_HALF_TILES 1: a tile in two of the ground's material skipped whole, the image broken — its ceiling)
+  if (TUNE_LITE_HALF_TILES != 0u && ((wid.x + wid.y + P.frame.x) & 1u) == 1u) { return; }
   let k = u32(P.near1.w);
   // (another world than the Earth, without its air: the body raster's — bodyLite, its threads the rate's pattern's; compiled out
   // of the Earth's kernel — NEAR_KIND 1 — and the Earth's material out of the worlds' — 3)
@@ -16782,6 +16784,8 @@ fn waterMarked(m: f32) -> bool { return m <= RASTER_WATER && m > RASTER_WATER - 
 // (a pixel's moments.x marking it the water's kernel's, left for its finishing — RASTER_SPLIT_WATER, less a half over half its water)
 fn waterSplit(m: f32) -> bool { return m < RASTER_SPLIT_WATER + 0.1 && m > RASTER_SPLIT_WATER - 0.6; }
 override WATER_HALF: bool = false;
+// (a measure — PLAN-J5: the ground's material's ceiling at half rate, a tile in two skipped whole; the image broken)
+override TUNE_LITE_HALF_TILES: u32 = 0u;
 override WATER_WG_Y: u32 = 8u;
 // (WATER_HALF: the pixel beside the one shaded, left this frame — its pair —, and whether it is water: shadeWater's output written to it too)
 var<private> WATER_PAIR: vec2u = vec2u(0u);

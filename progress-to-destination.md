@@ -7489,7 +7489,7 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
 - Vérifié dans le jeu (sonde e2e, non commitée) : le calculateur ouvert par l'outil `show_screen` de TARS, ses onglets dessinés, aucune
   erreur de page.
 
-### 2026-11-15 08:05 UTC — J5-6 : le plafond du sol à demi-rythme (~2,3 ms) ; le M1 Max à 19,1 ms
+### 2026-11-15 07:58 UTC — J5-6 : le plafond du sol à demi-rythme (~2,3 ms) ; le M1 Max à 19,1 ms
 
 - Contribution à la destination : le prochain poste chiffré (règle 1) ; le palier du M1 Max relu avec l'eau à demi-rythme.
 - Réalisé : levier de mesure `TUNE_LITE_HALF_TILES` (shadeLite, une tuile sur deux sautée entière) et ablation J0 `liteHalfTiles` ; lot J5-6

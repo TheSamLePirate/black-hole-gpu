@@ -40,6 +40,7 @@ au-dessus de 1,6 ms dans les mesures de J4.
 | **J5-3** | **La marche et les transitions** : le personnage (character e2e), l'orbite → le sol, la Terre → l'espace ; ce que chaque transition laisse dans l'historique (contrat de la reconstruction) | qualité (transitions) | e2e de parcours, images | L |
 | **J5-4** | **HDR/SDR/exports** : la sortie de l'image (hdrMap, AgX), les captures et les vidéos sur la même chaîne que l'écran | qualité | captures SDR sur kerr-mini (mesures de couleur), exports | M |
 | **J5-5** | **L'eau à demi-rythme** (ajouté le 15 nov. après la répartition de J0) : un pixel sur deux par image, des groupes de 32 fils | J0 −8,4 ms (une tuile sur deux sautée) | ΔGPU J0 et à 30 m, captures — **allumé : −6,0 à −7,2 ms** (§5) | M |
+| **J5-6** | **Le matériau du sol à demi-rythme** (`shadeLite`, sa lumière) : le même schéma que l'eau, le voisin classé (eau, arbres, ponts) et sa photo gardée | **J0 ~2,3 ms** (lu : `earth lite` 3,8 → 2,0, sa lumière 1,3 → 0,8) ; plus sur la terre | ΔGPU J0 et forêt, images en mouvement (le détail des photos) | L |
 | **J5-R** | **Le retrait des chemins terrestres redondants** : le tracé de la Terre proche (repli dormant depuis J2-7, PROBLEMES) et les options sans utilisateur — après validation de la parité ; une décision de Sam | compilation et code | suite, J0, `kernel-budget` | M |
 
 **Ordre recommandé** : J5-0 d'abord (les décisions d'image sont la seule voie mesurée vers 40 ms : elles reviennent à Sam), puis J5-1
@@ -173,3 +174,9 @@ Les plafonds de J5-1 au beau temps, de J5-2 par corps et la parité du repli tra
   l'eau (groupes de 32 fils, le pixel du damier fini et recopié — accum, moments, stamps — au voisin de sa paire). Mesuré (kerr-mini, A/B deux
   fois) : J0 **48,1 / 48,0 / 48,2 ms contre 55,9 / 55,2** sans le demi-rythme (`waterFull`) — **−7,4 ms en tout** (la finition ~2 de plus) ;
   captures au même instant : la mer, les îles, la côte identiques. **J0 sur le mini : ~48 ms** pour une cible de 40.
+- **J5-6, son plafond lu ; le M1 Max avec l'eau à demi-rythme** (2026-11-15 07:58 UTC) : une tuile sur deux du matériau du sol sautée entière
+  (levier de mesure `TUNE_LITE_HALF_TILES`, ablation J0 `liteHalfTiles`, l'image cassée) : J0 41,4 / 41,4 contre 49,0 / 48,1 / 48,0 — mais
+  l'eau, non marquée sur ces tuiles, y fond aussi ; **le plafond propre du sol ≈ 2,3 ms** (`earth lite` 3,8 → 2,0, sa lumière 1,3 → 0,8).
+  Lot ouvrable (au-dessus de 1 ms), mais lourd : le noyau le plus chargé du sol, chaque voisin à classer, le détail des photos à garder en
+  mouvement — non ouvert dans cette session. **M1 Max** (J0 borné à 30, l'eau à demi-rythme) : vol 30 images/s, GPU p50 **19,1 ms** (21,3
+  avant), soutenu 30 images/s, 23,1 ms (horloge 1 286 → 1 076 MHz).
