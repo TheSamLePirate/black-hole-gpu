@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-15 01:18 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-15 01:30 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous.
@@ -7093,3 +7093,14 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   provisoirement (traversée : le cumulus de Tarifa ; profil lourd : Toulon-Hyères sous orage). Carte de la documentation, État courant.
 - **Preuves :** documentaire.
 - **Suite :** J4-0, les scènes et leur fiche.
+
+### 2026-11-15 01:30 UTC — QA-09, troisième série de mesures : 12 e2e ; les échecs du piéton examinés, notés
+
+- **Mesures** : 12 e2e hors rendu (personnage, photo et vidéo, réseau, éditeur de missions, amarrage, télescope) avec le journal des attentes.
+  9 sont verts. Plafonds candidats relevés, par exemple `moon-telescope:38` (600 s, 21 s pris), `photo-video:40/57` (180 s, 3 s) et
+  `net-coop:63` (180 s, 28 s). Aucun abaissé dans ce lot.
+- **Échecs examinés** (PROBLEMES) : `character-aaa`, le piéton passe sous le ventre du Ranger posé (1,85 m au-dessus de ses pieds, capsule
+  de 1,80 m). La collision sur les triangles est juste, l'hypothèse du test ne tient plus ; une question de conception à trancher, rien
+  changé (sonde, capture non commitée, bissection à 6aee50fe). Les échecs d'éclairage, de décor et de calibration du piéton reviennent à la session du
+  rendu. `offline-settings` est à relancer seul (IGN).
+

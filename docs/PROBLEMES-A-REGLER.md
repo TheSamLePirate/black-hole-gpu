@@ -14,6 +14,22 @@ connue ou supposée, la piste. Une entrée réglée est barrée avec le commit q
 - **Correction** : `nextDusk` passe aux jours suivants, jusqu'à la première nuit qui descend 4° plus bas que −12° (depuis le 10 juillet :
   le 8 septembre, 21 h 34 UTC, Soleil à −14,8°). La carte dit « La prochaine nuit noire ». Test `s2-views` (unité) 5/5, e2e 6/6, capture.
 
+## Le piéton passe sous le ventre du Ranger posé, à 5 cm près ; trois autres échecs des e2e du piéton (relevé le 15 novembre 2026)
+
+- **`character-aaa` « in front of the landed vessel »** (40 et 43 pas dans la boîte de la coque, deux lancements). Sonde : le piéton marche
+  vers le centre de la coque et passe **sous** le ventre, entre les roues du train. Le point le plus bas du maillage est 1,85 m au-dessus de
+  ses pieds, sa capsule mesure 1,80 m ; la collision sur les vrais triangles (`vesselBlocked`, BVH) ne le bloque jamais, la boîte ne le
+  touche qu'à un coin (43 pas sur 1 200). (Capture prise, non commitée : le budget de 600 Mo de binaires est atteint.) Le code de collision
+  (`controller/character.ts`, `system/collide.ts`) n'a pas changé depuis le 30 octobre. Au commit 6aee50fe (13 nov.), le même test échouait
+  autrement : le piéton s'arrêtait à 4,2 m de la boîte. Ce n'est donc pas une traversée de la coque : l'hypothèse du test (« la tête
+  heurte le bord ») ne tient plus, à quelques centimètres de sol ou de hauteur de pose près. **À trancher** : un astronaute en scaphandre
+  peut-il passer sous un ventre à 1,85 m (capsule plus haute, ou viser un train) ? Rien de changé.
+- **`character-aaa` « the light on foot »** : `renderer.characterLight()` rend `null` (Lune) ; **« after a teleport »** : le décor
+  `degraded` au lieu de `ready`. **`character`** : `variantReady && calibrationReady && !hdLoading` jamais vrai en 240 s. Domaine du
+  rendu (éclairage du piéton, décor, calibration) : session du rendu prévenue, non examiné ici.
+- **`offline-settings`** : la zone hors ligne s'est mise en pause à 192 / 8 038 et n'était pas prête en 420 s. Lancé après une dizaine
+  d'e2e qui lisent l'IGN : une limitation du débit (429) est possible. À relancer seul avant de conclure.
+
 ## ~~« Climb, climb! » pendant tout le contact d'un ravitaillement en vol~~ (relevé le 14 novembre 2026, capture de l'e2e `aar`) — réglé le même jour
 
 - **Constat** : pendant le contact, l'annonce « Climb, climb! » (signée RANGER). Sans tête, sur le vol automatique : le TCAS donne des RA
