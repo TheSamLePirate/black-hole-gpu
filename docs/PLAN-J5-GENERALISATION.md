@@ -71,3 +71,9 @@ Les plafonds de J5-1 au beau temps, de J5-2 par corps et la parité du repli tra
   l'appareil en escalier (ventre, dérives) que l'historique ne lisse pas (planche dans T3, non commitée). **Aucune décision** : question 1.
   **J5-1** : la marche de lumière des nuages au beau temps sur J0 (ablation `cloudLight`, deux fois) **≈ 0 ms** (55,9 / 55,2 contre 55,3 /
   55,2) — le découpage du noyau des nuages ne paierait que sous ciel chargé (~9,8 ms sous orage) : son plafond est celui du profil lourd.
+- **J5-1, le plafond du découpage lu** (2026-11-15 05:17 UTC) : sous orage (J0 `J0_WEATHER=storm`, kerr-mini, deux fois) — référence
+  78,7 / 79,1 / 77,8 ms ; la marche vers le Soleil coupée **à l'exécution**, son code gardé (levier de mesure `cloudLightRuntimeOff`,
+  `FLAG_CLOUD_LIGHT_OFF`, ablation `cloudLightRt`) 72,4 / 72,7 (**−6,0 : son travail**) ; **compilée hors** 69,9 / 69,8 (−8,7). **Sa présence
+  ≈ 2,7 ms** : ce qu'un noyau de nuages découpé (la lumière hors du noyau de la marche) pourrait rendre au plus, **sous orage seulement**
+  (au beau temps la lumière entière ≈ 0). Lot possible (au-dessus de 1 ms), à ouvrir avec le profil lourd ; son travail (6 ms) ne bouge
+  qu'avec moins d'échantillons ou un cache plus large — des décisions d'image.

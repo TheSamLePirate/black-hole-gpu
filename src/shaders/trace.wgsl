@@ -407,6 +407,7 @@ const FLAG_TEMPORAL = 4u;       // temporal accumulation of realtime samples
 const FLAG_INTERLEAVED = 8u;    // realtime pass: one pixel per block, rotating offset
 const FLAG_AERIAL = 64u;        // the aerial perspective's table is there: the camera's rays near a world with air read it (earthLook)
 const FLAG_CLOUD_AMORTISED = 128u; // the clouds' march a texel in four this frame (Q5 VIPER C2: clouds, post.wgsl cloudTemporal)
+const FLAG_CLOUD_LIGHT_OFF = 256u; // a measure (PLAN-J5 J5-1): the clouds' sunward march off at run time, its code kept — its work against its presence
 const FLAG_LUT = 32u;           // the far field's LUT is there: rays between clean samples read it (main: farLut)
 const FLAG_REPROJECT = 16u;     // realtime under the temporal reprojection: the frames' rays accumulate —
                                 // each prefiltered over its pixel (the history supplies the coverage)
@@ -16989,7 +16990,7 @@ fn clouds(@builtin(global_invocation_id) gid0: vec3u) {
       WX_Q = normalize(ro);
       RNDV = blueDraws(gid, frameStamp);
       RND = RNDV.z;
-      CLOUD_LIGHT_MARCH = TUNE_CLOUD_LIGHT > 0u;
+      CLOUD_LIGHT_MARCH = TUNE_CLOUD_LIGHT > 0u && (P.frame.z & FLAG_CLOUD_LIGHT_OFF) == 0u;
       // (the craft's shadow on the clouds — VIPER C4 —: a sample's place from the camera [m] by its t on this ray)
       CLOUD_SHIP_LOOK = look;
       CLOUD_SHIP_K = P.near4.w / m;

@@ -512,6 +512,8 @@ const FLAG_REPROJECT = 16;
 const FLAG_LUT = 32;
 const FLAG_AERIAL = 64; // (trace.wgsl FLAG_AERIAL: the aerial perspective's table written this frame)
 const FLAG_CLOUD_AMORTISED = 128; // (trace.wgsl: the clouds' march a texel in four this frame — Q5 VIPER C2)
+/** (PLAN-J5 J5-1, a measure) trace.wgsl FLAG_CLOUD_LIGHT_OFF: the clouds' sunward march off at run time, its code compiled — renderer.cloudLightRuntimeOff */
+const FLAG_CLOUD_LIGHT_OFF = 256;
 /** the features under which the far field's LUT is not used: radio, polarization, jet, hot spot, hot flow,
  *  the wormhole, bodies — what a ray between two clean samples could meet unseen */
 const LUT_BLOCKERS = 1 | 2 | 4 | 8 | 16 | 32 | 128;
@@ -3682,7 +3684,9 @@ export class Renderer {
         this.frameStamp,
         t === this.live ? this.validFrom : 0,
         // (and the clouds' samples a layer while amortised, the high half: trace.wgsl CLOUD_N)
-        o.flags | (this.cloudAmortizedNow ? FLAG_CLOUD_AMORTISED | (this.cloudSamples << 16) : 0),
+        o.flags |
+          (this.cloudAmortizedNow ? FLAG_CLOUD_AMORTISED | (this.cloudSamples << 16) : 0) |
+          (this.cloudLightRuntimeOff ? FLAG_CLOUD_LIGHT_OFF : 0),
         o.minSpp ?? 0,
       ],
       17 * 4,
@@ -5512,6 +5516,9 @@ export class Renderer {
   /** PLAN-MER-WEBGPU S3: the open sea's pixels shaded by their own kernel — shadeWater compiled without the coasts' and the inland
    *  water's code (trace.wgsl WATER_OPEN) — once it is compiled (A/B lever) */
   seaWaterOpenOn = true;
+  /** (PLAN-J5 J5-1, a measure) the clouds' sunward march off at run time — its code still in the kernel: against the ablation that
+   *  compiles it out (renderer.tune TUNE_CLOUD_LIGHT 0), what of its cost is its work and what its presence */
+  cloudLightRuntimeOff = false;
   /** PLAN-MER-WEBGPU S2: the sea's crests drawn before the land behind them where it stands over the waves (A/B lever) */
   seaCrestsOverLand = true;
   /** the frame's parameters' index of P.seafft[0].x (writeParams): encodeLite writes 2 there when the open sea's kernel runs */

@@ -97,6 +97,11 @@ const ABLATIONS: Record<string, { label: string; set: string }> = {
   // (PLAN-J4 J4-2's split of the clouds' pass — its light: the sunward march (TUNE_CLOUD_LIGHT 0: the layer's column instead), its steps
   // (CLOUD_NEAR_N 4 for 6 — Q5 C6: a storm's light +14 levels off with 4) —, recompiles, measures only)
   cloudLight: { label: "nuages sans marche vers le Soleil (colonne)", set: `__bh.renderer.tune = { TUNE_CLOUD_LIGHT: 0 };` },
+  // (PLAN-J5 J5-1: the sunward march off at run time, its code kept — against cloudLight, which compiles it out: work against presence)
+  cloudLightRt: {
+    label: "nuages sans marche vers le Soleil, à l'exécution (code gardé)",
+    set: `__bh.renderer.cloudLightRuntimeOff = true;`,
+  },
   cloudNear4: { label: "marche vers le Soleil en 4 pas (6)", set: `__bh.renderer.tune = { CLOUD_NEAR_N: 4 };` },
   cloudNear1: { label: "marche vers le Soleil en 1 pas (6)", set: `__bh.renderer.tune = { CLOUD_NEAR_N: 1 };` },
   // (J4-2: the light volume's read skipped — TUNE_GSKIP 4194304: the near march to 3.8 km instead —: what the volume saves, +4.9 ms
@@ -281,7 +286,7 @@ describe.skipIf(!E2E)("J0: the reference flight over Toulon-Hyères", () => {
    * scenery: a jump back to the start reloads them, and the first ablations of the first run measured that reload (10 images/s)
    * —; then the clock running, the autopilot and autothrottle engaged until they hold, gear down; 3 s settling */
   async function start(set: string) {
-    await app.js(`(() => { __bh.freeze(false); __bh.game.importSave(${JSON.stringify(save)}, false); __bh.freeze(true); __bh.renderer.liteSkip = 0; __bh.renderer.tune = {}; if (__bh.settings.earthPipeline !== "raster") __bh.game.set("earthPipeline", "raster"); __bh.renderer.debugSkipShip = false; __bh.renderer.ship.debugSkip.clear(); __bh.renderer.shipAirAllowed = true; __bh.renderer.treeShadowOn = true; __bh.renderer.treeImpostorsOn = true; __bh.renderer.treeMinPx = 2.5;
+    await app.js(`(() => { __bh.freeze(false); __bh.game.importSave(${JSON.stringify(save)}, false); __bh.freeze(true); __bh.renderer.liteSkip = 0; __bh.renderer.tune = {}; if (__bh.settings.earthPipeline !== "raster") __bh.game.set("earthPipeline", "raster"); __bh.renderer.debugSkipShip = false; __bh.renderer.ship.debugSkip.clear(); __bh.renderer.shipAirAllowed = true; __bh.renderer.cloudLightRuntimeOff = false; __bh.renderer.treeShadowOn = true; __bh.renderer.treeImpostorsOn = true; __bh.renderer.treeMinPx = 2.5;
       Object.assign(__bh.renderer, { seaSurfaceOn: true, seaProbeOn: true, seaFoamWorldOn: true }); __bh.settings.seaFft = true;
       document.body.classList.remove("hide-ui"); Object.assign(__bh.settings, ${J0_FIXED}, ${hud}); __bh.settings.shipMount = "cockpit"; __bh.refresh();
       __bh.camera.viewReset(); ${set} return 1; })()`);

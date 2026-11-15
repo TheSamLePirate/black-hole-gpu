@@ -7310,3 +7310,14 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
 - Limites : aucune décision d'image prise (petits arbres, MSAA : question 1 de PLAN-J5) ; le M1 Max non mesuré.
 - Suite : J5-1 reste un lot du profil lourd (orage) ; la houle à demi-résolution à écrire puis chiffrer (J5-0) ; J5-2 (les autres corps) par
   ses scènes de référence.
+
+### 2026-11-15 05:17 UTC — J5-1 : la lumière des nuages sous orage, travail 6,0 ms, présence ~2,7 ms
+
+- Contribution à la destination : le plafond de J5-1 (le noyau des nuages découpé) lu avant de l'ouvrir (règle 1).
+- Réalisé : levier de mesure `renderer.cloudLightRuntimeOff` (trace.wgsl `FLAG_CLOUD_LIGHT_OFF`, bit 256 des drapeaux de l'image : la
+  marche vers le Soleil coupée à l'exécution, son code gardé) ; ablation J0 `cloudLightRt` ; BH-API, PLAN-J5.
+- Preuves (mesuré, kerr-mini, J0 sous orage, deux passages) : référence 78,5 ms en moyenne ; coupée à l'exécution 72,55 (−6,0) ; compilée hors
+  69,85 (−8,7) — la présence du code ≈ 2,7 ms. Le témoin négatif est l'écart des références (77,8–79,1) ; le positif, l'ablation compilée hors
+  connue (−9,8 le 15 nov. à 03:18).
+- Limites : sous orage seulement (au beau temps ≈ 0) ; le M1 Max non mesuré.
+- Suite : J5-1 ouvrable pour le profil lourd (plafond ~2,7 ms) ; J5-2 par les scènes de référence des autres corps.
