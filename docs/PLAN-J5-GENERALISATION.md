@@ -224,3 +224,10 @@ Les plafonds de J5-1 au beau temps, de J5-2 par corps et la parité du repli tra
   mais l'avion, sans manette ni monde figé, était descendu à 0 m pendant l'attente — la mesure n'est pas concluante. Levier retiré (patch
   hors du dépôt) ; la suite demande une scène tenue (le monde figé hors de la convergence tracée, ou l'avion en palier) avant de chercher
   la cause.
+- **La reconstruction des pixels laissés : le défaut est après le `resolve`** (2026-11-15 09:43 UTC) : dans le vol J0 tenu (ablation de mesure,
+  le voisin de chaque pixel d'eau marqué `RASTER_STALE` au lieu d'être écrit — levier `TUNE_WATER_PAIR_STALE`), `traceColumn` au `resolve` :
+  une colonne à −3 (laissée), la voisine à 4e30 (fraîche, son estampille de l'image) — **les marques sont justes**. L'image : le même bruit
+  cyan qu'au premier essai (le défaut se reproduit dans une scène tenue). **Peint par le `resolve` lui-même** (bit de mesure de `R.f.w` :
+  vert un pixel laissé rebâti de pixels frais, magenta aucun) : **toute la mer verte** — le `resolve` rebâtit chaque pixel laissé. Le cyan
+  naît donc **après** lui : le temporel ou le TAAU (dont l'entrée est `t.hdr`). Prochaine étape : la même peinture dans le temporel, puis
+  le TAAU. Leviers et peinture retirés (patch hors du dépôt).

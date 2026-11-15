@@ -7641,3 +7641,13 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   à la reconstruction donne des points blancs — scène non tenue (l'avion à 0 m), non concluant.
 - Limites : la cause du défaut de reconstruction reste inconnue ; J5-6 fermé ; J0 ~48–50 ms sur le mini.
 - Suite : une scène tenue pour la sonde (avion en palier ou monde figé hors convergence), puis la reconstruction.
+
+### 2026-11-15 09:43 UTC — La reconstruction des pixels laissés : le resolve rebâtit, le défaut est après lui
+
+- Contribution à la destination : l'enquête dont dépend J5-6 rétrécie à une étape (après le `resolve`).
+- Réalisé : dans le vol J0 (scène tenue), le voisin de l'eau laissé (`TUNE_WATER_PAIR_STALE`), les marques lues au `resolve`
+  (`traceColumn`), puis le `resolve` peint (vert rebâti, magenta non) ; retirés après la mesure ; PLAN-J5 §5.
+- Preuves (mesuré, kerr-mini) : marques justes (−3 à côté de 4e30) ; image cyan bruitée ; peinture : la mer entière verte — le `resolve`
+  rebâtit chaque pixel laissé. Témoin de la peinture : elle change bien l'image (toute la mer recolorée).
+- Limites : l'étape fautive (temporel ou TAAU) pas encore isolée.
+- Suite : peindre de même le temporel, puis le TAAU ; corriger ; rouvrir J5-6 (plafond ~2,3 ms).
