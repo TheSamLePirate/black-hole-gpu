@@ -26,16 +26,16 @@ import {
   type Porkchop,
 } from "../../fc/ops";
 import { elements, len, nodesAgainst, timeTo, type Elements, type V3 } from "../../fc/kepler";
-import * as kep from "../../fc/kepler";
 import type { Site } from "../../game/sites";
 import type { KerrOrbit } from "../../fc/kerr-ops";
 import { alignOverSite, firstReachable, sitePasses, type Pass, type SiteTrack } from "../../fc/land-ops";
 import { horizon, isco } from "../../physics";
 import { BODY_NAMES } from "../../targeting";
-import { AU_M, C_MPS, G0 } from "../../units";
+import { G0 } from "../../units";
 import { store } from "../../util/storage";
 import { t, tf } from "../../i18n";
 import { el as h } from "../kit";
+import { dur, km, ms, part, rM, transferAt } from "./format";
 import { VESSEL_IDS } from "../../vessels";
 
 /** What the computer needs from the flight (controls.ts). */
@@ -100,45 +100,6 @@ export interface FcHost {
 
 export type Tab = "orbit" | "target" | "land" | "mission";
 const D = 180 / Math.PI;
-const km = (m: number) =>
-  !Number.isFinite(m)
-    ? "∞"
-    : Math.abs(m) >= 1e9
-      ? `${(m / AU_M).toFixed(3)} AU`
-      : Math.abs(m) >= 1e6
-        ? `${(m / 1e3).toFixed(0)} km`
-        : Math.abs(m) >= 1e4
-          ? `${(m / 1e3).toFixed(1)} km`
-          : `${m.toFixed(0)} m`;
-const dur = (s: number) => {
-  if (!Number.isFinite(s)) return "—";
-  const a = Math.abs(s);
-  const sg = s < 0 ? "−" : "";
-  if (a < 60) return `${sg}${a.toFixed(0)} s`;
-  if (a < 3600)
-    return `${sg}${Math.floor(a / 60)} min ${Math.round(a % 60)
-      .toString()
-      .padStart(2, "0")} s`;
-  if (a < 86400)
-    return `${sg}${Math.floor(a / 3600)} h ${Math.round((a % 3600) / 60)
-      .toString()
-      .padStart(2, "0")} min`;
-  return `${sg}${(a / 86400).toFixed(a < 864000 ? 1 : 0)} d`;
-};
-const C = C_MPS;
-const ms = (v: number) =>
-  !Number.isFinite(v)
-    ? "∞"
-    : Math.abs(v) >= 3e6
-      ? `${(v / C).toFixed(4)} c`
-      : Math.abs(v) >= 1000
-        ? `${(v / 1000).toFixed(2)} km/s`
-        : `${v.toFixed(Math.abs(v) < 10 ? 2 : 1)} m/s`;
-/** A burn's part: m/s, or km/s for the hole's (fractions of c). */
-const part = (v: number, big: boolean) => (big ? (v / 1000).toFixed(0) : v.toFixed(1));
-/** A radius about the hole: in M, and its distance. */
-const rM = (r: number, Mm: number) => (!Number.isFinite(r) ? "∞" : `${r.toFixed(2)} M · ${km(r * Mm)}`);
-
 /** A number field with its unit and steppers (⇧ ×10, ⌥ ×0.1). */
 function numField(
   label: string,
@@ -1206,27 +1167,6 @@ export class FlightComputer {
     row.append(ex, del, clr);
     E.append(box, snaps, row);
   }
-}
-
-/** A transfer flown at a chosen departure and flight time (a porkchop's cell). */
-function transferAt(c: FcContext, dep: number, tof: number, rendezvous: boolean): OpResult | null {
-  const T = c.target;
-  if (!T) return null;
-  const { lambertBest, propagate, toPNR, add, unit, cross } = kep;
-  const s = propagate(c.mu, c.r, c.v, dep);
-  const tg = propagate(c.mu, T.r, T.v, dep + tof);
-  const L = lambertBest(c.mu, s.r, tg.r, tof, unit(cross(c.r, c.v)), s.v, rendezvous ? tg.v : null);
-  if (!L) return null;
-  const burns: Burn[] = [{ t: dep, dv: toPNR(s.r, s.v, add(L.v1, s.v, -1)), label: t("departure") }];
-  if (rendezvous) burns.push({ t: dep + tof, dv: toPNR(tg.r, L.v2, add(tg.v, L.v2, -1)), label: t("match") });
-  return {
-    ok: true,
-    note: rendezvous
-      ? tf("Rendezvous with {0}: departing in {1}, {2} of flight", T.name, dur(dep), dur(tof))
-      : tf("Intercept with {0}: departing in {1}, {2} of flight", T.name, dur(dep), dur(tof)),
-    burns,
-    dvTotal: burns.reduce((a, b) => a + len(b.dv), 0),
-  };
 }
 
 export type { Elements };

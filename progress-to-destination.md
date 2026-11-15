@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-15 07:44 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-15 07:53 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous.
@@ -7479,3 +7479,13 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   (comme le 12 nov.) ; bornée à 30 elle tient (beau temps 21,3 ms, orage 27,9, mesures du matin avant le demi-rythme de l'eau).
 - Limites : un passage ; le GPU à 30 ms sous bridage n'est pas comparable aux 21 ms à 30 bornés (horloge 1 290 MHz).
 - Suite : la borne de 30 reste le palier provisoire du M1 Max ; mesurer J0 borné à 30 avec l'eau à demi-rythme.
+
+### 2026-11-15 07:53 UTC — Audit QA-10 (un pas) : les chiffres du calculateur de vol et son transfert sortis et testés
+
+- `src/ui/fc/computer.ts` (1 232 lignes, jamais importé par un test) : ses formats (distance, durée, vitesse, part d'une poussée, rayon en
+  M) et le transfert d'une case du porkchop (`transferAt`, Lambert) sortis tels quels dans `src/ui/fc/format.ts`.
+  `tests/fc-format.test.ts` 2/2 : les formats à leurs seuils, et un transfert de 7 000 à 8 000 km autour de la Terre qui coûte ce que dit
+  Hohmann (une poussée pour intercepter, deux pour rejoindre). `fc` et `kepler` 10/10.
+- Vérifié dans le jeu (sonde e2e, non commitée) : le calculateur ouvert par l'outil `show_screen` de TARS, ses onglets dessinés, aucune
+  erreur de page.
+
