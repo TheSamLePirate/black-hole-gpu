@@ -3,7 +3,7 @@ import { App, E2E, stopServer } from "./lib/app";
 // Probe — no assertion but the field baked and no GPU error; not in `bun run e2e`: E2E_PROBE=1 — (L1/L2 — the coastal swell field, system/earth-swell.ts): off the Almanarre beach (the Giens peninsula's western tombolo),
 // a 1.6 m, 10 s swell from the south-west imposed (renderer.seaOverride); the field's bake on the shore's levels, then two views
 // — 250 m up looking at the beach, 12 m over the water — each with the field and without (renderer.shoreSwellOn): shots, GPU time.
-// Duration: ~4 min. Done when: both views shot and measured with and without the field, the field's levels published.
+// Duration: ~4 min (~7 with SWELL_ABLATE). Done when: both views shot and measured with and without the field, the field's levels published.
 afterAll(stopServer);
 const OUT = process.env.SWELL_OUT ?? "remote-results/zz-swell";
 test.skipIf(!E2E || process.env.E2E_PROBE !== "1")(
@@ -76,14 +76,16 @@ test.skipIf(!E2E || process.env.E2E_PROBE !== "1")(
             `(() => { __bh.renderer.shoreSwellOn = ${on}; __bh.renderer.shoreSwellAblate = ${Math.max(ablate, 0)}; __bh.renderer.tune = ${ablate < 0 ? "{ TUNE_SWELL: 0 }" : "{}"}; return 1; })()`,
           );
           await Bun.sleep(2500);
-          if (process.env.SWELL_ABLATE === "presence") await app.dataSettled(`swell ${name} kernel`, { maxMs: 120_000 }).catch(() => {});
+          if (process.env.SWELL_ABLATE === "presence" || process.env.SWELL_ABLATE === "pass")
+            await app.dataSettled(`swell ${name} kernel`, { maxMs: 120_000 }).catch(() => {});
           const r = await app.js<{ gpu: number[] }>(`(async () => {
           const R = __bh.renderer, f = () => new Promise((q) => requestAnimationFrame(q)); const gpu = []; let last = R.completedFrames; const t0 = performance.now();
           while (performance.now() - t0 < 6000) { __bh.touch(); await f(); if (R.completedFrames !== last) { last = R.completedFrames; gpu.push(+R.lastGpuMs.toFixed(2)); } }
           return { gpu }; })()`);
           const s = [...r.gpu].sort((a, b) => a - b);
           const shore = await app.js(
-            `(() => __bh.renderer.prof?.table?.().filter((p) => /earth (shore|water)|sea fft/.test(p.label)).map((p) => [p.label, +p.ms.toFixed(2)]) ?? null)()`,
+            // (SWELL_PASSES=all: every pass over 0.2 ms — where the swell's cost lies beyond the water's kernels)
+            `(() => __bh.renderer.prof?.table?.().filter((p) => ${process.env.SWELL_PASSES === "all" ? "p.ms > 0.2" : "/earth (shore|water)|sea (fft|swell)/.test(p.label)"}).map((p) => [p.label, +p.ms.toFixed(2)]) ?? null)()`,
           );
           console.log(
             JSON.stringify({

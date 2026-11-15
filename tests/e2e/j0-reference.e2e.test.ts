@@ -103,6 +103,10 @@ const ABLATIONS: Record<string, { label: string; set: string }> = {
   // under a storm without it, 15 Nov 2026; its frame made once a thread instead of at each sample was tried and dropped — ~2 ms slower,
   // the registers it held over the loop)
   clvSkip: { label: "volume de lumière non lu (la marche à sa place)", set: `__bh.renderer.tune = { TUNE_GSKIP: 4194304 };` },
+  // (J4-4's ceiling on J0 — the coastal swell, PLAN-MER-WEBGPU L1–L3 —: its reading compiled out of every kernel (TUNE_SWELL 0 — the
+  // water's crests, surf and wash, the shore's wet sand), its presence and its work: what a pass of its own could return at most —
+  // −0.8 ms on J0, 15 Nov 2026; the pass tried, −0.4 / 0 ms on the coast's views: not kept, PLAN-J4)
+  swell: { label: "sans houle côtière (lecture compilée hors)", set: `__bh.renderer.tune = { TUNE_SWELL: 0 };` },
 };
 // (13 Nov 2026, Sam's decision 1: the water's two ablations in every fiche — its material, valid since liteSkip's bits are carried by
 // bitcast, and the sea's surface, the largest render pass, no owner measured before)

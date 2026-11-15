@@ -280,6 +280,15 @@ ou avec l'allègement général de la passe d'eau (J4). **Même jour, aussi sans
 (le repli du champ) — plage allumé / compilé hors 72,5 / 69,1 ms, vue basse 61,6 / 59,3 — ; annulé, l'A/B `shoreSwellOn` garde son
 sens.
 
+**La passe de houle, essayée le 15 novembre (J4-4) et retirée** : le plan ci-dessus fait — `shadeSwell` sur les tuiles d'eau, l'enregistrement
+par pixel (pente des crêtes, écume du déferlement, place dans la vague) dans la dernière texture du sol différé, lu d'une lecture par les
+noyaux de l'eau compilés sans la houle (`WATER_SWELL_READ`), les images identiques. Le plafond relu ce jour-là : la houle allumée / compilée
+hors **+3,3 ms** vue de 250 m, **+3,5 ms** vue de 6 m (kerr-mini), tout dans `earth water (raster)`. **Rendu : −0,4 à +0,3 ms** (deux
+versions, A/B trois passages) — le noyau de l'eau s'allège de ~0,7–1,2 ms, la passe en coûte autant. **Leçon, avec celle du 11 novembre** :
+ce que coûte la houle est son travail (le champ lu, les crêtes, le déferlement), pas sa présence ; le déplacer ne le réduit pas. La cible
+« ≤ +0,5 ms » ne se tiendra qu'en faisant moins (la houle à demi-résolution, ou seulement où ses crêtes sont résolues) — une décision
+d'image. [PLAN-J4 §10](PLAN-J4-VOLUMES.md).
+
 ## 6. L'eau étagée (décision 1 de Sam, 13 novembre 2026)
 
 Origine : [contre-analyse](CHALLENGE-J1-J2-2026-11-13.md) idée 2, [stratégie](ANALYSE-STRATEGIE-RENDU-2026-11-03.md) §24 décision 1 —

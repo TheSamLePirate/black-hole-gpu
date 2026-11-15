@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-15 03:45 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-15 04:18 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous.
@@ -49,7 +49,7 @@ ouverts, sous 1 ms) ; J3 au stade du plan.**
 | Rendu (33d89754) | L'eau étagée E1 : l'air et les nuages sortis de `shadeWater` (passe `earth water: finishing`) | **fait, mesuré** (gain maximal lu : l'eau 16,2 ms, `earth water` 12,7) : A/B J0 sur le mini **GPU p50 57,85 → 56,3 ms (−1,55)** ; l'eau par ablation 13,0 → 10,1 ms ([PLAN-MER §6](docs/PLAN-MER-WEBGPU.md)) |
 | Rendu (33d89754) | L'eau étagée E2 : les reflets (SSR, nuages reflétés) dans leur noyau (`shadeWaterFinish`) | **fait, mesuré, gain faible** : plafond lu −4,7 ms, rendu **−0,5 ms** (A/B mini) — le SSR coûte surtout son travail ; **E3 non ouvert** (seule la présence du code pourrait rendre, ~0,4 ms mesurés par E2) |
 | Rendu (33d89754) | **J3 — lumière, ombres, cockpit** | **mené (2026-11-15)** : J3-0 à J3-7 et J3-R faits ou réglés provisoirement selon les recommandations du plan ([PLAN-J3](docs/PLAN-J3-LUMIERE-COCKPIT.md) §8 : le tableau, révisable par Sam) ; le crépuscule du sol réparé, les ombres d'arbres et du décor justes, les toits et la brique aux albédos mesurés, la cohérence appareil / sol bornée jusqu'à −13° |
-| Rendu (33d89754) | **J4 — l'eau et les volumes** | **plan écrit (2026-11-15)** : [PLAN-J4](docs/PLAN-J4-VOLUMES.md) — lots J4-0 à J4-R, plafonds lus (nuages 5,15 ms sur J0, 29,8 en orage ; eau 16,2 ; décor 2,0) ; questions réglées provisoirement ; **J4-0 fait sur kerr-mini**, l'enveloppe par profil écrite (J4-6) : beau temps 57,3, traversée 60,0, couvert 67,9, pluie 67,3, orage 77,8 ms — le coût suit la passe des nuages ; J4-3 non ouvert (règle 1) ; J4-2 : la lumière des nuages ~9,8 ms sous orage, dont le cache existant (Q5) rend déjà ~5 ms ; son repère par fil essayé et retiré (+2 ms, registres) ; l'échantillonneur matériel plafonné à ~1 ms : **J4-2 fermé pour l'instant** (le reste : la structure du noyau) ; J4-1 mesuré (sonde `cloudlag`, témoins passés) : au temps réel le retard des nuages invisible (+1 niveau p99) — non ouvert |
+| Rendu (33d89754) | **J4 — l'eau et les volumes** | **plan écrit (2026-11-15)** : [PLAN-J4](docs/PLAN-J4-VOLUMES.md) — lots J4-0 à J4-R, plafonds lus (nuages 5,15 ms sur J0, 29,8 en orage ; eau 16,2 ; décor 2,0) ; questions réglées provisoirement ; **J4-0 fait sur kerr-mini**, l'enveloppe par profil écrite (J4-6) : beau temps 57,3, traversée 60,0, couvert 67,9, pluie 67,3, orage 77,8 ms — le coût suit la passe des nuages ; J4-3 non ouvert (règle 1) ; J4-2 : la lumière des nuages ~9,8 ms sous orage, dont le cache existant (Q5) rend déjà ~5 ms ; son repère par fil essayé et retiré (+2 ms, registres) ; l'échantillonneur matériel plafonné à ~1 ms : **J4-2 fermé pour l'instant** (le reste : la structure du noyau) ; J4-1 mesuré (sonde `cloudlag`, témoins passés) : au temps réel le retard des nuages invisible (+1 niveau p99) — non ouvert ; **J4-4 : la passe de houle essayée (deux versions) et retirée** — la houle coûte +3,3–3,5 ms sur une côte (+0,8 sur J0), tout dans `earth water` ; sa passe rend −0,4 à +0,3 ms : son travail, pas sa présence |
 | Rendu (33d89754) | AR-07 (vague 4.3, décision de Sam relayée) : le renderer sur `ViewPose` | **fait** : `renderer.frame(viewPose, settings, …)` ; Paris et J0 volés sans erreur, `gpu-startup` sans nouvel échec |
 | Rendu (33d89754) | La classification de l'écran par tuiles — lot 1 : les noyaux de l'eau en indirect | **fait, mesuré** : plafond lu 2,1 ms (noyaux de l'eau vides) ; J0 neutre (presque toute la mer), **sur la terre −1,15 ms** (A/B mini) |
 | Rendu (33d89754) | Classification — lot 2 : le sol (`earth lite: light`, sa finition) | **non ouvert** : plafond mesuré (vue toute en mer, kerr-mini) 0,33 + 0,22 = 0,55 ms, moins le tri 0,2 — sous 1 ms (règle 1) |
@@ -7214,3 +7214,21 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
 - **Réalisé :** phase J0 `cloudlag` (image en marche contre le même instant convergé, la caméra libre fixe face aux cumulus) ; PLAN-J4 §10.
 - **Preuves (mesuré, kerr-mini)** : A/A 0,056 (p99 1), temps réel 0,09–0,10 (p99 2–2,2), × 30 0,27–0,35 (p99 7–9) ; deux passages chacun.
 - **Limites :** un cadrage (cumulus à quelques km) ; les nuages proches et un vent fort non mesurés. J4-1 non ouvert.
+
+### 2026-11-15 04:18 UTC — J4-4 : la passe de houle côtière essayée, mesurée, retirée
+
+- Contribution à la destination : l'eau (§8 de la stratégie, PLAN-J4 J4-4, PLAN-MER §5) — le plafond de la houle relu et sa passe à part
+  mesurée : une piste de performance fermée sur preuve, sa leçon écrite (règle 1).
+- Réalisé : ablation J0 `swell` (`TUNE_SWELL` 0) et option `SWELL_PASSES=all` de la sonde `coast-swell` (toutes les passes au-dessus de
+  0,2 ms) ; la passe `shadeSwell` écrite (l'enregistrement de la houle par pixel dans la dernière texture du sol différé, lu par les noyaux
+  de l'eau compilés avec `WATER_SWELL_READ`, liaisons et compilation liées au noyau qui la lit), essayée en deux versions puis **retirée**
+  (le code n'est pas commité) ; [PLAN-J4 §10](docs/PLAN-J4-VOLUMES.md), [PLAN-MER §5](docs/PLAN-MER-WEBGPU.md), GRAPHICS-PIPELINE C19,
+  E2E-CATALOGUE.
+- Preuves (mesuré, kerr-mini, 0234f17c + l'essai) : la houle allumée / compilée hors **+3,3 ms** vue de 250 m (72,0 contre 68,7),
+  **+3,5 ms** vue de 6 m (58,8 contre 55,3), trois passages ; **+0,8 ms sur J0** ; le surcoût tout dans `earth water (raster)`
+  (+2,0 / +2,2 ms), rien ailleurs. La passe : A/B dans la même page, trois passages, deux versions — **−0,4 / −0,2 ms** (250 m),
+  **0 / +0,3 ms** (6 m) ; le noyau de l'eau −0,7 à −1,2 ms, la passe +0,75 à +1,2 ms ; images identiques (écart moyen 1,02 contre 0,90 au
+  témoin A/A, 0,45 contre 0,47 à 6 m). `check-wgsl` 85/85, budgets des noyaux et tests unitaires verts pendant l'essai.
+- Limites / transitions restantes : la houle reste à +3,3–3,5 ms sur une côte proche ; la réduire demande de faire moins (demi-résolution,
+  ou seulement où ses crêtes sont résolues) — une décision d'image, non prise. Non mesuré : le M1 Max.
+- Suite : J4-5 (la végétation lointaine), puis J4-R.

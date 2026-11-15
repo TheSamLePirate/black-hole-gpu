@@ -73,7 +73,7 @@ Chaque lot de performance écrit d'abord son gain maximal, lu dans une fiche ; c
 | **J4-1** | **Le contrat des nuages** : la confiance et le mouvement du vent dans `cloudTemporal` (l'historique lié au vent, §7.9) ; les nuages dans le mouvement de l'image | qualité (fantômes en vol, traînées sous le vent) | images en mouvement, sonde de stabilité | M |
 | **J4-2** | **Le saut du vide** : une grille d'occupation hiérarchique pour `cloudVolume` | `clouds (half)` 5,15 ms (J0) ; **16,5 ms sur J0 sous orage** (15 nov.) | ΔGPU J0 et scène lourde | M |
 | **J4-3** | **Les caches de lumière spécialisés** : `cloudShadow`, `cloudLightVolume`, `skyAmbient` compilés depuis le module spécialisé | compilation (temps de chargement), coût de passe à mesurer | temps de compilation, ΔGPU | S |
-| **J4-4** | **La passe d'eau propre** : sa disposition à elle (PLAN-MER), la houle côtière en passe séparée | famille eau 16,2 ms (mini) ; houle +2,0–2,6 ms sur une côte | ΔGPU J0 et côte | L |
+| **J4-4** | **La passe d'eau propre** : sa disposition à elle (PLAN-MER), la houle côtière en passe séparée | famille eau 16,2 ms (mini) ; houle **+3,3–3,5 ms sur une côte, +0,8 sur J0** (15 nov.) | ΔGPU J0 et côte — **la passe de houle essayée : −0,4 à +0,3 ms, retirée** (§10) | L |
 | **J4-5** | **La végétation lointaine collective** : tuiles de canopée par classe, moyenne exacte, imposteurs à profondeur fiable | décor −2,0 ms (mini) | images lointaines, ΔGPU | M |
 | **J4-6** | **Le profil météo lourd** : son enveloppe écrite et tenue sur la scène de J4-0 | **la météo d'orage 20,8 ms sur J0** (15 nov., [fiche](progress/j4/FICHE-ORAGE-kerr-mini-2026-11-15.md)) ; `clouds (half)` 16,5 ms | fiche | M |
 | **J4-R** | Retrait des anciens chemins des leviers allumés pendant J4 | — | suite, J0 | S |
@@ -160,3 +160,17 @@ Le relevé du §2 vient d'une lecture du code et des documents (agent d'explorat
   |A−B| 0,056, p99 1 ; positif (× 30) 0,27–0,35, p99 7–9 — passés. **Au temps réel : 0,09–0,10, p99 2–2,2** — un niveau de plus que le bruit,
   invisible. Le vent dans l'historique ne corrigerait rien de visible au temps réel ; il compterait en temps accéléré. **Non ouvert** ; la sonde
   gardée (vent plus fort, nuages proches, accélérations).
+- **J4-4, la passe de houle essayée et retirée** (2026-11-15 04:18 UTC) : plafond relu (règle 1) sur la sonde `coast-swell`
+  `SWELL_ABLATE=presence` (kerr-mini, trois passages) — la houle allumée / éteinte à l'exécution / compilée hors : vue de 250 m
+  72,0 / 70,9 / 68,7 ms, vue de 6 m 58,8 / 57,8 / 55,3 : **−3,3 et −3,5 ms** (plus que les 2,0–2,6 du 11 nov.) ; sur J0 (ablation `swell`
+  ajoutée) **−0,8 ms** seulement (55,6 / 55,7 contre 55,0 / 54,7 : J0 voit la côte de loin). Le relevé de toutes les passes
+  (`SWELL_PASSES=all`, ajouté) met tout le surcoût dans `earth water (raster)` (+2,0 / +2,2 ms), rien ailleurs (le sable mouillé de
+  `shadeLite` sous le bruit). **Essai** : la passe écrite au plan de PLAN-MER §5 — `shadeSwell` sur les tuiles d'eau, un enregistrement par
+  pixel (la pente des crêtes est/nord, l'écume du déferlement, la place dans la vague) dans la dernière texture du sol différé, lu d'une
+  `textureLoad` par `shadeWater` et `shadeWaterOpen` compilés avec `WATER_SWELL_READ` (la houle sortie d'eux : −100 lignes inlinées, les
+  images identiques — écart au témoin A/A près) ; puis une seconde version qui quitte la mer lointaine avant de lire le fond. **Mesuré** (A/B
+  dans la même page, trois passages, deux fois) : passe contre houle dans les noyaux −0,4 / −0,2 ms vue de 250 m, 0 / +0,3 vue de 6 m —
+  le noyau de l'eau s'allège de ~0,7–1,2 ms et la passe en coûte autant (0,75–1,2 ms). **La houle coûte son travail, pas sa présence** :
+  la déplacer ne le réduit pas (la leçon du 11 nov. confirmée par l'autre bout). **Retirée** (patchs gardés hors du dépôt) ; gardés : la
+  phase J0 `swell`, l'option `SWELL_PASSES=all`. Ce qui rendrait ce coût : faire moins de travail (la houle à demi-résolution, ou
+  seulement où le champ tient des crêtes résolues) — une décision d'image, non un déplacement ; non ouvert.
