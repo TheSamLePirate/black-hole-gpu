@@ -164,6 +164,9 @@ export interface InstrumentSnapshot extends InstrumentSpace {
   nav?: InstrumentNav | null;
   sys?: InstrumentSystems | null;
   ils?: { id: string; loc: number | null; gs: number | null; dme: number; phase: string } | null;
+  /** the flight director (PLAN-APPROCHES AP7b): the path's angle and the bank still to take [°] (> 0: up, right), whose guidance —
+   *  the F-35's approach (« ils ») or the A320's FMGC (« fmgc ») */
+  fd?: { pitch: number; roll: number; src: string } | null;
   /** the approach chosen (PLAN-APPROCHES AP6): the selection — each part « auto » or named — and its generation; what was last
    *  flown (the airfield, the approach, its kind and source, why) */
   /** the approach drawn (PLAN-APPROCHES AP6: world/approach-draw.ts MapApproach — the crew's radar, ND, Approach view) */
@@ -389,6 +392,7 @@ export function readInstruments(x: unknown): InstrumentSnapshot | null {
     }
   }
   const ils = record(x.ils) && finite(x.ils.dme) ? x.ils : null;
+  const fd = record(x.fd) && finite(x.fd.pitch) && finite(x.fd.roll) ? x.fd : null;
   const ap = record(x.appr) && record(x.appr.sel) && finite(x.appr.gen) ? x.appr : null;
   const apSel = ap ? (ap.sel as Record<string, unknown>) : null;
   const apFlown = ap && record(ap.flown) ? (ap.flown as Record<string, unknown>) : null;
@@ -423,6 +427,13 @@ export function readInstruments(x: unknown): InstrumentSnapshot | null {
     nav: readNav(x.nav),
     sys: readSystems(x.sys),
     ils: ils ? { id: label(ils.id, 32), loc: opt(ils.loc), gs: opt(ils.gs), dme: ils.dme as number, phase: label(ils.phase, 16) } : null,
+    fd: fd
+      ? {
+          pitch: Math.max(-30, Math.min(30, fd.pitch as number)),
+          roll: Math.max(-90, Math.min(90, fd.roll as number)),
+          src: label(fd.src, 8),
+        }
+      : null,
     apprMap: readMapApproach(x.apprMap),
     appr:
       ap && apSel

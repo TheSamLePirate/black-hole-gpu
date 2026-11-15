@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-15 19:58 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-15 20:10 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous. Ce qui est fermé quitte le tableau « En cours » pour la ligne « Fermé récemment ».
@@ -49,7 +49,7 @@ J4 (fermé, sortie non atteinte) et J5 (fermé) ; **en cours : J6, les parcours 
 | Rendu (33d89754) | J3 — lumière, ombres, cockpit | **mené (15 nov.)** : J3-0 à J3-7 et J3-R faits ou réglés provisoirement selon les recommandations de [PLAN-J3](docs/PLAN-J3-LUMIERE-COCKPIT.md) §8 ; le crépuscule du sol réparé (appareil / sol 0,87–1,08 jusqu'à −12,7°), ombres d'arbres et du décor, albédos mesurés. **Confirmé par Sam (15 nov., ~19:55)** ; reste J3-R (les anciens chemins) |
 | Rendu (33d89754) | J4 / J5 — l'eau, les volumes, la généralisation | **fermés** ([PLAN-J4](docs/PLAN-J4-VOLUMES.md), [PLAN-J5](docs/PLAN-J5-GENERALISATION.md)) : l'eau à demi-rythme (J5-5, −6,0 à −6,4 ms, l'image la même) ; le sol à demi-rythme laissé au joueur (J5-6, réglage « demi » : −1,9 à −3,2 ms ; « auto » à chaque pixel) ; la FFT de la mer en deux passes (−0,9 ms) ; la carte d'ombre des arbres (−2,8 ms, forêt) ; Sam a refusé les arbitrages d'image (MSAA 1×, petits arbres, nuages amortis). Postes lourds restants : l'eau 16,2, les nuages d'orage 16,5, le décor d'une forêt ~7 ms |
 | Rendu (33d89754) | Mesures tenues | la borne du M1 Max **à 30, provisoire** (soutenu, le GPU bride vers 850 MHz quelle que soit la borne — [J0-CONTRAT §2](docs/J0-CONTRAT.md)) ; le coût de l'appareil 3,5–4,5 ms, dont le MSAA 4× 4–5 ms (gardé) |
-| PLAN-APPROCHES (1feb2f7f) | [PLAN-APPROCHES](docs/PLAN-APPROCHES.md) | **AP0 à AP6 et AP7a faits (15 nov.)** : nav.dat lié aux pistes (3 259 / 3 501 localizers), le CIFP de la FAA (9 568 approches publiées des États-Unis) ; l'approche choisie (choix auto par vent, aide, longueur, sens d'arrivée) ; la jonction planifiée (jamais au-dessus du terrain, 300 m sur le relief) — `approach-join` 4/4 à Nice, 8/8 sans navigateur à Edwards ; l'A320 (même jonction, MCDU ARRIVAL/VIA, RAD NAV réel, ND) ; la carte tactique, le radar du HUD, la TSD et le crew (choix au clic, tracé, vue « Approche », appels) ; toutes les pistes au HUD (Q2 : activé par défaut, sans touche). **Reste : AP7b (directeur de vol), AP8 (roue, options), AP9 (radio, audio), AP10 (tous les aéroports), AP-R (retraits)** ; la fiche de terrain au clic de la carte et du globe du crew |
+| PLAN-APPROCHES (1feb2f7f) | [PLAN-APPROCHES](docs/PLAN-APPROCHES.md) | **AP0 à AP7 faits (15 nov.)** : données réelles (nav.dat, CIFP de la FAA), choix automatique, jonction planifiée, A320 (MCDU, ND), carte, radar, TSD, crew, toutes les pistes au HUD ; AP7b : le directeur de vol (repère du HUD du F-35, barres de l'A320 et du crew, `fd-approach` 2/2 volé à la main), la pente publiée de chaque approche (Marseille 31R à 4°). **Reste : AP8 (roue, options), AP9 (radio, audio), AP10 (tous les aéroports), AP-R (retraits)** |
 | Audit vagues 3–4 et 6 (1feb2f7f) | [09-priorites-todo](docs/audit-2026-11-10/09-priorites-todo.md) | **faits** : 3.1–3.2 réseau (RD0–RD2), 3.3 sauvegardes (une clé par sauvegarde ; avion, systèmes des vaisseaux et de l'A320 — ce dernier par J6-4), 3.4–3.5 vol, 3.6–3.7 TARS, 3.10 e2e honnêtes, 4.2 temps et onglet masqué, 4.3 `Settings`/`ViewPose`, 4.8 `main()` découpé ; vague 6 hors rendu (QA, AR, RD4/RD5, FX). **Reste** : l'état d'une mission ou d'un combat (Sam), IndexedDB et l'autosauvegarde hors frame (AR-05), FX-19 (fraîcheur des écrans, à mesurer), FX-21 |
 
 **Fermé récemment** : l'eau étagée E1 (−1,55 ms) et E2 (−0,5 ms), E3 non ouvert ; la classification lot 1 (sur terre −1,15 ms), lot 2 non ouvert
@@ -8227,3 +8227,28 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
 - Preuve : décisions écrites, aucun code changé, aucune mesure faite par cette session.
 - Suite : session du rendu (après J6) — J3-R (anciens chemins sans utilisateur), le retrait du repli sur la Terre et de la partie « repli »
   de `raster-governor`, l'essai de la borne à 40 sur le M1 Max (état soutenu, deux passages).
+
+### 2026-11-15 20:10 UTC — PLAN-APPROCHES AP7b : le directeur de vol (F-35, A320, crew), la pente publiée de chaque approche
+
+- Contribution à la destination : §19 (l'expérience complète — un pilote qui vole l'approche à la main garde le guidage de
+  l'autopilote ; les instruments du crew disent la même chose que ceux du pilote) ; « une responsabilité commune avant plusieurs
+  lecteurs » : une seule source du guidage (`flightDirector()`) lue par le HUD, les barres de l'A320, la télémétrie et le crew.
+- Réalisé : `controller/ils.ts` `flightDirector()` (pente et inclinaison demandées, leurs écarts ; l'approche du F-35 de
+  `game/ils.ts`, auto ou à la main ; le FD du FMGC de l'A320) ; `controller/computer.ts` `fdCue` et le HUD (`symbology.ts`) :
+  le repère de guidage sur l'approche (à la pente demandée, décalé d'un tiers de l'inclinaison qui manque) ; l'A320 : l'approche ne
+  réengage plus l'AP1 que le pilote a coupé (`a320ap.ts` `manual`) — avant, la déconnexion au mini-manche était annulée à l'image
+  suivante ; la télémétrie `fd`, le snapshot du crew et son lecteur (`net/instruments.ts`), les barres FD au PFD du crew ;
+  `IlsRunway.glide` : la pente publiée de l'approche (`glideOf`, `glideHeight`) lue par les aiguilles, le guidage, la jonction,
+  l'A320 et le contrôle du relief — fin du « 3° partout » (Marseille 31R, à 4°, était refusée selon les tuiles arrivées) ;
+  `world/runways.ts` et `world/approaches.ts` : un fetch d'index raté n'est plus gardé pour la session (un premier appel hors
+  ligne rendait les codes introuvables et marquait toutes les tuiles « sans approche » jusqu'au rechargement) — `runwaysRetry`,
+  `approachesRetry` ; e2e `fd-approach` ; HUD.md, BH-API, CREW, VOL-AVIONS (leçons 7 et 10), apprendre-avions.html, plan.
+- Preuves (observé, M1 Max, ce lot) : e2e `fd-approach` **2/2** — 14 km avant la 27R de Roissy, 900 m à côté de l'axe, sous la
+  pente, l'autopilote coupé, une main scriptée sur le seul directeur : F-35 établi (aiguilles < ½ point 10 s) à 11,2 km, écarts du
+  FD sur la dernière seconde 0,1° / 0,02° ; A320 établi à 11,2 km, 147 kt, 0,3° / 0,08°, l'AP1 jamais réengagé ; `crew-approach`
+  **5/5** : les barres du crew dans le snapshot (`src: "ils"`), capturées (son test 2 avait échoué une fois avant le correctif de la
+  pente : la 31R refusée « la pente de 3° rencontre le relief à 1,0 km ») ; `apprendre-avions` **7/7** (cours revolé) ; tests unitaires liés 347/348 (l'échec : `flight-clock` sur
+  `controller/piloting.ts`, travail en cours d'une autre session, hors de ce lot). Captures : docs/progress/approches/ap7b-*.jpg.
+- Non vérifié : l'A/B de coût ±1 % du plan (un repère en canvas 2D et un calcul par image, non mesurés) ; la main scriptée n'est pas un pilote (ses gains sont réglés pour chaque appareil — tirée à
+  fond à 147 kt, l'A320 entrait en α floor, comportement juste du simulateur).
+- Suite : AP8 — la roue « Approche » (toutes les pistes, le directeur, le choix) et les options du Labo.

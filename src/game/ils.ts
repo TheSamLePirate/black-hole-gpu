@@ -46,7 +46,16 @@ export interface IlsRunway {
   len: number;
   /** its published designation (OurAirports' end name: 23L), when known */
   des?: string;
+  /** the glideslope's angle [°] — the approach's published one (nav.dat, the CIFP: Marseille's 31R 4°) —; absent: 3°
+   *  (PLAN-APPROCHES AP7b: before, every ILS was flown, read and checked against the relief at 3°) */
+  glide?: number;
 }
+
+/** A runway's glideslope angle [°]: its approach's, else the game's 3°. */
+export const glideOf = (R: IlsRunway) => (R.glide !== undefined && R.glide > 1.5 && R.glide < 7 ? R.glide : ILS.glide);
+
+/** The height of a runway's glideslope at a place along its axis [m over the threshold]. */
+export const glideHeight = (R: IlsRunway, along: number) => (ILS.gpi - along) * Math.tan(glideOf(R) * D);
 
 /** The runway's number: its published designation when known (23L — the magnetic heading's, not the true one's), else its
  *  heading's tens (087° → 09). */
@@ -79,7 +88,7 @@ export function ilsReading(R: IlsRunway, p: { lat: number; lon: number; alt: num
   const toLoc = R.len + ILS.locBeyond - o.along;
   const locDeg = Math.atan2(o.across, Math.max(toLoc, 1)) / D;
   const toGs = ILS.gpi - o.along;
-  const gsDeg = Math.atan2(o.h, Math.max(toGs, 1)) / D - ILS.glide;
+  const gsDeg = Math.atan2(o.h, Math.max(toGs, 1)) / D - glideOf(R);
   return {
     ...o,
     /** the needle: the course left of us (we right of it) → the needle left (−) */
@@ -95,7 +104,7 @@ export function ilsReading(R: IlsRunway, p: { lat: number; lon: number; alt: num
 /**
  * The glideslope's clearance over the relief (Sam, 5 Nov 2026 — the approaches of Toulon-Hyères flown by the lab: the hills
  * round the bay): along the final's axis from 1 km to the initial fix, every 250 m, three points across (the axis and
- * ±300 m), the 3° slope's height over the threshold's level (`onRunway`'s, the Earth's curve in it) less the ground's
+ * ±300 m), the slope's height (its own angle, 3° by default) over the threshold's level (`onRunway`'s, the Earth's curve in it) less the ground's
  * height over the sea there (`groundMsl` [m]). Its least [m] and where [m before the threshold]; negative: the slope runs
  * into the ground — the approach is refused.
  */
@@ -103,7 +112,7 @@ export function glideClearance(
   R: IlsRunway,
   groundMsl: (lat: number, lon: number) => number,
 ): { minM: number; atM: number; thin: boolean } {
-  const tan = Math.tan(ILS.glide * D);
+  const tan = Math.tan(glideOf(R) * D);
   let minM = Number.POSITIVE_INFINITY,
     atM = 0,
     thin = false;
@@ -180,9 +189,6 @@ export interface IlsOut {
   call?: string;
 }
 
-/** The height of the glideslope at a place along the axis [m over the threshold]. */
-const gsHeight = (along: number) => (ILS.gpi - along) * Math.tan(ILS.glide * D);
-
 /**
  * A frame of the approach: our place [lat, lon, alt over the sea], track [rad], ground speed and vertical speed [m/s],
  * on the wheels; the approach speed [m/s]. Its phase moved on; what to fly (null: done).
@@ -196,6 +202,9 @@ export function ilsStep(
   R.t += dt;
   const W = R.rwy;
   const r = ilsReading(W, own);
+  // (the glideslope's height along the axis, at the runway's own angle)
+  const gsHeight = (along: number) => glideHeight(W, along);
+  const tanG = Math.tan(glideOf(W) * D);
   if (!own.onGround) R.vs = own.vs;
   const crs = W.hdg * D;
   const say = (k: string) => {
@@ -253,7 +262,7 @@ export function ilsStep(
     } else {
       // (the path's own descent as we close the field, and the gap closed in some 5 s)
       const hT = clamp(gsHeight(r.along), 60, 300);
-      const vz = -Math.max(own.gs * Math.cos(dpsi), 0) * Math.tan(ILS.glide * D) - 0.2 * (r.h - hT);
+      const vz = -Math.max(own.gs * Math.cos(dpsi), 0) * tanG - 0.2 * (r.h - hT);
       const gamma = clamp(Math.atan2(vz, Math.max(own.gs, 1)), -8 * D, 3 * D);
       return { gamma, bank: steer(want, 45 * D), spd: vApp + 8, gear: true, flaps: 0.5 };
     }
@@ -407,7 +416,7 @@ export function ilsStep(
     }
     // (down the path, its height's error closed over some 6 s)
     const hErr = r.h - gsHeight(r.along);
-    const vz = -own.gs * Math.tan(ILS.glide * D) - 0.15 * hErr;
+    const vz = -own.gs * tanG - 0.15 * hErr;
     return { gamma: clamp(Math.atan2(vz, Math.max(own.gs, 1)), -6 * D, 2 * D), bank, spd: vApp, gear: true, flaps: 1, call };
   }
   // the flare: the sink eased to some 1.2 m/s (a fighter's firm touchdown, no float), the throttle back
@@ -422,8 +431,8 @@ export function ilsStep(
 export function arrivalFixes(R: IlsRunway): { name: string; lat: number; lon: number; alt: number }[] {
   const id = runwayId(R.hdg, R.des);
   return [
-    { name: `IAF${id}`, ...fromRunway(R, -ILS.iaf, 0), alt: R.elev + Math.max(gsHeight(-ILS.iaf), 600) },
-    { name: `FAF${id}`, ...fromRunway(R, -ILS.faf, 0), alt: R.elev + gsHeight(-ILS.faf) },
+    { name: `IAF${id}`, ...fromRunway(R, -ILS.iaf, 0), alt: R.elev + Math.max(glideHeight(R, -ILS.iaf), 600) },
+    { name: `FAF${id}`, ...fromRunway(R, -ILS.faf, 0), alt: R.elev + glideHeight(R, -ILS.faf) },
   ];
 }
 export function departureFix(R: IlsRunway): { name: string; lat: number; lon: number; alt: number } {

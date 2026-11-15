@@ -1,8 +1,12 @@
 # Plan — les approches et les pistes, AAA (pilote, crew, roue)
 
-**État (2026-11-15) : AP0a, AP1, AP2, AP0b, AP3 (a, b, c), AP4, AP5, AP6 et AP7a faits.** AP7a : toutes les pistes de l'aéroport
+**État (2026-11-15) : AP0a, AP1, AP2, AP0b, AP3 (a, b, c), AP4, AP5, AP6 et AP7 (a, b) faits.** AP7a : toutes les pistes de l'aéroport
 au HUD (`hudAllRunways`, activé par défaut — décision de Sam, Q2 ; réglage au Labo, la roue à AP8), la désignation publiée dans la
-boîte de piste (« 27R »). Reste d'AP7 (AP7b) : le directeur de vol F-35/A320/crew. AP6a : le crew — actions `app.*` (tous les
+boîte de piste (« 27R »). AP7b : le directeur de vol — `flightDirector()` commun (pente et inclinaison demandées, leurs écarts) ; au
+HUD du F-35 le repère de guidage sur l'approche, en automatique comme à la main ; l'A320 : ses barres FD (FMGC) et l'approche qui ne
+réengage plus l'AP1 coupé par le pilote ; le crew : barres FD au PFD ; la pente publiée de chaque approche (Marseille 31R à 4°)
+lue par les aiguilles, le guidage et le contrôle du relief (fin du « 3° partout ») ; un échec de chargement des index de pistes et
+d'approches n'est plus gardé pour la session. Suite : AP8 (la roue, les options). AP6a : le crew — actions `app.*` (tous les
 postes), boîte APP (approches réelles et construites, transition, Choisir/Auto/Armer/Remise de gaz, état choisi/volé), l'état de
 l'approche et celle de l'A320 dans la télémétrie, le DME corrigé. AP6b : les terrains et l'approche au radar et au ND
 du crew (touchés, ils la choisissent), la vue « Approche » (plan, repères, profil), les appels de l'approche dits à l'équipage. Non

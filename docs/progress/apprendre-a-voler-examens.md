@@ -141,3 +141,10 @@ de 0,27 m/s freins serrés et ⇧K refusait la sortie. Le repos se juge désorma
 `apprendre-avions` **7/7** (leçon 7, l'ILS d'Edwards, jugé sur son toucher), `landing` 5/5, `parcours-debarquer` 1/1 (ILS 05 de Toulon-Hyères
 19,5/20, à l'arrêt 0 m en 10 s, sortie, 2,8 m de marche aller-retour, retour à bord, U : en l'air en 10,2 s). Rien ne change aux recettes du
 cours.
+
+**15 novembre 2026, soir — PLAN-APPROCHES AP7b (le directeur de vol, la pente publiée).** Le cours gagne le directeur de vol (leçon 7 :
+le repère de guidage du HUD en manuel ; leçon 10, étape 9 bis : l'approche de l'A320 à la main sur les barres du FD, l'AP1 coupé n'étant
+plus réengagé) et la pente publiée de chaque approche (3° le plus souvent, 4° à Marseille 31R). Revérifié sur ce Mac : `apprendre-avions`
+**7/7** (l'ILS 23L d'Edwards ; LFPB 07 de l'A320 : 20/20, toucher à 669 m, 0,7 m de l'axe, −0,67 m/s), `fd-approach` 2/2 (la recette
+« à la main sur le directeur » volée par une main scriptée, F-35 et A320, établis à 11,2 km), `crew-approach` 5/5. Les recettes
+existantes ne changent pas ; l'étape 9 bis est nouvelle, volée par `fd-approach`.

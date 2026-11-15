@@ -9,7 +9,8 @@ import { App, E2E, stopServer } from "./lib/app";
 // Done when: the crew's list has I31R (« ILS 31R · 111.15 · 4.0° · CAT I · nav.dat 2013 »); « Choose » sets the pilot's selection to
 // LFML I31R (its generation up); « Arm » engages the ILS on 31R (approachLast I31R); the crew's box reads « LFML I31R » chosen and
 // flown; « Cancel the ILS » ends it; the crew's snapshot carries the approach drawn and its Approach view shows it; an airfield
-// tapped on the crew's radar chooses it on the pilot's side; on the final, armed, the crew is told « glideslope captured ».
+// tapped on the crew's radar chooses it on the pilot's side; on the final, armed, the crew is told « glideslope captured » and its
+// PFD carries the flight director's bars (AP7b).
 // Duration: about 1 min 30 (the boot, the room, the console joined; the orders; a few seconds of a final flown).
 
 describe.skipIf(!E2E)("the approach from the crew", () => {
@@ -157,6 +158,15 @@ describe.skipIf(!E2E)("the approach from the crew", () => {
     );
     const said = await app.js<string>(`${doc("#mcp-app-state")}.textContent`);
     console.log(`  the crew's box: ${said}`);
+    // (the flight director's bars on the crew's PFD — PLAN-APPROCHES AP7b —: the pilot's approach guidance, in its snapshot)
+    await app.waitFor(`!!document.querySelector('#crew-frame').contentWindow.__crew.model.own()?.snapshot?.fd`, 5000);
+    const fd = await app.js<{ pitch: number; roll: number; src: string }>(
+      `document.querySelector('#crew-frame').contentWindow.__crew.model.own().snapshot.fd`,
+    );
+    console.log(`  the crew's FD: ${JSON.stringify(fd)}`);
+    expect(fd.src).toBe("ils");
+    expect(Math.abs(fd.pitch)).toBeLessThan(5);
+    if (shots) await app.shot(`${shots}/crew-approach-fd.png`);
     await press("#mcp-ils-off");
   }, 90_000);
 });

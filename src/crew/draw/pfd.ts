@@ -164,6 +164,20 @@ function attitude(p: Pen, r: Rect, sc: Scene) {
       c.restore();
     }
   }
+  // the flight director's bars (PLAN-APPROCHES AP7b): the pilot's guidance — the F-35's approach, the A320's FMGC —, the path's
+  // angle still to take up or down (the horizontal bar), the bank (the vertical one); centred on the reference: flown as asked
+  const fd = sc.snap?.fd;
+  if (known && fd) {
+    const by = cy - clamp(fd.pitch, -10, 10) * ppd,
+      bx = cx + clamp(fd.roll, -30, 30) * ((r.w * 0.25) / 30);
+    const hw = r.w * 0.22,
+      hh = r.h * 0.22;
+    p.seg(cx - hw, by, cx + hw, by, "#000", 5);
+    p.seg(bx, cy - hh, bx, cy + hh, "#000", 5);
+    p.seg(cx - hw, by, cx + hw, by, C.green, 2.5);
+    p.seg(bx, cy - hh, bx, cy + hh, C.green, 2.5);
+    p.text("FD", r.x + r.w - 12, r.y + 20, { col: C.green, size: 11, align: "right", weight: 700, bg: "#0008" });
+  }
   // the aircraft's reference (the "W")
   c.save();
   c.translate(cx, cy);

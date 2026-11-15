@@ -140,6 +140,11 @@ const resting = (key: string) => {
   return t !== undefined && performance.now() - t < RETRY_MS;
 };
 
+/** The failed fetches forgotten: asked again at once (the network back; a test's own fetch put in after another's failed). */
+export function runwaysRetry() {
+  failedAt.clear();
+}
+
 async function getIndex() {
   if (index) return index;
   // (failed: none for now, asked again after a while — it had stayed empty for the session)
@@ -284,9 +289,15 @@ let idents: Record<string, [number, number]> | null = null;
 export async function fieldByCode(code: string): Promise<Airfield | null> {
   const c = code.trim().toUpperCase();
   if (!c) return null;
-  idents ??= await fetch(`${base}idents.json`)
-    .then((r) => (r.ok ? r.json() : {}))
-    .catch(() => ({}));
+  // (a failed fetch not kept: asked again after a while, as the index is — kept empty, a first ask offline or before the server
+  // answered left every code unknown for the session; the tests run after others met it, 15 Nov 2026)
+  if (!idents && !resting("idents")) {
+    const j = await fetch(`${base}idents.json`)
+      .then((r) => (r.ok ? (r.json() as Promise<Record<string, [number, number]>>) : null))
+      .catch(() => null);
+    if (j) idents = j;
+    else failedAt.set("idents", performance.now());
+  }
   const p = idents?.[c];
   if (!p) return null;
   const fields = await loadTile(tileKey(p[0] / 1e4, p[1] / 1e4));

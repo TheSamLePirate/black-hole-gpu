@@ -55,7 +55,7 @@ right from any mount); points (the future path, the runway, the docking gates) w
 | Sideslip | A ball under the flight path vector, off centre by β (8° full scale). |
 | Energy | A chevron by the flight path's wing: the speed's rate as the flight path angle it would buy, atan(dV/dt / g) — above the wings gaining speed, below losing it. |
 | Load | In g when it departs from 1 g, amber at 70 % of the craft's limit, red at 90 %. |
-| Flight director | With the sci-fi flight computer: where it wants the flight path (its climb angle, its heading), a magenta cue and a dotted line to it. |
+| Flight director | With the sci-fi flight computer: where it wants the flight path (its climb angle, its heading), a magenta cue and a dotted line to it. On an ILS approach (PLAN-APPROCHES AP7b, 15 Nov 2026 — `controller/ils.ts` `flightDirector`, `controller/computer.ts` `fdCue`), flown by the autopilot or by hand: the same cue at the flight path angle the approach asks, off the air's track by a third of the bank still to take (8° at most) — a fly-to guidance cue: the velocity vector put on it flies the join, the intercept and the final as the autopilot would. The crew's PFD shows the same guidance as FD bars. |
 
 ## The future
 

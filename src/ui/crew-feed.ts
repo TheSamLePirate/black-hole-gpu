@@ -486,6 +486,8 @@ export function crewSnapshot(
       mass: fin(i.mass),
     },
     ils: i.ils ? { id: i.ils.id, loc: i.ils.loc, gs: i.ils.gs, dme: i.ils.dme, phase: i.ils.phase } : null,
+    // (the flight director's bars — PLAN-APPROCHES AP7b —: the path's angle and the bank still to take [°], whose guidance)
+    fd: i.fd ? { pitch: i.fd.dGamma * (180 / Math.PI), roll: i.fd.dBank * (180 / Math.PI), src: i.fd.src } : null,
     // (the approach drawn — the crew's radar, ND and Approach view — PLAN-APPROCHES AP6)
     apprMap: c.approachMapData(),
     // (the approach chosen and the one flown — PLAN-APPROCHES AP6: the crew's APP box reads it)

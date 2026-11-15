@@ -311,6 +311,9 @@ export interface SymInfo {
     sf?: { speed: number; gamma: number; heading: number } | null;
     /** Effective commanded direction through the air, in ship coordinates (as u). */
     sfU?: V3 | null;
+    /** the approach's flight director cue (PLAN-APPROCHES AP7b — controller/computer.ts fdCue): the flight path to fly to, in
+     *  ship coordinates (as u) */
+    fdU?: V3 | null;
     /** the load's peak this flight [g], Mach */
     gPeak?: number;
     mach?: number;
@@ -963,7 +966,8 @@ const energy = { t: 0, v: NaN, a: 0 };
  *   gains speed, below: it loses it (γ = atan(dV/dt / g));
  * - the sideslip: a ball under the flight path, off centre by β;
  * - the load in g, coloured against the craft's limit; STALL flashing;
- * - the flight director: where the flight computer wants the flight path (its climb angle, its heading).
+ * - the flight director: where the flight computer wants the flight path (its climb angle, its heading); on an approach, its
+ *   guidance (PLAN-APPROCHES AP7b): the path asked, off the track by the bank still to take — the velocity vector flown onto it.
  */
 function drawAir(F: SymFrame, A: NonNullable<SymInfo["air"]>, pr: Proj, stroke: Stroke, text: Text, up: V3 | null, fpx: number) {
   const { ctx, dpr, s, i } = F;
@@ -1111,9 +1115,12 @@ function drawAir(F: SymFrame, A: NonNullable<SymInfo["air"]>, pr: Proj, stroke: 
   }
 
   // ---- the flight director: where the flight computer wants the flight path
-  if (s.hudDirector && A.sf && A.sfU) {
+  // (the sci-fi computer's command, or the approach's guidance — PLAN-APPROCHES AP7b: the cue the autopilot follows, or the pilot
+  // with the stick taken, the velocity vector flown onto it)
+  const fdU = A.sf && A.sfU ? A.sfU : (A.fdU ?? null);
+  if (s.hudDirector && fdU) {
     // Same air-relative frame as the FPV, using the effective command after all corrections.
-    const u = A.sfU;
+    const u = fdU;
     const q = pr(norm(S.map((row) => dot(row as V3, u)) as V3));
     if (q) {
       const col = "rgba(224, 123, 255, 0.95)";

@@ -6,7 +6,7 @@
 // (Its methods, out of controls.ts: installed on its prototype — `this` the controller.)
 
 import { type Asker, type Choice, chooseApproach, chooseField, type Wind } from "../game/approach-choice";
-import { fromRunway, glideClearance, ILS, type IlsRunway, runwayId } from "../game/ils";
+import { fromRunway, glideClearance, glideHeight, type IlsRunway, runwayId } from "../game/ils";
 import { RUNWAY_LENGTH, reciprocal, type Site, SITES } from "../game/sites";
 import { isAircraft } from "../vessels";
 import { fleet } from "../fleet";
@@ -310,6 +310,8 @@ function runwayOfApproach(f: Airfield, a: Approach): IlsRunway {
     elev: a.thr.elev,
     len: rw?.len ?? 2500,
     des: a.rwy,
+    // (its published slope — Marseille's 31R at 4°: checked against the relief at 3° it was refused, 15 Nov 2026 —; flown at it)
+    glide: a.angle,
   };
 }
 
@@ -337,7 +339,7 @@ export function boxOverSlope(W: IlsRunway): boolean {
       const p = fromRunway(W, -d, x);
       top = Math.max(top, groundMsl(p.lat, p.lon));
     }
-  return top + 1000 * 0.3048 > W.elev + (16_000 + ILS.gpi) * Math.tan((ILS.glide * Math.PI) / 180) + 150;
+  return top + 1000 * 0.3048 > W.elev + glideHeight(W, -16_000) + 150;
 }
 
 /**

@@ -4,8 +4,8 @@ import { onRunway } from "../src/game/ils";
 import { add, cross, scale } from "../src/math/vec3";
 import { setGroundHeights } from "../src/system/our-surface";
 import { C_MPS, M_METRES } from "../src/units";
-import { fieldByCode } from "../src/world/runways";
-import { loadApproachTile } from "../src/world/approaches";
+import { fieldByCode, runwaysRetry } from "../src/world/runways";
+import { approachesRetry, loadApproachTile } from "../src/world/approaches";
 import { flight, resetFlights } from "./helpers/flight";
 
 // The A320 on a published arrival (docs/PLAN-APPROCHES.md AP3): a plan to San Francisco, its arrival put in by the plan's
@@ -21,6 +21,9 @@ globalThis.fetch = (async (u: string | URL | Request) => {
   const f = Bun.file(`assets/${m[1]}/v1/${m[2]}`);
   return (await f.exists()) ? new Response(f) : new Response("", { status: 404 });
 }) as typeof fetch;
+// (the fetches another test file saw fail — no server there — forgotten: asked again through this one)
+runwaysRetry();
+approachesRetry();
 afterAll(() => {
   globalThis.fetch = realFetch;
 });

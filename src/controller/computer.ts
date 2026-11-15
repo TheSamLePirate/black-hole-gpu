@@ -1275,6 +1275,8 @@ function airInfo(this: CameraController) {
     wind: this.windNow,
     sf: this.sfFlown ? { ...this.sfFlown } : this.sfCmd ? { ...this.sfCmd } : null,
     sfU: this.sfDirector ? (this.shipAxesLocal(cameraFrame(this.s)).map((a) => dot3(a, this.sfDirector!)) as Vec3) : null,
+    // (the approach's flight director — PLAN-APPROCHES AP7b —: the cue to put the flight path on, in the same axes)
+    fdU: fdCue(this),
     ...this.attitudeNow(),
     // (the wing's incidences, for the HUD's angle-of-attack cues: the stall; the best lift-to-drag —
     // where the induced drag equals the zero-lift one, C_L = √(C_D0 π AR e))
@@ -1601,6 +1603,28 @@ function pathAngle(this: CameraController, cam: ReturnType<typeof cameraFrame>):
   const fr = this.sfFrame(cam);
   const v = fr ? Math.hypot(...fr.vRel) : 0;
   return fr && v > 0 ? Math.asin(clamp(dot3(fr.vRel, fr.up) / v, -1, 1)) : 0;
+}
+
+/**
+ * The flight director's cue on the HUD (docs/PLAN-APPROCHES.md AP7b; controller/ils.ts flightDirector): where to put the flight
+ * path vector — at the flight path's angle asked; off the air's track by a third of the bank still to take (8° at most), so that
+ * the cue is met as that bank is reached — a "fly to" cue as a head-up display's guidance cue is. In the ship's axes, as `sfU`.
+ */
+function fdCue(c: CameraController): Vec3 | null {
+  const F = c.flightDirector();
+  if (!F) return null;
+  const cam = cameraFrame(c.s);
+  const fr = c.sfFrame(cam);
+  if (!fr) return null;
+  const va = sub3(fr.vRel, fr.wind);
+  const vh = lin(va, 1, fr.up, -dot3(va, fr.up));
+  if (Math.hypot(...vh) < 1) return null;
+  const D = Math.PI / 180;
+  const az = Math.atan2(dot3(vh, fr.east), dot3(vh, fr.north)) + clamp(F.dBank / 3, -8 * D, 8 * D);
+  const cg = Math.cos(F.gamma);
+  const dir = lin(lin(fr.north, Math.cos(az) * cg, fr.east, Math.sin(az) * cg), 1, fr.up, Math.sin(F.gamma));
+  const u = fr.toLocal(dir);
+  return c.shipAxesLocal(cam).map((a) => dot3(a, u)) as Vec3;
 }
 
 /** The flown craft's attitude over the ground below: pitch, bank (right: +), heading [rad]. */

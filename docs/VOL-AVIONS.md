@@ -350,7 +350,8 @@ puis lire le journal : `__bh.game.log.events.filter(e => e.kind === "pilot")` co
 ## Leçon 7 — L'approche ILS
 
 **But** : se poser par tout temps en suivant deux faisceaux : l'**alignement de piste** (localizer) et la **pente**
-(glideslope, 3°).
+(glideslope : la pente publiée de l'approche — 3° le plus souvent, 4° à Marseille 31R ; 3° pour une approche construite. Depuis le
+15 nov. 2026 les aiguilles, le guidage et le contrôle du relief la suivent ; avant, toutes étaient volées à 3°).
 
 | Point | Chiffres |
 |---|---|
@@ -393,6 +394,14 @@ choisie (son cap et sa distance au seuil).
 **Au clavier** : Tab › Navigation › **Approche ILS** (le choix de la piste dans la sous-roue). Le HUD montre en vert
 les points de pente à droite, ceux de l'alignement en bas, des losanges magenta, et la phase (`IAF`, `LOC`, `LOC GS`,
 `FLARE`, `ROLL`, `GA`). Toucher le manche ou la manette repasse en manuel.
+
+**Le directeur de vol** (PLAN-APPROCHES AP7b, depuis le 15 nov. 2026) : en manuel, le guidage de l'approche reste au HUD — un
+**cercle magenta à ailettes** (le repère de guidage) et un pointillé depuis le vecteur vitesse. Il est placé à la **pente
+demandée** et décalé du côté où il faut **incliner** (d'un tiers de l'inclinaison qui manque, 8° au plus) : amener le vecteur
+vitesse dessus et l'y garder vole la jonction, l'interception et la finale comme l'autopilote les volerait. Réglage
+`hudDirector` (activé par défaut). Vérifié par l'e2e `fd-approach` : 14 km avant la 27R de Roissy, 900 m à côté de l'axe et
+sous la pente, l'autopilote coupé, le F-35 volé au manche sur le seul repère, établi (aiguilles à moins d'un demi-point
+pendant 10 s) à 11,2 km.
 
 **Par `__bh`**
 
@@ -484,6 +493,7 @@ atterrissage automatique, roulage —, en sachant ce que fait l'automatisme à c
 | 8 | Croisière | le **FCU** au poste (cliquer : SPD, HDG, ALT, V/S ; tirer = sélecté, pousser = géré) ; **⇧M** : NAV sur le plan de vol | FMA `ALT`, `SPEED` |
 | 8 bis | Préparer l'arrivée | MCDU : F-PLN, la ligne de la destination (LAT REV) › **ARRIVAL>** : l'approche (aux États-Unis celles de la FAA — ILS, LOC, RNAV, VOR —, ailleurs l'ILS de nav.dat ou l'approche construite), sa **VIA** (transition publiée, ou NO VIA : guidage radar), **INSERT*** | le plan reçoit la transition et la finale (leurs altitudes) ; en NAV, l'approche s'enclenche à l'IF, sur l'axe ; RAD NAV : le localizer réel (KSFO 28R : IGWQ 111.70) |
 | 9 | Descente et approche | ALT du FCU plus bas, tirer : `OP DES` ; volets par étapes à **FULL** (becs 27°, volets 35° — ~30 s), **G** train ; Tab › Navigation › **Approche ILS** : le FMGC vole la jonction comme un contrôleur la donnerait (cap et altitude du FCU : dans l'axe, ou vent arrière et base, jamais au-dessus du terrain ; APPR armé sur la dernière branche) | FMA `HDG`, puis `LOC*`→`LOC`, `G/S*`→`G/S`, vitesse VAPP |
+| 9 bis | L'approche à la main | Pendant l'approche, couper l'AP1 (**'**, ou le mini-manche au-delà de la moitié : déconnexion instinctive) : l'approche **ne le réengage plus** (avant le 15 nov. 2026 elle le remettait à l'image suivante) ; elle règle toujours le FCU (cap, altitude, APPR), la configuration et l'A/THR — les **barres du FD** (vertes) suivent la jonction puis LOC et G/S : les centrer sur la maquette. Manettes au cran **CL** (l'A/THR tient la vitesse) ; tirer fort à basse vitesse déclenche l'**α floor** (TOGA LK) | FMA `HDG`/`ALT`, puis `LOC`, `G/S`, sans `AP1` ; FD `1 FD 2` |
 | 10 | Atterrissage | avec l'AP : `LAND` sous 400 ft, **`FLARE` à 50 ft (seulement avec l'AP)**, `ROLL OUT` ; manettes au **ralenti** au toucher | toucher < 3 m/s (≈ 600 ft/min) |
 | 11 | Freinage | **⇧Z** inverseurs (au sol, ralenti), **⇧B** autofrein (LO 1,7 · MED 3,0 · MAX m/s², MAX au sol seulement) ; spoilers sol automatiques | sorti de piste < 30 kt |
 | 12 | Au poste | la tour donne un poste libre ; frein de parc | — |

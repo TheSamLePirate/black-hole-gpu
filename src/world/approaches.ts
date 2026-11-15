@@ -376,6 +376,14 @@ let clock = 0;
 export const approachesEvents = { onLoad: (_key: string) => {} };
 let index: Record<string, number> | null = null;
 let indexP: Promise<void> | null = null;
+/** the index's fetch failed at [ms]: not asked again for 30 s (the maps ask every frame) — and never kept as « no tile has
+ *  approaches »: before 15 Nov 2026 a first ask offline, or before the server answered, marked every tile empty for the session */
+let indexFailedAt: number | null = null;
+
+/** The failed fetches forgotten: asked again at once (the network back; a test's own fetch put in after another's failed). */
+export function approachesRetry() {
+  indexFailedAt = null;
+}
 
 /** The tile of a place fetched (once; a tile without real approaches is none to fetch). */
 export async function loadApproachTile(lat: number, lon: number): Promise<void> {
@@ -387,16 +395,21 @@ runwayTileListeners.add((key) => void loadApproachKey(key));
 
 async function loadApproachKey(key: string): Promise<void> {
   if (tiles.has(key)) return;
+  if (!index && indexFailedAt !== null && performance.now() - indexFailedAt < 30_000) return;
   indexP ??= fetch(`${base}index.json`)
-    .then((r) => (r.ok ? r.json() : null))
-    .then((j: { tiles?: Record<string, number> } | null) => {
+    .then((r) => (r.ok ? r.json() : Promise.reject(new Error(String(r.status)))))
+    .then((j: { tiles?: Record<string, number> }) => {
       index = j?.tiles ?? {};
+      indexFailedAt = null;
     })
     .catch(() => {
-      index = {};
+      indexFailedAt = performance.now();
+      indexP = null;
     });
   await indexP;
-  if (!index?.[key]) {
+  // (the index not in — its fetch failed —: the tile not known either way, asked again later)
+  if (!index) return;
+  if (!index[key]) {
     tiles.set(key, { cycle: "", records: [], cifpCycle: "", cifp: [], used: ++clock });
     return;
   }
@@ -419,9 +432,10 @@ async function loadApproachKey(key: string): Promise<void> {
   await p;
 }
 
-/** Whether a place's tile is in (fetched, or known to have none). */
+/** Whether a place's tile is in (fetched, or known to have none) — or the index failed (offline): its built approaches flown
+ *  meanwhile, the real ones asked again later. */
 export function approachTileIn(lat: number, lon: number): boolean {
-  return tiles.has(tileKey(lat, lon));
+  return tiles.has(tileKey(lat, lon)) || (!index && indexFailedAt !== null);
 }
 
 /** A field's approaches with its tile's real ones when it is in (the built ones only, until it comes). */

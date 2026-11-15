@@ -231,6 +231,9 @@ export interface FlightInfo {
   msn: { name: string; brg: number; dist: number; dz: number } | null;
   /** an ILS approach (controller/ils.ts — P4): the runway, the needles [dots], the distance [km], its phase */
   ils: ReturnType<CameraController["ilsInfo"]>;
+  /** the flight director (controller/ils.ts flightDirector — PLAN-APPROCHES AP7b): the path's angle and the bank asked, their
+   *  gaps [rad]; null: none */
+  fd: ReturnType<CameraController["flightDirector"]>;
   /** the beginner's ring (controller/assistlevel.ts — A1): the heading and the flight path it asks [rad] */
   aimRing: { hdg: number; gamma: number } | null;
   /** the protections (controller/gcas.ts — A2): the fly-up flying, the ground near (the recovery within twice its
@@ -547,6 +550,7 @@ function flightInfo(this: CameraController): FlightInfo {
     })(),
     // (the A320's approach too — its FMGC's: PLAN-APPROCHES AP6, the crew saw none)
     ils: this.ilsRun || this.a320App ? this.ilsInfo() : null,
+    fd: this.ilsRun || fleet.active === "a320" ? this.flightDirector() : null,
     aimRing: this.aimRing ? { ...this.aimRing } : null,
     relief: (() => {
       // (under a radar's scope in the air: the F-35's, the Ranger's nose radar's)

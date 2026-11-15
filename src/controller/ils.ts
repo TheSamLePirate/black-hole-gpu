@@ -44,6 +44,7 @@ declare module "../controls" {
     ilsFrame: typeof ilsFrame;
     ilsInfo: typeof ilsInfo;
     ilsClear: typeof ilsClear;
+    flightDirector: typeof flightDirector;
     routeProcedures: typeof routeProcedures;
   }
 }
@@ -363,6 +364,43 @@ function ilsFrame(this: CameraController) {
   }
 }
 
+/** A flight director's orders now: the flight path's angle and the bank asked [rad], the gaps to them from the flight path and
+ *  the bank flown [rad] (> 0: up, to the right), whose guidance it is. */
+export interface FlightDirector {
+  gamma: number;
+  bank: number;
+  dGamma: number;
+  dBank: number;
+  src: "ils" | "fmgc";
+}
+
+/**
+ * The flight director (docs/PLAN-APPROCHES.md AP7b): what the approach's guidance asks now, for the HUD's guidance cue, the PFDs'
+ * bars and the crew's. The F-35's: the approach flown by game/ils.ts — its autopilot flying it or the stick taken (the same
+ * guidance, shown: the pilot flies the cue as the autopilot would have) —, from the join to the flare; the A320's: its FMGC's
+ * (the flight directors on — FD1 or FD2 —, a lateral mode engaged), the modes the approach sets or the pilot's. Null: neither.
+ */
+function flightDirector(this: CameraController): FlightDirector | null {
+  const g = this.geoNow();
+  if (!g) return null;
+  const att = this.attitudeNow();
+  const bankNow = "bank" in att && Number.isFinite(att.bank) ? att.bank : 0;
+  const gammaNow = g.gs > 1 ? Math.atan2(g.vs, g.gs) : 0;
+  if (fleet.active === "a320") {
+    // (the FMGC's: the path's angle asked as a gap [°], the bank asked [°])
+    const fd = this.a320FmgcOut?.fd;
+    if (!fd) return null;
+    const dG = (fd.pitch * Math.PI) / 180,
+      bank = (fd.bank * Math.PI) / 180;
+    return { gamma: gammaNow + dG, bank, dGamma: dG, dBank: bank - bankNow, src: "fmgc" };
+  }
+  const R = this.ilsRun;
+  if (!R || R.phase === "rollout" || R.phase === "done" || !isAircraft(fleet.active)) return null;
+  const out = guide(this, R);
+  if (!out || out.idle) return null;
+  return { gamma: out.gamma, bank: out.bank, dGamma: out.gamma - gammaNow, dBank: out.bank - bankNow, src: "ils" };
+}
+
 /** What the HUD shows of the approach: the runway, the needles (dots), the distance, its phase. Null: none flown. */
 function ilsInfo(
   this: CameraController,
@@ -475,5 +513,5 @@ export function publishedArrival(a: Approach, via: string | null, from: { lat: n
 }
 
 export function installIls(C: { prototype: CameraController }) {
-  Object.assign(C.prototype, { ilsStart, ilsRunways, ilsOff, ilsJet, ilsFrame, ilsInfo, ilsClear, routeProcedures });
+  Object.assign(C.prototype, { ilsStart, ilsRunways, ilsOff, ilsJet, ilsFrame, ilsInfo, ilsClear, routeProcedures, flightDirector });
 }

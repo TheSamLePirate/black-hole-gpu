@@ -14,7 +14,7 @@
 // Before 15 Nov 2026 the jet flew straight at a fixed initial fix 18.5 km out on the axis: from the other side, over the field and a
 // turn back; the relief checked on the final only (Sam: « l'AP ILS n'est pas fiable pour se placer sur le glide »).
 
-import { fromRunway, ILS, type IlsRunway, onRunway } from "./ils";
+import { fromRunway, glideHeight, ILS, type IlsRunway, onRunway } from "./ils";
 
 const D = Math.PI / 180;
 
@@ -81,8 +81,6 @@ function stepDown(W: IlsRunway, x0: number, ground: (lat: number, lon: number) =
   return out;
 }
 
-const gsHeight = (along: number) => (ILS.gpi - along) * Math.tan(ILS.glide * D);
-
 /** The highest ground along a leg (on it and 2 km either side, every 500 m) [m over the sea]. */
 function legGround(W: IlsRunway, a: { x: number; y: number }, b: { x: number; y: number }, ground: (lat: number, lon: number) => number) {
   const len = Math.hypot(b.x - a.x, b.y - a.y);
@@ -116,7 +114,7 @@ export function planJoin(
   const descDeg = opts.descDeg ?? PLAN.descDeg;
   const o = onRunway(W, { ...own, alt: own.alt });
   const crs = W.hdg * D;
-  const hJoin = W.elev + Math.max(gsHeight(-PLAN.join) - PLAN.underGs, PLAN.minJoin);
+  const hJoin = W.elev + Math.max(glideHeight(W, -PLAN.join) - PLAN.underGs, PLAN.minJoin);
   const J = { x: -PLAN.join, y: 0 };
   const pIntX = -PLAN.join - PLAN.intLeg * Math.cos(PLAN.intDeg * D);
   let entry: JoinPlan["entry"];

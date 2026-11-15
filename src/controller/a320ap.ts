@@ -12,7 +12,7 @@ import { Fmgc, type FmgcIn, type FmgcOut } from "../a320/fmgc/fmgc";
 import { fleet } from "../fleet";
 import { t, tf } from "../i18n";
 import { unitsOf } from "../ui/unitsys";
-import { fromRunway, ILS, ilsReading, type IlsRunway, onRunway, runwayId } from "../game/ils";
+import { fromRunway, glideHeight, ILS, ilsReading, type IlsRunway, onRunway, runwayId } from "../game/ils";
 import { gcCourse, gcDist } from "../game/flightplan";
 import { geoidDeg } from "../system/geoid";
 import { bodyFixedOf, groundRelief } from "../system/our-surface";
@@ -213,6 +213,11 @@ export interface A320App {
   touch: { along: number; across: number; vs: number } | null;
   /** the join flown: its plan, the point flown to (game/approach-plan.ts) — planned again after a round again */
   join: { plan: JoinPlan; i: number };
+  /** hand-flown on the flight directors (PLAN-APPROCHES AP7b): the autopilot let go during the approach — the side stick's
+   *  instinctive disconnection, its button, the key — is not engaged again; the FCU still set along the approach, the bars
+   *  following it. `apWas`: the autopilot at the last frame */
+  manual?: boolean;
+  apWas?: boolean;
 }
 
 /** The join from where the craft is. */
@@ -332,7 +337,15 @@ function a320AppStep(c: CameraController, F: Fmgc, i: FmgcIn, onWheels: boolean)
     if (F.apprArm) F.apprToggle();
   }
   if (!F.athr) F.athrToggle();
-  if (!F.ap) F.ap1Toggle(i);
+  // (the autopilot let go by the pilot: flown by hand on the flight directors from then on — before AP7b it was engaged again
+  // at the next frame, the side stick's disconnection undone)
+  if (A.apWas && !F.ap) {
+    A.manual = true;
+    if (!F.fd1 && !F.fd2) F.fd1 = true;
+  }
+  if (F.ap) A.manual = false;
+  else if (!A.manual) F.ap1Toggle(i);
+  A.apWas = F.ap;
   let joinFt: number | null = null;
   if (A.leg !== "final") {
     let hdg = W.hdg;
@@ -378,7 +391,7 @@ function a320AppStep(c: CameraController, F: Fmgc, i: FmgcIn, onWheels: boolean)
     let ft = joinFt ?? A.altFt;
     if (A.leg !== "entry") {
       const d = Math.max(-o.along, 0);
-      const below = W.elev + (d + ILS.gpi) * Math.tan((ILS.glide * Math.PI) / 180) - 60;
+      const below = W.elev + glideHeight(W, -d) - 60;
       // (and never under the join's step-down: a ridge under the localizer's outer part held over — AP2)
       const lastFloor = o.along < -PLAN.join ? (A.join.plan.pts.at(-1)?.floor ?? Number.NEGATIVE_INFINITY) : Number.NEGATIVE_INFINITY;
       ft = Math.max(Math.min(A.altFt, Math.max(below, safeAt(A, d)) * FT), Math.max(floorAt(A.join.plan, o.along), lastFloor) * FT);
