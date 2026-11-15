@@ -133,3 +133,11 @@ choix faits pendant le décollage sont **armés** et deviennent ses maintiens à
 Le FMGC de l'A320 vole désormais la jonction planifiée (cap et altitude du FCU, APPR armé sur la dernière branche) ; la leçon 10
 (VOL-AVIONS, étape 9) le dit. La recette ne change pas : `apprendre-avions` revolé **7/7** — leçon 10 (Le Bourget) ILS 07 20/20,
 toucher à 666 m, 0,7 m de l'axe ; leçon 7 (Edwards) ILS 23L 20/20, 270 m. Les départs de loin : `a320-approach-join` (Nice, 4/4).
+
+## 2026-11-15 — PLAN-J6 J6-3 : le repos au sol jugé dans le plan du sol, le cours revolé
+
+Après le roulage d'un ILS, le F-35 n'atteignait jamais le repos (une vitesse verticale résiduelle de −0,29 m/s dans le test 3D) : il glissait
+de 0,27 m/s freins serrés et ⇧K refusait la sortie. Le repos se juge désormais dans le plan du sol. Revérifié sur kerr-mini :
+`apprendre-avions` **7/7** (leçon 7, l'ILS d'Edwards, jugé sur son toucher), `landing` 5/5, `parcours-debarquer` 1/1 (ILS 05 de Toulon-Hyères
+19,5/20, à l'arrêt 0 m en 10 s, sortie, 2,8 m de marche aller-retour, retour à bord, U : en l'air en 10,2 s). Rien ne change aux recettes du
+cours.

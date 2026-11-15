@@ -638,7 +638,11 @@ sol sous un point.
   `wetRatio` ; avec la soufflante de sustentation ×184/120. **Le ralenti du F135 (`idle: 0.05`) n'est jamais lu : manette
   0 = poussée 0.**
 - **Train** (`gear.ts`) : jambes ressort-amortisseur progressives, adhérence des pneus par glissement, freins
-  antidérapants, roue avant directrice ; train pas entièrement sorti → patins de ventre.
+  antidérapants, roue avant directrice ; train pas entièrement sorti → patins de ventre. **Au repos** (`motion.ts`, `still`) : sur toutes ses
+  roues, manette à 0, moins de 0,05 m/s **dans le plan du sol** (et moins de 0,5 m/s de côté vertical), sans tourner — l'appareil est alors
+  tenu par le sol (`ourLanded`) et l'on peut en descendre (⇧K). Depuis le 15 nov. 2026 : la vitesse en 3D était testée, et après le roulage
+  d'un ILS une vitesse verticale résiduelle de −0,29 m/s (les jambes le replacent sur le sol sans la corriger) l'empêchait toujours —
+  l'avion glissait de 0,27 m/s freins serrés, la sortie refusée (e2e `parcours-debarquer`, PLAN-J6 J6-3).
 - **Vent** (`wind.ts`) : profil en loi de puissance, turbulence de Dryden et rafales, graine par vol ; actif si
   `wind > 0` (défaut 1, 4 m/s) ou météo non « fair ».
 

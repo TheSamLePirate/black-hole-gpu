@@ -1,8 +1,7 @@
 # PLAN-J6 — Les parcours complets (stratégie §19.13)
 
-**État (2026-11-15 18:45 UTC)** : **J6-1 et J6-2 faits** — leurs parcours passent ; trois défauts trouvés et corrigés (le décollage
-automatique, le décor en vol rapide, l'arrivée de la météo réelle d'un coup). **J6-3 ouvert** : son parcours écrit, bloqué par un défaut
-relevé (l'avion glisse après le roulage de l'ILS : on ne peut pas débarquer). Les jalons J0 à J5 ont été menés (PLAN-J1 à PLAN-J5) ; le 15 novembre,
+**État (2026-11-15 19:13 UTC)** : **J6-1, J6-2 et J6-3 faits** — leurs parcours passent ; quatre défauts trouvés et corrigés (le
+décollage automatique, le décor en vol rapide, l'arrivée de la météo réelle d'un coup, le repos au sol jamais atteint). J6-4 ensuite. Les jalons J0 à J5 ont été menés (PLAN-J1 à PLAN-J5) ; le 15 novembre,
 Sam a nommé **~48 ms de GPU sur J0 le palier intermédiaire de kerr-mini** ([J0-CONTRAT](J0-CONTRAT.md) §2) et demandé de reprendre la
 suite du plan, lumière et contenu. La stratégie ([ANALYSE-STRATEGIE](ANALYSE-STRATEGIE-RENDU-2026-11-03.md) §19.13) demande que les jalons
 « transportent l'expérience en même temps que les passes » : **un parcours n'est terminé ni avec une scène vide, ni avec un état choisi
@@ -104,3 +103,9 @@ L'inventaire du §1 vient de la lecture du catalogue et des en-têtes : aucun te
   l'avion glisse de 2,7 m en 10 s, freins serrés, sans vent ni lacet** — jamais au repos, la sortie refusée (« Land the vessel before going
   out. ») ([PROBLEMES](PROBLEMES-A-REGLER.md)). Le parcours échoue en le disant. Suite : la cause du glissement (les pneus à l'arrêt, la pente
   de la piste), puis la marche, le retour à bord et le redécollage.
+- **J6-3 fait : le repos au sol** (2026-11-15 19:13 UTC) : un relevé à chaque pas de la vitesse relative au sol (un diagnostic temporaire dans
+  `motion.ts`, retiré) — en long et en travers ~0,1 mm/s, **verticale −0,29 m/s** que les jambes ne corrigent pas ; la condition de repos
+  testait la vitesse en 3D. Jugée dans le plan du sol (`still` : moins de 0,05 m/s tangentielle, moins de 0,5 m/s verticale). **Mesuré**
+  (kerr-mini) : à l'arrêt 0 m en 10 s ; sortie par ⇧K, 2,8 m de marche aller-retour toujours au sol, retour à bord, U : en l'air en 10,2 s ;
+  le sol de contact identique sous deux réglages (0,328 / 0,328 m, z 17). `apprendre-avions` 7/7, `landing` 5/5, tests du train et des
+  atterrissages 46/46. Reste : pourquoi la vitesse verticale n'est pas amortie (PROBLEMES). Suite : J6-4 (reprendre un avion au sol).

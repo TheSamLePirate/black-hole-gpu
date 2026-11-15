@@ -122,7 +122,7 @@ test.skipIf(!E2E)(
       }
       const walk = await app.js<{ out: number; back: number; groundedAll: boolean }>(`(async () => {
         const ch = __bh.camera.character, f = () => new Promise((q) => requestAnimationFrame(q)); let groundedAll = true;
-        const q0 = [...ch.q]; const d = (q) => Math.hypot(q[0] - q0[0], q[1] - q0[1], q[2] - q0[2]) * 6378137;
+        const q0 = [...ch.q]; const d = (q) => Math.hypot(q[0] - q0[0], q[1] - q0[1], q[2] - q0[2]);
         for (let i = 0; i < 30; i++) await f();
         ch.move(1, 0, 2); const t0 = performance.now();
         while (performance.now() - t0 < 2600) { await f(); groundedAll = groundedAll && ch.grounded; }

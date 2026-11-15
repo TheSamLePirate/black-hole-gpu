@@ -193,7 +193,13 @@ gestionnaire des messages du pilote (`main.ts`) les montrait par `panel.toast`, 
 y écrivait comme le pilote. **Tous** les messages du pilote étaient doublés. `panel.toast(msg, { log: false })` pour eux ; e2e `journal-once` :
 avant `[info no-time, pilot t]`, après `[pilot t]`.
 
-## Après le roulage de l'ILS, le F-35 ne s'arrête jamais : il glisse de côté, freins serrés — on ne peut pas débarquer (relevé le 15 novembre 2026, PLAN-J6 J6-3)
+## ~~Après le roulage de l'ILS, le F-35 ne s'arrête jamais : il glisse de côté, freins serrés — on ne peut pas débarquer~~ (relevé le 15 novembre 2026, PLAN-J6 J6-3) — corrigé le même jour
+
+> **15 nov. 2026, 19:13 UTC — cause trouvée, corrigé** : un relevé de la vitesse relative au sol à chaque pas : en long et en travers ~0,1 mm/s,
+> **verticale −0,29 m/s** — les jambes replacent l'avion sur le sol à chaque pas sans corriger sa vitesse ; la condition de repos (`motion.ts`
+> `still`) testait la vitesse en 3D : jamais sous 0,05 m/s. Désormais jugée **dans le plan du sol** (et moins de 0,5 m/s verticale) : à l'arrêt
+> 0 m en 10 s, la sortie à pied, le retour et le redécollage passent (`parcours-debarquer`) ; `apprendre-avions` 7/7, `landing` 5/5, tests du
+> train et des atterrissages 46/46. Reste à comprendre : pourquoi cette vitesse verticale n'est pas amortie par les jambes.
 
 **État (15 nov. 2026, 18:45 UTC)** : relevé, cause non trouvée. Le parcours `parcours-debarquer` : l'ILS 05 de Toulon-Hyères depuis une finale de
 9 km, toucher 19,5/20 (640 m, 1,6 m de l'axe, −1,2 m/s), aucun rebond, roulage jusqu'à ~0 ; puis, sans rien toucher, l'avion **reste

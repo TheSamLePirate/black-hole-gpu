@@ -827,7 +827,13 @@ function flyHome(this: CameraController, p: ReturnType<typeof repPose>, vRep: Ve
           break;
         }
         // (at rest on all its legs, the engine idle, not turning: standing — carried by the ground)
-        const still = Math.hypot(...vr) * C_MPS < 0.05 && Math.hypot(...wWorld()) < 0.003;
+        // (judged in the ground's plane — with a sink bounded: the legs hold the craft on the ground each step but leave its velocity a
+        // steady few tenths of a m/s down (after an ILS rollout: −0.29 m/s), which the 3D test never let under 0.05 — the craft never at
+        // rest, its position re-set on the ground each step turning that sink into a slide of 0.27 m/s, brakes on, the pilot unable to get
+        // out: PLAN-J6 J6-3, 15 Nov 2026)
+        const vrN = dot3(vr, n) * C_MPS;
+        const vrT = Math.hypot(...lin(vr, 1, n, -dot3(vr, n))) * C_MPS;
+        const still = vrT < 0.05 && Math.abs(vrN) < 0.5 && Math.hypot(...wWorld()) < 0.003;
         // (on the belly, its underside not flat: still on two skids is at rest)
         // (the A320's tug pushing: not at rest — its pull a centimetre a second each frame from a stand —
         // controller/a320ground.ts)
