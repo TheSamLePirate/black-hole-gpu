@@ -545,7 +545,8 @@ function flightInfo(this: CameraController): FlightInfo {
       const dist = distM(g, m);
       return { name: m.name, brg: (Math.atan2(y, x) / D + 360) % 360, dist, dz: m.alt - g.alt - (dist * dist) / (2 * 6_371_008.8) };
     })(),
-    ils: this.ilsRun ? this.ilsInfo() : null,
+    // (the A320's approach too — its FMGC's: PLAN-APPROCHES AP6, the crew saw none)
+    ils: this.ilsRun || this.a320App ? this.ilsInfo() : null,
     aimRing: this.aimRing ? { ...this.aimRing } : null,
     relief: (() => {
       // (under a radar's scope in the air: the F-35's, the Ranger's nose radar's)

@@ -1,6 +1,9 @@
 # Plan — les approches et les pistes, AAA (pilote, crew, roue)
 
-**État (2026-11-15) : AP0a, AP1, AP2, AP0b, AP3 (a, b, c), AP4 et AP5 faits.** AP5 : sur le radar du HUD et la TSD du F-35,
+**État (2026-11-15) : AP0a, AP1, AP2, AP0b, AP3 (a, b, c), AP4, AP5 et AP6a faits.** AP6a : le crew — actions `app.*` (tous les
+postes), boîte APP (approches réelles et construites, transition, Choisir/Auto/Armer/Remise de gaz, état choisi/volé), l'état de
+l'approche et celle de l'A320 dans la télémétrie, le DME corrigé. Reste d'AP6 (AP6b) : les terrains au radar crew, la vue
+« Approche », les callouts dans le fil, la fiche partagée au clic sur la carte/le globe/le ND crew. AP5 : sur le radar du HUD et la TSD du F-35,
 les terrains et les parties de l'approche cliquables (son choix), l'approche dessinée (le module partagé), l'en-tête de la TSD sur
 l'approche choisie ; les pistes gardent la priorité au clic et au TDC ; coût non mesurable à cette résolution (A/B indicatif). AP4 : la carte tactique — la fiche de terrain
 (choix auto et raison, extrémités, vent, approches, Armer, Auto, Guidage/Par sa transition), l'approche dessinée (cône, repères et

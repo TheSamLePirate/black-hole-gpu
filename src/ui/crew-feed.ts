@@ -12,6 +12,8 @@ import { solarBody, solarState } from "../system/solar";
 import { fuelPlan } from "../game/flightplan";
 import type { Family } from "../net/crewcmd";
 import { fleet } from "../fleet";
+import { sayResolved } from "../controller/approach";
+import { unitsFor } from "./unitsys";
 import { VESSELS } from "../vessels";
 import { cruiseBurn } from "../f35/cruise";
 import { CARRIER } from "../game/carrier";
@@ -484,6 +486,20 @@ export function crewSnapshot(
       mass: fin(i.mass),
     },
     ils: i.ils ? { id: i.ils.id, loc: i.ils.loc, gs: i.ils.gs, dme: i.ils.dme, phase: i.ils.phase } : null,
+    // (the approach chosen and the one flown — PLAN-APPROCHES AP6: the crew's APP box reads it)
+    appr: ((S, L) => ({
+      sel: { field: S.field, rwy: S.rwy, approach: S.approach, via: S.via },
+      gen: c.approachGen,
+      flown: L
+        ? {
+            field: L.field.icao || L.field.ident,
+            id: L.approach.id,
+            kind: L.approach.kind,
+            source: L.approach.source,
+            why: sayResolved(L, unitsFor(c.s)),
+          }
+        : null,
+    }))(c.approachSel, c.approachLast),
     orbit: status?.orbit
       ? {
           pe: status.orbit.peKm,

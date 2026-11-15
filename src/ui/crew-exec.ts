@@ -97,7 +97,35 @@ const RUN: Record<Act, Run> = {
   "ap.set": (a, x) => apSelect(x.camera, a as never),
   "ap.engage": (a, x) => apEngage(x.camera, a),
   "ap.nav": (a, x) => apNav(x.camera, a),
-  "ap.ils": (a, x) => x.tool("approach", { action: "ils", ...(a.field ? { field: a.field } : {}) }),
+  // (the approach's actions — PLAN-APPROCHES AP6: the simulation's approach state, the same calls as the map's and the MCDU's)
+  "app.select": (a, x) =>
+    x.camera.approachSelect(
+      {
+        field: String(a.field),
+        ...(a.rwy ? { rwy: String(a.rwy) } : {}),
+        ...(a.approach ? { approach: String(a.approach) } : {}),
+        ...(a.via ? { via: String(a.via) } : {}),
+      },
+      "crew",
+    ),
+  "app.auto": (_a, x) => x.camera.approachSelect({ field: "auto" }, "crew"),
+  "app.arm": (_a, x) => {
+    // (refused — the slope into the relief, no runway —: said as a refusal to the crew, not « ✓ »)
+    const said = x.camera.ilsStart();
+    return x.camera.ilsRun || x.camera.a320App || /coming|arrivent/.test(said) ? said : { ok: false, note: said };
+  },
+  "app.clear": (_a, x) => x.tool("approach", { action: "off" }),
+  "app.goAround": (_a, x) => x.tool("flight_action", { action: "go_around" }),
+  "app.hold": (a, x) => x.tool("approach", { action: "ils", hold: Number(a.laps) }),
+  "ap.ils": (a, x) => {
+    // (its runway or approach: the selection made first, then flown — the old call kept: a field alone)
+    if (a.field && (a.rwy || a.approach))
+      x.camera.approachSelect(
+        { field: String(a.field), ...(a.rwy ? { rwy: String(a.rwy) } : {}), ...(a.approach ? { approach: String(a.approach) } : {}) },
+        "crew",
+      );
+    return x.tool("approach", { action: "ils", ...(a.field ? { field: a.field } : {}) });
+  },
   "ap.ilsOff": (_a, x) => x.tool("approach", { action: "off" }),
   "ap.mode": (a, x) => {
     const { mode, ...rest } = a;

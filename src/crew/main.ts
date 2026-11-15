@@ -1,4 +1,6 @@
-import { runwaysEvents, setRunwaysBase } from "../world/runways";
+import { fieldByCode, runwaysEvents, setRunwaysBase } from "../world/runways";
+import { type Approach, approachesForAsync, setApproachesBase } from "../world/approaches";
+import { approachText } from "../world/approach-draw";
 import { NetClient } from "../net/client";
 import { serverError } from "./errors";
 import { isCode, normCode } from "../net/proto";
@@ -1085,13 +1087,85 @@ function buildMcp() {
   app.append(el("summary", "APP"));
   const appBox = el("div");
   const field = document.createElement("input");
+  field.id = "mcp-app-field";
   field.placeholder = L("OACI (vide : le plus proche)", "ICAO (empty: the nearest)");
   field.setAttribute("aria-label", L("Terrain de l'approche ILS", "The ILS approach's airfield"));
+  // (PLAN-APPROCHES AP6: the field's approaches — real (the FAA's, nav.dat's) and built, from the same tiles as the pilot's —, the
+  // chosen one's transitions; choose, back to automatic, arm, cancel, go around; what is chosen and flown, and why)
+  const apprSel = document.createElement("select");
+  apprSel.id = "mcp-app-approach";
+  apprSel.setAttribute("aria-label", L("L'approche", "The approach"));
+  const viaSel = document.createElement("select");
+  viaSel.id = "mcp-app-via";
+  viaSel.setAttribute("aria-label", L("Sa transition", "Its transition"));
+  const apprState = el("div", "", "mcp-app-state");
+  apprState.id = "mcp-app-state";
+  let apprList: Approach[] = [];
+  const opt = (v: string, t: string) => Object.assign(document.createElement("option"), { value: v, textContent: t });
+  const fillVias = () => {
+    const a = apprList.find((x) => x.id === apprSel.value);
+    const vias = a && a.source === "cifp" ? a.transitions.map((t) => t[0]?.fix ?? "").filter(Boolean) : [];
+    viaSel.replaceChildren(
+      opt("auto", L("Transition : auto", "Transition: auto")),
+      opt("none", L("Guidage", "Vectors")),
+      ...vias.map((v) => opt(v, v)),
+    );
+    viaSel.hidden = !vias.length;
+  };
+  const fillApproaches = async () => {
+    const code = field.value.trim().toUpperCase();
+    apprList = [];
+    apprSel.replaceChildren(opt("auto", L("Approche : auto", "Approach: auto")));
+    if (code.length >= 3) {
+      const f = await fieldByCode(code);
+      if (f) apprList = await approachesForAsync(f);
+    }
+    for (const a of apprList) apprSel.append(opt(a.id, approachText(a)));
+    fillVias();
+  };
+  field.addEventListener("change", () => void fillApproaches());
+  apprSel.addEventListener("change", fillVias);
+  const dest = button(
+    L("Destination", "Destination"),
+    () => {
+      const r = snapNow()?.route ?? [];
+      const last = r.at(-1);
+      if (last) field.value = last.name;
+      void fillApproaches();
+    },
+    "mcp-app-dest",
+  );
+  const selArgs = (): Args => ({
+    field: (field.value.trim() || "auto").slice(0, 12),
+    ...(apprSel.value !== "auto" ? { approach: apprSel.value } : {}),
+    ...(viaSel.value !== "auto" && !viaSel.hidden ? { via: viaSel.value } : {}),
+  });
   appBox.append(
     field,
+    dest,
+    apprSel,
+    viaSel,
+    actButton(L("Choisir", "Choose"), "app.select", selArgs, "mcp-app-select"),
+    actButton("Auto", "app.auto", {}, "mcp-app-auto"),
+    actButton(L("Armer", "Arm"), "app.arm", {}, "mcp-app-arm"),
+    actButton(L("Remise de gaz", "Go around"), "app.goAround", {}, "mcp-app-ga"),
     actButton("ILS", "ap.ils", () => (field.value.trim() ? { field: field.value.trim().slice(0, 12) } : {}), "mcp-ils"),
     actButton(L("Annuler l'ILS", "Cancel the ILS"), "ap.ilsOff", {}, "mcp-ils-off"),
+    apprState,
   );
+  fillVias();
+  // (what is chosen — its generation — and what was flown, and why: read from the pilot's instruments)
+  setInterval(() => {
+    const A = snapNow()?.appr;
+    if (!A) return void (apprState.textContent = "");
+    const s = A.sel;
+    const chosen =
+      s.field === "auto"
+        ? L("auto", "auto")
+        : `${s.field} ${s.approach !== "auto" ? s.approach : s.rwy !== "auto" ? s.rwy : L("(auto)", "(auto)")}${s.via !== "auto" ? ` · ${s.via === "none" ? L("guidage", "vectors") : s.via}` : ""}`;
+    const flown = A.flown ? ` — ${L("volée", "flown")} : ${A.flown.why}` : "";
+    apprState.textContent = `${L("Choisie", "Chosen")} : ${chosen}${flown}`;
+  }, 1000);
   app.append(appBox);
   const modes = document.createElement("details");
   modes.className = "pan-controls mcp-pop";
@@ -2182,6 +2256,8 @@ langButton.textContent = lang() === "fr" ? "EN" : "FR";
 langPick.value = lang();
 // (the world's runways — PLAN-RADAR-AAA RD11 —: from the simulator's site, one level up; a tile in, the views redrawn)
 setRunwaysBase(new URL("../runways/v1/", location.href).href);
+// (the approaches' tiles beside the runways' — PLAN-APPROCHES AP6)
+setApproachesBase(new URL("../approaches/v1/", location.href).href);
 runwaysEvents.onLoad = () => views.request();
 Object.assign(window, { __crew: { net, model, views, radio, actions, join, setView, lang, setLang } });
 setUnits(views.units);

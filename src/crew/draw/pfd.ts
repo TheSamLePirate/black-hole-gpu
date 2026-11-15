@@ -206,7 +206,12 @@ function attitude(p: Pen, r: Rect, sc: Scene) {
   const ils = sc.snap?.ils;
   if (ils) {
     p.text(ils.id, r.x + 10, r.y + 20, { col: C.magenta, size: fs, weight: 700, bg: "#0008" });
-    p.text(`${fmt(ils.dme / 1000, 1)} km`, r.x + 10, r.y + 36, { col: C.magenta, size: fs, bg: "#0008" });
+    // (the DME is in km already — PLAN-APPROCHES AP6: it was divided by 1 000 again, 0.0 km shown —; the console's units)
+    p.text(`${fmt(sc.u.dist(ils.dme * 1000), 1)} ${sc.u.distName.toLowerCase()}`, r.x + 10, r.y + 36, {
+      col: C.magenta,
+      size: fs,
+      bg: "#0008",
+    });
     const sy = r.y + r.h - 34,
       half = r.w * 0.3;
     for (let k = -2; k <= 2; k++) if (k) p.circle(cx + (k * half) / 2, sy, 3), p.stroke(C.white, 1.2);

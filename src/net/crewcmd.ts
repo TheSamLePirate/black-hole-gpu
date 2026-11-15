@@ -299,9 +299,32 @@ export const ACTS = {
       return { fr: s, en: s };
     },
   },
+  // (the approach chosen — PLAN-APPROCHES AP6: every post, the same action as the map's, the MCDU's, TARS's)
+  "app.select": {
+    fam: "nav",
+    params: { field: { type: "string" }, rwy: { type: "string" }, approach: { type: "string" }, via: { type: "string" } },
+    required: ["field"],
+    say: (a) => {
+      const w = [a.field, a.approach ?? a.rwy, a.via && a.via !== "auto" ? `via ${a.via}` : ""]
+        .filter(Boolean)
+        .map((x) => String(x).toUpperCase().slice(0, 12))
+        .join(" ");
+      return { fr: `approche choisie : ${w}`, en: `approach chosen: ${w}` };
+    },
+  },
+  "app.auto": { fam: "nav", say: () => ({ fr: "approche automatique", en: "approach automatic" }) },
+  "app.arm": { fam: "jet", say: () => ({ fr: "approche armée", en: "approach armed" }) },
+  "app.clear": { fam: "jet", say: () => ({ fr: "approche annulée", en: "approach cancelled" }) },
+  "app.goAround": { fam: "jet", say: () => ({ fr: "remise de gaz", en: "go-around" }) },
+  "app.hold": {
+    fam: "jet",
+    params: { laps: { type: "number", minimum: 0, maximum: 99 } },
+    required: ["laps"],
+    say: (a) => ({ fr: `attente : ${a.laps} tour(s)`, en: `hold: ${a.laps} lap(s)` }),
+  },
   "ap.ils": {
     fam: "jet",
-    params: { field: { type: "string" } },
+    params: { field: { type: "string" }, rwy: { type: "string" }, approach: { type: "string" } },
     say: (a) => ({
       fr: `approche ILS${a.field ? ` ${String(a.field).toUpperCase().slice(0, 12)}` : ""}`,
       en: `ILS approach${a.field ? ` ${String(a.field).toUpperCase().slice(0, 12)}` : ""}`,

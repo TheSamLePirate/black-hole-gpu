@@ -163,6 +163,13 @@ export interface InstrumentSnapshot extends InstrumentSpace {
   nav?: InstrumentNav | null;
   sys?: InstrumentSystems | null;
   ils?: { id: string; loc: number | null; gs: number | null; dme: number; phase: string } | null;
+  /** the approach chosen (PLAN-APPROCHES AP6): the selection — each part « auto » or named — and its generation; what was last
+   *  flown (the airfield, the approach, its kind and source, why) */
+  appr?: {
+    sel: { field: string; rwy: string; approach: string; via: string };
+    gen: number;
+    flown: { field: string; id: string; kind: string; source: string; why: string } | null;
+  } | null;
   /** the orbit: apsides' heights [km], inclination [°], eccentricity, period and times to the apsides [s]; the body's
    *  radius and the semi-major axis [km], the apsides' true anomalies [rad] (PLAN-VAISSEAUX K1: the ORBIT card's
    *  figure was the Earth's) */
@@ -379,6 +386,9 @@ export function readInstruments(x: unknown): InstrumentSnapshot | null {
     }
   }
   const ils = record(x.ils) && finite(x.ils.dme) ? x.ils : null;
+  const ap = record(x.appr) && record(x.appr.sel) && finite(x.appr.gen) ? x.appr : null;
+  const apSel = ap ? (ap.sel as Record<string, unknown>) : null;
+  const apFlown = ap && record(ap.flown) ? (ap.flown as Record<string, unknown>) : null;
   const orbit = record(x.orbit) && finite(x.orbit.pe) && finite(x.orbit.ap) ? x.orbit : null;
   const next = record(x.next) && finite(x.next.in) ? x.next : null;
   const msn = record(x.msn) && finite(x.msn.brg) && finite(x.msn.dist) ? x.msn : null;
@@ -410,6 +420,27 @@ export function readInstruments(x: unknown): InstrumentSnapshot | null {
     nav: readNav(x.nav),
     sys: readSystems(x.sys),
     ils: ils ? { id: label(ils.id, 32), loc: opt(ils.loc), gs: opt(ils.gs), dme: ils.dme as number, phase: label(ils.phase, 16) } : null,
+    appr:
+      ap && apSel
+        ? {
+            sel: {
+              field: label(apSel.field, 12),
+              rwy: label(apSel.rwy, 8),
+              approach: label(apSel.approach, 12),
+              via: label(apSel.via, 12),
+            },
+            gen: ap.gen as number,
+            flown: apFlown
+              ? {
+                  field: label(apFlown.field, 12),
+                  id: label(apFlown.id, 12),
+                  kind: label(apFlown.kind, 8),
+                  source: label(apFlown.source, 8),
+                  why: label(apFlown.why, 120),
+                }
+              : null,
+          }
+        : null,
     orbit: orbit
       ? {
           pe: orbit.pe as number,
