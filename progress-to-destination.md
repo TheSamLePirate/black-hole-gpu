@@ -7546,3 +7546,13 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
 - Preuves (mesuré, kerr-mini, deux A/B) : J0 +0,9 ms, forêt +2,7 ; `earth lite` 3,75 → 4,5 et 6,4 → 9,4 ms.
 - Limites : la reconstruction par `resolve` (le voisin non traité) non élucidée — c'est elle qui donnerait le plafond de 2,3 ms.
 - Suite : élucider pourquoi le voisin `RASTER_STALE` de l'eau ne se rebâtissait pas (le bruit cyan), puis rouvrir J5-6 par cette voie.
+
+### 2026-11-15 08:23 UTC — La reconstruction de l'eau laissée : enquête arrêtée, non élucidée
+
+- Contribution à la destination : aucune avancée mesurable — une enquête (pourquoi les pixels d'eau `RASTER_STALE` ne se rebâtissaient pas),
+  dont dépendrait le sol à demi-rythme (J5-6, plafond ~2,3 ms).
+- Réalisé : une sonde et une copie des `moments` après les passes de l'eau, essayées, puis retirées (patch hors du dépôt) ; PLAN-J5 §5.
+- Preuves : la copie en vol montre la mer marquée fraîche et aucun pixel laissé, levier allumé ou non — l'outillage lui-même n'est pas
+  établi (règle 3 : pas de témoin positif) ; aucun chiffre n'en est tiré.
+- Limites : la cause reste inconnue.
+- Suite : à reprendre avec un témoin positif de la copie (un marquage connu injecté), avant toute conclusion.

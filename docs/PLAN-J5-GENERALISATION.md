@@ -188,3 +188,9 @@ Les plafonds de J5-1 au beau temps, de J5-2 par corps et la parité du repli tra
   de chaque pixel — le voisin les refait ; le plafond lu (−2,3 ms) supposait le voisin non traité, ce que seule une reconstruction (celle
   qui a échoué pour l'eau : le voisin `RASTER_STALE` rebâti par `resolve`) donnerait. **Retiré** (patch hors du dépôt) ; à reprendre avec
   cette reconstruction élucidée.
+- **La reconstruction de l'eau laissée (`RASTER_STALE`) : non élucidée** (2026-11-15 08:23 UTC) : une sonde (`readMoments`, une copie des
+  `moments`/`stamps` prise après les passes de l'eau ; un levier `WATER_PAIR_STALE`) — trois passages sur kerr-mini, dont deux à tort (le
+  monde figé converge sur le noyau tracé de qualité, pas le raster ; la lecture de fin d'image voit les marques réécrites). En vol, la copie
+  montre la mer « fraîche » (`RASTER_MARK`, estampilles en retard de 2–3 images) et **aucun pixel laissé**, même le levier allumé — la copie
+  ou la variante recompilée n'est pas celle que je crois. Arrêté là (outillage retiré, patch hors du dépôt) : la voie de J5-6 qui donnerait
+  ~2,3 ms reste fermée tant que cette reconstruction n'est pas comprise.
