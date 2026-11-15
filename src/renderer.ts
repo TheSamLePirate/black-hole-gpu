@@ -11168,9 +11168,6 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
    *  circumscribed proxies, ~1.9 × a round crown's disc; false: the proxies whole, as before 14 Nov 2026 (a comparison) */
   treeShadowCut = true;
   private tsmCut = true;
-  /** (PLAN-J4 J4-5) the trees' shadow map's centre snapped along the Sun as across it — drawn again only when it jumps; false: as
-   *  before 15 Nov 2026, redrawn whenever the camera moves a metre along the Sun (every frame in flight) — the A/B, retired at J4-R */
-  tsmSnapAlong = true;
   /** the trees' shadow map's redraws since the page started (a measure: their rate in flight) */
   tsmDraws = 0;
   /** Q4 L2a — the ground's ambient occlusion (system/gtao.ts): bound on this device, its pass, its stand-in; gtaoOn the switch */
@@ -11239,10 +11236,10 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
     const sr = Math.round(cr / texel) * texel - cr,
       su = Math.round(cu / texel) * texel - cu;
     // (and along the Sun too, by 128 m within its ±3 km of depth — PLAN-J4 J4-5, 15 Nov 2026: left unsnapped, the centre's part along
-    // the Sun followed the camera, a metre's change redrew the map — every frame in flight (57 of 57 over the Maures, kerr-mini);
-    // tsmSnapAlong the A/B)
+    // the Sun followed the camera, a metre's change redrew the map — every frame in flight, +2.8 ms over the Maures on kerr-mini; its
+    // A/B lever retired with that path, J4-R)
     const cl = cam[0]! * L[0]! + cam[1]! * L[1]! + cam[2]! * L[2]!;
-    const sl = this.tsmSnapAlong ? Math.round(cl / 128) * 128 - cl : 0;
+    const sl = Math.round(cl / 128) * 128 - cl;
     const c = cam.map((x, i) => x + r[i]! * sr + u[i]! * su + L[i]! * sl);
     // (its depth ±3 km about the camera along the Sun: the ground below a mesa's rim, a low Sun's long reach — depth32float
     // keeps a millimetre over it)

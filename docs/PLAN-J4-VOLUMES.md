@@ -1,7 +1,8 @@
 # PLAN-J4 — l'eau et les volumes à budgets propres
 
-**État (15 novembre 2026) : plan proposé, à valider par Sam ; mené selon ses recommandations sous la consigne « continue le plan »
-(comme PLAN-J3), chaque réglage provisoire daté et révisable.** Jalon de la [stratégie](ANALYSE-STRATEGIE-RENDU-2026-11-03.md) §15 J4 :
+**État (15 novembre 2026, 04:40 UTC) : mené et fermé** sous la consigne « continue le plan » (comme PLAN-J3), chaque réglage provisoire daté
+et révisable par Sam — J4-0, J4-6, J4-R faits ; J4-1, J4-3, J4-5 non ouverts (plafonds lus) ; J4-2 et J4-4 essayés et fermés sur preuve ; la
+carte d'ombre des arbres corrigée (−2,8 ms sur une forêt). **Sortie du §4 non atteinte** : les enveloppes écrites, aucune tenue (bilan §10). Jalon de la [stratégie](ANALYSE-STRATEGIE-RENDU-2026-11-03.md) §15 J4 :
 « porter les lecteurs de FFT et nuages vers les nouveaux contrats ; caches de lumière, limites opaques, mouvements et confiance ; introduire
 ensuite les représentations collectives de végétation lointaine et le profil météo lourd ». **Sortie (§15)** : *côte, reflet et traversée de
 nuages dans une enveloppe explicite ; pas d'annonce de réussite sur le seul ciel clair.* Ordre (§24, décision 1 de Sam, 13 novembre) : l'eau
@@ -76,7 +77,7 @@ Chaque lot de performance écrit d'abord son gain maximal, lu dans une fiche ; c
 | **J4-4** | **La passe d'eau propre** : sa disposition à elle (PLAN-MER), la houle côtière en passe séparée | famille eau 16,2 ms (mini) ; houle **+3,3–3,5 ms sur une côte, +0,8 sur J0** (15 nov.) | ΔGPU J0 et côte — **la passe de houle essayée : −0,4 à +0,3 ms, retirée** (§10) | L |
 | **J4-5** | **La végétation lointaine collective** : tuiles de canopée par classe, moyenne exacte, imposteurs à profondeur fiable | décor −2,0 ms (mini) ; **sur la forêt −10,2 ms, la portée lointaine −0,95** (15 nov.) | images lointaines, ΔGPU — **non ouvert (≈ 1 ms) ; la carte d'ombre des arbres redessinée à chaque image corrigée : −2,8 ms** (§10) | M |
 | **J4-6** | **Le profil météo lourd** : son enveloppe écrite et tenue sur la scène de J4-0 | **la météo d'orage 20,8 ms sur J0** (15 nov., [fiche](progress/j4/FICHE-ORAGE-kerr-mini-2026-11-15.md)) ; `clouds (half)` 16,5 ms | fiche | M |
-| **J4-R** | Retrait des anciens chemins des leviers allumés pendant J4 | — | suite, J0 | S |
+| **J4-R** | Retrait des anciens chemins des leviers allumés pendant J4 | — | suite, J0 — **fait** (`tsmSnapAlong`, 15 nov.) | S |
 
 **Ordre recommandé** : J4-0 → J4-1 → J4-2 → J4-3 → J4-6 → J4-4 → J4-5 → J4-R (les scènes d'abord ; les nuages, premier poste hors eau ; la passe
 d'eau propre, la plus grosse, quand les mesures de la scène lourde l'ont chiffrée).
@@ -184,3 +185,16 @@ Le relevé du §2 vient d'une lecture du code et des documents (agent d'explorat
   retiré à J4-R), compteur `tsmDraws`, ablation J0 `tsmEveryFrame`. **Mesuré** (A B A B A, Maures, kerr-mini) : GPU p50 **53,1 contre
   55,9 ms (−2,8)** ; redessins 36 par vol de 20 s contre 359 (le témoin : la cause vue). Images au même instant du vol semblables (captures
   `ablate-*`). Non mesuré : J0 (peu d'arbres), le M1 Max.
+- **J4-R, le retrait, et le bilan de J4** (2026-11-15 04:40 UTC) : le seul levier allumé pendant J4, `tsmSnapAlong` (J4-5), perd son ancien
+  chemin (la carte d'ombre des arbres redessinée à chaque image) avec l'ablation J0 `tsmEveryFrame` ; restent les leviers de mesure (les
+  ablations J0 `weather`, `cloudLight`, `cloudNear4`, `cloudNear1`, `clvSkip`, `swell`, `sceneryNear`, les phases `cloudlag`, le compte
+  `tsmDraws`). Les essais de J4 (le repère du volume de lumière, la lecture la plus proche, la passe de houle) étaient déjà retirés.
+  **Bilan, contre la sortie du §4** — *côte, reflet et traversée de nuages dans une enveloppe explicite* : les enveloppes sont **écrites**
+  par profil (J4-6 : beau temps 57,3, traversée 60,0, couvert 67,9, pluie 67,3, orage 77,8 ms sur kerr-mini) mais **aucune n'est tenue**
+  sur la cible du mini (40 ms) ; le M1 Max n'a pas été mesuré pour J4. **Gains de J4** : la carte d'ombre des arbres −2,8 ms au-dessus
+  d'une forêt. **Pistes fermées sur preuve** : la lumière des nuages (chaque levier lisible ≤ 1,6 ms ; le reste tient à la structure du
+  noyau), la passe de houle (le travail déplacé, pas réduit), la végétation lointaine (~1 ms), le vent dans l'historique des nuages (invisible
+  au temps réel). **Les postes lourds restants**, mesurés : l'eau (16,2 ms sur J0, la houle +3,3–3,5 ms sur une côte proche), les nuages
+  sous orage (16,5 ms, dont leur lumière ~9,8), le décor au-dessus d'une forêt (~7 ms hors de la carte d'ombre : les arbres proches et
+  moyens). J4 est **fermé** ; selon la stratégie §15 (« si un jalon manque ses objectifs »), la suite identifie le coût réel par poste avant de
+  généraliser (J5).
