@@ -7352,3 +7352,13 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   21,0) ; tracé 24,6 / 25,0 (A/A). Capture : les arbres proches deviennent des volumes lisses.
 - Limites : un lieu ; aucune décision ; le M1 Max non mesuré.
 - Suite : J5-4 (HDR/SDR/exports) ; le lot d'assets des arbres proches à proposer à Sam (la marche en raster en dépend).
+
+### 2026-11-15 05:48 UTC — J5-4 : l'export de la vue vivante sort l'image montrée
+
+- Contribution à la destination : stratégie §15 J5 « finaliser HDR/SDR/exports » — les captures sur la même chaîne que l'écran (§19).
+- Réalisé : sonde `export-parity` (témoins A/A et +1 EV) ; `renderer.ts` `renderDisplayed` (taille et image du suréchantillonnage temporel
+  pour `exportPNG`, `exportRGBA(s, shown)`, l'état `taau.on` rendu après l'export) ; BH-API, GRAPHICS-PIPELINE §5, PLAN-J5, E2E-CATALOGUE.
+- Preuves (mesuré, kerr-mini, SDR) : avant 1440×810 (natif), après 1920×1080 (montré) ; export contre écran 1,33 niveau en moyenne ; A/A
+  0,12 ; +1 EV 23,65. La perte d'historique après un export : lue dans le code, non mesurée.
+- Limites : le HDR (hdrMap) non vérifié ; l'interface DOM reste hors de l'export (voulu : l'image seule).
+- Suite : J5-R (le repli tracé de la Terre : sa parité à vérifier, la décision de Sam) ; le lot d'assets des arbres proches à proposer.

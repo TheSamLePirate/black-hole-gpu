@@ -108,3 +108,12 @@ Les plafonds de J5-1 au beau temps, de J5-2 par corps et la parité du repli tra
   plus cher que le tracé ; le marcheur reste fantôme. **Conclusion** : la marche en raster attend **des arbres proches en géométrie** (maillages
   ou cartes à alpha, LOD — la chaîne d'assets, §18 meshoptimizer) et le marcheur dans l'historique — un lot d'assets et de rendu (L), non
   ouvert ici. La marche reste tracée ; `walkRasterOn` et `nearTreesRays` restent des leviers de mesure (éteint, allumé).
+- **J5-4, l'export de la vue vivante sur la chaîne de l'écran** (2026-11-15 05:48 UTC) : sonde neuve `export-parity` (E2E_PROBE : le départ de
+  J0 de jour, HUD coupé, le monde figé, l'exposition tenue ; l'écran — capture DevTools — contre `exportRGBA`, en 16 × 9 blocs) ; témoins
+  passés : A/A 0,07–0,12, +1 EV 23,5–23,7 (un premier essai en orbite, noir et étoilé, ne voyait pas +1 EV : écarté). **Trouvé** : l'export
+  sortait **à la taille interne** (1440×810, l'image native à l'échelle 0,75) au lieu de l'image montrée (1920×1080, le suréchantillonnage
+  temporel) — `encodePost` coupe `taau.on`, que l'export ne rendait pas : **l'image suivante perdait aussi l'historique du suréchantillonnage**
+  (lu dans le code, non mesuré). **Corrigé** : `exportPNG` sort l'image montrée (1920×1080 vérifié), `exportRGBA` garde l'image native sauf
+  `shown` (les time-lapses veulent une taille stable), l'état rendu après chaque export. Couleur : export contre écran 1,33 niveau en moyenne
+  (dont l'interface restée à l'écran : le bloc le plus éloigné est le panneau avionique). Non vérifié : la vidéo des rendus (cible hors
+  ligne, inchangée), le HDR (écran de ce Mac).

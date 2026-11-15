@@ -880,7 +880,7 @@ The other members tests read:
 | `offlineActive` | boolean | an offline render is running |
 | `offlineState` | `{ width, height, progress, spp, targetSpp, elapsed, eta, paused, done, error? }` \| null | the running offline render's progress |
 | `startOffline(s, time, opts)` / `cancelOffline()` | methods | start or cancel an offline render (used by `render` and `video`) |
-| `exportPNG(s)` / `exportRGBA(s)` | Promise | the current image as a PNG Blob, or RGBA pixels |
+| `exportPNG(s)` / `exportRGBA(s, shown?)` | Promise | the current image as a PNG Blob, or RGBA pixels `{ data, width, height }`. The live view: `exportPNG` as the screen shows it — the temporal upsampling's image at the canvas's size where it ran (PLAN-J5 J5-4, 15 Nov 2026; before, the native image at the render's scale, 0.75 of the screen) —; `exportRGBA` the native image (a size that holds from frame to frame: the time-lapses), `shown` true as the screen shows it. An offline render: its own size. The upsampling's state is put back after (an export no longer drops its history) |
 | `effectiveQuality(s)` | method | the quality the renderer uses for `s` on this tier |
 | `simulateLoss()` | method | the device destroyed on purpose (`gpu.lose`) |
 | `ship` | ShipRenderer | the spaceship's renderer: `cabinShown` (the cabin is on screen), `cabinRay(x, y)` and `cabinProject(p)` (cabin ndc ↔ ray/point) |

@@ -13078,7 +13078,12 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
   }
 
   /** Tone-mapped image of a target at its native resolution (8- or 16-bit float output). */
-  private async renderDisplayed(s: Settings, t: Target, bits: 8 | 16): Promise<Uint8Array> {
+  private async renderDisplayed(
+    s: Settings,
+    t: Target,
+    bits: 8 | 16,
+    shown = false,
+  ): Promise<{ data: Uint8Array; width: number; height: number }> {
     if (bits === 8) {
       await this.export8Compile.start();
       if (!this.export8Pipeline) throw new Error(`Export pipeline unavailable: ${this.export8Compile.error}`);
@@ -13087,42 +13092,54 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
     }
     const format: GPUTextureFormat = bits === 8 ? "rgba8unorm" : "rgba16float";
     const pipeline = bits === 8 ? this.export8Pipeline! : this.export16Pipeline;
+    // (PLAN-J5 J5-4 — `shown`: the live image as shown, the temporal upsampling's where it ran, at its own size (the canvas's), not the
+    // native one at the render's scale (0.75 of the screen, kerr-mini 15 Nov 2026). Its state put back after: encodePost turns taau.on
+    // off — each frame's own pass sets it again —, and an export left it off, the next frame dropping the upsampling's history)
+    const taauWas = t.taau?.on;
+    const u = shown && t === this.live && t.taau?.on ? t.taau : null;
+    const w = u ? u.w : t.width;
+    const h = u ? u.h : t.height;
     const tex = this.device.createTexture({
-      size: [t.width, t.height],
+      size: [w, h],
       format,
       usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.COPY_SRC,
     });
     const enc = this.device.createCommandEncoder();
     this.writeResolve(t, s);
-    this.writeDisplay(s, t, t.width, t.height, false, bits === 8);
+    this.writeDisplay(s, t, w, h, false, bits === 8);
     this.encodePost(enc, t, s);
+    if (u) u.on = true;
     this.encodeDisplay(enc, t, pipeline, tex.createView());
-    this.encodeChart(enc, s, t, tex.createView(), format, t.width, t.height, false, false);
+    if (t.taau && taauWas !== undefined) t.taau.on = taauWas;
+    this.encodeChart(enc, s, t, tex.createView(), format, w, h, false, false);
     this.device.queue.submit([enc.finish()]);
-    const data = await this.readTexture(tex, t.width, t.height, bits === 8 ? 4 : 8);
+    const data = await this.readTexture(tex, w, h, bits === 8 ? 4 : 8);
     tex.destroy();
-    return data;
+    return { data, width: w, height: h };
   }
 
   /** Current image (the offline render if one exists, else the live view) as an 8-bit sRGB PNG. */
-  /** Tone-mapped 8-bit sRGB pixels (RGBA) of the offline render (or the live view). */
-  async exportRGBA(s: Settings): Promise<{ data: Uint8Array; width: number; height: number }> {
+  /** Tone-mapped 8-bit sRGB pixels (RGBA) of the offline render (or the live view: its native image at the render's scale — a size that
+   *  holds from frame to frame, the time-lapses' —; `shown`: as the screen shows it, PLAN-J5 J5-4) */
+  async exportRGBA(s: Settings, shown = false): Promise<{ data: Uint8Array; width: number; height: number }> {
     const t = this.exportTarget();
-    const px = await this.renderDisplayed(s, t, 8);
-    const data = new Uint8Array(px.buffer, px.byteOffset, t.width * t.height * 4);
-    if (!this.exportWords) return { data, width: t.width, height: t.height };
-    const c = this.withWords(data, t.width, t.height);
+    const { data: px, width: w, height: h } = await this.renderDisplayed(s, t, 8, shown);
+    const data = new Uint8Array(px.buffer, px.byteOffset, w * h * 4);
+    if (!this.exportWords) return { data, width: w, height: h };
+    const c = this.withWords(data, w, h);
     return {
-      data: new Uint8Array(c.getContext("2d")!.getImageData(0, 0, t.width, t.height).data.buffer),
-      width: t.width,
-      height: t.height,
+      data: new Uint8Array(c.getContext("2d")!.getImageData(0, 0, w, h).data.buffer),
+      width: w,
+      height: h,
     };
   }
 
+  /** (PLAN-J5 J5-4) the live view as shown — the temporal upsampling's image at the canvas's size where it ran —; an offline render at
+   *  its own size */
   async exportPNG(s: Settings): Promise<Blob> {
     const t = this.exportTarget();
-    const px = await this.renderDisplayed(s, t, 8);
-    return this.withWords(new Uint8Array(px.buffer, px.byteOffset, t.width * t.height * 4), t.width, t.height).convertToBlob({
+    const { data: px, width: w, height: h } = await this.renderDisplayed(s, t, 8, true);
+    return this.withWords(new Uint8Array(px.buffer, px.byteOffset, w * h * 4), w, h).convertToBlob({
       type: "image/png",
     });
   }
@@ -13140,10 +13157,11 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
   /** 16 bits per channel, tone-mapped sRGB PNG (no dithering). */
   async exportPNG16(s: Settings): Promise<Blob> {
     const t = this.exportTarget();
-    const half = new Uint16Array((await this.renderDisplayed(s, t, 16)).buffer);
+    const out = await this.renderDisplayed(s, t, 16);
+    const half = new Uint16Array(out.data.buffer);
     const f = new Float32Array(half.length);
     for (let i = 0; i < half.length; i++) f[i] = halfToFloat(half[i]!);
-    return encodePNG16(f, t.width, t.height);
+    return encodePNG16(f, out.width, out.height);
   }
 
   /**

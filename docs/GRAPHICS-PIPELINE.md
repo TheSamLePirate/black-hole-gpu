@@ -350,7 +350,11 @@ traceur rencontre la grille de sol que ses pieds touchent. Mesuré le 15 nov. 20
 le contact des pieds en raster reste à vérifier.
 
 Le mode photo laisse converger la vue fixe sur le noyau de qualité (`rasterHold`, `main.ts:8660`) ; un PNG repasse
-`encodePost` + display dans sa propre soumission (`renderDisplayed`, `renderer.ts:11390`). Le télescope n'a pas de chemin
+`encodePost` + display dans sa propre soumission (`renderDisplayed`) — **depuis le 15 nov. 2026 (PLAN-J5 J5-4), `exportPNG` de la vue
+vivante sort l'image telle que l'écran la montre** (l'image du suréchantillonnage temporel à la taille de la toile où il a tourné : 1920×1080
+sur kerr-mini, contre 1440×810 avant, l'image native à l'échelle 0,75) ; `exportRGBA` garde l'image native (une taille stable d'une image à
+l'autre : les time-lapses), `shown` l'autre ; l'état du suréchantillonnage rendu après l'export (il le coupait, l'image suivante perdait son
+historique). Sonde `export-parity` : export contre écran 1,33 niveau en moyenne (l'interface restée à l'écran), A/A 0,12, +1 EV 23,65. Le télescope n'a pas de chemin
 propre (même frame, autre champ). L'offline (`offlineFrame`, `renderer.ts:11207`) n'a ni raster ni cache.
 
 ### 5.2 Le traceur : un fichier, des noyaux spécialisés
