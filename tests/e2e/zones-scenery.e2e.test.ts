@@ -132,7 +132,7 @@ describe.skipIf(!E2E)("an offline zone with the world scenery", () => {
     const held = await scene();
     // (held still, every pixel shaded, the raster's: shot)
     await app.js(
-      `(() => { Object.assign(__bh.settings, { dynamicResolution: false, earthRasterShading: "every", earthRasterScale: 1, motionBlur: 0 }); __bh.renderer.rasterFellBack = false; return 1; })()`,
+      `(() => { Object.assign(__bh.settings, { dynamicResolution: false, earthRasterShading: "every", earthRasterScale: 1, motionBlur: 0 }); return 1; })()`,
     );
     await app.settled();
     await app.js(`(__bh.game.pause(true), 1)`);

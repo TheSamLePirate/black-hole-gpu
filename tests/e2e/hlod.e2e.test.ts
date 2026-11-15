@@ -77,9 +77,7 @@ describe.skipIf(!E2E)("the far silhouettes", () => {
   // (the GPU's passes over 40 frames drawn, the view held and the pixels pinned: the scale, the shading's rate)
   const PINNED = `{ dynamicResolution: false, earthRasterShading: "half", earthRasterScale: 0.75, motionBlur: 0.5 }`;
   const passes = async (what: string, rate: "half" | "quarter") => {
-    await app.js(
-      `(() => { Object.assign(__bh.settings, ${PINNED}, { earthRasterShading: "${rate}" }); __bh.renderer.rasterFellBack = false; return 1; })()`,
-    );
+    await app.js(`(() => { Object.assign(__bh.settings, ${PINNED}, { earthRasterShading: "${rate}" }); return 1; })()`);
     await app.settled();
     await Bun.sleep(3000);
     const r = await app.js<{
@@ -114,7 +112,7 @@ describe.skipIf(!E2E)("the far silhouettes", () => {
   const shot = async (name: string) => {
     if (!shots) return;
     await app.js(
-      `(() => { Object.assign(__bh.settings, { dynamicResolution: false, earthRasterShading: "every", earthRasterScale: 1, motionBlur: 0 }); __bh.renderer.rasterFellBack = false; return 1; })()`,
+      `(() => { Object.assign(__bh.settings, { dynamicResolution: false, earthRasterShading: "every", earthRasterScale: 1, motionBlur: 0 }); return 1; })()`,
     );
     await app.settled();
     await Bun.sleep(3000);

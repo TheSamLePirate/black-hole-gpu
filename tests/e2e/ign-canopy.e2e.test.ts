@@ -113,7 +113,7 @@ describe.skipIf(!E2E)("the IGN's canopy", () => {
     // (the held view, every pixel shaded at the full scale — the raster armed again: a small GPU's governor may have given it up)
     const shot = async (name: string) => {
       await app.js(
-        `(() => { Object.assign(__bh.settings, { dynamicResolution: false, earthRasterShading: "every", earthRasterScale: 1, motionBlur: 0 }); __bh.renderer.rasterFellBack = false; return 1; })()`,
+        `(() => { Object.assign(__bh.settings, { dynamicResolution: false, earthRasterShading: "every", earthRasterScale: 1, motionBlur: 0 }); return 1; })()`,
       );
       await app.settled();
       await Bun.sleep(3000);

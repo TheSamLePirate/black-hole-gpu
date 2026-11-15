@@ -255,7 +255,7 @@ centre de Toulon à 500 m et 150 m/s) : **en arrivant à 1,5 km du centre, la gr
 - **À faire** (PLAN-J6 J6-1) : asserter sur plusieurs passages (la variance : 0 à 71) ; essayer une boîte rapide décalée vers l'avant
   (couvrir le sol vu) ou des tuiles de bâtiments plus rapides ; le parcours relève `buildingsNear` sans l'asserter jusque-là.
 
-## Le repli du raster vers le pipeline tracé ne s'arme plus sur la Terre (relevé le 13 novembre 2026, e2e `raster-governor`)
+## ~~Le repli du raster vers le pipeline tracé ne s'arme plus sur la Terre~~ (relevé le 13 novembre 2026, e2e `raster-governor`) — réglé le 15 novembre 2026 : le repli retiré (décision (b) de Sam)
 
 **Constat (lu dans le code, 13 nov. ~14:40 UTC)** : le gouverneur (`src/game/governor.ts`, extrait de `main.ts` le 13) ne donne la Terre au
 pipeline tracé, pour la session, que si la cadence d'ombrage est à son plus grossier (`renderer.rasterRateCoarsest` : cadence ≥ 16), les blocs à
@@ -282,6 +282,14 @@ cadence mise au contrat actuel (1 sous le matériau) ; sa partie « repli » mis
 **Décision de Sam (2026-11-15 ~19:55 UTC) : (b)** — le repli vers le tracé est retiré sur la Terre (le raster toujours, son plancher de
 qualité à régler) ; le code du repli sur la Terre et la partie « repli » de l'e2e `raster-governor` sont à retirer (lot de la session du
 rendu, après J6). Reste ouvert ici jusqu'à ce retrait.
+
+**Retiré le 15 novembre 2026 (~20:46 UTC)** : `rasterFellBack`, `rasterKept` et le contrôle de 6 s du gouverneur (`src/game/governor.ts`),
+leur remise à zéro au changement de réglage (`main.ts`), leurs deux messages ; `renderer.earthPipelineNow` rend le réglage tel quel (le tracé
+reste au choix du joueur). Sur les autres astres le repli n'était pas atteignable (leur cadence plafonne à 4, il en demandait 16) : retiré
+avec. L'e2e `raster-governor` vérifie désormais l'inverse — le budget serré à 8 ms pendant 15 s (plus que les 12 s du repli), le raster
+jamais quitté : **passé sur kerr-mini** (run `20261115-214344-raster-governor-norepli`, 1/1, GPU 36,4 ms sous ce budget, la Terre en raster
+à chaque relevé). **Reste** (hors de ce retrait) : le plancher de qualité du raster sur un GPU faible, à régler — aujourd'hui celui du
+gouverneur (échelle, blocs, palier de matériel).
 
 ## ~~Des taches de couleur sur la mer au crépuscule~~ — réglé le 13 novembre 2026 (~20:29 UTC) : la sonde en demi-flottants sous-normaux
 

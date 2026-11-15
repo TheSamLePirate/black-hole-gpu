@@ -73,7 +73,7 @@ par le projet d'Alex).
 - `rasterPrimary` ombre avec les matériaux de `planetAlbedo` / `planetShade` (normales du relief cuit, détail fin
   procédural par pixel).
 - Ombres : carte d'horizon du relief + ombre solaire raster, comme sur Terre.
-- Repli traceur gardé (même gouverneur `rasterFellBack`).
+- Repli traceur gardé (même gouverneur `rasterFellBack`). *(2026-11-15 : jamais atteignable sur les astres — leur cadence plafonne à 4, le repli en demandait 16 — et retiré avec celui de la Terre, décision (b) de Sam : [PROBLEMES](PROBLEMES-A-REGLER.md).)*
 - **Gain attendu** : l'image en vol bas passe de blocs × N à un échantillon par pixel, la marche disparaît → c'est la
   marge qui paiera la qualité des phases suivantes.
 

@@ -108,13 +108,8 @@ describe.skipIf(!E2E)("the IGN's orthophotos", () => {
         );
         // (no motion blur; the denoiser off too — it runs on accumulated images only, never on the raster's: a held, still
         // view's image stays the raster's frame for frame)
-        // (set once frozen — in motion, every pixel shaded at the full scale is over a small GPU's budget: its governor would
-        // give the raster up for the traced pipeline —; a change of the raster's shading arms it again)
-        // (the raster given up by the governor in flight — rasterFellBack — said, then armed again: settings written
-        // directly do not pass through the change that would)
-        const fell = await app.js<boolean>(`__bh.renderer.rasterFellBack`);
-        if (fell) console.log(`  ${P.name}: the governor had given the raster up for the traced pipeline in flight (this GPU, loading)`);
-        const heavy = `Object.assign(__bh.settings, { dynamicResolution: false, earthRasterShading: "every", earthRasterScale: 1, denoise: false, motionBlur: 0 }); __bh.renderer.rasterFellBack = false`;
+        // (set once frozen — in motion, every pixel shaded at the full scale is over a small GPU's budget)
+        const heavy = `Object.assign(__bh.settings, { dynamicResolution: false, earthRasterShading: "every", earthRasterScale: 1, denoise: false, motionBlur: 0 })`;
         const light = `Object.assign(__bh.settings, ${JSON.stringify(kept)})`;
         for (const [view, mount] of [
           ["ahead", `__bh.settings.shipMount = "cockpit"`],

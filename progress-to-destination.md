@@ -39,26 +39,25 @@ les preuves restent dans les entrées datées du journal, dessous. Ce qui est fe
 | M1 Max | **borné à 30, l'eau à demi-rythme (15 nov.) : 19,1 ms en vol, 23,1 soutenu, 30 images/s tenues** ; orage : 30 soutenu parti froid (27,9 ms), décroche en héritant de la chaleur (14,6 images/s) ; le 22,5 ms « frais » du 12 nov. (98–100 °C) ne vaut pas palier | 16,7 ms (60 images/s), bornée et soutenue | l'eau : 5,3 ms pour une enveloppe de 1,0 |
 
 **L'ordre décidé** (stratégie §24) : l'eau étagée → la classification de l'écran par tuiles → J3 (lumière, cockpit) — **les trois menés** ; puis
-J4 (fermé, sortie non atteinte) et J5 (fermé) ; **en cours : J6, les parcours complets** (§19.13).
+J4 (fermé, sortie non atteinte), J5 et J6 (fermés).
 
 **En cours**
 
 | Session (T3) | Lot | État |
 |---|---|---|
-| Rendu (33d89754) | J3 — lumière, ombres, cockpit | **mené (15 nov.)** : J3-0 à J3-7 et J3-R faits ou réglés provisoirement selon les recommandations de [PLAN-J3](docs/PLAN-J3-LUMIERE-COCKPIT.md) §8 ; le crépuscule du sol réparé (appareil / sol 0,87–1,08 jusqu'à −12,7°), ombres d'arbres et du décor, albédos mesurés. **Confirmé par Sam (15 nov., ~19:55)** ; reste J3-R (les anciens chemins) |
 | Rendu (33d89754) | J4 / J5 — l'eau, les volumes, la généralisation | **fermés** ([PLAN-J4](docs/PLAN-J4-VOLUMES.md), [PLAN-J5](docs/PLAN-J5-GENERALISATION.md)) : l'eau à demi-rythme (J5-5, −6,0 à −6,4 ms, l'image la même) ; le sol à demi-rythme laissé au joueur (J5-6, réglage « demi » : −1,9 à −3,2 ms ; « auto » à chaque pixel) ; la FFT de la mer en deux passes (−0,9 ms) ; la carte d'ombre des arbres (−2,8 ms, forêt) ; Sam a refusé les arbitrages d'image (MSAA 1×, petits arbres, nuages amortis). Postes lourds restants : l'eau 16,2, les nuages d'orage 16,5, le décor d'une forêt ~7 ms |
 | Rendu (33d89754) | Mesures tenues | la borne du M1 Max **à 30, provisoire** (soutenu, le GPU bride vers 850 MHz quelle que soit la borne — [J0-CONTRAT §2](docs/J0-CONTRAT.md)) ; le coût de l'appareil 3,5–4,5 ms, dont le MSAA 4× 4–5 ms (gardé) |
 | PLAN-APPROCHES (1feb2f7f) | [PLAN-APPROCHES](docs/PLAN-APPROCHES.md) | **AP0 à AP9 faits (15 nov.)** : données réelles (nav.dat, CIFP), choix automatique, jonction planifiée, A320, carte, radar, TSD, crew, toutes les pistes au HUD, directeur de vol, pente publiée, la roue « Approche » et les options ; AP9 : l'autorisation avec les vraies valeurs, l'indicatif en morse, les radiobalises (`approach-audio` 4/4, témoins positif et négatif). **Reste : AP10 (tous les aéroports), AP-R (retraits)** |
 | Audit vagues 3–4 et 6 (1feb2f7f) | [09-priorites-todo](docs/audit-2026-11-10/09-priorites-todo.md) | **faits** : 3.1–3.2 réseau (RD0–RD2), 3.3 sauvegardes (une clé par sauvegarde ; avion, systèmes des vaisseaux et de l'A320 — ce dernier par J6-4), 3.4–3.5 vol, 3.6–3.7 TARS, 3.10 e2e honnêtes, 4.2 temps et onglet masqué, 4.3 `Settings`/`ViewPose`, 4.8 `main()` découpé ; vague 6 hors rendu (QA, AR, RD4/RD5, FX). **Reste** : l'état d'une mission ou d'un combat (Sam), IndexedDB et l'autosauvegarde hors frame (AR-05), FX-19 (fraîcheur des écrans, à mesurer), FX-21 |
 
-**Fermé récemment** : **PLAN-J6** (15 nov., 20:35 : les neuf parcours en e2e, sept défauts corrigés) ; l'eau étagée E1 (−1,55 ms) et E2 (−0,5 ms), E3 non ouvert ; la classification lot 1 (sur terre −1,15 ms), lot 2 non ouvert
+**Fermé récemment** : **J3** (15 nov., confirmé par Sam ; J3-R fait 20:48) ; **le repli du raster vers le tracé retiré** (15 nov., 20:48, décision (b)) ; **PLAN-J6** (15 nov., 20:35 : les neuf parcours en e2e, sept défauts corrigés) ; l'eau étagée E1 (−1,55 ms) et E2 (−0,5 ms), E3 non ouvert ; la classification lot 1 (sur terre −1,15 ms), lot 2 non ouvert
 (sous 1 ms) ; AR-07 (le renderer sur `ViewPose`) ; le retrait R1 des anciens chemins (13 nov.) ; le noyau du monde visé compilé pendant le voyage
 (Jupiter à froid 73,7 → 47 s) ; le grain des anneaux de Saturne ; J2 (13 nov.) ; J2-C BC7 rangée (Sam). Le plafond des binaires suivis monté à
 700 Mo (Sam, f4bba608).
 
 **Décidé par Sam (15 nov., ~19:55 UTC, « j'accepte tes recommandations »)** : PLAN-J3 §8 confirmé tel quel (J3-R peut retirer les anciens
-chemins) ; le repli du raster vers le tracé **retiré sur la Terre** (b, retrait à faire — [PROBLEMES](docs/PROBLEMES-A-REGLER.md)) ; la borne
-du M1 Max : **essai à 40 à refaire** avant de la figer (30 jusque-là) ; les seuils p99 et CPU du mini **fixés à la reprise de la cible 40 ms** ;
+chemins) ; le repli du raster vers le tracé **retiré sur la Terre** (b, fait le 15 à 20:48) ; la borne
+du M1 Max : **essai à 40 à refaire** avant de la figer (30 jusque-là ; un essai du 15 à 20:44–21:02 non retenu — le GPU partagé avec l'e2e d'une autre session —, à refaire au calme) ; les seuils p99 et CPU du mini **fixés à la reprise de la cible 40 ms** ;
 l'état d'une mission ou d'un combat **non sauvé, dit** ; le réseau **« entre amis »**, RD3 non ouvert ([J0-CONTRAT](docs/J0-CONTRAT.md) §2,
 [PLAN-RESEAU-DURCISSEMENT](docs/PLAN-RESEAU-DURCISSEMENT.md) §4).
 
@@ -8296,6 +8295,26 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
 - Preuves (mesuré) : l'annulation rend la place, le carburant, le train et les volets (kerr-mini, `parcours-tars` 3/3) ; la CI de `main` verte et
   le site déployé après la correction de l'horloge (run 43756771531) ; `parcours-meteo` avec l'horloge du vol : le fondu tenu (0,03 en une image).
 - Suite : les décisions de Sam du 15 nov. — J3-R, le repli du raster retiré sur la Terre, la borne du M1 Max essayée à 40.
+
+### 2026-11-15 20:48 UTC — J3-R fermé ; le repli du raster vers le tracé retiré (décision (b) de Sam)
+
+- Contribution à la destination : stratégie §20 (migrer par lots, retirer les chemins sans utilisateur, règle 2) ; §8 (aucune cadence
+  gagnée en retirant du contenu : le repli gardait un tracé sans nuages, mer plate, écrans brouillés sur le mini).
+- Réalisé : **J3-R** — la dernière écriture morte du plancher de nuit (`trace.wgsl` `keyLight`, `envBuf[ENV_W·ENV_H + 7].w`, sans lecteur
+  depuis le retrait de `ship.nightFloor`) retirée ; PLAN-J3 §10. **Le repli** — `rasterFellBack`, `rasterKept`, le contrôle de 6 s
+  (`src/game/governor.ts`), la remise à zéro (`main.ts`), les deux messages (FR) ; `earthPipelineNow` rend le réglage ; sur les astres il
+  n'était pas atteignable (cadence ≤ 4 pour 16 demandés) : retiré avec. L'e2e `raster-governor` vérifie l'inverse (budget 8 ms 15 s, le
+  raster gardé) ; 16 e2e débarrassés de leurs remises à zéro ; `lowflight-governor` lit `earthPipelineNow` (A/B vers d'anciens builds
+  gardé). BH-API, PROBLEMES (entrée fermée), PLAN-J3, PLAN-J5, PLAN-PLANETES, skill remote-e2e.
+- Preuves : vérifié statiquement — `check-wgsl` 84/84, `tsc`, biome, `governor`/`flight-clock`/`i18n` 9/9, `kernel-budget`, `wgsl-library`,
+  `sun-readers` ; observé — e2e `raster-governor` 1/1 sur kerr-mini (run `20261115-214344-raster-governor-norepli` : sous 8 ms de budget,
+  GPU 36,4 ms, la Terre en raster à chaque relevé de 100 ms). Aucun coût mesuré (code retiré hors du GPU, sauf une écriture d'un texel).
+- Limites : le plancher de qualité du raster sur un GPU faible reste à régler (le gouverneur : échelle, blocs, palier de matériel).
+- **L'essai de la borne à 40 (M1 Max, 20:44–21:02 UTC) : non retenu.** Deux runs J0 (`J0_FPSCAP=40`, `remote-results/j0/m1max-cap40-1115-1`,
+  `-2`) : le premier a attendu le Chrome de l'e2e `approach-audio` d'une autre session puis a perdu sa connexion DevTools en vol (3 échecs) ;
+  le second est allé au bout, mais le GPU était occupé à 94 % à 592 MHz avant son Chrome et des passes d'ordinaire sous la milliseconde y
+  coûtent ~20 ms (`display` 27,9, `ship: thrusters and plasma` 23,1) : le GPU partagé, non mesurable. Rien n'en entre dans J0-CONTRAT.
+- Suite : refaire l'essai de la borne à 40 machine au calme (aucun autre e2e sur ce Mac, le GPU au repos avant), deux runs soutenus.
 
 ### 2026-11-15 20:56 UTC — PLAN-APPROCHES AP9 : l'approche à l'écoute — l'autorisation, l'indicatif en morse, les radiobalises
 

@@ -48,9 +48,7 @@ describe.skipIf(!E2E)("the raster's finest relief", () => {
     // (both patches measured on the same pixels: the scale, the shading rate pinned — the shots' settings undone after each)
     const MEASURE = `{ dynamicResolution: false, earthRasterShading: "half", earthRasterScale: 0.75, motionBlur: 0.5 }`;
     const measure = async (level: number, shoot = true) => {
-      await app.js(
-        `(() => { Object.assign(__bh.settings, ${MEASURE}); __bh.settings.earthTerrainRasterLevel = ${level}; __bh.renderer.rasterFellBack = false; return 1; })()`,
-      );
+      await app.js(`(() => { Object.assign(__bh.settings, ${MEASURE}); __bh.settings.earthTerrainRasterLevel = ${level}; return 1; })()`);
       await app
         .waitFor(`__bh.renderer.terrainRasterStats.level === ${level} && __bh.renderer.terrainRasterStats.primary`, 60_000)
         .catch(() => {});
@@ -84,7 +82,7 @@ describe.skipIf(!E2E)("the raster's finest relief", () => {
       expect(r.n).toBeGreaterThanOrEqual(20);
       if (shots && shoot) {
         await app.js(
-          `(() => { Object.assign(__bh.settings, { dynamicResolution: false, earthRasterShading: "every", earthRasterScale: 1, motionBlur: 0 }); __bh.renderer.rasterFellBack = false; return 1; })()`,
+          `(() => { Object.assign(__bh.settings, { dynamicResolution: false, earthRasterShading: "every", earthRasterScale: 1, motionBlur: 0 }); return 1; })()`,
         );
         await Bun.sleep(3000);
         await Bun.$`mkdir -p ${shots}`;

@@ -1,11 +1,10 @@
 // The resolution governor (audit 2026-11-10, AR-12 — main() cut by responsibility, wave 4.8, its last lot; the render session's
 // levers, handed over to be moved as they are — 13 Nov 2026): the render scale in motion and held (dynamic resolution, the raster's
 // own scale), the frame time measured at each scale, the hardware tier promoted or demoted on what it measures, the near Earth's
-// raster pipeline given up for the traced one when too heavy and taken back when that is no faster. Out of main.ts's loop as it
+// raster pipeline kept (its fallback to the traced one retired, Sam's decision (b), 15 Nov 2026). Out of main.ts's loop as it
 // was there — the same rules, the same thresholds, the same order —, this module owning the state only it decides on; main's
 // resize() reads the scale it chose.
 
-import { t } from "../i18n";
 import { demotionEligible, dynamicResolutionOn, promotionEligible } from "../quality-policy";
 import type { Renderer } from "../renderer";
 import type { Settings } from "../settings";
@@ -17,7 +16,6 @@ export interface GovernorDeps {
   canvas: HTMLCanvasElement;
   /** the canvas and the renderer's targets made at the scale chosen (main.ts's resize, which reads `renderScale`) */
   resize(): void;
-  toast(text: string): void;
   /** a Kerr Bench running: no tier changed meanwhile */
   benching(): boolean;
 }
@@ -51,12 +49,6 @@ export class Governor {
   overAtFloor = 0;
   /** the last demotion [performance.now() ms]: no promotion for a minute after */
   demotedAt = -Infinity;
-  /** how long the raster pipeline has been over budget at its floor [s]: the fallback to the traced one */
-  rasterOver = 0;
-  // (the fallback measured: the raster's frame time when it was given up [ms], how long the traced one has flown since [s];
-  // renderer.rasterKept: the traced one proved no faster here — the raster kept, not given up again)
-  rasterFellMs = 0;
-  tracedFor = 0;
 
   constructor(private d: GovernorDeps) {}
 
@@ -272,52 +264,8 @@ export class Governor {
       })
         ? this.overAtFloor + 1.5
         : 0;
-      // (the raster pipeline too heavy for this device: over the budget and a half at its coarsest shading, its smallest
-      // scale and the coarsest blocks for 12 s, in motion — the traced pipeline for the session, said; the setting changed,
-      // tried again — onSettingsChange)
-      this.rasterOver =
-        raster &&
-        settings.earthRasterShading === "auto" &&
-        settings.realtimeSubsampling === "auto" &&
-        !this.d.benching() &&
-        moving &&
-        settled &&
-        renderer.rasterRateCoarsest &&
-        block >= 8 &&
-        (!dynOn || this.renderScale <= 0.5 + 1e-3) &&
-        !renderer.rasterKept &&
-        this.gpuEma > 1.5 * budget
-          ? this.rasterOver + 1.5
-          : 0;
-      // (the traced pipeline flown 6 s in motion since the fallback: kept only if it is a tenth faster at least — over a city's
-      // buildings on an M1 it was not, 57 ms a frame at 14 fps and its blocks far blurrier than the raster's floor —, else the
-      // raster back, said)
-      if (renderer.rasterFellBack && this.rasterFellMs > 0 && moving && settled && this.gpuEma > 0) {
-        this.tracedFor += 1.5;
-        if (this.tracedFor >= 6) {
-          if (this.gpuEma > 0.9 * this.rasterFellMs) {
-            renderer.rasterFellBack = false;
-            renderer.rasterKept = true;
-            this.scaleMs.clear();
-            this.gpuEma = 0;
-            this.scaleHeld = 0;
-            this.d.resize();
-            this.d.toast(t("The near Earth is drawn by the raster pipeline again: the traced one is no faster here"));
-          }
-          this.rasterFellMs = 0;
-        }
-      }
-      if (this.rasterOver >= 12) {
-        this.rasterOver = 0;
-        this.rasterFellMs = this.gpuEma;
-        this.tracedFor = 0;
-        renderer.rasterFellBack = true;
-        this.scaleMs.clear();
-        this.gpuEma = 0;
-        this.scaleHeld = 0;
-        this.d.resize();
-        this.d.toast(t("The near Earth is drawn by the traced pipeline: the raster one is too heavy for this GPU"));
-      }
+      // (no fallback to the traced pipeline on the Earth — Sam's decision (b), 15 Nov 2026: the traced one was faster on kerr-mini only by
+      // losing the clouds, the sea and the cockpit's displays; the raster always, its quality floor the governor's below)
       if (this.overAtFloor >= 12) {
         const down = demoted(renderer.tier);
         this.overAtFloor = 0;

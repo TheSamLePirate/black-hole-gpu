@@ -42,7 +42,7 @@ no figure or picture may come from a tracer still compiling.
   fix the wait and run again, never report it.
 - **The raster pipeline** (the user's preference): the e2e run in `earthPipeline: "raster"` (the default — set it
   explicitly where a test depends on the look) and log `renderer.earthPipelineNow(settings)` beside each figure or
-  shot: a run that fell back to `"trace"` (`rasterFellBack`) is said, not passed off as raster. Offline stills
+  shot: a run drawn by `"trace"` is said, not passed off as raster (the governor's fallback to it is retired since 15 Nov 2026). Offline stills
   (`__bh.render`) are traced — not for the e2e's comparisons unless the user asks; for a converged image, freeze
   the world and let the raster's shading go round every pixel (`app.settled()` then a few seconds).
 - **The right camera view.** The main view of every e2e is the cockpit (`__bh.settings.shipMount = "cockpit"`, set

@@ -55,6 +55,9 @@ au-dessus de 1,6 ms dans les mesures de J4.
 
 **Décisions de Sam (15 novembre, 08:34 UTC)** : **aucun arbitrage d'image** (ni MSAA 1×, ni petits arbres, ni nuages amortis) — la
 cible du mini reste à ~48 ms pour l'instant ; **l'eau à demi-rythme gardée** (J5-5, son ancien chemin retiré : J5-R2).
+**Décision de Sam (15 novembre, ~19:55 UTC), question 3** : le repli automatique du raster vers le tracé **retiré sur la Terre** (option (b)
+de [PROBLEMES](PROBLEMES-A-REGLER.md) : le tracé n'y était plus rapide qu'en perdant les nuages, la mer et les écrans) — fait le
+15 novembre (20:46 UTC) ; le pipeline tracé reste au choix du joueur (`earthPipeline`).
 
 **Réglées provisoirement le 15 novembre, selon les recommandations du plan — révisables par Sam** (avant ses décisions ci-dessus) : 1. **l'image gardée telle quelle** —
 le seuil des petits arbres à 2,5 px (4 px : −0,7 ms, sous 1 ms, règle 1 ; 6 px : −1,75 ms mais la forêt lointaine s'éclaircit) ; le MSAA

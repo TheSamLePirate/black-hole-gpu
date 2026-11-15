@@ -17453,9 +17453,6 @@ fn keyLight() {
       let mu0g = dot(upB, airPhysicalDirection(toBody(lt.dir)));
       let taken = max(skyFlat(upB, airHeight(nearCam()), lt.e, mu0g, 1.0), lt.e * nightFloor(1.0, mu0g));
       envBuf[ENV_W * ENV_H + 4u] = select(vec4f(-1.0), vec4f(skyIrradiance(airHeight(nearCam()), upB), luminance(taken)), isEarth(kn));
-      // (and the night's floor the ground takes — EARTH_NIGHT, the twilight's reference —, its luminance, beside the craft's air reach:
-      // envSH copies it to sh[12].w, read by ship.wgsl irradiance when ship.nightFloor is on — PLAN-J3 §8 question 7, a comparison)
-      if (arrayLength(&envBuf) >= ENV_W * ENV_H + 8u) { envBuf[ENV_W * ENV_H + 7u].w = select(0.0, luminance(lt.e * nightFloor(1.0, mu0g)), isEarth(kn)); }
       // (w: the night's floor alone over the star's light — the reference twilight table or the night's —: which of the two the ground took)
       envBuf[ENV_W * ENV_H + 5u] = select(vec4f(-1.0), vec4f(shIrradiance(upP), luminance(lt.e * nightFloor(1.0, mu0g))), isEarth(kn));
       // (the up direction on the probe's axes: the CPU integrates the probe's texels over its hemisphere — renderer.readShipSky)

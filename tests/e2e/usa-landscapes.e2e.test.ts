@@ -47,7 +47,7 @@ describe.skipIf(!E2E)("American landscapes: city, countryside, coast", () => {
     await app.js(`(__bh.freeze(true), 1)`);
     await loaded();
     await app.js(
-      `(() => { Object.assign(__bh.settings, { dynamicResolution: false, earthRasterShading: "every", earthRasterScale: 1, motionBlur: 0 }); __bh.renderer.rasterFellBack = false; return 1; })()`,
+      `(() => { Object.assign(__bh.settings, { dynamicResolution: false, earthRasterShading: "every", earthRasterScale: 1, motionBlur: 0 }); return 1; })()`,
     );
     await app.settled();
     await Bun.sleep(3000);

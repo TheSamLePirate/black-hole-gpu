@@ -4524,8 +4524,7 @@ export class Renderer {
     // Keep reference rendering for optical/scientific kernels and contact with the walking patch.
     // (the raster inspector draws its own patch and reads the cache itself; it does not need the tracer to be free of the
     // wormhole's metric, which the Earth scenes always carry: only the tracer's *use* of the cache does)
-    // (the pipeline the near Earth is drawn by: the setting's, unless the raster proved too heavy for this device —
-    // rasterFellBack, main.ts's governor —, then traced)
+    // (the pipeline the near Earth is drawn by: the setting's — no fallback to the traced one, Sam's decision (b), 15 Nov 2026)
     const rasterWanted = this.earthPipelineNow(s) === "raster";
     const terrainRasterEligible = !!(
       (s.earthTerrainCache || s.earthTerrainRasterView !== "off" || s.earthTerrainRasterUse || rasterWanted) &&
@@ -12706,9 +12705,10 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
     this.device.queue.writeBuffer(this.paramBuf, (MOUTH_LIST_AT + 4) * 4, this.paramsF.subarray(MOUTH_LIST_AT + 4, MOUTH_LIST_AT + 8));
     this.device.queue.writeBuffer(t.resolveBuf, 20, new Float32Array([0]));
   }
-  /** The near Earth's pipeline this frame: the setting's, traced once the raster proved too heavy here (rasterFellBack). */
+  /** The near Earth's pipeline this frame: the setting's (its fallback to the traced one when too heavy — rasterFellBack — retired
+   *  on Sam's decision (b), 15 Nov 2026: the traced one was faster on kerr-mini only by losing the clouds, the sea, the displays). */
   earthPipelineNow(s: Pick<Settings, "earthPipeline">): "raster" | "trace" {
-    return s.earthPipeline === "raster" && !this.rasterFellBack ? "raster" : "trace";
+    return s.earthPipeline === "raster" ? "raster" : "trace";
   }
   /** The raster's shading rate (1, 2, 4, 8, 16: one pixel in so many a frame): the setting's, or with "auto" the
    *  governor's — from the hardware tier's start (RASTER_RATE_START), then by the measured frame time. */
@@ -12769,13 +12769,7 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
   private rasterRateMs = new Map<number, { ms: number; at: number }>();
   private rateSlowMs = 0;
   private rateFastMs = 0;
-  /** the raster pipeline given up for the traced one on this device, for the session: main.ts's governor, the frame over
-   *  its budget and a half at the coarsest rate and the smallest scale for 12 s (the setting changed: tried again) */
-  rasterFellBack = false;
-  /** the traced pipeline flown after a fallback and found no faster (main.ts): the raster kept, not given up again until the
-   *  setting changes */
-  rasterKept = false;
-  /** the automatic shading rate (earthRasterShading "auto"): the coarsest it may go — main.ts's fallback watches it */
+  /** the automatic shading rate (earthRasterShading "auto"): the coarsest it may go — the governor's scale waits for it */
   get rasterRateCoarsest() {
     return this.rasterPrimaryOn && this.rasterRate >= RASTER_RATES_AUTO[RASTER_RATES_AUTO.length - 1]!;
   }

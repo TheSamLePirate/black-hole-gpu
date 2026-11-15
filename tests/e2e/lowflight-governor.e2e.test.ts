@@ -91,7 +91,7 @@ test.skipIf(!E2E)(
     const SAMPLE = `(() => { const r = __bh.renderer, p = __bh.game.perf(), bm = {};
       for (const [k, v] of r.blockMs ?? []) bm[k] = +v.ms.toFixed(1);
       return { block: p.block, scale: +p.renderScale.toFixed(3), gpu: p.gpuFrameMs, fps: p.renderFps, rate: p.terrainRaster?.rate ?? null,
-        primary: p.terrainRaster?.primary ?? null, pipe: r.earthPipelineNow(__bh.settings), fell: !!r.rasterFellBack, hint: r.rasterHint ?? null, phase: r.lastPhase, dense: !!r.lastFrameDense, trace: +(r.prof.traceMs?.() ?? 0).toFixed(2),
+        primary: p.terrainRaster?.primary ?? null, pipe: r.earthPipelineNow(__bh.settings), hint: r.rasterHint ?? null, phase: r.lastPhase, dense: !!r.lastFrameDense, trace: +(r.prof.traceMs?.() ?? 0).toFixed(2),
         image: p.image, blockMs: bm }; })()`;
     const sample = async (seconds: number) => {
       const s: Record<string, unknown>[] = [];
@@ -159,7 +159,7 @@ test.skipIf(!E2E)(
           const STATE = `(() => { const r = __bh.renderer, s = __bh.settings, v = r.variants?.get(r.featureKey);
             return { phase: r.lastPhase, spp: r.sampleIndex, bandY: r.bandY, bandRows: r.bandRows, h: r.live?.height, gpu: +r.lastGpuMs.toFixed(1),
               key: r.featureKey, camKey: r.cameraKey, rt: !!v?.rt, q: !!v?.q, qBusy: !!v?.qBusy, qWanted: !!v?.qWanted, qc: r.qualityCompile?.state,
-              gc: r.generalCompile?.state, adaptive: s.adaptiveIntegrator, target: r.liveTargetSpp, primary: r.rasterPrimaryOn, fell: r.rasterFellBack,
+              gc: r.generalCompile?.state, adaptive: s.adaptiveIntegrator, target: r.liveTargetSpp, primary: r.rasterPrimaryOn,
               animate: s.animate, thrust: !!r.shipThrust, taPhase: r.taPhase, held: !!r.live?.temporal?.held, moving: !!r.live?.temporal?.moving,
               scale: __bh.game.perf({ gpu: false }).renderScale }; })()`;
           const log: Record<string, unknown>[] = [];
@@ -258,10 +258,11 @@ test.skipIf(!E2E)(
           writeFileSync(`${OUT}/lowflight.json`, JSON.stringify(results, null, 1));
           continue;
         }
-        // the automatic flight (the raster's state held still first; when the governor gives it up, the time from the thaw)
+        // the automatic flight (the raster's state held still first; if the pipeline leaves the raster — an older build's fallback, retired
+        // on Sam's decision (b) of 15 Nov 2026 —, the time from the thaw)
         const before = await app.js<Record<string, unknown>>(SAMPLE);
         await app.js(`(() => { window.__fellAt = 0; const t0 = performance.now(); clearInterval(window.__fellTimer);
-          window.__fellTimer = setInterval(() => { if (!window.__fellAt && __bh.renderer.rasterFellBack) window.__fellAt = (performance.now() - t0) / 1000; }, 100); return 1; })()`);
+          window.__fellTimer = setInterval(() => { if (!window.__fellAt && __bh.renderer.earthPipelineNow(__bh.settings) !== "raster") window.__fellAt = (performance.now() - t0) / 1000; }, 100); return 1; })()`);
         await fly();
         await Bun.sleep(3000);
         const auto = await sample(6);

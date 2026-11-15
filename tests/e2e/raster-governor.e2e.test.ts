@@ -1,8 +1,7 @@
 // The raster pipeline as the default near the Earth, governed (the audit of 2026-10-23 — docs/progress/raster-aaa/ETAPE-1.md).
 // The F-35 flown over the Alps in its cockpit, the autopilot holding its height and speed, the settings as they come: the
-// raster draws the ground, no diagnostic holds the automatic quality. Its budget squeezed (realtimeBudget 8 ms): the
-// automatic shading rate goes coarser to one pixel in sixteen, then — still far over — the game falls back to the traced
-// pipeline and says so; the setting chosen again, the raster back; a wide budget: the rate finer again. The traced pipeline
+// raster draws the ground, no diagnostic holds the automatic quality. Its budget squeezed (realtimeBudget 8 ms) for 15 s: the
+// raster kept — its fallback to the traced pipeline retired on the Earth (Sam's decision (b), 15 Nov 2026). The traced pipeline
 // by the player's choice, a fixed rate. Then the Moon's shadow from orbit: the physical sky light carried to each point by
 // its eclipse — the umbra as dark with it as with the old model (it was lit by the camera's day sky).
 // Every wait bounded, the renderer's state printed when one runs out. Captures remote-results/rg-*.png; figures
@@ -41,13 +40,13 @@ function darkest(file: string) {
 
 /** the renderer's state, printed when a wait runs out */
 const STATE = `(() => { const r = __bh.renderer, g = __bh.camera.geoNow?.(), v = r.variants?.get?.(r.featureKey);
-  return { primary: r.rasterPrimaryNow, fellBack: r.rasterFellBack, inspecting: r.terrainRasterInspecting,
+  return { primary: r.rasterPrimaryNow, pipe: r.earthPipelineNow(__bh.settings), inspecting: r.terrainRasterInspecting,
     raster: { ...r.terrainRasterStats, scenery: undefined }, block: r.realtimeBlockNow, gpuMs: r.lastGpuMs,
     tracerSettled: r.tracerSettled, kernelsSettled: r.kernelsSettled, variant: v && { rt: !!v.rt, shade: !!v.shade, mark: !!v.shadeMark, busy: v.busy, failed: v.failed },
     tiles: r.earthTiles.pending, vessel: __bh.fleet.active, geo: g && { alt: Math.round(g.alt), gs: Math.round(g.gs) }, gpuErrors: r.gpuErrors }; })()`;
 
 test.skipIf(!E2E)(
-  "the raster pipeline by default: governed, its rate automatic, the traced one at hand, the eclipse kept",
+  "the raster pipeline by default: governed, kept under a squeezed budget, the traced one by choice, the eclipse kept",
   async () => {
     const app = await App.boot({ width: 1280, height: 800, lang: "fr", hash: "scene=game:artemis", tiles: true });
     const out: Record<string, unknown> = {};
@@ -111,25 +110,24 @@ test.skipIf(!E2E)(
       expect(geo.alt).toBeGreaterThan(2000);
       await app.shot("remote-results/rg-alps-raster.png");
 
-      // (the budget squeezed: the shading rate coarser to its floor, then the fallback to the traced pipeline, said — dormant on the
-      // Earth since J2-7 (the rate fixed at 1 under the material, the scale pinned): docs/PROBLEMES-A-REGLER.md « Le repli du raster vers
-      // le pipeline tracé ne s'arme plus », Sam's to decide; RG_FALLBACK=1 runs this part as it was written)
-      if (process.env.RG_FALLBACK === "1") {
-        await app.js(`(() => { __bh.settings.realtimeBudget = 8; return 1; })()`);
-        await until("__bh.renderer.terrainRasterStats.rate === 16", 90_000, "the automatic rate at one in sixteen");
-        await until("__bh.renderer.rasterFellBack", 90_000, "the fallback to the traced pipeline");
-        await until("!__bh.renderer.rasterPrimaryNow", 30_000, "the traced pipeline drawing");
-        await frames(60);
-        await app.shot("remote-results/rg-alps-fellback.png");
-        out.fellBack = await app.js(STATE);
-        // (the setting chosen again: the raster tried again; a wide budget: the rate finer again)
-        await app.js(`(() => { __bh.settings.realtimeBudget = 200; __bh.game.set("earthPipeline", "raster"); return 1; })()`);
-        expect(await app.js<boolean>("__bh.renderer.rasterFellBack")).toBe(false);
-        await until("__bh.renderer.rasterPrimaryNow", 120_000, "the raster back");
-        await until("__bh.renderer.terrainRasterStats.rate <= 4", 90_000, "the automatic rate finer again");
-        out.roomy = await app.js(STATE);
-        await app.js(`(() => { __bh.settings.realtimeBudget = 30; return 1; })()`);
-      } else out.fallback = "skipped — dormant on the Earth since J2-7 (PROBLEMES-A-REGLER)";
+      // (the budget squeezed — 8 ms, far under what the raster costs here — for 15 s, beyond the 12 s the old fallback waited: the raster
+      // kept — no fallback to the traced pipeline on the Earth, Sam's decision (b) of 15 Nov 2026, docs/PROBLEMES-A-REGLER.md)
+      await app.js(`(() => { __bh.settings.realtimeBudget = 8; window.__left = 0; window.__leftT = setInterval(() => {
+        if (!__bh.renderer.rasterPrimaryNow || __bh.renderer.earthPipelineNow(__bh.settings) !== "raster") window.__left++; }, 100); return 1; })()`);
+      await Bun.sleep(15_000);
+      const squeezed = await app.js<{
+        left: number;
+        pipe: string;
+        primary: boolean;
+        gpuMs: number;
+      }>(`(() => { clearInterval(window.__leftT);
+        const r = __bh.renderer; return { left: window.__left, pipe: r.earthPipelineNow(__bh.settings), primary: r.rasterPrimaryNow, gpuMs: +r.lastGpuMs.toFixed(1) }; })()`);
+      out.squeezed = squeezed;
+      console.log(`  budget 8 ms for 15 s: ${JSON.stringify(squeezed)}`);
+      await app.shot("remote-results/rg-alps-squeezed.png");
+      expect(squeezed.left).toBe(0);
+      expect(squeezed.pipe).toBe("raster");
+      await app.js(`(() => { __bh.settings.realtimeBudget = 30; return 1; })()`);
 
       // (the traced pipeline by the player's choice; a fixed rate)
       await app.js(`(() => { __bh.game.set("earthPipeline", "trace"); return 1; })()`);

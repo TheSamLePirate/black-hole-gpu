@@ -113,7 +113,7 @@ describe.skipIf(!E2E)("an offline zone", () => {
     // drawn in the governor's blocks, a small GPU's may have given the raster up (tests/e2e/swisstopo.e2e.test.ts) —, its
     // detail measured, shot; the game's own settings back after)
     await app.js(
-      `(() => { Object.assign(__bh.settings, { dynamicResolution: false, earthRasterShading: "every", earthRasterScale: 1, motionBlur: 0 }); __bh.renderer.rasterFellBack = false; return 1; })()`,
+      `(() => { Object.assign(__bh.settings, { dynamicResolution: false, earthRasterShading: "every", earthRasterScale: 1, motionBlur: 0 }); return 1; })()`,
     );
     await app.settled();
     // (in the core, at the full scale: the orthophotos to z 18 — 0.4 m)

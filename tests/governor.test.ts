@@ -16,7 +16,6 @@ const make = (o: { raster?: boolean; dyn?: boolean } = {}) => {
     settings: s,
     canvas: { clientWidth: 1280, clientHeight: 800 } as never,
     resize: () => resizes++,
-    toast: () => {},
     benching: () => false,
   });
   return { g, s, renderer, resizes: () => resizes };

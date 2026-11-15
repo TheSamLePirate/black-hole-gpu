@@ -79,6 +79,9 @@ pas à l'empêcher de brider : il faudrait que le GPU tienne nettement sous le b
 le palier soutenu mesuré ; `J0_FPSCAP=30` pour ses fiches) — **révisable par Sam**. **Décision de Sam (15 nov., ~19:55 UTC)** :
 **refaire l'essai de la borne à 40** maintenant que l'eau à demi-rythme a allégé le GPU (borné à 30 : 23,1 ms soutenu), avant de
 figer la valeur ; 30 reste la borne de ses fiches jusqu'à cet essai. Aucun gain promis : à 40 le GPU travaille et chauffe plus.
+*Premier essai (15 nov., 20:44–21:02 UTC, `remote-results/j0/m1max-cap40-1115-1`, `-2`) non retenu* : le GPU de ce Mac partagé avec l'e2e
+d'une autre session (occupé à 94 % à 592 MHz avant le Chrome du test ; des passes d'ordinaire sous la milliseconde à ~20 ms) ; le premier run
+a perdu sa connexion en vol. À refaire la machine au calme.
 
 **Le palier 1 est atteint** quand, sur le vol de référence (§3), mesuré deux fois sur le M1 Max dans l'état soutenu,
 **les seuils suivants tiennent tous** — *validés par Sam le 10 novembre* (transposés de §8.3, qui les fixe pour

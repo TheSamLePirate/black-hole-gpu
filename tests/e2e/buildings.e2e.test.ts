@@ -89,7 +89,7 @@ describe.skipIf(!E2E)("the buildings", () => {
   // (the held view, every pixel shaded at the full scale — the raster armed again: a small GPU's governor may give it up)
   const hold = async () => {
     await app.js(
-      `(() => { Object.assign(__bh.settings, { dynamicResolution: false, earthRasterShading: "every", earthRasterScale: 1, motionBlur: 0 }); __bh.renderer.rasterFellBack = false; return 1; })()`,
+      `(() => { Object.assign(__bh.settings, { dynamicResolution: false, earthRasterShading: "every", earthRasterScale: 1, motionBlur: 0 }); return 1; })()`,
     );
     await app.settled();
     await Bun.sleep(3000);
@@ -101,15 +101,15 @@ describe.skipIf(!E2E)("the buildings", () => {
     app.js<number | string>(`(async () => { const r = __bh.renderer, frame = () => new Promise((q) => requestAnimationFrame(q));
       // (the realtime frames, never accumulated: a held view otherwise refines in the tracer, not in shade)
       // (raster-shade-ablation's way: the clock stopped rather than the view frozen — a frozen view refines in the tracer)
-      const spp = __bh.settings.targetSpp; __bh.settings.targetSpp = 0; __bh.game.quality("realtime"); __bh.freeze(false); __bh.settings.animate = false; r.rasterFellBack = false;
+      const spp = __bh.settings.targetSpp; __bh.settings.targetSpp = 0; __bh.game.quality("realtime"); __bh.freeze(false); __bh.settings.animate = false;
       window.__t = true; const tick = () => { if (!window.__t) return; __bh.touch(); requestAnimationFrame(tick); }; requestAnimationFrame(tick);
       r.prof.enabled = true; r.prof.every = 1; r.prof.reset();
-      for (let i = 0; i < 30; i++) { await frame(); r.rasterFellBack = false; }
+      for (let i = 0; i < 30; i++) await frame();
       r.prof.reset(); let done = 0, last = r.lastDoneAt, sum = 0, n = 0;
       while (done < 40) { await frame(); if (r.lastDoneAt !== last) { last = r.lastDoneAt; done++;
         const s = r.prof.table().find((p) => p.label === "earth shade (raster)"); if (s) { sum += s.last; n++; } } }
       window.__t = false; __bh.settings.targetSpp = spp; __bh.settings.animate = true; __bh.freeze(true);
-      return n >= 30 ? +(sum / n).toFixed(2) : JSON.stringify({ done, n, fellBack: r.rasterFellBack, pipe: r.earthPipelineNow(__bh.settings), supported: r.prof.supported, labels: r.prof.table().map((p) => p.label) }); })()`);
+      return n >= 30 ? +(sum / n).toFixed(2) : JSON.stringify({ done, n, pipe: r.earthPipelineNow(__bh.settings), supported: r.prof.supported, labels: r.prof.table().map((p) => p.label) }); })()`);
 
   for (const key of CHOSEN) {
     test(`${SITES[key]!.name}: the scene's buildings, seen from above the roofs and lower`, async () => {

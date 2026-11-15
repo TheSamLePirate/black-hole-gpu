@@ -73,9 +73,8 @@ describe.skipIf(!E2E)("the IGN's relief switched in flight", () => {
       `(() => { __bh.game.flyAt(45.912, 6.858, 450, 45, 120); __bh.settings.shipMount = "cockpit"; __bh.freeze(true); return 1; })()`,
     );
     await app.waitFor(`__bh.renderer.earthTiles.pending === 0`, 90_000).catch(() => console.log("  (tiles still loading after 90 s)"));
-    // (the raster armed again — a small GPU's governor may have given it up while the tiles came —, said beside each figure)
+    // (the pipeline said beside each figure)
     const pipeline = async () => {
-      await app.js(`(() => { __bh.renderer.rasterFellBack = false; return 1; })()`);
       await app.settled();
       return `${await app.js<string>(`__bh.renderer.earthPipelineNow(__bh.settings)`)}, view ${await app.js<string>(`__bh.settings.shipMount`)}`;
     };
@@ -105,7 +104,6 @@ describe.skipIf(!E2E)("the IGN's relief switched in flight", () => {
     expect(await lost()).toBeNull();
 
     for (const on of [true, false]) {
-      await app.js(`(() => { __bh.renderer.rasterFellBack = false; return 1; })()`);
       await record();
       await Bun.sleep(2000);
       await app.js(`(() => { __bh.settings.earthIgnRelief = ${on}; return 1; })()`);

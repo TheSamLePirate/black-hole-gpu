@@ -185,7 +185,7 @@ avancer sans attendre, comme la borne provisoire du M1 Max) :
 | Les lampes de cabine la nuit (J3-4, AAA-PROGRESS) | **inchangées** | aucune mesure de l'atténuation voulue ; les écrans comme sources : 0,09/255, négligeables |
 | Le recalage des toits sur la photo, à l'étranger (J3-5) | **gardé** | l'état actuel ; les tables, elles, relevées |
 | Le verre des murs-rideaux, le zinc, les reflets lointains (J3-5) | **inchangés** | sans référence nette (un verre traité réfléchit plus que le flotté ; un reflet lointain scintillerait) |
-| Le Soleil du sol tracé de près (J3-7) | **géométrique, inchangé** | le pipeline tracé est le repli dormant du raster (décision) ; le contrat des deux Soleils tenu par `tests/sun-readers.test.ts` |
+| Le Soleil du sol tracé de près (J3-7) | **géométrique, inchangé** | le pipeline tracé est le repli dormant du raster (décision ; ce repli retiré sur la Terre le 15 nov., décision (b) de Sam : le tracé reste au choix du joueur) ; le contrat des deux Soleils tenu par `tests/sun-readers.test.ts` |
 
 
 Tout est réglé provisoirement ; à Sam de confirmer ou de changer chaque ligne (les anciens chemins retirés ensuite, J3-R).
@@ -393,3 +393,9 @@ Aucun coût de J3 n'est mesuré ; aucun gain n'est promis.
   (commit de J5-R). `incidentSunOn`, `shipAirAllowed` restent (leviers de mesure). **Même jour, 06:30 UTC** : `ship.skyBand4` (et son noyau
   `envSH4`) et `ship.nightFloor` — éteints, comparaisons sans autre usage — retirés avec leurs phases J0 `skyband4` et `nightfloor`, sous la
   même consigne (réglage provisoire « éteints » ; retour possible par l'historique git).
+
+  **Confirmation de Sam (2026-11-15, ~19:55 UTC) et dernier retrait (20:40 UTC)** : les réglages du §8 confirmés tels quels, J3-R
+  n'a plus rien d'attente. Relu après la confirmation : il restait une écriture morte du retrait de `ship.nightFloor` — `keyLight`
+  (`trace.wgsl`) écrivait encore le plancher de nuit dans `envBuf[ENV_W·ENV_H + 7].w`, que plus personne ne lit (`ship.wgsl` : « w
+  unused »). Retirée. `incidentSunOn` et `shipAirAllowed` restent : leviers de mesure (règle 2). Vérifié : `check-wgsl` 84/84,
+  `kernel-budget`, `wgsl-library`, `sun-readers` passent ; aucun e2e (une écriture sans lecteur).

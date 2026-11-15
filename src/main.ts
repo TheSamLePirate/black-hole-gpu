@@ -932,11 +932,6 @@ async function main() {
       refreshGui();
     }
     if (keys.includes("rotation")) camera.setRotation(settings.rotation);
-    // (the near Earth's pipeline or its shading chosen again: the raster tried again where it had been given up)
-    if (keys.includes("earthPipeline") || keys.includes("earthRasterShading")) {
-      renderer.rasterFellBack = false;
-      renderer.rasterKept = false;
-    }
     if (keys.includes("a320Livery")) renderer.ship.setA320Livery(settings.a320Livery);
     if (keys.includes("target")) {
       const want = settings.target;
@@ -5686,7 +5681,6 @@ async function main() {
     settings,
     canvas,
     resize: () => resize(),
-    toast: (text) => panel.toast(text),
     benching: () => bench.running,
   });
   function resize() {

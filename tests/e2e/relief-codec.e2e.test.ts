@@ -139,7 +139,7 @@ describe.skipIf(!E2E)("the relief kept small", () => {
     if (shots) {
       // (the ground held still, every pixel shaded — tests/e2e/zones.e2e.test.ts's recipe —, the game paused)
       await app.js(
-        `(() => { Object.assign(__bh.settings, { dynamicResolution: false, earthRasterShading: "every", earthRasterScale: 1, motionBlur: 0 }); __bh.renderer.rasterFellBack = false; __bh.game.pause(true); return 1; })()`,
+        `(() => { Object.assign(__bh.settings, { dynamicResolution: false, earthRasterShading: "every", earthRasterScale: 1, motionBlur: 0 }); __bh.game.pause(true); return 1; })()`,
       );
       await app.settled();
       await Bun.sleep(12_000);
