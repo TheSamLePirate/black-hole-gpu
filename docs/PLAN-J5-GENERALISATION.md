@@ -276,6 +276,6 @@ Les plafonds de J5-1 au beau temps, de J5-2 par corps et la parité du repli tra
   retirés (patchs hors du dépôt : `j5-6-stale-weight-trial.patch`, `j5-6-trees-every-pixel-trial.patch`). **Constat** : le gain du demi-rythme
   vient surtout des arbres, et c'est eux que la reconstruction adoucit en mouvement ; « demi » reste au choix du joueur, « auto » à chaque
   pixel. **À Sam** : accepter ce léger adoucissement des houppiers en mouvement pour −2 à −6 ms, ou laisser J5-6 au réglage du joueur.
-- **Décision de Sam : J5-6 laissé au joueur** (2026-11-15 ~11:00 UTC) : « auto » garde le matériau de la Terre à chaque pixel (aucun
+- **Décision de Sam : J5-6 laissé au joueur** (2026-11-15 14:16 UTC) : « auto » garde le matériau de la Terre à chaque pixel (aucun
   compromis d'image) ; le réglage « demi » (et plus grossier) l'applique pour qui le choisit (db50c54e). J5-6 fermé ; la cible des 40 ms
   du mini attend une autre voie.

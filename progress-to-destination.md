@@ -7732,4 +7732,4 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   contre la base, J0 −2,5 / −1,1. La mesure de netteté par gradients échoue à son A/A : non retenue.
 - Limites : le gain du demi-rythme vient des arbres, que la reconstruction adoucit en mouvement.
 - Suite : décision de Sam (accepter l'adoucissement ou laisser « demi » au joueur) ; J0 ~48–50 ms sur le mini.
-- Décision de Sam (~11:00 UTC) : laissé au joueur ; J5-6 fermé.
+- Décision de Sam (14:16 UTC) : laissé au joueur ; J5-6 fermé.
