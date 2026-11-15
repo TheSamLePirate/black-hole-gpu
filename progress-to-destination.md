@@ -34,7 +34,7 @@ les preuves restent dans les entrées datées du journal, dessous.
 
 | Machine | GPU p50 mesuré | Cible | Plus gros poste |
 |---|---:|---:|---|
-| kerr-mini | **~48 ms (15 nov., l'eau et sa finition à demi-rythme — J5-5, A/B : 48,1 contre 55,6)** ; 52,0 ms (984e821d, l'eau seule) ; 58,4 ms (5c420e09, 13 nov.) ; **56,3 ms avec l'eau E1** (A/B, 13 nov.) ; **57,3 ms le 15 nov.** (0bb2aa86, un vol, après les corrections de J3) | 40 ms (25 images/s régulières) | l'eau : 16,2 ms ; sans son matériau −13,0 ms (−10,1 avec E1) |
+| kerr-mini | **~48 ms (15 nov., l'eau et sa finition à demi-rythme — J5-5, confirmée par Sam ; A/B : 48,1 contre 55,6)** ; 52,0 ms (984e821d, l'eau seule) ; 58,4 ms (5c420e09, 13 nov.) ; **56,3 ms avec l'eau E1** (A/B, 13 nov.) ; **57,3 ms le 15 nov.** (0bb2aa86, un vol, après les corrections de J3) | 40 ms (25 images/s régulières) | l'eau : 16,2 ms ; sans son matériau −13,0 ms (−10,1 avec E1) |
 | M1 Max | 22,5 ms, **frais** (12 nov., 98–100 °C) — non valable comme palier ; **15 nov., borné à 30 avec l'eau à demi-rythme : 19,1 ms en vol, 23,1 soutenu, 30 images/s tenues** ; avant : beau temps 21,3 / 21,4 ms tenu soutenu ; orage 28,6 en vol, décroche en soutenu (14,6 images/s, 986 MHz) — chaleur héritée : parti froid, l'orage tient 30 soutenu (27,9 ms)** | 16,7 ms (60 images/s), bornée et soutenue | l'eau : 5,3 ms pour une enveloppe de 1,0 |
 
 **L'ordre décidé** (stratégie §24) : l'eau étagée (surface → éclairage → reflets) → la classification de l'écran par tuiles et les lancements
@@ -7570,3 +7570,12 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
 - **Non tranché** : l'autopilote d'amarrage qui perd l'ISS quand les images tournent pendant des pas figés (`freeze` + `__bh.step`). Le jeu
   normal amarre (`dock-undock`) ; noté ici seulement.
 
+### 2026-11-15 08:34 UTC — Décisions de Sam : aucun arbitrage d'image, l'eau à demi-rythme gardée ; J5-R2
+
+- Contribution à la destination : la décision qui fixe le palier du mini (~48 ms) sans perte d'image ; règle 2 appliquée.
+- Réalisé : Sam (question posée) — aucun des arbitrages (MSAA 1×, petits arbres, nuages amortis) ; l'eau à demi-rythme gardée. Son ancien
+  chemin retiré : `WATER_HALF`, `WATER_WG_Y` en constantes, `waterHalfRate`, l'option `waterHalf`, l'ablation `waterFull` ; BH-API,
+  GRAPHICS-PIPELINE, E2E-CATALOGUE, PLAN-J5 §3 et §5.
+- Preuves : statiques (tsc, biome, `check-wgsl` 84/84, tests des noyaux) ; le chemin gardé est celui mesuré (−7,4 ms).
+- Limites : la cible de 40 ms du mini n'est pas atteinte (~48 ms) ; aucune voie sans perte d'image au-dessus de 1 ms connue à ce jour.
+- Suite : J0 de contrôle ; la reconstruction des pixels laissés (pour J5-6) à reprendre avec un témoin positif.

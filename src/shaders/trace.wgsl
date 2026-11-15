@@ -16783,10 +16783,11 @@ fn skyFill(@builtin(global_invocation_id) gid: vec3u) {
 fn waterMarked(m: f32) -> bool { return m <= RASTER_WATER && m > RASTER_WATER - 3.0; }
 // (a pixel's moments.x marking it the water's kernel's, left for its finishing — RASTER_SPLIT_WATER, less a half over half its water)
 fn waterSplit(m: f32) -> bool { return m < RASTER_SPLIT_WATER + 0.1 && m > RASTER_SPLIT_WATER - 0.6; }
-override WATER_HALF: bool = false;
+// (confirmed by Sam, 15 Nov 2026 — the old path, every water pixel a frame, and its lever retired: J5-R2)
+const WATER_HALF = true;
 // (a measure — PLAN-J5: the ground's material's ceiling at half rate, a tile in two skipped whole; the image broken)
 override TUNE_LITE_HALF_TILES: u32 = 0u;
-override WATER_WG_Y: u32 = 8u;
+const WATER_WG_Y = 4u;
 // (WATER_HALF: the pixel beside the one shaded, left this frame — its pair —, and whether it is water: shadeWater's output written to it too)
 var<private> WATER_PAIR: vec2u = vec2u(0u);
 var<private> WATER_PAIR_ON: bool = false;

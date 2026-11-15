@@ -113,8 +113,6 @@ const ABLATIONS: Record<string, { label: string; set: string }> = {
   // −0.8 ms on J0, 15 Nov 2026; the pass tried, −0.4 / 0 ms on the coast's views: not kept, PLAN-J4)
   swell: { label: "sans houle côtière (lecture compilée hors)", set: `__bh.renderer.tune = { TUNE_SWELL: 0 };` },
   // (J4-5's ceiling — the far vegetation —: the scenery's reach cut to "balanced" (3–4 km for 4.5–6), the far ring's trees and buildings out)
-  // (PLAN-J5 J5-5: the water at half rate on by default since 15 Nov 2026 — waterFull, every water pixel a frame, the old path: its cost)
-  waterFull: { label: "eau à chaque pixel (avant J5-5)", set: `__bh.renderer.tune = { WATER_HALF: 0, WATER_WG_Y: 8 };` },
   // (PLAN-J5: the ground's material — shadeLite — a tile in two skipped whole: its half rate's ceiling; a measure, the image broken)
   liteHalfTiles: {
     label: "matériau du sol, une tuile sur deux (mesure, image cassée)",

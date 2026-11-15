@@ -109,8 +109,6 @@ export interface TracerConstantsOptions {
   /** the sea's reflections out of the water's kernels, drawn by shadeWaterFinish (the staged water's E2 — tracer-source.ts
    *  withWaterReflDeferred; renderer: where the device takes the deferred ground's record) */
   waterReflDefer?: boolean;
-  /** the water at half rate (PLAN-J5 J5-5: trace.wgsl WATER_HALF, WATER_WG_Y 4); false: every water pixel a frame, as before */
-  waterHalf?: boolean;
 }
 
 /** The feature bits a key's realtime kernels compile out although the key has them: the other universe's hole — its metric
@@ -142,10 +140,6 @@ export function tracerConstants(key: number, entry: TracerEntry, o: TracerConsta
     DISC_ONLY: entry === "discs" ? 1 : 0,
     WATER_OPEN: entry === "shadeWaterOpen" ? 1 : 0,
     WATER_REFL_DEFER: (entry === "shadeWater" || entry === "shadeWaterOpen") && o.waterReflDefer ? 1 : 0,
-    // (PLAN-J5 J5-5 — the water at half rate: a pixel in two a frame, a workgroup of 32 threads a tile; renderer.waterHalfRate)
-    ...((entry === "shadeWater" || entry === "shadeWaterOpen" || entry === "shadeWaterFinish") && o.waterHalf !== false
-      ? { WATER_HALF: 1, WATER_WG_Y: 4 }
-      : {}),
     HAS_RADIO: has(1),
     HAS_POL: has(2),
     HAS_JET: has(4),

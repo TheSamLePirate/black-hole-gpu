@@ -53,7 +53,10 @@ au-dessus de 1,6 ms dans les mesures de J4.
 2. **Le découpage du noyau des nuages (J5-1)** avant la généralisation, ou la généralisation d'abord ?
 3. **Le repli tracé de la Terre (J5-R)** : le retirer une fois la parité vérifiée, ou le garder comme filet des GPU faibles ?
 
-**Réglées provisoirement le 15 novembre, selon les recommandations du plan — révisables par Sam** : 1. **l'image gardée telle quelle** —
+**Décisions de Sam (15 novembre, 08:34 UTC)** : **aucun arbitrage d'image** (ni MSAA 1×, ni petits arbres, ni nuages amortis) — la
+cible du mini reste à ~48 ms pour l'instant ; **l'eau à demi-rythme gardée** (J5-5, son ancien chemin retiré : J5-R2).
+
+**Réglées provisoirement le 15 novembre, selon les recommandations du plan — révisables par Sam** (avant ses décisions ci-dessus) : 1. **l'image gardée telle quelle** —
 le seuil des petits arbres à 2,5 px (4 px : −0,7 ms, sous 1 ms, règle 1 ; 6 px : −1,75 ms mais la forêt lointaine s'éclaircit) ; le MSAA
 de l'appareil à 4× (1× : ≈ −3,4 ms au cockpit, mais des bords en escalier) ; la houle en pleine résolution (demi-résolution : −0,5 / −0,7,
 non gardée) ; 2. J5-1 rangé (présence ~2,7 ms sous orage seulement) ; 3. le repli tracé gardé ; **J5-R** : les anciens chemins des réglages
@@ -194,3 +197,7 @@ Les plafonds de J5-1 au beau temps, de J5-2 par corps et la parité du repli tra
   montre la mer « fraîche » (`RASTER_MARK`, estampilles en retard de 2–3 images) et **aucun pixel laissé**, même le levier allumé — la copie
   ou la variante recompilée n'est pas celle que je crois. Arrêté là (outillage retiré, patch hors du dépôt) : la voie de J5-6 qui donnerait
   ~2,3 ms reste fermée tant que cette reconstruction n'est pas comprise.
+- **Décisions de Sam ; J5-R2** (2026-11-15 08:34 UTC) : aucun arbitrage d'image ; l'eau à demi-rythme confirmée — `WATER_HALF` et `WATER_WG_Y`
+  deviennent des constantes, `renderer.waterHalfRate`, l'option `waterHalf` de `tracerConstants` et l'ablation J0 `waterFull` retirés (règle
+  2). Vérifié : tsc, biome, `check-wgsl` 84/84, tests des noyaux. **J0 sur le mini ~48 ms : la cible de 40 attend une autre voie que l'image
+  (la reconstruction des pixels laissés, à élucider — J5-6) ou une nouvelle décision.**
