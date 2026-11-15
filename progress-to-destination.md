@@ -7408,5 +7408,6 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
 - Réalisé : `TUNE_SKYFLAT_DIM`, `TUNE_SHIP_SCENERY_SHADOW`, `treeShadowCut` et leurs anciens chemins retirés (trace.wgsl, renderer.ts,
   scenery-raster.ts) ; J0 `twilightdim` retirée, `craftshade` et `perf-ab SET=j3` à l'A/A ; PLAN-J3, PLAN-J5, BH-API, GRAPHICS-PIPELINE.
 - Preuves : statiques (tsc, biome, `check-wgsl` 84/84, `kernel-budget`) ; aucun chemin gardé ne change (les nouveaux étaient les défauts).
+  Mesuré ensuite (kerr-mini, J0 vol) : GPU p50 57,2 ms (57,3 le 15 nov. avant J4) — pas de régression ; e2e passé.
 - Limites : retirés sous des réglages provisoires — un retour de Sam passe par l'historique git.
 - Suite : `ship.skyBand4`, `ship.nightFloor` à la confirmation de Sam ; les décisions d'image de PLAN-J5 §3.
