@@ -4,8 +4,8 @@
 chaque réglage provisoire daté et révisable. **Fait** : J5-0 chiffré (petits arbres 4 px −0,7 / 6 px −1,75 ms ; MSAA 1× ≈ −3,4 ms au cockpit ;
 houle demi-résolution −0,5 / −0,7, non gardée) ; J5-1 rangé (présence ~2,7 ms sous orage, 0 au beau temps) ; J5-2 clos (les corps déjà en
 raster) ; J5-3 : la marche sur la Terre reste tracée — le raster à pied attend des arbres proches en géométrie (59 ms de restes à Chamonix) ;
-J5-4 : l'export de la vue vivante sort l'image montrée (corrigé). **Attend Sam** : les arbitrages d'image (petits arbres, MSAA), le lot
-d'assets des arbres proches, le repli tracé (J5-R) — §3. Jalon de la [stratégie](ANALYSE-STRATEGIE-RENDU-2026-11-03.md)
+J5-4 : l'export de la vue vivante sort l'image montrée (corrigé). J5-3 fermé (à pied, le tracé est le moins cher : 34 ms contre 70).
+**Attend Sam** : la confirmation des réglages provisoires (§3 : l'image gardée), qui ouvre J5-R ; le lot d'assets des arbres proches. Jalon de la [stratégie](ANALYSE-STRATEGIE-RENDU-2026-11-03.md)
 §15 J5 : « étendre aux autres corps droits, à la marche puis aux transitions ; finaliser HDR/SDR/exports ; conserver les phénomènes
 scientifiques sur le chemin spécialisé ; retirer les portions terrestres historiques devenues redondantes après validation de la parité ».
 **Sortie** : *un renderer produit principal par domaine, pas une nouvelle option permanente parmi cinq compromis.*
@@ -51,8 +51,12 @@ au-dessus de 1,6 ms dans les mesures de J4.
 2. **Le découpage du noyau des nuages (J5-1)** avant la généralisation, ou la généralisation d'abord ?
 3. **Le repli tracé de la Terre (J5-R)** : le retirer une fois la parité vérifiée, ou le garder comme filet des GPU faibles ?
 
-**Réglées provisoirement le 15 novembre, selon les recommandations du plan — révisables par Sam** : 1. aucune décision d'image prise : les
-planches et les chiffres sont produits (J5-0), le choix reste à Sam ; 2. J5-1 avant la généralisation ; 3. le repli gardé jusqu'à sa décision.
+**Réglées provisoirement le 15 novembre, selon les recommandations du plan — révisables par Sam** : 1. **l'image gardée telle quelle** —
+le seuil des petits arbres à 2,5 px (4 px : −0,7 ms, sous 1 ms, règle 1 ; 6 px : −1,75 ms mais la forêt lointaine s'éclaircit) ; le MSAA
+de l'appareil à 4× (1× : ≈ −3,4 ms au cockpit, mais des bords en escalier) ; la houle en pleine résolution (demi-résolution : −0,5 / −0,7,
+non gardée) ; 2. J5-1 rangé (présence ~2,7 ms sous orage seulement) ; 3. le repli tracé gardé ; **J5-R** : les anciens chemins des réglages
+provisoires de J3 et J5 (`TUNE_SKYFLAT_DIM`, `TUNE_SHIP_SCENERY_SHADOW`, `treeShadowCut`…) retirés **à la confirmation de Sam** (la règle de
+J3-R) ; les leviers de mesure restent.
 
 ## 4. Non vérifié
 
