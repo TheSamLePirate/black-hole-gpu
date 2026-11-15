@@ -37,7 +37,7 @@ test("the card's lines and the fixes by role: Marseille's ILS 31R; San Francisco
   const a = ksfo.find((x) => x.id === "I28R")!;
   const fx = approachFixes(
     a,
-    a.transitions.find((t) => t[0]?.fix === "ARCHI"),
+    a.transitions.find((t) => t[0]?.fix === "ARCHI") ?? null,
   );
   expect(fx.map((f) => `${f.role} ${f.name}`)).toEqual([
     "IAF ARCHI",
