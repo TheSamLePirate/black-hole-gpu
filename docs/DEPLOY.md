@@ -62,8 +62,8 @@ Portainer (stack "kerr", from the `deploy` branch, polling) ─► new commit �
   output. `bun run check:push` runs it on HEAD; `KERR_SKIP_CHECKS=1 git push` skips it in an emergency (the CI
   still judges). The unit tests stay with the CI.
 - **The binaries' guard** (`scripts/check-repo-size.ts`): each binary blob a commit adds or rewrites fails past
-  8 MB, a warning when they come to 20 MB together; the binaries Git tracks warn past 560 MB and fail past
-  600 MB in all; the LFS objects warn past 800 MB. Its budgets are raised in that file, in the change that
+  8 MB, a warning when they come to 20 MB together; the binaries Git tracks warn past 650 MB and fail past
+  700 MB in all (560 / 600 until 15 Nov 2026, raised by Sam, audit QA-03); the LFS objects warn past 800 MB. Its budgets are raised in that file, in the change that
   needs it.
 - **The Pages deployment tried twice**: Pages sometimes stalls in `syncing_files` (2026-11-06: 10 min, against
   the usual 30 s for the same 881 MB); the `deploy` job's first try times out at 15 min, then a second one from

@@ -56,7 +56,7 @@ refuses another `basisu` version).
 ## The guards
 
 - **`bun scripts/check-repo-size.ts [--base <rev>]`** — every binary Git tracks at HEAD (Git's own
-  detection: `git ls-files --eol`), summed: a warning past 560 MB, a failure past 600 MB. With a base,
+  detection: `git ls-files --eol`), summed: a warning past 650 MB, a failure past 700 MB (560 / 600 until 15 Nov 2026, raised by Sam's decision, audit QA-03). With a base,
   each binary blob the change adds or rewrites: a failure for one over 8 MB, a warning when they come
   to more than 20 MB together. Locally, before a push: `bun scripts/check-repo-size.ts --base origin/main`.
   The CI runs it with `--base HEAD^1` (a pull request against its base; a push, its last commit
@@ -91,7 +91,7 @@ pointer, the object goes to GitHub's LFS store.
   keyed by their ids and runs `git lfs pull` — the objects are downloaded only when they change
   (GitHub's LFS bandwidth quota).
 - **The guard**: `check-repo-size.ts` counts the LFS objects apart (a warning past 800 MB: GitHub's LFS
-  quotas) — they are not in the Git binaries' 600 MB.
+  quotas) — they are not in the Git binaries' 700 MB.
 - **The history**: the objects committed before the switch stay in Git's history (about 96 MB); taking
   them out means rewriting main's history (`git lfs migrate import --everything`) and a force-push —
   not done.
@@ -111,5 +111,6 @@ yet**: which of Sam's servers and under which URL, how the CI and the lab machin
 fetch them (the `manifest.json` above, hashes checked), and which families leave Git first, are for the lot that does it.
 The rule kept: a file once published is never replaced nor deleted (an older commit, an A/B between commits, still names
 it). The trigger is the Git budget, not only Pages': on
-10 November the tracked binaries come to 591.6 MB of the 600 MB that `check-repo-size` allows — the next asset lot
-that adds more than ≈ 8 MB fails the pre-push hook and the CI. Until then, a new heavy binary goes to Git LFS.
+10 November the tracked binaries came to 591.6 MB of the 600 MB that `check-repo-size` allowed; on 15 November to 600.0 MB, a
+140 KB capture refused at the push. Sam raised the budget to 700 MB (warning at 650) the same day (audit QA-03): a respite of
+100 MB, not a plan — Pages still caps the site at 1 GB. Until the plan above is built, a new heavy binary goes to Git LFS.

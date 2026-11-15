@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-15 08:28 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-15 08:35 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous.
@@ -7579,3 +7579,13 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
 - Preuves : statiques (tsc, biome, `check-wgsl` 84/84, tests des noyaux) ; le chemin gardé est celui mesuré (−7,4 ms).
 - Limites : la cible de 40 ms du mini n'est pas atteinte (~48 ms) ; aucune voie sans perte d'image au-dessus de 1 ms connue à ce jour.
 - Suite : J0 de contrôle ; la reconstruction des pixels laissés (pour J5-6) à reprendre avec un témoin positif.
+
+### 2026-11-15 08:35 UTC — Décisions de Sam (15 nov.) sur l'audit en attente : QA-03, QA-06, NET-31, QA-23
+
+- **QA-03 — « plafond à 700 Mo »** : les binaires suivis étaient à 600,0 Mo, le budget, et une capture de 140 Ko avait été refusée au push.
+  `scripts/check-repo-size.ts` passe à 650 Mo d'alerte et 700 Mo d'échec (la raison écrite au même endroit) ; ASSETS.md et DEPLOY.md.
+  C'est un sursis de 100 Mo, pas un plan : Pages plafonne toujours le site à 1 Go, et la sortie de Git décrite dans ASSETS.md n'est pas
+  construite.
+- **QA-06 — « git revert suffit »** : pas de retour de Pages par commit.
+- **NET-31 (le port 3001 publié) et QA-23 (les licences d'assets) — « plus tard »** : rien de changé.
+

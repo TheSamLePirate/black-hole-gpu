@@ -15,8 +15,10 @@ import { $ } from "bun";
 
 const MAX_FILE_MB = 8;
 const WARN_ADDED_MB = 20;
-const WARN_TOTAL_MB = 560;
-const MAX_TOTAL_MB = 600;
+// (raised from 560 / 600 on 15 Nov 2026 — Sam: « plafond à 700 Mo » (audit QA-03): the binaries at 600.0 MB, a 140 KB capture refused at
+// the push. A respite, not a plan: Pages caps the site at 1 GB; the plan out of Git is docs/ASSETS.md's, not built yet)
+const WARN_TOTAL_MB = 650;
+const MAX_TOTAL_MB = 700;
 const WARN_LFS_MB = 800;
 
 const arg = (k: string) => {
