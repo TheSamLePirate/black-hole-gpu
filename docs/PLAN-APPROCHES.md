@@ -19,7 +19,12 @@ d'approches n'est plus gardé pour la session. **AP10a fait** : la campagne pure
 [ap10-campaign.md](progress/approches/ap10-campaign.md)) sur les 66 914 extrémités du monde — toutes avec une approche ; deux défauts
 corrigés : une approche réelle n'est plus refusée par le contrôle de pente (94 l'étaient, sur le relief grossier), l'altitude d'un seuil
 sous le relief de plus de 150 m prise au relief (OurAirports à 0 m) ; les refus restants comptés et compris (relief grossier : canyons,
-falaises, plateaux). Suite : AP10b (l'échantillon volé), AP-R (retraits). AP6a : le crew — actions `app.*` (tous les
+falaises, plateaux). **AP10b fait** : l'échantillon volé (`approach-sample.e2e`, tiré de la campagne : une extrémité typique par
+catégorie) — F-35 **9/9 posés sur la piste** (ILS, LDA, renumérotée, construite, approchée, en herbe, en altitude, en montagne, courte) ;
+A320 4/5 et un refus motivé (KTNX, construite, relief) — **OIFK 11 rouge** : rebond sur un relief bosselé, ROLL OUT en l'air (corrigé :
+la remise de gaz) puis le second passage non stabilisé ([PROBLEMES](PROBLEMES-A-REGLER.md)) ; trois correctifs : la pente d'une
+construite raidie (3,25…4,5°) au-dessus d'un sol qui monte, la campagne jugée sur le relief du jeu, l'A320 qui remet les gaz sur un
+rebond (manettes TOGA, LVR CLB, TOGA LK relâché). Question 4 (§9) posée. Suite : AP-R (retraits). AP6a : le crew — actions `app.*` (tous les
 postes), boîte APP (approches réelles et construites, transition, Choisir/Auto/Armer/Remise de gaz, état choisi/volé), l'état de
 l'approche et celle de l'A320 dans la télémétrie, le DME corrigé. AP6b : les terrains et l'approche au radar et au ND
 du crew (touchés, ils la choisissent), la vue « Approche » (plan, repères, profil), les appels de l'approche dits à l'équipage. Non
@@ -379,3 +384,10 @@ captures montrées dans T3, ses docs, une entrée au journal.
 2. ~~AP7 : la touche de « toutes les pistes » et le défaut du réglage~~ — **décidé le 15 nov. : activé par défaut ; bascule par
    la roue et le Labo, sans touche** (les touches de vol presque toutes prises).
 3. ~~AP6 : quels postes du crew peuvent armer une approche~~ — **décidé le 15 nov. : tous les postes.**
+4. **AP10 (ouverte) : sur quel relief juger la pente d'une approche construite ?** Le jeu la juge sur le relief qu'il a — avant les
+   tuiles fines, la carte mondiale **et son détail procédural** (`terrain.ts` `earthDetail`) : la campagne compte alors 8 559 extrémités
+   construites refusées, 360 terrains du F-35 sans extrémité volable (203 de l'A320) ; sur la carte seule, 3 740 et 92. Le détail
+   n'est pas une donnée : il refuse des approches et fait des bosses avant le seuil (le rebond de l'A320 à OIFK). Recommandation : juger
+   la pente (et la hauteur sur le sol des guidages) sur le relief des données seul — tuiles ou carte, sans le détail —, et aplanir le
+   détail sous la trouée d'approche des pistes du monde comme sous la piste elle-même (domaine du rendu : `terrain.ts`, à confier à sa
+   session).

@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-15 22:00 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-15 22:23 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous. Ce qui est fermé quitte le tableau « En cours » pour la ligne « Fermé récemment ».
@@ -47,7 +47,7 @@ J4 (fermé, sortie non atteinte), J5 et J6 (fermés).
 |---|---|---|
 | Rendu (33d89754) | J4 / J5 — l'eau, les volumes, la généralisation | **fermés** ([PLAN-J4](docs/PLAN-J4-VOLUMES.md), [PLAN-J5](docs/PLAN-J5-GENERALISATION.md)) : l'eau à demi-rythme (J5-5, −6,0 à −6,4 ms, l'image la même) ; le sol à demi-rythme laissé au joueur (J5-6, réglage « demi » : −1,9 à −3,2 ms ; « auto » à chaque pixel) ; la FFT de la mer en deux passes (−0,9 ms) ; la carte d'ombre des arbres (−2,8 ms, forêt) ; Sam a refusé les arbitrages d'image (MSAA 1×, petits arbres, nuages amortis). Postes lourds restants : l'eau 16,2, les nuages d'orage 16,5, le décor d'une forêt ~7 ms |
 | Rendu (33d89754) | Mesures tenues | la borne du M1 Max **à 30** : essayée à 40 le 15 au soir, non tenue (frais 32,3 / 35,4, soutenu 26,4 images/s ; un second soutenu à refaire, ce Mac libre — [J0-CONTRAT §2](docs/J0-CONTRAT.md)) ; le coût de l'appareil 3,5–4,5 ms, dont le MSAA 4× 4–5 ms (gardé) |
-| PLAN-APPROCHES (1feb2f7f) | [PLAN-APPROCHES](docs/PLAN-APPROCHES.md) | **AP0 à AP9 et AP10a faits (15 nov.)** : données réelles, choix, jonction, A320, carte, radar, TSD, crew, HUD, directeur de vol, roue, options, audio ; AP10a : la campagne sur les 66 914 extrémités du monde (toutes avec une approche ; 92 terrains du F-35 sans extrémité volable, sur le relief grossier), deux défauts corrigés. **Reste : AP10b (échantillon volé), AP-R (retraits)** |
+| PLAN-APPROCHES (1feb2f7f) | [PLAN-APPROCHES](docs/PLAN-APPROCHES.md) | **AP0 à AP10 faits (15 nov.)** : données réelles, choix, jonction, A320, carte, radar, TSD, crew, HUD, directeur de vol, roue, options, audio, campagne mondiale (66 914 extrémités, toutes avec une approche) et échantillon volé (F-35 9/9 sur la piste, A320 4/5 et un refus motivé, **OIFK rouge** — PROBLEMES). **Question 4 à Sam** : le relief sur lequel juger les pentes construites (avec ou sans le détail procédural : 360 ou 92 terrains refusés). **Reste : AP-R (retraits)** |
 | Audit vagues 3–4 et 6 (1feb2f7f) | [09-priorites-todo](docs/audit-2026-11-10/09-priorites-todo.md) | **faits** : 3.1–3.2 réseau (RD0–RD2), 3.3 sauvegardes (une clé par sauvegarde ; avion, systèmes des vaisseaux et de l'A320 — ce dernier par J6-4), 3.4–3.5 vol, 3.6–3.7 TARS, 3.10 e2e honnêtes, 4.2 temps et onglet masqué, 4.3 `Settings`/`ViewPose`, 4.8 `main()` découpé ; vague 6 hors rendu (QA, AR, RD4/RD5, FX). **Reste** : l'état d'une mission ou d'un combat (Sam), IndexedDB et l'autosauvegarde hors frame (AR-05), FX-19 (fraîcheur des écrans, à mesurer), FX-21 |
 
 **Fermé récemment** : **J3** (15 nov., confirmé par Sam ; J3-R fait 20:48) ; **le repli du raster vers le tracé retiré** (15 nov., 20:48, décision (b)) ; **PLAN-J6** (15 nov., 20:35 : les neuf parcours en e2e, sept défauts corrigés) ; l'eau étagée E1 (−1,55 ms) et E2 (−0,5 ms), E3 non ouvert ; la classification lot 1 (sur terre −1,15 ms), lot 2 non ouvert
@@ -8381,3 +8381,27 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
 - Limites : un seul vol soutenu valable sur les deux demandés par Sam ; la machine n'a jamais été froide ce soir (départs à ~900 MHz,
   ~80 °C) ; ce Mac est partagé avec un autre projet GPU (threeRTearth) — une mesure ici doit vérifier qu'il ne tourne pas.
 - Suite : la borne reste à 30 sur le M1 Max ; le second vol soutenu à 40, ce Mac libre, ne changerait la valeur que s'il tenait 40.
+
+### 2026-11-15 22:23 UTC — PLAN-APPROCHES AP10b : l'échantillon volé de la campagne ; trois correctifs, un problème ouvert, une question à Sam
+
+- Contribution à la destination : §19 (la fonction tient sur des terrains pris au hasard du monde, pas seulement les essayés) ; une
+  campagne et un échantillon qui la vole, tirés l'un de l'autre.
+- Réalisé : `tests/e2e/approach-sample.e2e.test.ts` — une extrémité typique par catégorie, tirée de la campagne
+  (`docs/progress/approches/ap10-sample.json`, `--sample`), volée par le F-35 (ici) ou l'A320 (`APS_CRAFT`, kerr-mini) en pas fixes,
+  **deux images tous les 5 s** (les pistes du monde mesurées comme en jeu — sans elles, une boucle de pas synchrone visait le niveau des
+  données, plus bas que le relief : quatre touchers 130 à 610 m avant le seuil, à −4,5…−6,4 m/s, l'A320 en ROLL OUT à 100 m) ; correctifs :
+  (1) une approche **construite** au-dessus d'un sol qui monte prend la première pente dégagée de 3,25 à 4,5° (`runwayOfApproach`) ;
+  (2) la campagne juge avec l'échantillonneur du jeu (la carte, son détail procédural, le géoïde — `earthHeightSampler`) ;
+  (3) l'A320 qui rebondit en ROLL OUT (les roues décollées à plus de 50 ft) remet les gaz comme un équipage (manettes TOGA ; CL au « LVR
+  CLB » ; le TOGA LK de l'alpha floor relâché) — il montait à 6 km sans guidage ; `ilsLast` effacé avant chaque vol de l'échantillon.
+- Preuves (observé) : F-35 **9/9** sur la piste, ici (M1 Max) — KPHX 07L ILS 20/20, PASI 11 LDA 16,6, LFLL 17L renumérotée 20, OEKF 33R
+  construite 20 (574 m, −1,07 m/s), UHWV 03 approchée 20, SSWF 19 herbe 20, KRTN 20 altitude 17 (314 m, −2,87), OAMS 24L montagne 20,
+  PAKP 20 courte 20 ; A320 sur kerr-mini : KRDU 23L ILS 20/20 (411 m, −0,26), LFPO 25 renumérotée 20, OETN 15 construite 20, KTNX 15
+  refusée (construite, relief — accepté, dit), **OIFK 11 non posé** (rebond, remise de gaz, second passage non stabilisé —
+  [PROBLEMES](docs/PROBLEMES-A-REGLER.md)). Campagne refaite sur le relief du jeu : 66 914 extrémités, construites refusées 8 559
+  (3 740 sur la carte seule), réelles contredites 645 (volées), terrains du F-35 sans extrémité volable 360 (92), de l'A320 203 (36).
+  Tests unitaires : le raidissement (colline : 4,5°, plat : 3°), `approach-choice` 10/10, A320 7/7.
+- Non vérifié : le correctif du rebond ailleurs qu'à OIFK ; l'échantillon avec les tuiles fines.
+- Limites, décision attendue : **question 4 à Sam** (PLAN-APPROCHES §9) — juger les pentes construites sur le relief des données seul et
+  aplanir le détail sous les trouées d'approche (recommandé ; domaine du rendu), ou garder le juge actuel.
+- Suite : AP-R (les retraits) ; OIFK après la décision.

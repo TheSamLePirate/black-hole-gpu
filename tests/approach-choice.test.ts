@@ -157,3 +157,21 @@ test("the runway's level: the data's, unless the relief stands over it by more t
   expect(at(149)).toBe(0);
   expect(at(205)).toBe(205);
 });
+
+test("a built approach over rising ground steepened (3.25…4.5°): a hill 1 km before the threshold; flat ground: 3° kept (AP10b)", async () => {
+  const { runwayOfApproach } = await import("../src/controller/approach");
+  const { onRunway } = await import("../src/game/ils");
+  const f = field([rwy("05", "23", 50)]);
+  const a = approachesOf(f, []).find((x) => x.source === "built")!;
+  const flat = runwayOfApproach(f, a, () => f.elev);
+  expect(flat.glide).toBe(a.angle);
+  // (a hill 50 m over the threshold, 700–1 300 m before it, across ±400 m)
+  const hill = (lat: number, lon: number) => {
+    const o = onRunway(flat, { lat, lon, alt: 0 });
+    return Math.abs(o.along + 1000) < 300 && Math.abs(o.across) < 400 ? f.elev + 50 : f.elev;
+  };
+  const steep = runwayOfApproach(f, a, hill);
+  console.log(`  over the hill: ${steep.glide}°`);
+  expect(steep.glide!).toBeGreaterThan(3);
+  expect(steep.glide!).toBeLessThanOrEqual(4.5);
+});

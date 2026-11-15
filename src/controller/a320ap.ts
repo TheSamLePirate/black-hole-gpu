@@ -297,6 +297,16 @@ function a320AppStep(c: CameraController, F: Fmgc, i: FmgcIn, onWheels: boolean)
   syncRunwayLevel(W);
   c.a320Ils = W;
   const o = onRunway(W, g);
+  // (the crew's hands on the levers — PLAN-APPROCHES AP10b: OIFK's built 11, a late flare over a lumpy relief, a bounce — ROLL OUT with
+  // the wheels off, the alpha floor's TOGA LK —, the A320 climbed to 6 km in ROLL OUT with no guidance: a bounce over 50 ft goes around,
+  // the levers to TOGA (its FMGC's GA TRK, SRS; the approach rounds again); the levers back to CL when it asks (LVR CLB); a TOGA LK
+  // let go once out of the alpha floor — the A/THR off, armed again below)
+  if (!onWheels && F.vert === "ROLL OUT" && (i.ra ?? Number.POSITIVE_INFINITY) > 50) {
+    c.pilot.throttle = 1;
+    A.touch = null;
+  }
+  if (F.thrust === "LVR CLB") c.pilot.throttle = 0.62;
+  if (F.thrust === "TOGA LK" && !i.alphaFloor) F.athrToggle();
   // (on the wheels: the touchdown measured once; stopped, the approach over — its grade where the F-35's is kept)
   if (onWheels) {
     if (!A.touch) A.touch = { along: o.along, across: o.across, vs: g.vs };

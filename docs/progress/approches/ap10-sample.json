@@ -1,0 +1,142 @@
+[
+ {
+  "cat": "ILS",
+  "craft": "f35",
+  "field": "KPHX",
+  "end": "07L",
+  "kind": "ILS",
+  "source": "cifp",
+  "len": 3162,
+  "elev": 338
+ },
+ {
+  "cat": "LDA/SDF/IGS",
+  "craft": "f35",
+  "field": "PASI",
+  "end": "11",
+  "kind": "LDA",
+  "source": "cifp",
+  "len": 1987,
+  "elev": 6
+ },
+ {
+  "cat": "renumbered",
+  "craft": "f35",
+  "field": "LFLL",
+  "end": "17L",
+  "kind": "ILS",
+  "source": "navdat",
+  "len": 2666,
+  "elev": 238
+ },
+ {
+  "cat": "built",
+  "craft": "f35",
+  "field": "OEKF",
+  "end": "33R",
+  "kind": "VIS",
+  "source": "built",
+  "len": 3702,
+  "elev": 742
+ },
+ {
+  "cat": "approx",
+  "craft": "f35",
+  "field": "UHWV",
+  "end": "03",
+  "kind": "VIS",
+  "source": "built",
+  "len": 2500,
+  "elev": 37
+ },
+ {
+  "cat": "not paved",
+  "craft": "f35",
+  "field": "SSWF",
+  "end": "19",
+  "kind": "VIS",
+  "source": "built",
+  "len": 1200,
+  "elev": 435
+ },
+ {
+  "cat": "high (> 1 500 m)",
+  "craft": "f35",
+  "field": "KRTN",
+  "end": "20",
+  "kind": "VIS",
+  "source": "built",
+  "len": 1915,
+  "elev": 1936
+ },
+ {
+  "cat": "mountain (+1 000 m within 20 km)",
+  "craft": "f35",
+  "field": "OAMS",
+  "end": "24L",
+  "kind": "VIS",
+  "source": "built",
+  "len": 2986,
+  "elev": 382
+ },
+ {
+  "cat": "short (< 1 500 m)",
+  "craft": "f35",
+  "field": "PAKP",
+  "end": "20",
+  "kind": "VIS",
+  "source": "built",
+  "len": 1460,
+  "elev": 812
+ },
+ {
+  "cat": "ILS",
+  "craft": "a320",
+  "field": "KRDU",
+  "end": "23L",
+  "kind": "ILS",
+  "source": "cifp",
+  "len": 2289,
+  "elev": 131
+ },
+ {
+  "cat": "renumbered",
+  "craft": "a320",
+  "field": "LFPO",
+  "end": "25",
+  "kind": "ILS",
+  "source": "navdat",
+  "len": 3320,
+  "elev": 87
+ },
+ {
+  "cat": "built",
+  "craft": "a320",
+  "field": "OETN",
+  "end": "15",
+  "kind": "VIS",
+  "source": "built",
+  "len": 2453,
+  "elev": 6
+ },
+ {
+  "cat": "high (> 1 500 m)",
+  "craft": "a320",
+  "field": "KTNX",
+  "end": "15",
+  "kind": "VIS",
+  "source": "built",
+  "len": 3657,
+  "elev": 1668
+ },
+ {
+  "cat": "mountain (+1 000 m within 20 km)",
+  "craft": "a320",
+  "field": "OIFK",
+  "end": "11",
+  "kind": "VIS",
+  "source": "built",
+  "len": 2699,
+  "elev": 1056
+ }
+]

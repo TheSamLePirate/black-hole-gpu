@@ -362,7 +362,7 @@ function pick(
 export function runwayOfApproach(f: Airfield, a: Approach, ground: (lat: number, lon: number) => number = groundMsl): IlsRunway {
   const rw = f.runways.find((r) => r.le === a.rwy || r.he === a.rwy);
   const under = ground(a.thr.lat, a.thr.lon);
-  return {
+  const W: IlsRunway = {
     name: f.name,
     icao: f.icao || f.ident,
     lat: a.thr.lat,
@@ -374,6 +374,15 @@ export function runwayOfApproach(f: Airfield, a: Approach, ground: (lat: number,
     // (its published slope — Marseille's 31R at 4°: checked against the relief at 3° it was refused, 15 Nov 2026 —; flown at it)
     glide: a.angle,
   };
+  // (a built approach over rising ground: steepened, as a visual approach over obstacles is — the first slope of 3.25…4.5° clear of the
+  // relief known; at 3° the F-35 touched the ground 300–600 m before the threshold at OEKF, OAMS, PAKP — the campaign's sample, AP10b)
+  if (a.source === "built" && glideClearance(W, ground).thin)
+    for (let g = 3.25; g <= 4.5 + 1e-9; g += 0.25)
+      if (!glideClearance({ ...W, glide: g }, ground).thin) {
+        W.glide = g;
+        break;
+      }
+  return W;
 }
 
 /** The ground's height over the sea at a place [m] (the relief over the ellipsoid less the geoid; the sea 0). */

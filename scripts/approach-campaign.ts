@@ -9,20 +9,20 @@
 //     1 500 m over the threshold or 600 m over the relief there —: its entry, whether its last floor stands over the glideslope at
 //     the join (the slope met late, below a ridge), its points over their legs' ground;
 //   - the craft that can land there: the F-35 (1 500 m, a hard surface), the A320 (2 000 m, paved).
-// The relief is the world map's (assets/earth/relief-high.bin, some 2 km a texel), not the fine tiles flown over: a coarse judge,
-// said as such. Out: docs/progress/approches/ap10-campaign.json (every end) and ap10-campaign.md (the table, the refusals by
+// The relief is the world map's (assets/earth/relief-high.bin, some 2 km a texel) with the game's procedural detail (terrain.ts
+// earthHeightSampler without tiles) — what the game judges on before the fine tiles flown over come: a coarse judge, said as such. Out: docs/progress/approches/ap10-campaign.json (every end) and ap10-campaign.md (the table, the refusals by
 // reason, the worst cases).
 //
-//   bun scripts/approach-campaign.ts [--limit N] [--only ICAO,…]
+//   bun scripts/approach-campaign.ts [--limit N] [--only ICAO,…] [--sample]   (--sample: ap10-sample.json picked again — the e2e's)
 
 import { readdirSync } from "node:fs";
 import { planJoin, PLAN } from "../src/game/approach-plan";
 import { fromRunway, glideClearance, glideHeight, type IlsRunway } from "../src/game/ils";
 import { loadGeoid } from "../src/system/geoid";
-import { geoidAt, geoidDeg } from "../src/system/geoid-grid";
+import { geoidDeg } from "../src/system/geoid-grid";
 import { loadHeights } from "../src/system/heights-file";
 import { bodyFixedOf, groundRelief, setGroundHeights } from "../src/system/our-surface";
-import { mapHeightSampler } from "../src/terrain";
+import { earthHeightSampler } from "../src/terrain";
 import { type Approach, approachesOf, decodeApproachTile } from "../src/world/approaches";
 import { type Airfield, decodeTile } from "../src/world/runways";
 import { runwayOfApproach } from "../src/controller/approach";
@@ -35,8 +35,10 @@ const fileGet = async (u: string) => new Response(Bun.file(u.replace(/^.*?assets
 // (the geoid and the relief: the sea's height over the ellipsoid, the ground's — the world map, no detail)
 await loadGeoid((u) => fileGet(u));
 const H = await loadHeights("assets/earth/relief-high.bin", fileGet);
-const fromMap = mapHeightSampler(H.map, H.W, H.H);
-setGroundHeights("earth", (q) => Math.max(fromMap(q), 0) + geoidAt(q));
+// (the game's own sampler without its tiles — the map, its detail, the geoid —: the relief the game judges a slope on before the fine
+// tiles come; the map's texels alone said Raton's 20 clear, the game refused it, AP10b)
+const sampler = earthHeightSampler(H.map, H.W, H.H);
+setGroundHeights("earth", (q) => sampler(q));
 const groundMsl = (lat: number, lon: number) => Math.max(groundRelief("earth", bodyFixedOf("earth", lat, lon, 0)) - geoidDeg(lat, lon), 0);
 
 // the approach tiles: their records and the FAA's, by field
@@ -242,6 +244,47 @@ const total = {
   vectors: rows.filter((r) => r.joins.some((j) => j.entry === "vectors")).length,
   seconds: Math.round(secs),
 };
+// the sample to fly (AP10b — tests/e2e/approach-sample.e2e.test.ts): per category, one end whose slope is clear, the longest runway
+// among them (a field with an ICAO code); the F-35's where it may land (paved, 1 500 m — the short and unpaved ones the F-35 asked
+// all the same: its choice says why), the A320's (2 000 m, paved)
+const SAMPLE_F35 = [
+  "ILS",
+  "LDA/SDF/IGS",
+  "renumbered",
+  "built",
+  "approx",
+  "not paved",
+  "high (> 1 500 m)",
+  "mountain (+1 000 m within 20 km)",
+  "short (< 1 500 m)",
+];
+const SAMPLE_A320 = ["ILS", "renumbered", "built", "high (> 1 500 m)", "mountain (+1 000 m within 20 km)"];
+const used = new Set<string>();
+const pickOf = (cat: string, craft: "f35" | "a320") => {
+  const free = cat === "not paved" || cat === "short (< 1 500 m)";
+  // (a typical end: a plausible length — OurAirports has a 74 658 m « runway » (VAAM) —, the median by code, a field not used yet)
+  const [lo, hi] = cat === "short (< 1 500 m)" ? [900, 1499] : cat === "not paved" ? [1200, 2500] : [1800, 4000];
+  const R = rows
+    .filter(
+      (r) =>
+        r.cats.includes(cat) &&
+        r.outcome === "ok" &&
+        /^[A-Z]{4}$/.test(r.field) &&
+        !used.has(`${r.field}:${craft}`) &&
+        r.len >= lo &&
+        r.len <= hi &&
+        (craft === "a320" ? r.a320 : free || r.f35),
+    )
+    .sort((a, b) => a.field.localeCompare(b.field) || a.end.localeCompare(b.end));
+  const r = R[R.length >> 1];
+  if (!r) return null;
+  used.add(`${r.field}:${craft}`);
+  return { cat, craft, field: r.field, end: r.end, kind: r.kind, source: r.source, len: r.len, elev: r.elev };
+};
+if (args.includes("--sample") && !only && limit === Number.POSITIVE_INFINITY) {
+  const sample = [...SAMPLE_F35.map((c) => pickOf(c, "f35")), ...SAMPLE_A320.map((c) => pickOf(c, "a320"))].filter(Boolean);
+  await Bun.write("docs/progress/approches/ap10-sample.json", `${JSON.stringify(sample, null, 1)}\n`);
+}
 const refusedReal = rows.filter((r) => r.outcome === "warned").sort((a, b) => a.clear - b.clear);
 const out = {
   date: new Date().toISOString(),
@@ -255,7 +298,7 @@ await Bun.write("docs/progress/approches/ap10-campaign.json", `${JSON.stringify(
 const md = [
   `# AP10 — la campagne sur toutes les pistes (${out.date.slice(0, 16).replace("T", " ")} UTC)`,
   "",
-  `Produit par \`bun scripts/approach-campaign.ts\` — relief : la carte mondiale (relief-high.bin, ~2 km le texel), sans les tuiles fines : un juge grossier.`,
+  `Produit par \`bun scripts/approach-campaign.ts\` — relief : la carte mondiale (relief-high.bin, ~2 km le texel) et le détail procédural du jeu, sans les tuiles fines : un juge grossier, celui du jeu avant l'arrivée des tuiles.`,
   "",
   `**${total.ends} extrémités**, toutes avec une approche (${total.real} réelles, ${total.ends - total.real} construites) ; pente dégagée ${total.ok}, mince ${total.thin}, construite écartée « relief » ${total.relief}, construite refusée (la pente rencontre le relief) ${total.refused}, réelle volée comme publiée malgré la carte du relief ${total.warned} ; jonction dont le dernier palier dépasse la pente à 16 km : ${total.floorOver} ; un point de jonction à moins de 290 m du sol : ${total.joinUnder290} ; en ${total.seconds} s.`,
   "",

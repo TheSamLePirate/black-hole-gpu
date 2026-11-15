@@ -3,6 +3,18 @@
 Problèmes constatés, pas encore réglés. Chaque entrée : la date (UTC), ce qui est mesuré ou observé et sa source, la cause
 connue ou supposée, la piste. Une entrée réglée est barrée avec le commit qui la règle, pas effacée.
 
+## L'A320 ne se repose pas à OIFK 11 après un rebond (relevé le 15 novembre 2026, e2e `approach-sample`, APS_CRAFT=a320, kerr-mini)
+
+Observé : l'approche construite d'OIFK 11 (Kerman, 1 056 m, montagnes à 20 km), sans tuiles fines ; arrondi à 13 m au lieu de 15 (le sol
+monte sous la finale : 12, 22, 17 m d'un instant à l'autre), contact, ROLL OUT, rebond ; la pente de trajectoire à +20°, l'alpha floor
+et son TOGA LK. Avant le correctif d'AP10b, l'A320 montait à 6 km en ROLL OUT, sans guidage. Désormais : remise de gaz (manettes TOGA,
+GA TRK/SRS), nouveau tour ; mais le second passage arrive au-dessus de la pente (OP DES à −8°), traverse le faisceau sans capter le G/S,
+ALT* à 168 m du sol, puis OP CLB — pas posé en 20 min. Cause supposée : (1) le détail procédural du relief (`earthDetail`) sous la
+trouée d'approche — des bosses de 10 à 50 m avant le seuil d'une piste aplanie ; (2) la jonction refaite après une remise de gaz
+au-dessus de la piste (`joinFrom` depuis l'axe, l'altitude de la remise de gaz gardée) trop haute pour une capture du G/S par en
+dessous. Piste : la question 4 de PLAN-APPROCHES §9 (le relief sans détail sous la trouée) ; une jonction après remise de gaz qui
+redescend sous le faisceau avant l'interception.
+
 
 ## ~~La vue « Les aurores sur les fjords des Lofoten » volée en plein jour quand la date du jeu est en été~~ (relevé le 14 novembre 2026, e2e `s2-views`) — réglé le même jour
 
