@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-16 05:05 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-16 05:31 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous. Ce qui est fermé quitte le tableau « En cours » pour la ligne « Fermé récemment ».
@@ -8500,3 +8500,18 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   `runwayGrade` — 3 km avant le seuil aujourd'hui —, `renderer.ts` `prewarm*`). Aucun test, e2e ni mesure lancé.
 - Limites : les causes des à-coups sont celles relevées par J6, non rétablies ; l'écart jour/nuit du mini (~48 contre 44,8 ms) non expliqué.
 - Suite : la session du rendu ouvre J7-0 ; Sam peut réviser les trois questions.
+
+### 2026-11-16 05:31 UTC — PLAN-J7 J7-0 : la sonde des à-coups et la fiche des parcours
+
+- Contribution à la destination : §19 (l'expérience entière : les images bloquées comptées et attribuées, pas seulement la cadence) ;
+  PLAN-J7 J7-0, qui juge J7-2 et J7-3.
+- Réalisé : `tests/e2e/lib/hitch-probe.ts` (chaque écart rAF > 50 ms, sa cause par l'état avant/après : compilation, thread principal,
+  collection, tuiles, journal, vue, mode, rendu hors ligne, appareil, GPU), `E2E_HITCH=1` dans `App.boot` (23ea4135) ; e2e de témoins
+  `hitch-probe` ; la [fiche](docs/progress/j7/FICHE-A-COUPS-2026-11-16.md) des neuf parcours de J6.
+- Preuves (mesuré, kerr-mini) : témoins — 200 ms injectées vues et attribuées au thread principal, A/A sans écart > 100 ms (run
+  `20261116-060710-hitch-probe`) ; parcours — run `20261116-060822-j7-hitches` (12/13). Les à-coups de la météo et du retour par F1 ne se
+  reproduisent pas sur ce passage ; les plus gros : le premier noyau de la scène 433–784 ms, le changement d'appareil ~200 ms, l'arrivée
+  des données après un placement (GPU 150–290 ms par image), le début du vol, le chargement d'une sauvegarde 417 ms.
+- Limites : une seule passe par parcours ; le cache de shaders du mini peut cacher les compilations « à froid » ; la cause fine des images
+  GPU lentes à l'arrivée des données non lue.
+- Suite : J7-1 (le sol des approches, en vérification) ; proposer à la session d'analyse les à-coups trouvés hors du plan.

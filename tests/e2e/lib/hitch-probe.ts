@@ -1,7 +1,7 @@
 // The hitch probe (PLAN-J7 J7-0): every gap between two animation frames over 50 ms in the page, and what changed across it — its cause read
 // from the steps the game already traces: a tracer compile (renderer.compileLog, compilingNow), a long task of the main thread (the
 // PerformanceObserver's "longtask": a script, a parse, a GC run on it), the JS heap dropping (a collection), the relief's and the
-// photographs' tiles, the game's log (a save, a message), the view (the mount, the craft, the canvas's size), the GPU's device, the GPU
+// photographs' tiles, the game's log (a save, a message), the view (the mount, the game's mode — ship, foot, free, photo —, an offline render, the craft, the canvas's size), the GPU's device, the GPU
 // itself (the frame's GPU time as long as the gap). A gap's longtasks arrive after it (their observer's callback is a later task): a gap
 // is judged 300 ms after, then sent out as a `console.debug("[hitch]…")` line — the Bun side appends it to a file as it comes
 // (tests/e2e/lib/app.ts, E2E_HITCH=1: the probe in every page booted, remote-results/hitches/<test>.jsonl), nothing read at a close.
@@ -30,6 +30,8 @@ export const HITCH_PROBE = `(() => {
       tiles: T ? (T.pending || 0) + (T.orthoPending || 0) : 0,
       log: (b && b.game && b.game.log && b.game.log.events && b.game.log.events.length) || 0,
       mount: b && b.settings ? b.settings.shipMount : "",
+      mode: b && b.mode && b.mode.get ? b.mode.get() : "",
+      offline: !!(R && R.offlineActive),
       craft: b && b.fleet ? b.fleet.active : "",
       gen: b && b.gpu && b.gpu.generation ? b.gpu.generation() : 0,
       gpu: (R && R.lastGpuMs) || 0,
@@ -56,12 +58,14 @@ export const HITCH_PROBE = `(() => {
       causes.push("log: " + ev.join(" | "));
     }
     if (b.mount !== a.mount) causes.push("view " + a.mount + "→" + b.mount);
+    if (b.mode !== a.mode) causes.push("mode " + a.mode + "→" + b.mode);
+    if (b.offline !== a.offline) causes.push(b.offline ? "offline render started" : "offline render ended");
     if (b.craft !== a.craft) causes.push("craft " + a.craft + "→" + b.craft);
     if (b.gen !== a.gen) causes.push("GPU device " + a.gen + "→" + b.gen);
     if (b.size !== a.size) causes.push("resize " + a.size + "→" + b.size);
     if (b.gpu > 0.8 * g.ms) causes.push("GPU " + b.gpu.toFixed(0) + " ms");
     if (!causes.length) causes.push("unknown");
-    const out = { t: +(g.end / 1000).toFixed(2), ms: +g.ms.toFixed(1), causes, mount: b.mount, craft: b.craft };
+    const out = { t: +(g.end / 1000).toFixed(2), ms: +g.ms.toFixed(1), causes, mount: b.mount, mode: b.mode, craft: b.craft };
     H.gaps.push(out);
     if (H.gaps.length > 2000) H.gaps.shift();
     console.debug("[hitch]" + JSON.stringify(out));

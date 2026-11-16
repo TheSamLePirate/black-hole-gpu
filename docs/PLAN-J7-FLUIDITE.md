@@ -86,12 +86,19 @@ des entrées datées ; les causes des à-coups (compilation de la météo, retou
 ## 6. Avancement
 
 - **Le plan** (2026-11-16 05:05 UTC) : écrit par la session d'analyse ; aucun lot ouvert.
-- **J7-0, la sonde et ses témoins** (2026-11-16 06:10 UTC) : `tests/e2e/lib/hitch-probe.ts` — chaque écart rAF > 50 ms et sa cause, lue
+- **J7-0, la sonde et ses témoins** (2026-11-16 05:08 UTC) : `tests/e2e/lib/hitch-probe.ts` — chaque écart rAF > 50 ms et sa cause, lue
   par l'état avant/après (compilation `compileLog`/`compilingNow`, tâche longue du thread principal `longtask`, tas JS en baisse, tuiles,
   journal du jeu, vue, appareil, taille, appareil GPU, temps GPU), jugée 300 ms après et sortie par `console.debug` ; `E2E_HITCH=1` la met dans
   chaque page démarrée (`lib/app.ts`), `remote-results/hitches/<test>.jsonl` (E2E.md). **Témoins passés** (kerr-mini, run
   `20261116-060710-hitch-probe`) : positif — 200 ms injectées vues en un écart de 200 ms, « main thread 200 ms » ; négatif (A/A, vol tenu
-  20 s deux fois) — 1 117 et 1 143 images, aucun > 100 ms, 1 et 0 > 50 ms. La fiche des parcours : en cours.
+  20 s deux fois) — 1 117 et 1 143 images, aucun > 100 ms, 1 et 0 > 50 ms. **J7-0 fait** (05:31 UTC) : [la fiche des à-coups](progress/j7/FICHE-A-COUPS-2026-11-16.md),
+  les neuf parcours (run `20261116-060822-j7-hitches`, 12/13 — `parcours-ville` rouge sur ses bâtiments proches, variance connue), chaque
+  écart > 100 ms attribué (les « inconnus » par leur contexte : la perte injectée, la suite d'un chargement, le mode photo — la sonde lit
+  depuis le mode et le rendu hors ligne —, les tranches de pas du test de l'orbite). **Ce qu'elle dit au plan** : les à-coups de J7-2
+  (météo) et J7-3 (F1) **ne se reproduisent pas** sur ce passage (aucun > 100 ms ; 83 ms au plus au retour par F1) — à rejouer à froid
+  avant de les ouvrir ; les plus gros vus sont ailleurs : le premier noyau de la scène (433–784 ms de thread principal au début de chaque
+  partie) et le changement d'appareil (~200 ms), l'arrivée des données après un placement (images GPU de 150–290 ms des secondes durant),
+  le début du vol (150–217 ms), le chargement d'une sauvegarde (417 ms) — proposés à la session d'analyse.
 - **J7-1, lecture du code avant de l'ouvrir** (2026-11-16 05:10 UTC, session du rendu ; rien changé) — `runwayGrade().x` (le « flat ») a
   quatre lecteurs qui n'ont pas le même coût, d'où : **le couloir d'approche ne doit pas entrer dans `.x`**, mais dans une composante à part,
   lue seulement là où le détail est ajouté :
