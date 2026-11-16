@@ -328,7 +328,7 @@ l'inventaire.
 | Analyse comparative, sources FableFlight et état BH GPU | Lecture statique ; références consignées dans ce plan |
 | Estimations de coût | Proposées, non mesurées ; périmètre et incertitudes au §6 |
 | VB0 à VB8 | Rattachés à PLAN-J8 comme groupe J8-VB. **Décidé par Sam (16 nov., ~18:05 UTC) : portés par la session des approches, VB0–VB1 lancés** ; les lots de dessin se conviennent avec la session du rendu |
-| Données routières BD TOPO | Présentes dans les tuiles déjà téléchargées (une tuile lue, noms des attributs seulement) ; le remplissage est à mesurer en VB0 |
+| Données routières BD TOPO | **VB0 mesuré** (session des approches, 16 nov. ~18:20 UTC, [FICHE-J8-VB0](progress/j8/FICHE-J8-VB0.md)) : sur les tuiles en cache, Paris 965 tuiles et 230 478 tronçons, Toulon-Hyères 2 192 et 100 874 ; sens, position (ponts, tunnels), urbain, importance, nature, vitesse renseignés à 100 % ; largeur et voies à 95,6–100 % pour les routes carrossables (1 et 2 chaussées, ronds-points, bretelles, autoroutes), 0 % pour les sentiers, chemins, routes empierrées et escaliers — l'inférence par classe ne sert qu'à eux et hors de France |
 | Code, dépendances, runtime, réglages et caches | Aucun changement par cette session |
 | Exécutions du projet | Aucune |
 
