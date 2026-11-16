@@ -3,7 +3,8 @@
 // street-cells.ts) asked within LAMP_FAR_REACH_M, the nearest first (building-layer.ts cellPriority); each cell's lamps put into a GPU pool
 // by blocks of 256 (building-layer.ts RecordPool, its blocks counted for 16-byte lamps), its frame in the scene's written (its drawn ground's
 // plane in its axes' w — the cells give no ground); drawn by SceneryRaster (farLampVs: a head as the near ones', lit at night by shadeLite).
-// The near scene keeps its own lamps (streetlamps.ts, LAMP_REACH_M round the eye): none drawn within it.
+// The near scene keeps its own lamps and cars (streetlamps.ts, traffic.ts — within their kept reach round its centre, scenery-worker.ts
+// lampReachM, trafficReachM): none of ours drawn within it. By day the far cars are drawn as their bodies.
 import { CELL_Z, cellKey, cellOf, cellOrigin, fromCell } from "./building-cells";
 import { BLOCK_RECORDS, cellFrameInScene, cellPriority, type EyeState, POOL_RECORD_BYTES, RecordPool } from "./building-layer";
 import type { CellPool, CellPrepared, CellWant } from "./cell-pool";
@@ -11,7 +12,7 @@ import { sceneryFrame } from "./scenery-data";
 import type { SceneryRaster } from "./scenery-raster";
 import { readLamp, readSegment, readStreetHeader, SegmentFlag } from "./street-cells";
 import { LAMP_REACH_M } from "./streetlamps";
-import { ROAD_TRAFFIC } from "./traffic";
+import { ROAD_TRAFFIC, TRAFFIC_REACH_M } from "./traffic";
 
 /** the far lamps' reach round the eye [m] (agreed with the approaches session: 12 km — past it night-roads' baked points) */
 export const LAMP_FAR_REACH_M = 12000;
@@ -88,8 +89,15 @@ export class StreetFar {
     private cells: () => CellPool,
   ) {}
 
-  /** each frame: the eye (null: away), the drawn scene's centre (its frame), whether it is night (the heads drawn) */
-  update(eye: EyeState | null, scene: { lat: number; lon: number } | null, night: boolean, now: number) {
+  /** each frame: the eye (null: away), the drawn scene's centre (its frame), whether it is night (the heads drawn), the reach round
+   *  that centre the scene keeps its own lamps and cars within [m] (scenery-worker.ts lampReachM, trafficReachM: none of ours there) */
+  update(
+    eye: EyeState | null,
+    scene: { lat: number; lon: number } | null,
+    night: boolean,
+    now: number,
+    near: { lamps: number; cars: number } = { lamps: LAMP_REACH_M, cars: TRAFFIC_REACH_M },
+  ) {
     if (!this.raster.lampsReady) {
       if (!this.initing) {
         this.initing = true;
@@ -105,8 +113,9 @@ export class StreetFar {
       this.frame = scene ? sceneryFrame(scene.lat, scene.lon) : null;
       if (this.frame) for (const r of this.residents.values()) if (r.slot >= 0) this.writeFrame(r);
     }
-    this.raster.lampsOn = !!this.frame && night;
-    this.raster.lampParams(LAMP_REACH_M, LAMP_FAR_REACH_M, night);
+    // (by day too: the cars' bodies)
+    this.raster.lampsOn = !!this.frame;
+    this.raster.lampParams(near.lamps, LAMP_FAR_REACH_M, night, near.cars);
     if (!eye) return;
     const w = this.wantedAt;
     const cosL = Math.cos((eye.lat * Math.PI) / 180);

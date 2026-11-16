@@ -591,6 +591,10 @@ export interface SceneryReply {
   trafficRoads?: number;
   /** (Q8 L10) the streets' lamps */
   lamps?: number;
+  /** (PLAN-J8 J8-L) the reach round the frame's centre the scene keeps its own lamps, its cars within [m] (shorter where their caps
+   *  cut; 0: none) — the far layer's left out within it */
+  lampReachM?: number;
+  trafficReachM?: number;
   /** (Q8 D1) the vineyards' and orchards' polygons drawn as rows */
   rowCrops?: number;
   roadPieces?: number;

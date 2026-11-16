@@ -633,6 +633,10 @@ export class EarthScenery {
       roadPieces: d?.roadPieces ?? 0,
       /** (Q8 L10) the streets' lamps drawn */
       lamps: d?.lamps ?? 0,
+      /** (PLAN-J8 J8-L) the reach round the scene's centre it keeps its own lamps, its cars within [m] (shorter where their caps cut;
+       *  0: none) — street-far.ts leaves its own out within it */
+      lampReachM: d?.lampReachM ?? 0,
+      trafficReachM: d?.trafficReachM ?? 0,
       /** (Q8 D1) the vineyards' and orchards' polygons drawn as rows */
       rowCrops: d?.rowCrops ?? 0,
       /** the procedural forest's grid: its cells (one tree at most each), a cell's side [m] */

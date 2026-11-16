@@ -63,7 +63,7 @@ l'état d'une mission ou d'un combat **non sauvé, dit** ; le réseau **« entre
 
 **Fermé aussi** : le plancher du raster sur GPU faible (15 nov., 23:46, proposer sous 15 images/s, décision de Sam).
 
-**La session du rendu (33d89754)** : **[PLAN-J8](docs/PLAN-J8-BATIMENTS.md)** — J8-4 allumée, matériaux rallumés, réserve à **72 Mio** (Sam) ; la nuit : la lueur de la ville sur les bâtiments lointains et **les lampadaires et les voitures lointains (J8-L, +0,5 ms)** ; **J8-5 décidé : la jonction à 0** (Sam, ~21:40 UTC) ; le blocage de son e2e contourné (pas un défaut du jeu, PROBLEMES) ; **J8-8 ouvert** (Sam) : le proche en cellules — le format aux approches après la zone de Paris, puis la réserve GPU, le dessin, les contacts, les ombres et la scène proche sans bâtiments ici ; l'éclat de nuit lointain gardé ; **J8-E fait** ; **J8-A** : l'e2e et un premier vol sur Paris, à revoler après la zone de cette nuit. [PLAN-J7](docs/PLAN-J7-FLUIDITE.md) en pause.
+**La session du rendu (33d89754)** : **[PLAN-J8](docs/PLAN-J8-BATIMENTS.md)** — J8-4 allumée, matériaux rallumés, réserve à **72 Mio** (Sam) ; la nuit : la lueur de la ville sur les bâtiments lointains et **les lampadaires et les voitures lointains (J8-L, +0,5 ms)** ; **J8-5 décidé : la jonction à 0** (Sam, ~21:40 UTC) ; le blocage de son e2e contourné (pas un défaut du jeu, PROBLEMES ; reproduit sur le mini hors ligne, la cause cherchée) ; **J8-L : le raccord avec la scène proche corrigé** (de nuit un trou au premier plan, un double au loin ; les voitures de jour) ; **J8-8 ouvert** (Sam) : le proche en cellules — le format aux approches après la zone de Paris, puis la réserve GPU, le dessin, les contacts, les ombres et la scène proche sans bâtiments ici ; l'éclat de nuit lointain gardé ; **J8-E fait** ; **J8-A** : l'e2e et un premier vol sur Paris, à revoler après la zone de cette nuit. [PLAN-J7](docs/PLAN-J7-FLUIDITE.md) en pause.
 
 **Priorité de Sam (16 nov., 11:30 UTC) : [PLAN-J8](docs/PLAN-J8-BATIMENTS.md), tous les bâtiments de la vue** (« c'est ça qui choque le plus ») — la suite de J7 en pause après J7-8b ; les deux sessions s'y mettent (rendu : couche GPU, scène proche ; approches : recensement, préparation des cellules, PWA) ; d'abord J8-0 (mesures) et J8-1 (le trou de 2 à 7 km).
 
@@ -9730,3 +9730,23 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
 - **Preuves :** documenté. Les chiffres viennent de la session du rendu (b7a29727, 74e71cae ; `j8-a` sur kerr-mini, un passage). Aucun test lancé ici.
 - **Limites / transitions restantes :** le coût de J8-8 n'est qu'estimé (réserve 100–200 Mio, plusieurs jours de travail). La question 8 (budget de la ville en vol bas) reste sans réponse ; la règle provisoire s'applique.
 - **Suite :** la zone de Paris tourne cette nuit sur le mini (22:00–02:15 UTC au plus), puis J8-A est revolé ; ensuite les deux sessions accordent le format de J8-8.
+
+### 2026-11-16 22:44 UTC — PLAN-J8 J8-L : le raccord des lampadaires et voitures lointains avec la scène proche, les voitures de jour ; J8-5 : la caméra perdue reproduite ; J8-8 : ce que le dessin attend du format (session 33d89754)
+
+- **Contribution à la destination :** J8-A (Sam : « le moins de différences visibles entre les qualités », jour et nuit), stratégie §19.13 ;
+  une responsabilité commune : la scène proche publie la portée qu'elle garde, la couche lointaine s'y raccorde.
+- **Réalisé :** `scenery-worker.ts` publie `lampReachM` et `trafficReachM` (la portée gardée autour du centre de la scène, plus courte
+  quand le plafond coupe) ; `street-far.ts` / `scenery-raster.ts` masquent les lampadaires et voitures lointains par leur place dans le
+  repère de la scène à cette portée (avant : 1,5 km autour de l'œil) ; les voitures lointaines dessinées de jour (la boîte des proches,
+  peinte, sous un demi-pixel écartées). E2e nouveau `j8-street-far`. J8-5 : leviers `J8J_RUN` (et son enregistreur : place, horloge,
+  rig, corps le plus proche), `J8J_STALL`, `FCH_J0`. J8-8 : la note du lot 2 pour le format (PLAN-J8 §8) et le poids des maillages
+  proches d'aujourd'hui (~433 o par bâtiment maillé, ~434 o par enregistrement).
+- **Preuves :** vu (ce Mac, A/B de commit 1b6cef0f contre l'arbre, hors ligne) : de nuit le premier plan rempli (part des pixels
+  brillants près de l'œil 0,06 → 1,0 %), le double au loin réduit (11,7 → 9,1 %, 5,6 sans la couche) ; 84/84 shaders, tests unitaires,
+  gardes e2e. Caméra perdue : reproduite sur kerr-mini hors ligne (1 étape sur 4), pas ici (15 étapes, avec des à-coups injectés
+  aussi). Mesure de taille : `earthScenery.stats()` à Toulon et Paris.
+- **Limites :** GPU mesuré seulement sur ce Mac en « Heavy » (dans chaque paire +0,3 à +0,8 ms de nuit, ±0,2 de jour) — la règle de
+  1 ms reste à vérifier sur kerr-mini ; de jour, à 350 m, les voitures lointaines changent peu l'image (~1 pixel au-delà de ~4,7 km).
+  La cause de la caméra perdue n'est pas trouvée.
+- **Suite :** après la zone de Paris : `j8-street-far` et l'enregistreur de `j8-junction` sur kerr-mini, J8-A revolé ; le lot 2 de
+  J8-8 au format des approches.

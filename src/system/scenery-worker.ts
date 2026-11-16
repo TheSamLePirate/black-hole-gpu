@@ -484,6 +484,10 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
   let lampGrid: Uint8Array | undefined;
   const cars: CarPlace[] = [];
   let pieceCount = 0;
+  // (PLAN-J8 J8-L: the reach round the frame's centre within which the scene keeps its own lamps and cars — shorter where their caps
+  // cut, 0 where it has none (a failure, the lamps not asked): the far layer's (street-far.ts) left out within it, no double, no gap)
+  let lampReachM = 0,
+    trafficReachM = 0;
   let storedBytes = 64 + pixels.byteLength + forestVec4s(ff) * 16,
     budgetLimited = false;
   let trees = 0,
@@ -1726,12 +1730,17 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
       }
     pieces.sort((x, y) => x.d - y.d);
     pieceCount = pieces.length;
+    let reach = TRAFFIC_REACH_M;
     for (const [i, pc] of pieces.entries()) {
-      if (cars.length >= TRAFFIC_MAX) break;
+      if (cars.length >= TRAFFIC_MAX) {
+        reach = pc.d;
+        break;
+      }
       if (pc.oneway >= 0) cars.push(...carsOn(pc.a, pc.b, pc.cls, i * 2 + 1));
       if (pc.oneway <= 0) cars.push(...carsOn(pc.b, pc.a, pc.cls, i * 2 + 2));
     }
     cars.length = Math.min(cars.length, TRAFFIC_MAX);
+    trafficReachM = reach;
     storedBytes += cars.length * (24 * 12 + 20 * 16 + 32);
   } catch (e) {
     if (surveyErrors.length < 4) surveyErrors.push(`traffic: ${String(e).slice(0, 200)}`);
@@ -1757,6 +1766,7 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
       }
     all.sort((x, y) => x.d - y.d);
     lamps = all.slice(0, LAMP_MAX);
+    lampReachM = q.lamps === false ? 0 : all.length > LAMP_MAX ? all[LAMP_MAX]!.d : LAMP_REACH_M;
     if (lamps.length) lampGrid = lampLight(lamps);
     storedBytes += lamps.length * (8 * 12 + 4 * 16) + (lampGrid?.length ?? 0);
   } catch (e) {
@@ -1804,6 +1814,8 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
     cars: cars.length,
     trafficRoads: roadLines.length,
     lamps: lamps.length,
+    lampReachM,
+    trafficReachM,
     rowCrops: rowCrops.length,
     roadPieces: pieceCount,
     surveyRequests: land?.requests ?? 0,

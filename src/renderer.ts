@@ -12270,7 +12270,10 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
             this.streetFar = new StreetFar(this.sceneryRaster, streetPool);
             this.streetFar.groundAt = (lat, lon) => groundBare("earth", bodyFixedOf("earth", lat, lon, 0));
           }
-          this.streetFar.update(this.farEye, box, this.earthTiles.nightRoads, performance.now());
+          this.streetFar.update(this.farEye, box, this.earthTiles.nightRoads, performance.now(), {
+            lamps: st.lampReachM,
+            cars: st.trafficReachM,
+          });
         } else this.sceneryRaster.lampsOn = false;
       } else if (this.sceneryRaster) {
         this.sceneryRaster.farOn = false;

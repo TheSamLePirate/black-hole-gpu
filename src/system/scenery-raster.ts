@@ -1082,8 +1082,9 @@ fn farCull(@builtin(global_invocation_id) g: vec3u, @builtin(num_workgroups) n: 
 // ---- PLAN-J8 J8-L: the far street lamps — the street cells' lamps (street-cells.ts) round the eye, in a pool of blocks of 256 as the
 // far buildings', each cell its frame in the scene's (its drawn ground's plane in its axes' w — street-far.ts); a lamp's head drawn as the
 // near ones' (meshVs: the turbines' code, its tag 7 — shadeLite lights it at night), opened towards the camera to a pixel and a half at
-// least; none within maskR of the eye (the near scene's own lamps), none past reach, none by day (lampU.on)
-struct LampU { blocks: u32, maskR: f32, reach: f32, on: f32, carBlocks: u32, _a: u32, _b: u32, _c: u32 };
+// least; none within maskR of the scene's centre (the near scene's own lamps: its kept reach — scenery-worker.ts lampReachM), none past
+// reach, none by day (lampU.on); the far cars none within carMaskR of it (its own cars' — trafficReachM), by day drawn as their bodies
+struct LampU { blocks: u32, maskR: f32, reach: f32, on: f32, carBlocks: u32, carMaskR: f32, _b: u32, _c: u32 };
 @group(1) @binding(11) var<uniform> lampU: LampU;
 @group(1) @binding(12) var<storage, read> lampRec: array<vec4f>;
 @group(1) @binding(13) var<storage, read> lampBlock: array<vec2u>;
@@ -1092,7 +1093,8 @@ struct LampU { blocks: u32, maskR: f32, reach: f32, on: f32, carBlocks: u32, _a:
 @group(1) @binding(16) var<storage, read_write> lampDraw: array<atomic<u32>, 4>;
 @group(1) @binding(17) var<storage, read> lampListR: array<u32>;
 // (a lamp k's head in the view's frame; w 0: none — an empty slot)
-fn lampAt(k: u32) -> vec4f {
+// (a lamp k's head in the scene's frame — its centre the near scene's —; w 0: none — an empty slot)
+fn lampWorld(k: u32) -> vec4f {
   let blk = lampBlock[k >> 8u];
   if ((k & 255u) >= blk.y) { return vec4f(0.0); }
   let r = lampRec[k];
@@ -1102,7 +1104,11 @@ fn lampAt(k: u32) -> vec4f {
   let N4 = lampCell[c + 2u];
   let U4 = lampCell[c + 3u];
   let g = E4.w + N4.w * r.x + U4.w * r.y;
-  return vec4f(view(O.xyz + E4.xyz * r.x + N4.xyz * r.y + U4.xyz * (g + r.z)), 1.0);
+  return vec4f(O.xyz + E4.xyz * r.x + N4.xyz * r.y + U4.xyz * (g + r.z), 1.0);
+}
+fn lampAt(k: u32) -> vec4f {
+  let w = lampWorld(k);
+  return vec4f(view(w.xyz), w.w);
 }
 // (the lamps in view: past the near scene's own, within reach, before the camera and in its field — each listed, the draw's instances
 // counted: its indirect draw)
@@ -1110,13 +1116,13 @@ fn lampAt(k: u32) -> vec4f {
 fn farLampCull(@builtin(global_invocation_id) gid: vec3u, @builtin(num_workgroups) n: vec3u) {
   let k = gid.y * n.x * 64u + gid.x;
   if (lampU.on < 0.5 || k >= lampU.blocks * 256u) { return; }
-  let p = lampAt(k);
+  let p = lampWorld(k);
   if (p.w < 0.5) { return; }
-  let v = p.xyz;
+  let v = view(p.xyz);
   let dist = length(v);
-  // (past the near scene's own lamps; their reach's last sixth a scatter — each lamp its own edge, farHash: no line at 12 km where the
-  // ground's baked lights and the far buildings' glow take over)
-  if (dist < lampU.maskR || dist > lampU.reach * (0.83 + 0.17 * farHash(k ^ 0x5bd1e995u)) || v.z <= 1.0) { return; }
+  // (past the near scene's own lamps — round its centre, as it keeps them; their reach's last sixth a scatter — each lamp its own
+  // edge, farHash: no line at 12 km where the ground's baked lights and the far buildings' glow take over)
+  if (length(p.xy) < lampU.maskR || dist > lampU.reach * (0.83 + 0.17 * farHash(k ^ 0x5bd1e995u)) || v.z <= 1.0) { return; }
   let m = 2.0 * u.up.w * v.z / u.image.y;
   if (abs(v.x) - u.right.w * v.z > m || abs(v.y) - u.up.w * v.z > m) { return; }
   let at = atomicAdd(&lampDraw[1], 1u);
@@ -1149,10 +1155,12 @@ fn farLampCull(@builtin(global_invocation_id) gid: vec3u, @builtin(num_workgroup
 @group(1) @binding(21) var<storage, read_write> carDraw: array<atomic<u32>, 4>;
 @group(1) @binding(22) var<storage, read> carListR: array<u32>;
 // (a car k: its place in the view's frame (w 1), and whether it comes towards the camera (its headlights) — x of the second)
-fn carAt(k: u32) -> array<vec4f, 2> {
-  var out = array<vec4f, 2>(vec4f(0.0), vec4f(0.0));
+// (a far car k: its road point under it in the scene's frame (w 0: none — an empty slot), its way ahead and the cell's up there)
+struct FarCar { w: vec4f, ahead: vec3f, up: vec3f };
+fn carAt(k: u32) -> FarCar {
+  var o = FarCar(vec4f(0.0), vec3f(0.0), vec3f(0.0));
   let blk = carBlock[k >> 8u];
-  if ((k & 255u) >= blk.y) { return out; }
+  if ((k & 255u) >= blk.y) { return o; }
   let a = carRec[2u * k];
   let b = carRec[2u * k + 1u];
   let L = max(length(a.zw), 1.0);
@@ -1165,39 +1173,58 @@ fn carAt(k: u32) -> array<vec4f, 2> {
   let N4 = lampCell[c + 2u];
   let U4 = lampCell[c + 3u];
   let g = E4.w + N4.w * xy.x + U4.w * xy.y;
-  let w = O.xyz + E4.xyz * xy.x + N4.xyz * xy.y + U4.xyz * (g + 0.8);
-  let v = view(w);
-  let ahead = view(w + E4.xyz * d.x + N4.xyz * d.y) - v;
-  out[0] = vec4f(v, 1.0);
-  out[1] = vec4f(select(0.0, 1.0, dot(ahead, -v) > 0.0), 0.0, 0.0, 0.0);
-  return out;
+  o.w = vec4f(O.xyz + E4.xyz * xy.x + N4.xyz * xy.y + U4.xyz * g, 1.0);
+  o.ahead = E4.xyz * d.x + N4.xyz * d.y;
+  o.up = U4.xyz;
+  return o;
 }
 @compute @workgroup_size(64)
 fn farCarCull(@builtin(global_invocation_id) gid: vec3u, @builtin(num_workgroups) n: vec3u) {
   let k = gid.y * n.x * 64u + gid.x;
-  if (lampU.on < 0.5 || k >= lampU.carBlocks * 256u) { return; }
+  if (k >= lampU.carBlocks * 256u) { return; }
   let c = carAt(k);
-  if (c[0].w < 0.5) { return; }
-  let v = c[0].xyz;
+  if (c.w.w < 0.5) { return; }
+  let v = view(c.w.xyz + c.up * 0.8);
   let dist = length(v);
-  if (dist < lampU.maskR || dist > lampU.reach * (0.83 + 0.17 * farHash(k ^ 0x27d4eb2du)) || v.z <= 1.0) { return; }
+  // (past the near scene's own cars — round its centre, as it keeps them —, within reach (its last sixth a scatter); by day its body
+  // under half a pixel left out — a speck the image would not hold)
+  if (length(c.w.xy) < lampU.carMaskR || dist > lampU.reach * (0.83 + 0.17 * farHash(k ^ 0x27d4eb2du)) || v.z <= 1.0) { return; }
   let m = 2.0 * u.up.w * v.z / u.image.y;
-  if (abs(v.x) - u.right.w * v.z > m || abs(v.y) - u.up.w * v.z > m) { return; }
+  if (lampU.on < 0.5 && 4.4 < 0.5 * m) { return; }
+  if (abs(v.x) - u.right.w * v.z > m + 3.0 || abs(v.y) - u.up.w * v.z > m + 3.0) { return; }
   let at = atomicAdd(&carDraw[1], 1u);
   carListW[at] = k;
 }
+// (a far car: at night its lamp — a point, white coming, red going (shadeLite's 5, 6), opened to a pixel and a half, its light kept to
+// its own share —; by day its body as the near ones' (traffic.ts carMesh: 4.4 × 1.8 m, 0.3–1.5 m up), painted as theirs (4 + paint / 8))
 @vertex fn farCarVs(@builtin(vertex_index) vi: u32, @builtin(instance_index) bi: u32) -> MV {
   var o: MV;
-  let c = carAt(carListR[bi]);
-  var v = c[0].xyz;
-  let px = 2.0 * u.up.w * max(v.z, 1.0) / u.image.y;
-  let half = max(0.4, 0.75 * px);
-  let q = array<vec2f, 6>(vec2f(-1.0, -1.0), vec2f(1.0, -1.0), vec2f(1.0, 1.0), vec2f(-1.0, -1.0), vec2f(1.0, 1.0), vec2f(-1.0, 1.0));
-  v = v + vec3f(q[vi] * half, 0.0);
-  // (its light kept to its lamps' own as the far lamps' — the share in the tag's fraction, 0.45 × (1 − share))
-  o.leaf = select(6.0, 5.0, c[1].x > 0.5) + 0.45 * (1.0 - sqrt(min(0.16 / (half * half), 1.0)));
+  let k = carListR[bi];
+  let c = carAt(k);
   o.bridge = 2.0;
   o.pyl = vec4f(0.0, 0.0, 0.0, 1.0);
+  var v: vec3f;
+  if (lampU.on > 0.5) {
+    v = view(c.w.xyz + c.up * 0.8);
+    let ahead = view(c.w.xyz + c.up * 0.8 + c.ahead) - v;
+    let px = 2.0 * u.up.w * max(v.z, 1.0) / u.image.y;
+    let half = max(0.4, 0.75 * px);
+    let q = array<vec2f, 6>(vec2f(-1.0, -1.0), vec2f(1.0, -1.0), vec2f(1.0, 1.0), vec2f(-1.0, -1.0), vec2f(1.0, 1.0), vec2f(-1.0, 1.0));
+    v = v + vec3f(q[min(vi, 5u)] * half, 0.0);
+    // (its light kept to its lamps' own as the far lamps' — the share in the tag's fraction, 0.45 × (1 − share))
+    o.leaf = select(6.0, 5.0, dot(ahead, -v) > 0.0) + 0.45 * (1.0 - sqrt(min(0.16 / (half * half), 1.0)));
+    // (the body's other vertices: none at night)
+    if (vi >= 6u) { v = vec3f(0.0, 0.0, -1.0); }
+  } else {
+    let ix = array<u32, 36>(0u, 2u, 6u, 0u, 6u, 4u, 1u, 5u, 7u, 1u, 7u, 3u, 0u, 4u, 5u, 0u, 5u, 1u, 2u, 3u, 7u, 2u, 7u, 6u, 0u, 1u, 3u, 0u, 3u,
+      2u, 4u, 6u, 7u, 4u, 7u, 5u);
+    let q = ix[vi];
+    let side = normalize(cross(c.ahead, c.up));
+    let p = c.w.xyz + c.ahead * select(-2.2, 2.2, (q & 1u) == 1u) + side * select(-0.9, 0.9, (q & 2u) == 2u) +
+      c.up * select(0.3, 1.5, (q & 4u) == 4u);
+    v = view(p);
+    o.leaf = 4.0 + f32(u32(farHash(k ^ 0x9e3779b9u) * 8.0) % 8u) / 8.0;
+  }
   o.clip = vec4f(v.x / u.right.w + u.output.z * v.z, v.y / u.up.w + u.output.w * v.z, u.forward.w, v.z);
   o.p = v;
   return o;
@@ -1772,6 +1799,11 @@ export class SceneryRaster {
     };
   } | null = null;
   private lampReset = new Uint32Array([6, 0, 0, 0]);
+  /** the far cars' draw's reset: at night their lamp's quad (6 vertices), by day their body's box (36) */
+  private carResetNight = new Uint32Array([6, 0, 0, 0]);
+  private carResetDay = new Uint32Array([36, 0, 0, 0]);
+  /** night: the far lamps' heads drawn (lampParams' `on`) — the far cars are drawn by day too (their bodies) */
+  private lampsNight = false;
   private lampUData = new ArrayBuffer(32);
   /** the far lamps drawn (their pool made, the layer on) — and the highest block in use + 1 (the draw's instances) */
   lampsOn = false;
@@ -1980,8 +2012,9 @@ export class SceneryRaster {
   lampFrame(slot: number, frame: Float32Array) {
     if (this.lamps) this.device.queue.writeBuffer(this.lamps.cell, slot * 64, frame as Float32Array<ArrayBuffer>);
   }
-  /** the near scene's own lamps' reach round the eye [m] (none drawn within), the layer's reach [m], at night (drawn at all) */
-  lampParams(maskR: number, reach: number, on: boolean) {
+  /** the near scene's own lamps' reach round its centre [m] (none drawn within), the layer's reach [m], at night (the lamps drawn at
+   *  all, the cars as their lamps — by day as their bodies), the near scene's own cars' reach round its centre [m] */
+  lampParams(maskR: number, reach: number, on: boolean, carMaskR = maskR) {
     const L = this.lamps;
     if (!L) return;
     const v = new DataView(this.lampUData);
@@ -1990,6 +2023,8 @@ export class SceneryRaster {
     v.setFloat32(8, reach, true);
     v.setFloat32(12, on ? 1 : 0, true);
     v.setUint32(16, L.cars.used, true);
+    v.setFloat32(20, carMaskR, true);
+    this.lampsNight = on;
     this.device.queue.writeBuffer(L.u, 0, this.lampUData);
   }
   lampRelease() {
@@ -2165,8 +2200,9 @@ export class SceneryRaster {
     if (this.bench && !(this.benchSkip & 1)) q.writeBuffer(this.bench.draw, 0, this.benchReset);
     this.farActive = !!this.far?.pipes && this.farOn;
     if (this.farActive && !(this.farSkip & 1)) q.writeBuffer(this.far!.draw, 0, this.farReset);
-    if (this.lamps && this.lampsOn && this.lamps.used > 0) q.writeBuffer(this.lamps.draw, 0, this.lampReset);
-    if (this.lamps && this.lampsOn && this.lamps.cars.used > 0) q.writeBuffer(this.lamps.cars.draw, 0, this.lampReset);
+    if (this.lamps && this.lampsOn && this.lampsNight && this.lamps.used > 0) q.writeBuffer(this.lamps.draw, 0, this.lampReset);
+    if (this.lamps && this.lampsOn && this.lamps.cars.used > 0)
+      q.writeBuffer(this.lamps.cars.draw, 0, this.lampsNight ? this.carResetNight : this.carResetDay);
     // (the Sun's view: its trees culled into the shadow lists when it is to be drawn — encodeShadow —; else none)
     this.sunOn = !!sun && sun[15]! > 0.5 && this.shadowReady;
     if (sun) {
@@ -2201,7 +2237,7 @@ export class SceneryRaster {
       pass.dispatchWorkgroups(Math.min(g, 65535), Math.ceil(g / 65535));
     }
     // (PLAN-J8 J8-L: the far lamps in view listed — their draw's instances reset before the pass)
-    if (this.lamps && this.lampsOn && this.lamps.used > 0) {
+    if (this.lamps && this.lampsOn && this.lampsNight && this.lamps.used > 0) {
       const L = this.lamps;
       const g = Math.ceil((L.used * 256) / 64);
       pass.setPipeline(L.cull);
@@ -2283,7 +2319,7 @@ export class SceneryRaster {
       pass.drawIndirect(F.draw, 16);
     }
     // (PLAN-J8 J8-L: the far street lamps' heads — at night, their used blocks' lamps, each its quad)
-    if (this.lamps && this.lampsOn && this.lamps.used > 0) {
+    if (this.lamps && this.lampsOn && this.lampsNight && this.lamps.used > 0) {
       const L = this.lamps;
       pass.setBindGroup(0, this.drawBind);
       pass.setBindGroup(1, L.bind);
