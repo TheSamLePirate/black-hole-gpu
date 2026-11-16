@@ -88,7 +88,23 @@ thermique « Nominal » avant et après ; GPU à 1 019 puis 1 266 MHz sur 1 278.
   - l'effet d'un tri au critère de taille plus fort.
 
   Ce sont les leviers à essayer avant d'accepter un coût.
-- **M1 Max** : à faire tourner, ce Mac, après l'A/B de J8-1 qui charge l'IGN sur le mini.
+- **Le second passage, avec l'allègement** (kerr-mini, 16 nov. 2026 ~13:58–14:01 UTC, run `20261116-145728-j8-0c-bench-lod`, 9afd6473) :
+  les enveloppes projetées sous 4 ou 8 px y sont dessinées en un quad face à la caméra (6 sommets) au lieu d'une boîte (36), à
+  enveloppes vues égales.
+  - **Témoin négatif (A/A)** : 49,6 et 48,6 ms. **Le bruit de cette mesure est de l'ordre de 1 à 2 ms** : à 256 k, les boîtes donnent
+    +4,6 ms au premier passage et +2,1 au second.
+
+  | Injectées | Vues | Boîtes | Quads sous 4 px (part en quads) | Quads sous 8 px (part en quads) |
+  |---:|---:|---:|---:|---:|
+  | 128 k | 78 860 | +2,4 ms | +1,9 ms (88 %) | +1,7 ms (97 %) |
+  | 512 k | 316 149 | +5,6 ms | +4,4 ms (88 %) | +3,5 ms (97 %) |
+
+  - **Ce qu'on en tire** : l'allègement retire ~0,7 ms à 128 k et ~2 ms à 512 k. La vue J0 passerait d'environ +2,5 à +4,5 ms (boîtes)
+    à **environ +1,7 à +3 ms (quads sous 8 px)**, autour du seuil de 3 ms, que la mesure ne départage pas à ±1–2 ms près.
+  - **Leviers non encore mesurés** : des maillages fusionnés par cellule, un point d'un pixel, un tri au pixel plus strict.
+- **M1 Max** (ce Mac, 13:21–13:26 UTC) : **non valable**. La pression thermique était « Heavy », le GPU médian baissait quand la charge
+  montait (23,7 ms à 0, 21,5 ms à 512 k) et le témoin positif a échoué ; la mesure est écartée (règle 3). À refaire sur une machine
+  refroidie.
 
 ## (d) Le budget qui bloque — Toulon fait ; Paris après J8-T
 
