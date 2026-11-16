@@ -48,6 +48,20 @@ export async function buildBVH(pos: Float32Array, tri: Uint32Array): Promise<Tri
   return p ? TriBVH.fromParts(pos, tri, p) : new TriBVH(pos, tri);
 }
 
+/** An image's mip chain `size` → 1 (each level resized from the full image, « high »), made off the page's thread when it can be. */
+export async function imageMipsOff(blob: Blob, size: number): Promise<ImageBitmap[]> {
+  const here = async () => {
+    const img = await createImageBitmap(blob);
+    const out: ImageBitmap[] = [];
+    for (let w = size; w >= 1; w >>= 1) out.push(await createImageBitmap(img, { resizeWidth: w, resizeHeight: w, resizeQuality: "high" }));
+    return out;
+  };
+  const w = the();
+  if (!w) return here();
+  const r = await ask<{ levels: ImageBitmap[] }>(w, { job: "mips", blob, size });
+  return r?.levels ?? here();
+}
+
 /** The sea's cascades (sea/spectrum.ts seaCascades), computed off the page's thread when it can be — the same for the same arguments. */
 export async function seaCascadesOff(systems: readonly SeaSystem[], seed: number, phys: SeaPhysics): Promise<SeaCascades> {
   const w = the();

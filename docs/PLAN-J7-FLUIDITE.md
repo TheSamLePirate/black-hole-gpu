@@ -156,6 +156,16 @@ des entrées datées ; les causes des à-coups (compilation de la météo, retou
   passage) : **reproduits** — la météo 499 ms à froid / 350 ms à chaud (une image GPU de 401 ms et une collection de 635 Mo, pas la
   compilation de son noyau), le retour par F1 650 ms à froid (le noyau principal recompilé) / 250 ms à chaud (l'image du retour) ; détail
   dans la [fiche](progress/j7/FICHE-A-COUPS-2026-11-16.md) §4. Leurs lots restent ouverts, leurs causes relues.
+- **J7-8, le début du vol** (11/16 09:31 UTC) — profil CPU du placement du F-35 au-dessus de Hyères (e2e
+  `j7-first-kernel`, `FK_CASE=flight-start`, kerr-mini, travail natif compté) : **ce ne sont pas les tuiles** (leur arrivée coïncide). Le
+  thread principal y fait : **la musique** — son thème lancé à « IN FLIGHT » : la réverbération (`impulseResponse`, ~40 ms) et la synthèse de
+  ses notes (`prepareNote`/`rendered`/`partials`, 25–60 ms par note de cuivre, sur ~1,5 s ; le travail en temps libre forcé par
+  `timeout: 1000` et une note qui déborde son budget) ; **les images du trafic** (`loadTrafficMaps` : 12 niveaux de MIP par image
+  redimensionnés sur le thread principal, `createImageBitmap` 115 ms + copies 35 ms) ; une collection (~100 ms) ; la mer de l'avion (30 ms).
+  **Corrigé** : les MIP des images du trafic faits dans le worker de calcul (`cpu-worker.ts` tâche `mips`, `imageMipsOff`), les copies une
+  image par tâche ; `traffic-ships` 3/3. **Mesuré** : au début du vol, écarts > 100 ms **183/150 → 182 ms** (un seul, le thread principal
+  118 ms : la musique). **Reste** : la synthèse de la musique — un chantier du domaine audio (ses notes rendues dans un worker, la
+  réverbération préparée d'avance), proposé à la session d'analyse.
 - **J7-3 et J7-2 relus de près** (11/16 09:22 UTC, [fiche §5](progress/j7/FICHE-A-COUPS-2026-11-16.md)) : le retour par F1 ne
   change aucune clé (e2e `j7-f1-return` : à froid aucune image > 100 ms, à chaud une de 116 ms) — les 650 ms de §4 n'étaient pas lui ;
   l'arrivée de la météo (e2e `j7-weather-arrival`) : 399 ms une fois (la nouvelle clé, ~30 pipelines sortis du cache), puis quatre

@@ -8,10 +8,19 @@ import { HITCH_PROBE } from "./lib/hitch-probe";
 // hitch probe, its timeline read (the splash gone, the first image, the hand-over, each compile's start): 12 s after the hand-over, then the
 // craft changed (Ranger → F-35, as the journeys do) and 8 s more. Each run of script over 100 ms: when, against that timeline, and the
 // functions it was spent in (self and inclusive). Not a pass/fail on the times: the run's map, written to j7-first-kernel.json.
+// FK_PRE/FK_CHANGE/FK_CHANGED: another step measured (J7-8: the F-35's placement over Hyères — the flight's start).
 // Duration: ~2 min on kerr-mini.
 // Done when: the profile read and j7-first-kernel.json written.
 afterAll(stopServer);
 const OUT = process.env.FK_OUT ?? "remote-results/j7-first-kernel";
+// (FK_CASE=flight-start — PLAN-J7 J7-8: the F-35 chosen first, then placed over Hyères — J0's start —, the flight's start measured)
+if (process.env.FK_CASE === "flight-start") {
+  process.env.FK_PRE ??= `Object.assign(__bh.settings, { vessel: "f35" })`;
+  process.env.FK_PRE_DONE ??= `__bh.fleet.active === "f35"`;
+  process.env.FK_CHANGE ??= `__bh.game.flyAt(43.06, 6.32, 500, 270, 140); __bh.settings.shipMount = "cockpit"; __bh.refresh(); __bh.camera.viewReset();
+    const c = __bh.camera; for (let i = 0; i < 10; i++) __bh.step(1 / 30); c.apSet({ ap: true, athr: true, alt: 500, hdg: 270 * Math.PI / 180, spd: 140 })`;
+  process.env.FK_CHANGED ??= "true";
+}
 type Run = { atS: number; ms: number; self: { f: string; ms: number }[]; incl: { f: string; ms: number }[] };
 function runsOver(pr: CdpProfile, minMs: number): Run[] {
   const name = new Map(
@@ -90,8 +99,16 @@ test.skipIf(!E2E)(
       await app.load("scene=game:artemis");
       await app.waitFor("__bh.camera.piloting", 120_000);
       await app.js(`new Promise((q) => setTimeout(q, 12000))`);
-      const changeAt = await app.js<number>(`(() => { Object.assign(__bh.settings, { vessel: "f35" }); return performance.now(); })()`);
-      await app.waitFor(`__bh.fleet.active === "f35"`, 60_000);
+      // (FK_PRE: a step before the measured one — e.g. the F-35 chosen, its placement waited for; FK_CHANGE: the measured step, by default the
+      // craft change; FK_CHANGED: what it waits for — J7-8 measures a placement this way)
+      if (process.env.FK_PRE) {
+        await app.js(`(() => { ${process.env.FK_PRE}; return 1; })()`);
+        await app.waitFor(process.env.FK_PRE_DONE ?? "true", 60_000);
+        await app.js(`new Promise((q) => setTimeout(q, 8000))`);
+      }
+      const change = process.env.FK_CHANGE ?? `Object.assign(__bh.settings, { vessel: "f35" })`;
+      const changeAt = await app.js<number>(`(() => { ${change}; return performance.now(); })()`);
+      await app.waitFor(process.env.FK_CHANGED ?? `__bh.fleet.active === "f35"`, 60_000);
       await app.js(`new Promise((q) => setTimeout(q, 8000))`);
       const { profile } = await app.cdp.send<{ profile: CdpProfile }>("Profiler.stop");
       const page = await app.js<{

@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-16 09:20 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-16 09:31 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous. Ce qui est fermé quitte le tableau « En cours » pour la ligne « Fermé récemment ».
@@ -8667,3 +8667,10 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
 - Limites : ~120 e2e d'autres domaines restent dans `PENDING` (rendu 82, vol à attribuer 40) ; J0/J2/motion-quality gardent le train en
   croisière (à décider avec Sam) ; a320-effects (axe asserté, palonnier) en cours sur le mini.
 - Suite : l'axe au décollage (une cause du jeu trouvée : l'horloge du vol), la piste du HUD, puis l'alarme du train et le débriefing en vol.
+
+### 2026-11-16 09:31 UTC — PLAN-J7 J7-8 : le début du vol — les images du trafic hors du thread principal ; la musique, à l'audio
+
+- Réalisé : le profil du placement (e2e `j7-first-kernel` paramétré, `FK_CASE=flight-start`) : pas les tuiles, mais la musique, les MIP
+  des images du trafic, une collection ; les MIP faits dans le worker de calcul (`imageMipsOff`), les copies étalées.
+- Preuves (kerr-mini) : écarts > 100 ms au début du vol 183/150 → 182 ms (un seul : la musique) ; `traffic-ships` 3/3.
+- Limites : la synthèse de la musique (~40 ms de réverbération, 25–60 ms par note) reste sur le thread principal — domaine audio, proposé.

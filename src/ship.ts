@@ -73,7 +73,7 @@ import {
 import { GEAR_HINGES, gearMesh } from "./gear-mesh";
 import type { GpuProfiler } from "./gpuprof";
 import { cockpitHull, samplePoints, vesselHulls } from "./system/collide";
-import { buildBVH } from "./system/cpu-client";
+import { buildBVH, imageMipsOff } from "./system/cpu-client";
 import { cabinHitOf } from "./cockpit/pick";
 import { MAX_SEGMENTS, SEG_FLOATS } from "./contrails";
 import { VESSELS, type JetDef, type VesselId } from "./vessels";
@@ -1169,23 +1169,31 @@ export class ShipRenderer {
   private async loadTrafficMaps(layers: number) {
     const d = this.device;
     const urls = [...TRAFFIC_MAPS, ...CARRIER_MAPS].slice(0, layers);
-    const imgs = await Promise.all(urls.map(async (url) => createImageBitmap(await this.getter(url).then((r) => r.blob()))));
-    // (a later, larger array asked meanwhile: this one dropped)
-    if (layers < this.trafficMapsLayers) return;
     const size = 2048;
     const levels = Math.floor(Math.log2(size)) + 1;
+    // (each map's mip chain made off the page's thread — cpu-worker.ts: 115 ms of resizes held the flight's start, PLAN-J7 J7-8 —; the
+    // copies into the array a map an image)
+    const mips = await Promise.all(urls.map(async (url) => imageMipsOff(await this.getter(url).then((r) => r.blob()), size)));
+    // (a later, larger array asked meanwhile: this one dropped)
+    if (layers < this.trafficMapsLayers) {
+      for (const m of mips) for (const b of m) b.close();
+      return;
+    }
     const t = d.createTexture({
       size: [size, size, urls.length],
       format: "rgba8unorm-srgb",
       mipLevelCount: levels,
       usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.RENDER_ATTACHMENT,
     });
-    for (let i = 0; i < urls.length; i++)
+    for (let i = 0; i < urls.length; i++) {
       for (let l = 0; l < levels; l++) {
         const w = Math.max(1, size >> l);
-        const bm = await createImageBitmap(imgs[i]!, { resizeWidth: w, resizeHeight: w, resizeQuality: "high" });
+        const bm = mips[i]![l]!;
         d.queue.copyExternalImageToTexture({ source: bm }, { texture: t, mipLevel: l, origin: [0, 0, i] }, [w, w]);
+        bm.close();
       }
+      if (i < urls.length - 1) await new Promise((q) => setTimeout(q, 0));
+    }
     this.trafficMaps?.destroy();
     this.trafficMaps = t;
     this.bind();
