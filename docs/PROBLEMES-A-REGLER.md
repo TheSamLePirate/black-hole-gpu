@@ -48,7 +48,7 @@ refaite à chaque jonction, ses captures), non trouvé ; contourné en gardant l
 (run 20261116-225401-j8j-run-offline, `J8J_RUN=1` : le monde qui tourne pendant l'attente, comme avant le contournement) — Toulon,
 jonctions 0, 1, 2 km propres, à 3 km la caméra perdue pendant l'attente de la scène (« away-from-earth », `geoNow()` null, GPU 13,4 ms,
 la date 15:31 : une minute de monde), **pas au saut d'heure** ; replacée (`viewAt`), elle revient. **Pas reproduit sur ce Mac** :
-16 étapes sur 16 propres (Toulon et Hyères ; deux séquences 0–3 km ; une avec le fil principal bloqué 400 ms toutes les 2 s, `J8J_STALL`
+15 étapes complètes sur 15 propres (Toulon et Hyères à 0 et 1 km, la 4ᵉ interrompue ; deux séquences 0–3 km à Toulon ; une avec le fil principal bloqué 400 ms toutes les 2 s, `J8J_STALL`
 — les à-coups d'une machine lente ne la perdent pas ; le pas du jeu borné à 0,1 s, le même pour l'horloge et la caméra). **Écarté** :
 les réglages de J0 (`free-camera-hold` `FCH_J0=1` : la caméra tient ; avec `ship: false` l'appareil n'est pas changé). **Vu en passant** :
 `geoNow()` sans appareil oscille de −730 à +306 m sous la caméra tenue (la vue, elle, ne bouge pas : `surfaceAt` constant) — à
