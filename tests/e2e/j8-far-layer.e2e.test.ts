@@ -36,7 +36,7 @@ test.skipIf(!E2E)(
     try {
       await app.js(`(() => { Object.assign(__bh.settings, ${J0_FIXED}, { ship: false, earthClouds: 0, weather: "fair", dof: false, motionBlur: 0,
         earthPipeline: "raster" }); __bh.renderer.debugSkipShip = true; __bh.game.setDate("${J0_SCENE.date}");
-        __bh.renderer.farBudgetMiB = ${Number(process.env.J8F_BUDGET ?? 24)}; return 1; })()`);
+        __bh.renderer.farBudgetMiB = ${Number(process.env.J8F_BUDGET ?? 72)}; return 1; })()`);
       // (J8F_VIEWS: the views by name, comma-separated)
       const only = process.env.J8F_VIEWS?.split(",");
       for (const v of VIEWS.filter((w) => !only || only.includes(w.name))) {
@@ -93,7 +93,7 @@ test.skipIf(!E2E)(
         }
         const row = {
           ...v,
-          budgetMiB: Number(process.env.J8F_BUDGET ?? 24),
+          budgetMiB: Number(process.env.J8F_BUDGET ?? 72),
           on: a,
           quads4: q4,
           boxesOnly: q0,

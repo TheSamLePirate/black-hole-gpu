@@ -11257,7 +11257,7 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
     return this.buildingFar?.materials ?? this.farMaterialsWant;
   }
   private farMaterialsWant = true;
-  /** (the far layer's) its GPU pool's budget [MiB] (24 by default — FAR_BUDGET_BYTES; PLAN-J8 J8-A's measure 2, Sam 16 Nov 2026: ~96, all
+  /** (the far layer's) its GPU pool's budget [MiB] (72 by default — FAR_BUDGET_BYTES, Sam's « ok 72 »; PLAN-J8 J8-A's measure 2 at ~96, all
    *  Paris resident, once): set, the layer made again — its cells asked again from the preparation pool's cache */
   set farBudgetMiB(mib: number) {
     const b = Math.max(1, Math.round(mib)) * 1024 * 1024;

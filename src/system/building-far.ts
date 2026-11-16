@@ -13,8 +13,9 @@ import type { SceneryRaster } from "./scenery-raster";
 
 /** the layer's reach round the eye [m] (the pixel's limit: ~15 km for a 10 m building, ~30 km for 20 m — §0; the first lot's) */
 export const FAR_REACH_M = 20000;
-/** its pool's budget [bytes] (≈ 512 k records — the bench's largest; PLAN-J8 §5: 500 000 × 48 o ≈ 24 Mio) */
-export const FAR_BUDGET_BYTES = 24 * 1024 * 1024;
+/** its pool's budget [bytes] — 72 MiB (Sam's decision of 16 Nov 2026 ~18:45 UTC, « ok 72 »: all Paris resident — 1 947 cells, 1,12 M
+ *  buildings — for +1.9 ms on the M1 Max, +3.7 ms on kerr-mini; the nearest first, the flight's corridor first, past it) */
+export const FAR_BUDGET_BYTES = 72 * 1024 * 1024;
 /** the cells' frames held at once */
 export const FAR_SLOTS = 4096;
 /** under this projected size [px] a building one quad facing the camera (Sam's decision of 16 Nov 2026) */
