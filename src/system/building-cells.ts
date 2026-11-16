@@ -24,6 +24,20 @@
 //          36 u32 source key (a hash of the source's own identity: the BD TOPO's cleabs, Overture's id — the same building across
 //             two generations)
 //          40 u32 roof colour (0x00RRGGBB; 0: none given)   44 u32 reserved (0)
+//
+// The rules both sides keep (agreed with the approaches' session, 16 Nov 2026, on Toulon's densest tile — 2 497 buildings):
+//  - the ground: the source's (the BD TOPO's altitude_minimale_sol, over the sea, + the geoid's N — flag GroundKnown); the far layer
+//    (J8-4) sets an envelope on the relief as drawn, its record's ground the fallback and the check (a coarse far relief would leave
+//    one floating or sunk by metres);
+//  - a building cut by two tiles: one record, in the cell holding its footprint's centre, its box on the geometry the tile gives
+//    past its square (the vector tile's buffer); the other copy left out by the same rule, each tile alone; flag Partial when the
+//    footprint passes the buffer;
+//  - the generation: the source's newest change in the cell (the BD TOPO's date_modification, as YYYYMMDD), else the response's
+//    Last-Modified — a newer replaces an older;
+//  - the identity: cell + rank stable within a generation (the ranks by the source's identity — cleabs); across generations the
+//    source key (cleabs, or identifiants_rnb when present);
+//  - the roof's shape without planning (the near scene alone plans roofs): its height (ridge less eave) over 1 m and the footprint
+//    long → gabled, squarish → hipped, else flat; the materials by roofs.ts (roofMaterial, wallMaterial, regionOf).
 import type { RoofMaterial, RoofShape, WallMaterial } from "./roofs";
 
 /** the cells' level: the BD TOPO's tiles (≈ 0.9 km a side at 43° N) */
@@ -50,6 +64,10 @@ export enum RecordFlag {
   Annex = 2,
   /** its height measured by the IGN's canopy (I4/B6), not the registry's */
   Measured = 4,
+  /** its ground the source's own (the BD TOPO's altitude_minimale_sol + N); absent (Overture, OSM): the drawn relief alone */
+  GroundKnown = 8,
+  /** its footprint past the vector tile's buffer: its box taken on a piece of it */
+  Partial = 16,
 }
 /** the use on one byte (the BD TOPO's usage_1; 0 unknown) — what `buildingLook` reads: day materials, night windows */
 export const USAGE_CODES = [
