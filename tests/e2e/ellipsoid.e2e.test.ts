@@ -67,7 +67,8 @@ test.skipIf(!E2E)(
         [-4600, 0],
         [r.len + 4600, 0],
         [-9990, 450],
-        [-10150, 0],
+        [-14000, 0],
+        [-18650, 0],
         [-6000, 700],
       ].map(([along, across]) => {
         const q = geodeticNormal(A, F, r.origin.map((v, i) => v + along! * r.along[i]! + across! * r.across[i]!) as Vec3);

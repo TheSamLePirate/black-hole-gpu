@@ -19,6 +19,15 @@ paliers restent donc (un filet tant que le sol dessiné n'est pas le relief). Pi
 `game/runway-grade.ts`) : le couloir prolongé jusqu'au point initial (18,5 km) ou à la jonction (16 km + la base), et/ou l'amplitude du
 détail bornée là où les données sont planes ; côté approches, si besoin, les paliers pris au plus haut des deux sols hors du couloir.
 
+**Couloir prolongé au point initial (11/16 07:29 UTC, PLAN-J7 J7-1, décision de Sam ~07:05 UTC : « prolonger à 18,5 km »)** —
+le cône continué au même évasement (~±460 m à 18,5 km), fondu 300 m ; seul le détail retiré. **Vérifié** (kerr-mini, e2e
+`j7-approach-ground`, `AG_FIELD`/`AG_RWY`, A/B contre 42c5887f) : sous l'axe de 3 à 18,2 km le sol touché égale les données (0,0 m) à
+OIFK 11 et à **SLCB 05** — où le détail retiré atteignait **+770 m** (14 km : 3 528 m contre 2 758 m de données) ; hors du couloir le sol
+inchangé ; parité GPU du zonage (`ellipsoid`) ; J0 sans coût (GPU p50 49,4–49,8 contre 49,5–50,2 ms). **À dire** : sur l'Altiplano les flancs
+du couloir dans un détail de cette ampleur sont presque des falaises (138 m pour 50 m dans le fondu de 300 m) — réglage révisable sur la
+planche. **Non vérifié** : le vol `APS_ONLY=SLCB:32` sans paliers (l'essai annulé par la session des approches) ; avec eux, le F-35 remet
+les gaz deux fois (jamais sous 551 m) — à la session des approches de rejouer sa mesure.
+
 ## L'e2e `ellipsoid`, son second test (« the live polar renderer … ») expire à 300 s sur kerr-mini (relevé le 16 novembre 2026)
 
 Observé : `the live polar renderer keeps WGS84 geometry and altitude when Earth textures are unavailable` expire à 300 s, trois fois

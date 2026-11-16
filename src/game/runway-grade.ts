@@ -31,11 +31,14 @@ export interface Grade {
 }
 /** a runway's grading's figures [m] (the shader's runwayGrade holds the same: change both) */
 export const RUNWAY_GRADE = { levelPast: 300, levelEase: 600, levelSide: 320, levelSideEase: 300 } as const;
-/** the approach funnel (J7-1): from the threshold, the runway's half width and 80 m either side, widening to ±300 m 10 km out; faded over
- *  300 m along and across (trace.wgsl approachCut: the same) */
-export const APPROACH_FUNNEL = { reach: 10000, half: 300, edge: 80, fade: 300 } as const;
-/** how far past either end a runway grades anything [m] (the funnel, its half width and both fades): the cut of the near lists */
-export const GRADE_REACH = APPROACH_FUNNEL.reach + 2 * APPROACH_FUNNEL.fade + APPROACH_FUNNEL.half;
+/** the approach funnel (J7-1): from the threshold, the runway's half width and 80 m either side, widening by the same slope as to ±300 m
+ *  10 km out (`half` at `widen`) — on to the approach's initial point, 18.5 km out (~±460 m there: Sam's decision of 16 Nov 2026, the
+ *  detail measured over the data by > 300 m between 10 and 18.5 km for 6.7 % of the world's runway ends —; faded over 300 m along and
+ *  across (trace.wgsl approachCut: the same) */
+export const APPROACH_FUNNEL = { reach: 18500, widen: 10000, half: 300, edge: 80, fade: 300 } as const;
+/** how far past either end a runway grades anything [m] (the funnel, its widest half and both fades): the cut of the near lists */
+export const GRADE_REACH =
+  APPROACH_FUNNEL.reach + 2 * APPROACH_FUNNEL.fade + Math.ceil((APPROACH_FUNNEL.half * APPROACH_FUNNEL.reach) / APPROACH_FUNNEL.widen);
 
 const ease = (x: number) => (x <= 0 ? 0 : x >= 1 ? 1 : x * x * (3 - 2 * x));
 
@@ -45,7 +48,7 @@ export function approachCut(a: number, c: number, L: number, hw: number): number
   if (x <= 0) return 0;
   const F = APPROACH_FUNNEL;
   const start = hw + F.edge;
-  const half = start + (Math.max(F.half, start) - start) * Math.min(x / F.reach, 1);
+  const half = start + ((Math.max(F.half, start) - start) * x) / F.widen;
   return (1 - ease((x - F.reach) / F.fade)) * (1 - ease((c - half) / F.fade));
 }
 

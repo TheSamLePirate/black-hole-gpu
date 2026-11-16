@@ -6908,14 +6908,15 @@ fn earthSurface(g: vec3f) -> vec3f {
   return N * vec3f(g.xy, g.z * ba * ba);
 }
 // A real airfield's approach funnel beyond either end (game/runway-grade.ts approachCut, the same figures: change both): its width and 80 m
-// at the threshold widening to ±300 m 10 km out, faded over 300 m along and across — the procedural detail off under the finals
-// (PLAN-J7 J7-1: it raised bumps the approaches flew into; the data untouched)
+// at the threshold widening by the slope that makes ±300 m 10 km out, to the approach's initial point 18.5 km out (Sam, 16 Nov 2026),
+// faded over 300 m along and across — the procedural detail off under the finals (PLAN-J7 J7-1: it raised bumps the approaches flew
+// into; the data untouched)
 fn approachCut(a: f32, c: f32, L: f32, hw: f32) -> f32 {
   let x = select(select(0.0, a - L, a > L), -a, a < 0.0);
   if (x <= 0.0) { return 0.0; }
   let start = hw + 80.0;
-  let half = start + (max(300.0, start) - start) * min(x / 10000.0, 1.0);
-  return (1.0 - smoothstep(0.0, 1.0, (x - 10000.0) / 300.0)) * (1.0 - smoothstep(0.0, 1.0, (c - half) / 300.0));
+  let half = start + (max(300.0, start) - start) * x / 10000.0;
+  return (1.0 - smoothstep(0.0, 1.0, (x - 18500.0) / 300.0)) * (1.0 - smoothstep(0.0, 1.0, (c - half) / 300.0));
 }
 fn runwayGrade(g: vec3f) -> vec4f {
   let point = earthSurface(g);
@@ -6926,8 +6927,8 @@ fn runwayGrade(g: vec3f) -> vec4f {
   for (var k = 0u; k < rwyCount(); k++) {
     let d = point - earthSurface(P.runways[1u + 4u * k].xyz);
     let L = P.runways[1u + 4u * k].w;
-    // (nothing graded beyond the approach funnel: runway-grade.ts GRADE_REACH, the strip's length and 10.9 km)
-    if (dot(d, d) > (L + 10900.0) * (L + 10900.0)) { continue; }
+    // (nothing graded beyond the approach funnel: runway-grade.ts GRADE_REACH, the strip's length and 19.66 km)
+    if (dot(d, d) > (L + 19655.0) * (L + 19655.0)) { continue; }
     let a = dot(d, P.runways[2u + 4u * k].xyz);
     let c = abs(dot(d, P.runways[3u + 4u * k].xyz));
     let hw = P.runways[2u + 4u * k].w;

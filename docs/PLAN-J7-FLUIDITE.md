@@ -143,4 +143,13 @@ des entrées datées ; les causes des à-coups (compilation de la météo, retou
   fonctions absentes du profil. **Reste** : ~116 ms de travail natif au démarrage d'une compilation (la création des modules — compté
   « (program) »), une collection, un `writeTexture` de 67 ms (une couverture d'imagerie) ; le rejeu à froid (J7-2/J7-3 avec), le critère
   sur trois parcours.
+- **J7-2 et J7-3 rejoués à froid** (11/16 07:11 UTC, run `20261116-072108-j7-cold`, cache Metal du mini vidé avant chaque
+  passage) : **reproduits** — la météo 499 ms à froid / 350 ms à chaud (une image GPU de 401 ms et une collection de 635 Mo, pas la
+  compilation de son noyau), le retour par F1 650 ms à froid (le noyau principal recompilé) / 250 ms à chaud (l'image du retour) ; détail
+  dans la [fiche](progress/j7/FICHE-A-COUPS-2026-11-16.md) §4. Leurs lots restent ouverts, leurs causes relues.
+- **J7-1, le couloir prolongé à 18,5 km** (décision de Sam, 11/16 ~07:05 UTC, sur la mesure de la session des approches —
+  `scripts/approach-detail-beyond.ts`, f0e0a431 : entre 10 et 18,5 km le détail dépasse les données de plus de 300 m pour 4 485 extrémités,
+  jusqu'à +700 m sur l'Altiplano) : le cône continué au même évasement (~±460 m à 18,5 km), fondu 300 m ; `runway-grade.ts`
+  `APPROACH_FUNNEL.reach` 18 500, `GRADE_REACH` 19 655 ; WGSL de même ; `__bh.sys.groundBareAt` (le sol sans le détail) ; e2e de la
+  planche paramétrée (`AG_FIELD`, `AG_RWY`) et jugée sur « sol touché = sol des données » de 3 à 18,2 km. En vérification.
 - **Le plan révisé** (2026-11-16 05:45 UTC, session d'analyse, sur la fiche de J7-0 — [FICHE-A-COUPS](progress/j7/FICHE-A-COUPS-2026-11-16.md)) : J7-2 (météo) et J7-3 (F1) non reproduits à chaud → rejoués à froid d'abord, fermés s'ils ne se reproduisent pas ; trois lots ajoutés sur les à-coups mesurés : **J7-7** le premier noyau de la partie et le changement d'appareil (433–784 ms, ~200 ms), **J7-8** le début du vol (150–217 ms, ~300 tuiles), **J7-9** l'arrivée des données après un placement (images GPU de 150–290 ms, avec le chargement d'une sauvegarde) ; `parcours-ville` rouge mis dans J7-4 (à expliquer, pas « variance ») ; l'ordre révisé au §2.

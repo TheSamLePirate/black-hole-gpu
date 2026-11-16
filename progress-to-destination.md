@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-16 06:18 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-16 07:29 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous. Ce qui est fermé quitte le tableau « En cours » pour la ligne « Fermé récemment ».
@@ -8588,3 +8588,16 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   le relief 10,9 km avant le seuil, là où le détail dépasse la pente de 431 m : essai annulé, les paliers gardés. PROBLEMES complété ; transmis
   à la session du rendu.
 - Suite : son choix pour le couloir au-delà de 10 km (ou une borne du détail) ; la mesure et SLCB 32 rejoués ensuite.
+
+### 2026-11-16 07:29 UTC — J7-1 prolongé au point initial (18,5 km) ; J7-2 et J7-3 reproduits à froid
+
+- Contribution à la destination : §19.4 (le sol touché = les données sous toute la finale) ; décision de Sam (16 nov., ~07:05 UTC) sur la
+  mesure de la session des approches (4 485 extrémités où le détail dépassait les données de > 300 m entre 10 et 18,5 km).
+- Réalisé : `runway-grade.ts` (`APPROACH_FUNNEL.reach` 18 500, le cône continué), WGSL de même ; `__bh.sys.groundBareAt` (BH-API) ; la
+  planche paramétrée (`AG_FIELD`/`AG_RWY`, l'heure de midi local) ; tests mis à jour (`runway-parity`, `ellipsoid`). Le rejeu à froid
+  de J7-2/J7-3 (cache Metal du mini vidé) dans la fiche §4 et le plan.
+- Preuves (mesuré, kerr-mini) : le sol de l'axe 3–18,2 km = les données à OIFK 11 et SLCB 05 (où +770 m de détail ont disparu) ; parité
+  GPU ; J0 sans coût ; à froid la météo 499 ms / à chaud 350 ms, F1 650 / 250 ms — reproduits, causes relues (image GPU, collection,
+  recompilation).
+- Limites : les flancs du couloir sur l'Altiplano (138 m / 50 m) ; le vol de SLCB 32 sans paliers non rejoué.
+- Suite : J7-7 (le changement d'appareil), puis J7-2, J7-3 sur leurs causes relues.

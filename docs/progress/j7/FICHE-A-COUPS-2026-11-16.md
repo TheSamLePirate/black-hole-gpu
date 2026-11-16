@@ -53,3 +53,22 @@ GPU, temps GPU), jugée 300 ms après. Le temps de démarrage (« boot », avant
 - **Non vérifié** : la cause fine des images GPU lentes à l'arrivée des données ; la part synchrone exacte de la création des noyaux (un
   profil CPU le dirait) ; une seule passe par parcours (aucune répétition) ; `parcours-ville` a échoué sur son assertion des bâtiments
   proches à l'arrivée (0 — PROBLEMES « le décor ne suit pas un vol rapide », variance connue), sans lien avec la sonde.
+
+## 4. Le rejeu à froid (16 novembre, 07:11 UTC — décision de la session d'analyse)
+
+kerr-mini, run `20261116-072108-j7-cold` (arbre 42c5887f) : avant chaque passage à froid, le cache Metal du processus GPU de Chrome vidé
+(`$(getconf DARWIN_USER_CACHE_DIR)com.google.Chrome.helper/com.apple.metal`, 982 Mo — le profil neuf de chaque e2e ne l'isole pas) ; puis
+les mêmes à chaud. Les six passages verts. Écarts > 100 ms après la mise en place (sonde) :
+
+| Moment | À froid | À chaud | Cause lue |
+|---|---|---|---|
+| **L'arrivée de la météo réelle** (J7-2) | 499 ms (+ 200 ms) | 350 ms | froid : collection de 635 Mo, thread principal 160 ms ; chaud : une image GPU de 401 ms, des tuiles — **pas une compilation** |
+| **Le retour par F1** (J7-3, « back aboard ») | 650 ms (`compile: main`, GPU 645 ms) | 250 ms (GPU 245 ms, collection, tuiles) | froid : le noyau principal recompilé au retour ; chaud : l'image du retour |
+| Le mode photo | 155 ms au plus | 255 ms ; 600 ms à sa sortie (GPU 597 ms) | images GPU lentes — l'image fixe du mode photo |
+| Le début du vol (J7-8) | 750, 416, 516, 416 ms (thread principal 357–563 ms, compilations `shadeLiteFinish`) | — (sous 100 ms) | à froid : la compilation des noyaux du vol |
+| Après un placement (J7-9) | des dizaines d'images GPU de 130–345 ms pendant ~20 s | 16 images de 100–290 ms pendant ~4 s ; « Under 10 images/s: the flight runs at 55 % of real time » | le GPU pendant l'arrivée des données |
+| Au démarrage (sous l'écran de chargement) | 683–2 150 ms de thread principal | — | les compilations à froid, sous l'écran |
+
+**Conclusion pour le plan** : **J7-2 et J7-3 se reproduisent** (à froid et à chaud) — leurs lots tels qu'écrits, mais leurs causes ne
+sont pas celles supposées par J6 : la météo, une image GPU lourde et une collection (pas la compilation de son noyau, déjà prêt) ; F1, la
+recompilation du noyau principal à froid et une image lourde à chaud.

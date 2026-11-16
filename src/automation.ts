@@ -7,7 +7,7 @@ import { issCameraList } from "./camera/iss-view";
 import { issCameraFrame, type IssCameraId } from "./system/iss-cameras";
 import { hudHits, scopeRange } from "./ui/hud/symbology";
 import type { BootReport } from "./boot-timeline";
-import { bodyFixedOf, GEAR, gearHeight, groundRelief, toBodyFixed } from "./system/our-surface";
+import { bodyFixedOf, GEAR, gearHeight, groundBare, groundRelief, toBodyFixed } from "./system/our-surface";
 import { geoidDeg } from "./system/geoid-grid";
 import { EARTH_RUNWAYS } from "./game/sites";
 import { GEARS } from "./gear";
@@ -674,6 +674,8 @@ export function installBh(c: BhContext) {
         geoid: (lat: number, lon: number) => geoidDeg(lat, lon),
         /** the Earth's ground [m over the ellipsoid] at a latitude, longitude [°], as stood on (the sea at the geoid) */
         groundAt: (lat: number, lon: number) => groundRelief("earth", bodyFixedOf("earth", lat, lon, 0)),
+        /** the same ground without the procedural detail — the data's alone, graded (PLAN-J7 J7-1: under an approach funnel the two equal) */
+        groundBareAt: (lat: number, lon: number) => groundBare("earth", bodyFixedOf("earth", lat, lon, 0)),
         /** the craft's gear (gear.ts GEARS: each leg on the craft's axes) */
         gears: () => GEARS,
         /** the Earth's runways as drawn (sites.ts EARTH_RUNWAYS: threshold, landing direction — WGS84) */

@@ -2090,6 +2090,14 @@ runways levelled, the sea at the geoid. Synchronous.
 
 *Used in:* `geoid.e2e.test.ts`.
 
+### `__bh.sys.groundBareAt(lat, lon)` → number
+
+The same ground as `groundAt` without the procedural detail — the data's alone (the tiles, the map), the runways' airfields levelled
+(`our-surface.ts` `groundBare`; PLAN-APPROCHES §9 q. 4: what an approach is judged on). Under an airfield's approach funnel (PLAN-J7 J7-1,
+`game/runway-grade.ts`: to 18.5 km before each end) the two are equal. Synchronous.
+
+*Used in:* `j7-approach-ground.e2e.test.ts`.
+
 ### `__bh.sys.runways()` → `RunwayFrame[]`
 
 The Earth's runways as drawn (`sites.ts` `EARTH_RUNWAYS`): each its `site`, its threshold's `origin` on the WGS84

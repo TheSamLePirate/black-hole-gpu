@@ -106,7 +106,7 @@ test("runwayGrade: the near runways' list (T8c) gives the full scan's answers, a
     for (const r of EARTH_RUNWAYS) {
       if (r.world?.measuring) continue;
       const d = point.map((v, i) => v - r.origin[i]!);
-      const cut = r.len + 10900;
+      const cut = r.len + 19655;
       if (Math.abs(d[0]!) > cut || Math.abs(d[1]!) > cut || Math.abs(d[2]!) > cut || Math.hypot(...d) > cut) continue;
       const a = d[0]! * r.along[0] + d[1]! * r.along[1] + d[2]! * r.along[2];
       const c = Math.abs(d[0]! * r.across[0] + d[1]! * r.across[1] + d[2]! * r.across[2]);
@@ -123,11 +123,12 @@ test("runwayGrade: the near runways' list (T8c) gives the full scan's answers, a
         g.elev = r.elev;
       }
       g.flat = Math.max(g.flat, wa * wc, level);
-      // (PLAN-J7 J7-1: a real airfield's approach funnel — its width and 80 m at the threshold to ±300 m 10 km out, faded over 300 m)
+      // (PLAN-J7 J7-1: a real airfield's approach funnel — its width and 80 m at the threshold, widening by the slope of ±300 m 10 km
+      // out, to 18.5 km — Sam, 16 Nov 2026 —, faded over 300 m)
       const x = a < 0 ? -a : a > r.len ? a - r.len : 0;
       const start = r.halfWidth + 80;
-      const half = start + (Math.max(300, start) - start) * Math.min(x / 10000, 1);
-      const funnel = world && x > 0 ? (1 - ease((x - 10000) / 300)) * (1 - ease((c - half) / 300)) : 0;
+      const half = start + ((Math.max(300, start) - start) * x) / 10000;
+      const funnel = world && x > 0 ? (1 - ease((x - 18500) / 300)) * (1 - ease((c - half) / 300)) : 0;
       g.cut = Math.max(g.cut, wa * wc, level, funnel);
     }
     return g;
@@ -139,7 +140,7 @@ test("runwayGrade: the near runways' list (T8c) gives the full scan's answers, a
     let graded = 0;
     for (let k = 0; k < 4000; k++) {
       const r = EARTH_RUNWAYS[Math.floor(rnd() * EARTH_RUNWAYS.length)]!;
-      const a = (rnd() * 2 - 0.5) * (r.len + 12000),
+      const a = (rnd() * 2 - 0.5) * (r.len + 21000),
         c = (rnd() * 2 - 1) * (rnd() < 0.5 ? 1500 : 12000);
       const q = geodeticNormal(
         WGS84_A,
@@ -149,7 +150,7 @@ test("runwayGrade: the near runways' list (T8c) gives the full scan's answers, a
       const got = runwayGrade(q),
         want = reference(q);
       expect(got).toEqual(want);
-      if (want.flat > 0) graded++;
+      if (want.cut > 0) graded++;
     }
     return graded;
   };
@@ -178,12 +179,16 @@ test("J7-1: the approach funnel — the detail off under a real airfield's final
   expect(runwayGrade(at(-4600, 0)).level).toBe(0);
   // (the far end's final too: the runway lands both ways)
   expect(runwayGrade(at(L + 4600, 0)).cut).toBeCloseTo(1, 6);
-  // (the cone: its width and 80 m at the threshold, ±300 m 10 km out; faded over 300 m across and along)
+  // (the cone: its width and 80 m at the threshold, ±300 m 10 km out, on to the initial point 18.5 km out — ~±460 m there —; faded
+  // over 300 m across and along)
   expect(runwayGrade(at(-500, hw + 70)).cut).toBeCloseTo(1, 6);
   expect(runwayGrade(at(-9990, 295)).cut).toBeCloseTo(1, 3);
   expect(runwayGrade(at(-9990, 300 + 150)).cut).toBeCloseTo(0.5, 1);
-  expect(runwayGrade(at(-10150, 0)).cut).toBeCloseTo(0.5, 2);
-  expect(runwayGrade(at(-10400, 0)).cut).toBe(0);
+  expect(runwayGrade(at(-14000, 0)).cut).toBeCloseTo(1, 6);
+  const half185 = hw + 80 + ((300 - hw - 80) * 18400) / 10000;
+  expect(runwayGrade(at(-18400, half185 - 10)).cut).toBeCloseTo(1, 2);
+  expect(runwayGrade(at(-18650, 0)).cut).toBeCloseTo(0.5, 2);
+  expect(runwayGrade(at(-18900, 0)).cut).toBe(0);
   expect(runwayGrade(at(-6000, 700)).cut).toBe(0);
   // (beside the strip, out of the funnel: as before)
   expect(runwayGrade(at(1000, hw + 320)).cut).toBeCloseTo(0, 6);
