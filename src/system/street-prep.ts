@@ -11,7 +11,17 @@ import { cellOrigin, fromCell, readHeader, readRecord, sourceKey, toCell } from 
 import { roadWidth } from "./scenery-geometry";
 import { builtUp, LAMP_CLASSES, lampsAlong } from "./streetlamps";
 import {
+  CellStreetFlag,
   encodeStreetCell,
+  PLACE_BUILDING_M,
+  PLACE_JUNCTION_M,
+  PLACE_KEEP,
+  PLACE_MAX,
+  PLACE_OTHER_ROAD_M,
+  PLACE_SPACING_M,
+  PlaceFlag,
+  PlaceKind,
+  type PlaceRecord,
   type JunctionRecord,
   JunctionFlag,
   JUNCTION_M,
@@ -36,6 +46,11 @@ export interface PreparedStreetCell {
   lamps: StreetLampRecord[];
   segments: RoadSegmentRecord[];
   junctions: JunctionRecord[];
+  /** its parked cars' places (VB4), and whether they were thinned to PLACE_MAX */
+  places: PlaceRecord[];
+  thinned: boolean;
+  /** with `measure`: the places without the assumed lanes (−1 else) */
+  placesBefore: number;
   /** the roads' vertices before and after the simplification (the fiche's count) */
   vertices: { before: number; after: number };
 }
@@ -185,6 +200,143 @@ function omtRoad(pr: Record<string, unknown>, id: number | undefined): RoadMeta 
   };
 }
 
+/** a building's oriented box in its cell's frame (building-cells.ts: centre, half-sides, heading) */
+interface Box {
+  e: number;
+  n: number;
+  hl: number;
+  hw: number;
+  h: number;
+}
+/** a u32 hash of four numbers (the places' seeds) */
+function hash4(a: number, b: number, c: number, d: number): number {
+  let h = Math.imul(a ^ 0x9e3779b9, 0x85ebca6b) ^ Math.imul(b + 0x632be5ab, 0xc2b2ae35) ^ Math.imul(c + 0x27d4eb2f, 0x165667b1) ^ d;
+  h = Math.imul(h ^ (h >>> 16), 0x45d9f3b);
+  h = Math.imul(h ^ (h >>> 15), 0x2c1b3c6d);
+  return (h ^ (h >>> 16)) >>> 0;
+}
+const PARKED = new Set(["tertiary", "minor", "service"]);
+
+/**
+ * A cell's parked cars' places (VB4 — street-cells.ts's rules): along the urban streets, both sides, every PLACE_SPACING_M; none near a
+ * junction or a building; each kept by its seed (PLACE_KEEP), at most PLACE_MAX, thinned evenly by the seeds past it.
+ */
+export function placesOf(
+  segments: readonly RoadSegmentRecord[],
+  junctions: readonly JunctionRecord[],
+  boxes: readonly Box[],
+  /** the assumed lanes of the narrow one ways (false: the 5 m rule alone — the fiche's before) */
+  assumed = true,
+): { places: PlaceRecord[]; thinned: boolean } {
+  // (the buildings and junctions in a grid of 50 m: the places' neighbours looked up)
+  const G = 50;
+  const key = (e: number, n: number) => `${Math.floor(e / G)},${Math.floor(n / G)}`;
+  const bgrid = new Map<string, Box[]>();
+  for (const b of boxes) {
+    const r = Math.hypot(b.hl, b.hw) + PLACE_BUILDING_M + 2;
+    for (let i = Math.floor((b.e - r) / G); i <= Math.floor((b.e + r) / G); i++)
+      for (let j = Math.floor((b.n - r) / G); j <= Math.floor((b.n + r) / G); j++) {
+        const k = `${i},${j}`;
+        (bgrid.get(k) ?? bgrid.set(k, []).get(k)!).push(b);
+      }
+  }
+  const jgrid = new Map<string, JunctionRecord[]>();
+  for (const j of junctions)
+    for (let a = -1; a <= 1; a++)
+      for (let b = -1; b <= 1; b++) {
+        const k = `${Math.floor(j.east / G) + a},${Math.floor(j.north / G) + b}`;
+        (jgrid.get(k) ?? jgrid.set(k, []).get(k)!).push(j);
+      }
+  // (a car's footprint — 4.4 × 1.8 m — against a building's box widened by PLACE_BUILDING_M: its centre within half its length more)
+  const inBuilding = (e: number, n: number) => {
+    for (const b of bgrid.get(key(e, n)) ?? []) {
+      const c = Math.cos(b.h),
+        s = Math.sin(b.h);
+      const u = (e - b.e) * c + (n - b.n) * s,
+        v = -(e - b.e) * s + (n - b.n) * c;
+      if (Math.abs(u) <= b.hl + PLACE_BUILDING_M + 1.1 && Math.abs(v) <= b.hw + PLACE_BUILDING_M + 1.1) return true;
+    }
+    return false;
+  };
+  // (the segments in the same grid: an assumed lane's place against another road)
+  const sgrid = new Map<string, number[]>();
+  segments.forEach((sg, si) => {
+    const L = Math.hypot(sg.b[0] - sg.a[0], sg.b[1] - sg.a[1]);
+    const steps = Math.max(1, Math.ceil(L / (G / 2)));
+    const seen = new Set<string>();
+    for (let q = 0; q <= steps; q++) {
+      const e = sg.a[0] + ((sg.b[0] - sg.a[0]) * q) / steps,
+        n = sg.a[1] + ((sg.b[1] - sg.a[1]) * q) / steps;
+      for (let a = -1; a <= 1; a++)
+        for (let b = -1; b <= 1; b++) {
+          const k = `${Math.floor(e / G) + a},${Math.floor(n / G) + b}`;
+          if (seen.has(k)) continue;
+          seen.add(k);
+          (sgrid.get(k) ?? sgrid.set(k, []).get(k)!).push(si);
+        }
+    }
+  });
+  const nearOtherRoad = (e: number, n: number, own: number) =>
+    (sgrid.get(key(e, n)) ?? []).some((si) => {
+      if (si === own) return false;
+      const sg = segments[si]!;
+      const vx = sg.b[0] - sg.a[0],
+        vy = sg.b[1] - sg.a[1],
+        l2 = vx * vx + vy * vy;
+      const t = l2 > 0 ? Math.max(0, Math.min(1, ((e - sg.a[0]) * vx + (n - sg.a[1]) * vy) / l2)) : 0;
+      return Math.hypot(e - sg.a[0] - t * vx, n - sg.a[1] - t * vy) < PLACE_OTHER_ROAD_M;
+    });
+  const nearJunction = (e: number, n: number) =>
+    (jgrid.get(key(e, n)) ?? []).some((j) => Math.hypot(j.east - e, j.north - n) < PLACE_JUNCTION_M);
+  const out: PlaceRecord[] = [];
+  segments.forEach((sg, si) => {
+    if (!(sg.flags & SegmentFlag.Urban) || !PARKED.has(sg.cls)) return;
+    if (sg.flags & (SegmentFlag.Bridge | SegmentFlag.Tunnel | SegmentFlag.Ford)) return;
+    const oneway = !!(sg.flags & (SegmentFlag.OnewayAlong | SegmentFlag.OnewayAgainst));
+    // (an urban one way of 3–5 m: an assumed lane off its carriageway, on the right)
+    const lane = assumed && oneway && sg.width >= 3 && sg.width < 5;
+    if (sg.width < 5 && !lane) return;
+    const [ax, ay] = sg.a,
+      [bx, by] = sg.b;
+    const L = Math.hypot(bx - ax, by - ay);
+    if (L < PLACE_SPACING_M) return;
+    const dx = (bx - ax) / L,
+      dy = (by - ay) / L;
+    const heading = Math.atan2(dy, dx);
+    const sides = oneway && sg.width < 6 ? [-1] : [-1, 1];
+    const off = lane ? sg.width / 2 + 1.1 : sg.width / 2 - 1.1;
+    for (let k = 0; PLACE_SPACING_M / 2 + k * PLACE_SPACING_M <= L - PLACE_SPACING_M / 2; k++) {
+      const t = PLACE_SPACING_M / 2 + k * PLACE_SPACING_M;
+      for (const side of sides) {
+        // (side −1 the right of the direction, (dy, −dx); +1 the left, (−dy, dx))
+        const e = ax + dx * t + side * -dy * off,
+          n = ay + dy * t + side * dx * off;
+        const seed = hash4(sg.roadId, si, k, side);
+        if ((seed & 0xffff) / 0x10000 >= PLACE_KEEP) continue;
+        if (nearJunction(e, n) || inBuilding(e, n)) continue;
+        if (lane && nearOtherRoad(e, n, si)) continue;
+        out.push({
+          east: e,
+          north: n,
+          heading: side > 0 ? heading + Math.PI : heading,
+          kind: PlaceKind.Along,
+          flags: (side > 0 ? PlaceFlag.Left : 0) | (lane ? PlaceFlag.AssumedLane : 0),
+          seed: seed >>> 8,
+          width: sg.width,
+        });
+      }
+    }
+  });
+  if (out.length <= PLACE_MAX) return { places: out, thinned: false };
+  // (past the bound: thinned evenly — the lowest seeds kept, wherever they are in the cell)
+  const kept = out
+    .map((p, i) => ({ p, r: hash4(p.seed, i, 0x51ace, 7) }))
+    .sort((a, b) => a.r - b.r)
+    .slice(0, PLACE_MAX)
+    .map((x) => x.p);
+  return { places: kept, thinned: true };
+}
+
 /**
  * An OpenMapTiles z 14 tile's four z 15 street cells (north-west, north-east, south-west, south-east, as cell-prep-overture.ts orders
  * them). `buildings(x, y)`: the building cell of a z 15 cell (its bytes, or null) — the town's test for the lamps; `bdtopo(x, y)`: in
@@ -197,6 +349,8 @@ export function prepareStreetCells(
   buildings: (x: number, y: number) => ArrayBuffer | null,
   generation = 0,
   bdtopo: (x: number, y: number) => ArrayBuffer | Uint8Array | null = () => null,
+  /** the fiche's measure: the places without the assumed lanes counted too (placesBefore) */
+  measure = false,
 ): PreparedStreetCell[] {
   const n = 2 ** OSM_Z;
   const tileOrigin = cellOrigin(x14, y14, OSM_Z);
@@ -213,6 +367,7 @@ export function prepareStreetCells(
       segments: [] as RoadSegmentRecord[],
       ends: [] as { e: number; n: number; width: number; level: number; round: boolean }[],
       vertices: { before: 0, after: 0 },
+      boxes: [] as Box[],
     };
   });
   // (which of the four a place falls in — null: outside this tile)
@@ -265,7 +420,7 @@ export function prepareStreetCells(
   };
   // (the BD TOPO's roads in France: each cell's own tile, its segments kept where their middle is that cell's)
   for (const c of cells) {
-    if (!c.bd || !c.bd.byteLength) continue;
+    if (!c.bd?.byteLength) continue;
     const layer = new VectorTile(new PbfReader(c.bd)).layers.troncon_de_route;
     for (let i = 0; layer && i < layer.length; i++) {
       const f = layer.feature(i);
@@ -298,6 +453,8 @@ export function prepareStreetCells(
       const g = fromCell(c.origin, r.east, r.north);
       const m = toCell(tileOrigin, g.lat, g.lon);
       centres.push([m.east, m.north]);
+      // (its box in its own cell's frame — the places' exclusion, VB4)
+      c.boxes.push({ e: r.east, n: r.north, hl: r.halfLength, hw: r.halfWidth, h: r.heading });
     }
   }
   const town = builtUp(centres);
@@ -383,18 +540,25 @@ export function prepareStreetCells(
         flags,
       });
     });
+    const P = placesOf(c.segments, junctions, c.boxes);
+    const placesBefore = measure ? placesOf(c.segments, junctions, c.boxes, false).places.length : -1;
     return {
       x: c.x,
       y: c.y,
       lamps: c.lamps,
       segments: c.segments,
       junctions,
+      places: P.places,
+      thinned: P.thinned,
+      placesBefore,
       vertices: c.vertices,
       buf: encodeStreetCell(
         { z: OSM_Z + 1, x: c.x, y: c.y, generation, originLat: c.origin.lat, originLon: c.origin.lon },
         c.lamps,
         c.segments,
         junctions,
+        P.places,
+        P.thinned ? CellStreetFlag.Thinned : 0,
       ),
     };
   });

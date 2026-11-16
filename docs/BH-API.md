@@ -2150,8 +2150,9 @@ words; `cells`: the pool's stats; `far`: the layer's. The J8-A e2e waits on it b
 The lamps and the roads in cells (`src/system/street-cells.ts`, `street-prep.ts`; the cell worker's `kind: "street"`): a z 15 cell's
 OpenMapTiles z 14 roads and, in France, its BD TOPO tile's `troncon_de_route`, the four building cells under it (their town), its four
 street cells prepared and kept in Cache Storage `kerr-street-v2` — format 2 (J8-VB, VB1): the lamps, every road's segments (width, lanes,
-ways, bridges and tunnels, abscissa, the road's identity; Douglas-Peucker at 0.3 m, ≤ 250 m), the junctions; its rules in the file's
-header —, the asked one handed — its own pool (`cell-workers.ts` `streetPool()`, two workers). As `__bh.sys.cells`: `want(list)`,
+ways, bridges and tunnels, abscissa, the road's identity; Douglas-Peucker at 0.3 m, ≤ 250 m), the junctions, the parked cars' places (VB4:
+along the urban streets, none near a junction or a building, kept by their seeds, at most 4 000 a cell thinned evenly); its rules in the
+file's header —, the asked one handed — its own pool (`cell-workers.ts` `streetPool()`, two workers). As `__bh.sys.cells`: `want(list)`,
 `stats()`, `got()`, `clear()`. `flightReady()` waits on it once asked. *Used in:* `j8-street-cells.e2e.test.ts`.
 
 ### `__bh.sys.runways()` → `RunwayFrame[]`

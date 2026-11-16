@@ -6,7 +6,7 @@
 //
 // The bytes (little-endian): a header of STREET_HEADER_BYTES, then `lampCount` lamps of LAMP_BYTES, then `segmentCount` road segments of
 // SEGMENT_BYTES, then `junctionCount` junctions of JUNCTION_BYTES, then `placeCount` places of PLACE_BYTES (VB4: none yet).
-//   header  0 u32 magic "KSC2"   4 u16 format (STREET_FORMAT)   6 u16 junctionCount   8 u8 z   9 u8 reserved   10 u16 placeCount
+//   header  0 u32 magic "KSC2"   4 u16 format (STREET_FORMAT)   6 u16 junctionCount   8 u8 z   9 u8 flags (CellStreetFlag)   10 u16 placeCount
 //          12 u32 x   16 u32 y   20 u32 lampCount   24 u32 segmentCount   28 u32 generation (the roads' source revision: YYYYMMDD)
 //          32 f64 origin latitude [°]   40 f64 origin longitude [°]   48 u32 a section to come's count (0)   52..63 reserved (0)
 //   lamp      0 f32 east [m]   4 f32 north [m] (the pole's foot, in the cell's frame)   8 u16 head height [cm over the ground]
@@ -17,7 +17,9 @@
 //            28 u32 the road's identity (a hash of the BD TOPO's cleabs, of OpenMapTiles' feature id)
 //   junction  0 f32 east   4 f32 north [m]   8 u8 degree (the segments' ends met there, ≥ 3)   9 u8 widest carriageway [dm / 2]
 //            10 u16 flags (JunctionFlag)
-//   place     (VB4: its record to be defined there — PLACE_BYTES reserved; none written in format 2's first cells)
+//   place     0 f32 east   4 f32 north [m] (a parked car's centre)   8 u16 heading (the street's direction there, 0 … 2π over
+//            0 … 65535)   10 u8 kind (PlaceKind: 0 along the kerb; 1 angled — reserved: only where the data say it)   11 u8 flags
+//            (PlaceFlag)   12 u24 seed (its car's model and colour — VB3)   15 u8 the carriageway's width there [dm / 2]
 //
 // The rules (agreed with the render session):
 //  - the sources: in France (the IGN's box, bdtopo.ts inBdtopoBox) the BD TOPO's `troncon_de_route`, from the very tile the building
@@ -32,6 +34,16 @@
 //  - the junctions: the roads' ends that meet within JUNCTION_M (an index of their ends, once at the preparation), three or more;
 //  - no ground: the far layer sets the lamps, segments and junctions on the relief as drawn; the level says only a bridge or a tunnel;
 //  - the lamps as in format 1 (OpenMapTiles' town streets, streetlamps.ts lampsAlong, where the building cells say built-up).
+//  - the places (VB4, agreed with the render session ~18:55 UTC): along the urban streets of the tertiary, minor and service classes, not
+//    on a bridge nor in a tunnel, their carriageway 5 m wide at least; a place every PLACE_SPACING_M on each side (one side only on a one
+//    way under 6 m), its centre `width / 2 − 1.1 m` off the axis; none within PLACE_JUNCTION_M of a junction, nor within PLACE_BUILDING_M
+//    of a building's box (the building cell's); each kept by its seed with PLACE_KEEP's chance (no wall of the same cars); at most
+//    PLACE_MAX a cell, thinned evenly by their seeds past it (CellStreetFlag.Thinned — a cap by the centre would leave a ring at the
+//    cells' edges). The vegetation and the crossings are in neither source: not excluded yet, never simulated. Angled parking (kind 1)
+//    only where the data say it (OSM parking:lane, the BD TOPO's car parks): later.
+//  - an urban one way of 3–5 m (agreed ~19:25 UTC: the BD TOPO gives the driven width, without its parking lane — Paris's streets): one
+//    side, the right, the car off the carriageway at `width / 2 + 1.1 m` (PlaceFlag.AssumedLane); none within PLACE_OTHER_ROAD_M of
+//    another segment (a service road alongside), the buildings' exclusion the same (a lane against the façades: none).
 import { CELL_Z } from "./building-cells";
 
 export const STREET_FORMAT = 2;
@@ -41,6 +53,14 @@ export const LAMP_BYTES = 12;
 export const SEGMENT_BYTES = 32;
 export const JUNCTION_BYTES = 12;
 export const PLACE_BYTES = 16;
+/** the places' rules (VB4) */
+export const PLACE_SPACING_M = 6;
+export const PLACE_JUNCTION_M = 12;
+export const PLACE_BUILDING_M = 1;
+export const PLACE_KEEP = 0.6;
+export const PLACE_MAX = 4000;
+/** an assumed lane's place: none this near another segment [m] */
+export const PLACE_OTHER_ROAD_M = 3;
 /** the simplification's tolerance [m] (Douglas-Peucker) */
 export const SIMPLIFY_M = 0.3;
 /** a segment's longest [m] */
@@ -84,6 +104,21 @@ export enum SegmentFlag {
   Ford = 64,
   Roundabout = 128,
 }
+export enum CellStreetFlag {
+  /** its places thinned evenly to PLACE_MAX */
+  Thinned = 1,
+}
+export enum PlaceKind {
+  Along = 0,
+  /** angled, perpendicular — reserved: only where the data say it */
+  Angled = 1,
+}
+export enum PlaceFlag {
+  /** on the left of its segment's direction */
+  Left = 1,
+  /** off the carriageway, on an assumed parking lane (a one way of 3–5 m: the BD TOPO's width is the driven one) */
+  AssumedLane = 2,
+}
 export enum JunctionFlag {
   Roundabout = 1,
   /** its segments on different levels (a bridge's end over a road) */
@@ -121,6 +156,18 @@ export interface JunctionRecord {
   width: number;
   flags: number;
 }
+export interface PlaceRecord {
+  east: number;
+  north: number;
+  /** the street's direction there [rad, anticlockwise from east, 0 … 2π) */
+  heading: number;
+  kind: PlaceKind;
+  flags: number;
+  /** a 24-bit seed */
+  seed: number;
+  /** the carriageway's width there [m] */
+  width: number;
+}
 export interface StreetHeader {
   format: number;
   z: number;
@@ -130,6 +177,8 @@ export interface StreetHeader {
   segmentCount: number;
   junctionCount: number;
   placeCount: number;
+  /** CellStreetFlag */
+  flags: number;
   generation: number;
   originLat: number;
   originLon: number;
@@ -141,16 +190,25 @@ export function encodeStreetCell(
   lamps: readonly StreetLampRecord[],
   segments: readonly RoadSegmentRecord[],
   junctions: readonly JunctionRecord[],
+  places: readonly PlaceRecord[] = [],
+  flags = 0,
 ): ArrayBuffer {
+  const js = junctions.slice(0, 65535),
+    ps = places.slice(0, 65535);
   const buf = new ArrayBuffer(
-    STREET_HEADER_BYTES + lamps.length * LAMP_BYTES + segments.length * SEGMENT_BYTES + junctions.length * JUNCTION_BYTES,
+    STREET_HEADER_BYTES +
+      lamps.length * LAMP_BYTES +
+      segments.length * SEGMENT_BYTES +
+      js.length * JUNCTION_BYTES +
+      ps.length * PLACE_BYTES,
   );
   const v = new DataView(buf);
   v.setUint32(0, STREET_MAGIC, true);
   v.setUint16(4, STREET_FORMAT, true);
-  v.setUint16(6, Math.min(65535, junctions.length), true);
+  v.setUint16(6, js.length, true);
   v.setUint8(8, h.z ?? CELL_Z);
-  v.setUint16(10, 0, true);
+  v.setUint8(9, flags & 255);
+  v.setUint16(10, ps.length, true);
   v.setUint32(12, h.x, true);
   v.setUint32(16, h.y, true);
   v.setUint32(20, lamps.length, true);
@@ -182,13 +240,27 @@ export function encodeStreetCell(
     v.setUint32(o + 28, s.roadId >>> 0, true);
     o += SEGMENT_BYTES;
   }
-  for (const j of junctions.slice(0, 65535)) {
+  for (const j of js) {
     v.setFloat32(o, j.east, true);
     v.setFloat32(o + 4, j.north, true);
     v.setUint8(o + 8, Math.max(0, Math.min(255, j.degree)));
     v.setUint8(o + 9, Math.max(0, Math.min(255, Math.round(j.width * 5))));
     v.setUint16(o + 10, j.flags & 65535, true);
     o += JUNCTION_BYTES;
+  }
+  for (const p of ps) {
+    v.setFloat32(o, p.east, true);
+    v.setFloat32(o + 4, p.north, true);
+    const h = ((p.heading % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI);
+    v.setUint16(o + 8, Math.min(65535, Math.round((h / (2 * Math.PI)) * 65536)), true);
+    v.setUint8(o + 10, p.kind & 255);
+    v.setUint8(o + 11, p.flags & 255);
+    const seed = p.seed & 0xffffff;
+    v.setUint8(o + 12, seed & 255);
+    v.setUint8(o + 13, (seed >> 8) & 255);
+    v.setUint8(o + 14, (seed >> 16) & 255);
+    v.setUint8(o + 15, Math.max(0, Math.min(255, Math.round(p.width * 5))));
+    o += PLACE_BYTES;
   }
   return buf;
 }
@@ -207,6 +279,7 @@ export function readStreetHeader(buf: ArrayBuffer): StreetHeader | null {
     segmentCount: v.getUint32(24, true),
     junctionCount: v.getUint16(6, true),
     placeCount: v.getUint16(10, true),
+    flags: v.getUint8(9),
     generation: v.getUint32(28, true),
     originLat: v.getFloat64(32, true),
     originLon: v.getFloat64(40, true),
@@ -263,6 +336,23 @@ export function readJunction(buf: ArrayBuffer, i: number): JunctionRecord {
     degree: v.getUint8(o + 8),
     width: v.getUint8(o + 9) / 5,
     flags: v.getUint16(o + 10, true),
+  };
+}
+
+/** a street cell's i-th place (VB4) */
+export function readPlace(buf: ArrayBuffer, i: number): PlaceRecord {
+  const v = new DataView(buf);
+  const h = readStreetHeader(buf)!;
+  const o =
+    STREET_HEADER_BYTES + h.lampCount * LAMP_BYTES + h.segmentCount * SEGMENT_BYTES + h.junctionCount * JUNCTION_BYTES + i * PLACE_BYTES;
+  return {
+    east: v.getFloat32(o, true),
+    north: v.getFloat32(o + 4, true),
+    heading: (v.getUint16(o + 8, true) / 65536) * 2 * Math.PI,
+    kind: v.getUint8(o + 10),
+    flags: v.getUint8(o + 11),
+    seed: v.getUint8(o + 12) | (v.getUint8(o + 13) << 8) | (v.getUint8(o + 14) << 16),
+    width: v.getUint8(o + 15) / 5,
   };
 }
 

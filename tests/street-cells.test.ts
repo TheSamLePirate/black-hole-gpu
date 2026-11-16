@@ -6,7 +6,11 @@ import {
   encodeStreetCell,
   JUNCTION_BYTES,
   LAMP_BYTES,
+  PLACE_BYTES,
+  PLACE_MAX,
+  PlaceFlag,
   readJunction,
+  readPlace,
   readLamp,
   readSegment,
   readStreetHeader,
@@ -14,9 +18,10 @@ import {
   SEGMENT_MAX_M,
   SegmentFlag,
   STREET_HEADER_BYTES,
+  CellStreetFlag,
   StreetFlag,
 } from "../src/system/street-cells";
-import { prepareStreetCells, simplify } from "../src/system/street-prep";
+import { placesOf, prepareStreetCells, simplify } from "../src/system/street-prep";
 import { earthDataDir, readKept } from "./e2e/lib/earth-cache";
 
 // PLAN-J8 J8-L and J8-VB (VB1) — the streets' cells, format 2 (src/system/street-cells.ts, street-prep.ts; agreed with the render session,
@@ -67,6 +72,90 @@ test("a street cell's bytes (format 2): its header, lamps, segments and junction
   expect(readStreetHeader(new ArrayBuffer(64))).toBeNull();
 });
 
+test("a place's bytes (VB4): its centre, heading, side, 24-bit seed and the carriageway's width", () => {
+  const buf = encodeStreetCell(
+    { z: 15, x: 1, y: 2, generation: 0, originLat: 43, originLon: 6 },
+    [],
+    [],
+    [],
+    [{ east: 10.25, north: -3.5, heading: Math.PI / 2, kind: 0, flags: PlaceFlag.Left, seed: 0xabcdef, width: 7.2 }],
+    CellStreetFlag.Thinned,
+  );
+  expect(buf.byteLength).toBe(STREET_HEADER_BYTES + PLACE_BYTES);
+  const h = readStreetHeader(buf)!;
+  expect([h.placeCount, h.flags]).toEqual([1, CellStreetFlag.Thinned]);
+  const p = readPlace(buf, 0);
+  expect([p.east, p.north, p.kind, p.flags, p.seed, p.width]).toEqual([10.25, -3.5, 0, PlaceFlag.Left, 0xabcdef, 7.2]);
+  expect(p.heading).toBeCloseTo(Math.PI / 2, 3);
+});
+
+test("the places (VB4): along an urban street both sides, none near a junction or a building, thinned evenly past the bound", () => {
+  const street = (a: [number, number], b: [number, number], extra = {}) => ({
+    a,
+    b,
+    width: 8,
+    lanes: 2,
+    cls: "minor" as const,
+    flags: SegmentFlag.Urban,
+    level: 0,
+    speed: 11,
+    s0: 0,
+    roadId: 42,
+    ...extra,
+  });
+  // (an eastward street 240 m long: both sides, ~40 places a side before the seeds' 0.6)
+  const one = placesOf([street([0, 0], [240, 0])], [], []);
+  expect(one.places.length).toBeGreaterThan(30);
+  expect(one.places.length).toBeLessThan(65);
+  // (the right of an eastward street is south: north < 0, heading east; the left north, heading west)
+  for (const p of one.places) {
+    if (p.flags & PlaceFlag.Left) {
+      expect(p.north).toBeCloseTo(8 / 2 - 1.1, 3);
+      expect(Math.cos(p.heading)).toBeLessThan(-0.99);
+    } else {
+      expect(p.north).toBeCloseTo(-(8 / 2 - 1.1), 3);
+      expect(Math.cos(p.heading)).toBeGreaterThan(0.99);
+    }
+  }
+  // (a junction at 120 m: none within 12 m of it; a building over the first 60 m on the south side: none there)
+  const ex = placesOf(
+    [street([0, 0], [240, 0])],
+    [{ east: 120, north: 0, degree: 3, width: 8, flags: 0 }],
+    [{ e: 30, n: -8, hl: 30, hw: 3, h: 0 }],
+  );
+  for (const p of ex.places) {
+    expect(Math.hypot(p.east - 120, p.north)).toBeGreaterThanOrEqual(12);
+    if (p.north < 0) expect(p.east).toBeGreaterThan(60);
+  }
+  // (an urban one way of 4 m: an assumed lane off the carriageway, the right side alone; none against a service road 2 m beside it)
+  const lane = placesOf([street([0, 0], [240, 0], { width: 4, flags: SegmentFlag.Urban | SegmentFlag.OnewayAlong })], [], []);
+  expect(lane.places.length).toBeGreaterThan(10);
+  for (const p of lane.places) {
+    expect(p.flags & PlaceFlag.AssumedLane).toBeTruthy();
+    expect(p.north).toBeCloseTo(-(4 / 2 + 1.1), 3);
+  }
+  const besides = placesOf(
+    [
+      street([0, 0], [240, 0], { width: 4, flags: SegmentFlag.Urban | SegmentFlag.OnewayAlong }),
+      street([0, -5], [240, -5], { width: 3, cls: "service", roadId: 7 }),
+    ],
+    [],
+    [],
+  );
+  expect(besides.places.filter((p) => p.flags & PlaceFlag.AssumedLane).length).toBe(0);
+  // (a main road, a path, a narrow street, a bridge: none)
+  expect(placesOf([street([0, 0], [240, 0], { cls: "primary" })], [], []).places.length).toBe(0);
+  expect(placesOf([street([0, 0], [240, 0], { width: 4 })], [], []).places.length).toBe(0);
+  expect(placesOf([street([0, 0], [240, 0], { flags: SegmentFlag.Urban | SegmentFlag.Bridge })], [], []).places.length).toBe(0);
+  // (past PLACE_MAX: thinned to it, evenly — both halves of a long row kept alike)
+  const many = Array.from({ length: 300 }, (_, i) => street([0, i * 20], [240, i * 20], { roadId: i }));
+  const t = placesOf(many, [], []);
+  expect(t.thinned).toBe(true);
+  expect(t.places.length).toBe(PLACE_MAX);
+  const low = t.places.filter((p) => p.north < 3000).length;
+  expect(Math.abs(low - PLACE_MAX / 2) / PLACE_MAX).toBeLessThan(0.05);
+});
+
 test("Douglas-Peucker: a line kept within its tolerance, a straight run to its ends", () => {
   const line: [number, number][] = Array.from({ length: 101 }, (_, i) => [i, 0.1 * Math.sin(i / 5)]);
   expect(simplify(line, 0.3)).toEqual([line[0]!, line[100]!]);
@@ -93,6 +182,7 @@ function place(x14: number, y14: number) {
         },
         20261116,
         (x, y) => bd(x, y)?.body ?? null,
+        true,
       ),
   };
 }
@@ -111,6 +201,11 @@ for (const P of PLACES) {
       const sum = (f: (c: (typeof cells)[number]) => number) => cells.reduce((s, c) => s + f(c), 0);
       const segs = cells.flatMap((c) => c.segments);
       const given = segs.filter((s) => !(s.flags & SegmentFlag.InferredWidth)).length;
+      const placed = sum((c) => c.places.length),
+        onLanes = sum((c) => c.places.filter((p) => p.flags & PlaceFlag.AssumedLane).length);
+      console.log(
+        `  ${P.name}: places ${cells.map((c) => `${c.places.length}${c.thinned ? " (thinned)" : ""}`).join(" · ")} (${placed}) — without the assumed lanes ${cells.map((c) => c.placesBefore).join(" · ")} (${sum((c) => c.placesBefore)}); on assumed lanes ${((100 * onLanes) / Math.max(1, placed)).toFixed(0)} %`,
+      );
       console.log(
         `  ${P.name} z 14 ${P.x14}/${P.y14}: ${sum((c) => c.lamps.length)} lamps, ${segs.length} segments (${given} with the BD TOPO's width), ${sum((c) => c.junctions.length)} junctions; vertices ${sum((c) => c.vertices.before)} → ${sum((c) => c.vertices.after)} by the simplification; segments a cell ${cells.map((c) => c.segments.length).join(" · ")}; ${ms.toFixed(0)} ms`,
       );

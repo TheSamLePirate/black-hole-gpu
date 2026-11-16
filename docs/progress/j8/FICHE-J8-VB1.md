@@ -32,3 +32,27 @@ l'en-tête de [`street-cells.ts`](../../../src/system/street-cells.ts).
   - l'abscisse est continue dans une tuile, pas d'une tuile à l'autre ;
   - à l'étranger, une route coupée par deux tuiles z 14 a deux identités ;
   - non mesuré : kerr-mini, le coût de dessin (à la session du rendu).
+
+## VB4 — les places du stationnement (la préparation)
+
+Convenu avec la session du rendu (16 nov. ~18:55 et ~19:25 UTC) ; les règles dans l'en-tête de `street-cells.ts`. Une place de 16 o (centre,
+cap, sorte, côté, graine de 24 bits, largeur de la chaussée au droit), dans la section réservée de KSC2.
+
+- **Rues** : urbaines, classes tertiaire, locale, service ; ni pont ni tunnel. Chaussée de 5 m et plus : sur la chaussée, à
+  `largeur/2 − 1,1 m`, des deux côtés (un seul en sens unique sous 6 m). **Sens unique de 3 à 5 m** : la BD TOPO y donne la largeur
+  roulante, sans la file de stationnement. La voiture est alors hors de la chaussée, à `largeur/2 + 1,1 m`, sur la droite, avec le
+  drapeau « file supposée ».
+- **Exclusions** : à moins de 12 m d'une jonction, à moins de 1 m d'une boîte de bâtiment ; une place de file supposée à moins de 3 m d'un
+  autre tronçon. La végétation et les passages piétons ne sont dans aucune des deux sources : non exclus, jamais simulés.
+- **Densité** : chaque place est gardée par sa graine (0,6). Au plus 4 000 par cellule, éclaircies uniformément au-delà, avec un drapeau
+  dans l'en-tête.
+
+**Mesuré** (16 nov., ce Mac, données du disque, une tuile z 14) :
+
+| Lieu | Places (par cellule) | Sans la file supposée | Part en file supposée | Cellules éclaircies |
+|---|---|---|---:|---:|
+| Centre de Toulon | 1 176 (295 · 461 · 270 · 150) | 671 (124 · 239 · 270 · 38) | 43 % | 0 |
+| Paris, le Marais | 1 707 (337 · 402 · 578 · 390) | 527 (114 · 87 · 224 · 102) | 69 % | 0 |
+
+- **Non vérifié** : la vraisemblance des places sur une image (le dessin est à la session du rendu), la justesse de la « file supposée »
+  rue par rue.
