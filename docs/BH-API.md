@@ -2109,7 +2109,9 @@ The same ground as `groundAt` without the procedural detail — the data's alone
 ### `__bh.sys.cells` (PLAN-J8 J8-3: the building cells' pool)
 
 The far buildings' cells (`src/system/cell-pool.ts`, `cell-workers.ts`, `cell-worker.ts`; the format `building-cells.ts`): a z 15
-cell's BD TOPO tile fetched (through the Service Worker), decoded in a worker into 48-byte records (`cell-prep.ts`: one a building,
+cell's BD TOPO tile fetched (through the Service Worker) — outside the IGN's box, and where the BD TOPO has no building in the cell,
+Overture Maps' z 14 tile instead (PLAN-J8 J8-7, `cell-overture.ts`, `cell-prep-overture.ts`: its four cells prepared once, no ground in
+the data) —, decoded in a worker into 48-byte records (`cell-prep.ts`: one a building,
 no roof planned), put in the prepared cache (Cache Storage `kerr-cells-v1`) and handed over.
 
 - `want(list)` — the cells wanted now, the whole set: `{ x, y, priority, d }` (priority 0 in view and near · 1 on the track ·

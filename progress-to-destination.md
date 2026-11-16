@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-16 15:59 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-16 16:05 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous. Ce qui est fermé quitte le tableau « En cours » pour la ligne « Fermé récemment ».
@@ -48,7 +48,7 @@ J4 (fermé, sortie non atteinte), J5 et J6 (fermés).
 | Rendu (33d89754) | J4 / J5 — l'eau, les volumes, la généralisation | **fermés** ([PLAN-J4](docs/PLAN-J4-VOLUMES.md), [PLAN-J5](docs/PLAN-J5-GENERALISATION.md)) : l'eau à demi-rythme (J5-5, −6,0 à −6,4 ms, l'image la même) ; le sol à demi-rythme laissé au joueur (J5-6, réglage « demi » : −1,9 à −3,2 ms ; « auto » à chaque pixel) ; la FFT de la mer en deux passes (−0,9 ms) ; la carte d'ombre des arbres (−2,8 ms, forêt) ; Sam a refusé les arbitrages d'image (MSAA 1×, petits arbres, nuages amortis). Postes lourds restants : l'eau 16,2, les nuages d'orage 16,5, le décor d'une forêt ~7 ms |
 | Rendu (33d89754) | Mesures tenues | la borne du M1 Max **à 30** : essayée à 40 le 15 au soir, non tenue (soutenu 26,4 et 34,5 images/s, deux runs — [J0-CONTRAT §2](docs/J0-CONTRAT.md)) ; le coût de l'appareil 3,5–4,5 ms, dont le MSAA 4× 4–5 ms (gardé) |
 | Audit vagues 3–4 et 6 (1feb2f7f) | [09-priorites-todo](docs/audit-2026-11-10/09-priorites-todo.md) | **faits** : 3.1–3.2 réseau (RD0–RD2), 3.3 sauvegardes (une clé par sauvegarde ; avion, systèmes des vaisseaux et de l'A320 — ce dernier par J6-4), 3.4–3.5 vol, 3.6–3.7 TARS, 3.10 e2e honnêtes, 4.2 temps et onglet masqué, 4.3 `Settings`/`ViewPose`, 4.8 `main()` découpé ; vague 6 hors rendu (QA, AR, RD4/RD5, FX). **Reste** : l'état d'une mission ou d'un combat (Sam), IndexedDB et l'autosauvegarde hors frame (AR-05), FX-19 (fraîcheur des écrans, à mesurer), FX-21 |
-| Vol, approches, e2e de vol (1feb2f7f) | E2E-VOLS règle 13 ; demandes de Sam du 16 nov. ; **PLAN-J8** | **fait le 16 nov.** : règle 13, bandeau et `app.scenario`, l'axe au décollage (horloge du vol), la piste du HUD, l'alarme du train, le débriefing, l'Auto-GCAS, la ligne d'horizon, les jonctions sur le sol dessiné ; **PLAN-J8** : J8-0 (a) fait, (b, d) Toulon faits ; **J8-T fait** (le cache disque des e2e activé par défaut ; J0 sur le mini : détail complet 107,7 → 57,6 s, GPU en vol inchangé, 49,4 contre 49,8 ms ; dossiers échangés par `earth-sync`) , Paris (b, d) depuis le disque faits (59,5 s dont 54 de calcul, 199 236 coupés) ; J8-3 cellule et réserve écrites ; **J8-3 `j8-cells` 2/2** (142 cellules en 28,1 s, aucune image > 100 ms, cache 0,26 s) ; J8-3 priorité laissée à J8-4 (accord), `dropped` corrigé ; **J8-6 écrit** (tests unitaires ; l’e2e de zone jamais passé : le téléchargement > 30 min) ; **maintenant** : la décision sur l’e2e de J8-6 (a : mini 50 min ; b : le cache disque pour le Service Worker), puis J8-7, J8-6, J8-7 ; **en pause** : le contour HUD en virage, la règle 13 des autres domaines, la garde du bandeau (338 en attente) |
+| Vol, approches, e2e de vol (1feb2f7f) | E2E-VOLS règle 13 ; demandes de Sam du 16 nov. ; **PLAN-J8** | **fait le 16 nov.** : règle 13, bandeau et `app.scenario`, l'axe au décollage (horloge du vol), la piste du HUD, l'alarme du train, le débriefing, l'Auto-GCAS, la ligne d'horizon, les jonctions sur le sol dessiné ; **PLAN-J8** : J8-0 (a) fait, (b, d) Toulon faits ; **J8-T fait** (le cache disque des e2e activé par défaut ; J0 sur le mini : détail complet 107,7 → 57,6 s, GPU en vol inchangé, 49,4 contre 49,8 ms ; dossiers échangés par `earth-sync`) , Paris (b, d) depuis le disque faits (59,5 s dont 54 de calcul, 199 236 coupés) ; J8-3 cellule et réserve écrites ; **J8-3 `j8-cells` 2/2** (142 cellules en 28,1 s, aucune image > 100 ms, cache 0,26 s) ; J8-3 priorité laissée à J8-4 (accord), `dropped` corrigé ; **J8-6 écrit** (tests unitaires ; l’e2e de zone jamais passé : le téléchargement > 30 min) ; **J8-7 fait** (Overture hors de France, Tarifa et Bruxelles dans la couche lointaine, aucune image > 100 ms) ; **maintenant** : la voie (b) de J8-6 décidée par Sam (le cache disque pour le Service Worker), puis le passage unique de `j8-zone-cells` sur le mini, J8-6, J8-7 ; **en pause** : le contour HUD en virage, la règle 13 des autres domaines, la garde du bandeau (338 en attente) |
 
 **Fermé récemment** : **PLAN-APPROCHES** (16 nov. : AP0–AP10 et AP-R menés — données réelles, choix, jonction, A320, carte, radar, TSD, crew, HUD, directeur de vol, roue, audio, campagne mondiale et échantillon volé ; OIFK posé après J7-1 le 16 nov. : échantillon F-35 9/9, A320 5/5) ; **J3** (15 nov., confirmé par Sam ; J3-R fait 20:48) ; **le repli du raster vers le tracé retiré** (15 nov., 20:48, décision (b)) ; **PLAN-J6** (15 nov., 20:35 : les neuf parcours en e2e, sept défauts corrigés) ; l'eau étagée E1 (−1,55 ms) et E2 (−0,5 ms), E3 non ouvert ; la classification lot 1 (sur terre −1,15 ms), lot 2 non ouvert
 (sous 1 ms) ; AR-07 (le renderer sur `ViewPose`) ; le retrait R1 des anciens chemins (13 nov.) ; le noyau du monde visé compilé pendant le voyage
@@ -9150,3 +9150,41 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
 - **Preuves :** documenté. Les chiffres viennent des sessions et ne sont pas remesurés ici. J8-4 est mesuré sur kerr-mini : ~+0,6 ms sur Toulon à 12 km, la vue J0 dans le bruit. Pour J8-6, `zoneDuration` annonce 175 s contre 45 à 55 min réels.
 - **Limites / transitions restantes :** sur la planche de Toulon, les toits lointains paraissent plus gris que les toits proches (observé sur une capture réduite, à vérifier). La jonction et la vue en vol ne sont pas encore capturées. Aucun test ni e2e lancé par cette session.
 - **Suite :** la session du rendu allume J8-4, corrige la teinte, puis prépare les captures de jonction pour J8-5. La session des approches pose le témoin du Service Worker, puis remplit le disque, puis passe à J8-7.
+
+### 2026-11-16 16:05 UTC — PLAN-J8 J8-7 : les bâtiments lointains hors de France, depuis Overture (session 1feb2f7f)
+
+- Contribution à la destination : la couche lointaine des bâtiments (J8-4) n'est plus limitée à la France. Le même format
+  d'enregistrement vaut pour tous les pays, avec un seul chemin de préparation hors de la frame. Jalon : PLAN-J8 J8-7.
+- Réalisé :
+  - `src/system/cell-prep-overture.ts` : une tuile Overture z 14 donne ses quatre cellules z 15. Elle suit la règle du bâtiment coupé
+    de la BD TOPO, avec un accrochage de 2 unités au bord. Les enregistrements n'ont pas de sol : `GroundKnown` est à 0, et c'est
+    J8-4 qui les pose sur le relief.
+  - `src/system/cell-overture.ts` : la source d'une cellule.
+    - Dans la boîte de l'IGN, la BD TOPO ; au-delà, Overture.
+    - Overture aussi là où la BD TOPO n'a aucun bâtiment : la boîte est un rectangle qui couvre la Belgique, la Catalogne et la
+      Cornouailles.
+    - L'archive est lue par plages, et une tuile z 14 n'est lue qu'une fois pour ses quatre cellules.
+    - La boîte est copiée de `ORTHO_BOX`, et un test garde les deux égales.
+  - Le cell-worker branché ; les zones hors ligne hors de France comptent leurs cellules Overture.
+  - Une tuile de Tarifa ajoutée aux fixtures (518 ko) ; BH-API, plan, catalogue.
+  - OSM : ses bâtiments sont déjà dans Overture, avec ceux de Microsoft et de Google.
+- Preuves (**mesuré**, ce Mac) :
+  - Tarifa : 1 178 bâtiments, contre 1 155 par la règle du worker du décor.
+  - Bruxelles, 2 × 2 tuiles : 24 244 bâtiments contre 24 278, aucun en double, 23 ms par tuile. Un bâtiment en double à un coin de
+    quatre tuiles a été corrigé par l'accrochage.
+  - e2e `j8-overture-cells` 1/1 (15:57–16:00 UTC). Le lieu est d'abord posé, couche éteinte, puis la couche est allumée.
+    - Tarifa : 1 287 cellules, 28 816 bâtiments résidents, 4 162 dessinés ; aucune image au-dessus de 100 ms pendant l'arrivée des
+      cellules (la plus longue 33 ms).
+    - Bruxelles : 410 745 bâtiments résidents, 172 117 dessinés, aucune image au-dessus de 100 ms (79 ms).
+  - Les deux passages précédents ont été corrigés :
+    - le témoin des à-coups avait un défaut ;
+    - le test comptait l'arrivée du lieu lui-même : ses tuiles et son noyau à Tarifa ont donné 5 images au-dessus de 100 ms ;
+    - l'attente n'attendait pas le déplacement de la couche.
+- Limites :
+  - Bruxelles remplit le budget GPU de la couche lointaine (24 Mio, 12 701 refus) et la capture montre 17 images/s, ce Mac en
+    pression « Heavy ». Ce n'est pas mesuré au banc : c'est pour J8-4, et c'est signalé à la session du rendu.
+  - Le sol des cellules Overture dépend de J8-4.
+  - Non mesuré : kerr-mini.
+  - Les cellules vides en mer dans la boîte coûtent maintenant une lecture de répertoire Overture chacune.
+- Suite : la voie (b) décidée par Sam pour J8-6 (le cache disque des e2e servant aussi le Service Worker, avec un témoin), puis le
+  passage unique de `j8-zone-cells` sur le mini, annoncé à la session du rendu.

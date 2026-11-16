@@ -7,6 +7,7 @@
 import { BDTOPO_Z } from "./bdtopo";
 import { readHeader } from "./building-cells";
 import { CellPool, type CellExecutor, type CellStore } from "./cell-pool";
+import { OVERTURE_Z, parseOvertureZoneUrl } from "./pmtiles";
 
 export interface ZoneCells {
   /** the cells prepared or found ready */
@@ -23,18 +24,30 @@ export interface ZoneCells {
 
 const TILE = new RegExp(`/BDTOPO/${BDTOPO_Z}/(\\d+)/(\\d+)\\.pbf`);
 
-/** A zone's BD TOPO tiles — its cells — from its chains' links (system/zones.ts zoneChains: sceneryZoneChains lists them). */
+/** A zone's cells from its chains' links (system/zones.ts zoneChains: sceneryZoneChains lists them): its BD TOPO z 15 tiles, and its
+ *  Overture z 14 tiles' four z 15 cells each (PLAN-J8 J8-7: `kerr-overture:14/x/y`, outside France). */
 export function zoneCellTiles(chains: readonly (readonly string[])[]): { x: number; y: number }[] {
   const seen = new Set<string>();
   const out: { x: number; y: number }[] = [];
+  const add = (x: number, y: number) => {
+    const k = `${x}/${y}`;
+    if (seen.has(k)) return;
+    seen.add(k);
+    out.push({ x, y });
+  };
   for (const chain of chains)
     for (const url of chain) {
       const m = TILE.exec(url);
-      if (!m) continue;
-      const k = `${m[1]}/${m[2]}`;
-      if (seen.has(k)) continue;
-      seen.add(k);
-      out.push({ x: Number(m[1]), y: Number(m[2]) });
+      if (m) add(Number(m[1]), Number(m[2]));
+      const o = parseOvertureZoneUrl(url);
+      if (o?.theme === "buildings" && o.z === OVERTURE_Z)
+        for (const [i, j] of [
+          [0, 0],
+          [1, 0],
+          [0, 1],
+          [1, 1],
+        ] as const)
+          add(o.x * 2 + i, o.y * 2 + j);
     }
   return out;
 }

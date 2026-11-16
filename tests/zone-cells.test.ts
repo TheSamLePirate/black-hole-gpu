@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
 import { bdtopoUrl } from "../src/system/bdtopo";
+import { overtureBaseZoneUrl, overtureZoneUrl } from "../src/system/pmtiles";
 import { CellSource, encodeCell } from "../src/system/building-cells";
 import type { CellExecutor, CellStore } from "../src/system/cell-pool";
 import { cellsOnlyIn, prepareZoneCells, zoneCellTiles } from "../src/system/zone-cells";
@@ -20,10 +21,17 @@ test("a zone's cells: its BD TOPO z 15 tiles among its chains, each once", () =>
     [bdtopoUrl(16972, 12014)],
     [bdtopoUrl(16971, 12014)],
     ["https://data.geopf.fr/tms/1.0.0/BDTOPO/14/8485/6007.pbf"],
+    // (outside France, Overture's z 14 tile: its four z 15 cells — PLAN-J8 J8-7; the base theme's not buildings)
+    [overtureZoneUrl(7936, 6432)],
+    [overtureBaseZoneUrl(13, 3968, 3216)],
   ];
   expect(zoneCellTiles(chains)).toEqual([
     { x: 16971, y: 12014 },
     { x: 16972, y: 12014 },
+    { x: 15872, y: 12864 },
+    { x: 15873, y: 12864 },
+    { x: 15872, y: 12865 },
+    { x: 15873, y: 12865 },
   ]);
 });
 

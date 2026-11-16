@@ -2,8 +2,10 @@
 // z 15 tile fetched (through the Service Worker: its tiles' cache and its zones'), decoded into the contract's records (cell-prep.ts:
 // no roof planned, no mesh), the bytes put in the prepared cache (Cache Storage, CELL_CACHE — never decoded again) and handed back
 // (transferred). {cancel: id}: its fetch aborted. The geoid's grid given once at the start ({geoid}): the buildings' ground over the
-// ellipsoid (CLAUDE.md, WGS84 everywhere).
+// ellipsoid (CLAUDE.md, WGS84 everywhere). PLAN-J8 J8-7: outside the IGN's box, and where the BD TOPO has no building in the cell,
+// Overture Maps' (cell-overture.ts: its z 14 tile prepared into its four cells, the asked one handed).
 import { bdtopoUrl } from "./bdtopo";
+import { inBdtopoBox, overtureCell } from "./cell-overture";
 import { CELL_CACHE, cellCacheUrl } from "./cell-pool";
 import { prepareBdtopoCell } from "./cell-prep";
 import { geoidDeg, setGeoid } from "./geoid-grid";
@@ -29,12 +31,21 @@ g.onmessage = async (e) => {
   aborts.set(m.id, abort);
   const t0 = performance.now();
   try {
-    const r = await fetch(bdtopoUrl(m.x, m.y), { signal: abort.signal });
-    // (no tile there — the sea, a border —: an empty cell, cached as such)
-    const bytes = r.status === 404 || r.status === 204 ? new ArrayBuffer(0) : r.ok ? await r.arrayBuffer() : null;
-    if (!bytes) throw new Error(`BD TOPO ${m.x}/${m.y}: HTTP ${r.status}`);
+    let P: ReturnType<typeof prepareBdtopoCell> | null = null;
+    if (inBdtopoBox(m.x, m.y)) {
+      const r = await fetch(bdtopoUrl(m.x, m.y), { signal: abort.signal });
+      // (no tile there — the sea, a border —: an empty cell, cached as such)
+      const bytes = r.status === 404 || r.status === 204 ? new ArrayBuffer(0) : r.ok ? await r.arrayBuffer() : null;
+      if (!bytes) throw new Error(`BD TOPO ${m.x}/${m.y}: HTTP ${r.status}`);
+      P = prepareBdtopoCell(bytes, m.x, m.y, (lat, lon) => geoidDeg(lat, lon));
+    }
+    // (beyond the box, or none of the BD TOPO's in the cell — Belgium, Catalonia within the box —: Overture's)
+    if (!P || P.records.length === 0) {
+      // (its archive's reads shared by the cells: not aborted with one — its result dropped below if this cell was)
+      const o = await overtureCell(m.x, m.y);
+      if (!P || o.records.length) P = o;
+    }
     const fetchMs = performance.now() - t0;
-    const P = prepareBdtopoCell(bytes, m.x, m.y, (lat, lon) => geoidDeg(lat, lon));
     if (abort.signal.aborted) return;
     try {
       cache ??= caches.open(CELL_CACHE);
