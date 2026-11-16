@@ -54,7 +54,14 @@ test.skipIf(!E2E)(
           return await __bh.renderer.envelopeBench({ lat: ${TOULON.lat}, lon: ${TOULON.lon}, n: ${n}, rMin: 2000, rMax: 15000, seed: 7, lodPx: ${lodPx} }); })()`);
         if (why) throw new Error(`envelopeBench ${n}: ${why}`);
         await app.settled(30_000);
-        const m = await app.js<{ p50: number; p95: number; images: number; inView: number; quads: number; passes: [string, number][] }>(`(async () => {
+        const m = await app.js<{
+          p50: number;
+          p95: number;
+          images: number;
+          inView: number;
+          quads: number;
+          passes: [string, number][];
+        }>(`(async () => {
           const R = __bh.renderer; R.prof.enabled = true; R.prof.every = 1; R.prof.reset?.();
           for (let i = 0; i < 20; i++) { await new Promise((q) => requestAnimationFrame(q)); __bh.touch(); }
           const g = []; let done = R.completedFrames; const t0 = performance.now();
