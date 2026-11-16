@@ -324,6 +324,20 @@ export class EarthScenery {
         this.forestAt = new Float32Array(r.buffer, 0, 16)[8] ?? 0;
         // (its BVH's nodes — the header's first float —: the raster's box culling dispatched over them, SceneryRaster.encodeCull)
         this.nodeCount = new Float32Array(r.buffer, 0, 16)[0] ?? 0;
+        // (PLAN-J8 J8-0 (c): a building's leaf — the envelope bench's material —, the first node's whose primitive is a building's)
+        this.buildingLeaf = -1;
+        {
+          const f = new Float32Array(r.buffer);
+          const base = f[1] ?? 0;
+          for (let k = 0; k < this.nodeCount && 4 * (5 + 2 * k) + 3 < f.length; k++) {
+            const leaf = f[4 * (5 + 2 * k) + 3]!;
+            const w = leaf >= 0 ? f[4 * (base + leaf) + 3] : undefined;
+            if (w !== undefined && w > 0.5 && w < 1.5) {
+              this.buildingLeaf = leaf;
+              break;
+            }
+          }
+        }
         this.seasonKey = "";
         this.contact = new SceneryContact(r, r.buffer);
         this.uploaded += performance.now() - t;
@@ -446,6 +460,8 @@ export class EarthScenery {
   /** the drawn scene's forest grid: its cells (w × h, one tree at most each; 0: none) — the raster's cull walks them */
   /** the scenery's BVH nodes uploaded (their boxes culled for the raster — scenery-raster.ts cullBoxes) */
   nodeCount = 0;
+  /** a building's leaf in the drawn scene (−1: none) — the envelope bench's material (PLAN-J8 J8-0 (c)) */
+  buildingLeaf = -1;
   get forestCells() {
     return this.data?.forestCells ?? 0;
   }
@@ -530,6 +546,17 @@ export class EarthScenery {
     return this.speed > 120 && this.speed * full > 0.5 * sceneryBox(0, 0, this.mode, this.reach).radius;
   }
   /** (T8m) the box's radius the next scene will have [m] (a quick one's share in a fast flight) */
+  /**
+   * The drawn scene's square — its centre [°], its half-side [m]: its box's radius (a quick one's QUICK_SHARE of it) and the bounds'
+   * margin (scenery-sources.ts sceneryBox) — where its buildings and trees stand; null: none drawn. PLAN-J8 J8-1: the far levels'
+   * overground (earth-tiles.ts setOverMask) left out there.
+   */
+  drawnBox(): { lat: number; lon: number; half: number } | null {
+    const d = this.data;
+    if (!d || d.lat === null || d.lat === undefined || d.lon === null || d.lon === undefined) return null;
+    const r = sceneryBox(0, 0, this.mode, this.reach).radius * (this.applied.endsWith(":q") ? QUICK_SHARE : 1);
+    return { lat: d.lat, lon: d.lon, half: r + 650 };
+  }
   nextRadius() {
     return sceneryBox(0, 0, this.mode, this.reach).radius * (this.fastFlight() ? QUICK_SHARE : 1);
   }

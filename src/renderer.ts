@@ -254,7 +254,7 @@ import { MoonTiles, WORLDS } from "./system/moon-tiles";
 import { WarpGrid } from "./system/warp-grid";
 import { EarthSurface, SURFACE_TEXTURE_LIMIT } from "./system/earth-surface";
 import { EarthScenery } from "./system/scenery";
-import { DETAIL_REACH, SCENERY_STORAGE_LIMIT, type SceneryExclusion } from "./system/scenery-data";
+import { DETAIL_REACH, localPoint, SCENERY_STORAGE_LIMIT, type SceneryExclusion, sceneryFrame } from "./system/scenery-data";
 import { LANDSCAPES, LANDSCAPE_CLEARING_M } from "./system/landscapes";
 const SCENERY_EXCLUSIONS: SceneryExclusion[] = [
   ...EARTH_RUNWAYS.map((r) => ({
@@ -280,6 +280,7 @@ import {
   altitudeOver,
   bodyFixedOf,
   figureUp,
+  groundBare,
   groundRelief,
   heightOverGround,
   toBodyFixed,
@@ -11198,6 +11199,57 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
   private rasterDetailNow = false;
   /** the world's trees as raster instances (system/scenery-raster.ts), made the first time the raster pipeline has them */
   private sceneryRaster: SceneryRaster | null = null;
+  /**
+   * PLAN-J8 J8-0 (c), a measuring tool: `n` synthetic buildings' envelopes injected round a place [°] — evenly over the ring rMin …
+   * rMax [m], on the bare ground (groundBare), half-sides 4–16 m, heights 6–30 m, any heading (a seeded draw: the same for the same
+   * arguments) — drawn as the far layer of J8-4 will be (SceneryRaster.setBench: culled by the GPU, a pixel at least, solid in the
+   * visibility with a real building's material, all into the buildings' shadow map); n 0: off. Their frame the drawn scene's: set
+   * again after the scene moves. Returns why not, or null.
+   */
+  async envelopeBench(o: { lat: number; lon: number; n: number; rMin?: number; rMax?: number; seed?: number }): Promise<string | null> {
+    const R = this.sceneryRaster,
+      sc = this.earthScenery;
+    if (!R) return "no scenery raster";
+    if (!o.n) {
+      await R.setBench(null);
+      return null;
+    }
+    const box = sc.drawnBox();
+    if (!box || sc.buildingLeaf < 0) return "no scene with a building drawn";
+    const frame = sceneryFrame(box.lat, box.lon);
+    const rMin = o.rMin ?? 2000,
+      rMax = o.rMax ?? 15000;
+    let seed = (o.seed ?? 1) >>> 0 || 1;
+    const rnd = () => {
+      seed ^= seed << 13;
+      seed ^= seed >>> 17;
+      seed ^= seed << 5;
+      return (seed >>> 0) / 4294967296;
+    };
+    const env = new Float32Array(o.n * 8);
+    const cosL = Math.cos((o.lat * Math.PI) / 180);
+    for (let i = 0; i < o.n; i++) {
+      const r = Math.sqrt(rMin * rMin + rnd() * (rMax * rMax - rMin * rMin)),
+        a = rnd() * 2 * Math.PI;
+      const lat = o.lat + (r * Math.cos(a)) / 111320,
+        lon = o.lon + (r * Math.sin(a)) / (111320 * cosL);
+      const g = groundBare("earth", bodyFixedOf("earth", lat, lon, 0));
+      const p = localPoint(frame, lat, lon, g);
+      env.set([p[0], p[1], p[2], rnd() * Math.PI, 4 + 12 * rnd(), 4 + 12 * rnd(), 6 + 24 * rnd(), sc.buildingLeaf], i * 8);
+    }
+    await R.setBench(env);
+    return null;
+  }
+  /** (the bench's) its envelopes in view at the last cull; its parts left out (1 culling, 2 visibility, 4 shadow) */
+  benchInView() {
+    return this.sceneryRaster?.benchInView() ?? Promise.resolve(0);
+  }
+  set benchSkip(v: number) {
+    if (this.sceneryRaster) this.sceneryRaster.benchSkip = v;
+  }
+  get benchSkip() {
+    return this.sceneryRaster?.benchSkip ?? 0;
+  }
   /** the trees' and buildings' shadow map (system/tree-shadow.ts, drawn by the scenery raster): the device binds it; a switch
    *  for comparisons (off: the rays towards the Sun, as before) */
   private treeShadow = false;

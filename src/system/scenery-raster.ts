@@ -820,6 +820,55 @@ fn meshShade(v: MV) -> vec4f {
   o.p = v;
   return o;
 }
+// ---- PLAN-J8 J8-0 (c): the envelope bench — synthetic buildings' envelopes (their oriented box, solid) culled by the GPU (the field of
+// view, a pixel at least), drawn into the visibility as the far buildings' solid boxes are (boxSolidVs, meshFs: a real building's
+// leaf for their material), and all into the buildings' shadow map — what the far layer of J8-4 will cost, measured before it is
+// built. A measuring tool: off unless a test sets it (SceneryRaster.setBench); the image then not the scene's.
+struct Env { c: vec4f, s: vec4f };
+@group(1) @binding(0) var<storage, read> benchEnv: array<Env>;
+@group(1) @binding(1) var<storage, read_write> benchListW: array<u32>;
+@group(1) @binding(2) var<storage, read_write> benchDraw: array<atomic<u32>, 4>;
+@group(1) @binding(3) var<storage, read> benchListR: array<u32>;
+// (an envelope's corner k (0/1 each axis): c — x, y, its base's z in the scene's frame, its heading —; s — half length, half width,
+// height, its leaf)
+fn benchCorner(e: Env, k: vec3f) -> vec3f {
+  let a = (k.x * 2.0 - 1.0) * e.s.x;
+  let b = (k.y * 2.0 - 1.0) * e.s.y;
+  let c = cos(e.c.w);
+  let s = sin(e.c.w);
+  return vec3f(e.c.xy + vec2f(c, s) * a + vec2f(-s, c) * b, e.c.z + k.z * e.s.z);
+}
+@compute @workgroup_size(64)
+fn benchCull(@builtin(global_invocation_id) g: vec3u, @builtin(num_workgroups) n: vec3u) {
+  let k = g.y * n.x * 64u + g.x;
+  if (k >= arrayLength(&benchEnv)) { return; }
+  let e = benchEnv[k];
+  let R = length(vec3f(e.s.x, e.s.y, 0.5 * e.s.z)) + 0.5;
+  let v = view(vec3f(e.c.xy, e.c.z + 0.5 * e.s.z));
+  let tx = u.right.w;
+  let ty = u.up.w;
+  if (v.z < -R) { return; }
+  if (abs(v.x) - tx * v.z > R * sqrt(1.0 + tx * tx)) { return; }
+  if (abs(v.y) - ty * v.z > R * sqrt(1.0 + ty * ty)) { return; }
+  // (a pixel across at least: its radius against a pixel's size at its distance)
+  if (v.z > 0.0 && R * u.image.x < v.z * tx) { return; }
+  let at = atomicAdd(&benchDraw[1], 1u);
+  benchListW[at] = k;
+}
+@vertex fn benchVs(@builtin(vertex_index) vi: u32, @builtin(instance_index) bi: u32) -> MV {
+  var o: MV;
+  let e = benchEnv[benchListR[bi]];
+  let c = BOX[vi];
+  let v = view(benchCorner(e, vec3f(f32(c & 1u), f32((c >> 1u) & 1u), f32((c >> 2u) & 1u))));
+  o.leaf = e.s.w + 1.0;
+  o.clip = vec4f(v.x / u.right.w + u.output.z * v.z, v.y / u.up.w + u.output.w * v.z, u.forward.w, v.z);
+  o.p = v;
+  return o;
+}
+@vertex fn benchShadowVs(@builtin(vertex_index) vi: u32, @builtin(instance_index) bi: u32) -> @builtin(position) vec4f {
+  let c = BOX[vi];
+  return sunClip(benchCorner(benchEnv[bi], vec3f(f32(c & 1u), f32((c >> 1u) & 1u), f32((c >> 2u) & 1u))));
+}
 `;
 }
 
@@ -1054,6 +1103,122 @@ export class SceneryRaster {
       .then((p) => (this.meshShadowPipe = p), fail);
   }
 
+  /** PLAN-J8 J8-0 (c): the envelope bench (a measuring tool — setBench): its envelopes, list, indirect draw, pipelines; null off */
+  private bench: {
+    count: number;
+    env: GPUBuffer;
+    list: GPUBuffer;
+    draw: GPUBuffer;
+    cullBind: GPUBindGroup;
+    drawBind: GPUBindGroup;
+  } | null = null;
+  private benchPipes: { cull: GPUComputePipeline; vis: GPURenderPipeline; shadow: GPURenderPipeline } | null = null;
+  /** the bench's parts left out, to measure each (1 its culling, 2 its visibility, 4 its shadow) */
+  benchSkip = 0;
+  /**
+   * The envelope bench (PLAN-J8 J8-0 (c)): `env` 8 floats an envelope — x, y, its base's z in the scene's frame [m], its heading [rad];
+   * half length, half width, height [m], a building's leaf (its material) —; null: off, its buffers let go. Its pipelines made at its
+   * first use (awaited: the bench draws once they are in).
+   */
+  async setBench(env: Float32Array | null): Promise<void> {
+    if (this.bench) {
+      for (const b of [this.bench.env, this.bench.list, this.bench.draw]) b.destroy();
+      this.bench = null;
+    }
+    if (!env || env.length < 8) return;
+    const d = this.device;
+    if (!this.benchPipes) {
+      const C = GPUShaderStage.COMPUTE,
+        V = GPUShaderStage.VERTEX;
+      const cullL = d.createBindGroupLayout({
+        label: "envelope bench cull",
+        entries: [
+          { binding: 0, visibility: C, buffer: { type: "read-only-storage" } },
+          { binding: 1, visibility: C, buffer: { type: "storage" } },
+          { binding: 2, visibility: C, buffer: { type: "storage" } },
+        ],
+      });
+      const drawL = d.createBindGroupLayout({
+        label: "envelope bench draw",
+        entries: [
+          { binding: 0, visibility: V, buffer: { type: "read-only-storage" } },
+          { binding: 3, visibility: V, buffer: { type: "read-only-storage" } },
+        ],
+      });
+      const [cull, vis, shadow] = await Promise.all([
+        d.createComputePipelineAsync({
+          layout: d.createPipelineLayout({ bindGroupLayouts: [this.cullLayout, cullL] }),
+          compute: { module: this.module, entryPoint: "benchCull" },
+        }),
+        d.createRenderPipelineAsync({
+          layout: d.createPipelineLayout({ bindGroupLayouts: [this.drawLayout, drawL] }),
+          vertex: { module: this.module, entryPoint: "benchVs" },
+          fragment: {
+            module: this.module,
+            entryPoint: "meshFs",
+            targets: [{ format: TERRAIN_RASTER_FORMAT }, { format: TERRAIN_RASTER_MOTION_FORMAT }, { format: TERRAIN_RASTER_ID_FORMAT }],
+          },
+          primitive: { topology: "triangle-list", cullMode: "none" },
+          depthStencil: { format: "depth32float", depthWriteEnabled: true, depthCompare: "greater" },
+        }),
+        d.createRenderPipelineAsync({
+          layout: d.createPipelineLayout({ bindGroupLayouts: [this.drawLayout, drawL] }),
+          vertex: { module: this.module, entryPoint: "benchShadowVs" },
+          primitive: { topology: "triangle-list", cullMode: "none" },
+          depthStencil: { format: "depth32float", depthWriteEnabled: true, depthCompare: "less" },
+        }),
+      ]);
+      this.benchPipes = { cull, vis, shadow };
+      this.benchLayouts = { cull: cullL, draw: drawL };
+    }
+    const count = Math.floor(env.length / 8);
+    const S = GPUBufferUsage.STORAGE;
+    const envB = d.createBuffer({ size: count * 32, usage: S | GPUBufferUsage.COPY_DST, label: "envelope bench" });
+    d.queue.writeBuffer(envB, 0, env.subarray(0, count * 8) as Float32Array<ArrayBuffer>);
+    const list = d.createBuffer({ size: count * 4, usage: S, label: "envelope bench list" });
+    const draw = d.createBuffer({
+      size: 16,
+      usage: S | GPUBufferUsage.INDIRECT | GPUBufferUsage.COPY_DST | GPUBufferUsage.COPY_SRC,
+      label: "envelope bench draw",
+    });
+    this.bench = {
+      count,
+      env: envB,
+      list,
+      draw,
+      cullBind: d.createBindGroup({
+        layout: this.benchLayouts!.cull,
+        entries: [
+          { binding: 0, resource: { buffer: envB } },
+          { binding: 1, resource: { buffer: list } },
+          { binding: 2, resource: { buffer: draw } },
+        ],
+      }),
+      drawBind: d.createBindGroup({
+        layout: this.benchLayouts!.draw,
+        entries: [
+          { binding: 0, resource: { buffer: envB } },
+          { binding: 3, resource: { buffer: list } },
+        ],
+      }),
+    };
+  }
+  private benchLayouts: { cull: GPUBindGroupLayout; draw: GPUBindGroupLayout } | null = null;
+  private benchReset = new Uint32Array([36, 0, 0, 0]);
+  /** the bench's envelopes in view at the last cull (its indirect draw's instances, read back) */
+  async benchInView(): Promise<number> {
+    if (!this.bench) return 0;
+    const r = this.device.createBuffer({ size: 16, usage: GPUBufferUsage.MAP_READ | GPUBufferUsage.COPY_DST });
+    const enc = this.device.createCommandEncoder();
+    enc.copyBufferToBuffer(this.bench.draw, 0, r, 0, 16);
+    this.device.queue.submit([enc.finish()]);
+    await r.mapAsync(GPUMapMode.READ);
+    const n = new Uint32Array(r.getMappedRange())[1]!;
+    r.unmap();
+    r.destroy();
+    return n;
+  }
+
   private lod: SceneryRasterLod = SCENERY_RASTER_LOD;
   private sceneryOut = new Float32Array(44);
   /** the scenery's publication the instances belong to (earthScenery.revision; PLAN-J1 J1-2): their identity's generation */
@@ -1194,6 +1359,7 @@ export class SceneryRaster {
     this.sceneryOut[40] = this.generation % 4096;
     q.writeBuffer(this.sceneryU, 0, this.sceneryOut);
     q.writeBuffer(this.draws, 0, this.reset);
+    if (this.bench && !(this.benchSkip & 1)) q.writeBuffer(this.bench.draw, 0, this.benchReset);
     // (the Sun's view: its trees culled into the shadow lists when it is to be drawn — encodeShadow —; else none)
     this.sunOn = !!sun && sun[15]! > 0.5 && this.shadowReady;
     if (sun) {
@@ -1218,6 +1384,14 @@ export class SceneryRaster {
     }
     pass.setPipeline(this.clampBoxesPipe!);
     pass.dispatchWorkgroups(1);
+    // (PLAN-J8 J8-0 (c): the envelope bench's culling — its list and its draw's instances, reset before the pass)
+    if (this.bench && this.benchPipes && !(this.benchSkip & 1)) {
+      const g = Math.ceil(this.bench.count / 64);
+      pass.setPipeline(this.benchPipes.cull);
+      pass.setBindGroup(0, this.cullBind!);
+      pass.setBindGroup(1, this.bench.cullBind);
+      pass.dispatchWorkgroups(Math.min(g, 65535), Math.ceil(g / 65535));
+    }
     pass.end();
     this.cells = forestCells;
     this.active = true;
@@ -1265,6 +1439,13 @@ export class SceneryRaster {
         pass.drawIndirect(this.draws, (LISTS + 3) * 16);
       }
     }
+    // (PLAN-J8 J8-0 (c): the envelope bench's envelopes in view, solid, a real building's material)
+    if (this.bench && this.benchPipes && !(this.benchSkip & 2)) {
+      pass.setPipeline(this.benchPipes.vis);
+      pass.setBindGroup(0, this.drawBind);
+      pass.setBindGroup(1, this.bench.drawBind);
+      pass.drawIndirect(this.bench.draw, 0);
+    }
   }
 
   /** The trees' and buildings' shadow map, seen from the Sun (after encodeCull, which culled its lists): false when not drawn. */
@@ -1297,6 +1478,13 @@ export class SceneryRaster {
     buildings.drawIndirect(this.draws, LISTS * 16);
     buildings.setPipeline(this.meshShadowPipe!);
     buildings.drawIndirect(this.draws, (LISTS + 4) * 16);
+    // (PLAN-J8 J8-0 (c): the envelope bench's, all of them — as the buildings' boxes, uncut by the Sun's view)
+    if (this.bench && this.benchPipes && !(this.benchSkip & 4)) {
+      buildings.setPipeline(this.benchPipes.shadow);
+      buildings.setBindGroup(0, this.drawBind);
+      buildings.setBindGroup(1, this.bench.drawBind);
+      buildings.draw(36, this.bench.count);
+    }
     buildings.end();
     return true;
   }
@@ -1343,5 +1531,7 @@ export class SceneryRaster {
 
   dispose() {
     for (const b of [this.frameU, this.sceneryU, this.draws, this.lists, this.sunU, ...this.meshes, ...this.cascadeSunU]) b.destroy();
+    if (this.bench) for (const b of [this.bench.env, this.bench.list, this.bench.draw]) b.destroy();
+    this.bench = null;
   }
 }

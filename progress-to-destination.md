@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-16 11:50 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-16 11:59 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous. Ce qui est fermé quitte le tableau « En cours » pour la ligne « Fermé récemment ».
@@ -63,7 +63,7 @@ l'état d'une mission ou d'un combat **non sauvé, dit** ; le réseau **« entre
 
 **Fermé aussi** : le plancher du raster sur GPU faible (15 nov., 23:46, proposer sous 15 images/s, décision de Sam).
 
-**La session du rendu (33d89754)** : **[PLAN-J8](docs/PLAN-J8-BATIMENTS.md) (tous les bâtiments de la vue, priorité de Sam, 16 nov.)** — J8-0 (c), (e) et J8-1 ouverts, puis J8-2, J8-4, J8-5. [PLAN-J7](docs/PLAN-J7-FLUIDITE.md) **en pause** (§6) : faits J7-0, J7-1, J7-7, J7-8, J7-8b (la musique dans le worker), J7-9 (non reproduit), J7-3 (fermé), J7-4 ; en pause J7-2 (cause lue : pas le thread principal, une image GPU ~4 s après — les nuages du jour suspects, non confirmé), J7-5, J7-6, J7-R.
+**La session du rendu (33d89754)** : **[PLAN-J8](docs/PLAN-J8-BATIMENTS.md) (tous les bâtiments de la vue, priorité de Sam, 16 nov.)** — J8-2 proposé (le contrat de cellule, à relire par 1feb2f7f) ; J8-0 (e) prêt (J0 relève le décor chaque seconde) ; J8-0 (c) : le banc d'enveloppes écrit, à faire tourner après J8-0 (b) ; **J8-1 essayé et mis de côté** (le sur-sol z 14 masqué par la scène : aucun gain visible — le trou est dans la scène, au plafond des bâtiments) ; ensuite J8-4, J8-5. [PLAN-J7](docs/PLAN-J7-FLUIDITE.md) en pause (§6).
 
 **Priorité de Sam (16 nov., 11:30 UTC) : [PLAN-J8](docs/PLAN-J8-BATIMENTS.md), tous les bâtiments de la vue** (« c'est ça qui choque le plus ») — la suite de J7 en pause après J7-8b ; les deux sessions s'y mettent (rendu : couche GPU, scène proche ; approches : recensement, préparation des cellules, PWA) ; d'abord J8-0 (mesures) et J8-1 (le trou de 2 à 7 km).
 
@@ -8878,3 +8878,18 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
 - Limites : le compte de la donnée, pas de ce qui couvre ≥ 1 pixel (J8-4) ; la préparation complète par tuile se mesure avec J8-3.
 - Suite : J8-0 (b) (le profil du worker de décor, par phase : CPU contre attente réseau — `cdp.ts` `sendTo` ajouté pour profiler un worker
   attaché), J8-0 (d) (Paris : la mémoire ou les maillages), puis J8-3 après le contrat J8-2.
+
+### 2026-11-16 11:59 UTC — PLAN-J8 : J8-2 proposé, J8-1 essayé et mis de côté, le banc J8-0 (c) écrit (session 33d89754)
+
+- Contribution à la destination : PLAN-J8 (tous les bâtiments de la vue, la priorité de Sam) — §7.19 de la stratégie (une unité de
+  résidence stable : le contrat de cellule) ; la règle 1 (le coût d'un lot de contenu mesuré avant qu'il soit construit : le banc).
+- Réalisé : `src/system/building-cells.ts` (b6d1fb1d, J8-2, à relire par la session des approches) ; J0 relève `earthScenery.stats()`
+  chaque seconde (efcb0e99, J8-0 (e)) ; le banc d'enveloppes (`renderer.envelopeBench`, `SceneryRaster` : `benchCull`, `benchVs`,
+  `benchShadowVs` ; `earthScenery.drawnBox`, `buildingLeaf`) et son e2e `j8-envelope-bench` ; l'e2e `j8-silhouettes` et sa sonde de
+  bande ; J8-1 : le sur-sol IGN porté à z 14 et masqué par le carré de la scène — essayé, mesuré, **non commité** (patch hors dépôt).
+- Preuves : J8-2 tests 6/6 ; le banc : shaders compilés par Chrome (84/84), tsc ; J8-1 (kerr-mini, A/B de commit, vues complètes) :
+  captures identiques, la sonde de bande voit le sur-sol dès 10 km des deux côtés (0,10 → 0,38 à 10 km sur une vue), GPU égal.
+- Limites : le banc n'a pas encore tourné (il attend la charge IGN de J8-0 (b)) ; J0 (e) en file sur le mini.
+- Suite : le banc sur le mini et le M1 Max (si plus de 3 ms sur le mini pour la vue J0, retour à Sam avant J8-4) ; J8-4 après la
+  relecture de J8-2.
+
