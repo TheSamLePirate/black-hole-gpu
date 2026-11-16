@@ -12,9 +12,9 @@ import { J0_FIXED } from "./lib/j0-scene";
 // first point, the world frozen, everything loaded (__bh.sys.flightReady — the tiles, the near scene whole, the building cells, the far
 // layer's cells all resident; said every 10 s, 10 min at most); then flown along the track under the autopilot (its heading set every
 // 5 s to the next point, the next once within 700 m; rule 13 after each leg: the holds, the engine, the airspeed, the attitude, gear up).
-// All along: the page's gaps, the GPU time, the near scene's quick ones, the network's requests during the flight (the data's hosts),
+// All along: the page's gaps, the GPU time, the near scene's quick ones, the real network in flight (the e2e disk cache's misses; the page's requests apart),
 // the buildings drawn (the near scene's, the far layer's boxes and quads); a cockpit shot at each point, a view from outside at the end.
-// Not yet a pass/fail on « no request, no quick scene » (J8A_STRICT: asserted) — J8-5 and J8-8 still to finish; it fails on the
+// Not yet a pass/fail on « no request, no quick scene » (J8A_STRICT: asserted; J8A_TRACK_READY: flightReady over the whole track) — J8-5 and J8-8 still to finish; it fails on the
 // flight itself (rule 13), a GPU error or the device lost. j8-a.json.
 // J8A_NEAR [m, default 0]: the near scene / far layer junction (renderer.farNearOnlyM — J8-5, Sam's choice pending).
 // J8A_BUDGET [MiB, default 72]: the far layer's pool (renderer.farBudgetMiB — all Paris resident; Sam's decision pending).
@@ -24,6 +24,9 @@ afterAll(stopServer);
 const MACHINE = process.env.J8A_MACHINE ?? (await $`hostname -s`.quiet().text()).trim();
 const OUT = process.env.J8A_OUT ?? `remote-results/j8-a/${MACHINE}`;
 const TRACKS = J8A_TRACKS.filter((t) => !process.env.J8A_TRACKS || process.env.J8A_TRACKS.split(",").includes(t.name));
+/** J8A_TRACK_READY: flightReady over the whole track (its zone's corridor, its far and street cells — dd36cb80), not the start's view
+ *  alone: a zone wanted first (the corridor's, j8-zone-paris) */
+const TRACK_READY = !!process.env.J8A_TRACK_READY;
 const HOURS = (process.env.J8A_HOURS ?? "day,night").split(",") as ("day" | "night")[];
 const D = Math.PI / 180;
 /** the data's hosts — a request to one in flight: not all loaded before */
@@ -69,7 +72,7 @@ test.skipIf(!E2E)(
             changed = Date.now();
           for (;;) {
             const r = await app.js<{ ready: boolean; why: string }>(
-              `(async () => { __bh.touch(); const r = await __bh.sys.flightReady(); return { ready: r.ready, why: String(r.why) }; })()`,
+              `(async () => { __bh.touch(); const r = await __bh.sys.flightReady(${TRACK_READY ? `{ track: { points: ${JSON.stringify(t.points)} } }` : ""}); return { ready: r.ready, why: String(r.why) }; })()`,
             );
             if (r.ready) break;
             if (r.why !== why) {
@@ -82,6 +85,9 @@ test.skipIf(!E2E)(
             await app.js(`new Promise((q) => setTimeout(q, 5000))`);
           }
           const preloadS = (Date.now() - t0) / 1000;
+          // (the real network in flight: the e2e disk cache's misses — what it had not and fetched — before and after; the requests the
+          // page made, served by the disk or the Service Worker too, apart)
+          const missesBefore = app.earth?.counts.misses ?? 0;
           await app.settled(90_000);
           await app.js(`(() => { performance.clearResourceTimings(); performance.setResourceTimingBufferSize(100000);
             __bh.camera.apSet({ ap: true, athr: true, alt: ${p0[2]}, hdg: ${hdg0.toFixed(2)} * Math.PI / 180, spd: ${t.speedMps} });
@@ -137,11 +143,12 @@ test.skipIf(!E2E)(
             gapMax: Math.max(...legs.map((l) => l.gapMax)),
             quickImages: legs.reduce((s, l) => s + l.quick, 0),
             requests: legs[legs.length - 1]?.requests ?? 0,
+            networkMisses: (app.earth?.counts.misses ?? 0) - missesBefore,
           };
           (out.flights as Record<string, unknown>)[name] = flight;
           console.log(`  ${name}: ${JSON.stringify({ ...flight, legs: undefined })}`);
           if (process.env.J8A_STRICT) {
-            expect(flight.requests).toBe(0);
+            expect(flight.networkMisses).toBe(0);
             expect(flight.quickImages).toBe(0);
           }
           await app.js(`(() => { __bh.freeze(true); return 1; })()`);
