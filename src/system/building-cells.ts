@@ -29,9 +29,11 @@
 //  - the ground: the source's (the BD TOPO's altitude_minimale_sol, over the sea, + the geoid's N — flag GroundKnown); the far layer
 //    (J8-4) sets an envelope on the relief as drawn, its record's ground the fallback and the check (a coarse far relief would leave
 //    one floating or sunk by metres);
-//  - a building cut by two tiles: one record, in the cell holding its footprint's centre, its box on the geometry the tile gives
-//    past its square (the vector tile's buffer); the other copy left out by the same rule, each tile alone; flag Partial when the
-//    footprint passes the buffer;
+//  - a building cut by two tiles: one record — its parts together (the tile splits a building at its buffer into parts its
+//    neighbour numbers otherwise) —, in the first (north, then west) of the cells it touches, its box on the geometry the tile gives
+//    past its square (the vector tile's buffer); the other copy left out by the same rule, each tile alone (its footprint's centre
+//    did not agree between the two copies, each cut at its own tile's buffer: 16 doubles and 5 lost over 25 tiles of Toulon; this
+//    rule none — tests/cell-prep.test.ts); flag Partial when the footprint reaches the buffer;
 //  - the generation: the source's newest change in the cell (the BD TOPO's date_modification, as YYYYMMDD), else the response's
 //    Last-Modified — a newer replaces an older;
 //  - the identity: cell + rank stable within a generation (the ranks by the source's identity — cleabs); across generations the

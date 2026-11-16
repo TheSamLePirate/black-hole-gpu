@@ -4,8 +4,8 @@ import { existsSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { PbfReader } from "pbf";
 import { bdtopoHeight, bdtopoStands } from "../src/system/bdtopo";
-import { HEADER_BYTES, RECORD_BYTES, readHeader, readRecord, sourceKey } from "../src/system/building-cells";
-import { FLAG_GROUND_KNOWN, prepareBdtopoCell } from "../src/system/cell-prep";
+import { HEADER_BYTES, RECORD_BYTES, RecordFlag, readHeader, readRecord, sourceKey } from "../src/system/building-cells";
+import { prepareBdtopoCell } from "../src/system/cell-prep";
 import { regionOf, roofMaterial, wallMaterial } from "../src/system/roofs";
 
 // PLAN-J8 J8-3 — a BD TOPO tile prepared into a building cell (src/system/cell-prep.ts), against the scenery worker's own decoding of
@@ -87,7 +87,7 @@ test("a tile prepared: the worker's buildings, each with the worker's attributes
       ((r.flags & 1) === 1) === w.light;
     if (!same) bad++;
     // (the ground over the ellipsoid: the registry's over the sea plus the N given, 50 m here)
-    if (r.flags & FLAG_GROUND_KNOWN) expect(r.ground).toBeGreaterThan(45);
+    if (r.flags & RecordFlag.GroundKnown) expect(r.ground).toBeGreaterThan(45);
   }
   expect(bad).toBe(0);
   // (the rank: the identity's order, stable whatever the tile's own)

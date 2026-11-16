@@ -27,11 +27,6 @@ import {
 } from "./building-cells";
 import { orientedBox, regionOf, roofMaterial, type RoofShape, wallMaterial } from "./roofs";
 
-/** (proposed to the contract, J8-2 review of 16 Nov 2026) the ground is the source's: else the drawn relief's at the draw */
-export const FLAG_GROUND_KNOWN = 8;
-/** (proposed) the footprint reaches the tile's buffer: its box from the part the tile carries */
-export const FLAG_PARTIAL = 16;
-
 const D = Math.PI / 180;
 
 export interface PreparedCell {
@@ -129,9 +124,9 @@ export function prepareBdtopoCell(
     let flags = 0;
     if (pr.construction_legere === true) flags |= RecordFlag.Light;
     if (usage === "Annexe") flags |= RecordFlag.Annex;
-    if (groundKnown) flags |= FLAG_GROUND_KNOWN;
+    if (groundKnown) flags |= RecordFlag.GroundKnown;
     if (cut) {
-      flags |= FLAG_PARTIAL;
+      flags |= RecordFlag.Partial;
       partial++;
     }
     out.push({
