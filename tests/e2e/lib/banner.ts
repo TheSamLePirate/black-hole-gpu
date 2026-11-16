@@ -54,7 +54,8 @@ function filter(): RegExp | null {
         .stdout.toString()
         .trim();
       const m = line.match(/(?:^|\s)(?:-t|--test-name-pattern)(?:=|\s+)(.+?)(?=\s+--?[a-zA-Z]|$)/);
-      pat = m ? m[1]!.replace(/^(["'])(.*)\1$/, "$2") : null;
+      // (ps writes the bytes beyond ASCII as « M-x » — « leçons » comes as « leM-CM-'ons »: such a run one or two characters)
+      pat = m ? m[1]!.replace(/^(["'])(.*)\1$/, "$2").replace(/(?:M-.)+/g, ".{1,2}") : null;
     } catch {}
   }
   try {
@@ -79,9 +80,10 @@ export function fileInfo(path: string): FileInfo {
   const suite = src.match(new RegExp(String.raw`\bdescribe(?:\.skipIf\([^)]*\))?\(\s*${title}`));
   const f = filter();
   const full = (t: string) => (suite ? `${pick(suite)} ${t}` : t);
-  const tests = [...src.matchAll(new RegExp(String.raw`\btest(?:\.skipIf\([^)]*\)|\.if\([^)]*\))?\(\s*${title}`, "g"))]
-    .map(pick)
-    .filter((t) => !f || f.test(t) || f.test(full(t)));
+  const all = [...src.matchAll(new RegExp(String.raw`\btest(?:\.skipIf\([^)]*\)|\.if\([^)]*\))?\(\s*${title}`, "g"))].map(pick);
+  // (a filter that picks none — misread —: the file's tests all, rather than none)
+  const picked = all.filter((t) => !f || f.test(t) || f.test(full(t)));
+  const tests = picked.length ? picked : all;
   // (the header: the first block of line comments — after the imports —, its lines joined; its "Duration:" and "Done when:"
   // lines apart, each running on to the next tagged line or the header's end)
   const lines = src.split("\n");

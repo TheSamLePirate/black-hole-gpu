@@ -153,3 +153,11 @@ existantes ne changent pas ; l'étape 9 bis est nouvelle, volée par `fd-approac
 apprendre-avions.html) : Tab › **Approche** (au lieu de Navigation › Approche ILS et de sa sous-roue de pistes). Les recettes de vol
 ne changent pas ; `apprendre-avions` n'utilise pas la roue. Revérifié : `approach-wheel` 2/2 et `ils-runway` 1/1 (le choix de la
 piste à la roue, en français, à Toulon-Hyères), par entrée réelle.
+
+**16 novembre 2026 — l'alarme du train (GPWS mode 4A), la leçon 3 revolée ; la ligne d'horizon du HUD retirée.** La leçon 3 disait
+l'alarme « train rentré trop bas » normale juste après le décollage : elle ne sonne plus pendant la montée initiale (`game/gear-warn.ts` :
+train rentré, sous 152 m sol et 98 m/s, en descente, hors montée jusqu'à 457 m). Revolé : `apprendre-avions` « leçons 0 et 3 » 1/1 (ce Mac,
+fenêtre visible) — à 223 m, +34,8 m/s, train rentré : plus d'alarme (avant : « MASTER WARNING · GEAR UP · TOO LOW », « Too low, gear! »).
+La capture `av-l3-montee.jpg` remplacée ; l'« Auto-GCAS: recovered » qu'on y lit était déjà sur l'ancienne (non lié). Le schéma du HUD
+(apprendre-avions.html) perd sa ligne d'horizon (retirée du HUD ce jour, Sam). Ouvert : l'Auto-GCAS qui reprend la main pendant la
+montée de la leçon 3 — non examiné.
