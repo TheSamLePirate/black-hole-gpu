@@ -65,7 +65,9 @@ l'état d'une mission ou d'un combat **non sauvé, dit** ; le réseau **« entre
 
 **La session du rendu (33d89754)** : [PLAN-J7](docs/PLAN-J7-FLUIDITE.md) en cours — **faits** : J7-0 (la sonde et sa [fiche](docs/progress/j7/FICHE-A-COUPS-2026-11-16.md)), J7-1 (le sol des approches), J7-7 (le démarrage, le changement d'appareil : le reste = la mise en place), J7-8 (le début du vol), J7-9 (non reproduit), **J7-3 fermé « non reproduit »**, **J7-4** (la pastille, `gpu-startup`, le bouton Météo de la carte corrigés ; `parcours-ville` : le décor en retard sur la ville à 150 m/s, **rouvert dans PROBLEMES, un lot du décor proposé**) ; **en cours** : J7-2 (le préchauffage de la clé de la météo essayé et retiré — le coup de l'arrivée n'est ni une compilation ni le GPU ; profil CPU en cours), **J7-8b fait** (la musique dans le worker : A/B des échantillons identique, au début du vol 182 → 149 ms/aucune image > 100 ms, e2e audio 19/19) ; ensuite J7-5, J7-6, J7-R.
 
-**Attend Sam** : les trois questions de [PLAN-J7](docs/PLAN-J7-FLUIDITE.md) §4, réglées provisoirement (les 40 ms du mini en dernier, J7-6 ; PLAN-J8 les arbres proches en géométrie ensuite ; l'aplanissement du détail sous les trouées jusqu'à la FAF ou 10 km) ; les seuils du mini attendent la reprise de la cible 40 ms.
+**Priorité de Sam (16 nov., 11:30 UTC) : [PLAN-J8](docs/PLAN-J8-BATIMENTS.md), tous les bâtiments de la vue** (« c'est ça qui choque le plus ») — la suite de J7 en pause après J7-8b ; les deux sessions s'y mettent (rendu : couche GPU, scène proche ; approches : recensement, préparation des cellules, PWA) ; d'abord J8-0 (mesures) et J8-1 (le trou de 2 à 7 km).
+
+**Attend Sam** : les quatre questions de [PLAN-J8](docs/PLAN-J8-BATIMENTS.md) §6, réglées provisoirement (même contenu sur les deux machines, retour si > 3 ms sur le mini ; portée au pixel ; J7 en pause, les arbres proches deviennent J9 ; pas de préparation côté serveur pour l'instant) ; les trois questions de [PLAN-J7](docs/PLAN-J7-FLUIDITE.md) §4, réglées provisoirement (les 40 ms du mini en dernier, J7-6 ; les arbres proches en géométrie ensuite, désormais J9 ; l'aplanissement du détail sous les trouées jusqu'à la FAF ou 10 km) ; les seuils du mini attendent la reprise de la cible 40 ms.
 
 ## Journal
 
@@ -8816,3 +8818,20 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   sienne est rendue sur place (comptée).
 - Suite : J7-2 (le profil CPU de l'arrivée de la météo), J7-5.
 
+### 2026-11-16 11:30 UTC — PLAN-J8 écrit (session d'analyse) : tous les bâtiments de la vue
+
+- Contribution à la destination : stratégie §7.19 (une unité de résidence stable, des enrichissements indépendants, une priorité de
+  bout en bout) appliquée aux bâtiments ; §19 (l'expérience : le réalisme des villes, la PWA hors ligne). Demande de Sam : « le maximum
+  de bâtiments dans la vue […] c'est ça qui choque le plus ».
+- Réalisé : [PLAN-J8-BATIMENTS.md](docs/PLAN-J8-BATIMENTS.md). Il part d'une analyse en lecture seule (`fad0da5c`) : une scène refaite
+  d'un bloc par un seul worker (12,7 s rapide, 24–33 s complète), d'où le régime rapide au-dessus de 120 m/s (2,1 km, 3 920
+  bâtiments) ; un plafond de 8 000 × portée² jamais recalculé depuis le raster ; un anneau sans bâtiment de 2 à 7 km ; du relief au-delà.
+  Le principe : une couche de bâtiments par cellules z 15, préparée une fois en workers et mise en cache, dessinée en enveloppes triées
+  par le GPU de 2 km à la limite du pixel, le maillage actuel en deçà, le relief des toits au-delà ; les zones PWA portent les cellules
+  préparées. Lots J8-0 à J8-8 et J8-R, répartis entre la session du rendu et celle des approches ; quatre questions à Sam, réglées
+  provisoirement. Carte docs/README.md.
+- Preuves : documenté seulement. Les valeurs du code relues sur `fad0da5c` (`scenery-worker.ts:697`, `scenery.ts:42,530`,
+  `scenery-sources.ts:19`, `earth-tiles.ts:664`) ; les mesures citées viennent des fiches existantes. Aucun test ni e2e lancé ; le
+  recensement des bâtiments de la vue J0 et le coût GPU par enveloppe sont à mesurer (J8-0).
+- Limites : le coût GPU de la couche lointaine sur le mini n'est pas connu ; il décide de la question 1.
+- Suite : J8-0 et J8-1 en parallèle, après J7-8b (rendu) et la mesure GCAS en cours (approches).
