@@ -40,16 +40,29 @@ function measured(name: string): string {
   return s === null ? "" : `${said(s)} ${where} (median of ${d.runs} run${d.runs > 1 ? "s" : ""})`;
 }
 
-/** The -t filter bun test was given (null: none). */
+/** The -t filter bun test was given (null: none). bun test leaves it out of process.argv: read from the process's own command line
+ *  (ps — its quoting lost: the pattern runs to the next flag or the line's end). */
+let filterRead: RegExp | null | undefined;
 function filter(): RegExp | null {
+  if (filterRead !== undefined) return filterRead;
   const a = process.argv;
   const i = a.findIndex((x) => x === "-t" || x === "--test-name-pattern");
-  if (i < 0 || !a[i + 1]) return null;
-  try {
-    return new RegExp(a[i + 1]!);
-  } catch {
-    return null;
+  let pat = i >= 0 ? (a[i + 1] ?? null) : null;
+  if (pat === null) {
+    try {
+      const line = Bun.spawnSync(["ps", "-ww", "-o", "args=", "-p", String(process.pid)])
+        .stdout.toString()
+        .trim();
+      const m = line.match(/(?:^|\s)(?:-t|--test-name-pattern)(?:=|\s+)(.+?)(?=\s+--?[a-zA-Z]|$)/);
+      pat = m ? m[1]!.replace(/^(["'])(.*)\1$/, "$2") : null;
+    } catch {}
   }
+  try {
+    filterRead = pat ? new RegExp(pat) : null;
+  } catch {
+    filterRead = null;
+  }
+  return filterRead;
 }
 
 /** A test file's describe, its tests (in order, the filter applied) and its header comment. */
@@ -98,24 +111,44 @@ export function fileInfo(path: string): FileInfo {
   return info;
 }
 
-/** What the page runs to put up (or update) the banner. */
-function script(file: string, k: number): string {
+/** This machine's name as the lab says it (kerr-mini, this Mac's). */
+const HOST = hostname().replace(/\.local$/, "");
+
+/** A test title as one reads it: a template's `${…}` (its values unknown to the file's text) said « … ». */
+export const titleOf = (t: string) => t.replace(/\$\{[^}]*\}/g, "…");
+
+/**
+ * The run's reference Sam can quote (docs/E2E.md, the banner): `<file> #<k>/<n> · <scenario or test>` — the same words on the
+ * banner's first line, in the log (app.scenario's line), in the live record and in the captures' names.
+ */
+export function bannerRef(file: string, k: number, scenario: string | null): string {
   const I = fileInfo(file);
-  const head = k === 0 ? "setting up" : `test ${k}/${I.tests.length || "?"}`;
-  const now = k === 0 ? I.suite || I.name : (I.tests[k - 1] ?? "");
+  const name = I.name.replace(/\.e2e\.test\.ts$/, "");
+  if (k === 0) return `${name} · setting up${scenario ? ` · ${scenario}` : ""}`;
+  return `${name} #${k}/${I.tests.length || "?"} · ${scenario ?? titleOf(I.tests[k - 1] ?? "")}`;
+}
+
+/** What the page runs to put up (or update) the banner. */
+function script(file: string, k: number, scenario: string | null = null): string {
+  const I = fileInfo(file);
+  const head = `${bannerRef(file, k, scenario)} · ${HOST}`;
+  // (the test's title — a template's values unknown to the text: the scenario said in its place)
+  const title = k === 0 ? I.suite || I.name : (I.tests[k - 1] ?? "");
+  const now = /\$\{/.test(title) && scenario ? scenario : titleOf(title);
   const about = I.about.length > 420 ? `${I.about.slice(0, 417)}…` : I.about;
-  const data = JSON.stringify({ file: I.name, head, now, about, duration: I.duration, done: I.done });
+  const data = JSON.stringify({ file: I.name, head, now, scenario, about, duration: I.duration, done: I.done });
   return `(() => { const d = ${data}; let el = document.getElementById("e2e-banner");
     if (!el) { el = document.createElement("div"); el.id = "e2e-banner"; el.setAttribute("aria-hidden", "true");
       el.style.cssText = "position:fixed;left:12px;bottom:12px;z-index:2147483647;max-width:min(560px,calc(100vw - 24px));padding:10px 14px;border-radius:10px;background:rgba(8,12,20,.82);border:1px solid rgba(255,200,90,.55);color:#e8eef6;font:13px/1.35 system-ui,-apple-system,sans-serif;pointer-events:none;box-shadow:0 6px 24px rgba(0,0,0,.45)";
       document.documentElement.append(el); }
     el.replaceChildren();
     const row = (t, css) => { const s = document.createElement("div"); s.textContent = t; s.style.cssText = css; el.append(s); };
-    row("E2E · " + d.file + " — " + d.head, "font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:#ffc85a;margin-bottom:3px");
+    row("E2E · " + d.head, "font-size:11.5px;letter-spacing:.03em;color:#ffc85a;margin-bottom:3px;font-variant-numeric:tabular-nums");
     row(d.now, "font-weight:650;font-size:14px;margin-bottom:4px");
+    if (d.scenario && d.scenario !== d.now) row("Scénario · " + d.scenario, "font-weight:600;font-size:13px;color:#ffe2a8;margin-bottom:4px");
     if (d.about) row(d.about, "font-size:12px;color:#b9c4d2;display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical;overflow:hidden");
     // (how long it takes against the time gone — since this file's or test's banner first went up —, and what ends it)
-    const key = d.file + "|" + d.head;
+    const key = d.file + "|" + d.head.split(" · ")[0];
     if (window.__e2eBannerKey !== key) { window.__e2eBannerKey = key; window.__e2eBannerT0 = Date.now(); }
     const clock = document.createElement("div");
     clock.style.cssText = "font-size:12px;color:#ffc85a;margin-top:4px;font-variant-numeric:tabular-nums";
@@ -130,7 +163,12 @@ function script(file: string, k: number): string {
 }
 
 /** Puts the banner up on a page one sees: the file being set up (k 0) or its k-th test. Headless: nothing. */
-export async function showBanner(page: { js(expr: string): Promise<unknown> } | null, file: string, k: number) {
+export async function showBanner(
+  page: { js(expr: string): Promise<unknown> } | null,
+  file: string,
+  k: number,
+  scenario: string | null = null,
+) {
   if (!page || SHOW === "headless" || !file || process.env.E2E_BANNER === "0") return;
-  await page.js(script(file, k)).catch(() => {});
+  await page.js(script(file, k, scenario)).catch(() => {});
 }

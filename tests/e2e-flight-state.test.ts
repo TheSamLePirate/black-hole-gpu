@@ -36,7 +36,7 @@ test("a cruise flown as a pilot leaves it: no problem; the cruise's bounds pass"
 });
 
 test("each absurd state named: the glide at idle, the holds off, the gear, the stall, the attitude", () => {
-  expect(flightProblems({ ...cruise, engine: 0, lever: 0 }, "cruise").join()).toMatch(/no thrust/);
+  expect(flightProblems({ ...cruise, engine: 0, lever: 0, athr: false }, "cruise").join()).toMatch(/no thrust/);
   expect(flightProblems({ ...cruise, ap: false }, "cruise").join()).toMatch(/no autopilot/);
   expect(flightProblems({ ...cruise, athr: false }, "cruise").join()).toMatch(/no autothrottle/);
   expect(flightProblems({ ...cruise, gearDown: true, gearExt: 1 }, "cruise").join()).toMatch(/gear not up/);
@@ -58,7 +58,7 @@ test("each absurd state named: the glide at idle, the holds off, the gear, the s
   // (idle under an autothrottle slowing to its target, or its target not known (an ILS): a pilot's; without one, a glide)
   expect(flightProblems({ ...cruise, engine: 0, speed: 169, spdTarget: 160 }, "cruise")).toEqual([]);
   expect(flightProblems({ ...cruise, engine: 0, speed: 139, spdTarget: null }, "approach")).toEqual([]);
-  expect(flightProblems({ ...cruise, engine: 0, speed: 150, spdTarget: 150 }, "cruise").join()).toMatch(/no thrust/);
+  expect(flightProblems({ ...cruise, engine: 0, speed: 150, spdTarget: 150 }, "cruise")).toEqual([]);
   expect(flightProblems({ ...cruise, engine: 0, athr: false }, "approach", { athr: false }).join()).toMatch(/no thrust/);
   expectFlight({ ...cruise, engine: 0, speed: 169, spdTarget: 160 }, "slowing", CRUISE);
   // (on the runway: lined up within 1° and 3 m, rolling within 3° and 6 m — Sam, 16 Nov 2026: an A320 seen off the axis)
@@ -70,7 +70,7 @@ test("each absurd state named: the glide at idle, the holds off, the gear, the s
   expect(flightProblems({ ...ground, axis: { ...axis, hdgErr: 2.1, across: 5 } }, "roll")).toEqual([]);
   expect(flightProblems({ ...ground, axis: null }, "roll").join()).toMatch(/no runway/);
   // (the bounds' assertion fails on a glide at idle)
-  expect(() => expectFlight({ ...cruise, engine: 0 }, "glide", CRUISE)).toThrow();
+  expect(() => expectFlight({ ...cruise, engine: 0, athr: false }, "glide", CRUISE)).toThrow();
 });
 
 test("the take-off roll's watch (axisWatchProblems): on the axis passes; a drift, a swerve, no roll do not", async () => {

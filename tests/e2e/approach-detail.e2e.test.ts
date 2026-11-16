@@ -13,7 +13,8 @@ import { EARTH_SETTINGS } from "./lib/plan-views";
 //   AD_RWY: "LFTH:13" (field:runway) · AD_KM (12) · AD_EVERY (2000) · AD_BURST ("45-80": a shot every 600 ms then) · AD_OUT
 //   · AD_SW=1 (the Service Worker on, the players' path). The network's light shown in the shots; its counts in each sample
 //   (net) and over the flight by source in net.json
-// Output: remote-results/approach-detail/NN.jpg, series.json. Done when: the touchdown or 150 s, no GPU error.
+// Output: remote-results/approach-detail/NN.jpg, series.json.
+// Done when: the touchdown or 150 s, no GPU error.
 // Duration: ~3 min.
 const OUT = process.env.AD_OUT ?? "remote-results/approach-detail";
 const [FIELD, RWY] = (process.env.AD_RWY ?? "LFTH:13").split(":") as [string, string];
@@ -96,6 +97,7 @@ test.skipIf(!E2E)(
         `(() => { __bh.settings.vessel = "f35"; Object.assign(__bh.settings, ${EARTH_SETTINGS}, { earthClouds: 0, lookProfile: "neutral", f35Invulnerable: true, motionBlur: 0, dof: false, traffic: false }); return 1; })()`,
       );
       await app.waitProgress(`__bh.fleet.active === "f35"`, "the F-35");
+      await app.scenario(`${FIELD} ${RWY} · F-35 · the final from ${KM} km`);
       // (the runway's threshold and heading as the game knows them — its tile in first, from a place over the sea near)
       const ends = await (async () => {
         // (first put near the final's start as the airfield's chart gives it — AD_NEAR "lat,lon" (LFTH 13's by default) —: its

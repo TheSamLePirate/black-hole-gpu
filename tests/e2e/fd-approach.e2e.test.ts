@@ -75,6 +75,7 @@ for (const craft of ["f35", "a320"] as const) {
     });
 
     test("off the axis, under the glideslope, the autopilot let go: established on the director alone", async () => {
+      await app.scenario(`LFPG 27R · ${craft === "f35" ? "F-35" : "A320"} · off the axis, under the slope, by hand on the director`);
       // (14 km out, 900 m to the right, 30° in, some 600 m over the ground — under the slope's 730 m there)
       const p = await app.js<{ lat: number; lon: number; crs: number }>(onAxis(14, 900));
       const spd = craft === "f35" ? 92 : 82;

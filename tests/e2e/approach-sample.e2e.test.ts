@@ -54,6 +54,7 @@ describe.skipIf(!E2E)(`the campaign's sample flown — ${CRAFT}`, () => {
 
   for (const P of SAMPLE)
     test(`${P.cat}: ${P.field} ${P.end} (${P.kind}, ${P.source})`, async () => {
+      await app.scenario(`${P.field} ${P.end} · ${CRAFT === "a320" ? "A320" : "F-35"} · ${P.cat} (${P.kind}, ${P.source})`);
       // (its approaches in: the field's tile)
       const ids = await app.js<string[]>(`__bh.sys.approaches(${JSON.stringify(P.field)}).then((l) => l.map((a) => a.id))`);
       const a = await app.js<{ crs: number; thr: { lat: number; lon: number } } | null>(

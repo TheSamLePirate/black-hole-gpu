@@ -94,20 +94,25 @@ How it shows, and how to override it:
 - **The banner is mandatory, with the scenario under way** (Sam, 16 Nov 2026: he watches the e2e go by and must be able
   to name exactly which e2e and which scenario showed a visual defect). Required of every e2e and of the harness:
   1. **Shown on every run one sees**, whatever launched it: `bun run e2e`, `E2E=1 bun test` (the remote jobs, the
-     A/B — the live preload), `ab-e2e`. *State on 16 Nov: the live preload's path (`telemetry.ts` `attach`/`begin` with
-     `light`) never calls `showBanner` — no banner on `E2E=1 bun test` runs; to fix.*
+     A/B — the live preload), `ab-e2e`. *Done 16 Nov (~10:35 UTC): the live preload's path (`telemetry.ts` `attach`/`begin`
+     with `light`) puts it up too — checked on this Mac (a window) and on kerr-mini (full screen).*
   2. **A header that says it all**: what the file proves and what it does, `// Duration: ~…` and `// Done when: …` at
-     line start. *State on 16 Nov: 320 of 525 files have no `Duration:` line, 299 no `Done when:`.* A static guard
-     (`tests/e2e-*.test.ts`) refuses a new or modified e2e without them; the old ones listed and emptied as they are touched.
+     line start. *The guard: `tests/e2e-banner-guard.test.ts` (judge `lib/header-check.ts`) — a file not in its `WAITING` list
+     must have them (and say its scenarios, below); the 338 files written before the rule wait there with what they lack, a
+     file touched is brought to the rule and taken off (the test says when), the list only shrinks.*
   3. **The scenario under way, live**: a test that flies or shows several cases (an airfield, an end, a craft, a
-     weather, a phase) says each one as it starts — an `app.scenario(label)` (to write in `lib/`) puts it on the banner,
-     in the live record and in the console. A test title built from a template (`${P.field}`, 28 files) shows its
-     values, not the template.
+     weather, a phase) says each one as it starts — `await app.scenario(label)` (`lib/app.ts`) puts it on the banner (a
+     « Scénario » line), in the live record (`scenario`, shown by the Monitor), in the console (`  ▶ <reference>`) and in the
+     report (`events.jsonl`, kind `scenario`). A test title built from a template (`${P.field}`) shows the scenario in its
+     place (`…` until one is said). The guard asks for it when a file runs through cases (a template title, a loop that
+     places, lines up, engages an approach, changes the craft, the date or the weather).
   4. **A reference Sam can quote**: the banner's first line reads `<file> #<test k>/<n> · <scenario>` (and the
      machine), the same words as the run's log, its report and its captures' names — so « approach-sample #3 · SLCB 05
-     F-35 · final » finds the run.
+     F-35 · final » finds the run. *Done: `bannerRef` (`lib/banner.ts`), the `-t` filter read from the process's command
+     line (bun test leaves it out of `process.argv`), so `#k/n` counts the tests run.*
   5. Captures stay without the banner (hidden for every shot), but each capture's file name and its caption in T3 carry
-     the file, the test and the scenario.
+     the file, the test and the scenario — `app.shot` prints `  [shot] <reference> → <path>`. `E2E_BANNER_SHOTS=1` keeps the
+     banner in the captures (to show what it says).
   (`remote.ts run --hold 20` / `bun run e2e --remote --hold 20 …`).
 - Measurement scripts (`bench.ts`, `trace-ab.ts`, `gallery.ts`, `quality.ts`, `check-wgsl.ts`) are always
   headless: a window's frame rate follows the display. They still take the lock.

@@ -62,6 +62,8 @@ export interface E2eLive {
   k: number;
   n: number;
   test: string;
+  /** the case under way inside the test (app.scenario: an airfield, an end, a craft, a phase) — null: none said */
+  scenario: string | null;
   fileStart: number;
   testStart: number;
   at: number;
@@ -160,6 +162,7 @@ export class LiveState {
       k: 0,
       n: 0,
       test: "",
+      scenario: null,
       fileStart: now,
       testStart: now,
       at: now,
@@ -194,8 +197,13 @@ export class LiveState {
 
   /** A test begins (k 0: the file's setup). */
   test(k: number, title: string, dir: string) {
-    Object.assign(this.s, { k, test: title, dir: dir ? resolve(dir) : "", testStart: Date.now(), series: [], craft: null });
+    Object.assign(this.s, { k, test: title, scenario: null, dir: dir ? resolve(dir) : "", testStart: Date.now(), series: [], craft: null });
     this.lastSeriesWall = -1;
+  }
+
+  /** The case under way inside the running test (app.scenario). */
+  scenario(label: string | null) {
+    this.s.scenario = label;
   }
 
   /** A test ended: its place, title and time kept in the file's list. */

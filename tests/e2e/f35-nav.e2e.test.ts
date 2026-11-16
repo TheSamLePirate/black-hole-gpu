@@ -5,6 +5,9 @@ import { MONITOR_INIT, MONITOR_STEP, type Monitor, monitorProblems } from "./lib
 // PLAN-F35 F8: a flight plan made by hand — ⇧O opens its panel, clicks on the map add its waypoints, an airfield
 // from the list —, then flown by NAV (⇧M): each point passed in turn, the altitudes and speeds of the plan
 // flown, its end reached over Edwards; the route and the bingo on the cockpit's display.
+// Done when: the hub's flight on the final flown by hand, the plan made by clicks (its waypoints, the arrival), NAV flown to its
+// end over Edwards, the step monitor conforming (rule 13).
+// Duration: ~1 min on this Mac (one run).
 
 describe.skipIf(!E2E)("the F-35's flight plan", () => {
   let app: App;
@@ -25,6 +28,7 @@ describe.skipIf(!E2E)("the F-35's flight plan", () => {
   });
 
   test("the flight hub: Le Bourget at dusk, overcast, half fuel, a plan to Edwards — on final, flown by hand", async () => {
+    await app.scenario("LFPB 25 · F-35 · the hub's final at dusk, by hand");
     await app.js(`(() => { __bh.flight.hub.open(); return 1; })()`);
     await app.waitFor(`!!document.querySelector("[data-testid=flight-hub]")`, 5000);
     for (const id of ["fhb-field-LFPB", "fhb-start-final", "fhb-hour-dusk", "fhb-wx-overcast", "fhb-fuel-0.5", "fhb-dest-KEDW"])
@@ -61,6 +65,7 @@ describe.skipIf(!E2E)("the F-35's flight plan", () => {
   }, 120_000);
 
   test("⇧O: the panel; clicks on the map add waypoints, the airfield list the arrival", async () => {
+    await app.scenario("F-35 · ⇧O the plan by clicks");
     // (back where the plan is made: north-east of Edwards, in the air, no plan, the tanks full)
     await app.js(`(() => { const c = __bh.camera; c.nav.route.wps.length = 0; c.routeChanged(); __bh.game.glideTo("Edwards", 30, 3.0, 230);
       c.pilot.setAuto("none"); c.pilot.auto = "none"; c.pilot.throttle = 0.7; c.pilot.engineNow = 0.7; __bh.fleet.fuel.f35 = 6125;
@@ -92,6 +97,7 @@ describe.skipIf(!E2E)("the F-35's flight plan", () => {
   }, 60_000);
 
   test("⇧M: NAV flies it — each point passed, the arrival's altitude and speed, its end over the field", async () => {
+    await app.scenario("F-35 · ⇧M NAV to Edwards");
     await app.js(
       `(() => { const R = __bh.camera.nav.route; R.wps[3].alt = 2500; R.wps[3].spd = 160; __bh.camera.routeChanged(); return 1; })()`,
     );

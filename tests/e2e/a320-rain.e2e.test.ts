@@ -8,6 +8,9 @@ import { expectFlightPhase } from "./lib/flight-state";
 // wipers on (their knob LO — FlightGear's channel), the arms sweeping and the glass cleared behind them; the frost in
 // icing, then the window heat clearing it (on the ground: aloft, the rain's clouds would hide it). Shots in E2E_SHOTS; the drops measured as the glass's cover (the deck's
 // window pixels' spread) where they can be.
+// Done when: the drops on the glass measured, the wipers' sweep clearing them, the frost cleared by the window heat; parked, then
+// placed at 400 m on its holds (rule 13).
+// Duration: ~2 min (not timed yet).
 
 const shots = process.env.E2E_SHOTS;
 const shot = (app: App, name: string) => (shots ? app.shot(`${shots}/${name}.png`) : Promise.resolve());

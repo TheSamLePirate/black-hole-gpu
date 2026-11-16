@@ -6,6 +6,8 @@ import { expectFlightPhase } from "./lib/flight-state";
 // The F-35's new autopilot modes (docs/PLAN-AVIATION-AAA.md, A3): first the Alps as ever; then the terrain following
 // at 150 m down the Arve's valley toward Chamonix — the real relief —; an orbit over the Mont Blanc; the tanker set,
 // joined behind its hose (the refuelling itself: tests/e2e/aar.e2e.test.ts). (Measured headless: tests/jetmodes.test.ts.) (E2E_SHOTS=<dir>: the views.)
+// Done when: the terrain following kept 80–310 m over the valley, the orbit held over the Mont Blanc, the tanker joined.
+// Duration: ~3 min on kerr-mini (median of 2 runs).
 
 describe.skipIf(!E2E)("the autopilot's new modes", () => {
   let app: App;

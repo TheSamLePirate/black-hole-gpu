@@ -58,6 +58,7 @@ describe.skipIf(!E2E)("the A320's join over the relief (Nice)", () => {
 
   for (const L of DEPARTURES) {
     test(`${L.name}: established before the final fix, clear of the relief, down`, async () => {
+      await app.scenario(`LFMN 22R · A320 · from ${L.name}`);
       const p = await app.js<{ lat: number; lon: number }>(`(() => {
         const D = Math.PI / 180, R = 6371000, d = ${L.km * 1000} / R, b = ${L.from} * D, la = ${LFMN.lat} * D, lo = ${LFMN.lon} * D;
         const lat = Math.asin(Math.sin(la) * Math.cos(d) + Math.cos(la) * Math.sin(d) * Math.cos(b));

@@ -15,6 +15,8 @@ import { HELD } from "./lib/held";
 // wing's vapour, the tip and flap-edge vortices); take-off power on the ground in humid air (the inlet vortices, the
 // exhausts' heat haze); a touchdown at speed (the tyres' smoke); the take-off roll and the reversers on a wet runway
 // (the spray). Each shot taken once the trails are there (the controller's segments), the frame rate with and without.
+// Done when: each effect's trails counted and shot; the wet roll held on the axis by a pilot's feet (rule 13: ≤ 3°, ≤ 6 m).
+// Duration: ~1.5 min on kerr-mini (16 Nov 2026).
 
 const shots = process.env.E2E_SHOTS;
 const shot = (app: App, name: string) => (shots ? app.shot(`${shots}/${name}.png`) : Promise.resolve());

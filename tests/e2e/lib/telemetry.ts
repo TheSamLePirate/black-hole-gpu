@@ -15,7 +15,7 @@
 // frame rate — for the lab's monitor and the dashboard; a picture only when one asks (a "peek"). An e2e run
 // without the preload (`E2E=1 bun test …`: the remote jobs, the A/B) is live too, lightly (lib/live-preload.ts,
 // bunfig.toml): its file, its test, its time, a picture on demand — its page otherwise untouched.
-import { fileInfo, showBanner } from "./banner";
+import { bannerRef, fileInfo, showBanner } from "./banner";
 import { LiveState } from "./live";
 import { appendFileSync, existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { hostname } from "node:os";
@@ -121,6 +121,8 @@ class Recorder {
   private page: Recordable | null = null;
   private file = "";
   private k = 0;
+  /** the case under way in the running test (scenario()): null until one is said */
+  private scen: string | null = null;
   /** a test running (begun, not ended): a page booted inside it serves that test, not the file's setup */
   private inTest = false;
   private dir = "";
@@ -156,6 +158,8 @@ class Recorder {
         this.k = this.inTest ? 1 : 0;
         this.openLight();
       }
+      // (the banner on a Chrome one sees, on this path too — `E2E=1 bun test`: the remote jobs, the A/B; Sam, 16 Nov 2026)
+      await showBanner(page, file, this.k, this.scen);
       this.timer ??= setInterval(() => this.pullLight(), 1500);
       this.liveTimer ??= setInterval(() => this.live.write(), 2000);
       return;
@@ -170,7 +174,7 @@ class Recorder {
       this.open();
     }
     // (the banner on a Chrome one sees: the file, the test running, what it proves — lib/banner.ts)
-    await showBanner(page, file, this.k);
+    await showBanner(page, file, this.k, this.scen);
     this.timer ??= setInterval(() => this.pull(), 1500);
     // (the live state written on its own clock: a page held by a long call shows as such, not as gone)
     this.liveTimer ??= setInterval(() => this.live.write(), 2000);
@@ -227,7 +231,9 @@ class Recorder {
       if (this.enabled || !this.light) return;
       this.inTest = true;
       this.k++;
+      this.scen = null;
       if (this.file) this.openLight();
+      await showBanner(this.page, this.file, this.k);
       return;
     }
     if (!this.enabled) return;
@@ -235,6 +241,7 @@ class Recorder {
     if (this.k === 0 && this.dir) this.summary();
     this.inTest = true;
     this.k++;
+    this.scen = null;
     this.open();
     await showBanner(this.page, this.file, this.k);
     await this.page?.js("window.__e2e?.fresh()").catch(() => {});
@@ -338,6 +345,31 @@ class Recorder {
       this.live.write();
     });
     return this.chain;
+  }
+
+  /**
+   * The case under way inside the running test (lib/app.ts `app.scenario`): on the banner (its first line the reference Sam
+   * quotes — « approach-sample #3/9 · SLCB 05 F-35 · final »), in the live record, the console and the test's report (its moments).
+   * Returns the reference, for the captures' names.
+   */
+  async scenario(label: string | null): Promise<string> {
+    this.scen = label;
+    const ref = bannerRef(this.file, this.k, label);
+    console.log(`  ▶ ${ref} · ${hostname().replace(/\.local$/, "")}`);
+    this.live.scenario(label);
+    this.live.write();
+    if (this.enabled && this.dir)
+      appendFileSync(
+        join(this.dir, "events.jsonl"),
+        `${JSON.stringify({ t: null, kind: "scenario", text: ref, wall: Date.now() - this.wall0 })}\n`,
+      );
+    await showBanner(this.page, this.file, this.k, label);
+    return ref;
+  }
+
+  /** The reference of the run now (the file, the test, the case said): the words of the banner's first line. */
+  ref(): string {
+    return this.file ? bannerRef(this.file, this.k, this.scen) : "";
   }
 
   /** The process ends: the last record closed (a file whose last test had no afterEach, a crash). */

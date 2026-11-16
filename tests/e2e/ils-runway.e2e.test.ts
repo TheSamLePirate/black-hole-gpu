@@ -10,7 +10,8 @@ import { expectFlightPhase } from "./lib/flight-state";
 // of its runways, « 13 » clicked, « Armer l'approche » — the approach engaged on 13, its needles read; then « 05/23 » asked by number (that
 // runway, its end in use) and a runway the field lacks refused.
 // Output: remote-results/ils-runway/ (IR_OUT): wheel.png, sub-wheel.png, approach.png.
-// Done when: the ends listed, 13 flown from the wheel, 05/23 resolved, 18 refused, no GPU error. Duration: ~1.5 min.
+// Done when: the ends listed, 13 flown from the wheel, 05/23 resolved, 18 refused, no GPU error.
+// Duration: ~1.5 min.
 const OUT = process.env.IR_OUT ?? "remote-results/ils-runway";
 afterAll(stopServer);
 

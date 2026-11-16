@@ -19,6 +19,7 @@ test.skipIf(!E2E)(
       await app.js(`(() => { Object.assign(__bh.settings, { vessel: "f35", damage: false, traffic: false }); return 1; })()`);
       await app.waitFor(`__bh.fleet.active === "f35"`, 60_000);
       for (const way of ["none", "apSet16"]) {
+        await app.scenario(`Edwards 23L · F-35 · U ${way === "none" ? "alone" : "then apSet at 16 s (2 500 m, 270°, 150 m/s)"}`);
         await app.js(`(() => { __bh.game.lineUp("Edwards"); for (let i = 0; i < 10; i++) __bh.step(1 / 30); return 1; })()`);
         await app.press("KeyU", "u");
         const r = await app.js<unknown[]>(`(() => {

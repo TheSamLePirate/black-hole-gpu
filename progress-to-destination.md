@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-16 09:31 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-16 09:32 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous. Ce qui est fermé quitte le tableau « En cours » pour la ligne « Fermé récemment ».
@@ -8674,3 +8674,21 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   des images du trafic, une collection ; les MIP faits dans le worker de calcul (`imageMipsOff`), les copies étalées.
 - Preuves (kerr-mini) : écarts > 100 ms au début du vol 183/150 → 182 ms (un seul : la musique) ; `traffic-ships` 3/3.
 - Limites : la synthèse de la musique (~40 ms de réverbération, 25–60 ms par note) reste sur le thread principal — domaine audio, proposé.
+
+### 2026-11-16 09:32 UTC — Le bandeau des e2e partout, avec le scénario en cours (demande de Sam, session 1feb2f7f)
+
+- Contribution à la destination : §19.13 (les parcours et e2e jugés par Sam à l'écran : chaque défaut visuel rattaché à un fichier, un test
+  et un cas précis) ; [E2E.md](docs/E2E.md), la règle du bandeau (29fc0961).
+- Réalisé : le bandeau sur le chemin léger (`E2E=1 bun test` : les jobs du mini, les A/B — `telemetry.ts` attach/begin) ; `app.scenario(label)`
+  (bandeau — une ligne « Scénario » —, live et Monitor, console `▶`, rapport) ; la première ligne citable `<fichier> #k/n · <scénario> ·
+  <machine>` (`bannerRef`, le filtre `-t` lu sur la ligne de commande), les mêmes mots devant chaque capture (`[shot]`) ;
+  `E2E_BANNER_SHOTS=1` (le bandeau gardé dans les captures) ; la garde `tests/e2e-banner-guard.test.ts` (juge `lib/header-check.ts` : en-tête,
+  Duration, Done when, scénarios si le fichier enchaîne des cas ; 338 anciens fichiers en attente, la liste ne fait que rétrécir) ; mes 14 e2e
+  de vol mis à la règle (approches, A320, autopilotes). Règle 13 : le ralenti sous autothrottle n'est plus une faute (le juge l'avait pris
+  dans la première seconde d'une ATHR engagée, approach-audio sur le mini).
+- Preuves (observé) : ce Mac, fenêtre visible, hud-runway-drawn « Le Bourget » — « hud-runway-drawn #1/5 · Paris – Le Bourget · final 3 km ·
+  MacBook… » ; kerr-mini plein écran, approach-audio 2/2 — « approach-audio #1/2 · LBSF 09 · F-35 · 9.3 km out · mini-de-olivier.home »
+  (captures avec le bandeau, montrées à Sam) ; gardes 9/9.
+- Limites : les 338 fichiers en attente (dont 107 qui enchaînent des cas sans scénario) se mettent à la règle quand on les touche ; le
+  repérage des « cas enchaînés » est textuel (une boucle dans le JS de page compte aussi).
+- Suite : la session du rendu peut appeler `app.scenario` dans ses parcours-* ; puis l'axe au décollage et la piste du HUD.

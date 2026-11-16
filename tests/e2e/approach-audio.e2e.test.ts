@@ -60,6 +60,7 @@ describe.skipIf(!E2E)("the approach in the headset (Sofia ILS 09)", () => {
 
   /** On the axis `out` m before the threshold, on the 3° slope, heading in at 85 m/s; the ILS on 09 engaged. */
   const placeAt = async (out: number) => {
+    await app.scenario(`LBSF 09 · F-35 · ${(out / 1000).toFixed(1)} km out`);
     await app.js(`(() => { const D = Math.PI / 180, R = 6371000, a = ${JSON.stringify(A)};
       const back = (a.crs + 180) * D, d = ${out} / R, la = a.thr.lat * D, lo = a.thr.lon * D;
       const lat = Math.asin(Math.sin(la) * Math.cos(d) + Math.cos(la) * Math.sin(d) * Math.cos(back));

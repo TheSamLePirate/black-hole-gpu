@@ -9,6 +9,9 @@ import { expectFlightPhase } from "./lib/flight-state";
 // 3° glideslope, the ILS engaged — its needles in the view, the gear, minimums, the flare —, down in the touchdown
 // zone and braked to a stop, graded. (Headless and whole, from 30 km, a hold, a missed approach, a flight plan's end:
 // tests/ils.test.ts.) (E2E_SHOTS=<dir>: the views.)
+// Done when: the Alps placed (rule 13 asserted), then Edwards's final flown by the ILS to a stop in the touchdown zone (150–900 m in,
+// under 8 m off the axis).
+// Duration: ~1.5 min (kerr-mini, 16 Nov 2026: 85 s for the final).
 
 const K = SITES.find((s) => s.icao === "KEDW")!;
 const W = { name: K.name, lat: K.lat, lon: K.lon, hdg: K.rwy!, elev: K.elev!, len: RUNWAY_LENGTH };

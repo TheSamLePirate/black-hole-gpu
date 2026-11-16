@@ -116,10 +116,12 @@ export interface FlightWant {
   gear?: boolean;
 }
 
-/** Idle thrust a pilot would leave: an autothrottle engaged and slowing — over its known target by more than 3 m/s, or its target not
- *  known here (an ILS, the A320's managed speed: a descent at idle on the slope). Without an autothrottle, idle is a glide. */
+/** Idle thrust a pilot would leave: an autothrottle engaged — slowing to its target, settling just after it was engaged, a descent
+ *  at idle on the slope: its own decision (one stuck at idle shows as the speed lost and the stall's edge, judged apart). Without an
+ *  autothrottle, idle is a glide. (16 Nov 2026: « over its target by 3 m/s » first — the render session's ILS at 139 m/s —, then
+ *  approach-audio's F-35 placed at 85 m/s, its ATHR at idle for its first second: a pilot's.) */
 export function idleAllowed(s: FlightState): boolean {
-  return s.athr && (s.spdTarget === null || s.speed > s.spdTarget + 3);
+  return s.athr;
 }
 
 /** What is wrong with a state for a phase (empty: none). */

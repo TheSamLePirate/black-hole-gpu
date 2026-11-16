@@ -722,11 +722,25 @@ export class App {
     }
   }
 
-  /** A screenshot — once the scene's ray tracer is compiled (settled): never the stale image the pill covers. */
+  /**
+   * The case under way inside the test (docs/E2E.md, the banner — Sam, 16 Nov 2026: « que je puisse dire exactement quel
+   * e2e/scénario avait le défaut »): said on the banner (its first line « <file> #<k>/<n> · <label> · <machine> », a template title
+   * shown as the label), in the live record, the console and the report. Each airfield, end, craft, weather or phase a test runs
+   * through, as it starts. Returns the reference (the same words), for a capture's name or caption.
+   */
+  async scenario(label: string): Promise<string> {
+    return recorder.scenario(label);
+  }
+
+  /** A screenshot — once the scene's ray tracer is compiled (settled): never the stale image the pill covers. The run's reference
+   *  (the file, the test, the scenario) said beside its path — the words of the banner, which the capture leaves out
+   *  (E2E_BANNER_SHOTS=1 keeps it in). */
   async shot(file: string) {
     if (!this.entry) await this.settled();
     const r = await this.cdp.send<{ data: string }>("Page.captureScreenshot", { format: "png" });
     await Bun.write(file, Buffer.from(r.data, "base64"));
+    const ref = recorder.ref();
+    if (ref) console.log(`  [shot] ${ref} → ${file}`);
   }
 
   /**

@@ -6,6 +6,9 @@ import { HELD } from "./lib/held";
 // 3 km behind her and 1 km to her left (the light wind, the default: its turbulence each craft's own) — Formation: his autopilot rejoins her right wing and holds it; she turns
 // 90°, she speeds up: he stays there; the autopilot's key lets it go (the holds kept). From 60 km: Beside first,
 // then the formation. (NET_SHOTS=<dir>: Ben's view in formation.)
+// Done when: Ben on Ana's wing within 5 m in under 150 s and held within 10 m, through her turn and speed-up; the key lets it
+// go, the holds kept; from 60 km, Beside then the formation.
+// Duration: ~5 min on kerr-mini (median of 2 runs; two boots in one room).
 
 describe.skipIf(!E2E)("formation flight's autopilot", () => {
   let a: App;

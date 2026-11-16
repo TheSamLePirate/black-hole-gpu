@@ -707,7 +707,7 @@ function macCard(name: string, m: Mac | null) {
                         h(
                           "span",
                           { class: "faint" },
-                          ` · ${e.k === 0 ? "setting up" : `test ${e.k}/${e.n}`} · ${dur((Date.now() - e.fileStart) / 1000)}${e.fps !== null ? ` · ${e.fps} fps` : ""}`,
+                          ` · ${e.k === 0 ? "setting up" : `#${e.k}/${e.n}`}${e.scenario ? ` · ${e.scenario}` : ""} · ${dur((Date.now() - e.fileStart) / 1000)}${e.fps !== null ? ` · ${e.fps} fps` : ""}`,
                         ),
                       ),
                     ),
@@ -4042,6 +4042,8 @@ function e2eCard(where: "here" | "mini", e: E2eLive, polledAt: number) {
       rel ? h("a", { class: "btn sm", href: reportHref(rel, { file: e.file.replace(/^.*\//, ""), name: e.test }) }, "Report ▸") : null,
     ),
     h("div", { class: "act-test" }, e.test || e.suite || name),
+    // (the case under way — app.scenario —: the words Sam quotes, « approach-sample #3/9 · SLCB 05 F-35 · final »)
+    e.scenario ? h("div", { class: "act-test", style: { color: "var(--acc, #ffc85a)" } }, `#${e.k}/${e.n || "?"} · ${e.scenario}`) : null,
     h(
       "div",
       { class: "col", style: { gap: "5px" } },
