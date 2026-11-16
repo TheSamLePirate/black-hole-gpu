@@ -150,6 +150,28 @@ test.skipIf(!E2E)(
       }
       await app.shot(`${OUT}/3-sur-toulon.png`);
       const arrival = await surface("arriving over Toulon (the cockpit)");
+      // (PLAN-J8 J8-1: the IGN's overground ahead, along the track — every km from 1 to 10, 21 points across ±1 km: the share whose
+      // drawn height stands 3 m or more over the bare ground (earthTiles.heightAt drawn), with the drawn scene's square — j8-silhouettes'
+      // band probe, here in flight: past the quick scene's square, the far silhouettes or the bare ground)
+      const band = await app.js<{ box: unknown; rings: { km: number; share: number; inScene: boolean }[] }>(`(() => {
+        const T = __bh.renderer.earthTiles, sc = __bh.renderer.earthScenery, c = __bh.camera, g = c.geoNow(), D = Math.PI / 180;
+        const b = sc.drawnBox?.() ?? null, h = g.track ?? 0, ex = Math.sin(h), ny = Math.cos(h), m = 111320, cl = Math.cos(g.lat * D);
+        const q = (lat, lon) => [Math.cos(lat * D) * Math.cos(lon * D), Math.cos(lat * D) * Math.sin(lon * D), Math.sin(lat * D)];
+        const rings = [];
+        for (let km = 1; km <= 10; km++) {
+          let over = 0, n = 0, inScene = false;
+          for (let i = -10; i <= 10; i++) {
+            const e = km * 1000 * ex + i * 100 * ny, nn = km * 1000 * ny - i * 100 * ex;
+            const lat = g.lat + nn / m, lon = g.lon + e / (m * cl), p = q(lat, lon);
+            const dr = T.heightAt(p, 4, true), bare = T.heightAt(p, 4, false);
+            if (dr.rem > 0.5) continue;
+            n++; if (dr.h - bare.h >= 3) over++;
+            if (b && Math.max(Math.abs(lon - b.lon) * m * Math.cos(b.lat * D), Math.abs(lat - b.lat) * m) < b.half) inScene = true;
+          }
+          rings.push({ km, share: n ? +(over / n).toFixed(2) : -1, inScene });
+        }
+        return { box: b && { lat: +b.lat.toFixed(4), lon: +b.lon.toFixed(4), half: Math.round(b.half) }, rings }; })()`);
+      console.log(`  arriving over Toulon, the overground ahead: ${JSON.stringify(band)}`);
       // (J7-4: the same view frozen, the scenery let finish — 60 s at most —: buildings then, the scenery was late; none, there are none
       // to see ahead of the cockpit there — J6-1's own revision saw 0 too, 16 Nov 2026)
       await app.scenario("à l'arrivée, gelé, le décor fini");
@@ -159,7 +181,7 @@ test.skipIf(!E2E)(
       const arrivalWhole = await surface(
         `arriving over Toulon, frozen, the scenery ${whole.ready ? "whole" : `not whole (${whole.status})`}`,
       );
-      out.arrival = { moving: arrival, frozen: { ...arrivalWhole, sceneryWhole: whole.ready } };
+      out.arrival = { moving: arrival, band, frozen: { ...arrivalWhole, sceneryWhole: whole.ready } };
       await app.shot(`${OUT}/3b-arrivee-decor-fini.png`);
       await app.js(`(() => { __bh.freeze(false); return 1; })()`);
       // (the turn over the city: left to 180°, towards the harbour)
