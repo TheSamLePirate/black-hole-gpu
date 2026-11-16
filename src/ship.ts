@@ -73,7 +73,7 @@ import {
 import { GEAR_HINGES, gearMesh } from "./gear-mesh";
 import type { GpuProfiler } from "./gpuprof";
 import { cockpitHull, samplePoints, vesselHulls } from "./system/collide";
-import { buildBVH } from "./system/bvh-client";
+import { buildBVH } from "./system/cpu-client";
 import { cabinHitOf } from "./cockpit/pick";
 import { MAX_SEGMENTS, SEG_FLOATS } from "./contrails";
 import { VESSELS, type JetDef, type VesselId } from "./vessels";
@@ -1239,7 +1239,7 @@ export class ShipRenderer {
     const r = Math.hypot(...sub(hi, lo)) / 2;
     const H = vesselHulls[id];
     H.points = samplePoints(verts, 10, nv, id === "endurance" ? 2 : 0.5);
-    // (the tree built off the page's thread — bvh-worker.ts, PLAN-J7 J7-7: ~100 ms held an image at a craft change)
+    // (the tree built off the page's thread — cpu-worker.ts, PLAN-J7 J7-7: ~100 ms held an image at a craft change)
     H.bvh = await buildBVH(pos, new Uint32Array(idx));
     H.radius = r + Math.hypot(...c);
     H.lo = lo;

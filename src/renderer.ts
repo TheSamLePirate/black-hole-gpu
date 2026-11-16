@@ -81,7 +81,6 @@ import {
   MILLER_WIND,
   normalQuantile,
   type SeaPhysics,
-  seaCascades,
   seaSystems,
   TITAN_SEA,
   TITAN_WIND,
@@ -185,6 +184,7 @@ import type { VesselId } from "./vessels";
 import type { F35Pose } from "./f35/model";
 import { fleet } from "./fleet";
 import { vesselHulls } from "./system/collide";
+import { seaCascadesOff } from "./system/cpu-client";
 import { EnduranceRenderer } from "./endurance";
 import { StationRenderer, type StationView } from "./station";
 import { issAxes, issTrack, refreshIssElements, stationAngles } from "./system/iss";
@@ -5820,7 +5820,13 @@ export class Renderer {
     this.seaPhys = miller ? MILLER_SEA : H.world === "titan" ? TITAN_SEA : EARTH_SEA;
     if (key !== this.seaKey) {
       this.seaKey = key;
-      this.seaFft.setSpectrum(seaCascades(seaSystems(state, H.to), 1, this.seaPhys));
+      // (a new sea state — a placement, the real weather's arrival —: its spectrum computed off the page's thread, ~45 ms held an image
+      // there — PLAN-J7 J7-7 —; the sea drawn meanwhile the one before — the first time, its waves a few frames late: seaFft not ready)
+      const systems = seaSystems(state, H.to);
+      const fft = this.seaFft;
+      void seaCascadesOff(systems, 1, this.seaPhys).then((c) => {
+        if (this.seaKey === key) fft.setSpectrum(c);
+      });
     }
     // (the waves at this clock due before the next trace — the probe's params and the frame's alike: the same sea)
     if (frame || !this.seaFftDue) this.seaFftT = tSec;

@@ -63,7 +63,7 @@ test("the hierarchy's first crossing is the brute force's", () => {
 
 test("J7-7: a tree handed back from a worker (parts → fromParts) answers as the one built here", async () => {
   const { TriBVH } = await import("../src/system/collide");
-  const { buildBVH } = await import("../src/system/bvh-client");
+  const { buildBVH } = await import("../src/system/cpu-client");
   let seed = 3;
   const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
   const pos = new Float32Array(3000).map(() => rnd() * 10 - 5);

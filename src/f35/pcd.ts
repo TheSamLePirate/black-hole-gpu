@@ -698,14 +698,20 @@ export class Pcd {
    *  the glyphs at every size and weight, the black under the parts. */
   warm() {
     const g = this.g;
-    for (const w of ["500", "700"])
-      for (const size of [16, 18, 20, 22, 24, 26, 28, 30, 34, 40, 48, 56]) {
-        g.font = `${w} ${size}px ${FONT}`;
+    // (a size a task — 24 at once held an image ~47 ms at a craft change, PLAN-J7 J7-7 —; the canvas cleared after the last)
+    const sizes = ["500", "700"].flatMap((w) => [16, 18, 20, 22, 24, 26, 28, 30, 34, 40, 48, 56].map((size) => `${w} ${size}px ${FONT}`));
+    const step = (k: number) => {
+      if (k < sizes.length) {
+        g.font = sizes[k]!;
         g.fillStyle = C.white;
         g.fillText("0123456789 ABCDEFGHIJKLMNOPQRSTUVWXYZ ◀▶°·%:/+−.,", 0, 40);
+        setTimeout(() => step(k + 1), 0);
+        return;
       }
-    g.fillStyle = C.bg;
-    g.fillRect(0, 0, PCD_W, PCD_H);
+      g.fillStyle = C.bg;
+      g.fillRect(0, 0, PCD_W, PCD_H);
+    };
+    step(0);
   }
 
   /** The look the shader needs (ship.wgsl pcdLight): the brightness — its knob's (DAY, NIGHT, NVG) or, automatic,

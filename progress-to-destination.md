@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-16 07:29 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-16 07:43 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous. Ce qui est fermé quitte le tableau « En cours » pour la ligne « Fermé récemment ».
@@ -62,7 +62,7 @@ l'état d'une mission ou d'un combat **non sauvé, dit** ; le réseau **« entre
 
 **Fermé aussi** : le plancher du raster sur GPU faible (15 nov., 23:46, proposer sous 15 images/s, décision de Sam).
 
-**La session du rendu (33d89754)** : [PLAN-J7](docs/PLAN-J7-FLUIDITE.md) en cours — **J7-0 fait** (la sonde des à-coups et sa [fiche](docs/progress/j7/FICHE-A-COUPS-2026-11-16.md)), **J7-1 fait** (le sol des approches : l'A320 posé à OIFK 11, J0 sans coût vu) ; **J7-7 en cours** (le démarrage tenu sous l'écran de chargement ; au changement d'appareil 4 écarts → 3 de ~116 ms) ; ensuite la suite de J7-7 (le premier noyau, le changement d'appareil) avec J7-2/J7-3 rejoués à froid, J7-8, J7-9, J7-4, J7-5, J7-6.
+**La session du rendu (33d89754)** : [PLAN-J7](docs/PLAN-J7-FLUIDITE.md) en cours — **J7-0 fait** (la sonde des à-coups et sa [fiche](docs/progress/j7/FICHE-A-COUPS-2026-11-16.md)), **J7-1 fait** (le sol des approches : l'A320 posé à OIFK 11, J0 sans coût vu) ; **J7-7 en cours** (le démarrage tenu sous l'écran de chargement ; au changement d'appareil 4 écarts → 2, le reste = la mise en place, J7-9) ; ensuite la suite de J7-7 (le premier noyau, le changement d'appareil) avec J7-2/J7-3 rejoués à froid, J7-8, J7-9, J7-4, J7-5, J7-6.
 
 **Attend Sam** : les trois questions de [PLAN-J7](docs/PLAN-J7-FLUIDITE.md) §4, réglées provisoirement (les 40 ms du mini en dernier, J7-6 ; PLAN-J8 les arbres proches en géométrie ensuite ; l'aplanissement du détail sous les trouées jusqu'à la FAF ou 10 km) ; les seuils du mini attendent la reprise de la cible 40 ms.
 
@@ -8601,3 +8601,11 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   recompilation).
 - Limites : les flancs du couloir sur l'Altiplano (138 m / 50 m) ; le vol de SLCB 32 sans paliers non rejoué.
 - Suite : J7-7 (le changement d'appareil), puis J7-2, J7-3 sur leurs causes relues.
+
+### 2026-11-16 07:43 UTC — J7-7, deuxième pas : le spectre de la mer et les glyphes hors de l'image
+
+- Réalisé : `cpu-worker.ts` (worker de calcul : arbres des coques, spectre de la mer) et `cpu-client.ts` ; le spectre de la mer calculé
+  hors du thread principal à chaque nouvel état (placement, météo) — la mer d'avant gardée jusqu'au nouveau ; `pcd.warm` étalé.
+- Preuves (mesuré, kerr-mini, à chaud, `j7-first-kernel`) : au changement d'appareil, écarts > 100 ms 217/250/117/182 → 183/133 ms ; `sea-fft`
+  5/5 ; `pcd`, `sea-*`, `collide` unitaires.
+- Limites : restent une collection de ~1 Go et l'arrivée des tuiles au changement (une mise en place : J7-9) ; non rejoué à froid.

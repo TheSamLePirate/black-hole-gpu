@@ -138,11 +138,20 @@ des entrées datées ; les causes des à-coups (compilation de la météo, retou
   Bourget) : 2 × ~110 ms de `wgslFunctions` (la bibliothèque de hauteurs du raster découpée dans `trace.wgsl` : une recherche par
   fonction depuis le début, quadratique) et ~105 ms de `TriBVH.build` (la coque du F-35) sur le thread principal. **Corrigé** :
   `wgslFunctions` en un passage, en cache par source (`wgsl-library.ts`, parité testée sur les 709 fonctions) ; les arbres des coques
-  construits dans un worker (`system/bvh-worker.ts`, `bvh-client.ts`, repli sur place ; `TriBVH.parts`/`fromParts`, parité testée ;
+  construits dans un worker (`system/bvh-worker.ts`, `bvh-client.ts` — devenus `cpu-worker.ts`/`cpu-client.ts` —, repli sur place ; `TriBVH.parts`/`fromParts`, parité testée ;
   `server.ts`, `build-pages.ts`). **Mesuré** : au changement, écarts > 100 ms **217, 250, 117, 182 ms → 117, 117, 116 ms** ; les deux
   fonctions absentes du profil. **Reste** : ~116 ms de travail natif au démarrage d'une compilation (la création des modules — compté
   « (program) »), une collection, un `writeTexture` de 67 ms (une couverture d'imagerie) ; le rejeu à froid (J7-2/J7-3 avec), le critère
   sur trois parcours.
+- **J7-7, deuxième pas** (11/16 07:43 UTC) — le profil compte aussi le travail natif (`FK_PROGRAM=1`) : au changement
+  d'appareil (Ranger → F-35, **avec sa mise en place au Bourget** : la clé de la scène change, ses noyaux recompilés), le spectre de la mer
+  recalculé sur le thread principal (`seaCascades`, 44 ms — aussi à chaque nouvel état de la mer : l'arrivée de la météo), la préparation des
+  glyphes de l'écran du F-35 (`pcd.warm`, 24 tailles d'un coup, 47 ms). **Corrigé** : un worker de calcul générique (`cpu-worker.ts` —
+  les arbres des coques et le spectre de la mer ; `cpu-client.ts`, repli sur place), le spectre toujours calculé là-bas (la mer d'avant
+  gardée jusqu'au nouveau ; la première fois, ses vagues quelques images plus tard), `pcd.warm` une taille par tâche. **Mesuré**
+  (kerr-mini, à chaud) : au changement, écarts > 100 ms **217/250/117/182 → 183/133 ms** — restent une collection de ~1 Go (les données
+  du lieu quitté) et l'arrivée des tuiles, **soit la mise en place : renvoyée à J7-9** ; `sea-fft` 5/5. Le démarrage : aucune image > 100 ms
+  dans les 5 s après l'écran de chargement (quatre passages). **Non fait** : à froid, trois parcours (le critère du lot) — après J7-9.
 - **J7-2 et J7-3 rejoués à froid** (11/16 07:11 UTC, run `20261116-072108-j7-cold`, cache Metal du mini vidé avant chaque
   passage) : **reproduits** — la météo 499 ms à froid / 350 ms à chaud (une image GPU de 401 ms et une collection de 635 Mo, pas la
   compilation de son noyau), le retour par F1 650 ms à froid (le noyau principal recompilé) / 250 ms à chaud (l'image du retour) ; détail
@@ -151,5 +160,5 @@ des entrées datées ; les causes des à-coups (compilation de la météo, retou
   `scripts/approach-detail-beyond.ts`, f0e0a431 : entre 10 et 18,5 km le détail dépasse les données de plus de 300 m pour 4 485 extrémités,
   jusqu'à +700 m sur l'Altiplano) : le cône continué au même évasement (~±460 m à 18,5 km), fondu 300 m ; `runway-grade.ts`
   `APPROACH_FUNNEL.reach` 18 500, `GRADE_REACH` 19 655 ; WGSL de même ; `__bh.sys.groundBareAt` (le sol sans le détail) ; e2e de la
-  planche paramétrée (`AG_FIELD`, `AG_RWY`) et jugée sur « sol touché = sol des données » de 3 à 18,2 km. En vérification.
+  planche paramétrée (`AG_FIELD`, `AG_RWY`) et jugée sur « sol touché = sol des données » de 3 à 18,2 km. Vérifié (OIFK 11, SLCB 05 : 0,0 m ; +770 m retirés à SLCB), 8b683069.
 - **Le plan révisé** (2026-11-16 05:45 UTC, session d'analyse, sur la fiche de J7-0 — [FICHE-A-COUPS](progress/j7/FICHE-A-COUPS-2026-11-16.md)) : J7-2 (météo) et J7-3 (F1) non reproduits à chaud → rejoués à froid d'abord, fermés s'ils ne se reproduisent pas ; trois lots ajoutés sur les à-coups mesurés : **J7-7** le premier noyau de la partie et le changement d'appareil (433–784 ms, ~200 ms), **J7-8** le début du vol (150–217 ms, ~300 tuiles), **J7-9** l'arrivée des données après un placement (images GPU de 150–290 ms, avec le chargement d'une sauvegarde) ; `parcours-ville` rouge mis dans J7-4 (à expliquer, pas « variance ») ; l'ordre révisé au §2.

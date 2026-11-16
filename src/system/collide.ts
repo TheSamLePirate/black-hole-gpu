@@ -55,11 +55,11 @@ export class TriBVH {
     if (nt) this.build(0, nt, cen);
   }
 
-  /** its built nodes, to hand from a worker to the page (bvh-worker.ts, bvh-client.ts — PLAN-J7 J7-7) */
+  /** its built nodes, to hand from a worker to the page (cpu-worker.ts, cpu-client.ts — PLAN-J7 J7-7) */
   parts(): BVHParts {
     return { box: this.box, link: this.link, order: this.order, nNodes: this.nNodes };
   }
-  /** a tree built elsewhere (bvh-worker.ts) over these vertices and triangles: no build here */
+  /** a tree built elsewhere (cpu-worker.ts) over these vertices and triangles: no build here */
   static fromParts(pos: Float32Array, tri: Uint32Array, p: BVHParts): TriBVH {
     const b = Object.create(TriBVH.prototype) as TriBVH;
     Object.assign(b, { pos, tri, box: p.box, link: p.link, order: p.order, nNodes: p.nNodes });

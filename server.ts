@@ -88,9 +88,9 @@ const server = Bun.serve({
       if (!r.success) return new Response(r.logs.join("\n"), { status: 500 });
       return new Response(await r.outputs[0]!.text(), { headers: { "content-type": "text/javascript" } });
     },
-    // The hulls' collision trees' worker (src/system/bvh-worker.ts — PLAN-J7 J7-7)
-    "/bvh-worker.js": async () => {
-      const r = await Bun.build({ entrypoints: ["./src/system/bvh-worker.ts"], target: "browser", minify: !dev });
+    // The CPU worker — the hulls' collision trees, the sea's spectrum (src/system/cpu-worker.ts — PLAN-J7 J7-7)
+    "/cpu-worker.js": async () => {
+      const r = await Bun.build({ entrypoints: ["./src/system/cpu-worker.ts"], target: "browser", minify: !dev });
       if (!r.success) return new Response(r.logs.join("\n"), { status: 500 });
       return new Response(await r.outputs[0]!.text(), { headers: { "content-type": "text/javascript" } });
     },

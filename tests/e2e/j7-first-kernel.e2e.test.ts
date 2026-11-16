@@ -20,7 +20,11 @@ function runsOver(pr: CdpProfile, minMs: number): Run[] {
       `${n.callFrame.functionName || "(anonymous)"} ${n.callFrame.url.split("/").pop()}:${n.callFrame.lineNumber + 1}`,
     ]),
   );
-  const idle = new Set(pr.nodes.filter((n) => /^\((idle|program)\)$/.test(n.callFrame.functionName)).map((n) => n.id));
+  const idle = new Set(
+    pr.nodes
+      .filter((n) => (process.env.FK_PROGRAM === "1" ? /^\(idle\)$/ : /^\((idle|program)\)$/).test(n.callFrame.functionName))
+      .map((n) => n.id),
+  );
   const parent = new Map<number, number>();
   for (const n of pr.nodes) for (const c of n.children ?? []) parent.set(c, n.id);
   const dt = pr.samples.map((_, i) => (pr.timeDeltas[i + 1] ?? 0) / 1000);
