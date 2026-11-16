@@ -2134,6 +2134,14 @@ says `{ count, buildings, bytes, failed, ms }`; a removal drops the cells no oth
 
 *Used in:* `j8-cells.e2e.test.ts`, `j8-zone-cells.e2e.test.ts`.
 
+### `__bh.sys.flightReady()` → Promise<{ ready, why, cells, far }> (PLAN-J8 J8-A)
+
+« All loaded before the flight » (Sam, 16 Nov 2026): whether the place can be flown with nothing more to fetch — the ground's tiles
+in (`earthTiles.pending`, `orthoPending` 0), the near scene complete (`earthScenery.stats().status` ready, not the quick one, nothing
+pending), the building cells' pool idle (nothing queued, running, nor waiting past its bound — `__bh.sys.cells.stats()`), and with
+the far layer on, its wanted cells all resident (`farBuildings().layer.missing`, when the layer says it). `why`: what is not yet, in
+words; `cells`: the pool's stats; `far`: the layer's. The J8-A e2e waits on it before the take-off.
+
 ### `__bh.sys.runways()` → `RunwayFrame[]`
 
 The Earth's runways as drawn (`sites.ts` `EARTH_RUNWAYS`): each its `site`, its threshold's `origin` on the WGS84

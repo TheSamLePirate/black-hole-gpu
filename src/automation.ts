@@ -701,6 +701,25 @@ export function installBh(c: BhContext) {
             clear: () => got.clear(),
           };
         })(),
+        /** PLAN-J8 J8-A — « all loaded before the flight » (Sam, 16 Nov 2026): whether the place is ready to be flown with nothing more to
+         *  fetch — the ground's tiles in, the near scene complete (not the quick one), the building cells' pool idle (nothing queued,
+         *  running, nor waiting past its bound), the far layer's wanted cells all resident (`missing`: J8-4's building-far.ts, when it
+         *  says it) —; `why` names what is not yet. Read by the e2e (J8-A) before the take-off, and by anyone who waits for a place. */
+        flightReady: async () => {
+          const why: string[] = [];
+          const t = renderer.earthTiles;
+          if (t.pending > 0 || t.orthoPending > 0) why.push(`tiles ${t.pending} + orthophotos ${t.orthoPending} pending`);
+          const s = renderer.earthScenery?.stats?.() as { status?: string; quick?: boolean } | undefined;
+          if (s && (s.status !== "ready" || s.quick)) why.push(`near scene ${s.status}${s.quick ? " (quick)" : ""}`);
+          if (renderer.earthScenery?.pending) why.push("near scene pending");
+          const p = cellPool().stats();
+          if (p.queued || p.running || p.beyond) why.push(`cells: ${p.queued} queued, ${p.running} running, ${p.beyond} past the bound`);
+          const far = renderer.farBuildingsOn
+            ? ((await renderer.farBuildings()).layer as { missing?: number; refused?: number } | null)
+            : null;
+          if (far?.missing) why.push(`far layer: ${far.missing} wanted cells not resident`);
+          return { ready: why.length === 0, why, cells: p, far };
+        },
         /** the craft's gear (gear.ts GEARS: each leg on the craft's axes) */
         gears: () => GEARS,
         /** the Earth's runways as drawn (sites.ts EARTH_RUNWAYS: threshold, landing direction — WGS84) */

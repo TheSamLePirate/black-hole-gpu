@@ -34,7 +34,9 @@ describe.skipIf(!E2E)("PLAN-J8 J8-6: an offline zone carries its building cells 
   let app: App;
   beforeAll(async () => {
     app = await App.boot({ width: 1280, height: 800, hash: "scene=game:artemis", sw: true, tiles: true });
-    await app.js(`(() => { __bh.settings.vessel = "f35"; Object.assign(__bh.settings, ${SETTINGS}); return 1; })()`);
+    await app.js(
+      `(() => { __bh.settings.vessel = "f35"; Object.assign(__bh.settings, ${SETTINGS}); __bh.renderer.farBuildingsOn = false; return 1; })()`,
+    );
     await app.waitFor(`__bh.fleet.active === "f35"`, 30_000);
     expect(await app.js<boolean>("__bh.pwa.ready()")).toBe(true);
     await app.waitFor("!!__bh.pwa.zones", 30_000);
@@ -83,7 +85,10 @@ describe.skipIf(!E2E)("PLAN-J8 J8-6: an offline zone carries its building cells 
     await app.offline(true);
     await app.load("scene=game:artemis");
     await app.offline(true);
-    await app.js(`(() => { __bh.settings.vessel = "f35"; Object.assign(__bh.settings, ${SETTINGS}); return 1; })()`);
+    // (the far layer off: its own want, every 2 s, would replace the cells this test asks of the pool — J8-4 on by default since 16 Nov)
+    await app.js(
+      `(() => { __bh.settings.vessel = "f35"; Object.assign(__bh.settings, ${SETTINGS}); __bh.renderer.farBuildingsOn = false; return 1; })()`,
+    );
     await app.waitFor(`__bh.fleet.active === "f35"`, 120_000);
     await app.js(
       `(() => { __bh.freeze(true); __bh.game.flyAt(${ZONE.lat}, ${ZONE.lon}, 500, 0, 0); __bh.settings.shipMount = "cockpit"; return 1; })()`,
@@ -96,6 +101,11 @@ describe.skipIf(!E2E)("PLAN-J8 J8-6: an offline zone carries its building cells 
     const off = await app.js<{ prepared: number; cached: number; failed: number }>(`__bh.sys.cells.stats()`);
     console.log(`  offline: ${kept.length} cells handed in ${((Date.now() - t1) / 1000).toFixed(2)} s — ${JSON.stringify(off)}`);
     await app.shot("remote-results/j8-zone-cells/offline.png");
+    // (J8-A's « ready » signal read offline in the zone — said, not asserted here: the zone holds no far cells, J8-9)
+    const ready = await app.js<{ ready: boolean; why: string[] }>(
+      `(async () => { const r = await __bh.sys.flightReady(); return { ready: r.ready, why: r.why }; })()`,
+    );
+    console.log(`  flightReady offline: ${JSON.stringify(ready)}`);
     expect(off.cached).toBe(kept.length);
     expect(off.prepared).toBe(0);
     expect(off.failed).toBe(0);
