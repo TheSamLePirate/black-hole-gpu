@@ -103,11 +103,30 @@ async function streetCell(x: number, y: number, signal: AbortSignal): Promise<{ 
   const quads = [0, 1, 2, 3].map((k) => [x14 * 2 + (k % 2), y14 * 2 + Math.floor(k / 2)] as const);
   const built = new Map<string, ArrayBuffer>();
   for (const [cx, cy] of quads) built.set(`${cx}/${cy}`, await buildingBytes(cx, cy, signal));
+  // (in France, each cell's BD TOPO tile — its troncon_de_route: the roads' widths, lanes, ways, bridges — through the Service Worker's
+  // cache, the tile the building cell was prepared from; a tile that does not come: that cell's roads OpenMapTiles')
+  const bd = new Map<string, ArrayBuffer>();
+  for (const [cx, cy] of quads) {
+    if (!inBdtopoBox(cx, cy)) continue;
+    try {
+      const t = await fetch(bdtopoUrl(cx, cy), { signal });
+      if (t.ok) bd.set(`${cx}/${cy}`, await t.arrayBuffer());
+    } catch {
+      /* its roads OpenMapTiles' */
+    }
+  }
   // (the roads' revision: the response's Last-Modified day, else none)
   const lm = Date.parse(r.headers.get("last-modified") ?? "");
   const day = Number.isFinite(lm) ? Number(new Date(lm).toISOString().slice(0, 10).replaceAll("-", "")) : 0;
-  const cells = prepareStreetCells(roads, x14, y14, (cx, cy) => built.get(`${cx}/${cy}`) ?? null, day);
+  const cells = prepareStreetCells(
+    roads,
+    x14,
+    y14,
+    (cx, cy) => built.get(`${cx}/${cy}`) ?? null,
+    day,
+    (cx, cy) => bd.get(`${cx}/${cy}`) ?? null,
+  );
   for (const c of cells) await keep(STREET_CACHE, streetCacheUrl(self.location.origin, c.x, c.y), c.buf);
   const mine = cells.find((c) => c.x === x && c.y === y)!;
-  return { buf: mine.buf, kept: mine.lamps.length + mine.pieces.length };
+  return { buf: mine.buf, kept: mine.lamps.length + mine.segments.length };
 }
