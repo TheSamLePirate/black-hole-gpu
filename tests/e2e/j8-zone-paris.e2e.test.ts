@@ -20,6 +20,8 @@ import { hostStats } from "./lib/earth-cache";
 afterAll(stopServer);
 const TRACK = process.env.J8_TRACK ?? "paris";
 const OUT = "remote-results/j8-zone-paris";
+/** a hard stop (J8Z_DEADLINE: an ISO time — the night bench's slot): none by default */
+const DEADLINE = process.env.J8Z_DEADLINE ? Date.parse(process.env.J8Z_DEADLINE) : 0;
 
 describe.skipIf(!E2E)(`PLAN-J8 J8-9: J8-A's corridor zone « ${TRACK} », downloaded then flown offline`, () => {
   let app: App;
@@ -73,6 +75,20 @@ describe.skipIf(!E2E)(`PLAN-J8 J8-9: J8-A's corridor zone « ${TRACK} », downlo
         }
         if (Date.now() - moved > 600_000) throw new Error(`the zone's download stopped moving for 10 min: ${JSON.stringify(z)}`);
         if (Date.now() - t0 > 4 * 3_600_000) throw new Error(`the zone not in after 4 h: ${JSON.stringify(z)}`);
+        // (a hard stop — J8Z_DEADLINE, an ISO time: Sam, 16 Nov 2026, « arrête-le proprement à 3 h 15 » before kerr-mini's night bench —:
+        // the zone paused, what is in kept on the disk, the hosts' rates so far written)
+        if (DEADLINE && Date.now() > DEADLINE) {
+          await app.js(`__bh.pwa.zones.pause(${JSON.stringify(id)})`);
+          const hosts = app.earth ? hostStats(app.earth.counts.log) : [];
+          writeFileSync(
+            `${OUT}/${TRACK}.json`,
+            `${JSON.stringify({ track: TRACK, zone, estimate: est, stoppedAt: new Date().toISOString(), realS: (Date.now() - t0) / 1000, record: z, hosts }, null, 1)}\n`,
+          );
+          for (const h of hosts) console.log(`  host ${JSON.stringify(h)}`);
+          throw new Error(
+            `stopped at the deadline (${process.env.J8Z_DEADLINE}) after ${((Date.now() - t0) / 60_000).toFixed(0)} min: ${z?.cursor}/${z?.total} chains in, kept on the disk`,
+          );
+        }
         if (k % 30 === 0)
           console.log(
             `  [${((Date.now() - t0) / 60_000).toFixed(1)} min] ${z?.cursor}/${z?.total} chains, ${((z?.bytes ?? 0) / 1e6).toFixed(0)} MB`,
