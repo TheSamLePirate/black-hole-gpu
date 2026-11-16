@@ -202,7 +202,12 @@ const flyJs = (seconds: number, turn: boolean) => `(async () => {
       samples.push({ t: +el.toFixed(2), lat: +(g?.lat ?? 0).toFixed(5), lon: +(g?.lon ?? 0).toFixed(5), alt: Math.round(g?.alt ?? 0),
         agl: Math.round(__bh.sys.heightOverGround("earth", pose.X, __bh.sim.time)), hdg: Math.round(((g?.track ?? 0) * 180 / Math.PI + 360) % 360),
         gs: Math.round(g?.gs ?? 0), scale: p.renderScale, block: p.block, quality: p.quality, tilesPending: r.earthTiles.pending,
-        orthoPending: r.earthTiles.orthoPending, compiling: r.compilesPending, heapMB: Math.round((performance.memory?.usedJSHeapSize ?? 0) / 1048576) });
+        orthoPending: r.earthTiles.orthoPending, compiling: r.compilesPending, heapMB: Math.round((performance.memory?.usedJSHeapSize ?? 0) / 1048576),
+        // (PLAN-J8 J8-0 (e): the scenery's scene each second — its state, its buildings and trees, a quick one, its centre from the craft [km],
+        // the buildings its cap left out and the farthest kept [m], its step)
+        scenery: (() => { const q = r.earthScenery.stats(); return { st: q.status, bld: q.buildings, bdtopo: q.bdtopoBuildings, trees: q.trees,
+          quick: q.quick, km: q.lat === null || !g ? null : +Math.hypot((q.lat - g.lat) * 111.32, (q.lon - g.lon) * 111.32 * Math.cos(g.lat * Math.PI / 180)).toFixed(2),
+          cut: q.cutBuildings, keptM: Math.round(q.keptReachM), step: q.progress?.step ?? null }; })() });
     }
   }
   const perf = __bh.game.perf({ gpu: false });

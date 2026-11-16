@@ -161,9 +161,9 @@ J8-R. J8-1 se voit tout de suite. J8-4 apporte le gros du gain : « toute la vue
 
 | Lot | État | Commit | Preuve |
 |---|---|---|---|
-| J8-0 | à faire | | |
+| J8-0 | (e) prêt : J0 relève `earthScenery.stats()` chaque seconde (`samples[].scenery` : état, bâtiments, arbres, scène rapide, centre à l'appareil, coupés, portée gardée, étape) — pas encore tourné ; (c) à faire (un banc d'instances) | | |
 | J8-1 | à faire | | |
-| J8-2 | à faire | | |
+| J8-2 | **proposé, à relire par la session des approches** (11/16 11:43 UTC, b6d1fb1d) : `src/system/building-cells.ts` — la grille (z 15, clé, origine au centre de la tuile), le repère (plan tangent est-nord à l'origine, hauteurs sur l'ellipsoïde WGS84), l'en-tête de 64 o (magie, format 1, source, tuile, compte, génération, origine en f64), l'enregistrement de 48 o (centre, sol, gouttière, toit, demi-côtés en dm, cap, forme et matériaux, usage, étages, rang, clé de source, couleur du toit), la vue GPU de 12 mots, l'identité stable cellule + rang | b6d1fb1d | `tests/building-cells.test.ts` 6/6 |
 | J8-3 | à faire | | |
 | J8-4 | à faire | | |
 | J8-5 | à faire | | |
