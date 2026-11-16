@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-16 13:17 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-16 13:45 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous. Ce qui est fermé quitte le tableau « En cours » pour la ligne « Fermé récemment ».
@@ -48,7 +48,7 @@ J4 (fermé, sortie non atteinte), J5 et J6 (fermés).
 | Rendu (33d89754) | J4 / J5 — l'eau, les volumes, la généralisation | **fermés** ([PLAN-J4](docs/PLAN-J4-VOLUMES.md), [PLAN-J5](docs/PLAN-J5-GENERALISATION.md)) : l'eau à demi-rythme (J5-5, −6,0 à −6,4 ms, l'image la même) ; le sol à demi-rythme laissé au joueur (J5-6, réglage « demi » : −1,9 à −3,2 ms ; « auto » à chaque pixel) ; la FFT de la mer en deux passes (−0,9 ms) ; la carte d'ombre des arbres (−2,8 ms, forêt) ; Sam a refusé les arbitrages d'image (MSAA 1×, petits arbres, nuages amortis). Postes lourds restants : l'eau 16,2, les nuages d'orage 16,5, le décor d'une forêt ~7 ms |
 | Rendu (33d89754) | Mesures tenues | la borne du M1 Max **à 30** : essayée à 40 le 15 au soir, non tenue (soutenu 26,4 et 34,5 images/s, deux runs — [J0-CONTRAT §2](docs/J0-CONTRAT.md)) ; le coût de l'appareil 3,5–4,5 ms, dont le MSAA 4× 4–5 ms (gardé) |
 | Audit vagues 3–4 et 6 (1feb2f7f) | [09-priorites-todo](docs/audit-2026-11-10/09-priorites-todo.md) | **faits** : 3.1–3.2 réseau (RD0–RD2), 3.3 sauvegardes (une clé par sauvegarde ; avion, systèmes des vaisseaux et de l'A320 — ce dernier par J6-4), 3.4–3.5 vol, 3.6–3.7 TARS, 3.10 e2e honnêtes, 4.2 temps et onglet masqué, 4.3 `Settings`/`ViewPose`, 4.8 `main()` découpé ; vague 6 hors rendu (QA, AR, RD4/RD5, FX). **Reste** : l'état d'une mission ou d'un combat (Sam), IndexedDB et l'autosauvegarde hors frame (AR-05), FX-19 (fraîcheur des écrans, à mesurer), FX-21 |
-| Vol, approches, e2e de vol (1feb2f7f) | E2E-VOLS règle 13 ; demandes de Sam du 16 nov. ; **PLAN-J8** | **fait le 16 nov.** : règle 13, bandeau et `app.scenario`, l'axe au décollage (horloge du vol), la piste du HUD, l'alarme du train, le débriefing, l'Auto-GCAS, la ligne d'horizon, les jonctions sur le sol dessiné ; **PLAN-J8** : J8-0 (a) fait, (b, d) Toulon faits — **charge IGN finie à 12:37:24 UTC** —, J8-3 cellule et réserve écrites ; **maintenant : J8-T** (le cache disque des e2e), puis Paris (b, d), puis J8-3, J8-6, J8-7 ; **en pause** : le contour HUD en virage, la règle 13 des autres domaines, la garde du bandeau (338 en attente) |
+| Vol, approches, e2e de vol (1feb2f7f) | E2E-VOLS règle 13 ; demandes de Sam du 16 nov. ; **PLAN-J8** | **fait le 16 nov.** : règle 13, bandeau et `app.scenario`, l'axe au décollage (horloge du vol), la piste du HUD, l'alarme du train, le débriefing, l'Auto-GCAS, la ligne d'horizon, les jonctions sur le sol dessiné ; **PLAN-J8** : J8-0 (a) fait, (b, d) Toulon faits ; **J8-T T0–T3 faits, le cache disque des e2e activé par défaut** (13:40 UTC ; témoin : les tuiles BD TOPO du worker du décor et du cell-worker toutes depuis le disque hors ligne, la même scène) ; J8-3 cellule et réserve écrites ; **maintenant : J8-T T4** (A/B froid/chaud), puis Paris (b, d) depuis le disque, puis J8-3, J8-6, J8-7 ; **en pause** : le contour HUD en virage, la règle 13 des autres domaines, la garde du bandeau (338 en attente) |
 
 **Fermé récemment** : **PLAN-APPROCHES** (16 nov. : AP0–AP10 et AP-R menés — données réelles, choix, jonction, A320, carte, radar, TSD, crew, HUD, directeur de vol, roue, audio, campagne mondiale et échantillon volé ; OIFK posé après J7-1 le 16 nov. : échantillon F-35 9/9, A320 5/5) ; **J3** (15 nov., confirmé par Sam ; J3-R fait 20:48) ; **le repli du raster vers le tracé retiré** (15 nov., 20:48, décision (b)) ; **PLAN-J6** (15 nov., 20:35 : les neuf parcours en e2e, sept défauts corrigés) ; l'eau étagée E1 (−1,55 ms) et E2 (−0,5 ms), E3 non ouvert ; la classification lot 1 (sur terre −1,15 ms), lot 2 non ouvert
 (sous 1 ms) ; AR-07 (le renderer sur `ViewPose`) ; le retrait R1 des anciens chemins (13 nov.) ; le noyau du monde visé compilé pendant le voyage
@@ -8963,3 +8963,37 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
 - Suite : le banc sur le M1 Max (après le témoin T0 de J8-T) ; les chiffres à Sam (question 1) avec les leviers à essayer (un point ou
   un quad sous quelques pixels, des maillages fusionnés par cellule) ; J8-4 côté GPU selon sa réponse.
 
+### 2026-11-16 13:45 UTC — PLAN-J8 J8-T : les données Terre des e2e sur disque, témoin T0 passé, activées par défaut (session 1feb2f7f)
+
+- Contribution à la destination : la préparation des données hors de la frame vaut aussi pour le banc d'essai. Les e2e du décor et
+  des bâtiments ne retéléchargent plus 50 Mo par scène sur une ligne à ~4,5 Mb/s. Les deux sessions peuvent mesurer la scène (J8-0,
+  J8-3, J8-4) sans se disputer l'IGN. Jalon : PLAN-J8 J8-T, préalable à J8-0 Paris et à J8-3.
+- Réalisé :
+  - `tests/e2e/lib/earth-cache.ts` :
+    - Fetch sur la page et sur chaque worker dédié ;
+    - **la source d'une requête lue par son identifiant dans la session du worker**. Constaté : Chrome met en pause sur la session de
+      la page les requêtes des workers aussi ;
+    - `EARTH_DATA_DEFAULT = "on"`, plus `off`, `offline` et `refresh`.
+  - L'en-tête `// Earth data: network` sur 6 e2e : `tile-arrival`, `first-image-downloads`, `coast-loading`, `voyage-prewarm`,
+    `j7-weather-arrival`, et `j0-reference` (son arrivée à froid). La garde dans `tests/e2e-banner-guard.test.ts`.
+  - Le bandeau dit d'où viennent les tuiles ; `summary.json` porte `earthData`.
+  - `bun scripts/remote.ts earth-sync` (rsync dans les deux sens, `--ignore-existing`) et la ligne de `doctor`.
+  - `tests/earth-cache.test.ts` (5 tests) et le témoin `tests/e2e/earth-cache-witness.e2e.test.ts`.
+  - Docs : E2E.md, E2E-VOLS (la règle IGN, deux lignes au §7), REMOTE-TESTS, la carte §3, les skills e2e-campaign et remote-e2e,
+    PLAN-J8 §8. Dans la fiche J8-0, l'ordre (a)…(e) est rétabli. Commits : c2aadb7f (T1–T3, encore désactivé), puis ce lot.
+- Preuves, **observé** sur ce Mac (M1 Max), 13:32–13:35 UTC, `earth-cache-witness`, 1 pass. Protocole : un dossier neuf, Toulon au
+  repos (scène complète), six cellules demandées.
+  - 1ᵉʳ démarrage : le worker du décor télécharge et garde 72 tuiles BD TOPO, le cell-worker 6 ; 2 207 réponses gardées (387 Mio).
+  - 2ᵉ démarrage **hors ligne** : 72/72 et 6/6 servies par le disque, **aucune téléchargée**, la même scène (32 000 bâtiments
+    BD TOPO) ; 2 007 réponses du disque (338 Mio).
+  - Les captures sont identiques (`remote-results/earth-witness/on.png`, `offline.png`).
+  - Le premier passage (13:16–13:23), raté, a montré l'attribution fausse : tout était compté à `page`. Le deuxième a montré les
+    demandes du cell-worker confondues avec celles du décor, parce que l'attribution se faisait par URL. Les deux sont corrigées.
+  - Non effectué : le gain de temps (T4, A/B froid contre chaud sur J0 en vol, `earth-scenery` et un fichier hors Terre, sur les deux
+    Mac) ; kerr-mini (son dossier est vide, `earth-sync` est prêt) ; l'effet de l'interception sur les mesures GPU (non mesuré).
+- Limites :
+  - **Hors ligne, 232 tuiles manquent** après un seul passage froid : des niveaux grossiers GIBS, Terrarium et EOX, et 137 WMS
+    d'altitude IGN, aucune BD TOPO. Un démarrage servi vite demande plus que le premier, plus lent. `offline` ne vaut qu'après plusieurs
+    passages, ou pour la BD TOPO seule ; à dire à Sam avant d'en faire un mode de campagne.
+  - Le toast « Relief 1 failed » hors ligne vient de ces tuiles manquantes.
+- Suite : T4 sur les deux Mac ; puis Paris (J8-0 b, d) depuis le disque ; `j8-cells` (J8-3) ; J8-6 et J8-7.

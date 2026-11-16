@@ -56,14 +56,6 @@ détail, les toits, le décodage d'OSM. C'est la cible du cache par tuile de J8-
 mesurer à nouveau avec le cache disque. Le décodage BD TOPO lui-même est petit (`bdtopo` 0,3 s actif). Pour J8-3, la préparation d'une
 cellule mesurée à part (`cell-prep`) prend 2,9 ms par tuile au médian. **Non mesuré** : kerr-mini ; Paris (après J8-T, depuis le disque).
 
-## (d) Le budget qui bloque — Toulon fait ; Paris après J8-T
-
-- **Toulon** (même passage, scène complète) : **le plafond de bâtiments** coupe, ni la mémoire ni les maillages. 32 000 gardés (8 000 ×
-  portée²), **70 247 coupés**, gardés jusqu'à 2 116 m ; `budgetLimited` vrai. Les postes que le worker rapporte (`bytes`) : le budget **64 Mio** (et non 48 :
-  `budget` = 67 108 864), avant les bâtiments 26,0 Mio, bâtiments 11,3 Mio, forêt 13,1 Mio, raster 4,0 Mio ; maillages **11,5 Mio sur
-  16**. (Leur recouvrement — « avant les bâtiments » inclut-il la forêt et le raster ? — n'est pas établi : pas de somme ici.)
-- **Paris** : à mesurer depuis le disque après J8-T.
-
 ## (c) Le coût GPU par enveloppe
 
 **kerr-mini**, 16 nov. 2026 12:29–12:33 UTC, run `20261116-132941-j8-0c-bench`, l'arbre de 7e99623d (le banc de f5dd6428). État
@@ -97,6 +89,14 @@ thermique « Nominal » avant et après ; GPU à 1 019 puis 1 266 MHz sur 1 278.
 
   Ce sont les leviers à essayer avant d'accepter un coût.
 - **M1 Max** : à faire tourner, ce Mac, après l'A/B de J8-1 qui charge l'IGN sur le mini.
+
+## (d) Le budget qui bloque — Toulon fait ; Paris après J8-T
+
+- **Toulon** (même passage, scène complète) : **le plafond de bâtiments** coupe, ni la mémoire ni les maillages. 32 000 gardés (8 000 ×
+  portée²), **70 247 coupés**, gardés jusqu'à 2 116 m ; `budgetLimited` vrai. Les postes que le worker rapporte (`bytes`) : le budget **64 Mio** (et non 48 :
+  `budget` = 67 108 864), avant les bâtiments 26,0 Mio, bâtiments 11,3 Mio, forêt 13,1 Mio, raster 4,0 Mio ; maillages **11,5 Mio sur
+  16**. (Leur recouvrement — « avant les bâtiments » inclut-il la forêt et le raster ? — n'est pas établi : pas de somme ici.)
+- **Paris** : à mesurer depuis le disque après J8-T.
 
 ## (e) Le décor pendant J0 — `earthScenery.stats()` chaque seconde
 
