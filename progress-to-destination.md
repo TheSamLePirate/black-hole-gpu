@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-16 11:23 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-16 11:33 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous. Ce qui est fermé quitte le tableau « En cours » pour la ligne « Fermé récemment ».
@@ -63,7 +63,7 @@ l'état d'une mission ou d'un combat **non sauvé, dit** ; le réseau **« entre
 
 **Fermé aussi** : le plancher du raster sur GPU faible (15 nov., 23:46, proposer sous 15 images/s, décision de Sam).
 
-**La session du rendu (33d89754)** : [PLAN-J7](docs/PLAN-J7-FLUIDITE.md) en cours — **faits** : J7-0 (la sonde et sa [fiche](docs/progress/j7/FICHE-A-COUPS-2026-11-16.md)), J7-1 (le sol des approches), J7-7 (le démarrage, le changement d'appareil : le reste = la mise en place), J7-8 (le début du vol), J7-9 (non reproduit), **J7-3 fermé « non reproduit »**, **J7-4** (la pastille, `gpu-startup`, le bouton Météo de la carte corrigés ; `parcours-ville` : le décor en retard sur la ville à 150 m/s, **rouvert dans PROBLEMES, un lot du décor proposé**) ; **en cours** : J7-2 (le préchauffage de la clé de la météo essayé et retiré — le coup de l'arrivée n'est ni une compilation ni le GPU ; profil CPU en cours), **J7-8b fait** (la musique dans le worker : A/B des échantillons identique, au début du vol 182 → 149 ms/aucune image > 100 ms, e2e audio 19/19) ; ensuite J7-5, J7-6, J7-R.
+**La session du rendu (33d89754)** : **[PLAN-J8](docs/PLAN-J8-BATIMENTS.md) (tous les bâtiments de la vue, priorité de Sam, 16 nov.)** — J8-0 (c), (e) et J8-1 ouverts, puis J8-2, J8-4, J8-5. [PLAN-J7](docs/PLAN-J7-FLUIDITE.md) **en pause** (§6) : faits J7-0, J7-1, J7-7, J7-8, J7-8b (la musique dans le worker), J7-9 (non reproduit), J7-3 (fermé), J7-4 ; en pause J7-2 (cause lue : pas le thread principal, une image GPU ~4 s après — les nuages du jour suspects, non confirmé), J7-5, J7-6, J7-R.
 
 **Priorité de Sam (16 nov., 11:30 UTC) : [PLAN-J8](docs/PLAN-J8-BATIMENTS.md), tous les bâtiments de la vue** (« c'est ça qui choque le plus ») — la suite de J7 en pause après J7-8b ; les deux sessions s'y mettent (rendu : couche GPU, scène proche ; approches : recensement, préparation des cellules, PWA) ; d'abord J8-0 (mesures) et J8-1 (le trou de 2 à 7 km).
 
@@ -8835,3 +8835,16 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   recensement des bâtiments de la vue J0 et le coût GPU par enveloppe sont à mesurer (J8-0).
 - Limites : le coût GPU de la couche lointaine sur le mini n'est pas connu ; il décide de la question 1.
 - Suite : J8-0 et J8-1 en parallèle, après J7-8b (rendu) et la mesure GCAS en cours (approches).
+
+### 2026-11-16 11:33 UTC — PLAN-J7 en pause pour PLAN-J8 ; J7-2 : la cause lue au profil (session 33d89754)
+
+- Contribution à la destination : la priorité de Sam (PLAN-J8, tous les bâtiments de la vue) ; J7 laissé dans un état propre et repris
+  d'après son §6.
+- Réalisé : PLAN-J7 §6 (la pause, ce qu'on sait de J7-2 et J7-5) ; PROBLEMES (le décor en retard renvoyé à J8-5) ; `j7-weather-arrival`
+  `WA_DAYCLOUDS=0` et la clé des nuages du jour à chaque image (pas encore tourné) ; les A/B J7 du mini annulés ; l'instrumentation de
+  J7-5 retirée de `motion.ts` (non mesurée).
+- Preuves (mesuré, kerr-mini, à froid, deux passages) : à l'arrivée de la météo, aucun bloc de script ≥ 80 ms ; une image GPU de
+  376–438 ms ~4 s après l'arrivée des 30 pipelines de la clé.
+- Limites : la cause GPU n'est pas confirmée (les nuages du jour suspects) ; J7-5 non mesuré.
+- Suite : PLAN-J8 — J8-0 (c), (e) et J8-1.
+

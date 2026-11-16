@@ -383,6 +383,8 @@ div.m3-stage.gpu` au-dessus (kerr-mini, un passage). Hors du périmètre de J6-2
 > construction devant, plafonné à 2,5 rayons (`buildLead`, `sceneryQuickLead`). **Non corrigé** : une scène qui couvre le point
 > d'arrivée à temps relève d'un lot du décor (sa durée, la scène suivante commencée plus tôt, ou deux scènes gardées), proposé à la
 > session d'analyse. `parcours-ville` garde son assertion (le défaut est vu du joueur) et mesure désormais aussi l'arrivée gelée.
+> **Renvoyé à [PLAN-J8](PLAN-J8-BATIMENTS.md) J8-5** (la scène proche allégée) et J8-4 (la couche lointaine par cellules) — décision de
+> la session d'analyse, 16 nov. ~11:30 UTC ; l'assertion de `parcours-ville` est le témoin du critère 2 de J8 (aucun trou devant).
 
 
 > **15 nov. 2026, 17:40 UTC — corrigé** : l'avance d'une scène rapide portée de 1,2 à **2,5** fois son rayon (`renderer.sceneryQuickLead`) :

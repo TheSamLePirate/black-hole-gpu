@@ -156,6 +156,21 @@ des entrées datées ; les causes des à-coups (compilation de la météo, retou
   passage) : **reproduits** — la météo 499 ms à froid / 350 ms à chaud (une image GPU de 401 ms et une collection de 635 Mo, pas la
   compilation de son noyau), le retour par F1 650 ms à froid (le noyau principal recompilé) / 250 ms à chaud (l'image du retour) ; détail
   dans la [fiche](progress/j7/FICHE-A-COUPS-2026-11-16.md) §4. Leurs lots restent ouverts, leurs causes relues.
+- **J7 en pause pour PLAN-J8, décision de Sam du 16 nov.** (11/16 ~11:30 UTC, par la session d'analyse ; [PLAN-J8](PLAN-J8-BATIMENTS.md)) :
+  J7-2, J7-5, J7-6 et J7-R en pause ; aucune charge J7 sur le mini (les A/B en cours annulés, 11/16 11:33 UTC). Ce qu'on en sait :
+  - **J7-2, la cause lue au profil, sans correctif** : le profil CPU de l'arrivée (kerr-mini, à froid, deux passages, natif compté) n'a
+    **aucun bloc de script ≥ 80 ms** — le thread principal n'y est pour rien. Les 30 pipelines de la nouvelle clé arrivent 1,9–2,3 s
+    après la météo, sans coup ; **~4 s plus tard une image GPU de 376–438 ms**, qu'aucune passe nommée n'explique. **Suspect, non
+    confirmé** (l'A/B `WA_DAYCLOUDS=0` annulé avant d'avoir tourné) : les nuages du jour de la météo réelle — leur mosaïque arrivée,
+    `buildDayClouds` (`system/day-clouds.ts`) monte une ou deux images satellite, crée deux pipelines de rendu synchrones et redessine
+    les 6 faces de la cubemap de nuit à tous leurs niveaux d'un coup ; et la même reconstruction **toutes les 30 min de jeu** (la clé
+    `hours` arrondie à la demi-heure). Pour reprendre : `j7-weather-arrival` `WA_DAYCLOUDS=0` contre défaut (la clé `dc` à chaque
+    image dit quand elle change), puis la construction étalée sur plusieurs images.
+  - **J7-5, une piste non mesurée** : la vitesse verticale résiduelle de −0,29 m/s au roulage (J6-3) a l'ordre de grandeur de l'erreur
+    d'horloge corrigée par la session des approches le même jour (69bce4c9 : 14 µs/s × 29,8 km/s ≈ 0,42 m/s en 2026) ; à vérifier par
+    un A/B avant/après 69bce4c9 sur `parcours-debarquer`, puis resserrer le seuil de J6-3 (|vn| < 0,5) si elle a disparu.
+  - **parcours-ville** : son défaut (le décor en retard sur la ville) est absorbé par PLAN-J8 (J8-5, J8-4) ; le test garde son
+    assertion, témoin du critère 2 de J8.
 - **J7-8b, la musique hors du thread de la page — fait** (11/16 11:23 UTC ; confiée par la session d'analyse à 09:45) : les notes
   rendues et les réponses impulsionnelles des réverbérations faites dans le worker de calcul (`cpu-worker.ts` tâches `notes`, `ir` ; le
   même code, `instruments.ts renderNotes` sur un contexte de tableaux ; `adoptRendered` à leur arrivée) ; les réverbérations dès la

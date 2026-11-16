@@ -9,6 +9,8 @@ import { J0_FIXED, J0_SCENE } from "./lib/j0-scene";
 // the real weather chosen, its METAR served by the page (rain, a ceiling at 600 ft, 2 500 m — parcours-meteo's). At every finished image,
 // 5 s before and 10 s after: the gap, the GPU time, its six costliest passes (renderer.prof, every image), the heap, the compiles. The
 // images over 150 ms: which pass. Not a pass/fail on the times: j7-weather-arrival.json; the flight asserted (rule 13).
+// WA_DAYCLOUDS=0: the real weather's clouds of the day off (renderer.dayCloudsOn — the measure's control: their build, 6 faces of the night
+// cube redrawn from the satellite mosaic, suspected of the arrival's heavy image, 16 Nov 2026); each row says the day's clouds built (dc).
 // WA_PROFILE=1: the page's CPU profile over the arrival (native work counted): its long runs (≥ WA_MIN ms, 80) and the functions in them.
 // Duration: ~3 min on kerr-mini.
 // Done when: the arrival recorded and j7-weather-arrival.json written.
@@ -55,9 +57,10 @@ test.skipIf(!E2E)(
             const passes = R.prof.table().map((p) => [p.label, +(p.last ?? 0).toFixed(1)]).sort((a, b) => b[1] - a[1]).slice(0, 6);
             rows.push({ t: +((now - t0) / 1000).toFixed(2), gap: +gap.toFixed(1), gpu: +(R.lastGpuMs ?? 0).toFixed(1), passes,
               heapMB: Math.round((performance.memory?.usedJSHeapSize ?? 0) / 1048576), compiles: R.compileReport().count,
-              ext: +((R.weatherBlock?.[1] ?? 0) * 1000).toFixed(3) });
+              ext: +((R.weatherBlock?.[1] ?? 0) * 1000).toFixed(3), dc: R.dayCloudsOf?.key ?? null });
           }
           return rows; })()`);
+      if (process.env.WA_DAYCLOUDS === "0") await app.js(`(__bh.renderer.dayCloudsOn = false, 1)`);
       const fair = await record(5000, "");
       await app.scenario("arrivée de la pluie (METAR réel)");
       const profiling = process.env.WA_PROFILE === "1";
