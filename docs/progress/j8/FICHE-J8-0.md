@@ -37,3 +37,23 @@ de la taille de chacun et se compte avec J8-4.
 ## (b) Le profil du worker de décor — à faire
 
 ## (d) Le budget qui bloque à Paris — à faire
+
+## (c) Le coût GPU par enveloppe — le banc écrit, pas encore tourné
+
+Le banc (`renderer.envelopeBench`, f5dd6428) et son e2e `j8-envelope-bench` (0 → 512 k, A/A, chaque part) attendent la fin de la charge
+IGN de (b). Les chiffres viendront ici, avec leur machine (kerr-mini, M1 Max), leur commit et leur état thermique.
+
+## (e) Le décor pendant J0 — `earthScenery.stats()` chaque seconde
+
+kerr-mini, 16 nov. 2026 ~11:55 UTC, run `20261116-125132-j8-0e-j0` (l'arbre d'efcb0e99, plus l'essai J8-1 alors non commité, sans effet sur
+le décor), `J0_PHASES=flight` (70 s à 140 m/s, 500 m, de 43,060/6,312 vers 43,096/6,219, le virage au 340° à 25 s).
+
+- **Toute la durée du vol, une scène rapide** (régime > 120 m/s) : 70 relevés sur 70, `refreshing` 59 fois et `ready` 11 fois. Son
+  centre reste à **moins de 0,93 km** de l'appareil.
+- **Ses bâtiments** : **0** pendant 57 s, l'appareil au-dessus de la mer, puis **149** à l'approche de la côte. **Aucun de la BD TOPO** :
+  `bdtopo` 0 sur tout le vol. **Arbres** : 0. **Aucun coupé** par le plafond (`cut` 0) : la scène rapide n'en a pas besoin.
+- **À lire avec le recensement (a)** : dans le champ au départ, 120 041 bâtiments à 15–30 km et 8 374 à 10–15 km. La scène, elle, n'en
+  porte aucun. En vol rapide, le décor ne voit donc jamais la côte que montre la vue de J0. Le plafond n'est pas en cause ici, c'est la
+  portée de la scène rapide (~2,1 km). **C'est le cas que la couche lointaine (J8-4) doit couvrir.**
+- **À vérifier** (non établi) : pourquoi la BD TOPO ne donne rien à l'approche de la côte. Le levé n'est peut-être pas « ign » à cet
+  instant, ou la scène rapide n'a pas encore ses tuiles. J8-0 (b) le dira.
