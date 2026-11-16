@@ -9278,7 +9278,7 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
 - **Limites / transitions restantes :** la lecture de J8-9 comme un accord est à confirmer par Sam. Pour les zones, les durées calculées par la session des approches restent des estimations, au débit mesuré à Toulon : Paris à 5 km « overflight », 7 704 chaînes, environ 0,9 h. Le coût GPU de J8-L n'est pas mesuré.
 - **Suite :** côté approches, J8-9 puis le signal « prêt » de J8-A. Côté rendu, J8-L après les matériaux de J8-4 et J8-5.
 
-### 2026-11-16 16:40 UTC — PLAN-J8 : J8-E ajouté (les fleuves et les rivières dans toute la vue) (session d'analyse)
+### 2026-11-16 16:34 UTC — PLAN-J8 : J8-E ajouté (les fleuves et les rivières dans toute la vue) (session d'analyse)
 
 - **Contribution à la destination :** PLAN-J8 J8-A, stratégie §19.13. Sam : « de la même manière, les fleuves et rivières doivent TOUS être chargés dans la vue ».
 - **Réalisé :**
