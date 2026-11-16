@@ -3,7 +3,38 @@
 Problèmes constatés, pas encore réglés. Chaque entrée : la date (UTC), ce qui est mesuré ou observé et sa source, la cause
 connue ou supposée, la piste. Une entrée réglée est barrée avec le commit qui la règle, pas effacée.
 
-## L'alarme « GEAR UP · TOO LOW » en montée après le décollage et en croisière rapide (relevé le 16 novembre 2026, captures des parcours-*, règle 13)
+## ~~Un appareil qui roule glisse de côté par rapport à la Terre, 0,2–0,4 m/s, loin de 2067~~ (relevé le 16 novembre 2026, e2e `takeoff-axis`) — réglé le même jour dans `controller/motion.ts` ; deux autres intégrateurs à revoir
+
+- **Constaté** (ce Mac) : à Edwards, le 10 juillet 2026, l'A320 au décollage, cap dans l'axe à 0,09°, finit 8,2 m à droite de l'axe à VR
+  (le F-35 4,8 m) ; les pneus ne voient aucun glissement (angles de dérive ≈ 0,001°), ni vent ni braquage ; rien au Bourget ce jour-là, rien
+  à Edwards en 2067 (la date par défaut). La position avançait ~0,3 m/s de plus que la vitesse ne le dit.
+- **Cause** : l'horloge du vol est comptée en M depuis 2067 ; en 2026 (|t| ≈ 2,6·10⁶ M), un double ne la résout qu'à ~0,1 µs, et chaque
+  sous-pas de 4 ms sur le train avançait l'horloge d'un pas arrondi pendant que l'appareil avançait du pas exact : 14 µs perdues par seconde,
+  soit 0,42 m/s contre la Terre emportée à 29,8 km/s sur son orbite (calculé : `bun` sur `EPOCH_DATE`/`M_SECONDS` ; 0 en 2067).
+- **Réglé** : `motion.ts` avance l'appareil du pas que l'horloge prend vraiment (`(t + dt) − t`). Vérifié : sonde 2,02 m → 0,24 m en 8 s ;
+  `takeoff-axis` 7/7 (A320 et F-35, Le Bourget, la piste la plus proche, Edwards, la pluie : ≤ 0,1° et ≤ 0,9 m jusqu'à VR) ; vol et train
+  unitaires 91/91.
+- **Reste** : `system/our-coast.ts` (les appareils de la flotte en roue libre) et `system/iss.ts` avancent aussi `X += V dt` à côté d'un
+  temps cumulé : même défaut possible loin de 2067 (non mesuré) — à vérifier par la même sonde.
+
+## La piste du HUD contre la piste dessinée : alignée ; les autres pistes des sites du jeu flottaient (réglé) ; la vue en mouvement non mesurée (relevé le 16 novembre 2026, question de Sam, e2e `hud-runway-drawn`)
+
+- **Mesuré** (ce Mac, 10 juillet 2026, de jour) : au seuil puis 3 km en finale, chaque coin du contour HUD contre la bande dessinée et nivelée
+  (`EARTH_RUNWAYS`, le sol dessiné) — Le Bourget 25, Edwards 23L (sites du jeu), Toulon-Hyères 05 et sa 13 (le géoïde +49 m), Madrid
+  18R et ses trois autres : cap identique (0,000°), seuil 0,0 m, largeur et longueur identiques, ≤ 0,023° vu de l'œil. Les sites du jeu sont
+  posés sur les vraies extrémités (OurAirports : Le Bourget 25 = 48,974 / 2,45825, 3 000 m ; Edwards 23L = 34,918858 / −117,857377).
+- **Écart réel, réglé le même jour** : aux sites du jeu, le HUD trace les **autres** pistes (Le Bourget 03/21 et 09/27, Edwards 05L/23R et
+  07/25, AP7a) d'après OurAirports, sur un sol que le jeu ne nivelle pas (seule l'orthophoto les montre). Leur contour était un plan plat au
+  niveau du relief sous leur seul seuil : la 05L d'Edwards **24 m au-dessus du sol** (1,15° vu du seuil de la 23L, sa ligne au-dessus de
+  l'horizon) pendant l'arrivée du relief, encore 7 m une fois chargé (la piste penche : 2 312 → 2 289 ft), Le Bourget 03/21 6,7 m. Désormais
+  (`controller/lowthrust.ts`) : le niveau = la médiane du sol sous la longueur, chaque bout posé sur le sol dessiné sous lui — mesuré
+  ≤ 2,1 m (0,09° au seuil, ≤ 0,03° en finale). L'alignement en plan avec la photo dépend d'OurAirports (non mesuré).
+- **Non mesuré** : la vue en mouvement (le contour d'une image en retard en virage ou en roulis, un coût d'une image à 20–30 images/s) ;
+  et les e2e où Sam a vu l'écart — à nommer (avec le bandeau, désormais citable) pour reproduire ce cas-là.
+- **Piste** : (1) que Sam cite l'e2e et le scénario ; (2) une mesure en virage (le contour projeté contre les coins dessinés, image par image) ;
+  (3) dessiner/niveler les autres pistes des sites du jeu comme celles du monde (ou ne pas les tracer au HUD).
+
+## ~~L'alarme « GEAR UP · TOO LOW » en montée après le décollage et en croisière rapide~~ (relevé le 16 novembre 2026, captures des parcours-*, règle 13) — réglé le même jour (`game/gear-warn.ts`)
 
 Observé (kerr-mini, runs `20261116-092121-r13-again`, `…-090328-r13-parcours`) : « MASTER WARNING · GEAR UP · TOO LOW » et « Too low,
 gear! » (1) au décollage automatique du F-35 à Toulon-Hyères, à 34 m, en montée à +9 m/s, 98 m/s, train rentré par le décollage
@@ -13,13 +44,22 @@ sol **et** sous 150 m/s, train rentré, quelle que soit la phase ; un avertisseu
 (environ < 150 m, < 100 m/s), et pas au décollage. **Non corrigé** (un système de vol : son cours, VOL-AVIONS, et son e2e) — à la session
 qui tient le vol. Les tests de la règle 13 ne l'assertent pas encore (l'alarme n'est pas dans `flightState`).
 
-## Relancer une approche après une prise de manche ouvre un débriefing « F 0,0/20 » en plein vol (relevé le 16 novembre 2026, `parcours-meteo`)
+- **Réglé (16 nov., session 1feb2f7f)** : `game/gear-warn.ts` — le mode 4A d'un GPWS (comme la voix EGPWS de l'A320,
+  `a320/sound/callouts.ts`) : train rentré, sous 152 m sol (500 ft) et 98 m/s (190 kt), en descente, jamais dans la montée initiale (de
+  l'envol à 457 m sol) ; `computer.ts` `gearWarn` le lit (HUD, voyant, annonce « Too low, gear! », crew). Les deux cas des parcours-* sans
+  alarme, une approche basse et lente train rentré toujours alarmée : `tests/gear-warn.test.ts` 3/3. VOL-AVIONS, COCKPIT, cours.
+
+## ~~Relancer une approche après une prise de manche ouvre un débriefing « F 0,0/20 » en plein vol~~ (relevé le 16 novembre 2026, `parcours-meteo`) — réglé le même jour (`controller/instructor.ts`)
 
 Observé (run `20261116-095016-r13-meteo2`, 3-after-stick) : après le manche tenu 1,5 s pendant l'ILS de LFTH, `camera.ilsStart("LFTH")`
 (l'appel de la roue et de TARS) relance l'approche ; l'approche précédente, reprise au manche, est notée « DEBRIEF — ILS APPROACH F 0.0/20 »
 dans un panneau qui couvre la vue pendant le vol (« Intercept 4 s », « Within tolerance 0 % »). Un débriefing de l'approche abandonnée en plein
 vol, au moment où le pilote la reprend, gêne ; à décider (le noter seulement à l'atterrissage, ou ne pas noter une approche reprise au
 manche puis relancée). Non corrigé — à la session des approches.
+
+- **Réglé (16 nov., session 1feb2f7f)** : l'instructeur ne débriefe une approche qu'à sa vraie fin — sur les roues (arrondi touché,
+  roulage) ou remise de gaz ; abandonnée ou relancée (`ilsStart` la remet « vers l'IAF »), elle n'est pas notée. Test
+  `tests/instructor.test.ts` (relancée vers l'autre bout : aucun débriefing ; ramenée et posée : un) — témoin : sans la correction, il échoue.
 
 ## Le détail procédural au-delà du couloir d'approche de J7-1 : 4 485 extrémités où il dépasse les données de plus de 300 m (relevé le 16 novembre 2026, `scripts/approach-detail-beyond.ts`)
 

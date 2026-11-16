@@ -67,7 +67,8 @@ Dix pages pour chacun des huit affichages : PFD, ORB, NAV, SYS, DCK, PLN, CLK, L
 - **G, le levier GEAR ou une manette** : sortie ou rentrée en 8 s, dessinée (jambes, amortisseurs, trappes).
   - Au sol, il est verrouillé sorti.
   - Sous l'autopilote, c'est l'autopilote qui le règle.
-- **L'alarme** : train rentré, sous 300 m et sous 150 m/s. L'alerte du HUD affiche « GEAR UP · TOO LOW » et la roue du levier clignote.
+- **L'alarme** (le mode 4A d'un GPWS, `game/gear-warn.ts`) : train rentré, sous 152 m sol et 98 m/s, en descente, jamais
+  pendant la montée initiale (du décollage à 457 m sol) — depuis le 16 nov. 2026 (avant : sous 300 m et 150 m/s, en toute phase). L'alerte du HUD affiche « GEAR UP · TOO LOW » et la roue du levier clignote.
 - **Posé train rentré** : il atterrit sur le ventre, glisse jusqu'à l'arrêt, et le train reste bloqué.
 - **Le réglage « Train automatique »** garde l'ancien comportement : le train sort sous 600 m au-dessus du sol.
 

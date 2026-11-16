@@ -8720,3 +8720,19 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   (contour en retard d'une image en virage) non mesurée ; Madrid non remesuré au dernier passage (relief bloqué 90 s) ; l'alignement en plan
   des autres pistes avec l'orthophoto dépend d'OurAirports.
 - Suite : que Sam cite (bandeau) l'e2e où il a vu la piste du HUD décalée, pour ce cas-là ; les deux autres intégrateurs.
+
+### 2026-11-16 10:04 UTC — L'alarme du train au modèle d'un GPWS, le débriefing d'une approche à sa seule vraie fin (session 1feb2f7f)
+
+- Contribution à la destination : §19 (préserver l'expérience : une alarme qui ne crie pas à tort, un débriefing qui ne couvre pas la vue en
+  vol) ; deux défauts relevés par la session du rendu dans ses parcours-*, attribués par la session d'analyse.
+- Réalisé : `game/gear-warn.ts` (le mode 4A d'un GPWS, comme la voix EGPWS de l'A320 : train rentré, sous 152 m sol et 98 m/s, en descente,
+  jamais dans la montée initiale jusqu'à 457 m) lu par `computer.ts gearWarn` (HUD, voyant, annonce, crew) — avant : tout avion sous 300 m et
+  150 m/s, d'où l'alarme au décollage (34 m, en montée) et en croisière rapide (275 m, 140 m/s) ; `controller/instructor.ts` : une approche
+  débriefée seulement posée ou remise de gaz — relancée (`ilsStart`, la roue, TARS) ou abandonnée, pas de « F 0,0/20 » en plein vol.
+  Docs : VOL-AVIONS (cours et référence), COCKPIT, apprendre-avions.html (légende de la capture d'avant), PROBLEMES (deux entrées barrées).
+- Preuves (vérifié) : `tests/gear-warn.test.ts` 3/3 (les deux cas des parcours-* sans alarme sous la nouvelle règle, l'ancienne les
+  alarmait ; une approche basse train rentré alarmée) ; `tests/instructor.test.ts` 4/4, le nouveau cas avec son témoin (sans la correction
+  il échoue).
+- Limites : pas rejoué en e2e (les parcours-* de la session du rendu le montreront) ; la capture de la leçon 3 d'apprendre-avions reste
+  celle d'avant (l'alarme y sonne) — à refaire au prochain passage de son e2e ; le mode 4B (volets) n'est pas modélisé hors de l'A320.
+- Suite : la règle 13 peut asserter « aucune alarme de train hors approche » (`flightState` à compléter).

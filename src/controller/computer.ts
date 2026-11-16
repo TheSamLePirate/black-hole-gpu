@@ -50,6 +50,7 @@ import { unitsOf } from "../ui/unitsys";
 import { netFrame } from "./netcraft";
 import type { CameraController } from "../controls";
 import { LANDING, clamp, finalGate, fmtDur, landingProfile, spinAxis, unitV } from "./util";
+import { GearWarn } from "../game/gear-warn";
 
 declare module "../controls" {
   interface CameraController {
@@ -1215,6 +1216,8 @@ function entryInfo(this: CameraController) {
   };
 }
 
+/** The gear's alarm's memory (the take-off's climb): one flown craft at a time */
+const GEAR_MODE4 = new GearWarn();
 /** The flown craft in the air, for the displays: the flow (q, Mach, α, β), the heat, the skin, the load. */
 function airInfo(this: CameraController) {
   const A = this.airFlight;
@@ -1260,17 +1263,20 @@ function airInfo(this: CameraController) {
     flaps: A.cfg.flaps ?? 0,
     brake: A.cfg.brake ?? 0,
     gear: !!A.cfg.gear,
-    // (the gear: commanded down, how far out; its alarm — the Ranger in the air, the gear left up (its
-    // lever up: lowered, the alarm stops — it is coming), low and slow: below 300 m and 150 m/s — K4b)
+    // (the gear: commanded down, how far out; its alarm — the GPWS's mode 4A, game/gear-warn.ts: the gear up (its lever: lowered,
+    // the alarm stops — it is coming), under 500 ft and 190 kt, coming down, not in the take-off's climb; before 16 Nov 2026 every
+    // aeroplane under 300 m and 150 m/s, the F-35 warned climbing out after its take-off and cruising level over hills)
     gearDown: this.gearDown,
     gearExt: this.gearExt,
     gearWarn:
       isPlane(fleet.active) &&
-      A.inAir &&
-      !this.gearDown &&
-      !A.cfg.gear &&
-      (A.cfg.agl ?? Infinity) - GEAR < 300 &&
-      (L?.speed ?? Infinity) < 150,
+      GEAR_MODE4.step({
+        inAir: A.inAir && !this.rolling,
+        gearDown: this.gearDown || !!A.cfg.gear,
+        agl: (A.cfg.agl ?? Infinity) - GEAR,
+        speed: L?.speed ?? Infinity,
+        vs: this.geoNow()?.vs ?? 0,
+      }),
     // (the wind there: its speed [m/s], where it blows from [°])
     wind: this.windNow,
     sf: this.sfFlown ? { ...this.sfFlown } : this.sfCmd ? { ...this.sfCmd } : null,

@@ -186,8 +186,9 @@ décollage en 10,5 s (`tests/f35-envelope.test.ts`).
 4. Vers **70 m/s** (≈ 135 kt), **S par petites pressions** (ou Verr. Maj puis S) : le nez se lève ; viser **10 à
    12°** d'assiette.
 5. Dès que la vitesse verticale est positive : **G** (train rentré, 8 s). Volets (P) rentrés s'ils étaient sortis.
-   L'alarme « train rentré trop bas » sonne alors (train rentré sous 300 m et 150 m/s) : normale juste après un
-   décollage, elle se tait au-dessus.
+   L'alarme « train rentré trop bas » ne sonne pas pendant la montée initiale : c'est le mode 4A d'un GPWS (train
+   rentré, sous 150 m sol et 98 m/s, en descente), armé seulement une fois passé 457 m (1 500 ft) après le décollage
+   (depuis le 16 nov. 2026 ; avant, elle sonnait sous 300 m et 150 m/s, même en montée ou en palier rapide).
 6. Montée à 10–15° ; **⇧Z** (⇧W) éteint la postcombustion (elle s'éteint aussi d'elle-même dès que la manette passe sous
    95 % : Alt, X…).
 
@@ -752,7 +753,8 @@ La loi avion exige le mode `"plane"`, **q > 300 Pa** et aucun maintien.
 - **Train** : `gearDown` / `gearExt` (8 s) ; seul `gearExt ≥ 1` porte. Train automatique quand `autoGear` (défaut faux)
   ou un autopilote d'entrée, d'atterrissage, de décollage : sorti sous **600 m AGL et 250 m/s**. `setGear` refuse sur le
   ventre, refuse de rentrer au sol, refuse en automatique. **Aucune vitesse limite train** (le 250 kt de
-  `aviation/en/f35.md` n'est pas appliqué). Alarme train : rentré, sous 300 m et 150 m/s. **Manette 0 sur toutes les roues
+  `aviation/en/f35.md` n'est pas appliqué). Alarme train (`game/gear-warn.ts`, le mode 4A du GPWS, comme la voix EGPWS de l'A320) : rentré, sous 152 m sol et
+  98 m/s, en descente, hors montée initiale (du décollage à 457 m sol). **Manette 0 sur toutes les roues
   = freinage automatique.** Roue avant : min(60°, 5,2/v). Spoilers sol au toucher manette 0.
 - **Volets** 0 / 0,5 / 1, **aérofrein** 0 / 1 : aucune vitesse limite.
 - **Maintiens du jet** (`game/jet.ts`, `controller/jet.ts`) — disponibles en mode avion, en l'air, sans roulage, sans

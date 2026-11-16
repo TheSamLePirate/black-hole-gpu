@@ -125,14 +125,22 @@ function watchedOwn(
   return null;
 }
 
+/** Whether the approach watched came to its end: on the wheels (the flare's touchdown, the rollout), or gone around. */
+function approachEnded(c: CameraController): boolean {
+  const ph = c.ilsRun?.phase;
+  return ph === "rollout" || ph === "done" || ph === "missed" || !!c.rolling || !!c.ourLanded;
+}
+
 /** A frame of the instructor: the manoeuvre's run begun, stepped (its call handed on), ended (its debrief). */
 function instrFrame(this: CameraController, dt: number) {
   const mode = this.s.f35Instructor ?? "full";
   const w = fleet.active === "f35" && mode !== "off" && dt > 0 ? watched(this) : null;
   const R = this.instr;
   if (R && (!w || w.id !== R.id)) {
-    // (ended: its debrief, when it was flown long enough to judge)
-    if (R.samples.length > 15) {
+    // (ended: its debrief, when it was flown long enough to judge — an approach only at its real end, on the wheels or gone around:
+    // abandoned, relaunched (ilsStart again — the wheel's, TARS's — puts it back « to the IAF »), it is not graded; before 16 Nov
+    // 2026 a relaunch after the stick opened « ILS APPROACH F 0,0/20 » in flight, over the view — parcours-meteo)
+    if (R.samples.length > 15 && (R.id !== "ils" || approachEnded(this))) {
       this.instrLast = { run: R, debrief: instrDebrief(R), auto: this.instrAuto };
       this.onInstrDebrief?.(this.instrLast);
     }

@@ -129,3 +129,23 @@ test("an ILS watched: the autopilot's debriefed high; flown 12 m/s fast, 'Fast' 
   expect(B!.score).toBeLessThan(debriefs[0]! - 2);
   expect(B!.tips.map((t) => t.text)).toContain("Fast");
 }, 300_000);
+
+test("an approach relaunched in flight (ilsStart again — the wheel's, TARS's) is not debriefed; flown on to the ground, it is", () => {
+  // (16 Nov 2026, parcours-meteo: after the stick, the approach relaunched opened « ILS APPROACH F 0,0/20 » over the view)
+  const a = onFinal();
+  const debriefs: number[] = [];
+  a.c.onInstrDebrief = (L) => debriefs.push(L.debrief.score);
+  a.c.ilsStart("KEDW");
+  a.fly(20, () => false);
+  expect(a.c.instr?.id).toBe("ils");
+  // (relaunched to the other end — far behind, « to the IAF »: no longer watched, not ended)
+  a.c.ilsStart("KEDW", { runway: "05R" });
+  a.fly(2, () => false);
+  expect(a.c.ilsRun?.phase).toBe("toIaf");
+  expect(debriefs).toEqual([]);
+  // (and back to the 23L, flown to the ground: graded once)
+  a.c.ilsStart("KEDW", { runway: "23L" });
+  a.fly(300, () => !a.c.ilsRun);
+  a.fly(1);
+  expect(debriefs.length).toBe(1);
+}, 300_000);
