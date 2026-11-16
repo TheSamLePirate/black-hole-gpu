@@ -67,6 +67,9 @@ fn terrainRasterLamp(px: vec2f) -> bool { let t = textureLoad(terrainDist, vec2i
 fn terrainRasterTag(px: vec2f) -> f32 { let t = textureLoad(terrainDist, vec2i(floor(px)), 0); return select(0.0, t.g, floor(t.a / ${RASTER_CODE_SCALE}.0) == ${RASTER_CODE.turbine}.0); }
 // A bridge's part's own triangles at this pixel (system/scenery-raster.ts meshFs): the material's, no windows.
 fn terrainRasterBridgeMesh(px: vec2f) -> bool { return terrainRasterCode(px) == ${RASTER_CODE.bridgeMesh}.0; }
+// A far building's envelope at this pixel (PLAN-J8 J8-4, scenery-raster.ts farVs: the mesh's code and a half — floor() the mesh's):
+// its roof's colour the orthophoto's held more — the near meshes' grey of a leaning photograph read as roofs gone grey far off
+fn terrainRasterFar(px: vec2f) -> bool { let a = textureLoad(terrainDist, vec2i(floor(px)), 0).a / ${RASTER_CODE_SCALE}.0; return floor(a) == ${RASTER_CODE.mesh}.0 && fract(a) > 0.25; }
 // How many levels coarser than the reference patch the ground here was drawn from (0 the patch — and what stands on it —, 1 its
 // first coarser ring, …: system/terrain-raster.ts ringFs; 0 none).
 fn terrainRasterLevelStep(px: vec2f) -> f32 {

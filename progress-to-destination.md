@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-16 16:05 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-16 16:07 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous. Ce qui est fermé quitte le tableau « En cours » pour la ligne « Fermé récemment ».
@@ -63,7 +63,7 @@ l'état d'une mission ou d'un combat **non sauvé, dit** ; le réseau **« entre
 
 **Fermé aussi** : le plancher du raster sur GPU faible (15 nov., 23:46, proposer sous 15 images/s, décision de Sam).
 
-**La session du rendu (33d89754)** : **[PLAN-J8](docs/PLAN-J8-BATIMENTS.md)** — J8-2 fait ; J8-0 (c), (e) faits ; J8-1 fermé « sans effet » ; **J8-4 avec les quads (décision de Sam)** : un premier lot dessine la couche lointaine (Toulon : +1,1 ms, 23 714 bâtiments), **éteinte par défaut — jugée laide par Sam** (un seul matériau, quads trop grands) ; à faire avant de la rallumer : le matériau du bâtiment, la forme du toit, aucune bascule, le seuil du quad, l'ordre des cellules ; J8-1b (le plafond) après. [PLAN-J7](docs/PLAN-J7-FLUIDITE.md) en pause.
+**La session du rendu (33d89754)** : **[PLAN-J8](docs/PLAN-J8-BATIMENTS.md)** — J8-2 fait ; J8-0 (c), (e) faits ; J8-1 fermé « sans effet » ; **J8-4 allumée par défaut** (décision de Sam, quads sous 8 px ; second lot : l'aspect U2, le toit, aucune bascule ; Toulon ~+0,6 ms, vue J0 dans le bruit) ; la teinte des toits lointains (l'orthophoto gardée, `farRoofHue`) écrite, non jugée ; **J8-5** : premier pas écrit et éteint (`farNearOnlyM`), la distance à choisir sur les captures de `j8-junction` et de `parcours-ville` ; J8-1b suspendu jusqu'à J8-5. [PLAN-J7](docs/PLAN-J7-FLUIDITE.md) en pause.
 
 **Priorité de Sam (16 nov., 11:30 UTC) : [PLAN-J8](docs/PLAN-J8-BATIMENTS.md), tous les bâtiments de la vue** (« c'est ça qui choque le plus ») — la suite de J7 en pause après J7-8b ; les deux sessions s'y mettent (rendu : couche GPU, scène proche ; approches : recensement, préparation des cellules, PWA) ; d'abord J8-0 (mesures) et J8-1 (le trou de 2 à 7 km).
 
@@ -9188,3 +9188,26 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   - Les cellules vides en mer dans la boîte coûtent maintenant une lecture de répertoire Overture chacune.
 - Suite : la voie (b) décidée par Sam pour J8-6 (le cache disque des e2e servant aussi le Service Worker, avec un témoin), puis le
   passage unique de `j8-zone-cells` sur le mini, annoncé à la session du rendu.
+
+### 2026-11-16 16:07 UTC — PLAN-J8 J8-4 allumée par défaut, la teinte des toits lointains, J8-5 premier pas (éteint) (session 33d89754)
+
+- Destination : §19.13 (la ville vue de loin en vol), §7 (une responsabilité par couche : la scène proche, la couche lointaine). Décisions
+  de Sam du 16 nov. (~16:10 UTC, relayées par la session d'analyse).
+- Fait :
+  - `renderer.farBuildingsOn` passe à true.
+  - La teinte des toits lointains : leurs enveloppes écrivent le code raster 62,5 (`terrainRasterFar` dans `terrain-raster-hint.ts`,
+    `atFar` dans trace.wgsl). Leur toit garde la couleur de l'orthophoto (`FAR_ROOF_HUE` 0,85, au lieu d'une désaturation à 0,2 et d'une
+    teinte froide). `renderer.farRoofHue` sert de levier (la marque passe dans les paramètres de la couche, 32 o).
+  - J8-5, premier pas : `renderer.farNearOnlyM`, à 0 par défaut (rien ne change). Le worker ne garde que les bâtiments de la scène à
+    moins de cette distance de son couloir. Les autres sont coupés ; l'empreinte des arbres reste. `stats().farLeft` les compte. Le
+    masque de la couche est borné par cette distance.
+  - Nouvel e2e `j8-junction` : Toulon vu de 2,5 et de 4 km, jonction à 0, 2, 3 et 4 km. À 2 km, une capture avant/après de la teinte.
+  - `parcours-ville` `PV_NEAR_ONLY` : une capture par segment à l'approche.
+- Preuve : vérifié statiquement (tsc, Biome, 84/84 shaders compilés, gardes e2e). **Rien d'observé ni de mesuré** : les captures sont à
+  venir, sur le mini, après le témoin IGN de la session des approches.
+- Limites :
+  - Le masque de la couche est un rayon autour du centre de la scène, alors que le tri de J8-5 suit son couloir. Il n'y a pas de trou,
+    puisque le centre est sur le couloir. Un double est possible au-delà du rayon, le long du couloir : un bâtiment dessiné par la scène
+    et par la couche. Les captures le diront.
+  - Bruxelles (J8-7, session des approches) remplit le budget de 24 Mio : 17 images/s à la capture, non mesuré au banc.
+- Suite : les captures, le choix de la distance, puis les montrer à Sam.

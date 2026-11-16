@@ -8462,6 +8462,7 @@ fn terrainRasterDepth(px: vec2f) -> f32 { return 0.0; }
 fn terrainRasterBuilding(px: vec2f) -> bool { return true; }
 fn terrainRasterMesh(px: vec2f) -> bool { return false; }
 fn terrainRasterBridgeMesh(px: vec2f) -> bool { return false; }
+fn terrainRasterFar(px: vec2f) -> bool { return false; }
 fn terrainRasterTurbine(px: vec2f) -> bool { return false; }
 fn terrainRasterLamp(px: vec2f) -> bool { return false; }
 fn terrainRasterTag(px: vec2f) -> f32 { return 0.0; }
@@ -15799,6 +15800,9 @@ fn atNg(a: RasterAttr, gq: vec3f) -> vec3f {
 fn atMesh(a: RasterAttr) -> bool { return select(a.mesh, terrainRasterMesh(a.px), a.vis); }
 fn atLeaf(a: RasterAttr) -> u32 { if (a.vis) { return select(0u, terrainRasterLeaf(a.px), HAS_SCENERY && (liteSkip() & 262144u) == 0u); } return a.leaf; }
 fn atBridgeMesh(a: RasterAttr) -> bool { if (a.vis) { return terrainRasterBridgeMesh(a.px); } return a.bridgeMesh; }
+// (PLAN-J8 J8-4) the share of the photograph's colour a far building's roof keeps
+const FAR_ROOF_HUE = 0.85;
+fn atFar(a: RasterAttr) -> bool { if (a.vis) { return terrainRasterFar(a.px); } return false; }
 fn atTurbine(a: RasterAttr) -> bool { if (a.vis) { return terrainRasterTurbine(a.px); } return a.turbine; }
 fn atPylon(a: RasterAttr) -> bool { if (a.vis) { return terrainRasterPylon(a.px); } return a.pylon; }
 fn atLamp(a: RasterAttr) -> bool { if (a.vis) { return terrainRasterLamp(a.px); } return a.lamp; }
@@ -16007,7 +16011,9 @@ fn liteMaterial(gq: vec3f, q: vec3f, ph: vec3f, rd: vec3f, look: vec3f, tM: f32,
   // the street's or a tree's beside it: zinc and slate grey, a fifth of the photograph's hue)
   if (mesh && leaf == 0u && dot(n, gq) >= 0.35) {
     let l = luminance(A);
-    A = mix(vec3f(l), A, 0.2) * vec3f(0.97, 0.99, 1.04);
+    // (PLAN-J8 J8-4: a far building's roof — the photograph's colour held, KEEP_FAR of it: under a kilometre's texel the photograph is the
+    // roofs' own tint, the near meshes' fifth of it read far off as roofs gone grey — Sam, 16 Nov 2026)
+    A = mix(vec3f(l), A, select(0.2, FAR_ROOF_HUE, atFar(at))) * select(vec3f(0.97, 0.99, 1.04), vec3f(1.0), atFar(at));
     // (a bridge's deck: its stone and its roadway — the photograph under it is the river's: a speckled dark slab)
     if (atBridgeMesh(at)) { A = vec3f(0.36, 0.34, 0.31) * P.earth2.z; }
   }

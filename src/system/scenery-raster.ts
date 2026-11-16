@@ -899,7 +899,7 @@ fn benchCull(@builtin(global_invocation_id) g: vec3u, @builtin(num_workgroups) n
 // field of view, a pixel at least), those the near scene draws itself left out (within farU.y of its centre), drawn as boxes, as one
 // quad under farU.z px (Sam's decision of 16 Nov 2026), all into the buildings' shadow map. Their look a building's own triangles'
 // without a leaf (shadeLite, U2): the roof the orthophoto's, the walls stone with their windows.
-struct FarU { blocks: u32, maskR: f32, lodPx: f32, leaf: f32 };
+struct FarU { blocks: u32, maskR: f32, lodPx: f32, leaf: f32, roofMark: f32, _a: f32, _b: f32, _c: f32 };
 @group(1) @binding(4) var<uniform> farU: FarU;
 @group(1) @binding(5) var<storage, read> farRec: array<u32>;
 @group(1) @binding(6) var<storage, read> farBlock: array<vec2u>;
@@ -1017,6 +1017,8 @@ fn farCull(@builtin(global_invocation_id) g: vec3u, @builtin(num_workgroups) n: 
   // (no leaf: shadeLite's look for a building's own triangles without one — its roof the orthophoto's, its walls stone with their
   // windows, lit at night — U2; the near scene's leaf records are not theirs)
   o.leaf = 0.0;
+  // (the mesh's code and a half — terrainRasterFar: shadeLite holds its roof's photograph's colour; farU.roofMark 0: the near look's)
+  o.bridge = farU.roofMark;
   // (its cell's fade-in — 0 → 1 over a second once it is put: farFs keeps that share of its pixels, a scatter)
   o.pyl = vec4f(0.0, 0.0, 0.0, farCell[4u * farBlock[k >> 8u].x].w);
   o.clip = vec4f(v.x / u.right.w + u.output.z * v.z, v.y / u.up.w + u.output.w * v.z, u.forward.w, v.z);
@@ -1035,6 +1037,8 @@ fn farCull(@builtin(global_invocation_id) g: vec3u, @builtin(num_workgroups) n: 
   // (no leaf: shadeLite's look for a building's own triangles without one — its roof the orthophoto's, its walls stone with their
   // windows, lit at night — U2; the near scene's leaf records are not theirs)
   o.leaf = 0.0;
+  // (the mesh's code and a half — terrainRasterFar: shadeLite holds its roof's photograph's colour; farU.roofMark 0: the near look's)
+  o.bridge = farU.roofMark;
   // (its cell's fade-in — 0 → 1 over a second once it is put: farFs keeps that share of its pixels, a scatter)
   o.pyl = vec4f(0.0, 0.0, 0.0, farCell[4u * farBlock[rk >> 8u].x].w);
   o.clip = vec4f(v.x / u.right.w + u.output.z * v.z, v.y / u.up.w + u.output.w * v.z, u.forward.w, v.z);
@@ -1428,7 +1432,7 @@ export class SceneryRaster {
     drawBind: GPUBindGroup;
     pipes: { cull: GPUComputePipeline; vis: GPURenderPipeline; quad: GPURenderPipeline; shadow: GPURenderPipeline } | null;
   } | null = null;
-  private farUData = new ArrayBuffer(16);
+  private farUData = new ArrayBuffer(32);
   /** the far layer drawing (its pipelines in, a cell resident) — and its parts left out to measure them (1 culling, 2 visibility, 4 shadow) */
   farOn = true;
   farSkip = 0;
@@ -1463,7 +1467,7 @@ export class SceneryRaster {
         { binding: 10, visibility: V, buffer: { type: "read-only-storage" } },
       ],
     });
-    const u = d.createBuffer({ size: 16, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST, label: "far buildings params" });
+    const u = d.createBuffer({ size: 32, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST, label: "far buildings params" });
     const rec = d.createBuffer({ size: Math.max(16, blocks * 256 * 48), usage: S, label: "far buildings records" });
     const block = d.createBuffer({ size: Math.max(16, blocks * 8), usage: S, label: "far buildings blocks" });
     const cell = d.createBuffer({ size: Math.max(64, slots * 64), usage: S, label: "far buildings cells" });
@@ -1560,14 +1564,16 @@ export class SceneryRaster {
   farFrame(slot: number, frame: Float32Array) {
     if (this.far) this.device.queue.writeBuffer(this.far.cell, slot * 64, frame as Float32Array<ArrayBuffer>);
   }
-  /** the near scene's reach left to it [m], a building's leaf (the material, for now), the quads' threshold [px] */
-  farParams(maskR: number, leaf: number, lodPx: number) {
+  /** the near scene's reach left to it [m], a building's leaf (the material, for now), the quads' threshold [px]; the far roofs' mark
+   *  (0.5: terrainRasterFar — their photograph's colour held, FAR_ROOF_HUE; 0: the near look's desaturated roofs — a lever, J8-4) */
+  farParams(maskR: number, leaf: number, lodPx: number, roofMark = 0.5) {
     if (!this.far) return;
     const v = new DataView(this.farUData);
     v.setUint32(0, this.far.blocks, true);
     v.setFloat32(4, maskR, true);
     v.setFloat32(8, lodPx, true);
     v.setFloat32(12, Math.max(0, leaf), true);
+    v.setFloat32(16, roofMark, true);
     this.device.queue.writeBuffer(this.far.u, 0, this.farUData);
   }
   /** (the far boxes 54 vertices — their walls 36, their roof 18 —, the quads 6) */

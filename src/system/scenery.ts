@@ -190,7 +190,8 @@ export class EarthScenery {
     reach = 1,
   ) {
     if (this.disposed) return;
-    const changed = this.mode !== mode || this.satellite !== satellite || this.reach !== reach;
+    const changed = this.mode !== mode || this.satellite !== satellite || this.reach !== reach || this.nearOnlyM !== this.nearOnlyApplied;
+    this.nearOnlyApplied = this.nearOnlyM;
     this.reach = reach;
     this.mode = mode;
     this.satellite = satellite;
@@ -377,6 +378,7 @@ export class EarthScenery {
         overture: this.overture,
         lamps: this.lamps,
         corridor: this.corridor,
+        ...(this.nearOnlyM > 0 ? { nearOnlyM: this.nearOnlyM } : {}),
         eye: [geo.lat / D, geo.lon / D],
         ...(quick ? { quick: QUICK_SHARE } : {}),
         swGate: swControls(),
@@ -460,6 +462,10 @@ export class EarthScenery {
   /** the drawn scene's forest grid: its cells (w × h, one tree at most each; 0: none) — the raster's cull walks them */
   /** the scenery's BVH nodes uploaded (their boxes culled for the raster — scenery-raster.ts cullBoxes) */
   nodeCount = 0;
+  /** PLAN-J8 J8-5: the scene's buildings within this of its corridor alone [m] — the far layer drawing past it (renderer: 2 000 while
+   *  renderer.farBuildingsOn, 0 else); changed, the scene made again */
+  nearOnlyM = 0;
+  private nearOnlyApplied = 0;
   /** a building's leaf in the drawn scene (−1: none) — the envelope bench's material (PLAN-J8 J8-0 (c)) */
   buildingLeaf = -1;
   get forestCells() {
@@ -593,6 +599,8 @@ export class EarthScenery {
       /** the buildings the cap left out, the farthest kept one's distance from the centre [m]; the survey's tree candidates
        *  their footprints refused, and that grid's time [ms] */
       cutBuildings: d?.cutBuildings ?? 0,
+      /** (PLAN-J8 J8-5) the buildings left to the far layer, past nearOnlyM */
+      farLeft: d?.farLeft ?? 0,
       keptReachM: d?.keptReachM ?? 0,
       /** the corridor the cap kept the buildings along, its half-length [m] (0: the centre's disc — a craft at rest, or off) */
       corridorM: d?.corridorM ?? 0,

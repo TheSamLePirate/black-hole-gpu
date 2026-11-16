@@ -532,6 +532,9 @@ export interface SceneryRequest {
   /** the buildings' cap kept by their distance to the corridor the craft flies — from the eye at the request to as far past the
    *  centre as the centre is past it —, not to the centre alone (the scenery's `corridor`, PLAN-J2 §9 undecies — Sam, 13 Nov 2026) */
   corridor?: boolean;
+  /** PLAN-J8 J8-5: the far buildings' layer drawing past it — the scene's buildings within this distance of its corridor alone [m]
+   *  (their footprints past it kept for the survey's trees, as the cap's cut ones); 0 / absent: all, as before */
+  nearOnlyM?: number;
   /** the runways near the scene (game/runway-grade.ts): the feet put on the ground as the gear and the tracer have it — their airfields
    *  levelled, the detail off there and under their approaches' funnels (PLAN-J7 J7-1) */
   runways?: GradeRunway[];
@@ -560,6 +563,8 @@ export interface SceneryReply {
   /** the buildings the cap left out (the nearest the centre kept), the farthest kept one's distance from the centre [m]
    *  (0: none cut); the survey's tree candidates their footprints refused and the time their grid took [ms] */
   cutBuildings?: number;
+  /** PLAN-J8 J8-5: the buildings left to the far layer (past nearOnlyM) */
+  farLeft?: number;
   keptReachM?: number;
   clearedTrees?: number;
   cutHousesMs?: number;

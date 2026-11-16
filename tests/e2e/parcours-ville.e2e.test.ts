@@ -15,6 +15,7 @@ import { sceneryReady } from "./lib/plan-views";
 // instruments' age, buildings ahead on arriving, no GPU error, the page never frozen over 1 s. Recorded (PLAN-J6 §3: thresholds still to read):
 // the holes' share, the GPU time by segment.
 // PV_QUICK_LEAD (default 2.5, the game's): renderer.sceneryQuickLead, the fast flight's scenery lead (a measure, PROBLEMES).
+// PV_NEAR_ONLY (default 0): renderer.farNearOnlyM, the near scene / far layer junction (PLAN-J8 J8-5) — and a shot each cruise segment.
 // Rule 13 (E2E-VOLS): frozen while the data load until lined up; climbing, then after every segment the craft as flown — autopilot,
 // autothrottle, thrust applied, airspeed, attitude, gear up (lib/flight-state.ts).
 // Duration: ~6 min on kerr-mini (the airfield's data, the take-off, ~2 min of flight, the city's turn, the view back).
@@ -34,7 +35,8 @@ test.skipIf(!E2E)(
     const out: Record<string, unknown> = { startedAt: new Date().toISOString() };
     try {
       await app.js(`(() => { Object.assign(__bh.settings, ${J0_FIXED}); Object.assign(__bh.settings, { dof: false, motionBlur: 0, damage: false });
-        __bh.renderer.sceneryQuickLead = ${Number(process.env.PV_QUICK_LEAD ?? 2.5)}; return 1; })()`);
+        __bh.renderer.sceneryQuickLead = ${Number(process.env.PV_QUICK_LEAD ?? 2.5)};
+        __bh.renderer.farNearOnlyM = ${Number(process.env.PV_NEAR_ONLY ?? 0)}; return 1; })()`);
       // (the craft switched first — asynchronous —, then lined up: E2E-VOLS §7)
       await app.waitFor(`__bh.fleet.active === "f35"`, 60_000);
       // (the airfield's tile first — a world airfield, lined up by its code once its tile is in (game.lineUp): placed over J0's start,
@@ -143,6 +145,8 @@ test.skipIf(!E2E)(
       for (let k = 0; k < 24; k++) {
         if (k > 0) await app.js(steer);
         const s = await seg(`cruise-${k}`, 10_000, atCity);
+        // (PV_NEAR_ONLY: the city coming, a shot each segment — the near scene / far layer junction and its fade, in flight, J8-5)
+        if (process.env.PV_NEAR_ONLY) await app.shot(`${OUT}/3a-approche-${k}.png`);
         segs.push(s);
         say(s);
         if (s.at && (s.at as { paused: boolean }).paused) throw new Error(`paused in flight — ${JSON.stringify(s.at)}`);

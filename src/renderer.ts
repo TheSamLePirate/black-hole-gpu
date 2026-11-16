@@ -4381,6 +4381,8 @@ export class Renderer {
       this.earthScenery.lamps = s.earthStreetLamps;
       // (T8m: its speed — a fast flight chains quick scenes)
       this.earthScenery.speed = groundSpeed(eye, this.streamVelocity);
+      // (PLAN-J8 J8-5: the far layer drawing, the scene's buildings within 2 km of its corridor alone — the rest the layer's)
+      this.earthScenery.nearOnlyM = this.farBuildingsOn ? this.farNearOnlyM : 0;
       this.earthScenery.update(
         eye,
         detail.scenery,
@@ -11228,9 +11230,12 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
   /** the world's trees as raster instances (system/scenery-raster.ts), made the first time the raster pipeline has them */
   private sceneryRaster: SceneryRaster | null = null;
   /** PLAN-J8 J8-4: the far buildings' layer (building-far.ts) — made with the scenery's raster; `farBuildingsOn` false: not drawn.
-   *  Off by default until its first lot is measured (e2e j8-far-layer turns it on) */
+   *  On by default since Sam's decision of 16 Nov 2026 (~16:10 UTC, on the second lot's captures: quads under 8 px) */
   private buildingFar: BuildingFar | null = null;
-  farBuildingsOn = false;
+  farBuildingsOn = true;
+  /** PLAN-J8 J8-5: the near scene's buildings within this of its corridor alone while the far layer draws [m] (FAR_NEAR_ONLY_M the
+   *  candidate); 0: the scene keeps all its own, as before — the junction's distance decided by Sam on captures */
+  farNearOnlyM = 0;
   private farEye: EyeState | null = null;
   /** (the far layer's) under this projected size [px] a building one quad (8, Sam's decision; 0 boxes all) */
   set farQuadPx(px: number) {
@@ -11241,6 +11246,15 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
     return this.buildingFar?.quadPx ?? this.farQuadPxWant;
   }
   private farQuadPxWant = 8;
+  /** (the far layer's) its roofs hold their photograph's colour (true, J8-4's tint — Sam, 16 Nov 2026); false: desaturated as before */
+  set farRoofHue(on: boolean) {
+    if (this.buildingFar) this.buildingFar.roofHue = on;
+    this.farRoofHueWant = on;
+  }
+  get farRoofHue() {
+    return this.buildingFar?.roofHue ?? this.farRoofHueWant;
+  }
+  private farRoofHueWant = true;
   /** (the far layer's) what is resident and what the last cull drew (boxes, quads — read back) */
   async farBuildings() {
     return {
@@ -12206,12 +12220,15 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
         if (!this.buildingFar) {
           this.buildingFar = new BuildingFar(this.sceneryRaster, cellPool);
           this.buildingFar.quadPx = this.farQuadPxWant;
+          this.buildingFar.roofHue = this.farRoofHueWant;
           // (the ground as drawn — the records without their own: Overture's, OSM's)
           this.buildingFar.groundAt = (lat, lon) => groundBare("earth", bodyFixedOf("earth", lat, lon, 0));
         }
         const box = this.earthScenery.drawnBox();
         const st = this.earthScenery.stats();
-        const maskR = !box ? 0 : st.cutBuildings > 0 && st.keptReachM > 0 ? st.keptReachM : box.half - 650;
+        // (the scene keeps its buildings within its kept reach where its cap cut, else its box — and within farNearOnlyM when set, J8-5)
+        const near = this.farNearOnlyM > 0 ? this.farNearOnlyM : Number.POSITIVE_INFINITY;
+        const maskR = !box ? 0 : Math.min(st.cutBuildings > 0 && st.keptReachM > 0 ? st.keptReachM : box.half - 650, near);
         this.buildingFar.update(this.farEye, box, maskR, this.earthScenery.buildingLeaf, performance.now());
       } else if (this.sceneryRaster) this.sceneryRaster.farOn = false;
       trees = this.sceneryRaster.encodeCull(

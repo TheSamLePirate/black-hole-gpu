@@ -30,6 +30,8 @@ interface Resident {
   /** its drawn ground's plane (groundPlane), sampled once */
   plane?: [number, number, number];
 }
+/** PLAN-J8 J8-5: the near scene's buildings within this of its corridor alone while the layer draws [m] (§2: the meshes' reach) */
+export const FAR_NEAR_ONLY_M = 2000;
 /** a cell's fade-in once put [ms] */
 export const FAR_FADE_MS = 1000;
 
@@ -45,6 +47,9 @@ export class BuildingFar {
   private initing = false;
   /** under this projected size [px] one quad facing the camera (FAR_QUAD_PX; 0: boxes all — a lever to compare their looks) */
   quadPx = FAR_QUAD_PX;
+  /** the far roofs hold their photograph's colour (FAR_ROOF_HUE, trace.wgsl — the near mesh's at the same distance); false: the look
+   *  of a near building without a leaf (desaturated) — a lever to compare */
+  roofHue = true;
   /** the counts: cells handed, put, let go, too big to fit */
   readonly counts = { handed: 0, put: 0, evicted: 0, refused: 0, empty: 0 };
 
@@ -87,7 +92,7 @@ export class BuildingFar {
     // (the cells fading in: their share written each frame until whole)
     if (this.frame) for (const r of this.residents.values()) if (r.slot >= 0 && now - r.at < FAR_FADE_MS + 100) this.writeFrame(r, now);
     this.raster.farOn = !!this.frame;
-    this.raster.farParams(maskR, leaf, this.quadPx);
+    this.raster.farParams(maskR, leaf, this.quadPx, this.roofHue ? 0.5 : 0);
     if (!eye) return;
     // (the cells wanted asked again when the eye moved 300 m, turned 10°, or 2 s on)
     const w = this.wantedAt;
