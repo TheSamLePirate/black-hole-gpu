@@ -90,7 +90,8 @@ The loop clamps its `dt` to 0.1 s: under 10 fps the flight runs slower than the 
 
 Scene names that exist: `__bh.scenes()` (96 keys on 6 Nov 2026 of `__bh.presets`, e.g. `"Interstellar (no shifts)"`, `"Earth: docking to the ISS"`, `"Miller: the water world"`, `"game:artemis"`, `"game:interstellar"`). The `game:` ones are flight scenes.
 
-### `__bh.viewPose()` → `ViewPose` | null · `__bh.simState()` → `SimState` | null
+### `__bh.viewPose()` → `ViewPose` | null
+### `__bh.simState()` → `SimState` | null
 
 The frame's two descriptions (`src/game/view-pose.ts`, 13 Nov 2026 — audit AR-07, wave 4.3), made once each loop and frozen:
 `viewPose()` — the view's own settings (`VIEW_POSE_KEYS`: its place, look, lens, target — the spectator's own keys too), the scene's
@@ -2099,6 +2100,17 @@ it has been measured (`measured`: 1 at 5 s, 2 at 20 s after it was brought in �
 
 *Used in:* `ground-placement.e2e.test.ts`, `runway-placement.e2e.test.ts`, `world-runway.e2e.test.ts`, `hud-runway.e2e.test.ts`.
 
+### `__bh.sys.approaches(code)` → `Promise<Approach[]>`
+
+An airfield's approaches (`src/world/approaches.ts` `approachesForAsync` — PLAN-APPROCHES AP0): every runway end's, the real ones first
+(X-Plane's nav.dat localizers, the FAA's CIFP) then the built ones (`C31R`), its tile fetched first. Each `Approach`: `id` (« I31R » ILS,
+« L31R » LOC, « X31R » LDA/SDF/IGS, « C31R » built), `field`, `rwy`, `kind`, `source`, `cycle`, the threshold `thr` (its elevation over the
+sea), the final course `crs` [° true], the slope `angle` [°] and crossing height `tch` [m], the aids (`loc`, `gs`, `dme`, `markers`), the
+decision height `dh`, the legs (`transitions`, `final`, `missed`). `[]` for an unknown code.
+
+*Used in:* `approach-auto`, `approach-join`, `approach-wheel`, `approach-audio`, `approach-sample`, `a320-approach-join`, `a320-deck`,
+`crew-approach` (e2e).
+
 ### `__bh.sys.geodetic()` → `{body, lat, lon, altM, radiusM} | null`
 
 Where the camera is over the body it is nearest, on our side, at `sim.time`: `lat`, `lon` in degrees, `altM` = height over the ellipsoid [m],
@@ -2823,6 +2835,12 @@ The tools TARS is given (the game's tools, `src/ai/game-tools.ts`, as built in m
 schema; the agent's mode (`act`, `plan`, `watch`) cuts the list the model sees (`modeTools` in tars-agent.ts).
 
 *Used in:* `tests/e2e/tars-agent.e2e.test.ts` (the mock model records the tool names it was sent in `window.__lastTools`; the test checks `press_key` is among them)
+
+### `__bh.tars.voiceSay` → `(text: string, model: string) => Promise<void>`
+
+A line said by a Deepgram voice as the game says it — synthesised piece by piece and played as it comes through the voice's effects chain
+(audit TA-22: `synth` → `sound.playStream`); resolved once heard. Needs a Deepgram key or the dev server's relay, as `voiceSynth`.
+*Used in:* `tests/e2e/tars-voice-stream.e2e.test.ts`.
 
 ### `__bh.tars.voiceSynth` → `(text: string, model: string) => Promise<number>`
 

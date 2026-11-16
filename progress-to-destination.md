@@ -8452,3 +8452,10 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   `a320-mcdu`, `a320-published-arrival` verts (15/15).
 - Limites : OIFK (PROBLEMES) ; l'aplanissement du détail sous les trouées d'approche, demandé à la session du rendu.
 - Suite : le plan mené ; reprendre OIFK après l'aplanissement.
+
+### 2026-11-16 00:02 UTC — BH-API : les trois membres de `__bh` que le contrôle ne trouvait pas
+
+- Réalisé : `__bh.simState()` (décrit sous un titre commun avec `viewPose`, que `scripts/bh-api.ts --check` ne reconnaissait pas : titre
+  séparé), `__bh.sys.approaches(code)` (PLAN-APPROCHES) et `__bh.tars.voiceSay` (audit TA-22) reçoivent leur section, les champs relus
+  dans le code (`world/approaches.ts` `Approach`).
+- Preuves : `bun scripts/bh-api.ts --check` — « docs/BH-API.md covers all 201 ». Documentation seule, aucun code changé.
