@@ -1,6 +1,14 @@
 import { afterAll, describe, expect, test } from "bun:test";
 import { App, E2E, stopServer } from "./lib/app";
 
+// The GPU's start and its failures, on a small Kerr page (320 × 240): an adapter of 8 storage buffers starts and draws; a missing adapter
+// and a core compile refused leave a downloadable diagnostic naming the stage; a stalled compile ends in one; the start compiles no
+// general kernel (P8), the first image waits for the scene's own; a still view converges without the general quality kernel; the
+// general family's quality kernel and its LUT — their compile asked for, waited on its progress (~2 min cold here, J7-4) —, their
+// failures leaving the adaptive kernel, the fixed steps and the PNG export usable; the variants kept; the Earth's downloads started.
+// Duration: ~5 min here cold (the general quality kernel compiled twice), ~1–2 min with the Metal cache warm.
+// Done when: the Earth's downloads seen after the first image, the last test.
+
 const scene = `scene=${encodeURIComponent("Kerr a=0.94, near edge-on")}`;
 const options = `{ width: 16, height: 16, spp: 1, tolerance: 1e-3, eps: 0.1, maxSteps: 1000,
   noiseThreshold: 0, minSpp: 1, shutter: 0, budgetMs: 20 }`;
@@ -18,6 +26,25 @@ function fault(entry: "main" | "lut") {
     };
   })()`;
 }
+
+/** the general family's state, said when a wait on it fails (no silent wait): its kernels, the view's refinement */
+const GENERAL_STATE = `JSON.stringify((() => { const R = __bh.renderer; return { general: R.generalCompile.state, quality: R.qualityCompile.state,
+  lutQ: R.lutQCompile.state, lutWanted: R.lutWanted, spp: R.sampleIndex, target: R.liveTargetSpp, phase: R.lastPhase,
+  onDemand: R.generalOnDemand, compiling: R.compilingNow }; })())`;
+/** the general quality kernel in — its compile 128 to over 180 s cold on the M1 Max: past the optional pipelines' 180 s it is "failed",
+ *  then taken when it lands (AsyncResource's lateIsCurrent) —, waited on its progress, said every 10 s */
+const qualityIn = (app: App) =>
+  app.waitProgress(`__bh.renderer.qualityCompile.state === "ready"`, "the general quality kernel", {
+    compileStallMs: 400_000,
+    stallMs: 300_000,
+    maxMs: 420_000,
+  });
+
+/** `cond` on the general family waited `ms`; its state said when it fails (no silent wait) */
+const waitGeneral = (app: App, cond: string, ms: number) =>
+  app.waitFor(cond, ms).catch(async (e) => {
+    throw new Error(`${String(e).slice(0, 200)} — ${await app.js<string>(GENERAL_STATE)}`);
+  });
 
 describe.skipIf(!E2E)("WebGPU startup and quality failures", () => {
   afterAll(stopServer);
@@ -59,6 +86,7 @@ describe.skipIf(!E2E)("WebGPU startup and quality failures", () => {
           ? `navigator.gpu.requestAdapter = async () => null;`
           : `GPUDevice.prototype.createComputePipelineAsync = function() { return Promise.reject(new Error("Injected core compilation failure")); };`;
       const app = await App.boot({ hash: scene, width: 320, height: 240, initScript, startupFailure: true });
+      await app.scenario(failure === "adapter" ? "aucun adaptateur WebGPU" : "la compilation du noyau refusée");
       try {
         const report = await app.js<{ status: string; stage: string; events: { message: string }[] }>(
           `JSON.parse(localStorage.getItem("kerr.gpu-diagnostic.v1"))`,
@@ -323,20 +351,20 @@ describe.skipIf(!E2E)("WebGPU startup and quality failures", () => {
     })()`,
     });
     try {
-      // (the general kernel family — on demand since P8 — asked for: this is its quality kernel's and LUT's test)
-      await app.js("(__bh.renderer.generalOnDemand = false, __bh.renderer.startGeneralWhenIdle(), 1)");
       // (a still view the far field's LUT serves: time held, no jet)
       await app.js("(__bh.freeze(true), (__bh.settings.jet = false), __bh.touch(), true)");
-      await app.waitFor(`__bh.renderer.qualityCompile.state === "pending" && __bh.renderer.lutWanted`, 30_000);
-      // (no frame submitted from here: a converged view draws none)
-      const lutQuality = await app.js<string>(`(async () => {
-        const renderer = __bh.renderer;
-        renderer.frame = () => null;
-        __releaseQuality();
-        await renderer.qualityCompile.start();
-        return renderer.lutQCompile.state;
-      })()`);
-      expect(lutQuality).not.toBe("idle");
+      await waitGeneral(app, `__bh.renderer.lutWanted`, 30_000);
+      // (the general family's quality kernel asked for itself — on demand since P8, it came after the general realtime kernel, which
+      // alone compiles in 226 s cold on the M1 Max: 30 s never saw it start, J7-4, 16 Nov 2026 —; this is its LUT's test)
+      await app.js("(void __bh.renderer.qualityCompile.start(), 1)");
+      await waitGeneral(app, `__bh.renderer.qualityCompile.state === "pending"`, 10_000);
+      // (no frame submitted from here: a converged view draws none; the kernel released, its compile waited on its progress)
+      await app.js(`(__bh.renderer.frame = () => null, __releaseQuality(), 1)`);
+      const t0 = Date.now();
+      await qualityIn(app);
+      console.log(`  the quality kernel in after ${Math.round((Date.now() - t0) / 1000)} s: ${await app.js<string>(GENERAL_STATE)}`);
+      expect(await app.js<string>("__bh.renderer.qualityCompile.state")).toBe("ready");
+      expect(await app.js<string>("__bh.renderer.lutQCompile.state")).not.toBe("idle");
     } finally {
       app.close();
     }
@@ -346,12 +374,11 @@ describe.skipIf(!E2E)("WebGPU startup and quality failures", () => {
     const app = await App.boot({ hash: scene, width: 320, height: 240, initScript: fault("lut") });
     try {
       expect(await app.js<boolean>("__bh.renderer.firstFrameDoneAt > 0")).toBe(true);
-      await app.js(`(async () => {
-        __bh.freeze(true);
-        await Promise.all([__bh.renderer.qualityCompile.start(), __bh.renderer.lutQCompile.start()]);
-        __bh.renderer.startOffline(__bh.settings, __bh.time(), ${options});
-        return true;
-      })()`);
+      await app.js(`(__bh.freeze(true), void __bh.renderer.qualityCompile.start(), void __bh.renderer.lutQCompile.start(), 1)`);
+      // (the quality kernel's compile waited on its progress — past 180 s cold it is taken when it lands —, the LUT failed at once)
+      await qualityIn(app);
+      await waitGeneral(app, `__bh.renderer.lutQCompile.state === "failed"`, 30_000);
+      await app.js(`(__bh.renderer.startOffline(__bh.settings, __bh.time(), ${options}), 1)`);
       await app.waitFor("__bh.renderer.offlineState?.done || __bh.renderer.offlineState?.error", 120_000);
       expect(await app.js<string>("__bh.renderer.pipelineStatus.lutQuality")).toBe("failed");
       expect(await app.js<string>("__bh.renderer.pipelineStatus.quality")).toBe("ready");
@@ -371,11 +398,12 @@ describe.skipIf(!E2E)("WebGPU startup and quality failures", () => {
   test("failed adaptive kernel: the still view and the adaptive export converge on fixed steps", async () => {
     const app = await App.boot({ hash: scene, width: 320, height: 240, initScript: fault("main") });
     try {
-      // (the general kernel family — on demand since P8 — asked for: its quality kernel's failure is what is tested)
-      await app.js("(__bh.renderer.generalOnDemand = false, __bh.renderer.startGeneralWhenIdle(), 1)");
+      // (the general family's quality kernel asked for itself — its failure is what is tested; on demand since P8, it came after the
+      // general realtime kernel, 226 s cold on the M1 Max: 30 s never saw it start, J7-4, 16 Nov 2026)
+      await app.js("(void __bh.renderer.qualityCompile.start(), 1)");
       // (the live still view: refining on the fixed-step kernel, not drawing realtime frames for ever)
       await app.js("(__bh.freeze(true), __bh.touch(), true)");
-      await app.waitFor(`__bh.renderer.pipelineStatus.quality === "failed"`, 30_000);
+      await waitGeneral(app, `__bh.renderer.pipelineStatus.quality === "failed"`, 30_000);
       await app.waitFor(`["converging", "converged"].includes(__bh.renderer.lastPhase)`, 30_000);
       expect(await app.js<string>("__bh.renderer.liveQualityError")).toContain("Injected optional compile failure");
       await app.js(`(__bh.renderer.startOffline(__bh.settings, __bh.time(), ${options}), true)`);

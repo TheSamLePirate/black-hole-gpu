@@ -156,6 +156,35 @@ des entrées datées ; les causes des à-coups (compilation de la météo, retou
   passage) : **reproduits** — la météo 499 ms à froid / 350 ms à chaud (une image GPU de 401 ms et une collection de 635 Mo, pas la
   compilation de son noyau), le retour par F1 650 ms à froid (le noyau principal recompilé) / 250 ms à chaud (l'image du retour) ; détail
   dans la [fiche](progress/j7/FICHE-A-COUPS-2026-11-16.md) §4. Leurs lots restent ouverts, leurs causes relues.
+- **J7-4, la santé** (11/16 11:07 UTC) — **trois des quatre faits, le quatrième expliqué** :
+  - **la pastille** « Compiling the ray tracer » : la phase convergée la ferme avant son retour anticipé (`renderer.ts`) ; `a320-deck`
+    l'asserte au départ, 8/8 (ce Mac) ; son témoin (le correctif coupé) voit « Compiling the ray tracer for this scene · 0 s », rouge ;
+  - **`gpu-startup`** : la cause est le test — le noyau de qualité général attendu 30 s derrière le noyau général temps réel, qui
+    compile en 226 s à froid ici ; les tests demandent le noyau de qualité eux-mêmes et attendent sa compilation sur sa progression
+    (128–271 s à froid sur ce Mac, au-delà du délai de 180 s des pipelines optionnels — pris à son arrivée) ; 15/17 puis 2/2 ;
+    en-tête à la règle ;
+  - **le bouton Météo de la carte** : la boîte vide de la barre de droite (posée à `--fc-l + 310 px`, les onglets mesurent 380 px)
+    prenait ses clics ; la boîte laisse passer le pointeur (`style.css`) ; `weather-panel` 6/6 ;
+  - **`parcours-ville`** : 6 passages sur kerr-mini, 1 vert (35 bâtiments devant à l'arrivée), 5 à 0 ; la révision de J6-1 (abe34202)
+    aussi à 0 — pas une régression ; **le décor est en retard** : gelé à l'arrivée et laissé finir, 41 bâtiments devant ; une scène
+    rapide prend ~12,7 s (1,9 km à 150 m/s), la scène en vigueur centrée à 3–5,5 km. PROBLEMES (l'entrée de J6-1 rouverte) ; la
+    correction est un lot du décor, **proposé à la session d'analyse** ; le test garde son assertion et mesure l'arrivée gelée.
+- **J7-3 fermé « non reproduit »** (décision de la session d'analyse, 11/16 ~09:35 UTC, sur la relecture de 09:22) : le retour par F1 ne
+  change aucune clé de scène — à froid aucune image > 100 ms, à chaud une seule de 116 ms ; les 650 ms de la fiche §4 n'étaient pas lui
+  (correction écrite dans la [fiche](progress/j7/FICHE-A-COUPS-2026-11-16.md) §5). La sonde des parcours le surveille. Le rythme des
+  départs de compilation essayé pour J7-2 (sans effet mesuré) : retiré (règle 2), rien n'en reste dans le code.
+- **J7-2 pas fermé** (décision de la session d'analyse, 11/16 ~09:35 UTC : la cause lue — la première arrivée d'une météo change la clé,
+  bit 1024, ~30 pipelines sortis du cache ; à anticiper comme J7-7). **Essayé et retiré** (11/16 11:18 UTC) : la clé de la caméra avec
+  le bit 1024 compilée d'avance dès qu'une météo est demandée (`prewarmWeatherFor`). Mesuré à froid sur kerr-mini (e2e
+  `j7-weather-arrival`, le METAR retenu jusqu'à la variante prête) : **sans effet démontré, et le plan de mesure ne tenait pas** — la
+  météo réelle arrive d'abord par le modèle et les nuages du jour, pas par le METAR : la retenir ne retient pas la météo (sans
+  préchauffage, son arrivée a eu lieu pendant l'attente, non observée) ; avec, une image de **350 et 366 ms 3 s après** l'arrivée,
+  **sans aucune compilation** dans la fenêtre (48 → 48) et le GPU à 53 ms — **ce coup-là n'est ni une compilation ni le GPU**. Un
+  préchauffage déclenché à la demande ne peut d'ailleurs pas prendre d'avance sur des données qui arrivent en moins d'une seconde.
+  Retiré (code, BH-API, parcours joueur ; règle 2). **Suite** : le profil CPU de l'arrivée (`WA_PROFILE=1`, natif compté, à froid,
+  deux passages, en cours) dira ce que fait le thread principal à cet instant.
+- **L'ordre après J7-4** (11/16 10:48 UTC) : J7-8 et J7-9 étaient déjà faits ; la musique (J7-8b, confiée par la session d'analyse à
+  09:45 UTC) vient après J7-4 et J7-2, puis J7-5, J7-6, J7-R.
 - **J7-9, l'arrivée des données après un placement — non reproduite** (11/16 09:51 UTC) : e2e
   `j7-placement-arrival` (les passes de calcul — seules attribuables sur Apple — de chaque image 25 s après le placement) : depuis Hyères
   vers les Maures **aucune image > 120 ms** ; au premier placement depuis le lancement **une seule** (217 ms, le placement lui-même, côté

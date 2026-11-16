@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-16 10:45 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-16 11:19 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous. Ce qui est fermé quitte le tableau « En cours » pour la ligne « Fermé récemment ».
@@ -63,7 +63,7 @@ l'état d'une mission ou d'un combat **non sauvé, dit** ; le réseau **« entre
 
 **Fermé aussi** : le plancher du raster sur GPU faible (15 nov., 23:46, proposer sous 15 images/s, décision de Sam).
 
-**La session du rendu (33d89754)** : [PLAN-J7](docs/PLAN-J7-FLUIDITE.md) en cours — **J7-0 fait** (la sonde des à-coups et sa [fiche](docs/progress/j7/FICHE-A-COUPS-2026-11-16.md)), **J7-1 fait** (le sol des approches : l'A320 posé à OIFK 11, J0 sans coût vu) ; **J7-7 en cours** (le démarrage tenu sous l'écran de chargement ; au changement d'appareil 4 écarts → 2, le reste = la mise en place, J7-9) ; ensuite la suite de J7-7 (le premier noyau, le changement d'appareil) avec J7-2/J7-3 rejoués à froid, J7-8, J7-9, J7-4, J7-5, J7-6.
+**La session du rendu (33d89754)** : [PLAN-J7](docs/PLAN-J7-FLUIDITE.md) en cours — **faits** : J7-0 (la sonde et sa [fiche](docs/progress/j7/FICHE-A-COUPS-2026-11-16.md)), J7-1 (le sol des approches), J7-7 (le démarrage, le changement d'appareil : le reste = la mise en place), J7-8 (le début du vol), J7-9 (non reproduit), **J7-3 fermé « non reproduit »**, **J7-4** (la pastille, `gpu-startup`, le bouton Météo de la carte corrigés ; `parcours-ville` : le décor en retard sur la ville à 150 m/s, **rouvert dans PROBLEMES, un lot du décor proposé**) ; **en cours** : J7-2 (le préchauffage de la clé de la météo essayé et retiré — le coup de l'arrivée n'est ni une compilation ni le GPU ; profil CPU en cours), **J7-8b** (la musique dans le worker : A/B des échantillons identique, au début du vol 182 → 149/aucune image > 100 ms ; e2e audio en cours) ; ensuite J7-5, J7-6, J7-R.
 
 **Attend Sam** : les trois questions de [PLAN-J7](docs/PLAN-J7-FLUIDITE.md) §4, réglées provisoirement (les 40 ms du mini en dernier, J7-6 ; PLAN-J8 les arbres proches en géométrie ensuite ; l'aplanissement du détail sous les trouées jusqu'à la FAF ou 10 km) ; les seuils du mini attendent la reprise de la cible 40 ms.
 
@@ -8770,3 +8770,32 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   échoue) ; e2e apprendre-avions « leçons 0 et 3 » et « leçon 3 (U) » 2/2 sur kerr-mini (`20261116-113827-appr-l3`) : montée du pilote seul,
   +16 m/s à 117 m/s (le +35 m/s d'avant était la ressource) ; ni alarme du train ni GCAS sur la capture.
 - Limites : la marge et la prédiction elles-mêmes inchangées ; pas rejoué : les e2e GCAS du F-35 (f35-flight-ops, f35-challenges).
+
+### 2026-11-16 11:19 UTC — PLAN-J7 J7-4 « la santé » : trois défauts corrigés, le quatrième expliqué ; J7-3 fermé ; J7-2 relu (session 33d89754)
+
+- Contribution à la destination : §19.13 (des parcours complets sans défaut visible : une pastille de compilation qui ne ment plus, une
+  commande de la carte cliquable, des tests qui disent vrai) ; §8 (un rouge expliqué plutôt qu'appelé variance) ; [PLAN-J7](docs/PLAN-J7-FLUIDITE.md) J7-4, J7-3, J7-2.
+- Réalisé :
+  - la pastille « Compiling the ray tracer for this scene » fermée quand l'image converge (`src/renderer.ts`, phase convergée) ;
+    `a320-deck` l'asserte au départ ;
+  - `gpu-startup` : la cause était le test (le noyau de qualité général attendu 30 s derrière un noyau général de 226 s à froid) ; les
+    tests demandent le noyau de qualité et attendent sa compilation sur sa progression ; en-tête à la règle du bandeau ;
+  - le bouton Météo de la carte : la boîte vide de la barre de droite prenait ses clics (`src/style.css`) ;
+  - `parcours-ville` : 6 passages + un A/B contre la révision de J6-1 ; le décor en retard (pas absent) à l'arrivée sur Toulon ; le
+    test mesure aussi l'arrivée gelée ; PROBLEMES (l'entrée de J6-1 rouverte, la cause écrite) ;
+  - J7-3 fermé « non reproduit » (décision de la session d'analyse) ; J7-2 : la clé de la météo préchauffée, mesurée, **retirée** ;
+    `j7-weather-arrival` `WA_PROFILE=1` (le profil CPU de l'arrivée) ;
+  - `parcours-meteo` : son premier scénario avant sa première capture.
+- Preuves (mesuré / observé) :
+  - `a320-deck` 8/8 (ce Mac) ; son témoin, le correctif coupé : « Compiling the ray tracer for this scene · 0 s », rouge ;
+  - `gpu-startup` 15/17, puis les deux tests 2/2 ; le noyau de qualité général 128–271 s à froid sur ce Mac, au-delà du délai de 180 s
+    des pipelines optionnels (pris à son arrivée) ;
+  - `weather-panel` 6/6, le bouton visible sur la capture ;
+  - `parcours-ville` (kerr-mini) : à l'arrivée 0 bâtiment devant 5 fois sur 6 (35 une fois) ; la révision abe34202 : 0 aussi ; gelé et
+    le décor fini : 41 ;
+  - J7-2 (kerr-mini, à froid) : avec le préchauffage, une image de 350–366 ms 3 s après l'arrivée, sans compilation, GPU 53 ms ; sans,
+    l'arrivée non observée (la météo est venue par le modèle pendant l'attente du METAR).
+- Limites : le décor en retard en vol rapide n'est pas corrigé (un lot du décor, proposé) ; la durée de compilation du noyau de qualité
+  général n'est pas réduite ; la cause du coup de l'arrivée de la météo n'est pas encore lue.
+- Suite : le profil CPU de l'arrivée de la météo (J7-2) ; J7-8b (la musique dans le worker) ; J7-5.
+

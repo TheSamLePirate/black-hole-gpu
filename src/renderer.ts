@@ -12558,6 +12558,9 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
       }
     } else {
       phase = "converged";
+      // (PLAN-J7 J7-4: a converged image is no wait — the pill closed here, the early return below skipped its note; a converging
+      // band left it open on a still scene, « Compiling … · 2 s » frozen for minutes, a320-deck 14 Nov)
+      if (this.firstFrameDoneAt) this.noteSceneTracer(false);
       // (the rain moving over a still image: drawn every frame — held with the time, not)
       const rainMoves = !!this.rain && this.rainClock !== this.rainDrawn;
       this.rainDrawn = this.rainClock;

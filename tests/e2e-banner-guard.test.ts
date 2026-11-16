@@ -13,7 +13,6 @@ import { headerProblems } from "./e2e/lib/header-check";
 const WAITING = new Set([
   "a11y.e2e.test.ts", // no « // Duration: » line; no « // Done when: » line
   "a320-cine.e2e.test.ts", // no « // Duration: » line; no « // Done when: » line
-  "a320-deck.e2e.test.ts", // no « // Duration: » line; no « // Done when: » line
   "a320-ecam.e2e.test.ts", // no « // Duration: » line; no « // Done when: » line
   "a320-gate.e2e.test.ts", // no « // Duration: » line; no « // Done when: » line
   "a320-services.e2e.test.ts", // no « // Duration: » line; no « // Done when: » line
@@ -140,7 +139,6 @@ const WAITING = new Set([
   "golden.e2e.test.ts", // no « // Duration: » line; no « // Done when: » line; runs through cases without app.scenario(label)
   "gpu-recovery-hold.e2e.test.ts", // no « // Duration: » line
   "gpu-recovery.e2e.test.ts", // no « // Duration: » line; no « // Done when: » line
-  "gpu-startup.e2e.test.ts", // no header saying what it proves and what it does; no « // Duration: » line; no « // Done when: » line; runs through cases without app.scenario(label)
   "grass-aaa.e2e.test.ts", // no « // Duration: » line; no « // Done when: » line
   "ground-camera-warp.e2e.test.ts", // no « // Duration: » line; no « // Done when: » line
   "ground-details.e2e.test.ts", // no « // Duration: » line; no « // Done when: » line
@@ -340,7 +338,6 @@ const WAITING = new Set([
   "war-airbase.e2e.test.ts", // no « // Duration: » line; no « // Done when: » line
   "war-mode.e2e.test.ts", // no « // Duration: » line; no « // Done when: » line
   "weather-grid.e2e.test.ts", // no « // Duration: » line
-  "weather-panel.e2e.test.ts", // no « // Duration: » line; no « // Done when: » line
   "world-runway.e2e.test.ts", // no « // Duration: » line; no « // Done when: » line
   "worlds.e2e.test.ts", // no « // Duration: » line; no « // Done when: » line
   "wormhole-map.e2e.test.ts", // no header saying what it proves and what it does; no « // Duration: » line; no « // Done when: » line

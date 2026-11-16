@@ -196,7 +196,12 @@ WGSL) ; à OIFK 11 le sol de l'axe passe de bosses jusqu'à 1 245 m aux données
   même si des tuiles arrivent encore. Une vidéo finale attend toujours ses données (rien n'entre entre deux images). Après : environ
   une image toutes les 2 s, `s3-replay` 6/6 (brouillon de 239 images).
 
-## La pastille « Compiling the ray tracer for this scene » reste affichée sur une scène immobile (relevé le 14 novembre 2026, e2e `a320-deck`)
+## ~~La pastille « Compiling the ray tracer for this scene » reste affichée sur une scène immobile~~ (relevé le 14 novembre 2026, e2e `a320-deck`) — corrigé le 16 novembre 2026
+
+> **16 nov. 2026, 10:53 UTC — corrigé (PLAN-J7 J7-4)** : la cause était celle notée ci-dessous ; la phase convergée ferme maintenant la
+> pastille (`noteSceneTracer(false)`, `src/renderer.ts`) avant son retour anticipé. `a320-deck` l'asserte au départ (8/8, ce Mac) ; son
+> témoin (le correctif coupé) voit le défaut : « Compiling the ray tracer for this scene · 0 s » au départ, le test rouge.
+
 
 - **Constat** : A320 au sol au Bourget (`lineUp`), vue cockpit, ce Mac en fenêtre visible : la pastille du bas affiche « Compiling the
   ray tracer for this scene · 2 s », figée, pendant au moins 60 s. Lus toutes les 10 s : `renderer.tracerSettled` vrai, `compilesPending` 0,
@@ -338,20 +343,47 @@ avant `[info no-time, pilot t]`, après `[pilot t]`.
   autre instant ou à un autre pas que la position) — l'avion « posé » (`landedAt`, tenu dans le repère du sol) ne dérive pas ; et pourquoi la
   condition de repos (`still`, moins de 0,05 m/s relatifs) ne se déclenche pas si les roues se voient au repos.
 
-## Deux tests de `gpu-startup` échouent : le LUT de qualité et le noyau adaptatif n'atteignent pas l'état attendu (relevé le 15 novembre 2026)
+## ~~Deux tests de `gpu-startup` échouent : le LUT de qualité et le noyau adaptatif n'atteignent pas l'état attendu~~ (relevé le 15 novembre 2026) — réglé le 16 novembre 2026 (le test)
+
+> **16 nov. 2026, 10:53 UTC — la cause est dans le test (PLAN-J7 J7-4)** : les deux attendaient 30 s que le noyau de qualité général
+> démarre, or il ne démarre qu'une fois le noyau général temps réel prêt, et celui-ci (toutes les fonctions, à la demande depuis P8)
+> compile en **226 s** à froid sur ce Mac (M1 Max). Les tests demandent maintenant le noyau de qualité eux-mêmes et attendent sa
+> compilation sur sa progression (dite toutes les 10 s) : **128 à 271 s** à froid ici selon la charge. Au-delà de 180 s, le délai des
+> pipelines optionnels (`AsyncResource`) le marque « failed », puis il est pris à son arrivée (`lateIsCurrent`) : le troisième test
+> touché (« failed quality LUT… ») l'attend aussi. `gpu-startup` 15/17 puis les deux 2/2 (ce Mac). **Reste à voir** (jeu) : sur une
+> machine lente, une vue fixe s'affine sur le noyau à pas fixes pendant ces minutes ; la durée de cette compilation n'a pas été réduite.
+
 
 **État (15 nov. 2026, 20:35 UTC)** : relevé en passant (PLAN-J6 J6-6), non étudié. `gpu-startup` › « the quality LUT starts compiling as the quality
 kernel lands » : `qualityCompile.state === "pending" && lutWanted` jamais vrai en 30 s ; « failed adaptive kernel … » : `pipelineStatus.quality ===
 "failed"` jamais vrai en 30 s (kerr-mini, deux passages). Un troisième (« variants retain … ») échouait par son faux renderer (`prof.table` absent
 depuis H5, 3 nov.) : corrigé dans le test. Aucun lien établi avec les lots du jour ; non rejoués sur une révision antérieure.
 
-## Le bouton de la couche météo de la carte masqué par la carte elle-même (relevé le 15 novembre 2026, e2e `weather-panel`)
+## ~~Le bouton de la couche météo de la carte masqué par la carte elle-même~~ (relevé le 15 novembre 2026, e2e `weather-panel`) — corrigé le 16 novembre 2026
+
+> **16 nov. 2026, 10:53 UTC — corrigé (PLAN-J7 J7-4)** : en vue carte, la barre de droite commence à `--fc-l + 310 px` ; les onglets
+> (3D, Globe, Planisphère, Tactique, Météo) mesurent maintenant 380 px, et la boîte vide de la barre, posée après, prenait les clics
+> du bouton Météo. Sa boîte laisse passer le pointeur, ses boutons le prennent (`src/style.css`). `weather-panel` 6/6 (ce Mac), le
+> bouton visible sur la capture.
+
 
 **État (15 nov. 2026, 18:03 UTC)** : relevé en passant (PLAN-J6 J6-2), non étudié. `weather-panel` › « the planisphere's weather layer » : le
 clic réel sur `[data-testid=map-weather]` refusé — `div.fl-mapbar.m3-bar > button.fl-mapwx > div.fl-maptabs > canvas.fl-map >
 div.m3-stage.gpu` au-dessus (kerr-mini, un passage). Hors du périmètre de J6-2 ; à reproduire puis à donner à qui tient la carte.
 
-## ~~Le décor ne suit pas un vol rapide : en arrivant sur une ville à 150 m/s, aucun bâtiment devant~~ (relevé le 15 novembre 2026, PLAN-J6 J6-1) — corrigé le même jour
+## Le décor ne suit pas un vol rapide : en arrivant sur une ville à 150 m/s, aucun bâtiment devant (relevé le 15 novembre 2026, PLAN-J6 J6-1) — **rouvert le 16 novembre 2026**
+
+> **16 nov. 2026, 11:07 UTC — rouvert (PLAN-J7 J7-4) : la correction de J6-1 n'a pas tenu, le défaut est intermittent.** `parcours-ville`
+> sur kerr-mini, 6 passages : à l'arrivée sur Toulon, **0** point de bâtiment devant (à moins de 2 km) cinq fois, **35** une fois ; la
+> révision même de J6-1 (abe34202, A/B `ab-e2e`) : 0 aussi — pas une régression depuis, les 36–38 de J6-1 étaient des passages
+> favorables. **Le décor est en retard, il n'est pas absent** : le même instant gelé, le décor laissé finir (`sceneryReady`, 60 s au
+> plus), **41** points de bâtiment entre 1 et 2 km devant (capture `3b-arrivee-decor-fini`). À l'arrivée, la scène en vigueur est
+> centrée à 3–5,5 km de l'avion (0,6 km au passage vert), la suivante encore en construction (`refreshing`, bâtiments 19/29, forêt) ;
+> une scène rapide prend ~12,7 s (« before forest » 11,6 s), ~1,9 km à 150 m/s, et son centre est mis à vitesse × durée de la dernière
+> construction devant, plafonné à 2,5 rayons (`buildLead`, `sceneryQuickLead`). **Non corrigé** : une scène qui couvre le point
+> d'arrivée à temps relève d'un lot du décor (sa durée, la scène suivante commencée plus tôt, ou deux scènes gardées), proposé à la
+> session d'analyse. `parcours-ville` garde son assertion (le défaut est vu du joueur) et mesure désormais aussi l'arrivée gelée.
+
 
 > **15 nov. 2026, 17:40 UTC — corrigé** : l'avance d'une scène rapide portée de 1,2 à **2,5** fois son rayon (`renderer.sceneryQuickLead`) :
 > en arrivant sur Toulon, **36–38** points de bâtiment devant (0 à trois passages sur quatre avant) ; le regard arrière **83–97** à moins de

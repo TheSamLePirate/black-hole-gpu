@@ -51,6 +51,7 @@ test.skipIf(!E2E)(
       await app.waitFor(`__bh.fleet.active === "f35"`, 60_000);
       const place = `(() => { __bh.game.setDate(new Date().toISOString()); __bh.game.set("weather", "fair");
         __bh.game.flyAt(${J0_SCENE.start.join(", ")}); __bh.settings.shipMount = "cockpit"; __bh.refresh(); __bh.camera.viewReset(); return 1; })()`;
+      await app.scenario("beau temps, sur l'approche de LFTH");
       // (rule 13 of E2E-VOLS: frozen while the data load — no glide at idle —, placed again, the approach engaged, then let go)
       await app.js(`(() => { __bh.freeze(true); return 1; })()`);
       await app.js(place);
@@ -97,7 +98,6 @@ test.skipIf(!E2E)(
         expect(stalls, `${what}: stalled`).toBe(0);
         expect(slow, `${what}: the airspeed`).toBeGreaterThan(60);
       };
-      await app.scenario("beau temps, sur l'approche de LFTH");
       const before = await run(15_000);
       flownWell(before.rows, "fair, on the approach");
       // (asserted once its speed is the approach's: at the engagement its autothrottle at idle slows it from 139 m/s — a pilot's too)

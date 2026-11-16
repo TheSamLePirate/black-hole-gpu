@@ -6,6 +6,9 @@ import { App, E2E, stopServer } from "./lib/app";
 // switch lights the strobes, the wheel puts it back; the autobrake's MED button arms the autobrake; the parking brake's
 // handle sets it; the flap lever turned a notch; the thrust levers dragged forward; the annunciators' test switch; the MCDU's
 // INIT, and its ARRIVAL (PLAN-APPROCHES AP3): to KSFO, the FAA's ILS 28R via ARCHI inserted by its keys, RAD NAV on IGWQ 111.70.
+// At the start, the scene still and its tracer in: no « Compiling the ray tracer » pill left up (PLAN-J7 J7-4 — frozen for minutes, 14 Nov).
+// Duration: ~3 min on kerr-mini.
+// Done when: the MCDU's arrival inserted and RAD NAV tuned, the last test.
 
 /** where the shots go (E2E_SHOTS=dir; none: not taken) */
 const shots = process.env.E2E_SHOTS;
@@ -29,6 +32,10 @@ describe.skipIf(!E2E)("the A320's flight deck by the mouse", () => {
     // (the scene's tracer in, on its progress — not the pill's text: on a still scene it stayed up, 240 s lost each run, 14 Nov 2026)
     await app.settled(60_000);
     await Bun.sleep(2000);
+    // (J7-4: the pill closed once the image converged — it stayed « Compiling the ray tracer for this scene · 2 s » on the still deck)
+    const pill = await app.js<string>(`document.querySelector(".asset-pill.show")?.textContent ?? ""`);
+    console.log(`  the pill at the start: ${JSON.stringify(pill)}`);
+    expect(pill).not.toMatch(/ray tracer|traceur/i);
   }, 400_000);
   afterAll(() => {
     app?.close();

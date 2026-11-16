@@ -3,7 +3,10 @@ import { App, E2E, stopServer } from "./lib/app";
 
 // The weather's panel (PLAN-METEO W2): opened by the HUD's Weather button (a real click), a preset chosen
 // (a real click) — the setting, what is in force at the place below (its flight category) and the
-// vertical cut drawn follow; the choice saved with the flight; the pause menu opens it too.
+// vertical cut drawn follow; the choice saved with the flight; the pause menu opens it too; the planisphere's weather layer toggled by a
+// real click on the map's Weather button (PLAN-J7 J7-4: the map's bar took its clicks); in the image (W3), overcast reaches the tracer.
+// Duration: ~2 min on kerr-mini.
+// Done when: the weather in the image checked, the last test.
 
 describe.skipIf(!E2E)("the weather's panel", () => {
   let app: App;
@@ -73,6 +76,7 @@ describe.skipIf(!E2E)("the weather's panel", () => {
     await app.js(`(__bh.settings.weather = "random", true)`);
     await app.press("KeyM");
     await Bun.sleep(800);
+    await app.shot("remote-results/weather-panel/planisphere-meteo.png");
     await app.click("[data-testid=map-weather]");
     await Bun.sleep(1500);
     expect(await app.js<boolean>(`document.querySelector("[data-testid=map-weather]").classList.contains("on")`)).toBe(true);

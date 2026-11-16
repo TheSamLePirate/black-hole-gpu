@@ -3,6 +3,7 @@ import { mkdirSync } from "node:fs";
 import { App, E2E, stopServer } from "./lib/app";
 import { CRUISE, expectFlight, type FlightState, flightState } from "./lib/flight-state";
 import { J0_FIXED, J0_SCENE } from "./lib/j0-scene";
+import { sceneryReady } from "./lib/plan-views";
 // PLAN-J6 J6-1 — the journey « take off then turn over a city » (strategy §19.13), played end to end in the main profile (raster, the
 // cockpit): the F-35 lined up at Toulon-Hyères, the afternoon, fair weather; the automatic take-off by the real key U; then to
 // Toulon's centre at 500 m (over the sea's level) and 150 m/s under the autopilot (its bearing set every 10 s), a turn over the city towards the harbour, the view back
@@ -149,6 +150,16 @@ test.skipIf(!E2E)(
       }
       await app.shot(`${OUT}/3-sur-toulon.png`);
       const arrival = await surface("arriving over Toulon (the cockpit)");
+      // (J7-4: the same view frozen, the scenery let finish — 60 s at most —: buildings then, the scenery was late; none, there are none
+      // to see ahead of the cockpit there — J6-1's own revision saw 0 too, 16 Nov 2026)
+      await app.scenario("à l'arrivée, gelé, le décor fini");
+      await app.js(`(() => { __bh.freeze(true); return 1; })()`);
+      const whole = await sceneryReady(app, 60_000);
+      await app.settled(60_000);
+      const arrivalWhole = await surface(`arriving over Toulon, frozen, the scenery ${whole.ready ? "whole" : `not whole (${whole.status})`}`);
+      out.arrival = { moving: arrival, frozen: { ...arrivalWhole, sceneryWhole: whole.ready } };
+      await app.shot(`${OUT}/3b-arrivee-decor-fini.png`);
+      await app.js(`(() => { __bh.freeze(false); return 1; })()`);
       // (the turn over the city: left to 180°, towards the harbour)
       await app.js(`(() => { __bh.camera.apSet({ ap: true, athr: true, alt: 500, hdg: 180 * Math.PI / 180, spd: 150 }); return 1; })()`);
       await app.scenario("virage au-dessus de Toulon");

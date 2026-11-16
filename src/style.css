@@ -2422,6 +2422,10 @@ body.mobile.portrait .tf-right { right: calc(14px + env(safe-area-inset-right));
 .fl-root.mapview .fl-maptabs { position: absolute; z-index: 3; top: calc(var(--tb-bottom, 52px) + 10px); left: var(--fc-l); }
 /* (left clear of the tabs: 3D, Globe, Planisphere and the weather's toggle, ~300 px) */
 .fl-root.mapview .fl-mapbar { position: absolute; z-index: 3; top: calc(var(--tb-bottom, 52px) + 10px); right: var(--fc-r); left: calc(var(--fc-l) + 310px); justify-content: flex-end; flex-wrap: wrap; row-gap: 4px; }
+/* (its box clear to the pointer, its items not: the tabs grew past 310 px — Tactical, the weather's toggle, longer in French — and the
+   bar's empty left took the Weather button's clicks, PLAN-J7 J7-4, 16 Nov 2026) */
+.fl-root.mapview .fl-mapbar { pointer-events: none; }
+.fl-root.mapview .fl-mapbar > * { pointer-events: auto; }
 @media (max-width: 1500px) { .fl-root.mapview .fl-mapbar > .fl-label { display: none; } }
 .fl-root.mapview .m3-crumbs { top: calc(var(--tb-bottom, 52px) + 48px); left: var(--fc-l); right: auto; transform: none; justify-content: flex-start; }
 .fl-root.mapview .m3-menu { top: calc(var(--tb-bottom, 52px) + 48px); left: auto; right: var(--fc-r); }
