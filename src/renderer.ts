@@ -12206,6 +12206,8 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
         if (!this.buildingFar) {
           this.buildingFar = new BuildingFar(this.sceneryRaster, cellPool);
           this.buildingFar.quadPx = this.farQuadPxWant;
+          // (the ground as drawn — the records without their own: Overture's, OSM's)
+          this.buildingFar.groundAt = (lat, lon) => groundBare("earth", bodyFixedOf("earth", lat, lon, 0));
         }
         const box = this.earthScenery.drawnBox();
         const st = this.earthScenery.stats();

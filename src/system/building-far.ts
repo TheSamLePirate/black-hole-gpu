@@ -4,7 +4,7 @@
 // the GPU's record pool by blocks (building-layer.ts RecordPool) under its declared budget — the farthest of the least wanted let go
 // when a nearer one does not fit —, its frame in the scene's written (moved with the scene); drawn by SceneryRaster (culled by the
 // GPU, boxes and quads, the shadow map). The near scene keeps its own buildings: those within its reach are left out (maskR).
-import { CELL_Z, cellKey, cellOf, readHeader, recordWords } from "./building-cells";
+import { CELL_Z, cellKey, cellOf, cellOrigin, fromCell, readHeader, recordWords } from "./building-cells";
 import { cellFrameInScene, cellPriority, type EyeState, POOL_RECORD_BYTES, RecordPool } from "./building-layer";
 import type { CellPool, CellPrepared, CellWant } from "./cell-pool";
 import { sceneryFrame } from "./scenery-data";
@@ -27,6 +27,8 @@ interface Resident {
   records: number;
   /** when it was put [ms]: its fade-in over FAR_FADE_MS (its frame's origin.w, farFs's scatter) */
   at: number;
+  /** its drawn ground's plane (groundPlane), sampled once */
+  plane?: [number, number, number];
 }
 /** a cell's fade-in once put [ms] */
 export const FAR_FADE_MS = 1000;
@@ -45,6 +47,12 @@ export class BuildingFar {
   quadPx = FAR_QUAD_PX;
   /** the counts: cells handed, put, let go, too big to fit */
   readonly counts = { handed: 0, put: 0, evicted: 0, refused: 0, empty: 0 };
+
+  /**
+   * The ground as drawn at a place [°] → its height over the ellipsoid [m] (the renderer's: groundBare): the cells whose records give
+   * none (Overture's, OSM's — building-cells.ts, GroundKnown absent) set on a plane through it; null: none (their ground 0)
+   */
+  groundAt: ((lat: number, lon: number) => number) | null = null;
 
   constructor(
     private raster: SceneryRaster,
@@ -166,12 +174,32 @@ export class BuildingFar {
     this.counts.put++;
   }
 
-  /** a resident cell's frame in the scene's, its fade-in's share in its origin's w */
+  /** a resident cell's frame in the scene's, its fade-in's share in its origin's w, its drawn ground's plane in its axes' w */
   private writeFrame(r: Resident, now: number) {
     if (!this.frame) return;
     const f = cellFrameInScene(r.x, r.y, this.frame);
     f[3] = Math.min(Math.max((now - r.at) / FAR_FADE_MS, 0), 1);
+    r.plane ??= this.groundPlane(r.x, r.y);
+    f[7] = r.plane[0];
+    f[11] = r.plane[1];
+    f[15] = r.plane[2];
     this.raster.farFrame(r.slot, f);
+  }
+  /** the drawn ground under a cell as a plane: its height at the origin [m over the ellipsoid], its slopes east and north [m/m] — five
+   *  samples (the origin, 300 m each way) */
+  private groundPlane(x: number, y: number): [number, number, number] {
+    const g = this.groundAt;
+    if (!g) return [0, 0, 0];
+    const o = cellOrigin(x, y);
+    const D = 300;
+    const at = (e: number, n: number) => {
+      const p = fromCell(o, e, n);
+      return g(p.lat, p.lon);
+    };
+    const h0 = at(0, 0);
+    const se = (at(D, 0) - at(-D, 0)) / (2 * D),
+      sn = (at(0, D) - at(0, -D)) / (2 * D);
+    return [h0, se, sn];
   }
 
   private evict(key: string) {

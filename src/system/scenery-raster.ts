@@ -923,10 +923,17 @@ fn farEnv(k: u32) -> Env {
   let head = f32(farRec[o + 6u] & 0xffffu) / 65535.0 * 3.14159265;
   let c = 4u * blk.x;
   let O = farCell[c];
-  let E = farCell[c + 1u].xyz;
-  let N = farCell[c + 2u].xyz;
-  let U = farCell[c + 3u].xyz;
-  let p = O.xyz + E * east + N * north + U * ground;
+  let E4 = farCell[c + 1u];
+  let N4 = farCell[c + 2u];
+  let U4 = farCell[c + 3u];
+  let E = E4.xyz;
+  let N = N4.xyz;
+  let U = U4.xyz;
+  // (its ground the source's when it gives one — RecordFlag.GroundKnown, the BD TOPO's —; else the relief as drawn under its cell, a
+  // plane through it — its height at the origin E.w, its slopes east N.w and north U.w: building-far.ts — Overture's, OSM's)
+  let known = ((farRec[o + 6u] >> 24u) & 8u) != 0u;
+  let g = select(E4.w + N4.w * east + U4.w * north, ground, known);
+  let p = O.xyz + E * east + N * north + U * g;
   // (its long side's direction in the scene's horizontal plane)
   let d = E * cos(head) + N * sin(head);
   e.c = vec4f(p, atan2(d.y, d.x));
