@@ -209,3 +209,21 @@ test("too high for the join at 3° (the A320 2 200 m up on Nice's 22R line): tra
   const far = fromRunway(W, -45_000, 4000);
   expect(planJoin(W, { ...far, alt: W.elev + 3000, trk: W.hdg * D }, () => W.elev).pts[0]!.name).toBe("DOG");
 });
+
+test("vectors from near the axis (a go-around): the downwind on the side of the lower relief — hills to its right, flown left (AP10b)", async () => {
+  const { onRunway } = await import("../src/game/ils");
+  // (hills 1 500 m high to the right of the final — across > 2 km —, flat to its left)
+  const hills = (lat: number, lon: number) => (onRunway(W, { lat, lon, alt: 0 }).across > 2000 ? W.elev + 1500 : W.elev);
+  // (gone around 1 km before the threshold, 300 m up, on the axis, a little to its right, heading down the course)
+  const p = fromRunway(W, -1000, 300);
+  const P = planJoin(W, { lat: p.lat, lon: p.lon, alt: W.elev + 300, trk: (W.hdg * Math.PI) / 180 }, hills);
+  const dw = P.pts.find((q) => q.name === "DW")!;
+  const at = onRunway(W, { lat: dw.lat, lon: dw.lon, alt: 0 });
+  console.log(`  ${P.entry}: the downwind ${at.across.toFixed(0)} m across, its floor ${dw.floor.toFixed(0)} m`);
+  expect(P.entry).toBe("vectors");
+  expect(at.across).toBeLessThan(0);
+  // (and flat ground both sides: the craft's own side kept)
+  const Q = planJoin(W, { lat: p.lat, lon: p.lon, alt: W.elev + 300, trk: (W.hdg * Math.PI) / 180 }, () => W.elev);
+  const dq = Q.pts.find((q) => q.name === "DW")!;
+  expect(onRunway(W, { lat: dq.lat, lon: dq.lon, alt: 0 }).across).toBeGreaterThan(0);
+});

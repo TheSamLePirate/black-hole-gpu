@@ -8471,3 +8471,16 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
 - Limites : une seule nuit automatique ; la médiane des nuits encore courte (4 lignes, dont 2 sans commit) ; le palier de 40 ms du mini
   non atteint (44,8 ms).
 - Suite : laisser les nuits s'accumuler ; relire `fetch` chaque matin.
+
+### 2026-11-16 03:13 UTC — PLAN-APPROCHES, OIFK : la jonction après remise de gaz du côté du relief bas ; la cause du rebond établie
+
+- Contribution à la destination : §19 (une remise de gaz qui ramène à une approche volable) ; et la preuve chiffrée d'une demande à la
+  session qui possède le terrain.
+- Réalisé : `game/approach-plan.ts` `planJoin` — en guidage radar près de l'axe (moins de 3 km), le vent arrière du côté dont le relief
+  est le plus bas de plus de 150 m (une remise de gaz à OIFK envoyait l'A320 sur les collines : dernier palier 600 m au-dessus de la pente,
+  jamais capté) ; test unitaire (collines à droite : vent arrière à gauche ; plat : le côté de l'avion gardé).
+- Preuves (observé, kerr-mini ; mesuré sans navigateur) : le second passage d'OIFK 11 se stabilise sur LOC/G/S ; le « rebond » : FLARE
+  4,0–4,6 km avant le seuil à 14 m du sol — données plates (1 036–1 049 m), sol de la collision avec le détail 1 122–1 248 m (+75…+205 m),
+  le faisceau à 65 m au-dessus à 4,6 km ; tests `approach-join`, `ils`, `a320-approach*` verts (17/17).
+- Limites : OIFK reste non posé tant que le détail procédural n'est pas aplani sous les trouées (session du rendu — PROBLEMES).
+- Suite : la session du rendu ; OIFK rejoué ensuite.

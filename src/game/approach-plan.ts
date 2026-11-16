@@ -145,8 +145,22 @@ export function planJoin(
   } else {
     // (inside it, abeam or beyond the field: vectors — a downwind on the craft's side out past the join, then the base)
     entry = "vectors";
-    const y = side * PLAN.dwOffset;
     const x1 = Math.min(Math.max(o.along, -PLAN.join), 4000);
+    // (near the axis — a go-around, an overflight —: the downwind on the side whose relief is lower by more than 150 m, as a
+    // controller vectors away from the high ground; at OIFK the A320 gone around was sent over the hills, its join's floor
+    // 600 m over the slope, never captured — AP10b)
+    let sideV = side;
+    if (Math.abs(o.across) < 3000) {
+      const top = (sd: number) => {
+        const y = sd * PLAN.dwOffset;
+        const P = [{ x: o.along, y: o.across }, { x: x1, y }, { x: -PLAN.join - PLAN.dwPast, y }, J];
+        let t = 0;
+        for (let i = 1; i < P.length; i++) t = Math.max(t, legGround(W, P[i - 1]!, P[i]!, ground));
+        return t;
+      };
+      if (top(-side) + 150 < top(side)) sideV = -side;
+    }
+    const y = sideV * PLAN.dwOffset;
     raw.push({ x: x1, y, name: "DW", dw: true });
     raw.push({ x: -PLAN.join - PLAN.dwPast, y, name: "BASE", dw: true });
   }

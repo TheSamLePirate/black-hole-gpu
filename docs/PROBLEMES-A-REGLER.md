@@ -16,6 +16,12 @@ dessous. Piste : la question 4 de PLAN-APPROCHES §9 — **décidée le 16 nov. 
 à la session du rendu : aplanir le détail sous les trouées d'approche des pistes du monde** (`terrain.ts`, comme sous la piste — la
 collision le garde aujourd'hui) ; côté approches : une jonction après remise de gaz qui redescend sous le faisceau avant l'interception.
 Rejoué le 16 nov. sur le juge des données : toujours non posé (le détail sous la trouée inchangé).
+**Cause établie (16 nov., 03:30 UTC)** : le « rebond » n'est pas un atterrissage — le FLARE se déclenche **4,0 à 4,6 km avant le seuil**,
+14 m au-dessus du sol : sous la finale d'OIFK 11 les données sont plates (1 036–1 049 m de 3 à 6 km), le sol de la collision, avec le
+détail procédural, monte à 1 122–1 248 m (+75 à +205 m) — le faisceau (1 313 m à 4,6 km) passe à 65 m de cette bosse inventée.
+Côté approches, réglé : la jonction après une remise de gaz prend le vent arrière du côté du relief bas (`planJoin`) — le second
+passage se stabilise désormais sur LOC/G/S ; il rebondit à la même bosse. **Reste entièrement à la session du rendu : le détail
+procédural aplani sous les trouées d'approche des pistes du monde** (`terrain.ts` `earthDetail`, comme sous la piste).
 
 
 ## ~~La vue « Les aurores sur les fjords des Lofoten » volée en plein jour quand la date du jeu est en été~~ (relevé le 14 novembre 2026, e2e `s2-views`) — réglé le même jour
