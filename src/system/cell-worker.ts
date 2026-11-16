@@ -5,17 +5,21 @@
 // ellipsoid (CLAUDE.md, WGS84 everywhere). PLAN-J8 J8-7: outside the IGN's box, and where the BD TOPO has no building in the cell,
 // Overture Maps' (cell-overture.ts: its z 14 tile prepared into its four cells, the asked one handed). PLAN-J8 J8-L: {id, x, y, kind:
 // "street"} — the cell « rue » (street-prep.ts): OpenMapTiles' z 14 tile, the four building cells under it (from the prepared cache, or
-// prepared now), its four street cells put in their cache (kerr-street-v<format>), the asked one handed.
+// prepared now), its four street cells put in their cache (kerr-street-v<format>), the asked one handed. PLAN-J8 J8-8: {…, kind: "mesh"} —
+// the near buildings' mesh cell (mesh-prep.ts), kept in kerr-mesh-v<format>.
 import { bdtopoUrl } from "./bdtopo";
 import { inBdtopoBox, overtureCell } from "./cell-overture";
+import { CellSource, readHeader } from "./building-cells";
 import { CELL_CACHE, cellCacheUrl } from "./cell-pool";
 import { prepareBdtopoCell } from "./cell-prep";
 import { geoidDeg, setGeoid } from "./geoid-grid";
 import type { HeightMap } from "./heights-file";
+import { encodeMeshCell, MESH_CACHE, meshCacheUrl, MeshCellFlag } from "./mesh-cells";
+import { prepareMeshCell } from "./mesh-prep";
 import { STREET_CACHE, streetCacheUrl, streetRoadsUrl } from "./street-cells";
 import { prepareStreetCells } from "./street-prep";
 
-type In = { geoid: HeightMap } | { id: number; x: number; y: number; kind?: "building" | "street" } | { cancel: number };
+type In = { geoid: HeightMap } | { id: number; x: number; y: number; kind?: "building" | "street" | "mesh" } | { cancel: number };
 const g = self as unknown as { onmessage: (e: MessageEvent<In>) => void; postMessage: (m: unknown, t?: Transferable[]) => void };
 const aborts = new Map<number, AbortController>();
 
@@ -34,6 +38,12 @@ g.onmessage = async (e) => {
   aborts.set(m.id, abort);
   const t0 = performance.now();
   try {
+    if (m.kind === "mesh") {
+      const M = await meshCell(m.x, m.y, abort.signal);
+      if (abort.signal.aborted) return;
+      g.postMessage({ id: m.id, buf: M.buf, ms: performance.now() - t0, prepMs: M.ms, kept: M.buildings }, [M.buf]);
+      return;
+    }
     if (m.kind === "street") {
       const S = await streetCell(m.x, m.y, abort.signal);
       if (abort.signal.aborted) return;
@@ -91,6 +101,44 @@ async function buildingBytes(x: number, y: number, signal: AbortSignal): Promise
   const P = await buildingCell(x, y, signal);
   await keep(CELL_CACHE, cellCacheUrl(self.location.origin, x, y), P.buf);
   return P.buf;
+}
+
+/** A mesh cell (PLAN-J8 J8-8, mesh-cells.ts): its building cell first (its generation, its source — the ranks are its), then the BD
+ *  TOPO's tile through the Service Worker (the zone's copy) prepared into it (mesh-prep.ts) and kept in MESH_CACHE. A cell whose
+ *  buildings are not the BD TOPO's (Overture's, J8-7): an empty mesh cell flagged SourceLater — its meshes a later step, the near scene
+ *  draws there as before. The tile newer than the building cell: both made again from it (the ranks must agree). */
+async function meshCell(x: number, y: number, signal: AbortSignal) {
+  const cell = await buildingBytes(x, y, signal);
+  let h = readHeader(cell)!;
+  const key = (gen: number) => meshCacheUrl(self.location.origin, x, y, gen, false);
+  if (h.source !== CellSource.BdTopo || !inBdtopoBox(x, y)) {
+    const buf = encodeMeshCell(
+      {
+        source: h.source,
+        z: h.z,
+        x,
+        y,
+        flags: MeshCellFlag.SourceLater,
+        generation: h.generation,
+        originLat: h.originLat,
+        originLon: h.originLon,
+      },
+      [],
+    );
+    await keep(MESH_CACHE, key(h.generation), buf);
+    return { buf, ms: 0, buildings: 0 };
+  }
+  const r = await fetch(bdtopoUrl(x, y), { signal });
+  const bytes = r.status === 404 || r.status === 204 ? new ArrayBuffer(0) : r.ok ? await r.arrayBuffer() : null;
+  if (!bytes) throw new Error(`BD TOPO ${x}/${y}: HTTP ${r.status}`);
+  const M = prepareMeshCell(bytes, x, y, (lat, lon) => geoidDeg(lat, lon));
+  if (M.generation !== h.generation) {
+    const P = prepareBdtopoCell(bytes, x, y, (lat, lon) => geoidDeg(lat, lon));
+    await keep(CELL_CACHE, cellCacheUrl(self.location.origin, x, y), P.buf);
+    h = readHeader(P.buf)!;
+  }
+  await keep(MESH_CACHE, key(M.generation), M.buf);
+  return { buf: M.buf, ms: M.stats.ms, buildings: M.stats.buildings };
 }
 
 /** a street cell: its z 14 roads' tile, the four building cells under it, its four street cells prepared and kept, the asked one */

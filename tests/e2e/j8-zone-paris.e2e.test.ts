@@ -130,7 +130,12 @@ describe.skipIf(!E2E)(`PLAN-J8 J8-9: J8-A's corridor zone « ${TRACK} », downlo
           `(async () => { const r = await __bh.sys.flightReady({ track: ${T} }); return { ready: r.ready, why: r.why }; })()`,
         );
         ready.push({ point: k + 1, ready: !!now.ready, why: now.why ?? [] });
-        console.log(`  point ${k + 1}: ${JSON.stringify(ready[k])}`);
+        // (a far layer's wanted cells not resident: its reserve refusing — refused, no block free — or still filling — the render's
+        // reading, 17 Nov 2026)
+        const far = await app.js<Record<string, unknown> | null>(
+          `(async () => { const f = await __bh.renderer.farBuildings?.(); const l = f?.layer; return l ? { wanted: l.wanted, missing: l.missing, cells: l.cells, refused: l.refused, freeBlocks: l.freeBlocks, blocks: l.blocks } : null; })()`,
+        );
+        console.log(`  point ${k + 1}: ${JSON.stringify(ready[k])} · far layer ${JSON.stringify(far)}`);
         if (k === 2) await app.shot(`${OUT}/${TRACK}-offline-point3.png`);
       }
       const st = await app.js<{ served: { network: number; kinds?: Record<string, { network: number }>; recent?: string[] } }>(

@@ -20,7 +20,7 @@ import {
   zoneEstimate,
   zoneLevelsAt,
 } from "./system/zones";
-import { cellsOnlyIn, type ZoneCells, zoneCellTiles, zoneStreetTiles } from "./system/zone-cells";
+import { cellsOnlyIn, type ZoneCells, zoneCellTiles, zoneMeshTiles, zoneStreetTiles } from "./system/zone-cells";
 
 export interface Zones {
   /** what a zone would hold: its tiles' chains of fetches, their links, its size [bytes] by the kinds' means, its download
@@ -81,6 +81,9 @@ export function createZones(o: {
     /** the street cells (PLAN-J8 J8-L): prepared after the buildings', dropped with them */
     prepareStreets?(tiles: { x: number; y: number }[]): Promise<ZoneCells>;
     dropStreets?(tiles: { x: number; y: number }[]): Promise<void>;
+    /** the near meshes' cells (PLAN-J8 J8-8): within MESH_NEAR_M of a corridor's track, after the streets', dropped with them */
+    prepareMeshes?(tiles: { x: number; y: number }[]): Promise<ZoneCells>;
+    dropMeshes?(tiles: { x: number; y: number }[]): Promise<void>;
   };
 }): Zones {
   let active: string | null = null;
@@ -189,6 +192,12 @@ export function createZones(o: {
           if (zone.fresh) await o.cells.dropStreets?.(streets);
           const r = await o.cells.prepareStreets(streets);
           zone.streets = { count: r.count, bytes: r.bytes, failed: r.failed, ms: r.ms };
+        }
+        // (its near meshes along its corridor — J8-8: from its building cells, their ranks)
+        const meshes = zoneMeshTiles(urls, zone);
+        if (meshes.length && o.cells.prepareMeshes) {
+          if (zone.fresh) await o.cells.dropMeshes?.(meshes);
+          zone.meshes = await o.cells.prepareMeshes(meshes);
         }
       }
       if (zone.state === "ready") {
@@ -317,6 +326,13 @@ export function createZones(o: {
             cellsOnlyIn(
               zoneStreetTiles(chainsOf(z)),
               all.filter((q) => q.id !== id).map((q) => zoneStreetTiles(chainsOf(q))),
+            ),
+          );
+        if (z?.meshes && o.cells.dropMeshes)
+          await o.cells.dropMeshes(
+            cellsOnlyIn(
+              zoneMeshTiles(chainsOf(z), z),
+              all.filter((q) => q.id !== id).map((q) => zoneMeshTiles(chainsOf(q), q)),
             ),
           );
       }

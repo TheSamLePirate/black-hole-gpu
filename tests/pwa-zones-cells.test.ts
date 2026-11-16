@@ -1,8 +1,9 @@
 import { expect, test } from "bun:test";
 import type { ZoneRecord } from "../src/pwa/rules";
 import { createZones } from "../src/pwa-zones";
-import { zoneCellTiles, zoneStreetTiles } from "../src/system/zone-cells";
-import { ZONE_PROFILES, zoneChains } from "../src/system/zones";
+import { MESH_NEAR_M } from "../src/system/building-cells";
+import { zoneCellTiles, zoneMeshTiles, zoneStreetTiles } from "../src/system/zone-cells";
+import { corridorDisc, corridorDistance, ZONE_PROFILES, zoneChains } from "../src/system/zones";
 
 // PLAN-J8 J8-6 — the zones' download (src/pwa-zones.ts) with its building cells: a fake Service Worker (every batch in at once) and fake
 // cells — once the zone is ready, its BD TOPO tiles prepared and counted in its record; an update drops them first; a removal drops only
@@ -22,6 +23,8 @@ function harness() {
   const dropped: string[][] = [];
   const streets: string[][] = [];
   const streetsDropped: string[][] = [];
+  const meshes: string[][] = [];
+  const meshesDropped: string[][] = [];
   const key = (t: { x: number; y: number }) => `${t.x}/${t.y}`;
   const zones = createZones({
     talk: async <T>(m: object) => {
@@ -56,6 +59,13 @@ function harness() {
       async dropStreets(tiles) {
         streetsDropped.push(tiles.map(key));
       },
+      async prepareMeshes(tiles) {
+        meshes.push(tiles.map(key));
+        return { count: tiles.length, buildings: 7 * tiles.length, bytes: 5000 * tiles.length, failed: 0, ms: 1 };
+      },
+      async dropMeshes(tiles) {
+        meshesDropped.push(tiles.map(key));
+      },
     },
   });
   const ready = async (id: string) => {
@@ -66,7 +76,7 @@ function harness() {
     }
     throw new Error("the zone never ready");
   };
-  return { zones, store, prepared, dropped, streets, streetsDropped, ready };
+  return { zones, store, prepared, dropped, streets, streetsDropped, meshes, meshesDropped, ready };
 }
 
 const tilesOf = (lat: number, lon: number, km: number) =>
@@ -117,4 +127,39 @@ test("a zone ready: its street cells prepared after its buildings' (J8-L), dropp
   expect(z.streets?.count).toBe(want.length);
   await h.zones.remove(id);
   expect(h.streetsDropped).toEqual([want]);
+});
+
+test("a corridor zone: its mesh cells (J8-8) — its BD TOPO cells within MESH_NEAR_M of the track — prepared after its streets', dropped with it; a disc zone none", async () => {
+  const h = harness();
+  const corridor = {
+    points: [
+      [43.1, 5.88],
+      [43.12, 5.95],
+    ] as [number, number][],
+    halfWidthM: 1000,
+  };
+  const d = corridorDisc(corridor);
+  const zone = { name: "c", lat: d.lat, lon: d.lon, radiusKm: d.radius / 1000, profile: "overflight" as const, corridor };
+  const id = (await h.zones.add(zone))!;
+  const z = await h.ready(id);
+  const chains = zoneChains(zone.lat, zone.lon, d.radius, ZONE_PROFILES.overflight, SOURCES, 0, corridor);
+  const want = zoneMeshTiles(chains, zone).map((t) => `${t.x}/${t.y}`);
+  // (fewer than the zone's building cells — those far along its 20 km far reach left out —, every one near the track)
+  expect(want.length).toBeGreaterThan(5);
+  expect(want.length).toBeLessThan(zoneCellTiles(chains).length);
+  for (const k of want) {
+    const [x, y] = k.split("/").map(Number) as [number, number];
+    const n = 2 ** 15;
+    const lon = ((x + 0.5) / n) * 360 - 180,
+      lat = (Math.atan(Math.sinh(Math.PI * (1 - (2 * (y + 0.5)) / n))) * 180) / Math.PI;
+    expect(corridorDistance(zone.lat, zone.lon, corridor, lat, lon)).toBeLessThan(MESH_NEAR_M + 700);
+  }
+  expect(h.meshes).toEqual([want]);
+  expect(z.meshes).toEqual({ count: want.length, buildings: 7 * want.length, bytes: 5000 * want.length, failed: 0, ms: 1 });
+  await h.zones.remove(id);
+  expect(h.meshesDropped).toEqual([want]);
+  // (a disc zone: no mesh cell)
+  const h2 = harness();
+  await h2.ready((await h2.zones.add({ name: "a", lat: 43.124, lon: 5.93, radiusKm: 0.5, profile: "overflight" }))!);
+  expect(h2.meshes).toEqual([]);
 });

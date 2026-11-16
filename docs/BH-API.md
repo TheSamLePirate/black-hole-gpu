@@ -2148,8 +2148,10 @@ words; `cells`: the pool's stats; `far`: the layer's. The J8-A e2e waits on it b
 
 With `{ track: { points: [[lat, lon, altitude?], …] } }` — J8-A's flight (system/j8a-tracks.ts) — what the whole flight will ask, not only the
 view at the start: a ready zone whose corridor covers every point (its building and street cells prepared), and every far cell within the
-far layer's reach (20 km) of the track, every street cell within the lamps' (12 km), in their prepared caches (`kerr-cells-v1`,
-`kerr-street-v2`); `track` in the answer: the zone's id, the far and street cells missing.
+far layer's reach (20 km) of the track, every street cell within the lamps' (12 km), and — PLAN-J8 J8-8 — every mesh cell within
+`MESH_NEAR_M` (1 500 m) of it in the IGN's box (the zone's `meshes` prepared), in their prepared caches (`kerr-cells-v1`,
+`kerr-street-v2`, `kerr-mesh-v1`); `track` in the answer: the zone's id, the far, street and mesh cells missing. The mesh cells' pool, once
+asked, idle as the others'.
 
 ### `__bh.sys.streets` (PLAN-J8 J8-L: the streets' cells' pool)
 
@@ -2160,6 +2162,18 @@ ways, bridges and tunnels, abscissa, the road's identity; Douglas-Peucker at 0.3
 along the urban streets, none near a junction or a building, kept by their seeds, at most 4 000 a cell thinned evenly); its rules in the
 file's header —, the asked one handed — its own pool (`cell-workers.ts` `streetPool()`, two workers). As `__bh.sys.cells`: `want(list)`,
 `stats()`, `got()`, `clear()`. `flightReady()` waits on it once asked. *Used in:* `j8-street-cells.e2e.test.ts`.
+
+### `__bh.sys.meshes` (PLAN-J8 J8-8: the near buildings' mesh cells' pool)
+
+The near buildings' meshes in cells (`src/system/mesh-cells.ts` — the format, kerr-mesh-v1, agreed with the render session —,
+`mesh-prep.ts`; the cell worker's `kind: "mesh"`): a z 15 cell's building cell (J8-2) first — its buildings, their ranks, its generation —,
+then its BD TOPO tile planned and meshed as the near scene does (`building-mesh-prep.ts`, the code both workers share): each building's
+packScenery leaves (its convex parts, its chimneys) and its parts' triangles, every height over its foot, the walls from 3 m below it, the
+identity table by rank (first record, records, flags, first triangle, triangles, first vertex, foot over the ellipsoid — NaN when the source
+has none); kept in Cache Storage `kerr-mesh-v1` under the building cell's generation; a cell whose buildings are Overture's empty, flagged
+`SourceLater`. Its own pool (`cell-workers.ts` `meshPool()`, two workers). As `__bh.sys.cells`: `want(list)`, `stats()`, `got()` (key,
+bytes, buildings, triangles, from the cache, ms), `clear()`. Nothing draws from them yet (lot 2, the render session's). A corridor zone
+prepares those within `MESH_NEAR_M` of its track (`zone.meshes`). *Used in:* `j8-mesh-cells.e2e.test.ts`.
 
 ### `__bh.sys.runways()` → `RunwayFrame[]`
 

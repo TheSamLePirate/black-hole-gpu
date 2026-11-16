@@ -47,25 +47,22 @@ function dayOf(v: unknown): number {
 /** the use's code name (unknown: "") */
 const usageOf = (v: unknown): UsageName => ((USAGE_CODES as readonly string[]).includes(String(v)) ? (String(v) as UsageName) : "");
 
+/** a building the tile keeps (the first — north, then west — of the tiles it touches), its parts' rings in the tile's units */
+export interface OwnedBuilding {
+  id: string;
+  properties: Record<string, unknown>;
+  /** its parts (classifyRings): each its outer ring then its courtyards', in the tile's units (past its square: the buffer's) */
+  polys: { x: number; y: number }[][][];
+  extent: number;
+  /** its footprint reaches the buffer's edge: the rest beyond it unknown */
+  cut: boolean;
+}
 /**
- * A BD TOPO tile's cell: its buildings' records — one a building, its parts together —, ranked by their identity (`cleabs`).
- * `geoid` (lat, lon) → N [m] (geoid-grid.ts geoidDeg once its grid is in; 0 leaves the ground over the sea).
+ * A BD TOPO tile's standing buildings decoded: those it keeps, ranked by their identity (`cleabs`) — the rank J8-2's records and J8-8's
+ * meshes share —, and every standing footprint it holds, kept or not (its buffer's neighbours: the party walls across its edges).
  */
-export function prepareBdtopoCell(
-  bytes: ArrayBuffer | Uint8Array,
-  x: number,
-  y: number,
-  geoid: (lat: number, lon: number) => number,
-): PreparedCell {
-  const t0 = performance.now();
-  const n = 2 ** BDTOPO_Z;
-  const origin = cellOrigin(x, y, BDTOPO_Z);
-  const region = regionOf(origin.lat, origin.lon);
+export function bdtopoOwned(bytes: ArrayBuffer | Uint8Array) {
   const layer = bytes.byteLength ? new VectorTile(new PbfReader(bytes)).layers.batiment : undefined;
-  const geoOf = (px: number, py: number, e: number) => ({
-    lon: ((x + px / e) / n) * 360 - 180,
-    lat: Math.atan(Math.sinh(Math.PI * (1 - (2 * (y + py / e)) / n))) / D,
-  });
   // (the buffer's reach past the square, in tile units: the farthest any vertex goes — a footprint touching it is cut there)
   let reach = 0;
   const feats: { f: ReturnType<NonNullable<typeof layer>["feature"]>; polys: { x: number; y: number }[][][] }[] = [];
@@ -77,21 +74,13 @@ export function prepareBdtopoCell(
     for (const p of polys) for (const v of p[0] ?? []) reach = Math.max(reach, -v.x, -v.y, v.x - e, v.y - e);
     feats.push({ f, polys });
   }
-  const out: (CellRecord & { id: string })[] = [];
-  let polygons = 0,
-    partial = 0,
-    generation = 0;
+  const owned: OwnedBuilding[] = [];
+  const others: { polys: { x: number; y: number }[][][]; extent: number }[] = [];
+  let generation = 0,
+    polygons = 0;
   for (const { f, polys } of feats) {
-    const pr = f.properties;
     const e = f.extent;
-    generation = Math.max(generation, dayOf(pr.date_modification), dayOf(pr.date_creation));
-    const eave = bdtopoHeight(pr);
-    const ridge = pr.altitude_maximale_toit,
-      low = pr.altitude_minimale_toit;
-    const roof = typeof ridge === "number" && typeof low === "number" && ridge >= low ? Math.min(30, ridge - low) : 0;
-    const storeys = typeof pr.nombre_d_etages === "number" && pr.nombre_d_etages > 0 ? pr.nombre_d_etages : 0;
-    const usage = usageOf(pr.usage_1);
-    const id0 = String(pr.cleabs ?? "");
+    generation = Math.max(generation, dayOf(f.properties.date_modification), dayOf(f.properties.date_creation));
     // (one record a building: its parts' outer rings together — the tile splits a building at its buffer into parts its neighbour
     // numbers otherwise: an identity of building and part did not survive from one copy to the other)
     const outer = polys.map((rings) => rings[0] ?? []).filter((r) => r.length >= 4);
@@ -107,10 +96,53 @@ export function prepareBdtopoCell(
         ty = Math.floor(v.y / e);
       if (ty < oy || (ty === oy && tx < ox)) (ox = tx), (oy = ty);
     }
-    if (ox !== 0 || oy !== 0) continue;
+    if (ox !== 0 || oy !== 0) {
+      others.push({ polys, extent: e });
+      continue;
+    }
+    const cut = reach > 0 && all.some((v) => -v.x >= reach - 1 || -v.y >= reach - 1 || v.x - e >= reach - 1 || v.y - e >= reach - 1);
+    owned.push({ id: String(f.properties.cleabs ?? ""), properties: f.properties as Record<string, unknown>, polys, extent: e, cut });
+  }
+  // (ranked by their identity: the same order whatever the tile's own)
+  owned.sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+  return { owned, others, features: feats.length, polygons, generation };
+}
+
+/**
+ * A BD TOPO tile's cell: its buildings' records — one a building, its parts together —, ranked by their identity (`cleabs`).
+ * `geoid` (lat, lon) → N [m] (geoid-grid.ts geoidDeg once its grid is in; 0 leaves the ground over the sea).
+ */
+export function prepareBdtopoCell(
+  bytes: ArrayBuffer | Uint8Array,
+  x: number,
+  y: number,
+  geoid: (lat: number, lon: number) => number,
+): PreparedCell {
+  const t0 = performance.now();
+  const n = 2 ** BDTOPO_Z;
+  const origin = cellOrigin(x, y, BDTOPO_Z);
+  const region = regionOf(origin.lat, origin.lon);
+  const geoOf = (px: number, py: number, e: number) => ({
+    lon: ((x + px / e) / n) * 360 - 180,
+    lat: Math.atan(Math.sinh(Math.PI * (1 - (2 * (y + py / e)) / n))) / D,
+  });
+  const { owned, features, polygons, generation } = bdtopoOwned(bytes);
+  const out: (CellRecord & { id: string })[] = [];
+  let partial = 0;
+  for (const { properties: pr, polys, extent: e, cut } of owned) {
+    const eave = bdtopoHeight(pr);
+    const ridge = pr.altitude_maximale_toit,
+      low = pr.altitude_minimale_toit;
+    const roof = typeof ridge === "number" && typeof low === "number" && ridge >= low ? Math.min(30, ridge - low) : 0;
+    const storeys = typeof pr.nombre_d_etages === "number" && pr.nombre_d_etages > 0 ? pr.nombre_d_etages : 0;
+    const usage = usageOf(pr.usage_1);
+    const id0 = String(pr.cleabs ?? "");
+    const all = polys
+      .map((rings) => rings[0] ?? [])
+      .filter((r) => r.length >= 4)
+      .flat();
     const cx = all.reduce((s, v) => s + v.x, 0) / all.length,
       cy = all.reduce((s, v) => s + v.y, 0) / all.length;
-    const cut = reach > 0 && all.some((v) => -v.x >= reach - 1 || -v.y >= reach - 1 || v.x - e >= reach - 1 || v.y - e >= reach - 1);
     const pts = all.map((v) => {
       const g = geoOf(v.x, v.y, e);
       const m = toCell(origin, g.lat, g.lon);
@@ -150,8 +182,7 @@ export function prepareBdtopoCell(
       roofColour: 0,
     });
   }
-  // (ranked by their identity: the same order whatever the tile's own)
-  out.sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+  // (ranked by their identity — bdtopoOwned's order)
   const records: CellRecord[] = out.map(({ id: _id, ...r }, i) => ({ ...r, rank: i }));
   const buf = encodeCell(
     { source: CellSource.BdTopo, z: BDTOPO_Z, x, y, generation, originLat: origin.lat, originLon: origin.lon },
@@ -161,6 +192,6 @@ export function prepareBdtopoCell(
     buf,
     records,
     generation,
-    stats: { features: feats.length, polygons, kept: records.length, partial, ms: performance.now() - t0 },
+    stats: { features, polygons, kept: records.length, partial, ms: performance.now() - t0 },
   };
 }

@@ -64,23 +64,20 @@ import {
   surfaceContains,
 } from "./scenery-geometry";
 import { buildingMesh } from "./roof-mesh";
+import { buildingLeaves, partMeshes, STACK_BYTES } from "./building-mesh-prep";
 import { builtUp, LAMP_CLASSES, LAMP_MAX, LAMP_REACH_M, lampLight, lampMesh, lampsAlong, type StreetLamp } from "./streetlamps";
 import {
-  osmColour,
   partyEdges,
   planBuilding,
-  stacksOf,
   type RoofInput,
   type RoofPart,
   type Pt,
   regionOf,
-  roofColour,
   overtureRoofMaterial,
   overtureShape,
   overtureWallMaterial,
   RoofMaterial,
   roofMaterial,
-  wallColour,
   WallMaterial,
   wallMaterial,
 } from "./roofs";
@@ -89,11 +86,6 @@ import {
   BUILDING_MESH_M,
   IGN_GATE_SW,
   BUILDING_PARTS_M,
-  buildingPacked,
-  isWorkUsage,
-  markedCoord,
-  orientedBox,
-  PARAPET_M,
   D,
   localPoint,
   packScenery,
@@ -1334,9 +1326,7 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
   // (in two passes within the budget: every building first as one leaf — a complex outline's roof flat —, the nearest
   // first until the budget is spent: the count as before; then the nearer ones' detail — their outlines cut into convex
   // parts each with its roof, their triangles for the shadow map — nearest first, while it fits)
-  // (a terrace — a building flat whole, not a shed nor a hut —: its parapet round its roof)
-  const parapetOf = (v: Choice, plans: RoofPart[]) =>
-    plans.length === 1 && plans[0]!.shape === "flat" && !v.a.light && v.a.usage !== "Annexe" && plans[0]!.wall > 4;
+  // (a terrace's parapet, its leaves, its meshes: building-mesh-prep.ts — the cells' worker makes the same, J8-8)
   type Planned = {
     i: number;
     base: number;
@@ -1458,10 +1448,7 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
         bottom = b.base + v.low - 1;
       const plans = near < BUILDING_PARTS_M ? plansOf(b.input, 24, v.geo) : b.plans;
       const bytes = leafBytes(plans);
-      const mesh =
-        near < BUILDING_MESH_M && meshBytes < meshBudget
-          ? plans.map((p) => buildingMesh(p.rings, bottom, floor, p.planes, parapetOf(v, plans) ? PARAPET_M : 0))
-          : [];
+      const mesh = near < BUILDING_MESH_M && meshBytes < meshBudget ? partMeshes(v.a, plans, bottom, floor) : [];
       const mb = mesh.reduce((t, m) => t + m.positions.length * 4 + (m.triangles.length / 3) * 12, 0);
       if (storedBytes + bytes - b.bytes + mb > room4) continue;
       storedBytes += bytes - b.bytes + mb;
@@ -1480,92 +1467,26 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
       m = planCacheStats.misses - planMisses0;
     phases["roofs kept %"] = h + m ? Math.round((100 * h) / (h + m)) : 0;
   }
-  // (the chimneys' brick, weathered; their count)
-  const stackColour = wallColour(WallMaterial.Brick, region, 0.7);
+  // (the chimneys near the camera — B9 —, within the budget)
   let stacks = 0;
   for (const b of planned) {
     const v = choices[b.i]!;
-    const a = v.a;
-    const floor = b.base + v.low,
-      bottom = b.base + v.low - 1;
-    const wall = osmColour(a.colour) ?? wallColour(a.wallMat, region, b.seed);
-    const roof = osmColour(a.roofColour) ?? roofColour(b.plans[0]!.roofMat, region, (b.seed * 7.31) % 1);
-    for (const [k, plan] of b.plans.entries()) {
-      const edges: number[] = [];
-      let minX = Infinity,
-        minY = Infinity,
-        maxX = -Infinity,
-        maxY = -Infinity;
-      for (const [r, ring] of plan.rings.entries())
-        for (let j = 0; j < ring.length; j++) {
-          const p = ring[j]!,
-            n = ring[(j + 1) % ring.length]!;
-          // (its x's last bit: a blind side — a party wall, a cut inside the building —, no window drawn on it: Q3)
-          edges.push(markedCoord(p[0], r === 0 && !!plan.blind?.[j]), p[1], n[0], n[1]);
-          minX = Math.min(minX, p[0]);
-          maxX = Math.max(maxX, p[0]);
-          minY = Math.min(minY, p[1]);
-          maxY = Math.max(maxY, p[1]);
-        }
-      const mesh = b.mesh[k];
-      const lip = parapetOf(v, b.plans) ? PARAPET_M : 0;
-      prims.push({
-        min: [minX, minY, bottom],
-        max: [maxX, maxY, floor + plan.top + lip],
-        data: [
-          bottom,
-          floor + plan.top + lip,
-          edges.length / 4,
-          1,
-          // (its footprint's oriented box — the raster's solid box for it without triangles: orientedBox)
-          ...orientedBox(edges),
-          ...wall,
-          buildingPacked(plan.roofMat, a.wallMat, plan.storeys, plan.planes.length, plan.shape, !!mesh, lip > 0, isWorkUsage(a.usage)),
-          ...edges,
-          ...roof,
-          floor + plan.wall,
-          ...plan.planes.flatMap(([pa, pb, pc]) => [pa, pb, pc + floor, 0]),
-        ],
-        mesh,
-      });
-      shapes[plan.shape] = (shapes[plan.shape] ?? 0) + 1;
-      vertices += edges.length / 4;
-      if (mesh) meshed++;
-      // (its chimneys near the camera — B9 —: a leaf a stack, its render's or brick's colour, no window)
-      if (v.d < STACKS_M && storedBytes + 400 < room4)
-        for (const st of stacksOf(plan, (b.seed * 13.7 + k * 0.31) % 1, plan.shape === "mansard")) {
-          const se: number[] = [];
-          for (let j = 0; j < 4; j++)
-            se.push(markedCoord(st.ring[j]![0], false), st.ring[j]![1], st.ring[(j + 1) % 4]![0], st.ring[(j + 1) % 4]![1]);
-          const xs = st.ring.map((p) => p[0]),
-            ys = st.ring.map((p) => p[1]);
-          const sb = floor + plan.top - 1.5;
-          prims.push({
-            min: [Math.min(...xs), Math.min(...ys), sb],
-            max: [Math.max(...xs), Math.max(...ys), floor + st.top],
-            data: [
-              sb,
-              floor + st.top,
-              4,
-              1,
-              ...orientedBox(se),
-              ...stackColour,
-              buildingPacked(RoofMaterial.Concrete, WallMaterial.Brick, 1, 1, "stack", false),
-              ...se,
-              0.12,
-              0.11,
-              0.1,
-              floor + st.top,
-              0,
-              0,
-              floor + st.top,
-              0,
-            ],
-          });
-          storedBytes += 112 + 64 + 32;
-          stacks++;
-        }
-    }
+    const leaves = buildingLeaves({
+      plans: b.plans,
+      a: v.a,
+      region,
+      seed: b.seed,
+      floor: b.base + v.low,
+      bottom: b.base + v.low - 1,
+      mesh: b.mesh,
+      stacks: () => v.d < STACKS_M && storedBytes + 400 < room4,
+      onStack: () => void (storedBytes += STACK_BYTES),
+    });
+    for (const p of leaves.prims) prims.push(p);
+    for (const plan of b.plans) shapes[plan.shape] = (shapes[plan.shape] ?? 0) + 1;
+    vertices += leaves.vertices;
+    meshed += leaves.meshed;
+    stacks += leaves.stacks;
     buildings++;
   }
   // (Q3 B4: the map's surfaces drawn once for the raster's ground — a texel read a pixel, not the surfaces' tree walked)

@@ -63,10 +63,13 @@ import type { GameMode, ModeState } from "./game/modes";
 import { DeckPicker } from "./a320/deckpick";
 import { fieldByCode } from "./world/runways";
 import { approachesForAsync } from "./world/approaches";
-import { cellPool, streetPool, streetPoolMade } from "./system/cell-workers";
+import { cellPool, meshPool, meshPoolMade, streetPool, streetPoolMade } from "./system/cell-workers";
 import { CELL_CACHE, type CellWant } from "./system/cell-pool";
 import { tilesWithin } from "./system/ign-canopy";
 import { STREET_CACHE } from "./system/street-cells";
+import { MESH_NEAR_M } from "./system/building-cells";
+import { inBdtopoBox } from "./system/bdtopo";
+import { MESH_CACHE, readMeshHeader } from "./system/mesh-cells";
 import { corridorDistance, ZONE_FAR_REACH_M, ZONE_STREET_REACH_M } from "./system/zones";
 
 /** the A320 deck's picker (a320DeckAt: the controls seen from the seat) */
@@ -721,6 +724,9 @@ export function installBh(c: BhContext) {
           if (p.queued || p.running || p.beyond) why.push(`cells: ${p.queued} queued, ${p.running} running, ${p.beyond} past the bound`);
           // (the streets' cells — J8-L —, when asked)
           const st = streetPoolMade()?.stats();
+          const mp = meshPoolMade()?.stats();
+          if (mp && (mp.queued || mp.running || mp.beyond))
+            why.push(`mesh cells: ${mp.queued} queued, ${mp.running} running, ${mp.beyond} past the bound`);
           if (st && (st.queued || st.running || st.beyond))
             why.push(`street cells: ${st.queued} queued, ${st.running} running, ${st.beyond} past the bound`);
           const far = renderer.farBuildingsOn
@@ -729,8 +735,9 @@ export function installBh(c: BhContext) {
           if (far?.missing) why.push(`far layer: ${far.missing} wanted cells not resident`);
           // (a track — J8-A: the flight's points —: what the whole flight will ask, not only the view at the start — a ready zone whose
           // corridor covers every point, its building and street cells prepared; and every far cell within the far layer's reach of the
-          // track, every street cell within the lamps', in the prepared caches)
-          let track: { zone: string | null; farMissing: number; streetMissing: number } | null = null;
+          // track, every street cell within the lamps', in the prepared caches; J8-8: every mesh cell within MESH_NEAR_M of it — the BD
+          // TOPO's, in the IGN's box: elsewhere its meshes are a later step)
+          let track: { zone: string | null; farMissing: number; streetMissing: number; meshMissing: number } | null = null;
           if (o?.track?.points.length) {
             const pts = o.track.points.map((q) => [q[0], q[1]] as [number, number]);
             const zones = (await c.pwa.zones?.list()) ?? [];
@@ -744,6 +751,7 @@ export function installBh(c: BhContext) {
             else {
               if (!zone.cells) why.push("the zone's building cells not prepared");
               if (!zone.streets) why.push("the zone's street cells not prepared");
+              if (!zone.meshes) why.push("the zone's mesh cells not prepared");
             }
             // (the track sampled every 2 km: the cells within reach of each)
             const samples: [number, number][] = [];
@@ -777,11 +785,26 @@ export function installBh(c: BhContext) {
             };
             const farHave = await have(CELL_CACHE),
               streetHave = await have(STREET_CACHE);
+            // (a mesh cell's key: …/x/y.kmc?g=…&c=… — its generation and canopy in the query)
+            const meshHave = new Set<string>();
+            try {
+              for (const r of await (await caches.open(MESH_CACHE)).keys()) {
+                const m = /\/(\d+)\/(\d+)\.kmc/.exec(new URL(r.url).pathname);
+                if (m) meshHave.add(`${m[1]}/${m[2]}`);
+              }
+            } catch {
+              /* no Cache Storage: none */
+            }
+            const meshMissing = [...wanted(MESH_NEAR_M)].filter((k) => {
+              const [x, y] = k.split("/").map(Number) as [number, number];
+              return inBdtopoBox(x, y) && !meshHave.has(k);
+            }).length;
+            if (meshMissing) why.push(`${meshMissing} mesh cells within ${MESH_NEAR_M} m of the track not prepared`);
             const farMissing = [...wanted(ZONE_FAR_REACH_M)].filter((k) => !farHave.has(k)).length;
             const streetMissing = [...wanted(ZONE_STREET_REACH_M)].filter((k) => !streetHave.has(k)).length;
             if (farMissing) why.push(`${farMissing} far cells within reach of the track not prepared`);
             if (streetMissing) why.push(`${streetMissing} street cells within reach of the track not prepared`);
-            track = { zone: zone?.id ?? null, farMissing, streetMissing };
+            track = { zone: zone?.id ?? null, farMissing, streetMissing, meshMissing };
           }
           return { ready: why.length === 0, why, cells: p, far, track };
         },
@@ -797,6 +820,36 @@ export function installBh(c: BhContext) {
               p.listen((c) =>
                 got.set(`${c.x}/${c.y}`, { bytes: c.buf.byteLength, cached: c.cached, ms: Math.round(c.ms), at: performance.now() }),
               );
+            }
+            return p;
+          };
+          return {
+            want: (l: CellWant[]) => P().want(l),
+            stats: () => P().stats(),
+            got: () => [...got].map(([key, v]) => ({ key, ...v })),
+            clear: () => got.clear(),
+          };
+        })(),
+        /** PLAN-J8 J8-8: the near meshes' cells' pool (mesh-cells.ts, kerr-mesh-v1), as `streets`: `want(list)`, `stats()`, `got()`
+         *  (key, bytes, buildings, triangles, from the prepared cache, ms), `clear()` */
+        meshes: (() => {
+          const got = new Map<string, { bytes: number; buildings: number; triangles: number; cached: boolean; ms: number; at: number }>();
+          let on = false;
+          const P = () => {
+            const p = meshPool();
+            if (!on) {
+              on = true;
+              p.listen((c) => {
+                const h = readMeshHeader(c.buf);
+                got.set(`${c.x}/${c.y}`, {
+                  bytes: c.buf.byteLength,
+                  buildings: h?.buildings ?? 0,
+                  triangles: h?.triangles ?? 0,
+                  cached: c.cached,
+                  ms: Math.round(c.ms),
+                  at: performance.now(),
+                });
+              });
             }
             return p;
           };

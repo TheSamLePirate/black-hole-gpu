@@ -44,6 +44,9 @@ import type { RoofMaterial, RoofShape, WallMaterial } from "./roofs";
 
 /** the cells' level: the BD TOPO's tiles (≈ 0.9 km a side at 43° N) */
 export const CELL_Z = 15;
+/** PLAN-J8 J8-8: the near meshes' reach from the track [m] — the cells within it prepared whole (mesh-cells.ts, kerr-mesh-v1), counted in
+ *  the zones and in `flightReady({ track })`; past it, the far layer (agreed by the render and approaches' sessions, 17 Nov 2026) */
+export const MESH_NEAR_M = 1500;
 /** the records' format: a cache keyed by it — a new one is never read as an old one */
 export const CELL_FORMAT = 1;
 export const CELL_MAGIC = 0x3143424b; // "KBC1"
