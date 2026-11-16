@@ -9676,3 +9676,11 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   - GPU p50 60,2 ms, p95 89,4 ms ;
   - **3 821 images de scène rapide et 10 558 requêtes en vol**. `flightReady` ne couvre que le départ.
 - Suite : la zone couloir de cette nuit (session des approches), J8-5 et J8-8 (aucune scène rapide en vol), et un compte des données arrivées en vol plutôt que des requêtes.
+
+### 2026-11-16 19:05 UTC — PLAN-J8 : décision de Sam, la réserve lointaine à 72 Mio (session d'analyse)
+
+- **Contribution à la destination :** PLAN-J8 J8-4 et J8-A, tout Paris dans la vue.
+- **Réalisé :** Sam décide « ok 72 », sur la mesure de la session du rendu. Tout Paris coûte +1,9 ms sur le M1 Max froid et +3,7 ms sur le mini ; à 64 Mio, 9 cellules restent refusées. Plan §6 point 10. Relayé à la session du rendu.
+- **Preuves :** documenté. Les chiffres viennent de la session du rendu (e2e10bf1, c59c981f) : témoins passés sur le M1 Max, un seul passage sur le mini. Aucun test lancé ici.
+- **Limites / transitions restantes :** le coût sur le mini dépasse le seuil de 3 ms, et Sam l'accepte. De nuit, un gris uniforme reste à la place des points lumineux jusqu'au dessin de J8-L. Un éclat blanc d'environ 30 s suit un saut d'heure.
+- **Suite :** la session du rendu fait J8-5, puis le dessin de J8-L. Cette nuit, la zone Paris tourne sur le mini (22:00–02:15 UTC au plus).

@@ -213,6 +213,14 @@ J8-R. J8-1 se voit tout de suite. J8-4 apporte le gros du gain : « toute la vue
    - **J8-VB** est porté par la session des approches : VB0 et VB1 tout de suite. Les lots de dessin se conviennent
      fichier par fichier avec la session du rendu.
    - **La question 8 n'a pas de réponse** : la règle provisoire (le cumul, 1 ms sur le mini) s'applique.
+10. **Décidé par Sam le 16 nov. (~19:00 UTC, « ok 72 ») : la réserve de la couche lointaine passe à 72 Mio.** Avec cette
+    réserve, tout Paris est résident (1 947 cellules, 1,12 M bâtiments) et le bord sur le relief bâti disparaît.
+    - **Mesuré** (fiche de la session du rendu, e2e10bf1, c59c981f) : tout Paris coûte +1,9 ms sur le M1 Max froid
+      (témoins passés) et +3,7 ms sur le mini, un passage.
+    - **Pourquoi pas 64 Mio** : avec l'allocation par blocs, 9 cellules y restent refusées.
+    - **Garde-fou au-delà** : le remplissage des plus proches d'abord.
+    - Sam accepte ce coût, au-dessus du seuil de 3 ms sur le mini.
+    - **La nuit est corrigée** (c59c981f) : les bâtiments lointains portent la lueur de leur ville.
 
 ## 7. Ce qui reste hors de ce plan
 
