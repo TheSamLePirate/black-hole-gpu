@@ -3,6 +3,15 @@
 Problèmes constatés, pas encore réglés. Chaque entrée : la date (UTC), ce qui est mesuré ou observé et sa source, la cause
 connue ou supposée, la piste. Une entrée réglée est barrée avec le commit qui la règle, pas effacée.
 
+## Les ombres du décor à Paris : `earth-scenery` les juge « plus d'éclaircis que d'assombris » (relevé le 16 novembre 2026, J8-T)
+
+**État (16 nov. 2026, 14:11 UTC)** : relevé par la session des approches, non étudié. C'est le domaine du rendu (les ombres du décor).
+Depuis que le cache disque des e2e (J8-T) laisse `earth-scenery` atteindre sa vérification d'ombre à Paris (elle n'y arrivait jamais à
+temps sur le réseau, 120 s), la comparaison avec et sans les ombres du décor échoue de peu, deux fois de suite. Le test veut plus de
+pixels assombris (seuil de luminance de 4) que d'éclaircis dans la zone centrale ; il a obtenu 905 contre 921, puis 948 contre 1 007.
+L'écart vient peut-être de l'image qui s'affine entre les deux captures, plutôt que des ombres elles-mêmes : à vérifier, l'image gelée
+et convergée. Non lié au cache : les données sont les mêmes, seule l'attente change. En attente derrière PLAN-J8.
+
 ## ~~Un appareil qui roule glisse de côté par rapport à la Terre, 0,2–0,4 m/s, loin de 2067~~ (relevé le 16 novembre 2026, e2e `takeoff-axis`) — réglé le même jour dans `controller/motion.ts` ; deux autres intégrateurs à revoir
 
 - **Constaté** (ce Mac) : à Edwards, le 10 juillet 2026, l'A320 au décollage, cap dans l'axe à 0,09°, finit 8,2 m à droite de l'axe à VR
