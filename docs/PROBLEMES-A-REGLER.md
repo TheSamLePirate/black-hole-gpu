@@ -54,6 +54,13 @@ les réglages de J0 (`free-camera-hold` `FCH_J0=1` : la caméra tient ; avec `sh
 `geoNow()` sans appareil oscille de −730 à +306 m sous la caméra tenue (la vue, elle, ne bouge pas : `surfaceAt` constant) — à
 comprendre, peut-être le même désaccord d'horloge. **Prêt** : un enregistreur image par image (`J8J_RUN` : la place de la caméra,
 `held()`, l'horloge ; les images autour d'une perte écrites au journal) — à lancer sur kerr-mini après la zone de Paris (02:15 UTC).
+**Suite (~22:30 UTC, ce Mac, hors ligne)** : le rig de la caméra libre (`controller/rig.ts`) suivi image par image — 11 281 images
+le monde tournant, deux scènes refaites : **aucun recalage** (`rig.key` stable, « free|moon|earth »), le décalage au centre de la Terre
+constant au mètre (6 368,539 km) ; le corps le plus proche toujours la Terre (le Ranger d'Artemis à ~2,6 milliards de km ; au démarrage,
+avant `viewAt`, le rig le suivait à ~200 m — il bascule bien sur la Terre). **L'oscillation de `geoNow()` expliquée** : `ourNav` lit la
+caméra à l'heure courante, le rig la place pour la fin de l'image — une image de mouvement de la Terre (30 km/s × 20–60 ms), un
+artefact de lecture entre deux images, pas un déplacement (le décalage du rig, lui, ne bouge pas). L'enregistreur de `J8J_RUN`
+porte désormais le rig (clé, corps, décalage) et le corps le plus proche : la prochaine perte sur le mini dira lequel change.
 
 
 

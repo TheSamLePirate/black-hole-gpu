@@ -35,13 +35,19 @@ test.skipIf(!E2E)(
       await app.js(`(() => { Object.assign(__bh.settings, ${J0_FIXED}, { ship: false, earthClouds: 0, weather: "fair", dof: false, motionBlur: 0,
         earthPipeline: "raster" }); __bh.renderer.debugSkipShip = true; __bh.renderer.farBuildingsOn = true; __bh.game.setDate("${J0_SCENE.date}");
         return 1; })()`);
-      // (J8J_RUN: a recorder each frame — the camera's place, what holds the step, the clock: the frames round its loss kept)
+      // (J8J_RUN: a recorder each frame — the camera's place, what holds the step, the clock, the free camera's rig (its key, body, offset
+      // from the body's centre): the frames round a loss, a re-key or a jump of the offset over 1 km kept)
       if (process.env.J8J_RUN)
         await app.js(`(() => { const ring = []; window.__j8jLost = [];
           const tick = () => { const g = __bh.camera.geoNow?.(), f = { ms: Math.round(performance.now()), held: __bh.held?.() ?? null,
-              now: __bh.game.now?.() ?? null, g: g && [+g.lat.toFixed(4), +g.lon.toFixed(4), Math.round(g.alt)], scene: __bh.renderer.earthScenery.stats().status };
+              now: __bh.game.now?.() ?? null, g: g && [+g.lat.toFixed(4), +g.lon.toFixed(4), Math.round(g.alt)], scene: __bh.renderer.earthScenery.stats().status,
+              rig: { key: __bh.camera.rig.key, ref: __bh.camera.rig.ref, on: __bh.camera.rig.on, offKm: +(Math.hypot(...__bh.camera.rig.off) * 1.476625 * __bh.settings.massSolar).toFixed(3) }, near: (() => {
+                const C = __bh.camera, w = C.rigWorld(), t = C.nowTime(), mR = 1476.625 * __bh.settings.massSolar; if (!w) return null;
+                const n = C.rigNearest(w.ours, w.X, t), rb = C.rigBody(__bh.fleet.active, w.ours, t);
+                return { id: n?.id ?? null, d: n ? +((Math.hypot(...n.C.map((c, i) => w.X[i] - c)) - n.R) / n.R).toExponential(2) : null,
+                  craftKm: rb ? +(Math.hypot(...rb.C.map((c, i) => w.X[i] - c)) * mR / 1000).toFixed(3) : null }; })() };
             const p = ring[ring.length - 1];
-            if (p && ((p.g && !f.g) || (p.g && f.g && Math.abs(p.g[2] - f.g[2]) > 3000))) window.__j8jLost.push({ before: ring.slice(-6), at: f });
+            if (p && ((p.g && !f.g) || (p.g && f.g && Math.abs(p.g[2] - f.g[2]) > 3000) || p.rig.key !== f.rig.key || p.near?.id !== f.near?.id || Math.abs(p.rig.offKm - f.rig.offKm) > 1)) window.__j8jLost.push({ before: ring.slice(-6), at: f });
             ring.push(f); if (ring.length > 12) ring.shift(); requestAnimationFrame(tick); };
           requestAnimationFrame(tick); return 1; })()`);
       // (J8J_STALL ms: the main thread blocked that long every 2 s — a slower machine's hitches, kerr-mini's)
