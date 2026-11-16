@@ -16312,7 +16312,9 @@ fn liteLight(gq: vec3f, q: vec3f, tM: f32, fx: vec3f, fy: vec3f, hG: f32, look: 
   let lights = m.lights;
   let lamp = max(lights - 0.07, 0.0) / 0.93;
   let dark = 1.0 - smoothstep(-0.12, 0.06, mu0g);
-  var lit = select(dark, 0.0, isTree || mesh);
+  // (PLAN-J8 J8-A: a far building — the far layer's, marked — carries its town's light: it stands where the ground's glow was, its
+  // windows and its street's light one at that distance; dark, it hid the city's lights — Paris at night, 16 Nov 2026)
+  var lit = select(dark, 0.0, isTree || (mesh && !atFar(at)));
   // (near — the scenery's box —: the streets carry the light, their lamps along them — OpenStreetMap's roads at the point:
   // ×3 on a road, ×0.15 off it, a quarter of a town's ground road: the quarter's light about the same, drawn along its
   // streets, not the map's 500 m wash — the night only, a lit town only)

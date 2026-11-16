@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-16 18:30 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-16 18:36 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous. Ce qui est fermé quitte le tableau « En cours » pour la ligne « Fermé récemment ».
@@ -63,7 +63,7 @@ l'état d'une mission ou d'un combat **non sauvé, dit** ; le réseau **« entre
 
 **Fermé aussi** : le plancher du raster sur GPU faible (15 nov., 23:46, proposer sous 15 images/s, décision de Sam).
 
-**La session du rendu (33d89754)** : **[PLAN-J8](docs/PLAN-J8-BATIMENTS.md)** — **J8-4 allumée par défaut, ses matériaux rallumés** (les carrés blancs de nuit : un transitoire après un saut d'heure) ; **Paris** : « ok 3 + mesure 2 » (Sam) — 96 Mio tient tout Paris pour +3,7 ms contre +3,5 (mini), M1 Max à refaire froid, de nuit la couche masque les lumières de la ville (à régler) ; **J8-5** : la jonction s'applique (proposition 1 km, à choisir par Sam), un blocage intermittent ouvert ; **J8-E fait** ; **J8-A** : les tracés `j8a-tracks.ts`. [PLAN-J7](docs/PLAN-J7-FLUIDITE.md) en pause.
+**La session du rendu (33d89754)** : **[PLAN-J8](docs/PLAN-J8-BATIMENTS.md)** — **J8-4 allumée par défaut, ses matériaux rallumés** ; **Paris** (« ok 3 + mesure 2 ») : tout Paris résident pour +3,7 ms (mini) et **+1,9 ms (M1 Max froid)**, 64–72 Mio proposés à Sam ; la nuit de la couche corrigée (la lueur de la ville sur les bâtiments lointains) ; **J8-5** : la jonction s'applique (proposition 1 km, à choisir par Sam), un blocage intermittent ouvert ; **J8-E fait** ; **J8-A** : les tracés `j8a-tracks.ts`. [PLAN-J7](docs/PLAN-J7-FLUIDITE.md) en pause.
 
 **Priorité de Sam (16 nov., 11:30 UTC) : [PLAN-J8](docs/PLAN-J8-BATIMENTS.md), tous les bâtiments de la vue** (« c'est ça qui choque le plus ») — la suite de J7 en pause après J7-8b ; les deux sessions s'y mettent (rendu : couche GPU, scène proche ; approches : recensement, préparation des cellules, PWA) ; d'abord J8-0 (mesures) et J8-1 (le trou de 2 à 7 km).
 
@@ -9625,3 +9625,17 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   - **de nuit, la couche masque les lumières de la ville cuites au sol**, et les cellules résidentes deviennent des silhouettes sombres. À régler : les fenêtres lointaines, et J8-L.
 - Format 2 de la cellule « rue » (KSC2) convenu avec la session des approches : simplification à 0,3 m, sentiers inclus, places dans une section de la même cellule.
 - Suite : la mesure 2 sur le M1 Max froid (avant 22:00 UTC), les captures montrées à Sam pour qu'il tranche, puis la nuit de la couche.
+
+### 2026-11-16 18:36 UTC — PLAN-J8 : la mesure 2 sur le M1 Max froid (+1,9 ms), la nuit de la couche lointaine corrigée (session 33d89754)
+
+- Destination : §19.13 (J8-A, Paris jour et nuit), §8 (borne et machines).
+- **Mesure 2 sur le M1 Max froid** (ce Mac, état « Nominal » avant et après, `j8-far-layer` Paris à 12 km, 96 Mio, un run) :
+  - tout Paris résident ;
+  - GPU 19,1 → 21,1 / 20,8 ms, soit **+1,9 ms** ;
+  - témoin positif : boîtes seules 22,6 ms, quads 4 px 22,3 ms ;
+  - témoin négatif (A/A) : 0,3 ms.
+  - Sur kerr-mini : +3,7 ms à 96 Mio. À 64 Mio, 1 938 cellules sur 1 947 : il faut ~72 Mio pour tout Paris.
+- **Nuit** : un bâtiment lointain marqué porte maintenant la lueur de sa ville (`liteLight`). Avant, la couche masquait les lumières cuites au sol.
+  - Paris de nuit, luminance moyenne de la bande : 25,9 avec la couche, 27,0 sans.
+  - Il reste un gris uniforme là où le sol avait des points de lumière : les lampadaires de J8-L.
+- Suite : la décision de Sam sur la réserve (64 ou ~72 Mio, proposés) ; la jonction ; l'e2e J8-A sur les tracés, après la zone de cette nuit.
