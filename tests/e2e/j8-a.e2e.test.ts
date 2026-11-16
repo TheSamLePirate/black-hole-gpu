@@ -16,6 +16,7 @@ import { J0_FIXED } from "./lib/j0-scene";
 // the buildings drawn (the near scene's, the far layer's boxes and quads); a cockpit shot at each point, a view from outside at the end.
 // Not yet a pass/fail on « no request, no quick scene » (J8A_STRICT: asserted) — J8-5 and J8-8 still to finish; it fails on the
 // flight itself (rule 13), a GPU error or the device lost. j8-a.json.
+// J8A_NEAR [m, default 0]: the near scene / far layer junction (renderer.farNearOnlyM — J8-5, Sam's choice pending).
 // J8A_BUDGET [MiB, default 72]: the far layer's pool (renderer.farBudgetMiB — all Paris resident; Sam's decision pending).
 // Duration: ~16 min on kerr-mini (two tracks, day and night, ~3 min of flight each, the preload from the disk).
 // Done when: every track flown by day and by night, j8-a.json written.
@@ -48,7 +49,8 @@ test.skipIf(!E2E)(
       // (the far layer's pool for the whole of Paris — 24 MiB holds a quarter of it, never « all loaded »: ~72 MiB proposed to Sam, his
       // decision pending; J8A_BUDGET [MiB])
       await app.js(`(() => { Object.assign(__bh.settings, ${J0_FIXED}); Object.assign(__bh.settings, { dof: false, motionBlur: 0, damage: false });
-        __bh.renderer.farBudgetMiB = ${Number(process.env.J8A_BUDGET ?? 72)}; return 1; })()`);
+        __bh.renderer.farBudgetMiB = ${Number(process.env.J8A_BUDGET ?? 72)};
+        __bh.renderer.farNearOnlyM = ${Number(process.env.J8A_NEAR ?? 0)}; return 1; })()`);
       await app.waitFor(`__bh.fleet.active === "f35"`, 60_000);
       for (const t of TRACKS) {
         for (const hour of HOURS) {
