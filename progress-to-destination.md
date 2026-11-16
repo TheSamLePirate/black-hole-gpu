@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-16 19:35 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-16 18:52 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous. Ce qui est fermé quitte le tableau « En cours » pour la ligne « Fermé récemment ».
@@ -63,7 +63,7 @@ l'état d'une mission ou d'un combat **non sauvé, dit** ; le réseau **« entre
 
 **Fermé aussi** : le plancher du raster sur GPU faible (15 nov., 23:46, proposer sous 15 images/s, décision de Sam).
 
-**La session du rendu (33d89754)** : **[PLAN-J8](docs/PLAN-J8-BATIMENTS.md)** — **J8-4 allumée par défaut, ses matériaux rallumés** ; **Paris** (« ok 3 + mesure 2 ») : tout Paris résident pour +3,7 ms (mini) et **+1,9 ms (M1 Max froid)**, 64–72 Mio proposés à Sam ; la nuit de la couche corrigée (la lueur de la ville sur les bâtiments lointains) ; **J8-5** : la jonction s'applique (proposition 1 km, à choisir par Sam), un blocage intermittent ouvert ; **J8-E fait** ; **J8-A** : les tracés `j8a-tracks.ts`. [PLAN-J7](docs/PLAN-J7-FLUIDITE.md) en pause.
+**La session du rendu (33d89754)** : **[PLAN-J8](docs/PLAN-J8-BATIMENTS.md)** — **J8-4 allumée par défaut, ses matériaux rallumés** ; **Paris** (« ok 3 + mesure 2 ») : tout Paris résident pour +3,7 ms (mini) et **+1,9 ms (M1 Max froid)**, 64–72 Mio proposés à Sam ; la nuit de la couche corrigée (la lueur de la ville sur les bâtiments lointains) ; **J8-5** : la jonction s'applique (proposition 1 km, à choisir par Sam), un blocage intermittent ouvert ; **J8-E fait** ; **J8-A** : les tracés `j8a-tracks.ts`, l'e2e écrit et un premier vol sur Paris (prêt en 36 s ; 3 821 images de scène rapide et 10 558 requêtes en vol : le couloir à précharger). [PLAN-J7](docs/PLAN-J7-FLUIDITE.md) en pause.
 
 **Priorité de Sam (16 nov., 11:30 UTC) : [PLAN-J8](docs/PLAN-J8-BATIMENTS.md), tous les bâtiments de la vue** (« c'est ça qui choque le plus ») — la suite de J7 en pause après J7-8b ; les deux sessions s'y mettent (rendu : couche GPU, scène proche ; approches : recensement, préparation des cellules, PWA) ; d'abord J8-0 (mesures) et J8-1 (le trou de 2 à 7 km).
 
@@ -9663,3 +9663,16 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   - la végétation et les passages piétons ne sont dans aucune des deux sources : ils ne sont pas exclus, et rien n'est simulé ;
   - la vraisemblance des places n'est pas vue en image.
 - Suite : à 23 h, `j8-zone-paris` sur le mini, puis J8-9 (3).
+
+### 2026-11-16 18:52 UTC — PLAN-J8 J8-A : l'e2e de la démonstration écrit, un premier vol sur Paris (session 33d89754)
+
+- Destination : §19.13 (J8-A, la démonstration de PLAN-J8).
+- **Fait** : `tests/e2e/j8-a.e2e.test.ts`, sur les tracés partagés (`j8a-tracks.ts`).
+  - Le F-35 est mis en l'air au-dessus du premier point, monde gelé jusqu'à `flightReady()`.
+  - Il vole ensuite au pilote automatique de point en point, de jour et de nuit, la règle 13 vérifiée à chaque étape.
+  - La réserve de la couche est à 72 Mio, la proposition faite à Sam : à 24 Mio, le chargement n'aboutit jamais.
+- **Premier vol** (kerr-mini, Paris de jour) :
+  - prêt en 36 s, les 5 étapes volées ;
+  - GPU p50 60,2 ms, p95 89,4 ms ;
+  - **3 821 images de scène rapide et 10 558 requêtes en vol**. `flightReady` ne couvre que le départ.
+- Suite : la zone couloir de cette nuit (session des approches), J8-5 et J8-8 (aucune scène rapide en vol), et un compte des données arrivées en vol plutôt que des requêtes.
