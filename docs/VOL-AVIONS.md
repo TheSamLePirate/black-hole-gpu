@@ -151,8 +151,8 @@ Réglages utiles : `f35Assist` (`"manual"`, `"realistic"`, `"assisted"`, `"begin
 
 | Ce qu'on voit | Ce que c'est |
 |---|---|
-| Le **vecteur vitesse** (cercle à ailes) | là où va l'avion ; sur l'horizon = palier |
-| L'**échelle de pente** | barreaux tous les 5° (pleins au-dessus de l'horizon, tiretés en dessous) |
+| Le **vecteur vitesse** (cercle à ailes) | là où va l'avion ; sur l'horizon = palier (pas de trait d'horizon au HUD depuis le 16 nov. 2026 : à mi-chemin des barreaux +5 et −5, ou sur l'horizon réel) |
+| L'**échelle de pente** | barreaux tous les 5° (pleins au-dessus de l'horizon, tiretés en dessous) ; réglage « Échelle de tangage » (`hudHorizon`) |
 | La **bande de cap** en haut | le cap du nez (repère ambre), la route (vert), la cible, le point du plan de vol (magenta) |
 | La **vitesse** (encadrée, à gauche) et l'**altitude** (encadrée, à droite) | en m/s et m par défaut (Réglages › Jeu › Aides du HUD › Unités) ; dessous : Mach, **G** (ambre au-delà de 5,6, rouge au-delà de 6,65), **α** (ambre au-delà de 35°), la vitesse verticale, la **hauteur radar** sous 1 500 m |
 | Les **annonces** sous la bande de cap | les modes engagés : `ALT …`, `HDG …`, `A/T …`, `LNAV`, `VNAV`, `TF 150`, `ORBIT`… |

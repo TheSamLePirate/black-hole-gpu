@@ -1,5 +1,5 @@
 // The flight HUD's conformal symbology, drawn over the view (canvas.fl-hud, each frame): what is in the
-// world drawn where it is seen — the horizon and the pitch ladder about the local vertical, the heading
+// world drawn where it is seen — the pitch ladder about the local vertical (no horizon line: Sam, 16 Nov 2026), the heading
 // tape (the world's north), the bank scale, the orbital markers the view lacked (radial, normal),
 // and for what leaves the screen an arrow at its edge, pointing to it.
 //
@@ -397,7 +397,6 @@ export function drawSymbology(F: SymFrame) {
   const { ctx, W, H, dpr, s, i } = F;
   F.compact = W / dpr < 1000 || H / dpr < 560;
   const tanH = Math.tan((F.fov * D) / 2);
-  const asp = W / H;
   const fpx = H / (2 * tanH);
   /** a direction on the screen [px] (unclipped), or null behind the eye */
   const pr = (d: V3 | null | undefined): [number, number] | null => {
@@ -464,7 +463,7 @@ export function drawSymbology(F: SymFrame) {
   const S = i.S;
   const nose: V3 = [S[0]![2]!, S[1]![2]!, S[2]![2]!];
 
-  // ---- the horizon and the pitch ladder (about the local vertical)
+  // ---- the pitch ladder (about the local vertical; no horizon line — Sam, 16 Nov 2026)
   if (up && pilotView && s.hudHorizon && on(F, "horizon")) {
     // (the rungs centred on the view's own bearing — the ladder where the eye looks)
     let h0 = comb([0, 0, 1], 1, up, -up[2]);
@@ -476,15 +475,7 @@ export function drawSymbology(F: SymFrame) {
       // the view's elevation: the rungs within the screen and a little beyond
       const eView = Math.asin(Math.max(-1, Math.min(1, up[2])));
       const span = Math.atan(tanH) * 1.25;
-      // the horizon: long, across the screen
-      const hz: [number, number][] = [];
-      const aw = Math.atan(tanH * asp) * 1.4;
-      for (let k = -24; k <= 24; k++) {
-        const p = pr(at(0, (k / 24) * aw));
-        if (p) hz.push(p);
-      }
-      if (hz.length > 1)
-        stroke(() => hz.forEach((p, j) => (j ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1]))), `rgba(${LADDER}, 0.8)`, 1.6);
+      // (no horizon line across the screen — Sam, 16 Nov 2026: « inutile » —; the ladder's rungs and their ends' ticks say where it is)
       // the rungs every 5° (labelled every 10°): solid above, dashed below, their ends' ticks to the horizon
       const half = 95 * dpr,
         gap = 34 * dpr;

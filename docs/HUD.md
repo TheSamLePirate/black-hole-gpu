@@ -41,7 +41,7 @@ right from any mount); points (the future path, the runway, the docking gates) w
 
 | Aid | What |
 |---|---|
-| Horizon & pitch ladder | The local horizontal where it is; rungs every 5° (labelled every 10°), solid above, dashed below, their end ticks to the horizon, curved as the lens draws them; within a central field fading towards its rim; zenith and nadir. In orbit the local horizontal stands above the planet's limb by the horizon's dip (~20° at 400 km). |
+| Pitch ladder (setting `hudHorizon`) | No line across the screen for the horizon (removed 16 Nov 2026 — Sam: « inutile »); rungs every 5° (labelled every 10°), solid above, dashed below, their end ticks to the horizon, curved as the lens draws them; within a central field fading towards its rim; zenith and nadir. In orbit the local horizontal stands above the planet's limb by the horizon's dip (~20° at 400 km). |
 | Heading tape | At the top: the view's heading against the world's north (its spin axis), boxed; carets for the nose (amber), the track (green: through the air, or the orbit's) and the target (orange). |
 | Bank scale | Fixed to the craft, its pointer to the sky's up; red past 60°. |
 | Radial & normal | Radial out / in (cyan), normal / anti-normal (magenta) in the view as on the attitude ball. |

@@ -3614,9 +3614,9 @@ export const SCHEMA: ControlDef[] = [
     type: "toggle",
     section: "game",
     group: "HUD aids",
-    label: "Horizon & pitch ladder",
+    label: "Pitch ladder",
     effect: "none",
-    help: "Near a world: its horizon drawn in the view where it is, and a ladder every 5° above (solid) and below it (dashed) — how far the view and the nose are above or below it.",
+    help: "Near a world: a ladder every 5° above its horizon (solid) and below it (dashed), drawn in the view where it is — how far the view and the nose are above or below the horizon (no line across the screen for the horizon itself).",
     keywords: "hud horizon pitch ladder attitude conformal",
   },
   {

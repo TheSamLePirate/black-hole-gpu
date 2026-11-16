@@ -537,7 +537,7 @@ export interface Settings {
   soiRings: boolean; // the spheres of influence on the map
   pathInView: boolean; // the ship's future path drawn in the view (the cyan tube; the map keeps it)
   // the HUD's aids over the view (ui/hud/symbology.ts): each shown where it helps, each can be turned off
-  hudHorizon: boolean; // the horizon and the pitch ladder about the local vertical
+  hudHorizon: boolean; // the pitch ladder about the local vertical (no horizon line since 16 Nov 2026 — Sam)
   speedLines: number; // the speed felt (ui/speedfx.ts): the air's streaks past the eye, the edges darkened (0: none)
   gVignette: boolean; // a hard pull's grey-out (from 5 g, a tunnel at 9)
   hudKind: "auto" | "atmo" | "space" | "approach"; // the ship's HUD (game/hudkind.ts): chosen by the flight's phase, or forced

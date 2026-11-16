@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-16 10:04 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-16 10:06 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous. Ce qui est fermé quitte le tableau « En cours » pour la ligne « Fermé récemment ».
@@ -8736,3 +8736,15 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
 - Limites : pas rejoué en e2e (les parcours-* de la session du rendu le montreront) ; la capture de la leçon 3 d'apprendre-avions reste
   celle d'avant (l'alarme y sonne) — à refaire au prochain passage de son e2e ; le mode 4B (volets) n'est pas modélisé hors de l'A320.
 - Suite : la règle 13 peut asserter « aucune alarme de train hors approche » (`flightState` à compléter).
+
+### 2026-11-16 10:06 UTC — HUD : la ligne d'horizon retirée (demande de Sam ; session 1feb2f7f)
+
+- Contribution à la destination : §19 (la lisibilité des instruments) — Sam (16 nov., ~08:10 UTC) : « ne pas afficher la ligne d'horizon, elle
+  est inutile ».
+- Réalisé : `src/ui/hud/symbology.ts` — le long trait d'horizon d'un bord à l'autre retiré pour tous les styles ; l'échelle de tangage, ses
+  barreaux, leurs crochets, zénith et nadir gardés ; aucun réglage nouveau : `hudHorizon` garde son rôle, libellé « Pitch ladder » /
+  « Échelle de tangage » (`schema.ts`, `fr-settings.ts`, `settings.ts`). Docs : HUD.md, VOL-AVIONS partie I, apprendre-avions.html (le schéma
+  sans la ligne). Le PFD de l'A320 et l'horizon artificiel des instruments non touchés.
+- Preuves (observé, ce Mac) : hud-gallery avant (80cbeaf6) / après — la finale de Le Bourget au même instant : la ligne disparue, rien d'autre
+  déplacé ([captures](docs/progress/approches/) `hud-horizon-*`) ; e2e hud-layout 10/10 ; unitaires i18n, schéma 18/18.
+- Limites : VOL-VAISSEAUX et apprendre-vaisseaux ne décrivaient pas la ligne (la sphère de navigation est un instrument, inchangée).

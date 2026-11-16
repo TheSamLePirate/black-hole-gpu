@@ -1033,9 +1033,9 @@ export default {
   "Future path in the view": "Trajectoire future dans la vue",
   "The cyan tube of the ship's predicted path, drawn in the view (Y while flying). The map shows it either way.":
     "Le tube cyan de la trajectoire prédite du vaisseau, tracé dans la vue (Y en vol). La carte l'affiche dans tous les cas.",
-  "Horizon & pitch ladder": "Horizon et échelle de tangage",
-  "Near a world: its horizon drawn in the view where it is, and a ladder every 5° above (solid) and below it (dashed) — how far the view and the nose are above or below it.":
-    "Près d'un monde : son horizon tracé dans la vue là où il est, et un barreau tous les 5° au-dessus (plein) et en dessous (pointillé) — de combien la vue et le nez sont au-dessus ou au-dessous.",
+  "Pitch ladder": "Échelle de tangage",
+  "Near a world: a ladder every 5° above its horizon (solid) and below it (dashed), drawn in the view where it is — how far the view and the nose are above or below the horizon (no line across the screen for the horizon itself).":
+    "Près d'un monde : un barreau tous les 5° au-dessus de son horizon (plein) et en dessous (pointillé), tracé dans la vue là où il est — de combien la vue et le nez sont au-dessus ou au-dessous de l'horizon (sans trait en travers de l'écran pour l'horizon lui-même).",
   "HUD aids": "Aides HUD",
   "Heading tape": "Bande de cap",
   "Near a world: the compass bearing at the top of the view (its north); carets for the nose (amber), the track (green) and the target (orange).":
