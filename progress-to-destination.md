@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-16 14:40 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-16 14:48 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous. Ce qui est fermé quitte le tableau « En cours » pour la ligne « Fermé récemment ».
@@ -48,7 +48,7 @@ J4 (fermé, sortie non atteinte), J5 et J6 (fermés).
 | Rendu (33d89754) | J4 / J5 — l'eau, les volumes, la généralisation | **fermés** ([PLAN-J4](docs/PLAN-J4-VOLUMES.md), [PLAN-J5](docs/PLAN-J5-GENERALISATION.md)) : l'eau à demi-rythme (J5-5, −6,0 à −6,4 ms, l'image la même) ; le sol à demi-rythme laissé au joueur (J5-6, réglage « demi » : −1,9 à −3,2 ms ; « auto » à chaque pixel) ; la FFT de la mer en deux passes (−0,9 ms) ; la carte d'ombre des arbres (−2,8 ms, forêt) ; Sam a refusé les arbitrages d'image (MSAA 1×, petits arbres, nuages amortis). Postes lourds restants : l'eau 16,2, les nuages d'orage 16,5, le décor d'une forêt ~7 ms |
 | Rendu (33d89754) | Mesures tenues | la borne du M1 Max **à 30** : essayée à 40 le 15 au soir, non tenue (soutenu 26,4 et 34,5 images/s, deux runs — [J0-CONTRAT §2](docs/J0-CONTRAT.md)) ; le coût de l'appareil 3,5–4,5 ms, dont le MSAA 4× 4–5 ms (gardé) |
 | Audit vagues 3–4 et 6 (1feb2f7f) | [09-priorites-todo](docs/audit-2026-11-10/09-priorites-todo.md) | **faits** : 3.1–3.2 réseau (RD0–RD2), 3.3 sauvegardes (une clé par sauvegarde ; avion, systèmes des vaisseaux et de l'A320 — ce dernier par J6-4), 3.4–3.5 vol, 3.6–3.7 TARS, 3.10 e2e honnêtes, 4.2 temps et onglet masqué, 4.3 `Settings`/`ViewPose`, 4.8 `main()` découpé ; vague 6 hors rendu (QA, AR, RD4/RD5, FX). **Reste** : l'état d'une mission ou d'un combat (Sam), IndexedDB et l'autosauvegarde hors frame (AR-05), FX-19 (fraîcheur des écrans, à mesurer), FX-21 |
-| Vol, approches, e2e de vol (1feb2f7f) | E2E-VOLS règle 13 ; demandes de Sam du 16 nov. ; **PLAN-J8** | **fait le 16 nov.** : règle 13, bandeau et `app.scenario`, l'axe au décollage (horloge du vol), la piste du HUD, l'alarme du train, le débriefing, l'Auto-GCAS, la ligne d'horizon, les jonctions sur le sol dessiné ; **PLAN-J8** : J8-0 (a) fait, (b, d) Toulon faits ; **J8-T fait** (le cache disque des e2e activé par défaut ; J0 sur le mini : détail complet 107,7 → 57,6 s, GPU en vol inchangé, 49,4 contre 49,8 ms ; dossiers échangés par `earth-sync`) , Paris (b, d) depuis le disque faits (59,5 s dont 54 de calcul, 199 236 coupés) ; J8-3 cellule et réserve écrites ; **maintenant** : J8-3 (`j8-cells`), J8-6, J8-7 ; **en pause** : le contour HUD en virage, la règle 13 des autres domaines, la garde du bandeau (338 en attente) |
+| Vol, approches, e2e de vol (1feb2f7f) | E2E-VOLS règle 13 ; demandes de Sam du 16 nov. ; **PLAN-J8** | **fait le 16 nov.** : règle 13, bandeau et `app.scenario`, l'axe au décollage (horloge du vol), la piste du HUD, l'alarme du train, le débriefing, l'Auto-GCAS, la ligne d'horizon, les jonctions sur le sol dessiné ; **PLAN-J8** : J8-0 (a) fait, (b, d) Toulon faits ; **J8-T fait** (le cache disque des e2e activé par défaut ; J0 sur le mini : détail complet 107,7 → 57,6 s, GPU en vol inchangé, 49,4 contre 49,8 ms ; dossiers échangés par `earth-sync`) , Paris (b, d) depuis le disque faits (59,5 s dont 54 de calcul, 199 236 coupés) ; J8-3 cellule et réserve écrites ; **J8-3 `j8-cells` 2/2** (142 cellules en 28,1 s, aucune image > 100 ms, cache 0,26 s) ; **maintenant** : J8-3 priorité vue et trajectoire, J8-6, J8-7 ; **en pause** : le contour HUD en virage, la règle 13 des autres domaines, la garde du bandeau (338 en attente) |
 
 **Fermé récemment** : **PLAN-APPROCHES** (16 nov. : AP0–AP10 et AP-R menés — données réelles, choix, jonction, A320, carte, radar, TSD, crew, HUD, directeur de vol, roue, audio, campagne mondiale et échantillon volé ; OIFK posé après J7-1 le 16 nov. : échantillon F-35 9/9, A320 5/5) ; **J3** (15 nov., confirmé par Sam ; J3-R fait 20:48) ; **le repli du raster vers le tracé retiré** (15 nov., 20:48, décision (b)) ; **PLAN-J6** (15 nov., 20:35 : les neuf parcours en e2e, sept défauts corrigés) ; l'eau étagée E1 (−1,55 ms) et E2 (−0,5 ms), E3 non ouvert ; la classification lot 1 (sur terre −1,15 ms), lot 2 non ouvert
 (sous 1 ms) ; AR-07 (le renderer sur `ViewPose`) ; le retrait R1 des anciens chemins (13 nov.) ; le noyau du monde visé compilé pendant le voyage
@@ -9051,3 +9051,21 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   - Quand le cache est aussi attaché, un worker déjà ouvert n'est profilé qu'à partir de son attache, pas de sa naissance.
 - Suite : `j8-cells` (J8-3 : aucune image au-dessus de 100 ms, le cache après rechargement), puis J8-6 et J8-7. Les chiffres de Paris
   servent à J8-1b (le plafond) et à J8-5 (le cache du travail préparé).
+
+### 2026-11-16 14:48 UTC — PLAN-J8 J8-3 : les cellules préparées dans le jeu, jugées par e2e (session 1feb2f7f)
+
+- Contribution à la destination : les données des bâtiments sont préparées hors de la frame, dans des workers, et gardées par
+  cellule. La couche lointaine de J8-4 les consomme. Jalon : PLAN-J8 J8-3 (stratégie : préparer les données avant la frame).
+- Réalisé : le premier passage de `tests/e2e/j8-cells.e2e.test.ts` ; plan §8.
+- Preuves (**mesuré**, ce Mac M1 Max, 14:37–14:38 UTC, arbre de 799237d8, 2/2) :
+  - F-35 gelé au départ de J0 ; les tuiles viennent du disque (3 021 réponses, 98 téléchargées).
+  - **142 cellules** z 15 à moins de 6 km, préparées à froid en **28,1 s** : 2 030 bâtiments, 106 528 octets.
+  - **Aucune image au-dessus de 100 ms** pendant la préparation ; le plus grand écart entre deux images est de 75 ms.
+  - Après un rechargement, les 142 cellules viennent du cache `kerr-cells-v1` en **0,26 s**, aucune refaite.
+  - Le temps médian d'une cellule est de 114 ms ; il compte la file d'attente et la lecture de la tuile.
+- Limites :
+  - Non mesuré : kerr-mini ; le coût dans une scène en mouvement.
+  - Le palier de 14 à 18 s dans la courbe de remise des cellules n'est pas expliqué.
+  - Mon run a chevauché sur la voie IGN le `j8-far-layer` de la session du rendu (98 tuiles, 1,7 Mio) ; je le leur ai signalé.
+- Suite : J8-3, la priorité tirée de la vue et de la trajectoire ; puis J8-6 (PWA : les zones portent les cellules préparées) et J8-7
+  (hors de France).
