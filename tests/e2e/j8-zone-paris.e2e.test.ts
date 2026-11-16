@@ -10,7 +10,7 @@ import { hostStats } from "./lib/earth-cache";
 // orthophotos, what the game asks at 500 m (j8-corridor-levels, 16 Nov) —, « overflight » elsewhere in its disc, the far cells to
 // 20 km; downloaded through the Service Worker (and the e2e's Earth data on disk: a second run reads it there). Its real time against
 // its estimate, each host's measured rate (PLAN-J8 J8-9 (3)); then the network cut, the page loaded again, the camera set at each point
-// of the track at its height: `__bh.sys.flightReady()` at each — the ground's tiles, none failed (`standIns`), the near scene, the
+// of the track at its height: `__bh.sys.flightReady({ track })` at each (the track's zone and its cells within reach too) — the ground's tiles, none failed (`standIns`), the near scene, the
 // far cells — and the Service Worker's figures (nothing from the network).
 // Done when: the zone ready (or its download's progress said every minute until it stops moving for 10 min, or 4 h), its time, its
 // estimate and its hosts written; offline, every point of the track ready with no tile failed, nothing from the network.
@@ -121,9 +121,11 @@ describe.skipIf(!E2E)(`PLAN-J8 J8-9: J8-A's corridor zone « ${TRACK} », downlo
         await app
           .dataSettled(`point ${k + 1}`, { maxMs: 120_000 })
           .catch((e) => console.log(`  (point ${k + 1} not settled: ${String(e).slice(0, 160)})`));
-        await app.waitOptional(`(async () => (await __bh.sys.flightReady()).ready)()`, 60_000);
+        // (J8-A's whole flight: the track given — its zone, its far and street cells within reach, not only the view at the point)
+        const T = JSON.stringify({ points: track.points });
+        await app.waitOptional(`(async () => (await __bh.sys.flightReady({ track: ${T} })).ready)()`, 60_000);
         const now = await app.js<{ ready: boolean; why: string[] }>(
-          `(async () => { const r = await __bh.sys.flightReady(); return { ready: r.ready, why: r.why }; })()`,
+          `(async () => { const r = await __bh.sys.flightReady({ track: ${T} }); return { ready: r.ready, why: r.why }; })()`,
         );
         ready.push({ point: k + 1, ready: !!now.ready, why: now.why ?? [] });
         console.log(`  point ${k + 1}: ${JSON.stringify(ready[k])}`);

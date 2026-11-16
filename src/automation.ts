@@ -64,7 +64,10 @@ import { DeckPicker } from "./a320/deckpick";
 import { fieldByCode } from "./world/runways";
 import { approachesForAsync } from "./world/approaches";
 import { cellPool, streetPool, streetPoolMade } from "./system/cell-workers";
-import type { CellWant } from "./system/cell-pool";
+import { CELL_CACHE, type CellWant } from "./system/cell-pool";
+import { tilesWithin } from "./system/ign-canopy";
+import { STREET_CACHE } from "./system/street-cells";
+import { corridorDistance, ZONE_FAR_REACH_M, ZONE_STREET_REACH_M } from "./system/zones";
 
 /** the A320 deck's picker (a320DeckAt: the controls seen from the seat) */
 let deckPick: DeckPicker | null = null;
@@ -705,7 +708,7 @@ export function installBh(c: BhContext) {
          *  fetch — the ground's tiles in, the near scene complete (not the quick one), the building cells' pool idle (nothing queued,
          *  running, nor waiting past its bound), the far layer's wanted cells all resident (`missing`: J8-4's building-far.ts, when it
          *  says it) —; `why` names what is not yet. Read by the e2e (J8-A) before the take-off, and by anyone who waits for a place. */
-        flightReady: async () => {
+        flightReady: async (o?: { track?: { points: readonly (readonly [number, number, number?])[] } }) => {
           const why: string[] = [];
           const t = renderer.earthTiles;
           if (t.pending > 0 || t.orthoPending > 0) why.push(`tiles ${t.pending} + orthophotos ${t.orthoPending} pending`);
@@ -724,7 +727,63 @@ export function installBh(c: BhContext) {
             ? ((await renderer.farBuildings()).layer as { missing?: number; refused?: number } | null)
             : null;
           if (far?.missing) why.push(`far layer: ${far.missing} wanted cells not resident`);
-          return { ready: why.length === 0, why, cells: p, far };
+          // (a track — J8-A: the flight's points —: what the whole flight will ask, not only the view at the start — a ready zone whose
+          // corridor covers every point, its building and street cells prepared; and every far cell within the far layer's reach of the
+          // track, every street cell within the lamps', in the prepared caches)
+          let track: { zone: string | null; farMissing: number; streetMissing: number } | null = null;
+          if (o?.track?.points.length) {
+            const pts = o.track.points.map((q) => [q[0], q[1]] as [number, number]);
+            const zones = (await c.pwa.zones?.list()) ?? [];
+            const zone = zones.find(
+              (z) =>
+                z.state === "ready" &&
+                !!z.corridor &&
+                pts.every((q) => corridorDistance(z.lat, z.lon, z.corridor!, q[0], q[1]) <= z.corridor!.halfWidthM),
+            );
+            if (!zone) why.push("no ready zone's corridor covers the track");
+            else {
+              if (!zone.cells) why.push("the zone's building cells not prepared");
+              if (!zone.streets) why.push("the zone's street cells not prepared");
+            }
+            // (the track sampled every 2 km: the cells within reach of each)
+            const samples: [number, number][] = [];
+            for (let k = 0; k < pts.length; k++) {
+              const [a, b] = [pts[k]!, pts[Math.min(k + 1, pts.length - 1)]!];
+              const km = Math.hypot((b[0] - a[0]) * 111.2, (b[1] - a[1]) * 111.2 * Math.cos((a[0] * Math.PI) / 180));
+              const n = Math.max(1, Math.ceil(km / 2));
+              for (let i = 0; i < n; i++) samples.push([a[0] + ((b[0] - a[0]) * i) / n, a[1] + ((b[1] - a[1]) * i) / n]);
+            }
+            samples.push(pts[pts.length - 1]!);
+            const wanted = (reach: number) => {
+              const set = new Set<string>();
+              for (const [la, lo] of samples) for (const t of tilesWithin(15, la, lo, reach)) set.add(`${t.x}/${t.y}`);
+              return set;
+            };
+            const have = async (name: string) => {
+              try {
+                const keys = await (await caches.open(name)).keys();
+                return new Set(
+                  keys.map((r) =>
+                    r.url
+                      .split("/")
+                      .slice(-2)
+                      .join("/")
+                      .replace(/\.[a-z]+$/, ""),
+                  ),
+                );
+              } catch {
+                return new Set<string>();
+              }
+            };
+            const farHave = await have(CELL_CACHE),
+              streetHave = await have(STREET_CACHE);
+            const farMissing = [...wanted(ZONE_FAR_REACH_M)].filter((k) => !farHave.has(k)).length;
+            const streetMissing = [...wanted(ZONE_STREET_REACH_M)].filter((k) => !streetHave.has(k)).length;
+            if (farMissing) why.push(`${farMissing} far cells within reach of the track not prepared`);
+            if (streetMissing) why.push(`${streetMissing} street cells within reach of the track not prepared`);
+            track = { zone: zone?.id ?? null, farMissing, streetMissing };
+          }
+          return { ready: why.length === 0, why, cells: p, far, track };
         },
         /** PLAN-J8 J8-L: the streets' cells' pool (street-cells.ts — the lamps, the cars' roads), as `cells`: `want(list)`, `stats()`,
          *  `got()` (key, bytes, from the prepared cache, ms), `clear()` */

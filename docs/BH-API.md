@@ -2136,7 +2136,7 @@ says `{ count, buildings, bytes, failed, ms }`; a removal drops the cells no oth
 
 *Used in:* `j8-cells.e2e.test.ts`, `j8-zone-cells.e2e.test.ts`.
 
-### `__bh.sys.flightReady()` → Promise<{ ready, why, cells, far }> (PLAN-J8 J8-A)
+### `__bh.sys.flightReady({ track? })` → Promise<{ ready, why, cells, far, track }> (PLAN-J8 J8-A)
 
 « All loaded before the flight » (Sam, 16 Nov 2026): whether the place can be flown with nothing more to fetch — the ground's tiles
 in (`earthTiles.pending`, `orthoPending` 0) and none failed (`standIns` 0: a tile whose load failed — offline, missing from a zone —
@@ -2144,6 +2144,11 @@ is no longer pending but drawn from its parent's), the near scene complete (`ear
 pending), the building cells' pool idle (nothing queued, running, nor waiting past its bound — `__bh.sys.cells.stats()`), and with
 the far layer on, its wanted cells all resident (`farBuildings().layer.missing`, when the layer says it). `why`: what is not yet, in
 words; `cells`: the pool's stats; `far`: the layer's. The J8-A e2e waits on it before the take-off.
+
+With `{ track: { points: [[lat, lon, altitude?], …] } }` — J8-A's flight (system/j8a-tracks.ts) — what the whole flight will ask, not only the
+view at the start: a ready zone whose corridor covers every point (its building and street cells prepared), and every far cell within the
+far layer's reach (20 km) of the track, every street cell within the lamps' (12 km), in their prepared caches (`kerr-cells-v1`,
+`kerr-street-v2`); `track` in the answer: the zone's id, the far and street cells missing.
 
 ### `__bh.sys.streets` (PLAN-J8 J8-L: the streets' cells' pool)
 
