@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-15 23:55 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-16 04:58 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous. Ce qui est fermé quitte le tableau « En cours » pour la ligne « Fermé récemment ».
@@ -61,6 +61,8 @@ l'état d'une mission ou d'un combat **non sauvé, dit** ; le réseau **« entre
 [PLAN-RESEAU-DURCISSEMENT](docs/PLAN-RESEAU-DURCISSEMENT.md) §4).
 
 **Fermé aussi** : le plancher du raster sur GPU faible (15 nov., 23:46, proposer sous 15 images/s, décision de Sam).
+
+**La session du rendu (33d89754)** : J0 à J6 fermés, décisions du 15 appliquées ; **en attente du prochain plan de la session d'analyse** (choix de Sam, 11/16 04:58 UTC) — pistes notées : la cible 40 ms du mini (l'eau 16,2, l'orage 16,5, la forêt ~7 ms), les à-coups relevés par J6 (noyau météo 84–433 ms, retour F1 317 ms).
 
 **Attend Sam** : rien d'ouvert à ce jour (les seuils du mini attendent la reprise de la cible 40 ms ; la borne du M1 Max mesurée le 15 au soir : 30 gardé).
 
