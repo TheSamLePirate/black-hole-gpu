@@ -28,7 +28,8 @@ rebond (manettes TOGA, LVR CLB, TOGA LK relâché). Question 4 (§9) décidée l
 (AP8) ; la fréquence inventée du MCDU (hachage) — la vraie ou « ---.-- » ; `findRunway` sans nom (« la plus proche à 150 km ») — le
 choix d'approche partout (`ilsRunways()`, l'accord de l'A320) ; les IAF/FAF fixes du plan de vol remplacés par les branches de
 l'approche choisie (réelle ou construite), gardés pour un site propre au jeu sans approche. **Plan AP0–AP10 et AP-R mené** ; ouvert :
-OIFK (PROBLEMES), l'aplanissement sous les trouées (session du rendu). AP6a : le crew — actions `app.*` (tous les
+OIFK (PROBLEMES), l'aplanissement sous les trouées — planifié en [PLAN-J7](PLAN-J7-FLUIDITE.md) J7-1 (session du rendu ; son critère :
+`approach-sample` A320 posé à OIFK 11). AP6a : le crew — actions `app.*` (tous les
 postes), boîte APP (approches réelles et construites, transition, Choisir/Auto/Armer/Remise de gaz, état choisi/volé), l'état de
 l'approche et celle de l'A320 dans la télémétrie, le DME corrigé. AP6b : les terrains et l'approche au radar et au ND
 du crew (touchés, ils la choisissent), la vue « Approche » (plan, repères, profil), les appels de l'approche dits à l'équipage. Non

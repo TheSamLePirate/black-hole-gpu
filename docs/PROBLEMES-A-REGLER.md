@@ -21,7 +21,8 @@ Rejoué le 16 nov. sur le juge des données : toujours non posé (le détail sou
 détail procédural, monte à 1 122–1 248 m (+75 à +205 m) — le faisceau (1 313 m à 4,6 km) passe à 65 m de cette bosse inventée.
 Côté approches, réglé : la jonction après une remise de gaz prend le vent arrière du côté du relief bas (`planJoin`) — le second
 passage se stabilise désormais sur LOC/G/S ; il rebondit à la même bosse. **Reste entièrement à la session du rendu : le détail
-procédural aplani sous les trouées d'approche des pistes du monde** (`terrain.ts` `earthDetail`, comme sous la piste).
+procédural aplani sous les trouées d'approche des pistes du monde** (`terrain.ts` `earthDetail`, comme sous la piste) — **planifié :
+[PLAN-J7](PLAN-J7-FLUIDITE.md) J7-1** (16 nov., session d'analyse), son critère : `approach-sample` A320 posé à OIFK 11.
 
 
 ## ~~La vue « Les aurores sur les fjords des Lofoten » volée en plein jour quand la date du jeu est en été~~ (relevé le 14 novembre 2026, e2e `s2-views`) — réglé le même jour
