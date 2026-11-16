@@ -159,5 +159,8 @@ l'alarme « train rentré trop bas » normale juste après le décollage : elle 
 train rentré, sous 152 m sol et 98 m/s, en descente, hors montée jusqu'à 457 m). Revolé : `apprendre-avions` « leçons 0 et 3 » 1/1 (ce Mac,
 fenêtre visible) — à 223 m, +34,8 m/s, train rentré : plus d'alarme (avant : « MASTER WARNING · GEAR UP · TOO LOW », « Too low, gear! »).
 La capture `av-l3-montee.jpg` remplacée ; l'« Auto-GCAS: recovered » qu'on y lit était déjà sur l'ancienne (non lié). Le schéma du HUD
-(apprendre-avions.html) perd sa ligne d'horizon (retirée du HUD ce jour, Sam). Ouvert : l'Auto-GCAS qui reprend la main pendant la
-montée de la leçon 3 — non examiné.
+(apprendre-avions.html) perd sa ligne d'horizon (retirée du HUD ce jour, Sam). L'Auto-GCAS qui reprenait la main pendant la montée de la leçon 3
+(« fly up », « recovered — yours ») : sa prédiction comptait la hauteur de l'instant de l'envol comme une menace ; corrigé le même jour
+(`game/gcas.ts` `gcasThreat` : pas de ressource quand le point le plus bas prédit est l'instant présent et que le jet s'en éloigne —
+en montée, ou dans la minute qui suit l'envol sans descendre). Revolé sur kerr-mini (2/2, run `20261116-113827-appr-l3`) : la montée
+est le pilote seul, +16 m/s à 117 m/s (le +35 m/s d'avant était la ressource du GCAS) ; capture remplacée, cours (tableau des recettes) à jour.

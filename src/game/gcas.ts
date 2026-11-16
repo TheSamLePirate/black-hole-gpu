@@ -74,6 +74,19 @@ export function gcasRecovery(s: GcasState, ground: (x: number) => number): { cle
 /** The margin [m] the recovery must keep at a speed. */
 export const gcasMargin = (V: number) => GCAS.buffer + GCAS.bufferV * V;
 
+/**
+ * Whether to fly up: the recovery's least clearance under the margin — unless that least clearance is where the jet is now (the first
+ * half second's) and it moves away from the ground: climbing (over 3°), or in the take-off's climb-out (`climbOut`: within a minute of
+ * the lift-off) and not coming down. The gear up a few metres over the runway is no threat to recover from (16 Nov 2026: the F-35's
+ * Auto-GCAS took its stick in every climb-out of the course's lesson 3, « fly up » then « recovered — yours »); a ridge ahead still is.
+ */
+export function gcasThreat(r: { clear: number; at: number }, gamma: number, V: number, climbOut = false): boolean {
+  if (!(r.clear < gcasMargin(V))) return false;
+  const now = r.at <= Math.max(V, 50) * 0.5;
+  const away = gamma > 3 * D || (climbOut && gamma > -1 * D);
+  return !(now && away);
+}
+
 /** Another aircraft as the ACAS reads it: its place and velocity relative to ours [m, m/s, the local east, north,
  *  up], its name. */
 export interface AcasOther {

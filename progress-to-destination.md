@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-16 10:18 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-16 10:45 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous. Ce qui est fermé quitte le tableau « En cours » pour la ligne « Fermé récemment ».
@@ -8757,3 +8757,16 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   correction (le pas que l'horloge prend vraiment). `system/iss.ts` relu : il rend l'heure exacte et avance de `n × span/n` — pas concerné.
 - Preuves : vérifié statiquement (la même identité que dans `motion.ts`, mesurée là) ; `fleet-coast`, `fleet` 7/7. Non mesuré sur un vol de
   la flotte.
+
+### 2026-11-16 10:45 UTC — L'Auto-GCAS ne reprend plus la main dans la montée initiale (session 1feb2f7f)
+
+- Contribution à la destination : §19 (préserver l'expérience : les protections ne prennent pas le manche à tort) ; vu en revolant la
+  leçon 3 d'apprendre-avions (« Auto-GCAS: fly up », puis « recovered — yours », à chaque décollage).
+- Réalisé : `game/gcas.ts` `gcasThreat` (pure) — la ressource seulement si le point le plus bas de la trajectoire de dégagement prédite
+  n'est pas l'instant présent alors que le jet s'éloigne du sol (en montée de plus de 3°, ou dans la minute qui suit l'envol sans descendre) ;
+  une crête devant lui la déclenche toujours ; `controller/gcas.ts` le lit (la minute depuis `offGround`). Cours : VOL-AVIONS (les protections,
+  le tableau des recettes), apprendre-avions.html (encadré, capture, légende), examens.
+- Preuves : `tests/gcas.test.ts` 6/6 (l'envol, la montée, le palier et la descente bas, la crête) avec témoin (sans la correction, il
+  échoue) ; e2e apprendre-avions « leçons 0 et 3 » et « leçon 3 (U) » 2/2 sur kerr-mini (`20261116-113827-appr-l3`) : montée du pilote seul,
+  +16 m/s à 117 m/s (le +35 m/s d'avant était la ressource) ; ni alarme du train ni GCAS sur la capture.
+- Limites : la marge et la prédiction elles-mêmes inchangées ; pas rejoué : les e2e GCAS du F-35 (f35-flight-ops, f35-challenges).

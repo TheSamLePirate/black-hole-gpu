@@ -8,12 +8,13 @@
 // (Its methods, out of controls.ts: installed on its prototype — `this` the controller.)
 import { frameNow } from "../frameclock";
 import { fleet } from "../fleet";
-import { ACAS, acasConflict, type AcasOther, GCAS, gcasMargin, gcasRecovery } from "../game/gcas";
+import { ACAS, acasConflict, type AcasOther, GCAS, gcasMargin, gcasThreat, gcasRecovery } from "../game/gcas";
 import { t, tf } from "../i18n";
 import { bodyFixedOf, groundRelief } from "../system/our-surface";
 import type { PilotInput } from "../pilot";
 import type { CameraController } from "../controls";
 import { geoidDeg } from "../system/geoid-grid";
+import { C_MPS, M_METRES } from "../units";
 
 const D = Math.PI / 180;
 const R_EARTH = 6_371_008.8;
@@ -108,7 +109,9 @@ function gcasStep(this: CameraController, dt: number) {
   };
   S.clear = r.clear;
   S.margin = gcasMargin(L.speed);
-  if (!S.flyUp && r.clear < S.margin) {
+  // (the take-off's climb-out: within a minute of the wheels leaving the ground)
+  const climbOut = (this.nowTime() - this.offGround) * (M_METRES / C_MPS) < 60;
+  if (!S.flyUp && gcasThreat(r, gamma, L.speed, climbOut)) {
     S.flyUp = true;
     S.escape = null;
     this.onRadio?.(t("Auto-GCAS: fly up"));

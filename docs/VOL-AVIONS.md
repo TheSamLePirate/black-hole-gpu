@@ -295,7 +295,9 @@ même ordre).
   (avec les dégâts actifs). Le **corps du pilote** : voile gris puis noir au-delà de sa tolérance, **perte de
   connaissance** si le voile noir dure 1,5 s (~8 s inconscient) ; voile rouge sous −1,5 g.
 - **Les protections** : l'**Auto-GCAS** tire à 5 g et remet les ailes à plat quand le sol arriverait (armé train
-  rentré, hors loi directe et hors décollage automatique U) ; l'**Auto-ACAS** évite un autre appareil.
+  rentré, hors loi directe et hors décollage automatique U ; pas de ressource quand l'avion s'éloigne déjà du sol — en
+  montée, ou dans la minute qui suit l'envol sans descendre —, une crête devant lui la déclenche toujours) ; l'**Auto-ACAS**
+  évite un autre appareil.
 - **Loi directe** (Réglages › Jeu › F-35 › Loi de pilotage) : plus de protection, la vrille devient possible ; on en
   sort en lâchant tout une dizaine de secondes.
 
@@ -580,7 +582,7 @@ Les recettes de ce cours ont été volées telles quelles par l'e2e `tests/e2e/a
 
 | Leçon | Résultat mesuré |
 |---|---|
-| 0 et 3 — le F-35B aligné à Edwards, décollage | quitté le sol en 11 s ; 8 s plus tard vario +35 m/s, inclinaison 0°, train rentré |
+| 0 et 3 — le F-35B aligné à Edwards, décollage | quitté le sol en 11 s ; 8 s plus tard vario +16 m/s à 117 m/s, inclinaison 0°, train rentré — revolé le 16 nov. 2026 (avant : +35 m/s, l'Auto-GCAS tirant l'avion à l'envol) |
 | 4 — palier sous `apSet`, puis virage à la main | 3 000 m, 270°, 200 m/s tenus exactement ; virage vers 000° à 2 999–3 000 m sans toucher S (touche tenue jusqu'à 29° : 41° atteints) |
 | 7 — ILS d'Edwards depuis 12 km | 20/20 : toucher à 470 m du seuil, 0,6 m de l'axe, −0,8 m/s |
 | 8 — le F-35B posé verticalement sur le Ford (`deckLand`) | posé à 0,5 m du point, 1,2 m/s, « OK » |

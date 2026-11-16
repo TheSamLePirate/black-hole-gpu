@@ -154,3 +154,27 @@ test("an aircraft head-on at our height: the escape, the closest approach over 1
   expect(said.join(" ")).toMatch(/Auto-ACAS: INTRUDER/);
   expect(closest).toBeGreaterThan(150);
 }, 120_000);
+
+test("a take-off's climb-out is no threat; a descent toward the ground at the same height is (gcasThreat)", async () => {
+  const { gcasRecovery, gcasThreat } = await import("../src/game/gcas");
+  const flat = () => 0;
+  // (16 Nov 2026, the course's lesson 3: the gear up 20 m over Edwards, 80 m/s, climbing at 25° — « fly up » before)
+  const up = { alt: 20, gamma: (25 * Math.PI) / 180, bank: 0, V: 80 };
+  const ru = gcasRecovery(up, flat);
+  expect(ru.clear).toBeLessThan(60);
+  expect(gcasThreat(ru, up.gamma, up.V)).toBe(false);
+  // (just off the runway, level or barely climbing: no threat in the climb-out, a threat outside it)
+  const lift = { ...up, alt: 5, gamma: (1 * Math.PI) / 180 };
+  const rl = gcasRecovery(lift, flat);
+  expect(gcasThreat(rl, lift.gamma, lift.V, true)).toBe(false);
+  expect(gcasThreat(rl, lift.gamma, lift.V, false)).toBe(true);
+  // (the same height level, or coming down: a threat)
+  const level = { ...up, gamma: 0 };
+  expect(gcasThreat(gcasRecovery(level, flat), level.gamma, level.V)).toBe(true);
+  const down = { ...up, alt: 60, gamma: (-10 * Math.PI) / 180 };
+  expect(gcasThreat(gcasRecovery(down, flat), down.gamma, down.V)).toBe(true);
+  // (climbing, but a ridge ahead under the climb: still a threat)
+  const ridge = (x: number) => (x > 400 ? 300 : 0);
+  const ur = { ...up, alt: 100 };
+  expect(gcasThreat(gcasRecovery(ur, ridge), ur.gamma, ur.V)).toBe(true);
+});
