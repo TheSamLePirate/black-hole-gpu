@@ -203,6 +203,16 @@ J8-R. J8-1 se voit tout de suite. J8-4 apporte le gros du gain : « toute la vue
    non mesurés. Fixe-t-il une enveloppe pour tout l'ensemble (bâtiments, eau, rues, voitures, lampadaires) sur chaque
    machine, ou juge-t-il lot par lot ? En attendant : chaque lot se mesure en cumul dans cette vue, et un lot qui dépasse
    1 ms sur le mini revient vers lui avec ses captures.
+9. **Décidé par Sam le 16 nov. (~18:05 UTC, « ok 23 h, ok 3 + mesure 2, ok VB0–VB1 ; le plan des détails en vol bas :
+   oui sur la session des approches ») :**
+   - **La zone Paris** (`j8-zone-paris`) tourne ce soir sur kerr-mini à 23 h, heure de Paris (22:00 UTC), seule sur
+     l'IGN, avant le banc de nuit.
+   - **La couche lointaine à Paris** : option 3 par défaut. La réserve se remplit des plus proches d'abord, le couloir
+     de vol en priorité, et le relief bâti IGN prend le relais au-delà ; le raccord est montré en captures de jour et
+     de nuit. L'option 2 (tout Paris, ~96 Mio) se mesure une fois sur les deux machines, pour la décision de J8-A.
+   - **J8-VB** est porté par la session des approches : VB0 et VB1 tout de suite. Les lots de dessin se conviennent
+     fichier par fichier avec la session du rendu.
+   - **La question 8 n'a pas de réponse** : la règle provisoire (le cumul, 1 ms sur le mini) s'applique.
 
 ## 7. Ce qui reste hors de ce plan
 

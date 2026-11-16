@@ -9548,3 +9548,15 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
 - **Preuves :** documenté. Les attributs ont été relus dans une seule tuile BD TOPO en cache (`15/16957/12011`, 64 `troncon_de_route`) : les noms seulement, sans les valeurs ni le taux de remplissage. Les tailles à l'écran sont calculées avec un champ de 60° supposé. La licence a été lue dans le dépôt de FableFlight. Aucun test lancé.
 - **Limites / transitions restantes :** le remplissage des attributs à Paris est à mesurer (VB0). Les coûts du plan VB sont des estimations. L'enveloppe de la ville est une question ouverte à Sam.
 - **Suite :** VB0–VB1 côté approches, si Sam est d'accord. VB2 et la suite côté rendu, après les priorités de J8-A.
+
+### 2026-11-16 18:07 UTC — PLAN-J8 : décisions de Sam (zone Paris ce soir, option 3 + mesure 2, J8-VB aux approches) (session d'analyse)
+
+- **Contribution à la destination :** PLAN-J8 J8-A, J8-9 et J8-VB.
+- **Réalisé :** Sam a décidé « ok 23 h, ok 3 + mesure 2, ok VB0–VB1 ; le plan des détails en vol bas : oui sur la session des approches ».
+  - `j8-zone-paris` passe ce soir sur kerr-mini à 22:00 UTC, seul sur l'IGN.
+  - La couche lointaine à Paris suit l'option 3 par défaut, avec une mesure unique de l'option 2.
+  - J8-VB est porté par la session des approches : VB0 et VB1 tout de suite.
+  - Relayé aux deux sessions. Plan §6 point 9, plan VB §8.
+- **Preuves :** documenté. Aucun test lancé.
+- **Limites / transitions restantes :** la question 8, l'enveloppe de la ville, reste sans réponse : la règle provisoire (le cumul, 1 ms sur le mini) s'applique. Les lots de dessin de J8-VB touchent les fichiers de la session du rendu et se conviennent avec elle.
+- **Suite :** cette nuit, la mesure réelle de la zone Paris. La session des approches fait VB0 et VB1. La session du rendu montre le raccord de l'option 3 et mesure l'option 2.

@@ -327,7 +327,7 @@ l'inventaire.
 |---|---|
 | Analyse comparative, sources FableFlight et état BH GPU | Lecture statique ; références consignées dans ce plan |
 | Estimations de coût | Proposées, non mesurées ; périmètre et incertitudes au §6 |
-| VB0 à VB8 | Non commencés. Rattachés à PLAN-J8 comme groupe J8-VB (16 nov., session d'analyse) ; VB0–VB1 peuvent démarrer côté approches |
+| VB0 à VB8 | Rattachés à PLAN-J8 comme groupe J8-VB. **Décidé par Sam (16 nov., ~18:05 UTC) : portés par la session des approches, VB0–VB1 lancés** ; les lots de dessin se conviennent avec la session du rendu |
 | Données routières BD TOPO | Présentes dans les tuiles déjà téléchargées (une tuile lue, noms des attributs seulement) ; le remplissage est à mesurer en VB0 |
 | Code, dépendances, runtime, réglages et caches | Aucun changement par cette session |
 | Exécutions du projet | Aucune |
