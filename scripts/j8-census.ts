@@ -31,10 +31,10 @@ const n = 2 ** BDTOPO_Z;
 function polar(lat: number, lon: number) {
   const e = (lon - LON0) * 111.32 * Math.cos(LAT0 * D),
     nn = (lat - LAT0) * 110.574;
-  return { km: Math.hypot(e, nn), brg: ((Math.atan2(e, nn) / D) % 360 + 360) % 360 };
+  return { km: Math.hypot(e, nn), brg: (((Math.atan2(e, nn) / D) % 360) + 360) % 360 };
 }
 const ringOf = (km: number) => RINGS.findIndex((r, i) => i < RINGS.length - 1 && km >= r && km < RINGS[i + 1]!);
-const inView = (brg: number, hdg: number) => Math.abs((((brg - hdg + 540) % 360) + 360) % 360 - 180) <= HALF_FOV;
+const inView = (brg: number, hdg: number) => Math.abs(((((brg - hdg + 540) % 360) + 360) % 360) - 180) <= HALF_FOV;
 const tileLon = (x: number) => (x / n) * 360 - 180;
 const tileLat = (y: number) => Math.atan(Math.sinh(Math.PI * (1 - (2 * y) / n))) / D;
 
@@ -151,8 +151,7 @@ async function runner() {
 }
 await Promise.all(Array.from({ length: 6 }, runner));
 const label = (i: number) => `${RINGS[i]}–${RINGS[i + 1]} km`;
-const table = (rows: Acc[]) =>
-  rows.map((a, i) => ({ ring: label(i), ...a, kB: Math.round(a.bytes / 1024) }));
+const table = (rows: Acc[]) => rows.map((a, i) => ({ ring: label(i), ...a, kB: Math.round(a.bytes / 1024) }));
 const out = {
   at: new Date().toISOString(),
   place: { lat: LAT0, lon: LON0, headings: HEADINGS, halfFov: HALF_FOV, radiusKm: RADIUS_KM },
@@ -167,7 +166,8 @@ const out = {
 mkdirSync(dirname(OUT), { recursive: true });
 writeFileSync(OUT, `${JSON.stringify(out, null, 1)}\n`);
 console.log(JSON.stringify({ tiles: out.tiles, decodeMsTotal: out.decodeMsTotal, wallS: out.wallS }));
-for (const r of out.disc) console.log(`  disc ${r.ring}: ${r.tiles} tiles, ${r.kB} kB, ${r.buildings} buildings (${r.withHeight} with a height)`);
+for (const r of out.disc)
+  console.log(`  disc ${r.ring}: ${r.tiles} tiles, ${r.kB} kB, ${r.buildings} buildings (${r.withHeight} with a height)`);
 for (const v of out.views)
   for (const r of v.rings) console.log(`  view ${v.heading}° ${r.ring}: ${r.tiles} tiles, ${r.kB} kB, ${r.buildings} buildings`);
 console.log(`written ${OUT}`);
