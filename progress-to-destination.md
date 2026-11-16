@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-16 14:48 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-16 14:44 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous. Ce qui est fermé quitte le tableau « En cours » pour la ligne « Fermé récemment ».
@@ -63,7 +63,7 @@ l'état d'une mission ou d'un combat **non sauvé, dit** ; le réseau **« entre
 
 **Fermé aussi** : le plancher du raster sur GPU faible (15 nov., 23:46, proposer sous 15 images/s, décision de Sam).
 
-**La session du rendu (33d89754)** : **[PLAN-J8](docs/PLAN-J8-BATIMENTS.md)** — J8-2 fait (relu par 1feb2f7f) ; J8-0 (e) fait (en vol, une scène rapide de ~2 km sans la côte de la vue) ; **J8-0 (c) mesuré sur kerr-mini : +2,7 ms à 128 k enveloppes (79 k vues), +4,6 à 256 k — la vue J0 ≈ +3 à +4,5 ms avec des boîtes naïves, au-dessus des 3 ms : retour à Sam avant J8-4** (M1 Max à mesurer) ; **J8-1 fermé « sans effet »** (vue complète et vol) ; J8-1b (le plafond) après les mesures ; J8-4 côté CPU commencé. [PLAN-J7](docs/PLAN-J7-FLUIDITE.md) en pause.
+**La session du rendu (33d89754)** : **[PLAN-J8](docs/PLAN-J8-BATIMENTS.md)** — J8-2 fait ; J8-0 (c), (e) faits ; J8-1 fermé « sans effet » ; **J8-4 avec les quads (décision de Sam)** : un premier lot dessine la couche lointaine (Toulon : +1,1 ms, 23 714 bâtiments), **éteinte par défaut — jugée laide par Sam** (un seul matériau, quads trop grands) ; à faire avant de la rallumer : le matériau du bâtiment, la forme du toit, aucune bascule, le seuil du quad, l'ordre des cellules ; J8-1b (le plafond) après. [PLAN-J7](docs/PLAN-J7-FLUIDITE.md) en pause.
 
 **Priorité de Sam (16 nov., 11:30 UTC) : [PLAN-J8](docs/PLAN-J8-BATIMENTS.md), tous les bâtiments de la vue** (« c'est ça qui choque le plus ») — la suite de J7 en pause après J7-8b ; les deux sessions s'y mettent (rendu : couche GPU, scène proche ; approches : recensement, préparation des cellules, PWA) ; d'abord J8-0 (mesures) et J8-1 (le trou de 2 à 7 km).
 
@@ -9069,3 +9069,21 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   - Mon run a chevauché sur la voie IGN le `j8-far-layer` de la session du rendu (98 tuiles, 1,7 Mio) ; je le leur ai signalé.
 - Suite : J8-3, la priorité tirée de la vue et de la trajectoire ; puis J8-6 (PWA : les zones portent les cellules préparées) et J8-7
   (hors de France).
+
+### 2026-11-16 14:44 UTC — PLAN-J8 J8-4 : la couche lointaine dessinée (premier lot), jugée laide, éteinte par défaut (session 33d89754)
+
+- Contribution à la destination : PLAN-J8 critère 1 (toute la vue) — la couche par cellules du §2, sa résidence et son dessin GPU ;
+  la décision de Sam du 16 nov. (les quads).
+- Réalisé : `src/system/building-far.ts` (les cellules de la réserve J8-3 autour de l'œil, l'ordre de résidence, la réserve GPU par
+  blocs, l'éviction, le repère suivant la scène) ; `SceneryRaster` (farCull, farVs, farQuadVs, farShadowVs) ; `renderer.farBuildingsOn`
+  (false par défaut), `farBuildings()` ; e2e `j8-far-layer` ; planche `docs/progress/j8/j8-4-lot1-*`.
+- Preuves (mesuré, kerr-mini, e2e `j8-far-layer`) : Toulon à 12 km — 800 boîtes et 22 914 quads dessinés, GPU 50,7 → 51,5 / 52,2 ms
+  (A/B/A) ; la différence d'image avec/sans limitée à la bande lointaine (1,1 % des pixels, A/A 0,18 %). La vue J0 : rien dessiné —
+  ~1 cellule/s, la côte (10–30 km) pas arrivée en 150 s. **Sam, en direct : « assez moche »** — un seul matériau sombre, des quads trop
+  grands, l'orthophoto recouverte.
+- Limites : le matériau est celui d'une seule feuille de la scène ; la forme du toit, le fondu, le relief des toits IGN sous les
+  cellules ne sont pas faits ; les cellules arrivent lentement et dans un ordre qui sert mal la vue J0.
+- Suite : dans l'ordre de la session d'analyse — le matériau du bâtiment (ses matériaux, le toit à la couleur de l'orthophoto), la
+  forme du toit, aucune bascule visible, le seuil du quad (8, 4, 0 px montrés à Sam) ; l'ordre des cellules ; la couche rallumée
+  seulement après le jugement de Sam sur les captures.
+

@@ -255,6 +255,9 @@ import { WarpGrid } from "./system/warp-grid";
 import { EarthSurface, SURFACE_TEXTURE_LIMIT } from "./system/earth-surface";
 import { EarthScenery } from "./system/scenery";
 import { DETAIL_REACH, localPoint, SCENERY_STORAGE_LIMIT, type SceneryExclusion, sceneryFrame } from "./system/scenery-data";
+import { BuildingFar } from "./system/building-far";
+import type { EyeState } from "./system/building-layer";
+import { cellPool } from "./system/cell-workers";
 import { LANDSCAPES, LANDSCAPE_CLEARING_M } from "./system/landscapes";
 const SCENERY_EXCLUSIONS: SceneryExclusion[] = [
   ...EARTH_RUNWAYS.map((r) => ({
@@ -2382,6 +2385,8 @@ export class Renderer {
     this.earthShore?.dispose();
     this.terrainSurfaceCache?.dispose();
     this.terrainRaster?.dispose();
+    this.buildingFar?.dispose();
+    this.buildingFar = null;
     this.sceneryRaster?.dispose();
     this.device.destroy();
   }
@@ -2638,6 +2643,8 @@ export class Renderer {
       r.earthSurface.dispose();
       r.terrainSurfaceCache?.dispose();
       r.terrainRaster?.dispose();
+      r.buildingFar?.dispose();
+      r.buildingFar = null;
       r.sceneryRaster?.dispose();
       // (a loss simulated — the e2e's, __bh.gpu.lose(): the device destroyed — told as a real one)
       r.lost = r.simulatedLoss ? "simulated" : info.reason === "destroyed" ? "released" : info.message || t("the GPU was reset");
@@ -4292,6 +4299,27 @@ export class Renderer {
       const focus = onEarth ? eye : shipLow ? F!.c : null;
       // (the streaming's lead: the camera's own motion over the ground, whatever carries it — the live view's)
       if (t === this.live) this.streamVelocity = this.cameraGroundVelocity(eye);
+      // (PLAN-J8 J8-4: the far buildings' eye — its place, its heading over the ground, its speed: the cells' order of residence)
+      if (t === this.live) {
+        if (eye) {
+          const g = cartToGeodetic(1, WGS84_F, eye);
+          const v = this.streamVelocity;
+          const sl = Math.sin(g.lat),
+            cl = Math.cos(g.lat),
+            so = Math.sin(g.lon),
+            co = Math.cos(g.lon);
+          const ve = v ? -so * v[0] + co * v[1] : 0,
+            vn = v ? -sl * co * v[0] - sl * so * v[1] + cl * v[2] : 0;
+          const speed = Math.hypot(ve, vn);
+          this.farEye = {
+            lat: (g.lat * 180) / Math.PI,
+            lon: (g.lon * 180) / Math.PI,
+            heading: speed > 5 ? Math.atan2(ve, vn) : (this.farEye?.heading ?? 0),
+            speed,
+            halfFov: (45 * Math.PI) / 180,
+          };
+        } else this.farEye = null;
+      }
       const lead = focus ? streamingLead(focus, this.streamVelocity) : ([0, 0, 0] as Vec3);
       this.streamingState.leadM = Math.hypot(...lead) * 6378137;
       // (where the view looks, on the Earth's axes, and the eye's height: the detail led there — the relief's finest
@@ -11199,6 +11227,19 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
   private rasterDetailNow = false;
   /** the world's trees as raster instances (system/scenery-raster.ts), made the first time the raster pipeline has them */
   private sceneryRaster: SceneryRaster | null = null;
+  /** PLAN-J8 J8-4: the far buildings' layer (building-far.ts) — made with the scenery's raster; `farBuildingsOn` false: not drawn.
+   *  Off by default until its first lot is measured (e2e j8-far-layer turns it on) */
+  private buildingFar: BuildingFar | null = null;
+  farBuildingsOn = false;
+  private farEye: EyeState | null = null;
+  /** (the far layer's) what is resident and what the last cull drew (boxes, quads — read back) */
+  async farBuildings() {
+    return {
+      layer: this.buildingFar?.stats() ?? null,
+      inView: this.sceneryRaster ? await this.sceneryRaster.farInView() : { boxes: 0, quads: 0 },
+      pool: cellPool().stats(),
+    };
+  }
   /**
    * PLAN-J8 J8-0 (c), a measuring tool: `n` synthetic buildings' envelopes injected round a place [°] — evenly over the ring rMin …
    * rMax [m], on the bare ground (groundBare), half-sides 4–16 m, heights 6–30 m, any heading (a seeded draw: the same for the same
@@ -12150,6 +12191,15 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
         this.sceneryRaster.sway = [-Math.sin(from), -Math.cos(from), k];
         this.earthScenery.sway = [-Math.sin(from), -Math.cos(from), k, this.sceneryRaster.clock];
       }
+      // (PLAN-J8 J8-4: the far buildings' layer — its cells asked and put, its frame the drawn scene's, the near scene's own buildings
+      // left to it: within its cap's kept reach when it cut, else its box)
+      if (this.farBuildingsOn) {
+        this.buildingFar ??= new BuildingFar(this.sceneryRaster, cellPool);
+        const box = this.earthScenery.drawnBox();
+        const st = this.earthScenery.stats();
+        const maskR = !box ? 0 : st.cutBuildings > 0 && st.keptReachM > 0 ? st.keptReachM : box.half - 650;
+        this.buildingFar.update(this.farEye, box, maskR, this.earthScenery.buildingLeaf, performance.now());
+      } else if (this.sceneryRaster) this.sceneryRaster.farOn = false;
       trees = this.sceneryRaster.encodeCull(
         enc,
         this.prof.pass("scenery raster cull"),
@@ -12376,6 +12426,8 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
     this.earthSurface.dispose();
     this.terrainSurfaceCache?.dispose();
     this.terrainRaster?.dispose();
+    this.buildingFar?.dispose();
+    this.buildingFar = null;
     this.sceneryRaster?.dispose();
     this.device.destroy();
   }

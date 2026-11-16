@@ -1,0 +1,195 @@
+// PLAN-J8 J8-4 — the far buildings' layer in the page (docs/PLAN-J8-BATIMENTS.md §2): the cells round the eye asked of the preparation
+// pool (cell-workers.ts cellPool — J8-3: the BD TOPO's z 15 tiles decoded into the contract's records, from the prepared cache first),
+// in the order of residence (building-layer.ts: in view and near, on the track, a reserve behind, the rest); each cell handed put into
+// the GPU's record pool by blocks (building-layer.ts RecordPool) under its declared budget — the farthest of the least wanted let go
+// when a nearer one does not fit —, its frame in the scene's written (moved with the scene); drawn by SceneryRaster (culled by the
+// GPU, boxes and quads, the shadow map). The near scene keeps its own buildings: those within its reach are left out (maskR).
+import { CELL_Z, cellKey, cellOf, readHeader, recordWords } from "./building-cells";
+import { cellFrameInScene, cellPriority, type EyeState, POOL_RECORD_BYTES, RecordPool } from "./building-layer";
+import type { CellPool, CellPrepared, CellWant } from "./cell-pool";
+import { sceneryFrame } from "./scenery-data";
+import type { SceneryRaster } from "./scenery-raster";
+
+/** the layer's reach round the eye [m] (the pixel's limit: ~15 km for a 10 m building, ~30 km for 20 m — §0; the first lot's) */
+export const FAR_REACH_M = 20000;
+/** its pool's budget [bytes] (≈ 512 k records — the bench's largest; PLAN-J8 §5: 500 000 × 48 o ≈ 24 Mio) */
+export const FAR_BUDGET_BYTES = 24 * 1024 * 1024;
+/** the cells' frames held at once */
+export const FAR_SLOTS = 4096;
+/** under this projected size [px] a building one quad facing the camera (Sam's decision of 16 Nov 2026) */
+export const FAR_QUAD_PX = 8;
+
+interface Resident {
+  x: number;
+  y: number;
+  slot: number;
+  blocks: number[];
+  records: number;
+}
+
+export class BuildingFar {
+  private pool: RecordPool;
+  private residents = new Map<string, Resident>();
+  private freeSlots: number[];
+  private wantedAt: { lat: number; lon: number; heading: number; t: number } | null = null;
+  private wanted = new Map<string, CellWant>();
+  private sceneKey = "";
+  private frame: ReturnType<typeof sceneryFrame> | null = null;
+  private unlisten: (() => void) | null = null;
+  private initing = false;
+  /** the counts: cells handed, put, let go, too big to fit */
+  readonly counts = { handed: 0, put: 0, evicted: 0, refused: 0, empty: 0 };
+
+  constructor(
+    private raster: SceneryRaster,
+    private cells: () => CellPool,
+    budgetBytes = FAR_BUDGET_BYTES,
+  ) {
+    this.pool = new RecordPool(budgetBytes);
+    this.freeSlots = Array.from({ length: FAR_SLOTS }, (_, i) => FAR_SLOTS - 1 - i);
+  }
+
+  /**
+   * Each frame the layer may draw: the eye (null: away — nothing asked), the drawn scene's centre (the frame the GPU draws in) and the
+   * reach its own buildings keep [m], a building's leaf (the material, for now).
+   */
+  update(eye: EyeState | null, scene: { lat: number; lon: number } | null, maskR: number, leaf: number, now: number) {
+    if (!this.raster.farReady) {
+      if (!this.initing) {
+        this.initing = true;
+        void this.raster.farInit(this.pool.blocks, FAR_SLOTS).then(() => {
+          this.unlisten = this.cells().listen((c) => this.put(c));
+        });
+      }
+      return;
+    }
+    // (the scene moved — a new one published —: every resident cell's frame in the new scene's)
+    const key = scene ? `${scene.lat.toFixed(6)}:${scene.lon.toFixed(6)}` : "";
+    if (key !== this.sceneKey) {
+      this.sceneKey = key;
+      this.frame = scene ? sceneryFrame(scene.lat, scene.lon) : null;
+      if (this.frame) for (const r of this.residents.values()) this.raster.farFrame(r.slot, cellFrameInScene(r.x, r.y, this.frame));
+    }
+    this.raster.farOn = !!this.frame;
+    this.raster.farParams(maskR, leaf, FAR_QUAD_PX);
+    if (!eye) return;
+    // (the cells wanted asked again when the eye moved 300 m, turned 10°, or 2 s on)
+    const w = this.wantedAt;
+    const cosL = Math.cos((eye.lat * Math.PI) / 180);
+    const moved = !w || Math.hypot((eye.lat - w.lat) * 111320, (eye.lon - w.lon) * 111320 * cosL) > 300;
+    const turned = !!w && Math.abs(Math.atan2(Math.sin(eye.heading - w.heading), Math.cos(eye.heading - w.heading))) > 0.17;
+    if (moved || turned || now - (w?.t ?? 0) > 2000) {
+      this.wantedAt = { lat: eye.lat, lon: eye.lon, heading: eye.heading, t: now };
+      this.want(eye);
+    }
+  }
+
+  /** the cells within reach, their order, asked of the preparation pool; those resident not asked again */
+  private want(eye: EyeState) {
+    const c = cellOf(eye.lat, eye.lon);
+    const side = (40075016 * Math.cos((eye.lat * Math.PI) / 180)) / 2 ** CELL_Z;
+    const k = Math.ceil(FAR_REACH_M / side) + 1;
+    const list: CellWant[] = [];
+    const n = 2 ** CELL_Z;
+    this.wanted.clear();
+    for (let j = -k; j <= k; j++)
+      for (let i = -k; i <= k; i++) {
+        const x = (((c.x + i) % n) + n) % n,
+          y = c.y + j;
+        if (y < 0 || y >= n) continue;
+        const [priority, d] = cellPriority(x, y, eye);
+        if (d > FAR_REACH_M) continue;
+        const want = { x, y, priority: priority as CellWant["priority"], d };
+        this.wanted.set(cellKey(x, y), want);
+        if (!this.residents.has(cellKey(x, y))) list.push(want);
+      }
+    this.cells().want(list);
+    // (resident cells past the reach and a margin let go: their blocks for the nearer)
+    for (const [key, r] of this.residents) if (!this.wanted.has(key) && cellPriority(r.x, r.y, eye)[1] > FAR_REACH_M * 1.3) this.evict(key);
+  }
+
+  /** a cell handed: into the pool's blocks — the least wanted farthest let go first when it does not fit */
+  private put(c: CellPrepared) {
+    this.counts.handed++;
+    const key = cellKey(c.x, c.y);
+    if (this.residents.has(key)) return;
+    // (not taken — no scene's frame yet, not wanted any more, not a cell —: asked again when next wanted)
+    const h = readHeader(c.buf);
+    const want = this.wanted.get(key);
+    if (!this.frame || !h || !want) {
+      this.cells().forget(c.x, c.y);
+      return;
+    }
+    if (h.count === 0) {
+      this.counts.empty++;
+      this.residents.set(key, { x: c.x, y: c.y, slot: -1, blocks: [], records: 0 });
+      return;
+    }
+    let blocks = this.pool.alloc(key, h.count);
+    while (!blocks) {
+      // (the worst resident — its order's class, then its distance — let go if worse than this one)
+      let worst: [string, number, number] | null = null;
+      for (const [k2, r] of this.residents) {
+        if (!r.blocks.length) continue;
+        const p = this.wanted.get(k2);
+        const rank = p ? p.priority : 4,
+          d = p ? p.d : Number.POSITIVE_INFINITY;
+        if (!worst || rank > worst[1] || (rank === worst[1] && d > worst[2])) worst = [k2, rank, d];
+      }
+      if (!worst || worst[1] < want.priority || (worst[1] === want.priority && worst[2] <= want.d)) {
+        this.counts.refused++;
+        this.cells().forget(c.x, c.y);
+        return;
+      }
+      this.evict(worst[0]);
+      blocks = this.pool.alloc(key, h.count);
+    }
+    const slot = this.freeSlots.pop();
+    if (slot === undefined) {
+      this.pool.release(blocks);
+      this.counts.refused++;
+      this.cells().forget(c.x, c.y);
+      return;
+    }
+    this.raster.farFrame(slot, cellFrameInScene(c.x, c.y, this.frame));
+    this.raster.farUpload(blocks, recordWords(c.buf), slot);
+    this.residents.set(key, { x: c.x, y: c.y, slot, blocks, records: h.count });
+    this.counts.put++;
+  }
+
+  private evict(key: string) {
+    const r = this.residents.get(key);
+    if (!r) return;
+    if (r.blocks.length) {
+      this.raster.farClear(r.blocks);
+      this.pool.release(r.blocks);
+    }
+    if (r.slot >= 0) this.freeSlots.push(r.slot);
+    this.residents.delete(key);
+    this.cells().forget(r.x, r.y);
+    this.counts.evicted++;
+  }
+
+  /** what is resident: cells, their records, the pool's blocks free, its budget [bytes] */
+  stats() {
+    let records = 0;
+    for (const r of this.residents.values()) records += r.records;
+    return {
+      cells: this.residents.size,
+      records,
+      freeBlocks: this.pool.freeBlocks,
+      blocks: this.pool.blocks,
+      budgetBytes: this.pool.bytes,
+      recordBytes: POOL_RECORD_BYTES,
+      wanted: this.wanted.size,
+      ...this.counts,
+    };
+  }
+
+  dispose() {
+    this.unlisten?.();
+    this.unlisten = null;
+    this.residents.clear();
+    this.raster.farRelease();
+  }
+}

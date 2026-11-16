@@ -893,6 +893,100 @@ fn benchCull(@builtin(global_invocation_id) g: vec3u, @builtin(num_workgroups) n
   let c = BOX[vi];
   return sunClip(benchCorner(benchEnv[bi], vec3f(f32(c & 1u), f32((c >> 1u) & 1u), f32((c >> 2u) & 1u))));
 }
+// ---- PLAN-J8 J8-4: the far buildings' layer — the building cells (building-cells.ts: 12 words a building, in their cell's east-north
+// frame, their ground over the ellipsoid) resident in a pool of blocks (building-layer.ts RecordPool), each block its cell's slot and its
+// records' count, each slot its cell's frame in the scene's (4 vec4s: origin, east, north, up). Culled as the bench's envelopes are (the
+// field of view, a pixel at least), those the near scene draws itself left out (within farU.y of its centre), drawn as boxes, as one
+// quad under farU.z px (Sam's decision of 16 Nov 2026), all into the buildings' shadow map. Their material, for now, a building's of
+// the near scene (farU.w: its leaf).
+struct FarU { blocks: u32, maskR: f32, lodPx: f32, leaf: f32 };
+@group(1) @binding(4) var<uniform> farU: FarU;
+@group(1) @binding(5) var<storage, read> farRec: array<u32>;
+@group(1) @binding(6) var<storage, read> farBlock: array<vec2u>;
+@group(1) @binding(7) var<storage, read> farCell: array<vec4f>;
+@group(1) @binding(8) var<storage, read_write> farListW: array<u32>;
+@group(1) @binding(9) var<storage, read_write> farDraw: array<atomic<u32>, 8>;
+@group(1) @binding(10) var<storage, read> farListR: array<u32>;
+// (a record k of the pool as the bench's envelope: its base in the scene's frame, its heading there; its half-sides, its height to its
+// roof's top; w: its block's records count 0 — none)
+fn farEnv(k: u32) -> Env {
+  var e: Env;
+  let blk = farBlock[k >> 8u];
+  if ((k & 255u) >= blk.y) { e.s = vec4f(0.0); return e; }
+  let o = 12u * k;
+  let east = bitcast<f32>(farRec[o]);
+  let north = bitcast<f32>(farRec[o + 1u]);
+  let ground = bitcast<f32>(farRec[o + 2u]);
+  let eave = bitcast<f32>(farRec[o + 3u]);
+  let roof = bitcast<f32>(farRec[o + 4u]);
+  let sides = farRec[o + 5u];
+  let head = f32(farRec[o + 6u] & 0xffffu) / 65535.0 * 3.14159265;
+  let c = 4u * blk.x;
+  let O = farCell[c];
+  let E = farCell[c + 1u].xyz;
+  let N = farCell[c + 2u].xyz;
+  let U = farCell[c + 3u].xyz;
+  let p = O.xyz + E * east + N * north + U * ground;
+  // (its long side's direction in the scene's horizontal plane)
+  let d = E * cos(head) + N * sin(head);
+  e.c = vec4f(p, atan2(d.y, d.x));
+  e.s = vec4f(f32(sides & 0xffffu) * 0.1, f32(sides >> 16u) * 0.1, eave + roof, farU.leaf);
+  return e;
+}
+@compute @workgroup_size(64)
+fn farCull(@builtin(global_invocation_id) g: vec3u, @builtin(num_workgroups) n: vec3u) {
+  let k = g.y * n.x * 64u + g.x;
+  if (k >= farU.blocks * 256u) { return; }
+  let e = farEnv(k);
+  if (e.s.z <= 0.0) { return; }
+  // (the near scene's own buildings: within its reach of its centre — the scene's frame's origin —, not drawn twice)
+  if (length(e.c.xy) < farU.maskR) { return; }
+  let R = length(vec3f(e.s.x, e.s.y, 0.5 * e.s.z)) + 0.5;
+  let v = view(vec3f(e.c.xy, e.c.z + 0.5 * e.s.z));
+  let tx = u.right.w;
+  let ty = u.up.w;
+  if (v.z < -R) { return; }
+  if (abs(v.x) - tx * v.z > R * sqrt(1.0 + tx * tx)) { return; }
+  if (abs(v.y) - ty * v.z > R * sqrt(1.0 + ty * ty)) { return; }
+  if (v.z > 0.0 && R * u.image.x < v.z * tx) { return; }
+  let px = R * u.image.x / max(v.z * tx, 1e-3);
+  if (px < farU.lodPx) {
+    let at = atomicAdd(&farDraw[5], 1u);
+    farListW[arrayLength(&farListW) - 1u - at] = k;
+    return;
+  }
+  let at = atomicAdd(&farDraw[1], 1u);
+  farListW[at] = k;
+}
+@vertex fn farVs(@builtin(vertex_index) vi: u32, @builtin(instance_index) bi: u32) -> MV {
+  var o: MV;
+  let e = farEnv(farListR[bi]);
+  let c = BOX[vi];
+  let v = view(benchCorner(e, vec3f(f32(c & 1u), f32((c >> 1u) & 1u), f32((c >> 2u) & 1u))));
+  o.leaf = e.s.w + 1.0;
+  o.clip = vec4f(v.x / u.right.w + u.output.z * v.z, v.y / u.up.w + u.output.w * v.z, u.forward.w, v.z);
+  o.p = v;
+  return o;
+}
+@vertex fn farQuadVs(@builtin(vertex_index) vi: u32, @builtin(instance_index) bi: u32) -> MV {
+  var o: MV;
+  let e = farEnv(farListR[arrayLength(&farListR) - 1u - bi]);
+  let q = array<vec2f, 6>(vec2f(-1.0, 0.0), vec2f(1.0, 0.0), vec2f(1.0, 1.0), vec2f(-1.0, 0.0), vec2f(1.0, 1.0), vec2f(-1.0, 1.0));
+  let c = view(e.c.xyz);
+  let top = view(vec3f(e.c.xy, e.c.z + e.s.z));
+  let k = q[vi];
+  let v = mix(c, top, k.y) + vec3f(k.x * max(e.s.x, e.s.y), 0.0, 0.0);
+  o.leaf = e.s.w + 1.0;
+  o.clip = vec4f(v.x / u.right.w + u.output.z * v.z, v.y / u.up.w + u.output.w * v.z, u.forward.w, v.z);
+  o.p = v;
+  return o;
+}
+@vertex fn farShadowVs(@builtin(vertex_index) vi: u32, @builtin(instance_index) bi: u32) -> @builtin(position) vec4f {
+  let e = farEnv(bi);
+  if (e.s.z <= 0.0 || length(e.c.xy) < farU.maskR) { return vec4f(2.0, 2.0, 0.5, 1.0); }
+  let c = BOX[vi];
+  return sunClip(benchCorner(e, vec3f(f32(c & 1u), f32((c >> 1u) & 1u), f32((c >> 2u) & 1u))));
+}
 `;
 }
 
@@ -1247,6 +1341,184 @@ export class SceneryRaster {
     };
   }
   private benchLayouts: { cull: GPUBindGroupLayout; draw: GPUBindGroupLayout } | null = null;
+
+  // ---- PLAN-J8 J8-4: the far buildings' layer (building-far.ts decides what is resident; this holds it on the GPU and draws it)
+  private far: {
+    blocks: number;
+    slots: number;
+    u: GPUBuffer;
+    rec: GPUBuffer;
+    block: GPUBuffer;
+    cell: GPUBuffer;
+    list: GPUBuffer;
+    draw: GPUBuffer;
+    cullBind: GPUBindGroup;
+    drawBind: GPUBindGroup;
+    pipes: { cull: GPUComputePipeline; vis: GPURenderPipeline; quad: GPURenderPipeline; shadow: GPURenderPipeline } | null;
+  } | null = null;
+  private farUData = new ArrayBuffer(16);
+  /** the far layer drawing (its pipelines in, a cell resident) — and its parts left out to measure them (1 culling, 2 visibility, 4 shadow) */
+  farOn = true;
+  farSkip = 0;
+  /**
+   * The far layer's GPU pool made: `blocks` blocks of 256 records (48 bytes each), `slots` cells' frames; its pipelines compiled
+   * (awaited). Made once; `farRelease` lets it go.
+   */
+  async farInit(blocks: number, slots: number): Promise<void> {
+    if (this.far) return;
+    const d = this.device;
+    const S = GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST;
+    const C = GPUShaderStage.COMPUTE,
+      V = GPUShaderStage.VERTEX;
+    const cullL = d.createBindGroupLayout({
+      label: "far buildings cull",
+      entries: [
+        { binding: 4, visibility: C, buffer: { type: "uniform" } },
+        { binding: 5, visibility: C, buffer: { type: "read-only-storage" } },
+        { binding: 6, visibility: C, buffer: { type: "read-only-storage" } },
+        { binding: 7, visibility: C, buffer: { type: "read-only-storage" } },
+        { binding: 8, visibility: C, buffer: { type: "storage" } },
+        { binding: 9, visibility: C, buffer: { type: "storage" } },
+      ],
+    });
+    const drawL = d.createBindGroupLayout({
+      label: "far buildings draw",
+      entries: [
+        { binding: 4, visibility: V, buffer: { type: "uniform" } },
+        { binding: 5, visibility: V, buffer: { type: "read-only-storage" } },
+        { binding: 6, visibility: V, buffer: { type: "read-only-storage" } },
+        { binding: 7, visibility: V, buffer: { type: "read-only-storage" } },
+        { binding: 10, visibility: V, buffer: { type: "read-only-storage" } },
+      ],
+    });
+    const u = d.createBuffer({ size: 16, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST, label: "far buildings params" });
+    const rec = d.createBuffer({ size: Math.max(16, blocks * 256 * 48), usage: S, label: "far buildings records" });
+    const block = d.createBuffer({ size: Math.max(16, blocks * 8), usage: S, label: "far buildings blocks" });
+    const cell = d.createBuffer({ size: Math.max(64, slots * 64), usage: S, label: "far buildings cells" });
+    const list = d.createBuffer({ size: Math.max(16, blocks * 256 * 4), usage: GPUBufferUsage.STORAGE, label: "far buildings list" });
+    const draw = d.createBuffer({
+      size: 32,
+      usage: GPUBufferUsage.STORAGE | GPUBufferUsage.INDIRECT | GPUBufferUsage.COPY_DST | GPUBufferUsage.COPY_SRC,
+      label: "far buildings draws",
+    });
+    const visTargets = [{ format: TERRAIN_RASTER_FORMAT }, { format: TERRAIN_RASTER_MOTION_FORMAT }, { format: TERRAIN_RASTER_ID_FORMAT }];
+    const drawLayout = d.createPipelineLayout({ bindGroupLayouts: [this.drawLayout, drawL] });
+    const [cull, vis, quad, shadow] = await Promise.all([
+      d.createComputePipelineAsync({
+        layout: d.createPipelineLayout({ bindGroupLayouts: [this.cullLayout, cullL] }),
+        compute: { module: this.module, entryPoint: "farCull" },
+      }),
+      d.createRenderPipelineAsync({
+        layout: drawLayout,
+        vertex: { module: this.module, entryPoint: "farVs" },
+        fragment: { module: this.module, entryPoint: "meshFs", targets: visTargets },
+        primitive: { topology: "triangle-list", cullMode: "none" },
+        depthStencil: { format: "depth32float", depthWriteEnabled: true, depthCompare: "greater" },
+      }),
+      d.createRenderPipelineAsync({
+        layout: drawLayout,
+        vertex: { module: this.module, entryPoint: "farQuadVs" },
+        fragment: { module: this.module, entryPoint: "meshFs", targets: visTargets },
+        primitive: { topology: "triangle-list", cullMode: "none" },
+        depthStencil: { format: "depth32float", depthWriteEnabled: true, depthCompare: "greater" },
+      }),
+      d.createRenderPipelineAsync({
+        layout: drawLayout,
+        vertex: { module: this.module, entryPoint: "farShadowVs" },
+        primitive: { topology: "triangle-list", cullMode: "none" },
+        depthStencil: { format: "depth32float", depthWriteEnabled: true, depthCompare: "less" },
+      }),
+    ]);
+    this.far = {
+      blocks,
+      slots,
+      u,
+      rec,
+      block,
+      cell,
+      list,
+      draw,
+      pipes: { cull, vis, quad, shadow },
+      cullBind: d.createBindGroup({
+        layout: cullL,
+        entries: [
+          { binding: 4, resource: { buffer: u } },
+          { binding: 5, resource: { buffer: rec } },
+          { binding: 6, resource: { buffer: block } },
+          { binding: 7, resource: { buffer: cell } },
+          { binding: 8, resource: { buffer: list } },
+          { binding: 9, resource: { buffer: draw } },
+        ],
+      }),
+      drawBind: d.createBindGroup({
+        layout: drawL,
+        entries: [
+          { binding: 4, resource: { buffer: u } },
+          { binding: 5, resource: { buffer: rec } },
+          { binding: 6, resource: { buffer: block } },
+          { binding: 7, resource: { buffer: cell } },
+          { binding: 10, resource: { buffer: list } },
+        ],
+      }),
+    };
+    this.farParams(0, 0, 8);
+  }
+  get farReady() {
+    return !!this.far?.pipes;
+  }
+  /** a cell's records into its blocks (their words, 12 a building, in the blocks' order), each block its slot and its count */
+  farUpload(blocks: readonly number[], words: Uint32Array, slot: number) {
+    const F = this.far;
+    if (!F) return;
+    const q = this.device.queue;
+    const records = words.length / 12;
+    for (const [i, b] of blocks.entries()) {
+      const n = Math.max(0, Math.min(256, records - i * 256));
+      if (n > 0) q.writeBuffer(F.rec, b * 256 * 48, words as Uint32Array<ArrayBuffer>, i * 256 * 12, n * 12);
+      q.writeBuffer(F.block, b * 8, new Uint32Array([slot, n]));
+    }
+  }
+  /** blocks let go: their counts 0 (drawn no more) */
+  farClear(blocks: readonly number[]) {
+    const F = this.far;
+    if (!F) return;
+    for (const b of blocks) this.device.queue.writeBuffer(F.block, b * 8, new Uint32Array([0, 0]));
+  }
+  /** a cell's frame in the scene's (building-layer.ts cellFrameInScene: 16 floats) */
+  farFrame(slot: number, frame: Float32Array) {
+    if (this.far) this.device.queue.writeBuffer(this.far.cell, slot * 64, frame as Float32Array<ArrayBuffer>);
+  }
+  /** the near scene's reach left to it [m], a building's leaf (the material, for now), the quads' threshold [px] */
+  farParams(maskR: number, leaf: number, lodPx: number) {
+    if (!this.far) return;
+    const v = new DataView(this.farUData);
+    v.setUint32(0, this.far.blocks, true);
+    v.setFloat32(4, maskR, true);
+    v.setFloat32(8, lodPx, true);
+    v.setFloat32(12, Math.max(0, leaf), true);
+    this.device.queue.writeBuffer(this.far.u, 0, this.farUData);
+  }
+  private farReset = new Uint32Array([36, 0, 0, 0, 6, 0, 0, 0]);
+  private farActive = false;
+  /** the far layer's buildings in view at the last cull (boxes, quads — read back) */
+  async farInView(): Promise<{ boxes: number; quads: number }> {
+    if (!this.far) return { boxes: 0, quads: 0 };
+    const r = this.device.createBuffer({ size: 32, usage: GPUBufferUsage.MAP_READ | GPUBufferUsage.COPY_DST });
+    const enc = this.device.createCommandEncoder();
+    enc.copyBufferToBuffer(this.far.draw, 0, r, 0, 32);
+    this.device.queue.submit([enc.finish()]);
+    await r.mapAsync(GPUMapMode.READ);
+    const w = new Uint32Array(r.getMappedRange());
+    const out = { boxes: w[1]!, quads: w[5]! };
+    r.unmap();
+    r.destroy();
+    return out;
+  }
+  farRelease() {
+    if (!this.far) return;
+    for (const b of [this.far.u, this.far.rec, this.far.block, this.far.cell, this.far.list, this.far.draw]) b.destroy();
+    this.far = null;
+  }
   private benchReset = new Uint32Array([36, 0, 0, 0, 6, 0, 0, 0]);
   /** of the last read's envelopes in view, those drawn as quads (under the LOD threshold) */
   benchQuads = 0;
@@ -1407,6 +1679,8 @@ export class SceneryRaster {
     q.writeBuffer(this.sceneryU, 0, this.sceneryOut);
     q.writeBuffer(this.draws, 0, this.reset);
     if (this.bench && !(this.benchSkip & 1)) q.writeBuffer(this.bench.draw, 0, this.benchReset);
+    this.farActive = !!this.far?.pipes && this.farOn;
+    if (this.farActive && !(this.farSkip & 1)) q.writeBuffer(this.far!.draw, 0, this.farReset);
     // (the Sun's view: its trees culled into the shadow lists when it is to be drawn — encodeShadow —; else none)
     this.sunOn = !!sun && sun[15]! > 0.5 && this.shadowReady;
     if (sun) {
@@ -1431,6 +1705,15 @@ export class SceneryRaster {
     }
     pass.setPipeline(this.clampBoxesPipe!);
     pass.dispatchWorkgroups(1);
+    // (PLAN-J8 J8-4: the far buildings' culling — over every record of the pool)
+    if (this.farActive && !(this.farSkip & 1)) {
+      const F = this.far!;
+      const g = Math.ceil((F.blocks * 256) / 64);
+      pass.setPipeline(F.pipes!.cull);
+      pass.setBindGroup(0, this.cullBind!);
+      pass.setBindGroup(1, F.cullBind);
+      pass.dispatchWorkgroups(Math.min(g, 65535), Math.ceil(g / 65535));
+    }
     // (PLAN-J8 J8-0 (c): the envelope bench's culling — its list and its draw's instances, reset before the pass)
     if (this.bench && this.benchPipes && !(this.benchSkip & 1)) {
       const g = Math.ceil(this.bench.count / 64);
@@ -1486,6 +1769,16 @@ export class SceneryRaster {
         pass.drawIndirect(this.draws, (LISTS + 3) * 16);
       }
     }
+    // (PLAN-J8 J8-4: the far buildings in view — boxes, then the quads under the threshold)
+    if (this.farActive && !(this.farSkip & 2)) {
+      const F = this.far!;
+      pass.setBindGroup(0, this.drawBind);
+      pass.setBindGroup(1, F.drawBind);
+      pass.setPipeline(F.pipes!.vis);
+      pass.drawIndirect(F.draw, 0);
+      pass.setPipeline(F.pipes!.quad);
+      pass.drawIndirect(F.draw, 16);
+    }
     // (PLAN-J8 J8-0 (c): the envelope bench's envelopes in view, solid, a real building's material)
     if (this.bench && this.benchPipes && !(this.benchSkip & 2)) {
       pass.setPipeline(this.benchPipes.vis);
@@ -1529,6 +1822,14 @@ export class SceneryRaster {
     buildings.drawIndirect(this.draws, LISTS * 16);
     buildings.setPipeline(this.meshShadowPipe!);
     buildings.drawIndirect(this.draws, (LISTS + 4) * 16);
+    // (PLAN-J8 J8-4: the far buildings', all those resident — those the near scene draws left out)
+    if (this.farActive && !(this.farSkip & 4)) {
+      const F = this.far!;
+      buildings.setPipeline(F.pipes!.shadow);
+      buildings.setBindGroup(0, this.drawBind);
+      buildings.setBindGroup(1, F.drawBind);
+      buildings.draw(36, F.blocks * 256);
+    }
     // (PLAN-J8 J8-0 (c): the envelope bench's, all of them — as the buildings' boxes, uncut by the Sun's view)
     if (this.bench && this.benchPipes && !(this.benchSkip & 4)) {
       buildings.setPipeline(this.benchPipes.shadow);
@@ -1584,5 +1885,6 @@ export class SceneryRaster {
     for (const b of [this.frameU, this.sceneryU, this.draws, this.lists, this.sunU, ...this.meshes, ...this.cascadeSunU]) b.destroy();
     if (this.bench) for (const b of [this.bench.env, this.bench.list, this.bench.draw]) b.destroy();
     this.bench = null;
+    this.farRelease();
   }
 }
