@@ -21,6 +21,17 @@ if (process.env.FK_CASE === "flight-start") {
     const c = __bh.camera; for (let i = 0; i < 10; i++) __bh.step(1 / 30); c.apSet({ ap: true, athr: true, alt: 500, hdg: 270 * Math.PI / 180, spd: 140 })`;
   process.env.FK_CHANGED ??= "true";
 }
+// (FK_CASE=load — J7-9: the F-35 lined up at Edwards and saved, then placed in flight 30 km off on its holds; the save loaded back measured —
+// parcours-reprise's 417 ms)
+if (process.env.FK_CASE === "load") {
+  process.env.FK_PRE ??= `Object.assign(__bh.settings, { vessel: "f35", wind: 0, damage: false }); setTimeout(() => { __bh.game.lineUp("Edwards");
+    setTimeout(() => { window.__save = __bh.game.snapshot(); __bh.game.flyAt(35.2, -118.2, 3000, 90, 160); const c = __bh.camera;
+      for (let i = 0; i < 10; i++) __bh.step(1 / 30); c.apSet({ ap: true, athr: true, alt: Math.round(c.geoNow().alt), hdg: Math.PI / 2, spd: 160 });
+      window.__readyToLoad = true; }, 3000); }, 3000)`;
+  process.env.FK_PRE_DONE ??= "!!window.__readyToLoad";
+  process.env.FK_CHANGE ??= "__bh.game.load(window.__save)";
+  process.env.FK_CHANGED ??= "!!__bh.camera.ourLanded || !!__bh.camera.rolling";
+}
 type Run = { atS: number; ms: number; self: { f: string; ms: number }[]; incl: { f: string; ms: number }[] };
 function runsOver(pr: CdpProfile, minMs: number): Run[] {
   const name = new Map(

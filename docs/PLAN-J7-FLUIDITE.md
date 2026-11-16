@@ -156,6 +156,15 @@ des entrées datées ; les causes des à-coups (compilation de la météo, retou
   passage) : **reproduits** — la météo 499 ms à froid / 350 ms à chaud (une image GPU de 401 ms et une collection de 635 Mo, pas la
   compilation de son noyau), le retour par F1 650 ms à froid (le noyau principal recompilé) / 250 ms à chaud (l'image du retour) ; détail
   dans la [fiche](progress/j7/FICHE-A-COUPS-2026-11-16.md) §4. Leurs lots restent ouverts, leurs causes relues.
+- **J7-9, l'arrivée des données après un placement — non reproduite** (11/16 09:51 UTC) : e2e
+  `j7-placement-arrival` (les passes de calcul — seules attribuables sur Apple — de chaque image 25 s après le placement) : depuis Hyères
+  vers les Maures **aucune image > 120 ms** ; au premier placement depuis le lancement **une seule** (217 ms, le placement lui-même, côté
+  thread), le GPU à 49 ms tout du long ; `parcours-camera` et `parcours-gpu` à la règle 13 sous la sonde : plus d'images GPU de 150–290 ms
+  hors du mode photo (son image fixe affinée, 500–540 ms, voulu). **Les images lourdes de la fiche venaient des parcours d'avant la règle
+  13** : l'avion planait manette à 0 vers le relief pendant les attentes. Le chargement d'une sauvegarde (`j7-first-kernel`
+  `FK_CASE=load`, Edwards au sol depuis un vol à 3 000 m) : **aucune image > 100 ms**. À fermer « non reproduit » (session d'analyse).
+  `parcours-gpu` rouge une fois (la consigne d'altitude 680 → 670 m après la reprise ; vert au passage suivant ; l'arbre envoyé au mini
+  portait aussi les modifications non commitées d'autres sessions — non attribué).
 - **J7-8, le début du vol** (11/16 09:31 UTC) — profil CPU du placement du F-35 au-dessus de Hyères (e2e
   `j7-first-kernel`, `FK_CASE=flight-start`, kerr-mini, travail natif compté) : **ce ne sont pas les tuiles** (leur arrivée coïncide). Le
   thread principal y fait : **la musique** — son thème lancé à « IN FLIGHT » : la réverbération (`impulseResponse`, ~40 ms) et la synthèse de

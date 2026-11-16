@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-16 09:32 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-16 09:51 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous. Ce qui est fermé quitte le tableau « En cours » pour la ligne « Fermé récemment ».
@@ -8692,3 +8692,11 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
 - Limites : les 338 fichiers en attente (dont 107 qui enchaînent des cas sans scénario) se mettent à la règle quand on les touche ; le
   repérage des « cas enchaînés » est textuel (une boucle dans le JS de page compte aussi).
 - Suite : la session du rendu peut appeler `app.scenario` dans ses parcours-* ; puis l'axe au décollage et la piste du HUD.
+
+### 2026-11-16 09:51 UTC — PLAN-J7 J7-9 : l'arrivée des données après un placement, non reproduite
+
+- Réalisé : e2e `j7-placement-arrival` (les passes de calcul de chaque image après un placement) ; `j7-first-kernel` `FK_CASE=load`.
+- Preuves (kerr-mini) : placement depuis Hyères — aucune image > 120 ms ; premier placement — une (217 ms, le placement) ; les parcours à la
+  règle 13 sous la sonde — plus d'images GPU lourdes hors du mode photo ; chargement d'une sauvegarde — aucune image > 100 ms.
+- Limites : les images lourdes de la fiche J7-0 venaient d'avions qui planaient vers le relief (avant la règle 13) ; à fermer par la session
+  d'analyse. `parcours-gpu` rouge une fois (consigne 680 → 670 m), vert ensuite, non attribué.
