@@ -10,6 +10,7 @@
 import type { ZoneRecord } from "./pwa/rules";
 import {
   type ZoneChain,
+  type ZoneCorridor,
   type ZoneProfileId,
   type ZoneSources,
   ZONE_PROFILES,
@@ -24,14 +25,23 @@ import { cellsOnlyIn, type ZoneCells, zoneCellTiles } from "./system/zone-cells"
 export interface Zones {
   /** what a zone would hold: its tiles' chains of fetches, their links, its size [bytes] by the kinds' means, its download
    *  time [s] */
-  estimate(o: { lat: number; lon: number; radiusKm: number; profile: ZoneProfileId; coreKm?: number }): {
+  estimate(o: { lat: number; lon: number; radiusKm: number; profile: ZoneProfileId; coreKm?: number; corridor?: ZoneCorridor }): {
     chains: number;
     urls: number;
     bytes: number;
     seconds: number;
   };
   /** a zone added and its download started; its id */
-  add(o: { name: string; lat: number; lon: number; radiusKm: number; profile: ZoneProfileId; coreKm?: number }): Promise<string | null>;
+  /** a zone added — with a corridor (PLAN-J8 J8-9 (2)): the airfield's levels along its track — and its download started; its id */
+  add(o: {
+    name: string;
+    lat: number;
+    lon: number;
+    radiusKm: number;
+    profile: ZoneProfileId;
+    coreKm?: number;
+    corridor?: ZoneCorridor;
+  }): Promise<string | null>;
   list(): Promise<ZoneRecord[]>;
   /** the finest levels the zones hold with the camera at a place [°] (system/zones.ts zoneLevelsAt; the zones as last
    *  read or saved): null out of every zone */
@@ -81,6 +91,7 @@ export function createZones(o: {
       ZONE_PROFILES[z.profile as ZoneProfileId] ?? ZONE_PROFILES.low,
       z.sources,
       (z.coreKm ?? 0) * 1000,
+      z.corridor ?? null,
     );
   // (the zones as last read or saved: the game's levels offline follow them, at once — heldAt)
   let known: ZoneRecord[] = [];
@@ -186,8 +197,8 @@ export function createZones(o: {
     void run();
   })();
   return {
-    estimate({ lat, lon, radiusKm, profile, coreKm = 0 }) {
-      const chains = zoneChains(lat, lon, radiusKm * 1000, ZONE_PROFILES[profile], o.sources(), coreKm * 1000);
+    estimate({ lat, lon, radiusKm, profile, coreKm = 0, corridor }) {
+      const chains = zoneChains(lat, lon, radiusKm * 1000, ZONE_PROFILES[profile], o.sources(), coreKm * 1000, corridor ?? null);
       return {
         chains: chains.length,
         urls: chains.reduce((s, c) => s + c.length, 0),
@@ -195,7 +206,7 @@ export function createZones(o: {
         seconds: zoneDuration(chains),
       };
     },
-    async add({ name, lat, lon, radiusKm, profile, coreKm }) {
+    async add({ name, lat, lon, radiusKm, profile, coreKm, corridor }) {
       try {
         await navigator.storage?.persist?.();
       } catch {
@@ -210,6 +221,9 @@ export function createZones(o: {
         radiusKm,
         profile,
         ...(coreKm ? { coreKm } : {}),
+        ...(corridor
+          ? { corridor: { points: corridor.points.map((p) => [p[0], p[1]] as [number, number]), halfWidthM: corridor.halfWidthM } }
+          : {}),
         total: 0,
         done: 0,
         bytes: 0,

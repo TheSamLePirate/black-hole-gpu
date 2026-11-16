@@ -90,6 +90,46 @@ export interface ZoneSources {
  */
 export type ZoneChain = string[];
 
+/** PLAN-J8 J8-9 (2) — a zone's corridor (Sam, 16 Nov 2026: « ok couloir »): the airfield's levels (ZONE_CORE — what a flight under
+ *  ~1 km asks, full screen) along a track, `halfWidthM` either side (1–2 km wide), the zone's profile elsewhere in its disc. The track:
+ *  its points [lat °, lon °] in order (system/j8a-tracks.ts's, J8-A's flights). */
+export interface ZoneCorridor {
+  points: readonly (readonly [number, number])[];
+  halfWidthM: number;
+}
+/** a place's distance [m] from a corridor's track (its segments, in Web Mercator at the zone's centre's scale — zoneDistance's) */
+export function corridorDistance(lat0: number, lon0: number, c: ZoneCorridor, lat: number, lon: number): number {
+  const D = Math.PI / 180,
+    C = 2 * Math.PI * WGS84_A * Math.cos(lat0 * D);
+  const merc = (la: number) => Math.asinh(Math.tan(la * D)) / (2 * Math.PI);
+  const xy = (la: number, lo: number): [number, number] => {
+    let dl = (lo - lon0) / 360;
+    dl -= Math.round(dl);
+    return [dl * C, (merc(la) - merc(lat0)) * C];
+  };
+  const [px, py] = xy(lat, lon);
+  let best = Number.POSITIVE_INFINITY;
+  for (let k = 0; k < c.points.length; k++) {
+    const [ax, ay] = xy(c.points[k]![0], c.points[k]![1]);
+    const [bx, by] = k + 1 < c.points.length ? xy(c.points[k + 1]![0], c.points[k + 1]![1]) : [ax, ay];
+    const vx = bx - ax,
+      vy = by - ay,
+      l2 = vx * vx + vy * vy;
+    const t = l2 > 0 ? Math.max(0, Math.min(1, ((px - ax) * vx + (py - ay) * vy) / l2)) : 0;
+    best = Math.min(best, Math.hypot(px - ax - t * vx, py - ay - t * vy));
+  }
+  return best;
+}
+/** the disc a corridor's zone needs: its track's middle, and the farthest of its points from it plus the half-width [m] */
+export function corridorDisc(c: ZoneCorridor): { lat: number; lon: number; radius: number } {
+  const lats = c.points.map((p) => p[0]),
+    lons = c.points.map((p) => p[1]);
+  const lat = (Math.min(...lats) + Math.max(...lats)) / 2,
+    lon = (Math.min(...lons) + Math.max(...lons)) / 2;
+  const radius = Math.max(...c.points.map((p) => zoneDistance(lat, lon, p[0], p[1]))) + c.halfWidthM;
+  return { lat, lon, radius };
+}
+
 /**
  * The tiles of a zone of `radius` metres round a place [°], to its profile's levels: at each level, those the game's window
  * holds with the camera anywhere in the disc — its half-side (SPAN; 8 at a far reach from FINE_Z to ZG1, the IGN's
@@ -108,44 +148,59 @@ export function zoneTiles(
   fineSpan = 8,
   relief = true,
   core = 0,
+  corridor: ZoneCorridor | null = null,
 ): { relief: [number, number, number][]; ortho: [number, number, number][] } {
   const D = Math.PI / 180;
   const reliefs: [number, number, number][] = [],
     ortho: [number, number, number][] = [];
   const coreR = Math.min(Math.max(core, 0), radius);
-  const level = (z: number, margin: number, out: [number, number, number][], national: boolean, radius: number) => {
+  const zoneR = radius;
+  // (a fine level's tile along the corridor: its centre within the half-width and the camera's window — `margin` tiles — plus half a
+  // tile's diagonal of the track: a camera on the track whose window holds it)
+  const along = (z: number, margin: number, x: number, y: number) => {
+    if (!corridor) return false;
+    const n = 2 ** z,
+      tileM = (2 * Math.PI * WGS84_A * Math.cos(lat * D)) / n;
+    const lo = ((x + 0.5) / n) * 360 - 180,
+      la = Math.atan(Math.sinh(Math.PI * (1 - (2 * (y + 0.5)) / n))) / D;
+    return corridorDistance(lat, lon, corridor, la, lo) <= corridor.halfWidthM + (margin + 0.75) * tileM;
+  };
+  const level = (z: number, margin: number, out: [number, number, number][], national: boolean, radius: number, fine = false) => {
     const n = 2 ** z,
       tileM = (2 * Math.PI * WGS84_A * Math.cos(lat * D)) / n;
     const cx = ((lon + 180) / 360) * n,
       cy = ((1 - Math.asinh(Math.tan(lat * D)) / Math.PI) / 2) * n;
     const r = radius / tileM,
-      reach = Math.ceil(r + margin + 1);
+      // (the corridor's tiles anywhere in the zone's disc: scanned over it all)
+      reach = Math.ceil((fine && corridor ? Math.max(radius, zoneR) / tileM : r) + margin + 1);
     for (let y = Math.max(0, Math.floor(cy) - reach); y <= Math.min(n - 1, Math.floor(cy) + reach); y++)
       for (let x = Math.floor(cx) - reach; x <= Math.floor(cx) + reach; x++) {
         // (a camera within the disc whose window — `margin` tiles round it — holds the tile: the disc meets the tile's square
         // widened by it)
         const dx = Math.max(x - margin - cx, 0, cx - (x + 1 + margin)),
           dy = Math.max(y - margin - cy, 0, cy - (y + 1 + margin));
-        if (dx * dx + dy * dy > r * r) continue;
+        const inDisc = dx * dx + dy * dy <= r * r;
+        // (a level finer than the profile's: the core's disc, or the corridor along the track)
+        if (!inDisc && !(fine && along(z, margin, x, y))) continue;
         const xw = ((x % n) + n) % n;
         if (national && !tileSource(NATIONAL, n, xw, y)) continue;
         out.push([z, xw, y]);
       }
   };
   const top =
-    coreR > 0
+    coreR > 0 || corridor
       ? { reliefZ1: Math.max(profile.reliefZ1, ZONE_CORE.reliefZ1), orthoZ1: Math.max(profile.orthoZ1, ZONE_CORE.orthoZ1) }
       : profile;
   for (let z = Z0; z <= Math.min(top.reliefZ1, relief ? Z1 : ZG1); z++) {
     // (the reach's span from FINE_Z up — the IGN's z 15–17 too since T8k, 6a3cd640: earth-tiles.ts levelSpan —; a zone kept
     // to 4 there missed the tiles a far reach's 8-tile windows ask, flown offline)
     const span = z >= FINE_Z ? fineSpan : SPAN;
-    level(z, span + 1.5, reliefs, z > ZG1, z <= profile.reliefZ1 ? radius : coreR);
+    level(z, span + 1.5, reliefs, z > ZG1, z <= profile.reliefZ1 ? radius : coreR, z > profile.reliefZ1);
   }
   // (the orthophotos' z 15–16 in 8-tile windows at a far reach — earth-tiles.ts ORTHO_BIG_LEVELS, T8e —, 4-tile ones else)
   for (let z = ORTHO_Z0; z <= top.orthoZ1; z++) {
     const span = z - ORTHO_Z0 < ORTHO_BIG_LEVELS && fineSpan > SPAN ? ORTHO_SPAN_BIG : ORTHO_SPAN;
-    level(z, span + 0.5, ortho, true, z <= profile.orthoZ1 ? radius : coreR);
+    level(z, span + 0.5, ortho, true, z <= profile.orthoZ1 ? radius : coreR, z > profile.orthoZ1);
   }
   return { relief: reliefs, ortho };
 }
@@ -381,9 +436,17 @@ export function farCellZoneChains(lat: number, lon: number, radius: number): Zon
 /** a zone's chains, each link asked once at most where it is sure to be (a parent's Terrarium, a lights' parent, shared by
  *  many tiles: the first's), the coarse
  *  levels first (a download cut short still holds the overview), the world scenery's last */
-export function zoneChains(lat: number, lon: number, radius: number, profile: ZoneProfile, o: ZoneSources, core = 0): ZoneChain[] {
+export function zoneChains(
+  lat: number,
+  lon: number,
+  radius: number,
+  profile: ZoneProfile,
+  o: ZoneSources,
+  core = 0,
+  corridor: ZoneCorridor | null = null,
+): ZoneChain[] {
   // (the relief's survey off: no level finer than the global data's asked)
-  const t = zoneTiles(lat, lon, radius, profile, o.span, o.relief, core);
+  const t = zoneTiles(lat, lon, radius, profile, o.span, o.relief, core, corridor);
   const tiles = [...t.relief.map((v) => ["r", ...v] as const), ...(o.ortho ? t.ortho.map((v) => ["o", ...v] as const) : [])];
   tiles.sort((a, b) => a[1] - b[1]);
   // (a link left out only where an earlier chain asks it first — surely fetched —: one met only as a fallback, past a link
@@ -417,6 +480,8 @@ export interface ZonePlace {
   radiusKm: number;
   profile: string;
   coreKm?: number;
+  /** its corridor (J8-9 (2)): the airfield's levels along a track */
+  corridor?: ZoneCorridor;
   sources: Pick<ZoneSources, "ortho" | "relief">;
 }
 /** a place's distance [m] from a zone's centre [°] as zoneTiles measures its disc: in Web Mercator, at the centre's scale */
@@ -440,7 +505,10 @@ export function zoneLevelsAt(zones: readonly ZonePlace[], lat: number, lon: numb
     const d = zoneDistance(z.lat, z.lon, lat, lon);
     if (d > z.radiusKm * 1000) continue;
     const p: ZoneProfile = ZONE_PROFILES[z.profile as ZoneProfileId] ?? ZONE_PROFILES.low;
-    const core = (z.coreKm ?? 0) > 0 && d <= Math.min(z.coreKm!, z.radiusKm) * 1000;
+    // (the core's disc, or the corridor along its track — the half-width alone: the windows' margin is for the zone's own tiles)
+    const core =
+      ((z.coreKm ?? 0) > 0 && d <= Math.min(z.coreKm!, z.radiusKm) * 1000) ||
+      (!!z.corridor && corridorDistance(z.lat, z.lon, z.corridor, lat, lon) <= z.corridor.halfWidthM);
     const relief = z.sources.relief ? Math.max(p.reliefZ1, core ? ZONE_CORE.reliefZ1 : 0) : Math.min(p.reliefZ1, ZG1);
     const ortho = z.sources.ortho ? Math.min(Math.max(p.orthoZ1, core ? ZONE_CORE.orthoZ1 : 0), ORTHO_Z1) : ORTHO_Z0 - 1;
     out = out ? { reliefZ1: Math.max(out.reliefZ1, relief), orthoZ1: Math.max(out.orthoZ1, ortho) } : { reliefZ1: relief, orthoZ1: ortho };

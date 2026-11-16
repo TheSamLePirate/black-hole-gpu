@@ -166,6 +166,8 @@ export interface ZoneRecord {
   profile: string;
   /** its detailed core's radius [km] (system/zones.ts ZONE_CORE: the airfield's levels round its centre; 0 or none: none) */
   coreKm?: number;
+  /** its corridor (PLAN-J8 J8-9 (2), system/zones.ts ZoneCorridor): the airfield's levels along a track, half-width either side */
+  corridor?: { points: [number, number][]; halfWidthM: number };
   /** its tiles' chains of fetches (system/zones.ts zoneChains), and how many of their links are in */
   total: number;
   done: number;
