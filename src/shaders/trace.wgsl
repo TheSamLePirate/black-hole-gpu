@@ -16361,14 +16361,17 @@ fn liteLight(gq: vec3f, q: vec3f, tM: f32, fx: vec3f, fy: vec3f, hG: f32, look: 
   // (Q8 D1: a car's lamps at night — its headlights warm white, its tail lights red)
   {
     let cg = atTag(at);
+    // (PLAN-J8 J8-L: a far one's light its share of the pixel — the tag's fraction over 0.45 —; a near one's whole)
     if (cg > 4.99 && cg < 6.5) {
       let lampC = select(vec3f(1.0, 0.08, 0.04) * 0.4, vec3f(1.0, 0.92, 0.75), cg < 5.5);
-      G += lampC * (luminance(E) / PI) * RWY_LAMPS_NIGHT * 0.012 * dark;
+      let share = 1.0 - clamp((cg - select(6.0, 5.0, cg < 5.5)) / 0.45, 0.0, 1.0);
+      G += lampC * (luminance(E) / PI) * RWY_LAMPS_NIGHT * 0.012 * dark * share;
     }
     // (Q8 L10: a street lamp's head — lit in a lit town (the night lights' map at it), warm white, as bright as a car's
     // headlights' block)
     if (cg > 6.5 && cg < 7.5 && lamp > 0.02) {
-      G += select(vec3f(1.0, 0.8, 0.55), streetLampTint(xyL) * 1.2, nearL) * (luminance(E) / PI) * RWY_LAMPS_NIGHT * 0.012 * dark;
+      let share = 1.0 - clamp((cg - 7.0) / 0.45, 0.0, 1.0);
+      G += select(vec3f(1.0, 0.8, 0.55), streetLampTint(xyL) * 1.2, nearL) * (luminance(E) / PI) * RWY_LAMPS_NIGHT * 0.012 * dark * share;
     }
   }
   // (Q8 D1: a wind turbine's obstruction light — red at night, white by day, 40 flashes a minute, every farm in step)

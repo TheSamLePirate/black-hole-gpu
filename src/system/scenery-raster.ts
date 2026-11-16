@@ -1129,7 +1129,10 @@ fn farLampCull(@builtin(global_invocation_id) gid: vec3u, @builtin(num_workgroup
   let half = max(0.3, 0.75 * px);
   let q = array<vec2f, 6>(vec2f(-1.0, -1.0), vec2f(1.0, -1.0), vec2f(1.0, 1.0), vec2f(-1.0, -1.0), vec2f(1.0, 1.0), vec2f(-1.0, 1.0));
   v = v + vec3f(q[vi] * half, 0.0);
-  o.leaf = 7.0;
+  // (its light kept to the head's own: opened to 1.5 px, its glow a share of a pixel's — the square root of its area's share, seen
+  // still —, in the tag's fraction (7 + 0.45 × (1 − share): shadeLite's lamp reads it); drawn whole a pixel's glow, the far town was
+  // twice the ground's lights within 12 km — 16 Nov 2026)
+  o.leaf = 7.0 + 0.45 * (1.0 - sqrt(min(0.09 / (half * half), 1.0)));
   o.bridge = 2.0;
   o.pyl = vec4f(0.0, 0.0, 0.0, 1.0);
   o.clip = vec4f(v.x / u.right.w + u.output.z * v.z, v.y / u.up.w + u.output.w * v.z, u.forward.w, v.z);
@@ -1191,7 +1194,8 @@ fn farCarCull(@builtin(global_invocation_id) gid: vec3u, @builtin(num_workgroups
   let half = max(0.4, 0.75 * px);
   let q = array<vec2f, 6>(vec2f(-1.0, -1.0), vec2f(1.0, -1.0), vec2f(1.0, 1.0), vec2f(-1.0, -1.0), vec2f(1.0, 1.0), vec2f(-1.0, 1.0));
   v = v + vec3f(q[vi] * half, 0.0);
-  o.leaf = select(6.0, 5.0, c[1].x > 0.5);
+  // (its light kept to its lamps' own as the far lamps' — the share in the tag's fraction, 0.45 × (1 − share))
+  o.leaf = select(6.0, 5.0, c[1].x > 0.5) + 0.45 * (1.0 - sqrt(min(0.16 / (half * half), 1.0)));
   o.bridge = 2.0;
   o.pyl = vec4f(0.0, 0.0, 0.0, 1.0);
   o.clip = vec4f(v.x / u.right.w + u.output.z * v.z, v.y / u.up.w + u.output.w * v.z, u.forward.w, v.z);
