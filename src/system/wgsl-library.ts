@@ -4,8 +4,6 @@
 // and private variables those read, the structures they name) and the list of the tracer's resources (its bound buffers, textures,
 // samplers) that closure reads — which the shader declares at its own group and bindings. Pure text: no GPU.
 
-import { wgslFunction } from "./warp-grid";
-
 export interface WgslClosure {
   /** the functions reached, in the order they were found (a root first, then its callees depth-first) */
   functions: Map<string, string>;
@@ -17,10 +15,29 @@ export interface WgslClosure {
   resources: Map<string, string>;
 }
 
-/** every `fn` of a module, name → its text */
-export function wgslFunctions(src: string): Map<string, string> {
+/** the last modules' functions (a few sources: the tracer's composed text, its specialised ones) — the map read, never changed */
+const FUNCTIONS = new Map<string, ReadonlyMap<string, string>>();
+/** every `fn` of a module, name → its text (its first, as `wgslFunction` finds it). One pass over the source, then cached by it
+ *  (PLAN-J7 J7-7: each `fn` searched from the start again — `wgslFunction` per name — cost ~110 ms of the main thread over the
+ *  tracer's 17 000 lines, twice at a craft change: the raster's height library and its pass) */
+export function wgslFunctions(src: string): ReadonlyMap<string, string> {
+  const hit = FUNCTIONS.get(src);
+  if (hit) return hit;
   const out = new Map<string, string>();
-  for (const [, name] of src.matchAll(/^fn (\w+)\(/gm)) out.set(name!, wgslFunction(src, name!));
+  for (const m of src.matchAll(/^fn (\w+)\(/gm)) {
+    const name = m[1]!;
+    if (out.has(name)) continue;
+    const at = m.index!;
+    let i = src.indexOf("{", at);
+    let depth = 0;
+    for (; i < src.length; i++) {
+      if (src[i] === "{") depth++;
+      else if (src[i] === "}" && --depth === 0) break;
+    }
+    out.set(name, src.slice(at, i + 1));
+  }
+  if (FUNCTIONS.size >= 6) FUNCTIONS.delete(FUNCTIONS.keys().next().value!);
+  FUNCTIONS.set(src, out);
   return out;
 }
 
@@ -47,7 +64,7 @@ export function wgslClosure(
   replace: Map<string, string> = new Map(),
   stop: ReadonlySet<string> = new Set(["cost"]),
 ): WgslClosure {
-  const all = wgslFunctions(src);
+  const all = new Map(wgslFunctions(src));
   for (const [n, body] of replace) all.set(n, body);
   const functions = new Map<string, string>();
   const add = (name: string) => {

@@ -60,3 +60,23 @@ test("the hierarchy's first crossing is the brute force's", () => {
     if (Math.hypot(pos[3 * i]!, pos[3 * i + 1]!, pos[3 * i + 2]!) < 10) expect(near.has(i)).toBe(true);
   }
 });
+
+test("J7-7: a tree handed back from a worker (parts → fromParts) answers as the one built here", async () => {
+  const { TriBVH } = await import("../src/system/collide");
+  const { buildBVH } = await import("../src/system/bvh-client");
+  let seed = 3;
+  const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+  const pos = new Float32Array(3000).map(() => rnd() * 10 - 5);
+  const tri = new Uint32Array(3000).map(() => Math.floor(rnd() * 1000));
+  const here = new TriBVH(pos, tri);
+  const there = TriBVH.fromParts(pos, tri, here.parts());
+  // (no worker in the tests: the client builds here, the same tree)
+  const client = await buildBVH(pos, tri);
+  for (let k = 0; k < 200; k++) {
+    const o: [number, number, number] = [rnd() * 12 - 6, rnd() * 12 - 6, rnd() * 12 - 6];
+    const e: [number, number, number] = [rnd() * 12 - 6, rnd() * 12 - 6, rnd() * 12 - 6];
+    expect(there.segment(o, e)).toEqual(here.segment(o, e));
+    expect(client.segment(o, e)).toEqual(here.segment(o, e));
+  }
+  expect(there.bounds()).toEqual(here.bounds());
+});

@@ -72,7 +72,8 @@ import {
 } from "./ship-lights";
 import { GEAR_HINGES, gearMesh } from "./gear-mesh";
 import type { GpuProfiler } from "./gpuprof";
-import { cockpitHull, samplePoints, TriBVH, vesselHulls } from "./system/collide";
+import { cockpitHull, samplePoints, vesselHulls } from "./system/collide";
+import { buildBVH } from "./system/bvh-client";
 import { cabinHitOf } from "./cockpit/pick";
 import { MAX_SEGMENTS, SEG_FLOATS } from "./contrails";
 import { VESSELS, type JetDef, type VesselId } from "./vessels";
@@ -1238,7 +1239,8 @@ export class ShipRenderer {
     const r = Math.hypot(...sub(hi, lo)) / 2;
     const H = vesselHulls[id];
     H.points = samplePoints(verts, 10, nv, id === "endurance" ? 2 : 0.5);
-    H.bvh = new TriBVH(pos, new Uint32Array(idx));
+    // (the tree built off the page's thread — bvh-worker.ts, PLAN-J7 J7-7: ~100 ms held an image at a craft change)
+    H.bvh = await buildBVH(pos, new Uint32Array(idx));
     H.radius = r + Math.hypot(...c);
     H.lo = lo;
     H.hi = hi;
@@ -1285,7 +1287,7 @@ export class ShipRenderer {
     const r = Math.hypot(...sub(hi, lo)) / 2;
     const H = vesselHulls.f35;
     H.points = samplePoints(verts, 10, nv, 0.5);
-    H.bvh = new TriBVH(pos, idx.slice(0, solid));
+    H.bvh = await buildBVH(pos, idx.slice(0, solid));
     H.radius = r + Math.hypot(...c);
     H.lo = lo;
     H.hi = hi;
@@ -1326,7 +1328,7 @@ export class ShipRenderer {
     const r = Math.hypot(...sub(hi, lo)) / 2;
     const H = vesselHulls.a320;
     H.points = samplePoints(verts, 10, nv, 0.6);
-    H.bvh = new TriBVH(pos, idx.slice(0, solid));
+    H.bvh = await buildBVH(pos, idx.slice(0, solid));
     H.radius = r + Math.hypot(...c);
     H.lo = lo;
     H.hi = hi;
@@ -1704,7 +1706,8 @@ export class ShipRenderer {
         // (its walls for the camera moving about it: the triangles in a hierarchy)
         const pos = new Float32Array(nv * 3);
         for (let i = 0; i < nv; i++) pos.set(verts.subarray(10 * i, 10 * i + 3), 3 * i);
-        cockpitHull.bvh = new TriBVH(pos, idx);
+        // (built off the page's thread: the camera's walls a moment later)
+        void buildBVH(pos, idx).then((b) => (cockpitHull.bvh = b));
         cockpitHull.verts = verts;
         cockpitHull.lo = lo;
         cockpitHull.hi = hi;

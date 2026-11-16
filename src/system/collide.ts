@@ -19,6 +19,14 @@ export interface Hit {
   v: number;
 }
 
+/** a TriBVH's nodes as plain arrays (they cross a worker's boundary) */
+export interface BVHParts {
+  box: Float32Array;
+  link: Int32Array;
+  order: Uint32Array;
+  nNodes: number;
+}
+
 export class TriBVH {
   /** the vertices (x, y, z each) and the triangles (three vertex indices each) */
   readonly pos: Float32Array;
@@ -45,6 +53,17 @@ export class TriBVH {
         cen[3 * i + k] = (pos[3 * tri[3 * i]! + k]! + pos[3 * tri[3 * i + 1]! + k]! + pos[3 * tri[3 * i + 2]! + k]!) / 3;
     }
     if (nt) this.build(0, nt, cen);
+  }
+
+  /** its built nodes, to hand from a worker to the page (bvh-worker.ts, bvh-client.ts — PLAN-J7 J7-7) */
+  parts(): BVHParts {
+    return { box: this.box, link: this.link, order: this.order, nNodes: this.nNodes };
+  }
+  /** a tree built elsewhere (bvh-worker.ts) over these vertices and triangles: no build here */
+  static fromParts(pos: Float32Array, tri: Uint32Array, p: BVHParts): TriBVH {
+    const b = Object.create(TriBVH.prototype) as TriBVH;
+    Object.assign(b, { pos, tri, box: p.box, link: p.link, order: p.order, nNodes: p.nNodes });
+    return b;
   }
 
   /** the whole mesh's box: min, max */

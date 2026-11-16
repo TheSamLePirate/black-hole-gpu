@@ -28,3 +28,17 @@ test("a module: Params first, its entry last; a missing root throws", () => {
   expect(m.endsWith("// tail")).toBeTrue();
   expect(() => wgslClosure(src, ["noSuchFunction"])).toThrow();
 });
+
+test("J7-7: every function read in one pass — the same text as one search per name, and cached by the source", async () => {
+  const { wgslFunctions } = await import("../src/system/wgsl-library");
+  const { wgslFunction } = await import("../src/system/warp-grid");
+  const t0 = performance.now();
+  const all = wgslFunctions(src);
+  const first = performance.now() - t0;
+  const names = [...src.matchAll(/^fn (\w+)\(/gm)].map((m) => m[1]!);
+  expect(all.size).toBe(new Set(names).size);
+  for (const n of names) expect(all.get(n)).toBe(wgslFunction(src, n));
+  const t1 = performance.now();
+  expect(wgslFunctions(src)).toBe(all);
+  console.log(`  ${all.size} functions: ${first.toFixed(1)} ms the first time, ${(performance.now() - t1).toFixed(2)} ms cached`);
+});

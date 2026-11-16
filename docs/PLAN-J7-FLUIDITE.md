@@ -130,4 +130,17 @@ des entrées datées ; les causes des à-coups (compilation de la météo, retou
   jusqu'à 45 m pour 50 m (le fondu de 300 m — q. 3, révisable sur cette planche) ; J0 (A B B A, kerr-mini) : GPU p50 49,6 / 49,3 avant,
   49,3 après — aucun coût vu (un run B sans mesure : le décor bloqué 60 s à l'étape forêt, à surveiller). Le second test d'`ellipsoid`
   expire aussi avant J7-1 (PROBLEMES).
+- **J7-7, premier pas** (11/16 06:18 UTC) — profil CPU du rechargement et du changement d'appareil (e2e
+  `j7-first-kernel`, kerr-mini, bundle non minifié, runs `…-j77-profile`, `-profile2`, `-profile3`) : **la prise en main n'est pas où la
+  sonde la croyait** — `camera.piloting` vrai à 1,0 s, la première image à 2,1 s, **l'écran de chargement levé à 5,2–5,5 s** ; les 263–383 ms
+  du premier noyau et les collections de 325–360 Mo tombent **sous l'écran de chargement** (animé par son worker) ; **dans les 5 s après qu'il
+  se lève : aucune image > 100 ms**, trois passages (à chaud). **Au changement d'appareil** (Ranger → F-35, avec la mise en place au
+  Bourget) : 2 × ~110 ms de `wgslFunctions` (la bibliothèque de hauteurs du raster découpée dans `trace.wgsl` : une recherche par
+  fonction depuis le début, quadratique) et ~105 ms de `TriBVH.build` (la coque du F-35) sur le thread principal. **Corrigé** :
+  `wgslFunctions` en un passage, en cache par source (`wgsl-library.ts`, parité testée sur les 709 fonctions) ; les arbres des coques
+  construits dans un worker (`system/bvh-worker.ts`, `bvh-client.ts`, repli sur place ; `TriBVH.parts`/`fromParts`, parité testée ;
+  `server.ts`, `build-pages.ts`). **Mesuré** : au changement, écarts > 100 ms **217, 250, 117, 182 ms → 117, 117, 116 ms** ; les deux
+  fonctions absentes du profil. **Reste** : ~116 ms de travail natif au démarrage d'une compilation (la création des modules — compté
+  « (program) »), une collection, un `writeTexture` de 67 ms (une couverture d'imagerie) ; le rejeu à froid (J7-2/J7-3 avec), le critère
+  sur trois parcours.
 - **Le plan révisé** (2026-11-16 05:45 UTC, session d'analyse, sur la fiche de J7-0 — [FICHE-A-COUPS](progress/j7/FICHE-A-COUPS-2026-11-16.md)) : J7-2 (météo) et J7-3 (F1) non reproduits à chaud → rejoués à froid d'abord, fermés s'ils ne se reproduisent pas ; trois lots ajoutés sur les à-coups mesurés : **J7-7** le premier noyau de la partie et le changement d'appareil (433–784 ms, ~200 ms), **J7-8** le début du vol (150–217 ms, ~300 tuiles), **J7-9** l'arrivée des données après un placement (images GPU de 150–290 ms, avec le chargement d'une sauvegarde) ; `parcours-ville` rouge mis dans J7-4 (à expliquer, pas « variance ») ; l'ordre révisé au §2.
