@@ -44,6 +44,8 @@ export const FAR_REGIONS: readonly Region[] = [
   "north",
   "temperate",
 ];
+/** a cell refused for the budget asked again once the eye moved this far [m] */
+export const REFUSED_MOVE_M = 2000;
 /** a cell's fade-in once put [ms] */
 export const FAR_FADE_MS = 1000;
 
@@ -53,6 +55,9 @@ export class BuildingFar {
   private freeSlots: number[];
   private wantedAt: { lat: number; lon: number; heading: number; t: number } | null = null;
   private wanted = new Map<string, CellWant>();
+  /** cells refused for the budget, and where the eye was then: not asked again until it moved REFUSED_MOVE_M (a city past the pool
+   *  asked its refused cells every 2 s — Paris: 3 735 refusals, the preparation pool kept busy for nothing, 16 Nov 2026) */
+  private refused = new Map<string, { lat: number; lon: number }>();
   private sceneKey = "";
   private frame: ReturnType<typeof sceneryFrame> | null = null;
   private unlisten: (() => void) | null = null;
@@ -145,6 +150,10 @@ export class BuildingFar {
         if (d > FAR_REACH_M) continue;
         const want = { x, y, priority: priority as CellWant["priority"], d };
         this.wanted.set(cellKey(x, y), want);
+        const r = this.refused.get(cellKey(x, y));
+        if (r && Math.hypot((eye.lat - r.lat) * 111320, (eye.lon - r.lon) * 111320 * Math.cos((eye.lat * Math.PI) / 180)) < REFUSED_MOVE_M)
+          continue;
+        if (r) this.refused.delete(cellKey(x, y));
         if (!this.residents.has(cellKey(x, y))) list.push(want);
       }
     this.cells().want(list);
@@ -182,6 +191,7 @@ export class BuildingFar {
       }
       if (!worst || worst[1] < want.priority || (worst[1] === want.priority && worst[2] <= want.d)) {
         this.counts.refused++;
+        if (this.wantedAt) this.refused.set(key, { lat: this.wantedAt.lat, lon: this.wantedAt.lon });
         this.cells().forget(c.x, c.y);
         return;
       }

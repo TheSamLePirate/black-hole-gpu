@@ -11728,6 +11728,7 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
         y: number;
         generation: number;
         decodedId: number;
+        vis: number[];
         depth: number | null;
         motion: number[] | null;
         craft: number | null;
@@ -11772,6 +11773,9 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
       // (the pass's own word where it has one; the adapter's otherwise)
       id: own ? new Uint32Array(raw, 256, 1)[0]! : decoded.id,
       decodedId: decoded.id,
+      // (the visibility's texel as it is — r the patch's distance, g a leaf / a tree's cell / a far building's materials, b the nearest,
+      // a the code × 2¹⁸ — a measure, PLAN-J8)
+      vis: Array.from(new Float32Array(raw, 0, 4)),
       depth,
       // (the motion target's texel — rgba16float: xy [px] to the frame before, z 1 a moving mesh’s / 2 no history / −1 the rigid’s
       // analytic motion, unread by the history)

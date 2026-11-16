@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-16 18:15 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-16 17:59 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous. Ce qui est fermé quitte le tableau « En cours » pour la ligne « Fermé récemment ».
@@ -63,7 +63,7 @@ l'état d'une mission ou d'un combat **non sauvé, dit** ; le réseau **« entre
 
 **Fermé aussi** : le plancher du raster sur GPU faible (15 nov., 23:46, proposer sous 15 images/s, décision de Sam).
 
-**La session du rendu (33d89754)** : **[PLAN-J8](docs/PLAN-J8-BATIMENTS.md)**, ordre convenu (a) matériaux, (b) J8-5, (c) Paris, (d) J8-E puis J8-L — **J8-4 allumée par défaut**, ses **matériaux éteints par défaut** (un défaut de nuit : des carrés blancs à l'horizon, cause cherchée) ; le masque le long du couloir ; **J8-5** : la jonction s'applique (proposition 1 km, à choisir par Sam), un blocage intermittent ouvert ; **J8-E écrit** (l'eau des tuiles vue par `liteWater`, l'avant/après à faire) ; **J8-A** : les tracés `j8a-tracks.ts` (couloir, décision de Sam). [PLAN-J7](docs/PLAN-J7-FLUIDITE.md) en pause.
+**La session du rendu (33d89754)** : **[PLAN-J8](docs/PLAN-J8-BATIMENTS.md)**, ordre convenu (a) matériaux, (b) J8-5, (c) Paris, (d) J8-E puis J8-L — **J8-4 allumée par défaut**, ses matériaux éteints par défaut (carrés blancs de nuit, sondés, cause cherchée) ; **J8-5** : la jonction s'applique (proposition 1 km, à choisir par Sam), un blocage intermittent ouvert ; **Paris mesuré : +3,5 ms, retour à Sam** (options envoyées) ; **J8-E fait et vu en A/B** (les rivières à l'horizon) ; **J8-A** : les tracés `j8a-tracks.ts`. [PLAN-J7](docs/PLAN-J7-FLUIDITE.md) en pause.
 
 **Priorité de Sam (16 nov., 11:30 UTC) : [PLAN-J8](docs/PLAN-J8-BATIMENTS.md), tous les bâtiments de la vue** (« c'est ça qui choque le plus ») — la suite de J7 en pause après J7-8b ; les deux sessions s'y mettent (rendu : couche GPU, scène proche ; approches : recensement, préparation des cellules, PWA) ; d'abord J8-0 (mesures) et J8-1 (le trou de 2 à 7 km).
 
@@ -9521,3 +9521,18 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   - L'eau (J8-E) n'ajoute rien : elle vient des tuiles z 13 que la zone porte déjà.
 - Limites : non vérifié dans un vrai navigateur hors ligne ; ce sera fait par `j8-zone-paris`, qui attend son créneau.
 - Suite : la mesure réelle de la zone couloir de Paris, puis J8-9 (3).
+
+### 2026-11-16 17:59 UTC — PLAN-J8 : J8-E vu en A/B, Paris mesuré (+3,5 ms, retour à Sam), les carrés blancs de nuit sondés (session 33d89754)
+
+- Destination : §19.13 (J8-A), §8 (la borne de 3 ms décidée par Sam pour Paris).
+- **J8-E, vu** (kerr-mini, `ab-commit` 17681f10 contre l'arbre, la Seine depuis 9 km, `liteSkip` 512) :
+  - avant, seule la boucle de la Seine est de l'eau, celle de la scène ;
+  - après, en plus, les rivières à l'horizon au-delà de la scène (la Seine, la Marne) ;
+  - GPU 56,7 → 56,9 ms, dans le bruit, un run par côté.
+- **Paris mesuré** (`j8-far-layer` vue `3-paris-12km`, un run) :
+  - 1 947 cellules voulues, 524 résidentes, la réserve de 24 Mio pleine ;
+  - **+3,5 ms**, au-dessus de la borne.
+  - Les options sont envoyées à Sam, avec la portée selon la densité recommandée.
+  - Corrigé : les cellules refusées redemandées toutes les 2 s (`REFUSED_MOVE_M`).
+- **Les carrés blancs de nuit sondés** (`surfaceAt().vis`, nouveau) : 21 des 24 pixels blancs sont du ciel. C'est le halo de quelques pixels lointains marqués d'une luminance énorme. La cause n'est pas trouvée. `farMaterials` reste éteint par défaut (PROBLEMES).
+- Suite : la décision de Sam pour Paris, le choix de la jonction, la cause des carrés, l'e2e J8-A sur les tracés.

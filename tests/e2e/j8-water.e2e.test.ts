@@ -14,7 +14,9 @@ import { J0_FIXED } from "./lib/j0-scene";
 // Done when: every view shot with and without the tiles' water, j8-water.json written.
 afterAll(stopServer);
 const MACHINE = process.env.J8W_MACHINE ?? (await $`hostname -s`.quiet().text()).trim();
-const OUT = process.env.J8W_OUT ?? `remote-results/j8-water/${MACHINE}`;
+// (an A/B's side its own directory — scripts/ab-e2e.ts AB_SIDE, AB_RUN)
+const SIDE = process.env.AB_SIDE ? `-${process.env.AB_SIDE}${process.env.AB_RUN ?? ""}` : "";
+const OUT = process.env.J8W_OUT ?? `remote-results/j8-water/${MACHINE}${SIDE}`;
 const DAY = "2026-07-10T13:30:00Z";
 const NIGHT = "2026-07-10T21:30:00Z";
 /** a point seen from d [km] towards bearing (from it) b [°], at altM: the camera's place and its look at the point */
@@ -67,10 +69,13 @@ test.skipIf(!E2E)(
             ] as const)
           : ([["jour", DAY]] as const)) {
           await app.js(`(() => { __bh.game.setDate("${date}"); __bh.freeze(true); __bh.touch(); return 1; })()`);
-          for (const [tag, tune] of [
-            ["avec", "{}"],
-            ["sans", "{ TUNE_TILE_WATER: 0 }"],
-          ] as const) {
+          // (J8W_AVEC_ONLY: the build as it is alone — an A/B by commits, the older side without the lever)
+          for (const [tag, tune] of (process.env.J8W_AVEC_ONLY
+            ? [["avec", "{}"]]
+            : [
+                ["avec", "{}"],
+                ["sans", "{ TUNE_TILE_WATER: 0 }"],
+              ]) as [string, string][]) {
             await app.js(`(() => { __bh.renderer.tune = ${tune}; __bh.touch(); return 1; })()`);
             await app.settled(90_000);
             const m = await app.js<Record<string, unknown>>(`(async () => {

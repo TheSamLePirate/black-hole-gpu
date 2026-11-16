@@ -6,8 +6,8 @@ import { J0_FIXED, J0_SCENE } from "./lib/j0-scene";
 
 // PLAN-J8 J8-4 — the far buildings' layer seen: the BD TOPO's cells round the eye (cellPool, J8-3) resident on the GPU (BuildingFar),
 // culled at the pixel, drawn as boxes and as quads under 8 px (Sam's decision of 16 Nov 2026), into the shadow map; the near scene's
-// own buildings left to it. Two views, the free camera, no craft, the world frozen: J0's start (500 m over the sea off Hyères, west —
-// the coast 10–30 km away, ~129 000 buildings in its field: the census, docs/progress/j8/census-j0.json) and Toulon from 12 km east.
+// own buildings left to it. Views, the free camera, no craft, the world frozen (J8F_VIEWS picks): J0's start (500 m over the sea off Hyères, west —
+// the coast 10–30 km away, ~129 000 buildings in its field: the census, docs/progress/j8/census-j0.json) Toulon from 12 km east, Paris from 12 km west (J8-A (c): the pool's budget for Paris).
 // Each: the place's data in, the far cells all in (the preparation pool idle), then the layer with quads under 8 px (Sam's decision),
 // under 4, boxes only, off, on again — 5 s each: the GPU time (median), the buildings drawn (boxes, quads), a shot (their looks compared:
 // the analysis session's question of 16 Nov 2026). Not a pass/fail on the times (j8-far-layer.json); it fails on a GPU
@@ -21,6 +21,8 @@ const OUT = process.env.J8F_OUT ?? `remote-results/j8-far-layer/${MACHINE}${SIDE
 const VIEWS = [
   { name: "1-depart-j0", label: "le départ de J0, vers la côte", lat: 43.06, lon: 6.32, altM: 550, heading: 270, pitch: -2 },
   { name: "2-toulon-12km", label: "Toulon à 12 km, depuis l'est", lat: 43.11, lon: 6.08, altM: 400, heading: 272, pitch: -3 },
+  // (PLAN-J8 J8-A (c): Paris — the layer's pool sized for it — from 12 km west, over the Seine's loops)
+  { name: "3-paris-12km", label: "Paris à 12 km, depuis l'ouest", lat: 48.865, lon: 2.185, altM: 500, heading: 90, pitch: -3 },
 ] as const;
 test.skipIf(!E2E)(
   "J8-4: the far buildings' layer — J0's view and Toulon's, the layer on, off, on: its buildings drawn, its GPU time, shots",
@@ -31,7 +33,9 @@ test.skipIf(!E2E)(
     try {
       await app.js(`(() => { Object.assign(__bh.settings, ${J0_FIXED}, { ship: false, earthClouds: 0, weather: "fair", dof: false, motionBlur: 0,
         earthPipeline: "raster" }); __bh.renderer.debugSkipShip = true; __bh.game.setDate("${J0_SCENE.date}"); return 1; })()`);
-      for (const v of VIEWS) {
+      // (J8F_VIEWS: the views by name, comma-separated)
+      const only = process.env.J8F_VIEWS?.split(",");
+      for (const v of VIEWS.filter((w) => !only || only.includes(w.name))) {
         await app.scenario(v.label);
         await app.js(`(() => { __bh.freeze(false); __bh.renderer.farBuildingsOn = true; return 1; })()`);
         const why = await app.js<string | null>(
@@ -82,9 +86,11 @@ test.skipIf(!E2E)(
       }
       const j0 = (out.views as Record<string, { on: { inView?: { boxes: number; quads: number }; layer?: { cells: number } } }>)[
         "1-depart-j0"
-      ]!;
-      expect(j0.on.layer?.cells ?? 0).toBeGreaterThan(0);
-      expect((j0.on.inView?.boxes ?? 0) + (j0.on.inView?.quads ?? 0)).toBeGreaterThan(0);
+      ];
+      if (j0) {
+        expect(j0.on.layer?.cells ?? 0).toBeGreaterThan(0);
+        expect((j0.on.inView?.boxes ?? 0) + (j0.on.inView?.quads ?? 0)).toBeGreaterThan(0);
+      }
       expect(await app.js<number>("__bh.renderer.gpuErrors")).toBe(0);
     } finally {
       out.finishedAt = new Date().toISOString();

@@ -18,6 +18,10 @@ sont commités en local, **non poussés** tant qu'il dure.
   tiennent aux matériaux des boîtes **et** à la présence des quads (boîtes seules : rien ; générique : rien).
 - **Correctif** (~17:45 UTC) : `farMaterials` false par défaut (l'aspect générique, sans marque) — 646eac75 et 17681f10, déjà déployés
   par une poussée de la session des approches, portaient le défaut ; les matériaux restent derrière le levier.
+- **Sondé** (run 20261116-184609 → j8-probe2, `surfaceAt(...).vis` aux pixels blancs repérés sur la capture) : 21 sur 24 sont du **ciel**
+  (texel nul), un seul un bâtiment lointain à 13,2 km (g −11 850 240 : ses matériaux) ; les carrés sont le **halo du flou lumineux**
+  autour de quelques pixels de bâtiments lointains d'une luminance énorme (ou infinie) — à chercher dans l'ombrage de ces pixels avec la
+  marque (le chemin qui ne la lit pas, l'aspect générique, ne les rend pas).
 - **Piste** : la normale des quads (`atNg`, lue des dérivées de la profondeur sur un quad d'un à trois pixels, au bord du ciel) envoie
   peut-être leurs pixels dans la branche « toit » ou dans une lumière que la marque déclenche ; à mesurer pixel par pixel
   (`surfaceAt`, la normale et le g) sur le mini.
