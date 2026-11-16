@@ -268,6 +268,8 @@ override TUNE_BLD_TILE: f32 = 1.0;
 override TUNE_BLD_BRICK: f32 = 1.0;
 // (PLAN-J3 J3-5, a measuring lever: 0 the raster's roofs not pulled toward the photograph's luminance — 1 as drawn)
 override TUNE_BLD_PHOTO: f32 = 1.0;
+// (PLAN-J8 J8-E) the street levels' inland water past the scene's square (liteWater, tileWaterAt): 0 off — the A/B's lever
+override TUNE_TILE_WATER: f32 = 1.0;
 // (PLAN-J3 J3-1 — skyFlat's dim fallback, 14 Nov 2026: where the camera's own clear sky is too dim to scale — the Sun 4–10° under its
 // horizon —, a place no brighter than the camera's (its Sun no higher, its eclipse no deeper) takes that sky carried down to it (scaled by
 // ≤ 1), not the old bluish tenth of the Sun's, which lit the ground 115–185 × its own table at −7.5…−9° (J0 coherence, kerr-mini) — a
@@ -7535,6 +7537,8 @@ fn tileLightsAt(uv: vec2f) -> f32 {
   }
   return 0.0;
 }
+// (PLAN-J8 J8-E: the inland water of the street levels — earth-tiles.ts —; none here)
+fn tileWaterAt(uv: vec2f, fpM: f32, cosLat: f32) -> f32 { return -1.0; }
 // END_ORTHO_IMAGERY
 // A relief level's imagery at p by hand from the relief's texture (its packed rgba8 — the stub's reader, before T9b the only
 // one): bilinear, the sRGB decoded after; none where a texel has none. Its alpha's the night's lights: tileLights
@@ -15747,12 +15751,28 @@ fn liteWater(gq: vec3f, fx: vec3f, fy: vec3f, hG: f32, fpM: f32, nW: vec3f, dirW
   if (HAS_SCENERY && P.scenery[0].w > 0.5 && P.scenery[2].w > 0.5) {
     let toW = mat3x3f(P.scenery[0].xyz, P.scenery[1].xyz, P.scenery[2].xyz);
     osm = sceneryWaterAt(P.scenery[3].xyz + (dirW * tM) * toW, max(length(fx), length(fy)) * EARTH_RM, tM);
+  }
+  // (PLAN-J8 J8-E: past the scene's square — sceneryWaterAt has none there —, the street levels' inland water — the same tile's
+  // rivers and lakes, earth-tiles.ts tileWaterAt —, faded in over the square's last 15 %: the whole view's rivers, a river's calm)
+  let sceneR = select(0.0, P.scenery[1].w, HAS_SCENERY && P.scenery[0].w > 0.5 && P.scenery[2].w > 0.5);
+  let farW = select(1.0, smoothstep(0.85 * sceneR, sceneR, tM), sceneR > 0.0);
+  var tileW = false;
+  if (TUNE_TILE_WATER > 0.5 && farW > 0.0 && osm.x < 0.999) {
+    let tw = tileWaterAt(tileCoord(gq), max(length(fx), length(fy)) * EARTH_RM, sqrt(max(1.0 - gq.z * gq.z, 1e-12)));
+    if (tw * farW > osm.x) {
+      osm = vec2f(tw * farW, 0.6);
+      tileW = true;
+    }
+  }
+  if (osm.x > 0.0) {
     // (water lies flat, and the sea at its level: a polygon's outline is a line on the map — over a cliff, a steep bank, the
     // ground the relief raises over the sea within it, land; the T7 survey, Sam: the Calanques' faces striped with the sea)
     // (under the sea's level — the mesh the bed's, a drowned ridge's slopes steep —: water whatever its slope; over it, flat
     // ground alone — the T7 survey: Étretat's banks shown as white sand out of the sea)
     let flat = max(smoothstep(0.82, 0.94, dot(nW, gq)), 1.0 - smoothstep(0.3, 1.5, hW));
-    osm.x = smoothstep(0.35, 0.65, osm.x) * flat * select(1.0, 1.0 - smoothstep(3.0, 8.0, hW), osm.y < 0.3);
+    // (the tiles' cover as it is — filtered, a texel's share: its bank the filter's, a river under the pixel a share of it, fading —;
+    // the scene's polygon's sharpened)
+    osm.x = select(smoothstep(0.35, 0.65, osm.x), osm.x, tileW) * flat * select(1.0, 1.0 - smoothstep(3.0, 8.0, hW), osm.y < 0.3);
   }
   let water = max(sea0, osm.x) * (1.0 - lvl);
   let calm = osm.x * (1.0 - max(sea0, seaBed)) * osm.y;

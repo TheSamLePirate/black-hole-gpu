@@ -15,6 +15,7 @@ g.onmessage = async (e) => {
     const transfer: Transferable[] = [];
     if (r.heights) transfer.push(r.heights.buffer);
     if (r.words) transfer.push(r.words.buffer);
+    if (r.water) transfer.push(r.water.buffer);
     g.postMessage({ id: q.id, ms: performance.now() - t0, ...r }, transfer);
   } catch (err) {
     g.postMessage({ id: q.id, ms: performance.now() - t0, error: String(err) }, []);

@@ -276,8 +276,10 @@ soumettre (`renderer.ts:10842`).
   env, nuages).
 - **Textures sources** : bruit 3D, ciel et étoiles, cartes planétaires et HD, cartes globales de la Terre (med 2048² /
   high 4096²), tuiles (`r32uint` 2048²×9 ≈ 144 Mio en portée far/veryFar ; imagerie rgba8 1024²×19 ≈ 106 Mo avec mips depuis
-  NU1 — +3 couches `IMG_ROADS0` : les lumières des rues z 12–14, cuites dans le worker de décodage, `night-roads.ts`, calculé
-  par `ORTHO_BYTES`, non mesuré —, 89 Mo avant), surface régionale,
+  NU1 — +3 couches `IMG_ROADS0` : les lumières des rues z 12–14 en alpha, cuites dans le worker de décodage, `night-roads.ts`, calculé
+  par `ORTHO_BYTES`, non mesuré ; depuis PLAN-J8 J8-E leur g porte l'eau intérieure de la même tuile OpenFreeMap z 13 (`water-mask.ts`,
+  encodée sRGB, r et b la couverture), demandée de jour comme de nuit, lue par `tileWaterAt` dans `liteWater` au-delà du carré de la
+  scène — aucune texture ni liaison nouvelle —, 89 Mo avant), surface régionale,
   FFT de la mer, buffer du décor (16/36/64 Mio), détails, horizons.
   **Lecture de l'imagerie** (`earthImageryAniso`, `earthImagery` dans `trace.wgsl`, lues par `shadeLite`, `main` et la marche des crêtes) :
   par niveau, l'anisotropie du matériel jusqu'à 16 par les gradients de l'empreinte du pixel ; les niveaux pondérés par l'empreinte

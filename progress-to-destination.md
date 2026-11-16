@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-16 17:50 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-16 17:43 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous. Ce qui est fermé quitte le tableau « En cours » pour la ligne « Fermé récemment ».
@@ -63,7 +63,7 @@ l'état d'une mission ou d'un combat **non sauvé, dit** ; le réseau **« entre
 
 **Fermé aussi** : le plancher du raster sur GPU faible (15 nov., 23:46, proposer sous 15 images/s, décision de Sam).
 
-**La session du rendu (33d89754)** : **[PLAN-J8](docs/PLAN-J8-BATIMENTS.md)**, ordre convenu (a) matériaux, (b) J8-5, (c) Paris, (d) J8-E puis J8-L — J8-2 fait ; J8-0 (c), (e) faits ; J8-1 fermé « sans effet » ; **J8-4 allumée par défaut** (décision de Sam) ; le masque le long du couloir et les matériaux de chaque bâtiment lointain écrits, non encore vus de nuit sur le mini ; **J8-5** : la jonction s'applique (proposition 1 km, à choisir par Sam sur la planche) ; J8-1b suspendu. Non poussé : 646eac75 et la suite, après le run du mini. [PLAN-J7](docs/PLAN-J7-FLUIDITE.md) en pause.
+**La session du rendu (33d89754)** : **[PLAN-J8](docs/PLAN-J8-BATIMENTS.md)**, ordre convenu (a) matériaux, (b) J8-5, (c) Paris, (d) J8-E puis J8-L — **J8-4 allumée par défaut**, ses **matériaux éteints par défaut** (un défaut de nuit : des carrés blancs à l'horizon, cause cherchée) ; le masque le long du couloir ; **J8-5** : la jonction s'applique (proposition 1 km, à choisir par Sam), un blocage intermittent ouvert ; **J8-E écrit** (l'eau des tuiles vue par `liteWater`, l'avant/après à faire) ; **J8-A** : les tracés `j8a-tracks.ts` (couloir, décision de Sam). [PLAN-J7](docs/PLAN-J7-FLUIDITE.md) en pause.
 
 **Priorité de Sam (16 nov., 11:30 UTC) : [PLAN-J8](docs/PLAN-J8-BATIMENTS.md), tous les bâtiments de la vue** (« c'est ça qui choque le plus ») — la suite de J7 en pause après J7-8b ; les deux sessions s'y mettent (rendu : couche GPU, scène proche ; approches : recensement, préparation des cellules, PWA) ; d'abord J8-0 (mesures) et J8-1 (le trou de 2 à 7 km).
 
@@ -9410,3 +9410,27 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   Proposition : voler le tracé une fois en ligne, relever avec le cache disque le niveau le plus fin demandé pour chaque sorte, et régler
   les niveaux du couloir dessus avant la mesure réelle.
 - Suite : (3) l'estimation au débit mesuré de chaque hôte ; la mesure réelle de Paris ; l'e2e J8-A, avec la session du rendu.
+
+### 2026-11-16 17:43 UTC — PLAN-J8 : les matériaux lointains éteints par défaut (un défaut de nuit), J8-E l'eau de toute la vue, les tracés de J8-A (session 33d89754)
+
+- Destination : §19.13 (J8-A, Sam : tous les bâtiments, fleuves et rivières de la vue, jour et nuit), §7.
+- **Correctif** : `renderer.farMaterials` passe à false par défaut.
+  - Avec les matériaux, de nuit, des carrés blancs éblouissants apparaissent à l'horizon (kerr-mini, runs 20261116-173855, 180558 et 183705 ; Hyères vers l'ouest à 23 h). Ils sont absents avec les boîtes seules et avec l'aspect générique.
+  - 646eac75 et 17681f10 étaient déjà déployés, partis avec une poussée de la session des approches.
+  - La cause n'est pas trouvée (PROBLEMES). La marque est passée de la fraction du code raster au signe de g, et les quads ont été essayés sans matériaux : ni l'un ni l'autre n'a suffi.
+- **J8-E, l'eau de toute la vue** (écrit) :
+  - `src/system/water-mask.ts`, tests 3/3. L'eau vient de la tuile OpenFreeMap z 13 que `night-roads` lisait déjà, maintenant demandée de jour aussi. La redemande à la tombée de la nuit est retirée.
+  - Elle est rangée dans le g des couches « rues », sans texture nouvelle, et lue par `tileWaterAt` dans `liteWater` au-delà de la scène.
+  - **Observé** (kerr-mini, run 20261116-183518, `liteSkip` 512) : la Seine reconnue comme rivière sur toute sa boucle jusqu'à ~12 km, les lacs comme lacs. 488 tuiles posées avec leur eau, aucune sans.
+  - **Non établi** :
+    - l'avant/après (`renderer.tune` n'atteint pas le noyau de `shadeLite` : ses deux images étaient pareilles ; à faire par commits) ;
+    - le coût GPU et réseau ;
+    - au-delà de ±13 km en portée normale, plus de couche « rues ».
+- **J8-A, les tracés** : `src/system/j8a-tracks.ts` (`paris`, `toulon-hyeres`), le seul fichier lu par l'e2e et par `zones.add`. Sam a décidé « ok couloir » ; la session des approches construit la zone dessus.
+- **J8-5** : la jonction s'applique. Un défaut intermittent est ouvert : la scène vide et l'image noire au changement de jonction, sans perte du périphérique (PROBLEMES). L'e2e relève l'état de la page au blocage.
+- Suite :
+  - la cause des carrés blancs (une sonde pixel par pixel) ;
+  - l'avant/après de J8-E par commits ;
+  - le choix de la jonction par Sam (proposition : 1 km) ;
+  - Paris dimensionné ;
+  - l'e2e J8-A.

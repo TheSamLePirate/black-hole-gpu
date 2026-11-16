@@ -3,6 +3,38 @@
 Problèmes constatés, pas encore réglés. Chaque entrée : la date (UTC), ce qui est mesuré ou observé et sa source, la cause
 connue ou supposée, la piste. Une entrée réglée est barrée avec le commit qui la règle, pas effacée.
 
+## La couche lointaine de nuit : des quads blancs éblouissants à l'horizon, avec les matériaux (relevé le 16 novembre 2026, PLAN-J8 J8-A)
+
+**État (16 nov. 2026, ~17:35 UTC)** : ouvert, non réglé ; la couche lointaine (`farBuildingsOn`, allumée par défaut) et ses matériaux
+sont commités en local, **non poussés** tant qu'il dure.
+- **Vu** (kerr-mini, e2e `j8-junction` `J8J_DIAG`, runs 20261116-172520, 173855, 180558) : à 23 h, vue de Hyères vers l'ouest à 350 m,
+  à 10–20 km, des carrés blancs avec un halo et une rangée de points orangés à la ligne d'horizon.
+- **Isolé** :
+  - présents avec les quads et la marque lointaine ;
+  - absents avec les boîtes seules (`farQuadPx` 0), avec l'aspect générique (`farMaterials` false, sans marque) et sans la couche ;
+  - la marque passée de la fraction du code raster (62,5) au signe de g ne les a pas fait disparaître (moins nombreux) ;
+  - le diagnostic local hors ligne (M1 Max, données partielles) ne les reproduit pas.
+- **Contournement essayé, sans effet** (run 20261116-183705) : les quads sans matériaux, les boîtes avec — les carrés restent ; ils
+  tiennent aux matériaux des boîtes **et** à la présence des quads (boîtes seules : rien ; générique : rien).
+- **Correctif** (~17:45 UTC) : `farMaterials` false par défaut (l'aspect générique, sans marque) — 646eac75 et 17681f10, déjà déployés
+  par une poussée de la session des approches, portaient le défaut ; les matériaux restent derrière le levier.
+- **Piste** : la normale des quads (`atNg`, lue des dérivées de la profondeur sur un quad d'un à trois pixels, au bord du ciel) envoie
+  peut-être leurs pixels dans la branche « toit » ou dans une lumière que la marque déclenche ; à mesurer pixel par pixel
+  (`surfaceAt`, la normale et le g) sur le mini.
+
+## Une scène proche vide après un changement de jonction (`farNearOnlyM`), par intermittence (relevé le 16 novembre 2026, PLAN-J8 J8-5)
+
+**État (16 nov. 2026, ~17:35 UTC)** : ouvert, non expliqué.
+- **Vu** (kerr-mini, e2e `j8-junction`) : trois runs sur cinq. À Toulon, au passage de la jonction à 2 km (une fois à 1 km), la scène
+  ne redevient jamais entière en 60 s :
+  - `status` « ready », `quick` vrai, 0 bâtiment, `corridorM` 0, pas de `phases` ;
+  - l'image entièrement noire, ciel compris (99,9 % des pixels noirs), le GPU à 14 ms ;
+  - ensuite, à Hyères, des scènes rapides de 5 000 bâtiments seulement et un GPU à 19 ms.
+- **Écarté** : une perte du périphérique (`graphicsDiagnostic`, aucun `device-lost`).
+- **Non reproduit** : Toulon seul, quatre jonctions (run 20261116-181851) ; le run complet 20261116-172520.
+- **Piste** : l'annulation de la scène en cours quand la jonction change (`scenery.ts`, `changed` → `cancel`) au moment d'une
+  scène rapide ; l'e2e relève désormais l'état de la page au blocage (caméra, scène, tuiles, pipeline).
+
 ## Les ombres du décor à Paris : `earth-scenery` les juge « plus d'éclaircis que d'assombris » (relevé le 16 novembre 2026, J8-T)
 
 **État (16 nov. 2026, 14:11 UTC)** : relevé par la session des approches, non étudié. C'est le domaine du rendu (les ombres du décor).

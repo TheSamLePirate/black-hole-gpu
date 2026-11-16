@@ -55,7 +55,17 @@ test.skipIf(!E2E)(
               `${v.name} ${j}: the scene whole`,
               { stallMs: 60_000, maxMs: 150_000 },
             )
-            .catch((e) => console.log(`  (${v.name} ${j}: ${String(e).slice(0, 200)})`));
+            .catch(async (e) => {
+              console.log(`  (${v.name} ${j}: ${String(e).slice(0, 200)})`);
+              // (what the page is in when the scene never comes whole: the camera, the scene, the tiles, the image's path)
+              const st = await app.js(`(() => { const R = __bh.renderer, sc = R.earthScenery.stats(), g = __bh.camera.geoNow?.();
+                return { geo: g && { lat: +g.lat.toFixed(4), lon: +g.lon.toFixed(4), alt: Math.round(g.alt ?? 0) },
+                  scene: { status: sc.status, quick: sc.quick, lat: sc.lat, lon: sc.lon, buildings: sc.buildings, trees: sc.trees,
+                    pending: sc.pending, progress: sc.progress, reason: sc.reason ?? null, error: sc.error ?? sc.lastError ?? null },
+                  box: R.earthScenery.drawnBox?.() ?? null, tiles: { pending: R.earthTiles.pending, ortho: R.earthTiles.orthoPending },
+                  pipeline: R.earthPipelineNow?.(__bh.settings) ?? null, frozen: __bh.frozen ?? null, gpuMs: R.lastGpuMs }; })()`);
+              console.log(`  (${v.name} ${j}: the page: ${JSON.stringify(st)})`);
+            });
           const sceneS = (Date.now() - t0) / 1000;
           // (the same hour at every shot: the sun as the first's — the world ran while the scene was made)
           await app.js(`(() => { __bh.game.setDate("${J0_SCENE.date}"); __bh.freeze(true); __bh.touch(); return 1; })()`);

@@ -4,6 +4,7 @@
 // tests), in the page. No allocation a pixel: the colours' loops write their tile's words straight.
 import type { OrthoFit } from "./national";
 import { roadLightByte, roadMask, spreadLights, tileMetresPerPixel } from "./night-roads";
+import { waterMask } from "./water-mask";
 import { type DelightIn, type DelightStats, delightTile } from "./ortho-delight";
 
 /** a tile's side [px] (earth-tiles.ts TILE) */
@@ -177,12 +178,16 @@ export type DecodeReply = {
   ms: number;
   heights?: Float32Array;
   words?: Uint32Array;
+  /** (PLAN-J8 J8-E: a street level's inland water — water-mask.ts —, 256² bytes, its cover sRGB-encoded for the layer's view) */
+  water?: Uint8Array;
   delight?: DelightStats;
   error?: string;
 };
 
 /** The request's work, wherever it runs: the arrays it gives (to be handed over, not copied) */
-export async function decodeTile(q: DecodeRequest): Promise<{ heights?: Float32Array; words?: Uint32Array; delight?: DelightStats }> {
+export async function decodeTile(
+  q: DecodeRequest,
+): Promise<{ heights?: Float32Array; words?: Uint32Array; water?: Uint8Array; delight?: DelightStats }> {
   if (q.op === "terrarium") return { heights: terrariumHeights(await pixels(q.blob)) };
   if (q.op === "terrarium512") {
     // (read whole at its size, no scaling: an interpolated Terrarium byte is a wrong height)
@@ -207,6 +212,7 @@ export async function decodeTile(q: DecodeRequest): Promise<{ heights?: Float32A
     q.night ? pixels(q.night, q.nightCrop) : Promise.resolve(new Uint8ClampedArray(4 * TILE * TILE)),
   ]);
   let roads: { mask: Float32Array | null; mpp: number } | null = null;
+  let water: Uint8Array | undefined;
   if (q.roads) {
     const mpp = tileMetresPerPixel(q.roads.z, q.roads.y);
     let mask: Float32Array | null = null;
@@ -216,6 +222,23 @@ export async function decodeTile(q: DecodeRequest): Promise<{ heights?: Float32A
       /* (a tile that will not parse: VIIRS's light as it is) */
     }
     roads = { mask, mpp };
+    // (PLAN-J8 J8-E: the same tile's rivers and lakes — their cover, sRGB-encoded: the layer is read through an sRGB view)
+    try {
+      const w = q.roads.mvt ? waterMask(q.roads.mvt, mpp, q.roads.sub) : null;
+      if (w) water = waterBytes(w);
+    } catch {
+      /* (none: no water there) */
+    }
   }
-  return { words: imageryWords(d, n, q.fit, q.fine, roads) };
+  return { words: imageryWords(d, n, q.fit, q.fine, roads), ...(water ? { water } : {}) };
+}
+
+/** a cover (0 … 1, linear) as the bytes of an sRGB view (the hardware decodes them back to linear: the mips average in linear light) */
+export function waterBytes(w: Float32Array): Uint8Array {
+  const out = new Uint8Array(w.length);
+  for (let i = 0; i < w.length; i++) {
+    const c = Math.min(Math.max(w[i]!, 0), 1);
+    out[i] = c <= 0 ? 0 : Math.round(255 * (c <= 0.0031308 ? 12.92 * c : 1.055 * c ** (1 / 2.4) - 0.055));
+  }
+  return out;
 }

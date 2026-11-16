@@ -11246,8 +11246,9 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
     return this.buildingFar?.quadPx ?? this.farQuadPxWant;
   }
   private farQuadPxWant = 8;
-  /** (the far layer's) its buildings drawn with their own materials (true — PLAN-J8 J8-A: their roof's and walls' from the record, the
-   *  near mesh's colours); false: generic, a near building's without a leaf */
+  /** (the far layer's) its buildings drawn with their own materials (PLAN-J8 J8-A: their roof's and walls' from the record, the near
+   *  mesh's colours); false — the default since 16 Nov 2026 ~17:45 UTC: with them, at night, white quads at the horizon (PROBLEMES) —:
+   *  generic, a near building's without a leaf */
   set farMaterials(on: boolean) {
     if (this.buildingFar) this.buildingFar.materials = on;
     this.farMaterialsWant = on;
@@ -11255,7 +11256,7 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
   get farMaterials() {
     return this.buildingFar?.materials ?? this.farMaterialsWant;
   }
-  private farMaterialsWant = true;
+  private farMaterialsWant = false;
   /** (the far layer's) what is resident and what the last cull drew (boxes, quads — read back) */
   async farBuildings() {
     return {

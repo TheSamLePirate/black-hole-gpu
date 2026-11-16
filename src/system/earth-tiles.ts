@@ -144,6 +144,8 @@ export const retryDelay = (n: number) => Math.min(RETRY_BASE_MS * 2 ** Math.max(
 const NIGHT_GRACE_MS = 3000;
 /** the imagery drawn without its night's lights (asked again: imageryLater) */
 const nightless = new WeakSet<Uint32Array>();
+/** (PLAN-J8 J8-E) a street level's imagery's inland water (water-mask.ts — 256² sRGB bytes): put into its layer's g with it */
+const waterOf = new WeakMap<Uint32Array, Uint8Array>();
 /** (L7b's prototype — ortho-delight.ts, settings.orthoDelight) the levels de-lit (z 17: 0.8 m, z 18: 0.4 m a pixel at 48°: a
  *  shadow's edge resolved), the canopy's margin round a tile [px] (a 40 m tree's shadow at 45° from z 18's 96 px — 38 m —
  *  away), its requests a second (the Géoplateforme's WMS-R: the relief's 20 and the survey's 12 beside), its tiles at once */
@@ -363,6 +365,26 @@ fn tileLightsAt(uv: vec2f) -> f32 {
   }
   return 0.0;
 }
+// (PLAN-J8 J8-E) the inland water at uv — earthImagery's (dlon, −dM) —: the street levels' g (water-mask.ts: a lake's, a river's
+// cover, the sea's none), the finest level that holds it, at the footprint's mip (fpM [m] over the level's texel — a river under it
+// fades); −1: no street level there (none drawn, or past z 12)
+fn tileWaterAt(uv: vec2f, fpM: f32, cosLat: f32) -> f32 {
+  for (var k = 0u; k < ${IMG_Z1 - ROAD_Z0 + 1}u; k++) {
+    let l = ${IMG_Z1 - Z0}u - k;
+    let a = P.tileL[2u * l];
+    let b = P.tileL[2u * l + 1u];
+    if (b.w < 0.5) { continue; }
+    let p = a.xy + uv * b.z;
+    if (min(min(p.x, p.y), min(b.x - p.x, b.y - p.y)) <= 2.0) { continue; }
+    let u = tileImgUv(l, p);
+    let tx = 40075016.0 * cosLat / (256.0 * exp2(f32(${IMG_Z1}u - k))) * select(1.0, 2.0, u.z > ${ORTHO_CLIP}.5);
+    // (a 2048² window's layer is written at half its resolution without mips — putImagery —: its base read alone)
+    let lod = select(clamp(log2(max(fpM / tx, 1.0)), 0.0, ${ORTHO_MIPS - 1}.0), 0.0, u.z > ${ORTHO_CLIP}.5);
+    let s = textureSampleLevel(orthoTex, orthoSamp, u.xy, ${IMG_ROADS0}u + ${IMG_Z1}u - k - ${ROAD_Z0}u, lod);
+    if (s.r > 0.5) { return s.g / s.r; }
+  }
+  return -1.0;
+}
 fn tileImgGrad(l: u32, p: vec2f, gx: vec2f, gy: vec2f) -> vec4f {
   let u = tileImgUv(l, p);
   if (u.z > ${ORTHO_CLIP}.5) { return textureSampleGrad(imgTex2k, orthoSamp, u.xy, l - ${FINE_Z - Z0}u, gx / u.z, gy / u.z); }
@@ -515,7 +537,7 @@ type DecodeAsk = DecodeRequest extends infer Q ? (Q extends { id: number } ? Omi
 async function decodeOff(
   q: DecodeAsk,
   kind: DecoderKind = "decode",
-): Promise<{ heights?: Float32Array; words?: Uint32Array; delight?: DelightStats }> {
+): Promise<{ heights?: Float32Array; words?: Uint32Array; water?: Uint8Array; delight?: DelightStats }> {
   const w = decodeWorker(kind);
   if (!w) {
     const t0 = performance.now();
@@ -2500,42 +2522,17 @@ export class EarthTiles {
     return cnt ? sum / cnt : 0;
   }
 
-  /** (NU1) the street levels' imagery taken with their streets' lights — the renderer's, at dusk and night round the camera:
-   *  OpenFreeMap's vector tiles asked then only —; turned on, the street levels' tiles drawn already asked again (roadsRefresh) */
+  /** (NU1) the street levels' imagery taken with their streets' lights — the renderer's, at dusk and night round the camera. Since
+   *  PLAN-J8 J8-E the vector tiles are asked by day too (their water): every street tile carries its streets already, none asked
+   *  again at nightfall (the old refetch at nightfall retired — roadsRefreshed stays 0, kept for the tests that log it) */
   nightRoads = false;
   /** the street levels' tiles asked again for their streets since the start (NU1) */
   roadsRefreshed = 0;
+  /** (PLAN-J8 J8-E) the street tiles put with their inland water (water-mask.ts), and those put without (no vector tile, none in it) */
+  waterTiles = { with: 0, without: 0 };
   setNightRoads(on: boolean) {
     if (on === this.nightRoads) return;
     this.nightRoads = on;
-    if (on) this.roadsRefresh();
-  }
-  /** the street levels' tiles in their windows asked again with their streets — the nearest level first, a few at once —,
-   *  their heights kept, put again when their imagery comes */
-  private roadsRefresh() {
-    const gen = this.gen;
-    let k = 0;
-    for (let z = IMG_Z1; z >= ROAD_Z0; z--) {
-      const L = this.levels[z - Z0];
-      if (!L) continue;
-      for (let s = 0; s < L.key.length; s++) {
-        const key = L.key[s];
-        if (!key || !L.data[s]) continue;
-        const [, xs, ys] = key.split("/");
-        const x = Number(xs),
-          y = Number(ys);
-        const src = this.orthoOn ? tileSource(NATIONAL, L.n, x, y) : null;
-        setTimeout(async () => {
-          if (gen !== this.gen || L.key[s] !== key || !this.nightRoads) return;
-          const col = await imagery(L.z, x, y, AbortSignal.timeout(TIMEOUT_MS), src, true);
-          if (gen !== this.gen || L.key[s] !== key || !L.data[s] || !col) return;
-          this.roadsRefreshed++;
-          // (its window's own column: the key's x unwrapped as the window holds it)
-          const xw = [x, x - L.n, x + L.n].find((c) => inside(L.want, c, y));
-          if (xw !== undefined) this.put(L.z, xw, y, L.data[s]!, col);
-        }, 40 * k++);
-      }
-    }
   }
 
   /** A tile loaded — into its window, or (ahead) into memory past it, drawn if its window has come to it meanwhile. */
@@ -3404,7 +3401,12 @@ export class EarthTiles {
       const tex1 = this.orthoTexture;
       if (!big) {
         const lights = this.scratch(TILE * TILE);
-        if (col) for (let i = 0; i < lights.length; i++) lights[i] = col[i] ? ((col[i]! & 0xff000000) | 0xffffff) >>> 0 : 0;
+        // (PLAN-J8 J8-E: g the inland water — waterOf —, r and b the coverage)
+        const wat = col ? waterOf.get(col) : undefined;
+        if (col) this.waterTiles[wat ? "with" : "without"]++;
+        if (col)
+          for (let i = 0; i < lights.length; i++)
+            lights[i] = col[i] ? ((col[i]! & 0xff000000) | 0xff00ff | ((wat ? wat[i]! : 0) << 8)) >>> 0 : 0;
         else lights.fill(0);
         this.device.queue.writeTexture({ texture: tex1, origin: [ox, oy, ll] }, lights, { bytesPerRow: TILE * 4 }, [TILE, TILE, 1]);
         this.pubWrote(lights.byteLength);
@@ -3412,6 +3414,8 @@ export class EarthTiles {
       } else {
         const H = TILE >> 1;
         const lights = this.scratch(H * H);
+        const wat = col ? waterOf.get(col) : undefined;
+        if (col) this.waterTiles[wat ? "with" : "without"]++;
         if (col)
           for (let j = 0; j < H; j++)
             for (let i = 0; i < H; i++) {
@@ -3423,7 +3427,9 @@ export class EarthTiles {
                 w3 = col[b + TILE + 1]!;
               const n = (w0 ? 1 : 0) + (w1 ? 1 : 0) + (w2 ? 1 : 0) + (w3 ? 1 : 0);
               const a = (w0 ? w0 >>> 24 : 0) + (w1 ? w1 >>> 24 : 0) + (w2 ? w2 >>> 24 : 0) + (w3 ? w3 >>> 24 : 0);
-              lights[j * H + i] = n ? ((Math.round(a / n) << 24) | 0xffffff) >>> 0 : 0;
+              // (the water's 2 × 2 bytes averaged — near enough in their sRGB encoding for a cover)
+              const g = wat ? (wat[b]! + wat[b + 1]! + wat[b + TILE]! + wat[b + TILE + 1]!) >> 2 : 0;
+              lights[j * H + i] = n ? ((Math.round(a / n) << 24) | 0xff00ff | (g << 8)) >>> 0 : 0;
             }
         else lights.fill(0);
         this.device.queue.writeTexture({ texture: tex1, origin: [ox >> 1, oy >> 1, ll] }, lights, { bytesPerRow: H * 4 }, [H, H, 1]);
@@ -3849,12 +3855,14 @@ async function imagery(
         }
       return [await get(fine ? eoxUrl(z, x, y) : dayUrl(z, x, y)), null];
     };
-    // (NU1: a street level at night — the renderer's nightRoads —: OpenFreeMap's vector tile there, its streets the lights';
-    // none — refused, timed out —: VIIRS's light as it is, the tile not failed for it)
+    // (NU1: a street level — OpenFreeMap's vector tile there, its streets the night's lights' —, by day too since PLAN-J8 J8-E: its
+    // rivers and lakes the whole view's water (water-mask.ts); none — refused, timed out —: VIIRS's light as it is, no water, the
+    // tile not failed for it. `roads` (the renderer's nightRoads) no longer gates it)
+    void roads;
     const street = z >= ROAD_Z0 && z <= IMG_Z1;
     const rk = Math.max(z - ROAD_MVT_Z1, 0);
     const sub = { k: rk, x: x - ((x >> rk) << rk), y: y - ((y >> rk) << rk) };
-    const mvt = street && roads ? fetchRoads(z - rk, x >> rk, y >> rk, signal) : Promise.resolve(null);
+    const mvt = street ? fetchRoads(z - rk, x >> rk, y >> rk, signal) : Promise.resolve(null);
     // (CM1, ST-05: the night's lights not needed for the day's photograph — refused, or later than NIGHT_GRACE_MS after the day:
     // the day drawn alone, its lights asked again with the tile's imagery — nightless, imageryLater)
     const nightP = get(nightUrl(night.z, night.x, night.y), night.crop ?? undefined).catch((e) => {
@@ -3880,6 +3888,7 @@ async function imagery(
       roads: street ? { z, y, mvt: roadTile, sub } : null,
     });
     if (r.words && !n) nightless.add(r.words);
+    if (r.words && r.water) waterOf.set(r.words, r.water);
     return r.words ?? null;
   } catch {
     // (given up with its tile: none; refused, timed out: undefined — asked again while the tile is drawn, imageryLater)
