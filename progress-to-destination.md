@@ -8515,3 +8515,17 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
 - Limites : une seule passe par parcours ; le cache de shaders du mini peut cacher les compilations « à froid » ; la cause fine des images
   GPU lentes à l'arrivée des données non lue.
 - Suite : J7-1 (le sol des approches, en vérification) ; proposer à la session d'analyse les à-coups trouvés hors du plan.
+
+### 2026-11-16 05:45 UTC — PLAN-J7 révisé (session d'analyse) sur la fiche des à-coups de J7-0
+
+- Contribution à la destination : §19.8 et §7.19 — le plan suit ce que la sonde a mesuré sur les neuf parcours plutôt que les relevés de J6.
+- Réalisé : [PLAN-J7](docs/PLAN-J7-FLUIDITE.md) §2 et §6 — J7-2 (météo) et J7-3 (F1), non reproduits à chaud (aucun écart > 100 ms ; 83 ms
+  au plus), rejoués à froid d'abord et fermés s'ils ne se reproduisent pas ; trois lots ajoutés : **J7-7** le premier noyau de la partie et
+  le changement d'appareil (433–784 ms de thread principal, ~200 ms), **J7-8** le début du vol (150–217 ms, ~300 tuiles d'un coup, le budget
+  de 2 ms contourné), **J7-9** l'arrivée des données après un placement (images GPU de 150–290 ms pendant des secondes ; le chargement d'une
+  sauvegarde relu avec) ; `parcours-ville` rouge (0 bâtiment proche) mis dans J7-4, à expliquer ; ordre : J7-1 → J7-7 → J7-2/3 à froid →
+  J7-8 → J7-9 → J7-4 → J7-5 → J7-6 → J7-R.
+- Preuves : documenté, depuis [la fiche de J7-0](docs/progress/j7/FICHE-A-COUPS-2026-11-16.md) (kerr-mini, run `20261116-060822-j7-hitches`,
+  un passage par parcours, mesuré par la session du rendu). Rien lancé par la session d'analyse.
+- Limites : une seule passe par parcours ; la part synchrone des noyaux et les passes GPU de l'arrivée des données non encore établies.
+- Suite : la session du rendu finit J7-1, puis J7-7.
