@@ -38,6 +38,12 @@ export const MESH_HEADER_BYTES = 64;
 export const MESH_IDENTITY_BYTES = 24;
 /** the walls' skirt below the foot [m] */
 export const SKIRT_M = 3;
+/** a mesh cell's bytes before it is prepared — an estimate for a zone's size (17 Nov 2026, from the BD TOPO tiles on the disk, 25 cells
+ *  each: Paris's centre 2.5 MB a cell, Toulon's 0.9 MB; the tile's own size does not tell them apart — 138 against 110 kB): the zone's
+ *  record keeps the real bytes once they are prepared */
+export const MESH_CELL_BYTES_EST = 1.5e6;
+/** a mesh cell's preparation time on one worker [s] — an estimate (Paris's centre 0.35 s, Toulon's 0.17 s: scripts/j8-8-mesh-measure.ts) */
+export const MESH_CELL_SECONDS_EST = 0.3;
 /** the prepared cache */
 export const MESH_CACHE = `kerr-mesh-v${MESH_FORMAT}`;
 /** a mesh cell's key in it (a URL: Cache Storage's keys are requests; never fetched) — its J8-2 cell's generation and whether the

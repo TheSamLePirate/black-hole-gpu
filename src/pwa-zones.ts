@@ -20,6 +20,7 @@ import {
   zoneEstimate,
   zoneLevelsAt,
 } from "./system/zones";
+import { MESH_CELL_BYTES_EST, MESH_CELL_SECONDS_EST } from "./system/mesh-cells";
 import { cellsOnlyIn, type ZoneCells, zoneCellTiles, zoneMeshTiles, zoneStreetTiles } from "./system/zone-cells";
 
 export interface Zones {
@@ -30,6 +31,9 @@ export interface Zones {
     urls: number;
     bytes: number;
     seconds: number;
+    /** its near meshes' cells (PLAN-J8 J8-8: a corridor's, within MESH_NEAR_M of its track) — in `bytes` and `seconds` already, an
+     *  estimate (mesh-cells.ts MESH_CELL_BYTES_EST) */
+    meshes: { cells: number; bytes: number };
   };
   /** a zone added and its download started; its id */
   /** a zone added — with a corridor (PLAN-J8 J8-9 (2)): the airfield's levels along its track — and its download started; its id */
@@ -218,11 +222,15 @@ export function createZones(o: {
   return {
     estimate({ lat, lon, radiusKm, profile, coreKm = 0, corridor }) {
       const chains = zoneChains(lat, lon, radiusKm * 1000, ZONE_PROFILES[profile], o.sources(), coreKm * 1000, corridor ?? null);
+      // (its near meshes along its corridor: prepared after its tiles, on the disk beside them — J8-8)
+      const cells = zoneMeshTiles(chains, { lat, lon, corridor: corridor ?? null }).length;
+      const meshes = { cells, bytes: cells * MESH_CELL_BYTES_EST };
       return {
         chains: chains.length,
         urls: chains.reduce((s, c) => s + c.length, 0),
-        bytes: zoneEstimate(chains),
-        seconds: zoneDuration(chains),
+        bytes: zoneEstimate(chains) + meshes.bytes,
+        seconds: zoneDuration(chains) + cells * MESH_CELL_SECONDS_EST,
+        meshes,
       };
     },
     async add({ name, lat, lon, radiusKm, profile, coreKm, corridor }) {

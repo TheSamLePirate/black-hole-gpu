@@ -2,6 +2,7 @@ import { expect, test } from "bun:test";
 import type { ZoneRecord } from "../src/pwa/rules";
 import { createZones } from "../src/pwa-zones";
 import { MESH_NEAR_M } from "../src/system/building-cells";
+import { MESH_CELL_BYTES_EST } from "../src/system/mesh-cells";
 import { zoneCellTiles, zoneMeshTiles, zoneStreetTiles } from "../src/system/zone-cells";
 import { corridorDisc, corridorDistance, ZONE_PROFILES, zoneChains } from "../src/system/zones";
 
@@ -155,6 +156,11 @@ test("a corridor zone: its mesh cells (J8-8) — its BD TOPO cells within MESH_N
     expect(corridorDistance(zone.lat, zone.lon, corridor, lat, lon)).toBeLessThan(MESH_NEAR_M + 700);
   }
   expect(h.meshes).toEqual([want]);
+  // (the estimate says them: their cells, their bytes — MESH_CELL_BYTES_EST each — in the zone's size)
+  const est = h.zones.estimate(zone);
+  expect(est.meshes).toEqual({ cells: want.length, bytes: want.length * MESH_CELL_BYTES_EST });
+  expect(est.bytes).toBeGreaterThan(est.meshes.bytes);
+  expect(h.zones.estimate({ lat: 43.124, lon: 5.93, radiusKm: 0.5, profile: "overflight" }).meshes.cells).toBe(0);
   expect(z.meshes).toEqual({ count: want.length, buildings: 7 * want.length, bytes: 5000 * want.length, failed: 0, ms: 1 });
   await h.zones.remove(id);
   expect(h.meshesDropped).toEqual([want]);

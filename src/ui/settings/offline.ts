@@ -90,6 +90,11 @@ const T = {
   cellsFailed: { fr: " {0} à préparer en vol.", en: " {0} to prepare in flight." },
   // (PLAN-J8 J8-L: its street cells — the lamps and the cars' roads)
   streets: { fr: "Rues préparées : {0} cellules, {1}.", en: "Streets prepared: {0} cells, {1}." },
+  // (PLAN-J8 J8-8: its near buildings' meshes along its corridor)
+  meshes: {
+    fr: "Bâtiments proches maillés : {0} cellules, {1} bâtiments, {2}.",
+    en: "Near buildings meshed: {0} cells, {1} buildings, {2}.",
+  },
   pause: { fr: "Suspendre", en: "Pause" },
   resume: { fr: "Reprendre", en: "Resume" },
   cancel: { fr: "Annuler le téléchargement", en: "Cancel the download" },
@@ -484,7 +489,9 @@ export class OfflineTab {
         z.cells
           ? `\n${fill(tr(T.cells), fmtCount(z.cells.count), fmtCount(z.cells.buildings), fmtBytes(z.cells.bytes))}${z.cells.failed ? fill(tr(T.cellsFailed), fmtCount(z.cells.failed)) : ""}`
           : ""
-      }${z.streets ? `\n${fill(tr(T.streets), fmtCount(z.streets.count), fmtBytes(z.streets.bytes))}` : ""}`,
+      }${z.streets ? `\n${fill(tr(T.streets), fmtCount(z.streets.count), fmtBytes(z.streets.bytes))}` : ""}${
+        z.meshes ? `\n${fill(tr(T.meshes), fmtCount(z.meshes.count), fmtCount(z.meshes.buildings), fmtBytes(z.meshes.bytes))}` : ""
+      }`,
     );
     return [z.name, text];
   }
