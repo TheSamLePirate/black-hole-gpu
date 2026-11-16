@@ -9,10 +9,10 @@ import { J0_FIXED, J0_SCENE } from "./lib/j0-scene";
 // its centre, culled by the GPU (the field of view, a pixel at least), drawn into the visibility and all into the buildings' shadow
 // map. The view: Toulon from 12 km east, 400 m up, west, the free camera, no craft, the world frozen, everything in. Counts 0, 32 k,
 // 64 k, 128 k, 256 k, 512 k, then 0 again (the A/A: the same as the first), then 512 k with each part left out in turn (the culling,
-// the visibility, the shadow — what each costs); each 5 s: the GPU time (median, p95), the envelopes in view, the passes. The machine's
+// the visibility, the shadow — what each costs), then 128 k and 512 k lightened (under 4 then 8 px one quad facing the camera); each 5 s: the GPU time (median, p95), the envelopes in view, the passes. The machine's
 // thermal state before and after (scripts/thermal.ts). Not a pass/fail on the times: j8-envelope-bench.json; it fails on a GPU error,
 // the A/A apart by more than 15 %, or 512 k unseen (its GPU time not over the 0's — the positive control).
-// Duration: ~6 min on kerr-mini.
+// Duration: ~8 min on kerr-mini.
 // Done when: every count measured, the A/A and the parts, j8-envelope-bench.json written.
 afterAll(stopServer);
 const MACHINE = process.env.J8B_MACHINE ?? (await $`hostname -s`.quiet().text()).trim();
@@ -48,13 +48,13 @@ test.skipIf(!E2E)(
         .catch((e) => console.log(`  (not whole: ${String(e).slice(0, 200)})`));
       await app.settled(60_000);
       await app.shot(`${OUT}/0-sans.png`);
-      const measure = async (label: string, n: number, skip: number) => {
+      const measure = async (label: string, n: number, skip: number, lodPx = 0) => {
         await app.scenario(`${label}`);
         const why = await app.js<string | null>(`(async () => { __bh.renderer.benchSkip = ${skip};
-          return await __bh.renderer.envelopeBench({ lat: ${TOULON.lat}, lon: ${TOULON.lon}, n: ${n}, rMin: 2000, rMax: 15000, seed: 7 }); })()`);
+          return await __bh.renderer.envelopeBench({ lat: ${TOULON.lat}, lon: ${TOULON.lon}, n: ${n}, rMin: 2000, rMax: 15000, seed: 7, lodPx: ${lodPx} }); })()`);
         if (why) throw new Error(`envelopeBench ${n}: ${why}`);
         await app.settled(30_000);
-        const m = await app.js<{ p50: number; p95: number; images: number; inView: number; passes: [string, number][] }>(`(async () => {
+        const m = await app.js<{ p50: number; p95: number; images: number; inView: number; quads: number; passes: [string, number][] }>(`(async () => {
           const R = __bh.renderer; R.prof.enabled = true; R.prof.every = 1; R.prof.reset?.();
           for (let i = 0; i < 20; i++) { await new Promise((q) => requestAnimationFrame(q)); __bh.touch(); }
           const g = []; let done = R.completedFrames; const t0 = performance.now();
@@ -63,8 +63,8 @@ test.skipIf(!E2E)(
           g.sort((a, b) => a - b);
           const passes = R.prof.table().map((p) => [p.label, +(p.ms ?? 0).toFixed(2)]).sort((a, b) => b[1] - a[1]).slice(0, 10);
           return { p50: +(g[g.length >> 1] ?? 0).toFixed(2), p95: +(g[Math.floor(g.length * 0.95)] ?? 0).toFixed(2), images: g.length,
-            inView: await R.benchInView(), passes }; })()`);
-        const row = { label, n, skip, ...m };
+            inView: await R.benchInView(), quads: R.benchQuads, passes }; })()`);
+        const row = { label, n, skip, lodPx, ...m };
         (out.runs as unknown[]).push(row);
         console.log(`  ${label}: ${JSON.stringify({ ...row, passes: row.passes.slice(0, 4) })}`);
         return row;
@@ -81,6 +81,16 @@ test.skipIf(!E2E)(
         [4, "sans l'ombre"],
       ] as const)
         parts.push(await measure(`512 k ${what}`, 512_000, skip));
+      // (the lightened far envelopes: under 4 then 8 px one quad facing the camera, not a box — the same envelopes in view)
+      const lod = [];
+      for (const [n, px] of [
+        [128_000, 4],
+        [128_000, 8],
+        [512_000, 4],
+        [512_000, 8],
+      ] as const)
+        lod.push(await measure(`${n / 1000} k, quads sous ${px} px`, n, 0, px));
+      out.lod = lod.map((r) => ({ n: r.n, lodPx: r.lodPx, inView: r.inView, quads: r.quads, addedP50: +(r.p50 - zero.p50).toFixed(2) }));
       await app.js(
         `(async () => { __bh.renderer.benchSkip = 0; await __bh.renderer.envelopeBench({ lat: 0, lon: 0, n: 0 }); return 1; })()`,
       );

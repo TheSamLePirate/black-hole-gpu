@@ -827,7 +827,9 @@ fn meshShade(v: MV) -> vec4f {
 struct Env { c: vec4f, s: vec4f };
 @group(1) @binding(0) var<storage, read> benchEnv: array<Env>;
 @group(1) @binding(1) var<storage, read_write> benchListW: array<u32>;
-@group(1) @binding(2) var<storage, read_write> benchDraw: array<atomic<u32>, 4>;
+// (two indirect draws: the boxes, then the quads — a far envelope under BENCH_LOD_PX drawn as one quad facing the camera)
+@group(1) @binding(2) var<storage, read_write> benchDraw: array<atomic<u32>, 8>;
+override BENCH_LOD_PX: f32 = 0.0;
 @group(1) @binding(3) var<storage, read> benchListR: array<u32>;
 // (an envelope's corner k (0/1 each axis): c — x, y, its base's z in the scene's frame, its heading —; s — half length, half width,
 // height, its leaf)
@@ -852,8 +854,30 @@ fn benchCull(@builtin(global_invocation_id) g: vec3u, @builtin(num_workgroups) n
   if (abs(v.y) - ty * v.z > R * sqrt(1.0 + ty * ty)) { return; }
   // (a pixel across at least: its radius against a pixel's size at its distance)
   if (v.z > 0.0 && R * u.image.x < v.z * tx) { return; }
+  // (its size on the image [px]: under BENCH_LOD_PX a quad, the list's other end)
+  let px = R * u.image.x / max(v.z * tx, 1e-3);
+  if (px < BENCH_LOD_PX) {
+    let at = atomicAdd(&benchDraw[5], 1u);
+    benchListW[arrayLength(&benchListW) - 1u - at] = k;
+    return;
+  }
   let at = atomicAdd(&benchDraw[1], 1u);
   benchListW[at] = k;
+}
+// a far envelope as one quad facing the camera: its centre, its widest half-side across, its height up (the view's)
+@vertex fn benchQuadVs(@builtin(vertex_index) vi: u32, @builtin(instance_index) bi: u32) -> MV {
+  var o: MV;
+  let e = benchEnv[benchListR[arrayLength(&benchListR) - 1u - bi]];
+  let q = array<vec2f, 6>(vec2f(-1.0, 0.0), vec2f(1.0, 0.0), vec2f(1.0, 1.0), vec2f(-1.0, 0.0), vec2f(1.0, 1.0), vec2f(-1.0, 1.0));
+  let c = view(vec3f(e.c.xy, e.c.z));
+  let top = view(vec3f(e.c.xy, e.c.z + e.s.z));
+  let w = max(e.s.x, e.s.y);
+  let k = q[vi];
+  let v = mix(c, top, k.y) + vec3f(k.x * w, 0.0, 0.0);
+  o.leaf = e.s.w + 1.0;
+  o.clip = vec4f(v.x / u.right.w + u.output.z * v.z, v.y / u.up.w + u.output.w * v.z, u.forward.w, v.z);
+  o.p = v;
+  return o;
 }
 @vertex fn benchVs(@builtin(vertex_index) vi: u32, @builtin(instance_index) bi: u32) -> MV {
   var o: MV;
@@ -1112,7 +1136,13 @@ export class SceneryRaster {
     cullBind: GPUBindGroup;
     drawBind: GPUBindGroup;
   } | null = null;
-  private benchPipes: { cull: GPUComputePipeline; vis: GPURenderPipeline; shadow: GPURenderPipeline } | null = null;
+  private benchPipes: {
+    cull: GPUComputePipeline;
+    vis: GPURenderPipeline;
+    shadow: GPURenderPipeline;
+    quad: GPURenderPipeline;
+    lodPx: number;
+  } | null = null;
   /** the bench's parts left out, to measure each (1 its culling, 2 its visibility, 4 its shadow) */
   benchSkip = 0;
   /**
@@ -1120,13 +1150,15 @@ export class SceneryRaster {
    * half length, half width, height [m], a building's leaf (its material) —; null: off, its buffers let go. Its pipelines made at its
    * first use (awaited: the bench draws once they are in).
    */
-  async setBench(env: Float32Array | null): Promise<void> {
+  async setBench(env: Float32Array | null, lodPx = 0): Promise<void> {
     if (this.bench) {
       for (const b of [this.bench.env, this.bench.list, this.bench.draw]) b.destroy();
       this.bench = null;
     }
     if (!env || env.length < 8) return;
     const d = this.device;
+    // (another LOD threshold: the culling's constant — its pipelines made again)
+    if (this.benchPipes && this.benchPipes.lodPx !== lodPx) this.benchPipes = null;
     if (!this.benchPipes) {
       const C = GPUShaderStage.COMPUTE,
         V = GPUShaderStage.VERTEX;
@@ -1145,10 +1177,10 @@ export class SceneryRaster {
           { binding: 3, visibility: V, buffer: { type: "read-only-storage" } },
         ],
       });
-      const [cull, vis, shadow] = await Promise.all([
+      const [cull, vis, shadow, quad] = await Promise.all([
         d.createComputePipelineAsync({
           layout: d.createPipelineLayout({ bindGroupLayouts: [this.cullLayout, cullL] }),
-          compute: { module: this.module, entryPoint: "benchCull" },
+          compute: { module: this.module, entryPoint: "benchCull", constants: { BENCH_LOD_PX: lodPx } },
         }),
         d.createRenderPipelineAsync({
           layout: d.createPipelineLayout({ bindGroupLayouts: [this.drawLayout, drawL] }),
@@ -1167,8 +1199,19 @@ export class SceneryRaster {
           primitive: { topology: "triangle-list", cullMode: "none" },
           depthStencil: { format: "depth32float", depthWriteEnabled: true, depthCompare: "less" },
         }),
+        d.createRenderPipelineAsync({
+          layout: d.createPipelineLayout({ bindGroupLayouts: [this.drawLayout, drawL] }),
+          vertex: { module: this.module, entryPoint: "benchQuadVs" },
+          fragment: {
+            module: this.module,
+            entryPoint: "meshFs",
+            targets: [{ format: TERRAIN_RASTER_FORMAT }, { format: TERRAIN_RASTER_MOTION_FORMAT }, { format: TERRAIN_RASTER_ID_FORMAT }],
+          },
+          primitive: { topology: "triangle-list", cullMode: "none" },
+          depthStencil: { format: "depth32float", depthWriteEnabled: true, depthCompare: "greater" },
+        }),
       ]);
-      this.benchPipes = { cull, vis, shadow };
+      this.benchPipes = { cull, vis, shadow, quad, lodPx };
       this.benchLayouts = { cull: cullL, draw: drawL };
     }
     const count = Math.floor(env.length / 8);
@@ -1177,7 +1220,7 @@ export class SceneryRaster {
     d.queue.writeBuffer(envB, 0, env.subarray(0, count * 8) as Float32Array<ArrayBuffer>);
     const list = d.createBuffer({ size: count * 4, usage: S, label: "envelope bench list" });
     const draw = d.createBuffer({
-      size: 16,
+      size: 32,
       usage: S | GPUBufferUsage.INDIRECT | GPUBufferUsage.COPY_DST | GPUBufferUsage.COPY_SRC,
       label: "envelope bench draw",
     });
@@ -1204,16 +1247,20 @@ export class SceneryRaster {
     };
   }
   private benchLayouts: { cull: GPUBindGroupLayout; draw: GPUBindGroupLayout } | null = null;
-  private benchReset = new Uint32Array([36, 0, 0, 0]);
-  /** the bench's envelopes in view at the last cull (its indirect draw's instances, read back) */
+  private benchReset = new Uint32Array([36, 0, 0, 0, 6, 0, 0, 0]);
+  /** of the last read's envelopes in view, those drawn as quads (under the LOD threshold) */
+  benchQuads = 0;
+  /** the bench's envelopes in view at the last cull (its indirect draws' instances, read back: boxes and quads) */
   async benchInView(): Promise<number> {
     if (!this.bench) return 0;
-    const r = this.device.createBuffer({ size: 16, usage: GPUBufferUsage.MAP_READ | GPUBufferUsage.COPY_DST });
+    const r = this.device.createBuffer({ size: 32, usage: GPUBufferUsage.MAP_READ | GPUBufferUsage.COPY_DST });
     const enc = this.device.createCommandEncoder();
-    enc.copyBufferToBuffer(this.bench.draw, 0, r, 0, 16);
+    enc.copyBufferToBuffer(this.bench.draw, 0, r, 0, 32);
     this.device.queue.submit([enc.finish()]);
     await r.mapAsync(GPUMapMode.READ);
-    const n = new Uint32Array(r.getMappedRange())[1]!;
+    const w = new Uint32Array(r.getMappedRange());
+    const n = w[1]! + w[5]!;
+    this.benchQuads = w[5]!;
     r.unmap();
     r.destroy();
     return n;
@@ -1445,6 +1492,10 @@ export class SceneryRaster {
       pass.setBindGroup(0, this.drawBind);
       pass.setBindGroup(1, this.bench.drawBind);
       pass.drawIndirect(this.bench.draw, 0);
+      if (this.benchPipes.lodPx > 0) {
+        pass.setPipeline(this.benchPipes.quad);
+        pass.drawIndirect(this.bench.draw, 16);
+      }
     }
   }
 

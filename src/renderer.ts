@@ -11206,7 +11206,16 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
    * visibility with a real building's material, all into the buildings' shadow map); n 0: off. Their frame the drawn scene's: set
    * again after the scene moves. Returns why not, or null.
    */
-  async envelopeBench(o: { lat: number; lon: number; n: number; rMin?: number; rMax?: number; seed?: number }): Promise<string | null> {
+  async envelopeBench(o: {
+    lat: number;
+    lon: number;
+    n: number;
+    rMin?: number;
+    rMax?: number;
+    seed?: number;
+    /** under this projected size [px] an envelope one quad facing the camera, not a box (0: boxes all) */
+    lodPx?: number;
+  }): Promise<string | null> {
     const R = this.sceneryRaster,
       sc = this.earthScenery;
     if (!R) return "no scenery raster";
@@ -11237,12 +11246,16 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
       const p = localPoint(frame, lat, lon, g);
       env.set([p[0], p[1], p[2], rnd() * Math.PI, 4 + 12 * rnd(), 4 + 12 * rnd(), 6 + 24 * rnd(), sc.buildingLeaf], i * 8);
     }
-    await R.setBench(env);
+    await R.setBench(env, o.lodPx ?? 0);
     return null;
   }
   /** (the bench's) its envelopes in view at the last cull; its parts left out (1 culling, 2 visibility, 4 shadow) */
   benchInView() {
     return this.sceneryRaster?.benchInView() ?? Promise.resolve(0);
+  }
+  /** (the bench's) of those in view at the last read, the quads */
+  get benchQuads() {
+    return this.sceneryRaster?.benchQuads ?? 0;
   }
   set benchSkip(v: number) {
     if (this.sceneryRaster) this.sceneryRaster.benchSkip = v;
