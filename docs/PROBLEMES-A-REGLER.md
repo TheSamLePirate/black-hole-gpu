@@ -3,7 +3,17 @@
 Problèmes constatés, pas encore réglés. Chaque entrée : la date (UTC), ce qui est mesuré ou observé et sa source, la cause
 connue ou supposée, la piste. Une entrée réglée est barrée avec le commit qui la règle, pas effacée.
 
-## La couche lointaine de nuit : des quads blancs éblouissants à l'horizon, avec les matériaux (relevé le 16 novembre 2026, PLAN-J8 J8-A)
+## La couche lointaine de nuit : des carrés blancs éblouissants à l'horizon, **quelques secondes après un saut à la nuit** (relevé le 16 novembre 2026, PLAN-J8 J8-A)
+
+**Requalifié (16 nov. 2026, ~18:28 UTC, kerr-mini, `j8-junction` `J8J_JUMP`)** : ce n'est pas un effet des matériaux. La nuit, sautée
+depuis le jour avec les matériaux, compte **1 382 pixels blancs 3 s après le saut et 18 après 30 s** (16 sans la couche). La capture à
+l'aspect générique prise 3 s après le saut en compte 1 315. Les runs précédents prenaient la capture avec matériaux juste après le saut et
+les autres plus tard : la fausse piste. Un **transitoire d'une trentaine de secondes après un changement d'heure brusque** (`setDate`, les
+commandes du temps), la couche lointaine présente ; non vu en temps qui s'écoule. `farMaterials` rallumé par défaut. Cause du transitoire
+non cherchée (l'adaptation de l'œil, l'historique temporel des pixels lointains ?) — gravité faible.
+
+**Ce qui suit est l'historique de l'enquête (la piste des matériaux, abandonnée).**
+
 
 **État (16 nov. 2026, ~17:35 UTC)** : ouvert, non réglé ; la couche lointaine (`farBuildingsOn`, allumée par défaut) et ses matériaux
 sont commités en local, **non poussés** tant qu'il dure.

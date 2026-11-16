@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-16 18:35 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-16 18:30 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous. Ce qui est fermé quitte le tableau « En cours » pour la ligne « Fermé récemment ».
@@ -63,7 +63,7 @@ l'état d'une mission ou d'un combat **non sauvé, dit** ; le réseau **« entre
 
 **Fermé aussi** : le plancher du raster sur GPU faible (15 nov., 23:46, proposer sous 15 images/s, décision de Sam).
 
-**La session du rendu (33d89754)** : **[PLAN-J8](docs/PLAN-J8-BATIMENTS.md)**, ordre convenu (a) matériaux, (b) J8-5, (c) Paris, (d) J8-E puis J8-L — **J8-4 allumée par défaut**, ses matériaux éteints par défaut (carrés blancs de nuit, sondés, cause cherchée) ; **J8-5** : la jonction s'applique (proposition 1 km, à choisir par Sam), un blocage intermittent ouvert ; **Paris mesuré : +3,5 ms, retour à Sam** (options envoyées) ; **J8-E fait et vu en A/B** (les rivières à l'horizon) ; **J8-A** : les tracés `j8a-tracks.ts`. [PLAN-J7](docs/PLAN-J7-FLUIDITE.md) en pause.
+**La session du rendu (33d89754)** : **[PLAN-J8](docs/PLAN-J8-BATIMENTS.md)** — **J8-4 allumée par défaut, ses matériaux rallumés** (les carrés blancs de nuit : un transitoire après un saut d'heure) ; **Paris** : « ok 3 + mesure 2 » (Sam) — 96 Mio tient tout Paris pour +3,7 ms contre +3,5 (mini), M1 Max à refaire froid, de nuit la couche masque les lumières de la ville (à régler) ; **J8-5** : la jonction s'applique (proposition 1 km, à choisir par Sam), un blocage intermittent ouvert ; **J8-E fait** ; **J8-A** : les tracés `j8a-tracks.ts`. [PLAN-J7](docs/PLAN-J7-FLUIDITE.md) en pause.
 
 **Priorité de Sam (16 nov., 11:30 UTC) : [PLAN-J8](docs/PLAN-J8-BATIMENTS.md), tous les bâtiments de la vue** (« c'est ça qui choque le plus ») — la suite de J7 en pause après J7-8b ; les deux sessions s'y mettent (rendu : couche GPU, scène proche ; approches : recensement, préparation des cellules, PWA) ; d'abord J8-0 (mesures) et J8-1 (le trou de 2 à 7 km).
 
@@ -9608,3 +9608,20 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   - le coût de dessin et kerr-mini ne sont pas mesurés.
 - Suite : à 23 h, `j8-zone-paris` sur le mini (décision de Sam), puis J8-9 (3). VB4, la préparation des places, viendra avec la session du
   rendu.
+
+### 2026-11-16 18:30 UTC — PLAN-J8 : les carrés blancs requalifiés (un transitoire), les matériaux rallumés ; la mesure 2 de Paris ; le raccord de l'option 3 (session 33d89754)
+
+- Destination : §19.13 (J8-A), §8. Décisions de Sam (~18:10 UTC) : « ok 3 + mesure 2 ».
+- **Les carrés blancs de nuit requalifiés** (kerr-mini, `j8-junction` `J8J_JUMP`) :
+  - 1 382 pixels blancs 3 s après un saut à la nuit, 18 après 30 s ;
+  - l'aspect générique en a autant 3 s après le saut.
+  - Ce n'est donc pas un effet des matériaux, mais un transitoire après un changement d'heure brusque. `farMaterials` est rallumé par défaut, ce qui rend la teinte des toits lointains.
+- **La mesure 2** (kerr-mini, `renderer.farBudgetMiB` 96, nouveau levier) :
+  - tout Paris résident : 1 947 cellules, 1 119 472 bâtiments, ~51 Mio utilisés ;
+  - **+3,7 ms**, contre +3,5 ms à 24 Mio.
+  - Sur le M1 Max, la machine était chaude (« Heavy », puis « Trapping ») et le témoin positif a échoué : écarté, à refaire froid.
+- **Le raccord de l'option 3** (24 Mio) :
+  - de jour, un bord visible où la ville s'arrête sur le relief bâti ;
+  - **de nuit, la couche masque les lumières de la ville cuites au sol**, et les cellules résidentes deviennent des silhouettes sombres. À régler : les fenêtres lointaines, et J8-L.
+- Format 2 de la cellule « rue » (KSC2) convenu avec la session des approches : simplification à 0,3 m, sentiers inclus, places dans une section de la même cellule.
+- Suite : la mesure 2 sur le M1 Max froid (avant 22:00 UTC), les captures montrées à Sam pour qu'il tranche, puis la nuit de la couche.

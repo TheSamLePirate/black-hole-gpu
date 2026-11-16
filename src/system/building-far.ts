@@ -66,7 +66,7 @@ export class BuildingFar {
   quadPx = FAR_QUAD_PX;
   /** the far buildings drawn with their own materials (PLAN-J8 J8-A: their roof's and walls' from the record, farMat — the near mesh's
    *  colours); false: the look of a near building without a leaf (generic) — a lever to compare */
-  materials = false;
+  materials = true;
   /** the region the eye is in (FAR_REGIONS' index) */
   private region = 0;
   /** the counts: cells handed, put, let go, too big to fit */

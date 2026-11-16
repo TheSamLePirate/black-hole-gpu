@@ -255,7 +255,7 @@ import { WarpGrid } from "./system/warp-grid";
 import { EarthSurface, SURFACE_TEXTURE_LIMIT } from "./system/earth-surface";
 import { EarthScenery } from "./system/scenery";
 import { DETAIL_REACH, localPoint, SCENERY_STORAGE_LIMIT, type SceneryExclusion, sceneryFrame } from "./system/scenery-data";
-import { BuildingFar } from "./system/building-far";
+import { BuildingFar, FAR_BUDGET_BYTES } from "./system/building-far";
 import type { EyeState } from "./system/building-layer";
 import { cellPool } from "./system/cell-workers";
 import { LANDSCAPES, LANDSCAPE_CLEARING_M } from "./system/landscapes";
@@ -11247,8 +11247,8 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
   }
   private farQuadPxWant = 8;
   /** (the far layer's) its buildings drawn with their own materials (PLAN-J8 J8-A: their roof's and walls' from the record, the near
-   *  mesh's colours); false — the default since 16 Nov 2026 ~17:45 UTC: with them, at night, white quads at the horizon (PROBLEMES) —:
-   *  generic, a near building's without a leaf */
+   *  mesh's colours; on by default again ~18:28 UTC: the night's white squares are a transient after a jump to night, the generic look's
+   *  too — PROBLEMES); false: generic, a near building's without a leaf */
   set farMaterials(on: boolean) {
     if (this.buildingFar) this.buildingFar.materials = on;
     this.farMaterialsWant = on;
@@ -11256,7 +11256,20 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
   get farMaterials() {
     return this.buildingFar?.materials ?? this.farMaterialsWant;
   }
-  private farMaterialsWant = false;
+  private farMaterialsWant = true;
+  /** (the far layer's) its GPU pool's budget [MiB] (24 by default — FAR_BUDGET_BYTES; PLAN-J8 J8-A's measure 2, Sam 16 Nov 2026: ~96, all
+   *  Paris resident, once): set, the layer made again — its cells asked again from the preparation pool's cache */
+  set farBudgetMiB(mib: number) {
+    const b = Math.max(1, Math.round(mib)) * 1024 * 1024;
+    if (b === this.farBudgetBytes) return;
+    this.farBudgetBytes = b;
+    this.buildingFar?.dispose();
+    this.buildingFar = null;
+  }
+  get farBudgetMiB() {
+    return this.farBudgetBytes / (1024 * 1024);
+  }
+  private farBudgetBytes = FAR_BUDGET_BYTES;
   /** (the far layer's) what is resident and what the last cull drew (boxes, quads — read back) */
   async farBuildings() {
     return {
@@ -12224,7 +12237,7 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
       // left to it: within its cap's kept reach when it cut, else its box)
       if (this.farBuildingsOn) {
         if (!this.buildingFar) {
-          this.buildingFar = new BuildingFar(this.sceneryRaster, cellPool);
+          this.buildingFar = new BuildingFar(this.sceneryRaster, cellPool, this.farBudgetBytes);
           this.buildingFar.quadPx = this.farQuadPxWant;
           this.buildingFar.materials = this.farMaterialsWant;
           // (the ground as drawn — the records without their own: Overture's, OSM's)

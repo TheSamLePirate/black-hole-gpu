@@ -121,6 +121,23 @@ test.skipIf(!E2E)(
         await app.js(`(() => { __bh.game.setDate("${NIGHT}"); __bh.touch(); return 1; })()`);
         await app.js(`new Promise((q) => setTimeout(q, 3000))`);
         const night = await pair("nuit");
+        // (J8J_JUMP: the night jumped to with the far materials on — shots 3 s and 30 s after: a transient? PROBLEMES 16 Nov 2026)
+        if (process.env.J8J_JUMP) {
+          await app.js(`(() => { __bh.renderer.farMaterials = true; __bh.game.setDate("${J0_SCENE.date}"); __bh.touch(); return 1; })()`);
+          await app.settled(30_000);
+          await app.js(`new Promise((q) => setTimeout(q, 5000))`);
+          await app.js(`(() => { __bh.game.setDate("${NIGHT}"); __bh.touch(); return 1; })()`);
+          for (const [tag, ms] of [
+            ["3s", 3000],
+            ["30s", 27000],
+          ] as const) {
+            await app.js(`new Promise((q) => setTimeout(q, ${ms}))`);
+            await app.js(`(() => { document.body.classList.add("hide-ui"); return 1; })()`);
+            await app.shot(`${OUT}/${v.name}-saut-nuit-${tag}.png`);
+            await app.js(`(() => { document.body.classList.remove("hide-ui"); return 1; })()`);
+          }
+          await app.js(`(() => { __bh.renderer.farMaterials = false; __bh.touch(); return 1; })()`);
+        }
         // (J8J_PROBE "x,y;x,y…" [px of the 1920 × 1080 shot]: the night with the far materials on, those pixels' visibility — what the
         // white squares are, PROBLEMES 16 Nov 2026)
         if (process.env.J8J_PROBE) {
@@ -136,6 +153,14 @@ test.skipIf(!E2E)(
             return r; })()`);
           console.log(`  ${v.name} night probes: ${JSON.stringify(probes)}`);
           (out as Record<string, unknown>).probes = probes;
+          // (J8J_SKIPS "16,128,…": the same night with each liteSkip bit — what part of the shading lights the white squares)
+          for (const bit of (process.env.J8J_SKIPS ?? "").split(",").filter(Boolean).map(Number)) {
+            await app.js(`(() => { __bh.renderer.liteSkip = ${bit}; __bh.touch(); return 1; })()`);
+            await app.settled(30_000);
+            await app.js(`(() => { document.body.classList.add("hide-ui"); return 1; })()`);
+            await app.shot(`${OUT}/${v.name}-nuit-materiaux-skip-${bit}.png`);
+            await app.js(`(() => { __bh.renderer.liteSkip = 0; document.body.classList.remove("hide-ui"); __bh.touch(); return 1; })()`);
+          }
           await app.js(`(() => { __bh.renderer.farMaterials = false; __bh.touch(); return 1; })()`);
         }
         // (J8J_DIAG: the night's far layer as boxes alone, then generic — what lights it, PLAN-J8 J8-A)
