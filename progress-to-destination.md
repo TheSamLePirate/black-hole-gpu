@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-16 06:01 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-16 06:13 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous. Ce qui est fermé quitte le tableau « En cours » pour la ligne « Fermé récemment ».
@@ -49,7 +49,7 @@ J4 (fermé, sortie non atteinte), J5 et J6 (fermés).
 | Rendu (33d89754) | Mesures tenues | la borne du M1 Max **à 30** : essayée à 40 le 15 au soir, non tenue (soutenu 26,4 et 34,5 images/s, deux runs — [J0-CONTRAT §2](docs/J0-CONTRAT.md)) ; le coût de l'appareil 3,5–4,5 ms, dont le MSAA 4× 4–5 ms (gardé) |
 | Audit vagues 3–4 et 6 (1feb2f7f) | [09-priorites-todo](docs/audit-2026-11-10/09-priorites-todo.md) | **faits** : 3.1–3.2 réseau (RD0–RD2), 3.3 sauvegardes (une clé par sauvegarde ; avion, systèmes des vaisseaux et de l'A320 — ce dernier par J6-4), 3.4–3.5 vol, 3.6–3.7 TARS, 3.10 e2e honnêtes, 4.2 temps et onglet masqué, 4.3 `Settings`/`ViewPose`, 4.8 `main()` découpé ; vague 6 hors rendu (QA, AR, RD4/RD5, FX). **Reste** : l'état d'une mission ou d'un combat (Sam), IndexedDB et l'autosauvegarde hors frame (AR-05), FX-19 (fraîcheur des écrans, à mesurer), FX-21 |
 
-**Fermé récemment** : **PLAN-APPROCHES** (16 nov. : AP0–AP10 et AP-R menés — données réelles, choix, jonction, A320, carte, radar, TSD, crew, HUD, directeur de vol, roue, audio, campagne mondiale et échantillon volé ; ouverts : OIFK et l'aplanissement du détail sous les trouées, demandé à la session du rendu — [PROBLEMES](docs/PROBLEMES-A-REGLER.md)) ; **J3** (15 nov., confirmé par Sam ; J3-R fait 20:48) ; **le repli du raster vers le tracé retiré** (15 nov., 20:48, décision (b)) ; **PLAN-J6** (15 nov., 20:35 : les neuf parcours en e2e, sept défauts corrigés) ; l'eau étagée E1 (−1,55 ms) et E2 (−0,5 ms), E3 non ouvert ; la classification lot 1 (sur terre −1,15 ms), lot 2 non ouvert
+**Fermé récemment** : **PLAN-APPROCHES** (16 nov. : AP0–AP10 et AP-R menés — données réelles, choix, jonction, A320, carte, radar, TSD, crew, HUD, directeur de vol, roue, audio, campagne mondiale et échantillon volé ; OIFK posé après J7-1 le 16 nov. : échantillon F-35 9/9, A320 5/5) ; **J3** (15 nov., confirmé par Sam ; J3-R fait 20:48) ; **le repli du raster vers le tracé retiré** (15 nov., 20:48, décision (b)) ; **PLAN-J6** (15 nov., 20:35 : les neuf parcours en e2e, sept défauts corrigés) ; l'eau étagée E1 (−1,55 ms) et E2 (−0,5 ms), E3 non ouvert ; la classification lot 1 (sur terre −1,15 ms), lot 2 non ouvert
 (sous 1 ms) ; AR-07 (le renderer sur `ViewPose`) ; le retrait R1 des anciens chemins (13 nov.) ; le noyau du monde visé compilé pendant le voyage
 (Jupiter à froid 73,7 → 47 s) ; le grain des anneaux de Saturne ; J2 (13 nov.) ; J2-C BC7 rangée (Sam). Le plafond des binaires suivis monté à
 700 Mo (Sam, f4bba608).
@@ -8543,3 +8543,13 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
 - Limites : la FAF de l'approche non lue (10 km) ; les flancs du couloir raides dans une crête inventée (45 m / 50 m) — réglage révisable ;
   un run J0 « après » sans mesure (décor bloqué à l'étape forêt) — à surveiller ; le décor déjà bâti n'est refait qu'à sa prochaine scène.
 - Suite : J7-7 (le premier noyau de la partie, le changement d'appareil), avec J7-2/J7-3 rejoués à froid.
+
+### 2026-11-16 06:13 UTC — PLAN-APPROCHES : OIFK posé après J7-1 ; l'échantillon de la campagne entier au vert
+
+- Contribution à la destination : §19.4 (le sol de contact et le sol dessiné, un seul zonage sous les approches) — la demande de cette
+  session faite par celle du rendu (J7-1, 7128cffe), vérifiée par l'e2e qui l'avait révélée.
+- Preuves (observé) : `approach-sample` rejoué sur 7128cffe — F-35 **9/9** sur la piste (M1 Max ; KPHX 19,6, PASI 20, LFLL 20, OEKF 20,
+  UHWV 20, SSWF 20, KRTN 17, OAMS 20, PAKP 20) ; A320 **5/5** (kerr-mini ; KRDU 23L 20, LFPO 25 20, OETN 15 20, KTNX 15 refus motivé —
+  construite, relief —, **OIFK 11 posé 20/20**, 891 m après le seuil, 1,0 m de l'axe, −0,53 m/s).
+- Limites : la campagne mondiale non refaite (elle juge sur les données seules, que J7-1 ne change pas).
+- Suite : rien d'ouvert sur PLAN-APPROCHES.
