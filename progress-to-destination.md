@@ -8609,3 +8609,17 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
 - Preuves (mesuré, kerr-mini, à chaud, `j7-first-kernel`) : au changement d'appareil, écarts > 100 ms 217/250/117/182 → 183/133 ms ; `sea-fft`
   5/5 ; `pcd`, `sea-*`, `collide` unitaires.
 - Limites : restent une collection de ~1 Go et l'arrivée des tuiles au changement (une mise en place : J7-9) ; non rejoué à froid.
+
+### 2026-11-16 07:58 UTC — E2E-VOLS règle 13 : un avion d'e2e vole comme un pilote, et le test l'asserte (Sam)
+
+- Contribution à la destination : §19.13 (des parcours jugés sur un état vrai, pas favorable) — la qualité des e2e de vol, demandée par Sam
+  (« les tests e2e en avion doivent être parfaits »).
+- Réalisé : [E2E-VOLS](docs/E2E-VOLS.md) §0 règle 13 et §8 point 13 — gelé pendant les attentes de données (jamais de vol plané manette 0),
+  puis à chaque phase asserté ce qui est appliqué : AP/ATHR, `engineNow`, train, vitesse au-dessus du décrochage, assiette ; un geste manuel
+  rendu et l'état d'après vérifié.
+- Constaté en lisant le run `20261116-084510-j72-73` (kerr-mini, session du rendu) et les tests : `parcours-meteo`, `-camera`, `-gpu`,
+  `-ville` placent par `flyAt` puis attendent jusqu'à 2 × 90 s **sans geler ni engager l'autothrottle** (l'avion plane manette à 0 —
+  ce que Sam a vu sur le mini), puis replacent ; `parcours-meteo` lâche l'ILS au manche et laisse l'avion 30 s à 53° de cabré, 130 → 58 m/s,
+  572 → 279 m — et passe (il n'asserte que le changement d'assiette). Transmis aux deux sessions.
+- Preuves : documenté (lecture du code des tests et du journal du run) ; rien lancé par la session d'analyse.
+- Suite : la session du rendu reprend ses tests de parcours ; la session des approches audite les autres e2e de vol contre la règle 13.

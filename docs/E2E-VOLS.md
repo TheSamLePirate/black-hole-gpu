@@ -13,7 +13,7 @@ Les chiffres sont ceux de cette analyse, avec ses limites (§1.4).
 
 ---
 
-## 0. En bref — les douze règles
+## 0. En bref — les treize règles
 
 1. **Lancer avec `bun run e2e <nom>`** (le préchargement enregistre télémétrie et rapports), jamais `E2E=1 bun test`
    seul pour un vrai essai. **Garder toute la sortie dans un fichier** et y chercher `(fail)` et le résumé ; jamais
@@ -41,6 +41,14 @@ Les chiffres sont ceux de cette analyse, avec ses limites (§1.4).
     `__bh.game.pause(false)` avant le vol suivant ; ou `damage: false` quand la casse n'est pas le sujet.
 12. **Captures à chaque état jugé**, regardées, montrées à Sam dans T3 ; une bannière remplie (`// Duration:`,
     `// Done when:`) ; `expect(app.cdp.errors).toEqual([])`.
+13. **Un avion d'e2e vole comme un pilote le ferait, et le test l'asserte** (Sam, 16 nov. 2026 : « les tests e2e en avion doivent
+    être parfaits »). Jamais d'avion qui plane manette à 0 pendant une attente de données : **geler** (`__bh.freeze(true)`) entre le
+    placement et la fin des attentes, puis replacer et engager. Une fois en vol, asserter à chaque phase **ce qui est réellement
+    appliqué** : autopilote et autothrottle engagés (`jetModes.alt`/`spd` non nuls), **la poussée** (`pilot.engineNow` > 0 en croisière,
+    pas le levier `pilot.throttle`), **le train** selon la phase (sorti et verrouillé avant le toucher, rentré en croisière), la
+    vitesse au-dessus du décrochage et une assiette plausible (pas de 50° de cabré à 60 m/s laissé 30 s). Un geste manuel (manche,
+    manette) se rend : l'avion est repris (autopilote réengagé ou pilotage scripté) et l'état d'après est asserté. Un état absurde
+    qui laisse passer le test est un défaut du test.
 
 ---
 
@@ -513,6 +521,8 @@ expect(r.log.some((l) => /Hard landing|collapsed|tipped/.test(l))).toBe(false);
 10. Attentes plafonnées qui disent ce qui manque ; aucun `.catch(() => {})`, aucun `Bun.sleep`.
 11. `expect(app.cdp.errors).toEqual([])` ; `afterAll` : `app?.close(); stopServer();`.
 12. Le faire échouer sans le correctif qu'il protège (un test de régression a déjà passé dans les deux cas).
+13. L'état de vol asserté à chaque phase (règle 13 du §0) : AP/ATHR engagés, `engineNow`, train, vitesse au-dessus du
+    décrochage, assiette ; gelé pendant les attentes ; un geste manuel rendu et l'état d'après vérifié.
 
 ### Fichiers modèles
 
