@@ -221,6 +221,17 @@ J8-R. J8-1 se voit tout de suite. J8-4 apporte le gros du gain : « toute la vue
     - **Garde-fou au-delà** : le remplissage des plus proches d'abord.
     - Sam accepte ce coût, au-dessus du seuil de 3 ms sur le mini.
     - **La nuit est corrigée** (c59c981f) : les bâtiments lointains portent la lueur de leur ville.
+11. **Décidé par Sam le 16 nov. (~21:40 UTC, « ok » aux trois recommandations de la session d'analyse)** :
+    - **J8-8 ouvert** (le proche en cellules, conception de la session du rendu au §8, b7a29727). En vol sur Paris,
+      ~3 800 images sur ~12 300 tombent sur une scène rapide, parce que l'appareil sort du carré de la scène proche ;
+      J8-5 et la zone ne règlent pas ce trou. Lot (1), le format et la préparation par cellule : session des approches,
+      après la zone de Paris de cette nuit. Lots (2) à (4), la réserve GPU, le dessin, les contacts et ombres, la scène
+      proche sans bâtiments : session du rendu. La réserve de 100–200 Mio est une estimation, à mesurer au lot (2) sur
+      les deux machines.
+    - **Distance de jonction : 0** (pas de limite du proche). À 1 km, il y avait plus de scènes rapides (4 863 contre
+      3 821) et +1,1 ms GPU ; J8-8 rendra cette distance sans objet. Les captures de jonction ne sont plus attendues.
+    - **L'éclat de nuit lointain gardé tel quel** (74e71cae : la part réelle du pixel, la ville lointaine ~7 fois le sol
+      au loin au lieu de ~15).
 
 ## 7. Ce qui reste hors de ce plan
 
