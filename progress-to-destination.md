@@ -67,7 +67,7 @@ l'état d'une mission ou d'un combat **non sauvé, dit** ; le réseau **« entre
 
 **Priorité de Sam (16 nov., 11:30 UTC) : [PLAN-J8](docs/PLAN-J8-BATIMENTS.md), tous les bâtiments de la vue** (« c'est ça qui choque le plus ») — la suite de J7 en pause après J7-8b ; les deux sessions s'y mettent (rendu : couche GPU, scène proche ; approches : recensement, préparation des cellules, PWA) ; d'abord J8-0 (mesures) et J8-1 (le trou de 2 à 7 km).
 
-**Décidé par Sam (16 nov., 15:58 UTC)** : J8-4 allumée par défaut (quads sous 8 px), J8-5 avec une jonction choisie sur captures, J8-1b suspendu, l'e2e de J8-6 par la voie (b), J8-9 ajouté ([PLAN-J8](docs/PLAN-J8-BATIMENTS.md) §6 point 6). **Attend Sam** : les captures de jonction de J8-5 ; les quatre premières questions de PLAN-J8 §6, réglées provisoirement (même contenu sur les deux machines, retour si > 3 ms sur le mini ; portée au pixel ; J7 en pause, les arbres proches deviennent J9 ; pas de préparation côté serveur pour l'instant) ; les trois questions de [PLAN-J7](docs/PLAN-J7-FLUIDITE.md) §4, réglées provisoirement (les 40 ms du mini en dernier, J7-6 ; les arbres proches en géométrie ensuite, désormais J9 ; l'aplanissement du détail sous les trouées jusqu'à la FAF ou 10 km) ; les seuils du mini attendent la reprise de la cible 40 ms.
+**Décidé par Sam (16 nov., 15:58 UTC)** : J8-4 allumée par défaut (quads sous 8 px), J8-5 avec une jonction choisie sur captures, J8-1b suspendu, l'e2e de J8-6 par la voie (b), J8-9 ajouté ([PLAN-J8](docs/PLAN-J8-BATIMENTS.md) §6 point 6). **But fixé par Sam (16 nov., ~16:19 UTC)** : [J8-A](docs/PLAN-J8-BATIMENTS.md), un vol Paris et Toulon-Hyères, de jour et de nuit, tous les bâtiments chargés avant le vol, en « high » partout, sans différence visible entre les qualités. **Attend Sam** : les captures de jonction de J8-5 ; les quatre premières questions de PLAN-J8 §6, réglées provisoirement (même contenu sur les deux machines, retour si > 3 ms sur le mini ; portée au pixel ; J7 en pause, les arbres proches deviennent J9 ; pas de préparation côté serveur pour l'instant) ; les trois questions de [PLAN-J7](docs/PLAN-J7-FLUIDITE.md) §4, réglées provisoirement (les 40 ms du mini en dernier, J7-6 ; les arbres proches en géométrie ensuite, désormais J9 ; l'aplanissement du détail sous les trouées jusqu'à la FAF ou 10 km) ; les seuils du mini attendent la reprise de la cible 40 ms.
 
 ## Journal
 
@@ -9211,3 +9211,19 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
     et par la couche. Les captures le diront.
   - Bruxelles (J8-7, session des approches) remplit le budget de 24 Mio : 17 images/s à la capture, non mesuré au banc.
 - Suite : les captures, le choix de la distance, puis les montrer à Sam.
+
+### 2026-11-16 16:20 UTC — PLAN-J8 : le résultat attendu fixé par Sam, J8-A ajouté (session d'analyse)
+
+- **Contribution à la destination :** PLAN-J8 et stratégie §19.13 (un parcours complet comme preuve). Sam fixe le but du plan : un vol au-dessus de Paris et de Toulon-Hyères, de jour et de nuit, avec un maximum de bâtiments, tous chargés avant le vol, en qualité « high » partout, et le moins de différences visibles entre les qualités de bâtiments (ombrage, couleur).
+- **Réalisé :**
+  - PLAN-J8 §0 : la citation de Sam et un cinquième critère, la démonstration.
+  - §3 : le lot J8-A, la démonstration qui ferme le plan. L'ordre des lots se juge désormais à J8-A.
+  - Relayé aux sessions 33d89754 (rendu) et 1feb2f7f (approches).
+- **Preuves :** documenté. Aucun test lancé.
+- **Limites / transitions restantes :** J8-A dépend de plusieurs travaux.
+  - Côté J8-4 : les matériaux par bâtiment sur la couche lointaine (un aspect générique aujourd'hui), le toit sur les quads, la teinte, et les fenêtres de nuit à vérifier.
+  - J8-5 : aucune scène rapide en vol.
+  - J8-6 : la zone, dont l'e2e n'a pas encore passé.
+  - La réserve de la couche, à dimensionner pour Paris : à Bruxelles elle est déjà pleine, avec 12 701 refus et 17 images/s sur une capture, non mesuré au banc.
+  - Le coût à Paris sur le mini, à mesurer face à la cible de 25 images/s.
+- **Suite :** chaque session indique ce que J8-A demande à ses lots. La réserve se dimensionne pour Paris, puis le coût de Paris se mesure au banc.

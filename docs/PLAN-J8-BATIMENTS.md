@@ -10,7 +10,12 @@ L'avancement se tient au §8 ; le code fait foi.
 
 ## 0. Ce que « fait » veut dire
 
-Il y a quatre critères, tous mesurés par un e2e et montrés en captures.
+**Le résultat attendu, fixé par Sam le 16 nov. (~16:19 UTC) :** *« un vol au-dessus de Paris et au-dessus de Toulon-Hyères avec un
+max de bâtiments, tous chargés avant le vol, en jour et en nuit ; high details partout dans la vue, le moins de différences
+visibles entre les qualités des bâtiments (shading, couleur…) »*. Les critères ci-dessous et le lot J8-A (§3) en sont la mesure ;
+ce vol est la démonstration qui ferme le plan.
+
+Il y a cinq critères, tous mesurés par un e2e et montrés en captures.
 
 1. **Toute la vue.** Sur la vue de J0 (Toulon-Hyères), chaque bâtiment BD TOPO qui couvre au moins 1 pixel est dessiné comme un
    bâtiment : un volume avec sa hauteur, sa forme de toit et son matériau. Cela vaut de la caméra jusqu'à la limite du pixel,
@@ -23,6 +28,15 @@ Il y a quatre critères, tous mesurés par un e2e et montrés en captures.
 4. **En ligne, sans zone.** Les cellules arrivent dans l'ordre suivant : vues et proches d'abord, puis sur la trajectoire, puis
    loin. Chacune s'affiche dès qu'elle est prête. La couverture ne recule jamais : une ancienne cellule reste tant que sa
    remplaçante n'est pas publiée.
+
+5. **La démonstration (J8-A).** Deux vols, Paris puis Toulon-Hyères, chacun **de jour et de nuit**, après un préchargement
+   (la zone hors ligne de la PWA ou le cache préparé) : **aucune requête réseau et aucune scène rapide pendant le vol**, tous
+   les bâtiments de la vue dessinés (le recensement par anneau à Paris comme à Toulon), la qualité « high » partout.
+   **Le moins de différences visibles entre les qualités** : le maillage proche et la couche lointaine partagent les
+   matériaux par bâtiment, la couleur des toits et des murs, l'éclairage, les ombres et les fenêtres éclairées la nuit. Le
+   témoin : à la jonction, l'écart de couleur moyenne des toits et des murs par bande de distance (de part et d'autre),
+   de jour et de nuit, avec les captures côte à côte ; aucune bascule visible dans la vidéo du vol. Le coût est mesuré sur
+   les deux machines et montré à Sam.
 
 Le coût GPU est mesuré et montré à Sam avant d'être accepté (§6, question 1). Aucun bâtiment n'est retiré en silence pour tenir
 une cadence.
@@ -110,9 +124,10 @@ de bâtiments vus, et leur coût GPU se mesure et se déclare.
 | **J8-7 Hors de France** | Overture (PMTiles) et OSM dans les mêmes enregistrements, puis la même couche. | approches | captures à Tarifa et Bruxelles ; recensement contre dessinés |
 | **J8-8 Le proche en cellules** (décision après J8-5) | Maillages, contacts (`SceneryContact`) et ombres par cellule, avec identité stable. Il n'y a plus de scène refaite pour les bâtiments. Grand lot : il ne s'ouvre que si J8-5 laisse un trou mesuré. | rendu | idem J8-5, sans régime rapide |
 | **J8-9 Une zone juste et légère** (ajouté le 16 nov., session d'analyse, sur la mesure de J8-6 ; après J8-4, sur accord de Sam) | `zoneDuration` annonce 175 s pour une zone dont le téléchargement réel prend 45 à 55 min (la Géoplateforme ~1,3 chaîne/s). Une zone de 0,5 km tire ~3 500 chaînes de base et ~700 grilles d'altitude IGN. L'estimation se cale sur le débit mesuré, et la zone ne tire que ce que le jeu lira. | approches | l'estimation contre le temps réel sur deux zones ; le compte des chaînes avant/après |
+| **J8-A La démonstration** (le résultat attendu par Sam, 16 nov. ; ferme le plan) | Un e2e de vol, Paris puis Toulon-Hyères, de jour et de nuit : la zone (ou le cache préparé) chargée avant le décollage et attendue jusqu'à ce que toutes les cellules de la vue et de la trajectoire soient résidentes ; puis le vol sans réseau. Il s'appuie sur J8-4 (matériaux par bâtiment, toit sur les quads, teinte), J8-5 (pas de scène rapide), J8-6 (la zone), et sur la réserve de la couche dimensionnée pour Paris. | les deux (rendu : vol, aspect, coût ; approches : zone, préchargement) | §0 critère 5 : réseau 0 et scène rapide 0 en vol ; bâtiments dessinés contre le recensement ; écart de couleur à la jonction jour et nuit ; vidéo et captures ; coût sur les deux machines |
 | **J8-R Retraits** (règle 2) | Le plafond 8 000 × portée² des bâtiments, les boîtes au-delà de 2 km dans la scène, les budgets rapides des bâtiments, le chemin de silhouettes remplacé : retirés au lot qui suit leur remplacement, avec une date. | les deux | `git grep` vide ; docs |
 
-**Ordre :** J8-T en tête côté approches (avant les téléchargements de J8-0 (b) s'il est encore temps, sinon juste après) ; J8-0 et J8-1 en parallèle, puis J8-2, puis J8-3 et J8-4 en parallèle, puis J8-5, J8-6, J8-7, J8-8 si nécessaire, et
+**Ordre :** J8-A est le but : chaque lot se juge à ce qu'il lui apporte. J8-T en tête côté approches (avant les téléchargements de J8-0 (b) s'il est encore temps, sinon juste après) ; J8-0 et J8-1 en parallèle, puis J8-2, puis J8-3 et J8-4 en parallèle, puis J8-5, J8-6, J8-7, J8-8 si nécessaire, et
 J8-R. J8-1 se voit tout de suite. J8-4 apporte le gros du gain : « toute la vue ».
 
 ## 4. Répartition et règles du checkout partagé
