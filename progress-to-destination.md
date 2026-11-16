@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-16 11:59 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-16 12:03 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous. Ce qui est fermé quitte le tableau « En cours » pour la ligne « Fermé récemment ».
@@ -8907,3 +8907,19 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   dans la durée des e2e (estimée entre 30 et 60 % pour le décor et l'IGN, non mesurée).
 - Suite : T0, les témoins et la mesure du gain, par la session des approches.
 
+### 2026-11-16 12:03 UTC — PLAN-J8 J8-3, premier pas : la cellule préparée depuis une tuile BD TOPO (session 1feb2f7f)
+
+- Contribution à la destination : §7.19 (une unité de résidence stable, préparée hors de l'image) ; PLAN-J8 J8-3 — la préparation, sur le
+  contrat J8-2 de la session du rendu (`building-cells.ts`, relu : cinq remarques envoyées, dont deux drapeaux proposés).
+- Réalisé : `src/system/cell-prep.ts` (pur) — une tuile z 15 → une cellule d'enregistrements de 48 octets : les règles du worker de décor
+  pour les attributs (debout, gouttière, hauteur du toit ≤ 30 m, étages, matériaux de la région, usage, construction légère), **un
+  enregistrement par bâtiment** (ses morceaux ensemble), gardé dans la première — nord puis ouest — des tuiles qu'il touche (les deux copies
+  d'une couture s'accordent ; le centre de l'emprise ne s'accordait pas : 16 doubles, 5 perdus), sa boîte orientée (`roofs.ts`), son sol
+  sur l'ellipsoïde (`altitude_minimale_sol` + N), une forme de toit sans planification, `generation` = la dernière `date_modification`.
+  `tests/cell-prep.test.ts` et une tuile témoin (`tests/fixtures/bdtopo/`, 88 ko).
+- Preuves (vérifié, ce Mac) : la tuile témoin, chaque enregistrement est un bâtiment du worker avec ses attributs (0 écart) ; un bloc de
+  5 × 5 tuiles de Toulon (depuis le cache du recensement) : 15 254 bâtiments, 15 056 gardés dans le bloc, **0 en double, 0 perdu** (les autres
+  appartiennent aux tuiles voisines hors du bloc) ; **2,9 ms par tuile au médian, 15 ms au pire** (M1 Max, décodage seul).
+- Limites : pas encore la réserve de workers, le cache préparé, la priorité ni l'annulation (suite de J8-3) ; les drapeaux `GroundKnown` et
+  `Partial` attendent l'accord de la session du rendu (constantes locales) ; pas mesuré sur kerr-mini ni sur une tuile de Paris (~2 500
+  bâtiments).
