@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-16 13:02 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-16 13:17 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous. Ce qui est fermé quitte le tableau « En cours » pour la ligne « Fermé récemment ».
@@ -63,7 +63,7 @@ l'état d'une mission ou d'un combat **non sauvé, dit** ; le réseau **« entre
 
 **Fermé aussi** : le plancher du raster sur GPU faible (15 nov., 23:46, proposer sous 15 images/s, décision de Sam).
 
-**La session du rendu (33d89754)** : **[PLAN-J8](docs/PLAN-J8-BATIMENTS.md) (tous les bâtiments de la vue, priorité de Sam, 16 nov.)** — J8-2 proposé (le contrat de cellule, à relire par 1feb2f7f) ; J8-0 (e) prêt (J0 relève le décor chaque seconde) ; J8-0 (c) : le banc d'enveloppes écrit, à faire tourner après J8-0 (b) ; **J8-1 essayé et mis de côté** (le sur-sol z 14 masqué par la scène : aucun gain visible — le trou est dans la scène, au plafond des bâtiments) ; ensuite J8-4, J8-5. [PLAN-J7](docs/PLAN-J7-FLUIDITE.md) en pause (§6).
+**La session du rendu (33d89754)** : **[PLAN-J8](docs/PLAN-J8-BATIMENTS.md)** — J8-2 fait (relu par 1feb2f7f) ; J8-0 (e) fait (en vol, une scène rapide de ~2 km sans la côte de la vue) ; **J8-0 (c) mesuré sur kerr-mini : +2,7 ms à 128 k enveloppes (79 k vues), +4,6 à 256 k — la vue J0 ≈ +3 à +4,5 ms avec des boîtes naïves, au-dessus des 3 ms : retour à Sam avant J8-4** (M1 Max à mesurer) ; **J8-1 fermé « sans effet »** (vue complète et vol) ; J8-1b (le plafond) après les mesures ; J8-4 côté CPU commencé. [PLAN-J7](docs/PLAN-J7-FLUIDITE.md) en pause.
 
 **Priorité de Sam (16 nov., 11:30 UTC) : [PLAN-J8](docs/PLAN-J8-BATIMENTS.md), tous les bâtiments de la vue** (« c'est ça qui choque le plus ») — la suite de J7 en pause après J7-8b ; les deux sessions s'y mettent (rendu : couche GPU, scène proche ; approches : recensement, préparation des cellules, PWA) ; d'abord J8-0 (mesures) et J8-1 (le trou de 2 à 7 km).
 
@@ -8947,3 +8947,19 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
 - Limites : non lancés, `j8-cells` et `earth-cache-witness` (ils attendent la voie IGN) ; pas mesuré sur kerr-mini ; la scène est centrée
   en avant de l'appareil (3,4 km au nord à Toulon).
 - Suite : J8-T (T0, les témoins des requêtes des workers et du disque ; T1 à T4), puis Paris (b, d), puis `j8-cells` et la suite de J8-3.
+
+### 2026-11-16 13:17 UTC — PLAN-J8 : J8-0 (c) mesuré sur kerr-mini, J8-1 fermé « sans effet », J8-2 relu, J8-4 côté CPU (session 33d89754)
+
+- Contribution à la destination : PLAN-J8 (tous les bâtiments de la vue) ; règle 1 (le coût d'un contenu mesuré avant d'être construit) ;
+  règle 3 (le banc et la sonde de bande avec leurs témoins).
+- Réalisé : la fiche J8-0 (c) et (e) ; J8-2 relu, ses drapeaux et ses règles (62c7cd48) ; `building-layer.ts` (J8-4, côté CPU, ea75aa91) ;
+  `parcours-ville` mesure le sur-sol devant à l'arrivée (la sonde de bande) et range les captures d'un A/B par côté ; J8-1 jugé en vol
+  puis fermé (patch hors dépôt).
+- Preuves (mesuré, kerr-mini) : le banc — A/A 49,0 / 49,7 ms ; +2,1 ms à 32 k (19 775 vues), +2,7 à 128 k (78 860), +4,6 à 256 k
+  (157 973), +7,2 à 512 k (316 149) ; presque tout le dessin de visibilité (l'ombre ~0,2, le tri ≤ 0,6) ; J8-1 en vol, deux A/B : le
+  sur-sol devant à l'arrivée nul ou tardif (surfaces z 14 pas là).
+- Limites : le banc dessine des boîtes naïves (aucun allègement des bâtiments minuscules au loin) ; le M1 Max pas encore mesuré ; une
+  partie (b)/(d) de la session des approches est partie par erreur dans mon commit b8d823ef (dit, contenu intact).
+- Suite : le banc sur le M1 Max (après le témoin T0 de J8-T) ; les chiffres à Sam (question 1) avec les leviers à essayer (un point ou
+  un quad sous quelques pixels, des maillages fusionnés par cellule) ; J8-4 côté GPU selon sa réponse.
+
