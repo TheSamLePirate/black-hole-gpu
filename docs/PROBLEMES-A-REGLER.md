@@ -36,7 +36,15 @@ sont commités en local, **non poussés** tant qu'il dure.
   peut-être leurs pixels dans la branche « toit » ou dans une lumière que la marque déclenche ; à mesurer pixel par pixel
   (`surfaceAt`, la normale et le g) sur le mini.
 
-## ~~Une scène proche vide après un changement de jonction~~ — la caméra libre laissée dans l'espace par un saut d'heure (relevé le 16 novembre 2026, PLAN-J8 J8-5)
+## Une scène proche vide après un changement de jonction — la caméra libre hors de la Terre, dans l'e2e de jonction seulement (relevé le 16 novembre 2026, PLAN-J8 J8-5)
+
+**Corrigé (16 nov. 2026, ~20:15 UTC)** : **le défaut du jeu supposé plus bas n'est pas établi.** Un e2e nouveau, `free-camera-hold`
+(la caméra libre sans appareil au-dessus de Toulon : gelée, le monde qui tourne 60 s, l'heure sautée d'une heure et remise, l'heure
+remise monde gelé puis relâché, replacée gelée puis relâchée), **passe sur ce Mac et sur kerr-mini** : `jumpTo` porte déjà la caméra
+libre (`rig.ts` `groundHold`). La caméra perdue tient à quelque chose de propre à la séquence de `j8-junction` (ses réglages J0, la scène
+refaite à chaque jonction, ses captures), non trouvé ; contourné en gardant le monde gelé (8/8 propres). `tools.ts` non modifié.
+
+
 
 **Trouvé (16 nov. 2026, ~19:25 UTC, kerr-mini, `j8-junction` — l'état de la page relevé au blocage)** : `earthScenery` « away-from-earth »,
 `camera.geoNow()` null — **la caméra libre n'était plus sur la Terre**. Deux causes, une même chose : le monde qui tourne pendant l'attente de la scène (l'e2e dégelait le monde à chaque étape), et la remise de l'heure. L'e2e remettait l'heure (`game.setDate`) après avoir placé la caméra
