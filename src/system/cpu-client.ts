@@ -2,6 +2,7 @@
 // an old browser) or if it fails, run here at once, as before.
 import { type BVHParts, TriBVH } from "./collide";
 import { type SeaCascades, type SeaPhysics, type SeaSystem, seaCascades } from "../sea/spectrum";
+import type { NoteJob } from "../audio/music/instruments";
 
 let worker: Worker | null = null;
 let failed = false;
@@ -68,4 +69,34 @@ export async function seaCascadesOff(systems: readonly SeaSystem[], seed: number
   if (!w) return seaCascades(systems, seed, phys);
   const s = await ask<SeaCascades>(w, { job: "sea", systems: [...systems], seed, phys });
   return s ?? seaCascades(systems, seed, phys);
+}
+
+/** Whether the CPU worker is there (made on first ask): the music renders its notes there, else on the page as before. */
+export function cpuWorkerAvailable(): boolean {
+  return the() !== null;
+}
+
+/** The music's rendered notes for these jobs (instruments.ts renderNotes), made in the worker; null: no worker, or it failed. */
+export async function renderNotesOff(
+  sampleRate: number,
+  jobs: readonly NoteJob[],
+  fresh = false,
+): Promise<{ key: string; sr: number; data: Float32Array<ArrayBuffer> }[] | null> {
+  const w = the();
+  if (!w) return null;
+  const r = await ask<{ notes: { key: string; sr: number; data: Float32Array<ArrayBuffer> }[] }>(w, {
+    job: "notes",
+    sampleRate,
+    jobs: jobs.map((j) => ({ inst: j.inst, dur: j.dur, note: j.note, vel: j.vel, beat: j.beat })),
+    fresh,
+  });
+  return r?.notes ?? null;
+}
+
+/** A reverb's impulse response's two channels (instruments.ts impulseArrays), made in the worker; null: no worker, or it failed. */
+export async function impulseOff(sampleRate: number, secs: number, bright: number): Promise<Float32Array<ArrayBuffer>[] | null> {
+  const w = the();
+  if (!w) return null;
+  const r = await ask<{ ir: Float32Array<ArrayBuffer>[] }>(w, { job: "ir", sampleRate, secs, bright });
+  return r?.ir ?? null;
 }

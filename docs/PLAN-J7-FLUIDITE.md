@@ -156,6 +156,16 @@ des entrées datées ; les causes des à-coups (compilation de la météo, retou
   passage) : **reproduits** — la météo 499 ms à froid / 350 ms à chaud (une image GPU de 401 ms et une collection de 635 Mo, pas la
   compilation de son noyau), le retour par F1 650 ms à froid (le noyau principal recompilé) / 250 ms à chaud (l'image du retour) ; détail
   dans la [fiche](progress/j7/FICHE-A-COUPS-2026-11-16.md) §4. Leurs lots restent ouverts, leurs causes relues.
+- **J7-8b, la musique hors du thread de la page — fait** (11/16 11:23 UTC ; confiée par la session d'analyse à 09:45) : les notes
+  rendues et les réponses impulsionnelles des réverbérations faites dans le worker de calcul (`cpu-worker.ts` tâches `notes`, `ir` ; le
+  même code, `instruments.ts renderNotes` sur un contexte de tableaux ; `adoptRendered` à leur arrivée) ; les réverbérations dès la
+  création du moteur ; un thème attendu jusqu'à sa première mesure (0,6 s au plus, le délai ajouté mesuré) ; plus de `timeout` forcé
+  dans le temps libre ; repli sur la page sans worker. **Mesuré (kerr-mini)** : A/B page contre worker **écart 0** sur 11 notes (A/A 0,
+  un échantillon changé vu — les témoins de la règle 3) ; 8 s d'un thème : 63 notes prises, **0 rendue sur la page** ; délai ajouté au
+  départ 0,48 s au premier thème (le worker qui démarre), 0 au suivant ; au début du vol (sonde, deux passages) : **182 → 149 ms
+  (une collection, des tuiles) / aucune image > 100 ms** ; music, music-panel, audio-space, f35-sound, a320-sound **19/19**. L'ancien
+  chemin (les notes sur la page) n'est plus que le repli sans worker (règle 2 : pas de levier gardé). Docs : TARS « La musique »,
+  AUDIO, BH-API, E2E-CATALOGUE.
 - **J7-4, la santé** (11/16 11:07 UTC) — **trois des quatre faits, le quatrième expliqué** :
   - **la pastille** « Compiling the ray tracer » : la phase convergée la ferme avant son retour anticipé (`renderer.ts`) ; `a320-deck`
     l'asserte au départ, 8/8 (ce Mac) ; son témoin (le correctif coupé) voit « Compiling the ray tracer for this scene · 0 s », rouge ;

@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-16 11:19 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-16 11:23 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous. Ce qui est fermé quitte le tableau « En cours » pour la ligne « Fermé récemment ».
@@ -63,7 +63,7 @@ l'état d'une mission ou d'un combat **non sauvé, dit** ; le réseau **« entre
 
 **Fermé aussi** : le plancher du raster sur GPU faible (15 nov., 23:46, proposer sous 15 images/s, décision de Sam).
 
-**La session du rendu (33d89754)** : [PLAN-J7](docs/PLAN-J7-FLUIDITE.md) en cours — **faits** : J7-0 (la sonde et sa [fiche](docs/progress/j7/FICHE-A-COUPS-2026-11-16.md)), J7-1 (le sol des approches), J7-7 (le démarrage, le changement d'appareil : le reste = la mise en place), J7-8 (le début du vol), J7-9 (non reproduit), **J7-3 fermé « non reproduit »**, **J7-4** (la pastille, `gpu-startup`, le bouton Météo de la carte corrigés ; `parcours-ville` : le décor en retard sur la ville à 150 m/s, **rouvert dans PROBLEMES, un lot du décor proposé**) ; **en cours** : J7-2 (le préchauffage de la clé de la météo essayé et retiré — le coup de l'arrivée n'est ni une compilation ni le GPU ; profil CPU en cours), **J7-8b** (la musique dans le worker : A/B des échantillons identique, au début du vol 182 → 149/aucune image > 100 ms ; e2e audio en cours) ; ensuite J7-5, J7-6, J7-R.
+**La session du rendu (33d89754)** : [PLAN-J7](docs/PLAN-J7-FLUIDITE.md) en cours — **faits** : J7-0 (la sonde et sa [fiche](docs/progress/j7/FICHE-A-COUPS-2026-11-16.md)), J7-1 (le sol des approches), J7-7 (le démarrage, le changement d'appareil : le reste = la mise en place), J7-8 (le début du vol), J7-9 (non reproduit), **J7-3 fermé « non reproduit »**, **J7-4** (la pastille, `gpu-startup`, le bouton Météo de la carte corrigés ; `parcours-ville` : le décor en retard sur la ville à 150 m/s, **rouvert dans PROBLEMES, un lot du décor proposé**) ; **en cours** : J7-2 (le préchauffage de la clé de la météo essayé et retiré — le coup de l'arrivée n'est ni une compilation ni le GPU ; profil CPU en cours), **J7-8b fait** (la musique dans le worker : A/B des échantillons identique, au début du vol 182 → 149 ms/aucune image > 100 ms, e2e audio 19/19) ; ensuite J7-5, J7-6, J7-R.
 
 **Attend Sam** : les trois questions de [PLAN-J7](docs/PLAN-J7-FLUIDITE.md) §4, réglées provisoirement (les 40 ms du mini en dernier, J7-6 ; PLAN-J8 les arbres proches en géométrie ensuite ; l'aplanissement du détail sous les trouées jusqu'à la FAF ou 10 km) ; les seuils du mini attendent la reprise de la cible 40 ms.
 
@@ -8798,4 +8798,21 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
 - Limites : le décor en retard en vol rapide n'est pas corrigé (un lot du décor, proposé) ; la durée de compilation du noyau de qualité
   général n'est pas réduite ; la cause du coup de l'arrivée de la météo n'est pas encore lue.
 - Suite : le profil CPU de l'arrivée de la météo (J7-2) ; J7-8b (la musique dans le worker) ; J7-5.
+
+### 2026-11-16 11:23 UTC — PLAN-J7 J7-8b : la musique hors du thread de la page (session 33d89754)
+
+- Contribution à la destination : §8 (préparer avant la frame : le travail CPU lourd en worker) et §19 (l'audio fait partie de
+  l'expérience : le son le même, à l'heure) ; [PLAN-J7](docs/PLAN-J7-FLUIDITE.md) J7-8b, la suite de J7-8 (le début du vol).
+- Réalisé : `src/audio/music/instruments.ts` (`renderNotes`, `impulseArrays` sur un contexte de tableaux, `adoptRendered`) ;
+  `src/system/cpu-worker.ts` / `cpu-client.ts` (tâches `notes`, `ir`) ; `src/audio/music/engine.ts` (les notes au worker par lots, la
+  première mesure d'un thème attendue 0,6 s au plus, les réverbérations dès la création, plus de `timeout` forcé, le repli sur la page) ;
+  `src/audio/music.ts` (`rendering`, `abRender`) ; `tests/music-render-off.test.ts` ; `tests/e2e/music.e2e.test.ts` (A/B, départ).
+- Preuves (mesuré, kerr-mini) : A/B page contre worker écart 0 (11 notes), A/A 0, un échantillon changé vu ; 8 s d'un thème : 63 notes
+  prises, 0 rendue sur la page ; délai ajouté 0,48 s au premier thème, 0 ensuite ; au début du vol (`j7-first-kernel`
+  `FK_CASE=flight-start`, deux passages) : une image de 149 ms (une collection, des tuiles) puis aucune > 100 ms, contre 182 ms dont
+  118 ms de musique avant ; music, music-panel, audio-space, f35-sound, a320-sound 19/19 ; tests unitaires 3/3.
+- Limites : la musique n'est pas confirmée jouant dans le profil du début du vol (bundle minifié, noms illisibles) — le profil de J7-8 la
+  voyait au même instant ; le premier thème d'une session attend le démarrage du worker (0,48 s) ; une note jouée avant l'arrivée de la
+  sienne est rendue sur place (comptée).
+- Suite : J7-2 (le profil CPU de l'arrivée de la météo), J7-5.
 

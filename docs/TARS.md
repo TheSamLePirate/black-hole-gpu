@@ -106,6 +106,18 @@ Ce qui encadre ces répliques :
 - **Le tic-tac de Miller** : 1,25 s, le motif du film, assumé comme hommage. Sur le Miller du jeu, dτ/dt = 0,85 (la physique réelle de son Gargantua) ; le vrai reste affiché sur l'écran CLOCKS.
 - **Le niveau** : −34 dB RMS sur Miller (un morceau doux), sous le moteur (−14 dB plein gaz).
 - **Réglages** : Musique, Volume de la musique.
+- **Où se fait le son** (PLAN-J7 J7-8b, 16 nov. 2026) : les notes « rendues une fois » (piano, célesta, timbales, harpe, pizzicati,
+  cuivres courts, orgue court, percussions) sont calculées dans le **worker de calcul** (`src/system/cpu-worker.ts`, tâche `notes` :
+  le même code, `instruments.ts renderNotes`, sur un contexte de tableaux), puis prises par la page (`adoptRendered` : l'`AudioBuffer`
+  fait à leur arrivée, le même cache LRU). Les réponses impulsionnelles des trois réverbérations (salle, plaque, cathédrale) y sont
+  faites aussi, **dès la création du moteur** (tâche `ir`), et leurs `ConvolverNode` créés à leur arrivée — plus au premier thème.
+  Un thème qui commence : sa première mesure envoyée d'abord, le thème **attendu jusqu'à ce qu'elle soit là, 0,6 s au plus**
+  (`startDelays`, le délai ajouté) ; les mesures suivantes par lots de 4, un lot à la fois (la mesure suivante passe devant le thème
+  prévu). Une note jouée avant l'arrivée de la sienne est rendue sur place (comptée : `madeHere`). Sans worker (un vieux navigateur,
+  un contexte hors ligne — un thème rendu —, un échec) : sur la page, par tranches de 2 ms par image et dans le temps libre, **sans
+  délai forcé** (le `timeout: 1000` qui débordait au début du vol retiré). Mesuré (kerr-mini) : A/B page contre worker **identique**
+  (écart 0 sur 11 notes ; A/A 0 ; un échantillon changé vu) ; 8 s d'un thème : 63 notes prises, **0 rendue sur la page** ; au début du
+  vol (sonde des à-coups) : 182 ms avant (118 ms de musique) → une image de 149 ms (une collection, des tuiles) / aucune.
 
 ## TARS
 
@@ -248,7 +260,7 @@ Plan : [`PLAN-AVIATION-AAA.md`](PLAN-AVIATION-AAA.md) (I1–I4, S1–S3) ; les f
 |---|---|
 | `__bh.voice` | `say(ligne)`, `said` (ce qui a été dit), `asked` (ce qui a été demandé), `queue`, `stop()` |
 | `__bh.capcom` | `blackout` |
-| `__bh.music` | `moment`, `notes`, `ticks` |
+| `__bh.music` | `moment`, `notes`, `ticks`, `rendering` (où se font les notes — J7-8b), `abRender` (l'A/B page/worker) |
 | `__bh.tarsVoice` | `phonemes`, `synthesize`, `robotVoice` : la voix de TARS rendue hors ligne (sa mesure) |
 | `__bh.tars` | `agent.ask(question)`, `agent.last` (ses actions), `agent.lastText`, `memory`, `tools()` |
 | `__bh.flight.school.state()` | la leçon en cours : l'étape, son temps, ce qu'il en reste, depuis quand elle stagne |

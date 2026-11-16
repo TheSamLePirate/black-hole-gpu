@@ -197,7 +197,6 @@ const WAITING = new Set([
   "motion-detail.e2e.test.ts", // no « // Duration: » line; no « // Done when: » line
   "motion-quality.e2e.test.ts", // runs through cases without app.scenario(label)
   "music-panel.e2e.test.ts", // no « // Duration: » line; no « // Done when: » line
-  "music.e2e.test.ts", // no « // Duration: » line; no « // Done when: » line
   "near-air.e2e.test.ts", // no « // Duration: » line; no « // Done when: » line
   "net-battle.e2e.test.ts", // no « // Duration: » line; no « // Done when: » line
   "net-board.e2e.test.ts", // no « // Duration: » line; no « // Done when: » line

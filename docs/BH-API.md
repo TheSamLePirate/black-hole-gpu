@@ -2697,6 +2697,8 @@ harp and celesta (`keys`), organ and choir. The energy comes from the section an
 | `flight` | `number` | the flight's intensity last given |
 | `notes` | `number` | notes started so far |
 | `ticks` | `number` | the ticks started so far (Miller's tick, every 1.25 s) |
+| `rendering` | `{ offThread, madeHere, adopted, startDelays } \| null` | where the rendered notes are made (PLAN-J7 J7-8b): `offThread` the CPU worker (false: no worker, an offline context, or it failed — on the page then), `madeHere` the notes rendered on the page's thread (late for the worker, or without it), `adopted` those taken from the worker, `startDelays` what waiting for each theme's first bar added to its start [s] (0.6 at most); null: no engine yet |
+| `abRender(jobs, o?)` | `(jobs: NoteJob[], o?: { where?: "worker" \| "page"; tamper?: number }) => Promise<{ keys, here, missing, lengths, maxDiff } \| null>` | (a measuring tool — J7-8b's A/B) the notes rendered on the page (a fresh kit of the game's context) and in the worker (`where: "page"`: on the page twice — the A/A), their keys and largest sample gap; `tamper` added to one sample of each (the positive control). e2e `music` |
 
 ```js
 // on Miller: its theme and its tick, heard on the music bus
@@ -2709,7 +2711,7 @@ await app.js(`(__bh.music.listen("ascent"), true)`);
 ```
 *Used in:*
 
-- `tests/e2e/music.e2e.test.ts`: on Miller, the ticks counted over 5 s and the music bus level; in orbit, silence.
+- `tests/e2e/music.e2e.test.ts`: on Miller, the ticks counted over 5 s and the music bus level; in orbit, silence; the notes' A/B page/worker, a theme's start (J7-8b).
 - `tests/e2e/music-panel.e2e.test.ts`: the console, listening, the mixer, every theme.
 
 ### `__bh.tars` → object

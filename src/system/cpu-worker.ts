@@ -4,11 +4,14 @@
 // page's side.
 import { TriBVH } from "./collide";
 import { type SeaPhysics, type SeaSystem, seaCascades } from "../sea/spectrum";
+import { impulseArrays, type NoteJob, renderNotes } from "../audio/music/instruments";
 
 export type CpuRequest =
   | { id: number; job: "bvh"; pos: Float32Array; tri: Uint32Array }
   | { id: number; job: "sea"; systems: SeaSystem[]; seed: number; phys: SeaPhysics }
-  | { id: number; job: "mips"; blob: Blob; size: number };
+  | { id: number; job: "mips"; blob: Blob; size: number }
+  | { id: number; job: "notes"; sampleRate: number; jobs: NoteJob[]; fresh?: boolean }
+  | { id: number; job: "ir"; sampleRate: number; secs: number; bright: number };
 
 const g = globalThis as unknown as { onmessage: unknown; postMessage(v: unknown, t?: Transferable[]): void };
 g.onmessage = async (e: MessageEvent<CpuRequest>) => {
@@ -23,6 +26,23 @@ g.onmessage = async (e: MessageEvent<CpuRequest>) => {
         levels.push(await createImageBitmap(img, { resizeWidth: w, resizeHeight: w, resizeQuality: "high" }));
       img.close();
       g.postMessage({ id: q.id, levels }, levels);
+      return;
+    }
+    if (q.job === "notes") {
+      // (the music's rendered notes — PLAN-J7 J7-8b: 25–60 ms a brass note on the page's thread at the flight's start)
+      const notes = renderNotes(q.sampleRate, q.jobs, q.fresh);
+      g.postMessage(
+        { id: q.id, notes },
+        notes.map((n) => n.data.buffer),
+      );
+      return;
+    }
+    if (q.job === "ir") {
+      const ir = impulseArrays(q.sampleRate, q.secs, q.bright);
+      g.postMessage(
+        { id: q.id, ir },
+        ir.map((c) => c.buffer),
+      );
       return;
     }
     if (q.job === "bvh") {

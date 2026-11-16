@@ -111,6 +111,19 @@ export class Music {
     };
   }
 
+  /**
+   * Where the rendered notes are made (PLAN-J7 J7-8b): `offThread` (the CPU worker), the notes rendered on the page's thread
+   * (`madeHere` — late for the worker, or without it) and taken from the worker (`adopted`), the last themes' start delays [s].
+   */
+  get rendering() {
+    const e = this.engine;
+    return e ? { offThread: e.offThread, madeHere: e.kit.made, adopted: e.kit.adopted ?? 0, startDelays: [...e.startDelays] } : null;
+  }
+  /** (the A/B's tool — MusicEngine.abRender) */
+  abRender(...a: Parameters<MusicEngine["abRender"]>) {
+    return this.ensure()?.abRender(...a) ?? Promise.resolve(null);
+  }
+
   /** The notes played, the ticks (Miller's) — the tests'. */
   get notes() {
     return this.engine?.notes ?? 0;

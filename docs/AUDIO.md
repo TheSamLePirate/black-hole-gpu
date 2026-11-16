@@ -16,6 +16,7 @@ Tout est synthétisé en direct par la Web Audio API : aucun échantillon, rien 
 | `src/game/radio.ts` | pur : les rôles de la radio du vol (tour, ailiers, AWACS Darkstar, Mother, Paddles), le rôle d'une annonce reconnu à ses mots, la voix Deepgram de chacun |
 | `src/ui/netvoice.ts` | la voix des joueurs d'une salle (WebRTC) : le micro envoyé, la voix des autres jouée par une radio |
 | `src/audio/music.ts`, `score.ts`, `music/`, `formant.ts`, `g2p.ts`, `deepgram-voice.ts` | la musique, la voix robot de TARS, les voix Deepgram — voir [`TARS.md`](TARS.md) |
+| `src/system/cpu-worker.ts` (tâches `notes`, `ir`) | les notes rendues de la musique et les réponses impulsionnelles de ses réverbérations, hors du thread de la page (PLAN-J7 J7-8b) — le chemin : [`TARS.md`](TARS.md) « La musique » |
 
 ## Le graphe
 

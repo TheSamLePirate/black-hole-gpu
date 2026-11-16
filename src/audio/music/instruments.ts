@@ -25,8 +25,10 @@ export interface Kit {
    *  size [samples] (kept under BUFFER_CAP) */
   buffers: Map<string, AudioBuffer>;
   bufferSamples: number;
-  /** the notes rendered so far (the cost's count) */
+  /** the notes rendered so far here (the cost's count — on the page's thread for the game's kit) */
   made: number;
+  /** the notes rendered elsewhere (the CPU worker — PLAN-J7 J7-8b) and taken in (adoptRendered) */
+  adopted?: number;
   soft: Float32Array<ArrayBuffer>;
   /** the waves: the bowed string's, the brass's, the organ's ranks, the flute's */
   bowed: PeriodicWave;
@@ -448,16 +450,89 @@ function rendered(k: Kit, key: string, secs: number, fill: (d: Float32Array, sr:
   const g = peak > 0 ? 0.9 / peak : 1;
   const fade = Math.min(4096, d.length >> 2);
   for (let i = 0; i < d.length; i++) d[i]! *= g * (i > d.length - fade ? (d.length - i) / fade : 1);
-  k.buffers.set(key, buf);
-  k.bufferSamples += d.length;
   k.made++;
-  // (the least recently used let go: a playing source keeps its own)
+  keep(k, key, buf);
+  return buf;
+}
+
+/** A rendered note kept (the least recently used let go past BUFFER_CAP: a playing source keeps its own). */
+function keep(k: Kit, key: string, buf: AudioBuffer) {
+  k.buffers.set(key, buf);
+  k.bufferSamples += buf.length;
   for (const [kk, b] of k.buffers) {
     if (k.bufferSamples <= BUFFER_CAP || kk === key) break;
     k.buffers.delete(kk);
     k.bufferSamples -= b.length;
   }
-  return buf;
+}
+
+/**
+ * A note rendered off the page's thread taken in (PLAN-J7 J7-8b): its samples into an AudioBuffer of the game's context, kept as
+ * `rendered` keeps its own. One already there (rendered here meanwhile — played before it came) wins: false.
+ */
+export function adoptRendered(k: Kit, key: string, data: Float32Array<ArrayBuffer>, sr: number): boolean {
+  if (k.buffers.has(key)) return false;
+  const buf = k.ctx.createBuffer(1, data.length, sr);
+  buf.copyToChannel(data, 0);
+  k.adopted = (k.adopted ?? 0) + 1;
+  keep(k, key, buf);
+  return true;
+}
+
+/** A context of plain arrays (no Web Audio — the CPU worker, the tests): only what the rendered notes and the kit ask of one. */
+function arrayCtx(sampleRate: number): Ctx {
+  return {
+    sampleRate,
+    createBuffer: (channels: number, length: number, rate: number) => {
+      const data = Array.from({ length: channels }, () => new Float32Array(length));
+      return { length, sampleRate: rate, numberOfChannels: channels, duration: length / rate, getChannelData: (c: number) => data[c]! };
+    },
+    createPeriodicWave: () => ({}),
+  } as unknown as Ctx;
+}
+
+/** A note to render ahead, as the music engine queues it (prepareNote's arguments). */
+export interface NoteJob {
+  inst: string;
+  dur: number;
+  note: number;
+  vel: number;
+  beat: number;
+}
+const arrayKits = new Map<number, Kit>();
+/** a note already handed out (renderNotes): its key kept, its samples gone with it — asked again, not rendered again */
+const HANDED = { length: 0, sampleRate: 0 } as unknown as AudioBuffer;
+/**
+ * The rendered notes of these jobs at this rate not handed out before, made with the same code as the page's (prepareNote on a kit
+ * of plain arrays): the same samples. The CPU worker's job « notes » (PLAN-J7 J7-8b). `fresh`: what was handed out forgotten (a new
+ * theme — the page's own kit may have let some go since).
+ */
+export function renderNotes(
+  sampleRate: number,
+  jobs: readonly NoteJob[],
+  fresh = false,
+): { key: string; sr: number; data: Float32Array<ArrayBuffer> }[] {
+  let k = arrayKits.get(sampleRate);
+  if (!k) arrayKits.set(sampleRate, (k = makeKit(arrayCtx(sampleRate))));
+  if (fresh) k.buffers.clear();
+  k.bufferSamples = 0;
+  const out: { key: string; sr: number; data: Float32Array<ArrayBuffer> }[] = [];
+  for (const j of jobs) {
+    const before = k.made;
+    prepareNote(k, j.inst, j.dur, j.note, j.vel, j.beat);
+    if (k.made === before) continue;
+    for (const [key, b] of k.buffers)
+      if (b !== HANDED) out.push({ key, sr: b.sampleRate, data: b.getChannelData(0) as Float32Array<ArrayBuffer> });
+    for (const o of out) k.buffers.set(o.key, HANDED);
+    k.bufferSamples = 0;
+  }
+  return out;
+}
+
+/** A reverb's impulse response (impulseResponse) as two arrays, made off the page's thread (PLAN-J7 J7-8b). */
+export function impulseArrays(sampleRate: number, secs: number, bright: number): Float32Array<ArrayBuffer>[] {
+  const ir = impulseResponse(arrayCtx(sampleRate), secs, bright);
+  return [ir.getChannelData(0) as Float32Array<ArrayBuffer>, ir.getChannelData(1) as Float32Array<ArrayBuffer>];
 }
 
 /** White noise's level in a band, the same at any rendering rate (its power spread over the rate's band). */

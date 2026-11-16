@@ -6,7 +6,8 @@
 // limiter, the spectrum. Any context: the game's (the music bus), or an offline one (a theme rendered).
 
 import { type BarPlan, composeBar, type NoteEvent } from "./composer";
-import { impulseResponse, type Kit, makeKit, playNote, prepareNote } from "./instruments";
+import { adoptRendered, impulseResponse, type Kit, makeKit, type NoteJob, playNote, prepareNote } from "./instruments";
+import { cpuWorkerAvailable, impulseOff, renderNotesOff } from "../../system/cpu-client";
 import { beatsOf, type Layer, LAYERS, type Theme, THEME_BY_ID } from "./themes";
 
 export type ReverbKind = "hall" | "plate" | "cathedral";
@@ -56,6 +57,11 @@ const SEND: Record<Layer, [number, number]> = {
 
 /** The bars of a theme foreseen when it starts (at a calm and a full intensity): its likely rendered notes. */
 const FORESEE = 16;
+/** the rendered notes sent to the CPU worker at once (one message), and the longest a theme waits for its first bar's [s] */
+const BATCH = 4;
+const HOLD_S = 0.6;
+/** the reverbs' impulse responses: length [s], brightness */
+const REVERBS: Record<ReverbKind, [number, number]> = { cathedral: [7, 0.32], plate: [2.2, 0.75], hall: [3.2, 0.5] };
 
 interface Track {
   theme: Theme;
@@ -75,6 +81,9 @@ interface Track {
   /** the bars composed (the panel shows the one playing) */
   plans: BarPlan[];
   nextTick: number;
+  /** held until its first bar's rendered notes are in (made off the page — PLAN-J7 J7-8b), at most until then [ctx s]; 0: not held */
+  hold: number;
+  ready: boolean;
 }
 
 export interface MusicState {
@@ -125,6 +134,17 @@ export class MusicEngine {
   private foreseen: { theme: Theme; n: number; prev: number[] | null; seen: Set<string> } | null = null;
   private idle = false;
   budgetMs = 2;
+  /**
+   * The rendered notes and the reverbs' impulse responses made in the CPU worker (PLAN-J7 J7-8b — at the flight's start, 25–60 ms a
+   * brass note and ~40 ms a reverb on the page's thread); false: here, in the frames' slices and the idle time (no worker, an offline
+   * context — a theme rendered —, or the worker failed).
+   */
+  offThread: boolean;
+  /** the worker's messages under way (one at a time: the next bar's notes, queued first, pass the foreseen theme's) */
+  private inFlight = 0;
+  private freshNext = true;
+  /** the last themes' start delays [s]: what waiting for their first bar's notes added (0: none — the bar on time), the latest last */
+  readonly startDelays: number[] = [];
   /** the levels' scratch (no allocation a frame) */
   private meterBuf = new Float32Array(256);
   private levelsOut = {} as Record<Layer, number>;
@@ -164,18 +184,31 @@ export class MusicEngine {
     this.delayR.connect(merge, 0, 1);
     merge.connect(this.delayRet).connect(this.input);
     this.applyMix();
+    this.offThread = !("startRendering" in ctx) && cpuWorkerAvailable();
+    // (the reverbs made ahead — when the engine is, before any theme —, their impulse responses in the worker)
+    if (this.offThread)
+      for (const kind of Object.keys(REVERBS) as ReverbKind[]) {
+        const [secs, bright] = REVERBS[kind];
+        void impulseOff(ctx.sampleRate, secs, bright).then((ir) => {
+          if (!ir || this.reverbs[kind]) return;
+          const buf = ctx.createBuffer(2, ir[0]!.length, ctx.sampleRate);
+          buf.copyToChannel(ir[0]!, 0);
+          buf.copyToChannel(ir[1]!, 1);
+          this.makeReverb(kind, buf);
+        });
+      }
+  }
+
+  private makeReverb(kind: ReverbKind, buffer: AudioBuffer) {
+    const conv = new ConvolverNode(this.ctx, { buffer });
+    const ret = new GainNode(this.ctx, { gain: this.mix.reverb });
+    conv.connect(ret).connect(this.input);
+    return (this.reverbs[kind] = { conv, ret });
   }
 
   private reverb(kind: ReverbKind) {
-    let r = this.reverbs[kind];
-    if (!r) {
-      const [secs, bright] = kind === "cathedral" ? [7, 0.32] : kind === "plate" ? [2.2, 0.75] : [3.2, 0.5];
-      const conv = new ConvolverNode(this.ctx, { buffer: impulseResponse(this.ctx, secs, bright) });
-      const ret = new GainNode(this.ctx, { gain: this.mix.reverb });
-      conv.connect(ret).connect(this.input);
-      r = this.reverbs[kind] = { conv, ret };
-    }
-    return r;
+    // (not in yet — no worker, or a theme asked before it came —: made here)
+    return this.reverbs[kind] ?? this.makeReverb(kind, impulseResponse(this.ctx, ...REVERBS[kind]));
   }
 
   /** The mixer's levels, mutes and solo applied (eased: no click). */
@@ -214,8 +247,6 @@ export class MusicEngine {
     const inEnd = at + Math.max(0.05, fade * 0.8);
     for (const l of LAYERS) {
       const g = new GainNode(ctx, { gain: 0 });
-      g.gain.setValueAtTime(0, at);
-      g.gain.linearRampToValueAtTime(1, inEnd);
       g.connect(this.buses[l].mix);
       const [rs, ds] = SEND[l];
       if (rs > 0) {
@@ -252,8 +283,63 @@ export class MusicEngine {
       endAt: Infinity,
       plans: [],
       nextTick: at,
+      hold: 0,
+      ready: true,
     });
+    const tr = this.tracks.at(-1)!;
     this.foresee(theme);
+    if (this.offThread) {
+      // (its first bar composed now and its notes made first, in the worker: the theme held until they are in — HOLD_S at most —,
+      // not rendered here in the frame it starts; its entry's ramp set once it starts)
+      tr.next = this.compose(tr);
+      tr.hold = now + HOLD_S;
+      tr.ready = false;
+      this.send(
+        tr.next.events.map((e) => ({ ...e, beat: Number.NaN })),
+        () => (tr.ready = true),
+      );
+    } else this.started(tr);
+  }
+
+  /** A track's entry: its layers' ramp from its first bar, the delay its notes' wait added noted. */
+  private started(tr: Track, added = 0) {
+    for (const g of Object.values(tr.layers)) {
+      g.gain.setValueAtTime(0, tr.fadeIn[0]);
+      g.gain.linearRampToValueAtTime(1, tr.fadeIn[1]);
+    }
+    this.startDelays.push(+added.toFixed(3));
+    if (this.startDelays.length > 8) this.startDelays.shift();
+  }
+
+  /** These notes rendered in the worker and taken in; failed: here from then on, the notes queued again. */
+  private send(batch: NoteJob[], done?: () => void) {
+    this.inFlight++;
+    const fresh = this.freshNext;
+    this.freshNext = false;
+    void renderNotesOff(this.ctx.sampleRate, batch, fresh).then((notes) => {
+      this.inFlight--;
+      if (notes) for (const n of notes) adoptRendered(this.kit, n.key, n.data, n.sr);
+      else {
+        this.offThread = false;
+        this.jobs.unshift(...(batch as NoteEvent[]));
+      }
+      done?.();
+      if (this.offThread) this.dispatch();
+      else this.idleWork();
+    });
+  }
+
+  /** The queue sent to the worker a batch at a time (the next bar's first, then the foreseen theme's bars composed one by one). */
+  private dispatch() {
+    while (this.inFlight < 1 && (this.jobs.length || this.foreseen)) {
+      const batch: NoteJob[] = [];
+      while (batch.length < BATCH && (this.jobs.length || this.foreseen)) {
+        const e = this.jobs.shift();
+        if (e) batch.push(e);
+        else this.foreseeBar();
+      }
+      if (batch.length) this.send(batch);
+    }
   }
 
   /**
@@ -263,7 +349,10 @@ export class MusicEngine {
   private foresee(theme: Theme) {
     this.jobs.length = 0;
     this.foreseen = { theme, n: 0, prev: null, seen: new Set() };
-    this.idleWork();
+    // (a new theme: the worker's « handed out » forgotten — the page's kit may have let some notes go since)
+    this.freshNext = true;
+    if (this.offThread) this.dispatch();
+    else this.idleWork();
   }
 
   /** One of the foreseen theme's bars composed, its notes not seen yet queued. */
@@ -298,14 +387,12 @@ export class MusicEngine {
       .requestIdleCallback;
     if (!ric || this.idle || !(this.jobs.length || this.foreseen)) return;
     this.idle = true;
-    ric(
-      (d) => {
-        this.idle = false;
-        while ((this.jobs.length || this.foreseen) && d.timeRemaining() > 3) this.work(1);
-        this.idleWork();
-      },
-      { timeout: 1000 },
-    );
+    // (no timeout: a forced call came in the middle of a busy frame and ran past its budget — J7-8, the flight's start)
+    ric((d) => {
+      this.idle = false;
+      while ((this.jobs.length || this.foreseen) && d.timeRemaining() > 3) this.work(1);
+      this.idleWork();
+    });
   }
 
   private release(tr: Track, at: number, fade: number) {
@@ -349,6 +436,17 @@ export class MusicEngine {
   pump(now: number, dt = 0, ahead = 0.4, prepare = 1.5) {
     if (dt > 0) this.intensity += (this.intensityWant - this.intensity) * (1 - Math.exp(-dt / 4));
     for (const tr of this.tracks) {
+      if (tr.hold) {
+        // (held for its first bar's notes: from now once they are in, or the wait over — then those not in made here as they play)
+        if (!tr.ready && now < tr.hold) continue;
+        const d = Math.max(0, now + 0.05 - tr.at);
+        tr.t0 += d;
+        tr.at += d;
+        tr.nextTick += d;
+        tr.fadeIn = [tr.fadeIn[0] + d, tr.fadeIn[1] + d];
+        tr.hold = 0;
+        this.started(tr, d);
+      }
       const spb = 60 / tr.theme.bpm;
       const barS = beatsOf(tr.theme) * spb;
       // (late — the sound was off, the tab hidden, a long frame —: the bars wholly past skipped, not played all at
@@ -389,9 +487,12 @@ export class MusicEngine {
           tr.nextTick += tr.theme.tick;
         }
     }
-    // (a frame's share of the rendering; the rest in the idle time)
-    this.work(this.budgetMs);
-    this.idleWork();
+    // (the rendering in the worker; without it a frame's share here, the rest in the idle time)
+    if (this.offThread) this.dispatch();
+    else {
+      this.work(this.budgetMs);
+      this.idleWork();
+    }
     // (the faded ones let go — no array made a frame unless one is)
     if (this.tracks.some((x) => x.stopping && now > x.endAt)) {
       for (const tr of this.tracks.filter((x) => x.stopping && now > x.endAt)) {
@@ -409,6 +510,49 @@ export class MusicEngine {
     tr.plans.push(plan);
     if (tr.plans.length > 6) tr.plans.shift();
     return plan;
+  }
+
+  /**
+   * (A measuring tool — PLAN-J7 J7-8b's A/B) these notes rendered here, on a fresh kit of the game's context, and in the worker: the
+   * keys of each, the largest sample gap. `where`: "worker" the worker against the page (the A/B); "page" the page twice (the A/A);
+   * `tamper` added to one sample of each of the worker's (the positive control: it must be seen). Null: no worker.
+   */
+  async abRender(
+    jobs: NoteJob[],
+    o: { where?: "worker" | "page"; tamper?: number } = {},
+  ): Promise<{ keys: number; here: number; missing: string[]; lengths: boolean; maxDiff: number } | null> {
+    const page = () => {
+      const k = makeKit(this.ctx);
+      for (const j of jobs) prepareNote(k, j.inst, j.dur, j.note, j.vel, j.beat);
+      return k;
+    };
+    const here = page();
+    let other: { key: string; data: Float32Array }[] | null;
+    if (o.where === "page") other = [...page().buffers].map(([key, b]) => ({ key, data: b.getChannelData(0) }));
+    else {
+      other = await renderNotesOff(this.ctx.sampleRate, jobs, true);
+      // (the worker's « handed out » forgotten by this: the engine's next notes sent as new)
+      this.freshNext = true;
+    }
+    if (!other) return null;
+    let maxDiff = 0;
+    let lengths = true;
+    const missing: string[] = [];
+    for (const n of other) {
+      if (o.tamper && n.data.length > 1000) n.data[1000]! += o.tamper;
+      const b = here.buffers.get(n.key);
+      if (!b) {
+        missing.push(n.key);
+        continue;
+      }
+      const d = b.getChannelData(0);
+      if (d.length !== n.data.length) {
+        lengths = false;
+        continue;
+      }
+      for (let i = 0; i < d.length; i++) maxDiff = Math.max(maxDiff, Math.abs(d[i]! - n.data[i]!));
+    }
+    return { keys: other.length, here: here.buffers.size, missing, lengths, maxDiff };
   }
 
   /** What plays now (the panel). */
