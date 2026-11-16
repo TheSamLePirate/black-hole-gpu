@@ -635,7 +635,12 @@ function flyHome(this: CameraController, p: ReturnType<typeof repPose>, vRep: Ve
     // (the velocity before this step: a touchdown is judged by the sink it came down with, not by what
     // the springs gave back within it)
     const Vin = V;
-    const dt = Math.min(stepOf(), tEnd - t);
+    // (the step the clock can take: t is counted from 2067 in M — in 2026, 40 years off, a double resolves it to ~0.1 µs, and each
+    // 4 ms sub-step on the gear moved the clock by a rounded step while the craft moved by the exact one — 14 µs a second lost,
+    // the craft slipping 0.42 m/s against the Earth carried on its orbit at 29.8 km/s: an A320 rolling 8 m off Edwards's axis by
+    // its rotation, its tyres feeling nothing — Sam, 16 Nov 2026. The craft moved by the step the clock really took)
+    const want = Math.min(stepOf(), tEnd - t);
+    const dt = t + want - t;
     // (in the vacuum, clear of the ground: Yoshida's fourth-order composition — the planner's
     // integrator; the flight follows its plans over months)
     let last = dt;

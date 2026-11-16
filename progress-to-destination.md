@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-16 09:51 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-16 10:04 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous. Ce qui est fermé quitte le tableau « En cours » pour la ligne « Fermé récemment ».
@@ -8700,3 +8700,23 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   règle 13 sous la sonde — plus d'images GPU lourdes hors du mode photo ; chargement d'une sauvegarde — aucune image > 100 ms.
 - Limites : les images lourdes de la fiche J7-0 venaient d'avions qui planaient vers le relief (avant la règle 13) ; à fermer par la session
   d'analyse. `parcours-gpu` rouge une fois (consigne 680 → 670 m), vert ensuite, non attribué.
+
+### 2026-11-16 10:04 UTC — L'axe au décollage (une glissade du jeu loin de 2067) et la piste du HUD sur la piste dessinée (Sam ; session 1feb2f7f)
+
+- Contribution à la destination : §19 (le vol tenu et lisible : un avion qui roule dans l'axe, le HUD qui dit où est la piste) ; E2E-VOLS
+  règle 13 (l'axe, 44a6606d) ; deux demandes de Sam du 16 nov. (« un A320 pas bien aligné au décollage », « la piste du HUD pas alignée »).
+- Réalisé : **le jeu** — `controller/motion.ts` : l'appareil avance du pas que l'horloge prend vraiment (en 2026, 40 ans avant l'époque de
+  l'horloge, les arrondis faisaient glisser tout appareil de 0,2–0,4 m/s contre la Terre : 8,2 m à VR à Edwards, cap dans l'axe, les pneus ne
+  sentant rien) ; `controller/lowthrust.ts` : les autres pistes d'un site du jeu (AP7a) posées sur le sol dessiné (médiane sous leur
+  longueur, chaque bout sur son sol) — la 05L d'Edwards flottait 24 m au-dessus. **Les e2e** — `takeoff-axis` (A320 et F-35, nommé, sans nom,
+  Edwards, pluie de travers avec le palonnier), `hud-runway-drawn` (chaque coin du contour contre la bande dessinée, ou contre le sol quand
+  il n'y en a pas) et `lib/hud-runway-gap.ts` ; a320-effects : sous la pluie de travers, personne au palonnier, l'A320 se mettait au vent
+  (5,9°, 12,9 m) — un pilote le tient (0,02°, 0,1 m). E2E-VOLS §5.7 et §7, PROBLEMES, catalogue.
+- Preuves (mesuré) : ce Mac — takeoff-axis 7/7 (≤ 0,1° et ≤ 0,9 m jusqu'à VR ; avant : 8,2 m A320, 4,8 m F-35 à Edwards) ; la sonde
+  pas à pas (déplacement contre vitesse) ; le calcul de l'erreur d'horloge (14 µs/s × 29,8 km/s = 0,42 m/s en 2026, 0 en 2067) ;
+  hud-runway-drawn : pistes dessinées ≤ 0,023° vu de l'œil (seuil 0 m, cap 0°, Toulon-Hyères et son géoïde +49 m, Madrid), autres pistes
+  ≤ 2,1 m ; kerr-mini — a320-effects 4/4 ; vol et train unitaires 91/91.
+- Limites : `system/our-coast.ts` et `system/iss.ts` avancent aussi `X += V dt` (même défaut possible, non mesuré) ; la vue en mouvement
+  (contour en retard d'une image en virage) non mesurée ; Madrid non remesuré au dernier passage (relief bloqué 90 s) ; l'alignement en plan
+  des autres pistes avec l'orthophoto dépend d'OurAirports.
+- Suite : que Sam cite (bandeau) l'e2e où il a vu la piste du HUD décalée, pour ce cas-là ; les deux autres intégrateurs.

@@ -2832,23 +2832,46 @@ function otherRunways(c: CameraController, fr: EntryFr, site: Site): RunwayGeo["
       elev: r.elev1 || f.elev,
       len: r.len,
     };
-    const hT = runwayLevel(fr, s);
+    // (its level: the median of the ground under its length — as a world runway's is measured —, not the relief under its threshold
+    // alone: a game site's other runways have no strip of ours, levelled; at Edwards the 05L's outline was set on a 24 m bump of the
+    // relief still coming in at its threshold and stood over the lakebed, above the horizon from the 23L — Sam, 16 Nov 2026)
+    const hT = runwayLevelAlong(fr, s, r.len);
     const w = (r.wid || 45) / 2;
+    // (each end on the ground drawn under it — a runway not levelled by us slopes with it: the 05L at Edwards 7 m from end to end;
+    // its frame's plane is the threshold's tangent one, the world's curve under it a²/2R lower)
+    const Rm = 6_371_000;
+    const endU = (a: number) => runwayLevelAlong(fr, at(s, a), 0) - hT - (a * a) / (2 * Rm);
+    const u0 = endU(0),
+      u1 = endU(r.len);
     out.push({
       site: s,
       hT,
       le: r.le,
       he: r.he,
       corners: [
-        [0, -w, 0],
-        [r.len, -w, 0],
-        [r.len, w, 0],
-        [0, w, 0],
+        [0, -w, u0],
+        [r.len, -w, u1],
+        [r.len, w, u1],
+        [0, w, u0],
       ],
     });
     if (out.length >= 8) break;
   }
   return out.length ? out : undefined;
+}
+
+/** A runway's level over its world's figure [m] from the ground under its length: the median of five points along its axis
+ *  (runwayLevel at each — the ground drawn, else its published level and the geoid). */
+function runwayLevelAlong(fr: EntryFr, site: Site, len: number): number {
+  const hs = [0, 0.25, 0.5, 0.75, 1].map((k) => runwayLevel(fr, at(site, k * len)));
+  return hs.sort((a, b) => a - b)[2]!;
+}
+
+/** A runway's site moved `d` metres along its heading (a flat step: a few km). */
+function at(site: Site, d: number): Site {
+  const D = Math.PI / 180;
+  const h = (site.rwy ?? 0) * D;
+  return { ...site, lat: site.lat + (d * Math.cos(h)) / 111_320, lon: site.lon + (d * Math.sin(h)) / (111_320 * Math.cos(site.lat * D)) };
 }
 
 /** A runway's threshold height over its world's figure [m]: the ground drawn there (the Earth's: its relief over

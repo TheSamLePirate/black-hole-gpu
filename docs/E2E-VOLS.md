@@ -390,6 +390,15 @@ await app.js(`(() => { const r = __bh.camera.carrierFinal("ford", 3500, 90); __b
   `jetToggle("ab")`, attendre `!c.rolling && !c.ourLanded` (`f35-flight-ops.e2e.test.ts`). **U ne décolle pas un
   F-35** : U lance l'autopilote de décollage orbital, refusé sous un rapport poussée/poids de 1,05 (le F-35 est à ~0,59).
 - A320 : `c.a320Park = false; c.pilot.throttle = 1`, attendre `geoNow().gs > 45`.
+- **L'axe de piste (règle 13, 16 nov.)** : `lineUp` aligne à 0,00° et 0,0 m ; l'asserter avant la mise en puissance
+  (`expectFlightPhase(app, "lineup")`) et pendant le roulage (`AXIS_WATCH_START` / `AXIS_WATCH_READ`, `axisWatchProblems` :
+  ≤ 3° et ≤ 6 m jusqu'à la rotation) — `tests/e2e/lib/flight-state.ts`, modèle `takeoff-axis.e2e.test.ts`. **Par vent de
+  travers, un pied sur le palonnier** (`AXIS_PILOT_ON` / `AXIS_PILOT_OFF`) : sans, l'A320 se met au vent (la pluie du jeu, 8 m/s
+  en rafales de travers au Bourget : 5,9° et 12,9 m à 45 m/s).
+- `settings.wind` est un **niveau 0–3**, pas une vitesse : 8 donne un vent NaN qui casse la simulation (moteurs éteints, état
+  illisible). Un vent de travers se donne par `weather: "rain"` (8 m/s, rafales 6) ou `"windy"`.
+- `HELD` (`lib/held.ts`) après un `flyAt` : poussée et maintiens engagés sans déplacer l'avion (3 pas pour le F-35, 6 s pour
+  l'A320 et son AP1) ; `placeJetFrozen` fait 10 pas avant `apSet`.
 
 ### 5.8 Atterrir et juger
 
@@ -502,6 +511,9 @@ expect(r.log.some((l) => /Hard landing|collapsed|tipped/.test(l))).toBe(false);
 | Après U (le décollage automatique du F-35), le pilote automatique réglé pendant la montée est ignoré : l'avion en palier à ~100 m et 210 m/s sur l'axe de la piste (`parcours-ville`, 15 nov.) | les maintiens engagés pendant le roulage prenaient le manche du décollage pour celui du pilote et, lâchés à sa fin, tenaient la hauteur du moment | corrigé (15 nov.) : les choix faits pendant le décollage sont armés et deviennent ses maintiens à sa fin (`takeoff-armed`) ; un test qui règle l'autopilote juste après U peut le faire, il est appliqué à la fin du décollage |
 | L'âge des écrans de l'appareil explose (15 s) dans un relevé qui passe en vue extérieure (`parcours-ville`, 15 nov.) | hors du cockpit, l'écran n'est pas dessiné, donc pas renvoyé : son âge grandit sans que l'information soit périmée pour le pilote | asserter l'âge sur les seuls relevés en monture `cockpit` |
 | Une attente de compilation de 240 s jamais atteinte, l'image pourtant prête (`a320-deck`, 14 nov.) | le test attendait que le texte « Compiling the ray tracer » disparaisse : sur une scène immobile, la pastille reste (défaut du moteur, PROBLEMES) | attendre l'état du moteur, sur sa progression : `app.settled()`, jamais le texte d'une pastille |
+| Au décollage, l'avion glisse de côté (0,2–0,4 m/s, 8 m à VR à Edwards) cap dans l'axe, les pneus ne sentant rien ; pas en 2067, pas partout (`takeoff-axis`, 16 nov.) | **le jeu** : l'horloge du vol, comptée en M depuis 2067, arrondie à chaque sous-pas (40 ans avant : ~0,1 µs de résolution) — l'avion avançait du pas exact, le monde du pas arrondi ; 14 µs/s × 29,8 km/s de la Terre sur son orbite | corrigé (`controller/motion.ts` : le pas que l'horloge prend vraiment). Un test daté loin de 2067 le montrait, pas les autres |
+| Un A320 qui part de l'axe au roulage sous la pluie (`a320-effects`, 16 nov.) | le vent de la pluie (8 m/s, rafales) de travers, personne au palonnier : l'avion se met au vent | `AXIS_PILOT_ON` (le palonnier d'un pilote) et l'axe asserté (`AXIS_WATCH_*`) |
+| Après `flyAt` + `HELD`, une approche « pas établie » qui l'était avant (`crew-approach`, 16 nov.) | `HELD` volait 6 s pour engager les maintiens : 600 m plus loin, hors de la pente posée | `HELD` ne déplace plus le F-35 (3 pas, poussée posée) |
 
 ---
 
