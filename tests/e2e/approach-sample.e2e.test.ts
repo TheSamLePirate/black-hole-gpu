@@ -26,7 +26,11 @@ interface Pick {
 }
 
 const CRAFT = (process.env.APS_CRAFT ?? "f35") as "f35" | "a320";
-const SAMPLE = ((await Bun.file("docs/progress/approches/ap10-sample.json").json()) as Pick[]).filter((p) => p.craft === CRAFT);
+// (APS_ONLY=FIELD:END — e.g. SLCB:05 —: that end alone, flown by the craft named, its category « asked »)
+const ONLY = process.env.APS_ONLY?.split(":");
+const SAMPLE = ONLY
+  ? [{ cat: "asked", craft: CRAFT, field: ONLY[0]!, end: ONLY[1]!, kind: "?", source: "?", len: 0, elev: 0 } as Pick]
+  : ((await Bun.file("docs/progress/approches/ap10-sample.json").json()) as Pick[]).filter((p) => p.craft === CRAFT);
 
 describe.skipIf(!E2E)(`the campaign's sample flown — ${CRAFT}`, () => {
   let app: App;
@@ -56,13 +60,21 @@ describe.skipIf(!E2E)(`the campaign's sample flown — ${CRAFT}`, () => {
       );
       expect(a).not.toBeNull();
       // (25 km out, 60° off the final's back course, heading for the threshold)
-      await app.js(`(() => { const D = Math.PI / 180, R = 6371000, a = ${JSON.stringify(a)};
+      await app.js(`(async () => { const D = Math.PI / 180, R = 6371000, a = ${JSON.stringify(a)};
         const b = (a.crs + 180 + 60) * D, d = 25000 / R, la = a.thr.lat * D, lo = a.thr.lon * D;
         const lat = Math.asin(Math.sin(la) * Math.cos(d) + Math.cos(la) * Math.sin(d) * Math.cos(b));
         const lon = lo + Math.atan2(Math.sin(b) * Math.sin(d) * Math.cos(la), Math.cos(d) - Math.sin(la) * Math.sin(lat));
         const hdg = (Math.atan2(Math.sin(lo - lon) * Math.cos(la), Math.cos(lat) * Math.sin(la) - Math.sin(lat) * Math.cos(la) * Math.cos(lo - lon)) / D + 360) % 360;
-        __bh.camera.ilsOff(); __bh.freeze(false); __bh.game.flyAt(lat / D, lon / D, 900, hdg, ${CRAFT === "f35" ? 150 : 120}); __bh.settings.shipMount = "cockpit";
-        __bh.freeze(true); for (let i = 0; i < 3; i++) __bh.step(1 / 30); return 1; })()`);
+        // (the relief under the place in before it is placed — flyAt reckons its height over the relief known: at Cochabamba, 2 548 m, the
+        // F-35 was put at 853 m inside the mountain, the relief not in yet — E2E-VOLS §7): placed, the relief waited for (its height there
+        // steady 1 s, 15 s at most), placed again
+        const fly = () => { __bh.game.flyAt(lat / D, lon / D, 900, hdg, ${CRAFT === "f35" ? 150 : 120}); __bh.settings.shipMount = "cockpit"; };
+        const frame = () => new Promise((q) => requestAnimationFrame(q));
+        __bh.camera.ilsOff(); __bh.freeze(false); fly();
+        const t0 = performance.now(); let h = NaN, since = performance.now();
+        while (performance.now() - t0 < 15000) { __bh.touch(); await frame(); const g = __bh.sys.groundAt(lat / D, lon / D);
+          if (Math.abs(g - h) > 1) { h = g; since = performance.now(); } else if (performance.now() - since > 1000 && g !== 0) break; }
+        fly(); __bh.freeze(true); for (let i = 0; i < 3; i++) __bh.step(1 / 30); return 1; })()`);
       if (CRAFT === "f35")
         await app.js(`(() => { __bh.fleet.fuel.f35 = 3500; __bh.camera.pilot.throttle = __bh.camera.pilot.engineNow = 0.6; return 1; })()`);
       else
@@ -79,7 +91,10 @@ describe.skipIf(!E2E)(`the campaign's sample flown — ${CRAFT}`, () => {
         table.push(`  | ${P.cat} | ${P.field} ${P.end} | ${P.kind} | no — ${said} | — | — | — |`);
         // (refused with its reason: an end the craft cannot land on, or a built approach whose slope meets the game's relief — finer
         // than the campaign's map: a refusal understood, said; a real approach is never refused — any other: a failure)
-        expect(free || (P.source === "built" && /relief|relief/.test(said))).toBe(true);
+        // (the end's approach built: none real there — its ids « C05 » only — when the sample does not say)
+        const built =
+          P.source === "built" || (P.source === "?" && !ids.some((id) => !id.startsWith("C") && id.slice(1).replace(/-.*$/, "") === P.end));
+        expect(free || (built && /relief|relief/.test(said))).toBe(true);
         return;
       }
       // the flight, in fixed steps: the least height over the ground before the final, down and graded

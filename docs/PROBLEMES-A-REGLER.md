@@ -11,7 +11,11 @@ sur les données : < 50 m pour 54 534 extrémités, 50–100 m 3 302, 100–200 
 dégageant la pente de 150 m et plus, le détail vient à moins de 90 m de la pente sur 2 294 extrémités et **la traverse sur 1 607** — pires :
 l'Altiplano bolivien (SLCB 05 : −444 m à 10,3 km, données +282 m ; SLCB 14 : −672 m à 18,5 km ; SLLP, SLOR, SLSU, SLUY), le Chili (SCCF).
 Effet : les paliers des jonctions (300 m au-dessus des données — décision de Sam du 16 nov., PLAN-APPROCHES §9 q. 4) et la pente entre
-10 et 18,5 km peuvent passer dans un relief inventé ; non vu en vol (l'échantillon AP10 n'a pas de tel terrain). Piste (session du rendu,
+10 et 18,5 km peuvent passer dans un relief inventé. **Vu en vol (16 nov.)** : F-35, ILS 32 de Cochabamba (`APS_ONLY=SLCB:32`, sans tuiles) —
+avec les paliers de la jonction (les données + 300 m), deux remises de gaz sûres (au plus près 453 m du sol) ; les paliers retirés pour
+l'essai (une approche réelle volée « comme publiée »), il percute le relief **10,9 km avant le seuil** à −9 m/s — là où le détail
+dépasse la pente de 431 m (hors du couloir) ; vers 5,5 km la carte grossière elle-même passe sur la pente (la vallée comblée). Les
+paliers restent donc (un filet tant que le sol dessiné n'est pas le relief). Piste (session du rendu,
 `game/runway-grade.ts`) : le couloir prolongé jusqu'au point initial (18,5 km) ou à la jonction (16 km + la base), et/ou l'amplitude du
 détail bornée là où les données sont planes ; côté approches, si besoin, les paliers pris au plus haut des deux sols hors du couloir.
 

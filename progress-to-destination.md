@@ -8578,3 +8578,13 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
 - Limites : non vu en vol (aucun terrain de l'échantillon n'y est) ; mesure sur la carte, sans tuiles fines.
 - Suite : transmis à la session du rendu (`game/runway-grade.ts`, le couloir jusqu'au point initial ou une borne du détail) ; l'échantillon
   rejoué ensuite, avec une extrémité de l'Altiplano ajoutée.
+
+### 2026-11-16 06:33 UTC — PLAN-APPROCHES : le détail au-delà du couloir vu en vol (Cochabamba) ; l'e2e de l'échantillon vole une extrémité nommée
+
+- Réalisé : `approach-sample.e2e` — `APS_ONLY=FIELD:END` (une extrémité nommée), le relief attendu sous le point avant le placement (à
+  Cochabamba, 2 548 m, le F-35 était placé à 853 m dans la montagne — E2E-VOLS §7), la source de l'approche déduite de la liste du terrain.
+- Preuves (observé, M1 Max, sans tuiles) : SLCB 05 (construite) refusée avec sa raison (la pente dans le relief à 5 km) ; SLCB 32 (ILS réel) :
+  deux remises de gaz sûres, au plus près 453 m du sol — un essai sans les paliers de la jonction (l'approche réelle « comme publiée ») a percuté
+  le relief 10,9 km avant le seuil, là où le détail dépasse la pente de 431 m : essai annulé, les paliers gardés. PROBLEMES complété ; transmis
+  à la session du rendu.
+- Suite : son choix pour le couloir au-delà de 10 km (ou une borne du détail) ; la mesure et SLCB 32 rejoués ensuite.
