@@ -9798,3 +9798,20 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   c1957d65.
 - **Non fait / limites :** le gain du levier sur une zone entière n'est pas mesuré ; le témoin porte sur 200 chaînes. Le levier ne vaut
   pas pour un démarrage sans Service Worker ni en `refresh`. Le second passage de la zone de Paris, sur le mini, tourne sans le levier.
+
+### 2026-11-16 23:55 UTC — PLAN-J8 J8-8 lot (2a) : les bâtiments proches dessinés depuis leurs cellules de maillage (session 33d89754)
+
+- **Contribution à la destination :** J8-A critère 5 (zéro scène rapide en vol) et stratégie §7, §20 : une responsabilité nommée —
+  les bâtiments proches préparés par cellule hors de la frame (lot 1, la session des approches) — remplace la scène proche refaite
+  autour de l'appareil ; « préparer les données avant la frame ».
+- **Réalisé :** `src/system/near-meshes.ts` (résidence des cellules kerr-mesh-v1 dans ~2 km, réserve GPU par blocs, chaque bâtiment
+  posé au relief dessiné) ; `scenery-raster.ts` `nearInit`/`nearUpload`/`nearFrame`/`nearClear`, `nearCellVs` → `meshFs` ;
+  `building-far.ts` `setHidden` (la couche lointaine laisse ces cellules) ; `renderer.nearCellsOn` (éteint), `nearCells()`. Format du
+  lot (1) accordé avec la session des approches (le pied relatif et le relief dessiné, les toits selon les données, le repère de la
+  cellule), leur diff de `scenery-worker.ts` relu. Tests `near-meshes` 2/2, 84/84 shaders.
+- **Preuves :** vu sur ce Mac (Toulon, hors ligne) : 15 cellules, 20 894 bâtiments, 541 151 triangles aux places de ceux de la
+  scène ; GPU 21,4 ms contre 22,5 (un regard, pas un A/B ; la machine chaude plus tôt dans la soirée).
+- **Limites :** levier éteint par défaut ; le matériau est encore le générique du proche (lot 2b : les enregistrements pour
+  `rasterBuilding`) ; ni contacts ni ombres (lot 3) ; la scène garde ses bâtiments (lot 4) ; le calage au sol ~30 ms par cellule sur
+  la page. Rien mesuré sur kerr-mini.
+- **Suite :** lot (2b), puis la mesure sur les deux machines et J8-A revolé avec.

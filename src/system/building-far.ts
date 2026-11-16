@@ -68,6 +68,20 @@ export class BuildingFar {
   /** the far buildings drawn with their own materials (PLAN-J8 J8-A: their roof's and walls' from the record, farMat — the near mesh's
    *  colours); false: the look of a near building without a leaf (generic) — a lever to compare */
   materials = true;
+  /** PLAN-J8 J8-8: the cells drawn as the near meshes' (near-meshes.ts residents) — theirs not drawn here (their frame's share −1) */
+  private hidden = new Set<string>();
+  /** the cells now drawn as the near meshes': those changed have their frame written again */
+  setHidden(keys: ReadonlySet<string>, now: number) {
+    const changed: string[] = [];
+    for (const k of keys) if (!this.hidden.has(k)) changed.push(k);
+    for (const k of this.hidden) if (!keys.has(k)) changed.push(k);
+    if (!changed.length) return;
+    this.hidden = new Set(keys);
+    for (const k of changed) {
+      const r = this.residents.get(k);
+      if (r && r.slot >= 0) this.writeFrame(r, now);
+    }
+  }
   /** the region the eye is in (FAR_REGIONS' index) */
   private region = 0;
   /** the counts: cells handed, put, let go, too big to fit */
@@ -217,7 +231,8 @@ export class BuildingFar {
   private writeFrame(r: Resident, now: number) {
     if (!this.frame) return;
     const f = cellFrameInScene(r.x, r.y, this.frame);
-    f[3] = Math.min(Math.max((now - r.at) / FAR_FADE_MS, 0), 1);
+    // (its fade-in share; −1: drawn as the near meshes' — hidden, none of it culled in)
+    f[3] = this.hidden.has(cellKey(r.x, r.y)) ? -1 : Math.min(Math.max((now - r.at) / FAR_FADE_MS, 0), 1);
     r.plane ??= this.groundPlane(r.x, r.y);
     f[7] = r.plane[0];
     f[11] = r.plane[1];

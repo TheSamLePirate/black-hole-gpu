@@ -34,6 +34,9 @@ export const SCENERY_RASTER_CAP = 1 << 20;
 const LISTS = 4;
 /** the trees' and buildings' shadow map: its texels a side, its half-extent [m] (~0.9 m a texel) — trace.wgsl treeShadowAt */
 export const TREE_SHADOW_N = 2048;
+/** PLAN-J8 J8-8 lot (2): the near mesh cells' blocks — of vertices, of triangles (near-meshes.ts) */
+export const NEAR_VERT_BLOCK = 4096;
+export const NEAR_TRI_BLOCK = 4096;
 export const TREE_SHADOW_HALF_M = 900;
 /** the map's depth half-range along the Sun [m] (renderer.treeShadowFrame) */
 export const TREE_SHADOW_DEPTH_M = 3000;
@@ -1007,6 +1010,8 @@ fn farCull(@builtin(global_invocation_id) g: vec3u, @builtin(num_workgroups) n: 
   if (k >= farU.blocks * 256u) { return; }
   let e = farEnv(k);
   if (e.s.z <= 0.0) { return; }
+  // (PLAN-J8 J8-8: its cell drawn as the near meshes' — its share < 0, building-far.ts hidden —: none of it here)
+  if (farCell[4u * farBlock[k >> 8u].x].w < 0.0) { return; }
   // (the near scene's own buildings: within its reach of its corridor — farMaskD, its cap's own measure —, not drawn twice; past it a
   // band of 300 m where each far one stands from its own distance — the edge a scatter, not a line)
   let h = farHash(k);
@@ -1229,9 +1234,40 @@ fn farCarCull(@builtin(global_invocation_id) gid: vec3u, @builtin(num_workgroups
   o.p = v;
   return o;
 }
+// ---- PLAN-J8 J8-8 lot (2): the near buildings' mesh cells (near-meshes.ts — kerr-mesh-v1, mesh-cells.ts): each resident cell's
+// vertices (its east, north [m], height over the ellipsoid — its building set on the relief drawn) in blocks of NEAR_VERT_BLOCK, its
+// triangles (their vertices' indices in the pool, w: its leaf's record — lot 2b) in blocks of NEAR_TRI_BLOCK, each block its cell's
+// slot and its count; each slot its frame in the scene's (building-layer.ts cellFrameInScene). Drawn into the visibility as the near
+// scene's own triangles (meshFs: the building mesh's code); none past a block's count
+@group(1) @binding(23) var<storage, read> nmPos: array<vec4f>;
+@group(1) @binding(24) var<storage, read> nmTri: array<vec4u>;
+@group(1) @binding(25) var<storage, read> nmBlk: array<vec2u>;
+@group(1) @binding(26) var<storage, read> nmCell: array<vec4f>;
+@vertex fn nearCellVs(@builtin(vertex_index) vi: u32) -> MV {
+  var o: MV;
+  let tri = vi / 3u;
+  let blk = nmBlk[tri / ${NEAR_TRI_BLOCK}u];
+  o.pyl = vec4f(0.0, 0.0, 0.0, 1.0);
+  o.mot = vec3f(0.0);
+  o.bridge = 0.0;
+  o.leaf = 0.0;
+  if (tri % ${NEAR_TRI_BLOCK}u >= blk.y) {
+    o.clip = vec4f(0.0, 0.0, 0.0, -1.0);
+    o.p = vec3f(0.0);
+    return o;
+  }
+  let t = nmTri[tri];
+  let k = vi % 3u;
+  let q = nmPos[select(select(t.z, t.y, k == 1u), t.x, k == 0u)];
+  let c = 4u * blk.x;
+  let v = view(nmCell[c].xyz + nmCell[c + 1u].xyz * q.x + nmCell[c + 2u].xyz * q.y + nmCell[c + 3u].xyz * q.z);
+  o.clip = vec4f(v.x / u.right.w + u.output.z * v.z, v.y / u.up.w + u.output.w * v.z, u.forward.w, v.z);
+  o.p = v;
+  return o;
+}
 @vertex fn farShadowVs(@builtin(vertex_index) vi: u32, @builtin(instance_index) bi: u32) -> @builtin(position) vec4f {
   let e = farEnv(bi);
-  if (e.s.z <= 0.0 || farMaskD(e.c.xy) < farU.maskR) { return vec4f(2.0, 2.0, 0.5, 1.0); }
+  if (e.s.z <= 0.0 || farMaskD(e.c.xy) < farU.maskR || farCell[4u * farBlock[bi >> 8u].x].w < 0.0) { return vec4f(2.0, 2.0, 0.5, 1.0); }
   return sunClip(farCorner(e, farParts(bi), vi));
 }
 `;
@@ -1810,6 +1846,104 @@ export class SceneryRaster {
   get lampsReady() {
     return !!this.lamps;
   }
+  /** PLAN-J8 J8-8 lot (2): the near mesh cells' reserve — its vertices' and triangles' blocks, its cells' frames, its pipeline */
+  private near: {
+    pos: GPUBuffer;
+    tri: GPUBuffer;
+    blk: GPUBuffer;
+    cell: GPUBuffer;
+    pipe: GPURenderPipeline;
+    bind: GPUBindGroup;
+    /** the highest triangle block in use + 1 (the draw's extent) */
+    usedTri: number;
+  } | null = null;
+  /** the near mesh cells drawn (near-meshes.ts: its reserve made, the lever on) */
+  nearOn = false;
+  get nearReady() {
+    return !!this.near;
+  }
+  /** the near mesh cells' reserve made: `vertBlocks` blocks of NEAR_VERT_BLOCK vertices (16 bytes each), `triBlocks` of NEAR_TRI_BLOCK
+   *  triangles (16 bytes each), `slots` cells' frames; its pipeline compiled */
+  async nearInit(vertBlocks: number, triBlocks: number, slots: number): Promise<void> {
+    if (this.near) return;
+    const d = this.device;
+    const S = GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST;
+    const V = GPUShaderStage.VERTEX;
+    const L = d.createBindGroupLayout({
+      label: "near mesh cells draw",
+      entries: [23, 24, 25, 26].map((binding) => ({ binding, visibility: V, buffer: { type: "read-only-storage" as const } })),
+    });
+    const pos = d.createBuffer({ size: Math.max(16, vertBlocks * NEAR_VERT_BLOCK * 16), usage: S, label: "near mesh cells vertices" });
+    const tri = d.createBuffer({ size: Math.max(16, triBlocks * NEAR_TRI_BLOCK * 16), usage: S, label: "near mesh cells triangles" });
+    const blk = d.createBuffer({ size: Math.max(16, triBlocks * 8), usage: S, label: "near mesh cells blocks" });
+    const cell = d.createBuffer({ size: Math.max(64, slots * 64), usage: S, label: "near mesh cells frames" });
+    const pipe = await d.createRenderPipelineAsync({
+      layout: d.createPipelineLayout({ bindGroupLayouts: [this.drawLayout, L] }),
+      vertex: { module: this.module, entryPoint: "nearCellVs" },
+      fragment: {
+        module: this.module,
+        entryPoint: "meshFs",
+        targets: [{ format: TERRAIN_RASTER_FORMAT }, { format: TERRAIN_RASTER_MOTION_FORMAT }, { format: TERRAIN_RASTER_ID_FORMAT }],
+      },
+      primitive: { topology: "triangle-list", cullMode: "none" },
+      depthStencil: { format: "depth32float", depthWriteEnabled: true, depthCompare: "greater" },
+    });
+    this.near = {
+      pos,
+      tri,
+      blk,
+      cell,
+      pipe,
+      usedTri: 0,
+      bind: d.createBindGroup({
+        layout: L,
+        entries: [
+          { binding: 23, resource: { buffer: pos } },
+          { binding: 24, resource: { buffer: tri } },
+          { binding: 25, resource: { buffer: blk } },
+          { binding: 26, resource: { buffer: cell } },
+        ],
+      }),
+    };
+  }
+  /** a cell's vertices (4 floats each) into its vertex blocks, its triangles (4 u32 each: the pool's vertex indices — the caller's,
+   *  from its vertex blocks —, its record) into its triangle blocks, each told its cell's slot and its count */
+  nearUpload(vertBlocks: readonly number[], pos: Float32Array, triBlocks: readonly number[], tris: Uint32Array, slot: number) {
+    const N = this.near;
+    if (!N) return;
+    const q = this.device.queue;
+    const nv = pos.length / 4,
+      nt = tris.length / 4;
+    for (let b = 0; b < vertBlocks.length; b++) {
+      const lo = b * NEAR_VERT_BLOCK,
+        cnt = Math.min(NEAR_VERT_BLOCK, nv - lo);
+      q.writeBuffer(N.pos, vertBlocks[b]! * NEAR_VERT_BLOCK * 16, pos.subarray(lo * 4, (lo + cnt) * 4) as Float32Array<ArrayBuffer>);
+    }
+    for (let b = 0; b < triBlocks.length; b++) {
+      const lo = b * NEAR_TRI_BLOCK,
+        cnt = Math.min(NEAR_TRI_BLOCK, nt - lo);
+      q.writeBuffer(N.tri, triBlocks[b]! * NEAR_TRI_BLOCK * 16, tris.subarray(lo * 4, (lo + cnt) * 4) as Uint32Array<ArrayBuffer>);
+      q.writeBuffer(N.blk, triBlocks[b]! * 8, new Uint32Array([slot, cnt]));
+      N.usedTri = Math.max(N.usedTri, triBlocks[b]! + 1);
+    }
+  }
+  /** a cell's frame in the scene's (16 floats: building-layer.ts cellFrameInScene) */
+  nearFrame(slot: number, frame: Float32Array) {
+    if (this.near) this.device.queue.writeBuffer(this.near.cell, slot * 64, frame as Float32Array<ArrayBuffer>);
+  }
+  /** triangle blocks let go: their counts 0 */
+  nearClear(triBlocks: readonly number[]) {
+    const N = this.near;
+    if (!N) return;
+    for (const b of triBlocks) this.device.queue.writeBuffer(N.blk, b * 8, new Uint32Array([0, 0]));
+  }
+  nearRelease() {
+    const N = this.near;
+    if (!N) return;
+    for (const b of [N.pos, N.tri, N.blk, N.cell]) b.destroy();
+    this.near = null;
+    this.nearOn = false;
+  }
   /** the far lamps' pool made: `blocks` blocks of 256 lamps (16 bytes each), `slots` cells' frames; its pipeline compiled */
   async lampInit(blocks: number, slots: number, carBlocks = 512): Promise<void> {
     if (this.lamps) return;
@@ -2332,6 +2466,14 @@ export class SceneryRaster {
       pass.setBindGroup(1, C.bind);
       pass.setPipeline(C.pipe);
       pass.drawIndirect(C.draw, 0);
+    }
+    // (PLAN-J8 J8-8 lot (2): the near mesh cells' triangles — every used block's, the rest of a block degenerate)
+    if (this.near && this.nearOn && this.near.usedTri > 0) {
+      const N = this.near;
+      pass.setBindGroup(0, this.drawBind);
+      pass.setBindGroup(1, N.bind);
+      pass.setPipeline(N.pipe);
+      pass.draw(N.usedTri * NEAR_TRI_BLOCK * 3);
     }
     // (PLAN-J8 J8-0 (c): the envelope bench's envelopes in view, solid, a real building's material)
     if (this.bench && this.benchPipes && !(this.benchSkip & 2)) {
