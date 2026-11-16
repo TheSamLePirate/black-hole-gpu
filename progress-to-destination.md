@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-16 15:44 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-16 15:59 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous. Ce qui est fermé quitte le tableau « En cours » pour la ligne « Fermé récemment ».
@@ -67,7 +67,7 @@ l'état d'une mission ou d'un combat **non sauvé, dit** ; le réseau **« entre
 
 **Priorité de Sam (16 nov., 11:30 UTC) : [PLAN-J8](docs/PLAN-J8-BATIMENTS.md), tous les bâtiments de la vue** (« c'est ça qui choque le plus ») — la suite de J7 en pause après J7-8b ; les deux sessions s'y mettent (rendu : couche GPU, scène proche ; approches : recensement, préparation des cellules, PWA) ; d'abord J8-0 (mesures) et J8-1 (le trou de 2 à 7 km).
 
-**Attend Sam** : les quatre questions de [PLAN-J8](docs/PLAN-J8-BATIMENTS.md) §6, réglées provisoirement (même contenu sur les deux machines, retour si > 3 ms sur le mini ; portée au pixel ; J7 en pause, les arbres proches deviennent J9 ; pas de préparation côté serveur pour l'instant) ; les trois questions de [PLAN-J7](docs/PLAN-J7-FLUIDITE.md) §4, réglées provisoirement (les 40 ms du mini en dernier, J7-6 ; les arbres proches en géométrie ensuite, désormais J9 ; l'aplanissement du détail sous les trouées jusqu'à la FAF ou 10 km) ; les seuils du mini attendent la reprise de la cible 40 ms.
+**Décidé par Sam (16 nov., 15:58 UTC)** : J8-4 allumée par défaut (quads sous 8 px), J8-5 avec une jonction choisie sur captures, J8-1b suspendu, l'e2e de J8-6 par la voie (b), J8-9 ajouté ([PLAN-J8](docs/PLAN-J8-BATIMENTS.md) §6 point 6). **Attend Sam** : les captures de jonction de J8-5 ; les quatre premières questions de PLAN-J8 §6, réglées provisoirement (même contenu sur les deux machines, retour si > 3 ms sur le mini ; portée au pixel ; J7 en pause, les arbres proches deviennent J9 ; pas de préparation côté serveur pour l'instant) ; les trois questions de [PLAN-J7](docs/PLAN-J7-FLUIDITE.md) §4, réglées provisoirement (les 40 ms du mini en dernier, J7-6 ; les arbres proches en géométrie ensuite, désormais J9 ; l'aplanissement du détail sous les trouées jusqu'à la FAF ou 10 km) ; les seuils du mini attendent la reprise de la cible 40 ms.
 
 ## Journal
 
@@ -9137,3 +9137,16 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   n'est pas encore celui de l'enregistrement (U2 générique) ; les quads n'ont pas de toit.
 - Suite : le jugement de Sam sur les captures (allumer, quel seuil) ; puis J8-5 (la scène proche allégée) et J8-1b.
 
+### 2026-11-16 15:59 UTC — PLAN-J8 : décisions de Sam sur J8-4, J8-5, J8-1b et l'e2e de J8-6 ; J8-9 ajouté (session d'analyse)
+
+- **Contribution à la destination :** PLAN-J8 (tous les bâtiments de la vue), stratégie §19 (expérience complète, PWA). Décisions consignées, aucun code.
+- **Réalisé :** Sam a validé les recommandations de la session d'analyse (« ok pour tes recommandations »).
+  - J8-4 est allumée par défaut, en quads sous 8 px.
+  - J8-5 est accepté, mais sa distance de jonction se décide sur captures.
+  - J8-1b est suspendu jusqu'à J8-5.
+  - L'e2e de J8-6 suit la voie (b) : le Service Worker passe par le cache disque des e2e, puis un seul passage remplit le disque.
+  - Le lot J8-9 est ajouté : une estimation juste de la durée d'une zone, et une zone plus légère.
+  - Décisions relayées aux sessions 33d89754 (rendu) et 1feb2f7f (approches). Plan §3 (J8-9) et §6 (point 6) mis à jour.
+- **Preuves :** documenté. Les chiffres viennent des sessions et ne sont pas remesurés ici. J8-4 est mesuré sur kerr-mini : ~+0,6 ms sur Toulon à 12 km, la vue J0 dans le bruit. Pour J8-6, `zoneDuration` annonce 175 s contre 45 à 55 min réels.
+- **Limites / transitions restantes :** sur la planche de Toulon, les toits lointains paraissent plus gris que les toits proches (observé sur une capture réduite, à vérifier). La jonction et la vue en vol ne sont pas encore capturées. Aucun test ni e2e lancé par cette session.
+- **Suite :** la session du rendu allume J8-4, corrige la teinte, puis prépare les captures de jonction pour J8-5. La session des approches pose le témoin du Service Worker, puis remplit le disque, puis passe à J8-7.

@@ -109,6 +109,7 @@ de bâtiments vus, et leur coût GPU se mesure et se déclare.
 | **J8-6 La PWA** | Une zone téléchargée contient aussi les cellules préparées : hors ligne, aucun décodage. Réglages › Hors ligne donne le compte et la taille. En ligne, la publication est progressive. | approches (`zones.ts`, `sw.ts`, UI FR + EN) | e2e hors ligne : placement dans la zone, réseau coupé, toute la vue en N s ; MENUS / docs à jour |
 | **J8-7 Hors de France** | Overture (PMTiles) et OSM dans les mêmes enregistrements, puis la même couche. | approches | captures à Tarifa et Bruxelles ; recensement contre dessinés |
 | **J8-8 Le proche en cellules** (décision après J8-5) | Maillages, contacts (`SceneryContact`) et ombres par cellule, avec identité stable. Il n'y a plus de scène refaite pour les bâtiments. Grand lot : il ne s'ouvre que si J8-5 laisse un trou mesuré. | rendu | idem J8-5, sans régime rapide |
+| **J8-9 Une zone juste et légère** (ajouté le 16 nov., session d'analyse, sur la mesure de J8-6 ; après J8-4, sur accord de Sam) | `zoneDuration` annonce 175 s pour une zone dont le téléchargement réel prend 45 à 55 min (la Géoplateforme ~1,3 chaîne/s). Une zone de 0,5 km tire ~3 500 chaînes de base et ~700 grilles d'altitude IGN. L'estimation se cale sur le débit mesuré, et la zone ne tire que ce que le jeu lira. | approches | l'estimation contre le temps réel sur deux zones ; le compte des chaînes avant/après |
 | **J8-R Retraits** (règle 2) | Le plafond 8 000 × portée² des bâtiments, les boîtes au-delà de 2 km dans la scène, les budgets rapides des bâtiments, le chemin de silhouettes remplacé : retirés au lot qui suit leur remplacement, avec une date. | les deux | `git grep` vide ; docs |
 
 **Ordre :** J8-T en tête côté approches (avant les téléchargements de J8-0 (b) s'il est encore temps, sinon juste après) ; J8-0 et J8-1 en parallèle, puis J8-2, puis J8-3 et J8-4 en parallèle, puis J8-5, J8-6, J8-7, J8-8 si nécessaire, et
@@ -159,6 +160,16 @@ J8-R. J8-1 se voit tout de suite. J8-4 apporte le gros du gain : « toute la vue
    - le mode par défaut est « le disque, puis le réseau » ; le mode `offline` strict sert aux A/B ;
    - kerr-mini a son propre dossier, rempli depuis ce Mac par le réseau local ;
    - durée de vie : 30 jours pour OpenFreeMap `latest` et la liste des versions d'Overture, illimitée pour le reste, avec `refresh`.
+6. **Décidé par Sam le 16 nov. (~15:58 UTC, « ok pour tes recommandations », session d'analyse) :**
+   - **J8-4 allumée par défaut**, quads sous 8 px (mesuré sur kerr-mini : Toulon à 12 km ~+0,6 ms, la vue J0 dans le bruit ;
+     fiche J8-0, planche `docs/progress/j8/j8-4-lot2-*`). À corriger : la teinte des toits lointains, plus grise et plus claire
+     que les toits proches sur la planche de Toulon.
+   - **J8-5 oui**, mais la distance de jonction (2 km ou 3–4 km) se choisit sur captures : un gros plan de la jonction et une vue
+     en vol, montrés à Sam.
+   - **J8-1b suspendu** : le plafond ne se relève pas avant J8-5, et J8-1b se ferme si J8-5 le rend inutile.
+   - **L'e2e de J8-6** : voie (b), le Service Worker passe aussi par le cache disque des e2e, avec un témoin comme T0 ; puis
+     `j8-zone-cells` une seule fois sur le mini, sur un long créneau IGN, pour remplir le disque.
+   - **J8-9 ajouté** (§3), à ouvrir après J8-4 seulement sur accord.
 
 ## 7. Ce qui reste hors de ce plan
 
