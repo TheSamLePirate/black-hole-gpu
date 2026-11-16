@@ -8566,3 +8566,15 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
 - Limites : le changement d'appareil garde ~116 ms (travail natif de la création des modules, une collection, un envoi de texture) ; non
   rejoué à froid ; la cible du lot (aucune image > 100 ms) pas encore atteinte au changement.
 - Suite : le rejeu à froid (cache Metal du mini vidé) avec J7-2/J7-3 ; la création des modules au changement d'appareil.
+
+### 2026-11-16 06:22 UTC — PLAN-APPROCHES : le détail au-delà du couloir de J7-1 mesuré (suite de la demande à la session du rendu)
+
+- Contribution à la destination : §19.4 (le sol de contact sous toute l'approche, pas seulement la finale) — une mesure qui dit jusqu'où le
+  couloir doit aller.
+- Réalisé : `scripts/approach-detail-beyond.ts` — sur l'axe de chaque extrémité du monde de 10 à 18,5 km, le sol avec détail contre les données
+  et la pente.
+- Preuves (mesuré, 2 min, sans navigateur) : 66 914 extrémités ; excès du détail > 300 m pour 4 485 (6,7 %), 200–300 m 1 584 ; le détail
+  traverse la pente là où les données la dégagent de 150 m sur 1 607 extrémités (Altiplano bolivien jusqu'à −672 m). PROBLEMES : l'entrée ouverte.
+- Limites : non vu en vol (aucun terrain de l'échantillon n'y est) ; mesure sur la carte, sans tuiles fines.
+- Suite : transmis à la session du rendu (`game/runway-grade.ts`, le couloir jusqu'au point initial ou une borne du détail) ; l'échantillon
+  rejoué ensuite, avec une extrémité de l'Altiplano ajoutée.

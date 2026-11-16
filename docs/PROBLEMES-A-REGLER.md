@@ -3,6 +3,18 @@
 Problèmes constatés, pas encore réglés. Chaque entrée : la date (UTC), ce qui est mesuré ou observé et sa source, la cause
 connue ou supposée, la piste. Une entrée réglée est barrée avec le commit qui la règle, pas effacée.
 
+## Le détail procédural au-delà du couloir d'approche de J7-1 : 4 485 extrémités où il dépasse les données de plus de 300 m (relevé le 16 novembre 2026, `scripts/approach-detail-beyond.ts`)
+
+Mesuré (sans navigateur, carte mondiale `relief-high.bin` et l'échantillonneur du jeu sans tuiles) : sur l'axe de chaque extrémité de
+piste du monde de 10 à 18,5 km — au-delà du couloir de J7-1 (7128cffe, 10 km), jusqu'au point initial —, l'excès du sol avec détail
+sur les données : < 50 m pour 54 534 extrémités, 50–100 m 3 302, 100–200 m 3 009, 200–300 m 1 584, **> 300 m 4 485** (6,7 %). Les données
+dégageant la pente de 150 m et plus, le détail vient à moins de 90 m de la pente sur 2 294 extrémités et **la traverse sur 1 607** — pires :
+l'Altiplano bolivien (SLCB 05 : −444 m à 10,3 km, données +282 m ; SLCB 14 : −672 m à 18,5 km ; SLLP, SLOR, SLSU, SLUY), le Chili (SCCF).
+Effet : les paliers des jonctions (300 m au-dessus des données — décision de Sam du 16 nov., PLAN-APPROCHES §9 q. 4) et la pente entre
+10 et 18,5 km peuvent passer dans un relief inventé ; non vu en vol (l'échantillon AP10 n'a pas de tel terrain). Piste (session du rendu,
+`game/runway-grade.ts`) : le couloir prolongé jusqu'au point initial (18,5 km) ou à la jonction (16 km + la base), et/ou l'amplitude du
+détail bornée là où les données sont planes ; côté approches, si besoin, les paliers pris au plus haut des deux sols hors du couloir.
+
 ## L'e2e `ellipsoid`, son second test (« the live polar renderer … ») expire à 300 s sur kerr-mini (relevé le 16 novembre 2026)
 
 Observé : `the live polar renderer keeps WGS84 geometry and altitude when Earth textures are unavailable` expire à 300 s, trois fois
