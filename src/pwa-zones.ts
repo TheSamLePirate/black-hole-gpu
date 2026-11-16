@@ -20,7 +20,7 @@ import {
   zoneEstimate,
   zoneLevelsAt,
 } from "./system/zones";
-import { cellsOnlyIn, type ZoneCells, zoneCellTiles } from "./system/zone-cells";
+import { cellsOnlyIn, type ZoneCells, zoneCellTiles, zoneStreetTiles } from "./system/zone-cells";
 
 export interface Zones {
   /** what a zone would hold: its tiles' chains of fetches, their links, its size [bytes] by the kinds' means, its download
@@ -78,6 +78,9 @@ export function createZones(o: {
   cells?: {
     prepare(tiles: { x: number; y: number }[]): Promise<ZoneCells>;
     drop(tiles: { x: number; y: number }[]): Promise<void>;
+    /** the street cells (PLAN-J8 J8-L): prepared after the buildings', dropped with them */
+    prepareStreets?(tiles: { x: number; y: number }[]): Promise<ZoneCells>;
+    dropStreets?(tiles: { x: number; y: number }[]): Promise<void>;
   };
 }): Zones {
   let active: string | null = null;
@@ -179,6 +182,13 @@ export function createZones(o: {
         if (tiles.length) {
           if (zone.fresh) await o.cells.drop(tiles);
           zone.cells = await o.cells.prepare(tiles);
+        }
+        // (its street cells after its buildings' — J8-L: their town is the building cells')
+        const streets = zoneStreetTiles(urls);
+        if (streets.length && o.cells.prepareStreets) {
+          if (zone.fresh) await o.cells.dropStreets?.(streets);
+          const r = await o.cells.prepareStreets(streets);
+          zone.streets = { count: r.count, bytes: r.bytes, failed: r.failed, ms: r.ms };
         }
       }
       if (zone.state === "ready") {
@@ -300,6 +310,13 @@ export function createZones(o: {
             cellsOnlyIn(
               zoneCellTiles(chainsOf(z)),
               all.filter((q) => q.id !== id).map((q) => zoneCellTiles(chainsOf(q))),
+            ),
+          );
+        if (z?.streets && o.cells.dropStreets)
+          await o.cells.dropStreets(
+            cellsOnlyIn(
+              zoneStreetTiles(chainsOf(z)),
+              all.filter((q) => q.id !== id).map((q) => zoneStreetTiles(chainsOf(q))),
             ),
           );
       }

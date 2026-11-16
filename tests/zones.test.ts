@@ -25,6 +25,7 @@ import { aheadFocus, gazeLead, streamingLead } from "../src/system/streaming-foc
 import { tileKey } from "../src/world/runways";
 import {
   farCellZoneChains,
+  streetTileZoneChains,
   reliefChains,
   reliefUrls,
   RUNWAYS_PATH,
@@ -273,7 +274,8 @@ test("a zone's scenery: every fetch of every scene the game asks with the camera
     // (the scenery's own sources — OpenFreeMap's z 14: the relief's z 12–13 street tiles, NU1, are the tiles' —)
     const own = /terrascope|openfreemap\.org\/planet\/latest\/14\/|BDTOPO|MNH/;
     // (the far buildings' cells round the zone apart — PLAN-J8 J8-9 (1): the far layer's whole reach, by design past the scenes')
-    const far = new Set(farCellZoneChains(lat0, lon0, radius).flat());
+    // (and the streets' roads round it — J8-L: the lamps' 12 km, by design past the scenes' too)
+    const far = new Set([...farCellZoneChains(lat0, lon0, radius).flat(), ...streetTileZoneChains(lat0, lon0, radius).flat()]);
     const extra = [...urls].filter((u) => !wanted.has(u) && !far.has(u) && own.test(u)).length;
     const theirs = [...wanted].filter((u) => own.test(u)).length;
     expect(extra).toBeLessThan(0.6 * theirs);

@@ -52,6 +52,32 @@ export function zoneCellTiles(chains: readonly (readonly string[])[]): { x: numb
   return out;
 }
 
+const ROADS = /tiles\.openfreemap\.org\/planet\/[^/]+\/14\/(\d+)\/(\d+)\.pbf/;
+/** A zone's street cells (PLAN-J8 J8-L): the four z 15 cells of each OpenMapTiles z 14 tile among its chains' links. */
+export function zoneStreetTiles(chains: readonly (readonly string[])[]): { x: number; y: number }[] {
+  const seen = new Set<string>();
+  const out: { x: number; y: number }[] = [];
+  for (const chain of chains)
+    for (const url of chain) {
+      const m = ROADS.exec(url);
+      if (!m) continue;
+      for (const [i, j] of [
+        [0, 0],
+        [1, 0],
+        [0, 1],
+        [1, 1],
+      ] as const) {
+        const x = Number(m[1]) * 2 + i,
+          y = Number(m[2]) * 2 + j;
+        const k = `${x}/${y}`;
+        if (seen.has(k)) continue;
+        seen.add(k);
+        out.push({ x, y });
+      }
+    }
+  return out;
+}
+
 /**
  * A zone's cells prepared (or found ready in the prepared cache), one pool of its own; `progress` told as they come. Resolves once
  * every cell is in or failed — `signal` stops it (those in are kept).

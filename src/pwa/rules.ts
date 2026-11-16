@@ -184,6 +184,8 @@ export interface ZoneRecord {
   state: "downloading" | "paused" | "ready";
   /** its building cells prepared (PLAN-J8 J8-6, system/zone-cells.ts): offline, read from the prepared cache, no decoding */
   cells?: { count: number; buildings: number; bytes: number; failed: number; ms: number };
+  /** its street cells prepared (PLAN-J8 J8-L, street-cells.ts): the lamps and the cars' roads round it */
+  streets?: { count: number; bytes: number; failed: number; ms: number };
   /** the sources' version its last whole download followed (system/zones.ts ZONE_SCHEMA; none: 1, before 6 Nov 2026) */
   schema?: number;
   /** the next chain to ask (their list rebuilt from the record: system/zones.ts zoneChains) */

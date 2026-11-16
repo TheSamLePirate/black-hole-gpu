@@ -121,6 +121,26 @@ export const zoneCellsIO = {
       w.dispose();
     }
   },
+  /** its street cells (J8-L): a street worker of their own */
+  async prepareStreets(tiles: { x: number; y: number }[]): Promise<ZoneCells> {
+    const w = new CellWorkers(1, "cell-worker.js", "street");
+    try {
+      return await prepareZoneCells(tiles, w, streetStore);
+    } finally {
+      w.dispose();
+    }
+  },
+  async dropStreets(tiles: { x: number; y: number }[]): Promise<void> {
+    try {
+      const c = await caches.open(STREET_CACHE);
+      for (const t of tiles) {
+        await c.delete(streetCacheUrl(location.origin, t.x, t.y));
+        streets?.forget(t.x, t.y);
+      }
+    } catch {
+      /* no Cache Storage: nothing kept */
+    }
+  },
   async drop(tiles: { x: number; y: number }[]): Promise<void> {
     try {
       const c = await caches.open(CELL_CACHE);

@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 import type { ZoneRecord } from "../src/pwa/rules";
 import { createZones } from "../src/pwa-zones";
-import { zoneCellTiles } from "../src/system/zone-cells";
+import { zoneCellTiles, zoneStreetTiles } from "../src/system/zone-cells";
 import { ZONE_PROFILES, zoneChains } from "../src/system/zones";
 
 // PLAN-J8 J8-6 — the zones' download (src/pwa-zones.ts) with its building cells: a fake Service Worker (every batch in at once) and fake
@@ -20,6 +20,8 @@ function harness() {
   const store = new Map<string, ZoneRecord>();
   const prepared: string[][] = [];
   const dropped: string[][] = [];
+  const streets: string[][] = [];
+  const streetsDropped: string[][] = [];
   const key = (t: { x: number; y: number }) => `${t.x}/${t.y}`;
   const zones = createZones({
     talk: async <T>(m: object) => {
@@ -47,6 +49,13 @@ function harness() {
       async drop(tiles) {
         dropped.push(tiles.map(key));
       },
+      async prepareStreets(tiles) {
+        streets.push(tiles.map(key));
+        return { count: tiles.length, buildings: 0, bytes: 100 * tiles.length, failed: 0, ms: 1 };
+      },
+      async dropStreets(tiles) {
+        streetsDropped.push(tiles.map(key));
+      },
     },
   });
   const ready = async (id: string) => {
@@ -57,7 +66,7 @@ function harness() {
     }
     throw new Error("the zone never ready");
   };
-  return { zones, store, prepared, dropped, ready };
+  return { zones, store, prepared, dropped, streets, streetsDropped, ready };
 }
 
 const tilesOf = (lat: number, lon: number, km: number) =>
@@ -95,4 +104,17 @@ test("a removal drops only the cells no other zone holds", async () => {
   const onlyA = tilesOf(43.124, 5.93, 0.5).filter((t) => !tilesOf(43.124, 5.942, 0.5).includes(t));
   expect(h.dropped).toEqual([onlyA]);
   expect(onlyA.length).toBeLessThan(tilesOf(43.124, 5.93, 0.5).length);
+});
+
+test("a zone ready: its street cells prepared after its buildings' (J8-L), dropped with it", async () => {
+  const h = harness();
+  const id = (await h.zones.add({ name: "a", lat: 43.124, lon: 5.93, radiusKm: 0.5, profile: "overflight" }))!;
+  const z = await h.ready(id);
+  const want = zoneStreetTiles(zoneChains(43.124, 5.93, 500, ZONE_PROFILES.overflight, SOURCES)).map((t) => `${t.x}/${t.y}`);
+  // (the roads' z 14 tiles within the lamps' 12 km: four cells each)
+  expect(want.length).toBeGreaterThan(400);
+  expect(h.streets).toEqual([want]);
+  expect(z.streets?.count).toBe(want.length);
+  await h.zones.remove(id);
+  expect(h.streetsDropped).toEqual([want]);
 });

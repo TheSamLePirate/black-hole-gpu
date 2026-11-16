@@ -407,6 +407,15 @@ export function sceneryZoneChains(
   return out;
 }
 
+/** PLAN-J8 J8-L — the streets' cells' reach round a zone [m]: the lamps' (the render session's parameter of its request, 12 km to start;
+ *  past it `night-roads` bakes them as points of light) */
+export const ZONE_STREET_REACH_M = 12_000;
+/** the roads' z 14 tiles round a zone within the streets' reach (OpenMapTiles' — the scenery's own tiles, osmUrl): each prepared into
+ *  its four street cells once the zone is in (zone-cells.ts zoneStreetTiles) */
+export function streetTileZoneChains(lat: number, lon: number, radius: number): ZoneChain[] {
+  return tilesWithin(OSM_Z, lat, lon, radius + ZONE_STREET_REACH_M).map((t) => [osmUrl(t.x, t.y)]);
+}
+
 /** the far buildings' reach round the camera [m] (building-far.ts FAR_REACH_M — copied: that module is the renderer's; tests/
  *  zones-far-cells.test.ts holds the two equal) */
 export const ZONE_FAR_REACH_M = 20_000;
@@ -464,6 +473,8 @@ export function zoneChains(
   if (o.scenery) for (const chain of sceneryZoneChains(lat, lon, radius, o.scenery, o.relief)) add(chain);
   // (the far buildings' cells round it — J8-9 (1) —, with the scenery's buildings: the far layer's whole reach)
   if (o.scenery) for (const chain of farCellZoneChains(lat, lon, radius)) add(chain);
+  // (the streets' roads round it — J8-L —: the lamps' and the cars' reach)
+  if (o.scenery) for (const chain of streetTileZoneChains(lat, lon, radius)) add(chain);
   // (the runways' round it — the airfields, the ILS —, whatever the sources)
   for (const chain of runwayZoneChains(lat, lon, radius)) add(chain);
   return out;
