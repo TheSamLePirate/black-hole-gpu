@@ -190,11 +190,13 @@ export async function earthCache(cdp: Cdp, o: { tiles: boolean; mode?: EarthData
       dir,
       counts,
       attribute: () => ({ workerFetch: {} as Record<string, string>, pausedOn: {} as Record<string, number>, workersSeen: [] as string[] }),
+      attached: () => [] as { sessionId: string; url: string }[],
       suspend: async (_on: boolean) => {},
       stop: async () => {},
     };
   mkdirSync(dir, { recursive: true });
   const sessions = new Map<string, string>();
+  const attached = new Map<string, string>(); // (the dedicated workers' sessions, their full URL — lib/worker-profile.ts seeds from it)
   // (which worker asked a URL: its own session's Network events — Chrome pauses a dedicated worker's requests on the page's Fetch
   // session too, so the paused request alone says "page"; T0, 16 Nov 2026)
   const askedBy = new Map<string, string>(); // (Network requestId → worker: the Fetch pause's networkId names it — two workers may ask one URL)
@@ -208,6 +210,7 @@ export async function earthCache(cdp: Cdp, o: { tiles: boolean; mode?: EarthData
     const t = p.targetInfo as { type: string; url: string };
     const sid = String(p.sessionId);
     sessions.set(sid, t.url.split("/").pop() || t.type);
+    if (t.type === "worker") attached.set(sid, t.url);
     void (async () => {
       if (t.type === "worker" || t.type === "shared_worker") {
         const name = sessions.get(sid)!;
@@ -292,6 +295,8 @@ export async function earthCache(cdp: Cdp, o: { tiles: boolean; mode?: EarthData
       for (const sid of [undefined, ...sessions.keys()]) await (on ? call(sid, "Fetch.disable", {}) : enable(sid));
     },
     attribute,
+    /** the dedicated workers attached so far (Chrome tells a later Target.setAutoAttach only of the new ones) */
+    attached: () => [...attached].map(([sessionId, url]) => ({ sessionId, url })),
     async stop() {
       offA();
       offP();

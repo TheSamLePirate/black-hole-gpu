@@ -34,7 +34,7 @@ grandeur que la couche lointaine doit tenir dans la vue est **~10⁵ bâtiments*
 pour tout le disque — estimé à partir de ces comptes). Ce sont des comptes de la donnée : le nombre qui couvre au moins 1 pixel dépend
 de la taille de chacun et se compte avec J8-4.
 
-## (b) Le profil du worker de décor — Toulon fait ; Paris après J8-T
+## (b) Le profil du worker de décor — Toulon et Paris, réseau puis disque
 
 - **Mesuré le 16 novembre 2026** (12:29–12:37 UTC), ce Mac (M1 Max), e2e `j8-scenery-profile` → [`worker-profile.json`](worker-profile.json).
   Le thread du worker profilé par le DevTools (`tests/e2e/lib/worker-profile.ts` : attaché dès sa naissance — il est recréé après un
@@ -55,6 +55,37 @@ de la taille de chacun et se compte avec J8-4.
 détail, les toits, le décodage d'OSM. C'est la cible du cache par tuile de J8-5. L'autre moitié est de l'attente réseau, que J8-T doit
 mesurer à nouveau avec le cache disque. Le décodage BD TOPO lui-même est petit (`bdtopo` 0,3 s actif). Pour J8-3, la préparation d'une
 cellule mesurée à part (`cell-prep`) prend 2,9 ms par tuile au médian. **Non mesuré** : kerr-mini ; Paris (après J8-T, depuis le disque).
+
+### (b) depuis le disque (J8-T), Toulon et Paris
+
+- **Mesuré le 16 novembre 2026**, ce Mac (M1 Max), arbre de 4d8b03db plus l'attache des workers déjà ouverts (`worker-profile.ts`), e2e
+  `j8-scenery-profile`, `J8P_OUT` → [`worker-profile-disk.json`](worker-profile-disk.json). Les tuiles servies par le cache disque des e2e
+  (J8-T). Deux passages :
+  - **1ᵉʳ (14:14–14:25 UTC)** : la machine « Nominal » au départ ; Paris encore en partie sur le réseau ; témoins non lus (ratés).
+  - **2ᵉ (14:26–14:35 UTC)** : témoins bons (boucle de 400 ms lue 398 ms active, attente 0 ms active) ; **pression thermique « Heavy »
+    relevée à la fin** — ses durées sont des bornes hautes.
+
+| Scène complète, disque | Durée | Actif | Inactif | Phases où le temps passe (actif) |
+|---|---:|---:|---:|---|
+| Toulon, 1ᵉʳ passage (A/A) | 30,8 s (31,6) | 22,8 s (23,2) | 8,0 s (8,4) | `party walls` 9,4 s, `detail` 6,0 s, `roofs` 2,8 s, `osm` 2,0 s ; attente `before forest` 7,4 s |
+| Toulon, 2ᵉ passage (A/A) | 39,0 s (33,7) | 32,2 s (25,9) | 6,8 s (7,8) | `party walls` 11,9 s, `detail` 9,1 s, `roofs` 4,2 s, `osm` 3,2 s |
+| **Paris**, 2ᵉ passage | **59,5 s** | **54,0 s (91 %)** | 5,5 s | `detail` 16,2 s, `party walls` 16,0 s, `osm` 11,2 s, `roofs` 4,3 s, `turbines` 2,8 s |
+
+| Scène rapide, disque | Durée | Actif | Inactif |
+|---|---:|---:|---:|
+| Toulon, 2ᵉ passage (A/A) | 10,3 s (8,0) | 7,2 s (6,6) | 3,1 s (1,4) |
+| Paris, 2ᵉ passage | 20,4 s | 12,6 s | 7,7 s (dont `turbines` 4,9 s) |
+
+**Ce que ça dit** :
+
+- **Le cache disque supprime l'attente, pas le calcul.** Toulon passe de 51,3 s sur le réseau à 31–39 s : l'inactif tombe de 25,5 s à
+  7–8 s.
+- **L'actif ne baisse pas.** 23–32 s contre 25,8 s : l'écart suit l'état thermique, il n'est pas attribué.
+- **À Paris, une scène complète est presque toute du calcul** : 54 s actives sur 59,5 s. Le détail, les murs mitoyens et le décodage
+  d'OSM en font 43 s.
+- **C'est la cible de J8-5** (le cache par tuile du travail préparé) et un argument pour J8-3 (la préparation par cellule, 2,9 ms par
+  tuile). Le worker unique refait tout à chaque scène.
+- **Non mesuré** : kerr-mini ; Paris à froid sur le réseau.
 
 ## (c) Le coût GPU par enveloppe
 
@@ -106,13 +137,17 @@ thermique « Nominal » avant et après ; GPU à 1 019 puis 1 266 MHz sur 1 278.
   montait (23,7 ms à 0, 21,5 ms à 512 k) et le témoin positif a échoué ; la mesure est écartée (règle 3). À refaire sur une machine
   refroidie.
 
-## (d) Le budget qui bloque — Toulon fait ; Paris après J8-T
+## (d) Le budget qui bloque — Toulon et Paris
 
 - **Toulon** (même passage, scène complète) : **le plafond de bâtiments** coupe, ni la mémoire ni les maillages. 32 000 gardés (8 000 ×
   portée²), **70 247 coupés**, gardés jusqu'à 2 116 m ; `budgetLimited` vrai. Les postes que le worker rapporte (`bytes`) : le budget **64 Mio** (et non 48 :
   `budget` = 67 108 864), avant les bâtiments 26,0 Mio, bâtiments 11,3 Mio, forêt 13,1 Mio, raster 4,0 Mio ; maillages **11,5 Mio sur
   16**. (Leur recouvrement — « avant les bâtiments » inclut-il la forêt et le raster ? — n'est pas établi : pas de somme ici.)
-- **Paris** : à mesurer depuis le disque après J8-T.
+- **Paris** (16 nov., 14:26–14:35 UTC, ce Mac, depuis le disque, deux passages identiques) : **encore le plafond**, bien plus serré.
+  - 32 000 bâtiments gardés, **199 236 coupés**, gardés jusqu'à **1 148 m** seulement (Toulon : 2 116 m) ; `budgetLimited` vrai.
+  - Les postes de `bytes` : budget 64 Mio, avant les bâtiments 29,5 Mio, bâtiments 12,8 Mio, forêt 12,1 Mio, raster 4,0 Mio ;
+    maillages **6,9 Mio sur 16**. Comme à Toulon, pas de somme : leur recouvrement n'est pas établi.
+  - Ni la mémoire ni les maillages ne bloquent. À Paris, le plafond ne laisse voir les bâtiments qu'à un peu plus d'un kilomètre.
 
 ## (e) Le décor pendant J0 — `earthScenery.stats()` chaque seconde
 

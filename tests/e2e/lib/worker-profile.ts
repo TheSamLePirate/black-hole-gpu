@@ -29,6 +29,9 @@ export async function attachWorkers(app: App, match: RegExp, profile?: RegExp): 
     const l: WorkerSession[] = [];
     seen.set(app, l);
     list = l;
+    // (the workers the Earth data cache attached at the boot — lib/earth-cache.ts: Chrome does not tell a second auto-attach of them;
+    // those already running are profiled from now, not from their birth)
+    for (const w of app.earth?.attached() ?? []) l.push(w);
     app.cdp.on("Target.attachedToTarget", (p) => {
       const t = p.targetInfo as { type: string; url: string };
       const sid = String(p.sessionId);
