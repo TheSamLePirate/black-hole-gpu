@@ -8893,3 +8893,17 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
 - Suite : le banc sur le mini et le M1 Max (si plus de 3 ms sur le mini pour la vue J0, retour à Sam avant J8-4) ; J8-4 après la
   relecture de J8-2.
 
+### 2026-11-16 12:20 UTC — PLAN-J8 J8-T ajouté (session d'analyse) : les données de la Terre des e2e sur disque, décidé par Sam
+
+- Contribution à la destination : la méthode (itérations et A/B plus courts et reproductibles) ; aucun gain de rendu.
+- Réalisé : [PLAN-J8](docs/PLAN-J8-BATIMENTS.md) §3, §6 (question 5) et §8 : le lot J8-T, confié à la session des approches. C'est le
+  prototype `tests/e2e/lib/tile-replay.ts` (T8h) généralisé : l'interception `Fetch` du harnais sert les tuiles depuis
+  `/Users/olivierveinand/Documents/DEV/earth-data` (kerr-mini : `~/kerr-lab/earth-data`) et ne télécharge qu'une fois. Le tri est
+  celui de la PWA (`classify`), sans aucune donnée vivante. Activé par défaut (`E2E_EARTH_DATA=off|offline|refresh`). Les e2e du
+  réseau (`sw: true`, en-tête `// Earth data: network`) le contournent.
+- Preuves : documenté, d'après une analyse en lecture seule ; revérifié dans le code : le SW est coupé en e2e (`src/pwa.ts:59`), le
+  profil Chrome est neuf à chaque lancement (`tests/e2e/lib/cdp.ts:91`), le port est aléatoire (`tests/e2e/lib/app.ts:62`), et le
+  prototype existe. Non vérifié : l'interception des requêtes des workers dédiés (le témoin de T0), et la part du téléchargement
+  dans la durée des e2e (estimée entre 30 et 60 % pour le décor et l'IGN, non mesurée).
+- Suite : T0, les témoins et la mesure du gain, par la session des approches.
+
