@@ -35,6 +35,20 @@ test.skipIf(!E2E)(
       await app.js(`(() => { Object.assign(__bh.settings, ${J0_FIXED}, { ship: false, earthClouds: 0, weather: "fair", dof: false, motionBlur: 0,
         earthPipeline: "raster" }); __bh.renderer.debugSkipShip = true; __bh.renderer.farBuildingsOn = true; __bh.game.setDate("${J0_SCENE.date}");
         return 1; })()`);
+      // (J8J_RUN: a recorder each frame — the camera's place, what holds the step, the clock: the frames round its loss kept)
+      if (process.env.J8J_RUN)
+        await app.js(`(() => { const ring = []; window.__j8jLost = [];
+          const tick = () => { const g = __bh.camera.geoNow?.(), f = { ms: Math.round(performance.now()), held: __bh.held?.() ?? null,
+              now: __bh.game.now?.() ?? null, g: g && [+g.lat.toFixed(4), +g.lon.toFixed(4), Math.round(g.alt)], scene: __bh.renderer.earthScenery.stats().status };
+            const p = ring[ring.length - 1];
+            if (p && ((p.g && !f.g) || (p.g && f.g && Math.abs(p.g[2] - f.g[2]) > 3000))) window.__j8jLost.push({ before: ring.slice(-6), at: f });
+            ring.push(f); if (ring.length > 12) ring.shift(); requestAnimationFrame(tick); };
+          requestAnimationFrame(tick); return 1; })()`);
+      // (J8J_STALL ms: the main thread blocked that long every 2 s — a slower machine's hitches, kerr-mini's)
+      if (process.env.J8J_STALL)
+        await app.js(
+          `(() => { setInterval(() => { const t = performance.now(); while (performance.now() - t < ${Number(process.env.J8J_STALL)}); }, 2000); return 1; })()`,
+        );
       // (J8J_VIEWS: the views by name, comma-separated — a diagnosis on one)
       const only = process.env.J8J_VIEWS?.split(",");
       for (const v of VIEWS.filter((w) => !only || only.includes(w.name))) {
@@ -43,7 +57,8 @@ test.skipIf(!E2E)(
           await app.scenario(`${v.label} · jonction ${j ? `${j / 1000} km` : "aucune (la scène garde tout)"}`);
           // (the world kept frozen while the scene is made — rule 13's way: the free camera without a craft is not carried with the Earth,
           // the world running left it in space — « away from the Earth », 16 Nov 2026, PROBLEMES)
-          await app.js(`(() => { __bh.freeze(true); __bh.renderer.farNearOnlyM = ${j}; return 1; })()`);
+          // (J8J_RUN: the world left running during the wait, as before — the camera lost reproduced, PROBLEMES)
+          await app.js(`(() => { __bh.freeze(${!process.env.J8J_RUN}); __bh.renderer.farNearOnlyM = ${j}; return 1; })()`);
           const why = await app.js<string | null>(
             `__bh.viewAt(${v.lat}, ${v.lon}, { altM: ${v.altM}, heading: ${v.heading}, pitch: ${v.pitch}, fov: 50 }) ?? null`,
           );
@@ -69,6 +84,17 @@ test.skipIf(!E2E)(
               console.log(`  (${v.name} ${j}: the page: ${JSON.stringify(st)})`);
             });
           const sceneS = (Date.now() - t0) / 1000;
+          if (process.env.J8J_RUN)
+            console.log(`  (${v.name} ${j}: the camera's losses: ${JSON.stringify(await app.js(`window.__j8jLost.splice(0)`))})`);
+          if (process.env.J8J_RUN)
+            console.log(
+              `  (${v.name} ${j}: after the wait, the world running: ${JSON.stringify(
+                await app.js(`(async () => {
+              const R = __bh.renderer, sc = R.earthScenery.stats(), s = await R.surfaceAt(0.5, 0.65), g = __bh.camera.geoNow?.();
+              return { scene: sc.status, lat: sc.lat, lon: sc.lon, kind: s?.kind ?? "none", d: Math.round(s?.nearest ?? -1), date: __bh.game.date?.() ?? null,
+                craft: { active: __bh.fleet?.active, geo: g && [+g.lat.toFixed(3), +g.lon.toFixed(3), Math.round(g.alt ?? 0)] } }; })()`),
+              )})`,
+            );
           // (the same hour at every shot: the sun as the first's — the world ran while the scene was made)
           // (the date set back, the free camera set again at its place: a jump in time left it where the Earth was — « away from the
           // Earth », the image black, the scene empty: 3 runs in 5 on 16 Nov 2026, PROBLEMES)

@@ -1,10 +1,12 @@
 import { afterAll, expect, test } from "bun:test";
 import { App, E2E, stopServer } from "./lib/app";
+import { J0_FIXED } from "./lib/j0-scene";
 
 // The free camera without a craft (ship: false — viewAt's photograph view) held on the Earth: placed over Toulon at 350 m, the world
 // running 60 s, then the clock jumped an hour on (game.setDate) and back — it stays over Toulon, at its height. Found by PLAN-J8's
 // junction e2e (16 Nov 2026): the camera left in space — « away from the Earth », the image black (PROBLEMES). Asserted at each step
 // (geoNow, game.status are the craft's): the scenery not « away from the Earth », the image's middle on a surface within 10 km.
+// FCH_J0=1: with J0's fixed settings too (J0_FIXED: vessel "f35"… — j8-junction's; the craft switched at the first flight step).
 // Duration: ~3 min on kerr-mini.
 // Done when: the hour jumped and back, the camera held at each step.
 afterAll(stopServer);
@@ -14,7 +16,7 @@ test.skipIf(!E2E)(
   async () => {
     const app = await App.boot({ width: 1280, height: 720, hash: "scene=game:artemis", tiles: true });
     try {
-      await app.js(`(() => { Object.assign(__bh.settings, { ship: false, earthPipeline: "raster" }); __bh.renderer.debugSkipShip = true;
+      await app.js(`(() => { Object.assign(__bh.settings, ${process.env.FCH_J0 ? `${J0_FIXED}, ` : ""}{ ship: false, earthPipeline: "raster" }); __bh.renderer.debugSkipShip = true;
       __bh.game.setDate("2026-07-10T13:30:00Z"); return 1; })()`);
       const why = await app.js<string | null>(
         `__bh.viewAt(${AT.lat}, ${AT.lon}, { altM: ${AT.altM}, heading: 270, pitch: -6, fov: 50 }) ?? null`,
@@ -23,9 +25,10 @@ test.skipIf(!E2E)(
       // (what tells the camera's place without a craft — geoNow and game.status are the craft's —: the scenery's status, made round
       // the camera (« away-from-earth » off it) and its centre; the image's middle below the horizon, its surface and distance)
       const where = () =>
-        app.js<{ scene: string; lat: number | null; lon: number | null; kind: string; d: number }>(`(async () => {
-        const R = __bh.renderer, sc = R.earthScenery.stats(), s = await R.surfaceAt(0.5, 0.65);
-        return { scene: sc.status, lat: sc.lat, lon: sc.lon, kind: s?.kind ?? "none", d: Math.round(s?.nearest ?? -1) }; })()`);
+        app.js<{ scene: string; lat: number | null; lon: number | null; kind: string; d: number; craft: unknown }>(`(async () => {
+        const R = __bh.renderer, sc = R.earthScenery.stats(), s = await R.surfaceAt(0.5, 0.65), g = __bh.camera.geoNow?.();
+        return { scene: sc.status, lat: sc.lat, lon: sc.lon, kind: s?.kind ?? "none", d: Math.round(s?.nearest ?? -1),
+          craft: { active: __bh.fleet?.active, vessel: __bh.settings.vessel, geo: g && [+g.lat.toFixed(3), +g.lon.toFixed(3), Math.round(g.alt ?? 0)] } }; })()`);
       const check = async (label: string) => {
         const p = await where();
         const km =

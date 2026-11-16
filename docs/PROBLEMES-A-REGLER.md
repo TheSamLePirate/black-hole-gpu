@@ -44,6 +44,17 @@ remise monde gelé puis relâché, replacée gelée puis relâchée), **passe su
 libre (`rig.ts` `groundHold`). La caméra perdue tient à quelque chose de propre à la séquence de `j8-junction` (ses réglages J0, la scène
 refaite à chaque jonction, ses captures), non trouvé ; contourné en gardant le monde gelé (8/8 propres). `tools.ts` non modifié.
 
+**Enquête (16 nov. 2026, ~21:45–22:10 UTC, hors ligne — `E2E_EARTH_DATA=offline`, aucune requête)** : **reproduit sur kerr-mini**
+(run 20261116-225401-j8j-run-offline, `J8J_RUN=1` : le monde qui tourne pendant l'attente, comme avant le contournement) — Toulon,
+jonctions 0, 1, 2 km propres, à 3 km la caméra perdue pendant l'attente de la scène (« away-from-earth », `geoNow()` null, GPU 13,4 ms,
+la date 15:31 : une minute de monde), **pas au saut d'heure** ; replacée (`viewAt`), elle revient. **Pas reproduit sur ce Mac** :
+16 étapes sur 16 propres (Toulon et Hyères ; deux séquences 0–3 km ; une avec le fil principal bloqué 400 ms toutes les 2 s, `J8J_STALL`
+— les à-coups d'une machine lente ne la perdent pas ; le pas du jeu borné à 0,1 s, le même pour l'horloge et la caméra). **Écarté** :
+les réglages de J0 (`free-camera-hold` `FCH_J0=1` : la caméra tient ; avec `ship: false` l'appareil n'est pas changé). **Vu en passant** :
+`geoNow()` sans appareil oscille de −730 à +306 m sous la caméra tenue (la vue, elle, ne bouge pas : `surfaceAt` constant) — à
+comprendre, peut-être le même désaccord d'horloge. **Prêt** : un enregistreur image par image (`J8J_RUN` : la place de la caméra,
+`held()`, l'horloge ; les images autour d'une perte écrites au journal) — à lancer sur kerr-mini après la zone de Paris (02:15 UTC).
+
 
 
 **Trouvé (16 nov. 2026, ~19:25 UTC, kerr-mini, `j8-junction` — l'état de la page relevé au blocage)** : `earthScenery` « away-from-earth »,
