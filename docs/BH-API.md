@@ -2122,7 +2122,8 @@ no roof planned), put in the prepared cache (Cache Storage `kerr-cells-v1`) and 
 - `stats()` → `{ queued, running, done, beyond, prepared, cached, cancelled, dropped, failed, ms }`: `beyond` the wanted cells waiting
   past the queue's bound (256) at the last `want` — a gauge, they wait for the next —; `dropped` the queued cells that left the wanted
   set before their turn, each counted once (since 16 Nov 2026: before, every `want` added those beyond the bound — J8-4's want every
-  2 s read 136 000 in five minutes).
+  2 s read 136 000 in five minutes). A cell that failed is not asked again before its wait — 5 s, doubling at each failure up to
+  120 s; a success clears it — (16 Nov 2026: offline, J8-4's want every 2 s asked each failed cell again, 8 209 requests in a minute).
 - `got()` → the cells handed since `clear()`: `{ key: "x/y", bytes, cached, ms }` (`cached`: from the prepared cache, no worker;
   `ms`: the worker's time, fetch and decoding).
 - `clear()` — `got()` emptied.

@@ -42,7 +42,12 @@ export const cellCacheUrl = (origin: string, x: number, y: number) => `${origin}
 export interface CellPoolOptions {
   /** the queue's bound (cells waiting, not counting those under way) */
   maxQueue?: number;
+  /** the clock [ms] (performance.now; the tests' own) */
+  now?: () => number;
 }
+/** a failed cell's first wait before it is asked again [ms], doubling at each failure up to RETRY_MAX_MS */
+export const RETRY_MS = 5_000;
+export const RETRY_MAX_MS = 120_000;
 
 export class CellPool {
   private queue: CellWant[] = [];
@@ -58,13 +63,19 @@ export class CellPool {
   readonly counts = { prepared: 0, cached: 0, cancelled: 0, dropped: 0, failed: 0, ms: 0 };
   /** the wanted cells waiting beyond the queue's bound at the last want (a gauge: they wait for the next) */
   private beyond = 0;
+  /** cells that failed: not asked again before their time (16 Nov 2026: offline, J8-4's want every 2 s asked each failed cell again —
+   *  8 209 requests in a minute); the wait doubles at each failure, from RETRY_MS to RETRY_MAX_MS */
+  private failedAt = new Map<string, { until: number; n: number }>();
 
+  /** the clock [ms] (the tests' own) */
+  private now: () => number;
   constructor(
     private exec: CellExecutor,
     private store: CellStore | null = null,
     o: CellPoolOptions = {},
   ) {
     this.maxQueue = o.maxQueue ?? 256;
+    this.now = o.now ?? (() => performance.now());
   }
 
   /** The cells wanted now (the whole set: what is not in it is no longer wanted — dropped, or its work cancelled). */
@@ -77,9 +88,11 @@ export class CellPool {
         this.counts.cancelled++;
       }
     const order = (a: CellWant, b: CellWant) => a.priority - b.priority || a.d - b.d;
+    const now = this.now();
     const fresh = [...this.wanted.values()].filter((w) => {
       const k = cellKey(w.x, w.y);
-      return !this.done.has(k) && !this.running.has(k);
+      const f = this.failedAt.get(k);
+      return !this.done.has(k) && !this.running.has(k) && !(f && now < f.until);
     });
     fresh.sort(order);
     // (the bound on those waiting: the free workers take theirs at once, outside it)
@@ -136,6 +149,9 @@ export class CellPool {
     } catch (e) {
       if (abort.signal.aborted) return;
       this.counts.failed++;
+      const f = this.failedAt.get(k);
+      const n = (f?.n ?? 0) + 1;
+      this.failedAt.set(k, { n, until: this.now() + Math.min(RETRY_MAX_MS, RETRY_MS * 2 ** (n - 1)) });
       this.onError?.(w.x, w.y, e);
     } finally {
       if (this.running.get(k)?.abort === abort) this.running.delete(k);
@@ -145,6 +161,7 @@ export class CellPool {
 
   private hand(k: string, c: CellPrepared) {
     this.done.add(k);
+    this.failedAt.delete(k);
     for (const fn of this.listeners) fn(c);
   }
 }

@@ -103,3 +103,46 @@ test("the queue's bound: the wanted beyond it wait for the next want (a gauge, n
   expect(s.dropped).toBe(0);
   expect(s.beyond).toBe(6);
 });
+
+test("a failed cell is not asked again before its wait, doubling (offline: no request every want)", async () => {
+  let t = 0;
+  let runs = 0;
+  const pool = new CellPool(
+    {
+      size: 1,
+      run: async () => {
+        runs++;
+        throw new Error("offline");
+      },
+    },
+    null,
+    { now: () => t },
+  );
+  const list = [W(1, 0, 1)];
+  pool.want(list);
+  await tick();
+  await tick();
+  expect(runs).toBe(1);
+  // (J8-4's want every 2 s: not asked again within the first wait — 5 s —)
+  for (t = 2000; t < 5000; t += 2000) {
+    pool.want(list);
+    await tick();
+  }
+  expect(runs).toBe(1);
+  t = 5001;
+  pool.want(list);
+  await tick();
+  await tick();
+  expect(runs).toBe(2);
+  // (the second wait doubled: 10 s)
+  t = 14_000;
+  pool.want(list);
+  await tick();
+  expect(runs).toBe(2);
+  t = 15_002;
+  pool.want(list);
+  await tick();
+  await tick();
+  expect(runs).toBe(3);
+  expect(pool.stats().failed).toBe(3);
+});
