@@ -65,6 +65,7 @@ describe.skipIf(!E2E)("J6-4: resume an aircraft on the ground — the state the 
   };
 
   test("the A320 saved cold and dark comes back cold and dark — not as the start preference has it", async () => {
+    await app.scenario("A320 sauvé froid et sombre");
     const saved = await lineUp("a320", "cold");
     const { block, back } = await resume("ready");
     console.log(`  A320 cold: saved ${JSON.stringify(saved)}; the save's a320: ${JSON.stringify(block)}; after F9 ${JSON.stringify(back)}`);
@@ -78,6 +79,7 @@ describe.skipIf(!E2E)("J6-4: resume an aircraft on the ground — the state the 
   }, 120_000);
 
   test("the A320 saved ready comes back with its engines running — then its throttle answers on the ground", async () => {
+    await app.scenario("A320 sauvé prêt");
     const saved = await lineUp("a320", "ready");
     const { block, back } = await resume("cold");
     console.log(
@@ -100,6 +102,7 @@ describe.skipIf(!E2E)("J6-4: resume an aircraft on the ground — the state the 
   }, 120_000);
 
   test("the F-35 parked: fuel, gear and brakes as saved, then U — airborne", async () => {
+    await app.scenario("F-35 parqué, puis U");
     await lineUp("f35", "ready");
     await app.js(`(() => { __bh.fleet.fuel.f35 = 3000; for (let i = 0; i < 10; i++) __bh.step(1 / 30); return 1; })()`);
     const saved = await app.js<Craft>(READ);

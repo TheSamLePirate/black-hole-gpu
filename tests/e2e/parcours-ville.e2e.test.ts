@@ -51,10 +51,12 @@ test.skipIf(!E2E)(
       out.lineUpAgain = await app.js<string>(lineUp);
       await app.settled(90_000);
       await app.js(`(() => { __bh.freeze(false); return 1; })()`);
-      await app.shot(`${OUT}/1-lined-up.png`);
+      await app.scenario("aligné à LFTH");
+      await app.shot(`${OUT}/1-aligne.png`);
       // (the take-off: the real key U, the clock running; airborne within 20 s)
       await app.js(`(() => { const c = __bh.camera; window.__said = []; if (!c.__saidHook) { const prev = c.onPilotMessage;
         c.onPilotMessage = (m) => { window.__said.push(String(m)); prev?.(m); }; c.__saidHook = 1; } return 1; })()`);
+      await app.scenario("décollage automatique");
       await app.press("KeyU", "u");
       const off = await app.js<{
         off: number | null;
@@ -70,7 +72,7 @@ test.skipIf(!E2E)(
       const climbing = await flightState(app);
       out.climbing = climbing;
       expectFlight(climbing, "climbing", { engineMin: 0.5, speedMin: 60, pitchMax: 25, bankMax: 20, aglMin: 10 });
-      await app.shot(`${OUT}/2-climbing.png`);
+      await app.shot(`${OUT}/2-montee.png`);
       // (west towards Toulon, 500 m over the sea's level, 150 m/s: the autopilot and the autothrottle set — apSet, not the toggles)
       await app.js(`(() => { __bh.camera.apSet({ ap: true, athr: true, alt: 500, hdg: 270 * Math.PI / 180, spd: 150 }); return 1; })()`);
       // in the page: `ms` of images — each one's gap, the display's age, the GPU time, a hole under the camera —, the place at the end
@@ -134,6 +136,7 @@ test.skipIf(!E2E)(
         const x = Math.cos(g.lat * D) * Math.sin(${TOULON.lat} * D) - Math.sin(g.lat * D) * Math.cos(${TOULON.lat} * D) * Math.cos((${TOULON.lon} - g.lon) * D);
         c.apSet({ ap: true, athr: true, alt: 500, hdg: Math.atan2(y, x), spd: 150 }); return 1; })()`;
       const atCity = `Math.hypot((c.geoNow().lat - ${TOULON.lat}) * 111000, (c.geoNow().lon - ${TOULON.lon}) * 81000) < 1500`;
+      await app.scenario("croisière vers Toulon");
       for (let k = 0; k < 24; k++) {
         if (k > 0) await app.js(steer);
         const s = await seg(`cruise-${k}`, 10_000, atCity);
@@ -144,34 +147,37 @@ test.skipIf(!E2E)(
         if (await app.js<boolean>(`(() => { const c = __bh.camera; return ${atCity}; })()`)) break;
         if (k === 23) throw new Error(`not over Toulon after 240 s — ${JSON.stringify(s.at)}`);
       }
-      await app.shot(`${OUT}/3-over-toulon.png`);
+      await app.shot(`${OUT}/3-sur-toulon.png`);
       const arrival = await surface("arriving over Toulon (the cockpit)");
       // (the turn over the city: left to 180°, towards the harbour)
       await app.js(`(() => { __bh.camera.apSet({ ap: true, athr: true, alt: 500, hdg: 180 * Math.PI / 180, spd: 150 }); return 1; })()`);
+      await app.scenario("virage au-dessus de Toulon");
       const turn = await seg("turn", 30_000);
       segs.push(turn);
       say(turn);
       await fly("turn");
-      await app.shot(`${OUT}/4-turning.png`);
+      await app.shot(`${OUT}/4-virage.png`);
       // (the view back over the shoulder: outside, 60 m ahead of the craft looking back — j2-page-camera's view)
       await app.js(`(async () => { __bh.settings.shipMount = "around"; __bh.refresh(); __bh.camera.viewReset();
         Object.assign(__bh.camera.outside, { yaw: 180, pitch: 8, dist: 60 }); for (let i = 0; i < 30; i++) await new Promise((q) => requestAnimationFrame(q)); return 1; })()`);
+      await app.scenario("vue arrière par-dessus l'épaule");
       const back = await seg("view-back", 15_000);
       segs.push(back);
       say(back);
       await fly("view-back");
-      await app.shot(`${OUT}/5-view-back.png`);
+      await app.shot(`${OUT}/5-vue-arriere.png`);
       const behind = await surface("the view back");
       out.surface = { arrival: arrival.bands, back: behind.bands };
       const buildingsNear = arrival.buildingsNear + behind.buildingsNear;
       await app.js(`(async () => { __bh.settings.shipMount = "cockpit"; __bh.refresh(); __bh.camera.viewReset();
         for (let i = 0; i < 30; i++) await new Promise((q) => requestAnimationFrame(q)); return 1; })()`);
+      await app.scenario("cockpit à nouveau");
       const again = await seg("cockpit-again", 8_000);
       segs.push(again);
       await fly("cockpit-again");
       out.flown = flown;
       say(again);
-      await app.shot(`${OUT}/6-cockpit-again.png`);
+      await app.shot(`${OUT}/6-cockpit.png`);
       // (the instruments' age where they are seen — the cockpit's segments; outside, the display not drawn is not uploaded: its age grows)
       const all = segs
         .filter((s) => (s.at as { mount?: string } | null)?.mount === "cockpit")

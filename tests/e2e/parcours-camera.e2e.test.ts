@@ -66,11 +66,13 @@ test.skipIf(!E2E)(
               holds: [m.alt && Math.round(m.alt), m.hdg && Math.round(m.hdg * 180 / Math.PI), m.spd], mode: __bh.mode.get(),
               spectating: !!c.spectating, photo: document.body.classList.contains("photo") } }; })()`);
       const segs: Record<string, Seg> = {};
+      await app.scenario("à bord, sur les Maures");
       segs.aboard = await seg(10_000);
       flown.aboard = await flightState(app);
       console.log(`  aboard: ${JSON.stringify(segs.aboard)}`);
       const holds0 = (segs.aboard.at as { holds: unknown }).holds;
       // (F3: the free camera, then 6 km north of the craft, 1 500 m up, looking south at the hills)
+      await app.scenario("caméra libre à 6 km (F3)");
       await app.press("F3", "F3");
       await app.waitFor(`__bh.camera.spectating`, 10_000);
       const why = await app.js<string | null>(`(() => { const g = __bh.camera.geoNow();
@@ -79,22 +81,25 @@ test.skipIf(!E2E)(
       segs.away = await seg(20_000);
       flown.away = await flightState(app);
       console.log(`  camera away: ${JSON.stringify(segs.away)}`);
-      await app.shot(`${OUT}/1-camera-away.png`);
+      await app.shot(`${OUT}/1-camera-libre.png`);
+      await app.scenario("retour à bord (F1)");
       await app.press("F1", "F1");
       await app.waitFor(`!__bh.camera.spectating && __bh.mode.get() === "ship"`, 10_000);
       segs.backAboard = await seg(8_000);
       flown.backAboard = await flightState(app);
       console.log(`  back aboard: ${JSON.stringify(segs.backAboard)}`);
-      await app.shot(`${OUT}/2-back-aboard.png`);
+      await app.shot(`${OUT}/2-retour-a-bord.png`);
       // (F4: the photo mode, 6 s; Escape: back)
+      await app.scenario("mode photo (F4)");
       await app.press("F4", "F4");
       await app.waitFor(`document.body.classList.contains("photo")`, 5_000);
       segs.photo = await seg(6_000);
       flown.photo = await flightState(app);
       console.log(`  photo mode: ${JSON.stringify(segs.photo)}`);
-      await app.shot(`${OUT}/3-photo.png`);
+      await app.shot(`${OUT}/3-mode-photo.png`);
       await app.press("Escape", "Escape");
       await app.waitFor(`!document.body.classList.contains("photo")`, 5_000);
+      await app.scenario("après le mode photo");
       segs.afterPhoto = await seg(6_000);
       flown.afterPhoto = await flightState(app);
       console.log(`  after the photo mode: ${JSON.stringify(segs.afterPhoto)}`);

@@ -62,7 +62,7 @@ test.skipIf(!E2E)(
         __bh.freeze(false); return String(r); })()`);
       console.log(`  ilsStart: ${ils}`);
       out.ilsStart = ils;
-      await app.shot(`${OUT}/1-fair.png`);
+      await app.shot(`${OUT}/1-beau-temps.png`);
       // in the page: `ms` of images — the image's fog extinction, the flight's wind, the approach, the pitch —, the gaps, the GPU
       const run = (ms: number) =>
         app.js<{ rows: Row[]; gapMax: number; gpu: number[]; same: boolean; real: string | null; at: unknown }>(`(async () => {
@@ -97,12 +97,14 @@ test.skipIf(!E2E)(
         expect(stalls, `${what}: stalled`).toBe(0);
         expect(slow, `${what}: the airspeed`).toBeGreaterThan(60);
       };
+      await app.scenario("beau temps, sur l'approche de LFTH");
       const before = await run(15_000);
       flownWell(before.rows, "fair, on the approach");
       // (asserted once its speed is the approach's: at the engagement its autothrottle at idle slows it from 139 m/s — a pilot's too)
       await expectFlightPhase(app, "approach", {}, "15 s on the approach");
       console.log(`  fair, on the approach: gap max ${before.gapMax} ms, GPU p50 ${p50(before.gpu)} ms — ${JSON.stringify(before.at)}`);
       // (the source arrives: the real weather chosen — the METAR fetched, decoded, in force)
+      await app.scenario("arrivée de la pluie (METAR réel)");
       await app.js(`(() => { __bh.game.set("weather", "real"); return 1; })()`);
       const arrival = await run(15_000);
       flownWell(arrival.rows, "the rain arriving");
@@ -128,16 +130,18 @@ test.skipIf(!E2E)(
         gpuP50: p50(arrival.gpu),
       };
       console.log(`  the source's arrival: ${JSON.stringify(out.arrival)}`);
-      await app.shot(`${OUT}/2-rain-arrived.png`);
+      await app.shot(`${OUT}/2-arrivee-pluie.png`);
       // (the stick taken a moment during the approach — the real key, held 1.5 s —: the craft answers)
       const p0 = before.rows.length ? (arrival.rows.at(-1)?.pitch ?? 0) : 0;
       let during: { pitch: number; ils: boolean } | null = null;
+      await app.scenario("manche tenu 1,5 s");
       await app.hold("KeyS", 1500, async () => {
         during = await app.js(
           `(() => { const c = __bh.camera; return { pitch: +(((c.attitudeNow().pitch ?? 0) * 180) / Math.PI).toFixed(2), ils: !!c.ilsRun && !c.ilsRun.manual }; })()`,
         );
       });
       // (rule 13: the stick given back — the approach engaged again as a pilot would, through the same call as the wheel's and TARS's)
+      await app.scenario("approche reprise après le manche");
       out.ilsAgain = await app.js<string>(`String(__bh.camera.ilsStart("LFTH"))`);
       console.log(`  ilsStart again: ${out.ilsAgain}`);
       const after = await run(30_000);
@@ -160,7 +164,7 @@ test.skipIf(!E2E)(
       console.log(
         `  the stick: ${JSON.stringify(stick)}; then 30 s: gap max ${after.gapMax} ms, GPU p50 ${p50(after.gpu)} ms — ${JSON.stringify(after.at)}`,
       );
-      await app.shot(`${OUT}/3-after-stick.png`);
+      await app.shot(`${OUT}/3-approche-reprise.png`);
       out.gpu = { fair: p50(before.gpu), arrival: p50(arrival.gpu), rain: p50(after.gpu) };
       const gapMax = Math.max(before.gapMax, arrival.gapMax, after.gapMax);
       out.summary = { gapMax, same: arrival.same, report: arrival.real, wind1, extStep, windStep };

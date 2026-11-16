@@ -34,6 +34,7 @@ test.skipIf(!E2E)(
           return 1; })()`;
       // (PA_FIRST=1: the first placement since the start — nothing of the place in, as the journeys' first; else from off Hyères, its data in)
       if (process.env.PA_FIRST !== "1") {
+        await app.scenario("au large d'Hyères, les données chargées");
         await app.js(`(() => { __bh.freeze(true); return 1; })()`);
         await app.js(place(FROM));
         await app.dataSettled("off Hyères", { maxMs: 90_000 }).catch((e) => console.log(`  (not settled: ${String(e).slice(0, 160)})`));
@@ -42,6 +43,9 @@ test.skipIf(!E2E)(
         await app.js(`(() => { __bh.freeze(false); return 1; })()`);
         expectFlight(await flightState(app), "off Hyères", { ap: true, athr: true, speedMin: 90, pitchMax: 20, bankMax: 20 });
       }
+      await app.scenario(
+        process.env.PA_FIRST === "1" ? "premier placement, sur les Maures" : "placement sur les Maures, 25 s enregistrées",
+      );
       const rows = await app.js<Record<string, unknown>[]>(`(async () => { const R = __bh.renderer; R.prof.enabled = true; R.prof.every = 1;
         ${place(TO)};
         const rows = []; let last = performance.now(), done = R.completedFrames; const t0 = performance.now();
@@ -68,7 +72,7 @@ test.skipIf(!E2E)(
       });
       console.log(`  GPU p50: first 5 s ${out.gpuP50First5s} ms, last 5 s ${out.gpuP50Last5s} ms; images over 120 ms: ${heavy.length}`);
       for (const h of heavy.slice(0, 14)) console.log(`    ${JSON.stringify(h)}`);
-      await app.shot(`${OUT}/maures.png`);
+      await app.shot(`${OUT}/placement-sur-les-maures.png`);
       expectFlight(await flightState(app), "over the Maures", { ap: true, athr: true, speedMin: 90, pitchMax: 20, bankMax: 35 });
       expect(await app.js<number>("__bh.renderer.gpuErrors")).toBe(0);
     } finally {

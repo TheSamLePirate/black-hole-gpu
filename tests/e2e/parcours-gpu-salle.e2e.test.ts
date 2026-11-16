@@ -24,6 +24,7 @@ describe.skipIf(!E2E)("J6-6: the GPU lost in a network room — the room goes on
   });
 
   test("Ben's GPU lost: Ana's room time goes on; Ben back on the room's hour, told; still in the room", async () => {
+    await a.scenario("salle : GPU de Ben perdu");
     await a.js(`(() => { __bh.net.setName("Ana"); return 1; })()`);
     await a.js(`__bh.net.create("GPU perdu")`);
     await a.waitFor(`!!__bh.net.net?.room`, 20_000);

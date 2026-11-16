@@ -38,6 +38,7 @@ test.skipIf(!E2E)(
       for (const [side, url] of SIDES) {
         (app as unknown as { url: string }).url = url;
         await app.load("scene=game:artemis");
+        await app.scenario(`${side === "A" ? "A (avant)" : side === "B" ? "B (après)" : side} · ${FIELD} ${RWY} : le sol sous la trouée`);
         await app.waitFor("__bh.camera.piloting", 120_000);
         await app.js(
           `(() => { Object.assign(__bh.settings, { vessel: "f35", damage: false, dof: false, motionBlur: 0, traffic: false }); return 1; })()`,

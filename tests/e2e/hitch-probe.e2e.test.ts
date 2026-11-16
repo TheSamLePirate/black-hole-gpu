@@ -28,6 +28,7 @@ describe.skipIf(!E2E)("J7-0: the hitch probe sees an injected stall and nothing 
   afterAll(() => app?.close());
 
   test("positive: a 200 ms wait injected in a frame — one gap of 200 ms or more, given to the main thread", async () => {
+    await app.scenario("témoin positif : 200 ms injectées");
     const before = await read(app);
     await app.js(`window.__hitch.inject(200)`);
     // (judged 300 ms after the gap: a second's wait in the page)
@@ -42,6 +43,7 @@ describe.skipIf(!E2E)("J7-0: the hitch probe sees an injected stall and nothing 
   }, 60_000);
 
   test("negative (A/A): a held flight watched 20 s twice — no gap over 100 ms, the gaps over 50 ms alike", async () => {
+    await app.scenario("témoin négatif (A/A) : 2 × 20 s de vol tenu");
     const win: Probe[] = [];
     for (let k = 0; k < 2; k++) {
       const a = await read(app);
@@ -56,7 +58,7 @@ describe.skipIf(!E2E)("J7-0: the hitch probe sees an injected stall and nothing 
       });
     }
     console.log(`  A/A: ${JSON.stringify(win.map((w) => ({ frames: w.frames, over50: w.over50, over100: w.over100, gaps: w.gaps })))}`);
-    await app.snap("remote-results/hitch-probe-aa.png");
+    await app.snap("remote-results/hitch-probe-temoin-negatif.png");
     for (const w of win) {
       expect(w.frames).toBeGreaterThan(200);
       expect(w.over100).toBe(0);

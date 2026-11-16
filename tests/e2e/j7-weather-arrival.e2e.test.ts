@@ -32,6 +32,7 @@ test.skipIf(!E2E)(
       await app.js(`(() => { Object.assign(__bh.settings, ${J0_FIXED}); Object.assign(__bh.settings, { dof: false, motionBlur: 0, damage: false });
         return 1; })()`);
       await app.waitFor(`__bh.fleet.active === "f35"`, 60_000);
+      await app.scenario("beau temps, au large d'Hyères");
       const [lat, lon, agl, hdg, spd] = J0_SCENE.start;
       const place = `(() => { __bh.game.setDate(new Date().toISOString()); __bh.game.set("weather", "fair"); __bh.game.flyAt(${lat}, ${lon}, ${agl}, ${hdg}, ${spd});
         __bh.settings.shipMount = "cockpit"; __bh.refresh(); __bh.camera.viewReset(); return 1; })()`;
@@ -56,6 +57,7 @@ test.skipIf(!E2E)(
           }
           return rows; })()`);
       const fair = await record(5000, "");
+      await app.scenario("arrivée de la pluie (METAR réel)");
       const arrival = await record(10_000, `__bh.game.set("weather", "real");`);
       const heavy = arrival.filter((r) => (r.gap as number) > 150);
       const p50 = (a: number[]) => [...a].sort((x, y) => x - y)[a.length >> 1] ?? null;
@@ -71,7 +73,7 @@ test.skipIf(!E2E)(
       const gaps = arrival.map((r) => r.gap as number).sort((x, y) => y - x);
       out.arrivalGapMax = gaps[0] ?? 0;
       console.log(`  the arrival's largest gaps: ${gaps.slice(0, 5).join(", ")} ms`);
-      await app.shot(`${OUT}/rain.png`);
+      await app.shot(`${OUT}/arrivee-de-la-pluie.png`);
       expectFlight(await flightState(app), "after the arrival", { ap: true, athr: true, speedMin: 90, pitchMax: 20, bankMax: 35 });
       expect(await app.js<number>("__bh.renderer.gpuErrors")).toBe(0);
     } finally {

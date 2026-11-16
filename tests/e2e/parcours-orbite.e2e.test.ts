@@ -28,7 +28,9 @@ test.skipIf(!E2E)(
       await app.js(`(() => { __bh.game.setDate("2026-07-10T15:00:00Z"); __bh.game.land("earth", 28.573, -80.649); __bh.settings.shipMount = "cockpit";
         __bh.refresh(); __bh.camera.viewReset(); return 1; })()`);
       await app.settled(90_000);
+      await app.scenario("sur le pas de tir du Cap");
       await app.shot(`${OUT}/0-pad.png`);
+      await app.scenario("décollage orbital, montée par tranches de 10 s");
       await app.press("KeyU", "u");
       await Bun.sleep(500);
       const slices: (Slice & { ev: number })[] = [];
@@ -59,6 +61,7 @@ test.skipIf(!E2E)(
         if (shotsAt.length && s.altKm >= shotsAt[0]!) await app.shot(`${OUT}/1-${shotsAt.shift()}km.png`);
         orbit = s.status === "orbit";
       }
+      await app.scenario("en orbite");
       await app.shot(`${OUT}/2-orbit.png`);
       let evStep = 0;
       for (let i = 1; i < slices.length; i++) evStep = Math.max(evStep, Math.abs(slices[i]!.ev - slices[i - 1]!.ev));

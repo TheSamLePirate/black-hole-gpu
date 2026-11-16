@@ -4,15 +4,6 @@ import { $ } from "bun";
 import { App, E2E, stopServer } from "./lib/app";
 import { type CdpProfile, longRuns } from "./lib/cpu-profile";
 import { intervals, J0_FIXED as J0_FIXED_BASE, J0_SCENE as J0_SCENE_BASE } from "./lib/j0-scene";
-
-// (J0_FPSCAP: the frame rate bounded — settings.fpsCap, whole refreshes of the display — for the palier's judgement « borné et soutenu »,
-// Sam's decision of 13 Nov 2026, J0-CONTRAT §2; 0 or unset: as the profile has it)
-// (J0_START=lat,lon,agl,hdg,speed: the same flight from elsewhere — NOT the J0 contract's scene: an A/B where J0's view misses what
-// is measured — a land view for the water's tiles, 13 Nov 2026 —; its results said apart, never a fiche's)
-const J0_SCENE = process.env.J0_START
-  ? { ...J0_SCENE_BASE, id: `${J0_SCENE_BASE.id}+start`, start: process.env.J0_START.split(",").map(Number) as typeof J0_SCENE_BASE.start }
-  : J0_SCENE_BASE;
-const J0_FIXED = process.env.J0_FPSCAP ? J0_FIXED_BASE.replace(/\}\s*$/, `, fpsCap: ${Number(process.env.J0_FPSCAP)} }`) : J0_FIXED_BASE;
 import { readPng, writePng } from "./lib/png";
 import { sceneryReady } from "./lib/plan-views";
 
@@ -40,6 +31,15 @@ import { sceneryReady } from "./lib/plan-views";
 // placed, a flight not flown.
 // Duration: ~10 min here (cold boot ~1–2 min, two flights of 70 s, 7 ablation flights ~40 s each).
 // Done when: the way in timed, both flights measured, every ablation flown, the thermal state of each recorded, j0.json written, no GPU error.
+
+// (J0_FPSCAP: the frame rate bounded — settings.fpsCap, whole refreshes of the display — for the palier's judgement « borné et soutenu »,
+// Sam's decision of 13 Nov 2026, J0-CONTRAT §2; 0 or unset: as the profile has it)
+// (J0_START=lat,lon,agl,hdg,speed: the same flight from elsewhere — NOT the J0 contract's scene: an A/B where J0's view misses what
+// is measured — a land view for the water's tiles, 13 Nov 2026 —; its results said apart, never a fiche's)
+const J0_SCENE = process.env.J0_START
+  ? { ...J0_SCENE_BASE, id: `${J0_SCENE_BASE.id}+start`, start: process.env.J0_START.split(",").map(Number) as typeof J0_SCENE_BASE.start }
+  : J0_SCENE_BASE;
+const J0_FIXED = process.env.J0_FPSCAP ? J0_FIXED_BASE.replace(/\}\s*$/, `, fpsCap: ${Number(process.env.J0_FPSCAP)} }`) : J0_FIXED_BASE;
 
 const MACHINE = process.env.J0_MACHINE ?? (await $`hostname -s`.quiet().text()).trim();
 // (an A/B's run — scripts/ab-e2e.ts: AB_RUN, AB_SIDE — its own directory, the four runs side by side)
@@ -235,6 +235,7 @@ describe.skipIf(!E2E)("J0: the reference flight over Toulon-Hyères", () => {
     out.thermalBefore = await thermal();
     // (1) the way in, cold: a fresh profile — Chrome's shader and HTTP caches empty
     app = await App.boot({ width: W, height: H, lang: "fr", hash: "scene=game:artemis", tiles: true });
+    await app.scenario("J0 · l'arrivée à froid");
     const way: Record<string, number> = { firstImage: since() };
     await app.js(`(() => { Object.assign(__bh.settings, ${J0_FIXED}); return 1; })()`);
     // (the HUD's settings as the profile ships them: the "displays" ablation turns them off, each start puts them back —
@@ -327,6 +328,7 @@ describe.skipIf(!E2E)("J0: the reference flight over Toulon-Hyères", () => {
   /** the measured flight, `tag` "flight" (first, the machine as the boot left it) or "sustained" (last, after the ablations: the
    * machine as long play leaves it — on the M1 Max the GPU throttled to 30 % of its clock within 2.5 min, 10 Nov) */
   async function measureFlight(tag: "flight" | "sustained") {
+    await app.scenario(tag === "flight" ? "J0 · le vol mesuré" : "J0 · le vol soutenu (machine chaude)");
     await start("");
     const memoryBefore = await chromeMemory();
     const thermal0 = await thermal();
@@ -456,6 +458,7 @@ describe.skipIf(!E2E)("J0: the reference flight over Toulon-Hyères", () => {
       const rows: Record<string, unknown>[] = [];
       for (const [i, key] of ORDER.entries()) {
         const ab = ABLATIONS[key]!;
+        await app.scenario(`J0 · ablation ${i + 1}/${ORDER.length} : ${ab.label}`);
         await start(ab.set);
         const th0 = await thermal();
         const tsm0 = await app.js<number>("__bh.renderer.tsmDraws ?? 0");
@@ -496,6 +499,7 @@ describe.skipIf(!E2E)("J0: the reference flight over Toulon-Hyères", () => {
   test.skipIf(!PHASES.includes("agecheck"))(
     "the instruments' age probe: a positive control and an A/A",
     async () => {
+      await app.scenario("J0 · agecheck");
       await start("");
       const a = await app.js<Flown>(flyJs(10, false));
       await app.js(`(() => { const s = __bh.renderer.ship; s.__upd = s.updateJetScreen; s.updateJetScreen = () => {}; return 1; })()`);
@@ -519,6 +523,7 @@ describe.skipIf(!E2E)("J0: the reference flight over Toulon-Hyères", () => {
   test.skipIf(!PHASES.includes("framing"))(
     "J3-0: the exposure by framing — cockpit, chase, quarter; camera and neutral profiles; its controls",
     async () => {
+      await app.scenario("J0 · framing");
       await start("");
       const at = async (mount: string, look: string, bias = 0) => {
         await app.js(`(async () => { const f = () => new Promise((q) => requestAnimationFrame(q)); __bh.freeze(false);
@@ -574,6 +579,7 @@ describe.skipIf(!E2E)("J0: the reference flight over Toulon-Hyères", () => {
   test.skipIf(!PHASES.includes("keylight"))(
     "J3-1: the craft's key light is the incident Sun towards sunset — its direction against the CPU's lift; A/A and positive",
     async () => {
+      await app.scenario("J0 · keylight");
       await start("");
       const deg = (a: number[], b: number[]) => {
         const d = a[0]! * b[0]! + a[1]! * b[1]! + a[2]! * b[2]!;
@@ -648,6 +654,7 @@ describe.skipIf(!E2E)("J0: the reference flight over Toulon-Hyères", () => {
   test.skipIf(!PHASES.includes("keyair"))(
     "J3-1: the key light's air — the march against the ground's table, high Sun to sunset; A/A and a coarse march",
     async () => {
+      await app.scenario("J0 · keyair");
       await start("");
       type Air = { march: number; table: number; cloud: number; h: number } | null;
       const tune = async (t: string) => {
@@ -709,6 +716,7 @@ describe.skipIf(!E2E)("J0: the reference flight over Toulon-Hyères", () => {
   test.skipIf(!PHASES.includes("keysky"))(
     "J3-1: the sky's light on a level surface — the craft's probe against the ground's clear sky, midday to sunset; A/A and clouds",
     async () => {
+      await app.scenario("J0 · keysky");
       await start("");
       type Air = { skyGround: number; skyCraft: number; h: number } | null;
       type Sky = { exact: number; sh: number; ground: number; shCpu: number; shHann: number; shLanczos: number; shBand4: number } | null;
@@ -778,6 +786,7 @@ describe.skipIf(!E2E)("J0: the reference flight over Toulon-Hyères", () => {
   test.skipIf(!PHASES.includes("coherence"))(
     "J3-1: the craft / ground coherence probe — direction, air, sky in one read per hour; bounds from the measures, two positive controls",
     async () => {
+      await app.scenario("J0 · coherence");
       await start("");
       const deg = (a: number[], b: number[]) => {
         const d = a[0]! * b[0]! + a[1]! * b[1]! + a[2]! * b[2]!;
@@ -909,6 +918,7 @@ describe.skipIf(!E2E)("J0: the reference flight over Toulon-Hyères", () => {
   test.skipIf(!PHASES.includes("keyhaze"))(
     "J3-2: the craft through the air of its distance — 300 m, 3 km, 10 km, with and without; A/A",
     async () => {
+      await app.scenario("J0 · keyhaze");
       await start("");
       const fov0 = await app.js<number>("__bh.settings.fov");
       const shot = async (name: string, dist: number, air: boolean) => {
@@ -984,6 +994,7 @@ describe.skipIf(!E2E)("J0: the reference flight over Toulon-Hyères", () => {
   test.skipIf(!PHASES.includes("shadows"))(
     "J3-3: the ground's sun shadows by owner — cascades, contact, the scenery's map; their overlap and double counting; A/A",
     async () => {
+      await app.scenario("J0 · shadows");
       await start("");
       const fov0 = await app.js<number>("__bh.settings.fov");
       await app.js(`(async () => { const f = () => new Promise((q) => requestAnimationFrame(q)); __bh.freeze(false);
@@ -1079,6 +1090,7 @@ describe.skipIf(!E2E)("J0: the reference flight over Toulon-Hyères", () => {
   test.skipIf(!PHASES.includes("wetbld"))(
     "J3-5: the town in the rain — wet ground and buildings, a shot for an A/B",
     async () => {
+      await app.scenario("J0 · wetbld");
       await start("");
       const fov0 = await app.js<number>("__bh.settings.fov");
       await app.js(`(async () => { const f = () => new Promise((q) => requestAnimationFrame(q)); __bh.freeze(false);
@@ -1127,6 +1139,7 @@ describe.skipIf(!E2E)("J0: the reference flight over Toulon-Hyères", () => {
   test.skipIf(!PHASES.includes("tunestall"))(
     "the first renderer.tune and the hour — the CPU's Sun, the scene's date, the GPU's light, before and after",
     async () => {
+      await app.scenario("J0 · tunestall");
       await start("");
       const at = async (utc: string) =>
         app.js<Record<string, unknown>>(`(async () => { const f = () => new Promise((q) => requestAnimationFrame(q)); __bh.freeze(false);
@@ -1162,6 +1175,7 @@ describe.skipIf(!E2E)("J0: the reference flight over Toulon-Hyères", () => {
   test.skipIf(!PHASES.includes("cityview"))(
     "J3-5: a town's reference views — aside and from above; what its pixels are (meshed buildings, boxes, ground)",
     async () => {
+      await app.scenario("J0 · cityview");
       await start("");
       const fov0 = await app.js<number>("__bh.settings.fov");
       await app.js(`(async () => { const f = () => new Promise((q) => requestAnimationFrame(q)); __bh.freeze(false);
@@ -1205,6 +1219,7 @@ describe.skipIf(!E2E)("J0: the reference flight over Toulon-Hyères", () => {
   test.skipIf(!PHASES.includes("materials"))(
     "J3-5: the buildings' albedo — as drawn, the trial (tiles × 2.5, brick × 1.5), as drawn again; aside and from above",
     async () => {
+      await app.scenario("J0 · materials");
       await start("");
       const fov0 = await app.js<number>("__bh.settings.fov");
       await app.js(`(async () => { const f = () => new Promise((q) => requestAnimationFrame(q)); __bh.freeze(false);
@@ -1283,6 +1298,7 @@ describe.skipIf(!E2E)("J0: the reference flight over Toulon-Hyères", () => {
   test.skipIf(!PHASES.includes("nightbands"))(
     "PROBLEMES: the night sky's bands 6 stops up — as drawn, converged, every ray, the raster whole, traced; their depth per case",
     async () => {
+      await app.scenario("J0 · nightbands");
       await start("");
       await app.js(`(async () => { const f = () => new Promise((q) => requestAnimationFrame(q)); __bh.freeze(false);
         __bh.game.setDate("2026-07-10T${process.env.NB_UTC ?? "21:40"}:00Z"); Object.assign(__bh.settings, { shipMount: "quarter", lookProfile: "neutral", dof: false, motionBlur: 0, autoExposure: true, exposure: 0 });
@@ -1347,6 +1363,7 @@ describe.skipIf(!E2E)("J0: the reference flight over Toulon-Hyères", () => {
   test.skipIf(!PHASES.includes("craftshade"))(
     "J3 question 3: the scenery's shadow on the craft — its map read at the craft, as drawn twice; shots",
     async () => {
+      await app.scenario("J0 · craftshade");
       await start("");
       const [lat, lon, agl, hdg] = (process.env.CS_PLACE ?? "48.8922,2.2421,30,280").split(",").map(Number);
       const utc = process.env.CS_UTC ?? "18:00";
@@ -1429,6 +1446,7 @@ describe.skipIf(!E2E)("J0: the reference flight over Toulon-Hyères", () => {
   test.skipIf(!PHASES.includes("cloudlag"))(
     "J4-1: the clouds' history behind their drift — running against the same instant converged; stopped (A/A), × 30 (positive)",
     async () => {
+      await app.scenario("J0 · cloudlag");
       await start("");
       const speed0 = await app.js<number>("__bh.settings.timeSpeed");
       const rows: Record<string, number[]> = {};
@@ -1497,6 +1515,7 @@ describe.skipIf(!E2E)("J0: the reference flight over Toulon-Hyères", () => {
   test.skipIf(!PHASES.includes("seadusk"))(
     "PROBLEMES: the sea's colour blotches at dusk — as drawn, then the probe, the water, the reflections, the clouds cut one at a time",
     async () => {
+      await app.scenario("J0 · seadusk");
       await start("");
       await app.js(`(async () => { const f = () => new Promise((q) => requestAnimationFrame(q)); __bh.freeze(false);
         __bh.game.setDate("${process.env.SEADUSK_DATE ?? "2026-07-10T19:40:00Z"}"); Object.assign(__bh.settings, { shipMount: "quarter", lookProfile: "neutral", dof: false, motionBlur: 0 });
@@ -1540,6 +1559,7 @@ describe.skipIf(!E2E)("J0: the reference flight over Toulon-Hyères", () => {
   test.skipIf(!PHASES.includes("probedump"))(
     "PROBLEMES: the craft's light probe as it stands — 15:30 and 19:40, written as images",
     async () => {
+      await app.scenario("J0 · probedump");
       await start("");
       // (PROBE_DATES="2026-12-15T22:00:00Z,…": other moments — the night's probe, PROBLEMES « le ciel de nuit de la sonde »)
       const dates = (process.env.PROBE_DATES ?? "2026-07-10T15:30:00Z,2026-07-10T19:40:00Z").split(",");
@@ -1597,6 +1617,7 @@ describe.skipIf(!E2E)("J0: the reference flight over Toulon-Hyères", () => {
   test.skipIf(!PHASES.includes("waterincident"))(
     "J3-7: the water lit by the incident Sun — 19:05, on / off / on; the sea's band moves, the sky's not",
     async () => {
+      await app.scenario("J0 · waterincident");
       await start("");
       await app.js(`(async () => { const f = () => new Promise((q) => requestAnimationFrame(q)); __bh.freeze(false);
         __bh.game.setDate("2026-07-10T19:05:00Z"); Object.assign(__bh.settings, { shipMount: "quarter", lookProfile: "neutral", dof: false, motionBlur: 0 });
@@ -1647,6 +1668,7 @@ describe.skipIf(!E2E)("J0: the reference flight over Toulon-Hyères", () => {
   test.skipIf(!PHASES.includes("tracedview"))(
     "PROBLEMES: a view in the traced pipeline beside the raster's — the sea's far sheet looked at",
     async () => {
+      await app.scenario("J0 · tracedview");
       await start("");
       for (const pipe of ["raster", "trace"]) {
         await app.js(`(async () => { const f = () => new Promise((q) => requestAnimationFrame(q)); __bh.freeze(false);

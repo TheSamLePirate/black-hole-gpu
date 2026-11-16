@@ -23,6 +23,7 @@ test.skipIf(!E2E)(
       await app.js(`(() => { Object.assign(__bh.settings, ${J0_FIXED}); Object.assign(__bh.settings, { dof: false, motionBlur: 0, damage: false });
         return 1; })()`);
       await app.waitFor(`__bh.fleet.active === "f35"`, 60_000);
+      await app.scenario("à bord, sur les Maures");
       const place = `(() => { __bh.game.setDate("2026-07-10T13:30:00Z"); __bh.game.flyAt(${AT.join(", ")}); __bh.settings.shipMount = "cockpit";
         __bh.refresh(); __bh.camera.viewReset(); return 1; })()`;
       const placed = await placeJetFrozen(app, place, { hdgDeg: AT[3], spd: AT[4] }, async () => {
@@ -39,6 +40,7 @@ test.skipIf(!E2E)(
       const mark = (name: string) =>
         app.js(`(window.__f1.push({ mark: ${JSON.stringify(name)}, t: +(performance.now() / 1000).toFixed(3) }), 1)`);
       await app.js(`new Promise((q) => setTimeout(q, 5000))`);
+      await app.scenario("F3 : la caméra libre");
       await mark("F3");
       await app.press("F3", "F3");
       await app.waitFor(`__bh.camera.spectating`, 10_000);
@@ -46,12 +48,13 @@ test.skipIf(!E2E)(
         return __bh.viewAt(g.lat + 0.055, g.lon, { altM: 1500, heading: 180, pitch: -12, fov: 50 }) ?? null; })()`);
       if (why) throw new Error(`viewAt: ${why}`);
       await app.js(`new Promise((q) => setTimeout(q, 15000))`);
-      await app.shot(`${OUT}/1-away.png`);
+      await app.shot(`${OUT}/1-camera-libre.png`);
+      await app.scenario("F1 : le retour à bord");
       await mark("F1");
       await app.press("F1", "F1");
       await app.waitFor(`!__bh.camera.spectating && __bh.mode.get() === "ship"`, 10_000);
       await app.js(`new Promise((q) => setTimeout(q, 10000))`);
-      await app.shot(`${OUT}/2-back.png`);
+      await app.shot(`${OUT}/2-retour-a-bord.png`);
       const rec = await app.js<Record<string, unknown>[]>(`(window.__f1On = false, window.__f1)`);
       const compiles = await app.js<unknown[]>(`__bh.renderer.compileReport().compiles.slice(-12)`);
       const flown = await flightState(app);

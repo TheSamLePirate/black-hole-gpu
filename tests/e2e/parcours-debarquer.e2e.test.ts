@@ -58,6 +58,7 @@ test.skipIf(!E2E)(
       let touched = false,
         stopped = false,
         bounces = 0;
+      await app.scenario("finale ILS LFTH jusqu'à l'arrêt");
       for (let k = 0; k < 30 && !stopped; k++) {
         const r: { gap: number; touched: boolean; bounces: number; stopped: boolean; at: unknown } = await app.js<{
           gap: number;
@@ -97,7 +98,7 @@ test.skipIf(!E2E)(
       const said = await app.js<string[]>(`__bh.game.log.events.slice(${said0}).map((e) => e.text)`);
       out.landing = { bounces, grade: said.filter((m) => /ILS .*\/20/.test(m)), ilsLast: await app.js(`__bh.camera.ilsLast ?? null`) };
       console.log(`  landed: ${JSON.stringify(out.landing)}`);
-      await app.shot(`${OUT}/1-stopped.png`);
+      await app.shot(`${OUT}/1-arrete.png`);
       // (at rest after the rollout, nothing touched: how far the craft moves in 10 s — the brakes held or not)
       const rest = await app.js<{ movedM: number; brake: unknown; thr: number }>(`(async () => { const c = __bh.camera, g0 = c.geoNow();
         const h0 = (c.attitudeNow().heading ?? 0) * 180 / Math.PI;
@@ -124,6 +125,7 @@ test.skipIf(!E2E)(
       await app.js(`(() => { Object.assign(__bh.settings, ${J0_FIXED}); return 1; })()`);
       // (out on foot — the real key —, a walk ahead and back, grounded all along)
       const said1 = await app.js<number>(`__bh.game.log.events.length`);
+      await app.scenario("à pied, aller-retour");
       await app.press("KeyK", "K", { shift: true });
       await Bun.sleep(1500);
       if (!(await app.js<boolean>(`__bh.camera.character.active`))) {
@@ -146,12 +148,13 @@ test.skipIf(!E2E)(
         return { out: +out.toFixed(2), back: +d(ch.q).toFixed(2), groundedAll }; })()`);
       out.walk = walk;
       console.log(`  on foot: ${JSON.stringify(walk)}`);
-      await app.shot(`${OUT}/2-on-foot.png`);
+      await app.shot(`${OUT}/2-a-pied.png`);
       await app.press("KeyK", "K", { shift: true });
       await app.waitFor(`!__bh.camera.character.active`, 10_000);
       await app.js(`(async () => { __bh.settings.shipMount = "cockpit"; __bh.refresh(); __bh.camera.viewReset();
         for (let i = 0; i < 30; i++) await new Promise((q) => requestAnimationFrame(q)); return 1; })()`);
       // (control taken again: the automatic take-off, the real key)
+      await app.scenario("rembarqué, redécollage");
       await app.press("KeyU", "u");
       const off = await app.js<{
         off: number | null;
@@ -168,7 +171,7 @@ test.skipIf(!E2E)(
       out.climbing = climbing;
       expectFlight(climbing, "off again", { engineMin: 0.5, speedMin: 60, pitchMax: 25, bankMax: 20, aglMin: 10 });
       console.log(`  off again: ${JSON.stringify(off)}`);
-      await app.shot(`${OUT}/3-off-again.png`);
+      await app.shot(`${OUT}/3-redecollage.png`);
       out.summary = { bounces, gapMax, walk, contactSame: a.h === b.h && a.z === b.z };
       expect(touched).toBe(true);
       expect(stopped).toBe(true);

@@ -108,15 +108,18 @@ test.skipIf(!E2E)(
       await app.cdp.send("Profiler.setSamplingInterval", { interval: 200 });
       await app.cdp.send("Profiler.start");
       await app.load("scene=game:artemis");
+      await app.scenario(`le premier noyau du jeu, profilé${process.env.FK_CASE ? ` (cas ${process.env.FK_CASE})` : ""}`);
       await app.waitFor("__bh.camera.piloting", 120_000);
       await app.js(`new Promise((q) => setTimeout(q, 12000))`);
       // (FK_PRE: a step before the measured one — e.g. the F-35 chosen, its placement waited for; FK_CHANGE: the measured step, by default the
       // craft change; FK_CHANGED: what it waits for — J7-8 measures a placement this way)
       if (process.env.FK_PRE) {
+        await app.scenario("l'étape d'avant (FK_PRE)");
         await app.js(`(() => { ${process.env.FK_PRE}; return 1; })()`);
         await app.waitFor(process.env.FK_PRE_DONE ?? "true", 60_000);
         await app.js(`new Promise((q) => setTimeout(q, 8000))`);
       }
+      await app.scenario(process.env.FK_CHANGE ? "l'étape mesurée (FK_CHANGE)" : "le changement d'appareil : le F-35");
       const change = process.env.FK_CHANGE ?? `Object.assign(__bh.settings, { vessel: "f35" })`;
       const changeAt = await app.js<number>(`(() => { ${change}; return performance.now(); })()`);
       await app.waitFor(process.env.FK_CHANGED ?? `__bh.fleet.active === "f35"`, 60_000);

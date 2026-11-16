@@ -48,8 +48,9 @@ test.skipIf(!E2E)(
       });
       expectFlight(placed, "placed", { ap: true, athr: true, speedMin: 90, pitchMax: 20, bankMax: 20 });
       await Bun.sleep(4000);
-      await app.shot(`${OUT}/1-before.png`);
-      const lumBefore = await meanLum(`${OUT}/1-before.png`);
+      await app.scenario("en vol sur les Maures, avant la perte");
+      await app.shot(`${OUT}/1-avant-la-perte.png`);
+      const lumBefore = await meanLum(`${OUT}/1-avant-la-perte.png`);
       const state = `(() => { const c = __bh.camera, g = c.geoNow(), m = c.jetModes, a = c.attitudeNow();
         return { alt: Math.round(g.alt), pitch: +((a.pitch ?? 0) * 180 / Math.PI).toFixed(1), holds: [m.alt && Math.round(m.alt), m.hdg && Math.round(m.hdg * 180 / Math.PI), m.spd] }; })()`;
       const before = await app.js<{ alt: number; pitch: number; holds: unknown }>(state);
@@ -62,6 +63,7 @@ test.skipIf(!E2E)(
             z: k ? (k.contactZ ?? k.z) : -1, want: g && t?.contactLevel ? t.contactLevel(g.lat, g.lon) : -1, alt: g ? Math.round(g.alt) : -1 }); };
         window.__recT = setInterval(s, 25); s(); return 1; })()`);
       await Bun.sleep(500);
+      await app.scenario("perte du GPU, manche tenu");
       await app.js("(__bh.gpu.lose(), true)");
       // (the stick held during the recovery: nothing flown blind)
       await app.hold("KeyS", 1200);
@@ -83,8 +85,9 @@ test.skipIf(!E2E)(
       const flownAfter = await flightState(app);
       console.log(`  flown before the loss ${JSON.stringify(flownBefore)}; after ${JSON.stringify(flownAfter)}`);
       await app.js(`(async () => { await new Promise((q) => setTimeout(q, 2000)); return 1; })()`);
-      await app.shot(`${OUT}/2-after.png`);
-      const lumAfter = await meanLum(`${OUT}/2-after.png`);
+      await app.scenario("après la reprise du GPU");
+      await app.shot(`${OUT}/2-apres-la-reprise.png`);
+      const lumAfter = await meanLum(`${OUT}/2-apres-la-reprise.png`);
       // (the window: from the first sample of the loss — 500 ms after the start — to the new generation's first drawn image)
       const lostAt = rec.findIndex((r) => r.w >= rec[0]!.w + 500);
       const backAt = rec.findIndex((r) => r.gen === gen0 + 1 && r.drawn);

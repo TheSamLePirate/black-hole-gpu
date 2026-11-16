@@ -60,6 +60,7 @@ afterAll(stopServer);
 describe.skipIf(!E2E)("J6-7: TARS during the automatic take-off — the truth of the state, the holds at its end", () => {
   let app: App;
   beforeAll(async () => {
+    await app.scenario("commande périmée, F-35 → Ranger");
     app = await App.boot({
       width: 1280,
       height: 800,
@@ -75,6 +76,7 @@ describe.skipIf(!E2E)("J6-7: TARS during the automatic take-off — the truth of
   afterAll(() => app?.close());
 
   test("« Cap 270, 2 500 m, 150 m/s » during the take-off's run: armed, said so, held at its end", async () => {
+    await app.scenario("décollage automatique, ordre à TARS");
     await app.js(`(() => { Object.assign(__bh.settings, { vessel: "f35", damage: false, wind: 0 }); return 1; })()`);
     await app.waitFor(`__bh.fleet.active === "f35"`, 30_000);
     await app.js(`(() => { __bh.game.lineUp("Edwards"); return 1; })()`);
@@ -130,6 +132,7 @@ describe.skipIf(!E2E)("J6-7: TARS during the automatic take-off — the truth of
   }, 120_000);
 
   test("undone as the checkpoint covers it: « Emmène-moi au-dessus de Paris », then « Annule » — the place, the fuel, the gear and the flaps back", async () => {
+    await app.scenario("Paris puis annulation");
     await app.js(`(() => { __bh.settings.vessel = "f35"; return 1; })()`);
     await app.waitFor(`__bh.fleet.active === "f35"`, 20_000);
     const before = await app.js<{ lat: number; lon: number; fuel: number; gear: boolean; flaps: number }>(`(() => {

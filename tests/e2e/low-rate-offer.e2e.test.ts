@@ -34,6 +34,7 @@ describe.skipIf(!E2E)("the playable floor: lighter settings proposed, applied on
     );
 
   test("proposed with its three steps; Accept: one step lighter, said", async () => {
+    await app.scenario("proposé, accepté");
     const before = await read();
     expect(before).toEqual({ scale: 0.75, scenery: "high", reach: "veryFar", pipe: "raster" });
     expect(await app.js<boolean>(`__bh.offerLighter(10)`)).toBe(true);
@@ -45,7 +46,7 @@ describe.skipIf(!E2E)("the playable floor: lighter settings proposed, applied on
     }>(`(() => { const p = document.querySelector("[data-testid=tars-accept]").closest(".tp-choose").parentElement;
       return { title: p.querySelector("h3")?.textContent ?? "", steps: [...p.querySelectorAll(".tp-steps li")].map((l) => l.textContent), figs: p.querySelector(".tp-figs")?.textContent ?? "" }; })()`);
     console.log(`  proposed: ${JSON.stringify(shown)}`);
-    await app.snap("remote-results/low-rate-offer-proposed.png");
+    await app.snap("remote-results/low-rate-offer-propose-accepte.png");
     // (nothing changed before the answer)
     expect(await read()).toEqual(before);
     expect(shown.title).toMatch(/plus légers/);
@@ -60,6 +61,7 @@ describe.skipIf(!E2E)("the playable floor: lighter settings proposed, applied on
   }, 60_000);
 
   test("proposed again; Refuse: nothing changed, the refusal remembered, never proposed again", async () => {
+    await app.scenario("proposé, refusé");
     const before = await read();
     expect(await app.js<boolean>(`__bh.offerLighter(9)`)).toBe(true);
     await app.waitFor(`!!document.querySelector("[data-testid=tars-refuse]")?.offsetParent`, 10_000);

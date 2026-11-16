@@ -167,10 +167,8 @@ const WAITING = new Set([
   "intro.e2e.test.ts", // no « // Duration: » line; no « // Done when: » line
   "iss-moonset.e2e.test.ts", // runs through cases without app.scenario(label)
   "iss-sunset.e2e.test.ts", // runs through cases without app.scenario(label)
-  "j0-reference.e2e.test.ts", // no « // Duration: » line; no « // Done when: » line; runs through cases without app.scenario(label)
   "j2-cover.e2e.test.ts", // runs through cases without app.scenario(label)
   "j2-probes.e2e.test.ts", // runs through cases without app.scenario(label)
-  "j7-approach-ground.e2e.test.ts", // runs through cases without app.scenario(label)
   "jetmap.e2e.test.ts", // no « // Duration: » line; no « // Done when: » line
   "jetpad.e2e.test.ts", // no « // Duration: » line; no « // Done when: » line
   "knowledge.e2e.test.ts", // no « // Duration: » line; no « // Done when: » line
