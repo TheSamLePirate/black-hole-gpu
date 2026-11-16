@@ -1,4 +1,4 @@
-// PLAN-J8 J8-L — the far street lamps (Sam, 16 Nov 2026: « idem pour les lampadaires, charger toute la vue »; the analysis session: the far
+// PLAN-J8 J8-L — the far street lamps and cars (Sam, 16 Nov 2026: « idem pour les lampadaires, charger toute la vue »; the analysis session: the far
 // lamps take the night's grey's place): the street cells round the eye (cell-workers.ts streetPool — the approaches session's: their lamps,
 // street-cells.ts) asked within LAMP_FAR_REACH_M, the nearest first (building-layer.ts cellPriority); each cell's lamps put into a GPU pool
 // by blocks of 256 (building-layer.ts RecordPool, its blocks counted for 16-byte lamps), its frame in the scene's written (its drawn ground's
@@ -9,8 +9,9 @@ import { BLOCK_RECORDS, cellFrameInScene, cellPriority, type EyeState, POOL_RECO
 import type { CellPool, CellPrepared, CellWant } from "./cell-pool";
 import { sceneryFrame } from "./scenery-data";
 import type { SceneryRaster } from "./scenery-raster";
-import { readLamp, readStreetHeader } from "./street-cells";
+import { readLamp, readSegment, readStreetHeader, SegmentFlag } from "./street-cells";
 import { LAMP_REACH_M } from "./streetlamps";
+import { ROAD_TRAFFIC } from "./traffic";
 
 /** the far lamps' reach round the eye [m] (agreed with the approaches session: 12 km — past it night-roads' baked points) */
 export const LAMP_FAR_REACH_M = 12000;
@@ -18,6 +19,43 @@ export const LAMP_FAR_REACH_M = 12000;
 export const LAMP_FAR_CAPACITY = 262144;
 /** the cells' frames held at once */
 export const LAMP_FAR_SLOTS = 2048;
+/** the far cars the pool holds (in blocks of 256 — a cell's few take a block: as many blocks as cells' frames; 512 refused Paris's 650
+ *  cells, 16 Nov 2026) */
+export const CAR_FAR_CAPACITY = LAMP_FAR_SLOTS * 256;
+
+/**
+ * A street cell's far cars (8 floats each: the lane's start xy, its run xy [m] in the cell's frame, its phase 0…1, its speed [m/s]):
+ * on its busy roads' segments (traffic.ts ROAD_TRAFFIC's classes — the near scene's —, no tunnel), each way the road allows, spaced by
+ * its class (a segment shorter than the spacing: a car now and then, by its seed), their phases and speeds by the road's identity
+ */
+export function farCars(buf: ArrayBuffer, segments: number): Float32Array {
+  const out: number[] = [];
+  for (let i = 0; i < segments; i++) {
+    const g = readSegment(buf, i);
+    const t = ROAD_TRAFFIC[g.cls];
+    if (!t || g.flags & SegmentFlag.Tunnel) continue;
+    const dx = g.b[0] - g.a[0],
+      dy = g.b[1] - g.a[1];
+    const L = Math.hypot(dx, dy);
+    if (L < 1) continue;
+    const h = (k: number) => {
+      const v = Math.sin((g.roadId % 100003) * 12.9898 + (i + k) * 78.233) * 43758.5453;
+      return v - Math.floor(v);
+    };
+    const ways: (1 | -1)[] = [];
+    if (!(g.flags & SegmentFlag.OnewayAgainst)) ways.push(1);
+    if (!(g.flags & SegmentFlag.OnewayAlong)) ways.push(-1);
+    for (const w of ways) {
+      let n = Math.floor(L / t.spacing);
+      if (n === 0 && h(w * 7) < L / t.spacing) n = 1;
+      for (let c = 0; c < n; c++) {
+        const [sx, sy, rx, ry] = w > 0 ? [g.a[0], g.a[1], dx, dy] : [g.b[0], g.b[1], -dx, -dy];
+        out.push(sx, sy, rx, ry, (c + h(w * 13 + c)) / n, t.speed * (0.85 + 0.3 * h(w * 17 + c)), 0, 0);
+      }
+    }
+  }
+  return new Float32Array(out);
+}
 
 interface Resident {
   x: number;
@@ -25,11 +63,14 @@ interface Resident {
   slot: number;
   blocks: number[];
   lamps: number;
+  carBlocks: number[];
+  cars: number;
   plane?: [number, number, number];
 }
 
 export class StreetFar {
   private pool = new RecordPool((LAMP_FAR_CAPACITY / BLOCK_RECORDS) * BLOCK_RECORDS * POOL_RECORD_BYTES);
+  private carPool = new RecordPool((CAR_FAR_CAPACITY / BLOCK_RECORDS) * BLOCK_RECORDS * POOL_RECORD_BYTES);
   private residents = new Map<string, Resident>();
   private freeSlots = Array.from({ length: LAMP_FAR_SLOTS }, (_, i) => LAMP_FAR_SLOTS - 1 - i);
   private wanted = new Map<string, CellWant>();
@@ -38,7 +79,7 @@ export class StreetFar {
   private frame: ReturnType<typeof sceneryFrame> | null = null;
   private unlisten: (() => void) | null = null;
   private initing = false;
-  readonly counts = { handed: 0, put: 0, evicted: 0, refused: 0, empty: 0, lamps: 0 };
+  readonly counts = { handed: 0, put: 0, evicted: 0, refused: 0, empty: 0, lamps: 0, cars: 0 };
   /** the ground as drawn at a place [°] → its height over the ellipsoid [m] (the renderer's: groundBare) */
   groundAt: ((lat: number, lon: number) => number) | null = null;
 
@@ -52,7 +93,7 @@ export class StreetFar {
     if (!this.raster.lampsReady) {
       if (!this.initing) {
         this.initing = true;
-        void this.raster.lampInit(this.pool.blocks, LAMP_FAR_SLOTS).then(() => {
+        void this.raster.lampInit(this.pool.blocks, LAMP_FAR_SLOTS, this.carPool.blocks).then(() => {
           this.unlisten = this.cells().listen((c) => this.put(c));
         });
       }
@@ -108,15 +149,19 @@ export class StreetFar {
       this.cells().forget(c.x, c.y);
       return;
     }
-    if (h.lampCount === 0) {
+    const cars = farCars(c.buf, h.segmentCount);
+    const nCars = cars.length / 8;
+    if (h.lampCount === 0 && nCars === 0) {
       this.counts.empty++;
-      this.residents.set(key, { x: c.x, y: c.y, slot: -1, blocks: [], lamps: 0 });
+      this.residents.set(key, { x: c.x, y: c.y, slot: -1, blocks: [], lamps: 0, carBlocks: [], cars: 0 });
       return;
     }
-    const blocks = this.pool.alloc(key, h.lampCount);
-    const slot = blocks ? this.freeSlots.pop() : undefined;
-    if (!blocks || slot === undefined) {
+    const blocks = h.lampCount ? this.pool.alloc(key, h.lampCount) : [];
+    const carBlocks = nCars ? this.carPool.alloc(key, nCars) : [];
+    const slot = blocks && carBlocks ? this.freeSlots.pop() : undefined;
+    if (!blocks || !carBlocks || slot === undefined) {
       if (blocks) this.pool.release(blocks);
+      if (carBlocks) this.carPool.release(carBlocks);
       this.counts.refused++;
       this.cells().forget(c.x, c.y);
       return;
@@ -128,9 +173,11 @@ export class StreetFar {
       data[4 * i + 1] = l.north;
       data[4 * i + 2] = l.height;
     }
-    const r: Resident = { x: c.x, y: c.y, slot, blocks, lamps: h.lampCount };
+    const r: Resident = { x: c.x, y: c.y, slot, blocks, lamps: h.lampCount, carBlocks, cars: nCars };
     this.writeFrame(r);
-    this.raster.lampUpload(blocks, data, slot);
+    if (blocks.length) this.raster.lampUpload(blocks, data, slot);
+    if (carBlocks.length) this.raster.carUpload(carBlocks, cars, slot);
+    this.counts.cars += nCars;
     this.residents.set(key, r);
     this.counts.put++;
     this.counts.lamps += h.lampCount;
@@ -166,6 +213,11 @@ export class StreetFar {
       this.raster.lampClear(r.blocks);
       this.pool.release(r.blocks);
       this.counts.lamps -= r.lamps;
+    }
+    if (r.carBlocks.length) {
+      this.raster.carClear(r.carBlocks);
+      this.carPool.release(r.carBlocks);
+      this.counts.cars -= r.cars;
     }
     if (r.slot >= 0) this.freeSlots.push(r.slot);
     this.residents.delete(key);

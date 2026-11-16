@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-16 19:44 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-16 19:56 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous. Ce qui est fermé quitte le tableau « En cours » pour la ligne « Fermé récemment ».
@@ -63,7 +63,7 @@ l'état d'une mission ou d'un combat **non sauvé, dit** ; le réseau **« entre
 
 **Fermé aussi** : le plancher du raster sur GPU faible (15 nov., 23:46, proposer sous 15 images/s, décision de Sam).
 
-**La session du rendu (33d89754)** : **[PLAN-J8](docs/PLAN-J8-BATIMENTS.md)** — J8-4 allumée, matériaux rallumés, réserve à **72 Mio** (Sam) ; la nuit : la lueur de la ville sur les bâtiments lointains et **les lampadaires lointains (J8-L, dans le bruit)** ; **J8-5** : le blocage expliqué (la caméra libre emportée — un défaut du jeu, PROBLEMES), en vol la jonction n'ôte pas les scènes rapides (J8-8 à décider par Sam) ; **J8-E fait** ; **J8-A** : l'e2e et un premier vol sur Paris, à revoler après la zone de cette nuit. [PLAN-J7](docs/PLAN-J7-FLUIDITE.md) en pause.
+**La session du rendu (33d89754)** : **[PLAN-J8](docs/PLAN-J8-BATIMENTS.md)** — J8-4 allumée, matériaux rallumés, réserve à **72 Mio** (Sam) ; la nuit : la lueur de la ville sur les bâtiments lointains et **les lampadaires et les voitures lointains (J8-L, +0,5 ms)** ; **J8-5** : le blocage expliqué (la caméra libre emportée — un défaut du jeu, PROBLEMES), en vol la jonction n'ôte pas les scènes rapides (J8-8 à décider par Sam) ; **J8-E fait** ; **J8-A** : l'e2e et un premier vol sur Paris, à revoler après la zone de cette nuit. [PLAN-J7](docs/PLAN-J7-FLUIDITE.md) en pause.
 
 **Priorité de Sam (16 nov., 11:30 UTC) : [PLAN-J8](docs/PLAN-J8-BATIMENTS.md), tous les bâtiments de la vue** (« c'est ça qui choque le plus ») — la suite de J7 en pause après J7-8b ; les deux sessions s'y mettent (rendu : couche GPU, scène proche ; approches : recensement, préparation des cellules, PWA) ; d'abord J8-0 (mesures) et J8-1 (le trou de 2 à 7 km).
 
@@ -9707,3 +9707,18 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   - L'e2e garde le monde gelé : 8 étapes sur 8 propres.
   - Le défaut du jeu (`jumpTo` ne porte pas la caméra libre) est consigné dans PROBLEMES, pour la session qui tient la caméra et le temps.
 - Suite : le raccord des lampadaires avec `night-roads`, les voitures lointaines, et J8-A après la zone de cette nuit.
+
+### 2026-11-16 19:56 UTC — PLAN-J8 J8-L : les voitures lointaines ; le bord des lampadaires tramé (session 33d89754)
+
+- Destination : §19.13 (J8-A de nuit, Sam : « les voitures aussi »).
+- **Fait** :
+  - `street-far.ts` `farCars` : les tronçons des classes de `ROAD_TRAFFIC` des cellules « rue », chaque sens permis, espacées par classe, pas en tunnel. Tests 2/2.
+  - `farCarCull` et `farCarVs` : la nuit, chaque voiture est un point, blanc quand elle vient, rouge quand elle s'en va, qui roule à l'horloge du jeu comme les voitures proches.
+  - Une réserve de voitures à un bloc par cellule : à 512 blocs, Paris essuyait 1 835 refus.
+  - Le bord à 12 km est tramé, pour les lampadaires comme pour les voitures.
+- **Mesuré** (kerr-mini, Paris à 12 km de nuit) :
+  - 702 cellules, 138 493 lampadaires, 8 948 voitures ;
+  - GPU 58,3 ms avec, 57,8 ms sans, soit +0,5 ms, sous la règle de 1 ms.
+- **Vu** : des feux rouges alignés sur les grands axes, parmi les points blancs des lampadaires.
+- Pas de double visible en gros plan avec `night-roads`. Non mesuré finement.
+- Suite : J8-A à revoler après la zone de Paris de cette nuit.

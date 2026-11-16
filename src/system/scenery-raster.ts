@@ -11,6 +11,7 @@
 
 import { CABLE_WIDTH_M } from "./pylons";
 import { LAMP_POLE_M } from "./streetlamps";
+import { LANE_M } from "./traffic";
 import { TURBINE_FACING } from "./turbines";
 import { NO_ID, NO_MOTION, TERRAIN_RASTER_FORMAT, TERRAIN_RASTER_ID_FORMAT, TERRAIN_RASTER_MOTION_FORMAT } from "./terrain-raster";
 import { TERRAIN_RASTER_UNIFORM_BYTES } from "./terrain-raster-frame";
@@ -1082,7 +1083,7 @@ fn farCull(@builtin(global_invocation_id) g: vec3u, @builtin(num_workgroups) n: 
 // far buildings', each cell its frame in the scene's (its drawn ground's plane in its axes' w — street-far.ts); a lamp's head drawn as the
 // near ones' (meshVs: the turbines' code, its tag 7 — shadeLite lights it at night), opened towards the camera to a pixel and a half at
 // least; none within maskR of the eye (the near scene's own lamps), none past reach, none by day (lampU.on)
-struct LampU { blocks: u32, maskR: f32, reach: f32, on: f32 };
+struct LampU { blocks: u32, maskR: f32, reach: f32, on: f32, carBlocks: u32, _a: u32, _b: u32, _c: u32 };
 @group(1) @binding(11) var<uniform> lampU: LampU;
 @group(1) @binding(12) var<storage, read> lampRec: array<vec4f>;
 @group(1) @binding(13) var<storage, read> lampBlock: array<vec2u>;
@@ -1113,7 +1114,9 @@ fn farLampCull(@builtin(global_invocation_id) gid: vec3u, @builtin(num_workgroup
   if (p.w < 0.5) { return; }
   let v = p.xyz;
   let dist = length(v);
-  if (dist < lampU.maskR || dist > lampU.reach || v.z <= 1.0) { return; }
+  // (past the near scene's own lamps; their reach's last sixth a scatter — each lamp its own edge, farHash: no line at 12 km where the
+  // ground's baked lights and the far buildings' glow take over)
+  if (dist < lampU.maskR || dist > lampU.reach * (0.83 + 0.17 * farHash(k ^ 0x5bd1e995u)) || v.z <= 1.0) { return; }
   let m = 2.0 * u.up.w * v.z / u.image.y;
   if (abs(v.x) - u.right.w * v.z > m || abs(v.y) - u.up.w * v.z > m) { return; }
   let at = atomicAdd(&lampDraw[1], 1u);
@@ -1127,6 +1130,68 @@ fn farLampCull(@builtin(global_invocation_id) gid: vec3u, @builtin(num_workgroup
   let q = array<vec2f, 6>(vec2f(-1.0, -1.0), vec2f(1.0, -1.0), vec2f(1.0, 1.0), vec2f(-1.0, -1.0), vec2f(1.0, 1.0), vec2f(-1.0, 1.0));
   v = v + vec3f(q[vi] * half, 0.0);
   o.leaf = 7.0;
+  o.bridge = 2.0;
+  o.pyl = vec4f(0.0, 0.0, 0.0, 1.0);
+  o.clip = vec4f(v.x / u.right.w + u.output.z * v.z, v.y / u.up.w + u.output.w * v.z, u.forward.w, v.z);
+  o.p = v;
+  return o;
+}
+// (PLAN-J8 J8-L: the far cars — on the busy roads' segments (traffic.ts ROAD_TRAFFIC's classes) of the same cells, each a record: its
+// lane's start and its run (m, the cell's frame: start.xy, run.xy), its phase and its speed [m/s]; driven by the game's clock as the near
+// ones (meshVertexAt: sc.north.w), their lane LANE_M to the right; at night a point — its headlights white towards the camera, its
+// tail lights red going away (shadeLite's tags 5 and 6))
+@group(1) @binding(18) var<storage, read> carRec: array<vec4f>;
+@group(1) @binding(19) var<storage, read> carBlock: array<vec2u>;
+@group(1) @binding(20) var<storage, read_write> carListW: array<u32>;
+@group(1) @binding(21) var<storage, read_write> carDraw: array<atomic<u32>, 4>;
+@group(1) @binding(22) var<storage, read> carListR: array<u32>;
+// (a car k: its place in the view's frame (w 1), and whether it comes towards the camera (its headlights) — x of the second)
+fn carAt(k: u32) -> array<vec4f, 2> {
+  var out = array<vec4f, 2>(vec4f(0.0), vec4f(0.0));
+  let blk = carBlock[k >> 8u];
+  if ((k & 255u) >= blk.y) { return out; }
+  let a = carRec[2u * k];
+  let b = carRec[2u * k + 1u];
+  let L = max(length(a.zw), 1.0);
+  let s = fract(b.x + sc.north.w * b.y / L);
+  let d = a.zw / L;
+  let xy = a.xy + a.zw * s + vec2f(d.y, -d.x) * ${LANE_M};
+  let c = 4u * blk.x;
+  let O = lampCell[c];
+  let E4 = lampCell[c + 1u];
+  let N4 = lampCell[c + 2u];
+  let U4 = lampCell[c + 3u];
+  let g = E4.w + N4.w * xy.x + U4.w * xy.y;
+  let w = O.xyz + E4.xyz * xy.x + N4.xyz * xy.y + U4.xyz * (g + 0.8);
+  let v = view(w);
+  let ahead = view(w + E4.xyz * d.x + N4.xyz * d.y) - v;
+  out[0] = vec4f(v, 1.0);
+  out[1] = vec4f(select(0.0, 1.0, dot(ahead, -v) > 0.0), 0.0, 0.0, 0.0);
+  return out;
+}
+@compute @workgroup_size(64)
+fn farCarCull(@builtin(global_invocation_id) gid: vec3u, @builtin(num_workgroups) n: vec3u) {
+  let k = gid.y * n.x * 64u + gid.x;
+  if (lampU.on < 0.5 || k >= lampU.carBlocks * 256u) { return; }
+  let c = carAt(k);
+  if (c[0].w < 0.5) { return; }
+  let v = c[0].xyz;
+  let dist = length(v);
+  if (dist < lampU.maskR || dist > lampU.reach * (0.83 + 0.17 * farHash(k ^ 0x27d4eb2du)) || v.z <= 1.0) { return; }
+  let m = 2.0 * u.up.w * v.z / u.image.y;
+  if (abs(v.x) - u.right.w * v.z > m || abs(v.y) - u.up.w * v.z > m) { return; }
+  let at = atomicAdd(&carDraw[1], 1u);
+  carListW[at] = k;
+}
+@vertex fn farCarVs(@builtin(vertex_index) vi: u32, @builtin(instance_index) bi: u32) -> MV {
+  var o: MV;
+  let c = carAt(carListR[bi]);
+  var v = c[0].xyz;
+  let px = 2.0 * u.up.w * max(v.z, 1.0) / u.image.y;
+  let half = max(0.4, 0.75 * px);
+  let q = array<vec2f, 6>(vec2f(-1.0, -1.0), vec2f(1.0, -1.0), vec2f(1.0, 1.0), vec2f(-1.0, -1.0), vec2f(1.0, 1.0), vec2f(-1.0, 1.0));
+  v = v + vec3f(q[vi] * half, 0.0);
+  o.leaf = select(6.0, 5.0, c[1].x > 0.5);
   o.bridge = 2.0;
   o.pyl = vec4f(0.0, 0.0, 0.0, 1.0);
   o.clip = vec4f(v.x / u.right.w + u.output.z * v.z, v.y / u.up.w + u.output.w * v.z, u.forward.w, v.z);
@@ -1688,16 +1753,29 @@ export class SceneryRaster {
     list: GPUBuffer;
     draw: GPUBuffer;
     used: number;
+    /** the far cars' (J8-L): their records (two vec4 each), blocks, list, draw, pipelines, the highest block in use + 1 */
+    cars: {
+      blocks: number;
+      rec: GPUBuffer;
+      block: GPUBuffer;
+      list: GPUBuffer;
+      draw: GPUBuffer;
+      pipe: GPURenderPipeline;
+      cull: GPUComputePipeline;
+      bind: GPUBindGroup;
+      cullBind: GPUBindGroup;
+      used: number;
+    };
   } | null = null;
   private lampReset = new Uint32Array([6, 0, 0, 0]);
-  private lampUData = new ArrayBuffer(16);
+  private lampUData = new ArrayBuffer(32);
   /** the far lamps drawn (their pool made, the layer on) — and the highest block in use + 1 (the draw's instances) */
   lampsOn = false;
   get lampsReady() {
     return !!this.lamps;
   }
   /** the far lamps' pool made: `blocks` blocks of 256 lamps (16 bytes each), `slots` cells' frames; its pipeline compiled */
-  async lampInit(blocks: number, slots: number): Promise<void> {
+  async lampInit(blocks: number, slots: number, carBlocks = 512): Promise<void> {
     if (this.lamps) return;
     const d = this.device;
     const S = GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST;
@@ -1724,7 +1802,36 @@ export class SceneryRaster {
         { binding: 16, visibility: C, buffer: { type: "storage" } },
       ],
     });
-    const u = d.createBuffer({ size: 16, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST, label: "far lamps params" });
+    const u = d.createBuffer({ size: 32, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST, label: "far lamps params" });
+    const carL = d.createBindGroupLayout({
+      label: "far cars draw",
+      entries: [
+        { binding: 11, visibility: V, buffer: { type: "uniform" } },
+        { binding: 14, visibility: V, buffer: { type: "read-only-storage" } },
+        { binding: 18, visibility: V, buffer: { type: "read-only-storage" } },
+        { binding: 19, visibility: V, buffer: { type: "read-only-storage" } },
+        { binding: 22, visibility: V, buffer: { type: "read-only-storage" } },
+      ],
+    });
+    const carCullL = d.createBindGroupLayout({
+      label: "far cars cull",
+      entries: [
+        { binding: 11, visibility: C, buffer: { type: "uniform" } },
+        { binding: 14, visibility: C, buffer: { type: "read-only-storage" } },
+        { binding: 18, visibility: C, buffer: { type: "read-only-storage" } },
+        { binding: 19, visibility: C, buffer: { type: "read-only-storage" } },
+        { binding: 20, visibility: C, buffer: { type: "storage" } },
+        { binding: 21, visibility: C, buffer: { type: "storage" } },
+      ],
+    });
+    const carRec = d.createBuffer({ size: Math.max(32, carBlocks * 256 * 32), usage: S, label: "far cars records" });
+    const carBlock = d.createBuffer({ size: Math.max(16, carBlocks * 8), usage: S, label: "far cars blocks" });
+    const carList = d.createBuffer({ size: Math.max(16, carBlocks * 256 * 4), usage: GPUBufferUsage.STORAGE, label: "far cars list" });
+    const carDraw = d.createBuffer({
+      size: 16,
+      usage: GPUBufferUsage.STORAGE | GPUBufferUsage.INDIRECT | GPUBufferUsage.COPY_DST,
+      label: "far cars draws",
+    });
     const rec = d.createBuffer({ size: Math.max(16, blocks * 256 * 16), usage: S, label: "far lamps records" });
     const block = d.createBuffer({ size: Math.max(16, blocks * 8), usage: S, label: "far lamps blocks" });
     const cell = d.createBuffer({ size: Math.max(64, slots * 64), usage: S, label: "far lamps cells" });
@@ -1735,7 +1842,7 @@ export class SceneryRaster {
       label: "far lamps draws",
     });
     const visTargets = [{ format: TERRAIN_RASTER_FORMAT }, { format: TERRAIN_RASTER_MOTION_FORMAT }, { format: TERRAIN_RASTER_ID_FORMAT }];
-    const [pipe, cull] = await Promise.all([
+    const [pipe, cull, carPipe, carCull] = await Promise.all([
       d.createRenderPipelineAsync({
         layout: d.createPipelineLayout({ bindGroupLayouts: [this.drawLayout, lampL] }),
         vertex: { module: this.module, entryPoint: "farLampVs" },
@@ -1746,6 +1853,17 @@ export class SceneryRaster {
       d.createComputePipelineAsync({
         layout: d.createPipelineLayout({ bindGroupLayouts: [this.cullLayout, lampCullL] }),
         compute: { module: this.module, entryPoint: "farLampCull" },
+      }),
+      d.createRenderPipelineAsync({
+        layout: d.createPipelineLayout({ bindGroupLayouts: [this.drawLayout, carL] }),
+        vertex: { module: this.module, entryPoint: "farCarVs" },
+        fragment: { module: this.module, entryPoint: "farFs", targets: visTargets },
+        primitive: { topology: "triangle-list", cullMode: "none" },
+        depthStencil: { format: "depth32float", depthWriteEnabled: true, depthCompare: "greater" },
+      }),
+      d.createComputePipelineAsync({
+        layout: d.createPipelineLayout({ bindGroupLayouts: [this.cullLayout, carCullL] }),
+        compute: { module: this.module, entryPoint: "farCarCull" },
       }),
     ]);
     this.lamps = {
@@ -1769,6 +1887,37 @@ export class SceneryRaster {
           { binding: 17, resource: { buffer: list } },
         ],
       }),
+      cars: {
+        blocks: carBlocks,
+        rec: carRec,
+        block: carBlock,
+        list: carList,
+        draw: carDraw,
+        pipe: carPipe,
+        cull: carCull,
+        used: 0,
+        bind: d.createBindGroup({
+          layout: carL,
+          entries: [
+            { binding: 11, resource: { buffer: u } },
+            { binding: 14, resource: { buffer: cell } },
+            { binding: 18, resource: { buffer: carRec } },
+            { binding: 19, resource: { buffer: carBlock } },
+            { binding: 22, resource: { buffer: carList } },
+          ],
+        }),
+        cullBind: d.createBindGroup({
+          layout: carCullL,
+          entries: [
+            { binding: 11, resource: { buffer: u } },
+            { binding: 14, resource: { buffer: cell } },
+            { binding: 18, resource: { buffer: carRec } },
+            { binding: 19, resource: { buffer: carBlock } },
+            { binding: 20, resource: { buffer: carList } },
+            { binding: 21, resource: { buffer: carDraw } },
+          ],
+        }),
+      },
       cullBind: d.createBindGroup({
         layout: lampCullL,
         entries: [
@@ -1803,6 +1952,26 @@ export class SceneryRaster {
     if (!L) return;
     for (const b of blocks) this.device.queue.writeBuffer(L.block, b * 8, new Uint32Array([0, 0]));
   }
+  /** a cell's far cars (8 floats each: the lane's start xy, its run xy [m], its phase, its speed [m/s], 0, 0) into its blocks */
+  carUpload(blocks: number[], cars: Float32Array, slot: number) {
+    const L = this.lamps;
+    if (!L) return;
+    const C = L.cars;
+    const n = cars.length / 8;
+    const q = this.device.queue;
+    for (let b = 0; b < blocks.length; b++) {
+      const lo = b * 256,
+        cnt = Math.min(256, n - lo);
+      q.writeBuffer(C.rec, blocks[b]! * 256 * 32, cars.subarray(lo * 8, (lo + cnt) * 8) as Float32Array<ArrayBuffer>);
+      q.writeBuffer(C.block, blocks[b]! * 8, new Uint32Array([slot, cnt]));
+      C.used = Math.max(C.used, blocks[b]! + 1);
+    }
+  }
+  carClear(blocks: number[]) {
+    const L = this.lamps;
+    if (!L) return;
+    for (const b of blocks) this.device.queue.writeBuffer(L.cars.block, b * 8, new Uint32Array([0, 0]));
+  }
   /** a cell slot's frame in the scene's (16 floats: building-layer.ts cellFrameInScene, its ground's plane in the axes' w) */
   lampFrame(slot: number, frame: Float32Array) {
     if (this.lamps) this.device.queue.writeBuffer(this.lamps.cell, slot * 64, frame as Float32Array<ArrayBuffer>);
@@ -1816,11 +1985,13 @@ export class SceneryRaster {
     v.setFloat32(4, maskR, true);
     v.setFloat32(8, reach, true);
     v.setFloat32(12, on ? 1 : 0, true);
+    v.setUint32(16, L.cars.used, true);
     this.device.queue.writeBuffer(L.u, 0, this.lampUData);
   }
   lampRelease() {
     if (!this.lamps) return;
-    for (const b of [this.lamps.u, this.lamps.rec, this.lamps.block, this.lamps.cell, this.lamps.list, this.lamps.draw]) b.destroy();
+    const L = this.lamps;
+    for (const b of [L.u, L.rec, L.block, L.cell, L.list, L.draw, L.cars.rec, L.cars.block, L.cars.list, L.cars.draw]) b.destroy();
     this.lamps = null;
   }
   farRelease() {
@@ -1991,6 +2162,7 @@ export class SceneryRaster {
     this.farActive = !!this.far?.pipes && this.farOn;
     if (this.farActive && !(this.farSkip & 1)) q.writeBuffer(this.far!.draw, 0, this.farReset);
     if (this.lamps && this.lampsOn && this.lamps.used > 0) q.writeBuffer(this.lamps.draw, 0, this.lampReset);
+    if (this.lamps && this.lampsOn && this.lamps.cars.used > 0) q.writeBuffer(this.lamps.cars.draw, 0, this.lampReset);
     // (the Sun's view: its trees culled into the shadow lists when it is to be drawn — encodeShadow —; else none)
     this.sunOn = !!sun && sun[15]! > 0.5 && this.shadowReady;
     if (sun) {
@@ -2031,6 +2203,14 @@ export class SceneryRaster {
       pass.setPipeline(L.cull);
       pass.setBindGroup(0, this.cullBind!);
       pass.setBindGroup(1, L.cullBind);
+      pass.dispatchWorkgroups(Math.min(g, 65535), Math.ceil(g / 65535));
+    }
+    if (this.lamps && this.lampsOn && this.lamps.cars.used > 0) {
+      const C = this.lamps.cars;
+      const g = Math.ceil((C.used * 256) / 64);
+      pass.setPipeline(C.cull);
+      pass.setBindGroup(0, this.cullBind!);
+      pass.setBindGroup(1, C.cullBind);
       pass.dispatchWorkgroups(Math.min(g, 65535), Math.ceil(g / 65535));
     }
     // (PLAN-J8 J8-0 (c): the envelope bench's culling — its list and its draw's instances, reset before the pass)
@@ -2105,6 +2285,13 @@ export class SceneryRaster {
       pass.setBindGroup(1, L.bind);
       pass.setPipeline(L.pipe);
       pass.drawIndirect(L.draw, 0);
+    }
+    if (this.lamps && this.lampsOn && this.lamps.cars.used > 0) {
+      const C = this.lamps.cars;
+      pass.setBindGroup(0, this.drawBind);
+      pass.setBindGroup(1, C.bind);
+      pass.setPipeline(C.pipe);
+      pass.drawIndirect(C.draw, 0);
     }
     // (PLAN-J8 J8-0 (c): the envelope bench's envelopes in view, solid, a real building's material)
     if (this.bench && this.benchPipes && !(this.benchSkip & 2)) {
