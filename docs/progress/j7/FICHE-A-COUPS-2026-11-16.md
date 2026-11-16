@@ -72,3 +72,17 @@ les mêmes à chaud. Les six passages verts. Écarts > 100 ms après la mise en 
 **Conclusion pour le plan** : **J7-2 et J7-3 se reproduisent** (à froid et à chaud) — leurs lots tels qu'écrits, mais leurs causes ne
 sont pas celles supposées par J6 : la météo, une image GPU lourde et une collection (pas la compilation de son noyau, déjà prêt) ; F1, la
 recompilation du noyau principal à froid et une image lourde à chaud.
+
+## 5. Relus de près (09:22 UTC) — J7-3 et J7-2 ne tiennent pas à ce que §4 en disait
+
+- **Le retour par F1 ne recompile rien.** e2e `j7-f1-return` (kerr-mini, à froid — cache Metal vidé — puis à chaud, run `…-j73-map`) : la
+  clé de la scène (`renderer.featureKey`) inchangée de la caméra libre au retour, aucune compilation lancée ; à froid **aucune image
+  > 100 ms**, à chaud **une seule, 116 ms**, 1,2 s après le retour (une image GPU de 71 ms). **Correction de §4** : les 650 ms
+  « compile: main » de `parcours-camera` à froid n'étaient pas le retour par F1 (une recompilation à un autre moment du vol) ; et sur les
+  passages suivants, le retour fait 66–83 ms (« back aboard »), 200 ms une fois à froid.
+- **L'arrivée de la météo, relue passe par passe** (e2e `j7-weather-arrival`) : le premier passage a montré l'image de 399 ms, son GPU à
+  67 ms, au moment où la nouvelle clé (bit 1024, la météo non calme) crée ses ~30 pipelines (32 → 62 compilations, sortis du cache) ;
+  puis **quatre passages A/B** (le départ des compilations rythmé contre libre) : **aucune image > 100 ms** (84 ms au plus), et la part
+  synchrone de chaque départ mesurée ~0 ms — ce n'est pas la création des pipelines qui coûtait. Le rythme, sans effet mesuré, retiré.
+- **Conclusion** : J7-2 et J7-3 sont **intermittents** — un à-coup de 116 à 400 ms une fois sur plusieurs passages, au même moment, sans
+  cause unique lue ; ni compilation au retour par F1, ni coût de création à l'arrivée de la météo.

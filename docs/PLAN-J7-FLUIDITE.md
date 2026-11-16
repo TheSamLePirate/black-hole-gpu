@@ -156,6 +156,12 @@ des entrées datées ; les causes des à-coups (compilation de la météo, retou
   passage) : **reproduits** — la météo 499 ms à froid / 350 ms à chaud (une image GPU de 401 ms et une collection de 635 Mo, pas la
   compilation de son noyau), le retour par F1 650 ms à froid (le noyau principal recompilé) / 250 ms à chaud (l'image du retour) ; détail
   dans la [fiche](progress/j7/FICHE-A-COUPS-2026-11-16.md) §4. Leurs lots restent ouverts, leurs causes relues.
+- **J7-3 et J7-2 relus de près** (11/16 09:22 UTC, [fiche §5](progress/j7/FICHE-A-COUPS-2026-11-16.md)) : le retour par F1 ne
+  change aucune clé (e2e `j7-f1-return` : à froid aucune image > 100 ms, à chaud une de 116 ms) — les 650 ms de §4 n'étaient pas lui ;
+  l'arrivée de la météo (e2e `j7-weather-arrival`) : 399 ms une fois (la nouvelle clé, ~30 pipelines sortis du cache), puis quatre
+  passages sans image > 100 ms, la part synchrone des départs ~0 ms ; un rythme des départs essayé, sans effet mesuré, retiré.
+  **Intermittents, sans cause unique lue** : à décider avec la session d'analyse (les fermer « non reproduit à cause établie » ou les
+  surveiller par la sonde dans les parcours).
 - **J7-1, le couloir prolongé à 18,5 km** (décision de Sam, 11/16 ~07:05 UTC, sur la mesure de la session des approches —
   `scripts/approach-detail-beyond.ts`, f0e0a431 : entre 10 et 18,5 km le détail dépasse les données de plus de 300 m pour 4 485 extrémités,
   jusqu'à +700 m sur l'Altiplano) : le cône continué au même évasement (~±460 m à 18,5 km), fondu 300 m ; `runway-grade.ts`

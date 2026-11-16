@@ -1,6 +1,7 @@
 import { afterAll, expect, test } from "bun:test";
 import { mkdirSync } from "node:fs";
 import { App, E2E, stopServer } from "./lib/app";
+import { CRUISE, expectFlight, type FlightState, flightState, placeJetFrozen } from "./lib/flight-state";
 import { J0_FIXED } from "./lib/j0-scene";
 // PLAN-J6 J6-5 — the journeys « move away in free camera » and « film then return to the game » (strategy §19.13), in the main profile:
 // the F-35 at 300 m over the Maures' hills (43.22° N, 6.33° E), east at 140 m/s under its autopilot and autothrottle; the real key F3 —
@@ -10,6 +11,8 @@ import { J0_FIXED } from "./lib/j0-scene";
 // take the flight's ground, §19.4), the page's gaps. Asserted: the contact level kept under the craft while the camera is away, the clock
 // never back, no jump of the craft, the autopilot's holds the same after F1 and after the photo mode, the craft's height held, no GPU
 // error, the page never frozen over 1 s.
+// Rule 13 (E2E-VOLS): placed frozen while the data load (no glide at idle), its holds engaged; after every phase the craft as flown —
+// autopilot, autothrottle, thrust applied, airspeed, attitude, height over the ground (lib/flight-state.ts).
 // Duration: ~4 min on kerr-mini.
 // Done when: back from the photo mode with the holds checked, parcours-camera.json written.
 afterAll(stopServer);
@@ -26,14 +29,16 @@ test.skipIf(!E2E)(
       await app.js(`(() => { Object.assign(__bh.settings, ${J0_FIXED}); Object.assign(__bh.settings, { dof: false, motionBlur: 0, damage: false });
         return 1; })()`);
       await app.waitFor(`__bh.fleet.active === "f35"`, 60_000);
-      const place = `(() => { __bh.game.setDate("2026-07-10T13:30:00Z"); __bh.game.flyAt(${AT.join(", ")}); __bh.settings.shipMount = "cockpit";
+      const place = `(() => { __bh.game.setDate("2026-07-10T13:30:00Z"); __bh.game.flyAt(${AT.join(", ")}); for (let i = 0; i < 10; i++) __bh.step(1 / 30); __bh.settings.shipMount = "cockpit";
         __bh.refresh(); __bh.camera.viewReset(); return 1; })()`;
-      await app.js(place);
-      await app.dataSettled("the Maures", { maxMs: 90_000 }).catch((e) => console.log(`  (not settled: ${String(e).slice(0, 160)})`));
-      await app.js(place);
-      await app.settled(90_000);
-      await app.js(`(() => { const c = __bh.camera, g = c.geoNow(); c.apSet({ ap: true, athr: true, alt: Math.round(g.alt), hdg: ${AT[3]} * Math.PI / 180, spd: ${AT[4]} });
-        return 1; })()`);
+      // (rule 13 of E2E-VOLS: frozen while the data load — no glide at idle —, placed again, its holds engaged, then let go)
+      const placed = await placeJetFrozen(app, place, { hdgDeg: AT[3], spd: AT[4] }, async () => {
+        await app.dataSettled("the Maures", { maxMs: 90_000 }).catch((e) => console.log(`  (not settled: ${String(e).slice(0, 160)})`));
+        await app.settled(90_000);
+      });
+      console.log(`  placed: ${JSON.stringify(placed)}`);
+      expectFlight(placed, "placed", { ap: true, athr: true, speedMin: 90, pitchMax: 20, bankMax: 20 });
+      const flown: Record<string, FlightState> = {};
       // in the page: `ms` of images — the clock, the craft's place and step, the contact under it —; one call, so the measure is continuous
       const seg = (ms: number) =>
         app.js<Seg>(`(async () => {
@@ -62,6 +67,7 @@ test.skipIf(!E2E)(
               spectating: !!c.spectating, photo: document.body.classList.contains("photo") } }; })()`);
       const segs: Record<string, Seg> = {};
       segs.aboard = await seg(10_000);
+      flown.aboard = await flightState(app);
       console.log(`  aboard: ${JSON.stringify(segs.aboard)}`);
       const holds0 = (segs.aboard.at as { holds: unknown }).holds;
       // (F3: the free camera, then 6 km north of the craft, 1 500 m up, looking south at the hills)
@@ -71,24 +77,32 @@ test.skipIf(!E2E)(
         return __bh.viewAt(g.lat + 0.055, g.lon, { altM: 1500, heading: 180, pitch: -12, fov: 50 }) ?? null; })()`);
       if (why) throw new Error(`viewAt: ${why}`);
       segs.away = await seg(20_000);
+      flown.away = await flightState(app);
       console.log(`  camera away: ${JSON.stringify(segs.away)}`);
       await app.shot(`${OUT}/1-camera-away.png`);
       await app.press("F1", "F1");
       await app.waitFor(`!__bh.camera.spectating && __bh.mode.get() === "ship"`, 10_000);
       segs.backAboard = await seg(8_000);
+      flown.backAboard = await flightState(app);
       console.log(`  back aboard: ${JSON.stringify(segs.backAboard)}`);
       await app.shot(`${OUT}/2-back-aboard.png`);
       // (F4: the photo mode, 6 s; Escape: back)
       await app.press("F4", "F4");
       await app.waitFor(`document.body.classList.contains("photo")`, 5_000);
       segs.photo = await seg(6_000);
+      flown.photo = await flightState(app);
       console.log(`  photo mode: ${JSON.stringify(segs.photo)}`);
       await app.shot(`${OUT}/3-photo.png`);
       await app.press("Escape", "Escape");
       await app.waitFor(`!document.body.classList.contains("photo")`, 5_000);
       segs.afterPhoto = await seg(6_000);
+      flown.afterPhoto = await flightState(app);
       console.log(`  after the photo mode: ${JSON.stringify(segs.afterPhoto)}`);
       out.segments = segs;
+      out.flown = flown;
+      console.log(`  flown: ${JSON.stringify(flown)}`);
+      // (rule 13: the craft flown as a pilot would leave it at every phase — its holds, its engine running, its airspeed, its attitude)
+      for (const [k, f] of Object.entries(flown)) expectFlight(f, k, { ...CRUISE, gear: undefined, aglMin: 100 });
       const all = Object.values(segs);
       const alt0 = (segs.aboard.at as { alt: number }).alt;
       for (const [k, s] of Object.entries(segs)) {

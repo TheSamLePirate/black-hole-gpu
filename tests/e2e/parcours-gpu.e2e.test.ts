@@ -1,6 +1,7 @@
 import { afterAll, expect, test } from "bun:test";
 import { mkdirSync } from "node:fs";
 import { App, E2E, stopServer } from "./lib/app";
+import { CRUISE, expectFlight, flightState, placeJetFrozen } from "./lib/flight-state";
 import { J0_FIXED } from "./lib/j0-scene";
 import { readPng } from "./lib/png";
 // PLAN-J6 J6-6 — the journey « rebuild the GPU » (strategy §19.13), solo, in the main profile: the F-35 at 300 m over the Maures' hills
@@ -11,6 +12,8 @@ import { readPng } from "./lib/png";
 // ground at its level under the craft; the craft's height and holds as before the loss; within 15 s of the new image, the relief published
 // again (earthTiles.finest ≥ 14), the cockpit's display uploaded (ship.displayAges().jet under 1 s), the image not black (the screen's mean
 // luminance at least half the one before); no GPU error after the new device. Not here (a second lot): the loss in a network room.
+// Rule 13 (E2E-VOLS): placed frozen while the data load, its holds engaged; before the loss and after the recovery the craft as flown —
+// autopilot, autothrottle, thrust applied, airspeed, attitude (lib/flight-state.ts).
 // Duration: ~4 min on kerr-mini.
 // Done when: the new generation judged, parcours-gpu.json written.
 afterAll(stopServer);
@@ -36,20 +39,21 @@ test.skipIf(!E2E)(
       await app.js(`(() => { Object.assign(__bh.settings, ${J0_FIXED}); Object.assign(__bh.settings, { dof: false, motionBlur: 0, damage: false });
         return 1; })()`);
       await app.waitFor(`__bh.fleet.active === "f35"`, 60_000);
-      const place = `(() => { __bh.game.setDate("2026-07-10T13:30:00Z"); __bh.game.flyAt(${AT.join(", ")}); __bh.settings.shipMount = "cockpit";
+      const place = `(() => { __bh.game.setDate("2026-07-10T13:30:00Z"); __bh.game.flyAt(${AT.join(", ")}); for (let i = 0; i < 10; i++) __bh.step(1 / 30); __bh.settings.shipMount = "cockpit";
         __bh.refresh(); __bh.camera.viewReset(); return 1; })()`;
-      await app.js(place);
-      await app.dataSettled("the Maures", { maxMs: 90_000 }).catch((e) => console.log(`  (not settled: ${String(e).slice(0, 160)})`));
-      await app.js(place);
-      await app.settled(90_000);
-      await app.js(`(() => { const c = __bh.camera, g = c.geoNow(); c.apSet({ ap: true, athr: true, alt: Math.round(g.alt), hdg: ${AT[3]} * Math.PI / 180, spd: ${AT[4]} });
-        return 1; })()`);
+      // (rule 13 of E2E-VOLS: frozen while the data load — no glide at idle —, placed again, its holds engaged, then let go)
+      const placed = await placeJetFrozen(app, place, { hdgDeg: AT[3], spd: AT[4] }, async () => {
+        await app.dataSettled("the Maures", { maxMs: 90_000 }).catch((e) => console.log(`  (not settled: ${String(e).slice(0, 160)})`));
+        await app.settled(90_000);
+      });
+      expectFlight(placed, "placed", { ap: true, athr: true, speedMin: 90, pitchMax: 20, bankMax: 20 });
       await Bun.sleep(4000);
       await app.shot(`${OUT}/1-before.png`);
       const lumBefore = await meanLum(`${OUT}/1-before.png`);
       const state = `(() => { const c = __bh.camera, g = c.geoNow(), m = c.jetModes, a = c.attitudeNow();
         return { alt: Math.round(g.alt), pitch: +((a.pitch ?? 0) * 180 / Math.PI).toFixed(1), holds: [m.alt && Math.round(m.alt), m.hdg && Math.round(m.hdg * 180 / Math.PI), m.spd] }; })()`;
       const before = await app.js<{ alt: number; pitch: number; holds: unknown }>(state);
+      const flownBefore = await flightState(app);
       const gen0 = await app.js<number>("__bh.gpu.generation()");
       await app.js(`(() => {
         window.__rec = [];
@@ -76,6 +80,8 @@ test.skipIf(!E2E)(
       await Bun.sleep(1500);
       const rec = await app.js<Sample[]>(`(clearInterval(window.__recT), window.__rec)`);
       const after = await app.js<{ alt: number; pitch: number; holds: unknown }>(state);
+      const flownAfter = await flightState(app);
+      console.log(`  flown before the loss ${JSON.stringify(flownBefore)}; after ${JSON.stringify(flownAfter)}`);
       await app.js(`(async () => { await new Promise((q) => setTimeout(q, 2000)); return 1; })()`);
       await app.shot(`${OUT}/2-after.png`);
       const lumAfter = await meanLum(`${OUT}/2-after.png`);
@@ -106,6 +112,9 @@ test.skipIf(!E2E)(
       expect(first!.z).toBeGreaterThanOrEqual(first!.want);
       expect(Math.abs(after.alt - before.alt)).toBeLessThan(60);
       expect(after.holds).toEqual(before.holds);
+      // (rule 13: before the loss and after the recovery, the craft flown — its holds, its engine, its airspeed, its attitude)
+      expectFlight(flownBefore, "before the loss", { ...CRUISE, gear: undefined, aglMin: 100 });
+      expectFlight(flownAfter, "after the recovery", { ...CRUISE, gear: undefined, aglMin: 100 });
       expect(back.finest).toBeGreaterThanOrEqual(14);
       expect(back.age ?? 9e9).toBeLessThan(1000);
       expect(lumAfter).toBeGreaterThan(lumBefore * 0.5);

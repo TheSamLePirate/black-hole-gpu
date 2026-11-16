@@ -3,6 +3,24 @@
 Problèmes constatés, pas encore réglés. Chaque entrée : la date (UTC), ce qui est mesuré ou observé et sa source, la cause
 connue ou supposée, la piste. Une entrée réglée est barrée avec le commit qui la règle, pas effacée.
 
+## L'alarme « GEAR UP · TOO LOW » en montée après le décollage et en croisière rapide (relevé le 16 novembre 2026, captures des parcours-*, règle 13)
+
+Observé (kerr-mini, runs `20261116-092121-r13-again`, `…-090328-r13-parcours`) : « MASTER WARNING · GEAR UP · TOO LOW » et « Too low,
+gear! » (1) au décollage automatique du F-35 à Toulon-Hyères, à 34 m, en montée à +9 m/s, 98 m/s, train rentré par le décollage
+(`parcours-debarquer`, 3-off-again) ; (2) en croisière sur ses maintiens, 680 m d'altitude, 275 m au-dessus des collines, 140 m/s, en palier,
+à 4 km de LFTZ (`parcours-camera`, 2-back-aboard). Cause lue : `controller/computer.ts` `gearWarn` — tout avion en l'air sous 300 m du
+sol **et** sous 150 m/s, train rentré, quelle que soit la phase ; un avertisseur réel (GPWS mode 4) ne s'arme qu'en descente ou en approche
+(environ < 150 m, < 100 m/s), et pas au décollage. **Non corrigé** (un système de vol : son cours, VOL-AVIONS, et son e2e) — à la session
+qui tient le vol. Les tests de la règle 13 ne l'assertent pas encore (l'alarme n'est pas dans `flightState`).
+
+## Relancer une approche après une prise de manche ouvre un débriefing « F 0,0/20 » en plein vol (relevé le 16 novembre 2026, `parcours-meteo`)
+
+Observé (run `20261116-095016-r13-meteo2`, 3-after-stick) : après le manche tenu 1,5 s pendant l'ILS de LFTH, `camera.ilsStart("LFTH")`
+(l'appel de la roue et de TARS) relance l'approche ; l'approche précédente, reprise au manche, est notée « DEBRIEF — ILS APPROACH F 0.0/20 »
+dans un panneau qui couvre la vue pendant le vol (« Intercept 4 s », « Within tolerance 0 % »). Un débriefing de l'approche abandonnée en plein
+vol, au moment où le pilote la reprend, gêne ; à décider (le noter seulement à l'atterrissage, ou ne pas noter une approche reprise au
+manche puis relancée). Non corrigé — à la session des approches.
+
 ## Le détail procédural au-delà du couloir d'approche de J7-1 : 4 485 extrémités où il dépasse les données de plus de 300 m (relevé le 16 novembre 2026, `scripts/approach-detail-beyond.ts`)
 
 Mesuré (sans navigateur, carte mondiale `relief-high.bin` et l'échantillonneur du jeu sans tuiles) : sur l'axe de chaque extrémité de

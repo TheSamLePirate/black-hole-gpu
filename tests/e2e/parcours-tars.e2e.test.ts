@@ -1,11 +1,14 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { App, E2E, stopServer } from "./lib/app";
+import { CRUISE, expectFlight, flightState } from "./lib/flight-state";
 // PLAN-J6 J6-7 — the journey « command TARS during a transition » (strategy §19.13): the F-35 lined up at Edwards (tiles off), its automatic
 // take-off started by the real key U; during its run the pilot types to TARS « Cap 270, 2 500 m, 150 m/s » — the model simulated in the page
 // (openrouter.ai answered by a script, as tars-agent: no key): it calls jet_autopilot { hdgDeg 270, alt 2500, spd 150, ap, athr }, then its
 // words repeat what the tool gave back. Asserted: the tool's result says the truth of the state — « armed », held at the take-off's end, not
 // « selected » (no success announced without its effect: before 15 Nov 2026 the holds engaged mid-run were lost at its end) —; at the
 // take-off's end the holds are the ones asked; the jet climbing.
+// Rule 13 (E2E-VOLS): no placement left gliding at idle (its holds engaged after each flyAt); the state flown asserted at the take-off's
+// end and after the undo — the craft taken back as a pilot would (its holds engaged again).
 // Duration: ~1 min on kerr-mini.
 // Then a command gone stale: « Monte à 4000 m » asked of the F-35 in flight, the model's answer slow (3 s), the craft changed to the Ranger
 // meanwhile — the call checked against the state when it runs: refused, said, nothing engaged.
@@ -98,11 +101,16 @@ describe.skipIf(!E2E)("J6-7: TARS during the automatic take-off — the truth of
     expect(end.holds).toEqual([2500, 270, 150]);
     expect(end.vs).toBeGreaterThan(2);
     expect(end.gear).toBe(false);
+    // (rule 13: the holds applied — the engine giving thrust, the airspeed, a climb's attitude, gear up)
+    expectFlight(await flightState(app), "after the automatic take-off", { ...CRUISE, aglMin: 50 });
   }, 120_000);
 
   test("a command gone stale: « Monte à 4000 m » asked of the F-35, the craft changed to the Ranger before the call runs — refused, nothing changed", async () => {
-    await app.js(`(() => { __bh.game.flyAt(34.9, -117.9, 2000, 90, 180); return 1; })()`);
+    // (rule 13: placed, then flown — its holds and autothrottle engaged, not a glide at idle while TARS thinks)
+    await app.js(`(() => { __bh.game.flyAt(34.9, -117.9, 2000, 90, 180); for (let i = 0; i < 10; i++) __bh.step(1 / 30);
+      const c = __bh.camera; c.apSet({ ap: true, athr: true, alt: Math.round(c.geoNow().alt), hdg: Math.PI / 2, spd: 180 }); return 1; })()`);
     await Bun.sleep(1500);
+    expectFlight(await flightState(app), "placed for the stale command", { ...CRUISE, aglMin: 500 });
     await app.type("Monte à 4000 m.");
     await app.press("Enter");
     await app.waitFor(`__bh.tars.agent.busy`, 10_000);
@@ -125,7 +133,8 @@ describe.skipIf(!E2E)("J6-7: TARS during the automatic take-off — the truth of
     await app.js(`(() => { __bh.settings.vessel = "f35"; return 1; })()`);
     await app.waitFor(`__bh.fleet.active === "f35"`, 20_000);
     const before = await app.js<{ lat: number; lon: number; fuel: number; gear: boolean; flaps: number }>(`(() => {
-      __bh.game.flyAt(34.9, -117.9, 2000, 90, 180); const c = __bh.camera;
+      __bh.game.flyAt(34.9, -117.9, 2000, 90, 180); const c = __bh.camera; for (let i = 0; i < 10; i++) __bh.step(1 / 30);
+      c.apSet({ ap: true, athr: true, alt: Math.round(c.geoNow().alt), hdg: Math.PI / 2, spd: 160 });
       __bh.fleet.fuel.f35 = 3000; c.gearInit = true; c.gearDown = true; c.gearExt = 1; c.airFlight.cfg.flaps = 0.5;
       const g = c.geoNow(); return { lat: g.lat, lon: g.lon, fuel: Math.round(__bh.fleet.fuel.f35), gear: c.gearDown, flaps: c.airFlight.cfg.flaps }; })()`);
     await Bun.sleep(1000);
@@ -151,5 +160,12 @@ describe.skipIf(!E2E)("J6-7: TARS during the automatic take-off — the truth of
     expect(back.gear).toBe(true);
     expect(back.flaps).toBe(0.5);
     expect(back.text).not.toMatch(/undo: none/);
+    // (rule 13: after the undo the craft taken back as a pilot would — its holds engaged again — and flying: thrust, airspeed, attitude)
+    // (its speed now the hold's — at another, the autothrottle at idle slows it, as a pilot's would)
+    await app.js(
+      `(() => { const c = __bh.camera; c.apSet({ ap: true, athr: true, alt: Math.round(c.geoNow().alt), hdg: Math.PI / 2, spd: Math.round(c.airInfo().speed) }); return 1; })()`,
+    );
+    await Bun.sleep(3000);
+    expectFlight(await flightState(app), "taken back after the undo", { ...CRUISE, gear: undefined, aglMin: 500 });
   }, 120_000);
 });

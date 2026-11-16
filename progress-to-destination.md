@@ -8631,6 +8631,23 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   détail. Mesuré : 2 712 extrémités où une branche passe sous ce sol (3 155 à moins de 50 m), l'Altiplano le pire. Question posée à Sam (les
   paliers sur le sol dessiné hors du couloir, recommandé) — sans réponse ; rien changé. PROBLEMES complété.
 
+### 2026-11-16 08:55 UTC — Les parcours-* à la règle 13 d'E2E-VOLS (demande de Sam : « les tests e2e en avion doivent être parfaits »)
+
+- Contribution à la destination : §19.13 (les parcours de référence, instruments de J7, jugés sur un avion piloté comme par un pilote) ;
+  E2E-VOLS règle 13 (fb0e0a92).
+- Réalisé : les neuf `parcours-*` — gelés pendant les attentes de données (plus d'avion qui plane manette à 0 : ce que Sam a vu sur le
+  mini), l'état de vol asserté à chaque phase par `tests/e2e/lib/flight-state.ts` (l'outil commun de la session des approches) : AP/ATHR,
+  poussée appliquée (`engineNow`), train sorti et verrouillé en finale, vitesse, décrochage, assiette, hauteur sol ; `parcours-meteo` :
+  après le manche l'approche relancée (`ilsStart`, l'appel de la roue et de TARS) et 30 s jugées ; `parcours-tars` : l'avion repris après
+  l'annulation. PROBLEMES : deux défauts du jeu vus dans les captures (l'alarme « GEAR UP · TOO LOW » armée au décollage et en croisière
+  rapide — `computer.ts gearWarn` ; un débriefing « F 0,0/20 » ouvert en vol à la relance d'une approche) — au vol, non corrigés ici.
+- Preuves (kerr-mini) : 13/13 (runs `20261116-090328-r13-parcours`, `-092121-r13-again`, `-095016-r13-meteo2`) ; après le manche, 0 image
+  décrochée, ≥ 99 m/s, puis AP+ATHR, 131 m/s, poussée 0,34.
+- Limites : la garde statique et l'outil sont ceux de la session des approches ; l'alarme du train n'est pas encore jugée par les tests.
+  **Les mesures de J7-0 restent valables** : les à-coups relevés ne dépendaient pas de la manette (le gel et l'autothrottle ne changent ni
+  les compilations ni les arrivées de données).
+- Suite : J7 reprend (J7-7 au changement d'appareil → J7-9, puis J7-2/J7-3 sur leurs causes relues).
+
 ### 2026-11-16 09:20 UTC — Règle 13 d'E2E-VOLS : l'outil commun, la garde statique, les e2e de vol du domaine des approches (session 1feb2f7f)
 
 - Contribution à la destination : §19.13 (des parcours et des e2e de vol jugés sur un avion piloté comme par un pilote) ; demande de Sam

@@ -1,6 +1,7 @@
 import { afterAll, expect, test } from "bun:test";
 import { mkdirSync } from "node:fs";
 import { App, E2E, stopServer } from "./lib/app";
+import { expectFlight, expectFlightPhase, flightState } from "./lib/flight-state";
 import { J0_FIXED, J0_SCENE } from "./lib/j0-scene";
 // PLAN-J6 J6-3 — the journey « land then disembark » (strategy §19.13), in the main profile (raster, the cockpit): the F-35 over the sea
 // off Hyères (J0's start), the afternoon; then 9 km out on the final of the end the ILS picks (camera.ilsRunways), the ILS engaged on it (camera.ilsStart), flown to its touchdown and its rollout to a
@@ -12,6 +13,8 @@ import { J0_FIXED, J0_SCENE } from "./lib/j0-scene";
 // Asserted: the ILS lands and stops, no bounce, the contact the same under both settings, out on foot and grounded, back aboard, airborne
 // again within 30 s of U, no GPU error, the page never frozen over 1 s. Recorded: the touchdown's grade, the walk's distance, how far the craft
 // moves at rest in 10 s after the rollout (the brakes).
+// Rule 13 (E2E-VOLS): frozen while the data load; the approach's state asserted at its engagement and at each chunk (its autopilot and
+// thrust; under 300 m the gear down and locked); off again, the thrust, the airspeed and the attitude of a climb.
 // Duration: ~5 min on kerr-mini.
 // Done when: airborne again after U, parcours-debarquer.json written.
 afterAll(stopServer);
@@ -29,6 +32,8 @@ test.skipIf(!E2E)(
       await app.waitFor(`__bh.fleet.active === "f35"`, 60_000);
       const place = `(() => { __bh.game.setDate("${J0_SCENE.date}"); __bh.game.flyAt(${J0_SCENE.start.join(", ")});
         __bh.settings.shipMount = "cockpit"; __bh.refresh(); __bh.camera.viewReset(); return 1; })()`;
+      // (rule 13 of E2E-VOLS: frozen while the data load — no glide at idle — until the final is placed and its approach engaged)
+      await app.js(`(() => { __bh.freeze(true); return 1; })()`);
       await app.js(place);
       await app.dataSettled("off Hyères", { maxMs: 90_000 }).catch((e) => console.log(`  (not settled: ${String(e).slice(0, 160)})`));
       await app.js(place);
@@ -45,6 +50,9 @@ test.skipIf(!E2E)(
         __bh.camera.viewReset(); return 1; })()`);
       out.ilsStart = await app.js<string>(`String(__bh.camera.ilsStart("LFTH", { runway: ${JSON.stringify(fin.id)} }))`);
       console.log(`  ilsStart: ${out.ilsStart}`);
+      // (a few steps on the approach, then let go: its autopilot and autothrottle flying — rule 13)
+      await app.js(`(() => { for (let i = 0; i < 30; i++) __bh.step(1 / 30); __bh.freeze(false); return 1; })()`);
+      await expectFlightPhase(app, "approach", {}, "the approach engaged");
       // (the approach to its stop: 10 s chunks, said each; from the touchdown each image's contact — a bounce, the air again)
       const said0 = await app.js<number>(`__bh.game.log.events.length`);
       let touched = false,
@@ -77,6 +85,12 @@ test.skipIf(!E2E)(
         bounces += r.bounces;
         stopped = r.stopped;
         console.log(`  approach ${k}: ${JSON.stringify(r)}`);
+        // (rule 13 at each chunk until the touchdown: on the approach its autopilot and thrust, the gear down and locked under 300 m)
+        if (!r.touched) {
+          const f = await flightState(app);
+          // (under 20 m: the flare — the thrust to idle, as a pilot's)
+          if (f.inAir) await expectFlightPhase(app, f.agl < 20 ? "flare" : f.agl < 300 ? "final" : "approach", {}, `approach ${k}`);
+        }
         if ((r.at as { paused?: boolean } | null)?.paused) throw new Error(`paused — ${JSON.stringify(r.at)}`);
         if (k === 29) throw new Error(`not stopped after 300 s — ${JSON.stringify(r.at)}`);
       }
@@ -149,6 +163,10 @@ test.skipIf(!E2E)(
         return { off, gap: +gap.toFixed(1) }; })()`);
       gapMax = Math.max(gapMax, off.gap);
       out.takeoff = off;
+      // (rule 13: off again — the engine at take-off thrust, the airspeed, the attitude of a climb)
+      const climbing = await flightState(app);
+      out.climbing = climbing;
+      expectFlight(climbing, "off again", { engineMin: 0.5, speedMin: 60, pitchMax: 25, bankMax: 20, aglMin: 10 });
       console.log(`  off again: ${JSON.stringify(off)}`);
       await app.shot(`${OUT}/3-off-again.png`);
       out.summary = { bounces, gapMax, walk, contactSame: a.h === b.h && a.z === b.z };

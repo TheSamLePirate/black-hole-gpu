@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { mkdirSync } from "node:fs";
 import { App, E2E, stopServer } from "./lib/app";
+import { expectFlight, FLIGHT_STATE_JS, type FlightState } from "./lib/flight-state";
 // PLAN-J6 J6-4 — the journey « resume an aircraft on the ground » (strategy §19.13): a craft at rest on Edwards' runway (tiles and the
 // IGN blocked), saved by the real key F5, then the player's start preference changed (settings.a320Start — what a placement gives the
 // A320's systems), flown elsewhere, then F9: the state the save announces must come back — the fuel, the gear, the flaps, the brakes, and
@@ -8,6 +9,7 @@ import { App, E2E, stopServer } from "./lib/app";
 // coherent; then control taken again on the ground (the F-35: U, airborne; the A320 ready: its engines running, its throttle answering).
 // Before 15 Nov 2026 an A320 saved cold and dark came back with its engines running (the setting's « ready »), and one saved running came
 // back cold with the setting « cold ».
+// Rule 13 (E2E-VOLS): the F-35's climb after U stepped 4 s and asserted — thrust, airspeed, attitude.
 // Duration: ~2 min on kerr-mini.
 // Done when: the A320 saved cold and saved ready both come back as saved, and the F-35 resumed and airborne after U.
 afterAll(stopServer);
@@ -113,6 +115,11 @@ describe.skipIf(!E2E)("J6-4: resume an aircraft on the ground — the state the 
       for (let k = 0; k < 30 * 30; k++) { __bh.step(1 / 30); if (!c.rolling && !c.ourLanded) { off = k / 30; break; } } __bh.freeze(false); return off; })()`);
     console.log(`  F-35 airborne after U: ${off} s`);
     expect(off ?? 99).toBeLessThan(20);
+    // (rule 13: 4 s on, stepped — the climb as flown: the engine at take-off thrust, the airspeed, the attitude)
+    const climbing = await app.js<FlightState>(`(() => { __bh.freeze(true); for (let i = 0; i < 120; i++) __bh.step(1 / 30);
+      const s = ${FLIGHT_STATE_JS}; __bh.freeze(false); return s; })()`);
+    console.log(`  climbing: ${JSON.stringify(climbing)}`);
+    expectFlight(climbing, "climbing after the resume", { engineMin: 0.5, speedMin: 60, pitchMax: 25, bankMax: 20, aglMin: 10 });
     expect(app.cdp.errors).toEqual([]);
   }, 120_000);
 });

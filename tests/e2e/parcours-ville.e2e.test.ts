@@ -1,6 +1,7 @@
 import { afterAll, expect, test } from "bun:test";
 import { mkdirSync } from "node:fs";
 import { App, E2E, stopServer } from "./lib/app";
+import { CRUISE, expectFlight, type FlightState, flightState } from "./lib/flight-state";
 import { J0_FIXED, J0_SCENE } from "./lib/j0-scene";
 // PLAN-J6 J6-1 — the journey « take off then turn over a city » (strategy §19.13), played end to end in the main profile (raster, the
 // cockpit): the F-35 lined up at Toulon-Hyères, the afternoon, fair weather; the automatic take-off by the real key U; then to
@@ -13,6 +14,8 @@ import { J0_FIXED, J0_SCENE } from "./lib/j0-scene";
 // instruments' age, buildings ahead on arriving, no GPU error, the page never frozen over 1 s. Recorded (PLAN-J6 §3: thresholds still to read):
 // the holes' share, the GPU time by segment.
 // PV_QUICK_LEAD (default 2.5, the game's): renderer.sceneryQuickLead, the fast flight's scenery lead (a measure, PROBLEMES).
+// Rule 13 (E2E-VOLS): frozen while the data load until lined up; climbing, then after every segment the craft as flown — autopilot,
+// autothrottle, thrust applied, airspeed, attitude, gear up (lib/flight-state.ts).
 // Duration: ~6 min on kerr-mini (the airfield's data, the take-off, ~2 min of flight, the city's turn, the view back).
 // Done when: the view back held 15 s and the cockpit back, parcours-ville.json written.
 afterAll(stopServer);
@@ -33,7 +36,10 @@ test.skipIf(!E2E)(
       await app.waitFor(`__bh.fleet.active === "f35"`, 60_000);
       // (the airfield's tile first — a world airfield, lined up by its code once its tile is in (game.lineUp): placed over J0's start,
       // next to it, the data waited for)
-      await app.js(`(() => { __bh.game.setDate("2026-07-10T13:30:00Z"); __bh.game.flyAt(${J0_SCENE.start.join(", ")}); return 1; })()`);
+      // (rule 13 of E2E-VOLS: frozen while the data load — the craft does not glide at idle meanwhile —, until lined up and let go)
+      await app.js(
+        `(() => { __bh.freeze(true); __bh.game.setDate("2026-07-10T13:30:00Z"); __bh.game.flyAt(${J0_SCENE.start.join(", ")}); return 1; })()`,
+      );
       await app
         .dataSettled("near Toulon-Hyères", { maxMs: 90_000 })
         .catch((e) => console.log(`  (not settled: ${String(e).slice(0, 160)})`));
@@ -44,6 +50,7 @@ test.skipIf(!E2E)(
       await app.dataSettled("Toulon-Hyères", { maxMs: 90_000 }).catch((e) => console.log(`  (not settled: ${String(e).slice(0, 160)})`));
       out.lineUpAgain = await app.js<string>(lineUp);
       await app.settled(90_000);
+      await app.js(`(() => { __bh.freeze(false); return 1; })()`);
       await app.shot(`${OUT}/1-lined-up.png`);
       // (the take-off: the real key U, the clock running; airborne within 20 s)
       await app.js(`(() => { const c = __bh.camera; window.__said = []; if (!c.__saidHook) { const prev = c.onPilotMessage;
@@ -59,6 +66,10 @@ test.skipIf(!E2E)(
       console.log(`  take-off: ${JSON.stringify(off)}`);
       out.takeoff = off;
       expect(off.off ?? 99).toBeLessThan(20);
+      // (rule 13: climbing — the engine at take-off thrust, the airspeed, the attitude of a climb)
+      const climbing = await flightState(app);
+      out.climbing = climbing;
+      expectFlight(climbing, "climbing", { engineMin: 0.5, speedMin: 60, pitchMax: 25, bankMax: 20, aglMin: 10 });
       await app.shot(`${OUT}/2-climbing.png`);
       // (west towards Toulon, 500 m over the sea's level, 150 m/s: the autopilot and the autothrottle set — apSet, not the toggles)
       await app.js(`(() => { __bh.camera.apSet({ ap: true, athr: true, alt: 500, hdg: 270 * Math.PI / 180, spd: 150 }); return 1; })()`);
@@ -104,6 +115,12 @@ test.skipIf(!E2E)(
         return { bands, buildingsNear: grid.filter((p) => /build/i.test(p.kind) && p.d >= 0 && p.d < 2000).length };
       };
       const segs: Seg[] = [];
+      // (rule 13: after each segment, the craft as a pilot would leave it — its holds, its engine, its airspeed, its attitude, gear up)
+      const flown: Record<string, FlightState> = {};
+      const fly = async (name: string) => {
+        flown[name] = await flightState(app);
+        expectFlight(flown[name]!, name, { ...CRUISE, aglMin: 100, bankMax: 40 });
+      };
       const say = (s: Seg) => {
         const a = [...s.ages].sort((x, y) => x - y);
         const g = [...s.gpu].sort((x, y) => x - y);
@@ -123,6 +140,7 @@ test.skipIf(!E2E)(
         segs.push(s);
         say(s);
         if (s.at && (s.at as { paused: boolean }).paused) throw new Error(`paused in flight — ${JSON.stringify(s.at)}`);
+        await fly(`cruise-${k}`);
         if (await app.js<boolean>(`(() => { const c = __bh.camera; return ${atCity}; })()`)) break;
         if (k === 23) throw new Error(`not over Toulon after 240 s — ${JSON.stringify(s.at)}`);
       }
@@ -133,6 +151,7 @@ test.skipIf(!E2E)(
       const turn = await seg("turn", 30_000);
       segs.push(turn);
       say(turn);
+      await fly("turn");
       await app.shot(`${OUT}/4-turning.png`);
       // (the view back over the shoulder: outside, 60 m ahead of the craft looking back — j2-page-camera's view)
       await app.js(`(async () => { __bh.settings.shipMount = "around"; __bh.refresh(); __bh.camera.viewReset();
@@ -140,6 +159,7 @@ test.skipIf(!E2E)(
       const back = await seg("view-back", 15_000);
       segs.push(back);
       say(back);
+      await fly("view-back");
       await app.shot(`${OUT}/5-view-back.png`);
       const behind = await surface("the view back");
       out.surface = { arrival: arrival.bands, back: behind.bands };
@@ -148,6 +168,8 @@ test.skipIf(!E2E)(
         for (let i = 0; i < 30; i++) await new Promise((q) => requestAnimationFrame(q)); return 1; })()`);
       const again = await seg("cockpit-again", 8_000);
       segs.push(again);
+      await fly("cockpit-again");
+      out.flown = flown;
       say(again);
       await app.shot(`${OUT}/6-cockpit-again.png`);
       // (the instruments' age where they are seen — the cockpit's segments; outside, the display not drawn is not uploaded: its age grows)
