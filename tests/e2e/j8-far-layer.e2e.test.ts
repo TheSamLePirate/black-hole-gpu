@@ -8,10 +8,11 @@ import { J0_FIXED, J0_SCENE } from "./lib/j0-scene";
 // culled at the pixel, drawn as boxes and as quads under 8 px (Sam's decision of 16 Nov 2026), into the shadow map; the near scene's
 // own buildings left to it. Two views, the free camera, no craft, the world frozen: J0's start (500 m over the sea off Hyères, west —
 // the coast 10–30 km away, ~129 000 buildings in its field: the census, docs/progress/j8/census-j0.json) and Toulon from 12 km east.
-// Each: the place's data in, the far cells all in (the preparation pool idle), then the layer on, off, on (A/B/A) — 5 s each: the GPU
-// time (median), the buildings drawn (boxes, quads), a shot. Not a pass/fail on the times (j8-far-layer.json); it fails on a GPU
+// Each: the place's data in, the far cells all in (the preparation pool idle), then the layer with quads under 8 px (Sam's decision),
+// under 4, boxes only, off, on again — 5 s each: the GPU time (median), the buildings drawn (boxes, quads), a shot (their looks compared:
+// the analysis session's question of 16 Nov 2026). Not a pass/fail on the times (j8-far-layer.json); it fails on a GPU
 // error, no cell resident, or none drawn in J0's view.
-// Duration: ~6 min on kerr-mini.
+// Duration: ~8 min on kerr-mini.
 // Done when: both views measured on, off and on again, j8-far-layer.json written.
 afterAll(stopServer);
 const MACHINE = process.env.J8F_MACHINE ?? (await $`hostname -s`.quiet().text()).trim();
@@ -50,8 +51,8 @@ test.skipIf(!E2E)(
         }
         await app.js(`(() => { __bh.freeze(true); __bh.touch(); return 1; })()`);
         await app.settled(60_000);
-        const measure = async (on: boolean, tag: string) => {
-          await app.js(`(() => { __bh.renderer.farBuildingsOn = ${on}; __bh.touch(); return 1; })()`);
+        const measure = async (on: boolean, tag: string, quadPx = 8) => {
+          await app.js(`(() => { __bh.renderer.farBuildingsOn = ${on}; __bh.renderer.farQuadPx = ${quadPx}; __bh.touch(); return 1; })()`);
           await app.settled(30_000);
           const m = await app.js<{ p50: number; p95: number; images: number }>(`(async () => {
             const R = __bh.renderer; for (let i = 0; i < 20; i++) { await new Promise((q) => requestAnimationFrame(q)); __bh.touch(); }
@@ -64,14 +65,19 @@ test.skipIf(!E2E)(
           await app.js(`(() => { document.body.classList.add("hide-ui"); return 1; })()`);
           await app.shot(`${OUT}/${v.name}-${tag}.png`);
           await app.js(`(() => { document.body.classList.remove("hide-ui"); return 1; })()`);
-          return { on, ...m, inView: f?.inView, layer: f?.layer };
+          return { on, quadPx, ...m, inView: f?.inView, layer: f?.layer };
         };
-        const a = await measure(true, "avec");
+        // (the layer with quads under 8 px — Sam's decision —, under 4, none; then off; then on again: the A/B/A's)
+        const a = await measure(true, "avec-quads-8px", 8);
+        const q4 = await measure(true, "avec-quads-4px", 4);
+        const q0 = await measure(true, "avec-boites-seules", 0);
         const b = await measure(false, "sans");
-        const a2 = await measure(true, "avec-2");
-        const row = { ...v, on: a, off: b, onAgain: a2, addedP50: +((a.p50 + a2.p50) / 2 - b.p50).toFixed(2) };
+        const a2 = await measure(true, "avec-quads-8px-2", 8);
+        const row = { ...v, on: a, quads4: q4, boxesOnly: q0, off: b, onAgain: a2, addedP50: +((a.p50 + a2.p50) / 2 - b.p50).toFixed(2) };
         (out.views as Record<string, unknown>)[v.name] = row;
-        console.log(`  ${v.name}: ${JSON.stringify({ on: a.p50, off: b.p50, onAgain: a2.p50, inView: a.inView, layer: a.layer })}`);
+        console.log(
+          `  ${v.name}: ${JSON.stringify({ on8: a.p50, on4: q4.p50, boxes: q0.p50, off: b.p50, onAgain: a2.p50, inView: a.inView, layer: a.layer })}`,
+        );
         await app.js(`(() => { __bh.freeze(false); return 1; })()`);
       }
       const j0 = (out.views as Record<string, { on: { inView?: { boxes: number; quads: number }; layer?: { cells: number } } }>)[

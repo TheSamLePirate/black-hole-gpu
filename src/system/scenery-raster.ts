@@ -897,8 +897,8 @@ fn benchCull(@builtin(global_invocation_id) g: vec3u, @builtin(num_workgroups) n
 // frame, their ground over the ellipsoid) resident in a pool of blocks (building-layer.ts RecordPool), each block its cell's slot and its
 // records' count, each slot its cell's frame in the scene's (4 vec4s: origin, east, north, up). Culled as the bench's envelopes are (the
 // field of view, a pixel at least), those the near scene draws itself left out (within farU.y of its centre), drawn as boxes, as one
-// quad under farU.z px (Sam's decision of 16 Nov 2026), all into the buildings' shadow map. Their material, for now, a building's of
-// the near scene (farU.w: its leaf).
+// quad under farU.z px (Sam's decision of 16 Nov 2026), all into the buildings' shadow map. Their look a building's own triangles'
+// without a leaf (shadeLite, U2): the roof the orthophoto's, the walls stone with their windows.
 struct FarU { blocks: u32, maskR: f32, lodPx: f32, leaf: f32 };
 @group(1) @binding(4) var<uniform> farU: FarU;
 @group(1) @binding(5) var<storage, read> farRec: array<u32>;
@@ -933,14 +933,57 @@ fn farEnv(k: u32) -> Env {
   e.s = vec4f(f32(sides & 0xffffu) * 0.1, f32(sides >> 16u) * 0.1, eave + roof, farU.leaf);
   return e;
 }
+// (a record's walls' and roof's heights over its ground [m], its roof's shape — building-cells.ts ROOF_CODES: 0 flat, 1 gabled, 2 hipped,
+// 3 mansard, 4 shed)
+fn farParts(k: u32) -> vec3f {
+  let o = 12u * k;
+  return vec3f(bitcast<f32>(farRec[o + 3u]), bitcast<f32>(farRec[o + 4u]), f32((farRec[o + 6u] >> 16u) & 255u));
+}
+// A far building's vertex vi (0–53): its walls a box up to the eave (0–35), its roof (36–53) — two slopes and two ends from the eaves
+// to a ridge along its long side: the whole side's for a gabled roof (and the others but a hipped one: a mansard's or a shed's drawn
+// so at this distance), the half-width short of each end for a hipped one; flat: none (its triangles at the eave, degenerate)
+fn farCorner(e: Env, parts: vec3f, vi: u32) -> vec3f {
+  if (vi < 36u) {
+    var w = e;
+    w.s.z = parts.x;
+    let c = BOX[vi];
+    return benchCorner(w, vec3f(f32(c & 1u), f32((c >> 1u) & 1u), f32((c >> 2u) & 1u)));
+  }
+  let L = e.s.x;
+  let W = e.s.y;
+  let eave = parts.x;
+  let roof = select(0.0, parts.y, parts.z > 0.5);
+  let R = select(L, max(L - W, 0.0), parts.z > 1.5 && parts.z < 2.5);
+  // (the roof's points: eave corners 0–3 (−L,−W) (L,−W) (L,W) (−L,W), ridge ends 4–5 (−R,0) (R,0))
+  let tri = array<u32, 18>(3u, 2u, 5u, 3u, 5u, 4u, 0u, 5u, 1u, 0u, 4u, 5u, 1u, 5u, 2u, 0u, 3u, 4u);
+  let i = tri[vi - 36u];
+  var q = vec3f(0.0);
+  if (i == 0u) { q = vec3f(-L, -W, eave); }
+  else if (i == 1u) { q = vec3f(L, -W, eave); }
+  else if (i == 2u) { q = vec3f(L, W, eave); }
+  else if (i == 3u) { q = vec3f(-L, W, eave); }
+  else if (i == 4u) { q = vec3f(-R, 0.0, eave + roof); }
+  else { q = vec3f(R, 0.0, eave + roof); }
+  let c = cos(e.c.w);
+  let s = sin(e.c.w);
+  return vec3f(e.c.xy + vec2f(c, s) * q.x + vec2f(-s, c) * q.y, e.c.z + q.z);
+}
+// a far building's stable hash in [0, 1) — its record's place in the pool: the same from frame to frame
+fn farHash(k: u32) -> f32 {
+  var x = k * 747796405u + 2891336453u;
+  x = ((x >> ((x >> 28u) + 4u)) ^ x) * 277803737u;
+  return f32((x >> 22u) ^ x) / 4294967296.0;
+}
 @compute @workgroup_size(64)
 fn farCull(@builtin(global_invocation_id) g: vec3u, @builtin(num_workgroups) n: vec3u) {
   let k = g.y * n.x * 64u + g.x;
   if (k >= farU.blocks * 256u) { return; }
   let e = farEnv(k);
   if (e.s.z <= 0.0) { return; }
-  // (the near scene's own buildings: within its reach of its centre — the scene's frame's origin —, not drawn twice)
-  if (length(e.c.xy) < farU.maskR) { return; }
+  // (the near scene's own buildings: within its reach of its centre — the scene's frame's origin —, not drawn twice; past it a band of
+  // 300 m where each far one stands from its own distance — the edge a scatter, not a line)
+  let h = farHash(k);
+  if (length(e.c.xy) < farU.maskR + 300.0 * h) { return; }
   let R = length(vec3f(e.s.x, e.s.y, 0.5 * e.s.z)) + 0.5;
   let v = view(vec3f(e.c.xy, e.c.z + 0.5 * e.s.z));
   let tx = u.right.w;
@@ -950,7 +993,8 @@ fn farCull(@builtin(global_invocation_id) g: vec3u, @builtin(num_workgroups) n: 
   if (abs(v.y) - ty * v.z > R * sqrt(1.0 + ty * ty)) { return; }
   if (v.z > 0.0 && R * u.image.x < v.z * tx) { return; }
   let px = R * u.image.x / max(v.z * tx, 1e-3);
-  if (px < farU.lodPx) {
+  // (its own threshold, 0.75–1.25 of the quads': the boxes give way to quads over a band of distances, building by building)
+  if (px < farU.lodPx * (0.75 + 0.5 * h)) {
     let at = atomicAdd(&farDraw[5], 1u);
     farListW[arrayLength(&farListW) - 1u - at] = k;
     return;
@@ -960,32 +1004,53 @@ fn farCull(@builtin(global_invocation_id) g: vec3u, @builtin(num_workgroups) n: 
 }
 @vertex fn farVs(@builtin(vertex_index) vi: u32, @builtin(instance_index) bi: u32) -> MV {
   var o: MV;
-  let e = farEnv(farListR[bi]);
-  let c = BOX[vi];
-  let v = view(benchCorner(e, vec3f(f32(c & 1u), f32((c >> 1u) & 1u), f32((c >> 2u) & 1u))));
-  o.leaf = e.s.w + 1.0;
+  let k = farListR[bi];
+  let e = farEnv(k);
+  let v = view(farCorner(e, farParts(k), vi));
+  // (no leaf: shadeLite's look for a building's own triangles without one — its roof the orthophoto's, its walls stone with their
+  // windows, lit at night — U2; the near scene's leaf records are not theirs)
+  o.leaf = 0.0;
+  // (its cell's fade-in — 0 → 1 over a second once it is put: farFs keeps that share of its pixels, a scatter)
+  o.pyl = vec4f(0.0, 0.0, 0.0, farCell[4u * farBlock[k >> 8u].x].w);
   o.clip = vec4f(v.x / u.right.w + u.output.z * v.z, v.y / u.up.w + u.output.w * v.z, u.forward.w, v.z);
   o.p = v;
   return o;
 }
 @vertex fn farQuadVs(@builtin(vertex_index) vi: u32, @builtin(instance_index) bi: u32) -> MV {
   var o: MV;
-  let e = farEnv(farListR[arrayLength(&farListR) - 1u - bi]);
+  let rk = farListR[arrayLength(&farListR) - 1u - bi];
+  let e = farEnv(rk);
   let q = array<vec2f, 6>(vec2f(-1.0, 0.0), vec2f(1.0, 0.0), vec2f(1.0, 1.0), vec2f(-1.0, 0.0), vec2f(1.0, 1.0), vec2f(-1.0, 1.0));
   let c = view(e.c.xyz);
   let top = view(vec3f(e.c.xy, e.c.z + e.s.z));
   let k = q[vi];
   let v = mix(c, top, k.y) + vec3f(k.x * max(e.s.x, e.s.y), 0.0, 0.0);
-  o.leaf = e.s.w + 1.0;
+  // (no leaf: shadeLite's look for a building's own triangles without one — its roof the orthophoto's, its walls stone with their
+  // windows, lit at night — U2; the near scene's leaf records are not theirs)
+  o.leaf = 0.0;
+  // (its cell's fade-in — 0 → 1 over a second once it is put: farFs keeps that share of its pixels, a scatter)
+  o.pyl = vec4f(0.0, 0.0, 0.0, farCell[4u * farBlock[rk >> 8u].x].w);
   o.clip = vec4f(v.x / u.right.w + u.output.z * v.z, v.y / u.up.w + u.output.w * v.z, u.forward.w, v.z);
   o.p = v;
+  return o;
+}
+// the far buildings' fragments: their cell's fade-in a scatter of its pixels, then the meshes' own (meshFs)
+@fragment fn farFs(v: MV) -> MO {
+  let r = fract(sin(dot(floor(v.clip.xy), vec2f(12.9898, 78.233))) * 43758.547);
+  if (r >= v.pyl.w) { discard; }
+  var w = v;
+  w.pyl = vec4f(0.0);
+  // (meshFs's own: an entry point is not called from another)
+  var o: MO;
+  o.vis = meshShade(w);
+  o.mot = vec4f(w.mot, 0.0);
+  o.id = select(0u, surfaceId(o.vis.g), floor(o.vis.a / ${RASTER_CODE_SCALE}.0) >= ${RASTER_CODE.mesh}.0);
   return o;
 }
 @vertex fn farShadowVs(@builtin(vertex_index) vi: u32, @builtin(instance_index) bi: u32) -> @builtin(position) vec4f {
   let e = farEnv(bi);
   if (e.s.z <= 0.0 || length(e.c.xy) < farU.maskR) { return vec4f(2.0, 2.0, 0.5, 1.0); }
-  let c = BOX[vi];
-  return sunClip(benchCorner(e, vec3f(f32(c & 1u), f32((c >> 1u) & 1u), f32((c >> 2u) & 1u))));
+  return sunClip(farCorner(e, farParts(bi), vi));
 }
 `;
 }
@@ -1411,14 +1476,14 @@ export class SceneryRaster {
       d.createRenderPipelineAsync({
         layout: drawLayout,
         vertex: { module: this.module, entryPoint: "farVs" },
-        fragment: { module: this.module, entryPoint: "meshFs", targets: visTargets },
+        fragment: { module: this.module, entryPoint: "farFs", targets: visTargets },
         primitive: { topology: "triangle-list", cullMode: "none" },
         depthStencil: { format: "depth32float", depthWriteEnabled: true, depthCompare: "greater" },
       }),
       d.createRenderPipelineAsync({
         layout: drawLayout,
         vertex: { module: this.module, entryPoint: "farQuadVs" },
-        fragment: { module: this.module, entryPoint: "meshFs", targets: visTargets },
+        fragment: { module: this.module, entryPoint: "farFs", targets: visTargets },
         primitive: { topology: "triangle-list", cullMode: "none" },
         depthStencil: { format: "depth32float", depthWriteEnabled: true, depthCompare: "greater" },
       }),
@@ -1498,7 +1563,8 @@ export class SceneryRaster {
     v.setFloat32(12, Math.max(0, leaf), true);
     this.device.queue.writeBuffer(this.far.u, 0, this.farUData);
   }
-  private farReset = new Uint32Array([36, 0, 0, 0, 6, 0, 0, 0]);
+  /** (the far boxes 54 vertices — their walls 36, their roof 18 —, the quads 6) */
+  private farReset = new Uint32Array([54, 0, 0, 0, 6, 0, 0, 0]);
   private farActive = false;
   /** the far layer's buildings in view at the last cull (boxes, quads — read back) */
   async farInView(): Promise<{ boxes: number; quads: number }> {
@@ -1828,7 +1894,7 @@ export class SceneryRaster {
       buildings.setPipeline(F.pipes!.shadow);
       buildings.setBindGroup(0, this.drawBind);
       buildings.setBindGroup(1, F.drawBind);
-      buildings.draw(36, F.blocks * 256);
+      buildings.draw(54, F.blocks * 256);
     }
     // (PLAN-J8 J8-0 (c): the envelope bench's, all of them — as the buildings' boxes, uncut by the Sun's view)
     if (this.bench && this.benchPipes && !(this.benchSkip & 4)) {

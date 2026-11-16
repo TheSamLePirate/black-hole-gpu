@@ -11232,6 +11232,15 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
   private buildingFar: BuildingFar | null = null;
   farBuildingsOn = false;
   private farEye: EyeState | null = null;
+  /** (the far layer's) under this projected size [px] a building one quad (8, Sam's decision; 0 boxes all) */
+  set farQuadPx(px: number) {
+    if (this.buildingFar) this.buildingFar.quadPx = px;
+    this.farQuadPxWant = px;
+  }
+  get farQuadPx() {
+    return this.buildingFar?.quadPx ?? this.farQuadPxWant;
+  }
+  private farQuadPxWant = 8;
   /** (the far layer's) what is resident and what the last cull drew (boxes, quads — read back) */
   async farBuildings() {
     return {
@@ -12194,7 +12203,10 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
       // (PLAN-J8 J8-4: the far buildings' layer — its cells asked and put, its frame the drawn scene's, the near scene's own buildings
       // left to it: within its cap's kept reach when it cut, else its box)
       if (this.farBuildingsOn) {
-        this.buildingFar ??= new BuildingFar(this.sceneryRaster, cellPool);
+        if (!this.buildingFar) {
+          this.buildingFar = new BuildingFar(this.sceneryRaster, cellPool);
+          this.buildingFar.quadPx = this.farQuadPxWant;
+        }
         const box = this.earthScenery.drawnBox();
         const st = this.earthScenery.stats();
         const maskR = !box ? 0 : st.cutBuildings > 0 && st.keptReachM > 0 ? st.keptReachM : box.half - 650;

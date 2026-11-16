@@ -25,7 +25,11 @@ interface Resident {
   slot: number;
   blocks: number[];
   records: number;
+  /** when it was put [ms]: its fade-in over FAR_FADE_MS (its frame's origin.w, farFs's scatter) */
+  at: number;
 }
+/** a cell's fade-in once put [ms] */
+export const FAR_FADE_MS = 1000;
 
 export class BuildingFar {
   private pool: RecordPool;
@@ -37,6 +41,8 @@ export class BuildingFar {
   private frame: ReturnType<typeof sceneryFrame> | null = null;
   private unlisten: (() => void) | null = null;
   private initing = false;
+  /** under this projected size [px] one quad facing the camera (FAR_QUAD_PX; 0: boxes all — a lever to compare their looks) */
+  quadPx = FAR_QUAD_PX;
   /** the counts: cells handed, put, let go, too big to fit */
   readonly counts = { handed: 0, put: 0, evicted: 0, refused: 0, empty: 0 };
 
@@ -68,10 +74,12 @@ export class BuildingFar {
     if (key !== this.sceneKey) {
       this.sceneKey = key;
       this.frame = scene ? sceneryFrame(scene.lat, scene.lon) : null;
-      if (this.frame) for (const r of this.residents.values()) this.raster.farFrame(r.slot, cellFrameInScene(r.x, r.y, this.frame));
+      if (this.frame) for (const r of this.residents.values()) if (r.slot >= 0) this.writeFrame(r, now);
     }
+    // (the cells fading in: their share written each frame until whole)
+    if (this.frame) for (const r of this.residents.values()) if (r.slot >= 0 && now - r.at < FAR_FADE_MS + 100) this.writeFrame(r, now);
     this.raster.farOn = !!this.frame;
-    this.raster.farParams(maskR, leaf, FAR_QUAD_PX);
+    this.raster.farParams(maskR, leaf, this.quadPx);
     if (!eye) return;
     // (the cells wanted asked again when the eye moved 300 m, turned 10°, or 2 s on)
     const w = this.wantedAt;
@@ -122,7 +130,7 @@ export class BuildingFar {
     }
     if (h.count === 0) {
       this.counts.empty++;
-      this.residents.set(key, { x: c.x, y: c.y, slot: -1, blocks: [], records: 0 });
+      this.residents.set(key, { x: c.x, y: c.y, slot: -1, blocks: [], records: 0, at: 0 });
       return;
     }
     let blocks = this.pool.alloc(key, h.count);
@@ -151,10 +159,19 @@ export class BuildingFar {
       this.cells().forget(c.x, c.y);
       return;
     }
-    this.raster.farFrame(slot, cellFrameInScene(c.x, c.y, this.frame));
+    const r: Resident = { x: c.x, y: c.y, slot, blocks, records: h.count, at: performance.now() };
+    this.writeFrame(r, r.at);
     this.raster.farUpload(blocks, recordWords(c.buf), slot);
-    this.residents.set(key, { x: c.x, y: c.y, slot, blocks, records: h.count });
+    this.residents.set(key, r);
     this.counts.put++;
+  }
+
+  /** a resident cell's frame in the scene's, its fade-in's share in its origin's w */
+  private writeFrame(r: Resident, now: number) {
+    if (!this.frame) return;
+    const f = cellFrameInScene(r.x, r.y, this.frame);
+    f[3] = Math.min(Math.max((now - r.at) / FAR_FADE_MS, 0), 1);
+    this.raster.farFrame(r.slot, f);
   }
 
   private evict(key: string) {

@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-16 15:45 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-16 15:44 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous. Ce qui est fermé quitte le tableau « En cours » pour la ligne « Fermé récemment ».
@@ -9122,3 +9122,18 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   - (b) ou faire servir par le cache disque des e2e les téléchargements du Service Worker, ce qui demande un témoin. La zone ne se
     téléchargerait alors qu'une fois pour tous les e2e de zones (`zones-scenery` prend aussi 14 min et plus).
   - Ensuite J8-7.
+
+### 2026-11-16 15:44 UTC — PLAN-J8 J8-4, second lot : l'aspect, le toit, aucune bascule (éteint par défaut, à juger par Sam) (session 33d89754)
+
+- Contribution à la destination : PLAN-J8 critère 1 (toute la vue) sans image qui choque — la demande de la session d'analyse (le
+  matériau du bâtiment, la forme du toit, aucune bascule visible, le seuil du quad).
+- Réalisé : les enveloppes lointaines dessinées sans feuille (shadeLite U2 : le toit à l'orthophoto, les murs de pierre avec leurs
+  fenêtres) ; le toit de l'enregistrement (deux pans, quatre pans, plat) ; le seuil boîte/quad propre à chaque bâtiment, la bande de
+  300 m au bord de la scène proche, le fondu tramé d'une cellule (`farFs`) ; `renderer.farQuadPx` ; l'e2e montre 8, 4 et 0 px.
+- Preuves (mesuré, kerr-mini, e2e `j8-far-layer`, run 20261116-163905) : vue J0 — 82 boîtes et 14 890 quads dessinés, GPU dans le bruit
+  (42,8 sans, 42,5 / 42,0 avec) ; Toulon à 12 km — 829 et 36 883, ~+0,6 ms ; quads 4 px et boîtes seules +0,5 à +1,2 ms ; captures :
+  les taches sombres du premier lot disparues.
+- Limites : la couche reste éteinte jusqu'au jugement de Sam ; le relief des toits IGN sous les cellules n'est pas retiré ; le matériau
+  n'est pas encore celui de l'enregistrement (U2 générique) ; les quads n'ont pas de toit.
+- Suite : le jugement de Sam sur les captures (allumer, quel seuil) ; puis J8-5 (la scène proche allégée) et J8-1b.
+
