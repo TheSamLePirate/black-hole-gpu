@@ -104,7 +104,9 @@ describe.skipIf(!E2E)("the runway's axis at the take-off", () => {
 
   const results: { label: string; problems: string[] }[] = [];
   const run = async (craft: "a320" | "f35", where: string | null, label: string, vr: number, rain = false) => {
-    await app.scenario(`${label} · ${craft === "a320" ? "A320" : "F-35"} · ${where ?? "the nearest runway"}${rain ? " · rain, crosswind, feet on the rudder" : ""}`);
+    await app.scenario(
+      `${label} · ${craft === "a320" ? "A320" : "F-35"} · ${where ?? "the nearest runway"}${rain ? " · rain, crosswind, feet on the rudder" : ""}`,
+    );
     if (rain) await app.js(`(() => { __bh.settings.weather = "rain"; __bh.refresh(); return 1; })()`);
     const l = await lineUp(craft, where, label);
     if (rain)
