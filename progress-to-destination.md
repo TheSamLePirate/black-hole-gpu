@@ -9373,3 +9373,14 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   - J8-9 (3), l'estimation, sur ces mesures ;
   - la mesure réelle de la zone Paris « overflight » sur un créneau annoncé ;
   - J8-L après J8-E côté rendu.
+
+### 2026-11-16 17:20 UTC — PLAN-J8 : décision de Sam, la zone couloir de J8-A (J8-9 (2)) (session d'analyse)
+
+- **Contribution à la destination :** PLAN-J8 J8-A, critère 5 (rien du réseau en vol). Stratégie §19 (PWA, données préparées avant la frame).
+- **Réalisé :** Sam valide la zone couloir proposée par la session des approches (« ok couloir »).
+  - Contenu : les niveaux fins le long de la trajectoire sur 1 à 2 km, « overflight » ailleurs, les cellules lointaines à 20 km.
+  - Le tracé est commun à la zone et à l'e2e de vol.
+  - Plan §6 point 7. Relayé aux deux sessions.
+- **Preuves :** documenté. Le besoin vient de la mesure de la session des approches : le jeu demande des grilles z 17 à 500 m, qu'une zone « overflight » (z ≤ 14) n'a pas. Aucun test lancé.
+- **Limites / transitions restantes :** le tracé de J8-A n'est pas encore fixé. La taille du couloir de Paris n'est pas encore calculée. En dehors du couloir, le jeu retourne au réseau.
+- **Suite :** les sessions du rendu et des approches fixent les tracés dans un fichier commun. La session des approches construit le couloir et corrige `flightReady` (le compte des tuiles échouées).
