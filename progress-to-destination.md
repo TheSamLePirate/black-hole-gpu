@@ -9536,3 +9536,15 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   - Corrigé : les cellules refusées redemandées toutes les 2 s (`REFUSED_MOVE_M`).
 - **Les carrés blancs de nuit sondés** (`surfaceAt().vis`, nouveau) : 21 des 24 pixels blancs sont du ciel. C'est le halo de quelques pixels lointains marqués d'une luminance énorme. La cause n'est pas trouvée. `farMaterials` reste éteint par défaut (PROBLEMES).
 - Suite : la décision de Sam pour Paris, le choix de la jonction, la cause des carrés, l'e2e J8-A sur les tracés.
+
+### 2026-11-16 18:05 UTC — PLAN-DETAILS-VOL-BAS (FableFlight) revu et rattaché à PLAN-J8 comme J8-VB (session d'analyse)
+
+- **Contribution à la destination :** PLAN-J8 J8-A et J8-L, stratégie §19.13, avec l'expérience du vol urbain bas. Sam a demandé l'analyse du plan, son amélioration et son ajout au plan actuel.
+- **Réalisé :** le plan est revu. Lots VB0–VB8, idées de FableFlight, sous licence MIT.
+  - La donnée routière de la BD TOPO est déjà dans les tuiles z 15 téléchargées pour les bâtiments : largeur de chaussée, nombre de voies, sens, ponts et tunnels.
+  - VB1 étend la cellule « rue » de J8-L (661db914) au lieu de créer un second contrat.
+  - Ajout de ce qui se voit à l'altitude de J8-A, d'une règle de coût en cumul et de la répartition entre les deux sessions.
+  - PLAN-J8 : lot J8-VB et question 8 du §6 (l'enveloppe de la ville vue d'en bas). La ligne de la carte est corrigée.
+- **Preuves :** documenté. Les attributs ont été relus dans une seule tuile BD TOPO en cache (`15/16957/12011`, 64 `troncon_de_route`) : les noms seulement, sans les valeurs ni le taux de remplissage. Les tailles à l'écran sont calculées avec un champ de 60° supposé. La licence a été lue dans le dépôt de FableFlight. Aucun test lancé.
+- **Limites / transitions restantes :** le remplissage des attributs à Paris est à mesurer (VB0). Les coûts du plan VB sont des estimations. L'enveloppe de la ville est une question ouverte à Sam.
+- **Suite :** VB0–VB1 côté approches, si Sam est d'accord. VB2 et la suite côté rendu, après les priorités de J8-A.
