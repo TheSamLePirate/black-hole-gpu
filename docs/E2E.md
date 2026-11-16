@@ -245,6 +245,7 @@ page** — a unit test, faster, for autopilot logic.
 | `E2E_HOLD=<s>` | Chrome kept open `<s>` s at close |
 | `E2E_BANNER=0` | no banner (the file, the test, what it proves) on a Chrome one sees |
 | `E2E_CDP_TIMEOUT=<s>` | a DevTools call fails after this (300 s): nothing waits forever |
+| `E2E_HITCH=1` (`E2E_HITCH_DIR=<dir>`) | the hitch probe in every page booted (`lib/hitch-probe.ts`, PLAN-J7 J7-0): each gap between two frames over 50 ms and its cause — a compile, the main thread, a collection, tiles, the log, the view, the GPU device, the GPU — appended as it comes to `remote-results/hitches/<test>.jsonl`, the frames counted every 600 (`kind: "sum"`). Its witnesses: `hitch-probe.e2e.test.ts` |
 | `CHROME=<path>` | another Chrome binary |
 | `KERR_CHROME_LOCK=0` | no lock (dedicated machine only) |
 | `UPDATE=1` | `golden.e2e.test.ts` re-records `tests/e2e/golden/flights.json` (compare with the previous one before keeping it) |

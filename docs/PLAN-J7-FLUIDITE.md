@@ -86,3 +86,22 @@ des entrées datées ; les causes des à-coups (compilation de la météo, retou
 ## 6. Avancement
 
 - **Le plan** (2026-11-16 05:05 UTC) : écrit par la session d'analyse ; aucun lot ouvert.
+- **J7-0, la sonde et ses témoins** (2026-11-16 06:10 UTC) : `tests/e2e/lib/hitch-probe.ts` — chaque écart rAF > 50 ms et sa cause, lue
+  par l'état avant/après (compilation `compileLog`/`compilingNow`, tâche longue du thread principal `longtask`, tas JS en baisse, tuiles,
+  journal du jeu, vue, appareil, taille, appareil GPU, temps GPU), jugée 300 ms après et sortie par `console.debug` ; `E2E_HITCH=1` la met dans
+  chaque page démarrée (`lib/app.ts`), `remote-results/hitches/<test>.jsonl` (E2E.md). **Témoins passés** (kerr-mini, run
+  `20261116-060710-hitch-probe`) : positif — 200 ms injectées vues en un écart de 200 ms, « main thread 200 ms » ; négatif (A/A, vol tenu
+  20 s deux fois) — 1 117 et 1 143 images, aucun > 100 ms, 1 et 0 > 50 ms. La fiche des parcours : en cours.
+- **J7-1, lecture du code avant de l'ouvrir** (2026-11-16 05:10 UTC, session du rendu ; rien changé) — `runwayGrade().x` (le « flat ») a
+  quatre lecteurs qui n'ont pas le même coût, d'où : **le couloir d'approche ne doit pas entrer dans `.x`**, mais dans une composante à part,
+  lue seulement là où le détail est ajouté :
+  1. `trace.wgsl` `earthHeightExactG` / `earthHeightStepG` : le détail × (1 − flat) — le couloir y entre (et `terrain.ts`
+     `earthHeightSampler`, la collision, par `sites.ts` `runwayGrade`).
+  2. `earthHeightG` contourne le cache naturel du relief (cuit **sans** pistes, `terrainHeightLibrary(trace)`) là où `.x > 0` : le cache
+     porte le détail, donc le contournement doit couvrir aussi le couloir (coût : la hauteur exacte du tracé dans le couloir).
+  3. le raster : `vertexGraded` (`.x > 0`) fait passer chaque sommet par la hauteur exacte, sans normale — le chemin lent, à garder à la
+     piste ; ses niveaux sont cuits **avec** les pistes (`terrainHeightLibrary(trace, true)`) : le couloir y entre par (1) sans autre code.
+  4. **le décor** (`scenery-worker.ts` ~l. 418) pose arbres et bâtiments sur le relief + détail **sans aucun aplanissement de piste** : sous
+     un couloir de 10 km, un arbre resterait sur la bosse inventée (+75 à +205 m à OIFK) — il faut lui passer les pistes proches (leur
+     repère) et le même calcul, d'où un module pur commun (le calcul de `runwayGrade`, sans l'état de `sites.ts`).
+  La portée : `runwaysNear` et les deux `runwayGrade` coupent à `len + 3 400 m` — à porter à `len + 10 000 + fondu`.

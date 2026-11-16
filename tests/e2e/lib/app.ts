@@ -2,6 +2,7 @@
 // key and mouse events by the DevTools protocol — and every click proven to land on its element
 // (an invisible overlay once swallowed the pointer while scripted .click() calls kept passing).
 import { type Cdp, launch } from "./cdp";
+import { HITCH_PROBE } from "./hitch-probe";
 import { recorder } from "./telemetry";
 import { appendFileSync, mkdirSync } from "node:fs";
 import { hostname } from "node:os";
@@ -289,6 +290,22 @@ export class App {
       source: `try { localStorage.setItem("kerr.hint-seen", "1"); localStorage.setItem("kerr.lowrate-refused", "1"); localStorage.setItem("kerr.lang", "${o.lang ?? "en"}"); localStorage.setItem("kerr.crew.lang", "${o.crewLang ?? "fr"}"); if (!${!!o.fullIntro}) localStorage.setItem("kerr.intro.seen", "1"); } catch {}`,
     });
     if (o.initScript) await cdp.send("Page.addScriptToEvaluateOnNewDocument", { source: o.initScript });
+    // (E2E_HITCH=1 — PLAN-J7 J7-0 —: the hitch probe in the page from its start, each gap over 50 ms and its cause appended as it comes to
+    // remote-results/hitches/<test>.jsonl, the page's frames counted every 600 — lib/hitch-probe.ts)
+    if (process.env.E2E_HITCH === "1") {
+      await cdp.send("Page.addScriptToEvaluateOnNewDocument", { source: HITCH_PROBE });
+      const out = `${process.env.E2E_HITCH_DIR ?? "remote-results/hitches"}/${file.replace(/\.e2e\.test\.ts$/, "")}.jsonl`;
+      mkdirSync(dirname(out), { recursive: true });
+      cdp.on("Runtime.consoleAPICalled", (p) => {
+        const v = (p.args as { value?: unknown }[] | undefined)?.[0]?.value;
+        if (p.type !== "debug" || typeof v !== "string" || !v.startsWith("[hitch")) return;
+        const sum = v.startsWith("[hitch-sum]");
+        try {
+          const row = JSON.parse(v.slice(sum ? 11 : 7));
+          appendFileSync(out, `${JSON.stringify({ kind: sum ? "sum" : "gap", ...row, at: new Date().toISOString() })}\n`);
+        } catch {}
+      });
+    }
     app.sw = !!o.sw;
     app.file = file;
     app.recorded = !o.entry && o.telemetry !== false;
