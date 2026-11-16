@@ -8623,3 +8623,9 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   572 → 279 m — et passe (il n'asserte que le changement d'assiette). Transmis aux deux sessions.
 - Preuves : documenté (lecture du code des tests et du journal du run) ; rien lancé par la session d'analyse.
 - Suite : la session du rendu reprend ses tests de parcours ; la session des approches audite les autres e2e de vol contre la règle 13.
+
+### 2026-11-16 07:53 UTC — PLAN-APPROCHES : après le couloir prolongé (8b683069), les jonctions mesurées hors du couloir
+
+- Réalisé : `scripts/approach-detail-beyond.ts --joins` — les deux jonctions de la campagne, leurs branches hors du couloir, contre le sol avec
+  détail. Mesuré : 2 712 extrémités où une branche passe sous ce sol (3 155 à moins de 50 m), l'Altiplano le pire. Question posée à Sam (les
+  paliers sur le sol dessiné hors du couloir, recommandé) — sans réponse ; rien changé. PROBLEMES complété.

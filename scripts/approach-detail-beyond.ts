@@ -4,7 +4,8 @@
 // clear the slope by 150 m and the detail comes within 90 m of it (`near`) or above it (`hit`); where the detail stands over the data
 // by more than 300 m (`over300` — a join's floor inside it); the histogram of the detail's greatest excess (< 50, 100, 200, 300, more).
 //
-//   bun scripts/approach-detail-beyond.ts
+//   bun scripts/approach-detail-beyond.ts [--joins]   (--joins: the two planned joins' legs out of the corridor — 18.5 km since 8b683069 —,
+//                                                     their height over the detailed ground: `near` under 50 m, `hit` under 0)
 import { readdirSync } from "node:fs";
 const R = `${import.meta.dir}/../`;
 const { loadGeoid } = await import(R + "src/system/geoid");
@@ -13,7 +14,9 @@ const { loadHeights } = await import(R + "src/system/heights-file");
 const { setGroundHeights, groundRelief, groundBare, bodyFixedOf } = await import(R + "src/system/our-surface");
 const { earthHeightSampler } = await import(R + "src/terrain");
 const { runwayOfApproach, groundMsl } = await import(R + "src/controller/approach");
-const { fromRunway, glideHeight, ILS } = await import(R + "src/game/ils");
+const { fromRunway, glideHeight, ILS, onRunway } = await import(R + "src/game/ils");
+const { planJoin } = await import(R + "src/game/approach-plan");
+const JOINS = process.argv.includes("--joins");
 const { approachesOf, decodeApproachTile } = await import(R + "src/world/approaches");
 const { decodeTile } = await import(R + "src/world/runways");
 const fileGet = async (u: string) => new Response(Bun.file(R + "assets/" + u.replace(/^.*?assets\//, "")));
@@ -51,6 +54,40 @@ for (const f of readdirSync(R + "assets/runways/v1").filter((x) => /^t-?\d+_-?\d
       seen.add(ap.rwy);
       ends++;
       const W = runwayOfApproach(a, ap, groundMsl);
+      if (JOINS) {
+        // (the two joins of the campaign — 40 km behind the final, 40 km beyond the field —: along their legs, out of the corridor (the
+        // axis to 18.5 km, ±460 m), the planned height over the ground with its detail)
+        let worstJ = Infinity,
+          where = "";
+        for (const [from, along, trk] of [
+          ["behind", -40_000, W.hdg],
+          ["beyond", 40_000 + W.len, W.hdg + 180],
+        ] as const) {
+          const p0 = fromRunway(W, along, 0);
+          const alt = Math.max(W.elev + 1500, groundMsl(p0.lat, p0.lon) + 600);
+          const P = planJoin(W, { lat: p0.lat, lon: p0.lon, alt, trk: (trk * Math.PI) / 180 }, groundMsl);
+          const pts = [{ lat: p0.lat, lon: p0.lon, alt }, ...P.pts.map((q) => ({ lat: q.lat, lon: q.lon, alt: q.alt }))];
+          for (let k = 1; k < pts.length; k++) {
+            const A = pts[k - 1]!,
+              B = pts[k]!;
+            for (let t = 0; t <= 1; t += 0.05) {
+              const lat = A.lat + (B.lat - A.lat) * t,
+                lon = A.lon + (B.lon - A.lon) * t;
+              const o = onRunway(W, { lat, lon, alt: 0 });
+              if (o.along > -18_500 && o.along < 0 && Math.abs(o.across) < 460) continue;
+              const q = bodyFixedOf("earth", lat, lon, 0);
+              const over = B.alt - Math.max(groundRelief("earth", q) - geoidDeg(lat, lon), 0);
+              if (over < worstJ) (worstJ = over), (where = `${from} ${P.pts[k - 1]?.name ?? ""}`);
+            }
+          }
+        }
+        if (worstJ < 50) {
+          near++;
+          if (worstJ < 0) hit++;
+          if (worst.length < 15) worst.push(`${a.icao || a.ident} ${ap.rwy} ${where}: ${worstJ.toFixed(0)} m over the detailed ground`);
+        }
+        continue;
+      }
       let minDet = Infinity,
         minBare = Infinity,
         at = 0;

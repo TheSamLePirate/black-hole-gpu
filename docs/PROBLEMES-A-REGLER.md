@@ -15,7 +15,12 @@ Effet : les paliers des jonctions (300 m au-dessus des données — décision de
 avec les paliers de la jonction (les données + 300 m), deux remises de gaz sûres (au plus près 453 m du sol) ; les paliers retirés pour
 l'essai (une approche réelle volée « comme publiée »), il percute le relief **10,9 km avant le seuil** à −9 m/s — là où le détail
 dépasse la pente de 431 m (hors du couloir) ; vers 5,5 km la carte grossière elle-même passe sur la pente (la vallée comblée). Les
-paliers restent donc (un filet tant que le sol dessiné n'est pas le relief). Piste (session du rendu,
+paliers restent donc (un filet tant que le sol dessiné n'est pas le relief).
+**Après le couloir prolongé à 18,5 km (8b683069, 16 nov.)** : l'axe est propre ; mais `bun scripts/approach-detail-beyond.ts --joins` (les deux
+jonctions de la campagne, hors du couloir) : sur **2 712 extrémités** une branche prévue passe sous le sol avec détail (3 155 à moins de 50 m) —
+vent arrière à 6 km de l'axe, base, point de jonction ; pires sur l'Altiplano (SLCB 32 DW −450 m, SLOR 09 DW −334 m). **Question posée à Sam
+(sans réponse, 16 nov. ~08:00 UTC)** : paliers des jonctions pris au plus haut des données et du sol dessiné hors du couloir (recommandé —
+aucune approche refusée de plus), ou aplanir sous les jonctions, ou borner le détail. Rien changé en attendant. Piste (session du rendu,
 `game/runway-grade.ts`) : le couloir prolongé jusqu'au point initial (18,5 km) ou à la jonction (16 km + la base), et/ou l'amplitude du
 détail bornée là où les données sont planes ; côté approches, si besoin, les paliers pris au plus haut des deux sols hors du couloir.
 
