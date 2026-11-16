@@ -89,9 +89,30 @@ export const E2E_PAGE = `(() => {
 })()`;
 
 /** What the harness needs of a page (App, without importing it: no cycle). */
+/** what summary.json says of the Earth data (null: the network kept — `off`, a Service Worker's boot, `// Earth data: network`) */
+function earthSummary(e: Recordable["earth"]) {
+  if (!e || e.mode === "off") return null;
+  const c = e.counts;
+  return {
+    mode: e.mode,
+    hits: c.hits,
+    misses: c.misses,
+    hitMiB: +(c.hitBytes / 2 ** 20).toFixed(2),
+    missMiB: +(c.missBytes / 2 ** 20).toFixed(2),
+    failed: c.failed,
+    missing: c.missing.length,
+  };
+}
+
 export interface Recordable {
   js<T = unknown>(expr: string): Promise<T>;
   cdp: { send<T = Record<string, unknown>>(method: string, params?: object, timeoutS?: number): Promise<T>; errors: string[] };
+  /** the e2e's Earth data on disk (lib/earth-cache.ts, PLAN-J8 J8-T): its mode and counts, in the summary */
+  earth?: null | {
+    mode: string;
+    dir: string;
+    counts: { hits: number; misses: number; hitBytes: number; missBytes: number; failed: number; missing: string[] };
+  };
 }
 
 interface Drained {
@@ -295,6 +316,8 @@ class Recorder {
           : null,
         // (the machine's heat over the test — docs/THERMAL.md; null without the thermal service)
         thermal: thermalWindow(this.wall0, Date.now()),
+        // (the Earth data — from the disk, fetched and kept, failed — PLAN-J8 J8-T; null when the network was kept)
+        earthData: earthSummary(this.page?.earth),
       }),
     );
   }

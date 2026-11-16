@@ -77,6 +77,7 @@ bun scripts/remote.ts fetch <id>
 bun scripts/remote.ts cancel <id>
 bun scripts/remote.ts clean [--keep 10]
 bun scripts/remote.ts sync
+bun scripts/remote.ts earth-sync
 ```
 
 | | |
@@ -94,6 +95,7 @@ bun scripts/remote.ts sync
 | `cancel <id>` | arrête un job et ce qu'il a lancé (serveur, Chrome) |
 | `clean --keep 10` | efface les anciens jobs sur le mini (jamais ceux en cours) |
 | `sync` | envoie l'arbre sans rien lancer |
+| `earth-sync` | les données Terre des e2e (PLAN-J8 J8-T, [E2E.md](E2E.md) §4 règle 5) échangées entre ce Mac et le mini : rsync dans les deux sens, `--ignore-existing` (rien d'écrasé), sans les `.tmp`. Ici `earthDataDir()` (`~/Documents/DEV/earth-data`), là-bas `~/kerr-lab/earth-data` (`KERR_REMOTE_EARTH`) — **pas sous `~/Documents`** : la TCC de macOS y bloque les jobs lancés par launchd. Pas pour kerr-pc. `doctor` dit le chemin et la taille du dossier |
 
 La commande est lancée par zsh dans la copie : `UPDATE=1 bun test …`, `a && b` s'écrivent comme dans un
 terminal.

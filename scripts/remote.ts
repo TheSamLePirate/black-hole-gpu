@@ -4,6 +4,8 @@
 //
 //   bun scripts/remote.ts [--host kerr-pc] run [--headless] [--cpu] [--hold <s>] [--name <n>] [--detach] -- <command…>
 //   bun scripts/remote.ts [--host kerr-pc] status | logs <id> [-f] | fetch <id> | cancel <id> | clean [--keep 10] | sync | doctor
+//   bun scripts/remote.ts [--host …] earth-sync   the e2e's Earth data (PLAN-J8 J8-T, tests/e2e/lib/earth-cache.ts) both ways over the
+//              local network — rsync --ignore-existing: the files never change once written, no conflict possible
 //
 //   --host     which machine of the lab (scripts/lib/lab-hosts.ts): kerr-mini (the default, KERR_REMOTE) or
 //              kerr-pc, the Windows PC (RTX 5070 Ti) — the same commands, its tree sent another way (below)
@@ -38,6 +40,7 @@ import { tmpdir } from "node:os";
 import { LAB_DIR, labConfig } from "./lib/chrome-lock";
 import { labHost, remoteCommand, takeHost } from "./lib/lab-hosts";
 import { shellJoin } from "./lib/shell";
+import { earthDataDir } from "../tests/e2e/lib/earth-cache";
 
 const argv = process.argv.slice(2);
 const H = labHost(takeHost(argv));
@@ -45,6 +48,9 @@ const HOST = H.name;
 const WIN = H.os === "windows";
 const DIR = H.dir;
 const RESULTS = "remote-results";
+// (the e2e's Earth data there — tests/e2e/lib/earth-cache.ts earthDataDir: on a Mac of the lab ~/kerr-lab/earth-data, not under
+// ~/Documents — TCC stops launchd's nightly bench there —; KERR_REMOTE_EARTH another)
+const REMOTE_EARTH = process.env.KERR_REMOTE_EARTH ?? "~/kerr-lab/earth-data";
 const CLONE = H.clone;
 // (Windows: the runner from its own folder, bin/, sent at each sync before the tree — the tree's overlay is its work)
 const RUNNER = `${H.bun} ${DIR}/${WIN ? "bin" : "base"}/scripts/remote-runner.ts`;
@@ -294,6 +300,8 @@ async function doctor() {
     // (a test Chrome alive there: one at a time per Mac — scripts/lib/chrome-lock.ts)
     `echo chromes=$(pgrep -f -- '--remote-debugging-port=[0-9]' | wc -l | tr -d ' ')`,
     `echo gpu_lock=$(test -e ${DIR}/gpu.lock && cat ${DIR}/gpu.lock 2>/dev/null | head -c 80 || echo free)`,
+    // (the e2e's Earth data there — PLAN-J8 J8-T: its folder's size and files)
+    `echo earth_data=$(du -sh ${REMOTE_EARTH} 2>/dev/null | cut -f1 || echo none) $(find ${REMOTE_EARTH} -name '*.bin' 2>/dev/null | wc -l | tr -d ' ') files`,
   ].join("; ");
   const kv = await probeKv(probe);
   const local = Bun.version;
@@ -317,6 +325,7 @@ async function doctor() {
     ["sleep", kv.sleep === "0", `system sleep ${kv.sleep} min (0: never — a sleeping Mac drops the run)`],
     ["load", true, kv.load ?? "?"],
     ["GPU queue", true, kv.gpu_lock ?? "?"],
+    ["Earth data", true, `${kv.earth_data ?? "?"} there (${REMOTE_EARTH}); here ${earthDataDir()} (bun scripts/remote.ts earth-sync)`],
   ];
   console.log(`${HOST} — macOS ${kv.os}, ${kv.user}`);
   for (const [k, ok, d] of checks) console.log(`  ${ok ? "✓" : "✗"} ${k.padEnd(15)} ${d}`);
@@ -403,6 +412,30 @@ async function doctorWindows(ms: number) {
   process.exit(bad ? 1 : 0);
 }
 
+/** the e2e's Earth data both ways (PLAN-J8 J8-T): what one Mac has and the other lacks, copied; nothing ever overwritten */
+async function earthSync() {
+  if (WIN) die("earth-sync: the PC keeps its own Earth data (set ~/.kerr-lab/config.json earthData there); no rsync to Windows");
+  const here = earthDataDir();
+  mkdirSync(here, { recursive: true });
+  await Bun.spawn(sh(`mkdir -p ${REMOTE_EARTH}`), { stdout: "inherit", stderr: "inherit" }).exited;
+  for (const [from, to, label] of [
+    [`${here}/`, `${HOST}:${REMOTE_EARTH}/`, `here → ${HOST}`],
+    [`${HOST}:${REMOTE_EARTH}/`, `${here}/`, `${HOST} → here`],
+  ] as const) {
+    const t0 = performance.now();
+    const r = Bun.spawnSync(["rsync", ...rsyncE(), "-a", "--ignore-existing", "--exclude", "*.tmp", "--stats", from, to], {
+      stdout: "pipe",
+      stderr: "inherit",
+    });
+    const out = r.stdout.toString();
+    const n = out.match(/Number of regular files transferred: ([\d,]+)/)?.[1] ?? "?";
+    const b = out.match(/Total transferred file size: ([\d,]+)/)?.[1] ?? "?";
+    console.log(
+      `remote: earth-sync ${label}: ${n} files, ${b} bytes, ${((performance.now() - t0) / 1000).toFixed(1)} s${r.exitCode ? ` (rsync exit ${r.exitCode})` : ""}`,
+    );
+  }
+}
+
 const sub = argv[0];
 if (sub === "doctor") await doctor();
 else if (!(await reach())) process.exit(2);
@@ -439,6 +472,7 @@ if (sub === "run") {
   if (flag("detach")) console.log(id);
   else process.exit(await follow(id));
 } else if (sub === "sync") await withSyncLock(() => sync());
+else if (sub === "earth-sync") await earthSync();
 else if (sub === "status") process.exit((await runner(["status"])).code);
 else if (sub === "logs") {
   const id = argv[1] ?? die("logs <id> [-f]");

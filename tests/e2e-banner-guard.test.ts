@@ -379,3 +379,17 @@ test("the judge: a header that says it all passes; each lack named; cases withou
   expect(headerProblems(`${good}\n${loop}`).join()).toMatch(/app.scenario/);
   expect(headerProblems(`${good}\n${loop}\nawait app.scenario(F);`)).toEqual([]);
 });
+
+test("the e2e that measure the network keep it (PLAN-J8 J8-T): a Service Worker's boot, or the header `// Earth data: network`", async () => {
+  const { wantsNetwork } = await import("./e2e/lib/earth-cache");
+  // (the families whose subject is the network — the PWA, the zones, offline, the tiles' arrival, the first image's downloads, the coast's
+  // loading, the voyage's prewarm, the weather's arrival —: served from the disk, they would prove nothing)
+  const NETWORK = /^(pwa|zones|offline|tars-zones|tile-arrival|first-image-downloads|coast-loading|voyage-prewarm|j7-weather-arrival)/;
+  const bad = files
+    .filter((f) => NETWORK.test(f))
+    .filter((f) => {
+      const src = readFileSync(`tests/e2e/${f}`, "utf8");
+      return !/\bsw:\s*true\b/.test(src) && !wantsNetwork(src);
+    });
+  expect(bad).toEqual([]);
+});

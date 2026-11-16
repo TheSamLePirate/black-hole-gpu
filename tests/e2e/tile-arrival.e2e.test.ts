@@ -32,6 +32,7 @@ import { tileReplay } from "./lib/tile-replay";
 // Done when: both passes watched until every level is drawn and nothing is pending (60 s a pass at most, what is missing
 // said), no GPU error.
 // Duration: ~1.5–2.5 min (two launches; the cold pass the network's).
+// Earth data: network (it measures the downloads — PLAN-J8 J8-T: never served from the disk)
 const OUT = process.env.TA_OUT ?? "remote-results/tile-arrival";
 const TAG = `${process.env.AB_SIDE ?? "X"}${process.env.AB_RUN ?? "0"}`;
 const CAP_S = Number(process.env.TA_CAP_S ?? 60);

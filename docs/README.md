@@ -156,8 +156,8 @@ implémentation). Abandonné : PLAN-ELECTRON (pas de fichier). Les autres sont t
 | Un membre de `__bh` ajouté, retiré ou modifié | [BH-API.md](BH-API.md) (chemin complet en titre ou ligne de tableau) |
 | Un outil de placement, un autopilote, un mode, une limite de vol, une touche de vol | [VOL-AVIONS.md](VOL-AVIONS.md) ou [VOL-VAISSEAUX.md](VOL-VAISSEAUX.md) (le cours et la référence) et sa page illustrée (`apprendre-*.html`) ; le manuel joueur ([F35.md](F35.md), [VAISSEAUX.md](VAISSEAUX.md)) si le joueur le voit ; [E2E-VOLS.md](E2E-VOLS.md) si une recette de test change |
 | Une touche ou une commande | le manuel joueur (EN et FR), [HOTAS.md](HOTAS.md) si la manette est concernée |
-| Un nouveau fichier e2e | son commentaire d'en-tête (`Duration:`, `Done when:`), une ligne dans [E2E-CATALOGUE.md](E2E-CATALOGUE.md) |
-| Le harnais e2e (`tests/e2e/lib`, `scripts/e2e.ts`, `remote.ts`) | [E2E.md](E2E.md), [REMOTE-TESTS.md](REMOTE-TESTS.md), les skills `.claude/skills/*` |
+| Un nouveau fichier e2e | son commentaire d'en-tête (`Duration:`, `Done when:`, et `// Earth data: network` s'il mesure les téléchargements — J8-T), une ligne dans [E2E-CATALOGUE.md](E2E-CATALOGUE.md) |
+| Le harnais e2e (`tests/e2e/lib`, `scripts/e2e.ts`, `remote.ts`) — dont les données Terre sur disque (`lib/earth-cache.ts`, `earth-sync`) | [E2E.md](E2E.md), [REMOTE-TESTS.md](REMOTE-TESTS.md), les skills `.claude/skills/*` |
 | Une leçon d'e2e (un échec compris) | [E2E-VOLS.md](E2E-VOLS.md) §6 (le tableau des échecs) ou [E2E.md](E2E.md) §7 |
 | Une fonction accessible à TARS | [TARS.md](TARS.md), `tests/tars-tools.test.ts` |
 | Un problème constaté non corrigé | [PROBLEMES-A-REGLER.md](PROBLEMES-A-REGLER.md) |

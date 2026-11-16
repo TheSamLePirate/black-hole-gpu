@@ -100,6 +100,9 @@ bun scripts/remote.ts logs <id> -f      # streams, fetches remote-results/<id>/,
   job wrote, at its path). **Never copy an artifact into the tree without looking at it** — a golden
   re-recorded there (`UPDATE=1`) is compared with the one here first, and said to the user.
 - `cancel <id>` stops a job and what it started; `clean --keep 10` trims the runs there.
+- The e2e's Earth data (tiles kept on disk, PLAN-J8 J8-T): on the mini in `~/kerr-lab/earth-data` (not under ~/Documents:
+  TCC). `bun scripts/remote.ts earth-sync` swaps the two Macs' folders (rsync both ways, nothing overwritten) — before a
+  campaign over zones loaded here, or an `E2E_EARTH_DATA=offline` run there; `doctor` says the path and size.
 
 ## The iPad (plugged into the mini)
 

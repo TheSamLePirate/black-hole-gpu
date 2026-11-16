@@ -131,14 +131,14 @@ export function bannerRef(file: string, k: number, scenario: string | null): str
 }
 
 /** What the page runs to put up (or update) the banner. */
-function script(file: string, k: number, scenario: string | null = null): string {
+function script(file: string, k: number, scenario: string | null = null, earth: string | null = null): string {
   const I = fileInfo(file);
   const head = `${bannerRef(file, k, scenario)} · ${HOST}`;
   // (the test's title — a template's values unknown to the text: the scenario said in its place)
   const title = k === 0 ? I.suite || I.name : (I.tests[k - 1] ?? "");
   const now = /\$\{/.test(title) && scenario ? scenario : titleOf(title);
   const about = I.about.length > 420 ? `${I.about.slice(0, 417)}…` : I.about;
-  const data = JSON.stringify({ file: I.name, head, now, scenario, about, duration: I.duration, done: I.done });
+  const data = JSON.stringify({ file: I.name, head, now, scenario, about, duration: I.duration, done: I.done, earth });
   return `(() => { const d = ${data}; let el = document.getElementById("e2e-banner");
     if (!el) { el = document.createElement("div"); el.id = "e2e-banner"; el.setAttribute("aria-hidden", "true");
       el.style.cssText = "position:fixed;left:12px;bottom:12px;z-index:2147483647;max-width:min(560px,calc(100vw - 24px));padding:10px 14px;border-radius:10px;background:rgba(8,12,20,.82);border:1px solid rgba(255,200,90,.55);color:#e8eef6;font:13px/1.35 system-ui,-apple-system,sans-serif;pointer-events:none;box-shadow:0 6px 24px rgba(0,0,0,.45)";
@@ -161,16 +161,20 @@ function script(file: string, k: number, scenario: string | null = null): string
     clearInterval(window.__e2eBannerTimer);
     window.__e2eBannerTimer = setInterval(tick, 1000);
     if (d.done) row("Done when: " + d.done, "font-size:12px;color:#9fe0a8;margin-top:2px");
+    if (d.earth) row("Earth data: " + d.earth, "font-size:11.5px;color:#9fb6d6;margin-top:2px");
     return 1; })()`;
 }
 
 /** Puts the banner up on a page one sees: the file being set up (k 0) or its k-th test. Headless: nothing. */
 export async function showBanner(
-  page: { js(expr: string): Promise<unknown> } | null,
+  page: { js(expr: string): Promise<unknown>; earth?: { mode: string; dir: string } | null } | null,
   file: string,
   k: number,
   scenario: string | null = null,
 ) {
   if (!page || SHOW === "headless" || !file || process.env.E2E_BANNER === "0") return;
-  await page.js(script(file, k, scenario)).catch(() => {});
+  // (where the tiles come from — PLAN-J8 J8-T: the disk's folder, or the network)
+  const e = page.earth;
+  const earth = !e || e.mode === "off" ? "network" : `${e.mode === "on" ? "disk" : e.mode} · ${e.dir.replace(/^\/Users\/[^/]+/, "~")}`;
+  await page.js(script(file, k, scenario, earth)).catch(() => {});
 }

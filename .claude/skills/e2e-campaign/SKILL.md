@@ -43,7 +43,11 @@ When the user wants to watch, browse results or drive the page themselves, point
 - Before a measure (bench, A/B, frame times), `bun scripts/thermal.ts --all` (docs/THERMAL.md): a pressure other than
   Nominal makes the figures doubtful — wait, or report it beside them. Each test's `summary.json` carries `thermal`.
 - After a shader edit: `bun scripts/check-wgsl.ts` before the e2e. After a test edit: `bun run typecheck`.
-- One IGN-heavy e2e at a time across both Macs (same public IP → 429).
+- One IGN-heavy e2e at a time across both Macs (same public IP → 429) — for a zone not yet on the disk: the e2e's Earth
+  data (PLAN-J8 J8-T, docs/E2E.md §4 rule 5) come from one folder per machine (`E2E_EARTH_DATA` on/off/offline/refresh,
+  `KERR_EARTH_DATA`), fetched once and kept; the live data and OpenStreetMap's tiles never. A test that measures the downloads
+  says `// Earth data: network` in its header (or boots `sw: true`). The banner says where the tiles come from; the close
+  prints the counts (from the disk / fetched / failed).
 - Watching a run (yours or another session's, here or on the mini): `lab-monitor` names each e2e's file and test
   (~/.kerr-lab/live, docs/E2E.md "Every e2e is live"); the dashboard's Monitor (#monitor) shows it with a picture on
   demand. A picture is only taken when asked: never "Auto" on another session's A/B.

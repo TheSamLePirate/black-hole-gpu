@@ -9,6 +9,7 @@ import { App, E2E, stopServer } from "./lib/app";
 // false), the arrival's wait as before — the A/B. Logged: the key compiled ahead and the key at the arrival (the same: the guess right).
 // Duration: ~3 min on kerr-mini
 // Done when: the arrival's wait logged and nothing compiling by Jupiter, shot taken
+// Earth data: network (it measures the downloads — PLAN-J8 J8-T: never served from the disk)
 const OUT = process.env.VP_OUT ?? "remote-results/voyage-prewarm";
 afterAll(stopServer);
 

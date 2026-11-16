@@ -5,6 +5,7 @@ import { App, E2E, stopServer } from "./lib/app";
 // neither the Earth's medium maps (22.7 MB) nor Jupiter's moons' ephemeris (JUP365, 7.5 MB) before its
 // first image — both come after it, ahead of need; a scene at Jupiter waits for JUP365 before it is
 // placed. Before: every scene's first image waited behind all of them (at 20 Mbit/s, 11.1 s against 5.5–6.1).
+// Earth data: network (it measures the downloads — PLAN-J8 J8-T: never served from the disk)
 
 interface Seen {
   first: number;

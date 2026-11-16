@@ -234,7 +234,7 @@ so order matters within a file. Keep a file under ~2 min. Split a longer one.
 
 | member | what it does |
 |---|---|
-| `App.boot(o)` | starts (once per process) a **production** server of the tree on a free port, launches Chrome (after the lock), loads the page, waits for the first frame and the splash to lift. Options: `hash` (`"scene=game:artemis"`, `"scene=Moon: an afternoon on the plains"`, `"bench"`), `width`/`height` (1440×900), `dpr`, `lang` (`"en"` default, `"fr"`), `tiles` (false: S3 terrain and GIBS imagery blocked, so runs are reproducible), `sw` (register the Service Worker), `initScript` (page code run before the app's), `startupFailure` (expect the error screen), `args` (extra Chrome flags, e.g. a fake microphone) |
+| `App.boot(o)` | starts (once per process) a **production** server of the tree on a free port, launches Chrome (after the lock), loads the page, waits for the first frame and the splash to lift. Options: `hash` (`"scene=game:artemis"`, `"scene=Moon: an afternoon on the plains"`, `"bench"`), `width`/`height` (1440×900), `dpr`, `lang` (`"en"` default, `"fr"`), `tiles` (false: S3 terrain and GIBS imagery blocked, so runs are reproducible), `sw` (register the Service Worker — its boot keeps the network), `earthData` (`"on"`, `"off"`, `"offline"`, `"refresh"`: this boot's Earth data, whatever `E2E_EARTH_DATA` says — below), `initScript` (page code run before the app's), `startupFailure` (expect the error screen), `args` (extra Chrome flags, e.g. a fake microphone) |
 | `app.load(hash)` | navigates again (a fresh page, same Chrome) and waits as boot does; `app.lastLoadMs` |
 | `app.js<T>(expr)` | evaluates `expr` in the page (wrapped in an async function: `await` works, Promises are awaited), returns its JSON value; a page exception rejects with its message |
 | `app.waitFor(expr, ms = 10000)` | polls `expr` every 100 ms until truthy (returns it) or throws with the last value / error |
@@ -250,6 +250,8 @@ so order matters within a file. Keep a file under ~2 min. Split a longer one.
 | `app.snap(file)` | the page as it is now, no wait for the shaders nor the kernels beside them (shot() waits for every one): for a test about something else than the image — a toast, a panel, a mode — where a kernel pending minutes would stall it past its timeout (13 Nov 2026) |
 | `app.cdp.send(method, params, timeoutS?)` | any DevTools call (`Emulation.*`, `Network.*`, `Input.*` …) |
 | `app.cdp.errors` | the page's exceptions and console errors so far (assert it is `[]`, or filter what is expected) |
+| `app.earth` | the Earth data on disk for this boot (`lib/earth-cache.ts`; null when the network is kept): `mode`, `dir`, `counts` (`hits`, `misses`, bytes, `failed`, `missing`, `bySource`, `log` of `{src, url, hit}`) — said at the close, in `summary.json` (`earthData`) and on the banner |
+| `app.offline(on)`, `app.throttle(mbps, ms)` | the network cut or slowed (`lib/cdp.ts`); the Earth data's disk let go meanwhile, so the test measures the network |
 | `app.close()` | Chrome ended, its profile removed, the lock released |
 
 Other helpers: `tests/e2e/lib/cdp.ts` (`launch()`: a bare Chrome, no app), `tests/e2e/lib/flights.ts`
@@ -268,6 +270,8 @@ page** — a unit test, faster, for autopilot logic.
 | `E2E_BANNER=0` | no banner (the file, the test, what it proves) on a Chrome one sees |
 | `E2E_CDP_TIMEOUT=<s>` | a DevTools call fails after this (300 s): nothing waits forever |
 | `E2E_HITCH=1` (`E2E_HITCH_DIR=<dir>`) | the hitch probe in every page booted (`lib/hitch-probe.ts`, PLAN-J7 J7-0): each gap between two frames over 50 ms and its cause — a compile, the main thread, a collection, tiles, the log, the view, the GPU device, the GPU — appended as it comes to `remote-results/hitches/<test>.jsonl`, the frames counted every 600 (`kind: "sum"`). Its witnesses: `hitch-probe.e2e.test.ts` |
+| `E2E_EARTH_DATA=on` / `off` / `offline` / `refresh` | the Earth data on disk (PLAN-J8 J8-T, below): `on` the disk, else the network once and kept; `off` the network as before; `offline` a tile missing from the disk fails its request and the test at its close, with its URL; `refresh` fetched again and kept anew. **Default: `EARTH_DATA_DEFAULT` in `lib/earth-cache.ts`** |
+| `KERR_EARTH_DATA=<dir>` | the folder (else `~/.kerr-lab/config.json` `earthData`, else `~/Documents/DEV/earth-data`; on kerr-mini `~/kerr-lab/earth-data`) |
 | `CHROME=<path>` | another Chrome binary |
 | `KERR_CHROME_LOCK=0` | no lock (dedicated machine only) |
 | `UPDATE=1` | `golden.e2e.test.ts` re-records `tests/e2e/golden/flights.json` (compare with the previous one before keeping it) |
@@ -352,6 +356,15 @@ returns; the Monitor says so (*page held*).
    those; IGN, OSM and the other sources still load), so a **judged flight** stands on the same ground every day. A
    test whose picture must show the real ground asks `tiles: true` (Sam: images loaded for any visual test — about 235
    files do) and waits for the data (`app.dataSettled()`); the ground then changes under an autopilot while it loads.
+   **The Earth data from the disk** (PLAN-J8 J8-T, Sam's decision of 16 Nov 2026: « désactivable, mais activée par défaut … partageables
+   par chaque session e2e »). Every tile the game asks — the relief, the imagery, the IGN's heights, orthophotos and **buildings**,
+   OpenFreeMap's, WorldCover's and Overture's ranges — is served from one folder per machine, shared by every e2e and every session,
+   fetched by Bun the first time and kept (`tests/e2e/lib/earth-cache.ts`, Chrome's Fetch domain on the page **and on its dedicated
+   workers**: the scenery's, the building cells'). What is kept is what the PWA keeps (`classify` → `"tile"`); **never the live data**
+   (weather, METAR, traffic, solar wind, Overpass, geocoding) **nor OpenStreetMap's own map tiles** (their policy). A test that
+   **measures the downloads** keeps the network: a Service Worker's boot (`sw: true`) or the header line `// Earth data: network`
+   (`tests/e2e-banner-guard.test.ts` refuses a loading/offline/PWA file without one). The folder moves between the Macs with
+   `bun scripts/remote.ts earth-sync` (rsync both ways, nothing overwritten); `doctor` says its path and size.
 6. **Assert `app.cdp.errors`** at least once per file. A file without any `expect(` — a measure, a probe — says so in its
    header (« no assertion »); `tests/e2e-honesty.test.ts` (a unit test, in `bun test`) refuses one that does not, and a
    swallowed wait (audit QA-08, 13 Nov 2026).

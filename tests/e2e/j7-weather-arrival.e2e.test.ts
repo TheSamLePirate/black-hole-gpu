@@ -14,6 +14,7 @@ import { J0_FIXED, J0_SCENE } from "./lib/j0-scene";
 // WA_PROFILE=1: the page's CPU profile over the arrival (native work counted): its long runs (≥ WA_MIN ms, 80) and the functions in them.
 // Duration: ~3 min on kerr-mini.
 // Done when: the arrival recorded and j7-weather-arrival.json written.
+// Earth data: network (it measures the downloads — PLAN-J8 J8-T: never served from the disk)
 afterAll(stopServer);
 const OUT = process.env.WA_OUT ?? "remote-results/j7-weather-arrival";
 const REPORT = "LFTH 151700Z 25018G28KT 2500 RA BKN006 OVC012 13/12 Q1004";

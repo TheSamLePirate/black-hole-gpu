@@ -138,7 +138,9 @@ bun scripts/lab-monitor.ts                # avant : qui tient le Chrome, la chal
   seulement l'état « live ». À réserver aux sondes.
 - Les variables d'un test (`DEMOS=…`) ne passent pas avec `--remote` : les écrire dans la commande de
   `remote.ts run -- E2E=1 DEMOS=… bun test …` ([E2E.md](E2E.md) §3).
-- Un fichier qui touche l'IGN à la fois, sur les deux Macs réunis (même IP publique : 429).
+- Un fichier qui touche l'IGN à la fois, sur les deux Macs réunis (même IP publique : 429). Les données Terre des e2e servies depuis le
+  disque (PLAN-J8 J8-T, [E2E.md](E2E.md) §4 règle 5) ne touchent plus l'IGN qu'au premier passage d'une zone : la règle tient
+  pour une zone neuve, `E2E_EARTH_DATA=off`/`refresh` et les e2e marqués `// Earth data: network`.
 - Après une modification de shader : `bun scripts/check-wgsl.ts` avant l'e2e (les tests de budget ne compilent pas).
 - Après une modification du test : vérification de types (`bun run typecheck`, ou `bun run check` qui y ajoute Biome et les shaders) avant de lancer.
 - Tâche de fond : un titre avec la durée estimée ; jamais d'attente silencieuse de plusieurs minutes.
@@ -473,7 +475,8 @@ expect(r.log.some((l) => /Hard landing|collapsed|tipped/.test(l))).toBe(false);
 | Rien ne bouge, `body.paused`, écran « craft lost » | un crash a mis en pause ; ou Échap a ouvert le menu pause ; ou un `.k-modal` retiré à la main | détecter `.craft-lost` / `body.paused` ; `game.pause(false)` ; fermer les écrans par leur bouton ; `damage: false` si la casse n'est pas le sujet |
 | « … is not clickable: div#loading … / div.craft-lost / div.k-modal » | un calque (chargement, crash, pause) au-dessus | attendre la fin du chargement ; gérer le crash ; jamais `element.click()` |
 | `waitFor(…firstFrameDoneAt…): 180000 ms` | la page n'a jamais dessiné : GPU occupé (autre page, orphelin), mini sans internet, chaleur | `lab-monitor`, `--sweep`, `thermal.ts --all` ; relancer seul |
-| Tuiles « toujours en attente » / 429 | IGN partagé entre les deux Macs, ou orthophotos lentes | un test IGN à la fois ; `waitProgress` plutôt qu'un plafond fixe |
+| Tuiles « toujours en attente » / 429 | IGN partagé entre les deux Macs, ou orthophotos lentes | les données Terre depuis le disque (J8-T : `E2E_EARTH_DATA=on`, `earth-sync` entre les Macs) ; une zone neuve : un test IGN à la fois ; `waitProgress` plutôt qu'un plafond fixe |
+| Un test hors ligne passe ici et échoue ailleurs ; « not on the disk — <url> » à la fermeture (`E2E_EARTH_DATA=offline`) | la tuile n'a jamais été chargée sur cette machine (le dossier n'a pas été échangé) | la charger une fois en `on`, ou `bun scripts/remote.ts earth-sync` ; un test qui mesure le réseau porte `// Earth data: network` |
 | Image noire ou fausse alors que « compilé » | `variantReady` vrai dès le départ ; pastille « Compiling » encore là | `app.settled()` (`tracerSettled` + `compilesPending` + `compilingNow`) |
 | Vue A/B : un côté plus sombre | exposition tenue au chargement | `app.exposureSettled()` des deux côtés |
 | A/B : B plus rapide | B a chargé moins de tuiles | consigner le nombre de tuiles par côté ; `dataSettled` des deux côtés |

@@ -13,6 +13,7 @@ import { EARTH_SETTINGS } from "./lib/plan-views";
 //   (2) a flight: put east of Porquerolles heading west at 500 m, the world running, a shot pair every 3 s.
 // Output: remote-results/coast-loading/ (CL_OUT): A-NN.png / A-NN-w.png, F-NN.png / F-NN-w.png, series.json.
 // Done when: both series and the final shots taken, the probe's counts written, no GPU error. Duration: ~3 min.
+// Earth data: network (it measures the downloads — PLAN-J8 J8-T: never served from the disk)
 const OUT = process.env.CL_OUT ?? "remote-results/coast-loading";
 afterAll(stopServer);
 const EVERY = Number(process.env.CL_EVERY ?? 2000);
