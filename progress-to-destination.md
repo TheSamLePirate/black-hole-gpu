@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-16 04:58 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-16 05:05 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous. Ce qui est fermé quitte le tableau « En cours » pour la ligne « Fermé récemment ».
@@ -62,9 +62,9 @@ l'état d'une mission ou d'un combat **non sauvé, dit** ; le réseau **« entre
 
 **Fermé aussi** : le plancher du raster sur GPU faible (15 nov., 23:46, proposer sous 15 images/s, décision de Sam).
 
-**La session du rendu (33d89754)** : J0 à J6 fermés, décisions du 15 appliquées ; **en attente du prochain plan de la session d'analyse** (choix de Sam, 11/16 04:58 UTC) — pistes notées : la cible 40 ms du mini (l'eau 16,2, l'orage 16,5, la forêt ~7 ms), les à-coups relevés par J6 (noyau météo 84–433 ms, retour F1 317 ms).
+**La session du rendu (33d89754)** : J0 à J6 fermés, décisions du 15 appliquées ; **son prochain plan écrit : [PLAN-J7](docs/PLAN-J7-FLUIDITE.md)** (session d'analyse, 16 nov. 05:05 UTC) — la sonde des à-coups, le sol des approches (OIFK), la météo compilée d'avance (84–433 ms), le retour F1 (317 ms), la santé, le repos au sol, puis la fiche des 40 ms du mini ; ses trois questions réglées provisoirement selon les recommandations.
 
-**Attend Sam** : rien d'ouvert à ce jour (les seuils du mini attendent la reprise de la cible 40 ms ; la borne du M1 Max mesurée le 15 au soir : 30 gardé).
+**Attend Sam** : les trois questions de [PLAN-J7](docs/PLAN-J7-FLUIDITE.md) §4, réglées provisoirement (les 40 ms du mini en dernier, J7-6 ; PLAN-J8 les arbres proches en géométrie ensuite ; l'aplanissement du détail sous les trouées jusqu'à la FAF ou 10 km) ; les seuils du mini attendent la reprise de la cible 40 ms.
 
 ## Journal
 
@@ -8486,3 +8486,17 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   le faisceau à 65 m au-dessus à 4,6 km ; tests `approach-join`, `ils`, `a320-approach*` verts (17/17).
 - Limites : OIFK reste non posé tant que le détail procédural n'est pas aplani sous les trouées (session du rendu — PROBLEMES).
 - Suite : la session du rendu ; OIFK rejoué ensuite.
+
+### 2026-11-16 05:05 UTC — PLAN-J7 écrit (session d'analyse) : la fluidité, le sol des approches, puis les 40 ms du mini
+
+- Contribution à la destination : §19.8 et §7.19 (les images bloquées d'un parcours), §19.4 (le sol de contact sous les approches), §8 (la
+  cible du mini) — le prochain plan de la session du rendu, demandé par Sam (16 nov., ~00:00 UTC) après la fermeture de J0–J6.
+- Réalisé : [PLAN-J7-FLUIDITE.md](docs/PLAN-J7-FLUIDITE.md) — huit lots : J7-0 la sonde des à-coups (témoins), J7-1 le détail procédural
+  aplani sous les trouées d'approche (OIFK : sol de collision +75 à +205 m sur des données plates), J7-2 le noyau de la météo compilé avant
+  son arrivée (84–433 ms bloqués), J7-3 le retour par F1 (317 ms), J7-4 la santé (pastille figée, `gpu-startup`, bouton météo de la carte),
+  J7-5 le repos au sol à la source (−0,29 m/s), J7-6 la fiche des plafonds des 40 ms du mini, J7-R ; trois questions à Sam réglées
+  provisoirement ; carte `docs/README.md` ; État courant.
+- Preuves : documenté, depuis le journal, PLAN-J4 à J6, PROBLEMES et la lecture du code (`terrain.ts` `earthHeightSampler`, `game/sites.ts`
+  `runwayGrade` — 3 km avant le seuil aujourd'hui —, `renderer.ts` `prewarm*`). Aucun test, e2e ni mesure lancé.
+- Limites : les causes des à-coups sont celles relevées par J6, non rétablies ; l'écart jour/nuit du mini (~48 contre 44,8 ms) non expliqué.
+- Suite : la session du rendu ouvre J7-0 ; Sam peut réviser les trois questions.
