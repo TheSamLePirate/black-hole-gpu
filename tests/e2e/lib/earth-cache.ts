@@ -158,6 +158,9 @@ export interface EarthCounts {
   /** each kept-kind request: its source, its URL, from the disk or not (the witnesses read it) */
   /** each request kept or served: its source, URL, from the disk or not, when [ms since the epoch], the network's time if fetched [ms] */
   log: { src: string; url: string; hit: boolean; nid?: string; at?: number; ms?: number }[];
+  /** every request kept or served, by host kind (hostKind), unbounded — the log stops at 20 000, a zone's download asks 50 000: the
+   *  host rates read from the log alone covered its first 25 min (j8-zone-paris, 16 Nov 2026) */
+  timing: { host: string; hit: boolean; at: number; ms: number }[];
 }
 
 /** the hosts' patterns paused (Fetch.enable); without tiles (`App.boot({ tiles: false })`), the relief's and GIBS's left to the block */
@@ -184,7 +187,7 @@ function patterns(tiles: boolean) {
 export async function earthCache(cdp: Cdp, o: { tiles: boolean; mode?: EarthDataMode; dir?: string; port?: number }) {
   const mode = o.mode ?? earthDataMode();
   const dir = o.dir ?? earthDataDir();
-  const counts: EarthCounts = { hits: 0, misses: 0, hitBytes: 0, missBytes: 0, failed: 0, missing: [], bySource: {}, log: [] };
+  const counts: EarthCounts = { hits: 0, misses: 0, hitBytes: 0, missBytes: 0, failed: 0, missing: [], bySource: {}, log: [], timing: [] };
   if (mode === "off")
     return {
       mode,
@@ -245,6 +248,7 @@ export async function earthCache(cdp: Cdp, o: { tiles: boolean; mode?: EarthData
           counts.hits++;
           counts.hitBytes += got.body.byteLength;
           if (counts.log.length < 20_000) counts.log.push({ src, url, hit: true, nid: p.networkId, at: Date.now() });
+          counts.timing.push({ host: hostKind(url), hit: true, at: Date.now(), ms: 0 });
         } else if (mode === "offline") {
           counts.missing.push(url);
           console.error(`  e2e Earth data (offline): not on the disk — ${url}${range ? ` [${range}]` : ""}`);
@@ -255,6 +259,7 @@ export async function earthCache(cdp: Cdp, o: { tiles: boolean; mode?: EarthData
           counts.misses++;
           counts.missBytes += got.body.byteLength;
           if (counts.log.length < 20_000) counts.log.push({ src, url, hit: false, nid: p.networkId, at: t0, ms: Date.now() - t0 });
+          counts.timing.push({ host: hostKind(url), hit: false, at: t0, ms: Date.now() - t0 });
         }
         const h = [
           { name: "content-type", value: got.meta.type },
@@ -357,38 +362,44 @@ export async function earthCache(cdp: Cdp, o: { tiles: boolean; mode?: EarthData
   };
 }
 
-/** The network's requests by host (PLAN-J8 J8-9 (3): each host's measured rate): how many fetched, their span [s] — first start to last
- *  end — and rate over it [/s], their time on the wire (median, 95th) [ms]. The Géoplateforme's WMS-R grids, its WMTS, its BD TOPO apart. */
-export function hostStats(log: EarthCounts["log"]) {
-  const kind = (u: string) => {
-    try {
-      const h = new URL(u).hostname;
-      if (h !== "data.geopf.fr") return h;
-      return u.includes("/BDTOPO/")
-        ? "geopf BD TOPO"
-        : u.includes("wms-r")
-          ? "geopf WMS-R"
-          : /wmts/i.test(u)
-            ? "geopf WMTS"
-            : "geopf other";
-    } catch {
-      return "?";
+/** a request's host, the Géoplateforme's split by service (its WMS-R grids, its WMTS orthophotos, its BD TOPO: one budget in sw.ts) */
+export function hostKind(u: string): string {
+  try {
+    const h = new URL(u).hostname;
+    if (h !== "data.geopf.fr") return h;
+    return u.includes("/BDTOPO/") ? "geopf BD TOPO" : u.includes("wms-r") ? "geopf WMS-R" : /wmts/i.test(u) ? "geopf WMTS" : "geopf other";
+  } catch {
+    return "?";
+  }
+}
+/** The network's requests by host (PLAN-J8 J8-9 (3): each host's measured rate), over the whole run (EarthCounts.timing): how many
+ *  fetched (n), their span [s] — first start to last end — and rate over it [/s], their time on the wire (median, 95th) [ms]; how many
+ *  served from the disk (disk) — a run partly on the disk is no cold download's time */
+export function hostStats(counts: Pick<EarthCounts, "timing">) {
+  const by = new Map<string, { n: number; disk: number; t0: number; t1: number; ms: number[] }>();
+  for (const r of counts.timing) {
+    const b = by.get(r.host) ?? { n: 0, disk: 0, t0: Number.POSITIVE_INFINITY, t1: 0, ms: [] };
+    by.set(r.host, b);
+    if (r.hit) {
+      b.disk++;
+      continue;
     }
-  };
-  const by = new Map<string, { n: number; t0: number; t1: number; ms: number[] }>();
-  for (const r of log) {
-    if (r.hit || r.at === undefined) continue;
-    const k = kind(r.url);
-    const b = by.get(k) ?? { n: 0, t0: Number.POSITIVE_INFINITY, t1: 0, ms: [] };
     b.n++;
     b.t0 = Math.min(b.t0, r.at);
-    b.t1 = Math.max(b.t1, r.at + (r.ms ?? 0));
-    b.ms.push(r.ms ?? 0);
-    by.set(k, b);
+    b.t1 = Math.max(b.t1, r.at + r.ms);
+    b.ms.push(r.ms);
   }
   const q = (a: number[], f: number) => a.sort((x, y) => x - y)[Math.min(a.length - 1, Math.floor(f * a.length))] ?? 0;
   return [...by].map(([host, b]) => {
-    const span = Math.max(0.001, (b.t1 - b.t0) / 1000);
-    return { host, n: b.n, spanS: Math.round(span), perS: +(b.n / span).toFixed(2), p50ms: q(b.ms, 0.5), p95ms: q(b.ms, 0.95) };
+    const span = b.n ? Math.max(0.001, (b.t1 - b.t0) / 1000) : 0;
+    return {
+      host,
+      n: b.n,
+      disk: b.disk,
+      spanS: Math.round(span),
+      perS: span ? +(b.n / span).toFixed(2) : 0,
+      p50ms: q(b.ms, 0.5),
+      p95ms: q(b.ms, 0.95),
+    };
   });
 }

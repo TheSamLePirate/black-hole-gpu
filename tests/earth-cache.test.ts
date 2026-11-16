@@ -2,7 +2,7 @@ import { afterAll, expect, test } from "bun:test";
 import { existsSync, mkdtempSync, readdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { fetchKeep, keptUrl, keyFiles, readKept, ttlOf, wantsNetwork } from "./e2e/lib/earth-cache";
+import { fetchKeep, hostKind, hostStats, keptUrl, keyFiles, readKept, ttlOf, wantsNetwork } from "./e2e/lib/earth-cache";
 
 // PLAN-J8 J8-T — the e2e's Earth data on disk (tests/e2e/lib/earth-cache.ts), its pure parts: what is kept (the PWA's tiles — the BD TOPO's
 // buildings, OpenFreeMap's, Overture's ranges, WorldCover's COGs —, never the live data nor OpenStreetMap's map tiles), how long, under
@@ -92,4 +92,18 @@ test("the header that keeps the network: `// Earth data: network` in the file's 
     wantsNetwork(`import { x } from "y";\n// What it proves.\n// Earth data: network (it measures)\n// Duration: ~1 min.\ntest();`),
   ).toBe(true);
   expect(wantsNetwork(`// What it proves.\n// Duration: ~1 min.\ntest();\n// Earth data: network`)).toBe(false);
+});
+
+test("each host's rate over the whole run, the disk's apart (J8-9 (3): the log alone stopped at 20 000 requests)", () => {
+  expect(hostKind("https://data.geopf.fr/wms-r?SERVICE=WMS&LAYERS=ELEVATION")).toBe("geopf WMS-R");
+  expect(hostKind("https://data.geopf.fr/wmts?SERVICE=WMTS&REQUEST=GetTile")).toBe("geopf WMTS");
+  expect(hostKind("https://data.geopf.fr/tms/1.0.0/BDTOPO/15/1/2.pbf")).toBe("geopf BD TOPO");
+  expect(hostKind("https://tiles.openfreemap.org/planet/x/14/1/2.pbf")).toBe("tiles.openfreemap.org");
+  // (30 000 fetched over 3 000 s, past the log's 20 000; 10 from the disk)
+  const timing = Array.from({ length: 30_000 }, (_, i) => ({ host: "geopf WMS-R", hit: false, at: i * 100, ms: i % 2 ? 400 : 200 }));
+  for (let i = 0; i < 10; i++) timing.push({ host: "geopf WMS-R", hit: true, at: 5, ms: 0 });
+  const [h] = hostStats({ timing });
+  expect(h).toMatchObject({ host: "geopf WMS-R", n: 30_000, disk: 10, spanS: 3000, perS: 10, p50ms: 400, p95ms: 400 });
+  // (a host only on the disk: no rate)
+  expect(hostStats({ timing: [{ host: "eox", hit: true, at: 1, ms: 0 }] })[0]).toMatchObject({ n: 0, disk: 1, perS: 0 });
 });

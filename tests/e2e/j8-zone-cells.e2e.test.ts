@@ -76,7 +76,7 @@ describe.skipIf(!E2E)("PLAN-J8 J8-6: an offline zone carries its building cells 
     console.log(`  ready in ${((Date.now() - t0) / 1000).toFixed(0)} s: ${JSON.stringify(z)}`);
     // (each host's measured rate — PLAN-J8 J8-9 (3): the zone's estimate set on them; through the e2e's Earth data on disk, the
     // Service Worker's fetches — a first run fetches, a later one finds them on the disk)
-    if (app.earth) for (const h of hostStats(app.earth.counts.log)) console.log(`  host ${JSON.stringify(h)}`);
+    if (app.earth) for (const h of hostStats(app.earth.counts)) console.log(`  host ${JSON.stringify(h)}`);
     expect(z.state).toBe("ready");
     expect(z.cells?.count ?? 0).toBeGreaterThan(0);
     expect(z.cells?.failed).toBe(0);

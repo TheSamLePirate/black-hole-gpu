@@ -29,7 +29,8 @@ describe.skipIf(!E2E)(`PLAN-J8 J8-9: J8-A's corridor zone « ${TRACK} », downlo
     mkdirSync(OUT, { recursive: true });
     app = await App.boot({ width: 1600, height: 900, hash: "scene=game:artemis", sw: true, tiles: true });
     await app.js(`(() => { Object.assign(__bh.settings, { ship: false, traffic: false, earthClouds: 0, weather: "fair", earthPipeline: "raster",
-      earthOrtho: true, earthIgnRelief: true }); __bh.renderer.debugSkipShip = true; return 1; })()`);
+      earthOrtho: true, earthIgnRelief: true }); __bh.renderer.debugSkipShip = true;
+      __bh.renderer.farBudgetMiB = ${Number(process.env.J8A_BUDGET ?? 72)}; return 1; })()`);
     expect(await app.js<boolean>("__bh.pwa.ready()")).toBe(true);
     await app.waitFor("!!__bh.pwa.zones", 30_000);
   }, 180_000);
@@ -79,7 +80,7 @@ describe.skipIf(!E2E)(`PLAN-J8 J8-9: J8-A's corridor zone « ${TRACK} », downlo
         // the zone paused, what is in kept on the disk, the hosts' rates so far written)
         if (DEADLINE && Date.now() > DEADLINE) {
           await app.js(`__bh.pwa.zones.pause(${JSON.stringify(id)})`);
-          const hosts = app.earth ? hostStats(app.earth.counts.log) : [];
+          const hosts = app.earth ? hostStats(app.earth.counts) : [];
           writeFileSync(
             `${OUT}/${TRACK}.json`,
             `${JSON.stringify({ track: TRACK, zone, estimate: est, stoppedAt: new Date().toISOString(), realS: (Date.now() - t0) / 1000, record: z, hosts }, null, 1)}\n`,
@@ -97,7 +98,7 @@ describe.skipIf(!E2E)(`PLAN-J8 J8-9: J8-A's corridor zone « ${TRACK} », downlo
       }
       const z = (await rec())!;
       const realS = (Date.now() - t0) / 1000;
-      const hosts = app.earth ? hostStats(app.earth.counts.log) : [];
+      const hosts = app.earth ? hostStats(app.earth.counts) : [];
       console.log(`  ready in ${(realS / 60).toFixed(1)} min (estimated ${(est.seconds / 60).toFixed(1)}): ${JSON.stringify(z)}`);
       for (const h of hosts) console.log(`  host ${JSON.stringify(h)}`);
       writeFileSync(`${OUT}/${TRACK}.json`, `${JSON.stringify({ track: TRACK, zone, estimate: est, realS, record: z, hosts }, null, 1)}\n`);
@@ -109,13 +110,14 @@ describe.skipIf(!E2E)(`PLAN-J8 J8-9: J8-A's corridor zone « ${TRACK} », downlo
       await app.load("scene=game:artemis");
       await app.offline(true);
       await app.js(`(() => { Object.assign(__bh.settings, { ship: false, traffic: false, earthClouds: 0, weather: "fair", earthPipeline: "raster",
-      earthOrtho: true, earthIgnRelief: true }); __bh.renderer.debugSkipShip = true; return 1; })()`);
+      earthOrtho: true, earthIgnRelief: true }); __bh.renderer.debugSkipShip = true;
+      __bh.renderer.farBudgetMiB = ${Number(process.env.J8A_BUDGET ?? 72)}; return 1; })()`);
       const before = (await app.js<{ served: { network: number } }>(`__bh.pwa.stats()`)).served.network;
       const ready: { point: number; ready: boolean; why: string[] }[] = [];
       for (let k = 0; k < track.points.length; k++) {
         const [lat, lon, alt] = track.points[k]!;
         const why = await app.js<string | null>(
-          `__bh.viewAt(${lat}, ${lon}, { altM: ${alt} + __bh.sys.geoid(${lat}, ${lon}), pitch: -8, fov: 50 }) ?? null`,
+          `(() => { __bh.freeze(true); return __bh.viewAt(${lat}, ${lon}, { altM: ${alt} + __bh.sys.geoid(${lat}, ${lon}), pitch: -8, fov: 50 }) ?? null; })()`,
         );
         if (why) throw new Error(`viewAt point ${k + 1}: ${why}`);
         await app
@@ -131,8 +133,22 @@ describe.skipIf(!E2E)(`PLAN-J8 J8-9: J8-A's corridor zone « ${TRACK} », downlo
         console.log(`  point ${k + 1}: ${JSON.stringify(ready[k])}`);
         if (k === 2) await app.shot(`${OUT}/${TRACK}-offline-point3.png`);
       }
-      const after = (await app.js<{ served: { network: number } }>(`__bh.pwa.stats()`)).served.network;
-      console.log(`  the Service Worker's network responses offline: ${after - before}`);
+      const st = await app.js<{ served: { network: number; kinds?: Record<string, { network: number }>; recent?: string[] } }>(
+        `__bh.pwa.stats()`,
+      );
+      const after = st.served.network;
+      // (counted before the fetch: a tile asked of the network — in neither the zone nor the worker's cache —, failed offline)
+      console.log(`  the Service Worker's requests to the network offline (in neither the zone nor its cache): ${after - before}`);
+      console.log(
+        `  … by kind ${JSON.stringify(
+          Object.fromEntries(
+            Object.entries(st.served.kinds ?? {})
+              .filter(([, v]) => v.network)
+              .map(([k, v]) => [k, v.network]),
+          ),
+        )}`,
+      );
+      for (const u of (st.served.recent ?? []).slice(-12)) console.log(`  … ${u}`);
       expect(ready.every((p) => p.ready)).toBe(true);
       expect(after - before).toBe(0);
     },
