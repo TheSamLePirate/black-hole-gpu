@@ -210,14 +210,22 @@ self.addEventListener("activate", (ev) => {
 
 // ---- messages from the page: take over now; the caches' figures (the tests, the settings)
 self.addEventListener("message", (ev) => {
-  const m = ev.data as { type?: string; id?: string; chains?: string[][]; zone?: ZoneRecord; fresh?: boolean; bytes?: number } | null;
+  const m = ev.data as {
+    type?: string;
+    id?: string;
+    chains?: string[][];
+    zone?: ZoneRecord;
+    fresh?: boolean;
+    bytes?: number;
+    wmsSpacingLifted?: boolean;
+  } | null;
   const answer = (p: Promise<unknown>) => ev.waitUntil(p.then((v) => ev.ports[0]?.postMessage(v)));
   if (m?.type === "skip-waiting") void self.skipWaiting();
   if (m?.type === "stats") answer(stats());
   if (m?.type === "clear-tiles") answer(clearTiles().then(() => ({ ok: true })));
   if (m?.type === "tile-budget" && typeof m.bytes === "number") answer(setBudget(m.bytes));
   // (the zones: a batch fetched in, a record kept, the list, one dropped)
-  if (m?.type === "zone-fetch" && m.id && m.chains) answer(zoneFetch(m.id, m.chains, !!m.fresh));
+  if (m?.type === "zone-fetch" && m.id && m.chains) answer(zoneFetch(m.id, m.chains, !!m.fresh, !!m.wmsSpacingLifted));
   if (m?.type === "zone-save" && m.zone) answer(storePut(ZONES, m.zone).then(() => ({ ok: true })));
   if (m?.type === "zones") answer(storeAll<ZoneRecord>(ZONES));
   if (m?.type === "zone-delete" && m.id) answer(zoneDelete(m.id));
@@ -298,9 +306,10 @@ async function serve(kept: Response, mark?: [string, string]): Promise<Response 
  * gentle): a chain's links one after the other while each falls
  * short or is refused (a 404 counted as none); a link already in (another zone's, or this one's before a pause) only
  * marked as this zone's too — its body read again to know whether the next is wanted; `fresh` (an update): every link
- * asked again, the one kept where the network fails. Answers the batch's tally, the chains that failed after every try.
+ * asked again, the one kept where the network fails. `wmsSpacingLifted`: the e2e harness's (its data from the e2e's disk) — the
+ * WMS-R's spacing skipped, ZONE_PARALLEL and the batches as they are. Answers the batch's tally, the chains that failed after every try.
  */
-async function zoneFetch(id: string, chains: string[][], fresh = false) {
+async function zoneFetch(id: string, chains: string[][], fresh = false, wmsSpacingLifted = false) {
   zonesHeld = Promise.resolve(true);
   const cache = await caches.open(ZONE_CACHE);
   const out = { done: 0, bytes: 0, none: 0, failed: [] as string[][], why: [] as string[] };
@@ -382,7 +391,9 @@ async function zoneFetch(id: string, chains: string[][], fresh = false) {
     // for 990 — the chains left are asked again at the end, after a pause, and on a resume)
     for (let attempt = 0; attempt < 3; attempt++) {
       try {
-        await gentle(url);
+        // (the e2e harness's alone — its data from the e2e's disk, not the IGN's —: the WMS-R's spacing lifted, nothing else; a player
+        // never has it — pwa-zones.ts wmsSpacingLifted)
+        if (!wmsSpacingLifted) await gentle(url);
         // (past the browser's HTTP cache: the zone keeps its own copy; and a gateway's 502 kept there would be served again on every
         // try — suspected, 11 Nov 2026: the same 17 tiles failed for 12 minutes of resumes while the IGN answered them at once)
         const res = await fetch(url, { cache: "no-store" });

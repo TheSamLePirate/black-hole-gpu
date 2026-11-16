@@ -203,6 +203,8 @@ export async function earthCache(cdp: Cdp, o: { tiles: boolean; mode?: EarthData
   const attached = new Map<string, string>(); // (the dedicated workers' sessions, their full URL — lib/worker-profile.ts seeds from it)
   // (which worker asked a URL: its own session's Network events — Chrome pauses a dedicated worker's requests on the page's Fetch
   // session too, so the paused request alone says "page"; T0, 16 Nov 2026)
+  /** the next WMS-R grid's turn to reach the network [ms] (8 a second, the Service Worker's gentle's) */
+  let wmsNext = 0;
   const askedBy = new Map<string, string>(); // (Network requestId → worker: the Fetch pause's networkId names it — two workers may ask one URL)
   const workerFetch: Record<string, string> = {};
   const pausedOn: Record<string, number> = {}; // (which session Chrome paused each request on)
@@ -254,6 +256,13 @@ export async function earthCache(cdp: Cdp, o: { tiles: boolean; mode?: EarthData
           console.error(`  e2e Earth data (offline): not on the disk — ${url}${range ? ` [${range}]` : ""}`);
           return void reply("Fetch.failRequest", { requestId: p.requestId, errorReason: "InternetDisconnected" });
         } else {
+          // (a WMS-R grid not on the disk: spaced 125 ms apart here — the Service Worker's own spacing lifted for a zone in the e2e,
+          // lib/app.ts wmsSpacingLifted: the IGN still asked at the player's pace)
+          if (url.includes("data.geopf.fr/wms-r")) {
+            const at = Math.max(Date.now(), wmsNext);
+            wmsNext = at + 125;
+            if (at > Date.now()) await new Promise((done) => setTimeout(done, at - Date.now()));
+          }
           const t0 = Date.now();
           got = await fetchKeep(dir, url, range);
           counts.misses++;

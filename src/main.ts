@@ -984,6 +984,8 @@ async function main() {
       talk: pwa.talk,
       // (a zone's building cells prepared once its tiles are in — PLAN-J8 J8-6)
       cells: zoneCellsIO,
+      // (the e2e harness's alone: its data from the e2e's disk — the WMS-R's spacing lifted; never a player's)
+      wmsSpacingLifted: () => (globalThis as { __e2eWmsSpacingLifted?: boolean }).__e2eWmsSpacingLifted === true,
       busy: () => renderer.earthTiles.pending > 0 || renderer.earthTiles.orthoPending > 0,
       sources: () => ({
         ortho: settings.earthOrtho,

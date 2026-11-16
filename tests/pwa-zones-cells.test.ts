@@ -169,3 +169,33 @@ test("a corridor zone: its mesh cells (J8-8) — its BD TOPO cells within MESH_N
   await h2.ready((await h2.zones.add({ name: "a", lat: 43.124, lon: 5.93, radiusKm: 0.5, profile: "overflight" }))!);
   expect(h2.meshes).toEqual([]);
 });
+
+test("the e2e's lever (J8-9): each batch tells the worker the WMS-R's spacing is lifted only when the page says so", async () => {
+  for (const on of [false, true]) {
+    const seen: boolean[] = [];
+    const store = new Map<string, ZoneRecord>();
+    const zones = createZones({
+      talk: async <T>(m: object) => {
+        const msg = m as { type: string; zone?: ZoneRecord; chains?: string[][]; wmsSpacingLifted?: boolean };
+        if (msg.type === "zones") return [...store.values()].map((z) => structuredClone(z)) as T;
+        if (msg.type === "zone-save") {
+          store.set(msg.zone!.id, structuredClone(msg.zone!));
+          return { ok: true } as T;
+        }
+        if (msg.type === "zone-fetch") {
+          seen.push(msg.wmsSpacingLifted === true);
+          return { done: msg.chains!.length, bytes: 1, none: 0, failed: [] } as T;
+        }
+        return null;
+      },
+      busy: () => false,
+      sources: () => SOURCES,
+      retryPauseMs: 0,
+      ...(on ? { wmsSpacingLifted: () => true } : {}),
+    });
+    const id = (await zones.add({ name: "a", lat: 43.124, lon: 5.93, radiusKm: 0.3, profile: "overflight" }))!;
+    for (let i = 0; i < 500 && (await zones.list()).find((q) => q.id === id)?.state !== "ready"; i++) await Bun.sleep(5);
+    expect(seen.length).toBeGreaterThan(0);
+    expect(seen.every((v) => v === on)).toBe(true);
+  }
+});

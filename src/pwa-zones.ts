@@ -76,6 +76,10 @@ export function createZones(o: {
   busy: () => boolean;
   /** the sources the game's tiles follow now */
   sources: () => ZoneSources;
+  /** the e2e harness's alone (tests/e2e/lib/app.ts, when the e2e's disk serves the Earth's data): « the WMS-R's spacing lifted: the data
+   *  come from the e2e's disk » — each batch tells the worker to skip its WMS-R spacing (sw.ts gentle), nothing else changed; a player
+   *  never has it (off unless the page global `__e2eWmsSpacingLifted` is true) */
+  wmsSpacingLifted?: () => boolean;
   /** the pause before the failed are asked again (RETRY_PAUSE_MS; the tests' 0) */
   retryPauseMs?: number;
   /** the building cells (PLAN-J8 J8-6): prepared into the prepared cache once a zone's tiles are in, dropped from it */
@@ -137,7 +141,7 @@ export function createZones(o: {
         const batch = urls.slice(zone.cursor, zone.cursor + BATCH);
         const b0 = Date.now();
         const r = await o.talk<{ done: number; bytes: number; none: number; failed: ZoneChain[]; why?: string[] }>(
-          { type: "zone-fetch", id, chains: batch, fresh: !!zone.fresh },
+          { type: "zone-fetch", id, chains: batch, fresh: !!zone.fresh, wmsSpacingLifted: !!o.wmsSpacingLifted?.() },
           BATCH_MS,
         );
         zone.batchMs = (zone.batchMs ?? 0) + (Date.now() - b0);
@@ -167,7 +171,7 @@ export function createZones(o: {
       if (zone.cursor >= urls.length && failed.length && !paused.has(id)) {
         await new Promise((r) => setTimeout(r, o.retryPauseMs ?? RETRY_PAUSE_MS));
         const r = await o.talk<{ done: number; bytes: number; none: number; failed: ZoneChain[]; why?: string[] }>(
-          { type: "zone-fetch", id, chains: failed, fresh: !!zone.fresh },
+          { type: "zone-fetch", id, chains: failed, fresh: !!zone.fresh, wmsSpacingLifted: !!o.wmsSpacingLifted?.() },
           BATCH_MS * Math.ceil(failed.length / BATCH),
         );
         if (r) {

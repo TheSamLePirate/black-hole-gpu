@@ -271,6 +271,9 @@ export class App {
       entry?: "crew";
       /** the Earth's data from the disk (lib/earth-cache.ts) — this boot's mode, over E2E_EARTH_DATA and the file's header */
       earthData?: import("./earth-cache").EarthDataMode;
+      /** a zone's download with the e2e's disk serving: "lifted" (the default — the WMS-R's spacing skipped: its data are not the IGN's)
+       *  or "keep" (the player's spacing — a witness, E2E_WMS_SPACING=keep) */
+      wmsSpacing?: "lifted" | "keep";
     } = {},
   ) {
     // (the test file booting it, for its report's folder: E2E_FILE when one file runs, else the caller's frame)
@@ -309,6 +312,14 @@ export class App {
     // lib/earth-cache.ts attaches its target; a test that measures the downloads keeps the network by its header)
     if (o.earthData ? o.earthData !== "off" : !o.entry && (force || !wantsNetwork(src)))
       app.earth = await earthCache(cdp, { tiles: !!o.tiles, mode: o.earthData, port: cdp.port });
+    // (PLAN-J8 J8-9 — « the WMS-R's spacing lifted: the data come from the e2e's disk » —, the render session's terms of 17 Nov 2026: a
+    // Service Worker's boot with the disk serving — on, offline; never refresh, never a player's —, the page global the zones read
+    // (main.ts, pwa-zones.ts wmsSpacingLifted) set before any page: the Service Worker's WMS-R spacing skipped for a zone's batches, its
+    // parallel fetches and batches as they are)
+    if (o.sw && (app.earth?.mode === "on" || app.earth?.mode === "offline") && (o.wmsSpacing ?? process.env.E2E_WMS_SPACING) !== "keep") {
+      await cdp.send("Page.addScriptToEvaluateOnNewDocument", { source: "window.__e2eWmsSpacingLifted = true;" });
+      app.wmsSpacingLifted = true;
+    }
     // (E2E_HITCH=1 — PLAN-J7 J7-0 —: the hitch probe in the page from its start, each gap over 50 ms and its cause appended as it comes to
     // remote-results/hitches/<test>.jsonl, the page's frames counted every 600 — lib/hitch-probe.ts)
     if (process.env.E2E_HITCH === "1") {
@@ -340,6 +351,8 @@ export class App {
 
   /** the Service Worker wanted (`sw=1`: the page registers it despite the e2e flag) */
   sw = false;
+  /** the zones' WMS-R spacing lifted for this boot (the e2e's disk serving a Service Worker's boot) */
+  wmsSpacingLifted = false;
   /** the Earth's data served from the disk (lib/earth-cache.ts), null: the network (off, a Service Worker, `// Earth data: network`) */
   earth: Awaited<ReturnType<typeof earthCache>> | null = null;
 

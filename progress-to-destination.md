@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 16 nov. 23:50 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 17 nov. 00:05 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous. Ce qui est fermé quitte le tableau « En cours » pour la ligne « Fermé récemment ».
@@ -9779,3 +9779,22 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
 - **Non fait / limites :** rien ne dessine les maillages (lot 2 du rendu) ; la canopée (toits LiDAR, drapeau `Canopy` dans la clé) et
   les cellules d'Overture restent au lot (1) ; aucune mesure GPU ; le mini n'a pas fait tourner `j8-mesh-cells` ; aucun gain de rendu
   n'est revendiqué.
+
+### 2026-11-17 00:05 UTC — PLAN-J8 J8-9 : l'espacement WMS-R levé pour les zones des e2e servies par le disque ; J8-8 : les maillages dans l'estimation d'une zone (session des approches, 1feb2f7f)
+
+- **Destination :** §8 (mesurer vite et juste : les e2e de zone en minutes, pas en trois quarts d'heure) et §19.13 (J8-A : une zone
+  annoncée avec sa vraie taille). Jalons PLAN-J8 J8-9, J8-8 lot (1).
+- **Levier :** « l'espacement WMS-R levé : les données viennent du disque e2e », aux conditions de la session du rendu (17 nov.). Il est
+  éteint pour le joueur. `App.boot` le pose seulement pour un démarrage avec Service Worker quand le disque e2e sert (`on`, `offline`), par
+  la variable de page `__e2eWmsSpacingLifted`. `pwa-zones.ts` le transmet avec chaque lot (`wmsSpacingLifted`) et `sw.ts` saute alors
+  `gentle`, rien d'autre : `ZONE_PARALLEL` et les lots ne changent pas. Une grille absente du disque reste espacée de 125 ms vers l'IGN, dans
+  `lib/earth-cache.ts`. `E2E_WMS_SPACING=keep` garde le rythme du joueur. Documenté dans E2E.md et E2E-CATALOGUE.
+- **Témoin** (`j8-wms-spacing` 1/1, ce Mac, fenêtre visible) : les mêmes 200 chaînes WMS-R de Toulon passées deux fois, 7 337 889 octets à
+  chaque passage, aucune en échec ; 25,7 s avec l'espacement contre 1,1 s sans. Un test unitaire vérifie que le lot ne porte le levier
+  que lorsque la page le dit.
+- **Estimation d'une zone :** `zones.estimate().meshes` donne `{ cells, bytes }`, inclus dans la taille et le temps annoncés, à 1,5 Mo et
+  0,3 s estimés par cellule. Mesuré sur les tuiles du disque : 2,5 Mo par cellule au centre de Paris, 0,9 Mo à Toulon. Le couloir de
+  Paris compte 199 cellules, soit environ 300 Mo de plus. Réglages › Hors ligne affiche la ligne « Bâtiments proches maillés » (FR/EN).
+  c1957d65.
+- **Non fait / limites :** le gain du levier sur une zone entière n'est pas mesuré ; le témoin porte sur 200 chaînes. Le levier ne vaut
+  pas pour un démarrage sans Service Worker ni en `refresh`. Le second passage de la zone de Paris, sur le mini, tourne sans le levier.
