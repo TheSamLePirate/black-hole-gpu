@@ -56,6 +56,8 @@ test("no longer wanted: dropped from the queue, its work under way cancelled; a 
   await tick();
   expect(f.pending.get("1/0")!.signal.aborted).toBe(true);
   expect(pool.stats().cancelled).toBe(1);
+  // (2, queued, left the wanted set: dropped once)
+  expect(pool.stats().dropped).toBe(1);
   expect(f.started).toEqual(["1/0", "4/0"]);
   f.finish("4/0");
   await tick();
@@ -83,13 +85,21 @@ test("the prepared cache first: a cell found there handed without a worker", asy
   expect(pool.stats().cached).toBe(1);
 });
 
-test("the queue's bound: the wanted beyond it wait for the next want (counted dropped)", async () => {
+test("the queue's bound: the wanted beyond it wait for the next want (a gauge, not dropped)", async () => {
   const f = fake(1);
   const pool = new CellPool(f.exec, null, { maxQueue: 3 });
-  pool.want(Array.from({ length: 10 }, (_, i) => W(i, 0, i)));
+  const list = Array.from({ length: 10 }, (_, i) => W(i, 0, i));
+  pool.want(list);
   await tick();
-  const s = pool.stats();
+  let s = pool.stats();
   expect(s.running).toBe(1);
   expect(s.queued).toBe(3);
-  expect(s.dropped).toBe(6);
+  expect(s.beyond).toBe(6);
+  expect(s.dropped).toBe(0);
+  // (the same list wanted again and again — J8-4's every 2 s —: nothing dropped)
+  for (let k = 0; k < 5; k++) pool.want(list);
+  await tick();
+  s = pool.stats();
+  expect(s.dropped).toBe(0);
+  expect(s.beyond).toBe(6);
 });

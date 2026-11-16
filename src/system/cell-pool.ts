@@ -54,7 +54,10 @@ export class CellPool {
   /** who takes the cells (J8-4's GPU pool, the tools): each told every cell handed */
   private listeners = new Set<(c: CellPrepared) => void>();
   onError: ((x: number, y: number, e: unknown) => void) | null = null;
+  /** `dropped`: queued cells that left the wanted set before their turn (a want repeated with the same list drops nothing) */
   readonly counts = { prepared: 0, cached: 0, cancelled: 0, dropped: 0, failed: 0, ms: 0 };
+  /** the wanted cells waiting beyond the queue's bound at the last want (a gauge: they wait for the next) */
+  private beyond = 0;
 
   constructor(
     private exec: CellExecutor,
@@ -81,7 +84,10 @@ export class CellPool {
     fresh.sort(order);
     // (the bound on those waiting: the free workers take theirs at once, outside it)
     const take = this.maxQueue + Math.max(0, this.exec.size - this.running.size);
-    this.counts.dropped += Math.max(0, fresh.length - take);
+    // (the queued no longer wanted: dropped — counted once each, 16 Nov 2026: a count of those beyond the bound at every want grew by
+    // the list's size each call, 136 000 in five minutes of J8-4's want every 2 s)
+    for (const q of this.queue) if (!this.wanted.has(cellKey(q.x, q.y))) this.counts.dropped++;
+    this.beyond = Math.max(0, fresh.length - take);
     this.queue = fresh.slice(0, take);
     this.pump();
   }
@@ -99,7 +105,7 @@ export class CellPool {
 
   /** what the pool holds now */
   stats() {
-    return { queued: this.queue.length, running: this.running.size, done: this.done.size, ...this.counts };
+    return { queued: this.queue.length, running: this.running.size, done: this.done.size, beyond: this.beyond, ...this.counts };
   }
 
   private pump() {

@@ -4,7 +4,8 @@
 // the worker a batch at a time (`zone-fetch`: each message keeps it alive), the game first — a batch waits while the tiles
 // it streams are pending —; paused, resumed, resumed again after a reload (the record keeps its cursor). The storage asked
 // to persist at the first zone (navigator.storage.persist: else the browser may clear it under pressure).
-// `__bh.pwa.zones` (automation): the tests', TARS's, the settings' tab's (I8b).
+// `__bh.pwa.zones` (automation): the tests', TARS's, the settings' tab's (I8b). A zone's building cells (PLAN-J8 J8-6, system/
+// zone-cells.ts) prepared once its tiles are in — offline, no decoding in flight —, counted in its record (`cells`), dropped with it.
 
 import type { ZoneRecord } from "./pwa/rules";
 import {
@@ -18,6 +19,7 @@ import {
   zoneEstimate,
   zoneLevelsAt,
 } from "./system/zones";
+import { cellsOnlyIn, type ZoneCells, zoneCellTiles } from "./system/zone-cells";
 
 export interface Zones {
   /** what a zone would hold: its tiles' chains of fetches, their links, its size [bytes] by the kinds' means, its download
@@ -62,6 +64,11 @@ export function createZones(o: {
   sources: () => ZoneSources;
   /** the pause before the failed are asked again (RETRY_PAUSE_MS; the tests' 0) */
   retryPauseMs?: number;
+  /** the building cells (PLAN-J8 J8-6): prepared into the prepared cache once a zone's tiles are in, dropped from it */
+  cells?: {
+    prepare(tiles: { x: number; y: number }[]): Promise<ZoneCells>;
+    drop(tiles: { x: number; y: number }[]): Promise<void>;
+  };
 }): Zones {
   let active: string | null = null;
   const paused = new Set<string>();
@@ -155,6 +162,14 @@ export function createZones(o: {
         }
       }
       zone.state = paused.has(id) ? "paused" : zone.failed ? "paused" : "ready";
+      // (its building cells prepared from its tiles now in — an update's: its old cells dropped first, the sources' new vintage)
+      if (zone.state === "ready" && o.cells) {
+        const tiles = zoneCellTiles(urls);
+        if (tiles.length) {
+          if (zone.fresh) await o.cells.drop(tiles);
+          zone.cells = await o.cells.prepare(tiles);
+        }
+      }
       if (zone.state === "ready") {
         zone.updated = Date.now();
         zone.fresh = false;
@@ -262,6 +277,18 @@ export function createZones(o: {
     async remove(id) {
       paused.add(id);
       while (active === id) await new Promise((r) => setTimeout(r, 200));
+      // (its building cells no other zone holds dropped from the prepared cache)
+      if (o.cells) {
+        const all = await zones();
+        const z = all.find((q) => q.id === id);
+        if (z?.cells)
+          await o.cells.drop(
+            cellsOnlyIn(
+              zoneCellTiles(chainsOf(z)),
+              all.filter((q) => q.id !== id).map((q) => zoneCellTiles(chainsOf(q))),
+            ),
+          );
+      }
       await o.talk({ type: "zone-delete", id }, 60_000);
       known = known.filter((z) => z.id !== id);
       paused.delete(id);

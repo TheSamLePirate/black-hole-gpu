@@ -82,6 +82,12 @@ const T = {
   srcScenery: { fr: "décor (arbres, bâtiments)", en: "scenery (trees, buildings)" },
   srcGlobal: { fr: "données mondiales", en: "global data" },
   since: { fr: "Téléchargée le {0}.", en: "Downloaded on {0}." },
+  // (PLAN-J8 J8-6: its building cells prepared — offline, the far buildings without decoding)
+  cells: {
+    fr: "Bâtiments préparés : {0} cellules, {1} bâtiments, {2}.",
+    en: "Buildings prepared: {0} cells, {1} buildings, {2}.",
+  },
+  cellsFailed: { fr: " {0} à préparer en vol.", en: " {0} to prepare in flight." },
   pause: { fr: "Suspendre", en: "Pause" },
   resume: { fr: "Reprendre", en: "Resume" },
   cancel: { fr: "Annuler le téléchargement", en: "Cancel the download" },
@@ -472,7 +478,11 @@ export class OfflineTab {
       placeCoords({ id: "", name: { fr: "", en: "" }, lat: z.lat, lon: z.lon }),
       fmtCount(z.total),
       fmtBytes(z.bytes),
-      `${z.coreKm ? `${fill(tr(T.coreOf), u.fDist(Math.min(z.coreKm, z.radiusKm) * 1000, z.coreKm < 1 ? 1 : 0))} ` : ""}${fill(tr(T.sources), src.join(", "))}${z.state === "ready" ? ` ${fill(tr(T.since), fmtDate(z.updated ?? z.created))}` : ""}`,
+      `${z.coreKm ? `${fill(tr(T.coreOf), u.fDist(Math.min(z.coreKm, z.radiusKm) * 1000, z.coreKm < 1 ? 1 : 0))} ` : ""}${fill(tr(T.sources), src.join(", "))}${z.state === "ready" ? ` ${fill(tr(T.since), fmtDate(z.updated ?? z.created))}` : ""}${
+        z.cells
+          ? `\n${fill(tr(T.cells), fmtCount(z.cells.count), fmtCount(z.cells.buildings), fmtBytes(z.cells.bytes))}${z.cells.failed ? fill(tr(T.cellsFailed), fmtCount(z.cells.failed)) : ""}`
+          : ""
+      }`,
     );
     return [z.name, text];
   }

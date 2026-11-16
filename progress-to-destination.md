@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-16 14:44 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-16 15:45 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous. Ce qui est fermé quitte le tableau « En cours » pour la ligne « Fermé récemment ».
@@ -48,7 +48,7 @@ J4 (fermé, sortie non atteinte), J5 et J6 (fermés).
 | Rendu (33d89754) | J4 / J5 — l'eau, les volumes, la généralisation | **fermés** ([PLAN-J4](docs/PLAN-J4-VOLUMES.md), [PLAN-J5](docs/PLAN-J5-GENERALISATION.md)) : l'eau à demi-rythme (J5-5, −6,0 à −6,4 ms, l'image la même) ; le sol à demi-rythme laissé au joueur (J5-6, réglage « demi » : −1,9 à −3,2 ms ; « auto » à chaque pixel) ; la FFT de la mer en deux passes (−0,9 ms) ; la carte d'ombre des arbres (−2,8 ms, forêt) ; Sam a refusé les arbitrages d'image (MSAA 1×, petits arbres, nuages amortis). Postes lourds restants : l'eau 16,2, les nuages d'orage 16,5, le décor d'une forêt ~7 ms |
 | Rendu (33d89754) | Mesures tenues | la borne du M1 Max **à 30** : essayée à 40 le 15 au soir, non tenue (soutenu 26,4 et 34,5 images/s, deux runs — [J0-CONTRAT §2](docs/J0-CONTRAT.md)) ; le coût de l'appareil 3,5–4,5 ms, dont le MSAA 4× 4–5 ms (gardé) |
 | Audit vagues 3–4 et 6 (1feb2f7f) | [09-priorites-todo](docs/audit-2026-11-10/09-priorites-todo.md) | **faits** : 3.1–3.2 réseau (RD0–RD2), 3.3 sauvegardes (une clé par sauvegarde ; avion, systèmes des vaisseaux et de l'A320 — ce dernier par J6-4), 3.4–3.5 vol, 3.6–3.7 TARS, 3.10 e2e honnêtes, 4.2 temps et onglet masqué, 4.3 `Settings`/`ViewPose`, 4.8 `main()` découpé ; vague 6 hors rendu (QA, AR, RD4/RD5, FX). **Reste** : l'état d'une mission ou d'un combat (Sam), IndexedDB et l'autosauvegarde hors frame (AR-05), FX-19 (fraîcheur des écrans, à mesurer), FX-21 |
-| Vol, approches, e2e de vol (1feb2f7f) | E2E-VOLS règle 13 ; demandes de Sam du 16 nov. ; **PLAN-J8** | **fait le 16 nov.** : règle 13, bandeau et `app.scenario`, l'axe au décollage (horloge du vol), la piste du HUD, l'alarme du train, le débriefing, l'Auto-GCAS, la ligne d'horizon, les jonctions sur le sol dessiné ; **PLAN-J8** : J8-0 (a) fait, (b, d) Toulon faits ; **J8-T fait** (le cache disque des e2e activé par défaut ; J0 sur le mini : détail complet 107,7 → 57,6 s, GPU en vol inchangé, 49,4 contre 49,8 ms ; dossiers échangés par `earth-sync`) , Paris (b, d) depuis le disque faits (59,5 s dont 54 de calcul, 199 236 coupés) ; J8-3 cellule et réserve écrites ; **J8-3 `j8-cells` 2/2** (142 cellules en 28,1 s, aucune image > 100 ms, cache 0,26 s) ; **maintenant** : J8-3 priorité vue et trajectoire, J8-6, J8-7 ; **en pause** : le contour HUD en virage, la règle 13 des autres domaines, la garde du bandeau (338 en attente) |
+| Vol, approches, e2e de vol (1feb2f7f) | E2E-VOLS règle 13 ; demandes de Sam du 16 nov. ; **PLAN-J8** | **fait le 16 nov.** : règle 13, bandeau et `app.scenario`, l'axe au décollage (horloge du vol), la piste du HUD, l'alarme du train, le débriefing, l'Auto-GCAS, la ligne d'horizon, les jonctions sur le sol dessiné ; **PLAN-J8** : J8-0 (a) fait, (b, d) Toulon faits ; **J8-T fait** (le cache disque des e2e activé par défaut ; J0 sur le mini : détail complet 107,7 → 57,6 s, GPU en vol inchangé, 49,4 contre 49,8 ms ; dossiers échangés par `earth-sync`) , Paris (b, d) depuis le disque faits (59,5 s dont 54 de calcul, 199 236 coupés) ; J8-3 cellule et réserve écrites ; **J8-3 `j8-cells` 2/2** (142 cellules en 28,1 s, aucune image > 100 ms, cache 0,26 s) ; J8-3 priorité laissée à J8-4 (accord), `dropped` corrigé ; **J8-6 écrit** (tests unitaires ; l’e2e de zone jamais passé : le téléchargement > 30 min) ; **maintenant** : la décision sur l’e2e de J8-6 (a : mini 50 min ; b : le cache disque pour le Service Worker), puis J8-7, J8-6, J8-7 ; **en pause** : le contour HUD en virage, la règle 13 des autres domaines, la garde du bandeau (338 en attente) |
 
 **Fermé récemment** : **PLAN-APPROCHES** (16 nov. : AP0–AP10 et AP-R menés — données réelles, choix, jonction, A320, carte, radar, TSD, crew, HUD, directeur de vol, roue, audio, campagne mondiale et échantillon volé ; OIFK posé après J7-1 le 16 nov. : échantillon F-35 9/9, A320 5/5) ; **J3** (15 nov., confirmé par Sam ; J3-R fait 20:48) ; **le repli du raster vers le tracé retiré** (15 nov., 20:48, décision (b)) ; **PLAN-J6** (15 nov., 20:35 : les neuf parcours en e2e, sept défauts corrigés) ; l'eau étagée E1 (−1,55 ms) et E2 (−0,5 ms), E3 non ouvert ; la classification lot 1 (sur terre −1,15 ms), lot 2 non ouvert
 (sous 1 ms) ; AR-07 (le renderer sur `ViewPose`) ; le retrait R1 des anciens chemins (13 nov.) ; le noyau du monde visé compilé pendant le voyage
@@ -9087,3 +9087,38 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   forme du toit, aucune bascule visible, le seuil du quad (8, 4, 0 px montrés à Sam) ; l'ordre des cellules ; la couche rallumée
   seulement après le jugement de Sam sur les captures.
 
+### 2026-11-16 15:45 UTC — PLAN-J8 J8-6 écrit (les zones hors ligne portent leurs cellules) ; J8-3 : la priorité et `dropped` (session 1feb2f7f)
+
+- Contribution à la destination : les données des bâtiments préparées avant le vol vont jusqu'au hors ligne. Une zone téléchargée
+  garde ses cellules, et rien n'est décodé en vol. Jalon : PLAN-J8 J8-6 (stratégie : préparer les données avant la frame, la PWA).
+- Réalisé :
+  - `src/system/zone-cells.ts` (`zoneCellTiles`, `prepareZoneCells`, `cellsOnlyIn`).
+  - `cell-workers.ts` `zoneCellsIO` : un pool et un worker propres à la zone. Le `want` du pool du jeu est l'ensemble de J8-4 ; s'en
+    servir aurait remplacé sa liste.
+  - `pwa-zones.ts` :
+    - les cellules sont préparées une fois la zone prête ;
+    - à une mise à jour, elles sont effacées puis refaites ;
+    - à la suppression, seules celles qu'aucune autre zone ne garde sont effacées.
+  - `ZoneRecord.cells` ; Réglages › Hors ligne en donne le compte et la taille, en FR et EN ; BH-API.
+  - `cell-pool` : `dropped` ne compte plus qu'une fois chaque cellule sortie de la liste voulue. La session du rendu avait relevé
+    136 000 en 5 min, avec un `want` toutes les 2 s. Nouvelle jauge `beyond`.
+  - La priorité reste chez J8-4 : `building-layer.ts` `cellPriority`, accordé avec la session du rendu.
+- Preuves :
+  - **Tests unitaires** : `tests/zone-cells.test.ts` 4/4, `tests/pwa-zones-cells.test.ts` 3/3 (avec un faux Service Worker),
+    `tests/cell-pool.test.ts` ; typecheck.
+  - **L'e2e `j8-zone-cells` n'a jamais passé** : deux passages sur ce Mac ont buté sur le téléchargement de la zone, avant la partie
+    hors ligne.
+    - 14:46–15:06 UTC, décor « high » et orthophotos : 4 618 chaînes, 70 % au bout de 20 min.
+    - 15:07–15:37 UTC, la zone légère : 4 320 chaînes, 4 160 au bout de 30 min, aucun échec. Les 2 000 premières en 2,5 min, le reste
+      (la Géoplateforme) à ~1,3 chaîne/s, alors que `zoneDuration` estimait 175 s. Ce Mac était en pression thermique « Heavy » au
+      départ.
+    - De 15:06 à 15:11, le `j8-far-layer` de la session du rendu chargeait aussi l'IGN depuis le mini.
+- Limites :
+  - Rien n'est mesuré du hors ligne de J8-6 : ni les cellules servies par le cache, ni leur suppression dans un vrai navigateur.
+  - L'estimation de durée des zones (`zoneDuration`) sous-estime la Géoplateforme d'un facteur ~10 sur cette zone.
+  - La vue entière hors ligne attend J8-4.
+- Suite, **à décider** :
+  - (a) lancer `j8-zone-cells` (plafond porté à 50 min) sur le mini, sur un créneau IGN long ;
+  - (b) ou faire servir par le cache disque des e2e les téléchargements du Service Worker, ce qui demande un témoin. La zone ne se
+    téléchargerait alors qu'une fois pour tous les e2e de zones (`zones-scenery` prend aussi 14 min et plus).
+  - Ensuite J8-7.

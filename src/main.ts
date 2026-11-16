@@ -83,6 +83,7 @@ import { NetVoice } from "./ui/netvoice";
 import type { JetInputs } from "./f35/pose";
 import { installPwa } from "./pwa";
 import { createZones } from "./pwa-zones";
+import { zoneCellsIO } from "./system/cell-workers";
 import { PauseMenu } from "./ui/pause";
 import type { PauseContext } from "./ui/pausemenu";
 import { OfflineTab } from "./ui/settings/offline";
@@ -981,6 +982,8 @@ async function main() {
     if (!ok) return;
     pwa.zones = createZones({
       talk: pwa.talk,
+      // (a zone's building cells prepared once its tiles are in — PLAN-J8 J8-6)
+      cells: zoneCellsIO,
       busy: () => renderer.earthTiles.pending > 0 || renderer.earthTiles.orthoPending > 0,
       sources: () => ({
         ortho: settings.earthOrtho,

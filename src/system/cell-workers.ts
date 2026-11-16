@@ -3,6 +3,7 @@
 // cores or more — the scenery's worker, the CPU worker and the page's own thread keep theirs.
 import { CellPool, type CellExecutor, type CellStore, CELL_CACHE, cellCacheUrl } from "./cell-pool";
 import { geoidMap } from "./geoid-grid";
+import { prepareZoneCells, type ZoneCells } from "./zone-cells";
 
 type Reply = { id: number; buf?: ArrayBuffer; ms?: number; error?: string };
 
@@ -80,3 +81,27 @@ export function cellPool(): CellPool {
   pool ??= new CellPool(new CellWorkers(), cellStore);
   return pool;
 }
+
+/** an offline zone's cells (PLAN-J8 J8-6, pwa-zones.ts): prepared by a worker of their own — the download runs behind the game —,
+ *  dropped from the prepared cache (the game's pool told: a cell dropped is prepared again when next wanted) */
+export const zoneCellsIO = {
+  async prepare(tiles: { x: number; y: number }[]): Promise<ZoneCells> {
+    const w = new CellWorkers(1);
+    try {
+      return await prepareZoneCells(tiles, w, cellStore);
+    } finally {
+      w.dispose();
+    }
+  },
+  async drop(tiles: { x: number; y: number }[]): Promise<void> {
+    try {
+      const c = await caches.open(CELL_CACHE);
+      for (const t of tiles) {
+        await c.delete(cellCacheUrl(location.origin, t.x, t.y));
+        pool?.forget(t.x, t.y);
+      }
+    } catch {
+      /* no Cache Storage: nothing kept */
+    }
+  },
+};

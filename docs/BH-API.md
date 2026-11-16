@@ -1051,11 +1051,15 @@ The offline zones, once the worker is in (null before, or without one). A zone: 
 | `list()` | Promise<ZoneRecord[]> | `{ id, name, lat, lon, radiusKm, profile, total, cursor, done, bytes, none, failed, failedUrls? (the first URLs of the failed chains, 8 at most), waitMs?, batchMs? (this download's time waiting for the game's tiles, and in its batches), state: "downloading" \| "paused" \| "ready", sources, created, updated?, fresh? }` |
 | `pause(id)` / `resume(id)` | Promise<void> | a pause resolves once its batch under way is in (nothing asked after); a ready zone's resume — or a paused one whose list is done — asks its chains again from the start, those in only marked, its tally counted anew |
 | `update(id)` | Promise<void> | fetched again from its start, every tile asked anew (the sources' new vintage), the old one kept where the network fails; the sources the settings' now |
-| `remove(id)` | Promise<void> | its tiles no other zone holds deleted |
+| `remove(id)` | Promise<void> | its tiles no other zone holds deleted, its building cells too (PLAN-J8 J8-6) |
 | `active` | string \| null | the zone downloading |
 | `persisted()` | Promise<boolean> | `navigator.storage.persisted()` |
 
-*Used in:* `tests/e2e/zones.e2e.test.ts`, `tests/e2e/zones-scenery.e2e.test.ts`, `tests/e2e/offline-settings.e2e.test.ts`, `tests/pwa-zones.test.ts` (a fake worker).
+A zone ready prepares its building cells (PLAN-J8 J8-6, `system/zone-cells.ts`: each BD TOPO z 15 tile of its chains into the prepared
+cache `kerr-cells-v1`, a worker of its own) and keeps their count in its record: `cells: { count, buildings, bytes, failed, ms }`
+(Settings › Offline says it in the zone's help); an update drops them first and prepares them again.
+
+*Used in:* `tests/e2e/zones.e2e.test.ts`, `tests/e2e/zones-scenery.e2e.test.ts`, `tests/e2e/offline-settings.e2e.test.ts`, `tests/e2e/j8-zone-cells.e2e.test.ts`, `tests/pwa-zones.test.ts` (a fake worker), `tests/pwa-zones-cells.test.ts` (the cells).
 
 ### `__bh.pwa.talk(msg: object, timeoutMs = 3000)` → Promise<T \| null>
 
@@ -2110,12 +2114,19 @@ no roof planned), put in the prepared cache (Cache Storage `kerr-cells-v1`) and 
 - `want(list)` — the cells wanted now, the whole set: `{ x, y, priority, d }` (priority 0 in view and near · 1 on the track ·
   2 behind · 3 the rest; `d` [m], the order within a class). What is not in it is no longer wanted: dropped from the queue, its
   work under way cancelled. A cell handed once is not prepared again.
-- `stats()` → `{ queued, running, done, prepared, cached, cancelled, dropped, failed, ms }`.
+- `stats()` → `{ queued, running, done, beyond, prepared, cached, cancelled, dropped, failed, ms }`: `beyond` the wanted cells waiting
+  past the queue's bound (256) at the last `want` — a gauge, they wait for the next —; `dropped` the queued cells that left the wanted
+  set before their turn, each counted once (since 16 Nov 2026: before, every `want` added those beyond the bound — J8-4's want every
+  2 s read 136 000 in five minutes).
 - `got()` → the cells handed since `clear()`: `{ key: "x/y", bytes, cached, ms }` (`cached`: from the prepared cache, no worker;
   `ms`: the worker's time, fetch and decoding).
 - `clear()` — `got()` emptied.
 
-*Used in:* `j8-cells.e2e.test.ts`.
+An offline zone (`__bh.pwa.zones`, PLAN-J8 J8-6: `src/system/zone-cells.ts`) prepares its BD TOPO cells into the same prepared cache
+once its tiles are in, with a pool and a worker of its own (this pool's `want` is the far layer's whole set); its record's `cells`
+says `{ count, buildings, bytes, failed, ms }`; a removal drops the cells no other zone holds.
+
+*Used in:* `j8-cells.e2e.test.ts`, `j8-zone-cells.e2e.test.ts`.
 
 ### `__bh.sys.runways()` → `RunwayFrame[]`
 
