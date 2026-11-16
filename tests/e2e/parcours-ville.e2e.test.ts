@@ -20,7 +20,9 @@ import { sceneryReady } from "./lib/plan-views";
 // Duration: ~6 min on kerr-mini (the airfield's data, the take-off, ~2 min of flight, the city's turn, the view back).
 // Done when: the view back held 15 s and the cockpit back, parcours-ville.json written.
 afterAll(stopServer);
-const OUT = process.env.PV_OUT ?? "remote-results/parcours-ville";
+// (an A/B's side its own directory — scripts/ab-e2e.ts AB_SIDE, AB_RUN: the two sides' shots side by side)
+const OUT =
+  process.env.PV_OUT ?? `remote-results/parcours-ville${process.env.AB_SIDE ? `-${process.env.AB_SIDE}${process.env.AB_RUN ?? ""}` : ""}`;
 /** Toulon's centre (the turn's place) — the city west of the airfield */
 const TOULON = { lat: 43.12, lon: 5.93 };
 type Seg = { name: string; frames: number; gapMax: number; ages: number[]; gpu: number[]; holeImages: number; at: unknown };
