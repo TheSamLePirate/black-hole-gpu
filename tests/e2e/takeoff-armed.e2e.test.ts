@@ -1,5 +1,6 @@
 import { afterAll, expect, test } from "bun:test";
 import { App, E2E, stopServer } from "./lib/app";
+import { expectFlightPhase } from "./lib/flight-state";
 // PLAN-J6 J6-1 found the F-35, after its automatic take-off (U), holding ~100 m over the field at 210 m/s on the runway's heading, the
 // autopilot set during its climb (apSet: 270°, 500 m, 150 m/s) ignored, until a hill: the holds, engaged during the run, took its stick
 // for the pilot's hand (their control-wheel steering) and, let go at its end, held the height of the moment. Since (15 Nov 2026): the
@@ -31,6 +32,8 @@ test.skipIf(!E2E)(
                 c.pilot.auto, c.rwyRun?.phase ?? "-", c.gearDown]); }
           }
           return rows; })()`);
+        // (rule 13 of E2E-VOLS: the take-off's end as a pilot leaves it — its holds, its thrust, its gear up)
+        await expectFlightPhase(app, "cruise", {}, `take-off, ${way}`);
         console.log(`  way ${way} (t, h over field, vs, pitch, hdg, gs, hold alt, hold hdg, hold spd, auto, run, gear):`);
         for (const x of r) console.log(`    ${JSON.stringify(x)}`);
         // (the last second's row: [t, h, vs, pitch, hdg, gs, hold alt, hold hdg, hold spd, …]; the field ~700 m over the sea)

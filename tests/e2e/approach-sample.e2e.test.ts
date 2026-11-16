@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { App, E2E, stopServer } from "./lib/app";
+import { MONITOR_INIT, MONITOR_STEP, type Monitor, monitorProblems } from "./lib/held";
 
 // The campaign's sample flown (docs/PLAN-APPROCHES.md AP10b): the ends scripts/approach-campaign.ts picked — one per category, a
 // typical one whose slope is clear (docs/progress/approches/ap10-sample.json): a real ILS, an LDA, a renumbered runway, a built
@@ -70,7 +71,7 @@ describe.skipIf(!E2E)(`the campaign's sample flown — ${CRAFT}`, () => {
         // steady 1 s, 15 s at most), placed again
         const fly = () => { __bh.game.flyAt(lat / D, lon / D, 900, hdg, ${CRAFT === "f35" ? 150 : 120}); __bh.settings.shipMount = "cockpit"; };
         const frame = () => new Promise((q) => requestAnimationFrame(q));
-        __bh.camera.ilsOff(); __bh.freeze(false); fly();
+        __bh.camera.ilsOff(); __bh.freeze(false); fly(); __bh.freeze(true);
         const t0 = performance.now(); let h = NaN, since = performance.now();
         while (performance.now() - t0 < 15000) { __bh.touch(); await frame(); const g = __bh.sys.groundAt(lat / D, lon / D);
           if (Math.abs(g - h) > 1) { h = g; since = performance.now(); } else if (performance.now() - since > 1000 && g !== 0) break; }
@@ -108,11 +109,15 @@ describe.skipIf(!E2E)(`the campaign's sample flown — ${CRAFT}`, () => {
         t: number;
         rwy: string;
         trace: string[];
+        mon: Monitor;
       }>(`(async () => {
         const c = __bh.camera, S = __bh.sys, F = __bh.fleet, frame = () => new Promise((q) => requestAnimationFrame(q));
         let minAgl = 1e9, missed = 0, t = 0, rwy = "", trace = [], ga = false;
+        ${MONITOR_INIT}
         for (let i = 0; i < 30 * 1200; i++) {
           __bh.step(1 / 30); t += 1 / 30;
+          // (rule 13: the thrust, the incidence, the attitude, the holds watched each step; the gear at the touch)
+          ${MONITOR_STEP}
           // (every 5 s of flight two frames drawn: the world's runways measured as the craft nears them — runways3d —, the approach's
           // level following theirs, as in play; one synchronous loop never drew a frame: the F-35 aimed at the data's level and met the
           // relief before OEKF's threshold)
@@ -130,7 +135,7 @@ describe.skipIf(!E2E)(`the campaign's sample flown — ${CRAFT}`, () => {
             trace.push(Math.round(t) + " s " + (R ? R.phase : A.leg + " " + M?.lat + "/" + M?.vert) + " alt " + (g?.alt ?? NaN).toFixed(0) + " gs " + (g?.gs ?? NaN).toFixed(0) + " agl " + S.heightOverGround("earth", F.pose(F.active, __bh.sim.time).X, __bh.sim.time).toFixed(0) + (A ? " lever " + c.pilot.throttle.toFixed(2) + " n1 " + (c.a320FmgcIn?.n1.now ?? NaN).toFixed(0) + " thr " + M?.thrust + " ra " + c.a320FmgcIn?.ra + " gnd " + c.a320FmgcIn?.onGround + " ap " + M?.ap + " fpa " + (c.a320FmgcIn?.fpa ?? NaN).toFixed(1) + " fcu " + M?.alt + " join " + (A.join ? A.join.plan.entry + "/" + A.join.i + ":" + A.join.plan.pts.map((q) => q.name + Math.round(q.alt) + "f" + Math.round(q.floor)).join(",") : "") + " along " + Math.round(S.onRunwayOf ? 0 : ((g.lat - A.rwy.lat) * 111320 * Math.cos(A.rwy.hdg * Math.PI / 180) + (g.lon - A.rwy.lon) * 111320 * Math.cos(g.lat * Math.PI / 180) * Math.sin(A.rwy.hdg * Math.PI / 180))) + " altFt " + A.altFt : "")); }
         }
         const L = c.ilsLast;
-        return { minAgl, landed: !!L, score: L?.score ?? null, touch: L?.touch ?? null, missed, phase: String(c.ilsRun?.phase ?? c.a320App?.leg ?? "done"), t, rwy, trace };
+        return { minAgl, landed: !!L, score: L?.score ?? null, touch: L?.touch ?? null, missed, phase: String(c.ilsRun?.phase ?? c.a320App?.leg ?? "done"), t, rwy, trace, mon: window.__mon };
       })()`);
       console.log(
         `  flown ${r.t.toFixed(0)} s: least ${r.minAgl.toFixed(0)} m over the ground before the final, ${r.landed ? `down, ${r.score}/20, ${r.touch ? `${r.touch.along.toFixed(0)} m in, ${r.touch.across.toFixed(1)} m off, ${r.touch.vs.toFixed(2)} m/s` : ""}` : `not down (${r.phase})`}, missed ${r.missed}`,
@@ -151,5 +156,10 @@ describe.skipIf(!E2E)(`the campaign's sample flown — ${CRAFT}`, () => {
       expect(r.landed).toBe(true);
       expect(r.touch!.along).toBeGreaterThan(0);
       expect(r.score!).toBeGreaterThanOrEqual(10);
+      // (rule 13 of E2E-VOLS: flown as a pilot would — never at idle out of the flare, never near the stall, held by its autopilot and
+      // autothrottle, the gear down and locked at the touch)
+      const prob = monitorProblems(r.mon, { landed: true });
+      console.log(`  rule 13: ${JSON.stringify(r.mon)}${prob.length ? ` — ${prob.join("; ")}` : " — conforms"}`);
+      expect(prob).toEqual([]);
     }, 240_000);
 });

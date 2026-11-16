@@ -2,6 +2,7 @@ import { afterAll, expect, test } from "bun:test";
 import { mkdirSync } from "node:fs";
 import { fromRunway } from "../../src/game/ils";
 import { App, E2E, stopServer } from "./lib/app";
+import { expectFlightPhase } from "./lib/flight-state";
 import { EARTH_SETTINGS } from "./lib/plan-views";
 
 // A night approach on Paris-Le Bourget (LFPB), landed by the ILS's autopilot (Sam, 6 Nov 2026: « approche Le Bourget de nuit
@@ -48,7 +49,7 @@ test.skipIf(!E2E)(
       // (14 km out on its axis, on the 3° slope over the threshold — 300 m past it the aim —, gear down)
       const p = fromRunway({ name: FIELD, lat: E.lat, lon: E.lon, hdg: E.hdg, elev: E.elev, len: E.len }, -KM * 1000, 0);
       const h = Math.round((KM * 1000 + 300) * Math.tan((3 * Math.PI) / 180));
-      await app.js(`(() => { __bh.game.flyAt(${p.lat}, ${p.lon}, ${h}, ${E.hdg}, 95); __bh.camera.gearDown = true;
+      await app.js(`(() => { __bh.game.flyAt(${p.lat}, ${p.lon}, ${h}, ${E.hdg}, 95); __bh.camera.gearDown = true; __bh.camera.pilot.throttle = __bh.camera.pilot.engineNow = 0.5;
         __bh.settings.shipMount = "cockpit"; __bh.freeze(true); return 1; })()`);
       // (every datum in before the approach: waited while it keeps coming, what stalls said)
       await app.dataSettled("Le Bourget's final");
@@ -56,6 +57,10 @@ test.skipIf(!E2E)(
       await app.js(`(() => { __bh.freeze(false); __bh.netLight.reset(); __bh.camera.setLook(0, -4); return 1; })()`);
       const said = await app.js<string>(`__bh.camera.ilsStart(${JSON.stringify(FIELD)}, { runway: ${JSON.stringify(rwy)} })`);
       console.log(`  ${said}`);
+      // (rule 13 of E2E-VOLS: on the final as a pilot flies it — the ILS holding it, its thrust, the gear down)
+      // (the gear, lowered at the frozen placing, runs out once the flight goes: its lock waited — ~6 s —, then the state asserted)
+      await app.waitFor(`(__bh.camera.gearExt ?? 0) >= 0.99`, 15_000);
+      await expectFlightPhase(app, "approach", { gear: true }, "the ILS engaged");
       const t0 = Date.now();
       let phase: string | null = null;
       let lastXte = Number.NaN;

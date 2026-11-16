@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-16 07:43 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-16 09:20 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous. Ce qui est fermé quitte le tableau « En cours » pour la ligne « Fermé récemment ».
@@ -48,6 +48,7 @@ J4 (fermé, sortie non atteinte), J5 et J6 (fermés).
 | Rendu (33d89754) | J4 / J5 — l'eau, les volumes, la généralisation | **fermés** ([PLAN-J4](docs/PLAN-J4-VOLUMES.md), [PLAN-J5](docs/PLAN-J5-GENERALISATION.md)) : l'eau à demi-rythme (J5-5, −6,0 à −6,4 ms, l'image la même) ; le sol à demi-rythme laissé au joueur (J5-6, réglage « demi » : −1,9 à −3,2 ms ; « auto » à chaque pixel) ; la FFT de la mer en deux passes (−0,9 ms) ; la carte d'ombre des arbres (−2,8 ms, forêt) ; Sam a refusé les arbitrages d'image (MSAA 1×, petits arbres, nuages amortis). Postes lourds restants : l'eau 16,2, les nuages d'orage 16,5, le décor d'une forêt ~7 ms |
 | Rendu (33d89754) | Mesures tenues | la borne du M1 Max **à 30** : essayée à 40 le 15 au soir, non tenue (soutenu 26,4 et 34,5 images/s, deux runs — [J0-CONTRAT §2](docs/J0-CONTRAT.md)) ; le coût de l'appareil 3,5–4,5 ms, dont le MSAA 4× 4–5 ms (gardé) |
 | Audit vagues 3–4 et 6 (1feb2f7f) | [09-priorites-todo](docs/audit-2026-11-10/09-priorites-todo.md) | **faits** : 3.1–3.2 réseau (RD0–RD2), 3.3 sauvegardes (une clé par sauvegarde ; avion, systèmes des vaisseaux et de l'A320 — ce dernier par J6-4), 3.4–3.5 vol, 3.6–3.7 TARS, 3.10 e2e honnêtes, 4.2 temps et onglet masqué, 4.3 `Settings`/`ViewPose`, 4.8 `main()` découpé ; vague 6 hors rendu (QA, AR, RD4/RD5, FX). **Reste** : l'état d'une mission ou d'un combat (Sam), IndexedDB et l'autosauvegarde hors frame (AR-05), FX-19 (fraîcheur des écrans, à mesurer), FX-21 |
+| Vol, approches, e2e de vol (1feb2f7f) | E2E-VOLS règle 13 ; demandes de Sam du 16 nov. | **fait** : outil commun `flight-state.ts`/`held.ts`, garde statique, 23 e2e du domaine (09:20) ; **en cours** : l'axe au décollage (horloge du vol corrigée), la piste du HUD, le HUD sans ligne d'horizon ; **ensuite** : l'alarme GEAR UP hors approche, le débriefing ouvert en vol |
 
 **Fermé récemment** : **PLAN-APPROCHES** (16 nov. : AP0–AP10 et AP-R menés — données réelles, choix, jonction, A320, carte, radar, TSD, crew, HUD, directeur de vol, roue, audio, campagne mondiale et échantillon volé ; OIFK posé après J7-1 le 16 nov. : échantillon F-35 9/9, A320 5/5) ; **J3** (15 nov., confirmé par Sam ; J3-R fait 20:48) ; **le repli du raster vers le tracé retiré** (15 nov., 20:48, décision (b)) ; **PLAN-J6** (15 nov., 20:35 : les neuf parcours en e2e, sept défauts corrigés) ; l'eau étagée E1 (−1,55 ms) et E2 (−0,5 ms), E3 non ouvert ; la classification lot 1 (sur terre −1,15 ms), lot 2 non ouvert
 (sous 1 ms) ; AR-07 (le renderer sur `ViewPose`) ; le retrait R1 des anciens chemins (13 nov.) ; le noyau du monde visé compilé pendant le voyage
@@ -8629,3 +8630,23 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
 - Réalisé : `scripts/approach-detail-beyond.ts --joins` — les deux jonctions de la campagne, leurs branches hors du couloir, contre le sol avec
   détail. Mesuré : 2 712 extrémités où une branche passe sous ce sol (3 155 à moins de 50 m), l'Altiplano le pire. Question posée à Sam (les
   paliers sur le sol dessiné hors du couloir, recommandé) — sans réponse ; rien changé. PROBLEMES complété.
+
+### 2026-11-16 09:20 UTC — Règle 13 d'E2E-VOLS : l'outil commun, la garde statique, les e2e de vol du domaine des approches (session 1feb2f7f)
+
+- Contribution à la destination : §19.13 (des parcours et des e2e de vol jugés sur un avion piloté comme par un pilote) ; demande de Sam
+  (16 nov., ~08:00 : « les tests e2e en avion doivent être parfaits — autopilot, gear, autothrust »), E2E-VOLS règle 13 (fb0e0a92, 44a6606d).
+- Réalisé : `tests/e2e/lib/flight-state.ts` (l'état appliqué : AP/ATHR, `engineNow`, train et extension, vitesse, incidence/décrochage,
+  assiette, hauteur sol ; `flightProblems`/`expectFlightPhase` par phase, `expectFlight`+`CRUISE` et `placeJetFrozen` pour les parcours-*
+  de la session du rendu ; le ralenti sous autothrottle qui ralentit vers sa consigne permis ; **l'axe de piste** : `axis`, phases
+  `lineup`/`roll`, `AXIS_WATCH_*`, `AXIS_PILOT_*`) ; `tests/e2e/lib/held.ts` (`HELD` : poussée et maintiens sans déplacer l'avion ;
+  le moniteur pas à pas) ; `tests/e2e-flight-state.test.ts` (4/4) ; `tests/e2e-flight-guard.test.ts` (garde statique : `flyAt` suivi
+  d'une attente non gelée = rouge ; `PENDING` par propriétaire, ne fait que rétrécir) ; 23 e2e du domaine (approches, A320, autopilotes)
+  mis à la règle ; [compte rendu](docs/progress/e2e-regle-13-audit.md).
+- Preuves (observé) : ce Mac — 9 e2e d'approche, 22/25 puis les 3 rouges corrigés 11/11 ; kerr-mini — takeoff-armed, f35-nav, net-formation-ap,
+  a320-pad, a320-du-cost, a320-rain, jetmodes, approach-sample A320 (4 posés conformes, KTNX refusée motivée), fd-approach 2/2 et ils 2/2
+  (runs `20261116-091329-r13-mini`, `-093527-r13-mini2`, `-095046-r13-fd`). Défauts trouvés par la règle : la main scriptée de fd-approach
+  (33° d'assiette, 122 % de l'incidence de décrochage) ; `HELD` qui déplaçait l'avion de 600 m ; des attentes datées (13 de Toulon relevée à
+  4,25°, Edwards 23L).
+- Limites : ~120 e2e d'autres domaines restent dans `PENDING` (rendu 82, vol à attribuer 40) ; J0/J2/motion-quality gardent le train en
+  croisière (à décider avec Sam) ; a320-effects (axe asserté, palonnier) en cours sur le mini.
+- Suite : l'axe au décollage (une cause du jeu trouvée : l'horloge du vol), la piste du HUD, puis l'alarme du train et le débriefing en vol.

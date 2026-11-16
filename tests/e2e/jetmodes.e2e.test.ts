@@ -1,5 +1,7 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { App, E2E, stopServer } from "./lib/app";
+import { HELD } from "./lib/held";
+import { expectFlightPhase } from "./lib/flight-state";
 
 // The F-35's new autopilot modes (docs/PLAN-AVIATION-AAA.md, A3): first the Alps as ever; then the terrain following
 // at 150 m down the Arve's valley toward Chamonix — the real relief —; an orbit over the Mont Blanc; the tanker set,
@@ -31,17 +33,21 @@ describe.skipIf(!E2E)("the autopilot's new modes", () => {
 
   test("first the Alps, their relief", async () => {
     await app.js(`(() => { __bh.game.setDate("2026-07-10T11:00:00Z"); Object.assign(__bh.settings, { weather: "fair", wind: 1, earthClouds: 0, f35Variant: "B", f35Assist: "realistic" });
-      __bh.game.flyAt(45.85, 6.75, 1500, 110, 150); __bh.settings.shipMount = "chase"; return 1; })()`);
+      __bh.game.flyAt(45.85, 6.75, 1500, 110, 150); ${HELD} __bh.settings.shipMount = "chase"; return 1; })()`);
     await Bun.sleep(3000);
+    // (rule 13 of E2E-VOLS: placed as a pilot leaves it — its holds, its thrust, its gear — asserted)
+    await expectFlightPhase(app, "cruise", {}, "placed");
     await shot("alps");
   }, 120_000);
 
   test("terrain following at 150 m up the Arve toward Chamonix: the valley followed", async () => {
     // (over Sallanches, heading up the valley — east-south-east —, 300 m over it)
-    await app.js(`(() => { __bh.game.flyAt(45.94, 6.63, 300, 105, 200); __bh.fleet.fuel.f35 = 5000; return 1; })()`);
+    await app.js(`(() => { __bh.game.flyAt(45.94, 6.63, 300, 105, 200); ${HELD} __bh.fleet.fuel.f35 = 5000; return 1; })()`);
     await Bun.sleep(1000);
+    // (rule 13 of E2E-VOLS: placed as a pilot leaves it — its holds, its thrust, its gear — asserted)
+    await expectFlightPhase(app, "cruise", {}, "placed");
     await app.js(
-      `(() => { const c = __bh.camera; c.jetModes.hdg = c.attitudeNow().heading; c.jetToggle("athr"); return c.tfStart(150); })()`,
+      `(() => { const c = __bh.camera; c.jetModes.hdg = c.attitudeNow().heading; if (c.jetModes.spd === null) c.jetToggle("athr"); return c.tfStart(150); })()`,
     );
     let lo = Infinity,
       hi = 0;

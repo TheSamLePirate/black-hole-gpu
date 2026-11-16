@@ -1,14 +1,17 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { App, E2E, stopServer } from "./lib/app";
+import { HELD } from "./lib/held";
+import { expectFlightPhase } from "./lib/flight-state";
 
 // The approach chosen automatically (docs/PLAN-APPROCHES.md AP1): the F-35 placed 40 km from Toulon-Hyères on each of its four
 // sides, flying towards it, calm; the ILS engaged by the airfield's name — the end whose approach comes from that side taken (23
-// from the east, 31 from the south, 05 from the west; from the north the built 13 is left out for the relief — its slope over the
-// hills north-west of Hyères, PLAN-APPROCHES AP2 — and 23 taken), its reason said —; engaged without a name, the nearest
+// from the east, 31 from the south, 05 from the west; from the north the built 13, steepened over the hills north-west of Hyères —
+// at 3° it was left out for the relief, PLAN-APPROCHES AP2, and 23 taken; since AP10b a built slope is raised to 3.25…4.5° over
+// rising ground, and the 13 so cleared is the end that way), its reason said —; engaged without a name, the nearest
 // ahead; a windy day: the end with the wind ahead whatever the side; the A320 its 2 000 m kept; the approach state the same everywhere
 // (`approachState`). Before 15 Nov 2026 the first end was always taken in fair weather: from the other side, the jet flew over.
 //
-// Done when: the four sides take 23 (13 out: « relief »), 23, 31, 05; a selection (LFTH C23) flown from the south and kept through a save; LFML's list
+// Done when: the four sides take 13 (its slope steepened, 3.25…4.5°, clear of the relief), 23, 31, 05; a selection (LFTH C23) flown from the south and kept through a save; LFML's list
 // has its real ILS 31R; unnamed from the west takes LFTH 05; the « windy » weather takes an end with the wind ahead from the
 // west; the A320 from the south takes 05 or 23 (31, 1 900 m, short for it); the state names what was flown; KSFO's list has the
 // FAA's published ILS 28R (its four transitions) and RNAV 28R-Z (AP0b).
@@ -30,10 +33,12 @@ describe.skipIf(!E2E)("the approach chosen automatically", () => {
       const lat = Math.asin(Math.sin(la) * Math.cos(d) + Math.cos(la) * Math.sin(d) * Math.cos(b));
       const lon = lo + Math.atan2(Math.sin(b) * Math.sin(d) * Math.cos(la), Math.cos(d) - Math.sin(la) * Math.sin(lat));
       __bh.camera.ilsOff();
-      __bh.game.flyAt(lat / D, lon / D, 2000, ${(from + 180) % 360}, 140);
+      __bh.game.flyAt(lat / D, lon / D, 2000, ${(from + 180) % 360}, 140); ${HELD}
       return 1; })()`);
     // (the flight running, the new place taken: its geodetic track towards the field)
     await app.waitFor(`(() => { const g = __bh.camera.geoNow(); return !!g && g.gs > 100; })()`, 15_000);
+    // (rule 13 of E2E-VOLS: placed as a pilot leaves it — its holds, its thrust, its gear — asserted)
+    await expectFlightPhase(app, "cruise", {}, "placed");
   };
   /** the ILS engaged (by the field's name or none): the end flown, once its data are in */
   const engage = async (name: string | null) => {
@@ -62,19 +67,20 @@ describe.skipIf(!E2E)("the approach chosen automatically", () => {
   });
 
   test("calm, from each side of Toulon-Hyères: the end whose approach comes from there", async () => {
-    // (from the north the built 13 out for the relief — 15 Nov 2026, AP2 —: its slope's least clearance said)
-    const want: Record<number, string> = { 0: "23", 90: "23", 180: "31", 270: "05" };
+    // (from the north the built 13, its slope steepened over the hills — 16 Nov 2026, AP10b; out for the relief at 3° before, AP2)
+    const want: Record<number, string> = { 0: "13", 90: "23", 180: "31", 270: "05" };
     for (const from of [0, 90, 180, 270]) {
       await place(from);
       const r = await engage("LFTH");
       expect(`${from}: ${r.field} ${r.rwy}`).toBe(`${from}: LFTH ${want[from]}`);
       if (from === 0) {
-        const c13 = await app.js<{ out: string | null; clear: number | undefined }>(`(() => {
+        const c13 = await app.js<{ out: string | null; glide: number | undefined }>(`(() => {
           const s = __bh.camera.approachLast.choice.table.find((x) => x.a.id === "C13");
-          const e = __bh.camera.ilsRunways("LFTH")?.ends.find((x) => x.id === "13");
-          return { out: s?.out ?? null, clear: e?.clearM }; })()`);
-        console.log(`  C13 from the north: ${c13.out}, its slope's least clearance ${c13.clear?.toFixed(0)} m`);
-        expect(c13.out).toBe("relief");
+          return { out: s?.out ?? null, glide: __bh.camera.ilsRun?.rwy.glide }; })()`);
+        console.log(`  C13 from the north: ${c13.out ?? "taken"}, its slope ${c13.glide?.toFixed(2)}°`);
+        expect(c13.out).toBe(null);
+        expect(c13.glide ?? 3).toBeGreaterThanOrEqual(3.25);
+        expect(c13.glide ?? 9).toBeLessThanOrEqual(4.5);
       }
     }
     await shot("approach-auto-west");

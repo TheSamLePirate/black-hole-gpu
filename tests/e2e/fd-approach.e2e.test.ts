@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { App, E2E, stopServer } from "./lib/app";
+import { MONITOR_INIT, MONITOR_STEP, type Monitor, monitorProblems } from "./lib/held";
 
 // The flight director flown by hand (docs/PLAN-APPROCHES.md AP7b — controller/ils.ts flightDirector): an approach to Roissy's
 // 27R joined from off its axis, below its glideslope, the autopilot let go — the stick only, moved as the director asks (a scripted
@@ -19,10 +20,16 @@ const D = Math.PI / 180;
 const handFly = (maxS: number, k: { bank: number; path: number; max: number }) => `(() => {
   const c = __bh.camera, T = c.touchInput, cl = (x) => Math.max(-${k.max}, Math.min(${k.max}, x));
   let t = 0, held = 0, est = null, apOn = 0, trace = [], last = [], worst = { dB: 0, dG: 0 };
+  ${MONITOR_INIT}
   for (let i = 0; i < 30 * ${maxS}; i++) {
     const F = c.flightDirector();
     if (F) { T.roll = cl(F.dBank / (${k.bank} * ${D})); T.pitch = cl(F.dGamma / (${k.path} * ${D})); } else { T.roll = T.pitch = 0; }
+    // (a pilot's restraint — rule 13: no pull past 80 % of the stall's incidence; the F-35's full stick at 92 m/s took it to 33° of
+    // pitch and 122 % of it, kerr-mini 16 Nov 2026)
+    const A = c.airInfo ? c.airInfo() : null;
+    if (A && A.stallA && A.alpha > 0.8 * A.stallA) T.pitch = Math.min(T.pitch, 0);
     __bh.step(1 / 30); t += 1 / 30;
+    ${MONITOR_STEP}
     const I = c.ilsInfo();
     if (c.a320Fmgc?.ap || (c.jetModes && (c.jetModes.alt !== null || c.jetModes.hdg !== null)) || (c.ilsRun && !c.ilsRun.manual)) apOn++;
     if (i % 300 === 0) trace.push(t.toFixed(0) + " s " + (I ? I.phase + " loc " + (I.loc ?? NaN).toFixed(2) + " gs " + (I.gs ?? NaN).toFixed(2) + " dme " + I.dme.toFixed(1) : "no ils") + (F ? " fd dB " + (F.dBank / ${D}).toFixed(1) + " dG " + (F.dGamma / ${D}).toFixed(2) : " no fd") + " stick " + T.pitch.toFixed(2) + "/" + T.roll.toFixed(2) + " pitch " + ((c.attitudeNow().pitch ?? NaN) / ${D}).toFixed(1) + " fpa " + (c.a320FmgcIn?.fpa ?? NaN).toFixed(1) + " in " + (c.a320FmgcIn ? c.a320FmgcIn.stick.map((x) => x.toFixed(2)).join("/") : "-") + " ias " + (c.a320FmgcIn?.ias ?? NaN).toFixed(0) + (c.a320Fmgc ? " thr " + c.a320Fmgc.thrust + " n1 " + c.a320FmgcIn.n1.now.toFixed(0) + " tgt " + c.a320Fmgc.targetSpeed(c.a320FmgcIn).toFixed(0) + " flap " + c.a320FmgcIn.flapLever + " det " + c.a320FmgcIn.detent + " athr " + c.a320Fmgc.athr + "/" + c.a320Fmgc.athrActive : ""));
@@ -35,7 +42,7 @@ const handFly = (maxS: number, k: { bank: number; path: number; max: number }) =
       worst = { dB: Math.max(...last.map((x) => x[0])), dG: Math.max(...last.map((x) => x[1])) }; break; }
   }
   T.roll = T.pitch = 0;
-  return { est, t, apOn, trace, worst };
+  return { est, t, apOn, trace, worst, mon: window.__mon };
 })()`;
 
 /** 27R's axis: a place `km` out, `across` m to the right of it (looking down the final). */
@@ -98,7 +105,8 @@ for (const craft of ["f35", "a320"] as const) {
         apOn: number;
         trace: string[];
         worst: { dB: number; dG: number };
-      }>(handFly(240, craft === "f35" ? { bank: 15, path: 4, max: 1 } : { bank: 25, path: 8, max: 0.5 }));
+        mon: Monitor;
+      }>(handFly(240, craft === "f35" ? { bank: 15, path: 4, max: 0.5 } : { bank: 25, path: 8, max: 0.5 }));
       console.log(`  the flight, every 10 s:\n    ${r.trace.join("\n    ")}`);
       console.log(
         `  ${r.est ? `established ${r.est.dme.toFixed(1)} km out after ${r.t.toFixed(0)} s (${r.est.phase}, loc ${r.est.loc.toFixed(2)}, gs ${r.est.gs.toFixed(2)}, ${r.est.ias.toFixed(0)} kt)` : "never established"}; autopilot on ${r.apOn} steps; the director's largest gaps over its last second: bank ${r.worst.dB.toFixed(1)}°, path ${r.worst.dG.toFixed(2)}°`,
@@ -114,6 +122,11 @@ for (const craft of ["f35", "a320"] as const) {
       expect(r.est).not.toBeNull();
       expect(r.worst.dB).toBeLessThan(2);
       expect(r.worst.dG).toBeLessThan(0.5);
+      // (rule 13: flown by hand on the director — the autopilot off by design, the autothrottle held, never at idle with nobody on the
+      // throttle, never near the stall)
+      const prob = monitorProblems(r.mon, { ap: false });
+      console.log(`  rule 13: ${JSON.stringify(r.mon)}${prob.length ? ` — ${prob.join("; ")}` : " — conforms"}`);
+      expect(prob).toEqual([]);
     }, 240_000);
   });
 }

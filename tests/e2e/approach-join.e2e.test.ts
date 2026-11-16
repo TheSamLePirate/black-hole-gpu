@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { type IlsRunway, onRunway } from "../../src/game/ils";
 import { App, E2E, stopServer } from "./lib/app";
+import { MONITOR_INIT, MONITOR_STEP, type Monitor, monitorProblems } from "./lib/held";
 import { placeLow } from "./lib/place";
 
 // The approach's join (docs/PLAN-APPROCHES.md §4.4, AP2) over real relief: the F-35 placed around Nice — the sea to the south,
@@ -88,8 +89,10 @@ describe.skipIf(!E2E)("the approach's join over the relief (Nice)", () => {
         // (the runway's middle — the threshold and half its length down it; flat offsets: a distance)
         const cos = Math.cos(W.lat * Math.PI / 180), h = W.hdg * Math.PI / 180;
         const mid = { lat: W.lat + Math.cos(h) * W.len / 2 / 111320, lon: W.lon + Math.sin(h) * W.len / 2 / (111320 * cos) };
+        ${MONITOR_INIT}
         for (let i = 0; i < 30 * 600; i++) {
           __bh.step(1 / 30); t += 1 / 30;
+          ${MONITOR_STEP}
           const R = c.ilsRun; if (!R) break;
           if (R.join && entry === "?") { entry = R.join.plan.entry; pts = R.join.plan.pts.map((q) => ({ name: q.name, alt: q.alt, ground: gnd(q.lat, q.lon) })); }
           const g = c.geoNow(); if (!g) continue;
@@ -122,11 +125,12 @@ describe.skipIf(!E2E)("the approach's join over the relief (Nice)", () => {
         touch: { along: number; across: number; vs: number } | null;
         missed: number;
         t: number;
+        mon: Monitor;
       }>(`(() => {
         const c = __bh.camera; let t = 0, missed = 0;
-        for (let i = 0; i < 30 * 400; i++) { __bh.step(1 / 30); t += 1 / 30; const R = c.ilsRun; if (!R) break; missed = Math.max(missed, R.missed); }
+        for (let i = 0; i < 30 * 400; i++) { __bh.step(1 / 30); t += 1 / 30; ${MONITOR_STEP} const R = c.ilsRun; if (!R) break; missed = Math.max(missed, R.missed); }
         __bh.freeze(false);
-        return { score: c.ilsLast?.score ?? 0, touch: c.ilsLast?.touch ?? null, missed, t };
+        return { score: c.ilsLast?.score ?? 0, touch: c.ilsLast?.touch ?? null, missed, t, mon: window.__mon };
       })()`);
       console.log(
         `  down in ${d.t.toFixed(0)} s: ${d.score}/20, touchdown ${d.touch?.along.toFixed(0)} m in, ${d.touch?.across.toFixed(1)} m off, ${d.touch?.vs.toFixed(2)} m/s; ${d.missed} missed`,
@@ -135,6 +139,11 @@ describe.skipIf(!E2E)("the approach's join over the relief (Nice)", () => {
       expect(d.touch!.along).toBeGreaterThan(150);
       expect(d.touch!.along).toBeLessThan(900);
       expect(d.score).toBeGreaterThan(14);
+      // (rule 13 of E2E-VOLS: the whole flight watched step by step — held by its autopilot and autothrottle, never at idle with nobody on
+      // the throttle, never near the stall, the gear down and locked at the touch)
+      const prob = monitorProblems(d.mon, { landed: true });
+      console.log(`  rule 13: ${JSON.stringify(d.mon)}${prob.length ? ` — ${prob.join("; ")}` : " — conforms"}`);
+      expect(prob).toEqual([]);
       await shot(`approach-join-${L.from}-stopped`);
     }, 240_000);
   }

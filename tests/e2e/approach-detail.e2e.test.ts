@@ -2,6 +2,7 @@ import { afterAll, expect, test } from "bun:test";
 import { mkdirSync } from "node:fs";
 import { fromRunway } from "../../src/game/ils";
 import { App, E2E, stopServer } from "./lib/app";
+import { expectFlightPhase } from "./lib/flight-state";
 import { EARTH_SETTINGS } from "./lib/plan-views";
 
 // T8 — the finest relief near the ground on an approach (Sam, 5 Nov 2026: « quand on s'approche du sol, en approche ou près
@@ -113,7 +114,7 @@ test.skipIf(!E2E)(
       const R = { name: FIELD, lat: E.lat, lon: E.lon, hdg: E.hdg, elev: E.elev, len: 2000 };
       const p = fromRunway(R, -KM * 1000, 0);
       const h = Math.round((KM * 1000 + 300) * Math.tan((3 * Math.PI) / 180));
-      await app.js(`(() => { __bh.game.flyAt(${p.lat}, ${p.lon}, ${h}, ${E.hdg}, 95); __bh.camera.gearDown = true;
+      await app.js(`(() => { __bh.game.flyAt(${p.lat}, ${p.lon}, ${h}, ${E.hdg}, 95); __bh.camera.gearDown = true; __bh.camera.pilot.throttle = __bh.camera.pilot.engineNow = 0.5;
         __bh.settings.shipMount = "cockpit"; document.body.classList.add("hide-ui"); __bh.freeze(true); return 1; })()`);
       // (the flight's start ready as a player's launch has it — its relief, scenery and kernels in, on their progress —: what
       // is seen coming in after is the streaming in flight)
@@ -124,6 +125,10 @@ test.skipIf(!E2E)(
       );
       const said = await app.js<string>(`__bh.camera.ilsStart(${JSON.stringify(FIELD)}, { runway: ${JSON.stringify(RWY)} })`);
       console.log(`  ${said}`);
+      // (rule 13 of E2E-VOLS: on the final as a pilot flies it — the ILS holding it, its thrust, the gear down)
+      // (the gear, lowered at the frozen placing, runs out once the flight goes: its lock waited — ~6 s —, then the state asserted)
+      await app.waitFor(`(__bh.camera.gearExt ?? 0) >= 0.99`, 15_000);
+      await expectFlightPhase(app, "approach", { gear: true }, "the ILS engaged");
       const t0 = Date.now();
       for (let i = 0; Date.now() - t0 < 150_000; i++) {
         const t = +((Date.now() - t0) / 1000).toFixed(1);

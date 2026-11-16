@@ -1,6 +1,8 @@
 import { afterAll, expect, test } from "bun:test";
 import { mkdirSync } from "node:fs";
 import { App, E2E, stopServer } from "./lib/app";
+import { HELD } from "./lib/held";
+import { expectFlightPhase } from "./lib/flight-state";
 
 // The ILS's runway chosen (Sam, 5 Nov 2026: « quand il y a deux pistes, permets de choisir celle pour l'ILS »): the F-35 at
 // 1 500 m north-west of Toulon-Hyères (LFTH: 05/23 and 13/31), in French. The airfield's runways as the action lists them
@@ -34,9 +36,11 @@ test.skipIf(!E2E)(
       );
       await app.waitFor(`__bh.fleet.active === "f35"`, 60_000);
       await app.js(`(() => { __bh.game.setDate("2026-11-05T12:00:00Z"); __bh.game.set("weather", "fair");
-        __bh.game.flyAt(43.16, 6.12, 1500, 160, 140); __bh.settings.shipMount = "cockpit"; return 1; })()`);
+        __bh.game.flyAt(43.16, 6.12, 1500, 160, 140); ${HELD} __bh.settings.shipMount = "cockpit"; return 1; })()`);
       // (the airfield's runways: their tile in)
       await app.waitFor(`(__bh.camera.ilsRunways("LFTH")?.ends.length ?? 0) >= 4`, 45_000);
+      // (rule 13 of E2E-VOLS: placed as a pilot leaves it — its holds, its thrust, its gear — asserted)
+      await expectFlightPhase(app, "cruise", {}, "placed");
       const ch = await app.js<{ field: string; auto: { id: string }; ends: { id: string; len: number; wind: boolean }[] }>(
         `(() => { const c = __bh.camera.ilsRunways("LFTH"); return { field: c.field, auto: { id: c.auto.id }, ends: c.ends.map((e) => ({ id: e.id, len: Math.round(e.len), wind: e.wind })) }; })()`,
       );

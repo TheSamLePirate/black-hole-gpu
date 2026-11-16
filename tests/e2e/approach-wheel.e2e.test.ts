@@ -1,5 +1,7 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { App, E2E, stopServer } from "./lib/app";
+import { HELD } from "./lib/held";
+import { expectFlightPhase } from "./lib/flight-state";
 
 // The wheel's « Approach » sector (docs/PLAN-APPROCHES.md AP8, ui/approach-wheel.ts), by real input (DevTools key and mouse events,
 // E2E.md): the F-35 towards Marseille, Tab held — the wheel —, the pointer on « Approach », Tab released: its sector. There the
@@ -63,8 +65,10 @@ describe.skipIf(!E2E)("the wheel's Approach sector", () => {
       `(() => { Object.assign(__bh.settings, { vessel: "f35", traffic: false, damage: false, weather: "fair", wind: 0, hudAllRunways: true }); return 1; })()`,
     );
     await app.waitFor(`__bh.fleet.active === "f35"`, 30_000);
-    await app.js(`(() => { __bh.game.flyAt(43.21, 5.53, 2000, 305, 170); __bh.settings.shipMount = "cockpit"; return 1; })()`);
+    await app.js(`(() => { __bh.game.flyAt(43.21, 5.53, 2000, 305, 170); ${HELD} __bh.settings.shipMount = "cockpit"; return 1; })()`);
     await app.waitFor(`!!__bh.camera.geoNow() && __bh.camera.geoNow().gs > 100`, 15_000);
+    // (rule 13 of E2E-VOLS: placed as a pilot leaves it — its holds, its thrust, its gear — asserted)
+    await expectFlightPhase(app, "cruise", {}, "placed");
     await app.js(`(() => { const c = __bh.camera; if (c.jetModes.alt === null) c.jetToggle("ap"); if (c.jetModes.spd === null) c.jetToggle("athr");
       c.approachSelect({ field: "auto" }); __bh.fleet.fuel.f35 = 6000; return 1; })()`);
     // (Marseille's field and approaches in: the automatic choice has its ILS to say)

@@ -1,5 +1,7 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { App, E2E, stopServer } from "./lib/app";
+import { HELD } from "./lib/held";
+import { expectFlightPhase } from "./lib/flight-state";
 
 // The approaches on the tactical map (docs/PLAN-APPROCHES.md AP4), real input (CDP): the F-35 flying towards Marseille from the
 // south-east; LFML clicked on the map — its card: the automatic choice and why, each runway end with the wind on it and its
@@ -40,9 +42,11 @@ describe.skipIf(!E2E)("the approaches on the tactical map", () => {
     );
     await a.waitFor(`__bh.fleet.active === "f35"`, 30_000);
     // (35 km south-east of Marseille, flying north-west at 2 000 m; the autopilot holding it)
-    await a.js(`(() => { __bh.game.flyAt(43.21, 5.53, 2000, 305, 170); const c = __bh.camera;
+    await a.js(`(() => { __bh.game.flyAt(43.21, 5.53, 2000, 305, 170); ${HELD} const c = __bh.camera;
       __bh.settings.shipMount = "cockpit"; return 1; })()`);
     await a.waitFor(`!!__bh.camera.geoNow() && __bh.camera.geoNow().gs > 100`, 15_000);
+    // (rule 13 of E2E-VOLS: placed as a pilot leaves it — its holds, its thrust, its gear — asserted)
+    await expectFlightPhase(a, "cruise", {}, "placed");
     await a.js(`(() => { const c = __bh.camera; if (c.jetModes.alt === null) c.jetToggle("ap"); if (c.jetModes.spd === null) c.jetToggle("athr");
       __bh.camera.approachSelect({ field: "auto" }); const m = __bh.flight.hud.tacMap; m.range = 4; m.northUp = true; return 1; })()`);
     await a.waitFor(`!!document.querySelector("[data-testid=jetmap]")?.getBoundingClientRect().width`, 20_000);

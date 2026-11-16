@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { App, E2E, stopServer } from "./lib/app";
+import { MONITOR_INIT, MONITOR_STEP, type Monitor, monitorProblems } from "./lib/held";
 
 // PLAN-F35 F8: a flight plan made by hand — ⇧O opens its panel, clicks on the map add its waypoints, an airfield
 // from the list —, then flown by NAV (⇧M): each point passed in turn, the altitudes and speeds of the plan
@@ -96,10 +97,12 @@ describe.skipIf(!E2E)("the F-35's flight plan", () => {
     );
     await app.press("KeyM", "M", { shift: true });
     expect(await app.js<boolean>(`__bh.camera.nav.on.l && __bh.camera.nav.on.v`)).toBe(true);
-    const r = await app.js<{ log: string[]; passed: number[]; end: number; alt: number; spd: number; ann: string }>(`(() => {
+    const r = await app.js<{ log: string[]; passed: number[]; end: number; alt: number; spd: number; ann: string; mon: Monitor }>(`(() => {
       const c = __bh.camera; const log = [], passed = []; let t = 0, ann = "";
+      ${MONITOR_INIT}
       for (let k = 0; k < 1500 * 30; k++) {
         __bh.step(1 / 30); t += 1 / 30;
+        ${MONITOR_STEP}
         const o = c.nav.last.l; if (o && o.passed >= 0) passed.push(o.passed);
         if (c.nav.say) { log.push(Math.round(t) + " s " + c.nav.say); c.nav.say = null; }
         if (k === 300) ann = JSON.stringify([c.nav.on.l, c.nav.on.v]);
@@ -107,12 +110,16 @@ describe.skipIf(!E2E)("the F-35's flight plan", () => {
       }
       const g = c.geoNow(); const R = c.nav.route.wps; const f = R[R.length - 1];
       const end = Math.hypot((g.lat - f.lat) * 111e3, (g.lon - f.lon) * 111e3 * Math.cos(f.lat * Math.PI / 180));
-      return { log, passed, end, alt: g.alt, spd: c.airFlight.last.speed, ann };
+      return { log, passed, end, alt: g.alt, spd: c.airFlight.last.speed, ann, mon: window.__mon };
     })()`);
     console.log(r.log.map((l) => `  ${l}`).join("\n"));
     expect(r.passed).toEqual([1, 2]);
     expect(r.end).toBeLessThan(600);
     expect(Math.abs(r.alt - 2500)).toBeLessThan(400);
     expect(Math.abs(r.spd - 160)).toBeLessThan(20);
+    // (rule 13 of E2E-VOLS: NAV flown as a pilot would — LNAV/VNAV holding it, never at idle with nobody on the thrust, never near the stall)
+    const prob = monitorProblems(r.mon);
+    console.log(`  rule 13: ${JSON.stringify(r.mon)}${prob.length ? ` — ${prob.join("; ")}` : " — conforms"}`);
+    expect(prob).toEqual([]);
   }, 300_000);
 });

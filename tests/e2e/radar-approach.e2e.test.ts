@@ -1,5 +1,7 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { App, E2E, stopServer } from "./lib/app";
+import { HELD } from "./lib/held";
+import { expectFlightPhase } from "./lib/flight-state";
 
 // The approaches on the radars (docs/PLAN-APPROCHES.md AP5): the F-35 towards Marseille, its radar on; on the HUD's scope, by
 // real clicks, LFML's dot — its approach chosen (automatic there) and drawn —, then another approach's axis — that one chosen —;
@@ -33,9 +35,11 @@ describe.skipIf(!E2E)("the approaches on the radars", () => {
       `(() => { Object.assign(__bh.settings, { vessel: "f35", traffic: false, damage: false, weather: "fair", wind: 0 }); return 1; })()`,
     );
     await app.waitFor(`__bh.fleet.active === "f35"`, 30_000);
-    await app.js(`(() => { __bh.game.flyAt(43.21, 5.53, 2000, 305, 170); __bh.settings.shipMount = "cockpit";
+    await app.js(`(() => { __bh.game.flyAt(43.21, 5.53, 2000, 305, 170); ${HELD} __bh.settings.shipMount = "cockpit";
       __bh.settings.f35Radar = true; __bh.settings.f35RadarRange = "80"; return 1; })()`);
     await app.waitFor(`!!__bh.camera.geoNow() && __bh.camera.geoNow().gs > 100`, 15_000);
+    // (rule 13 of E2E-VOLS: placed as a pilot leaves it — its holds, its thrust, its gear — asserted)
+    await expectFlightPhase(app, "cruise", {}, "placed");
     await app.js(`(() => { const c = __bh.camera; if (c.jetModes.alt === null) c.jetToggle("ap"); if (c.jetModes.spd === null) c.jetToggle("athr");
       c.approachSelect({ field: "auto" }); c.nav.route.wps.length = 0; return 1; })()`);
     await app.js(`__bh.sys.approaches("LFML").then((l) => l.length)`);

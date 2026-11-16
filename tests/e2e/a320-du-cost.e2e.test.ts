@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { App, E2E, stopServer } from "./lib/app";
+import { HELD } from "./lib/held";
 
 // The A320's displays: what they cost (audit 2026-11-10, FX-19 — « the PFD at 20 Hz, the ISIS at 10: their attitude steps in a fast
 // roll; drawn every frame, at what cost? »). The A320 in its cockpit over the sea, 8 s: each display's own rate (its draws counted),
@@ -25,9 +26,7 @@ describe.skipIf(!E2E)("the A320's displays: their rates and costs", () => {
     await app.cdp.send("Network.setBlockedURLs", { urls: ["*geopf.fr*", "*ign.fr*", "*s3.amazonaws.com*", "*gibs.earthdata.nasa.gov*"] });
     await app.js(`(() => { __bh.settings.vessel = "a320"; __bh.settings.traffic = false; return 1; })()`);
     await app.waitFor(`__bh.fleet.active === "a320"`, 30_000);
-    await app.js(
-      `(() => { __bh.game.flyAt(42.9, 6.0, 3000, 90, 130); __bh.settings.shipMount = "cockpit"; __bh.camera.pilot.throttle = 0.6; return 1; })()`,
-    );
+    await app.js(`(() => { __bh.game.flyAt(42.9, 6.0, 3000, 90, 130); __bh.settings.shipMount = "cockpit"; ${HELD} return 1; })()`);
     await app.waitFor(`!!__bh.renderer.a320Du && Object.keys(__bh.renderer.a320Du.cost).length >= 4`, 60_000);
     // (the counters: each display's draws, the uploads' time)
     await app.js(`(() => {

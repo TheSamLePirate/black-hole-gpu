@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { App, E2E, stopServer } from "./lib/app";
+import { HELD } from "./lib/held";
 
 // The A320 on an Xbox 360 pad (audit 2026-11-10, FX-07): before 13 Nov 2026 it had no layout of its own — the pad's
 // general one, a spacecraft's: the left stick pitched and yawed (no roll), the bumpers rolled, X and Y engaged the
@@ -34,9 +35,7 @@ describe.skipIf(!E2E)("the A320 on an Xbox 360 pad", () => {
     await app.js(`(() => { __bh.settings.vessel = "a320"; __bh.settings.traffic = false; return 1; })()`);
     await app.waitFor(`__bh.fleet.active === "a320"`, 30_000);
     // (over the sea: no relief to wait for)
-    await app.js(
-      `(() => { __bh.game.flyAt(42.9, 6.0, 2000, 90, 130); __bh.settings.shipMount = "chase"; __bh.camera.pilot.throttle = 0.6; return 1; })()`,
-    );
+    await app.js(`(() => { __bh.game.flyAt(42.9, 6.0, 2000, 90, 130); __bh.settings.shipMount = "chase"; ${HELD} return 1; })()`);
     await app.js(FAKE_PAD);
     await Bun.sleep(1500);
   }, 180_000);

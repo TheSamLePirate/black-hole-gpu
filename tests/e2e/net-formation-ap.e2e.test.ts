@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { App, E2E, stopServer } from "./lib/app";
+import { HELD } from "./lib/held";
 
 // Formation flight (game/formation.ts, the room panel's Formation): Ana's F-35 on her autopilot over Edwards, Ben's
 // 3 km behind her and 1 km to her left (the light wind, the default: its turbulence each craft's own) — Formation: his autopilot rejoins her right wing and holds it; she turns
@@ -44,10 +45,10 @@ describe.skipIf(!E2E)("formation flight's autopilot", () => {
     await b.js(`(() => { __bh.net.setName("Ben"); return 1; })()`);
     await b.waitFor(`__bh.net.net.clock.synced && !__bh.net.session.teleport(-1).includes("clock")`, 30_000);
     // (Ana on her holds: 3000 m, 090°, 220 m/s)
-    await a.js(`(() => { __bh.game.flyAt(34.95, -117.80, 2300, 90, 220); return 1; })()`);
+    await a.js(`(() => { __bh.game.flyAt(34.95, -117.80, 2300, 90, 220); ${HELD} return 1; })()`);
     await Bun.sleep(1000);
     await a.js(
-      `(() => { const c = __bh.camera; c.jetToggle("ap"); c.jetToggle("athr"); c.jetModes.alt = 3000; c.jetModes.hdg = Math.PI / 2; c.jetModes.spd = 220; return 1; })()`,
+      `(() => { const c = __bh.camera; c.apSet({ ap: true, athr: true }); c.jetModes.alt = 3000; c.jetModes.hdg = Math.PI / 2; c.jetModes.spd = 220; return 1; })()`,
     );
     await b.waitFor(
       `__bh.net.net.remotes.track(${sa})?.latest?.kind === 3 && !(__bh.net.net.remotes.track(${sa}).latest.flags & 1)`,
@@ -63,7 +64,7 @@ describe.skipIf(!E2E)("formation flight's autopilot", () => {
   test("from 3 km behind and 1 km to her left: Formation — on her right wing within two minutes, held within a few metres (the light wind)", async () => {
     // (Ben 3 km behind her, 1 km to her left, 300 m under, at her speed: about 0.027° of longitude per 2.5 km there)
     const at = await a.js<number[]>(`(() => { const g = __bh.camera.geoNow(); return [g.lat, g.lon]; })()`);
-    await b.js(`(() => { __bh.game.flyAt(${at[0]! + 0.009}, ${at[1]! - 0.033}, 2000, 85, 220); return 1; })()`);
+    await b.js(`(() => { __bh.game.flyAt(${at[0]! + 0.009}, ${at[1]! - 0.033}, 2000, 85, 220); ${HELD} return 1; })()`);
     await Bun.sleep(1500);
     console.log(`  Ben: ${await b.js<string>(`__bh.net.formation(${sa})`)} — ${(await gap()).toFixed(0)} m from her`);
     await b.waitFor(`__bh.camera.jetModes.form === "Ana"`, 5000);
@@ -147,7 +148,7 @@ describe.skipIf(!E2E)("formation flight's autopilot", () => {
 
   test("from 60 km: Beside first, then the formation", async () => {
     const at = await a.js<number[]>(`(() => { const g = __bh.camera.geoNow(); return [g.lat, g.lon]; })()`);
-    await b.js(`(() => { __bh.game.flyAt(${at[0]! - 0.5}, ${at[1]!}, 2000, 0, 220); return 1; })()`);
+    await b.js(`(() => { __bh.game.flyAt(${at[0]! - 0.5}, ${at[1]!}, 2000, 0, 220); ${HELD} return 1; })()`);
     await Bun.sleep(1500);
     console.log(`  ${((await gap()) / 1000).toFixed(0)} km off — Ben: ${await b.js<string>(`__bh.net.formation(${sa})`)}`);
     await b.waitFor(`__bh.camera.jetModes.form === "Ana"`, 5000);

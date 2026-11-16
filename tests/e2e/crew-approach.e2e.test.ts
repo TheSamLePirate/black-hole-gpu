@@ -1,5 +1,7 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { App, E2E, stopServer } from "./lib/app";
+import { HELD } from "./lib/held";
+import { expectFlightPhase } from "./lib/flight-state";
 
 // The approach from the crew (docs/PLAN-APPROCHES.md AP6): an F-35 towards Marseille in a room, the crew console (crew/) in a frame
 // of the same page joined as instruments; in its MCP's APP box the field typed — its approaches listed from the same tiles as the
@@ -29,8 +31,10 @@ describe.skipIf(!E2E)("the approach from the crew", () => {
       `(() => { Object.assign(__bh.settings, { vessel: "f35", traffic: false, damage: false, weather: "fair", wind: 0 }); return 1; })()`,
     );
     await app.waitFor(`__bh.fleet.active === "f35"`, 30_000);
-    await app.js(`(() => { __bh.game.flyAt(43.21, 5.53, 2000, 305, 170); return 1; })()`);
+    await app.js(`(() => { __bh.game.flyAt(43.21, 5.53, 2000, 305, 170); ${HELD} return 1; })()`);
     await app.waitFor(`!!__bh.camera.geoNow() && __bh.camera.geoNow().gs > 100`, 15_000);
+    // (rule 13 of E2E-VOLS: placed as a pilot leaves it — its holds, its thrust, its gear — asserted)
+    await expectFlightPhase(app, "cruise", {}, "placed");
     await app.js(`(() => { const c = __bh.camera; if (c.jetModes.alt === null) c.jetToggle("ap"); if (c.jetModes.spd === null) c.jetToggle("athr");
       c.approachSelect({ field: "auto" }); return 1; })()`);
     await app.js(`__bh.sys.approaches("LFML").then((l) => l.length)`);
@@ -141,8 +145,10 @@ describe.skipIf(!E2E)("the approach from the crew", () => {
       const back = (a.crs + 180) * D, d = 12000 / 6371000, la = a.thr.lat * D, lo = a.thr.lon * D;
       const lat = Math.asin(Math.sin(la) * Math.cos(d) + Math.cos(la) * Math.sin(d) * Math.cos(back));
       const lon = lo + Math.atan2(Math.sin(back) * Math.sin(d) * Math.cos(la), Math.cos(d) - Math.sin(la) * Math.sin(lat));
-      __bh.game.flyAt(lat / D, lon / D, 640, a.crs, 95); __bh.fleet.fuel.f35 = 3000; return 1; })()`);
+      __bh.game.flyAt(lat / D, lon / D, 640, a.crs, 95); ${HELD} __bh.fleet.fuel.f35 = 3000; return 1; })()`);
     await app.waitFor(`!!__bh.camera.geoNow() && __bh.camera.geoNow().gs > 60`, 10_000);
+    // (rule 13 of E2E-VOLS: placed as a pilot leaves it — its holds, its thrust, its gear — asserted)
+    await expectFlightPhase(app, "approach", {}, "placed");
     await app.js(crew("__crew.setView('pfd')"));
     await app.waitFor(`!!${doc("#mcp-app-arm")}`, 5000);
     // (the console allowed the flight's orders again — the craft just placed)

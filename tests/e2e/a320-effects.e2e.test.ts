@@ -1,5 +1,15 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { App, E2E, stopServer } from "./lib/app";
+import {
+  AXIS_PILOT_OFF,
+  AXIS_PILOT_ON,
+  AXIS_WATCH_READ,
+  AXIS_WATCH_START,
+  type AxisWatch,
+  axisWatchProblems,
+  expectFlightPhase,
+} from "./lib/flight-state";
+import { HELD } from "./lib/held";
 
 // PLAN-A320 A13 (the air and the ground): the A320 at Le Bourget, seen from outside — a humid approach in CONF FULL (the
 // wing's vapour, the tip and flap-edge vortices); take-off power on the ground in humid air (the inlet vortices, the
@@ -69,7 +79,7 @@ describe.skipIf(!E2E)("the A320's air and ground effects", () => {
   test("a humid approach in CONF FULL: the wing's vapour, the vortices", async () => {
     const r = await app.js<{ fpsOn: number; fpsOff: number }>(`(async () => {
       const c = __bh.camera;
-      __bh.game.flyAt(48.90, 2.44, 350, 270, 66);
+      __bh.game.flyAt(48.90, 2.44, 350, 270, 66); ${HELD}
       c.gearDown = true; c.gearExt = 1; c.gearInit = true;
       c.airFlight.cfg.flaps = 1;
       c.pilot.throttle = 0.55;
@@ -124,13 +134,29 @@ describe.skipIf(!E2E)("the A320's air and ground effects", () => {
     await app.js(`(() => {
       __bh.settings.weather = "rain"; __bh.refresh();
       __bh.game.lineUp("Paris – Le Bourget");
-      const c = __bh.camera;
-      c.a320Park = false;
-      c.pilot.throttle = 1;
       __bh.settings.shipMount = "quarter"; __bh.refresh();
       return true;
     })()`);
+    // (rule 13 of E2E-VOLS: lined up on the axis before the power, held on it through the roll — Sam, 16 Nov 2026: an A320 seen off
+    // the axis at its take-off)
+    await app.waitFor("!!__bh.camera.a320Sys", 30_000);
+    await expectFlightPhase(app, "lineup", { ap: false, athr: false }, "lined up, wet");
+    // (the rain's wind, 8 m/s gusting 14 from 334°, right across the 25: a pilot's feet keep it on the axis — nobody on the rudder,
+    // the A320 weathervaned 5.9° into it and rolled 12.9 m off the centreline by 45 m/s, kerr-mini 16 Nov 2026)
+    await app.js(AXIS_PILOT_ON);
+    await app.js(AXIS_WATCH_START);
+    await app.js(`(() => { const c = __bh.camera; c.a320Park = false; c.pilot.throttle = 1; return true; })()`);
     await app.waitFor(`(__bh.camera.geoNow()?.gs ?? 0) > 45`, 60_000);
+    const axis = await app.js<AxisWatch>(AXIS_WATCH_READ);
+    await app.js(AXIS_PILOT_OFF);
+    console.log(
+      `  the wind on the runway: ${await app.js<string>(`JSON.stringify(__bh.camera.runwayView()?.wind ?? null)`)}; the roll (t s, gs, hdg°, trk°, across m, along m, engine) each second:`,
+    );
+    for (const r of axis.rows.filter((_, i) => i % 10 === 0)) console.log(`    ${JSON.stringify(r)}`);
+    console.log(
+      `  the roll's axis: heading ${axis.worstHdg.toFixed(2)}°, across ${axis.worstAcross.toFixed(1)} m at worst (runway ${axis.des}, ${axis.rolled} samples)`,
+    );
+    expect(axisWatchProblems(axis)).toEqual([]);
     await Bun.sleep(600);
     const spray = await segs(7);
     console.log(`  spray points rolling: ${spray}`);

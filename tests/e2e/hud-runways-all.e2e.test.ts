@@ -1,5 +1,7 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { App, E2E, stopServer } from "./lib/app";
+import { HELD } from "./lib/held";
+import { expectFlightPhase } from "./lib/flight-state";
 
 // All the airport's runways on the HUD (docs/PLAN-APPROCHES.md AP7 — Sam, 15 Nov 2026: on by default, toggled from the wheel and the
 // Labo, no key): the F-35 on a final to Roissy (four runways), its ILS on 27R engaged; the runway landed on drawn bright, the other
@@ -30,8 +32,10 @@ describe.skipIf(!E2E)("all the airport's runways on the HUD", () => {
       const D = Math.PI / 180, back = (a.crs + 180) * D, d = 12000 / 6371000, la = a.thr.lat * D, lo = a.thr.lon * D;
       const lat = Math.asin(Math.sin(la) * Math.cos(d) + Math.cos(la) * Math.sin(d) * Math.cos(back));
       const lon = lo + Math.atan2(Math.sin(back) * Math.sin(d) * Math.cos(la), Math.cos(d) - Math.sin(la) * Math.sin(lat));
-      __bh.game.flyAt(lat / D, lon / D, 640, a.crs, 95); __bh.settings.shipMount = "cockpit"; return 1; })()`);
+      __bh.game.flyAt(lat / D, lon / D, 640, a.crs, 95); ${HELD} __bh.settings.shipMount = "cockpit"; return 1; })()`);
     await app.waitFor(`!!__bh.camera.geoNow() && __bh.camera.geoNow().gs > 60`, 15_000);
+    // (rule 13 of E2E-VOLS: placed as a pilot leaves it — its holds, its thrust, its gear — asserted)
+    await expectFlightPhase(app, "approach", {}, "placed");
     await app.js(`(() => { __bh.fleet.fuel.f35 = 3000; return __bh.camera.ilsStart("LFPG", { runway: "27R" }); })()`);
     await app.waitFor(`!!__bh.camera.ilsRun`, 10_000);
   }, 300_000);

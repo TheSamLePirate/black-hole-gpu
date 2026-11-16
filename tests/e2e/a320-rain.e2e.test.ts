@@ -1,5 +1,7 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { App, E2E, stopServer } from "./lib/app";
+import { HELD } from "./lib/held";
+import { expectFlightPhase } from "./lib/flight-state";
 
 // PLAN-A320 A13: the A320's windshield from the captain's seat at Le Bourget, in the rain (src/a320/glass.ts,
 // ship.wgsl a320Wet): the drops sitting and trickling down parked; at 140 kt the runners carried up and out; the
@@ -109,12 +111,14 @@ describe.skipIf(!E2E)("the A320's windshield in the rain", () => {
 
   test("at 140 kt: the runners carried up and out", async () => {
     await app.js(`(() => {
-      __bh.game.flyAt(48.95, 2.44, 400, 270, 72);
+      __bh.game.flyAt(48.95, 2.44, 400, 270, 72); ${HELD}
       __bh.settings.shipMount = "cockpit";
       __bh.refresh();
       return true;
     })()`);
     await app.waitFor("!!__bh.renderer.ship.deckMats && !!__bh.renderer.a320Glass", 60_000);
+    // (rule 13 of E2E-VOLS: placed as a pilot leaves it — its holds, its thrust, its gear — asserted)
+    await expectFlightPhase(app, "approach", { ap: false }, "placed");
     await app.js(`(__bh.camera.setLook(0, 2), true)`);
     await Bun.sleep(5000);
     const g = await glass();

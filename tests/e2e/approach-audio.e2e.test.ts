@@ -1,5 +1,7 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { App, E2E, stopServer } from "./lib/app";
+import { HELD } from "./lib/held";
+import { expectFlightPhase } from "./lib/flight-state";
 
 // The approach in the headset (docs/PLAN-APPROCHES.md AP9): the F-35 on Sofia's ILS 09 (LBSF — nav.dat: its localizer, its outer,
 // middle and inner markers), the sound on. Its clearance said with real values (« Sofia approach: cleared ILS approach runway 09,
@@ -62,9 +64,11 @@ describe.skipIf(!E2E)("the approach in the headset (Sofia ILS 09)", () => {
       const back = (a.crs + 180) * D, d = ${out} / R, la = a.thr.lat * D, lo = a.thr.lon * D;
       const lat = Math.asin(Math.sin(la) * Math.cos(d) + Math.cos(la) * Math.sin(d) * Math.cos(back));
       const lon = lo + Math.atan2(Math.sin(back) * Math.sin(d) * Math.cos(la), Math.cos(d) - Math.sin(la) * Math.sin(lat));
-      __bh.camera.ilsOff(); __bh.game.flyAt(lat / D, lon / D, Math.max((${out} + 300) * Math.tan(3 * D), 60), a.crs, 85);
+      __bh.camera.ilsOff(); __bh.game.flyAt(lat / D, lon / D, Math.max((${out} + 300) * Math.tan(3 * D), 60), a.crs, 85); ${HELD}
       __bh.settings.shipMount = "cockpit"; __bh.fleet.fuel.f35 = 3000; return 1; })()`);
     await app.waitFor(`!!__bh.camera.geoNow() && __bh.camera.geoNow().gs > 60`, 10_000);
+    // (rule 13 of E2E-VOLS: placed as a pilot leaves it — its holds, its thrust, its gear — asserted)
+    await expectFlightPhase(app, "approach", {}, "placed");
     const said = await app.js<string>(`__bh.camera.ilsStart("LBSF", { runway: "09" })`);
     await app.waitFor(`!!__bh.camera.ilsRun`, 5000);
     return said;
@@ -157,8 +161,10 @@ describe.skipIf(!E2E)("the approach in the headset (Sofia ILS 09)", () => {
   test("engaged far out, off the axis: the clearance gives the join's altitude (climb, descend or maintain)", async () => {
     // (30 km west of the field, 8 km north of the axis, at 2 000 m, heading east: the join planned — its first altitude said)
     await app.js(`(() => { const a = ${JSON.stringify(A)}; __bh.camera.ilsOff();
-      __bh.game.flyAt(a.thr.lat + 0.072, a.thr.lon - 0.37, 1500, 90, 140); return 1; })()`);
+      __bh.game.flyAt(a.thr.lat + 0.072, a.thr.lon - 0.37, 1500, 90, 140); ${HELD} return 1; })()`);
     await app.waitFor(`!!__bh.camera.geoNow() && __bh.camera.geoNow().gs > 100`, 10_000);
+    // (rule 13 of E2E-VOLS: placed as a pilot leaves it — its holds, its thrust, its gear — asserted)
+    await expectFlightPhase(app, "cruise", {}, "placed");
     await app.js(`(() => { window.__radio.length = 0; return __bh.camera.ilsStart("LBSF", { runway: "09" }); })()`);
     const clr = (await app.js<string[]>(`window.__radio`)).find((r) => /cleared|autorisé/i.test(r)) ?? "";
     console.log(`  the radio, far out: ${clr}`);
