@@ -67,7 +67,7 @@ l'état d'une mission ou d'un combat **non sauvé, dit** ; le réseau **« entre
 
 **Priorité de Sam (16 nov., 11:30 UTC) : [PLAN-J8](docs/PLAN-J8-BATIMENTS.md), tous les bâtiments de la vue** (« c'est ça qui choque le plus ») — la suite de J7 en pause après J7-8b ; les deux sessions s'y mettent (rendu : couche GPU, scène proche ; approches : recensement, préparation des cellules, PWA) ; d'abord J8-0 (mesures) et J8-1 (le trou de 2 à 7 km).
 
-**Décidé par Sam (16 nov., 15:58 UTC)** : J8-4 allumée par défaut (quads sous 8 px), J8-5 avec une jonction choisie sur captures, J8-1b suspendu, l'e2e de J8-6 par la voie (b), J8-9 ajouté ([PLAN-J8](docs/PLAN-J8-BATIMENTS.md) §6 point 6). **But fixé par Sam (16 nov., ~16:19 UTC)** : [J8-A](docs/PLAN-J8-BATIMENTS.md), un vol Paris et Toulon-Hyères, de jour et de nuit, tous les bâtiments chargés avant le vol, en « high » partout, sans différence visible entre les qualités. **Attend Sam** : les captures de jonction de J8-5 ; les quatre premières questions de PLAN-J8 §6, réglées provisoirement (même contenu sur les deux machines, retour si > 3 ms sur le mini ; portée au pixel ; J7 en pause, les arbres proches deviennent J9 ; pas de préparation côté serveur pour l'instant) ; les trois questions de [PLAN-J7](docs/PLAN-J7-FLUIDITE.md) §4, réglées provisoirement (les 40 ms du mini en dernier, J7-6 ; les arbres proches en géométrie ensuite, désormais J9 ; l'aplanissement du détail sous les trouées jusqu'à la FAF ou 10 km) ; les seuils du mini attendent la reprise de la cible 40 ms.
+**Décidé par Sam (16 nov., 15:58 UTC)** : J8-4 allumée par défaut (quads sous 8 px), J8-5 avec une jonction choisie sur captures, J8-1b suspendu, l'e2e de J8-6 par la voie (b), J8-9 ajouté ([PLAN-J8](docs/PLAN-J8-BATIMENTS.md) §6 point 6). **But fixé par Sam (16 nov., ~16:19 UTC)** : [J8-A](docs/PLAN-J8-BATIMENTS.md), un vol Paris et Toulon-Hyères, de jour et de nuit, tous les bâtiments, lampadaires et voitures (J8-L) chargés avant le vol, en « high » partout, sans différence visible entre les qualités. **Attend Sam** : les captures de jonction de J8-5 ; les quatre premières questions de PLAN-J8 §6, réglées provisoirement (même contenu sur les deux machines, retour si > 3 ms sur le mini ; portée au pixel ; J7 en pause, les arbres proches deviennent J9 ; pas de préparation côté serveur pour l'instant) ; les trois questions de [PLAN-J7](docs/PLAN-J7-FLUIDITE.md) §4, réglées provisoirement (les 40 ms du mini en dernier, J7-6 ; les arbres proches en géométrie ensuite, désormais J9 ; l'aplanissement du détail sous les trouées jusqu'à la FAF ou 10 km) ; les seuils du mini attendent la reprise de la cible 40 ms.
 
 ## Journal
 
@@ -9266,3 +9266,14 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   - J8-9 proposé à Sam, chiffres ci-dessus : la zone porte les cellules lointaines, peu coûteuses ; les hauteurs sont allégées, elles
     sont coûteuses ; l'estimation suit le débit mesuré de chaque hôte ;
   - le signal « prêt » de J8-A.
+
+### 2026-11-16 16:30 UTC — PLAN-J8 : J8-9 ouvert, J8-L ajouté (les lampadaires et les voitures dans toute la vue) (session d'analyse)
+
+- **Contribution à la destination :** PLAN-J8 J8-A, stratégie §19.13. Sam étend le but : « idem pour les lampadaires, charger toute la vue — et les voitures aussi ».
+- **Réalisé :**
+  - Le lot J8-L est ajouté : les lampadaires et les voitures dans les cellules z 15, dessinés jusqu'à la limite du pixel, avec un raccord à la nuit des tuiles (`night-roads.ts`).
+  - J8-9 est ouvert. La réponse de Sam à la proposition de la session des approches est lue comme un accord : la zone porte les cellules lointaines, les hauteurs au niveau que le jeu lira, l'estimation au débit mesuré.
+  - Le critère 5 du §0 est complété. Relayé aux deux sessions.
+- **Preuves :** documenté. L'état des lampadaires et des voitures est lu dans le code : `streetlamps.ts`, 1 500 m et 4 000 au plus ; `traffic.ts`, 3 000 m et 1 500 au plus. Aucun test lancé.
+- **Limites / transitions restantes :** la lecture de J8-9 comme un accord est à confirmer par Sam. Pour les zones, les durées calculées par la session des approches restent des estimations, au débit mesuré à Toulon : Paris à 5 km « overflight », 7 704 chaînes, environ 0,9 h. Le coût GPU de J8-L n'est pas mesuré.
+- **Suite :** côté approches, J8-9 puis le signal « prêt » de J8-A. Côté rendu, J8-L après les matériaux de J8-4 et J8-5.

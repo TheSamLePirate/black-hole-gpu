@@ -13,7 +13,8 @@ L'avancement se tient au §8 ; le code fait foi.
 **Le résultat attendu, fixé par Sam le 16 nov. (~16:19 UTC) :** *« un vol au-dessus de Paris et au-dessus de Toulon-Hyères avec un
 max de bâtiments, tous chargés avant le vol, en jour et en nuit ; high details partout dans la vue, le moins de différences
 visibles entre les qualités des bâtiments (shading, couleur…) »*. Les critères ci-dessous et le lot J8-A (§3) en sont la mesure ;
-ce vol est la démonstration qui ferme le plan.
+ce vol est la démonstration qui ferme le plan. **Étendu par Sam le même jour (~16:29 UTC) :** *« idem pour les lampadaires,
+charger toute la vue — et les voitures aussi »* (lot J8-L).
 
 Il y a cinq critères, tous mesurés par un e2e et montrés en captures.
 
@@ -35,7 +36,9 @@ Il y a cinq critères, tous mesurés par un e2e et montrés en captures.
    **Le moins de différences visibles entre les qualités** : le maillage proche et la couche lointaine partagent les
    matériaux par bâtiment, la couleur des toits et des murs, l'éclairage, les ombres et les fenêtres éclairées la nuit. Le
    témoin : à la jonction, l'écart de couleur moyenne des toits et des murs par bande de distance (de part et d'autre),
-   de jour et de nuit, avec les captures côte à côte ; aucune bascule visible dans la vidéo du vol. Le coût est mesuré sur
+   de jour et de nuit, avec les captures côte à côte ; aucune bascule visible dans la vidéo du vol. **Les lampadaires et les
+   voitures aussi, dans toute la vue** (J8-L) : la nuit, les lumières proches et lointaines de la même ville se raccordent sans
+   bord visible. Le coût est mesuré sur
    les deux machines et montré à Sam.
 
 Le coût GPU est mesuré et montré à Sam avant d'être accepté (§6, question 1). Aucun bâtiment n'est retiré en silence pour tenir
@@ -123,8 +126,9 @@ de bâtiments vus, et leur coût GPU se mesure et se déclare.
 | **J8-6 La PWA** | Une zone téléchargée contient aussi les cellules préparées : hors ligne, aucun décodage. Réglages › Hors ligne donne le compte et la taille. En ligne, la publication est progressive. | approches (`zones.ts`, `sw.ts`, UI FR + EN) | e2e hors ligne : placement dans la zone, réseau coupé, toute la vue en N s ; MENUS / docs à jour |
 | **J8-7 Hors de France** | Overture (PMTiles) et OSM dans les mêmes enregistrements, puis la même couche. | approches | captures à Tarifa et Bruxelles ; recensement contre dessinés |
 | **J8-8 Le proche en cellules** (décision après J8-5) | Maillages, contacts (`SceneryContact`) et ombres par cellule, avec identité stable. Il n'y a plus de scène refaite pour les bâtiments. Grand lot : il ne s'ouvre que si J8-5 laisse un trou mesuré. | rendu | idem J8-5, sans régime rapide |
-| **J8-9 Une zone juste et légère** (ajouté le 16 nov., session d'analyse, sur la mesure de J8-6 ; après J8-4, sur accord de Sam) | `zoneDuration` annonce 175 s pour une zone dont le téléchargement réel prend 45 à 55 min (la Géoplateforme ~1,3 chaîne/s). Une zone de 0,5 km tire ~3 500 chaînes de base et ~700 grilles d'altitude IGN. L'estimation se cale sur le débit mesuré, et la zone ne tire que ce que le jeu lira. | approches | l'estimation contre le temps réel sur deux zones ; le compte des chaînes avant/après |
+| **J8-9 Une zone juste et légère** (ajouté le 16 nov., session d'analyse, sur la mesure de J8-6 ; **ouvert le 16 nov. ~16:29 UTC** : Sam répond à la proposition de la session des approches par « idem pour les lampadaires, charger toute la vue », lu comme un accord — (1) la zone porte les cellules lointaines du vol, (2) les hauteurs au niveau que le jeu lira, (3) l'estimation au débit mesuré de chaque hôte) | `zoneDuration` annonce 175 s pour une zone dont le téléchargement réel prend 45 à 55 min (la Géoplateforme ~1,3 chaîne/s). Une zone de 0,5 km tire ~3 500 chaînes de base et ~700 grilles d'altitude IGN. L'estimation se cale sur le débit mesuré, et la zone ne tire que ce que le jeu lira. | approches | l'estimation contre le temps réel sur deux zones ; le compte des chaînes avant/après |
 | **J8-A La démonstration** (le résultat attendu par Sam, 16 nov. ; ferme le plan) | Un e2e de vol, Paris puis Toulon-Hyères, de jour et de nuit : la zone (ou le cache préparé) chargée avant le décollage et attendue jusqu'à ce que toutes les cellules de la vue et de la trajectoire soient résidentes ; puis le vol sans réseau. Il s'appuie sur J8-4 (matériaux par bâtiment, toit sur les quads, teinte), J8-5 (pas de scène rapide), J8-6 (la zone), et sur la réserve de la couche dimensionnée pour Paris. | les deux (rendu : vol, aspect, coût ; approches : zone, préchargement) | §0 critère 5 : réseau 0 et scène rapide 0 en vol ; bâtiments dessinés contre le recensement ; écart de couleur à la jonction jour et nuit ; vidéo et captures ; coût sur les deux machines |
+| **J8-L Les lampadaires et les voitures dans toute la vue** (demandé par Sam le 16 nov., ~16:29 UTC, pour J8-A) | Aujourd'hui les lampadaires sont dans la scène (`streetlamps.ts` : 1 500 m, 4 000 au plus) et, au-delà, des points de lumière cuits dans la nuit des tuiles (`night-roads.ts`) ; les voitures sont dans la scène (`traffic.ts` : 3 000 m, 1 500 au plus, routes principales). Les mettre dans les mêmes cellules z 15 (enregistrements préparés en workers depuis les routes d'OpenMapTiles, gardés en cache et dans la zone), dessinées par le GPU jusqu'à la limite du pixel : un lampadaire lointain est un point lumineux la nuit, une voiture lointaine des phares et des feux la nuit, une petite boîte le jour ; le raccord avec les points cuits de `night-roads` sans double ni bord. | rendu (GPU, aspect, raccord) ; approches (préparation, zone) | le compte dessiné contre les routes de la vue ; captures de nuit proche/loin côte à côte ; coût sur les deux machines |
 | **J8-R Retraits** (règle 2) | Le plafond 8 000 × portée² des bâtiments, les boîtes au-delà de 2 km dans la scène, les budgets rapides des bâtiments, le chemin de silhouettes remplacé : retirés au lot qui suit leur remplacement, avec une date. | les deux | `git grep` vide ; docs |
 
 **Ordre :** J8-A est le but : chaque lot se juge à ce qu'il lui apporte. J8-T en tête côté approches (avant les téléchargements de J8-0 (b) s'il est encore temps, sinon juste après) ; J8-0 et J8-1 en parallèle, puis J8-2, puis J8-3 et J8-4 en parallèle, puis J8-5, J8-6, J8-7, J8-8 si nécessaire, et
