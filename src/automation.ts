@@ -709,6 +709,8 @@ export function installBh(c: BhContext) {
           const why: string[] = [];
           const t = renderer.earthTiles;
           if (t.pending > 0 || t.orthoPending > 0) why.push(`tiles ${t.pending} + orthophotos ${t.orthoPending} pending`);
+          // (a tile whose load failed is no longer « pending » — offline, one missing from a zone — but drawn from its parent: missing)
+          if (t.standIns > 0) why.push(`${t.standIns} tiles failed, drawn from their parent's`);
           const s = renderer.earthScenery?.stats?.() as { status?: string; quick?: boolean } | undefined;
           if (s && (s.status !== "ready" || s.quick)) why.push(`near scene ${s.status}${s.quick ? " (quick)" : ""}`);
           if (renderer.earthScenery?.pending) why.push("near scene pending");
