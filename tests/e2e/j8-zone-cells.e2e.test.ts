@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { App, E2E, stopServer } from "./lib/app";
+import { hostStats } from "./lib/earth-cache";
 
 // PLAN-J8 J8-6 — an offline zone carries its building cells prepared (src/system/zone-cells.ts, src/pwa-zones.ts, cell-workers.ts
 // zoneCellsIO): over Toulon, a small zone of the « overflight » profile with the scenery balanced, the IGN's relief on, no orthophotos
@@ -8,10 +9,9 @@ import { App, E2E, stopServer } from "./lib/app";
 // (Settings › Offline shows them). Then the network cut and the page loaded again: every cell of the zone asked of the game's pool
 // (__bh.sys.cells) comes from the prepared cache, none decoded, within seconds. Back online, the zone removed: its cells dropped from
 // the prepared cache (no other zone holds them).
-// Earth data: network (a zone's download goes through the Service Worker — its boot keeps the network)
 // Done when: the zone ready with its cells prepared (none failed); offline, every one of them handed from the prepared cache, none
 // prepared, in under 20 s; after the removal, none of them left.
-// Duration: ~35–45 min (the zone's download: 16 Nov 2026 on this Mac, its first 2 000 chains in 2.5 min, the rest — the Géoplateforme's
+// Duration: ~15 min on kerr-mini (16 Nov 2026, 16:44: the zone ready in 894 s with its far cells — 5 978 chains); here ~35–45 min (the zone's download: 16 Nov 2026 on this Mac, its first 2 000 chains in 2.5 min, the rest — the Géoplateforme's
 // — ~1.3 a second: 4 160 of 4 320 after 30 min; its estimate said 175 s. One heavy IGN load at a time; then two reloads). Never passed
 // yet: both runs of 16 Nov stopped at the download's cap before the cells.
 
@@ -74,6 +74,9 @@ describe.skipIf(!E2E)("PLAN-J8 J8-6: an offline zone carries its building cells 
     }
     const z = (await rec(id))!;
     console.log(`  ready in ${((Date.now() - t0) / 1000).toFixed(0)} s: ${JSON.stringify(z)}`);
+    // (each host's measured rate — PLAN-J8 J8-9 (3): the zone's estimate set on them; through the e2e's Earth data on disk, the
+    // Service Worker's fetches — a first run fetches, a later one finds them on the disk)
+    if (app.earth) for (const h of hostStats(app.earth.counts.log)) console.log(`  host ${JSON.stringify(h)}`);
     expect(z.state).toBe("ready");
     expect(z.cells?.count ?? 0).toBeGreaterThan(0);
     expect(z.cells?.failed).toBe(0);
@@ -97,7 +100,17 @@ describe.skipIf(!E2E)("PLAN-J8 J8-6: an offline zone carries its building cells 
     await app.js(
       `(async () => { const l = await ${CELLS}; __bh.sys.cells.want(l.map((t, i) => ({ x: t.x, y: t.y, priority: 0, d: i }))); return l.length; })()`,
     );
-    await app.waitFor(`__bh.sys.cells.got().length >= ${kept.length}`, 20_000);
+    // (the pool takes 256 at a time and its free workers — the rest wait past its bound for the next want: asked again each second, as
+    // the far layer does every 2 s; 30 s at most)
+    for (let k = 0; k < 30; k++) {
+      const n = await app.js<number>(`__bh.sys.cells.got().length`);
+      if (n >= kept.length) break;
+      await app.js(
+        `(async () => { const l = await ${CELLS}; __bh.sys.cells.want(l.map((t, i) => ({ x: t.x, y: t.y, priority: 0, d: i }))); return 1; })()`,
+      );
+      await app.js(`new Promise((q) => setTimeout(q, 1000))`);
+    }
+    await app.waitFor(`__bh.sys.cells.got().length >= ${kept.length}`, 5_000);
     const off = await app.js<{ prepared: number; cached: number; failed: number }>(`__bh.sys.cells.stats()`);
     console.log(`  offline: ${kept.length} cells handed in ${((Date.now() - t1) / 1000).toFixed(2)} s — ${JSON.stringify(off)}`);
     await app.shot("remote-results/j8-zone-cells/offline.png");

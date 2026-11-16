@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-16 16:57 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-16 17:10 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous. Ce qui est fermé quitte le tableau « En cours » pour la ligne « Fermé récemment ».
@@ -48,7 +48,7 @@ J4 (fermé, sortie non atteinte), J5 et J6 (fermés).
 | Rendu (33d89754) | J4 / J5 — l'eau, les volumes, la généralisation | **fermés** ([PLAN-J4](docs/PLAN-J4-VOLUMES.md), [PLAN-J5](docs/PLAN-J5-GENERALISATION.md)) : l'eau à demi-rythme (J5-5, −6,0 à −6,4 ms, l'image la même) ; le sol à demi-rythme laissé au joueur (J5-6, réglage « demi » : −1,9 à −3,2 ms ; « auto » à chaque pixel) ; la FFT de la mer en deux passes (−0,9 ms) ; la carte d'ombre des arbres (−2,8 ms, forêt) ; Sam a refusé les arbitrages d'image (MSAA 1×, petits arbres, nuages amortis). Postes lourds restants : l'eau 16,2, les nuages d'orage 16,5, le décor d'une forêt ~7 ms |
 | Rendu (33d89754) | Mesures tenues | la borne du M1 Max **à 30** : essayée à 40 le 15 au soir, non tenue (soutenu 26,4 et 34,5 images/s, deux runs — [J0-CONTRAT §2](docs/J0-CONTRAT.md)) ; le coût de l'appareil 3,5–4,5 ms, dont le MSAA 4× 4–5 ms (gardé) |
 | Audit vagues 3–4 et 6 (1feb2f7f) | [09-priorites-todo](docs/audit-2026-11-10/09-priorites-todo.md) | **faits** : 3.1–3.2 réseau (RD0–RD2), 3.3 sauvegardes (une clé par sauvegarde ; avion, systèmes des vaisseaux et de l'A320 — ce dernier par J6-4), 3.4–3.5 vol, 3.6–3.7 TARS, 3.10 e2e honnêtes, 4.2 temps et onglet masqué, 4.3 `Settings`/`ViewPose`, 4.8 `main()` découpé ; vague 6 hors rendu (QA, AR, RD4/RD5, FX). **Reste** : l'état d'une mission ou d'un combat (Sam), IndexedDB et l'autosauvegarde hors frame (AR-05), FX-19 (fraîcheur des écrans, à mesurer), FX-21 |
-| Vol, approches, e2e de vol (1feb2f7f) | E2E-VOLS règle 13 ; demandes de Sam du 16 nov. ; **PLAN-J8** | **fait le 16 nov.** : règle 13, bandeau et `app.scenario`, l'axe au décollage (horloge du vol), la piste du HUD, l'alarme du train, le débriefing, l'Auto-GCAS, la ligne d'horizon, les jonctions sur le sol dessiné ; **PLAN-J8** : J8-0 (a) fait, (b, d) Toulon faits ; **J8-T fait** (le cache disque des e2e activé par défaut ; J0 sur le mini : détail complet 107,7 → 57,6 s, GPU en vol inchangé, 49,4 contre 49,8 ms ; dossiers échangés par `earth-sync`) , Paris (b, d) depuis le disque faits (59,5 s dont 54 de calcul, 199 236 coupés) ; J8-3 cellule et réserve écrites ; **J8-3 `j8-cells` 2/2** (142 cellules en 28,1 s, aucune image > 100 ms, cache 0,26 s) ; J8-3 priorité laissée à J8-4 (accord), `dropped` corrigé ; **J8-6 écrit** (tests unitaires ; l’e2e de zone jamais passé : le téléchargement > 30 min) ; **J8-7 fait** (Overture hors de France, Tarifa et Bruxelles dans la couche lointaine, aucune image > 100 ms) ; **J8-6 (b) faite** (le cache disque sert le Service Worker, témoin 1/1) ; **J8-9 (1) fait** (la zone porte les cellules lointaines) ; **maintenant** : le passage (a) unique de `j8-zone-cells` sur le mini, J8-9 proposé à Sam (Paris 5 km ~0,9 h de Géoplateforme, les cellules lointaines ~4 min), le signal « prêt » de J8-A, J8-6, J8-7 ; **en pause** : le contour HUD en virage, la règle 13 des autres domaines, la garde du bandeau (338 en attente) |
+| Vol, approches, e2e de vol (1feb2f7f) | E2E-VOLS règle 13 ; demandes de Sam du 16 nov. ; **PLAN-J8** | **fait le 16 nov.** : règle 13, bandeau et `app.scenario`, l'axe au décollage (horloge du vol), la piste du HUD, l'alarme du train, le débriefing, l'Auto-GCAS, la ligne d'horizon, les jonctions sur le sol dessiné ; **PLAN-J8** : J8-0 (a) fait, (b, d) Toulon faits ; **J8-T fait** (le cache disque des e2e activé par défaut ; J0 sur le mini : détail complet 107,7 → 57,6 s, GPU en vol inchangé, 49,4 contre 49,8 ms ; dossiers échangés par `earth-sync`) , Paris (b, d) depuis le disque faits (59,5 s dont 54 de calcul, 199 236 coupés) ; J8-3 cellule et réserve écrites ; **J8-3 `j8-cells` 2/2** (142 cellules en 28,1 s, aucune image > 100 ms, cache 0,26 s) ; J8-3 priorité laissée à J8-4 (accord), `dropped` corrigé ; **J8-6 écrit** (tests unitaires ; l’e2e de zone jamais passé : le téléchargement > 30 min) ; **J8-7 fait** (Overture hors de France, Tarifa et Bruxelles dans la couche lointaine, aucune image > 100 ms) ; **J8-6 (b) faite** (le cache disque sert le Service Worker, témoin 1/1) ; **J8-9 (1) fait** (la zone porte les cellules lointaines) ; **J8-6 jugé de bout en bout** (`j8-zone-cells` passe sur le mini : 1 747 cellules hors ligne du cache en 8,5 s) ; **maintenant** : J8-9 (2), (3) et la zone Paris ; avant : le passage (a) unique de `j8-zone-cells` sur le mini, J8-9 proposé à Sam (Paris 5 km ~0,9 h de Géoplateforme, les cellules lointaines ~4 min), le signal « prêt » de J8-A, J8-6, J8-7 ; **en pause** : le contour HUD en virage, la règle 13 des autres domaines, la garde du bandeau (338 en attente) |
 
 **Fermé récemment** : **PLAN-APPROCHES** (16 nov. : AP0–AP10 et AP-R menés — données réelles, choix, jonction, A320, carte, radar, TSD, crew, HUD, directeur de vol, roue, audio, campagne mondiale et échantillon volé ; OIFK posé après J7-1 le 16 nov. : échantillon F-35 9/9, A320 5/5) ; **J3** (15 nov., confirmé par Sam ; J3-R fait 20:48) ; **le repli du raster vers le tracé retiré** (15 nov., 20:48, décision (b)) ; **PLAN-J6** (15 nov., 20:35 : les neuf parcours en e2e, sept défauts corrigés) ; l'eau étagée E1 (−1,55 ms) et E2 (−0,5 ms), E3 non ouvert ; la classification lot 1 (sur terre −1,15 ms), lot 2 non ouvert
 (sous 1 ms) ; AR-07 (le renderer sur `ViewPose`) ; le retrait R1 des anciens chemins (13 nov.) ; le noyau du monde visé compilé pendant le voyage
@@ -9329,3 +9329,47 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   - Le gain de temps de scène à froid.
   - Le diagnostic local hors ligne (M1 Max, données partielles) n'a pas reproduit les quads blancs.
 - Suite : run complet sur le mini après le créneau IGN de la session des approches, puis le choix de la jonction par Sam (proposition : 1 km), puis le push.
+
+### 2026-11-16 17:10 UTC — PLAN-J8 J8-6 jugé de bout en bout : l'e2e de la zone passe sur kerr-mini ; le débit de chaque hôte (session 1feb2f7f)
+
+- Contribution à la destination : la preuve que « chargé avant le vol » tient pour les bâtiments. Une zone téléchargée porte ses
+  cellules, et hors ligne elles viennent toutes du cache préparé, sans aucun décodage. Jalon : PLAN-J8 J8-6, J8-A (le signal « prêt »).
+- Réalisé :
+  - `j8-zone-cells` :
+    - l'en-tête « réseau » est retiré : le Service Worker est servi par le disque depuis 83b927cd ;
+    - les cellules au-delà de la borne de 256 de la réserve sont redemandées chaque seconde, comme le fait la couche lointaine ;
+    - la durée de l'en-tête est corrigée.
+  - `earth-cache.ts` note pour chaque requête son heure et son temps sur le réseau, et `hostStats` donne le débit par hôte.
+  - Catalogue à jour. La ligne J8-6 du plan attend : à 17:07 UTC, j'ai vidé par erreur `docs/PLAN-J8-BATIMENTS.md` dans l'arbre
+    partagé (le script l'ouvrait en écriture avant de le lire). La version commitée est remise, mais les modifications non commitées
+    de la session du rendu sur ce fichier, dont sa ligne J8-E, sont perdues de mon côté. Je le lui ai dit, et elle les réapplique.
+- Preuves (**mesuré**, kerr-mini, 17:00–17:06 UTC, 1/1). La zone légère de Toulon, avec ses cellules lointaines, compte 5 978 chaînes.
+  - Elle est prête en **331 s** : 4 167 réponses lues sur le disque du mini, 2 712 téléchargées. Le premier passage de 16:44, sans le
+    disque, avait pris 894 s.
+  - **1 747 cellules, 324 462 bâtiments**, 15,7 Mo, aucun échec ; leur préparation prend 9,6 s.
+  - Hors ligne, les 1 747 cellules viennent du cache préparé en **8,5 s**, aucune n'est recalculée, et `flightReady` dit prêt (couche
+    lointaine éteinte dans ce test).
+  - Après la suppression de la zone, il ne reste aucune cellule.
+- Débit des téléchargements de ce passage :
+
+  | Hôte | Requêtes | Durée | Débit | Temps par requête (p50 / p95) |
+  |---|---:|---:|---:|---:|
+  | Géoplateforme WMS-R | 164 | 188 s | 0,87/s | 297 / 3 000 ms |
+  | BD TOPO | 44 | 70 s | — | 169 / 1 702 ms |
+  | OpenFreeMap | 152 | 177 s | 0,86/s | 68 / 167 ms |
+  | EOX | 953 | 205 s | 4,7/s | — |
+  | Terrarium (S3) | 684 | 205 s | 3,3/s | — |
+  | GIBS | 652 | 23 s | 28/s | — |
+  | Overture | 62 | — | — | 213 / 999 ms |
+
+  Ce sont des débits sous la cadence du Service Worker, tous les hôtes entremêlés, et seulement pour les réponses absentes du disque.
+  Ils ne disent pas la capacité de chaque hôte. La WMS-R a le temps de réponse le plus long (p95 3 s) ; c'est elle qui ralentit.
+- Limites :
+  - La zone de ce Mac (30 min, 4 160 chaînes sur 4 320) et celle du mini (894 s) diffèrent d'un facteur 2, non attribué : le réseau
+    des deux Mac, la charge IGN d'à côté.
+  - La vue entière hors ligne attend J8-4.
+- Suite :
+  - J8-9 (2), les hauteurs au niveau que le jeu lira ;
+  - J8-9 (3), l'estimation, sur ces mesures ;
+  - la mesure réelle de la zone Paris « overflight » sur un créneau annoncé ;
+  - J8-L après J8-E côté rendu.
