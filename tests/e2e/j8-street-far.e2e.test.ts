@@ -71,7 +71,7 @@ test.skipIf(!E2E)(
       await measure("jour-avec-2", true);
       await app.scenario("de nuit : avec et sans");
       await app.js(`(() => { __bh.game.setDate("2026-07-10T21:00:00Z"); __bh.touch(); return 1; })()`);
-        await measure("nuit-avec", true);
+      await measure("nuit-avec", true);
       await measure("nuit-sans", false);
     } finally {
       app.close();
