@@ -8,20 +8,10 @@ import { prepareOvertureCells } from "./cell-prep-overture";
 import type { PreparedCell } from "./cell-prep";
 import { fetchRange, OVERTURE_LIST, OVERTURE_Z, overtureReleases, overtureUrl, PmTiles } from "./pmtiles";
 
-/** the IGN's box (earth-tiles.ts ORTHO_BOX — copied: that module is the renderer's, too heavy for a worker; tests/cell-overture.test.ts
- *  holds the two equal) */
-export const BDTOPO_BOX = { west: -5.6, east: 9.8, south: 41.2, north: 51.2 } as const;
-const D = Math.PI / 180;
+// (the IGN's box: bdtopo.ts — the zones read it too, without this module's decoding)
+export { BDTOPO_BOX, inBdtopoBox } from "./bdtopo";
 /** a fetch (the worker's own; the tests' fakes) — the archive keeps the first it is given: no cell's abort signal in it */
 export type Fetcher = (url: string, init?: RequestInit) => Promise<Response>;
-
-/** whether a z 15 cell's centre is in the IGN's box (the BD TOPO asked first) */
-export function inBdtopoBox(x: number, y: number, z = OVERTURE_Z + 1): boolean {
-  const n = 2 ** z;
-  const lon = ((x + 0.5) / n) * 360 - 180;
-  const lat = Math.atan(Math.sinh(Math.PI * (1 - (2 * (y + 0.5)) / n))) / D;
-  return lon > BDTOPO_BOX.west && lon < BDTOPO_BOX.east && lat > BDTOPO_BOX.south && lat < BDTOPO_BOX.north;
-}
 
 let archive: Promise<{ pm: PmTiles; release: string }> | null = null;
 /** the latest Overture release whose archive answers (the bucket keeps three) */

@@ -18,6 +18,17 @@ type Properties = Record<string, unknown>;
 
 /** the buildings' tiles' level */
 export const BDTOPO_Z = 15;
+/** the IGN's box (earth-tiles.ts ORTHO_BOX — copied: that module is the renderer's, too heavy for a worker or the zones; tests/
+ *  cell-overture.test.ts holds the two equal). A rectangle: Belgium, Luxembourg, Catalonia and Cornwall are in it, the BD TOPO empty
+ *  there (PLAN-J8 J8-7: the cells fall back on Overture's) */
+export const BDTOPO_BOX = { west: -5.6, east: 9.8, south: 41.2, north: 51.2 } as const;
+/** whether a z 15 cell's centre is in the IGN's box (the BD TOPO asked first) */
+export function inBdtopoBox(x: number, y: number, z = BDTOPO_Z): boolean {
+  const n = 2 ** z;
+  const lon = ((x + 0.5) / n) * 360 - 180;
+  const lat = Math.atan(Math.sinh(Math.PI * (1 - (2 * (y + 0.5)) / n))) / (Math.PI / 180);
+  return lon > BDTOPO_BOX.west && lon < BDTOPO_BOX.east && lat > BDTOPO_BOX.south && lat < BDTOPO_BOX.north;
+}
 export const bdtopoUrl = (x: number, y: number) => `https://data.geopf.fr/tms/1.0.0/BDTOPO/${BDTOPO_Z}/${x}/${y}.pbf`;
 /** a storey [m] (a building whose height is missing: its storeys' count, else OSM's default) */
 const STOREY = 3;

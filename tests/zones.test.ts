@@ -24,6 +24,7 @@ import { sceneryChains } from "../src/system/scenery-sources";
 import { aheadFocus, gazeLead, streamingLead } from "../src/system/streaming-focus";
 import { tileKey } from "../src/world/runways";
 import {
+  farCellZoneChains,
   reliefChains,
   reliefUrls,
   RUNWAYS_PATH,
@@ -271,7 +272,9 @@ test("a zone's scenery: every fetch of every scene the game asks with the camera
     // (the zone not much more than its scenes: every source's tiles within a few of theirs)
     // (the scenery's own sources — OpenFreeMap's z 14: the relief's z 12–13 street tiles, NU1, are the tiles' —)
     const own = /terrascope|openfreemap\.org\/planet\/latest\/14\/|BDTOPO|MNH/;
-    const extra = [...urls].filter((u) => !wanted.has(u) && own.test(u)).length;
+    // (the far buildings' cells round the zone apart — PLAN-J8 J8-9 (1): the far layer's whole reach, by design past the scenes')
+    const far = new Set(farCellZoneChains(lat0, lon0, radius).flat());
+    const extra = [...urls].filter((u) => !wanted.has(u) && !far.has(u) && own.test(u)).length;
     const theirs = [...wanted].filter((u) => own.test(u)).length;
     expect(extra).toBeLessThan(0.6 * theirs);
   }
@@ -301,7 +304,9 @@ test("a zone's scenery: every fetch of every scene the game asks with the camera
   expect(bare.some((u) => /terrascope|openfreemap\.org\/planet\/latest\/14\/|BDTOPO|MNH/.test(u))).toBe(false);
   // (the IGN's relief off: its survey's and buildings' left out, as the worker leaves them)
   const noIgn = zoneUrls(49.116, -1.09, 2000, ZONE_PROFILES.low, { ...sources("balanced", 1), relief: false });
-  expect(noIgn.some((u) => /BDTOPO|MNH/.test(u))).toBe(false);
+  // (the far buildings' cells apart — J8-9 (1): the far layer reads the BD TOPO whatever the relief's setting —)
+  const farNoIgn = new Set(farCellZoneChains(49.116, -1.09, 2000).flat());
+  expect(noIgn.some((u) => /BDTOPO|MNH/.test(u) && !farNoIgn.has(u))).toBe(false);
   expect(noIgn.some((u) => /openfreemap/.test(u))).toBe(true);
 });
 

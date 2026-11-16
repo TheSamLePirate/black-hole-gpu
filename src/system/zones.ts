@@ -31,7 +31,7 @@ import {
   ZG1,
 } from "./earth-tiles";
 import { WGS84_A } from "./ellipsoid";
-import { BDTOPO_Z, bdtopoUrl } from "./bdtopo";
+import { BDTOPO_Z, bdtopoUrl, inBdtopoBox } from "./bdtopo";
 import { blockChains, blockSides, CANOPY_NEAR, CANOPY_Z, tilesWithin } from "./ign-canopy";
 import { SWISS_GROUND_G, swissTerrainUrl, tileSource } from "./national";
 import { D as DEG, type SceneryMode } from "./scenery-data";
@@ -352,6 +352,32 @@ export function sceneryZoneChains(
   return out;
 }
 
+/** the far buildings' reach round the camera [m] (building-far.ts FAR_REACH_M — copied: that module is the renderer's; tests/
+ *  zones-far-cells.test.ts holds the two equal) */
+export const ZONE_FAR_REACH_M = 20_000;
+/**
+ * PLAN-J8 J8-9 (1) — the far buildings' cells round a zone (J8-A, Sam: « all loaded before the flight »): every z 15 cell within the
+ * zone's radius and the far layer's reach — the BD TOPO's tile within the IGN's box, Overture's z 14 tile beyond (its release's listing
+ * first) —, fetched into the zone and prepared into cells once it is in (pwa-zones.ts, zone-cells.ts). Cheap: the BD TOPO's tiles come
+ * ~13 a second (J8-0's census) — ~3 150 round a 5 km zone of Paris, ~4 min. (Inside the box where the BD TOPO is empty — Belgium —, the
+ * cells' Overture fallback is not in the zone.)
+ */
+export function farCellZoneChains(lat: number, lon: number, radius: number): ZoneChain[] {
+  const out: ZoneChain[] = [];
+  const o14 = new Set<string>();
+  for (const t of tilesWithin(BDTOPO_Z, lat, lon, radius + ZONE_FAR_REACH_M)) {
+    if (inBdtopoBox(t.x, t.y)) out.push([bdtopoUrl(t.x, t.y)]);
+    else {
+      const k = `${t.x >> 1}/${t.y >> 1}`;
+      if (o14.has(k)) continue;
+      o14.add(k);
+      out.push([overtureZoneUrl(t.x >> 1, t.y >> 1)]);
+    }
+  }
+  if (o14.size) out.unshift([OVERTURE_LIST]);
+  return out;
+}
+
 /** a zone's chains, each link asked once at most where it is sure to be (a parent's Terrarium, a lights' parent, shared by
  *  many tiles: the first's), the coarse
  *  levels first (a download cut short still holds the overview), the world scenery's last */
@@ -373,6 +399,8 @@ export function zoneChains(lat: number, lon: number, radius: number, profile: Zo
   for (const [kind, z, x, y] of tiles) for (const chain of kind === "r" ? reliefChains(z, x, y, o) : [orthoUrls(z, x, y)]) add(chain);
   // (the world scenery's after the ground's)
   if (o.scenery) for (const chain of sceneryZoneChains(lat, lon, radius, o.scenery, o.relief)) add(chain);
+  // (the far buildings' cells round it — J8-9 (1) —, with the scenery's buildings: the far layer's whole reach)
+  if (o.scenery) for (const chain of farCellZoneChains(lat, lon, radius)) add(chain);
   // (the runways' round it — the airfields, the ILS —, whatever the sources)
   for (const chain of runwayZoneChains(lat, lon, radius)) add(chain);
   return out;
