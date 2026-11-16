@@ -88,7 +88,15 @@ test.skipIf(!E2E)(
         if (process.env.J8F_NIGHT) {
           await app.js(`(() => { __bh.game.setDate("${NIGHT}"); __bh.touch(); return 1; })()`);
           await app.js(`new Promise((q) => setTimeout(q, 30000))`);
-          night = { on: await measure(true, "nuit-avec", 8), off: await measure(false, "nuit-sans") };
+          // (PLAN-J8 J8-L: the far lamps' cells — their pool's stats — at night, beside the layer's)
+          const lamps = await app.js(`__bh.renderer.farLamps()`);
+          console.log(`  ${v.name} night, the far lamps: ${JSON.stringify(lamps)}`);
+          const on = await measure(true, "nuit-avec", 8);
+          // (the far lamps off, the layer on: their own cost at night)
+          await app.js(`(() => { __bh.renderer.farLampsOn = false; __bh.touch(); return 1; })()`);
+          const noLamps = await measure(true, "nuit-sans-lampadaires", 8);
+          await app.js(`(() => { __bh.renderer.farLampsOn = true; __bh.touch(); return 1; })()`);
+          night = { lamps, on, noLamps, off: await measure(false, "nuit-sans") };
           await app.js(`(() => { __bh.game.setDate("${J0_SCENE.date}"); __bh.touch(); return 1; })()`);
         }
         const row = {

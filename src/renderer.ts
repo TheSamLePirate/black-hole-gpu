@@ -256,8 +256,9 @@ import { EarthSurface, SURFACE_TEXTURE_LIMIT } from "./system/earth-surface";
 import { EarthScenery } from "./system/scenery";
 import { DETAIL_REACH, localPoint, SCENERY_STORAGE_LIMIT, type SceneryExclusion, sceneryFrame } from "./system/scenery-data";
 import { BuildingFar, FAR_BUDGET_BYTES } from "./system/building-far";
+import { StreetFar } from "./system/street-far";
 import type { EyeState } from "./system/building-layer";
-import { cellPool } from "./system/cell-workers";
+import { cellPool, streetPool } from "./system/cell-workers";
 import { LANDSCAPES, LANDSCAPE_CLEARING_M } from "./system/landscapes";
 const SCENERY_EXCLUSIONS: SceneryExclusion[] = [
   ...EARTH_RUNWAYS.map((r) => ({
@@ -2387,6 +2388,8 @@ export class Renderer {
     this.terrainRaster?.dispose();
     this.buildingFar?.dispose();
     this.buildingFar = null;
+    this.streetFar?.dispose();
+    this.streetFar = null;
     this.sceneryRaster?.dispose();
     this.device.destroy();
   }
@@ -2645,6 +2648,8 @@ export class Renderer {
       r.terrainRaster?.dispose();
       r.buildingFar?.dispose();
       r.buildingFar = null;
+      r.streetFar?.dispose();
+      r.streetFar = null;
       r.sceneryRaster?.dispose();
       // (a loss simulated — the e2e's, __bh.gpu.lose(): the device destroyed — told as a real one)
       r.lost = r.simulatedLoss ? "simulated" : info.reason === "destroyed" ? "released" : info.message || t("the GPU was reset");
@@ -11265,11 +11270,21 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
     this.farBudgetBytes = b;
     this.buildingFar?.dispose();
     this.buildingFar = null;
+    this.streetFar?.dispose();
+    this.streetFar = null;
   }
   get farBudgetMiB() {
     return this.farBudgetBytes / (1024 * 1024);
   }
   private farBudgetBytes = FAR_BUDGET_BYTES;
+  /** PLAN-J8 J8-L: the far street lamps (street-far.ts) — the street cells within 12 km, their heads drawn at night as the near ones' (on
+   *  with the far layer; false: none) */
+  farLampsOn = true;
+  private streetFar: StreetFar | null = null;
+  /** (the far lamps') what is resident: cells, lamps, the pool's blocks; the cells wanted, those missing */
+  farLamps() {
+    return this.streetFar?.stats() ?? null;
+  }
   /** (the far layer's) what is resident and what the last cull drew (boxes, quads — read back) */
   async farBuildings() {
     return {
@@ -12249,7 +12264,18 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
         const near = this.farNearOnlyM > 0 ? this.farNearOnlyM : Number.POSITIVE_INFINITY;
         const maskR = !box ? 0 : Math.min(st.cutBuildings > 0 && st.keptReachM > 0 ? st.keptReachM : box.half - 650, near);
         this.buildingFar.update(this.farEye, box, maskR, this.earthScenery.buildingLeaf, performance.now(), st.corridorA);
-      } else if (this.sceneryRaster) this.sceneryRaster.farOn = false;
+        // (PLAN-J8 J8-L: the far street lamps — the street cells within 12 km, their heads at night as the near ones')
+        if (this.farLampsOn) {
+          if (!this.streetFar) {
+            this.streetFar = new StreetFar(this.sceneryRaster, streetPool);
+            this.streetFar.groundAt = (lat, lon) => groundBare("earth", bodyFixedOf("earth", lat, lon, 0));
+          }
+          this.streetFar.update(this.farEye, box, this.earthTiles.nightRoads, performance.now());
+        } else this.sceneryRaster.lampsOn = false;
+      } else if (this.sceneryRaster) {
+        this.sceneryRaster.farOn = false;
+        this.sceneryRaster.lampsOn = false;
+      }
       trees = this.sceneryRaster.encodeCull(
         enc,
         this.prof.pass("scenery raster cull"),
@@ -12478,6 +12504,8 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
     this.terrainRaster?.dispose();
     this.buildingFar?.dispose();
     this.buildingFar = null;
+    this.streetFar?.dispose();
+    this.streetFar = null;
     this.sceneryRaster?.dispose();
     this.device.destroy();
   }

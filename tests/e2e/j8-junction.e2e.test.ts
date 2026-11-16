@@ -41,7 +41,9 @@ test.skipIf(!E2E)(
         const rows: unknown[] = [];
         for (const j of JUNCTIONS) {
           await app.scenario(`${v.label} · jonction ${j ? `${j / 1000} km` : "aucune (la scène garde tout)"}`);
-          await app.js(`(() => { __bh.freeze(false); __bh.renderer.farNearOnlyM = ${j}; return 1; })()`);
+          // (the world kept frozen while the scene is made — rule 13's way: the free camera without a craft is not carried with the Earth,
+          // the world running left it in space — « away from the Earth », 16 Nov 2026, PROBLEMES)
+          await app.js(`(() => { __bh.freeze(true); __bh.renderer.farNearOnlyM = ${j}; return 1; })()`);
           const why = await app.js<string | null>(
             `__bh.viewAt(${v.lat}, ${v.lon}, { altM: ${v.altM}, heading: ${v.heading}, pitch: ${v.pitch}, fov: 50 }) ?? null`,
           );
@@ -68,7 +70,11 @@ test.skipIf(!E2E)(
             });
           const sceneS = (Date.now() - t0) / 1000;
           // (the same hour at every shot: the sun as the first's — the world ran while the scene was made)
-          await app.js(`(() => { __bh.game.setDate("${J0_SCENE.date}"); __bh.freeze(true); __bh.touch(); return 1; })()`);
+          // (the date set back, the free camera set again at its place: a jump in time left it where the Earth was — « away from the
+          // Earth », the image black, the scene empty: 3 runs in 5 on 16 Nov 2026, PROBLEMES)
+          await app.js(`(() => { __bh.game.setDate("${J0_SCENE.date}");
+            __bh.viewAt(${v.lat}, ${v.lon}, { altM: ${v.altM}, heading: ${v.heading}, pitch: ${v.pitch}, fov: 50 });
+            __bh.freeze(true); __bh.touch(); return 1; })()`);
           await app.settled(60_000);
           const m = await app.js<Record<string, unknown>>(`(async () => {
             const R = __bh.renderer; for (let i = 0; i < 20; i++) { await new Promise((q) => requestAnimationFrame(q)); __bh.touch(); }
@@ -118,15 +124,21 @@ test.skipIf(!E2E)(
         await app.scenario(`${v.label} · le témoin de J8-A, de jour`);
         const day = await pair("jour");
         await app.scenario(`${v.label} · le témoin de J8-A, de nuit`);
-        await app.js(`(() => { __bh.game.setDate("${NIGHT}"); __bh.touch(); return 1; })()`);
+        await app.js(
+          `(() => { __bh.game.setDate("${NIGHT}"); __bh.viewAt(${v.lat}, ${v.lon}, { altM: ${v.altM}, heading: ${v.heading}, pitch: ${v.pitch}, fov: 50 }); __bh.touch(); return 1; })()`,
+        );
         await app.js(`new Promise((q) => setTimeout(q, 3000))`);
         const night = await pair("nuit");
         // (J8J_JUMP: the night jumped to with the far materials on — shots 3 s and 30 s after: a transient? PROBLEMES 16 Nov 2026)
         if (process.env.J8J_JUMP) {
-          await app.js(`(() => { __bh.renderer.farMaterials = true; __bh.game.setDate("${J0_SCENE.date}"); __bh.touch(); return 1; })()`);
+          await app.js(
+            `(() => { __bh.renderer.farMaterials = true; __bh.game.setDate("${J0_SCENE.date}"); __bh.viewAt(${v.lat}, ${v.lon}, { altM: ${v.altM}, heading: ${v.heading}, pitch: ${v.pitch}, fov: 50 }); __bh.touch(); return 1; })()`,
+          );
           await app.settled(30_000);
           await app.js(`new Promise((q) => setTimeout(q, 5000))`);
-          await app.js(`(() => { __bh.game.setDate("${NIGHT}"); __bh.touch(); return 1; })()`);
+          await app.js(
+            `(() => { __bh.game.setDate("${NIGHT}"); __bh.viewAt(${v.lat}, ${v.lon}, { altM: ${v.altM}, heading: ${v.heading}, pitch: ${v.pitch}, fov: 50 }); __bh.touch(); return 1; })()`,
+          );
           for (const [tag, ms] of [
             ["3s", 3000],
             ["30s", 27000],
@@ -176,7 +188,9 @@ test.skipIf(!E2E)(
             await app.js(`(() => { ${back}; document.body.classList.remove("hide-ui"); return 1; })()`);
           }
         }
-        await app.js(`(() => { __bh.game.setDate("${J0_SCENE.date}"); return 1; })()`);
+        await app.js(
+          `(() => { __bh.game.setDate("${J0_SCENE.date}"); __bh.viewAt(${v.lat}, ${v.lon}, { altM: ${v.altM}, heading: ${v.heading}, pitch: ${v.pitch}, fov: 50 }); return 1; })()`,
+        );
         (out.views as Record<string, unknown>)[v.name] = { rows, witness: { junction: JUNCTIONS[JUNCTIONS.length - 1], day, night } };
       }
       expect(await app.js<number>("__bh.renderer.gpuErrors")).toBe(0);

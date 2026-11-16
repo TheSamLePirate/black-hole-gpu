@@ -36,7 +36,18 @@ sont commités en local, **non poussés** tant qu'il dure.
   peut-être leurs pixels dans la branche « toit » ou dans une lumière que la marque déclenche ; à mesurer pixel par pixel
   (`surfaceAt`, la normale et le g) sur le mini.
 
-## Une scène proche vide après un changement de jonction (`farNearOnlyM`), par intermittence (relevé le 16 novembre 2026, PLAN-J8 J8-5)
+## ~~Une scène proche vide après un changement de jonction~~ — la caméra libre laissée dans l'espace par un saut d'heure (relevé le 16 novembre 2026, PLAN-J8 J8-5)
+
+**Trouvé (16 nov. 2026, ~19:25 UTC, kerr-mini, `j8-junction` — l'état de la page relevé au blocage)** : `earthScenery` « away-from-earth »,
+`camera.geoNow()` null — **la caméra libre n'était plus sur la Terre**. Deux causes, une même chose : le monde qui tourne pendant l'attente de la scène (l'e2e dégelait le monde à chaque étape), et la remise de l'heure. L'e2e remettait l'heure (`game.setDate`) après avoir placé la caméra
+libre (`viewAt`, `ship: false`) : `tools.ts` `jumpTo` porte d'une heure à l'autre l'appareil près d'un sol (`s.ship`), **pas la caméra
+libre sans appareil**, laissée là où était la Terre — l'image noire (l'espace), la scène vide, le GPU à 14 ms ; par intermittence selon
+l'écart de temps. **L'e2e corrigé** (le monde gelé pendant l'attente, la caméra replacée après chaque saut d'heure : run 20261116-…-j8-jx-frozen, 8 étapes sur 8 propres). **Le jeu** : un joueur en caméra libre (mode photo,
+sans appareil) qui change la date perd la Terre de vue — à porter comme l'appareil (`jumpTo`), hors du domaine du rendu : à régler par
+la session qui tient la caméra et le temps.
+
+**Historique de l'enquête** :
+
 
 **État (16 nov. 2026, ~17:35 UTC)** : ouvert, non expliqué.
 - **Vu** (kerr-mini, e2e `j8-junction`) : trois runs sur cinq. À Toulon, au passage de la jonction à 2 km (une fois à 1 km), la scène
