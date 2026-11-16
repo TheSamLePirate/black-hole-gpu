@@ -156,7 +156,9 @@ test.skipIf(!E2E)(
       await app.js(`(() => { __bh.freeze(true); return 1; })()`);
       const whole = await sceneryReady(app, 60_000);
       await app.settled(60_000);
-      const arrivalWhole = await surface(`arriving over Toulon, frozen, the scenery ${whole.ready ? "whole" : `not whole (${whole.status})`}`);
+      const arrivalWhole = await surface(
+        `arriving over Toulon, frozen, the scenery ${whole.ready ? "whole" : `not whole (${whole.status})`}`,
+      );
       out.arrival = { moving: arrival, frozen: { ...arrivalWhole, sceneryWhole: whole.ready } };
       await app.shot(`${OUT}/3b-arrivee-decor-fini.png`);
       await app.js(`(() => { __bh.freeze(false); return 1; })()`);
