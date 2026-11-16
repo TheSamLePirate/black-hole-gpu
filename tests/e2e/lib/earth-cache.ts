@@ -180,7 +180,7 @@ function patterns(tiles: boolean) {
  * The cache on a page and its workers (App.boot, before the page's first navigation). `suspend(true)` lets the requests go to the network
  * (app.offline, app.throttle) and back.
  */
-export async function earthCache(cdp: Cdp, o: { tiles: boolean; mode?: EarthDataMode; dir?: string }) {
+export async function earthCache(cdp: Cdp, o: { tiles: boolean; mode?: EarthDataMode; dir?: string; port?: number }) {
   const mode = o.mode ?? earthDataMode();
   const dir = o.dir ?? earthDataDir();
   const counts: EarthCounts = { hits: 0, misses: 0, hitBytes: 0, missBytes: 0, failed: 0, missing: [], bySource: {}, log: [] };
@@ -228,15 +228,16 @@ export async function earthCache(cdp: Cdp, o: { tiles: boolean; mode?: EarthData
     const w = sid && sessions.get(sid);
     if (w) askedBy.set(String(p.requestId), w);
   });
-  const offP = cdp.on("Fetch.requestPaused", (raw, sid) => {
+  /** a request paused — the page's, a worker's (on the page's session or its own), the Service Worker's (its own target) —: let go,
+   *  served from the disk, or fetched once and kept; `reply` answers on the session it was paused on */
+  const paused = (raw: Record<string, unknown>, src: string, reply: (method: string, params: object) => Promise<unknown>) => {
     const p = raw as { requestId: string; networkId?: string; request: { url: string; method: string; headers: Record<string, string> } };
-    const src = sid ? (sessions.get(sid) ?? "worker") : "page";
     counts.bySource[src] = (counts.bySource[src] ?? 0) + 1;
     pausedOn[src] = (pausedOn[src] ?? 0) + 1;
     void (async () => {
       const url = p.request.url;
       const range = p.request.headers.Range ?? p.request.headers.range ?? null;
-      if (suspended || p.request.method !== "GET" || !keptUrl(url)) return call(sid, "Fetch.continueRequest", { requestId: p.requestId });
+      if (suspended || p.request.method !== "GET" || !keptUrl(url)) return void reply("Fetch.continueRequest", { requestId: p.requestId });
       try {
         let got = mode === "refresh" ? null : readKept(dir, url, range);
         if (got) {
@@ -246,7 +247,7 @@ export async function earthCache(cdp: Cdp, o: { tiles: boolean; mode?: EarthData
         } else if (mode === "offline") {
           counts.missing.push(url);
           console.error(`  e2e Earth data (offline): not on the disk — ${url}${range ? ` [${range}]` : ""}`);
-          return call(sid, "Fetch.failRequest", { requestId: p.requestId, errorReason: "InternetDisconnected" });
+          return void reply("Fetch.failRequest", { requestId: p.requestId, errorReason: "InternetDisconnected" });
         } else {
           got = await fetchKeep(dir, url, range);
           counts.misses++;
@@ -260,7 +261,7 @@ export async function earthCache(cdp: Cdp, o: { tiles: boolean; mode?: EarthData
           { name: "cache-control", value: "no-store" },
           ...(got.meta.contentRange ? [{ name: "content-range", value: got.meta.contentRange }] : []),
         ];
-        await call(sid, "Fetch.fulfillRequest", {
+        await reply("Fetch.fulfillRequest", {
           requestId: p.requestId,
           responseCode: got.meta.status,
           responseHeaders: h,
@@ -269,10 +270,13 @@ export async function earthCache(cdp: Cdp, o: { tiles: boolean; mode?: EarthData
       } catch {
         // (the host refused, the page gone, the request cancelled: failed, as the network would)
         counts.failed++;
-        await call(sid, "Fetch.failRequest", { requestId: p.requestId, errorReason: "Failed" });
+        await reply("Fetch.failRequest", { requestId: p.requestId, errorReason: "Failed" });
       }
     })();
-  });
+  };
+  const offP = cdp.on("Fetch.requestPaused", (raw, sid) =>
+    paused(raw, sid ? (sessions.get(sid) ?? "worker") : "page", (m, q) => call(sid, m, q)),
+  );
   /** the log's and bySource's sources resolved: a URL a worker's own session saw asked is that worker's, whichever session paused it */
   const attribute = () => {
     counts.bySource = {};
@@ -283,6 +287,47 @@ export async function earthCache(cdp: Cdp, o: { tiles: boolean; mode?: EarthData
     }
     return { workerFetch, pausedOn, workersSeen: [...new Set(sessions.values())] };
   };
+  // (the Service Worker's own fetches — a zone's download, its tiles' cache filled —: another DevTools target, not the page's child —
+  // attached by its own socket as it appears (the browser's target list read every second), Fetch enabled there; PLAN-J8 J8-6 (b),
+  // Sam's decision of 16 Nov 2026: a zone downloaded once for every e2e)
+  const swSockets = new Map<string, { ws: WebSocket; send: (method: string, params: object) => Promise<unknown> }>();
+  const swAttach = async () => {
+    if (!o.port) return;
+    const list = await fetch(`http://127.0.0.1:${o.port}/json`)
+      .then((r) => r.json() as Promise<{ id: string; type: string; webSocketDebuggerUrl?: string }[]>)
+      .catch(() => []);
+    for (const t of list) {
+      if (t.type !== "service_worker" || !t.webSocketDebuggerUrl || swSockets.has(t.id)) continue;
+      const ws = new WebSocket(t.webSocketDebuggerUrl);
+      let next = 1;
+      const waiting = new Map<number, (v: unknown) => void>();
+      const send = (method: string, params: object) =>
+        new Promise<unknown>((ok) => {
+          const id = next++;
+          waiting.set(id, ok);
+          try {
+            ws.send(JSON.stringify({ id, method, params }));
+          } catch {
+            ok(null);
+          }
+          setTimeout(() => waiting.delete(id) && ok(null), 30_000);
+        });
+      ws.onmessage = (m) => {
+        const d = JSON.parse(String(m.data)) as { id?: number; method?: string; params?: Record<string, unknown> };
+        if (d.id) waiting.get(d.id)?.(d);
+        if (d.id) waiting.delete(d.id);
+        if (d.method === "Fetch.requestPaused" && d.params) paused(d.params, "service-worker", send);
+      };
+      ws.onclose = () => swSockets.delete(t.id);
+      swSockets.set(t.id, { ws, send });
+      await new Promise((ok) => {
+        ws.onopen = ok;
+        ws.onerror = ok;
+      });
+      if (!suspended) workerFetch["service-worker"] = (await send("Fetch.enable", { patterns: patterns(o.tiles) })) ? "enabled" : "refused";
+    }
+  };
+  const swTimer = o.port ? setInterval(() => void swAttach(), 1000) : null;
   await enable();
   await cdp.send("Target.setAutoAttach", { autoAttach: true, waitForDebuggerOnStart: true, flatten: true });
   return {
@@ -293,6 +338,7 @@ export async function earthCache(cdp: Cdp, o: { tiles: boolean; mode?: EarthData
     async suspend(on: boolean) {
       suspended = on;
       for (const sid of [undefined, ...sessions.keys()]) await (on ? call(sid, "Fetch.disable", {}) : enable(sid));
+      for (const w of swSockets.values()) await w.send(on ? "Fetch.disable" : "Fetch.enable", on ? {} : { patterns: patterns(o.tiles) });
     },
     attribute,
     /** the dedicated workers attached so far (Chrome tells a later Target.setAutoAttach only of the new ones) */
@@ -301,6 +347,9 @@ export async function earthCache(cdp: Cdp, o: { tiles: boolean; mode?: EarthData
       offA();
       offP();
       offN();
+      if (swTimer) clearInterval(swTimer);
+      for (const w of swSockets.values()) w.ws.close();
+      swSockets.clear();
       await call(undefined, "Fetch.disable", {});
     },
   };

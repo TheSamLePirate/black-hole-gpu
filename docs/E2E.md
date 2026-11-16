@@ -250,7 +250,7 @@ so order matters within a file. Keep a file under ~2 min. Split a longer one.
 | `app.snap(file)` | the page as it is now, no wait for the shaders nor the kernels beside them (shot() waits for every one): for a test about something else than the image — a toast, a panel, a mode — where a kernel pending minutes would stall it past its timeout (13 Nov 2026) |
 | `app.cdp.send(method, params, timeoutS?)` | any DevTools call (`Emulation.*`, `Network.*`, `Input.*` …) |
 | `app.cdp.errors` | the page's exceptions and console errors so far (assert it is `[]`, or filter what is expected) |
-| `app.earth` | the Earth data on disk for this boot (`lib/earth-cache.ts`; null when the network is kept): `mode`, `dir`, `counts` (`hits`, `misses`, bytes, `failed`, `missing`, `bySource`, `log` of `{src, url, hit}`) — said at the close, in `summary.json` (`earthData`) and on the banner |
+| `app.earth` | the Earth data on disk for this boot (`lib/earth-cache.ts`; null when the network is kept): `mode`, `dir`, `counts` (`hits`, `misses`, bytes, `failed`, `missing`, `bySource`, `log` of `{src, url, hit}`), `attribute()` (each request's source — `page`, a worker by its own session's request id, `service-worker` —, the sessions it was paused on), `attached()` — said at the close, in `summary.json` (`earthData`) and on the banner |
 | `app.offline(on)`, `app.throttle(mbps, ms)` | the network cut or slowed (`lib/cdp.ts`); the Earth data's disk let go meanwhile, so the test measures the network |
 | `app.close()` | Chrome ended, its profile removed, the lock released |
 
@@ -362,9 +362,11 @@ returns; the Monitor says so (*page held*).
    OpenFreeMap's, WorldCover's and Overture's ranges — is served from one folder per machine, shared by every e2e and every session,
    fetched by Bun the first time and kept (`tests/e2e/lib/earth-cache.ts`, Chrome's Fetch domain on the page **and on its dedicated
    workers**: the scenery's, the building cells'). What is kept is what the PWA keeps (`classify` → `"tile"`); **never the live data**
-   (weather, METAR, traffic, solar wind, Overpass, geocoding) **nor OpenStreetMap's own map tiles** (their policy). A test that
-   **measures the downloads** keeps the network: a Service Worker's boot (`sw: true`) or the header line `// Earth data: network`
-   (`tests/e2e-banner-guard.test.ts` refuses a loading/offline/PWA file without one). The folder moves between the Macs with
+   (weather, METAR, traffic, solar wind, Overpass, geocoding) **nor OpenStreetMap's own map tiles** (their policy). The Service
+   Worker's own fetches too (`sw: true` — PLAN-J8 J8-6 (b), Sam, 16 Nov 2026: its target attached by its own socket — with the worker
+   registered, the page's and its workers' tiles go through it —; an offline zone downloaded once for every e2e; witness
+   `earth-cache-sw-witness`). A test that **measures the downloads** keeps the network with the header line `// Earth data: network`
+   (`tests/e2e-banner-guard.test.ts` holds the arrival, first-image, coast, prewarm, weather and J0 files to it). The folder moves between the Macs with
    `bun scripts/remote.ts earth-sync` (rsync both ways, nothing overwritten); `doctor` says its path and size.
 6. **Assert `app.cdp.errors`** at least once per file. A file without any `expect(` — a measure, a probe — says so in its
    header (« no assertion »); `tests/e2e-honesty.test.ts` (a unit test, in `bun test`) refuses one that does not, and a

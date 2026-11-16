@@ -20,6 +20,8 @@ export interface Cdp {
    *  the scenery worker's CPU profile */
   sendTo<T = Record<string, unknown>>(sessionId: string, method: string, params?: object, timeoutS?: number): Promise<T>;
   errors: string[];
+  /** Chrome's remote debugging port (its targets listed at /json: the Service Worker's — lib/earth-cache.ts attaches it) */
+  readonly port: number;
   /** a DevTools event listened to (Page.screencastFrame, Runtime.consoleAPICalled, …): the listener's removal. `sessionId`: the
    *  attached target's it came from (a dedicated worker's — Target.setAutoAttach, flatten), none for the page's own */
   on(method: string, fn: (params: Record<string, unknown>, sessionId?: string) => void): () => void;
@@ -237,6 +239,7 @@ export async function launch(o: { width?: number; height?: number; dpr?: number;
     sendTo: <T>(sessionId: string, method: string, params?: object, timeoutS?: number) =>
       send<T>(method, params ?? {}, timeoutS ?? CDP_TIMEOUT_S, sessionId),
     errors,
+    port,
     on: (method, fn) => {
       if (!listeners.has(method)) listeners.set(method, new Set());
       listeners.get(method)!.add(fn);

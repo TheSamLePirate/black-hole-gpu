@@ -46,7 +46,7 @@ When the user wants to watch, browse results or drive the page themselves, point
 - One IGN-heavy e2e at a time across both Macs (same public IP → 429) — for a zone not yet on the disk: the e2e's Earth
   data (PLAN-J8 J8-T, docs/E2E.md §4 rule 5) come from one folder per machine (`E2E_EARTH_DATA` on/off/offline/refresh,
   `KERR_EARTH_DATA`), fetched once and kept; the live data and OpenStreetMap's tiles never. A test that measures the downloads
-  says `// Earth data: network` in its header (or boots `sw: true`). The banner says where the tiles come from; the close
+  says `// Earth data: network` in its header (a `sw: true` boot is served from the disk too since 16 Nov 2026: the Service Worker's own fetches, a zone's download once for all). The banner says where the tiles come from; the close
   prints the counts (from the disk / fetched / failed).
 - Watching a run (yours or another session's, here or on the mini): `lab-monitor` names each e2e's file and test
   (~/.kerr-lab/live, docs/E2E.md "Every e2e is live"); the dashboard's Monitor (#monitor) shows it with a picture on
