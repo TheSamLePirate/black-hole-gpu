@@ -2,6 +2,7 @@ import { afterAll, expect, test } from "bun:test";
 import { mkdirSync } from "node:fs";
 import { $ } from "bun";
 import { J8A_TRACKS } from "../../src/system/j8a-tracks";
+import { corridorDisc } from "../../src/system/zones";
 import { App, E2E, stopServer } from "./lib/app";
 import { CRUISE, expectFlight, flightState } from "./lib/flight-state";
 import { J0_FIXED } from "./lib/j0-scene";
@@ -16,8 +17,8 @@ import { J0_FIXED } from "./lib/j0-scene";
 // the buildings drawn (the near scene's, the far layer's boxes and quads); a cockpit shot at each point, a view from outside at the end.
 // Not yet a pass/fail on « no request, no quick scene » (J8A_STRICT: asserted; J8A_TRACK_READY: flightReady over the whole track) — J8-5 and J8-8 still to finish; it fails on the
 // flight itself (rule 13), a GPU error or the device lost. j8-a.json.
-// J8A_NEAR [m, default 0]: the near scene / far layer junction (renderer.farNearOnlyM — J8-5, Sam's choice pending).
-// J8A_BUDGET [MiB, default 72]: the far layer's pool (renderer.farBudgetMiB — all Paris resident; Sam's decision pending).
+// J8A_NEAR [m, default 0]: the near scene / far layer junction (renderer.farNearOnlyM — J8-5; Sam's decision of 16 Nov 2026: 0).
+// J8A_BUDGET [MiB, default 72]: the far layer's pool (renderer.farBudgetMiB — all Paris resident; the default since Sam's « ok 72 »).
 // Duration: ~16 min on kerr-mini (two tracks, day and night, ~3 min of flight each, the preload from the disk).
 // Done when: every track flown by day and by night, j8-a.json written.
 afterAll(stopServer);
@@ -25,7 +26,8 @@ const MACHINE = process.env.J8A_MACHINE ?? (await $`hostname -s`.quiet().text())
 const OUT = process.env.J8A_OUT ?? `remote-results/j8-a/${MACHINE}`;
 const TRACKS = J8A_TRACKS.filter((t) => !process.env.J8A_TRACKS || process.env.J8A_TRACKS.split(",").includes(t.name));
 /** J8A_TRACK_READY: flightReady over the whole track (its zone's corridor, its far and street cells — dd36cb80), not the start's view
- *  alone: a zone wanted first (the corridor's, j8-zone-paris) */
+ *  alone: the track's corridor zone made first in this run's profile (the Service Worker on; its chains from the e2e's disk — the
+ *  corridor's put there by j8-zone-paris) */
 const TRACK_READY = !!process.env.J8A_TRACK_READY;
 const HOURS = (process.env.J8A_HOURS ?? "day,night").split(",") as ("day" | "night")[];
 const D = Math.PI / 180;
@@ -46,16 +48,56 @@ test.skipIf(!E2E)(
   "J8-A: Paris and Toulon-Hyères flown by day and by night, everything loaded before — no request, no quick scene, the buildings drawn",
   async () => {
     mkdirSync(OUT, { recursive: true });
-    const app = await App.boot({ width: 1920, height: 1080, hash: "scene=game:artemis", tiles: true });
+    // (J8A_TRACK_READY: the Service Worker on — the track's corridor zone made in this profile, from the e2e's disk)
+    const app = await App.boot({ width: 1920, height: 1080, hash: "scene=game:artemis", tiles: true, sw: TRACK_READY });
     const out: Record<string, unknown> = { startedAt: new Date().toISOString(), machine: MACHINE, flights: {} };
     try {
-      // (the far layer's pool for the whole of Paris — 24 MiB holds a quarter of it, never « all loaded »: ~72 MiB proposed to Sam, his
-      // decision pending; J8A_BUDGET [MiB])
+      // (the far layer's pool for the whole of Paris — 24 MiB holds a quarter of it, never « all loaded »: 72 MiB, the default since
+      // Sam's « ok 72 »; J8A_BUDGET [MiB])
       await app.js(`(() => { Object.assign(__bh.settings, ${J0_FIXED}); Object.assign(__bh.settings, { dof: false, motionBlur: 0, damage: false });
         __bh.renderer.farBudgetMiB = ${Number(process.env.J8A_BUDGET ?? 72)};
         __bh.renderer.farNearOnlyM = ${Number(process.env.J8A_NEAR ?? 0)}; return 1; })()`);
       await app.waitFor(`__bh.fleet.active === "f35"`, 60_000);
       for (const t of TRACKS) {
+        // (J8A_TRACK_READY: the track's corridor zone — j8-zone-paris's: the airfield's levels along it, « overflight » in its disc, the far
+        // cells to 20 km — made here, in this profile (a zone lives in the Service Worker's storage: another run's is not this one's), its
+        // chains read from the e2e's disk (the corridor's on kerr-mini's since 17 Nov 2026) — kept if a ready one covers the track already;
+        // its progress said every minute, 10 min without a move or 60 min: fails)
+        if (TRACK_READY) {
+          await app.scenario(`${t.label} — la zone du couloir`);
+          await app.waitFor("!!__bh.pwa.zones", 30_000);
+          const corridor = { points: t.points.map((p) => [p[0], p[1]] as [number, number]), halfWidthM: t.halfWidthM };
+          const d = corridorDisc(corridor);
+          const zone = { name: `J8-A ${t.name} (e2e)`, lat: d.lat, lon: d.lon, radiusKm: d.radius / 1000, profile: "overflight", corridor };
+          const id = await app.js<string | null>(`__bh.pwa.zones.add(${JSON.stringify(zone)})`);
+          if (!id) throw new Error(`${t.name}: the corridor zone refused`);
+          const z0 = Date.now();
+          let last = -1,
+            moved = Date.now();
+          for (let k = 0; ; k++) {
+            const z = await app.js<{ state: string; cursor: number; total: number; failed: number; bytes: number } | null>(
+              `(async () => (await __bh.pwa.zones.list()).find((z) => z.id === ${JSON.stringify(id)}) ?? null)()`,
+            );
+            if (z && z.state !== "downloading") {
+              console.log(
+                `  ${t.name}: the corridor zone ${z.state} in ${((Date.now() - z0) / 60_000).toFixed(1)} min — ${JSON.stringify(z)}`,
+              );
+              if (z.state !== "ready") throw new Error(`${t.name}: the corridor zone ${z.state}: ${JSON.stringify(z)}`);
+              break;
+            }
+            if ((z?.cursor ?? 0) !== last) {
+              last = z?.cursor ?? 0;
+              moved = Date.now();
+            }
+            if (Date.now() - moved > 600_000 || Date.now() - z0 > 3_600_000)
+              throw new Error(
+                `${t.name}: the corridor zone not in after ${Math.round((Date.now() - z0) / 60_000)} min: ${JSON.stringify(z)}`,
+              );
+            if (k % 30 === 0)
+              console.log(`  … ${t.name}: the corridor zone ${z?.cursor}/${z?.total} chains, ${((z?.bytes ?? 0) / 1e6).toFixed(0)} MB`);
+            await app.js(`new Promise((q) => setTimeout(q, 2000))`);
+          }
+        }
         for (const hour of HOURS) {
           const name = `${t.name}-${hour === "day" ? "jour" : "nuit"}`;
           const [p0, p1] = [t.points[0]!, t.points[1]!];
