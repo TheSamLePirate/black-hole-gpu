@@ -1,0 +1,172 @@
+{
+ "at": "2026-11-16T11:43:51.925Z",
+ "place": {
+  "lat": 43.06,
+  "lon": 6.32,
+  "headings": [
+   270,
+   340
+  ],
+  "halfFov": 45,
+  "radiusKm": 30
+ },
+ "source": "Géoplateforme BD TOPO z 15 (https://data.geopf.fr/tms/1.0.0/BDTOPO/15/x/y.pbf)",
+ "tiles": {
+  "total": 3696,
+  "fetched": 3696,
+  "cached": 0,
+  "failed": 0
+ },
+ "decodeMsTotal": 1813,
+ "wallS": 286.6,
+ "disc": [
+  {
+   "ring": "0–2 km",
+   "tiles": 26,
+   "bytes": 70520,
+   "buildings": 0,
+   "withHeight": 0,
+   "maxTileBuildings": 0,
+   "kB": 69
+  },
+  {
+   "ring": "2–5 km",
+   "tiles": 97,
+   "bytes": 1226632,
+   "buildings": 402,
+   "withHeight": 389,
+   "maxTileBuildings": 418,
+   "kB": 1198
+  },
+  {
+   "ring": "5–10 km",
+   "tiles": 322,
+   "bytes": 8954781,
+   "buildings": 15217,
+   "withHeight": 15112,
+   "maxTileBuildings": 1305,
+   "kB": 8745
+  },
+  {
+   "ring": "10–15 km",
+   "tiles": 511,
+   "bytes": 14624005,
+   "buildings": 24536,
+   "withHeight": 24155,
+   "maxTileBuildings": 2123,
+   "kB": 14281
+  },
+  {
+   "ring": "15–30 km",
+   "tiles": 2740,
+   "bytes": 80947966,
+   "buildings": 183357,
+   "withHeight": 182043,
+   "maxTileBuildings": 2497,
+   "kB": 79051
+  }
+ ],
+ "views": [
+  {
+   "heading": 270,
+   "rings": [
+    {
+     "ring": "0–2 km",
+     "tiles": 13,
+     "bytes": 37547,
+     "buildings": 0,
+     "withHeight": 0,
+     "maxTileBuildings": 0,
+     "kB": 37
+    },
+    {
+     "ring": "2–5 km",
+     "tiles": 27,
+     "bytes": 56914,
+     "buildings": 0,
+     "withHeight": 0,
+     "maxTileBuildings": 0,
+     "kB": 56
+    },
+    {
+     "ring": "5–10 km",
+     "tiles": 79,
+     "bytes": 854931,
+     "buildings": 315,
+     "withHeight": 313,
+     "maxTileBuildings": 0,
+     "kB": 835
+    },
+    {
+     "ring": "10–15 km",
+     "tiles": 134,
+     "bytes": 6161284,
+     "buildings": 8374,
+     "withHeight": 8220,
+     "maxTileBuildings": 0,
+     "kB": 6017
+    },
+    {
+     "ring": "15–30 km",
+     "tiles": 689,
+     "bytes": 39375682,
+     "buildings": 120041,
+     "withHeight": 119407,
+     "maxTileBuildings": 0,
+     "kB": 38453
+    }
+   ]
+  },
+  {
+   "heading": 340,
+   "rings": [
+    {
+     "ring": "0–2 km",
+     "tiles": 13,
+     "bytes": 32292,
+     "buildings": 0,
+     "withHeight": 0,
+     "maxTileBuildings": 0,
+     "kB": 32
+    },
+    {
+     "ring": "2–5 km",
+     "tiles": 24,
+     "bytes": 607995,
+     "buildings": 197,
+     "withHeight": 186,
+     "maxTileBuildings": 0,
+     "kB": 594
+    },
+    {
+     "ring": "5–10 km",
+     "tiles": 80,
+     "bytes": 6177674,
+     "buildings": 12540,
+     "withHeight": 12475,
+     "maxTileBuildings": 0,
+     "kB": 6033
+    },
+    {
+     "ring": "10–15 km",
+     "tiles": 128,
+     "bytes": 7377271,
+     "buildings": 13517,
+     "withHeight": 13455,
+     "maxTileBuildings": 0,
+     "kB": 7204
+    },
+    {
+     "ring": "15–30 km",
+     "tiles": 687,
+     "bytes": 36755317,
+     "buildings": 64474,
+     "withHeight": 63834,
+     "maxTileBuildings": 0,
+     "kB": 35894
+    }
+   ]
+  }
+ ],
+ "note": "buildings counted once (cleabs); a tile in the ring of its nearest point; the view: ±45° of the heading from the start"
+}

@@ -81,6 +81,8 @@ vent arrière à 6 km de l'axe, base, point de jonction ; pires sur l'Altiplano 
 aucune approche refusée de plus), ou aplanir sous les jonctions, ou borner le détail. Rien changé en attendant. Piste (session du rendu,
 `game/runway-grade.ts`) : le couloir prolongé jusqu'au point initial (18,5 km) ou à la jonction (16 km + la base), et/ou l'amplitude du
 détail bornée là où les données sont planes ; côté approches, si besoin, les paliers pris au plus haut des deux sols hors du couloir.
+**Réglé côté approches (16 nov., 16c3eabb — Sam : « Sol dessiné »)** : les paliers des jonctions au plus haut des données et du sol dessiné
+(`groundJoinMsl`) ; sur un échantillon de 1 673 extrémités, sous le sol 54 → 0, à moins de 50 m 63 → 0. Les pentes restent sur les données.
 
 **Couloir prolongé au point initial (11/16 07:29 UTC, PLAN-J7 J7-1, décision de Sam ~07:05 UTC : « prolonger à 18,5 km »)** —
 le cône continué au même évasement (~±460 m à 18,5 km), fondu 300 m ; seul le détail retiré. **Vérifié** (kerr-mini, e2e

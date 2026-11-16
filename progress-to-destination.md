@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-16 11:49 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-16 11:50 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous. Ce qui est fermé quitte le tableau « En cours » pour la ligne « Fermé récemment ».
@@ -8863,3 +8863,18 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
 - **En pause pour PLAN-J8** (Sam, 16 nov., 11:30) : le contour HUD en virage (non mesuré ; attend l'e2e et le scénario cités par Sam) ; la
   règle 13 pour les ~120 e2e d'autres domaines (`PENDING`) ; les 338 e2e en attente de la garde du bandeau ; « aucune alarme de train hors
   approche » dans `flightState`.
+
+### 2026-11-16 11:50 UTC — PLAN-J8 J8-0 (a) : le recensement des bâtiments BD TOPO de la vue J0 (session 1feb2f7f)
+
+- Contribution à la destination : §7.19 et PLAN-J8 §0 (« toute la vue ») — le témoin des lots suivants : combien de bâtiments la donnée met
+  dans la vue J0, par anneau.
+- Réalisé : `scripts/j8-census.ts` (les tuiles BD TOPO z 15 à 30 km du départ de J0, téléchargées une fois et gardées hors dépôt,
+  `~/.kerr-cache/bdtopo` ; comptés une fois par `cleabs`, par anneau 0–2/2–5/5–10/10–15/15–30 km, sur le disque et dans le champ ±45°
+  au départ 270° et après le virage 340°) ; [FICHE-J8-0](docs/progress/j8/FICHE-J8-0.md) (a) ; [census-j0.json](docs/progress/j8/census-j0.json) ;
+  PLAN-J8 §8.
+- Preuves (mesuré, ce Mac, 16 nov. ~12:40 UTC) : 3 696 tuiles, 103 Mo, 0 échec, 287 s ; 223 512 bâtiments (99,2 % avec une hauteur
+  mesurée) ; dans la vue au départ 0 / 0 / 315 / 8 374 / 120 041, après le virage 0 / 197 / 12 540 / 13 517 / 64 474 ; décodage brut des 3 696
+  tuiles 1,8 s. Une seule charge IGN : la session du rendu prévenue avant et après.
+- Limites : le compte de la donnée, pas de ce qui couvre ≥ 1 pixel (J8-4) ; la préparation complète par tuile se mesure avec J8-3.
+- Suite : J8-0 (b) (le profil du worker de décor, par phase : CPU contre attente réseau — `cdp.ts` `sendTo` ajouté pour profiler un worker
+  attaché), J8-0 (d) (Paris : la mémoire ou les maillages), puis J8-3 après le contrat J8-2.
