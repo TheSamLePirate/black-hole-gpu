@@ -144,7 +144,7 @@ J8-R. J8-1 se voit tout de suite. J8-4 apporte le gros du gain : « toute la vue
 
 ## 6. Questions à Sam (recommandations entre parenthèses ; le plan avance dessus sauf avis contraire)
 
-1. **Le coût GPU de la couche lointaine** : (même contenu sur les deux machines, conformément aux décisions du 15 nov. sans
+1. **Décidé par Sam le 16 nov. (~14:05 UTC) : J8-4 avec les quads** — des boîtes au-dessus de 8 px, un quad face à la caméra en dessous ; le même contenu sur les deux machines, ~+1,7 à +3 ms sur le mini pour la vue J0 (fiche J8-0 (c), mesuré à ~1–2 ms près), mesuré à chaque lot ; les maillages fusionnés par cellule s'essaient ensuite s'il faut gagner davantage. **Le coût GPU de la couche lointaine** : (même contenu sur les deux machines, conformément aux décisions du 15 nov. sans
    compromis d'image ; si J8-0 (c) montre plus de 3 ms sur le mini pour la vue J0, retour à Sam avec les chiffres avant J8-4).
 2. **La portée** : (le critère du pixel, ≥ 1 px, plutôt qu'une distance fixe ; le relief des toits au-delà).
 3. **La priorité** : (J7 en pause après J7-8b ; les arbres proches en géométrie deviennent J9 ; les lignes ouvertes de la session des
