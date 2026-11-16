@@ -63,6 +63,12 @@ test.skipIf(!E2E)(
         [1000, 470],
         [-600, 0],
         [5300, 0],
+        // (PLAN-J7 J7-1: the approach funnel — on the final's axis, its far end's, its cone's edge, its fade along and across, out of it)
+        [-4600, 0],
+        [r.len + 4600, 0],
+        [-9990, 450],
+        [-10150, 0],
+        [-6000, 700],
       ].map(([along, across]) => {
         const q = geodeticNormal(A, F, r.origin.map((v, i) => v + along! * r.along[i]! + across! * r.across[i]!) as Vec3);
         return { r, q, expected: runwayGrade(q) };
@@ -84,6 +90,7 @@ test.skipIf(!E2E)(
       "earthSurface",
       "rwyCount",
       "runwayFlags",
+      "approachCut",
       "runwayGrade",
     ]
       .map(shaderFunction)
@@ -126,7 +133,7 @@ test.skipIf(!E2E)(
         out[i+3u]=moon.r; out[i+4u]=moon.g; out[i+5u]=moon.b;
         out[i+6u]=select(0.0,1.0,hasAir(0u));
         bodies[2].z=5.0; out[i+7u]=squashOf(0u);
-      }else if(id.x<${cases.length + sourceCases.length}u){out[i]=figureSunShare(ro,light,rs,ab);}else{let g=runwayGrade(q);out[i]=g.x;out[i+1u]=g.y;out[i+2u]=g.z;}
+      }else if(id.x<${cases.length + sourceCases.length}u){out[i]=figureSunShare(ro,light,rs,ab);}else{let g=runwayGrade(q);out[i]=g.x;out[i+1u]=g.y;out[i+2u]=g.z;out[i+3u]=g.w;}
     }`;
     const app = await App.boot({ width: 320, height: 240 });
     try {
@@ -163,6 +170,8 @@ test.skipIf(!E2E)(
         expect(Math.abs(values[i]! - e.flat)).toBeLessThan(0.025);
         expect(Math.abs(values[i + 1]! - e.level)).toBeLessThan(0.025);
         if (e.level > 0) expect(values[i + 2]).toBe(e.elev);
+        // (the detail's share taken off — the gear's ground through terrain.ts, the drawn one through trace.wgsl: one zoning)
+        expect(Math.abs(values[i + 3]! - e.cut)).toBeLessThan(0.025);
       }
       expect(app.cdp.errors).toEqual([]);
     } finally {

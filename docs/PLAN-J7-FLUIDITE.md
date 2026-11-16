@@ -117,4 +117,17 @@ des entrées datées ; les causes des à-coups (compilation de la météo, retou
      un couloir de 10 km, un arbre resterait sur la bosse inventée (+75 à +205 m à OIFK) — il faut lui passer les pistes proches (leur
      repère) et le même calcul, d'où un module pur commun (le calcul de `runwayGrade`, sans l'état de `sites.ts`).
   La portée : `runwaysNear` et les deux `runwayGrade` coupent à `len + 3 400 m` — à porter à `len + 10 000 + fondu`.
+- **J7-1 fait** (11/16 06:01 UTC) — `src/game/runway-grade.ts` (pur : `gradeAt`, `approachCut`, `GRADE_REACH`) : le
+  calcul du zonage, commun à la collision (`sites.ts` `runwayGrade` → `terrain.ts`), au décor (`scenery-worker.ts` : ses pieds sur le sol
+  aplani et nivelé — il ignorait toute pente de piste) et, par son pendant, au WGSL (`trace.wgsl` `runwayGrade` → `vec4f`, `w` la part du
+  détail retirée, `approachCut`). Le couloir de chaque extrémité de piste d'un aérodrome réel (drapeau 16 : les sites et les pistes du
+  monde) : largeur + 80 m au seuil → ±300 m à 10 km, fondu 300 m (smoothstep) ; la FAF de l'approche choisie non lue (10 km toujours).
+  Il n'entre que là où le détail est ajouté : `.x` (le chemin lent des sommets du raster, le cache) inchangé ; le tracé contourne son cache
+  naturel où `w > 0`. **Vérifié** : `runway-parity` 5/5 (dont le couloir), 162 tests unitaires, `check-wgsl` 84/84 ; parité GPU du zonage
+  (`ellipsoid` 1er test, le couloir compris) ; **A320 posé à OIFK 11** (run `20261116-061434-j71-oifk`) ; planche
+  (`j7-approach-ground`, A/B 23ea4135, run `20261116-063833-j71-board2`) : l'axe 3–9,5 km à 3,0 m d'une droite (bosses jusqu'à +194 m
+  avant), le fond du couloir 0,1 m, le sol hors du couloir identique (0,0 m) ; **les flancs du couloir** dans une crête inventée de ~200 m :
+  jusqu'à 45 m pour 50 m (le fondu de 300 m — q. 3, révisable sur cette planche) ; J0 (A B B A, kerr-mini) : GPU p50 49,6 / 49,3 avant,
+  49,3 après — aucun coût vu (un run B sans mesure : le décor bloqué 60 s à l'étape forêt, à surveiller). Le second test d'`ellipsoid`
+  expire aussi avant J7-1 (PROBLEMES).
 - **Le plan révisé** (2026-11-16 05:45 UTC, session d'analyse, sur la fiche de J7-0 — [FICHE-A-COUPS](progress/j7/FICHE-A-COUPS-2026-11-16.md)) : J7-2 (météo) et J7-3 (F1) non reproduits à chaud → rejoués à froid d'abord, fermés s'ils ne se reproduisent pas ; trois lots ajoutés sur les à-coups mesurés : **J7-7** le premier noyau de la partie et le changement d'appareil (433–784 ms, ~200 ms), **J7-8** le début du vol (150–217 ms, ~300 tuiles), **J7-9** l'arrivée des données après un placement (images GPU de 150–290 ms, avec le chargement d'une sauvegarde) ; `parcours-ville` rouge mis dans J7-4 (à expliquer, pas « variance ») ; l'ordre révisé au §2.

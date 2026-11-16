@@ -5,6 +5,8 @@ import { PbfReader } from "pbf";
 import { installNetActivity } from "./net-activity";
 import type { Vec3 } from "../physics";
 import { earthDetail, toHalf } from "../terrain";
+import { gradeAt } from "../game/runway-grade";
+import { geodeticToCart as cartOf, WGS84_A as RA, WGS84_F as RF } from "./ellipsoid";
 import { forestFrame, forestVec4s, growForest } from "./forest";
 import { BDTOPO_Z, bdtopoHeight, bdtopoStands, bdtopoUrl, clipRing } from "./bdtopo";
 import { CANOPY_NEAR, IgnLand, tilesWithin } from "./ign-canopy";
@@ -381,6 +383,15 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
   // (the sea's surface over the ellipsoid — the geoid's plane round the centre —: the ground as the tracer has it)
   const [n0, nLat, nLon] = q.geoid ?? [0, 0, 0];
   const sea = (lat: number, lon: number) => n0 + nLat * (lat - q.lat) + nLon * wrapLon(lon - q.lon);
+  // (the runways near — game/runway-grade.ts, the gear's and the tracer's calculation —: their airfields levelled, the detail off there and
+  // under their approaches' funnels — PLAN-J7 J7-1: a tree on a bump the ground no longer has would float)
+  const runways = q.runways ?? [];
+  const graded = (lat: number, lon: number) => (runways.length ? gradeAt(cartOf(RA, RF, lat * D, lon * D, 0), runways) : null);
+  // (a survey's ground — the IGN's, swisstopo's, 3DEP's: data, no detail added —: an airfield's level alone)
+  const levelled = (h: number, lat: number, lon: number) => {
+    const g = graded(lat, lon);
+    return g && g.level > 0 ? h + (g.elev - h) * g.level : h;
+  };
   // (the heights at hand without waiting — the IGN's ground once its survey is in, a Terrarium tile once decoded —: the forest's
   // ~700 000 nodes and the 32 000 buildings' feet read at once, not each through a promise)
   let landDone = !land;
@@ -415,13 +426,17 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
     const a = lat * D,
       b = lon * D,
       res = Math.max(25, (40075016 * Math.cos(a)) / (2 ** demZoom * 256));
-    return Math.max(0, h0 + earthDetail([Math.cos(a) * Math.cos(b), Math.cos(a) * Math.sin(b), Math.sin(a)], h0, 0.5, res)) + sea(lat, lon);
+    const g = graded(lat, lon);
+    if (g && g.level > 0) h0 += (g.elev - h0) * g.level;
+    const cut = g ? g.cut : 0;
+    const detail = cut < 1 ? (1 - cut) * earthDetail([Math.cos(a) * Math.cos(b), Math.cos(a) * Math.sin(b), Math.sin(a)], h0, 0.5, res) : 0;
+    return Math.max(0, h0 + detail) + sea(lat, lon);
   };
   const heightNow = (lat: number, lon: number): number | undefined => {
     if (land) {
       if (!landDone) return undefined;
       const h = land.ground(lat, lon);
-      if (Number.isFinite(h)) return Math.max(0, h) + sea(lat, lon);
+      if (Number.isFinite(h)) return Math.max(0, levelled(h, lat, lon)) + sea(lat, lon);
     }
     const { x, y } = demTile(lat, lon, demZoom);
     const px = resolved.get(`${x}/${y}`);
@@ -434,7 +449,7 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
     if (land) {
       await landReady;
       const h = land.ground(lat, lon);
-      if (Number.isFinite(h)) return Math.max(0, h) + sea(lat, lon);
+      if (Number.isFinite(h)) return Math.max(0, levelled(h, lat, lon)) + sea(lat, lon);
     }
     const { x, y } = demTile(lat, lon, demZoom),
       key = `${x}/${y}`;

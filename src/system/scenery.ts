@@ -4,7 +4,9 @@ import { forestKindTable, forestSeason } from "./forest";
 import { SceneryContact } from "./scenery-contact";
 import { swControls } from "./earth-tiles";
 import { sceneryBox, sceneryChains } from "./scenery-sources";
-import { cartToGeodetic, WGS84_A, WGS84_F } from "./ellipsoid";
+import { cartToGeodetic, geodeticToCart, WGS84_A, WGS84_F } from "./ellipsoid";
+import { EARTH_RUNWAYS } from "../game/sites";
+import { GRADE_REACH, type GradeRunway } from "../game/runway-grade";
 import { geoidN } from "./geoid-grid";
 import {
   D,
@@ -40,6 +42,23 @@ const CENTRE_HOLD_M = 1500;
 const QUICK_SHARE = 0.35;
 const QUICK_COVER = 0.8;
 
+/** the runways that grade any of a scene's ground (its box ≤ 20 km out, their funnel's reach): as the worker needs them (PLAN-J7 J7-1) */
+function runwaysAround(lat: number, lon: number): GradeRunway[] {
+  const D = Math.PI / 180;
+  const c = geodeticToCart(WGS84_A, WGS84_F, lat * D, lon * D, 0);
+  return EARTH_RUNWAYS.filter(
+    (r) => Math.hypot(c[0] - r.origin[0], c[1] - r.origin[1], c[2] - r.origin[2]) <= 20000 + r.len + GRADE_REACH,
+  ).map((r) => ({
+    origin: r.origin,
+    along: r.along,
+    across: r.across,
+    len: r.len,
+    halfWidth: r.halfWidth,
+    flags: r.flags,
+    elev: r.elev,
+    world: r.world ? { measuring: r.world.measuring } : undefined,
+  }));
+}
 export class EarthScenery {
   contact: SceneryContact | null = null;
   buffer: GPUBuffer;
@@ -347,6 +366,7 @@ export class EarthScenery {
         eye: [geo.lat / D, geo.lon / D],
         ...(quick ? { quick: QUICK_SHARE } : {}),
         swGate: swControls(),
+        runways: runwaysAround(c.lat, c.lon),
       } satisfies SceneryRequest);
     } catch (e) {
       this.lastError = String(e);

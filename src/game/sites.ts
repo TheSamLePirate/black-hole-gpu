@@ -1,4 +1,5 @@
 import { cartToGeodetic, geodeticToCart, WGS84_A, WGS84_F } from "../system/ellipsoid";
+import { GRADE_REACH, type Grade, gradeAt } from "./runway-grade";
 import { type WeatherPreset, type WeatherState, weatherAt, windFromAt } from "../weather";
 import type { WindLevel } from "../wind";
 
@@ -239,7 +240,7 @@ function runwaysNear(p: [number, number, number]): RunwayFrame[] {
     // (a point within NEAR_CELL / 2 of the centre on each axis is within 0.87 NEAR_CELL of it: a runway in its cut of
     // the point is within its cut and NEAR_CELL of the centre)
     nearList = EARTH_RUNWAYS.filter(
-      (r) => Math.hypot(p[0] - r.origin[0], p[1] - r.origin[1], p[2] - r.origin[2]) <= r.len + 3400 + NEAR_CELL,
+      (r) => Math.hypot(p[0] - r.origin[0], p[1] - r.origin[1], p[2] - r.origin[2]) <= r.len + GRADE_REACH + NEAR_CELL,
     );
   }
   return nearList;
@@ -258,51 +259,11 @@ export function runwayPaved(q: [number, number, number]): boolean {
   }
   return false;
 }
-/** a runway's grading's figures [m] (the shader's runwayGrade holds the same: change both) */
-export const RUNWAY_GRADE = { levelPast: 300, levelEase: 600, levelSide: 320, levelSideEase: 300 } as const;
-const ease = (x: number) => (x <= 0 ? 0 : x >= 1 ? 1 : x * x * (3 - 2 * x));
-export interface Grade {
-  flat: number;
-  level: number;
-  /** the level's height [m] (that of the runway levelling most) */
-  elev: number;
-}
+export { type Grade, RUNWAY_GRADE } from "./runway-grade";
+/** How the ground is graded at a geodetic unit direction by the runways near it (runway-grade.ts gradeAt: flat, level, elev, cut). */
 export function runwayGrade(q: [number, number, number]): Grade {
-  const g: Grade = { flat: 0, level: 0, elev: 0 };
   const point = geodeticToCart(WGS84_A, WGS84_F, Math.atan2(q[2], Math.hypot(q[0], q[1])), Math.atan2(q[1], q[0]), 0);
-  const near = runwaysNear(point);
-  const G = RUNWAY_GRADE;
-  for (const r of near) {
-    // (a world runway whose level is being measured: the relief under it read bare)
-    if (r.world?.measuring) continue;
-    const d0 = point[0] - r.origin[0],
-      d1 = point[1] - r.origin[1],
-      d2 = point[2] - r.origin[2];
-    // (nothing graded beyond 3.3 km past either end nor 620 m aside: the cut from the threshold grows with the strip's length)
-    const cut = r.len + 3400;
-    if (Math.abs(d0) > cut || Math.abs(d1) > cut || Math.abs(d2) > cut || d0 * d0 + d1 * d1 + d2 * d2 > cut * cut) continue;
-    const a = d0 * r.along[0] + d1 * r.along[1] + d2 * r.along[2];
-    const c = Math.abs(d0 * r.across[0] + d1 * r.across[1] + d2 * r.across[2]);
-    // (the clear zone 3 km before either threshold: a runway lands both ways — W4)
-    const wa = a < -3000 ? Math.max(0, 1 + (a + 3000) / 300) : a > r.len + 3000 ? Math.max(0, 1 - (a - r.len - 3000) / 300) : 1;
-    // (the strip, the taxiway beside it, the apron and the buildings — PLAN-AEROPORTS A2, A3 —: 280 m out of
-    // the axis, faded by 340; a world runway's — no made-up apron by it —: its own width and 80 m)
-    const world = (r.flags & 16) !== 0;
-    const side = world ? r.halfWidth + 80 : 280;
-    const wc = c < side ? 1 : Math.max(0, 1 - (c - side) / 60);
-    // (the level: the strip and its airfield, eased back to the relief — a world runway's its own width and 100 m,
-    // eased over 200: its town, its trees kept by it)
-    const out = Math.max(-G.levelPast - a, a - r.len - G.levelPast, 0);
-    const la = 1 - ease(out / G.levelEase);
-    const lc = 1 - ease((c - (world ? r.halfWidth + 100 : G.levelSide)) / (world ? 200 : G.levelSideEase));
-    const level = la * lc;
-    if (level > g.level) {
-      g.level = level;
-      g.elev = r.elev;
-    }
-    g.flat = Math.max(g.flat, wa * wc, level);
-  }
-  return g;
+  return gradeAt(point, runwaysNear(point));
 }
 /** How much of a point the drawn detail is taken off (runwayGrade's flat). */
 export const runwayWeight = (q: [number, number, number]): number => runwayGrade(q).flat;

@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-16 05:31 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-16 06:01 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous. Ce qui est fermé quitte le tableau « En cours » pour la ligne « Fermé récemment ».
@@ -62,7 +62,7 @@ l'état d'une mission ou d'un combat **non sauvé, dit** ; le réseau **« entre
 
 **Fermé aussi** : le plancher du raster sur GPU faible (15 nov., 23:46, proposer sous 15 images/s, décision de Sam).
 
-**La session du rendu (33d89754)** : J0 à J6 fermés, décisions du 15 appliquées ; **son prochain plan écrit : [PLAN-J7](docs/PLAN-J7-FLUIDITE.md)** (session d'analyse, 16 nov. 05:05 UTC) — la sonde des à-coups, le sol des approches (OIFK), la météo compilée d'avance (84–433 ms), le retour F1 (317 ms), la santé, le repos au sol, puis la fiche des 40 ms du mini ; ses trois questions réglées provisoirement selon les recommandations.
+**La session du rendu (33d89754)** : [PLAN-J7](docs/PLAN-J7-FLUIDITE.md) en cours — **J7-0 fait** (la sonde des à-coups et sa [fiche](docs/progress/j7/FICHE-A-COUPS-2026-11-16.md)), **J7-1 fait** (le sol des approches : l'A320 posé à OIFK 11, J0 sans coût vu) ; ensuite J7-7 (le premier noyau, le changement d'appareil) avec J7-2/J7-3 rejoués à froid, J7-8, J7-9, J7-4, J7-5, J7-6.
 
 **Attend Sam** : les trois questions de [PLAN-J7](docs/PLAN-J7-FLUIDITE.md) §4, réglées provisoirement (les 40 ms du mini en dernier, J7-6 ; PLAN-J8 les arbres proches en géométrie ensuite ; l'aplanissement du détail sous les trouées jusqu'à la FAF ou 10 km) ; les seuils du mini attendent la reprise de la cible 40 ms.
 
@@ -8529,3 +8529,17 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   un passage par parcours, mesuré par la session du rendu). Rien lancé par la session d'analyse.
 - Limites : une seule passe par parcours ; la part synchrone des noyaux et les passes GPU de l'arrivée des données non encore établies.
 - Suite : la session du rendu finit J7-1, puis J7-7.
+
+### 2026-11-16 06:01 UTC — PLAN-J7 J7-1 : le sol des approches (le détail inventé retiré sous les finales)
+
+- Contribution à la destination : §19.4 (le contact : le sol touché = le sol dessiné = le sol du décor) ; la décision de Sam du 16 nov.
+  (les approches jugées sur les données) portée à ce que le joueur touche ; PLAN-J7 J7-1.
+- Réalisé : `src/game/runway-grade.ts` (un calcul pur du zonage des pistes : collision, décor, et son pendant WGSL) ; le couloir d'approche
+  de chaque extrémité d'aérodrome réel (largeur + 80 m → ±300 m à 10 km, fondu 300 m) ; le décor posé sur le sol nivelé et aplani (il
+  ignorait les pistes) ; e2e `j7-approach-ground` (la planche A/B), parité GPU étendue (`ellipsoid`), `runway-parity` ; PROBLEMES (OIFK
+  réglé ; `ellipsoid` polaire, antérieur, ouvert) ; GRAPHICS-PIPELINE (C3).
+- Preuves (mesuré, kerr-mini) : A320 posé à OIFK 11 ; l'axe de la finale à 3,0 m d'une droite (bosses jusqu'à +194 m avant) ; hors du
+  couloir le sol inchangé ; J0 GPU p50 49,3 ms après contre 49,6 / 49,3 avant.
+- Limites : la FAF de l'approche non lue (10 km) ; les flancs du couloir raides dans une crête inventée (45 m / 50 m) — réglage révisable ;
+  un run J0 « après » sans mesure (décor bloqué à l'étape forêt) — à surveiller ; le décor déjà bâti n'est refait qu'à sa prochaine scène.
+- Suite : J7-7 (le premier noyau de la partie, le changement d'appareil), avec J7-2/J7-3 rejoués à froid.

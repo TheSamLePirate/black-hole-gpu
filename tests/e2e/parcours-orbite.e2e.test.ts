@@ -36,7 +36,7 @@ test.skipIf(!E2E)(
       let orbit = false;
       for (let k = 0; k < 90 && !orbit; k++) {
         const s = await app.js<Slice>(`(() => {
-          __bh.freeze(true); const st0 = __bh.game.status(); let alt = st0.altKm, t = __bh.time(), jumps = 0, jumpMaxM = 0, back = 0, vz = 0;
+          window.__hitchQuiet = true; __bh.freeze(true); const st0 = __bh.game.status(); let alt = st0.altKm, t = __bh.time(), jumps = 0, jumpMaxM = 0, back = 0, vz = 0;
           for (let i = 0; i < 300; i++) {
             __bh.step(1 / 30);
             const st = __bh.game.status(), tt = __bh.time();
@@ -48,6 +48,8 @@ test.skipIf(!E2E)(
             vz = (st.altKm - alt) * 1000 * 30; alt = st.altKm; t = tt;
           }
           const st = __bh.game.status(); __bh.freeze(false);
+          // (the slice — 300 steps in one call — the test's own work: the hitch probe told not to count it, its first frame after included)
+          requestAnimationFrame(() => requestAnimationFrame(() => { window.__hitchQuiet = false; }));
           return { t: +(__bh.time() * 492.5490947).toFixed(1), altKm: +st.altKm.toFixed(2), status: st.status, speed: Math.round(st.speed), jumps, jumpMaxM: Math.round(jumpMaxM), back }; })()`);
         // (a few images drawn: the exposure they are drawn with)
         const ev = await app.js<number>(`(async () => { for (let i = 0; i < 8; i++) await new Promise((q) => requestAnimationFrame(q));

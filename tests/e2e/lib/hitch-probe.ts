@@ -37,6 +37,8 @@ export const HITCH_PROBE = `(() => {
       gpu: (R && R.lastGpuMs) || 0,
       size: innerWidth + "x" + innerHeight,
       hidden: document.hidden,
+      // (a test's own synchronous work — window.__hitchQuiet, set across it —: not the game's, not counted)
+      quiet: !!window.__hitchQuiet,
       heap: (performance.memory && performance.memory.usedJSHeapSize) || 0,
     };
   };
@@ -77,7 +79,7 @@ export const HITCH_PROBE = `(() => {
       const gap = now - last;
       H.frames++;
       H.max = Math.max(H.max, gap);
-      if (gap > 50 && !cur.hidden && !prev.hidden) {
+      if (gap > 50 && !cur.hidden && !prev.hidden && !cur.quiet) {
         H.over50++;
         if (gap > 100) H.over100++;
         pending.push({ start: last, end: now, ms: gap, prev, cur });

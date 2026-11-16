@@ -6899,23 +6899,35 @@ fn runwayFlags(k: u32) -> u32 { return u32(P.runways[3u + 4u * k].w + 0.5); }
 // How a geodetic direction is graded by the runways near (sites.ts runwayGrade, the same figures): x, flat
 // (0…1: the drawn detail off) — from 3 km before a threshold to 3 km past the far end, 280 m either side,
 // faded over 300 m along, 60 m across —; y, level (0…1: the relief brought to the runway's level) — the
-// strip and 300 m past its ends, 320 m either side, eased back over 600 m along, 300 m across —; z, that level [m].
+// strip and 300 m past its ends, 320 m either side, eased back over 600 m along, 300 m across —; z, that level [m];
+// w, the detail's share taken off where it is added (game/runway-grade.ts cut): x, and a real airfield's approach funnel (PLAN-J7 J7-1).
 // WGS84 surface point from its geodetic unit normal, body-fixed metres.
 fn earthSurface(g: vec3f) -> vec3f {
   let ba = 1.0 / EARTH_AB;
   let N = EARTH_RM / sqrt(1.0 - (1.0 - ba * ba) * g.z * g.z);
   return N * vec3f(g.xy, g.z * ba * ba);
 }
-fn runwayGrade(g: vec3f) -> vec3f {
+// A real airfield's approach funnel beyond either end (game/runway-grade.ts approachCut, the same figures: change both): its width and 80 m
+// at the threshold widening to ±300 m 10 km out, faded over 300 m along and across — the procedural detail off under the finals
+// (PLAN-J7 J7-1: it raised bumps the approaches flew into; the data untouched)
+fn approachCut(a: f32, c: f32, L: f32, hw: f32) -> f32 {
+  let x = select(select(0.0, a - L, a > L), -a, a < 0.0);
+  if (x <= 0.0) { return 0.0; }
+  let start = hw + 80.0;
+  let half = start + (max(300.0, start) - start) * min(x / 10000.0, 1.0);
+  return (1.0 - smoothstep(0.0, 1.0, (x - 10000.0) / 300.0)) * (1.0 - smoothstep(0.0, 1.0, (c - half) / 300.0));
+}
+fn runwayGrade(g: vec3f) -> vec4f {
   let point = earthSurface(g);
   var w = 0.0;
   var lv = 0.0;
   var el = 0.0;
+  var cut = 0.0;
   for (var k = 0u; k < rwyCount(); k++) {
     let d = point - earthSurface(P.runways[1u + 4u * k].xyz);
     let L = P.runways[1u + 4u * k].w;
-    // (nothing graded beyond 3.3 km past either end nor 620 m aside: sites.ts runwayGrade's cut, the strip's length and 3.4 km)
-    if (dot(d, d) > (L + 3400.0) * (L + 3400.0)) { continue; }
+    // (nothing graded beyond the approach funnel: runway-grade.ts GRADE_REACH, the strip's length and 10.9 km)
+    if (dot(d, d) > (L + 10900.0) * (L + 10900.0)) { continue; }
     let a = dot(d, P.runways[2u + 4u * k].xyz);
     let c = abs(dot(d, P.runways[3u + 4u * k].xyz));
     let hw = P.runways[2u + 4u * k].w;
@@ -6934,9 +6946,11 @@ fn runwayGrade(g: vec3f) -> vec3f {
       lv = la * lc;
       el = P.runways[4u + 4u * k].w;
     }
-    w = max(max(w, wa * wc), la * lc);
+    let flat = max(wa * wc, la * lc);
+    w = max(w, flat);
+    cut = max(cut, max(flat, select(0.0, approachCut(a, c, L, hw), world)));
   }
-  return vec3f(w, lv, el);
+  return vec4f(w, lv, el, cut);
 }
 // the share of a pixel of footprint fw [m] a band lo…hi along x covers (the band thinner than the pixel:
 // its share of it)
@@ -8204,12 +8218,12 @@ fn geoidN(g: vec3f) -> f32 {
 }
 fn earthHeightExactG(q: vec3f, foot: f32) -> f32 {
   let hr = earthH(q, foot, false);
-  // (a runway's airfield graded: at its level, its detail off — the gear's ground the same)
-  var g = vec3f(0.0);
+  // (a runway's airfield graded: at its level, its detail off — and under its approaches' funnels (w) —: the gear's ground the same)
+  var g = vec4f(0.0);
   if (HAS_RWY) { g = runwayGrade(q); }
   let h0 = mix(hr.x, g.z, g.y);
-  if (g.x >= 1.0) { return max(h0, 0.0); }
-  if (NEAR_DETAIL && GROUND_DETAIL) { return max(h0 + (1.0 - g.x) * earthDetail(q, h0, foot, hr.y), 0.0); }
+  if (g.w >= 1.0) { return max(h0, 0.0); }
+  if (NEAR_DETAIL && GROUND_DETAIL) { return max(h0 + (1.0 - g.w) * earthDetail(q, h0, foot, hr.y), 0.0); }
   return max(h0, 0.0);
 }
 // BEGIN_TERRAIN_CACHE (system/terrain-cache.ts supplies the existing table lookup)
@@ -8222,7 +8236,8 @@ fn earthSkyOpen(gq: vec3f, h: f32, n: vec3f) -> f32 { return 1.0; }
 // (the heights above the sea — the cache's, the exact ones — over the ellipsoid: raised by the geoid)
 fn earthHeightG(q: vec3f, foot: f32) -> f32 {
   if (HAS_TERRAIN_CACHE) {
-    if (!HAS_RWY || runwayGrade(q).x <= 0.0) {
+    // (the cache is the natural relief, its detail whole: where a runway takes any off — w — the exact height)
+    if (!HAS_RWY || runwayGrade(q).w <= 0.0) {
       let h = terrainCachedHeight(q, foot);
       if (h >= 0.0) { return h + geoidN(q); }
     }
@@ -8239,17 +8254,17 @@ fn earthHeight(q: vec3f, foot: f32) -> f32 { let h = earthHeightG(geoQ(q), foot)
 fn earthHeightStep(q: vec3f, foot: f32) -> f32 { let g = geoQ(q); let h = earthHeightStepG(g, foot) + geoidN(g); GEO_H = h; return h / earthSq(q); }
 // (above the sea: earthHeightStep raises it by the geoid)
 fn earthHeightStepG(q: vec3f, foot: f32) -> f32 {
-  var g = vec3f(0.0);
+  var g = vec4f(0.0);
   if (HAS_RWY) { g = runwayGrade(q); }
   if (P.tiles.w > 0.5) {
     let hr = earthH(q, foot, true);
     let h1 = mix(hr.x, g.z, g.y);
-    if (NEAR_DETAIL && GROUND_DETAIL) { return max(h1 + (1.0 - g.x) * earthDetail(q, h1, max(foot * 4.0, 1.0), hr.y), 0.0); }
+    if (NEAR_DETAIL && GROUND_DETAIL) { return max(h1 + (1.0 - g.w) * earthDetail(q, h1, max(foot * 4.0, 1.0), hr.y), 0.0); }
     return max(h1, 0.0);
   }
   let texelM = EARTH_RM * TAU / f32(textureDimensions(earthElev).x);
   let h0 = mix(textureSampleLevel(earthElev, bgSamp, earthUV(q), max(log2(max(foot, 1.0) / texelM), 0.0)).r, g.z, g.y);
-  if (NEAR_DETAIL && GROUND_DETAIL) { return max(h0 + (1.0 - g.x) * earthDetail(q, h0, max(foot * 4.0, 1.0), texelM), 0.0); }
+  if (NEAR_DETAIL && GROUND_DETAIL) { return max(h0 + (1.0 - g.w) * earthDetail(q, h0, max(foot * 4.0, 1.0), texelM), 0.0); }
   return max(h0, 0.0);
 }
 // the relief's own normal at q, no finer than the footprint

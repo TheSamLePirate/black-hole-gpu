@@ -3,7 +3,15 @@
 Problèmes constatés, pas encore réglés. Chaque entrée : la date (UTC), ce qui est mesuré ou observé et sa source, la cause
 connue ou supposée, la piste. Une entrée réglée est barrée avec le commit qui la règle, pas effacée.
 
-## L'A320 ne se repose pas à OIFK 11 après un rebond (relevé le 15 novembre 2026, e2e `approach-sample`, APS_CRAFT=a320, kerr-mini)
+## L'e2e `ellipsoid`, son second test (« the live polar renderer … ») expire à 300 s sur kerr-mini (relevé le 16 novembre 2026)
+
+Observé : `the live polar renderer keeps WGS84 geometry and altitude when Earth textures are unavailable` expire à 300 s, trois fois
+sur kerr-mini le 16 nov. (runs `…-j71-ellipsoid`, `…-j71-polar`, et `…-j71-polar-before` **sur 23ea4135, avant J7-1** : l'échec ne vient
+pas de J7-1). Le premier test du fichier (la parité GPU de la géométrie et de `runwayGrade`) passe. Non analysé : sa page (320 × 240,
+sans textures de la Terre) attend `__bh.renderer.lastNear` — sa première image, peut-être un noyau compilé à froid au-delà de 300 s sur
+le mini, ou une attente qui ne vient jamais. À rejouer avec la sonde et `waitProgress` (J7-4, la santé).
+
+## ~~L'A320 ne se repose pas à OIFK 11 après un rebond~~ (relevé le 15 novembre 2026, e2e `approach-sample`, APS_CRAFT=a320, kerr-mini) — réglé le 16 novembre 2026 (J7-1)
 
 Observé : l'approche construite d'OIFK 11 (Kerman, 1 056 m, montagnes à 20 km), sans tuiles fines ; arrondi à 13 m au lieu de 15 (le sol
 monte sous la finale : 12, 22, 17 m d'un instant à l'autre), contact, ROLL OUT, rebond ; la pente de trajectoire à +20°, l'alpha floor
@@ -23,6 +31,10 @@ Côté approches, réglé : la jonction après une remise de gaz prend le vent a
 passage se stabilise désormais sur LOC/G/S ; il rebondit à la même bosse. **Reste entièrement à la session du rendu : le détail
 procédural aplani sous les trouées d'approche des pistes du monde** (`terrain.ts` `earthDetail`, comme sous la piste) — **planifié :
 [PLAN-J7](PLAN-J7-FLUIDITE.md) J7-1** (16 nov., session d'analyse), son critère : `approach-sample` A320 posé à OIFK 11.
+**Réglé (16 nov., 06:00 UTC, J7-1)** : le détail procédural retiré sous le couloir d'approche de chaque extrémité de piste d'un aérodrome
+réel (largeur + 80 m au seuil → ±300 m à 10 km, fondu 300 m ; `game/runway-grade.ts`, le même calcul pour la collision, le décor et le
+WGSL) ; à OIFK 11 le sol de l'axe passe de bosses jusqu'à 1 245 m aux données (1 051 → 1 012 m de 3 à 10 km). **L'A320 s'y pose**
+(`approach-sample -t mountain`, APS_CRAFT=a320, run `20261116-061434-j71-oifk`, note 20).
 
 
 ## ~~La vue « Les aurores sur les fjords des Lofoten » volée en plein jour quand la date du jeu est en été~~ (relevé le 14 novembre 2026, e2e `s2-views`) — réglé le même jour

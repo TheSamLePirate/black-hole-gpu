@@ -3,6 +3,7 @@ import { carMesh } from "./traffic";
 import { geodeticToCart, WGS84_A, WGS84_F } from "./ellipsoid";
 import { type ForestFrame, forestVec4s, writeForest } from "./forest";
 import type { Vec3 } from "../physics";
+import type { GradeRunway } from "../game/runway-grade";
 
 import { DECAL_FAR, DECAL_NEAR, type Decals } from "./scenery-geometry";
 import { LAMP_GRID } from "./streetlamps";
@@ -531,6 +532,9 @@ export interface SceneryRequest {
   /** the buildings' cap kept by their distance to the corridor the craft flies — from the eye at the request to as far past the
    *  centre as the centre is past it —, not to the centre alone (the scenery's `corridor`, PLAN-J2 §9 undecies — Sam, 13 Nov 2026) */
   corridor?: boolean;
+  /** the runways near the scene (game/runway-grade.ts): the feet put on the ground as the gear and the tracer have it — their airfields
+   *  levelled, the detail off there and under their approaches' funnels (PLAN-J7 J7-1) */
+  runways?: GradeRunway[];
 }
 /** the worker's progress through a scene, posted as it goes (the loading status's: ui — data meter): the last step ended,
  *  and in the buildings' step the BD TOPO's or Overture's tiles in and wanted */
