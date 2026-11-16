@@ -11246,15 +11246,16 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
     return this.buildingFar?.quadPx ?? this.farQuadPxWant;
   }
   private farQuadPxWant = 8;
-  /** (the far layer's) its roofs hold their photograph's colour (true, J8-4's tint — Sam, 16 Nov 2026); false: desaturated as before */
-  set farRoofHue(on: boolean) {
-    if (this.buildingFar) this.buildingFar.roofHue = on;
-    this.farRoofHueWant = on;
+  /** (the far layer's) its buildings drawn with their own materials (true — PLAN-J8 J8-A: their roof's and walls' from the record, the
+   *  near mesh's colours); false: generic, a near building's without a leaf */
+  set farMaterials(on: boolean) {
+    if (this.buildingFar) this.buildingFar.materials = on;
+    this.farMaterialsWant = on;
   }
-  get farRoofHue() {
-    return this.buildingFar?.roofHue ?? this.farRoofHueWant;
+  get farMaterials() {
+    return this.buildingFar?.materials ?? this.farMaterialsWant;
   }
-  private farRoofHueWant = true;
+  private farMaterialsWant = true;
   /** (the far layer's) what is resident and what the last cull drew (boxes, quads — read back) */
   async farBuildings() {
     return {
@@ -12220,7 +12221,7 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
         if (!this.buildingFar) {
           this.buildingFar = new BuildingFar(this.sceneryRaster, cellPool);
           this.buildingFar.quadPx = this.farQuadPxWant;
-          this.buildingFar.roofHue = this.farRoofHueWant;
+          this.buildingFar.materials = this.farMaterialsWant;
           // (the ground as drawn — the records without their own: Overture's, OSM's)
           this.buildingFar.groundAt = (lat, lon) => groundBare("earth", bodyFixedOf("earth", lat, lon, 0));
         }
@@ -12229,7 +12230,7 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
         // (the scene keeps its buildings within its kept reach where its cap cut, else its box — and within farNearOnlyM when set, J8-5)
         const near = this.farNearOnlyM > 0 ? this.farNearOnlyM : Number.POSITIVE_INFINITY;
         const maskR = !box ? 0 : Math.min(st.cutBuildings > 0 && st.keptReachM > 0 ? st.keptReachM : box.half - 650, near);
-        this.buildingFar.update(this.farEye, box, maskR, this.earthScenery.buildingLeaf, performance.now());
+        this.buildingFar.update(this.farEye, box, maskR, this.earthScenery.buildingLeaf, performance.now(), st.corridorA);
       } else if (this.sceneryRaster) this.sceneryRaster.farOn = false;
       trees = this.sceneryRaster.encodeCull(
         enc,

@@ -8463,6 +8463,7 @@ fn terrainRasterBuilding(px: vec2f) -> bool { return true; }
 fn terrainRasterMesh(px: vec2f) -> bool { return false; }
 fn terrainRasterBridgeMesh(px: vec2f) -> bool { return false; }
 fn terrainRasterFar(px: vec2f) -> bool { return false; }
+fn terrainRasterFarMat(px: vec2f) -> u32 { return 0u; }
 fn terrainRasterTurbine(px: vec2f) -> bool { return false; }
 fn terrainRasterLamp(px: vec2f) -> bool { return false; }
 fn terrainRasterTag(px: vec2f) -> f32 { return 0.0; }
@@ -15800,9 +15801,48 @@ fn atNg(a: RasterAttr, gq: vec3f) -> vec3f {
 fn atMesh(a: RasterAttr) -> bool { return select(a.mesh, terrainRasterMesh(a.px), a.vis); }
 fn atLeaf(a: RasterAttr) -> u32 { if (a.vis) { return select(0u, terrainRasterLeaf(a.px), HAS_SCENERY && (liteSkip() & 262144u) == 0u); } return a.leaf; }
 fn atBridgeMesh(a: RasterAttr) -> bool { if (a.vis) { return terrainRasterBridgeMesh(a.px); } return a.bridgeMesh; }
-// (PLAN-J8 J8-4) the share of the photograph's colour a far building's roof keeps
-const FAR_ROOF_HUE = 0.85;
 fn atFar(a: RasterAttr) -> bool { if (a.vis) { return terrainRasterFar(a.px); } return false; }
+// (PLAN-J8 J8-A) a far building's materials at the pixel (scenery-raster.ts farMat; 0 none)
+fn atFarMat(a: RasterAttr) -> u32 { if (a.vis) { return terrainRasterFarMat(a.px); } return 0u; }
+// (its region — building-far.ts FAR_REGIONS: 0 paris, 1 france-west, 2 france-north, 3 france-south, 4 alpine, 5 mediterranean, 6 north,
+// 7 temperate —: the south's roofs and renders warmer)
+fn farWarm(m: u32) -> bool { let r = (m >> 20u) & 7u; return r == 3u || r == 5u; }
+// A far building's roof's albedo from its material — roofs.ts roofColour, the same colours as the near scene's records (its region's
+// material where the registry gives none: Paris zinc, the west's and the Alps' slate, tiles elsewhere)
+fn farRoofAlbedo(m: u32) -> vec3f {
+  var mat = m & 15u;
+  let r = (m >> 20u) & 7u;
+  if (mat == 0u) { mat = select(select(1u, 2u, r == 1u || r == 4u), 3u, r == 0u); }
+  let s = f32((m >> 12u) & 255u) / 255.0;
+  switch mat {
+    case 1u: {
+      if (farWarm(m)) { return mix(vec3f(0.38, 0.2, 0.12), vec3f(0.32, 0.22, 0.16), s); }
+      return mix(vec3f(0.425, 0.22, 0.16), vec3f(0.325, 0.22, 0.175), s);
+    }
+    case 2u: { return mix(vec3f(0.065, 0.072, 0.085), vec3f(0.095, 0.098, 0.105), s); }
+    case 3u: { return mix(vec3f(0.27, 0.29, 0.31), vec3f(0.21, 0.23, 0.25), s); }
+    case 4u: { return mix(vec3f(0.2, 0.195, 0.18), vec3f(0.11, 0.11, 0.105), s); }
+    case 5u: { return mix(vec3f(0.32, 0.33, 0.34), vec3f(0.2, 0.24, 0.22), s); }
+    default: { return mix(vec3f(0.16, 0.15, 0.14), vec3f(0.24, 0.22, 0.2), s); }
+  }
+}
+// … its walls' — roofs.ts wallColour (render, white to cream, the south's ochres, where the registry gives none)
+fn farWallAlbedo(m: u32) -> vec3f {
+  let mat = (m >> 4u) & 15u;
+  let s = f32((m >> 12u) & 255u) / 255.0;
+  switch mat {
+    case 1u: { return mix(vec3f(0.5, 0.44, 0.33), vec3f(0.4, 0.37, 0.31), s); }
+    case 2u: { return mix(vec3f(0.34, 0.23, 0.13), vec3f(0.28, 0.21, 0.15), s); }
+    case 3u: { return mix(vec3f(0.34, 0.33, 0.31), vec3f(0.26, 0.26, 0.25), s); }
+    case 4u: { return mix(vec3f(0.45, 0.165, 0.098), vec3f(0.36, 0.18, 0.12), s); }
+    case 6u: { return mix(vec3f(0.34, 0.2, 0.1), vec3f(0.22, 0.145, 0.09), s); }
+    case 7u: { return mix(vec3f(0.06, 0.08, 0.1), vec3f(0.08, 0.09, 0.09), s); }
+    default: {
+      if (farWarm(m)) { return mix(vec3f(0.6, 0.5, 0.36), vec3f(0.55, 0.38, 0.3), s); }
+      return mix(vec3f(0.58, 0.56, 0.5), vec3f(0.46, 0.42, 0.34), s);
+    }
+  }
+}
 fn atTurbine(a: RasterAttr) -> bool { if (a.vis) { return terrainRasterTurbine(a.px); } return a.turbine; }
 fn atPylon(a: RasterAttr) -> bool { if (a.vis) { return terrainRasterPylon(a.px); } return a.pylon; }
 fn atLamp(a: RasterAttr) -> bool { if (a.vis) { return terrainRasterLamp(a.px); } return a.lamp; }
@@ -16011,9 +16051,14 @@ fn liteMaterial(gq: vec3f, q: vec3f, ph: vec3f, rd: vec3f, look: vec3f, tM: f32,
   // the street's or a tree's beside it: zinc and slate grey, a fifth of the photograph's hue)
   if (mesh && leaf == 0u && dot(n, gq) >= 0.35) {
     let l = luminance(A);
-    // (PLAN-J8 J8-4: a far building's roof — the photograph's colour held, KEEP_FAR of it: under a kilometre's texel the photograph is the
-    // roofs' own tint, the near meshes' fifth of it read far off as roofs gone grey — Sam, 16 Nov 2026)
-    A = mix(vec3f(l), A, select(0.2, FAR_ROOF_HUE, atFar(at))) * select(vec3f(0.97, 0.99, 1.04), vec3f(1.0), atFar(at));
+    A = mix(vec3f(l), A, 0.2) * vec3f(0.97, 0.99, 1.04);
+    // (PLAN-J8 J8-A: a far building's roof — its material's colour, as the near mesh's record gives it, its light brought to the
+    // photograph's as rasterBuilding's (TUNE_BLD_PHOTO, 0.6–1.5): the near roofs and the far ones the same tint — Sam, 16 Nov 2026)
+    let fm = atFarMat(at);
+    if (fm != 0u) {
+      let ra = farRoofAlbedo(fm);
+      A = ra * select(1.0, clamp(l / max(luminance(ra), 0.02), 0.6, 1.5), TUNE_BLD_PHOTO > 0.5);
+    }
     // (a bridge's deck: its stone and its roadway — the photograph under it is the river's: a speckled dark slab)
     if (atBridgeMesh(at)) { A = vec3f(0.36, 0.34, 0.31) * P.earth2.z; }
   }
@@ -16024,6 +16069,9 @@ fn liteMaterial(gq: vec3f, q: vec3f, ph: vec3f, rd: vec3f, look: vec3f, tM: f32,
     let along = normalize(vec2f(-nL.y, nL.x) + vec2f(1e-6, 0.0));
     let block = hash31(vec3f(floor(spL.xy / 25.0), 3.0));
     A = vec3f(0.5, 0.46, 0.39) * (0.8 + 0.35 * block) * P.earth2.z;
+    // (PLAN-J8 J8-A: a far building's walls — its material's colour, the near records' — wallColour)
+    let fwm = atFarMat(at);
+    if (fwm != 0u) { A = farWallAlbedo(fwm) * (0.9 + 0.2 * block); }
     let fw = fract(dot(spL.xy, along) / 2.6);
     let fz = fract(spL.z / 3.1);
     // (a bridge's part — its deck's sides, its parapets, its piers —: stone, no windows)

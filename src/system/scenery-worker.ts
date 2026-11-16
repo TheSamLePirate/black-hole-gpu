@@ -1793,6 +1793,7 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
     cutHousesMs,
     corridor: q.corridor === true,
     corridorM,
+    corridorA,
     bdtopoBuildings,
     bdtopoTiles: bdtopoTileCount,
     overtureBuildings,

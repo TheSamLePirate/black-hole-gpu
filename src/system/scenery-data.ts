@@ -571,6 +571,8 @@ export interface SceneryReply {
   /** the request's corridor, as this scene was made, and its half-length [m] (0: the centre alone — a craft at rest) */
   corridor?: boolean;
   corridorM?: number;
+  /** (PLAN-J8 J8-5) that corridor's end at the eye, from the centre [m east, m north] — the far layer's mask the same shape; null: a disc */
+  corridorA?: [number, number] | null;
   /** of the buildings, the IGN's BD TOPO's over France (I5, bdtopo.ts); its tiles taken */
   bdtopoBuildings?: number;
   bdtopoTiles?: number;

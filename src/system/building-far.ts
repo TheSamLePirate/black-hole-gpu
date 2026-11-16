@@ -7,6 +7,7 @@
 import { CELL_Z, cellKey, cellOf, cellOrigin, fromCell, readHeader, recordWords } from "./building-cells";
 import { cellFrameInScene, cellPriority, type EyeState, POOL_RECORD_BYTES, RecordPool } from "./building-layer";
 import type { CellPool, CellPrepared, CellWant } from "./cell-pool";
+import { type Region, regionOf } from "./roofs";
 import { sceneryFrame } from "./scenery-data";
 import type { SceneryRaster } from "./scenery-raster";
 
@@ -32,6 +33,17 @@ interface Resident {
 }
 /** PLAN-J8 J8-5: the near scene's buildings within this of its corridor alone while the layer draws [m] (§2: the meshes' reach) */
 export const FAR_NEAR_ONLY_M = 2000;
+/** the regions in the order trace.wgsl's farRoofAlbedo / farWallAlbedo read them (roofs.ts Region: their roofs' default, their colours) */
+export const FAR_REGIONS: readonly Region[] = [
+  "paris",
+  "france-west",
+  "france-north",
+  "france-south",
+  "alpine",
+  "mediterranean",
+  "north",
+  "temperate",
+];
 /** a cell's fade-in once put [ms] */
 export const FAR_FADE_MS = 1000;
 
@@ -47,9 +59,11 @@ export class BuildingFar {
   private initing = false;
   /** under this projected size [px] one quad facing the camera (FAR_QUAD_PX; 0: boxes all — a lever to compare their looks) */
   quadPx = FAR_QUAD_PX;
-  /** the far roofs hold their photograph's colour (FAR_ROOF_HUE, trace.wgsl — the near mesh's at the same distance); false: the look
-   *  of a near building without a leaf (desaturated) — a lever to compare */
-  roofHue = true;
+  /** the far buildings drawn with their own materials (PLAN-J8 J8-A: their roof's and walls' from the record, farMat — the near mesh's
+   *  colours); false: the look of a near building without a leaf (generic) — a lever to compare */
+  materials = true;
+  /** the region the eye is in (FAR_REGIONS' index) */
+  private region = 0;
   /** the counts: cells handed, put, let go, too big to fit */
   readonly counts = { handed: 0, put: 0, evicted: 0, refused: 0, empty: 0 };
 
@@ -70,9 +84,17 @@ export class BuildingFar {
 
   /**
    * Each frame the layer may draw: the eye (null: away — nothing asked), the drawn scene's centre (the frame the GPU draws in) and the
-   * reach its own buildings keep [m], a building's leaf (the material, for now).
+   * reach its own buildings keep [m] from its corridor (its end at the eye from the centre, m east and north — null: from the centre),
+   * a building's leaf (the material, for now).
    */
-  update(eye: EyeState | null, scene: { lat: number; lon: number } | null, maskR: number, leaf: number, now: number) {
+  update(
+    eye: EyeState | null,
+    scene: { lat: number; lon: number } | null,
+    maskR: number,
+    leaf: number,
+    now: number,
+    corridor: readonly [number, number] | null = null,
+  ) {
     if (!this.raster.farReady) {
       if (!this.initing) {
         this.initing = true;
@@ -92,8 +114,9 @@ export class BuildingFar {
     // (the cells fading in: their share written each frame until whole)
     if (this.frame) for (const r of this.residents.values()) if (r.slot >= 0 && now - r.at < FAR_FADE_MS + 100) this.writeFrame(r, now);
     this.raster.farOn = !!this.frame;
-    this.raster.farParams(maskR, leaf, this.quadPx, this.roofHue ? 0.5 : 0);
+    this.raster.farParams(maskR, leaf, this.quadPx, this.materials ? 0.5 : 0, corridor, this.region);
     if (!eye) return;
+    this.region = Math.max(0, FAR_REGIONS.indexOf(regionOf(eye.lat, eye.lon)));
     // (the cells wanted asked again when the eye moved 300 m, turned 10°, or 2 s on)
     const w = this.wantedAt;
     const cosL = Math.cos((eye.lat * Math.PI) / 180);
@@ -220,7 +243,7 @@ export class BuildingFar {
     this.counts.evicted++;
   }
 
-  /** what is resident: cells, their records, the pool's blocks free, its budget [bytes] */
+  /** what is resident: cells, their records, the pool's blocks free, its budget [bytes]; the cells wanted, those still missing */
   stats() {
     let records = 0;
     for (const r of this.residents.values()) records += r.records;
@@ -232,6 +255,9 @@ export class BuildingFar {
       budgetBytes: this.pool.bytes,
       recordBytes: POOL_RECORD_BYTES,
       wanted: this.wanted.size,
+      /** the cells wanted not resident yet (the empty ones count as resident; those refused for the budget stay missing: a city past the
+       *  pool is not « all in ») — __bh.sys.flightReady (J8-A) */
+      missing: [...this.wanted.keys()].filter((k) => !this.residents.has(k)).length,
       ...this.counts,
     };
   }

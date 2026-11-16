@@ -899,7 +899,7 @@ fn benchCull(@builtin(global_invocation_id) g: vec3u, @builtin(num_workgroups) n
 // field of view, a pixel at least), those the near scene draws itself left out (within farU.y of its centre), drawn as boxes, as one
 // quad under farU.z px (Sam's decision of 16 Nov 2026), all into the buildings' shadow map. Their look a building's own triangles'
 // without a leaf (shadeLite, U2): the roof the orthophoto's, the walls stone with their windows.
-struct FarU { blocks: u32, maskR: f32, lodPx: f32, leaf: f32, roofMark: f32, _a: f32, _b: f32, _c: f32 };
+struct FarU { blocks: u32, maskR: f32, lodPx: f32, leaf: f32, roofMark: f32, region: f32, corrA: vec2f };
 @group(1) @binding(4) var<uniform> farU: FarU;
 @group(1) @binding(5) var<storage, read> farRec: array<u32>;
 @group(1) @binding(6) var<storage, read> farBlock: array<vec2u>;
@@ -907,6 +907,15 @@ struct FarU { blocks: u32, maskR: f32, lodPx: f32, leaf: f32, roofMark: f32, _a:
 @group(1) @binding(8) var<storage, read_write> farListW: array<u32>;
 @group(1) @binding(9) var<storage, read_write> farDraw: array<atomic<u32>, 8>;
 @group(1) @binding(10) var<storage, read> farListR: array<u32>;
+// (the near scene's measure: a place's distance to its corridor — the segment from its eye's end A through its centre to −A, the
+// buildings its cap kept within maskR of it, scenery-worker capDistance; A 0: the centre's disc)
+fn farMaskD(p: vec2f) -> f32 {
+  let a = farU.corrA;
+  let aa = dot(a, a);
+  if (aa < 1.0) { return length(p); }
+  let t = clamp(dot(p, a) / aa, -1.0, 1.0);
+  return length(p - t * a);
+}
 // (a record k of the pool as the bench's envelope: its base in the scene's frame, its heading there; its half-sides, its height to its
 // roof's top; w: its block's records count 0 — none)
 fn farEnv(k: u32) -> Env {
@@ -939,6 +948,16 @@ fn farEnv(k: u32) -> Env {
   e.c = vec4f(p, atan2(d.y, d.x));
   e.s = vec4f(f32(sides & 0xffffu) * 0.1, f32(sides >> 16u) * 0.1, eave + roof, farU.leaf);
   return e;
+}
+// (PLAN-J8 J8-A: a far building's own materials for shadeLite — its roof's and its walls' (building-cells.ts bytes 28, 29), its use
+// (30), a seed of its own, the region's (farU.region: roofs.ts regionOf, FAR_REGIONS) — packed in the visibility's g where a near
+// building's leaf goes, negative — its bit 23 set, exact in its f32 —: the mesh's code itself whole (a fraction of it read as the
+// ground's normal's bits, the night's far quads lit white — 16 Nov 2026): trace.wgsl farRoofAlbedo, farWallAlbedo — terrainRasterFarMat)
+fn farMat(k: u32) -> f32 {
+  let w = farRec[12u * k + 7u];
+  let seed = u32(farHash(k ^ 0x9e3779b9u) * 255.0);
+  let m = (w & 15u) | (((w >> 8u) & 15u) << 4u) | (((w >> 16u) & 15u) << 8u) | (seed << 12u) | ((u32(farU.region) & 7u) << 20u);
+  return -f32(m | 0x800000u);
 }
 // (a record's walls' and roof's heights over its ground [m], its roof's shape — building-cells.ts ROOF_CODES: 0 flat, 1 gabled, 2 hipped,
 // 3 mansard, 4 shed)
@@ -987,10 +1006,10 @@ fn farCull(@builtin(global_invocation_id) g: vec3u, @builtin(num_workgroups) n: 
   if (k >= farU.blocks * 256u) { return; }
   let e = farEnv(k);
   if (e.s.z <= 0.0) { return; }
-  // (the near scene's own buildings: within its reach of its centre — the scene's frame's origin —, not drawn twice; past it a band of
-  // 300 m where each far one stands from its own distance — the edge a scatter, not a line)
+  // (the near scene's own buildings: within its reach of its corridor — farMaskD, its cap's own measure —, not drawn twice; past it a
+  // band of 300 m where each far one stands from its own distance — the edge a scatter, not a line)
   let h = farHash(k);
-  if (length(e.c.xy) < farU.maskR + 300.0 * h) { return; }
+  if (farMaskD(e.c.xy) < farU.maskR + 300.0 * h) { return; }
   let R = length(vec3f(e.s.x, e.s.y, 0.5 * e.s.z)) + 0.5;
   let v = view(vec3f(e.c.xy, e.c.z + 0.5 * e.s.z));
   let tx = u.right.w;
@@ -1014,11 +1033,11 @@ fn farCull(@builtin(global_invocation_id) g: vec3u, @builtin(num_workgroups) n: 
   let k = farListR[bi];
   let e = farEnv(k);
   let v = view(farCorner(e, farParts(k), vi));
-  // (no leaf: shadeLite's look for a building's own triangles without one — its roof the orthophoto's, its walls stone with their
-  // windows, lit at night — U2; the near scene's leaf records are not theirs)
-  o.leaf = 0.0;
-  // (the mesh's code and a half — terrainRasterFar: shadeLite holds its roof's photograph's colour; farU.roofMark 0: the near look's)
-  o.bridge = farU.roofMark;
+  // (no leaf — the near scene's records are not theirs —: its own materials in its place, farMat — shadeLite's U2 look with them: its
+  // roof's and its walls' colours, its windows lit at night; none with the lever off — farU.roofMark 0: g 0, a building without a leaf)
+  o.leaf = select(0.0, farMat(k), farU.roofMark > 0.25);
+  // (the mesh's own code: a building's triangles — its materials in g, negative: terrainRasterFar)
+  o.bridge = 0.0;
   // (its cell's fade-in — 0 → 1 over a second once it is put: farFs keeps that share of its pixels, a scatter)
   o.pyl = vec4f(0.0, 0.0, 0.0, farCell[4u * farBlock[k >> 8u].x].w);
   o.clip = vec4f(v.x / u.right.w + u.output.z * v.z, v.y / u.up.w + u.output.w * v.z, u.forward.w, v.z);
@@ -1034,11 +1053,11 @@ fn farCull(@builtin(global_invocation_id) g: vec3u, @builtin(num_workgroups) n: 
   let top = view(vec3f(e.c.xy, e.c.z + e.s.z));
   let k = q[vi];
   let v = mix(c, top, k.y) + vec3f(k.x * max(e.s.x, e.s.y), 0.0, 0.0);
-  // (no leaf: shadeLite's look for a building's own triangles without one — its roof the orthophoto's, its walls stone with their
-  // windows, lit at night — U2; the near scene's leaf records are not theirs)
-  o.leaf = 0.0;
-  // (the mesh's code and a half — terrainRasterFar: shadeLite holds its roof's photograph's colour; farU.roofMark 0: the near look's)
-  o.bridge = farU.roofMark;
+  // (no leaf — the near scene's records are not theirs —: its own materials in its place, farMat — shadeLite's U2 look with them: its
+  // roof's and its walls' colours, its windows lit at night; none with the lever off — farU.roofMark 0: g 0, a building without a leaf)
+  o.leaf = select(0.0, farMat(rk), farU.roofMark > 0.25);
+  // (the mesh's own code: a building's triangles — its materials in g, negative: terrainRasterFar)
+  o.bridge = 0.0;
   // (its cell's fade-in — 0 → 1 over a second once it is put: farFs keeps that share of its pixels, a scatter)
   o.pyl = vec4f(0.0, 0.0, 0.0, farCell[4u * farBlock[rk >> 8u].x].w);
   o.clip = vec4f(v.x / u.right.w + u.output.z * v.z, v.y / u.up.w + u.output.w * v.z, u.forward.w, v.z);
@@ -1055,12 +1074,13 @@ fn farCull(@builtin(global_invocation_id) g: vec3u, @builtin(num_workgroups) n: 
   var o: MO;
   o.vis = meshShade(w);
   o.mot = vec4f(w.mot, 0.0);
-  o.id = select(0u, surfaceId(o.vis.g), floor(o.vis.a / ${RASTER_CODE_SCALE}.0) >= ${RASTER_CODE.mesh}.0);
+  // (its identity a building's without a leaf: g holds its materials, not a leaf)
+  o.id = select(0u, surfaceId(0.0), floor(o.vis.a / ${RASTER_CODE_SCALE}.0) >= ${RASTER_CODE.mesh}.0);
   return o;
 }
 @vertex fn farShadowVs(@builtin(vertex_index) vi: u32, @builtin(instance_index) bi: u32) -> @builtin(position) vec4f {
   let e = farEnv(bi);
-  if (e.s.z <= 0.0 || length(e.c.xy) < farU.maskR) { return vec4f(2.0, 2.0, 0.5, 1.0); }
+  if (e.s.z <= 0.0 || farMaskD(e.c.xy) < farU.maskR) { return vec4f(2.0, 2.0, 0.5, 1.0); }
   return sunClip(farCorner(e, farParts(bi), vi));
 }
 `;
@@ -1565,8 +1585,10 @@ export class SceneryRaster {
     if (this.far) this.device.queue.writeBuffer(this.far.cell, slot * 64, frame as Float32Array<ArrayBuffer>);
   }
   /** the near scene's reach left to it [m], a building's leaf (the material, for now), the quads' threshold [px]; the far roofs' mark
-   *  (0.5: terrainRasterFar — their photograph's colour held, FAR_ROOF_HUE; 0: the near look's desaturated roofs — a lever, J8-4) */
-  farParams(maskR: number, leaf: number, lodPx: number, roofMark = 0.5) {
+   *  (0.5: terrainRasterFar — their own materials, farMat; 0: a near building's without a leaf, generic — a lever, J8-A); the
+   *  near scene's corridor's end from its centre [m east, m north] (the mask measured as its cap is, farMaskD; null: a disc); the
+   *  region's index (FAR_REGIONS: its roofs' default material and its colours) */
+  farParams(maskR: number, leaf: number, lodPx: number, roofMark = 0.5, corridor: readonly [number, number] | null = null, region = 0) {
     if (!this.far) return;
     const v = new DataView(this.farUData);
     v.setUint32(0, this.far.blocks, true);
@@ -1574,6 +1596,10 @@ export class SceneryRaster {
     v.setFloat32(8, lodPx, true);
     v.setFloat32(12, Math.max(0, leaf), true);
     v.setFloat32(16, roofMark, true);
+    v.setFloat32(20, region, true);
+    // (vec2f at 24: the near scene's corridor's end, farMaskD)
+    v.setFloat32(24, corridor?.[0] ?? 0, true);
+    v.setFloat32(28, corridor?.[1] ?? 0, true);
     this.device.queue.writeBuffer(this.far.u, 0, this.farUData);
   }
   /** (the far boxes 54 vertices — their walls 36, their roof 18 —, the quads 6) */

@@ -221,7 +221,12 @@ export class EarthScenery {
     // crossed a 556 m cell at each turn of the head — the camera looked down, a new scene of 35–180 s asked, the old one with
     // its boxes under the craft kept meanwhile: a scene rebuilt over and over, never the one in view)
     const held = this.requestedCentre;
-    if (held && this.requested.endsWith(`:${mode}:${satellite}:${reach}:${this.ign}:${this.overture}:${this.lamps}:${this.corridor}`)) {
+    if (
+      held &&
+      this.requested.endsWith(
+        `:${mode}:${satellite}:${reach}:${this.ign}:${this.overture}:${this.lamps}:${this.corridor}:n${this.nearOnlyM}`,
+      )
+    ) {
       const off = Math.hypot((held.lat - wanted.lat / D) * 111320, wrapLon(held.lon - wanted.lon / D) * 111320 * Math.cos(held.lat * D));
       if (off < CENTRE_HOLD_M * reach * (this.fastFlight() ? QUICK_SHARE : 1)) c = held;
     }
@@ -249,7 +254,8 @@ export class EarthScenery {
     // (T8m: or a flight too fast for a full scene — the craft out of its box's half before one is ready —: quick scenes one
     // after the other, each centred where the craft will be — the renderer's lead —, until it slows down)
     const quick = this.fastFlight() || (eyeToDrawn > QUICK_COVER * sceneryBox(0, 0, mode, reach).radius && !this.applied.endsWith(":q"));
-    const key = `${c.key}:${mode}:${satellite}:${reach}:${this.ign}:${this.overture}:${this.lamps}:${this.corridor}${quick ? ":q" : ""}`;
+    // (PLAN-J8 J8-5: the near scene's reach left to the far layer in its key — a new one changes the scene, asked again)
+    const key = `${c.key}:${mode}:${satellite}:${reach}:${this.ign}:${this.overture}:${this.lamps}:${this.corridor}:n${this.nearOnlyM}${quick ? ":q" : ""}`;
     // (waited for — the settled frame, an offline render — until drawn, or failed and waiting to be tried again)
     this.wanted = key !== this.applied && !(key === this.requested && this.lastError);
     // (in flight: the next scene's data fetched ahead — the network idle otherwise until the craft leaves the hold, or while the
@@ -604,6 +610,8 @@ export class EarthScenery {
       keptReachM: d?.keptReachM ?? 0,
       /** the corridor the cap kept the buildings along, its half-length [m] (0: the centre's disc — a craft at rest, or off) */
       corridorM: d?.corridorM ?? 0,
+      /** (PLAN-J8 J8-5) its end at the eye from the centre [m east, m north] (null: the centre's disc) — the far layer's mask */
+      corridorA: d?.corridorA ?? null,
       clearedTrees: d?.clearedTrees ?? 0,
       cutHousesMs: d?.cutHousesMs ?? 0,
       /** of the buildings, the IGN's BD TOPO's (I5), and its tiles */

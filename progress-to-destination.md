@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-16 16:55 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-16 16:57 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous. Ce qui est fermé quitte le tableau « En cours » pour la ligne « Fermé récemment ».
@@ -63,7 +63,7 @@ l'état d'une mission ou d'un combat **non sauvé, dit** ; le réseau **« entre
 
 **Fermé aussi** : le plancher du raster sur GPU faible (15 nov., 23:46, proposer sous 15 images/s, décision de Sam).
 
-**La session du rendu (33d89754)** : **[PLAN-J8](docs/PLAN-J8-BATIMENTS.md)** — J8-2 fait ; J8-0 (c), (e) faits ; J8-1 fermé « sans effet » ; **J8-4 allumée par défaut** (décision de Sam, quads sous 8 px ; second lot : l'aspect U2, le toit, aucune bascule ; Toulon ~+0,6 ms, vue J0 dans le bruit) ; la teinte des toits lointains (l'orthophoto gardée, `farRoofHue`) écrite, non jugée ; **J8-5** : premier pas écrit et éteint (`farNearOnlyM`), la distance à choisir sur les captures de `j8-junction` et de `parcours-ville` ; J8-1b suspendu jusqu'à J8-5. [PLAN-J7](docs/PLAN-J7-FLUIDITE.md) en pause.
+**La session du rendu (33d89754)** : **[PLAN-J8](docs/PLAN-J8-BATIMENTS.md)**, ordre convenu (a) matériaux, (b) J8-5, (c) Paris, (d) J8-E puis J8-L — J8-2 fait ; J8-0 (c), (e) faits ; J8-1 fermé « sans effet » ; **J8-4 allumée par défaut** (décision de Sam) ; le masque le long du couloir et les matériaux de chaque bâtiment lointain écrits, non encore vus de nuit sur le mini ; **J8-5** : la jonction s'applique (proposition 1 km, à choisir par Sam sur la planche) ; J8-1b suspendu. Non poussé : 646eac75 et la suite, après le run du mini. [PLAN-J7](docs/PLAN-J7-FLUIDITE.md) en pause.
 
 **Priorité de Sam (16 nov., 11:30 UTC) : [PLAN-J8](docs/PLAN-J8-BATIMENTS.md), tous les bâtiments de la vue** (« c'est ça qui choque le plus ») — la suite de J7 en pause après J7-8b ; les deux sessions s'y mettent (rendu : couche GPU, scène proche ; approches : recensement, préparation des cellules, PWA) ; d'abord J8-0 (mesures) et J8-1 (le trou de 2 à 7 km).
 
@@ -9307,3 +9307,25 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   - (3) l'estimation au débit mesuré de chaque hôte ;
   - le passage (a) sur le mini dès le créneau de la session du rendu ;
   - J8-L et J8-E : les formats à convenir avec la session du rendu.
+
+### 2026-11-16 16:57 UTC — PLAN-J8 J8-A : le masque le long du couloir, la jonction appliquée, les matériaux de chaque bâtiment lointain (session 33d89754)
+
+- Destination : §19.13 (« le moins de différences visibles entre les qualités des bâtiments », J8-A décidé par Sam le 16 nov.), §7.
+- Fait (non commité au moment de l'entrée, poussé avec les captures) :
+  - Le masque de la couche suit le couloir de la scène (`farMaskD`, `stats().corridorA`). Il était un disque autour du centre, d'où des doubles au premier plan quand l'œil est à 2,6 km du centre.
+  - La jonction de J8-5 entre dans la clé de la scène. Sans cela, la changer ne redemandait aucune scène.
+  - Les matériaux de chaque bâtiment lointain : toit, murs, usage, une graine et la région, rangés en négatif dans le g de la visibilité (`farMat`), colorés comme les enregistrements proches (`farRoofAlbedo`/`farWallAlbedo`, `roofs.ts`). `renderer.farMaterials` sert de levier. `FAR_ROOF_HUE` est retiré.
+  - La marque lointaine ne passe plus par une fraction du code raster (62,5) : de nuit, les quads lointains marqués ainsi brillaient en blanc à l'horizon.
+  - `farBuildings().layer.missing` pour le signal « prêt » de la session des approches.
+  - L'e2e `j8-junction` : Hyères, la jonction à 1 km, l'heure remise à chaque capture, le témoin de J8-A de jour et de nuit (grille de `surfaceAt`, la couche dessinée puis non), les pertes du périphérique relevées.
+- Mesuré (kerr-mini, run 20261116-172520, avant les matériaux) :
+  - Toulon : 21 665 bâtiments gardés, 104 050 laissés à la couche.
+  - Hyères : 14 519 gardés, 46 030 laissés.
+  - GPU dans le bruit.
+  - Témoin de couleur de jour : −8 à +11 sur 255.
+  - Planche montrée dans T3.
+- Non établi :
+  - Les matériaux et la nuit sur le mini. Le run des matériaux a perdu, vraisemblablement, le périphérique GPU au changement de jonction (image noire, scène vide), et ses chiffres d'après sont écartés.
+  - Le gain de temps de scène à froid.
+  - Le diagnostic local hors ligne (M1 Max, données partielles) n'a pas reproduit les quads blancs.
+- Suite : run complet sur le mini après le créneau IGN de la session des approches, puis le choix de la jonction par Sam (proposition : 1 km), puis le push.

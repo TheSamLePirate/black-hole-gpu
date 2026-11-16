@@ -39,10 +39,16 @@ fn terrainRasterId(px: vec2f) -> u32 {
   return select(u32(t.g), 0u, t.a >= ${RASTER_CODE.mesh * RASTER_CODE_SCALE}.0);
 }
 // A building's leaf at this pixel — its own triangles' or its solid box's (g: the record's offset from the scenery's geomOffset
-// + 1, Q3) —; 0 none (a bridge's part, the ground, a tree).
+// + 1, Q3) —; 0 none (a bridge's part, the ground, a tree, a far building's — its g negative, its materials: terrainRasterFarMat).
 fn terrainRasterLeaf(px: vec2f) -> u32 {
   let t = textureLoad(terrainDist, vec2i(floor(px)), 0);
-  return select(0u, u32(t.g), floor(t.a / ${RASTER_CODE_SCALE}.0) == ${RASTER_CODE.mesh}.0);
+  return select(0u, u32(t.g), floor(t.a / ${RASTER_CODE_SCALE}.0) == ${RASTER_CODE.mesh}.0 && t.g > 0.5);
+}
+// (PLAN-J8 J8-A) A far building's materials at this pixel (scenery-raster.ts farMat: its g negative — roof 4 bits, walls 4, use 4, a
+// seed 8, the region 3, bit 23 set); 0 none.
+fn terrainRasterFarMat(px: vec2f) -> u32 {
+  let t = textureLoad(terrainDist, vec2i(floor(px)), 0);
+  return select(0u, u32(-t.g), floor(t.a / ${RASTER_CODE_SCALE}.0) == ${RASTER_CODE.mesh}.0 && t.g < -0.5);
 }
 // The nearest surface's distance [m] at this pixel (b: the ground's, or an instance's proxy before it; 0 none).
 fn terrainRasterDepth(px: vec2f) -> f32 { return textureLoad(terrainDist, vec2i(floor(px)), 0).b; }
@@ -67,9 +73,8 @@ fn terrainRasterLamp(px: vec2f) -> bool { let t = textureLoad(terrainDist, vec2i
 fn terrainRasterTag(px: vec2f) -> f32 { let t = textureLoad(terrainDist, vec2i(floor(px)), 0); return select(0.0, t.g, floor(t.a / ${RASTER_CODE_SCALE}.0) == ${RASTER_CODE.turbine}.0); }
 // A bridge's part's own triangles at this pixel (system/scenery-raster.ts meshFs): the material's, no windows.
 fn terrainRasterBridgeMesh(px: vec2f) -> bool { return terrainRasterCode(px) == ${RASTER_CODE.bridgeMesh}.0; }
-// A far building's envelope at this pixel (PLAN-J8 J8-4, scenery-raster.ts farVs: the mesh's code and a half — floor() the mesh's):
-// its roof's colour the orthophoto's held more — the near meshes' grey of a leaning photograph read as roofs gone grey far off
-fn terrainRasterFar(px: vec2f) -> bool { let a = textureLoad(terrainDist, vec2i(floor(px)), 0).a / ${RASTER_CODE_SCALE}.0; return floor(a) == ${RASTER_CODE.mesh}.0 && fract(a) > 0.25; }
+// A far building's envelope at this pixel (PLAN-J8 J8-4, scenery-raster.ts farVs: the mesh's code, its g negative — its materials)
+fn terrainRasterFar(px: vec2f) -> bool { let t = textureLoad(terrainDist, vec2i(floor(px)), 0); return floor(t.a / ${RASTER_CODE_SCALE}.0) == ${RASTER_CODE.mesh}.0 && t.g < -0.5; }
 // How many levels coarser than the reference patch the ground here was drawn from (0 the patch — and what stands on it —, 1 its
 // first coarser ring, …: system/terrain-raster.ts ringFs; 0 none).
 fn terrainRasterLevelStep(px: vec2f) -> f32 {

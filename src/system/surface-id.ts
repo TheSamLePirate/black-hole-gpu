@@ -72,8 +72,8 @@ export function decodeSurface(texel: ArrayLike<number>, generation: number): Sur
   let level = -1;
   if (CODES[code]) {
     kind = CODES[code]!;
-    // (a building's own triangles: g its leaf; the boxes and marks carry none)
-    if (code >= RASTER_CODE.mesh) object = Math.round(g);
+    // (a building's own triangles: g its leaf; the boxes and marks carry none; a far building's g negative — its materials, no leaf)
+    if (code >= RASTER_CODE.mesh) object = Math.max(0, Math.round(g));
   } else if (code > 0 || ground > 0 || nearest > 0) {
     // (a tree's proxy: g its cell + 1, a 0 — scenery-raster.ts proxyFs —; the ground: its code 1 + rank + 8 × step, g 0)
     if (g > 0) {
