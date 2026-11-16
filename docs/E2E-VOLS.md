@@ -46,7 +46,9 @@ Les chiffres sont ceux de cette analyse, avec ses limites (§1.4).
     placement et la fin des attentes, puis replacer et engager. Une fois en vol, asserter à chaque phase **ce qui est réellement
     appliqué** : autopilote et autothrottle engagés (`jetModes.alt`/`spd` non nuls), **la poussée** (`pilot.engineNow` > 0 en croisière,
     pas le levier `pilot.throttle`), **le train** selon la phase (sorti et verrouillé avant le toucher, rentré en croisière), la
-    vitesse au-dessus du décrochage et une assiette plausible (pas de 50° de cabré à 60 m/s laissé 30 s). Un geste manuel (manche,
+    vitesse au-dessus du décrochage et une assiette plausible (pas de 50° de cabré à 60 m/s laissé 30 s) ; **au sol, sur la piste,
+    l'axe** : aligné avant la mise en puissance (écart de cap et écart latéral à l'axe bornés), tenu pendant le roulage jusqu'à la
+    rotation (Sam, 16 nov. : un A320 vu mal aligné au décollage). Un geste manuel (manche,
     manette) se rend : l'avion est repris (autopilote réengagé ou pilotage scripté) et l'état d'après est asserté. Un état absurde
     qui laisse passer le test est un défaut du test.
 
@@ -522,7 +524,7 @@ expect(r.log.some((l) => /Hard landing|collapsed|tipped/.test(l))).toBe(false);
 11. `expect(app.cdp.errors).toEqual([])` ; `afterAll` : `app?.close(); stopServer();`.
 12. Le faire échouer sans le correctif qu'il protège (un test de régression a déjà passé dans les deux cas).
 13. L'état de vol asserté à chaque phase (règle 13 du §0) : AP/ATHR engagés, `engineNow`, train, vitesse au-dessus du
-    décrochage, assiette ; gelé pendant les attentes ; un geste manuel rendu et l'état d'après vérifié.
+    décrochage, assiette ; au sol l'axe de piste (cap et écart latéral) avant la mise en puissance et pendant le roulage ; gelé pendant les attentes ; un geste manuel rendu et l'état d'après vérifié.
 
 ### Fichiers modèles
 
