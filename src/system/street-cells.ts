@@ -156,3 +156,13 @@ export function readPiece(buf: ArrayBuffer, i: number): StreetPieceRecord {
     seed: v.getUint32(o + 20, true),
   };
 }
+
+/** the prepared streets' cache (Cache Storage): the format in its name — a new format never reads an old one's cells */
+export const STREET_CACHE = `kerr-street-v${STREET_FORMAT}`;
+/** a street cell's key in it (a URL: Cache Storage's keys are requests; never fetched) */
+export const streetCacheUrl = (origin: string, x: number, y: number) => `${origin}/__street/${STREET_FORMAT}/${CELL_Z}/${x}/${y}.ksc`;
+/** OpenMapTiles' z 14 tile a street cell is prepared from (OpenFreeMap's — scenery-sources.ts osmUrl's, built here without that module) */
+export const streetRoadsUrl = (x: number, y: number) => {
+  const n = 2 ** (CELL_Z - 1);
+  return `https://tiles.openfreemap.org/planet/latest/${CELL_Z - 1}/${(((x >> 1) % n) + n) % n}/${y >> 1}.pbf`;
+};

@@ -2144,6 +2144,13 @@ pending), the building cells' pool idle (nothing queued, running, nor waiting pa
 the far layer on, its wanted cells all resident (`farBuildings().layer.missing`, when the layer says it). `why`: what is not yet, in
 words; `cells`: the pool's stats; `far`: the layer's. The J8-A e2e waits on it before the take-off.
 
+### `__bh.sys.streets` (PLAN-J8 J8-L: the streets' cells' pool)
+
+The lamps and the cars' roads in cells (`src/system/street-cells.ts`, `street-prep.ts`; the cell worker's `kind: "street"`): a z 15 cell's
+OpenMapTiles z 14 roads, the four building cells under it (their town), its four street cells prepared and kept in Cache Storage
+`kerr-street-v1`, the asked one handed — its own pool (`cell-workers.ts` `streetPool()`, two workers). As `__bh.sys.cells`: `want(list)`,
+`stats()`, `got()`, `clear()`. `flightReady()` waits on it once asked. *Used in:* `j8-street-cells.e2e.test.ts`.
+
 ### `__bh.sys.runways()` → `RunwayFrame[]`
 
 The Earth's runways as drawn (`sites.ts` `EARTH_RUNWAYS`): each its `site`, its threshold's `origin` on the WGS84

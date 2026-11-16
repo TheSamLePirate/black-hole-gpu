@@ -63,7 +63,7 @@ import type { GameMode, ModeState } from "./game/modes";
 import { DeckPicker } from "./a320/deckpick";
 import { fieldByCode } from "./world/runways";
 import { approachesForAsync } from "./world/approaches";
-import { cellPool } from "./system/cell-workers";
+import { cellPool, streetPool, streetPoolMade } from "./system/cell-workers";
 import type { CellWant } from "./system/cell-pool";
 
 /** the A320 deck's picker (a320DeckAt: the controls seen from the seat) */
@@ -716,12 +716,38 @@ export function installBh(c: BhContext) {
           if (renderer.earthScenery?.pending) why.push("near scene pending");
           const p = cellPool().stats();
           if (p.queued || p.running || p.beyond) why.push(`cells: ${p.queued} queued, ${p.running} running, ${p.beyond} past the bound`);
+          // (the streets' cells — J8-L —, when asked)
+          const st = streetPoolMade()?.stats();
+          if (st && (st.queued || st.running || st.beyond))
+            why.push(`street cells: ${st.queued} queued, ${st.running} running, ${st.beyond} past the bound`);
           const far = renderer.farBuildingsOn
             ? ((await renderer.farBuildings()).layer as { missing?: number; refused?: number } | null)
             : null;
           if (far?.missing) why.push(`far layer: ${far.missing} wanted cells not resident`);
           return { ready: why.length === 0, why, cells: p, far };
         },
+        /** PLAN-J8 J8-L: the streets' cells' pool (street-cells.ts — the lamps, the cars' roads), as `cells`: `want(list)`, `stats()`,
+         *  `got()` (key, bytes, from the prepared cache, ms), `clear()` */
+        streets: (() => {
+          const got = new Map<string, { bytes: number; cached: boolean; ms: number; at: number }>();
+          let on = false;
+          const P = () => {
+            const p = streetPool();
+            if (!on) {
+              on = true;
+              p.listen((c) =>
+                got.set(`${c.x}/${c.y}`, { bytes: c.buf.byteLength, cached: c.cached, ms: Math.round(c.ms), at: performance.now() }),
+              );
+            }
+            return p;
+          };
+          return {
+            want: (l: CellWant[]) => P().want(l),
+            stats: () => P().stats(),
+            got: () => [...got].map(([key, v]) => ({ key, ...v })),
+            clear: () => got.clear(),
+          };
+        })(),
         /** the craft's gear (gear.ts GEARS: each leg on the craft's axes) */
         gears: () => GEARS,
         /** the Earth's runways as drawn (sites.ts EARTH_RUNWAYS: threshold, landing direction — WGS84) */

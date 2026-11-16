@@ -3,6 +3,7 @@
 // cores or more — the scenery's worker, the CPU worker and the page's own thread keep theirs.
 import { CellPool, type CellExecutor, type CellStore, CELL_CACHE, cellCacheUrl } from "./cell-pool";
 import { geoidMap } from "./geoid-grid";
+import { STREET_CACHE, streetCacheUrl } from "./street-cells";
 import { prepareZoneCells, type ZoneCells } from "./zone-cells";
 
 type Reply = { id: number; buf?: ArrayBuffer; ms?: number; error?: string };
@@ -16,7 +17,12 @@ export class CellWorkers implements CellExecutor {
   private geoidGiven = false;
   private calls = new Map<number, { ok: (r: { buf: ArrayBuffer; ms: number }) => void; no: (e: Error) => void }>();
 
-  constructor(size = (navigator.hardwareConcurrency ?? 4) >= 8 ? 3 : 2, url = "cell-worker.js") {
+  constructor(
+    size = (navigator.hardwareConcurrency ?? 4) >= 8 ? 3 : 2,
+    url = "cell-worker.js",
+    /** the cells it prepares: the buildings' (J8-3), the streets' (J8-L) */
+    private kind: "building" | "street" = "building",
+  ) {
     this.size = size;
     for (let i = 0; i < size; i++) {
       const w = new Worker(new URL(url, location.href), { type: "module" });
@@ -43,7 +49,7 @@ export class CellWorkers implements CellExecutor {
         this.calls.delete(id);
         no(new Error("cancelled"));
       });
-      slot.w.postMessage({ id, x, y });
+      slot.w.postMessage({ id, x, y, kind: this.kind });
     }).finally(() => {
       slot.busy = false;
     });
@@ -80,6 +86,28 @@ let pool: CellPool | null = null;
 export function cellPool(): CellPool {
   pool ??= new CellPool(new CellWorkers(), cellStore);
   return pool;
+}
+
+/** the prepared streets' cache, read by the page (PLAN-J8 J8-L) */
+export const streetStore: CellStore = {
+  async get(x, y) {
+    try {
+      const r = await (await caches.open(STREET_CACHE)).match(streetCacheUrl(location.origin, x, y));
+      return r ? await r.arrayBuffer() : null;
+    } catch {
+      return null;
+    }
+  },
+};
+
+/** the streets' pool (PLAN-J8 J8-L: the lamps and the cars' roads in cells — street-cells.ts), its own workers (two): made at its
+ *  first use; the far layer asks it as it asks cellPool, its reach its own (the lamps' ~12 km — the render session's parameter) */
+let streets: CellPool | null = null;
+/** the streets' pool if it was made (null: never asked — flightReady reads it without making its workers) */
+export const streetPoolMade = () => streets;
+export function streetPool(): CellPool {
+  streets ??= new CellPool(new CellWorkers(2, "cell-worker.js", "street"), streetStore);
+  return streets;
 }
 
 /** an offline zone's cells (PLAN-J8 J8-6, pwa-zones.ts): prepared by a worker of their own — the download runs behind the game —,
