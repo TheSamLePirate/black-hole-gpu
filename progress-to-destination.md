@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-16 10:06 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-16 10:18 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous. Ce qui est fermé quitte le tableau « En cours » pour la ligne « Fermé récemment ».
@@ -8748,3 +8748,12 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
 - Preuves (observé, ce Mac) : hud-gallery avant (80cbeaf6) / après — la finale de Le Bourget au même instant : la ligne disparue, rien d'autre
   déplacé ([captures](docs/progress/approches/) `hud-horizon-*`) ; e2e hud-layout 10/10 ; unitaires i18n, schéma 18/18.
 - Limites : VOL-VAISSEAUX et apprendre-vaisseaux ne décrivaient pas la ligne (la sphère de navigation est un instrument, inchangée).
+
+### 2026-11-16 10:18 UTC — L'horloge de la flotte en roue libre, même correction (session 1feb2f7f)
+
+- Contribution à la destination : §19 (des appareils qui restent où le monde les met) ; suite du lot de l'axe au décollage.
+- Réalisé : `system/our-coast.ts` (les appareils de la flotte qu'on ne pilote pas, intégrés à part) avançait comme `motion.ts` avant
+  sa correction — le pas demandé pour la position, le pas arrondi pour l'horloge : loin de 2067, ~0,4 m/s de dérive contre la Terre. Même
+  correction (le pas que l'horloge prend vraiment). `system/iss.ts` relu : il rend l'heure exacte et avance de `n × span/n` — pas concerné.
+- Preuves : vérifié statiquement (la même identité que dans `motion.ts`, mesurée là) ; `fleet-coast`, `fleet` 7/7. Non mesuré sur un vol de
+  la flotte.

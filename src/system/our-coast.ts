@@ -126,7 +126,9 @@ export function coastHome(X: Vec3, V: Vec3, t0: number, simDt: number, subCap = 
       }
       if (aAir > 0) dt = Math.min(dt, Math.max(0.05 / aAir, 1e-6));
     }
-    dt = Math.min(dt, tEnd - t);
+    // (the step the clock can take — t counted from 2067 in M: far from it, the clock's rounded step and the craft's exact one
+    // drifted the craft some 0.4 m/s against the Earth; controller/motion.ts, 16 Nov 2026)
+    dt = t + Math.min(dt, tEnd - t) - t;
     let last = dt;
     const tn = t + dt;
     if (!airy && !(ground && gearHeight(ground, X, t) < 1e5)) {

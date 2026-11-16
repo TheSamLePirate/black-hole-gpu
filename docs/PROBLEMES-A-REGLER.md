@@ -14,8 +14,8 @@ connue ou supposée, la piste. Une entrée réglée est barrée avec le commit q
 - **Réglé** : `motion.ts` avance l'appareil du pas que l'horloge prend vraiment (`(t + dt) − t`). Vérifié : sonde 2,02 m → 0,24 m en 8 s ;
   `takeoff-axis` 7/7 (A320 et F-35, Le Bourget, la piste la plus proche, Edwards, la pluie : ≤ 0,1° et ≤ 0,9 m jusqu'à VR) ; vol et train
   unitaires 91/91.
-- **Reste** : `system/our-coast.ts` (les appareils de la flotte en roue libre) et `system/iss.ts` avancent aussi `X += V dt` à côté d'un
-  temps cumulé : même défaut possible loin de 2067 (non mesuré) — à vérifier par la même sonde.
+- **Les deux autres intégrateurs** (relus le même jour) : `system/our-coast.ts` (la flotte en roue libre) avait le même schéma — corrigé de
+  même ; `system/iss.ts` rend l'heure exacte et avance de `n × span/n` — pas concerné. Non mesuré en vol pour la flotte.
 
 ## La piste du HUD contre la piste dessinée : alignée ; les autres pistes des sites du jeu flottaient (réglé) ; la vue en mouvement non mesurée (relevé le 16 novembre 2026, question de Sam, e2e `hud-runway-drawn`)
 
