@@ -8459,3 +8459,15 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   séparé), `__bh.sys.approaches(code)` (PLAN-APPROCHES) et `__bh.tars.voiceSay` (audit TA-22) reçoivent leur section, les champs relus
   dans le code (`world/approaches.ts` `Approach`).
 - Preuves : `bun scripts/bh-api.ts --check` — « docs/BH-API.md covers all 201 ». Documentation seule, aucun code changé.
+
+### 2026-11-16 03:05 UTC — Le banc de nuit de kerr-mini : sa première nuit lancée par launchd
+
+- Contribution à la destination : §8 (la cadence suivie chaque nuit sans intervention ; une régression de plus de 10 % sur la médiane des
+  nuits écrite en alerte) — l'outil QA-12 de l'audit, en marche.
+- Réalisé : `bun scripts/nightly-bench.ts fetch` — la nuit du 16 nov. ajoutée à `docs/perf/nightly-mini.jsonl` (4 lignes).
+- Preuves (mesuré, kerr-mini, clone `~/kerr-nightly`, LaunchAgent 03:30 heure du mini) : 2026-11-16 02:30 UTC, commit f2985d54, état
+  thermique Nominal au départ, J0 vol mesuré : **GPU p50 44,8 ms, p95 49,8 ms**, 22,4 images/s (la nuit d'essai lancée à la main le
+  15 nov. à 09:15 UTC : 46,0 / 51,6 ms) ; aucune alerte. C'est la première nuit lancée par launchd (celle du 15 bloquée sur TCC).
+- Limites : une seule nuit automatique ; la médiane des nuits encore courte (4 lignes, dont 2 sans commit) ; le palier de 40 ms du mini
+  non atteint (44,8 ms).
+- Suite : laisser les nuits s'accumuler ; relire `fetch` chaque matin.
