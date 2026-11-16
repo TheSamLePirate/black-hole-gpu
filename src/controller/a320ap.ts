@@ -16,7 +16,7 @@ import { fromRunway, glideHeight, ILS, ilsReading, type IlsRunway, onRunway, run
 import { gcCourse, gcDist } from "../game/flightplan";
 import type { PilotInput } from "../pilot";
 import { findRunway, runwayOf, syncRunwayLevel } from "./ils";
-import { groundMsl, runwayOfApproach } from "./approach";
+import { groundJoinMsl, groundMsl, runwayOfApproach } from "./approach";
 import { floorAt, followJoin, type JoinPlan, PLAN, planJoin } from "../game/approach-plan";
 import type { CameraController } from "../controls";
 
@@ -225,19 +225,20 @@ export interface A320App {
 
 /** The join from where the craft is. */
 const joinFrom = (W: IlsRunway, g: { lat: number; lon: number; alt: number; track: number }) => ({
-  plan: planJoin(W, { lat: g.lat, lon: g.lon, alt: g.alt, trk: g.track }, groundMsl, { descDeg: 2.5 }),
+  plan: planJoin(W, { lat: g.lat, lon: g.lon, alt: g.alt, trk: g.track }, groundJoinMsl, { descDeg: 2.5 }),
   i: 0,
 });
 
 const INTERCEPT_ALONG = 13_000;
 
-/** The highest ground under the approach's legs [m over the sea]: the axis from 4 to 26 km out, 7 km either side. */
+/** The highest ground under the approach's legs [m over the sea]: the axis from 4 to 26 km out, 7 km either side — the join's, so the
+ *  ground drawn counted (groundJoinMsl). */
 function legsGround(W: IlsRunway): number {
   let top = 0;
   for (let d = 4000; d <= 26_000; d += 1000)
     for (let x = -7000; x <= 7000; x += 1000) {
       const p = fromRunway(W, -d, x);
-      top = Math.max(top, groundMsl(p.lat, p.lon));
+      top = Math.max(top, groundJoinMsl(p.lat, p.lon));
     }
   return top;
 }

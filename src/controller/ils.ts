@@ -5,7 +5,7 @@
 // flight plan, and its end: the approach engaged as the plan reaches its runway.
 // (Its methods, out of controls.ts: installed on its prototype — `this` the controller.)
 import { fieldCached } from "../world/runways";
-import { groundMsl, sayResolved } from "./approach";
+import { groundJoinMsl, groundMsl, sayResolved } from "./approach";
 import { worldRunwaySites, worldSite } from "../world/fieldsite";
 import { worldRunwaysNow } from "../world/runways3d";
 import { approachSpeed } from "../game/trap";
@@ -252,7 +252,7 @@ function ilsStart(
   this.ilsRun = newIlsRun(W, o.hold ?? 0, o.base);
   // (the join planned now — guide() would at its first frame —: its first altitude said in the clearance)
   if (!o.base && !(o.hold && o.hold > 0))
-    this.ilsRun.join = { plan: planJoin(W, { lat: g.lat, lon: g.lon, alt: g.alt, trk: g.track }, groundMsl), i: 0 };
+    this.ilsRun.join = { plan: planJoin(W, { lat: g.lat, lon: g.lon, alt: g.alt, trk: g.track }, groundJoinMsl), i: 0 };
   this.onRadio?.(
     o.base
       ? tf("{0} tower: cleared to land, runway {1}", W.icao ?? W.name, runwayId(W.hdg, W.des))
@@ -392,7 +392,7 @@ function guide(c: CameraController, R: IlsRun) {
   // (the join planned from here — PLAN-APPROCHES AP2 —: at the approach's first frame, and again after a missed approach; not
   // for a hold at the initial fix, nor a visual circuit's base)
   if (R.phase === "toIaf" && R.hold <= 0 && (!R.join || R.replan)) {
-    R.join = { plan: planJoin(R.rwy, { lat: g.lat, lon: g.lon, alt: g.alt, trk: g.track }, groundMsl), i: 0 };
+    R.join = { plan: planJoin(R.rwy, { lat: g.lat, lon: g.lon, alt: g.alt, trk: g.track }, groundJoinMsl), i: 0 };
     R.replan = false;
   }
   const out = ilsStep(R, { lat: g.lat, lon: g.lon, alt: g.alt, trk: g.track, gs: g.gs, vs: g.vs, onGround }, vAppOf(), dt);

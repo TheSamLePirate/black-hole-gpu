@@ -4,7 +4,7 @@
 // clear the slope by 150 m and the detail comes within 90 m of it (`near`) or above it (`hit`); where the detail stands over the data
 // by more than 300 m (`over300` — a join's floor inside it); the histogram of the detail's greatest excess (< 50, 100, 200, 300, more).
 //
-//   bun scripts/approach-detail-beyond.ts [--joins]   (--joins: the two planned joins' legs out of the corridor — 18.5 km since 8b683069 —,
+//   bun scripts/approach-detail-beyond.ts [--joins [--data-joins]]   (--joins: the two planned joins' legs out of the corridor — 18.5 km since 8b683069 —,
 //                                                     their height over the detailed ground: `near` under 50 m, `hit` under 0)
 import { readdirSync } from "node:fs";
 const R = `${import.meta.dir}/../`;
@@ -13,10 +13,15 @@ const { geoidDeg } = await import(R + "src/system/geoid-grid");
 const { loadHeights } = await import(R + "src/system/heights-file");
 const { setGroundHeights, groundRelief, groundBare, bodyFixedOf } = await import(R + "src/system/our-surface");
 const { earthHeightSampler } = await import(R + "src/terrain");
-const { runwayOfApproach, groundMsl } = await import(R + "src/controller/approach");
+const { runwayOfApproach, groundMsl, groundJoinMsl } = await import(R + "src/controller/approach");
 const { fromRunway, glideHeight, ILS, onRunway } = await import(R + "src/game/ils");
 const { planJoin } = await import(R + "src/game/approach-plan");
 const JOINS = process.argv.includes("--joins");
+// (the joins planned as the game plans them — their floors over the ground drawn, Sam 16 Nov 2026 —; --data-joins: over the data alone, as before)
+const joinGround = process.argv.includes("--data-joins") ? groundMsl : groundJoinMsl;
+// (--every K: one end in K — the drawn ground's detail is slow to plan over: a sample, the same for both ways)
+const EVERY = Number(process.argv[process.argv.indexOf("--every") + 1]) || 1;
+let endNo = 0;
 const { approachesOf, decodeApproachTile } = await import(R + "src/world/approaches");
 const { decodeTile } = await import(R + "src/world/runways");
 const fileGet = async (u: string) => new Response(Bun.file(R + "assets/" + u.replace(/^.*?assets\//, "")));
@@ -52,6 +57,7 @@ for (const f of readdirSync(R + "assets/runways/v1").filter((x) => /^t-?\d+_-?\d
     for (const ap of list) {
       if (seen.has(ap.rwy)) continue;
       seen.add(ap.rwy);
+      if (endNo++ % EVERY) continue;
       ends++;
       const W = runwayOfApproach(a, ap, groundMsl);
       if (JOINS) {
@@ -65,7 +71,7 @@ for (const f of readdirSync(R + "assets/runways/v1").filter((x) => /^t-?\d+_-?\d
         ] as const) {
           const p0 = fromRunway(W, along, 0);
           const alt = Math.max(W.elev + 1500, groundMsl(p0.lat, p0.lon) + 600);
-          const P = planJoin(W, { lat: p0.lat, lon: p0.lon, alt, trk: (trk * Math.PI) / 180 }, groundMsl);
+          const P = planJoin(W, { lat: p0.lat, lon: p0.lon, alt, trk: (trk * Math.PI) / 180 }, joinGround);
           const pts = [{ lat: p0.lat, lon: p0.lon, alt }, ...P.pts.map((q) => ({ lat: q.lat, lon: q.lon, alt: q.alt }))];
           for (let k = 1; k < pts.length; k++) {
             const A = pts[k - 1]!,

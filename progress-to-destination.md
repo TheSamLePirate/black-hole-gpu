@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-16 11:33 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-16 11:49 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous. Ce qui est fermé quitte le tableau « En cours » pour la ligne « Fermé récemment ».
@@ -48,7 +48,7 @@ J4 (fermé, sortie non atteinte), J5 et J6 (fermés).
 | Rendu (33d89754) | J4 / J5 — l'eau, les volumes, la généralisation | **fermés** ([PLAN-J4](docs/PLAN-J4-VOLUMES.md), [PLAN-J5](docs/PLAN-J5-GENERALISATION.md)) : l'eau à demi-rythme (J5-5, −6,0 à −6,4 ms, l'image la même) ; le sol à demi-rythme laissé au joueur (J5-6, réglage « demi » : −1,9 à −3,2 ms ; « auto » à chaque pixel) ; la FFT de la mer en deux passes (−0,9 ms) ; la carte d'ombre des arbres (−2,8 ms, forêt) ; Sam a refusé les arbitrages d'image (MSAA 1×, petits arbres, nuages amortis). Postes lourds restants : l'eau 16,2, les nuages d'orage 16,5, le décor d'une forêt ~7 ms |
 | Rendu (33d89754) | Mesures tenues | la borne du M1 Max **à 30** : essayée à 40 le 15 au soir, non tenue (soutenu 26,4 et 34,5 images/s, deux runs — [J0-CONTRAT §2](docs/J0-CONTRAT.md)) ; le coût de l'appareil 3,5–4,5 ms, dont le MSAA 4× 4–5 ms (gardé) |
 | Audit vagues 3–4 et 6 (1feb2f7f) | [09-priorites-todo](docs/audit-2026-11-10/09-priorites-todo.md) | **faits** : 3.1–3.2 réseau (RD0–RD2), 3.3 sauvegardes (une clé par sauvegarde ; avion, systèmes des vaisseaux et de l'A320 — ce dernier par J6-4), 3.4–3.5 vol, 3.6–3.7 TARS, 3.10 e2e honnêtes, 4.2 temps et onglet masqué, 4.3 `Settings`/`ViewPose`, 4.8 `main()` découpé ; vague 6 hors rendu (QA, AR, RD4/RD5, FX). **Reste** : l'état d'une mission ou d'un combat (Sam), IndexedDB et l'autosauvegarde hors frame (AR-05), FX-19 (fraîcheur des écrans, à mesurer), FX-21 |
-| Vol, approches, e2e de vol (1feb2f7f) | E2E-VOLS règle 13 ; demandes de Sam du 16 nov. | **fait** : outil commun `flight-state.ts`/`held.ts`, garde statique, 23 e2e du domaine (09:20) ; **en cours** : l'axe au décollage (horloge du vol corrigée), la piste du HUD, le HUD sans ligne d'horizon ; **ensuite** : l'alarme GEAR UP hors approche, le débriefing ouvert en vol |
+| Vol, approches, e2e de vol (1feb2f7f) | E2E-VOLS règle 13 ; demandes de Sam du 16 nov. ; **PLAN-J8** | **fait le 16 nov.** : règle 13 (outil, garde, 23 e2e), bandeau et `app.scenario`, l'axe au décollage (horloge du vol), la piste du HUD, l'alarme du train, le débriefing, l'Auto-GCAS, la ligne d'horizon, les jonctions sur le sol dessiné ; **maintenant : PLAN-J8** (J8-0 a/b/d, J8-3, J8-6, J8-7) ; **en pause** : le contour HUD en virage, la règle 13 des autres domaines, la garde du bandeau (338 en attente) |
 
 **Fermé récemment** : **PLAN-APPROCHES** (16 nov. : AP0–AP10 et AP-R menés — données réelles, choix, jonction, A320, carte, radar, TSD, crew, HUD, directeur de vol, roue, audio, campagne mondiale et échantillon volé ; OIFK posé après J7-1 le 16 nov. : échantillon F-35 9/9, A320 5/5) ; **J3** (15 nov., confirmé par Sam ; J3-R fait 20:48) ; **le repli du raster vers le tracé retiré** (15 nov., 20:48, décision (b)) ; **PLAN-J6** (15 nov., 20:35 : les neuf parcours en e2e, sept défauts corrigés) ; l'eau étagée E1 (−1,55 ms) et E2 (−0,5 ms), E3 non ouvert ; la classification lot 1 (sur terre −1,15 ms), lot 2 non ouvert
 (sous 1 ms) ; AR-07 (le renderer sur `ViewPose`) ; le retrait R1 des anciens chemins (13 nov.) ; le noyau du monde visé compilé pendant le voyage
@@ -8848,3 +8848,18 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
 - Limites : la cause GPU n'est pas confirmée (les nuages du jour suspects) ; J7-5 non mesuré.
 - Suite : PLAN-J8 — J8-0 (c), (e) et J8-1.
 
+### 2026-11-16 11:49 UTC — Les paliers des jonctions sur le sol dessiné (décision de Sam) ; mes lignes en pause pour PLAN-J8 (session 1feb2f7f)
+
+- Contribution à la destination : §19 (une approche ne traverse jamais une colline visible) ; PLAN-APPROCHES, la question des jonctions hors
+  du couloir de J7-1 — Sam (16 nov.) : « Sol dessiné ».
+- Réalisé : `controller/approach.ts` `groundJoinMsl` (le plus haut des données et du sol dessiné, détail procédural compris ; dans le
+  couloir les deux sont égaux) pour les jonctions planifiées du F-35 (`ils.ts`, deux appels) et de l'A320 (`a320ap.ts`, et ses
+  `legsGround`) ; les pentes et les hauteurs du guidage restent sur les données (`groundMsl`, question 4). `scripts/approach-detail-beyond.ts`
+  planifie comme le jeu (`--data-joins` : l'ancien, `--every K` : un échantillon).
+- Preuves (mesuré, hors navigateur) : sur le même échantillon (1 673 extrémités, une sur 40), une branche de jonction sous le sol dessiné
+  54 → **0**, à moins de 50 m 63 → **0** ; unitaires des approches 146/146. Plus tôt dans la journée : l'Auto-GCAS (fad0da5c, e2e gcas 3/3
+  sur kerr-mini).
+- Limites : pas de campagne mondiale entière (la planification sur le sol dessiné est ~5× plus lente hors ligne) ; pas de vol e2e rejoué.
+- **En pause pour PLAN-J8** (Sam, 16 nov., 11:30) : le contour HUD en virage (non mesuré ; attend l'e2e et le scénario cités par Sam) ; la
+  règle 13 pour les ~120 e2e d'autres domaines (`PENDING`) ; les 338 e2e en attente de la garde du bandeau ; « aucune alarme de train hors
+  approche » dans `flightState`.

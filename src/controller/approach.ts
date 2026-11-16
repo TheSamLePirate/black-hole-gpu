@@ -12,7 +12,7 @@ import { isAircraft } from "../vessels";
 import { fleet } from "../fleet";
 import { t, tf } from "../i18n";
 import { geoidDeg } from "../system/geoid";
-import { bodyFixedOf, groundBare } from "../system/our-surface";
+import { bodyFixedOf, groundBare, groundRelief } from "../system/our-surface";
 import { wgs84Direct, wgs84Inverse } from "../system/ellipsoid";
 import { daysOf } from "../system/solar";
 import { weatherAt, windFromAt } from "../weather";
@@ -390,6 +390,15 @@ export function runwayOfApproach(f: Airfield, a: Approach, ground: (lat: number,
  *  PLAN-APPROCHES §9 q. 4 — on the detail 360 of the F-35's airfields had no end to fly, 92 on the data). */
 export const groundMsl = (lat: number, lon: number) =>
   Math.max(groundBare("earth", bodyFixedOf("earth", lat, lon, 0)) - geoidDeg(lat, lon), 0);
+
+/** The ground a join's floors keep over [m over the sea]: the data's and the ground drawn — its procedural detail —, the higher. Out of
+ *  the approach corridor (J7-1: the detail cut under each final to 18.5 km, the two equal there) the detail stands, and the craft must
+ *  never fly through a hill it sees (Sam, 16 Nov 2026: « sol dessiné » — 2 712 ends of the campaign had a join's leg under it); the
+ *  slopes and the guidance's heights stay judged on the data (`groundMsl`, question 4). */
+export const groundJoinMsl = (lat: number, lon: number) => {
+  const q = bodyFixedOf("earth", lat, lon, 0);
+  return Math.max(Math.max(groundBare("earth", q), groundRelief("earth", q)) - geoidDeg(lat, lon), 0);
+};
 
 /** A field's built approach a controller could not give: its glideslope not clear of the relief known (game/ils.ts
  *  glideClearance « thin »), or its safe height round the legs over the slope at the join (`boxOverSlope`). */
