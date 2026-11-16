@@ -59,8 +59,9 @@ cellule mesurée à part (`cell-prep`) prend 2,9 ms par tuile au médian. **Non 
 ## (d) Le budget qui bloque — Toulon fait ; Paris après J8-T
 
 - **Toulon** (même passage, scène complète) : **le plafond de bâtiments** coupe, ni la mémoire ni les maillages. 32 000 gardés (8 000 ×
-  portée²), **70 247 coupés**, gardés jusqu'à 2 116 m ; `budgetLimited` vrai. Les octets : 51,1 Mio pour un budget de **64 Mio** (et non 48 :
-  `bytes.budget` = 67 108 864 — dont avant les bâtiments 27,2 Mio, bâtiments 11,9, forêt 13,8) ; maillages **11,5 Mio sur 16**.
+  portée²), **70 247 coupés**, gardés jusqu'à 2 116 m ; `budgetLimited` vrai. Les postes que le worker rapporte (`bytes`) : le budget **64 Mio** (et non 48 :
+  `budget` = 67 108 864), avant les bâtiments 26,0 Mio, bâtiments 11,3 Mio, forêt 13,1 Mio, raster 4,0 Mio ; maillages **11,5 Mio sur
+  16**. (Leur recouvrement — « avant les bâtiments » inclut-il la forêt et le raster ? — n'est pas établi : pas de somme ici.)
 - **Paris** : à mesurer depuis le disque après J8-T.
 
 ## (c) Le coût GPU par enveloppe

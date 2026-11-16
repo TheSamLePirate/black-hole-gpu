@@ -16,9 +16,13 @@ import { CHROME, endChrome, WINDOWS } from "../../../scripts/lib/procs";
 export interface Cdp {
   /** a DevTools call: its answer, or an error once Chrome is gone or `timeoutS` passed (E2E_CDP_TIMEOUT, 300 s) */
   send<T = Record<string, unknown>>(method: string, params?: object, timeoutS?: number): Promise<T>;
+  /** a DevTools call on an attached target's session — a dedicated worker's (Target.setAutoAttach, flatten): PLAN-J8 J8-0 (b),
+   *  the scenery worker's CPU profile */
+  sendTo<T = Record<string, unknown>>(sessionId: string, method: string, params?: object, timeoutS?: number): Promise<T>;
   errors: string[];
-  /** a DevTools event listened to (Page.screencastFrame, Runtime.consoleAPICalled, …): the listener's removal */
-  on(method: string, fn: (params: Record<string, unknown>) => void): () => void;
+  /** a DevTools event listened to (Page.screencastFrame, Runtime.consoleAPICalled, …): the listener's removal. `sessionId`: the
+   *  attached target's it came from (a dedicated worker's — Target.setAutoAttach, flatten), none for the page's own */
+  on(method: string, fn: (params: Record<string, unknown>, sessionId?: string) => void): () => void;
   close(): void;
   /**
    * The network cut — or given back — for the page **and its Service Worker**. `Network.emulateNetworkConditions` on the
@@ -162,12 +166,12 @@ export async function launch(o: { width?: number; height?: number; dpr?: number;
   ws.onclose = () => failAll((gone ??= "Chrome's DevTools connection closed"));
   void proc.exited.then((code) => failAll((gone ??= `Chrome exited (code ${code})`)));
   const errors: string[] = [];
-  const listeners = new Map<string, Set<(params: Record<string, unknown>) => void>>();
+  const listeners = new Map<string, Set<(params: Record<string, unknown>, sessionId?: string) => void>>();
   /** the Service Worker's DevTools sessions held while the network is cut (offline) */
   const workers = new Map<string, WebSocket>();
   ws.onmessage = (m) => {
     const d = JSON.parse(String(m.data));
-    if (d.method) for (const fn of listeners.get(d.method) ?? []) fn(d.params);
+    if (d.method) for (const fn of listeners.get(d.method) ?? []) fn(d.params, d.sessionId);
     if (d.id) {
       const p = pending.get(d.id);
       if (p) {
@@ -180,7 +184,7 @@ export async function launch(o: { width?: number; height?: number; dpr?: number;
     else if (d.method === "Runtime.consoleAPICalled" && d.params.type === "error")
       errors.push(d.params.args.map((a: { value?: unknown; description?: string }) => a.value ?? a.description).join(" "));
   };
-  const send = <T>(method: string, params: object = {}, timeoutS = CDP_TIMEOUT_S) =>
+  const send = <T>(method: string, params: object = {}, timeoutS = CDP_TIMEOUT_S, sessionId?: string) =>
     new Promise<T>((ok, fail) => {
       if (gone) return fail(new Error(gone));
       const k = ++id;
@@ -189,7 +193,7 @@ export async function launch(o: { width?: number; height?: number; dpr?: number;
         fail(new Error(`DevTools ${method} unanswered after ${timeoutS} s (the page hung?)`));
       }, timeoutS * 1000);
       pending.set(k, { ok: ok as (v: unknown) => void, fail, timer });
-      ws.send(JSON.stringify({ id: k, method, params }));
+      ws.send(JSON.stringify(sessionId ? { id: k, method, params, sessionId } : { id: k, method, params }));
     });
   await send("Runtime.enable");
   await send("Page.enable");
@@ -230,6 +234,8 @@ export async function launch(o: { width?: number; height?: number; dpr?: number;
         await vis("visible");
       }
     },
+    sendTo: <T>(sessionId: string, method: string, params?: object, timeoutS?: number) =>
+      send<T>(method, params ?? {}, timeoutS ?? CDP_TIMEOUT_S, sessionId),
     errors,
     on: (method, fn) => {
       if (!listeners.has(method)) listeners.set(method, new Set());

@@ -14,6 +14,8 @@ await $`bun build ./crew/index.html --outdir _site/crew --minify --define __KERR
 await $`bun build ./src/system/plan-worker.ts --outfile _site/plan-worker.js --minify --target browser`;
 // (the CPU worker — the hulls' collision trees, the sea's spectrum: PLAN-J7 J7-7, src/system/cpu-worker.ts)
 await $`bun build ./src/system/cpu-worker.ts --outfile _site/cpu-worker.js --minify --target browser`;
+// (the building cells' workers — PLAN-J8 J8-3, src/system/cell-worker.ts)
+await $`bun build ./src/system/cell-worker.ts --outfile _site/cell-worker.js --minify --target browser`;
 // (the mirages' tables' worker — R6a-ciel, src/system/mirage-worker.ts)
 await $`bun build ./src/system/mirage-worker.ts --outfile _site/mirage-worker.js --minify --target browser`;
 // (the network, loaded when the player asks for it — src/net/load.ts)

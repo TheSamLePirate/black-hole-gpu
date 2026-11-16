@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-16 12:03 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-16 13:02 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous. Ce qui est fermé quitte le tableau « En cours » pour la ligne « Fermé récemment ».
@@ -48,7 +48,7 @@ J4 (fermé, sortie non atteinte), J5 et J6 (fermés).
 | Rendu (33d89754) | J4 / J5 — l'eau, les volumes, la généralisation | **fermés** ([PLAN-J4](docs/PLAN-J4-VOLUMES.md), [PLAN-J5](docs/PLAN-J5-GENERALISATION.md)) : l'eau à demi-rythme (J5-5, −6,0 à −6,4 ms, l'image la même) ; le sol à demi-rythme laissé au joueur (J5-6, réglage « demi » : −1,9 à −3,2 ms ; « auto » à chaque pixel) ; la FFT de la mer en deux passes (−0,9 ms) ; la carte d'ombre des arbres (−2,8 ms, forêt) ; Sam a refusé les arbitrages d'image (MSAA 1×, petits arbres, nuages amortis). Postes lourds restants : l'eau 16,2, les nuages d'orage 16,5, le décor d'une forêt ~7 ms |
 | Rendu (33d89754) | Mesures tenues | la borne du M1 Max **à 30** : essayée à 40 le 15 au soir, non tenue (soutenu 26,4 et 34,5 images/s, deux runs — [J0-CONTRAT §2](docs/J0-CONTRAT.md)) ; le coût de l'appareil 3,5–4,5 ms, dont le MSAA 4× 4–5 ms (gardé) |
 | Audit vagues 3–4 et 6 (1feb2f7f) | [09-priorites-todo](docs/audit-2026-11-10/09-priorites-todo.md) | **faits** : 3.1–3.2 réseau (RD0–RD2), 3.3 sauvegardes (une clé par sauvegarde ; avion, systèmes des vaisseaux et de l'A320 — ce dernier par J6-4), 3.4–3.5 vol, 3.6–3.7 TARS, 3.10 e2e honnêtes, 4.2 temps et onglet masqué, 4.3 `Settings`/`ViewPose`, 4.8 `main()` découpé ; vague 6 hors rendu (QA, AR, RD4/RD5, FX). **Reste** : l'état d'une mission ou d'un combat (Sam), IndexedDB et l'autosauvegarde hors frame (AR-05), FX-19 (fraîcheur des écrans, à mesurer), FX-21 |
-| Vol, approches, e2e de vol (1feb2f7f) | E2E-VOLS règle 13 ; demandes de Sam du 16 nov. ; **PLAN-J8** | **fait le 16 nov.** : règle 13 (outil, garde, 23 e2e), bandeau et `app.scenario`, l'axe au décollage (horloge du vol), la piste du HUD, l'alarme du train, le débriefing, l'Auto-GCAS, la ligne d'horizon, les jonctions sur le sol dessiné ; **maintenant : PLAN-J8** (J8-0 a/b/d, J8-3, J8-6, J8-7) ; **en pause** : le contour HUD en virage, la règle 13 des autres domaines, la garde du bandeau (338 en attente) |
+| Vol, approches, e2e de vol (1feb2f7f) | E2E-VOLS règle 13 ; demandes de Sam du 16 nov. ; **PLAN-J8** | **fait le 16 nov.** : règle 13, bandeau et `app.scenario`, l'axe au décollage (horloge du vol), la piste du HUD, l'alarme du train, le débriefing, l'Auto-GCAS, la ligne d'horizon, les jonctions sur le sol dessiné ; **PLAN-J8** : J8-0 (a) fait, (b, d) Toulon faits — **charge IGN finie à 12:37:24 UTC** —, J8-3 cellule et réserve écrites ; **maintenant : J8-T** (le cache disque des e2e), puis Paris (b, d), puis J8-3, J8-6, J8-7 ; **en pause** : le contour HUD en virage, la règle 13 des autres domaines, la garde du bandeau (338 en attente) |
 
 **Fermé récemment** : **PLAN-APPROCHES** (16 nov. : AP0–AP10 et AP-R menés — données réelles, choix, jonction, A320, carte, radar, TSD, crew, HUD, directeur de vol, roue, audio, campagne mondiale et échantillon volé ; OIFK posé après J7-1 le 16 nov. : échantillon F-35 9/9, A320 5/5) ; **J3** (15 nov., confirmé par Sam ; J3-R fait 20:48) ; **le repli du raster vers le tracé retiré** (15 nov., 20:48, décision (b)) ; **PLAN-J6** (15 nov., 20:35 : les neuf parcours en e2e, sept défauts corrigés) ; l'eau étagée E1 (−1,55 ms) et E2 (−0,5 ms), E3 non ouvert ; la classification lot 1 (sur terre −1,15 ms), lot 2 non ouvert
 (sous 1 ms) ; AR-07 (le renderer sur `ViewPose`) ; le retrait R1 des anciens chemins (13 nov.) ; le noyau du monde visé compilé pendant le voyage
@@ -8923,3 +8923,27 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
 - Limites : pas encore la réserve de workers, le cache préparé, la priorité ni l'annulation (suite de J8-3) ; les drapeaux `GroundKnown` et
   `Partial` attendent l'accord de la session du rendu (constantes locales) ; pas mesuré sur kerr-mini ni sur une tuile de Paris (~2 500
   bâtiments).
+
+### 2026-11-16 13:02 UTC — PLAN-J8 J8-0 (b, d) à Toulon ; J8-3 : la réserve de workers ; **fin de ma charge IGN : 12:37:24 UTC** (session 1feb2f7f)
+
+- Contribution à la destination : §7.19, PLAN-J8 J8-0 et J8-3 — où passe le temps d'une scène du décor ; la préparation des cellules hors
+  du thread de la page, priorisée, annulable, mise en cache.
+- **La charge IGN de J8-0 (b) est finie à 12:37:24 UTC** (la session du rendu prévenue : son banc J8-0 (c) peut tourner). Paris (b, d) se
+  mesurera depuis le cache disque après J8-T.
+- Réalisé : `tests/e2e/lib/worker-profile.ts` (le thread d'un worker dédié profilé par le DevTools, dès sa naissance — le worker du
+  décor est recréé après un placement lointain —, découpé par ses `phases` ; témoins), `cdp.ts` `sendTo` et le `sessionId` des
+  événements ; e2e `j8-scenery-profile` ; [FICHE-J8-0](docs/progress/j8/FICHE-J8-0.md) (b) et (d) pour Toulon ; J8-3 : `cell-pool.ts`
+  (priorité vue → trajectoire → derrière → reste, la plus proche d'abord ; borne de la file ; annulation de ce qui n'est plus voulu ; le
+  cache préparé d'abord), `cell-worker.ts` (la tuile par le Service Worker, `cell-prep`, Cache Storage `kerr-cells-v1`),
+  `cell-workers.ts` (2 ou 3 workers, le géoïde donné), `__bh.sys.cells` (BH-API), la route et la construction du worker
+  (`server.ts`, `build-pages.ts`, la liste de la PWA) ; e2e `j8-cells` écrit. J8-T commencé : `tests/e2e/lib/earth-cache.ts` branché
+  dans `App`, **désactivé par défaut** tant que ses témoins (e2e `earth-cache-witness`) n'ont pas tourné.
+- Preuves (mesuré, ce Mac, M1 Max) : témoins de la sonde, une boucle de 400 ms vue 400 ms active, une attente vue 0 ms active ; A/A, la même
+  scène complète deux fois, 51,3 s contre 51,8 s, 25,8 s contre 26,1 s actives. **Toulon** : la scène complète prend 51,3 s, dont 50 % de
+  calcul (`party walls` 9,7 s, `detail` 7,8 s, `roofs` 3,0 s, `osm` 2,2 s) et 50 % d'attente (`before forest` 20,8 s) ; la scène
+  rapide 22,7 s, dont 19 % de calcul. Mais le worker **retélécharge 50 Mo par scène** (pas de Service Worker en e2e). (d) : c'est le plafond
+  de 32 000 bâtiments qui coupe (70 247 coupés), pas la mémoire (64 Mio de budget) ni les maillages (11,5 Mio sur 16). Unitaires :
+  la réserve 4/4, la cellule 2/2, le contrat 6/6.
+- Limites : non lancés, `j8-cells` et `earth-cache-witness` (ils attendent la voie IGN) ; pas mesuré sur kerr-mini ; la scène est centrée
+  en avant de l'appareil (3,4 km au nord à Toulon).
+- Suite : J8-T (T0, les témoins des requêtes des workers et du disque ; T1 à T4), puis Paris (b, d), puis `j8-cells` et la suite de J8-3.

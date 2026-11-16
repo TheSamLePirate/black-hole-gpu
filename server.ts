@@ -94,6 +94,12 @@ const server = Bun.serve({
       if (!r.success) return new Response(r.logs.join("\n"), { status: 500 });
       return new Response(await r.outputs[0]!.text(), { headers: { "content-type": "text/javascript" } });
     },
+    // The building cells' workers — a BD TOPO tile decoded into the far buildings' records (src/system/cell-worker.ts — PLAN-J8 J8-3)
+    "/cell-worker.js": async () => {
+      const r = await Bun.build({ entrypoints: ["./src/system/cell-worker.ts"], target: "browser", minify: !dev });
+      if (!r.success) return new Response(r.logs.join("\n"), { status: 500 });
+      return new Response(await r.outputs[0]!.text(), { headers: { "content-type": "text/javascript" } });
+    },
     // The mirages' tables' worker (src/system/mirage-worker.ts — R6a-ciel)
     "/mirage-worker.js": async () => {
       const r = await Bun.build({ entrypoints: ["./src/system/mirage-worker.ts"], target: "browser", minify: !dev });
@@ -232,6 +238,7 @@ const server = Bun.serve({
         "tile-decode-worker.js",
         "terrain-mesh-worker.js",
         "scenery-worker.js",
+        "cell-worker.js",
         "basis_transcoder.wasm",
       ]),
     // (the OAuth callback of "Sign in with OpenRouter" — PLAN-TARS T6)

@@ -1,0 +1,1307 @@
+{
+ "at": "2026-11-16T12:29:06.540Z",
+ "witness": {
+  "loopBusyMs": 4692,
+  "waitBusyMs": 0,
+  "waitIdleMs": 402,
+  "waitTop": []
+ },
+ "Toulon": {
+  "cold": {
+   "workerMs": 75117,
+   "phases": {
+    "cover": 2841,
+    "before osm": 2845,
+    "osm": 5994,
+    "bdtopo": 9612,
+    "before forest": 45881,
+    "party walls": 58770,
+    "forest": 58770,
+    "roofs": 62912,
+    "detail": 72420,
+    "roofs kept %": 11,
+    "decals": 72833,
+    "turbines": 73218
+   }
+  },
+  "quick": {
+   "workerMs": 22650,
+   "phases": [
+    {
+     "phase": "cover",
+     "wallMs": 1044,
+     "busyMs": 83,
+     "idleMs": 884,
+     "top": [
+      {
+       "fn": "(anonymous) scenery-worker.js:277",
+       "ms": 21.9
+      },
+      {
+       "fn": "n scenery-worker.js:277",
+       "ms": 16.1
+      },
+      {
+       "fn": "GQ scenery-worker.js:277",
+       "ms": 11
+      },
+      {
+       "fn": "fetch :0",
+       "ms": 5.4
+      }
+     ]
+    },
+    {
+     "phase": "before osm",
+     "wallMs": 5,
+     "busyMs": 0,
+     "idleMs": 5,
+     "top": []
+    },
+    {
+     "phase": "osm",
+     "wallMs": 838,
+     "busyMs": 696,
+     "idleMs": 142,
+     "top": [
+      {
+       "fn": "readSVarint scenery-worker.js:78",
+       "ms": 148.2
+      },
+      {
+       "fn": "loadGeometry scenery-worker.js:78",
+       "ms": 57.3
+      },
+      {
+       "fn": "(garbage collector) :0",
+       "ms": 56.4
+      },
+      {
+       "fn": "xQ scenery-worker.js:277",
+       "ms": 37
+      }
+     ]
+    },
+    {
+     "phase": "before forest",
+     "wallMs": 7990,
+     "busyMs": 186,
+     "idleMs": 7804,
+     "top": [
+      {
+       "fn": "xQ scenery-worker.js:277",
+       "ms": 21.7
+      },
+      {
+       "fn": "(anonymous) scenery-worker.js:277",
+       "ms": 20
+      },
+      {
+       "fn": "readSVarint scenery-worker.js:78",
+       "ms": 18.1
+      },
+      {
+       "fn": "fetch :0",
+       "ms": 14.7
+      }
+     ]
+    },
+    {
+     "phase": "party walls",
+     "wallMs": 1614,
+     "busyMs": 1549,
+     "idleMs": 64,
+     "top": [
+      {
+       "fn": "(anonymous) scenery-worker.js:78",
+       "ms": 246.3
+      },
+      {
+       "fn": "canopyNear scenery-worker.js:277",
+       "ms": 205.1
+      },
+      {
+       "fn": "(anonymous) scenery-worker.js:277",
+       "ms": 186
+      },
+      {
+       "fn": "G6 scenery-worker.js:78",
+       "ms": 181.1
+      }
+     ]
+    },
+    {
+     "phase": "roofs",
+     "wallMs": 463,
+     "busyMs": 458,
+     "idleMs": 5,
+     "top": [
+      {
+       "fn": "(anonymous) scenery-worker.js:277",
+       "ms": 137.8
+      },
+      {
+       "fn": "V scenery-worker.js:277",
+       "ms": 119
+      },
+      {
+       "fn": "W scenery-worker.js:277",
+       "ms": 90.3
+      },
+      {
+       "fn": "OQ scenery-worker.js:277",
+       "ms": 10.8
+      }
+     ]
+    },
+    {
+     "phase": "detail",
+     "wallMs": 907,
+     "busyMs": 901,
+     "idleMs": 6,
+     "top": [
+      {
+       "fn": "V scenery-worker.js:277",
+       "ms": 338.5
+      },
+      {
+       "fn": "W scenery-worker.js:277",
+       "ms": 244.9
+      },
+      {
+       "fn": "(anonymous) scenery-worker.js:277",
+       "ms": 92.9
+      },
+      {
+       "fn": "Z scenery-worker.js:277",
+       "ms": 62.9
+      }
+     ]
+    },
+    {
+     "phase": "decals",
+     "wallMs": 93,
+     "busyMs": 92,
+     "idleMs": 1,
+     "top": [
+      {
+       "fn": "V scenery-worker.js:277",
+       "ms": 36.2
+      },
+      {
+       "fn": "W scenery-worker.js:277",
+       "ms": 26.5
+      },
+      {
+       "fn": "(anonymous) scenery-worker.js:277",
+       "ms": 8.2
+      },
+      {
+       "fn": "Z scenery-worker.js:277",
+       "ms": 6.3
+      }
+     ]
+    },
+    {
+     "phase": "turbines",
+     "wallMs": 9554,
+     "busyMs": 184,
+     "idleMs": 9370,
+     "top": [
+      {
+       "fn": "readString scenery-worker.js:78",
+       "ms": 47.8
+      },
+      {
+       "fn": "xQ scenery-worker.js:277",
+       "ms": 22.8
+      },
+      {
+       "fn": "E0 scenery-worker.js:78",
+       "ms": 19.2
+      },
+      {
+       "fn": "(garbage collector) :0",
+       "ms": 17.9
+      }
+     ]
+    },
+    {
+     "phase": "(after the last mark)",
+     "wallMs": 142,
+     "busyMs": 124,
+     "idleMs": 17,
+     "top": [
+      {
+       "fn": "readString scenery-worker.js:78",
+       "ms": 39.3
+      },
+      {
+       "fn": "V scenery-worker.js:78",
+       "ms": 37.7
+      },
+      {
+       "fn": "h0 scenery-worker.js:78",
+       "ms": 8.2
+      },
+      {
+       "fn": "(anonymous) scenery-worker.js:78",
+       "ms": 6.7
+      }
+     ]
+    }
+   ],
+   "busyMs": 4274,
+   "idleMs": 18299,
+   "top": [
+    {
+     "fn": "V scenery-worker.js:277",
+     "ms": 513.7
+    },
+    {
+     "fn": "(anonymous) scenery-worker.js:277",
+     "ms": 512
+    },
+    {
+     "fn": "W scenery-worker.js:277",
+     "ms": 362.3
+    },
+    {
+     "fn": "(anonymous) scenery-worker.js:78",
+     "ms": 288.7
+    },
+    {
+     "fn": "canopyNear scenery-worker.js:277",
+     "ms": 205.1
+    },
+    {
+     "fn": "G6 scenery-worker.js:78",
+     "ms": 192.5
+    },
+    {
+     "fn": "readSVarint scenery-worker.js:78",
+     "ms": 166.5
+    },
+    {
+     "fn": "(garbage collector) :0",
+     "ms": 131.9
+    }
+   ],
+   "coveredMs": 22574,
+   "network": {
+    "bytes": 24805605,
+    "zone": 0,
+    "other": 167,
+    "fetchCache": {
+     "hits": 0,
+     "misses": 167,
+     "hitBytes": 0,
+     "bytes": 24806102
+    }
+   },
+   "buildings": 3920,
+   "cutBuildings": 6256,
+   "keptReachM": 715,
+   "budgetLimited": true,
+   "bytes": {
+    "forest": 1965520,
+    "raster": 589824,
+    "before": 3944296,
+    "buildings": 2563824,
+    "budget": 67108864
+   },
+   "meshBytes": 1961388,
+   "meshedBuildings": 6216
+  },
+  "full": {
+   "workerMs": 51324,
+   "phases": [
+    {
+     "phase": "roofs kept %",
+     "wallMs": 13,
+     "busyMs": 13,
+     "idleMs": 0,
+     "top": [
+      {
+       "fn": "V scenery-worker.js:78",
+       "ms": 8.9
+      },
+      {
+       "fn": "(anonymous) scenery-worker.js:78",
+       "ms": 4
+      }
+     ]
+    },
+    {
+     "phase": "cover",
+     "wallMs": 1993,
+     "busyMs": 435,
+     "idleMs": 1558,
+     "top": [
+      {
+       "fn": "n scenery-worker.js:277",
+       "ms": 106.1
+      },
+      {
+       "fn": "V scenery-worker.js:78",
+       "ms": 71.2
+      },
+      {
+       "fn": "(garbage collector) :0",
+       "ms": 65.4
+      },
+      {
+       "fn": "GQ scenery-worker.js:277",
+       "ms": 26.7
+      }
+     ]
+    },
+    {
+     "phase": "before osm",
+     "wallMs": 3,
+     "busyMs": 0,
+     "idleMs": 3,
+     "top": []
+    },
+    {
+     "phase": "osm",
+     "wallMs": 2598,
+     "busyMs": 2184,
+     "idleMs": 414,
+     "top": [
+      {
+       "fn": "readSVarint scenery-worker.js:78",
+       "ms": 281.8
+      },
+      {
+       "fn": "(anonymous) scenery-worker.js:78",
+       "ms": 228.6
+      },
+      {
+       "fn": "loadGeometry scenery-worker.js:78",
+       "ms": 202.2
+      },
+      {
+       "fn": "xQ scenery-worker.js:277",
+       "ms": 190.1
+      }
+     ]
+    },
+    {
+     "phase": "bdtopo",
+     "wallMs": 2864,
+     "busyMs": 328,
+     "idleMs": 2536,
+     "top": [
+      {
+       "fn": "(anonymous) scenery-worker.js:277",
+       "ms": 62.4
+      },
+      {
+       "fn": "readSVarint scenery-worker.js:78",
+       "ms": 39.8
+      },
+      {
+       "fn": "loadGeometry scenery-worker.js:78",
+       "ms": 26.8
+      },
+      {
+       "fn": "(anonymous) scenery-worker.js:78",
+       "ms": 26.6
+      }
+     ]
+    },
+    {
+     "phase": "before forest",
+     "wallMs": 21416,
+     "busyMs": 595,
+     "idleMs": 20821,
+     "top": [
+      {
+       "fn": "(garbage collector) :0",
+       "ms": 192.4
+      },
+      {
+       "fn": "xQ scenery-worker.js:277",
+       "ms": 98.5
+      },
+      {
+       "fn": "k4 scenery-worker.js:78",
+       "ms": 58.3
+      },
+      {
+       "fn": "R6 scenery-worker.js:277",
+       "ms": 36
+      }
+     ]
+    },
+    {
+     "phase": "party walls",
+     "wallMs": 9753,
+     "busyMs": 9694,
+     "idleMs": 59,
+     "top": [
+      {
+       "fn": "(anonymous) scenery-worker.js:277",
+       "ms": 1975
+      },
+      {
+       "fn": "(anonymous) scenery-worker.js:78",
+       "ms": 1802.6
+      },
+      {
+       "fn": "G6 scenery-worker.js:78",
+       "ms": 1044.6
+      },
+      {
+       "fn": "canopyNear scenery-worker.js:277",
+       "ms": 842.4
+      }
+     ]
+    },
+    {
+     "phase": "roofs",
+     "wallMs": 3025,
+     "busyMs": 2993,
+     "idleMs": 32,
+     "top": [
+      {
+       "fn": "V scenery-worker.js:277",
+       "ms": 1021.7
+      },
+      {
+       "fn": "W scenery-worker.js:277",
+       "ms": 809.1
+      },
+      {
+       "fn": "(anonymous) scenery-worker.js:277",
+       "ms": 472.1
+      },
+      {
+       "fn": "J1 scenery-worker.js:277",
+       "ms": 80.9
+      }
+     ]
+    },
+    {
+     "phase": "detail",
+     "wallMs": 7810,
+     "busyMs": 7773,
+     "idleMs": 37,
+     "top": [
+      {
+       "fn": "V scenery-worker.js:277",
+       "ms": 2980.2
+      },
+      {
+       "fn": "(anonymous) scenery-worker.js:277",
+       "ms": 1832.3
+      },
+      {
+       "fn": "Z scenery-worker.js:277",
+       "ms": 626.8
+      },
+      {
+       "fn": "W scenery-worker.js:277",
+       "ms": 603.9
+      }
+     ]
+    },
+    {
+     "phase": "decals",
+     "wallMs": 263,
+     "busyMs": 248,
+     "idleMs": 15,
+     "top": [
+      {
+       "fn": "V scenery-worker.js:277",
+       "ms": 87.5
+      },
+      {
+       "fn": "(anonymous) scenery-worker.js:277",
+       "ms": 58
+      },
+      {
+       "fn": "xQ scenery-worker.js:277",
+       "ms": 30
+      },
+      {
+       "fn": "W scenery-worker.js:277",
+       "ms": 14.6
+      }
+     ]
+    },
+    {
+     "phase": "turbines",
+     "wallMs": 319,
+     "busyMs": 286,
+     "idleMs": 33,
+     "top": [
+      {
+       "fn": "xQ scenery-worker.js:277",
+       "ms": 75.4
+      },
+      {
+       "fn": "decode :0",
+       "ms": 58
+      },
+      {
+       "fn": "E0 scenery-worker.js:78",
+       "ms": 44.2
+      },
+      {
+       "fn": "readString scenery-worker.js:78",
+       "ms": 15.4
+      }
+     ]
+    },
+    {
+     "phase": "(after the last mark)",
+     "wallMs": 1267,
+     "busyMs": 1243,
+     "idleMs": 24,
+     "top": [
+      {
+       "fn": "V scenery-worker.js:78",
+       "ms": 812.1
+      },
+      {
+       "fn": "(anonymous) scenery-worker.js:78",
+       "ms": 193.2
+      },
+      {
+       "fn": "decode :0",
+       "ms": 68
+      },
+      {
+       "fn": "xQ scenery-worker.js:277",
+       "ms": 37.4
+      }
+     ]
+    }
+   ],
+   "busyMs": 25793,
+   "idleMs": 25531,
+   "top": [
+    {
+     "fn": "(anonymous) scenery-worker.js:277",
+     "ms": 4617.6
+    },
+    {
+     "fn": "V scenery-worker.js:277",
+     "ms": 4140.4
+    },
+    {
+     "fn": "(anonymous) scenery-worker.js:78",
+     "ms": 2278.7
+    },
+    {
+     "fn": "W scenery-worker.js:277",
+     "ms": 1428
+    },
+    {
+     "fn": "G6 scenery-worker.js:78",
+     "ms": 1188.5
+    },
+    {
+     "fn": "V scenery-worker.js:78",
+     "ms": 892.2
+    },
+    {
+     "fn": "canopyNear scenery-worker.js:277",
+     "ms": 842.4
+    },
+    {
+     "fn": "k4 scenery-worker.js:78",
+     "ms": 671.7
+    }
+   ],
+   "coveredMs": 51324,
+   "network": {
+    "bytes": 51136672,
+    "zone": 0,
+    "other": 412,
+    "fetchCache": {
+     "hits": 290,
+     "misses": 460,
+     "hitBytes": 44137038,
+     "bytes": 57484129
+    }
+   },
+   "buildings": 32000,
+   "cutBuildings": 70247,
+   "keptReachM": 2116,
+   "budgetLimited": true,
+   "bytes": {
+    "forest": 13786432,
+    "raster": 4194304,
+    "before": 27228616,
+    "buildings": 11859936,
+    "budget": 67108864
+   },
+   "meshBytes": 12065232,
+   "meshedBuildings": 36314
+  }
+ },
+ "Toulon A/A": {
+  "cold": {
+   "workerMs": 51324,
+   "phases": {
+    "cover": 2006,
+    "before osm": 2009,
+    "osm": 4607,
+    "bdtopo": 7471,
+    "before forest": 28887,
+    "party walls": 38640,
+    "forest": 38640,
+    "roofs": 41665,
+    "detail": 49475,
+    "roofs kept %": 13,
+    "decals": 49738,
+    "turbines": 50057
+   }
+  },
+  "quick": {
+   "workerMs": 24367,
+   "phases": [
+    {
+     "phase": "cover",
+     "wallMs": 876,
+     "busyMs": 99,
+     "idleMs": 756,
+     "top": [
+      {
+       "fn": "n scenery-worker.js:277",
+       "ms": 26.3
+      },
+      {
+       "fn": "GQ scenery-worker.js:277",
+       "ms": 19
+      },
+      {
+       "fn": "block scenery-worker.js:277",
+       "ms": 9.9
+      },
+      {
+       "fn": "(anonymous) scenery-worker.js:277",
+       "ms": 5.6
+      }
+     ]
+    },
+    {
+     "phase": "before osm",
+     "wallMs": 4,
+     "busyMs": 0,
+     "idleMs": 4,
+     "top": []
+    },
+    {
+     "phase": "osm",
+     "wallMs": 680,
+     "busyMs": 584,
+     "idleMs": 96,
+     "top": [
+      {
+       "fn": "readSVarint scenery-worker.js:78",
+       "ms": 74.2
+      },
+      {
+       "fn": "xQ scenery-worker.js:277",
+       "ms": 55.6
+      },
+      {
+       "fn": "(anonymous) scenery-worker.js:277",
+       "ms": 51.6
+      },
+      {
+       "fn": "loadGeometry scenery-worker.js:78",
+       "ms": 46.6
+      }
+     ]
+    },
+    {
+     "phase": "bdtopo",
+     "wallMs": 2884,
+     "busyMs": 97,
+     "idleMs": 2787,
+     "top": [
+      {
+       "fn": "(garbage collector) :0",
+       "ms": 14.6
+      },
+      {
+       "fn": "GQ scenery-worker.js:277",
+       "ms": 7.4
+      },
+      {
+       "fn": "readSVarint scenery-worker.js:78",
+       "ms": 7.2
+      },
+      {
+       "fn": "MQ scenery-worker.js:277",
+       "ms": 6.9
+      }
+     ]
+    },
+    {
+     "phase": "before forest",
+     "wallMs": 4415,
+     "busyMs": 61,
+     "idleMs": 4354,
+     "top": [
+      {
+       "fn": "xQ scenery-worker.js:277",
+       "ms": 18
+      },
+      {
+       "fn": "R6 scenery-worker.js:277",
+       "ms": 8.5
+      },
+      {
+       "fn": "n5 scenery-worker.js:277",
+       "ms": 4.7
+      },
+      {
+       "fn": "k4 scenery-worker.js:78",
+       "ms": 3.6
+      }
+     ]
+    },
+    {
+     "phase": "party walls",
+     "wallMs": 2007,
+     "busyMs": 1980,
+     "idleMs": 26,
+     "top": [
+      {
+       "fn": "(anonymous) scenery-worker.js:78",
+       "ms": 340.3
+      },
+      {
+       "fn": "canopyNear scenery-worker.js:277",
+       "ms": 294.6
+      },
+      {
+       "fn": "G6 scenery-worker.js:78",
+       "ms": 266.3
+      },
+      {
+       "fn": "(anonymous) scenery-worker.js:277",
+       "ms": 179.7
+      }
+     ]
+    },
+    {
+     "phase": "roofs",
+     "wallMs": 598,
+     "busyMs": 595,
+     "idleMs": 3,
+     "top": [
+      {
+       "fn": "V scenery-worker.js:277",
+       "ms": 178.4
+      },
+      {
+       "fn": "W scenery-worker.js:277",
+       "ms": 151
+      },
+      {
+       "fn": "(anonymous) scenery-worker.js:277",
+       "ms": 122
+      },
+      {
+       "fn": "OQ scenery-worker.js:277",
+       "ms": 14.3
+      }
+     ]
+    },
+    {
+     "phase": "detail",
+     "wallMs": 1279,
+     "busyMs": 1268,
+     "idleMs": 11,
+     "top": [
+      {
+       "fn": "V scenery-worker.js:277",
+       "ms": 484.7
+      },
+      {
+       "fn": "W scenery-worker.js:277",
+       "ms": 354
+      },
+      {
+       "fn": "(anonymous) scenery-worker.js:277",
+       "ms": 120.9
+      },
+      {
+       "fn": "Z scenery-worker.js:277",
+       "ms": 78.4
+      }
+     ]
+    },
+    {
+     "phase": "decals",
+     "wallMs": 120,
+     "busyMs": 98,
+     "idleMs": 22,
+     "top": [
+      {
+       "fn": "xQ scenery-worker.js:277",
+       "ms": 27.3
+      },
+      {
+       "fn": "V scenery-worker.js:277",
+       "ms": 18
+      },
+      {
+       "fn": "W scenery-worker.js:277",
+       "ms": 15.8
+      },
+      {
+       "fn": "(anonymous) scenery-worker.js:277",
+       "ms": 7.3
+      }
+     ]
+    },
+    {
+     "phase": "turbines",
+     "wallMs": 11323,
+     "busyMs": 216,
+     "idleMs": 11107,
+     "top": [
+      {
+       "fn": "readString scenery-worker.js:78",
+       "ms": 87.4
+      },
+      {
+       "fn": "E0 scenery-worker.js:78",
+       "ms": 26.6
+      },
+      {
+       "fn": "(garbage collector) :0",
+       "ms": 17.7
+      },
+      {
+       "fn": "U9 scenery-worker.js:78",
+       "ms": 12
+      }
+     ]
+    },
+    {
+     "phase": "(after the last mark)",
+     "wallMs": 181,
+     "busyMs": 155,
+     "idleMs": 26,
+     "top": [
+      {
+       "fn": "V scenery-worker.js:78",
+       "ms": 98.6
+      },
+      {
+       "fn": "(anonymous) scenery-worker.js:78",
+       "ms": 18.4
+      },
+      {
+       "fn": "h0 scenery-worker.js:78",
+       "ms": 8.1
+      },
+      {
+       "fn": "xQ scenery-worker.js:277",
+       "ms": 4.6
+      }
+     ]
+    }
+   ],
+   "busyMs": 5153,
+   "idleMs": 19192,
+   "top": [
+    {
+     "fn": "V scenery-worker.js:277",
+     "ms": 691.8
+    },
+    {
+     "fn": "W scenery-worker.js:277",
+     "ms": 520.8
+    },
+    {
+     "fn": "(anonymous) scenery-worker.js:277",
+     "ms": 505
+    },
+    {
+     "fn": "(anonymous) scenery-worker.js:78",
+     "ms": 401.3
+    },
+    {
+     "fn": "canopyNear scenery-worker.js:277",
+     "ms": 294.6
+    },
+    {
+     "fn": "G6 scenery-worker.js:78",
+     "ms": 288.3
+    },
+    {
+     "fn": "k4 scenery-worker.js:78",
+     "ms": 155.3
+    },
+    {
+     "fn": "xQ scenery-worker.js:277",
+     "ms": 134.5
+    }
+   ],
+   "coveredMs": 24346,
+   "network": {
+    "bytes": 23321456,
+    "zone": 0,
+    "other": 153,
+    "fetchCache": {
+     "hits": 0,
+     "misses": 153,
+     "hitBytes": 0,
+     "bytes": 23321953
+    }
+   },
+   "buildings": 3920,
+   "cutBuildings": 13865,
+   "keptReachM": 514,
+   "budgetLimited": true,
+   "bytes": {
+    "forest": 1965520,
+    "raster": 589824,
+    "before": 3977536,
+    "buildings": 2601056,
+    "budget": 67108864
+   },
+   "meshBytes": 2086680,
+   "meshedBuildings": 6673
+  },
+  "full": {
+   "workerMs": 51779,
+   "phases": [
+    {
+     "phase": "roofs kept %",
+     "wallMs": 13,
+     "busyMs": 13,
+     "idleMs": 0,
+     "top": [
+      {
+       "fn": "V scenery-worker.js:78",
+       "ms": 9.7
+      },
+      {
+       "fn": "(anonymous) scenery-worker.js:78",
+       "ms": 3.1
+      }
+     ]
+    },
+    {
+     "phase": "cover",
+     "wallMs": 2486,
+     "busyMs": 206,
+     "idleMs": 2280,
+     "top": [
+      {
+       "fn": "n scenery-worker.js:277",
+       "ms": 56.9
+      },
+      {
+       "fn": "V scenery-worker.js:78",
+       "ms": 34.9
+      },
+      {
+       "fn": "block scenery-worker.js:277",
+       "ms": 27.1
+      },
+      {
+       "fn": "t1 scenery-worker.js:78",
+       "ms": 17.6
+      }
+     ]
+    },
+    {
+     "phase": "before osm",
+     "wallMs": 2,
+     "busyMs": 0,
+     "idleMs": 2,
+     "top": []
+    },
+    {
+     "phase": "osm",
+     "wallMs": 2666,
+     "busyMs": 2290,
+     "idleMs": 376,
+     "top": [
+      {
+       "fn": "readSVarint scenery-worker.js:78",
+       "ms": 332.5
+      },
+      {
+       "fn": "(anonymous) scenery-worker.js:78",
+       "ms": 206.7
+      },
+      {
+       "fn": "(anonymous) scenery-worker.js:277",
+       "ms": 192
+      },
+      {
+       "fn": "loadGeometry scenery-worker.js:78",
+       "ms": 191.8
+      }
+     ]
+    },
+    {
+     "phase": "bdtopo",
+     "wallMs": 2990,
+     "busyMs": 272,
+     "idleMs": 2719,
+     "top": [
+      {
+       "fn": "(anonymous) scenery-worker.js:277",
+       "ms": 56.8
+      },
+      {
+       "fn": "readSVarint scenery-worker.js:78",
+       "ms": 29.6
+      },
+      {
+       "fn": "loadGeometry scenery-worker.js:78",
+       "ms": 21.7
+      },
+      {
+       "fn": "decode :0",
+       "ms": 19
+      }
+     ]
+    },
+    {
+     "phase": "before forest",
+     "wallMs": 20629,
+     "busyMs": 584,
+     "idleMs": 20045,
+     "top": [
+      {
+       "fn": "(garbage collector) :0",
+       "ms": 187.4
+      },
+      {
+       "fn": "xQ scenery-worker.js:277",
+       "ms": 93.4
+      },
+      {
+       "fn": "k4 scenery-worker.js:78",
+       "ms": 70.8
+      },
+      {
+       "fn": "(anonymous) scenery-worker.js:277",
+       "ms": 33.3
+      }
+     ]
+    },
+    {
+     "phase": "party walls",
+     "wallMs": 9889,
+     "busyMs": 9818,
+     "idleMs": 72,
+     "top": [
+      {
+       "fn": "(anonymous) scenery-worker.js:277",
+       "ms": 2227.1
+      },
+      {
+       "fn": "(anonymous) scenery-worker.js:78",
+       "ms": 1723.8
+      },
+      {
+       "fn": "G6 scenery-worker.js:78",
+       "ms": 983.6
+      },
+      {
+       "fn": "canopyNear scenery-worker.js:277",
+       "ms": 784.4
+      }
+     ]
+    },
+    {
+     "phase": "roofs",
+     "wallMs": 3570,
+     "busyMs": 3548,
+     "idleMs": 22,
+     "top": [
+      {
+       "fn": "V scenery-worker.js:277",
+       "ms": 1279.6
+      },
+      {
+       "fn": "W scenery-worker.js:277",
+       "ms": 917.8
+      },
+      {
+       "fn": "(anonymous) scenery-worker.js:277",
+       "ms": 512
+      },
+      {
+       "fn": "OQ scenery-worker.js:277",
+       "ms": 88.2
+      }
+     ]
+    },
+    {
+     "phase": "detail",
+     "wallMs": 7235,
+     "busyMs": 7195,
+     "idleMs": 40,
+     "top": [
+      {
+       "fn": "V scenery-worker.js:277",
+       "ms": 2849.3
+      },
+      {
+       "fn": "(anonymous) scenery-worker.js:277",
+       "ms": 1562.5
+      },
+      {
+       "fn": "Z scenery-worker.js:277",
+       "ms": 584
+      },
+      {
+       "fn": "W scenery-worker.js:277",
+       "ms": 567.7
+      }
+     ]
+    },
+    {
+     "phase": "decals",
+     "wallMs": 293,
+     "busyMs": 239,
+     "idleMs": 54,
+     "top": [
+      {
+       "fn": "xQ scenery-worker.js:277",
+       "ms": 74.2
+      },
+      {
+       "fn": "V scenery-worker.js:277",
+       "ms": 53.4
+      },
+      {
+       "fn": "(anonymous) scenery-worker.js:277",
+       "ms": 31.9
+      },
+      {
+       "fn": "W scenery-worker.js:277",
+       "ms": 10.8
+      }
+     ]
+    },
+    {
+     "phase": "turbines",
+     "wallMs": 365,
+     "busyMs": 340,
+     "idleMs": 25,
+     "top": [
+      {
+       "fn": "decode :0",
+       "ms": 121.5
+      },
+      {
+       "fn": "E0 scenery-worker.js:78",
+       "ms": 53.3
+      },
+      {
+       "fn": "readString scenery-worker.js:78",
+       "ms": 36.7
+      },
+      {
+       "fn": "xQ scenery-worker.js:277",
+       "ms": 34.1
+      }
+     ]
+    },
+    {
+     "phase": "(after the last mark)",
+     "wallMs": 1641,
+     "busyMs": 1613,
+     "idleMs": 28,
+     "top": [
+      {
+       "fn": "V scenery-worker.js:78",
+       "ms": 1034
+      },
+      {
+       "fn": "(anonymous) scenery-worker.js:78",
+       "ms": 210.6
+      },
+      {
+       "fn": "(garbage collector) :0",
+       "ms": 114.8
+      },
+      {
+       "fn": "t1 scenery-worker.js:78",
+       "ms": 86.4
+      }
+     ]
+    }
+   ],
+   "busyMs": 26115,
+   "idleMs": 25664,
+   "top": [
+    {
+     "fn": "(anonymous) scenery-worker.js:277",
+     "ms": 4625.4
+    },
+    {
+     "fn": "V scenery-worker.js:277",
+     "ms": 4247.7
+    },
+    {
+     "fn": "(anonymous) scenery-worker.js:78",
+     "ms": 2174.8
+    },
+    {
+     "fn": "W scenery-worker.js:277",
+     "ms": 1496.3
+    },
+    {
+     "fn": "G6 scenery-worker.js:78",
+     "ms": 1129
+    },
+    {
+     "fn": "V scenery-worker.js:78",
+     "ms": 1078.6
+    },
+    {
+     "fn": "canopyNear scenery-worker.js:277",
+     "ms": 784.4
+    },
+    {
+     "fn": "(garbage collector) :0",
+     "ms": 721.1
+    }
+   ],
+   "coveredMs": 51779,
+   "network": {
+    "bytes": 51136672,
+    "zone": 0,
+    "other": 412,
+    "fetchCache": {
+     "hits": 275,
+     "misses": 451,
+     "hitBytes": 41613864,
+     "bytes": 57651360
+    }
+   },
+   "buildings": 32000,
+   "cutBuildings": 70247,
+   "keptReachM": 2116,
+   "budgetLimited": true,
+   "bytes": {
+    "forest": 13786432,
+    "raster": 4194304,
+    "before": 27228616,
+    "buildings": 11859936,
+    "budget": 67108864
+   },
+   "meshBytes": 12065184,
+   "meshedBuildings": 36313
+  }
+ }
+}

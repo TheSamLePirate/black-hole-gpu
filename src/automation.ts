@@ -63,6 +63,8 @@ import type { GameMode, ModeState } from "./game/modes";
 import { DeckPicker } from "./a320/deckpick";
 import { fieldByCode } from "./world/runways";
 import { approachesForAsync } from "./world/approaches";
+import { cellPool } from "./system/cell-workers";
+import type { CellWant } from "./system/cell-pool";
 
 /** the A320 deck's picker (a320DeckAt: the controls seen from the seat) */
 let deckPick: DeckPicker | null = null;
@@ -676,6 +678,29 @@ export function installBh(c: BhContext) {
         groundAt: (lat: number, lon: number) => groundRelief("earth", bodyFixedOf("earth", lat, lon, 0)),
         /** the same ground without the procedural detail — the data's alone, graded (PLAN-J7 J7-1: under an approach funnel the two equal) */
         groundBareAt: (lat: number, lon: number) => groundBare("earth", bodyFixedOf("earth", lat, lon, 0)),
+        /** PLAN-J8 J8-3: the building cells' pool (system/cell-pool.ts) — `want(list)` the cells wanted now ({x, y, priority 0 view and near
+         *  · 1 track · 2 behind · 3 rest, d [m]}: the whole set), `stats()`, `got()` the cells handed since `clear()` (key, bytes, from the
+         *  prepared cache, ms in the worker) */
+        cells: (() => {
+          const got = new Map<string, { bytes: number; cached: boolean; ms: number; at: number }>();
+          let on = false;
+          const P = () => {
+            const p = cellPool();
+            if (!on) {
+              on = true;
+              p.listen((c) =>
+                got.set(`${c.x}/${c.y}`, { bytes: c.buf.byteLength, cached: c.cached, ms: Math.round(c.ms), at: performance.now() }),
+              );
+            }
+            return p;
+          };
+          return {
+            want: (l: CellWant[]) => P().want(l),
+            stats: () => P().stats(),
+            got: () => [...got].map(([key, v]) => ({ key, ...v })),
+            clear: () => got.clear(),
+          };
+        })(),
         /** the craft's gear (gear.ts GEARS: each leg on the craft's axes) */
         gears: () => GEARS,
         /** the Earth's runways as drawn (sites.ts EARTH_RUNWAYS: threshold, landing direction — WGS84) */

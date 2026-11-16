@@ -2100,6 +2100,22 @@ The same ground as `groundAt` without the procedural detail — the data's alone
 
 *Used in:* `j7-approach-ground.e2e.test.ts`.
 
+### `__bh.sys.cells` (PLAN-J8 J8-3: the building cells' pool)
+
+The far buildings' cells (`src/system/cell-pool.ts`, `cell-workers.ts`, `cell-worker.ts`; the format `building-cells.ts`): a z 15
+cell's BD TOPO tile fetched (through the Service Worker), decoded in a worker into 48-byte records (`cell-prep.ts`: one a building,
+no roof planned), put in the prepared cache (Cache Storage `kerr-cells-v1`) and handed over.
+
+- `want(list)` — the cells wanted now, the whole set: `{ x, y, priority, d }` (priority 0 in view and near · 1 on the track ·
+  2 behind · 3 the rest; `d` [m], the order within a class). What is not in it is no longer wanted: dropped from the queue, its
+  work under way cancelled. A cell handed once is not prepared again.
+- `stats()` → `{ queued, running, done, prepared, cached, cancelled, dropped, failed, ms }`.
+- `got()` → the cells handed since `clear()`: `{ key: "x/y", bytes, cached, ms }` (`cached`: from the prepared cache, no worker;
+  `ms`: the worker's time, fetch and decoding).
+- `clear()` — `got()` emptied.
+
+*Used in:* `j8-cells.e2e.test.ts`.
+
 ### `__bh.sys.runways()` → `RunwayFrame[]`
 
 The Earth's runways as drawn (`sites.ts` `EARTH_RUNWAYS`): each its `site`, its threshold's `origin` on the WGS84

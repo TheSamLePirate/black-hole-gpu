@@ -2,9 +2,10 @@
 // key and mouse events by the DevTools protocol — and every click proven to land on its element
 // (an invisible overlay once swallowed the pointer while scripted .click() calls kept passing).
 import { type Cdp, launch } from "./cdp";
+import { earthCache, wantsNetwork } from "./earth-cache";
 import { HITCH_PROBE } from "./hitch-probe";
 import { recorder } from "./telemetry";
-import { appendFileSync, mkdirSync } from "node:fs";
+import { appendFileSync, existsSync, mkdirSync, readFileSync } from "node:fs";
 import { hostname } from "node:os";
 import { dirname } from "node:path";
 
@@ -268,6 +269,8 @@ export class App {
       fullIntro?: boolean;
       /** Independent crew page; no renderer readiness or simulator telemetry. */
       entry?: "crew";
+      /** the Earth's data from the disk (lib/earth-cache.ts) — this boot's mode, over E2E_EARTH_DATA and the file's header */
+      earthData?: import("./earth-cache").EarthDataMode;
     } = {},
   ) {
     // (the test file booting it, for its report's folder: E2E_FILE when one file runs, else the caller's frame)
@@ -290,6 +293,18 @@ export class App {
       source: `try { localStorage.setItem("kerr.hint-seen", "1"); localStorage.setItem("kerr.lowrate-refused", "1"); localStorage.setItem("kerr.lang", "${o.lang ?? "en"}"); localStorage.setItem("kerr.crew.lang", "${o.crewLang ?? "fr"}"); if (!${!!o.fullIntro}) localStorage.setItem("kerr.intro.seen", "1"); } catch {}`,
     });
     if (o.initScript) await cdp.send("Page.addScriptToEvaluateOnNewDocument", { source: o.initScript });
+    // (the Earth's data from the machine's disk — PLAN-J8 J8-T, lib/earth-cache.ts, E2E_EARTH_DATA —: not for a Service Worker's boot
+    // (its fetches its own target's) nor a file that measures the network (its header's `// Earth data: network`))
+    const src = (() => {
+      const p = `tests/e2e/${file}`;
+      try {
+        return existsSync(p) ? readFileSync(p, "utf8") : "";
+      } catch {
+        return "";
+      }
+    })();
+    if (o.earthData ? o.earthData !== "off" : !o.sw && !o.entry && !wantsNetwork(src))
+      app.earth = await earthCache(cdp, { tiles: !!o.tiles, mode: o.earthData });
     // (E2E_HITCH=1 — PLAN-J7 J7-0 —: the hitch probe in the page from its start, each gap over 50 ms and its cause appended as it comes to
     // remote-results/hitches/<test>.jsonl, the page's frames counted every 600 — lib/hitch-probe.ts)
     if (process.env.E2E_HITCH === "1") {
@@ -321,6 +336,8 @@ export class App {
 
   /** the Service Worker wanted (`sw=1`: the page registers it despite the e2e flag) */
   sw = false;
+  /** the Earth's data served from the disk (lib/earth-cache.ts), null: the network (off, a Service Worker, `// Earth data: network`) */
+  earth: Awaited<ReturnType<typeof earthCache>> | null = null;
 
   /** the test file that booted it, and whether its telemetry is recorded */
   file = "";
@@ -375,19 +392,41 @@ export class App {
   }
 
   /** The network cut (or given back) for the page and its Service Worker — lib/cdp.ts offline; again after a `load` offline. */
-  offline(on = true) {
+  async offline(on = true) {
+    // (the disk let go while the network is cut — the test measures the game offline, not the cache)
+    await this.earth?.suspend(on);
     return this.cdp.offline(on);
+  }
+
+  /** a slower link (lib/cdp.ts throttle), the disk let go meanwhile (null: back to both) */
+  async throttle(mbps: number | null, latencyMs?: number) {
+    await this.earth?.suspend(mbps !== null);
+    return this.cdp.throttle(mbps, latencyMs);
+  }
+
+  /** the Earth data's counts said (and in `offline` mode, a tile missing from the disk fails the run, its URL given) */
+  private earthReport() {
+    const c = this.earth?.counts;
+    if (!c || !this.earth || this.earth.mode === "off") return;
+    if (c.hits + c.misses + c.failed)
+      console.log(
+        `  e2e Earth data (${this.earth.mode}, ${this.earth.dir}): ${c.hits} from the disk (${(c.hitBytes / 2 ** 20).toFixed(1)} MiB), ${c.misses} fetched and kept (${(c.missBytes / 2 ** 20).toFixed(1)} MiB), ${c.failed} failed`,
+      );
+    if (this.earth.mode === "offline" && c.missing.length)
+      throw new Error(`E2E_EARTH_DATA=offline: ${c.missing.length} tiles not on the disk — first ${c.missing.slice(0, 3).join(" · ")}`);
   }
 
   close() {
     recorder.detach(this);
     this.cdp.close();
+    this.earthReport();
   }
 
   /** closed letting Chrome quit by itself first — its caches written to a kept profile (`boot({ profile })`) */
   async quit() {
     recorder.detach(this);
     await this.cdp.quit();
+    this.earthReport();
   }
 
   // biome-ignore lint/suspicious/noExplicitAny: what the page's code returns, typed at the call when it matters
