@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-16 13:45 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 2026-11-16 14:14 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous. Ce qui est fermé quitte le tableau « En cours » pour la ligne « Fermé récemment ».
@@ -48,7 +48,7 @@ J4 (fermé, sortie non atteinte), J5 et J6 (fermés).
 | Rendu (33d89754) | J4 / J5 — l'eau, les volumes, la généralisation | **fermés** ([PLAN-J4](docs/PLAN-J4-VOLUMES.md), [PLAN-J5](docs/PLAN-J5-GENERALISATION.md)) : l'eau à demi-rythme (J5-5, −6,0 à −6,4 ms, l'image la même) ; le sol à demi-rythme laissé au joueur (J5-6, réglage « demi » : −1,9 à −3,2 ms ; « auto » à chaque pixel) ; la FFT de la mer en deux passes (−0,9 ms) ; la carte d'ombre des arbres (−2,8 ms, forêt) ; Sam a refusé les arbitrages d'image (MSAA 1×, petits arbres, nuages amortis). Postes lourds restants : l'eau 16,2, les nuages d'orage 16,5, le décor d'une forêt ~7 ms |
 | Rendu (33d89754) | Mesures tenues | la borne du M1 Max **à 30** : essayée à 40 le 15 au soir, non tenue (soutenu 26,4 et 34,5 images/s, deux runs — [J0-CONTRAT §2](docs/J0-CONTRAT.md)) ; le coût de l'appareil 3,5–4,5 ms, dont le MSAA 4× 4–5 ms (gardé) |
 | Audit vagues 3–4 et 6 (1feb2f7f) | [09-priorites-todo](docs/audit-2026-11-10/09-priorites-todo.md) | **faits** : 3.1–3.2 réseau (RD0–RD2), 3.3 sauvegardes (une clé par sauvegarde ; avion, systèmes des vaisseaux et de l'A320 — ce dernier par J6-4), 3.4–3.5 vol, 3.6–3.7 TARS, 3.10 e2e honnêtes, 4.2 temps et onglet masqué, 4.3 `Settings`/`ViewPose`, 4.8 `main()` découpé ; vague 6 hors rendu (QA, AR, RD4/RD5, FX). **Reste** : l'état d'une mission ou d'un combat (Sam), IndexedDB et l'autosauvegarde hors frame (AR-05), FX-19 (fraîcheur des écrans, à mesurer), FX-21 |
-| Vol, approches, e2e de vol (1feb2f7f) | E2E-VOLS règle 13 ; demandes de Sam du 16 nov. ; **PLAN-J8** | **fait le 16 nov.** : règle 13, bandeau et `app.scenario`, l'axe au décollage (horloge du vol), la piste du HUD, l'alarme du train, le débriefing, l'Auto-GCAS, la ligne d'horizon, les jonctions sur le sol dessiné ; **PLAN-J8** : J8-0 (a) fait, (b, d) Toulon faits ; **J8-T T0–T3 faits, le cache disque des e2e activé par défaut** (13:40 UTC ; témoin : les tuiles BD TOPO du worker du décor et du cell-worker toutes depuis le disque hors ligne, la même scène) ; J8-3 cellule et réserve écrites ; **maintenant : J8-T T4** (A/B froid/chaud), puis Paris (b, d) depuis le disque, puis J8-3, J8-6, J8-7 ; **en pause** : le contour HUD en virage, la règle 13 des autres domaines, la garde du bandeau (338 en attente) |
+| Vol, approches, e2e de vol (1feb2f7f) | E2E-VOLS règle 13 ; demandes de Sam du 16 nov. ; **PLAN-J8** | **fait le 16 nov.** : règle 13, bandeau et `app.scenario`, l'axe au décollage (horloge du vol), la piste du HUD, l'alarme du train, le débriefing, l'Auto-GCAS, la ligne d'horizon, les jonctions sur le sol dessiné ; **PLAN-J8** : J8-0 (a) fait, (b, d) Toulon faits ; **J8-T fait** (le cache disque des e2e activé par défaut ; J0 sur le mini : détail complet 107,7 → 57,6 s, GPU en vol inchangé, 49,4 contre 49,8 ms ; dossiers échangés par `earth-sync`) ; J8-3 cellule et réserve écrites ; **maintenant** : Paris (b, d) depuis le disque, puis J8-3 (`j8-cells`), J8-6, J8-7 ; **en pause** : le contour HUD en virage, la règle 13 des autres domaines, la garde du bandeau (338 en attente) |
 
 **Fermé récemment** : **PLAN-APPROCHES** (16 nov. : AP0–AP10 et AP-R menés — données réelles, choix, jonction, A320, carte, radar, TSD, crew, HUD, directeur de vol, roue, audio, campagne mondiale et échantillon volé ; OIFK posé après J7-1 le 16 nov. : échantillon F-35 9/9, A320 5/5) ; **J3** (15 nov., confirmé par Sam ; J3-R fait 20:48) ; **le repli du raster vers le tracé retiré** (15 nov., 20:48, décision (b)) ; **PLAN-J6** (15 nov., 20:35 : les neuf parcours en e2e, sept défauts corrigés) ; l'eau étagée E1 (−1,55 ms) et E2 (−0,5 ms), E3 non ouvert ; la classification lot 1 (sur terre −1,15 ms), lot 2 non ouvert
 (sous 1 ms) ; AR-07 (le renderer sur `ViewPose`) ; le retrait R1 des anciens chemins (13 nov.) ; le noyau du monde visé compilé pendant le voyage
@@ -8997,3 +8997,33 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
     passages, ou pour la BD TOPO seule ; à dire à Sam avant d'en faire un mode de campagne.
   - Le toast « Relief 1 failed » hors ligne vient de ces tuiles manquantes.
 - Suite : T4 sur les deux Mac ; puis Paris (J8-0 b, d) depuis le disque ; `j8-cells` (J8-3) ; J8-6 et J8-7.
+
+### 2026-11-16 14:14 UTC — PLAN-J8 J8-T T4 : le gain mesuré, réseau contre disque, sur les deux Mac (session 1feb2f7f)
+
+- Contribution à la destination : le banc d'essai prépare ses données avant la mesure. L'arrivée de J0 et les scènes du décor ne
+  dépendent plus de la ligne. Jalon : PLAN-J8 J8-T, dernier sous-lot.
+- Réalisé :
+  - `E2E_EARTH_DATA_FORCE=1` (`tests/e2e/lib/app.ts`, E2E.md) : le disque même pour un fichier marqué réseau, seulement pour un A/B
+    du cache lui-même.
+  - `bun scripts/remote.ts earth-sync` lancé : 7 714 fichiers (509 Mo) envoyés au mini, 11 804 (253 Mo) rapportés. Le dossier
+    d'ici fait 793 Mo.
+- Preuves (**mesuré**) :
+  - **kerr-mini, J0 en vol** (`J0_PHASES=flight`, run `20261116-150201-j8t-t4-j0`, 14:02–14:10 UTC, pression thermique « Nominal »
+    aux trois vols, 22/22 à chaque vol), dans l'ordre réseau, remplissage, disque plein :
+    - détail complet à l'arrivée : 107,7 s, puis 99,5 s, puis **57,6 s** ;
+    - relief chargé : 70,0 s, puis 70,2 s, puis 54,6 s ; il est complet avec le disque (0 tuile en attente contre 83) ;
+    - image pilotable : 12,9, 13,1 et 13,3 s (inchangée : c'est la compilation) ;
+    - **GPU p50 en vol : 49,4, 49,7 et 49,8 ms ; p95 : 54,9, 55,3 et 55,0 ms** ; 20,1–20,2 images/s ;
+    - le fichier entier : 185 s, puis 177 s, puis 137 s.
+  - **Ce Mac (M1 Max, pression thermique « Heavy » : durées seulement)** :
+    - `earth-scenery` : 429 s sur le réseau, dont deux scènes jamais prêtes en 120 s ; 383 s au remplissage ; 219 s avec le
+      disque plein, les quatre scènes prêtes ;
+    - hors Terre, `gargantua-ground`, quatre passages : 43–66 s sans le disque contre 38–49 s avec, aucun effet distinguable.
+- Limites :
+  - Un seul vol par côté : les écarts GPU de ±0,4 ms et la plus longue image (100 → 116 ms) ne sont pas attribués.
+  - Le troisième vol télécharge encore 819 réponses (198 Mio) : un démarrage plus rapide demande des tuiles que le précédent n'avait pas
+    atteintes. Le dossier se complète en quelques passages.
+  - `earth-scenery` atteint maintenant à Paris sa vérification d'ombre, qu'il n'atteignait jamais sur le réseau. Elle y échoue de peu :
+    905 contre 921, puis 948 contre 1 007. Non lié au cache (les mêmes données) ; signalé à la session du rendu.
+- Correction de l'entrée de 13:45 UTC : le travail de T0 s'est fini vers 13:38 UTC. L'heure de l'entrée avait été estimée, pas lue.
+- Suite : Paris (J8-0 b, d) depuis le disque ; `j8-cells` (J8-3) ; J8-6, J8-7.

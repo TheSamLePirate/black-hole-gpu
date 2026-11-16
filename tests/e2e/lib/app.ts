@@ -303,7 +303,9 @@ export class App {
         return "";
       }
     })();
-    if (o.earthData ? o.earthData !== "off" : !o.sw && !o.entry && !wantsNetwork(src))
+    // (E2E_EARTH_DATA_FORCE=1: the disk even for a file that keeps the network — an A/B of the cache itself, J8-T T4)
+    const force = process.env.E2E_EARTH_DATA_FORCE === "1";
+    if (o.earthData ? o.earthData !== "off" : !o.sw && !o.entry && (force || !wantsNetwork(src)))
       app.earth = await earthCache(cdp, { tiles: !!o.tiles, mode: o.earthData });
     // (E2E_HITCH=1 — PLAN-J7 J7-0 —: the hitch probe in the page from its start, each gap over 50 ms and its cause appended as it comes to
     // remote-results/hitches/<test>.jsonl, the page's frames counted every 600 — lib/hitch-probe.ts)
