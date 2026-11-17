@@ -686,6 +686,8 @@ export class EarthScenery {
       /** (PLAN-J8 J8-RP RP2) the road segments from the street cells, their cells */
       cellRoads: d?.cellRoads ?? 0,
       cellRoadCells: d?.cellRoadCells ?? 0,
+      /** (PLAN-J8 J8-RP RP4) the bridges from the street cells */
+      cellBridges: d?.cellBridges ?? 0,
       keptReachM: d?.keptReachM ?? 0,
       /** the corridor the cap kept the buildings along, its half-length [m] (0: the centre's disc — a craft at rest, or off) */
       corridorM: d?.corridorM ?? 0,

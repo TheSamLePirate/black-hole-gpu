@@ -10457,3 +10457,10 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
 - **Réalisé :** `cell-roads.ts` (`cellRoadSurfaces`) transforme les `roadRuns` d'une cellule KSC4 en segments de surface de la scène : axe et largeur mesurée par la BD TOPO, marquages, bordures et trottoirs tirés des surfaces de la cellule, rien sur les ponts ni dans les tunnels. Le worker lit les cellules du cache dans un rayon de 2,5 km et y remplace les routes OMT, cellule par cellule ; rails et cours d'eau restent ceux d'OMT. Le levier `renderer.cellRoadsOn` est allumé, avec les stats `cellRoads` et `cellRoadCells`.
 - **Preuves :** `tests/cell-roads.test.ts`, `tsc`, Biome. **Non vu en jeu.**
 - **Limites :** le trafic et les lampadaires proches suivent encore l'axe OMT, et non celui de la BD TOPO.
+
+### 2026-11-17 10:39 UTC — PLAN-J8 J8-RP RP4 : les ponts de France depuis KSC4, un seul tablier pour tous (session 33d89754)
+
+- **Destination :** §19.13 (« AAA road and bridges ») ; J8-RP RP4 et RP5.
+- **Réalisé :** en France, le worker lit les ponts des cellules « rue » trouvées (`readBridges`, dédoublonnés par identité) et retire les ponts OMT de ces cellules : une seule source par pays. Les deux sources passent par une seule fonction de tablier, `deckBridge` (le RP5, sorti de la boucle OMT). Le tablier part du sol de ses culées, sur un axe densifié tous les 20 m, et monte à son tirant (celui de la cellule, sinon 5,5 m). Les piles sont placées par `bridgePiers` des approches pour les deux sources, seulement où le tablier dépasse 3,5 m. Les cellules sont lues avant la boucle des ponts. Stat `cellBridges`.
+- **Preuves :** `tsc`, Biome, tests. **Non vu en jeu.**
+- **Limites :** un bout ouvert (`OpenA`/`OpenB`) est encore traité comme une culée. RP-R : le chemin OMT des routes et ponts de France à retirer quand le cache est garanti.

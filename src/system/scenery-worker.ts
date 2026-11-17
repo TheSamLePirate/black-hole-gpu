@@ -68,6 +68,10 @@ import { preparedForest } from "./forest-assembly";
 import { cellOf, cellOrigin, fromCell } from "./building-cells";
 import { parkedKind } from "./car-shapes";
 import {
+  type BridgeRecord,
+  BridgeKind,
+  bridgePiers as pierPlaces,
+  readBridges,
   FurnitureFlag,
   FurnitureKind,
   type FurnitureRecord,
@@ -836,7 +840,8 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
   const surveyErrors: string[] = [];
   // (PLAN-J8 J8-RP RP2: the roads drawn from the street cells, and their cells)
   let cellRoadCount = 0,
-    cellRoadCells = 0;
+    cellRoadCells = 0,
+    cellBridgeCount = 0;
   const region = regionOf(q.lat, q.lon);
   const bdtopoTiles = async () => {
     const out: Choice[] = [],
@@ -1280,103 +1285,13 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
       if (!errors.length) errors.push(String(e).slice(0, 220));
     }
   }
-  for (const v of bridgeLines) {
-    if (bridges >= bridgeLimit) break;
-    try {
-      const mid = v.line[Math.floor(v.line.length / 2)]!;
-      const at = localPoint(frame, mid.lat, mid.lon, 0);
-      if (selectedAreas.some((p) => surfaceContains(at, p))) continue;
-      const points: Vec3[] = [];
-      for (const at of v.line) points.push(localPoint(frame, at.lat, at.lon, await height(at.lat, at.lon)));
-      // (PLAN-J8 J8-RP RP5, FableFlight's bridge_end: the deck from the ground at its two abutments — its ends —, straight between them,
-      // lifted towards its middle to a clearance over what lies under it (5.5 m; a layer above the first 4 m more), cut in pieces of
-      // 10 m at most, each on its own height; its thickness 1.2 m, a viaduct's (over 400 m) 1.8 m; concrete parapets; piers every
-      // 34 m — a viaduct's 130 m — only where the deck passes more than 3.5 m over the ground at their foot. Before: one flat deck at
-      // its highest point + 4 m a layer, piers every 40 m down to 5 m under the ground, 17 Nov 2026)
-      const span: number[] = [0];
-      for (let i = 1; i < points.length; i++)
-        span.push(span[i - 1]! + Math.hypot(points[i]![0] - points[i - 1]![0], points[i]![1] - points[i - 1]![1]));
-      const total = span[span.length - 1]!;
-      if (total < 1) continue;
-      const zA = points[0]![2],
-        zB = points[points.length - 1]![2];
-      const clearance = 5.5 + 4 * Math.max(0, v.layer - 1);
-      // (the lift the middle needs: the clearance over each inner point's ground, against the line between the abutments)
-      let lift = 0;
-      for (let i = 1; i < points.length - 1; i++) {
-        const t = span[i]! / total;
-        const env = Math.min(1, 4 * t * (1 - t));
-        if (env > 0.05) lift = Math.max(lift, (points[i]![2] + clearance - (zA + (zB - zA) * t)) / env);
-      }
-      lift = Math.min(Math.max(lift, total > 60 ? clearance * 0.5 : 0.6), 40);
-      const deckAt = (sv: number) => {
-        const t = sv / total;
-        return zA + (zB - zA) * t + lift * Math.min(1, 4 * t * (1 - t)) + 0.4;
-      };
-      const groundAt = (sv: number) => {
-        let k = 1;
-        while (k < span.length - 1 && span[k]! < sv) k++;
-        const s0 = span[k - 1]!,
-          s1 = span[k]!;
-        const f = s1 > s0 ? (sv - s0) / (s1 - s0) : 0;
-        return points[k - 1]![2] + (points[k]![2] - points[k - 1]![2]) * f;
-      };
-      const viaduct = total > 400;
-      const thick = viaduct ? 1.8 : 1.2;
-      const pierStep = viaduct ? 130 : 34;
-      let made = false;
-      for (let i = 0; i < points.length - 1; i++) {
-        const a = points[i]!,
-          b = points[i + 1]!,
-          length = span[i + 1]! - span[i]!;
-        if (length < 0.5) continue;
-        // (each part with its triangles — its strip's outline —: the view draws them as the buildings', 2 Nov 2026; before, their
-        // boxes marked the pixels the tracer's rays then shaded, 6.5 ms of kerr-mini's frame over the Seine)
-        const n = Math.max(1, Math.ceil(length / 10));
-        for (let k = 0; k < n; k++) {
-          const f0 = k / n,
-            f1 = (k + 1) / n;
-          const pa: [number, number, number] = [a[0] + (b[0] - a[0]) * f0, a[1] + (b[1] - a[1]) * f0, 0],
-            pb: [number, number, number] = [a[0] + (b[0] - a[0]) * f1, a[1] + (b[1] - a[1]) * f1, 0];
-          const top = deckAt(span[i]! + length * (f0 + f1) * 0.5);
-          const deck = [stripPolygon(pa, pb, v.width)];
-          made =
-            addSolid(
-              polygonPrimitive(deck, top - thick, top, v.water ? 4 : 2, v.water ? [0.018, 0.052, 0.055] : [0.095, 0.098, 0.1]),
-              deck,
-            ) || made;
-          for (const side of [-1, 1]) {
-            const rail = [stripPolygon(pa, pb, 0.28, (side * v.width) / 2)];
-            addSolid(polygonPrimitive(rail, top, top + 1, 3, [0.42, 0.41, 0.39]), rail);
-          }
-        }
-      }
-      // (the piers, along the whole bridge: where its deck stands more than 3.5 m over the ground at their foot)
-      for (let d = pierStep / 2; d < total - 2; d += pierStep) {
-        if (d < 2) continue;
-        const z = deckAt(d) - thick,
-          g = groundAt(d);
-        if (z - g < 3.5) continue;
-        let k = 1;
-        while (k < span.length - 1 && span[k]! < d) k++;
-        const A = points[k - 1]!,
-          B = points[k]!;
-        const f = span[k]! > span[k - 1]! ? (d - span[k - 1]!) / (span[k]! - span[k - 1]!) : 0;
-        const p: [number, number, number] = [A[0] + (B[0] - A[0]) * f, A[1] + (B[1] - A[1]) * f, 0];
-        const ux = (B[0] - A[0]) / Math.max(1e-6, Math.hypot(B[0] - A[0], B[1] - A[1])),
-          uy = (B[1] - A[1]) / Math.max(1e-6, Math.hypot(B[0] - A[0], B[1] - A[1]));
-        const pier = [stripPolygon([p[0] - ux, p[1] - uy, 0], [p[0] + ux, p[1] + uy, 0], Math.min(viaduct ? 5 : 3, v.width * 0.5))];
-        if (addSolid(polygonPrimitive(pier, g - 2, z, 3, [0.5, 0.49, 0.46]), pier)) bridgePiers++;
-      }
-      if (made) bridges++;
-    } catch (e) {
-      if (!errors.length) errors.push(String(e).slice(0, 220));
-    }
-  }
   // (PLAN-J8 J8-RP RP2: in France the roads within CELL_ROAD_REACH_M from the street cells in the cache — the BD TOPO's axis and
   // measured width, their markings the cells' — in place of OpenMapTiles' in each cell found (their rails and waterways kept); a cell
   // not in the cache: OpenMapTiles' there as before)
   const cellRoads = new Set<Primitive>();
+  // (RP4: the cells' bridges — whole within a z 14 tile, the same identity in each cell that carries them: kept once)
+  const cellBridges = new Map<string, { b: BridgeRecord; o: { lat: number; lon: number } }>();
+  const roadCellsFound = new Set<string>();
   if (q.cellRoads && typeof caches !== "undefined")
     try {
       const store = await caches.open(STREET_CACHE);
@@ -1397,6 +1312,11 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
             return localPoint(frame, g.lat, g.lon, 0) as [number, number, number];
           });
           found.add(`${x}/${y}`);
+          roadCellsFound.add(`${x}/${y}`);
+          for (const br of readBridges(buf)) {
+            const key = `${br.id}:${Math.round(br.points[0]![0])}`;
+            if (!cellBridges.has(key)) cellBridges.set(key, { b: br, o });
+          }
           for (const p of roads) {
             cellRoads.add(p);
             fresh.push(p);
@@ -1418,6 +1338,161 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
     } catch (e) {
       if (surveyErrors.length < 4) surveyErrors.push(`cell roads: ${String(e).slice(0, 200)}`);
     }
+  // (RP4: OpenMapTiles' bridges in a cell whose street cell is cached — France —: out; the cells' own bridges built below)
+  if (roadCellsFound.size) {
+    for (let i = bridgeLines.length - 1; i >= 0; i--) {
+      const mid = bridgeLines[i]!.line[Math.floor(bridgeLines[i]!.line.length / 2)]!;
+      const c = cellOf(mid.lat, mid.lon);
+      if (roadCellsFound.has(`${c.x}/${c.y}`)) bridgeLines.splice(i, 1);
+    }
+  }
+  // (PLAN-J8 J8-RP RP4/RP5 — one deck for every bridge, OpenMapTiles' abroad and the street cells' in France: `points` its axis on the
+  // ground (the scene's frame, z the ground's), its width, its prism's kind and colour, its clearance [m]; returns whether a part was
+  // made)
+  // (a bridge's axis on the ground every 20 m at most — its deck's lift judged on what lies under its whole span, not its few points)
+  const groundLine = async (geo: { lat: number; lon: number }[]): Promise<Vec3[]> => {
+    const out: Vec3[] = [];
+    for (let i = 0; i < geo.length; i++) {
+      const a = geo[i]!;
+      if (i > 0) {
+        const b = geo[i - 1]!;
+        const pa = localPoint(frame, a.lat, a.lon, 0),
+          pb = localPoint(frame, b.lat, b.lon, 0);
+        const n = Math.floor(Math.hypot(pa[0] - pb[0], pa[1] - pb[1]) / 20);
+        for (let k = 1; k <= n; k++) {
+          const f = k / (n + 1);
+          const lat = b.lat + (a.lat - b.lat) * f,
+            lon = b.lon + (a.lon - b.lon) * f;
+          out.push(localPoint(frame, lat, lon, await height(lat, lon)));
+        }
+      }
+      out.push(localPoint(frame, a.lat, a.lon, await height(a.lat, a.lon)));
+    }
+    return out;
+  };
+  const deckBridge = (points: Vec3[], width: number, kind: number, colour: number[], clearance: number): boolean => {
+    // (PLAN-J8 J8-RP RP5, FableFlight's bridge_end: the deck from the ground at its two abutments — its ends —, straight between them,
+    // lifted towards its middle to a clearance over what lies under it (5.5 m; a layer above the first 4 m more), cut in pieces of
+    // 10 m at most, each on its own height; its thickness 1.2 m, a viaduct's (over 400 m) 1.8 m; concrete parapets; piers every
+    // 34 m — a viaduct's 130 m — only where the deck passes more than 3.5 m over the ground at their foot. Before: one flat deck at
+    // its highest point + 4 m a layer, piers every 40 m down to 5 m under the ground, 17 Nov 2026)
+    const span: number[] = [0];
+    for (let i = 1; i < points.length; i++)
+      span.push(span[i - 1]! + Math.hypot(points[i]![0] - points[i - 1]![0], points[i]![1] - points[i - 1]![1]));
+    const total = span[span.length - 1]!;
+    if (total < 1) return false;
+    const zA = points[0]![2],
+      zB = points[points.length - 1]![2];
+    // (the lift the middle needs: the clearance over each inner point's ground, against the line between the abutments)
+    let lift = 0;
+    for (let i = 1; i < points.length - 1; i++) {
+      const t = span[i]! / total;
+      const env = Math.min(1, 4 * t * (1 - t));
+      if (env > 0.05) lift = Math.max(lift, (points[i]![2] + clearance - (zA + (zB - zA) * t)) / env);
+    }
+    lift = Math.min(Math.max(lift, total > 60 ? clearance * 0.5 : 0.6), 40);
+    const deckAt = (sv: number) => {
+      const t = sv / total;
+      return zA + (zB - zA) * t + lift * Math.min(1, 4 * t * (1 - t)) + 0.4;
+    };
+    const groundAt = (sv: number) => {
+      let k = 1;
+      while (k < span.length - 1 && span[k]! < sv) k++;
+      const s0 = span[k - 1]!,
+        s1 = span[k]!;
+      const f = s1 > s0 ? (sv - s0) / (s1 - s0) : 0;
+      return points[k - 1]![2] + (points[k]![2] - points[k - 1]![2]) * f;
+    };
+    const viaduct = total > 400;
+    const thick = viaduct ? 1.8 : 1.2;
+    let made = false;
+    for (let i = 0; i < points.length - 1; i++) {
+      const a = points[i]!,
+        b = points[i + 1]!,
+        length = span[i + 1]! - span[i]!;
+      if (length < 0.5) continue;
+      // (each part with its triangles — its strip's outline —: the view draws them as the buildings', 2 Nov 2026; before, their
+      // boxes marked the pixels the tracer's rays then shaded, 6.5 ms of kerr-mini's frame over the Seine)
+      const n = Math.max(1, Math.ceil(length / 10));
+      for (let k = 0; k < n; k++) {
+        const f0 = k / n,
+          f1 = (k + 1) / n;
+        const pa: [number, number, number] = [a[0] + (b[0] - a[0]) * f0, a[1] + (b[1] - a[1]) * f0, 0],
+          pb: [number, number, number] = [a[0] + (b[0] - a[0]) * f1, a[1] + (b[1] - a[1]) * f1, 0];
+        const top = deckAt(span[i]! + length * (f0 + f1) * 0.5);
+        const deck = [stripPolygon(pa, pb, width)];
+        made = addSolid(polygonPrimitive(deck, top - thick, top, kind, colour), deck) || made;
+        for (const side of [-1, 1]) {
+          const rail = [stripPolygon(pa, pb, 0.28, (side * width) / 2)];
+          addSolid(polygonPrimitive(rail, top, top + 1, 3, [0.42, 0.41, 0.39]), rail);
+        }
+      }
+    }
+    // (the piers, along the whole bridge: where its deck stands more than 3.5 m over the ground at their foot)
+    for (const d of pierPlaces(total, viaduct)) {
+      if (d < 2 || d > total - 2) continue;
+      const z = deckAt(d) - thick,
+        g = groundAt(d);
+      if (z - g < 3.5) continue;
+      let k = 1;
+      while (k < span.length - 1 && span[k]! < d) k++;
+      const A = points[k - 1]!,
+        B = points[k]!;
+      const f = span[k]! > span[k - 1]! ? (d - span[k - 1]!) / (span[k]! - span[k - 1]!) : 0;
+      const p: [number, number, number] = [A[0] + (B[0] - A[0]) * f, A[1] + (B[1] - A[1]) * f, 0];
+      const ux = (B[0] - A[0]) / Math.max(1e-6, Math.hypot(B[0] - A[0], B[1] - A[1])),
+        uy = (B[1] - A[1]) / Math.max(1e-6, Math.hypot(B[0] - A[0], B[1] - A[1]));
+      const pier = [stripPolygon([p[0] - ux, p[1] - uy, 0], [p[0] + ux, p[1] + uy, 0], Math.min(viaduct ? 5 : 3, width * 0.5))];
+      if (addSolid(polygonPrimitive(pier, g - 2, z, 3, [0.5, 0.49, 0.46]), pier)) bridgePiers++;
+    }
+    return made;
+  };
+  for (const v of bridgeLines) {
+    if (bridges >= bridgeLimit) break;
+    try {
+      const mid = v.line[Math.floor(v.line.length / 2)]!;
+      const at = localPoint(frame, mid.lat, mid.lon, 0);
+      if (selectedAreas.some((p) => surfaceContains(at, p))) continue;
+      const points = await groundLine(v.line);
+      if (
+        deckBridge(
+          points,
+          v.width,
+          v.water ? 4 : 2,
+          v.water ? [0.018, 0.052, 0.055] : [0.095, 0.098, 0.1],
+          5.5 + 4 * Math.max(0, v.layer - 1),
+        )
+      )
+        bridges++;
+    } catch (e) {
+      if (!errors.length) errors.push(String(e).slice(0, 220));
+    }
+  }
+  // (RP4: the street cells' bridges — the BD TOPO's axis, width with its sides, clearance —, the nearest first, on the same deck)
+  {
+    const list = [...cellBridges.values()]
+      .map((e) => {
+        const g = fromCell(e.o, e.b.points[0]![0], e.b.points[0]![1]);
+        const p = localPoint(frame, g.lat, g.lon, 0);
+        return { ...e, d: Math.hypot(p[0], p[1]) };
+      })
+      .sort((a, b) => a.d - b.d);
+    for (const e of list) {
+      if (bridges >= bridgeLimit) break;
+      try {
+        const pts = await groundLine(e.b.points.map(([east, north]) => fromCell(e.o, east, north)));
+        const rail = e.b.kind === BridgeKind.Rail,
+          foot = e.b.kind === BridgeKind.Foot;
+        const colour = rail ? [0.2, 0.19, 0.17] : foot ? [0.3, 0.29, 0.27] : [0.095, 0.098, 0.1];
+        if (deckBridge(pts, Math.max(foot ? 2 : 4, e.b.width), 2, colour, e.b.clearance > 0 ? e.b.clearance : 5.5)) {
+          bridges++;
+          cellBridgeCount++;
+        }
+      } catch (err) {
+        if (!errors.length) errors.push(String(err).slice(0, 220));
+      }
+    }
+  }
   // Reserve the planar network before vegetation; analytic distance tests keep even narrow paths sharp.
   surfaces.sort((a, b) => surfaceDistance(a) - surfaceDistance(b));
   const surfaceLimit = Math.round((q.mode === "high" ? 24000 : 16000) * k2);
@@ -2133,6 +2208,7 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
     furniture: furnitureCount,
     cellRoads: cellRoadCount,
     cellRoadCells,
+    cellBridges: cellBridgeCount,
     trafficRoads: roadLines.length,
     lamps: lamps.length,
     lampReachM,
