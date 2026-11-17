@@ -56,6 +56,7 @@ describe.skipIf(!E2E)(`PLAN-J8 J8-9: J8-A's corridor zone « ${TRACK} », downlo
       let last = -1,
         moved = Date.now();
       type Rec = {
+        forests?: { count: number; buildings: number; bytes: number; failed: number; ms: number };
         meshes?: { count: number; buildings: number; bytes: number; failed: number; ms: number };
         state: string;
         cursor: number;
@@ -113,6 +114,15 @@ describe.skipIf(!E2E)(`PLAN-J8 J8-9: J8-A's corridor zone « ${TRACK} », downlo
       console.log(
         `  mesh cells: ${JSON.stringify(z.meshes ?? null)} · keyed with the canopy ${meshes.canopy}, without ${meshes.guessed} · buildings measured ${meshes.measured}`,
       );
+      // (PLAN-J8 J8-8b: its forest cells — within FOREST_NEAR_M of the track —: their candidates, those the zone's canopy served, the
+      // town of Toulon's centre — 16923/12025: none without the canopy —)
+      const forests = await app.js<{ cells: number; canopy: number; candidates: number; toulon: number | null }>(`(async () => {
+        const c = await caches.open("kerr-forest-v1"); let cells = 0, canopy = 0, candidates = 0, toulon = null;
+        for (const r of await c.keys()) { cells++; if (r.url.endsWith("c=1")) canopy++;
+          const v = new DataView(await (await c.match(r)).arrayBuffer()); const n = v.getUint32(36, true); candidates += n;
+          if (v.getUint32(8, true) === 16923 && v.getUint32(12, true) === 12025) toulon = n; }
+        return { cells, canopy, candidates, toulon }; })()`);
+      console.log(`  forest cells: ${JSON.stringify(z.forests ?? null)} · in the cache ${JSON.stringify(forests)}`);
       expect(z.state).toBe("ready");
       expect(z.failed).toBe(0);
 

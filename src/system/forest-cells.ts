@@ -24,10 +24,10 @@ export const FOREST_MAGIC = 0x3143464b; // "KFC1"
 export const FOREST_HEADER_BYTES = 64;
 /** the canopy's step in a word [m] (255 steps: 51 m — the survey's trees under it) */
 export const CANOPY_STEP = 0.2;
-/** a forest cell's bytes and its preparation's time — measured (j8-forest-cells, kerr-mini, 17 Nov 2026: 34 kB, 120–210 ms with its
- *  sources read) — for a zone's estimate */
+/** a forest cell's bytes and its preparation's time — measured in a zone (j8-zone-paris, toulon-hyeres, kerr-mini, 17 Nov 2026: 686
+ *  cells, 23.5 MB, 215 s — 34.3 kB, 0.31 s each, its sources read from the zone) — for a zone's estimate */
 export const FOREST_CELL_BYTES_EST = 34_000;
-export const FOREST_CELL_SECONDS_EST = 0.2;
+export const FOREST_CELL_SECONDS_EST = 0.32;
 /** the prepared cache */
 export const FOREST_CACHE = `kerr-forest-v${FOREST_FORMAT}`;
 /** a forest cell's key (its sources' generation and whether the canopy served it — either changed, another key) */
