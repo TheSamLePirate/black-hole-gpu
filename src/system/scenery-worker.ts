@@ -68,6 +68,7 @@ import { preparedForest } from "./forest-assembly";
 import { cellOf, cellOrigin, fromCell } from "./building-cells";
 import { parkedKind } from "./car-shapes";
 import { PlaceFlag, readPlace, readStreetHeader, STREET_CACHE, streetCacheUrl } from "./street-cells";
+import { markRoad, roadClassCode } from "./road-markings";
 
 /** (PLAN-J8 VB4) the parked cars kept round the scene's centre [m] and at most (the nearest places first) */
 export const PARKED_REACH_M = 900;
@@ -720,6 +721,11 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
                 my = (aa.y + bb.y) / 2;
               if (mx < 0 || mx >= e || my < 0 || my >= e || Math.hypot(b[0] - a[0], b[1] - a[1]) < 0.1) continue;
               const p = surfaceSegment(a, b, width, water ? 3 : rail ? 2 : 1, color);
+              // (PLAN-J8 VB2: a road's class and way kept for its markings — roadMarkings, once the town is known)
+              if (!water && !rail) {
+                p.data[6] = roadClassCode(cls);
+                p.data[7] = Number(props.oneway) || 0;
+              }
               if (surfaceDistance(p) <= radius + 500) surfaces.push(p);
             }
           }
@@ -1851,6 +1857,23 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
     storedBytes += lamps.length * (12 * 12 + 6 * 16) + (lampGrid?.length ?? 0);
   } catch (e) {
     if (surveyErrors.length < 4) surveyErrors.push(`lamps: ${String(e).slice(0, 200)}`);
+  }
+  // (PLAN-J8 J8-VB VB2: the roads' markings, kerbs and pavements — street-detail-prep.ts segmentSurface's rules, KSC3's —, from the
+  // scene's own lines: their class, their width (OpenMapTiles' by class — the BD TOPO's measured ones are the cells'), their lanes by
+  // the width (3.25 m each, two at least both ways), their way, the town at their middle; packed in the segment's free pair: data[6]
+  // the flags (SurfaceFlag) + 16 one way + 32 lane lines + 512 the pavement [dm], data[7] the carriageway's half-width — a kerbed one's
+  // record widened by its pavements (trace.wgsl scenerySurface paints them))
+  try {
+    const town = builtUp([
+      ...prims.filter((p) => p.data[3] === 1).map((p) => [(p.min[0] + p.max[0]) / 2, (p.min[1] + p.max[1]) / 2] as [number, number]),
+      ...cut.map((v) => {
+        const c = localPoint(frame, v.lat, v.lon, 0);
+        return [c[0], c[1]] as [number, number];
+      }),
+    ]);
+    for (const p of keptSurfaces) markRoad(p, town((p.data[0]! + p.data[2]!) / 2, (p.data[1]! + p.data[3]!) / 2));
+  } catch (e) {
+    if (surveyErrors.length < 4) surveyErrors.push(`road markings: ${String(e).slice(0, 200)}`);
   }
   phase("turbines");
   const buffer = packScenery(

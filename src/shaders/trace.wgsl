@@ -10638,7 +10638,34 @@ fn scenerySurface(foot:f32)->ScenerySurface {
       let distance=length(point-p.xy-line*along);
       cover=1.0-smoothstep(max(0.0,size.x-aa),size.x+aa,distance);
       rank=select(2.0,3.0,kind==2.0);
-      if(kind==1.0 && size.x>=3.5 && foot<2.0){
+      // (PLAN-J8 VB2: a road's markings, kerb and pavements — the worker's roadMarkings, KSC3's rules: size.z the flags (1 edge lines,
+      // 2 a dashed centre, 4 a solid one, 8 a kerb) + 16 one way + 32 lane lines + 512 the pavement [dm], size.w the carriageway's
+      // half-width; none: the old dashed centre of the wide ones)
+      let mk=u32(size.z+.5);
+      if(kind==1.0 && mk>0u){
+        let cr=select(size.x,size.w,size.w>0.0);let s=along*len;let paint=vec3f(.65,.64,.56);
+        if((mk&8u)!=0u && distance>cr){
+          // (its pavement: concrete, the kerb's edge lighter)
+          color=mix(vec3f(.30,.295,.28),vec3f(.46,.45,.43),1.0-smoothstep(.1,.1+aa,abs(distance-cr-.1)));
+        }else if(foot<2.0){
+          var m=0.0;
+          if((mk&1u)!=0u){m=max(m,1.0-smoothstep(.075,.075+aa,abs(distance-(cr-.3))));}
+          let dash=1.0-smoothstep(3.0-aa,3.0+aa,s%9.0);
+          if((mk&2u)!=0u){m=max(m,(1.0-smoothstep(.075,.075+aa,distance))*dash);}
+          if((mk&4u)!=0u){m=max(m,1.0-smoothstep(.075,.075+aa,distance));}
+          // (its lane lines, dashed 3 m in 13: both ways — as many each side, from the centre —, or one way across its width)
+          let lanes=(mk>>5u)&15u;
+          if(lanes>0u){
+            let ldash=1.0-smoothstep(3.0-aa,3.0+aa,s%13.0);
+            let one=(mk&16u)!=0u;
+            let k=select(f32(lanes/2u+1u),f32(lanes+1u),one);
+            let w=select(cr,2.0*cr,one)/k;let x=select(distance,distance+cr,one);
+            let f=x/w;let j=round(f);
+            if(j>=1.0 && j<=k-1.0 && (one || j>=1.0)){m=max(m,(1.0-smoothstep(.06,.06+aa,abs(f-j)*w))*ldash);}
+          }
+          color=mix(color,paint,m);
+        }
+      }else if(kind==1.0 && size.x>=3.5 && foot<2.0){
         let stripe=1.0-smoothstep(.09,.09+aa,distance);
         let dash=1.0-smoothstep(3.0-aa,3.0+aa,(along*len)%9.0);
         color=mix(color,vec3f(.65,.64,.56),stripe*dash);
