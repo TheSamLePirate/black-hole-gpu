@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 17 nov. 04:00 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 17 nov. 04:05 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous. Ce qui est fermé quitte le tableau « En cours » pour la ligne « Fermé récemment ».
@@ -10004,7 +10004,7 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   l'utilisent toutes deux. Paris compte 190 cellules, Toulon-Hyères 146.
 - **Preuves :** tests unitaires des zones verts ; vérifié statiquement que les deux appellent la même fonction. Aucun vol relancé de
   ma part.
-\n\n### 2026-11-17 04:05 UTC — PLAN-J8 J8-A : les virages serrés dans la zone en couloir (session des approches, 1feb2f7f)
+### 2026-11-17 04:05 UTC — PLAN-J8 J8-A : les virages serrés dans la zone en couloir (session des approches, 1feb2f7f)
 
 - **Constat** (`j8a-paris-strict` et `-2`, session du rendu, kerr-mini) : 140 puis 174 requêtes réseau en vol, des orthophotos z18 à
   1,5–2,2 km du tracé au demi-tour de Bercy (~150°). À 120 m/s et 25° d'inclinaison, le rayon de virage vaut ~3,1 km : un couloir
