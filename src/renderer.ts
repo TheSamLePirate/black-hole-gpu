@@ -4416,6 +4416,8 @@ export class Renderer {
       this.earthScenery.parkedCars = this.parkedCarsOn;
       // (PLAN-J8 VB7: the junctions' furniture)
       this.earthScenery.furniture = this.furnitureOn;
+      // (PLAN-J8 J8-RP RP2: the roads from the street cells in France)
+      this.earthScenery.cellRoads = this.cellRoadsOn;
       this.earthScenery.update(
         eye,
         detail.scenery,
@@ -11346,6 +11348,10 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
   /** PLAN-J8 J8-VB VB7: the junctions' furniture of the street cells (kerr-street-v3, the approaches' inferred data) within 900 m of
    *  the near scene's centre — stop and yield lines and crossings painted on the road, signals and guardrails as solids. On by default
    *  (not measured); the page's hash `furniture=0`: off from the start */
+  /** PLAN-J8 J8-RP RP2: the near scene's roads within 2.5 km drawn from the street cells (kerr-street-v4 — the BD TOPO's axis and measured
+   *  width, their markings the cells') in place of OpenMapTiles' where a cell is cached (France: the far lamps' pool and the zones fill
+   *  them). On by default (not measured); the page's hash `cellRoads=0`: off from the start */
+  cellRoadsOn = new URLSearchParams(globalThis.location?.hash.slice(1) ?? "").get("cellRoads") !== "0";
   furnitureOn = new URLSearchParams(globalThis.location?.hash.slice(1) ?? "").get("furniture") !== "0";
   parkedCarsOn = new URLSearchParams(globalThis.location?.hash.slice(1) ?? "").get("parkedCars") !== "0";
   /** (the near mesh cells') what is resident: cells, buildings, triangles, the pools' blocks; the cells wanted, those missing */

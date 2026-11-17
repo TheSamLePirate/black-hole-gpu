@@ -10450,3 +10450,10 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   le plus long de 154 m. Toulon : 9 ponts, Marais : 7. Chaque tronçon de pont nomme son pont. tsc, Biome, les gardes e2e et
   `pipeline-inventory --check` passent.
 - **Non mesuré :** rien n'est dessiné ni vu en jeu. Restent RP9 (les voies ferrées) et RP3 (le profil long hors de France).
+
+### 2026-11-17 10:35 UTC — PLAN-J8 J8-RP RP2 : les routes de la scène depuis les cellules « rue » en France (session 33d89754)
+
+- **Destination :** §19.13 (« AAA road and bridges ») ; J8-RP RP2, la part du rendu.
+- **Réalisé :** `cell-roads.ts` (`cellRoadSurfaces`) transforme les `roadRuns` d'une cellule KSC4 en segments de surface de la scène : axe et largeur mesurée par la BD TOPO, marquages, bordures et trottoirs tirés des surfaces de la cellule, rien sur les ponts ni dans les tunnels. Le worker lit les cellules du cache dans un rayon de 2,5 km et y remplace les routes OMT, cellule par cellule ; rails et cours d'eau restent ceux d'OMT. Le levier `renderer.cellRoadsOn` est allumé, avec les stats `cellRoads` et `cellRoadCells`.
+- **Preuves :** `tests/cell-roads.test.ts`, `tsc`, Biome. **Non vu en jeu.**
+- **Limites :** le trafic et les lampadaires proches suivent encore l'axe OMT, et non celui de la BD TOPO.

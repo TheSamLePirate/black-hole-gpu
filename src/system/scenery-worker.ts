@@ -79,6 +79,7 @@ import {
   streetCacheUrl,
 } from "./street-cells";
 import { markRoad, roadClassCode } from "./road-markings";
+import { cellRoadSurfaces } from "./cell-roads";
 
 /** (PLAN-J8 VB4) the parked cars kept round the scene's centre [m] and at most (the nearest places first) */
 export const PARKED_REACH_M = 900;
@@ -86,6 +87,8 @@ export const PARKED_MAX = 2500;
 /** (PLAN-J8 VB7) the junctions' furniture kept round the scene's centre [m] and at most (the nearest first) */
 export const FURNITURE_REACH_M = 900;
 export const FURNITURE_MAX = 4000;
+/** (PLAN-J8 J8-RP RP2) the street cells whose roads the scene draws in place of OpenMapTiles' — within this of its centre [m] */
+export const CELL_ROAD_REACH_M = 2500;
 import { buildingMesh } from "./roof-mesh";
 import { buildingLeaves, lidarRoof as measuredRoof, partMeshes, STACK_BYTES } from "./building-mesh-prep";
 import { builtUp, LAMP_CLASSES, LAMP_MAX, LAMP_REACH_M, lampLight, lampMesh, lampShape, lampsAlong, type StreetLamp } from "./streetlamps";
@@ -831,6 +834,9 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
     return `${Math.floor(((lon + 180) / 360) * t)}/${Math.floor(((1 - Math.asinh(Math.tan(lat * D)) / Math.PI) / 2) * t)}`;
   };
   const surveyErrors: string[] = [];
+  // (PLAN-J8 J8-RP RP2: the roads drawn from the street cells, and their cells)
+  let cellRoadCount = 0,
+    cellRoadCells = 0;
   const region = regionOf(q.lat, q.lon);
   const bdtopoTiles = async () => {
     const out: Choice[] = [],
@@ -1367,6 +1373,51 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
       if (!errors.length) errors.push(String(e).slice(0, 220));
     }
   }
+  // (PLAN-J8 J8-RP RP2: in France the roads within CELL_ROAD_REACH_M from the street cells in the cache — the BD TOPO's axis and
+  // measured width, their markings the cells' — in place of OpenMapTiles' in each cell found (their rails and waterways kept); a cell
+  // not in the cache: OpenMapTiles' there as before)
+  const cellRoads = new Set<Primitive>();
+  if (q.cellRoads && typeof caches !== "undefined")
+    try {
+      const store = await caches.open(STREET_CACHE);
+      const dLat = CELL_ROAD_REACH_M / 111_000,
+        dLon = CELL_ROAD_REACH_M / (111_000 * Math.max(0.1, Math.cos(q.lat * D)));
+      const a = cellOf(q.lat - dLat, q.lon - dLon),
+        b = cellOf(q.lat + dLat, q.lon + dLon);
+      const found = new Set<string>();
+      const fresh: Primitive[] = [];
+      for (let y = Math.min(a.y, b.y); y <= Math.max(a.y, b.y); y++)
+        for (let x = Math.min(a.x, b.x); x <= Math.max(a.x, b.x); x++) {
+          const res = await store.match(streetCacheUrl(self.location.origin, x, y));
+          if (!res) continue;
+          const buf = await res.arrayBuffer();
+          const o = cellOrigin(x, y);
+          const roads = cellRoadSurfaces(buf, (e, n) => {
+            const g = fromCell(o, e, n);
+            return localPoint(frame, g.lat, g.lon, 0) as [number, number, number];
+          });
+          found.add(`${x}/${y}`);
+          for (const p of roads) {
+            cellRoads.add(p);
+            fresh.push(p);
+          }
+        }
+      if (found.size) {
+        // (OpenMapTiles' roads — kind 1 with a class kept — in the cells found: out; their middle's cell by the frame's flat inverse)
+        const cosL = Math.max(0.05, Math.cos(q.lat * D));
+        for (let i = surfaces.length - 1; i >= 0; i--) {
+          const d = surfaces[i]!.data;
+          if (d[5] !== 1 || !(d[6]! > 0) || cellRoads.has(surfaces[i]!)) continue;
+          const c = cellOf(q.lat + (d[1]! + d[3]!) / 2 / 111_132, q.lon + (d[0]! + d[2]!) / 2 / (111_320 * cosL));
+          if (found.has(`${c.x}/${c.y}`)) surfaces.splice(i, 1);
+        }
+        for (const p of fresh) surfaces.push(p);
+        cellRoadCells = found.size;
+        cellRoadCount = fresh.length;
+      }
+    } catch (e) {
+      if (surveyErrors.length < 4) surveyErrors.push(`cell roads: ${String(e).slice(0, 200)}`);
+    }
   // Reserve the planar network before vegetation; analytic distance tests keep even narrow paths sharp.
   surfaces.sort((a, b) => surfaceDistance(a) - surfaceDistance(b));
   const surfaceLimit = Math.round((q.mode === "high" ? 24000 : 16000) * k2);
@@ -2025,7 +2076,7 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
         return [c[0], c[1]] as [number, number];
       }),
     ]);
-    for (const p of keptSurfaces) markRoad(p, town((p.data[0]! + p.data[2]!) / 2, (p.data[1]! + p.data[3]!) / 2));
+    for (const p of keptSurfaces) if (!cellRoads.has(p)) markRoad(p, town((p.data[0]! + p.data[2]!) / 2, (p.data[1]! + p.data[3]!) / 2));
   } catch (e) {
     if (surveyErrors.length < 4) surveyErrors.push(`road markings: ${String(e).slice(0, 200)}`);
   }
@@ -2080,6 +2131,8 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
     cars: cars.length,
     parkedCars,
     furniture: furnitureCount,
+    cellRoads: cellRoadCount,
+    cellRoadCells,
     trafficRoads: roadLines.length,
     lamps: lamps.length,
     lampReachM,

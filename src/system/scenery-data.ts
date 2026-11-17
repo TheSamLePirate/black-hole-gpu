@@ -566,6 +566,8 @@ export interface SceneryRequest {
   parkedCars?: boolean;
   /** PLAN-J8 VB7: the junctions' furniture — stop and yield lines, crossings, signals, guardrails (kerr-street-v3) — within 900 m */
   furniture?: boolean;
+  /** PLAN-J8 J8-RP RP2: the roads within 2.5 km from the street cells (kerr-street-v4) in place of OpenMapTiles' where a cell is cached */
+  cellRoads?: boolean;
   /** the runways near the scene (game/runway-grade.ts): the feet put on the ground as the gear and the tracer have it — their airfields
    *  levelled, the detail off there and under their approaches' funnels (PLAN-J7 J7-1) */
   runways?: GradeRunway[];
@@ -624,6 +626,9 @@ export interface SceneryReply {
   parkedCars?: number;
   /** (PLAN-J8 VB7) the pieces of the junctions' furniture drawn */
   furniture?: number;
+  /** (PLAN-J8 J8-RP RP2) the road segments drawn from the street cells, and the cells they came from */
+  cellRoads?: number;
+  cellRoadCells?: number;
   /** (Q8 D1) the main roads' lines the traffic read, their pieces */
   trafficRoads?: number;
   /** (Q8 L10) the streets' lamps */
