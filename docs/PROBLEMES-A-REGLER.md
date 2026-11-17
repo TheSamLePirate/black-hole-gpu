@@ -53,7 +53,7 @@ la date 15:31 : une minute de monde), **pas au saut d'heure** ; replacée (`view
 les réglages de J0 (`free-camera-hold` `FCH_J0=1` : la caméra tient ; avec `ship: false` l'appareil n'est pas changé). **Vu en passant** :
 `geoNow()` sans appareil oscille de −730 à +306 m sous la caméra tenue (la vue, elle, ne bouge pas : `surfaceAt` constant) — à
 comprendre, peut-être le même désaccord d'horloge. **Prêt** : un enregistreur image par image (`J8J_RUN` : la place de la caméra,
-`held()`, l'horloge ; les images autour d'une perte écrites au journal) — à lancer sur kerr-mini après la zone de Paris (02:15 UTC).
+`held()`, l'horloge ; les images autour d'une perte écrites au journal) — à lancer sur kerr-mini après la zone de Paris (02:15 UTC). **Lancé** (11/17 ~01:00 UTC, kerr-mini, run 20261117-012051, hors ligne, deux séquences 0–3 km à Toulon) : **0 perte sur 8 étapes** cette fois (1 sur 4 au premier run) — le défaut rare ; l'enregistreur reste prêt (`J8J_RUN`).
 **Suite (~22:30 UTC, ce Mac, hors ligne)** : le rig de la caméra libre (`controller/rig.ts`) suivi image par image — 11 281 images
 le monde tournant, deux scènes refaites : **aucun recalage** (`rig.key` stable, « free|moon|earth »), le décalage au centre de la Terre
 constant au mètre (6 368,539 km) ; le corps le plus proche toujours la Terre (le Ranger d'Artemis à ~2,6 milliards de km ; au démarrage,
