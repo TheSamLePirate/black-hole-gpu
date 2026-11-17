@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 17 nov. 12:10 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 17 nov. 13:03 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous. Ce qui est fermé quitte le tableau « En cours » pour la ligne « Fermé récemment ».
@@ -10621,3 +10621,15 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
 
 - **Le vol M1 Max à froid** (Paris de jour, zone préparée, repos 600 s, hors ligne, strict ; ce Mac) : **arrêté à l'étape 1**, avant tout vol. La zone avait reçu ses 60 738 chaînes vers la 7ᵉ minute, puis elle a fabriqué ses cellules (rues KSC5, maillages, forêt). Le garde-fou de `j8-a` ne suivait que les chaînes et a coupé après 10 min sans qu'elles avancent. Le Mac était passé en Heavy pendant la seule zone. Correction : le garde-fou compte aussi les cellules des caches (`kerr-street`, `kerr-mesh`, `kerr-forest`) comme progrès. À relancer, le Mac revenu en Nominal.
 - **RP10 :** les rapiéçages de la chaussée (réparations carrées de quelques mètres, plus fraîches ou plus vieilles, sous 1,5 m de pied de pixel). `check-wgsl` passe. **Non vu en jeu.**
+
+### 2026-11-17 13:03 UTC — PLAN-J8 : l'arrêt de Toulon après Paris, la préparation des zones mise hors de cause (session des approches, 1feb2f7f)
+
+- **Mesuré** (kerr-mini, `j8-zone-paris` avec `J8_TRACK=toulon-hyeres`, `J8Z_BEFORE=paris` et `E2E_EMIT=0`,
+  `20261117-133638-j8-zone-toulon-after-paris`, 1/1, 27 min) :
+  - les zones de Paris puis de Toulon-Hyères sont téléchargées et préparées dans la même page ;
+  - **la page répond toujours** : 53 témoins, toutes les 30 s, entre 0 et 253 ms ;
+  - le tas JS reste entre 361 et 807 Mo, sans tendance ;
+  - Toulon est prête en 10,3 min ; ses 7 points sont prêts hors ligne, avec 0 requête réseau.
+- **Conclusion :** la préparation des zones, même enchaînées, ne reproduit pas l'arrêt du premier gros e2e. Il y manque le vol de Paris :
+  la scène, la couche lointaine, la forêt, tout ce qu'ils laissent dans la page. La suite est côté rendu, avec le même témoin dans `j8-a`
+  au besoin. Toulon passe aussi seul en page neuve (`j8a-big-toulon`).
