@@ -10539,3 +10539,15 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
 - **Constat :** au gros e2e (kerr-mini, Paris jour et nuit), le relevé du critère 5 n'a vu aucun pixel de bâtiment (0 et 0) et a buté sur sa limite de 45 s. Un diagnostic sur ce Mac (`surfaceAt` sur une grille 16 × 9 au-dessus de Paris, 500 m) montre que la sonde lit bien les bâtiments : les maillages proches (g positif) jusqu'à ~2,5 km, la couche lointaine (g négatif) dès ~2,1 km. Le défaut venait du relevé : 64 × 36 points à partir du tiers supérieur de l'image, du ciel d'abord, et le temps écoulé avant le premier bâtiment.
 - **Correction :** 32 × 18 points sur la moitié basse de l'image, une bande de 0,8–3,5 km autour de la jonction, et 90 s au plus.
 - **Preuves :** le diagnostic (témoin positif : la sonde voit des bâtiments des deux couches) ; `tsc`, Biome, gardes e2e. **Le relevé corrigé n'a pas encore tourné** : le gros e2e en cours a été lancé avant. Témoin négatif (A/A) pas encore fait.
+
+### 2026-11-17 11:02 UTC — PLAN-J8 : le gros e2e, premier passage (kerr-mini) — Paris passe, Toulon-Hyères bloque à la préparation de sa zone (session 33d89754)
+
+- **Destination :** §19.13 (J8-A) ; PLAN-J8 §6 point 13, R5.
+- **Ce qui a tourné :** `j8-a` avec `J8A_TRACK_READY J8A_STRICT J8A_OFFLINE J8A_FOREST J8A_LOW`, sur 71428657…6bac1118 (VB2–VB7 et A6, **avant J8-RP**). Job `20261117-112103-j8a-big-e2e-mini`, 40 min, exit 1.
+- **Paris, de jour et de nuit, hors ligne, en strict : passé.**
+  - **Jour :** 0 image rapide, 0 requête de données (`swData` 0), GPU p50 59,5 ms (p95 89,8), écart max entre images 101 ms, chargement 35 s.
+  - **Nuit :** 0 image rapide, GPU p50 58,7 ms (p95 69,9), écart max 84 ms.
+  - **Critère 4 :** les bâtiments préparés sont dessinés à 100 % dans 15 km. Dans l'anneau 15–20 km, 73–99 % le sont (réserve lointaine de 72 Mio, décision de Sam).
+- **Critère 5 :** 0 pixel de bâtiment, à cause d'un défaut du relevé (le ciel lu d'abord, limite de 45 s), corrigé en fb2268fd. La vue « dehors » finale montrait l'arceau de la verrière de l'intérieur : le relevé laissait le monde figé, corrigé par un `freeze(false)`.
+- **Toulon-Hyères :** la zone a reçu toutes ses données (46 357 chaînes), puis la page n'a plus répondu pendant 300 s, pendant la préparation des cellules. C'était la même page que pour Paris, ouverte depuis 40 min ; la même zone passait seule ce matin. Les tracés bas n'ont pas été volés.
+- **Suite :** relancer un tracé par processus (une page neuve chacun), sur le code de J8-RP.

@@ -399,7 +399,9 @@ test.skipIf(!E2E)(
             return { near: mean(acc.near), far: mean(acc.far), nN: acc.near[3], nF: acc.far[3], ms: Math.round(performance.now() - t0) };
           })()`);
           await app.js(
-            `(() => { __bh.renderer.debugSkipShip = false; document.body.classList.remove("hide-ui"); __bh.touch(); return 1; })()`,
+            // (the world let go again: a mount set while frozen is not applied — the view from outside below shot the canopy's frame from
+            // inside, the big e2e of 17 Nov 2026)
+            `(() => { __bh.renderer.debugSkipShip = false; document.body.classList.remove("hide-ui"); __bh.freeze(false); __bh.touch(); return 1; })()`,
           );
           const lum = (c: number[] | null) => (c ? 0.2126 * c[0]! + 0.7152 * c[1]! + 0.0722 * c[2]! : null);
           const junction = {
