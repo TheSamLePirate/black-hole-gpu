@@ -30,7 +30,7 @@ import { J0_FIXED } from "./lib/j0-scene";
 // (surfaceAt on a 32 × 18 grid of the lower half, the canvas's colours, the craft and the UI hidden) and their gap — said, not asserted.
 // J8A_WITNESS=1: the page's witness (its JS heap asked every 30 s on its own timer, « NO ANSWER in 10 s » when it does not answer) —
 // to date a page that stops answering (Toulon's zone after Paris's flights in one page, 17 Nov 2026).
-// J8A_FOREST=1 (J8-8b lot 2): the near scene's forest assembled from its prepared cells (renderer.forestCellsOn — the zone's, the forest
+// J8A_FOREST=0 (J8-8b lot 2 — on by default since 17 Nov 2026): the near scene's forest decided case by case again, not assembled from its prepared cells (renderer.forestCellsOn — the zone's, the forest
 // pool's), each leg's last scene's cells said (forestPrepared: read, missing, cases covered).
 // J8A_BUDGET [MiB, default 72]: the far layer's pool (renderer.farBudgetMiB — all Paris resident; the default since Sam's « ok 72 »).
 // J8A_OFFLINE=1 (with J8A_TRACK_READY; the approaches' session, agreed 17 Nov 2026): each track flown with the network cut — its zone
@@ -100,7 +100,7 @@ test.skipIf(!E2E)(
         await app.js(`(() => { Object.assign(__bh.settings, ${J0_FIXED}); Object.assign(__bh.settings, { dof: false, motionBlur: 0, damage: false });
           __bh.renderer.farBudgetMiB = ${Number(process.env.J8A_BUDGET ?? 72)};
           __bh.renderer.nearCellsOn = ${process.env.J8A_CELLS !== "0"};
-          __bh.renderer.forestCellsOn = ${process.env.J8A_FOREST === "1"}; return 1; })()`);
+          __bh.renderer.forestCellsOn = ${process.env.J8A_FOREST !== "0"}; return 1; })()`);
         await app.waitFor(`__bh.fleet.active === "f35"`, 60_000);
       };
       await setup();

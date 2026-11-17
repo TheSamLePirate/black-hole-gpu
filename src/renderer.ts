@@ -11334,9 +11334,10 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
   private nearCellsWant = new URLSearchParams(globalThis.location?.hash.slice(1) ?? "").get("nearCells") !== "0";
   private nearMeshes: NearMeshes | null = null;
   /** PLAN-J8 J8-8b lot (2): the near scene's forest assembled from its prepared cells (kerr-forest-v1 — forest-assembly.ts) where they are
-   *  in the cache (an offline zone's; the forest pool's — asked round the eye with forestPoolOn), the rest decided as before. Off until measured
-   *  (the M1 Max's reference: Paris, 17 Nov 2026); the page's hash `forestCells=1`: on from the start */
-  forestCellsOn = new URLSearchParams(globalThis.location?.hash.slice(1) ?? "").get("forestCells") === "1";
+   *  in the cache (an offline zone's; the forest pool's — asked round the eye with forestPoolOn), the rest decided as before. On by default
+   *  since 17 Nov 2026 (J8-A green on kerr-mini with it: Paris, Toulon-Hyères, the low tracks, day and night, strict); the page's hash
+   *  `forestCells=0`: off from the start */
+  forestCellsOn = new URLSearchParams(globalThis.location?.hash.slice(1) ?? "").get("forestCells") !== "0";
   private forestWantAt: { lat: number; lon: number; t: number } | null = null;
   /** (with forestCellsOn) the forest pool asked for the cells round the eye — off: the cells an offline zone prepared alone (17 Nov
    *  2026: the pool's cells, made outside a zone, have no canopy — left out by a scene that has the IGN's, its work wasted, two workers

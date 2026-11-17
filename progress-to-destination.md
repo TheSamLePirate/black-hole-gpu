@@ -10682,3 +10682,9 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   - GPU p50 58,1 ms de jour et 51,8 ms de nuit (p95 84,6 et 63,6).
 - **Avec les passages du rendu, tous les tracés de J8-A sont verts sur kerr-mini** : Paris, Toulon-Hyères, `toulon-bas` et
   `paris-marais-bas`, dont Paris puis Toulon dans une même page. Reste le vol M1 Max, à froid, mené par le rendu. Grille VB8 à jour.
+
+### 2026-11-17 15:01 UTC — PLAN-J8 J8-8b : la forêt des cellules allumée par défaut (session 33d89754)
+
+- **Décision appliquée :** relayée par la session d'analyse (17 nov. vers 16:15 à Paris) : les cellules forêt de J8-8b sont allumées par défaut. J8-A est vert sur kerr-mini avec elles (Paris, Toulon-Hyères et les tracés bas, de jour et de nuit, en strict).
+- **Réalisé :** `renderer.forestCellsOn` est vrai par défaut ; le hash `forestCells=0` l'éteint, et `J8A_FOREST=0` dans `j8-a`. Mis à jour : BH-API, catalogue, plan. L'ancienne décision de `growForest` pour les cases couvertes se retire au prochain lot de retrait (règle 2).
+- **Preuves :** aucune lancée sur ce Mac pendant le vol M1 Max : `tsc`, Biome et le push viendront après lui. Le changement se limite à une valeur par défaut.
