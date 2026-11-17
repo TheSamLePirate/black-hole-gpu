@@ -307,7 +307,7 @@ J8-R. J8-1 se voit tout de suite. J8-4 apporte le gros du gain : « toute la vue
              nombre dessiné. Le recensement se lit dans les cellules préparées (`zone-cells.ts` `buildingsIn` lit déjà
              leurs en-têtes ; les approches peuvent fournir `censusRings(vue, anneaux)`) ; le nombre dessiné vient de la
              couche lointaine et des maillages (rendu) ;
-          5. ✗ **le moins de différences entre les qualités** : l'écart de couleur moyenne des toits et des murs de part
+          5. ✓ (relevé ajouté par le rendu, 11/17 ~10:19 UTC : au dernier point de chaque vol, figé, sans avion ni interface, une grille de 64 × 36 points — `surfaceAt` dit maillage proche ou couche lointaine et la distance —, la couleur moyenne de chaque couche dans 0,8–2,5 km et leur écart ; dit, non jugé ; toits et murs ensemble, `surfaceAt` ne donne pas la normale ; **sonde sans témoins positif ni négatif (règle 3) : son chiffre n'entre pas dans une recommandation avant eux** ; non lancé) **le moins de différences entre les qualités** : l'écart de couleur moyenne des toits et des murs de part
              et d'autre de la jonction maillage / couche lointaine (1,5 km), par bande, de jour et de nuit, avec les
              captures côte à côte (rendu) ;
           6. ✓ les captures de jour et de nuit le long du vol, plus la vidéo pour juger les bascules (à montrer à Sam) ;

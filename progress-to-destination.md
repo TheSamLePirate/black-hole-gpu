@@ -10378,3 +10378,10 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   240 Mo à Paris. Elles y sont désormais, avec la moyenne par cellule des deux zones mesurées : `BUILDING_CELL_BYTES_EST` et
   `_SECONDS_EST` dans `building-cells.ts`, `STREET_CELL_*` dans `street-cells.ts`. Test `pwa-zones-cells`.
 - **Limite :** une zone dense comme Paris pèse environ 1,4 fois cette moyenne, une zone peu dense comme Toulon environ 0,4 fois.
+
+### 2026-11-17 10:19 UTC — PLAN-J8 A6 critère 5 : l'écart de couleur à la jonction relevé par j8-a (session 33d89754)
+
+- **Destination :** §19.13 (« le moins de différences visibles entre les qualités des bâtiments ») ; PLAN-J8 A6 critère 5.
+- **Réalisé :** au dernier point de chaque vol, `j8-a` fige le monde et cache l'avion et l'interface. Il lit une grille de 64 × 36 points : `surfaceAt` donne la couche (maillage proche, ou couche lointaine quand le g de visibilité est négatif) et la distance, le canvas donne la couleur. Il en tire la couleur moyenne de chaque couche dans 0,8–2,5 km et leur écart (canaux, rapport de luminance). Le relevé est affiché, pas jugé.
+- **Preuves :** `tsc`, Biome, gardes e2e. **Non lancé.** Sonde sans témoins (règle 3) : son chiffre n'entre dans aucune recommandation avant eux. Toits et murs sont mesurés ensemble, faute de normale.
+- **Suite :** le gros e2e (R5) et VB8, avec les approches.

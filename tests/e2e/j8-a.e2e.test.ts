@@ -25,7 +25,8 @@ import { J0_FIXED } from "./lib/j0-scene";
 // J8A_LOW=1 (PLAN-J8 A6 criterion 8): the low tracks too (j8a-tracks.ts J8A_LOW_TRACKS — Toulon's centre, the Marais — 150 m then
 // 50 m over the ground; rule 13's floor 25 m on them), for VB2–VB7's details. After each leg, criterion 4: the prepared building
 // cells' census by ring round the craft (__bh.sys.census) against the cells drawn (__bh.sys.drawnCensus) — strict: 98 % or more drawn
-// within 10 km.
+// within 10 km. At each flight's last point, criterion 5: the near meshes' and the far layer's buildings' mean colours within 0.8–2.5 km
+// (surfaceAt on a 64 × 36 grid, the canvas's colours, the craft and the UI hidden) and their gap — said, not asserted.
 // J8A_FOREST=1 (J8-8b lot 2): the near scene's forest assembled from its prepared cells (renderer.forestCellsOn — the zone's, the forest
 // pool's), each leg's last scene's cells said (forestPrepared: read, missing, cases covered).
 // J8A_BUDGET [MiB, default 72]: the far layer's pool (renderer.farBudgetMiB — all Paris resident; the default since Sam's « ok 72 »).
@@ -363,6 +364,53 @@ test.skipIf(!E2E)(
                 if (r.share < 0.98)
                   throw new Error(`${name} ${l.name}: ${r.drawn} of the ${r.census} buildings prepared within ${r.km} km drawn (< 98 %)`);
           }
+          // (PLAN-J8 A6 criterion 5 — the least difference between the qualities: frozen at the last point, the craft and the UI hidden,
+          // the image converged; a 64 × 36 grid of its lower two thirds read (surfaceAt: a near mesh's building, or a far one's — its
+          // visibility's g negative —, its distance), the image's colours there (the canvas); each layer's mean colour within 0.8–2.5 km
+          // of the eye — round the junction, the near meshes' reach — and their gap: the mean channels' difference, the luminance's
+          // ratio. Said, not asserted (Sam judges with the shots); no normal there: roofs and walls together)
+          await app.js(
+            `(() => { __bh.freeze(true); __bh.renderer.debugSkipShip = true; document.body.classList.add("hide-ui"); __bh.touch(); return 1; })()`,
+          );
+          await app.settled();
+          await app.js(`new Promise((q) => setTimeout(q, 3000))`);
+          const gap = await app.js<{ near: number[] | null; far: number[] | null; nN: number; nF: number; ms: number }>(`(async () => {
+            const t0 = performance.now(), R = __bh.renderer, f = () => new Promise((q) => requestAnimationFrame(q));
+            for (let i = 0; i < 5; i++) { __bh.touch(); await f(); }
+            const cv = document.querySelector("canvas");
+            const b = await new Promise((q) => requestAnimationFrame(() => q(createImageBitmap(cv))));
+            const o = new OffscreenCanvas(b.width, b.height), g = o.getContext("2d"); g.drawImage(b, 0, 0);
+            const img = g.getImageData(0, 0, b.width, b.height).data;
+            const acc = { near: [0, 0, 0, 0], far: [0, 0, 0, 0] };
+            for (let j = 0; j < 36; j++) for (let i = 0; i < 64; i++) {
+              if (performance.now() - t0 > 45000) break;
+              const x = (i + 0.5) / 64, y = 1 / 3 + ((j + 0.5) / 36) * (2 / 3);
+              const s = await R.surfaceAt(x, y);
+              if (!s || s.craft !== null || (s.kind !== "building" && s.kind !== "box")) continue;
+              const d = s.nearest ?? s.ground ?? 0;
+              if (d < 800 || d > 2500) continue;
+              const k = (s.vis?.[1] ?? 0) < 0 ? "far" : "near";
+              const px = Math.min(b.width - 1, Math.floor(x * b.width)), py = Math.min(b.height - 1, Math.floor(y * b.height)), at = 4 * (py * b.width + px);
+              acc[k][0] += img[at]; acc[k][1] += img[at + 1]; acc[k][2] += img[at + 2]; acc[k][3]++;
+            }
+            const mean = (a) => (a[3] ? [a[0] / a[3], a[1] / a[3], a[2] / a[3]].map((v) => +v.toFixed(1)) : null);
+            return { near: mean(acc.near), far: mean(acc.far), nN: acc.near[3], nF: acc.far[3], ms: Math.round(performance.now() - t0) };
+          })()`);
+          await app.js(
+            `(() => { __bh.renderer.debugSkipShip = false; document.body.classList.remove("hide-ui"); __bh.touch(); return 1; })()`,
+          );
+          const lum = (c: number[] | null) => (c ? 0.2126 * c[0]! + 0.7152 * c[1]! + 0.0722 * c[2]! : null);
+          const junction = {
+            ...gap,
+            diff: gap.near && gap.far ? gap.near.map((v, k) => +(v - gap.far![k]!).toFixed(1)) : null,
+            lumRatio: gap.near && gap.far ? +((lum(gap.far) ?? 0) / Math.max(1, lum(gap.near) ?? 1)).toFixed(3) : null,
+          };
+          console.log(`  ${name} criterion 5 (the junction's colours, 0.8–2.5 km, sRGB 0–255): ${JSON.stringify(junction)}`);
+          await app.stepDone(
+            junction.lumRatio === null
+              ? `jonction : pas assez de bâtiments des deux couches (${gap.nN} proches, ${gap.nF} lointains)`
+              : `jonction : écart ${JSON.stringify(junction.diff)}, luminance lointaine / proche ${junction.lumRatio}`,
+          );
           // (the view from outside at the end: 80 m behind, a little above — the city round the craft)
           await app.js(`(async () => { __bh.settings.shipMount = "around"; __bh.refresh(); __bh.camera.viewReset();
             Object.assign(__bh.camera.outside, { yaw: 160, pitch: 10, dist: 80 });
@@ -373,6 +421,7 @@ test.skipIf(!E2E)(
           const flight = {
             preloadS,
             legs,
+            junction,
             gpuP50: all[all.length >> 1] ?? null,
             gpuP95: all[Math.floor(all.length * 0.95)] ?? null,
             gapMax: Math.max(...legs.map((l) => l.gapMax)),
