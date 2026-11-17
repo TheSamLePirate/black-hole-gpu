@@ -1,5 +1,5 @@
 // Shared worker/GPU contract: local WGS84 metres, stackless BVH, exact polygon extrusions.
-import { carKind, carShape } from "./car-shapes";
+import { type CarKind, carKind, carShape } from "./car-shapes";
 import { geodeticToCart, WGS84_A, WGS84_F } from "./ellipsoid";
 import { type ForestFrame, forestVec4s, writeForest } from "./forest";
 import type { Vec3 } from "../physics";
@@ -288,6 +288,16 @@ export const CABLE_TAG = 0xfffb0000;
 export const CAR_BODY = 0xfff90000;
 /** (PLAN-J8 VB3) a car's glass: its body's tag with this bit in its index's half (the index itself below it — TRAFFIC_MAX < 2¹⁵) */
 export const CAR_GLASS_BIT = 0x8000;
+/** a car of the scene (packScenery): its piece of road (start → end, its speed [m/s], its phase) — traffic.ts CarPlace's —; (VB4) its
+ *  shape when given (a parked car's: car-shapes.ts parkedKind), its lamps false: none (dark) */
+export interface SceneryCar {
+  start: [number, number, number];
+  end: [number, number, number];
+  speed: number;
+  phase: number;
+  kind?: CarKind;
+  lamps?: boolean;
+}
 export const CAR_HEAD = 0xfff80000;
 export const CAR_TAIL = 0xfff70000;
 /** (Q8 L10) a street lamp's pole (a pair of vertices at its foot, a pair at its top: widened across the view, dithered) and its
@@ -329,7 +339,7 @@ export function packScenery(
    *  glass's (CAR_BODY | CAR_GLASS_BIT), headlights' and tail lights' triangles tagged CAR_BODY / CAR_HEAD / CAR_TAIL | its index,
    *  from a vertex index ≡ 0 mod 4 (padding before them; each shape's vertices a multiple of four); its entry (start, speed),
    *  (end, phase) after the pylons' */
-  cars: { start: [number, number, number]; end: [number, number, number]; speed: number; phase: number }[] = [],
+  cars: SceneryCar[] = [],
   /** (Q8 L10) the streets' lamps (system/streetlamps.ts lampMesh: eight vertices, from a vertex index ≡ 0 mod 4), their pole's
    *  triangles tagged LAMP_POLE, their head's LAMP_HEAD; and their light's grid (LAMP_GRID's bytes) after the decals' far grid,
    *  its side and texel in the palette's unused entry 0 (0: none) */
@@ -337,7 +347,7 @@ export function packScenery(
   lampGrid?: Uint8Array,
 ) {
   // (PLAN-J8 VB3: each car its shape)
-  const carShapes = cars.map((_, i) => carShape(carKind(i)));
+  const carShapes = cars.map((c, i) => carShape(c.kind ?? carKind(i), c.lamps ?? true));
   const { nodes, geometries, offsets } = sceneryBVH(prims);
   const surface = sceneryBVH(surfaces);
   // (the water's tree: the surfaces' own records, a large polygon's bands — waterBands — appended after them)
@@ -542,6 +552,8 @@ export interface SceneryRequest {
   meshCells?: boolean;
   /** PLAN-J8 J8-8b lot (2): the forest assembled from its prepared cells where they are (kerr-forest-v1 — forest-assembly.ts) */
   forestPrepared?: boolean;
+  /** PLAN-J8 VB4: the parked cars — the street cells' places (kerr-street-v3, read from their cache) within PARKED_REACH_M */
+  parkedCars?: boolean;
   /** the runways near the scene (game/runway-grade.ts): the feet put on the ground as the gear and the tracer have it — their airfields
    *  levelled, the detail off there and under their approaches' funnels (PLAN-J7 J7-1) */
   runways?: GradeRunway[];
@@ -594,8 +606,10 @@ export interface SceneryReply {
   pylons?: number;
   /** (Q8 D1) the spans of conductors drawn */
   cables?: number;
-  /** (Q8 D1) the cars on the main roads */
+  /** (Q8 D1) the cars on the main roads (VB4: the parked ones among them) */
   cars?: number;
+  /** (PLAN-J8 VB4) the parked cars drawn (street cells' places) */
+  parkedCars?: number;
   /** (Q8 D1) the main roads' lines the traffic read, their pieces */
   trafficRoads?: number;
   /** (Q8 L10) the streets' lamps */

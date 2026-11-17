@@ -4412,6 +4412,8 @@ export class Renderer {
       this.earthScenery.meshCells = this.farBuildingsOn && this.nearCellsWant;
       // (PLAN-J8 J8-8b lot 2: the forest from its prepared cells where they are)
       this.earthScenery.forestPrepared = this.forestCellsOn;
+      // (PLAN-J8 VB4: the parked cars on the street cells' places)
+      this.earthScenery.parkedCars = this.parkedCarsOn;
       this.earthScenery.update(
         eye,
         detail.scenery,
@@ -11336,6 +11338,10 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
    *  2026: the pool's cells, made outside a zone, have no canopy — left out by a scene that has the IGN's, its work wasted, two workers
    *  at ~0.45 s a cell beside the scene's on the M1 Max) */
   forestPoolOn = false;
+  /** PLAN-J8 J8-VB VB4: the parked cars — the street cells' places (kerr-street-v3, the approaches' data) within 900 m of the near
+   *  scene's centre, each a car at rest of car-shapes.ts's (no bus, its lamps dark). On by default (Sam: all of J8-VB before the big
+   *  e2e — not measured); the page's hash `parkedCars=0`: off from the start */
+  parkedCarsOn = new URLSearchParams(globalThis.location?.hash.slice(1) ?? "").get("parkedCars") !== "0";
   /** (the near mesh cells') what is resident: cells, buildings, triangles, the pools' blocks; the cells wanted, those missing */
   nearCells() {
     return this.nearMeshes?.stats() ?? null;

@@ -68,16 +68,24 @@ export interface CarShape {
   tail: number;
 }
 
-const built = new Map<CarKind, CarShape>();
-/** a shape's mesh (built once): its vertices a multiple of four, its lamps' quads each from a vertex index ≡ 0 mod 4 */
-export function carShape(kind: CarKind): CarShape {
-  const hit = built.get(kind);
+/** a parked car's shape (VB4): no bus nor lorry in a street's parking lane — a van in its place */
+export function parkedKind(seed: number): CarKind {
+  const k = carKind(seed);
+  return k === CarKind.Bus ? CarKind.Van : k;
+}
+
+const built = new Map<string, CarShape>();
+/** a shape's mesh (built once): its vertices a multiple of four, its lamps' quads each from a vertex index ≡ 0 mod 4; `lamps` false
+ *  (VB4, a parked car): none — its lamps dark, nothing lit at night */
+export function carShape(kind: CarKind, lamps = true): CarShape {
+  const key = `${kind}:${lamps ? 1 : 0}`;
+  const hit = built.get(key);
   if (hit) return hit;
   const s = SPECS[kind];
   const positions: number[] = [];
   const body: number[] = [],
     glass: number[] = [],
-    lamps: number[] = [];
+    lampTris: number[] = [];
   const y0 = -LANE_M;
   const v = (x: number, y: number, z: number) => {
     positions.push(x, y0 + y, z);
@@ -128,20 +136,22 @@ export function carShape(kind: CarKind): CarShape {
     v(x, y, lz);
     v(x, y, lz);
     v(x, y, lz);
-    lamps.push(a, a + 1, a + 2, a, a + 2, a + 3);
+    lampTris.push(a, a + 1, a + 2, a, a + 2, a + 3);
   };
-  lamp(L + 0.05, ly);
-  lamp(L + 0.05, -ly);
-  lamp(-L - 0.05, ly);
-  lamp(-L - 0.05, -ly);
+  if (lamps) {
+    lamp(L + 0.05, ly);
+    lamp(L + 0.05, -ly);
+    lamp(-L - 0.05, ly);
+    lamp(-L - 0.05, -ly);
+  }
   const shape: CarShape = {
     positions,
-    triangles: [...body, ...glass, ...lamps],
+    triangles: [...body, ...glass, ...lampTris],
     body: body.length / 3,
     glass: glass.length / 3,
-    head: 4,
-    tail: 4,
+    head: lamps ? 4 : 0,
+    tail: lamps ? 4 : 0,
   };
-  built.set(kind, shape);
+  built.set(key, shape);
   return shape;
 }

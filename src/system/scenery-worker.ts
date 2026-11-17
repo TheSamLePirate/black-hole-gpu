@@ -1,5 +1,5 @@
 // Worldwide data preparation is isolated from the render loop. No complete COG download.
-import { type CarPlace, carsOn, PIECE_M, ROAD_TRAFFIC, TRAFFIC_MAX, TRAFFIC_REACH_M } from "./traffic";
+import { carsOn, LANE_M, PIECE_M, ROAD_TRAFFIC, TRAFFIC_MAX, TRAFFIC_REACH_M } from "./traffic";
 import { VectorTile, classifyRings } from "@mapbox/vector-tile";
 import { PbfReader } from "pbf";
 import { installNetActivity } from "./net-activity";
@@ -65,6 +65,13 @@ import {
 } from "./scenery-geometry";
 import { forestCacheUrl, FOREST_CACHE } from "./forest-cells";
 import { preparedForest } from "./forest-assembly";
+import { cellOf, cellOrigin, fromCell } from "./building-cells";
+import { parkedKind } from "./car-shapes";
+import { PlaceFlag, readPlace, readStreetHeader, STREET_CACHE, streetCacheUrl } from "./street-cells";
+
+/** (PLAN-J8 VB4) the parked cars kept round the scene's centre [m] and at most (the nearest places first) */
+export const PARKED_REACH_M = 900;
+export const PARKED_MAX = 2500;
 import { buildingMesh } from "./roof-mesh";
 import { buildingLeaves, lidarRoof as measuredRoof, partMeshes, STACK_BYTES } from "./building-mesh-prep";
 import { builtUp, LAMP_CLASSES, LAMP_MAX, LAMP_REACH_M, lampLight, lampMesh, lampsAlong, type StreetLamp } from "./streetlamps";
@@ -91,6 +98,7 @@ import {
   D,
   localPoint,
   packScenery,
+  type SceneryCar,
   sceneryFrame,
   sceneryGrid,
   SCENERY_BYTES,
@@ -512,7 +520,7 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
   const lampLines: { xy: [number, number][]; geo: { lat: number; lon: number }[]; cls: string; width: number }[] = [];
   let lamps: StreetLamp[] = [];
   let lampGrid: Uint8Array | undefined;
-  const cars: CarPlace[] = [];
+  const cars: SceneryCar[] = [];
   let pieceCount = 0;
   // (PLAN-J8 J8-L: the reach round the frame's centre within which the scene keeps its own lamps and cars — shorter where their caps
   // cut, 0 where it has none (a failure, the lamps not asked): the far layer's (street-far.ts) left out within it, no double, no gap)
@@ -1705,6 +1713,63 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
   } catch (e) {
     if (surveyErrors.length < 4) surveyErrors.push(`traffic: ${String(e).slice(0, 200)}`);
   }
+  // (PLAN-J8 VB4: the parked cars — the street cells' places within PARKED_REACH_M (street-cells.ts, the approaches' VB4 data; their
+  // cells in the street cache — the far lamps' pool and the zones fill it), the nearest PARKED_MAX: each a car at rest (speed 0, its
+  // piece a metre ahead) on its place, its shape by its seed (no bus), its lamps dark; on the left of its street it faces the other
+  // way (driving on the right); the ground already in only, none on any failure)
+  let parkedCars = 0;
+  if (q.parkedCars && typeof caches !== "undefined")
+    try {
+      const store = await caches.open(STREET_CACHE);
+      const dLat = PARKED_REACH_M / 111_000,
+        dLon = PARKED_REACH_M / (111_000 * Math.max(0.1, Math.cos(q.lat * D)));
+      const a = cellOf(q.lat - dLat, q.lon - dLon),
+        b = cellOf(q.lat + dLat, q.lon + dLon);
+      const found: { p: [number, number, number]; d: [number, number]; seed: number; r: number }[] = [];
+      for (let y = Math.min(a.y, b.y); y <= Math.max(a.y, b.y); y++)
+        for (let x = Math.min(a.x, b.x); x <= Math.max(a.x, b.x); x++) {
+          const res = await store.match(streetCacheUrl(self.location.origin, x, y));
+          if (!res) continue;
+          const buf = await res.arrayBuffer();
+          const h = readStreetHeader(buf);
+          if (!h) continue;
+          const o = cellOrigin(x, y);
+          for (let i = 0; i < h.placeCount; i++) {
+            const pl = readPlace(buf, i);
+            const g = fromCell(o, pl.east, pl.north);
+            const z = heightNow(g.lat, g.lon);
+            if (z === undefined) continue;
+            const p = localPoint(frame, g.lat, g.lon, z) as [number, number, number];
+            const r = Math.hypot(p[0], p[1]);
+            if (r > PARKED_REACH_M) continue;
+            // (its direction in the scene's frame: a metre along the street's heading, the left side's turned round)
+            const hd = pl.heading + (pl.flags & PlaceFlag.Left ? Math.PI : 0);
+            const g2 = fromCell(o, pl.east + Math.cos(hd), pl.north + Math.sin(hd));
+            const p2 = localPoint(frame, g2.lat, g2.lon, z);
+            const dx = p2[0] - p[0],
+              dy = p2[1] - p[1],
+              L = Math.hypot(dx, dy) || 1;
+            found.push({ p, d: [dx / L, dy / L], seed: pl.seed, r });
+          }
+        }
+      found.sort((u, v) => u.r - v.r);
+      for (const f of found.slice(0, Math.min(PARKED_MAX, 0x7fff - cars.length))) {
+        // (the shapes are built in their lane LANE_M to the right of their piece: the piece moved as far to its left)
+        const start: [number, number, number] = [f.p[0] - f.d[1] * LANE_M, f.p[1] + f.d[0] * LANE_M, f.p[2]];
+        cars.push({
+          start,
+          end: [start[0] + f.d[0], start[1] + f.d[1], start[2]],
+          speed: 0,
+          phase: 0,
+          kind: parkedKind(f.seed),
+          lamps: false,
+        });
+        parkedCars++;
+      }
+      storedBytes += parkedCars * (16 * 12 + 22 * 16 + 32);
+    } catch (e) {
+      if (surveyErrors.length < 4) surveyErrors.push(`parked cars: ${String(e).slice(0, 200)}`);
+    }
   // (Q8 L10: the streets' lamps — along the town streets' runs where buildings stand about, the nearest first, their feet on the
   // ground already in (none without it) — and their light's grid; none on any failure)
   try {
@@ -1775,6 +1840,7 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
     pylons: pylons.length,
     cables: cables.length,
     cars: cars.length,
+    parkedCars,
     trafficRoads: roadLines.length,
     lamps: lamps.length,
     lampReachM,

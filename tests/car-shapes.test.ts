@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { CAR_SILL_M, CarKind, carKind, carShape } from "../src/system/car-shapes";
+import { CAR_SILL_M, CarKind, carKind, carShape, parkedKind } from "../src/system/car-shapes";
 import { CAR_BODY, CAR_GLASS_BIT, CAR_HEAD, CAR_TAIL, packScenery, SCENERY_BYTES, SCENERY_GRID } from "../src/system/scenery-data";
 import { LANE_M } from "../src/system/traffic";
 
@@ -120,4 +120,45 @@ test("VB3: packScenery tags each car by its shape — body, glass (its bit), hea
     expect(tags.slice(at, at + want.length)).toEqual(want);
     at += want.length;
   });
+});
+
+test("VB4: a parked car — its shape without lamps (nothing lit at night), no bus in a parking lane, tagged without lamps", () => {
+  for (const k of [CarKind.Compact, CarKind.Saloon, CarKind.Suv, CarKind.Van]) {
+    const m = carShape(k, false);
+    expect(m.positions.length / 3).toBe(16);
+    expect(m.head + m.tail).toBe(0);
+    expect(m.triangles.length / 3).toBe(m.body + m.glass);
+  }
+  for (let s = 0; s < 2000; s++) expect(parkedKind(s)).not.toBe(CarKind.Bus);
+  const cars = [
+    {
+      start: [0, 0, 0] as [number, number, number],
+      end: [1, 0, 0] as [number, number, number],
+      speed: 0,
+      phase: 0,
+      kind: CarKind.Suv,
+      lamps: false,
+    },
+  ];
+  const packed = packScenery(
+    [],
+    new Uint32Array(SCENERY_GRID ** 2),
+    [],
+    undefined,
+    SCENERY_GRID,
+    SCENERY_BYTES,
+    undefined,
+    [],
+    [],
+    [],
+    cars,
+  );
+  const f = new Float32Array(packed);
+  const u = new Uint32Array(f.buffer);
+  const triangleOffset = f[3 * 4 + 2]!,
+    triangles = f[2 * 4 + 3]!;
+  const tags = Array.from(u.subarray(triangleOffset * 4 + triangles * 3, triangleOffset * 4 + triangles * 3 + triangles));
+  const s = carShape(CarKind.Suv, false);
+  expect(tags.filter((t) => (t & 0xffff0000) >>> 0 === CAR_BODY).length).toBe(s.body + s.glass);
+  expect(tags.filter((t) => [CAR_HEAD, CAR_TAIL].includes((t & 0xffff0000) >>> 0)).length).toBe(0);
 });

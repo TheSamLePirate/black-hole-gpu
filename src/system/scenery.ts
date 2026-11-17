@@ -235,9 +235,11 @@ export class EarthScenery {
       this.satellite !== satellite ||
       this.reach !== reach ||
       this.meshCells !== this.meshCellsApplied ||
-      this.forestPrepared !== this.forestPreparedApplied;
+      this.forestPrepared !== this.forestPreparedApplied ||
+      this.parkedCars !== this.parkedCarsApplied;
     this.meshCellsApplied = this.meshCells;
     this.forestPreparedApplied = this.forestPrepared;
+    this.parkedCarsApplied = this.parkedCars;
     this.reach = reach;
     this.mode = mode;
     this.satellite = satellite;
@@ -270,7 +272,7 @@ export class EarthScenery {
     if (
       held &&
       this.requested.endsWith(
-        `:${mode}:${satellite}:${reach}:${this.ign}:${this.overture}:${this.lamps}:${this.corridor}:m${this.meshCells ? 1 : 0}:f${this.forestPrepared ? 1 : 0}`,
+        `:${mode}:${satellite}:${reach}:${this.ign}:${this.overture}:${this.lamps}:${this.corridor}:m${this.meshCells ? 1 : 0}:f${this.forestPrepared ? 1 : 0}:p${this.parkedCars ? 1 : 0}`,
       )
     ) {
       const off = Math.hypot((held.lat - wanted.lat / D) * 111320, wrapLon(held.lon - wanted.lon / D) * 111320 * Math.cos(held.lat * D));
@@ -301,7 +303,7 @@ export class EarthScenery {
     // after the other, each centred where the craft will be — the renderer's lead —, until it slows down)
     const quick = this.fastFlight() || (eyeToDrawn > QUICK_COVER * sceneryBox(0, 0, mode, reach).radius && !this.applied.endsWith(":q"));
     // (PLAN-J8 J8-5: the near scene's reach left to the far layer in its key — a new one changes the scene, asked again)
-    const key = `${c.key}:${mode}:${satellite}:${reach}:${this.ign}:${this.overture}:${this.lamps}:${this.corridor}:m${this.meshCells ? 1 : 0}:f${this.forestPrepared ? 1 : 0}${quick ? ":q" : ""}`;
+    const key = `${c.key}:${mode}:${satellite}:${reach}:${this.ign}:${this.overture}:${this.lamps}:${this.corridor}:m${this.meshCells ? 1 : 0}:f${this.forestPrepared ? 1 : 0}:p${this.parkedCars ? 1 : 0}${quick ? ":q" : ""}`;
     // (waited for — the settled frame, an offline render — until drawn, or failed and waiting to be tried again)
     this.wanted = key !== this.applied && !(key === this.requested && this.lastError);
     // (in flight: the next scene's data fetched ahead — the network idle otherwise until the craft leaves the hold, or while the
@@ -433,6 +435,7 @@ export class EarthScenery {
         corridor: this.corridor,
         ...(this.meshCells ? { meshCells: true } : {}),
         ...(this.forestPrepared ? { forestPrepared: true } : {}),
+        ...(this.parkedCars ? { parkedCars: true } : {}),
         eye: [geo.lat / D, geo.lon / D],
         ...(quick ? { quick: QUICK_SHARE } : {}),
         swGate: swControls(),
@@ -524,6 +527,9 @@ export class EarthScenery {
    *  again */
   forestPrepared = false;
   private forestPreparedApplied = false;
+  /** PLAN-J8 VB4: the parked cars on the street cells' places (renderer.parkedCarsOn); changed, the scene made again */
+  parkedCars = false;
+  private parkedCarsApplied = false;
   /** a building's leaf in the drawn scene (−1: none) — the envelope bench's material (PLAN-J8 J8-0 (c)) */
   buildingLeaf = -1;
   get forestCells() {
@@ -661,6 +667,8 @@ export class EarthScenery {
       meshLeft: d?.meshLeft ?? 0,
       /** (PLAN-J8 J8-8b lot 2) the forest's prepared cells read, missing, the cases they covered (null: not asked) */
       forestPrepared: d?.forestPrepared ?? null,
+      /** (PLAN-J8 VB4) the parked cars drawn */
+      parkedCars: d?.parkedCars ?? 0,
       keptReachM: d?.keptReachM ?? 0,
       /** the corridor the cap kept the buildings along, its half-length [m] (0: the centre's disc — a craft at rest, or off) */
       corridorM: d?.corridorM ?? 0,
