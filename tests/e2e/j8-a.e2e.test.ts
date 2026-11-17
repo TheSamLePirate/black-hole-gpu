@@ -135,6 +135,7 @@ test.skipIf(!E2E)(
           // (the real network in flight: the e2e disk cache's misses — what it had not and fetched — before and after; the requests the
           // page made, served by the disk or the Service Worker too, apart)
           const missesBefore = app.earth?.counts.misses ?? 0;
+          const flownFrom = Date.now();
           await app.settled(90_000);
           await app.js(`(() => { performance.clearResourceTimings(); performance.setResourceTimingBufferSize(100000);
             __bh.camera.apSet({ ap: true, athr: true, alt: ${p0[2]}, hdg: ${hdg0.toFixed(2)} * Math.PI / 180, spd: ${t.speedMps} });
@@ -191,6 +192,16 @@ test.skipIf(!E2E)(
             quickImages: legs.reduce((s, l) => s + l.quick, 0),
             requests: legs[legs.length - 1]?.requests ?? 0,
             networkMisses: (app.earth?.counts.misses ?? 0) - missesBefore,
+            // (what went to the network in flight — its host's kind, a few of its URLs: what the zone does not hold)
+            missed: (() => {
+              const m = (app.earth?.counts.log ?? []).filter((r) => !r.hit && (r.at ?? 0) >= flownFrom);
+              const by: Record<string, number> = {};
+              for (const r of m) {
+                const k = new URL(r.url).hostname + new URL(r.url).pathname.split("/").slice(0, 3).join("/");
+                by[k] = (by[k] ?? 0) + 1;
+              }
+              return { by, first: m.slice(0, 8).map((r) => r.url.slice(0, 200)) };
+            })(),
           };
           (out.flights as Record<string, unknown>)[name] = flight;
           console.log(`  ${name}: ${JSON.stringify({ ...flight, legs: undefined })}`);
