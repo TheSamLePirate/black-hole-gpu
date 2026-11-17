@@ -218,6 +218,23 @@ l'ombrage tracé sur toute l'image est à revoir avant d'être gardé.
   tenu sous sa pente maximale (6 % … 12 %, la voie ferrée 3,5 %), ses deux bouts au sol, avec le déblai ou remblai par échantillon.
   Le rendu échantillonne son relief le long du run et aplanit le sol de ce déblai ou remblai, hors de France seulement.
 
+**RP-R et J8-R, la part des approches** (préparé le 17 nov. ~15:01 UTC pendant le vol M1 Max ; à faire au lot qui suit le gros e2e, règle 2) :
+- **À retirer** :
+  - le balayage des caches de rue v1–v4 dans `streetPool()` (`cell-workers.ts`), une fois toutes les pages passées au format 5 : il ne sert
+    qu'à la bascule ;
+  - le nom `kerr-street-v3` dans les commentaires de `renderer.ts` et de `scenery-data.ts` (au rendu) ;
+  - rien d'autre côté données : `carsOn` et `STREET_TRAFFIC` sont déjà partis.
+- **À garder, comme leviers de mesure** (règle 2) : `J8Z_BEFORE` de `j8-zone-paris`, `lib/witness.ts`, la borne de 15 s de
+  `flightReady`.
+- **Après le gros e2e, si ses résultats le demandent** :
+  - la canopée en ligne pour le pool de forêt hors zone, si `forestPoolOn` revient ;
+  - une canopée partielle pour les cellules de bord de zone (5 cellules `c=0` sur 686 à Toulon : `zoneCanopy` exige les 512 blocs) ;
+  - KBR1, si un grand viaduc manque entre 12 et 20 km ;
+  - l'option (B) de VB6, si le raccord aux coins se voit ;
+  - les pays qui roulent à gauche manquants dans `drivesLeft`, si une zone étrangère compte.
+- **Côté rendu, pour mémoire** (ligne RP-R ci-dessus) : le tablier estimé de la scène, la largeur par classe en France, les routes OMT
+  doublées par les cellules, `growForest` et le chemin des bâtiments de la scène.
+
 ## 4. Répartition et règles du checkout partagé
 
 - **La session du rendu (33d89754)** termine et commite J7-8b (la musique, en cours dans l'arbre), puis met en pause le reste de
