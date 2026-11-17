@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 17 nov. 10:02 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 17 nov. 10:17 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous. Ce qui est fermé quitte le tableau « En cours » pour la ligne « Fermé récemment ».
@@ -10366,3 +10366,15 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
 - **Réalisé :** `j8-a` vole les tracés bas des approches avec `J8A_LOW=1` (`J8A_LOW_TRACKS`, plancher de la règle 13 à 25 m). Après chaque tronçon, il compare le recensement des cellules préparées par anneau (`__bh.sys.census`) aux cellules dessinées (`__bh.sys.drawnCensus`, nouveau : `renderer.drawnBuildingCells`, `BuildingFar.drawnCells`, `NearMeshes.drawnCells`). En strict, il exige 98 % ou plus dans 10 km. La bannière montre les parts.
 - **Preuves :** `tsc`, Biome, gardes e2e. **Non lancé** : c'est le gros e2e.
 - **Reste pour le gros e2e :** le critère 5, l'écart de couleur à la jonction maillage / couche lointaine.
+
+### 2026-11-17 10:17 UTC — PLAN-J8 (A6) : Toulon-Hyères repassée avec KSC3 ; l'estimation d'une zone compte ses cellules de bâtiments et de rue (session des approches, 1feb2f7f)
+
+- **Mesuré** (kerr-mini, `j8-zone-paris` avec `J8_TRACK=toulon-hyeres`, 1/1, par un agent, `20261117-110403-j8-zone-toulon-ksc3`) :
+  - la zone est prête en 10,4 min depuis le disque ;
+  - cellules : 2 600 de rue au format 3 (32,9 Mo, 12,7 Ko la cellule contre 9,6 Ko au format 2), 4 176 de bâtiments (20,5 Mo),
+    146 maillages et 686 forêt (681 avec canopée, le centre de Toulon à 132 candidats) ;
+  - hors ligne, les 7 points sont prêts, aucun refus de la couche lointaine, 0 requête réseau.
+- **Réalisé :** l'estimation d'une zone (`pwa-zones.ts`) ne comptait ni les cellules de bâtiments ni celles de rue, soit environ
+  240 Mo à Paris. Elles y sont désormais, avec la moyenne par cellule des deux zones mesurées : `BUILDING_CELL_BYTES_EST` et
+  `_SECONDS_EST` dans `building-cells.ts`, `STREET_CELL_*` dans `street-cells.ts`. Test `pwa-zones-cells`.
+- **Limite :** une zone dense comme Paris pèse environ 1,4 fois cette moyenne, une zone peu dense comme Toulon environ 0,4 fois.

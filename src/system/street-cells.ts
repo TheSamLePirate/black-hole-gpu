@@ -568,6 +568,12 @@ export function drivesLeft(lat: number, lon: number): boolean {
   return boxes.some(inside) && !right.some(inside);
 }
 
+/** a street cell's bytes (format 3) and its preparation's time in a zone's own worker — measured (j8-zone-paris, kerr-mini, 17 Nov 2026:
+ *  Paris 4 332 cells, 121 MB, 36 s — 27.9 kB a cell, 23.0 in format 2 —; Toulon-Hyères 2 600, 32.9 MB, 12.3 s — 12.7 kB, 9.6 in format
+ *  2) — the two zones' mean by cell, for a zone's estimate (pwa-zones.ts) */
+export const STREET_CELL_BYTES_EST = 22_200;
+export const STREET_CELL_SECONDS_EST = 0.0069;
+
 /** the prepared streets' cache (Cache Storage): the format in its name — a new format never reads an old one's cells */
 export const STREET_CACHE = `kerr-street-v${STREET_FORMAT}`;
 /** a street cell's key in it (a URL: Cache Storage's keys are requests; never fetched) */

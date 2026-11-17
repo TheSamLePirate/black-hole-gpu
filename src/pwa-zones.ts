@@ -21,8 +21,10 @@ import {
   zoneLevelsAt,
   zoneTouchesSea,
 } from "./system/zones";
+import { BUILDING_CELL_BYTES_EST, BUILDING_CELL_SECONDS_EST } from "./system/building-cells";
 import { FOREST_CELL_BYTES_EST, FOREST_CELL_SECONDS_EST } from "./system/forest-cells";
 import { MESH_CELL_BYTES_EST, MESH_CELL_SECONDS_EST } from "./system/mesh-cells";
+import { STREET_CELL_BYTES_EST, STREET_CELL_SECONDS_EST } from "./system/street-cells";
 import { cellsOnlyIn, type ZoneCells, zoneCellTiles, zoneForestTiles, zoneMeshTiles, zoneStreetTiles } from "./system/zone-cells";
 
 export interface Zones {
@@ -263,11 +265,23 @@ export function createZones(o: {
       // (its forest cells within FOREST_NEAR_M — J8-8b)
       const fc = zoneForestTiles(chains, { lat, lon, corridor: corridor ?? null }).length;
       const forests = { cells: fc, bytes: fc * FOREST_CELL_BYTES_EST };
+      // (its building and street cells — J8-6, J8-L: prepared from its tiles, kept beside them; Paris's ~240 MB were not counted)
+      const bc = zoneCellTiles(chains).length,
+        sc = zoneStreetTiles(chains).length;
+      const buildings = { cells: bc, bytes: bc * BUILDING_CELL_BYTES_EST };
+      const streets = { cells: sc, bytes: sc * STREET_CELL_BYTES_EST };
       return {
         chains: chains.length,
         urls: chains.reduce((s, c) => s + c.length, 0),
-        bytes: zoneEstimate(chains) + meshes.bytes + forests.bytes,
-        seconds: zoneDuration(chains) + cells * MESH_CELL_SECONDS_EST + fc * FOREST_CELL_SECONDS_EST,
+        bytes: zoneEstimate(chains) + buildings.bytes + streets.bytes + meshes.bytes + forests.bytes,
+        seconds:
+          zoneDuration(chains) +
+          bc * BUILDING_CELL_SECONDS_EST +
+          sc * STREET_CELL_SECONDS_EST +
+          cells * MESH_CELL_SECONDS_EST +
+          fc * FOREST_CELL_SECONDS_EST,
+        buildings,
+        streets,
         meshes,
         forests,
       };

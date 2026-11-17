@@ -1,8 +1,9 @@
 import { expect, test } from "bun:test";
 import type { ZoneRecord } from "../src/pwa/rules";
 import { createZones } from "../src/pwa-zones";
-import { MESH_NEAR_M } from "../src/system/building-cells";
+import { BUILDING_CELL_BYTES_EST, MESH_NEAR_M } from "../src/system/building-cells";
 import { MESH_CELL_BYTES_EST } from "../src/system/mesh-cells";
+import { STREET_CELL_BYTES_EST } from "../src/system/street-cells";
 import { zoneCellTiles, zoneForestTiles, zoneMeshTiles, zoneStreetTiles } from "../src/system/zone-cells";
 import { corridorDisc, corridorDistance, ZONE_PROFILES, zoneChains } from "../src/system/zones";
 
@@ -177,6 +178,10 @@ test("a corridor zone: its mesh cells (J8-8) — its BD TOPO cells within MESH_N
   expect(h.forests).toEqual([wantF]);
   expect(z.forests?.count).toBe(wantF.length);
   expect(est.forests).toEqual({ cells: wantF.length, bytes: wantF.length * 34_000 });
+  // (its building and street cells in the estimate too — their tiles', at BUILDING_CELL_BYTES_EST and STREET_CELL_BYTES_EST)
+  expect(est.buildings).toEqual({ cells: zoneCellTiles(chains).length, bytes: zoneCellTiles(chains).length * BUILDING_CELL_BYTES_EST });
+  expect(est.streets).toEqual({ cells: zoneStreetTiles(chains).length, bytes: zoneStreetTiles(chains).length * STREET_CELL_BYTES_EST });
+  expect(est.buildings.cells).toBeGreaterThan(0);
   await h.zones.remove(id);
   expect(h.meshesDropped).toEqual([want]);
   expect(h.forestsDropped).toEqual([wantF]);

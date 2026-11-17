@@ -140,6 +140,13 @@ export function cellOf(lat: number, lon: number, z = CELL_Z): { x: number; y: nu
   const y = Math.floor((0.5 - Math.log((1 + s) / (1 - s)) / (4 * Math.PI)) * n);
   return { x: ((x % n) + n) % n, y: Math.max(0, Math.min(n - 1, y)) };
 }
+
+/** a building cell's bytes and its preparation's time in a zone's own worker — measured (j8-zone-paris, kerr-mini, 17 Nov 2026: Paris 6 562
+ *  cells, 121 MB, 44 s; Toulon-Hyères 4 176, 20.5 MB, 16.5 s — dense Paris 18.4 kB a cell, Toulon 4.9 kB) — the two zones' mean by
+ *  cell, for a zone's estimate (pwa-zones.ts) */
+export const BUILDING_CELL_BYTES_EST = 13_200;
+export const BUILDING_CELL_SECONDS_EST = 0.0057;
+
 /** a cell's bounds [°]: west, south, east, north */
 export function cellBounds(x: number, y: number, z = CELL_Z): { west: number; south: number; east: number; north: number } {
   const n = 2 ** z;
