@@ -118,13 +118,17 @@ test.skipIf(!E2E)(
             changed = Date.now(),
             readyOnce = false;
           for (;;) {
-            const r = await app.js<{ ready: boolean; why: string }>(
+            const r = await app.js<{ ready: boolean; why: string; notes: string }>(
               `(async () => { __bh.touch(); const r = await __bh.sys.flightReady(${TRACK_READY ? `{ track: { points: ${JSON.stringify(t.points)} } }` : ""});
                 // (J8A_CELLS: the mesh cells within reach resident too — near-meshes.ts)
                 const n = __bh.renderer.nearCells(), cells = ${!!process.env.J8A_CELLS} && (!n || n.missing > 0) ? [\`near mesh cells: \${n ? n.missing : "none yet"} missing\`] : [];
-                return { ready: r.ready && !cells.length, why: String([r.why, ...cells].filter(Boolean)) }; })()`,
+                return { ready: r.ready && !cells.length, why: String([r.why, ...cells].filter(Boolean)), notes: String(r.notes ?? "") }; })()`,
             );
-            if (r.ready && readyOnce) break;
+            // (what does not hold the flight but is said — the far cells past the budget, Sam's decision of 17 Nov 2026: 72 MiB, told apart)
+            if (r.ready && readyOnce) {
+              if (r.notes) console.log(`  ${name}: ready — ${r.notes}`);
+              break;
+            }
             readyOnce = r.ready;
             if (r.ready) {
               await app.js(`new Promise((q) => setTimeout(q, 5000))`);
