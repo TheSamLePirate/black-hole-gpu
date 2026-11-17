@@ -631,6 +631,8 @@ export interface SceneryReply {
   cellRoadCells?: number;
   /** (PLAN-J8 J8-RP RP4) the bridges built from the street cells */
   cellBridges?: number;
+  /** (PLAN-J8 J8-RP RP9) the catenary masts drawn */
+  catenaryMasts?: number;
   /** (Q8 D1) the main roads' lines the traffic read, their pieces */
   trafficRoads?: number;
   /** (Q8 L10) the streets' lamps */

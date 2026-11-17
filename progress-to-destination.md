@@ -10516,3 +10516,8 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   cercle passant par le point et ses deux voisins, et de la vitesse de projet de la classe (v² / (2 g R)). Elle est plafonnée à 7 %
   sur les voies rapides et à 5–6 % ailleurs ; elle vaut 0 en ligne droite, aux bouts, en ville et pour les petites classes.
 - **Vérifié :** test (arc de 300 m plafonné à 6 %, courbe de 2 km, virage miroir négatif). Non mesuré en jeu.
+
+### 2026-11-17 10:47 UTC — PLAN-J8 J8-RP RP9 : les poteaux de caténaire (session 33d89754)
+
+- **Réalisé :** `cell-roads.ts catenaryMasts` place un poteau tous les 60 m le long des voies électrifiées de KSC5 (`SurfaceFlag.Electrified`), hors de la voie extérieure. Les poteaux sont en phase d'un tronçon à l'autre, par l'abscisse de la route. Le worker en fait des solides, mât d'acier et bras au-dessus des voies, posés sur le sol déjà chargé, dans 2,5 km. Stat `catenaryMasts`.
+- **Preuves :** `tests/cell-roads.test.ts`, `tsc`, Biome. **Non vu en jeu.**

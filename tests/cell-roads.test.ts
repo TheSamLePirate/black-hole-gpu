@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { cellRoadSurfaces } from "../src/system/cell-roads";
+import { catenaryMasts, cellRoadSurfaces } from "../src/system/cell-roads";
 import {
   encodeStreetCell,
   NEXT_NONE,
@@ -77,4 +77,31 @@ test("RP9 (KSC5): a railway's segment — its tracks as the scene's rails, 4.5 m
     expect(p.data[4]).toBe(1.5);
   }
   expect(Math.abs(out[0]!.data[1]! - out[1]!.data[1]!)).toBeCloseTo(4.5, 6);
+});
+
+test("RP9: the catenary's masts — every 60 m along an electrified railway, beside its outer track, none on a plain one", () => {
+  const segs = [
+    seg([0, 0], [300, 0], { cls: "rail", lanes: 2, width: 7.5, flags: 0, roadId: 1 }),
+    seg([0, 50], [300, 50], { cls: "rail", lanes: 1, width: 3, flags: 0, roadId: 2 }),
+  ];
+  const buf = encodeStreetCell(
+    { z: 15, x: 1, y: 2, generation: 0, originLat: 43, originLon: 6 },
+    [],
+    segs,
+    [],
+    [],
+    0,
+    segs.map(() => ({ a: NEXT_NONE, b: NEXT_NONE })),
+    [],
+    [
+      { flags: SurfaceFlag.Electrified, laneLines: 0, pavement: 0, bridge: 0xff },
+      { flags: 0, laneLines: 0, pavement: 0, bridge: 0xff },
+    ],
+  );
+  const masts = catenaryMasts(buf, (e, n) => [e, n, 0]);
+  expect(masts.length).toBe(5);
+  for (const m of masts) {
+    expect(Math.abs(m.foot[1])).toBeCloseTo(2.25 + 3.2, 6);
+    expect(m.foot[0] % 60).toBeCloseTo(0, 6);
+  }
 });

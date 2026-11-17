@@ -61,3 +61,39 @@ export function cellRoadSurfaces(buf: ArrayBuffer, toLocal: (east: number, north
     }
   return out;
 }
+
+/** (J8-RP RP9) the catenary's masts along an electrified railway: one every CATENARY_SPACING_M, beside the outer track */
+export const CATENARY_SPACING_M = 60;
+
+/**
+ * A street cell's catenary masts (KSC5: a railway's segment with SurfaceFlag.Electrified): each its foot in the scene's frame (z the
+ * segment's ends' — `toLocal`'s — between them) and the way across to the tracks (unit, x y) and its arm's reach over them [m].
+ */
+export function catenaryMasts(
+  buf: ArrayBuffer,
+  toLocal: (east: number, north: number) => [number, number, number],
+): { foot: [number, number, number]; across: [number, number]; reach: number }[] {
+  const h = readStreetHeader(buf);
+  if (!h) return [];
+  const out: { foot: [number, number, number]; across: [number, number]; reach: number }[] = [];
+  for (let i = 0; i < h.segmentCount; i++) {
+    const s = readSegment(buf, i);
+    if (s.cls !== "rail" || s.flags & SegmentFlag.Tunnel || !(readSurface(buf, i).flags & SurfaceFlag.Electrified)) continue;
+    const a = toLocal(s.a[0], s.a[1]),
+      b = toLocal(s.b[0], s.b[1]);
+    const L = Math.hypot(b[0] - a[0], b[1] - a[1]);
+    if (L < 1) continue;
+    const ux = (b[0] - a[0]) / L,
+      uy = (b[1] - a[1]) / L;
+    const n = Math.max(1, s.lanes);
+    const side = ((n - 1) / 2) * 4.5 + 3.2;
+    // (at whole multiples of the spacing along its road — a road's masts in step from one segment to the next)
+    for (let d = (CATENARY_SPACING_M - (s.s0 % CATENARY_SPACING_M)) % CATENARY_SPACING_M; d < L; d += CATENARY_SPACING_M)
+      out.push({
+        foot: [a[0] + ux * d - uy * side, a[1] + uy * d + ux * side, a[2] + ((b[2] - a[2]) * d) / L],
+        across: [uy, -ux],
+        reach: side + ((n - 1) / 2) * 4.5,
+      });
+  }
+  return out;
+}

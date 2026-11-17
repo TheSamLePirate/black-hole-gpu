@@ -83,7 +83,7 @@ import {
   streetCacheUrl,
 } from "./street-cells";
 import { markRoad, roadClassCode } from "./road-markings";
-import { cellRoadSurfaces } from "./cell-roads";
+import { catenaryMasts, cellRoadSurfaces } from "./cell-roads";
 
 /** (PLAN-J8 VB4) the parked cars kept round the scene's centre [m] and at most (the nearest places first) */
 export const PARKED_REACH_M = 900;
@@ -847,7 +847,8 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
   // (PLAN-J8 J8-RP RP2: the roads drawn from the street cells, and their cells)
   let cellRoadCount = 0,
     cellRoadCells = 0,
-    cellBridgeCount = 0;
+    cellBridgeCount = 0,
+    catenaryCount = 0;
   const region = regionOf(q.lat, q.lon);
   const bdtopoTiles = async () => {
     const out: Choice[] = [],
@@ -1319,6 +1320,22 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
           });
           found.add(`${x}/${y}`);
           roadCellsFound.add(`${x}/${y}`);
+          // (RP9: the catenary's masts of the cell's electrified railways — on the ground already in; a steel mast, its arm over the
+          // tracks)
+          for (const m of catenaryMasts(buf, (e, n) => {
+            const g = fromCell(o, e, n);
+            const z = heightNow(g.lat, g.lon);
+            return localPoint(frame, g.lat, g.lon, z ?? Number.NaN) as [number, number, number];
+          })) {
+            if (!Number.isFinite(m.foot[2]) || Math.hypot(m.foot[0], m.foot[1]) > CELL_ROAD_REACH_M) continue;
+            const f = m.foot;
+            const mast = [stripPolygon([f[0] - 0.15, f[1], 0], [f[0] + 0.15, f[1], 0], 0.3)];
+            addSolid(polygonPrimitive(mast, f[2] - 0.5, f[2] + 7.4, 3, [0.36, 0.37, 0.37]), mast);
+            const tip: [number, number, number] = [f[0] + m.across[0] * m.reach, f[1] + m.across[1] * m.reach, 0];
+            const arm = [stripPolygon([f[0], f[1], 0], tip, 0.12)];
+            addSolid(polygonPrimitive(arm, f[2] + 6.9, f[2] + 7.15, 3, [0.36, 0.37, 0.37]), arm);
+            catenaryCount++;
+          }
           for (const br of readBridges(buf)) {
             const key = `${br.id}:${Math.round(br.points[0]![0])}`;
             if (!cellBridges.has(key)) cellBridges.set(key, { b: br, o });
@@ -2258,6 +2275,7 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
     cellRoads: cellRoadCount,
     cellRoadCells,
     cellBridges: cellBridgeCount,
+    catenaryMasts: catenaryCount,
     trafficRoads: roadLines.length,
     lamps: lamps.length,
     lampReachM,
