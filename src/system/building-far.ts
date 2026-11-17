@@ -51,6 +51,12 @@ export const FAR_FADE_MS = 1000;
 export class BuildingFar {
   private pool: RecordPool;
   private residents = new Map<string, Resident>();
+  /** (PLAN-J8 §0 criterion 1, the drawn side) the cells drawn here: resident, put, not left to the near meshes */
+  drawnCells(): { x: number; y: number }[] {
+    const out: { x: number; y: number }[] = [];
+    for (const [k, r] of this.residents) if (r.slot >= 0 && !this.hidden.has(k)) out.push({ x: r.x, y: r.y });
+    return out;
+  }
   private freeSlots: number[];
   private wantedAt: { lat: number; lon: number; heading: number; t: number } | null = null;
   private wanted = new Map<string, CellWant>();

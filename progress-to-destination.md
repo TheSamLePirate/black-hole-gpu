@@ -10359,3 +10359,10 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
 - **Preuves :** `tsc` (hors les erreurs d'un test des approches en cours d'écriture, `tests/pwa-zones-cells.test.ts`), Biome, `check-wgsl`. **Non vu en jeu.**
 - **Limites :** les feux ne s'allument pas. Ce dessin n'a pas de test unitaire (il est dans le worker).
 - **Suite :** le gros e2e de J8 (R5) avec les approches, et VB8.
+
+### 2026-11-17 10:16 UTC — PLAN-J8 A6 : le gros e2e prend le vol bas et le recensement des bâtiments dessinés (session 33d89754)
+
+- **Destination :** §19.13 (J8-A, toute la vue, vol bas) ; PLAN-J8 §6 point 13, A6 critères 4 et 8.
+- **Réalisé :** `j8-a` vole les tracés bas des approches avec `J8A_LOW=1` (`J8A_LOW_TRACKS`, plancher de la règle 13 à 25 m). Après chaque tronçon, il compare le recensement des cellules préparées par anneau (`__bh.sys.census`) aux cellules dessinées (`__bh.sys.drawnCensus`, nouveau : `renderer.drawnBuildingCells`, `BuildingFar.drawnCells`, `NearMeshes.drawnCells`). En strict, il exige 98 % ou plus dans 10 km. La bannière montre les parts.
+- **Preuves :** `tsc`, Biome, gardes e2e. **Non lancé** : c'est le gros e2e.
+- **Reste pour le gros e2e :** le critère 5, l'écart de couleur à la jonction maillage / couche lointaine.

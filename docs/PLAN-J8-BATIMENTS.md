@@ -303,7 +303,7 @@ J8-R. J8-1 se voit tout de suite. J8-4 apporte le gros du gain : « toute la vue
           1. ✓ aucune requête réseau en vol (`J8A_STRICT`, réseau coupé : `swData`) ;
           2. ✓ aucune scène rapide en vol (`quick`) ;
           3. ✓ chaque tracé prêt avant le vol (`flightReady({ track })`, les quatre familles de cellules) ;
-          4. ✗ **tous les bâtiments de la vue** (§0 critère 1) : le recensement par anneau de distance, comparé au
+          4. ✓ (relevé ajouté par le rendu, 11/17 ~10:16 UTC : après chaque tronçon, `__bh.sys.census` contre `__bh.sys.drawnCensus` — les cellules dessinées, lointaines et maillages —, strict à 98 % dans 10 km ; non lancé) **tous les bâtiments de la vue** (§0 critère 1) : le recensement par anneau de distance, comparé au
              nombre dessiné. Le recensement se lit dans les cellules préparées (`zone-cells.ts` `buildingsIn` lit déjà
              leurs en-têtes ; les approches peuvent fournir `censusRings(vue, anneaux)`) ; le nombre dessiné vient de la
              couche lointaine et des maillages (rendu) ;
@@ -313,7 +313,7 @@ J8-R. J8-1 se voit tout de suite. J8-4 apporte le gros du gain : « toute la vue
           6. ✓ les captures de jour et de nuit le long du vol, plus la vidéo pour juger les bascules (à montrer à Sam) ;
           7. ✓ les coûts : GPU p50 et p95 sur les deux machines. Cibles : 25 images/s régulières sur kerr-mini, palier
              nommé sur le M1 Max ; la règle du 1 ms cumulée (question 8) ;
-          8. ✗ **les détails en vol bas** (plan VB §7, demandés par Sam) : aucun tronçon bas dans `j8-a` aujourd'hui
+          8. ✓ (vol ajouté par le rendu, 11/17 ~10:16 UTC : `J8A_LOW=1`, les tracés bas volés comme les autres, plancher de la règle 13 à 25 m ; non lancé) **les détails en vol bas** (plan VB §7, demandés par Sam) : aucun tronçon bas dans `j8-a` aujourd'hui
              (vol vers 500 m). Proposition : un tronçon à 150 m puis à 50 m sur le centre de Toulon et sur le Marais,
              de jour et de nuit. On y juge chaussées et marquages (VB2), silhouettes et stationnement (VB3, VB4),
              potences et éclat des feux (VB5a, VB5b), trafic sans saut aux raccords (VB6), passages piétons, lignes

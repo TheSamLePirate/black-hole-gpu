@@ -11349,6 +11349,11 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
   furnitureOn = new URLSearchParams(globalThis.location?.hash.slice(1) ?? "").get("furniture") !== "0";
   parkedCarsOn = new URLSearchParams(globalThis.location?.hash.slice(1) ?? "").get("parkedCars") !== "0";
   /** (the near mesh cells') what is resident: cells, buildings, triangles, the pools' blocks; the cells wanted, those missing */
+  /** PLAN-J8 §0 criterion 1, the drawn side: the building cells drawn now — the far layer's (not left to the near meshes) and the
+   *  near meshes' — ([] for a layer not made) */
+  drawnBuildingCells(): { x: number; y: number }[] {
+    return [...(this.buildingFar?.drawnCells() ?? []), ...(this.nearMeshes?.drawnCells() ?? [])];
+  }
   nearCells() {
     return this.nearMeshes?.stats() ?? null;
   }

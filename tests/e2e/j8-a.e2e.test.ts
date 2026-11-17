@@ -2,7 +2,7 @@ import { afterAll, expect, test } from "bun:test";
 import { mkdirSync } from "node:fs";
 import { $ } from "bun";
 import { FOREST_NEAR_M, MESH_NEAR_M } from "../../src/system/building-cells";
-import { J8A_TRACKS } from "../../src/system/j8a-tracks";
+import { J8A_LOW_TRACKS, J8A_TRACKS } from "../../src/system/j8a-tracks";
 import { cellsAlong } from "../../src/system/zone-cells";
 import { corridorDisc, turnRadiusFor } from "../../src/system/zones";
 import { App, E2E, stopServer } from "./lib/app";
@@ -22,6 +22,10 @@ import { J0_FIXED } from "./lib/j0-scene";
 // J8A_REST_S [s]: a rest after each zone, the world frozen (the M1 Max cooled before its flight).
 // The near buildings from their mesh cells (renderer.nearCellsOn — J8-8, on by default since Sam's decision of 17 Nov 2026; J8A_CELLS=0:
 // off, the near scene's own as before): their cells within reach resident before the take-off too.
+// J8A_LOW=1 (PLAN-J8 A6 criterion 8): the low tracks too (j8a-tracks.ts J8A_LOW_TRACKS — Toulon's centre, the Marais — 150 m then
+// 50 m over the ground; rule 13's floor 25 m on them), for VB2–VB7's details. After each leg, criterion 4: the prepared building
+// cells' census by ring round the craft (__bh.sys.census) against the cells drawn (__bh.sys.drawnCensus) — strict: 98 % or more drawn
+// within 10 km.
 // J8A_FOREST=1 (J8-8b lot 2): the near scene's forest assembled from its prepared cells (renderer.forestCellsOn — the zone's, the forest
 // pool's), each leg's last scene's cells said (forestPrepared: read, missing, cases covered).
 // J8A_BUDGET [MiB, default 72]: the far layer's pool (renderer.farBudgetMiB — all Paris resident; the default since Sam's « ok 72 »).
@@ -39,7 +43,13 @@ import { J0_FIXED } from "./lib/j0-scene";
 afterAll(stopServer);
 const MACHINE = process.env.J8A_MACHINE ?? (await $`hostname -s`.quiet().text()).trim();
 const OUT = process.env.J8A_OUT ?? `remote-results/j8-a/${MACHINE}`;
-const TRACKS = J8A_TRACKS.filter((t) => !process.env.J8A_TRACKS || process.env.J8A_TRACKS.split(",").includes(t.name));
+// (J8A_LOW=1: the low tracks too — J8A_LOW_TRACKS, Toulon's centre and the Marais at 150 m then 50 m over the ground, PLAN-J8 A6
+// criterion 8; J8A_TRACKS names any of either list)
+const LOW = process.env.J8A_LOW === "1";
+const TRACKS = [...J8A_TRACKS, ...(LOW || process.env.J8A_TRACKS ? J8A_LOW_TRACKS : [])].filter((t) =>
+  process.env.J8A_TRACKS ? process.env.J8A_TRACKS.split(",").includes(t.name) : LOW || J8A_TRACKS.includes(t),
+);
+const isLow = (t: { name: string }) => J8A_LOW_TRACKS.some((k) => k.name === t.name);
 /** J8A_TRACK_READY: flightReady over the whole track (its zone's corridor, its far and street cells — dd36cb80), not the start's view
  *  alone: the track's corridor zone made first in this run's profile (the Service Worker on; its chains from the e2e's disk — the
  *  corridor's put there by j8-zone-paris) */
@@ -59,6 +69,8 @@ type Leg = {
   requests: number;
   near: number;
   far: { boxes: number; quads: number } | null;
+  /** (PLAN-J8 A6 criterion 4) each ring's buildings: prepared (the cells' census), drawn (the cells drawn now), their share */
+  census?: { km: number; census: number; drawn: number; share: number }[];
   /** (J8A_FOREST) the last scene's forest cells: read, missing, cases covered (null: not asked) */
   forest: { cells: number; missing: number; cases: number } | null;
   /** the near scene's own preparations in the leg: their worker's times [ms] (full, quick) and how often « a fast flight » held */
@@ -322,8 +334,34 @@ test.skipIf(!E2E)(
             );
             if ((l.at as { paused?: boolean } | null)?.paused) throw new Error(`${name}: paused in flight — ${JSON.stringify(l.at)}`);
             // (rule 13: the craft as flown after each leg)
-            expectFlight(await flightState(app), `${name} ${l.name}`, { ...CRUISE, aglMin: 100, bankMax: 45 });
+            // (a low track: 50 m over the ground at its lowest — its heights cleared by 15 m over the BD TOPO's tops, j8a-tracks.ts)
+            expectFlight(await flightState(app), `${name} ${l.name}`, { ...CRUISE, aglMin: isLow(t) ? 25 : 100, bankMax: 45 });
             await app.shot(`${OUT}/${name}-${i}.png`);
+            // (PLAN-J8 A6 criterion 4 — all the view's buildings: the prepared cells' census by ring round the craft against the cells
+            // drawn now — the far layer's and the near meshes' —, each ring's share drawn; strict: 98 % or more within 10 km)
+            const cz = await app.js<{
+              census: { rings: { outerM: number; buildings: number }[]; missing: number };
+              drawn: { rings: { outerM: number; buildings: number }[] };
+            }>(
+              `(async () => { const g = __bh.camera.geoNow(); return { census: await __bh.sys.census(g.lat, g.lon), drawn: await __bh.sys.drawnCensus(g.lat, g.lon) }; })()`,
+            );
+            const share = cz.census.rings.map((r, k) => ({
+              km: r.outerM / 1000,
+              census: r.buildings,
+              drawn: cz.drawn.rings[k]?.buildings ?? 0,
+              share: r.buildings ? +((cz.drawn.rings[k]?.buildings ?? 0) / r.buildings).toFixed(3) : 1,
+            }));
+            l.census = share;
+            console.log(
+              `  ${name} ${l.name} census (km: drawn / prepared): ${share.map((r) => `${r.km} ${r.drawn}/${r.census}`).join(" · ")}`,
+            );
+            await app.progress(
+              `tronçon ${i} : bâtiments dessinés ${share.map((r) => `${r.km} km ${Math.round(100 * r.share)} %`).join(", ")}`,
+            );
+            if (process.env.J8A_STRICT)
+              for (const r of share.filter((r) => r.km <= 10 && r.census > 50))
+                if (r.share < 0.98)
+                  throw new Error(`${name} ${l.name}: ${r.drawn} of the ${r.census} buildings prepared within ${r.km} km drawn (< 98 %)`);
           }
           // (the view from outside at the end: 80 m behind, a little above — the city round the craft)
           await app.js(`(async () => { __bh.settings.shipMount = "around"; __bh.refresh(); __bh.camera.viewReset();

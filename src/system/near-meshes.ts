@@ -268,6 +268,12 @@ export class NearMeshes {
   private vertPool: BlockPool;
   private triPool: BlockPool;
   private residents = new Map<string, Resident>();
+  /** (PLAN-J8 §0 criterion 1, the drawn side) the cells drawn here: resident and put */
+  drawnCells(): { x: number; y: number }[] {
+    const out: { x: number; y: number }[] = [];
+    for (const r of this.residents.values()) if (r.slot >= 0) out.push({ x: r.x, y: r.y });
+    return out;
+  }
   private freeSlots = Array.from({ length: NEAR_MESH_SLOTS }, (_, i) => NEAR_MESH_SLOTS - 1 - i);
   private wanted = new Map<string, CellWant>();
   private wantedAt: { lat: number; lon: number; heading: number; t: number } | null = null;

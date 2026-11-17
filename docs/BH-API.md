@@ -2166,7 +2166,14 @@ The census's side of « toute la vue »: the prepared building cells (`kerr-cell
 ring of a place, their records counted by ring of horizontal distance (`zone-cells.ts` `censusRings`; `ringsM` the outer radii, rising,
 default 0.5, 1, 2, 5, 10, 15, 20 km), and those 10 m long or more (a pixel's at ~15 km). `missing`: the cells within reach not in the
 cache. The drawn count to set against it is the render's (the far layer, the near meshes) — the big e2e's criterion 4 (PLAN-J8 §6
-point 13, A6). *Used in:* none yet.
+point 13, A6). *Used in:* `j8-a` (criterion 4, after each leg).
+
+### `__bh.sys.drawnCensus(lat, lon, ringsM?)` → Promise<{ cells, rings: { outerM, buildings, tenMetres }[] }> (PLAN-J8 §0 criterion 1, the drawn side)
+
+The same census over the building cells drawn now alone: `renderer.drawnBuildingCells()` — the far layer's resident cells not left to
+the near meshes (`BuildingFar.drawnCells`) and the near meshes' resident ones (`NearMeshes.drawnCells`) —, read from the same cache, by
+the same rings. Set against `census`: a ring's prepared buildings not drawn are its shortfall (cell by cell: a cell is drawn whole or not).
+*Used in:* `j8-a` (criterion 4: strict, 98 % or more drawn within 10 km).
 
 ### `__bh.sys.streets` (PLAN-J8 J8-L: the streets' cells' pool)
 
