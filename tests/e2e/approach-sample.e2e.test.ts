@@ -2,6 +2,7 @@ import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { App, E2E, stopServer } from "./lib/app";
 import { MONITOR_INIT, MONITOR_STEP, type Monitor, monitorProblems } from "./lib/held";
 
+// One end of each kind of approach flown to the stop, engaged, clear of the ground, down on its runway and graded.
 // The campaign's sample flown (docs/PLAN-APPROCHES.md AP10b): the ends scripts/approach-campaign.ts picked — one per category, a
 // typical one whose slope is clear (docs/progress/approches/ap10-sample.json): a real ILS, an LDA, a renumbered runway, a built
 // approach, an approximate runway, an unpaved one, a high field, one ringed by mountains, a short one — flown by the craft the
@@ -55,6 +56,8 @@ describe.skipIf(!E2E)(`the campaign's sample flown — ${CRAFT}`, () => {
   for (const P of SAMPLE)
     test(`${P.cat}: ${P.field} ${P.end} (${P.kind}, ${P.source})`, async () => {
       await app.scenario(`${P.field} ${P.end} · ${CRAFT === "a320" ? "A320" : "F-35"} · ${P.cat} (${P.kind}, ${P.source})`);
+      app.steps(["placé à 25 km", "approche engagée", "vol jusqu'à l'arrêt", "jugement"]);
+      await app.step("placé à 25 km");
       // (its approaches in: the field's tile)
       const ids = await app.js<string[]>(`__bh.sys.approaches(${JSON.stringify(P.field)}).then((l) => l.map((a) => a.id))`);
       const a = await app.js<{ crs: number; thr: { lat: number; lon: number } } | null>(
@@ -83,12 +86,15 @@ describe.skipIf(!E2E)(`the campaign's sample flown — ${CRAFT}`, () => {
         await app.js(
           `(() => { __bh.camera.pilot.throttle = 0.62; __bh.camera.gearDown = false; for (let i = 0; i < 30 * 7; i++) __bh.step(1 / 30); return 1; })()`,
         );
+      await app.stepDone(`placé à 25 km, 900 m sur le sol, cap sur ${P.field} ${P.end}`);
+      await app.step("approche engagée");
       // (the last flight's grade cleared: OIFK once read OETN's)
       await app.js(`(() => { __bh.camera.ilsLast = null; return 1; })()`);
       const said = await app.js<string>(`__bh.camera.ilsStart(${JSON.stringify(P.field)}, { runway: ${JSON.stringify(P.end)} })`);
       console.log(`  ${P.field} ${P.end} (${ids.join(" ")}): ${said}`);
       const engaged = await app.js<boolean>(`!!(__bh.camera.ilsRun || __bh.camera.a320App)`);
       const free = P.cat === "not paved" || P.cat.startsWith("short");
+      await app.stepDone(engaged ? `engagée sur ${P.end}` : `refusée : ${said.slice(0, 80)}`, engaged || free);
       if (!engaged) {
         table.push(`  | ${P.cat} | ${P.field} ${P.end} | ${P.kind} | no — ${said} | — | — | — |`);
         // (refused with its reason: an end the craft cannot land on, or a built approach whose slope meets the game's relief — finer
@@ -99,7 +105,50 @@ describe.skipIf(!E2E)(`the campaign's sample flown — ${CRAFT}`, () => {
         expect(free || (built && /relief|relief/.test(said))).toBe(true);
         return;
       }
-      // the flight, in fixed steps: the least height over the ground before the final, down and graded
+      // the flight, in fixed steps: the least height over the ground before the final, down and graded — in chunks of 20 s of flight
+      // (its state on window.__aps, the rule-13 watch on window.__mon): between them the banner's counter (docs/E2E.md, the banner,
+      // point 6 — a single page call of up to 20 min of flight showed nothing); the clock held throughout, the flight the same
+      await app.step("vol jusqu'à l'arrêt");
+      await app.js(
+        `(() => { window.__aps = { minAgl: 1e9, missed: 0, t: 0, i: 0, rwy: "", trace: [], ga: false, end: false }; ${MONITOR_INIT} return 1; })()`,
+      );
+      for (;;) {
+        const c = await app.js<{ t: number; phase: string; agl: number; minAgl: number; missed: number; end: boolean }>(`(async () => {
+        const c = __bh.camera, S = __bh.sys, F = __bh.fleet, frame = () => new Promise((q) => requestAnimationFrame(q));
+        const st = window.__aps; let { minAgl, missed, t, rwy, trace, ga } = st;
+        const stop = Math.min(30 * 1200, st.i + 30 * 20);
+        let i = st.i;
+        for (; i < stop; i++) {
+          __bh.step(1 / 30); t += 1 / 30;
+          // (rule 13: the thrust, the incidence, the attitude, the holds watched each step; the gear at the touch)
+          ${MONITOR_STEP}
+          // (every 5 s of flight two frames drawn: the world's runways measured as the craft nears them — runways3d —, the approach's
+          // level following theirs, as in play; one synchronous loop never drew a frame: the F-35 aimed at the data's level and met the
+          // relief before OEKF's threshold)
+          if (i % 150 === 0) { __bh.touch(); await frame(); await frame(); }
+          const R = c.ilsRun, A = c.a320App;
+          if (!R && !A) { st.end = true; break; }
+          rwy = (R ?? A).rwy.des ?? "";
+          missed = Math.max(missed, R?.missed ?? 0);
+          // (the least height counted on the way in only: a go-around's climb over the runway — a bounce's — is not a join)
+          if (c.a320Fmgc?.phase === "go around") ga = true;
+          const final = ga || (R ? R.phase === "final" || R.phase === "flare" || R.phase === "rollout" || R.missed > 0 : A.leg === "final");
+          if (!final) { const pose = F.pose(F.active, __bh.sim.time); minAgl = Math.min(minAgl, S.heightOverGround("earth", pose.X, __bh.sim.time)); }
+          if (missed > 1) { st.end = true; break; }
+          if (i % (A && (A.leg === "final" || ga) ? 150 : 1800) === 0) { const g = c.geoNow(), M = c.a320Fmgc;
+            trace.push(Math.round(t) + " s " + (R ? R.phase : A.leg + " " + M?.lat + "/" + M?.vert) + " alt " + (g?.alt ?? NaN).toFixed(0) + " gs " + (g?.gs ?? NaN).toFixed(0) + " agl " + S.heightOverGround("earth", F.pose(F.active, __bh.sim.time).X, __bh.sim.time).toFixed(0) + (A ? " lever " + c.pilot.throttle.toFixed(2) + " n1 " + (c.a320FmgcIn?.n1.now ?? NaN).toFixed(0) + " thr " + M?.thrust + " ra " + c.a320FmgcIn?.ra + " gnd " + c.a320FmgcIn?.onGround + " ap " + M?.ap + " fpa " + (c.a320FmgcIn?.fpa ?? NaN).toFixed(1) + " fcu " + M?.alt + " join " + (A.join ? A.join.plan.entry + "/" + A.join.i + ":" + A.join.plan.pts.map((q) => q.name + Math.round(q.alt) + "f" + Math.round(q.floor)).join(",") : "") + " along " + Math.round(S.onRunwayOf ? 0 : ((g.lat - A.rwy.lat) * 111320 * Math.cos(A.rwy.hdg * Math.PI / 180) + (g.lon - A.rwy.lon) * 111320 * Math.cos(g.lat * Math.PI / 180) * Math.sin(A.rwy.hdg * Math.PI / 180))) + " altFt " + A.altFt : "")); }
+        }
+        if (i >= 30 * 1200) st.end = true;
+        Object.assign(st, { minAgl, missed, t, rwy, trace, ga, i: st.end ? i : stop });
+        const agl = S.heightOverGround("earth", F.pose(F.active, __bh.sim.time).X, __bh.sim.time);
+        return { t, phase: String(c.ilsRun?.phase ?? c.a320App?.leg ?? "done"), agl, minAgl, missed, end: st.end };
+      })()`);
+        await app.progress(
+          `vol ${c.t.toFixed(0)} s · ${c.phase} · ${c.agl.toFixed(0)} m sur le sol`,
+          `plus bas avant la finale ${c.minAgl < 1e8 ? `${c.minAgl.toFixed(0)} m` : "–"} · remises ${c.missed}`,
+        );
+        if (c.end) break;
+      }
       const r = await app.js<{
         minAgl: number;
         landed: boolean;
@@ -111,33 +160,12 @@ describe.skipIf(!E2E)(`the campaign's sample flown — ${CRAFT}`, () => {
         rwy: string;
         trace: string[];
         mon: Monitor;
-      }>(`(async () => {
-        const c = __bh.camera, S = __bh.sys, F = __bh.fleet, frame = () => new Promise((q) => requestAnimationFrame(q));
-        let minAgl = 1e9, missed = 0, t = 0, rwy = "", trace = [], ga = false;
-        ${MONITOR_INIT}
-        for (let i = 0; i < 30 * 1200; i++) {
-          __bh.step(1 / 30); t += 1 / 30;
-          // (rule 13: the thrust, the incidence, the attitude, the holds watched each step; the gear at the touch)
-          ${MONITOR_STEP}
-          // (every 5 s of flight two frames drawn: the world's runways measured as the craft nears them — runways3d —, the approach's
-          // level following theirs, as in play; one synchronous loop never drew a frame: the F-35 aimed at the data's level and met the
-          // relief before OEKF's threshold)
-          if (i % 150 === 0) { __bh.touch(); await frame(); await frame(); }
-          const R = c.ilsRun, A = c.a320App;
-          if (!R && !A) break;
-          rwy = (R ?? A).rwy.des ?? "";
-          missed = Math.max(missed, R?.missed ?? 0);
-          // (the least height counted on the way in only: a go-around's climb over the runway — a bounce's — is not a join)
-          if (c.a320Fmgc?.phase === "go around") ga = true;
-          const final = ga || (R ? R.phase === "final" || R.phase === "flare" || R.phase === "rollout" || R.missed > 0 : A.leg === "final");
-          if (!final) { const pose = F.pose(F.active, __bh.sim.time); minAgl = Math.min(minAgl, S.heightOverGround("earth", pose.X, __bh.sim.time)); }
-          if (missed > 1) break;
-          if (i % (A && (A.leg === "final" || ga) ? 150 : 1800) === 0) { const g = c.geoNow(), M = c.a320Fmgc;
-            trace.push(Math.round(t) + " s " + (R ? R.phase : A.leg + " " + M?.lat + "/" + M?.vert) + " alt " + (g?.alt ?? NaN).toFixed(0) + " gs " + (g?.gs ?? NaN).toFixed(0) + " agl " + S.heightOverGround("earth", F.pose(F.active, __bh.sim.time).X, __bh.sim.time).toFixed(0) + (A ? " lever " + c.pilot.throttle.toFixed(2) + " n1 " + (c.a320FmgcIn?.n1.now ?? NaN).toFixed(0) + " thr " + M?.thrust + " ra " + c.a320FmgcIn?.ra + " gnd " + c.a320FmgcIn?.onGround + " ap " + M?.ap + " fpa " + (c.a320FmgcIn?.fpa ?? NaN).toFixed(1) + " fcu " + M?.alt + " join " + (A.join ? A.join.plan.entry + "/" + A.join.i + ":" + A.join.plan.pts.map((q) => q.name + Math.round(q.alt) + "f" + Math.round(q.floor)).join(",") : "") + " along " + Math.round(S.onRunwayOf ? 0 : ((g.lat - A.rwy.lat) * 111320 * Math.cos(A.rwy.hdg * Math.PI / 180) + (g.lon - A.rwy.lon) * 111320 * Math.cos(g.lat * Math.PI / 180) * Math.sin(A.rwy.hdg * Math.PI / 180))) + " altFt " + A.altFt : "")); }
-        }
-        const L = c.ilsLast;
-        return { minAgl, landed: !!L, score: L?.score ?? null, touch: L?.touch ?? null, missed, phase: String(c.ilsRun?.phase ?? c.a320App?.leg ?? "done"), t, rwy, trace, mon: window.__mon };
-      })()`);
+      }>(`(() => { const c = __bh.camera, st = window.__aps, L = c.ilsLast;
+        return { minAgl: st.minAgl, landed: !!L, score: L?.score ?? null, touch: L?.touch ?? null, missed: st.missed, phase: String(c.ilsRun?.phase ?? c.a320App?.leg ?? "done"), t: st.t, rwy: st.rwy, trace: st.trace, mon: window.__mon }; })()`);
+      await app.stepDone(
+        r.landed ? `posé en ${r.t.toFixed(0)} s, ${r.score}/20` : `pas posé (${r.phase}) après ${r.t.toFixed(0)} s`,
+        r.landed,
+      );
       console.log(
         `  flown ${r.t.toFixed(0)} s: least ${r.minAgl.toFixed(0)} m over the ground before the final, ${r.landed ? `down, ${r.score}/20, ${r.touch ? `${r.touch.along.toFixed(0)} m in, ${r.touch.across.toFixed(1)} m off, ${r.touch.vs.toFixed(2)} m/s` : ""}` : `not down (${r.phase})`}, missed ${r.missed}`,
       );
@@ -152,6 +180,11 @@ describe.skipIf(!E2E)(`the campaign's sample flown — ${CRAFT}`, () => {
         );
         await app.shot(`${shots}/sample-${CRAFT}-${P.field}-${P.end}.png`);
       }
+      await app.step("jugement");
+      await app.progress(
+        `piste ${r.rwy} · ${r.touch ? `${r.touch.along.toFixed(0)} m après le seuil, ${r.touch.across.toFixed(1)} m de l'axe, ${r.touch.vs.toFixed(2)} m/s` : "pas de toucher"}`,
+        `plus bas ${r.minAgl.toFixed(0)} m (> 150) · note ${r.score ?? "–"} (≥ 10)`,
+      );
       expect(r.rwy).toBe(P.end);
       expect(r.minAgl).toBeGreaterThan(150);
       expect(r.landed).toBe(true);
@@ -162,5 +195,6 @@ describe.skipIf(!E2E)(`the campaign's sample flown — ${CRAFT}`, () => {
       const prob = monitorProblems(r.mon, { landed: true });
       console.log(`  rule 13: ${JSON.stringify(r.mon)}${prob.length ? ` — ${prob.join("; ")}` : " — conforms"}`);
       expect(prob).toEqual([]);
+      await app.stepDone(`posé, ${r.score}/20 · règle 13 conforme`);
     }, 240_000);
 });

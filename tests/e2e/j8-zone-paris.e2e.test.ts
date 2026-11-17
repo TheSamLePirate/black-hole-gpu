@@ -5,7 +5,8 @@ import { corridorDisc } from "../../src/system/zones";
 import { App, E2E, stopServer } from "./lib/app";
 import { hostStats } from "./lib/earth-cache";
 
-// PLAN-J8 J8-9 — the real measure of J8-A's zone (Sam, 16 Nov 2026: « tous chargés avant le vol »; « ok couloir »): the corridor zone
+// PLAN-J8 J8-9 — J8-A's corridor zone downloaded, then every point of its track ready offline with nothing from the network.
+// The real measure of J8-A's zone (Sam, 16 Nov 2026: « tous chargés avant le vol »; « ok couloir »): the corridor zone
 // on J8-A's track (system/j8a-tracks.ts — J8_TRACK, `paris` by default), the airfield's levels along it — z 17 heights, z 18
 // orthophotos, what the game asks at 500 m (j8-corridor-levels, 16 Nov) —, « overflight » elsewhere in its disc, the far cells to
 // 20 km; downloaded through the Service Worker (and the e2e's Earth data on disk: a second run reads it there). Its real time against
@@ -46,15 +47,30 @@ describe.skipIf(!E2E)(`PLAN-J8 J8-9: J8-A's corridor zone « ${TRACK} », downlo
       const corridor = { points: track.points.map((p) => [p[0], p[1]] as [number, number]), halfWidthM: track.halfWidthM };
       const d = corridorDisc(corridor);
       const zone = { name: `J8-A ${TRACK} (e2e)`, lat: d.lat, lon: d.lon, radiusKm: d.radius / 1000, profile: "overflight", corridor };
+      // (the banner's steps — docs/E2E.md, the banner, point 6: the step under way numbered, its counter, the steps done with their
+      // result —: the zone, its cells, the report, the reload offline, each point of the track, the network's count)
+      const POINTS = track.points.map((_, k) => `point ${k + 1}/${track.points.length} hors ligne`);
+      app.steps([
+        "téléchargement de la zone",
+        "cellules de la zone",
+        "relevé des caches",
+        "rechargement hors ligne",
+        ...POINTS,
+        "réseau hors ligne",
+      ]);
       await app.scenario(`${TRACK} · the corridor zone downloaded`);
+      await app.step("téléchargement de la zone");
       const est = await app.js<{ chains: number; bytes: number; seconds: number }>(`__bh.pwa.zones.estimate(${JSON.stringify(zone)})`);
       console.log(`  the zone: ${est.chains} chains, ≈ ${(est.bytes / 1e6).toFixed(0)} MB, estimated ${(est.seconds / 60).toFixed(0)} min`);
+      // (the whole: the zone's estimate and ~1 min a point offline — the download from the e2e's disk is much faster: set again after it)
+      app.estimate(est.seconds + 60 * track.points.length);
       const id = (await app.js<string | null>(`__bh.pwa.zones.add(${JSON.stringify(zone)})`))!;
       expect(id).toBeTruthy();
       // (its progress said every minute; it fails when the download stops moving for 10 minutes, or past 4 hours — what is missing said)
       const t0 = Date.now();
       let last = -1,
-        moved = Date.now();
+        moved = Date.now(),
+        inCells = false;
       type Rec = {
         forests?: { count: number; buildings: number; bytes: number; failed: number; ms: number };
         meshes?: { count: number; buildings: number; bytes: number; failed: number; ms: number };
@@ -92,6 +108,37 @@ describe.skipIf(!E2E)(`PLAN-J8 J8-9: J8-A's corridor zone « ${TRACK} », downlo
             `stopped at the deadline (${process.env.J8Z_DEADLINE}) after ${((Date.now() - t0) / 60_000).toFixed(0)} min: ${z?.cursor}/${z?.total} chains in, kept on the disk`,
           );
         }
+        // (the banner's counter every 4 s: the chains against their total, the megabytes, the rest at the rate so far; then — every chain
+        // in, the zone still « downloading » — its cells being prepared, those done said)
+        const gone = (Date.now() - t0) / 1000;
+        if (z && z.cursor >= z.total && !inCells) {
+          inCells = true;
+          await app.stepDone(
+            `zone ${z.total.toLocaleString("fr-FR")} chaînes · ${(z.bytes / 1e6).toFixed(0)} Mo en ${(gone / 60).toFixed(1)} min`,
+          );
+          await app.step("cellules de la zone");
+        }
+        if (k % 2 === 0 && z) {
+          const mb = `${(z.bytes / 1e6).toFixed(0)} Mo`;
+          if (!inCells) {
+            const rest = z.cursor > 0 ? (gone / z.cursor) * (z.total - z.cursor) : null;
+            await app.progress(
+              `chaînes ${z.cursor.toLocaleString("fr-FR")} / ${z.total.toLocaleString("fr-FR")} · ${mb}${rest !== null ? ` · reste ~${Math.ceil(rest / 60)} min` : ""}`,
+              `échecs ${z.failed}`,
+            );
+          } else {
+            const kinds = (["cells", "streets", "meshes", "forests"] as const)
+              .map((n) => [n, (z as Record<string, unknown>)[n] as { count?: number } | undefined] as const)
+              .map(
+                ([n, r]) =>
+                  `${{ cells: "lointaines", streets: "rues", meshes: "maillages", forests: "forêt" }[n]} ${r ? `✓ ${r.count}` : "…"}`,
+              );
+            await app.progress(
+              `cellules : ${kinds.join(" · ")} · ${Math.round((Date.now() - moved) / 1000)} s sans changement`,
+              `échecs ${z.failed}`,
+            );
+          }
+        }
         if (k % 30 === 0)
           console.log(
             `  [${((Date.now() - t0) / 60_000).toFixed(1)} min] ${z?.cursor}/${z?.total} chains, ${((z?.bytes ?? 0) / 1e6).toFixed(0)} MB`,
@@ -100,6 +147,13 @@ describe.skipIf(!E2E)(`PLAN-J8 J8-9: J8-A's corridor zone « ${TRACK} », downlo
       }
       const z = (await rec())!;
       const realS = (Date.now() - t0) / 1000;
+      if (!inCells) await app.step("cellules de la zone");
+      await app.stepDone(
+        `zone ${z.state} en ${(realS / 60).toFixed(1)} min · maillages ${z.meshes?.count ?? "–"} · forêt ${z.forests?.count ?? "–"} · échecs ${z.failed}`,
+        z.state === "ready" && z.failed === 0,
+      );
+      app.estimate(realS + 60 * track.points.length);
+      await app.step("relevé des caches");
       const hosts = app.earth ? hostStats(app.earth.counts) : [];
       console.log(`  ready in ${(realS / 60).toFixed(1)} min (estimated ${(est.seconds / 60).toFixed(1)}): ${JSON.stringify(z)}`);
       for (const h of hosts) console.log(`  host ${JSON.stringify(h)}`);
@@ -123,10 +177,14 @@ describe.skipIf(!E2E)(`PLAN-J8 J8-9: J8-A's corridor zone « ${TRACK} », downlo
           if (v.getUint32(8, true) === 16923 && v.getUint32(12, true) === 12025) toulon = n; }
         return { cells, canopy, candidates, toulon }; })()`);
       console.log(`  forest cells: ${JSON.stringify(z.forests ?? null)} · in the cache ${JSON.stringify(forests)}`);
+      await app.stepDone(
+        `maillages ${meshes.canopy} avec canopée / ${meshes.guessed} sans · forêt ${forests.cells} cellules, ${forests.canopy} avec canopée`,
+      );
       expect(z.state).toBe("ready");
       expect(z.failed).toBe(0);
 
       await app.scenario(`${TRACK} · offline, the track's points`);
+      await app.step("rechargement hors ligne");
       await app.offline(true);
       await app.load("scene=game:artemis");
       await app.offline(true);
@@ -135,9 +193,17 @@ describe.skipIf(!E2E)(`PLAN-J8 J8-9: J8-A's corridor zone « ${TRACK} », downlo
       __bh.renderer.farBudgetMiB = ${Number(process.env.J8A_BUDGET ?? 72)}; return 1; })()`);
       const st0 = await app.js<{ served: { network: number; kinds?: Record<string, { network: number }> } }>(`__bh.pwa.stats()`);
       const before = st0.served.network;
+      await app.stepDone("page rechargée, réseau coupé");
       const ready: { point: number; ready: boolean; why: string[]; notes?: string[] }[] = [];
+      // (the values judged: the points ready so far, the worker's requests to the network since the cut)
+      const judged = async () => {
+        const n = (await app.js<{ served: { network: number } }>(`__bh.pwa.stats()`)).served.network - before;
+        return `prêts ${ready.filter((p) => p.ready).length}/${track.points.length} · requêtes réseau ${n}`;
+      };
       for (let k = 0; k < track.points.length; k++) {
         const [lat, lon, alt] = track.points[k]!;
+        await app.step(POINTS[k]!);
+        await app.progress("la caméra posée, les données du point attendues (relief, photos, scène)", await judged());
         const why = await app.js<string | null>(
           `(() => { __bh.freeze(true); return __bh.viewAt(${lat}, ${lon}, { altM: ${alt} + __bh.sys.geoid(${lat}, ${lon}), pitch: -8, fov: 50 }) ?? null; })()`,
         );
@@ -162,6 +228,14 @@ describe.skipIf(!E2E)(`PLAN-J8 J8-9: J8-A's corridor zone « ${TRACK} », downlo
           else if (!since) since = Date.now();
           if (since && Date.now() - since >= 5_000) break;
           const w = now.why.join(" · ");
+          const s = Math.round((Date.now() - t0) / 1000);
+          if (s % 2 === 0)
+            await app.progress(
+              since
+                ? `prêt depuis ${Math.round((Date.now() - since) / 1000)} / 5 s · ${s} / 120 s`
+                : `en attente : ${w.slice(0, 90) || "…"} · ${s} / 120 s`,
+              await judged(),
+            );
           if (w && w !== lastWhy) console.log(`  … point ${k + 1}: ${Math.round((Date.now() - t0) / 1000)} s — ${w.slice(0, 200)}`);
           lastWhy = w;
           await Bun.sleep(1_000);
@@ -174,12 +248,20 @@ describe.skipIf(!E2E)(`PLAN-J8 J8-9: J8-A's corridor zone « ${TRACK} », downlo
           `(async () => { const f = await __bh.renderer.farBuildings?.(); const l = f?.layer; return l ? { wanted: l.wanted, missing: l.missing, cells: l.cells, refused: l.refused, freeBlocks: l.freeBlocks, blocks: l.blocks } : null; })()`,
         );
         console.log(`  point ${k + 1}: ${JSON.stringify(ready[k])} · far layer ${JSON.stringify(far)}`);
+        await app.progress(`point ${k + 1} ${now.ready ? "prêt" : "pas prêt"}`, await judged());
+        await app.stepDone(
+          now.ready
+            ? `point ${k + 1} prêt en ${Math.round((Date.now() - t0) / 1000)} s`
+            : `point ${k + 1} pas prêt : ${(now.why ?? []).join(" · ").slice(0, 80)}`,
+          !!now.ready,
+        );
         if (k === 2) await app.shot(`${OUT}/${TRACK}-offline-point3.png`);
       }
       const st = await app.js<{ served: { network: number; kinds?: Record<string, { network: number }>; recent?: string[] } }>(
         `__bh.pwa.stats()`,
       );
       const after = st.served.network;
+      await app.step("réseau hors ligne");
       // (counted before the fetch: a tile asked of the network — in neither the zone nor the worker's cache —, failed offline)
       console.log(`  the Service Worker's requests to the network offline (in neither the zone nor its cache): ${after - before}`);
       console.log(
@@ -193,6 +275,7 @@ describe.skipIf(!E2E)(`PLAN-J8 J8-9: J8-A's corridor zone « ${TRACK} », downlo
         )}`,
       );
       for (const u of (st.served.recent ?? []).slice(-12)) console.log(`  … ${u}`);
+      await app.stepDone(`${after - before} requête(s) au réseau hors ligne`, after - before === 0);
       expect(ready.every((p) => p.ready)).toBe(true);
       expect(after - before).toBe(0);
     },
