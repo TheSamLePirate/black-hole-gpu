@@ -1,5 +1,5 @@
 // Shared worker/GPU contract: local WGS84 metres, stackless BVH, exact polygon extrusions.
-import { carMesh } from "./traffic";
+import { carKind, carShape } from "./car-shapes";
 import { geodeticToCart, WGS84_A, WGS84_F } from "./ellipsoid";
 import { type ForestFrame, forestVec4s, writeForest } from "./forest";
 import type { Vec3 } from "../physics";
@@ -286,6 +286,8 @@ export const PYLON_TAG = 0xfffc0000;
 export const CABLE_TAG = 0xfffb0000;
 /** (Q8 D1) a car's triangles: its body, its headlights, its tail lights | its index */
 export const CAR_BODY = 0xfff90000;
+/** (PLAN-J8 VB3) a car's glass: its body's tag with this bit in its index's half (the index itself below it — TRAFFIC_MAX < 2¹⁵) */
+export const CAR_GLASS_BIT = 0x8000;
 export const CAR_HEAD = 0xfff80000;
 export const CAR_TAIL = 0xfff70000;
 /** (Q8 L10) a street lamp's pole (a pair of vertices at its foot, a pair at its top: widened across the view, dithered) and its
@@ -323,8 +325,9 @@ export function packScenery(
   /** (Q8 D1) the conductors' ribbons (system/pylons.ts cableMesh: pairs of vertices), tagged CABLE_TAG, each pair from an even
    *  vertex (one vertex of padding before them when needed) */
   cables: { positions: number[]; triangles: number[] }[] = [],
-  /** (Q8 D1) the cars (system/traffic.ts): each the shared car mesh, its body's, headlights' and tail lights' triangles tagged
-   *  CAR_BODY / CAR_HEAD / CAR_TAIL | its index, from a vertex index ≡ 0 mod 4 (padding before them); its entry (start, speed),
+  /** (Q8 D1) the cars (system/traffic.ts): each its shape (car-shapes.ts — VB3: one of five by its index, carKind), its body's,
+   *  glass's (CAR_BODY | CAR_GLASS_BIT), headlights' and tail lights' triangles tagged CAR_BODY / CAR_HEAD / CAR_TAIL | its index,
+   *  from a vertex index ≡ 0 mod 4 (padding before them; each shape's vertices a multiple of four); its entry (start, speed),
    *  (end, phase) after the pylons' */
   cars: { start: [number, number, number]; end: [number, number, number]; speed: number; phase: number }[] = [],
   /** (Q8 L10) the streets' lamps (system/streetlamps.ts lampMesh: eight vertices, from a vertex index ≡ 0 mod 4), their pole's
@@ -333,7 +336,8 @@ export function packScenery(
   lamps: { positions: number[]; triangles: number[] }[] = [],
   lampGrid?: Uint8Array,
 ) {
-  const car = cars.length ? carMesh() : { positions: [], triangles: [] };
+  // (PLAN-J8 VB3: each car its shape)
+  const carShapes = cars.map((_, i) => carShape(carKind(i)));
   const { nodes, geometries, offsets } = sceneryBVH(prims);
   const surface = sceneryBVH(surfaces);
   // (the water's tree: the surfaces' own records, a large polygon's bands — waterBands — appended after them)
@@ -387,8 +391,8 @@ export function packScenery(
     triangleCount += m.triangles.length / 3;
   }
   const carPad = cars.length ? (4 - (vertexCount % 4)) % 4 : 0;
-  vertexCount += carPad + cars.length * (car.positions.length / 3);
-  triangleCount += cars.length * (car.triangles.length / 3);
+  vertexCount += carPad + carShapes.reduce((n, m) => n + m.positions.length / 3, 0);
+  triangleCount += carShapes.reduce((n, m) => n + m.triangles.length / 3, 0);
   const lampPad = lamps.length ? (4 - (vertexCount % 4)) % 4 : 0;
   vertexCount += lampPad + lamps.length * 8;
   triangleCount += lamps.length * 4;
@@ -475,14 +479,15 @@ export function packScenery(
       u.fill(CABLE_TAG, tag, (tag += m.triangles.length / 3));
     }
     v += carPad;
-    const carTris = car.triangles.length / 3;
     cars.forEach((c, i) => {
+      const car = carShapes[i]!;
       f.set(car.positions, meshOffset * 4 + v * 3);
       for (const k of car.triangles) u[t++] = v + k;
       v += car.positions.length / 3;
-      u.fill((CAR_BODY | i) >>> 0, tag, (tag += 12));
-      u.fill((CAR_HEAD | i) >>> 0, tag, (tag += 4));
-      u.fill((CAR_TAIL | i) >>> 0, tag, (tag += carTris - 16));
+      u.fill((CAR_BODY | i) >>> 0, tag, (tag += car.body));
+      u.fill((CAR_BODY | CAR_GLASS_BIT | i) >>> 0, tag, (tag += car.glass));
+      u.fill((CAR_HEAD | i) >>> 0, tag, (tag += car.head));
+      u.fill((CAR_TAIL | i) >>> 0, tag, (tag += car.tail));
       f.set(
         [...c.start, c.speed, ...c.end, c.phase],
         (triangleOffset + triangleCount + 1 + 3 * turbines.length + 2 * pylons.length + 2 * i) * 4,

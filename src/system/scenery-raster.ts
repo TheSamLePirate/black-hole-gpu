@@ -625,7 +625,8 @@ fn meshVertexAt(vi: u32, tc: f32) -> vec3f {
     if (hi == 0xfff90000u || hi == 0xfff80000u || hi == 0xfff70000u) {
       let b0 = u32(scenery[3].z) + u32(scenery[2].w);
       let hd = scenery[b0];
-      let r = b0 + 1u + 3u * u32(hd.x) + 2u * u32(hd.y) + 2u * (tg & 0xffffu);
+      // (VB3: a car's glass — CAR_GLASS_BIT in its index's half — moves with it: the index below the bit)
+      let r = b0 + 1u + 3u * u32(hd.x) + 2u * u32(hd.y) + 2u * (tg & 0x7fffu);
       let st = scenery[r];
       let en = scenery[r + 1u];
       let D = en.xyz - st.xyz;
@@ -695,7 +696,8 @@ fn meshLeaf(tri: u32) -> f32 {
   var v = view(wp);
   // (Q8 D1: a car — its g 4 + its paint's index / 8, 5 a headlight, 6 a tail light: shadeLite's —; a lamp's quad, its four
   // vertices at its centre, opened towards the camera to a pixel and a half at least — the corner by the vertex's index mod 4)
-  if (fam == 0xfff90000u) { o.leaf = 4.0 + f32((tg & 0xffffu) % 8u) / 8.0; }
+  // (VB3: its glass 4.95 — shadeLite's dark mirror —, its body 4 + its paint)
+  if (fam == 0xfff90000u) { o.leaf = select(4.0 + f32((tg & 0x7fffu) % 8u) / 8.0, 4.95, (tg & 0x8000u) != 0u); }
   if (fam == 0xfff80000u || fam == 0xfff70000u) {
     o.leaf = select(6.0, 5.0, fam == 0xfff80000u);
     let t = u32(scenery[3].z) * 4u + vi;

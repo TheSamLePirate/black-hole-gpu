@@ -16141,7 +16141,11 @@ fn liteMaterial(gq: vec3f, q: vec3f, ph: vec3f, rd: vec3f, look: vec3f, tM: f32,
     // (Q8 D1: a car — system/traffic.ts —: its paint one of eight by its index — white, silver, grey, black, red, blue, dark
     // green, beige —, its lamps' glass dark by day)
     let cg = atTag(at);
-    if (cg > 3.5 && cg < 4.99) {
+    if (cg > 4.92 && cg < 4.99) {
+      // (PLAN-J8 VB3: a car's glass — car-shapes.ts —: dark, the sky mirrored at a grazing look as a building's windows)
+      A = vec3f(0.035, 0.04, 0.045) * P.earth2.z;
+      glass = 1.0;
+    } else if (cg > 3.5 && cg < 4.92) {
       let i = u32(fract(cg) * 8.0 + 0.5) % 8u;
       var paint = array<vec3f, 8>(vec3f(0.75), vec3f(0.45), vec3f(0.2), vec3f(0.03), vec3f(0.45, 0.04, 0.03), vec3f(0.05, 0.1, 0.3), vec3f(0.05, 0.12, 0.07), vec3f(0.5, 0.45, 0.35));
       A = paint[i] * P.earth2.z;
