@@ -430,6 +430,11 @@ l'ombrage tracé sur toute l'image est à revoir avant d'être gardé.
     §3 bis (analyse de la session d'analyse, ~10:30 UTC). Rattaché à J8 en mode speed : implémenté avant le gros e2e, qui en
     ajoute les critères. Le défaut le plus urgent : en France de jour, les routes peintes et les marquages de VB2 et VB7 ne
     se dessinent pas sous l'orthophoto (RP1). RP9, les voies ferrées, peut sortir de J8 si Sam le veut.
+15. **Décidé par Sam le 17 nov. (~15:20 UTC) : RP3 (le nivellement du sol sous les routes hors de France) passe après J8**,
+    en lot à part (recommandation A de la session d'analyse). Il touche le contrat du sol : une grille de hauteurs commune au
+    relief GPU, au worker du décor et au contact (`gradeAt`, `groundRelief`), publiée avec une génération ; le faire avant le
+    gros e2e aurait obligé à revoler tous les tracés de J8-A, verts sur kerr-mini. Le gros e2e final se fait sans lui ; la
+    conception reste à la ligne RP3 de §3 bis (6ecf8006). La part des approches (le profil long par tronçon) est faite.
 
 ## 7. Ce qui reste hors de ce plan
 
