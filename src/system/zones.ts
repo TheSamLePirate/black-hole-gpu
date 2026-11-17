@@ -613,7 +613,16 @@ export function zoneEstimate(chains: readonly ZoneChain[]): number {
  *  2026-11-11, Chamonix's airport-profile zone with its scenery: it was said 400 s, from the WMS-R's alone at 5 a second), the
  *  other tiles ~35 chains a second (4 190 chains in 2 min, 2026-10-23) — the two at once */
 export function zoneDuration(chains: readonly ZoneChain[]): number {
-  let geopf = 0;
-  for (const c of chains) if (c[0]!.includes("data.geopf.fr")) geopf++;
-  return Math.max((chains.length - geopf) / 35, geopf / 4.6);
+  let geopf = 0,
+    wmsr = 0;
+  for (const c of chains)
+    if (c[0]!.includes("data.geopf.fr")) {
+      geopf++;
+      if (c[0]!.includes("data.geopf.fr/wms-r")) wmsr++;
+    }
+  // (PLAN-J8 J8-9 (3), 17 Nov 2026 — J8-A's Paris corridor, 47 706 chains of which 39 243 the Géoplateforme's, 15 445 WMS-R, on kerr-mini:
+  // 76.2 min through the network — a third of the answers from the e2e's disk: ~8.6 Géoplateforme chains a second at most —, 35.7 min
+  // from the disk alone — the Service Worker's WMS-R spacing, 125 ms (sw.ts gentle), its floor: 15 445 / 8 = 32 min. The cold rate kept
+  // at 4.6 a second (Chamonix's, measured cold): an estimate on the safe side — Paris's said 142 min, its cold time between 76 and ~115)
+  return Math.max((chains.length - geopf) / 35, geopf / 4.6, wmsr / 8);
 }

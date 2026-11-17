@@ -181,6 +181,14 @@ export class SceneryContact {
   }
   /** Capsule occupancy and highest reachable support: preserves polygon holes and bridge undersides. */
   at(q: Vec3, radius = 0.3, height = 1.8, step = 0.25) {
+    const own = this.atScene(q, radius, height, step);
+    // (PLAN-J8 J8-8 lot 3: the buildings drawn from their mesh cells — out of the scene — as solid: near-meshes.ts contactAt)
+    if (own.blocked || !nearBuildings) return own;
+    const g = cartToGeodetic(WGS84_A, WGS84_F, q);
+    const n = nearBuildings(g.lat / D, g.lon / D, g.h, radius, height, step);
+    return { blocked: n.blocked, support: Math.max(own.support, n.support) };
+  }
+  private atScene(q: Vec3, radius: number, height: number, step: number) {
     const p = this.local(q);
     let blocked = false,
       support = -Infinity;
@@ -212,6 +220,21 @@ export class SceneryContact {
     });
     return { blocked, support };
   }
+}
+
+/** PLAN-J8 J8-8 lot 3: the buildings drawn from their mesh cells (near-meshes.ts contactAt — the renderer sets it while they are on):
+ *  at a place [°] and its height over the ellipsoid [m], the capsule blocked, its support */
+type NearBuildings = (
+  lat: number,
+  lon: number,
+  hM: number,
+  radius: number,
+  height: number,
+  step: number,
+) => { blocked: boolean; support: number };
+let nearBuildings: NearBuildings | null = null;
+export function setNearBuildingsContact(f: NearBuildings | null) {
+  nearBuildings = f;
 }
 
 /** The scenery the game stands in now (main.ts sets it: the Earth's near the camera, when drawn), for what is not

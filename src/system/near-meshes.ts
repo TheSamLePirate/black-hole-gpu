@@ -8,7 +8,7 @@
 // The far layer leaves those cells to it (building-far.ts setHidden). First step of lot (2): the triangles drawn with the generic near
 // material (no leaf); the records (rasterBuilding's exact faces and windows) next — lot (2b); the contacts and shadows lot (3); the
 // near scene without buildings lot (4). A lever (renderer.nearCellsOn), off until those are in.
-import { CELL_Z, cellKey, cellOf, fromCell, MESH_NEAR_M } from "./building-cells";
+import { CELL_Z, cellKey, cellOf, fromCell, MESH_NEAR_M, toCell } from "./building-cells";
 import { cellFrameInScene, cellPriority, type EyeState } from "./building-layer";
 import type { CellPool, CellPrepared, CellWant } from "./cell-pool";
 import { MeshCellFlag, type MeshCellHeader, meshViews, readMeshBuilding, readMeshHeader } from "./mesh-cells";
@@ -84,6 +84,96 @@ class BlockPool {
   }
 }
 
+/** lot (3): a cell's buildings for the walker's contacts — its records (heights set on the relief), its origin, its leaves by bins of
+ *  CONTACT_BIN_M (each leaf's float index in `rec`) */
+export const CONTACT_BIN_M = 32;
+interface CellContact {
+  rec: Float32Array;
+  origin: { lat: number; lon: number };
+  bins: Map<number, number[]>;
+}
+const binKey = (i: number, j: number) => (i + 32768) * 65536 + (j + 32768);
+/** a cell's contact: its leaves binned by their footprint's box (their edges) */
+export function cellContact(buf: ArrayBuffer, rec: Float32Array): CellContact {
+  const h = readMeshHeader(buf)!;
+  const bins = new Map<number, number[]>();
+  for (let r = 0; r < h.buildings; r++) {
+    const b = readMeshBuilding(buf, r);
+    let o = b.firstRecord;
+    for (let l = 0; l < b.records && o < h.records; l++) {
+      const base = 4 * o,
+        count = Math.round(rec[base + 2]!);
+      const np = (Math.floor(rec[base + 11]!) >> 14) & 15;
+      let minX = Infinity,
+        minY = Infinity,
+        maxX = -Infinity,
+        maxY = -Infinity;
+      for (let e = 0; e < count; e++) {
+        const x = rec[base + 12 + 4 * e]!,
+          y = rec[base + 13 + 4 * e]!;
+        minX = Math.min(minX, x);
+        maxX = Math.max(maxX, x);
+        minY = Math.min(minY, y);
+        maxY = Math.max(maxY, y);
+      }
+      if (count > 0)
+        for (let i = Math.floor(minX / CONTACT_BIN_M); i <= Math.floor(maxX / CONTACT_BIN_M); i++)
+          for (let j = Math.floor(minY / CONTACT_BIN_M); j <= Math.floor(maxY / CONTACT_BIN_M); j++) {
+            const k = binKey(i, j);
+            const list = bins.get(k);
+            if (list) list.push(base);
+            else bins.set(k, [base]);
+          }
+      o += 4 + count + np;
+    }
+  }
+  return { rec, origin: { lat: h.originLat, lon: h.originLon }, bins };
+}
+/** is p (its cell's east, north [m]) within `radius` of the leaf's footprint (its edges at base + 12: the scene's records' — scenery-contact.ts) */
+function inLeaf(f: Float32Array, base: number, px: number, py: number, radius: number) {
+  let inside = false,
+    edge = false;
+  for (let i = base + 12; i < base + 12 + f[base + 2]! * 4; i += 4) {
+    const x = f[i]!,
+      y = f[i + 1]!,
+      dx = f[i + 2]! - x,
+      dy = f[i + 3]! - y;
+    const t = Math.max(0, Math.min(1, ((px - x) * dx + (py - y) * dy) / (dx * dx + dy * dy || 1)));
+    edge ||= (px - x - t * dx) ** 2 + (py - y - t * dy) ** 2 < radius * radius;
+    if (y > py !== f[i + 3]! > py && px < x + ((py - y) * dx) / dy) inside = !inside;
+  }
+  return inside || edge;
+}
+/** a leaf's top over (x, y): its roof planes' least, its own top else (scenery-contact.ts topAt) */
+function leafTop(f: Float32Array, base: number, x: number, y: number) {
+  const top = f[base + 1]!;
+  if (f[base + 3] !== 1) return top;
+  const planes = (f[base + 11]! >>> 14) & 15,
+    at = base + 12 + f[base + 2]! * 4 + 4;
+  let z = top;
+  for (let k = 0; k < planes; k++) z = Math.min(z, f[at + k * 4]! * x + f[at + k * 4 + 1]! * y + f[at + k * 4 + 2]!);
+  return z;
+}
+
+/** the capsule at (east, north [m] in the cell's frame, hM over the ellipsoid) against a cell's buildings: blocked, its support */
+export function contactIn(C: CellContact, east: number, north: number, hM: number, radius = 0.3, height = 1.8, step = 0.25) {
+  let blocked = false,
+    support = Number.NEGATIVE_INFINITY;
+  const seen = new Set<number>();
+  for (let bi = Math.floor((east - radius) / CONTACT_BIN_M); bi <= Math.floor((east + radius) / CONTACT_BIN_M); bi++)
+    for (let bj = Math.floor((north - radius) / CONTACT_BIN_M); bj <= Math.floor((north + radius) / CONTACT_BIN_M); bj++)
+      for (const base of C.bins.get(binKey(bi, bj)) ?? []) {
+        if (seen.has(base)) continue;
+        seen.add(base);
+        if (!inLeaf(C.rec, base, east, north, radius)) continue;
+        const bottom = C.rec[base]!,
+          top = leafTop(C.rec, base, east, north);
+        if (top <= hM + step && top >= hM - 2) support = Math.max(support, top - hM);
+        else if (bottom < hM + height - 0.02 && top > hM + 0.02) blocked = true;
+      }
+  return { blocked, support };
+}
+
 interface Resident {
   x: number;
   y: number;
@@ -94,6 +184,8 @@ interface Resident {
   records: number;
   buildings: number;
   triangles: number;
+  /** lot (3): its buildings for the walker's contacts */
+  contact?: CellContact;
 }
 
 /** each building's box in its cell's frame (min east, min north, max east, max north; NaN: no vertex) — its ground's samples */
@@ -373,13 +465,25 @@ export class NearMeshes {
       return;
     }
     const arrays = nearCellArrays(c.buf, vert, (rank) => grounds[rank]!, rec.length ? rec : null)!;
-    const r: Resident = { x: c.x, y: c.y, slot, vert, tri, rec, records: 0, buildings: h.buildings, triangles: h.triangles };
+    // (its records, their heights set on the relief: the region's and the walker's contacts')
+    const records = nearCellRecords(c.buf, arrays.grounds);
+    const r: Resident = {
+      x: c.x,
+      y: c.y,
+      slot,
+      vert,
+      tri,
+      rec,
+      records: 0,
+      buildings: h.buildings,
+      triangles: h.triangles,
+      contact: cellContact(c.buf, records),
+    };
     this.writeFrame(r);
     this.raster.nearUpload(vert, arrays.pos, tri, arrays.tris, slot);
     // (lot 2b: its records into the region's blocks, each block's slot into the table)
     const L = this.layout;
     if (rec.length && L && this.writeRegion) {
-      const records = nearCellRecords(c.buf, arrays.grounds);
       for (let b = 0; b < rec.length; b++) {
         const lo = b * NEAR_REC_BLOCK,
           cnt = Math.min(NEAR_REC_BLOCK, h.records - lo);
@@ -432,6 +536,29 @@ export class NearMeshes {
     this.residents.delete(key);
     this.cells().forget(r.x, r.y);
     this.counts.evicted++;
+  }
+
+  /**
+   * Lot (3): the walker's capsule against the resident cells' buildings (as scenery-contact.ts at() against the scene's): at a place
+   * [°] and its height over the ellipsoid [m], a capsule `radius` wide and `height` tall — blocked by a wall, or standing on a roof
+   * within `step` above or 2 m below (`support`: that top less the height [m]); the cells round it (their buildings straddle their edges)
+   */
+  contactAt(lat: number, lon: number, hM: number, radius = 0.3, height = 1.8, step = 0.25): { blocked: boolean; support: number } {
+    let blocked = false,
+      support = Number.NEGATIVE_INFINITY;
+    const c = cellOf(lat, lon);
+    const n = 2 ** CELL_Z;
+    for (let j = -1; j <= 1 && !blocked; j++)
+      for (let i = -1; i <= 1 && !blocked; i++) {
+        const r = this.residents.get(cellKey((((c.x + i) % n) + n) % n, c.y + j));
+        const C = r?.contact;
+        if (!C) continue;
+        const p = toCell(C.origin, lat, lon);
+        const k = contactIn(C, p.east, p.north, hM, radius, height, step);
+        blocked ||= k.blocked;
+        support = Math.max(support, k.support);
+      }
+    return { blocked, support };
   }
 
   /** what is resident: cells, the pools' free blocks; the cells wanted, those missing */

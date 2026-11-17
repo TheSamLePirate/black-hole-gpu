@@ -9829,3 +9829,17 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
 - **Limites :** levier éteint ; les ombres portées des bâtiments manquent (lot 3) ; la scène garde ses bâtiments (lot 4) ; le motif
   des fenêtres allumées tient à l'adresse de l'enregistrement (comme aujourd'hui à chaque scène refaite) ; rien sur kerr-mini.
 - **Suite :** lot (3) les ombres et les contacts, puis (4).
+
+### 2026-11-17 00:18 UTC — PLAN-J8 J8-8 lots (3) et (4) : les ombres, les contacts et la scène sans bâtiments, sous le levier (session 33d89754)
+
+- **Contribution à la destination :** J8-A critère 5 (zéro scène rapide pour les bâtiments : la scène proche ne refait plus que le
+  sol, les arbres et l'eau) ; stratégie §7 et §20 (une responsabilité par module : les bâtiments proches aux cellules préparées).
+- **Réalisé :** `nearCellShadowVs` (carte d'ombre, cascades) ; `near-meshes.ts` étale le calage au sol (3 ms par image) et répond aux
+  contacts (`contactAt`, branché dans `SceneryContact.at`) ; la demande de scène `meshCells` : la scène laisse ses bâtiments BD TOPO
+  (et OSM dans la boîte de la BD TOPO) ; la couche lointaine non masquée par la scène dans ce cas. E2e `j8-near-cells`. Tests
+  `near-meshes` 4/4, décor 24/24, contacts, 84/84 shaders.
+- **Preuves :** vu sur ce Mac (Toulon, hors ligne) : image équivalente à celle d'aujourd'hui, 0 bâtiment dans la scène, GPU 22,6
+  contre 22,5 ms (un regard), la plus longue image 33 ms pendant l'arrivée de 15 cellules.
+- **Limites :** levier éteint par défaut ; rien mesuré sur kerr-mini ; pas encore volé ; les cellules d'Overture vides (`SourceLater` :
+  la scène garde ces bâtiments) ; le diagnostic `collisionLines` ne montre pas les bâtiments des cellules.
+- **Suite :** `j8-near-cells` et J8-A sur kerr-mini avec le levier ; à Sam la décision de l'allumer.

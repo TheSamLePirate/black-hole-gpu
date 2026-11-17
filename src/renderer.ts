@@ -258,6 +258,7 @@ import { DETAIL_REACH, localPoint, SCENERY_STORAGE_LIMIT, type SceneryExclusion,
 import { BuildingFar, FAR_BUDGET_BYTES } from "./system/building-far";
 import { StreetFar } from "./system/street-far";
 import { NEAR_REGION_BYTES, NearMeshes } from "./system/near-meshes";
+import { setNearBuildingsContact } from "./system/scenery-contact";
 import type { EyeState } from "./system/building-layer";
 import { cellPool, meshPool, streetPool } from "./system/cell-workers";
 import { LANDSCAPES, LANDSCAPE_CLEARING_M } from "./system/landscapes";
@@ -4393,6 +4394,8 @@ export class Renderer {
       this.earthScenery.speed = groundSpeed(eye, this.streamVelocity);
       // (PLAN-J8 J8-5: the far layer drawing, the scene's buildings within 2 km of its corridor alone — the rest the layer's)
       this.earthScenery.nearOnlyM = this.farBuildingsOn ? this.farNearOnlyM : 0;
+      // (PLAN-J8 J8-8 lot 4: the BD TOPO's buildings drawn from their mesh cells — out of the scene)
+      this.earthScenery.meshCells = this.farBuildingsOn && this.nearCellsWant;
       this.earthScenery.update(
         eye,
         detail.scenery,
@@ -11298,6 +11301,7 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
     if (!on) {
       this.nearMeshes?.dispose();
       this.nearMeshes = null;
+      setNearBuildingsContact(null);
       this.buildingFar?.setHidden(new Set(), performance.now());
     }
     // (lot 2b: their records' region in the scenery buffer — asked while on, let go off)
@@ -12289,7 +12293,9 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
         const st = this.earthScenery.stats();
         // (the scene keeps its buildings within its kept reach where its cap cut, else its box — and within farNearOnlyM when set, J8-5)
         const near = this.farNearOnlyM > 0 ? this.farNearOnlyM : Number.POSITIVE_INFINITY;
-        const maskR = !box ? 0 : Math.min(st.cutBuildings > 0 && st.keptReachM > 0 ? st.keptReachM : box.half - 650, near);
+        // (PLAN-J8 J8-8 lot 4: the scene's BD TOPO buildings the mesh cells' — the far layer drawing all but theirs: no mask from the scene)
+        const maskR =
+          !box || (st.meshLeft ?? 0) > 0 ? 0 : Math.min(st.cutBuildings > 0 && st.keptReachM > 0 ? st.keptReachM : box.half - 650, near);
         this.buildingFar.update(this.farEye, box, maskR, this.earthScenery.buildingLeaf, performance.now(), st.corridorA);
         // (PLAN-J8 J8-L: the far street lamps — the street cells within 12 km, their heads at night as the near ones')
         if (this.farLampsOn) {
@@ -12314,6 +12320,12 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
               if (r) this.device.queue.writeBuffer(this.earthScenery.buffer, (r.base + at) * 16, data as Float32Array<ArrayBuffer>);
             };
             this.earthScenery.onRegion = () => this.nearMeshes?.regionChanged();
+            // (lot 3: the walker's contacts with their buildings — out of the scene's)
+            setNearBuildingsContact((lat, lon, h, radius, height, step) =>
+              this.nearMeshes
+                ? this.nearMeshes.contactAt(lat, lon, h, radius, height, step)
+                : { blocked: false, support: Number.NEGATIVE_INFINITY },
+            );
           }
           this.nearMeshes.update(this.farEye, box, performance.now());
           this.buildingFar.setHidden(this.nearMeshes.residentKeys(), performance.now());

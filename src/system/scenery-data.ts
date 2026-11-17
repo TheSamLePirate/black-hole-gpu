@@ -535,6 +535,9 @@ export interface SceneryRequest {
   /** PLAN-J8 J8-5: the far buildings' layer drawing past it — the scene's buildings within this distance of its corridor alone [m]
    *  (their footprints past it kept for the survey's trees, as the cap's cut ones); 0 / absent: all, as before */
   nearOnlyM?: number;
+  /** PLAN-J8 J8-8 lot (4): the BD TOPO's buildings drawn from their mesh cells (near-meshes.ts) — left out of the scene (their
+   *  footprints kept for the trees, as the cap's cut ones; counted `meshLeft`); Overture's and OSM's kept */
+  meshCells?: boolean;
   /** the runways near the scene (game/runway-grade.ts): the feet put on the ground as the gear and the tracer have it — their airfields
    *  levelled, the detail off there and under their approaches' funnels (PLAN-J7 J7-1) */
   runways?: GradeRunway[];
@@ -565,6 +568,8 @@ export interface SceneryReply {
   cutBuildings?: number;
   /** PLAN-J8 J8-5: the buildings left to the far layer (past nearOnlyM) */
   farLeft?: number;
+  /** (PLAN-J8 J8-8 lot 4) the BD TOPO's buildings left to their mesh cells (meshCells) */
+  meshLeft?: number;
   keptReachM?: number;
   clearedTrees?: number;
   cutHousesMs?: number;

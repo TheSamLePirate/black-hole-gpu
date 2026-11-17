@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 import { CellSource } from "../src/system/building-cells";
 import { encodeMeshCell } from "../src/system/mesh-cells";
-import { NO_RECORD, nearCellArrays, nearCellRecords } from "../src/system/near-meshes";
+import { cellContact, contactIn, NO_RECORD, nearCellArrays, nearCellRecords } from "../src/system/near-meshes";
 import { NEAR_REC_BLOCK, NEAR_VERT_BLOCK } from "../src/system/scenery-raster";
 
 // PLAN-J8 J8-8 lot (2): a mesh cell's arrays for the GPU reserve — each building lifted by its own ground, the vertex indices mapped
@@ -83,4 +83,22 @@ test("a cell's records lifted by their building's ground: bottom, top, walls' to
     112,
     0,
   ]);
+});
+
+test("the walker against a cell's building: its wall blocks, its roof carries, beside it nothing", () => {
+  // (a 10 m square, walls 0–12 m over its foot, a flat roof at 12: no plane — its top)
+  const edges = [0, 0, 10, 0, 10, 0, 10, 10, 10, 10, 0, 10, 0, 10, 0, 0];
+  const leaf = [-3, 12, 4, 1, 5, 5, 5, 5, 0.5, 0.5, 0.5, 0, ...edges, 0.3, 0.3, 0.3, 12];
+  const buf = encodeMeshCell({ source: CellSource.BdTopo, z: 15, x: 1, y: 2, flags: 0, generation: 7, originLat: 43.1, originLon: 5.9 }, [
+    { leaves: [leaf], parts: [{ leaf: 0, ...square(0, -3, 12) }], flags: 0, foot: Number.NaN },
+  ]);
+  const C = cellContact(buf, nearCellRecords(buf, [100]));
+  // (at its foot, inside: the wall's)
+  expect(contactIn(C, 5, 5, 100).blocked).toBe(true);
+  // (on its roof: carried, 0 m up)
+  const roof = contactIn(C, 5, 5, 112);
+  expect(roof.blocked).toBe(false);
+  expect(roof.support).toBeCloseTo(0, 5);
+  // (beside it, 2 m off its wall)
+  expect(contactIn(C, 12, 5, 100)).toEqual({ blocked: false, support: Number.NEGATIVE_INFINITY });
 });

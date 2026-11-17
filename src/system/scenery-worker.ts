@@ -8,7 +8,7 @@ import { earthDetail, toHalf } from "../terrain";
 import { gradeAt } from "../game/runway-grade";
 import { geodeticToCart as cartOf, WGS84_A as RA, WGS84_F as RF } from "./ellipsoid";
 import { forestFrame, forestVec4s, growForest } from "./forest";
-import { BDTOPO_Z, bdtopoHeight, bdtopoStands, bdtopoUrl, clipRing } from "./bdtopo";
+import { BDTOPO_Z, bdtopoHeight, bdtopoStands, bdtopoUrl, clipRing, inBdtopoBox } from "./bdtopo";
 import { CANOPY_NEAR, IgnLand, tilesWithin } from "./ign-canopy";
 import {
   lineVolts,
@@ -714,7 +714,8 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
   const cut: Choice[] = [];
   let cutBuildings = 0,
     keptReachM = 0;
-  let farLeft = 0;
+  let farLeft = 0,
+    meshLeft = 0;
   const trim = () => {
     choices.sort((a, b) => a.d - b.d);
     // (PLAN-J8 J8-5: past nearOnlyM, the far layer's — out of the scene, their footprints kept for the trees as the cut ones')
@@ -1110,8 +1111,18 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
     phase("bdtopo");
     bdtopoTileCount = b.tileCount;
     // (one by one: Paris's tens of thousands would overflow a spread's arguments)
-    for (const v of b.out) choices.push(v);
-    for (const v of osmChoices) if (!b.covered.has(bdKey(v.lat, v.lon))) choices.push(v);
+    // (PLAN-J8 J8-8 lot 4: drawn from their mesh cells — out of the scene, their footprints kept for the trees as the cut ones')
+    if (q.meshCells) {
+      for (const v of b.out) cut.push(v);
+      meshLeft += b.out.length;
+    } else for (const v of b.out) choices.push(v);
+    // (lot 4: OSM's within the BD TOPO's box too — past the tiles fetched, the far layer's BD TOPO cells draw them: none twice)
+    for (const v of osmChoices)
+      if (b.covered.has(bdKey(v.lat, v.lon))) continue;
+      else if (q.meshCells && inBdtopoBox(...(bdKey(v.lat, v.lon).split("/").map(Number) as [number, number]))) {
+        cut.push(v);
+        meshLeft++;
+      } else choices.push(v);
     trim();
     bdtopoBuildings = choices.filter((v) => b.covered.has(bdKey(v.lat, v.lon))).length;
   }
@@ -1720,6 +1731,7 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
     cutBuildings,
     keptReachM,
     farLeft,
+    meshLeft,
     clearedTrees,
     cutHousesMs,
     corridor: q.corridor === true,
