@@ -25,8 +25,8 @@ import { J0_FIXED } from "./lib/j0-scene";
 // J8A_LOW=1 (PLAN-J8 A6 criterion 8): the low tracks too (j8a-tracks.ts J8A_LOW_TRACKS — Toulon's centre, the Marais — 150 m then
 // 50 m over the ground; rule 13's floor 25 m on them), for VB2–VB7's details. After each leg, criterion 4: the prepared building
 // cells' census by ring round the craft (__bh.sys.census) against the cells drawn (__bh.sys.drawnCensus) — strict: 98 % or more drawn
-// within 10 km. At each flight's last point, criterion 5: the near meshes' and the far layer's buildings' mean colours within 0.8–2.5 km
-// (surfaceAt on a 64 × 36 grid, the canvas's colours, the craft and the UI hidden) and their gap — said, not asserted.
+// within 10 km. At each flight's last point, criterion 5: the near meshes' and the far layer's buildings' mean colours within 0.8–3.5 km
+// (surfaceAt on a 32 × 18 grid of the lower half, the canvas's colours, the craft and the UI hidden) and their gap — said, not asserted.
 // J8A_FOREST=1 (J8-8b lot 2): the near scene's forest assembled from its prepared cells (renderer.forestCellsOn — the zone's, the forest
 // pool's), each leg's last scene's cells said (forestPrepared: read, missing, cases covered).
 // J8A_BUDGET [MiB, default 72]: the far layer's pool (renderer.farBudgetMiB — all Paris resident; the default since Sam's « ok 72 »).
@@ -365,7 +365,7 @@ test.skipIf(!E2E)(
                   throw new Error(`${name} ${l.name}: ${r.drawn} of the ${r.census} buildings prepared within ${r.km} km drawn (< 98 %)`);
           }
           // (PLAN-J8 A6 criterion 5 — the least difference between the qualities: frozen at the last point, the craft and the UI hidden,
-          // the image converged; a 64 × 36 grid of its lower two thirds read (surfaceAt: a near mesh's building, or a far one's — its
+          // the image converged; a 32 × 18 grid of its lower half read (surfaceAt: a near mesh's building, or a far one's — its
           // visibility's g negative —, its distance), the image's colours there (the canvas); each layer's mean colour within 0.8–2.5 km
           // of the eye — round the junction, the near meshes' reach — and their gap: the mean channels' difference, the luminance's
           // ratio. Said, not asserted (Sam judges with the shots); no normal there: roofs and walls together)
@@ -382,13 +382,15 @@ test.skipIf(!E2E)(
             const o = new OffscreenCanvas(b.width, b.height), g = o.getContext("2d"); g.drawImage(b, 0, 0);
             const img = g.getImageData(0, 0, b.width, b.height).data;
             const acc = { near: [0, 0, 0, 0], far: [0, 0, 0, 0] };
-            for (let j = 0; j < 36; j++) for (let i = 0; i < 64; i++) {
-              if (performance.now() - t0 > 45000) break;
-              const x = (i + 0.5) / 64, y = 1 / 3 + ((j + 0.5) / 36) * (2 / 3);
+            // (17 Nov 2026: 64 × 36 from the upper third read the sky first and its 45 s ran out before a building — the diagnostic
+            // over Paris: near meshes to ~2.5 km, the far layer past ~2.1 km)
+            for (let j = 0; j < 18; j++) for (let i = 0; i < 32; i++) {
+              if (performance.now() - t0 > 90000) break;
+              const x = (i + 0.5) / 32, y = 0.45 + ((j + 0.5) / 18) * 0.55;
               const s = await R.surfaceAt(x, y);
               if (!s || s.craft !== null || (s.kind !== "building" && s.kind !== "box")) continue;
               const d = s.nearest ?? s.ground ?? 0;
-              if (d < 800 || d > 2500) continue;
+              if (d < 800 || d > 3500) continue;
               const k = (s.vis?.[1] ?? 0) < 0 ? "far" : "near";
               const px = Math.min(b.width - 1, Math.floor(x * b.width)), py = Math.min(b.height - 1, Math.floor(y * b.height)), at = 4 * (py * b.width + px);
               acc[k][0] += img[at]; acc[k][1] += img[at + 1]; acc[k][2] += img[at + 2]; acc[k][3]++;
@@ -405,7 +407,7 @@ test.skipIf(!E2E)(
             diff: gap.near && gap.far ? gap.near.map((v, k) => +(v - gap.far![k]!).toFixed(1)) : null,
             lumRatio: gap.near && gap.far ? +((lum(gap.far) ?? 0) / Math.max(1, lum(gap.near) ?? 1)).toFixed(3) : null,
           };
-          console.log(`  ${name} criterion 5 (the junction's colours, 0.8–2.5 km, sRGB 0–255): ${JSON.stringify(junction)}`);
+          console.log(`  ${name} criterion 5 (the junction's colours, 0.8–3.5 km, sRGB 0–255): ${JSON.stringify(junction)}`);
           await app.stepDone(
             junction.lumRatio === null
               ? `jonction : pas assez de bâtiments des deux couches (${gap.nN} proches, ${gap.nF} lointains)`

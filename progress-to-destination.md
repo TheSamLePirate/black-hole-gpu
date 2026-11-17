@@ -10533,3 +10533,9 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
 - **Réalisé :** les lignes d'éclairage de la scène passent maintenant sur les ponts OMT, et leurs lampadaires sont posés sur le tablier (`deckHeightAt`). Là où aucun tablier n'a été construit, il n'y en a pas.
 - **Preuves :** `tsc`, Biome. **Non vu en jeu.**
 - **Limite :** la flaque de lumière reste peinte au sol, sous le pont.
+
+### 2026-11-17 10:57 UTC — PLAN-J8 A6 critère 5 : la sonde de couleur corrigée (session 33d89754)
+
+- **Constat :** au gros e2e (kerr-mini, Paris jour et nuit), le relevé du critère 5 n'a vu aucun pixel de bâtiment (0 et 0) et a buté sur sa limite de 45 s. Un diagnostic sur ce Mac (`surfaceAt` sur une grille 16 × 9 au-dessus de Paris, 500 m) montre que la sonde lit bien les bâtiments : les maillages proches (g positif) jusqu'à ~2,5 km, la couche lointaine (g négatif) dès ~2,1 km. Le défaut venait du relevé : 64 × 36 points à partir du tiers supérieur de l'image, du ciel d'abord, et le temps écoulé avant le premier bâtiment.
+- **Correction :** 32 × 18 points sur la moitié basse de l'image, une bande de 0,8–3,5 km autour de la jonction, et 90 s au plus.
+- **Preuves :** le diagnostic (témoin positif : la sonde voit des bâtiments des deux couches) ; `tsc`, Biome, gardes e2e. **Le relevé corrigé n'a pas encore tourné** : le gros e2e en cours a été lancé avant. Témoin négatif (A/A) pas encore fait.
