@@ -179,6 +179,10 @@ test.skipIf(!E2E)(
               const lead = Pn && turn <= 100 * D
                 ? Math.max(700, Math.min((${t.speedMps} ** 2 / (9.81 * Math.tan(25 * D))) * Math.tan(turn / 2) + 200, 0.9 * Math.min(L, Ln)))
                 : 700;
+              // (into a turn sharper than 100° slowed to 80 m/s at most, as a pilot would: the jet's autopilot banks 30° at most — jet.ts —,
+              // at 120 m/s a 2.5 km radius, its circle out to ~5 km from the point (Paris's U-turn at Bercy: an orthophoto 4.6 km off,
+              // 17 Nov 2026); at 80 m/s ~1.1 km, within its zone's disc)
+              const spd = Pn && turn > 100 * D ? Math.min(${t.speedMps}, 80) : ${t.speedMps};
               const gpu = []; let gapMax = 0, frames = 0, quick = 0, last = performance.now(), done = R.completedFrames, steerAt = 0;
               const t0 = performance.now();
               while (performance.now() - t0 < 120000) {
@@ -192,7 +196,7 @@ test.skipIf(!E2E)(
                 if (before < lead || Math.hypot(X[0], X[1]) < 700) break;
                 const s = Math.max(0, Math.min(L, L - before + 1500));
                 const aim = [A[0] + u[0] * s, A[1] + u[1] * s];
-                if (now - steerAt > 1000) { steerAt = now; c.apSet({ ap: true, athr: true, alt: P[2], hdg: Math.atan2(aim[0] - X[0], aim[1] - X[1]), spd: ${t.speedMps} }); }
+                if (now - steerAt > 1000) { steerAt = now; c.apSet({ ap: true, athr: true, alt: P[2], hdg: Math.atan2(aim[0] - X[0], aim[1] - X[1]), spd }); }
               }
               const req = performance.getEntriesByType("resource").filter((e) => /${HOSTS}/.test(e.name)).length;
               const sc = R.earthScenery.stats(), far = await R.farBuildings(), g = c.geoNow();
