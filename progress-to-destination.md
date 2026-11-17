@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 17 nov. 14:59 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 17 nov. 15:43 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous. Ce qui est fermé quitte le tableau « En cours » pour la ligne « Fermé récemment ».
@@ -10688,3 +10688,9 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
 - **Décision appliquée :** relayée par la session d'analyse (17 nov. vers 16:15 à Paris) : les cellules forêt de J8-8b sont allumées par défaut. J8-A est vert sur kerr-mini avec elles (Paris, Toulon-Hyères et les tracés bas, de jour et de nuit, en strict).
 - **Réalisé :** `renderer.forestCellsOn` est vrai par défaut ; le hash `forestCells=0` l'éteint, et `J8A_FOREST=0` dans `j8-a`. Mis à jour : BH-API, catalogue, plan. L'ancienne décision de `growForest` pour les cases couvertes se retire au prochain lot de retrait (règle 2).
 - **Preuves :** aucune lancée sur ce Mac pendant le vol M1 Max : `tsc`, Biome et le push viendront après lui. Le changement se limite à une valeur par défaut.
+
+### 2026-11-17 15:43 UTC — PLAN-J8 J8-VB VB8 : la grille reçoit le vol M1 Max (session des approches, 1feb2f7f)
+
+- **Rapporté** (vol du rendu, Paris de jour, à froid, sur ce Mac) : échec strict avec 4 800 images rapides, contre 5 948 ce matin sans
+  les cellules. GPU p50 47,6 ms ; scènes complètes de 19 à 33 s, contre 6 à 12 s sur le mini ; le Mac a fini en Heavy. Le goulot est le
+  worker de la scène (rendu), et la décision revient à Sam. Ligne VB8 de la grille mise à jour.
