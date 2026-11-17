@@ -16439,6 +16439,13 @@ fn liteLight(gq: vec3f, q: vec3f, tM: f32, fx: vec3f, fy: vec3f, hG: f32, look: 
       let share = 1.0 - clamp((cg - 7.0) / 0.45, 0.0, 1.0);
       G += select(vec3f(1.0, 0.8, 0.55), streetLampTint(xyL) * 1.2, nearL) * (luminance(E) / PI) * RWY_LAMPS_NIGHT * 0.012 * dark * share;
     }
+    // (PLAN-J8 VB7: a traffic signal's head — its leaf 8 + its phase × 0.9 —: a 60 s cycle, green 27 s, amber 3 s, red 30 s, lit
+    // by day too (a fifth of the night's))
+    if (cg > 7.95 && cg < 8.95) {
+      let t = fract(P.runways[17].x / 60.0 + (cg - 8.0) / 0.9);
+      let sig = select(select(vec3f(1.0, 0.04, 0.02), vec3f(1.0, 0.45, 0.02), t < 0.5), vec3f(0.05, 1.0, 0.35), t < 0.45);
+      G += sig * (luminance(E) / PI) * RWY_LAMPS_NIGHT * 0.006 * max(dark, 0.2);
+    }
   }
   // (Q8 D1: a wind turbine's obstruction light — red at night, white by day, 40 flashes a minute, every farm in step)
   if (atLamp(at)) {

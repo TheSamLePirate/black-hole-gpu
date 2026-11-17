@@ -1790,6 +1790,8 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
   // way in the scene's frame, the ground under it)
   const furniture: { p: [number, number, number]; u: [number, number]; f: FurnitureRecord; r: number; o: { lat: number; lon: number } }[] =
     [];
+  // (VB7: the signals' lit heads, drawn among the lamps' heads — packScenery's `signal`)
+  const signalHeads: { positions: number[]; triangles: number[]; signal: number }[] = [];
   if ((q.parkedCars || q.furniture) && typeof caches !== "undefined")
     try {
       const store = await caches.open(STREET_CACHE);
@@ -1878,6 +1880,20 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
           addSolid(polygonPrimitive(pole, p[2], p[2] + 3.3, 3, [0.12, 0.12, 0.13]), pole);
           const head = [stripPolygon([p[0] - u[0] * 0.13, p[1] - u[1] * 0.13, 0], [p[0] + u[0] * 0.13, p[1] + u[1] * 0.13, 0], 0.32)];
           addSolid(polygonPrimitive(head, p[2] + 2.3, p[2] + 3.2, 3, [0.04, 0.04, 0.045]), head);
+          // (its light: a lamp's head quad on the head's face towards the traffic coming in — u the way out of the junction —, its
+          // phase the junction's (its place to 40 m) and its axis's (the two crossing ways half a cycle apart))
+          const hx = p[0] + u[0] * 0.2,
+            hy = p[1] + u[1] * 0.2,
+            hz = p[2] + 2.75;
+          const jx = Math.round(p[0] / 40),
+            jy = Math.round(p[1] / 40);
+          const seed = Math.abs(Math.sin(jx * 12.9898 + jy * 78.233) * 43758.5453) % 1;
+          const axis = Math.abs(u[0]) >= Math.abs(u[1]) ? 0 : 0.5;
+          signalHeads.push({
+            positions: Array.from({ length: 12 }, () => [hx, hy, hz]).flat(),
+            triangles: [0, 1, 3, 0, 3, 2, 4, 5, 7, 4, 7, 6, 8, 9, 10, 8, 10, 11],
+            signal: (seed + axis) % 1,
+          });
         } else if (f.kind === FurnitureKind.Guardrail) {
           // (its rail in pieces of 20 m at most, each on the ground at its middle — the cell's frame along its heading)
           const n = Math.max(1, Math.ceil(f.length / 20));
@@ -1975,9 +1991,12 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
     cables,
     cars,
     // (PLAN-J8 VB5a: each lamp's shape from its foot's place — the frame's flat inverse, to the metre)
-    lamps.map((l) =>
-      lampMesh(l, lampShape(q.lat + l.foot[1] / 111_132, q.lon + l.foot[0] / (111_320 * Math.max(0.05, Math.cos(q.lat * D))))),
-    ),
+    [
+      ...lamps.map((l) =>
+        lampMesh(l, lampShape(q.lat + l.foot[1] / 111_132, q.lon + l.foot[0] / (111_320 * Math.max(0.05, Math.cos(q.lat * D))))),
+      ),
+      ...signalHeads,
+    ],
     lampGrid,
   );
   return {

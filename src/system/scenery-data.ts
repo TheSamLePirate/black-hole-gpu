@@ -305,6 +305,8 @@ export const CAR_TAIL = 0xfff70000;
 export const LAMP_POLE = 0xfff60000;
 /** (PLAN-J8 VB5a) a lamp's arm: its pole's tag with this bit in its index's half (widened up the view, not across) */
 export const LAMP_ARM_BIT = 0x8000;
+/** (PLAN-J8 VB7) a traffic signal's head among the lamps: its head's tag with this bit, its cycle's phase in the 10 bits below (0…1023) */
+export const SIGNAL_BIT = 0x4000;
 export const LAMP_HEAD = 0xfff50000;
 export function packScenery(
   prims: Primitive[],
@@ -345,7 +347,7 @@ export function packScenery(
   /** (Q8 L10) the streets' lamps (system/streetlamps.ts lampMesh: twelve vertices since VB5a, from a vertex index ≡ 0 mod 4), their pole's
    *  triangles tagged LAMP_POLE, their head's LAMP_HEAD; and their light's grid (LAMP_GRID's bytes) after the decals' far grid,
    *  its side and texel in the palette's unused entry 0 (0: none) */
-  lamps: { positions: number[]; triangles: number[] }[] = [],
+  lamps: { positions: number[]; triangles: number[]; signal?: number }[] = [],
   lampGrid?: Uint8Array,
 ) {
   // (PLAN-J8 VB3: each car its shape)
@@ -512,7 +514,12 @@ export function packScenery(
       v += 12;
       u.fill((LAMP_POLE | i) >>> 0, tag, (tag += 2));
       u.fill((LAMP_POLE | LAMP_ARM_BIT | i) >>> 0, tag, (tag += 2));
-      u.fill((LAMP_HEAD | i) >>> 0, tag, (tag += 2));
+      // (VB7: a signal's head — its phase in place of the index: no pole, no arm, no pool of light)
+      u.fill(
+        (m.signal === undefined ? LAMP_HEAD | i : LAMP_HEAD | SIGNAL_BIT | (Math.round(m.signal * 1023) & 1023)) >>> 0,
+        tag,
+        (tag += 2),
+      );
     });
     f.set([turbines.length, pylons.length, cars.length, lamps.length], (triangleOffset + triangleCount) * 4);
   }

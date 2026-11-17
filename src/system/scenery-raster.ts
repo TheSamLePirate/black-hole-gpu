@@ -751,8 +751,10 @@ fn meshLeaf(tri: u32) -> f32 {
     let id = bitcast<u32>(scenery[t / 4u][t % 4u]) & 3u;
     let px = 2.0 * u.up.w * max(v.z, 1.0) / u.image.y;
     if (fam == 0xfff50000u) {
-      o.leaf = 7.0;
-      let half = max(0.3, 0.75 * px);
+      // (PLAN-J8 VB7: a traffic signal's head — SIGNAL_BIT —: its leaf 8 + its cycle's phase × 0.9, shadeLite's colour)
+      o.leaf = select(7.0, 8.0 + f32(tg & 1023u) / 1023.0 * 0.9, (tg & 0x4000u) != 0u);
+      // (a signal's lens 0.2 m, a street lamp's head 0.6 m — each to a pixel and a half at least)
+      let half = max(select(0.3, 0.1, (tg & 0x4000u) != 0u), 0.75 * px);
       let corner = vec2f(select(-1.0, 1.0, id == 1u || id == 2u), select(-1.0, 1.0, id >= 2u));
       v = v + vec3f(corner * half, 0.0);
     } else {

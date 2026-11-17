@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { LAMP_ARM_BIT, LAMP_HEAD, LAMP_POLE, packScenery } from "../src/system/scenery-data";
+import { LAMP_ARM_BIT, LAMP_HEAD, LAMP_POLE, packScenery, SIGNAL_BIT } from "../src/system/scenery-data";
 import { makeDecals } from "../src/system/scenery-geometry";
 import {
   builtUp,
@@ -158,4 +158,40 @@ test("VB5a: a lamp's shapes — the arm to the head over the street, a lantern o
   for (let k = 0; k < 600; k++) n[lampShape(48.85 + k * 1e-4, 2.35 + (k % 7) * 1e-4)]++;
   for (const c of n) expect(c).toBeGreaterThan(100);
   expect(lampShape(48.8566, 2.3522)).toBe(lampShape(48.8566, 2.3522));
+});
+
+test("VB7: a traffic signal's head among the lamps — its head's tag with SIGNAL_BIT and its phase, no pool of light", () => {
+  const [l] = lampsAlong(
+    [
+      [0, 0],
+      [100, 0],
+    ],
+    "minor",
+    6,
+  );
+  const signal = {
+    positions: Array.from({ length: 12 }, () => [5, 5, 3]).flat(),
+    triangles: [0, 1, 3, 0, 3, 2, 4, 5, 7, 4, 7, 6, 8, 9, 10, 8, 10, 11],
+    signal: 0.5,
+  };
+  const buf = packScenery(
+    [],
+    new Uint32Array(64),
+    [],
+    undefined,
+    8,
+    64 * 1024 * 1024,
+    makeDecals([]),
+    [],
+    [],
+    [],
+    [],
+    [lampMesh(l!), signal],
+  );
+  const f = new Float32Array(buf),
+    u = new Uint32Array(buf);
+  const [triangleOffset, triangleCount] = [f[14]!, f[11]!];
+  const tags = u.subarray(triangleOffset * 4 + triangleCount * 3, triangleOffset * 4 + triangleCount * 4);
+  expect(tags[4]).toBe(LAMP_HEAD >>> 0);
+  expect(tags[10]).toBe((LAMP_HEAD | SIGNAL_BIT | 512) >>> 0);
 });

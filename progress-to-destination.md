@@ -10398,3 +10398,9 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   (captures basses de jour et de nuit, vidéo, coûts, comptes). Le verdict de chaque ligne sera rempli avec ses résultats, lancé par le
   rendu sur kerr-mini (828f775a).
 - **Non vérifié :** documentation seulement.
+
+### 2026-11-17 10:23 UTC — PLAN-J8 J8-VB VB7 : les feux tricolores allumés (session 33d89754)
+
+- **Destination :** §19.13 (J8-A de nuit, vol bas) ; VB7.
+- **Réalisé :** chaque feu de VB7 reçoit une lentille lumineuse, tirée du chemin des têtes de lampadaires. Le tag porte `SIGNAL_BIT` et la phase ; il n'y a pas de lumière au sol. Le cycle dure 60 s (vert, orange, rouge), avec une phase par carrefour, et les deux axes sont à une demi-période. La lentille reste allumée de jour, à un cinquième.
+- **Preuves :** `tests/streetlamps.test.ts`, `tsc`, Biome, `check-wgsl`. **Non vu en jeu**, et pas dans le gros e2e déjà lancé sur le mini.
