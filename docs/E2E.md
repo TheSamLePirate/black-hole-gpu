@@ -113,6 +113,26 @@ How it shows, and how to override it:
   5. Captures stay without the banner (hidden for every shot), but each capture's file name and its caption in T3 carry
      the file, the test and the scenario — `app.shot` prints `  [shot] <reference> → <path>`. `E2E_BANNER_SHOTS=1` keeps the
      banner in the captures (to show what it says).
+  6. **Less text, more progress** (Sam, 17 Nov 2026: « moins de blabla dans la bannière mais plus d'infos sur le déroulement
+     du test » — he watched `j8-a` sit 25 min on a frozen aircraft with nothing on the banner but its header, and took it
+     for stuck). The banner is a progress display, not the file's description:
+     - **What it proves: one line** (the header's first sentence, ~120 characters), not the 4-line excerpt of the header
+       comment. The full header stays in the file and the catalogue.
+     - **The step under way, numbered**: `Étape 3/7 · cellules forêt` — the test's phases in order (boot, data, zone,
+       compile, rest, each leg or case, the checks), the whole list known from the start so `n` is right.
+     - **Its own progress whenever it waits or loops**: a count against its total (`zone 49 920 / 60 738 · 1 811 Mo`,
+       `cellules 412 / 869`, `repos 420 / 600 s`, `tronçon 2/5`, `cas 4/12`), refreshed at least every 10 s. No wait over
+       10 s without it: a frozen aircraft with a counter that moves is visibly not stuck.
+     - **The steps done, one short line each, with their result**: `✓ zone 15,1 min · ✓ cellules 869 en 303 s · ✗ …` (the
+       last 3–4; a failure stays shown).
+     - **The live values the test judges**, when it measures them (GPU p50 so far, quick-scene images, requests in flight,
+       the gap max) — the numbers its asserts will read, not a decoration.
+     - **Time**: gone / estimated total, and the step's remaining time when it is known (a rest, a zone at its rate).
+     - The same steps and counters go to the live record (`events`, `estimateS`, read by the Monitor) and to the console,
+       so the Monitor and the log tell the same progress as the banner.
+     *To build in the harness (`lib/banner.ts`, `lib/app.ts`: a declared step list and a progress call beside
+     `app.scenario`), then applied to each e2e as it is touched — the long ones first (`j8-a`, `j8-zone-paris`, the zone and
+     approach flights). Until then the header's `// Duration:` and `// Done when:` lines stay required.*
   (`remote.ts run --hold 20` / `bun run e2e --remote --hold 20 …`).
 - Measurement scripts (`bench.ts`, `trace-ab.ts`, `gallery.ts`, `quality.ts`, `check-wgsl.ts`) are always
   headless: a window's frame rate follows the display. They still take the lock.

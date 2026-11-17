@@ -40,7 +40,12 @@ Les chiffres sont ceux de cette analyse, avec ses limites (§1.4).
 11. **Un crash met le jeu en pause** (écran « craft lost ») : il bloque les clics suivants. Le détecter, et
     `__bh.game.pause(false)` avant le vol suivant ; ou `damage: false` quand la casse n'est pas le sujet.
 12. **Captures à chaque état jugé**, regardées, montrées à Sam dans T3 ; une bannière remplie (`// Duration:`,
-    `// Done when:`) ; `expect(app.cdp.errors).toEqual([])`.
+    `// Done when:`) ; `expect(app.cdp.errors).toEqual([])`. **La bannière montre le déroulement, pas un résumé**
+    (Sam, 17 nov. 2026 : « moins de blabla, plus d'infos sur le déroulement ») : une ligne sur ce que le test prouve,
+    puis l'étape en cours numérotée (`Étape 3/7`), son compteur dès qu'elle attend ou boucle (zone x / y, repos s / 600,
+    tronçon k / n), les étapes finies avec leur résultat, les valeurs que le test juge et le temps écoulé / estimé
+    ([E2E.md](E2E.md), la bannière, point 6). Un avion gelé pendant une attente doit se voir « en attente de … »,
+    jamais sembler bloqué.
 13. **Un avion d'e2e vole comme un pilote le ferait, et le test l'asserte** (Sam, 16 nov. 2026 : « les tests e2e en avion doivent
     être parfaits »). Jamais d'avion qui plane manette à 0 pendant une attente de données : **geler** (`__bh.freeze(true)`) entre le
     placement et la fin des attentes, puis replacer et engager. Une fois en vol, asserter à chaque phase **ce qui est réellement
@@ -522,8 +527,10 @@ expect(r.log.some((l) => /Hard landing|collapsed|tipped/.test(l))).toBe(false);
 
 ## 8. Écrire un nouvel e2e qui vole
 
-1. **En-tête** : ce qu'il prouve, puis `// Duration: ~N s ici.` et `// Done when: …` en début de ligne (la bannière et
-   le catalogue) ; une ligne dans [E2E-CATALOGUE.md](E2E-CATALOGUE.md).
+1. **En-tête** : ce qu'il prouve (sa première phrase, courte, est la seule montrée sur la bannière), puis
+   `// Duration: ~N s ici.` et `// Done when: …` en début de ligne (la bannière et le catalogue) ; une ligne dans
+   [E2E-CATALOGUE.md](E2E-CATALOGUE.md). **Ses étapes déclarées dès le début, et leur avancement dit en cours de route**
+   (règle 12 ; [E2E.md](E2E.md), la bannière, point 6).
 2. `App.boot({ hash: "scene=game:artemis", tiles: false })` si les données du sol ne sont pas le sujet ;
    `tiles: true` si l'image doit montrer le vrai sol (Sam : images chargées pour tout test visuel).
 3. `waitFor("__bh.camera.piloting")` ; changer d'appareil et attendre `fleet.active`.
