@@ -397,7 +397,7 @@ l'ombrage tracé sur toute l'image est à revoir avant d'être gardé.
              d'arrêt, feux et glissières (VB7). Défauts à chercher : rien qui traverse un bâtiment ou qui soit peint sur
              l'eau, pas de double route, pas de scintillement. **Les tracés bas sont écrits** (17 nov., accord du
              rendu) : `J8A_LOW_TRACKS` dans `j8a-tracks.ts`, `toulon-bas` (boulevard de Strasbourg) et `paris-marais-bas`
-             (axe de la rue de Turenne jusqu'à la Seine), 70 m/s. Leurs hauteurs sont tirées des sommets BD TOPO : chaque
+             (axe de la rue de Turenne jusqu'à la Seine), 90 m/s (70 m/s laissait le F-35 près du décrochage sur le Marais : `j8a-big-low`, règle 13, assiette 35°). Leurs hauteurs sont tirées des sommets BD TOPO : chaque
              bâtiment à moins de 150 m d'un tronçon est dépassé de 15 m ou plus, et le point le plus bas est à 50–55 m
              sur le sol (`tests/j8a-low-tracks.test.ts`) ; antennes et grues ne sont pas dans les données. Leur vol dans
              `j8-a` revient au rendu ;

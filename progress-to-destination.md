@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 17 nov. 11:23 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 17 nov. 12:10 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous. Ce qui est fermé quitte le tableau « En cours » pour la ligne « Fermé récemment ».
@@ -10596,3 +10596,15 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   - **Tracés bas** (`20261117-120323-j8a-big-low`) : `toulon-bas` passe de jour et de nuit (GPU p50 46,7 ms de nuit). Le Marais échoue à la règle 13 au tronçon 1 de jour : tangage 35°, incidence 0,66 rad (décrochage à 0,45), à 65 m/s.
 - **Correction de la régression de Paris** (RP2) : le retrait des routes OMT des cellules trouvées faisait un `splice` par surface sur des dizaines de milliers de surfaces. Il se fait maintenant en une passe. Chaque cellule « rue » n'est plus lue qu'une fois par scène (les routes, puis les places et le mobilier). **Non remesuré** : Paris est relancé seul sur le mini.
 - **Le Marais bas :** 70 m/s est trop lent pour le F-35 en palier à cette masse. La vitesse des tracés bas (`j8a-tracks.ts`, données des approches) est à revoir.
+
+### 2026-11-17 12:10 UTC — PLAN-J8 (A6) : les tracés bas portés à 90 m/s ; les lecteurs des cellules « rue » mesurés (session des approches, 1feb2f7f)
+
+- **Constat**, d'après les trois jobs du gros e2e du rendu sur kerr-mini :
+  - `j8a-big-low` échoue sur `paris-marais-bas`, tronçon 1, à la règle 13 : assiette 35°, incidence 0,66 rad pour un décrochage
+    à 0,45, et 65 m/s ;
+  - `toulon-bas` passe de jour et de nuit, sans scène rapide ni requête ;
+  - Toulon-Hyères passe seul en page neuve. L'hypothèse d'une page qui portait déjà Paris se renforce.
+- **Réalisé :** `J8A_LOW_TRACKS` volent à 90 m/s au lieu de 70 (`j8a-tracks.ts`, plan). Le test de dégagement reste vert.
+- **Mesuré puis écarté :** un cache de l'en-tête des cellules « rue » par tampon. Les lecteurs d'une tuile du Marais coûtent environ 3 ms
+  avec ou sans lui (6 537 enregistrements). Pas de gain : il n'est pas gardé. Ils ne sont pas la cause des scènes complètes de 14 à
+  21 s vues sur Paris.

@@ -75,8 +75,9 @@ export const J8A_LOW_TRACKS: readonly J8ATrack[] = [
       [43.123, 5.915, 55],
       [43.115, 5.905, 150],
     ],
-    // (70 m/s: a turn of ~1.1 km at 25° of bank — the legs bend by 25° at most)
-    speedMps: 70,
+    // (90 m/s — 70 m/s left the F-35 near its stall over the Marais, its incidence 0.66 rad against 0.45, its pitch 35°: rule 13 failed,
+    // j8a-big-low, 17 Nov 2026 —: a turn of ~1.8 km at 25° of bank, the legs bending by 25° at most)
+    speedMps: 90,
     halfWidthM: 1000,
     dates: { day: "2026-07-10T13:30:00Z", night: "2026-07-10T21:00:00Z" },
   },
@@ -92,7 +93,7 @@ export const J8A_LOW_TRACKS: readonly J8ATrack[] = [
       [48.851, 2.3642, 110],
       [48.846, 2.365, 150],
     ],
-    speedMps: 70,
+    speedMps: 90,
     halfWidthM: 1000,
     dates: { day: "2026-07-10T13:30:00Z", night: "2026-07-10T21:30:00Z" },
   },
