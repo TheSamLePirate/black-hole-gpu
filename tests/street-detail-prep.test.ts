@@ -1,6 +1,11 @@
 import { expect, test } from "bun:test";
-import { segmentNexts, segmentSurface, streetFurniture } from "../src/system/street-detail-prep";
+import type { Primitive } from "../src/system/scenery-data";
+import { chainBridges, segmentNexts, segmentSurface, streetFurniture } from "../src/system/street-detail-prep";
 import {
+  BridgeFlag,
+  BridgeKind,
+  bridgePiers,
+  Crossed,
   drivesLeft,
   FurnitureFlag,
   FurnitureKind,
@@ -178,4 +183,85 @@ test("the traffic's side: Great Britain, Ireland, Japan, Australia on the left; 
     [40.4, -3.7],
   ])
     expect(drivesLeft(lat!, lon!)).toBe(false);
+});
+
+test("J8-RP RP4: a tile's bridge pieces chained into one deck — its abutments, width, what it crosses, confirmed, open at the tile's edge", () => {
+  const bridge = (a: [number, number], b: [number, number], o: Partial<RoadSegmentRecord> = {}) =>
+    seg(a, b, { flags: SegmentFlag.Urban | SegmentFlag.Bridge, level: 1, width: 10, cls: "secondary", ...o });
+  // (a 300 m deck in three pieces over a river of 100 m wide, from x 100 to 200; the BD TOPO's « Pont » along it)
+  const pieces = [
+    { cell: 0, index: 0, a: [100, 0], b: [0, 0], seg: bridge([100, 0], [0, 0], { roadId: 5 }) },
+    { cell: 1, index: 3, a: [100, 0], b: [200, 0], seg: bridge([100, 0], [200, 0], { roadId: 6 }) },
+    { cell: 1, index: 4, a: [200, 0], b: [300, 0], seg: bridge([200, 0], [300, 0], { roadId: 6 }) },
+  ] as const;
+  const river: Primitive = {
+    min: [100, -500, 0],
+    max: [200, 500, 0],
+    data: [0, 0, 1, 4, 100, -500, 200, 500, 0, 0, 0, 4, 100, -500, 200, -500, 200, -500, 200, 500, 200, 500, 100, 500, 100, 500, 100, -500],
+  };
+  const ponts: [[number, number], [number, number]][] = [
+    [
+      [0, 8],
+      [300, 8],
+    ],
+  ];
+  const out = chainBridges(
+    pieces.map((p) => ({ ...p, a: [...p.a] as [number, number], b: [...p.b] as [number, number] })),
+    [river],
+    ponts,
+    (p) => p[0] >= 299,
+  );
+  expect(out.length).toBe(1);
+  const b = out[0]!.bridge;
+  expect(out[0]!.pieces.length).toBe(3);
+  expect(b.points.map((p) => p[0]).sort((x, y) => x - y)).toEqual([0, 100, 200, 300]);
+  expect(b.length).toBeCloseTo(300, 6);
+  expect(b.width).toBeCloseTo(10 + 2 * 3, 6);
+  expect(b.layer).toBe(1);
+  expect(b.crossed & Crossed.Water).toBeTruthy();
+  expect(b.clearance).toBe(5.5);
+  expect(b.flags & BridgeFlag.Confirmed).toBeTruthy();
+  expect(b.flags & BridgeFlag.Viaduct).toBe(0);
+  // (its end at x 300 cut by the tile's edge: open there, an abutment at x 0)
+  const open = b.points[0]![0] === 300 ? BridgeFlag.OpenA : BridgeFlag.OpenB;
+  expect(b.flags & open).toBeTruthy();
+  expect(b.flags & (BridgeFlag.OpenA | BridgeFlag.OpenB)).toBe(open);
+  expect(b.id).toBe(5);
+  // (a footbridge over nothing, unconfirmed: kind Foot, no clearance)
+  const foot = chainBridges(
+    [{ cell: 0, index: 0, a: [0, 0], b: [40, 0], seg: bridge([0, 0], [40, 0], { cls: "path", width: 2, flags: SegmentFlag.Bridge }) }],
+    [],
+    [],
+    () => false,
+  )[0]!.bridge;
+  expect([foot.kind, foot.crossed, foot.clearance, foot.flags]).toEqual([BridgeKind.Foot, 0, 0, 0]);
+  // (another level at the same point: two decks)
+  expect(
+    chainBridges(
+      [
+        { cell: 0, index: 0, a: [0, 0], b: [50, 0], seg: bridge([0, 0], [50, 0]) },
+        { cell: 0, index: 1, a: [50, 0], b: [100, 0], seg: bridge([50, 0], [100, 0], { level: 2 }) },
+      ],
+      [],
+      [],
+      () => false,
+    ).length,
+  ).toBe(2);
+});
+
+test("J8-RP RP4: the piers every ~34 m (a viaduct's ~130 m), none at the abutments", () => {
+  expect(bridgePiers(30, false)).toEqual([]);
+  const p = bridgePiers(170, false);
+  expect(p.length).toBe(4);
+  expect(p[0]).toBeCloseTo(34, 6);
+  expect(bridgePiers(800, true).length).toBe(5);
+});
+
+test("J8-RP RP8: a tunnel's mouths — where a segment out of it meets it, heading in", () => {
+  const segs = [seg([0, 0], [100, 0]), seg([100, 0], [400, 0], { flags: SegmentFlag.Tunnel, level: -1 }), seg([400, 0], [500, 0])];
+  const m = streetFurniture(segs, [], false).filter((f) => f.kind === FurnitureKind.TunnelPortal);
+  expect(m.map((f) => f.east).sort((a, b) => a - b)).toEqual([100, 400]);
+  const at100 = m.find((f) => f.east === 100)!;
+  expect(Math.cos(at100.heading)).toBeCloseTo(1, 6);
+  expect(at100.length).toBe(8);
 });

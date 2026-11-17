@@ -4,13 +4,22 @@
 // one ways allow), and the furniture of its junctions and fast roads (stop and yield lines, crossings, signals, guardrails). Every piece
 // inferred: the BD TOPO and OpenMapTiles give the roads' widths and lanes, not their markings, crossings or signals. Pure, in the cell's
 // frame (east, north metres): street-prep.ts runs it for each cell, the tests too.
+import type { Primitive } from "./scenery-data";
+import { surfaceContains } from "./scenery-geometry";
 import {
+  type BridgeRecord,
+  BridgeFlag,
+  BridgeKind,
+  CLEARANCE_M,
+  Crossed,
   CROSSING_BEYOND_M,
   FURNITURE_ARM_MIN_M,
   FurnitureFlag,
   FurnitureKind,
   type FurnitureRecord,
   GUARDRAIL_OFF_M,
+  RAIL_CLEARANCE_M,
+  VIADUCT_M,
   JunctionFlag,
   type JunctionRecord,
   JUNCTION_M,
@@ -220,6 +229,35 @@ export function streetFurniture(
         });
     }
   });
+  // (J8-RP RP8: the tunnels' mouths — a tunnel segment's end met by a segment out of it, on the ground: heading into the tunnel)
+  for (const s of segs) {
+    if (!(s.flags & SegmentFlag.Tunnel)) continue;
+    for (const end of [0, 1] as const) {
+      const p = end ? s.b : s.a,
+        q = end ? s.a : s.b;
+      const gi = Math.floor(p[0] / 4),
+        gj = Math.floor(p[1] / 4);
+      let open = false;
+      for (let a = -1; a <= 1 && !open; a++)
+        for (let b = -1; b <= 1 && !open; b++)
+          for (const [i, e] of ends.get((gi + a + 32768) * 65536 + (gj + b + 32768)) ?? []) {
+            const t = segs[i]!;
+            const m = e ? t.b : t.a;
+            if (t !== s && !(t.flags & SegmentFlag.Tunnel) && t.level >= 0 && Math.hypot(m[0] - p[0], m[1] - p[1]) <= JUNCTION_M)
+              open = true;
+          }
+      if (open)
+        out.push({
+          east: p[0],
+          north: p[1],
+          heading: Math.atan2(q[1] - p[1], q[0] - p[0]),
+          length: s.width,
+          kind: FurnitureKind.TunnelPortal,
+          flags: 0,
+          junction: 0xffff,
+        });
+    }
+  }
   // (the guardrails: both sides of a fast road outside the towns, of a bridge of the tertiary class or above)
   for (const s of segs) {
     const fast = (s.cls === "motorway" || s.cls === "trunk") && !(s.flags & SegmentFlag.Urban);
@@ -240,6 +278,145 @@ export function streetFurniture(
         flags: FurnitureFlag.Inferred,
         junction: 0xffff,
       });
+  }
+  return out;
+}
+
+/** a bridge's segment as the tile's chaining sees it: its cell (0–3) and index there, its ends in the tile's frame */
+export interface BridgePiece {
+  cell: number;
+  index: number;
+  a: [number, number];
+  b: [number, number];
+  seg: RoadSegmentRecord;
+}
+
+/** a bridge chained over a tile: its record (points in the tile's frame) and the pieces it holds */
+export interface ChainedBridge {
+  bridge: BridgeRecord;
+  pieces: BridgePiece[];
+}
+
+/** a bridge confirmed by the BD TOPO's own: within this of a « Pont » construction [m] */
+export const BRIDGE_CONFIRM_M = 15;
+/** a deck's side beyond its carriageway outside the towns (parapets) [m]; in the towns, its pavements (PAVEMENT_M) */
+const PARAPET_SIDE_M = 0.75;
+
+const kindOf = (p: Primitive) => {
+  const v = p.data;
+  return v.length === 12 && v[5]! < 4 ? v[5]! : v[3]!;
+};
+
+/**
+ * J8-RP RP4 — a tile's bridges: its bridge segments (BridgePiece, from its four cells) chained by their ends (within JUNCTION_M, on the
+ * same level) into decks, whichever their roads (a viaduct cut into several of the BD TOPO's sections is one deck: its middle no
+ * abutment). Each: its axis (the chain's points, its ends its abutments — OpenA/OpenB where `atEdge` says the chain is cut by the
+ * tile), its width (the widest carriageway and its sides), its layer, what it crosses (`surfaces`: OpenMapTiles' water, rails and roads
+ * in the tile's frame — water kinds 3/4, rail 2, road 1 —, sampled every 5 m away from its ends), its least clearance, BD TOPO's
+ * confirmation (`ponts`: the « Pont » constructions' segments in the tile's frame), its kind (a path's or steps' a footbridge).
+ */
+export function chainBridges(
+  pieces: readonly BridgePiece[],
+  surfaces: readonly Primitive[],
+  ponts: readonly [[number, number], [number, number]][],
+  atEdge: (p: [number, number]) => boolean,
+): ChainedBridge[] {
+  const key = (p: [number, number]) => `${Math.round(p[0] / JUNCTION_M)},${Math.round(p[1] / JUNCTION_M)}`;
+  const near = (p: [number, number], q: [number, number]) => Math.hypot(p[0] - q[0], p[1] - q[1]) <= JUNCTION_M;
+  const at = new Map<string, number[]>();
+  const add = (p: [number, number], i: number) => {
+    for (let dx = -1; dx <= 1; dx++)
+      for (let dy = -1; dy <= 1; dy++) {
+        const k = `${Math.round(p[0] / JUNCTION_M) + dx},${Math.round(p[1] / JUNCTION_M) + dy}`;
+        (at.get(k) ?? at.set(k, []).get(k)!).push(i);
+      }
+  };
+  pieces.forEach((pc, i) => {
+    add(pc.a, i);
+    add(pc.b, i);
+  });
+  const others = (p: [number, number], i: number, level = pieces[i]!.seg.level) =>
+    [...new Set(at.get(key(p)) ?? [])].filter(
+      (j) => j !== i && pieces[j]!.seg.level === level && (near(pieces[j]!.a, p) || near(pieces[j]!.b, p)),
+    );
+  const used = new Uint8Array(pieces.length);
+  const out: ChainedBridge[] = [];
+  // (start at a chain's end: a piece with an end met by no other; loops last)
+  const order = pieces.map((pc, i) => ({ i, end: others(pc.a, i).length === 0 || others(pc.b, i).length === 0 }));
+  order.sort((x, y) => Number(y.end) - Number(x.end));
+  for (const { i: start } of order) {
+    if (used[start]) continue;
+    const s0 = pieces[start]!;
+    // (oriented from its free end)
+    let tip: [number, number] = others(s0.a, start).length === 0 ? s0.b : s0.a;
+    const points: [number, number][] = [tip === s0.b ? s0.a : s0.b, tip];
+    const chain: BridgePiece[] = [s0];
+    used[start] = 1;
+    for (;;) {
+      const next = others(tip, -1, s0.seg.level).filter((j) => !used[j]);
+      if (!next.length) break;
+      const j = next[0]!;
+      used[j] = 1;
+      const pc = pieces[j]!;
+      tip = near(pc.a, tip) ? pc.b : pc.a;
+      points.push(tip);
+      chain.push(pc);
+    }
+    let length = 0;
+    for (let k = 1; k < points.length; k++) length += Math.hypot(points[k]![0] - points[k - 1]![0], points[k]![1] - points[k - 1]![1]);
+    const widest = chain.reduce((w, pc) => Math.max(w, pc.seg.width), 0);
+    const lead = chain.reduce((w, pc) => (pc.seg.width > w.seg.width ? pc : w), chain[0]!).seg;
+    const side = lead.flags & SegmentFlag.Urban ? (PAVEMENT_M[lead.cls] ?? PARAPET_SIDE_M) || PARAPET_SIDE_M : PARAPET_SIDE_M;
+    const foot = chain.every((pc) => pc.seg.cls === "path" || pc.seg.cls === "steps" || pc.seg.cls === "track");
+    // (what it crosses: its axis every 5 m, its ends' approaches left out — the roads that lead onto it)
+    let crossed = 0;
+    const keep = widest / 2 + 5;
+    let walked = 0;
+    for (let k = 1; k < points.length; k++) {
+      const p = points[k - 1]!,
+        q = points[k]!;
+      const L = Math.hypot(q[0] - p[0], q[1] - p[1]);
+      for (let d = 0; d < L; d += 5) {
+        const s = walked + d;
+        if (s < keep || s > length - keep) continue;
+        const f = d / L;
+        const x: [number, number, number] = [p[0] + (q[0] - p[0]) * f, p[1] + (q[1] - p[1]) * f, 0];
+        for (const prim of surfaces) {
+          if (!surfaceContains(x, prim)) continue;
+          const k2 = kindOf(prim);
+          crossed |= k2 >= 3 ? Crossed.Water : k2 === 2 ? Crossed.Rail : Crossed.Road;
+        }
+      }
+      walked += L;
+    }
+    // (the BD TOPO's own bridge near its axis: confirmed)
+    const confirmed = points.some((p) =>
+      ponts.some(([a, b]) => {
+        const x = b[0] - a[0],
+          y = b[1] - a[1];
+        const t = Math.max(0, Math.min(1, ((p[0] - a[0]) * x + (p[1] - a[1]) * y) / Math.max(x * x + y * y, 1e-8)));
+        return Math.hypot(p[0] - a[0] - t * x, p[1] - a[1] - t * y) <= BRIDGE_CONFIRM_M;
+      }),
+    );
+    let flags = 0;
+    if (confirmed) flags |= BridgeFlag.Confirmed;
+    if (length > VIADUCT_M) flags |= BridgeFlag.Viaduct;
+    if (atEdge(points[0]!)) flags |= BridgeFlag.OpenA;
+    if (atEdge(points[points.length - 1]!)) flags |= BridgeFlag.OpenB;
+    out.push({
+      bridge: {
+        id: Math.min(...chain.map((pc) => pc.seg.roadId >>> 0)),
+        kind: foot ? BridgeKind.Foot : BridgeKind.Road,
+        flags,
+        width: widest + 2 * side,
+        layer: lead.level,
+        crossed,
+        clearance: crossed & Crossed.Rail ? RAIL_CLEARANCE_M : crossed ? CLEARANCE_M : 0,
+        length,
+        points,
+      },
+      pieces: chain,
+    });
   }
   return out;
 }

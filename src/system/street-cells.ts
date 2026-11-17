@@ -9,9 +9,9 @@
 // SEGMENT_BYTES, then `junctionCount` junctions of JUNCTION_BYTES, then `placeCount` places of PLACE_BYTES, then `segmentCount`
 // continuations of NEXT_BYTES, then `segmentCount` surfaces of SURFACE_BYTES, then `furnitureCount` pieces of furniture of
 // FURNITURE_BYTES.
-//   header  0 u32 magic "KSC3"   4 u16 format (STREET_FORMAT)   6 u16 junctionCount   8 u8 z   9 u8 flags (CellStreetFlag)   10 u16 placeCount
+//   header  0 u32 magic "KSC4"   4 u16 format (STREET_FORMAT)   6 u16 junctionCount   8 u8 z   9 u8 flags (CellStreetFlag)   10 u16 placeCount
 //          12 u32 x   16 u32 y   20 u32 lampCount   24 u32 segmentCount   28 u32 generation (the roads' source revision: YYYYMMDD)
-//          32 f64 origin latitude [°]   40 f64 origin longitude [°]   48 u32 furnitureCount   52..63 reserved (0)
+//          32 f64 origin latitude [°]   40 f64 origin longitude [°]   48 u32 furnitureCount   52 u32 bridgeCount   56..63 reserved (0)
 //   lamp      0 f32 east [m]   4 f32 north [m] (the pole's foot, in the cell's frame)   8 u16 head height [cm over the ground]
 //            10 u8 road class (LAMP_CODES)   11 u8 flags (StreetFlag.Left)   12 u16 the arm's heading (from the foot to the head, over the
 //            street: 0 … 2π anticlockwise from east over 0 … 65535)   14 u8 the arm's reach [dm]   15 u8 variant (0 … LAMP_VARIANTS − 1, by
@@ -29,10 +29,16 @@
 //            (driving b → a): a segment's index in this cell, its bit 15 set when that one is driven b → a (entered at its b); NEXT_NONE none
 //            (a dead end, a one way against, a level not met), NEXT_ELSEWHERE its road going on into a neighbouring cell
 //   surface   (one a segment — VB2's carriageway) 0 u8 flags (SurfaceFlag: edge lines, the centre line dashed or solid, a kerb)
-//            1 u8 the lane lines besides the centre's   2 u8 each pavement's width [dm] (0: none)   3 u8 reserved (0)
+//            1 u8 the lane lines besides the centre's   2 u8 each pavement's width [dm] (0: none)   3 u8 its bridge's index in this
+//            cell (NO_BRIDGE: on none — J8-RP RP6: what rides on it takes the deck's height)
 //   furniture (VB7) 0 f32 east   4 f32 north [m] (its centre)   8 u16 heading (0 … 2π over 0 … 65535: the arm's way out of the junction —
 //            a line's and a crossing's stripes across it; a signal facing the traffic coming in; a guardrail along its road)   10 u16 length
 //            [cm] (a line's and a crossing's across the road, a guardrail's along it; a signal's 0)   12 u8 kind (FurnitureKind)   13 u8 flags (FurnitureFlag)   14 u16 its junction's index (NO_JUNCTION none)
+//   bridge    (J8-RP RP4, RP7 — one a bridge, its length varying; after the furniture) 0 u32 its identity (its first segment's road's)
+//            4 u16 its axis's points   6 u8 kind (BridgeKind)   7 u8 flags (BridgeFlag)   8 f32 the deck's width [m] (the carriageway and
+//            its pavements or parapets)   12 i8 its layer (the source's level)   13 u8 what it crosses (Crossed: bits)   14 u8 the least
+//            clearance over it [dm]   15 u8 reserved (0)   16 f32 its length [m]   20 its axis's points, each f32 east, f32 north [m]
+//            (the first and the last its abutments)
 //
 // The rules (agreed with the render session):
 //  - the sources: in France (the IGN's box, bdtopo.ts inBdtopoBox) the BD TOPO's `troncon_de_route`, from the very tile the building
@@ -78,15 +84,39 @@
 //    (FurnitureFlag.Inferred): neither the BD TOPO nor OpenMapTiles give the real crossings or signals. The side is the traffic's
 //    (CellStreetFlag.LeftHand: drivesLeft's countries). Guardrails (FurnitureKind.Guardrail): along both sides of a motorway's or a
 //    trunk's segment outside the towns, and of a bridge's of the tertiary class or above, GUARDRAIL_OFF_M past the carriageway's edge.
+//  - the bridges (J8-RP RP4, 17 Nov 2026, proposed to the render session): a tile's bridge segments (its four cells') chained by their
+//    ends on one level into decks, whichever their roads — a viaduct cut into several BD TOPO sections one deck —; its axis's ends its
+//    abutments, BridgeFlag.OpenA/OpenB where the tile's edge cuts it (the rest in the next tile's cells, the same point); its width the
+//    widest carriageway and its pavements (in the towns) or parapets; what it crosses from OpenMapTiles' water, rails and roads under its
+//    axis (its approaches left out); its least clearance CLEARANCE_M (RAIL_CLEARANCE_M over a railway); BridgeFlag.Confirmed where the
+//    BD TOPO's construction_lineaire or construction_surfacique « Pont » lies near; written in every cell holding one of its segments,
+//    whole — the drawing and the far layer keep one by its identity. No height (the BD TOPO's sections have none): the drawing sets the
+//    deck between its abutments' ground as drawn (FableFlight's bridge_end), raised to its clearance; its piers bridgePiers', kept where
+//    the deck stands PIER_MIN_M over the ground. Each segment on a bridge names it (its surface's byte 3: RP6).
+//  - the tunnels' mouths (J8-RP RP8): FurnitureKind.TunnelPortal where a tunnel's segment meets one out of it on the ground.
 import { CELL_Z } from "./building-cells";
 
-export const STREET_FORMAT = 3;
-export const STREET_MAGIC = 0x3343534b; // "KSC3"
+export const STREET_FORMAT = 4;
+export const STREET_MAGIC = 0x3443534b; // "KSC4"
 export const STREET_HEADER_BYTES = 64;
 export const LAMP_BYTES = 16;
 export const NEXT_BYTES = 4;
 export const SURFACE_BYTES = 4;
 export const FURNITURE_BYTES = 16;
+/** a bridge record's fixed part and a point of its axis */
+export const BRIDGE_HEAD_BYTES = 20;
+export const BRIDGE_POINT_BYTES = 8;
+/** a segment on no bridge (its surface's byte 3) */
+export const NO_BRIDGE = 0xff;
+/** the piers' spacing (FableFlight's roads.rs: 34 m; a viaduct's — longer than VIADUCT_M — 130 m) and where a pier stands: the deck
+ *  PIER_MIN_M or more over the ground at its foot (the drawing's test, on its relief) [m] */
+export const PIER_SPACING_M = 34;
+export const VIADUCT_PIER_SPACING_M = 130;
+export const VIADUCT_M = 400;
+export const PIER_MIN_M = 3.5;
+/** a bridge's least clearance over what it crosses [m] (FableFlight's 5.5 m; a railway's catenary 6 m) */
+export const CLEARANCE_M = 5.5;
+export const RAIL_CLEARANCE_M = 6;
 /** a continuation's none, its road going on in a neighbouring cell, its bit for « driven b → a » */
 export const NEXT_NONE = 0xffff;
 export const NEXT_ELSEWHERE = 0xfffe;
@@ -173,6 +203,42 @@ export enum FurnitureKind {
   Crossing = 2,
   Signal = 3,
   Guardrail = 4,
+  /** J8-RP RP8: a tunnel's mouth — where a segment goes from the ground into a tunnel; heading into it, length the carriageway's */
+  TunnelPortal = 5,
+}
+export enum BridgeKind {
+  Road = 1,
+  Rail = 2,
+  /** a footbridge (a path's, steps') */
+  Foot = 3,
+}
+export enum BridgeFlag {
+  /** the BD TOPO's own bridge (a construction_lineaire or construction_surfacique « Pont ») within BRIDGE_CONFIRM_M of its axis */
+  Confirmed = 1,
+  /** longer than VIADUCT_M: its piers every VIADUCT_PIER_SPACING_M */
+  Viaduct = 2,
+  /** its first (A) or last (B) point is not an abutment: the bridge goes on in another tile's cells (the same point there) */
+  OpenA = 4,
+  OpenB = 8,
+}
+export enum Crossed {
+  Water = 1,
+  Road = 2,
+  Rail = 4,
+}
+/** a bridge (J8-RP RP4) — no height: the drawing sets its deck between its abutments' ground as drawn (FableFlight's bridge_end), raised
+ *  to its clearance over what it crosses */
+export interface BridgeRecord {
+  id: number;
+  kind: BridgeKind;
+  flags: number;
+  width: number;
+  layer: number;
+  crossed: number;
+  /** [m] */
+  clearance: number;
+  length: number;
+  points: [number, number][];
 }
 export enum SurfaceFlag {
   EdgeLines = 1,
@@ -187,6 +253,8 @@ export interface SegmentSurface {
   laneLines: number;
   /** each pavement's width [m] (0 none) */
   pavement: number;
+  /** its bridge's index in the cell (NO_BRIDGE or absent: none) */
+  bridge?: number;
 }
 export enum FurnitureFlag {
   /** inferred from the junction's shape (the data give none) */
@@ -286,6 +354,7 @@ export interface StreetHeader {
   junctionCount: number;
   placeCount: number;
   furnitureCount: number;
+  bridgeCount: number;
   /** CellStreetFlag */
   flags: number;
   generation: number;
@@ -310,6 +379,7 @@ export function encodeStreetCell(
   next: readonly SegmentNext[] = [],
   furniture: readonly FurnitureRecord[] = [],
   surfaces: readonly SegmentSurface[] = [],
+  bridges: readonly BridgeRecord[] = [],
 ): ArrayBuffer {
   const js = junctions.slice(0, 65535),
     ps = places.slice(0, 65535);
@@ -321,7 +391,8 @@ export function encodeStreetCell(
       ps.length * PLACE_BYTES +
       segments.length * NEXT_BYTES +
       segments.length * SURFACE_BYTES +
-      furniture.length * FURNITURE_BYTES,
+      furniture.length * FURNITURE_BYTES +
+      bridges.reduce((n, b) => n + BRIDGE_HEAD_BYTES + b.points.length * BRIDGE_POINT_BYTES, 0),
   );
   const v = new DataView(buf);
   v.setUint32(0, STREET_MAGIC, true);
@@ -338,6 +409,7 @@ export function encodeStreetCell(
   v.setFloat64(32, h.originLat, true);
   v.setFloat64(40, h.originLon, true);
   v.setUint32(48, furniture.length, true);
+  v.setUint32(52, bridges.length, true);
   let o = STREET_HEADER_BYTES;
   for (const l of lamps) {
     v.setFloat32(o, l.east, true);
@@ -396,6 +468,7 @@ export function encodeStreetCell(
     v.setUint8(o, (f?.flags ?? 0) & 255);
     v.setUint8(o + 1, Math.max(0, Math.min(255, f?.laneLines ?? 0)));
     v.setUint8(o + 2, Math.max(0, Math.min(255, Math.round((f?.pavement ?? 0) * 10))));
+    v.setUint8(o + 3, f?.bridge ?? NO_BRIDGE);
     o += SURFACE_BYTES;
   }
   for (const f of furniture) {
@@ -407,6 +480,23 @@ export function encodeStreetCell(
     v.setUint8(o + 13, f.flags & 255);
     v.setUint16(o + 14, f.junction & 65535, true);
     o += FURNITURE_BYTES;
+  }
+  for (const b of bridges) {
+    v.setUint32(o, b.id >>> 0, true);
+    v.setUint16(o + 4, b.points.length, true);
+    v.setUint8(o + 6, b.kind);
+    v.setUint8(o + 7, b.flags & 255);
+    v.setFloat32(o + 8, b.width, true);
+    v.setInt8(o + 12, Math.max(-128, Math.min(127, Math.round(b.layer))));
+    v.setUint8(o + 13, b.crossed & 255);
+    v.setUint8(o + 14, Math.max(0, Math.min(255, Math.round(b.clearance * 10))));
+    v.setFloat32(o + 16, b.length, true);
+    o += BRIDGE_HEAD_BYTES;
+    for (const [e, n] of b.points) {
+      v.setFloat32(o, e, true);
+      v.setFloat32(o + 4, n, true);
+      o += BRIDGE_POINT_BYTES;
+    }
   }
   return buf;
 }
@@ -426,6 +516,7 @@ export function readStreetHeader(buf: ArrayBuffer): StreetHeader | null {
     junctionCount: v.getUint16(6, true),
     placeCount: v.getUint16(10, true),
     furnitureCount: v.getUint32(48, true),
+    bridgeCount: v.getUint32(52, true),
     flags: v.getUint8(9),
     generation: v.getUint32(28, true),
     originLat: v.getFloat64(32, true),
@@ -440,7 +531,13 @@ export function readStreetHeader(buf: ArrayBuffer): StreetHeader | null {
     h.segmentCount * NEXT_BYTES +
     h.segmentCount * SURFACE_BYTES +
     h.furnitureCount * FURNITURE_BYTES;
-  return buf.byteLength === size ? h : null;
+  // (the bridges' records, of their own lengths: walked to the end, each inside the bytes)
+  let o = size;
+  for (let i = 0; i < h.bridgeCount; i++) {
+    if (o + BRIDGE_HEAD_BYTES > buf.byteLength) return null;
+    o += BRIDGE_HEAD_BYTES + v.getUint16(o + 4, true) * BRIDGE_POINT_BYTES;
+  }
+  return buf.byteLength === o ? h : null;
 }
 
 /** a street cell's i-th lamp */
@@ -529,7 +626,7 @@ export function readSurface(buf: ArrayBuffer, i: number): SegmentSurface {
   const v = new DataView(buf);
   const h = readStreetHeader(buf)!;
   const o = nextBase(h) + h.segmentCount * NEXT_BYTES + i * SURFACE_BYTES;
-  return { flags: v.getUint8(o), laneLines: v.getUint8(o + 1), pavement: v.getUint8(o + 2) / 10 };
+  return { flags: v.getUint8(o), laneLines: v.getUint8(o + 1), pavement: v.getUint8(o + 2) / 10, bridge: v.getUint8(o + 3) };
 }
 
 /** a street cell's i-th piece of furniture (VB7) */
@@ -546,6 +643,103 @@ export function readFurniture(buf: ArrayBuffer, i: number): FurnitureRecord {
     flags: v.getUint8(o + 13),
     junction: v.getUint16(o + 14, true),
   };
+}
+
+/** a street cell's bridges (J8-RP RP4), in their order (a segment's surface names one by its index) */
+export function readBridges(buf: ArrayBuffer): BridgeRecord[] {
+  const v = new DataView(buf);
+  const h = readStreetHeader(buf);
+  if (!h) return [];
+  let o = nextBase(h) + h.segmentCount * (NEXT_BYTES + SURFACE_BYTES) + h.furnitureCount * FURNITURE_BYTES;
+  const out: BridgeRecord[] = [];
+  for (let i = 0; i < h.bridgeCount; i++) {
+    const n = v.getUint16(o + 4, true);
+    const points: [number, number][] = [];
+    for (let k = 0; k < n; k++) {
+      const p = o + BRIDGE_HEAD_BYTES + k * BRIDGE_POINT_BYTES;
+      points.push([v.getFloat32(p, true), v.getFloat32(p + 4, true)]);
+    }
+    out.push({
+      id: v.getUint32(o, true),
+      kind: v.getUint8(o + 6),
+      flags: v.getUint8(o + 7),
+      width: v.getFloat32(o + 8, true),
+      layer: v.getInt8(o + 12),
+      crossed: v.getUint8(o + 13),
+      clearance: v.getUint8(o + 14) / 10,
+      length: v.getFloat32(o + 16, true),
+      points,
+    });
+    o += BRIDGE_HEAD_BYTES + n * BRIDGE_POINT_BYTES;
+  }
+  return out;
+}
+
+/**
+ * A bridge's piers (J8-RP RP4 — the drawing keeps those where the deck stands PIER_MIN_M or more over the ground at the foot): their
+ * abscissas along its axis [m], evenly spaced about PIER_SPACING_M (VIADUCT_PIER_SPACING_M for a viaduct), none at the abutments.
+ */
+export function bridgePiers(length: number, viaduct: boolean): number[] {
+  const spacing = viaduct ? VIADUCT_PIER_SPACING_M : PIER_SPACING_M;
+  const n = Math.max(0, Math.round(length / spacing) - 1);
+  return Array.from({ length: n }, (_, i) => (length * (i + 1)) / (n + 1));
+}
+
+/** A road's run in a cell (J8-RP RP2): its segments sewn by their continuations along the same road — the BD TOPO's surveyed axis in
+ *  France —, its points and its attributes (its first segment's). */
+export interface RoadRun {
+  points: [number, number][];
+  width: number;
+  lanes: number;
+  cls: RoadClass;
+  flags: number;
+  level: number;
+  roadId: number;
+  /** its segments' indices, in order */
+  segments: number[];
+}
+
+/**
+ * A street cell's roads as runs (J8-RP RP2): each segment once, sewn to the next one of its own road driven forward (its continuation
+ * at b, not reversed, the same road's identity), from those no such segment leads to. The scene draws its roads in France from them
+ * — the BD TOPO's axis and width — rather than from OpenMapTiles' lines.
+ */
+export function roadRuns(buf: ArrayBuffer): RoadRun[] {
+  const h = readStreetHeader(buf);
+  if (!h) return [];
+  const segs = Array.from({ length: h.segmentCount }, (_, i) => readSegment(buf, i));
+  const after = segs.map((s, i) => {
+    const b = readNext(buf, i).b;
+    if (b >= NEXT_ELSEWHERE || b & NEXT_REVERSED) return -1;
+    return segs[b]?.roadId === s.roadId ? b : -1;
+  });
+  const led = new Uint8Array(segs.length);
+  for (const j of after) if (j >= 0) led[j] = 1;
+  const used = new Uint8Array(segs.length);
+  const out: RoadRun[] = [];
+  const walk = (start: number) => {
+    const s = segs[start]!;
+    const run: RoadRun = {
+      points: [s.a],
+      width: s.width,
+      lanes: s.lanes,
+      cls: s.cls,
+      flags: s.flags,
+      level: s.level,
+      roadId: s.roadId,
+      segments: [],
+    };
+    for (let i = start; i >= 0 && !used[i]; i = after[i]!) {
+      used[i] = 1;
+      run.points.push(segs[i]!.b);
+      run.segments.push(i);
+    }
+    out.push(run);
+  };
+  for (let i = 0; i < segs.length; i++) if (!led[i]) walk(i);
+  // (a loop of one road — a roundabout's ring — has no start: its rest walked from any of its segments)
+  for (let i = 0; i < segs.length; i++) if (!used[i]) walk(i);
+  return out;
 }
 
 /**

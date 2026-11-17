@@ -5,7 +5,7 @@ import { App, E2E, stopServer } from "./lib/app";
 // cell-worker.ts — and its pool, cell-workers.ts streetPool, `__bh.sys.streets`): Toulon's centre, the four z 15 cells of the
 // OpenMapTiles z 14 tile 8461/6012 (its data on the e2e's Earth data on disk: the roads' tile and the BD TOPO's four tiles), asked of the
 // streets' pool from the boot's place (no placing: nothing else loaded for it); each handed (its lamps, segments and junctions counted from its
-// header), no image over 100 ms while they were prepared; the page loaded again, all four from the prepared cache (kerr-street-v3).
+// header), no image over 100 ms while they were prepared; the page loaded again, all four from the prepared cache (kerr-street-v4).
 // Done when: the four street cells handed with their lamps, segments and junctions, no image over 100 ms, all four from the cache after the
 // reload.
 // Duration: ~1 min.
@@ -13,7 +13,7 @@ import { App, E2E, stopServer } from "./lib/app";
 afterAll(stopServer);
 const CELLS = [0, 1, 2, 3].map((k) => ({ x: 8461 * 2 + (k % 2), y: 6012 * 2 + Math.floor(k / 2), priority: 0, d: k }));
 /** the street cells' counts read from the prepared cache: their header's lamps, segments and junctions */
-const COUNTS = `(async () => { const c = await caches.open("kerr-street-v3"); const out = [];
+const COUNTS = `(async () => { const c = await caches.open("kerr-street-v4"); const out = [];
   for (const r of await c.keys()) { const b = await (await c.match(r)).arrayBuffer(); const v = new DataView(b);
     out.push({ key: r.url.split("/").slice(-2).join("/"), lamps: v.getUint32(20, true), segments: v.getUint32(24, true), junctions: v.getUint16(6, true) }); } return out; })()`;
 
@@ -36,7 +36,7 @@ describe.skipIf(!E2E)("PLAN-J8 J8-L: the streets' cells prepared in the game", (
       );
       expect(s1.failed).toBe(0);
       expect(counts.reduce((s, c) => s + c.lamps, 0)).toBeGreaterThan(200);
-      // (format 3 — VB1: every road's segments, the BD TOPO's in France, and their junctions; VB2/VB5a/VB6/VB7's details beside)
+      // (format 4 — VB1: every road's segments, the BD TOPO's in France, and their junctions; VB2/VB5a/VB6/VB7's details beside)
       expect(counts.reduce((s, c) => s + c.segments, 0)).toBeGreaterThan(1000);
       expect(counts.reduce((s, c) => s + c.junctions, 0)).toBeGreaterThan(100);
       expect(gap.n).toBe(0);

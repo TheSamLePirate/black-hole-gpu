@@ -12,10 +12,13 @@ import { inBdtopoBox } from "./bdtopo";
 import { cellBounds, cellOrigin, fromCell, readHeader, readRecord, sourceKey, toCell } from "./building-cells";
 import { roadWidth } from "./scenery-geometry";
 import { builtUp, LAMP_CLASSES, lampsAlong } from "./streetlamps";
-import { type PieceEnds, segmentNexts, segmentSurface, streetFurniture } from "./street-detail-prep";
+import { omtSurfaces } from "./forest-exclusions";
+import { type BridgePiece, chainBridges, type PieceEnds, segmentNexts, segmentSurface, streetFurniture } from "./street-detail-prep";
 import {
+  type BridgeRecord,
   CellStreetFlag,
   drivesLeft,
+  NO_BRIDGE,
   encodeStreetCell,
   type FurnitureRecord,
   LAMP_VARIANTS,
@@ -54,8 +57,10 @@ export interface PreparedStreetCell {
   junctions: JunctionRecord[];
   /** its parked cars' places (VB4), and whether they were thinned to PLACE_MAX */
   places: PlaceRecord[];
-  /** its junctions' and fast roads' furniture (VB7) */
+  /** its junctions' and fast roads' furniture (VB7), its tunnels' mouths (J8-RP RP8) */
   furniture: FurnitureRecord[];
+  /** its bridges (J8-RP RP4): every bridge holding one of its segments, whole as its tile holds it, in its frame */
+  bridges: BridgeRecord[];
   thinned: boolean;
   /** with `measure`: the places without the assumed lanes (−1 else) */
   placesBefore: number;
@@ -524,7 +529,68 @@ export function prepareStreetCells(
       }
     }
   }
-  return cells.map((c) => {
+  // (J8-RP RP4: the tile's bridges — its four cells' bridge segments chained in the tile's frame, what they cross from OpenMapTiles'
+  // surfaces, the BD TOPO's « Pont » constructions confirming them, cut where the tile's edge cuts them)
+  const tileOf = (c: (typeof cells)[number], p: readonly [number, number]): [number, number] => {
+    const g = fromCell(c.origin, p[0], p[1]);
+    const m = toCell(tileOrigin, g.lat, g.lon);
+    return [m.east, m.north];
+  };
+  const bridgePieces: BridgePiece[] = [];
+  cells.forEach((c, k) =>
+    c.segments.forEach((sg, i) => {
+      if (sg.flags & SegmentFlag.Bridge) bridgePieces.push({ cell: k, index: i, a: tileOf(c, sg.a), b: tileOf(c, sg.b), seg: sg });
+    }),
+  );
+  let bridgesOfTile: ReturnType<typeof chainBridges> = [];
+  if (bridgePieces.length) {
+    const surfaces = bytes.byteLength ? omtSurfaces(bytes, x14, y14, tileOrigin) : [];
+    const ponts: [[number, number], [number, number]][] = [];
+    for (const c of cells) {
+      if (!c.bd?.byteLength) continue;
+      const L = new VectorTile(new PbfReader(c.bd)).layers;
+      for (const name of ["construction_lineaire", "construction_surfacique"]) {
+        const l = L[name];
+        for (let i = 0; l && i < l.length; i++) {
+          const f = l.feature(i);
+          if (String(f.properties.nature ?? "") !== "Pont") continue;
+          const e = f.extent,
+            nz = 2 ** (OSM_Z + 1);
+          for (const line of f.loadGeometry()) {
+            const xy = line.map((v) => {
+              const lon = ((c.x + v.x / e) / nz) * 360 - 180,
+                lat = Math.atan(Math.sinh(Math.PI * (1 - (2 * (c.y + v.y / e)) / nz))) / D;
+              const m = toCell(tileOrigin, lat, lon);
+              return [m.east, m.north] as [number, number];
+            });
+            for (let k = 0; k + 1 < xy.length; k++) ponts.push([xy[k]!, xy[k + 1]!]);
+          }
+        }
+      }
+    }
+    const tb = cellBounds(x14, y14, OSM_Z);
+    const tsw = toCell(tileOrigin, tb.south, tb.west),
+      tne = toCell(tileOrigin, tb.north, tb.east);
+    const atEdge = (p: [number, number]) => p[0] - tsw.east < 3 || tne.east - p[0] < 3 || p[1] - tsw.north < 3 || tne.north - p[1] < 3;
+    bridgesOfTile = chainBridges(bridgePieces, surfaces, ponts, atEdge);
+  }
+  return cells.map((c, k) => {
+    // (its bridges: those holding one of its segments, in its frame; each segment on one its index — J8-RP RP6)
+    const bridges: BridgeRecord[] = [];
+    const bridgeOf = new Map<number, number>();
+    for (const cb of bridgesOfTile) {
+      const mine = cb.pieces.filter((pc) => pc.cell === k);
+      if (!mine.length || bridges.length >= NO_BRIDGE) continue;
+      for (const pc of mine) bridgeOf.set(pc.index, bridges.length);
+      bridges.push({
+        ...cb.bridge,
+        points: cb.bridge.points.map((p) => {
+          const g = fromCell(tileOrigin, p[0], p[1]);
+          const m = toCell(c.origin, g.lat, g.lon);
+          return [m.east, m.north] as [number, number];
+        }),
+      });
+    }
     // (the junctions: the ends met within JUNCTION_M — a grid of that side, its neighbours looked in —, three or more)
     const grid = new Map<string, number[]>();
     const key = (i: number, j: number) => `${i},${j}`;
@@ -566,7 +632,7 @@ export function prepareStreetCells(
     const nearEdge = (e: number, n: number) => e - sw.east < 3 || ne.east - e < 3 || n - sw.north < 3 || ne.north - n < 3;
     const leftHand = drivesLeft(c.origin.lat, c.origin.lon);
     const next = segmentNexts(c.segments, c.pieces, nearEdge);
-    const surfaces = c.segments.map(segmentSurface);
+    const surfaces = c.segments.map((sg, i) => ({ ...segmentSurface(sg), bridge: bridgeOf.get(i) ?? NO_BRIDGE }));
     const furniture = streetFurniture(c.segments, junctions, leftHand);
     const flags = (P.thinned ? CellStreetFlag.Thinned : 0) | (leftHand ? CellStreetFlag.LeftHand : 0);
     return {
@@ -577,6 +643,7 @@ export function prepareStreetCells(
       junctions,
       places: P.places,
       furniture,
+      bridges,
       thinned: P.thinned,
       placesBefore,
       vertices: c.vertices,
@@ -590,6 +657,7 @@ export function prepareStreetCells(
         next,
         furniture,
         surfaces,
+        bridges,
       ),
     };
   });

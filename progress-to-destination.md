@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 17 nov. 10:22 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 17 nov. 10:32 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous. Ce qui est fermé quitte le tableau « En cours » pour la ligne « Fermé récemment ».
@@ -10433,3 +10433,20 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
 - **Réalisé :** sur les ponts OMT de la scène (`scenery-worker.ts`), le tablier part du sol de ses deux culées. Il est relevé vers le milieu jusqu'au tirant de 5,5 m (+4 m par couche au-dessus de la première), par morceaux de 10 m. Il a ses parapets en béton et 1,2 m d'épaisseur (1,8 m pour un viaduc de plus de 400 m). Les piles sont posées tous les 34 m (130 m sur un viaduc), seulement là où le tablier passe à plus de 3,5 m du sol (FableFlight `bridge_end`). Avant, le tablier était plat au point le plus haut, avec des piles tous les 40 m.
 - **Preuves :** `tsc`, Biome, tests du décor. **Non vu en jeu.**
 - **Reste :** le type et la matière, les marquages sur le tablier, les arches (avec KSC4).
+
+### 2026-11-17 10:32 UTC — PLAN-J8 J8-RP (mode speed) : les données des routes, des ponts et des tunnels, cellule « rue » au format 4 (session des approches, 1feb2f7f)
+
+- **Destination :** §19.13 (J8-A, « AAA road and bridges », demande de Sam du 17 nov.) et §7 (préparer avant la frame) ; PLAN-J8 §3 bis,
+  RP2, RP4, RP6, RP7 et RP8.
+- **Réalisé :** `kerr-street-v4`, format proposé au rendu (`street-cells.ts`, `street-detail-prep.ts`, `street-prep.ts`) :
+  - RP2 : les routes en runs (`roadRuns` : l'axe et la largeur BD TOPO) ;
+  - RP4 et RP7 : les ponts chaînés par tuile. Chacun porte son axe, sa largeur, son niveau, ce qu'il franchit, son tirant, sa
+    confirmation par les `construction_*` « Pont » de la BD TOPO et ses bouts ouverts. Il n'a pas de hauteur : le dessin pose le
+    tablier entre ses culées. Les piles se calculent avec `bridgePiers` ;
+  - RP6 : chaque tronçon donne l'indice de son pont ;
+  - RP8 : les bouches de tunnel entrent dans le mobilier.
+  BH-API, pipeline ligne 10 b, PLAN-J8 §3 bis et [FICHE-J8-VB1](docs/progress/j8/FICHE-J8-VB1.md) § KSC4 sont à jour.
+- **Vérifié :** tests unitaires sur les données du disque e2e. Sur la Seine au pont Alexandre III, 5 ponts, tous confirmés, 4 sur l'eau,
+  le plus long de 154 m. Toulon : 9 ponts, Marais : 7. Chaque tronçon de pont nomme son pont. tsc, Biome, les gardes e2e et
+  `pipeline-inventory --check` passent.
+- **Non mesuré :** rien n'est dessiné ni vu en jeu. Restent RP9 (les voies ferrées) et RP3 (le profil long hors de France).

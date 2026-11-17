@@ -88,3 +88,30 @@ PLAN-J8). Les règles sont dans l'en-tête de [`street-cells.ts`](../../../src/s
 - **Non mesuré** : rien n'est encore dessiné (la session du rendu), ni vu dans le jeu, ni passé sur kerr-mini. Le coût de préparation dans
   les workers et la taille des cellules en zone restent à relever au gros e2e. La vraisemblance des passages et des feux n'a pas été
   confrontée à l'orthophoto.
+
+## KSC4 — les ponts, les routes en runs, les bouches de tunnel (J8-RP, mode speed, 17 nov. ~10:35 UTC)
+
+Proposé à la session du rendu à ~10:35 UTC et codé sans attendre sa réponse. Le cache passe à `kerr-street-v4`.
+
+- **RP2** : `roadRuns(buf)` recoud les tronçons d'une même route par leurs suites. En France, ce sont l'axe et la largeur de la BD TOPO.
+- **RP4, RP7 : les ponts.**
+  - Les tronçons de pont des quatre cellules d'une tuile z 14 sont chaînés en tabliers.
+  - Chaque tablier porte son axe, sa largeur (chaussée plus trottoirs ou parapets), son niveau et ce qu'il franchit (eau, routes et voies
+    ferrées d'OpenMapTiles), avec son tirant (5,5 m, 6 m au-dessus d'une voie ferrée).
+  - Il est confirmé par la BD TOPO (`construction_lineaire` ou `construction_surfacique` « Pont » à 15 m) et marqué ouvert là où la tuile
+    le coupe.
+  - **Aucune hauteur dans la cellule** : la BD TOPO n'en donne pas. Le tablier se pose au dessin entre le sol de ses deux culées. Les
+    piles se calculent avec `bridgePiers` (34 m, 130 m pour un viaduc).
+- **RP6** : chaque tronçon sur un pont donne l'indice de son pont (octet 3 de la surface).
+- **RP8** : le mobilier compte une sorte de plus, la bouche de tunnel.
+
+**Mesuré** (tests unitaires, données du disque e2e, une tuile z 14 par lieu) :
+
+| Lieu | Ponts | Confirmés BD TOPO | Sur l'eau | Sur une route | Ouverts au bord | Le plus long | Bouches de tunnel |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| Centre de Toulon | 9 | 9 | 0 | 4 | 1 | 111 m | 6 |
+| Paris, le Marais | 7 | 7 | 6 | 4 | 1 | 124 m | 2 |
+| Paris, la Seine au pont Alexandre III (8297/5636) | 5 | 5 | 4 | 4 | 0 | 154 m | 10 |
+
+- **Non mesuré** : rien n'est dessiné ni vu en jeu. La taille des cellules au format 4 en zone n'a pas été relevée, ni ce qu'un pont
+  coupé par deux tuiles donne au dessin.

@@ -4,6 +4,11 @@ import { cellBounds } from "../src/system/building-cells";
 import { prepareBdtopoCell } from "../src/system/cell-prep";
 import {
   encodeStreetCell,
+  BRIDGE_HEAD_BYTES,
+  BRIDGE_POINT_BYTES,
+  BridgeFlag,
+  BridgeKind,
+  Crossed,
   FURNITURE_BYTES,
   FurnitureFlag,
   FurnitureKind,
@@ -11,10 +16,14 @@ import {
   LAMP_BYTES,
   NEXT_BYTES,
   NEXT_ELSEWHERE,
+  NEXT_NONE,
   NEXT_REVERSED,
+  readBridges,
   readFurniture,
   readNext,
   readSurface,
+  roadRuns,
+  type RoadSegmentRecord,
   SURFACE_BYTES,
   SurfaceFlag,
   PLACE_BYTES,
@@ -63,10 +72,34 @@ test("a street cell's bytes (format 3): its header, lamps, segments, junctions, 
     CellStreetFlag.LeftHand,
     [{ b: NEXT_ELSEWHERE, a: 3 | NEXT_REVERSED }],
     [{ east: 190, north: 9.5, heading: Math.PI, length: 6.5, kind: FurnitureKind.Crossing, flags: FurnitureFlag.Inferred, junction: 0 }],
-    [{ flags: SurfaceFlag.EdgeLines | SurfaceFlag.Kerb, laneLines: 1, pavement: 2.5 }],
+    [{ flags: SurfaceFlag.EdgeLines | SurfaceFlag.Kerb, laneLines: 1, pavement: 2.5, bridge: 0 }],
+    [
+      {
+        id: 77,
+        kind: BridgeKind.Road,
+        flags: BridgeFlag.Confirmed,
+        width: 12.5,
+        layer: 1,
+        crossed: Crossed.Water,
+        clearance: 5.5,
+        length: 200.25,
+        points: [
+          [0, 0],
+          [200, 10],
+        ],
+      },
+    ],
   );
   expect(buf.byteLength).toBe(
-    STREET_HEADER_BYTES + LAMP_BYTES + SEGMENT_BYTES + JUNCTION_BYTES + NEXT_BYTES + SURFACE_BYTES + FURNITURE_BYTES,
+    STREET_HEADER_BYTES +
+      LAMP_BYTES +
+      SEGMENT_BYTES +
+      JUNCTION_BYTES +
+      NEXT_BYTES +
+      SURFACE_BYTES +
+      FURNITURE_BYTES +
+      BRIDGE_HEAD_BYTES +
+      2 * BRIDGE_POINT_BYTES,
   );
   const h = readStreetHeader(buf)!;
   expect([h.z, h.x, h.y, h.lampCount, h.segmentCount, h.junctionCount, h.placeCount, h.furnitureCount, h.generation, h.flags]).toEqual([
@@ -94,7 +127,23 @@ test("a street cell's bytes (format 3): its header, lamps, segments, junctions, 
   });
   expect(lamp.heading).toBeCloseTo(Math.PI / 2, 3);
   expect(readNext(buf, 0)).toEqual({ b: NEXT_ELSEWHERE, a: 3 | NEXT_REVERSED });
-  expect(readSurface(buf, 0)).toEqual({ flags: SurfaceFlag.EdgeLines | SurfaceFlag.Kerb, laneLines: 1, pavement: 2.5 });
+  expect(readSurface(buf, 0)).toEqual({ flags: SurfaceFlag.EdgeLines | SurfaceFlag.Kerb, laneLines: 1, pavement: 2.5, bridge: 0 });
+  expect(readBridges(buf)).toEqual([
+    {
+      id: 77,
+      kind: BridgeKind.Road,
+      flags: BridgeFlag.Confirmed,
+      width: 12.5,
+      layer: 1,
+      crossed: Crossed.Water,
+      clearance: 5.5,
+      length: 200.25,
+      points: [
+        [0, 0],
+        [200, 10],
+      ],
+    },
+  ]);
   const f = readFurniture(buf, 0);
   expect([f.east, f.north, f.length, f.kind, f.flags, f.junction]).toEqual([
     190,
@@ -120,6 +169,42 @@ test("a street cell's bytes (format 3): its header, lamps, segments, junctions, 
   expect(readJunction(buf, 0)).toEqual({ east: 200, north: 10, degree: 4, width: 6.4, flags: 0 });
   // (not a street cell of this format: null)
   expect(readStreetHeader(new ArrayBuffer(64))).toBeNull();
+});
+
+test("J8-RP RP2: a cell's roads as runs — its segments sewn along the same road by their continuations", () => {
+  const sg = (a: [number, number], b: [number, number], roadId: number): RoadSegmentRecord => ({
+    a,
+    b,
+    width: 7,
+    lanes: 2,
+    cls: "tertiary",
+    flags: SegmentFlag.Urban,
+    level: 0,
+    speed: 13,
+    s0: 0,
+    roadId,
+  });
+  // (road 1 in three segments, given out of order; road 2 crossing it at its middle)
+  const segs = [sg([100, 0], [200, 0], 1), sg([0, 0], [100, 0], 1), sg([200, 0], [300, 0], 1), sg([100, -50], [100, 50], 2)];
+  const next = [
+    { b: 2, a: 1 | NEXT_REVERSED },
+    { b: 0, a: NEXT_NONE },
+    { b: NEXT_ELSEWHERE, a: 0 | NEXT_REVERSED },
+    { b: NEXT_NONE, a: NEXT_NONE },
+  ];
+  const buf = encodeStreetCell({ z: 15, x: 1, y: 2, generation: 0, originLat: 43, originLon: 6 }, [], segs, [], [], 0, next);
+  const runs = roadRuns(buf);
+  expect(runs.length).toBe(2);
+  const r1 = runs.find((r) => r.roadId === 1)!;
+  expect(r1.points).toEqual([
+    [0, 0],
+    [100, 0],
+    [200, 0],
+    [300, 0],
+  ]);
+  expect(r1.segments).toEqual([1, 0, 2]);
+  expect(r1.width).toBe(7);
+  expect(runs.find((r) => r.roadId === 2)!.points.length).toBe(2);
 });
 
 test("a place's bytes (VB4): its centre, heading, side, 24-bit seed and the carriageway's width", () => {
@@ -240,6 +325,8 @@ function place(x14: number, y14: number) {
 const PLACES = [
   { name: "Toulon's centre", x14: 8461, y14: 6012 },
   { name: "Paris, the Marais", x14: 8299, y14: 5636 },
+  // (J8-RP: the Seine's bridges — the pont Alexandre III, the Invalides', the Concorde's)
+  { name: "Paris, the Seine at the pont Alexandre III", x14: 8297, y14: 5636 },
 ];
 for (const P of PLACES) {
   const p = place(P.x14, P.y14);
@@ -329,6 +416,21 @@ for (const P of PLACES) {
             const j = readJunction(c.buf, f.junction);
             expect(Math.hypot(f.east - j.east, f.north - j.north)).toBeLessThan(j.width / 2 + 1 + 3 + 12);
           }
+        }
+      }
+      const bridges = cells.flatMap((c) => readBridges(c.buf));
+      const ids = new Map(bridges.map((b) => [b.id, b]));
+      const portals = cells.reduce((n, c) => n + c.furniture.filter((f) => f.kind === 5).length, 0);
+      console.log(
+        `  ${P.name}: bridges ${ids.size} (records ${bridges.length}; confirmed ${[...ids.values()].filter((b) => b.flags & BridgeFlag.Confirmed).length}, over water ${[...ids.values()].filter((b) => b.crossed & Crossed.Water).length}, over a road ${[...ids.values()].filter((b) => b.crossed & Crossed.Road).length}, open ${[...ids.values()].filter((b) => b.flags & (BridgeFlag.OpenA | BridgeFlag.OpenB)).length}; longest ${Math.max(0, ...[...ids.values()].map((b) => b.length)).toFixed(0)} m) · tunnel mouths ${portals} · runs ${cells.reduce((n, c) => n + roadRuns(c.buf).length, 0)} for ${cells.reduce((n, c) => n + c.segments.length, 0)} segments`,
+      );
+      for (const c of cells) {
+        const h = readStreetHeader(c.buf)!;
+        for (let i = 0; i < h.segmentCount; i++) {
+          const sf = readSurface(c.buf, i);
+          const onBridge = !!(readSegment(c.buf, i).flags & SegmentFlag.Bridge);
+          // (a bridge's segment names its bridge; no other does)
+          expect(sf.bridge !== 0xff).toBe(onBridge);
         }
       }
       console.log(
