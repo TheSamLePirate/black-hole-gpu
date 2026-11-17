@@ -1272,6 +1272,17 @@ fn farCarCull(@builtin(global_invocation_id) gid: vec3u, @builtin(num_workgroups
   o.p = v;
   return o;
 }
+// (lot 3: the same triangles from the Sun — the buildings' shadow map and the relief's cascades, as the near scene's own: meshShadowVs)
+@vertex fn nearCellShadowVs(@builtin(vertex_index) vi: u32) -> @builtin(position) vec4f {
+  let tri = vi / 3u;
+  let blk = nmBlk[tri / ${NEAR_TRI_BLOCK}u];
+  if (tri % ${NEAR_TRI_BLOCK}u >= blk.y) { return vec4f(0.0, 0.0, 0.0, -1.0); }
+  let t = nmTri[tri];
+  let k = vi % 3u;
+  let q = nmPos[select(select(t.z, t.y, k == 1u), t.x, k == 0u)];
+  let c = 4u * blk.x;
+  return sunClip(nmCell[c].xyz + nmCell[c + 1u].xyz * q.x + nmCell[c + 2u].xyz * q.y + nmCell[c + 3u].xyz * q.z);
+}
 @vertex fn farShadowVs(@builtin(vertex_index) vi: u32, @builtin(instance_index) bi: u32) -> @builtin(position) vec4f {
   let e = farEnv(bi);
   if (e.s.z <= 0.0 || farMaskD(e.c.xy) < farU.maskR || farCell[4u * farBlock[bi >> 8u].x].w < 0.0) { return vec4f(2.0, 2.0, 0.5, 1.0); }
@@ -1860,6 +1871,8 @@ export class SceneryRaster {
     blk: GPUBuffer;
     cell: GPUBuffer;
     pipe: GPURenderPipeline;
+    /** lot 3: into the buildings' shadow map and the relief's cascades */
+    shadow: GPURenderPipeline;
     bind: GPUBindGroup;
     /** the highest triangle block in use + 1 (the draw's extent) */
     usedTri: number;
@@ -1884,8 +1897,15 @@ export class SceneryRaster {
     const tri = d.createBuffer({ size: Math.max(16, triBlocks * NEAR_TRI_BLOCK * 16), usage: S, label: "near mesh cells triangles" });
     const blk = d.createBuffer({ size: Math.max(16, triBlocks * 8), usage: S, label: "near mesh cells blocks" });
     const cell = d.createBuffer({ size: Math.max(64, slots * 64), usage: S, label: "near mesh cells frames" });
+    const layout = d.createPipelineLayout({ bindGroupLayouts: [this.drawLayout, L] });
+    const shadow = await d.createRenderPipelineAsync({
+      layout,
+      vertex: { module: this.module, entryPoint: "nearCellShadowVs" },
+      primitive: { topology: "triangle-list", cullMode: "none" },
+      depthStencil: { format: "depth32float", depthWriteEnabled: true, depthCompare: "less" },
+    });
     const pipe = await d.createRenderPipelineAsync({
-      layout: d.createPipelineLayout({ bindGroupLayouts: [this.drawLayout, L] }),
+      layout,
       vertex: { module: this.module, entryPoint: "nearCellVs" },
       fragment: {
         module: this.module,
@@ -1901,6 +1921,7 @@ export class SceneryRaster {
       blk,
       cell,
       pipe,
+      shadow,
       usedTri: 0,
       bind: d.createBindGroup({
         layout: L,
@@ -2533,6 +2554,13 @@ export class SceneryRaster {
       buildings.setBindGroup(1, F.drawBind);
       buildings.draw(54, F.blocks * 256);
     }
+    // (PLAN-J8 J8-8 lot 3: the near mesh cells' triangles)
+    if (this.near && this.nearOn && this.near.usedTri > 0) {
+      buildings.setPipeline(this.near.shadow);
+      buildings.setBindGroup(0, this.drawBind);
+      buildings.setBindGroup(1, this.near.bind);
+      buildings.draw(this.near.usedTri * NEAR_TRI_BLOCK * 3);
+    }
     // (PLAN-J8 J8-0 (c): the envelope bench's, all of them — as the buildings' boxes, uncut by the Sun's view)
     if (this.bench && this.benchPipes && !(this.benchSkip & 4)) {
       buildings.setPipeline(this.benchPipes.shadow);
@@ -2577,6 +2605,12 @@ export class SceneryRaster {
     pass.drawIndirect(this.draws, LISTS * 16);
     pass.setPipeline(this.meshShadowPipe);
     pass.drawIndirect(this.draws, (LISTS + 4) * 16);
+    // (PLAN-J8 J8-8 lot 3: the near mesh cells' triangles, in this cascade too)
+    if (this.near && this.nearOn && this.near.usedTri > 0) {
+      pass.setPipeline(this.near.shadow);
+      pass.setBindGroup(1, this.near.bind);
+      pass.draw(this.near.usedTri * NEAR_TRI_BLOCK * 3);
+    }
     return true;
   }
 
