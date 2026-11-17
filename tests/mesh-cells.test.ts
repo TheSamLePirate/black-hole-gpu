@@ -14,7 +14,8 @@ import {
   SKIRT_M,
 } from "../src/system/mesh-cells";
 import { lidarRoof } from "../src/system/building-mesh-prep";
-import { prepareMeshCell } from "../src/system/mesh-prep";
+import { prepareMeshCell, prepareOvertureMeshCells } from "../src/system/mesh-prep";
+import { prepareOvertureCells } from "../src/system/cell-prep-overture";
 
 // PLAN-J8 J8-8 lot (1) — the near buildings' mesh cell (mesh-cells.ts, kerr-mesh-v1), agreed with the render session (17 Nov 2026):
 // the J8-2 cell's buildings in its order (rank i here, rank i there), each its packScenery leaves and its parts' triangles, every
@@ -151,4 +152,29 @@ test("the roofs without a ridge measured by the canopy (B6, the scene's lidarRoo
   for (let r = 0; r < h.buildings; r++) if (readMeshBuilding(m.buf, r).flags & RecordFlag.Measured) flagged++;
   expect(flagged).toBe(m.stats.measured);
   console.log(`  canopy: guessed ${plain.stats.guessed} → ${m.stats.guessed}, measured ${m.stats.measured}`);
+});
+
+test("Overture's mesh cells (outside France, J8-7's): the four cells of Tarifa's z 14 tile — J8-2's buildings in its order, its parts' pieces under their building, no foot", () => {
+  const bytes = new Uint8Array(readFileSync(new URL("./fixtures/overture/2026-10-21.0-14-7936-6432.mvt", import.meta.url)));
+  const cells = prepareOvertureCells(bytes, 7936, 6432, "2026-10-21.0");
+  const meshes = prepareOvertureMeshCells(bytes, 7936, 6432, "2026-10-21.0");
+  expect(meshes.length).toBe(4);
+  let buildings = 0,
+    triangles = 0;
+  for (let k = 0; k < 4; k++) {
+    const h = readMeshHeader(meshes[k]!.buf)!;
+    const c = readHeader(cells[k]!.buf)!;
+    expect([h.x, h.y, h.buildings, h.generation, h.source]).toEqual([c.x, c.y, c.count, c.generation, 2]);
+    expect(meshes[k]!.stats.unplanned).toBe(0);
+    for (let r = 0; r < h.buildings; r++) {
+      const b = readMeshBuilding(meshes[k]!.buf, r);
+      expect(Number.isNaN(b.foot)).toBe(true);
+      expect(b.records).toBeGreaterThan(0);
+      expect(b.flags & 0xff).toBe(readRecord(cells[k]!.buf, r).flags & ~RecordFlag.Measured);
+    }
+    buildings += h.buildings;
+    triangles += h.triangles;
+  }
+  expect(buildings).toBeGreaterThan(100);
+  console.log(`  Tarifa's tile: ${buildings} buildings, ${triangles} triangles in four mesh cells`);
 });

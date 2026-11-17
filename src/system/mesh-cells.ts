@@ -54,7 +54,8 @@ export const meshCacheUrl = (origin: string, x: number, y: number, generation: n
 export enum MeshCellFlag {
   /** the IGN's canopy read for its roofs without a ridge (I4/B6) */
   Canopy = 1,
-  /** its building cell is not the BD TOPO's (Overture's — J8-7): no mesh yet, the cell empty — the near scene draws there */
+  /** its building cell's source has no meshes yet (OSM's alone: neither the BD TOPO's nor Overture's), the cell empty — the near scene
+   *  draws there */
   SourceLater = 2,
 }
 /** a building's flags past J8-2's RecordFlag bits (its low byte) */

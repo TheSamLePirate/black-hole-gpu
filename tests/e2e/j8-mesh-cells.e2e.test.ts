@@ -6,9 +6,10 @@ import { App, E2E, stopServer } from "./lib/app";
 // cells round 16923/12025 (their BD TOPO tiles on the e2e's Earth data on disk), asked of the meshes' pool from the boot's place; each
 // handed, its building cell (kerr-cells-v1) made first — the same buildings, the same generation —, its buildings, triangles and time
 // read; no image over 100 ms while they were prepared (the workers' own threads); the page loaded again, all nine from the prepared
-// cache. Nothing is drawn from them yet (lot 2, the render session's).
+// cache. Then outside France: Tarifa's Overture z 14 tile's four mesh cells (J8-7's cells), each with its building cell's count and
+// generation.
 // Done when: nine mesh cells handed, each with its building cell's count and generation, no image over 100 ms, all nine from the
-// cache after the reload.
+// cache after the reload; Tarifa's four Overture mesh cells, their building cells' counts and generation.
 // Duration: ~1 min.
 
 afterAll(stopServer);
@@ -75,6 +76,33 @@ describe.skipIf(!E2E)("PLAN-J8 J8-8: the near mesh cells prepared in the game", 
       console.log(`  warm: ${JSON.stringify(s2)}`);
       expect(s2.cached).toBe(CELLS.length);
       expect(s2.prepared).toBe(0);
+
+      // (outside France — J8-7's Overture cells: Tarifa's z 14 tile 7936/6432, its four cells made at once)
+      await app.scenario("Tarifa · Overture's mesh cells");
+      const T = [0, 1, 2, 3].map((k) => ({ x: 7936 * 2 + (k % 2), y: 6432 * 2 + Math.floor(k / 2), priority: 0, d: k }));
+      await app.js(`(() => { __bh.sys.meshes.clear(); __bh.sys.meshes.want(${JSON.stringify(T)}); return 1; })()`);
+      await app.waitFor(`__bh.sys.meshes.got().length >= 4`, 90_000);
+      const tp = (
+        await app.js<
+          {
+            key: string;
+            buildings: number;
+            generation: number;
+            triangles: number;
+            flags: number;
+            cellBuildings: number;
+            cellGeneration: number;
+          }[]
+        >(PAIRS)
+      ).filter((p) => T.some((t) => p.key === `${t.x}/${t.y}`));
+      for (const p of tp) console.log(`    ${JSON.stringify(p)}`);
+      expect(tp.length).toBe(4);
+      for (const p of tp) {
+        expect(p.buildings).toBe(p.cellBuildings);
+        expect(p.generation).toBe(p.cellGeneration);
+        expect(p.flags & 2).toBe(0);
+      }
+      expect(tp.reduce((t, p) => t + p.triangles, 0)).toBeGreaterThan(10_000);
       expect(app.cdp.errors).toEqual([]);
     } finally {
       app.close();

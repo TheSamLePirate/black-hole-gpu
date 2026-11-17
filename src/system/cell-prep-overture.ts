@@ -38,25 +38,29 @@ export function colourCode(v: unknown): number {
   return /^[0-9a-f]{6}$/i.test(h) ? Number.parseInt(h, 16) : 0;
 }
 
+/** a building an Overture tile's cell keeps (cell-prep.ts's rule, then its first z 15 cell within the tile), its rings in tile units */
+export interface OvertureOwned {
+  id: string;
+  properties: Record<string, unknown>;
+  /** its outline's polygons (classifyRings), in the z 14 tile's units (past its square: the buffer's) */
+  polys: { x: number; y: number }[][][];
+  extent: number;
+  cut: boolean;
+}
 /**
- * An Overture z 14 tile's four z 15 cells (north-west, north-east, south-west, south-east: `x14 * 2 + i`, `y14 * 2 + j`): each its
- * buildings' records, ranked by their Overture id. An empty tile (`bytes` empty: none there) gives four empty cells.
+ * An Overture z 14 tile's standing buildings decoded (layer `building`): each kept by the first z 14 tile it touches and that tile's
+ * first z 15 cell it touches, in the four cells (north-west, north-east, south-west, south-east), ranked by their Overture id — the rank
+ * J8-2's records (prepareOvertureCells) and J8-8's meshes share —; every outline the tile holds (its buffer's neighbours: the party
+ * walls); the parts (`building_part`) by their building's id — the near scene draws those in its stead.
  */
-export function prepareOvertureCells(bytes: ArrayBuffer | Uint8Array, x14: number, y14: number, release: string): PreparedCell[] {
-  const t0 = performance.now();
-  const n14 = 2 ** OVERTURE_Z;
-  const generation = releaseDay(release);
-  const layer = bytes.byteLength ? new VectorTile(new PbfReader(bytes)).layers.building : undefined;
-  const geoOf = (px: number, py: number, e: number) => ({
-    lon: ((x14 + px / e) / n14) * 360 - 180,
-    lat: Math.atan(Math.sinh(Math.PI * (1 - (2 * (y14 + py / e)) / n14))) / D,
-  });
+export function overtureOwned(bytes: ArrayBuffer | Uint8Array, x14: number, y14: number) {
+  const layers = bytes.byteLength ? new VectorTile(new PbfReader(bytes)).layers : undefined;
+  const layer = layers?.building;
   const cells = [0, 1, 2, 3].map((k) => {
     const x = x14 * 2 + (k % 2),
       y = y14 * 2 + Math.floor(k / 2);
-    return { x, y, origin: cellOrigin(x, y, OVERTURE_Z + 1), out: [] as (CellRecord & { id: string })[], partial: 0, polygons: 0 };
+    return { x, y, origin: cellOrigin(x, y, OVERTURE_Z + 1), owned: [] as OvertureOwned[], polygons: 0 };
   });
-  let features = 0;
   // (the buffer's reach past the square, in tile units: a footprint touching it is cut there — Partial)
   let reach = 0;
   const feats: { f: ReturnType<NonNullable<typeof layer>["feature"]>; polys: { x: number; y: number }[][][] }[] = [];
@@ -68,12 +72,13 @@ export function prepareOvertureCells(bytes: ArrayBuffer | Uint8Array, x14: numbe
     for (const p of polys) for (const v of p[0] ?? []) reach = Math.max(reach, -v.x, -v.y, v.x - e, v.y - e);
     feats.push({ f, polys });
   }
-  features = feats.length;
+  const outlines: { id: string; polys: { x: number; y: number }[][][]; extent: number }[] = [];
   for (const { f, polys } of feats) {
     const pr = f.properties;
     const e = f.extent;
     const outer = polys.map((rings) => rings[0] ?? []).filter((r) => r.length >= 4);
     if (!outer.length) continue;
+    outlines.push({ id: String(pr.id ?? ""), polys, extent: e });
     const all = outer.flat();
     // (the z 14 tile that keeps it: the first — north, then west — of those it touches; then its first z 15 cell within this tile. A
     // vertex within SNAP units of a tile's edge counts on its south or east side: two copies of a building at a four-tile corner,
@@ -99,51 +104,88 @@ export function prepareOvertureCells(bytes: ArrayBuffer | Uint8Array, x14: numbe
     const cell = cells[cy15 * 2 + cx15]!;
     cell.polygons += outer.length;
     const cut = reach > 0 && all.some((v) => -v.x >= reach - 1 || -v.y >= reach - 1 || v.x - e >= reach - 1 || v.y - e >= reach - 1);
-    const pts = all.map((v) => {
-      const g = geoOf(v.x, v.y, e);
-      const m = toCell(cell.origin, g.lat, g.lon);
-      return [m.east, m.north] as [number, number];
-    });
-    const b = orientedBox(pts);
-    // (the scenery worker's heights: to the top; a measured roof its own, the walls under it)
-    const floors = num(pr.num_floors);
-    const top = Math.min(500, Math.max(2, num(pr.height) ?? (floors !== null ? floors * 3.2 + 1 : 6)));
-    const low = Math.min(top - 1, Math.max(0, num(pr.min_height) ?? (num(pr.min_floor) ?? 0) * 3.2));
-    const rh = num(pr.roof_height);
-    const measured = rh !== null && rh > 0 && rh < top - low - 1;
-    const roof = measured ? Math.min(30, rh!) : 0;
-    const given = overtureShape(pr.roof_shape);
-    const shape: RoofShape = given ?? (roof > 1 ? (b.hu > 1.4 * b.hv ? "gabled" : "hipped") : "flat");
-    let flags = 0;
-    if (cut) {
-      flags |= RecordFlag.Partial;
-      cell.partial++;
-    }
-    const id = String(pr.id ?? "");
-    cell.out.push({
-      id,
-      east: b.cx,
-      north: b.cy,
-      ground: 0,
-      eave: top - roof,
-      roof,
-      halfLength: b.hu,
-      halfWidth: b.hv,
-      heading: Math.atan2(b.uy, b.ux),
-      roofShape: shape,
-      flags,
-      roofMaterial: overtureRoofMaterial(pr.roof_material),
-      wallMaterial: overtureWallMaterial(pr.facade_material),
-      usage: "",
-      storeys: floors !== null && floors > 0 ? Math.min(255, Math.round(floors)) : 0,
-      rank: 0,
-      sourceKey: sourceKey(id),
-      roofColour: colourCode(pr.roof_color),
-    });
+    cell.owned.push({ id: String(pr.id ?? ""), properties: pr as Record<string, unknown>, polys, extent: e, cut });
   }
+  // (ranked by their Overture id: the same order whatever the tile's own)
+  for (const c of cells) c.owned.sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+  const parts = new Map<string, { properties: Record<string, unknown>; polys: { x: number; y: number }[][][]; extent: number }[]>();
+  const part = layers?.building_part;
+  for (let i = 0; part && i < part.length; i++) {
+    const f = part.feature(i);
+    if (f.type !== 3 || f.properties.is_underground === true) continue;
+    const k = String(f.properties.building_id ?? "");
+    const list = parts.get(k) ?? [];
+    list.push({ properties: f.properties as Record<string, unknown>, polys: classifyRings(f.loadGeometry()), extent: f.extent });
+    parts.set(k, list);
+  }
+  return { cells, outlines, parts, features: feats.length };
+}
+
+/**
+ * An Overture z 14 tile's four z 15 cells (north-west, north-east, south-west, south-east: `x14 * 2 + i`, `y14 * 2 + j`): each its
+ * buildings' records, ranked by their Overture id. An empty tile (`bytes` empty: none there) gives four empty cells.
+ */
+export function prepareOvertureCells(bytes: ArrayBuffer | Uint8Array, x14: number, y14: number, release: string): PreparedCell[] {
+  const t0 = performance.now();
+  const n14 = 2 ** OVERTURE_Z;
+  const generation = releaseDay(release);
+  const geoOf = (px: number, py: number, e: number) => ({
+    lon: ((x14 + px / e) / n14) * 360 - 180,
+    lat: Math.atan(Math.sinh(Math.PI * (1 - (2 * (y14 + py / e)) / n14))) / D,
+  });
+  const decoded = overtureOwned(bytes, x14, y14);
+  const features = decoded.features;
+  const cells = decoded.cells.map((c) => ({ ...c, out: [] as (CellRecord & { id: string })[], partial: 0 }));
+  for (const cell of cells)
+    for (const { id, properties: pr, polys, extent: e, cut } of cell.owned) {
+      const all = polys
+        .map((rings) => rings[0] ?? [])
+        .filter((r) => r.length >= 4)
+        .flat();
+      const pts = all.map((v) => {
+        const g = geoOf(v.x, v.y, e);
+        const m = toCell(cell.origin, g.lat, g.lon);
+        return [m.east, m.north] as [number, number];
+      });
+      const b = orientedBox(pts);
+      // (the scenery worker's heights: to the top; a measured roof its own, the walls under it)
+      const floors = num(pr.num_floors);
+      const top = Math.min(500, Math.max(2, num(pr.height) ?? (floors !== null ? floors * 3.2 + 1 : 6)));
+      const low = Math.min(top - 1, Math.max(0, num(pr.min_height) ?? (num(pr.min_floor) ?? 0) * 3.2));
+      const rh = num(pr.roof_height);
+      const measured = rh !== null && rh > 0 && rh < top - low - 1;
+      const roof = measured ? Math.min(30, rh!) : 0;
+      const given = overtureShape(pr.roof_shape);
+      const shape: RoofShape = given ?? (roof > 1 ? (b.hu > 1.4 * b.hv ? "gabled" : "hipped") : "flat");
+      let flags = 0;
+      if (cut) {
+        flags |= RecordFlag.Partial;
+        cell.partial++;
+      }
+      cell.out.push({
+        id,
+        east: b.cx,
+        north: b.cy,
+        ground: 0,
+        eave: top - roof,
+        roof,
+        halfLength: b.hu,
+        halfWidth: b.hv,
+        heading: Math.atan2(b.uy, b.ux),
+        roofShape: shape,
+        flags,
+        roofMaterial: overtureRoofMaterial(pr.roof_material),
+        wallMaterial: overtureWallMaterial(pr.facade_material),
+        usage: "",
+        storeys: floors !== null && floors > 0 ? Math.min(255, Math.round(floors)) : 0,
+        rank: 0,
+        sourceKey: sourceKey(id),
+        roofColour: colourCode(pr.roof_color),
+      });
+    }
   const ms = performance.now() - t0;
   return cells.map((c) => {
-    c.out.sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+    // (ranked by their Overture id — overtureOwned's order)
     const records: CellRecord[] = c.out.map(({ id: _id, ...r }, i) => ({ ...r, rank: i }));
     const buf = encodeCell(
       { source: CellSource.Overture, z: OVERTURE_Z + 1, x: c.x, y: c.y, generation, originLat: c.origin.lat, originLon: c.origin.lon },

@@ -8,7 +8,8 @@
 // prepared now), its four street cells put in their cache (kerr-street-v<format>), the asked one handed. PLAN-J8 J8-8: {…, kind: "mesh"} —
 // the near buildings' mesh cell (mesh-prep.ts), kept in kerr-mesh-v<format>.
 import { bdtopoUrl } from "./bdtopo";
-import { inBdtopoBox, overtureCell } from "./cell-overture";
+import { inBdtopoBox, overtureCell, overtureTile } from "./cell-overture";
+import { prepareOvertureCells } from "./cell-prep-overture";
 import { CellSource, readHeader } from "./building-cells";
 import { CELL_CACHE, cellCacheUrl } from "./cell-pool";
 import { prepareBdtopoCell } from "./cell-prep";
@@ -18,8 +19,8 @@ import { ZONE_CACHE } from "../pwa/rules";
 import { cellBounds, cellOrigin } from "./building-cells";
 import { ignHeightUrl } from "./earth-tiles";
 import { blockSides, blocksWithin, CANOPY_Z, IGN_MNH, IgnLand, inIgnBox } from "./ign-canopy";
-import { encodeMeshCell, MESH_CACHE, meshCacheUrl, MeshCellFlag } from "./mesh-cells";
-import { prepareMeshCell } from "./mesh-prep";
+import { encodeMeshCell, MESH_CACHE, meshCacheUrl, MeshCellFlag, readMeshHeader } from "./mesh-cells";
+import { prepareMeshCell, prepareOvertureMeshCells } from "./mesh-prep";
 import { STREET_CACHE, streetCacheUrl, streetRoadsUrl } from "./street-cells";
 import { prepareStreetCells } from "./street-prep";
 
@@ -107,14 +108,36 @@ async function buildingBytes(x: number, y: number, signal: AbortSignal): Promise
   return P.buf;
 }
 
-/** A mesh cell (PLAN-J8 J8-8, mesh-cells.ts): its building cell first (its generation, its source — the ranks are its), then the BD
- *  TOPO's tile through the Service Worker (the zone's copy) prepared into it (mesh-prep.ts) and kept in MESH_CACHE. A cell whose
- *  buildings are not the BD TOPO's (Overture's, J8-7): an empty mesh cell flagged SourceLater — its meshes a later step, the near scene
- *  draws there as before. The tile newer than the building cell: both made again from it (the ranks must agree). */
+/** A mesh cell (PLAN-J8 J8-8, mesh-cells.ts): its building cell first (its generation, its source — the ranks are its), then its
+ *  source's tile through the Service Worker (the zone's copy) prepared into it (mesh-prep.ts) and kept in MESH_CACHE — the BD TOPO's
+ *  z 15 tile, or Overture's z 14 tile (J8-7's cells: its four made at once). Another source's (OSM's alone): an empty mesh cell flagged
+ *  SourceLater, the near scene draws there as before. The tile newer than the building cell: both made again from it (the ranks must
+ *  agree). */
 async function meshCell(x: number, y: number, signal: AbortSignal) {
   const cell = await buildingBytes(x, y, signal);
   let h = readHeader(cell)!;
   const key = (gen: number, canopy: boolean) => meshCacheUrl(self.location.origin, x, y, gen, canopy);
+  // (Overture's buildings — abroad, or where the BD TOPO has none —: its z 14 tile's four mesh cells made and kept, the asked one
+  // handed; a newer release than the building cells': those made again from it too — the ranks must agree)
+  if (h.source === CellSource.Overture) {
+    const x14 = Math.floor(x / 2),
+      y14 = Math.floor(y / 2);
+    const { raw, release } = await overtureTile(x14, y14);
+    if (signal.aborted) throw new Error("cancelled");
+    const meshes = prepareOvertureMeshCells(raw, x14, y14, release);
+    if (meshes[0]!.generation !== h.generation)
+      for (const c of prepareOvertureCells(raw, x14, y14, release)) {
+        const ch = readHeader(c.buf)!;
+        await keep(CELL_CACHE, cellCacheUrl(self.location.origin, ch.x, ch.y), c.buf);
+      }
+    let mine: (typeof meshes)[number] | null = null;
+    for (const m of meshes) {
+      const mh = readMeshHeader(m.buf)!;
+      await keep(MESH_CACHE, meshCacheUrl(self.location.origin, mh.x, mh.y, m.generation, false), m.buf);
+      if (mh.x === x && mh.y === y) mine = m;
+    }
+    return { buf: mine!.buf, ms: mine!.stats.ms, buildings: mine!.stats.buildings };
+  }
   if (h.source !== CellSource.BdTopo || !inBdtopoBox(x, y)) {
     const buf = encodeMeshCell(
       {

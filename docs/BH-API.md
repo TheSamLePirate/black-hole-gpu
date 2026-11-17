@@ -2171,8 +2171,9 @@ The near buildings' meshes in cells (`src/system/mesh-cells.ts` — the format, 
 then its BD TOPO tile planned and meshed as the near scene does (`building-mesh-prep.ts`, the code both workers share): each building's
 packScenery leaves (its convex parts, its chimneys) and its parts' triangles, every height over its foot, the walls from 3 m below it, the
 identity table by rank (first record, records, flags, first triangle, triangles, first vertex, foot over the ellipsoid — NaN when the source
-has none; the roofs without a ridge measured by the IGN's canopy — the scene's `lidarRoof`, shared — where an offline zone holds the canopy, the cell flagged `Canopy` and keyed so, its buildings `Measured`; elsewhere guessed, `RoofGuessed`); kept in Cache Storage `kerr-mesh-v1` under the building cell's generation; a cell whose buildings are Overture's empty, flagged
-`SourceLater`. Its own pool (`cell-workers.ts` `meshPool()`, two workers). As `__bh.sys.cells`: `want(list)`, `stats()`, `got()` (key,
+has none; the roofs without a ridge measured by the IGN's canopy — the scene's `lidarRoof`, shared — where an offline zone holds the canopy, the cell flagged `Canopy` and keyed so, its buildings `Measured`; elsewhere guessed, `RoofGuessed`); kept in Cache Storage `kerr-mesh-v1` under the building cell's generation; outside France (J8-7's Overture cells) its z 14 tile's four mesh cells made at once —
+a building's parts (a tower, a spire) in its outline's stead as the scene draws them, no foot —; a cell of another source (OSM's alone)
+empty, flagged `SourceLater`. Its own pool (`cell-workers.ts` `meshPool()`, two workers). As `__bh.sys.cells`: `want(list)`, `stats()`, `got()` (key,
 bytes, buildings, triangles, from the cache, ms), `clear()`. Nothing draws from them yet (lot 2, the render session's). A corridor zone
 prepares those within `MESH_NEAR_M` of its track (`zone.meshes`). *Used in:* `j8-mesh-cells.e2e.test.ts`.
 

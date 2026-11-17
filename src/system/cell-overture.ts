@@ -44,6 +44,16 @@ function overture(fetcher: Fetcher): Promise<{ pm: PmTiles; release: string }> {
 const recent = new Map<string, Promise<PreparedCell[]>>();
 const KEEP = 4;
 
+/** an Overture z 14 tile's bytes (empty: none there) and the release they come from — PLAN-J8 J8-8: the mesh cells read it too */
+export async function overtureTile(
+  x14: number,
+  y14: number,
+  fetcher: Fetcher = (u, i) => fetch(u, i),
+): Promise<{ raw: Uint8Array; release: string }> {
+  const { pm, release } = await overture(fetcher);
+  return { raw: (await pm.tile(OVERTURE_Z, x14, y14)) ?? new Uint8Array(0), release };
+}
+
 /** a z 15 cell from Overture (its z 14 tile's four prepared once, the last KEEP tiles kept) */
 export async function overtureCell(x: number, y: number, fetcher: Fetcher = (u, i) => fetch(u, i)): Promise<PreparedCell> {
   const x14 = Math.floor(x / 2),
@@ -52,9 +62,8 @@ export async function overtureCell(x: number, y: number, fetcher: Fetcher = (u, 
   let p = recent.get(k);
   if (!p) {
     p = (async () => {
-      const { pm, release } = await overture(fetcher);
-      const raw = await pm.tile(OVERTURE_Z, x14, y14);
-      return prepareOvertureCells(raw ?? new Uint8Array(0), x14, y14, release);
+      const { raw, release } = await overtureTile(x14, y14, fetcher);
+      return prepareOvertureCells(raw, x14, y14, release);
     })();
     recent.set(k, p);
     p.catch(() => recent.delete(k));
