@@ -16,15 +16,25 @@ import { prepareBdtopoCell } from "./cell-prep";
 import { geoidDeg, setGeoid } from "./geoid-grid";
 import type { HeightMap } from "./heights-file";
 import { ZONE_CACHE } from "../pwa/rules";
-import { cellBounds, cellOrigin } from "./building-cells";
+import { cellBounds, cellOrigin, toCell as toCellOf } from "./building-cells";
 import { ignHeightUrl } from "./earth-tiles";
 import { blockSides, blocksWithin, CANOPY_Z, IGN_MNH, IgnLand, inIgnBox } from "./ign-canopy";
 import { encodeMeshCell, MESH_CACHE, meshCacheUrl, MeshCellFlag, readMeshHeader } from "./mesh-cells";
 import { prepareMeshCell, prepareOvertureMeshCells } from "./mesh-prep";
 import { STREET_CACHE, streetCacheUrl, streetRoadsUrl } from "./street-cells";
 import { prepareStreetCells } from "./street-prep";
+import { bdtopoOwned } from "./cell-prep";
+import { overtureOwned } from "./cell-prep-overture";
+import { FOREST_CACHE, forestCacheUrl } from "./forest-cells";
+import { loadCover } from "./forest-cover";
+import { footprintPrimitives, forestExcluded, omtSurfaces } from "./forest-exclusions";
+import { prepareForestCell } from "./forest-prep";
+import { osmUrl } from "./scenery-sources";
 
-type In = { geoid: HeightMap } | { id: number; x: number; y: number; kind?: "building" | "street" | "mesh" } | { cancel: number };
+type In =
+  | { geoid: HeightMap }
+  | { id: number; x: number; y: number; kind?: "building" | "street" | "mesh" | "forest" }
+  | { cancel: number };
 const g = self as unknown as { onmessage: (e: MessageEvent<In>) => void; postMessage: (m: unknown, t?: Transferable[]) => void };
 const aborts = new Map<number, AbortController>();
 
@@ -43,6 +53,12 @@ g.onmessage = async (e) => {
   aborts.set(m.id, abort);
   const t0 = performance.now();
   try {
+    if (m.kind === "forest") {
+      const F = await forestCell(m.x, m.y, abort.signal);
+      if (abort.signal.aborted) return;
+      g.postMessage({ id: m.id, buf: F.buf, ms: performance.now() - t0, prepMs: F.ms, kept: F.candidates }, [F.buf]);
+      return;
+    }
     if (m.kind === "mesh") {
       const M = await meshCell(m.x, m.y, abort.signal);
       if (abort.signal.aborted) return;
@@ -199,6 +215,79 @@ async function zoneCanopy(x: number, y: number, signal: AbortSignal): Promise<Ig
     if (!land.hasCanopy(lat, lon)) return null;
   }
   return land;
+}
+
+/** A forest cell (PLAN-J8 J8-8b, forest-cells.ts): its candidates decided (forest-prep.ts) from the land cover's cells, the canopy where an
+ *  offline zone holds it (J8-8's rule — zoneCanopy), the data's exclusions (forest-exclusions.ts): the footprints its building cell's
+ *  source holds — the BD TOPO's tile, or Overture's z 14 —, the roads and waters of its OpenMapTiles z 14 tile and of the three across its
+ *  outer edges (a segment is its middle's tile's); every source through the Service Worker (the zone's copy); kept in FOREST_CACHE under
+ *  their newest generation. */
+async function forestCell(x: number, y: number, signal: AbortSignal) {
+  const origin = cellOrigin(x, y);
+  const b = cellBounds(x, y);
+  const pad = 0.0003;
+  const fetchOk = async (url: string) => {
+    const r = await fetch(url, { signal });
+    if (r.status === 404 || r.status === 204) return new ArrayBuffer(0);
+    if (!r.ok) throw new Error(`HTTP ${r.status}: ${url}`);
+    return r.arrayBuffer();
+  };
+  // (the footprints: its building cell's source — the BD TOPO's tile within the box, else Overture's z 14 —, every one the tile holds)
+  const cell = await buildingBytes(x, y, signal);
+  const h = readHeader(cell)!;
+  const rings: [number, number][][][] = [];
+  const toRing = (r: { x: number; y: number }[], e: number, tx: number, ty: number, z: number) => {
+    const n = 2 ** z;
+    return r.map((v) => {
+      const lon = ((tx + v.x / e) / n) * 360 - 180,
+        lat = (Math.atan(Math.sinh(Math.PI * (1 - (2 * (ty + v.y / e)) / n))) * 180) / Math.PI;
+      const m = toCellPoint(lat, lon);
+      return [m.east, m.north] as [number, number];
+    });
+  };
+  const toCellPoint = (lat: number, lon: number) => toCellOf(origin, lat, lon);
+  if (h.source === CellSource.BdTopo && inBdtopoBox(x, y)) {
+    const d = bdtopoOwned(await fetchOk(bdtopoUrl(x, y)));
+    for (const o of [...d.owned, ...d.others])
+      for (const p of o.polys) rings.push(p.filter((r) => r.length >= 4).map((r) => toRing(r, o.extent, x, y, 15)));
+  } else if (h.source === CellSource.Overture) {
+    const { raw } = await overtureTile(x >> 1, y >> 1);
+    const d = overtureOwned(raw, x >> 1, y >> 1);
+    for (const o of d.outlines)
+      for (const p of o.polys) rings.push(p.filter((r) => r.length >= 4).map((r) => toRing(r, o.extent, x >> 1, y >> 1, 14)));
+  }
+  // (the roads and waters: its z 14 tile, and the three across its outer edges)
+  const x14 = x >> 1,
+    y14 = y >> 1,
+    dx = x & 1 ? 1 : -1,
+    dy = y & 1 ? 1 : -1;
+  const surfaces = [];
+  for (const [tx, ty] of [
+    [x14, y14],
+    [x14 + dx, y14],
+    [x14, y14 + dy],
+    [x14 + dx, y14 + dy],
+  ] as const) {
+    try {
+      surfaces.push(...omtSurfaces(await fetchOk(osmUrl(tx, ty)), tx, ty, origin));
+    } catch {
+      /* a tile not there: its roads none (said in the stats: fewer exclusions) */
+    }
+  }
+  const excluded = forestExcluded(origin, surfaces, footprintPrimitives(rings.filter((r) => r.length)));
+  const cover = await loadCover([b.west - pad, b.south - pad, b.east + pad, b.north + pad], fetchOk);
+  const land = await zoneCanopy(x, y, signal);
+  // (its generation: its building cell's — the newest of its sources this format can date)
+  const generation = h.generation;
+  const F = prepareForestCell(
+    x,
+    y,
+    { cover: cover.at, canopy: land ? (lat, lon, r) => land.canopyNear(lat, lon, r) : undefined, excluded },
+    generation,
+    !!land,
+  );
+  await keep(FOREST_CACHE, forestCacheUrl(self.location.origin, x, y, generation, !!land), F.buf);
+  return { buf: F.buf, ms: F.stats.ms, candidates: F.stats.candidates };
 }
 
 /** a street cell: its z 14 roads' tile, the four building cells under it, its four street cells prepared and kept, the asked one */

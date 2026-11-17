@@ -8,6 +8,7 @@ import { BDTOPO_Z } from "./bdtopo";
 import { MESH_NEAR_M, readHeader } from "./building-cells";
 import { tilesWithin } from "./ign-canopy";
 import { CellPool, type CellExecutor, type CellStore } from "./cell-pool";
+import { readForestHeader } from "./forest-cells";
 import { readMeshHeader } from "./mesh-cells";
 import { OVERTURE_Z, parseOvertureZoneUrl } from "./pmtiles";
 import type { ZoneCorridor } from "./zones";
@@ -119,8 +120,13 @@ export function zoneMeshTiles(
   return cellsAlong(c.points, MESH_NEAR_M).filter((t) => held.has(`${t.x}/${t.y}`));
 }
 
-/** a prepared cell's buildings, whichever its kind: a building cell's records (KBC1), a mesh cell's buildings (KMC1) */
-const buildingsIn = (buf: ArrayBuffer) => readHeader(buf)?.count ?? readMeshHeader(buf)?.buildings ?? 0;
+/** A zone's forest cells (PLAN-J8 J8-8b, forest-cells.ts): its mesh cells' selection — the near scene's reach along its corridor's track */
+export const zoneForestTiles = zoneMeshTiles;
+
+/** a prepared cell's count, whichever its kind: a building cell's records (KBC1), a mesh cell's buildings (KMC1), a forest cell's
+ *  candidates (KFC1) */
+const buildingsIn = (buf: ArrayBuffer) =>
+  readHeader(buf)?.count ?? readMeshHeader(buf)?.buildings ?? readForestHeader(buf)?.candidates ?? 0;
 
 /**
  * A zone's cells prepared (or found ready in the prepared cache), one pool of its own; `progress` told as they come. Resolves once

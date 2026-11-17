@@ -26,6 +26,8 @@ function harness() {
   const streetsDropped: string[][] = [];
   const meshes: string[][] = [];
   const meshesDropped: string[][] = [];
+  const forests: string[][] = [];
+  const forestsDropped: string[][] = [];
   const key = (t: { x: number; y: number }) => `${t.x}/${t.y}`;
   const zones = createZones({
     talk: async <T>(m: object) => {
@@ -67,6 +69,13 @@ function harness() {
       async dropMeshes(tiles) {
         meshesDropped.push(tiles.map(key));
       },
+      async prepareForests(tiles) {
+        forests.push(tiles.map(key));
+        return { count: tiles.length, buildings: 50 * tiles.length, bytes: 34000 * tiles.length, failed: 0, ms: 1 };
+      },
+      async dropForests(tiles) {
+        forestsDropped.push(tiles.map(key));
+      },
     },
   });
   const ready = async (id: string) => {
@@ -77,7 +86,7 @@ function harness() {
     }
     throw new Error("the zone never ready");
   };
-  return { zones, store, prepared, dropped, streets, streetsDropped, meshes, meshesDropped, ready };
+  return { zones, store, prepared, dropped, streets, streetsDropped, meshes, meshesDropped, forests, forestsDropped, ready };
 }
 
 const tilesOf = (lat: number, lon: number, km: number) =>
@@ -162,8 +171,13 @@ test("a corridor zone: its mesh cells (J8-8) — its BD TOPO cells within MESH_N
   expect(est.bytes).toBeGreaterThan(est.meshes.bytes);
   expect(h.zones.estimate({ lat: 43.124, lon: 5.93, radiusKm: 0.5, profile: "overflight" }).meshes.cells).toBe(0);
   expect(z.meshes).toEqual({ count: want.length, buildings: 7 * want.length, bytes: 5000 * want.length, failed: 0, ms: 1 });
+  // (J8-8b: its forest cells on the same, dropped with it)
+  expect(h.forests).toEqual([want]);
+  expect(z.forests?.count).toBe(want.length);
+  expect(est.forests).toEqual({ cells: want.length, bytes: want.length * 34_000 });
   await h.zones.remove(id);
   expect(h.meshesDropped).toEqual([want]);
+  expect(h.forestsDropped).toEqual([want]);
   // (a disc zone: no mesh cell)
   const h2 = harness();
   await h2.ready((await h2.zones.add({ name: "a", lat: 43.124, lon: 5.93, radiusKm: 0.5, profile: "overflight" }))!);

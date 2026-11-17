@@ -188,6 +188,8 @@ export interface ZoneRecord {
   streets?: { count: number; bytes: number; failed: number; ms: number };
   /** its near meshes' cells prepared (PLAN-J8 J8-8, mesh-cells.ts): within MESH_NEAR_M of its corridor's track */
   meshes?: { count: number; buildings: number; bytes: number; failed: number; ms: number };
+  /** its forest cells prepared (PLAN-J8 J8-8b, forest-cells.ts): the same selection as its meshes'; `buildings` their candidate trees */
+  forests?: { count: number; buildings: number; bytes: number; failed: number; ms: number };
   /** the sources' version its last whole download followed (system/zones.ts ZONE_SCHEMA; none: 1, before 6 Nov 2026) */
   schema?: number;
   /** the next chain to ask (their list rebuilt from the record: system/zones.ts zoneChains) */

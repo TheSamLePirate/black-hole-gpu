@@ -4,6 +4,7 @@
 import { CellPool, type CellExecutor, type CellStore, CELL_CACHE, cellCacheUrl } from "./cell-pool";
 import { readHeader } from "./building-cells";
 import { geoidMap } from "./geoid-grid";
+import { FOREST_CACHE, forestCacheUrl } from "./forest-cells";
 import { MESH_CACHE, meshCacheUrl } from "./mesh-cells";
 import { STREET_CACHE, streetCacheUrl } from "./street-cells";
 import { prepareZoneCells, type ZoneCells } from "./zone-cells";
@@ -23,7 +24,7 @@ export class CellWorkers implements CellExecutor {
     size = (navigator.hardwareConcurrency ?? 4) >= 8 ? 3 : 2,
     url = "cell-worker.js",
     /** the cells it prepares: the buildings' (J8-3), the streets' (J8-L), the near meshes' (J8-8) */
-    private kind: "building" | "street" | "mesh" = "building",
+    private kind: "building" | "street" | "mesh" | "forest" = "building",
   ) {
     this.size = size;
     for (let i = 0; i < size; i++) {
@@ -139,6 +140,33 @@ export function meshPool(): CellPool {
   return meshes;
 }
 
+/** the forest cells' prepared cache, read by the page (PLAN-J8 J8-8b, forest-cells.ts): keyed by its building cell's generation (read
+ *  first) and whether the canopy served it (that one first) */
+export const forestStore: CellStore = {
+  async get(x, y) {
+    try {
+      const cell = await cellStore.get(x, y);
+      const h = cell ? readHeader(cell) : null;
+      if (!h) return null;
+      const c = await caches.open(FOREST_CACHE);
+      const r =
+        (await c.match(forestCacheUrl(location.origin, x, y, h.generation, true))) ??
+        (await c.match(forestCacheUrl(location.origin, x, y, h.generation, false)));
+      return r ? await r.arrayBuffer() : null;
+    } catch {
+      return null;
+    }
+  },
+};
+/** the forest cells' pool (PLAN-J8 J8-8b: made at its first use — the render session's scene asks it, lot 2 —), its own workers */
+let forests: CellPool | null = null;
+/** the forests' pool if it was made (null: never asked) */
+export const forestPoolMade = () => forests;
+export function forestPool(): CellPool {
+  forests ??= new CellPool(new CellWorkers(2, "cell-worker.js", "forest"), forestStore);
+  return forests;
+}
+
 /** an offline zone's cells (PLAN-J8 J8-6, pwa-zones.ts): prepared by a worker of their own — the download runs behind the game —,
  *  dropped from the prepared cache (the game's pool told: a cell dropped is prepared again when next wanted) */
 export const zoneCellsIO = {
@@ -166,6 +194,28 @@ export const zoneCellsIO = {
       return await prepareZoneCells(tiles, w, meshStore);
     } finally {
       w.dispose();
+    }
+  },
+  /** its forest cells (J8-8b): a forest worker of their own */
+  async prepareForests(tiles: { x: number; y: number }[]): Promise<ZoneCells> {
+    const w = new CellWorkers(1, "cell-worker.js", "forest");
+    try {
+      return await prepareZoneCells(tiles, w, forestStore);
+    } finally {
+      w.dispose();
+    }
+  },
+  async dropForests(tiles: { x: number; y: number }[]): Promise<void> {
+    try {
+      const c = await caches.open(FOREST_CACHE);
+      const gone = new Set(tiles.map((t) => `/${t.x}/${t.y}.kfc`));
+      for (const k of await c.keys()) {
+        const p = new URL(k.url).pathname;
+        if (gone.has(p.slice(p.lastIndexOf("/", p.lastIndexOf("/") - 1)))) await c.delete(k);
+      }
+      for (const t of tiles) forests?.forget(t.x, t.y);
+    } catch {
+      /* no Cache Storage: nothing kept */
     }
   },
   /** (every generation's and canopy's key of these cells: the cache's keys listed once) */

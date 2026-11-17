@@ -21,6 +21,7 @@ import {
   zoneLevelsAt,
   zoneTouchesSea,
 } from "./system/zones";
+import { FOREST_CELL_BYTES_EST, FOREST_CELL_SECONDS_EST } from "./system/forest-cells";
 import { MESH_CELL_BYTES_EST, MESH_CELL_SECONDS_EST } from "./system/mesh-cells";
 import { cellsOnlyIn, type ZoneCells, zoneCellTiles, zoneMeshTiles, zoneStreetTiles } from "./system/zone-cells";
 
@@ -35,6 +36,8 @@ export interface Zones {
     /** its near meshes' cells (PLAN-J8 J8-8: a corridor's, within MESH_NEAR_M of its track) — in `bytes` and `seconds` already, an
      *  estimate (mesh-cells.ts MESH_CELL_BYTES_EST) */
     meshes: { cells: number; bytes: number };
+    /** its forest cells (PLAN-J8 J8-8b: the meshes' selection) — in `bytes` and `seconds` already, measured means (forest-cells.ts) */
+    forests: { cells: number; bytes: number };
   };
   /** a zone added and its download started; its id */
   /** a zone added — with a corridor (PLAN-J8 J8-9 (2)): the airfield's levels along its track — and its download started; its id */
@@ -97,6 +100,9 @@ export function createZones(o: {
     /** the near meshes' cells (PLAN-J8 J8-8): within MESH_NEAR_M of a corridor's track, after the streets', dropped with them */
     prepareMeshes?(tiles: { x: number; y: number }[]): Promise<ZoneCells>;
     dropMeshes?(tiles: { x: number; y: number }[]): Promise<void>;
+    /** the forest cells (PLAN-J8 J8-8b): the meshes' selection, after them, dropped with them */
+    prepareForests?(tiles: { x: number; y: number }[]): Promise<ZoneCells>;
+    dropForests?(tiles: { x: number; y: number }[]): Promise<void>;
   };
 }): Zones {
   /** a zone's sources: the settings' now, and whether it touches the sea (judged once here, kept in its record: its chains the same
@@ -218,6 +224,11 @@ export function createZones(o: {
           if (zone.fresh) await o.cells.dropMeshes?.(meshes);
           zone.meshes = await o.cells.prepareMeshes(meshes);
         }
+        // (its forest cells on the same — J8-8b: the trees the near scene assembles)
+        if (meshes.length && o.cells.prepareForests) {
+          if (zone.fresh) await o.cells.dropForests?.(meshes);
+          zone.forests = await o.cells.prepareForests(meshes);
+        }
       }
       if (zone.state === "ready") {
         zone.updated = Date.now();
@@ -248,12 +259,15 @@ export function createZones(o: {
       // (its near meshes along its corridor: prepared after its tiles, on the disk beside them — J8-8)
       const cells = zoneMeshTiles(chains, { lat, lon, corridor: corridor ?? null }).length;
       const meshes = { cells, bytes: cells * MESH_CELL_BYTES_EST };
+      // (its forest cells on the same — J8-8b)
+      const forests = { cells, bytes: cells * FOREST_CELL_BYTES_EST };
       return {
         chains: chains.length,
         urls: chains.reduce((s, c) => s + c.length, 0),
-        bytes: zoneEstimate(chains) + meshes.bytes,
-        seconds: zoneDuration(chains) + cells * MESH_CELL_SECONDS_EST,
+        bytes: zoneEstimate(chains) + meshes.bytes + forests.bytes,
+        seconds: zoneDuration(chains) + cells * (MESH_CELL_SECONDS_EST + FOREST_CELL_SECONDS_EST),
         meshes,
+        forests,
       };
     },
     async add({ name, lat, lon, radiusKm, profile, coreKm, corridor }) {
@@ -361,6 +375,13 @@ export function createZones(o: {
           );
         if (z?.meshes && o.cells.dropMeshes)
           await o.cells.dropMeshes(
+            cellsOnlyIn(
+              zoneMeshTiles(chainsOf(z), z),
+              all.filter((q) => q.id !== id).map((q) => zoneMeshTiles(chainsOf(q), q)),
+            ),
+          );
+        if (z?.forests && o.cells.dropForests)
+          await o.cells.dropForests(
             cellsOnlyIn(
               zoneMeshTiles(chainsOf(z), z),
               all.filter((q) => q.id !== id).map((q) => zoneMeshTiles(chainsOf(q), q)),

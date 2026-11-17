@@ -63,7 +63,8 @@ import type { GameMode, ModeState } from "./game/modes";
 import { DeckPicker } from "./a320/deckpick";
 import { fieldByCode } from "./world/runways";
 import { approachesForAsync } from "./world/approaches";
-import { cellPool, meshPool, meshPoolMade, streetPool, streetPoolMade } from "./system/cell-workers";
+import { cellPool, forestPool, forestPoolMade, meshPool, meshPoolMade, streetPool, streetPoolMade } from "./system/cell-workers";
+import { FOREST_CACHE, readForestHeader } from "./system/forest-cells";
 import { CELL_CACHE, type CellWant } from "./system/cell-pool";
 import { tilesWithin } from "./system/ign-canopy";
 import { STREET_CACHE } from "./system/street-cells";
@@ -731,6 +732,9 @@ export function installBh(c: BhContext) {
           const mp = meshPoolMade()?.stats();
           if (mp && (mp.queued || mp.running || mp.beyond))
             why.push(`mesh cells: ${mp.queued} queued, ${mp.running} running, ${mp.beyond} past the bound`);
+          const fp = forestPoolMade()?.stats();
+          if (fp && (fp.queued || fp.running || fp.beyond))
+            why.push(`forest cells: ${fp.queued} queued, ${fp.running} running, ${fp.beyond} past the bound`);
           if (st && (st.queued || st.running || st.beyond))
             why.push(`street cells: ${st.queued} queued, ${st.running} running, ${st.beyond} past the bound`);
           const far = renderer.farBuildingsOn
@@ -754,7 +758,13 @@ export function installBh(c: BhContext) {
           // corridor covers every point, its building and street cells prepared; and every far cell within the far layer's reach of the
           // track, every street cell within the lamps', in the prepared caches; J8-8: every mesh cell within MESH_NEAR_M of it — the BD
           // TOPO's, in the IGN's box: elsewhere its meshes are a later step)
-          let track: { zone: string | null; farMissing: number; streetMissing: number; meshMissing: number } | null = null;
+          let track: {
+            zone: string | null;
+            farMissing: number;
+            streetMissing: number;
+            meshMissing: number;
+            forestMissing: number;
+          } | null = null;
           if (o?.track?.points.length) {
             const pts = o.track.points.map((q) => [q[0], q[1]] as [number, number]);
             const zones = (await c.pwa.zones?.list()) ?? [];
@@ -769,6 +779,7 @@ export function installBh(c: BhContext) {
               if (!zone.cells) why.push("the zone's building cells not prepared");
               if (!zone.streets) why.push("the zone's street cells not prepared");
               if (!zone.meshes) why.push("the zone's mesh cells not prepared");
+              if (!zone.forests) why.push("the zone's forest cells not prepared");
             }
             // (the track sampled every 2 km: the cells within reach of each)
             const samples: [number, number][] = [];
@@ -815,11 +826,23 @@ export function installBh(c: BhContext) {
             // (the zone's own selection — zone-cells.ts cellsAlong: they had disagreed by 8 cells over Paris)
             const meshMissing = cellsAlong(pts, MESH_NEAR_M).filter((t) => inBdtopoBox(t.x, t.y) && !meshHave.has(`${t.x}/${t.y}`)).length;
             if (meshMissing) why.push(`${meshMissing} mesh cells within ${MESH_NEAR_M} m of the track not prepared`);
+            // (J8-8b: the forest cells on the same selection — every source's, the BD TOPO's box or not)
+            const forestHave = new Set<string>();
+            try {
+              for (const r of await (await caches.open(FOREST_CACHE)).keys()) {
+                const m = /\/(\d+)\/(\d+)\.kfc/.exec(new URL(r.url).pathname);
+                if (m) forestHave.add(`${m[1]}/${m[2]}`);
+              }
+            } catch {
+              /* no Cache Storage: none */
+            }
+            const forestMissing = cellsAlong(pts, MESH_NEAR_M).filter((t) => !forestHave.has(`${t.x}/${t.y}`)).length;
+            if (forestMissing) why.push(`${forestMissing} forest cells within ${MESH_NEAR_M} m of the track not prepared`);
             const farMissing = [...wanted(ZONE_FAR_REACH_M)].filter((k) => !farHave.has(k)).length;
             const streetMissing = [...wanted(ZONE_STREET_REACH_M)].filter((k) => !streetHave.has(k)).length;
             if (farMissing) why.push(`${farMissing} far cells within reach of the track not prepared`);
             if (streetMissing) why.push(`${streetMissing} street cells within reach of the track not prepared`);
-            track = { zone: zone?.id ?? null, farMissing, streetMissing, meshMissing };
+            track = { zone: zone?.id ?? null, farMissing, streetMissing, meshMissing, forestMissing };
           }
           // (said, not holding: « far layer: N past the budget, nearest X km »)
           const notes = pastBudget
@@ -869,6 +892,34 @@ export function installBh(c: BhContext) {
                   at: performance.now(),
                 });
               });
+            }
+            return p;
+          };
+          return {
+            want: (l: CellWant[]) => P().want(l),
+            stats: () => P().stats(),
+            got: () => [...got].map(([key, v]) => ({ key, ...v })),
+            clear: () => got.clear(),
+          };
+        })(),
+        /** PLAN-J8 J8-8b: the forest cells' pool (forest-cells.ts, kerr-forest-v1), as `meshes`: `want(list)`, `stats()`, `got()` (key,
+         *  bytes, candidates, from the prepared cache, ms), `clear()` */
+        forests: (() => {
+          const got = new Map<string, { bytes: number; candidates: number; cached: boolean; ms: number; at: number }>();
+          let on = false;
+          const P = () => {
+            const p = forestPool();
+            if (!on) {
+              on = true;
+              p.listen((c) =>
+                got.set(`${c.x}/${c.y}`, {
+                  bytes: c.buf.byteLength,
+                  candidates: readForestHeader(c.buf)?.candidates ?? 0,
+                  cached: c.cached,
+                  ms: Math.round(c.ms),
+                  at: performance.now(),
+                }),
+              );
             }
             return p;
           };
