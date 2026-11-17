@@ -289,7 +289,7 @@ so order matters within a file. Keep a file under ~2 min. Split a longer one.
 | `app.offline(on)`, `app.throttle(mbps, ms)` | the network cut or slowed (`lib/cdp.ts`); the Earth data's disk let go meanwhile, so the test measures the network |
 | `app.close()` | Chrome ended, its profile removed, the lock released |
 
-Other helpers: `tests/e2e/lib/cdp.ts` (`launch()`: a bare Chrome, no app), `tests/e2e/lib/flights.ts`
+Other helpers: `tests/e2e/lib/witness.ts` (`pageWitness(app)`: every 30 s on its own clock, the page asked for its JS heap with 10 s to answer — the delay and the heap logged, or « NO ANSWER »: a hung page dated; returns its stop), `tests/e2e/lib/cdp.ts` (`launch()`: a bare Chrome, no app), `tests/e2e/lib/flights.ts`
 (the reference flights replayed by `golden.e2e.test.ts`), `tests/e2e/lib/contrast.ts` (text contrast),
 `tests/e2e/lib/bh-api.ts` (the `__bh` walker). `tests/helpers/flight.ts` flies the controller **without a
 page** — a unit test, faster, for autopilot logic.

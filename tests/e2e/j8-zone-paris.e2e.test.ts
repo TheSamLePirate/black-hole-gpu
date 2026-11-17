@@ -3,6 +3,7 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { j8aTrack } from "../../src/system/j8a-tracks";
 import { corridorDisc } from "../../src/system/zones";
 import { App, E2E, stopServer } from "./lib/app";
+import { HEAP, pageWitness } from "./lib/witness";
 import { hostStats } from "./lib/earth-cache";
 
 // PLAN-J8 J8-9 — J8-A's corridor zone downloaded, then every point of its track ready offline with nothing from the network.
@@ -29,32 +30,6 @@ const DEADLINE = process.env.J8Z_DEADLINE ? Date.parse(process.env.J8Z_DEADLINE)
 const BEFORE = process.env.J8Z_BEFORE ?? "";
 /** the witness's stop (J8Z_BEFORE): none until it is started */
 let stopWitness = () => {};
-/** the page's JavaScript heap [MB] (Chrome's performance.memory; null elsewhere) */
-const HEAP = `(() => { const m = performance.memory; return m ? Math.round(m.usedJSHeapSize / 1e6) : null; })()`;
-/** (J8Z_BEFORE) the witness: every 30 s, on its own clock — a call the test awaits would itself wait out a hung page —, the heap asked
- *  with 10 s to answer, its delay and its heap logged, or its silence: the moment the page stops answering dated (the render session's
- *  ask, 17 Nov 2026) */
-function pageWitness(app: App): () => void {
-  const t0 = Date.now();
-  let busy = false;
-  const timer = setInterval(async () => {
-    if (busy) return;
-    busy = true;
-    const at = new Date().toISOString().slice(11, 19);
-    const s = Date.now();
-    try {
-      const r = await app.cdp.send<{ result: { value: number | null } }>("Runtime.evaluate", { expression: HEAP, returnByValue: true }, 10);
-      console.log(
-        `  [witness ${at} UTC, +${((s - t0) / 60_000).toFixed(1)} min] answered in ${Date.now() - s} ms · heap ${r.result?.value} MB`,
-      );
-    } catch {
-      console.log(`  [witness ${at} UTC, +${((s - t0) / 60_000).toFixed(1)} min] NO ANSWER in 10 s`);
-    } finally {
-      busy = false;
-    }
-  }, 30_000);
-  return () => clearInterval(timer);
-}
 
 describe.skipIf(!E2E)(`PLAN-J8 J8-9: J8-A's corridor zone « ${TRACK} », downloaded then flown offline`, () => {
   let app: App;
