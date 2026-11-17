@@ -284,6 +284,15 @@ export class BuildingFar {
       /** the cells wanted not resident yet (the empty ones count as resident; those refused for the budget stay missing: a city past the
        *  pool is not « all in ») — __bh.sys.flightReady (J8-A) */
       missing: [...this.wanted.keys()].filter((k) => !this.residents.has(k)).length,
+      /** of those, refused for the budget (the pool full of nearer ones — the farthest go first) */
+      missingRefused: [...this.wanted.keys()].filter((k) => !this.residents.has(k) && this.refused.has(k)).length,
+      /** the nearest cell wanted and not resident [m] (null: none missing) — whether a missing one can be seen (J8-A, Paris: 20 km past
+       *  72 MiB, 16 Nov 2026) */
+      missingNearestM: (() => {
+        let d = Number.POSITIVE_INFINITY;
+        for (const [k, w] of this.wanted) if (!this.residents.has(k)) d = Math.min(d, w.d);
+        return Number.isFinite(d) ? Math.round(d) : null;
+      })(),
       ...this.counts,
     };
   }
