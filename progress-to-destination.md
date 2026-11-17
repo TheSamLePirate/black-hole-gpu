@@ -63,7 +63,7 @@ l'état d'une mission ou d'un combat **non sauvé, dit** ; le réseau **« entre
 
 **Fermé aussi** : le plancher du raster sur GPU faible (15 nov., 23:46, proposer sous 15 images/s, décision de Sam).
 
-**La session du rendu (33d89754)** : **[PLAN-J8](docs/PLAN-J8-BATIMENTS.md)** — J8-4 allumée, matériaux rallumés, réserve à **72 Mio** (Sam) ; la nuit : la lueur de la ville sur les bâtiments lointains et **les lampadaires et les voitures lointains (J8-L, +0,5 ms)** ; **J8-5 décidé : la jonction à 0** (Sam, ~21:40 UTC) ; le blocage de son e2e contourné (pas un défaut du jeu, PROBLEMES ; reproduit sur le mini hors ligne, la cause cherchée) ; **J8-L : le raccord avec la scène proche corrigé** (de nuit un trou au premier plan, un double au loin ; les voitures de jour) ; **J8-8 ouvert** (Sam) : le proche en cellules — le format aux approches après la zone de Paris, puis la réserve GPU, le dessin, les contacts, les ombres et la scène proche sans bâtiments ici ; l'éclat de nuit lointain gardé ; **J8-E fait** ; **J8-8 lots 1–4 faits** (les approches le lot 1 ; ici la réserve GPU, le matériau exact, les ombres, les contacts, la scène sans bâtiments — levier `nearCellsOn` éteint) ; **J8-A Paris volé avec les cellules : 0 image de scène rapide** jour et nuit (8 208 sans), 0 requête de jour, 15 de nuit, +3,1 ms GPU à mesurer en A/B ; à Sam : allumer les cellules, la réserve lointaine (72 Mio refuse au-delà de 18 km à l'est de Paris). [PLAN-J7](docs/PLAN-J7-FLUIDITE.md) en pause.
+**La session du rendu (33d89754)** : **[PLAN-J8](docs/PLAN-J8-BATIMENTS.md)** — J8-4 allumée, matériaux rallumés, réserve à **72 Mio** (Sam) ; la nuit : la lueur de la ville sur les bâtiments lointains et **les lampadaires et les voitures lointains (J8-L, +0,5 ms)** ; **J8-5 décidé : la jonction à 0** (Sam, ~21:40 UTC) ; le blocage de son e2e contourné (pas un défaut du jeu, PROBLEMES ; reproduit sur le mini hors ligne, la cause cherchée) ; **J8-L : le raccord avec la scène proche corrigé** (de nuit un trou au premier plan, un double au loin ; les voitures de jour) ; **J8-8 ouvert** (Sam) : le proche en cellules — le format aux approches après la zone de Paris, puis la réserve GPU, le dessin, les contacts, les ombres et la scène proche sans bâtiments ici ; l'éclat de nuit lointain gardé ; **J8-E fait** ; **J8-8 lots 1–4 faits** (les approches le lot 1 ; ici la réserve GPU, le matériau exact, les ombres, les contacts, la scène sans bâtiments — levier `nearCellsOn` éteint) ; **J8-A avec les cellules : Toulon-Hyères passe en strict** (jour et nuit : 0 scène rapide, 0 requête, GPU p50 ~52 ms sur le mini) ; **Paris** : 0 scène rapide jour et nuit (8 208 sans), à revoler en strict avec la réserve décidée par Sam (72 Mio + compte à part) ; les cellules ne coûtent pas plus à vue fixe (59,1 contre 60,5 ms) ; à Sam : allumer `nearCellsOn` par défaut. [PLAN-J7](docs/PLAN-J7-FLUIDITE.md) en pause.
 
 **Priorité de Sam (16 nov., 11:30 UTC) : [PLAN-J8](docs/PLAN-J8-BATIMENTS.md), tous les bâtiments de la vue** (« c'est ça qui choque le plus ») — la suite de J7 en pause après J7-8b ; les deux sessions s'y mettent (rendu : couche GPU, scène proche ; approches : recensement, préparation des cellules, PWA) ; d'abord J8-0 (mesures) et J8-1 (le trou de 2 à 7 km).
 
@@ -9964,3 +9964,18 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   1 053 BD TOPO), toutes dans le budget du Service Worker. C'est signalé à la session du rendu, qui chargeait aussi Toulon sur le mini.
 - **Limites :** la côte n'est pas volée (points gelés) ; aucune mesure GPU de ma part. Paris n'est prête hors ligne qu'à 96 Mio : à
   72 Mio, des cellules au-delà de 17,9 km sont refusées. La décision revient à Sam.
+
+### 2026-11-17 03:22 UTC — PLAN-J8 J8-A : Toulon-Hyères volé jour et nuit avec les cellules — l'e2e strict passe (session 33d89754)
+
+- **Contribution à la destination :** J8-A (Sam : « un vol au-dessus de Paris et au-dessus de Toulon-Hyères avec un max de
+  buildings, tous chargés avant le vol, en jour et nuit ») — sur Toulon-Hyères, ses critères tenus en vol : tout chargé avant,
+  aucune requête, aucune scène rapide ; stratégie §19.13.
+- **Réalisé :** J8-A sur kerr-mini avec les cellules J8-8 (`J8A_CELLS`), la zone du couloir faite dans le profil du run depuis le
+  disque ; le tracé de Toulon-Hyères volé à 100 m/s (à 150 m/s ses coins de la rade se coupent hors du couloir) et suivi le long du
+  segment, le virage anticipé (e703ca43) ; `flightReady` exigé deux fois de suite (a34d2825).
+- **Preuves (mesuré, kerr-mini, run 20261117-040547, un vol) :** **pass** en `J8A_STRICT` — jour : 0 image de scène rapide, 0 requête,
+  GPU p50 52,6 / p95 80,8 ms, plus long trou 84,3 ms ; nuit : 0, 0, 52,1 / 60,3 ms, 67,7 ms ; zone en 6,7 min. Paris (runs
+  20261117-012042, -021717) : 0 scène rapide jour et nuit, 0 requête de jour, 1 de nuit partie avant le décollage. Captures dans T3.
+- **Limites :** les cellules restent derrière `nearCellsOn` (éteint) — l'allumer par défaut est à Sam ; Paris pas encore revolé en
+  strict avec la décision de Sam sur la réserve (« 72 Mio + compte à part », codée par la session des approches) ; un vol chacun.
+- **Suite :** Paris revolé en strict ; la décision de Sam sur `nearCellsOn` ; le retrait de `farNearOnlyM` à ce moment.
