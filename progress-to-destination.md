@@ -10608,3 +10608,11 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
 - **Mesuré puis écarté :** un cache de l'en-tête des cellules « rue » par tampon. Les lecteurs d'une tuile du Marais coûtent environ 3 ms
   avec ou sans lui (6 537 enregistrements). Pas de gain : il n'est pas gardé. Ils ne sont pas la cause des scènes complètes de 14 à
   21 s vues sur Paris.
+
+### 2026-11-17 12:37 UTC — PLAN-J8 : Paris repasse en strict après le correctif des scènes (session 33d89754)
+
+- **Ce qui a tourné :** `20261117-131002-j8a-paris-fix` sur kerr-mini (dc97a2c6, `E2E_EMIT=0`), Paris de jour et de nuit, zone préparée, hors ligne, strict. **Passé**, exit 0, 26 min.
+- **Chiffres :** 0 image rapide sur les 10 tronçons. Scènes complètes de 5,9 à 12,3 s, contre 7,5 à 21 s avant le correctif. GPU p50 60,2 ms de jour (p95 91,1), 59 ms de nuit (p95 70,6). `swData` 0, `networkMisses` 0, 0 fichier téléchargé.
+- **Critère 5 (non jugé, sonde sans témoin négatif) :** rapport de luminance lointain / proche de 1,29 de jour et 1,88 de nuit. La couche lointaine paraît plus claire que les bâtiments proches, surtout la nuit : à examiner.
+- **Vue « dehors » :** de nouveau correcte, avec la caméra derrière l'appareil.
+- **Reste du gros e2e :** Toulon-Hyères passe (second passage). Le Marais bas est à revoler à 90 m/s (601777de, approches). Le gel de Toulon après Paris dans la même page est en reproduction (`J8Z_BEFORE`, approches). Puis le M1 Max à froid.
