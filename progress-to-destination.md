@@ -10489,3 +10489,10 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   échantillon, que le rendu applique à son sol hors de France. Aucun octet de plus : `roadRuns` et ses abscisses suffisent.
 - **Vérifié :** test sur 2 km de route primaire, 60 m de montée et des bosses de ±6 m. La pente reste sous 8 %, la courbure tombe de
   2,9 m à moins de 0,2 m loin des bouts, et le déblai ou remblai reste sous 8 m. Non mesuré en jeu.
+
+### 2026-11-17 10:42 UTC — PLAN-J8 J8-RP RP6 (commencé) : les voitures et les glissières sur les tabliers (session 33d89754)
+
+- **Destination :** §19.13 (« AAA road and bridges ») ; J8-RP RP6.
+- **Réalisé :** les tabliers construits par `deckBridge` sont gardés dans un registre : `deckHeightAt(x, y)` donne la hauteur du tablier sous un point proche de son axe. Le trafic des grands axes passe maintenant sur les ponts OMT, ses morceaux posés sur le tablier ; là où aucun tablier n'a été construit, il n'y a pas de voiture. Les glissières de pont de KSC4 sont posées sur le tablier.
+- **Preuves :** `tsc`, Biome, tests. **Non vu en jeu.**
+- **Reste :** les lampadaires sur les ponts, et la lecture de l'indice de pont des surfaces KSC4.

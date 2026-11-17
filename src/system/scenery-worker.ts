@@ -534,7 +534,13 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
   // (lot 3: every cell under the frame prepared and usable — none missing, none without the canopy the scene has)
   const forestWhole = preparedP.then((p) => !!p && p.missing === 0 && p.noCanopy === 0 && p.cases > 0);
   // (Q8 D1: the main roads' segments for the traffic, and the cars on them)
-  const roadLines: { segs: { a: { lat: number; lon: number }; b: { lat: number; lon: number } }[]; cls: string; oneway: number }[] = [];
+  const roadLines: {
+    segs: { a: { lat: number; lon: number }; b: { lat: number; lon: number } }[];
+    cls: string;
+    oneway: number;
+    /** (PLAN-J8 J8-RP RP6) on a bridge: its cars on the deck (deckHeightAt) */
+    bridge?: boolean;
+  }[] = [];
   // (Q8 D1: the vineyards' and orchards' polygons, for the decals alone)
   const rowCrops: Primitive[] = [];
   // (Q8 L10: the town streets' runs near, the lamps set along them at the end)
@@ -685,7 +691,7 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
           for (const line of f.loadGeometry()) {
             const locals = line.map(point);
             // (Q8 D1: a main road's segments — their middles in the tile — for the traffic, not on a bridge nor in a tunnel)
-            if (!water && !rail && ROAD_TRAFFIC[cls] && !props.brunnel) {
+            if (!water && !rail && ROAD_TRAFFIC[cls] && props.brunnel !== "tunnel" && props.brunnel !== "ford") {
               const segs: { a: { lat: number; lon: number }; b: { lat: number; lon: number } }[] = [];
               for (let j = 0; j < line.length - 1; j++) {
                 const mx = (line[j]!.x + line[j + 1]!.x) / 2,
@@ -695,7 +701,7 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
                   continue;
                 segs.push({ a: geo(line[j]!), b: geo(line[j + 1]!) });
               }
-              if (segs.length) roadLines.push({ segs, cls, oneway: Number(props.oneway) || 0 });
+              if (segs.length) roadLines.push({ segs, cls, oneway: Number(props.oneway) || 0, bridge: props.brunnel === "bridge" });
             }
             // (Q8 L10: a town street's runs — its consecutive segments with their middles in the tile, near — for the lamps)
             if (!water && !rail && LAMP_CLASSES[cls] && !props.brunnel) {
@@ -1370,6 +1376,27 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
     }
     return out;
   };
+  // (PLAN-J8 J8-RP RP6: the decks built — their axis, half-width and height along —: what rides or stands on a bridge set on its deck)
+  const decks: { pts: Vec3[]; span: number[]; half: number; at: (sv: number) => number }[] = [];
+  const deckHeightAt = (x: number, y: number): number | null => {
+    let best = Number.POSITIVE_INFINITY,
+      z: number | null = null;
+    for (const d of decks)
+      for (let i = 0; i + 1 < d.pts.length; i++) {
+        const A = d.pts[i]!,
+          B = d.pts[i + 1]!;
+        const dx = B[0] - A[0],
+          dy = B[1] - A[1],
+          L2 = dx * dx + dy * dy || 1;
+        const t = Math.max(0, Math.min(1, ((x - A[0]) * dx + (y - A[1]) * dy) / L2));
+        const e = Math.hypot(A[0] + dx * t - x, A[1] + dy * t - y);
+        if (e < d.half + 1.5 && e < best) {
+          best = e;
+          z = d.at(d.span[i]! + (d.span[i + 1]! - d.span[i]!) * t);
+        }
+      }
+    return z;
+  };
   const deckBridge = (points: Vec3[], width: number, kind: number, colour: number[], clearance: number): boolean => {
     // (PLAN-J8 J8-RP RP5, FableFlight's bridge_end: the deck from the ground at its two abutments — its ends —, straight between them,
     // lifted towards its middle to a clearance over what lies under it (5.5 m; a layer above the first 4 m more), cut in pieces of
@@ -1395,6 +1422,7 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
       const t = sv / total;
       return zA + (zB - zA) * t + lift * Math.min(1, 4 * t * (1 - t)) + 0.4;
     };
+    decks.push({ pts: points, span, half: width / 2, at: deckAt });
     const groundAt = (sv: number) => {
       let k = 1;
       while (k < span.length - 1 && span[k]! < sv) k++;
@@ -1871,13 +1899,21 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
   // first; none on any failure)
   try {
     // (the ground's height already in only — the scene not held for the traffic: a point without it ends the run there)
+    // (RP6: a bridge's road on its deck — deckHeightAt; none where no deck was built: its cars left out there)
+    let onBridge = false;
     const at = (q: { lat: number; lon: number }) => {
+      if (onBridge) {
+        const g = localPoint(frame, q.lat, q.lon, 0);
+        const z = deckHeightAt(g[0], g[1]);
+        return z === null ? null : ([g[0], g[1], z] as [number, number, number]);
+      }
       const h = heightNow(q.lat, q.lon);
       return h === undefined ? null : (localPoint(frame, q.lat, q.lon, h) as [number, number, number]);
     };
     // (a line's runs: its consecutive segments, each cut every PIECE_M at most on the ground)
     const runs: { pts: [number, number, number][]; cls: string; oneway: number }[] = [];
     for (const r of roadLines) {
+      onBridge = !!r.bridge;
       let run: [number, number, number][] = [];
       let last: { lat: number; lon: number } | null = null;
       const close = () => {
@@ -2098,21 +2134,17 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
             const ga = at(s0),
               gb = at(s1),
               gm = at((s0 + s1) / 2);
-            const z = heightNow(gm.lat, gm.lon);
-            if (z === undefined) continue;
+            const z0 = heightNow(gm.lat, gm.lon);
+            if (z0 === undefined) continue;
+            // (RP6: a bridge's rail on its deck — its local z the deck's top)
+            const m0 = localPoint(frame, gm.lat, gm.lon, z0);
+            const zd = deckHeightAt(m0[0], m0[1]);
+            const z = z0;
             const a = localPoint(frame, ga.lat, ga.lon, z),
               b = localPoint(frame, gb.lat, gb.lon, z);
             const rail = [stripPolygon(a, b, 0.12)];
-            addSolid(
-              polygonPrimitive(
-                rail,
-                localPoint(frame, gm.lat, gm.lon, z)[2] + 0.55,
-                localPoint(frame, gm.lat, gm.lon, z)[2] + 0.8,
-                3,
-                [0.48, 0.49, 0.5],
-              ),
-              rail,
-            );
+            const base = zd ?? localPoint(frame, gm.lat, gm.lon, z)[2];
+            addSolid(polygonPrimitive(rail, base + 0.55, base + 0.8, 3, [0.48, 0.49, 0.5]), rail);
           }
         }
         furnitureCount++;
