@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 17 nov. 15:43 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 17 nov. 17:30 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous. Ce qui est fermé quitte le tableau « En cours » pour la ligne « Fermé récemment ».
@@ -10723,3 +10723,18 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   de 7 cm, piles de 0,8 m au plus). Les ponts OMT hors cellules gardent le style routier.
 - Preuve : tsc, Biome, tests `street-far` et `cell-roads`. **Non vu en jeu, non mesuré**, hors du gros e2e définitif.
 - Reste de RP5 : la matière et l'époque (pierre, acier : pas dans KSC4), les marquages sur le tablier, les arches.
+
+### 2026-11-17 17:30 UTC — PLAN-J8 J8-VB VB8 : la grille reçoit le gros e2e définitif de J8-A (session des approches, 1feb2f7f)
+
+- **Lu dans les logs** du gros e2e du rendu sur kerr-mini (`20261117-164327-j8a-final-main` et `20261117-164333-j8a-final-low`, exit 0 tous
+  les deux) : Paris, Toulon-Hyères, `toulon-bas` et `paris-marais-bas`, de jour et de nuit, en strict, hors ligne, forêt par défaut, J8-RP
+  compris.
+  - 0 image rapide, 0 `networkMisses` et 0 requête de données (`swData`) sur les 8 vols. Les seules requêtes réseau sont 4 à 14 tuiles de
+    carte OSM, hors du contrôle strict.
+  - Recensement plein à 10 km : 44 anneaux sur 44.
+  - GPU p50 de 50,8 à 60,4 ms, p95 de 58,5 à 91,5 ms.
+  - Critère 5, non jugé (sa sonde n'a pas de témoin négatif) : les lointains plus clairs que les proches, avec un `lumRatio` de 1,08 à
+    1,29 de jour et de 1,23 à 3,69 de nuit.
+- **Réalisé :** les lignes VB1 et VB8 de la grille de revue (plan VB §8.1) remplies.
+- **Restent pour VB8 :** les lignes de dessin (VB2 à VB7), à juger sur les captures avec le rendu ; le M1 Max, en échec strict à froid
+  (le worker de la scène), en attente de Sam.
