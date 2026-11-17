@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 17 nov. 09:47 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 17 nov. 09:55 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous. Ce qui est fermé quitte le tableau « En cours » pour la ligne « Fermé récemment ».
@@ -10237,3 +10237,10 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   - neuf critères, chacun avec son témoin. Quatre sont à ajouter : le recensement par anneau, l'écart de couleur à la jonction, un
     tronçon en vol bas (VB §7) et Paris repassée avec la forêt et KSC3.
 - **Non vérifié :** documentation seulement.
+
+### 2026-11-17 09:55 UTC — PLAN-J8 (A6) : le recensement par anneau, côté données (session des approches, 1feb2f7f)
+
+- **Réalisé :** `censusRings` dans `zone-cells.ts` et `__bh.sys.census(lat, lon, anneaux)` : les bâtiments des cellules préparées
+  autour d'un lieu, comptés par anneau de distance, et ceux de 10 m ou plus. C'est le côté données du critère 4 du gros e2e ; le nombre
+  dessiné à comparer revient au rendu. BH-API est à jour.
+- **Vérifié :** test unitaire (`zone-cells`, 11/11 avec `pwa-zones-cells`), tsc, Biome. **Non mesuré** : jamais appelé en jeu.

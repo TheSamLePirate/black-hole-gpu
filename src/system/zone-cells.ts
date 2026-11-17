@@ -5,7 +5,7 @@
 // is the whole wanted set, J8-4's — the zone's list would replace it), one worker: a download runs behind the game. The cells a
 // zone holds are counted (cells, buildings, bytes) for Settings › Offline; a zone removed drops the cells no other zone holds.
 import { BDTOPO_Z } from "./bdtopo";
-import { FOREST_NEAR_M, MESH_NEAR_M, readHeader } from "./building-cells";
+import { cellOrigin, FOREST_NEAR_M, MESH_NEAR_M, readHeader, readRecord, toCell } from "./building-cells";
 import { tilesWithin } from "./ign-canopy";
 import { CellPool, type CellExecutor, type CellStore } from "./cell-pool";
 import { readForestHeader } from "./forest-cells";
@@ -130,6 +130,46 @@ export function zoneForestTiles(
   if (!c) return [];
   const held = new Set(zoneCellTiles(chains).map((t) => `${t.x}/${t.y}`));
   return cellsAlong(c.points, FOREST_NEAR_M).filter((t) => held.has(`${t.x}/${t.y}`));
+}
+
+/** The buildings of a census ring (censusRings). */
+export interface CensusRing {
+  /** its outer radius [m] (its inner the previous ring's) */
+  outerM: number;
+  /** the building cells' records whose centres lie in it */
+  buildings: number;
+  /** those 10 m or more on their long side (a pixel's at ~15 km: PLAN-J8 §0 criterion 1) */
+  tenMetres: number;
+}
+
+/**
+ * PLAN-J8 §0 criterion 1 (« toute la vue »), the census's side — what the prepared building cells hold round an eye, by ring of
+ * horizontal distance (`ringsM`: the outer radii, rising): each ring's records and those 10 m or more long. The drawn count to set
+ * against it is the render's (the far layer, the near meshes). Each cell's records placed by its origin's offset from the eye (the
+ * cells' frames' small turn neglected: < 0.1 % at 20 km). Pure: `cells` the building cells' bytes (KBC1; others ignored).
+ */
+export function censusRings(
+  cells: readonly { x: number; y: number; buf: ArrayBuffer }[],
+  lat: number,
+  lon: number,
+  ringsM: readonly number[],
+): CensusRing[] {
+  const out = ringsM.map((outerM) => ({ outerM, buildings: 0, tenMetres: 0 }));
+  const last = ringsM[ringsM.length - 1] ?? 0;
+  for (const c of cells) {
+    const h = readHeader(c.buf);
+    if (!h) continue;
+    const o = toCell({ lat, lon }, cellOrigin(c.x, c.y).lat, cellOrigin(c.x, c.y).lon);
+    for (let i = 0; i < h.count; i++) {
+      const r = readRecord(c.buf, i);
+      const d = Math.hypot(o.east + r.east, o.north + r.north);
+      if (d >= last) continue;
+      const k = ringsM.findIndex((m) => d < m);
+      out[k]!.buildings++;
+      if (2 * r.halfLength >= 10) out[k]!.tenMetres++;
+    }
+  }
+  return out;
 }
 
 /** a prepared cell's count, whichever its kind: a building cell's records (KBC1), a mesh cell's buildings (KMC1), a forest cell's

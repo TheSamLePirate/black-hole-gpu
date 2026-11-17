@@ -2158,6 +2158,14 @@ the budget, all no nearer than 12 km, counted apart (« far layer: N past the bu
 a cell still pending, or a refused one nearer, holds it in `why`. The mesh cells' pool, once
 asked, idle as the others'.
 
+### `__bh.sys.census(lat, lon, ringsM?)` → Promise<{ cells, missing, rings: { outerM, buildings, tenMetres }[] }> (PLAN-J8 §0 criterion 1)
+
+The census's side of « toute la vue »: the prepared building cells (`kerr-cells-v<format>`, read only — none prepared) within the last
+ring of a place, their records counted by ring of horizontal distance (`zone-cells.ts` `censusRings`; `ringsM` the outer radii, rising,
+default 0.5, 1, 2, 5, 10, 15, 20 km), and those 10 m long or more (a pixel's at ~15 km). `missing`: the cells within reach not in the
+cache. The drawn count to set against it is the render's (the far layer, the near meshes) — the big e2e's criterion 4 (PLAN-J8 §6
+point 13, A6). *Used in:* none yet.
+
 ### `__bh.sys.streets` (PLAN-J8 J8-L: the streets' cells' pool)
 
 The lamps and the roads in cells (`src/system/street-cells.ts`, `street-prep.ts`; the cell worker's `kind: "street"`): a z 15 cell's

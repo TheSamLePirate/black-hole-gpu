@@ -1,9 +1,9 @@
 import { expect, test } from "bun:test";
 import { bdtopoUrl } from "../src/system/bdtopo";
 import { overtureBaseZoneUrl, overtureZoneUrl } from "../src/system/pmtiles";
-import { CellSource, encodeCell } from "../src/system/building-cells";
+import { cellOrigin, CellSource, encodeCell } from "../src/system/building-cells";
 import type { CellExecutor, CellStore } from "../src/system/cell-pool";
-import { cellsOnlyIn, prepareZoneCells, zoneCellTiles } from "../src/system/zone-cells";
+import { cellsOnlyIn, censusRings, prepareZoneCells, zoneCellTiles } from "../src/system/zone-cells";
 
 // PLAN-J8 J8-6 — an offline zone's building cells (src/system/zone-cells.ts): its BD TOPO tiles read from its chains, each prepared
 // (or found ready) by a pool of its own, counted (cells, buildings, bytes, failed); a removal drops only the cells no other zone holds.
@@ -81,4 +81,28 @@ test("a removal drops only the cells no other zone holds", () => {
     { x: 1, y: 1 },
     { x: 3, y: 1 },
   ]);
+});
+
+test("the census (PLAN-J8 §0 criterion 1): a cell's records counted by ring of distance from the eye, those 10 m long apart", () => {
+  // (a cell whose origin is the eye: records 100, 700, 1 500 and 3 000 m east, 4 m and 12 m long)
+  const [x, y] = [16923, 12025];
+  const o = cellOrigin(x, y);
+  const at = (east: number, halfLength: number) => ({ east, north: 0, halfLength, halfWidth: 2 }) as never;
+  const buf = encodeCell({ source: CellSource.BdTopo, x, y, z: 15, generation: 1, originLat: o.lat, originLon: o.lon }, [
+    at(100, 2),
+    at(700, 6),
+    at(1500, 6),
+    at(3000, 6),
+  ]);
+  const r = censusRings([{ x, y, buf }], o.lat, o.lon, [500, 1000, 2000]);
+  expect(r.map((k) => [k.outerM, k.buildings, k.tenMetres])).toEqual([
+    [500, 1, 0],
+    [1000, 1, 1],
+    [2000, 1, 1],
+  ]);
+  // (the eye 1 km west: the first record at 1 100 m)
+  const west = censusRings([{ x, y, buf }], o.lat, o.lon - 1000 / (111_320 * Math.cos((o.lat * Math.PI) / 180)), [500, 1000, 2000]);
+  expect(west.map((k) => k.buildings)).toEqual([0, 0, 2]);
+  // (not a building cell: ignored)
+  expect(censusRings([{ x, y, buf: new ArrayBuffer(8) }], o.lat, o.lon, [500])[0]!.buildings).toBe(0);
 });

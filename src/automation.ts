@@ -63,7 +63,7 @@ import type { GameMode, ModeState } from "./game/modes";
 import { DeckPicker } from "./a320/deckpick";
 import { fieldByCode } from "./world/runways";
 import { approachesForAsync } from "./world/approaches";
-import { cellPool, forestPool, forestPoolMade, meshPool, meshPoolMade, streetPool, streetPoolMade } from "./system/cell-workers";
+import { cellPool, cellStore, forestPool, forestPoolMade, meshPool, meshPoolMade, streetPool, streetPoolMade } from "./system/cell-workers";
 import { FOREST_CACHE, readForestHeader } from "./system/forest-cells";
 import { CELL_CACHE, type CellWant } from "./system/cell-pool";
 import { tilesWithin } from "./system/ign-canopy";
@@ -72,9 +72,9 @@ import { FOREST_NEAR_M, MESH_NEAR_M } from "./system/building-cells";
 /** PLAN-J8 J8-A (c), Sam's decision of 17 Nov 2026: the far layer's cells refused for its budget no nearer than this [m] do not hold
  *  `flightReady` — counted apart in its notes (none refused nearer over Paris's track: 17.9 km at the nearest, j8-far-track) */
 const FAR_BUDGET_NEAR_M = 12_000;
-import { inBdtopoBox } from "./system/bdtopo";
+import { BDTOPO_Z, inBdtopoBox } from "./system/bdtopo";
 import { MESH_CACHE, readMeshHeader } from "./system/mesh-cells";
-import { cellsAlong } from "./system/zone-cells";
+import { cellsAlong, censusRings } from "./system/zone-cells";
 import { corridorDistance, ZONE_FAR_REACH_M, ZONE_STREET_REACH_M } from "./system/zones";
 
 /** the A320 deck's picker (a320DeckAt: the controls seen from the seat) */
@@ -716,6 +716,20 @@ export function installBh(c: BhContext) {
          *  fetch — the ground's tiles in, the near scene complete (not the quick one), the building cells' pool idle (nothing queued,
          *  running, nor waiting past its bound), the far layer's wanted cells all resident (`missing`: J8-4's building-far.ts, when it
          *  says it) —; `why` names what is not yet. Read by the e2e (J8-A) before the take-off, and by anyone who waits for a place. */
+        /** PLAN-J8 §0 criterion 1 (the census's side): the prepared building cells' records round a place by ring of distance
+         *  (zone-cells.ts censusRings; the cells read from kerr-cells-v<format>, none prepared here — a cell not in the cache is counted
+         *  in `missing`). `ringsM`: the outer radii, rising (default 0.5, 1, 2, 5, 10, 15, 20 km). */
+        census: async (lat: number, lon: number, ringsM: number[] = [500, 1_000, 2_000, 5_000, 10_000, 15_000, 20_000]) => {
+          const tiles = tilesWithin(BDTOPO_Z, lat, lon, ringsM[ringsM.length - 1] ?? 0);
+          const cells: { x: number; y: number; buf: ArrayBuffer }[] = [];
+          let missing = 0;
+          for (const t of tiles) {
+            const buf = await cellStore.get(t.x, t.y);
+            if (buf) cells.push({ x: t.x, y: t.y, buf });
+            else missing++;
+          }
+          return { cells: cells.length, missing, rings: censusRings(cells, lat, lon, ringsM) };
+        },
         flightReady: async (o?: { track?: { points: readonly (readonly [number, number, number?])[] } }) => {
           const why: string[] = [];
           const t = renderer.earthTiles;
