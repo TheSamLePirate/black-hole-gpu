@@ -1,5 +1,5 @@
 // Worldwide data preparation is isolated from the render loop. No complete COG download.
-import { carsOn, LANE_M, PIECE_M, ROAD_TRAFFIC, TRAFFIC_MAX, TRAFFIC_REACH_M } from "./traffic";
+import { carsAlong, LANE_M, PIECE_M, ROAD_TRAFFIC, TRAFFIC_MAX, TRAFFIC_REACH_M } from "./traffic";
 import { VectorTile, classifyRings } from "@mapbox/vector-tile";
 import { PbfReader } from "pbf";
 import { installNetActivity } from "./net-activity";
@@ -1669,43 +1669,91 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
   } catch (e) {
     if (surveyErrors.length < 4) surveyErrors.push(`turbines: ${String(e).slice(0, 200)}`);
   }
-  // (Q8 D1: the cars — each segment cut into pieces of PIECE_M at most on the ground, a car every so often each way, the nearest
-  // pieces first; none on any failure)
+  // (Q8 D1: the cars — PLAN-J8 VB6 since 17 Nov 2026: each road's line, on the ground, one stream each way (traffic.ts carsAlong, the
+  // approaches session's: one speed, phases from the abscissa — a car leaving a piece is the one entering the next), the nearest pieces
+  // first; none on any failure)
   try {
-    const pieces: { a: [number, number, number]; b: [number, number, number]; cls: string; oneway: number; d: number }[] = [];
-    // (the ground's height already in only — the scene not held for the traffic: a piece without it, none)
+    // (the ground's height already in only — the scene not held for the traffic: a point without it ends the run there)
     const at = (q: { lat: number; lon: number }) => {
       const h = heightNow(q.lat, q.lon);
       return h === undefined ? null : (localPoint(frame, q.lat, q.lon, h) as [number, number, number]);
     };
-    for (const r of roadLines)
+    // (a line's runs: its consecutive segments, each cut every PIECE_M at most on the ground)
+    const runs: { pts: [number, number, number][]; cls: string; oneway: number }[] = [];
+    for (const r of roadLines) {
+      let run: [number, number, number][] = [];
+      let last: { lat: number; lon: number } | null = null;
+      const close = () => {
+        if (run.length >= 2) runs.push({ pts: run, cls: r.cls, oneway: r.oneway });
+        run = [];
+      };
       for (const sg of r.segs) {
+        if (!last || last.lat !== sg.a.lat || last.lon !== sg.a.lon) {
+          close();
+          const pa = at(sg.a);
+          if (pa) run.push(pa);
+        }
+        last = sg.b;
         const A = localPoint(frame, sg.a.lat, sg.a.lon, 0),
           B = localPoint(frame, sg.b.lat, sg.b.lon, 0);
         const n = Math.max(1, Math.ceil(Math.hypot(B[0] - A[0], B[1] - A[1]) / PIECE_M));
-        for (let k = 0; k < n; k++) {
-          const f0 = k / n,
-            f1 = (k + 1) / n;
-          const q0 = { lat: sg.a.lat + (sg.b.lat - sg.a.lat) * f0, lon: sg.a.lon + (sg.b.lon - sg.a.lon) * f0 },
-            q1 = { lat: sg.a.lat + (sg.b.lat - sg.a.lat) * f1, lon: sg.a.lon + (sg.b.lon - sg.a.lon) * f1 };
-          const mid = localPoint(frame, (q0.lat + q1.lat) / 2, (q0.lon + q1.lon) / 2, 0);
-          const d = Math.hypot(mid[0], mid[1]);
-          if (d > TRAFFIC_REACH_M) continue;
-          const pa = at(q0),
-            pb = at(q1);
-          if (pa && pb) pieces.push({ a: pa, b: pb, cls: r.cls, oneway: r.oneway, d });
+        for (let k = 1; k <= n; k++) {
+          const f1 = k / n;
+          const pb = at({ lat: sg.a.lat + (sg.b.lat - sg.a.lat) * f1, lon: sg.a.lon + (sg.b.lon - sg.a.lon) * f1 });
+          if (!pb) {
+            close();
+            last = null;
+            break;
+          }
+          run.push(pb);
         }
       }
+      close();
+    }
+    // (a piece's ends on the ground: carsAlong keeps the line's chords — its heights between them straight —, the run's own heights
+    // read back at each end, the nearest point of the run)
+    const groundOn = (pts: [number, number, number][], x: number, y: number) => {
+      let best = Infinity,
+        z = pts[0]![2];
+      for (let k = 0; k + 1 < pts.length; k++) {
+        const A = pts[k]!,
+          B = pts[k + 1]!;
+        const dx = B[0] - A[0],
+          dy = B[1] - A[1];
+        const t = Math.max(0, Math.min(1, ((x - A[0]) * dx + (y - A[1]) * dy) / (dx * dx + dy * dy || 1)));
+        const ex = A[0] + dx * t - x,
+          ey = A[1] + dy * t - y;
+        const d2 = ex * ex + ey * ey;
+        if (d2 < best) {
+          best = d2;
+          z = A[2] + (B[2] - A[2]) * t;
+        }
+      }
+      return z;
+    };
+    const pieces: { d: number; cars: SceneryCar[] }[] = [];
+    runs.forEach((run, i) => {
+      const ways: [number, number, number][][] = [];
+      if (run.oneway >= 0) ways.push(run.pts);
+      if (run.oneway <= 0) ways.push([...run.pts].reverse());
+      ways.forEach((line, w) => {
+        for (const pc of carsAlong(line, run.cls, i * 2 + 1 + w)) {
+          pc.a[2] = groundOn(run.pts, pc.a[0], pc.a[1]);
+          pc.b[2] = groundOn(run.pts, pc.b[0], pc.b[1]);
+          const d = Math.hypot((pc.a[0] + pc.b[0]) / 2, (pc.a[1] + pc.b[1]) / 2);
+          if (d <= TRAFFIC_REACH_M && pc.cars.length) pieces.push({ d, cars: pc.cars });
+        }
+      });
+    });
     pieces.sort((x, y) => x.d - y.d);
     pieceCount = pieces.length;
     let reach = TRAFFIC_REACH_M;
-    for (const [i, pc] of pieces.entries()) {
+    for (const pc of pieces) {
       if (cars.length >= TRAFFIC_MAX) {
         reach = pc.d;
         break;
       }
-      if (pc.oneway >= 0) cars.push(...carsOn(pc.a, pc.b, pc.cls, i * 2 + 1));
-      if (pc.oneway <= 0) cars.push(...carsOn(pc.b, pc.a, pc.cls, i * 2 + 2));
+      cars.push(...pc.cars);
     }
     cars.length = Math.min(cars.length, TRAFFIC_MAX);
     trafficReachM = reach;
