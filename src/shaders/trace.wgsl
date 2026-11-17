@@ -16461,6 +16461,23 @@ fn liteLight(gq: vec3f, q: vec3f, tM: f32, fx: vec3f, fy: vec3f, hG: f32, look: 
     litC = cityTint(gq, lamp);
   }
   G += litAlb * litC * (pow(lamp, 1.4) * P.earth.z * lit * luminance(E) / PI);
+  // (PLAN-J8 J8-RP RP10: the streets' lamps mirrored in a wet road at night — the ray mirrored by the flat road meets the lamps'
+  // heads ~8 m up at a point whose pool is the lamp's own (its light near its foot alone, sharpened); three heights along the
+  // mirrored ray — the water's ripples and the road's grain — stretch each into the streak a wet street draws towards the eye)
+  if (wetS > 0.0 && nearL && dark > 0.0 && lamp > 0.02 && m.roadKind == 1.0 && m.roadCover > 0.0 && !mesh && !isTree) {
+    let rL = vec3f(dLr.xy, -dLr.z);
+    if (rL.z > 0.02) {
+      let cv = clamp(dot(n, -dirW), 0.0, 1.0);
+      let F = (0.02 + 0.98 * pow(1.0 - cv, 5.0)) * min(wetS * 2.0, 1.0);
+      var refl = 0.0;
+      for (var k = 0; k < 3; k++) {
+        let hk = 8.0 * (0.7 + 0.3 * f32(k)) * (1.0 + 0.6 * ripple);
+        let pk = sceneryLampLight(xyL + rL.xy * (hk / rL.z));
+        refl = max(refl, pow(clamp((pk.x - 0.6) / 0.4, 0.0, 1.0), 3.0) * pk.y);
+      }
+      G += F * m.roadCover * streetLampTint(xyL) * (refl * pow(lamp, 1.4) * dark * RWY_LAMPS_NIGHT * 0.004 * luminance(E) / PI);
+    }
+  }
   // (Q8 L10: the streets' lamps on the buildings' walls by them — their pools' light where the wall stands, three tenths of the ground's (half lit the walls brighter than the street, +65 % to the night's mean):
   // a wall faces the lamp across the street, not under it; a lit town, at night, near)
   if (mesh && nearL && dark > 0.0 && lamp > 0.02) {

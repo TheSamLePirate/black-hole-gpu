@@ -10704,3 +10704,13 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
 - Preuve : `check-wgsl` 84/84, `pipeline-inventory --check`, test `road-markings`. **Non vu en jeu, non mesuré.** Codé après le
   lancement du gros e2e définitif (kerr-mini) : il n'en fait pas partie.
 - Reste de RP10 : les reflets des phares et des lampadaires dans les flaques.
+
+### 2026-11-17 15:48 UTC — PLAN-J8 J8-RP RP10 : les lampadaires reflétés dans la route mouillée (session 33d89754, mode speed)
+
+- Destination : §19.13 (J8-A de nuit sous la pluie, routes AAA), §7.
+- Fait : dans `trace.wgsl liteLight`, de nuit, sur la chaussée mouillée proche (`nearL`), le rayon réfléchi par la route
+  plate lit la grille des lampadaires (`sceneryLampLight`) là où il passe à ~8 m de haut ; la lumière près du pied de la lampe
+  seule (affûtée) donne la tache, trois hauteurs (élargies par les anneaux de pluie) l'étirent en traînée ; Fresnel du mouillé.
+- Preuve : `check-wgsl` 84/84, `pipeline-inventory --check`. **Non vu en jeu, non mesuré** (trois lectures de la grille de
+  plus, seulement pour un pixel de route mouillée de nuit). Hors du gros e2e définitif.
+- Reste de RP10 : les reflets des phares (les voitures ne sont pas dans une grille lisible par la passe).
