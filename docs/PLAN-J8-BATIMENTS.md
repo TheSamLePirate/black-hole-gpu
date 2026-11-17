@@ -4,6 +4,10 @@
 avant la suite de J7 (J7-5, J7-6, J7-R) et avant les arbres proches en géométrie, l'ancien candidat J8, qui devient J9.
 L'avancement se tient au §8 ; le code fait foi.
 
+**Mode de travail : speed** (décision de Sam, 17 nov. ~09:20 UTC ; [CLAUDE.md](../CLAUDE.md), modes de travail ; §6 point 13) :
+J8 se finit sans e2e ni A/B par lot (contrôles rapides seulement : tests unitaires, `tsc`, Biome, `check-wgsl`), quelques
+e2e sur kerr-mini menés par un agent en parallèle, puis **un gros e2e de fin de jalon**, J8-VB compris, qui vérifie tout (J8-A complet, kerr-mini et M1 Max).
+
 > Sam, 16 nov. : « Les buildings, je veux avoir le maximum de buildings dans la vue caméra, pas juste des petits secteurs. […]
 > Prépare un plan pour avoir un maximum de bâtiments, quand on l'utilise en PWA, avec le cache et le téléchargement, mais aussi
 > dès que c'est possible. […] Au niveau réalisme, c'est ça qui choque le plus en ce moment. »
@@ -245,6 +249,22 @@ J8-R. J8-1 se voit tout de suite. J8-4 apporte le gros du gain : « toute la vue
       retrait de `growForest` dans la scène et du décodage BD TOPO qui ne sert qu'aux arbres : session du rendu. Le
       format s'accorde entre les deux sessions avant le code. Taille (~14 Mo pour le couloir de Paris) et temps
       (~0,1 s par cellule) estimés, à mesurer au lot (1).
+13. **Décidé par Sam le 17 nov. (~09:20 UTC) : J8 se finit en mode speed** ([CLAUDE.md](../CLAUDE.md), modes de travail).
+    - **Le but** : aller plus vite. La qualité visée ne change pas (AAA, bonnes pratiques, contrats, docs et journal).
+    - **Par lot** : les contrôles rapides seulement (tests unitaires du code touché, `tsc`, Biome, `check-wgsl` après un
+      shader, `pipeline-inventory --check`) ; ni e2e ni A/B ; un lot non mesuré s'écrit « non mesuré ».
+    - **Quelques e2e sur kerr-mini** restent possibles (un doute réel, une donnée à confirmer), toujours lancés et suivis
+      par un agent en parallèle : la session principale ne les attend jamais.
+    - **Le gros e2e de fin de jalon** : J8-A complet — Paris et Toulon-Hyères, jour et nuit, la zone préparée, hors
+      ligne, en strict (0 requête, 0 scène rapide), sur kerr-mini et sur le M1 Max à froid, avec les coûts des deux
+      machines, les captures et le graphique du vol montrés à Sam. Ses mesures jugent les seuils (la règle du 1 ms
+      cumulée, la question 8) ; un dépassement se traite alors.
+    - **Ce qui reste à implémenter avant lui** (Sam, même heure : « tout J8 avec VB », un seul gros e2e à la fin) :
+      J8-8b lots (2) et (3), J8-R (les retraits), la bannière de déroulement des e2e, **et tout J8-VB** — VB2 chaussées
+      et trottoirs, VB3 silhouettes de voitures, VB4 le dessin du stationnement, VB5 lampadaires et feux, VB6 trafic,
+      VB7 intersections et mobilier, VB8 retraits. J8-L se remesure au gros e2e. Le gros e2e juge aussi les détails en
+      vol bas (critères du plan VB, §7).
+    - **Machines** (Sam) : kerr-mini puis le M1 Max à froid.
 
 ## 7. Ce qui reste hors de ce plan
 

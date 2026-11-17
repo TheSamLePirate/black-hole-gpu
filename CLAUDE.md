@@ -81,6 +81,30 @@ mettre à jour quand le code change** (son §3). La lire au début d'une session
   code se corrige dans la doc (ou se signale s'il sort du périmètre), sans réécrire l'historique.
 - Un nouveau document reçoit sa ligne dans la carte.
 
+### Modes de travail : normal et speed (décision de Sam, 17 novembre 2026)
+
+**Sam choisit le mode de chaque jalon ; le mode en cours est écrit en tête du plan du jalon et sur la page « État
+courant ».** Sans mention, c'est le mode normal. La qualité visée ne change pas d'un mode à l'autre : travail AAA,
+bonnes pratiques de code, contrats, WGS84, documentation et journal tenus. Seule change la quantité de vérifications
+lourdes en cours de route.
+
+- **Mode normal** (ce qu'on a toujours fait) : chaque lot est vérifié au fil de l'eau — tests unitaires, e2e ciblés,
+  A/B, mesures de performance et audits, témoins positif et négatif d'une sonde (règle 3), captures montrées à Sam.
+- **Mode speed** (« travailler plus vite ») : on implémente le jalon d'affilée, puis **un gros e2e à la fin du jalon**
+  vérifie tout.
+  - **Par lot, seulement les contrôles rapides** : tests unitaires du code touché, `tsc`, Biome, `check-wgsl` après une
+    modification de shader, `pipeline-inventory --check`. Pas d'e2e ni d'A/B par lot, pas de campagne de mesures.
+  - **Quelques e2e restent possibles, de préférence sur kerr-mini** (un doute réel, une donnée à confirmer avant de
+    bâtir dessus), **toujours lancés et suivis par un agent en parallèle** : la session principale ne les attend jamais
+    et continue de coder. Leurs résultats arrivent comme une notification ; une capture montrée à Sam reste brève.
+  - **Le gros e2e de fin de jalon** couvre tous les critères du jalon (pour J8 : J8-A, les deux tracés, jour et nuit,
+    hors ligne, strict ; les coûts sur les deux machines). Ses mesures font foi pour les seuils de Sam ; un dépassement se
+    traite alors, lot par lot si besoin. Il se montre à Sam en captures et graphiques, comme en mode normal.
+  - **Rien d'affirmé sans preuve** : un lot non mesuré s'écrit « non mesuré » dans le plan et le journal, et aucun gain
+    ne lui est attribué avant le gros e2e. La règle d'une seule charge IGN à la fois entre les deux Macs reste.
+  - Le journal reste obligatoire, avec des entrées plus courtes ; les références du code (BH-API, GRAPHICS-PIPELINE,
+    E2E, VOL-*) se tiennent toujours dans le même lot que le code.
+
 ### E2E : avant d'en lancer ou d'en écrire un
 
 Lire [E2E.md](docs/E2E.md), puis **[E2E-VOLS.md](docs/E2E-VOLS.md) pour tout test qui fait voler un appareil, attend
