@@ -166,7 +166,13 @@ test.skipIf(!E2E)(
               const cosL = Math.cos(P[0] * D), en = (q) => [(q[1] - P[1]) * 111320 * cosL, (q[0] - P[0]) * 111320];
               const A = en(Pp), B = en(Pn ?? P), L = Math.hypot(A[0], A[1]) || 1, u = [-A[0] / L, -A[1] / L];
               const turn = Pn ? Math.acos(Math.max(-1, Math.min(1, (u[0] * B[0] + u[1] * B[1]) / (Math.hypot(B[0], B[1]) || 1)))) : 0;
-              const lead = Pn ? (${t.speedMps} ** 2 / (9.81 * Math.tan(25 * D))) * Math.tan(turn / 2) + 200 : 700;
+              // (the lead: a turn of up to 100° flown round its corner — its radius × tan(half the turn), no more than 0.9 of the shorter
+              // leg —; a sharper one (Paris's U-turn at Bercy, ~150°: a lead of ~12 km cut the V off the corridor, 17 Nov 2026) the point
+              // overflown first, then the turn)
+              const Ln = Pn ? Math.hypot(B[0], B[1]) : 0;
+              const lead = Pn && turn <= 100 * D
+                ? Math.max(700, Math.min((${t.speedMps} ** 2 / (9.81 * Math.tan(25 * D))) * Math.tan(turn / 2) + 200, 0.9 * Math.min(L, Ln)))
+                : 700;
               const gpu = []; let gapMax = 0, frames = 0, quick = 0, last = performance.now(), done = R.completedFrames, steerAt = 0;
               const t0 = performance.now();
               while (performance.now() - t0 < 120000) {
