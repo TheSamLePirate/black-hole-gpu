@@ -231,5 +231,6 @@ test.skipIf(!E2E)(
       app.close();
     }
   },
-  3_600_000,
+  // (J8A_TRACK_READY: a zone not on the disk yet comes from the network — Toulon-Hyères's, 46 347 chains: ~1 h)
+  TRACK_READY ? 7_200_000 : 3_600_000,
 );
