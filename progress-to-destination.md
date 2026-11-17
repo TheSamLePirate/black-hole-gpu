@@ -9780,7 +9780,7 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   les cellules d'Overture restent au lot (1) ; aucune mesure GPU ; le mini n'a pas fait tourner `j8-mesh-cells` ; aucun gain de rendu
   n'est revendiqué.
 
-### 2026-11-17 00:05 UTC — PLAN-J8 J8-9 : l'espacement WMS-R levé pour les zones des e2e servies par le disque ; J8-8 : les maillages dans l'estimation d'une zone (session des approches, 1feb2f7f)
+### 2026-11-16 23:55 UTC — PLAN-J8 J8-9 : l'espacement WMS-R levé pour les zones des e2e servies par le disque ; J8-8 : les maillages dans l'estimation d'une zone (session des approches, 1feb2f7f)
 
 - **Destination :** §8 (mesurer vite et juste : les e2e de zone en minutes, pas en trois quarts d'heure) et §19.13 (J8-A : une zone
   annoncée avec sa vraie taille). Jalons PLAN-J8 J8-9, J8-8 lot (1).
