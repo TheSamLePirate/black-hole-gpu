@@ -139,6 +139,12 @@ How it shows, and how to override it:
      - `app.estimate(seconds)` — the run's whole time as the test reckons it (its tracks, its rests): the banner's
        « ⏱ gone / ~N min estimated » and the live record's `estimateS`. Without it: the measured median
        (`durations.json`), else the header's `// Duration:` figure (the monitor showed no estimate for an untimed file).
+     - **the harness's own count** (the approaches session's idea): `waitFor` and `waitProgress`, past 10 s without a word
+       from the test (no `step`/`progress`/`scenario` in the last 10 s), put up « ⏳ <what is awaited> · 23 / 90 s » (waitFor)
+       or the readiness probe's state (waitProgress) and take it off at their end — every e2e keeps « no wait over 10 s
+       without a count », the ones not yet brought to the steps too;
+     - **clocks kept by the page**: the step's time and, under a count said over 15 s ago, « compteur dit il y a N s » — a
+       long page call that holds the banner's updates leaves them running, and a count that no longer moves shows as such.
      The banner's « what it proves » is now one line (the header's first sentence). Applied: `j8-a` (the zone's chains, its
      mesh and forest cells counted in their caches, the rest, the loading, each leg), `approach-sample` (approaches session).
      The header's `// Duration:` and `// Done when:` lines stay required.*

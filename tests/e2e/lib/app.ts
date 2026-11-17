@@ -474,38 +474,48 @@ export class App {
     let lastKey = "",
       lastChange = t0,
       lastLog = t0,
+      waited = false,
       p: ReadyProbe | null = null;
-    for (;;) {
-      let ok = false;
-      try {
-        const r = await this.js<{ ok: boolean; p: ReadyProbe }>(
-          `(() => { let ok = false; try { ok = !!(${cond}); } catch {} return { ok, p: ${READY_PROBE} }; })()`,
+    try {
+      for (;;) {
+        let ok = false;
+        try {
+          const r = await this.js<{ ok: boolean; p: ReadyProbe }>(
+            `(() => { let ok = false; try { ok = !!(${cond}); } catch {} return { ok, p: ${READY_PROBE} }; })()`,
+          );
+          ok = r.ok;
+          p = r.p;
+        } catch {
+          p = null;
+        }
+        if (ok) return p;
+        if (p?.err) throw new Error(`${label}: the page failed — ${p.err}`);
+        const now = Date.now();
+        const key = JSON.stringify(
+          p && [p.origin, p.bh, p.first, p.splash, p.settled, p.compiling, p.cp, p.relief, p.photos, p.scenery, p.maps, p.horizons],
         );
-        ok = r.ok;
-        p = r.p;
-      } catch {
-        p = null;
+        if (key !== lastKey) {
+          lastKey = key;
+          lastChange = now;
+        }
+        const compiling = !p || !p.first || !p.settled || p.compiling.length > 0 || p.cp > 0;
+        const stall = compiling ? (o.compileStallMs ?? 300_000) : (o.stallMs ?? 90_000);
+        if (!o.quiet && now - lastLog >= 10_000) {
+          lastLog = now;
+          console.log(`  … ${label}: ${Math.round((now - t0) / 1000)} s — ${describeReady(p)}`);
+        }
+        // (the harness's own count after 10 s of the test's silence — recorder.waiting; taken off when the wait ends)
+        if (now - t0 >= 10_000) {
+          waited = true;
+          await recorder.waiting(`${label} · ${Math.round((now - t0) / 1000)} s · ${describeReady(p).slice(0, 110)}`);
+        }
+        if (now - lastChange > stall)
+          throw new Error(`${label}: nothing moved for ${Math.round((now - lastChange) / 1000)} s — ${describeReady(p)}`);
+        if (now - t0 > (o.maxMs ?? 15 * 60_000)) throw new Error(`${label}: ${Math.round((now - t0) / 1000)} s, still ${describeReady(p)}`);
+        await Bun.sleep(500);
       }
-      if (ok) return p;
-      if (p?.err) throw new Error(`${label}: the page failed — ${p.err}`);
-      const now = Date.now();
-      const key = JSON.stringify(
-        p && [p.origin, p.bh, p.first, p.splash, p.settled, p.compiling, p.cp, p.relief, p.photos, p.scenery, p.maps, p.horizons],
-      );
-      if (key !== lastKey) {
-        lastKey = key;
-        lastChange = now;
-      }
-      const compiling = !p || !p.first || !p.settled || p.compiling.length > 0 || p.cp > 0;
-      const stall = compiling ? (o.compileStallMs ?? 300_000) : (o.stallMs ?? 90_000);
-      if (!o.quiet && now - lastLog >= 10_000) {
-        lastLog = now;
-        console.log(`  … ${label}: ${Math.round((now - t0) / 1000)} s — ${describeReady(p)}`);
-      }
-      if (now - lastChange > stall)
-        throw new Error(`${label}: nothing moved for ${Math.round((now - lastChange) / 1000)} s — ${describeReady(p)}`);
-      if (now - t0 > (o.maxMs ?? 15 * 60_000)) throw new Error(`${label}: ${Math.round((now - t0) / 1000)} s, still ${describeReady(p)}`);
-      await Bun.sleep(500);
+    } finally {
+      if (waited) await recorder.waiting(null);
     }
   }
 
@@ -523,17 +533,28 @@ export class App {
     // (the caller's line read now: after the first await, the stack no longer has it)
     const site = timeout >= 60_000 ? new Error().stack : undefined;
     const t0 = Date.now();
-    let last: unknown;
-    while (Date.now() - t0 < timeout) {
-      try {
-        if ((last = await this.js(expr))) {
-          noteWait(site, timeout, Date.now() - t0, true);
-          return last;
+    let last: unknown,
+      shown = 0;
+    // (the harness's own count when the test has said nothing for 10 s — recorder.waiting; taken off at the end)
+    const what = expr.replace(/\s+/g, " ").slice(0, 90);
+    try {
+      while (Date.now() - t0 < timeout) {
+        try {
+          if ((last = await this.js(expr))) {
+            noteWait(site, timeout, Date.now() - t0, true);
+            return last;
+          }
+        } catch (e) {
+          last = e;
         }
-      } catch (e) {
-        last = e;
+        if (Date.now() - t0 >= 10_000 && Date.now() - shown >= 2_000) {
+          shown = Date.now();
+          await recorder.waiting(`${what} · ${Math.round((Date.now() - t0) / 1000)} / ${Math.round(timeout / 1000)} s`);
+        }
+        await Bun.sleep(100);
       }
-      await Bun.sleep(100);
+    } finally {
+      if (shown) await recorder.waiting(null);
     }
     noteWait(site, timeout, Date.now() - t0, false);
     throw new Error(`waitFor(${expr}): ${timeout} ms, last ${String(last)}`);

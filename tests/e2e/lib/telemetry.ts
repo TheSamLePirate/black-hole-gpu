@@ -16,6 +16,19 @@
 // without the preload (`E2E=1 bun test …`: the remote jobs, the A/B) is live too, lightly (lib/live-preload.ts,
 // bunfig.toml): its file, its test, its time, a picture on demand — its page otherwise untouched.
 import { type BannerProgress, bannerRef, fileInfo, showBanner } from "./banner";
+
+/** no progress declared yet (each use spreads it with its own `done` list) */
+const NO_PROGRESS: BannerProgress = {
+  steps: [],
+  at: -1,
+  progress: null,
+  done: [],
+  values: null,
+  estimateS: null,
+  stepAt: null,
+  saidAt: null,
+  auto: null,
+};
 import { LiveState } from "./live";
 import { appendFileSync, existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { hostname } from "node:os";
@@ -146,6 +159,8 @@ class Recorder {
   private scen: string | null = null;
   /** the test's declared progress (steps, the one under way, its count, the ended ones — lib/banner.ts BannerProgress): null none */
   private prog: BannerProgress | null = null;
+  /** when the test last said its case (scenario) [ms] — the harness's own wait count after 10 s of silence */
+  private scenAt = Date.now();
   /** a test running (begun, not ended): a page booted inside it serves that test, not the file's setup */
   private inTest = false;
   private dir = "";
@@ -381,6 +396,7 @@ class Recorder {
    */
   async scenario(label: string | null): Promise<string> {
     this.scen = label;
+    this.scenAt = Date.now();
     const ref = bannerRef(this.file, this.k, label);
     console.log(`  ▶ ${ref} · ${hostname().replace(/\.local$/, "")}`);
     this.live.scenario(label);
@@ -397,24 +413,26 @@ class Recorder {
 
   /** The test's steps in order (lib/app.ts `app.steps`): « Étape k/n » on the banner from the first `step`. */
   steps(list: string[]) {
-    this.prog = { steps: [...list], at: -1, progress: null, done: [], values: null, estimateS: this.prog?.estimateS ?? null };
+    this.prog = { ...NO_PROGRESS, steps: [...list], done: [], estimateS: this.prog?.estimateS ?? null };
   }
 
   /** A declared step begins (lib/app.ts `app.step`; a name not declared is added at the end): said as a scenario — the banner, the
    *  live record and its events, the console, the report —, its progress cleared. */
   async step(name: string): Promise<string> {
-    this.prog ??= { steps: [], at: -1, progress: null, done: [], values: null, estimateS: null };
+    this.prog ??= { ...NO_PROGRESS };
     let i = this.prog.steps.indexOf(name, Math.max(0, this.prog.at));
     if (i < 0) i = this.prog.steps.indexOf(name);
     if (i < 0) i = this.prog.steps.push(name) - 1;
     this.prog.at = i;
     this.prog.progress = null;
+    this.prog.stepAt = this.prog.saidAt = Date.now();
+    this.prog.auto = null;
     return this.scenario(`Étape ${i + 1}/${this.prog.steps.length} · ${name}`);
   }
 
   /** A step ended, with its result (« zone 15,1 min », a failure kept shown): the banner's last ones, a live event. */
   async stepDone(text: string, ok = true): Promise<void> {
-    this.prog ??= { steps: [], at: -1, progress: null, done: [], values: null, estimateS: null };
+    this.prog ??= { ...NO_PROGRESS };
     this.prog.done.push({ text, ok });
     this.live.note(ok ? "step" : "step-failed", text);
     this.live.write();
@@ -427,8 +445,10 @@ class Recorder {
    * banner and in the live record (its case's words); no moment in the report or the live events (the step said them once).
    */
   async progress(text: string, values?: string): Promise<void> {
-    this.prog ??= { steps: [], at: -1, progress: null, done: [], values: null, estimateS: null };
+    this.prog ??= { ...NO_PROGRESS };
     this.prog.progress = text;
+    this.prog.saidAt = Date.now();
+    this.prog.auto = null;
     if (values !== undefined) this.prog.values = values;
     const step = this.prog.at >= 0 ? `Étape ${this.prog.at + 1}/${this.prog.steps.length} · ${this.prog.steps[this.prog.at]}` : null;
     this.live.scenario(step ? `${step} — ${text}` : text);
@@ -436,9 +456,32 @@ class Recorder {
     await showBanner(this.page, this.file, this.k, this.scen, this.prog);
   }
 
+  /**
+   * A harness wait still running (lib/app.ts waitFor, waitProgress): when the test has said nothing for 10 s, the harness's own count
+   * on the banner (« en attente · <what> · 23 / 90 s ») and in the live record — the rule « no wait over 10 s without a count » kept
+   * for every e2e, the ones not yet brought to the steps too (the approaches session's idea, 17 Nov 2026). `null`: the wait over,
+   * its count taken off.
+   */
+  async waiting(text: string | null): Promise<void> {
+    if (text !== null) {
+      const said = this.prog?.saidAt ?? this.scenAt;
+      if (Date.now() - said < 10_000) return;
+      this.prog ??= { ...NO_PROGRESS, done: [] };
+      if (this.prog.auto === text) return;
+      this.prog.auto = text;
+    } else {
+      if (!this.prog?.auto) return;
+      this.prog.auto = null;
+    }
+    const step = this.prog.at >= 0 ? `Étape ${this.prog.at + 1}/${this.prog.steps.length} · ${this.prog.steps[this.prog.at]}` : this.scen;
+    this.live.scenario([step, this.prog.progress, this.prog.auto && `en attente · ${this.prog.auto}`].filter(Boolean).join(" — "));
+    this.live.write();
+    await showBanner(this.page, this.file, this.k, this.scen, this.prog);
+  }
+
   /** The file's whole time estimated by the test [s] (lib/app.ts `app.estimate`): the banner's and the live record's estimate. */
   estimate(s: number) {
-    this.prog ??= { steps: [], at: -1, progress: null, done: [], values: null, estimateS: null };
+    this.prog ??= { ...NO_PROGRESS };
     this.prog.estimateS = Math.round(s);
     this.live.estimate(s);
     this.live.write();

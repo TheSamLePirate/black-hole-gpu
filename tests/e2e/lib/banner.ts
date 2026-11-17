@@ -144,6 +144,12 @@ export interface BannerProgress {
   values: string | null;
   /** the whole run's estimate [s] (the test's own) */
   estimateS: number | null;
+  /** when the step began and its progress was last said [ms, epoch] — counted on the page every second (a long page call that
+   *  holds the banner's updates leaves its clocks running; « dit il y a N s » under a count that no longer moves) */
+  stepAt: number | null;
+  saidAt: number | null;
+  /** the harness's own count in a wait the test left silent over 10 s (waitFor, waitProgress — the approaches session's idea) */
+  auto: string | null;
 }
 
 /** What it proves, in one line: the header's first sentence, ~120 characters. */
@@ -184,6 +190,9 @@ function script(
     progress: p?.progress ?? null,
     ended,
     values: p?.values ?? null,
+    stepAt: p?.stepAt ?? null,
+    saidAt: p?.saidAt ?? null,
+    auto: p?.auto ?? null,
   });
   return `(() => { const d = ${data}; let el = document.getElementById("e2e-banner");
     if (!el) { el = document.createElement("div"); el.id = "e2e-banner"; el.setAttribute("aria-hidden", "true");
@@ -197,6 +206,11 @@ function script(
     if (d.about) row(d.about, "font-size:12px;color:#b9c4d2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis");
     if (d.step) row(d.step, "font-weight:650;font-size:13.5px;color:#ffe2a8;margin-top:5px");
     if (d.progress) row(d.progress, "font-size:12.5px;color:#e8eef6;font-variant-numeric:tabular-nums");
+    if (d.auto) row("⏳ " + d.auto, "font-size:12.5px;color:#ffd38a;font-variant-numeric:tabular-nums");
+    // (the step's clock and the age of its count, kept running by the page)
+    const since = document.createElement("div");
+    since.style.cssText = "font-size:11.5px;color:#9fb6d6;font-variant-numeric:tabular-nums";
+    if (d.stepAt) el.append(since);
     if (d.values) row(d.values, "font-size:12px;color:#9fe0a8;font-variant-numeric:tabular-nums");
     for (const t of d.ended) row(t, "font-size:11.5px;color:" + (t.startsWith("✗") ? "#ff9b8a" : "#9fb6d6"));
     // (how long it takes against the time gone — since this file's or test's banner first went up —, and what ends it)
@@ -205,8 +219,11 @@ function script(
     const clock = document.createElement("div");
     clock.style.cssText = "font-size:12px;color:#ffc85a;margin-top:4px;font-variant-numeric:tabular-nums";
     el.append(clock);
+    const mmss = (s) => Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0");
     const tick = () => { const s = Math.round((Date.now() - window.__e2eBannerT0) / 1000);
-      clock.textContent = "⏱ " + Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0") + (d.duration ? " / " + d.duration : ""); };
+      clock.textContent = "⏱ " + mmss(s) + (d.duration ? " / " + d.duration : "");
+      if (d.stepAt) { const a = d.saidAt ? Math.round((Date.now() - d.saidAt) / 1000) : 0;
+        since.textContent = "étape " + mmss(Math.round((Date.now() - d.stepAt) / 1000)) + (d.saidAt && a >= 15 ? " · compteur dit il y a " + a + " s" : ""); } };
     tick();
     clearInterval(window.__e2eBannerTimer);
     window.__e2eBannerTimer = setInterval(tick, 1000);
