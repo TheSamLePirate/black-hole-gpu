@@ -10663,3 +10663,11 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   - l'« arrêt » de Toulon après Paris était une promesse du test, bornée de part et d'autre (ba9207b8, a85f8f7e).
 - **Restent :** `paris-marais-bas` à revoler à 90 m/s, le vol M1 Max à refaire, et les lignes de dessin (VB2 à VB7) à juger sur les
   captures, avec le rendu.
+
+### 2026-11-17 14:50 UTC — PLAN-J8 : J8-A passe en strict sur kerr-mini, Paris puis Toulon-Hyères dans une même page (session 33d89754)
+
+- **Ce qui a tourné :** `20261117-150247-j8a-paris-toulon-fix` sur kerr-mini (e1e8769a, `J8A_TRACK_READY J8A_STRICT J8A_OFFLINE J8A_FOREST J8A_WITNESS`). Paris de jour et de nuit, puis Toulon-Hyères de jour et de nuit, dans une même page, zones préparées depuis le disque, hors ligne. **Passé**, exit 0, 46,7 min.
+- **Chiffres :** 0 image rapide, `swData` 0 et `networkMisses` 0 sur les quatre vols. GPU p50 60,3 / 59,1 ms à Paris (jour / nuit), 51,4 / 51,5 ms à Toulon. Écart max entre images 101 / 83 / 84 / 67 ms. La zone de Toulon est prête en 10,2 min après les vols de Paris. Le témoin de page n'a jamais manqué une réponse (193 ms au plus, tas JS 350–1 092 Mo).
+- **Critère 5 (non jugé, sonde sans témoin négatif) :** rapport de luminance lointain / proche de 1,30 et 1,88 à Paris (jour, nuit), 1,14 et 0,76 à Toulon.
+- **L'« arrêt » de Toulon après Paris :** il ne se reproduit plus. C'était le comptage des caches du test (corrigé en ba9207b8), et non un défaut du jeu.
+- **Reste du gros e2e :** le Marais bas à 90 m/s (en file, approches), et le vol de référence sur le M1 Max à froid, Mac réservé (en cours).
