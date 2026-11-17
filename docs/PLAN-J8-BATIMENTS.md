@@ -136,10 +136,71 @@ de bâtiments vus, et leur coût GPU se mesure et se déclare.
 | **J8-L Les lampadaires et les voitures dans toute la vue** (demandé par Sam le 16 nov., ~16:29 UTC, pour J8-A) | Aujourd'hui les lampadaires sont dans la scène (`streetlamps.ts` : 1 500 m, 4 000 au plus) et, au-delà, des points de lumière cuits dans la nuit des tuiles (`night-roads.ts`) ; les voitures sont dans la scène (`traffic.ts` : 3 000 m, 1 500 au plus, routes principales). Les mettre dans les mêmes cellules z 15 (enregistrements préparés en workers depuis les routes d'OpenMapTiles, gardés en cache et dans la zone), dessinées par le GPU jusqu'à la limite du pixel : un lampadaire lointain est un point lumineux la nuit, une voiture lointaine des phares et des feux la nuit, une petite boîte le jour ; le raccord avec les points cuits de `night-roads` sans double ni bord. | rendu (GPU, aspect, raccord) ; approches (préparation, zone) | le compte dessiné contre les routes de la vue ; captures de nuit proche/loin côte à côte ; coût sur les deux machines |
 | **J8-E Les fleuves et les rivières dans toute la vue** (demandé par Sam le 16 nov., pour J8-A) | Lu dans le code : les eaux intérieures (rivières, canaux, lacs, polygones `water` et lignes `waterway` d'OpenMapTiles) n'existent que dans la scène (`scenery-worker.ts`, `sceneryWaterAt`), qui les fait ombrer par `inlandWater` ; au-delà du carré de la scène, une rivière n'est, d'après le code, que la couleur de l'orthophoto (à confirmer en capture). Les porter dans toute la vue, chargées avant le vol : la forme est à proposer par la session du rendu (un masque d'eau par tuile du sol, lu par `shadeLite` à toute distance, plutôt que des instances), la préparation et la zone par la session des approches. | rendu (ombrage, masque, raccord) ; approches (préparation, zone) | captures jour et nuit d'un fleuve (la Seine à Paris, le Gapeau ou les salins à Hyères) à 1, 5 et 15 km, avant/après ; aucun bord à la limite de la scène ; coût sur les deux machines |
 | **J8-VB Les détails en vol bas** (rattaché le 16 nov., session d'analyse, à la demande de Sam) | Le plan [PLAN-DETAILS-VOL-BAS-FABLEFLIGHT](PLAN-DETAILS-VOL-BAS-FABLEFLIGHT.md), lots VB0–VB8, idées reprises de FableFlight (licence MIT) : chaussées, voies et trottoirs, silhouettes de voitures, stationnement, potences de lampadaires, éclat des feux, trafic dans les rues, intersections. VB1 étend la cellule « rue » de J8-L (format 2) avec `troncon_de_route` de la BD TOPO (largeur, voies, sens, ponts et tunnels), lu dans les tuiles z 15 déjà téléchargées pour les bâtiments. VB0–VB1 démarrent côté approches ; VB2 et la suite viennent après les priorités de J8-A côté rendu. Le coût se juge en cumul dans la vue de Paris (§6 du plan VB, question 8 ci-dessous). | approches (VB1, la préparation de VB4 et VB7) ; rendu (VB2, VB3, VB5, VB6, le dessin) | les critères de sortie du plan VB ; à l'altitude de J8-A, les voitures, les lampadaires et les voies se voient |
+| **J8-RP Les routes et les ponts AAA** (demandé par Sam le 17 nov., ~10:20 UTC : « AAA road and bridges ») | Neuf lots RP1–RP9 et un retrait, détaillés au §3 bis : les routes visibles sous l'orthophoto, leur géométrie BD TOPO, leur profil, les ponts au bon niveau et à leur forme, ce qui roule dessus, les ponts au loin, les tunnels, les voies ferrées, la matière des routes. | les deux (§3 bis) | le gros e2e (§6 point 13) : critères RP au §3 bis |
 | **J8-R Retraits** (règle 2) | Le plafond 8 000 × portée² des bâtiments, les boîtes au-delà de 2 km dans la scène, les budgets rapides des bâtiments, le chemin de silhouettes remplacé : retirés au lot qui suit leur remplacement, avec une date. | les deux | `git grep` vide ; docs |
 
 **Ordre :** J8-A est le but : chaque lot se juge à ce qu'il lui apporte. J8-T en tête côté approches (avant les téléchargements de J8-0 (b) s'il est encore temps, sinon juste après) ; J8-0 et J8-1 en parallèle, puis J8-2, puis J8-3 et J8-4 en parallèle, puis J8-5, J8-6, J8-7, J8-8 si nécessaire, et
 J8-R. J8-1 se voit tout de suite. J8-4 apporte le gros du gain : « toute la vue ».
+
+### 3 bis. J8-RP — Les routes et les ponts AAA
+
+**Écrit le 17 nov. 2026 (~10:30 UTC) par la session d'analyse, à la demande de Sam (« Améliorons aussi les routes et les
+ponts. AAA road and bridges »).** Mode speed comme le reste de J8 (§6 point 13) : implémenté avant le gros e2e, jugé par lui.
+L'état ci-dessous est lu dans le code d'`origin/main` (6bac1118) par un agent, non vérifié en jeu.
+
+**Ce qu'il y a aujourd'hui.**
+- **Au loin** (au-delà de la scène, 2–3 km) : la route n'est que l'orthophoto ; la nuit, les lueurs de `night-roads.ts`.
+- **Dans la scène** : une route est **une peinture plate posée au sol**, calculée par pixel dans `trace.wgsl` `scenerySurface`
+  (l. ~10622–10694) sur les lignes OpenMapTiles z 14 (`scenery-worker.ts` ~596–745), à la largeur de sa classe (`roadWidth`,
+  `scenery-geometry.ts` 4–14 : 18 m l'autoroute… 6 m la rue). Les marquages de VB2 et la peinture de VB7 s'y ajoutent.
+  Elle suit le relief exactement (pas de route flottante ni enterrée), mais rien n'aplanit le sol sous elle : ni déblai, ni
+  remblai, ni dévers (seules les pistes le sont, `runwayGrade`). Matière : une couleur d'asphalte plate, le détail générique
+  du sol, la pluie générique.
+- **Le défaut majeur, en France de jour : sous l'orthophoto IGN, la route peinte, les marquages de VB2 et la peinture de
+  VB7 ne se dessinent pas** (`trace.wgsl` ~16049 : mélange par `1 − img.o` ; le calcul exact exige `img.o < 0.99`). Le
+  critère de VB2, « lisible sous l'orthophoto », n'est donc pas tenu ; VB2 et VB7 sont « non vus en jeu ».
+- **La largeur dessinée vient de la classe OpenMapTiles**, pas de la largeur mesurée de la BD TOPO (`troncon_de_route`,
+  décodée seulement dans les cellules « rue », 95,6–100 % remplie sur les routes, VB0) ; l'axe OpenMapTiles n'est pas celui
+  de l'orthophoto : risque de double route.
+- **Les ponts** (`scenery-worker.ts` ~1228–1316, « estimated… not surveyed ») : repérés par `brunnel=bridge` d'OpenMapTiles ;
+  un tablier **plat et horizontal au plus haut sol de la ligne + 4 m × layer**, 1,2 m d'épaisseur, parapets de 1 m, piles
+  génériques tous les 40 m dont le pied est interpolé entre les sommets (pas lu au sol) ; une seule matière de pierre, sans
+  asphalte ni marquage ; ni culées, ni intrados, ni arcs ; pont routier, ferroviaire et passerelle confondus. 128 ponts au
+  plus (256 en « high »). **Défauts probables** : une marche de ~4 m à chaque bout, des piles en l'air sur un viaduc, les
+  glissières de VB7 et les voitures lointaines posées au niveau de la rivière, pas de voitures ni de lampadaires proches sur
+  le tablier, les ponts absents au-delà de la scène (pas dans les cellules) et peut-être peints d'eau par le masque de J8-E.
+  **Coût connu** : un pont dans la vue éteint `liteAll` (`renderer.ts` ~7557) et fait passer le noyau d'ombrage tracé sur
+  toute l'image (~0,6 ms sur le M1 Max ; bf1249c3 avait ramené l'ombrage des ponts de 11,7–15,1 ms à 0,4 ms sur le mini).
+- **Tunnels** : simplement retirés (aucun portail). **Voies ferrées** : des bandes peintes (rails et traverses sous 1,5 m de
+  pixel), cachées sous l'orthophoto comme les routes ; ni ballast, ni caténaires.
+- **La référence FableFlight** (MIT) : des rubans de route maillés, chaque bord à son sol + 0,12 m, une surface en
+  coordonnées métriques (voies, bordures, usure filtrée au pixel) ; des ponts dont le tablier est interpolé entre leurs deux
+  rampes (`bridge_end`), avec bombement, 5,5 m de tirant au moins, 1,0–1,8 m d'épaisseur, parapets, intrados, piles tous
+  les 34 m (130 m au-delà de 400 m) seulement là où le tablier est à plus de 3,5 m du sol, le mobilier posé sur le tablier.
+
+**Les lots** (gain = qualité et contenu ; le coût se déclare et se juge au gros e2e, cumulé avec le reste de J8 dans la vue de
+Paris — règle provisoire de la question 8).
+
+| Lot | Contenu | Session | Critère du gros e2e |
+|---|---|---|---|
+| **RP1 Les routes visibles sous l'orthophoto** (en tête : sans lui VB2 et VB7 ne se voient pas en France) | Garder l'orthophoto comme albédo de la chaussée (sa teinte, son usure, ses rapiéçages réels) et poser par-dessus, avec leur couverture au pixel, les marquages, bordures et trottoirs de VB2 et la peinture de VB7 ; au-delà de leur taille visible (plan VB §5.2), rien ; hors orthophoto, la chaussée peinte d'aujourd'hui. Pas de seconde route : l'axe et la largeur viennent de RP2 en France. Le traçé exact et la grille de 2 m / 8 m gardent le filtrage au pixel (pas de scintillement). | rendu (`trace.wgsl`, `scenery-raster.ts`) | marquages lisibles à 150 m et 50 m sur `toulon-bas` et `paris-marais-bas`, de jour et de nuit, sans double route ni scintillement en vol |
+| **RP2 La géométrie des routes de la BD TOPO en France** | En France, les routes de la scène prises dans les tronçons de la BD TOPO (axe levé, aligné sur l'orthophoto ; largeur de chaussée mesurée, voies, sens) au lieu des lignes OpenMapTiles ; ailleurs, OpenMapTiles et la largeur par classe. Les cellules « rue » portent déjà ces tronçons (KSC3) : la scène les lit comme les places et le mobilier, une seule source par pays. | approches (exposer les polylignes et largeurs par cellule) ; rendu (la scène qui les lit) | la chaussée dessinée sur la chaussée de l'orthophoto (écart d'axe et de largeur relevé sur quelques rues de Paris et de Toulon) |
+| **RP3 Le profil des routes** | Hors de la France (et là où le relief est grossier) : le sol aplani sous la chaussée et ses accotements, un déblai ou un remblai raccordé en pente douce, le dévers des grandes routes, sur le modèle de `runwayGrade`, sans toucher au sol de contact de l'appareil hors de la route. En France le modèle IGN (1 m / 0,5 m) porte déjà les talus réels : ne rien aplanir de plus. | rendu (le sol) ; approches (le profil long par tronçon, préparé dans la cellule) | une route de montagne hors de France (vue à choisir) sans chaussée qui épouse les bosses du relief grossier |
+| **RP4 Les ponts au bon niveau** | Le tablier interpolé entre les hauteurs de ses deux rampes (les routes qui y arrivent, lues au sol), comme `bridge_end` de FableFlight : plus de marche aux bouts, plus de tablier plat au plus haut sol ; un bombement léger ; le tirant au-dessus de l'eau ou de la route croisée gardé (5,5 m au moins, `layer` pour les étages). Les piles posées sur le sol réel, échantillonné à leur pied, tous les ~34 m (~130 m pour les grands viaducs), seulement où le tablier est à plus de 3,5 m du sol ; les culées aux rampes. En France, la BD TOPO (`position_par_rapport_au_sol`, `construction_lineaire` et `construction_surfacique` de nature pont) confirme le pont et son emprise. Le résultat préparé une fois par cellule (une section « ponts » des cellules « rue », ou des cellules à part), donc présent dans la zone et compté par `flightReady`. | approches (le profil du tablier, les piles, les culées, par cellule) ; rendu (le dessin) | pont Alexandre III et les ponts de la Seine, un viaduc de la côte varoise : ni marche aux bouts, ni pile en l'air, ni tablier sous la route |
+| **RP5 La forme et la matière des ponts** | Un tablier d'asphalte avec les marquages de RP1, ses trottoirs et parapets ou glissières selon le type ; l'intrados ; des piles et des culées en béton, en pierre ou en acier selon la nature et l'époque connues (BD TOPO, OSM quand il les donne), sinon par la portée ; les ponts ferroviaires (ballast, garde-corps), les passerelles (étroites, légères), les grands viaducs (épaisseur 1,8 m, piles hautes). Les ponts célèbres en pierre gardent une silhouette d'arches quand la portée et la nature le disent. Rester dans le chemin raster sans rallumer l'ombrage tracé de toute l'image (`liteAll`). | rendu ; approches (le type et la matière dans la cellule) | captures de jour et de nuit à 500 m et 150 m ; coût des ponts dans la vue de Paris |
+| **RP6 Ce qui roule et se tient sur les ponts** | Les voitures proches et lointaines, les voitures garées, les lampadaires et les glissières de VB7 posés à la hauteur du tablier, pas du sol ; les voitures qui passent sous un pont restent dessous. | les deux (la hauteur du tablier par tronçon dans la cellule ; le dessin) | voitures et lampadaires sur les ponts de la Seine, de jour et de nuit |
+| **RP7 Les ponts au loin** | Les ponts au-delà de la scène, dans la couche lointaine (comme les bâtiments : un enregistrement par pont et par cellule, une boîte longue pour le tablier), jusqu'à la portée de la couche ; le masque d'eau de J8-E ne peint plus l'eau sur un tablier (l'emprise des ponts retirée du masque). | approches (les enregistrements, le masque) ; rendu (le dessin lointain) | la Seine vue de 9 km : les ponts visibles, pas d'eau par-dessus |
+| **RP8 Les tunnels** | Les portails aux deux bouts (une tête en béton ou en pierre dans le talus, l'ouverture sombre), la route qui y entre ; la position des bouches préparée dans la cellule. | approches (les bouches) ; rendu (le portail) | un tunnel de Toulon (vue à choisir) |
+| **RP9 Les voies ferrées** (le dernier ; Sam peut le sortir de J8) | Sous l'orthophoto comme RP1 (rails et traverses par-dessus la photo quand le pixel le permet), le ballast en léger relief, les poteaux de caténaire en instances le long des lignes électrifiées, les ponts ferroviaires de RP5. | les deux | une ligne de Paris (gare de Lyon ou Austerlitz) à 150 m |
+| **RP10 La matière des routes** | Une détaille d'asphalte par classe (grain, usure, rapiéçages, joints), la pluie propre aux routes (mouillé, flaques, reflets des phares et des lampadaires), comme les pistes ; la nuit inchangée (`night-roads`, lampadaires). | rendu | la route mouillée de nuit sous la pluie à 150 m |
+| **RP-R Retraits** (règle 2) | Le tablier estimé de `scenery-worker.ts` (le plus haut sol + 4 m), la largeur par classe en France, les chemins remplacés : retirés au lot qui suit leur remplacement, après le gros e2e. | les deux | `git grep` vide |
+
+**Ordre** : RP1 et RP2 d'abord (ils rendent visibles VB2 et VB7, déjà faits), puis RP4, RP6 et RP7 (les ponts justes), RP5,
+RP10, RP8, RP3, RP9. Les deux sessions travaillent en parallèle (§6 point 13) : les approches préparent les données de RP2,
+RP4, RP6, RP7 et RP8 pendant que le rendu fait RP1 ; chaque extension de format s'accorde par un message avant le code.
+
+**Coût** : non mesuré ; à mesurer au gros e2e (les deux machines, cumul de la vue de Paris). Un lot qui ferait repasser
+l'ombrage tracé sur toute l'image est à revoir avant d'être gardé.
 
 ## 4. Répartition et règles du checkout partagé
 
@@ -332,6 +393,10 @@ J8-R. J8-1 se voit tout de suite. J8-4 apporte le gros du gain : « toute la vue
              forêt toutes avec la canopée (2,70 M candidats, 0,33 s la cellule) et 190 maillages. Hors ligne, les 6 points
              sont prêts et le réseau reçoit 0 requête ; au-delà de 17,9 km, la réserve de 72 Mio refuse les cellules en trop
              (des notes).
+14. **Demandé par Sam le 17 nov. (~10:20 UTC) : « Améliorons aussi les routes et les ponts. AAA road and bridges »** — J8-RP,
+    §3 bis (analyse de la session d'analyse, ~10:30 UTC). Rattaché à J8 en mode speed : implémenté avant le gros e2e, qui en
+    ajoute les critères. Le défaut le plus urgent : en France de jour, les routes peintes et les marquages de VB2 et VB7 ne
+    se dessinent pas sous l'orthophoto (RP1). RP9, les voies ferrées, peut sortir de J8 si Sam le veut.
 
 ## 7. Ce qui reste hors de ce plan
 
