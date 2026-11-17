@@ -232,6 +232,19 @@ J8-R. J8-1 se voit tout de suite. J8-4 apporte le gros du gain : « toute la vue
       3 821) et +1,1 ms GPU ; J8-8 rendra cette distance sans objet. Les captures de jonction ne sont plus attendues.
     - **L'éclat de nuit lointain gardé tel quel** (74e71cae : la part réelle du pixel, la ville lointaine ~7 fois le sol
       au loin au lieu de ~15).
+12. **Décidé par Sam le 17 nov. (~08:00 UTC, « ok, oui ») : J8-8b ouvert, les arbres par cellule** (conception de la session
+    du rendu au §8, 5865b087).
+    - **Pourquoi** : avec J8-8, J8-A passe en strict sur le mini (0 scène rapide, 0 requête en vol, réseau coupé ;
+      j8a-offline-full). Sur le M1 Max, la scène proche qui reste (sol, arbres, eau) se prépare en 13–25 s, dont ~11 s
+      de forêt et ~13 s de données (les bâtiments BD TOPO décodés pour que les arbres évitent leurs empreintes). Le
+      critère « zéro scène rapide » reste entier, arbres compris : il n'est pas revu.
+    - **D'abord** : le vol J8-A Paris de jour refait sur le M1 Max à froid, avec les cellules ; c'est la référence
+      avant/après. Le run de ~06:20 UTC (« Heavy », 4 099 images de scène rapide) ne compte pas.
+    - **Lots** : (1) le format et la préparation (`kerr-forest-v1`, cell-worker, compté dans la zone et dans
+      `flightReady({ track })`) : session des approches ; (2) la scène qui assemble les tuiles de forêt et (3) le
+      retrait de `growForest` dans la scène et du décodage BD TOPO qui ne sert qu'aux arbres : session du rendu. Le
+      format s'accorde entre les deux sessions avant le code. Taille (~14 Mo pour le couloir de Paris) et temps
+      (~0,1 s par cellule) estimés, à mesurer au lot (1).
 
 ## 7. Ce qui reste hors de ce plan
 
