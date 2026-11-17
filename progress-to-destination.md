@@ -10333,3 +10333,10 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
 - **Preuves :** `tests/streetlamps.test.ts`, `tsc`, Biome, `check-wgsl`. **Non vu en jeu.**
 - **Limites :** les lampadaires lointains gardent leur tête seule ; le cap et la variante de KSC3 ne sont pas lus au loin.
 - **Suite :** VB2 (chaussées et marquages) et VB7 (mobilier) sur KSC3.
+
+### 2026-11-17 10:06 UTC — PLAN-J8 : les lampadaires proches de France rendus (défaut de J8-8 lot 4, trouvé en codant VB2) (session 33d89754)
+
+- **Destination :** J8-L et J8-A de nuit (§19.13).
+- **Défaut :** la scène ne pose ses lampadaires proches qu'en ville (`builtUp`), et la ville se déduisait des bâtiments qu'elle dessine. Depuis J8-8 lot 4, les bâtiments BD TOPO sont laissés aux cellules de maillage : en France, `prims` n'en contient presque plus, et la scène posait très peu de lampadaires. La couche lointaine restait pourtant effacée sur `LAMP_REACH_M` (1,5 km) autour de la scène, d'où un trou de lumière de nuit. J8-A ne le jugeait pas.
+- **Correction :** la ville se calcule aussi sur les empreintes laissées aux cellules (`cut`). Le compte d'octets des lampes passe à 12 sommets (VB5a).
+- **Preuves :** `tsc`, Biome. **Non vu de nuit** (gros e2e). Limite : avec le lot 3 de J8-8b (BD TOPO non téléchargée), la ville ne vient plus que des bâtiments OSM.

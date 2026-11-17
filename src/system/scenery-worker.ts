@@ -1821,9 +1821,16 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
   // (Q8 L10: the streets' lamps — along the town streets' runs where buildings stand about, the nearest first, their feet on the
   // ground already in (none without it) — and their light's grid; none on any failure)
   try {
-    const town = builtUp(
-      prims.filter((p) => p.data[3] === 1).map((p) => [(p.min[0] + p.max[0]) / 2, (p.min[1] + p.max[1]) / 2] as [number, number]),
-    );
+    // (the town: the scene's buildings and those left to their mesh cells — `cut`'s footprints: with J8-8 the BD TOPO's are all there,
+    // none in `prims`; without them the near lamps of France were gone, the far layer's left out within LAMP_REACH_M all the same — a
+    // dark hole round the scene at night, 17 Nov 2026)
+    const town = builtUp([
+      ...prims.filter((p) => p.data[3] === 1).map((p) => [(p.min[0] + p.max[0]) / 2, (p.min[1] + p.max[1]) / 2] as [number, number]),
+      ...cut.map((v) => {
+        const c = localPoint(frame, v.lat, v.lon, 0);
+        return [c[0], c[1]] as [number, number];
+      }),
+    ]);
     const all: (StreetLamp & { d: number })[] = [];
     for (const r of q.lamps === false ? [] : lampLines)
       for (const l of lampsAlong(r.xy, r.cls, r.width)) {
@@ -1841,7 +1848,7 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
     lamps = all.slice(0, LAMP_MAX);
     lampReachM = q.lamps === false ? 0 : all.length > LAMP_MAX ? all[LAMP_MAX]!.d : LAMP_REACH_M;
     if (lamps.length) lampGrid = lampLight(lamps);
-    storedBytes += lamps.length * (8 * 12 + 4 * 16) + (lampGrid?.length ?? 0);
+    storedBytes += lamps.length * (12 * 12 + 6 * 16) + (lampGrid?.length ?? 0);
   } catch (e) {
     if (surveyErrors.length < 4) surveyErrors.push(`lamps: ${String(e).slice(0, 200)}`);
   }
