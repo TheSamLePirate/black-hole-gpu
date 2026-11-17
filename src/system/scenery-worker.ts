@@ -1303,6 +1303,8 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
   // measured width, their markings the cells' — in place of OpenMapTiles' in each cell found (their rails and waterways kept); a cell
   // not in the cache: OpenMapTiles' there as before)
   const cellRoads = new Set<Primitive>();
+  // (the street cells read for the roads, kept for the parked cars and the furniture: null a cell not in the cache)
+  const streetBufs = new Map<string, ArrayBuffer | null>();
   // (RP4: the cells' bridges — whole within a z 14 tile, the same identity in each cell that carries them: kept once)
   const cellBridges = new Map<string, { b: BridgeRecord; o: { lat: number; lon: number } }>();
   const roadCellsFound = new Set<string>();
@@ -1318,8 +1320,12 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
       for (let y = Math.min(a.y, b.y); y <= Math.max(a.y, b.y); y++)
         for (let x = Math.min(a.x, b.x); x <= Math.max(a.x, b.x); x++) {
           const res = await store.match(streetCacheUrl(self.location.origin, x, y));
-          if (!res) continue;
+          if (!res) {
+            streetBufs.set(`${x}/${y}`, null);
+            continue;
+          }
           const buf = await res.arrayBuffer();
+          streetBufs.set(`${x}/${y}`, buf);
           const o = cellOrigin(x, y);
           const roads = cellRoadSurfaces(buf, (e, n) => {
             const g = fromCell(o, e, n);
@@ -1355,13 +1361,20 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
       if (found.size) {
         // (OpenMapTiles' roads — kind 1 with a class kept — in the cells found: out; their middle's cell by the frame's flat inverse)
         const cosL = Math.max(0.05, Math.cos(q.lat * D));
-        for (let i = surfaces.length - 1; i >= 0; i--) {
-          const d = surfaces[i]!.data;
+        // (one pass, the kept ones moved down in place — a splice each, tens of thousands of surfaces, made Paris's scene twice as slow
+        // on kerr-mini, 17 Nov 2026)
+        let kept = 0;
+        for (let i = 0; i < surfaces.length; i++) {
+          const v = surfaces[i]!;
+          const d = v.data;
           // (their roads — kind 1 with a class kept — and, KSC5, their rails — kind 2 — the cells' in each cell found)
-          if (!((d[5] === 1 && d[6]! > 0) || d[5] === 2) || cellRoads.has(surfaces[i]!)) continue;
-          const c = cellOf(q.lat + (d[1]! + d[3]!) / 2 / 111_132, q.lon + (d[0]! + d[2]!) / 2 / (111_320 * cosL));
-          if (found.has(`${c.x}/${c.y}`)) surfaces.splice(i, 1);
+          if ((d[5] === 1 && d[6]! > 0) || d[5] === 2) {
+            const c = cellOf(q.lat + (d[1]! + d[3]!) / 2 / 111_132, q.lon + (d[0]! + d[2]!) / 2 / (111_320 * cosL));
+            if (found.has(`${c.x}/${c.y}`)) continue;
+          }
+          surfaces[kept++] = v;
         }
+        surfaces.length = kept;
         for (const p of fresh) surfaces.push(p);
         cellRoadCells = found.size;
         cellRoadCount = fresh.length;
@@ -2041,9 +2054,14 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
       const found: { p: [number, number, number]; d: [number, number]; seed: number; r: number }[] = [];
       for (let y = Math.min(a.y, b.y); y <= Math.max(a.y, b.y); y++)
         for (let x = Math.min(a.x, b.x); x <= Math.max(a.x, b.x); x++) {
-          const res = await store.match(streetCacheUrl(self.location.origin, x, y));
-          if (!res) continue;
-          const buf = await res.arrayBuffer();
+          // (the road pass's read kept — a cell read once a scene: Cache Storage's match costs, 17 Nov 2026)
+          const k = `${x}/${y}`;
+          let buf = streetBufs.get(k);
+          if (buf === undefined) {
+            const res = await store.match(streetCacheUrl(self.location.origin, x, y));
+            buf = res ? await res.arrayBuffer() : null;
+          }
+          if (!buf) continue;
           const h = readStreetHeader(buf);
           if (!h) continue;
           const o = cellOrigin(x, y);

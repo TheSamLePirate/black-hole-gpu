@@ -10587,3 +10587,12 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   - sur la vraie tuile z 14 de la Seine au pont Alexandre III, depuis le disque e2e, le tablier vaut 0,10 et la Seine vaut 1,00 à 100 m
     de part et d'autre.
 - **Non mesuré** en jeu.
+
+### 2026-11-17 12:09 UTC — PLAN-J8 : le gros e2e, second passage (un tracé par page) — Toulon passe ; Paris régresse en scènes rapides, cause corrigée ; le Marais bas échoue au tangage (session 33d89754)
+
+- **Ce qui a tourné** (kerr-mini, code J8-RP jusqu'à 83585bf5 environ, `J8A_TRACK_READY J8A_STRICT J8A_OFFLINE J8A_FOREST`, un tracé par processus) :
+  - **Toulon-Hyères, de jour et de nuit : passé** (`20261117-120316-j8a-big-toulon`, 22 min). Pas de gel en page neuve : le gel du premier passage venait de la page qui portait déjà Paris. Nuit : GPU p50 51,4 ms, 0 image rapide. Critère 5 : les bâtiments lointains sont 1,24 fois plus lumineux que les proches (20 et 59 échantillons).
+  - **Paris : échec en strict, 2 800 images rapides de jour** (`20261117-120327-j8a-big-paris`). Les scènes complètes passent de 5–12 s (premier passage, avant J8-RP) à 7,5–21 s. Critère 5 de jour : rapport de luminance 1,28, les lointains plus clairs.
+  - **Tracés bas** (`20261117-120323-j8a-big-low`) : `toulon-bas` passe de jour et de nuit (GPU p50 46,7 ms de nuit). Le Marais échoue à la règle 13 au tronçon 1 de jour : tangage 35°, incidence 0,66 rad (décrochage à 0,45), à 65 m/s.
+- **Correction de la régression de Paris** (RP2) : le retrait des routes OMT des cellules trouvées faisait un `splice` par surface sur des dizaines de milliers de surfaces. Il se fait maintenant en une passe. Chaque cellule « rue » n'est plus lue qu'une fois par scène (les routes, puis les places et le mobilier). **Non remesuré** : Paris est relancé seul sur le mini.
+- **Le Marais bas :** 70 m/s est trop lent pour le F-35 en palier à cette masse. La vitesse des tracés bas (`j8a-tracks.ts`, données des approches) est à revoir.
