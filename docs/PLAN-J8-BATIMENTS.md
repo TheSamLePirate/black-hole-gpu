@@ -265,6 +265,26 @@ J8-R. J8-1 se voit tout de suite. J8-4 apporte le gros du gain : « toute la vue
       VB7 intersections et mobilier, VB8 retraits. J8-L se remesure au gros e2e. Le gros e2e juge aussi les détails en
       vol bas (critères du plan VB, §7).
     - **Machines** (Sam) : kerr-mini puis le M1 Max à froid.
+    - **Les deux sessions travaillent en parallèle** (session d'analyse, 17 nov. ~09:35 UTC, à la demande de Sam). Leurs
+      fichiers sont disjoints : aux approches, les données et la préparation (`*-cells.ts`, `*-prep.ts`, `cell-worker.ts`,
+      `zones.ts`, `zone-cells.ts`) ; au rendu, la scène, le renderer, les shaders, `near-meshes.ts`, `street-far.ts` et le
+      harnais e2e. Chaque format nouveau ou étendu s'accorde par un message avant le code, sans que l'autre s'arrête : le
+      rendu traite d'abord ce qui ne dépend de rien. Les e2e éventuels partent sur kerr-mini par un agent ; le Chrome de
+      ce Mac reste libre pour `check-wgsl`, sinon les pushes se bloquent.
+      - **Rendu, dans l'ordre** : (R1) J8-8b lot (2) fini (une cellule sans canopée ne remplace plus une scène qui l'a ;
+        plus de repli sur `growForest`), puis lot (3) (le retrait de `growForest` et du décodage BD TOPO pour les arbres,
+        le lecteur WorldCover en double) ; (R2) le harnais de la bannière commité tout de suite, les approches l'attendent ;
+        (R3) J8-R ; (R4) le dessin de VB, d'abord ce qui a ses données : VB3 silhouettes, le dessin de VB4 (places faites),
+        VB5b éclat des feux, puis VB5a, VB2 et VB7 quand les données des approches arrivent ; (R5) le gros e2e final et
+        VB8 avec les approches.
+      - **Approches, en même temps** : (A1) VB2, les données de chaussée (bandes, séparations de voies, bordures et
+        trottoirs tirés des largeurs de KSC2) ; (A2) VB7, l'index des jonctions et le placement (passages piétons, lignes
+        d'arrêt, feux, glissières) ; (A3) VB5a, l'orientation des lampadaires vers la chaussée et leurs variantes ;
+        (A4) VB6, le réseau de trafic (courtes polylignes raccordées, rues mineures, population inchangée), si le rendu
+        accepte de lui céder ce lot (il touche `traffic.ts`) ; (A5) la bannière sur ses e2e longs, dès le harnais
+        commité ; (A6) la préparation du gros e2e : les zones de Paris et Toulon-Hyères avec toutes leurs cellules
+        (maillages, forêt, rue), `flightReady` qui les compte, et la liste des critères à vérifier (J8-A §0 critère 5 et
+        plan VB §7), écrite au plan pour le rendu.
 
 ## 7. Ce qui reste hors de ce plan
 
