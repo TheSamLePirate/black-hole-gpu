@@ -51,6 +51,8 @@ type Leg = {
   requests: number;
   near: number;
   far: { boxes: number; quads: number } | null;
+  /** the near scene's own preparations in the leg: their worker's times [ms] (full, quick) and how often « a fast flight » held */
+  scenes: { full: number[]; quick: number[]; fastFlight: number };
   at: unknown;
 };
 test.skipIf(!E2E)(
@@ -211,11 +213,16 @@ test.skipIf(!E2E)(
               // 17 Nov 2026); at 80 m/s ~1.1 km, within its zone's disc)
               const spd = Pn && turn > 100 * D ? Math.min(${t.speedMps}, 80) : ${t.speedMps};
               const gpu = []; let gapMax = 0, frames = 0, quick = 0, last = performance.now(), done = R.completedFrames, steerAt = 0;
+              const scFull = [], scQuick = []; let lastWorker = R.earthScenery.stats().workerMs, fast = 0;
               const t0 = performance.now();
               while (performance.now() - t0 < 120000) {
                 const now = await f(); gapMax = Math.max(gapMax, now - last); last = now; frames++;
                 if (R.completedFrames !== done) { done = R.completedFrames; gpu.push(+R.lastGpuMs.toFixed(2)); }
-                if (R.earthScenery.stats().quick) quick++;
+                const sst = R.earthScenery.stats();
+                if (sst.quick) quick++;
+                // (each new scene's worker time, by kind; whether the scene judged the flight too fast for a full one — T8m)
+                if (sst.workerMs && sst.workerMs !== lastWorker) { lastWorker = sst.workerMs; (sst.quick ? scQuick : scFull).push(Math.round(sst.workerMs)); }
+                if (R.earthScenery.fastFlight()) fast++;
                 const g = c.geoNow();
                 const X = en([g.lat, g.lon]);
                 // (along the segment: how far before point i (its along-distance, ≤ 0 past it), the aim 1.5 km ahead on the segment)
@@ -227,7 +234,7 @@ test.skipIf(!E2E)(
               }
               const req = performance.getEntriesByType("resource").filter((e) => /${HOSTS}/.test(e.name)).length;
               const sc = R.earthScenery.stats(), far = await R.farBuildings(), g = c.geoNow();
-              return { name: "leg-" + ${i}, frames, gapMax: +gapMax.toFixed(1), gpu, quick, requests: req,
+              return { name: "leg-" + ${i}, frames, gapMax: +gapMax.toFixed(1), gpu, quick, requests: req, scenes: { full: scFull, quick: scQuick, fastFlight: fast },
                 near: sc.bdtopoBuildings + sc.overtureBuildings, far: far?.inView ?? null,
                 at: g && { lat: +g.lat.toFixed(4), lon: +g.lon.toFixed(4), alt: Math.round(g.alt), gs: Math.round(g.gs ?? 0),
                   paused: document.body.classList.contains("paused"), ap: c.jetModes.alt !== null, athr: c.jetModes.spd !== null } }; })()`);
@@ -237,7 +244,7 @@ test.skipIf(!E2E)(
             legs.push(l);
             const g = [...l.gpu].sort((a, b) => a - b);
             console.log(
-              `  ${name} ${l.name}: ${l.frames} images, gap max ${l.gapMax} ms, GPU p50 ${g[g.length >> 1] ?? "-"} ms, quick ${l.quick}, requests ${l.requests}, near ${l.near}, far ${JSON.stringify(l.far)} — ${JSON.stringify(l.at)}`,
+              `  ${name} ${l.name}: ${l.frames} images, gap max ${l.gapMax} ms, GPU p50 ${g[g.length >> 1] ?? "-"} ms, quick ${l.quick} (scenes ${JSON.stringify(l.scenes)}), requests ${l.requests}, near ${l.near}, far ${JSON.stringify(l.far)} — ${JSON.stringify(l.at)}`,
             );
             if ((l.at as { paused?: boolean } | null)?.paused) throw new Error(`${name}: paused in flight — ${JSON.stringify(l.at)}`);
             // (rule 13: the craft as flown after each leg)
