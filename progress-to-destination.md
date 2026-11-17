@@ -10527,3 +10527,9 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
 - **Constat :** aplanir le sol sous les routes hors de France (`roadProfile` et `roadBank`, approches) modifie le sol du monde. Le relief dessiné, le worker du décor et le contact de l'appareil et du marcheur doivent alors lire une seule fonction de sol, comme pour les pistes (`gradeAt`). Le faire dans le seul dessin désaccorderait voitures, lampadaires et roues de l'image.
 - **Proposition (au plan, ligne RP3) :** une couche « nivellement des routes » à côté de celle des pistes. Elle serait calculée à la préparation des cellules hors de France : une grille d'écarts de 2 m sous la chaussée, publiée avec une génération. `gradeAt` et le shader du relief la liraient. Ce choix est à faire avant le code, qui est reporté après le gros e2e.
 - **Pas de code** dans ce lot.
+
+### 2026-11-17 10:54 UTC — PLAN-J8 J8-RP RP6 : les lampadaires sur les ponts (session 33d89754)
+
+- **Réalisé :** les lignes d'éclairage de la scène passent maintenant sur les ponts OMT, et leurs lampadaires sont posés sur le tablier (`deckHeightAt`). Là où aucun tablier n'a été construit, il n'y en a pas.
+- **Preuves :** `tsc`, Biome. **Non vu en jeu.**
+- **Limite :** la flaque de lumière reste peinte au sol, sous le pont.

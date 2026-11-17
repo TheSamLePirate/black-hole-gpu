@@ -544,7 +544,14 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
   // (Q8 D1: the vineyards' and orchards' polygons, for the decals alone)
   const rowCrops: Primitive[] = [];
   // (Q8 L10: the town streets' runs near, the lamps set along them at the end)
-  const lampLines: { xy: [number, number][]; geo: { lat: number; lon: number }[]; cls: string; width: number }[] = [];
+  const lampLines: {
+    xy: [number, number][];
+    geo: { lat: number; lon: number }[];
+    cls: string;
+    width: number;
+    /** (PLAN-J8 J8-RP RP6) on a bridge: its lamps on the deck */
+    bridge?: boolean;
+  }[] = [];
   let lamps: StreetLamp[] = [];
   let lampGrid: Uint8Array | undefined;
   const cars: SceneryCar[] = [];
@@ -704,7 +711,7 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
               if (segs.length) roadLines.push({ segs, cls, oneway: Number(props.oneway) || 0, bridge: props.brunnel === "bridge" });
             }
             // (Q8 L10: a town street's runs — its consecutive segments with their middles in the tile, near — for the lamps)
-            if (!water && !rail && LAMP_CLASSES[cls] && !props.brunnel) {
+            if (!water && !rail && LAMP_CLASSES[cls] && props.brunnel !== "tunnel" && props.brunnel !== "ford") {
               let run: (typeof lampLines)[number] | null = null;
               for (let j = 0; j < line.length - 1; j++) {
                 const mx = (line[j]!.x + line[j + 1]!.x) / 2,
@@ -721,7 +728,7 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
                   continue;
                 }
                 if (!run) {
-                  run = { xy: [[locals[j]![0], locals[j]![1]]], geo: [geo(line[j]!)], cls, width };
+                  run = { xy: [[locals[j]![0], locals[j]![1]]], geo: [geo(line[j]!)], cls, width, bridge: props.brunnel === "bridge" };
                   lampLines.push(run);
                 }
                 run.xy.push([locals[j + 1]![0], locals[j + 1]![1]]);
@@ -2190,6 +2197,13 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
         if (d > LAMP_REACH_M || !town(l.foot[0], l.foot[1])) continue;
         const a = r.geo[l.seg]!,
           b = r.geo[l.seg + 1]!;
+        // (RP6: a bridge's lamp on its deck — none where no deck was built)
+        if (r.bridge) {
+          const zd = deckHeightAt(l.foot[0], l.foot[1]);
+          if (zd === null) continue;
+          all.push({ ...l, foot: [l.foot[0], l.foot[1], zd], d });
+          continue;
+        }
         const h = heightNow(a.lat + (b.lat - a.lat) * l.frac, a.lon + (b.lon - a.lon) * l.frac);
         if (h === undefined) continue;
         // (the ground's height over the frame's plane there: the frame's local z of the foot at that height)
