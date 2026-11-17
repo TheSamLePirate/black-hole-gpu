@@ -27,6 +27,7 @@ import {
   isAppPage,
   isLegacyShell,
   isOwnShellCache,
+  lidarTwinOf,
   ownsLegacyShell,
   SHELL_CACHE,
   TILE_CACHE,
@@ -724,6 +725,26 @@ async function tile(request: Request): Promise<Response> {
     serving(request.url, "lru");
     indexTouch({ url: request.url, t: Date.now(), size: Number(hit.headers.get("content-length")) || 0 });
     return fromCache;
+  }
+  // (PLAN-J8 J8-A, the offline relief's rule — agreed between the sessions, 17 Nov 2026: a RGE ALTI grid no zone holds, beside its LiDAR
+  // a zone holds — the zone judged the LiDAR enough, away from the coast —: online asked as ever (the game's check of the LiDAR, the
+  // Calanques'), offline none at once, a 404 — the game keeps the LiDAR, its tile no longer waiting. A zone on the coast holds both:
+  // zones.ts seaCheck)
+  const twin = zoned ? null : lidarTwinOf(request.url);
+  if (twin && !self.navigator.onLine && (await anyZoneTiles()) && (await (await zoneCache()).match(twin))) {
+    serving(request.url, "zone");
+    return new Response(null, { status: 404, headers: { "x-kerr-zone": "1", "access-control-allow-origin": "*" } });
+  }
+  if (twin && (await anyZoneTiles()) && (await (await zoneCache()).match(twin))) {
+    try {
+      const res = await networkFetch(request);
+      serving(request.url, "network");
+      return res;
+    } catch {
+      // (the network cut — the worker's navigator said online —: the zone's answer)
+      serving(request.url, "zone");
+      return new Response(null, { status: 404, headers: { "x-kerr-zone": "1", "access-control-allow-origin": "*" } });
+    }
   }
   serving(request.url, "network");
   const res = await networkFetch(request);

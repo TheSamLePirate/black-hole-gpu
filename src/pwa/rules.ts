@@ -269,3 +269,17 @@ export function geopfClass(url: string): number {
   if (url.includes("ORTHOIMAGERY") || /BDTOPO/i.test(url) || /MNH/i.test(url)) return 1;
   return 2;
 }
+
+/** the IGN's height layers as earth-tiles.ts names them (IGN_RGEALTI, IGN_LIDAR — tests/pwa-rules.test.ts holds them equal) */
+export const RGEALTI_LAYER = "ELEVATION.ELEVATIONGRIDCOVERAGE.HIGHRES";
+export const LIDAR_LAYER = "IGNF_LIDAR-HD_MNT_ELEVATION.ELEVATIONGRIDCOVERAGE.WGS84G";
+/**
+ * PLAN-J8 J8-A, the offline relief's rule (17 Nov 2026, agreed between the sessions): a RGE ALTI grid's LiDAR twin — the same request
+ * on the LiDAR's layer — or null for any other URL. The Service Worker answers a RGE ALTI no zone holds, beside a LiDAR a zone holds,
+ * with a 404 at once (the game keeps the LiDAR: earth-tiles.ts ignGrid takes a 404 for none); a zone on the coast holds both
+ * (zones.ts seaCheck).
+ */
+export function lidarTwinOf(url: string): string | null {
+  if (!url.includes("data.geopf.fr/wms-r") || !url.includes(`LAYERS=${RGEALTI_LAYER}&`)) return null;
+  return url.replace(`LAYERS=${RGEALTI_LAYER}&`, `LAYERS=${LIDAR_LAYER}&`);
+}

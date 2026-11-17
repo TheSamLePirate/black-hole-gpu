@@ -1,8 +1,11 @@
 import { expect, test } from "bun:test";
 import { bdtopoUrl } from "../src/system/bdtopo";
 import { swissimageUrl, swissTerrainUrl } from "../src/system/national";
-import { orthoUrl } from "../src/system/earth-tiles";
+import { IGN_LIDAR, IGN_RGEALTI, ignHeightUrl, orthoUrl } from "../src/system/earth-tiles";
 import {
+  LIDAR_LAYER,
+  lidarTwinOf,
+  RGEALTI_LAYER,
   geopfBudget,
   geopfClass,
   geopfService,
@@ -162,4 +165,13 @@ test("CM2: a Géoplateforme request's service — the WMS-R's grids, the WMTS's 
   expect(geopfBudget("https://data.geopf.fr/wmts?SERVICE=WMTS&LAYER=ORTHOIMAGERY.ORTHOPHOTOS")).toBe("tiles");
   expect(geopfBudget("https://data.geopf.fr/tms/1.0.0/BDTOPO/15/16800/11900.pbf")).toBe("tiles");
   expect(geopfBudget("https://data.geopf.fr/geocodage/search?q=x")).toBe("rate");
+});
+
+test("the offline relief's rule (PLAN-J8 J8-A): a RGE ALTI grid's LiDAR twin, the layers earth-tiles.ts's", () => {
+  expect(RGEALTI_LAYER).toBe(IGN_RGEALTI);
+  expect(LIDAR_LAYER).toBe(IGN_LIDAR);
+  const rge = ignHeightUrl(IGN_RGEALTI, 17, 66380, 45080, 256);
+  expect(lidarTwinOf(rge)).toBe(ignHeightUrl(IGN_LIDAR, 17, 66380, 45080, 256));
+  expect(lidarTwinOf(ignHeightUrl(IGN_LIDAR, 17, 66380, 45080, 256))).toBeNull();
+  expect(lidarTwinOf("https://data.geopf.fr/wmts?LAYERS=ELEVATION.ELEVATIONGRIDCOVERAGE.HIGHRES&x=1")).toBeNull();
 });

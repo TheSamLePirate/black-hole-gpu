@@ -26,7 +26,8 @@ import { GIANT_LAYERS, GiantThunder, giantLevel, isGiant } from "./system/giant-
 import { airAt } from "./aero";
 import { setDrawnRefractivity } from "./system/refraction";
 import { projectLook } from "./shadow";
-import { groundVelocity, heightOverGround } from "./system/our-surface";
+import { bodyFixedOf, groundRelief, groundVelocity, heightOverGround } from "./system/our-surface";
+import { geoidDeg, geoidMap } from "./system/geoid-grid";
 import { VoyageHud } from "./ui/voyagehud";
 import { voyageChoice, voyageFigures } from "./camera/voyager";
 import { G_PER_M, planVoyage } from "./camera/voyage";
@@ -984,6 +985,13 @@ async function main() {
       talk: pwa.talk,
       // (a zone's building cells prepared once its tiles are in — PLAN-J8 J8-6)
       cells: zoneCellsIO,
+      // (PLAN-J8 J8-A: a zone on the coast holds RGE ALTI at the LiDAR's levels — the ground's relief, over the ellipsoid (max(H, 0) + N),
+      // less the geoid's N: the sea within half a metre of it — not a river's or a lake's water; unknown without the geoid's grid)
+      seaAt: (lat, lon) => {
+        if (!geoidMap()) return null;
+        const h = groundRelief("earth", bodyFixedOf("earth", lat, lon, 0));
+        return Number.isFinite(h) ? h - geoidDeg(lat, lon) <= 0.5 : null;
+      },
       // (the e2e harness's alone: its data from the e2e's disk — the WMS-R's spacing lifted; never a player's)
       wmsSpacingLifted: () => (globalThis as { __e2eWmsSpacingLifted?: boolean }).__e2eWmsSpacingLifted === true,
       busy: () => renderer.earthTiles.pending > 0 || renderer.earthTiles.orthoPending > 0,

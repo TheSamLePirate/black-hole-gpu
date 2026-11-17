@@ -19,6 +19,7 @@ import {
   zoneDuration,
   zoneEstimate,
   zoneLevelsAt,
+  zoneTouchesSea,
 } from "./system/zones";
 import { MESH_CELL_BYTES_EST, MESH_CELL_SECONDS_EST } from "./system/mesh-cells";
 import { cellsOnlyIn, type ZoneCells, zoneCellTiles, zoneMeshTiles, zoneStreetTiles } from "./system/zone-cells";
@@ -80,6 +81,10 @@ export function createZones(o: {
    *  come from the e2e's disk » — each batch tells the worker to skip its WMS-R spacing (sw.ts gentle), nothing else changed; a player
    *  never has it (off unless the page global `__e2eWmsSpacingLifted` is true) */
   wmsSpacingLifted?: () => boolean;
+  /** PLAN-J8 J8-A, the offline relief's rule: whether a place is at sea (true), on land (false), unknown (null) — the page's coarse
+   *  relief (renderer.earthLandAt); a zone that touches the sea holds RGE ALTI at the LiDAR's levels (zones.ts seaCheck); none given:
+   *  every zone judged on the coast (the safe side) */
+  seaAt?: (lat: number, lon: number) => boolean | null;
   /** the pause before the failed are asked again (RETRY_PAUSE_MS; the tests' 0) */
   retryPauseMs?: number;
   /** the building cells (PLAN-J8 J8-6): prepared into the prepared cache once a zone's tiles are in, dropped from it */
@@ -94,6 +99,12 @@ export function createZones(o: {
     dropMeshes?(tiles: { x: number; y: number }[]): Promise<void>;
   };
 }): Zones {
+  /** a zone's sources: the settings' now, and whether it touches the sea (judged once here, kept in its record: its chains the same
+   *  on a resume, a removal) */
+  const sourcesAt = (lat: number, lon: number, radiusKm: number): ZoneSources => ({
+    ...o.sources(),
+    seaCheck: zoneTouchesSea(lat, lon, radiusKm * 1000, o.seaAt ?? (() => null)),
+  });
   let active: string | null = null;
   const paused = new Set<string>();
   const queue: string[] = [];
@@ -225,7 +236,15 @@ export function createZones(o: {
   })();
   return {
     estimate({ lat, lon, radiusKm, profile, coreKm = 0, corridor }) {
-      const chains = zoneChains(lat, lon, radiusKm * 1000, ZONE_PROFILES[profile], o.sources(), coreKm * 1000, corridor ?? null);
+      const chains = zoneChains(
+        lat,
+        lon,
+        radiusKm * 1000,
+        ZONE_PROFILES[profile],
+        sourcesAt(lat, lon, radiusKm),
+        coreKm * 1000,
+        corridor ?? null,
+      );
       // (its near meshes along its corridor: prepared after its tiles, on the disk beside them — J8-8)
       const cells = zoneMeshTiles(chains, { lat, lon, corridor: corridor ?? null }).length;
       const meshes = { cells, bytes: cells * MESH_CELL_BYTES_EST };
@@ -262,7 +281,7 @@ export function createZones(o: {
         failed: 0,
         state: "downloading",
         cursor: 0,
-        sources: o.sources(),
+        sources: sourcesAt(lat, lon, radiusKm),
         created: Date.now(),
       };
       if (!(await save(zone))) return null;
@@ -314,7 +333,7 @@ export function createZones(o: {
         waitMs: 0,
         batchMs: 0,
         fresh: true,
-        sources: o.sources(),
+        sources: sourcesAt(z.lat, z.lon, z.radiusKm),
       });
       if (!queue.includes(id)) queue.push(id);
       void run();

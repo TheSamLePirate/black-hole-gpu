@@ -137,10 +137,26 @@ describe.skipIf(!E2E)(`PLAN-J8 J8-9: J8-A's corridor zone « ${TRACK} », downlo
           .catch((e) => console.log(`  (point ${k + 1} not settled: ${String(e).slice(0, 160)})`));
         // (J8-A's whole flight: the track given — its zone, its far and street cells within reach, not only the view at the point)
         const T = JSON.stringify({ points: track.points });
-        await app.waitOptional(`(async () => (await __bh.sys.flightReady({ track: ${T} })).ready)()`, 60_000);
-        const now = await app.js<{ ready: boolean; why: string[] }>(
-          `(async () => { const r = await __bh.sys.flightReady({ track: ${T} }); return { ready: r.ready, why: r.why }; })()`,
-        );
+        // (ready for 5 s in a row, 120 s at most: right after a jump of kilometres the new view has asked nothing yet — dataSettled and
+        // flightReady said done before its tiles began, then 67 to 142 tiles pending at the read: the race, 17 Nov 2026; its why at
+        // each change said)
+        const t0 = Date.now();
+        let now = { ready: false, why: [] as string[] },
+          since = 0,
+          lastWhy = "";
+        while (Date.now() - t0 < 120_000) {
+          now = await app.js<{ ready: boolean; why: string[] }>(
+            `(async () => { const r = await __bh.sys.flightReady({ track: ${T} }); return { ready: r.ready, why: r.why }; })()`,
+          );
+          if (!now.ready) since = 0;
+          else if (!since) since = Date.now();
+          if (since && Date.now() - since >= 5_000) break;
+          const w = now.why.join(" · ");
+          if (w && w !== lastWhy) console.log(`  … point ${k + 1}: ${Math.round((Date.now() - t0) / 1000)} s — ${w.slice(0, 200)}`);
+          lastWhy = w;
+          await Bun.sleep(1_000);
+        }
+        now.ready = !!since && Date.now() - since >= 5_000;
         ready.push({ point: k + 1, ready: !!now.ready, why: now.why ?? [] });
         // (a far layer's wanted cells not resident: its reserve refusing — refused, no block free — or still filling — the render's
         // reading, 17 Nov 2026)

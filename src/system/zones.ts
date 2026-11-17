@@ -14,6 +14,7 @@ import {
   dayUrl,
   FINE_Z,
   GIBS_Z1,
+  IGN_LIDAR_Z,
   IMG_Z1,
   NATIONAL,
   nightOf,
@@ -83,6 +84,11 @@ export interface ZoneSources {
   /** the world scenery as the game draws it (quality-policy.ts earthDetailFor: its mode, DETAIL_REACH's reach; the land
    *  cover's true colours with settings.earthSurface on) — none, off or absent; its survey follows `relief` */
   scenery?: { mode: SceneryMode; satellite: boolean; reach: number; overture?: boolean } | null;
+  /** PLAN-J8 J8-A, the offline relief's rule (17 Nov 2026, agreed between the sessions): a zone that touches the sea (zoneTouchesSea,
+   *  judged once when it is added) holds RGE ALTI beside the LiDAR at the LiDAR's levels — the game's check of the LiDAR's ground
+   *  (earth-tiles.ts ignGround: the Calanques', Giens's interpolated sea) kept offline on the coast; elsewhere the Service Worker answers
+   *  a RGE ALTI it does not hold, beside a LiDAR it holds, with a 404 at once (sw.ts) — the game keeps the LiDAR */
+  seaCheck?: boolean;
 }
 /**
  * A tile's fetches as the loads make them: a chain, each link asked only if the one before falls short — a height grid
@@ -276,7 +282,12 @@ export function reliefChains(z: number, x: number, y: number, o: ZoneSources): Z
     // is filled from it — a WebP the zone cannot read for holes. The streaming analysis, 6 Nov 2026)
     const surface = urls.filter((u) => u.includes("_MNS") || u.includes(".MNS"));
     const ground = urls.filter((u) => !surface.includes(u));
-    if (ground.length) out.push(ground);
+    // (a zone on the coast: the LiDAR's ground and RGE ALTI each its own chain at the LiDAR's levels — the game checks the one against
+    // the other there; elsewhere RGE ALTI only where the LiDAR falls short)
+    if (o.seaCheck && z >= IGN_LIDAR_Z && ground.length > 1 && ground[0]!.includes("LIDAR-HD_MNT")) {
+      out.push([ground[0]!]);
+      out.push(ground.slice(1));
+    } else if (ground.length) out.push(ground);
     out.push([terrarium]);
     if (surface.length) out.push(surface);
   } else out.push([terrarium]);
@@ -521,6 +532,26 @@ export interface ZonePlace {
   /** its corridor (J8-9 (2)): the airfield's levels along a track */
   corridor?: ZoneCorridor;
   sources: Pick<ZoneSources, "ortho" | "relief">;
+}
+/**
+ * Whether a zone's disc touches the sea (PLAN-J8 J8-A, the offline relief's rule): `seaAt` (lat, lon) → true at sea, false on land,
+ * null unknown — the page's coarse relief (renderer.earthLandAt) — at its centre and on rings every ~2 km to its edge; unknown anywhere:
+ * true (the coast's check kept: the safe side).
+ */
+export function zoneTouchesSea(lat: number, lon: number, radius: number, seaAt: (lat: number, lon: number) => boolean | null): boolean {
+  const D = Math.PI / 180;
+  const step = 2000;
+  for (let r = 0; r <= radius + 1; r += step) {
+    const n = r === 0 ? 1 : Math.max(8, Math.ceil((2 * Math.PI * r) / step));
+    for (let i = 0; i < n; i++) {
+      const a = (2 * Math.PI * i) / n;
+      const la = lat + (r * Math.cos(a)) / 111_320,
+        lo = lon + (r * Math.sin(a)) / (111_320 * Math.cos(lat * D));
+      const sea = seaAt(la, lo);
+      if (sea !== false) return true;
+    }
+  }
+  return false;
 }
 /** a place's distance [m] from a zone's centre [°] as zoneTiles measures its disc: in Web Mercator, at the centre's scale */
 export function zoneDistance(lat0: number, lon0: number, lat: number, lon: number): number {
