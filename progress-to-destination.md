@@ -10412,3 +10412,10 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
 - **Constat le plus urgent :** en France de jour, sous l'orthophoto IGN, la route peinte et les marquages de VB2 et VB7 ne se dessinent pas (`trace.wgsl` mélange par `1 − img.o`) : RP1 en tête. Les ponts ont un tablier plat estimé (le plus haut sol + 4 m) et des piles au pied interpolé.
 - **Preuves :** documenté, lu dans le code ; rien vérifié en jeu, aucun test lancé ici.
 - **Suite :** RP1 (rendu) et la préparation de RP2/RP4 (approches), puis le reste avant le gros e2e.
+
+### 2026-11-17 10:27 UTC — PLAN-J8 J8-RP RP1 : la peinture des routes par-dessus l'orthophoto (session 33d89754)
+
+- **Destination :** §19.13 (« AAA road and bridges », Sam, 17 nov.) ; J8-RP RP1, en mode speed.
+- **Réalisé :** `scenerySurface` garde à part sa peinture (marquages de VB2, lignes et passages de VB7) avec sa couverture au pixel (`SC_PAINT`, déclaré hors du bloc du décor). `shadeLite` la pose sur l'orthophoto nationale, qui reste l'albédo de la chaussée. Avant, en France de jour, cette peinture était mélangée par `1 − img.o` et ne se voyait pas. La marche exacte des surfaces tourne de nouveau sous la photo là où la peinture se voit : pied de pixel sous 2 m, à moins de 2,5 km.
+- **Preuves :** `check-wgsl`. **Non vu en jeu, coût non mesuré** (gros e2e ; la marche coûtait 0,66 ms sur tous les pixels de moins de 12 m dans la Manche).
+- **Suite :** RP5 et RP10, sans dépendance, puis RP2, RP4, RP6, RP7 et RP8 sur KSC4 (format accordé avec les approches).

@@ -7789,6 +7789,10 @@ fn imageryUv(q: vec3f) -> vec2f {
 // (within this of the camera [m]: the levels finer than the float32 point's ~0.4 m read there — further, its footprint coarser)
 const TILE_ANCHOR_M = 2000.0;
 var<private> TILE_AT: vec2f = vec2f(0.0);
+// (PLAN-J8 J8-RP RP1: the paint scenerySurface met at its point — the roads' markings (VB2), a junction's lines and crossings (VB7) —, its
+// colour and its cover in the pixel: shadeLite lays it over a national photograph, which is the carriageway's albedo there)
+var<private> SC_PAINT:vec4f=vec4f(0.0);
+// (outside the scenery's block: shadeLite reads it in every kernel)
 var<private> TILE_AT_ON: bool = false;
 fn tileCoord(q: vec3f) -> vec2f {
   if (TILE_AT_ON) { return TILE_AT; }
@@ -10621,6 +10625,7 @@ fn sceneryShadow(light:vec3f,normal:vec3f)->f32 {
 struct ScenerySurface { color:vec3f, cover:f32, kind:f32 };
 fn scenerySurface(foot:f32)->ScenerySurface {
   var out=ScenerySurface(vec3f(0.0),0.0,0.0);
+  SC_PAINT=vec4f(0.0);
   if(!HAS_SCENERY || P.scenery[0].w<.5 || P.scenery[2].w<.5 || SC_DISTANCE>P.scenery[1].w){return out;}
   let point=SC_POINT.xy;let aa=max(.12,foot*.75);let header=scenery[1];let total=u32(header.y);var i=0u;var priority=0.0;var dryIsland=false;
   while(i<total){
@@ -10646,6 +10651,7 @@ fn scenerySurface(foot:f32)->ScenerySurface {
         if(pat==1u){cover*=1.0-smoothstep(.5-aa*.5,.5+aa*.5,fract(sa)+select(0.0,1.0,fract(sa)<0.0));}
         if(pat==2u){cover*=1.0-smoothstep(.6-aa*.5,.6+aa*.5,sa%1.2);}
         cover*=1.0-smoothstep(1.5,2.0,foot);
+        if(cover>SC_PAINT.w){SC_PAINT=vec4f(color,cover);}
       }
       // (PLAN-J8 VB2: a road's markings, kerb and pavements — the worker's roadMarkings, KSC3's rules: size.z the flags (1 edge lines,
       // 2 a dashed centre, 4 a solid one, 8 a kerb) + 16 one way + 32 lane lines + 512 the pavement [dm], size.w the carriageway's
@@ -10673,6 +10679,8 @@ fn scenerySurface(foot:f32)->ScenerySurface {
             if(j>=1.0 && j<=k-1.0 && (one || j>=1.0)){m=max(m,(1.0-smoothstep(.06,.06+aa,abs(f-j)*w))*ldash);}
           }
           color=mix(color,paint,m);
+          // (RP1: the paint kept apart — its cover the marking's in the road's —, for a photograph's ground)
+          if(m*cover>SC_PAINT.w){SC_PAINT=vec4f(paint,m*cover);}
         }
       }else if(kind==1.0 && size.x>=3.5 && foot<2.0){
         let stripe=1.0-smoothstep(.09,.09+aa,distance);
@@ -16032,7 +16040,10 @@ fn liteMaterial(gq: vec3f, q: vec3f, ph: vec3f, rd: vec3f, look: vec3f, tM: f32,
     // the decals' one read beyond: the walk on every pixel under 12 m cost 0.66 ms in La Mancha)
     // (under a national photograph the map's colour is not drawn — the walk was for nothing there: France whole —; at night
     // still, for the streets' lights)
-    if (mu0g < 0.06 || (fpM < 0.3 && tM < 4000.0 && img.o < 0.99)) { sv = sceneryGround(dirW, tM, fpM); }
+    // (PLAN-J8 RP1: under a national photograph the walk again where the paint shows — a pixel under 2 m, within 2.5 km —: its
+    // paint alone laid over the photograph below, the photograph the carriageway)
+    SC_PAINT = vec4f(0.0);
+    if (mu0g < 0.06 || (fpM < 0.3 && tM < 4000.0 && img.o < 0.99) || (fpM < 2.0 && tM < 2500.0 && img.o >= 0.99)) { sv = sceneryGround(dirW, tM, fpM); }
     else if (fpM < 12.0 && tM < 4000.0 && img.o < 0.99) {
       // (the scenery's local frame written out — sceneryLocal goes with the scenery's code, a kernel without it would not compile)
       let dL = vec3f(dot(dirW, P.scenery[0].xyz), dot(dirW, P.scenery[1].xyz), dot(dirW, P.scenery[2].xyz));
@@ -16047,6 +16058,8 @@ fn liteMaterial(gq: vec3f, q: vec3f, ph: vec3f, rd: vec3f, look: vec3f, tM: f32,
     if (DECAL_ROW.x > 0.5) { A *= mix(1.0, rowCrop(xyc + P.scenery[6].xy, DECAL_ROW.x, DECAL_ROW.y, fpM), DECAL_ROW.z); }
   }
   A = mix(A, sv.color, select(sv.cover, 0.0, sv.kind == 3.0 || sv.kind == 4.0) * (1.0 - img.o));
+  // (RP1: the paint over the photograph — its share the photograph's, the map's colour above carrying the rest)
+  if (SC_PAINT.w > 0.0) { A = mix(A, SC_PAINT.rgb, SC_PAINT.w * img.o); }
   if (!mesh && !isTree && fpM < 10.0 && (liteSkip() & 16u) == 0u) {
     TILE_AT_ON = anchored;
     let sf = earthSlopeFine(gq, fpM);
