@@ -566,7 +566,7 @@ export interface SceneryReply {
    *  (0: none cut); the survey's tree candidates their footprints refused and the time their grid took [ms] */
   cutBuildings?: number;
   /** (PLAN-J8 J8-8b lot 2) the forest's prepared cells read under the frame, those missing, the cases they covered */
-  forestPrepared?: { cells: number; missing: number; noCanopy: number; cases: number } | null;
+  forestPrepared?: { cells: number; missing: number; noCanopy: number; cases: number; bdtopoSkipped: boolean } | null;
   /** (PLAN-J8 J8-8 lot 4) the BD TOPO's buildings left to their mesh cells (meshCells) */
   meshLeft?: number;
   keptReachM?: number;

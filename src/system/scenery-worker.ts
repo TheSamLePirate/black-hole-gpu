@@ -468,6 +468,42 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
   // (the forest's grid: its bytes held from the start — the networks' and buildings' budgets after it)
   const reach = radius + 250;
   const ff = forestFrame(q.lat, q.lon, reach, (lat, lon) => localPoint(frame, lat, lon, 0));
+  // (PLAN-J8 J8-8b: the forest's prepared cells under the frame read now, beside the data — lot 3: all of them there, the BD TOPO's
+  // buildings not fetched at all (with meshCells they only kept the trees off their footprints, the cells' words have that))
+  let preparedError = "";
+  const preparedP: Promise<Awaited<ReturnType<typeof preparedForest>>> =
+    q.forestPrepared && typeof caches !== "undefined"
+      ? (async () => {
+          const store = await caches.open(FOREST_CACHE);
+          // (the cache's keys read once for the scene — a keys() or match() with ignoreSearch per cell walks the whole cache: Paris's
+          // 272 cells against its 869 took the M1 Max's full scene from ~25 s to 61 s, 17 Nov 2026), each cell's best kept: any
+          // generation, the newest, the canopy's first (cell-workers.ts forestStore)
+          const rank = (r: Request) => {
+            const s = new URL(r.url).searchParams;
+            return Number(s.get("c") ?? 0) * 1e9 + Number(s.get("g") ?? 0);
+          };
+          const best = new Map<string, Request>();
+          for (const r of await store.keys()) {
+            const path = new URL(r.url).pathname;
+            const had = best.get(path);
+            if (!had || rank(r) > rank(had)) best.set(path, r);
+          }
+          return preparedForest(
+            ff,
+            async (x, y) => {
+              const key = best.get(new URL(forestCacheUrl(self.location.origin, x, y, 0, false)).pathname);
+              const r = key ? await store.match(key) : undefined;
+              return r ? await r.arrayBuffer() : null;
+            },
+            land instanceof IgnLand,
+          );
+        })().catch((e) => {
+          preparedError = String(e).slice(0, 200);
+          return null;
+        })
+      : Promise.resolve(null);
+  // (lot 3: every cell under the frame prepared and usable — none missing, none without the canopy the scene has)
+  const forestWhole = preparedP.then((p) => !!p && p.missing === 0 && p.noCanopy === 0 && p.cases > 0);
   // (Q8 D1: the main roads' segments for the traffic, and the cars on them)
   const roadLines: { segs: { a: { lat: number; lon: number }; b: { lat: number; lon: number } }[]; cls: string; oneway: number }[] = [];
   // (Q8 D1: the vineyards' and orchards' polygons, for the decals alone)
@@ -863,7 +899,16 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
     await Promise.all(Array.from({ length: BDTOPO_RUNNERS }, runner));
     return { out, covered, tileCount };
   };
-  const bdtopo = survey === "ign" ? bdtopoTiles() : null;
+  // (J8-8b lot 3: with the near buildings from their mesh cells and the forest whole from its cells, the BD TOPO's tiles serve nothing
+  // here — not fetched, not decoded: null in the promise)
+  let bdtopoSkipped = false;
+  const bdtopo =
+    survey === "ign"
+      ? (q.meshCells ? forestWhole : Promise.resolve(false)).then((whole) => {
+          bdtopoSkipped = whole;
+          return whole ? null : bdtopoTiles();
+        })
+      : null;
   // ---- elsewhere, Overture Maps' buildings near the centre (B7, pmtiles.ts): OSM's with the ML footprints of Microsoft's
   // and Google's, their roofs' shapes, heights, colours and materials where mapped — a z 14 tile 0.5–1.6 MB, so within
   // OVERTURE_REACH_M alone; OSM's own buildings kept beyond, and where an Overture tile failed
@@ -1099,8 +1144,18 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
   let bdtopoBuildings = 0,
     bdtopoTileCount = 0;
   phase("osm");
-  if (bdtopo) {
-    const b = await bdtopo;
+  const b = bdtopo ? await bdtopo : null;
+  if (bdtopo && !b) {
+    // (lot 3: the BD TOPO skipped — OSM's within its box drawn by the cells, as when it was read)
+    phase("bdtopo");
+    for (const v of osmChoices)
+      if (inBdtopoBox(...(bdKey(v.lat, v.lon).split("/").map(Number) as [number, number]))) {
+        cut.push(v);
+        meshLeft++;
+      } else choices.push(v);
+    trim();
+  }
+  if (b) {
     phase("bdtopo");
     bdtopoTileCount = b.tileCount;
     // (one by one: Paris's tens of thousands would overflow a spread's arguments)
@@ -1303,37 +1358,10 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
   let clearedTrees = 0;
   const housedAt = (p: Vec3) => inGrid(houses, p) || (inGrid(cutHouses, p) && ++clearedTrees > 0);
   phase("before forest");
-  // (PLAN-J8 J8-8b lot 2: the forest's prepared cells under the frame — their cases taken as they were decided, the rest as before)
-  let prepared: Awaited<ReturnType<typeof preparedForest>> = null;
-  if (q.forestPrepared && typeof caches !== "undefined") {
-    try {
-      const store = await caches.open(FOREST_CACHE);
-      // (the cache's keys read once for the scene — a keys() or match() with ignoreSearch per cell walks the whole cache: Paris's 272
-      // cells against its 869 took the M1 Max's full scene from ~25 s to 61 s, 17 Nov 2026), each cell's best kept: any generation, the
-      // newest, the canopy's first (cell-workers.ts forestStore)
-      const rank = (r: Request) => {
-        const s = new URL(r.url).searchParams;
-        return Number(s.get("c") ?? 0) * 1e9 + Number(s.get("g") ?? 0);
-      };
-      const best = new Map<string, Request>();
-      for (const r of await store.keys()) {
-        const path = new URL(r.url).pathname;
-        const had = best.get(path);
-        if (!had || rank(r) > rank(had)) best.set(path, r);
-      }
-      prepared = await preparedForest(
-        ff,
-        async (x, y) => {
-          const key = best.get(new URL(forestCacheUrl(self.location.origin, x, y, 0, false)).pathname);
-          const r = key ? await store.match(key) : undefined;
-          return r ? await r.arrayBuffer() : null;
-        },
-        land instanceof IgnLand,
-      );
-    } catch (e) {
-      if (surveyErrors.length < 4) surveyErrors.push(`forest cells: ${String(e).slice(0, 200)}`);
-    }
-  }
+  // (PLAN-J8 J8-8b lot 2: the forest's prepared cells under the frame — their cases taken as they were decided, the rest as before;
+  // read early, beside the data — preparedP)
+  const prepared = await preparedP;
+  if (preparedError && surveyErrors.length < 4) surveyErrors.push(`forest cells: ${preparedError}`);
   phase("forest cells");
   const grown = await growForest(ff, {
     cover: (lat, lon) => {
@@ -1732,7 +1760,7 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
     keptReachM,
     meshLeft,
     forestPrepared: prepared
-      ? { cells: prepared.cells, missing: prepared.missing, noCanopy: prepared.noCanopy, cases: prepared.cases }
+      ? { cells: prepared.cells, missing: prepared.missing, noCanopy: prepared.noCanopy, cases: prepared.cases, bdtopoSkipped }
       : null,
     clearedTrees,
     cutHousesMs,
