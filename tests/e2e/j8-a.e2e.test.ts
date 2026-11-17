@@ -6,6 +6,7 @@ import { J8A_LOW_TRACKS, J8A_TRACKS } from "../../src/system/j8a-tracks";
 import { cellsAlong } from "../../src/system/zone-cells";
 import { corridorDisc, turnRadiusFor } from "../../src/system/zones";
 import { App, E2E, stopServer } from "./lib/app";
+import { pageWitness } from "./lib/witness";
 import { CRUISE, expectFlight, flightState } from "./lib/flight-state";
 import { J0_FIXED } from "./lib/j0-scene";
 
@@ -80,29 +81,6 @@ type Leg = {
   scenes: { full: number[]; quick: number[]; fastFlight: number };
   at: unknown;
 };
-const HEAP = `(() => { const m = performance.memory; return m ? Math.round(m.usedJSHeapSize / 1e6) : null; })()`;
-/** the page's witness (J8A_WITNESS): its heap asked every 30 s, its answer's delay or « NO ANSWER in 10 s » logged; stopped by the call */
-function pageWitness(app: App): () => void {
-  const t0 = Date.now();
-  let busy = false;
-  const timer = setInterval(async () => {
-    if (busy) return;
-    busy = true;
-    const at = new Date().toISOString().slice(11, 19);
-    const s = Date.now();
-    try {
-      const r = await app.cdp.send<{ result: { value: number | null } }>("Runtime.evaluate", { expression: HEAP, returnByValue: true }, 10);
-      console.log(
-        `  [witness ${at} UTC, +${((s - t0) / 60_000).toFixed(1)} min] answered in ${Date.now() - s} ms · heap ${r.result?.value} MB`,
-      );
-    } catch {
-      console.log(`  [witness ${at} UTC, +${((s - t0) / 60_000).toFixed(1)} min] NO ANSWER in 10 s`);
-    } finally {
-      busy = false;
-    }
-  }, 30_000);
-  return () => clearInterval(timer);
-}
 test.skipIf(!E2E)(
   "J8-A: Paris and Toulon-Hyères flown by day and by night, everything loaded before — no request, no quick scene, the buildings drawn",
   async () => {
@@ -111,7 +89,7 @@ test.skipIf(!E2E)(
     const app = await App.boot({ width: 1920, height: 1080, hash: "scene=game:artemis", tiles: true, sw: TRACK_READY });
     // (J8A_WITNESS=1: the page's witness — a Runtime.evaluate of its JS heap every 30 s on its own timer, 10 s to answer —, the time
     // a page stops answering dated to 30 s: the freeze of Toulon's zone after Paris's flights in one page, 17 Nov 2026; the
-    // approaches session's pageWitness, j8-zone-paris)
+    // approaches session's pageWitness, lib/witness.ts)
     const witness = process.env.J8A_WITNESS === "1" ? pageWitness(app) : () => {};
     const out: Record<string, unknown> = { startedAt: new Date().toISOString(), machine: MACHINE, flights: {} };
     try {
