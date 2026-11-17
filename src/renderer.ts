@@ -260,7 +260,8 @@ import { StreetFar } from "./system/street-far";
 import { NEAR_REGION_BYTES, NearMeshes } from "./system/near-meshes";
 import { setNearBuildingsContact } from "./system/scenery-contact";
 import type { EyeState } from "./system/building-layer";
-import { cellPool, meshPool, streetPool } from "./system/cell-workers";
+import { cellPool, forestPool, meshPool, streetPool } from "./system/cell-workers";
+import { forestWants } from "./system/forest-assembly";
 import { LANDSCAPES, LANDSCAPE_CLEARING_M } from "./system/landscapes";
 const SCENERY_EXCLUSIONS: SceneryExclusion[] = [
   ...EARTH_RUNWAYS.map((r) => ({
@@ -4332,6 +4333,18 @@ export class Renderer {
             halfFov: (45 * Math.PI) / 180,
           };
         } else this.farEye = null;
+        // (PLAN-J8 J8-8b lot 2: the forest cells around the eye asked of their pool — every 2 s or 200 m —, the scene reading them
+        // from the cache at its next making)
+        const fe = this.farEye;
+        if (this.forestCellsOn && this.forestPoolOn && fe) {
+          const w = this.forestWantAt,
+            now = performance.now();
+          const cosL = Math.cos((fe.lat * Math.PI) / 180);
+          if (!w || now - w.t > 2000 || Math.hypot((fe.lat - w.lat) * 111320, (fe.lon - w.lon) * 111320 * cosL) > 200) {
+            this.forestWantAt = { lat: fe.lat, lon: fe.lon, t: now };
+            forestPool().want(forestWants(fe));
+          }
+        }
       }
       const lead = focus ? streamingLead(focus, this.streamVelocity) : ([0, 0, 0] as Vec3);
       this.streamingState.leadM = Math.hypot(...lead) * 6378137;
@@ -4397,6 +4410,8 @@ export class Renderer {
       // (PLAN-J8 J8-5: the far layer drawing, the scene's buildings within 2 km of its corridor alone — the rest the layer's)
       // (PLAN-J8 J8-8 lot 4: the BD TOPO's buildings drawn from their mesh cells — out of the scene)
       this.earthScenery.meshCells = this.farBuildingsOn && this.nearCellsWant;
+      // (PLAN-J8 J8-8b lot 2: the forest from its prepared cells where they are)
+      this.earthScenery.forestPrepared = this.forestCellsOn;
       this.earthScenery.update(
         eye,
         detail.scenery,
@@ -11312,6 +11327,15 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
    *  (the e2e that check the near scene's own buildings) */
   private nearCellsWant = new URLSearchParams(globalThis.location?.hash.slice(1) ?? "").get("nearCells") !== "0";
   private nearMeshes: NearMeshes | null = null;
+  /** PLAN-J8 J8-8b lot (2): the near scene's forest assembled from its prepared cells (kerr-forest-v1 — forest-assembly.ts) where they are
+   *  in the cache (an offline zone's; the forest pool's — asked round the eye with forestPoolOn), the rest decided as before. Off until measured
+   *  (the M1 Max's reference: Paris, 17 Nov 2026); the page's hash `forestCells=1`: on from the start */
+  forestCellsOn = new URLSearchParams(globalThis.location?.hash.slice(1) ?? "").get("forestCells") === "1";
+  private forestWantAt: { lat: number; lon: number; t: number } | null = null;
+  /** (with forestCellsOn) the forest pool asked for the cells round the eye — off: the cells an offline zone prepared alone (17 Nov
+   *  2026: the pool's cells, made outside a zone, have no canopy — left out by a scene that has the IGN's, its work wasted, two workers
+   *  at ~0.45 s a cell beside the scene's on the M1 Max) */
+  forestPoolOn = false;
   /** (the near mesh cells') what is resident: cells, buildings, triangles, the pools' blocks; the cells wanted, those missing */
   nearCells() {
     return this.nearMeshes?.stats() ?? null;

@@ -63,6 +63,8 @@ import {
   stripPolygon,
   surfaceContains,
 } from "./scenery-geometry";
+import { forestCacheUrl, FOREST_CACHE } from "./forest-cells";
+import { preparedForest } from "./forest-assembly";
 import { buildingMesh } from "./roof-mesh";
 import { buildingLeaves, lidarRoof as measuredRoof, partMeshes, STACK_BYTES } from "./building-mesh-prep";
 import { builtUp, LAMP_CLASSES, LAMP_MAX, LAMP_REACH_M, lampLight, lampMesh, lampsAlong, type StreetLamp } from "./streetlamps";
@@ -1301,6 +1303,38 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
   let clearedTrees = 0;
   const housedAt = (p: Vec3) => inGrid(houses, p) || (inGrid(cutHouses, p) && ++clearedTrees > 0);
   phase("before forest");
+  // (PLAN-J8 J8-8b lot 2: the forest's prepared cells under the frame — their cases taken as they were decided, the rest as before)
+  let prepared: Awaited<ReturnType<typeof preparedForest>> = null;
+  if (q.forestPrepared && typeof caches !== "undefined") {
+    try {
+      const store = await caches.open(FOREST_CACHE);
+      // (the cache's keys read once for the scene — a keys() or match() with ignoreSearch per cell walks the whole cache: Paris's 272
+      // cells against its 869 took the M1 Max's full scene from ~25 s to 61 s, 17 Nov 2026), each cell's best kept: any generation, the
+      // newest, the canopy's first (cell-workers.ts forestStore)
+      const rank = (r: Request) => {
+        const s = new URL(r.url).searchParams;
+        return Number(s.get("c") ?? 0) * 1e9 + Number(s.get("g") ?? 0);
+      };
+      const best = new Map<string, Request>();
+      for (const r of await store.keys()) {
+        const path = new URL(r.url).pathname;
+        const had = best.get(path);
+        if (!had || rank(r) > rank(had)) best.set(path, r);
+      }
+      prepared = await preparedForest(
+        ff,
+        async (x, y) => {
+          const key = best.get(new URL(forestCacheUrl(self.location.origin, x, y, 0, false)).pathname);
+          const r = key ? await store.match(key) : undefined;
+          return r ? await r.arrayBuffer() : null;
+        },
+        land instanceof IgnLand,
+      );
+    } catch (e) {
+      if (surveyErrors.length < 4) surveyErrors.push(`forest cells: ${String(e).slice(0, 200)}`);
+    }
+  }
+  phase("forest cells");
   const grown = await growForest(ff, {
     cover: (lat, lon) => {
       const k = index(lat, lon);
@@ -1313,6 +1347,7 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
       return networkExcludedAt(p) || housedAt(p);
     },
     canopy: land instanceof IgnLand ? (lat, lon, r) => land.canopyNear(lat, lon, r) : undefined,
+    ...(prepared ? { prepared, excludedLive: excluded } : {}),
     ground: height,
     groundNow: heightNow,
     sea,
@@ -1696,6 +1731,9 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
     cutBuildings,
     keptReachM,
     meshLeft,
+    forestPrepared: prepared
+      ? { cells: prepared.cells, missing: prepared.missing, noCanopy: prepared.noCanopy, cases: prepared.cases }
+      : null,
     clearedTrees,
     cutHousesMs,
     corridor: q.corridor === true,

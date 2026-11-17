@@ -649,6 +649,12 @@ export interface ForestSources {
   /** the survey's canopy [m]: its top within `r` metres of a place (a crown's reach from its foot), NaN where it has none
    *  — there, the land cover's draw (I4: ign-canopy.ts canopyNear) */
   canopy?(lat: number, lon: number, r: number): number;
+  /** PLAN-J8 J8-8b: the frame's cases decided at their cells' preparation (forest-assembly.ts preparedForest — the draw, the cover, the
+   *  canopy and the data's exclusions): a covered case's word (its cover's class, its measured canopy; 0 no tree) taken as it is */
+  prepared?: { covered: Uint8Array; words: Uint16Array };
+  /** with `prepared`: what a covered case is still refused on — the exclusions that live with the scene (sceneryExcluded: the runways,
+   *  the viewpoints), the data's being in its word */
+  excludedLive?(lat: number, lon: number): boolean;
 }
 /**
  * The frame's cells, decided: 1. where a tree may stand (the cover's density by the cell's own draw — where the survey
@@ -662,7 +668,10 @@ export async function growForest(f: ForestFrame, io: ForestSources): Promise<{ c
   const cells = new Uint32Array(f.w * f.h);
   const candidates: number[] = [];
   // (the canopy measured over each candidate — NaN: the land cover's)
-  const canopies = io.canopy ? new Float32Array(f.w * f.h) : null;
+  const P = io.prepared;
+  const canopies = io.canopy || P ? new Float32Array(f.w * f.h).fill(Number.NaN) : null;
+  // (J8-8b: a prepared case's land cover's class, its word's — 0: the cover asked at its place)
+  const classes = P ? new Uint8Array(f.w * f.h) : null;
   const nodesW = (f.w >> 1) + 2,
     nodesH = (f.h >> 1) + 2;
   const wanted = new Uint8Array(nodesW * nodesH);
@@ -677,6 +686,21 @@ export async function growForest(f: ForestFrame, io: ForestSources): Promise<{ c
         y = f.d[0] + f.d[1] * u + f.d[2] * v;
       if (x * x + y * y > f.reach * f.reach) continue;
       const [lat, lon] = forestPlaceOf(f.i0 + u, f.j0 + v, f.columns);
+      // (J8-8b: a case its cell decided — refused (0), or its class and canopy —, refused here only by the scene's live exclusions)
+      const at = j * f.w + i;
+      if (P?.covered[at]) {
+        const word = P.words[at]!;
+        if (!word || io.excludedLive?.(lat, lon)) continue;
+        classes![at] = word & 255;
+        const code = word >>> 8;
+        // (no canopy in the word — the cell made without the survey —: the scene's, where it has one)
+        canopies![at] = code ? code * 0.2 : io.canopy ? io.canopy(lat, lon, f.cell * (0.3 + 0.17 * size)) : Number.NaN;
+        candidates.push(at);
+        const a = Math.floor(u / 2),
+          b = Math.floor(v / 2);
+        wanted[b * nodesW + a] = wanted[b * nodesW + a + 1] = wanted[(b + 1) * nodesW + a] = wanted[(b + 1) * nodesW + a + 1] = 1;
+        continue;
+      }
       const cls = io.cover(lat, lon),
         draw = forestUnit(forestHash(gi, gj, 5));
       const mnh = io.canopy ? io.canopy(lat, lon, f.cell * (0.3 + 0.17 * size)) : Number.NaN;
@@ -734,7 +758,7 @@ export async function growForest(f: ForestFrame, io: ForestSources): Promise<{ c
     const pick = forestUnit(forestHash(gi, gj, 6));
     const kind = measured
       ? canopyKind(lat, above, mnh, pick)
-      : forestKind(io.cover(lat, lon), lat, above, forestUnit(forestHash(gi, gj, 5)), pick);
+      : forestKind(classes?.[c] || io.cover(lat, lon), lat, above, forestUnit(forestHash(gi, gj, 5)), pick);
     if (kind === ForestKind.none) continue;
     const tall = measured ? mnh : forestHeight(kind, lat, above, forestUnit(forestHash(gi, gj, 7)));
     cells[c] = packCell(io.local(lat, lon, ground - FOREST_SINK)[2], kind, tall);
