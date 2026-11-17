@@ -1,16 +1,21 @@
 // PLAN-J8 J8-L and J8-VB (VB1) — the streets' cells (Sam, 16 Nov 2026: « idem pour les lampadaires, charger toute la vue — et les voitures
 // aussi »; the low flight's details, docs/PLAN-DETAILS-VOL-BAS-FABLEFLIGHT.md): a cell « rue » beside each building cell (building-cells.ts:
 // the same z 15 key, origin and east-north frame), prepared in workers (street-prep.ts), kept in the prepared cache (kerr-street-v<format>),
-// counted in the zones and in `flightReady`. Format 2 (KSC2) agreed with the render session (16 Nov 2026, ~18:40 UTC); format 1 (KSC1: lamps
-// and the cars' pieces alone) is not read any more — the cache's name carries the format.
+// counted in the zones and in `flightReady`. Format 2 (KSC2) agreed with the render session (16 Nov 2026, ~18:40 UTC); format 3 (KSC3,
+// 17 Nov 2026, proposed to the render session for J8-VB's VB2, VB5a, VB6 and VB7): the lamp's arm, the segments' continuations and
+// surfaces, the junctions' furniture. Formats 1 and 2 are not read any more — the cache's name carries the format (the older ones' caches swept: cell-workers.ts).
 //
 // The bytes (little-endian): a header of STREET_HEADER_BYTES, then `lampCount` lamps of LAMP_BYTES, then `segmentCount` road segments of
-// SEGMENT_BYTES, then `junctionCount` junctions of JUNCTION_BYTES, then `placeCount` places of PLACE_BYTES (VB4: none yet).
-//   header  0 u32 magic "KSC2"   4 u16 format (STREET_FORMAT)   6 u16 junctionCount   8 u8 z   9 u8 flags (CellStreetFlag)   10 u16 placeCount
+// SEGMENT_BYTES, then `junctionCount` junctions of JUNCTION_BYTES, then `placeCount` places of PLACE_BYTES, then `segmentCount`
+// continuations of NEXT_BYTES, then `segmentCount` surfaces of SURFACE_BYTES, then `furnitureCount` pieces of furniture of
+// FURNITURE_BYTES.
+//   header  0 u32 magic "KSC3"   4 u16 format (STREET_FORMAT)   6 u16 junctionCount   8 u8 z   9 u8 flags (CellStreetFlag)   10 u16 placeCount
 //          12 u32 x   16 u32 y   20 u32 lampCount   24 u32 segmentCount   28 u32 generation (the roads' source revision: YYYYMMDD)
-//          32 f64 origin latitude [°]   40 f64 origin longitude [°]   48 u32 a section to come's count (0)   52..63 reserved (0)
+//          32 f64 origin latitude [°]   40 f64 origin longitude [°]   48 u32 furnitureCount   52..63 reserved (0)
 //   lamp      0 f32 east [m]   4 f32 north [m] (the pole's foot, in the cell's frame)   8 u16 head height [cm over the ground]
-//            10 u8 road class (LAMP_CODES)   11 u8 flags (StreetFlag.Left)
+//            10 u8 road class (LAMP_CODES)   11 u8 flags (StreetFlag.Left)   12 u16 the arm's heading (from the foot to the head, over the
+//            street: 0 … 2π anticlockwise from east over 0 … 65535)   14 u8 the arm's reach [dm]   15 u8 variant (0 … LAMP_VARIANTS − 1, by
+//            a seed of its foot)
 //   segment   0 f32 east a   4 f32 north a   8 f32 east b   12 f32 north b [m]   16 u16 carriageway width [cm]   18 u8 lanes
 //            19 u8 class (ROAD_CODES)   20 u8 flags (SegmentFlag)   21 i8 level (the BD TOPO's position_par_rapport_au_sol: 0 the ground,
 //            1 … 3 over it — bridges —, −1 … −4 under it — tunnels)   22 u16 speed [cm/s]   24 f32 abscissa of a along its road [m]
@@ -20,6 +25,14 @@
 //   place     0 f32 east   4 f32 north [m] (a parked car's centre)   8 u16 heading (the street's direction there, 0 … 2π over
 //            0 … 65535)   10 u8 kind (PlaceKind: 0 along the kerb; 1 angled — reserved: only where the data say it)   11 u8 flags
 //            (PlaceFlag)   12 u24 seed (its car's model and colour — VB3)   15 u8 the carriageway's width there [dm / 2]
+//   next      (one a segment, in the segments' order — VB6's traffic) 0 u16 the next at b (driving a → b, b reached)   2 u16 the next at a
+//            (driving b → a): a segment's index in this cell, its bit 15 set when that one is driven b → a (entered at its b); NEXT_NONE none
+//            (a dead end, a one way against, a level not met), NEXT_ELSEWHERE its road going on into a neighbouring cell
+//   surface   (one a segment — VB2's carriageway) 0 u8 flags (SurfaceFlag: edge lines, the centre line dashed or solid, a kerb)
+//            1 u8 the lane lines besides the centre's   2 u8 each pavement's width [dm] (0: none)   3 u8 reserved (0)
+//   furniture (VB7) 0 f32 east   4 f32 north [m] (its centre)   8 u16 heading (0 … 2π over 0 … 65535: the arm's way out of the junction —
+//            a line's and a crossing's stripes across it; a signal facing the traffic coming in; a guardrail along its road)   10 u16 length
+//            [cm] (a line's and a crossing's across the road, a guardrail's along it; a signal's 0)   12 u8 kind (FurnitureKind)   13 u8 flags (FurnitureFlag)   14 u16 its junction's index (NO_JUNCTION none)
 //
 // The rules (agreed with the render session):
 //  - the sources: in France (the IGN's box, bdtopo.ts inBdtopoBox) the BD TOPO's `troncon_de_route`, from the very tile the building
@@ -44,12 +57,57 @@
 //  - an urban one way of 3–5 m (agreed ~19:25 UTC: the BD TOPO gives the driven width, without its parking lane — Paris's streets): one
 //    side, the right, the car off the carriageway at `width / 2 + 1.1 m` (PlaceFlag.AssumedLane); none within PLACE_OTHER_ROAD_M of
 //    another segment (a service road alongside), the buildings' exclusion the same (a lane against the façades: none).
+//  - the lamp's arm (VB5a): its heading and reach as lampsAlong sets the head over the street (the foot off the kerb, the head ARM_M
+//    nearer the axis); its variant a seed of the foot's place.
+//  - the continuations (VB6): each segment's end matched to the other ends within JUNCTION_M — on its own road first (a road's pieces),
+//    else through a junction the straightest way the one ways allow, on the same level; none a dead end; NEXT_ELSEWHERE when its road's
+//    next piece lies in another cell (the cells are prepared per tile: a neighbour's index is not known — its road's identity and
+//    abscissa find it there).
+//  - the surfaces (VB2), from the class, width, lanes, way and place of each segment — inferred, the sources give no markings: edge
+//    lines on the motorways, trunks, and outside the towns on the primary to tertiary roads SURFACE_EDGE_MIN_M wide or more; a centre line
+//    on a two-way road of two lanes or more SURFACE_CENTRE_MIN_M wide or more (the classes motorway to tertiary; a town's minor street
+//    from SURFACE_MINOR_CENTRE_M), solid on the trunks, dashed elsewhere, none on a roundabout; the lane lines between the lanes of
+//    each way (lanes − 1 on a one way, lanes − 2 on a two-way); a kerb and pavements in the towns on the primary to minor classes
+//    (PAVEMENT_M by class), a kerb alone on a town's service road; nothing on a track, a path, steps, nor a ford.
+//  - the furniture (VB7): at the urban junctions of three arms or more, none of them a bridge or a tunnel: for each arm long enough
+//    (FURNITURE_ARM_MIN_M past its line): a stop line (FurnitureKind.StopLine — a yield line, FurnitureFlag.Yield, entering a roundabout)
+//    `widest / 2 + STOP_BACK_M` from the centre across the lanes coming in (the right half of a two-way; the whole of a one way coming in;
+//    none on a one way going out); a crossing CROSSING_BEYOND_M further, across the whole carriageway (none on the motorway, trunk,
+//    service, track, path and steps classes); a signal at the kerb of each line coming in (FurnitureKind.Signal) where four arms or more
+//    meet with two of the secondary class or above, or the widest is SIGNAL_WIDE_M or more — none at a roundabout. Every piece inferred
+//    (FurnitureFlag.Inferred): neither the BD TOPO nor OpenMapTiles give the real crossings or signals. The side is the traffic's
+//    (CellStreetFlag.LeftHand: drivesLeft's countries). Guardrails (FurnitureKind.Guardrail): along both sides of a motorway's or a
+//    trunk's segment outside the towns, and of a bridge's of the tertiary class or above, GUARDRAIL_OFF_M past the carriageway's edge.
 import { CELL_Z } from "./building-cells";
 
-export const STREET_FORMAT = 2;
-export const STREET_MAGIC = 0x3243534b; // "KSC2"
+export const STREET_FORMAT = 3;
+export const STREET_MAGIC = 0x3343534b; // "KSC3"
 export const STREET_HEADER_BYTES = 64;
-export const LAMP_BYTES = 12;
+export const LAMP_BYTES = 16;
+export const NEXT_BYTES = 4;
+export const SURFACE_BYTES = 4;
+export const FURNITURE_BYTES = 16;
+/** a continuation's none, its road going on in a neighbouring cell, its bit for « driven b → a » */
+export const NEXT_NONE = 0xffff;
+export const NEXT_ELSEWHERE = 0xfffe;
+export const NEXT_REVERSED = 0x8000;
+/** a piece of furniture with no junction */
+export const NO_JUNCTION = 0xffff;
+/** the lamps' arm: its reach [m] (streetlamps.ts lampsAlong's head), its variants */
+export const ARM_M = 1.2;
+export const LAMP_VARIANTS = 3;
+/** the furniture's rules (VB7) [m] */
+export const STOP_BACK_M = 1;
+export const CROSSING_BEYOND_M = 3;
+export const FURNITURE_ARM_MIN_M = 2;
+export const SIGNAL_WIDE_M = 10;
+export const GUARDRAIL_OFF_M = 0.5;
+/** the surfaces' rules (VB2) [m] */
+export const SURFACE_EDGE_MIN_M = 5.5;
+export const SURFACE_CENTRE_MIN_M = 5;
+export const SURFACE_MINOR_CENTRE_M = 7;
+/** a town's pavement by class [m] (none: no kerb) */
+export const PAVEMENT_M: Partial<Record<RoadClass, number>> = { primary: 3, secondary: 3, tertiary: 2.5, minor: 2, service: 0 };
 export const SEGMENT_BYTES = 32;
 export const JUNCTION_BYTES = 12;
 export const PLACE_BYTES = 16;
@@ -107,6 +165,34 @@ export enum SegmentFlag {
 export enum CellStreetFlag {
   /** its places thinned evenly to PLACE_MAX */
   Thinned = 1,
+  /** its traffic drives on the left (drivesLeft) */
+  LeftHand = 2,
+}
+export enum FurnitureKind {
+  StopLine = 1,
+  Crossing = 2,
+  Signal = 3,
+  Guardrail = 4,
+}
+export enum SurfaceFlag {
+  EdgeLines = 1,
+  CentreDashed = 2,
+  CentreSolid = 4,
+  Kerb = 8,
+}
+/** a segment's carriageway (VB2) */
+export interface SegmentSurface {
+  flags: number;
+  /** the lane lines besides the centre's */
+  laneLines: number;
+  /** each pavement's width [m] (0 none) */
+  pavement: number;
+}
+export enum FurnitureFlag {
+  /** inferred from the junction's shape (the data give none) */
+  Inferred = 1,
+  /** a yield line (entering a roundabout), not a stop line */
+  Yield = 2,
 }
 export enum PlaceKind {
   Along = 0,
@@ -132,6 +218,28 @@ export interface StreetLampRecord {
   height: number;
   cls: (typeof LAMP_CODES)[number];
   flags: number;
+  /** the arm's heading, from the foot to the head [rad, anticlockwise from east, 0 … 2π] (VB5a; 0 when not given) */
+  heading?: number;
+  /** the arm's reach [m] (ARM_M when not given) */
+  reach?: number;
+  /** its variant (0 … LAMP_VARIANTS − 1) */
+  variant?: number;
+}
+/** a segment's continuations (VB6): the next at b, at a — NEXT_* */
+export interface SegmentNext {
+  b: number;
+  a: number;
+}
+export interface FurnitureRecord {
+  east: number;
+  north: number;
+  /** [rad, anticlockwise from east, 0 … 2π) */
+  heading: number;
+  /** across the road [m] */
+  length: number;
+  kind: FurnitureKind;
+  flags: number;
+  junction: number;
 }
 export interface RoadSegmentRecord {
   a: [number, number];
@@ -177,6 +285,7 @@ export interface StreetHeader {
   segmentCount: number;
   junctionCount: number;
   placeCount: number;
+  furnitureCount: number;
   /** CellStreetFlag */
   flags: number;
   generation: number;
@@ -184,7 +293,13 @@ export interface StreetHeader {
   originLon: number;
 }
 
-/** A street cell's bytes (no places yet: VB4). */
+/** an angle [rad] on 16 bits (0 … 2π over 0 … 65535) */
+const angle16 = (a: number) => {
+  const h = ((a % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI);
+  return Math.min(65535, Math.round((h / (2 * Math.PI)) * 65536));
+};
+
+/** A street cell's bytes. `next` one a segment (none given: NEXT_NONE everywhere). */
 export function encodeStreetCell(
   h: Pick<StreetHeader, "z" | "x" | "y" | "generation" | "originLat" | "originLon">,
   lamps: readonly StreetLampRecord[],
@@ -192,6 +307,9 @@ export function encodeStreetCell(
   junctions: readonly JunctionRecord[],
   places: readonly PlaceRecord[] = [],
   flags = 0,
+  next: readonly SegmentNext[] = [],
+  furniture: readonly FurnitureRecord[] = [],
+  surfaces: readonly SegmentSurface[] = [],
 ): ArrayBuffer {
   const js = junctions.slice(0, 65535),
     ps = places.slice(0, 65535);
@@ -200,7 +318,10 @@ export function encodeStreetCell(
       lamps.length * LAMP_BYTES +
       segments.length * SEGMENT_BYTES +
       js.length * JUNCTION_BYTES +
-      ps.length * PLACE_BYTES,
+      ps.length * PLACE_BYTES +
+      segments.length * NEXT_BYTES +
+      segments.length * SURFACE_BYTES +
+      furniture.length * FURNITURE_BYTES,
   );
   const v = new DataView(buf);
   v.setUint32(0, STREET_MAGIC, true);
@@ -216,6 +337,7 @@ export function encodeStreetCell(
   v.setUint32(28, h.generation >>> 0, true);
   v.setFloat64(32, h.originLat, true);
   v.setFloat64(40, h.originLon, true);
+  v.setUint32(48, furniture.length, true);
   let o = STREET_HEADER_BYTES;
   for (const l of lamps) {
     v.setFloat32(o, l.east, true);
@@ -223,6 +345,9 @@ export function encodeStreetCell(
     v.setUint16(o + 8, Math.max(0, Math.min(65535, Math.round(l.height * 100))), true);
     v.setUint8(o + 10, Math.max(0, LAMP_CODES.indexOf(l.cls)));
     v.setUint8(o + 11, l.flags & 255);
+    v.setUint16(o + 12, angle16(l.heading ?? 0), true);
+    v.setUint8(o + 14, Math.max(0, Math.min(255, Math.round((l.reach ?? ARM_M) * 10))));
+    v.setUint8(o + 15, Math.max(0, Math.min(LAMP_VARIANTS - 1, l.variant ?? 0)));
     o += LAMP_BYTES;
   }
   for (const s of segments) {
@@ -251,8 +376,7 @@ export function encodeStreetCell(
   for (const p of ps) {
     v.setFloat32(o, p.east, true);
     v.setFloat32(o + 4, p.north, true);
-    const h = ((p.heading % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI);
-    v.setUint16(o + 8, Math.min(65535, Math.round((h / (2 * Math.PI)) * 65536)), true);
+    v.setUint16(o + 8, angle16(p.heading), true);
     v.setUint8(o + 10, p.kind & 255);
     v.setUint8(o + 11, p.flags & 255);
     const seed = p.seed & 0xffffff;
@@ -261,6 +385,28 @@ export function encodeStreetCell(
     v.setUint8(o + 14, (seed >> 16) & 255);
     v.setUint8(o + 15, Math.max(0, Math.min(255, Math.round(p.width * 5))));
     o += PLACE_BYTES;
+  }
+  for (let i = 0; i < segments.length; i++) {
+    v.setUint16(o, next[i]?.b ?? NEXT_NONE, true);
+    v.setUint16(o + 2, next[i]?.a ?? NEXT_NONE, true);
+    o += NEXT_BYTES;
+  }
+  for (let i = 0; i < segments.length; i++) {
+    const f = surfaces[i];
+    v.setUint8(o, (f?.flags ?? 0) & 255);
+    v.setUint8(o + 1, Math.max(0, Math.min(255, f?.laneLines ?? 0)));
+    v.setUint8(o + 2, Math.max(0, Math.min(255, Math.round((f?.pavement ?? 0) * 10))));
+    o += SURFACE_BYTES;
+  }
+  for (const f of furniture) {
+    v.setFloat32(o, f.east, true);
+    v.setFloat32(o + 4, f.north, true);
+    v.setUint16(o + 8, angle16(f.heading), true);
+    v.setUint16(o + 10, Math.max(0, Math.min(65535, Math.round(f.length * 100))), true);
+    v.setUint8(o + 12, f.kind & 255);
+    v.setUint8(o + 13, f.flags & 255);
+    v.setUint16(o + 14, f.junction & 65535, true);
+    o += FURNITURE_BYTES;
   }
   return buf;
 }
@@ -279,6 +425,7 @@ export function readStreetHeader(buf: ArrayBuffer): StreetHeader | null {
     segmentCount: v.getUint32(24, true),
     junctionCount: v.getUint16(6, true),
     placeCount: v.getUint16(10, true),
+    furnitureCount: v.getUint32(48, true),
     flags: v.getUint8(9),
     generation: v.getUint32(28, true),
     originLat: v.getFloat64(32, true),
@@ -289,7 +436,10 @@ export function readStreetHeader(buf: ArrayBuffer): StreetHeader | null {
     h.lampCount * LAMP_BYTES +
     h.segmentCount * SEGMENT_BYTES +
     h.junctionCount * JUNCTION_BYTES +
-    h.placeCount * PLACE_BYTES;
+    h.placeCount * PLACE_BYTES +
+    h.segmentCount * NEXT_BYTES +
+    h.segmentCount * SURFACE_BYTES +
+    h.furnitureCount * FURNITURE_BYTES;
   return buf.byteLength === size ? h : null;
 }
 
@@ -303,6 +453,9 @@ export function readLamp(buf: ArrayBuffer, i: number): StreetLampRecord {
     height: v.getUint16(o + 8, true) / 100,
     cls: LAMP_CODES[v.getUint8(o + 10)] ?? "",
     flags: v.getUint8(o + 11),
+    heading: (v.getUint16(o + 12, true) / 65536) * 2 * Math.PI,
+    reach: v.getUint8(o + 14) / 10,
+    variant: v.getUint8(o + 15),
   };
 }
 
@@ -354,6 +507,65 @@ export function readPlace(buf: ArrayBuffer, i: number): PlaceRecord {
     seed: v.getUint8(o + 12) | (v.getUint8(o + 13) << 8) | (v.getUint8(o + 14) << 16),
     width: v.getUint8(o + 15) / 5,
   };
+}
+
+/** where the continuations begin (after the places) */
+const nextBase = (h: StreetHeader) =>
+  STREET_HEADER_BYTES +
+  h.lampCount * LAMP_BYTES +
+  h.segmentCount * SEGMENT_BYTES +
+  h.junctionCount * JUNCTION_BYTES +
+  h.placeCount * PLACE_BYTES;
+
+/** a street cell's i-th segment's continuations (VB6) */
+export function readNext(buf: ArrayBuffer, i: number): SegmentNext {
+  const v = new DataView(buf);
+  const o = nextBase(readStreetHeader(buf)!) + i * NEXT_BYTES;
+  return { b: v.getUint16(o, true), a: v.getUint16(o + 2, true) };
+}
+
+/** a street cell's i-th segment's surface (VB2) */
+export function readSurface(buf: ArrayBuffer, i: number): SegmentSurface {
+  const v = new DataView(buf);
+  const h = readStreetHeader(buf)!;
+  const o = nextBase(h) + h.segmentCount * NEXT_BYTES + i * SURFACE_BYTES;
+  return { flags: v.getUint8(o), laneLines: v.getUint8(o + 1), pavement: v.getUint8(o + 2) / 10 };
+}
+
+/** a street cell's i-th piece of furniture (VB7) */
+export function readFurniture(buf: ArrayBuffer, i: number): FurnitureRecord {
+  const v = new DataView(buf);
+  const h = readStreetHeader(buf)!;
+  const o = nextBase(h) + h.segmentCount * (NEXT_BYTES + SURFACE_BYTES) + i * FURNITURE_BYTES;
+  return {
+    east: v.getFloat32(o, true),
+    north: v.getFloat32(o + 4, true),
+    heading: (v.getUint16(o + 8, true) / 65536) * 2 * Math.PI,
+    length: v.getUint16(o + 10, true) / 100,
+    kind: v.getUint8(o + 12),
+    flags: v.getUint8(o + 13),
+    junction: v.getUint16(o + 14, true),
+  };
+}
+
+/**
+ * Whether a place's traffic drives on the left (VB7's side): the countries that do, by coarse boxes — Great Britain, Ireland, Japan,
+ * Australia, New Zealand. Others that do (southern Africa, the Indian subcontinent, Indonesia, Thailand…) are not listed yet: their
+ * furniture is set for the right (said, not hidden).
+ */
+export function drivesLeft(lat: number, lon: number): boolean {
+  const boxes: [number, number, number, number][] = [
+    // [south, west, north, east]
+    [49.8, -8.7, 60.9, 1.8], // Great Britain (its Channel Islands, the Isle of Man)
+    [51.3, -10.7, 55.5, -5.9], // Ireland and Northern Ireland
+    [24, 122.9, 46, 146], // Japan
+    [-44, 112, -10, 154], // Australia
+    [-47.5, 166, -34, 179], // New Zealand
+  ];
+  // (the French coast the British box reaches — Boulogne, Calais, east of 1.4° E under 51.0° N — drives on the right)
+  const right: [number, number, number, number][] = [[49.8, 1.4, 51.0, 1.8]];
+  const inside = (b: [number, number, number, number]) => lat >= b[0] && lat <= b[2] && lon >= b[1] && lon <= b[3];
+  return boxes.some(inside) && !right.some(inside);
 }
 
 /** the prepared streets' cache (Cache Storage): the format in its name — a new format never reads an old one's cells */

@@ -1,18 +1,24 @@
-// PLAN-J8 J8-L and J8-VB (VB1) — the streets' cells prepared (street-cells.ts, format 2 — its rules in its header): an OpenMapTiles z 14
+// PLAN-J8 J8-L and J8-VB (VB1, VB2, VB4, VB5a, VB6's data, VB7) — the streets' cells prepared (street-cells.ts, format 3 — its rules in its
+// header): an OpenMapTiles z 14
 // tile (OpenFreeMap's, its `transportation` layer) and, in France, the BD TOPO's z 15 tiles under it (their `troncon_de_route` — the very
 // tiles the building cells are prepared from) into its four z 15 street cells: the lamps (streetlamps.ts lampsAlong on the town streets,
 // where the building cells say built-up — builtUp —, as the scenery worker's own), every road's segments (Douglas-Peucker to SIMPLIFY_M,
 // cut to SEGMENT_MAX_M, each in the cell of its middle — the BD TOPO's in France, OpenMapTiles' elsewhere, its width and lanes inferred by
-// its class), its junctions (the roads' ends met within JUNCTION_M, three or more). No ground. Pure: the cell workers run it, the tests too.
+// its class), its junctions (the roads' ends met within JUNCTION_M, three or more), its places (VB4), and the details street-detail-prep.ts
+// derives (the surfaces, the continuations, the furniture). No ground. Pure: the cell workers run it, the tests too.
 import { VectorTile } from "@mapbox/vector-tile";
 import { PbfReader } from "pbf";
 import { inBdtopoBox } from "./bdtopo";
-import { cellOrigin, fromCell, readHeader, readRecord, sourceKey, toCell } from "./building-cells";
+import { cellBounds, cellOrigin, fromCell, readHeader, readRecord, sourceKey, toCell } from "./building-cells";
 import { roadWidth } from "./scenery-geometry";
 import { builtUp, LAMP_CLASSES, lampsAlong } from "./streetlamps";
+import { type PieceEnds, segmentNexts, segmentSurface, streetFurniture } from "./street-detail-prep";
 import {
   CellStreetFlag,
+  drivesLeft,
   encodeStreetCell,
+  type FurnitureRecord,
+  LAMP_VARIANTS,
   PLACE_BUILDING_M,
   PLACE_JUNCTION_M,
   PLACE_KEEP,
@@ -48,6 +54,8 @@ export interface PreparedStreetCell {
   junctions: JunctionRecord[];
   /** its parked cars' places (VB4), and whether they were thinned to PLACE_MAX */
   places: PlaceRecord[];
+  /** its junctions' and fast roads' furniture (VB7) */
+  furniture: FurnitureRecord[];
   thinned: boolean;
   /** with `measure`: the places without the assumed lanes (−1 else) */
   placesBefore: number;
@@ -365,6 +373,7 @@ export function prepareStreetCells(
       bd,
       lamps: [] as StreetLampRecord[],
       segments: [] as RoadSegmentRecord[],
+      pieces: [] as PieceEnds[],
       ends: [] as { e: number; n: number; width: number; level: number; round: boolean }[],
       vertices: { before: 0, after: 0 },
       boxes: [] as Box[],
@@ -404,6 +413,8 @@ export function prepareStreetCells(
           const ma = toCell(c.origin, ga.lat, ga.lon),
             mb = toCell(c.origin, gb.lat, gb.lon);
           c.segments.push({ ...meta, a: [ma.east, ma.north], b: [mb.east, mb.north], s0: s + (L * q) / k });
+          // (whether its ends are its road piece's own — the continuations': an end inside the piece goes on to its next segment)
+          c.pieces.push({ a: j === 0 && q === 0, b: j === pts.length - 2 && q === k - 1 });
         }
       }
       s += L;
@@ -486,12 +497,18 @@ export function prepareStreetCells(
           const m = toCell(c.origin, g.lat, g.lon);
           // (left of the direction: the foot on the side of (−dy, dx))
           const left = (l.foot[0] - xy[l.seg]![0]) * -l.dir[1] + (l.foot[1] - xy[l.seg]![1]) * l.dir[0] > 0;
+          // (its arm, VB5a: from the foot to the head over the street — lampsAlong's —; its variant a seed of its foot)
+          const ax = l.head[0] - l.foot[0],
+            ay = l.head[1] - l.foot[1];
           c.lamps.push({
             east: m.east,
             north: m.north,
             height: l.head[2],
             cls: cls as (typeof LAMP_CODES)[number],
             flags: left ? StreetFlag.Left : 0,
+            heading: Math.atan2(ay, ax),
+            reach: Math.hypot(ax, ay),
+            variant: hash4(Math.round(m.east * 10), Math.round(m.north * 10), c.x, c.y) % LAMP_VARIANTS,
           });
         }
       }
@@ -542,6 +559,16 @@ export function prepareStreetCells(
     });
     const P = placesOf(c.segments, junctions, c.boxes);
     const placesBefore = measure ? placesOf(c.segments, junctions, c.boxes, false).places.length : -1;
+    // (the details, VB2/VB6/VB7: the cell's edges in its frame — an end within 3 m of one may go on in a neighbour —; the traffic's side)
+    const b = cellBounds(c.x, c.y, OSM_Z + 1);
+    const sw = toCell(c.origin, b.south, b.west),
+      ne = toCell(c.origin, b.north, b.east);
+    const nearEdge = (e: number, n: number) => e - sw.east < 3 || ne.east - e < 3 || n - sw.north < 3 || ne.north - n < 3;
+    const leftHand = drivesLeft(c.origin.lat, c.origin.lon);
+    const next = segmentNexts(c.segments, c.pieces, nearEdge);
+    const surfaces = c.segments.map(segmentSurface);
+    const furniture = streetFurniture(c.segments, junctions, leftHand);
+    const flags = (P.thinned ? CellStreetFlag.Thinned : 0) | (leftHand ? CellStreetFlag.LeftHand : 0);
     return {
       x: c.x,
       y: c.y,
@@ -549,6 +576,7 @@ export function prepareStreetCells(
       segments: c.segments,
       junctions,
       places: P.places,
+      furniture,
       thinned: P.thinned,
       placesBefore,
       vertices: c.vertices,
@@ -558,7 +586,10 @@ export function prepareStreetCells(
         c.segments,
         junctions,
         P.places,
-        P.thinned ? CellStreetFlag.Thinned : 0,
+        flags,
+        next,
+        furniture,
+        surfaces,
       ),
     };
   });

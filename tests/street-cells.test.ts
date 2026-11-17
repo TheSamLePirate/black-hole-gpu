@@ -4,8 +4,19 @@ import { cellBounds } from "../src/system/building-cells";
 import { prepareBdtopoCell } from "../src/system/cell-prep";
 import {
   encodeStreetCell,
+  FURNITURE_BYTES,
+  FurnitureFlag,
+  FurnitureKind,
   JUNCTION_BYTES,
   LAMP_BYTES,
+  NEXT_BYTES,
+  NEXT_ELSEWHERE,
+  NEXT_REVERSED,
+  readFurniture,
+  readNext,
+  readSurface,
+  SURFACE_BYTES,
+  SurfaceFlag,
   PLACE_BYTES,
   PLACE_MAX,
   PlaceFlag,
@@ -24,15 +35,15 @@ import {
 import { placesOf, prepareStreetCells, simplify } from "../src/system/street-prep";
 import { earthDataDir, readKept } from "./e2e/lib/earth-cache";
 
-// PLAN-J8 J8-L and J8-VB (VB1) — the streets' cells, format 2 (src/system/street-cells.ts, street-prep.ts; agreed with the render session,
+// PLAN-J8 J8-L and J8-VB (VB1; format 3 since 17 Nov 2026: VB2, VB5a, VB6's data, VB7) — the streets' cells (src/system/street-cells.ts, street-prep.ts; agreed with the render session,
 // 16 Nov 2026): the bytes round-trip; Douglas-Peucker keeps a line within its tolerance; and on Toulon's centre and Paris (their OpenMapTiles
 // z 14 tiles and BD TOPO z 15 tiles, from the e2e's Earth data on disk when present): the lamps, every road's segments — the BD TOPO's in
 // France with their widths and lanes —, none over SEGMENT_MAX_M, each in its cell; the junctions; the vertices before and after.
 
-test("a street cell's bytes (format 2): its header, lamps, segments and junctions read back", () => {
+test("a street cell's bytes (format 3): its header, lamps, segments, junctions, continuations, surfaces and furniture read back", () => {
   const buf = encodeStreetCell(
     { z: 15, x: 16922, y: 12024, generation: 20261116, originLat: 43.12, originLon: 5.93 },
-    [{ east: 12.5, north: -30.25, height: 9, cls: "secondary", flags: StreetFlag.Left }],
+    [{ east: 12.5, north: -30.25, height: 9, cls: "secondary", flags: StreetFlag.Left, heading: Math.PI / 2, reach: 1.2, variant: 2 }],
     [
       {
         a: [0, 0],
@@ -48,13 +59,52 @@ test("a street cell's bytes (format 2): its header, lamps, segments and junction
       },
     ],
     [{ east: 200, north: 10, degree: 4, width: 6.4, flags: 0 }],
+    [],
+    CellStreetFlag.LeftHand,
+    [{ b: NEXT_ELSEWHERE, a: 3 | NEXT_REVERSED }],
+    [{ east: 190, north: 9.5, heading: Math.PI, length: 6.5, kind: FurnitureKind.Crossing, flags: FurnitureFlag.Inferred, junction: 0 }],
+    [{ flags: SurfaceFlag.EdgeLines | SurfaceFlag.Kerb, laneLines: 1, pavement: 2.5 }],
   );
-  expect(buf.byteLength).toBe(STREET_HEADER_BYTES + LAMP_BYTES + SEGMENT_BYTES + JUNCTION_BYTES);
+  expect(buf.byteLength).toBe(
+    STREET_HEADER_BYTES + LAMP_BYTES + SEGMENT_BYTES + JUNCTION_BYTES + NEXT_BYTES + SURFACE_BYTES + FURNITURE_BYTES,
+  );
   const h = readStreetHeader(buf)!;
-  expect([h.z, h.x, h.y, h.lampCount, h.segmentCount, h.junctionCount, h.placeCount, h.generation]).toEqual([
-    15, 16922, 12024, 1, 1, 1, 0, 20261116,
+  expect([h.z, h.x, h.y, h.lampCount, h.segmentCount, h.junctionCount, h.placeCount, h.furnitureCount, h.generation, h.flags]).toEqual([
+    15,
+    16922,
+    12024,
+    1,
+    1,
+    1,
+    0,
+    1,
+    20261116,
+    CellStreetFlag.LeftHand,
   ]);
-  expect(readLamp(buf, 0)).toEqual({ east: 12.5, north: -30.25, height: 9, cls: "secondary", flags: StreetFlag.Left });
+  const lamp = readLamp(buf, 0);
+  expect({ ...lamp, heading: 0 }).toEqual({
+    east: 12.5,
+    north: -30.25,
+    height: 9,
+    cls: "secondary",
+    flags: StreetFlag.Left,
+    heading: 0,
+    reach: 1.2,
+    variant: 2,
+  });
+  expect(lamp.heading).toBeCloseTo(Math.PI / 2, 3);
+  expect(readNext(buf, 0)).toEqual({ b: NEXT_ELSEWHERE, a: 3 | NEXT_REVERSED });
+  expect(readSurface(buf, 0)).toEqual({ flags: SurfaceFlag.EdgeLines | SurfaceFlag.Kerb, laneLines: 1, pavement: 2.5 });
+  const f = readFurniture(buf, 0);
+  expect([f.east, f.north, f.length, f.kind, f.flags, f.junction]).toEqual([
+    190,
+    9.5,
+    6.5,
+    FurnitureKind.Crossing,
+    FurnitureFlag.Inferred,
+    0,
+  ]);
+  expect(f.heading).toBeCloseTo(Math.PI, 3);
   expect(readSegment(buf, 0)).toEqual({
     a: [0, 0],
     b: [200, 10],
@@ -231,6 +281,64 @@ for (const P of PLACES) {
         }
         for (const j of c.junctions) expect(j.degree).toBeGreaterThanOrEqual(3);
       }
+    });
+
+    test("the details (VB2, VB5a, VB6, VB7): lamps' arms, continuations, surfaces and furniture read back from the bytes", () => {
+      const cells = p!.run();
+      let ends = 0,
+        inCell = 0,
+        elsewhere = 0,
+        kerb = 0,
+        centre = 0,
+        segs = 0;
+      const kinds = [0, 0, 0, 0, 0];
+      const variants = [0, 0, 0];
+      for (const c of cells) {
+        const h = readStreetHeader(c.buf)!;
+        expect(h.furnitureCount).toBe(c.furniture.length);
+        for (let i = 0; i < h.lampCount; i++) {
+          const l = readLamp(c.buf, i);
+          expect(l.reach).toBeCloseTo(1.2, 1);
+          variants[l.variant!]!++;
+        }
+        for (let i = 0; i < h.segmentCount; i++) {
+          const s = readSegment(c.buf, i),
+            nx = readNext(c.buf, i),
+            sf = readSurface(c.buf, i);
+          segs++;
+          if (sf.flags & SurfaceFlag.Kerb) kerb++;
+          if (sf.flags & (SurfaceFlag.CentreDashed | SurfaceFlag.CentreSolid)) centre++;
+          for (const [end, v] of [
+            [s.b, nx.b],
+            [s.a, nx.a],
+          ] as const) {
+            ends++;
+            if (v === NEXT_ELSEWHERE) elsewhere++;
+            if (v >= NEXT_ELSEWHERE) continue;
+            inCell++;
+            // (the next one entered at the end met: within JUNCTION_M)
+            const t = readSegment(c.buf, v & ~NEXT_REVERSED);
+            const at = v & NEXT_REVERSED ? t.b : t.a;
+            expect(Math.hypot(at[0] - end[0], at[1] - end[1])).toBeLessThanOrEqual(1.01);
+          }
+        }
+        for (let i = 0; i < h.furnitureCount; i++) {
+          const f = readFurniture(c.buf, i);
+          kinds[f.kind]!++;
+          if (f.junction !== 0xffff) {
+            const j = readJunction(c.buf, f.junction);
+            expect(Math.hypot(f.east - j.east, f.north - j.north)).toBeLessThan(j.width / 2 + 1 + 3 + 12);
+          }
+        }
+      }
+      console.log(
+        `  ${P.name}: continuations ${inCell}/${ends} in the cell, ${elsewhere} elsewhere · surfaces ${segs} (kerb ${kerb}, centre line ${centre}) · furniture: stop lines ${kinds[1]}, crossings ${kinds[2]}, signals ${kinds[3]}, guardrails ${kinds[4]} · lamp variants ${variants.join("/")}`,
+      );
+      expect(inCell / ends).toBeGreaterThan(0.5);
+      expect(kinds[1]).toBeGreaterThan(50);
+      expect(kinds[2]).toBeGreaterThan(50);
+      expect(kerb).toBeGreaterThan(segs / 10);
+      expect(Math.min(...variants)).toBeGreaterThan(0);
     });
   });
 }

@@ -109,8 +109,18 @@ let streets: CellPool | null = null;
 /** the streets' pool if it was made (null: never asked — flightReady reads it without making its workers) */
 export const streetPoolMade = () => streets;
 export function streetPool(): CellPool {
+  if (!streets) void sweepStreetCaches();
   streets ??= new CellPool(new CellWorkers(2, "cell-worker.js", "street"), streetStore);
   return streets;
+}
+
+/** the older formats' street caches (kerr-street-v1, -v2: never read again — the format is in the name) deleted, once a page asks */
+async function sweepStreetCaches() {
+  try {
+    for (const n of await caches.keys()) if (/^kerr-street-v\d+$/.test(n) && n !== STREET_CACHE) await caches.delete(n);
+  } catch {
+    /* (no Cache Storage: nothing kept to sweep) */
+  }
 }
 
 /** the near meshes' prepared cache, read by the page (PLAN-J8 J8-8, mesh-cells.ts): a mesh cell is keyed by its building cell's

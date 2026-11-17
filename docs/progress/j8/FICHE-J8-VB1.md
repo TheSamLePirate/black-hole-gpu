@@ -56,3 +56,35 @@ cap, sorte, côté, graine de 24 bits, largeur de la chaussée au droit), dans l
 
 - **Non vérifié** : la vraisemblance des places sur une image (le dessin est à la session du rendu), la justesse de la « file supposée »
   rue par rue.
+
+## KSC3 — les données de VB2, VB5a, VB6 et VB7 (mode speed, 17 nov. ~09:40 UTC)
+
+Proposé à la session du rendu à ~09:30 UTC et codé sans attendre sa réponse (mode speed, décision de Sam ; répartition du point 13 de
+PLAN-J8). Les règles sont dans l'en-tête de [`street-cells.ts`](../../../src/system/street-cells.ts) ; le calcul est dans
+[`street-detail-prep.ts`](../../../src/system/street-detail-prep.ts). Le cache passe à `kerr-street-v3`, et le pool efface les caches des formats 1 et 2.
+
+- **VB5a, la lampe passe à 16 o** : le cap de la potence (du pied vers la tête, celui de `lampsAlong`), sa portée (1,2 m) et une variante
+  de 0 à 2, tirée d'une graine du pied.
+- **VB6, une suite par bout de tronçon (4 o par tronçon)** : d'abord le tronçon suivant de la même route, sinon la branche la plus droite
+  que les sens uniques autorisent, au même niveau, jamais en demi-tour. `NEXT_ELSEWHERE` quand la route continue dans une cellule voisine.
+- **VB2, une surface par tronçon (4 o)** : lignes de rive, ligne centrale (tiretée ou pleine), lignes de voie, bordure et largeur des
+  trottoirs, tirées de la classe, de la largeur, des voies, du sens et de l'urbain.
+- **VB7, le mobilier (16 o)** : aux jonctions urbaines de degré 3 et plus, sans pont ni tunnel :
+  - une ligne d'arrêt sur les voies entrantes (une ligne de cédez-le-passage à l'entrée d'un rond-point) ;
+  - un passage piéton 3 m au-delà ;
+  - des feux aux grands carrefours ;
+  - des glissières le long des voies rapides hors agglomération et sur les ponts.
+  - Le côté de circulation suit `drivesLeft` : Royaume-Uni, Irlande, Japon, Australie, Nouvelle-Zélande. Les autres pays qui roulent à
+    gauche ne sont pas encore listés.
+- **Tout est inféré** : la BD TOPO et OpenMapTiles ne donnent ni marquages, ni passages piétons, ni feux.
+
+**Mesuré** (tests unitaires, ce Mac, données du disque e2e, une tuile z 14, 17 nov.) :
+
+| Lieu | Suites dans la cellule | Ailleurs | Tronçons avec bordure | Ligne centrale | Lignes d'arrêt | Passages | Feux | Glissières | Préparation de la tuile |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| Centre de Toulon | 4 416 / 5 318 | 726 | 2 312 / 2 659 | 146 | 1 102 | 1 424 | 132 | 30 | 96 ms |
+| Paris, le Marais | 3 379 / 4 194 | 628 | 1 819 / 2 097 | 107 | 1 057 | 1 458 | 149 | 14 | 92 ms |
+
+- **Non mesuré** : rien n'est encore dessiné (la session du rendu), ni vu dans le jeu, ni passé sur kerr-mini. Le coût de préparation dans
+  les workers et la taille des cellules en zone restent à relever au gros e2e. La vraisemblance des passages et des feux n'a pas été
+  confrontée à l'orthophoto.
