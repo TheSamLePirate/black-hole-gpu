@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 17 nov. 10:41 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 17 nov. 10:46 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous. Ce qui est fermé quitte le tableau « En cours » pour la ligne « Fermé récemment ».
@@ -10508,3 +10508,11 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
 - **Réalisé :** avec le format 5 des approches (b937a4f1), `roadRuns` rend aussi les voies ferrées. `cellRoadSurfaces` les dessine en rails (genre 2, rails et traverses peints, une bande de 3 m par voie, à 4,5 m d'écart) et non plus en chaussée. Le worker retire aussi les rails OMT des cellules trouvées, pour ne pas les doubler.
 - **Preuves :** `tests/cell-roads.test.ts`, `tsc`, Biome. **Non vu en jeu.**
 - **Reste :** les poteaux de caténaire (`SurfaceFlag.Electrified`) et le ballast en relief.
+
+### 2026-11-17 10:46 UTC — PLAN-J8 J8-RP RP3 : le dévers des routes hors de France, une fonction partagée (session des approches, 1feb2f7f)
+
+- **Réalisé :** `roadBank(points, classe, urbain)` et `ROAD_BANK` (`street-detail-prep.ts`), pour le dévers que demande le rendu.
+  Pour chaque point d'un run, la fonction rend la pente transversale, signée vers l'intérieur du virage. Elle se tire du rayon du
+  cercle passant par le point et ses deux voisins, et de la vitesse de projet de la classe (v² / (2 g R)). Elle est plafonnée à 7 %
+  sur les voies rapides et à 5–6 % ailleurs ; elle vaut 0 en ligne droite, aux bouts, en ville et pour les petites classes.
+- **Vérifié :** test (arc de 300 m plafonné à 6 %, courbe de 2 km, virage miroir négatif). Non mesuré en jeu.

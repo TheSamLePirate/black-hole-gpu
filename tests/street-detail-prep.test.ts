@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import type { Primitive } from "../src/system/scenery-data";
-import { chainBridges, roadProfile, segmentNexts, segmentSurface, streetFurniture } from "../src/system/street-detail-prep";
+import { chainBridges, roadBank, roadProfile, segmentNexts, segmentSurface, streetFurniture } from "../src/system/street-detail-prep";
 import {
   BridgeFlag,
   BridgeKind,
@@ -329,4 +329,37 @@ test("J8-RP RP3: a road's profile on a coarse relief — smoothed, within its cl
   );
   expect(Math.max(...flat.fill.map(Math.abs))).toBeLessThan(1e-9);
   expect(roadProfile(s, h, "path").heights).toEqual(h);
+});
+
+test("J8-RP RP3: a road's banking — into the curve, by its radius, within its class's steepest; none on a straight or in a town", () => {
+  // (a left-hand arc of 300 m radius on a primary road: v² / (2 g R) = 625 / 5 886 ≈ 0.106, held at 6 %, positive)
+  const arc = Array.from({ length: 11 }, (_, i) => {
+    const a = (i / 10) * (Math.PI / 4);
+    return [300 * Math.sin(a), 300 - 300 * Math.cos(a)] as [number, number];
+  });
+  const b = roadBank(arc, "primary");
+  expect(b[0]).toBe(0);
+  expect(b[10]).toBe(0);
+  for (let i = 1; i < 10; i++) expect(b[i]).toBeCloseTo(0.06, 6);
+  // (a wide curve, 2 km: below the steepest; the mirror curve negative)
+  const wide = Array.from({ length: 5 }, (_, i) => [2000 * Math.sin(i * 0.05), 2000 - 2000 * Math.cos(i * 0.05)] as [number, number]);
+  expect(roadBank(wide, "primary")[2]).toBeCloseTo((0.5 * 625) / (9.81 * 2000), 4);
+  expect(
+    roadBank(
+      wide.map(([x, y]) => [x, -y] as [number, number]),
+      "primary",
+    )[2],
+  ).toBeLessThan(0);
+  expect(
+    roadBank(
+      [
+        [0, 0],
+        [100, 0],
+        [200, 0],
+      ],
+      "primary",
+    ),
+  ).toEqual([0, 0, 0]);
+  expect(roadBank(arc, "primary", true).every((v) => v === 0)).toBe(true);
+  expect(roadBank(arc, "minor").every((v) => v === 0)).toBe(true);
 });

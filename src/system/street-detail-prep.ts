@@ -490,3 +490,40 @@ export function roadProfile(s: readonly number[], h: readonly number[], cls: Roa
   out[0] = h[0]!;
   return { heights: out, fill: out.map((v, i) => v - h[i]!) };
 }
+
+/** RP3 — a class's design speed [m/s] and its steepest banking (the rules' order: 7 % on the fast roads, 5 % on the others) */
+export const ROAD_BANK: Partial<Record<RoadClass, { speed: number; max: number }>> = {
+  motorway: { speed: 36, max: 0.07 },
+  trunk: { speed: 30, max: 0.07 },
+  primary: { speed: 25, max: 0.06 },
+  secondary: { speed: 22, max: 0.05 },
+  tertiary: { speed: 18, max: 0.05 },
+};
+
+/**
+ * RP3 — a road's banking along its run (its points, in order): at each point, the curve's radius from it and its neighbours (the circle
+ * through the three), the cross-slope a car at the class's design speed needs on it — v² / (g R), half carried by the tyres —, held
+ * within the class's steepest; signed: > 0 its right edge higher than its left (in the run's direction — a left-hand curve), < 0 the
+ * reverse; 0 on a straight, at the ends, in a town (its streets drained, not banked) and for a class without one. Outside France the
+ * drawing tilts its flattened ground by it (roadProfile its height).
+ */
+export function roadBank(points: readonly (readonly [number, number])[], cls: RoadClass, urban = false): number[] {
+  const b = ROAD_BANK[cls];
+  const out = points.map(() => 0);
+  if (!b || urban) return out;
+  for (let i = 1; i + 1 < points.length; i++) {
+    const [ax, ay] = points[i - 1]!,
+      [px, py] = points[i]!,
+      [cx, cy] = points[i + 1]!;
+    const cross = (px - ax) * (cy - py) - (py - ay) * (cx - px);
+    const la = Math.hypot(px - ax, py - ay),
+      lb = Math.hypot(cx - px, cy - py),
+      lc = Math.hypot(cx - ax, cy - ay);
+    if (cross === 0 || la * lb * lc === 0) continue;
+    // (the circumradius: |ab|·|bc|·|ca| / (2 |cross|))
+    const R = (la * lb * lc) / (2 * Math.abs(cross));
+    const e = Math.min(b.max, (0.5 * b.speed * b.speed) / (9.81 * R));
+    out[i] = Math.sign(cross) * e;
+  }
+  return out;
+}
