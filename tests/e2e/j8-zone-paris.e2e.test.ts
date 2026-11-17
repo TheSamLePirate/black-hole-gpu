@@ -27,8 +27,34 @@ const DEADLINE = process.env.J8Z_DEADLINE ? Date.parse(process.env.J8Z_DEADLINE)
  *  zone, after Paris's in one page, left the page unanswering 300 s while its cells were prepared; alone it passes) —, the page's heap
  *  said every 30 s through both */
 const BEFORE = process.env.J8Z_BEFORE ?? "";
+/** the witness's stop (J8Z_BEFORE): none until it is started */
+let stopWitness = () => {};
 /** the page's JavaScript heap [MB] (Chrome's performance.memory; null elsewhere) */
 const HEAP = `(() => { const m = performance.memory; return m ? Math.round(m.usedJSHeapSize / 1e6) : null; })()`;
+/** (J8Z_BEFORE) the witness: every 30 s, on its own clock — a call the test awaits would itself wait out a hung page —, the heap asked
+ *  with 10 s to answer, its delay and its heap logged, or its silence: the moment the page stops answering dated (the render session's
+ *  ask, 17 Nov 2026) */
+function pageWitness(app: App): () => void {
+  const t0 = Date.now();
+  let busy = false;
+  const timer = setInterval(async () => {
+    if (busy) return;
+    busy = true;
+    const at = new Date().toISOString().slice(11, 19);
+    const s = Date.now();
+    try {
+      const r = await app.cdp.send<{ result: { value: number | null } }>("Runtime.evaluate", { expression: HEAP, returnByValue: true }, 10);
+      console.log(
+        `  [witness ${at} UTC, +${((s - t0) / 60_000).toFixed(1)} min] answered in ${Date.now() - s} ms · heap ${r.result?.value} MB`,
+      );
+    } catch {
+      console.log(`  [witness ${at} UTC, +${((s - t0) / 60_000).toFixed(1)} min] NO ANSWER in 10 s`);
+    } finally {
+      busy = false;
+    }
+  }, 30_000);
+  return () => clearInterval(timer);
+}
 
 describe.skipIf(!E2E)(`PLAN-J8 J8-9: J8-A's corridor zone « ${TRACK} », downloaded then flown offline`, () => {
   let app: App;
@@ -42,6 +68,7 @@ describe.skipIf(!E2E)(`PLAN-J8 J8-9: J8-A's corridor zone « ${TRACK} », downlo
     await app.waitFor("!!__bh.pwa.zones", 30_000);
   }, 180_000);
   afterAll(async () => {
+    stopWitness();
     await app?.offline(false).catch(() => {});
     app?.close();
   });
@@ -68,6 +95,7 @@ describe.skipIf(!E2E)(`PLAN-J8 J8-9: J8-A's corridor zone « ${TRACK} », downlo
       if (BEFORE) {
         // (the other zone first, in this page, to its end: its heap said every 30 s)
         await app.step(`zone ${BEFORE} d'abord`);
+        stopWitness = pageWitness(app);
         const bt = j8aTrack(BEFORE);
         const bc = { points: bt.points.map((p) => [p[0], p[1]] as [number, number]), halfWidthM: bt.halfWidthM };
         const bd = corridorDisc(bc);
@@ -89,8 +117,7 @@ describe.skipIf(!E2E)(`PLAN-J8 J8-9: J8-A's corridor zone « ${TRACK} », downlo
           if (Date.now() - b0 > 3_600_000) throw new Error(`the zone ${BEFORE} not in after 1 h: ${JSON.stringify(z)}`);
           const heap = await app.js<number | null>(HEAP);
           await app.progress(`zone ${BEFORE} : chaînes ${z?.cursor ?? 0} / ${z?.total ?? "?"}`, `tas ${heap ?? "?"} Mo`);
-          if (k % 15 === 0)
-            console.log(`  [${((Date.now() - b0) / 60_000).toFixed(1)} min] ${BEFORE}: ${z?.cursor}/${z?.total} · heap ${heap} MB`);
+          if (k % 15 === 0) console.log(`  [${((Date.now() - b0) / 60_000).toFixed(1)} min] ${BEFORE}: ${z?.cursor}/${z?.total}`);
           await Bun.sleep(2000);
         }
         await app.stepDone(
@@ -178,7 +205,6 @@ describe.skipIf(!E2E)(`PLAN-J8 J8-9: J8-A's corridor zone « ${TRACK} », downlo
             );
           }
         }
-        if (BEFORE && k % 15 === 0) console.log(`  … heap ${await app.js<number | null>(HEAP)} MB`);
         if (k % 30 === 0)
           console.log(
             `  [${((Date.now() - t0) / 60_000).toFixed(1)} min] ${z?.cursor}/${z?.total} chains, ${((z?.bytes ?? 0) / 1e6).toFixed(0)} MB`,
