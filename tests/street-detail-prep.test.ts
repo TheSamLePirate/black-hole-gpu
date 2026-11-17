@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import type { Primitive } from "../src/system/scenery-data";
-import { chainBridges, segmentNexts, segmentSurface, streetFurniture } from "../src/system/street-detail-prep";
+import { chainBridges, roadProfile, segmentNexts, segmentSurface, streetFurniture } from "../src/system/street-detail-prep";
 import {
   BridgeFlag,
   BridgeKind,
@@ -299,4 +299,34 @@ test("J8-RP RP9: a railway's track — electrified or not, no road markings, no 
     () => false,
   )[0]!.bridge;
   expect(rb.kind).toBe(BridgeKind.Rail);
+});
+
+test("J8-RP RP3: a road's profile on a coarse relief — smoothed, within its class's grade, its ends on the ground", () => {
+  // (a primary road of 2 km climbing 60 m, the coarse relief's bumps of ±6 m every ~90 m on it)
+  const s = Array.from({ length: 201 }, (_, i) => i * 10);
+  const h = s.map((x) => 100 + 0.03 * x + 6 * Math.sin(x / 14));
+  const r = roadProfile(s, h, "primary");
+  expect(r.heights[0]).toBe(h[0]!);
+  expect(r.heights[200]).toBe(h[200]!);
+  let steepest = 0,
+    bump = 0;
+  for (let i = 1; i < s.length; i++) {
+    steepest = Math.max(steepest, Math.abs(r.heights[i]! - r.heights[i - 1]!) / 10);
+    // (the bumps taken out away from its ends — a window from them, where it rejoins the ground —: the profile's second difference far
+    // below the relief's, ~2.9 m)
+    if (i + 1 < s.length && s[i]! > 150 && s[i]! < 1850)
+      bump = Math.max(bump, Math.abs(r.heights[i + 1]! - 2 * r.heights[i]! + r.heights[i - 1]!));
+  }
+  expect(steepest).toBeLessThanOrEqual(0.08 + 1e-9);
+  expect(bump).toBeLessThan(0.2);
+  // (cut and fill no deeper than the bumps)
+  expect(Math.max(...r.fill.map(Math.abs))).toBeLessThan(8);
+  // (flat ground: nothing flattened; a path: the ground itself)
+  const flat = roadProfile(
+    s,
+    s.map(() => 50),
+    "minor",
+  );
+  expect(Math.max(...flat.fill.map(Math.abs))).toBeLessThan(1e-9);
+  expect(roadProfile(s, h, "path").heights).toEqual(h);
 });

@@ -212,7 +212,11 @@ l'ombrage tracé sur toute l'image est à revoir avant d'être gardé.
 - Mesures : sur la Seine au pont Alexandre III, 5 ponts confirmés, 4 sur l'eau, le plus long 154 m. Tests unitaires seulement, non vu
   en jeu.
 - `construction_*` est présent dans les tuiles BD TOPO z 15 en cache. **RP9, les données sont faites** (format 5, `kerr-street-v5`) :
-  les voies ferrées en tronçons de classe « rail », électrifiées ou non. Il reste RP3 (le profil long hors de France).
+  les voies ferrées en tronçons de classe « rail », électrifiées ou non. **RP3, la part des approches est faite** : aucune donnée de
+  plus, `roadRuns` donne les polylignes et leurs abscisses. S'y ajoute une fonction pure et partagée, `roadProfile(s, h, classe)`
+  (`street-detail-prep.ts`, table `ROAD_PROFILE`) : le profil long lissé sur une fenêtre de la classe (motorway 240 m … minor 60 m),
+  tenu sous sa pente maximale (6 % … 12 %, la voie ferrée 3,5 %), ses deux bouts au sol, avec le déblai ou remblai par échantillon.
+  Le rendu échantillonne son relief le long du run et aplanit le sol de ce déblai ou remblai, hors de France seulement.
 
 ## 4. Répartition et règles du checkout partagé
 

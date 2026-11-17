@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 17 nov. 10:39 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 17 nov. 10:41 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous. Ce qui est fermé quitte le tableau « En cours » pour la ligne « Fermé récemment ».
@@ -10481,3 +10481,11 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
 - **Destination :** §19.13 (« AAA road and bridges ») ; J8-RP RP8.
 - **Réalisé :** les bouches `TunnelPortal` du mobilier KSC4 sont dessinées dans la boucle de VB7 : deux piédroits et un linteau de béton sur la largeur de la chaussée, et l'ouverture sombre 1,2 m à l'intérieur. Elles dépendent du levier `furnitureOn` et n'existent qu'en France, faute de données OMT.
 - **Preuves :** `tsc`, Biome. **Non vu en jeu.**
+
+### 2026-11-17 10:41 UTC — PLAN-J8 J8-RP RP3 (mode speed) : le profil long des routes hors de France, une fonction partagée (session des approches, 1feb2f7f)
+
+- **Réalisé :** `roadProfile(s, h, classe)` et `ROAD_PROFILE` (`street-detail-prep.ts`). Le profil d'un run est lissé sur une fenêtre
+  de sa classe et tenu sous sa pente maximale ; ses bouts restent au sol. La fonction rend aussi le déblai ou remblai de chaque
+  échantillon, que le rendu applique à son sol hors de France. Aucun octet de plus : `roadRuns` et ses abscisses suffisent.
+- **Vérifié :** test sur 2 km de route primaire, 60 m de montée et des bosses de ±6 m. La pente reste sous 8 %, la courbure tombe de
+  2,9 m à moins de 0,2 m loin des bouts, et le déblai ou remblai reste sous 8 m. Non mesuré en jeu.

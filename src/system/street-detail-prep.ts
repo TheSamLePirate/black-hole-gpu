@@ -430,3 +430,63 @@ export function chainBridges(
   }
   return out;
 }
+
+/**
+ * J8-RP RP3 — a road's long profile outside France (where the relief is coarse — the IGN's 1 m / 0.5 m models carry the real
+ * embankments in France: nothing more flattened there): by class, the window it is smoothed over [m] and its steepest grade (the
+ * design rules' order: a motorway's 6 %, a main road's 8 %, a street's 12 %, a track's 20 %).
+ */
+export const ROAD_PROFILE: Partial<Record<RoadClass, { window: number; grade: number }>> = {
+  motorway: { window: 240, grade: 0.06 },
+  trunk: { window: 200, grade: 0.07 },
+  primary: { window: 150, grade: 0.08 },
+  secondary: { window: 120, grade: 0.09 },
+  tertiary: { window: 90, grade: 0.1 },
+  minor: { window: 60, grade: 0.12 },
+  service: { window: 40, grade: 0.14 },
+  track: { window: 30, grade: 0.2 },
+  rail: { window: 300, grade: 0.035 },
+};
+
+/**
+ * RP3 — a road's profile from its ground sampled along it (`s` its abscissas, rising; `h` the relief there, from the drawing's own):
+ * smoothed over its class's window (a mean weighted by a tent), then held within its class's steepest grade (a forward and a backward
+ * pass, each sample no farther from its neighbour than the grade allows — the profile nearest the smoothed one that a road can take),
+ * its two ends kept on the ground (the road leaves and meets the rest of the network there). Returns the profile's heights and each
+ * sample's cut (< 0) or fill (> 0) — what the drawing flattens the ground by under the carriageway and its shoulders. A class without a
+ * profile (a path, steps): the ground itself.
+ */
+export function roadProfile(s: readonly number[], h: readonly number[], cls: RoadClass): { heights: number[]; fill: number[] } {
+  const p = ROAD_PROFILE[cls];
+  if (!p || s.length < 3) return { heights: [...h], fill: h.map(() => 0) };
+  const n = s.length;
+  const half = p.window / 2;
+  const smooth = s.map((si, i) => {
+    let w = 0,
+      sum = 0;
+    for (let j = 0; j < n; j++) {
+      const d = Math.abs(s[j]! - si);
+      if (d >= half) continue;
+      const k = 1 - d / half;
+      w += k;
+      sum += k * h[j]!;
+    }
+    return w > 0 ? sum / w : h[i]!;
+  });
+  // (its ends on the ground: the smoothed profile led back to them over a window)
+  smooth[0] = h[0]!;
+  smooth[n - 1] = h[n - 1]!;
+  const out = [...smooth];
+  for (let i = 1; i < n; i++) {
+    const g = p.grade * (s[i]! - s[i - 1]!);
+    out[i] = Math.min(Math.max(out[i]!, out[i - 1]! - g), out[i - 1]! + g);
+  }
+  out[n - 1] = h[n - 1]!;
+  for (let i = n - 2; i >= 0; i--) {
+    const g = p.grade * (s[i + 1]! - s[i]!);
+    out[i] = Math.min(Math.max(out[i]!, out[i + 1]! - g), out[i + 1]! + g);
+  }
+  // (a slope steeper than the grade allows end to end: its ends kept on the ground all the same)
+  out[0] = h[0]!;
+  return { heights: out, fill: out.map((v, i) => v - h[i]!) };
+}
