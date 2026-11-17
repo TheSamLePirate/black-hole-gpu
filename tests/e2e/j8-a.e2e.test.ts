@@ -2,7 +2,7 @@ import { afterAll, expect, test } from "bun:test";
 import { mkdirSync } from "node:fs";
 import { $ } from "bun";
 import { J8A_TRACKS } from "../../src/system/j8a-tracks";
-import { corridorDisc } from "../../src/system/zones";
+import { corridorDisc, turnRadiusFor } from "../../src/system/zones";
 import { App, E2E, stopServer } from "./lib/app";
 import { CRUISE, expectFlight, flightState } from "./lib/flight-state";
 import { J0_FIXED } from "./lib/j0-scene";
@@ -68,7 +68,13 @@ test.skipIf(!E2E)(
         if (TRACK_READY) {
           await app.scenario(`${t.label} — la zone du couloir`);
           await app.waitFor("!!__bh.pwa.zones", 30_000);
-          const corridor = { points: t.points.map((p) => [p[0], p[1]] as [number, number]), halfWidthM: t.halfWidthM };
+          // (its sharp turns' discs from the track's speed — a whole turn at 25° of bank and 500 m: Paris's U-turn at Bercy went out 3.3 km,
+          // past the 2 500 m default, 17 Nov 2026)
+          const corridor = {
+            points: t.points.map((p) => [p[0], p[1]] as [number, number]),
+            halfWidthM: t.halfWidthM,
+            turnRadiusM: turnRadiusFor(t.speedMps),
+          };
           const d = corridorDisc(corridor);
           const zone = { name: `J8-A ${t.name} (e2e)`, lat: d.lat, lon: d.lon, radiusKm: d.radius / 1000, profile: "overflight", corridor };
           const id = await app.js<string | null>(`__bh.pwa.zones.add(${JSON.stringify(zone)})`);
