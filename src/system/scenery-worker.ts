@@ -1435,7 +1435,22 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
       }
     return z;
   };
-  const deckBridge = (points: Vec3[], width: number, kind: number, colour: number[], clearance: number): boolean => {
+  // (RP5: a bridge's build by its kind — a road's concrete deck and parapets; a railway's deeper deck (its ballast's trough) and
+  // taller parapets; a footbridge's thin deck, its steel railings, its slender piers)
+  const BRIDGE_STYLES = {
+    road: { thick: 1.2, viaductThick: 1.8, railW: 0.28, railH: 1, railColour: [0.42, 0.41, 0.39], pierMax: 3, viaductPier: 5 },
+    rail: { thick: 1.5, viaductThick: 2.2, railW: 0.25, railH: 1.2, railColour: [0.4, 0.39, 0.37], pierMax: 3.5, viaductPier: 5.5 },
+    foot: { thick: 0.45, viaductThick: 0.9, railW: 0.07, railH: 1.1, railColour: [0.3, 0.32, 0.34], pierMax: 0.8, viaductPier: 1.5 },
+  };
+  type BridgeStyle = (typeof BRIDGE_STYLES)["road"];
+  const deckBridge = (
+    points: Vec3[],
+    width: number,
+    kind: number,
+    colour: number[],
+    clearance: number,
+    style: BridgeStyle = BRIDGE_STYLES.road,
+  ): boolean => {
     // (PLAN-J8 J8-RP RP5, FableFlight's bridge_end: the deck from the ground at its two abutments — its ends —, straight between them,
     // lifted towards its middle to a clearance over what lies under it (5.5 m; a layer above the first 4 m more), cut in pieces of
     // 10 m at most, each on its own height; its thickness 1.2 m, a viaduct's (over 400 m) 1.8 m; concrete parapets; piers every
@@ -1470,7 +1485,7 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
       return points[k - 1]![2] + (points[k]![2] - points[k - 1]![2]) * f;
     };
     const viaduct = total > 400;
-    const thick = viaduct ? 1.8 : 1.2;
+    const thick = viaduct ? style.viaductThick : style.thick;
     let made = false;
     for (let i = 0; i < points.length - 1; i++) {
       const a = points[i]!,
@@ -1489,8 +1504,8 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
         const deck = [stripPolygon(pa, pb, width)];
         made = addSolid(polygonPrimitive(deck, top - thick, top, kind, colour), deck) || made;
         for (const side of [-1, 1]) {
-          const rail = [stripPolygon(pa, pb, 0.28, (side * width) / 2)];
-          addSolid(polygonPrimitive(rail, top, top + 1, 3, [0.42, 0.41, 0.39]), rail);
+          const rail = [stripPolygon(pa, pb, style.railW, (side * width) / 2)];
+          addSolid(polygonPrimitive(rail, top, top + style.railH, 3, style.railColour), rail);
         }
       }
     }
@@ -1508,7 +1523,13 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
       const p: [number, number, number] = [A[0] + (B[0] - A[0]) * f, A[1] + (B[1] - A[1]) * f, 0];
       const ux = (B[0] - A[0]) / Math.max(1e-6, Math.hypot(B[0] - A[0], B[1] - A[1])),
         uy = (B[1] - A[1]) / Math.max(1e-6, Math.hypot(B[0] - A[0], B[1] - A[1]));
-      const pier = [stripPolygon([p[0] - ux, p[1] - uy, 0], [p[0] + ux, p[1] + uy, 0], Math.min(viaduct ? 5 : 3, width * 0.5))];
+      const pier = [
+        stripPolygon(
+          [p[0] - ux, p[1] - uy, 0],
+          [p[0] + ux, p[1] + uy, 0],
+          Math.min(viaduct ? style.viaductPier : style.pierMax, width * 0.5),
+        ),
+      ];
       if (addSolid(polygonPrimitive(pier, g - 2, z, 3, [0.5, 0.49, 0.46]), pier)) bridgePiers++;
     }
     return made;
@@ -1550,7 +1571,8 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
         const rail = e.b.kind === BridgeKind.Rail,
           foot = e.b.kind === BridgeKind.Foot;
         const colour = rail ? [0.2, 0.19, 0.17] : foot ? [0.3, 0.29, 0.27] : [0.095, 0.098, 0.1];
-        if (deckBridge(pts, Math.max(foot ? 2 : 4, e.b.width), 2, colour, e.b.clearance > 0 ? e.b.clearance : 5.5)) {
+        const style = rail ? BRIDGE_STYLES.rail : foot ? BRIDGE_STYLES.foot : BRIDGE_STYLES.road;
+        if (deckBridge(pts, Math.max(foot ? 2 : 4, e.b.width), 2, colour, e.b.clearance > 0 ? e.b.clearance : 5.5, style)) {
           bridges++;
           cellBridgeCount++;
         }

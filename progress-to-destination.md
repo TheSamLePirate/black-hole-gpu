@@ -10714,3 +10714,12 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
 - Preuve : `check-wgsl` 84/84, `pipeline-inventory --check`. **Non vu en jeu, non mesuré** (trois lectures de la grille de
   plus, seulement pour un pixel de route mouillée de nuit). Hors du gros e2e définitif.
 - Reste de RP10 : les reflets des phares (les voitures ne sont pas dans une grille lisible par la passe).
+
+### 2026-11-17 15:50 UTC — PLAN-J8 J8-RP RP5 : la forme d'un pont selon son genre (session 33d89754, mode speed)
+
+- Destination : §19.13 (J8-A, ponts de la Seine et de Toulon en vol bas), §7 (matériaux explicites).
+- Fait : `scenery-worker.ts deckBridge` prend un style par genre de pont KSC4 (`BRIDGE_STYLES`) : route (béton, parapets
+  de 1 m), voie ferrée (tablier 1,5 m / 2,2 m en viaduc, parapets de 1,2 m), passerelle (tablier 0,45 m, garde-corps d'acier
+  de 7 cm, piles de 0,8 m au plus). Les ponts OMT hors cellules gardent le style routier.
+- Preuve : tsc, Biome, tests `street-far` et `cell-roads`. **Non vu en jeu, non mesuré**, hors du gros e2e définitif.
+- Reste de RP5 : la matière et l'époque (pierre, acier : pas dans KSC4), les marquages sur le tablier, les arches.
