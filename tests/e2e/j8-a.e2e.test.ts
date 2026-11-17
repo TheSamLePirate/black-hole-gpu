@@ -112,8 +112,11 @@ test.skipIf(!E2E)(
             __bh.settings.shipMount = "cockpit"; __bh.refresh(); __bh.camera.viewReset(); return 1; })()`);
           const t0 = Date.now();
           // (everything loaded: flightReady every 5 s, what is missing said every 10 s; 120 s without a change of « why » or 600 s: fails)
+          // (ready twice in a row, 5 s apart: just after a jump the view has asked nothing yet — a first « ready » passed before its
+          // tiles were even pending, the session of the approaches' j8-zone-paris, 17 Nov 2026)
           let why = "",
-            changed = Date.now();
+            changed = Date.now(),
+            readyOnce = false;
           for (;;) {
             const r = await app.js<{ ready: boolean; why: string }>(
               `(async () => { __bh.touch(); const r = await __bh.sys.flightReady(${TRACK_READY ? `{ track: { points: ${JSON.stringify(t.points)} } }` : ""});
@@ -121,7 +124,12 @@ test.skipIf(!E2E)(
                 const n = __bh.renderer.nearCells(), cells = ${!!process.env.J8A_CELLS} && (!n || n.missing > 0) ? [\`near mesh cells: \${n ? n.missing : "none yet"} missing\`] : [];
                 return { ready: r.ready && !cells.length, why: String([r.why, ...cells].filter(Boolean)) }; })()`,
             );
-            if (r.ready) break;
+            if (r.ready && readyOnce) break;
+            readyOnce = r.ready;
+            if (r.ready) {
+              await app.js(`new Promise((q) => setTimeout(q, 5000))`);
+              continue;
+            }
             if (r.why !== why) {
               why = r.why;
               changed = Date.now();
