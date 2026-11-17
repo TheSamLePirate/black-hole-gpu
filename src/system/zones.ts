@@ -116,7 +116,8 @@ export function turnRadiusFor(speedMps: number, marginM = 500): number {
 /** a turn sharper than this [°] gets its disc (ZoneCorridor.turnRadiusM) */
 export const SHARP_TURN_DEG = 100;
 /** the turn's disc by default [m]: what J8-A's flight swung past Bercy's point (2.2 km at 120 m/s banked 25°, j8a-paris-strict-2) and
- *  the windows' margin — a full turn's 3.1 km radius not all outside the half-width (Paris: +10 % chains at 2 500 m, +20 % at 3 500) */
+ *  the windows' margin — a full turn's 3.1 km radius not all outside the half-width (Paris: +10 % chains at 2 500 m, +20 % at 3 500).
+ *  Measured at 120 m/s: a faster track with a sharp turn swings farther — give it turnRadiusM (turnRadiusFor its speed) */
 export const CORRIDOR_TURN_M = 2500;
 /** a place's distance [m] from a corridor's track (its segments, in Web Mercator at the zone's centre's scale — zoneDistance's) */
 export function corridorDistance(lat0: number, lon0: number, c: ZoneCorridor, lat: number, lon: number): number {
