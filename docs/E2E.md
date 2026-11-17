@@ -372,6 +372,45 @@ answers at its next pull with `e2e-<pid>.jpg`, ~0.5 s) — the dashboard's *Pict
 while shown). A page held by one long call (a whole flight stepped at once) cannot be pictured until it
 returns; the Monitor says so (*page held*).
 
+### Every e2e is emitted
+
+(17 Nov 2026, the Agent Universe session, allowed by Sam.) Beside the live record — one state, its last 12 events, removed
+when the process ends — every e2e process **appends one JSON line per fact** to a file that stays:
+
+```
+~/.kerr-lab/events/e2e-<pid>-<start ms>.jsonl        (KERR_EVENTS_DIR moves it; E2E_EMIT=0 leaves it out)
+{"v":1,"seq":7,"at":1794915900000,"pid":4242,"host":"kerr-mini","file":"j8-a.e2e.test.ts","k":1,
+ "kind":"step_started","data":{"index":4,"total":60,"name":"paris de jour : tronçon 1/5"}}
+```
+
+`seq` counts the process's lines from 0, `at` is the machine's clock [ms], `file` and `k` are the banner's reference (k = 0:
+the file's setup). The kinds, said by the recorder where it already tells the banner and the live record
+(`lib/telemetry.ts`; the writer is `lib/emit.ts`):
+
+| kind | said by | data |
+|---|---|---|
+| `process` | the file's first line | `argv`, `cwd`, `reportRoot`, `headed` |
+| `suite` | a test file's first page | `title`, `tests` (the titles in order, the `-t` filter applied), `estimateS` |
+| `test_started` / `test_ended` | the preloads' `beforeEach` / `afterEach` | `title`, `reportDir` / `title`, `durationMs` |
+| `step_declared` | `app.steps` | `total`, `names` |
+| `step_started` | `app.step` | `index`, `total`, `name` |
+| `step_ended` | `app.stepDone` | `index`, `ok`, `text` |
+| `progress` | `app.progress` | `index`, `text`, `values` |
+| `waiting` | the harness's own count (`waitFor`, `waitProgress`) | `text` (`null`: over) |
+| `scenario` | `app.scenario` | `label`, `ref` |
+| `estimate` | `app.estimate` | `seconds` |
+| `shot` | `app.shot` | `path` (absolute), `ref` |
+
+What it adds to what was already on disk: the declared steps and **each step's result**, the **values a test judges**, a
+**time on every fact**, and a test's title and times **at its own `k`**. What it does not: **a test's verdict** — bun gives
+none to `afterEach`; it stays in the log, at the same `k`.
+
+It only adds: the banner, the live record, the reports, the waits and the measures are as they were. One small synchronous
+append per fact; a write that fails turns it off for the process, silently. Files older than 14 days are removed by the next
+e2e process. On both paths (`bun run e2e`, and `E2E=1 bun test`: the remote jobs, the A/B) — on a remote machine the file
+is written there, and is not brought back by `remote.ts`. Test: `tests/e2e-emit.test.ts`. *Not yet seen on a real e2e run
+(no e2e was started for it).*
+
 ### Rules that keep tests honest
 
 1. **Real input for UI.** Use `app.click`/`app.press`/`app.mouse`/`app.touch`, never `element.click()` in

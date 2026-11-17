@@ -846,6 +846,7 @@ export class App {
     await Bun.write(file, Buffer.from(r.data, "base64"));
     const ref = recorder.ref();
     if (ref) console.log(`  [shot] ${ref} → ${file}`);
+    recorder.shot(file);
   }
 
   /**

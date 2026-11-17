@@ -16,6 +16,7 @@
 // without the preload (`E2E=1 bun test …`: the remote jobs, the A/B) is live too, lightly (lib/live-preload.ts,
 // bunfig.toml): its file, its test, its time, a picture on demand — its page otherwise untouched.
 import { type BannerProgress, bannerRef, fileInfo, showBanner } from "./banner";
+import { type EmitKind, emitter } from "./emit";
 
 /** no progress declared yet (each use spreads it with its own `done` list) */
 const NO_PROGRESS: BannerProgress = {
@@ -32,7 +33,7 @@ const NO_PROGRESS: BannerProgress = {
 import { LiveState } from "./live";
 import { appendFileSync, existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { hostname } from "node:os";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import { thermalWindow } from "../../../scripts/lib/thermal";
 import { LAB_PAGE } from "../../flight/lib/sampler";
 
@@ -154,6 +155,10 @@ class Recorder {
   light = false;
   private page: Recordable | null = null;
   private file = "";
+  /** the file last said to the emitter (lib/emit.ts `suite`) */
+  private saidFile = "";
+  /** inside step(): its scenario is the step itself, said once (lib/emit.ts `step_started`) */
+  private inStep = false;
   private k = 0;
   /** the case under way in the running test (scenario()): null until one is said */
   private scen: string | null = null;
@@ -173,6 +178,24 @@ class Recorder {
   private said = new Set<string>();
   private live = new LiveState();
   private liveTimer: Timer | null = null;
+
+  /** One fact for the readers outside (lib/emit.ts: ~/.kerr-lab/events/), stamped with the file and the test under way — on an
+   *  e2e run only (recorded or live), nothing else changed by it. */
+  private say(kind: EmitKind, data: Record<string, unknown> = {}) {
+    if (!this.enabled && !this.light) return;
+    emitter.at(this.file, this.k);
+    emitter.say(kind, data);
+  }
+
+  /** The file (once, when it changes) and the test now open, said (lib/emit.ts). */
+  private sayOpen(I: ReturnType<typeof fileInfo>) {
+    if (!this.file) return;
+    if (this.file !== this.saidFile) {
+      this.saidFile = this.file;
+      this.say("suite", { title: I.suite, tests: I.tests, estimateS: this.prog?.estimateS ?? null });
+    }
+    this.say("test_started", { title: this.k === 0 ? null : (I.tests[this.k - 1] ?? null), reportDir: this.dir || null });
+  }
 
   /** The preload's: on for this process. */
   enable() {
@@ -231,6 +254,7 @@ class Recorder {
     this.live.file(this.file, I.suite, I.tests.length, reportRoot());
     this.live.test(this.k, this.k === 0 ? "setting up" : (I.tests[this.k - 1] ?? `test ${this.k}`), this.dir);
     this.live.write();
+    this.sayOpen(I);
     this.wall0 = Date.now();
     this.sim0 = null;
     this.fps = [];
@@ -244,6 +268,7 @@ class Recorder {
     this.live.file(this.file, I.suite, I.tests.length, "", true);
     this.live.test(this.k, this.k === 0 ? "setting up" : (I.tests[this.k - 1] ?? `test ${this.k}`), "");
     this.live.write();
+    this.sayOpen(I);
     this.wall0 = Date.now();
   }
 
@@ -299,6 +324,7 @@ class Recorder {
           Math.round((Date.now() - this.wall0) / 100) / 10,
         );
         this.live.write();
+        this.sayEnded();
       }
       return;
     }
@@ -307,6 +333,7 @@ class Recorder {
     await this.pull();
     this.live.ended(this.k, fileInfo(this.file).tests[this.k - 1] ?? `test ${this.k}`, Math.round((Date.now() - this.wall0) / 100) / 10);
     this.live.write();
+    this.sayEnded();
     const page = this.page;
     if (page) {
       const g = await page.js("window.__e2e?.graphs()").catch(() => null);
@@ -315,6 +342,12 @@ class Recorder {
       if (shot) writeFileSync(join(this.dir, "shots", "end.jpg"), Buffer.from(shot.data, "base64"));
     }
     this.summary();
+  }
+
+  /** The test's end said (lib/emit.ts): its time — its verdict is bun's, in the log, at the same k. */
+  private sayEnded() {
+    if (!this.file) return;
+    this.say("test_ended", { title: fileInfo(this.file).tests[this.k - 1] ?? null, durationMs: Date.now() - this.wall0 });
   }
 
   private summary() {
@@ -400,6 +433,7 @@ class Recorder {
     const ref = bannerRef(this.file, this.k, label);
     console.log(`  ▶ ${ref} · ${hostname().replace(/\.local$/, "")}`);
     this.live.scenario(label);
+    if (!this.inStep) this.say("scenario", { label, ref });
     if (label) this.live.note("scenario", label);
     this.live.write();
     if (this.enabled && this.dir)
@@ -414,6 +448,7 @@ class Recorder {
   /** The test's steps in order (lib/app.ts `app.steps`): « Étape k/n » on the banner from the first `step`. */
   steps(list: string[]) {
     this.prog = { ...NO_PROGRESS, steps: [...list], done: [], estimateS: this.prog?.estimateS ?? null };
+    this.say("step_declared", { total: list.length, names: [...list] });
   }
 
   /** A declared step begins (lib/app.ts `app.step`; a name not declared is added at the end): said as a scenario — the banner, the
@@ -427,13 +462,20 @@ class Recorder {
     this.prog.progress = null;
     this.prog.stepAt = this.prog.saidAt = Date.now();
     this.prog.auto = null;
-    return this.scenario(`Étape ${i + 1}/${this.prog.steps.length} · ${name}`);
+    this.say("step_started", { index: i + 1, total: this.prog.steps.length, name });
+    this.inStep = true;
+    try {
+      return await this.scenario(`Étape ${i + 1}/${this.prog.steps.length} · ${name}`);
+    } finally {
+      this.inStep = false;
+    }
   }
 
   /** A step ended, with its result (« zone 15,1 min », a failure kept shown): the banner's last ones, a live event. */
   async stepDone(text: string, ok = true): Promise<void> {
     this.prog ??= { ...NO_PROGRESS };
     this.prog.done.push({ text, ok });
+    this.say("step_ended", { index: this.prog.at >= 0 ? this.prog.at + 1 : null, ok, text });
     this.live.note(ok ? "step" : "step-failed", text);
     this.live.write();
     await showBanner(this.page, this.file, this.k, this.scen, this.prog);
@@ -450,6 +492,7 @@ class Recorder {
     this.prog.saidAt = Date.now();
     this.prog.auto = null;
     if (values !== undefined) this.prog.values = values;
+    this.say("progress", { index: this.prog.at >= 0 ? this.prog.at + 1 : null, text, values: values ?? null });
     const step = this.prog.at >= 0 ? `Étape ${this.prog.at + 1}/${this.prog.steps.length} · ${this.prog.steps[this.prog.at]}` : null;
     this.live.scenario(step ? `${step} — ${text}` : text);
     this.live.write();
@@ -473,6 +516,7 @@ class Recorder {
       if (!this.prog?.auto) return;
       this.prog.auto = null;
     }
+    this.say("waiting", { text });
     const step = this.prog.at >= 0 ? `Étape ${this.prog.at + 1}/${this.prog.steps.length} · ${this.prog.steps[this.prog.at]}` : this.scen;
     this.live.scenario([step, this.prog.progress, this.prog.auto && `en attente · ${this.prog.auto}`].filter(Boolean).join(" — "));
     this.live.write();
@@ -483,6 +527,7 @@ class Recorder {
   estimate(s: number) {
     this.prog ??= { ...NO_PROGRESS };
     this.prog.estimateS = Math.round(s);
+    this.say("estimate", { seconds: Math.round(s) });
     this.live.estimate(s);
     this.live.write();
   }
@@ -490,6 +535,11 @@ class Recorder {
   /** The reference of the run now (the file, the test, the case said): the words of the banner's first line. */
   ref(): string {
     return this.file ? bannerRef(this.file, this.k, this.scen) : "";
+  }
+
+  /** A picture written by the test (lib/app.ts `app.shot`), said with the reference of the run (lib/emit.ts). */
+  shot(file: string) {
+    this.say("shot", { path: resolve(file), ref: this.ref() });
   }
 
   /** The process ends: the last record closed (a file whose last test had no afterEach, a crash). */
