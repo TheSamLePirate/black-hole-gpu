@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 17 nov. 04:30 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 17 nov. 05:10 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous. Ce qui est fermé quitte le tableau « En cours » pour la ligne « Fermé récemment ».
@@ -10027,3 +10027,16 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
 - **Réalisé :** `CORRIDOR_TURN_M` = `turnRadiusFor(120)` = 3 649 m, la règle d'abord proposée par la session du rendu (v²/(g tan 25°) +
   500 m). Elle couvre cette tuile. Paris passe à 58 052 chaînes (+22 % sur la zone sans disque), 3 351 Mo, 176 min estimées pour le joueur.
 - **Suite :** un nouveau vol strict à Paris, relancé par la session du rendu.
+
+### 2026-11-17 05:10 UTC — PLAN-J8 J8-A : le disque d'un virage serré centré sur son cercle ; Paris strict passe de jour (session des approches, 1feb2f7f)
+
+- **Mesuré** (`j8a-paris-strict-4`, session du rendu, kerr-mini, disque de 3 649 m autour du point) : **de jour, 0 requête réseau en vol**,
+  0 image de scène rapide, GPU p50 61,8 ms : Paris passe le strict de jour. **De nuit, 1 orthophoto** à 4,5 km du point de Bercy, à 945 m
+  au-delà du disque. Les sorties successives (2,2, puis 3,3, puis 4,5 km) suivent la géométrie : l'avion survole le point, puis tourne sur
+  un cercle de rayon r ≈ 3,15 km dont le centre est à r du point, du côté du virage. Il peut donc s'éloigner jusqu'à 2r du point.
+- **Réalisé :** `zones.ts` `turnCentres` : pour chaque virage de plus de 100°, le centre de son cercle (le point décalé de
+  turnRadiusM − 500 m, perpendiculairement à l'entrée, du côté du virage). Le disque de turnRadiusM est centré là (`corridorOutside`,
+  `corridorDisc`) : il tient tout le virage et le point. Les quatre tuiles manquées des quatre vols sont dans la zone (vérifié sur les
+  chaînes). Paris : 60 733 chaînes, 3 518 Mo, 185 min estimées pour le joueur (+27 % sur la zone sans disque) ; Toulon-Hyères inchangé.
+- **Preuves :** tests unitaires (`zones-corridor` : le centre, un point de l'arc dans le disque, le côté extérieur hors du disque).
+  Le vol strict de nuit est à relancer par la session du rendu.

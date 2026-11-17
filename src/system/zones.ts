@@ -110,7 +110,7 @@ export interface ZoneCorridor {
 }
 /** a corridor's turn radius for a flight at `speedMps` banked 25° (the autopilots'), plus a margin [m]: v² / (g tan 25°) + 500 — 3.6 km at
  *  120 m/s, 2.6 km at 100 (the render session's rule, 17 Nov 2026: a zone whose track's speed is known — j8a-tracks.ts speedMps) */
-export function turnRadiusFor(speedMps: number, marginM = 500): number {
+export function turnRadiusFor(speedMps: number, marginM = TURN_MARGIN_M): number {
   return (speedMps * speedMps) / (9.80665 * Math.tan((25 * Math.PI) / 180)) + marginM;
 }
 /** a turn sharper than this [°] gets its disc (ZoneCorridor.turnRadiusM) */
@@ -162,12 +162,45 @@ export function sharpTurns(c: ZoneCorridor): (readonly [number, number])[] {
   }
   return out;
 }
+/** the margin a turn's disc keeps past its circle [m] (turnRadiusFor's) */
+export const TURN_MARGIN_M = 500;
+/**
+ * The corridor's sharp turns' circles' centres [lat °, lon °]: a flight passes over the point, then turns on a circle of radius
+ * turnRadiusM − TURN_MARGIN_M whose centre lies that far from the point, square to the way in, on the turn's side — the turn swings up
+ * to twice that from the point (j8a-paris-strict-3 and -4: 3.3 then 4.5 km from Bercy's point, both within 2.9 km of its circle's
+ * centre). A disc of turnRadiusM round it holds the whole turn and the point.
+ */
+export function turnCentres(c: ZoneCorridor): (readonly [number, number])[] {
+  const D = Math.PI / 180;
+  const rc = Math.max(0, (c.turnRadiusM ?? CORRIDOR_TURN_M) - TURN_MARGIN_M);
+  const out: (readonly [number, number])[] = [];
+  for (let k = 1; k + 1 < c.points.length; k++) {
+    const [la0, lo0] = c.points[k - 1]!,
+      [la1, lo1] = c.points[k]!,
+      [la2, lo2] = c.points[k + 1]!;
+    const k1 = Math.cos(la1 * D);
+    const ax = (lo1 - lo0) * k1,
+      ay = la1 - la0,
+      bx = (lo2 - lo1) * k1,
+      by = la2 - la1;
+    const cross = ax * by - ay * bx;
+    const turn = Math.abs(Math.atan2(cross, ax * bx + ay * by)) / D;
+    if (turn <= SHARP_TURN_DEG) continue;
+    // (the way in's unit normal on the turn's side: left — anticlockwise — when the cross product is positive)
+    const len = Math.hypot(ax, ay) || 1;
+    const side = cross >= 0 ? 1 : -1;
+    const nx = (-ay / len) * side,
+      ny = (ax / len) * side;
+    out.push([la1 + (ny * rc) / 111_320, lo1 + (nx * rc) / (111_320 * k1)]);
+  }
+  return out;
+}
 /** How far a place lies outside a corridor [m] (≤ 0 inside): its distance from the track less the half-width, or from a sharp turn's
- *  point less the turn's radius — the nearer. */
+ *  circle's centre less the turn's radius — the nearer. */
 export function corridorOutside(lat0: number, lon0: number, c: ZoneCorridor, lat: number, lon: number): number {
   let out = corridorDistance(lat0, lon0, c, lat, lon) - c.halfWidthM;
   const r = c.turnRadiusM ?? CORRIDOR_TURN_M;
-  for (const p of sharpTurns(c)) out = Math.min(out, zoneDistance(p[0], p[1], lat, lon) - r);
+  for (const p of turnCentres(c)) out = Math.min(out, zoneDistance(p[0], p[1], lat, lon) - r);
   return out;
 }
 /** the disc a corridor's zone needs: its track's middle, and the farthest of its points from it plus the half-width [m] — a sharp
@@ -180,7 +213,7 @@ export function corridorDisc(c: ZoneCorridor): { lat: number; lon: number; radiu
   const r = c.turnRadiusM ?? CORRIDOR_TURN_M;
   const radius = Math.max(
     Math.max(...c.points.map((p) => zoneDistance(lat, lon, p[0], p[1]))) + c.halfWidthM,
-    ...sharpTurns(c).map((p) => zoneDistance(lat, lon, p[0], p[1]) + r),
+    ...turnCentres(c).map((p) => zoneDistance(lat, lon, p[0], p[1]) + r),
   );
   return { lat, lon, radius };
 }

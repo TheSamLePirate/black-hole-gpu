@@ -63,7 +63,7 @@ test("offline the game keeps to the corridor's levels on the track, to the profi
 });
 
 test("a corridor's sharp turns (J8-A, Bercy's ~150°): a disc of turnRadiusM round each, the fine levels and the offline cap within it", async () => {
-  const { sharpTurns, corridorOutside, corridorDisc, CORRIDOR_TURN_M } = await import("../src/system/zones");
+  const { sharpTurns, turnCentres, corridorOutside, corridorDisc, CORRIDOR_TURN_M } = await import("../src/system/zones");
   // (east, then back west-north-west: ~150°; a 45° bend after it — not sharp)
   const c = {
     points: [
@@ -77,11 +77,17 @@ test("a corridor's sharp turns (J8-A, Bercy's ~150°): a disc of turnRadiusM rou
   };
   const sharp = sharpTurns(c);
   expect(sharp).toEqual([[48.8, 2.4]]);
-  // (2 km east of the turn's point: out of the half-width, within the turn's disc)
-  const east = 2.4 + 2000 / (111_320 * Math.cos((48.8 * Math.PI) / 180));
+  // (the turn's circle: in east, turning left — its centre 2 km north of the point; its far side, 2 km east and 2 km north of the point —
+  // where the flight swings, out of the half-width: within the disc; 2 km south, the turn's outer side: not)
+  const k = 111_320 * Math.cos((48.8 * Math.PI) / 180);
+  const centres = turnCentres(c);
+  expect(centres[0]![0]).toBeCloseTo(48.8 + 2000 / 111_320, 4);
+  expect(centres[0]![1]).toBeCloseTo(2.4, 4);
   const d = corridorDisc(c);
-  expect(corridorOutside(d.lat, d.lon, c, 48.8, east)).toBeLessThan(0);
-  expect(corridorOutside(d.lat, d.lon, { ...c, turnRadiusM: 0 }, 48.8, east)).toBeGreaterThan(900);
+  const far = [48.8 + 2000 / 111_320, 2.4 + 2000 / k] as const;
+  expect(corridorOutside(d.lat, d.lon, c, far[0], far[1])).toBeLessThan(0);
+  expect(corridorOutside(d.lat, d.lon, { ...c, turnRadiusM: 0 }, far[0], far[1])).toBeGreaterThan(400);
+  expect(corridorOutside(d.lat, d.lon, c, 48.8 - 2000 / 111_320, 2.4)).toBeGreaterThan(0);
   // (the zone's disc holds the turn's)
   expect(d.radius).toBeGreaterThan(corridorDisc({ ...c, turnRadiusM: 0 }).radius);
   expect(CORRIDOR_TURN_M).toBeGreaterThan(2000);
