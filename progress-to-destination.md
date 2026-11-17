@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 17 nov. 09:57 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 17 nov. 10:02 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous. Ce qui est fermé quitte le tableau « En cours » pour la ligne « Fermé récemment ».
@@ -10313,3 +10313,15 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
 - **Réalisé :** le worker du décor passe chaque route proche à `carsAlong` (approches, 0430b5b5) : un flot par sens, une seule vitesse, des phases tirées de l'abscisse. La hauteur du sol est reprise aux deux bouts de chaque morceau. On garde les morceaux les plus proches jusqu'à `TRAFFIC_MAX`. `carsOn` n'est plus appelé par la scène. Les rues mineures restent sans trafic, d'un commun accord avec les approches (conflit avec les voitures garées de VB4).
 - **Preuves :** `tsc`, Biome, tests de `traffic.ts`. **Non vérifié en jeu** (gros e2e).
 - **Suite :** VB5a, VB2 et VB7 sur KSC3.
+
+### 2026-11-17 10:02 UTC — PLAN-J8 (A6, critère 9) : Paris repassée avec la forêt et les cellules de rue au format 3 (session des approches, 1feb2f7f)
+
+- **Mesuré** (kerr-mini, `j8-zone-paris` 1/1 lancé par un agent, `20261117-104530-j8-zone-paris-ksc3`, df3496b9 et la copie de
+  travail) :
+  - la zone de Paris est prête en 13,0 min depuis le disque e2e (60 738 chaînes, 2 961 Mo, 0 requête réseau ou IGN) ;
+  - cellules : 6 562 lointaines (121 Mo), 4 332 de rue au format 3 (121 Mo, 27,9 Ko la cellule contre 23,0 en format 2), 190 maillages
+    (288 Mo) et 869 cellules forêt, toutes avec la canopée (2 695 030 candidats, 22,4 Mo, 0,33 s la cellule) ;
+  - hors ligne, les 6 points sont prêts et le réseau reçoit 0 requête. La couche lointaine est saturée à 72 Mio à partir du point 2 ;
+    elle refuse 134 à 268 cellules, toutes à 17,9 km ou plus, comptées en notes comme Sam l'a décidé.
+- **Limites :** le cache des maillages contient aussi 4 cellules sans canopée, préparées par le pool du jeu avant la zone, qui garde
+  celles avec canopée. Le coût en vol n'a pas été mesuré : ce sera au gros e2e.

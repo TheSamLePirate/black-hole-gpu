@@ -326,7 +326,12 @@ J8-R. J8-1 se voit tout de suite. J8-4 apporte le gros du gain : « toute la vue
              `j8-a` revient au rendu ;
           9. ✗ les données (plan VB §7.6) : la taille et le temps de préparation des cellules de rue au format 3 dans
              chaque zone ; `j8-zone-paris` les imprime déjà (`zone.streets`). Il faut le passer sur Paris, avec la
-             forêt et KSC3, avant le gros e2e (approches, sur kerr-mini, par un agent).
+             forêt et KSC3, avant le gros e2e (approches, sur kerr-mini, par un agent). **Fait le 17 nov.** (kerr-mini,
+             `20261117-104530-j8-zone-paris-ksc3`) : Paris prête en 13,0 min depuis le disque (60 738 chaînes, 2 961 Mo).
+             La zone compte 4 332 cellules de rue au format 3 (27,9 Ko la cellule, +21 % sur le format 2), 869 cellules
+             forêt toutes avec la canopée (2,70 M candidats, 0,33 s la cellule) et 190 maillages. Hors ligne, les 6 points
+             sont prêts et le réseau reçoit 0 requête ; au-delà de 17,9 km, la réserve de 72 Mio refuse les cellules en trop
+             (des notes).
 
 ## 7. Ce qui reste hors de ce plan
 
