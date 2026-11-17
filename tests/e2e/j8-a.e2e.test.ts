@@ -18,6 +18,8 @@ import { J0_FIXED } from "./lib/j0-scene";
 // Not yet a pass/fail on « no request, no quick scene » (J8A_STRICT: asserted; J8A_TRACK_READY: flightReady over the whole track) — J8-5 and J8-8 still to finish; it fails on the
 // flight itself (rule 13), a GPU error or the device lost. j8-a.json.
 // J8A_NEAR [m, default 0]: the near scene / far layer junction (renderer.farNearOnlyM — J8-5; Sam's decision of 16 Nov 2026: 0).
+// J8A_CELLS=1: the near buildings from their mesh cells (renderer.nearCellsOn — J8-8 lots 2–4, the scene without its buildings): their
+// cells within reach resident before the take-off too.
 // J8A_BUDGET [MiB, default 72]: the far layer's pool (renderer.farBudgetMiB — all Paris resident; the default since Sam's « ok 72 »).
 // Duration: ~16 min on kerr-mini (two tracks, day and night, ~3 min of flight each, the preload from the disk).
 // Done when: every track flown by day and by night, j8-a.json written.
@@ -56,7 +58,7 @@ test.skipIf(!E2E)(
       // Sam's « ok 72 »; J8A_BUDGET [MiB])
       await app.js(`(() => { Object.assign(__bh.settings, ${J0_FIXED}); Object.assign(__bh.settings, { dof: false, motionBlur: 0, damage: false });
         __bh.renderer.farBudgetMiB = ${Number(process.env.J8A_BUDGET ?? 72)};
-        __bh.renderer.farNearOnlyM = ${Number(process.env.J8A_NEAR ?? 0)}; return 1; })()`);
+        __bh.renderer.farNearOnlyM = ${Number(process.env.J8A_NEAR ?? 0)}; __bh.renderer.nearCellsOn = ${!!process.env.J8A_CELLS}; return 1; })()`);
       await app.waitFor(`__bh.fleet.active === "f35"`, 60_000);
       for (const t of TRACKS) {
         // (J8A_TRACK_READY: the track's corridor zone — j8-zone-paris's: the airfield's levels along it, « overflight » in its disc, the far
@@ -114,7 +116,10 @@ test.skipIf(!E2E)(
             changed = Date.now();
           for (;;) {
             const r = await app.js<{ ready: boolean; why: string }>(
-              `(async () => { __bh.touch(); const r = await __bh.sys.flightReady(${TRACK_READY ? `{ track: { points: ${JSON.stringify(t.points)} } }` : ""}); return { ready: r.ready, why: String(r.why) }; })()`,
+              `(async () => { __bh.touch(); const r = await __bh.sys.flightReady(${TRACK_READY ? `{ track: { points: ${JSON.stringify(t.points)} } }` : ""});
+                // (J8A_CELLS: the mesh cells within reach resident too — near-meshes.ts)
+                const n = __bh.renderer.nearCells(), cells = ${!!process.env.J8A_CELLS} && (!n || n.missing > 0) ? [\`near mesh cells: \${n ? n.missing : "none yet"} missing\`] : [];
+                return { ready: r.ready && !cells.length, why: String([r.why, ...cells].filter(Boolean)) }; })()`,
             );
             if (r.ready) break;
             if (r.why !== why) {
