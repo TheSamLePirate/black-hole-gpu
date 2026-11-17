@@ -63,7 +63,7 @@ l'état d'une mission ou d'un combat **non sauvé, dit** ; le réseau **« entre
 
 **Fermé aussi** : le plancher du raster sur GPU faible (15 nov., 23:46, proposer sous 15 images/s, décision de Sam).
 
-**La session du rendu (33d89754)** : **[PLAN-J8](docs/PLAN-J8-BATIMENTS.md)** — J8-4 allumée, matériaux rallumés, réserve à **72 Mio** (Sam) ; la nuit : la lueur de la ville sur les bâtiments lointains et **les lampadaires et les voitures lointains (J8-L, +0,5 ms)** ; **J8-5 décidé : la jonction à 0** (Sam, ~21:40 UTC) ; le blocage de son e2e contourné (pas un défaut du jeu, PROBLEMES ; reproduit sur le mini hors ligne, la cause cherchée) ; **J8-L : le raccord avec la scène proche corrigé** (de nuit un trou au premier plan, un double au loin ; les voitures de jour) ; **J8-8 ouvert** (Sam) : le proche en cellules — le format aux approches après la zone de Paris, puis la réserve GPU, le dessin, les contacts, les ombres et la scène proche sans bâtiments ici ; l'éclat de nuit lointain gardé ; **J8-E fait** ; **J8-A** : l'e2e et un premier vol sur Paris, à revoler après la zone de cette nuit. [PLAN-J7](docs/PLAN-J7-FLUIDITE.md) en pause.
+**La session du rendu (33d89754)** : **[PLAN-J8](docs/PLAN-J8-BATIMENTS.md)** — J8-4 allumée, matériaux rallumés, réserve à **72 Mio** (Sam) ; la nuit : la lueur de la ville sur les bâtiments lointains et **les lampadaires et les voitures lointains (J8-L, +0,5 ms)** ; **J8-5 décidé : la jonction à 0** (Sam, ~21:40 UTC) ; le blocage de son e2e contourné (pas un défaut du jeu, PROBLEMES ; reproduit sur le mini hors ligne, la cause cherchée) ; **J8-L : le raccord avec la scène proche corrigé** (de nuit un trou au premier plan, un double au loin ; les voitures de jour) ; **J8-8 ouvert** (Sam) : le proche en cellules — le format aux approches après la zone de Paris, puis la réserve GPU, le dessin, les contacts, les ombres et la scène proche sans bâtiments ici ; l'éclat de nuit lointain gardé ; **J8-E fait** ; **J8-8 lots 1–4 faits** (les approches le lot 1 ; ici la réserve GPU, le matériau exact, les ombres, les contacts, la scène sans bâtiments — levier `nearCellsOn` éteint) ; **J8-A Paris volé avec les cellules : 0 image de scène rapide** jour et nuit (8 208 sans), 0 requête de jour, 15 de nuit, +3,1 ms GPU à mesurer en A/B ; à Sam : allumer les cellules, la réserve lointaine (72 Mio refuse au-delà de 18 km à l'est de Paris). [PLAN-J7](docs/PLAN-J7-FLUIDITE.md) en pause.
 
 **Priorité de Sam (16 nov., 11:30 UTC) : [PLAN-J8](docs/PLAN-J8-BATIMENTS.md), tous les bâtiments de la vue** (« c'est ça qui choque le plus ») — la suite de J7 en pause après J7-8b ; les deux sessions s'y mettent (rendu : couche GPU, scène proche ; approches : recensement, préparation des cellules, PWA) ; d'abord J8-0 (mesures) et J8-1 (le trou de 2 à 7 km).
 
@@ -9913,3 +9913,19 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   dans `flightReady`, et la voie (b), une réserve de 96 Mio, revient à Sam.
 - **Limites :** le coût GPU d'une réserve de 96 Mio n'est pas mesuré par moi ; le rendu avait mesuré +2 ms sur le mini.
   `j8-zone-paris` ne sera pas vert tant que le relief n'est pas décidé.
+
+### 2026-11-17 01:11 UTC — PLAN-J8 J8-A : Paris volé avec les cellules de maillage (J8-8) — zéro scène rapide (session 33d89754)
+
+- **Contribution à la destination :** J8-A (Sam : « tous chargés avant le vol, en jour et nuit ») — son critère 5, zéro scène rapide en
+  vol, atteint par J8-8 ; stratégie §19.13 (le parcours complet, préparé avant la frame).
+- **Réalisé :** `j8-a` fait sa zone de couloir dans le profil du run depuis le disque (`J8A_TRACK_READY`), allume les cellules
+  (`J8A_CELLS`) et relève les requêtes réseau en vol ; deux vols sur kerr-mini (20261117-002456 sans, 20261117-012042 avec).
+- **Preuves (mesuré, kerr-mini, un vol chacun, pas un A/B) :** sans les cellules, de jour : 8 208 images de scène rapide, 61 requêtes
+  réseau, GPU p50 58,9 ms ; **avec : 0 image de scène rapide de jour comme de nuit**, 0 requête réseau de jour (le strict passé), 15 de
+  nuit (échec), GPU p50 62,0 (jour) et 60,6 ms (nuit), plus long trou 116,9 / 83,7 ms, chargement 28,7 / 16,3 s ; la zone en 6,1 min
+  avec le levier WMS-R des approches. Captures et tableau dans T3.
+- **Limites :** +3,1 ms de GPU de jour entre deux vols différents — au-delà de la règle de 1 ms : à mesurer en A/B (`j8-near-cells` en
+  file) et à soumettre à Sam ; les 15 requêtes de nuit non nommées (le run précède le relevé) ; la réserve lointaine de 72 Mio refuse
+  à l'est de Paris (décision de Sam, plan J8-A (c)) ; Toulon-Hyères pas volé.
+- **Suite :** A/B `j8-near-cells` sur le mini ; revoler la nuit pour nommer ses requêtes ; Toulon-Hyères ; les décisions de Sam
+  (allumer les cellules, la réserve).
