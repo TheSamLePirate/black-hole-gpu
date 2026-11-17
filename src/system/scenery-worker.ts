@@ -1134,8 +1134,19 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
     overtureTileCount = o.tileCount;
     const z14 = (lat: number, lon: number) =>
       `${Math.floor(((lon + 180) / 360) * 2 ** OVERTURE_Z)}/${Math.floor(((1 - Math.asinh(Math.tan(lat * D)) / Math.PI) / 2) * 2 ** OVERTURE_Z)}`;
-    for (const v of o.out) choices.push(v);
-    for (const v of osmChoices) if (!o.covered.has(z14(v.lat, v.lon))) choices.push(v);
+    // (PLAN-J8 J8-8 lot 4: Overture's drawn from their mesh cells too (lot 1, ad07a44c) — out of the scene, their footprints kept for
+    // the trees; OSM's in Overture's tiles with them — where Overture has none, OSM's kept: its cells have no mesh, SourceLater)
+    if (q.meshCells) {
+      for (const v of o.out) cut.push(v);
+      meshLeft += o.out.length;
+    } else for (const v of o.out) choices.push(v);
+    for (const v of osmChoices)
+      if (o.covered.has(z14(v.lat, v.lon))) {
+        if (q.meshCells) {
+          cut.push(v);
+          meshLeft++;
+        }
+      } else choices.push(v);
     trim();
     overtureBuildings = choices.filter((v) => o.covered.has(z14(v.lat, v.lon))).length;
   }
