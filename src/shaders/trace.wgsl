@@ -10458,8 +10458,22 @@ fn sceneryGround(dirW:vec3f,tM:f32,fpM:f32)->ScenerySurface {
 // brightness. Inside the world scenery's block: the devices without it never draw a building's leaf)
 fn rasterBuilding(leaf:u32,dirW:vec3f,tM:f32,photo:vec3f)->RasterBuilding {
   let g = u32(scenery[0].y) + leaf - 1u;
-  let dL = sceneryLocal(dirW);
-  let pL = P.scenery[3].xyz + dL * tM;
+  var dL = sceneryLocal(dirW);
+  var pL = P.scenery[3].xyz + dL * tM;
+  // (PLAN-J8 J8-8: a near mesh cell's record — in its cell's frame: the point and the ray taken there, the normal brought back)
+  let fc = nearCellFrame(g);
+  var E = vec3f(1.0, 0.0, 0.0);
+  var N = vec3f(0.0, 1.0, 0.0);
+  var U = vec3f(0.0, 0.0, 1.0);
+  if (fc >= 0) {
+    let f = u32(fc);
+    E = scenery[f + 1u].xyz;
+    N = scenery[f + 2u].xyz;
+    U = scenery[f + 3u].xyz;
+    let r = pL - scenery[f].xyz;
+    pL = vec3f(dot(r, E), dot(r, N), dot(r, U));
+    dL = vec3f(dot(dL, E), dot(dL, N), dot(dL, U));
+  }
   let hit = buildingFaceAt(g, pL, dL, tM);
   var alb = hit.albedo * (0.85 + 0.15 * gnoise(pL * 0.65));
   var nL = hit.normal;
@@ -10469,7 +10483,19 @@ fn rasterBuilding(leaf:u32,dirW:vec3f,tM:f32,photo:vec3f)->RasterBuilding {
   buildingLook(hit, pL, &alb, &nL);
   RB_ABOVE = max(pL.z - (scenery[g].x + 1.0), 0.0);
   if (hit.aux.y < 0.0 && TUNE_BLD_PHOTO > 0.5) { alb *= clamp(luminance(photo) / max(luminance(alb), 0.02), 0.6, 1.5); }
+  if (fc >= 0) { nL = E * nL.x + N * nL.y + U * nL.z; }
   return RasterBuilding(alb, normalize(sceneryGlobal(nL)), WS_S, WS_E, WS_AO);
+}
+// PLAN-J8 J8-8 lot (2b) — a near mesh cell's record (near-meshes.ts): the scenery buffer's last vec4 says its region past the scene's
+// bytes — (NEAR_REGION_MARK, its frames' first vec4, its block table's, its records') —; a record past the records' start is in its
+// cell's frame (east, north, height over the ellipsoid), its block (NEAR_REC_BLOCK vec4s — near-meshes.ts) gives its cell's slot in the
+// table (a u32 a block), the slot its frame at frames + 4 slot: origin, east, north, up in the scene's frame. −1: the scene's own record
+fn nearCellFrame(g: u32) -> i32 {
+  let t = scenery[arrayLength(&scenery) - 1u];
+  if (t.x != 7777777.0 || f32(g) < t.w) { return -1; }
+  let b = (g - u32(t.w)) / 1024u;
+  let tw = u32(t.z) * 4u + b;
+  return i32(u32(t.y) + 4u * bitcast<u32>(scenery[tw / 4u][tw % 4u]));
 }
 fn buildingFaceAt(g:u32,p:vec3f,d:vec3f,t:f32)->SceneryHit {
   let head=scenery[g];let count=u32(head.z);

@@ -37,6 +37,9 @@ export const TREE_SHADOW_N = 2048;
 /** PLAN-J8 J8-8 lot (2): the near mesh cells' blocks — of vertices, of triangles (near-meshes.ts) */
 export const NEAR_VERT_BLOCK = 4096;
 export const NEAR_TRI_BLOCK = 4096;
+/** the near mesh cells' records' block [vec4] (trace.wgsl nearCellFrame's 1024u) and the region's mark in the scenery buffer's last vec4 */
+export const NEAR_REC_BLOCK = 1024;
+export const NEAR_REGION_MARK = 7777777;
 export const TREE_SHADOW_HALF_M = 900;
 /** the map's depth half-range along the Sun [m] (renderer.treeShadowFrame) */
 export const TREE_SHADOW_DEPTH_M = 3000;
@@ -1261,6 +1264,10 @@ fn farCarCull(@builtin(global_invocation_id) gid: vec3u, @builtin(num_workgroups
   let q = nmPos[select(select(t.z, t.y, k == 1u), t.x, k == 0u)];
   let c = 4u * blk.x;
   let v = view(nmCell[c].xyz + nmCell[c + 1u].xyz * q.x + nmCell[c + 2u].xyz * q.y + nmCell[c + 3u].xyz * q.z);
+  // (lot 2b: its leaf — its record in the scenery buffer's region past the scene's (the buffer's last vec4: NEAR_REGION_MARK, …,
+  // the records' first vec4 — near-meshes.ts), counted from the scene's geometries as the scene's own leaves: rasterBuilding reads it)
+  let tail = scenery[arrayLength(&scenery) - 1u];
+  if (t.w != 0xffffffffu && tail.x == ${NEAR_REGION_MARK}.0) { o.leaf = f32(u32(tail.w) + t.w - u32(scenery[0].y) + 1u); }
   o.clip = vec4f(v.x / u.right.w + u.output.z * v.z, v.y / u.up.w + u.output.w * v.z, u.forward.w, v.z);
   o.p = v;
   return o;

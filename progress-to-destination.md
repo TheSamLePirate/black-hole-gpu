@@ -9815,3 +9815,17 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   `rasterBuilding`) ; ni contacts ni ombres (lot 3) ; la scène garde ses bâtiments (lot 4) ; le calage au sol ~30 ms par cellule sur
   la page. Rien mesuré sur kerr-mini.
 - **Suite :** lot (2b), puis la mesure sur les deux machines et J8-A revolé avec.
+
+### 2026-11-17 00:01 UTC — PLAN-J8 J8-8 lot (2b) : le matériau exact des bâtiments proches dessinés depuis leurs cellules (session 33d89754)
+
+- **Contribution à la destination :** J8-A (« le moins de différences visibles entre les qualités ») ; stratégie §7 (un matériau
+  partagé : les enregistrements de `packScenery`, lus par le même `rasterBuilding` pour la scène et pour les cellules).
+- **Réalisé :** `scenery.ts` `setRegion`/`region`/`onRegion` (une région au bout du tampon de la scène, gardée d'une publication à
+  l'autre) ; `near-meshes.ts` `nearRegionLayout`, `nearCellRecords` (les hauteurs posées sur le relief dessiné), la table des blocs
+  et les repères dans la région ; `trace.wgsl` `nearCellFrame` et `rasterBuilding` dans le repère de la cellule ; `nearCellVs` donne
+  la feuille. Aucune liaison de plus dans le noyau. Tests `near-meshes` 3/3, 84/84 shaders.
+- **Preuves :** vu sur ce Mac (Toulon, hors ligne) : les cellules et la scène d'aujourd'hui presque identiques de près ; GPU 22,2
+  contre 22,5 ms (un regard, pas un A/B).
+- **Limites :** levier éteint ; les ombres portées des bâtiments manquent (lot 3) ; la scène garde ses bâtiments (lot 4) ; le motif
+  des fenêtres allumées tient à l'adresse de l'enregistrement (comme aujourd'hui à chaque scène refaite) ; rien sur kerr-mini.
+- **Suite :** lot (3) les ombres et les contacts, puis (4).

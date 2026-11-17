@@ -13,7 +13,7 @@ import { cellFrameInScene, cellPriority, type EyeState } from "./building-layer"
 import type { CellPool, CellPrepared, CellWant } from "./cell-pool";
 import { MeshCellFlag, meshViews, readMeshBuilding, readMeshHeader } from "./mesh-cells";
 import { sceneryFrame } from "./scenery-data";
-import { NEAR_TRI_BLOCK, NEAR_VERT_BLOCK, type SceneryRaster } from "./scenery-raster";
+import { NEAR_REC_BLOCK, NEAR_REGION_MARK, NEAR_TRI_BLOCK, NEAR_VERT_BLOCK, type SceneryRaster } from "./scenery-raster";
 
 /** the cells asked round the eye [m] — the « full mesh » distance (building-cells.ts MESH_NEAR_M) and a margin for the turn ahead */
 export const NEAR_MESH_REACH_M = MESH_NEAR_M + 500;
@@ -22,6 +22,46 @@ export const NEAR_MESH_REACH_M = MESH_NEAR_M + 500;
 export const NEAR_MESH_BUDGET_BYTES = 128 * 1024 * 1024;
 /** the cells' frames held at once */
 export const NEAR_MESH_SLOTS = 256;
+/** lot (2b): the region past the scene's bytes in the scenery buffer (scenery.ts setRegion) — the cells' frames, their record blocks'
+ *  table, their records (packScenery's, in the cell's frame, heights over the ellipsoid) — read by the tracer's near material
+ *  (trace.wgsl rasterBuilding, nearCellFrame) as the scene's own: ~26 MB of records within 2 km in central Paris (the lot (1) measure) */
+export const NEAR_REGION_BYTES = 48 * 1024 * 1024;
+/** a triangle without a record (no region): its leaf 0 — the generic near material */
+export const NO_RECORD = 0xffffffff;
+
+/** the region's layout [vec4s from its start]: the frames, the table (a u32 a record block), the records; the last vec4 the tail */
+export function nearRegionLayout(vec4s: number) {
+  const frames = 0;
+  const table = NEAR_MESH_SLOTS * 4;
+  const blocks = Math.max(0, Math.floor((vec4s - table - 1) / (NEAR_REC_BLOCK + 0.25)));
+  const records = table + Math.ceil(blocks / 4);
+  return { frames, table, records, blocks, tail: vec4s - 1 };
+}
+
+/**
+ * A cell's records for the region (packScenery's leaves — mesh-cells.ts's records section, copied), each building's heights lifted by
+ * its ground (`grounds[rank]`, m over the ellipsoid): a leaf's bottom and top (its first vec4's x, y), its walls' top (its roof
+ * colour's w), its roof planes' heights (their z) — its leaves walked from the identity table (a leaf: 4 + edges + planes vec4s).
+ */
+export function nearCellRecords(buf: ArrayBuffer, grounds: ArrayLike<number>): Float32Array {
+  const h = readMeshHeader(buf)!;
+  const rec = new Float32Array(meshViews(buf, h).records);
+  for (let r = 0; r < h.buildings; r++) {
+    const b = readMeshBuilding(buf, r);
+    const g = grounds[r] ?? 0;
+    let o = b.firstRecord;
+    for (let l = 0; l < b.records && o < h.records; l++) {
+      const count = Math.round(rec[4 * o + 2]!);
+      const np = (Math.floor(rec[4 * (o + 2) + 3]!) >> 14) & 15;
+      rec[4 * o]! += g;
+      rec[4 * o + 1]! += g;
+      rec[4 * (o + 3 + count) + 3]! += g;
+      for (let k = 0; k < np; k++) rec[4 * (o + 4 + count + k) + 2]! += g;
+      o += 4 + count + np;
+    }
+  }
+  return rec;
+}
 
 /** A pool of equal blocks: a cell's in whole blocks, the lowest free first. */
 class BlockPool {
@@ -48,6 +88,8 @@ interface Resident {
   slot: number;
   vert: number[];
   tri: number[];
+  rec: number[];
+  records: number;
   buildings: number;
   triangles: number;
 }
@@ -62,11 +104,13 @@ export function nearCellArrays(
   buf: ArrayBuffer,
   vertBlocks: readonly number[],
   groundOf: (rank: number, minE: number, minN: number, maxE: number, maxN: number) => number,
-): { pos: Float32Array; tris: Uint32Array } | null {
+  recBlocks: readonly number[] | null = null,
+): { pos: Float32Array; tris: Uint32Array; grounds: Float32Array } | null {
   const h = readMeshHeader(buf);
   if (!h) return null;
   const v = meshViews(buf, h);
   const pos = new Float32Array(h.vertices * 4);
+  const grounds = new Float32Array(h.buildings);
   for (let i = 0; i < h.vertices; i++) {
     pos[4 * i] = v.positions[3 * i]!;
     pos[4 * i + 1] = v.positions[3 * i + 1]!;
@@ -87,6 +131,7 @@ export function nearCellArrays(
       maxN = Math.max(maxN, pos[4 * i + 1]!);
     }
     const g = groundOf(r, minE, minN, maxE, maxN);
+    grounds[r] = g;
     for (let i = b.firstVertex; i < end; i++) pos[4 * i + 2]! += g;
   }
   const at = (i: number) => vertBlocks[Math.floor(i / NEAR_VERT_BLOCK)]! * NEAR_VERT_BLOCK + (i % NEAR_VERT_BLOCK);
@@ -95,9 +140,11 @@ export function nearCellArrays(
     tris[4 * t] = at(v.indices[3 * t]!);
     tris[4 * t + 1] = at(v.indices[3 * t + 1]!);
     tris[4 * t + 2] = at(v.indices[3 * t + 2]!);
-    tris[4 * t + 3] = v.tags[t]!;
+    // (its leaf's record in the region's records — through the cell's record blocks; none without them)
+    const tg = v.tags[t]!;
+    tris[4 * t + 3] = recBlocks ? recBlocks[Math.floor(tg / NEAR_REC_BLOCK)]! * NEAR_REC_BLOCK + (tg % NEAR_REC_BLOCK) : NO_RECORD;
   }
-  return { pos, tris };
+  return { pos, tris, grounds };
 }
 
 export class NearMeshes {
@@ -111,9 +158,15 @@ export class NearMeshes {
   private frame: ReturnType<typeof sceneryFrame> | null = null;
   private unlisten: (() => void) | null = null;
   private initing = false;
-  readonly counts = { handed: 0, put: 0, evicted: 0, refused: 0, empty: 0, buildings: 0, triangles: 0, groundMs: 0 };
+  readonly counts = { handed: 0, put: 0, evicted: 0, refused: 0, empty: 0, buildings: 0, triangles: 0, records: 0, groundMs: 0 };
   /** the ground as drawn at a place [°] → its height over the ellipsoid [m] (the renderer's: groundBare) */
   groundAt: ((lat: number, lon: number) => number) | null = null;
+  /** lot (2b): the scenery buffer's region (its first vec4, its bytes — scenery.ts region) and how to write into it [vec4 from its
+   *  start]; null: none — the triangles drawn without their records (the generic near material) */
+  region: (() => { base: number; bytes: number } | null) | null = null;
+  writeRegion: ((at: number, data: Float32Array | Uint32Array) => void) | null = null;
+  private layout: (ReturnType<typeof nearRegionLayout> & { base: number }) | null = null;
+  private recPool: BlockPool | null = null;
 
   constructor(
     private raster: SceneryRaster,
@@ -125,6 +178,25 @@ export class NearMeshes {
     this.triPool = new BlockPool(Math.max(1, Math.floor((budgetBytes * 2) / 3 / (NEAR_TRI_BLOCK * 16))));
   }
 
+  /** lot (2b): the scenery buffer made again (its region lost or moved): every cell let go — asked again, from the mesh pool's cache —,
+   *  the region's layout taken anew */
+  regionChanged() {
+    for (const key of [...this.residents.keys()]) this.evict(key);
+    this.layout = null;
+    this.recPool = null;
+  }
+  /** the region's layout (made once it is there: its tail written — the tracer and the raster read it) */
+  private regionReady(): boolean {
+    if (this.layout) return true;
+    const r = this.region?.();
+    if (!r || !this.writeRegion) return false;
+    const L = nearRegionLayout(r.bytes / 16);
+    if (L.blocks <= 0) return false;
+    this.layout = { ...L, base: r.base };
+    this.recPool = new BlockPool(L.blocks);
+    this.writeRegion(L.tail, new Float32Array([NEAR_REGION_MARK, r.base + L.frames, r.base + L.table, r.base + L.records]));
+    return true;
+  }
   /** the cells resident with buildings drawn (their keys: the far layer leaves them — building-far.ts setHidden) */
   residentKeys(): Set<string> {
     const s = new Set<string>();
@@ -150,6 +222,8 @@ export class NearMeshes {
       if (this.frame) for (const r of this.residents.values()) if (r.slot >= 0) this.writeFrame(r);
     }
     this.raster.nearOn = !!this.frame;
+    // (the region there: the cells put before it — drawn without their records — let go once, put again with them)
+    if (!this.layout && this.regionReady()) for (const key of [...this.residents.keys()]) this.evict(key);
     if (!eye) return;
     const w = this.wantedAt;
     const cosL = Math.cos((eye.lat * Math.PI) / 180);
@@ -194,15 +268,18 @@ export class NearMeshes {
     }
     if (h.triangles === 0 || h.flags & MeshCellFlag.SourceLater) {
       this.counts.empty++;
-      this.residents.set(key, { x: c.x, y: c.y, slot: -1, vert: [], tri: [], buildings: 0, triangles: 0 });
+      this.residents.set(key, { x: c.x, y: c.y, slot: -1, vert: [], tri: [], rec: [], records: 0, buildings: 0, triangles: 0 });
       return;
     }
     const vert = this.vertPool.alloc(Math.ceil(h.vertices / NEAR_VERT_BLOCK));
     const tri = vert ? this.triPool.alloc(Math.ceil(h.triangles / NEAR_TRI_BLOCK)) : null;
-    const slot = vert && tri ? this.freeSlots.pop() : undefined;
-    if (!vert || !tri || slot === undefined) {
+    // (lot 2b: its records' blocks in the region — none there: drawn without them)
+    const rec = vert && tri && this.layout && this.recPool ? this.recPool.alloc(Math.ceil(h.records / NEAR_REC_BLOCK)) : [];
+    const slot = vert && tri && rec ? this.freeSlots.pop() : undefined;
+    if (!vert || !tri || !rec || slot === undefined) {
       if (vert) this.vertPool.release(vert);
       if (tri) this.triPool.release(tri);
+      if (rec?.length) this.recPool?.release(rec);
       this.counts.refused++;
       this.cells().forget(c.x, c.y);
       return;
@@ -211,36 +288,68 @@ export class NearMeshes {
     const g = this.groundAt;
     const origin = { lat: h.originLat, lon: h.originLon };
     const ground = (lat: number, lon: number) => (g ? g(lat, lon) : 0);
-    const arrays = nearCellArrays(c.buf, vert, (rank, minE, minN, maxE, maxN) => {
-      const foot = readMeshBuilding(c.buf, rank).foot;
-      if (!g) return Number.isFinite(foot) ? foot : 0;
-      // (the lowest of its box's corners and centre on the relief drawn: no wall standing over a slope's foot)
-      let lo = Infinity;
-      for (const [e, n] of [
-        [minE, minN],
-        [maxE, minN],
-        [minE, maxN],
-        [maxE, maxN],
-        [(minE + maxE) / 2, (minN + maxN) / 2],
-      ] as const) {
-        const p = fromCell(origin, e, n);
-        lo = Math.min(lo, ground(p.lat, p.lon));
-      }
-      return lo;
-    })!;
+    const arrays = nearCellArrays(
+      c.buf,
+      vert,
+      (rank, minE, minN, maxE, maxN) => {
+        const foot = readMeshBuilding(c.buf, rank).foot;
+        if (!g) return Number.isFinite(foot) ? foot : 0;
+        // (the lowest of its box's corners and centre on the relief drawn: no wall standing over a slope's foot)
+        let lo = Infinity;
+        for (const [e, n] of [
+          [minE, minN],
+          [maxE, minN],
+          [minE, maxN],
+          [maxE, maxN],
+          [(minE + maxE) / 2, (minN + maxN) / 2],
+        ] as const) {
+          const p = fromCell(origin, e, n);
+          lo = Math.min(lo, ground(p.lat, p.lon));
+        }
+        return lo;
+      },
+      rec.length ? rec : null,
+    )!;
     this.counts.groundMs += performance.now() - t0;
-    const r: Resident = { x: c.x, y: c.y, slot, vert, tri, buildings: h.buildings, triangles: h.triangles };
+    const r: Resident = { x: c.x, y: c.y, slot, vert, tri, rec, records: 0, buildings: h.buildings, triangles: h.triangles };
     this.writeFrame(r);
     this.raster.nearUpload(vert, arrays.pos, tri, arrays.tris, slot);
+    // (lot 2b: its records into the region's blocks, each block's slot into the table)
+    const L = this.layout;
+    if (rec.length && L && this.writeRegion) {
+      const records = nearCellRecords(c.buf, arrays.grounds);
+      for (let b = 0; b < rec.length; b++) {
+        const lo = b * NEAR_REC_BLOCK,
+          cnt = Math.min(NEAR_REC_BLOCK, h.records - lo);
+        this.writeRegion(L.records + rec[b]! * NEAR_REC_BLOCK, records.subarray(lo * 4, (lo + cnt) * 4));
+      }
+      this.counts.records += h.records;
+      r.records = h.records;
+      // (the table: a u32 a block — written as whole vec4s, their four blocks' slots, from the residents)
+      const touched = new Set(rec.map((b) => Math.floor(b / 4)));
+      for (const v4 of touched) this.writeTable(v4, rec, slot);
+    }
     this.residents.set(key, r);
     this.counts.put++;
     this.counts.buildings += h.buildings;
     this.counts.triangles += h.triangles;
   }
 
+  /** the table's vec4 `v4` (its four record blocks' slots), this cell's blocks given `slot`, the others' their owner's */
+  private tableSlots = new Uint32Array(0);
+  private writeTable(v4: number, blocks: readonly number[], slot: number) {
+    const L = this.layout;
+    if (!L || !this.writeRegion) return;
+    if (this.tableSlots.length !== L.blocks + 4) this.tableSlots = new Uint32Array(L.blocks + 4);
+    for (const b of blocks) this.tableSlots[b] = slot;
+    this.writeRegion(L.table + v4, this.tableSlots.subarray(4 * v4, 4 * v4 + 4));
+  }
   private writeFrame(r: Resident) {
     if (!this.frame || r.slot < 0) return;
-    this.raster.nearFrame(r.slot, cellFrameInScene(r.x, r.y, this.frame));
+    const f = cellFrameInScene(r.x, r.y, this.frame);
+    this.raster.nearFrame(r.slot, f);
+    // (lot 2b: the tracer's copy — its records turned into the scene's frame there)
+    if (this.layout && this.writeRegion) this.writeRegion(this.layout.frames + 4 * r.slot, f);
   }
 
   private evict(key: string) {
@@ -251,6 +360,10 @@ export class NearMeshes {
       this.triPool.release(r.tri);
     }
     if (r.vert.length) this.vertPool.release(r.vert);
+    if (r.rec.length) {
+      this.recPool?.release(r.rec);
+      this.counts.records -= r.records;
+    }
     if (r.slot >= 0) this.freeSlots.push(r.slot);
     this.counts.buildings -= r.buildings;
     this.counts.triangles -= r.triangles;
@@ -269,6 +382,8 @@ export class NearMeshes {
       freeVertBlocks: this.vertPool.freeBlocks,
       triBlocks: this.triPool.blocks,
       freeTriBlocks: this.triPool.freeBlocks,
+      recBlocks: this.layout?.blocks ?? 0,
+      freeRecBlocks: this.recPool?.freeBlocks ?? 0,
       ...this.counts,
       groundMs: Math.round(this.counts.groundMs),
     };

@@ -64,6 +64,12 @@ export class EarthScenery {
   buffer: GPUBuffer;
   onChange: (() => void) | null = null;
   onContent: (() => void) | null = null;
+  /** PLAN-J8 J8-8 lot (2b): the buffer made again (another size, the placeholder) — the region past the scene's bytes lost with it: its
+   *  owner (near-meshes.ts) writes it again */
+  onRegion: (() => void) | null = null;
+  /** PLAN-J8 J8-8 lot (2b): the bytes asked past the scene's budget, at the buffer's end — the near mesh cells' records, which the
+   *  tracer's near material reads as the scene's own (rasterBuilding: no binding more); kept across the scenes of one size */
+  private regionBytes = 0;
   stamp = 0;
   readonly supported: boolean;
   private worker: Worker | null = null;
@@ -134,9 +140,42 @@ export class EarthScenery {
       label: "world scenery placeholder",
     });
   }
-  /** the bytes a scene of this reach may take: its budget, within the device's largest storage binding */
+  /** the bytes a scene of this reach may take: its budget, within the device's largest storage binding (the region's room left) */
   private budget() {
-    return Math.min(sceneryBudget(this.reach), this.device.limits.maxStorageBufferBindingSize ?? Number.POSITIVE_INFINITY);
+    const max = this.device.limits.maxStorageBufferBindingSize ?? Number.POSITIVE_INFINITY;
+    return Math.min(sceneryBudget(this.reach), max - this.regionBytes);
+  }
+  /** the buffer's size: the scene's budget and the region past it */
+  private bufferSize() {
+    return this.budget() + this.regionBytes;
+  }
+  /** PLAN-J8 J8-8 lot (2b): `bytes` asked past the scene's budget (0: none) — the buffer made again at once when allocated (the scene's
+   *  bytes copied into the new one), the region's owner told (onRegion) */
+  setRegion(bytes: number) {
+    const b = Math.max(0, Math.ceil(bytes / 16) * 16);
+    if (b === this.regionBytes) return;
+    this.regionBytes = b;
+    if (!this.allocated) return;
+    const size = this.bufferSize();
+    const old = this.buffer;
+    const oldBytes = this.bufferBytes;
+    this.buffer = this.device.createBuffer({
+      size,
+      usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST | GPUBufferUsage.COPY_SRC,
+      label: "world forests and OSM scenery",
+    });
+    const enc = this.device.createCommandEncoder({ label: "scenery region" });
+    enc.copyBufferToBuffer(old, 0, this.buffer, 0, Math.min(oldBytes, size, this.budget()));
+    this.device.queue.submit([enc.finish()]);
+    this.bufferBytes = size;
+    this.retire(old, oldBytes);
+    this.onChange?.();
+    this.onRegion?.();
+  }
+  /** the region past the scene's bytes: its first vec4's index in the buffer and its bytes; null: none (not asked, no scene) */
+  region(): { base: number; bytes: number } | null {
+    if (!this.allocated || !this.regionBytes) return null;
+    return { base: (this.bufferBytes - this.regionBytes) / 16, bytes: this.regionBytes };
   }
   private clear() {
     this.worker?.terminate();
@@ -159,6 +198,7 @@ export class EarthScenery {
       this.retire(old, this.bufferBytes);
       this.bufferBytes = 64;
       this.onChange?.();
+      this.onRegion?.();
     }
     this.stamp++;
   }
@@ -311,7 +351,7 @@ export class EarthScenery {
           return;
         }
         // (the buffer the scene's budget, made again when a farther reach's scene needs more — or comes back to less)
-        const size = this.budget();
+        const size = this.bufferSize();
         if (!this.allocated || this.bufferBytes !== size) {
           const old = this.buffer;
           const oldBytes = this.allocated ? this.bufferBytes : 0;
@@ -319,11 +359,12 @@ export class EarthScenery {
           this.bufferBytes = size;
           this.buffer = this.device.createBuffer({
             size,
-            usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+            usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST | GPUBufferUsage.COPY_SRC,
             label: "world forests and OSM scenery",
           });
           this.retire(old, oldBytes); // (the placeholder: not counted — the next scene is not held back for it)
           this.onChange?.();
+          this.onRegion?.();
         }
         const t = performance.now();
         this.device.queue.writeBuffer(this.buffer, 0, r.buffer);

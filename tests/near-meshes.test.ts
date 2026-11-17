@@ -1,8 +1,8 @@
 import { expect, test } from "bun:test";
 import { CellSource } from "../src/system/building-cells";
 import { encodeMeshCell } from "../src/system/mesh-cells";
-import { nearCellArrays } from "../src/system/near-meshes";
-import { NEAR_VERT_BLOCK } from "../src/system/scenery-raster";
+import { NO_RECORD, nearCellArrays, nearCellRecords } from "../src/system/near-meshes";
+import { NEAR_REC_BLOCK, NEAR_VERT_BLOCK } from "../src/system/scenery-raster";
 
 // PLAN-J8 J8-8 lot (2): a mesh cell's arrays for the GPU reserve — each building lifted by its own ground, the vertex indices mapped
 // into the cell's vertex blocks, each triangle's record kept.
@@ -41,8 +41,46 @@ test("each building lifted by its own ground; its box given to the ground's samp
   expect(a.pos[4 * 5 + 2]).toBe(220);
 });
 
-test("the vertex indices into the cell's blocks; each triangle its leaf's record", () => {
-  const a = nearCellArrays(cell(), [3], () => 0)!;
+test("the vertex indices into the cell's blocks; each triangle its leaf's record through the record blocks, none without", () => {
   const base = 3 * NEAR_VERT_BLOCK;
-  expect(Array.from(a.tris)).toEqual([base, base + 1, base + 2, 0, base + 3, base + 4, base + 5, 2]);
+  const none = nearCellArrays(cell(), [3], () => 0)!;
+  expect(Array.from(none.tris)).toEqual([base, base + 1, base + 2, NO_RECORD, base + 3, base + 4, base + 5, NO_RECORD]);
+  const a = nearCellArrays(cell(), [3], () => 0, [5])!;
+  expect(Array.from(a.tris)).toEqual([base, base + 1, base + 2, 5 * NEAR_REC_BLOCK, base + 3, base + 4, base + 5, 5 * NEAR_REC_BLOCK + 2]);
+});
+
+test("a cell's records lifted by their building's ground: bottom, top, walls' top, roof planes' heights", () => {
+  // (a leaf: [bottom, top, edges, 1], its box, [wall rgb, packed], its edges, [roof rgb, walls' top], its planes)
+  const packed = (np: number) => np << 14;
+  const leaf = [0, 12, 1, 1, 9, 9, 9, 9, 0.5, 0.5, 0.5, packed(1), 1, 2, 3, 4, 0.3, 0.3, 0.3, 10, 0.1, 0.2, 12, 0];
+  const buf = encodeMeshCell({ source: CellSource.BdTopo, z: 15, x: 1, y: 2, flags: 0, generation: 7, originLat: 43.1, originLon: 5.9 }, [
+    { leaves: [leaf], parts: [{ leaf: 0, ...square(0, -3, 12) }], flags: 0, foot: Number.NaN },
+  ]);
+  const r = Array.from(nearCellRecords(buf, [100]));
+  expect(r).toEqual([
+    100,
+    112,
+    1,
+    1,
+    9,
+    9,
+    9,
+    9,
+    0.5,
+    0.5,
+    0.5,
+    packed(1),
+    1,
+    2,
+    3,
+    4,
+    0.30000001192092896,
+    0.30000001192092896,
+    0.30000001192092896,
+    110,
+    0.10000000149011612,
+    0.20000000298023224,
+    112,
+    0,
+  ]);
 });

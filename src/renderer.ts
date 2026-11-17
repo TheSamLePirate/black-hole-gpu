@@ -257,7 +257,7 @@ import { EarthScenery } from "./system/scenery";
 import { DETAIL_REACH, localPoint, SCENERY_STORAGE_LIMIT, type SceneryExclusion, sceneryFrame } from "./system/scenery-data";
 import { BuildingFar, FAR_BUDGET_BYTES } from "./system/building-far";
 import { StreetFar } from "./system/street-far";
-import { NearMeshes } from "./system/near-meshes";
+import { NEAR_REGION_BYTES, NearMeshes } from "./system/near-meshes";
 import type { EyeState } from "./system/building-layer";
 import { cellPool, meshPool, streetPool } from "./system/cell-workers";
 import { LANDSCAPES, LANDSCAPE_CLEARING_M } from "./system/landscapes";
@@ -11300,6 +11300,8 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
       this.nearMeshes = null;
       this.buildingFar?.setHidden(new Set(), performance.now());
     }
+    // (lot 2b: their records' region in the scenery buffer — asked while on, let go off)
+    this.earthScenery.setRegion(on ? NEAR_REGION_BYTES : 0);
   }
   get nearCellsOn() {
     return this.nearCellsWant;
@@ -12305,6 +12307,13 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
           if (!this.nearMeshes) {
             this.nearMeshes = new NearMeshes(this.sceneryRaster, meshPool);
             this.nearMeshes.groundAt = (lat, lon) => groundBare("earth", bodyFixedOf("earth", lat, lon, 0));
+            // (lot 2b: the scenery buffer's region — their records, read by the tracer as the scene's own)
+            this.nearMeshes.region = () => this.earthScenery.region();
+            this.nearMeshes.writeRegion = (at, data) => {
+              const r = this.earthScenery.region();
+              if (r) this.device.queue.writeBuffer(this.earthScenery.buffer, (r.base + at) * 16, data as Float32Array<ArrayBuffer>);
+            };
+            this.earthScenery.onRegion = () => this.nearMeshes?.regionChanged();
           }
           this.nearMeshes.update(this.farEye, box, performance.now());
           this.buildingFar.setHidden(this.nearMeshes.residentKeys(), performance.now());
