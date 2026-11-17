@@ -2149,8 +2149,8 @@ words; `cells`: the pool's stats; `far`: the layer's. The J8-A e2e waits on it b
 With `{ track: { points: [[lat, lon, altitude?], …] } }` — J8-A's flight (system/j8a-tracks.ts) — what the whole flight will ask, not only the
 view at the start: a ready zone whose corridor covers every point (its building and street cells prepared), and every far cell within the
 far layer's reach (20 km) of the track, every street cell within the lamps' (12 km), and — PLAN-J8 J8-8 — every mesh cell within
-`MESH_NEAR_M` (1 500 m) of it in the IGN's box (the zone's `meshes` prepared) and every forest cell on the same selection (PLAN-J8
-J8-8b: `zone.forests`, `kerr-forest-v1`), in their prepared caches (`kerr-cells-v1`,
+`MESH_NEAR_M` (1 500 m) of it in the IGN's box (the zone's `meshes` prepared) and every forest cell within `FOREST_NEAR_M`
+(7 000 m; PLAN-J8 J8-8b: `zone.forests`, `kerr-forest-v1`), in their prepared caches (`kerr-cells-v1`,
 `kerr-street-v2`, `kerr-mesh-v1`); `track` in the answer: the zone's id, the far, street and mesh cells missing. `notes`: what is said but
 does not hold the flight — Sam's decision of 17 Nov 2026 (PLAN-J8 J8-A (c)), the far layer's reserve kept at 72 MiB: its cells refused for
 the budget, all no nearer than 12 km, counted apart (« far layer: N past the budget, nearest X km »; over Paris's track 17.9 km and more);
@@ -2190,8 +2190,9 @@ scene's palette), the canopy where an offline zone holds it, the data's exclusio
 footprints at 1.5 m) —, a candidate's word its class and its canopy (u16), 0 elsewhere; kept in Cache Storage `kerr-forest-v1` under the
 building cell's generation. The scene (lot 2, the render session's) sets the kind, the height and the foot on its relief, refuses the
 cliffs and the live exclusions (`sceneryExcluded`). Its own pool (`cell-workers.ts` `forestPool()`, two workers). As `__bh.sys.meshes`:
-`want(list)`, `stats()`, `got()` (key, bytes, candidates, from the cache, ms), `clear()`. A corridor zone prepares them on its meshes'
-selection (`zone.forests`). *Used in:* `j8-forest-cells.e2e.test.ts`.
+`want(list)`, `stats()`, `got()` (key, bytes, candidates, from the cache, ms), `clear()`. A corridor zone prepares those within
+`FOREST_NEAR_M` (7 000 m — the scene plants its trees within its box's radius + 250 m) of its track (`zone.forests`; Paris's corridor 869
+cells, ~29 MB). *Used in:* `j8-forest-cells.e2e.test.ts`.
 
 ### `__bh.sys.runways()` → `RunwayFrame[]`
 

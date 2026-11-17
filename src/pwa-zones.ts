@@ -23,7 +23,7 @@ import {
 } from "./system/zones";
 import { FOREST_CELL_BYTES_EST, FOREST_CELL_SECONDS_EST } from "./system/forest-cells";
 import { MESH_CELL_BYTES_EST, MESH_CELL_SECONDS_EST } from "./system/mesh-cells";
-import { cellsOnlyIn, type ZoneCells, zoneCellTiles, zoneMeshTiles, zoneStreetTiles } from "./system/zone-cells";
+import { cellsOnlyIn, type ZoneCells, zoneCellTiles, zoneForestTiles, zoneMeshTiles, zoneStreetTiles } from "./system/zone-cells";
 
 export interface Zones {
   /** what a zone would hold: its tiles' chains of fetches, their links, its size [bytes] by the kinds' means, its download
@@ -224,10 +224,11 @@ export function createZones(o: {
           if (zone.fresh) await o.cells.dropMeshes?.(meshes);
           zone.meshes = await o.cells.prepareMeshes(meshes);
         }
-        // (its forest cells on the same — J8-8b: the trees the near scene assembles)
-        if (meshes.length && o.cells.prepareForests) {
-          if (zone.fresh) await o.cells.dropForests?.(meshes);
-          zone.forests = await o.cells.prepareForests(meshes);
+        // (its forest cells within FOREST_NEAR_M — J8-8b: the trees the near scene assembles, farther than its meshes)
+        const forests = zoneForestTiles(urls, zone);
+        if (forests.length && o.cells.prepareForests) {
+          if (zone.fresh) await o.cells.dropForests?.(forests);
+          zone.forests = await o.cells.prepareForests(forests);
         }
       }
       if (zone.state === "ready") {
@@ -259,13 +260,14 @@ export function createZones(o: {
       // (its near meshes along its corridor: prepared after its tiles, on the disk beside them — J8-8)
       const cells = zoneMeshTiles(chains, { lat, lon, corridor: corridor ?? null }).length;
       const meshes = { cells, bytes: cells * MESH_CELL_BYTES_EST };
-      // (its forest cells on the same — J8-8b)
-      const forests = { cells, bytes: cells * FOREST_CELL_BYTES_EST };
+      // (its forest cells within FOREST_NEAR_M — J8-8b)
+      const fc = zoneForestTiles(chains, { lat, lon, corridor: corridor ?? null }).length;
+      const forests = { cells: fc, bytes: fc * FOREST_CELL_BYTES_EST };
       return {
         chains: chains.length,
         urls: chains.reduce((s, c) => s + c.length, 0),
         bytes: zoneEstimate(chains) + meshes.bytes + forests.bytes,
-        seconds: zoneDuration(chains) + cells * (MESH_CELL_SECONDS_EST + FOREST_CELL_SECONDS_EST),
+        seconds: zoneDuration(chains) + cells * MESH_CELL_SECONDS_EST + fc * FOREST_CELL_SECONDS_EST,
         meshes,
         forests,
       };
@@ -383,8 +385,8 @@ export function createZones(o: {
         if (z?.forests && o.cells.dropForests)
           await o.cells.dropForests(
             cellsOnlyIn(
-              zoneMeshTiles(chainsOf(z), z),
-              all.filter((q) => q.id !== id).map((q) => zoneMeshTiles(chainsOf(q), q)),
+              zoneForestTiles(chainsOf(z), z),
+              all.filter((q) => q.id !== id).map((q) => zoneForestTiles(chainsOf(q), q)),
             ),
           );
       }

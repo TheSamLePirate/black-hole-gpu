@@ -68,7 +68,7 @@ import { FOREST_CACHE, readForestHeader } from "./system/forest-cells";
 import { CELL_CACHE, type CellWant } from "./system/cell-pool";
 import { tilesWithin } from "./system/ign-canopy";
 import { STREET_CACHE } from "./system/street-cells";
-import { MESH_NEAR_M } from "./system/building-cells";
+import { FOREST_NEAR_M, MESH_NEAR_M } from "./system/building-cells";
 /** PLAN-J8 J8-A (c), Sam's decision of 17 Nov 2026: the far layer's cells refused for its budget no nearer than this [m] do not hold
  *  `flightReady` — counted apart in its notes (none refused nearer over Paris's track: 17.9 km at the nearest, j8-far-track) */
 const FAR_BUDGET_NEAR_M = 12_000;
@@ -836,8 +836,8 @@ export function installBh(c: BhContext) {
             } catch {
               /* no Cache Storage: none */
             }
-            const forestMissing = cellsAlong(pts, MESH_NEAR_M).filter((t) => !forestHave.has(`${t.x}/${t.y}`)).length;
-            if (forestMissing) why.push(`${forestMissing} forest cells within ${MESH_NEAR_M} m of the track not prepared`);
+            const forestMissing = cellsAlong(pts, FOREST_NEAR_M).filter((t) => !forestHave.has(`${t.x}/${t.y}`)).length;
+            if (forestMissing) why.push(`${forestMissing} forest cells within ${FOREST_NEAR_M} m of the track not prepared`);
             const farMissing = [...wanted(ZONE_FAR_REACH_M)].filter((k) => !farHave.has(k)).length;
             const streetMissing = [...wanted(ZONE_STREET_REACH_M)].filter((k) => !streetHave.has(k)).length;
             if (farMissing) why.push(`${farMissing} far cells within reach of the track not prepared`);

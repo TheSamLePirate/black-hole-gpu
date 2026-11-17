@@ -47,6 +47,10 @@ export const CELL_Z = 15;
 /** PLAN-J8 J8-8: the near meshes' reach from the track [m] — the cells within it prepared whole (mesh-cells.ts, kerr-mesh-v1), counted in
  *  the zones and in `flightReady({ track })`; past it, the far layer (agreed by the render and approaches' sessions, 17 Nov 2026) */
 export const MESH_NEAR_M = 1500;
+/** PLAN-J8 J8-8b: the forest cells' reach from the track [m] — the scene plants its trees within its box's radius + 250 m (up to
+ *  ~6.6 km, scenery-sources.ts sceneryBox, its mode and reach): the cells within it prepared (forest-cells.ts, kerr-forest-v1), counted in
+ *  the zones and in `flightReady({ track })` (the render session's value, 17 Nov 2026 — to adjust at its lot 2) */
+export const FOREST_NEAR_M = 7000;
 /** the records' format: a cache keyed by it — a new one is never read as an old one */
 export const CELL_FORMAT = 1;
 export const CELL_MAGIC = 0x3143424b; // "KBC1"

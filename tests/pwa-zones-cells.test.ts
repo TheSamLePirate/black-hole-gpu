@@ -3,7 +3,7 @@ import type { ZoneRecord } from "../src/pwa/rules";
 import { createZones } from "../src/pwa-zones";
 import { MESH_NEAR_M } from "../src/system/building-cells";
 import { MESH_CELL_BYTES_EST } from "../src/system/mesh-cells";
-import { zoneCellTiles, zoneMeshTiles, zoneStreetTiles } from "../src/system/zone-cells";
+import { zoneCellTiles, zoneForestTiles, zoneMeshTiles, zoneStreetTiles } from "../src/system/zone-cells";
 import { corridorDisc, corridorDistance, ZONE_PROFILES, zoneChains } from "../src/system/zones";
 
 // PLAN-J8 J8-6 — the zones' download (src/pwa-zones.ts) with its building cells: a fake Service Worker (every batch in at once) and fake
@@ -171,13 +171,15 @@ test("a corridor zone: its mesh cells (J8-8) — its BD TOPO cells within MESH_N
   expect(est.bytes).toBeGreaterThan(est.meshes.bytes);
   expect(h.zones.estimate({ lat: 43.124, lon: 5.93, radiusKm: 0.5, profile: "overflight" }).meshes.cells).toBe(0);
   expect(z.meshes).toEqual({ count: want.length, buildings: 7 * want.length, bytes: 5000 * want.length, failed: 0, ms: 1 });
-  // (J8-8b: its forest cells on the same, dropped with it)
-  expect(h.forests).toEqual([want]);
-  expect(z.forests?.count).toBe(want.length);
-  expect(est.forests).toEqual({ cells: want.length, bytes: want.length * 34_000 });
+  // (J8-8b: its forest cells within FOREST_NEAR_M — more than its meshes' —, dropped with it)
+  const wantF = zoneForestTiles(chains, zone).map((t) => `${t.x}/${t.y}`);
+  expect(wantF.length).toBeGreaterThan(want.length);
+  expect(h.forests).toEqual([wantF]);
+  expect(z.forests?.count).toBe(wantF.length);
+  expect(est.forests).toEqual({ cells: wantF.length, bytes: wantF.length * 34_000 });
   await h.zones.remove(id);
   expect(h.meshesDropped).toEqual([want]);
-  expect(h.forestsDropped).toEqual([want]);
+  expect(h.forestsDropped).toEqual([wantF]);
   // (a disc zone: no mesh cell)
   const h2 = harness();
   await h2.ready((await h2.zones.add({ name: "a", lat: 43.124, lon: 5.93, radiusKm: 0.5, profile: "overflight" }))!);

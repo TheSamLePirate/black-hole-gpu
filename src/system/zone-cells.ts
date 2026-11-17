@@ -5,7 +5,7 @@
 // is the whole wanted set, J8-4's — the zone's list would replace it), one worker: a download runs behind the game. The cells a
 // zone holds are counted (cells, buildings, bytes) for Settings › Offline; a zone removed drops the cells no other zone holds.
 import { BDTOPO_Z } from "./bdtopo";
-import { MESH_NEAR_M, readHeader } from "./building-cells";
+import { FOREST_NEAR_M, MESH_NEAR_M, readHeader } from "./building-cells";
 import { tilesWithin } from "./ign-canopy";
 import { CellPool, type CellExecutor, type CellStore } from "./cell-pool";
 import { readForestHeader } from "./forest-cells";
@@ -120,8 +120,17 @@ export function zoneMeshTiles(
   return cellsAlong(c.points, MESH_NEAR_M).filter((t) => held.has(`${t.x}/${t.y}`));
 }
 
-/** A zone's forest cells (PLAN-J8 J8-8b, forest-cells.ts): its mesh cells' selection — the near scene's reach along its corridor's track */
-export const zoneForestTiles = zoneMeshTiles;
+/** A zone's forest cells (PLAN-J8 J8-8b, forest-cells.ts): its building cells within FOREST_NEAR_M of its corridor's track (cellsAlong —
+ *  `flightReady`'s selection): the scene plants trees farther than it draws its near buildings; a zone without a corridor none. */
+export function zoneForestTiles(
+  chains: readonly (readonly string[])[],
+  zone: { lat: number; lon: number; corridor?: ZoneCorridor | null },
+): { x: number; y: number }[] {
+  const c = zone.corridor;
+  if (!c) return [];
+  const held = new Set(zoneCellTiles(chains).map((t) => `${t.x}/${t.y}`));
+  return cellsAlong(c.points, FOREST_NEAR_M).filter((t) => held.has(`${t.x}/${t.y}`));
+}
 
 /** a prepared cell's count, whichever its kind: a building cell's records (KBC1), a mesh cell's buildings (KMC1), a forest cell's
  *  candidates (KFC1) */
