@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 17 nov. 09:50 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 17 nov. 09:47 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous. Ce qui est fermé quitte le tableau « En cours » pour la ligne « Fermé récemment ».
@@ -10215,7 +10215,7 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
 - **Preuves :** `tsc`, Biome, tests unitaires de la forêt. **Non mesuré** : ni le gain (sur le M1 Max, la phase OSM et BD TOPO prenait 8 à 21 s dans la sonde de Notre-Dame), ni l'absence de régression en vol. Le gros e2e de fin de jalon le dira.
 - **Suite :** la mesure au gros e2e, puis l'allumage de `forestCellsOn` (décision de Sam) et le retrait de l'ancien chemin (règle 2) ; J8-R.
 
-### 2026-11-17 09:50 UTC — E2E : la bannière de déroulement sur deux e2e longs des approches (session des approches, 1feb2f7f)
+### 2026-11-17 09:42 UTC — E2E : la bannière de déroulement sur deux e2e longs des approches (session des approches, 1feb2f7f)
 
 - **Destination :** la règle de Sam du 17 nov. (docs/E2E.md, point 6) ; PLAN-J8 §6 point 13, A5.
 - **Réalisé :** `j8-zone-paris` et `approach-sample` déclarent leurs étapes, tiennent un compteur et affichent les valeurs qu'ils jugent,
@@ -10228,3 +10228,12 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
 - **Vérifié :** tsc, Biome, les gardes e2e (25/25). `approach-sample` découpé a volé 2 approches sur 9 avant d'être arrêté par le passage
   en mode speed : posé 17,7/20 et 20/20, règle 13 conforme.
 - **Non vérifié :** `j8-zone-paris` n'a pas été relancé ; il tournera au gros e2e.
+
+### 2026-11-17 09:47 UTC — PLAN-J8 (mode speed, A6) : le gros e2e préparé, ses critères écrits pour le rendu (session des approches, 1feb2f7f)
+
+- **Réalisé :** PLAN-J8 §6 point 13 donne l'état des approches et le détail de A6 :
+  - la préparation : les zones de couloir avec leurs quatre familles de cellules, que `flightReady({ track })` compte ;
+  - le lancement : kerr-mini, puis le M1 Max à froid ;
+  - neuf critères, chacun avec son témoin. Quatre sont à ajouter : le recensement par anneau, l'écart de couleur à la jonction, un
+    tronçon en vol bas (VB §7) et Paris repassée avec la forêt et KSC3.
+- **Non vérifié :** documentation seulement.
