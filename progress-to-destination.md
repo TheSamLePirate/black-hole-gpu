@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 17 nov. 10:46 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 17 nov. 11:03 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous. Ce qui est fermé quitte le tableau « En cours » pour la ligne « Fermé récemment ».
@@ -10551,3 +10551,13 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
 - **Critère 5 :** 0 pixel de bâtiment, à cause d'un défaut du relevé (le ciel lu d'abord, limite de 45 s), corrigé en fb2268fd. La vue « dehors » finale montrait l'arceau de la verrière de l'intérieur : le relevé laissait le monde figé, corrigé par un `freeze(false)`.
 - **Toulon-Hyères :** la zone a reçu toutes ses données (46 357 chaînes), puis la page n'a plus répondu pendant 300 s, pendant la préparation des cellules. C'était la même page que pour Paris, ouverte depuis 40 min ; la même zone passait seule ce matin. Les tracés bas n'ont pas été volés.
 - **Suite :** relancer un tracé par processus (une page neuve chacun), sur le code de J8-RP.
+
+### 2026-11-17 11:03 UTC — PLAN-J8 J8-VB VB8 : les lignes de données de la grille, d'après le gros e2e de Paris (session des approches, 1feb2f7f)
+
+- **Mesuré** (le gros e2e du rendu sur kerr-mini, `20261117-112103-j8a-big-e2e-mini`, lancé sur KSC3, avant J8-RP) :
+  - Paris est bon de jour et de nuit, hors ligne : 0 requête, 0 scène rapide, GPU p50 59 ms et p95 70 ms (nuit). Le critère 4 tient :
+    dessiné = préparé jusqu'à 15 km sur les 5 tronçons ; l'anneau de 20 km est court (75–99 %) à cause de la réserve de 72 Mio.
+  - Le critère 5 n'a relevé aucun échantillon.
+  - **Échec sur Toulon-Hyères** : la page ne répond plus pendant 300 s pendant la préparation des cellules de sa zone, après Paris
+    dans la même page. La même zone passe en page neuve. La cause n'est pas trouvée ; les pistes sont envoyées au rendu.
+- **Réalisé :** les lignes VB1 et VB8 de la grille de revue (plan VB §8.1) sont remplies pour Paris.
