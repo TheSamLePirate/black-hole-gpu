@@ -1185,9 +1185,11 @@ fn farLampCull(@builtin(global_invocation_id) gid: vec3u, @builtin(num_workgroup
 @group(1) @binding(22) var<storage, read> carListR: array<u32>;
 // (a car k: its place in the view's frame (w 1), and whether it comes towards the camera (its headlights) — x of the second)
 // (a far car k: its road point under it in the scene's frame (w 0: none — an empty slot), its way ahead and the cell's up there)
-struct FarCar { w: vec4f, ahead: vec3f, up: vec3f };
+// (PLAN-J8 J8-RP RP7: a far bridge's deck among them — its second vec4's z its half-width (> 0), w its deck's height over the cell's
+// ground —: span its half-length, half-width, deck's height, 1 (0: a car))
+struct FarCar { w: vec4f, ahead: vec3f, up: vec3f, span: vec4f };
 fn carAt(k: u32) -> FarCar {
-  var o = FarCar(vec4f(0.0), vec3f(0.0), vec3f(0.0));
+  var o = FarCar(vec4f(0.0), vec3f(0.0), vec3f(0.0), vec4f(0.0));
   let blk = carBlock[k >> 8u];
   if ((k & 255u) >= blk.y) { return o; }
   let a = carRec[2u * k];
@@ -1195,7 +1197,9 @@ fn carAt(k: u32) -> FarCar {
   let L = max(length(a.zw), 1.0);
   let s = fract(b.x + sc.north.w * b.y / L);
   let d = a.zw / L;
-  let xy = a.xy + a.zw * s + vec2f(d.y, -d.x) * ${LANE_M};
+  let deck = b.z > 0.0;
+  let xy = a.xy + a.zw * s + select(vec2f(d.y, -d.x) * ${LANE_M}, vec2f(0.0), deck);
+  if (deck) { o.span = vec4f(0.5 * length(a.zw), b.z, b.w, 1.0); }
   let c = 4u * blk.x;
   let O = lampCell[c];
   let E4 = lampCell[c + 1u];
@@ -1219,7 +1223,10 @@ fn farCarCull(@builtin(global_invocation_id) gid: vec3u, @builtin(num_workgroups
   // under half a pixel left out — a speck the image would not hold)
   if (length(c.w.xy) < lampU.carMaskR || dist > lampU.reach * (0.83 + 0.17 * farHash(k ^ 0x27d4eb2du)) || v.z <= 1.0) { return; }
   let m = 2.0 * u.up.w * v.z / u.image.y;
-  if (lampU.on < 0.5 && 4.4 < 0.5 * m) { return; }
+  // (a bridge's deck — RP7 —: by day and by night, its own length against the pixel; a car's body by day only)
+  if (c.span.w > 0.5) {
+    if (2.0 * c.span.x < 0.5 * m) { return; }
+  } else if (lampU.on < 0.5 && 4.4 < 0.5 * m) { return; }
   if (abs(v.x) - u.right.w * v.z > m + 3.0 || abs(v.y) - u.up.w * v.z > m + 3.0) { return; }
   let at = atomicAdd(&carDraw[1], 1u);
   carListW[at] = k;
@@ -1233,7 +1240,7 @@ fn farCarCull(@builtin(global_invocation_id) gid: vec3u, @builtin(num_workgroups
   o.bridge = 2.0;
   o.pyl = vec4f(0.0, 0.0, 0.0, 1.0);
   var v: vec3f;
-  if (lampU.on > 0.5) {
+  if (lampU.on > 0.5 && c.span.w < 0.5) {
     v = view(c.w.xyz + c.up * 0.8);
     let ahead = view(c.w.xyz + c.up * 0.8 + c.ahead) - v;
     let px = 2.0 * u.up.w * max(v.z, 1.0) / u.image.y;
@@ -1249,10 +1256,16 @@ fn farCarCull(@builtin(global_invocation_id) gid: vec3u, @builtin(num_workgroups
       2u, 4u, 6u, 7u, 4u, 7u, 5u);
     let q = ix[vi];
     let side = normalize(cross(c.ahead, c.up));
-    let p = c.w.xyz + c.ahead * select(-2.2, 2.2, (q & 1u) == 1u) + side * select(-0.9, 0.9, (q & 2u) == 2u) +
-      c.up * select(0.3, 1.5, (q & 4u) == 4u);
+    // (RP7: a bridge's deck a slab of 1.2 m under its height, its own length and width; its concrete the silver paint's grey)
+    let deck = c.span.w > 0.5;
+    let hl = select(2.2, c.span.x, deck);
+    let hw = select(0.9, c.span.y, deck);
+    let z0 = select(0.3, c.span.z - 1.2, deck);
+    let z1 = select(1.5, c.span.z, deck);
+    let p = c.w.xyz + c.ahead * select(-hl, hl, (q & 1u) == 1u) + side * select(-hw, hw, (q & 2u) == 2u) +
+      c.up * select(z0, z1, (q & 4u) == 4u);
     v = view(p);
-    o.leaf = 4.0 + f32(u32(farHash(k ^ 0x9e3779b9u) * 8.0) % 8u) / 8.0;
+    o.leaf = select(4.0 + f32(u32(farHash(k ^ 0x9e3779b9u) * 8.0) % 8u) / 8.0, 4.125, deck);
   }
   o.clip = vec4f(v.x / u.right.w + u.output.z * v.z, v.y / u.up.w + u.output.w * v.z, u.forward.w, v.z);
   o.p = v;

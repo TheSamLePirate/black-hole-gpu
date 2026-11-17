@@ -10569,3 +10569,10 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   repart d'un `IgnLand` neuf par cellule. Aucune fuite sûre n'explique l'arrêt de la page du gros e2e sur Toulon après Paris ; la cause
   reste à trouver (reproduction `J8Z_BEFORE`, après les jobs du rendu).
 - **Corrigé** : `CellWorkers.dispose()` fait échouer les appels en cours au lieu de les laisser pendants. Test `cell-workers`.
+
+### 2026-11-17 11:20 UTC — PLAN-J8 J8-RP RP7 : les ponts au loin (session 33d89754)
+
+- **Destination :** §19.13 (« AAA road and bridges », toute la vue) ; J8-RP RP7.
+- **Réalisé :** `street-far.ts farBridges` met chaque segment de tablier des ponts d'une cellule « rue » (KSC5) parmi ses enregistrements lointains (8 nombres comme une voiture ; demi-largeur > 0). Le pont est gardé par la cellule de son premier point, pour n'être dessiné qu'une fois. Dans `scenery-raster.ts`, `carAt`, `farCarCull` et `farCarVs` en font une dalle de béton de 1,2 m, au tirant + 0,6 m au-dessus du sol dessiné de la cellule, de jour et de nuit, au-delà de la scène. Stat `counts.bridges`.
+- **Preuves :** `tests/street-far.test.ts`, `tsc`, Biome, `check-wgsl`. **Non vu en jeu.**
+- **Reste :** retirer l'emprise des ponts du masque d'eau de J8-E.

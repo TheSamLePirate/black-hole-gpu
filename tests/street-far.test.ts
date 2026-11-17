@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
-import { encodeStreetCell, type RoadSegmentRecord, readStreetHeader, SegmentFlag } from "../src/system/street-cells";
-import { farCars } from "../src/system/street-far";
+import { BridgeKind, Crossed, encodeStreetCell, type RoadSegmentRecord, readStreetHeader, SegmentFlag } from "../src/system/street-cells";
+import { farBridges, farCars } from "../src/system/street-far";
 import { ROAD_TRAFFIC } from "../src/system/traffic";
 
 // PLAN-J8 J8-L: the far cars of a street cell — on its busy roads only, each way allowed, spaced by their class, none in a tunnel.
@@ -43,4 +43,34 @@ test("a one way: its cars one way only", () => {
   const c = farCars(along, 1);
   expect(c.length / 8).toBe(Math.floor(240 / ROAD_TRAFFIC.primary!.spacing));
   for (let i = 0; i < c.length / 8; i++) expect(c[8 * i + 2]!).toBeGreaterThan(0);
+});
+
+test("RP7: a cell's bridges as far decks among its cars — each segment's run, its half-width and height; a bridge from another cell's first point left out", () => {
+  const bridge = (id: number, start: [number, number]) => ({
+    id,
+    kind: BridgeKind.Road,
+    flags: 0,
+    width: 14,
+    layer: 1,
+    crossed: Crossed.Water,
+    clearance: 7,
+    length: 160,
+    points: [start, [start[0] + 80, start[1]] as [number, number], [start[0] + 160, start[1]] as [number, number]],
+  });
+  const buf = encodeStreetCell(
+    { z: 15, x: 1, y: 2, generation: 0, originLat: 48.86, originLon: 2.3 },
+    [],
+    [],
+    [],
+    [],
+    0,
+    [],
+    [],
+    [],
+    [bridge(1, [0, 0]), bridge(2, [5000, 0])],
+  );
+  const d = farBridges(buf, (e) => Math.abs(e) < 600);
+  expect(d.length).toBe(2 * 8);
+  expect(Array.from(d.slice(0, 7))).toEqual([0, 0, 80, 0, 0.5, 0, 7]);
+  expect(d[7]).toBeCloseTo(7.6, 5);
 });

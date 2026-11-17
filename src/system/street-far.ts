@@ -5,12 +5,12 @@
 // plane in its axes' w — the cells give no ground); drawn by SceneryRaster (farLampVs: a head as the near ones', lit at night by shadeLite).
 // The near scene keeps its own lamps and cars (streetlamps.ts, traffic.ts — within their kept reach round its centre, scenery-worker.ts
 // lampReachM, trafficReachM): none of ours drawn within it. By day the far cars are drawn as their bodies.
-import { CELL_Z, cellKey, cellOf, cellOrigin, fromCell } from "./building-cells";
+import { CELL_Z, cellBounds, cellKey, cellOf, cellOrigin, fromCell, toCell } from "./building-cells";
 import { BLOCK_RECORDS, cellFrameInScene, cellPriority, type EyeState, POOL_RECORD_BYTES, RecordPool } from "./building-layer";
 import type { CellPool, CellPrepared, CellWant } from "./cell-pool";
 import { sceneryFrame } from "./scenery-data";
 import type { SceneryRaster } from "./scenery-raster";
-import { readLamp, readSegment, readStreetHeader, SegmentFlag } from "./street-cells";
+import { readBridges, readLamp, readSegment, readStreetHeader, SegmentFlag } from "./street-cells";
 import { LAMP_REACH_M } from "./streetlamps";
 import { ROAD_TRAFFIC, TRAFFIC_REACH_M } from "./traffic";
 
@@ -58,6 +58,29 @@ export function farCars(buf: ArrayBuffer, segments: number): Float32Array {
   return new Float32Array(out);
 }
 
+/**
+ * PLAN-J8 J8-RP RP7 — a street cell's bridges as far records among its cars (the same 8 floats, scenery-raster.ts carAt): each of a deck's
+ * segments its start xy, its run xy [m] in the cell's frame, its phase 0.5 (its middle), its speed 0, its half-width (> 0: a bridge's,
+ * not a car's), its deck's height over the cell's drawn ground [m] (its clearance and its thickness's half — the far deck a level slab).
+ * A bridge spanning cells is in each that carries it (readBridges): kept by the cell holding its first point alone — `inCell` — drawn once.
+ */
+export function farBridges(buf: ArrayBuffer, inCell: (east: number, north: number) => boolean): Float32Array {
+  const out: number[] = [];
+  for (const br of readBridges(buf)) {
+    const p0 = br.points[0];
+    if (!p0 || !inCell(p0[0], p0[1])) continue;
+    const half = Math.max(1.5, br.width / 2);
+    const h = (br.clearance > 0 ? br.clearance : 5.5) + 0.6;
+    for (let i = 0; i + 1 < br.points.length; i++) {
+      const a = br.points[i]!,
+        b = br.points[i + 1]!;
+      if (Math.hypot(b[0] - a[0], b[1] - a[1]) < 1) continue;
+      out.push(a[0], a[1], b[0] - a[0], b[1] - a[1], 0.5, 0, half, h);
+    }
+  }
+  return new Float32Array(out);
+}
+
 interface Resident {
   x: number;
   y: number;
@@ -80,7 +103,7 @@ export class StreetFar {
   private frame: ReturnType<typeof sceneryFrame> | null = null;
   private unlisten: (() => void) | null = null;
   private initing = false;
-  readonly counts = { handed: 0, put: 0, evicted: 0, refused: 0, empty: 0, lamps: 0, cars: 0 };
+  readonly counts = { handed: 0, put: 0, evicted: 0, refused: 0, empty: 0, lamps: 0, cars: 0, bridges: 0 };
   /** the ground as drawn at a place [°] → its height over the ellipsoid [m] (the renderer's: groundBare) */
   groundAt: ((lat: number, lon: number) => number) | null = null;
 
@@ -158,7 +181,24 @@ export class StreetFar {
       this.cells().forget(c.x, c.y);
       return;
     }
-    const cars = farCars(c.buf, h.segmentCount);
+    // (RP7: the cell's bridges among its far records — the far decks)
+    const b = cellBounds(c.x, c.y);
+    const o = cellOrigin(c.x, c.y);
+    const sw = toCell(o, b.south, b.west),
+      ne = toCell(o, b.north, b.east);
+    const decks = farBridges(
+      c.buf,
+      (e, n) =>
+        e >= Math.min(sw.east, ne.east) &&
+        e < Math.max(sw.east, ne.east) &&
+        n >= Math.min(sw.north, ne.north) &&
+        n < Math.max(sw.north, ne.north),
+    );
+    const carsOnly = farCars(c.buf, h.segmentCount);
+    const cars = new Float32Array(carsOnly.length + decks.length);
+    cars.set(carsOnly, 0);
+    cars.set(decks, carsOnly.length);
+    this.counts.bridges += decks.length / 8;
     const nCars = cars.length / 8;
     if (h.lampCount === 0 && nCars === 0) {
       this.counts.empty++;
