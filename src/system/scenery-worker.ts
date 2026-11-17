@@ -1333,7 +1333,8 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
         const cosL = Math.max(0.05, Math.cos(q.lat * D));
         for (let i = surfaces.length - 1; i >= 0; i--) {
           const d = surfaces[i]!.data;
-          if (d[5] !== 1 || !(d[6]! > 0) || cellRoads.has(surfaces[i]!)) continue;
+          // (their roads — kind 1 with a class kept — and, KSC5, their rails — kind 2 — the cells' in each cell found)
+          if (!((d[5] === 1 && d[6]! > 0) || d[5] === 2) || cellRoads.has(surfaces[i]!)) continue;
           const c = cellOf(q.lat + (d[1]! + d[3]!) / 2 / 111_132, q.lon + (d[0]! + d[2]!) / 2 / (111_320 * cosL));
           if (found.has(`${c.x}/${c.y}`)) surfaces.splice(i, 1);
         }

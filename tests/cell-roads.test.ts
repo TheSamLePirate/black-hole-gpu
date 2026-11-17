@@ -56,3 +56,25 @@ test("RP2: a cell's roads as surface segments — measured width, the cell's mar
   expect(lane.data[6]! & 16).toBe(16);
   expect(lane.data[7]).toBe(2);
 });
+
+test("RP9 (KSC5): a railway's segment — its tracks as the scene's rails, 4.5 m apart, no marking", () => {
+  const segs = [seg([0, 0], [100, 0], { cls: "rail", lanes: 2, width: 7.5, flags: 0 })];
+  const buf = encodeStreetCell(
+    { z: 15, x: 1, y: 2, generation: 0, originLat: 43, originLon: 6 },
+    [],
+    segs,
+    [],
+    [],
+    0,
+    [{ a: NEXT_NONE, b: NEXT_NONE }],
+    [],
+    [{ flags: 0, laneLines: 0, pavement: 0, bridge: 0xff }],
+  );
+  const out = cellRoadSurfaces(buf, (e, n) => [e, n, 0]);
+  expect(out.length).toBe(2);
+  for (const p of out) {
+    expect(p.data[5]).toBe(2);
+    expect(p.data[4]).toBe(1.5);
+  }
+  expect(Math.abs(out[0]!.data[1]! - out[1]!.data[1]!)).toBeCloseTo(4.5, 6);
+});

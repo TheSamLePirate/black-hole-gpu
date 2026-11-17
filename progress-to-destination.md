@@ -10502,3 +10502,9 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
 - **Réalisé :** dans `scenerySurface`, la ligne d'acier des rails OMT passe par la peinture de RP1 (`SC_PAINT`) et se dessine donc par-dessus l'orthophoto en France.
 - **Preuves :** `check-wgsl`. **Non vu en jeu.**
 - **Reste :** les traverses, le ballast en relief, les caténaires, les tronçons de voie ferrée de la BD TOPO.
+
+### 2026-11-17 10:45 UTC — PLAN-J8 J8-RP RP9 : les voies ferrées de KSC5 dans la scène (session 33d89754)
+
+- **Réalisé :** avec le format 5 des approches (b937a4f1), `roadRuns` rend aussi les voies ferrées. `cellRoadSurfaces` les dessine en rails (genre 2, rails et traverses peints, une bande de 3 m par voie, à 4,5 m d'écart) et non plus en chaussée. Le worker retire aussi les rails OMT des cellules trouvées, pour ne pas les doubler.
+- **Preuves :** `tests/cell-roads.test.ts`, `tsc`, Biome. **Non vu en jeu.**
+- **Reste :** les poteaux de caténaire (`SurfaceFlag.Electrified`) et le ballast en relief.

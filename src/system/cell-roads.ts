@@ -29,7 +29,20 @@ export function cellRoadSurfaces(buf: ArrayBuffer, toLocal: (east: number, north
       if (s.flags & (SegmentFlag.Bridge | SegmentFlag.Tunnel)) continue;
       const a = toLocal(s.a[0], s.a[1]),
         b = toLocal(s.b[0], s.b[1]);
-      if (Math.hypot(b[0] - a[0], b[1] - a[1]) < 0.1) continue;
+      const L = Math.hypot(b[0] - a[0], b[1] - a[1]);
+      if (L < 0.1) continue;
+      // (J8-RP RP9, KSC5: a railway's segment — its tracks as the scene's rails (kind 2: their rails and sleepers painted), one strip
+      // of 3 m a track, 4.5 m apart across its axis; no marking)
+      if (s.cls === "rail") {
+        const n = Math.max(1, s.lanes);
+        const nx = -(b[1] - a[1]) / L,
+          ny = (b[0] - a[0]) / L;
+        for (let k = 0; k < n; k++) {
+          const off = (k - (n - 1) / 2) * 4.5;
+          out.push(surfaceSegment([a[0] + nx * off, a[1] + ny * off, 0], [b[0] + nx * off, b[1] + ny * off, 0], 3, 2, [0.1, 0.085, 0.06]));
+        }
+        continue;
+      }
       const p = surfaceSegment(a, b, Math.max(1, s.width), 1, roadColour(s.cls));
       const sf = readSurface(buf, i);
       const oneway = !!(s.flags & (SegmentFlag.OnewayAlong | SegmentFlag.OnewayAgainst));
