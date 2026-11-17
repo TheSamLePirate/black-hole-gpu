@@ -328,9 +328,11 @@ export function surfaceZoneChains(lat: number, lon: number, radius: number): Zon
 
 /** the world's runways' files as the game asks them (world/runways.ts: relative to the page — the Service Worker's scope) */
 export const RUNWAYS_PATH = "runways/v1/";
-/** how far round a zone the runways' tiles are held [m]: the ILS's search (controller/ils.ts, 150 km), the METAR's nearest
- *  station (metar.ts, 150 km) — the 3D runways' 25 km and the sites' within it */
-export const RUNWAYS_REACH_M = 150_000;
+/** how far round a zone the runways' tiles are held [m]: the cockpit's tactical map at its farthest — 320 km, its airfields within 1.5 ×
+ *  it (ui/jetmap.ts JETMAP_RANGES, fieldsNearCached): flown offline over Paris it asked the 5° tiles east of 5° E again and again,
+ *  j8a-offline-2, 17 Nov 2026 —; past the ILS's search (controller/ils.ts, 150 km), the METAR's nearest station (metar.ts, 150 km), the
+ *  range scope's. A 5° tile is ~8.5 kB on average */
+export const RUNWAYS_REACH_M = 480_000;
 /**
  * A zone's runways (PLAN-RADAR-AAA RD10: OurAirports' 5° × 5° tiles): the index, then each tile within RUNWAYS_REACH_M of the
  * disc — a key the index lacks answers a 404, kept as none. Offline they had failed — the tiles' own cache emptied, no zone

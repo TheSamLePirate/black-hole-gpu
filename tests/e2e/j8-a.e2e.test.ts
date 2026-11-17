@@ -21,6 +21,11 @@ import { J0_FIXED } from "./lib/j0-scene";
 // J8A_CELLS=1: the near buildings from their mesh cells (renderer.nearCellsOn — J8-8 lots 2–4, the scene without its buildings): their
 // cells within reach resident before the take-off too.
 // J8A_BUDGET [MiB, default 72]: the far layer's pool (renderer.farBudgetMiB — all Paris resident; the default since Sam's « ok 72 »).
+// J8A_OFFLINE=1 (with J8A_TRACK_READY; the approaches' session, agreed 17 Nov 2026): each track flown with the network cut — its zone
+// made online, then the network cut and the page loaded again (the zone and the Service Worker kept in the profile), its settings set
+// again, ready, flown; the network back before the next track's zone. Strict: the Service Worker's network requests over each flight
+// 0 too (__bh.pwa.stats().served.network — counted before the fetch: every attempt), the map's tiles apart (OpenStreetMap's, the
+// cockpit's tactical map: no zone holds them — their usage policy forbids bulk fetching —, told in swKinds).
 // Duration: ~16 min on kerr-mini (two tracks, day and night, ~3 min of flight each, the preload from the disk).
 // Done when: every track flown by day and by night, j8-a.json written.
 afterAll(stopServer);
@@ -31,6 +36,8 @@ const TRACKS = J8A_TRACKS.filter((t) => !process.env.J8A_TRACKS || process.env.J
  *  alone: the track's corridor zone made first in this run's profile (the Service Worker on; its chains from the e2e's disk — the
  *  corridor's put there by j8-zone-paris) */
 const TRACK_READY = !!process.env.J8A_TRACK_READY;
+/** J8A_OFFLINE: each track flown with the network cut, from its zone alone (needs J8A_TRACK_READY) */
+const OFFLINE = TRACK_READY && !!process.env.J8A_OFFLINE;
 const HOURS = (process.env.J8A_HOURS ?? "day,night").split(",") as ("day" | "night")[];
 const D = Math.PI / 180;
 /** the data's hosts — a request to one in flight: not all loaded before */
@@ -56,10 +63,14 @@ test.skipIf(!E2E)(
     try {
       // (the far layer's pool for the whole of Paris — 24 MiB holds a quarter of it, never « all loaded »: 72 MiB, the default since
       // Sam's « ok 72 »; J8A_BUDGET [MiB])
-      await app.js(`(() => { Object.assign(__bh.settings, ${J0_FIXED}); Object.assign(__bh.settings, { dof: false, motionBlur: 0, damage: false });
-        __bh.renderer.farBudgetMiB = ${Number(process.env.J8A_BUDGET ?? 72)};
-        __bh.renderer.farNearOnlyM = ${Number(process.env.J8A_NEAR ?? 0)}; __bh.renderer.nearCellsOn = ${!!process.env.J8A_CELLS}; return 1; })()`);
-      await app.waitFor(`__bh.fleet.active === "f35"`, 60_000);
+      // (the run's settings — set again after J8A_OFFLINE's reload)
+      const setup = async () => {
+        await app.js(`(() => { Object.assign(__bh.settings, ${J0_FIXED}); Object.assign(__bh.settings, { dof: false, motionBlur: 0, damage: false });
+          __bh.renderer.farBudgetMiB = ${Number(process.env.J8A_BUDGET ?? 72)};
+          __bh.renderer.farNearOnlyM = ${Number(process.env.J8A_NEAR ?? 0)}; __bh.renderer.nearCellsOn = ${!!process.env.J8A_CELLS}; return 1; })()`);
+        await app.waitFor(`__bh.fleet.active === "f35"`, 60_000);
+      };
+      await setup();
       for (const t of TRACKS) {
         // (J8A_TRACK_READY: the track's corridor zone — j8-zone-paris's: the airfield's levels along it, « overflight » in its disc, the far
         // cells to 20 km — made here, in this profile (a zone lives in the Service Worker's storage: another run's is not this one's), its
@@ -104,6 +115,15 @@ test.skipIf(!E2E)(
             if (k % 30 === 0)
               console.log(`  … ${t.name}: the corridor zone ${z?.cursor}/${z?.total} chains, ${((z?.bytes ?? 0) / 1e6).toFixed(0)} MB`);
             await app.js(`new Promise((q) => setTimeout(q, 2000))`);
+          }
+          // (J8A_OFFLINE: the network cut, the page loaded again in the same profile — its zone and Service Worker kept —, its settings
+          // set again)
+          if (OFFLINE) {
+            await app.scenario(`${t.label} — le réseau coupé`);
+            await app.offline(true);
+            await app.load("scene=game:artemis");
+            await setup();
+            await app.waitFor("!!__bh.pwa.zones", 30_000);
           }
         }
         for (const hour of HOURS) {
@@ -153,6 +173,13 @@ test.skipIf(!E2E)(
           // (the real network in flight: the e2e disk cache's misses — what it had not and fetched — before and after; the requests the
           // page made, served by the disk or the Service Worker too, apart)
           const missesBefore = app.earth?.counts.misses ?? 0;
+          // (the Service Worker's network requests — every attempt, counted before the fetch —: its zone's and cache's misses)
+          const swStats = () =>
+            app.js<{ network: number; kinds: Record<string, { network: number }>; recent: string[] }>(
+              "(async () => { const s = (await __bh.pwa.stats())?.served; return { network: s?.network ?? 0, kinds: s?.kinds ?? {}, recent: s?.recent ?? [] }; })()",
+            );
+          const sw0 = TRACK_READY ? await swStats() : null;
+          const swBefore = sw0?.network ?? 0;
           // (the harness's request log — 20 000 at most, filled by a zone's download — emptied: the flight's own requests named in it)
           if (app.earth) app.earth.counts.log.length = 0;
           const flownFrom = Date.now();
@@ -233,6 +260,25 @@ test.skipIf(!E2E)(
             quickImages: legs.reduce((s, l) => s + l.quick, 0),
             requests: legs[legs.length - 1]?.requests ?? 0,
             networkMisses: (app.earth?.counts.misses ?? 0) - missesBefore,
+            ...(await (async () => {
+              if (!TRACK_READY) return { swNetwork: null, swData: null };
+              const s = await swStats();
+              // (what the Service Worker asked of the network in flight: by kind, its last URLs — what the zone does not hold)
+              const kinds = Object.fromEntries(
+                Object.entries(s.kinds)
+                  .map(([k, v]) => [k, v.network - (sw0?.kinds[k]?.network ?? 0)] as const)
+                  .filter(([, n]) => n > 0),
+              );
+              // (the map's tiles — OpenStreetMap's, the cockpit's tactical map — apart: no zone holds them, their usage policy forbids
+              // fetching them in bulk ahead; offline the map goes without them)
+              return {
+                swNetwork: s.network - swBefore,
+                swData: s.network - swBefore - (kinds.map ?? 0),
+                swKinds: kinds,
+                swRecent: s.network > swBefore ? s.recent.slice(-12) : [],
+              };
+            })()),
+            offline: OFFLINE,
             // (what went to the network in flight — its host's kind, a few of its URLs: what the zone does not hold)
             missed: (() => {
               const m = (app.earth?.counts.log ?? []).filter((r) => !r.hit && (r.at ?? 0) >= flownFrom);
@@ -249,9 +295,12 @@ test.skipIf(!E2E)(
           if (process.env.J8A_STRICT) {
             expect(flight.networkMisses).toBe(0);
             expect(flight.quickImages).toBe(0);
+            if (OFFLINE) expect(flight.swData).toBe(0);
           }
           await app.js(`(() => { __bh.freeze(true); return 1; })()`);
         }
+        // (J8A_OFFLINE: the network back for the next track's zone)
+        if (OFFLINE) await app.offline(false);
       }
       expect(await app.js<number>("__bh.renderer.gpuErrors")).toBe(0);
       const lost = await app.js<unknown[]>(

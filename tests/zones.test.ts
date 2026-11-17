@@ -405,8 +405,8 @@ test("a zone's download time: the Géoplateforme's chains 4.6 a second (its WMS-
   expect(zoneDuration([...wms, ...wmts, ...rest, ...rest])).toBeCloseTo(20);
 });
 
-test("a zone's runways: the index and the 5° tiles round it within the ILS's 150 km — the files the game asks (world/runways.ts)", async () => {
-  // (JFK's final: its own tile, and the neighbours 150 km reaches — west of 75° W, the east past 70° W not)
+test("a zone's runways: the index and the 5° tiles round it within the tactical map's 480 km — the files the game asks (world/runways.ts)", async () => {
+  // (JFK's final: its own tile, and the neighbours 480 km reaches — west of 75° W, east to 70–65° W; past 60° W not)
   const lat = 40.6595,
     lon = -73.836;
   const chains = runwayZoneChains(lat, lon, 1000);
@@ -414,7 +414,8 @@ test("a zone's runways: the index and the 5° tiles round it within the ILS's 15
   const urls = chains.slice(1).map((c) => c[0]!);
   expect(urls).toContain(`${RUNWAYS_PATH}t${tileKey(lat, lon)}.json`);
   expect(urls).toContain(`${RUNWAYS_PATH}t8_-16.json`);
-  expect(urls).not.toContain(`${RUNWAYS_PATH}t8_-14.json`);
+  expect(urls).toContain(`${RUNWAYS_PATH}t8_-14.json`);
+  expect(urls).not.toContain(`${RUNWAYS_PATH}t8_-12.json`);
   // (each a file the build serves, or a key the index lacks — a 404 kept as none)
   const index = (await Bun.file("assets/runways/v1/index.json").json()) as { tiles: Record<string, unknown> };
   expect(urls.filter((u) => index.tiles[u.slice(RUNWAYS_PATH.length + 1, -5)]).length).toBeGreaterThan(0);
