@@ -63,7 +63,7 @@ l'état d'une mission ou d'un combat **non sauvé, dit** ; le réseau **« entre
 
 **Fermé aussi** : le plancher du raster sur GPU faible (15 nov., 23:46, proposer sous 15 images/s, décision de Sam).
 
-**La session du rendu (33d89754)** : **[PLAN-J8](docs/PLAN-J8-BATIMENTS.md)** — J8-4 allumée, matériaux rallumés, réserve à **72 Mio** (Sam) ; la nuit : la lueur de la ville sur les bâtiments lointains et **les lampadaires et les voitures lointains (J8-L, +0,5 ms)** ; **J8-5 décidé : la jonction à 0** (Sam, ~21:40 UTC) ; le blocage de son e2e contourné (pas un défaut du jeu, PROBLEMES ; reproduit sur le mini hors ligne, la cause cherchée) ; **J8-L : le raccord avec la scène proche corrigé** (de nuit un trou au premier plan, un double au loin ; les voitures de jour) ; **J8-8 ouvert** (Sam) : le proche en cellules — le format aux approches après la zone de Paris, puis la réserve GPU, le dessin, les contacts, les ombres et la scène proche sans bâtiments ici ; l'éclat de nuit lointain gardé ; **J8-E fait** ; **J8-8 lots 1–4 faits** (les approches le lot 1 ; ici la réserve GPU, le matériau exact, les ombres, les contacts, la scène sans bâtiments — levier `nearCellsOn` éteint) ; **J8-A avec les cellules : Toulon-Hyères passe en strict** (jour et nuit : 0 scène rapide, 0 requête, GPU p50 ~52 ms sur le mini) ; **Paris** : 0 scène rapide jour et nuit (8 208 sans), à revoler en strict avec la réserve décidée par Sam (72 Mio + compte à part) ; les cellules ne coûtent pas plus à vue fixe (59,1 contre 60,5 ms) ; à Sam : allumer `nearCellsOn` par défaut. [PLAN-J7](docs/PLAN-J7-FLUIDITE.md) en pause.
+**La session du rendu (33d89754)** : **[PLAN-J8](docs/PLAN-J8-BATIMENTS.md)** — J8-4 allumée, matériaux rallumés, réserve à **72 Mio** (Sam) ; la nuit : la lueur de la ville sur les bâtiments lointains et **les lampadaires et les voitures lointains (J8-L, +0,5 ms)** ; **J8-5 décidé : la jonction à 0** (Sam, ~21:40 UTC) ; le blocage de son e2e contourné (pas un défaut du jeu, PROBLEMES ; reproduit sur le mini hors ligne, la cause cherchée) ; **J8-L : le raccord avec la scène proche corrigé** (de nuit un trou au premier plan, un double au loin ; les voitures de jour) ; **J8-8 ouvert** (Sam) : le proche en cellules — le format aux approches après la zone de Paris, puis la réserve GPU, le dessin, les contacts, les ombres et la scène proche sans bâtiments ici ; l'éclat de nuit lointain gardé ; **J8-E fait** ; **J8-8 lots 1–4 faits** (les approches le lot 1 ; ici la réserve GPU, le matériau exact, les ombres, les contacts, la scène sans bâtiments — levier `nearCellsOn` éteint) ; **J8-A avec les cellules : Paris et Toulon-Hyères passent en strict, jour et nuit** (kerr-mini : 0 scène rapide, 0 requête en vol, GPU p50 52–62 ms ; la réserve lointaine à 72 Mio + compte à part, décision de Sam) ; les cellules ne coûtent pas plus à vue fixe (59,1 contre 60,5 ms) ; à Sam : allumer `nearCellsOn` par défaut. [PLAN-J7](docs/PLAN-J7-FLUIDITE.md) en pause.
 
 **Priorité de Sam (16 nov., 11:30 UTC) : [PLAN-J8](docs/PLAN-J8-BATIMENTS.md), tous les bâtiments de la vue** (« c'est ça qui choque le plus ») — la suite de J7 en pause après J7-8b ; les deux sessions s'y mettent (rendu : couche GPU, scène proche ; approches : recensement, préparation des cellules, PWA) ; d'abord J8-0 (mesures) et J8-1 (le trou de 2 à 7 km).
 
@@ -10052,3 +10052,18 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   sélection des cellules, le disque des virages serrés.
 - **Limites :** ce sont des vols e2e sur le mini ; la cible de 25 images/s du mini n'est pas l'objet de ce test (GPU ~60 ms) ;
   Toulon-Hyères passe déjà en strict (session du rendu, 4647e57b).
+
+### 2026-11-17 05:40 UTC — PLAN-J8 J8-A : Paris passe en strict aussi — les deux tracés, jour et nuit (session 33d89754)
+
+- **Contribution à la destination :** J8-A (Sam : « un vol au-dessus de Paris et au-dessus de Toulon-Hyères avec un max de
+  buildings, tous chargés avant le vol, en jour et nuit ») — ses deux tracés volés en strict sur kerr-mini avec les cellules J8-8 :
+  tout chargé avant, aucune requête en vol, aucune scène rapide ; stratégie §19.13.
+- **Réalisé :** le demi-tour de Bercy tenu dans la zone — l'e2e ralentit à 80 m/s au plus avant un virage de plus de 100° (le jet
+  incline à 30° au plus : à 120 m/s son cercle sort à ~5 km du point), la zone de la session des approches prend un disque centré
+  sur le cercle du virage (`turnRadiusFor`, 79305370) ; l'anticipation des virages bornée (c2170f23).
+- **Preuves (mesuré, kerr-mini, run 20261117-060529, un vol) :** **pass** — Paris de jour 0 scène rapide, 0 requête, GPU p50 61,1 /
+  p95 91,6 ms, plus long trou 100,9 ms ; de nuit 0, 0, 59,7 / 70,9 ms, 83,3 ms ; la zone en 22,7 min (60 733 chaînes) ; Toulon-Hyères
+  (run 20261117-040547) déjà passé. Captures et tableau dans T3.
+- **Limites :** avec `nearCellsOn` allumé par l'e2e (`J8A_CELLS`) — éteint par défaut dans le jeu, sa mise en service est à Sam ; un
+  vol par tracé ; le M1 Max pas volé.
+- **Suite :** la décision de Sam sur `nearCellsOn` (et le retrait de `farNearOnlyM`) ; les vols sur le M1 Max.
