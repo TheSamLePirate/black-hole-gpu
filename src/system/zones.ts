@@ -103,7 +103,16 @@ export type ZoneChain = string[];
 export interface ZoneCorridor {
   points: readonly (readonly [number, number])[];
   halfWidthM: number;
+  /** (J8-A, 17 Nov 2026) the radius [m] held round each point where the track turns by more than SHARP_TURN_DEG — a turn of 150° at
+   *  120 m/s banked 25° swings ~3 km past it (r = v² / (g tan φ) ≈ 3.1 km): the corridor's half-width cannot hold it, flown over the
+   *  point or anticipated (j8a-paris-strict, Bercy) —; absent: CORRIDOR_TURN_M */
+  turnRadiusM?: number;
 }
+/** a turn sharper than this [°] gets its disc (ZoneCorridor.turnRadiusM) */
+export const SHARP_TURN_DEG = 100;
+/** the turn's disc by default [m]: what J8-A's flight swung past Bercy's point (2.2 km at 120 m/s banked 25°, j8a-paris-strict-2) and
+ *  the windows' margin — a full turn's 3.1 km radius not all outside the half-width (Paris: +10 % chains at 2 500 m, +20 % at 3 500) */
+export const CORRIDOR_TURN_M = 2500;
 /** a place's distance [m] from a corridor's track (its segments, in Web Mercator at the zone's centre's scale — zoneDistance's) */
 export function corridorDistance(lat0: number, lon0: number, c: ZoneCorridor, lat: number, lon: number): number {
   const D = Math.PI / 180,
@@ -127,13 +136,45 @@ export function corridorDistance(lat0: number, lon0: number, c: ZoneCorridor, la
   }
   return best;
 }
-/** the disc a corridor's zone needs: its track's middle, and the farthest of its points from it plus the half-width [m] */
+/** the corridor's sharp turns: its inner points where the track turns by more than SHARP_TURN_DEG (Web Mercator's angles, at the
+ *  point's own scale) */
+export function sharpTurns(c: ZoneCorridor): (readonly [number, number])[] {
+  const D = Math.PI / 180;
+  const out: (readonly [number, number])[] = [];
+  for (let k = 1; k + 1 < c.points.length; k++) {
+    const [la0, lo0] = c.points[k - 1]!,
+      [la1, lo1] = c.points[k]!,
+      [la2, lo2] = c.points[k + 1]!;
+    const k1 = Math.cos(la1 * D);
+    const ax = (lo1 - lo0) * k1,
+      ay = la1 - la0,
+      bx = (lo2 - lo1) * k1,
+      by = la2 - la1;
+    const turn = Math.abs(Math.atan2(ax * by - ay * bx, ax * bx + ay * by)) / D;
+    if (turn > SHARP_TURN_DEG) out.push(c.points[k]!);
+  }
+  return out;
+}
+/** How far a place lies outside a corridor [m] (≤ 0 inside): its distance from the track less the half-width, or from a sharp turn's
+ *  point less the turn's radius — the nearer. */
+export function corridorOutside(lat0: number, lon0: number, c: ZoneCorridor, lat: number, lon: number): number {
+  let out = corridorDistance(lat0, lon0, c, lat, lon) - c.halfWidthM;
+  const r = c.turnRadiusM ?? CORRIDOR_TURN_M;
+  for (const p of sharpTurns(c)) out = Math.min(out, zoneDistance(p[0], p[1], lat, lon) - r);
+  return out;
+}
+/** the disc a corridor's zone needs: its track's middle, and the farthest of its points from it plus the half-width [m] — a sharp
+ *  turn's point plus its radius */
 export function corridorDisc(c: ZoneCorridor): { lat: number; lon: number; radius: number } {
   const lats = c.points.map((p) => p[0]),
     lons = c.points.map((p) => p[1]);
   const lat = (Math.min(...lats) + Math.max(...lats)) / 2,
     lon = (Math.min(...lons) + Math.max(...lons)) / 2;
-  const radius = Math.max(...c.points.map((p) => zoneDistance(lat, lon, p[0], p[1]))) + c.halfWidthM;
+  const r = c.turnRadiusM ?? CORRIDOR_TURN_M;
+  const radius = Math.max(
+    Math.max(...c.points.map((p) => zoneDistance(lat, lon, p[0], p[1]))) + c.halfWidthM,
+    ...sharpTurns(c).map((p) => zoneDistance(lat, lon, p[0], p[1]) + r),
+  );
   return { lat, lon, radius };
 }
 
@@ -170,7 +211,7 @@ export function zoneTiles(
       tileM = (2 * Math.PI * WGS84_A * Math.cos(lat * D)) / n;
     const lo = ((x + 0.5) / n) * 360 - 180,
       la = Math.atan(Math.sinh(Math.PI * (1 - (2 * (y + 0.5)) / n))) / D;
-    return corridorDistance(lat, lon, corridor, la, lo) <= corridor.halfWidthM + (margin + 0.75) * tileM;
+    return corridorOutside(lat, lon, corridor, la, lo) <= (margin + 0.75) * tileM;
   };
   const level = (z: number, margin: number, out: [number, number, number][], national: boolean, radius: number, fine = false) => {
     const n = 2 ** z,
@@ -577,7 +618,7 @@ export function zoneLevelsAt(zones: readonly ZonePlace[], lat: number, lon: numb
     // (the core's disc, or the corridor along its track — the half-width alone: the windows' margin is for the zone's own tiles)
     const core =
       ((z.coreKm ?? 0) > 0 && d <= Math.min(z.coreKm!, z.radiusKm) * 1000) ||
-      (!!z.corridor && corridorDistance(z.lat, z.lon, z.corridor, lat, lon) <= z.corridor.halfWidthM);
+      (!!z.corridor && corridorOutside(z.lat, z.lon, z.corridor, lat, lon) <= 0);
     const relief = z.sources.relief ? Math.max(p.reliefZ1, core ? ZONE_CORE.reliefZ1 : 0) : Math.min(p.reliefZ1, ZG1);
     const ortho = z.sources.ortho ? Math.min(Math.max(p.orthoZ1, core ? ZONE_CORE.orthoZ1 : 0), ORTHO_Z1) : ORTHO_Z0 - 1;
     out = out ? { reliefZ1: Math.max(out.reliefZ1, relief), orthoZ1: Math.max(out.orthoZ1, ortho) } : { reliefZ1: relief, orthoZ1: ortho };

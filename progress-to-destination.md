@@ -10004,3 +10004,16 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   l'utilisent toutes deux. Paris compte 190 cellules, Toulon-Hyères 146.
 - **Preuves :** tests unitaires des zones verts ; vérifié statiquement que les deux appellent la même fonction. Aucun vol relancé de
   ma part.
+\n\n### 2026-11-17 04:05 UTC — PLAN-J8 J8-A : les virages serrés dans la zone en couloir (session des approches, 1feb2f7f)
+
+- **Constat** (`j8a-paris-strict` et `-2`, session du rendu, kerr-mini) : 140 puis 174 requêtes réseau en vol, des orthophotos z18 à
+  1,5–2,2 km du tracé au demi-tour de Bercy (~150°). À 120 m/s et 25° d'inclinaison, le rayon de virage vaut ~3,1 km : un couloir
+  d'1 km ne le tient pas, que le virage soit anticipé (le V coupé) ou que l'avion survole d'abord le point (sortie au-delà).
+- **Réalisé** (accordé avec la session du rendu, voie (d)) : `ZoneCorridor.turnRadiusM`, par défaut `CORRIDOR_TURN_M` = 2 500 m ; un
+  disque de ce rayon autour de chaque point où le tracé tourne de plus de 100° (`sharpTurns`). `corridorOutside` mesure l'éloignement
+  au couloir, disques compris, pour les niveaux fins de la zone et pour le plafond hors ligne (`zoneLevelsAt`) ; `corridorDisc`
+  agrandit le disque de la zone. Le joueur qui vole ce tracé fait le même virage : la zone le couvre aussi.
+- **Coût estimé** (`zoneChains`) : Paris 47 738 → 52 682 chaînes (+10 %), 2 868 → 3 117 Mo, 142 → 158 min estimées pour le joueur ;
+  Toulon-Hyères, sans virage serré, inchangé. À 3 500 m, le coût aurait été de +20 %.
+- **Preuves :** test unitaire (`zones-corridor` : le virage détecté, un point à 2 km dedans, le disque de la zone agrandi). Le vol
+  strict de Paris sera relancé par la session du rendu.
