@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { CHORD_M, carsAlong, carsOn, PIECE_M, ROAD_TRAFFIC, STREET_TRAFFIC } from "../src/system/traffic";
+import { CHORD_M, carsAlong, carsOn, PIECE_M } from "../src/system/traffic";
 
 // Q8 D1 — the road traffic (src/system/traffic.ts): the cars on a piece of road by its class.
 // (a car's mesh: tests/car-shapes.test.ts — PLAN-J8 VB3)
@@ -37,7 +37,7 @@ test("VB6: a road's cars as one stream — one speed, evenly spaced across its p
   }
 });
 
-test("VB6: a curve's short segments become a few chords; the town's streets sparser; an unknown class none", () => {
+test("VB6: a curve's short segments become a few chords; a secondary road sparser; the minor streets and an unknown class none", () => {
   // (a quarter circle of 200 m radius in 100 segments: chords within CHORD_M — a handful of pieces)
   const arc: [number, number, number][] = Array.from({ length: 101 }, (_, i) => {
     const a = (i / 100) * (Math.PI / 2);
@@ -48,15 +48,16 @@ test("VB6: a curve's short segments become a few chords; the town's streets spar
   // (every chord within CHORD_M of the arc it replaces: its middle no farther in than the sagitta)
   const mid = pieces.map((p) => Math.hypot((p.a[0] + p.b[0]) / 2, (p.a[1] + p.b[1]) / 2));
   for (const r of mid) expect(200 - r).toBeLessThanOrEqual(CHORD_M + 1e-6);
-  // (a minor street: sparser than a primary road; the far layer's table without the streets)
+  // (a secondary road sparser than a primary one; the town's minor streets none — VB4's parked cars hold them)
   const km: [number, number, number][] = [
     [0, 0, 0],
-    [2000, 0, 0],
+    [20_000, 0, 0],
   ];
   const n = (cls: string) => carsAlong(km, cls, 1).flatMap((p) => p.cars).length;
-  expect(n("minor")).toBeGreaterThan(0);
-  expect(n("minor")).toBeLessThan(n("primary"));
-  expect(ROAD_TRAFFIC.minor).toBeUndefined();
-  expect(STREET_TRAFFIC.minor).toBeDefined();
+  // (20 km: a car every ~320 m on the secondary road by its pieces' seeds, every 250 m on the primary — one a piece)
+  expect(Math.abs(n("secondary") - 20_000 / 320) / (20_000 / 320)).toBeLessThan(0.3);
+  expect(n("secondary")).toBeGreaterThan(0);
+  expect(n("secondary")).toBeLessThan(n("primary"));
+  expect(carsAlong(km, "minor", 1)).toEqual([]);
   expect(carsAlong(km, "path", 1)).toEqual([]);
 });

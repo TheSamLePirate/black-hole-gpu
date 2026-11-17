@@ -52,16 +52,6 @@ export function carsOn(start: [number, number, number], end: [number, number, nu
   }));
 }
 
-/**
- * PLAN-J8 J8-VB VB6 — the traffic of the near scene's streets as well (Sam, the low flight's plan: « davantage de rues animées sans
- * hausse cachée des effectifs »): ROAD_TRAFFIC's main roads and the town's tertiary and minor streets, sparser. The far layer
- * (street-far.ts) keeps ROAD_TRAFFIC's alone; the near scene's count stays bounded by TRAFFIC_MAX (the nearest pieces first).
- */
-export const STREET_TRAFFIC: Record<string, { spacing: number; speed: number }> = {
-  ...ROAD_TRAFFIC,
-  tertiary: { spacing: 260, speed: 13 },
-  minor: { spacing: 420, speed: 9 },
-};
 /** a road's line simplified to chords within this [m] before it is cut (a curve's short segments: one piece, not twenty) */
 export const CHORD_M = 2;
 
@@ -111,7 +101,9 @@ function chords(points: readonly [number, number, number][], tol: number): [numb
  * entering the next. The phases' seam at a chord's corner (pieces of other lengths) remains: the plan's (B), chains, if it shows.
  */
 export function carsAlong(line: readonly [number, number, number][], cls: string, seed: number): StreamPiece[] {
-  const t = STREET_TRAFFIC[cls];
+  // (ROAD_TRAFFIC's classes alone — the render session, 17 Nov 2026: the tertiary and minor streets hold VB4's parked cars, their lane
+  // and LANE_M's would cross where the scene's lines carry no width; their traffic, if any, from KSC3's segments with the plan's (B))
+  const t = ROAD_TRAFFIC[cls];
   if (!t || line.length < 2) return [];
   const h = (k: number) => {
     const s = Math.sin(seed * 12.9898 + k * 78.233) * 43758.5453;

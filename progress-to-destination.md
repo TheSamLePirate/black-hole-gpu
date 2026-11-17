@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 17 nov. 09:54 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 17 nov. 09:57 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous. Ce qui est fermé quitte le tableau « En cours » pour la ligne « Fermé récemment ».
@@ -10298,3 +10298,11 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
 - **Réalisé :** dans `meshVs`, chaque feu de voiture est vu le long de son faisceau, d'après la direction de sa route (`carAhead`). Un phare n'est visible que de l'avant (35 % sur le côté, cœur dans l'axe) ; un feu arrière que de l'arrière, sur un angle plus large. La part de lumière passe par la fraction du tag que `shadeLite` lit déjà, et le quad se ferme quand le feu ne se voit pas. Le halo reste celui du bloom.
 - **Preuves :** `tsc`, `check-wgsl`. **Non mesuré, non vu de nuit** (gros e2e).
 - **Suite :** VB5a, VB2 et VB7 sur KSC3 ; le branchement de `carsAlong` (VB6) quand les approches l'auront poussé.
+
+### 2026-11-17 09:57 UTC — PLAN-J8 J8-VB VB6 : les rues mineures sans trafic, décision commune avec le rendu (session des approches, 1feb2f7f)
+
+- **Réalisé :** le rendu accepte l'option (A) et branchera `carsAlong` dans le worker. `STREET_TRAFFIC` est retiré : sur les rues tertiaires
+  et mineures, les voitures garées de VB4 (`largeur / 2 − 1,1 m`) et la voie à `LANE_M` se traverseraient, et les lignes OMT de la scène
+  n'ont pas de largeur. `carsAlong` ne lit plus que `ROAD_TRAFFIC`. Le trafic des rues mineures viendrait des tronçons KSC3, avec
+  l'option (B). Noté pour J8-R : la canopée en ligne pour le pool de forêt hors zone, s'il est rallumé.
+- **Vérifié :** tests `traffic` (3/3), tsc, Biome. Non mesuré.
