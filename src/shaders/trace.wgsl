@@ -7792,6 +7792,8 @@ var<private> TILE_AT: vec2f = vec2f(0.0);
 // (PLAN-J8 J8-RP RP1: the paint scenerySurface met at its point — the roads' markings (VB2), a junction's lines and crossings (VB7) —, its
 // colour and its cover in the pixel: shadeLite lays it over a national photograph, which is the carriageway's albedo there)
 var<private> SC_PAINT:vec4f=vec4f(0.0);
+// (RP10: that point's place in the scenery's frame [m] — SC_POINT's, kept outside the scenery's block)
+var<private> SC_AT:vec2f=vec2f(0.0);
 // (outside the scenery's block: shadeLite reads it in every kernel)
 var<private> TILE_AT_ON: bool = false;
 fn tileCoord(q: vec3f) -> vec2f {
@@ -10625,7 +10627,7 @@ fn sceneryShadow(light:vec3f,normal:vec3f)->f32 {
 struct ScenerySurface { color:vec3f, cover:f32, kind:f32 };
 fn scenerySurface(foot:f32)->ScenerySurface {
   var out=ScenerySurface(vec3f(0.0),0.0,0.0);
-  SC_PAINT=vec4f(0.0);
+  SC_PAINT=vec4f(0.0);SC_AT=SC_POINT.xy;
   if(!HAS_SCENERY || P.scenery[0].w<.5 || P.scenery[2].w<.5 || SC_DISTANCE>P.scenery[1].w){return out;}
   let point=SC_POINT.xy;let aa=max(.12,foot*.75);let header=scenery[1];let total=u32(header.y);var i=0u;var priority=0.0;var dryIsland=false;
   while(i<total){
@@ -16220,24 +16222,33 @@ fn liteMaterial(gq: vec3f, q: vec3f, ph: vec3f, rd: vec3f, look: vec3f, tM: f32,
   // runway's paving water lying in its hollows and the drops' rings spreading on it, near)
   var wetS = 0.0;
   var ripple = 0.0;
+  // (PLAN-J8 J8-RP RP10: a road's carriageway — the scene's surface of kind 1, its cover, under a photograph too — paved as a runway is:
+  // its asphalt's grain near, the rain's darker wet, its puddles and the drops' rings in the scene's own metres)
+  let roadPaved = select(0.0, sv.cover, sv.kind == 1.0 && !mesh && !isTree) * (1.0 - min(rwyPaved, 1.0));
+  let paved = max(rwyPaved, roadPaved);
+  let pavedAt = select(rwyAt, SC_AT, rwyPaved <= 0.0);
+  if (roadPaved > 0.0 && fpM < 0.6) {
+    let gr = vnoise(vec3f(SC_AT * 9.0, 5.0)) * 0.6 + vnoise(vec3f(SC_AT * 1.7, 9.0)) * 0.4;
+    A *= 1.0 + roadPaved * 0.12 * (gr - 0.5) * (1.0 - smoothstep(0.2, 0.6, fpM));
+  }
   if (HAS_WX && WX_W > 0.0 && P.wx[5].x > 0.0 && !isTree) {
     let wet = P.wx[5].x * WX_W;
     var pud = 0.0;
-    if (rwyPaved > 0.0) {
-      let pn = vnoise(vec3f(rwyAt.x * 0.08, rwyAt.y * 0.2, 3.0)) * 0.6 + vnoise(vec3f(rwyAt.x * 0.31, rwyAt.y * 0.55, 7.0)) * 0.28
-        + vnoise(vec3f(rwyAt.x * 1.3, rwyAt.y * 1.7, 11.0)) * 0.12;
-      pud = smoothstep(0.7 - 0.06 * min(P.wx[5].y, 1.0), 0.8 - 0.06 * min(P.wx[5].y, 1.0), pn) * rwyPaved * wet;
+    if (paved > 0.0) {
+      let pn = vnoise(vec3f(pavedAt.x * 0.08, pavedAt.y * 0.2, 3.0)) * 0.6 + vnoise(vec3f(pavedAt.x * 0.31, pavedAt.y * 0.55, 7.0)) * 0.28
+        + vnoise(vec3f(pavedAt.x * 1.3, pavedAt.y * 1.7, 11.0)) * 0.12;
+      pud = smoothstep(0.7 - 0.06 * min(P.wx[5].y, 1.0), 0.8 - 0.06 * min(P.wx[5].y, 1.0), pn) * paved * wet;
       let footM = max(length(fx), length(fy)) * EARTH_RM;
       let near = smoothstep(0.1, 0.02, footM) * min(P.wx[5].y, 1.0);
       if (near > 0.0) {
-        let cp = rwyAt / 0.3;
+        let cp = pavedAt / 0.3;
         for (var dj = 0; dj < 2; dj++) {
           for (var di = 0; di < 2; di++) {
             let id = floor(cp) + vec2f(f32(di), f32(dj)) - vec2f(0.5);
             let hh = vec2f(hash31(vec3f(id, 11.0)), hash31(vec3f(id, 23.0)));
             let age = fract(P.wx[5].z * (0.9 + 0.5 * hh.x) + hh.y);
             let ctr = (id + 0.5 + 0.5 * (vec2f(hash31(vec3f(id, 5.0)), hash31(vec3f(id, 7.0))) - 0.5)) * 0.3;
-            let d = length(rwyAt - ctr);
+            let d = length(pavedAt - ctr);
             ripple += exp(-pow((d - age * 0.11) / 0.006, 2.0)) * (1.0 - age) * (1.0 - age);
           }
         }
@@ -16247,9 +16258,9 @@ fn liteMaterial(gq: vec3f, q: vec3f, ph: vec3f, rd: vec3f, look: vec3f, tM: f32,
     // (a roof's slate and a wall's stone darker wet too, less than the soil — their pores fewer; the buildings drawn as boxes too —
     // a leaf, the scenery on —, not the meshes' alone: they had the soil's ×0.58, PLAN-J3 J3-5 inventory, 13 Nov 2026)
     let bldWet = mesh || (leaf > 0u && P.scenery[0].w > 0.5);
-    A *= mix(vec3f(1.0), vec3f(select(mix(0.58, 0.7, rwyPaved), 0.75, bldWet)), wet);
+    A *= mix(vec3f(1.0), vec3f(select(mix(0.58, 0.7, paved), 0.75, bldWet)), wet);
     A *= 1.0 - 0.35 * pud;
-    wetS = wet * select(mix(0.08, 0.3, rwyPaved), 0.12, bldWet) + pud * 0.4;
+    wetS = wet * select(mix(0.08, 0.3, paved), 0.12, bldWet) + pud * 0.4;
   }
   // (L3 — the shore's wet band and the swash on it, PLAN-MER-WEBGPU §5: the ground next to the sea — the shore's distances positive
   // on land only within a node of a sea node — and under the waves' run-up (Stockdon 2006 for a beach of slope ~0.08: R2 ≈ 0.078

@@ -10419,3 +10419,10 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
 - **Réalisé :** `scenerySurface` garde à part sa peinture (marquages de VB2, lignes et passages de VB7) avec sa couverture au pixel (`SC_PAINT`, déclaré hors du bloc du décor). `shadeLite` la pose sur l'orthophoto nationale, qui reste l'albédo de la chaussée. Avant, en France de jour, cette peinture était mélangée par `1 − img.o` et ne se voyait pas. La marche exacte des surfaces tourne de nouveau sous la photo là où la peinture se voit : pied de pixel sous 2 m, à moins de 2,5 km.
 - **Preuves :** `check-wgsl`. **Non vu en jeu, coût non mesuré** (gros e2e ; la marche coûtait 0,66 ms sur tous les pixels de moins de 12 m dans la Manche).
 - **Suite :** RP5 et RP10, sans dépendance, puis RP2, RP4, RP6, RP7 et RP8 sur KSC4 (format accordé avec les approches).
+
+### 2026-11-17 10:30 UTC — PLAN-J8 J8-RP RP10 (en partie) : la chaussée revêtue, son grain et la pluie (session 33d89754)
+
+- **Destination :** §19.13 (« AAA road and bridges ») ; J8-RP RP10, en mode speed.
+- **Réalisé :** dans `liteMaterial`, la chaussée de la scène (surface de genre 1, y compris sous l'orthophoto) est traitée comme une piste. De près, elle reçoit un grain d'asphalte. Sous la pluie, elle s'assombrit et luit davantage que le sol, avec des flaques et des anneaux de gouttes à ses coordonnées dans la scène (`SC_AT`, hors du bloc du décor).
+- **Preuves :** `check-wgsl`. **Non vu en jeu.**
+- **Reste :** l'usure et les rapiéçages par classe, les reflets des phares et des lampadaires dans les flaques.
