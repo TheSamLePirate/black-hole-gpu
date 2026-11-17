@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 17 nov. 11:03 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 17 nov. 11:19 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous. Ce qui est fermé quitte le tableau « En cours » pour la ligne « Fermé récemment ».
@@ -10561,3 +10561,11 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   - **Échec sur Toulon-Hyères** : la page ne répond plus pendant 300 s pendant la préparation des cellules de sa zone, après Paris
     dans la même page. La même zone passe en page neuve. La cause n'est pas trouvée ; les pistes sont envoyées au rendu.
 - **Réalisé :** les lignes VB1 et VB8 de la grille de revue (plan VB §8.1) sont remplies pour Paris.
+
+### 2026-11-17 11:19 UTC — PLAN-J8 : le chemin d'une zone dans la page relu après l'arrêt de Toulon (session des approches, 1feb2f7f)
+
+- **Lu, sans e2e** (demande de la session d'analyse) : la préparation des cellules d'une zone ne garde rien d'une zone à l'autre. Chaque
+  sorte a son worker, terminé en fin de préparation ; les octets sont transférés ; `CellPool` ne garde que des clés ; `zoneCanopy`
+  repart d'un `IgnLand` neuf par cellule. Aucune fuite sûre n'explique l'arrêt de la page du gros e2e sur Toulon après Paris ; la cause
+  reste à trouver (reproduction `J8Z_BEFORE`, après les jobs du rendu).
+- **Corrigé** : `CellWorkers.dispose()` fait échouer les appels en cours au lieu de les laisser pendants. Test `cell-workers`.

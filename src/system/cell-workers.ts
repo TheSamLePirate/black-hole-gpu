@@ -66,9 +66,14 @@ export class CellWorkers implements CellExecutor {
     this.geoidGiven = true;
   }
 
+  /** the workers ended — their calls under way failed (« disposed »), not left pending: a zone's preparation stopped mid-way never
+   *  waits on a worker gone */
   dispose() {
     for (const s of this.workers) s.w.terminate();
     this.workers = [];
+    const pending = [...this.calls.values()];
+    this.calls.clear();
+    for (const c of pending) c.no(new Error("the cell workers were disposed"));
   }
 }
 
