@@ -51,3 +51,103 @@ export function carsOn(start: [number, number, number], end: [number, number, nu
     phase: (i + h(i + 7)) / Math.max(n, 1),
   }));
 }
+
+/**
+ * PLAN-J8 J8-VB VB6 — the traffic of the near scene's streets as well (Sam, the low flight's plan: « davantage de rues animées sans
+ * hausse cachée des effectifs »): ROAD_TRAFFIC's main roads and the town's tertiary and minor streets, sparser. The far layer
+ * (street-far.ts) keeps ROAD_TRAFFIC's alone; the near scene's count stays bounded by TRAFFIC_MAX (the nearest pieces first).
+ */
+export const STREET_TRAFFIC: Record<string, { spacing: number; speed: number }> = {
+  ...ROAD_TRAFFIC,
+  tertiary: { spacing: 260, speed: 13 },
+  minor: { spacing: 420, speed: 9 },
+};
+/** a road's line simplified to chords within this [m] before it is cut (a curve's short segments: one piece, not twenty) */
+export const CHORD_M = 2;
+
+/** a piece of a road and its cars (carsAlong) */
+export interface StreamPiece {
+  a: [number, number, number];
+  b: [number, number, number];
+  cars: CarPlace[];
+}
+
+/** a polyline's points kept within `tol` [m] of it (Douglas-Peucker on x, y; z carried) */
+function chords(points: readonly [number, number, number][], tol: number): [number, number, number][] {
+  if (points.length < 3) return [...points];
+  const keep = new Uint8Array(points.length);
+  keep[0] = keep[points.length - 1] = 1;
+  const stack: [number, number][] = [[0, points.length - 1]];
+  while (stack.length) {
+    const [i, j] = stack.pop()!;
+    const a = points[i]!,
+      b = points[j]!;
+    const dx = b[0] - a[0],
+      dy = b[1] - a[1],
+      L = Math.hypot(dx, dy) || 1;
+    let far = -1,
+      best = tol;
+    for (let k = i + 1; k < j; k++) {
+      const p = points[k]!;
+      const d = Math.abs((p[0] - a[0]) * dy - (p[1] - a[1]) * dx) / L;
+      if (d > best) {
+        best = d;
+        far = k;
+      }
+    }
+    if (far >= 0) {
+      keep[far] = 1;
+      stack.push([i, far], [far, j]);
+    }
+  }
+  return points.filter((_, k) => keep[k]);
+}
+
+/**
+ * VB6 — a road's cars as one stream, within the GPU's contract (each car on its own straight piece, start → end, looped by the clock:
+ * scenery-raster.ts meshVertexAt): the line (one way, its points in the scenery's frame) simplified to chords (CHORD_M), each cut into
+ * equal pieces of PIECE_M at most; one speed for the whole road and way (no car through another); on each piece round(L / spacing) cars
+ * evenly spaced (a piece shorter than the spacing: one car or none, by its seed), their phases from the abscissa along the road — on pieces of a chord, of one length, a car leaving a piece is the one
+ * entering the next. The phases' seam at a chord's corner (pieces of other lengths) remains: the plan's (B), chains, if it shows.
+ */
+export function carsAlong(line: readonly [number, number, number][], cls: string, seed: number): StreamPiece[] {
+  const t = STREET_TRAFFIC[cls];
+  if (!t || line.length < 2) return [];
+  const h = (k: number) => {
+    const s = Math.sin(seed * 12.9898 + k * 78.233) * 43758.5453;
+    return s - Math.floor(s);
+  };
+  const speed = t.speed * (0.9 + 0.2 * h(1));
+  const offset = h(2) * t.spacing;
+  const pts = chords(line, CHORD_M);
+  const out: StreamPiece[] = [];
+  let s = 0;
+  for (let i = 0; i + 1 < pts.length; i++) {
+    const A = pts[i]!,
+      B = pts[i + 1]!;
+    const L = Math.hypot(B[0] - A[0], B[1] - A[1]);
+    if (L < 1e-3) continue;
+    const m = Math.max(1, Math.ceil(L / PIECE_M));
+    const len = L / m;
+    for (let q = 0; q < m; q++) {
+      // (as many cars as the spacing gives: rounded where a piece holds one or more — the stream —, else one now and then by the
+      // piece's seed — a sparse street's density kept on average, its pieces each with its car or none)
+      const r = len / t.spacing;
+      const n = r >= 1 ? Math.round(r) : h(10 + out.length) < r ? 1 : 0;
+      const f0 = q / m,
+        f1 = (q + 1) / m;
+      const a: [number, number, number] = [A[0] + (B[0] - A[0]) * f0, A[1] + (B[1] - A[1]) * f0, A[2] + (B[2] - A[2]) * f0];
+      const b: [number, number, number] = [A[0] + (B[0] - A[0]) * f1, A[1] + (B[1] - A[1]) * f1, A[2] + (B[2] - A[2]) * f1];
+      const cars: CarPlace[] = [];
+      if (n > 0) {
+        const gap = len / n;
+        // (the stream's first car on this piece at the clock's 0: the road's cars at `offset + k gap` along it)
+        const x0 = ((((offset - s) % gap) + gap) % gap) / len;
+        for (let j = 0; j < n; j++) cars.push({ start: a, end: b, speed, phase: (x0 + j / n) % 1 });
+      }
+      out.push({ a, b, cars });
+      s += len;
+    }
+  }
+  return out;
+}

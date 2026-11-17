@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 17 nov. 09:50 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 17 nov. 09:54 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous. Ce qui est fermé quitte le tableau « En cours » pour la ligne « Fermé récemment ».
@@ -10268,3 +10268,18 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
 - **Vérifié :** `tests/j8a-low-tracks.test.ts`, sur les sommets BD TOPO du disque e2e. Chaque bâtiment à moins de 150 m d'un tronçon
   est dépassé de 15 m ou plus ; le point le plus bas est à 55 m sur le sol à Toulon, 50 m dans le Marais.
 - **Limites :** les antennes, grues et flèches absentes de la BD TOPO ne sont pas vérifiées. Ces tracés n'ont jamais été volés.
+
+### 2026-11-17 09:54 UTC — PLAN-J8 J8-VB VB6 (mode speed) : les voitures en flot, côté `traffic.ts` (session des approches, 1feb2f7f)
+
+- **Réalisé :** le rendu m'a cédé `traffic.ts` (sauf la forme des voitures, déjà dans `car-shapes.ts`). Option (A), proposée au
+  rendu, qui ne change pas le contrat GPU :
+  - `carsAlong(ligne, classe, graine)` simplifie la route en cordes (2 m) puis la coupe en morceaux de 250 m au plus ;
+  - une seule vitesse par route et par sens, donc plus de voiture qui en traverse une autre ;
+  - des phases tirées de l'abscisse, si bien que sur des morceaux de même longueur une voiture qui sort est relayée par celle qui entre ;
+  - `STREET_TRAFFIC` ajoute les rues tertiaires et mineures, plus clairsemées, en scène proche seulement. `ROAD_TRAFFIC` (couche
+    lointaine) et `TRAFFIC_MAX` (1 500) ne changent pas.
+- **Vérifié :** tests `traffic` : un flot régulier à 62,5 m sur 1 km à tout instant ; un quart de cercle en moins de 10 cordes ; les
+  rues mineures moins denses que les primaires.
+- **Non branché** : le worker de la scène appelle encore `carsOn` ; le branchement revient au rendu, après accord. Non mesuré. Le
+  raccord aux coins (morceaux de longueurs différentes) reste ; l'option (B), des chaînes dans le shader, viendrait si ce raccord se
+  voit au gros e2e.
