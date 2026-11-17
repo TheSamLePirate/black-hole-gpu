@@ -68,6 +68,9 @@ import { CELL_CACHE, type CellWant } from "./system/cell-pool";
 import { tilesWithin } from "./system/ign-canopy";
 import { STREET_CACHE } from "./system/street-cells";
 import { MESH_NEAR_M } from "./system/building-cells";
+/** PLAN-J8 J8-A (c), Sam's decision of 17 Nov 2026: the far layer's cells refused for its budget no nearer than this [m] do not hold
+ *  `flightReady` — counted apart in its notes (none refused nearer over Paris's track: 17.9 km at the nearest, j8-far-track) */
+const FAR_BUDGET_NEAR_M = 12_000;
 import { inBdtopoBox } from "./system/bdtopo";
 import { MESH_CACHE, readMeshHeader } from "./system/mesh-cells";
 import { corridorDistance, ZONE_FAR_REACH_M, ZONE_STREET_REACH_M } from "./system/zones";
@@ -730,9 +733,22 @@ export function installBh(c: BhContext) {
           if (st && (st.queued || st.running || st.beyond))
             why.push(`street cells: ${st.queued} queued, ${st.running} running, ${st.beyond} past the bound`);
           const far = renderer.farBuildingsOn
-            ? ((await renderer.farBuildings()).layer as { missing?: number; refused?: number } | null)
+            ? ((await renderer.farBuildings()).layer as {
+                missing?: number;
+                refused?: number;
+                missingRefused?: number;
+                missingNearestM?: number | null;
+              } | null)
             : null;
-          if (far?.missing) why.push(`far layer: ${far.missing} wanted cells not resident`);
+          // (Sam's decision, 17 Nov 2026 — the reserve kept at 72 MiB: the cells its budget refuses past FAR_BUDGET_NEAR_M — the farthest,
+          // 17.9 km and more over Paris — counted apart, said, not holding the flight; a cell still pending, or a refused one nearer, holds it)
+          let pastBudget: { cells: number; nearestM: number } | null = null;
+          if (far?.missing) {
+            const refused = far.missingRefused ?? 0;
+            const nearest = far.missingNearestM ?? 0;
+            if (refused === far.missing && nearest >= FAR_BUDGET_NEAR_M) pastBudget = { cells: refused, nearestM: Math.round(nearest) };
+            else why.push(`far layer: ${far.missing} wanted cells not resident`);
+          }
           // (a track — J8-A: the flight's points —: what the whole flight will ask, not only the view at the start — a ready zone whose
           // corridor covers every point, its building and street cells prepared; and every far cell within the far layer's reach of the
           // track, every street cell within the lamps', in the prepared caches; J8-8: every mesh cell within MESH_NEAR_M of it — the BD
@@ -806,7 +822,11 @@ export function installBh(c: BhContext) {
             if (streetMissing) why.push(`${streetMissing} street cells within reach of the track not prepared`);
             track = { zone: zone?.id ?? null, farMissing, streetMissing, meshMissing };
           }
-          return { ready: why.length === 0, why, cells: p, far, track };
+          // (said, not holding: « far layer: N past the budget, nearest X km »)
+          const notes = pastBudget
+            ? [`far layer: ${pastBudget.cells} past the budget, nearest ${(pastBudget.nearestM / 1000).toFixed(1)} km`]
+            : [];
+          return { ready: why.length === 0, why, notes, cells: p, far, track };
         },
         /** PLAN-J8 J8-L: the streets' cells' pool (street-cells.ts — the lamps, the cars' roads), as `cells`: `want(list)`, `stats()`,
          *  `got()` (key, bytes, from the prepared cache, ms), `clear()` */

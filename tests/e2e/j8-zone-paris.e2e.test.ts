@@ -125,7 +125,7 @@ describe.skipIf(!E2E)(`PLAN-J8 J8-9: J8-A's corridor zone « ${TRACK} », downlo
       __bh.renderer.farBudgetMiB = ${Number(process.env.J8A_BUDGET ?? 72)}; return 1; })()`);
       const st0 = await app.js<{ served: { network: number; kinds?: Record<string, { network: number }> } }>(`__bh.pwa.stats()`);
       const before = st0.served.network;
-      const ready: { point: number; ready: boolean; why: string[] }[] = [];
+      const ready: { point: number; ready: boolean; why: string[]; notes?: string[] }[] = [];
       for (let k = 0; k < track.points.length; k++) {
         const [lat, lon, alt] = track.points[k]!;
         const why = await app.js<string | null>(
@@ -141,12 +141,12 @@ describe.skipIf(!E2E)(`PLAN-J8 J8-9: J8-A's corridor zone « ${TRACK} », downlo
         // flightReady said done before its tiles began, then 67 to 142 tiles pending at the read: the race, 17 Nov 2026; its why at
         // each change said)
         const t0 = Date.now();
-        let now = { ready: false, why: [] as string[] },
+        let now = { ready: false, why: [] as string[], notes: [] as string[] },
           since = 0,
           lastWhy = "";
         while (Date.now() - t0 < 120_000) {
-          now = await app.js<{ ready: boolean; why: string[] }>(
-            `(async () => { const r = await __bh.sys.flightReady({ track: ${T} }); return { ready: r.ready, why: r.why }; })()`,
+          now = await app.js<{ ready: boolean; why: string[]; notes: string[] }>(
+            `(async () => { const r = await __bh.sys.flightReady({ track: ${T} }); return { ready: r.ready, why: r.why, notes: r.notes ?? [] }; })()`,
           );
           if (!now.ready) since = 0;
           else if (!since) since = Date.now();
@@ -157,7 +157,7 @@ describe.skipIf(!E2E)(`PLAN-J8 J8-9: J8-A's corridor zone « ${TRACK} », downlo
           await Bun.sleep(1_000);
         }
         now.ready = !!since && Date.now() - since >= 5_000;
-        ready.push({ point: k + 1, ready: !!now.ready, why: now.why ?? [] });
+        ready.push({ point: k + 1, ready: !!now.ready, why: now.why ?? [], ...(now.notes?.length ? { notes: now.notes } : {}) });
         // (a far layer's wanted cells not resident: its reserve refusing — refused, no block free — or still filling — the render's
         // reading, 17 Nov 2026)
         const far = await app.js<Record<string, unknown> | null>(

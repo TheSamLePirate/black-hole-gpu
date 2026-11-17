@@ -2151,7 +2151,10 @@ With `{ track: { points: [[lat, lon, altitude?], …] } }` — J8-A's flight (sy
 view at the start: a ready zone whose corridor covers every point (its building and street cells prepared), and every far cell within the
 far layer's reach (20 km) of the track, every street cell within the lamps' (12 km), and — PLAN-J8 J8-8 — every mesh cell within
 `MESH_NEAR_M` (1 500 m) of it in the IGN's box (the zone's `meshes` prepared), in their prepared caches (`kerr-cells-v1`,
-`kerr-street-v2`, `kerr-mesh-v1`); `track` in the answer: the zone's id, the far, street and mesh cells missing. The mesh cells' pool, once
+`kerr-street-v2`, `kerr-mesh-v1`); `track` in the answer: the zone's id, the far, street and mesh cells missing. `notes`: what is said but
+does not hold the flight — Sam's decision of 17 Nov 2026 (PLAN-J8 J8-A (c)), the far layer's reserve kept at 72 MiB: its cells refused for
+the budget, all no nearer than 12 km, counted apart (« far layer: N past the budget, nearest X km »; over Paris's track 17.9 km and more);
+a cell still pending, or a refused one nearer, holds it in `why`. The mesh cells' pool, once
 asked, idle as the others'.
 
 ### `__bh.sys.streets` (PLAN-J8 J8-L: the streets' cells' pool)
