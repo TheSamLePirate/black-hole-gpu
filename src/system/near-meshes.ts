@@ -11,7 +11,7 @@
 import { CELL_Z, cellKey, cellOf, fromCell, MESH_NEAR_M } from "./building-cells";
 import { cellFrameInScene, cellPriority, type EyeState } from "./building-layer";
 import type { CellPool, CellPrepared, CellWant } from "./cell-pool";
-import { MeshCellFlag, meshViews, readMeshBuilding, readMeshHeader } from "./mesh-cells";
+import { MeshCellFlag, type MeshCellHeader, meshViews, readMeshBuilding, readMeshHeader } from "./mesh-cells";
 import { sceneryFrame } from "./scenery-data";
 import { NEAR_REC_BLOCK, NEAR_REGION_MARK, NEAR_TRI_BLOCK, NEAR_VERT_BLOCK, type SceneryRaster } from "./scenery-raster";
 
@@ -22,6 +22,8 @@ export const NEAR_MESH_REACH_M = MESH_NEAR_M + 500;
 export const NEAR_MESH_BUDGET_BYTES = 128 * 1024 * 1024;
 /** the cells' frames held at once */
 export const NEAR_MESH_SLOTS = 256;
+/** the page's time the cells' arrival takes at most a frame [ms] (their ground sampled, their upload) */
+export const NEAR_PUT_MS = 3;
 /** lot (2b): the region past the scene's bytes in the scenery buffer (scenery.ts setRegion) — the cells' frames, their record blocks'
  *  table, their records (packScenery's, in the cell's frame, heights over the ellipsoid) — read by the tracer's near material
  *  (trace.wgsl rasterBuilding, nearCellFrame) as the scene's own: ~26 MB of records within 2 km in central Paris (the lot (1) measure) */
@@ -92,6 +94,29 @@ interface Resident {
   records: number;
   buildings: number;
   triangles: number;
+}
+
+/** each building's box in its cell's frame (min east, min north, max east, max north; NaN: no vertex) — its ground's samples */
+export function buildingBoxes(buf: ArrayBuffer, h: MeshCellHeader): Float32Array {
+  const pos = meshViews(buf, h).positions;
+  const out = new Float32Array(4 * h.buildings).fill(Number.NaN);
+  for (let r = 0; r < h.buildings; r++) {
+    const b = readMeshBuilding(buf, r);
+    const end = r + 1 < h.buildings ? readMeshBuilding(buf, r + 1).firstVertex : h.vertices;
+    if (end <= b.firstVertex) continue;
+    let minE = Infinity,
+      minN = Infinity,
+      maxE = -Infinity,
+      maxN = -Infinity;
+    for (let i = b.firstVertex; i < end; i++) {
+      minE = Math.min(minE, pos[3 * i]!);
+      maxE = Math.max(maxE, pos[3 * i]!);
+      minN = Math.min(minN, pos[3 * i + 1]!);
+      maxN = Math.max(maxN, pos[3 * i + 1]!);
+    }
+    out.set([minE, minN, maxE, maxN], 4 * r);
+  }
+  return out;
 }
 
 /**
@@ -182,6 +207,10 @@ export class NearMeshes {
    *  the region's layout taken anew */
   regionChanged() {
     for (const key of [...this.residents.keys()]) this.evict(key);
+    if (this.job) this.cells().forget(this.job.c.x, this.job.c.y);
+    for (const c of this.queue) this.cells().forget(c.x, c.y);
+    this.job = null;
+    this.queue = [];
     this.layout = null;
     this.recPool = null;
   }
@@ -224,6 +253,7 @@ export class NearMeshes {
     this.raster.nearOn = !!this.frame;
     // (the region there: the cells put before it — drawn without their records — let go once, put again with them)
     if (!this.layout && this.regionReady()) for (const key of [...this.residents.keys()]) this.evict(key);
+    this.pump();
     if (!eye) return;
     const w = this.wantedAt;
     const cosL = Math.cos((eye.lat * Math.PI) / 180);
@@ -257,18 +287,76 @@ export class NearMeshes {
       if (!this.wanted.has(key) && cellPriority(r.x, r.y, eye)[1] > NEAR_MESH_REACH_M * 1.3) this.evict(key);
   }
 
+  /** a cell handed: queued — its ground sampled and its upload made over the frames (pump: NEAR_PUT_MS a frame) */
   private put(c: CellPrepared) {
     this.counts.handed++;
     const key = cellKey(c.x, c.y);
-    if (this.residents.has(key)) return;
-    const h = readMeshHeader(c.buf);
-    if (!this.frame || !h || !this.wanted.has(key)) {
-      this.cells().forget(c.x, c.y);
-      return;
+    if (this.residents.has(key) || this.queue.some((q) => q.x === c.x && q.y === c.y)) return;
+    this.queue.push(c);
+  }
+  private queue: CellPrepared[] = [];
+  /** the cell whose ground is being sampled: its buildings' boxes, their grounds, the next rank */
+  private job: { c: CellPrepared; h: MeshCellHeader; boxes: Float32Array; grounds: Float32Array; rank: number; ms: number } | null = null;
+  /** each frame: the queued cells advanced within NEAR_PUT_MS of the page's time (a cell's ~1 000 buildings × 5 ground samples were
+   *  ~30 ms in one go on this Mac — a hitch a cell) */
+  private pump() {
+    const t0 = performance.now();
+    while (performance.now() - t0 < NEAR_PUT_MS) {
+      if (!this.job) {
+        const c = this.queue.shift();
+        if (!c) return;
+        const key = cellKey(c.x, c.y);
+        const h = readMeshHeader(c.buf);
+        if (!this.frame || !h || !this.wanted.has(key) || this.residents.has(key)) {
+          if (!this.residents.has(key)) this.cells().forget(c.x, c.y);
+          continue;
+        }
+        if (h.triangles === 0 || h.flags & MeshCellFlag.SourceLater) {
+          this.counts.empty++;
+          this.residents.set(key, { x: c.x, y: c.y, slot: -1, vert: [], tri: [], rec: [], records: 0, buildings: 0, triangles: 0 });
+          continue;
+        }
+        this.job = { c, h, boxes: buildingBoxes(c.buf, h), grounds: new Float32Array(h.buildings), rank: 0, ms: 0 };
+      }
+      const J = this.job;
+      const s0 = performance.now();
+      const g = this.groundAt;
+      const origin = { lat: J.h.originLat, lon: J.h.originLon };
+      // (each building's ground: the lowest of its box's corners and centre on the relief drawn — no wall standing over a slope's
+      // foot —; without the relief, its source's foot)
+      while (J.rank < J.h.buildings && performance.now() - t0 < NEAR_PUT_MS) {
+        const r = J.rank++;
+        const [minE, minN, maxE, maxN] = J.boxes.subarray(4 * r, 4 * r + 4) as unknown as number[];
+        if (!g || !Number.isFinite(minE!)) {
+          const foot = readMeshBuilding(J.c.buf, r).foot;
+          J.grounds[r] = Number.isFinite(foot) ? foot : 0;
+          continue;
+        }
+        let lo = Infinity;
+        for (const [e, n] of [
+          [minE!, minN!],
+          [maxE!, minN!],
+          [minE!, maxN!],
+          [maxE!, maxN!],
+          [(minE! + maxE!) / 2, (minN! + maxN!) / 2],
+        ] as const) {
+          const p = fromCell(origin, e, n);
+          lo = Math.min(lo, g(p.lat, p.lon));
+        }
+        J.grounds[r] = lo;
+      }
+      J.ms += performance.now() - s0;
+      if (J.rank < J.h.buildings) return;
+      this.job = null;
+      this.counts.groundMs += J.ms;
+      this.finish(J.c, J.h, J.grounds);
     }
-    if (h.triangles === 0 || h.flags & MeshCellFlag.SourceLater) {
-      this.counts.empty++;
-      this.residents.set(key, { x: c.x, y: c.y, slot: -1, vert: [], tri: [], rec: [], records: 0, buildings: 0, triangles: 0 });
+  }
+  /** a cell whose ground is in: into the reserve's blocks (none free: refused, asked again when next wanted) */
+  private finish(c: CellPrepared, h: MeshCellHeader, grounds: Float32Array) {
+    const key = cellKey(c.x, c.y);
+    if (!this.frame || !this.wanted.has(key) || this.residents.has(key)) {
+      if (!this.residents.has(key)) this.cells().forget(c.x, c.y);
       return;
     }
     const vert = this.vertPool.alloc(Math.ceil(h.vertices / NEAR_VERT_BLOCK));
@@ -284,33 +372,7 @@ export class NearMeshes {
       this.cells().forget(c.x, c.y);
       return;
     }
-    const t0 = performance.now();
-    const g = this.groundAt;
-    const origin = { lat: h.originLat, lon: h.originLon };
-    const ground = (lat: number, lon: number) => (g ? g(lat, lon) : 0);
-    const arrays = nearCellArrays(
-      c.buf,
-      vert,
-      (rank, minE, minN, maxE, maxN) => {
-        const foot = readMeshBuilding(c.buf, rank).foot;
-        if (!g) return Number.isFinite(foot) ? foot : 0;
-        // (the lowest of its box's corners and centre on the relief drawn: no wall standing over a slope's foot)
-        let lo = Infinity;
-        for (const [e, n] of [
-          [minE, minN],
-          [maxE, minN],
-          [minE, maxN],
-          [maxE, maxN],
-          [(minE + maxE) / 2, (minN + maxN) / 2],
-        ] as const) {
-          const p = fromCell(origin, e, n);
-          lo = Math.min(lo, ground(p.lat, p.lon));
-        }
-        return lo;
-      },
-      rec.length ? rec : null,
-    )!;
-    this.counts.groundMs += performance.now() - t0;
+    const arrays = nearCellArrays(c.buf, vert, (rank) => grounds[rank]!, rec.length ? rec : null)!;
     const r: Resident = { x: c.x, y: c.y, slot, vert, tri, rec, records: 0, buildings: h.buildings, triangles: h.triangles };
     this.writeFrame(r);
     this.raster.nearUpload(vert, arrays.pos, tri, arrays.tris, slot);
