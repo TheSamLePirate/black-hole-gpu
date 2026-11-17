@@ -10475,3 +10475,9 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   - `roadRuns` donne aussi l'abscisse de chaque point (07277435), pour des pointillés continus.
 - **Vérifié :** tests unitaires sur le disque e2e : Toulon 50 tronçons de voie (43 électrifiés), Marais 82, Seine 19 ; le mobilier des
   routes est inchangé. tsc (hors fichiers du rendu en cours), Biome, gardes. **Non mesuré** en jeu.
+
+### 2026-11-17 10:40 UTC — PLAN-J8 J8-RP RP8 : les bouches de tunnel (session 33d89754)
+
+- **Destination :** §19.13 (« AAA road and bridges ») ; J8-RP RP8.
+- **Réalisé :** les bouches `TunnelPortal` du mobilier KSC4 sont dessinées dans la boucle de VB7 : deux piédroits et un linteau de béton sur la largeur de la chaussée, et l'ouverture sombre 1,2 m à l'intérieur. Elles dépendent du levier `furnitureOn` et n'existent qu'en France, faute de données OMT.
+- **Preuves :** `tsc`, Biome. **Non vu en jeu.**

@@ -2072,6 +2072,22 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
             triangles: [0, 1, 3, 0, 3, 2, 4, 5, 7, 4, 7, 6, 8, 9, 10, 8, 10, 11],
             signal: (seed + axis) % 1,
           });
+        } else if (f.kind === FurnitureKind.TunnelPortal) {
+          // (PLAN-J8 J8-RP RP8: a tunnel's mouth — its heading into the tunnel, its length the carriageway's width —: two concrete
+          // jambs and a lintel over the road's width, the mouth's dark a metre inside)
+          const w = Math.max(4, f.length) / 2 + 0.6;
+          const jamb = (k: number) => {
+            const c: [number, number, number] = [p[0] + across[0] * k * w, p[1] + across[1] * k * w, 0];
+            return [stripPolygon([c[0] - u[0] * 0.6, c[1] - u[1] * 0.6, 0], [c[0] + u[0] * 0.6, c[1] + u[1] * 0.6, 0], 1.2)];
+          };
+          for (const k of [-1, 1]) addSolid(polygonPrimitive(jamb(k), p[2] - 1, p[2] + 6.5, 3, [0.46, 0.45, 0.42]), jamb(k));
+          const [la, lb] = ends(2 * w + 1.2);
+          const lintel = [stripPolygon(la, lb, 1.2)];
+          addSolid(polygonPrimitive(lintel, p[2] + 5.2, p[2] + 6.5, 3, [0.46, 0.45, 0.42]), lintel);
+          const [da, db] = ends(2 * w - 0.4);
+          const shift: [number, number] = [u[0] * 1.2, u[1] * 1.2];
+          const dark = [stripPolygon([da[0] + shift[0], da[1] + shift[1], 0], [db[0] + shift[0], db[1] + shift[1], 0], 0.3)];
+          addSolid(polygonPrimitive(dark, p[2] - 0.5, p[2] + 5.3, 3, [0.008, 0.008, 0.009]), dark);
         } else if (f.kind === FurnitureKind.Guardrail) {
           // (its rail in pieces of 20 m at most, each on the ground at its middle — the cell's frame along its heading)
           const n = Math.max(1, Math.ceil(f.length / 20));
