@@ -181,6 +181,9 @@ test.skipIf(!E2E)(
               const cells = await app.js<number>(`Promise.race([(async () => { let k = 0;
                 for (const name of await caches.keys()) if (/^kerr-(street|mesh|forest)-/.test(name)) k += (await (await caches.open(name)).keys()).length;
                 return k; })(), new Promise((q) => setTimeout(() => q(-1), 5000))])`);
+              // (a count past its 5 s said — a keys() hung for minutes would be the game's defect too: flightReady, the stores read them)
+              if (cells < 0)
+                console.log(`  … ${t.name}: the caches' count did not answer in 5 s (Cache Storage slow under the zone's writes)`);
               if (cells >= 0 && cells !== lastCells) {
                 lastCells = cells;
                 moved = Date.now();
