@@ -10496,3 +10496,9 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
 - **Réalisé :** les tabliers construits par `deckBridge` sont gardés dans un registre : `deckHeightAt(x, y)` donne la hauteur du tablier sous un point proche de son axe. Le trafic des grands axes passe maintenant sur les ponts OMT, ses morceaux posés sur le tablier ; là où aucun tablier n'a été construit, il n'y a pas de voiture. Les glissières de pont de KSC4 sont posées sur le tablier.
 - **Preuves :** `tsc`, Biome, tests. **Non vu en jeu.**
 - **Reste :** les lampadaires sur les ponts, et la lecture de l'indice de pont des surfaces KSC4.
+
+### 2026-11-17 10:43 UTC — PLAN-J8 J8-RP RP9 (en partie) : les rails sous l'orthophoto (session 33d89754)
+
+- **Réalisé :** dans `scenerySurface`, la ligne d'acier des rails OMT passe par la peinture de RP1 (`SC_PAINT`) et se dessine donc par-dessus l'orthophoto en France.
+- **Preuves :** `check-wgsl`. **Non vu en jeu.**
+- **Reste :** les traverses, le ballast en relief, les caténaires, les tronçons de voie ferrée de la BD TOPO.

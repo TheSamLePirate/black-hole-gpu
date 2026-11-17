@@ -10693,6 +10693,8 @@ fn scenerySurface(foot:f32)->ScenerySurface {
         let rail=1.0-smoothstep(.06,.06+aa,abs(distance-.72));
         let sleeper=1.0-smoothstep(.18,.18+aa,(along*len)%.7);
         color=mix(color,vec3f(.18,.15,.10),sleeper);color=mix(color,vec3f(.42),rail);
+        // (PLAN-J8 J8-RP RP9: the rails over a national photograph too — RP1's paint: the steel's line, its cover in the pixel)
+        if(rail*cover>SC_PAINT.w){SC_PAINT=vec4f(vec3f(.42),rail*cover);}
       }
     }
     if(cover>0.0 && (rank>priority || (rank==priority && cover>out.cover))){priority=rank;out=ScenerySurface(color,cover,kind);}
