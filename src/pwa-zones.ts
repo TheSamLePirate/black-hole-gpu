@@ -35,6 +35,10 @@ export interface Zones {
     urls: number;
     bytes: number;
     seconds: number;
+    /** its building cells (PLAN-J8 J8-6) and street cells (J8-L) — in `bytes` and `seconds` already, the measured zones' mean by cell
+     *  (building-cells.ts BUILDING_CELL_BYTES_EST, street-cells.ts STREET_CELL_BYTES_EST) */
+    buildings: { cells: number; bytes: number };
+    streets: { cells: number; bytes: number };
     /** its near meshes' cells (PLAN-J8 J8-8: a corridor's, within MESH_NEAR_M of its track) — in `bytes` and `seconds` already, an
      *  estimate (mesh-cells.ts MESH_CELL_BYTES_EST) */
     meshes: { cells: number; bytes: number };
