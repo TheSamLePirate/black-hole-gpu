@@ -13,6 +13,7 @@ import {
   readMeshHeader,
   SKIRT_M,
 } from "../src/system/mesh-cells";
+import { lidarRoof } from "../src/system/building-mesh-prep";
 import { prepareMeshCell } from "../src/system/mesh-prep";
 
 // PLAN-J8 J8-8 lot (1) — the near buildings' mesh cell (mesh-cells.ts, kerr-mesh-v1), agreed with the render session (17 Nov 2026):
@@ -116,4 +117,38 @@ test("a real tile (Hyères, 250 buildings): J8-2's buildings in J8-2's order, ev
   expect(partsChecked).toBe(h.triangles);
   expect(under / h.vertices).toBeLessThan(0.01);
   console.log(`  Hyères' tile: ${JSON.stringify({ ...m.stats, bytes: m.buf.byteLength, ms: Math.round(m.stats.ms), underSkirt: under })}`);
+});
+
+test("the roofs without a ridge measured by the canopy (B6, the scene's lidarRoof): the cell flagged Canopy, its measured buildings flagged", () => {
+  // (lidarRoof: a 20 × 12 m footprint, the canopy 3 m over its 9 m eave inside it — the roof 3 m; no canopy: none)
+  const box = [
+    [
+      [0, 0],
+      [20, 0],
+      [20, 12],
+      [0, 12],
+    ],
+  ] as [number, number][][];
+  expect(lidarRoof(box, 9, () => 12)).toBeCloseTo(3, 5);
+  expect(lidarRoof(box, 9, () => Number.NaN)).toBeNull();
+  // (the tile: the canopy 4 m over every building's eave — its 41 ridgeless roofs measured, none guessed)
+  const bytes = new Uint8Array(readFileSync(FIX));
+  const plain = prepareMeshCell(bytes, X, Y, () => 48.5);
+  const m = prepareMeshCell(
+    bytes,
+    X,
+    Y,
+    () => 48.5,
+    () => 14,
+  );
+  const h = readMeshHeader(m.buf)!;
+  expect(h.flags & 1).toBe(1);
+  expect(readMeshHeader(plain.buf)!.flags & 1).toBe(0);
+  expect(plain.stats.guessed).toBeGreaterThan(0);
+  expect(m.stats.guessed).toBeLessThan(plain.stats.guessed);
+  expect(m.stats.measured).toBeGreaterThan(0);
+  let flagged = 0;
+  for (let r = 0; r < h.buildings; r++) if (readMeshBuilding(m.buf, r).flags & RecordFlag.Measured) flagged++;
+  expect(flagged).toBe(m.stats.measured);
+  console.log(`  canopy: guessed ${plain.stats.guessed} → ${m.stats.guessed}, measured ${m.stats.measured}`);
 });

@@ -64,7 +64,7 @@ import {
   surfaceContains,
 } from "./scenery-geometry";
 import { buildingMesh } from "./roof-mesh";
-import { buildingLeaves, partMeshes, STACK_BYTES } from "./building-mesh-prep";
+import { buildingLeaves, lidarRoof as measuredRoof, partMeshes, STACK_BYTES } from "./building-mesh-prep";
 import { builtUp, LAMP_CLASSES, LAMP_MAX, LAMP_REACH_M, lampLight, lampMesh, lampsAlong, type StreetLamp } from "./streetlamps";
 import {
   partyEdges,
@@ -1353,48 +1353,11 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
   // (B6: a BD TOPO roof without its ridge — Paris's — measured by the IGN's canopy model, its surface over its ground
   // (I4: ~3 m a texel within CANOPY_NEAR, a texel the mean over it): its footprint's inner points, 1.5 m in from its walls,
   // the 85th percentile of their heights its top — the roof the eave's to it; a measure of fewer than six points none)
+  // (shared with the cells' worker — building-mesh-prep.ts lidarRoof: the same building the same roof, J8-8)
   const lidarRoof = (rings: Pt[][], lat: number, lon: number, eave: number): number | null => {
     if (!(land instanceof IgnLand)) return null;
-    const outer = rings[0]!;
-    let x0 = Infinity,
-      y0 = Infinity,
-      x1 = -Infinity,
-      y1 = -Infinity;
-    for (const [x, y] of outer) {
-      x0 = Math.min(x0, x);
-      x1 = Math.max(x1, x);
-      y0 = Math.min(y0, y);
-      y1 = Math.max(y1, y);
-    }
     const [cx, cy] = localPoint(frame, lat, lon, 0);
-    const step = Math.max(1.5, Math.max(x1 - x0, y1 - y0) / 7);
-    const inside = (x: number, y: number) => {
-      let c = false,
-        near = Infinity;
-      for (const r of rings)
-        for (let k = 0, j = r.length - 1; k < r.length; j = k++) {
-          const a = r[k]!,
-            b = r[j]!;
-          if (a[1] > y !== b[1] > y && x < a[0] + ((y - a[1]) * (b[0] - a[0])) / (b[1] - a[1])) c = !c;
-          const dx = b[0] - a[0],
-            dy = b[1] - a[1];
-          const t = Math.max(0, Math.min(1, ((x - a[0]) * dx + (y - a[1]) * dy) / (dx * dx + dy * dy || 1)));
-          near = Math.min(near, Math.hypot(x - a[0] - t * dx, y - a[1] - t * dy));
-        }
-      return c && near > 1.5;
-    };
-    const hs: number[] = [];
-    for (let y = y0 + step / 2; y < y1; y += step)
-      for (let x = x0 + step / 2; x < x1; x += step) {
-        if (!inside(x, y)) continue;
-        const h = land.canopy(lat + (y - cy) / 111320, lon + (x - cx) / (111320 * Math.cos(lat * D)));
-        if (Number.isFinite(h) && h < 50) hs.push(h);
-      }
-    if (hs.length < 6) return null;
-    hs.sort((p, q) => p - q);
-    const top = hs[Math.floor(0.85 * (hs.length - 1))]!;
-    const roof = top - eave;
-    return roof > 0.8 && roof < 12 ? roof : roof <= 0.8 && roof > -2 ? 0 : null;
+    return measuredRoof(rings, eave, (x, y) => land.canopy(lat + (y - cy) / 111320, lon + (x - cx) / (111320 * Math.cos(lat * D))));
   };
   phase("forest");
   let lidarRoofs = 0;

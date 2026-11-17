@@ -14,6 +14,10 @@ import { CELL_CACHE, cellCacheUrl } from "./cell-pool";
 import { prepareBdtopoCell } from "./cell-prep";
 import { geoidDeg, setGeoid } from "./geoid-grid";
 import type { HeightMap } from "./heights-file";
+import { ZONE_CACHE } from "../pwa/rules";
+import { cellBounds, cellOrigin } from "./building-cells";
+import { ignHeightUrl } from "./earth-tiles";
+import { blockSides, blocksWithin, CANOPY_Z, IGN_MNH, IgnLand, inIgnBox } from "./ign-canopy";
 import { encodeMeshCell, MESH_CACHE, meshCacheUrl, MeshCellFlag } from "./mesh-cells";
 import { prepareMeshCell } from "./mesh-prep";
 import { STREET_CACHE, streetCacheUrl, streetRoadsUrl } from "./street-cells";
@@ -110,7 +114,7 @@ async function buildingBytes(x: number, y: number, signal: AbortSignal): Promise
 async function meshCell(x: number, y: number, signal: AbortSignal) {
   const cell = await buildingBytes(x, y, signal);
   let h = readHeader(cell)!;
-  const key = (gen: number) => meshCacheUrl(self.location.origin, x, y, gen, false);
+  const key = (gen: number, canopy: boolean) => meshCacheUrl(self.location.origin, x, y, gen, canopy);
   if (h.source !== CellSource.BdTopo || !inBdtopoBox(x, y)) {
     const buf = encodeMeshCell(
       {
@@ -125,20 +129,53 @@ async function meshCell(x: number, y: number, signal: AbortSignal) {
       },
       [],
     );
-    await keep(MESH_CACHE, key(h.generation), buf);
+    await keep(MESH_CACHE, key(h.generation, false), buf);
     return { buf, ms: 0, buildings: 0 };
   }
   const r = await fetch(bdtopoUrl(x, y), { signal });
   const bytes = r.status === 404 || r.status === 204 ? new ArrayBuffer(0) : r.ok ? await r.arrayBuffer() : null;
   if (!bytes) throw new Error(`BD TOPO ${x}/${y}: HTTP ${r.status}`);
-  const M = prepareMeshCell(bytes, x, y, (lat, lon) => geoidDeg(lat, lon));
+  const land = await zoneCanopy(x, y, signal);
+  const M = prepareMeshCell(bytes, x, y, (lat, lon) => geoidDeg(lat, lon), land ? (lat, lon) => land.canopy(lat, lon) : undefined);
   if (M.generation !== h.generation) {
     const P = prepareBdtopoCell(bytes, x, y, (lat, lon) => geoidDeg(lat, lon));
     await keep(CELL_CACHE, cellCacheUrl(self.location.origin, x, y), P.buf);
     h = readHeader(P.buf)!;
   }
-  await keep(MESH_CACHE, key(M.generation), M.buf);
+  await keep(MESH_CACHE, key(M.generation, !!land), M.buf);
   return { buf: M.buf, ms: M.stats.ms, buildings: M.stats.buildings };
+}
+
+/** The IGN's canopy over a mesh cell — its ridgeless roofs measured (B6) — where an offline zone holds it (the render session's rule,
+ *  17 Nov 2026: the corridor's; elsewhere guessed — no IGN load from the meshes' pool): every canopy block its buildings may reach, at the
+ *  near scene's resolution, in the zones' cache; then read through the Service Worker (the zone's copy). Null: not all held, or a block
+ *  failed. */
+async function zoneCanopy(x: number, y: number, signal: AbortSignal): Promise<IgnLand | null> {
+  const o = cellOrigin(x, y);
+  if (!inIgnBox(o.lat, o.lon)) return null;
+  const b = cellBounds(x, y);
+  const half = 0.5 * Math.hypot((b.north - b.south) * 111_320, (b.east - b.west) * 111_320 * Math.cos((o.lat * Math.PI) / 180));
+  const reach = half + 100;
+  try {
+    const zones = await caches.open(ZONE_CACHE);
+    for (const k of blocksWithin(o.lat, o.lon, reach))
+      if (!(await zones.match(ignHeightUrl(IGN_MNH, CANOPY_Z, k.x, k.y, blockSides(k.d).canopy)))) return null;
+  } catch {
+    return null;
+  }
+  const land = new IgnLand(async (url) => {
+    const r = await fetch(url, { signal });
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    return r.arrayBuffer();
+  });
+  await land.prepare(o.lat, o.lon, reach, { ground: false });
+  for (const k of blocksWithin(o.lat, o.lon, reach)) {
+    const n = 2 ** CANOPY_Z;
+    const lon = ((k.x + 0.5) / n) * 360 - 180,
+      lat = (Math.atan(Math.sinh(Math.PI * (1 - (2 * (k.y + 0.5)) / n))) * 180) / Math.PI;
+    if (!land.hasCanopy(lat, lon)) return null;
+  }
+  return land;
 }
 
 /** a street cell: its z 14 roads' tile, the four building cells under it, its four street cells prepared and kept, the asked one */

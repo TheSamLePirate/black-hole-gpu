@@ -121,14 +121,15 @@ export class IgnLand {
     this.gate = new RateGate(rate);
   }
 
-  /** the blocks within `reach` metres of a place, fetched INFLIGHT at a time, the nearest first */
-  async prepare(lat: number, lon: number, reach: number) {
+  /** the blocks within `reach` metres of a place, fetched INFLIGHT at a time, the nearest first; `ground` false: their canopy alone
+   *  (PLAN-J8 J8-8: a mesh cell's measured roofs — the cells' worker) */
+  async prepare(lat: number, lon: number, reach: number, o: { ground?: boolean } = {}) {
     const keys = blocksWithin(lat, lon, reach);
     let next = 0;
     const run = async () => {
       while (next < keys.length) {
         const { x, y, d } = keys[next++]!;
-        await this.block(x, y, blockSides(d));
+        await this.block(x, y, blockSides(d), o.ground !== false);
       }
     };
     await Promise.all(Array.from({ length: INFLIGHT }, run));
@@ -152,13 +153,14 @@ export class IgnLand {
     return null;
   }
 
-  private async block(x: number, y: number, sides: { canopy: number; ground: number }) {
+  private async block(x: number, y: number, sides: { canopy: number; ground: number }, ground = true) {
     const key = `${x}/${y}`,
       cn = sides.canopy,
       gn = sides.ground;
-    const [mnh, lidar] = await Promise.all([this.grid(IGN_MNH, x, y, cn), this.grid(IGN_LIDAR, x, y, gn)]);
+    const [mnh, lidar] = await Promise.all([this.grid(IGN_MNH, x, y, cn), ground ? this.grid(IGN_LIDAR, x, y, gn) : null]);
     this.canopyBlocks.set(key, mnh && { n: cn, v: codeCanopy(mnh) });
     this.lastX = Number.NaN;
+    if (!ground) return;
     // (the ground: the LiDAR's terrain, RGE ALTI in its holes — earth-tiles' rule, its no-data and coastal junk dropped)
     const clean = (v: Float32Array | null) => {
       if (!v) return null;
@@ -197,6 +199,11 @@ export class IgnLand {
     return (at(0, 0) * (1 - fx) + at(1, 0) * fx) * (1 - fy) + (at(0, 1) * (1 - fx) + at(1, 1) * fx) * fy;
   }
 
+  /** whether the canopy's block over a place came in (PLAN-J8 J8-8: a mesh cell's roofs measured — its Canopy flag) */
+  hasCanopy(lat: number, lon: number): boolean {
+    const b = blockOf(lat, lon, 1);
+    return !!this.canopyBlocks.get(`${b.x}/${b.y}`);
+  }
   /** the canopy's height at a place [m] (its texel; NaN where the survey has none) */
   canopy(lat: number, lon: number): number {
     const t = 2 ** CANOPY_Z;
