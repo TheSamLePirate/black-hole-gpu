@@ -27,6 +27,8 @@ import { J0_FIXED } from "./lib/j0-scene";
 // cells' census by ring round the craft (__bh.sys.census) against the cells drawn (__bh.sys.drawnCensus) — strict: 98 % or more drawn
 // within 10 km. At each flight's last point, criterion 5: the near meshes' and the far layer's buildings' mean colours within 0.8–3.5 km
 // (surfaceAt on a 32 × 18 grid of the lower half, the canvas's colours, the craft and the UI hidden) and their gap — said, not asserted.
+// J8A_WITNESS=1: the page's witness (its JS heap asked every 30 s on its own timer, « NO ANSWER in 10 s » when it does not answer) —
+// to date a page that stops answering (Toulon's zone after Paris's flights in one page, 17 Nov 2026).
 // J8A_FOREST=1 (J8-8b lot 2): the near scene's forest assembled from its prepared cells (renderer.forestCellsOn — the zone's, the forest
 // pool's), each leg's last scene's cells said (forestPrepared: read, missing, cases covered).
 // J8A_BUDGET [MiB, default 72]: the far layer's pool (renderer.farBudgetMiB — all Paris resident; the default since Sam's « ok 72 »).
@@ -78,12 +80,39 @@ type Leg = {
   scenes: { full: number[]; quick: number[]; fastFlight: number };
   at: unknown;
 };
+const HEAP = `(() => { const m = performance.memory; return m ? Math.round(m.usedJSHeapSize / 1e6) : null; })()`;
+/** the page's witness (J8A_WITNESS): its heap asked every 30 s, its answer's delay or « NO ANSWER in 10 s » logged; stopped by the call */
+function pageWitness(app: App): () => void {
+  const t0 = Date.now();
+  let busy = false;
+  const timer = setInterval(async () => {
+    if (busy) return;
+    busy = true;
+    const at = new Date().toISOString().slice(11, 19);
+    const s = Date.now();
+    try {
+      const r = await app.cdp.send<{ result: { value: number | null } }>("Runtime.evaluate", { expression: HEAP, returnByValue: true }, 10);
+      console.log(
+        `  [witness ${at} UTC, +${((s - t0) / 60_000).toFixed(1)} min] answered in ${Date.now() - s} ms · heap ${r.result?.value} MB`,
+      );
+    } catch {
+      console.log(`  [witness ${at} UTC, +${((s - t0) / 60_000).toFixed(1)} min] NO ANSWER in 10 s`);
+    } finally {
+      busy = false;
+    }
+  }, 30_000);
+  return () => clearInterval(timer);
+}
 test.skipIf(!E2E)(
   "J8-A: Paris and Toulon-Hyères flown by day and by night, everything loaded before — no request, no quick scene, the buildings drawn",
   async () => {
     mkdirSync(OUT, { recursive: true });
     // (J8A_TRACK_READY: the Service Worker on — the track's corridor zone made in this profile, from the e2e's disk)
     const app = await App.boot({ width: 1920, height: 1080, hash: "scene=game:artemis", tiles: true, sw: TRACK_READY });
+    // (J8A_WITNESS=1: the page's witness — a Runtime.evaluate of its JS heap every 30 s on its own timer, 10 s to answer —, the time
+    // a page stops answering dated to 30 s: the freeze of Toulon's zone after Paris's flights in one page, 17 Nov 2026; the
+    // approaches session's pageWitness, j8-zone-paris)
+    const witness = process.env.J8A_WITNESS === "1" ? pageWitness(app) : () => {};
     const out: Record<string, unknown> = { startedAt: new Date().toISOString(), machine: MACHINE, flights: {} };
     try {
       // (the far layer's pool for the whole of Paris — 24 MiB holds a quarter of it, never « all loaded »: 72 MiB, the default since
@@ -492,6 +521,7 @@ test.skipIf(!E2E)(
       );
       expect(lost).toEqual([]);
     } finally {
+      witness();
       out.finishedAt = new Date().toISOString();
       await Bun.write(`${OUT}/j8-a.json`, JSON.stringify(out, null, 1));
       app.close();
