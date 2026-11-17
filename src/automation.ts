@@ -73,6 +73,7 @@ import { MESH_NEAR_M } from "./system/building-cells";
 const FAR_BUDGET_NEAR_M = 12_000;
 import { inBdtopoBox } from "./system/bdtopo";
 import { MESH_CACHE, readMeshHeader } from "./system/mesh-cells";
+import { cellsAlong } from "./system/zone-cells";
 import { corridorDistance, ZONE_FAR_REACH_M, ZONE_STREET_REACH_M } from "./system/zones";
 
 /** the A320 deck's picker (a320DeckAt: the controls seen from the seat) */
@@ -811,10 +812,8 @@ export function installBh(c: BhContext) {
             } catch {
               /* no Cache Storage: none */
             }
-            const meshMissing = [...wanted(MESH_NEAR_M)].filter((k) => {
-              const [x, y] = k.split("/").map(Number) as [number, number];
-              return inBdtopoBox(x, y) && !meshHave.has(k);
-            }).length;
+            // (the zone's own selection — zone-cells.ts cellsAlong: they had disagreed by 8 cells over Paris)
+            const meshMissing = cellsAlong(pts, MESH_NEAR_M).filter((t) => inBdtopoBox(t.x, t.y) && !meshHave.has(`${t.x}/${t.y}`)).length;
             if (meshMissing) why.push(`${meshMissing} mesh cells within ${MESH_NEAR_M} m of the track not prepared`);
             const farMissing = [...wanted(ZONE_FAR_REACH_M)].filter((k) => !farHave.has(k)).length;
             const streetMissing = [...wanted(ZONE_STREET_REACH_M)].filter((k) => !streetHave.has(k)).length;

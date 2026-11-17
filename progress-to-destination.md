@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 17 nov. 03:35 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 17 nov. 04:00 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous. Ce qui est fermé quitte le tableau « En cours » pour la ligne « Fermé récemment ».
@@ -9991,3 +9991,16 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   réseau** ; aux points 3–6, 132 à 261 cellules au-delà du budget, la plus proche à 17,9–19,0 km. Les deux tracés de J8-A sont donc prêts
   hors ligne à la réserve par défaut (Toulon-Hyères à 03:05 UTC).
 - **Limites :** le vol lui-même n'est pas fait ici (J8-A, la session du rendu) ; les notes ne sont pas affichées dans l'e2e `j8-a`.
+
+### 2026-11-17 04:00 UTC — PLAN-J8 J8-8/J8-A : une seule sélection des cellules de maillage pour la zone et `flightReady` (session des approches, 1feb2f7f)
+
+- **Constat** (le `j8a-paris-strict` de la session du rendu, kerr-mini, ~03:30 UTC) : au décollage, « near mesh cells: 8 missing ». La
+  zone choisissait ses cellules par leur centre moins leur demi-diagonale, `flightReady` par des points pris tous les 2 km le long du
+  tracé : les deux ensembles différaient. Le même vol a envoyé 140 requêtes au réseau (122 orthophotos et 18 grilles de relief, de 1,5 à
+  2,1 km du tracé près du point 6, où le virage sort du couloir de 1 km). Ce point est signalé à la session du rendu (largeur du couloir
+  ou virage plus tôt).
+- **Réalisé :** `zone-cells.ts` `cellsAlong(points, reach)` donne les cellules z15 à moins de `reach` de points pris tous les 250 m le
+  long du tracé, au bord le plus proche. La zone (`zoneMeshTiles`, restreinte à ses cellules de bâtiments) et `flightReady({ track })`
+  l'utilisent toutes deux. Paris compte 190 cellules, Toulon-Hyères 146.
+- **Preuves :** tests unitaires des zones verts ; vérifié statiquement que les deux appellent la même fonction. Aucun vol relancé de
+  ma part.

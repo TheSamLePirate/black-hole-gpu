@@ -5,11 +5,12 @@
 // is the whole wanted set, J8-4's — the zone's list would replace it), one worker: a download runs behind the game. The cells a
 // zone holds are counted (cells, buildings, bytes) for Settings › Offline; a zone removed drops the cells no other zone holds.
 import { BDTOPO_Z } from "./bdtopo";
-import { cellBounds, MESH_NEAR_M, readHeader } from "./building-cells";
+import { MESH_NEAR_M, readHeader } from "./building-cells";
+import { tilesWithin } from "./ign-canopy";
 import { CellPool, type CellExecutor, type CellStore } from "./cell-pool";
 import { readMeshHeader } from "./mesh-cells";
 import { OVERTURE_Z, parseOvertureZoneUrl } from "./pmtiles";
-import { corridorDistance, type ZoneCorridor } from "./zones";
+import type { ZoneCorridor } from "./zones";
 
 export interface ZoneCells {
   /** the cells prepared or found ready */
@@ -80,33 +81,42 @@ export function zoneStreetTiles(chains: readonly (readonly string[])[]): { x: nu
   return out;
 }
 
-/** A zone's mesh cells (PLAN-J8 J8-8, mesh-cells.ts): its BD TOPO z 15 tiles that reach within MESH_NEAR_M of its corridor's track —
- *  a cell's nearest point, its centre less its half-diagonal —; a zone without a corridor none (the near scene draws there as before:
- *  a disc of 12 km would be ~450 cells, ~600 MB at Paris's density). */
+/** The z 15 cells within `reach` [m] of a track (its points [lat, lon]): the cells within reach of points every 250 m along it, by their
+ *  nearest edge (ign-canopy.ts tilesWithin) — one selection for the zone's mesh cells and for `flightReady({ track })`: they disagreed by
+ *  8 cells over Paris (the zone by its cells' centres, the check by points every 2 km — j8a-paris-strict, 17 Nov 2026). */
+export function cellsAlong(points: readonly (readonly [number, number])[], reach: number): { x: number; y: number }[] {
+  const seen = new Set<string>();
+  const out: { x: number; y: number }[] = [];
+  const at = (la: number, lo: number) => {
+    for (const t of tilesWithin(BDTOPO_Z, la, lo, reach)) {
+      const k = `${t.x}/${t.y}`;
+      if (seen.has(k)) continue;
+      seen.add(k);
+      out.push({ x: t.x, y: t.y });
+    }
+  };
+  for (let k = 0; k < points.length; k++) {
+    const a = points[k]!,
+      b = points[Math.min(k + 1, points.length - 1)]!;
+    const m = Math.hypot((b[0] - a[0]) * 111_320, (b[1] - a[1]) * 111_320 * Math.cos((a[0] * Math.PI) / 180));
+    const n = Math.max(1, Math.ceil(m / 250));
+    for (let i = 0; i < n; i++) at(a[0] + ((b[0] - a[0]) * i) / n, a[1] + ((b[1] - a[1]) * i) / n);
+  }
+  if (points.length) at(points[points.length - 1]![0], points[points.length - 1]![1]);
+  return out;
+}
+
+/** A zone's mesh cells (PLAN-J8 J8-8, mesh-cells.ts): those of its building cells (zoneCellTiles: the BD TOPO's, Overture's) within
+ *  MESH_NEAR_M of its corridor's track (cellsAlong — `flightReady`'s selection); a zone without a corridor none (the near scene draws
+ *  there as before: a disc of 12 km would be ~450 cells, ~600 MB at Paris's density). */
 export function zoneMeshTiles(
   chains: readonly (readonly string[])[],
   zone: { lat: number; lon: number; corridor?: ZoneCorridor | null },
 ): { x: number; y: number }[] {
   const c = zone.corridor;
   if (!c) return [];
-  const out: { x: number; y: number }[] = [];
-  const seen = new Set<string>();
-  for (const chain of chains)
-    for (const url of chain) {
-      const m = TILE.exec(url);
-      if (!m) continue;
-      const x = Number(m[1]),
-        y = Number(m[2]);
-      const k = `${x}/${y}`;
-      if (seen.has(k)) continue;
-      seen.add(k);
-      const b = cellBounds(x, y, BDTOPO_Z);
-      const lat = (b.north + b.south) / 2,
-        lon = (b.east + b.west) / 2;
-      const half = 0.5 * Math.hypot((b.north - b.south) * 111320, (b.east - b.west) * 111320 * Math.cos((lat * Math.PI) / 180));
-      if (corridorDistance(zone.lat, zone.lon, c, lat, lon) - half <= MESH_NEAR_M) out.push({ x, y });
-    }
-  return out;
+  const held = new Set(zoneCellTiles(chains).map((t) => `${t.x}/${t.y}`));
+  return cellsAlong(c.points, MESH_NEAR_M).filter((t) => held.has(`${t.x}/${t.y}`));
 }
 
 /** a prepared cell's buildings, whichever its kind: a building cell's records (KBC1), a mesh cell's buildings (KMC1) */
