@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 17 nov. 14:03 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 17 nov. 14:59 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous. Ce qui est fermé quitte le tableau « En cours » pour la ligne « Fermé récemment ».
@@ -10671,3 +10671,14 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
 - **Critère 5 (non jugé, sonde sans témoin négatif) :** rapport de luminance lointain / proche de 1,30 et 1,88 à Paris (jour, nuit), 1,14 et 0,76 à Toulon.
 - **L'« arrêt » de Toulon après Paris :** il ne se reproduit plus. C'était le comptage des caches du test (corrigé en ba9207b8), et non un défaut du jeu.
 - **Reste du gros e2e :** le Marais bas à 90 m/s (en file, approches), et le vol de référence sur le M1 Max à froid, Mac réservé (en cours).
+
+### 2026-11-17 14:59 UTC — PLAN-J8 (A6) : le tracé bas du Marais passe à 90 m/s ; tous les tracés de J8-A verts sur kerr-mini (session des approches, 1feb2f7f)
+
+- **Mesuré** (kerr-mini, le `j8-a` du rendu sans modification, `J8A_TRACKS=paris-marais-bas` en strict, hors ligne, avec la forêt et
+  `E2E_EMIT=0`, `20261117-150430-j8a-marais-bas-90`, exit 0) :
+  - de jour et de nuit, 0 scène rapide ;
+  - la règle 13 est tenue sur les 6 tronçons ;
+  - recensement plein jusqu'à 15 km ;
+  - GPU p50 58,1 ms de jour et 51,8 ms de nuit (p95 84,6 et 63,6).
+- **Avec les passages du rendu, tous les tracés de J8-A sont verts sur kerr-mini** : Paris, Toulon-Hyères, `toulon-bas` et
+  `paris-marais-bas`, dont Paris puis Toulon dans une même page. Reste le vol M1 Max, à froid, mené par le rendu. Grille VB8 à jour.
