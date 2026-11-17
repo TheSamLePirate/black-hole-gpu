@@ -303,6 +303,8 @@ export const CAR_TAIL = 0xfff70000;
 /** (Q8 L10) a street lamp's pole (a pair of vertices at its foot, a pair at its top: widened across the view, dithered) and its
  *  head (four vertices at its centre: opened to a quad) | its index */
 export const LAMP_POLE = 0xfff60000;
+/** (PLAN-J8 VB5a) a lamp's arm: its pole's tag with this bit in its index's half (widened up the view, not across) */
+export const LAMP_ARM_BIT = 0x8000;
 export const LAMP_HEAD = 0xfff50000;
 export function packScenery(
   prims: Primitive[],
@@ -340,7 +342,7 @@ export function packScenery(
    *  from a vertex index ≡ 0 mod 4 (padding before them; each shape's vertices a multiple of four); its entry (start, speed),
    *  (end, phase) after the pylons' */
   cars: SceneryCar[] = [],
-  /** (Q8 L10) the streets' lamps (system/streetlamps.ts lampMesh: eight vertices, from a vertex index ≡ 0 mod 4), their pole's
+  /** (Q8 L10) the streets' lamps (system/streetlamps.ts lampMesh: twelve vertices since VB5a, from a vertex index ≡ 0 mod 4), their pole's
    *  triangles tagged LAMP_POLE, their head's LAMP_HEAD; and their light's grid (LAMP_GRID's bytes) after the decals' far grid,
    *  its side and texel in the palette's unused entry 0 (0: none) */
   lamps: { positions: number[]; triangles: number[] }[] = [],
@@ -404,8 +406,8 @@ export function packScenery(
   vertexCount += carPad + carShapes.reduce((n, m) => n + m.positions.length / 3, 0);
   triangleCount += carShapes.reduce((n, m) => n + m.triangles.length / 3, 0);
   const lampPad = lamps.length ? (4 - (vertexCount % 4)) % 4 : 0;
-  vertexCount += lampPad + lamps.length * 8;
-  triangleCount += lamps.length * 4;
+  vertexCount += lampPad + lamps.length * 12;
+  triangleCount += lamps.length * 6;
   const meshOffset = forestOffset + (forest ? forestVec4s(forest.frame) : 0),
     triangleOffset = meshOffset + Math.ceil((vertexCount * 3) / 4);
   // (after the triangles, a tag a triangle: a building triangle's leaf — its record's offset from geomOffset [vec4] —: the raster
@@ -507,8 +509,9 @@ export function packScenery(
     lamps.forEach((m, i) => {
       f.set(m.positions, meshOffset * 4 + v * 3);
       for (const k of m.triangles) u[t++] = v + k;
-      v += 8;
+      v += 12;
       u.fill((LAMP_POLE | i) >>> 0, tag, (tag += 2));
+      u.fill((LAMP_POLE | LAMP_ARM_BIT | i) >>> 0, tag, (tag += 2));
       u.fill((LAMP_HEAD | i) >>> 0, tag, (tag += 2));
     });
     f.set([turbines.length, pylons.length, cars.length, lamps.length], (triangleOffset + triangleCount) * 4);

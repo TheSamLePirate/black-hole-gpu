@@ -87,17 +87,38 @@ export function lampsAlong(points: [number, number][], cls: string, width: numbe
   return out;
 }
 
-/** A lamp's eight vertices (scenery-data.ts packScenery: from a vertex index ≡ 0 mod 4): its pole a pair at its foot and a pair
- *  at its top (meshVs widens each pair across the view, the even one to the left), its head four at its centre (opened to a
- *  quad by the index mod 4); two triangles each — the pole's first. */
-export function lampMesh(l: StreetLamp): { positions: number[]; triangles: number[] } {
+/** (PLAN-J8 VB5a) the near lamps' shapes: an arm over the street (lampsAlong's head), a lantern on the pole's top, a longer
+ *  swan-neck arm */
+export const LAMP_SHAPES = 3;
+/** a lamp's shape from its foot's place [°] (to a metre: the same lamp the same shape whichever scene holds it) */
+export function lampShape(lat: number, lon: number): number {
+  let h = Math.imul(Math.round(lat * 1e5) ^ 0x9e3779b9, 0x85ebca6b);
+  h = Math.imul(h ^ (h >>> 13) ^ Math.round(lon * 1e5), 0xc2b2ae35);
+  h = Math.imul(h ^ (h >>> 16), 0x27d4eb2d);
+  return ((h ^ (h >>> 15)) >>> 0) % LAMP_SHAPES;
+}
+
+/** A lamp's twelve vertices (scenery-data.ts packScenery: from a vertex index ≡ 0 mod 4): its pole a pair at its foot and a pair
+ *  at its top (meshVs widens each pair across the view, the even one to the left), its arm a pair at the pole and a pair at the
+ *  head (PLAN-J8 VB5a: widened up the view — LAMP_POLE's tag with LAMP_ARM_BIT), its head four at its centre (opened to a quad by
+ *  the index mod 4); two triangles each — the pole's, the arm's, the head's. `shape` (lampShape): 0 the arm over the street, 1 a
+ *  lantern on the pole's top (its arm none — its four vertices at the top), 2 a swan neck reaching 40 % further, rising to it. */
+export function lampMesh(l: StreetLamp, shape = 0): { positions: number[]; triangles: number[] } {
   const [fx, fy, fz] = l.foot;
-  const top = fz + l.head[2] + 0.2;
-  const [hx, hy] = l.head;
   const hz = fz + l.head[2];
+  const reach = shape === 2 ? 1.4 : shape === 1 ? 0 : 1;
+  const hx = fx + (l.head[0] - fx) * reach,
+    hy = fy + (l.head[1] - fy) * reach;
+  const top = shape === 1 ? hz : hz + (shape === 2 ? 0.45 : 0.2);
+  const az = shape === 1 ? top : hz + 0.12;
+  const headZ = shape === 1 ? top + 0.3 : hz;
   return {
-    positions: [fx, fy, fz, fx, fy, fz, fx, fy, top, fx, fy, top, hx, hy, hz, hx, hy, hz, hx, hy, hz, hx, hy, hz],
-    triangles: [0, 1, 3, 0, 3, 2, 4, 5, 6, 4, 6, 7],
+    positions: [
+      ...[fx, fy, fz, fx, fy, fz, fx, fy, top, fx, fy, top],
+      ...[fx, fy, top - 0.05, fx, fy, top - 0.05, hx, hy, az, hx, hy, az],
+      ...[hx, hy, headZ, hx, hy, headZ, hx, hy, headZ, hx, hy, headZ],
+    ].map((v, i) => (shape === 1 && i >= 12 && i < 24 ? [fx, fy, top][i % 3]! : v)),
+    triangles: [0, 1, 3, 0, 3, 2, 4, 5, 7, 4, 7, 6, 8, 9, 10, 8, 10, 11],
   };
 }
 

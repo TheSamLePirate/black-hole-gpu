@@ -74,7 +74,7 @@ export const PARKED_REACH_M = 900;
 export const PARKED_MAX = 2500;
 import { buildingMesh } from "./roof-mesh";
 import { buildingLeaves, lidarRoof as measuredRoof, partMeshes, STACK_BYTES } from "./building-mesh-prep";
-import { builtUp, LAMP_CLASSES, LAMP_MAX, LAMP_REACH_M, lampLight, lampMesh, lampsAlong, type StreetLamp } from "./streetlamps";
+import { builtUp, LAMP_CLASSES, LAMP_MAX, LAMP_REACH_M, lampLight, lampMesh, lampShape, lampsAlong, type StreetLamp } from "./streetlamps";
 import {
   partyEdges,
   planBuilding,
@@ -1858,7 +1858,10 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
     pylons,
     cables,
     cars,
-    lamps.map(lampMesh),
+    // (PLAN-J8 VB5a: each lamp's shape from its foot's place — the frame's flat inverse, to the metre)
+    lamps.map((l) =>
+      lampMesh(l, lampShape(q.lat + l.foot[1] / 111_132, q.lon + l.foot[0] / (111_320 * Math.max(0.05, Math.cos(q.lat * D))))),
+    ),
     lampGrid,
   );
   return {

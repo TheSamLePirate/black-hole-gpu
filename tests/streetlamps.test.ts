@@ -1,7 +1,17 @@
 import { expect, test } from "bun:test";
-import { packScenery, LAMP_HEAD, LAMP_POLE } from "../src/system/scenery-data";
+import { LAMP_ARM_BIT, LAMP_HEAD, LAMP_POLE, packScenery } from "../src/system/scenery-data";
 import { makeDecals } from "../src/system/scenery-geometry";
-import { builtUp, LAMP_CLASSES, LAMP_GRID, LAMP_LIGHT_RANGE, lampLight, lampMesh, lampsAlong } from "../src/system/streetlamps";
+import {
+  builtUp,
+  LAMP_CLASSES,
+  LAMP_GRID,
+  LAMP_LIGHT_RANGE,
+  LAMP_SHAPES,
+  lampLight,
+  lampMesh,
+  lampShape,
+  lampsAlong,
+} from "../src/system/streetlamps";
 
 test("lamps along a street: its class's spacing, off its axis, the head over the road", () => {
   const pts: [number, number][] = [
@@ -93,12 +103,14 @@ test("packed: the lamps' tags after the cars', from a vertex index ≡ 0 mod 4, 
     u = new Uint32Array(buf);
   const [meshOffset, vertexCount, triangleOffset] = [f[12]!, f[13]!, f[14]!];
   const triangleCount = f[11]!;
-  expect(triangleCount).toBe(lamps.length * 4);
-  expect(vertexCount).toBe(lamps.length * 8);
+  expect(triangleCount).toBe(lamps.length * 6);
+  expect(vertexCount).toBe(lamps.length * 12);
   const tags = u.subarray(triangleOffset * 4 + triangleCount * 3, triangleOffset * 4 + triangleCount * 4);
   expect(tags[0]).toBe(LAMP_POLE >>> 0);
-  expect(tags[2]).toBe(LAMP_HEAD >>> 0);
-  expect(tags[4]).toBe((LAMP_POLE | 1) >>> 0);
+  // (PLAN-J8 VB5a: its arm's two, then its head's)
+  expect(tags[2]).toBe((LAMP_POLE | LAMP_ARM_BIT) >>> 0);
+  expect(tags[4]).toBe(LAMP_HEAD >>> 0);
+  expect(tags[6]).toBe((LAMP_POLE | 1) >>> 0);
   // (the header's fourth: the lamps' count)
   expect(f[(triangleOffset + triangleCount) * 4 + 3]).toBe(lamps.length);
   // (the first lamp's vertices: from an index ≡ 0 mod 4)
@@ -114,4 +126,36 @@ test("the shader's pool scale is LAMP_LIGHT_RANGE", async () => {
   const src = await Bun.file(new URL("../src/shaders/trace.wgsl", import.meta.url)).text();
   const line = src.split("\n").find((l) => l.includes("mix(mix(c.x, c.y, f.x), mix(c.z, c.w, f.x), f.y) *"))!;
   expect(Number(line.split("*").pop()!.replace(";", "").trim())).toBe(LAMP_LIGHT_RANGE);
+});
+
+test("VB5a: a lamp's shapes — the arm to the head over the street, a lantern on the pole (no arm), a swan neck further; all three in a town", () => {
+  const [l] = lampsAlong(
+    [
+      [0, 0],
+      [100, 0],
+    ],
+    "minor",
+    6,
+  );
+  const at = (m: { positions: number[] }, i: number) => m.positions.slice(3 * i, 3 * i + 3);
+  const arm = lampMesh(l!, 0),
+    lantern = lampMesh(l!, 1),
+    swan = lampMesh(l!, 2);
+  for (const m of [arm, lantern, swan]) {
+    expect(m.positions.length / 3).toBe(12);
+    expect(m.triangles.length / 3).toBe(6);
+  }
+  // (the arm: from the pole to the head, the head over the road as lampsAlong sets it)
+  expect(at(arm, 6).slice(0, 2)).toEqual(l!.head.slice(0, 2));
+  expect(at(arm, 8).slice(0, 2)).toEqual(l!.head.slice(0, 2));
+  // (the lantern: its arm's four at the pole's top, its head over the foot, above the top)
+  for (let i = 4; i < 8; i++) expect(at(lantern, i).slice(0, 2)).toEqual(l!.foot.slice(0, 2));
+  expect(at(lantern, 8)[2]!).toBeGreaterThan(at(lantern, 2)[2]!);
+  // (the swan neck: its head 40 % further from the pole)
+  const d = (m: { positions: number[] }) => Math.hypot(at(m, 8)[0]! - l!.foot[0], at(m, 8)[1]! - l!.foot[1]);
+  expect(d(swan)).toBeCloseTo(1.4 * d(arm), 6);
+  const n = new Array(LAMP_SHAPES).fill(0);
+  for (let k = 0; k < 600; k++) n[lampShape(48.85 + k * 1e-4, 2.35 + (k % 7) * 1e-4)]++;
+  for (const c of n) expect(c).toBeGreaterThan(100);
+  expect(lampShape(48.8566, 2.3522)).toBe(lampShape(48.8566, 2.3522));
 });

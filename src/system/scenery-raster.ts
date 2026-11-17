@@ -759,7 +759,9 @@ fn meshLeaf(tri: u32) -> f32 {
       o.bridge = 4.0;
       let half = max(${LAMP_POLE_M / 2}, 0.5 * px);
       o.pyl = vec4f(${LAMP_POLE_M} / (2.0 * half), sc.misc.x, 0.0, 0.0);
-      v = v + vec3f(select(-half, half, (id & 1u) == 1u), 0.0, 0.0);
+      // (PLAN-J8 VB5a: its arm — LAMP_ARM_BIT — widened up the view, the pole across it)
+      let s = select(-half, half, (id & 1u) == 1u);
+      v = v + select(vec3f(s, 0.0, 0.0), vec3f(0.0, s, 0.0), (tg & 0x8000u) != 0u);
     }
   }
   o.clip = vec4f(v.x / u.right.w + u.output.z * v.z, v.y / u.up.w + u.output.w * v.z, u.forward.w, v.z);
