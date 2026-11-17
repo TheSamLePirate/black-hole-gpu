@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 17 nov. 13:49 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 17 nov. 14:03 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous. Ce qui est fermé quitte le tableau « En cours » pour la ligne « Fermé récemment ».
@@ -10654,3 +10654,12 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   le dit dans `why` (« the prepared cache … did not list its keys in 15 s ») au lieu de pendre. BH-API est à jour.
 - **Non vérifié :** que `keys()` soit bien l'appel pendu (c'est l'hypothèse la plus probable, pas une preuve) ; la nouvelle borne n'a
   pas été vue en jeu.
+
+### 2026-11-17 14:03 UTC — PLAN-J8 J8-VB VB8 : la grille mise à jour d'après les passages un tracé par page (session des approches, 1feb2f7f)
+
+- **Réalisé :** les lignes VB1 et VB8 du plan VB §8.1, d'après les jobs du rendu sur kerr-mini avec J8-RP :
+  - Paris en strict de jour et de nuit après dc97a2c6 (0 scène rapide, GPU p50 60,2 ms de jour et 59 ms de nuit) ;
+  - Toulon-Hyères seul, et `toulon-bas` de jour et de nuit (p50 52,8 ms, p95 75,1 ms de jour) ;
+  - l'« arrêt » de Toulon après Paris était une promesse du test, bornée de part et d'autre (ba9207b8, a85f8f7e).
+- **Restent :** `paris-marais-bas` à revoler à 90 m/s, le vol M1 Max à refaire, et les lignes de dessin (VB2 à VB7) à juger sur les
+  captures, avec le rendu.

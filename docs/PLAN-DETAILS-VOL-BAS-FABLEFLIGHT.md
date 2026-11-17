@@ -340,7 +340,7 @@ ensemble. Chaque ligne relie le critère de sortie du §5 à ce que le gros e2e 
 
 | Lot | Critère de sortie (§5) | Ce qui le juge au gros e2e | Verdict |
 |---|---|---|---|
-| VB1 | pas de recul de couverture ; hors ligne | zones prêtes aux points, 0 requête (`j8-zone-paris` 17 nov. : Paris 6/6, Toulon 7/7) | données ✓ ; **en vol, Paris ✓** (gros e2e du mini, `20261117-112103`, lancé sur KSC3 : jour et nuit hors ligne, 0 requête, 0 scène rapide, dessiné = préparé jusqu'à 15 km) ; Toulon non volé (la page ne répondait plus pendant la préparation de sa zone, cause à trouver) |
+| VB1 | pas de recul de couverture ; hors ligne | zones prêtes aux points, 0 requête (`j8-zone-paris` 17 nov. : Paris 6/6, Toulon 7/7) | données ✓ ; **en vol ✓ sur kerr-mini, un tracé par page, J8-RP compris** : Paris en strict de jour et de nuit après dc97a2c6 (`j8a-paris-fix` : 0 scène rapide, `swData` 0), Toulon-Hyères seul (`j8a-big-toulon`), `toulon-bas` jour et nuit ; `paris-marais-bas` à revoler à 90 m/s ; l'« arrêt » de Toulon après Paris dans une page était une promesse du test (le compte des caches), pas la page (témoin : réponse toutes les 30 s), borné en ba9207b8 ; `flightReady` bornée aussi (a85f8f7e) |
 | VB2 | routes lisibles ; ni double route, ni scintillement, ni fuite sur bâtiment ou eau | captures et vidéo des tracés bas (150 m, 50 m), jour | à remplir |
 | VB3 | formes reconnaissables de près ; pas de géométrie par véhicule | captures basses ; triangles et instances relevés | à remplir |
 | VB4 | rue habitée sans empilement ; densité affichée | captures basses (centre de Toulon, Marais) ; nombre de places des cellules | à remplir |
@@ -348,7 +348,7 @@ ensemble. Chaque ligne relie le critère de sortie du §5 à ce que le gros e2e 
 | VB5b | énergie sous le pixel maîtrisée ; pas de halo qui couvre les rues | captures et vidéo de nuit ; coût de nuit dense | à remplir |
 | VB6 | plus de rues animées sans hausse cachée ; pas de saut visible au raccord | vidéo des tracés bas ; nombre de voitures (`TRAFFIC_MAX` 1 500, rues mineures exclues) | à remplir ; le saut résiduel aux coins décide de l'option (B) |
 | VB7 | mobilier bien placé et visible depuis l'avion ; préparation raisonnable | captures basses ; préparation des cellules de rue (Paris 4 332 cellules en 36 s) | données ✓ ; dessin : à remplir |
-| VB8 | un chemin de production par responsabilité ; coûts par famille | retraits faits : caches de rue v1–v4, `carsOn`, `carMesh` ; coûts GPU p50/p95 des deux machines | Paris sur kerr-mini : GPU p50 59 ms, p95 70 ms (nuit) — avant J8-RP ; M1 Max à venir ; à remplir |
+| VB8 | un chemin de production par responsabilité ; coûts par famille | retraits faits : caches de rue v1–v4, `carsOn`, `carMesh` ; coûts GPU p50/p95 des deux machines | kerr-mini, Paris avec J8-RP (dc97a2c6) : GPU p50 60,2 ms de jour, 59 ms de nuit ; Toulon-Hyères, `toulon-bas` : p50 52,8 ms, p95 75,1 ms (jour) ; M1 Max à refaire (le vol de référence gâché par un pre-push sur ce Mac) ; à remplir |
 
 **Prochaine étape proposée :** à la reprise d'un travail d'implémentation, rapprocher VB0/VB1 de l'état réellement
 livré de J8-L, puis construire une première comparaison des routes proches (VB2) et des silhouettes de voitures
