@@ -108,6 +108,11 @@ export interface ZoneCorridor {
    *  point or anticipated (j8a-paris-strict, Bercy) —; absent: CORRIDOR_TURN_M */
   turnRadiusM?: number;
 }
+/** a corridor's turn radius for a flight at `speedMps` banked 25° (the autopilots'), plus a margin [m]: v² / (g tan 25°) + 500 — 3.6 km at
+ *  120 m/s, 2.6 km at 100 (the render session's rule, 17 Nov 2026: a zone whose track's speed is known — j8a-tracks.ts speedMps) */
+export function turnRadiusFor(speedMps: number, marginM = 500): number {
+  return (speedMps * speedMps) / (9.80665 * Math.tan((25 * Math.PI) / 180)) + marginM;
+}
 /** a turn sharper than this [°] gets its disc (ZoneCorridor.turnRadiusM) */
 export const SHARP_TURN_DEG = 100;
 /** the turn's disc by default [m]: what J8-A's flight swung past Bercy's point (2.2 km at 120 m/s banked 25°, j8a-paris-strict-2) and

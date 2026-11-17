@@ -86,3 +86,10 @@ test("a corridor's sharp turns (J8-A, Bercy's ~150°): a disc of turnRadiusM rou
   expect(d.radius).toBeGreaterThan(corridorDisc({ ...c, turnRadiusM: 0 }).radius);
   expect(CORRIDOR_TURN_M).toBeGreaterThan(2000);
 });
+
+test("a turn's radius from the track's speed: v² / (g tan 25°) + 500 m", async () => {
+  const { turnRadiusFor } = await import("../src/system/zones");
+  expect(turnRadiusFor(120)).toBeCloseTo(3649, -1);
+  expect(turnRadiusFor(100)).toBeCloseTo(2687, -1);
+  expect(turnRadiusFor(120, 0)).toBeCloseTo(3149, -1);
+});
