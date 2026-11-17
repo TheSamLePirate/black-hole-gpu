@@ -824,46 +824,53 @@ export function installBh(c: BhContext) {
               for (const [la, lo] of samples) for (const t of tilesWithin(15, la, lo, reach)) set.add(`${t.x}/${t.y}`);
               return set;
             };
-            const have = async (name: string) => {
+            // (a prepared cache's keys, KEYS_WAIT_MS at most: a key listing waiting behind a zone's writes — 17 Nov 2026, the big e2e's
+            // count of the caches left unanswered 300 s while Toulon's cells were made after Paris — holds the flight, said, instead of
+            // the check itself)
+            const KEYS_WAIT_MS = 15_000;
+            const keysOf = async (name: string): Promise<readonly Request[]> => {
+              let late: ReturnType<typeof setTimeout> | undefined;
               try {
-                const keys = await (await caches.open(name)).keys();
-                return new Set(
-                  keys.map((r) =>
-                    r.url
-                      .split("/")
-                      .slice(-2)
-                      .join("/")
-                      .replace(/\.[a-z]+$/, ""),
-                  ),
-                );
-              } catch {
-                return new Set<string>();
+                return await Promise.race([
+                  (async () => await (await caches.open(name)).keys())(),
+                  new Promise<never>((_, no) => {
+                    late = setTimeout(() => no(new Error("late")), KEYS_WAIT_MS);
+                  }),
+                ]);
+              } catch (e) {
+                if ((e as Error).message === "late")
+                  why.push(`the prepared cache ${name} did not list its keys in ${KEYS_WAIT_MS / 1000} s`);
+                return [];
+              } finally {
+                clearTimeout(late);
               }
             };
+            const have = async (name: string) =>
+              new Set(
+                (await keysOf(name)).map((r) =>
+                  r.url
+                    .split("/")
+                    .slice(-2)
+                    .join("/")
+                    .replace(/\.[a-z]+$/, ""),
+                ),
+              );
             const farHave = await have(CELL_CACHE),
               streetHave = await have(STREET_CACHE);
             // (a mesh cell's key: …/x/y.kmc?g=…&c=… — its generation and canopy in the query)
             const meshHave = new Set<string>();
-            try {
-              for (const r of await (await caches.open(MESH_CACHE)).keys()) {
-                const m = /\/(\d+)\/(\d+)\.kmc/.exec(new URL(r.url).pathname);
-                if (m) meshHave.add(`${m[1]}/${m[2]}`);
-              }
-            } catch {
-              /* no Cache Storage: none */
+            for (const r of await keysOf(MESH_CACHE)) {
+              const m = /\/(\d+)\/(\d+)\.kmc/.exec(new URL(r.url).pathname);
+              if (m) meshHave.add(`${m[1]}/${m[2]}`);
             }
             // (the zone's own selection — zone-cells.ts cellsAlong: they had disagreed by 8 cells over Paris)
             const meshMissing = cellsAlong(pts, MESH_NEAR_M).filter((t) => inBdtopoBox(t.x, t.y) && !meshHave.has(`${t.x}/${t.y}`)).length;
             if (meshMissing) why.push(`${meshMissing} mesh cells within ${MESH_NEAR_M} m of the track not prepared`);
             // (J8-8b: the forest cells on the same selection — every source's, the BD TOPO's box or not)
             const forestHave = new Set<string>();
-            try {
-              for (const r of await (await caches.open(FOREST_CACHE)).keys()) {
-                const m = /\/(\d+)\/(\d+)\.kfc/.exec(new URL(r.url).pathname);
-                if (m) forestHave.add(`${m[1]}/${m[2]}`);
-              }
-            } catch {
-              /* no Cache Storage: none */
+            for (const r of await keysOf(FOREST_CACHE)) {
+              const m = /\/(\d+)\/(\d+)\.kfc/.exec(new URL(r.url).pathname);
+              if (m) forestHave.add(`${m[1]}/${m[2]}`);
             }
             const forestMissing = cellsAlong(pts, FOREST_NEAR_M).filter((t) => !forestHave.has(`${t.x}/${t.y}`)).length;
             if (forestMissing) why.push(`${forestMissing} forest cells within ${FOREST_NEAR_M} m of the track not prepared`);

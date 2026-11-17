@@ -2158,7 +2158,7 @@ far layer's reach (20 km) of the track, every street cell within the lamps' (12 
 `kerr-street-v5`, `kerr-mesh-v1`); `track` in the answer: the zone's id, the far, street and mesh cells missing. `notes`: what is said but
 does not hold the flight — Sam's decision of 17 Nov 2026 (PLAN-J8 J8-A (c)), the far layer's reserve kept at 72 MiB: its cells refused for
 the budget, all no nearer than 12 km, counted apart (« far layer: N past the budget, nearest X km »; over Paris's track 17.9 km and more);
-a cell still pending, or a refused one nearer, holds it in `why`. The mesh cells' pool, once
+a cell still pending, or a refused one nearer, holds it in `why`. Each prepared cache's keys are listed within 15 s: a listing that does not answer (behind a zone's writes) holds the flight, said (« the prepared cache … did not list its keys in 15 s »), and never hangs the check. The mesh cells' pool, once
 asked, idle as the others'.
 
 ### `__bh.sys.census(lat, lon, ringsM?)` → Promise<{ cells, missing, rings: { outerM, buildings, tenMetres }[] }> (PLAN-J8 §0 criterion 1)

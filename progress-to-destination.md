@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 17 nov. 13:03 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 17 nov. 13:49 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous. Ce qui est fermé quitte le tableau « En cours » pour la ligne « Fermé récemment ».
@@ -10640,3 +10640,17 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
 - **Cause probable :** le comptage des cellules dans les caches (`caches.open(…).keys()` sur `kerr-street`, `kerr-mesh` et `kerr-forest`), ajouté par `j8-a` pour sa bannière et son garde-fou. Une fois Paris en cache, il attend derrière les écritures de cellules faites par le worker de la zone. La reproduction des approches (deux zones enchaînées, sans ce comptage) ne gelait pas.
 - **Correction :** les deux comptages sont bornés à 5 s ; au-delà, ils rendent -1 et ne comptent pas comme progrès. La lecture des couleurs du critère 5 recommence tant que l'image revient noire : à ce passage, Paris avait donné [0, 0, 0].
 - **Pour Sam :** rien dans ces mesures ne montre un défaut du jeu pour un joueur qui enchaîne deux zones. La page reste vivante, et la mémoire bornée. **Non vérifié** tant que le test corrigé n'a pas repassé Paris puis Toulon dans une même page.
+
+### 2026-11-17 13:49 UTC — PLAN-J8 : l'« arrêt » de Toulon après Paris est une promesse pendante, pas une page gelée ; `flightReady` bornée (session des approches, 1feb2f7f)
+
+- **Mesuré** (le test du rendu `j8a-paris-toulon-witness`, `20261117-140536`, sur kerr-mini, Paris puis Toulon dans une page, avec le
+  témoin `lib/witness.ts`) : le test échoue au même endroit que le premier gros e2e. Pourtant **le témoin répond en 0 à 6 ms toutes les
+  30 s jusqu'au bout**, et le tas reste entre 912 et 1 177 Mo. Le fil principal est donc libre : c'est un appel de `j8-a`, lancé vers
+  13:40:50 UTC, dont la promesse n'est jamais revenue. La zone de Toulon préparait alors ses cellules.
+- **Lecture :** `zones.list()` (`talk`, 3 s) et les attentes du test reviennent toujours. Le seul appel sans limite de cette phase est le
+  compte des caches de `j8-a`. Il passe par `caches.keys()` et par la liste des clés des caches `kerr-street`, `kerr-mesh` et
+  `kerr-forest`, dans lesquels les workers de la zone écrivent au même moment. La correction du test (le borner) est proposée au rendu.
+- **Réalisé :** `flightReady({ track })` (`automation.ts`) liste désormais les clés de chaque cache préparé en 15 s au plus. Au-delà, il
+  le dit dans `why` (« the prepared cache … did not list its keys in 15 s ») au lieu de pendre. BH-API est à jour.
+- **Non vérifié :** que `keys()` soit bien l'appel pendu (c'est l'hypothèse la plus probable, pas une preuve) ; la nouvelle borne n'a
+  pas été vue en jeu.
