@@ -130,9 +130,18 @@ How it shows, and how to override it:
      - **Time**: gone / estimated total, and the step's remaining time when it is known (a rest, a zone at its rate).
      - The same steps and counters go to the live record (`events`, `estimateS`, read by the Monitor) and to the console,
        so the Monitor and the log tell the same progress as the banner.
-     *To build in the harness (`lib/banner.ts`, `lib/app.ts`: a declared step list and a progress call beside
-     `app.scenario`), then applied to each e2e as it is touched — the long ones first (`j8-a`, `j8-zone-paris`, the zone and
-     approach flights). Until then the header's `// Duration:` and `// Done when:` lines stay required.*
+     *Built (17 Nov 2026, render session; `lib/app.ts`, `lib/telemetry.ts`, `lib/banner.ts`, `lib/live.ts`):*
+     - `app.steps([...])` declares the steps in order; `await app.step(name)` starts one — « Étape k/n · name » on the banner,
+       in the live record (`scenario`) and its `events`, the console and the report, like `app.scenario`;
+     - `await app.progress(text, values?)` — the step's count against its total and, optionally, the live values judged:
+       the banner and the live record only (no event: call it every few seconds);
+     - `await app.stepDone(text, ok = true)` — an ended step with its result: the banner's last four (✗ in red), a live event;
+     - `app.estimate(seconds)` — the run's whole time as the test reckons it (its tracks, its rests): the banner's
+       « ⏱ gone / ~N min estimated » and the live record's `estimateS`. Without it: the measured median
+       (`durations.json`), else the header's `// Duration:` figure (the monitor showed no estimate for an untimed file).
+     The banner's « what it proves » is now one line (the header's first sentence). Applied: `j8-a` (the zone's chains, its
+     mesh and forest cells counted in their caches, the rest, the loading, each leg), `approach-sample` (approaches session).
+     The header's `// Duration:` and `// Done when:` lines stay required.*
   (`remote.ts run --hold 20` / `bun run e2e --remote --hold 20 …`).
 - Measurement scripts (`bench.ts`, `trace-ab.ts`, `gallery.ts`, `quality.ts`, `check-wgsl.ts`) are always
   headless: a window's frame rate follows the display. They still take the lock.

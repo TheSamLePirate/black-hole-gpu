@@ -10,6 +10,7 @@
 import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { homedir, hostname } from "node:os";
 import { basename, join, resolve } from "node:path";
+import { fileInfo } from "./banner";
 
 /** (KERR_LIVE_DIR: elsewhere — the unit tests) */
 export const LIVE_DIR = process.env.KERR_LIVE_DIR ?? join(homedir(), ".kerr-lab", "live");
@@ -132,11 +133,18 @@ export function estimateOf(file: string): number | null {
       { mini: number | null; here: number | null }
     >;
     const d = all[basename(file)];
-    if (!d) return null;
-    return /mini/i.test(hostname()) ? (d.mini ?? d.here) : (d.here ?? d.mini);
-  } catch {
-    return null;
-  }
+    if (d) return /mini/i.test(hostname()) ? (d.mini ?? d.here) : (d.here ?? d.mini);
+  } catch {}
+  return headerEstimate(file);
+}
+
+/** No measured median: the header's « Duration: ~N min » (its first figure — 17 Nov 2026: j8-a had none timed, the monitor showed
+ *  no estimate), null without one. */
+export function headerEstimate(file: string): number | null {
+  const m = fileInfo(file).duration?.match(/~?\s*(\d+(?:[.,]\d+)?)\s*(h|min|s)\b/);
+  if (!m) return null;
+  const v = Number(m[1]!.replace(",", "."));
+  return Math.round(m[2] === "h" ? v * 3600 : m[2] === "min" ? v * 60 : v);
 }
 
 const SERIES_MAX = 360;
@@ -201,9 +209,20 @@ export class LiveState {
     this.lastSeriesWall = -1;
   }
 
-  /** The case under way inside the running test (app.scenario). */
+  /** The case under way inside the running test (app.scenario, app.progress). */
   scenario(label: string | null) {
     this.s.scenario = label;
+  }
+
+  /** A moment of the run's own (a phase begun — app.scenario): among the live events, as the page's are. */
+  note(kind: string, text: string) {
+    this.s.events.push({ wall: Date.now(), kind, text: text.slice(0, 240) });
+    if (this.s.events.length > EVENTS_MAX) this.s.events.splice(0, this.s.events.length - EVENTS_MAX);
+  }
+
+  /** The file's whole time estimated by the test itself [s] (app.estimate — what it runs decides it: tracks, rests). */
+  estimate(s: number) {
+    this.s.estimateS = Math.round(s);
   }
 
   /** A test ended: its place, title and time kept in the file's list. */

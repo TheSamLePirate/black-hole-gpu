@@ -14,7 +14,8 @@ export function headerProblems(src: string): string[] {
   if (about.replace(/\s+/g, " ").trim().length < 60) out.push("no header saying what it proves and what it does");
   if (!head.some((l) => /^Duration:\s*\S/i.test(l))) out.push("no « // Duration: » line");
   if (!head.some((l) => /^Done when:\s*\S/i.test(l))) out.push("no « // Done when: » line");
-  if (casesChained(src) && !/\.scenario\(/.test(src)) out.push("runs through cases without app.scenario(label)");
+  // (app.step says its step as a scenario — the declared steps, docs/E2E.md the banner point 6)
+  if (casesChained(src) && !/\.scenario\(|\bapp\.step\(/.test(src)) out.push("runs through cases without app.scenario(label) or app.step(name)");
   return out;
 }
 

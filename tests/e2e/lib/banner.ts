@@ -130,15 +130,61 @@ export function bannerRef(file: string, k: number, scenario: string | null): str
   return `${name} #${k}/${I.tests.length || "?"} · ${scenario ?? titleOf(I.tests[k - 1] ?? "")}`;
 }
 
+/** The run's progress as the test declares it (lib/app.ts steps/step/progress/stepDone/estimate — docs/E2E.md, the banner, point 6:
+ *  « moins de blabla dans la bannière mais plus d'infos sur le déroulement du test », Sam, 17 Nov 2026). */
+export interface BannerProgress {
+  /** the steps in order, the one under way (its index, -1 none) */
+  steps: string[];
+  at: number;
+  /** its own progress (« zone 49 920 / 60 738 · 1 811 Mo ») */
+  progress: string | null;
+  /** the steps ended, with their result */
+  done: { text: string; ok: boolean }[];
+  /** the live values the test judges (GPU p50 so far, quick images…) */
+  values: string | null;
+  /** the whole run's estimate [s] (the test's own) */
+  estimateS: number | null;
+}
+
+/** What it proves, in one line: the header's first sentence, ~120 characters. */
+export function aboutLine(about: string): string {
+  const m = about.match(/^(.+?[.!?])(?:\s|$)/);
+  const s = (m ? m[1]! : about).trim();
+  return s.length > 140 ? `${s.slice(0, 137)}…` : s;
+}
+
 /** What the page runs to put up (or update) the banner. */
-function script(file: string, k: number, scenario: string | null = null, earth: string | null = null): string {
+function script(
+  file: string,
+  k: number,
+  scenario: string | null = null,
+  earth: string | null = null,
+  p: BannerProgress | null = null,
+): string {
   const I = fileInfo(file);
   const head = `${bannerRef(file, k, scenario)} · ${HOST}`;
   // (the test's title — a template's values unknown to the text: the scenario said in its place)
   const title = k === 0 ? I.suite || I.name : (I.tests[k - 1] ?? "");
   const now = /\$\{/.test(title) && scenario ? scenario : titleOf(title);
-  const about = I.about.length > 420 ? `${I.about.slice(0, 417)}…` : I.about;
-  const data = JSON.stringify({ file: I.name, head, now, scenario, about, duration: I.duration, done: I.done, earth });
+  const about = aboutLine(I.about);
+  // (the declared steps: « Étape k/n · name », its progress, the last ended ones; the time against the run's own estimate)
+  const step = p && p.at >= 0 ? `Étape ${p.at + 1}/${p.steps.length} · ${p.steps[p.at]}` : null;
+  const ended = p ? p.done.slice(-4).map((d) => `${d.ok ? "✓" : "✗"} ${d.text}`) : [];
+  const total = p?.estimateS ? `${said(p.estimateS)} estimated` : I.duration;
+  const data = JSON.stringify({
+    file: I.name,
+    head,
+    now,
+    scenario: step ? null : scenario,
+    about,
+    duration: total,
+    done: I.done,
+    earth,
+    step,
+    progress: p?.progress ?? null,
+    ended,
+    values: p?.values ?? null,
+  });
   return `(() => { const d = ${data}; let el = document.getElementById("e2e-banner");
     if (!el) { el = document.createElement("div"); el.id = "e2e-banner"; el.setAttribute("aria-hidden", "true");
       el.style.cssText = "position:fixed;left:12px;bottom:12px;z-index:2147483647;max-width:min(560px,calc(100vw - 24px));padding:10px 14px;border-radius:10px;background:rgba(8,12,20,.82);border:1px solid rgba(255,200,90,.55);color:#e8eef6;font:13px/1.35 system-ui,-apple-system,sans-serif;pointer-events:none;box-shadow:0 6px 24px rgba(0,0,0,.45)";
@@ -148,7 +194,11 @@ function script(file: string, k: number, scenario: string | null = null, earth: 
     row("E2E · " + d.head, "font-size:11.5px;letter-spacing:.03em;color:#ffc85a;margin-bottom:3px;font-variant-numeric:tabular-nums");
     row(d.now, "font-weight:650;font-size:14px;margin-bottom:4px");
     if (d.scenario && d.scenario !== d.now) row("Scénario · " + d.scenario, "font-weight:600;font-size:13px;color:#ffe2a8;margin-bottom:4px");
-    if (d.about) row(d.about, "font-size:12px;color:#b9c4d2;display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical;overflow:hidden");
+    if (d.about) row(d.about, "font-size:12px;color:#b9c4d2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis");
+    if (d.step) row(d.step, "font-weight:650;font-size:13.5px;color:#ffe2a8;margin-top:5px");
+    if (d.progress) row(d.progress, "font-size:12.5px;color:#e8eef6;font-variant-numeric:tabular-nums");
+    if (d.values) row(d.values, "font-size:12px;color:#9fe0a8;font-variant-numeric:tabular-nums");
+    for (const t of d.ended) row(t, "font-size:11.5px;color:" + (t.startsWith("✗") ? "#ff9b8a" : "#9fb6d6"));
     // (how long it takes against the time gone — since this file's or test's banner first went up —, and what ends it)
     const key = d.file + "|" + d.head.split(" · ")[0];
     if (window.__e2eBannerKey !== key) { window.__e2eBannerKey = key; window.__e2eBannerT0 = Date.now(); }
@@ -171,10 +221,11 @@ export async function showBanner(
   file: string,
   k: number,
   scenario: string | null = null,
+  progress: BannerProgress | null = null,
 ) {
   if (!page || SHOW === "headless" || !file || process.env.E2E_BANNER === "0") return;
   // (where the tiles come from — PLAN-J8 J8-T: the disk's folder, or the network)
   const e = page.earth;
   const earth = !e || e.mode === "off" ? "network" : `${e.mode === "on" ? "disk" : e.mode} · ${e.dir.replace(/^\/Users\/[^/]+/, "~")}`;
-  await page.js(script(file, k, scenario, earth)).catch(() => {});
+  await page.js(script(file, k, scenario, earth, progress)).catch(() => {});
 }

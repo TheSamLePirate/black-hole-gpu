@@ -1,7 +1,9 @@
 import { afterAll, expect, test } from "bun:test";
 import { mkdirSync } from "node:fs";
 import { $ } from "bun";
+import { FOREST_NEAR_M, MESH_NEAR_M } from "../../src/system/building-cells";
 import { J8A_TRACKS } from "../../src/system/j8a-tracks";
+import { cellsAlong } from "../../src/system/zone-cells";
 import { corridorDisc, turnRadiusFor } from "../../src/system/zones";
 import { App, E2E, stopServer } from "./lib/app";
 import { CRUISE, expectFlight, flightState } from "./lib/flight-state";
@@ -20,13 +22,19 @@ import { J0_FIXED } from "./lib/j0-scene";
 // J8A_REST_S [s]: a rest after each zone, the world frozen (the M1 Max cooled before its flight).
 // The near buildings from their mesh cells (renderer.nearCellsOn — J8-8, on by default since Sam's decision of 17 Nov 2026; J8A_CELLS=0:
 // off, the near scene's own as before): their cells within reach resident before the take-off too.
+// J8A_FOREST=1 (J8-8b lot 2): the near scene's forest assembled from its prepared cells (renderer.forestCellsOn — the zone's, the forest
+// pool's), each leg's last scene's cells said (forestPrepared: read, missing, cases covered).
 // J8A_BUDGET [MiB, default 72]: the far layer's pool (renderer.farBudgetMiB — all Paris resident; the default since Sam's « ok 72 »).
 // J8A_OFFLINE=1 (with J8A_TRACK_READY; the approaches' session, agreed 17 Nov 2026): each track flown with the network cut — its zone
 // made online, then the network cut and the page loaded again (the zone and the Service Worker kept in the profile), its settings set
 // again, ready, flown; the network back before the next track's zone. Strict: the Service Worker's network requests over each flight
 // 0 too (__bh.pwa.stats().served.network — counted before the fetch: every attempt), the map's tiles apart (OpenStreetMap's, the
 // cockpit's tactical map: no zone holds them — their usage policy forbids bulk fetching —, told in swKinds).
-// Duration: ~16 min on kerr-mini (two tracks, day and night, ~3 min of flight each, the preload from the disk).
+// Duration: ~16 min on kerr-mini without J8A_TRACK_READY (two tracks, day and night, ~3 min of flight each, the preload from the disk);
+// with it ~15 min of zone per track and J8A_REST_S more (Paris by day on the M1 Max with a 600 s rest: ~40 min) — the run reckons its
+// own (app.estimate: the banner's and the monitor's estimate) and declares its steps (app.steps: the zone, the rest, the loading,
+// each leg), each with its progress (the zone's chains, then its mesh and forest cells; the rest's seconds; what the loading still
+// waits for) and its result (app.stepDone).
 // Done when: every track flown by day and by night, j8-a.json written.
 afterAll(stopServer);
 const MACHINE = process.env.J8A_MACHINE ?? (await $`hostname -s`.quiet().text()).trim();
@@ -51,6 +59,8 @@ type Leg = {
   requests: number;
   near: number;
   far: { boxes: number; quads: number } | null;
+  /** (J8A_FOREST) the last scene's forest cells: read, missing, cases covered (null: not asked) */
+  forest: { cells: number; missing: number; cases: number } | null;
   /** the near scene's own preparations in the leg: their worker's times [ms] (full, quick) and how often « a fast flight » held */
   scenes: { full: number[]; quick: number[]; fastFlight: number };
   at: unknown;
@@ -69,17 +79,42 @@ test.skipIf(!E2E)(
       const setup = async () => {
         await app.js(`(() => { Object.assign(__bh.settings, ${J0_FIXED}); Object.assign(__bh.settings, { dof: false, motionBlur: 0, damage: false });
           __bh.renderer.farBudgetMiB = ${Number(process.env.J8A_BUDGET ?? 72)};
-          __bh.renderer.nearCellsOn = ${process.env.J8A_CELLS !== "0"}; return 1; })()`);
+          __bh.renderer.nearCellsOn = ${process.env.J8A_CELLS !== "0"};
+          __bh.renderer.forestCellsOn = ${process.env.J8A_FOREST === "1"}; return 1; })()`);
         await app.waitFor(`__bh.fleet.active === "f35"`, 60_000);
       };
       await setup();
+      // (the run's whole time as reckoned from what it runs — the banner and the monitor's estimate, Sam's rule of 16 Nov 2026: per track
+      // its zone (~15 min on the M1 Max for Paris, ~10 for Toulon-Hyères on kerr-mini), its rest, and per hour ~1 min of loading and a
+      // leg at most 2 min each)
+      const REST_S = Number(process.env.J8A_REST_S ?? 0);
+      const estimateS = TRACKS.reduce(
+        (s, t) => s + (TRACK_READY ? 900 + REST_S : 0) + HOURS.length * (60 + (t.points.length - 1) * 120 + (OFFLINE ? 60 : 0)),
+        30,
+      );
+      app.estimate(estimateS);
+      // (the steps, all known from the start: « Étape k/n » right from the first — docs/E2E.md, the banner, point 6)
+      const hourOf = (h: "day" | "night") => (h === "day" ? "de jour" : "de nuit");
+      app.steps(
+        TRACKS.flatMap((t) => [
+          ...(TRACK_READY ? [`${t.name} : la zone du couloir`] : []),
+          ...(TRACK_READY && REST_S > 0 ? [`${t.name} : le repos`] : []),
+          ...(OFFLINE ? [`${t.name} : le réseau coupé`] : []),
+          ...HOURS.flatMap((h) => [
+            `${t.name} ${hourOf(h)} : le chargement`,
+            ...t.points.slice(1).map((_, i) => `${t.name} ${hourOf(h)} : tronçon ${i + 1}/${t.points.length - 1}`),
+          ]),
+        ]),
+      );
+      const runStart = Date.now();
+      const left = () => `· ~${Math.max(1, Math.round((estimateS - (Date.now() - runStart) / 1000) / 60))} min restantes (estimé)`;
       for (const t of TRACKS) {
         // (J8A_TRACK_READY: the track's corridor zone — j8-zone-paris's: the airfield's levels along it, « overflight » in its disc, the far
         // cells to 20 km — made here, in this profile (a zone lives in the Service Worker's storage: another run's is not this one's), its
         // chains read from the e2e's disk (the corridor's on kerr-mini's since 17 Nov 2026) — kept if a ready one covers the track already;
         // its progress said every minute, 10 min without a move or 60 min: fails)
         if (TRACK_READY) {
-          await app.scenario(`${t.label} — la zone du couloir`);
+          await app.step(`${t.name} : la zone du couloir`);
           await app.waitFor("!!__bh.pwa.zones", 30_000);
           // (its sharp turns' discs from the track's speed — a whole turn at 25° of bank and 500 m: Paris's U-turn at Bercy went out 3.3 km,
           // past the 2 500 m default, 17 Nov 2026)
@@ -93,6 +128,8 @@ test.skipIf(!E2E)(
           const id = await app.js<string | null>(`__bh.pwa.zones.add(${JSON.stringify(zone)})`);
           if (!id) throw new Error(`${t.name}: the corridor zone refused`);
           const z0 = Date.now();
+          const meshCells = cellsAlong(corridor.points, MESH_NEAR_M).length,
+            forestCells = cellsAlong(corridor.points, FOREST_NEAR_M).length;
           let last = -1,
             moved = Date.now();
           for (let k = 0; ; k++) {
@@ -102,6 +139,11 @@ test.skipIf(!E2E)(
             if (z && z.state !== "downloading") {
               console.log(
                 `  ${t.name}: the corridor zone ${z.state} in ${((Date.now() - z0) / 60_000).toFixed(1)} min — ${JSON.stringify(z)}`,
+              );
+              const zf = z as { forests?: { count: number; ms: number }; meshes?: { count: number } };
+              await app.stepDone(
+                `zone ${z.state} en ${((Date.now() - z0) / 60_000).toFixed(1)} min · maillages ${zf.meshes?.count ?? "-"} · forêt ${zf.forests?.count ?? "-"}`,
+                z.state === "ready",
               );
               if (z.state !== "ready") throw new Error(`${t.name}: the corridor zone ${z.state}: ${JSON.stringify(z)}`);
               break;
@@ -116,18 +158,38 @@ test.skipIf(!E2E)(
               );
             if (k % 30 === 0)
               console.log(`  … ${t.name}: the corridor zone ${z?.cursor}/${z?.total} chains, ${((z?.bytes ?? 0) / 1e6).toFixed(0)} MB`);
+            // (the banner every 10 s: the chains, then — all in, the zone still making — its cells: the meshes, the forest, counted in
+            // their caches against the track's (cellsAlong: ~ the zone's own choice))
+            if (k % 5 === 0) {
+              const min = ((Date.now() - z0) / 60_000).toFixed(1);
+              if (z && z.cursor < z.total)
+                await app.progress(
+                  `chaînes ${z.cursor.toLocaleString("fr-FR")} / ${z.total.toLocaleString("fr-FR")}, ${((z.bytes ?? 0) / 1e6).toFixed(0)} Mo (${min} min) ${left()}`,
+                );
+              else {
+                const c = await app.js<{ mesh: number; forest: number }>(`(async () => { const n = async (p) => { let k = 0;
+                  for (const name of await caches.keys()) if (name.startsWith(p)) k += (await (await caches.open(name)).keys()).length; return k; };
+                  return { mesh: await n("kerr-mesh-"), forest: await n("kerr-forest-") }; })()`);
+                await app.progress(
+                  `cellules : maillages ${c.mesh} / ~${meshCells}, forêt ${c.forest} / ~${forestCells} (${min} min) ${left()}`,
+                );
+              }
+            }
             await app.js(`new Promise((q) => setTimeout(q, 2000))`);
           }
           // (J8A_REST_S: a rest after the zone, the world frozen — its download heats the M1 Max to « Heavy »; the flight measured cold,
           // Sam's demand of 17 Nov 2026 — said every minute)
-          for (let r = 0; r < Number(process.env.J8A_REST_S ?? 0); r += 60) {
-            console.log(`  … ${t.name}: resting after the zone, ${r} / ${process.env.J8A_REST_S} s`);
-            await app.js(`(() => { __bh.freeze(true); return new Promise((q) => setTimeout(q, 60000)); })()`);
+          if (REST_S > 0) await app.step(`${t.name} : le repos`);
+          for (let r = 0; r < REST_S; r += 10) {
+            if (r % 60 === 0) console.log(`  … ${t.name}: resting after the zone, ${r} / ${REST_S} s`);
+            await app.progress(`repos ${r} / ${REST_S} s, le monde figé ${left()}`);
+            await app.js(`(() => { __bh.freeze(true); return new Promise((q) => setTimeout(q, 10000)); })()`);
           }
+          if (REST_S > 0) await app.stepDone(`repos ${REST_S} s`);
           // (J8A_OFFLINE: the network cut, the page loaded again in the same profile — its zone and Service Worker kept —, its settings
           // set again)
           if (OFFLINE) {
-            await app.scenario(`${t.label} — le réseau coupé`);
+            await app.step(`${t.name} : le réseau coupé`);
             await app.offline(true);
             await app.load("scene=game:artemis");
             await setup();
@@ -140,7 +202,7 @@ test.skipIf(!E2E)(
           const hdg0 = Math.atan2(Math.sin((p1[1] - p0[1]) * D) * Math.cos(p1[0] * D), (p1[0] - p0[0]) * D) / D;
           // (rule 13: frozen while the data load — the craft in the air over the first point, its heading to the second —, the date the
           // hour's; flyAt over the ground: the track's height over the sea less ~50 m of ground, the autopilot holds the sea's height)
-          await app.scenario(`${t.label} — ${hour === "day" ? "de jour" : "de nuit"} : le chargement`);
+          await app.step(`${t.name} ${hourOf(hour)} : le chargement`);
           await app.js(`(() => { __bh.freeze(true); __bh.game.setDate("${hour === "day" ? t.dates.day : t.dates.night}");
             __bh.game.set("weather", "fair"); __bh.game.flyAt(${p0[0]}, ${p0[1]}, ${Math.max(p0[2] - 50, 150)}, ${hdg0.toFixed(1)}, ${t.speedMps});
             __bh.settings.shipMount = "cockpit"; __bh.refresh(); __bh.camera.viewReset(); return 1; })()`);
@@ -173,11 +235,13 @@ test.skipIf(!E2E)(
               changed = Date.now();
             }
             if ((Date.now() - t0) % 10_000 < 5_000) console.log(`  … ${name}: not ready — ${r.why}`);
+            await app.progress(`${Math.round((Date.now() - t0) / 1000)} s — encore : ${r.why.slice(0, 120)} ${left()}`);
             if (Date.now() - changed > 120_000 || Date.now() - t0 > 600_000)
               throw new Error(`${name}: not loaded after ${Math.round((Date.now() - t0) / 1000)} s — ${r.why}`);
             await app.js(`new Promise((q) => setTimeout(q, 5000))`);
           }
           const preloadS = (Date.now() - t0) / 1000;
+          await app.stepDone(`chargé en ${preloadS.toFixed(0)} s`);
           // (the real network in flight: the e2e disk cache's misses — what it had not and fetched — before and after; the requests the
           // page made, served by the disk or the Service Worker too, apart)
           const missesBefore = app.earth?.counts.misses ?? 0;
@@ -195,7 +259,6 @@ test.skipIf(!E2E)(
           await app.js(`(() => { performance.clearResourceTimings(); performance.setResourceTimingBufferSize(100000);
             __bh.camera.apSet({ ap: true, athr: true, alt: ${p0[2]}, hdg: ${hdg0.toFixed(2)} * Math.PI / 180, spd: ${t.speedMps} });
             __bh.freeze(false); return 1; })()`);
-          await app.scenario(`${t.label} — ${hour === "day" ? "de jour" : "de nuit"} : le vol`);
           // (a leg: along the segment to point i — its heading set every second towards a point 1.5 km ahead on the segment (no wandering
           // off the corridor's 1 km), the next leg taken a turn's lead before point i (the turn's radius at the speed and a 25° bank:
           // a 90° corner at 150 m/s is ~5 km round — aimed at the point itself and done within 700 m, the craft circled off the corridor
@@ -241,16 +304,21 @@ test.skipIf(!E2E)(
               const req = performance.getEntriesByType("resource").filter((e) => /${HOSTS}/.test(e.name)).length;
               const sc = R.earthScenery.stats(), far = await R.farBuildings(), g = c.geoNow();
               return { name: "leg-" + ${i}, frames, gapMax: +gapMax.toFixed(1), gpu, quick, requests: req, scenes: { full: scFull, quick: scQuick, fastFlight: fast },
-                near: sc.bdtopoBuildings + sc.overtureBuildings, far: far?.inView ?? null,
+                near: sc.bdtopoBuildings + sc.overtureBuildings, far: far?.inView ?? null, forest: sc.forestPrepared,
                 at: g && { lat: +g.lat.toFixed(4), lon: +g.lon.toFixed(4), alt: Math.round(g.alt), gs: Math.round(g.gs ?? 0),
                   paused: document.body.classList.contains("paused"), ap: c.jetModes.alt !== null, athr: c.jetModes.spd !== null } }; })()`);
           const legs: Leg[] = [];
           for (let i = 1; i < t.points.length; i++) {
+            await app.step(`${t.name} ${hourOf(hour)} : tronçon ${i}/${t.points.length - 1}`);
             const l = await leg(i);
             legs.push(l);
             const g = [...l.gpu].sort((a, b) => a - b);
+            await app.stepDone(
+              `tronçon ${i} : GPU p50 ${g[g.length >> 1] ?? "-"} ms · rapides ${l.quick} · écart max ${l.gapMax} ms`,
+              l.quick === 0 || !process.env.J8A_STRICT,
+            );
             console.log(
-              `  ${name} ${l.name}: ${l.frames} images, gap max ${l.gapMax} ms, GPU p50 ${g[g.length >> 1] ?? "-"} ms, quick ${l.quick} (scenes ${JSON.stringify(l.scenes)}), requests ${l.requests}, near ${l.near}, far ${JSON.stringify(l.far)} — ${JSON.stringify(l.at)}`,
+              `  ${name} ${l.name}: ${l.frames} images, gap max ${l.gapMax} ms, GPU p50 ${g[g.length >> 1] ?? "-"} ms, quick ${l.quick} (scenes ${JSON.stringify(l.scenes)}), requests ${l.requests}, near ${l.near}, far ${JSON.stringify(l.far)}, forest cells ${JSON.stringify(l.forest)} — ${JSON.stringify(l.at)}`,
             );
             if ((l.at as { paused?: boolean } | null)?.paused) throw new Error(`${name}: paused in flight — ${JSON.stringify(l.at)}`);
             // (rule 13: the craft as flown after each leg)

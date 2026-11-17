@@ -788,6 +788,34 @@ export class App {
     return recorder.scenario(label);
   }
 
+  /** The test's steps in order (docs/E2E.md, the banner, point 6 — Sam, 17 Nov 2026): declared once, the whole list known, so the
+   *  banner's « Étape k/n » is right from the first. */
+  steps(list: string[]) {
+    recorder.steps(list);
+  }
+
+  /** A declared step begins: « Étape k/n · name » on the banner, in the live record and its events, the console, the report. */
+  async step(name: string): Promise<string> {
+    return recorder.step(name);
+  }
+
+  /** A step ended, with its result (« zone 15,1 min », « cellules 869 en 303 s »; `ok` false: shown as failed). */
+  async stepDone(text: string, ok = true): Promise<void> {
+    await recorder.stepDone(text, ok);
+  }
+
+  /** A step's progress whenever it waits or loops, at least every 10 s — a count against its total (« zone 49 920 / 60 738 · 1 811
+   *  Mo », « repos 420 / 600 s ») — and the live values the test judges (GPU p50 so far, quick images): the banner, the live record. */
+  async progress(text: string, values?: string): Promise<void> {
+    await recorder.progress(text, values);
+  }
+
+  /** The file's whole time as the test reckons it [s] (its tracks, its rests): the banner's and the monitor's estimate, for a file
+   *  whose time hangs on its settings (the header's « Duration: » and the measured median otherwise). */
+  estimate(seconds: number) {
+    recorder.estimate(seconds);
+  }
+
   /** A screenshot — once the scene's ray tracer is compiled (settled): never the stale image the pill covers. The run's reference
    *  (the file, the test, the scenario) said beside its path — the words of the banner, which the capture leaves out
    *  (E2E_BANNER_SHOTS=1 keeps it in). */
