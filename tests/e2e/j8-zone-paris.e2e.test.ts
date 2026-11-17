@@ -23,6 +23,12 @@ const TRACK = process.env.J8_TRACK ?? "paris";
 const OUT = "remote-results/j8-zone-paris";
 /** a hard stop (J8Z_DEADLINE: an ISO time — the night bench's slot): none by default */
 const DEADLINE = process.env.J8Z_DEADLINE ? Date.parse(process.env.J8Z_DEADLINE) : 0;
+/** J8Z_BEFORE (a track's name): its zone downloaded and prepared first in the same page — the big e2e's order (17 Nov 2026: Toulon's
+ *  zone, after Paris's in one page, left the page unanswering 300 s while its cells were prepared; alone it passes) —, the page's heap
+ *  said every 30 s through both */
+const BEFORE = process.env.J8Z_BEFORE ?? "";
+/** the page's JavaScript heap [MB] (Chrome's performance.memory; null elsewhere) */
+const HEAP = `(() => { const m = performance.memory; return m ? Math.round(m.usedJSHeapSize / 1e6) : null; })()`;
 
 describe.skipIf(!E2E)(`PLAN-J8 J8-9: J8-A's corridor zone « ${TRACK} », downloaded then flown offline`, () => {
   let app: App;
@@ -51,6 +57,7 @@ describe.skipIf(!E2E)(`PLAN-J8 J8-9: J8-A's corridor zone « ${TRACK} », downlo
       // result —: the zone, its cells, the report, the reload offline, each point of the track, the network's count)
       const POINTS = track.points.map((_, k) => `point ${k + 1}/${track.points.length} hors ligne`);
       app.steps([
+        ...(BEFORE ? [`zone ${BEFORE} d'abord`] : []),
         "téléchargement de la zone",
         "cellules de la zone",
         "relevé des caches",
@@ -58,6 +65,38 @@ describe.skipIf(!E2E)(`PLAN-J8 J8-9: J8-A's corridor zone « ${TRACK} », downlo
         ...POINTS,
         "réseau hors ligne",
       ]);
+      if (BEFORE) {
+        // (the other zone first, in this page, to its end: its heap said every 30 s)
+        await app.step(`zone ${BEFORE} d'abord`);
+        const bt = j8aTrack(BEFORE);
+        const bc = { points: bt.points.map((p) => [p[0], p[1]] as [number, number]), halfWidthM: bt.halfWidthM };
+        const bd = corridorDisc(bc);
+        const bz = {
+          name: `J8-A ${BEFORE} (e2e, before)`,
+          lat: bd.lat,
+          lon: bd.lon,
+          radiusKm: bd.radius / 1000,
+          profile: "overflight",
+          corridor: bc,
+        };
+        const bid = (await app.js<string | null>(`__bh.pwa.zones.add(${JSON.stringify(bz)})`))!;
+        const b0 = Date.now();
+        for (let k = 0; ; k++) {
+          const z = await app.js<{ state: string; cursor: number; total: number } | null>(
+            `(async () => (await __bh.pwa.zones.list()).find((z) => z.id === ${JSON.stringify(bid)}) ?? null)()`,
+          );
+          if (z && z.state !== "downloading") break;
+          if (Date.now() - b0 > 3_600_000) throw new Error(`the zone ${BEFORE} not in after 1 h: ${JSON.stringify(z)}`);
+          const heap = await app.js<number | null>(HEAP);
+          await app.progress(`zone ${BEFORE} : chaînes ${z?.cursor ?? 0} / ${z?.total ?? "?"}`, `tas ${heap ?? "?"} Mo`);
+          if (k % 15 === 0)
+            console.log(`  [${((Date.now() - b0) / 60_000).toFixed(1)} min] ${BEFORE}: ${z?.cursor}/${z?.total} · heap ${heap} MB`);
+          await Bun.sleep(2000);
+        }
+        await app.stepDone(
+          `zone ${BEFORE} prête en ${((Date.now() - b0) / 60_000).toFixed(1)} min · tas ${await app.js<number | null>(HEAP)} Mo`,
+        );
+      }
       await app.scenario(`${TRACK} · the corridor zone downloaded`);
       await app.step("téléchargement de la zone");
       const est = await app.js<{ chains: number; bytes: number; seconds: number }>(`__bh.pwa.zones.estimate(${JSON.stringify(zone)})`);
@@ -139,6 +178,7 @@ describe.skipIf(!E2E)(`PLAN-J8 J8-9: J8-A's corridor zone « ${TRACK} », downlo
             );
           }
         }
+        if (BEFORE && k % 15 === 0) console.log(`  … heap ${await app.js<number | null>(HEAP)} MB`);
         if (k % 30 === 0)
           console.log(
             `  [${((Date.now() - t0) / 60_000).toFixed(1)} min] ${z?.cursor}/${z?.total} chains, ${((z?.bytes ?? 0) / 1e6).toFixed(0)} MB`,
