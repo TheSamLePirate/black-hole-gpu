@@ -654,6 +654,16 @@ fn meshVertexAt(vi: u32, tc: f32) -> vec3f {
   }
   return p;
 }
+// (PLAN-J8 VB5b: a car's way ahead on the ground — its piece of road's direction (meshVertexAt's entry) — for its lamps' beams)
+fn carAhead(vi: u32) -> vec2f {
+  let t = u32(scenery[3].z) * 4u + vi;
+  let tg = bitcast<u32>(scenery[(t - vi + u32(scenery[2].w) * 3u + vi / 3u) / 4u][(t - vi + u32(scenery[2].w) * 3u + vi / 3u) % 4u]);
+  let b0 = u32(scenery[3].z) + u32(scenery[2].w);
+  let hd = scenery[b0];
+  let r = b0 + 1u + 3u * u32(hd.x) + 2u * u32(hd.y) + 2u * (tg & 0x7fffu);
+  let D = scenery[r + 1u].xy - scenery[r].xy;
+  return normalize(D + vec2f(1e-6, 0.0));
+}
 @vertex fn meshShadowVs(@builtin(vertex_index) vi: u32) -> @builtin(position) vec4f {
   return sunClip(meshVertex(vi));
 }
@@ -699,11 +709,16 @@ fn meshLeaf(tri: u32) -> f32 {
   // (VB3: its glass 4.95 — shadeLite's dark mirror —, its body 4 + its paint)
   if (fam == 0xfff90000u) { o.leaf = select(4.0 + f32((tg & 0x7fffu) % 8u) / 8.0, 4.95, (tg & 0x8000u) != 0u); }
   if (fam == 0xfff80000u || fam == 0xfff70000u) {
-    o.leaf = select(6.0, 5.0, fam == 0xfff80000u);
+    // (PLAN-J8 VB5b: each lamp seen along its beam — a headlight from ahead, its core on the axis; a tail light from behind, wider —,
+    // none from the other side: its share of light in the tag's fraction (shadeLite: 1 − fraction / 0.45), the quad closed at 0)
+    let head = fam == 0xfff80000u;
+    let f = dot(carAhead(vi), normalize(sc.cam.xy - wp.xy)) * select(-1.0, 1.0, head);
+    let vis = select(smoothstep(-0.1, 0.3, f), 0.35 * smoothstep(-0.1, 0.25, f) + 0.65 * pow(max(f, 0.0), 4.0), head);
+    o.leaf = select(6.0, 5.0, head) + (1.0 - clamp(vis, 0.0, 1.0)) * 0.44;
     let t = u32(scenery[3].z) * 4u + vi;
     let id = bitcast<u32>(scenery[t / 4u][t % 4u]) & 3u;
     let px = 2.0 * u.up.w * max(v.z, 1.0) / u.image.y;
-    let half = max(0.12, 0.75 * px);
+    let half = select(0.0, max(0.12, 0.75 * px), vis > 0.01);
     let corner = vec2f(select(-1.0, 1.0, id == 1u || id == 2u), select(-1.0, 1.0, id >= 2u));
     v = v + vec3f(corner * half, 0.0);
   }
