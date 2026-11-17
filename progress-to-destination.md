@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 17 nov. 04:05 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 17 nov. 04:30 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous. Ce qui est fermé quitte le tableau « En cours » pour la ligne « Fermé récemment ».
@@ -10017,3 +10017,13 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   Toulon-Hyères, sans virage serré, inchangé. À 3 500 m, le coût aurait été de +20 %.
 - **Preuves :** test unitaire (`zones-corridor` : le virage détecté, un point à 2 km dedans, le disque de la zone agrandi). Le vol
   strict de Paris sera relancé par la session du rendu.
+
+### 2026-11-17 04:30 UTC — PLAN-J8 J8-A : le disque des virages serrés porté à la règle du rendu, 3,65 km (session des approches, 1feb2f7f)
+
+- **Mesuré** (`j8a-paris-strict-3`, session du rendu, kerr-mini, avec le disque de 2 500 m et `cellsAlong`) : **1 seule requête réseau en
+  vol, contre 174**, 0 image de scène rapide, GPU p50 61,9 ms. La tuile restante est une orthophoto z18 à 3,3 km du tracé, à 838 m
+  au-delà du disque et de la marge de fenêtre : le virage de Bercy est sorti plus loin que la première fois. Les 190 cellules de
+  maillage de la zone sont prêtes ; « near mesh cells: 8 missing » était le journal d'attente du `j8-a` (cellules pas encore sur le GPU).
+- **Réalisé :** `CORRIDOR_TURN_M` = `turnRadiusFor(120)` = 3 649 m, la règle d'abord proposée par la session du rendu (v²/(g tan 25°) +
+  500 m). Elle couvre cette tuile. Paris passe à 58 052 chaînes (+22 % sur la zone sans disque), 3 351 Mo, 176 min estimées pour le joueur.
+- **Suite :** un nouveau vol strict à Paris, relancé par la session du rendu.
