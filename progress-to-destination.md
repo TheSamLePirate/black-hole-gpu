@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 17 nov. 10:21 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 17 nov. 10:22 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous. Ce qui est fermé quitte le tableau « En cours » pour la ligne « Fermé récemment ».
@@ -10391,3 +10391,10 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
 - **Réalisé :** le rendu a branché `carsAlong` dans le worker de la scène (ee3afed0). L'ancien placement morceau par morceau, où
   chaque voiture avait sa propre vitesse (`carsOn` et son test), est retiré de `traffic.ts` : plus aucun appel.
 - **Vérifié :** tests `traffic` (2/2), tsc, Biome. Non mesuré.
+
+### 2026-11-17 10:22 UTC — PLAN-J8 J8-VB VB8 : la grille de revue préparée (session des approches, 1feb2f7f)
+
+- **Réalisé :** une grille au plan VB (§8.1) relie le critère de sortie de chaque lot, VB1 à VB8, à ce que le gros e2e en montre
+  (captures basses de jour et de nuit, vidéo, coûts, comptes). Le verdict de chaque ligne sera rempli avec ses résultats, lancé par le
+  rendu sur kerr-mini (828f775a).
+- **Non vérifié :** documentation seulement.

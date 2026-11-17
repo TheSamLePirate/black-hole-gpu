@@ -332,6 +332,24 @@ l'inventaire.
 | Code, dépendances, runtime, réglages et caches | Aucun changement par cette session |
 | Exécutions du projet | Aucune |
 
+### 8.1 VB8 — la grille de revue (préparée le 17 nov. 10:22 UTC par la session des approches, à remplir avec le gros e2e)
+
+J8 se finit en mode speed (PLAN-J8 §6 point 13) : aucun lot VB n'a été mesuré en jeu un par un. Le gros e2e (`j8-a` avec
+`J8A_TRACK_READY`, `J8A_STRICT`, `J8A_OFFLINE`, `J8A_FOREST`, `J8A_LOW`, sur kerr-mini puis sur le M1 Max à froid) les juge
+ensemble. Chaque ligne relie le critère de sortie du §5 à ce que le gros e2e en montre ; le verdict se remplit avec ses résultats.
+
+| Lot | Critère de sortie (§5) | Ce qui le juge au gros e2e | Verdict |
+|---|---|---|---|
+| VB1 | pas de recul de couverture ; hors ligne | zones prêtes aux points, 0 requête (`j8-zone-paris` 17 nov. : Paris 6/6, Toulon 7/7) | données ✓ ; en vol : à remplir |
+| VB2 | routes lisibles ; ni double route, ni scintillement, ni fuite sur bâtiment ou eau | captures et vidéo des tracés bas (150 m, 50 m), jour | à remplir |
+| VB3 | formes reconnaissables de près ; pas de géométrie par véhicule | captures basses ; triangles et instances relevés | à remplir |
+| VB4 | rue habitée sans empilement ; densité affichée | captures basses (centre de Toulon, Marais) ; nombre de places des cellules | à remplir |
+| VB5a | bras raccordé au mât, silhouettes stables de jour | captures basses, jour | à remplir |
+| VB5b | énergie sous le pixel maîtrisée ; pas de halo qui couvre les rues | captures et vidéo de nuit ; coût de nuit dense | à remplir |
+| VB6 | plus de rues animées sans hausse cachée ; pas de saut visible au raccord | vidéo des tracés bas ; nombre de voitures (`TRAFFIC_MAX` 1 500, rues mineures exclues) | à remplir ; le saut résiduel aux coins décide de l'option (B) |
+| VB7 | mobilier bien placé et visible depuis l'avion ; préparation raisonnable | captures basses ; préparation des cellules de rue (Paris 4 332 cellules en 36 s) | données ✓ ; dessin : à remplir |
+| VB8 | un chemin de production par responsabilité ; coûts par famille | retraits faits : caches de rue v1/v2, `carsOn`, `carMesh` ; coûts GPU p50/p95 des deux machines | à remplir |
+
 **Prochaine étape proposée :** à la reprise d'un travail d'implémentation, rapprocher VB0/VB1 de l'état réellement
 livré de J8-L, puis construire une première comparaison des routes proches (VB2) et des silhouettes de voitures
 (VB3). La commande d'écriture de ce document ne déclenche ni ces travaux ni leur campagne de mesures.
