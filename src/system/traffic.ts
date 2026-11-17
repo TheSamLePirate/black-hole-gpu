@@ -5,8 +5,9 @@
 // (x ahead, y to its left, z up): scenery-raster.ts meshVertex moves each along its piece of road by the game's clock — its
 // table entry: the piece's start (w its speed), end (w its phase) —, meshVs turns its lights to the camera and widens them to a
 // pixel and a half, shadeLite paints the body and lights the lamps at night (white ahead, red behind).
-// First step: each car runs along its own piece of road (≤ PIECE_M) and starts it again at its end; the traffic's density a
-// plausible one by the road's class, not counted.
+// Each car runs along its own piece of road (≤ PIECE_M) and starts it again at its end — the pieces of a road set as one stream since
+// PLAN-J8 VB6 (carsAlong: one speed, phases from the abscissa); the traffic's density a plausible one by the road's class, not counted.
+// (carsOn, the piece-by-piece placing — each car its own speed — retired with VB6 wired, ee3afed0: rule 2.)
 
 /** the cars kept round the centre [m] and at most (the nearest pieces first), a piece of road's longest [m] */
 export const TRAFFIC_REACH_M = 3000;
@@ -30,26 +31,6 @@ export interface CarPlace {
   end: [number, number, number];
   speed: number;
   phase: number;
-}
-
-/** the cars on a piece of road (start → end), one way: a car every `spacing` metres or so, their phases from a seed */
-export function carsOn(start: [number, number, number], end: [number, number, number], cls: string, seed: number): CarPlace[] {
-  const t = ROAD_TRAFFIC[cls];
-  if (!t) return [];
-  const L = Math.hypot(end[0] - start[0], end[1] - start[1]);
-  let n = Math.floor(L / t.spacing);
-  // (a piece shorter than the spacing: a car on it now and then — by its seed)
-  const h = (k: number) => {
-    const s = Math.sin(seed * 12.9898 + k * 78.233) * 43758.5453;
-    return s - Math.floor(s);
-  };
-  if (n === 0 && h(0) < L / t.spacing) n = 1;
-  return Array.from({ length: n }, (_, i) => ({
-    start,
-    end,
-    speed: t.speed * (0.85 + 0.3 * h(i + 1)),
-    phase: (i + h(i + 7)) / Math.max(n, 1),
-  }));
 }
 
 /** a road's line simplified to chords within this [m] before it is cut (a curve's short segments: one piece, not twenty) */
