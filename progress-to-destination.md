@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 17 nov. 10:32 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 17 nov. 10:39 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous. Ce qui est fermé quitte le tableau « En cours » pour la ligne « Fermé récemment ».
@@ -10464,3 +10464,14 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
 - **Réalisé :** en France, le worker lit les ponts des cellules « rue » trouvées (`readBridges`, dédoublonnés par identité) et retire les ponts OMT de ces cellules : une seule source par pays. Les deux sources passent par une seule fonction de tablier, `deckBridge` (le RP5, sorti de la boucle OMT). Le tablier part du sol de ses culées, sur un axe densifié tous les 20 m, et monte à son tirant (celui de la cellule, sinon 5,5 m). Les piles sont placées par `bridgePiers` des approches pour les deux sources, seulement où le tablier dépasse 3,5 m. Les cellules sont lues avant la boucle des ponts. Stat `cellBridges`.
 - **Preuves :** `tsc`, Biome, tests. **Non vu en jeu.**
 - **Limites :** un bout ouvert (`OpenA`/`OpenB`) est encore traité comme une culée. RP-R : le chemin OMT des routes et ponts de France à retirer quand le cache est garanti.
+
+### 2026-11-17 10:39 UTC — PLAN-J8 J8-RP RP9 (mode speed) : les voies ferrées dans les cellules « rue », format 5 (session des approches, 1feb2f7f)
+
+- **Réalisé :** `kerr-street-v5`.
+  - Les voies ferrées deviennent des tronçons de classe « rail » : `troncon_de_voie_ferree` de la BD TOPO en France (voies, niveau,
+    électrifiée), les lignes `rail` et `transit` d'OMT ailleurs.
+  - L'électrification passe dans la surface.
+  - Aucun mobilier de route, aucune place, aucune jonction ni suite vers une route ; les ponts ferroviaires sont `BridgeKind.Rail`.
+  - `roadRuns` donne aussi l'abscisse de chaque point (07277435), pour des pointillés continus.
+- **Vérifié :** tests unitaires sur le disque e2e : Toulon 50 tronçons de voie (43 électrifiés), Marais 82, Seine 19 ; le mobilier des
+  routes est inchangé. tsc (hors fichiers du rendu en cours), Biome, gardes. **Non mesuré** en jeu.

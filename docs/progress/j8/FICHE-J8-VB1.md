@@ -115,3 +115,16 @@ Proposé à la session du rendu à ~10:35 UTC et codé sans attendre sa réponse
 
 - **Non mesuré** : rien n'est dessiné ni vu en jeu. La taille des cellules au format 4 en zone n'a pas été relevée, ni ce qu'un pont
   coupé par deux tuiles donne au dessin.
+
+## KSC5 — les voies ferrées (J8-RP RP9, mode speed, 17 nov. ~10:39 UTC)
+
+Le cache passe à `kerr-street-v5`.
+- **Les sources** : en France, `troncon_de_voie_ferree` de la BD TOPO (nature, nombre de voies, niveau, électrifiée) ; ailleurs, les
+  lignes `rail` et `transit` d'OpenMapTiles (une voie, électrification inconnue). Chaque voie devient un tronçon de classe « rail ».
+- **La largeur** : 4,5 m entre voies, plus 3 m de ballast. L'électrification passe dans la surface (`SurfaceFlag.Electrified`).
+- **Ce qui ne s'applique pas aux voies** : ni jonction, ni place, ni lampadaire, ni mobilier de route (aucune ligne d'arrêt ni passage
+  sur une voie), et aucune suite d'une voie vers une route.
+- **Ponts et tunnels** : un pont ferroviaire est `BridgeKind.Rail` ; ses bouches de tunnel sont celles d'une route.
+
+**Mesuré** (tests unitaires, une tuile z 14) : centre de Toulon 50 tronçons de voie, dont 43 électrifiés ; le Marais 82, tous
+électrifiés ; la Seine au pont Alexandre III 19, tous électrifiés. Le mobilier des routes est inchangé. Non vu en jeu.

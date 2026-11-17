@@ -53,6 +53,8 @@ const NO_SURFACE = new Set<RoadClass>(["track", "path", "steps", ""]);
 /** A segment's carriageway (VB2): its markings, its kerb and pavements (street-cells.ts's rules). */
 export function segmentSurface(s: RoadSegmentRecord): SegmentSurface {
   const out: SegmentSurface = { flags: 0, laneLines: 0, pavement: 0 };
+  // (a railway's track: no road's markings; under a catenary or not — J8-RP RP9)
+  if (s.cls === "rail") return { ...out, flags: s.electric ? SurfaceFlag.Electrified : 0 };
   if (NO_SURFACE.has(s.cls) || s.flags & SegmentFlag.Ford) return out;
   const urban = !!(s.flags & SegmentFlag.Urban),
     oneway = !!(s.flags & (SegmentFlag.OnewayAlong | SegmentFlag.OnewayAgainst)),
@@ -118,8 +120,8 @@ export function segmentNexts(
           const m = e ? t.b : t.a,
             o = e ? t.a : t.b;
           if (Math.hypot(m[0] - p[0], m[1] - p[1]) > JUNCTION_M) continue;
-          // (entered at its end e: driven away from it — allowed by its way —, on the same level)
-          if (!may(t, e) || t.level !== s.level) continue;
+          // (entered at its end e: driven away from it — allowed by its way —, on the same level; a track to a track, a road to a road)
+          if (!may(t, e) || t.level !== s.level || (t.cls === "rail") !== (s.cls === "rail")) continue;
           const tl = Math.hypot(o[0] - m[0], o[1] - m[1]) || 1;
           const straight = ((o[0] - m[0]) * dx + (o[1] - m[1]) * dy) / tl;
           // (its own road first — a piece's next segment —, then the straightest; never straight back)
@@ -168,7 +170,8 @@ export function streetFurniture(
         for (const [i, end] of ends.get((gi + a + 32768) * 65536 + (gj + b + 32768)) ?? []) {
           const s = segs[i]!;
           const p = end ? s.b : s.a;
-          if (Math.hypot(p[0] - J.east, p[1] - J.north) <= 1.5 * JUNCTION_M) arms.push({ s, end });
+          // (a railway's track no arm: no stop line nor crossing on it)
+          if (s.cls !== "rail" && Math.hypot(p[0] - J.east, p[1] - J.north) <= 1.5 * JUNCTION_M) arms.push({ s, end });
         }
     if (arms.length < 3) return;
     if (!arms.some((x) => x.s.flags & SegmentFlag.Urban)) return;
@@ -243,7 +246,13 @@ export function streetFurniture(
           for (const [i, e] of ends.get((gi + a + 32768) * 65536 + (gj + b + 32768)) ?? []) {
             const t = segs[i]!;
             const m = e ? t.b : t.a;
-            if (t !== s && !(t.flags & SegmentFlag.Tunnel) && t.level >= 0 && Math.hypot(m[0] - p[0], m[1] - p[1]) <= JUNCTION_M)
+            if (
+              t !== s &&
+              !(t.flags & SegmentFlag.Tunnel) &&
+              t.level >= 0 &&
+              (t.cls === "rail") === (s.cls === "rail") &&
+              Math.hypot(m[0] - p[0], m[1] - p[1]) <= JUNCTION_M
+            )
               open = true;
           }
       if (open)
@@ -368,6 +377,7 @@ export function chainBridges(
     const lead = chain.reduce((w, pc) => (pc.seg.width > w.seg.width ? pc : w), chain[0]!).seg;
     const side = lead.flags & SegmentFlag.Urban ? (PAVEMENT_M[lead.cls] ?? PARAPET_SIDE_M) || PARAPET_SIDE_M : PARAPET_SIDE_M;
     const foot = chain.every((pc) => pc.seg.cls === "path" || pc.seg.cls === "steps" || pc.seg.cls === "track");
+    const rail = chain.every((pc) => pc.seg.cls === "rail");
     // (what it crosses: its axis every 5 m, its ends' approaches left out — the roads that lead onto it)
     let crossed = 0;
     const keep = widest / 2 + 5;
@@ -406,7 +416,7 @@ export function chainBridges(
     out.push({
       bridge: {
         id: Math.min(...chain.map((pc) => pc.seg.roadId >>> 0)),
-        kind: foot ? BridgeKind.Foot : BridgeKind.Road,
+        kind: rail ? BridgeKind.Rail : foot ? BridgeKind.Foot : BridgeKind.Road,
         flags,
         width: widest + 2 * side,
         layer: lead.level,

@@ -2155,7 +2155,7 @@ view at the start: a ready zone whose corridor covers every point (its building 
 far layer's reach (20 km) of the track, every street cell within the lamps' (12 km), and — PLAN-J8 J8-8 — every mesh cell within
 `MESH_NEAR_M` (1 500 m) of it in the IGN's box (the zone's `meshes` prepared) and every forest cell within `FOREST_NEAR_M`
 (7 000 m; PLAN-J8 J8-8b: `zone.forests`, `kerr-forest-v1`), in their prepared caches (`kerr-cells-v1`,
-`kerr-street-v4`, `kerr-mesh-v1`); `track` in the answer: the zone's id, the far, street and mesh cells missing. `notes`: what is said but
+`kerr-street-v5`, `kerr-mesh-v1`); `track` in the answer: the zone's id, the far, street and mesh cells missing. `notes`: what is said but
 does not hold the flight — Sam's decision of 17 Nov 2026 (PLAN-J8 J8-A (c)), the far layer's reserve kept at 72 MiB: its cells refused for
 the budget, all no nearer than 12 km, counted apart (« far layer: N past the budget, nearest X km »; over Paris's track 17.9 km and more);
 a cell still pending, or a refused one nearer, holds it in `why`. The mesh cells' pool, once
@@ -2180,8 +2180,8 @@ the same rings. Set against `census`: a ring's prepared buildings not drawn are 
 
 The lamps and the roads in cells (`src/system/street-cells.ts`, `street-prep.ts`; the cell worker's `kind: "street"`): a z 15 cell's
 OpenMapTiles z 14 roads and, in France, its BD TOPO tile's `troncon_de_route`, the four building cells under it (their town), its four
-street cells prepared and kept in Cache Storage `kerr-street-v4` — format 4 (J8-VB and J8-RP, 17 Nov 2026; the older formats' caches
-deleted when the pool is first made): the lamps with their arm's heading, reach and variant (VB5a), every road's segments (width, lanes, ways, bridges
+street cells prepared and kept in Cache Storage `kerr-street-v5` — format 5 (J8-VB and J8-RP, 17 Nov 2026 — the railways' tracks as
+segments of the class « rail », electrified in their surface, RP9; the older formats' caches deleted when the pool is first made): the lamps with their arm's heading, reach and variant (VB5a), every road's segments (width, lanes, ways, bridges
 and tunnels, abscissa, the road's identity; Douglas-Peucker at 0.3 m, ≤ 250 m) with their continuations (VB6: the next segment driven at
 each end) and surfaces (VB2: edge, centre and lane lines, kerb and pavements, inferred by class, width, lanes and place), the junctions,
 the parked cars' places (VB4: along the urban streets, none near a junction or a building, kept by their seeds, at most 4 000 a cell

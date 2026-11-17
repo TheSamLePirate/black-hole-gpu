@@ -265,3 +265,38 @@ test("J8-RP RP8: a tunnel's mouths — where a segment out of it meets it, headi
   expect(Math.cos(at100.heading)).toBeCloseTo(1, 6);
   expect(at100.length).toBe(8);
 });
+
+test("J8-RP RP9: a railway's track — electrified or not, no road markings, no stop line on it, never continued by a road", () => {
+  const track = (a: [number, number], b: [number, number], o: Partial<RoadSegmentRecord> = {}) =>
+    seg(a, b, { cls: "rail", flags: 0, width: 7.5, lanes: 2, speed: 0, roadId: 9, ...o });
+  expect(segmentSurface(track([0, 0], [100, 0], { electric: true }))).toEqual({
+    flags: SurfaceFlag.Electrified,
+    laneLines: 0,
+    pavement: 0,
+  });
+  expect(segmentSurface(track([0, 0], [100, 0]))).toEqual({ flags: 0, laneLines: 0, pavement: 0 });
+  // (a level crossing: the track through a town's crossroads — the roads' furniture on their arms only)
+  const arms = [seg([0, 0], [100, 0]), seg([0, 0], [-100, 0]), seg([0, 0], [0, 100]), track([0, 0], [0, -100])];
+  const f = streetFurniture(arms, [{ east: 0, north: 0, degree: 4, width: 8, flags: 0 }], false);
+  expect(f.filter((x) => x.kind === FurnitureKind.Crossing && x.north < -1).length).toBe(0);
+  expect(f.filter((x) => x.kind === FurnitureKind.Crossing).length).toBe(3);
+  // (the track's continuation another track, never the road beside it)
+  const nx = segmentNexts(
+    [track([0, 0], [100, 0]), seg([100, 0], [200, 0]), track([100, 0], [200, 5], { roadId: 10 })],
+    [
+      { a: true, b: true },
+      { a: true, b: true },
+      { a: true, b: true },
+    ],
+    () => false,
+  );
+  expect(nx[0]!.b).toBe(2);
+  // (a railway's bridge)
+  const rb = chainBridges(
+    [{ cell: 0, index: 0, a: [0, 0], b: [60, 0], seg: track([0, 0], [60, 0], { flags: SegmentFlag.Bridge, level: 1 }) }],
+    [],
+    [],
+    () => false,
+  )[0]!.bridge;
+  expect(rb.kind).toBe(BridgeKind.Rail);
+});

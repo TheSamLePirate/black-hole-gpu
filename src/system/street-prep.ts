@@ -28,6 +28,8 @@ import {
   PLACE_MAX,
   PLACE_OTHER_ROAD_M,
   PLACE_SPACING_M,
+  RAIL_BALLAST_M,
+  RAIL_TRACK_M,
   PlaceFlag,
   PlaceKind,
   type PlaceRecord,
@@ -135,6 +137,38 @@ interface RoadMeta {
   level: number;
   speed: number;
   roadId: number;
+  /** a railway's track electrified (RP9) */
+  electric?: boolean;
+}
+
+/** J8-RP RP9 — the BD TOPO's troncon_de_voie_ferree as a track's attributes: its tracks, its level, electrified */
+function bdtopoRail(pr: Record<string, unknown>): RoadMeta {
+  const tracks = typeof pr.nombre_de_voies === "number" && pr.nombre_de_voies > 0 ? pr.nombre_de_voies : 1;
+  const level = Number(pr.position_par_rapport_au_sol ?? 0) || 0;
+  let flags = 0;
+  if (level > 0) flags |= SegmentFlag.Bridge;
+  if (level < 0) flags |= SegmentFlag.Tunnel;
+  return {
+    cls: "rail",
+    width: (tracks - 1) * RAIL_TRACK_M + RAIL_BALLAST_M,
+    lanes: tracks,
+    flags,
+    level,
+    speed: 0,
+    roadId: sourceKey(String(pr.cleabs ?? "")),
+    electric: pr.electrifie === true || pr.electrifie === "true",
+  };
+}
+
+/** J8-RP RP9 — OpenMapTiles' rail and transit lines as a track's attributes (one track, not known electrified) */
+function omtRail(pr: Record<string, unknown>, id: number | undefined): RoadMeta | null {
+  const c = String(pr.class ?? "");
+  if (c !== "rail" && c !== "transit") return null;
+  const level = pr.brunnel === "bridge" ? 1 : pr.brunnel === "tunnel" || pr.subclass === "subway" ? -1 : 0;
+  let flags = SegmentFlag.InferredWidth;
+  if (level > 0) flags |= SegmentFlag.Bridge;
+  if (level < 0) flags |= SegmentFlag.Tunnel;
+  return { cls: "rail", width: RAIL_BALLAST_M, lanes: 1, flags, level, speed: 0, roadId: sourceKey(`osm:${id ?? 0}:rail`) };
 }
 
 /** the BD TOPO's troncon_de_route as a road's attributes (null: not a road the cells keep — a ferry) */
@@ -424,8 +458,8 @@ export function prepareStreetCells(
       }
       s += L;
     }
-    // (its ends — the junctions' index —, each in its own cell)
-    for (const p of [pts[0]!, pts[pts.length - 1]!]) {
+    // (its ends — the junctions' index —, each in its own cell; a railway's none: no junction of the roads' on a track)
+    for (const p of meta.cls === "rail" ? [] : [pts[0]!, pts[pts.length - 1]!]) {
       const g = toGeo(p);
       const c = cellAt(g.lat, g.lon);
       if (!c || !accept(c)) continue;
@@ -437,11 +471,18 @@ export function prepareStreetCells(
   // (the BD TOPO's roads in France: each cell's own tile, its segments kept where their middle is that cell's)
   for (const c of cells) {
     if (!c.bd?.byteLength) continue;
-    const layer = new VectorTile(new PbfReader(c.bd)).layers.troncon_de_route;
-    for (let i = 0; layer && i < layer.length; i++) {
-      const f = layer.feature(i);
+    const layers = new VectorTile(new PbfReader(c.bd)).layers;
+    // (its roads, then its railways' tracks — J8-RP RP9)
+    const feats = [
+      ...Array.from({ length: layers.troncon_de_route?.length ?? 0 }, (_, i) => ({ f: layers.troncon_de_route!.feature(i), rail: false })),
+      ...Array.from({ length: layers.troncon_de_voie_ferree?.length ?? 0 }, (_, i) => ({
+        f: layers.troncon_de_voie_ferree!.feature(i),
+        rail: true,
+      })),
+    ];
+    for (const { f, rail } of feats) {
       if (f.type !== 2) continue;
-      const meta = bdtopoRoad(f.properties as Record<string, unknown>);
+      const meta = rail ? bdtopoRail(f.properties as Record<string, unknown>) : bdtopoRoad(f.properties as Record<string, unknown>);
       if (!meta) continue;
       const e = f.extent,
         nz = 2 ** (OSM_Z + 1);
@@ -482,7 +523,7 @@ export function prepareStreetCells(
     const pr = f.properties as Record<string, unknown>;
     const cls = String(pr.class ?? "");
     const lamp = LAMP_CLASSES[cls] && !pr.brunnel;
-    const meta = omtRoad(pr, f.id);
+    const meta = omtRoad(pr, f.id) ?? omtRail(pr, f.id);
     if (!lamp && !meta) continue;
     const e = f.extent;
     for (const line of f.loadGeometry()) {

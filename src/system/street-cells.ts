@@ -9,7 +9,7 @@
 // SEGMENT_BYTES, then `junctionCount` junctions of JUNCTION_BYTES, then `placeCount` places of PLACE_BYTES, then `segmentCount`
 // continuations of NEXT_BYTES, then `segmentCount` surfaces of SURFACE_BYTES, then `furnitureCount` pieces of furniture of
 // FURNITURE_BYTES.
-//   header  0 u32 magic "KSC4"   4 u16 format (STREET_FORMAT)   6 u16 junctionCount   8 u8 z   9 u8 flags (CellStreetFlag)   10 u16 placeCount
+//   header  0 u32 magic "KSC5"   4 u16 format (STREET_FORMAT)   6 u16 junctionCount   8 u8 z   9 u8 flags (CellStreetFlag)   10 u16 placeCount
 //          12 u32 x   16 u32 y   20 u32 lampCount   24 u32 segmentCount   28 u32 generation (the roads' source revision: YYYYMMDD)
 //          32 f64 origin latitude [°]   40 f64 origin longitude [°]   48 u32 furnitureCount   52 u32 bridgeCount   56..63 reserved (0)
 //   lamp      0 f32 east [m]   4 f32 north [m] (the pole's foot, in the cell's frame)   8 u16 head height [cm over the ground]
@@ -94,10 +94,15 @@
 //    deck between its abutments' ground as drawn (FableFlight's bridge_end), raised to its clearance; its piers bridgePiers', kept where
 //    the deck stands PIER_MIN_M over the ground. Each segment on a bridge names it (its surface's byte 3: RP6).
 //  - the tunnels' mouths (J8-RP RP8): FurnitureKind.TunnelPortal where a tunnel's segment meets one out of it on the ground.
+//  - the railways (J8-RP RP9, format 5): their tracks as segments of the class « rail » — the BD TOPO's troncon_de_voie_ferree in France
+//    (its nature, its tracks as `lanes`, its level: bridges and tunnels — the metro under the ground —, electrified: the surface's
+//    SurfaceFlag.Electrified), OpenMapTiles' rail and transit elsewhere (not known electrified); their width the tracks' (RAIL_TRACK_M
+//    apart) and their ballast; no junction, no place, no lamp, no furniture of the roads' (no stop line on a track), no continuation
+//    between a track and a road; a railway's bridge BridgeKind.Rail; its tunnels' mouths as a road's.
 import { CELL_Z } from "./building-cells";
 
-export const STREET_FORMAT = 4;
-export const STREET_MAGIC = 0x3443534b; // "KSC4"
+export const STREET_FORMAT = 5;
+export const STREET_MAGIC = 0x3543534b; // "KSC5"
 export const STREET_HEADER_BYTES = 64;
 export const LAMP_BYTES = 16;
 export const NEXT_BYTES = 4;
@@ -117,6 +122,9 @@ export const PIER_MIN_M = 3.5;
 /** a bridge's least clearance over what it crosses [m] (FableFlight's 5.5 m; a railway's catenary 6 m) */
 export const CLEARANCE_M = 5.5;
 export const RAIL_CLEARANCE_M = 6;
+/** a railway's tracks apart and its ballast's width beyond its outer rails [m] (J8-RP RP9) */
+export const RAIL_TRACK_M = 4.5;
+export const RAIL_BALLAST_M = 3;
 /** a continuation's none, its road going on in a neighbouring cell, its bit for « driven b → a » */
 export const NEXT_NONE = 0xffff;
 export const NEXT_ELSEWHERE = 0xfffe;
@@ -171,6 +179,8 @@ export const ROAD_CODES = [
   "track",
   "path",
   "steps",
+  // (J8-RP RP9, format 5: a railway's track — the BD TOPO's troncon_de_voie_ferree, OpenMapTiles' rail and transit)
+  "rail",
 ] as const;
 export type RoadClass = (typeof ROAD_CODES)[number];
 
@@ -245,6 +255,8 @@ export enum SurfaceFlag {
   CentreDashed = 2,
   CentreSolid = 4,
   Kerb = 8,
+  /** J8-RP RP9: a railway's track under a catenary (the BD TOPO's electrifie; abroad unknown: none) */
+  Electrified = 16,
 }
 /** a segment's carriageway (VB2) */
 export interface SegmentSurface {
@@ -323,6 +335,8 @@ export interface RoadSegmentRecord {
   /** a's abscissa along its road's piece [m] */
   s0: number;
   roadId: number;
+  /** a railway's track electrified (J8-RP RP9: the preparation's; in the bytes its surface's SurfaceFlag.Electrified, not the segment's) */
+  electric?: boolean;
 }
 export interface JunctionRecord {
   east: number;
