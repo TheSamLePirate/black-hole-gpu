@@ -714,18 +714,9 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
   const cut: Choice[] = [];
   let cutBuildings = 0,
     keptReachM = 0;
-  let farLeft = 0,
-    meshLeft = 0;
+  let meshLeft = 0;
   const trim = () => {
     choices.sort((a, b) => a.d - b.d);
-    // (PLAN-J8 J8-5: past nearOnlyM, the far layer's — out of the scene, their footprints kept for the trees as the cut ones')
-    if (q.nearOnlyM && q.nearOnlyM > 0) {
-      let n = choices.length;
-      while (n > 0 && choices[n - 1]!.d > q.nearOnlyM) n--;
-      for (let i = n; i < choices.length; i++) cut.push(choices[i]!);
-      farLeft += choices.length - n;
-      choices.length = n;
-    }
     if (choices.length <= limit) return;
     cutBuildings += choices.length - limit;
     for (let i = limit; i < choices.length; i++) cut.push(choices[i]!);
@@ -1704,7 +1695,6 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
     surveyedTrees,
     cutBuildings,
     keptReachM,
-    farLeft,
     meshLeft,
     clearedTrees,
     cutHousesMs,

@@ -24,7 +24,7 @@ test.skipIf(!E2E)(
   "J8-8: the near buildings from their mesh cells against the scene's own — GPU, the cells' arrival, shots",
   async () => {
     mkdirSync(OUT, { recursive: true });
-    const app = await App.boot({ width: 1920, height: 1080, hash: "scene=game:artemis", tiles: true });
+    const app = await App.boot({ width: 1920, height: 1080, hash: "scene=game:artemis&nearCells=0", tiles: true });
     try {
       await app.js(`(() => { Object.assign(__bh.settings, { ship: false, earthPipeline: "raster", earthClouds: 0, weather: "fair", dof: false, motionBlur: 0, hud: false });
       __bh.renderer.debugSkipShip = true; __bh.game.setDate("2026-07-10T13:30:00Z"); return 1; })()`);

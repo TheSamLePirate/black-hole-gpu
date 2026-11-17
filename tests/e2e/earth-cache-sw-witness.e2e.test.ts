@@ -13,6 +13,7 @@ import { App, E2E, stopServer } from "./lib/app";
 // Earth data: network (it sets its own mode and folder per boot)
 // Done when: at the first boot requests paused on the Service Worker's own target, fetched and kept; at the second, offline, the
 // Service Worker's tile requests served from the disk, no BD TOPO tile missing, the same buildings.
+// (the page's hash nearCells=0: the near scene's own buildings checked — off since J8-8 draws them from their mesh cells, Sam, 17 Nov 2026)
 // Duration: ~4 min (two boots at Toulon — the tiles once from the network, one heavy IGN load at a time).
 
 test.skipIf(!E2E)(
@@ -22,7 +23,14 @@ test.skipIf(!E2E)(
     rmSync(dir, { recursive: true, force: true });
     process.env.KERR_EARTH_DATA = dir;
     const one = async (label: string, mode: "on" | "offline") => {
-      const a = await App.boot({ width: 1280, height: 800, hash: "scene=game:artemis", sw: true, tiles: true, earthData: mode });
+      const a = await App.boot({
+        width: 1280,
+        height: 800,
+        hash: "scene=game:artemis&nearCells=0",
+        sw: true,
+        tiles: true,
+        earthData: mode,
+      });
       try {
         await a.scenario(`Toulon · ${label}`);
         expect(await a.js<boolean>("__bh.pwa.ready()")).toBe(true);

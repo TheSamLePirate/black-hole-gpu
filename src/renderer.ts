@@ -1925,6 +1925,8 @@ export class Renderer {
       if (!this.offline) this.invalidate("surfaceContent");
     };
     this.earthScenery = new EarthScenery(device);
+    // (PLAN-J8 J8-8: the near mesh cells' records' region in its buffer, while they are on — on by default)
+    if (this.nearCellsWant) this.earthScenery.setRegion(NEAR_REGION_BYTES);
     this.earthScenery.onChange = () => {
       if (this.live) this.bindTarget(this.live);
       if (this.offline) this.bindTarget(this.offline.target);
@@ -4393,7 +4395,6 @@ export class Renderer {
       // (T8m: its speed — a fast flight chains quick scenes)
       this.earthScenery.speed = groundSpeed(eye, this.streamVelocity);
       // (PLAN-J8 J8-5: the far layer drawing, the scene's buildings within 2 km of its corridor alone — the rest the layer's)
-      this.earthScenery.nearOnlyM = this.farBuildingsOn ? this.farNearOnlyM : 0;
       // (PLAN-J8 J8-8 lot 4: the BD TOPO's buildings drawn from their mesh cells — out of the scene)
       this.earthScenery.meshCells = this.farBuildingsOn && this.nearCellsWant;
       this.earthScenery.update(
@@ -11246,9 +11247,6 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
    *  On by default since Sam's decision of 16 Nov 2026 (~16:10 UTC, on the second lot's captures: quads under 8 px) */
   private buildingFar: BuildingFar | null = null;
   farBuildingsOn = true;
-  /** PLAN-J8 J8-5: the near scene's buildings within this of its corridor alone while the far layer draws [m] (FAR_NEAR_ONLY_M the
-   *  candidate); 0: the scene keeps all its own, as before — the junction's distance decided by Sam on captures */
-  farNearOnlyM = 0;
   private farEye: EyeState | null = null;
   /** (the far layer's) under this projected size [px] a building one quad (8, Sam's decision; 0 boxes all) */
   set farQuadPx(px: number) {
@@ -11310,7 +11308,9 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
   get nearCellsOn() {
     return this.nearCellsWant;
   }
-  private nearCellsWant = false;
+  /** on by default since Sam's decision of 17 Nov 2026 (J8-A flown strict with them); the page's hash `nearCells=0`: off from the start
+   *  (the e2e that check the near scene's own buildings) */
+  private nearCellsWant = new URLSearchParams(globalThis.location?.hash.slice(1) ?? "").get("nearCells") !== "0";
   private nearMeshes: NearMeshes | null = null;
   /** (the near mesh cells') what is resident: cells, buildings, triangles, the pools' blocks; the cells wanted, those missing */
   nearCells() {
@@ -12291,11 +12291,9 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
         }
         const box = this.earthScenery.drawnBox();
         const st = this.earthScenery.stats();
-        // (the scene keeps its buildings within its kept reach where its cap cut, else its box — and within farNearOnlyM when set, J8-5)
-        const near = this.farNearOnlyM > 0 ? this.farNearOnlyM : Number.POSITIVE_INFINITY;
-        // (PLAN-J8 J8-8 lot 4: the scene's BD TOPO buildings the mesh cells' — the far layer drawing all but theirs: no mask from the scene)
-        const maskR =
-          !box || (st.meshLeft ?? 0) > 0 ? 0 : Math.min(st.cutBuildings > 0 && st.keptReachM > 0 ? st.keptReachM : box.half - 650, near);
+        // (the scene keeps its buildings within its kept reach where its cap cut, else its box; PLAN-J8 J8-8 lot 4: its BD TOPO and
+        // Overture buildings the mesh cells' — the far layer drawing all but theirs: no mask from the scene)
+        const maskR = !box || (st.meshLeft ?? 0) > 0 ? 0 : st.cutBuildings > 0 && st.keptReachM > 0 ? st.keptReachM : box.half - 650;
         this.buildingFar.update(this.farEye, box, maskR, this.earthScenery.buildingLeaf, performance.now(), st.corridorA);
         // (PLAN-J8 J8-L: the far street lamps — the street cells within 12 km, their heads at night as the near ones')
         if (this.farLampsOn) {

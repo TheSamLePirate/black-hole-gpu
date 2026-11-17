@@ -8,7 +8,12 @@ afterAll(stopServer);
 test.skipIf(!E2E)(
   "riverbanks and bridge volumes share illuminated terrain and water",
   async () => {
-    const app = await App.boot({ hash: `scene=${encodeURIComponent("Earth: the Blue Marble")}`, width: 960, height: 540, tiles: true });
+    const app = await App.boot({
+      hash: `scene=${encodeURIComponent("Earth: the Blue Marble")}&nearCells=0`,
+      width: 960,
+      height: 540,
+      tiles: true,
+    });
     try {
       await app.js(`(()=>{__bh.freeze(true);__bh.game.setDate("2021-06-21T15:00:00Z");
         __bh.presets["River view"]={...__bh.presets["Earth: the Blue Marble"],animate:false,ship:false,time:__bh.sim.time,
@@ -42,7 +47,12 @@ test.skipIf(!E2E)(
 test.skipIf(!E2E)(
   "worldwide forests and OSM volumes render on real data outside pilot packs",
   async () => {
-    const app = await App.boot({ hash: `scene=${encodeURIComponent("Earth: the Blue Marble")}`, width: 960, height: 540, tiles: true });
+    const app = await App.boot({
+      hash: `scene=${encodeURIComponent("Earth: the Blue Marble")}&nearCells=0`,
+      width: 960,
+      height: 540,
+      tiles: true,
+    });
     const reports: unknown[] = [];
     try {
       await app.js(
@@ -157,7 +167,7 @@ test.skipIf(!E2E)(
   "eight storage buffers keep baseline renderer without world scenery",
   async () => {
     const app = await App.boot({
-      hash: `scene=${encodeURIComponent("Earth: the Blue Marble")}`,
+      hash: `scene=${encodeURIComponent("Earth: the Blue Marble")}&nearCells=0`,
       width: 320,
       height: 240,
       initScript:
@@ -176,7 +186,7 @@ test.skipIf(!E2E)(
 test.skipIf(!E2E)(
   "high scenery renders in airplane cockpit with terrain and regional satellite pages",
   async () => {
-    const app = await App.boot({ hash: "scene=game:artemis", width: 960, height: 540, tiles: true });
+    const app = await App.boot({ hash: "scene=game:artemis&nearCells=0", width: 960, height: 540, tiles: true });
     try {
       await app.js(`(()=>{__bh.game.setDate("2021-06-21T12:00:00Z");__bh.game.set("flightMode","plane");__bh.game.glideTo("Bourget",6,.5,120);
         __bh.settings.earthSurface="satellite";__bh.settings.earthScenery="high";__bh.settings.earthTerrain=true;__bh.settings.earthClouds=0;

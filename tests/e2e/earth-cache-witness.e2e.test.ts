@@ -13,6 +13,7 @@ import { App, E2E, stopServer } from "./lib/app";
 // Earth data: network (it sets its own mode and folder per boot)
 // Done when: at the first boot the scenery worker's BD TOPO tiles fetched and kept; at the second, offline, every one of them asked
 // again and served from the disk, no BD TOPO tile missing, the same buildings; the cell worker's tiles too (the rest missing said by host).
+// (the page's hash nearCells=0: the near scene's own buildings checked — off since J8-8 draws them from their mesh cells, Sam, 17 Nov 2026)
 // Duration: ~4 min (two boots at Toulon — the IGN's tiles once from the network, one heavy load at a time).
 
 describe.skipIf(!E2E)("PLAN-J8 J8-T T0: the scenery worker's BD TOPO tiles from the disk", () => {
@@ -25,7 +26,7 @@ describe.skipIf(!E2E)("PLAN-J8 J8-T T0: the scenery worker's BD TOPO tiles from 
     rmSync(dir, { recursive: true, force: true });
     process.env.KERR_EARTH_DATA = dir;
     const one = async (label: string, mode: "on" | "offline") => {
-      const a = await App.boot({ width: 1280, height: 800, hash: "scene=game:artemis", tiles: true, earthData: mode });
+      const a = await App.boot({ width: 1280, height: 800, hash: "scene=game:artemis&nearCells=0", tiles: true, earthData: mode });
       try {
         await a.scenario(`Toulon · ${label}`);
         await a.js(

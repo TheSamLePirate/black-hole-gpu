@@ -12,6 +12,7 @@ import { App, E2E, stopServer } from "./lib/app";
 // 1.8 km up the valley at 450 m over its floor: the scenes asked anew as it goes, the Service Worker's figures by kind
 // (pwa/rules.ts tileKind: the scenery worker's fetches, out of the page's sight) and the page's own — none from the network.
 // (E2E_SHOTS=<dir>: zones-scenery-online, zones-scenery-offline — the cockpit over the valley, held still.)
+// (the page's hash nearCells=0: the near scene's own buildings checked — off since J8-8 draws them from their mesh cells, Sam, 17 Nov 2026)
 // Duration: ~17 min on kerr-mini (the download ~14 of them, 11 Nov 2026: the Géoplateforme's chains ~5 a second), up to ~50
 // with the resumes of chains the IGN refused under the load.
 // Done when: the zone ready, the offline scenes' trees and buildings drawn from it, no tile of any kind from the network,
@@ -76,7 +77,7 @@ describe.skipIf(!E2E)("an offline zone with the world scenery", () => {
   const shots = process.env.E2E_SHOTS;
   const phase = (text: string) => app.js(`(window.__zonePhase = ${JSON.stringify(text)}, 1)`);
   beforeAll(async () => {
-    app = await App.boot({ width: 1600, height: 1000, hash: "scene=game:artemis", sw: true, tiles: true });
+    app = await App.boot({ width: 1600, height: 1000, hash: "scene=game:artemis&nearCells=0", sw: true, tiles: true });
     await app.js(`(() => { __bh.settings.vessel = "f35"; Object.assign(__bh.settings, ${SETTINGS}); return 1; })()`);
     await app.waitFor(`__bh.fleet.active === "f35"`, 30_000);
     expect(await app.js<boolean>("__bh.pwa.ready()")).toBe(true);
@@ -248,7 +249,7 @@ describe.skipIf(!E2E)("an offline zone with the world scenery", () => {
     });
     // (the page and its Service Worker cut — lib/cdp.ts offline: the page's alone left the worker's fetches on the network)
     await app.offline(true);
-    await app.load("scene=game:artemis");
+    await app.load("scene=game:artemis&nearCells=0");
     // (again after the load: its new worker targets)
     await app.offline(true);
     await app.js(`(() => { __bh.settings.vessel = "f35"; Object.assign(__bh.settings, ${SETTINGS}); return 1; })()`);

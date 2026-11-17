@@ -32,8 +32,6 @@ interface Resident {
   /** its drawn ground's plane (groundPlane), sampled once */
   plane?: [number, number, number];
 }
-/** PLAN-J8 J8-5: the near scene's buildings within this of its corridor alone while the layer draws [m] (§2: the meshes' reach) */
-export const FAR_NEAR_ONLY_M = 2000;
 /** the regions in the order trace.wgsl's farRoofAlbedo / farWallAlbedo read them (roofs.ts Region: their roofs' default, their colours) */
 export const FAR_REGIONS: readonly Region[] = [
   "paris",

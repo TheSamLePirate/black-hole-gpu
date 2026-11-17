@@ -10,6 +10,7 @@ import { App, E2E, stopServer } from "./lib/app";
 // E2E_SHOTS=<dir>: buildings-<site>-high.png / -low.png, and during the loading load-<site>-<view>-<s>s.png every 10 s (the
 // loading line shown); remote-results/buildings-<label>.json (BLD_LABEL, default "run" —
 // under scripts/ab-e2e.ts the side and the run, A1, B2…).
+// (the page's hash nearCells=0: the near scene's own buildings checked — off since J8-8 draws them from their mesh cells, Sam, 17 Nov 2026)
 // Duration: ~3 min a site on kerr-mini.
 // Done when: each town's scene ready with its buildings, both views drawn in the raster pipeline, no error.
 
@@ -30,7 +31,7 @@ describe.skipIf(!E2E)("the buildings", () => {
   const shots = process.env.E2E_SHOTS && process.env.AB_SIDE ? `${process.env.E2E_SHOTS}/${LABEL}` : process.env.E2E_SHOTS;
   const rows: Record<string, unknown>[] = [];
   beforeAll(async () => {
-    app = await App.boot({ width: 1600, height: 1000, hash: "scene=game:artemis", tiles: true });
+    app = await App.boot({ width: 1600, height: 1000, hash: "scene=game:artemis&nearCells=0", tiles: true });
     await app.js(
       `(() => { Object.assign(__bh.settings, { vessel: "f35", traffic: false, autosave: false, f35AutoProtect: false, f35Invulnerable: true,
         weather: "fair", earthClouds: 0, dof: false, earthPipeline: "raster", earthOrtho: true, earthIgnRelief: true,

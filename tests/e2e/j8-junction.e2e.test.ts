@@ -4,12 +4,10 @@ import { $ } from "bun";
 import { App, E2E, stopServer } from "./lib/app";
 import { J0_FIXED, J0_SCENE } from "./lib/j0-scene";
 
-// PLAN-J8 J8-5 — where the near scene's buildings hand over to the far layer: the scene keeps its own within farNearOnlyM of its
-// corridor (and within its cap's kept reach — 32 000 buildings: ~1.4 km of it in Toulon), the far layer (J8-4, on) draws past it — its
-// mask measured along the same corridor. Its distance decided by Sam on these captures (16 Nov 2026). Two views, the free camera, no
+// PLAN-J8 J8-5 — where the near buildings hand over to the far layer (the junction's distance decided 0 by Sam, 16 Nov 2026; its lever
+// farNearOnlyM retired with J8-8 on, 17 Nov 2026: the near buildings from their mesh cells, the far layer past them, cell by cell). Two views, the free camera, no
 // craft, the world frozen, 350 m up, 2.5 km from a dense city (Toulon: the cap bites) and a lighter one (Hyères: the scene's box does);
-// at each the junction at 0 (the scene keeps all its own, as before), 1 000, 2 000 and 3 000 m (J8J_JUNCTIONS) — the scene made again
-// for each and waited for, the same hour set, then 5 s: the GPU time (median), the scene's buildings and those left to the layer, the
+// at each the scene made and waited for, the same hour set, then 5 s: the GPU time (median), the scene's buildings and those left to the layer, the
 // layer's drawn, how long the scene took; a shot — at the last a second with the far roofs' tint as before (renderer.farMaterials false:
 // Sam's question on their colour); then J8-A's witness by day and by night (23:00): a grid read by surfaceAt, the layer on and off
 // (its pixels), for the colour gap either side of the junction by band of distance. Not a pass/fail on the image (j8-junction.json); it fails on a GPU error or the device lost.
@@ -24,7 +22,8 @@ const VIEWS = [
 ] as const;
 /** the night's hour — 23:00 at Toulon in July, dark: the windows lit (J8-A, Sam's « jour et nuit ») */
 const NIGHT = "2026-07-10T21:00:00Z";
-const JUNCTIONS = (process.env.J8J_JUNCTIONS ?? "0,1000,2000,3000").split(",").map(Number);
+/** (one pass — the junction's lever retired; J8J_RUN repeats the scene's wait: J8J_REPEAT passes) */
+const JUNCTIONS = Array.from({ length: Number(process.env.J8J_REPEAT ?? 1) }, () => 0);
 test.skipIf(!E2E)(
   "J8-5: the near scene / far layer junction at 0, 2, 3 and 4 km — Toulon from 2.5 and 4 km, shots, GPU, the scene's time",
   async () => {
@@ -64,7 +63,7 @@ test.skipIf(!E2E)(
           // (the world kept frozen while the scene is made — rule 13's way: the free camera without a craft is not carried with the Earth,
           // the world running left it in space — « away from the Earth », 16 Nov 2026, PROBLEMES)
           // (J8J_RUN: the world left running during the wait, as before — the camera lost reproduced, PROBLEMES)
-          await app.js(`(() => { __bh.freeze(${!process.env.J8J_RUN}); __bh.renderer.farNearOnlyM = ${j}; return 1; })()`);
+          await app.js(`(() => { __bh.freeze(${!process.env.J8J_RUN}); return 1; })()`);
           const why = await app.js<string | null>(
             `__bh.viewAt(${v.lat}, ${v.lon}, { altM: ${v.altM}, heading: ${v.heading}, pitch: ${v.pitch}, fov: 50 }) ?? null`,
           );
@@ -114,7 +113,7 @@ test.skipIf(!E2E)(
             while (performance.now() - t0 < 5000) { await new Promise((q) => requestAnimationFrame(q)); __bh.touch();
               if (R.completedFrames !== done) { done = R.completedFrames; g.push(R.lastGpuMs ?? 0); } }
             g.sort((a, b) => a - b); const sc = R.earthScenery.stats(), far = await R.farBuildings();
-            return { p50: +(g[g.length >> 1] ?? 0).toFixed(2), buildings: sc.buildings, farLeft: sc.farLeft, cut: sc.cutBuildings,
+            return { p50: +(g[g.length >> 1] ?? 0).toFixed(2), buildings: sc.buildings, meshLeft: sc.meshLeft, cut: sc.cutBuildings,
               keptM: Math.round(sc.keptReachM), corridorM: sc.corridorM, inView: far.inView, phases: sc.phases,
               lost: (__bh.graphicsDiagnostic().events ?? []).filter((e) => String(e.kind).startsWith("device-lost")).length }; })()`);
           await app.js(`(() => { document.body.classList.add("hide-ui"); return 1; })()`);

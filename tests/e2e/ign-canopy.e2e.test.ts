@@ -7,6 +7,7 @@ import { App, E2E, stopServer } from "./lib/app";
 // raster pipeline: the trees placed, the survey's share, the buildings, and how well they sit on the IGN's orthophoto — a
 // source of its own: the trees on the photo's canopy, the photo's canopy under a tree.
 // (E2E_SHOTS=<dir>: ign-canopy-saintlo-on / -ortho — the photo alone, the scene off — / -off.)
+// (the page's hash nearCells=0: the near scene's own buildings checked — off since J8-8 draws them from their mesh cells, Sam, 17 Nov 2026)
 // Duration: ~7 min on kerr-mini.
 // Done when: with the survey most trees placed by it, the buildings all in, far more of the photo's canopy under a tree and
 // as many trees on it as without.
@@ -17,7 +18,7 @@ describe.skipIf(!E2E)("the IGN's canopy", () => {
   let app: App;
   const shots = process.env.E2E_SHOTS;
   beforeAll(async () => {
-    app = await App.boot({ width: 1600, height: 1000, hash: "scene=game:artemis", tiles: true });
+    app = await App.boot({ width: 1600, height: 1000, hash: "scene=game:artemis&nearCells=0", tiles: true });
     await app.js(
       `(() => { __bh.settings.vessel = "f35"; Object.assign(__bh.settings, { traffic: false, weather: "fair", earthClouds: 0, dof: false, earthPipeline: "raster", earthOrtho: true, earthIgnRelief: true }); return 1; })()`,
     );

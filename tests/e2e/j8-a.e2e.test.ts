@@ -17,9 +17,9 @@ import { J0_FIXED } from "./lib/j0-scene";
 // the buildings drawn (the near scene's, the far layer's boxes and quads); a cockpit shot at each point, a view from outside at the end.
 // Not yet a pass/fail on « no request, no quick scene » (J8A_STRICT: asserted; J8A_TRACK_READY: flightReady over the whole track) — J8-5 and J8-8 still to finish; it fails on the
 // flight itself (rule 13), a GPU error or the device lost. j8-a.json.
-// J8A_NEAR [m, default 0]: the near scene / far layer junction (renderer.farNearOnlyM — J8-5; Sam's decision of 16 Nov 2026: 0).
-// J8A_CELLS=1: the near buildings from their mesh cells (renderer.nearCellsOn — J8-8 lots 2–4, the scene without its buildings): their
-// cells within reach resident before the take-off too.
+// J8A_REST_S [s]: a rest after each zone, the world frozen (the M1 Max cooled before its flight).
+// The near buildings from their mesh cells (renderer.nearCellsOn — J8-8, on by default since Sam's decision of 17 Nov 2026; J8A_CELLS=0:
+// off, the near scene's own as before): their cells within reach resident before the take-off too.
 // J8A_BUDGET [MiB, default 72]: the far layer's pool (renderer.farBudgetMiB — all Paris resident; the default since Sam's « ok 72 »).
 // J8A_OFFLINE=1 (with J8A_TRACK_READY; the approaches' session, agreed 17 Nov 2026): each track flown with the network cut — its zone
 // made online, then the network cut and the page loaded again (the zone and the Service Worker kept in the profile), its settings set
@@ -69,7 +69,7 @@ test.skipIf(!E2E)(
       const setup = async () => {
         await app.js(`(() => { Object.assign(__bh.settings, ${J0_FIXED}); Object.assign(__bh.settings, { dof: false, motionBlur: 0, damage: false });
           __bh.renderer.farBudgetMiB = ${Number(process.env.J8A_BUDGET ?? 72)};
-          __bh.renderer.farNearOnlyM = ${Number(process.env.J8A_NEAR ?? 0)}; __bh.renderer.nearCellsOn = ${!!process.env.J8A_CELLS}; return 1; })()`);
+          __bh.renderer.nearCellsOn = ${process.env.J8A_CELLS !== "0"}; return 1; })()`);
         await app.waitFor(`__bh.fleet.active === "f35"`, 60_000);
       };
       await setup();
@@ -118,6 +118,12 @@ test.skipIf(!E2E)(
               console.log(`  … ${t.name}: the corridor zone ${z?.cursor}/${z?.total} chains, ${((z?.bytes ?? 0) / 1e6).toFixed(0)} MB`);
             await app.js(`new Promise((q) => setTimeout(q, 2000))`);
           }
+          // (J8A_REST_S: a rest after the zone, the world frozen — its download heats the M1 Max to « Heavy »; the flight measured cold,
+          // Sam's demand of 17 Nov 2026 — said every minute)
+          for (let r = 0; r < Number(process.env.J8A_REST_S ?? 0); r += 60) {
+            console.log(`  … ${t.name}: resting after the zone, ${r} / ${process.env.J8A_REST_S} s`);
+            await app.js(`(() => { __bh.freeze(true); return new Promise((q) => setTimeout(q, 60000)); })()`);
+          }
           // (J8A_OFFLINE: the network cut, the page loaded again in the same profile — its zone and Service Worker kept —, its settings
           // set again)
           if (OFFLINE) {
@@ -148,8 +154,8 @@ test.skipIf(!E2E)(
           for (;;) {
             const r = await app.js<{ ready: boolean; why: string; notes: string }>(
               `(async () => { __bh.touch(); const r = await __bh.sys.flightReady(${TRACK_READY ? `{ track: { points: ${JSON.stringify(t.points)} } }` : ""});
-                // (J8A_CELLS: the mesh cells within reach resident too — near-meshes.ts)
-                const n = __bh.renderer.nearCells(), cells = ${!!process.env.J8A_CELLS} && (!n || n.missing > 0) ? [\`near mesh cells: \${n ? n.missing : "none yet"} missing\`] : [];
+                // (the mesh cells within reach resident too — near-meshes.ts; J8A_CELLS=0: none)
+                const n = __bh.renderer.nearCells(), cells = ${process.env.J8A_CELLS !== "0"} && (!n || n.missing > 0) ? [\`near mesh cells: \${n ? n.missing : "none yet"} missing\`] : [];
                 return { ready: r.ready && !cells.length, why: String([r.why, ...cells].filter(Boolean)), notes: String(r.notes ?? "") }; })()`,
             );
             // (what does not hold the flight but is said — the far cells past the budget, Sam's decision of 17 Nov 2026: 72 MiB, told apart)

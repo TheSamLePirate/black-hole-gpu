@@ -532,9 +532,6 @@ export interface SceneryRequest {
   /** the buildings' cap kept by their distance to the corridor the craft flies — from the eye at the request to as far past the
    *  centre as the centre is past it —, not to the centre alone (the scenery's `corridor`, PLAN-J2 §9 undecies — Sam, 13 Nov 2026) */
   corridor?: boolean;
-  /** PLAN-J8 J8-5: the far buildings' layer drawing past it — the scene's buildings within this distance of its corridor alone [m]
-   *  (their footprints past it kept for the survey's trees, as the cap's cut ones); 0 / absent: all, as before */
-  nearOnlyM?: number;
   /** PLAN-J8 J8-8 lot (4): the BD TOPO's buildings drawn from their mesh cells (near-meshes.ts) — left out of the scene (their
    *  footprints kept for the trees, as the cap's cut ones; counted `meshLeft`); Overture's and OSM's kept */
   meshCells?: boolean;
@@ -566,8 +563,6 @@ export interface SceneryReply {
   /** the buildings the cap left out (the nearest the centre kept), the farthest kept one's distance from the centre [m]
    *  (0: none cut); the survey's tree candidates their footprints refused and the time their grid took [ms] */
   cutBuildings?: number;
-  /** PLAN-J8 J8-5: the buildings left to the far layer (past nearOnlyM) */
-  farLeft?: number;
   /** (PLAN-J8 J8-8 lot 4) the BD TOPO's buildings left to their mesh cells (meshCells) */
   meshLeft?: number;
   keptReachM?: number;
