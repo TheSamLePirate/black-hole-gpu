@@ -10633,3 +10633,10 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
 - **Conclusion :** la préparation des zones, même enchaînées, ne reproduit pas l'arrêt du premier gros e2e. Il y manque le vol de Paris :
   la scène, la couche lointaine, la forêt, tout ce qu'ils laissent dans la page. La suite est côté rendu, avec le même témoin dans `j8-a`
   au besoin. Toulon passe aussi seul en page neuve (`j8a-big-toulon`).
+
+### 2026-11-17 13:48 UTC — PLAN-J8 : le « gel » de Toulon après Paris est un défaut du test, pas du jeu (session 33d89754)
+
+- **Mesure :** `20261117-140536-j8a-paris-toulon-witness` sur kerr-mini (Paris de jour et de nuit, puis Toulon-Hyères, une seule page, `J8A_WITNESS=1`). L'arrêt se reproduit à la préparation des cellules de Toulon (« Runtime.evaluate unanswered after 300 s »). Mais **le témoin de page a répondu toutes les 30 s, en 0 à 2 ms, pendant ces 300 s**, avec un tas JS de 429 à 1 177 Mo et sans tendance. La page ne gèle pas : c'est la promesse de l'appel du test qui ne revient pas.
+- **Cause probable :** le comptage des cellules dans les caches (`caches.open(…).keys()` sur `kerr-street`, `kerr-mesh` et `kerr-forest`), ajouté par `j8-a` pour sa bannière et son garde-fou. Une fois Paris en cache, il attend derrière les écritures de cellules faites par le worker de la zone. La reproduction des approches (deux zones enchaînées, sans ce comptage) ne gelait pas.
+- **Correction :** les deux comptages sont bornés à 5 s ; au-delà, ils rendent -1 et ne comptent pas comme progrès. La lecture des couleurs du critère 5 recommence tant que l'image revient noire : à ce passage, Paris avait donné [0, 0, 0].
+- **Pour Sam :** rien dans ces mesures ne montre un défaut du jeu pour un joueur qui enchaîne deux zones. La page reste vivante, et la mémoire bornée. **Non vérifié** tant que le test corrigé n'a pas repassé Paris puis Toulon dans une même page.

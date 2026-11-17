@@ -176,10 +176,12 @@ test.skipIf(!E2E)(
             // (its chains all in, the zone still making its cells — streets, meshes, forest: minutes on the M1 Max — their caches' count
             // the progress: the stall's guard read the chains alone and stopped a zone alive at its cells, 17 Nov 2026)
             if (z && z.cursor >= z.total && k % 5 === 0) {
-              const cells = await app.js<number>(`(async () => { let k = 0;
+              // (the count bounded to 5 s, -1 past it: a Cache Storage read waited behind the zone's worker's writes — Toulon's cells after
+              // Paris's flights, 17 Nov 2026: the page answered the witness in 0–2 ms all along, the test's call never came back)
+              const cells = await app.js<number>(`Promise.race([(async () => { let k = 0;
                 for (const name of await caches.keys()) if (/^kerr-(street|mesh|forest)-/.test(name)) k += (await (await caches.open(name)).keys()).length;
-                return k; })()`);
-              if (cells !== lastCells) {
+                return k; })(), new Promise((q) => setTimeout(() => q(-1), 5000))])`);
+              if (cells >= 0 && cells !== lastCells) {
                 lastCells = cells;
                 moved = Date.now();
               }
@@ -199,9 +201,10 @@ test.skipIf(!E2E)(
                   `chaînes ${z.cursor.toLocaleString("fr-FR")} / ${z.total.toLocaleString("fr-FR")}, ${((z.bytes ?? 0) / 1e6).toFixed(0)} Mo (${min} min) ${left()}`,
                 );
               else {
-                const c = await app.js<{ mesh: number; forest: number }>(`(async () => { const n = async (p) => { let k = 0;
+                // (bounded to 5 s as above: -1 when the caches did not answer in time)
+                const c = await app.js<{ mesh: number; forest: number }>(`Promise.race([(async () => { const n = async (p) => { let k = 0;
                   for (const name of await caches.keys()) if (name.startsWith(p)) k += (await (await caches.open(name)).keys()).length; return k; };
-                  return { mesh: await n("kerr-mesh-"), forest: await n("kerr-forest-") }; })()`);
+                  return { mesh: await n("kerr-mesh-"), forest: await n("kerr-forest-") }; })(), new Promise((q) => setTimeout(() => q({ mesh: -1, forest: -1 }), 5000))])`);
                 await app.progress(
                   `cellules : maillages ${c.mesh} / ~${meshCells}, forêt ${c.forest} / ~${forestCells} (${min} min) ${left()}`,
                 );
@@ -397,9 +400,16 @@ test.skipIf(!E2E)(
             const t0 = performance.now(), R = __bh.renderer, f = () => new Promise((q) => requestAnimationFrame(q));
             for (let i = 0; i < 5; i++) { __bh.touch(); await f(); }
             const cv = document.querySelector("canvas");
-            const b = await new Promise((q) => requestAnimationFrame(() => q(createImageBitmap(cv))));
-            const o = new OffscreenCanvas(b.width, b.height), g = o.getContext("2d"); g.drawImage(b, 0, 0);
-            const img = g.getImageData(0, 0, b.width, b.height).data;
+            // (read back after a frame drawn, again while it reads black — a frozen, untouched canvas can: Paris's colours came back
+            // [0, 0, 0] once, 17 Nov 2026 — air-tlut's way)
+            let b, img, mx = 0;
+            for (let t = 0; t < 20 && mx === 0; t++) {
+              __bh.touch(); await f(); __bh.touch();
+              b = await new Promise((q) => requestAnimationFrame(() => q(createImageBitmap(cv))));
+              const o = new OffscreenCanvas(b.width, b.height), g = o.getContext("2d"); g.drawImage(b, 0, 0);
+              img = g.getImageData(0, 0, b.width, b.height).data;
+              for (let i = 0; i < img.length; i += 4096) mx = Math.max(mx, img[i], img[i + 1], img[i + 2]);
+            }
             const acc = { near: [0, 0, 0, 0], far: [0, 0, 0, 0] };
             // (17 Nov 2026: 64 × 36 from the upper third read the sky first and its 45 s ran out before a building — the diagnostic
             // over Paris: near meshes to ~2.5 km, the far layer past ~2.1 km)
