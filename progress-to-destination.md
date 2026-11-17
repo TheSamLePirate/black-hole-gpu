@@ -10694,3 +10694,13 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
 - **Rapporté** (vol du rendu, Paris de jour, à froid, sur ce Mac) : échec strict avec 4 800 images rapides, contre 5 948 ce matin sans
   les cellules. GPU p50 47,6 ms ; scènes complètes de 19 à 33 s, contre 6 à 12 s sur le mini ; le Mac a fini en Heavy. Le goulot est le
   worker de la scène (rendu), et la décision revient à Sam. Ligne VB8 de la grille mise à jour.
+
+### 2026-11-17 15:46 UTC — PLAN-J8 J8-RP RP10 : l'usure de la chaussée par classe (session 33d89754, mode speed)
+
+- Destination : §19.13 (J8-A, routes AAA en vol bas), §7 (matériaux explicites).
+- Fait : dans `trace.wgsl scenerySurface`, une route chargée (ligne médiane ou lignes de voie, VB2) a les deux traces des roues
+  de chaque voie assombries (−13 %, 1,6 m d'écart, sous 2 m de pied de pixel) ; une petite rue sans ligne a des fissures (sous
+  1 m). La couleur de la route seulement : sous une orthophoto, rien ne change.
+- Preuve : `check-wgsl` 84/84, `pipeline-inventory --check`, test `road-markings`. **Non vu en jeu, non mesuré.** Codé après le
+  lancement du gros e2e définitif (kerr-mini) : il n'en fait pas partie.
+- Reste de RP10 : les reflets des phares et des lampadaires dans les flaques.

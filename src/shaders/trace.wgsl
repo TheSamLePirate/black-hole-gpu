@@ -10665,6 +10665,20 @@ fn scenerySurface(foot:f32)->ScenerySurface {
           // (its pavement: concrete, the kerb's edge lighter)
           color=mix(vec3f(.30,.295,.28),vec3f(.46,.45,.43),1.0-smoothstep(.1,.1+aa,abs(distance-cr-.1)));
         }else if(foot<2.0){
+          // (PLAN-J8 J8-RP RP10: the asphalt's wear by its class — a busy road's (a centre line or lane lines) the wheels' two paths in
+          // each lane darkened and polished, 1.6 m apart; a minor street's (no line) crazed with cracks, greyer)
+          let lanesW=(mk>>5u)&15u;let oneW=(mk&16u)!=0u;
+          if(cover>0.0 && ((mk&6u)!=0u || lanesW>0u)){
+            let kW=select(f32(lanesW/2u+1u),f32(lanesW+1u),oneW);
+            let wW=select(cr,2.0*cr,oneW)/kW;let xW=select(distance,distance+cr,oneW);
+            let uW=abs(fract(xW/wW)-.5)*wW;
+            let track=1.0-smoothstep(.22,.22+aa,abs(uW-.8));
+            color*=1.0-.13*track*(1.0-smoothstep(1.0,2.0,foot));
+          }else if(cover>0.0 && foot<1.0){
+            let cn=vnoise(vec3f(point*.55,17.0))*.7+vnoise(vec3f(point*2.1,19.0))*.3;
+            let crack=1.0-smoothstep(.012,.012+aa*.25,abs(cn-.5));
+            color=mix(color*1.06,color*.55,crack*(1.0-smoothstep(.5,1.0,foot)));
+          }
           var m=0.0;
           if((mk&1u)!=0u){m=max(m,1.0-smoothstep(.075,.075+aa,abs(distance-(cr-.3))));}
           let dash=1.0-smoothstep(3.0-aa,3.0+aa,s%9.0);
