@@ -1,17 +1,19 @@
 import { expect, test } from "bun:test";
 import { PbfWriter } from "pbf";
 import { waterMask } from "../src/system/water-mask";
+import { earthDataDir, readKept } from "./e2e/lib/earth-cache";
 
 // PLAN-J8 J8-E: the inland water of a vector tile — its `water` polygons and `waterway` lines — drawn into a 256² coverage, the sea
 // left out, a river under a texel kept as its share of the texel.
 
-type Feat = { type: 2 | 3; cls: string; rings: [number, number][][] };
+type Feat = { type: 2 | 3; cls: string; rings: [number, number][][]; brunnel?: string };
 const zz = (n: number) => (n << 1) ^ (n >> 31);
 /** a vector tile with `water` and `waterway` layers (extent 4096): each feature a class and its rings (a polygon closed by ClosePath) */
 function tile(layers: Record<string, Feat[]>): Uint8Array {
   const pbf = new PbfWriter();
   for (const [name, feats] of Object.entries(layers)) {
     const classes = [...new Set(feats.map((s) => s.cls))];
+    const brunnels = [...new Set(feats.flatMap((s) => (s.brunnel ? [s.brunnel] : [])))];
     pbf.writeMessage(
       3,
       (_: null, p: PbfWriter) => {
@@ -21,7 +23,10 @@ function tile(layers: Record<string, Feat[]>): Uint8Array {
           p.writeMessage(
             2,
             (_: null, f: PbfWriter) => {
-              f.writePackedVarint(2, [0, classes.indexOf(s.cls)]);
+              f.writePackedVarint(
+                2,
+                s.brunnel ? [0, classes.indexOf(s.cls), 1, classes.length + brunnels.indexOf(s.brunnel)] : [0, classes.indexOf(s.cls)],
+              );
               f.writeVarintField(3, s.type);
               const g: number[] = [];
               let cx = 0,
@@ -41,7 +46,8 @@ function tile(layers: Record<string, Feat[]>): Uint8Array {
             null,
           );
         p.writeStringField(3, "class");
-        for (const c of classes) p.writeMessage(4, (_: null, v: PbfWriter) => v.writeStringField(1, c), null);
+        p.writeStringField(3, "brunnel");
+        for (const c of [...classes, ...brunnels]) p.writeMessage(4, (_: null, v: PbfWriter) => v.writeStringField(1, c), null);
         p.writeVarintField(5, 4096);
       },
       null,
@@ -156,4 +162,61 @@ test("a z 14 tile from its z 13 parent's quarter; a tile without water layers: n
       10,
     ),
   ).toBeNull();
+});
+
+test("J8-RP RP7: a bridge's deck cut out of the water under it — its class's width and parapets; a road beside the water nothing", () => {
+  // (a river 40 texels wide — x 100 to 140 — and a secondary road's bridge across it at y 128; mpp 1: the deck 9 + 2 m wide, 11 texels)
+  const river: Feat = { type: 3, cls: "river", rings: [sq(100 * 16, 0, 140 * 16, 4096)] };
+  const bridge: Feat = {
+    type: 2,
+    cls: "secondary",
+    brunnel: "bridge",
+    rings: [
+      [
+        [90 * 16, 128 * 16],
+        [150 * 16, 128 * 16],
+      ],
+    ],
+  };
+  const road: Feat = {
+    type: 2,
+    cls: "secondary",
+    rings: [
+      [
+        [90 * 16, 60 * 16],
+        [150 * 16, 60 * 16],
+      ],
+    ],
+  };
+  const m = waterMask(tile({ water: [river], transportation: [bridge, road] }), 1)!;
+  expect(at(m, 120, 128)).toBeLessThan(0.01);
+  expect(at(m, 120, 126)).toBeLessThan(0.01);
+  // (beyond the deck's half-width — 5.5 texels —: water again; the road that is no bridge cuts nothing)
+  expect(at(m, 120, 120)).toBeGreaterThan(0.99);
+  expect(at(m, 120, 60)).toBeGreaterThan(0.99);
+  // (no transportation layer: the water whole)
+  expect(at(waterMask(tile({ water: [river] }), 1)!, 120, 128)).toBeGreaterThan(0.99);
+});
+
+test("J8-RP RP7: the Seine at the pont Alexandre III (OpenFreeMap z 14, the e2e's Earth data on disk) — no water on the deck", () => {
+  const k = readKept(earthDataDir(), "https://tiles.openfreemap.org/planet/latest/14/8297/5636.pbf", null);
+  if (!k) return;
+  const n = 2 ** 14;
+  // (a place's texel in the tile 8297/5636)
+  const px = (lat: number, lon: number) => {
+    const fx = ((lon + 180) / 360) * n - 8297,
+      fy = ((1 - Math.asinh(Math.tan((lat * Math.PI) / 180)) / Math.PI) / 2) * n - 5636;
+    return [Math.floor(fx * 256), Math.floor(fy * 256)] as const;
+  };
+  const mpp = (40_075_016.7 * Math.cos((48.864 * Math.PI) / 180)) / n / 256;
+  const m = waterMask(k.body, mpp)!;
+  // (the deck's middle over the river — the Seine crosses the tile west to east there, texel rows ~10–26 —; the river 100 m
+  // upstream and downstream of it, on the same row: water)
+  const [bx, by] = px(48.8637, 2.3136);
+  console.log(
+    `  the pont Alexandre III's texel ${bx},${by}: ${at(m, bx, by).toFixed(2)} · the Seine at ${bx - 15},${by}: ${at(m, bx - 15, by).toFixed(2)}, at ${bx + 15},${by}: ${at(m, bx + 15, by).toFixed(2)}`,
+  );
+  expect(at(m, bx - 15, by)).toBeGreaterThan(0.8);
+  expect(at(m, bx + 15, by)).toBeGreaterThan(0.8);
+  expect(at(m, bx, by)).toBeLessThan(0.2);
 });

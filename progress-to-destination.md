@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 17 nov. 11:19 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 17 nov. 11:23 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous. Ce qui est fermé quitte le tableau « En cours » pour la ligne « Fermé récemment ».
@@ -10576,3 +10576,14 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
 - **Réalisé :** `street-far.ts farBridges` met chaque segment de tablier des ponts d'une cellule « rue » (KSC5) parmi ses enregistrements lointains (8 nombres comme une voiture ; demi-largeur > 0). Le pont est gardé par la cellule de son premier point, pour n'être dessiné qu'une fois. Dans `scenery-raster.ts`, `carAt`, `farCarCull` et `farCarVs` en font une dalle de béton de 1,2 m, au tirant + 0,6 m au-dessus du sol dessiné de la cellule, de jour et de nuit, au-delà de la scène. Stat `counts.bridges`.
 - **Preuves :** `tests/street-far.test.ts`, `tsc`, Biome, `check-wgsl`. **Non vu en jeu.**
 - **Reste :** retirer l'emprise des ponts du masque d'eau de J8-E.
+
+### 2026-11-17 11:23 UTC — PLAN-J8 J8-RP RP7 : les tabliers des ponts retirés du masque d'eau de J8-E (session des approches, 1feb2f7f)
+
+- **Réalisé** (`water-mask.ts`, prêté par le rendu pour ce lot) : `waterMask` lit aussi la couche `transportation` de la tuile. Il retire de
+  la couverture d'eau chaque pont (`brunnel=bridge`), sur la largeur de sa classe (`roadWidth`) plus 2 m de parapets ; plus d'eau peinte
+  sur un tablier vu de loin. Le dessin des ponts au loin est fait côté rendu (929d03ba, sans nouveau format). Pipeline mis à jour.
+- **Vérifié :** `tests/water-mask.test.ts` (5/5) :
+  - un pont synthétique est retiré sur sa largeur, et une route qui n'est pas un pont ne retire rien ;
+  - sur la vraie tuile z 14 de la Seine au pont Alexandre III, depuis le disque e2e, le tablier vaut 0,10 et la Seine vaut 1,00 à 100 m
+    de part et d'autre.
+- **Non mesuré** en jeu.

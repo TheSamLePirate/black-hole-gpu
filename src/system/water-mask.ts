@@ -4,11 +4,14 @@
 // a 256² coverage (0 … 1, anti-aliased): the street levels' layer carries it (earth-tiles.ts IMG_ROADS0, its g), shadeLite reads it
 // past the scene's square (inlandWater, the scene's own water nearer). The sea left out — the game's sea is the geoid's (its
 // `ocean`/`sea` polygons): a lake, a river's polygon, a canal, a dock kept. A river under a texel keeps its share of the texel (its
-// width over the pixel): the tile's mips fade it out, no dotted line. Pure, run in the decode worker (tile-decode.ts);
-// tests/water-mask.test.ts.
+// width over the pixel): the tile's mips fade it out, no dotted line. The bridges' decks (PLAN-J8 J8-RP RP7, 17 Nov 2026 — the
+// approaches' session, the file lent by the render session): `transportation`'s bridges — their class's width (roadWidth) and
+// BRIDGE_SIDES_M of parapets — cut out of the coverage, no water painted over a deck seen from afar. Pure, run in the decode worker
+// (tile-decode.ts); tests/water-mask.test.ts.
 
 import { VectorTile } from "@mapbox/vector-tile";
 import { PbfReader } from "pbf";
+import { roadWidth } from "./scenery-geometry";
 
 const TILE = 256;
 /** the polygons' supersampling a side (4 × 4 a texel: the coverage in sixteenths) */
@@ -17,6 +20,8 @@ const SS = 4;
 const WATER_SKIP = new Set(["ocean", "sea", "swimming_pool"]);
 /** each `waterway` class's width [m] (OpenMapTiles gives none): a river's, a canal's, a stream's, a ditch's */
 export const WATERWAY_WIDTH_M: Record<string, number> = { river: 40, canal: 18, stream: 4, drain: 2, ditch: 1.5 };
+/** a bridge's deck beyond its class's carriageway: its parapets, both sides [m] (J8-RP RP7) */
+export const BRIDGE_SIDES_M = 2;
 
 /**
  * A vector tile's inland water drawn into a 256² coverage (row 0 the north): its `water` polygons (even-odd, 4 × 4 samples a texel)
@@ -94,11 +99,34 @@ export function waterMask(
       }
     }
   }
+  // (J8-RP RP7: the bridges' decks cut out — a road's, a railway's, a footbridge's —, each its class's width and its parapets, their
+  // share of a texel as a line's)
+  const roads = layers.transportation;
+  if (roads) {
+    const k = (TILE * 2 ** sub.k) / roads.extent;
+    const ox = sub.x * TILE,
+      oy = sub.y * TILE;
+    for (let f = 0; f < roads.length; f++) {
+      const ft = roads.feature(f);
+      if (ft.type !== 2 || ft.properties.brunnel !== "bridge") continue;
+      const cls = String(ft.properties.class ?? "");
+      if (cls === "ferry" || cls === "aerialway") continue;
+      const w =
+        roadWidth(cls === "transit" ? "rail" : cls.replace("_construction", ""), String(ft.properties.subclass ?? "")) + BRIDGE_SIDES_M;
+      const half = Math.max(w / mpp / 2, 0.5),
+        share = Math.min(w / mpp, 1);
+      for (const line of ft.loadGeometry()) {
+        const pts = line.map((p) => [p.x * k - ox, p.y * k - oy] as [number, number]);
+        for (let i = 1; i < pts.length; i++) stroke(m, pts[i - 1]!, pts[i]!, half, share, true);
+      }
+    }
+  }
   return m;
 }
 
-/** a segment drawn into the coverage: each texel within half + 1 of it, its cover by the distance × share, the greater kept */
-function stroke(m: Float32Array, a: [number, number], b: [number, number], half: number, share: number) {
+/** a segment drawn into the coverage: each texel within half + 1 of it, its cover by the distance × share, the greater kept — or, `cut`,
+ *  taken out of it (a deck over the water: the coverage scaled by what the deck leaves) */
+function stroke(m: Float32Array, a: [number, number], b: [number, number], half: number, share: number, cut = false) {
   const r = half + 1;
   const x0 = Math.max(Math.floor(Math.min(a[0], b[0]) - r), 0),
     x1 = Math.min(Math.ceil(Math.max(a[0], b[0]) + r), TILE - 1),
@@ -116,6 +144,7 @@ function stroke(m: Float32Array, a: [number, number], b: [number, number], half:
       const ex = px - t * dx,
         ey = py - t * dy;
       const c = Math.min(Math.max(half + 0.5 - Math.sqrt(ex * ex + ey * ey), 0), 1) * share;
-      if (c > m[y * TILE + x]!) m[y * TILE + x] = c;
+      if (cut) m[y * TILE + x]! *= 1 - c;
+      else if (c > m[y * TILE + x]!) m[y * TILE + x] = c;
     }
 }

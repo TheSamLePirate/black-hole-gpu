@@ -278,7 +278,7 @@ soumettre (`renderer.ts:10842`).
   high 4096²), tuiles (`r32uint` 2048²×9 ≈ 144 Mio en portée far/veryFar ; imagerie rgba8 1024²×19 ≈ 106 Mo avec mips depuis
   NU1 — +3 couches `IMG_ROADS0` : les lumières des rues z 12–14 en alpha, cuites dans le worker de décodage, `night-roads.ts`, calculé
   par `ORTHO_BYTES`, non mesuré ; depuis PLAN-J8 J8-E leur g porte l'eau intérieure de la même tuile OpenFreeMap z 13 (`water-mask.ts`,
-  encodée sRGB, r et b la couverture), demandée de jour comme de nuit, lue par `tileWaterAt` dans `liteWater` au-delà du carré de la
+  encodée sRGB, r et b la couverture ; depuis J8-RP RP7, 17/11, les tabliers des ponts de sa couche `transportation` en sont retirés), demandée de jour comme de nuit, lue par `tileWaterAt` dans `liteWater` au-delà du carré de la
   scène — aucune texture ni liaison nouvelle —, 89 Mo avant), surface régionale,
   FFT de la mer, buffer du décor (16/36/64 Mio), détails, horizons.
   **Lecture de l'imagerie** (`earthImageryAniso`, `earthImagery` dans `trace.wgsl`, lues par `shadeLite`, `main` et la marche des crêtes) :
