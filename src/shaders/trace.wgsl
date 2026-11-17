@@ -10638,6 +10638,15 @@ fn scenerySurface(foot:f32)->ScenerySurface {
       let distance=length(point-p.xy-line*along);
       cover=1.0-smoothstep(max(0.0,size.x-aa),size.x+aa,distance);
       rank=select(2.0,3.0,kind==2.0);
+      // (PLAN-J8 VB7: a junction's paint — kind 5, over the road: size.z its pattern, 0 a line, 1 a zebra's 0.5 m bands, 2 a yield's
+      // dashes —, its extent across the road along the segment; under a 2 m pixel only)
+      if(kind==5.0){
+        rank=4.0;
+        let sa=along*len;let pat=u32(size.z+.5);
+        if(pat==1u){cover*=1.0-smoothstep(.5-aa*.5,.5+aa*.5,fract(sa)+select(0.0,1.0,fract(sa)<0.0));}
+        if(pat==2u){cover*=1.0-smoothstep(.6-aa*.5,.6+aa*.5,sa%1.2);}
+        cover*=1.0-smoothstep(1.5,2.0,foot);
+      }
       // (PLAN-J8 VB2: a road's markings, kerb and pavements — the worker's roadMarkings, KSC3's rules: size.z the flags (1 edge lines,
       // 2 a dashed centre, 4 a solid one, 8 a kerb) + 16 one way + 32 lane lines + 512 the pavement [dm], size.w the carriageway's
       // half-width; none: the old dashed centre of the wide ones)

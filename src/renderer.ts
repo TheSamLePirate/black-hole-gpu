@@ -4414,6 +4414,8 @@ export class Renderer {
       this.earthScenery.forestPrepared = this.forestCellsOn;
       // (PLAN-J8 VB4: the parked cars on the street cells' places)
       this.earthScenery.parkedCars = this.parkedCarsOn;
+      // (PLAN-J8 VB7: the junctions' furniture)
+      this.earthScenery.furniture = this.furnitureOn;
       this.earthScenery.update(
         eye,
         detail.scenery,
@@ -11341,6 +11343,10 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
   /** PLAN-J8 J8-VB VB4: the parked cars — the street cells' places (kerr-street-v3, the approaches' data) within 900 m of the near
    *  scene's centre, each a car at rest of car-shapes.ts's (no bus, its lamps dark). On by default (Sam: all of J8-VB before the big
    *  e2e — not measured); the page's hash `parkedCars=0`: off from the start */
+  /** PLAN-J8 J8-VB VB7: the junctions' furniture of the street cells (kerr-street-v3, the approaches' inferred data) within 900 m of
+   *  the near scene's centre — stop and yield lines and crossings painted on the road, signals and guardrails as solids. On by default
+   *  (not measured); the page's hash `furniture=0`: off from the start */
+  furnitureOn = new URLSearchParams(globalThis.location?.hash.slice(1) ?? "").get("furniture") !== "0";
   parkedCarsOn = new URLSearchParams(globalThis.location?.hash.slice(1) ?? "").get("parkedCars") !== "0";
   /** (the near mesh cells') what is resident: cells, buildings, triangles, the pools' blocks; the cells wanted, those missing */
   nearCells() {

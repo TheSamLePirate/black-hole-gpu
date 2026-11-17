@@ -557,6 +557,8 @@ export interface SceneryRequest {
   forestPrepared?: boolean;
   /** PLAN-J8 VB4: the parked cars — the street cells' places (kerr-street-v3, read from their cache) within PARKED_REACH_M */
   parkedCars?: boolean;
+  /** PLAN-J8 VB7: the junctions' furniture — stop and yield lines, crossings, signals, guardrails (kerr-street-v3) — within 900 m */
+  furniture?: boolean;
   /** the runways near the scene (game/runway-grade.ts): the feet put on the ground as the gear and the tracer have it — their airfields
    *  levelled, the detail off there and under their approaches' funnels (PLAN-J7 J7-1) */
   runways?: GradeRunway[];
@@ -613,6 +615,8 @@ export interface SceneryReply {
   cars?: number;
   /** (PLAN-J8 VB4) the parked cars drawn (street cells' places) */
   parkedCars?: number;
+  /** (PLAN-J8 VB7) the pieces of the junctions' furniture drawn */
+  furniture?: number;
   /** (Q8 D1) the main roads' lines the traffic read, their pieces */
   trafficRoads?: number;
   /** (Q8 L10) the streets' lamps */

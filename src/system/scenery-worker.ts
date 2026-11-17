@@ -67,12 +67,25 @@ import { forestCacheUrl, FOREST_CACHE } from "./forest-cells";
 import { preparedForest } from "./forest-assembly";
 import { cellOf, cellOrigin, fromCell } from "./building-cells";
 import { parkedKind } from "./car-shapes";
-import { PlaceFlag, readPlace, readStreetHeader, STREET_CACHE, streetCacheUrl } from "./street-cells";
+import {
+  FurnitureFlag,
+  FurnitureKind,
+  type FurnitureRecord,
+  PlaceFlag,
+  readFurniture,
+  readPlace,
+  readStreetHeader,
+  STREET_CACHE,
+  streetCacheUrl,
+} from "./street-cells";
 import { markRoad, roadClassCode } from "./road-markings";
 
 /** (PLAN-J8 VB4) the parked cars kept round the scene's centre [m] and at most (the nearest places first) */
 export const PARKED_REACH_M = 900;
 export const PARKED_MAX = 2500;
+/** (PLAN-J8 VB7) the junctions' furniture kept round the scene's centre [m] and at most (the nearest first) */
+export const FURNITURE_REACH_M = 900;
+export const FURNITURE_MAX = 4000;
 import { buildingMesh } from "./roof-mesh";
 import { buildingLeaves, lidarRoof as measuredRoof, partMeshes, STACK_BYTES } from "./building-mesh-prep";
 import { builtUp, LAMP_CLASSES, LAMP_MAX, LAMP_REACH_M, lampLight, lampMesh, lampShape, lampsAlong, type StreetLamp } from "./streetlamps";
@@ -1771,8 +1784,13 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
   // cells in the street cache — the far lamps' pool and the zones fill it), the nearest PARKED_MAX: each a car at rest (speed 0, its
   // piece a metre ahead) on its place, its shape by its seed (no bus), its lamps dark; on the left of its street it faces the other
   // way (driving on the right); the ground already in only, none on any failure)
-  let parkedCars = 0;
-  if (q.parkedCars && typeof caches !== "undefined")
+  let parkedCars = 0,
+    furnitureCount = 0;
+  // (PLAN-J8 VB7: the junctions' furniture of the same cells — stop and yield lines, crossings, signals, guardrails —, its place and
+  // way in the scene's frame, the ground under it)
+  const furniture: { p: [number, number, number]; u: [number, number]; f: FurnitureRecord; r: number; o: { lat: number; lon: number } }[] =
+    [];
+  if ((q.parkedCars || q.furniture) && typeof caches !== "undefined")
     try {
       const store = await caches.open(STREET_CACHE);
       const dLat = PARKED_REACH_M / 111_000,
@@ -1788,7 +1806,21 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
           const h = readStreetHeader(buf);
           if (!h) continue;
           const o = cellOrigin(x, y);
-          for (let i = 0; i < h.placeCount; i++) {
+          if (q.furniture)
+            for (let i = 0; i < h.furnitureCount; i++) {
+              const fr = readFurniture(buf, i);
+              const g = fromCell(o, fr.east, fr.north);
+              const z = heightNow(g.lat, g.lon);
+              if (z === undefined) continue;
+              const p = localPoint(frame, g.lat, g.lon, z) as [number, number, number];
+              const r = Math.hypot(p[0], p[1]);
+              if (r > FURNITURE_REACH_M) continue;
+              const g2 = fromCell(o, fr.east + Math.cos(fr.heading), fr.north + Math.sin(fr.heading));
+              const p2 = localPoint(frame, g2.lat, g2.lon, z);
+              const L = Math.hypot(p2[0] - p[0], p2[1] - p[1]) || 1;
+              furniture.push({ p, u: [(p2[0] - p[0]) / L, (p2[1] - p[1]) / L], f: fr, r, o });
+            }
+          for (let i = 0; i < (q.parkedCars ? h.placeCount : 0); i++) {
             const pl = readPlace(buf, i);
             const g = fromCell(o, pl.east, pl.north);
             const z = heightNow(g.lat, g.lon);
@@ -1821,6 +1853,60 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
         parkedCars++;
       }
       storedBytes += parkedCars * (16 * 12 + 22 * 16 + 32);
+      // (VB7: the nearest pieces of furniture — the lines and crossings painted on the road (surface segments of kind 5 across it,
+      // their pattern in data[6]: 0 a line, 1 a zebra, 2 a yield's dashes — trace.wgsl scenerySurface, over the road), the signals
+      // and guardrails solids as a bridge's rails are)
+      furniture.sort((u, v) => u.r - v.r);
+      const WHITE = [0.62, 0.61, 0.55];
+      for (const it of furniture.slice(0, FURNITURE_MAX)) {
+        const { p, u, f } = it;
+        const across: [number, number] = [-u[1], u[0]];
+        const ends = (len: number) =>
+          [
+            [p[0] - (across[0] * len) / 2, p[1] - (across[1] * len) / 2, p[2]],
+            [p[0] + (across[0] * len) / 2, p[1] + (across[1] * len) / 2, p[2]],
+          ] as [[number, number, number], [number, number, number]];
+        if (f.kind === FurnitureKind.StopLine || f.kind === FurnitureKind.Crossing) {
+          const cross = f.kind === FurnitureKind.Crossing;
+          const [a, b] = ends(f.length);
+          const seg = surfaceSegment(a, b, cross ? 4 : 0.5, 5, WHITE);
+          seg.data[6] = cross ? 1 : f.flags & FurnitureFlag.Yield ? 2 : 0;
+          keptSurfaces.push(seg);
+          storedBytes += 64 + seg.data.length * 4;
+        } else if (f.kind === FurnitureKind.Signal) {
+          const pole = [stripPolygon([p[0] - u[0] * 0.07, p[1] - u[1] * 0.07, 0], [p[0] + u[0] * 0.07, p[1] + u[1] * 0.07, 0], 0.14)];
+          addSolid(polygonPrimitive(pole, p[2], p[2] + 3.3, 3, [0.12, 0.12, 0.13]), pole);
+          const head = [stripPolygon([p[0] - u[0] * 0.13, p[1] - u[1] * 0.13, 0], [p[0] + u[0] * 0.13, p[1] + u[1] * 0.13, 0], 0.32)];
+          addSolid(polygonPrimitive(head, p[2] + 2.3, p[2] + 3.2, 3, [0.04, 0.04, 0.045]), head);
+        } else if (f.kind === FurnitureKind.Guardrail) {
+          // (its rail in pieces of 20 m at most, each on the ground at its middle — the cell's frame along its heading)
+          const n = Math.max(1, Math.ceil(f.length / 20));
+          for (let k = 0; k < n; k++) {
+            const s0 = -f.length / 2 + (f.length * k) / n,
+              s1 = -f.length / 2 + (f.length * (k + 1)) / n;
+            const at = (sv: number) => fromCell(it.o, f.east + Math.cos(f.heading) * sv, f.north + Math.sin(f.heading) * sv);
+            const ga = at(s0),
+              gb = at(s1),
+              gm = at((s0 + s1) / 2);
+            const z = heightNow(gm.lat, gm.lon);
+            if (z === undefined) continue;
+            const a = localPoint(frame, ga.lat, ga.lon, z),
+              b = localPoint(frame, gb.lat, gb.lon, z);
+            const rail = [stripPolygon(a, b, 0.12)];
+            addSolid(
+              polygonPrimitive(
+                rail,
+                localPoint(frame, gm.lat, gm.lon, z)[2] + 0.55,
+                localPoint(frame, gm.lat, gm.lon, z)[2] + 0.8,
+                3,
+                [0.48, 0.49, 0.5],
+              ),
+              rail,
+            );
+          }
+        }
+        furnitureCount++;
+      }
     } catch (e) {
       if (surveyErrors.length < 4) surveyErrors.push(`parked cars: ${String(e).slice(0, 200)}`);
     }
@@ -1922,6 +2008,7 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
     cables: cables.length,
     cars: cars.length,
     parkedCars,
+    furniture: furnitureCount,
     trafficRoads: roadLines.length,
     lamps: lamps.length,
     lampReachM,
