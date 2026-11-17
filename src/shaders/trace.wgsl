@@ -16233,6 +16233,18 @@ fn liteMaterial(gq: vec3f, q: vec3f, ph: vec3f, rd: vec3f, look: vec3f, tM: f32,
     let gr = vnoise(vec3f(SC_AT * 9.0, 5.0)) * 0.6 + vnoise(vec3f(SC_AT * 1.7, 9.0)) * 0.4;
     A *= 1.0 + roadPaved * 0.12 * (gr - 0.5) * (1.0 - smoothstep(0.2, 0.6, fpM));
   }
+  // (RP10: its patches — repairs of a few metres, square-cut, fresher (darker) or older (greyer) than the road about them —, seen
+  // under a pixel of 1.5 m)
+  if (roadPaved > 0.0 && fpM < 1.5) {
+    let pc = floor(SC_AT / 4.0);
+    let ph = hash31(vec3f(pc, 41.0));
+    if (ph < 0.08) {
+      let f = fract(SC_AT / 4.0);
+      let inPatch = step(0.12, f.x) * step(f.x, 0.88) * step(0.2, f.y) * step(f.y, 0.8);
+      let tone = select(1.18, 0.78, hash31(vec3f(pc, 43.0)) < 0.5);
+      A *= mix(1.0, tone, roadPaved * inPatch * (1.0 - smoothstep(0.8, 1.5, fpM)));
+    }
+  }
   if (HAS_WX && WX_W > 0.0 && P.wx[5].x > 0.0 && !isTree) {
     let wet = P.wx[5].x * WX_W;
     var pud = 0.0;

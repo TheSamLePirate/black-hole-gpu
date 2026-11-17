@@ -10616,3 +10616,8 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
 - **Critère 5 (non jugé, sonde sans témoin négatif) :** rapport de luminance lointain / proche de 1,29 de jour et 1,88 de nuit. La couche lointaine paraît plus claire que les bâtiments proches, surtout la nuit : à examiner.
 - **Vue « dehors » :** de nouveau correcte, avec la caméra derrière l'appareil.
 - **Reste du gros e2e :** Toulon-Hyères passe (second passage). Le Marais bas est à revoler à 90 m/s (601777de, approches). Le gel de Toulon après Paris dans la même page est en reproduction (`J8Z_BEFORE`, approches). Puis le M1 Max à froid.
+
+### 2026-11-17 12:58 UTC — PLAN-J8 : le vol de référence M1 Max arrêté par le garde-fou de la zone ; RP10, les rapiéçages (session 33d89754)
+
+- **Le vol M1 Max à froid** (Paris de jour, zone préparée, repos 600 s, hors ligne, strict ; ce Mac) : **arrêté à l'étape 1**, avant tout vol. La zone avait reçu ses 60 738 chaînes vers la 7ᵉ minute, puis elle a fabriqué ses cellules (rues KSC5, maillages, forêt). Le garde-fou de `j8-a` ne suivait que les chaînes et a coupé après 10 min sans qu'elles avancent. Le Mac était passé en Heavy pendant la seule zone. Correction : le garde-fou compte aussi les cellules des caches (`kerr-street`, `kerr-mesh`, `kerr-forest`) comme progrès. À relancer, le Mac revenu en Nominal.
+- **RP10 :** les rapiéçages de la chaussée (réparations carrées de quelques mètres, plus fraîches ou plus vieilles, sous 1,5 m de pied de pixel). `check-wgsl` passe. **Non vu en jeu.**

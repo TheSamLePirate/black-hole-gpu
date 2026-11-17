@@ -143,6 +143,7 @@ test.skipIf(!E2E)(
           const z0 = Date.now();
           const meshCells = cellsAlong(corridor.points, MESH_NEAR_M).length,
             forestCells = cellsAlong(corridor.points, FOREST_NEAR_M).length;
+          let lastCells = -1;
           let last = -1,
             moved = Date.now();
           for (let k = 0; ; k++) {
@@ -164,6 +165,17 @@ test.skipIf(!E2E)(
             if ((z?.cursor ?? 0) !== last) {
               last = z?.cursor ?? 0;
               moved = Date.now();
+            }
+            // (its chains all in, the zone still making its cells — streets, meshes, forest: minutes on the M1 Max — their caches' count
+            // the progress: the stall's guard read the chains alone and stopped a zone alive at its cells, 17 Nov 2026)
+            if (z && z.cursor >= z.total && k % 5 === 0) {
+              const cells = await app.js<number>(`(async () => { let k = 0;
+                for (const name of await caches.keys()) if (/^kerr-(street|mesh|forest)-/.test(name)) k += (await (await caches.open(name)).keys()).length;
+                return k; })()`);
+              if (cells !== lastCells) {
+                lastCells = cells;
+                moved = Date.now();
+              }
             }
             if (Date.now() - moved > 600_000 || Date.now() - z0 > 3_600_000)
               throw new Error(
