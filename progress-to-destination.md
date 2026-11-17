@@ -10426,3 +10426,10 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
 - **Réalisé :** dans `liteMaterial`, la chaussée de la scène (surface de genre 1, y compris sous l'orthophoto) est traitée comme une piste. De près, elle reçoit un grain d'asphalte. Sous la pluie, elle s'assombrit et luit davantage que le sol, avec des flaques et des anneaux de gouttes à ses coordonnées dans la scène (`SC_AT`, hors du bloc du décor).
 - **Preuves :** `check-wgsl`. **Non vu en jeu.**
 - **Reste :** l'usure et les rapiéçages par classe, les reflets des phares et des lampadaires dans les flaques.
+
+### 2026-11-17 10:32 UTC — PLAN-J8 J8-RP RP5 (la forme) : les ponts entre leurs culées (session 33d89754)
+
+- **Destination :** §19.13 (« AAA road and bridges ») ; J8-RP RP5, en mode speed.
+- **Réalisé :** sur les ponts OMT de la scène (`scenery-worker.ts`), le tablier part du sol de ses deux culées. Il est relevé vers le milieu jusqu'au tirant de 5,5 m (+4 m par couche au-dessus de la première), par morceaux de 10 m. Il a ses parapets en béton et 1,2 m d'épaisseur (1,8 m pour un viaduc de plus de 400 m). Les piles sont posées tous les 34 m (130 m sur un viaduc), seulement là où le tablier passe à plus de 3,5 m du sol (FableFlight `bridge_end`). Avant, le tablier était plat au point le plus haut, avec des piles tous les 40 m.
+- **Preuves :** `tsc`, Biome, tests du décor. **Non vu en jeu.**
+- **Reste :** le type et la matière, les marquages sur le tablier, les arches (avec KSC4).

@@ -1280,35 +1280,87 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
       const mid = v.line[Math.floor(v.line.length / 2)]!;
       const at = localPoint(frame, mid.lat, mid.lon, 0);
       if (selectedAreas.some((p) => surfaceContains(at, p))) continue;
-      const points = [];
+      const points: Vec3[] = [];
       for (const at of v.line) points.push(localPoint(frame, at.lat, at.lon, await height(at.lat, at.lon)));
-      const top = Math.max(...points.map((p) => p[2])) + 4 * v.layer;
-      let made = false,
-        distance = 0;
+      // (PLAN-J8 J8-RP RP5, FableFlight's bridge_end: the deck from the ground at its two abutments — its ends —, straight between them,
+      // lifted towards its middle to a clearance over what lies under it (5.5 m; a layer above the first 4 m more), cut in pieces of
+      // 10 m at most, each on its own height; its thickness 1.2 m, a viaduct's (over 400 m) 1.8 m; concrete parapets; piers every
+      // 34 m — a viaduct's 130 m — only where the deck passes more than 3.5 m over the ground at their foot. Before: one flat deck at
+      // its highest point + 4 m a layer, piers every 40 m down to 5 m under the ground, 17 Nov 2026)
+      const span: number[] = [0];
+      for (let i = 1; i < points.length; i++)
+        span.push(span[i - 1]! + Math.hypot(points[i]![0] - points[i - 1]![0], points[i]![1] - points[i - 1]![1]));
+      const total = span[span.length - 1]!;
+      if (total < 1) continue;
+      const zA = points[0]![2],
+        zB = points[points.length - 1]![2];
+      const clearance = 5.5 + 4 * Math.max(0, v.layer - 1);
+      // (the lift the middle needs: the clearance over each inner point's ground, against the line between the abutments)
+      let lift = 0;
+      for (let i = 1; i < points.length - 1; i++) {
+        const t = span[i]! / total;
+        const env = Math.min(1, 4 * t * (1 - t));
+        if (env > 0.05) lift = Math.max(lift, (points[i]![2] + clearance - (zA + (zB - zA) * t)) / env);
+      }
+      lift = Math.min(Math.max(lift, total > 60 ? clearance * 0.5 : 0.6), 40);
+      const deckAt = (sv: number) => {
+        const t = sv / total;
+        return zA + (zB - zA) * t + lift * Math.min(1, 4 * t * (1 - t)) + 0.4;
+      };
+      const groundAt = (sv: number) => {
+        let k = 1;
+        while (k < span.length - 1 && span[k]! < sv) k++;
+        const s0 = span[k - 1]!,
+          s1 = span[k]!;
+        const f = s1 > s0 ? (sv - s0) / (s1 - s0) : 0;
+        return points[k - 1]![2] + (points[k]![2] - points[k - 1]![2]) * f;
+      };
+      const viaduct = total > 400;
+      const thick = viaduct ? 1.8 : 1.2;
+      const pierStep = viaduct ? 130 : 34;
+      let made = false;
       for (let i = 0; i < points.length - 1; i++) {
         const a = points[i]!,
           b = points[i + 1]!,
-          length = Math.hypot(b[0] - a[0], b[1] - a[1]);
+          length = span[i + 1]! - span[i]!;
         if (length < 0.5) continue;
         // (each part with its triangles — its strip's outline —: the view draws them as the buildings', 2 Nov 2026; before, their
         // boxes marked the pixels the tracer's rays then shaded, 6.5 ms of kerr-mini's frame over the Seine)
-        const deck = [stripPolygon(a, b, v.width)];
-        made =
-          addSolid(polygonPrimitive(deck, top - 1.2, top, v.water ? 4 : 2, v.water ? [0.018, 0.052, 0.055] : [0.095, 0.098, 0.1]), deck) ||
-          made;
-        for (const side of [-1, 1]) {
-          const rail = [stripPolygon(a, b, 0.28, (side * v.width) / 2)];
-          addSolid(polygonPrimitive(rail, top, top + 1, 3, [0.28, 0.27, 0.25]), rail);
+        const n = Math.max(1, Math.ceil(length / 10));
+        for (let k = 0; k < n; k++) {
+          const f0 = k / n,
+            f1 = (k + 1) / n;
+          const pa: [number, number, number] = [a[0] + (b[0] - a[0]) * f0, a[1] + (b[1] - a[1]) * f0, 0],
+            pb: [number, number, number] = [a[0] + (b[0] - a[0]) * f1, a[1] + (b[1] - a[1]) * f1, 0];
+          const top = deckAt(span[i]! + length * (f0 + f1) * 0.5);
+          const deck = [stripPolygon(pa, pb, v.width)];
+          made =
+            addSolid(
+              polygonPrimitive(deck, top - thick, top, v.water ? 4 : 2, v.water ? [0.018, 0.052, 0.055] : [0.095, 0.098, 0.1]),
+              deck,
+            ) || made;
+          for (const side of [-1, 1]) {
+            const rail = [stripPolygon(pa, pb, 0.28, (side * v.width) / 2)];
+            addSolid(polygonPrimitive(rail, top, top + 1, 3, [0.42, 0.41, 0.39]), rail);
+          }
         }
-        // Generic piers every 40 m, excluding the short spans. Anchored below the filtered DEM.
-        for (let d = 20 - (distance % 40); d < length; d += 40) {
-          if (d < 2 || d > length - 2) continue;
-          const t = d / length,
-            p: [number, number, number] = [a[0] + t * (b[0] - a[0]), a[1] + t * (b[1] - a[1]), a[2] + t * (b[2] - a[2])];
-          const pier = [stripPolygon([p[0] - 1, p[1], 0], [p[0] + 1, p[1], 0], Math.min(3, v.width * 0.5))];
-          if (addSolid(polygonPrimitive(pier, p[2] - 5, top - 1.2, 3, [0.27, 0.26, 0.24]), pier)) bridgePiers++;
-        }
-        distance += length;
+      }
+      // (the piers, along the whole bridge: where its deck stands more than 3.5 m over the ground at their foot)
+      for (let d = pierStep / 2; d < total - 2; d += pierStep) {
+        if (d < 2) continue;
+        const z = deckAt(d) - thick,
+          g = groundAt(d);
+        if (z - g < 3.5) continue;
+        let k = 1;
+        while (k < span.length - 1 && span[k]! < d) k++;
+        const A = points[k - 1]!,
+          B = points[k]!;
+        const f = span[k]! > span[k - 1]! ? (d - span[k - 1]!) / (span[k]! - span[k - 1]!) : 0;
+        const p: [number, number, number] = [A[0] + (B[0] - A[0]) * f, A[1] + (B[1] - A[1]) * f, 0];
+        const ux = (B[0] - A[0]) / Math.max(1e-6, Math.hypot(B[0] - A[0], B[1] - A[1])),
+          uy = (B[1] - A[1]) / Math.max(1e-6, Math.hypot(B[0] - A[0], B[1] - A[1]));
+        const pier = [stripPolygon([p[0] - ux, p[1] - uy, 0], [p[0] + ux, p[1] + uy, 0], Math.min(viaduct ? 5 : 3, v.width * 0.5))];
+        if (addSolid(polygonPrimitive(pier, g - 2, z, 3, [0.5, 0.49, 0.46]), pier)) bridgePiers++;
       }
       if (made) bridges++;
     } catch (e) {
