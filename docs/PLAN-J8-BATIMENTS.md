@@ -318,8 +318,12 @@ J8-R. J8-1 se voit tout de suite. J8-4 apporte le gros du gain : « toute la vue
              de jour et de nuit. On y juge chaussées et marquages (VB2), silhouettes et stationnement (VB3, VB4),
              potences et éclat des feux (VB5a, VB5b), trafic sans saut aux raccords (VB6), passages piétons, lignes
              d'arrêt, feux et glissières (VB7). Défauts à chercher : rien qui traverse un bâtiment ou qui soit peint sur
-             l'eau, pas de double route, pas de scintillement. Les tracés bas peuvent s'ajouter dans `j8a-tracks.ts`
-             si le rendu le veut ;
+             l'eau, pas de double route, pas de scintillement. **Les tracés bas sont écrits** (17 nov., accord du
+             rendu) : `J8A_LOW_TRACKS` dans `j8a-tracks.ts`, `toulon-bas` (boulevard de Strasbourg) et `paris-marais-bas`
+             (axe de la rue de Turenne jusqu'à la Seine), 70 m/s. Leurs hauteurs sont tirées des sommets BD TOPO : chaque
+             bâtiment à moins de 150 m d'un tronçon est dépassé de 15 m ou plus, et le point le plus bas est à 50–55 m
+             sur le sol (`tests/j8a-low-tracks.test.ts`) ; antennes et grues ne sont pas dans les données. Leur vol dans
+             `j8-a` revient au rendu ;
           9. ✗ les données (plan VB §7.6) : la taille et le temps de préparation des cellules de rue au format 3 dans
              chaque zone ; `j8-zone-paris` les imprime déjà (`zone.streets`). Il faut le passer sur Paris, avec la
              forêt et KSC3, avant le gros e2e (approches, sur kerr-mini, par un agent).

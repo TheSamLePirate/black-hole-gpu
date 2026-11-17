@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 17 nov. 09:55 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 17 nov. 09:50 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous. Ce qui est fermé quitte le tableau « En cours » pour la ligne « Fermé récemment ».
@@ -10229,7 +10229,7 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   en mode speed : posé 17,7/20 et 20/20, règle 13 conforme.
 - **Non vérifié :** `j8-zone-paris` n'a pas été relancé ; il tournera au gros e2e.
 
-### 2026-11-17 09:47 UTC — PLAN-J8 (mode speed, A6) : le gros e2e préparé, ses critères écrits pour le rendu (session des approches, 1feb2f7f)
+### 2026-11-17 09:44 UTC — PLAN-J8 (mode speed, A6) : le gros e2e préparé, ses critères écrits pour le rendu (session des approches, 1feb2f7f)
 
 - **Réalisé :** PLAN-J8 §6 point 13 donne l'état des approches et le détail de A6 :
   - la préparation : les zones de couloir avec leurs quatre familles de cellules, que `flightReady({ track })` compte ;
@@ -10238,7 +10238,7 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
     tronçon en vol bas (VB §7) et Paris repassée avec la forêt et KSC3.
 - **Non vérifié :** documentation seulement.
 
-### 2026-11-17 09:55 UTC — PLAN-J8 (A6) : le recensement par anneau, côté données (session des approches, 1feb2f7f)
+### 2026-11-17 09:47 UTC — PLAN-J8 (A6) : le recensement par anneau, côté données (session des approches, 1feb2f7f)
 
 - **Réalisé :** `censusRings` dans `zone-cells.ts` et `__bh.sys.census(lat, lon, anneaux)` : les bâtiments des cellules préparées
   autour d'un lieu, comptés par anneau de distance, et ceux de 10 m ou plus. C'est le côté données du critère 4 du gros e2e ; le nombre
@@ -10257,3 +10257,14 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
 - **Preuves :** `tests/car-shapes.test.ts` (formes, enroulement, répartition, étiquettes de `packScenery`), `tsc`, Biome, `check-wgsl`. **Non mesuré, non vu en jeu.**
 - **Limites :** la géométrie reste copiée par voiture (32 sommets, comme la boîte), sans instanciation. Les voitures lointaines de jour restent des boîtes.
 - **Suite :** le dessin de VB4 (le stationnement), VB5b, puis VB5a, VB2 et VB7 sur KSC3.
+
+### 2026-11-17 09:50 UTC — PLAN-J8 (A6, critère 8) : les tracés du vol bas (session des approches, 1feb2f7f)
+
+- **Réalisé :** `J8A_LOW_TRACKS` dans `j8a-tracks.ts` (accord du rendu), séparés de `J8A_TRACKS` : `j8-a` ne les vole que quand le
+  rendu codera le vol bas. Deux tracés à 70 m/s, de jour et de nuit :
+  - `toulon-bas` : du Mourillon par le boulevard de Strasbourg jusqu'à la darse ;
+  - `paris-marais-bas` : l'axe de la rue de Turenne jusqu'à la Seine.
+  Ils descendent d'environ 150 m à environ 50 m sur le sol.
+- **Vérifié :** `tests/j8a-low-tracks.test.ts`, sur les sommets BD TOPO du disque e2e. Chaque bâtiment à moins de 150 m d'un tronçon
+  est dépassé de 15 m ou plus ; le point le plus bas est à 55 m sur le sol à Toulon, 50 m dans le Marais.
+- **Limites :** les antennes, grues et flèches absentes de la BD TOPO ne sont pas vérifiées. Ces tracés n'ont jamais été volés.

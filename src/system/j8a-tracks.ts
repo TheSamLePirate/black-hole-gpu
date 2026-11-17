@@ -55,9 +55,52 @@ export const J8A_TRACKS: readonly J8ATrack[] = [
   },
 ];
 
-/** a track by its name */
+/**
+ * The low flight's tracks (PLAN-J8 §6 point 13, A6 criterion 8 — Sam, 17 Nov 2026: the big e2e « détails du vol bas compris »; the
+ * low-flight plan's §7: 150 m then 50 m over the ground): Toulon's centre along the boulevard de Strasbourg, and the Marais north to
+ * south along rue de Turenne's line, by day and by night. Apart from J8A_TRACKS: `j8-a` flies them when the render session codes the
+ * low flight (its own legs, its own checks — PLAN-J8 A6). Their heights over the sea set from the BD TOPO's tops on the e2e's disk
+ * (tests/j8a-low-tracks.test.ts: every building within 150 m of a leg cleared by 15 m or more — masts and cranes are not in the data):
+ * ~150 m over the ground on the way in, ~50 m over the town's lowest streets (Toulon 43.1247–43.123 N, the Marais 48.8625–48.8535 N).
+ */
+export const J8A_LOW_TRACKS: readonly J8ATrack[] = [
+  {
+    name: "toulon-bas",
+    label: "Toulon à basse hauteur : du Mourillon par le boulevard de Strasbourg jusqu'à la darse, 150 m puis 50 m sur le sol",
+    points: [
+      [43.118, 5.965, 200],
+      [43.124, 5.945, 160],
+      [43.1255, 5.938, 120],
+      [43.1247, 5.926, 75],
+      [43.123, 5.915, 55],
+      [43.115, 5.905, 150],
+    ],
+    // (70 m/s: a turn of ~1.1 km at 25° of bank — the legs bend by 25° at most)
+    speedMps: 70,
+    halfWidthM: 1000,
+    dates: { day: "2026-07-10T13:30:00Z", night: "2026-07-10T21:00:00Z" },
+  },
+  {
+    name: "paris-marais-bas",
+    label: "Le Marais à basse hauteur, du nord au sud par la rue de Turenne jusqu'à la Seine, 150 m puis 50 m sur le sol",
+    points: [
+      [48.878, 2.3605, 185],
+      [48.868, 2.3618, 130],
+      [48.8625, 2.3625, 90],
+      [48.8575, 2.3632, 85],
+      [48.8535, 2.3638, 90],
+      [48.851, 2.3642, 110],
+      [48.846, 2.365, 150],
+    ],
+    speedMps: 70,
+    halfWidthM: 1000,
+    dates: { day: "2026-07-10T13:30:00Z", night: "2026-07-10T21:30:00Z" },
+  },
+];
+
+/** a track by its name (the demonstration's or the low flight's) */
 export function j8aTrack(name: string): J8ATrack {
-  const t = J8A_TRACKS.find((k) => k.name === name);
+  const t = [...J8A_TRACKS, ...J8A_LOW_TRACKS].find((k) => k.name === name);
   if (!t) throw new Error(`j8a-tracks: no track "${name}"`);
   return t;
 }
