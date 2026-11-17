@@ -7,7 +7,8 @@ import { App, E2E, stopServer } from "./lib/app";
 // (j8-zone-paris, kerr-mini, 17 Nov 2026) points 2–6 stayed « far layer: N wanted cells not resident » with the world frozen — the
 // reserve refusing (72 MiB) or the layer still filling (the render session's two readings). The camera set at each point at its height,
 // the world frozen, the place's data settled; then the far layer watched up to 60 s until nothing is missing or nothing has moved for
-// 15 s: its cells wanted, missing, resident, refused, its blocks free of all, its budget — and the cells' pool (queued, past its bound).
+// 15 s: its cells wanted, missing, resident, refused, its blocks free of all, its budget, the missing cells' nearest and farthest
+// distance and how many within 12 km (read from the layer's own maps) — and the cells' pool (queued, past its bound).
 // No zone, no Service Worker: the e2e's Earth data on disk (a miss fetched and kept). A shot at each point.
 // Done when: each point's far-layer figures and the pool's written, a shot each.
 // Duration: ~4 min.
@@ -25,6 +26,9 @@ type Far = {
   blocks: number;
   budgetBytes: number;
   records: number;
+  /** (the render session's, 17 Nov 2026) the missing cells refused for the budget, the nearest missing one's distance [m] */
+  missingRefused?: number;
+  missingNearestM?: number | null;
 } | null;
 
 describe.skipIf(!E2E)(`PLAN-J8 J8-9: the far layer along J8-A's track « ${TRACK} »`, () => {
@@ -48,8 +52,15 @@ describe.skipIf(!E2E)(`PLAN-J8 J8-9: the far layer along J8-A's track « ${TRACK
           .catch((e) => console.log(`  (point ${k + 1} not settled: ${String(e).slice(0, 160)})`));
         // (the far layer watched: nothing missing, or nothing moved for 15 s, or 60 s)
         const read = () =>
-          app.js<{ far: Far; pool: Record<string, number> }>(
-            `(async () => { const f = await __bh.renderer.farBuildings(); return { far: f?.layer ?? null, pool: __bh.sys.cells.stats() }; })()`,
+          app.js<{ far: Far; pool: Record<string, number>; gap: { nearestKm: number; farthestKm: number; within12: number } | null }>(
+            `(async () => { const f = await __bh.renderer.farBuildings();
+              // (the missing cells' distances — the render session's question, 17 Nov 2026: refused only past ~12 km, or nearer? Its
+              // stats say the nearest — missingNearestM — and how many refused — missingRefused —; the farthest and those within 12 km
+              // read from the layer's own wanted set, a measuring read)
+              const L = __bh.renderer.buildingFar; let gap = null;
+              if (L && L.wanted && L.residents) { const ds = [...L.wanted].filter(([k]) => !L.residents.has(k)).map(([, w]) => w.d);
+                if (ds.length) gap = { nearestKm: Math.min(...ds) / 1000, farthestKm: Math.max(...ds) / 1000, within12: ds.filter((d) => d < 12000).length }; }
+              return { far: f?.layer ?? null, pool: __bh.sys.cells.stats(), gap }; })()`,
           );
         const t0 = Date.now();
         let r = await read(),
@@ -76,6 +87,11 @@ describe.skipIf(!E2E)(`PLAN-J8 J8-9: the far layer along J8-A's track « ${TRACK
           poolQueued: r.pool.queued,
           poolBeyond: r.pool.beyond,
           poolFailed: r.pool.failed,
+          missingRefused: f?.missingRefused,
+          missingNearestKm:
+            f?.missingNearestM != null ? +(f.missingNearestM / 1000).toFixed(1) : r.gap ? +r.gap.nearestKm.toFixed(1) : null,
+          missingFarthestKm: r.gap ? +r.gap.farthestKm.toFixed(1) : null,
+          missingWithin12Km: r.gap?.within12 ?? 0,
         };
         rows.push(row);
         console.log(`  point ${k + 1}: ${JSON.stringify(row)}`);

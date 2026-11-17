@@ -56,6 +56,7 @@ describe.skipIf(!E2E)(`PLAN-J8 J8-9: J8-A's corridor zone « ${TRACK} », downlo
       let last = -1,
         moved = Date.now();
       type Rec = {
+        meshes?: { count: number; buildings: number; bytes: number; failed: number; ms: number };
         state: string;
         cursor: number;
         total: number;
@@ -102,6 +103,16 @@ describe.skipIf(!E2E)(`PLAN-J8 J8-9: J8-A's corridor zone « ${TRACK} », downlo
       console.log(`  ready in ${(realS / 60).toFixed(1)} min (estimated ${(est.seconds / 60).toFixed(1)}): ${JSON.stringify(z)}`);
       for (const h of hosts) console.log(`  host ${JSON.stringify(h)}`);
       writeFileSync(`${OUT}/${TRACK}.json`, `${JSON.stringify({ track: TRACK, zone, estimate: est, realS, record: z, hosts }, null, 1)}\n`);
+      // (PLAN-J8 J8-8: its near mesh cells — within MESH_NEAR_M of the track —, those whose roofs the zone's canopy measured: the key's c=1)
+      const meshes = await app.js<{ canopy: number; guessed: number; measured: number }>(`(async () => {
+        const c = await caches.open("kerr-mesh-v1"); let canopy = 0, guessed = 0, measured = 0;
+        for (const r of await c.keys()) { if (r.url.endsWith("c=1")) canopy++; else guessed++;
+          const b = await (await c.match(r)).arrayBuffer(); const v = new DataView(b); const n = v.getUint32(20, true);
+          for (let i = 0; i < n; i++) if (v.getUint16(64 + 24 * i + 6, true) & 4) measured++; }
+        return { canopy, guessed, measured }; })()`);
+      console.log(
+        `  mesh cells: ${JSON.stringify(z.meshes ?? null)} · keyed with the canopy ${meshes.canopy}, without ${meshes.guessed} · buildings measured ${meshes.measured}`,
+      );
       expect(z.state).toBe("ready");
       expect(z.failed).toBe(0);
 
