@@ -31,6 +31,7 @@ import {
   ZG1,
 } from "./earth-tiles";
 import { WGS84_A } from "./ellipsoid";
+import surfaceManifest from "../../assets/earth-surface/manifest.json";
 import { BDTOPO_Z, bdtopoUrl, inBdtopoBox } from "./bdtopo";
 import { blockChains, blockSides, CANOPY_NEAR, CANOPY_Z, tilesWithin } from "./ign-canopy";
 import { SWISS_GROUND_G, swissTerrainUrl, tileSource } from "./national";
@@ -213,6 +214,30 @@ export function zoneTiles(
  * the world's runways round the zone.
  */
 export const ZONE_SCHEMA = 2;
+
+/** the regional surface packs (earth-surface.ts — Sentinel-2 colour and WorldCover classes, PLAN-CIEL pilots: Le Bourget, the Cévennes)
+ *  as the game asks them: relative to the page — the Service Worker's scope */
+export const SURFACE_PATH = "earth-surface/v1/";
+/**
+ * A zone's regional surface packs (PLAN-J8 J8-9, 17 Nov 2026: offline over Paris the Service Worker asked Le Bourget's pages of the
+ * network — no zone held them): each region whole (the game queues all its pages once the camera is within its box, margin 0.025°,
+ * under 20 km) when the zone's disc reaches its box.
+ */
+export function surfaceZoneChains(lat: number, lon: number, radius: number): ZoneChain[] {
+  const out: ZoneChain[] = [];
+  const dlat = radius / 111_320,
+    dlon = radius / (111_320 * Math.cos(lat * DEG));
+  for (const r of surfaceManifest.regions) {
+    const m = 0.025;
+    const w = r.west - m,
+      e = r.west + r.columns * r.step + m,
+      n = r.north + m,
+      sth = r.north - r.rows * r.step - m;
+    if (lon + dlon < w || lon - dlon > e || lat + dlat < sth || lat - dlat > n) continue;
+    for (const p of r.pages) out.push([`${SURFACE_PATH}${r.id}/${p.color}`], [`${SURFACE_PATH}${r.id}/${p.cover}`]);
+  }
+  return out;
+}
 
 /** the world's runways' files as the game asks them (world/runways.ts: relative to the page — the Service Worker's scope) */
 export const RUNWAYS_PATH = "runways/v1/";
@@ -477,6 +502,8 @@ export function zoneChains(
   if (o.scenery) for (const chain of streetTileZoneChains(lat, lon, radius)) add(chain);
   // (the runways' round it — the airfields, the ILS —, whatever the sources)
   for (const chain of runwayZoneChains(lat, lon, radius)) add(chain);
+  // (the regional surface packs it reaches — Le Bourget's under Paris —, whatever the sources: the game asks them below 20 km)
+  for (const chain of surfaceZoneChains(lat, lon, radius)) add(chain);
   return out;
 }
 /** a zone's URLs, every link of every chain, once each */
@@ -568,7 +595,12 @@ const sizeOf = (u: string) =>
                     : // (a runways' tile: 8.5 kB on average, 184 kB at most — t6_-20, the eastern USA —, the index 15 kB)
                       u.startsWith(RUNWAYS_PATH)
                       ? 60_000
-                      : 18_000;
+                      : // (a surface pack's page: its colour 966 kB, its classes 52 kB — Le Bourget's, 17 Nov 2026)
+                        u.startsWith(SURFACE_PATH)
+                        ? u.endsWith(".ktx2")
+                          ? 966_000
+                          : 52_000
+                        : 18_000;
 /** a zone's size before it is fetched [bytes]: its chains' first links, a tenth of the fallbacks after them (the sea, a
  *  survey's gap) */
 export function zoneEstimate(chains: readonly ZoneChain[]): number {

@@ -112,7 +112,8 @@ describe.skipIf(!E2E)(`PLAN-J8 J8-9: J8-A's corridor zone « ${TRACK} », downlo
       await app.js(`(() => { Object.assign(__bh.settings, { ship: false, traffic: false, earthClouds: 0, weather: "fair", earthPipeline: "raster",
       earthOrtho: true, earthIgnRelief: true }); __bh.renderer.debugSkipShip = true;
       __bh.renderer.farBudgetMiB = ${Number(process.env.J8A_BUDGET ?? 72)}; return 1; })()`);
-      const before = (await app.js<{ served: { network: number } }>(`__bh.pwa.stats()`)).served.network;
+      const st0 = await app.js<{ served: { network: number; kinds?: Record<string, { network: number }> } }>(`__bh.pwa.stats()`);
+      const before = st0.served.network;
       const ready: { point: number; ready: boolean; why: string[] }[] = [];
       for (let k = 0; k < track.points.length; k++) {
         const [lat, lon, alt] = track.points[k]!;
@@ -147,9 +148,10 @@ describe.skipIf(!E2E)(`PLAN-J8 J8-9: J8-A's corridor zone « ${TRACK} », downlo
       console.log(
         `  … by kind ${JSON.stringify(
           Object.fromEntries(
+            // (offline's alone: the worker's counts since it started, less those before the network was cut)
             Object.entries(st.served.kinds ?? {})
-              .filter(([, v]) => v.network)
-              .map(([k, v]) => [k, v.network]),
+              .map(([k, v]) => [k, v.network - (st0.served.kinds?.[k]?.network ?? 0)] as const)
+              .filter(([, n]) => n > 0),
           ),
         )}`,
       );
