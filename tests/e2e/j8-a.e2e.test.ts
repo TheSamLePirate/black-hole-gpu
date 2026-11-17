@@ -12,7 +12,7 @@ import { J0_FIXED } from "./lib/j0-scene";
 // built on them). Per track (J8A_TRACKS: their names) and per hour (day, night — J8A_HOURS): the F-35 put in the air over the track's
 // first point, the world frozen, everything loaded (__bh.sys.flightReady — the tiles, the near scene whole, the building cells, the far
 // layer's cells all resident; said every 10 s, 10 min at most); then flown along the track under the autopilot (its heading set every
-// 5 s to the next point, the next once within 700 m; rule 13 after each leg: the holds, the engine, the airspeed, the attitude, gear up).
+// second along the segment to the next point (a point 1.5 km ahead on it), the next a turn's lead before it; rule 13 after each leg: the holds, the engine, the airspeed, the attitude, gear up).
 // All along: the page's gaps, the GPU time, the near scene's quick ones, the real network in flight (the e2e disk cache's misses; the page's requests apart),
 // the buildings drawn (the near scene's, the far layer's boxes and quads); a cockpit shot at each point, a view from outside at the end.
 // Not yet a pass/fail on « no request, no quick scene » (J8A_STRICT: asserted; J8A_TRACK_READY: flightReady over the whole track) — J8-5 and J8-8 still to finish; it fails on the
@@ -143,17 +143,26 @@ test.skipIf(!E2E)(
           // (the real network in flight: the e2e disk cache's misses — what it had not and fetched — before and after; the requests the
           // page made, served by the disk or the Service Worker too, apart)
           const missesBefore = app.earth?.counts.misses ?? 0;
+          // (the harness's request log — 20 000 at most, filled by a zone's download — emptied: the flight's own requests named in it)
+          if (app.earth) app.earth.counts.log.length = 0;
           const flownFrom = Date.now();
           await app.settled(90_000);
           await app.js(`(() => { performance.clearResourceTimings(); performance.setResourceTimingBufferSize(100000);
             __bh.camera.apSet({ ap: true, athr: true, alt: ${p0[2]}, hdg: ${hdg0.toFixed(2)} * Math.PI / 180, spd: ${t.speedMps} });
             __bh.freeze(false); return 1; })()`);
           await app.scenario(`${t.label} — ${hour === "day" ? "de jour" : "de nuit"} : le vol`);
-          // (a leg: to point i, its heading set every 5 s, done within 700 m; 120 s at most)
+          // (a leg: along the segment to point i — its heading set every second towards a point 1.5 km ahead on the segment (no wandering
+          // off the corridor's 1 km), the next leg taken a turn's lead before point i (the turn's radius at the speed and a 25° bank:
+          // a 90° corner at 150 m/s is ~5 km round — aimed at the point itself and done within 700 m, the craft circled off the corridor
+          // at Toulon, 17 Nov 2026); 120 s at most)
           const leg = (i: number) =>
             app.js<Leg>(`(async () => {
               const R = __bh.renderer, c = __bh.camera, f = () => new Promise((q) => requestAnimationFrame(q));
-              const P = ${JSON.stringify(t.points)}[${i}], D = Math.PI / 180;
+              const PTS = ${JSON.stringify(t.points)}, P = PTS[${i}], Pp = PTS[${i} - 1], Pn = PTS[${i} + 1] ?? null, D = Math.PI / 180;
+              const cosL = Math.cos(P[0] * D), en = (q) => [(q[1] - P[1]) * 111320 * cosL, (q[0] - P[0]) * 111320];
+              const A = en(Pp), B = en(Pn ?? P), L = Math.hypot(A[0], A[1]) || 1, u = [-A[0] / L, -A[1] / L];
+              const turn = Pn ? Math.acos(Math.max(-1, Math.min(1, (u[0] * B[0] + u[1] * B[1]) / (Math.hypot(B[0], B[1]) || 1)))) : 0;
+              const lead = Pn ? (${t.speedMps} ** 2 / (9.81 * Math.tan(25 * D))) * Math.tan(turn / 2) + 200 : 700;
               const gpu = []; let gapMax = 0, frames = 0, quick = 0, last = performance.now(), done = R.completedFrames, steerAt = 0;
               const t0 = performance.now();
               while (performance.now() - t0 < 120000) {
@@ -161,9 +170,13 @@ test.skipIf(!E2E)(
                 if (R.completedFrames !== done) { done = R.completedFrames; gpu.push(+R.lastGpuMs.toFixed(2)); }
                 if (R.earthScenery.stats().quick) quick++;
                 const g = c.geoNow();
-                const dn = (P[0] - g.lat) * 111320, de = (P[1] - g.lon) * 111320 * Math.cos(g.lat * D);
-                if (Math.hypot(dn, de) < 700) break;
-                if (now - steerAt > 5000) { steerAt = now; c.apSet({ ap: true, athr: true, alt: P[2], hdg: Math.atan2(de, dn), spd: ${t.speedMps} }); }
+                const X = en([g.lat, g.lon]);
+                // (along the segment: how far before point i (its along-distance, ≤ 0 past it), the aim 1.5 km ahead on the segment)
+                const before = -(X[0] * u[0] + X[1] * u[1]);
+                if (before < lead || Math.hypot(X[0], X[1]) < 700) break;
+                const s = Math.max(0, Math.min(L, L - before + 1500));
+                const aim = [A[0] + u[0] * s, A[1] + u[1] * s];
+                if (now - steerAt > 1000) { steerAt = now; c.apSet({ ap: true, athr: true, alt: P[2], hdg: Math.atan2(aim[0] - X[0], aim[1] - X[1]), spd: ${t.speedMps} }); }
               }
               const req = performance.getEntriesByType("resource").filter((e) => /${HOSTS}/.test(e.name)).length;
               const sc = R.earthScenery.stats(), far = await R.farBuildings(), g = c.geoNow();

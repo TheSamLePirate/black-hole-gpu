@@ -47,7 +47,9 @@ export const J8A_TRACKS: readonly J8ATrack[] = [
       [43.1, 5.93, 500],
       [43.1, 5.88, 500],
     ],
-    speedMps: 150,
+    // (100 m/s: the autopilot banks 25° at most — jetmodes.ts —, a turn ~2.2 km round; at 150 m/s ~4.9 km, the rade's two right-angle
+    // corners 2.8 km apart cut ~2 km inside, off the corridor's 1 km — J8-A flown, 17 Nov 2026: its last legs off the zone)
+    speedMps: 100,
     halfWidthM: 1000,
     dates: { day: "2026-07-10T13:30:00Z", night: "2026-07-10T21:00:00Z" },
   },
