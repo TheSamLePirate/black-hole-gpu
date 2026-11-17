@@ -10521,3 +10521,9 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
 
 - **Réalisé :** `cell-roads.ts catenaryMasts` place un poteau tous les 60 m le long des voies électrifiées de KSC5 (`SurfaceFlag.Electrified`), hors de la voie extérieure. Les poteaux sont en phase d'un tronçon à l'autre, par l'abscisse de la route. Le worker en fait des solides, mât d'acier et bras au-dessus des voies, posés sur le sol déjà chargé, dans 2,5 km. Stat `catenaryMasts`.
 - **Preuves :** `tests/cell-roads.test.ts`, `tsc`, Biome. **Non vu en jeu.**
+
+### 2026-11-17 10:52 UTC — PLAN-J8 J8-RP RP3 (rendu) : conception écrite, le code reporté (session 33d89754)
+
+- **Constat :** aplanir le sol sous les routes hors de France (`roadProfile` et `roadBank`, approches) modifie le sol du monde. Le relief dessiné, le worker du décor et le contact de l'appareil et du marcheur doivent alors lire une seule fonction de sol, comme pour les pistes (`gradeAt`). Le faire dans le seul dessin désaccorderait voitures, lampadaires et roues de l'image.
+- **Proposition (au plan, ligne RP3) :** une couche « nivellement des routes » à côté de celle des pistes. Elle serait calculée à la préparation des cellules hors de France : une grille d'écarts de 2 m sous la chaussée, publiée avec une génération. `gradeAt` et le shader du relief la liraient. Ce choix est à faire avant le code, qui est reporté après le gros e2e.
+- **Pas de code** dans ce lot.
