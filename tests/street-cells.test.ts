@@ -185,7 +185,12 @@ test("J8-RP RP2: a cell's roads as runs — its segments sewn along the same roa
     roadId,
   });
   // (road 1 in three segments, given out of order; road 2 crossing it at its middle)
-  const segs = [sg([100, 0], [200, 0], 1), sg([0, 0], [100, 0], 1), sg([200, 0], [300, 0], 1), sg([100, -50], [100, 50], 2)];
+  const segs = [
+    { ...sg([100, 0], [200, 0], 1), s0: 100 },
+    sg([0, 0], [100, 0], 1),
+    { ...sg([200, 0], [300, 0], 1), s0: 200 },
+    sg([100, -50], [100, 50], 2),
+  ];
   const next = [
     { b: 2, a: 1 | NEXT_REVERSED },
     { b: 0, a: NEXT_NONE },
@@ -203,6 +208,7 @@ test("J8-RP RP2: a cell's roads as runs — its segments sewn along the same roa
     [300, 0],
   ]);
   expect(r1.segments).toEqual([1, 0, 2]);
+  expect(r1.s).toEqual([0, 100, 200, 300]);
   expect(r1.width).toBe(7);
   expect(runs.find((r) => r.roadId === 2)!.points.length).toBe(2);
 });

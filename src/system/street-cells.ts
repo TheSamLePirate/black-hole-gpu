@@ -689,6 +689,8 @@ export function bridgePiers(length: number, viaduct: boolean): number[] {
  *  France —, its points and its attributes (its first segment's). */
 export interface RoadRun {
   points: [number, number][];
+  /** each point's abscissa along its road [m] — its segments' (`s0`): continuous within a tile's cells, not from one tile to the next */
+  s: number[];
   width: number;
   lanes: number;
   cls: RoadClass;
@@ -702,7 +704,9 @@ export interface RoadRun {
 /**
  * A street cell's roads as runs (J8-RP RP2): each segment once, sewn to the next one of its own road driven forward (its continuation
  * at b, not reversed, the same road's identity), from those no such segment leads to. The scene draws its roads in France from them
- * — the BD TOPO's axis and width — rather than from OpenMapTiles' lines.
+ * — the BD TOPO's axis and width — rather than from OpenMapTiles' lines. A road crossing a cell's edge is cut there: each cell keeps
+ * the segments whose middles are its own, so the run ends on a point a little past the edge where the next cell's run of the same
+ * `roadId` begins (the same point, the same abscissa within a tile).
  */
 export function roadRuns(buf: ArrayBuffer): RoadRun[] {
   const h = readStreetHeader(buf);
@@ -721,6 +725,7 @@ export function roadRuns(buf: ArrayBuffer): RoadRun[] {
     const s = segs[start]!;
     const run: RoadRun = {
       points: [s.a],
+      s: [s.s0],
       width: s.width,
       lanes: s.lanes,
       cls: s.cls,
@@ -731,7 +736,9 @@ export function roadRuns(buf: ArrayBuffer): RoadRun[] {
     };
     for (let i = start; i >= 0 && !used[i]; i = after[i]!) {
       used[i] = 1;
-      run.points.push(segs[i]!.b);
+      const g = segs[i]!;
+      run.points.push(g.b);
+      run.s.push(g.s0 + Math.hypot(g.b[0] - g.a[0], g.b[1] - g.a[1]));
       run.segments.push(i);
     }
     out.push(run);
