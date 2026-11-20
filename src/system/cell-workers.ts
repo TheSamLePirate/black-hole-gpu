@@ -77,17 +77,43 @@ export class CellWorkers implements CellExecutor {
   }
 }
 
+async function readBuildingCell(store: Cache, x: number, y: number): Promise<ArrayBuffer | null> {
+  try {
+    const response = await store.match(cellCacheUrl(location.origin, x, y));
+    return response ? await response.arrayBuffer() : null;
+  } catch {
+    return null;
+  }
+}
+
 /** the prepared cache, read by the page */
 export const cellStore: CellStore = {
   async get(x, y) {
     try {
-      const r = await (await caches.open(CELL_CACHE)).match(cellCacheUrl(location.origin, x, y));
-      return r ? await r.arrayBuffer() : null;
+      return await readBuildingCell(await caches.open(CELL_CACHE), x, y);
     } catch {
       return null;
     }
   },
 };
+
+/** Read a census from the prepared cache with a bounded group of reads in flight. */
+export async function readBuildingCells(tiles: readonly { x: number; y: number }[]) {
+  const cells: { x: number; y: number; buf: ArrayBuffer }[] = [];
+  const store = await globalThis.caches?.open(CELL_CACHE).catch(() => null);
+  if (!store) return cells;
+  const batchSize = 16;
+  for (let i = 0; i < tiles.length; i += batchSize) {
+    const batch = await Promise.all(
+      tiles.slice(i, i + batchSize).map(async (tile) => {
+        const buf = await readBuildingCell(store, tile.x, tile.y);
+        return buf ? { ...tile, buf } : null;
+      }),
+    );
+    for (const cell of batch) if (cell) cells.push(cell);
+  }
+  return cells;
+}
 
 /** the game's pool (made at its first use) */
 let pool: CellPool | null = null;

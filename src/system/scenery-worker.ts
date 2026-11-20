@@ -1,5 +1,5 @@
 // Worldwide data preparation is isolated from the render loop. No complete COG download.
-import { carsAlong, LANE_M, PIECE_M, ROAD_TRAFFIC, TRAFFIC_MAX, TRAFFIC_REACH_M } from "./traffic";
+import { carsAlong, LANE_M, PIECE_M, ROAD_TRAFFIC, TRAFFIC_MAX, TRAFFIC_REACH_M, trafficRunwayMask } from "./traffic";
 import { VectorTile, classifyRings } from "@mapbox/vector-tile";
 import { PbfReader } from "pbf";
 import { installNetActivity } from "./net-activity";
@@ -531,8 +531,8 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
           return null;
         })
       : Promise.resolve(null);
-  // (lot 3: every cell under the frame prepared and usable — none missing, none without the canopy the scene has)
-  const forestWhole = preparedP.then((p) => !!p && p.missing === 0 && p.noCanopy === 0 && p.cases > 0);
+  // (lot 3: the prepared cells cover the planting disc, even when the frame's corners have no cells)
+  const forestWhole = preparedP.then((p) => p?.complete ?? false);
   // (Q8 D1: the main roads' segments for the traffic, and the cars on them)
   const roadLines: {
     segs: { a: { lat: number; lon: number }; b: { lat: number; lon: number } }[];
@@ -1957,6 +1957,8 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
   // (Q8 D1: the cars — PLAN-J8 VB6 since 17 Nov 2026: each road's line, on the ground, one stream each way (traffic.ts carsAlong, the
   // approaches session's: one speed, phases from the abscissa — a car leaving a piece is the one entering the next), the nearest pieces
   // first; none on any failure)
+  const onRunway = trafficRunwayMask(frame, runways, TRAFFIC_REACH_M + PIECE_M);
+  let runwayCarsRejected = 0;
   try {
     // (the ground's height already in only — the scene not held for the traffic: a point without it ends the run there)
     // (RP6: a bridge's road on its deck — deckHeightAt; none where no deck was built: its cars left out there)
@@ -2031,10 +2033,15 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
       if (run.oneway <= 0) ways.push([...run.pts].reverse());
       ways.forEach((line, w) => {
         for (const pc of carsAlong(line, run.cls, i * 2 + 1 + w)) {
+          if (!pc.cars.length) continue;
+          if (onRunway?.(pc.a, pc.b)) {
+            runwayCarsRejected += pc.cars.length;
+            continue;
+          }
           pc.a[2] = groundOn(run.pts, pc.a[0], pc.a[1]);
           pc.b[2] = groundOn(run.pts, pc.b[0], pc.b[1]);
           const d = Math.hypot((pc.a[0] + pc.b[0]) / 2, (pc.a[1] + pc.b[1]) / 2);
-          if (d <= TRAFFIC_REACH_M && pc.cars.length) pieces.push({ d, cars: pc.cars });
+          if (d <= TRAFFIC_REACH_M) pieces.push({ d, cars: pc.cars });
         }
       });
     });
@@ -2109,6 +2116,10 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
             const p = localPoint(frame, g.lat, g.lon, z) as [number, number, number];
             const r = Math.hypot(p[0], p[1]);
             if (r > PARKED_REACH_M) continue;
+            if (onRunway?.(p)) {
+              runwayCarsRejected++;
+              continue;
+            }
             // (its direction in the scene's frame: a metre along the street's heading, the left side's turned round)
             const hd = pl.heading + (pl.flags & PlaceFlag.Left ? Math.PI : 0);
             const g2 = fromCell(o, pl.east + Math.cos(hd), pl.north + Math.sin(hd));
@@ -2324,6 +2335,7 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
     pylons: pylons.length,
     cables: cables.length,
     cars: cars.length,
+    runwayCarsRejected,
     parkedCars,
     furniture: furnitureCount,
     cellRoads: cellRoadCount,

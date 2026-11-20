@@ -338,6 +338,18 @@ J8 se finit en mode speed (PLAN-J8 §6 point 13) : aucun lot VB n'a été mesur�
 `J8A_TRACK_READY`, `J8A_STRICT`, `J8A_OFFLINE`, `J8A_FOREST`, `J8A_LOW`, sur kerr-mini puis sur le M1 Max à froid) les juge
 ensemble. Chaque ligne relie le critère de sortie du §5 à ce que le gros e2e en montre ; le verdict se remplit avec ses résultats.
 
+**Rejeu du 20 novembre sur kerr-mini** (`20261120-181101-j8-a-coverage`). Les deux tracés bas passent de jour
+et de nuit, réseau de données coupé, sans scène rapide et avec des recensements complets à 10 km. GPU p50
+de 51,1 à 60,2 ms et p95 de 62,6 à 86,5 ms sur ces quatre vols. Les captures établissent la présence du
+décor à cette altitude. Les silhouettes, le positionnement du mobilier et le raccord du trafic restent à
+juger aux échelles prévues ci-dessous.
+
+**Vues rapprochées du 20 novembre.** À Toulon, les captures montrent plusieurs silhouettes et rangées de véhicules,
+les lampadaires, la peinture des voies et les traversées piétonnes. Le rendu du matériau de chaussée a été corrigé
+pour les voies de largeur mesurée (PLAN-J8 RP1/RP2, `20261120-193340-j8-surveyed-road`). La scène compte 1 027
+voitures stationnées et 2 472 éléments de mobilier. La stabilité en mouvement, les cas de chevauchement et
+le raccord du trafic restent à vérifier.
+
 | Lot | Critère de sortie (§5) | Ce qui le juge au gros e2e | Verdict |
 |---|---|---|---|
 | VB1 | pas de recul de couverture ; hors ligne | zones prêtes aux points, 0 requête (`j8-zone-paris` 17 nov. : Paris 6/6, Toulon 7/7) | données ✓ ; **en vol ✓ sur kerr-mini, un tracé par page, J8-RP compris** : Paris en strict de jour et de nuit après dc97a2c6 (`j8a-paris-fix` : 0 scène rapide, `swData` 0), Toulon-Hyères seul (`j8a-big-toulon`), `toulon-bas` jour et nuit ; `paris-marais-bas` à 90 m/s jour et nuit (`j8a-marais-bas-90` : 0 scène rapide, règle 13 tenue, GPU p50 58,1 ms de jour, 51,8 ms de nuit) ; Paris puis Toulon dans une page (`j8a-paris-toulon-fix`) ; l'« arrêt » de Toulon après Paris dans une page était une promesse du test (le compte des caches), pas la page (témoin : réponse toutes les 30 s), borné en ba9207b8 ; `flightReady` bornée aussi (a85f8f7e) ; **gros e2e définitif ✓** (17 nov. 16:48 UTC, `20261117-164327-j8a-final-main` et `-164333-j8a-final-low`, exit 0) : les 4 tracés de jour et de nuit, 0 image rapide, 0 requête de données hors ligne, recensement plein à 10 km sur 44 anneaux sur 44 |

@@ -305,13 +305,15 @@ test("world scenery: pending until the wanted scene is drawn, a quick near scene
     offset += 3100;
     scenery.update(place(48.869, 2.35), "balanced", true, true);
     expect(jobs).toHaveLength(2);
-    // (the camera 1 km on, the view led 2.1 km on — the camera still within the drawn box: not quick —, past the hold: a new
-    // centre — its land cover's raster missing: taken all the same, the drawn one elsewhere, and its error kept to try again)
-    const cam = place(48.869, 2.35),
+    // The eye is in the corner of the drawn square, over 2 km from its centre. A burst above 120 m/s
+    // should still request a full replacement while that square covers the eye.
+    const cam = place(48.874, 2.371),
       ahead = place(48.879, 2.35);
+    scenery.speed = 140;
     scenery.update(cam, "balanced", true, true, [], ahead);
     expect(jobs).toHaveLength(3);
     expect(jobs[2]!.request.quick).toBeUndefined();
+    scenery.speed = 0;
     expect(scenery.pending).toBe(true);
     reply(2, ["WorldCover raster: offline"]);
     expect(scenery.contact).not.toBe(drawn);

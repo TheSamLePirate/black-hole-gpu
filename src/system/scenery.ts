@@ -8,6 +8,7 @@ import { cartToGeodetic, geodeticToCart, WGS84_A, WGS84_F } from "./ellipsoid";
 import { EARTH_RUNWAYS } from "../game/sites";
 import { GRADE_REACH, type GradeRunway } from "../game/runway-grade";
 import { geoidN } from "./geoid-grid";
+import { PIECE_M, TRAFFIC_REACH_M, trafficRunwayMask } from "./traffic";
 import {
   D,
   sceneryBudget,
@@ -36,11 +37,10 @@ export function sceneryShader(code: string, supported: boolean) {
  *  too (SceneryRequest.eye) */
 const CENTRE_HOLD_M = 1500;
 /** the quick first scene's box, a share of the reach's (~2 km round its centre at the very far reach), asked while no drawn
- *  scene covers the camera — the camera past QUICK_COVER of the drawn box's radius, or none drawn: a first arrival, a jump —:
+ *  scene covers the camera — the camera outside the square, or none drawn: a first arrival, a jump —:
  *  the near buildings, roads and trees in a fraction of the full scene's time, the full one right after; not when a flight
  *  re-centres a scene that still covers it (each re-centring's work twice) */
 const QUICK_SHARE = 0.35;
-const QUICK_COVER = 0.8;
 
 /** the runways that grade any of a scene's ground (its box ≤ 20 km out, their funnel's reach): as the worker needs them (PLAN-J7 J7-1) */
 function runwaysAround(lat: number, lon: number): GradeRunway[] {
@@ -78,6 +78,11 @@ export class EarthScenery {
   /** (T8m) the last full and quick scenes' preparation in the worker [ms] (0: none yet) */
   private lastMs = { full: 0, quick: 0 };
   private data: SceneryReply | null = null;
+  private trafficRunwayRevision = 0;
+  trafficRunwaysChanged(runways: readonly GradeRunway[]) {
+    const centre = this.requestedCentre;
+    if (centre && trafficRunwayMask(sceneryFrame(centre.lat, centre.lon), runways, TRAFFIC_REACH_M + PIECE_M)) this.trafficRunwayRevision++;
+  }
   /** the bridges drawn (their decks the rays' kernel's: renderer — shade — not skipped while there are) */
   get bridgeCount() {
     return this.data?.bridges ?? 0;
@@ -86,6 +91,7 @@ export class EarthScenery {
    *  shadow map — drawn again */
   revision = 0;
   private camera: Vec3 | null = null;
+  private cameraGeo: ReturnType<typeof cartToGeodetic> | null = null;
   private allocated = false;
   /** the drawn buffer's size (the placeholder's 64 bytes, else a scene's budget) */
   private bufferBytes = 64;
@@ -250,6 +256,7 @@ export class EarthScenery {
     this.terrain = terrain;
     this.camera = camera;
     const geo = camera ? cartToGeodetic(1, WGS84_F, camera) : null;
+    this.cameraGeo = geo;
     this.reason = !this.supported
       ? "unsupported-storage-limit"
       : mode === "off"
@@ -273,12 +280,8 @@ export class EarthScenery {
     // crossed a 556 m cell at each turn of the head — the camera looked down, a new scene of 35–180 s asked, the old one with
     // its boxes under the craft kept meanwhile: a scene rebuilt over and over, never the one in view)
     const held = this.requestedCentre;
-    if (
-      held &&
-      this.requested.endsWith(
-        `:${mode}:${satellite}:${reach}:${this.ign}:${this.overture}:${this.lamps}:${this.corridor}:m${this.meshCells ? 1 : 0}:f${this.forestPrepared ? 1 : 0}:p${this.parkedCars ? 1 : 0}:u${this.furniture ? 1 : 0}:r${this.cellRoads ? 1 : 0}`,
-      )
-    ) {
+    const settingsKey = `:${mode}:${satellite}:${reach}:${this.ign}:${this.overture}:${this.lamps}:${this.corridor}:m${this.meshCells ? 1 : 0}:f${this.forestPrepared ? 1 : 0}:p${this.parkedCars ? 1 : 0}:u${this.furniture ? 1 : 0}:r${this.cellRoads ? 1 : 0}:rw${this.trafficRunwayRevision}`;
+    if (held && this.requested.endsWith(settingsKey)) {
       const off = Math.hypot((held.lat - wanted.lat / D) * 111320, wrapLon(held.lon - wanted.lon / D) * 111320 * Math.cos(held.lat * D));
       if (off < CENTRE_HOLD_M * reach * (this.fastFlight() ? QUICK_SHARE : 1)) c = held;
     }
@@ -299,15 +302,10 @@ export class EarthScenery {
       // (the camera moved on: its new scene asked at once, not after the throttle)
       this.attempted = -Infinity;
     }
-    // (no drawn scene round the camera — the first arrival, a jump —: a quick near one first)
-    const eyeToDrawn = this.data
-      ? Math.hypot((this.data.lat - geo.lat / D) * 111320, wrapLon(this.data.lon - geo.lon / D) * 111320 * Math.cos(geo.lat))
-      : Infinity;
-    // (T8m: or a flight too fast for a full scene — the craft out of its box's half before one is ready —: quick scenes one
-    // after the other, each centred where the craft will be — the renderer's lead —, until it slows down)
-    const quick = this.fastFlight() || (eyeToDrawn > QUICK_COVER * sceneryBox(0, 0, mode, reach).radius && !this.applied.endsWith(":q"));
+    // Keep making full scenes while the eye is covered. The published scene is a square, including at its corners.
+    const quick = this.fastFlight() || (!this.fullSceneCoversEye() && !this.applied.endsWith(":q"));
     // (PLAN-J8 J8-5: the near scene's reach left to the far layer in its key — a new one changes the scene, asked again)
-    const key = `${c.key}:${mode}:${satellite}:${reach}:${this.ign}:${this.overture}:${this.lamps}:${this.corridor}:m${this.meshCells ? 1 : 0}:f${this.forestPrepared ? 1 : 0}:p${this.parkedCars ? 1 : 0}:u${this.furniture ? 1 : 0}:r${this.cellRoads ? 1 : 0}${quick ? ":q" : ""}`;
+    const key = `${c.key}${settingsKey}${quick ? ":q" : ""}`;
     // (waited for — the settled frame, an offline render — until drawn, or failed and waiting to be tried again)
     this.wanted = key !== this.applied && !(key === this.requested && this.lastError);
     // (in flight: the next scene's data fetched ahead — the network idle otherwise until the craft leaves the hold, or while the
@@ -624,10 +622,19 @@ export class EarthScenery {
     const ms = this.fastFlight() ? this.lastMs.quick : this.lastMs.full || this.data?.workerMs;
     return ms ? (ms / 1000) * 1.35 + 3 : this.fastFlight() ? 15 : 35;
   }
-  /** (T8m) too fast for a full scene: the craft would cross half its box's radius while one is made (120 m/s at least) */
+  private fullSceneCoversEye() {
+    const box = this.drawnBox();
+    const geo = this.cameraGeo;
+    if (!box || !geo || this.applied.endsWith(":q")) return false;
+    const north = (box.lat - geo.lat / D) * 111320;
+    const east = wrapLon(box.lon - geo.lon / D) * 111320 * Math.cos(box.lat * D);
+    // The outer margin serves source reads. The content itself reaches to the nominal half-side.
+    return Math.max(Math.abs(north), Math.abs(east)) <= box.half - 650;
+  }
+  /** (T8m) outside full coverage and too fast for a full scene: the craft would cross half its radius while one is made */
   fastFlight() {
     const full = this.lastMs.full ? (this.lastMs.full / 1000) * 1.35 + 3 : 35;
-    return this.speed > 120 && this.speed * full > 0.5 * sceneryBox(0, 0, this.mode, this.reach).radius;
+    return this.speed > 120 && this.speed * full > 0.5 * sceneryBox(0, 0, this.mode, this.reach).radius && !this.fullSceneCoversEye();
   }
   /** (T8m) the box's radius the next scene will have [m] (a quick one's share in a fast flight) */
   /**
@@ -683,6 +690,7 @@ export class EarthScenery {
       forestPrepared: d?.forestPrepared ?? null,
       /** (PLAN-J8 VB4) the parked cars drawn */
       parkedCars: d?.parkedCars ?? 0,
+      runwayCarsRejected: d?.runwayCarsRejected ?? 0,
       /** (PLAN-J8 VB7) the pieces of furniture drawn */
       furniture: d?.furniture ?? 0,
       /** (PLAN-J8 J8-RP RP2) the road segments from the street cells, their cells */

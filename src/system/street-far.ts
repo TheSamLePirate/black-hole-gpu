@@ -8,11 +8,13 @@
 import { CELL_Z, cellBounds, cellKey, cellOf, cellOrigin, fromCell, toCell } from "./building-cells";
 import { BLOCK_RECORDS, cellFrameInScene, cellPriority, type EyeState, POOL_RECORD_BYTES, RecordPool } from "./building-layer";
 import type { CellPool, CellPrepared, CellWant } from "./cell-pool";
+import type { GradeRunway } from "../game/runway-grade";
+import { EARTH_RUNWAYS } from "../game/sites";
 import { sceneryFrame } from "./scenery-data";
 import type { SceneryRaster } from "./scenery-raster";
 import { readBridges, readLamp, readSegment, readStreetHeader, SegmentFlag } from "./street-cells";
 import { LAMP_REACH_M } from "./streetlamps";
-import { ROAD_TRAFFIC, TRAFFIC_REACH_M } from "./traffic";
+import { ROAD_TRAFFIC, TRAFFIC_REACH_M, trafficRunwayMask } from "./traffic";
 
 /** the far lamps' reach round the eye [m] (agreed with the approaches session: 12 km — past it night-roads' baked points) */
 export const LAMP_FAR_REACH_M = 12000;
@@ -23,18 +25,20 @@ export const LAMP_FAR_SLOTS = 2048;
 /** the far cars the pool holds (in blocks of 256 — a cell's few take a block: as many blocks as cells' frames; 512 refused Paris's 650
  *  cells, 16 Nov 2026) */
 export const CAR_FAR_CAPACITY = LAMP_FAR_SLOTS * 256;
+const CAR_CELL_REACH = 2500;
 
 /**
  * A street cell's far cars (8 floats each: the lane's start xy, its run xy [m] in the cell's frame, its phase 0…1, its speed [m/s]):
  * on its busy roads' segments (traffic.ts ROAD_TRAFFIC's classes — the near scene's —, no tunnel), each way the road allows, spaced by
  * its class (a segment shorter than the spacing: a car now and then, by its seed), their phases and speeds by the road's identity
  */
-export function farCars(buf: ArrayBuffer, segments: number): Float32Array {
+export function farCars(buf: ArrayBuffer, segments: number, onRunway?: ReturnType<typeof trafficRunwayMask>): Float32Array {
   const out: number[] = [];
   for (let i = 0; i < segments; i++) {
     const g = readSegment(buf, i);
     const t = ROAD_TRAFFIC[g.cls];
     if (!t || g.flags & SegmentFlag.Tunnel) continue;
+    if (onRunway?.(g.a, g.b)) continue;
     const dx = g.b[0] - g.a[0],
       dy = g.b[1] - g.a[1];
     const L = Math.hypot(dx, dy);
@@ -111,6 +115,14 @@ export class StreetFar {
     private raster: SceneryRaster,
     private cells: () => CellPool,
   ) {}
+
+  trafficRunwaysChanged(runways: readonly GradeRunway[]) {
+    for (const [key, cell] of this.residents) {
+      const o = cellOrigin(cell.x, cell.y);
+      if (trafficRunwayMask(sceneryFrame(o.lat, o.lon), runways, CAR_CELL_REACH)) this.evict(key);
+    }
+    this.wantedAt = null;
+  }
 
   /** each frame: the eye (null: away), the drawn scene's centre (its frame), whether it is night (the heads drawn), the reach round
    *  that centre the scene keeps its own lamps and cars within [m] (scenery-worker.ts lampReachM, trafficReachM: none of ours there) */
@@ -194,7 +206,8 @@ export class StreetFar {
         n >= Math.min(sw.north, ne.north) &&
         n < Math.max(sw.north, ne.north),
     );
-    const carsOnly = farCars(c.buf, h.segmentCount);
+    const onRunway = trafficRunwayMask(sceneryFrame(o.lat, o.lon), EARTH_RUNWAYS, CAR_CELL_REACH);
+    const carsOnly = farCars(c.buf, h.segmentCount, onRunway);
     const cars = new Float32Array(carsOnly.length + decks.length);
     cars.set(carsOnly, 0);
     cars.set(decks, carsOnly.length);

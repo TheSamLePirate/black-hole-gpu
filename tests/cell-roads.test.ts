@@ -30,7 +30,7 @@ test("RP2: a cell's roads as surface segments — measured width, the cell's mar
   const segs = [
     seg([0, 0], [100, 0]),
     seg([100, 0], [200, 0], { flags: SegmentFlag.Urban | SegmentFlag.Bridge }),
-    seg([0, 50], [80, 50], { roadId: 2, width: 4, flags: SegmentFlag.OnewayAlong }),
+    seg([0, 50], [80, 50], { roadId: 2, width: 4, flags: SegmentFlag.OnewayAlong | SegmentFlag.InferredWidth }),
     seg([0, 90], [80, 90], { roadId: 3, flags: SegmentFlag.Tunnel }),
   ];
   const next = segs.map(() => ({ a: NEXT_NONE, b: NEXT_NONE }));
@@ -47,7 +47,7 @@ test("RP2: a cell's roads as surface segments — measured width, the cell's mar
   // (the main road: 9 m, its frame moved; its dashed centre and kerb with 3 m pavements — its record widened to 4.5 + 3)
   expect(main.data.slice(0, 4)).toEqual([1000, -500, 1100, -500]);
   expect(main.data[5]).toBe(1);
-  expect(main.data[7]).toBe(4.5);
+  expect(main.data[7]).toBe(-4.5);
   expect(main.data[4]).toBe(7.5);
   const pk = main.data[6]!;
   expect(pk & 15).toBe(SurfaceFlag.CentreDashed | SurfaceFlag.Kerb);

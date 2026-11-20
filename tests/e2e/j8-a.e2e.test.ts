@@ -144,6 +144,16 @@ test.skipIf(!E2E)(
             turnRadiusM: turnRadiusFor(t.speedMps),
           };
           const d = corridorDisc(corridor);
+          // The zone classifies its terrain once at creation. Before the geoid and coarse relief load,
+          // an inland corridor is treated as coastal and fetches the extra RGE ALTI grids.
+          await app.waitProgress(
+            `(() => {
+              const n = __bh.sys.geoid(${d.lat}, ${d.lon}), h = __bh.sys.groundAt(${d.lat}, ${d.lon});
+              return Math.abs(n) > 1 && Number.isFinite(h) && h !== 0;
+            })()`,
+            `${t.name}: geoid and coarse ground before classifying the zone`,
+            { maxMs: 120_000 },
+          );
           const zone = { name: `J8-A ${t.name} (e2e)`, lat: d.lat, lon: d.lon, radiusKm: d.radius / 1000, profile: "overflight", corridor };
           const id = await app.js<string | null>(`__bh.pwa.zones.add(${JSON.stringify(zone)})`);
           if (!id) throw new Error(`${t.name}: the corridor zone refused`);
@@ -369,7 +379,11 @@ test.skipIf(!E2E)(
               census: { rings: { outerM: number; buildings: number }[]; missing: number };
               drawn: { rings: { outerM: number; buildings: number }[] };
             }>(
-              `(async () => { const g = __bh.camera.geoNow(); return { census: await __bh.sys.census(g.lat, g.lon), drawn: await __bh.sys.drawnCensus(g.lat, g.lon) }; })()`,
+              `(async () => {
+                const { lat, lon } = __bh.camera.geoNow();
+                const [census, drawn] = await Promise.all([__bh.sys.census(lat, lon), __bh.sys.drawnCensus(lat, lon)]);
+                return { census, drawn };
+              })()`,
             );
             const share = cz.census.rings.map((r, k) => ({
               km: r.outerM / 1000,

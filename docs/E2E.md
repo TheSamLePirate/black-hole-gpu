@@ -300,7 +300,7 @@ page** — a unit test, faster, for autopilot logic.
 |---|---|
 | `E2E=1` | e2e files run (else skipped); set by `bun run e2e` |
 | `E2E_URL=http://localhost:3000/` | use a server already running instead of starting one (e.g. the dev server — but its bundles can be stale, see §7) |
-| `E2E_HEADED=1` / `0` | full screen / headless, whatever the Mac's config says |
+| `E2E_HEADED=1` / `0` / `window` | full screen / headless / visible window, whatever the Mac's config says |
 | `E2E_HOLD=<s>` | Chrome kept open `<s>` s at close |
 | `E2E_BANNER=0` | no banner (the file, the test, what it proves) on a Chrome one sees |
 | `E2E_CDP_TIMEOUT=<s>` | a DevTools call fails after this (300 s): nothing waits forever |

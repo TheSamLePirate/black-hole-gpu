@@ -21,6 +21,11 @@ les autres plus tard : la fausse piste. Un **transitoire d'une trentaine de seco
 commandes du temps), la couche lointaine présente ; non vu en temps qui s'écoule. `farMaterials` rallumé par défaut. Cause du transitoire
 non cherchée (l'adaptation de l'œil, l'historique temporel des pixels lointains ?) — gravité faible.
 
+**Revu le 20 novembre.** Une capture M1 Max de Toulon après un saut à la nuit montre des lignes orange dans le ciel
+(`j8-junction-ab/after/a-toulon-nuit.png`). La capture plus tardive avec la couche des bâtiments lointains coupée ne
+les montre plus. Le rejeu kerr-mini (`20261120-191626-j8-night-stabilized`) n'en montre pas à 30 s, avant ou après
+la correction de la lueur. La durée et la cause de cette variante sur le M1 Max restent à établir.
+
 **Ce qui suit est l'historique de l'enquête (la piste des matériaux, abandonnée).**
 
 

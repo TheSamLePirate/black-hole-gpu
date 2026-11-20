@@ -44,8 +44,12 @@ export interface Cdp {
   quit(): Promise<void>;
 }
 
+const requestedDisplay = process.env.E2E_HEADED;
+const displays = { "1": "kiosk", "0": "headless", window: "window" } as const;
 export const SHOW =
-  process.env.E2E_HEADED === "1" ? "kiosk" : process.env.E2E_HEADED === "0" ? "headless" : (labConfig().chrome ?? "headless");
+  requestedDisplay === "1" || requestedDisplay === "0" || requestedDisplay === "window"
+    ? displays[requestedDisplay]
+    : (labConfig().chrome ?? "headless");
 const HOLD = Number(process.env.E2E_HOLD || 0);
 const CDP_TIMEOUT_S = Number(process.env.E2E_CDP_TIMEOUT || 300);
 const GPU =

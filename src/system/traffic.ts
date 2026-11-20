@@ -9,6 +9,61 @@
 // PLAN-J8 VB6 (carsAlong: one speed, phases from the abscissa); the traffic's density a plausible one by the road's class, not counted.
 // (carsOn, the piece-by-piece placing — each car its own speed — retired with VB6 wired, ee3afed0: rule 2.)
 
+import type { GradeRunway } from "../game/runway-grade";
+import { dot, len, sub } from "../math/vec3";
+import type { Vec3 } from "../physics";
+
+/** Protect the whole path of a car, including its lane offset and body, even when both ends lie off the runway. */
+export function trafficRunwayMask(
+  frame: { origin: Vec3; east: Vec3; north: Vec3 },
+  runways: readonly GradeRunway[],
+  reach: number,
+): ((a: readonly number[], b?: readonly number[]) => boolean) | null {
+  const margin = 12;
+  const strips = runways.flatMap((r) => {
+    const offset = sub(frame.origin, r.origin);
+    if (len(offset) > reach + r.len + r.halfWidth + 300 + margin) return [];
+    return [
+      [
+        {
+          origin: dot(offset, r.along),
+          east: dot(frame.east, r.along),
+          north: dot(frame.north, r.along),
+          min: -300 - margin,
+          max: r.len + 300 + margin,
+        },
+        {
+          origin: dot(offset, r.across),
+          east: dot(frame.east, r.across),
+          north: dot(frame.north, r.across),
+          min: -r.halfWidth - margin,
+          max: r.halfWidth + margin,
+        },
+      ],
+    ];
+  });
+  if (!strips.length) return null;
+  return (a, b = a) =>
+    strips.some((axes) => {
+      let enter = 0;
+      let leave = 1;
+      for (const axis of axes) {
+        const first = axis.origin + axis.east * a[0]! + axis.north * a[1]!;
+        const delta = axis.east * (b[0]! - a[0]!) + axis.north * (b[1]! - a[1]!);
+        if (Math.abs(delta) < 1e-9) {
+          if (first < axis.min || first > axis.max) return false;
+          continue;
+        }
+        const t0 = (axis.min - first) / delta;
+        const t1 = (axis.max - first) / delta;
+        enter = Math.max(enter, Math.min(t0, t1));
+        leave = Math.min(leave, Math.max(t0, t1));
+        if (enter > leave) return false;
+      }
+      return true;
+    });
+}
+
 /** the cars kept round the centre [m] and at most (the nearest pieces first), a piece of road's longest [m] */
 export const TRAFFIC_REACH_M = 3000;
 export const TRAFFIC_MAX = 1500;

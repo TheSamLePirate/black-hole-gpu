@@ -1,8 +1,26 @@
 import { expect, test } from "bun:test";
-import { CHORD_M, carsAlong, PIECE_M } from "../src/system/traffic";
+import { EARTH_RUNWAYS } from "../src/game/sites";
+import { dot } from "../src/math/vec3";
+import { sceneryFrame } from "../src/system/scenery-data";
+import { CHORD_M, carsAlong, PIECE_M, trafficRunwayMask } from "../src/system/traffic";
 
 // Q8 D1 — the road traffic (src/system/traffic.ts): the cars on a piece of road by its class.
 // (a car's mesh: tests/car-shapes.test.ts — PLAN-J8 VB3)
+test("Le Bourget: a parked car and a lane that crosses the entire runway are excluded", () => {
+  const runway = EARTH_RUNWAYS.find((r) => r.site.icao === "LFPB")!;
+  const frame = sceneryFrame(runway.site.lat, runway.site.lon);
+  const at = (along: number, across: number) =>
+    [frame.east, frame.north].map((axis) => along * dot(axis, runway.along) + across * dot(axis, runway.across));
+  const mask = trafficRunwayMask(frame, [runway], 3500)!;
+  const side = runway.halfWidth + 30;
+  expect(mask(at(750, 0))).toBe(true);
+  expect(mask(at(750, -side))).toBe(false);
+  expect(mask(at(750, side))).toBe(false);
+  expect(mask(at(750, -side), at(750, side))).toBe(true);
+  expect(mask(at(650, side), at(850, side))).toBe(false);
+  expect(mask(at(runway.len + 400, 0))).toBe(false);
+});
+
 test("VB6: a road's cars as one stream — one speed, evenly spaced across its pieces at every moment", () => {
   // (a straight motorway of 1 km: four pieces of 250 m, the cars every 62.5 m — round(250 / 70) a piece —, one speed)
   const line: [number, number, number][] = [

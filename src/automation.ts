@@ -63,7 +63,16 @@ import type { GameMode, ModeState } from "./game/modes";
 import { DeckPicker } from "./a320/deckpick";
 import { fieldByCode } from "./world/runways";
 import { approachesForAsync } from "./world/approaches";
-import { cellPool, cellStore, forestPool, forestPoolMade, meshPool, meshPoolMade, streetPool, streetPoolMade } from "./system/cell-workers";
+import {
+  cellPool,
+  forestPool,
+  forestPoolMade,
+  meshPool,
+  meshPoolMade,
+  readBuildingCells,
+  streetPool,
+  streetPoolMade,
+} from "./system/cell-workers";
 import { FOREST_CACHE, readForestHeader } from "./system/forest-cells";
 import { CELL_CACHE, type CellWant } from "./system/cell-pool";
 import { tilesWithin } from "./system/ign-canopy";
@@ -721,28 +730,15 @@ export function installBh(c: BhContext) {
          *  in `missing`). `ringsM`: the outer radii, rising (default 0.5, 1, 2, 5, 10, 15, 20 km). */
         census: async (lat: number, lon: number, ringsM: number[] = [500, 1_000, 2_000, 5_000, 10_000, 15_000, 20_000]) => {
           const tiles = tilesWithin(BDTOPO_Z, lat, lon, ringsM[ringsM.length - 1] ?? 0);
-          const cells: { x: number; y: number; buf: ArrayBuffer }[] = [];
-          let missing = 0;
-          for (const t of tiles) {
-            const buf = await cellStore.get(t.x, t.y);
-            if (buf) cells.push({ x: t.x, y: t.y, buf });
-            else missing++;
-          }
-          return { cells: cells.length, missing, rings: censusRings(cells, lat, lon, ringsM) };
+          const cells = await readBuildingCells(tiles);
+          return { cells: cells.length, missing: tiles.length - cells.length, rings: censusRings(cells, lat, lon, ringsM) };
         },
         /** PLAN-J8 §0 criterion 1, the drawn side (render session, 17 Nov 2026): the same census over the cells drawn now alone
          *  (renderer.drawnBuildingCells — the far layer's resident cells not left to the near meshes, the near meshes' resident ones), by
          *  the same rings — set against `census`: a ring's buildings prepared but not drawn are its shortfall. */
         drawnCensus: async (lat: number, lon: number, ringsM: number[] = [500, 1_000, 2_000, 5_000, 10_000, 15_000, 20_000]) => {
-          const cells: { x: number; y: number; buf: ArrayBuffer }[] = [];
-          const seen = new Set<string>();
-          for (const t of renderer.drawnBuildingCells()) {
-            const k = `${t.x}/${t.y}`;
-            if (seen.has(k)) continue;
-            seen.add(k);
-            const buf = await cellStore.get(t.x, t.y);
-            if (buf) cells.push({ x: t.x, y: t.y, buf });
-          }
+          const tiles = new Map(renderer.drawnBuildingCells().map((t) => [`${t.x}/${t.y}`, t]));
+          const cells = await readBuildingCells([...tiles.values()]);
           return { cells: cells.length, rings: censusRings(cells, lat, lon, ringsM) };
         },
         flightReady: async (o?: { track?: { points: readonly (readonly [number, number, number?])[] } }) => {

@@ -168,7 +168,7 @@ R reconstruction/sortie, S ombres/sondes amorties, Z hors budget (diagnostic, ch
 | C15 | `trace (discs)` | `renderer.ts:6492` | trace `main` + `DISC_ONLY` | raster, astres à l'écran | → `accum`… dans leurs rectangles | M |
 | C16 | `stars (raster)` | `renderer.ts:6500` | trace `shadeStars`, un fil par étoile (≤120 000) | raster, étoiles splattées | → `t.stars` | R |
 | C17 | `earth shade (raster)` ; `earth raster: left pixels` | `renderer.ts:6512` | trace `shade` (+ `shadeMark`) ; **`shadeMark` seul** quand `liteAll` et une cadence > 1 (PLAN-J5 J5-6, 15 nov.) | raster et **pas `liteAll`** : ponts, arbres < 80 m, boîtes marquées ; `shadeMark` à toute cadence > 1 — **il marque aussi les pixels du matériau de la Terre laissés** (`RASTER_STALE`, l'albédo et la profondeur), que le `resolve` rebâtit | → `accum`… pour les restes ; `moments` des pixels laissés | M |
-| C18 | `earth lite (raster)` / `body lite (raster)`, puis `earth lite: light`, `earth lite: finishing` | `encodeLite` | trace `shadeLite` ; **différé (11 nov., `withLiteDeferred`, l'appareil prenant 37 textures)** : `shadeLite` ne fait plus que le **matériau** (`liteMaterial`, 6,7 k lignes inlinées) et écrit son enregistrement — 4 `rgba32float` `matOut0…3`, groupe 1 liaisons 14–17 : albédo et distance ; normale (oct), drapeaux (arbre, verre, classe, route), lumières de nuit ; l'émission unique (transmission d'arbre, fenêtres, feux de piste) et la part d'orthophoto ; verre/AO de bâtiment ou pavage/couvert de route, humidité, ondes —, le pixel marqué `RASTER_MAT` (−11,5) ; `shadeLiteLight` (2,4 k lignes) relit (liaisons 18–21), retrouve rayon, point, lumière, empreinte et l'eau (`liteWater`), éclaire (`liteLight`) et finit (`liteEpilogue`) vers `liteOut` ; mesuré forêt kerr-mini : 18,1 + 18,4 + 3,0 ms (39,5 contre 42,1) ; **découpé (11 nov., `tracer-source.ts` `withLiteSplit`)** : il écrit la radiance de surface et la distance dans `liteOut` (`rgba32float`, groupe 1 liaison 13, sa propre mise en page `liteLayout`) et marque le pixel `RASTER_SPLIT` (−9,5) ; `shadeLiteFinish` (trace, 0,8 k lignes inlinées) met l'air et les nuages (`liteFinishAt` → `liteFinish`), `liteOut` lu à la place de la LUT (groupe 1 liaison 2) ; les deux compilés par paire (`liteWithFinish`) — mesuré sur kerr-mini (Toulon, forêt à 120 m) : 46 → 41 + 3 ms ; Terre : un fil par pixel, chaque frame — **à une cadence > 1 (`earthRasterShading` « demi »… ; « auto » garde 1 sous le matériau), un fil par pixel du motif, serrés (`rasterPixel`), le matériau, sa lumière et sa finition lancés sur la largeur divisée ; les autres marqués par `shadeMark` (PLAN-J5 J5-6, 15 nov. : « demi » mesuré J0 −1,9 à −3,2 ms, les Maures −5,7 à −6,3, kerr-mini, A/B ×2)** ; **l'eau classée d'abord (`liteWater`) : la pleine mer profonde sort aussitôt ; la mer peu profonde aussi, après la seule lecture de l'imagerie (son albédo dans `accum`, `w` = 2)** (S2 et S3, 10 nov. ; `liteSkip` 2³⁰ l'A/B des deux) ; autres corps : `bodyLite` → `shadeNear`, dont la mer de Miller ombrée par le `seaShade` de la Terre (`SEA_ALIEN`, 10 nov.) ; à une cadence > 1 son `shadeMark` (mise en page `mainLayout`) dans la même passe, **le groupe 1 de la LUT relié avant lui** (11 nov. : le groupe 1 du matériau laissé lié invalidait la passe sur la Lune — erreur WebGPU à chaque image, vue par l'e2e `apprendre-vaisseaux`) | `shadeLite` compilé | → `accum`, `moments`, `stamps` | M |
+| C18 | `earth lite (raster)` / `body lite (raster)`, puis `earth lite: light`, `earth lite: finishing` | `encodeLite` | trace `shadeLite`. Depuis J8-A (20 nov.), `liteLight` introduit progressivement la lueur urbaine des seuls bâtiments lointains entre 1,5 et 4 km de la caméra. L’émission des fenêtres suit toujours le matériau. Sous 2 m de pied de pixel à moins de 2,5 km, la chaussée de largeur mesurée conserve son matériau avec 25 % de la part photographique (RP1/RP2). **Différé (11 nov., `withLiteDeferred`, l'appareil prenant 37 textures)** : `shadeLite` ne fait plus que le **matériau** (`liteMaterial`, 6,7 k lignes inlinées) et écrit son enregistrement — 4 `rgba32float` `matOut0…3`, groupe 1 liaisons 14–17 : albédo et distance ; normale (oct), drapeaux (arbre, verre, classe, route), lumières de nuit ; l'émission unique (transmission d'arbre, fenêtres, feux de piste) et la part d'orthophoto ; verre/AO de bâtiment ou pavage/couvert de route, humidité, ondes —, le pixel marqué `RASTER_MAT` (−11,5) ; `shadeLiteLight` (2,4 k lignes) relit (liaisons 18–21), retrouve rayon, point, lumière, empreinte et l'eau (`liteWater`), éclaire (`liteLight`) et finit (`liteEpilogue`) vers `liteOut` ; mesuré forêt kerr-mini : 18,1 + 18,4 + 3,0 ms (39,5 contre 42,1) ; **découpé (11 nov., `tracer-source.ts` `withLiteSplit`)** : il écrit la radiance de surface et la distance dans `liteOut` (`rgba32float`, groupe 1 liaison 13, sa propre mise en page `liteLayout`) et marque le pixel `RASTER_SPLIT` (−9,5) ; `shadeLiteFinish` (trace, 0,8 k lignes inlinées) met l'air et les nuages (`liteFinishAt` → `liteFinish`), `liteOut` lu à la place de la LUT (groupe 1 liaison 2) ; les deux compilés par paire (`liteWithFinish`) — mesuré sur kerr-mini (Toulon, forêt à 120 m) : 46 → 41 + 3 ms ; Terre : un fil par pixel, chaque frame — **à une cadence > 1 (`earthRasterShading` « demi »… ; « auto » garde 1 sous le matériau), un fil par pixel du motif, serrés (`rasterPixel`), le matériau, sa lumière et sa finition lancés sur la largeur divisée ; les autres marqués par `shadeMark` (PLAN-J5 J5-6, 15 nov. : « demi » mesuré J0 −1,9 à −3,2 ms, les Maures −5,7 à −6,3, kerr-mini, A/B ×2)** ; **l'eau classée d'abord (`liteWater`) : la pleine mer profonde sort aussitôt ; la mer peu profonde aussi, après la seule lecture de l'imagerie (son albédo dans `accum`, `w` = 2)** (S2 et S3, 10 nov. ; `liteSkip` 2³⁰ l'A/B des deux) ; autres corps : `bodyLite` → `shadeNear`, dont la mer de Miller ombrée par le `seaShade` de la Terre (`SEA_ALIEN`, 10 nov.) ; à une cadence > 1 son `shadeMark` (mise en page `mainLayout`) dans la même passe, **le groupe 1 de la LUT relié avant lui** (11 nov. : le groupe 1 du matériau laissé lié invalidait la passe sur la Lune — erreur WebGPU à chaque image, vue par l'e2e `apprendre-vaisseaux`) | `shadeLite` compilé | → `accum`, `moments`, `stamps` | M |
 | C18b | `sea surface` (rendu) puis `sea surface resolve` (calcul) | `encodeSeaSurface` → `TerrainRaster.encodeSea` | `terrain-raster.ts` `seaVs`/`seaFs` (CDLOD de `sea/surface-nodes.ts`, 16² quads par nœud, 200–900 nœuds) et `seaResolve` | Terre, sous 3 km au-dessus de la mer, FFT prête, `seaSurfaceOn` (PLAN-MER-WEBGPU S2) | lit `moments` (pixels de pleine mer), la visibilité, la FFT, la table des rivages (une crête gardée devant le sol plus haut que les vagues, son point en mer : `seaCrestsOverLand`) → cible r32float + profondeur propres → `moments.y` (la distance de la surface déplacée) → `shadeWater` | W |
 | C19 | `earth water (raster)` | `encodeLite` | trace `shadeWater`, pleine résolution ; la distance de la surface lue dans `moments.y` (celle de `sea surface` où elle est dessinée) ; l'albédo du fond laissé par `shadeLite` (`accum.w` = 2) éclairé ici ; le SSR seulement à moins de 8 km d'une terre (`seaAllAround`, une lecture du masque de mer) ; **le SSR lit `moments`/`accum` d'autres pixels, dont ceux d'eau que cette même passe écrit (marque 4e30, autres groupes de travail, sans ordre) : cause des points blancs/cyan de la mer (M1 Max, 12 nov.) — écartés (`mk > 3e30`) depuis le 13 nov. (décision de Sam), toujours depuis le lot R1 (le levier `seaSsrSafe` retiré : `shadeWaterFinish`, qui finit des pixels d'eau en lisant les autres, a la même course)** ; **l'eau étagée, première étape (13 nov., `withLiteSplit`, décision 1 de Sam) : sa fin — l'air et les nuages, `liteFinish` — sortie du noyau : il écrit la radiance de sa surface et la distance dans `liteOut` (mise en page `liteLayout`, groupe 1 `lite`) et marque le pixel `RASTER_SPLIT_WATER` (−10,25 ; −10,75 si l'eau couvre plus de la moitié du pixel) — C19d les finit ; **E2 (13 nov.) : compilé avec `WATER_REFL_DEFER` (mise en page `waterLayout` : `liteOut` et `matOut0…2`, liaisons 13–16), il laisse les reflets de la mer à C19d — leur enregistrement dans les trois premières textures du sol différé** ; ses pixels ne sont plus lus par le SSR pendant qu'il les écrit (la course des points blancs disparaît par construction)** ; **la houle côtière (L1–L2) y coûte +2,0 / +2,2 ms sur une côte** (sonde `coast-swell`, toutes les passes relevées, kerr-mini, 15 nov., 0234f17c : allumée contre compilée hors, rien ailleurs) ; **sa passe à part (`shadeSwell`, J4-4) essayée et retirée** : −0,4 à +0,3 ms, le travail déplacé, pas réduit ([PLAN-J4 §10](PLAN-J4-VOLUMES.md)) ; **à demi-rythme depuis le 15 nov. 2026 (PLAN-J5 J5-5, `WATER_HALF`, réglage provisoire)** : un pixel sur deux par image (damier tourné chaque image), des groupes de 32 fils par tuile (`WATER_WG_Y` 4), le résultat écrit aussi au pixel voisin de la paire (l'historique a les deux en deux images ; le voisin ombré quand celui du damier n'est pas de l'eau) — **J0 −6,0 à −6,4 ms, à 30 m sur la mer −6,6 / −7,2 (kerr-mini), l'image la même** ; la moitié des fils d'un groupe de 64 sortis ne rendait rien (le coût suit les groupes) ; **confirmé par Sam le 15 nov. : le seul chemin, l'ancien et son levier retirés (J5-R2)** ; **sa finition (C19d) au même demi-rythme** (le pixel fini recopié au voisin) : J0 −7,4 ms en tout (48,1 contre 55,6) | Terre, noyau prêt, sa passe de finition compilée | → `liteOut`, `moments`… + mot « mer vue » → sonde de mer | W |
 | C19c | `earth water open (raster)` | `encodeLite` | trace `shadeWater` compilé avec `WATER_OPEN` (entrée `shadeWaterOpen`) : les pixels de pleine mer — sans fond connu à 60 m, sans rivage à portée du lavis, pas d'eau intérieure —, le code des côtes et de l'eau intérieure retiré (PLAN-MER-WEBGPU S3) ; `shadeWater` les lui laisse (`P.seafft[0].x` = 2) ; **sa fin vers `liteOut` comme `shadeWater` (13 nov.)** | noyau compilé (après l'image), FFT de la mer active, `seaWaterOpenOn` | → `liteOut`, `moments` | W |
@@ -535,8 +535,8 @@ fini. Les marques entre crochets sont celles de `__bh.boot()` (`src/boot-timelin
 | 7 | Titre ouvert 8 s | **pré-compilation du vol terrestre** (`prewarmEarthFlight`, `main.ts:9729`), non urgente ; noyau général, LUT, aérien retenus (`backgroundHold`) ; **depuis CM3 (12/11)**, Vol libre ou À pied sur la Terre choisis : le départ (`renderer.departure`) — cartes globales `high` puis fenêtres de tuiles du lieu demandées pendant le choix, retirées sur un autre écran | clé Terre-raster complète | titre | non | non mesuré séparément | `compilesPending`, `compileReport()` |
 | 8 | Lancement d'un mode | voile d'entrée : attend le noyau de la scène (`scene-tracer`), ≤ 90 s (`ui/entry.ts:67`) ; arrêt de la pré-compilation | la clé de la scène choisie | voile 400 ms, HUD 600 ms | oui (≤ 90 s) | entrée en orbite 2,1 s (E10, e2e) ; vol libre depuis le titre (Edwards, profil neuf, ce Mac, CM3 12/11, `title-departure`) : voile levé à 2,2–2,6 s **sur une image noire** — cartes globales de la Terre et tuiles demandées seulement après, 1re tuile à 11,3 s ; **après CM3** : le voile attend aussi le sol du départ (cartes, chaque niveau z ≤ 10 dessiné autour de l'appareil ; ≤ 15 s, `__bh.entry.lastWait`) — levé à 3,3–3,7 s (Edwards), 3,5 s (Le Bourget), relief dessiné 29–50 %, plus d'image noire | `__bh.entry`, aucune marque dans `boot()` |
 | 9 | Arrivée près de la Terre | cartes globales med puis high ; **tuiles** relief z6–17 (8 en vol, décodées en worker) et imagerie, IGN (14 en vol ; SW : WMS-R 25/s et 10 en vol, WMTS/TMS 16 en vol sans débit depuis CM2 12/11 — avant, les orthophotos attendaient 5 s derrière les grilles ; les 429 viennent du seul WMS-R, `pwa.stats().served.geopf`), ortho (8) ; une tuile en échec : son parent agrandi en attendant, redemandée (2 s → 30 s, aussitôt au retour du réseau ; CM1 12/11 — plus la carte mondiale à 4,9 km) ; l'imagerie de jour publiée sans la nuit si celle-ci manque ou tarde de 3 s ; cuissons du cache ; raster créé (pipelines async) | si non pré-compilé : `shadeLite` → `skyFill` → `clouds` (secondes, **image du ciel d'attente**) → `main` → … ; raster du terrain et du décor | sol grossier 2–6 s, puis affiné | **non** (le ciel d'attente remplace `main`) | ILS LFTH froid : côtés complets 38 s, file vide 44 s ; vue à 90 % en 8,1 s (rejeu, ce Mac, T8j 3/11) ; Paris relief 57 s (kerr-mini, M0b 2/11) ; **Paris 900 m froid (ce Mac, CM0 12/11, `tile-arrival`)** : vue à 90 % en 4,9–6,1 s avec ou sans SW, mais avec le SW imagerie z 9–14 reçue p50 5 s (0,25 s sans), orthophotos dessinées 4–5 s (0,7 s), relief IGN 22–23 s (7–8 s) ; à 20 Mbit/s vue à 90 % en 21–22 s, z 11–14 jamais entiers en 60 s | `earthTiles.pending`, `renderer.earthSettled` (booléen) ; **par tuile** : `earthTiles.arrivals` (demandée → reçue → écrite → dessinée, par source ; CM0) |
-| 10 | Décor (forêts, bâtiments, routes) | worker du décor : WorldCover, OSM, BD TOPO/Overture, canopée IGN, forêt, BVH ; scène rapide (35 %) puis complète ; **en vol rapide (> 120 m/s), chaque scène rapide centrée jusqu'à 2,5 fois son rayon devant (`renderer.sceneryQuickLead` — **16 nov. : ne suffit pas, bâtiments devant à l'arrivée sur Toulon 1 passage sur 6 ; le décor en retard, pas absent : 41 une fois laissé finir ; PROBLEMES** —, 1,2 avant le 15 nov. : arrivée derrière l'avion, aucun bâtiment devant en arrivant sur Toulon ; e2e `parcours-ville`)** ; fondu 600 ms ; buffer ≤ 64 Mio ; **bâtiments plafonnés** (8 000 × portée², 32 000 en `high`/`veryFar`, les plus proches **du centre de la scène** gardés — `cutBuildings`, `keptReachM`) ; les arbres de la canopée IGN exclus des emprises des seuls bâtiments gardés : sur les îlots coupés, la canopée (MNH, qui contient les toits) plante des arbres — `earthScenery.clearCut` (éteint, décision de Sam) les exclut aussi des emprises coupées ; **plafond de 32 000 bâtiments gardés le long du couloir de vol** (`earthScenery.corridor`, 13 nov. : de l'œil à l'au-delà du centre, non plus autour du centre seul ; `clearCut` allumé : les arbres refusés aux îlots coupés) | `shade` quand le décor entre (profil : déjà compilé) | arbres et bâtiments en fondu | non | scènes 24–33 s (kerr-mini, T8o 6/11) ; couverture 0,97 (T8m) ; **Paris, ce Mac, 12/11, `cut-buildings-trees`** : 215 000–261 000 bâtiments coupés, gardés à 2,5 km du centre ; `clearCut` : 1,22–1,37 M → 0,64–0,68 M arbres, grille des emprises coupées 0,5–0,75 s et forêt +0,9–1,3 s dans le worker (une scène chaude 22–23 s), image GPU inchangée dans le bruit (thermique « Heavy ») | `earthScenery.stats()`, compteur de données |
-| 10 b | Cellules préparées (PLAN-J8) | workers des cellules (`cell-worker.js`, pools de `cell-workers.ts`) hors de l'image : **bâtiments** z 15 (J8-3, `kerr-cells-v1`, lus par la couche lointaine), **rues** (J8-L, `kerr-street-v5` depuis le 17/11 — KSC3 : la potence des lampes, les suites et surfaces des tronçons, le mobilier des jonctions, J8-VB VB2/VB5a/VB6/VB7 ; KSC4 : les ponts chaînés par tuile, l'indice de pont par tronçon, les bouches de tunnel, J8-RP RP2/RP4/RP6/RP7/RP8 ; KSC5 : les voies ferrées, RP9 ; les caches des formats anciens effacés à la création du pool —, lampadaires et voitures lointains), **forêt par cellule** (J8-8b lot 1, 17/11 : `kerr-forest-v1` — `forest-cells.ts`, `forest-prep.ts`, `forest-cover.ts`, `forest-exclusions.ts` — : les candidats de la grille fixe de la forêt par cellule z 15 ; **assemblés par la scène depuis le lot 2** (17/11, `renderer.forestCellsOn`, éteint par défaut tant que non mesuré : le worker du décor lit les cellules sous son cadre dans `kerr-forest-v1` avant `growForest` — `forest-assembly.ts` `preparedForest`, phase `forest cells` — et ne décide plus que le sol, l'espèce, la hauteur et le pied des cases couvertes ; les clés du cache lues une fois par scène ; une cellule sans canopée laissée à une scène qui a celle de l'IGN ; le pool forêt demandé à 7 km de l'œil seulement avec `forestPoolOn` (éteint : les cellules des zones seules) ; lot 3 (non mesuré) : les cellules lues dès le début de la scène, et toutes là avec les maillages proches, la BD TOPO n'est plus téléchargée ni décodée par la scène ; `growForest` et le décodage BD TOPO pour les arbres retirés au lot 3) ; Toulon, 4 cellules en 0,6 s, 120–210 ms la cellule, ~34 Ko, image la plus longue 18 ms, kerr-mini, `j8-forest-cells`), **maillages proches** (J8-8 lot 1, 17/11 : `kerr-mesh-v1` — `mesh-cells.ts`, `mesh-prep.ts`, le code des enregistrements partagé avec le worker du décor, `building-mesh-prep.ts` — ; **rien ne les dessine encore** : réserve GPU et dessin au lot 2) ; une zone en couloir les prépare après ses tuiles (maillages : à moins de `MESH_NEAR_M` = 1 500 m du tracé) ; `flightReady({ track })` les compte | — | — | non (workers) | maillages : Toulon centre, 9 cellules en 1,1 s à froid, médiane 254 ms la cellule, 7 854 bâtiments, 8,0 Mo, image la plus longue 10 ms (ce Mac, 17/11, `j8-mesh-cells`) ; Paris centre 345 ms la cellule et ~2,75 ko le bâtiment hors navigateur (`scripts/j8-8-mesh-measure.ts`, un fil) | `__bh.sys.cells` / `streets` / `meshes` `.stats()` |
+| 10 | Décor (forêts, bâtiments, routes) | worker du décor : WorldCover, OSM, BD TOPO/Overture, canopée IGN, forêt, BVH ; scène rapide (35 %) puis complète. Le worker continue de préparer des scènes complètes tant que le carré publié couvre la caméra (J8-A, 20 nov. 2026). **Hors de cette couverture, en vol rapide (> 120 m/s), chaque scène rapide centrée jusqu'à 2,5 fois son rayon devant (`renderer.sceneryQuickLead` — **16 nov. : ne suffit pas, bâtiments devant à l'arrivée sur Toulon 1 passage sur 6 ; le décor en retard, pas absent : 41 une fois laissé finir ; PROBLEMES** —, 1,2 avant le 15 nov. : arrivée derrière l'avion, aucun bâtiment devant en arrivant sur Toulon ; e2e `parcours-ville`)** ; fondu 600 ms ; buffer ≤ 64 Mio ; **bâtiments plafonnés** (8 000 × portée², 32 000 en `high`/`veryFar`, les plus proches **du centre de la scène** gardés — `cutBuildings`, `keptReachM`) ; les arbres de la canopée IGN exclus des emprises des seuls bâtiments gardés : sur les îlots coupés, la canopée (MNH, qui contient les toits) plante des arbres — `earthScenery.clearCut` (éteint, décision de Sam) les exclut aussi des emprises coupées ; **plafond de 32 000 bâtiments gardés le long du couloir de vol** (`earthScenery.corridor`, 13 nov. : de l'œil à l'au-delà du centre, non plus autour du centre seul ; `clearCut` allumé : les arbres refusés aux îlots coupés) | `shade` quand le décor entre (profil : déjà compilé) | arbres et bâtiments en fondu | non | scènes 24–33 s (kerr-mini, T8o 6/11) ; couverture 0,97 (T8m) ; **Paris, ce Mac, 12/11, `cut-buildings-trees`** : 215 000–261 000 bâtiments coupés, gardés à 2,5 km du centre ; `clearCut` : 1,22–1,37 M → 0,64–0,68 M arbres, grille des emprises coupées 0,5–0,75 s et forêt +0,9–1,3 s dans le worker (une scène chaude 22–23 s), image GPU inchangée dans le bruit (thermique « Heavy ») | `earthScenery.stats()`, compteur de données |
+| 10 b | Cellules préparées (PLAN-J8) | le trafic et le stationnement sont filtrés côté CPU avec les axes WGS84 des pistes. Les cellules lointaines concernées sont réémises quand les pistes du catalogue changent. Workers des cellules (`cell-worker.js`, pools de `cell-workers.ts`) hors de l'image : **bâtiments** z 15 (J8-3, `kerr-cells-v1`, lus par la couche lointaine), **rues** (J8-L, `kerr-street-v5` depuis le 17/11 — KSC3 : la potence des lampes, les suites et surfaces des tronçons, le mobilier des jonctions, J8-VB VB2/VB5a/VB6/VB7 ; KSC4 : les ponts chaînés par tuile, l'indice de pont par tronçon, les bouches de tunnel, J8-RP RP2/RP4/RP6/RP7/RP8 ; KSC5 : les voies ferrées, RP9 ; les caches des formats anciens effacés à la création du pool —, lampadaires et voitures lointains), **forêt par cellule** (J8-8b lot 1, 17/11 : `kerr-forest-v1` — `forest-cells.ts`, `forest-prep.ts`, `forest-cover.ts`, `forest-exclusions.ts` — : les candidats de la grille fixe de la forêt par cellule z 15 ; **assemblés par la scène depuis le lot 2** (17/11, `renderer.forestCellsOn`, éteint par défaut tant que non mesuré : le worker du décor lit les cellules sous son cadre dans `kerr-forest-v1` avant `growForest` — `forest-assembly.ts` `preparedForest`, phase `forest cells`. Avec les maillages proches, la lecture BD TOPO est évitée quand les cellules couvrent toutes les positions plantables du disque (J8-8b, 20 nov.) — et ne décide plus que le sol, l'espèce, la hauteur et le pied des cases couvertes ; les clés du cache lues une fois par scène ; une cellule sans canopée laissée à une scène qui a celle de l'IGN ; le pool forêt demandé à 7 km de l'œil seulement avec `forestPoolOn` (éteint : les cellules des zones seules) ; lot 3 (non mesuré) : les cellules lues dès le début de la scène, et toutes là avec les maillages proches, la BD TOPO n'est plus téléchargée ni décodée par la scène ; `growForest` et le décodage BD TOPO pour les arbres retirés au lot 3) ; Toulon, 4 cellules en 0,6 s, 120–210 ms la cellule, ~34 Ko, image la plus longue 18 ms, kerr-mini, `j8-forest-cells`), **maillages proches** (J8-8 lot 1, 17/11 : `kerr-mesh-v1` — `mesh-cells.ts`, `mesh-prep.ts`, le code des enregistrements partagé avec le worker du décor, `building-mesh-prep.ts` — ; **rien ne les dessine encore** : réserve GPU et dessin au lot 2) ; une zone en couloir les prépare après ses tuiles (maillages : à moins de `MESH_NEAR_M` = 1 500 m du tracé) ; `flightReady({ track })` les compte | — | — | non (workers) | maillages : Toulon centre, 9 cellules en 1,1 s à froid, médiane 254 ms la cellule, 7 854 bâtiments, 8,0 Mo, image la plus longue 10 ms (ce Mac, 17/11, `j8-mesh-cells`) ; Paris centre 345 ms la cellule et ~2,75 ko le bâtiment hors navigateur (`scripts/j8-8-mesh-measure.ts`, un fil) | `__bh.sys.cells` / `streets` / `meshes` `.stats()` |
 | 11 | Vol | re-cuissons du cache (≈16/s en vol bas, M0b), nouvelles tuiles (publiées au début de l'image sous budget, une soumission de mips par image — J2-1), décor reconstruit 40–50 s, bandes des horizons ; gouverneurs (bloc, taux raster, échelle, palier) | clé en avance (`aheadKey`) ; rien de neuf sous le profil | — | non | vol de 2 min à Chamonix 30–32 ms médian, p95 37–40, max 72,6 (kerr-mini, M0b) | `game.perf()`, `gpu.frames()` |
 | 12 | Voyage vers un autre corps | `NEAR_KIND` change → nouvelle clé — **depuis le 13/11, le noyau du corps visé demandé dès le départ du voyage** (`renderer.prewarmNear`, `main.ts` `travelTo`, non urgent ; levier de mesure `prewarmVoyage`) ; cartes HD + tuiles Lune/Mars ; bake des horizons ; raster des corps | `main`/`env`/`shadeLite` du corps (Mars 86k, Lune 73k lignes) ; **Jupiter proche 203–219 s à froid** (M1 Max, 6/11) ; **60 s** sur kerr-mini (13/11), ~47 s à l'arrivée d'un voyage anticipé | l'ancienne clé couvre si possible | parfois | Lune prête 7,9 s, trou de ver 8,6 s (kerr-mini 27/10) | `compileReport()` ; aucun chrono de re-streaming |
 | 13 | Carte 3D, trace au sol | `MapGpu` : 6 pipelines sync à l'ouverture, même device | 6 sync | carte | court | non mesuré | aucun |
@@ -727,7 +727,7 @@ Paris jusqu'à `earthSettled` » chronométré par étape.
 
 <!-- pipeline-inventory:begin (bun scripts/pipeline-inventory.ts --write) -->
 
-_Généré le 2026-11-20T12:50:57Z sur `12e1e805` (arbre de travail). Ne pas éditer à la main : relancer l'outil._
+_Généré le 2026-11-20T18:50:05Z sur `83484708` (arbre de travail). Ne pas éditer à la main : relancer l'outil._
 
 **126 sites de création de pipeline** (82 rendu, 44 calcul, dont 62 asynchrones) et 42 `createShaderModule` dans 31 fichiers ; **43 programmes WGSL** (15 fichiers .wgsl, 28 chaînes dans le TypeScript) ; **66 libellés de passes** du profileur GPU (+ 11 sites à libellé dynamique).
 
@@ -799,13 +799,13 @@ _Généré le 2026-11-20T12:50:57Z sur `12e1e805` (arbre de travail). Ne pas éd
 | `src/renderer.ts:1944` | render async | — | `vs`, `fs` |
 | `src/renderer.ts:1952` | compute async | — | — |
 | `src/renderer.ts:1990` | compute async | — | — |
-| `src/renderer.ts:6923` | compute async | — | `ep` |
-| `src/renderer.ts:7650` | compute | — | — |
-| `src/renderer.ts:8699` | compute | — | — |
-| `src/renderer.ts:10879` | compute async | `clouds` | `cloudShadow` |
-| `src/renderer.ts:10961` | compute async | `sky ambient write` | `cloudLightVolume` |
-| `src/renderer.ts:11043` | compute async | — | `skyAmbient` |
-| `src/renderer.ts:13366` | compute async | — | `probe` |
+| `src/renderer.ts:6933` | compute async | — | `ep` |
+| `src/renderer.ts:7660` | compute | — | — |
+| `src/renderer.ts:8709` | compute | — | — |
+| `src/renderer.ts:10890` | compute async | `clouds` | `cloudShadow` |
+| `src/renderer.ts:10972` | compute async | `sky ambient write` | `cloudLightVolume` |
+| `src/renderer.ts:11054` | compute async | — | `skyAmbient` |
+| `src/renderer.ts:13377` | compute async | — | `probe` |
 | `src/sea/fft-gpu.ts:117` | compute | — | — |
 | `src/ship.ts:832` | compute | — | `vs` |
 | `src/ship.ts:852` | render | — | `fsJetGlass` |
@@ -895,8 +895,8 @@ _Généré le 2026-11-20T12:50:57Z sur `12e1e805` (arbre de travail). Ne pas éd
 | `src/vegetation/tree-impostors.ts:331` | render async | `tree impostor bake` | `vs`, `fs` |
 | `src/vegetation/tree-impostors.ts:348` | compute async | `tree impostor down` | `down` |
 | `src/vegetation/tree-impostors.ts:459` | render async | `tree canopy bake` | `vsTop`, `fs` |
-| `src/vegetation/tree-near.ts:247` | render async | `near tree geometry` | `nearTreeVs`, `nearTreeFs` |
-| `src/vegetation/tree-near.ts:272` | render async | `near tree shadow` | `nearTreeShadowVs`, `nearTreeShadowFs` |
+| `src/vegetation/tree-near.ts:260` | render async | `near tree geometry` | `nearTreeVs`, `nearTreeFs` |
+| `src/vegetation/tree-near.ts:285` | render async | `near tree shadow` | `nearTreeShadowVs`, `nearTreeShadowFs` |
 
 </details>
 
@@ -904,7 +904,7 @@ _Généré le 2026-11-20T12:50:57Z sur `12e1e805` (arbre de travail). Ne pas éd
 
 | source | lignes | points d'entrée |
 |---|---:|---|
-| `src/shaders/trace.wgsl` | 17990 | 18 entrées : cloudLightVolume, aerial, lut, main, shade, shadeMark, shadeLiteFinish, shadeWaterFinish, shadeLiteLight, shadeLite, skyFill, shadeWater, clouds, skyAmbient, cloudShadow, env, probe, shadeStars |
+| `src/shaders/trace.wgsl` | 17997 | 18 entrées : cloudLightVolume, aerial, lut, main, shade, shadeMark, shadeLiteFinish, shadeWaterFinish, shadeLiteLight, shadeLite, skyFill, shadeWater, clouds, skyAmbient, cloudShadow, env, probe, shadeStars |
 | `src/shaders/ship.wgsl` | 2713 | 34 entrées : envCopy, envDown, envGGX, envSH, ctlVs, depthVs, vs, mirrorVs, shadowVs, fs, hullDepthVs, hullDepthFs, ownMaskFs, plumeVs, plumeFs, glowVs, glowFs, distVs, distFs, sheathVs, sheathFs, trailVs, trailFs, lampVs, lampFs, compVs, compFs, fsCabin, fsCabinGlass, fsJetGlass, motionVs, motionFs, composeColor, composeSurface |
 | `src/shaders/post.wgsl` | 1396 | 18 entrées : gatherH, atrous, beamH, beamV, polgrid, resolve, down, downShip, dof, flareMeter, up, meter, stars, motionBlur, temporal, occlusion, cloudTemporal, taau |
 | `src/system/scenery-raster.ts:208` | 1139 | 31 entrées : cull, cullBoxes, clampBoxes, shadowVs, shadowFs, proxyVs, proxyFs, boxVs, boxFs, bridgeMarkFs, boxMarkVs, boxShadowVs, meshShadowVs, meshVs, meshFs, boxSolidVs, benchCull, benchQuadVs, benchVs, benchShadowVs, farCull, farVs, farQuadVs, farFs, farLampCull, farLampVs, farCarCull, farCarVs, nearCellVs, nearCellShadowVs, farShadowVs |
@@ -922,7 +922,7 @@ _Généré le 2026-11-20T12:50:57Z sur `12e1e805` (arbre de travail). Ne pas éd
 | `src/system/bc-encode.ts:13` | 163 | bc7 (c), bc5 (c) |
 | `src/shaders/endurance.wgsl` | 145 | vs (v), fs (f), compVs (v), compFs (f) |
 | `src/system/terrain-raster.ts:51` | 126 | seaVs (v), seaFs (f), seaResolve (c) |
-| `src/vegetation/tree-near.ts:15` | 113 | nearTreeVs (v), nearTreeFs (f), nearTreeShadowVs (v), nearTreeShadowFs (f) |
+| `src/vegetation/tree-near.ts:24` | 113 | nearTreeVs (v), nearTreeFs (f), nearTreeShadowVs (v), nearTreeShadowFs (f) |
 | `src/crew/sys3d/gpu.ts:9` | 101 | vl (v), fl (f), vd (v), fd (f) |
 | `src/system/body-raster.ts:103` | 91 | bodyHeights (c), bodyVs (v), bodySunVs (v), bodyCloudVs (v), bodyCloudFs (f), bodyFs (f) |
 | `src/system/earth-horizons.ts:83` | 76 | bake (c) |
@@ -942,9 +942,9 @@ _Généré le 2026-11-20T12:50:57Z sur `12e1e805` (arbre de travail). Ne pas éd
 | `src/shaders/mips.wgsl` | 23 | vs (v), fs (f) |
 | `src/system/earth-tiles.ts:398` | 18 | vs (v), fs (f) |
 | `src/vegetation/tree-impostors.ts:136` | 17 | down (c) |
-| `src/renderer.ts:7655` | 16 | main (c) |
+| `src/renderer.ts:7665` | 16 | main (c) |
 | `src/system/earth-tiles.ts:1264` | 14 | main (c) |
-| `src/renderer.ts:8703` | 10 | main (c) |
+| `src/renderer.ts:8713` | 10 | main (c) |
 | `src/system/terrain-cache.ts:165` | 9 | main (c) |
 | `src/system/earth-tiles.ts:1254` | 8 | main (c) |
 
@@ -961,48 +961,48 @@ _Généré le 2026-11-20T12:50:57Z sur `12e1e805` (arbre de travail). Ne pas éd
 | `resolve` | `src/renderer.ts:3496` | 1 |
 | `bloom down …` | `src/renderer.ts:3519` | 1 |
 | `bloom up …` | `src/renderer.ts:3543` | 1 |
-| `ship probe: trace` | `src/renderer.ts:6031` | 1 |
-| `planet probe` | `src/renderer.ts:6090` | 1 |
-| `cockpit mask` | `src/renderer.ts:7218` | 1 |
-| `sea fft` | `src/renderer.ts:7267` | 1 |
-| `far-field LUT` | `src/renderer.ts:7283` | 1 |
-| `terrain surface cache` | `src/renderer.ts:7313` | 1 |
-| `earth horizons` | `src/renderer.ts:7329` | 1 |
-| `earth shore` | `src/renderer.ts:7341` | 1 |
-| `aerial perspective` | `src/renderer.ts:7388` | 1 |
-| `clouds (half)` | `src/renderer.ts:7452` | 1 |
-| `sky (waiting)` | `src/renderer.ts:7475` | 1 |
-| `trace (discs)` | `src/renderer.ts:7532` | 1 |
-| `stars (raster)` | `src/renderer.ts:7540` | 1 |
-| `earth water: tiles` | `src/renderer.ts:7701` | 1 |
-| `body lite (raster)` | `src/renderer.ts:7724` | 1 |
-| `earth lite (raster)` | `src/renderer.ts:7747` | 1 |
-| `earth lite: light` | `src/renderer.ts:7756` | 1 |
-| `earth lite: finishing` | `src/renderer.ts:7766` | 1 |
-| `earth water (raster)` | `src/renderer.ts:7780` | 1 |
-| `earth water open (raster)` | `src/renderer.ts:7801` | 1 |
-| `earth water: finishing` | `src/renderer.ts:7812` | 1 |
-| `beam` | `src/renderer.ts:7870` | 1 |
-| `temporal` | `src/renderer.ts:8444` | 2 |
-| `taau` | `src/renderer.ts:8617` | 1 |
-| `stars` | `src/renderer.ts:8658` | 1 |
-| `motion blur` | `src/renderer.ts:8791` | 1 |
-| `occlusion depth` | `src/renderer.ts:8824` | 1 |
-| `denoise` | `src/renderer.ts:8856` | 1 |
-| `polarization` | `src/renderer.ts:8959` | 1 |
-| `depth of field` | `src/renderer.ts:9047` | 1 |
-| `lens flare meter` | `src/renderer.ts:9057` | 1 |
-| `light meter` | `src/renderer.ts:9081` | 1 |
-| `display` | `src/renderer.ts:10507` | 2 |
-| `clouds' shadow map` | `src/renderer.ts:10911` | 1 |
-| `clouds' light volume` | `src/renderer.ts:10992` | 1 |
-| `sky ambient` | `src/renderer.ts:11074` | 1 |
-| `clouds' history` | `src/renderer.ts:11790` | 1 |
-| `body raster heights` | `src/renderer.ts:12150` | 1 |
-| `scenery raster cull` | `src/renderer.ts:12402` | 1 |
-| `ground occlusion` | `src/renderer.ts:12442` | 1 |
-| `trees' shadow map` | `src/renderer.ts:12447` | 1 |
-| `horizon bake` | `src/renderer.ts:12725` | 1 |
+| `ship probe: trace` | `src/renderer.ts:6041` | 1 |
+| `planet probe` | `src/renderer.ts:6100` | 1 |
+| `cockpit mask` | `src/renderer.ts:7228` | 1 |
+| `sea fft` | `src/renderer.ts:7277` | 1 |
+| `far-field LUT` | `src/renderer.ts:7293` | 1 |
+| `terrain surface cache` | `src/renderer.ts:7323` | 1 |
+| `earth horizons` | `src/renderer.ts:7339` | 1 |
+| `earth shore` | `src/renderer.ts:7351` | 1 |
+| `aerial perspective` | `src/renderer.ts:7398` | 1 |
+| `clouds (half)` | `src/renderer.ts:7462` | 1 |
+| `sky (waiting)` | `src/renderer.ts:7485` | 1 |
+| `trace (discs)` | `src/renderer.ts:7542` | 1 |
+| `stars (raster)` | `src/renderer.ts:7550` | 1 |
+| `earth water: tiles` | `src/renderer.ts:7711` | 1 |
+| `body lite (raster)` | `src/renderer.ts:7734` | 1 |
+| `earth lite (raster)` | `src/renderer.ts:7757` | 1 |
+| `earth lite: light` | `src/renderer.ts:7766` | 1 |
+| `earth lite: finishing` | `src/renderer.ts:7776` | 1 |
+| `earth water (raster)` | `src/renderer.ts:7790` | 1 |
+| `earth water open (raster)` | `src/renderer.ts:7811` | 1 |
+| `earth water: finishing` | `src/renderer.ts:7822` | 1 |
+| `beam` | `src/renderer.ts:7880` | 1 |
+| `temporal` | `src/renderer.ts:8454` | 2 |
+| `taau` | `src/renderer.ts:8627` | 1 |
+| `stars` | `src/renderer.ts:8668` | 1 |
+| `motion blur` | `src/renderer.ts:8801` | 1 |
+| `occlusion depth` | `src/renderer.ts:8834` | 1 |
+| `denoise` | `src/renderer.ts:8866` | 1 |
+| `polarization` | `src/renderer.ts:8969` | 1 |
+| `depth of field` | `src/renderer.ts:9057` | 1 |
+| `lens flare meter` | `src/renderer.ts:9067` | 1 |
+| `light meter` | `src/renderer.ts:9091` | 1 |
+| `display` | `src/renderer.ts:10518` | 2 |
+| `clouds' shadow map` | `src/renderer.ts:10922` | 1 |
+| `clouds' light volume` | `src/renderer.ts:11003` | 1 |
+| `sky ambient` | `src/renderer.ts:11085` | 1 |
+| `clouds' history` | `src/renderer.ts:11801` | 1 |
+| `body raster heights` | `src/renderer.ts:12161` | 1 |
+| `scenery raster cull` | `src/renderer.ts:12413` | 1 |
+| `ground occlusion` | `src/renderer.ts:12453` | 1 |
+| `trees' shadow map` | `src/renderer.ts:12458` | 1 |
+| `horizon bake` | `src/renderer.ts:12736` | 1 |
 | `ship probe: mips` | `src/ship.ts:1930` | 1 |
 | `ship probe: GGX` | `src/ship.ts:1942` | 1 |
 | `ship probe: SH` | `src/ship.ts:1949` | 1 |
@@ -1022,15 +1022,15 @@ _Généré le 2026-11-20T12:50:57Z sur `12e1e805` (arbre de travail). Ne pas éd
 Libellés dynamiques (calculés à l'exécution) :
 
 - `src/gpuprof.ts:66` — `label`
-- `src/renderer.ts:7524` — `label`
-- `src/renderer.ts:7636` — `label`
-- `src/renderer.ts:7637` — `label`
-- `src/renderer.ts:8974` — `label`
-- `src/renderer.ts:11703` — `label`
-- `src/renderer.ts:12156` — `label`
-- `src/renderer.ts:12187` — `label`
-- `src/renderer.ts:12427` — `label`
-- `src/renderer.ts:12473` — `label`
+- `src/renderer.ts:7534` — `label`
+- `src/renderer.ts:7646` — `label`
+- `src/renderer.ts:7647` — `label`
+- `src/renderer.ts:8984` — `label`
+- `src/renderer.ts:11714` — `label`
+- `src/renderer.ts:12167` — `label`
+- `src/renderer.ts:12198` — `label`
+- `src/renderer.ts:12438` — `label`
+- `src/renderer.ts:12484` — `label`
 - `src/ship.ts:788` — `label`
 
 #### A.3b Passes jamais chronométrées (ni libellé du profileur, ni horodatage transmis)
@@ -1050,9 +1050,9 @@ Leur coût n'apparaît que dans l'intervalle de complétion de la frame (ou d'un
 | sharpness probe | `src/frame-probes.ts:132` |
 | render pass | `src/mipgen.ts:69` |
 | render pass | `src/noise3d.ts:124` |
-| render pass | `src/renderer.ts:5643` |
-| compute pass | `src/renderer.ts:8718` |
-| compute pass | `src/renderer.ts:13385` |
+| render pass | `src/renderer.ts:5653` |
+| compute pass | `src/renderer.ts:8728` |
+| compute pass | `src/renderer.ts:13396` |
 | compute pass | `src/sea/fft-gpu.ts:261` |
 | compute pass | `src/sea/fft-gpu.ts:265` |
 | render pass | `src/ship.ts:3286` |
@@ -1082,19 +1082,19 @@ Leur coût n'apparaît que dans l'intervalle de complétion de la frame (ou d'un
 
 | profil | noyaux (lignes inlinées, en milliers) | total |
 |---|---|---:|
-| `earth-raster` | shade 27.2 · shadeMark 0.3 · shadeLite 7.7 · shadeLiteFinish 0.8 · shadeLiteLight 2.5 · shadeWater 5.6 · shadeWaterOpen 4.9 · shadeWaterFinish 1.2 · shadeStars 0.3 · discs 29.9 · clouds 3.8 · skyFill 0.7 · main 42.6 · env 59.3 · aerial 0.7 | 188k |
-| `earth-raster-wx` | shade 32.2 · shadeMark 0.3 · shadeLite 7.7 · shadeLiteFinish 0.8 · shadeLiteLight 2.5 · shadeWater 5.6 · shadeWaterOpen 4.9 · shadeWaterFinish 1.2 · shadeStars 0.3 · discs 29.9 · clouds 3.8 · skyFill 0.7 · main 45.5 · env 59.3 · aerial 0.7 | 195k |
-| `earth-trace` | main 66.1 · env 62.8 · aerial 0.6 | 130k |
-| `earth-photo` | main 67.9 | 68k |
-| `game-space` | main 54.3 · env 50.7 · aerial 0.6 | 106k |
-| `moon` | main 76.0 · env 50.7 · aerial 0.6 · shadeLite 25.9 | 153k |
-| `moons` | main 76.9 · env 50.7 · aerial 0.6 · shadeLite 26.0 | 154k |
-| `mars` | main 87.9 · env 50.7 · aerial 0.6 · shadeLite 37.9 | 177k |
-| `titan` | main 91.0 · env 50.7 · aerial 0.6 · shadeLite 43.1 | 185k |
-| `venus` | main 90.7 · env 50.7 · aerial 0.6 · shadeLite 43.7 | 186k |
+| `earth-raster` | shade 27.2 · shadeMark 0.3 · shadeLite 8.5 · shadeLiteFinish 0.8 · shadeLiteLight 2.5 · shadeWater 5.6 · shadeWaterOpen 4.9 · shadeWaterFinish 1.2 · shadeStars 0.3 · discs 29.9 · clouds 3.8 · skyFill 0.7 · main 42.6 · env 59.3 · aerial 0.7 | 188k |
+| `earth-raster-wx` | shade 32.2 · shadeMark 0.3 · shadeLite 8.5 · shadeLiteFinish 0.8 · shadeLiteLight 2.5 · shadeWater 5.6 · shadeWaterOpen 4.9 · shadeWaterFinish 1.2 · shadeStars 0.3 · discs 29.9 · clouds 3.8 · skyFill 0.7 · main 45.5 · env 59.3 · aerial 0.7 | 196k |
+| `earth-trace` | main 66.2 · env 62.8 · aerial 0.6 | 130k |
+| `earth-photo` | main 68.0 | 68k |
+| `game-space` | main 54.4 · env 50.7 · aerial 0.6 | 106k |
+| `moon` | main 76.1 · env 50.7 · aerial 0.6 · shadeLite 26.7 | 154k |
+| `moons` | main 77.0 · env 50.7 · aerial 0.6 · shadeLite 26.8 | 155k |
+| `mars` | main 88.0 · env 50.7 · aerial 0.6 · shadeLite 38.8 | 178k |
+| `titan` | main 91.1 · env 50.7 · aerial 0.6 · shadeLite 43.9 | 186k |
+| `venus` | main 90.8 · env 50.7 · aerial 0.6 · shadeLite 44.5 | 187k |
 | `earth-only` | main 50.3 · env 44.3 · aerial 0.7 | 95k |
 | `kerr-jet` | main 32.0 · env 28.0 · lut 28.3 | 88k |
 | `eclipse` | main 46.1 · env 37.9 · aerial 0.6 | 85k |
-| `general` | main 151.6 · env 73.9 · lut 147.2 | 373k |
+| `general` | main 151.7 · env 73.9 · lut 147.3 | 373k |
 
 <!-- pipeline-inventory:end -->

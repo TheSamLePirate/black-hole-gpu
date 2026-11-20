@@ -622,6 +622,7 @@ export interface SceneryReply {
   cables?: number;
   /** (Q8 D1) the cars on the main roads (VB4: the parked ones among them) */
   cars?: number;
+  runwayCarsRejected?: number;
   /** (PLAN-J8 VB4) the parked cars drawn (street cells' places) */
   parkedCars?: number;
   /** (PLAN-J8 VB7) the pieces of the junctions' furniture drawn */

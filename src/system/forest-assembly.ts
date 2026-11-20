@@ -8,7 +8,7 @@
 import { CELL_Z, cellBounds, cellOf, FOREST_NEAR_M } from "./building-cells";
 import { cellPriority, type EyeState } from "./building-layer";
 import type { CellWant } from "./cell-pool";
-import { type ForestFrame, forestPlaceOf } from "./forest";
+import { forestColumn, type ForestFrame, forestJitter, forestPlaceOf } from "./forest";
 import { ForestCellFlag, forestWords, readForestHeader } from "./forest-cells";
 
 /** the frame's cases from prepared cells: covered (1) or not (0), and a covered one's word (0: no tree there) */
@@ -22,6 +22,8 @@ export interface PreparedForest {
   noCanopy: number;
   /** the frame's cases covered */
   cases: number;
+  /** every planting position in the scene's disc is covered */
+  complete: boolean;
 }
 
 /**
@@ -94,7 +96,29 @@ export async function preparedForest(
         }
       }
     }
-  return { covered, words, cells, missing, noCanopy, cases };
+  // The grid is rectangular, but growForest only plants inside the disc. Missing corners
+  // must not trigger a new building survey for trees that the scene will never consider.
+  let complete = cases > 0;
+  if (complete && cases < covered.length) {
+    const [x0, xu, xv] = f.c;
+    const [y0, yu, yv] = f.d;
+    const reach2 = f.reach * f.reach;
+    scan: for (let j = 0; j < f.h; j++) {
+      for (let i = 0; i < f.w; i++) {
+        if (covered[j * f.w + i]) continue;
+        const [jx, jy] = forestJitter(forestColumn(f, i), f.j0 + j);
+        const u = i + jx;
+        const v = j + jy;
+        const x = x0 + xu * u + xv * v;
+        const y = y0 + yu * u + yv * v;
+        if (x * x + y * y <= reach2) {
+          complete = false;
+          break scan;
+        }
+      }
+    }
+  }
+  return { covered, words, cells, missing, noCanopy, cases, complete };
 }
 
 /**

@@ -7790,8 +7790,9 @@ fn imageryUv(q: vec3f) -> vec2f {
 const TILE_ANCHOR_M = 2000.0;
 var<private> TILE_AT: vec2f = vec2f(0.0);
 // (PLAN-J8 J8-RP RP1: the paint scenerySurface met at its point — the roads' markings (VB2), a junction's lines and crossings (VB7) —, its
-// colour and its cover in the pixel: shadeLite lays it over a national photograph, which is the carriageway's albedo there)
+// colour and its cover in the pixel: shadeLite lays it over the carriageway)
 var<private> SC_PAINT:vec4f=vec4f(0.0);
+var<private> SC_SURVEY_ROAD:bool=false;
 // (RP10: that point's place in the scenery's frame [m] — SC_POINT's, kept outside the scenery's block)
 var<private> SC_AT:vec2f=vec2f(0.0);
 // (outside the scenery's block: shadeLite reads it in every kernel)
@@ -10632,7 +10633,7 @@ fn sceneryShadow(light:vec3f,normal:vec3f)->f32 {
 struct ScenerySurface { color:vec3f, cover:f32, kind:f32 };
 fn scenerySurface(foot:f32)->ScenerySurface {
   var out=ScenerySurface(vec3f(0.0),0.0,0.0);
-  SC_PAINT=vec4f(0.0);SC_AT=SC_POINT.xy;
+  SC_PAINT=vec4f(0.0);SC_SURVEY_ROAD=false;SC_AT=SC_POINT.xy;
   if(!HAS_SCENERY || P.scenery[0].w<.5 || P.scenery[2].w<.5 || SC_DISTANCE>P.scenery[1].w){return out;}
   let point=SC_POINT.xy;let aa=max(.12,foot*.75);let header=scenery[1];let total=u32(header.y);var i=0u;var priority=0.0;var dryIsland=false;
   while(i<total){
@@ -10662,10 +10663,10 @@ fn scenerySurface(foot:f32)->ScenerySurface {
       }
       // (PLAN-J8 VB2: a road's markings, kerb and pavements — the worker's roadMarkings, KSC3's rules: size.z the flags (1 edge lines,
       // 2 a dashed centre, 4 a solid one, 8 a kerb) + 16 one way + 32 lane lines + 512 the pavement [dm], size.w the carriageway's
-      // half-width; none: the old dashed centre of the wide ones)
+      // signed half-width (negative for surveyed roads); none: the old dashed centre of the wide ones)
       let mk=u32(size.z+.5);
       if(kind==1.0 && mk>0u){
-        let cr=select(size.x,size.w,size.w>0.0);let s=along*len;let paint=vec3f(.65,.64,.56);
+        let cr=select(size.x,abs(size.w),size.w!=0.0);let s=along*len;let paint=vec3f(.65,.64,.56);
         if((mk&8u)!=0u && distance>cr){
           // (its pavement: concrete, the kerb's edge lighter)
           color=mix(vec3f(.30,.295,.28),vec3f(.46,.45,.43),1.0-smoothstep(.1,.1+aa,abs(distance-cr-.1)));
@@ -10716,7 +10717,9 @@ fn scenerySurface(foot:f32)->ScenerySurface {
         if(rail*cover>SC_PAINT.w){SC_PAINT=vec4f(vec3f(.42),rail*cover);}
       }
     }
-    if(cover>0.0 && (rank>priority || (rank==priority && cover>out.cover))){priority=rank;out=ScenerySurface(color,cover,kind);}
+    if(cover>0.0 && (rank>priority || (rank==priority && cover>out.cover))){
+      priority=rank;out=ScenerySurface(color,cover,kind);SC_SURVEY_ROAD=kind==1.0 && size.w<0.0;
+    }
     i++;
   }
   if(dryIsland && out.kind==3.0){out.cover=0.0;}
@@ -16092,6 +16095,7 @@ fn liteMaterial(gq: vec3f, q: vec3f, ph: vec3f, rd: vec3f, look: vec3f, tM: f32,
     A = mix(A, vec3f(0.82, 0.84, 0.88) * P.earth2.z, snowS);
   }
   var sv = ScenerySurface(vec3f(0.0), 0.0, 0.0);
+  SC_SURVEY_ROAD = false;
   if (HAS_SCENERY && !mesh && !isTree && (liteSkip() & 134217728u) == 0u) {
     // (the exact walk near — its stripes, sleepers, edges' antialiasing — and at night — its kinds for the streets' lights —;
     // the decals' one read beyond: the walk on every pixel under 12 m cost 0.66 ms in La Mancha)
@@ -16114,9 +16118,10 @@ fn liteMaterial(gq: vec3f, q: vec3f, ph: vec3f, rd: vec3f, look: vec3f, tM: f32,
     if (DECAL_ROW.x < 0.5 && fpM < 3.6 && tM < 2500.0 && img.o < 0.99) { _ = sceneryDecal(xyc, fpM, tM); }
     if (DECAL_ROW.x > 0.5) { A *= mix(1.0, rowCrop(xyc + P.scenery[6].xy, DECAL_ROW.x, DECAL_ROW.y, fpM), DECAL_ROW.z); }
   }
-  A = mix(A, sv.color, select(sv.cover, 0.0, sv.kind == 3.0 || sv.kind == 4.0) * (1.0 - img.o));
-  // (RP1: the paint over the photograph — its share the photograph's, the map's colour above carrying the rest)
-  if (SC_PAINT.w > 0.0) { A = mix(A, SC_PAINT.rgb, SC_PAINT.w * img.o); }
+  // A surveyed carriageway carries its material under the markings even when the photo under it is coarse.
+  let photoSurface = img.o * select(1.0, 0.25, SC_SURVEY_ROAD && tM < 2500.0 && fpM < 2.0);
+  A = mix(A, sv.color, select(sv.cover, 0.0, sv.kind == 3.0 || sv.kind == 4.0) * (1.0 - photoSurface));
+  if (SC_PAINT.w > 0.0) { A = mix(A, SC_PAINT.rgb, SC_PAINT.w * photoSurface); }
   if (!mesh && !isTree && fpM < 10.0 && (liteSkip() & 16u) == 0u) {
     TILE_AT_ON = anchored;
     let sf = earthSlopeFine(gq, fpM);
@@ -16472,6 +16477,8 @@ fn liteLight(gq: vec3f, q: vec3f, tM: f32, fx: vec3f, fy: vec3f, hG: f32, look: 
   // (PLAN-J8 J8-A: a far building — the far layer's, marked — carries its town's light: it stands where the ground's glow was, its
   // windows and its street's light one at that distance; dark, it hid the city's lights — Paris at night, 16 Nov 2026)
   var lit = select(dark, 0.0, isTree || (mesh && !atFar(at)));
+  // The far building's extra city wash fades into the mesh junction. Window emission above uses its own material.
+  if (mesh && lit > 0.0) { lit *= smoothstep(1500.0, 4000.0, tM); }
   // (near — the scenery's box —: the streets carry the light, their lamps along them — OpenStreetMap's roads at the point:
   // ×3 on a road, ×0.15 off it, a quarter of a town's ground road: the quarter's light about the same, drawn along its
   // streets, not the map's 500 m wash — the night only, a lit town only)

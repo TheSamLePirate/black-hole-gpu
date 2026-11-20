@@ -38,6 +38,7 @@ test("the scene's trees from the prepared cells: the same as deciding every case
   const p = (await preparedForest(f, read))!;
   expect(p.cells).toBeGreaterThanOrEqual(4);
   expect(p.missing).toBe(0);
+  expect(p.complete).toBe(true);
   // (every case of the frame owned by one cell — its grid a strip wider than the reach's disc, all of it under the cells read)
   expect(p.cases).toBe(f.w * f.h);
   const fromCells = await growForest(f, { ...io, prepared: p, excludedLive: () => false });
@@ -49,6 +50,7 @@ test("the scene's trees from the prepared cells: the same as deciding every case
   const gone = cellOf(o.lat + 1e-4, o.lon + 1e-4);
   const q = (await preparedForest(f, async (x, y) => (x === gone.x && y === gone.y ? null : read(x, y))))!;
   expect(q.missing).toBe(1);
+  expect(q.complete).toBe(false);
   expect(q.cases).toBeLessThan(p.cases);
   const partial = await growForest(f, { ...io, prepared: q, excludedLive: () => false });
   expect(Buffer.from(partial.cells.buffer).equals(Buffer.from(own.cells.buffer))).toBe(true);
@@ -60,6 +62,20 @@ test("the scene's trees from the prepared cells: the same as deciding every case
   console.log(
     `  frame ${f.w}×${f.h}: ${p.cells} cells, ${p.cases} cases covered · ${own.trees} trees either way · ${q.cases} with one missing · ${cleared.trees} with a live exclusion`,
   );
+});
+
+test("a missing cell outside the planting disc does not require the building survey", async () => {
+  const f = forestFrame(o.lat, o.lon, 560, (lat, lon) => local(lat, lon));
+  const corner = await preparedForest(f, async (x, y) =>
+    x === X + 1 && y === Y + 1 ? null : prepareForestCell(x, y, { cover, excluded }, 1, false).buf,
+  );
+  if (!corner) throw new Error("the forest frame is empty");
+  expect(corner.missing).toBe(1);
+  expect(corner.cases).toBeLessThan(f.w * f.h);
+  expect(corner.complete).toBe(true);
+  const own = await growForest(f, io);
+  const fromCells = await growForest(f, { ...io, prepared: corner, excludedLive: () => false });
+  expect(Buffer.from(fromCells.cells.buffer).equals(Buffer.from(own.cells.buffer))).toBe(true);
 });
 
 test("the forest cells wanted round the eye: within the reach, the nearest of each class first", () => {

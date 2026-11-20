@@ -4926,6 +4926,16 @@ export class Renderer {
     {
       const g = cartToGeodetic(WGS84_A, WGS84_F, [c[0] * WGS84_A, c[1] * WGS84_A, c[2] * (1 - WGS84_F) * WGS84_A]);
       if (worldRunwaysUpdate((g.lat * 180) / Math.PI, (g.lon * 180) / Math.PI, this.frameMs())) {
+        const runways = new Set(EARTH_RUNWAYS);
+        const changed = [
+          ...[...runways].filter((runway) => !this.trafficRunwayFrames.has(runway)),
+          ...[...this.trafficRunwayFrames].filter((runway) => !runways.has(runway)),
+        ];
+        this.trafficRunwayFrames = runways;
+        if (changed.length) {
+          this.earthScenery.trafficRunwaysChanged(changed);
+          this.streetFar?.trafficRunwaysChanged(changed);
+        }
         this.sceneryExclusions = [
           ...SCENERY_EXCLUSIONS,
           ...worldRunwaysNow().map((r) => ({
@@ -9385,6 +9395,7 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
   }[] = [];
   /** the scenery's exclusions: the sites' runways, the landscapes' viewpoints, the world's runways near (RD13) */
   private sceneryExclusions: SceneryExclusion[] = SCENERY_EXCLUSIONS;
+  private trafficRunwayFrames = new Set(EARTH_RUNWAYS);
   /** a fight's flares burning (controller/combat.ts combatGlares — PLAN-RADAR-AAA RD8a): each from the flown craft's
    *  origin on the camera's axes [m], its size [m], its colour (display-referred) */
   combatGlares: { rel: Vec3; r: number; rgb: Vec3 }[] = [];

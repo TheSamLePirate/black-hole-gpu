@@ -20,6 +20,27 @@ const VIEWS = [
   { name: "a-toulon", label: "Toulon depuis 2,5 km", lat: 43.124, lon: 5.958, altM: 350, heading: 270, pitch: -6 },
   { name: "b-hyeres", label: "Hyères depuis 2,5 km", lat: 43.12, lon: 6.161, altM: 350, heading: 270, pitch: -6 },
 ] as const;
+const LOW_VIEWS = [
+  {
+    name: "bourget-piste",
+    label: "Le Bourget dans l'axe de la piste 25",
+    lat: 48.974,
+    lon: 2.45825,
+    altM: 165,
+    heading: 247.81,
+    pitch: -12,
+  },
+  {
+    name: "toulon-rue",
+    label: "Toulon au-dessus du boulevard de Strasbourg",
+    lat: 43.1247,
+    lon: 5.926,
+    altM: 105,
+    heading: 260,
+    pitch: -40,
+  },
+  { name: "paris-pont", label: "Paris vers le pont Alexandre III", lat: 48.866, lon: 2.313, altM: 120, heading: 170, pitch: -27 },
+] as const;
 /** the night's hour — 23:00 at Toulon in July, dark: the windows lit (J8-A, Sam's « jour et nuit ») */
 const NIGHT = "2026-07-10T21:00:00Z";
 /** (one pass — the junction's lever retired; J8J_RUN repeats the scene's wait: J8J_REPEAT passes) */
@@ -56,7 +77,9 @@ test.skipIf(!E2E)(
         );
       // (J8J_VIEWS: the views by name, comma-separated — a diagnosis on one)
       const only = process.env.J8J_VIEWS?.split(",");
-      for (const v of VIEWS.filter((w) => !only || only.includes(w.name))) {
+      const views = only ? [...VIEWS, ...LOW_VIEWS].filter((v) => only.includes(v.name)) : VIEWS;
+      expect(views.length).toBeGreaterThan(0);
+      for (const v of views) {
         const rows: unknown[] = [];
         for (const j of JUNCTIONS) {
           await app.scenario(`${v.label} · jonction ${j ? `${j / 1000} km` : "aucune (la scène garde tout)"}`);
@@ -115,6 +138,8 @@ test.skipIf(!E2E)(
             g.sort((a, b) => a - b); const sc = R.earthScenery.stats(), far = await R.farBuildings();
             return { p50: +(g[g.length >> 1] ?? 0).toFixed(2), buildings: sc.buildings, meshLeft: sc.meshLeft, cut: sc.cutBuildings,
               keptM: Math.round(sc.keptReachM), corridorM: sc.corridorM, inView: far.inView, phases: sc.phases,
+              roads: sc.cellRoads, roadCells: sc.cellRoadCells, bridges: sc.bridges, bridgePiers: sc.bridgePiers,
+              parkedCars: sc.parkedCars, furniture: sc.furniture, runwayCarsRejected: sc.runwayCarsRejected,
               lost: (__bh.graphicsDiagnostic().events ?? []).filter((e) => String(e.kind).startsWith("device-lost")).length }; })()`);
           await app.js(`(() => { document.body.classList.add("hide-ui"); return 1; })()`);
           await app.shot(`${OUT}/${v.name}-jonction-${j}.png`);
@@ -135,9 +160,10 @@ test.skipIf(!E2E)(
         // image's lower part read by surfaceAt — kind, distance —, the layer drawn then not (sceneryRaster.farSkip 6: its draws left out, the scene the same — their difference its pixels); the same at
         // night, the windows lit. The colour gap by band of distance is read from the shots and the grid offline)
         const probe = () =>
-          app.js<{ fx: number; fy: number; x: number; y: number; kind: string; d: number }[]>(`(async () => { const r = [];
+          app.js<{ fx: number; fy: number; x: number; y: number; kind: string; far: boolean; d: number }[]>(`(async () => { const r = [];
             for (let j = 0; j < 26; j++) for (let i = 0; i < 48; i++) { const x = (i + 0.5) / 48, y = 0.36 + (j + 0.5) * 0.64 / 26;
-              const s = await __bh.renderer.surfaceAt(x, y); if (s) r.push({ fx: x, fy: y, x: s.x, y: s.y, kind: s.kind, d: Math.round(s.nearest ?? s.ground ?? -1) }); }
+              const s = await __bh.renderer.surfaceAt(x, y); if (s) r.push({ fx: x, fy: y, x: s.x, y: s.y, kind: s.kind,
+                far: s.vis[1] < 0, d: Math.round(s.nearest ?? s.ground ?? -1) }); }
             return r; })()`);
         const pair = async (tag: string) => {
           await app.settled(30_000);

@@ -1,10 +1,46 @@
 # PLAN-J8 — Tous les bâtiments de la vue
 
-**Point de lecture du 20 novembre 2026 (préparation de [J9](PLAN-J9-ARBRES-PROCHES.md)) :** J8 est largement implémenté,
-mais pas fermé. Le gros e2e du 17 novembre valide sur kerr-mini les quatre tracés jour/nuit, stricts et hors ligne ; le M1 Max
-reste en échec strict (préparation de scène). Le raccord de luminance reste non jugé, des dessins VB/RP à examiner et J8-R
-à mener ; les changements postérieurs au départ du gros e2e ne sont pas couverts par celui-ci. Détail et sources au §8 et
-dans le journal du 17 novembre, 17:30 UTC. L'en-tête initial et les décisions ci-dessous sont conservés comme historique.
+**Point de clôture du 20 novembre 2026 :** J8 est **terminé, validé et fermé**.
+Les huit vols stricts J8-A passent sur kerr-mini sans scène rapide ni requête réseau (`20261120-181101-j8-a-coverage`).
+Le raccord nocturne est stabilisé (`20261120-191626-j8-night-stabilized`), les chaussées et ponts sont intégrés (RP1/RP2/RP7),
+et le filtrage d'exclusion des véhicules sur les pistes d'atterrissage est actif et prouvé au Bourget (`20261120-194929-j8-bourget-clear`, 295 voitures exclues).
+Détail et sources au §8 et dans le journal du 20 novembre. L'en-tête initial et les décisions ci-dessous sont conservés comme historique.
+
+**Reprise du 20 novembre, après J9.** Les rapports du M1 Max montrent des périodes prolongées en mode rapide.
+La décision pouvait basculer au-dessus de 120 m/s alors que le carré complet couvrait encore la caméra. L'ordonnanceur
+continue désormais de demander une scène complète tant que ce carré la couvre. J8-A conserve ses assertions strictes.
+L'assemblage de la forêt vérifie la couverture aux positions réellement plantables. Une cellule absente dans
+un coin de grille hors du disque ne déclenche plus la lecture des emprises BD TOPO.
+
+**Filtrage des pistes d'atterrissage et clôture J8, 20 novembre.** Suite au constat de véhicules routiers et stationnés
+apparaissant sur la piste 25 du Bourget dans les vues e2e, un filtrage géométrique WGS84 a été intégré pour le trafic
+en mouvement (`traffic.ts`) et les voitures stationnées (`scenery-worker.ts`, `street-far.ts`, `cell-roads.ts`).
+Validé sur kerr-mini (`20261120-194929-j8-bourget-clear`, sortie 0, 295 voitures rejetées de la piste, piste 25 dégagée).
+
+**J8-A sur kerr-mini, 20 novembre.** Les huit vols passent en strict avec la correction de l'ordonnanceur
+(`20261120-181101-j8-a-coverage`, base `83484708`). Aucun accès réseau aux données terrestres, aucune scène rapide,
+recensements complets à 10 km. GPU p50 de 51,1 à 61,2 ms et p95 de 59,5 à 92,1 ms.
+Les moyennes de luminance des deux couches diffèrent encore (rapport lointain/proche de 1,325 le jour et 1,661
+la nuit à Paris). La sonde compare des populations dans une bande de distance. Elle ne suit pas un même toit ou mur à la
+jonction. Le verdict visuel reste ouvert.
+La correction suivante atténue la lueur urbaine ajoutée par la couche lointaine, entre 1,5 et 4 km de la
+caméra. Elle conserve la lumière des fenêtres et la lueur de l'horizon. La grille de `j8-junction`
+identifie désormais la couche de chaque pixel pour comparer les mêmes positions avant et après.
+À Toulon sur kerr-mini (`20261120-191626-j8-night-stabilized`), 30 s après le passage à la nuit, la moyenne
+pondérée sRGB de 51 pixels sur les bâtiments lointains entre 1,5 et 2,5 km passe de 33,50 à 27,75 sur 255.
+Entre 2,5 et 4 km elle passe de 66,40 à 75,10 (22 pixels). La correction réduit l'écart dans la première bande.
+La continuité de l'ensemble de la vue reste à juger.
+
+**M1 Max, 20 novembre.** Le premier tronçon a fini avec zéro scène rapide après le repos de 600 s.
+Le recensement a ensuite dépassé la limite DevTools de 300 s. Le cache est désormais lu par groupes de 16
+et les cellules dessinées sont relevées au même point du vol que le recensement de référence.
+Le verdict M1 Max reste ouvert.
+
+**Vues basses, 20 novembre.** Le témoin `20261120-192652-j8-vb-rp-review` montre le tablier du pont Alexandre III,
+les voitures, les lampadaires et les traversées piétonnes. À Toulon, une partie des marquages se dessinait sur
+la teinte verte du fond photographique. RP1/RP2 applique désormais le matériau de chaussée quand le tronçon a une
+largeur mesurée, avec 25 % de la part photographique de près. La correction se voit sur le même boulevard
+(`20261120-193340-j8-surveyed-road`). Le raccord du trafic, les finitions et le coût des ponts restent à juger.
 
 **Écrit le 16 novembre 2026 (11:30 UTC) par la session d'analyse, à la demande de Sam.** État : **proposé, prioritaire**. Il passe
 avant la suite de J7 (J7-5, J7-6, J7-R) et avant les arbres proches en géométrie, l'ancien candidat J8, qui devient J9.

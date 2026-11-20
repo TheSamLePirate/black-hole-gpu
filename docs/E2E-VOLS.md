@@ -253,6 +253,12 @@ complet à Edwards prend ≈ 6 s de mur.
 
 ### 4.2 Pièges des attentes
 
+- **Un recensement J8-A peut prendre plus de temps que le vol du tronçon.** Sur le M1 Max, la lecture en série
+  a dépassé les 300 s de DevTools alors que la page restait réactive. Les lectures se font par groupes bornés
+  et la liste des cellules dessinées est relevée au début du recensement.
+- **Attendre le géoïde et le relief grossier avant de créer une zone J8-A.** La zone classe son disque à la création.
+  Sur le M1 Max en fenêtre, Paris a été classée côtière et a demandé 8 936 chaînes de plus. Le terrain et le
+  géoïde chargés, le point le plus bas de la grille de classement était à 22,67 m au-dessus de la mer.
 - **`earthTiles.pending` vaut 0 juste après un saut**, avant que les tuiles soient demandées : exiger 3 s de calme.
 - **`variantReady` est vrai au démarrage**, avant toute compilation (la clé vaut alors `FEATURES_ALL`) : attendre
   `tracerSettled`.

@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 import { BridgeKind, Crossed, encodeStreetCell, type RoadSegmentRecord, readStreetHeader, SegmentFlag } from "../src/system/street-cells";
 import { farBridges, farCars } from "../src/system/street-far";
-import { ROAD_TRAFFIC } from "../src/system/traffic";
+import { ROAD_TRAFFIC, trafficRunwayMask } from "../src/system/traffic";
 
 // PLAN-J8 J8-L: the far cars of a street cell — on its busy roads only, each way allowed, spaced by their class, none in a tunnel.
 
@@ -43,6 +43,21 @@ test("a one way: its cars one way only", () => {
   const c = farCars(along, 1);
   expect(c.length / 8).toBe(Math.floor(240 / ROAD_TRAFFIC.primary!.spacing));
   for (let i = 0; i < c.length / 8; i++) expect(c[8 * i + 2]!).toBeGreaterThan(0);
+});
+
+test("the far layer drops road traffic across the runway and keeps the parallel road outside it", () => {
+  const buf = cell([
+    { ...seg("motorway", 210), a: [0, -100], b: [0, 110] },
+    { ...seg("motorway", 210), a: [70, -100], b: [70, 110] },
+  ]);
+  const mask = trafficRunwayMask(
+    { origin: [0, 0, 0], east: [1, 0, 0], north: [0, 1, 0] },
+    [{ origin: [0, 0, 0], along: [0, 1, 0], across: [1, 0, 0], len: 500, halfWidth: 25, flags: 0, elev: 0 }],
+    2500,
+  );
+  const cars = farCars(buf, 2, mask);
+  expect(cars.length / 8).toBe(6);
+  for (let i = 0; i < cars.length; i += 8) expect(cars[i]).toBe(70);
 });
 
 test("RP7: a cell's bridges as far decks among its cars — each segment's run, its half-width and height; a bridge from another cell's first point left out", () => {

@@ -17,7 +17,8 @@ function roadColour(cls: string): number[] {
 /**
  * A street cell's roads as the scene's surface segments: `toLocal(east, north)` the cell's frame [m] to the scene's (z 0 — the surfaces
  * are flat, the ground's relief theirs). Each segment's record packed as road-markings.ts packs one: data[6] the flags (SurfaceFlag)
- * + 16 one way + 32 lane lines + 512 the pavement [dm], data[7] the carriageway's half-width, a kerbed one widened by its pavements.
+ * + 16 one way + 32 lane lines + 512 the pavement [dm]. data[7] is the carriageway's half-width, negative for surveyed widths
+ * away from fords. The segment is widened by its pavements when kerbed.
  */
 export function cellRoadSurfaces(buf: ArrayBuffer, toLocal: (east: number, north: number) => [number, number, number]): Primitive[] {
   const h = readStreetHeader(buf);
@@ -49,7 +50,7 @@ export function cellRoadSurfaces(buf: ArrayBuffer, toLocal: (east: number, north
       const pave = sf.flags & SurfaceFlag.Kerb ? sf.pavement : 0;
       const r = p.data[4]!;
       p.data[6] = sf.flags + (oneway ? 16 : 0) + 32 * Math.min(15, sf.laneLines) + 512 * Math.round(pave * 10);
-      p.data[7] = r;
+      p.data[7] = s.flags & (SegmentFlag.InferredWidth | SegmentFlag.Ford) ? r : -r;
       if (pave > 0) {
         p.data[4] = r + pave;
         p.min[0] -= pave;

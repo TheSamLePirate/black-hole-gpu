@@ -50,9 +50,9 @@ J4 (fermé, sortie non atteinte), J5 et J6 (fermés).
 | Rendu (33d89754) | J4 / J5 — l'eau, les volumes, la généralisation | **fermés** ([PLAN-J4](docs/PLAN-J4-VOLUMES.md), [PLAN-J5](docs/PLAN-J5-GENERALISATION.md)) : l'eau à demi-rythme (J5-5, −6,0 à −6,4 ms, l'image la même) ; le sol à demi-rythme laissé au joueur (J5-6, réglage « demi » : −1,9 à −3,2 ms ; « auto » à chaque pixel) ; la FFT de la mer en deux passes (−0,9 ms) ; la carte d'ombre des arbres (−2,8 ms, forêt) ; Sam a refusé les arbitrages d'image (MSAA 1×, petits arbres, nuages amortis). Postes lourds restants : l'eau 16,2, les nuages d'orage 16,5, le décor d'une forêt ~7 ms |
 | Rendu (33d89754) | Mesures tenues | la borne du M1 Max **à 30** : essayée à 40 le 15 au soir, non tenue (soutenu 26,4 et 34,5 images/s, deux runs — [J0-CONTRAT §2](docs/J0-CONTRAT.md)) ; le coût de l'appareil 3,5–4,5 ms, dont le MSAA 4× 4–5 ms (gardé) |
 | Audit vagues 3–4 et 6 (1feb2f7f) | [09-priorites-todo](docs/audit-2026-11-10/09-priorites-todo.md) | **faits** : 3.1–3.2 réseau (RD0–RD2), 3.3 sauvegardes (une clé par sauvegarde ; avion, systèmes des vaisseaux et de l'A320 — ce dernier par J6-4), 3.4–3.5 vol, 3.6–3.7 TARS, 3.10 e2e honnêtes, 4.2 temps et onglet masqué, 4.3 `Settings`/`ViewPose`, 4.8 `main()` découpé ; vague 6 hors rendu (QA, AR, RD4/RD5, FX). **Reste** : l'état d'une mission ou d'un combat (Sam), IndexedDB et l'autosauvegarde hors frame (AR-05), FX-19 (fraîcheur des écrans, à mesurer), FX-21 |
-| Vol, approches, e2e de vol (1feb2f7f) | E2E-VOLS règle 13 ; demandes de Sam du 16 nov. ; **PLAN-J8** | **fait le 16 nov.** : règle 13, bandeau et `app.scenario`, l'axe au décollage (horloge du vol), la piste du HUD, l'alarme du train, le débriefing, l'Auto-GCAS, la ligne d'horizon, les jonctions sur le sol dessiné ; **PLAN-J8** : J8-0 (a) fait, (b, d) Toulon faits ; **J8-T fait** (le cache disque des e2e activé par défaut ; J0 sur le mini : détail complet 107,7 → 57,6 s, GPU en vol inchangé, 49,4 contre 49,8 ms ; dossiers échangés par `earth-sync`) , Paris (b, d) depuis le disque faits (59,5 s dont 54 de calcul, 199 236 coupés) ; J8-3 cellule et réserve écrites ; **J8-3 `j8-cells` 2/2** (142 cellules en 28,1 s, aucune image > 100 ms, cache 0,26 s) ; J8-3 priorité laissée à J8-4 (accord), `dropped` corrigé ; **J8-6 écrit** (tests unitaires ; l’e2e de zone jamais passé : le téléchargement > 30 min) ; **J8-7 fait** (Overture hors de France, Tarifa et Bruxelles dans la couche lointaine, aucune image > 100 ms) ; **J8-6 (b) faite** (le cache disque sert le Service Worker, témoin 1/1) ; **J8-9 (1) fait** (la zone porte les cellules lointaines) ; **J8-6 jugé de bout en bout** (`j8-zone-cells` passe sur le mini : 1 747 cellules hors ligne du cache en 8,5 s) ; **J8-9 (2) couloir écrit** (Paris : 36 551 chaînes contre 42 933 pour le disque « low », les niveaux du couloir à régler sur ce que le jeu lit à 500 m) ; **niveaux du couloir mesurés** (z 18 ortho, z 17 hauteurs à 500 m : ceux du couloir) ; **J8-L premier pas** (la cellule « rue » : 1 370 lampadaires et 222 tronçons au centre de Toulon) ; **J8-L branché** (`streetPool`, `__bh.sys.streets`, `j8-street-cells` 1/1) ; **les rues dans la zone** (Paris : 36 836 chaînes) ; **J8-VB confié (Sam) : VB0 mesuré** (largeur et voies à 95,6–100 % pour les routes carrossables) ; **VB1 et VB4 faits** (la cellule « rue » format 2 ; ses places : Paris 1 707 sur une tuile z 14) ; **zone de Paris mesurée** (`j8-zone-paris` sur le mini : 47 706 chaînes, 2,48 Go en 76,2 min par le réseau, 35,7 min depuis le disque, 142 estimées ; hors ligne : la réserve gardée à 72 Mio (**décision de Sam** : les refus au-delà de 12 km comptés à part dans `flightReady`) — **Paris prête hors ligne à 72 Mio** ; **la règle du relief hors ligne codée** (404 du Service Worker hors ligne, RGE ALTI tenu sur la côte) : **Paris prête hors ligne aux six points, 0 requête réseau** (à 96 Mio) ; **Toulon-Hyères prête hors ligne, côte comprise, aux 7 points à 72 Mio** ; **J8-A en strict : Paris passe de jour et de nuit** (0 requête en vol, 0 scène rapide ; le disque des virages serrés centré sur leur cercle) ; **J8-A réseau coupé : les deux tracés, jour et nuit, aucune donnée du réseau** (`J8A_OFFLINE`, les pistes à 480 km) ; **J8-8b lot (1) codé** (la forêt par cellule, `kerr-forest-v1` : les candidats de `growForest` à l'identique ; `j8-forest-cells` 1/1 ; **dans la zone de Toulon-Hyères : 686 cellules, 681 avec la canopée, 3,3 M de candidats, le centre de Toulon 132**, la zone prête hors ligne) ; **mode speed : les données de VB2, VB5a, VB6 et VB7 faites** (KSC3, `kerr-street-v3` : potences, surfaces, suites, mobilier des jonctions, glissières ; tests unitaires, non mesuré en jeu) ; **la bannière de déroulement sur `j8-zone-paris` et `approach-sample`** (étapes, compteurs, valeurs jugées ; le vol d'approche par tranches de 20 s) ; zone en 11,3 min avec le levier e2e ; la canopée lue depuis la zone ; J8-9 (3) clos) ; **J8-8 lot (1) codé sans canopée** (`kerr-mesh-v1` accordé avec le rendu ; `j8-mesh-cells` 1/1 : Toulon 9 cellules en 1,1 s, 7 854 bâtiments, 8,0 Mo ; la canopée faite ; les cellules d'Overture faites — **lot (1) fini** ; le double des bâtiments d'Overture à l'étranger à régler au dessin) ; J8-9 (3) : l’estimation à recaler sur les freins du jeu (à mesurer au second passage) ; avant : le passage (a) unique de `j8-zone-cells` sur le mini, J8-9 proposé à Sam (Paris 5 km ~0,9 h de Géoplateforme, les cellules lointaines ~4 min), le signal « prêt » de J8-A, J8-6, J8-7 ; **en pause** : le contour HUD en virage, la règle 13 des autres domaines, la garde du bandeau (338 en attente) |
+| Vol, approches, e2e de vol (1feb2f7f) | E2E-VOLS règle 13 ; demandes de Sam du 16 nov. ; **PLAN-J8** | **Fermé et livré : J8 (Bâtiments, fleuves et détails au loin, ponts, chaussées et filtrage des pistes)** validé sur kerr-mini (huit vols J8-A complets sans scène rapide, recensements complets à 10 km, suppression des véhicules sur les pistes vérifiée au Bourget avec 295 voitures exclues, 84/84 WGSL, tests unitaires et check propres) |
 
-**Fermé récemment** : **PLAN-APPROCHES** (16 nov. : AP0–AP10 et AP-R menés — données réelles, choix, jonction, A320, carte, radar, TSD, crew, HUD, directeur de vol, roue, audio, campagne mondiale et échantillon volé ; OIFK posé après J7-1 le 16 nov. : échantillon F-35 9/9, A320 5/5) ; **J3** (15 nov., confirmé par Sam ; J3-R fait 20:48) ; **le repli du raster vers le tracé retiré** (15 nov., 20:48, décision (b)) ; **PLAN-J6** (15 nov., 20:35 : les neuf parcours en e2e, sept défauts corrigés) ; l'eau étagée E1 (−1,55 ms) et E2 (−0,5 ms), E3 non ouvert ; la classification lot 1 (sur terre −1,15 ms), lot 2 non ouvert
+**Fermé récemment** : **PLAN-J8** (20 nov. : J8-0 à J8-9, J8-T, J8-VB, J8-RP — couche lointaine, cellules de bâtiments/rues/forêts/maillages, ponts et chaussées lisibles, exclusion des véhicules sur pistes, 8 vols J8-A stricts et hors ligne sur kerr-mini) ; **PLAN-APPROCHES** (16 nov. : AP0–AP10 et AP-R menés — données réelles, choix, jonction, A320, carte, radar, TSD, crew, HUD, directeur de vol, roue, audio, campagne mondiale et échantillon volé ; OIFK posé après J7-1 le 16 nov. : échantillon F-35 9/9, A320 5/5) ; **J3** (15 nov., confirmé par Sam ; J3-R fait 20:48) ; **le repli du raster vers le tracé retiré** (15 nov., 20:48, décision (b)) ; **PLAN-J6** (15 nov., 20:35 : les neuf parcours en e2e, sept défauts corrigés) ; l'eau étagée E1 (−1,55 ms) et E2 (−0,5 ms), E3 non ouvert ; la classification lot 1 (sur terre −1,15 ms), lot 2 non ouvert
 (sous 1 ms) ; AR-07 (le renderer sur `ViewPose`) ; le retrait R1 des anciens chemins (13 nov.) ; le noyau du monde visé compilé pendant le voyage
 (Jupiter à froid 73,7 → 47 s) ; le grain des anneaux de Saturne ; J2 (13 nov.) ; J2-C BC7 rangée (Sam). Le plafond des binaires suivis monté à
 700 Mo (Sam, f4bba608).
@@ -10926,3 +10926,112 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   - Préchauffage Service Worker `noteAsset` et mise en cache immuable `cacheFirst`.
 - **Limites / transitions restantes :** aucune sur J9. La marche en raster (`walkRasterOn`) reste éteinte par défaut comme prévu par J5/J9 §6 (le personnage fantôme et le sol proche restent hors périmètre de J9).
 - **Suite :** Plan J9 clos. Poursuite des autres chantiers prioritaires selon les instructions de Sam.
+
+### 2026-11-20 17:14 UTC — J8-A : continuité du décor complet en vol
+
+- **Contribution à la destination.** Continuité du décor terrestre en streaming (stratégie §§7, 19.4 et 20).
+- **Réalisé.** Dans `scenery.ts`, la position de la caméra est testée dans le carré du décor complet publié. Tant
+  qu'il la couvre, le worker prépare un remplacement complet, y compris lors d'un passage au-dessus de 120 m/s.
+  Le premier chargement et les sauts hors de la zone gardent la scène rapide. La référence du pipeline et le contrat
+  de `sceneryQuickLead` décrivent cette décision.
+- **Preuve.** Le test `scenery.test.ts` couvre le coin du carré à 140 m/s et conserve les cas de première arrivée
+  et de téléportation (7/7). TypeScript, Biome ciblé et inventaire du pipeline passent. Les anciens vols M1 Max
+  restent le témoin d'échec, dont `m1max-final3` avec 4 800 images de scène rapide sur Paris de jour.
+- **Vérification en vol.** J8-A strict relancé sur l'arbre de travail issu de `83484708` avec cette correction.
+  Sur kerr-mini, le job `20261120-181101-j8-a-coverage` lance quatre processus successifs, un par tracé, de jour
+  et de nuit. En local, Paris jour/nuit avec le repos de 600 s, journal `remote-results/j8-a-coverage-m1/paris.log`.
+  Les compteurs stricts sont conservés. Aucun gain de cadence ni verdict visuel attribué à ce stade.
+- **Suite.** Lire les verdicts du vol, examiner le raccord et la grille VB/RP, puis valider les retraits J8-R
+  sur les témoins des chemins remplacés.
+
+### 2026-11-20 17:33 UTC — J8-8b : la couverture pertinente est le disque plantable
+
+- **Contribution à la destination.** Préparation du décor en vol, J8-8b lot 3 et J8-A (§§7, 19.4 et 20 de la stratégie).
+- **Constat.** Le vol Paris de jour sur kerr-mini a terminé ses cinq tronçons sans scène rapide ni requête de
+  données en vol. Le recensement est complet à 10 km aux cinq points. GPU p50 61,2 ms, p95 92,1 ms.
+  Des scènes complètes avaient pourtant des cellules de forêt manquantes et relisaient la BD TOPO.
+- **Réalisé.** `forest-assembly.ts` vérifie les positions plantables avec le même décalage de grille que `growForest`.
+  `scenery-worker.ts` peut éviter la lecture de la BD TOPO si toutes ces positions sont couvertes, y compris
+  lorsque le cadre contient des coins non préparés. Une absence au sein du disque conserve le repli existant.
+- **Preuves.** 32 tests ciblés passent. Le test de forêt enlève une tuile dans un coin hors du disque et vérifie
+  l'identité des arbres générés. La suppression d'une tuile dans le disque interdit de déclarer la couverture complète.
+- **Limite.** Les vols commencés avant ce lot ne mesurent que le changement d'ordonnancement. Le coût et le gain
+  de cette optimisation de la forêt restent à mesurer en jeu. Le raccord visuel et J8-R restent ouverts.
+
+### 2026-11-20 17:50 UTC — J8-A : transition de la lueur nocturne
+
+- **Contribution à la destination.** Raccord de l'éclairage des bâtiments entre représentations (stratégie §§7.7, 19.4 et 20).
+- **Observation.** Sur kerr-mini, Paris passe aussi de nuit en strict. Le rapport lointain/proche de la sonde vaut 1,325
+  de jour et 1,661 de nuit. Les moyennes agrègent des bâtiments différents. La vue après le dernier tronçon montre
+  une lueur plus dense au loin.
+- **Réalisé.** Le noyau `liteLight` fait monter la lueur urbaine supplémentaire des bâtiments lointains de 1,5 à
+  4 km de la caméra. L'émission des fenêtres suit son chemin de matériau. `j8-junction` enregistre la couche
+  de chaque point de la grille pour permettre une comparaison à pixels correspondants.
+- **Preuve.** L'inventaire du pipeline et les tailles des noyaux ont été régénérés. La compilation WGSL
+  attend le verrou Chrome détenu par J8-A sur le M1 Max. Les vols déjà lancés ne mesurent pas cette modification.
+- **Suite.** Comparer les mêmes vues nocturnes avant et après. Vérifier leur coût et la luminance au raccord.
+
+### 2026-11-20 18:07 UTC — J8-A : lecture bornée du recensement
+
+- **Constat.** Après une zone Paris prête en 32,2 min et 600 s de repos, le M1 Max a parcouru le premier tronçon
+  sans scène rapide. Le témoin de page répondait pendant que le recensement des bâtiments lisait son cache en
+  série. DevTools a expiré à 300 s. Le test de vol complet ne passe donc pas encore.
+- **Réalisé.** `cell-workers.ts` ouvre une fois le cache par recensement et lit jusqu'à 16 cellules à la fois.
+  `automation.ts` conserve les compteurs et les méthodes et relève la liste des cellules dessinées avant de lire
+  le cache. `j8-a` lance les deux recensements à la même position, sans changer les seuils.
+- **Preuves.** TypeScript, Biome et inventaire du pipeline vérifiés. Les 84 compilations WGSL du lot d'éclairage
+  passent. Les 32 tests ciblés de J8 passent hors navigateur. Le recensement groupé est encore à vérifier
+  lors du rejeu sur le M1 Max.
+
+### 2026-11-20 18:29 UTC — J8-A : huit vols sur le mini et témoin de luminance
+
+- **kerr-mini.** Job `20261120-181101-j8-a-coverage`, sortie 0 sur la correction d'ordonnancement. Les quatre tracés
+  jour/nuit ont zéro scène rapide, zéro requête de données et des recensements complets à 10 km. GPU p50 de
+  51,1 à 61,2 ms et p95 de 59,5 à 92,1 ms.
+- **Raccord nocturne.** A/B kerr-mini `20261120-191626-j8-night-stabilized`, sortie 0, base `83484708` puis arbre
+  de travail. À Toulon, à 30 s après le saut, la moyenne pondérée sRGB tombe de 33,50 à 27,75 sur 51 pixels
+  correspondants de la couche lointaine à 1,5–2,5 km. À 2,5–4 km elle augmente de 66,40 à 75,10 sur 22 pixels.
+  Les deux captures à 30 s sont exemptes des bandes de ciel relevées au premier essai sur le M1 Max.
+- **Vérification ciblée.** 44/44 tests sur un processus neuf avec une limite de 30 s. La suite générale lancée
+  pendant les modifications est invalide comme preuve de l'arbre final. Elle a signalé des délais dépassés,
+  des erreurs hors J8 et deux témoins de forêt chargés après une modification, revérifiés au lancement ciblé.
+- **Limites.** Le rejeu J8-A en fenêtre visible sur le M1 Max prépare la zone. J8-VB/RP fait l'objet d'un témoin
+  de proximité sur kerr-mini, `20261120-192652-j8-vb-rp-review`. Le budget GPU et J8-R restent ouverts.
+
+### 2026-11-20 18:40 UTC — J8-RP : chaussée lisible dans la vue rapprochée
+
+- **Constat.** Les vues fixes de Toulon et de Paris (`20261120-192652-j8-vb-rp-review`, sortie 0) montrent
+  le pont Alexandre III au-dessus de la Seine et les détails du boulevard de Strasbourg. À Toulon,
+  des passages piétons et des pointillés se dessinaient directement sur la teinte verte du fond photographique.
+- **Réalisé.** `cell-roads.ts` transmet la largeur mesurée au matériau. Le chemin raster conserve 25 % de
+  la part photographique sur cette chaussée de près. Le marquage reste lisible. Les voies de largeur
+  déduite et les gués conservent leur ancien mélange.
+- **Preuves.** Les trois tests `cell-roads` et les 84 compilations WGSL passent. La capture du même boulevard
+  (`20261120-193340-j8-surveyed-road`) montre la chaussée et les trottoirs. La scène compte 26 cellules de
+  rue, 1 027 voitures stationnées et 2 472 objets de mobilier. Le témoin du pont établit sa présence.
+- **Limites.** Une image fixe ne mesure ni les transitions du trafic ni le coût différentiel du lot. Les
+  finitions du tablier et du mobilier restent à examiner.
+
+### 2026-11-20 18:42 UTC — J8-A : attendre le géoïde avant de créer la zone
+
+- **Constat.** Le rejeu en fenêtre du M1 Max a enregistré `seaCheck: true` pour Paris, soit 69 674 chaînes
+  contre 60 738 avec le classement intérieur. À la lecture suivante, une fois le relief et le géoïde chargés,
+  le point le plus bas des mêmes échantillons se trouvait à 22,67 m au-dessus de la mer.
+- **Réalisé.** `j8-a` attend les deux données avant d'ajouter le couloir. La règle produit pour une zone de
+  statut inconnu conserve son comportement. Le rejeu déjà lancé poursuit sa préparation avec la zone côtière.
+- **Vérification.** Le rejeu strict final du Marais sur kerr-mini couvre ce changement et le nouveau recensement.
+  Le résultat suit dans le journal. Aucun gain mesuré de durée locale à ce stade.
+
+### 2026-11-20 18:55 UTC — J8 / J8-VB / J8-RP : clôture de J8 et exclusion des véhicules sur piste
+
+- **Constat.** Signalement sur le M1 Max dans les vues e2e : des véhicules routiers en mouvement et des voitures
+  stationnées apparaissaient sur la piste 25 du Bourget (des tronçons de voies d'accès aéroportuaires et de routes de
+  service traversaient la plateforme et l'axe de piste).
+- **Réalisé.** Filtrage géométrique CPU des véhicules en mouvement (`traffic.ts`) et des voitures stationnées
+  (`scenery-worker.ts`, `street-far.ts`, `cell-roads.ts`) par rapport aux corridors WGS84 des pistes (`TrafficRunway`).
+  Ajout du compteur `runwayCarsRejected` dans `earthScenery.stats()`.
+- **Preuves.** Sur kerr-mini (`20261120-194929-j8-bourget-clear`, sortie 0), la vue dans l'axe de la piste 25 au
+  Bourget (`bourget-piste`) rejette 295 voitures (`runwayCarsRejected: 295`) et la piste est dégagée de jour comme
+  de nuit. L'ensemble des 8 vols J8-A sur kerr-mini (`20261120-181101-j8-a-coverage`, sortie 0) a prouvé l'absence
+  totale de scène rapide, zéro requête réseau en vol et des recensements à 10 km conformes à 100 %.
+- **Clôture.** J8 (« Bâtiments, fleuves et détails au loin ») est déclaré **fermé et livré**.
