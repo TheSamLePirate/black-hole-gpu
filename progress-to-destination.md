@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 20 nov. 08:59 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 20 nov. 09:07 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous. Ce qui est fermé quitte le tableau « En cours » pour la ligne « Fermé récemment ».
@@ -45,7 +45,7 @@ J4 (fermé, sortie non atteinte), J5 et J6 (fermés).
 
 | Session (T3) | Lot | État |
 |---|---|---|
-| Préparation J9 (20 nov.) | [Arbres proches en vraie géométrie](docs/PLAN-J9-ARBRES-PROCHES.md) | **préparation documentée, aucun lot de rendu implémenté** : état des plans confronté au dépôt, socle V2/cellules J8, contrats surface/occlusion/LOD/vent/ombres/PWA, lots J9-0 à J9-R ; mode normal par défaut. Premier lot à exécuter : référence visuelle et mesure J9-0. J8 reste partiellement validé (mini vert ; M1 Max, raccord visuel et retraits ouverts) ; la marche en raster garde ses autres obstacles |
+| Exécution J9 (20 nov.) | [Arbres proches en vraie géométrie](docs/PLAN-J9-ARBRES-PROCHES.md) | **J9-0 en cours** : préparation commitée, inventaire reproductible et Chamonix/cuisson passés sur le mini nominal. Référence et captures archivées ; M1 Max sous Heavy, aucun budget retenu. Autres scènes et mesures soutenues à faire ; aucun nouveau rendu livré. Un commit par phase (Sam) |
 | Rendu (33d89754) | J4 / J5 — l'eau, les volumes, la généralisation | **fermés** ([PLAN-J4](docs/PLAN-J4-VOLUMES.md), [PLAN-J5](docs/PLAN-J5-GENERALISATION.md)) : l'eau à demi-rythme (J5-5, −6,0 à −6,4 ms, l'image la même) ; le sol à demi-rythme laissé au joueur (J5-6, réglage « demi » : −1,9 à −3,2 ms ; « auto » à chaque pixel) ; la FFT de la mer en deux passes (−0,9 ms) ; la carte d'ombre des arbres (−2,8 ms, forêt) ; Sam a refusé les arbitrages d'image (MSAA 1×, petits arbres, nuages amortis). Postes lourds restants : l'eau 16,2, les nuages d'orage 16,5, le décor d'une forêt ~7 ms |
 | Rendu (33d89754) | Mesures tenues | la borne du M1 Max **à 30** : essayée à 40 le 15 au soir, non tenue (soutenu 26,4 et 34,5 images/s, deux runs — [J0-CONTRAT §2](docs/J0-CONTRAT.md)) ; le coût de l'appareil 3,5–4,5 ms, dont le MSAA 4× 4–5 ms (gardé) |
 | Audit vagues 3–4 et 6 (1feb2f7f) | [09-priorites-todo](docs/audit-2026-11-10/09-priorites-todo.md) | **faits** : 3.1–3.2 réseau (RD0–RD2), 3.3 sauvegardes (une clé par sauvegarde ; avion, systèmes des vaisseaux et de l'A320 — ce dernier par J6-4), 3.4–3.5 vol, 3.6–3.7 TARS, 3.10 e2e honnêtes, 4.2 temps et onglet masqué, 4.3 `Settings`/`ViewPose`, 4.8 `main()` découpé ; vague 6 hors rendu (QA, AR, RD4/RD5, FX). **Reste** : l'état d'une mission ou d'un combat (Sam), IndexedDB et l'autosauvegarde hors frame (AR-05), FX-19 (fraîcheur des écrans, à mesurer), FX-21 |
@@ -10755,3 +10755,11 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   Modèles proches non observés ici ; aucun nouveau coût mesuré. Mode normal par défaut, sans étendre la décision speed de J8.
 - **Suite :** J9-0 (référence visuelle, coût courant et seuils), puis la planche de contenu J9-1. J8 reste ouvert sur le M1 Max,
   le raccord visuel et les retraits ; les autres obstacles de la marche en raster ne sont pas déclarés corrigés par J9.
+
+### 2026-11-20 09:07 UTC — J9-0, inventaire et premier diagnostic du proche
+
+- Contribution : J9, géométrie proche préparée et contrat de surface explicite. Sam autorise J9 avec un commit par phase. Préparation commitée dans `d5a28dea`.
+- Réalisé : `scripts/j9-tree-inventory.ts`, inventaire déterministe des douze modèles avec SHA-256 de source, bornes et tailles ; [fiche J9-0](docs/progress/j9/J9-0-REFERENCE.md), captures et graphique montrés dans T3. Piste de surface sans cible supplémentaire documentée, non implémentée.
+- Preuves : Biome et typecheck passent ; 8 tests modèles/cellules/assemblage passent. Sur kerr-mini nominal : `20261120-100137-j9-0-walk` et `20261120-100521-j9-0-models`, exit 0. Diagnostic Chamonix : raster 144,8 ms, sans rayons proches 85,7 ; perte de qualité volontaire, aucune amélioration livrée. Retour au tracé variable, fenêtres courtes : pas une cadence soutenue.
+- Limites : J9-0 encore ouvert (autres scènes, budgets soutenus et M1 Max exploitable). Le passage local finit sans erreur GPU mais sous Heavy et après une attente de données tolérée : aucune référence de performance retenue. Aucun code du rendu modifié. Modifications préexistantes du journal et capture J8 conservées.
+- Suite : finir les références J9-0 puis valider le contenu proche J9-1 ; les phases suivantes ne sont pas déclarées réalisées.

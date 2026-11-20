@@ -1,7 +1,7 @@
 # J9 — Les arbres proches en vraie géométrie
 
 **Préparé le 20 novembre 2026, à la demande de Sam : « Prépare toi à faire J9 : les arbres proches en vraie géometrie — AAA work ».**
-**État : préparation documentée, aucun lot de rendu implémenté.** Lecture du dépôt à `935fb201` ; les modifications déjà présentes
+**État : J9 lancé le 20 novembre ; J9-0 en cours, aucun lot de rendu implémenté. Un commit par phase demandé par Sam.** Lecture du dépôt à `935fb201` ; les modifications déjà présentes
 dans le journal et la capture J8 non suivie sont conservées. **Mode : normal**, par défaut selon CLAUDE.md ; le mode speed de J8
 ne s'étend pas automatiquement à J9. Ce plan prépare le travail sans fermer J8 ni rouvrir toute la marche en raster.
 
@@ -161,3 +161,5 @@ sur la seule suppression des rayons des arbres. La marche actuelle garde son che
   proches n'est pas observée dans cette session. Les chiffres historiques ne sont pas remesurés.
 - **Premier travail à exécuter : J9-0**, puis la planche J9-1. Les distances, comptes de triangles, variantes, mémoire et coût
   admissible du proche restent à établir sur ces preuves, sans baisser silencieusement le contenu ou les objectifs de Sam.
+
+- **20 novembre, exécution J9-0 :** préparation commitée (`d5a28dea`), inventaire reproductible des douze modèles, sonde de Chamonix et cuisson sur kerr-mini passées. [Référence et limites](progress/j9/J9-0-REFERENCE.md). Le passage M1 Max sous Heavy ne fixe aucun budget. J9-0 reste ouvert pour les autres scènes et les mesures soutenues ; pas de bascule du rendu.
