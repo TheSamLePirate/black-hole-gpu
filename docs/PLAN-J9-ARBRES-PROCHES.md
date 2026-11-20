@@ -1,7 +1,7 @@
 # J9 — Les arbres proches en vraie géométrie
 
 **Préparé le 20 novembre 2026, à la demande de Sam : « Prépare toi à faire J9 : les arbres proches en vraie géometrie — AAA work ».**
-**État : J9 lancé le 20 novembre ; référence J9-0 mini établie ; modèles inspectés, assets partagés livrés ; prototype J9-3 dessiné et mesuré, non accepté. LOD utiles, raccords, ombres et préparation restent ouverts. Un commit par phase demandé par Sam.** Lecture du dépôt à `935fb201` ; les modifications déjà présentes
+**État : J9 lancé le 20 novembre ; référence J9-0 mini établie ; modèles J9-1 inspectés ; assets partagés et LOD 0/1 J9-2 livrés ; prototype J9-3 et raccords/saisons/vent/hystérésis J9-4 validés sur le mini. Ombres découpées (J9-5), PWA (J9-6) et acceptation/retrait (J9-A/J9-R) restent ouverts. Un commit par phase demandé par Sam.** Lecture du dépôt à `935fb201` ; les modifications déjà présentes
 dans le journal et la capture J8 non suivie sont conservées. **Mode : normal**, par défaut selon CLAUDE.md ; le mode speed de J8
 ne s'étend pas automatiquement à J9. Ce plan prépare le travail sans fermer J8 ni rouvrir toute la marche en raster.
 
@@ -196,3 +196,14 @@ sur la seule suppression des rayons des arbres. La marche actuelle garde son che
   `1736718`, sans erreur ; A/A nul et défaut +1 m détecté). [Fiche mise à jour](progress/j9/J9-3-PROTOTYPE.md#troisième-lot--matériau-gabarit-denveloppe-conifères-de-côté-et-témoin-bâtiment-derrière-arbre-à-80-m).
   Prochaines étapes : LOD utiles (J9-2) et raccords/saisons/vent/mouvement (J9-4), puis ombres découpées (J9-5), PWA (J9-6)
   et acceptation/retrait (J9-A/J9-R). Prototype maintenu éteint par défaut jusque-là.
+
+- **20 novembre, J9-2 (LOD utiles) et J9-4 (raccords, saisons, vent et mouvement) :** 24 modèles KTG1 (`trees-v1-b31429154c38b2fd.bin`,
+  12 × LOD 0 + 12 × LOD 1, réduction de triangles de **60,1 % à 64,2 %** sur les 12 modèles avec couverture latérale/zénithale conservée à
+  mieux que 3,8 %, téléversés dans 2 tampons GPU partagés indexés par `firstIndex`/`baseVertex`), sélection LOD 0 / LOD 1 par erreur
+  projetée avec ancre d'hystérésis GPU (`nearDraws.anchor`, bande morte ±5 % + gigue déterministe ±4 %), cuisson d'imposteurs alignée et
+  raccord direct à 80 m vers `sceneryTreeImpostor` sans anneau d'enveloppes pleines (`80..200 m`), saisons (automne, ramure 3D nue en hiver
+  prolongée par `forestTwigs`), vue sous couronne à 0,8 m AGL et vecteurs de mouvement du vent (`o.mot` nul au repos, actif sous le vent).
+  Validés sur `kerr-mini` (`20261120-130901-j9-4-full3`, 129 assertions, 49 relevés thermiques Nominal ; 84/84 WGSL `20261120-125559-j9-4-wgsl`) :
+  Maures `67,4 → 53,9 → 66,2 ms` p50 (`2` LOD 0 + `42` LOD 1, hystérésis `33` vs `41`), 60 m AGL `58,7 → 59,3 → 59,0 ms`, Chamonix
+  `70,5 → 59,3 → 70,5 ms` p50 (`2` LOD 0 + `16` LOD 1, hystérésis `18` vs `19`). [Fiche J9-2](progress/j9/J9-2-ASSETS.md) et
+  [fiche J9-4](progress/j9/J9-4-TRANSITIONS.md). Suite : ombres découpées des arbres proches (J9-5), PWA (J9-6) et acceptation/retrait (J9-A/J9-R).

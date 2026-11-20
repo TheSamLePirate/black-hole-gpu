@@ -346,7 +346,13 @@ fn cull(@builtin(global_invocation_id) g: vec3u, @builtin(num_workgroups) n: vec
 // the counts kept within the lists' room (the draws read them as they are)
 @compute @workgroup_size(${LISTS})
 fn clampDraws(@builtin(local_invocation_index) i: u32) {
-  for(var m=i;m<12u;m+=4u){atomicStore(&nearDraws.items[m].instances,min(atomicLoad(&nearDraws.items[m].instances),u32(nearU.z)));}
+  for(var m=i;m<24u;m+=4u){atomicStore(&nearDraws.items[m].instances,min(atomicLoad(&nearDraws.items[m].instances),u32(nearU.z)));}
+  if(i==0u){
+    let cur=sc.cam.xyz;
+    let old=select(cur,nearDraws.anchor.xyz,nearDraws.anchor.w>.5 && length(cur-nearDraws.anchor.xyz)<200.0);
+    let dv=cur-old;let dl=length(dv);
+    nearDraws.anchor=vec4f(select(old,cur-dv*(2.5/dl),dl>2.5),1.0);
+  }
   atomicStore(&draws[i].instances, min(atomicLoad(&draws[i].instances), CAP));
   if (i == 0u) {
     atomicStore(&draws[${LISTS}].instances, u32(scenery[0].x));

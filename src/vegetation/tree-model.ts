@@ -115,14 +115,14 @@ interface Node {
   depth: number;
 }
 
-/** A kind's tree at one proportion, its leaf clumps and its skeleton grown from `seed`. */
-export function treeModel(kind: ForestKind, aspect: number, seed = 1): TreeMesh {
+/** A kind's tree at one proportion, its leaf clumps and its skeleton grown from `seed` (`lod` 0: full near mesh; 1: consolidated tufts and 3-sided limbs from the same growth). */
+export function treeModel(kind: ForestKind, aspect: number, seed = 1, lod: 0 | 1 = 0): TreeMesh {
   const rnd = treeRng(seed * 7919 + kind * 104729 + Math.round(aspect * 1000));
   const k = KIND_SHAPES[kind]!;
   const env = treeEnvelope(kind, aspect);
   const R = env.R;
   const segs: Seg[] = [];
-  const leaves: { p: V3; n: V3; s: number; shade: number; long?: V3 }[] = [];
+  const leaves: { p: V3; n: V3; s: number; shade: number; long?: V3; keep1?: number }[] = [];
   // (a point in the envelope, biased to its shell — the leaves live outside, the inside is shade)
   const inEnvelope = (shell: number): V3 => {
     for (let t = 0; t < 64; t++) {
@@ -188,7 +188,14 @@ export function treeModel(kind: ForestKind, aspect: number, seed = 1): TreeMesh 
             const spread = sz * (0.6 + 0.4 * rnd()) * side;
             const q = add(p, mul(across, spread));
             const n = norm(add(mul(outward(q), 0.35), [0, 0, 1]));
-            leaves.push({ p: q, n, s: sz * 1.35, shade: 0, long: norm(add(dir, mul(across, side * 0.4))) });
+            leaves.push({
+              p: q,
+              n,
+              s: sz * 1.35,
+              shade: 0,
+              long: norm(add(dir, mul(across, side * 0.4))),
+              keep1: i % 3 === 0 || i === nl - 1 ? 1.38 : 0,
+            });
           }
         }
         nodes[tipN]!.flow += 1;
@@ -213,7 +220,14 @@ export function treeModel(kind: ForestKind, aspect: number, seed = 1): TreeMesh 
         const f = s / 8;
         // (an arch: up, then down)
         const p = add(head, add(mul(dir, L * f), [0, 0, L * (up * f - 0.55 * f * f)]));
-        leaves.push({ p: mul(add(p, pPrev), 0.5), n: norm(add(outward(p), [0, 0, 1])), s: 0.11 * R, shade: 0, long: norm(sub(p, pPrev)) });
+        leaves.push({
+          p: mul(add(p, pPrev), 0.5),
+          n: norm(add(outward(p), [0, 0, 1])),
+          s: 0.11 * R,
+          shade: 0,
+          long: norm(sub(p, pPrev)),
+          keep1: s % 2 === 0 ? 1.38 : 0,
+        });
         pPrev = p;
       }
     }
@@ -266,6 +280,7 @@ export function treeModel(kind: ForestKind, aspect: number, seed = 1): TreeMesh 
       // (the clump's leaves: cards scattered in a ball of the kind's clump size, facing out)
       const cr = Math.max((kind === ForestKind.columnar ? 0.42 : 0.3) * R, 0.018);
       const nl = kind === ForestKind.shrub ? 30 : 40;
+      let keptInClump = 0;
       for (let i = 0; i < nl; i++) {
         const q: V3 = [2 * rnd() - 1, 2 * rnd() - 1, 2 * rnd() - 1];
         if (len(q) > 1) {
@@ -275,21 +290,34 @@ export function treeModel(kind: ForestKind, aspect: number, seed = 1): TreeMesh 
         const p = add(c, mul(q, cr));
         if (env.inside(p) > 1.08) continue;
         const nOut = norm(add(mul(norm(q), 0.6), mul(outward(p), 0.8)));
-        leaves.push({ p, n: nOut, s: cr * (0.5 + 0.35 * rnd()), shade: 0 });
+        leaves.push({ p, n: nOut, s: cr * (0.5 + 0.35 * rnd()), shade: 0, keep1: keptInClump++ % 3 === 0 ? 1.42 : 0 });
       }
     }
   }
   // (the pipe model: each node's flow its leaves' and its children's; radius ∝ flow^(1/2.5), the trunk's r0 at the foot)
+  const children = new Uint16Array(nodes.length);
   for (let i = nodes.length - 1; i >= 0; i--) {
     const n = nodes[i]!;
-    if (n.parent >= 0) nodes[n.parent]!.flow += n.flow;
+    if (n.parent >= 0) {
+      nodes[n.parent]!.flow += n.flow;
+      children[n.parent]!++;
+    }
   }
   const rootFlow = Math.max(...nodes.filter((n) => n.parent < 0).map((n) => n.flow), 1);
   const radiusOf = (n: Node) => Math.max(r0 * (Math.max(n.flow, 0.5) / rootFlow) ** (1 / 2.5), 0.002);
+  const ChainSkip = (idx: number) =>
+    lod === 1 &&
+    idx >= 0 &&
+    nodes[idx]!.parent >= 0 &&
+    children[idx] === 1 &&
+    (nodes[idx]!.depth >= 1 || kind === ForestKind.palm) &&
+    nodes[idx]!.flow <= 1;
   for (let i = 0; i < nodes.length; i++) {
     const n = nodes[i]!;
-    if (n.parent < 0) continue;
-    const p = nodes[n.parent]!;
+    if (n.parent < 0 || ChainSkip(i)) continue;
+    let pIdx = n.parent;
+    while (ChainSkip(pIdx)) pIdx = nodes[pIdx]!.parent;
+    const p = nodes[pIdx]!;
     segs.push({ a: p.p, b: n.p, ra: radiusOf(p), rb: radiusOf(n) });
   }
   // (each leaf's shade: deeper in the crown darker — the envelope's value at it —, and its own variation)
@@ -297,11 +325,18 @@ export function treeModel(kind: ForestKind, aspect: number, seed = 1): TreeMesh 
     const depthIn = Math.min(Math.max(env.inside(l.p), 0), 1);
     l.shade = (0.55 + 0.45 * depthIn) * (0.85 + 0.15 * rnd());
   }
-  return meshOf(segs, leaves, Math.max(R, ...leaves.map((l) => Math.hypot(l.p[0], l.p[1]) + l.s)));
+  const rad0 = Math.max(R, ...leaves.map((l) => Math.hypot(l.p[0], l.p[1]) + l.s));
+  if (lod === 0) return meshOf(segs, leaves, rad0, 5);
+  const leaves1 = leaves
+    .filter((l) => (l.keep1 ?? 0) > 0)
+    .map((l) => ({
+      ...l,
+      s: Math.min(l.s * l.keep1!, Math.max(l.s, rad0 - Math.hypot(l.p[0], l.p[1]))),
+    }));
+  return meshOf(segs, leaves1, rad0, 3);
 }
 
-function meshOf(segs: Seg[], leaves: { p: V3; n: V3; s: number; shade: number; long?: V3 }[], radius: number): TreeMesh {
-  const SIDES = 5;
+function meshOf(segs: Seg[], leaves: { p: V3; n: V3; s: number; shade: number; long?: V3 }[], radius: number, SIDES = 5): TreeMesh {
   const nv = segs.length * SIDES * 2 + leaves.length * 4;
   const ni = segs.length * SIDES * 6 + leaves.length * 6;
   const pos = new Float32Array(nv * 3),

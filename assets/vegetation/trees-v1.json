@@ -1,12 +1,12 @@
 {
   "format": 1,
-  "sourceSha256": "690918018554ad47f897522915499650ab15c5de06ce2157e0676e9198ab90d3",
-  "file": "trees-v1-690918018554ad47.bin",
-  "sha256": "250afa8d923a8aa101fb92b315b65bceb47442f73887d072ed42385cad8709dc",
+  "sourceSha256": "b31429154c38b2fd3860c3d7ad9f0b9f80ccb6146ae50d6213dd006e310c7518",
+  "file": "trees-v1-b31429154c38b2fd.bin",
+  "sha256": "aa5613b290976ae9525c9231061242f9e277304e3d62122d4d2bb64bd028cf96",
   "meshoptimizer": "1.3.0",
   "compression": "gzip",
-  "rawBytes": 6976520,
-  "bytes": 2909376,
+  "rawBytes": 9519424,
+  "bytes": 3979761,
   "barkLodStudy": [
     {
       "kind": 1,
@@ -91,6 +91,152 @@
       "sourceTriangles": 11318,
       "trialTriangles": 11156,
       "absoluteError": 0.0019612832337301267
+    }
+  ],
+  "lodStudy": [
+    {
+      "kind": 1,
+      "aspect": 0.22,
+      "lod0Triangles": 12588,
+      "lod1Triangles": 4620,
+      "reductionPct": 63.3,
+      "sideCoverage0": 0.4614,
+      "sideCoverage1": 0.4703,
+      "topCoverage0": 0.5166,
+      "topCoverage1": 0.5276,
+      "canonicalError": 0.00933
+    },
+    {
+      "kind": 1,
+      "aspect": 0.11,
+      "lod0Triangles": 12368,
+      "lod1Triangles": 4578,
+      "reductionPct": 63,
+      "sideCoverage0": 0.2924,
+      "sideCoverage1": 0.2865,
+      "topCoverage0": 0.5361,
+      "topCoverage1": 0.5449,
+      "canonicalError": 0.00469
+    },
+    {
+      "kind": 2,
+      "aspect": 0.19,
+      "lod0Triangles": 4622,
+      "lod1Triangles": 1830,
+      "reductionPct": 60.4,
+      "sideCoverage0": 0.1981,
+      "sideCoverage1": 0.2255,
+      "topCoverage0": 0.6838,
+      "topCoverage1": 0.8017,
+      "canonicalError": 0.00508
+    },
+    {
+      "kind": 2,
+      "aspect": 0.09,
+      "lod0Triangles": 3232,
+      "lod1Triangles": 1288,
+      "reductionPct": 60.1,
+      "sideCoverage0": 0.2174,
+      "sideCoverage1": 0.2016,
+      "topCoverage0": 0.6836,
+      "topCoverage1": 0.7708,
+      "canonicalError": 0.00243
+    },
+    {
+      "kind": 3,
+      "aspect": 0.27,
+      "lod0Triangles": 7428,
+      "lod1Triangles": 2790,
+      "reductionPct": 62.4,
+      "sideCoverage0": 0.2645,
+      "sideCoverage1": 0.2654,
+      "topCoverage0": 0.5253,
+      "topCoverage1": 0.5343,
+      "canonicalError": 0.01144
+    },
+    {
+      "kind": 3,
+      "aspect": 0.13,
+      "lod0Triangles": 7436,
+      "lod1Triangles": 2756,
+      "reductionPct": 62.9,
+      "sideCoverage0": 0.2704,
+      "sideCoverage1": 0.266,
+      "topCoverage0": 0.5278,
+      "topCoverage1": 0.5378,
+      "canonicalError": 0.00548
+    },
+    {
+      "kind": 4,
+      "aspect": 0.33,
+      "lod0Triangles": 236,
+      "lod1Triangles": 94,
+      "reductionPct": 60.2,
+      "sideCoverage0": 0.0872,
+      "sideCoverage1": 0.093,
+      "topCoverage0": 0.1246,
+      "topCoverage1": 0.1327,
+      "canonicalError": 0.01044
+    },
+    {
+      "kind": 4,
+      "aspect": 0.16,
+      "lod0Triangles": 236,
+      "lod1Triangles": 94,
+      "reductionPct": 60.2,
+      "sideCoverage0": 0.0764,
+      "sideCoverage1": 0.0689,
+      "topCoverage0": 0.1744,
+      "topCoverage1": 0.1948,
+      "canonicalError": 0.00498
+    },
+    {
+      "kind": 5,
+      "aspect": 1.1,
+      "lod0Triangles": 7382,
+      "lod1Triangles": 2640,
+      "reductionPct": 64.2,
+      "sideCoverage0": 0.7205,
+      "sideCoverage1": 0.7467,
+      "topCoverage0": 0.5187,
+      "topCoverage1": 0.5268,
+      "canonicalError": 0.04663
+    },
+    {
+      "kind": 5,
+      "aspect": 0.5,
+      "lod0Triangles": 7560,
+      "lod1Triangles": 2770,
+      "reductionPct": 63.4,
+      "sideCoverage0": 0.6551,
+      "sideCoverage1": 0.6613,
+      "topCoverage0": 0.5017,
+      "topCoverage1": 0.5098,
+      "canonicalError": 0.02107
+    },
+    {
+      "kind": 6,
+      "aspect": 0.22,
+      "lod0Triangles": 11052,
+      "lod1Triangles": 4050,
+      "reductionPct": 63.4,
+      "sideCoverage0": 0.5505,
+      "sideCoverage1": 0.5577,
+      "topCoverage0": 0.4923,
+      "topCoverage1": 0.5035,
+      "canonicalError": 0.00427
+    },
+    {
+      "kind": 6,
+      "aspect": 0.11,
+      "lod0Triangles": 11318,
+      "lod1Triangles": 4168,
+      "reductionPct": 63.2,
+      "sideCoverage0": 0.3711,
+      "sideCoverage1": 0.3569,
+      "topCoverage0": 0.4942,
+      "topCoverage1": 0.5046,
+      "canonicalError": 0.0022
     }
   ],
   "models": [
@@ -345,6 +491,258 @@
       },
       "vertices": 20176,
       "triangles": 11318
+    },
+    {
+      "kind": 1,
+      "aspect": 0.22,
+      "lod": 1,
+      "error": 0.00933,
+      "radius": 0.2893717234556458,
+      "bounds": {
+        "lo": [
+          -0.2739829421043396,
+          -0.2649324834346771,
+          -0.00019594405603129417
+        ],
+        "hi": [
+          0.2760280668735504,
+          0.26292791962623596,
+          1.0058996677398682
+        ]
+      },
+      "vertices": 8004,
+      "triangles": 4620
+    },
+    {
+      "kind": 1,
+      "aspect": 0.11,
+      "lod": 1,
+      "error": 0.00469,
+      "radius": 0.14502677985240234,
+      "bounds": {
+        "lo": [
+          -0.13527235388755798,
+          -0.13444510102272034,
+          -0.00018553214613348246
+        ],
+        "hi": [
+          0.14121048152446747,
+          0.13642257452011108,
+          0.9751373529434204
+        ]
+      },
+      "vertices": 7944,
+      "triangles": 4578
+    },
+    {
+      "kind": 2,
+      "aspect": 0.19,
+      "lod": 1,
+      "error": 0.00508,
+      "radius": 0.15200000000000002,
+      "bounds": {
+        "lo": [
+          -0.182883158326149,
+          -0.18572187423706055,
+          0
+        ],
+        "hi": [
+          0.18584677577018738,
+          0.18890179693698883,
+          1
+        ]
+      },
+      "vertices": 3126,
+      "triangles": 1830
+    },
+    {
+      "kind": 2,
+      "aspect": 0.09,
+      "lod": 1,
+      "error": 0.00243,
+      "radius": 0.072,
+      "bounds": {
+        "lo": [
+          -0.08660811930894852,
+          -0.08569204807281494,
+          0
+        ],
+        "hi": [
+          0.09151867777109146,
+          0.08818753063678741,
+          1
+        ]
+      },
+      "vertices": 2168,
+      "triangles": 1288
+    },
+    {
+      "kind": 3,
+      "aspect": 0.27,
+      "lod": 1,
+      "error": 0.01144,
+      "radius": 0.3571760096619312,
+      "bounds": {
+        "lo": [
+          -0.31316158175468445,
+          -0.3345637023448944,
+          -0.00010400138125987723
+        ],
+        "hi": [
+          0.33087459206581116,
+          0.3447452187538147,
+          1.0295342206954956
+        ]
+      },
+      "vertices": 4746,
+      "triangles": 2790
+    },
+    {
+      "kind": 3,
+      "aspect": 0.13,
+      "lod": 1,
+      "error": 0.00548,
+      "radius": 0.17019278449446287,
+      "bounds": {
+        "lo": [
+          -0.1589851677417755,
+          -0.15817764401435852,
+          -0.0002743532822933048
+        ],
+        "hi": [
+          0.15625116229057312,
+          0.15928976237773895,
+          1.0008647441864014
+        ]
+      },
+      "vertices": 4768,
+      "triangles": 2756
+    },
+    {
+      "kind": 4,
+      "aspect": 0.33,
+      "lod": 1,
+      "error": 0.01044,
+      "radius": 0.32471964417436877,
+      "bounds": {
+        "lo": [
+          -0.26798373460769653,
+          -0.29039931297302246,
+          -0.00007831939728930593
+        ],
+        "hi": [
+          0.26771262288093567,
+          0.2440798282623291,
+          0.9827932715415955
+        ]
+      },
+      "vertices": 182,
+      "triangles": 94
+    },
+    {
+      "kind": 4,
+      "aspect": 0.16,
+      "lod": 1,
+      "error": 0.00498,
+      "radius": 0.153595420752538,
+      "bounds": {
+        "lo": [
+          -0.14235812425613403,
+          -0.1559680849313736,
+          -0.00003501687751850113
+        ],
+        "hi": [
+          0.12615078687667847,
+          0.14554068446159363,
+          0.9438846111297607
+        ]
+      },
+      "vertices": 182,
+      "triangles": 94
+    },
+    {
+      "kind": 5,
+      "aspect": 1.1,
+      "lod": 1,
+      "error": 0.04663,
+      "radius": 1.4506571276414466,
+      "bounds": {
+        "lo": [
+          -1.416211724281311,
+          -1.4224343299865723,
+          -0.21806040406227112
+        ],
+        "hi": [
+          1.4009112119674683,
+          1.3471179008483887,
+          1.1796901226043701
+        ]
+      },
+      "vertices": 4200,
+      "triangles": 2640
+    },
+    {
+      "kind": 5,
+      "aspect": 0.5,
+      "lod": 1,
+      "error": 0.02107,
+      "radius": 0.6570143880339072,
+      "bounds": {
+        "lo": [
+          -0.6163008213043213,
+          -0.6037430763244629,
+          -0.123976930975914
+        ],
+        "hi": [
+          0.5718076825141907,
+          0.6091343760490417,
+          1.032528042793274
+        ]
+      },
+      "vertices": 4472,
+      "triangles": 2770
+    },
+    {
+      "kind": 6,
+      "aspect": 0.22,
+      "lod": 1,
+      "error": 0.00427,
+      "radius": 0.13158935079761755,
+      "bounds": {
+        "lo": [
+          -0.11627331376075745,
+          -0.12983454763889313,
+          -0.00005964529191260226
+        ],
+        "hi": [
+          0.12071022391319275,
+          0.1224304735660553,
+          1.0438183546066284
+        ]
+      },
+      "vertices": 7020,
+      "triangles": 4050
+    },
+    {
+      "kind": 6,
+      "aspect": 0.11,
+      "lod": 1,
+      "error": 0.0022,
+      "radius": 0.06521256850003819,
+      "bounds": {
+        "lo": [
+          -0.06015788018703461,
+          -0.0591287761926651,
+          -0.00008247434016084298
+        ],
+        "hi": [
+          0.06371185928583145,
+          0.05991111695766449,
+          1.008246898651123
+        ]
+      },
+      "vertices": 7238,
+      "triangles": 4168
     }
   ]
 }

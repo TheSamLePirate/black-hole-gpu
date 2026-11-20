@@ -28,6 +28,11 @@ test("each kind's tree: deterministic, finite, its leaves within its envelope, i
       expect(out / (a.pos.length / 3)).toBeLessThan(kind === 4 ? 0.3 : 0.02);
       expect(zmax).toBeGreaterThan(0.85);
       expect(zmax).toBeLessThan(1.12);
+      const lod1 = treeModel(kind, aspect, 3, 1);
+      expect(lod1.pos).toEqual(treeModel(kind, aspect, 3, 1).pos);
+      expect(lod1.radius).toBeCloseTo(a.radius, 6);
+      expect(lod1.index.length).toBeLessThan(a.index.length * 0.45);
+      expect(lod1.index.length).toBeGreaterThan(a.index.length * 0.25);
     }
 });
 

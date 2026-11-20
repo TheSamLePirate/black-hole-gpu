@@ -76,13 +76,23 @@ fn viewDir(v: u32) -> vec3f {
   var right = cross(vec3f(0.0, 0.0, 1.0), d);
   right = select(normalize(right), vec3f(1.0, 0.0, 0.0), dot(right, right) < 1e-8);
   let up = cross(d, right);
-  let q = pos - vec3f(0.0, 0.0, 0.5);
+  let dz = select(0.0, (attr.y - 0.5) * 0.055 - (attr.x - 0.5) * 0.025, B.kind == 2.0 && attr.z > 0.5);
+  let p = vec3f(pos.xy, pos.z + dz);
+  let q = p - vec3f(0.0, 0.0, 0.5);
   var o: VOut;
   // (orthographic, the bounding sphere's half-size; depth: towards the eye nearer — 0 at the front of the sphere, 1 at its back)
   let z = dot(q, d);
   o.pos = vec4f(dot(q, right) / B.half, dot(q, up) / B.half, 0.5 - 0.5 * z / B.half, 1.0);
-  o.n = nrm;
-  o.a = attr;
+  let cz = select(0.55, 0.45, B.kind == 5.0);
+  let uCr = (p - vec3f(0.0, 0.0, cz)) / vec3f(max(B.radius, 0.1), max(B.radius, 0.1), 0.45);
+  let nCone = normalize(vec3f(p.xy, (B.radius / 0.9) * length(p.xy) + 1e-4));
+  let nEll = normalize(vec3f(uCr.xy, uCr.z * 0.75 + 0.1));
+  let nCrown = select(nEll, nCone, B.kind == 2.0);
+  let nCard = normalize(nrm);
+  let nOut = normalize(nCard - nCrown * min(0.0, dot(nCard, nCrown)) + nCrown * 1e-4);
+  let crDepth = select(clamp(length(uCr), 0.45, 1.0), 0.75 + 0.25 * clamp(pos.z, 0.0, 1.0), B.kind == 2.0);
+  o.n = select(nCard, normalize(mix(nCrown, nOut, 0.28)), attr.z > 0.5);
+  o.a = vec4f(attr.xyz, attr.w * select(1.0, crDepth * (0.82 + 0.18 * attr.y), attr.z > 0.5));
   o.depth = z / B.half;
   return o;
 }
@@ -219,13 +229,19 @@ fn sceneryTreeImpostor(o: vec3f, d: vec3f, ci: i32, cj: i32, hd: ForestHead, tre
   let b = (tree.kind - 1u) * 2u;
   let ratio = r / H;
   let L = b + select(0u, 1u, abs(log(ratio / IMP_ASPECT[b + 1u])) < abs(log(ratio / IMP_ASPECT[b])));
-  let sx = r / IMP_ASPECT[L];
+  let nearGeo = P.scenery[6].w > 1.5;
+  let sx = select(1.0, 0.8, nearGeo) * r / IMP_ASPECT[L];
+  let hz = select(1.0, select(1.0, 0.86, tree.kind == 5u), nearGeo) * H;
+  let ang = select(0.0, 6.2831853 * tree.seed, nearGeo);
+  let ca = cos(ang);
+  let sa = sin(ang);
   let half = IMP_HALF[L];
   // (the ray in the tree's canonical frame — height 1 —: the same parameter t, metres along d; the tree carried by the wind's
   // sway as its crown near — V2e F1, forest.wgsl forestSway —: the whole of it, at this distance)
   let sw = forestSway(tree.base, tree.height, tree.seed);
-  let oc = vec3f((o.xy - tree.base.xy - sw) / sx, (o.z - tree.base.z) / H);
-  let dc = vec3f(d.xy / sx, d.z / H);
+  let ro = o.xy - tree.base.xy - sw;
+  let oc = vec3f((ro.x * ca + ro.y * sa) / sx, (-ro.x * sa + ro.y * ca) / sx, (o.z - tree.base.z) / hz);
+  let dc = vec3f((d.x * ca + d.y * sa) / sx, (-d.x * sa + d.y * ca) / sx, d.z / hz);
   let eye = normalize(-dc);
   let z = max(eye.z, 0.0);
   let pp = eye.xy / (abs(eye.x) + abs(eye.y) + z);
@@ -261,7 +277,8 @@ fn sceneryTreeImpostor(o: vec3f, d: vec3f, ci: i32, cj: i32, hd: ForestHead, tre
   var e = S.rg * 2.0 - 1.0;
   var nc = vec3f(e, 1.0 - abs(e.x) - abs(e.y));
   if (nc.z < 0.0) { nc = vec3f((1.0 - abs(e.yx)) * select(vec2f(-1.0), vec2f(1.0), e >= vec2f(0.0)), nc.z); }
-  let n = normalize(vec3f(nc.xy / sx, nc.z / H));
+  let nr = vec2f(nc.x * ca - nc.y * sa, nc.x * sa + nc.y * ca);
+  let n = normalize(vec3f(nr / sx, nc.z / hz));
   return ImpHit(t, n, A.r, A.g > 0.5);
 }`,
   );

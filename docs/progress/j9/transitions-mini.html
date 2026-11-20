@@ -1,0 +1,170 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: var(--font-sans, system-ui, sans-serif); color: var(--foreground, #e5e7eb); }
+  .wrap { display: flex; flex-direction: column; gap: 12px; }
+  .panel { background: var(--card, #181b20); border: 1px solid var(--border, #2a2f37); border-radius: var(--radius, 8px); padding: 16px; }
+  h2 { margin: 0 0 6px; font-size: 15px; font-weight: 600; }
+  p { margin: 0 0 10px; font-size: 12px; color: var(--muted-foreground, #9ca3af); line-height: 1.45; }
+  .tabs { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 10px; }
+  button {
+    background: var(--secondary, #232730);
+    color: var(--foreground, #e5e7eb);
+    border: 1px solid var(--border, #2a2f37);
+    border-radius: var(--radius, 6px);
+    padding: 5px 10px;
+    font-size: 12px;
+    cursor: pointer;
+  }
+  button.active { background: var(--primary, #3b82f6); color: var(--primary-foreground, #fff); border-color: var(--primary, #3b82f6); }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .card { background: var(--secondary, #12151a); border: 1px solid var(--border, #2a2f37); border-radius: var(--radius, 6px); padding: 8px; }
+  .card img { width: 100%; height: auto; display: block; border-radius: 4px; }
+  .cap { font-size: 11px; color: var(--muted-foreground, #9ca3af); margin-top: 6px; display: flex; justify-content: space-between; gap: 6px; }
+  .metrics { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 10px; }
+  .metric { background: var(--secondary, #12151a); border: 1px solid var(--border, #2a2f37); border-radius: var(--radius, 6px); padding: 8px 10px; }
+  .metric .k { font-size: 11px; color: var(--muted-foreground, #9ca3af); }
+  .metric .v { font-size: 15px; font-weight: 600; margin-top: 2px; color: var(--foreground, #f3f4f6); }
+  .metric .s { font-size: 11px; color: var(--success, #22c55e); }
+  .chart-box { height: 190px; width: 100%; position: relative; }
+  svg { width: 100%; height: 100%; display: block; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="panel">
+    <h2>J9-2 &amp; J9-4 — LOD 0/1 (−62,4 % triangles), raccord direct aux imposteurs à 80 m, saisons, vent et dessous de couronne</h2>
+    <p>Run <code>20261120-130901-j9-4-full3</code> sur <code>kerr-mini</code> (129 assertions, thermique Nominal, 1920×1080 / interne 1440×810). Les 24 modèles KTG1 partagent 2 tampons GPU ; au-delà de 80 m, <code>sceneryTreeLite</code> passe directement aux imposteurs V2 orientés par cellule.</p>
+    <div class="metrics">
+      <div class="metric">
+        <div class="k">Maures (44 arbres : 2 LOD0 / 42 LOD1)</div>
+        <div class="v">67,4 → 53,9 → 66,2 ms</div>
+        <div class="s">−13,5 ms p50 · hyst. 33 vs 41</div>
+      </div>
+      <div class="metric">
+        <div class="k">Chamonix (18 arbres : 2 LOD0 / 16 LOD1)</div>
+        <div class="v">70,5 → 59,3 → 70,5 ms</div>
+        <div class="s">−11,2 ms p50 · hyst. 18 vs 19</div>
+      </div>
+      <div class="metric">
+        <div class="k">Hiver (ramure 3D nue + conifères)</div>
+        <div class="v">Écorce ×95 / ×5,3</div>
+        <div class="s">Maures 37→3527 px · Cham. 499→2648 px</div>
+      </div>
+      <div class="metric">
+        <div class="k">Vecteurs mouvement vent (o.mot)</div>
+        <div class="v">0 → 49 339 / 18 357 px</div>
+        <div class="s">Calme = 0 px · Vent 1,5 = 99,9 %</div>
+      </div>
+    </div>
+    <div class="chart-box">
+      <svg viewBox="0 0 680 185" aria-label="Réduction de triangles LOD 0 vers LOD 1 sur les 12 modèles KTG1">
+        <line x1="50" y1="20" x2="660" y2="20" stroke="var(--border, #2a2f37)" stroke-dasharray="3,3"/>
+        <line x1="50" y1="65" x2="660" y2="65" stroke="var(--border, #2a2f37)" stroke-dasharray="3,3"/>
+        <line x1="50" y1="110" x2="660" y2="110" stroke="var(--border, #2a2f37)" stroke-dasharray="3,3"/>
+        <line x1="50" y1="150" x2="660" y2="150" stroke="var(--border, #2a2f37)"/>
+        <text x="44" y="24" text-anchor="end" font-size="10" fill="var(--muted-foreground, #9ca3af)">13k</text>
+        <text x="44" y="69" text-anchor="end" font-size="10" fill="var(--muted-foreground, #9ca3af)">8,5k</text>
+        <text x="44" y="114" text-anchor="end" font-size="10" fill="var(--muted-foreground, #9ca3af)">4k</text>
+        <text x="44" y="153" text-anchor="end" font-size="10" fill="var(--muted-foreground, #9ca3af)">0</text>
+        <g id="bars"></g>
+        <rect x="470" y="6" width="10" height="10" fill="var(--chart-1, #3b82f6)" rx="2"/>
+        <text x="484" y="15" font-size="10" fill="var(--foreground, #e5e7eb)">LOD 0 (78 452 tri)</text>
+        <rect x="575" y="6" width="10" height="10" fill="var(--chart-2, #22c55e)" rx="2"/>
+        <text x="589" y="15" font-size="10" fill="var(--foreground, #e5e7eb)">LOD 1 (29 496 tri, −62,4 %)</text>
+      </svg>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="tabs">
+      <button class="active" onclick="showTab('maures-seasons', this)">Maures — Été vs Automne</button>
+      <button onclick="showTab('maures-winter', this)">Maures — Hiver (ramure 3D) &amp; Dessous</button>
+      <button onclick="showTab('chamonix-seasons', this)">Chamonix — Été vs Automne</button>
+      <button onclick="showTab('chamonix-winter', this)">Chamonix — Hiver (squelette 3D devant bâtiment) &amp; Dessous</button>
+    </div>
+
+    <div id="tab-maures-seasons" class="grid2">
+      <div class="card">
+        <img src="/Users/olivierveinand/Documents/DEV/black-hole-gpu/remote-results/20261120-130901-j9-4-full3/artifacts/remote-results/j9-4-full3/maures-floor-1-geometry.png" alt="Maures été géométrie J9 + raccord imposteurs 80 m">
+        <div class="cap"><span>Maures été — Géométrie 3D (2 LOD0 + 42 LOD1) → imposteurs V2 à 80 m</span><span>53,9 ms p50</span></div>
+      </div>
+      <div class="card">
+        <img src="/Users/olivierveinand/Documents/DEV/black-hole-gpu/remote-results/20261120-130901-j9-4-full3/artifacts/remote-results/j9-4-full3/maures-floor-autumn.png" alt="Maures automne géométrie J9 + imposteurs">
+        <div class="cap"><span>Maures automne (25 oct.) — Continuité de teinte 3D ↔ imposteurs</span><span>0 saut à 80 m</span></div>
+      </div>
+    </div>
+
+    <div id="tab-maures-winter" class="grid2" style="display:none">
+      <div class="card">
+        <img src="/Users/olivierveinand/Documents/DEV/black-hole-gpu/remote-results/20261120-130901-j9-4-full3/artifacts/remote-results/j9-4-full3/maures-floor-winter.png" alt="Maures hiver ramure 3D nue">
+        <div class="cap"><span>Maures hiver (15 janv.) — Feuillus en ramure 3D nue + pins persistants</span><span>Écorce : 37 → 3 527 px</span></div>
+      </div>
+      <div class="card">
+        <img src="/Users/olivierveinand/Documents/DEV/black-hole-gpu/remote-results/20261120-130901-j9-4-full3/artifacts/remote-results/j9-4-full3/maures-floor-underside.png" alt="Maures vue du dessous à 0,8 m AGL">
+        <div class="cap"><span>Maures dessous (0,8 m AGL, pitch +11°) — 38 044 px géométrie</span><span>100 % prof/id valides</span></div>
+      </div>
+    </div>
+
+    <div id="tab-chamonix-seasons" class="grid2" style="display:none">
+      <div class="card">
+        <img src="/Users/olivierveinand/Documents/DEV/black-hole-gpu/remote-results/20261120-130901-j9-4-full3/artifacts/remote-results/j9-4-full3/chamonix-slope-1-geometry.png" alt="Chamonix été géométrie J9">
+        <div class="cap"><span>Chamonix été — 18 arbres (2 LOD0 + 16 LOD1), conifères &amp; feuillus</span><span>59,3 ms p50</span></div>
+      </div>
+      <div class="card">
+        <img src="/Users/olivierveinand/Documents/DEV/black-hole-gpu/remote-results/20261120-130901-j9-4-full3/artifacts/remote-results/j9-4-full3/chamonix-slope-autumn.png" alt="Chamonix automne géométrie J9">
+        <div class="cap"><span>Chamonix automne (25 oct.) — Feuillu doré devant bâtiment code 62</span><span>Continuité proche/versant</span></div>
+      </div>
+    </div>
+
+    <div id="tab-chamonix-winter" class="grid2" style="display:none">
+      <div class="card">
+        <img src="/Users/olivierveinand/Documents/DEV/black-hole-gpu/remote-results/20261120-130901-j9-4-full3/artifacts/remote-results/j9-4-full3/chamonix-slope-winter.png" alt="Chamonix hiver ramure 3D nue devant bâtiment">
+        <div class="cap"><span>Chamonix hiver (15 janv.) — Ramure 3D nue devant le bâtiment + sapins enneigés</span><span>Écorce : 499 → 2 648 px</span></div>
+      </div>
+      <div class="card">
+        <img src="/Users/olivierveinand/Documents/DEV/black-hole-gpu/remote-results/20261120-130901-j9-4-full3/artifacts/remote-results/j9-4-full3/chamonix-slope-underside.png" alt="Chamonix vue du dessous à 0,8 m AGL">
+        <div class="cap"><span>Chamonix dessous (0,8 m AGL, pitch +6°) — 17 131 px géométrie</span><span>100 % prof/id valides</span></div>
+      </div>
+    </div>
+  </div>
+</div>
+<script>
+const models = [
+  { label: "Feuillu 0.22", l0: 12588, l1: 4620, pct: "-63%" },
+  { label: "Feuillu 0.11", l0: 12368, l1: 4578, pct: "-63%" },
+  { label: "Conif. 0.19", l0: 4622, l1: 1830, pct: "-60%" },
+  { label: "Conif. 0.09", l0: 3232, l1: 1288, pct: "-60%" },
+  { label: "Trop. 0.27", l0: 7428, l1: 2790, pct: "-62%" },
+  { label: "Trop. 0.13", l0: 7436, l1: 2756, pct: "-63%" },
+  { label: "Palm. 0.33", l0: 236, l1: 94, pct: "-60%" },
+  { label: "Palm. 0.16", l0: 236, l1: 94, pct: "-60%" },
+  { label: "Arbuste 1.1", l0: 7382, l1: 2640, pct: "-64%" },
+  { label: "Arbuste 0.5", l0: 7560, l1: 2770, pct: "-63%" },
+  { label: "Arid. 0.22", l0: 11052, l1: 4050, pct: "-63%" },
+  { label: "Arid. 0.11", l0: 11318, l1: 4168, pct: "-63%" }
+];
+const g = document.getElementById("bars");
+models.forEach((m, i) => {
+  const x = 60 + i * 50;
+  const h0 = Math.max(3, (m.l0 / 13000) * 130);
+  const h1 = Math.max(2, (m.l1 / 13000) * 130);
+  g.innerHTML += `
+    <rect x="${x}" y="${150 - h0}" width="16" height="${h0}" fill="var(--chart-1, #3b82f6)" rx="2"/>
+    <rect x="${x + 18}" y="${150 - h1}" width="16" height="${h1}" fill="var(--chart-2, #22c55e)" rx="2"/>
+    <text x="${x + 17}" y="${146 - h1}" text-anchor="middle" font-size="8.5" fill="var(--chart-2, #22c55e)">${m.pct}</text>
+    <text x="${x + 17}" y="166" text-anchor="middle" font-size="8.5" fill="var(--muted-foreground, #9ca3af)">${m.label}</text>
+  `;
+});
+function showTab(id, btn) {
+  for (const el of document.querySelectorAll('[id^="tab-"]')) el.style.display = 'none';
+  document.getElementById('tab-' + id).style.display = 'grid';
+  for (const b of document.querySelectorAll('.tabs button')) b.classList.remove('active');
+  btn.classList.add('active');
+}
+</script>
+</body>
+</html>

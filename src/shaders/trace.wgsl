@@ -10795,31 +10795,40 @@ fn sceneryTreeLite(dW: vec3f, id: u32, tMax: f32, rnd: vec4f) -> f32 {
   let k = i32(id - 1u);
   let ci = k % max(hd.w, 1);
   let cj = k / max(hd.w, 1);
-  // (its plain crown whole — detail −1 —: the proxy the raster drew round it covers it, no more; a far crown's shrinking — half
-  // its carving — left a ring of it uncovered round each crown, the ground behind there, the trees behind it gone)
-  var tree = forestCandidate(o, d, ci, cj, -1.0, hd);
+  let nearGeo = P.scenery[6].w > 1.5;
+  // (its plain crown whole — detail −1 —: the proxy the raster drew round it covers it, no more; in winter with near geometry on,
+  // 160 m of twigs bridge the bare 3D skeleton to the far canopy)
+  var tree = forestCandidate(o, d, ci, cj, select(-1.0, 160.0, nearGeo && forestData(F + 7u).z > 0.5), hd);
   // (missed — a crown behind it on the screen —: the ground there; the grid walked from it only with TUNE_LITE 256 — 40 % of
   // the material's time over Paris for nothing seen at a pixel's size; near, the rays' kernel's — rasterLiteTakes)
   if (!(tree.t > 0.0 && tree.t < tMax) && (TUNE_LITE & 256u) != 0u) {
     tree = forestQueryFrom(o, d, forestCandidateStart(o, d, ci, cj, hd), tMax, false, 0.0);
   }
   if (tree.kind == 0u || tree.t <= 0.0 || tree.t >= tMax) { return -1.0; }
-  // (V2c — far, in leaf: its hemi-octahedral impostor — its modelled branches and leaf clumps, their normals and their depth —
-  // instead of the plain shape and its noise; dithered in over IMPOSTOR_NEAR_M … + 100 m; a deciduous crown bare in winter keeps
-  // the shape and its twigs' cover)
+  // (V2c / J9-4 — far, in leaf: its hemi-octahedral impostor — its modelled branches and leaf clumps, their normals and their depth —
+  // instead of the plain shape and its noise; with near 3D geometry on, impostors take over directly at the geometry reach without
+  // dropping back to smooth uncarved proxies)
   let bareNow = forestData(F + 10u + 4u * tree.kind).w * forestData(F + 7u).z;
-  if (IMPOSTOR_BOUND && P.scenery[6].w > 0.5 && bareNow < 0.5 && tree.t > IMPOSTOR_NEAR_M + 100.0 * rnd.x) {
+  let impNear = select(IMPOSTOR_NEAR_M + 100.0 * rnd.x, 0.0, nearGeo);
+  if (IMPOSTOR_BOUND && P.scenery[6].w > 0.5 && bareNow < 0.5 && tree.t > impNear) {
     let ih = sceneryTreeImpostor(o, d, ci, cj, hd, tree, rnd.yzw);
     if (ih.t <= 0.0 || ih.t >= tMax) { return -1.0; }
     var th = tree;
     th.part = select(1u, 0u, ih.leaf);
+    th.ao = select(1.0, ih.shade, nearGeo && ih.leaf);
     let pi = o + d * ih.t;
     SC_POINT = pi;
     SC_DISTANCE = ih.t;
-    let lk = forestLook(th, ih.n, pi, sceneryColourAt(tree.base.xy));
-    WS_T = lk.through;
-    WS = vec4f(normalize(sceneryGlobal(ih.n)), 1.0);
-    WS_A = lk.albedo * select(1.0, mix(0.55, 1.15, ih.shade), ih.leaf);
+    var ni = ih.n;
+    let lk = forestLook(th, ni, pi, sceneryColourAt(tree.base.xy));
+    if (nearGeo && ih.leaf) {
+      let clump = vec3f(gnoise(pi * 0.9), gnoise(pi * 0.9 + vec3f(17.1, 3.7, -5.3)), gnoise(pi * 0.9 + vec3f(-8.3, 11.9, 2.1)));
+      ni = normalize(ni + 0.55 * clump);
+    }
+    let gr = select(gnoise(pi * vec3f(5.0, 5.0, 0.7)), gnoise(pi * 5.3), ih.leaf);
+    WS_T = lk.through * select(1.0, select(0.0, ih.shade * ih.shade, ih.leaf), nearGeo);
+    WS = vec4f(normalize(sceneryGlobal(ni)), 1.0);
+    WS_A = lk.albedo * select(select(1.0, mix(0.55, 1.15, ih.shade), ih.leaf), 0.8 + 0.2 * gr, nearGeo);
     return ih.t;
   }
   let p = o + d * tree.t;

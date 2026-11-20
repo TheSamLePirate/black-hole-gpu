@@ -4484,6 +4484,7 @@ export class Renderer {
     // (V2c: the impostors baked the first time the forest is drawn; drawn once ready — treeImpostorsOn the A/B)
     if (this.treeImpostors && this.sceneryRaster && !this.treeImpostors.ready) void this.treeImpostors.bake();
     this.earthScenery.impostorsOn = this.treeImpostorsOn && !!this.treeImpostors?.ready;
+    this.earthScenery.nearGeometryOn = this.nearTreeGeometryOn && !!this.sceneryRaster?.nearTrees.ready;
     f.set(this.earthScenery.params(), PARAMS.scenery);
     if (!o.probe && this.character?.active && this.character.body === "earth")
       this.character.groundPatch.build(this.character.q, this.character.up(), (q) => this.character!.rawHeight(q), this.earthTiles.stamp);

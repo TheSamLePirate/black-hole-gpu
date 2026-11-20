@@ -1,4 +1,4 @@
-// J9-3 prototype: shared source triangles, GPU-selected instances. Off until explicitly measured.
+// J9-2/J9-3/J9-4: shared source triangles (12 models × 2 LODs), GPU-selected instances with projected-error LOD and hysteresis.
 import url from "./tree-asset-url";
 import { decodeTreeAssets, TREE_VERTEX_FLOATS } from "./tree-assets";
 import { TREE_ASPECTS, TREE_MODEL_KINDS } from "./tree-model";
@@ -7,25 +7,38 @@ import { inflated } from "../util/inflate";
 import { TERRAIN_RASTER_FORMAT, TERRAIN_RASTER_ID_FORMAT, TERRAIN_RASTER_MOTION_FORMAT } from "../system/terrain-raster";
 export const NEAR_TREE_CAP = 4096;
 export const NEAR_TREE_MODELS = 12;
+export const NEAR_TREE_LODS = 2;
+export const NEAR_TREE_DRAWS = NEAR_TREE_MODELS * NEAR_TREE_LODS;
 const aspects = TREE_MODEL_KINDS.flatMap((k) => TREE_ASPECTS[k]!);
 export const NEAR_TREE_WGSL = /* wgsl */ `
 struct NearDraw { count:u32, instances:atomic<u32>, first:u32, vertex:i32, base:u32 };
-struct NearDraws { items:array<NearDraw,12>, overflow:atomic<u32> };
+struct NearDraws { items:array<NearDraw,${NEAR_TREE_DRAWS}>, overflow:atomic<u32>, pad0:u32, pad1:u32, pad2:u32, anchor:vec4f };
 @group(1) @binding(27) var<uniform> nearU:vec4f;
 @group(1) @binding(28) var<storage,read_write> nearDraws:NearDraws;
 @group(1) @binding(29) var<storage,read_write> nearOut:array<u32>;
 @group(1) @binding(30) var<storage,read> nearIn:array<u32>;
 const NEAR_ASPECT=array<f32,12>(${aspects.map((a) => a.toFixed(3)).join(",")});
 fn nearKeep(k:u32,t:Tree,hd:ForestHead)->bool {
-  if(nearU.x<.5 || length(t.foot-sc.cam.xyz)>nearU.y){return false;}
+  if(nearU.x<.5){return false;}
+  let dNow=length(t.foot-sc.cam.xyz);
+  let anch=select(sc.cam.xyz,nearDraws.anchor.xyz,nearDraws.anchor.w>.5);
+  let dPrev=length(t.foot-anch);
+  let hyst=1.0+clamp((dNow-dPrev)*.08,-0.05,0.05);
+  let jit=1.0+0.08*(t.seed-0.5);
+  let lim=nearU.y*hyst*jit;
+  if(dNow>lim){return false;}
   let ci=i32(k)%hd.w;let cj=i32(k)/hd.w;
   let gi=u32(((hd.i0+ci)%hd.columns+hd.columns)%hd.columns);let gj=bitcast<u32>(hd.j0+cj);
   let r=hd.cell*(.3+.17*forestUnit(forestHash(gi,gj,3u)));
   let b=(t.kind-1u)*2u;let ratio=r/t.height;
   let model=b+select(0u,1u,abs(log(ratio/NEAR_ASPECT[b+1u]))<abs(log(ratio/NEAR_ASPECT[b])));
-  let at=atomicAdd(&nearDraws.items[model].instances,1u);
+  let pxPerM=(0.5*u.image.y)/(max(dNow,1.0)*max(u.up.w,0.1));
+  let errPx=0.025*max(t.height,2.0*r)*pxPerM*hyst*jit;
+  let lod=select(0u,1u,dNow>0.52*lim || errPx<3.2);
+  let draw=model+lod*12u;
+  let at=atomicAdd(&nearDraws.items[draw].instances,1u);
   if(at>=u32(nearU.z)){atomicAdd(&nearDraws.overflow,1u);return false;}
-  nearOut[model*${NEAR_TREE_CAP}u+at]=k;return true;
+  nearOut[draw*${NEAR_TREE_CAP}u+at]=k;return true;
 }
 ${TREE_LEAF_WGSL}
 override NEAR_MODEL:u32=0u;
@@ -36,7 +49,7 @@ struct NearV { @builtin(position) clip:vec4f,@location(0) p:vec3f,@location(1) n
   let k=nearIn[NEAR_MODEL*${NEAR_TREE_CAP}u+instance];let hd=forestHead(u32(forestData(2u).x));let t=treeOf(k,hd);
   let ci=i32(k)%hd.w;let cj=i32(k)/hd.w;
   let gi=u32(((hd.i0+ci)%hd.columns+hd.columns)%hd.columns);let gj=bitcast<u32>(hd.j0+cj);
-  let r=hd.cell*(.3+.17*forestUnit(forestHash(gi,gj,3u)));let sx=.8*r/NEAR_ASPECT[NEAR_MODEL];
+  let r=hd.cell*(.3+.17*forestUnit(forestHash(gi,gj,3u)));let sx=.8*r/NEAR_ASPECT[NEAR_MODEL%12u];
   let ang=6.2831853*t.seed;let ca=cos(ang);let sa=sin(ang);
   let dz=select(0.0,(attr.y-.5)*.055-(attr.x-.5)*.025,t.cone && attr.z>.5);
   let hz=select(1.0,.86,t.kind==5u)*t.height;
@@ -44,7 +57,8 @@ struct NearV { @builtin(position) clip:vec4f,@location(0) p:vec3f,@location(1) n
   let nr=vec3f(nrm.x*ca-nrm.y*sa,nrm.x*sa+nrm.y*ca,nrm.z);
   let base=t.foot+pr*vec3f(sx,sx,hz);
   let weight=clamp(pos.z*pos.z,0.0,1.0);
-  let p=base+vec3f(forestSway(t.foot,t.height,t.seed)*weight,0.0);let v=view(p);
+  let sw=forestSway(t.foot,t.height,t.seed)*weight;
+  let p=base+vec3f(sw,0.0);let v=view(p);
   var o:NearV;o.clip=vec4f(v.x/u.right.w+u.output.z*v.z,v.y/u.up.w+u.output.w*v.z,u.forward.w,v.z);
   let nCard=normalize(nr/vec3f(sx,sx,hz));
   let q=base-t.c;
@@ -58,7 +72,7 @@ struct NearV { @builtin(position) clip:vec4f,@location(0) p:vec3f,@location(1) n
   o.a=vec4f(attr.xyz,attr.w*select(1.0,crDepth*(0.82+0.18*attr.y),attr.z>.5));
   o.id=k+1u;o.kind=t.kind;
   o.bare=forestData(hd.F+10u+4u*t.kind).w*forestData(hd.F+7u).z;o.mot=vec3f(0.0);
-  if(sc.pf.w>.5 && v.z>.1){let old=base+vec3f(forestSwayAt(t.foot,t.height,t.seed,forestWind(),sc.pcam.xyz,sc.pcam.w)*weight,0.0);
+  if(any(sw!=vec2f(0.0)) && sc.pf.w>.5 && v.z>.1){let old=base+vec3f(forestSwayAt(t.foot,t.height,t.seed,forestWind(),sc.pcam.xyz,sc.pcam.w)*weight,0.0);
     let vp=viewPrev(old);if(vp.z>.1){o.mot=vec3f((v.xy/(vec2f(u.right.w,u.up.w)*v.z)-vp.xy/(vec2f(sc.pr.w,sc.pu.w)*vp.z))*.5*vec2f(u.image.x,-u.image.y),1.0);}}
   return o;
 }
@@ -88,8 +102,9 @@ export class NearTreeGeometry {
   private u: GPUBuffer;
   private lists: GPUBuffer;
   private draws: GPUBuffer;
-  private reset = new Uint32Array(NEAR_TREE_MODELS * 5 + 1);
-  private meshes: { v: GPUBuffer; i: GPUBuffer }[] = [];
+  private reset = new Uint32Array(NEAR_TREE_DRAWS * 5 + 1);
+  private vBuf: GPUBuffer | null = null;
+  private iBuf: GPUBuffer | null = null;
   private pipes: GPURenderPipeline[] = [];
   private disposed = false;
   private params = new Float32Array(4);
@@ -99,9 +114,9 @@ export class NearTreeGeometry {
     private mainLayout: GPUBindGroupLayout,
   ) {
     this.u = d.createBuffer({ size: 16, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
-    this.lists = d.createBuffer({ size: NEAR_TREE_CAP * NEAR_TREE_MODELS * 4, usage: GPUBufferUsage.STORAGE });
+    this.lists = d.createBuffer({ size: NEAR_TREE_CAP * NEAR_TREE_DRAWS * 4, usage: GPUBufferUsage.STORAGE });
     this.draws = d.createBuffer({
-      size: this.reset.byteLength,
+      size: this.reset.byteLength + 28,
       usage: GPUBufferUsage.STORAGE | GPUBufferUsage.INDIRECT | GPUBufferUsage.COPY_DST | GPUBufferUsage.COPY_SRC,
     });
     const C = GPUShaderStage.COMPUTE,
@@ -141,19 +156,35 @@ export class NearTreeGeometry {
     const models = decodeTreeAssets(await inflated(response));
     if (this.disposed) return;
     if (
-      models.length !== NEAR_TREE_MODELS ||
-      models.some((m, i) => m.lod !== 0 || m.kind !== Math.floor(i / 2) + 1 || Math.abs(m.aspect - aspects[i]!) > 1e-6)
+      models.length !== NEAR_TREE_DRAWS ||
+      models.some(
+        (m, i) =>
+          m.lod !== Math.floor(i / NEAR_TREE_MODELS) ||
+          m.kind !== Math.floor((i % NEAR_TREE_MODELS) / 2) + 1 ||
+          Math.abs(m.aspect - aspects[i % NEAR_TREE_MODELS]!) > 1e-6,
+      )
     )
       throw Error("Unexpected tree models");
     const layout = this.d.createPipelineLayout({ bindGroupLayouts: [this.mainLayout, this.drawLayout] });
+    const totalVFloats = models.reduce((s, m) => s + m.vertices.length, 0);
+    const totalIndices = models.reduce((s, m) => s + m.indices.length, 0);
+    const allV = new Float32Array(totalVFloats);
+    const allI = new Uint32Array(totalIndices);
+    let vOff = 0,
+      iOff = 0;
     for (const [index, m] of models.entries()) {
-      const v = this.d.createBuffer({ size: m.vertices.byteLength, usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST });
-      const i = this.d.createBuffer({ size: m.indices.byteLength, usage: GPUBufferUsage.INDEX | GPUBufferUsage.COPY_DST });
-      this.meshes.push({ v, i });
-      this.d.queue.writeBuffer(v, 0, m.vertices);
-      this.d.queue.writeBuffer(i, 0, m.indices);
+      allV.set(m.vertices, vOff * TREE_VERTEX_FLOATS);
+      allI.set(m.indices, iOff);
       this.reset[index * 5] = m.indices.length;
+      this.reset[index * 5 + 2] = iOff;
+      this.reset[index * 5 + 3] = vOff;
+      vOff += m.vertices.length / TREE_VERTEX_FLOATS;
+      iOff += m.indices.length;
     }
+    this.vBuf = this.d.createBuffer({ size: allV.byteLength, usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST });
+    this.iBuf = this.d.createBuffer({ size: allI.byteLength, usage: GPUBufferUsage.INDEX | GPUBufferUsage.COPY_DST });
+    this.d.queue.writeBuffer(this.vBuf, 0, allV);
+    this.d.queue.writeBuffer(this.iBuf, 0, allI);
     this.pipes = await Promise.all(
       models.map((_, index) =>
         this.d.createRenderPipelineAsync({
@@ -206,13 +237,13 @@ export class NearTreeGeometry {
     this.d.queue.writeBuffer(this.draws, 0, this.reset);
   }
   draw(pass: GPURenderPassEncoder, main: GPUBindGroup) {
-    if (!this.on || !this.ready) return;
-    for (const [i, m] of this.meshes.entries()) {
+    if (!this.on || !this.ready || !this.vBuf || !this.iBuf) return;
+    pass.setBindGroup(0, main);
+    pass.setBindGroup(1, this.drawBind);
+    pass.setVertexBuffer(0, this.vBuf);
+    pass.setIndexBuffer(this.iBuf, "uint32");
+    for (let i = 0; i < NEAR_TREE_DRAWS; i++) {
       pass.setPipeline(this.pipes[i]!);
-      pass.setBindGroup(0, main);
-      pass.setBindGroup(1, this.drawBind);
-      pass.setVertexBuffer(0, m.v);
-      pass.setIndexBuffer(m.i, "uint32");
       pass.drawIndexedIndirect(this.draws, i * 20);
     }
   }
@@ -224,7 +255,10 @@ export class NearTreeGeometry {
       this.d.queue.submit([enc.finish()]);
       await b.mapAsync(GPUMapMode.READ);
       const words = new Uint32Array(b.getMappedRange());
-      return { instances: Array.from({ length: NEAR_TREE_MODELS }, (_, i) => words[i * 5 + 1]!), overflow: words[NEAR_TREE_MODELS * 5]! };
+      const lod0 = Array.from({ length: NEAR_TREE_MODELS }, (_, i) => words[i * 5 + 1]!);
+      const lod1 = Array.from({ length: NEAR_TREE_MODELS }, (_, i) => words[(NEAR_TREE_MODELS + i) * 5 + 1]!);
+      const instances = Array.from({ length: NEAR_TREE_MODELS }, (_, i) => lod0[i]! + lod1[i]!);
+      return { instances, lod0, lod1, overflow: words[NEAR_TREE_DRAWS * 5]! };
     } finally {
       b.destroy();
     }
@@ -232,6 +266,6 @@ export class NearTreeGeometry {
   dispose() {
     this.disposed = true;
     this.ready = false;
-    for (const b of [this.u, this.lists, this.draws, ...this.meshes.flatMap((m) => [m.v, m.i])]) b.destroy();
+    for (const b of [this.u, this.lists, this.draws, ...(this.vBuf ? [this.vBuf] : []), ...(this.iBuf ? [this.iBuf] : [])]) b.destroy();
   }
 }

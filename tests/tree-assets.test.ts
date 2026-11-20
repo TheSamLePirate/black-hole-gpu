@@ -7,41 +7,43 @@ const read = async () => {
   const raw = Bun.gunzipSync(await Bun.file(`assets/vegetation/${manifest.file}`).bytes());
   return raw.buffer.slice(raw.byteOffset, raw.byteOffset + raw.byteLength) as ArrayBuffer;
 };
-test("prepared tree geometry: all source triangles and attributes preserved after build reordering", async () => {
+test("prepared tree geometry: all source triangles and attributes preserved after build reordering (LOD 0 and LOD 1)", async () => {
   const models = decodeTreeAssets(await read());
-  expect(models.length).toBe(12);
-  for (const kind of TREE_MODEL_KINDS)
-    for (const aspect of TREE_ASPECTS[kind]!) {
-      const source = treeModel(kind, aspect);
-      const reference: string[] = [];
-      const signature = (vertices: number[][]) =>
-        vertices.map((_, i) => [...vertices.slice(i), ...vertices.slice(0, i)].flat().join(",")).sort()[0]!;
-      for (let i = 0; i < source.index.length; i += 3) {
-        reference.push(
-          signature(
-            Array.from(source.index.subarray(i, i + 3), (index) => [
-              ...source.pos.subarray(index * 3, index * 3 + 3),
-              ...source.nrm.subarray(index * 3, index * 3 + 3),
-              ...source.attr.subarray(index * 4, index * 4 + 4),
-            ]),
-          ),
-        );
-      }
-      reference.sort();
-      const pair = models.filter((m) => m.kind === kind && Math.abs(m.aspect - aspect) < 1e-6);
-      expect(pair.length).toBe(1);
-      for (const m of pair) {
-        const leaves: string[] = [];
-        for (let i = 0; i < m.indices.length; i += 3) {
-          const ids = m.indices.subarray(i, i + 3);
-          leaves.push(
-            signature(Array.from(ids, (index) => [...m.vertices.subarray(index * TREE_VERTEX_FLOATS, (index + 1) * TREE_VERTEX_FLOATS)])),
+  expect(models.length).toBe(24);
+  for (const lod of [0, 1] as const)
+    for (const kind of TREE_MODEL_KINDS)
+      for (const aspect of TREE_ASPECTS[kind]!) {
+        const source = treeModel(kind, aspect, 1, lod);
+        const reference: string[] = [];
+        const signature = (vertices: number[][]) =>
+          vertices.map((_, i) => [...vertices.slice(i), ...vertices.slice(0, i)].flat().join(",")).sort()[0]!;
+        for (let i = 0; i < source.index.length; i += 3) {
+          reference.push(
+            signature(
+              Array.from(source.index.subarray(i, i + 3), (index) => [
+                ...source.pos.subarray(index * 3, index * 3 + 3),
+                ...source.nrm.subarray(index * 3, index * 3 + 3),
+                ...source.attr.subarray(index * 4, index * 4 + 4),
+              ]),
+            ),
           );
         }
-        expect(leaves.sort()).toEqual(reference);
-        expect(m.error).toBe(0);
+        reference.sort();
+        const pair = models.filter((m) => m.lod === lod && m.kind === kind && Math.abs(m.aspect - aspect) < 1e-6);
+        expect(pair.length).toBe(1);
+        for (const m of pair) {
+          const leaves: string[] = [];
+          for (let i = 0; i < m.indices.length; i += 3) {
+            const ids = m.indices.subarray(i, i + 3);
+            leaves.push(
+              signature(Array.from(ids, (index) => [...m.vertices.subarray(index * TREE_VERTEX_FLOATS, (index + 1) * TREE_VERTEX_FLOATS)])),
+            );
+          }
+          expect(leaves.sort()).toEqual(reference);
+          if (lod === 0) expect(m.error).toBe(0);
+          else expect(m.error).toBeGreaterThan(0);
+        }
       }
-    }
 });
 test("tree asset codec rejects wrong version, truncated sections, bad indices and non-finite vertices", async () => {
   const raw = await read();

@@ -106,12 +106,18 @@ test.skipIf(!E2E)(
           expect(result.gpu.every((x) => Number.isFinite(x) && x > 0)).toBe(true);
           const ordered = [...result.gpu].sort((a, b) => a - b);
           const counts = GEOMETRY
-            ? await app.js<{ instances: number[]; overflow: number }>("__bh.renderer.sceneryRaster.nearTrees.readCounts()")
+            ? await app.js<{ instances: number[]; lod0: number[]; lod1: number[]; overflow: number }>(
+                "__bh.renderer.sceneryRaster.nearTrees.readCounts()",
+              )
             : null;
           if (counts) {
             expect(counts.overflow).toBe(0);
             if (rays) expect(counts.instances.reduce((a, b) => a + b, 0)).toBe(0);
-            else if (v.agl < 10) expect(counts.instances.reduce((a, b) => a + b, 0)).toBeGreaterThan(0);
+            else if (v.agl < 10) {
+              expect(counts.instances.reduce((a, b) => a + b, 0)).toBeGreaterThan(0);
+              expect(counts.lod0.reduce((a, b) => a + b, 0)).toBeGreaterThan(0);
+              expect(counts.lod1.reduce((a, b) => a + b, 0)).toBeGreaterThan(0);
+            }
           }
           const surface =
             GEOMETRY && !rays && v.agl < 10
@@ -232,6 +238,94 @@ test.skipIf(!E2E)(
           console.log(JSON.stringify({ missingSurfaceWitness: missing.pixels }));
           await app.js("(() => {__bh.renderer.sceneryRaster.debugSkip=0;return true;})()");
           await app.js("(() => {__bh.renderer.sceneryRaster.nearTrees.capacity=4096;return true;})()");
+          if (process.env.J9_TRANSITIONS === "1") {
+            await app.js(
+              "(() => {__bh.renderer.nearTreeGeometryOn=true;__bh.renderer.treeWindOn=false;__bh.freeze(true);__bh.touch();return true;})()",
+            );
+            await Bun.sleep(1000);
+            // 1. Stationary treeWindOn=false negative witness for motion vectors, then treeWindOn=true positive witness with advancing clock.
+            const calmProbe = await app.js<{
+              pixels: number;
+              leafPixels: number;
+              barkPixels: number;
+              motionValid: number;
+              motionMoving: number;
+            }>(TREE_SURFACE_PROBE);
+            expect(calmProbe.pixels).toBeGreaterThan(0);
+            expect(calmProbe.leafPixels).toBeGreaterThan(0);
+            expect(calmProbe.motionValid).toBe(0);
+            expect(calmProbe.motionMoving).toBe(0);
+            await app.js("(() => {__bh.settings.wind=1.5;__bh.renderer.treeWindOn=true;__bh.touch();return true;})()");
+            await Bun.sleep(800);
+            const windProbe = await app.js<{ motionValid: number; motionMoving: number }>(TREE_SURFACE_PROBE);
+            await app.shot(`${OUT}/${v.name}-wind.png`);
+            await app.js("(() => {__bh.settings.wind=0;__bh.touch();return true;})()");
+            expect(windProbe.motionValid).toBeGreaterThan(0);
+            expect(windProbe.motionMoving).toBeGreaterThan(0);
+            // 2. Seasons: autumn colour & winter bare deciduous crowns (leaf cards discarded, 3D branches exposed).
+            await app.js('(() => {__bh.game.setDate("2026-10-25T09:30:00Z");__bh.touch();return true;})()');
+            await Bun.sleep(1200);
+            await app.shot(`${OUT}/${v.name}-autumn.png`);
+            await app.js('(() => {__bh.game.setDate("2026-01-15T09:30:00Z");__bh.touch();return true;})()');
+            await Bun.sleep(1200);
+            const winterProbe = await app.js<{ pixels: number; leafPixels: number; barkPixels: number }>(TREE_SURFACE_PROBE);
+            await app.shot(`${OUT}/${v.name}-winter.png`);
+            expect(winterProbe.pixels).toBeGreaterThan(0);
+            expect(winterProbe.barkPixels).toBeGreaterThan(calmProbe.barkPixels);
+            expect(winterProbe.leafPixels).toBeLessThan(calmProbe.leafPixels);
+            await app.js('(() => {__bh.game.setDate("2026-07-10T09:30:00Z");__bh.touch();return true;})()');
+            await Bun.sleep(1000);
+            // 3. Underside crown view (+6 deg pitch from 0.8 m AGL at the trunk base) and approach/recede hysteresis across the LOD boundary.
+            await app.js(`__bh.viewAt(${v.lat},${v.lon},{altM:${ground + 0.8},heading:${v.heading},pitch:${v.pitch + 6},fov:50})`);
+            await Bun.sleep(1000);
+            const underProbe = await app.js<{ pixels: number; validDepth: number; identified: number }>(TREE_SURFACE_PROBE);
+            await app.shot(`${OUT}/${v.name}-underside.png`);
+            expect(underProbe.pixels).toBeGreaterThan(0);
+            expect(underProbe.validDepth).toBe(underProbe.pixels);
+            expect(underProbe.identified).toBe(underProbe.pixels);
+            await app.js(`__bh.viewAt(${v.lat},${v.lon},{altM:${ground + v.agl + 12},heading:${v.heading},pitch:${v.pitch},fov:50})`);
+            await Bun.sleep(600);
+            await app.js(`__bh.viewAt(${v.lat},${v.lon},{altM:${ground + v.agl + 6},heading:${v.heading},pitch:${v.pitch},fov:50})`);
+            await Bun.sleep(300);
+            const approachCounts = await app.js<{ instances: number[]; lod0: number[]; lod1: number[]; overflow: number }>(
+              "__bh.renderer.sceneryRaster.nearTrees.readCounts()",
+            );
+            await app.js(`__bh.viewAt(${v.lat},${v.lon},{altM:${ground + v.agl},heading:${v.heading},pitch:${v.pitch},fov:50})`);
+            await Bun.sleep(600);
+            await app.js(`__bh.viewAt(${v.lat},${v.lon},{altM:${ground + v.agl + 6},heading:${v.heading},pitch:${v.pitch},fov:50})`);
+            await Bun.sleep(300);
+            const recedeCounts = await app.js<{ instances: number[]; lod0: number[]; lod1: number[]; overflow: number }>(
+              "__bh.renderer.sceneryRaster.nearTrees.readCounts()",
+            );
+            await app.js(`__bh.viewAt(${v.lat},${v.lon},{altM:${ground + v.agl},heading:${v.heading},pitch:${v.pitch},fov:50})`);
+            await Bun.sleep(800);
+            expect(approachCounts.overflow).toBe(0);
+            expect(recedeCounts.overflow).toBe(0);
+            const approachTotal = approachCounts.instances.reduce((a, b) => a + b, 0);
+            const recedeTotal = recedeCounts.instances.reduce((a, b) => a + b, 0);
+            const approachLod0 = approachCounts.lod0.reduce((a, b) => a + b, 0);
+            const recedeLod0 = recedeCounts.lod0.reduce((a, b) => a + b, 0);
+            expect(recedeTotal).toBeGreaterThanOrEqual(approachTotal);
+            expect(recedeLod0).toBeGreaterThanOrEqual(approachLod0);
+            const transitions = {
+              calm: {
+                pixels: calmProbe.pixels,
+                leafPixels: calmProbe.leafPixels,
+                barkPixels: calmProbe.barkPixels,
+                motionValid: calmProbe.motionValid,
+                motionMoving: calmProbe.motionMoving,
+              },
+              wind: windProbe,
+              winter: winterProbe,
+              underside: underProbe,
+              approachTotal,
+              recedeTotal,
+              approachLod0,
+              recedeLod0,
+            };
+            console.log(JSON.stringify({ transitions }));
+            await Bun.write(`${OUT}/${v.name}-transitions.json`, JSON.stringify(transitions, null, 2));
+          }
         }
         await app.stepDone(`${v.name}: trees ${trees}, A/B/A captured`);
       }
