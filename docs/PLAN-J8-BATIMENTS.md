@@ -1,5 +1,11 @@
 # PLAN-J8 — Tous les bâtiments de la vue
 
+**Point de lecture du 20 novembre 2026 (préparation de [J9](PLAN-J9-ARBRES-PROCHES.md)) :** J8 est largement implémenté,
+mais pas fermé. Le gros e2e du 17 novembre valide sur kerr-mini les quatre tracés jour/nuit, stricts et hors ligne ; le M1 Max
+reste en échec strict (préparation de scène). Le raccord de luminance reste non jugé, des dessins VB/RP à examiner et J8-R
+à mener ; les changements postérieurs au départ du gros e2e ne sont pas couverts par celui-ci. Détail et sources au §8 et
+dans le journal du 17 novembre, 17:30 UTC. L'en-tête initial et les décisions ci-dessous sont conservés comme historique.
+
 **Écrit le 16 novembre 2026 (11:30 UTC) par la session d'analyse, à la demande de Sam.** État : **proposé, prioritaire**. Il passe
 avant la suite de J7 (J7-5, J7-6, J7-R) et avant les arbres proches en géométrie, l'ancien candidat J8, qui devient J9.
 L'avancement se tient au §8 ; le code fait foi.

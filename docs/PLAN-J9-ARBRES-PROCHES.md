@@ -1,0 +1,163 @@
+# J9 — Les arbres proches en vraie géométrie
+
+**Préparé le 20 novembre 2026, à la demande de Sam : « Prépare toi à faire J9 : les arbres proches en vraie géometrie — AAA work ».**
+**État : préparation documentée, aucun lot de rendu implémenté.** Lecture du dépôt à `935fb201` ; les modifications déjà présentes
+dans le journal et la capture J8 non suivie sont conservées. **Mode : normal**, par défaut selon CLAUDE.md ; le mode speed de J8
+ne s'étend pas automatiquement à J9. Ce plan prépare le travail sans fermer J8 ni rouvrir toute la marche en raster.
+
+## 1. Où en sont les plans
+
+- **J1–J3 terminés ; J4 fermé sans atteindre sa sortie ; J5 et J6 fermés**, avec leurs limites consignées. Les décisions d'image de
+  Sam restent : ni retrait des petits arbres, ni baisse silencieuse du MSAA ou du contenu pour gagner du temps.
+- **J7 en pause** derrière J8 : notamment J7-2 (à-coup de météo encore ouvert), J7-5 (repos au sol), J7-6 (fiche et reprise des 40 ms du mini), J7-R. Ses travaux déjà faits
+  ne sont pas à refaire. Le candidat « arbres proches », anciennement appelé J8 dans J7 §4, porte maintenant le numéro **J9**.
+- **J8 implémenté en grande partie, validation partielle** : le journal du 17 novembre à 17:30 UTC et la grille VB8 rapportent les
+  quatre tracés, jour/nuit, stricts et hors ligne, verts sur kerr-mini ; zéro scène rapide et zéro requête de données en vol,
+  recensement plein à 10 km. Le M1 Max reste en échec strict (worker de scène, 19–33 s). Le critère de raccord de luminance n'est
+  pas jugé : sa sonde manque de témoin négatif. Des dessins VB/RP restent à examiner ; des changements RP sont postérieurs au
+  départ du gros e2e et ne sont pas prouvés par lui. J8-R reste à mener ; RP3 a été explicitement reporté après J8.
+- **Végétation V2 réutilisable** : modèles procéduraux, cuisson et lecture d'imposteurs, vent proche. Son en-tête est historique
+  (11–12 novembre). J8-8b a depuis ajouté les candidats de forêt en cellules préparées et les a allumés par défaut.
+
+Sources : [journal courant](../progress-to-destination.md), [J7](PLAN-J7-FLUIDITE.md), [J8 §8](PLAN-J8-BATIMENTS.md#8-avancement),
+[J5](PLAN-J5-GENERALISATION.md), [V2](PLAN-VEGETATION-V2.md). Ce sont les preuves existantes, pas des mesures refaites ici.
+
+## 2. Ce que J9 doit livrer
+
+De près, un arbre présente un tronc et des branches en volume, des touffes et feuilles découpées dans l'espace, de la parallaxe,
+un dessous de couronne lisible et des vides laissant voir **les arbres ou objets derrière**. Les cartes de feuillage sont des
+surfaces placées dans la ramure ; un panneau unique tourné vers la caméra ne constitue pas le résultat proche.
+
+L'arbre conserve son pied, sa hauteur, son espèce, sa saison et sa couleur lorsqu'on approche, tourne autour ou traverse un LOD.
+La lumière, la transmission bornée, l'air, les ombres et le vent appartiennent au même monde que le sol et les bâtiments.
+Le loin reste servi par les imposteurs V2 et la matière de canopée. Une forêt dense ne devient pas une collection de troncs
+identiques, de cartes plates visibles ou de houppiers opaques sans ramure.
+
+**Objectif de qualité d'abord.** Le gain éventuel vient du remplacement du tracé des arbres proches, et se mesure sur le coût
+complet : tri, sommets, couverture, matériau, lumière, ombres, reconstruction et préparation. Aucun gain n'est établi aujourd'hui.
+
+## 3. Le socle réel et les points d'intégration
+
+| Responsabilité | Existant lu dans le code | Travail J9 |
+|---|---|---|
+| Modèles | `src/vegetation/tree-model.ts` : `TreeMesh` (positions, normales, UV, écorce/feuille, ombrage local, indices), six sortes × deux proportions ; `treeModel` déterministe | Réutiliser le générateur ; juger et enrichir le contenu proche, préparer LOD et bornes |
+| Couverture | `src/vegetation/tree-impostors.ts` : `leafMask`, masque procédural utilisé pour la cuisson | Une définition partagée entre modèle dessiné, cuisson et ombre ; filtrage à l'empreinte |
+| Placement | `forest.ts`, `forest-cells.ts`, `forest-assembly.ts` ; candidats KFC1 z 15, grille mondiale de 7 m ; la scène décide encore le pied, l'espèce et la hauteur | Consommer ces arbres, sans nouvelle population ni nouveau tirage au changement de scène |
+| Visibilité | `scenery-raster.ts` : `treeOf`, `cull`, listes bornées et dessins indirects ; `proxyVs/proxyFs` dessinent des enveloppes | Sélection géométrie/LOD par arbre, triangles et couverture réelle dans la profondeur finale |
+| Matériau | `trace.wgsl` : `sceneryTreeLite` ne teste que l'arbre du proxy ; un trou retombe sur le sol ; imposteurs à partir de 200–300 m | Lire la surface rasterisée du proche sans retester l'enveloppe ni tracer la grille par pixel |
+| Champ proche | `renderer.ts` : `nearTreesNow`, `nearTreesRays` ; `trace.wgsl` : `RASTER_NEAR_TREES_M = 80` | Retirer cette responsabilité au noyau des restes pour les arbres effectivement couverts par J9 |
+| Vent et ombres | `forest.wgsl` : `forestSwayAt` ; la carte d'ombre est amortie, houppiers proches animés, loin figé | Déformation partagée, mouvement précédent utile ; ombres proches découpées sans redessiner toute la forêt à chaque image |
+| Identité | `surfaceId` associe actuellement index local (20 bits) et révision de scène (12 bits) | Ne pas confondre cet index avec une identité mondiale ; prévenir les collisions et invalider l'historique aux changements de publication |
+
+Le budget de listes `CAP` peut tronquer : compter candidats, sélectionnés, dessinés et refusés par LOD. Un overflow n'est jamais
+un moyen silencieux de réduire la forêt. Les limites de l'enveloppe de V2 (notamment les palmes, et les grands arbres contenus
+dans une demi-cellule) doivent être examinées avant d'étendre les bornes ; agrandir un houppier implique aussi les voisins et
+les collisions, dont la marche de grille suppose aujourd'hui une portée d'une demi-cellule.
+
+## 4. Contrats proposés pour l'implémentation
+
+### Données et préparation
+
+- Une seule identité logique : bande/grille mondiale et coordonnées globales, sources et génération explicites. Rotation,
+  variante et phase de vent viennent de cette identité, pas de l'ordre d'assemblage. Un LOD ne change ni arbre ni contact.
+- Pied et hauteur issus du monde **WGS84**, dans le repère tangent déclaré de la scène/cellule. Réutiliser la conversion du
+  sol existante ; ni rayon terrestre moyen ni hauteur MSL prise pour une hauteur ellipsoïdale. Mesurer la dérive entre scènes.
+- Modèles et LOD préparés hors de la frame, de préférence au build par Bun ; buffers partagés et instances compactes,
+  pas un maillage recopié par arbre. Borner mémoire, préparation et uploads ; garder l'ancienne publication jusqu'à la nouvelle.
+- Source, paramètres, version du générateur, masque et LOD forment une révision d'asset. Si un modèle change, sa cuisson
+  d'imposteur est invalidée ou régénérée avec lui. La zone PWA doit porter les ressources nécessaires au proche hors ligne.
+- J9 ne rend pas les cellules J8 obsolètes par principe : conserver KFC1 si les candidats suffisent. Une nouvelle donnée
+  persistante exige un format versionné, la migration/invalidation des caches et les compteurs de `flightReady` correspondants.
+
+### Surface, ombrage et reconstruction
+
+- Tronc opaque ; feuillage découpé avec test de profondeur et écriture de la surface survivante. Un fragment rejeté ne doit
+  masquer ni l'arbre derrière ni sa profondeur. Traiter les deux faces des feuilles et la normale sous échelle non uniforme.
+- Proposition d'intégration : visibilité et attributs minimaux (normale, UV/matière ou référence permettant leur récupération),
+  puis lecteur du matériau proche dans la chaîne matériau/lumière/finition existante. Écrire son layout CPU/WGSL et chiffrer
+  les cibles avant le lot J9-3 ; éviter d'ajouter cette logique à tous les noyaux du traceur. Un forward dédié ne serait retenu
+  qu'après comparaison complète et avec la même lumière, l'air et les sorties de surface.
+- La profondeur finale est celle des triangles conservés ; l'identité, la génération et le mouvement ne sont pas ceux de
+  l'enveloppe. Recenser les lecteurs : reconstruction, AO/contact, eau/reflets, export, `surfaceAt` et ombres.
+- Le terrain utilise actuellement des cibles de visibilité à un échantillon. Ne pas activer simplement `alphaToCoverageEnabled` :
+  WebGPU exige plusieurs échantillons et des attachements compatibles. Commencer par une couverture découpée filtrée,
+  vérifiée en mouvement ; si son crénelage impose une autre solution, chiffrer son coût complet et ses résolutions de profondeur
+  et d'identité. Le MSAA de l'appareil est une responsabilité distincte.
+- LOD piloté par taille/erreur projetée et stabilité, pas par un nombre magique unique de mètres ; hystérésis et raccord
+  complémentaire près/loin. Le recouvrement ne double pas l'opacité. Le pied, l'enveloppe et la couverture moyenne restent
+  cohérents avec l'imposteur, y compris à contre-jour et en hiver. Les seuils se choisissent en J9-0/J9-4.
+- Vent issu de l'horloge acceptée existante ; pied fixe, pose actuelle/précédente, bornes élargies par la déformation maximale.
+  Gel, pas, pause, saut de temps ou de caméra invalident/reprennent l'historique selon le contrat commun.
+- Les collisions gardent leur propriétaire simulation et leurs exclusions (pistes, routes, bâtiments). J9 ne les remplace pas
+  par les triangles de rendu ; tout écart visuel/contact constaté est explicité. Tout réglage produit ajouté reste accessible à
+  TARS par les actions métier communes ; les leviers A/B restent des outils de mesure.
+
+### Assets et meshoptimizer
+
+Évaluer meshoptimizer dans la chaîne d'assets, en réutilisant l'[évaluation J3-6](progress/j3/FICHE-J3-6-MESHOPT-2026-11-14.md).
+Sa documentation JS expose la simplification pondérée par attributs ; cela ne garantit ni la couverture des feuilles ni la
+silhouette d'un arbre. Séparer écorce et cartes, préserver leurs attributs, comparer la simplification des branches et une
+réduction structurée des touffes. Ne pas retirer au hasard des feuilles pour atteindre un compte de triangles.
+
+Avant adoption : version npm, licence, API de cette version, Bun/WASM, taille du build et coût de préparation vérifiés.
+Rien n'est installé dans cette préparation. Aucun décodeur dans le runtime si seuls les LOD non compressés sont livrés.
+
+Sources officielles lues le 20 novembre 2026 : [WebGPU, multisample state](https://www.w3.org/TR/webgpu/#multisample-state),
+[meshoptimizer, API JS](https://github.com/zeux/meshoptimizer/blob/master/js/README.md). Les choix d'intégration ci-dessus sont
+des propositions pour notre renderer, pas des garanties de ces bibliothèques.
+
+## 5. Lots et preuves de passage
+
+| Lot | Travail | Preuve attendue avant passage |
+|---|---|---|
+| **J9-0** | Figer scènes, qualité et coûts sur le code courant ; inventaire des modèles, triangles, couverture et bornes ; contrat des attributs proche | Fiche datée des deux Macs : vol bas des Maures, sous-bois de Chamonix, arbre isolé et deux couronnes superposées ; ablation du poste proche et captures. Fixer les seuils de régression et de coût avant implémentation |
+| **J9-1** | Contenu proche : modèles réutilisés puis corrigés, variations déterministes, écorce/feuillage, hiver ; planche des six sortes et deux proportions | Vues du dessus, de côté et du dessous, contre-jour ; ramure et feuilles lisibles à l'échelle du jeu. Bornes réelles et exclusions vérifiées, pas seulement un test de tableaux finis |
+| **J9-2** | Chaîne Bun des assets et LOD ; essai meshoptimizer ciblé ; manifest/révision communs avec les imposteurs | Erreur projetée, silhouette et couverture par LOD, mémoire et temps de préparation mesurés ; déterminisme. Aucun travail de simplification dans la frame |
+| **J9-3** | Instances GPU depuis la forêt existante ; tri, listes, dessins, surface et matériau proches ; levier A/B temporaire | Les trous montrent la seconde couronne ; profondeur/identité exactes, aucune enveloppe opaque résiduelle ; compteurs d'overflow nuls dans les scènes de référence, coût complet comparé |
+| **J9-4** | Raccords LOD ↔ imposteurs, saisons, vent et historique | Approche/recul, rotation rapide et vue du dessous : pas de trou, de double, de saut de teinte ou de traînée. Captures et vidéo des zones de transition |
+| **J9-5** | Ombres, lumière commune, contact visuel et reprise | Ombres du feuillage, Soleil rasant, nuit/pluie ; déplacement de scène, pause/pas et saut ; coût et fréquence de mise à jour des cartes. La forêt hors champ continue de porter ses ombres utiles |
+| **J9-6** | Préchargement/PWA, publication et ressources GPU bornées ; absence de régression J8 | Même population après rechargement hors ligne ; aucun asset manquant ni donnée réseau ; vol bas soutenu, pas de trou devant. Mesurer à part le worker : la géométrie ne résout pas d'elle-même le retard J8 du M1 Max |
+| **J9-A** | Démonstration d'acceptation proche, vol et vues au sol, sur les deux Macs | Tous les critères du §6, planches et courbes montrées dans T3 ; bilan des coûts et limites |
+| **J9-R** | Après acceptation de la bascule : retrait au lot suivant du chemin proche remplacé et de son levier | Plus de tracé primaire des arbres raster couverts ; garder le tracé nécessaire aux modes toujours tracés (photo/marche). Références et inventaire pipeline à jour |
+
+Ordre : **J9-0 → J9-1 → J9-2 → J9-3 → J9-4 → J9-5 → J9-6 → J9-A → J9-R**. J9-0 commence par des mesures du proche,
+pas par une nouvelle campagne complète J8. Une modification encore active de J8 doit être isolée dans la référence de mesure.
+
+**Plafond historique, pas promesse** : J5-3a rapporte environ 59 ms de restes attribués aux arbres proches à pied à Chamonix
+sur kerr-mini (15 novembre). Cela ne s'applique ni à tous les vols ni au code J8 sans nouvelle mesure. Le coût du nouveau dessin
+et du sol reste à payer. Un lot sous 1 ms se justifie par sa qualité, sans être vendu comme optimisation de cadence.
+
+## 6. Acceptation AAA et vérification
+
+1. **Géométrie proche réelle.** Tronc, branches et feuillage visibles en parallaxe ; deux arbres superposés et un objet derrière
+   servent de témoins d'occlusion. Aucune couronne pleine de substitution dans le domaine déclaré de J9.
+2. **Continuité.** Même arbre avant/après assemblage, LOD et rechargement ; mesure pied/sommet et couverture aux raccords.
+   Pas de double opacité, de disparition, de saut de teinte ou de variation de densité cachée.
+3. **Image vivante.** Sous-bois, hiver, Soleil rasant, nuit et vent fort ; caméra fixe puis mobile, gel et reprise.
+   Les nouvelles sondes doivent détecter un défaut injecté et donner un A/A nul avant de fonder un verdict.
+4. **Préparation.** Démarrage à froid/chaud, zone hors ligne rechargée, changement de scène et reprise GPU ; compteurs de
+   résidence, uploads et refus explicités. La référence J8 de population et de disponibilité reste tenue.
+5. **Coût complet soutenu.** Même résolution, qualité et météo en A/B, cadence bornée, thermique stabilisée ; GPU p50/p95/p99,
+   temps CPU et images bloquées, mémoire, compilation et chargement. Cibles permanentes : 16,7 ms M1 Max, 40 ms mini ;
+   les paliers existants ne deviennent pas ces cibles par rédaction. Aucun seuil de gain J9 n'est inventé avant J9-0.
+6. **Preuves visibles.** Captures locales, détails d'occlusion et de raccord, vidéo courte du vol et graphiques dans T3.
+   Distinguer implémenté, vérifié statiquement, observé et mesuré pour chaque lot.
+
+Réutiliser les recettes de `forest-impostors`, `forest-wind`, `forest-aaa`, `j8-forest-cells` et la sonde `walk-raster` après
+lecture complète de leur code et des guides [E2E](E2E.md)/[E2E-VOLS](E2E-VOLS.md). Les futurs e2e J9 restent ciblés, un Chrome
+de test par machine, données prêtes avant vol, conditions réelles de pilotage assertées ; pas de campagne entière par défaut.
+Chaque changement de shader passe `check-wgsl`, chaque lot de pipeline tient `GRAPHICS-PIPELINE` et son inventaire ; contrats
+`__bh`, TARS et catalogue des tests mis à jour dans les lots qui les changent. Les nouveaux diagnostics n'existent pas encore.
+
+**Marche en raster : évaluation distincte après J9-5.** J5 a aussi mesuré un coût du sol proche et trouvé le personnage fantôme.
+Rejouer son témoin si J9 rend la réouverture utile ; ne pas activer `walkRasterOn` par défaut ni déclarer la marche corrigée
+sur la seule suppression des rayons des arbres. La marche actuelle garde son chemin tracé tant que son contrat complet échoue.
+
+## 7. Avancement et limites de cette préparation
+
+- **20 novembre 2026 : préparation faite.** Plans, historique récent, pipeline et points d'intégration ci-dessus lus ; sources
+  officielles consultées. Plan relié à la carte documentaire, V2 et J7 ; entrée et ligne propres ajoutées au journal.
+- Aucun code du jeu changé, aucune dépendance installée, aucun e2e/benchmark ni test de rendu lancé. La qualité des modèles
+  proches n'est pas observée dans cette session. Les chiffres historiques ne sont pas remesurés.
+- **Premier travail à exécuter : J9-0**, puis la planche J9-1. Les distances, comptes de triangles, variantes, mémoire et coût
+  admissible du proche restent à établir sur ces preuves, sans baisser silencieusement le contenu ou les objectifs de Sam.

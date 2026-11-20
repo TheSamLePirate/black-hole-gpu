@@ -1,5 +1,9 @@
 # PLAN-VEGETATION-V2 — les arbres lointains en imposteurs ré-éclairables
 
+**Suite préparée le 20 novembre 2026 : [J9 — les arbres proches en vraie géométrie](PLAN-J9-ARBRES-PROCHES.md).**
+Les modèles et la cuisson ci-dessous en sont le socle ; les candidats de forêt sont depuis préparés en cellules par J8-8b,
+allumé par défaut le 17 novembre. Les états datés ci-dessous restent l'historique de V2 ; J9 n'est pas encore implémenté.
+
 **V3 essayé et retiré le 12 novembre** (voir le tableau, V2d). **Décision de Sam (11 novembre)** : V1 gardé tel quel (effet discret accepté) — **12 novembre**, revu sur la planche des Maures : « je vois pas les différences » ; rien de plus sur l'intensité de V1, il se rejuge quand il passera dans l'opaque de J1 ; rien de plus sur le rendu pour l'instant — V2e et V3
 attendent. **Puis (12 novembre) : « V2e / V3 : forêt »** — V2e F1 (le vent proche) fait le même jour ; V3 ensuite.
 

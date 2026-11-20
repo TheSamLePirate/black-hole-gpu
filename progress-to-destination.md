@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 17 nov. 17:30 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 20 nov. 08:59 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous. Ce qui est fermé quitte le tableau « En cours » pour la ligne « Fermé récemment ».
@@ -45,6 +45,7 @@ J4 (fermé, sortie non atteinte), J5 et J6 (fermés).
 
 | Session (T3) | Lot | État |
 |---|---|---|
+| Préparation J9 (20 nov.) | [Arbres proches en vraie géométrie](docs/PLAN-J9-ARBRES-PROCHES.md) | **préparation documentée, aucun lot de rendu implémenté** : état des plans confronté au dépôt, socle V2/cellules J8, contrats surface/occlusion/LOD/vent/ombres/PWA, lots J9-0 à J9-R ; mode normal par défaut. Premier lot à exécuter : référence visuelle et mesure J9-0. J8 reste partiellement validé (mini vert ; M1 Max, raccord visuel et retraits ouverts) ; la marche en raster garde ses autres obstacles |
 | Rendu (33d89754) | J4 / J5 — l'eau, les volumes, la généralisation | **fermés** ([PLAN-J4](docs/PLAN-J4-VOLUMES.md), [PLAN-J5](docs/PLAN-J5-GENERALISATION.md)) : l'eau à demi-rythme (J5-5, −6,0 à −6,4 ms, l'image la même) ; le sol à demi-rythme laissé au joueur (J5-6, réglage « demi » : −1,9 à −3,2 ms ; « auto » à chaque pixel) ; la FFT de la mer en deux passes (−0,9 ms) ; la carte d'ombre des arbres (−2,8 ms, forêt) ; Sam a refusé les arbitrages d'image (MSAA 1×, petits arbres, nuages amortis). Postes lourds restants : l'eau 16,2, les nuages d'orage 16,5, le décor d'une forêt ~7 ms |
 | Rendu (33d89754) | Mesures tenues | la borne du M1 Max **à 30** : essayée à 40 le 15 au soir, non tenue (soutenu 26,4 et 34,5 images/s, deux runs — [J0-CONTRAT §2](docs/J0-CONTRAT.md)) ; le coût de l'appareil 3,5–4,5 ms, dont le MSAA 4× 4–5 ms (gardé) |
 | Audit vagues 3–4 et 6 (1feb2f7f) | [09-priorites-todo](docs/audit-2026-11-10/09-priorites-todo.md) | **faits** : 3.1–3.2 réseau (RD0–RD2), 3.3 sauvegardes (une clé par sauvegarde ; avion, systèmes des vaisseaux et de l'A320 — ce dernier par J6-4), 3.4–3.5 vol, 3.6–3.7 TARS, 3.10 e2e honnêtes, 4.2 temps et onglet masqué, 4.3 `Settings`/`ViewPose`, 4.8 `main()` découpé ; vague 6 hors rendu (QA, AR, RD4/RD5, FX). **Reste** : l'état d'une mission ou d'un combat (Sam), IndexedDB et l'autosauvegarde hors frame (AR-05), FX-19 (fraîcheur des écrans, à mesurer), FX-21 |
@@ -10738,3 +10739,19 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
 - **Réalisé :** les lignes VB1 et VB8 de la grille de revue (plan VB §8.1) remplies.
 - **Restent pour VB8 :** les lignes de dessin (VB2 à VB7), à juger sur les captures avec le rendu ; le M1 Max, en échec strict à froid
   (le worker de la scène), en attente de Sam.
+
+### 2026-11-20 08:59 UTC — Préparation de J9, les arbres proches en vraie géométrie
+
+- **Contribution à la destination :** stratégie §§7.7, 7.15–7.17, 18.4 et 20 : contenu proche préparé, surface raster finale,
+  continuité entre représentations et responsabilités communes. Demande de Sam : examiner l'avancement des plans et préparer J9.
+- **Réalisé :** [PLAN-J9-ARBRES-PROCHES](docs/PLAN-J9-ARBRES-PROCHES.md), sur le dépôt `935fb201` : état J1–J8, modèles V2 et
+  candidats J8 réutilisables ; contrats d'identité, profondeur, couverture, LOD, matériau, vent, ombres, contact et PWA ; lots
+  J9-0 à J9-R, critères d'acceptation et évaluation distincte de la marche raster. Liens dans la carte, J7 et V2 ; point de lecture
+  daté en tête de J8. Ligne propre ajoutée à l'état courant ; modifications préexistantes du journal conservées.
+- **Preuves :** lecture du code, des plans, des entrées et commits récents ; documentation officielle WebGPU et meshoptimizer JS
+  consultée (liens dans J9). Vérification documentaire des chemins locaux et du diff. Le gain historique de J5-3a reste un
+  plafond daté à remesurer ; aucune promesse de cadence. Les résultats J8 rapportés sont ceux du journal, pas de nouveaux runs.
+- **Limites :** aucun code de jeu changé, aucune dépendance installée, aucun test unitaire, e2e, benchmark ou lancement GPU.
+  Modèles proches non observés ici ; aucun nouveau coût mesuré. Mode normal par défaut, sans étendre la décision speed de J8.
+- **Suite :** J9-0 (référence visuelle, coût courant et seuils), puis la planche de contenu J9-1. J8 reste ouvert sur le M1 Max,
+  le raccord visuel et les retraits ; les autres obstacles de la marche en raster ne sont pas déclarés corrigés par J9.

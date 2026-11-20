@@ -1,5 +1,9 @@
 # PLAN-J7 — La fluidité, le sol des approches, puis les 40 ms du mini
 
+**Repère du 20 novembre 2026 :** J7 reste en pause derrière J8 (détail au §6). Le candidat « arbres proches en géométrie »,
+appelé J8 au §4 avant la priorité donnée aux bâtiments, est désormais [J9](PLAN-J9-ARBRES-PROCHES.md), dont la préparation
+est écrite. Les décisions et constats datés ci-dessous sont conservés.
+
 **État (2026-11-16 05:45 UTC)** : **écrit par la session d'analyse**, **révisé après la fiche de J7-0** (J7-7 à J7-9 ajoutés, J7-2 et J7-3 rejoués à froid d'abord), à la demande de Sam (16 nov., ~00:00 UTC : la session du rendu attend
 ce plan ; J0 à J6 fermés, aucun PLAN-J7). J7-0 fait, J7-1 en cours (§6). Les questions du §4 sont réglées provisoirement selon les recommandations,
 révisables par Sam ; J7-0 à J7-5 n'en dépendent pas. Le code fait foi : chaque lot relit l'état du dépôt avant d'appliquer un diagnostic
