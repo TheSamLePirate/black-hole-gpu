@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 20 nov. 09:07 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 20 nov. 09:17 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous. Ce qui est fermé quitte le tableau « En cours » pour la ligne « Fermé récemment ».
@@ -10763,3 +10763,11 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
 - Preuves : Biome et typecheck passent ; 8 tests modèles/cellules/assemblage passent. Sur kerr-mini nominal : `20261120-100137-j9-0-walk` et `20261120-100521-j9-0-models`, exit 0. Diagnostic Chamonix : raster 144,8 ms, sans rayons proches 85,7 ; perte de qualité volontaire, aucune amélioration livrée. Retour au tracé variable, fenêtres courtes : pas une cadence soutenue.
 - Limites : J9-0 encore ouvert (autres scènes, budgets soutenus et M1 Max exploitable). Le passage local finit sans erreur GPU mais sous Heavy et après une attente de données tolérée : aucune référence de performance retenue. Aucun code du rendu modifié. Modifications préexistantes du journal et capture J8 conservées.
 - Suite : finir les références J9-0 puis valider le contenu proche J9-1 ; les phases suivantes ne sont pas déclarées réalisées.
+
+### 2026-11-20 09:17 UTC — J9-0 : référence mini stricte établie
+
+- Contribution : remplacement du proche sur des références explicites ; Sam demande de continuer sur le mini.
+- Réalisé : e2e `j9-reference`, attentes de données strictes, sol WGS84 stabilisé avant hauteur AGL, trois vues A/B/A, dimensions internes et échantillons complets archivés ; [fiche](docs/progress/j9/J9-0-REFERENCE.md), graphique et captures montrés dans T3.
+- Preuve : run mini `20261120-101235-j9-reference2`, exit 0, 50 assertions, 43 relevés thermiques Nominal. Le poste proche vaut ici ~13–14 ms au sol des Maures, ~11–12 ms sur la pente de Chamonix, rien à 60 m dans cette vue. Perte de qualité volontaire de B, aucun gain livré.
+- Échec conservé : premier run `20261120-101032-j9-reference` ; lastGpuMs remis à zéro par la calibration. Collecte corrigée sur les durées des images terminées, sans modifier le renderer.
+- Limites : fenêtres de 12 s, pas une performance soutenue ; le volet M1 Max et les témoins isolé/superposition restent à J9-A. La référence mini permet de poursuivre le contenu J9-1, sans déclarer la validation finale sur deux machines.

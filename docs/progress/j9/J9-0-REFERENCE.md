@@ -75,3 +75,32 @@ révision de scène ; ne pas la présenter comme une identité mondiale stable. 
 - Les défauts visuels du personnage et du sol restent distincts de J9 ; ne pas activer la marche raster par défaut.
 
 Passage local `remote-results/e2e-reports/20261120-090229-MacBook-Pro-de-olivier/walk-raster/01/summary.json` : exit 0, 43 relevés thermiques tous Heavy. Le harnais a toléré une attente de données à 90 s avant de finir les compilations. Ce passage ne fixe aucun budget M1 Max.
+
+## Référence mini stricte du 20 novembre, 09:12–09:16 UTC
+
+`j9-reference`, run `20261120-101235-j9-reference2`, passe : 50 assertions, 3 vues A/B/A, aucune erreur GPU/console.
+Borne 30, sortie 1920×1080, interne 1440×810, palier 2 et ombrage 1/1 identiques sur les neuf fenêtres. Les 43 relevés
+thermiques sont Nominal (GPU médian 1278 MHz). [Échantillons complets](reference-mini-samples.json),
+[graphique et captures](reference-mini.html). L'image vient du code de rendu antérieur à la correction des conifères.
+
+| Vue (AGL, sol ellipsoïdal chargé) | A rayons p50 | B sans rayons p50 | A retour p50 |
+|---|---:|---:|---:|
+| Maures, 3 m ; sol 202,16 m | 66,7 | 52,8 | 66,2 |
+| Maures, 60 m ; sol 202,16 m | 58,5 | 58,6 | 58,5 |
+| Chamonix pente, 5 m ; sol 1084,72 m | 69,2 | 57,0 | 68,1 |
+
+Le plafond diagnostic du poste proche sur ces vues est donc environ 13–14 ms au sol des Maures et 11–12 ms sur la pente,
+**nul à 60 m dans cette vue** ; la scène de marche précédente (~59 ms) n'est pas représentative de toutes les caméras.
+J9-3 sera un lot de qualité et de remplacement du proche, sans promesse de gain universel. Son coût complet doit être
+comparé aux deux références A et B, avec les mêmes dimensions/qualités. Les seuils fonctionnels restent : aucun overflow
+silencieux, aucun trou ni arbre supprimé, aucun rayon de grille primaire pour une surface proche effectivement dessinée.
+Les fenêtres durent 12 s : elles n'établissent toujours pas un budget soutenu.
+
+Le premier run strict (`20261120-101032-j9-reference`) a échoué sur des durées nulles : `lastGpuMs` est remis à zéro par
+`resetQualityTiming`, même si une autre image vient de finir. La collecte lit maintenant la liste existante
+`completedDurations`, alimentée au même callback que `completedFrames`, et exige des valeurs finies positives. La résolution
+interne réellement appliquée est enregistrée. Aucun correctif du renderer pour contourner ce défaut de la sonde.
+
+**Poursuite décidée dans cette session :** Sam demande le travail sur le mini ; la référence mini permet de passer au contenu
+J9-1. Le volet M1 Max, les coûts soutenus et les témoins d'arbre isolé/superposition restent explicitement à la validation J9-A ;
+la phase de référence n'est pas présentée comme une validation finale sur deux machines.

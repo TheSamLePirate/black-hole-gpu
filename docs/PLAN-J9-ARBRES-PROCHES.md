@@ -1,7 +1,7 @@
 # J9 — Les arbres proches en vraie géométrie
 
 **Préparé le 20 novembre 2026, à la demande de Sam : « Prépare toi à faire J9 : les arbres proches en vraie géometrie — AAA work ».**
-**État : J9 lancé le 20 novembre ; J9-0 en cours, aucun lot de rendu implémenté. Un commit par phase demandé par Sam.** Lecture du dépôt à `935fb201` ; les modifications déjà présentes
+**État : J9 lancé le 20 novembre ; référence J9-0 mini établie ; J9-1 en cours, géométrie proche pas encore dessinée dans le jeu. Un commit par phase demandé par Sam.** Lecture du dépôt à `935fb201` ; les modifications déjà présentes
 dans le journal et la capture J8 non suivie sont conservées. **Mode : normal**, par défaut selon CLAUDE.md ; le mode speed de J8
 ne s'étend pas automatiquement à J9. Ce plan prépare le travail sans fermer J8 ni rouvrir toute la marche en raster.
 
@@ -163,3 +163,5 @@ sur la seule suppression des rayons des arbres. La marche actuelle garde son che
   admissible du proche restent à établir sur ces preuves, sans baisser silencieusement le contenu ou les objectifs de Sam.
 
 - **20 novembre, exécution J9-0 :** préparation commitée (`d5a28dea`), inventaire reproductible des douze modèles, sonde de Chamonix et cuisson sur kerr-mini passées. [Référence et limites](progress/j9/J9-0-REFERENCE.md). Le passage M1 Max sous Heavy ne fixe aucun budget. J9-0 reste ouvert pour les autres scènes et les mesures soutenues ; pas de bascule du rendu.
+
+- **20 novembre 09:17 UTC :** référence stricte sur le mini établie (`j9-reference` 50 assertions, A/B/A sur trois vues, Nominal). [Fiche et limites](progress/j9/J9-0-REFERENCE.md) : budget soutenu/M1 Max et témoins isolés reportés à J9-A, pas déclarés validés. Passage au contenu J9-1 sur le mini selon la demande de Sam.
