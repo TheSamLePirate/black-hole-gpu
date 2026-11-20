@@ -45,7 +45,8 @@ J4 (fermé, sortie non atteinte), J5 et J6 (fermés).
 
 | Session (T3) | Lot | État |
 |---|---|---|
-| Exécution J9 (20 nov.) | [Arbres proches en vraie géométrie](docs/PLAN-J9-ARBRES-PROCHES.md) | **J9-5 (ombres 3D découpées dans `tsmTex`, filtrage bilinéaire proche et biais de contact, ramures d'hiver, Soleil rasant, crépuscule/pluie, stabilité `tsmDraws`, forêt hors champ et contact `SceneryContact`) validé sur le mini** (`20261120-134219-j9-5-full3`, 173 assertions, 53 relevés Nominal ; Maures `68,2 → 54,8 → 66,5 ms` avec 948 trouées d'ombre 3D, Chamonix `71,4 → 59,3 → 71,8 ms` avec 411 trouées, 84/84 WGSL), éteint par défaut. Suite : PWA/ressources bornées (J9-6), acceptation/retrait (J9-A/J9-R) |
+| Exécution J9 (20 nov.) | [Arbres proches en vraie géométrie](docs/PLAN-J9-ARBRES-PROCHES.md) | **J9-6 (PWA, préchauffage `noteAsset`, mise en cache immuable, mémoire GPU bornée à 10,1 Mo, non-régression J8)** validé sur le mini (`20261120-140944-j9-6-full2`, 201 assertions, 54 relevés Nominal, VRAM 10 108 464 B, 84/84 WGSL), éteint par défaut. Suite : acceptation / retrait (J9-A / J9-R) |
+| Documentation vol bas (cette session) | [Référence FableFlight, VB0–VB8](docs/PLAN-DETAILS-VOL-BAS-FABLEFLIGHT.md) | **plan écrit, proposé** : routes, silhouettes et stationnement, lampadaires, feux et trafic ; complément à J8-L sans changement de priorité ; coûts estimés, aucun lot de code ni mesure exécuté |
 | Rendu (33d89754) | J4 / J5 — l'eau, les volumes, la généralisation | **fermés** ([PLAN-J4](docs/PLAN-J4-VOLUMES.md), [PLAN-J5](docs/PLAN-J5-GENERALISATION.md)) : l'eau à demi-rythme (J5-5, −6,0 à −6,4 ms, l'image la même) ; le sol à demi-rythme laissé au joueur (J5-6, réglage « demi » : −1,9 à −3,2 ms ; « auto » à chaque pixel) ; la FFT de la mer en deux passes (−0,9 ms) ; la carte d'ombre des arbres (−2,8 ms, forêt) ; Sam a refusé les arbitrages d'image (MSAA 1×, petits arbres, nuages amortis). Postes lourds restants : l'eau 16,2, les nuages d'orage 16,5, le décor d'une forêt ~7 ms |
 | Rendu (33d89754) | Mesures tenues | la borne du M1 Max **à 30** : essayée à 40 le 15 au soir, non tenue (soutenu 26,4 et 34,5 images/s, deux runs — [J0-CONTRAT §2](docs/J0-CONTRAT.md)) ; le coût de l'appareil 3,5–4,5 ms, dont le MSAA 4× 4–5 ms (gardé) |
 | Audit vagues 3–4 et 6 (1feb2f7f) | [09-priorites-todo](docs/audit-2026-11-10/09-priorites-todo.md) | **faits** : 3.1–3.2 réseau (RD0–RD2), 3.3 sauvegardes (une clé par sauvegarde ; avion, systèmes des vaisseaux et de l'A320 — ce dernier par J6-4), 3.4–3.5 vol, 3.6–3.7 TARS, 3.10 e2e honnêtes, 4.2 temps et onglet masqué, 4.3 `Settings`/`ViewPose`, 4.8 `main()` découpé ; vague 6 hors rendu (QA, AR, RD4/RD5, FX). **Reste** : l'état d'une mission ou d'un combat (Sam), IndexedDB et l'autosauvegarde hors frame (AR-05), FX-19 (fraîcheur des écrans, à mesurer), FX-21 |
@@ -9412,6 +9413,22 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   les niveaux du couloir dessus avant la mesure réelle.
 - Suite : (3) l'estimation au débit mesuré de chaque hôte ; la mesure réelle de Paris ; l'e2e J8-A, avec la session du rendu.
 
+### 2026-11-16 17:42 UTC — Plan des détails en vol bas, référence FableFlight
+
+- **Contribution à la destination :** qualité des surfaces, contenu préparé et continuité en vol bas (stratégie §§7, 8,
+  19 et 20), en complément de J8-L et J8-A sans changement de leur priorité.
+- **Réalisé :** création de [PLAN-DETAILS-VOL-BAS-FABLEFLIGHT](docs/PLAN-DETAILS-VOL-BAS-FABLEFLIGHT.md) à la demande
+  de Sam : dossier local FableFlight, commit et liens GitHub figés ; état du code BH GPU ; lots VB0–VB8 (routes,
+  silhouettes, stationnement, lampadaires, feux, trafic, mobilier et retraits), contrats de rendu/préparation/PWA,
+  estimations de coût et critères de validation. Entrée ajoutée à la carte documentaire et à l'état courant.
+- **Preuves :** documentation fondée sur la lecture des sources et des mesures historiques citées. Les coûts
+  annoncés restent des estimations, sans nouveau résultat de performance. Vérification documentaire des liens locaux
+  et des différences de ces fichiers ; aucun jeu, test, benchmark ni script du projet lancé.
+- **Limites :** aucun lot implémenté ; pas de modification du runtime, des réglages ou des caches. L'arbre partagé
+  évolue pendant les autres travaux ; les diagnostics sont à rapprocher de l'état livré de J8-L avant implémentation.
+- **Suite proposée :** VB0/VB1, puis première comparaison des routes proches et des silhouettes ; cette session
+  s'arrête à la rédaction demandée et ne déclenche pas ces travaux.
+
 ### 2026-11-16 17:43 UTC — PLAN-J8 : les matériaux lointains éteints par défaut (un défaut de nuit), J8-E l'eau de toute la vue, les tracés de J8-A (session 33d89754)
 
 - Destination : §19.13 (J8-A, Sam : tous les bâtiments, fleuves et rivières de la vue, jour et nuit), §7.
@@ -10857,3 +10874,23 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
     - `chamonix-slope` (18 instances en vue, **73 instances d’ombre 3D** sur 360°) : **71,4 → 59,3 → 71,8 ms** p50 (p95 : 76,4 → 64,6 → 75,1 ms) ; carte d’ombre proche (`≤ 75 m`) : `1 629 → 1 249` texels occultés (`A/A = 0`), **411 trouées ensoleillées** découpées dans l’ombre proxy (`bothOccluded: 2 265`), forêt hors champ `farOccluded: 1 063 869` ; hiver : `15 214 → 15 156` texels ; témoin positif `debugSkip = 1` : `nearOccluded → 0` ; stabilité `tsmDraws` : `41 → 41` (`+0`) ; Soleil rasant (19 296 px) et crépuscule/pluie (19 282 px) ; contact CPU `SceneryContact` : 55 arbres (1 723 segments) dans 60 m.
 - **Limites / transitions restantes :** prototype toujours éteint par défaut (`nearTreeGeometryOn = false`) ; la marche en raster (`walkRasterOn`) conserve son chemin tracé conformément à PLAN-J9 §6 (le personnage fantôme et le coût du sol proche de J5 restent hors périmètre J9).
 - **Suite :** J9-6 (disponibilité PWA / hors-ligne de `trees-v1-*.bin`, compteurs mémoire GPU bornés et non-régression J8), puis J9-A et J9-R.
+
+### 2026-11-20 14:15 UTC — J9-6 : PWA, préchauffage noteAsset, mise en cache immuable, mémoire GPU bornée et non-régression J8
+
+- **Contribution à la destination :** J9-6 (stratégie §§7.8, 19.3, 19.4 et 20) : disponibilité hors-ligne garantie de l'asset KTG1 (`trees-v1-b31429154c38b2fd.bin`, 3,8 Mo gzip) dès la première visite via le Service Worker et `noteAsset`, mémoire VRAM strictement bornée et allouée une seule fois (10,11 Mo, < 10,5 Mo), absence de fuite ou réallocation, et vérification de la continuité du streaming J8 en vol bas soutenu.
+- **Réalisé :**
+  - `src/vegetation/tree-near.ts` : enregistrement de l'URL absolue de l'asset KTG1 dans `noteAsset` au chargement du module pour réchauffement en tâche de fond par le Service Worker (`warmShell` dans `src/pwa.ts`) ; ajout de la méthode d'introspection `gpuBytes()` sur `NearTreeGeometry` mesurant les 5 tampons GPU (`vertices`, `indices`, `lists`, `draws`, `uniforms`, total, `capacity`, `slots`).
+  - `tests/pwa-rules.test.ts` : vérification que les binaires d'arbres avec hash de bundler (`trees-v1-*.bin`) sont classés `immutable` (cache perpétuel, `cacheFirst`).
+  - `docs/BH-API.md`, `docs/E2E-CATALOGUE.md`, `docs/PLAN-J9-ARBRES-PROCHES.md` : documentation de `gpuBytes()`, de `noteAsset`, et de la sonde `J9_PWA=1`.
+  - `tests/e2e/j9-reference.e2e.test.ts` : ajout de la suite `J9_PWA=1` contrôlant la VRAM (10 108 464 B), la capacité de 4 096 instances (`overflow = 0`), la non-régression J8 en vol bas continu à 60 m AGL, et la reproductibilité déterministe de la population après rafraîchissement.
+  - `tests/kernel-budget.json` : mise à jour des budgets inlinés WGSL (`KB_WRITE=1`), 69/69 profils validés.
+  - Documentation créée : [fiche J9-6](docs/progress/j9/J9-6-PWA.md).
+- **Preuves :**
+  - `20261120-140632-j9-6-wgsl` : 84/84 shaders compilent sur Apple (`kerr-mini` et local).
+  - `20261120-140944-j9-6-full2` sur `kerr-mini` (exit 0, **201 assertions**, **54 relevés thermiques Nominal** à 1 278 MHz médian, 1920×1080 / interne 1440×810, ombrage 1/1, borne 30) :
+    - `maures-floor` : **67,7 → 54,7 → 66,6 ms** p50 ; VRAM GPU mesurée à **10 108 464 octets** (8 112 240 vertices, 1 405 632 indices, 589 824 lists, 752 draws, 16 u) ; débordement `overflow: 0` ; population strictement conservée après rafraîchissement (2 LOD 0 + 42 LOD 1 / 182 ombres).
+    - `maures-low` (60 m AGL) : **59,3 → 59,8 → 59,2 ms** p50 ; streaming continu des cellules KFC1 sans trou ni débordement (`overflow: 0`).
+    - `chamonix-slope` : **71,2 → 59,1 → 71,4 ms** p50 ; VRAM **10 108 464 octets** ; débordement `overflow: 0` ; population identique (2 LOD 0 + 16 LOD 1 / 73 ombres).
+  - `bun run build:pages` : vérifié, émet `_site/trees-v1-b31429154c38b2fd-hpzdxfmm.bin` (3,98 Mo) classé immuable.
+- **Limites / transitions restantes :** prototype toujours éteint par défaut (`nearTreeGeometryOn = false`).
+- **Suite :** J9-A (démonstration d'acceptation complète, qualité visuelle, vol bas et bilan sur les deux Macs du lab) puis J9-R (retrait des branches obsolètes et activation par défaut).

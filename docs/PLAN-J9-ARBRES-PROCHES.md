@@ -1,7 +1,7 @@
 # J9 — Les arbres proches en vraie géométrie
 
 **Préparé le 20 novembre 2026, à la demande de Sam : « Prépare toi à faire J9 : les arbres proches en vraie géometrie — AAA work ».**
-**État : J9 lancé le 20 novembre ; référence J9-0 mini établie ; modèles J9-1 inspectés ; assets partagés et LOD 0/1 J9-2 livrés ; prototype J9-3, raccords/saisons/vent/hystérésis J9-4 et ombres 3D découpées/éclairage/contact J9-5 validés sur le mini. PWA (J9-6) et acceptation/retrait (J9-A/J9-R) restent ouverts. Un commit par phase demandé par Sam.** Lecture du dépôt à `935fb201` ; les modifications déjà présentes
+**État : J9 lancé le 20 novembre ; référence J9-0 mini établie ; modèles J9-1 inspectés ; assets partagés et LOD 0/1 J9-2 livrés ; prototype J9-3, raccords/saisons/vent/hystérésis J9-4, ombres 3D découpées/éclairage/contact J9-5 et PWA/ressources GPU bornées/non-régression J8 (J9-6) validés sur le mini. Acceptation/retrait (J9-A/J9-R) restent ouverts. Un commit par phase demandé par Sam.** Lecture du dépôt à `935fb201` ; les modifications déjà présentes
 dans le journal et la capture J8 non suivie sont conservées. **Mode : normal**, par défaut selon CLAUDE.md ; le mode speed de J8
 ne s'étend pas automatiquement à J9. Ce plan prépare le travail sans fermer J8 ni rouvrir toute la marche en raster.
 
@@ -218,3 +218,5 @@ sur la seule suppression des rayons des arbres. La marche actuelle garde son che
   d'ombre des feuillus nus en hiver, témoin positif `debugSkip` (`nearOccluded → 0`), `+0` redessin `tsmDraws` au repos/gel, Soleil rasant
   (`05:35 UTC`), crépuscule/pluie (`19:45 UTC`), et alignement des collisions CPU `SceneryContact` (94 et 55 arbres dans 60 m).
   [Fiche J9-5](progress/j9/J9-5-SHADOWS.md). Suite : PWA/hors-ligne et ressources GPU bornées (J9-6), puis acceptation et retrait (J9-A/J9-R).
+
+- **20 novembre, J9-6 (préchargement PWA, publication et ressources GPU bornées, non-régression J8) :** asset KTG1 enregistré dans le réchauffement PWA (`noteAsset`), binaire immuable vérifié (`trees-v1-b31429154c38b2fd-hpzdxfmm.bin` dans le build Pages), VRAM GPU strictement bornée à **10 108 464 octets** (9,64 Mo : sommets 8 112 240, indices 1 405 632, listes 589 824, commandes 752, uniformes 16) sur 24 modèles sans réallocation ni fuite lors des mouvements/sauts de scène, population déterministe identique après rechargement, absence de trou en vol bas soutenu à 60 m AGL au-dessus des Maures et 69/69 profils inlinés WGSL sous budget. Validé sur `kerr-mini` (`20261120-140944-j9-6-full2`, 201 assertions, 54 relevés thermiques Nominal ; 84/84 WGSL `20261120-140632-j9-6-wgsl`). [Fiche J9-6](progress/j9/J9-6-PWA.md). Suite : acceptation générale (J9-A) et retrait du chemin de restes remplacé (J9-R).

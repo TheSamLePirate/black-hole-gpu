@@ -1,10 +1,19 @@
-// J9-2/J9-3/J9-4: shared source triangles (12 models × 2 LODs), GPU-selected instances with projected-error LOD and hysteresis.
+// J9-2/J9-3/J9-4/J9-5/J9-6: shared source triangles (12 models × 2 LODs), GPU-selected instances with projected-error LOD and hysteresis.
 import url from "./tree-asset-url";
 import { decodeTreeAssets, TREE_VERTEX_FLOATS } from "./tree-assets";
 import { TREE_ASPECTS, TREE_MODEL_KINDS } from "./tree-model";
 import { TREE_LEAF_WGSL } from "./tree-leaf";
 import { inflated } from "../util/inflate";
 import { TERRAIN_RASTER_FORMAT, TERRAIN_RASTER_ID_FORMAT, TERRAIN_RASTER_MOTION_FORMAT } from "../system/terrain-raster";
+import { noteAsset } from "../pwa/seen";
+
+if (typeof location !== "undefined") {
+  try {
+    noteAsset(new URL(url, location.href).href);
+  } catch {
+    /* non-standard / SSR environment */
+  }
+}
 export const NEAR_TREE_CAP = 4096;
 export const NEAR_TREE_MODELS = 12;
 export const NEAR_TREE_LODS = 2;
@@ -145,6 +154,8 @@ export class NearTreeGeometry {
   private reset = new Uint32Array(NEAR_TREE_SLOTS * 5 + 1);
   private vBuf: GPUBuffer | null = null;
   private iBuf: GPUBuffer | null = null;
+  private vBufBytes = 0;
+  private iBufBytes = 0;
   private pipes: GPURenderPipeline[] = [];
   private shadowPipes: GPURenderPipeline[] = [];
   private disposed = false;
@@ -231,6 +242,8 @@ export class NearTreeGeometry {
     }
     this.vBuf = this.d.createBuffer({ size: allV.byteLength, usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST });
     this.iBuf = this.d.createBuffer({ size: allI.byteLength, usage: GPUBufferUsage.INDEX | GPUBufferUsage.COPY_DST });
+    this.vBufBytes = allV.byteLength;
+    this.iBufBytes = allI.byteLength;
     this.d.queue.writeBuffer(this.vBuf, 0, allV);
     this.d.queue.writeBuffer(this.iBuf, 0, allI);
     const vBufferLayout: GPUVertexBufferLayout = {
@@ -351,6 +364,24 @@ export class NearTreeGeometry {
     } finally {
       b.destroy();
     }
+  }
+  gpuBytes() {
+    const v = this.vBuf ? this.vBufBytes : 0;
+    const i = this.iBuf ? this.iBufBytes : 0;
+    const l = this.lists.size;
+    const d = this.draws.size;
+    const u = this.u.size;
+    return {
+      vertices: v,
+      indices: i,
+      lists: l,
+      draws: d,
+      uniforms: u,
+      total: v + i + l + d + u,
+      capacity: this.capacity,
+      slots: NEAR_TREE_SLOTS,
+      ready: this.ready,
+    };
   }
   dispose() {
     this.disposed = true;

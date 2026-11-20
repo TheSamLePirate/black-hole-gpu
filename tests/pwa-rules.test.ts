@@ -37,6 +37,8 @@ test("crew shell and assets bypass the simulator worker, even when crew is a bui
 test("a request's kind: hashed assets, the shell, the tiles, the elements, the rest", () => {
   expect(classify(`${SITE}index-a1b2c3d4.js`, SITE)).toBe("immutable");
   expect(classify(`${SITE}earth-3z05cvb5.ktx2`, SITE)).toBe("immutable");
+  expect(classify(`${SITE}trees-v1-b31429154c38b2fd-hpzdxfmm.bin`, SITE)).toBe("immutable");
+  expect(classify(`${SITE}assets/vegetation/trees-v1-b31429154c38b2fd-hpzdxfmm.bin`, SITE)).toBe("immutable");
   expect(classify(SITE, SITE)).toBe("shell");
   expect(classify(`${SITE}version.json`, SITE)).toBe("shell");
   expect(classify(`${SITE}plan-worker.js`, SITE)).toBe("shell");

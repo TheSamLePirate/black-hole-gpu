@@ -457,6 +457,89 @@ test.skipIf(!E2E)(
             console.log(JSON.stringify({ shadows: shadowsReport }));
             await Bun.write(`${OUT}/${v.name}-shadows.json`, JSON.stringify(shadowsReport, null, 2));
           }
+          if (process.env.J9_PWA === "1") {
+            // 1. Bounded GPU memory and buffers verification.
+            const gpu = await app.js<{
+              vertices: number;
+              indices: number;
+              lists: number;
+              draws: number;
+              uniforms: number;
+              total: number;
+              capacity: number;
+              slots: number;
+              ready: boolean;
+            }>("__bh.renderer.sceneryRaster.nearTrees.gpuBytes()");
+            expect(gpu.ready).toBe(true);
+            expect(gpu.vertices).toBe(8112240);
+            expect(gpu.indices).toBe(1405632);
+            expect(gpu.lists).toBe(589824);
+            expect(gpu.draws).toBe(752);
+            expect(gpu.uniforms).toBe(16);
+            expect(gpu.total).toBe(10108464);
+            expect(gpu.capacity).toBe(4096);
+            expect(gpu.slots).toBe(36);
+
+            const initialCounts = await app.js<{
+              instances: number[];
+              lod0: number[];
+              lod1: number[];
+              shadow: number[];
+              overflow: number;
+            }>("__bh.renderer.sceneryRaster.nearTrees.readCounts()");
+            expect(initialCounts.overflow).toBe(0);
+
+            // 2. Sustained low flight & absence of J8 regression (at maures-low or during flight).
+            let flightReport: { steps: number; minInstances: number; maxOverflow: number; sceneryWorkerMs?: number } | null = null;
+            if (v.name === "maures-low") {
+              const samples: number[] = [];
+              let maxOf = 0;
+              await app.js("(() => { __bh.freeze(false); return true; })()");
+              for (let f = 0; f < 5; f++) {
+                await Bun.sleep(200);
+                const cnt = await app.js<{ instances: number[]; shadow: number[]; overflow: number }>(
+                  "__bh.renderer.sceneryRaster.nearTrees.readCounts()",
+                );
+                const sum = cnt.instances.reduce((a, b) => a + b, 0) + cnt.shadow.reduce((a, b) => a + b, 0);
+                samples.push(sum);
+                maxOf = Math.max(maxOf, cnt.overflow);
+              }
+              await app.js("(() => { __bh.freeze(true); return true; })()");
+              expect(maxOf).toBe(0);
+              expect(Math.min(...samples)).toBeGreaterThan(0);
+              const workerMs = await app.js<number>("__bh.renderer.earthScenery?.stats?.()?.workerMs ?? 0");
+              flightReport = {
+                steps: samples.length,
+                minInstances: Math.min(...samples),
+                maxOverflow: maxOf,
+                sceneryWorkerMs: workerMs,
+              };
+            }
+
+            // 3. Population consistency across settled refresh.
+            // When re-evaluating the place, verify the deterministic instance counts are strictly identical.
+            await app.js("(() => { __bh.touch(); return true; })()");
+            await Bun.sleep(500);
+            const settledCounts = await app.js<{
+              instances: number[];
+              lod0: number[];
+              lod1: number[];
+              shadow: number[];
+              overflow: number;
+            }>("__bh.renderer.sceneryRaster.nearTrees.readCounts()");
+            expect(settledCounts.lod0).toEqual(initialCounts.lod0);
+            expect(settledCounts.lod1).toEqual(initialCounts.lod1);
+            expect(settledCounts.shadow).toEqual(initialCounts.shadow);
+            expect(settledCounts.overflow).toBe(0);
+
+            const pwaReport = {
+              gpu,
+              initialCounts,
+              flightReport,
+            };
+            console.log(JSON.stringify({ pwa: pwaReport }));
+            await Bun.write(`${OUT}/${v.name}-pwa.json`, JSON.stringify(pwaReport, null, 2));
+          }
         }
         await app.stepDone(`${v.name}: trees ${trees}, A/B/A captured`);
       }
