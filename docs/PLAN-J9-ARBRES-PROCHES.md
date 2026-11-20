@@ -187,3 +187,12 @@ sur la seule suppression des rayons des arbres. La marche actuelle garde son che
   limité à un pixel d'ouverture. [Preuves et limites](progress/j9/J9-3-PROTOTYPE.md#deuxième-lot--occlusion-mesurée-et-portée-étudiée).
   Étendre toute la géométrie pleine à 300 m coûte 81,4 ms sur le mini (818 instances) : **portée normale 80 m conservée**.
   Matériau, objet derrière les arbres, LOD, raccords et J9-4–6/A/R restent ouverts ; prototype toujours éteint par défaut.
+
+- **20 novembre, J9-3 troisième lot :** matériau, gabarit d'enveloppe, rotation déterministe par cellule, volume latéral des
+  conifères et témoin bâtiment 3D derrière un arbre proche à 80 m validés sur `kerr-mini` (`20261120-122829-j9-3-full`,
+  93 assertions, 43 relevés Nominal ; 84/84 WGSL `20261120-122753-j9-3-wgsl`). À 80 m : A/B/A `67,6 → 54,7 → 66,6 ms` aux
+  Maures (432 recouvrements et 19 ouvertures entre arbres sans erreur), `58,0 → 58,0 → 57,6 ms` à 60 m AGL, et
+  `69,7 → 57,6 → 69,6 ms` à Chamonix (4 326 recouvrements et 25 ouvertures laissant voir le bâtiment code 62 derrière l'arbre
+  `1736718`, sans erreur ; A/A nul et défaut +1 m détecté). [Fiche mise à jour](progress/j9/J9-3-PROTOTYPE.md#troisième-lot--matériau-gabarit-denveloppe-conifères-de-côté-et-témoin-bâtiment-derrière-arbre-à-80-m).
+  Prochaines étapes : LOD utiles (J9-2) et raccords/saisons/vent/mouvement (J9-4), puis ombres découpées (J9-5), PWA (J9-6)
+  et acceptation/retrait (J9-A/J9-R). Prototype maintenu éteint par défaut jusque-là.

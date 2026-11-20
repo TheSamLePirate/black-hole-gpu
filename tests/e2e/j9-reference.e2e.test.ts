@@ -1,6 +1,13 @@
 import { afterAll, expect, test } from "bun:test";
 import { App, E2E, stopServer } from "./lib/app";
-import { TREE_SURFACE_PROBE, treeSurfaceProbe, TREE_OCCLUSION_COMPARE, TREE_OCCLUSION_PICK } from "./lib/tree-surface-probe";
+import {
+  TREE_OBJECT_COMPARE,
+  TREE_OBJECT_PICK,
+  TREE_OCCLUSION_COMPARE,
+  TREE_OCCLUSION_PICK,
+  TREE_SURFACE_PROBE,
+  treeSurfaceProbe,
+} from "./lib/tree-surface-probe";
 
 // J9-0: the near forest at a known height over loaded WGS84 ground, with and without near-tree rays.
 // Three fixed views (Maures floor, Maures low flight height, Chamonix slope), A/B/A in each. No craft is flown.
@@ -136,7 +143,7 @@ test.skipIf(!E2E)(
           await app.shot(`${OUT}/${v.name}-${index}-${rays ? "rays" : GEOMETRY ? "geometry" : "smooth"}.png`);
         }
         if (GEOMETRY && v.agl < 10) {
-          if (process.env.J9_OCCLUSION === "1") {
+          if (process.env.J9_OCCLUSION === "1" && (v.name === "maures-floor" || process.env.J9_CASES === v.name)) {
             await app.js("(() => {__bh.renderer.nearTreeGeometryOn=true;__bh.touch();return true;})()");
             await Bun.sleep(1000);
             const complete = await app.js<{ trees: [number, number][]; aaDelta: number }>(treeSurfaceProbe("complete"));
@@ -169,6 +176,45 @@ test.skipIf(!E2E)(
               "(() => {for(const [i,id] of __j9Surfaces.complete.ids.entries())if(id)__j9Surfaces.complete.distances[i]+=1;return true;})()",
             );
             const fault = await app.js<{ wrongDepth: number; wrongHole: number }>(TREE_OCCLUSION_COMPARE);
+            expect(fault.wrongDepth + fault.wrongHole).toBeGreaterThan(0);
+            await app.js("(() => {__bh.renderer.sceneryRaster.nearTrees.debugTreeId=0;delete globalThis.__j9Surfaces;return true;})()");
+          }
+          if (process.env.J9_OBJECT_OCCLUSION === "1" && (v.name === "chamonix-slope" || process.env.J9_CASES === v.name)) {
+            await app.js("(() => {__bh.renderer.nearTreeGeometryOn=true;__bh.touch();return true;})()");
+            await Bun.sleep(1000);
+            const complete = await app.js<{ trees: [number, number][]; aaDelta: number }>(treeSurfaceProbe("complete"));
+            const candidate = await app.js<{ id: number; visibleObjectGaps: number }>(TREE_OBJECT_PICK);
+            const frontId = candidate.id;
+            console.log(JSON.stringify({ objectOcclusionCandidate: candidate }));
+            expect(complete.aaDelta).toBe(0);
+            await app.js("(() => {__j9Surfaces.front=__j9Surfaces.complete;__j9Surfaces.back=__j9Surfaces.complete;return true;})()");
+            const aa = await app.js<{ wrongDepth: number; wrongHole: number }>(TREE_OBJECT_COMPARE);
+            expect(aa.wrongDepth + aa.wrongHole).toBe(0);
+            await app.js(`(() => {__bh.renderer.sceneryRaster.nearTrees.debugTreeId=${-frontId};return true;})()`);
+            await Bun.sleep(1000);
+            await app.js(treeSurfaceProbe("front"));
+            await app.shot(`${OUT}/${v.name}-object-front-only.png`);
+            await app.js(`(() => {__bh.renderer.sceneryRaster.nearTrees.debugTreeId=${frontId};return true;})()`);
+            await Bun.sleep(1000);
+            await app.js(treeSurfaceProbe("back"));
+            await app.shot(`${OUT}/${v.name}-object-front-hidden.png`);
+            const comparison = await app.js<{
+              overlap: number;
+              wrongDepth: number;
+              holes: number;
+              wrongHole: number;
+              codes: number[];
+            }>(TREE_OBJECT_COMPARE);
+            console.log(JSON.stringify({ frontId, objectOcclusion: comparison }));
+            await Bun.write(`${OUT}/${v.name}-object-occlusion.json`, JSON.stringify({ frontId, ...comparison }, null, 2));
+            expect(comparison.overlap).toBeGreaterThan(0);
+            expect(comparison.wrongDepth).toBe(0);
+            expect(comparison.holes).toBeGreaterThan(0);
+            expect(comparison.wrongHole).toBe(0);
+            await app.js(
+              "(() => {for(let i=0;i<__j9Surfaces.complete.distances.length;i++){if(__j9Surfaces.complete.ids[i])__j9Surfaces.complete.distances[i]+=1;if(__j9Surfaces.complete.objCodes[i])__j9Surfaces.complete.objDistances[i]+=1;}return true;})()",
+            );
+            const fault = await app.js<{ wrongDepth: number; wrongHole: number }>(TREE_OBJECT_COMPARE);
             expect(fault.wrongDepth + fault.wrongHole).toBeGreaterThan(0);
             await app.js("(() => {__bh.renderer.sceneryRaster.nearTrees.debugTreeId=0;delete globalThis.__j9Surfaces;return true;})()");
           }

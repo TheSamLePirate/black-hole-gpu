@@ -85,3 +85,49 @@ Tolérance de distance : 2 mm ; lectures hors fenêtres chronométrées, ressour
 - `20261120-110912-j9-occlusion-wgsl` : 84/84 shaders Apple. Typecheck, Biome, inventaire pipeline et les 18 tests ciblés
   passent. Aucun gain à image égale ni performance soutenue revendiqués. Le matériau trop clair reste à résoudre ; la portée
   seule ne fournit pas une solution acceptable au raccord.
+
+## Troisième lot — Matériau, gabarit d'enveloppe, conifères de côté et témoin bâtiment derrière arbre à 80 m
+
+20 novembre, sur `44e1a08f` avec les corrections de matériau et la sonde d'objet (`J9_OBJECT_OCCLUSION=1`).
+[Captures et graphique A/B/A](geometry-mini.html), [témoins d'occlusion à 80 m](occlusion-mini.html),
+[échantillons des trois vues](geometry-mini-samples.json), [occlusion arbre-arbre 80 m](maures-floor-occlusion-80m.json),
+[occlusion bâtiment-derrière-arbre 80 m](chamonix-slope-object-occlusion-80m.json).
+
+Quatre défauts visuels et géométriques du prototype initial sont corrigés sans toucher au placement ni aux espèces :
+
+1. **Rotation déterministe par cellule (`t.seed`)** : chaque instance tourne autour de son axe vertical d'un angle issu de la
+   graine de sa cellule mondiale (`6.2831853 * t.seed`), évitant les répétitions de silhouettes identiques et ouvrant des
+   trous lisibles entre couronnes dès la portée normale de 80 m.
+2. **Gabarit ramené dans l'enveloppe de `forestShape`** : les cartes de `treeModel` débordaient de ~25 % hors du rayon
+   canonique (`impostorFrameRadius` documentait `1.25 × R`), ce qui gonflait les buissons du premier plan jusqu'à la lentille.
+   L'échelle horizontale (`0.8 * r / NEAR_ASPECT`) et la hauteur des buissons (`0.86 * height`) ramènent la géométrie dans
+   la même enveloppe `(t.c, t.r)` que le tracé et l'imposteur.
+3. **Normale hémisphérique, relief 3D de houppier (`clump`) et ombrage local** : sur les dômes aplatis (`shrub`, `pine`),
+   `q / (t.r * t.r)` exagérait la composante verticale jusqu'à 7× et orientait toutes les normales vers le zénith. La normale
+   macroscopique est évaluée sur la sphère unité du houppier (`q / t.r`), combinée à la normale sortante de la carte, puis
+   perturbée au pixel dans `sceneryTreeGeometry` par le même champ 3D `0.55 * clump` (`gnoise(p * 0.9)`) et le même grain
+   `(0.8 + 0.2 * grain)` que `sceneryTreeLite` et `worldScenery`, sans le double multiplicateur d'albédo `mix(0.55, 1.15, shade)`.
+4. **Épaisseur verticale des rameaux de conifères vus de côté (`pitch = 0°`)** : les éventails d'aiguilles quasi horizontaux
+   (`n ≈ [0, 0, 1]`) devenaient filiformes de profil à Chamonix ; une inclinaison verticale déterministe sur la largeur et la
+   longueur de chaque carte (`dz`) restitue le volume conique étagé sans élargir l'empreinte vue de dessus.
+
+### Mesures et témoins sur `kerr-mini` (`20261120-122829-j9-3-full`, 93 assertions, 43 relevés Nominal)
+
+- **A/B/A complet à 80 m** (1920×1080, interne 1440×810, ombrage 1/1, borne 30, fenêtres de 12 s) :
+  - `maures-floor` (3 m AGL, 49 instances proches, 49 639 pixels de géométrie) : **67,6 → 54,7 → 66,6 ms** p50 (p95 : 73,4 → 57,6 → 69,9 ms) ;
+  - `maures-low` (60 m AGL, 0 instance dans 80 m) : **58,0 → 58,0 → 57,6 ms** p50 (p95 : 61,8 → 61,4 → 62,1 ms) ;
+  - `chamonix-slope` (5 m AGL, 19 instances dont 8 conifères, 18 706 pixels de géométrie) : **69,7 → 57,6 → 69,6 ms** p50 (p95 : 74,3 → 62,6 → 73,1 ms).
+- **Témoin d'occlusion arbre-arbre à la portée normale de 80 m** (`maures-floor`) :
+  - Avant redimensionnement du gabarit (`20261120-120530-j9-mat-maures`, 37 assertions) : arbre `1233861` devant `1241182`,
+    **141 pixels de recouvrement** (`wrongDepth: 0`) et **167 pixels d'ouverture** (`wrongHole: 0`).
+  - Avec gabarit ramené dans l'enveloppe (`20261120-122829-j9-3-full`) : arbre `1239357` devant `[1241188, 1241189]`,
+    **432 pixels de recouvrement** (`wrongDepth: 0`) et **19 pixels d'ouverture** (`wrongHole: 0`), A/A = 0, défaut +1 m détecté.
+- **Témoin d'occlusion bâtiment/objet 3D derrière un arbre proche à 80 m** (`chamonix-slope`, `J9_OBJECT_OCCLUSION=1`) :
+  - Dans `20261120-122829-j9-3-full`, l'arbre `1736718` recouvre un bâtiment en maillage 3D (code de visibilité `62`, `RASTER_CODE.mesh`)
+    sur **4 326 pixels** avec profondeur et identité d'arbre exactes (`wrongDepth: 0`), et laisse voir le bâtiment à travers
+    **25 pixels d'ouverture** encadrés sur la même ligne avec son code `62`, son identité et sa distance exacts (`wrongHole: 0`).
+    A/A du comparateur nul ; défaut +1 m injecté sur les distances détecté.
+- **Contrôles techniques** : `20261120-122753-j9-3-wgsl` compile 84/84 shaders sur Apple ; témoins de dépassement (capacité 1 →
+  44 refus aux Maures, 14 à Chamonix ; capacité 4096 → 0) et de dessin coupé (`debugSkip = 1` → 0 pixel) verts dans les deux vues.
+  Le prototype reste éteint par défaut (`nearTreeGeometryOn = false`) en attendant les LOD utiles (J9-2), le raccord LOD ↔ imposteurs,
+  les saisons/vent/mouvement (J9-4), les ombres découpées (J9-5) et la disponibilité PWA hors ligne (J9-6).

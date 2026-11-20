@@ -10767,14 +10767,20 @@ fn sceneryTreeGeometry(dW:vec3f,id:u32,t:f32,bits:u32,shade:f32)->f32 {
   let gi=u32(((hd.i0+ci)%hd.columns+hd.columns)%hd.columns);let gj=bitcast<u32>(hd.j0+cj);
   let uv=vec2f(f32(ci)+.12+.76*forestUnit(forestHash(gi,gj,1u)),f32(cj)+.12+.76*forestUnit(forestHash(gi,gj,2u)));
   let base=vec3f(hd.C.x+hd.C.y*uv.x+hd.C.z*uv.y,hd.Dm.x+hd.Dm.y*uv.x+hd.Dm.z*uv.y,f32(word&0x3fffffu)/100.0-20000.0);
-  let n=nearTreeNormal(bits);let height=2.0+f32(word>>26u)*.5;let seed=forestUnit(forestHash(gi,gj,4u));
+  var n=nearTreeNormal(bits);let height=2.0+f32(word>>26u)*.5;let seed=forestUnit(forestHash(gi,gj,4u));
   let leaf=(bits&65536u)!=0u;
-  let hit=ForestHit(t,n,kind,select(1u,0u,leaf),base,height,seed,1.0);
+  let hit=ForestHit(t,n,kind,select(1u,0u,leaf),base,height,seed,select(1.0,shade,leaf));
   let p=P.scenery[3].xyz+sceneryLocal(dW)*t-vec3f(0.0,0.0,sceneryLiftM(t));
   SC_POINT=p;SC_DISTANCE=t;
   let look=forestLook(hit,n,p,sceneryColourAt(base.xy));
-  WS_T=look.through;WS=vec4f(normalize(sceneryGlobal(n)),1.0);
-  WS_A=look.albedo*select(1.0,mix(.55,1.15,shade),leaf);
+  if(leaf){
+    let clump=vec3f(gnoise(p*.9),gnoise(p*.9+vec3f(17.1,3.7,-5.3)),gnoise(p*.9+vec3f(-8.3,11.9,2.1)));
+    n=normalize(n+.55*clump);
+  }
+  let grain=select(gnoise(p*vec3f(5.0,5.0,0.7)),gnoise(p*5.3),leaf);
+  WS_T=look.through*select(0.0,shade*shade,leaf);
+  WS=vec4f(normalize(sceneryGlobal(n)),1.0);
+  WS_A=look.albedo*(0.8+0.2*grain);
   return t;
 }
 fn sceneryTreeLite(dW: vec3f, id: u32, tMax: f32, rnd: vec4f) -> f32 {

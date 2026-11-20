@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 20 nov. 10:16 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 20 nov. 11:34 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous. Ce qui est fermé quitte le tableau « En cours » pour la ligne « Fermé récemment ».
@@ -45,7 +45,7 @@ J4 (fermé, sortie non atteinte), J5 et J6 (fermés).
 
 | Session (T3) | Lot | État |
 |---|---|---|
-| Exécution J9 (20 nov.) | [Arbres proches en vraie géométrie](docs/PLAN-J9-ARBRES-PROCHES.md) | **Prototype J9-3 sur le mini, éteint par défaut** : surface réelle, témoins profondeur/occlusion A/A et défauts injectés ; assets partagés, 84/84 WGSL. Extension brute à 300 m trop coûteuse ; matériau et raccord non acceptés. LOD utiles/J9-4–6/A/R restent ouverts |
+| Exécution J9 (20 nov.) | [Arbres proches en vraie géométrie](docs/PLAN-J9-ARBRES-PROCHES.md) | **J9-3 matériau, gabarit et témoins d'occlusion arbre-arbre + bâtiment-derrière-arbre validés à 80 m sur le mini** (`20261120-122829-j9-3-full`, 93 assertions, Nominal ; Maures `67,6 → 54,7 → 66,6 ms`, Chamonix `69,7 → 57,6 → 69,6 ms`, 84/84 WGSL), éteint par défaut. Suite : LOD utiles (J9-2) et raccords/saisons/vent/mouvement (J9-4), puis J9-5/6/A/R |
 | Rendu (33d89754) | J4 / J5 — l'eau, les volumes, la généralisation | **fermés** ([PLAN-J4](docs/PLAN-J4-VOLUMES.md), [PLAN-J5](docs/PLAN-J5-GENERALISATION.md)) : l'eau à demi-rythme (J5-5, −6,0 à −6,4 ms, l'image la même) ; le sol à demi-rythme laissé au joueur (J5-6, réglage « demi » : −1,9 à −3,2 ms ; « auto » à chaque pixel) ; la FFT de la mer en deux passes (−0,9 ms) ; la carte d'ombre des arbres (−2,8 ms, forêt) ; Sam a refusé les arbitrages d'image (MSAA 1×, petits arbres, nuages amortis). Postes lourds restants : l'eau 16,2, les nuages d'orage 16,5, le décor d'une forêt ~7 ms |
 | Rendu (33d89754) | Mesures tenues | la borne du M1 Max **à 30** : essayée à 40 le 15 au soir, non tenue (soutenu 26,4 et 34,5 images/s, deux runs — [J0-CONTRAT §2](docs/J0-CONTRAT.md)) ; le coût de l'appareil 3,5–4,5 ms, dont le MSAA 4× 4–5 ms (gardé) |
 | Audit vagues 3–4 et 6 (1feb2f7f) | [09-priorites-todo](docs/audit-2026-11-10/09-priorites-todo.md) | **faits** : 3.1–3.2 réseau (RD0–RD2), 3.3 sauvegardes (une clé par sauvegarde ; avion, systèmes des vaisseaux et de l'A320 — ce dernier par J6-4), 3.4–3.5 vol, 3.6–3.7 TARS, 3.10 e2e honnêtes, 4.2 temps et onglet masqué, 4.3 `Settings`/`ViewPose`, 4.8 `main()` découpé ; vague 6 hors rendu (QA, AR, RD4/RD5, FX). **Reste** : l'état d'une mission ou d'un combat (Sam), IndexedDB et l'autosauvegarde hors frame (AR-05), FX-19 (fraîcheur des écrans, à mesurer), FX-21 |
@@ -10804,3 +10804,21 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
 - Échecs/limites conservés : premier arbre de bord sans recouvrement, assertion échouée (`20261120-110941-j9-geometry-occlusion`) ; témoin suivant à 80 m avec seulement un pixel d’ouverture (`20261120-111156-j9-occlusion-selected`), insuffisant pour la lisibilité ; champ renforcé à 300 m pour le couple observé. Ni objets derrière ni ensemble des vues AAA validés.
 - Portée mesurée : 818 instances à 300 m, p50 67,3 → 81,4 → 66,2 ms (`20261120-110620-j9-geometry-reach300`, 30 assertions, Nominal). Ce n’est pas une solution de raccord ; portée normale 80 m et prototype éteint conservés. Image différente, matériau trop clair, ombres/LOD/préparation encore ouverts ; aucun gain à image égale ou coût soutenu validé.
 - Suite : LOD utiles et raccord géométrie/imposteurs, matériau et ombres communes, puis préparation/PWA et acceptation. Aucun ancien chemin retiré avant cette acceptation.
+
+### 2026-11-20 11:34 UTC — J9-3 : matériau, gabarit d’enveloppe, conifères de côté et témoin bâtiment derrière arbre à 80 m
+
+- **Contribution à la destination :** J9-3 (stratégie §§7.7, 7.15–7.17) : cohérence du matériau proche avec l’éclairage commun et le relief 3D des houppiers, respect de l’enveloppe `(t.c, t.r)` de `forestShape`, volume latéral des conifères et preuve d’occlusion à 80 m aussi bien entre couronnes que devant un bâtiment 3D.
+- **Réalisé :**
+  - `src/vegetation/tree-near.ts` (`nearTreeVs`) : rotation azimutale déterministe par cellule (`6.2831853 * t.seed`), gabarit ramené dans l’enveloppe du monde (`sx = 0.8 * r / NEAR_ASPECT`, hauteur des buissons `0.86 * height`), normale macroscopique évaluée sur la sphère unité du houppier (`q / t.r` au lieu de `q / t.r²` qui pointait au zénith sur les dômes aplatis), ombrage radial/vertical dans la couronne et inclinaison verticale (`dz`) des éventails d’aiguilles de conifères vus de profil.
+  - `src/shaders/trace.wgsl` (`sceneryTreeGeometry`) : suppression du double multiplicateur d’albédo `mix(0.55, 1.15, shade)` (l’ombrage passant par `hit.ao` dans `forestLook`), ajout du relief 3D de houppier `n = normalize(n + 0.55 * clump)` (`gnoise(p * 0.9)`) et du grain procédural `(0.8 + 0.2 * grain)` partagés avec `sceneryTreeLite` et `worldScenery`.
+  - `tests/e2e/lib/tree-surface-probe.ts` et `tests/e2e/j9-reference.e2e.test.ts` : sonde d’occlusion d’un objet/bâtiment 3D (`code >= 57`, `J9_OBJECT_OCCLUSION=1`) derrière un arbre proche à la portée normale de 80 m, avec A/A nul et défaut +1 m injecté.
+  - Documentation mise à jour : [fiche J9-3](docs/progress/j9/J9-3-PROTOTYPE.md), [PLAN-J9](docs/PLAN-J9-ARBRES-PROCHES.md), [E2E-CATALOGUE](docs/E2E-CATALOGUE.md).
+- **Preuves :**
+  - `20261120-122753-j9-3-wgsl` : 84/84 shaders compilent sur Apple (`kerr-mini` et local). Typecheck, Biome, inventaire pipeline et tests unitaires (`tree-assets`, `tree-model`) verts.
+  - `20261120-122829-j9-3-full` sur `kerr-mini` (exit 0, **93 assertions**, **43 relevés thermiques Nominal**, 1920×1080 / interne 1440×810, ombrage 1/1, borne 30) :
+    - `maures-floor` (49 instances, 49 639 px) : **67,6 → 54,7 → 66,6 ms** p50 (p95 : 73,4 → 57,6 → 69,9 ms) ; témoin arbre-arbre à 80 m (`1239357` devant `[1241188, 1241189]`) : **432 recouvrements** (`wrongDepth: 0`) et **19 ouvertures** (`wrongHole: 0`), A/A = 0, défaut +1 m détecté (et `20261120-120530-j9-mat-maures` sur le couple `1233861 / 1241182` à 80 m : 141 recouvrements, 167 ouvertures, 0 erreur).
+    - `maures-low` (60 m AGL, 0 instance dans 80 m) : **58,0 → 58,0 → 57,6 ms** p50.
+    - `chamonix-slope` (19 instances dont 8 conifères, 18 706 px) : **69,7 → 57,6 → 69,6 ms** p50 (p95 : 74,3 → 62,6 → 73,1 ms) ; témoin bâtiment 3D derrière arbre à 80 m (`1736718` devant bâtiment code `62`) : **4 326 recouvrements** (`wrongDepth: 0`) et **25 ouvertures** (`wrongHole: 0`), A/A = 0, défaut +1 m détecté.
+    - Témoins de dépassement (capacité 1 → 44 et 14 refus) et de dessin coupé (`debugSkip = 1` → 0 px) verts. Captures et graphiques montrés dans T3.
+- **Limites / transitions restantes :** prototype toujours éteint par défaut (`nearTreeGeometryOn = false`) ; au-delà de 80 m et jusqu’à `IMPOSTOR_NEAR_M = 200 m`, `sceneryTreeLite` utilise encore l’enveloppe pleine avant les imposteurs V2 ; ombres encore portées par les proxies ; LOD utiles non encore livrés.
+- **Suite :** J9-2 (second LOD géométrique utile préparé au build dans KTG1) et J9-4 (sélection de LOD avec hystérésis, raccord géométrie ↔ imposteurs V2 sans saut par l’enveloppe pleine à 80 m, saisons, vent et vecteurs de mouvement), puis J9-5, J9-6, J9-A et J9-R.
