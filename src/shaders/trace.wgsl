@@ -15888,7 +15888,7 @@ fn liteWater(gq: vec3f, fx: vec3f, fy: vec3f, hG: f32, fpM: f32, nW: vec3f, dirW
   let farW = select(1.0, smoothstep(0.85 * sceneR, sceneR, tM), sceneR > 0.0);
   var tileW = false;
   if (TUNE_TILE_WATER > 0.5 && farW > 0.0 && osm.x < 0.999) {
-    let tw = tileWaterAt(tileCoord(gq), max(length(fx), length(fy)) * EARTH_RM, sqrt(max(1.0 - gq.z * gq.z, 1e-12)));
+    let tw = tileWaterAt(imageryUv(gq), max(length(fx), length(fy)) * EARTH_RM, sqrt(max(1.0 - gq.z * gq.z, 1e-12)));
     if (tw * farW > osm.x) {
       osm = vec2f(tw * farW, 0.6);
       tileW = true;
