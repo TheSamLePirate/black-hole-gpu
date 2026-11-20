@@ -48,6 +48,8 @@ struct NearV { @builtin(position) clip:vec4f,@location(0) p:vec3f,@location(1) n
   return o;
 }
 @fragment fn nearTreeFs(v:NearV,@builtin(front_facing) front:bool)->MO {
+  // Diagnostic isolation after selection: never put a hidden tree back into the proxy lists.
+  if((nearU.w>0.0 && v.id==u32(nearU.w)) || (nearU.w<0.0 && v.id!=u32(-nearU.w))){discard;}
   let leaf=v.a.z>.5;if(leaf && (v.bare>.5 || !leafMask(v.a.xy,f32(v.kind)))){discard;}
   var n=normalize(v.n);if(!leaf && !front){n=-n;}
   var o:MO;o.vis=vec4f(0.0,f32(v.id),length(v.p),f32(nearTreePack(n,leaf,v.a.w)));
@@ -59,6 +61,8 @@ export class NearTreeGeometry {
   reachM = 80;
   /** A lower capacity is only a witness for the overflow/fallback contract. */
   capacity = NEAR_TREE_CAP;
+  /** Surface witness only: >0 hides this local tree id; <0 draws only its opposite. Zero draws all. */
+  debugTreeId = 0;
   ready = false;
   error: string | null = null;
   private loading: Promise<void> | null = null;
@@ -94,7 +98,12 @@ export class NearTreeGeometry {
         { binding: 29, visibility: C, buffer: { type: "storage" } },
       ],
     });
-    this.drawLayout = d.createBindGroupLayout({ entries: [{ binding: 30, visibility: V, buffer: { type: "read-only-storage" } }] });
+    this.drawLayout = d.createBindGroupLayout({
+      entries: [
+        { binding: 27, visibility: GPUShaderStage.FRAGMENT, buffer: { type: "uniform" } },
+        { binding: 30, visibility: V, buffer: { type: "read-only-storage" } },
+      ],
+    });
     this.cullBind = d.createBindGroup({
       layout: this.cullLayout,
       entries: [
@@ -103,7 +112,13 @@ export class NearTreeGeometry {
         { binding: 29, resource: { buffer: this.lists } },
       ],
     });
-    this.drawBind = d.createBindGroup({ layout: this.drawLayout, entries: [{ binding: 30, resource: { buffer: this.lists } }] });
+    this.drawBind = d.createBindGroup({
+      layout: this.drawLayout,
+      entries: [
+        { binding: 27, resource: { buffer: this.u } },
+        { binding: 30, resource: { buffer: this.lists } },
+      ],
+    });
   }
   private async load() {
     const response = await fetch(url);
@@ -166,7 +181,12 @@ export class NearTreeGeometry {
         this.error = String(e);
       });
     const cap = Number.isFinite(this.capacity) ? Math.max(1, Math.min(NEAR_TREE_CAP, Math.floor(this.capacity))) : NEAR_TREE_CAP;
-    this.params.set([this.on && this.ready ? 1 : 0, Number.isFinite(this.reachM) ? Math.max(0, this.reachM) : 0, cap, 0]);
+    this.params.set([
+      this.on && this.ready ? 1 : 0,
+      Number.isFinite(this.reachM) ? Math.max(0, this.reachM) : 0,
+      cap,
+      Number.isFinite(this.debugTreeId) ? Math.trunc(this.debugTreeId) : 0,
+    ]);
     this.d.queue.writeBuffer(this.u, 0, this.params);
     this.d.queue.writeBuffer(this.draws, 0, this.reset);
   }

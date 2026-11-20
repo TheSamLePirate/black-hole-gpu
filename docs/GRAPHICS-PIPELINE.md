@@ -38,8 +38,8 @@ rendu asynchrones (`nearTreeVs`/`nearTreeFs`, une sorte/proportion chacun), comp
 utile encore ; rayon prototype 80 m.
 
 La passe existante `scenery raster cull` publie les instances : groupe 1, uniforme binding 27 (allumé/prêt, portée,
-capacité), stockage 28 (12 arguments indexés de 20 octets + compteur de dépassement : 244 octets), listes écrites 29,
-relues au sommet 30 (12 × 4 096 u32, 192 Kio). `clampDraws` borne les comptes ; un refus dépassement reste dans les proxies,
+capacité, id d’isolement diagnostic), stockage 28 (12 arguments indexés de 20 octets + compteur de dépassement : 244 octets), listes écrites 29,
+relues au sommet 30 (12 × 4 096 u32, 192 Kio). L’uniforme 27 est aussi lu par le fragment pour le témoin d’occlusion : id positif masqué, négatif seul conservé, zéro normal ; le tri ne réintroduit pas les arbres masqués dans les proxies. `clampDraws` borne les comptes ; un refus dépassement reste dans les proxies,
 jamais un arbre supprimé. Le dessin est dans `terrain raster visibility`, avant les proxies, avec les buffers de sommets
 entrelacés (40 octets) et indices KTG1 partagés. Les buffers et pipelines sont au renderer, détruits avec le décor.
 
@@ -730,7 +730,7 @@ Paris jusqu'à `earthSettled` » chronométré par étape.
 
 <!-- pipeline-inventory:begin (bun scripts/pipeline-inventory.ts --write) -->
 
-_Généré le 2026-11-20T09:47:27Z sur `1ff89f47` (arbre de travail). Ne pas éditer à la main : relancer l'outil._
+_Généré le 2026-11-20T10:09:53Z sur `5581f777` (arbre de travail). Ne pas éditer à la main : relancer l'outil._
 
 **125 sites de création de pipeline** (81 rendu, 44 calcul, dont 61 asynchrones) et 42 `createShaderModule` dans 31 fichiers ; **43 programmes WGSL** (15 fichiers .wgsl, 28 chaînes dans le TypeScript) ; **66 libellés de passes** du profileur GPU (+ 11 sites à libellé dynamique).
 
@@ -898,7 +898,7 @@ _Généré le 2026-11-20T09:47:27Z sur `1ff89f47` (arbre de travail). Ne pas éd
 | `src/vegetation/tree-impostors.ts:314` | render async | `tree impostor bake` | `vs`, `fs` |
 | `src/vegetation/tree-impostors.ts:331` | compute async | `tree impostor down` | `down` |
 | `src/vegetation/tree-impostors.ts:442` | render async | `tree canopy bake` | `vsTop`, `fs` |
-| `src/vegetation/tree-near.ts:129` | render async | `near tree geometry` | `nearTreeVs`, `nearTreeFs` |
+| `src/vegetation/tree-near.ts:144` | render async | `near tree geometry` | `nearTreeVs`, `nearTreeFs` |
 
 </details>
 
@@ -934,7 +934,7 @@ _Généré le 2026-11-20T09:47:27Z sur `1ff89f47` (arbre de travail). Ne pas éd
 | `src/system/earth-shore.ts:100` | 64 | seeds (c), flood (c), finish (c) |
 | `src/vegetation/tree-impostors.ts:61` | 64 | vs (v), vsTop (v), fs (f) |
 | `src/system/hd-maps.ts:122` | 52 | vs (v), copy (f), fromSeas (f), fromDem (f), fromHeight (f), downSrgb (f), downLin (f), downDem (f) |
-| `src/vegetation/tree-near.ts:11` | 46 | nearTreeVs (v), nearTreeFs (f) |
+| `src/vegetation/tree-near.ts:11` | 48 | nearTreeVs (v), nearTreeFs (f) |
 | `src/system/earth-maps.ts:175` | 43 | vs (v), face (f), lights (f), elev (f), downSrgb (f), downLin (f) |
 | `src/shaders/sky.wgsl` | 40 | decode (c), down (c) |
 | `src/crew/draw/earth.ts:45` | 38 | vs (v), fs (f) |

@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 20 nov. 10:03 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 20 nov. 10:16 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous. Ce qui est fermé quitte le tableau « En cours » pour la ligne « Fermé récemment ».
@@ -45,7 +45,7 @@ J4 (fermé, sortie non atteinte), J5 et J6 (fermés).
 
 | Session (T3) | Lot | État |
 |---|---|---|
-| Exécution J9 (20 nov.) | [Arbres proches en vraie géométrie](docs/PLAN-J9-ARBRES-PROCHES.md) | **Prototype J9-3 dessiné et mesuré sur le mini, éteint par défaut** : assets partagés, instances GPU, surface réelle sans rayons primaires sur les pixels couverts. E2e, A/A et défauts injectés passent ; 84/84 WGSL. Feuillage trop clair et raccord brut : non accepté. LOD utiles/J9-4–6/A/R restent ouverts |
+| Exécution J9 (20 nov.) | [Arbres proches en vraie géométrie](docs/PLAN-J9-ARBRES-PROCHES.md) | **Prototype J9-3 sur le mini, éteint par défaut** : surface réelle, témoins profondeur/occlusion A/A et défauts injectés ; assets partagés, 84/84 WGSL. Extension brute à 300 m trop coûteuse ; matériau et raccord non acceptés. LOD utiles/J9-4–6/A/R restent ouverts |
 | Rendu (33d89754) | J4 / J5 — l'eau, les volumes, la généralisation | **fermés** ([PLAN-J4](docs/PLAN-J4-VOLUMES.md), [PLAN-J5](docs/PLAN-J5-GENERALISATION.md)) : l'eau à demi-rythme (J5-5, −6,0 à −6,4 ms, l'image la même) ; le sol à demi-rythme laissé au joueur (J5-6, réglage « demi » : −1,9 à −3,2 ms ; « auto » à chaque pixel) ; la FFT de la mer en deux passes (−0,9 ms) ; la carte d'ombre des arbres (−2,8 ms, forêt) ; Sam a refusé les arbitrages d'image (MSAA 1×, petits arbres, nuages amortis). Postes lourds restants : l'eau 16,2, les nuages d'orage 16,5, le décor d'une forêt ~7 ms |
 | Rendu (33d89754) | Mesures tenues | la borne du M1 Max **à 30** : essayée à 40 le 15 au soir, non tenue (soutenu 26,4 et 34,5 images/s, deux runs — [J0-CONTRAT §2](docs/J0-CONTRAT.md)) ; le coût de l'appareil 3,5–4,5 ms, dont le MSAA 4× 4–5 ms (gardé) |
 | Audit vagues 3–4 et 6 (1feb2f7f) | [09-priorites-todo](docs/audit-2026-11-10/09-priorites-todo.md) | **faits** : 3.1–3.2 réseau (RD0–RD2), 3.3 sauvegardes (une clé par sauvegarde ; avion, systèmes des vaisseaux et de l'A320 — ce dernier par J6-4), 3.4–3.5 vol, 3.6–3.7 TARS, 3.10 e2e honnêtes, 4.2 temps et onglet masqué, 4.3 `Settings`/`ViewPose`, 4.8 `main()` découpé ; vague 6 hors rendu (QA, AR, RD4/RD5, FX). **Reste** : l'état d'une mission ou d'un combat (Sam), IndexedDB et l'autosauvegarde hors frame (AR-05), FX-19 (fraîcheur des écrans, à mesurer), FX-21 |
@@ -10795,3 +10795,12 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
 - Échecs conservés : première compilation 79/84 (stubs des variantes sans décor, corrigés) ; témoin à pitch +35° sans arbre dans 80 m, rejeté puis replacé dans le champ connu. Le contrôle BH-API a automatiquement ouvert une page locale ; aucun budget M1 Max utilisé.
 - Limites : les feuilles sont trop claires, raccord à 80 m brut, ombres encore par proxies, LOD utiles ouverts. Aucune acceptation AAA, performance soutenue ou gain à image égale ; les corps, la marche/photo tracées et les contacts ne sont pas remplacés.
 - Suite : isoler le raccord (géométrie → ancien houppier → imposteur), puis J9-4/J9-5 et la préparation/PWA.
+
+### 2026-11-20 10:16 UTC — J9-3 : témoins d’occlusion et portée mesurés sur le mini
+
+- Contribution : J9-3, preuve de la profondeur des couronnes superposées et des ouvertures, sans réintroduire d’enveloppe au masquage diagnostic.
+- Réalisé : uniforme de dessin partagé pour isoler/masquer un arbre après sélection, snapshots de visibilité et comparateur profondeur/identité ; portée expérimentale enregistrée dans chaque échantillon. Références BH-API/pipeline/catalogue et état du plan tenus ; [captures et preuves](docs/progress/j9/J9-3-PROTOTYPE.md#deuxième-lot--occlusion-mesurée-et-portée-étudiée).
+- Preuves mini : `20261120-111404-j9-occlusion-dense`, 37 assertions, 90,9 s, 811 pixels de recouvrement et 130 de seconde couronne dans les ouvertures, zéro erreur de profondeur/identité ; A/A nul et +1 m injecté détecté, thermique Nominal. 84/84 WGSL (`20261120-110912-j9-occlusion-wgsl`), typecheck, Biome, inventaire et 18 tests ciblés passent. Captures regardées et montrées dans T3.
+- Échecs/limites conservés : premier arbre de bord sans recouvrement, assertion échouée (`20261120-110941-j9-geometry-occlusion`) ; témoin suivant à 80 m avec seulement un pixel d’ouverture (`20261120-111156-j9-occlusion-selected`), insuffisant pour la lisibilité ; champ renforcé à 300 m pour le couple observé. Ni objets derrière ni ensemble des vues AAA validés.
+- Portée mesurée : 818 instances à 300 m, p50 67,3 → 81,4 → 66,2 ms (`20261120-110620-j9-geometry-reach300`, 30 assertions, Nominal). Ce n’est pas une solution de raccord ; portée normale 80 m et prototype éteint conservés. Image différente, matériau trop clair, ombres/LOD/préparation encore ouverts ; aucun gain à image égale ou coût soutenu validé.
+- Suite : LOD utiles et raccord géométrie/imposteurs, matériau et ombres communes, puis préparation/PWA et acceptation. Aucun ancien chemin retiré avant cette acceptation.

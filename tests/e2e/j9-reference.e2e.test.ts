@@ -1,6 +1,6 @@
 import { afterAll, expect, test } from "bun:test";
 import { App, E2E, stopServer } from "./lib/app";
-import { TREE_SURFACE_PROBE } from "./lib/tree-surface-probe";
+import { TREE_SURFACE_PROBE, treeSurfaceProbe, TREE_OCCLUSION_COMPARE, TREE_OCCLUSION_PICK } from "./lib/tree-surface-probe";
 
 // J9-0: the near forest at a known height over loaded WGS84 ground, with and without near-tree rays.
 // Three fixed views (Maures floor, Maures low flight height, Chamonix slope), A/B/A in each. No craft is flown.
@@ -10,6 +10,9 @@ import { TREE_SURFACE_PROBE } from "./lib/tree-surface-probe";
 afterAll(stopServer);
 const OUT = process.env.J9_OUT ?? "remote-results/j9-reference";
 const GEOMETRY = process.env.J9_GEOMETRY === "1";
+// Diagnostic reach, recorded with every sample; the product prototype keeps its 80 m default.
+const REACH = Number(process.env.J9_REACH ?? 80);
+if (!Number.isFinite(REACH) || REACH <= 0 || REACH > 1000) throw Error("J9_REACH must be in (0, 1000] metres");
 const VIEWS = [
   { name: "maures-floor", lat: 43.19, lon: 6.25, agl: 3, heading: 60, pitch: 5 },
   { name: "maures-low", lat: 43.19, lon: 6.25, agl: 60, heading: 60, pitch: -12 },
@@ -63,6 +66,7 @@ test.skipIf(!E2E)(
           await app.waitFor("__bh.renderer.sceneryRaster?.nearTrees.ready || __bh.renderer.sceneryRaster?.nearTrees.error", 120_000);
           const error = await app.js<string | null>("__bh.renderer.sceneryRaster.nearTrees.error");
           if (error) throw Error(error);
+          await app.js(`(() => {__bh.renderer.sceneryRaster.nearTrees.reachM=${REACH};return true;})()`);
         }
         const trees = await app.js<number>("__bh.renderer.earthScenery.stats().trees");
         expect(trees).toBeGreaterThan(0);
@@ -115,6 +119,7 @@ test.skipIf(!E2E)(
           const entry = {
             surface,
             geometry: GEOMETRY && !rays,
+            reachM: GEOMETRY ? REACH : null,
             counts,
             view: v,
             ground,
@@ -131,6 +136,42 @@ test.skipIf(!E2E)(
           await app.shot(`${OUT}/${v.name}-${index}-${rays ? "rays" : GEOMETRY ? "geometry" : "smooth"}.png`);
         }
         if (GEOMETRY && v.agl < 10) {
+          if (process.env.J9_OCCLUSION === "1") {
+            await app.js("(() => {__bh.renderer.nearTreeGeometryOn=true;__bh.touch();return true;})()");
+            await Bun.sleep(1000);
+            const complete = await app.js<{ trees: [number, number][]; aaDelta: number }>(treeSurfaceProbe("complete"));
+            const candidate = await app.js<{ id: number; visibleGaps: number }>(TREE_OCCLUSION_PICK);
+            const frontId = candidate.id;
+            console.log(JSON.stringify({ occlusionCandidate: candidate }));
+            expect(complete.aaDelta).toBe(0);
+            await app.js("(() => {__j9Surfaces.front=__j9Surfaces.complete;__j9Surfaces.back=__j9Surfaces.complete;return true;})()");
+            const aa = await app.js<{ wrongDepth: number; wrongHole: number }>(TREE_OCCLUSION_COMPARE);
+            expect(aa.wrongDepth + aa.wrongHole).toBe(0);
+            await app.js(`(() => {__bh.renderer.sceneryRaster.nearTrees.debugTreeId=${-frontId};return true;})()`);
+            await Bun.sleep(1000);
+            await app.js(treeSurfaceProbe("front"));
+            await app.shot(`${OUT}/${v.name}-front-only.png`);
+            await app.js(`(() => {__bh.renderer.sceneryRaster.nearTrees.debugTreeId=${frontId};return true;})()`);
+            await Bun.sleep(1000);
+            await app.js(treeSurfaceProbe("back"));
+            await app.shot(`${OUT}/${v.name}-front-hidden.png`);
+            const comparison = await app.js<{ overlap: number; wrongDepth: number; holes: number; wrongHole: number }>(
+              TREE_OCCLUSION_COMPARE,
+            );
+            console.log(JSON.stringify({ frontId, occlusion: comparison }));
+            await Bun.write(`${OUT}/${v.name}-occlusion.json`, JSON.stringify({ frontId, ...comparison }, null, 2));
+            expect(comparison.overlap).toBeGreaterThan(0);
+            expect(comparison.wrongDepth).toBe(0);
+            expect(comparison.holes).toBeGreaterThan(0);
+            expect(comparison.wrongHole).toBe(0);
+            // Positive witness: move every complete-scene distance one metre away; the comparison must reject it.
+            await app.js(
+              "(() => {for(const [i,id] of __j9Surfaces.complete.ids.entries())if(id)__j9Surfaces.complete.distances[i]+=1;return true;})()",
+            );
+            const fault = await app.js<{ wrongDepth: number; wrongHole: number }>(TREE_OCCLUSION_COMPARE);
+            expect(fault.wrongDepth + fault.wrongHole).toBeGreaterThan(0);
+            await app.js("(() => {__bh.renderer.sceneryRaster.nearTrees.debugTreeId=0;delete globalThis.__j9Surfaces;return true;})()");
+          }
           await app.js(
             "(() => {const r=__bh.renderer;r.nearTreeGeometryOn=true;r.sceneryRaster.nearTrees.capacity=1;__bh.touch();return true;})()",
           );
@@ -153,7 +194,11 @@ test.skipIf(!E2E)(
       expect(app.cdp.errors).toEqual([]);
       await app.stepDone("no GPU or console error");
     } finally {
-      await app.js("(() => {__bh.renderer.nearTreesRays=true;__bh.renderer.nearTreeGeometryOn=false;return true;})()").catch(() => {});
+      await app
+        .js(
+          "(() => {__bh.renderer.nearTreesRays=true;__bh.renderer.nearTreeGeometryOn=false;if(__bh.renderer.sceneryRaster)__bh.renderer.sceneryRaster.nearTrees.debugTreeId=0;delete globalThis.__j9Surfaces;return true;})()",
+        )
+        .catch(() => {});
       app.close();
     }
   },

@@ -1,7 +1,7 @@
 # J9 — Les arbres proches en vraie géométrie
 
 **Préparé le 20 novembre 2026, à la demande de Sam : « Prépare toi à faire J9 : les arbres proches en vraie géometrie — AAA work ».**
-**État : J9 lancé le 20 novembre ; référence J9-0 mini établie ; J9-1 en cours, géométrie proche pas encore dessinée dans le jeu. Un commit par phase demandé par Sam.** Lecture du dépôt à `935fb201` ; les modifications déjà présentes
+**État : J9 lancé le 20 novembre ; référence J9-0 mini établie ; modèles inspectés, assets partagés livrés ; prototype J9-3 dessiné et mesuré, non accepté. LOD utiles, raccords, ombres et préparation restent ouverts. Un commit par phase demandé par Sam.** Lecture du dépôt à `935fb201` ; les modifications déjà présentes
 dans le journal et la capture J8 non suivie sont conservées. **Mode : normal**, par défaut selon CLAUDE.md ; le mode speed de J8
 ne s'étend pas automatiquement à J9. Ce plan prépare le travail sans fermer J8 ni rouvrir toute la marche en raster.
 
@@ -180,3 +180,10 @@ sur la seule suppression des rayons des arbres. La marche actuelle garde son che
   [Fiche, captures et mesures](progress/j9/J9-3-PROTOTYPE.md). Trois vues sur le mini ; dernière version aux Maures avec
   profondeur/identité, A/A nul, défaut de dessin et dépassement injectés détectés. 84/84 WGSL et contrôles rapides passent.
   **J9-3 non accepté** : feuillage trop clair, témoins d'occlusion/raccords à compléter ; pas de bascule ni de gain à image égale.
+
+- **20 novembre, J9-3 deuxième lot :** témoin de deux couronnes sur le mini, comparées à leurs dessins isolés ; A/A nul,
+  défaut de profondeur injecté détecté. Dans le champ diagnostic à 300 m : 811 pixels de recouvrement et 130 de seconde
+  couronne entre les feuilles, sans erreur d'identité/distance ; 37 assertions passent. À 80 m, premier témoin valide mais
+  limité à un pixel d'ouverture. [Preuves et limites](progress/j9/J9-3-PROTOTYPE.md#deuxième-lot--occlusion-mesurée-et-portée-étudiée).
+  Étendre toute la géométrie pleine à 300 m coûte 81,4 ms sur le mini (818 instances) : **portée normale 80 m conservée**.
+  Matériau, objet derrière les arbres, LOD, raccords et J9-4–6/A/R restent ouverts ; prototype toujours éteint par défaut.

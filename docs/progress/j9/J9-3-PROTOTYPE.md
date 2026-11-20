@@ -51,8 +51,37 @@ arbitrairement une couleur pour masquer le raccord. Les captures ont été regar
 
 ## Suite avant toute bascule
 
-J9-2 reste ouvert pour les LOD utiles. J9-3 reste ouvert pour les témoins d'occlusion entre arbres et l'acceptation du
+J9-2 reste ouvert pour les LOD utiles. J9-3 reste ouvert pour le complément objet/contre-jour et l'acceptation du
 matériau. J9-4 doit traiter le raccord de représentation (la limite à 80 m est brute), les saisons, le vent et le mouvement ;
 J9-5 les ombres réellement découpées et le contact ; J9-6 la préparation/PWA et la reprise. La carte d'ombre actuelle reste
 celle des proxies ; l'identité locale conserve le contrat existant à 20 bits, sans résoudre ses collisions globales.
 La marche en raster n'est pas activée ; aucun ancien chemin n'est retiré avant acceptation.
+
+## Deuxième lot — Occlusion mesurée et portée étudiée
+
+20 novembre, sur `5581f777` avec les modifications de ce lot. [Captures interactives](occlusion-mini.html),
+[échantillons](occlusion-mini-samples.json). La portée de diagnostic `J9_REACH` entre dans chaque échantillon ; le prototype
+garde **80 m et reste éteint par défaut**. Aucune bascule à 300 m.
+
+L'isolement `debugTreeId` intervient dans le fragment **après le tri** : positif, l'arbre est masqué ; négatif, seul cet
+arbre est conservé ; zéro, dessin normal. Les autres arbres sélectionnés ne redeviennent pas des proxies opaques.
+Le témoin compare trois copies indépendantes de la visibilité : scène complète, arbre isolé, scène sans cet arbre.
+Aux recouvrements, l'identité et la distance doivent correspondre à la surface la plus proche ; dans les ouvertures
+encadrées par le premier arbre sur la même ligne, la seconde couronne doit garder son identité et sa distance.
+Tolérance de distance : 2 mm ; lectures hors fenêtres chronométrées, ressources GPU et snapshots libérés.
+
+- Premier choix rejeté : `20261120-110941-j9-geometry-occlusion`, arbre dominant au bord inférieur sans seconde géométrie
+  recouverte ; zéro recouvrement, assertion conservée. Le choix se fait ensuite sur une ouverture observée dans la vue.
+- À 80 m, `20261120-111156-j9-occlusion-selected` passe, 37 assertions : 2 212 recouvrements sans erreur, mais **un seul pixel**
+  de seconde couronne dans un trou ; ce témoin trop étroit ne suffit pas à juger la lisibilité.
+- Contrôle renforcé dans le champ à 300 m, choix privilégiant une seconde couronne plus éloignée :
+  `20261120-111404-j9-occlusion-dense`, **37 assertions**, exit 0 en 90,9 s. Arbre local 1 230 205, seconde couronne 1 230 208 :
+  **811 pixels de recouvrement**, **130 pixels dans les ouvertures**, zéro mauvaise identité/distance. A/A du comparateur nul ;
+  +1 m injecté dans les distances complètes détecté. Thermique : 17 relevés, tous Nominal ; aucune erreur GPU/console.
+  Cela prouve ce couple et ce contrat de surface, pas toute l'acceptation AAA ni les objets derrière les arbres.
+- Extension brute à 300 m : `20261120-110620-j9-geometry-reach300`, 30 assertions, 818 instances ;
+  **67,3 → 81,4 → 66,2 ms** p50 GPU, même qualité et dimensions que la référence, 16 relevés Nominal.
+  Le contrôle renforcé retrouve 81,4 ms. Les LOD utiles sont nécessaires avant toute extension ; l'image reste différente.
+- `20261120-110912-j9-occlusion-wgsl` : 84/84 shaders Apple. Typecheck, Biome, inventaire pipeline et les 18 tests ciblés
+  passent. Aucun gain à image égale ni performance soutenue revendiqués. Le matériau trop clair reste à résoudre ; la portée
+  seule ne fournit pas une solution acceptable au raccord.
