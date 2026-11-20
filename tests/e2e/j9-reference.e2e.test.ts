@@ -550,7 +550,7 @@ test.skipIf(!E2E)(
     } finally {
       await app
         .js(
-          "(() => {__bh.renderer.nearTreesRays=true;__bh.renderer.nearTreeGeometryOn=false;if(__bh.renderer.sceneryRaster)__bh.renderer.sceneryRaster.nearTrees.debugTreeId=0;delete globalThis.__j9Surfaces;return true;})()",
+          "(() => {__bh.renderer.nearTreesRays=false;__bh.renderer.nearTreeGeometryOn=true;if(__bh.renderer.sceneryRaster)__bh.renderer.sceneryRaster.nearTrees.debugTreeId=0;delete globalThis.__j9Surfaces;return true;})()",
         )
         .catch(() => {});
       app.close();

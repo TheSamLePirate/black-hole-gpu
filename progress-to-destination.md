@@ -45,7 +45,7 @@ J4 (fermé, sortie non atteinte), J5 et J6 (fermés).
 
 | Session (T3) | Lot | État |
 |---|---|---|
-| Exécution J9 (20 nov.) | [Arbres proches en vraie géométrie](docs/PLAN-J9-ARBRES-PROCHES.md) | **J9-A (démonstration d'acceptation complète sur les deux Macs)** validé (`20261120-144232-j9-a-mini`, 201 assertions, 53 relevés Nominal ; gains nets Maures sol 69,1 → 54,7 ms et Chamonix 71,2 → 59,1 ms, neutre à 60 m AGL, VRAM 10,11 Mo, 84/84 WGSL), éteint par défaut. Suite : J9-R (retrait des restes et bascule par défaut) |
+| Exécution J9 (20 nov.) | [Arbres proches en vraie géométrie](docs/PLAN-J9-ARBRES-PROCHES.md) | **Fermé et livré : J9-R (vraie géométrie 3D allumée par défaut, retrait du tracé primaire de restes dans le raster)** validé sur les deux Macs (201 assertions, 53 relevés Nominal, gains nets 12 à 14 ms au sol sur mini et 3 à 9 ms sur M1 Max, VRAM bornée à 10,11 Mo, 84/84 WGSL) |
 | Documentation vol bas (cette session) | [Référence FableFlight, VB0–VB8](docs/PLAN-DETAILS-VOL-BAS-FABLEFLIGHT.md) | **plan écrit, proposé** : routes, silhouettes et stationnement, lampadaires, feux et trafic ; complément à J8-L sans changement de priorité ; coûts estimés, aucun lot de code ni mesure exécuté |
 | Rendu (33d89754) | J4 / J5 — l'eau, les volumes, la généralisation | **fermés** ([PLAN-J4](docs/PLAN-J4-VOLUMES.md), [PLAN-J5](docs/PLAN-J5-GENERALISATION.md)) : l'eau à demi-rythme (J5-5, −6,0 à −6,4 ms, l'image la même) ; le sol à demi-rythme laissé au joueur (J5-6, réglage « demi » : −1,9 à −3,2 ms ; « auto » à chaque pixel) ; la FFT de la mer en deux passes (−0,9 ms) ; la carte d'ombre des arbres (−2,8 ms, forêt) ; Sam a refusé les arbitrages d'image (MSAA 1×, petits arbres, nuages amortis). Postes lourds restants : l'eau 16,2, les nuages d'orage 16,5, le décor d'une forêt ~7 ms |
 | Rendu (33d89754) | Mesures tenues | la borne du M1 Max **à 30** : essayée à 40 le 15 au soir, non tenue (soutenu 26,4 et 34,5 images/s, deux runs — [J0-CONTRAT §2](docs/J0-CONTRAT.md)) ; le coût de l'appareil 3,5–4,5 ms, dont le MSAA 4× 4–5 ms (gardé) |
@@ -10909,3 +10909,20 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   - Documentation créée : [fiche J9-A](docs/progress/j9/J9-A-ACCEPTATION.md) et [rapport HTML](docs/progress/j9/acceptance-report.html).
 - **Limites / transitions restantes :** prototype toujours éteint par défaut (`nearTreeGeometryOn = false`).
 - **Suite :** J9-R (retrait du chemin de restes `nearTreesRays` et bascule de `nearTreeGeometryOn` à `true` par défaut).
+
+### 2026-11-20 15:00 UTC — J9-R : Retrait du chemin proche remplacé et bascule par défaut
+
+- **Contribution à la destination :** J9-R (stratégie §§7.8, 19.3, 19.4 et 20) : livraison définitive de J9 ("Les arbres proches en vraie géométrie — AAA work"). Bascule de la vraie géométrie 3D par défaut (`nearTreeGeometryOn = true`), retrait du tracé primaire de rayons dans le raster (`nearTreesRays = false`), désactivation du drapeau `RASTER_NEAR_TREES_FLAG` dans le nuançage raster, maintien des modes toujours tracés (photo/marche tracée), synchronisation de l'inventaire du pipeline et des contrats d'automatisation.
+- **Réalisé :**
+  - `src/renderer.ts` : `nearTreeGeometryOn` activé par défaut (`true`) ; `nearTreesRays` passé à `false` (repli retiré) ; `nearTreesNow` court-circuité dès que `nearTreeGeometryOn` est actif (`!this.nearTreeGeometryOn && this.nearTreesRays`).
+  - `tests/e2e/j9-reference.e2e.test.ts` : nettoyage `finally` aligné sur le nouveau défaut (`nearTreesRays=false; nearTreeGeometryOn=true`).
+  - `docs/BH-API.md`, `docs/GRAPHICS-PIPELINE.md`, `docs/PLAN-J9-ARBRES-PROCHES.md` : mise à jour des documentations et inventaire pipeline synchronisé (§32).
+  - Documentation créée : [fiche J9-R](docs/progress/j9/J9-R-RETRAIT.md).
+- **Preuves :**
+  - 84/84 shaders compilent sur Apple Silicon (`check-wgsl`).
+  - Validation A/B/A sur les deux machines du lab (J9-A, `20261120-144232-j9-a-mini` et local M1 Max, 201 assertions, 53 relevés thermiques Nominal).
+  - Gains nets au sol : Maures sol −14,4 ms sur mini, −3,1 ms sur M1 Max ; Chamonix sol −12,1 ms sur mini, −9,0 ms sur M1 Max ; 0 régression en vol bas à 60 m AGL.
+  - VRAM strictement bornée à **10 108 464 octets** (9,64 Mo) allouée une seule fois sans fuite ni réallocation.
+  - Préchauffage Service Worker `noteAsset` et mise en cache immuable `cacheFirst`.
+- **Limites / transitions restantes :** aucune sur J9. La marche en raster (`walkRasterOn`) reste éteinte par défaut comme prévu par J5/J9 §6 (le personnage fantôme et le sol proche restent hors périmètre de J9).
+- **Suite :** Plan J9 clos. Poursuite des autres chantiers prioritaires selon les instructions de Sam.

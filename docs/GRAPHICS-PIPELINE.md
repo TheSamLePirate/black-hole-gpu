@@ -29,10 +29,10 @@ branches, dans la même enveloppe ; la cuisson au démarrage reprend ces modèle
 Les cibles, layouts et passes de production ne changent pas dans ce lot. L'inspection e2e utilise des cibles temporaires
 rgba8unorm/depth24plus, détruites après lecture, sans coût de frame revendiqué. Le rendu proche dans le jeu reste à J9-3.
 
-### J9-3 / J9-4 / J9-5 — prototype des arbres proches en triangles, LOD 0/1, raccord aux imposteurs et ombres 3D découpées (20 novembre 2026)
+### J9-3 / J9-4 / J9-5 / J9-A / J9-R — arbres proches en vraie géométrie, LOD 0/1, raccord aux imposteurs et ombres 3D découpées (20 novembre 2026)
 
 `vegetation/tree-near.ts` possède les buffers et pipelines de vraie géométrie proche, derrière
-`renderer.nearTreeGeometryOn` **éteint par défaut**. KTG1 (`trees-v1-b31429154c38b2fd.bin`, 24 modèles : 12 × LOD 0 + 12 × LOD 1, −62,4 % de triangles en LOD 1) est importé comme asset du bundle : chargement/décompression/validation
+`renderer.nearTreeGeometryOn` **allumé par défaut après acceptation J9-A** (retrait au lot J9-R du tracé primaire de restes `nearTreesRays` dans le raster). KTG1 (`trees-v1-b31429154c38b2fd.bin`, 24 modèles : 12 × LOD 0 + 12 × LOD 1, −62,4 % de triangles en LOD 1) est importé comme asset du bundle : chargement/décompression/validation
 et uploads une fois au premier allumage dans **deux tampons partagés** (1 tampon de sommets de 6,83 Mo et 1 tampon d'indices de 2,69 Mo, indexés par `firstIndex` et `baseVertex`). Vingt-quatre pipelines de
 rendu asynchrones pour la visibilité (`nearTreeVs`/`nearTreeFs`, `NEAR_MODEL = 0..23`) et douze pipelines d'ombre (`nearTreeShadowVs`/`nearTreeShadowFs`, `NEAR_MODEL = 24..35`, LOD 1) sont compilés à cet allumage ; rayon normal 80 m.
 

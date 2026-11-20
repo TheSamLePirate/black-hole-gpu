@@ -5597,11 +5597,11 @@ export class Renderer {
   /** (PLAN-J5 J5-3, a measure) the walker on the Earth drawn by the raster — its walking grid still sent (P.walk[0].w 2: trace.wgsl
    *  rasterPrimary) —; false: the traced pipeline while walking, as ever (its march meets the grid the feet stand on) */
   walkRasterOn = false;
-  /** (PLAN-J5 J5-3a, a measure) the trees within 80 m of the camera given to the rays' kernel (shade) — their crowns carved, what stands
-   *  behind them found —; false: to the material like the others (a ring of bare ground round each crown up close) */
-  nearTreesRays = true;
-  /** J9-3 measurement prototype; real near geometry, off until accepted. */
-  nearTreeGeometryOn = false;
+  /** (PLAN-J5 J5-3a legacy fallback, retired in J9-R) the trees within 80 m of the camera given to the rays' kernel (shade) —
+   *  retired by J9-R in favor of real 3D geometry nearTreeGeometryOn; kept as fallback */
+  nearTreesRays = false;
+  /** (PLAN-J9 AAA near tree geometry) 3D near trees geometry on by default in raster mode after acceptance J9-A. */
+  nearTreeGeometryOn = true;
   /** PLAN-MER-WEBGPU S2: the sea's crests drawn before the land behind them where it stands over the waves (A/B lever) */
   seaCrestsOverLand = true;
   /** the frame's parameters' index of P.seafft[0].x (writeParams): encodeLite writes 2 there when the open sea's kernel runs */
@@ -7419,10 +7419,10 @@ export class Renderer {
       // (its water's pass — shadeWater — once its kernel is there: shadeLite leaves it the water's pixels)
       // (not another world's: its water is bodyLite's — and the Earth's unseen sea would stop the FFT, seaFftParams)
       this.rasterWaterNow = !this.bodyRasterNow && !!this.traceVariant("shadeWater");
-      // (the trees near the camera — within RASTER_NEAR_TREES_M, wide on the screen —: the rays' kernel's, which carves their
-      // crowns and finds what stands behind them — the material tests a proxy's tree alone, a ring of bare ground round each
-      // crown up close —; only while shade runs — ready, the camera low near the scenery: it is then dispatched, encodeRaster)
+      // (J9-R: real 3D geometry nearTreeGeometryOn replaces the near-tree rays march in raster mode;
+      // nearTreesNow is only enabled as a legacy fallback when nearTreeGeometryOn is explicitly disabled)
       this.nearTreesNow =
+        !this.nearTreeGeometryOn &&
         this.nearTreesRays &&
         !shadeLate &&
         !this.bodyRasterNow &&
