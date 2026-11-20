@@ -174,3 +174,9 @@ sur la seule suppression des rayons des arbres. La marche actuelle garde son che
   meshoptimizer au build sans perte de triangles/attributs, codec validé et données Git LFS. [Fiche](progress/j9/J9-2-ASSETS.md).
   L'essai de simplification des branches est conservé mais non livré en second LOD (réduction trop faible dans la plupart
   des cas). **J9-2 reste ouvert pour les LOD utiles** ; le socle permet le prototype J9-3 sans prétendre leur coût maîtrisé.
+
+- **20 novembre, J9-3 premier lot :** le prototype dessine les douze modèles par instances GPU dans le monde, surface et
+  profondeur réelles, matériau lu sans marche primaire des arbres couverts ; levier `nearTreeGeometryOn` éteint par défaut.
+  [Fiche, captures et mesures](progress/j9/J9-3-PROTOTYPE.md). Trois vues sur le mini ; dernière version aux Maures avec
+  profondeur/identité, A/A nul, défaut de dessin et dépassement injectés détectés. 84/84 WGSL et contrôles rapides passent.
+  **J9-3 non accepté** : feuillage trop clair, témoins d'occlusion/raccords à compléter ; pas de bascule ni de gain à image égale.

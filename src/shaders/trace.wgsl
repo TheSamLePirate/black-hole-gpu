@@ -8469,6 +8469,8 @@ fn terrainRasterHint(px: vec2f) -> f32 { return 0.0; }
 fn terrainRasterId(px: vec2f) -> u32 { return 0u; }
 fn terrainRasterLeaf(px: vec2f) -> u32 { return 0u; }
 fn terrainRasterDepth(px: vec2f) -> f32 { return 0.0; }
+fn terrainRasterTreeSurface(px:vec2f)->u32 {return 0u;}
+fn terrainRasterTreeShade(px:vec2f)->f32 {return 0.0;}
 fn terrainRasterBuilding(px: vec2f) -> bool { return true; }
 fn terrainRasterMesh(px: vec2f) -> bool { return false; }
 fn terrainRasterBridgeMesh(px: vec2f) -> bool { return false; }
@@ -10101,6 +10103,9 @@ fn forestData(i:u32)->vec4f { return scenery[i]; }
 fn forestWind()->vec4f { return P.scenery[7]; }
 fn forestEye()->vec3f { return P.scenery[3].xyz; }
 // BEGIN_FOREST_MODULE (shaders/forest.wgsl set in at load, src/forest-shader.ts: this stub draws no tree)
+fn forestHash(i:u32,j:u32,k:u32)->u32 {return 0u;}
+fn forestUnit(v:u32)->f32 {return 0.0;}
+fn nearTreeNormal(bits:u32)->vec3f {return vec3f(0.0,0.0,1.0);}
 struct ForestHit { t: f32, n: vec3f, kind: u32, part: u32, base: vec3f, height: f32, seed: f32, ao: f32 };
 fn forestQuery(o: vec3f, d: vec3f, tMax: f32, anyHit: bool, detail: f32) -> ForestHit { return ForestHit(tMax, vec3f(0.0), 0u, 0u, vec3f(0.0), 0.0, 0.0, 1.0); }
 struct ForestHead { F: u32, w: i32, h: i32, cellsAt: u32, cell: f32, columns: i32, i0: i32, j0: i32, C: vec3f, Dm: vec3f };
@@ -10754,6 +10759,24 @@ struct ImpHit { t: f32, n: vec3f, shade: f32, leaf: bool };
 // its plain shape, the carving's sphere tracing left out (clumps in the normal stand for it, as worldScenery's far trees) —,
 // the grid walked from it on a miss (crowns overlap on the screen), before tMax [m]; its look as worldScenery's in WS, WS_A,
 // WS_T; the distance [m], −1 none
+fn sceneryTreeGeometry(dW:vec3f,id:u32,t:f32,bits:u32,shade:f32)->f32 {
+  let hd=forestHead(u32(forestData(2u).x));let cell=id-1u;
+  let ci=i32(cell)%hd.w;let cj=i32(cell)/hd.w;
+  let word=bitcast<u32>(forestData(hd.cellsAt+cell/4u)[cell%4u]);let kind=(word>>22u)&15u;
+  if(kind==0u || t<=0.0){return -1.0;}
+  let gi=u32(((hd.i0+ci)%hd.columns+hd.columns)%hd.columns);let gj=bitcast<u32>(hd.j0+cj);
+  let uv=vec2f(f32(ci)+.12+.76*forestUnit(forestHash(gi,gj,1u)),f32(cj)+.12+.76*forestUnit(forestHash(gi,gj,2u)));
+  let base=vec3f(hd.C.x+hd.C.y*uv.x+hd.C.z*uv.y,hd.Dm.x+hd.Dm.y*uv.x+hd.Dm.z*uv.y,f32(word&0x3fffffu)/100.0-20000.0);
+  let n=nearTreeNormal(bits);let height=2.0+f32(word>>26u)*.5;let seed=forestUnit(forestHash(gi,gj,4u));
+  let leaf=(bits&65536u)!=0u;
+  let hit=ForestHit(t,n,kind,select(1u,0u,leaf),base,height,seed,1.0);
+  let p=P.scenery[3].xyz+sceneryLocal(dW)*t-vec3f(0.0,0.0,sceneryLiftM(t));
+  SC_POINT=p;SC_DISTANCE=t;
+  let look=forestLook(hit,n,p,sceneryColourAt(base.xy));
+  WS_T=look.through;WS=vec4f(normalize(sceneryGlobal(n)),1.0);
+  WS_A=look.albedo*select(1.0,mix(.55,1.15,shade),leaf);
+  return t;
+}
 fn sceneryTreeLite(dW: vec3f, id: u32, tMax: f32, rnd: vec4f) -> f32 {
   WS = vec4f(0.0);
   if (!HAS_SCENERY || P.scenery[0].w < 0.5 || P.scenery[2].w < 0.5 || id == 0u) { return -1.0; }
@@ -15389,6 +15412,7 @@ fn rasterPoint(r: RasterRay, tM: f32) -> vec3f {
 // shade's) — the same test in shade, shadeMark and shadeLite
 fn rasterLiteTakes(px: vec2f, k: u32) -> bool {
   if (!rasterLiteOn()) { return false; }
+  if(terrainRasterTreeSurface(px)>0u){return true;}
   // (a building's own triangles — U2 —: the material's; its box alone — a building without triangles, the box's margin —: the
   // rays', as before)
   if (terrainRasterMesh(px)) { return true; }
@@ -16882,7 +16906,10 @@ fn shadeLite(@builtin(global_invocation_id) gp: vec3u, @builtin(workgroup_id) wi
   let treeId = terrainRasterId(centre);
   if (treeId != 0u && (liteSkip() & 64u) == 0u) {
     // (four per-pixel draws, the frame's — the blue noise's channels, independent —: the impostors' fade, their view's pick, their cover)
-    let tt = sceneryTreeLite(normalize(toBody(ray.look)), treeId, tM, blueDraws(vec2u(centre), P.frame.x));
+    let surface=terrainRasterTreeSurface(centre);
+    var tt=-1.0;
+    if(surface>0u){tt=sceneryTreeGeometry(normalize(toBody(ray.look)),treeId,terrainRasterDepth(centre),surface,terrainRasterTreeShade(centre));}
+    else{tt=sceneryTreeLite(normalize(toBody(ray.look)), treeId, tM, blueDraws(vec2u(centre), P.frame.x));}
     if (tt > 0.0) {
       tM = tt;
       isTree = true;

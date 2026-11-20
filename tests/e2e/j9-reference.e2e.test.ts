@@ -1,5 +1,6 @@
 import { afterAll, expect, test } from "bun:test";
 import { App, E2E, stopServer } from "./lib/app";
+import { TREE_SURFACE_PROBE } from "./lib/tree-surface-probe";
 
 // J9-0: the near forest at a known height over loaded WGS84 ground, with and without near-tree rays.
 // Three fixed views (Maures floor, Maures low flight height, Chamonix slope), A/B/A in each. No craft is flown.
@@ -8,11 +9,14 @@ import { App, E2E, stopServer } from "./lib/app";
 // Done when: three views measured and captured A/B/A, trees present, raster active, no GPU or console error.
 afterAll(stopServer);
 const OUT = process.env.J9_OUT ?? "remote-results/j9-reference";
+const GEOMETRY = process.env.J9_GEOMETRY === "1";
 const VIEWS = [
   { name: "maures-floor", lat: 43.19, lon: 6.25, agl: 3, heading: 60, pitch: 5 },
   { name: "maures-low", lat: 43.19, lon: 6.25, agl: 60, heading: 60, pitch: -12 },
   { name: "chamonix-slope", lat: 45.92, lon: 6.87, agl: 5, heading: 100, pitch: 0 },
-];
+]
+  .map((v) => ({ ...v, pitch: process.env.J9_PITCH ? Number(process.env.J9_PITCH) : v.pitch }))
+  .filter((v) => !process.env.J9_CASES || process.env.J9_CASES.split(",").includes(v.name));
 
 test.skipIf(!E2E)(
   "J9 near forest reference: loaded ground, strict readiness, A/B/A",
@@ -54,11 +58,22 @@ test.skipIf(!E2E)(
         ).toBeNull();
         await app.dataSettled(v.name, { maxMs: 180_000 });
         await app.exposureSettled();
+        if (GEOMETRY) {
+          await app.js("(() => {__bh.renderer.nearTreeGeometryOn=true;__bh.touch();return true;})()");
+          await app.waitFor("__bh.renderer.sceneryRaster?.nearTrees.ready || __bh.renderer.sceneryRaster?.nearTrees.error", 120_000);
+          const error = await app.js<string | null>("__bh.renderer.sceneryRaster.nearTrees.error");
+          if (error) throw Error(error);
+        }
         const trees = await app.js<number>("__bh.renderer.earthScenery.stats().trees");
         expect(trees).toBeGreaterThan(0);
         for (const [index, rays] of [true, false, true].entries()) {
-          await app.progress(`A/B/A ${index + 1}/3 · rays ${rays}`, JSON.stringify({ ground, trees }));
-          await app.js(`(() => { __bh.renderer.nearTreesRays = ${rays}; __bh.touch(); return true; })()`);
+          await app.progress(
+            `A/B/A ${index + 1}/3 · ${GEOMETRY ? `geometry ${!rays}` : `rays ${rays}`}`,
+            JSON.stringify({ ground, trees }),
+          );
+          await app.js(
+            `(() => { __bh.renderer.nearTreesRays = ${GEOMETRY ? true : rays}; __bh.renderer.nearTreeGeometryOn = ${GEOMETRY && !rays}; __bh.touch(); return true; })()`,
+          );
           // Only settling, not a readiness shortcut: all data were required above.
           await Bun.sleep(2000);
           const result = await app.js<{
@@ -75,16 +90,37 @@ test.skipIf(!E2E)(
           return {gpu,raster:R.rasterPrimaryNow,near:R.nearTreesNow,width:document.querySelector("#view").width,height:document.querySelector("#view").height,scale:R.live.width/document.querySelector("#view").width,internalWidth:R.live.width,internalHeight:R.live.height,tier:R.tier.level,rasterRate:R.rasterRate};
         })()`);
           expect(result.raster).toBe(true);
-          expect(result.near).toBe(rays);
+          expect(result.near).toBe(GEOMETRY ? true : rays);
           expect(result.gpu.length).toBeGreaterThan(20);
           expect(result.gpu.every((x) => Number.isFinite(x) && x > 0)).toBe(true);
           const ordered = [...result.gpu].sort((a, b) => a - b);
+          const counts = GEOMETRY
+            ? await app.js<{ instances: number[]; overflow: number }>("__bh.renderer.sceneryRaster.nearTrees.readCounts()")
+            : null;
+          if (counts) {
+            expect(counts.overflow).toBe(0);
+            if (rays) expect(counts.instances.reduce((a, b) => a + b, 0)).toBe(0);
+            else if (v.agl < 10) expect(counts.instances.reduce((a, b) => a + b, 0)).toBeGreaterThan(0);
+          }
+          const surface =
+            GEOMETRY && !rays && v.agl < 10
+              ? await app.js<{ aaDelta: number; pixels: number; validDepth: number; identified: number; sky: number }>(TREE_SURFACE_PROBE)
+              : null;
+          if (surface) {
+            expect(surface.aaDelta).toBe(0);
+            expect(surface.pixels).toBeGreaterThan(0);
+            expect(surface.validDepth).toBe(surface.pixels);
+            expect(surface.identified).toBe(surface.pixels);
+          }
           const entry = {
+            surface,
+            geometry: GEOMETRY && !rays,
+            counts,
             view: v,
             ground,
             trees,
             index,
-            rays,
+            rays: GEOMETRY ? true : rays,
             ...result,
             p50: ordered[Math.floor(ordered.length * 0.5)],
             p95: ordered[Math.floor(ordered.length * 0.95)],
@@ -92,7 +128,23 @@ test.skipIf(!E2E)(
           report.push(entry);
           console.log(JSON.stringify({ ...entry, gpu: `${result.gpu.length} samples in samples.json` }));
           await Bun.write(`${OUT}/samples.json`, JSON.stringify(report, null, 2));
-          await app.shot(`${OUT}/${v.name}-${index}-${rays ? "rays" : "smooth"}.png`);
+          await app.shot(`${OUT}/${v.name}-${index}-${rays ? "rays" : GEOMETRY ? "geometry" : "smooth"}.png`);
+        }
+        if (GEOMETRY && v.agl < 10) {
+          await app.js(
+            "(() => {const r=__bh.renderer;r.nearTreeGeometryOn=true;r.sceneryRaster.nearTrees.capacity=1;__bh.touch();return true;})()",
+          );
+          await Bun.sleep(1500);
+          const witness = await app.js<{ instances: number[]; overflow: number }>("__bh.renderer.sceneryRaster.nearTrees.readCounts()");
+          expect(witness.overflow).toBeGreaterThan(0);
+          console.log(JSON.stringify({ overflowWitness: witness }));
+          await app.js("(() => {__bh.renderer.sceneryRaster.debugSkip=1;return true;})()");
+          await Bun.sleep(1000);
+          const missing = await app.js<{ pixels: number }>(TREE_SURFACE_PROBE);
+          expect(missing.pixels).toBe(0);
+          console.log(JSON.stringify({ missingSurfaceWitness: missing.pixels }));
+          await app.js("(() => {__bh.renderer.sceneryRaster.debugSkip=0;return true;})()");
+          await app.js("(() => {__bh.renderer.sceneryRaster.nearTrees.capacity=4096;return true;})()");
         }
         await app.stepDone(`${v.name}: trees ${trees}, A/B/A captured`);
       }
@@ -101,7 +153,7 @@ test.skipIf(!E2E)(
       expect(app.cdp.errors).toEqual([]);
       await app.stepDone("no GPU or console error");
     } finally {
-      await app.js("(() => {__bh.renderer.nearTreesRays=true;return true;})()").catch(() => {});
+      await app.js("(() => {__bh.renderer.nearTreesRays=true;__bh.renderer.nearTreeGeometryOn=false;return true;})()").catch(() => {});
       app.close();
     }
   },

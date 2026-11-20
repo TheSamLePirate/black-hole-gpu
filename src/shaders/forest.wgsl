@@ -404,3 +404,18 @@ fn forestQueryFrom(o: vec3f, d: vec3f, tStart: f32, tMax: f32, anyHit: bool, det
   }
   return best;
 }
+
+// J9: real tree surface attributes in the visibility alpha's 18 low bits (code remains 0).
+fn nearTreePack(n:vec3f,leaf:bool,shade:f32)->f32 {
+  var q=n/(abs(n.x)+abs(n.y)+abs(n.z));
+  if(q.z<0.0){q=vec3f((1.0-abs(q.yx))*select(vec2f(-1.0),vec2f(1.0),q.xy>=vec2f(0.0)),q.z);}
+  let e=vec2u(round(clamp(q.xy*.5+.5,vec2f(0.0),vec2f(1.0))*255.0));
+  let bits=131072u|e.x|(e.y<<8u)|(select(0u,1u,leaf)<<16u);
+  return f32(bits)+round(clamp(shade,0.0,1.0)*63.0)/64.0;
+}
+fn nearTreeNormal(bits:u32)->vec3f {
+  let e=vec2f(f32(bits&255u),f32((bits>>8u)&255u))/255.0*2.0-1.0;
+  var n=vec3f(e,1.0-abs(e.x)-abs(e.y));
+  if(n.z<0.0){n=vec3f((1.0-abs(n.yx))*select(vec2f(-1.0),vec2f(1.0),n.xy>=vec2f(0.0)),n.z);}
+  return normalize(n);
+}

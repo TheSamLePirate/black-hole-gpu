@@ -5599,6 +5599,8 @@ export class Renderer {
   /** (PLAN-J5 J5-3a, a measure) the trees within 80 m of the camera given to the rays' kernel (shade) — their crowns carved, what stands
    *  behind them found —; false: to the material like the others (a ring of bare ground round each crown up close) */
   nearTreesRays = true;
+  /** J9-3 measurement prototype; real near geometry, off until accepted. */
+  nearTreeGeometryOn = false;
   /** PLAN-MER-WEBGPU S2: the sea's crests drawn before the land behind them where it stands over the waves (A/B lever) */
   seaCrestsOverLand = true;
   /** the frame's parameters' index of P.seafft[0].x (writeParams): encodeLite writes 2 there when the open sea's kernel runs */
@@ -12311,6 +12313,7 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
         this.tsmNext.set(fr);
         this.tsmRevisionNext = sc.revision;
       }
+      this.sceneryRaster.nearTrees.on = this.nearTreeGeometryOn;
       this.sceneryRaster.clock = this.rainClock % 3600;
       this.sceneryRaster.frame = this.frameStamp;
       // (the instances' identity's generation: the scenery's publication — PLAN-J1 J1-2; their analytic motion, asked or not)

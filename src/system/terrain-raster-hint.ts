@@ -52,6 +52,13 @@ fn terrainRasterFarMat(px: vec2f) -> u32 {
 }
 // The nearest surface's distance [m] at this pixel (b: the ground's, or an instance's proxy before it; 0 none).
 fn terrainRasterDepth(px: vec2f) -> f32 { return textureLoad(terrainDist, vec2i(floor(px)), 0).b; }
+// J9: alpha's bit 17 marks an actual tree triangle, code 0; a proxy has alpha 0.
+fn terrainRasterTreeShade(px:vec2f)->f32 {return fract(textureLoad(terrainDist,vec2i(floor(px)),0).a)*(64.0/63.0);}
+fn terrainRasterTreeSurface(px:vec2f)->u32 {
+  let v=textureLoad(terrainDist,vec2i(floor(px)),0);
+  return select(0u,u32(max(v.a,0.0)),v.g>.5 && v.a>=131072.0 && v.a<262144.0);
+}
+
 // (a: an integer below 2²⁴, exact in its float — what drew the pixel, its code × 2¹⁸ (RASTER_CODE: the ground's 1 + its rank from
 // the patch + 8 × its step; the scenery's, a cloud's), and the ground's smooth normal, its octahedron 2 × 9 bits, each 1…511, 0 none
 // — system/terrain-raster.ts rasterCode, T5)

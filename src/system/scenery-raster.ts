@@ -1,3 +1,4 @@
+import { NearTreeGeometry, NEAR_TREE_WGSL } from "../vegetation/tree-near";
 // The world's trees drawn as raster instances (docs/PLAN-RENDU-RASTER-AAA.md étape 1b): not their look — the instance
 // only says which tree a pixel sees, and the tracer's kernel shade tests that tree alone, exactly, with the forest's own
 // shapes (trace.wgsl worldScenery: forestCandidate) instead of walking the grid of cells along every camera ray.
@@ -243,6 +244,7 @@ struct Draw { vertices: u32, instances: atomic<u32>, first: u32, base: u32 };
 @group(0) @binding(4) var<storage, read_write> listsOut: array<u32>;
 @group(0) @binding(5) var<storage, read> listsIn: array<u32>;
 
+${NEAR_TREE_WGSL}
 // A cell's tree as forestCandidate shapes it, its plain crown unshrunk (the carving, the twigs, a far crown's shrinking
 // all lie within it); none where the cell has no tree.
 struct Tree { ok: bool, kind: u32, foot: vec3f, cone: bool, c: vec3f, r: vec3f, trunk: bool, trunkR: f32, trunkTop: f32, height: f32, seed: f32 };
@@ -336,6 +338,7 @@ fn cull(@builtin(global_invocation_id) g: vec3u, @builtin(num_workgroups) n: vec
   // (a tree under ~1.2 px of radius — sc.east.w — not drawn: no shape at that size, the forest's colour the ground's imagery
   // there; hundreds of thousands of micro-triangles, stacked deep at a grazing view, were most of the pass)
   if (R / max(v.z, 1.0) / ty * (0.5 * u.image.y) < sc.east.w) { return; }
+  if(nearKeep(k,t,hd)){return;}
   let list = select(0u, 1u, t.cone) + select(2u, 0u, length(v) < sc.cam.w);
   let at = atomicAdd(&draws[list].instances, 1u);
   if (at < CAP) { listsOut[list * CAP + at] = k; }
@@ -343,6 +346,7 @@ fn cull(@builtin(global_invocation_id) g: vec3u, @builtin(num_workgroups) n: vec
 // the counts kept within the lists' room (the draws read them as they are)
 @compute @workgroup_size(${LISTS})
 fn clampDraws(@builtin(local_invocation_index) i: u32) {
+  for(var m=i;m<12u;m+=4u){atomicStore(&nearDraws.items[m].instances,min(atomicLoad(&nearDraws.items[m].instances),u32(nearU.z)));}
   atomicStore(&draws[i].instances, min(atomicLoad(&draws[i].instances), CAP));
   if (i == 0u) {
     atomicStore(&draws[${LISTS}].instances, u32(scenery[0].x));
@@ -1333,6 +1337,7 @@ export function forestModuleOf(traceSource: string): string {
 }
 
 export class SceneryRaster {
+  readonly nearTrees: NearTreeGeometry;
   private module: GPUShaderModule;
   private cullPipe: GPUComputePipeline | null = null;
   private cullBoxesPipe: GPUComputePipeline | null = null;
@@ -1427,7 +1432,8 @@ export class SceneryRaster {
         { binding: 6, visibility: Vx, buffer: { type: "uniform" } },
       ],
     });
-    const cullPipeLayout = device.createPipelineLayout({ bindGroupLayouts: [this.cullLayout] });
+    this.nearTrees = new NearTreeGeometry(device, this.module, this.drawLayout);
+    const cullPipeLayout = device.createPipelineLayout({ bindGroupLayouts: [this.cullLayout, this.nearTrees.cullLayout] });
     const drawPipeLayout = device.createPipelineLayout({ bindGroupLayouts: [this.drawLayout] });
     void device
       .createComputePipelineAsync({ layout: cullPipeLayout, compute: { module: this.module, entryPoint: "cull" } })
@@ -2393,6 +2399,7 @@ export class SceneryRaster {
     this.sceneryOut[40] = this.generation % 4096;
     q.writeBuffer(this.sceneryU, 0, this.sceneryOut);
     q.writeBuffer(this.draws, 0, this.reset);
+    this.nearTrees.prepare();
     if (this.bench && !(this.benchSkip & 1)) q.writeBuffer(this.bench.draw, 0, this.benchReset);
     this.farActive = !!this.far?.pipes && this.farOn;
     if (this.farActive && !(this.farSkip & 1)) q.writeBuffer(this.far!.draw, 0, this.farReset);
@@ -2412,6 +2419,7 @@ export class SceneryRaster {
     const pass = enc.beginComputePass(descriptor);
     pass.setPipeline(this.cullPipe!);
     pass.setBindGroup(0, this.cullBind!);
+    pass.setBindGroup(1, this.nearTrees.cullBind);
     pass.dispatchWorkgroups(gx, Math.ceil(groups / gx));
     pass.setPipeline(this.clampPipe!);
     pass.dispatchWorkgroups(1);
@@ -2476,6 +2484,7 @@ export class SceneryRaster {
   /** The culled trees' proxies, in the terrain raster's pass (after the ground: its depth already there). */
   draw(pass: GPURenderPassEncoder) {
     if (!this.active || !this.drawBind) return;
+    if (!(this.debugSkip & 1)) this.nearTrees.draw(pass, this.drawBind);
     for (let l = 0; l < LISTS; l++) {
       if (this.debugSkip & 1) break;
       pass.setPipeline(this.drawPipes[l]!);
@@ -2653,6 +2662,7 @@ export class SceneryRaster {
   }
 
   dispose() {
+    this.nearTrees.dispose();
     for (const b of [this.frameU, this.sceneryU, this.draws, this.lists, this.sunU, ...this.meshes, ...this.cascadeSunU]) b.destroy();
     if (this.bench) for (const b of [this.bench.env, this.bench.list, this.bench.draw]) b.destroy();
     this.bench = null;

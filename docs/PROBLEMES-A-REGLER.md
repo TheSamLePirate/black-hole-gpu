@@ -3,6 +3,15 @@
 Problèmes constatés, pas encore réglés. Chaque entrée : la date (UTC), ce qui est mesuré ou observé et sa source, la cause
 connue ou supposée, la piste. Une entrée réglée est barrée avec le commit qui la règle, pas effacée.
 
+## J9-3, prototype éteint : les feuilles proches beaucoup plus claires que la forêt (20 novembre 2026)
+
+**Observé sur kerr-mini**, A/B/A `20261120-104528-j9-geometry-final-prototype`, source et captures dans
+[la fiche J9-3](progress/j9/J9-3-PROTOTYPE.md). La géométrie proche est réellement dessinée, mais son feuillage tranche
+par sa clarté et son aspect plat. Cause non isolée ; comparer normale, occlusion locale et matériau partagé, pas un facteur
+arbitraire d'assombrissement. `nearTreeGeometryOn` reste **faux par défaut**. Le raccord brut à 80 m et les ombres encore
+portées par les proxies sont d'autres limites connues du prototype ; lots J9-4/J9-5 avant acceptation. Aucun défaut nouveau
+activé par ce levier dans les réglages produit.
+
 ## La couche lointaine de nuit : des carrés blancs éblouissants à l'horizon, **quelques secondes après un saut à la nuit** (relevé le 16 novembre 2026, PLAN-J8 J8-A)
 
 **Requalifié (16 nov. 2026, ~18:28 UTC, kerr-mini, `j8-junction` `J8J_JUMP`)** : ce n'est pas un effet des matériaux. La nuit, sautée
