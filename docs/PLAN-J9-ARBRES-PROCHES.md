@@ -169,3 +169,8 @@ sur la seule suppression des rayons des arbres. La marche actuelle garde son che
 - **20 novembre, J9-1 :** socle de contenu inspecté en géométrie directe (six sortes × deux proportions, trois angles et
   ramure nue), conifères densifiés après la première planche ; masque de feuilles partagé avec V2. [Fiche](progress/j9/J9-1-MODELES.md).
   E2e mini et 84/84 WGSL passent. Le matériau dans le monde, les contacts et le raccord restent aux lots suivants.
+
+- **20 novembre, J9-2 lot assets :** géométrie partagée KTG1 préparée hors frame, manifestes et noms par contenu, réordonnancement
+  meshoptimizer au build sans perte de triangles/attributs, codec validé et données Git LFS. [Fiche](progress/j9/J9-2-ASSETS.md).
+  L'essai de simplification des branches est conservé mais non livré en second LOD (réduction trop faible dans la plupart
+  des cas). **J9-2 reste ouvert pour les LOD utiles** ; le socle permet le prototype J9-3 sans prétendre leur coût maîtrisé.

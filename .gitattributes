@@ -20,3 +20,5 @@ docs/img/**/*.webp filter=lfs diff=lfs merge=lfs -text
 docs/video/*.mp4 filter=lfs diff=lfs merge=lfs -text
 gallery/img/paysages/*.jpg filter=lfs diff=lfs merge=lfs -text
 assets/detail/*.ktx2 filter=lfs diff=lfs merge=lfs -text
+# J9: generated shared tree geometry, content-addressed; manifest stays in plain Git.
+assets/vegetation/*.bin filter=lfs diff=lfs merge=lfs -text

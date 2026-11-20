@@ -10778,3 +10778,11 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
 - Réalisé : e2e `j9-models` et son inspecteur GPU hors frame, douze modèles vus de côté/dessous/dessus et ramure nue. `tree-leaf.ts` extrait le masque de la cuisson ; les conifères ont des bouquets d'aiguilles latéraux, après constat de branches trop nues. [Fiche, captures et planche](docs/progress/j9/J9-1-MODELES.md), inventaire séparé de la référence J9-0. Pipeline et catalogue tenus.
 - Preuves : sur le mini, `20261120-101201-j9-models-inspect` avant et `20261120-101351-j9-models-dense` après, exit 0, aucune erreur GPU/console ; planches regardées et montrées dans T3. `20261120-101615-j9-wgsl`, 84/84 compilations. Tests modèles, garde des bandeaux et typecheck passent.
 - Limites : aucun dessin de vraie géométrie proche dans le monde à ce stade ; éclairage de diagnostic sur les planches. Coût de forêt après la densification non mesuré ; aucun gain revendiqué. Les matériaux, les raccords et les témoins d'occlusion en jeu restent aux lots suivants.
+
+### 2026-11-20 09:28 UTC — J9-2 : assets partagés préparés, étude des LOD conservée
+
+- Contribution : préparation hors frame, ressources communes prêtes à charger et format versionné.
+- Réalisé : KTG1 (`tree-assets.ts`), build Bun des douze modèles, manifeste SHA-256 et nom par contenu, binaire gzip sous Git LFS, URL d'import générée. Meshoptimizer 1.3.0 MIT adopté au build pour réordonner sans perte, pas dans le codec runtime. ASSETS tenu ; [fiche](docs/progress/j9/J9-2-ASSETS.md).
+- Preuves : tests des triangles et attributs exactement conservés, rejets de corruption/NaN/indices/offsets et doublons, aller-retour exact ; builds reproductibles, Biome/typecheck. 6 976 520 octets décompressés, 2 909 376 gzip : tailles mesurées par le build, aucun gain GPU revendiqué.
+- Limites : essai de simplification des seules branches trop faible pour un second LOD utile dans la plupart des modèles ; étude conservée au manifeste, LOD non livrés. J9-2 reste ouvert. Les assets ne sont pas encore dessinés dans le monde et n'engagent pas la disponibilité PWA.
+- Suite : prototype J9-3 derrière un levier de mesure, puis sélection/LOD et validation en jeu sur le mini.
