@@ -168,20 +168,28 @@ export function treeModel(kind: ForestKind, aspect: number, seed = 1): TreeMesh 
       for (let b = 0; b < nb; b++) {
         const az = turn + (b / nb) * Math.PI * 2 + (rnd() - 0.5) * 0.5;
         // (its needles' cards reach ~0.4 of the radius past the branch: the branch shorter, the tuft within the cone)
-        const L = rr * (0.62 + 0.18 * rnd());
+        const L = rr * (0.76 + 0.12 * rnd());
         const dir: V3 = [Math.cos(az), Math.sin(az), 0];
         const mid = add(nodes[node]!.p, add(mul(dir, L * 0.55), [0, 0, 0.01]));
         const tip = add(nodes[node]!.p, add(mul(dir, L), [0, 0, -0.035 * (1 - z) - 0.01]));
         const m = addNode(mid, node, 1);
         const tipN = addNode(tip, m, 2);
         // (needles: cards along the branch's outer two thirds, drooping)
-        const nl = 6 + Math.floor(rnd() * 3);
+        const nl = 9 + Math.floor(rnd() * 3);
         for (let i = 0; i < nl; i++) {
-          const f = 0.35 + 0.65 * (i / (nl - 1));
+          const f = 0.2 + 0.8 * (i / (nl - 1));
           const p = add(nodes[node]!.p, add(mul(dir, L * f), [0, 0, -0.03 * f * f * (1 - z) + (rnd() - 0.5) * 0.006]));
           // (their size the cone's radius there at most: no tuft past the tip)
           const sz = Math.min((0.05 * R) / 0.19, 0.22 * rr) * (1.1 - 0.4 * f) + 0.0006;
-          leaves.push({ p, n: norm(add(outward(p), [0, 0, 0.6])), s: sz, shade: 0, long: dir });
+          // Needle sprays occupy both sides of each bough, rather than a single sparse strip. Their cards tilt toward
+          // the sky; the paired fans still sit inside the same cone and expose the bough from underneath.
+          const across: V3 = [-dir[1], dir[0], 0];
+          for (const side of [-1, 1]) {
+            const spread = sz * (0.6 + 0.4 * rnd()) * side;
+            const q = add(p, mul(across, spread));
+            const n = norm(add(mul(outward(q), 0.35), [0, 0, 1]));
+            leaves.push({ p: q, n, s: sz * 1.35, shade: 0, long: norm(add(dir, mul(across, side * 0.4))) });
+          }
         }
         nodes[tipN]!.flow += 1;
       }

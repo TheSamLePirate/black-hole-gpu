@@ -14,6 +14,7 @@
 // half-size the bounding sphere's radius √(radius² + 0.25); a view's texel (x, y) ∈ [0, 64)² at right × (2x/64 − 1) + up × (1 − 2y/64)
 // (rows top-down); its depth b: 0.5 + 0.5 × (the point's offset towards the eye) / half-size.
 
+import { TREE_LEAF_WGSL } from "./tree-leaf";
 import { ForestKind, KIND_SHAPES } from "../system/forest";
 import { TREE_ASPECTS, TREE_MODEL_KINDS, type TreeMesh, treeModel, treeRng } from "./tree-model";
 
@@ -102,26 +103,7 @@ struct TopIn { @location(3) at: vec4f, @location(4) scale: vec2f };
   return o;
 }
 fn hash2(p: vec2f) -> f32 { return fract(sin(dot(p, vec2f(127.1, 311.7))) * 43758.5453); }
-// (a leaf card's mask: a spray of leaflets — five ellipses — on a broad leaf's card; a needle tuft's or a frond's: thin blades)
-fn leafMask(uv: vec2f, kind: f32) -> bool {
-  let c = uv * 2.0 - 1.0;
-  if (kind == 2.0 || kind == 4.0) {
-    // (needles, fronds: blades across the card's length)
-    let blades = abs(fract(c.y * 3.5 + 0.5 * c.x * c.x) - 0.5);
-    return blades < 0.32 * (1.0 - c.x * c.x) && abs(c.x) < 0.98;
-  }
-  var hit = false;
-  for (var i = 0; i < 5; i++) {
-    let a = f32(i) * 1.2566 + 0.3;
-    let ctr = vec2f(cos(a), sin(a)) * 0.42;
-    let dd = c - ctr;
-    let ax = vec2f(cos(a), sin(a));
-    let along = dot(dd, ax);
-    let across = dot(dd, vec2f(-ax.y, ax.x));
-    if ((along * along) / 0.2 + (across * across) / 0.07 < 1.0) { hit = true; }
-  }
-  return hit || dot(c, c) < 0.12;
-}
+${TREE_LEAF_WGSL}
 struct FOut { @location(0) alb: vec4f, @location(1) surf: vec4f };
 fn octEnc(n: vec3f) -> vec2f {
   let p = n.xy / (abs(n.x) + abs(n.y) + abs(n.z));

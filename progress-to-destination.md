@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 20 nov. 09:17 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 20 nov. 09:21 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous. Ce qui est fermé quitte le tableau « En cours » pour la ligne « Fermé récemment ».
@@ -45,7 +45,7 @@ J4 (fermé, sortie non atteinte), J5 et J6 (fermés).
 
 | Session (T3) | Lot | État |
 |---|---|---|
-| Exécution J9 (20 nov.) | [Arbres proches en vraie géométrie](docs/PLAN-J9-ARBRES-PROCHES.md) | **J9-0 en cours** : préparation commitée, inventaire reproductible et Chamonix/cuisson passés sur le mini nominal. Référence et captures archivées ; M1 Max sous Heavy, aucun budget retenu. Autres scènes et mesures soutenues à faire ; aucun nouveau rendu livré. Un commit par phase (Sam) |
+| Exécution J9 (20 nov.) | [Arbres proches en vraie géométrie](docs/PLAN-J9-ARBRES-PROCHES.md) | **Référence mini établie ; contenu source J9-1 inspecté** : douze modèles en géométrie directe, conifères densifiés, masque partagé. E2e mini et 84/84 WGSL passent. Géométrie proche du monde à J9-3 ; assets/LOD J9-2 en préparation, aucune cadence soutenue validée |
 | Rendu (33d89754) | J4 / J5 — l'eau, les volumes, la généralisation | **fermés** ([PLAN-J4](docs/PLAN-J4-VOLUMES.md), [PLAN-J5](docs/PLAN-J5-GENERALISATION.md)) : l'eau à demi-rythme (J5-5, −6,0 à −6,4 ms, l'image la même) ; le sol à demi-rythme laissé au joueur (J5-6, réglage « demi » : −1,9 à −3,2 ms ; « auto » à chaque pixel) ; la FFT de la mer en deux passes (−0,9 ms) ; la carte d'ombre des arbres (−2,8 ms, forêt) ; Sam a refusé les arbitrages d'image (MSAA 1×, petits arbres, nuages amortis). Postes lourds restants : l'eau 16,2, les nuages d'orage 16,5, le décor d'une forêt ~7 ms |
 | Rendu (33d89754) | Mesures tenues | la borne du M1 Max **à 30** : essayée à 40 le 15 au soir, non tenue (soutenu 26,4 et 34,5 images/s, deux runs — [J0-CONTRAT §2](docs/J0-CONTRAT.md)) ; le coût de l'appareil 3,5–4,5 ms, dont le MSAA 4× 4–5 ms (gardé) |
 | Audit vagues 3–4 et 6 (1feb2f7f) | [09-priorites-todo](docs/audit-2026-11-10/09-priorites-todo.md) | **faits** : 3.1–3.2 réseau (RD0–RD2), 3.3 sauvegardes (une clé par sauvegarde ; avion, systèmes des vaisseaux et de l'A320 — ce dernier par J6-4), 3.4–3.5 vol, 3.6–3.7 TARS, 3.10 e2e honnêtes, 4.2 temps et onglet masqué, 4.3 `Settings`/`ViewPose`, 4.8 `main()` découpé ; vague 6 hors rendu (QA, AR, RD4/RD5, FX). **Reste** : l'état d'une mission ou d'un combat (Sam), IndexedDB et l'autosauvegarde hors frame (AR-05), FX-19 (fraîcheur des écrans, à mesurer), FX-21 |
@@ -10771,3 +10771,10 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
 - Preuve : run mini `20261120-101235-j9-reference2`, exit 0, 50 assertions, 43 relevés thermiques Nominal. Le poste proche vaut ici ~13–14 ms au sol des Maures, ~11–12 ms sur la pente de Chamonix, rien à 60 m dans cette vue. Perte de qualité volontaire de B, aucun gain livré.
 - Échec conservé : premier run `20261120-101032-j9-reference` ; lastGpuMs remis à zéro par la calibration. Collecte corrigée sur les durées des images terminées, sans modifier le renderer.
 - Limites : fenêtres de 12 s, pas une performance soutenue ; le volet M1 Max et les témoins isolé/superposition restent à J9-A. La référence mini permet de poursuivre le contenu J9-1, sans déclarer la validation finale sur deux machines.
+
+### 2026-11-20 09:21 UTC — J9-1 : la géométrie source inspectée sur le mini
+
+- Contribution : contenu préparé pour les arbres proches ; une seule source de masque pour cuisson et dessin proche.
+- Réalisé : e2e `j9-models` et son inspecteur GPU hors frame, douze modèles vus de côté/dessous/dessus et ramure nue. `tree-leaf.ts` extrait le masque de la cuisson ; les conifères ont des bouquets d'aiguilles latéraux, après constat de branches trop nues. [Fiche, captures et planche](docs/progress/j9/J9-1-MODELES.md), inventaire séparé de la référence J9-0. Pipeline et catalogue tenus.
+- Preuves : sur le mini, `20261120-101201-j9-models-inspect` avant et `20261120-101351-j9-models-dense` après, exit 0, aucune erreur GPU/console ; planches regardées et montrées dans T3. `20261120-101615-j9-wgsl`, 84/84 compilations. Tests modèles, garde des bandeaux et typecheck passent.
+- Limites : aucun dessin de vraie géométrie proche dans le monde à ce stade ; éclairage de diagnostic sur les planches. Coût de forêt après la densification non mesuré ; aucun gain revendiqué. Les matériaux, les raccords et les témoins d'occlusion en jeu restent aux lots suivants.

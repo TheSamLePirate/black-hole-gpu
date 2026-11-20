@@ -165,3 +165,7 @@ sur la seule suppression des rayons des arbres. La marche actuelle garde son che
 - **20 novembre, exécution J9-0 :** préparation commitée (`d5a28dea`), inventaire reproductible des douze modèles, sonde de Chamonix et cuisson sur kerr-mini passées. [Référence et limites](progress/j9/J9-0-REFERENCE.md). Le passage M1 Max sous Heavy ne fixe aucun budget. J9-0 reste ouvert pour les autres scènes et les mesures soutenues ; pas de bascule du rendu.
 
 - **20 novembre 09:17 UTC :** référence stricte sur le mini établie (`j9-reference` 50 assertions, A/B/A sur trois vues, Nominal). [Fiche et limites](progress/j9/J9-0-REFERENCE.md) : budget soutenu/M1 Max et témoins isolés reportés à J9-A, pas déclarés validés. Passage au contenu J9-1 sur le mini selon la demande de Sam.
+
+- **20 novembre, J9-1 :** socle de contenu inspecté en géométrie directe (six sortes × deux proportions, trois angles et
+  ramure nue), conifères densifiés après la première planche ; masque de feuilles partagé avec V2. [Fiche](progress/j9/J9-1-MODELES.md).
+  E2e mini et 84/84 WGSL passent. Le matériau dans le monde, les contacts et le raccord restent aux lots suivants.

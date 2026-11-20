@@ -1,0 +1,287 @@
+{
+  "source": "src/vegetation/tree-model.ts",
+  "sourceSha256": "50abc898a7718f142f4f18df4b4da56c4dfcf11208f268ff5b9bfc8e5cab6318",
+  "units": "canonical: z up, height 1; bounds include leaf card corners before alpha rejection",
+  "totals": {
+    "bytes": 6975736,
+    "triangles": 85458
+  },
+  "models": [
+    {
+      "kind": "broadleaf",
+      "aspect": 0.22,
+      "seed": 1,
+      "vertices": 22366,
+      "triangles": 12588,
+      "leafCards": 4889,
+      "branchSegments": 281,
+      "bytes": 1045696,
+      "bounds": {
+        "lo": [
+          -0.2571278214454651,
+          -0.25293657183647156,
+          -0.00019594405603129417
+        ],
+        "hi": [
+          0.25610092282295227,
+          0.2582429349422455,
+          0.9906635284423828
+        ]
+      },
+      "invalidIndices": 0
+    },
+    {
+      "kind": "broadleaf",
+      "aspect": 0.11,
+      "seed": 1,
+      "vertices": 22076,
+      "triangles": 12368,
+      "leafCards": 4854,
+      "branchSegments": 266,
+      "bytes": 1031456,
+      "bounds": {
+        "lo": [
+          -0.1271635890007019,
+          -0.1310863345861435,
+          -0.00018553214613348246
+        ],
+        "hi": [
+          0.13543099164962769,
+          0.13010099530220032,
+          0.9728251695632935
+        ]
+      },
+      "invalidIndices": 0
+    },
+    {
+      "kind": "conifer",
+      "aspect": 0.19,
+      "seed": 1,
+      "vertices": 7614,
+      "triangles": 4622,
+      "leafCards": 1496,
+      "branchSegments": 163,
+      "bytes": 360024,
+      "bounds": {
+        "lo": [
+          -0.1612204760313034,
+          -0.1689963936805725,
+          0
+        ],
+        "hi": [
+          0.16466785967350006,
+          0.16714444756507874,
+          1
+        ]
+      },
+      "invalidIndices": 0
+    },
+    {
+      "kind": "conifer",
+      "aspect": 0.09,
+      "seed": 1,
+      "vertices": 5264,
+      "triangles": 3232,
+      "leafCards": 1016,
+      "branchSegments": 120,
+      "bytes": 249344,
+      "bounds": {
+        "lo": [
+          -0.08099526911973953,
+          -0.07886134088039398,
+          0
+        ],
+        "hi": [
+          0.08365289866924286,
+          0.08392578363418579,
+          1
+        ]
+      },
+      "invalidIndices": 0
+    },
+    {
+      "kind": "pine",
+      "aspect": 0.27,
+      "seed": 1,
+      "vertices": 13066,
+      "triangles": 7428,
+      "leafCards": 2819,
+      "branchSegments": 179,
+      "bytes": 611776,
+      "bounds": {
+        "lo": [
+          -0.29872605204582214,
+          -0.3113735318183899,
+          -0.00008781960787018761
+        ],
+        "hi": [
+          0.3307841420173645,
+          0.3283272385597229,
+          1.009302020072937
+        ]
+      },
+      "invalidIndices": 0
+    },
+    {
+      "kind": "pine",
+      "aspect": 0.13,
+      "seed": 1,
+      "vertices": 13232,
+      "triangles": 7436,
+      "leafCards": 2898,
+      "branchSegments": 164,
+      "bytes": 618512,
+      "bounds": {
+        "lo": [
+          -0.1519749015569687,
+          -0.1509682685136795,
+          -0.00026734796119853854
+        ],
+        "hi": [
+          0.14844518899917603,
+          0.15116576850414276,
+          0.993449866771698
+        ]
+      },
+      "invalidIndices": 0
+    },
+    {
+      "kind": "palm",
+      "aspect": 0.33,
+      "seed": 1,
+      "vertices": 412,
+      "triangles": 236,
+      "leafCards": 88,
+      "branchSegments": 6,
+      "bytes": 19312,
+      "bounds": {
+        "lo": [
+          -0.26229071617126465,
+          -0.2873501181602478,
+          -0.00001232562408404192
+        ],
+        "hi": [
+          0.25986701250076294,
+          0.23772847652435303,
+          0.9622399210929871
+        ]
+      },
+      "invalidIndices": 0
+    },
+    {
+      "kind": "palm",
+      "aspect": 0.16,
+      "seed": 1,
+      "vertices": 412,
+      "triangles": 236,
+      "leafCards": 88,
+      "branchSegments": 6,
+      "bytes": 19312,
+      "bounds": {
+        "lo": [
+          -0.13638609647750854,
+          -0.15084317326545715,
+          -0.000005131103534949943
+        ],
+        "hi": [
+          0.12073634564876556,
+          0.14461581408977509,
+          0.9373750686645508
+        ]
+      },
+      "invalidIndices": 0
+    },
+    {
+      "kind": "shrub",
+      "aspect": 1.1,
+      "seed": 1,
+      "vertices": 11934,
+      "triangles": 7382,
+      "leafCards": 2276,
+      "branchSegments": 283,
+      "bytes": 565944,
+      "bounds": {
+        "lo": [
+          -1.3073101043701172,
+          -1.371390700340271,
+          -0.17472150921821594
+        ],
+        "hi": [
+          1.345548391342163,
+          1.3307650089263916,
+          1.1144083738327026
+        ]
+      },
+      "invalidIndices": 0
+    },
+    {
+      "kind": "shrub",
+      "aspect": 0.5,
+      "seed": 1,
+      "vertices": 12570,
+      "triangles": 7560,
+      "leafCards": 2505,
+      "branchSegments": 255,
+      "bytes": 593520,
+      "bounds": {
+        "lo": [
+          -0.5907434821128845,
+          -0.5707175135612488,
+          -0.12290775775909424
+        ],
+        "hi": [
+          0.5307491421699524,
+          0.5687165856361389,
+          1.0186337232589722
+        ]
+      },
+      "invalidIndices": 0
+    },
+    {
+      "kind": "columnar",
+      "aspect": 0.22,
+      "seed": 1,
+      "vertices": 19634,
+      "triangles": 11052,
+      "leafCards": 4291,
+      "branchSegments": 247,
+      "bytes": 917984,
+      "bounds": {
+        "lo": [
+          -0.1153983399271965,
+          -0.11813849210739136,
+          -0.00007155892672017217
+        ],
+        "hi": [
+          0.11261135339736938,
+          0.11300504207611084,
+          1.0384873151779175
+        ]
+      },
+      "invalidIndices": 0
+    },
+    {
+      "kind": "columnar",
+      "aspect": 0.11,
+      "seed": 1,
+      "vertices": 20176,
+      "triangles": 11318,
+      "leafCards": 4429,
+      "branchSegments": 246,
+      "bytes": 942856,
+      "bounds": {
+        "lo": [
+          -0.05728840455412865,
+          -0.05553638935089111,
+          -0.0001563109690323472
+        ],
+        "hi": [
+          0.05690832808613777,
+          0.05853103846311569,
+          1.00420343875885
+        ]
+      },
+      "invalidIndices": 0
+    }
+  ]
+}
