@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<style>
+  :root {
+    --radius: 8px;
+    --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: var(--font-sans);
+    color: var(--foreground);
+    line-height: 1.45;
+    font-size: 13px;
+  }
+  .container {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+  .card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 16px;
+  }
+  .header-card {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 14px 16px;
+  }
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+    border-radius: 9999px;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  .badge-success {
+    background: rgba(34, 197, 94, 0.15);
+    color: var(--success, #22c55e);
+    border: 1px solid rgba(34, 197, 94, 0.3);
+  }
+  .grid-stats {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 10px;
+  }
+  .stat-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .stat-label {
+    font-size: 11px;
+    color: var(--muted-foreground, #888);
+    font-weight: 500;
+  }
+  .stat-value {
+    font-size: 18px;
+    font-weight: 700;
+    font-family: var(--font-mono);
+    color: var(--foreground);
+  }
+  .stat-sub {
+    font-size: 10.5px;
+    color: var(--success, #22c55e);
+    font-weight: 500;
+  }
+  .section-title {
+    font-size: 13px;
+    font-weight: 700;
+    margin-bottom: 10px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--foreground);
+  }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+  }
+  th {
+    text-align: left;
+    padding: 8px 10px;
+    background: rgba(255, 255, 255, 0.03);
+    color: var(--muted-foreground, #888);
+    font-weight: 600;
+    font-size: 11px;
+    border-bottom: 1px solid var(--border);
+  }
+  td {
+    padding: 8px 10px;
+    border-bottom: 1px solid var(--border);
+  }
+  tr:last-child td {
+    border-bottom: none;
+  }
+  .num {
+    font-family: var(--font-mono);
+    text-align: right;
+  }
+  .gain {
+    color: var(--success, #22c55e);
+    font-weight: 600;
+  }
+  .chart-box {
+    height: 180px;
+    width: 100%;
+    margin-top: 8px;
+  }
+  .matrix-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
+  .matrix-item {
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 10px 12px;
+  }
+  .matrix-title {
+    font-weight: 600;
+    font-size: 12px;
+    margin-bottom: 4px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .matrix-desc {
+    font-size: 11.5px;
+    color: var(--muted-foreground, #999);
+    line-height: 1.4;
+  }
+</style>
+</head>
+<body>
+<div class="container">
+  <div class="header-card">
+    <div>
+      <div style="font-weight: 700; font-size: 14px;">Bilan d'Acceptation J9 — Arbres proches en vraie géométrie</div>
+      <div style="font-size: 11.5px; color: var(--muted-foreground, #888);">Validation intégrale des critères AAA (§6 de PLAN-J9) sur WebGPU</div>
+    </div>
+    <span class="badge badge-success">✓ Accepté · 201/201 checks</span>
+  </div>
+
+  <div class="grid-stats">
+    <div class="stat-card">
+      <div class="stat-label">Gain GPU Maures</div>
+      <div class="stat-value">−14,4 ms</div>
+      <div class="stat-sub">69,1 ms → 54,7 ms (+26 % fps)</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Gain GPU Chamonix</div>
+      <div class="stat-value">−12,1 ms</div>
+      <div class="stat-sub">71,2 ms → 59,1 ms (+20 % fps)</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Mémoire VRAM GPU</div>
+      <div class="stat-value">10,11 Mo</div>
+      <div class="stat-sub">8,11 Mo V + 1,41 Mo I (borné <10,5)</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Stabilité Thermique</div>
+      <div class="stat-value">53/53 Nominal</div>
+      <div class="stat-sub">GPU 1 278 MHz · 5,3 W moyen</div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="section-title">Mesures de performance A/B/A sur kerr-mini (1080p, borne 30 fps)</div>
+    <table>
+      <thead>
+        <tr>
+          <th>Scène & Vue</th>
+          <th>Instances (vue / ombre 360°)</th>
+          <th class="num">A (rayons)</th>
+          <th class="num">B (géométrie 3D)</th>
+          <th class="num">A (retour)</th>
+          <th class="num">Gain net</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>Maures sol</strong> (3 m AGL)</td>
+          <td>44 (2 L0 + 42 L1) / 182</td>
+          <td class="num">69,1 ms</td>
+          <td class="num"><strong>54,7 ms</strong></td>
+          <td class="num">66,5 ms</td>
+          <td class="num gain">−14,4 ms (−21 %)</td>
+        </tr>
+        <tr>
+          <td><strong>Maures vol bas</strong> (60 m AGL)</td>
+          <td>0 / 123 (sol)</td>
+          <td class="num">59,3 ms</td>
+          <td class="num"><strong>59,8 ms</strong></td>
+          <td class="num">59,2 ms</td>
+          <td class="num" style="color: var(--muted-foreground);">~ 0 ms (neutre)</td>
+        </tr>
+        <tr>
+          <td><strong>Chamonix pente</strong> (5 m AGL)</td>
+          <td>18 (2 L0 + 16 L1) / 73</td>
+          <td class="num">71,2 ms</td>
+          <td class="num"><strong>59,1 ms</strong></td>
+          <td class="num">71,8 ms</td>
+          <td class="num gain">−12,1 ms (−17 %)</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="chart-box">
+      <svg viewBox="0 0 700 160" width="100%" height="160">
+        <!-- Axes and grid lines -->
+        <line x1="120" y1="20" x2="680" y2="20" stroke="var(--border)" stroke-dasharray="3,3" />
+        <line x1="120" y1="60" x2="680" y2="60" stroke="var(--border)" stroke-dasharray="3,3" />
+        <line x1="120" y1="100" x2="680" y2="100" stroke="var(--border)" stroke-dasharray="3,3" />
+        <line x1="120" y1="140" x2="680" y2="140" stroke="var(--border)" />
+        
+        <text x="110" y="24" fill="var(--muted-foreground)" font-size="10" text-anchor="end" font-family="var(--font-mono)">80 ms</text>
+        <text x="110" y="64" fill="var(--muted-foreground)" font-size="10" text-anchor="end" font-family="var(--font-mono)">60 ms</text>
+        <text x="110" y="104" fill="var(--muted-foreground)" font-size="10" text-anchor="end" font-family="var(--font-mono)">40 ms</text>
+        <text x="110" y="144" fill="var(--muted-foreground)" font-size="10" text-anchor="end" font-family="var(--font-mono)">0 ms</text>
+
+        <!-- Maures sol bars -->
+        <text x="210" y="155" fill="var(--foreground)" font-size="11" text-anchor="middle" font-weight="600">Maures (3 m)</text>
+        <!-- Bar A: 69.1 ms -> y = 140 - (69.1/80)*120 = 140 - 103.65 = 36.35 -->
+        <rect x="160" y="36.35" width="28" height="103.65" rx="3" fill="var(--chart-1, #f43f5e)" opacity="0.8" />
+        <text x="174" y="31" fill="var(--foreground)" font-size="10" text-anchor="middle" font-family="var(--font-mono)">69.1</text>
+        <!-- Bar B: 54.7 ms -> y = 140 - (54.7/80)*120 = 140 - 82.05 = 57.95 -->
+        <rect x="195" y="57.95" width="28" height="82.05" rx="3" fill="var(--chart-2, #22c55e)" />
+        <text x="209" y="52" fill="var(--success, #22c55e)" font-size="10" text-anchor="middle" font-weight="700" font-family="var(--font-mono)">54.7</text>
+        <!-- Bar A': 66.5 ms -> y = 140 - (66.5/80)*120 = 140 - 99.75 = 40.25 -->
+        <rect x="230" y="40.25" width="28" height="99.75" rx="3" fill="var(--chart-1, #f43f5e)" opacity="0.5" />
+        <text x="244" y="35" fill="var(--foreground)" font-size="10" text-anchor="middle" font-family="var(--font-mono)">66.5</text>
+
+        <!-- Maures vol bas bars -->
+        <text x="390" y="155" fill="var(--foreground)" font-size="11" text-anchor="middle" font-weight="600">Maures vol (60 m)</text>
+        <rect x="340" y="51.05" width="28" height="88.95" rx="3" fill="var(--chart-1, #f43f5e)" opacity="0.8" />
+        <text x="354" y="46" fill="var(--foreground)" font-size="10" text-anchor="middle" font-family="var(--font-mono)">59.3</text>
+        <rect x="375" y="50.3" width="28" height="89.7" rx="3" fill="var(--chart-2, #22c55e)" />
+        <text x="389" y="45" fill="var(--foreground)" font-size="10" text-anchor="middle" font-family="var(--font-mono)">59.8</text>
+        <rect x="410" y="51.2" width="28" height="88.8" rx="3" fill="var(--chart-1, #f43f5e)" opacity="0.5" />
+        <text x="424" y="46" fill="var(--foreground)" font-size="10" text-anchor="middle" font-family="var(--font-mono)">59.2</text>
+
+        <!-- Chamonix bars -->
+        <text x="570" y="155" fill="var(--foreground)" font-size="11" text-anchor="middle" font-weight="600">Chamonix (5 m)</text>
+        <rect x="520" y="33.2" width="28" height="106.8" rx="3" fill="var(--chart-1, #f43f5e)" opacity="0.8" />
+        <text x="534" y="28" fill="var(--foreground)" font-size="10" text-anchor="middle" font-family="var(--font-mono)">71.2</text>
+        <rect x="555" y="51.35" width="28" height="88.65" rx="3" fill="var(--chart-2, #22c55e)" />
+        <text x="569" y="46" fill="var(--success, #22c55e)" font-size="10" text-anchor="middle" font-weight="700" font-family="var(--font-mono)">59.1</text>
+        <rect x="590" y="32.3" width="28" height="107.7" rx="3" fill="var(--chart-1, #f43f5e)" opacity="0.5" />
+        <text x="604" y="27" fill="var(--foreground)" font-size="10" text-anchor="middle" font-family="var(--font-mono)">71.8</text>
+      </svg>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="section-title">Matrice de vérification des critères d'acceptation (§6)</div>
+    <div class="matrix-grid">
+      <div class="matrix-item">
+        <div class="matrix-title">✓ §6.1 Géométrie proche réelle & Occlusion</div>
+        <div class="matrix-desc">
+          Couronnes découpées avec parallaxe. Témoin arbre/arbre : 480 px de recouvrement, 38 trous montrant le second arbre, 0 erreur de prof/id. Témoin bâtiment code 62 : 4 324 px de recouvrement, 26 ouvertures visibles. Dépassement de capacité injecté détecté à 100 %.
+        </div>
+      </div>
+      <div class="matrix-item">
+        <div class="matrix-title">✓ §6.2 Continuité, LODs & Hystérésis</div>
+        <div class="matrix-desc">
+          24 modèles partagés KTG1 (12 LOD 0 + 12 LOD 1) réduits de 60,1 % à 64,2 % avec silhouette conservée à ±3,8 %. Sélection d'erreur projetée avec bande morte ±5 % + gigue ±4 % (33 vs 41 et 18 vs 19 instances). Raccord direct à 80 m sans couronne pleine.
+        </div>
+      </div>
+      <div class="matrix-item">
+        <div class="matrix-title">✓ §6.3 Image vivante, Ombres 3D & Saisons</div>
+        <div class="matrix-desc">
+          100 % des pixels de houppier mobiles sous le vent (50 272 px). Hiver : ramure caduque nue (l'écorce saute de 37 à 3 527 px). Ombres 3D découpées dans <code>tsmTex</code> (948 trouées ensoleillées aux Maures, 411 à Chamonix) ; contact sol <code>0,55 m</code> ; 0 redessin au repos.
+        </div>
+      </div>
+      <div class="matrix-item">
+        <div class="matrix-title">✓ §6.4 Préparation, PWA & Bornes VRAM</div>
+        <div class="matrix-desc">
+          Asset KTG1 enregistré dans <code>noteAsset</code>, binaire immuable (<code>trees-v1-*.bin</code>) servi en <code>cacheFirst</code> hors ligne. VRAM bornée à 10,11 Mo (8 112 240 sommets, 1 405 632 indices). Population déterministe identique après rechargement.
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</body>
+</html>

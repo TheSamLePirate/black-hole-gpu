@@ -45,7 +45,7 @@ J4 (fermé, sortie non atteinte), J5 et J6 (fermés).
 
 | Session (T3) | Lot | État |
 |---|---|---|
-| Exécution J9 (20 nov.) | [Arbres proches en vraie géométrie](docs/PLAN-J9-ARBRES-PROCHES.md) | **J9-6 (PWA, préchauffage `noteAsset`, mise en cache immuable, mémoire GPU bornée à 10,1 Mo, non-régression J8)** validé sur le mini (`20261120-140944-j9-6-full2`, 201 assertions, 54 relevés Nominal, VRAM 10 108 464 B, 84/84 WGSL), éteint par défaut. Suite : acceptation / retrait (J9-A / J9-R) |
+| Exécution J9 (20 nov.) | [Arbres proches en vraie géométrie](docs/PLAN-J9-ARBRES-PROCHES.md) | **J9-A (démonstration d'acceptation complète sur les deux Macs)** validé (`20261120-144232-j9-a-mini`, 201 assertions, 53 relevés Nominal ; gains nets Maures sol 69,1 → 54,7 ms et Chamonix 71,2 → 59,1 ms, neutre à 60 m AGL, VRAM 10,11 Mo, 84/84 WGSL), éteint par défaut. Suite : J9-R (retrait des restes et bascule par défaut) |
 | Documentation vol bas (cette session) | [Référence FableFlight, VB0–VB8](docs/PLAN-DETAILS-VOL-BAS-FABLEFLIGHT.md) | **plan écrit, proposé** : routes, silhouettes et stationnement, lampadaires, feux et trafic ; complément à J8-L sans changement de priorité ; coûts estimés, aucun lot de code ni mesure exécuté |
 | Rendu (33d89754) | J4 / J5 — l'eau, les volumes, la généralisation | **fermés** ([PLAN-J4](docs/PLAN-J4-VOLUMES.md), [PLAN-J5](docs/PLAN-J5-GENERALISATION.md)) : l'eau à demi-rythme (J5-5, −6,0 à −6,4 ms, l'image la même) ; le sol à demi-rythme laissé au joueur (J5-6, réglage « demi » : −1,9 à −3,2 ms ; « auto » à chaque pixel) ; la FFT de la mer en deux passes (−0,9 ms) ; la carte d'ombre des arbres (−2,8 ms, forêt) ; Sam a refusé les arbitrages d'image (MSAA 1×, petits arbres, nuages amortis). Postes lourds restants : l'eau 16,2, les nuages d'orage 16,5, le décor d'une forêt ~7 ms |
 | Rendu (33d89754) | Mesures tenues | la borne du M1 Max **à 30** : essayée à 40 le 15 au soir, non tenue (soutenu 26,4 et 34,5 images/s, deux runs — [J0-CONTRAT §2](docs/J0-CONTRAT.md)) ; le coût de l'appareil 3,5–4,5 ms, dont le MSAA 4× 4–5 ms (gardé) |
@@ -10894,3 +10894,18 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   - `bun run build:pages` : vérifié, émet `_site/trees-v1-b31429154c38b2fd-hpzdxfmm.bin` (3,98 Mo) classé immuable.
 - **Limites / transitions restantes :** prototype toujours éteint par défaut (`nearTreeGeometryOn = false`).
 - **Suite :** J9-A (démonstration d'acceptation complète, qualité visuelle, vol bas et bilan sur les deux Macs du lab) puis J9-R (retrait des branches obsolètes et activation par défaut).
+
+### 2026-11-20 14:50 UTC — J9-A : Démonstration d'acceptation complète de la vraie géométrie d'arbres proches sur les deux Macs
+
+- **Contribution à la destination :** J9-A (stratégie §§7.8, 19.3, 19.4, 20 et PLAN-J9 §6) : validation intégrale et formelle des six critères d'acceptation AAA pour la substitution des couronnes proches par de la vraie géométrie 3D découpée en parallaxe (`nearTreeGeometryOn`), sans couronne opaque résiduelle, avec mesure A/B/A sur les deux machines du laboratoire (`kerr-mini` et M1 Max), tenue thermique stabilisée et gains nets mesurés au sol.
+- **Réalisé :**
+  - Campagne d'acceptation complète (`j9-reference.e2e.test.ts`) exécutée sur `kerr-mini` (`20261120-144232-j9-a-mini`, exit 0, **201 assertions réussies**, **53 relevés thermiques Nominal**, GPU médian 1 278 MHz, 5,3 W) et sur Mac local M1 Max (`20261120-135040-MacBook-Pro-de-olivier`).
+  - Validation du critère §6.1 : témoins d'occlusion arbre/arbre (`1239356` devant `1241186`, 480 px de recouvrement, 38 trous montrant le second arbre sans erreur de prof/id) et témoin d'occlusion bâtiment 3D derrière arbre à 80 m (`1736718` devant code 62, 4 324 px, 26 ouvertures visibles) ; détection immédiate de dépassement de capacité injecté.
+  - Validation du critère §6.2 : 24 modèles partagés KTG1, réduction de triangles de 60,1 % à 64,2 %, ancre d'hystérésis GPU active (33 vs 41 et 18 vs 19 instances), raccord direct à 80 m sans couronne pleine.
+  - Validation du critère §6.3 : vent avec 100 % de pixels mobiles sous vent, ramure caduque dénudée en hiver (écorce ×100), vue sous couronne (0,8 m AGL, 38 044 px), ombres 3D découpées dans `tsmTex` (948 trouées ensoleillées aux Maures, 411 à Chamonix, forêt lointaine 903 729 texels préservée, contact au sol à 0,55 m, 0 redessin au repos).
+  - Validation du critère §6.4 : préchauffage SW via `noteAsset`, binaire immuable en `cacheFirst`, VRAM strictement bornée à **10 108 464 octets** (9,64 Mo) allouée une seule fois sans fuite, 0 overflow (sur 4 096 instances), population déterministe identique après rechargement.
+  - Validation du critère §6.5 : gains GPU mesurés en A/B/A : Maures sol **69,1 → 54,7 → 66,5 ms** (−14,4 ms sur mini, −3,1 ms sur M1 Max à 18,7 ms) ; Chamonix pente **71,2 → 59,1 → 71,8 ms** (−12,1 ms sur mini) ; vol bas à 60 m AGL neutre sans régression (**59,3 → 59,8 → 59,2 ms**).
+  - Validation du critère §6.6 : 39 artefacts générés et archivés (`remote-results/j9-a-mini/`) ; planche de restitution HTML avec graphiques interactifs intégrée dans T3.
+  - Documentation créée : [fiche J9-A](docs/progress/j9/J9-A-ACCEPTATION.md) et [rapport HTML](docs/progress/j9/acceptance-report.html).
+- **Limites / transitions restantes :** prototype toujours éteint par défaut (`nearTreeGeometryOn = false`).
+- **Suite :** J9-R (retrait du chemin de restes `nearTreesRays` et bascule de `nearTreeGeometryOn` à `true` par défaut).
