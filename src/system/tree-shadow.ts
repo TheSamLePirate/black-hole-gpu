@@ -34,24 +34,32 @@ fn shadowLayerAt(p: vec3f, layer: i32) -> f32 {
   let uv = vec2f(dot(q, R.xyz) / R.w * 0.5 + 0.5, 0.5 - dot(q, U.xyz) / U.w * 0.5);
   if (any(uv <= vec2f(0.01)) || any(uv >= vec2f(0.99))) { return -1.0; }
   let n = vec2i(textureDimensions(tsmTex));
-  let z = 0.5 - dot(q, L.xyz) / (2.0 * L.w) - (1.5 + 2.0 * R.w / f32(n.x)) / (2.0 * L.w);
+  let nearK = select(0.0, 1.0 - smoothstep(55.0, 85.0, length(p - P.scenery[3].xyz)), layer == 0 && P.scenery[6].w > 1.5);
+  let bias = mix(1.5 + 2.0 * R.w / f32(n.x), 0.55 + R.w / f32(n.x), nearK);
+  let z = 0.5 - dot(q, L.xyz) / (2.0 * L.w) - bias / (2.0 * L.w);
   // (past either end of the map's depth range — a valley below a mesa's rim, the Sun low —: nothing known there, not a
   // shadow — beyond the far end the cleared map compared as an occluder, a whole plain shaded to a straight line; the rays)
   if (z <= 0.0 || z >= 1.0) { return -1.0; }
   // (a box three texels wide at the point's own continuous place — its 4 × 4 texels each weighed by its overlap —: an
-  // edge's shadow ramps across the texels, not in a texel's steps — a building's edge near the camera spans a dozen pixels)
+  // edge's shadow ramps across the texels, not in a texel's steps — a building's edge near the camera spans a dozen pixels;
+  // for near 3D trees, the inner 2 × 2 bilinear filter keeps foliage openings and trunk shadows sharp without texel steps)
   let g = uv * vec2f(n) - 1.5;
   let at = vec2i(floor(g));
   let f = g - floor(g);
   var wx = vec4f(1.0 - f.x, 1.0, 1.0, f.x);
   var wy = vec4f(1.0 - f.y, 1.0, 1.0, f.y);
+  var bx = vec4f(0.0, 1.0 - f.x, f.x, 0.0);
+  var by = vec4f(0.0, 1.0 - f.y, f.y, 0.0);
   var lit = 0.0;
+  var lit1 = 0.0;
   for (var j = 0; j < 4; j++) {
     for (var i = 0; i < 4; i++) {
-      lit += wx[i] * wy[j] * select(0.0, 1.0, z <= textureLoad(tsmTex, clamp(at + vec2i(i, j), vec2i(0), n - 1), layer, 0));
+      let s = select(0.0, 1.0, z <= textureLoad(tsmTex, clamp(at + vec2i(i, j), vec2i(0), n - 1), layer, 0));
+      lit += wx[i] * wy[j] * s;
+      lit1 += bx[i] * by[j] * s;
     }
   }
-  return lit / 9.0;
+  return mix(lit / 9.0, lit1, nearK);
 }`,
   );
 }

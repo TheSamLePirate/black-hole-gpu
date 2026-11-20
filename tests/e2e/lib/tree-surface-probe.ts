@@ -114,3 +114,86 @@ export const TREE_OBJECT_COMPARE = `(() => {
   }
   return {overlap,wrongDepth,holes,wrongHole,codes:[...codes]};
 })()`;
+
+// J9-5 diagnostic readback of the 2048x2048 trees' shadow map (layer 0 of tsmTex):
+// measures near (<=75 m in Sun plane from camera) and far/out-of-frustum (>95 m) occluded texels,
+// with A/A=0 twin readback in the same submission and saved near window for proxy vs 3D alpha-cut comparison.
+export function treeShadowProbe(save: string | null = null) {
+  return `(async () => {
+  const R=__bh.renderer,d=R.device,tex=R.tsmTex,fr=R.tsmFrame,scp=R.earthScenery.params();
+  if(!tex || tex.width<2048)throw Error("trees' shadow map not allocated");
+  const W=tex.width,H=tex.height,row=W*4;
+  const buf=d.createBuffer({size:row*H,usage:GPUBufferUsage.COPY_DST|GPUBufferUsage.MAP_READ});
+  const twin=d.createBuffer({size:row*H,usage:GPUBufferUsage.COPY_DST|GPUBufferUsage.MAP_READ});
+  try {
+    const enc=d.createCommandEncoder();
+    enc.copyTextureToBuffer({texture:tex,aspect:"depth-only",origin:[0,0,0]},{buffer:buf,bytesPerRow:row},[W,H,1]);
+    enc.copyTextureToBuffer({texture:tex,aspect:"depth-only",origin:[0,0,0]},{buffer:twin,bytesPerRow:row},[W,H,1]);
+    d.queue.submit([enc.finish()]);
+    await Promise.all([buf.mapAsync(GPUMapMode.READ),twin.mapAsync(GPUMapMode.READ)]);
+    const A=new Float32Array(buf.getMappedRange()),B=new Float32Array(twin.getMappedRange());
+    const qx=(scp[12]??0)-fr[12],qy=(scp[13]??0)-fr[13],qz=(scp[14]??0)-fr[14];
+    const rw=Math.max(fr[3],1),uw=Math.max(fr[7],1);
+    const uCam=0.5+0.5*(qx*fr[0]+qy*fr[1]+qz*fr[2])/rw;
+    const vCam=0.5-0.5*(qx*fr[4]+qy*fr[5]+qz*fr[6])/uw;
+    const cx=Math.round(uCam*W),cy=Math.round(vCam*H),mPerTex=2*rw/W;
+    let aaDelta=0,totalOccluded=0,nearOccluded=0,farOccluded=0;
+    const winR=96,winW=winR*2+1,saveKey=${JSON.stringify(save)},win=saveKey?new Float32Array(winW*winW):null;
+    for(let y=0;y<H;y++){
+      const dy=(y-cy)*mPerTex;
+      for(let x=0;x<W;x++){
+        const idx=y*W+x,z=A[idx];
+        if(z!==B[idx])aaDelta++;
+        const dx=(x-cx)*mPerTex,dist=Math.hypot(dx,dy);
+        if(z<0.9999){
+          totalOccluded++;
+          if(dist<=75)nearOccluded++;
+          else if(dist>95)farOccluded++;
+        }
+        if(win && Math.abs(x-cx)<=winR && Math.abs(y-cy)<=winR){
+          win[(y-(cy-winR))*winW+(x-(cx-winR))]=z;
+        }
+      }
+    }
+    if(saveKey && win){
+      globalThis.__j9Shadows??={};
+      globalThis.__j9Shadows[saveKey]={winW,win,totalOccluded,nearOccluded,farOccluded,tsmDraws:R.tsmDraws};
+    }
+    return {aaDelta,totalOccluded,nearOccluded,farOccluded,tsmDraws:R.tsmDraws,cx,cy};
+  } finally {buf.destroy();twin.destroy();}
+})()`;
+}
+
+export const TREE_SHADOW_COMPARE = `(() => {
+  const S=globalThis.__j9Shadows;
+  if(!S?.proxy || !S?.geom)throw Error("Missing saved proxy/geom shadow snapshots");
+  const P=S.proxy.win,G=S.geom.win,N=P.length;
+  let bothOccluded=0,carvedOpenings=0,detailAdded=0;
+  for(let i=0;i<N;i++){
+    const pOcc=P[i]<0.9999,gOcc=G[i]<0.9999;
+    if(pOcc && gOcc)bothOccluded++;
+    else if(pOcc && !gOcc)carvedOpenings++;
+    else if(!pOcc && gOcc)detailAdded++;
+  }
+  return {
+    bothOccluded,
+    carvedOpenings,
+    detailAdded,
+    proxyNear:S.proxy.nearOccluded,
+    geomNear:S.geom.nearOccluded,
+    farOccluded:S.geom.farOccluded,
+  };
+})()`;
+
+export const TREE_CONTACT_PROBE = `(() => {
+  const R=__bh.renderer,C=R.earthScenery.contact;
+  if(!C || !C.forest)throw Error("SceneryContact forest not ready");
+  const scp=R.earthScenery.params(),F=C.frame;
+  const q=[
+    F.origin[0]+(scp[12]??0)*F.east[0]+(scp[13]??0)*F.north[0]+(scp[14]??0)*F.up[0],
+    F.origin[1]+(scp[12]??0)*F.east[1]+(scp[13]??0)*F.north[1]+(scp[14]??0)*F.up[1],
+    F.origin[2]+(scp[12]??0)*F.east[2]+(scp[13]??0)*F.north[2]+(scp[14]??0)*F.up[2],
+  ];
+  const lines=C.collisionLines(q,60);
+  return {trees:lines.trees,buildings:lines.buildings,segments:lines.vertices.length/6};
+})()`;

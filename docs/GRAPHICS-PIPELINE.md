@@ -29,16 +29,16 @@ branches, dans la même enveloppe ; la cuisson au démarrage reprend ces modèle
 Les cibles, layouts et passes de production ne changent pas dans ce lot. L'inspection e2e utilise des cibles temporaires
 rgba8unorm/depth24plus, détruites après lecture, sans coût de frame revendiqué. Le rendu proche dans le jeu reste à J9-3.
 
-### J9-3 / J9-4 — prototype des arbres proches en triangles, LOD 0/1 et raccord aux imposteurs (20 novembre 2026)
+### J9-3 / J9-4 / J9-5 — prototype des arbres proches en triangles, LOD 0/1, raccord aux imposteurs et ombres 3D découpées (20 novembre 2026)
 
 `vegetation/tree-near.ts` possède les buffers et pipelines de vraie géométrie proche, derrière
 `renderer.nearTreeGeometryOn` **éteint par défaut**. KTG1 (`trees-v1-b31429154c38b2fd.bin`, 24 modèles : 12 × LOD 0 + 12 × LOD 1, −62,4 % de triangles en LOD 1) est importé comme asset du bundle : chargement/décompression/validation
 et uploads une fois au premier allumage dans **deux tampons partagés** (1 tampon de sommets de 6,83 Mo et 1 tampon d'indices de 2,69 Mo, indexés par `firstIndex` et `baseVertex`). Vingt-quatre pipelines de
-rendu asynchrones (`nearTreeVs`/`nearTreeFs`, `NEAR_MODEL = 0..23`), compilés à cet allumage ; rayon normal 80 m.
+rendu asynchrones pour la visibilité (`nearTreeVs`/`nearTreeFs`, `NEAR_MODEL = 0..23`) et douze pipelines d'ombre (`nearTreeShadowVs`/`nearTreeShadowFs`, `NEAR_MODEL = 24..35`, LOD 1) sont compilés à cet allumage ; rayon normal 80 m.
 
 La passe existante `scenery raster cull` publie les instances : groupe 1, uniforme binding 27 (allumé/prêt, portée,
-capacité, id d’isolement diagnostic), stockage 28 (24 arguments indexés de 20 octets + compteur de dépassement + ancre d'hystérésis GPU `anchor` : 512 octets), listes écrites 29,
-relues au sommet 30 (24 × 4 096 u32, 384 Kio). Le choix LOD 0 / LOD 1 dépend de l'erreur projetée (`errPx`) modulée par l'ancre d'hystérésis (`±5 %`) et la gigue déterministe par cellule (`±4 %`). L’uniforme 27 est aussi lu par le fragment pour le témoin d’occlusion : id positif masqué, négatif seul conservé, zéro normal ; le tri ne réintroduit pas les arbres masqués dans les proxies. `clampDraws` borne les comptes et met à jour l'ancre d'hystérésis ; un refus dépassement reste dans les proxies,
+capacité, id d’isolement diagnostic), stockage 28 (36 arguments indexés de 20 octets + compteur de dépassement + ancre d'hystérésis GPU `anchor` : 752 octets), listes écrites 29,
+relues au sommet 30 (36 × 4 096 u32, 576 Kio). Lorsque la carte d'ombre des arbres est redessinée (`sun.c.w > 0.5`), `nearShadowKeep` capture avant le test de frustum caméra tous les arbres dans la sphère proche (`≤ 1,05 × portée`, vus ou hors champ) dans les tranches `24..35` (les arbres au-delà, ou en dépassement de capacité, restant dans les listes d'ombre proxy `LISTS + 1 / 2`), et `encodeShadow` appelle `nearTrees.drawShadow` dans la couche 0 de `tsmTex`. `treeShadowAt` (`system/tree-shadow.ts`) réduit dans ce domaine proche le biais à `0,55 m + 1 texel` et utilise le filtre bilinéaire `2 × 2` (`0,88 m`) avant de fondre vers le filtre `3 × 3` entre 55 et 85 m. Le choix LOD 0 / LOD 1 en visibilité dépend de l'erreur projetée (`errPx`) modulée par l'ancre d'hystérésis (`±5 %`) et la gigue déterministe par cellule (`±4 %`). L’uniforme 27 est aussi lu par le fragment pour le témoin d’occlusion : id positif masqué, négatif seul conservé, zéro normal ; le tri ne réintroduit pas les arbres masqués dans les proxies. `clampDraws` borne les comptes et met à jour l'ancre d'hystérésis ; un refus dépassement reste dans les proxies,
 jamais un arbre supprimé. Le dessin est dans `terrain raster visibility`, avant les proxies, avec les buffers de sommets
 entrelacés (40 octets) et indices KTG1 partagés. Les buffers et pipelines sont au renderer, détruits avec le décor.
 
@@ -47,7 +47,7 @@ mouvement (`o.mot` uniquement lorsque le vent déplace l'arbre, `any(sw != vec2f
 bit 16 = feuille ; la fraction (pas de 1/64 du float32 à cette magnitude) porte l'ombrage sur 64 niveaux. `terrainRasterTreeSurface` et `sceneryTreeGeometry` lisent cette
 surface dans le matériau (`earth lite`) ; `rasterLiteTakes` la prend même dans le domaine des rayons proches, sans
 `forestCandidate` ni marche de grille primaire. Lorsque la géométrie proche est active (`P.scenery[6].w = 2`), `sceneryTreeLite` passe directement dès 80 m aux imposteurs V2 (`sceneryTreeImpostor`, `impNear = 0`) avec la même rotation par cellule et la même enveloppe, et prolonge en hiver les feuillus nus par `forestTwigs` jusqu'à 160 m. Les versions sans décor gardent leurs stubs et ne lisent aucune ressource
-nouvelle. `forestLook` et la chaîne lumière/air/finition restent communs. Les ombres portées au sol restent encore les proxies existants (objet de J9-5).
+nouvelle. `forestLook` et la chaîne lumière/air/finition restent communs.
 
 ## 1. Vue d'ensemble
 
@@ -727,9 +727,9 @@ Paris jusqu'à `earthSettled` » chronométré par étape.
 
 <!-- pipeline-inventory:begin (bun scripts/pipeline-inventory.ts --write) -->
 
-_Généré le 2026-11-20T12:18:31Z sur `0428f16f` (arbre de travail). Ne pas éditer à la main : relancer l'outil._
+_Généré le 2026-11-20T12:50:57Z sur `12e1e805` (arbre de travail). Ne pas éditer à la main : relancer l'outil._
 
-**125 sites de création de pipeline** (81 rendu, 44 calcul, dont 61 asynchrones) et 42 `createShaderModule` dans 31 fichiers ; **43 programmes WGSL** (15 fichiers .wgsl, 28 chaînes dans le TypeScript) ; **66 libellés de passes** du profileur GPU (+ 11 sites à libellé dynamique).
+**126 sites de création de pipeline** (82 rendu, 44 calcul, dont 62 asynchrones) et 42 `createShaderModule` dans 31 fichiers ; **43 programmes WGSL** (15 fichiers .wgsl, 28 chaînes dans le TypeScript) ; **66 libellés de passes** du profileur GPU (+ 11 sites à libellé dynamique).
 
 #### A.1 Sites de création de pipeline, par fichier
 
@@ -753,6 +753,7 @@ _Généré le 2026-11-20T12:18:31Z sur `0428f16f` (arbre de travail). Ne pas éd
 | `src/system/earth-shore.ts` | 0 | 2 | 2 | 2 |
 | `src/system/horizon-maps.ts` | 0 | 2 | 1 | 0 |
 | `src/system/terrain-cache.ts` | 0 | 2 | 2 | 2 |
+| `src/vegetation/tree-near.ts` | 2 | 0 | 0 | 2 |
 | `src/crew/draw/earth.ts` | 1 | 0 | 1 | 0 |
 | `src/frame-probes.ts` | 0 | 1 | 1 | 0 |
 | `src/noise3d.ts` | 1 | 0 | 1 | 0 |
@@ -765,7 +766,6 @@ _Généré le 2026-11-20T12:18:31Z sur `0428f16f` (arbre de travail). Ne pas éd
 | `src/system/gtao.ts` | 0 | 1 | 1 | 1 |
 | `src/system/hd-maps.ts` | 1 | 0 | 1 | 0 |
 | `src/system/warp-grid.ts` | 0 | 1 | 1 | 1 |
-| `src/vegetation/tree-near.ts` | 1 | 0 | 0 | 1 |
 
 <details><summary>Détail des sites (fichier:ligne, type, libellé, points d'entrée)</summary>
 
@@ -805,7 +805,7 @@ _Généré le 2026-11-20T12:18:31Z sur `0428f16f` (arbre de travail). Ne pas éd
 | `src/renderer.ts:10879` | compute async | `clouds` | `cloudShadow` |
 | `src/renderer.ts:10961` | compute async | `sky ambient write` | `cloudLightVolume` |
 | `src/renderer.ts:11043` | compute async | — | `skyAmbient` |
-| `src/renderer.ts:13353` | compute async | — | `probe` |
+| `src/renderer.ts:13366` | compute async | — | `probe` |
 | `src/sea/fft-gpu.ts:117` | compute | — | — |
 | `src/ship.ts:832` | compute | — | `vs` |
 | `src/ship.ts:852` | render | — | `fsJetGlass` |
@@ -852,32 +852,32 @@ _Généré le 2026-11-20T12:18:31Z sur `0428f16f` (arbre de travail). Ne pas éd
 | `src/system/hd-maps.ts:300` | render | — | `vs`, `entry` |
 | `src/system/horizon-maps.ts:628` | compute | `horizon bake` | `bake` |
 | `src/system/horizon-maps.ts:629` | compute | `horizon mips` | `mip` |
-| `src/system/scenery-raster.ts:1445` | compute async | — | `cull` |
-| `src/system/scenery-raster.ts:1448` | compute async | — | `clampDraws` |
-| `src/system/scenery-raster.ts:1451` | compute async | — | `cullBoxes` |
-| `src/system/scenery-raster.ts:1454` | compute async | — | `clampBoxes` |
-| `src/system/scenery-raster.ts:1458` | render async | — | `proxyVs`, `proxyFs` |
-| `src/system/scenery-raster.ts:1483` | render async | — | `boxVs`, `boxFs` |
-| `src/system/scenery-raster.ts:1496` | render async | — | `boxMarkVs`, `bridgeMarkFs` |
-| `src/system/scenery-raster.ts:1509` | render async | — | `boxSolidVs`, `meshFs` |
-| `src/system/scenery-raster.ts:1523` | render async | — | `meshVs`, `meshFs` |
-| `src/system/scenery-raster.ts:1539` | render async | — | `shadowVs`, `shadowFs` |
-| `src/system/scenery-raster.ts:1554` | render async | — | `boxShadowVs` |
-| `src/system/scenery-raster.ts:1562` | render async | `envelope bench cull` | `meshShadowVs` |
-| `src/system/scenery-raster.ts:1622` | compute async | — | `benchCull` |
-| `src/system/scenery-raster.ts:1626` | render async | — | `benchVs`, `meshFs` |
-| `src/system/scenery-raster.ts:1637` | render async | — | `benchShadowVs` |
-| `src/system/scenery-raster.ts:1643` | render async | `envelope bench` | `benchQuadVs`, `meshFs` |
-| `src/system/scenery-raster.ts:1754` | compute async | — | `farCull` |
-| `src/system/scenery-raster.ts:1758` | render async | — | `farVs`, `farFs` |
-| `src/system/scenery-raster.ts:1765` | render async | — | `farQuadVs`, `farFs` |
-| `src/system/scenery-raster.ts:1772` | render async | — | `farShadowVs` |
-| `src/system/scenery-raster.ts:1947` | render async | — | `nearCellShadowVs` |
-| `src/system/scenery-raster.ts:1953` | render async | `far lamps draw` | `nearCellVs`, `meshFs` |
-| `src/system/scenery-raster.ts:2090` | render async | — | `farLampVs`, `farFs` |
-| `src/system/scenery-raster.ts:2097` | compute async | — | `farLampCull` |
-| `src/system/scenery-raster.ts:2101` | render async | — | `farCarVs`, `farFs` |
-| `src/system/scenery-raster.ts:2108` | compute async | — | `farCarCull` |
+| `src/system/scenery-raster.ts:1456` | compute async | — | `cull` |
+| `src/system/scenery-raster.ts:1459` | compute async | — | `clampDraws` |
+| `src/system/scenery-raster.ts:1462` | compute async | — | `cullBoxes` |
+| `src/system/scenery-raster.ts:1465` | compute async | — | `clampBoxes` |
+| `src/system/scenery-raster.ts:1469` | render async | — | `proxyVs`, `proxyFs` |
+| `src/system/scenery-raster.ts:1494` | render async | — | `boxVs`, `boxFs` |
+| `src/system/scenery-raster.ts:1507` | render async | — | `boxMarkVs`, `bridgeMarkFs` |
+| `src/system/scenery-raster.ts:1520` | render async | — | `boxSolidVs`, `meshFs` |
+| `src/system/scenery-raster.ts:1534` | render async | — | `meshVs`, `meshFs` |
+| `src/system/scenery-raster.ts:1550` | render async | — | `shadowVs`, `shadowFs` |
+| `src/system/scenery-raster.ts:1565` | render async | — | `boxShadowVs` |
+| `src/system/scenery-raster.ts:1573` | render async | `envelope bench cull` | `meshShadowVs` |
+| `src/system/scenery-raster.ts:1633` | compute async | — | `benchCull` |
+| `src/system/scenery-raster.ts:1637` | render async | — | `benchVs`, `meshFs` |
+| `src/system/scenery-raster.ts:1648` | render async | — | `benchShadowVs` |
+| `src/system/scenery-raster.ts:1654` | render async | `envelope bench` | `benchQuadVs`, `meshFs` |
+| `src/system/scenery-raster.ts:1765` | compute async | — | `farCull` |
+| `src/system/scenery-raster.ts:1769` | render async | — | `farVs`, `farFs` |
+| `src/system/scenery-raster.ts:1776` | render async | — | `farQuadVs`, `farFs` |
+| `src/system/scenery-raster.ts:1783` | render async | — | `farShadowVs` |
+| `src/system/scenery-raster.ts:1958` | render async | — | `nearCellShadowVs` |
+| `src/system/scenery-raster.ts:1964` | render async | `far lamps draw` | `nearCellVs`, `meshFs` |
+| `src/system/scenery-raster.ts:2101` | render async | — | `farLampVs`, `farFs` |
+| `src/system/scenery-raster.ts:2108` | compute async | — | `farLampCull` |
+| `src/system/scenery-raster.ts:2112` | render async | — | `farCarVs`, `farFs` |
+| `src/system/scenery-raster.ts:2119` | compute async | — | `farCarCull` |
 | `src/system/terrain-cache.ts:300` | compute async | — | `main` |
 | `src/system/terrain-cache.ts:301` | compute async | — | — |
 | `src/system/terrain-raster.ts:638` | render async | — | `terrainSunVs` |
@@ -895,7 +895,8 @@ _Généré le 2026-11-20T12:18:31Z sur `0428f16f` (arbre de travail). Ne pas éd
 | `src/vegetation/tree-impostors.ts:331` | render async | `tree impostor bake` | `vs`, `fs` |
 | `src/vegetation/tree-impostors.ts:348` | compute async | `tree impostor down` | `down` |
 | `src/vegetation/tree-impostors.ts:459` | render async | `tree canopy bake` | `vsTop`, `fs` |
-| `src/vegetation/tree-near.ts:190` | render async | `near tree geometry` | `nearTreeVs`, `nearTreeFs` |
+| `src/vegetation/tree-near.ts:247` | render async | `near tree geometry` | `nearTreeVs`, `nearTreeFs` |
+| `src/vegetation/tree-near.ts:272` | render async | `near tree shadow` | `nearTreeShadowVs`, `nearTreeShadowFs` |
 
 </details>
 
@@ -906,7 +907,7 @@ _Généré le 2026-11-20T12:18:31Z sur `0428f16f` (arbre de travail). Ne pas éd
 | `src/shaders/trace.wgsl` | 17990 | 18 entrées : cloudLightVolume, aerial, lut, main, shade, shadeMark, shadeLiteFinish, shadeWaterFinish, shadeLiteLight, shadeLite, skyFill, shadeWater, clouds, skyAmbient, cloudShadow, env, probe, shadeStars |
 | `src/shaders/ship.wgsl` | 2713 | 34 entrées : envCopy, envDown, envGGX, envSH, ctlVs, depthVs, vs, mirrorVs, shadowVs, fs, hullDepthVs, hullDepthFs, ownMaskFs, plumeVs, plumeFs, glowVs, glowFs, distVs, distFs, sheathVs, sheathFs, trailVs, trailFs, lampVs, lampFs, compVs, compFs, fsCabin, fsCabinGlass, fsJetGlass, motionVs, motionFs, composeColor, composeSurface |
 | `src/shaders/post.wgsl` | 1396 | 18 entrées : gatherH, atrous, beamH, beamV, polgrid, resolve, down, downShip, dof, flareMeter, up, meter, stars, motionBlur, temporal, occlusion, cloudTemporal, taau |
-| `src/system/scenery-raster.ts:208` | 1128 | 31 entrées : cull, cullBoxes, clampBoxes, shadowVs, shadowFs, proxyVs, proxyFs, boxVs, boxFs, bridgeMarkFs, boxMarkVs, boxShadowVs, meshShadowVs, meshVs, meshFs, boxSolidVs, benchCull, benchQuadVs, benchVs, benchShadowVs, farCull, farVs, farQuadVs, farFs, farLampCull, farLampVs, farCarCull, farCarVs, nearCellVs, nearCellShadowVs, farShadowVs |
+| `src/system/scenery-raster.ts:208` | 1139 | 31 entrées : cull, cullBoxes, clampBoxes, shadowVs, shadowFs, proxyVs, proxyFs, boxVs, boxFs, bridgeMarkFs, boxMarkVs, boxShadowVs, meshShadowVs, meshVs, meshFs, boxSolidVs, benchCull, benchQuadVs, benchVs, benchShadowVs, farCull, farVs, farQuadVs, farFs, farLampCull, farLampVs, farCarCull, farCarVs, nearCellVs, nearCellShadowVs, farShadowVs |
 | `src/shaders/display.wgsl` | 949 | vs (v), fs (f) |
 | `src/shaders/character.wgsl` | 704 | 22 entrées : avatarVs, shadowVs, fs, screenVs, groundShadow, skinVs, skinShadowVs, skinFs, grassLight, grassTrample, grassBlades, grassClamp, grassVs, grassFs, stonesGrow, stonesClamp, stoneVs, stoneFs, coverGrow, coverClamp, coverVs, coverFs |
 | `src/shaders/map.wgsl` | 616 | bodyVs (v), bodyFs (f), skyVs (v), skyFs (f), bodyDepthFs (f), lineVs (v), lineFs (f), planiVs (v), planiFs (f), markVs (v), markFs (f) |
@@ -921,10 +922,10 @@ _Généré le 2026-11-20T12:18:31Z sur `0428f16f` (arbre de travail). Ne pas éd
 | `src/system/bc-encode.ts:13` | 163 | bc7 (c), bc5 (c) |
 | `src/shaders/endurance.wgsl` | 145 | vs (v), fs (f), compVs (v), compFs (f) |
 | `src/system/terrain-raster.ts:51` | 126 | seaVs (v), seaFs (f), seaResolve (c) |
+| `src/vegetation/tree-near.ts:15` | 113 | nearTreeVs (v), nearTreeFs (f), nearTreeShadowVs (v), nearTreeShadowFs (f) |
 | `src/crew/sys3d/gpu.ts:9` | 101 | vl (v), fl (f), vd (v), fd (f) |
 | `src/system/body-raster.ts:103` | 91 | bodyHeights (c), bodyVs (v), bodySunVs (v), bodyCloudVs (v), bodyCloudFs (f), bodyFs (f) |
 | `src/system/earth-horizons.ts:83` | 76 | bake (c) |
-| `src/vegetation/tree-near.ts:13` | 75 | nearTreeVs (v), nearTreeFs (f) |
 | `src/system/day-clouds.ts:58` | 74 | vs (v), cover (f), down (f) |
 | `src/vegetation/tree-impostors.ts:61` | 74 | vs (v), vsTop (v), fs (f) |
 | `src/shaders/mask.wgsl` | 73 | cell (c), main (c) |
@@ -996,12 +997,12 @@ _Généré le 2026-11-20T12:18:31Z sur `0428f16f` (arbre de travail). Ne pas éd
 | `clouds' shadow map` | `src/renderer.ts:10911` | 1 |
 | `clouds' light volume` | `src/renderer.ts:10992` | 1 |
 | `sky ambient` | `src/renderer.ts:11074` | 1 |
-| `clouds' history` | `src/renderer.ts:11788` | 1 |
-| `body raster heights` | `src/renderer.ts:12148` | 1 |
-| `scenery raster cull` | `src/renderer.ts:12390` | 1 |
-| `ground occlusion` | `src/renderer.ts:12430` | 1 |
-| `trees' shadow map` | `src/renderer.ts:12435` | 1 |
-| `horizon bake` | `src/renderer.ts:12712` | 1 |
+| `clouds' history` | `src/renderer.ts:11790` | 1 |
+| `body raster heights` | `src/renderer.ts:12150` | 1 |
+| `scenery raster cull` | `src/renderer.ts:12402` | 1 |
+| `ground occlusion` | `src/renderer.ts:12442` | 1 |
+| `trees' shadow map` | `src/renderer.ts:12447` | 1 |
+| `horizon bake` | `src/renderer.ts:12725` | 1 |
 | `ship probe: mips` | `src/ship.ts:1930` | 1 |
 | `ship probe: GGX` | `src/ship.ts:1942` | 1 |
 | `ship probe: SH` | `src/ship.ts:1949` | 1 |
@@ -1025,11 +1026,11 @@ Libellés dynamiques (calculés à l'exécution) :
 - `src/renderer.ts:7636` — `label`
 - `src/renderer.ts:7637` — `label`
 - `src/renderer.ts:8974` — `label`
-- `src/renderer.ts:11701` — `label`
-- `src/renderer.ts:12154` — `label`
-- `src/renderer.ts:12185` — `label`
-- `src/renderer.ts:12415` — `label`
-- `src/renderer.ts:12460` — `label`
+- `src/renderer.ts:11703` — `label`
+- `src/renderer.ts:12156` — `label`
+- `src/renderer.ts:12187` — `label`
+- `src/renderer.ts:12427` — `label`
+- `src/renderer.ts:12473` — `label`
 - `src/ship.ts:788` — `label`
 
 #### A.3b Passes jamais chronométrées (ni libellé du profileur, ni horodatage transmis)
@@ -1051,7 +1052,7 @@ Leur coût n'apparaît que dans l'intervalle de complétion de la frame (ou d'un
 | render pass | `src/noise3d.ts:124` |
 | render pass | `src/renderer.ts:5643` |
 | compute pass | `src/renderer.ts:8718` |
-| compute pass | `src/renderer.ts:13372` |
+| compute pass | `src/renderer.ts:13385` |
 | compute pass | `src/sea/fft-gpu.ts:261` |
 | compute pass | `src/sea/fft-gpu.ts:265` |
 | render pass | `src/ship.ts:3286` |

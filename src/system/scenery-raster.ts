@@ -324,9 +324,11 @@ fn cull(@builtin(global_invocation_id) g: vec3u, @builtin(num_workgroups) n: vec
   if (sun.c.w > 0.5) {
     let q = centre - sun.c.xyz;
     if (abs(dot(q, sun.r.xyz)) < sun.r.w + R && abs(dot(q, sun.u.xyz)) < sun.u.w + R) {
-      let ls = ${LISTS + 1}u + select(0u, 1u, t.cone);
-      let at = atomicAdd(&draws[ls].instances, 1u);
-      if (at < CAP) { listsOut[ls * CAP + at] = k; }
+      if (!nearShadowKeep(k, t, hd)) {
+        let ls = ${LISTS + 1}u + select(0u, 1u, t.cone);
+        let at = atomicAdd(&draws[ls].instances, 1u);
+        if (at < CAP) { listsOut[ls * CAP + at] = k; }
+      }
     }
   }
   let v = view(centre);
@@ -346,7 +348,8 @@ fn cull(@builtin(global_invocation_id) g: vec3u, @builtin(num_workgroups) n: vec
 // the counts kept within the lists' room (the draws read them as they are)
 @compute @workgroup_size(${LISTS})
 fn clampDraws(@builtin(local_invocation_index) i: u32) {
-  for(var m=i;m<24u;m+=4u){atomicStore(&nearDraws.items[m].instances,min(atomicLoad(&nearDraws.items[m].instances),u32(nearU.z)));}
+  let mLim = select(24u, 36u, sun.c.w > 0.5);
+  for(var m=i;m<mLim;m+=4u){atomicStore(&nearDraws.items[m].instances,min(atomicLoad(&nearDraws.items[m].instances),u32(nearU.z)));}
   if(i==0u){
     let cur=sc.cam.xyz;
     let old=select(cur,nearDraws.anchor.xyz,nearDraws.anchor.w>.5 && length(cur-nearDraws.anchor.xyz)<200.0);
@@ -433,7 +436,8 @@ struct ShadowV {
 };
 @vertex fn shadowVs(@location(0) m: vec4f, @builtin(instance_index) ii: u32) -> ShadowV {
   let k = listsIn[LIST * CAP + ii];
-  let t = treeOf(k, forestHead(u32(forestData(2u).x)));
+  let hd = forestHead(u32(forestData(2u).x));
+  let t = treeOf(k, hd);
   let p = proxyPoint(m, t);
   var o: ShadowV;
   o.clip = select(sunClip(p.xyz), vec4f(2.0, 2.0, 0.5, 1.0), p.w > 0.5);
@@ -442,16 +446,23 @@ struct ShadowV {
   // (the line to the Sun in the crown's unit frame: its axes over the crown's radii)
   let L = sun.l.xyz;
   o.l = select(L / max(vec3f(t.r.x, t.r.x, t.r.z), vec3f(1e-3)), vec3f(L.xy / max(t.r.x, 1e-3), L.z / max(t.r.y, 1e-3)), part == 1u);
-  o.kind = select(2u, part, part < 2u && sun.c.w > 1.5);
+  let bare = forestData(hd.F + 10u + 4u * t.kind).w * forestData(hd.F + 7u).z;
+  o.kind = select(2u, select(part, 3u, part == 0u && bare > 0.5), part < 2u && sun.c.w > 1.5);
   return o;
 }
 @fragment fn shadowFs(i: ShadowV) {
   if (i.kind == 2u) { return; }
   let L = normalize(i.l);
   let q = i.q;
-  if (i.kind == 0u) {
+  if (i.kind == 0u || i.kind == 3u) {
     let s = dot(q, L);
-    if (dot(q, q) - s * s > 1.0) { discard; }
+    let r2 = dot(q, q) - s * s;
+    if (r2 > 1.0) { discard; }
+    if (i.kind == 3u) {
+      let p = q - s * L;
+      let h = fract(sin(dot(floor(p * 7.0), vec3f(12.9898, 78.233, 37.719))) * 43758.5453);
+      if (h > 0.28 * (1.0 - 0.65 * r2)) { discard; }
+    }
     return;
   }
   // (the unit cone: the base disc crossed, or its side x² + y² = z² between z −1 and 0)
@@ -2405,15 +2416,15 @@ export class SceneryRaster {
     this.sceneryOut[40] = this.generation % 4096;
     q.writeBuffer(this.sceneryU, 0, this.sceneryOut);
     q.writeBuffer(this.draws, 0, this.reset);
-    this.nearTrees.prepare();
+    // (the Sun's view: its trees culled into the shadow lists when it is to be drawn — encodeShadow —; else none)
+    this.sunOn = !!sun && sun[15]! > 0.5 && this.shadowReady;
+    this.nearTrees.prepare(this.sunOn);
     if (this.bench && !(this.benchSkip & 1)) q.writeBuffer(this.bench.draw, 0, this.benchReset);
     this.farActive = !!this.far?.pipes && this.farOn;
     if (this.farActive && !(this.farSkip & 1)) q.writeBuffer(this.far!.draw, 0, this.farReset);
     if (this.lamps && this.lampsOn && this.lampsNight && this.lamps.used > 0) q.writeBuffer(this.lamps.draw, 0, this.lampReset);
     if (this.lamps && this.lampsOn && this.lamps.cars.used > 0)
       q.writeBuffer(this.lamps.cars.draw, 0, this.lampsNight ? this.carResetNight : this.carResetDay);
-    // (the Sun's view: its trees culled into the shadow lists when it is to be drawn — encodeShadow —; else none)
-    this.sunOn = !!sun && sun[15]! > 0.5 && this.shadowReady;
     if (sun) {
       // (c.w: 2 on, the trees' proxies cut to their crowns — shadowFs; the proxies whole, its lever treeShadowCut, retired at J5-R)
       this.sunData.set(this.sunOn ? sun : this.sunNone);
@@ -2582,6 +2593,7 @@ export class SceneryRaster {
         ...(descriptor && k === 0 ? { timestampWrites: descriptor } : {}),
       });
     const trees = layer(0);
+    if (!(this.debugSkip & 1)) this.nearTrees.drawShadow(trees, this.drawBind);
     for (let l = 0; l < 2; l++) {
       trees.setPipeline(this.shadowPipes[l]!);
       trees.setBindGroup(0, this.drawBind);

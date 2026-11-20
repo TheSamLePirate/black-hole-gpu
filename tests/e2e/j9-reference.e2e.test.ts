@@ -5,7 +5,10 @@ import {
   TREE_OBJECT_PICK,
   TREE_OCCLUSION_COMPARE,
   TREE_OCCLUSION_PICK,
+  TREE_SHADOW_COMPARE,
   TREE_SURFACE_PROBE,
+  TREE_CONTACT_PROBE,
+  treeShadowProbe,
   treeSurfaceProbe,
 } from "./lib/tree-surface-probe";
 
@@ -325,6 +328,134 @@ test.skipIf(!E2E)(
             };
             console.log(JSON.stringify({ transitions }));
             await Bun.write(`${OUT}/${v.name}-transitions.json`, JSON.stringify(transitions, null, 2));
+          }
+          if (process.env.J9_SHADOWS === "1") {
+            // 1. Proxy shadow map vs alpha-cut 3D near tree shadow map (layer 0 of tsmTex).
+            await app.js(
+              "(() => {__bh.renderer.nearTreeGeometryOn=false;__bh.renderer.sceneryRaster.nearTrees.debugTreeId=0;__bh.freeze(true);__bh.touch();return true;})()",
+            );
+            await Bun.sleep(800);
+            const proxyShadow = await app.js<{
+              aaDelta: number;
+              totalOccluded: number;
+              nearOccluded: number;
+              farOccluded: number;
+              tsmDraws: number;
+            }>(treeShadowProbe("proxy"));
+            expect(proxyShadow.aaDelta).toBe(0);
+            expect(proxyShadow.nearOccluded).toBeGreaterThan(0);
+            expect(proxyShadow.farOccluded).toBeGreaterThan(0);
+
+            await app.js("(() => {__bh.renderer.nearTreeGeometryOn=true;__bh.touch();return true;})()");
+            await Bun.sleep(800);
+            const geomShadow = await app.js<{
+              aaDelta: number;
+              totalOccluded: number;
+              nearOccluded: number;
+              farOccluded: number;
+              tsmDraws: number;
+            }>(treeShadowProbe("geom"));
+            expect(geomShadow.aaDelta).toBe(0);
+            expect(geomShadow.nearOccluded).toBeGreaterThan(0);
+            expect(geomShadow.farOccluded).toBeGreaterThan(0);
+            expect(geomShadow.tsmDraws).toBeGreaterThan(proxyShadow.tsmDraws);
+
+            const shadowCmp = await app.js<{
+              bothOccluded: number;
+              carvedOpenings: number;
+              detailAdded: number;
+              proxyNear: number;
+              geomNear: number;
+              farOccluded: number;
+            }>(TREE_SHADOW_COMPARE);
+            expect(shadowCmp.bothOccluded).toBeGreaterThan(0);
+            expect(shadowCmp.carvedOpenings).toBeGreaterThan(0);
+            expect(shadowCmp.farOccluded).toBeGreaterThan(0);
+
+            // 2. Amortized shadow map stability: 0 extra tsmDraws while stationary, and pause/step contract.
+            const drawsBeforeStill = geomShadow.tsmDraws;
+            await Bun.sleep(600);
+            const drawsAfterStill = await app.js<number>("__bh.renderer.tsmDraws");
+            expect(drawsAfterStill).toBe(drawsBeforeStill);
+            await app.js("(() => {__bh.step(1/60);__bh.touch();return true;})()");
+            await Bun.sleep(300);
+
+            // Positive witness: skipping near tree shadow draw removes near 3D shadow texels while keeping far forest shadows.
+            await app.js(
+              "(() => {__bh.renderer.sceneryRaster.debugSkip=1;__bh.renderer.sceneryRaster.nearTrees.debugTreeId=-1;__bh.touch();return true;})()",
+            );
+            await Bun.sleep(600);
+            const skippedShadow = await app.js<{ nearOccluded: number; farOccluded: number }>(treeShadowProbe());
+            expect(skippedShadow.nearOccluded).toBeLessThan(geomShadow.nearOccluded);
+            await app.js(
+              "(() => {__bh.renderer.sceneryRaster.debugSkip=0;__bh.renderer.sceneryRaster.nearTrees.debugTreeId=0;__bh.touch();return true;})()",
+            );
+            await Bun.sleep(600);
+
+            // 3. Winter bare deciduous skeleton shadows (compared at the same winter Sun angle), grazing Sun, night + rain, and visual contact.
+            await app.js(
+              '(() => {__bh.renderer.nearTreeGeometryOn=false;__bh.game.setDate("2026-01-15T09:30:00Z");__bh.touch();return true;})()',
+            );
+            await Bun.sleep(800);
+            const winterProxyShadow = await app.js<{ nearOccluded: number; farOccluded: number; tsmDraws: number }>(
+              treeShadowProbe("winterProxy"),
+            );
+            await app.js("(() => {__bh.renderer.nearTreeGeometryOn=true;__bh.touch();return true;})()");
+            await Bun.sleep(800);
+            const winterShadow = await app.js<{ nearOccluded: number; farOccluded: number; tsmDraws: number }>(treeShadowProbe("winter"));
+            expect(winterShadow.nearOccluded).toBeGreaterThan(0);
+            expect(winterShadow.nearOccluded).toBeLessThan(winterProxyShadow.nearOccluded);
+
+            await app.js('(() => {__bh.game.setDate("2026-07-10T05:35:00Z");__bh.touch();return true;})()');
+            await Bun.sleep(1000);
+            const grazingProbe = await app.js<{ pixels: number; validDepth: number }>(TREE_SURFACE_PROBE);
+            const grazingShadow = await app.js<{ nearOccluded: number; farOccluded: number }>(treeShadowProbe());
+            await app.shot(`${OUT}/${v.name}-grazing-sun.png`);
+            expect(grazingProbe.pixels).toBeGreaterThan(0);
+            expect(grazingProbe.validDepth).toBe(grazingProbe.pixels);
+            expect(grazingShadow.nearOccluded).toBeGreaterThan(0);
+
+            await app.js('(() => {__bh.game.setDate("2026-07-10T19:45:00Z");__bh.settings.weather="rain";__bh.touch();return true;})()');
+            await Bun.sleep(1200);
+            const nightRainProbe = await app.js<{ pixels: number; validDepth: number }>(TREE_SURFACE_PROBE);
+            await app.shot(`${OUT}/${v.name}-night-rain.png`);
+            expect(nightRainProbe.pixels).toBeGreaterThan(0);
+            expect(nightRainProbe.validDepth).toBe(nightRainProbe.pixels);
+
+            await app.js('(() => {__bh.settings.weather="fair";__bh.game.setDate("2026-07-10T09:30:00Z");__bh.touch();return true;})()');
+            await Bun.sleep(1000);
+
+            const contactProbe = await app.js<{ trees: number; buildings: number; segments: number }>(TREE_CONTACT_PROBE);
+            expect(contactProbe.trees).toBeGreaterThan(0);
+            expect(contactProbe.segments).toBeGreaterThan(0);
+
+            const shadowCounts = await app.js<{
+              instances: number[];
+              lod0: number[];
+              lod1: number[];
+              shadow: number[];
+              overflow: number;
+            }>("__bh.renderer.sceneryRaster.nearTrees.readCounts()");
+            const shadowInstances = shadowCounts.shadow.reduce((a, b) => a + b, 0);
+            expect(shadowInstances).toBeGreaterThan(0);
+
+            const shadowsReport = {
+              proxyShadow,
+              geomShadow,
+              shadowCmp,
+              drawsBeforeStill,
+              drawsAfterStill,
+              skippedNearOccluded: skippedShadow.nearOccluded,
+              winterProxyNearOccluded: winterProxyShadow.nearOccluded,
+              winterNearOccluded: winterShadow.nearOccluded,
+              grazingPixels: grazingProbe.pixels,
+              grazingNearOccluded: grazingShadow.nearOccluded,
+              nightRainPixels: nightRainProbe.pixels,
+              contact: contactProbe,
+              shadowInstances,
+            };
+            console.log(JSON.stringify({ shadows: shadowsReport }));
+            await Bun.write(`${OUT}/${v.name}-shadows.json`, JSON.stringify(shadowsReport, null, 2));
           }
         }
         await app.stepDone(`${v.name}: trees ${trees}, A/B/A captured`);

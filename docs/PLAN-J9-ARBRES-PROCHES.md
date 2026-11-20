@@ -1,7 +1,7 @@
 # J9 — Les arbres proches en vraie géométrie
 
 **Préparé le 20 novembre 2026, à la demande de Sam : « Prépare toi à faire J9 : les arbres proches en vraie géometrie — AAA work ».**
-**État : J9 lancé le 20 novembre ; référence J9-0 mini établie ; modèles J9-1 inspectés ; assets partagés et LOD 0/1 J9-2 livrés ; prototype J9-3 et raccords/saisons/vent/hystérésis J9-4 validés sur le mini. Ombres découpées (J9-5), PWA (J9-6) et acceptation/retrait (J9-A/J9-R) restent ouverts. Un commit par phase demandé par Sam.** Lecture du dépôt à `935fb201` ; les modifications déjà présentes
+**État : J9 lancé le 20 novembre ; référence J9-0 mini établie ; modèles J9-1 inspectés ; assets partagés et LOD 0/1 J9-2 livrés ; prototype J9-3, raccords/saisons/vent/hystérésis J9-4 et ombres 3D découpées/éclairage/contact J9-5 validés sur le mini. PWA (J9-6) et acceptation/retrait (J9-A/J9-R) restent ouverts. Un commit par phase demandé par Sam.** Lecture du dépôt à `935fb201` ; les modifications déjà présentes
 dans le journal et la capture J8 non suivie sont conservées. **Mode : normal**, par défaut selon CLAUDE.md ; le mode speed de J8
 ne s'étend pas automatiquement à J9. Ce plan prépare le travail sans fermer J8 ni rouvrir toute la marche en raster.
 
@@ -207,3 +207,14 @@ sur la seule suppression des rayons des arbres. La marche actuelle garde son che
   Maures `67,4 → 53,9 → 66,2 ms` p50 (`2` LOD 0 + `42` LOD 1, hystérésis `33` vs `41`), 60 m AGL `58,7 → 59,3 → 59,0 ms`, Chamonix
   `70,5 → 59,3 → 70,5 ms` p50 (`2` LOD 0 + `16` LOD 1, hystérésis `18` vs `19`). [Fiche J9-2](progress/j9/J9-2-ASSETS.md) et
   [fiche J9-4](progress/j9/J9-4-TRANSITIONS.md). Suite : ombres découpées des arbres proches (J9-5), PWA (J9-6) et acceptation/retrait (J9-A/J9-R).
+
+- **20 novembre, J9-5 (ombres 3D découpées, lumière commune, contact visuel et reprise) :** 12 pipelines `nearTreeShadowVs`/`nearTreeShadowFs`
+  (LOD 1, tranches `24..35` de `NearDraws`) alimentées dans `cull` par `nearShadowKeep` avant le test de frustum caméra pour tous les arbres
+  dans la sphère proche (`≤ 84 m`, vus ou hors champ), avec repli automatique vers les listes d'ombre proxy en cas de dépassement et maintien
+  des ombres de la forêt hors champ au-delà (`903 729` et `1 063 869` texels). Dans `treeShadowAt`, réduction du biais proche à `0,55 m + 1 texel`
+  et filtre bilinéaire `2 × 2` (`0,88 m`) fondu vers `3 × 3` entre 55 et 85 m ; ajourage hivernal des houppiers caducs lointains (`kind == 3`).
+  Validé sur `kerr-mini` (`20261120-134219-j9-5-full3`, 173 assertions, 53 relevés thermiques Nominal ; 84/84 WGSL `20261120-133411-j9-5-wgsl`) :
+  948 trouées ensoleillées découpées dans l'ombre proxy aux Maures (182 arbres d'ombre 3D) et 411 à Chamonix (73 arbres d'ombre 3D), réduction
+  d'ombre des feuillus nus en hiver, témoin positif `debugSkip` (`nearOccluded → 0`), `+0` redessin `tsmDraws` au repos/gel, Soleil rasant
+  (`05:35 UTC`), crépuscule/pluie (`19:45 UTC`), et alignement des collisions CPU `SceneryContact` (94 et 55 arbres dans 60 m).
+  [Fiche J9-5](progress/j9/J9-5-SHADOWS.md). Suite : PWA/hors-ligne et ressources GPU bornées (J9-6), puis acceptation et retrait (J9-A/J9-R).

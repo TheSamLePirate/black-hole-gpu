@@ -11475,6 +11475,8 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
   private tsmRedraw = false;
   private tsmRevision = -1;
   private tsmRevisionNext = -1;
+  private tsmNearKey = "";
+  private tsmNearKeyNext = "";
   private tsmTableOn = false;
   private tsmDrawn = false;
   /** the relief's shadow map drawn this frame (encodeSunShadow): its frame cleared otherwise — not the last one's read */
@@ -12291,7 +12293,7 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
             // (two layers: the trees', the buildings' — B8)
             size: [TREE_SHADOW_N, TREE_SHADOW_N, 2],
             format: "depth32float",
-            usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING,
+            usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_SRC,
           });
           if (this.live) this.bindTarget(this.live);
           if (this.offline) this.bindTarget(this.offline.target);
@@ -12299,22 +12301,32 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
         this.sceneryRaster = new SceneryRaster(this.device, this.traceSource, this.tsmTex);
         if (this.pendingSceneryLod) this.sceneryRaster.setLod(this.pendingSceneryLod);
       }
+      this.sceneryRaster.nearTrees.on = this.nearTreeGeometryOn;
       const scp = sc.params();
+      const nt = this.sceneryRaster.nearTrees;
+      const nearActive = this.nearTreeGeometryOn && nt.ready ? 1 : 0;
+      const nearReach = nearActive ? Math.round(nt.reachM) : 0;
+      const nearSnap =
+        nearActive && Math.abs(scp[14] ?? 0) < nearReach + 40
+          ? `${Math.round((scp[12] ?? 0) / 32)},${Math.round((scp[13] ?? 0) / 32)}`
+          : "0";
+      const nearKey = `${nearActive}:${nearReach}:${Math.trunc(nt.debugTreeId)}:${Math.trunc(nt.capacity)}:${nearSnap}`;
       // (the shadow map drawn again only when its frame has moved — the camera 128 m in the Sun's plane, the Sun turned —, or
-      // the scenery changed: the trees stand still, the Sun moves slowly; else the last one kept, read as it is)
+      // the scenery or near-tree geometry state changed: the trees stand still, the Sun moves slowly; else the last one kept)
       const fr = this.treeShadowFrame(scp);
       const moved =
         fr[15]! > 0.5 &&
         (!this.tsmValid ||
           this.tsmRevision !== sc.revision ||
+          this.tsmNearKey !== nearKey ||
           fr.some((x, i) => i !== 15 && Math.abs(x - this.tsmFrame[i]!) > (i >= 12 ? 1 : 1e-3)));
       this.tsmRedraw = moved;
       if (fr[15]! < 0.5) this.tsmValid = false;
       if (moved) {
         this.tsmNext.set(fr);
         this.tsmRevisionNext = sc.revision;
+        this.tsmNearKeyNext = nearKey;
       }
-      this.sceneryRaster.nearTrees.on = this.nearTreeGeometryOn;
       this.sceneryRaster.clock = this.rainClock % 3600;
       this.sceneryRaster.frame = this.frameStamp;
       // (the instances' identity's generation: the scenery's publication — PLAN-J1 J1-2; their analytic motion, asked or not)
@@ -12436,6 +12448,7 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
         this.tsmDraws++;
         this.tsmFrame.set(this.tsmNext);
         this.tsmRevision = this.tsmRevisionNext;
+        this.tsmNearKey = this.tsmNearKeyNext;
         this.tsmValid = true;
         this.device.queue.writeBuffer(this.bodyBuf, TABLE_TSM * 16, this.tsmFrame);
         this.tsmTableOn = true;

@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: var(--font-sans, system-ui, sans-serif); color: var(--foreground, #e5e7eb); }
+  .wrap { display: flex; flex-direction: column; gap: 12px; }
+  .panel { background: var(--card, #181b20); border: 1px solid var(--border, #2a2f37); border-radius: var(--radius, 8px); padding: 16px; }
+  h2 { margin: 0 0 6px; font-size: 15px; font-weight: 600; }
+  p { margin: 0 0 10px; font-size: 12px; color: var(--muted-foreground, #9ca3af); line-height: 1.45; }
+  .metrics { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 10px; }
+  .metric { background: var(--secondary, #12151a); border: 1px solid var(--border, #2a2f37); border-radius: var(--radius, 6px); padding: 8px 10px; }
+  .metric .k { font-size: 11px; color: var(--muted-foreground, #9ca3af); }
+  .metric .v { font-size: 15px; font-weight: 600; margin-top: 2px; color: var(--foreground, #f3f4f6); }
+  .metric .s { font-size: 11px; color: var(--success, #22c55e); }
+  .tabs { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 10px; }
+  button {
+    background: var(--secondary, #232730);
+    color: var(--foreground, #e5e7eb);
+    border: 1px solid var(--border, #2a2f37);
+    border-radius: var(--radius, 6px);
+    padding: 5px 10px;
+    font-size: 12px;
+    cursor: pointer;
+  }
+  button.active { background: var(--primary, #3b82f6); color: var(--primary-foreground, #fff); border-color: var(--primary, #3b82f6); }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .card { background: var(--secondary, #12151a); border: 1px solid var(--border, #2a2f37); border-radius: var(--radius, 6px); padding: 8px; }
+  .card img { width: 100%; height: auto; display: block; border-radius: 4px; }
+  .cap { font-size: 11px; color: var(--muted-foreground, #9ca3af); margin-top: 6px; display: flex; justify-content: space-between; gap: 6px; }
+  .chart-box { height: 170px; width: 100%; }
+  svg { width: 100%; height: 100%; display: block; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="panel">
+    <h2>J9-5 — Ombres 3D découpées (tsmTex couche 0), Soleil rasant, nuit/pluie, forêt hors champ et contact CPU</h2>
+    <p>Run <code>20261120-134219-j9-5-full3</code> sur <code>kerr-mini</code> (173 assertions, 53 relevés thermiques Nominal à 1 278 MHz). Les arbres proches (≤ 84 m, vus ou hors champ) projettent leur géométrie 3D découpée (LOD 1) dans <code>encodeShadow</code> ; la forêt lointaine conserve ses ombres hors champ.</p>
+    <div class="metrics">
+      <div class="metric">
+        <div class="k">Maures — Ombres 3D (182 arbres)</div>
+        <div class="v">948 trouées</div>
+        <div class="s">3 907 → 3 080 texels · hors champ 903k</div>
+      </div>
+      <div class="metric">
+        <div class="k">Chamonix — Ombres 3D (73 arbres)</div>
+        <div class="v">411 trouées</div>
+        <div class="s">1 629 → 1 249 texels · hors champ 1,06M</div>
+      </div>
+      <div class="metric">
+        <div class="k">Amortissement carte d'ombre</div>
+        <div class="v">+0 tsmDraws</div>
+        <div class="s">Stable au repos/gel (16→16, 41→41)</div>
+      </div>
+      <div class="metric">
+        <div class="k">Contact CPU (SceneryContact ≤ 60 m)</div>
+        <div class="v">94 / 55 arbres</div>
+        <div class="s">1 726 et 1 723 segments alignés WGS84</div>
+      </div>
+    </div>
+    <div class="chart-box">
+      <svg viewBox="0 0 680 165" aria-label="Comparaison des texels d'ombre proches (proxy plein vs géométrie 3D découpée)">
+        <line x1="60" y1="20" x2="650" y2="20" stroke="var(--border, #2a2f37)" stroke-dasharray="3,3"/>
+        <line x1="60" y1="75" x2="650" y2="75" stroke="var(--border, #2a2f37)" stroke-dasharray="3,3"/>
+        <line x1="60" y1="130" x2="650" y2="130" stroke="var(--border, #2a2f37)"/>
+        <text x="52" y="24" text-anchor="end" font-size="10" fill="var(--muted-foreground, #9ca3af)">5 500</text>
+        <text x="52" y="79" text-anchor="end" font-size="10" fill="var(--muted-foreground, #9ca3af)">2 750</text>
+        <text x="52" y="133" text-anchor="end" font-size="10" fill="var(--muted-foreground, #9ca3af)">0</text>
+
+        <!-- Maures Summer -->
+        <rect x="85" y="52" width="32" height="78" fill="var(--chart-3, #f59e0b)" rx="3"/>
+        <rect x="121" y="68" width="32" height="62" fill="var(--chart-2, #22c55e)" rx="3"/>
+        <text x="119" y="45" text-anchor="middle" font-size="9.5" fill="var(--foreground, #e5e7eb)">3907 → 3080 (−21%)</text>
+        <text x="119" y="148" text-anchor="middle" font-size="10" fill="var(--muted-foreground, #9ca3af)">Maures été (≤75 m)</text>
+
+        <!-- Maures Winter -->
+        <rect x="235" y="29" width="32" height="101" fill="var(--chart-3, #f59e0b)" rx="3"/>
+        <rect x="271" y="33" width="32" height="97" fill="var(--chart-1, #3b82f6)" rx="3"/>
+        <text x="269" y="22" text-anchor="middle" font-size="9.5" fill="var(--foreground, #e5e7eb)">5046 → 4860 (ramure nue)</text>
+        <text x="269" y="148" text-anchor="middle" font-size="10" fill="var(--muted-foreground, #9ca3af)">Maures hiver (15 janv.)</text>
+
+        <!-- Chamonix Summer -->
+        <rect x="395" y="97" width="32" height="33" fill="var(--chart-3, #f59e0b)" rx="3"/>
+        <rect x="431" y="105" width="32" height="25" fill="var(--chart-2, #22c55e)" rx="3"/>
+        <text x="429" y="90" text-anchor="middle" font-size="9.5" fill="var(--foreground, #e5e7eb)">1629 → 1249 (−23%)</text>
+        <text x="429" y="148" text-anchor="middle" font-size="10" fill="var(--muted-foreground, #9ca3af)">Chamonix été (≤75 m)</text>
+
+        <!-- Carved openings -->
+        <rect x="545" y="111" width="32" height="19" fill="var(--chart-4, #a855f7)" rx="3"/>
+        <rect x="581" y="122" width="32" height="8" fill="var(--chart-4, #a855f7)" rx="3"/>
+        <text x="579" y="104" text-anchor="middle" font-size="9.5" fill="var(--chart-4, #a855f7)">948 / 411 trouées soleil</text>
+        <text x="579" y="148" text-anchor="middle" font-size="10" fill="var(--muted-foreground, #9ca3af)">Trouées dans l'ombre</text>
+      </svg>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="tabs">
+      <button class="active" onclick="showTab('chamonix', this)">Chamonix — Soleil rasant (05:35 UTC) vs Crépuscule &amp; pluie (19:45 UTC)</button>
+      <button onclick="showTab('maures', this)">Maures — Soleil rasant (05:35 UTC) vs Crépuscule &amp; pluie (19:45 UTC)</button>
+    </div>
+
+    <div id="tab-chamonix" class="grid2">
+      <div class="card">
+        <img src="/Users/olivierveinand/Documents/DEV/black-hole-gpu/remote-results/20261120-134219-j9-5-full3/artifacts/remote-results/j9-5-full3/chamonix-slope-grazing-sun.png" alt="Chamonix Soleil rasant">
+        <div class="cap"><span>Chamonix Soleil rasant (05:35 UTC) — Ombres 3D allongées &amp; transmission</span><span>19 296 px · 17 712 texels ombre</span></div>
+      </div>
+      <div class="card">
+        <img src="/Users/olivierveinand/Documents/DEV/black-hole-gpu/remote-results/20261120-134219-j9-5-full3/artifacts/remote-results/j9-5-full3/chamonix-slope-night-rain.png" alt="Chamonix crépuscule et pluie">
+        <div class="cap"><span>Chamonix crépuscule &amp; pluie (19:45 UTC) — Lampadaires, sol mouillé, houppiers sombres</span><span>19 282 px · 0 erreur GPU</span></div>
+      </div>
+    </div>
+
+    <div id="tab-maures" class="grid2" style="display:none">
+      <div class="card">
+        <img src="/Users/olivierveinand/Documents/DEV/black-hole-gpu/remote-results/20261120-134219-j9-5-full3/artifacts/remote-results/j9-5-full3/maures-floor-grazing-sun.png" alt="Maures Soleil rasant">
+        <div class="cap"><span>Maures Soleil rasant (05:35 UTC) — Contre-jour doré (`WS_T`) &amp; ombres portées</span><span>48 742 px · 4 841 texels ombre</span></div>
+      </div>
+      <div class="card">
+        <img src="/Users/olivierveinand/Documents/DEV/black-hole-gpu/remote-results/20261120-134219-j9-5-full3/artifacts/remote-results/j9-5-full3/maures-floor-night-rain.png" alt="Maures crépuscule et pluie">
+        <div class="cap"><span>Maures crépuscule &amp; pluie (19:45 UTC) — Éclairage commun &amp; silhouettes 3D</span><span>48 568 px · 0 erreur GPU</span></div>
+      </div>
+    </div>
+  </div>
+</div>
+<script>
+function showTab(id, btn) {
+  for (const el of document.querySelectorAll('[id^="tab-"]')) el.style.display = 'none';
+  document.getElementById('tab-' + id).style.display = 'grid';
+  for (const b of document.querySelectorAll('.tabs button')) b.classList.remove('active');
+  btn.classList.add('active');
+}
+</script>
+</body>
+</html>
