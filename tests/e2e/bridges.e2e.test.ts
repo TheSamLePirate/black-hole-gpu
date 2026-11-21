@@ -58,7 +58,7 @@ describe.skipIf(!E2E)("AAA bridges and roads integrated acceptance", () => {
         realtimeSubsampling: 1,
         pixelRatio: 1,
         temporalReprojection: true,
-        pose: { body: "earth", at: [48.8637, 2.3135], altKm: 0.15, look: "earth", off: [0, 35] }
+        pose: { body: "earth", at: [48.8624, 2.3135], altKm: 0.14, look: "earth", off: [0, 38] }
       };
       __bh.preset("Paris Alexandre III");
       __bh.resize();
@@ -101,8 +101,9 @@ describe.skipIf(!E2E)("AAA bridges and roads integrated acceptance", () => {
       };
     })()`);
 
-    // Verify bridge population in Paris Seine corridor
+    // Verify bridge population in Paris Seine corridor (including canonical BD TOPO cellBridges)
     expect(stats.bridges).toBeGreaterThan(0);
+    expect(stats.cellBridges).toBeGreaterThan(0);
     expect(stats.gpuErrors).toBe(0);
 
     // Capture visual proof for documentation and review

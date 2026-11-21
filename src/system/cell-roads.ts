@@ -5,7 +5,7 @@
 // road-markings.ts packs them; none on a bridge (its deck is the bridge's — RP4) nor in a tunnel. Pure but for `toLocal`.
 import type { Primitive } from "./scenery-data";
 import { surfaceSegment } from "./scenery-geometry";
-import { readSegment, readStreetHeader, roadRuns, SegmentFlag, SurfaceFlag, readSurface } from "./street-cells";
+import { PAVEMENT_M, readSegment, readStreetHeader, roadRuns, SegmentFlag, SurfaceFlag, readSurface } from "./street-cells";
 
 /** a road's colour by its class: asphalt, a track's or a path's earth, steps' stone */
 function roadColour(cls: string): number[] {
@@ -20,14 +20,21 @@ function roadColour(cls: string): number[] {
  * + 16 one way + 32 lane lines + 512 the pavement [dm]. data[7] is the carriageway's half-width, negative for surveyed widths
  * away from fords. The segment is widened by its pavements when kerbed.
  */
-export function cellRoadSurfaces(buf: ArrayBuffer, toLocal: (east: number, north: number) => [number, number, number]): Primitive[] {
+export function cellRoadSurfaces(
+  buf: ArrayBuffer,
+  toLocal: (east: number, north: number) => [number, number, number],
+  includeBridges = false,
+): Primitive[] {
   const h = readStreetHeader(buf);
   if (!h) return [];
   const out: Primitive[] = [];
   for (const run of roadRuns(buf))
     for (const i of run.segments) {
       const s = readSegment(buf, i);
-      if (s.flags & (SegmentFlag.Bridge | SegmentFlag.Tunnel)) continue;
+      if (s.flags & SegmentFlag.Tunnel) continue;
+      const isBridge = !!(s.flags & SegmentFlag.Bridge);
+      if (isBridge && !includeBridges) continue;
+      const bridgeBit = isBridge ? 32768 : 0;
       const a = toLocal(s.a[0], s.a[1]),
         b = toLocal(s.b[0], s.b[1]);
       const L = Math.hypot(b[0] - a[0], b[1] - a[1]);
@@ -40,16 +47,21 @@ export function cellRoadSurfaces(buf: ArrayBuffer, toLocal: (east: number, north
           ny = (b[0] - a[0]) / L;
         for (let k = 0; k < n; k++) {
           const off = (k - (n - 1) / 2) * 4.5;
-          out.push(surfaceSegment([a[0] + nx * off, a[1] + ny * off, 0], [b[0] + nx * off, b[1] + ny * off, 0], 3, 2, [0.1, 0.085, 0.06]));
+          const rp = surfaceSegment([a[0] + nx * off, a[1] + ny * off, 0], [b[0] + nx * off, b[1] + ny * off, 0], 3, 2, [0.1, 0.085, 0.06]);
+          rp.data[6] = bridgeBit;
+          out.push(rp);
         }
         continue;
       }
       const p = surfaceSegment(a, b, Math.max(1, s.width), 1, roadColour(s.cls));
       const sf = readSurface(buf, i);
       const oneway = !!(s.flags & (SegmentFlag.OnewayAlong | SegmentFlag.OnewayAgainst));
-      const pave = sf.flags & SurfaceFlag.Kerb ? sf.pavement : 0;
+      const urbanBridgePave = isBridge && s.flags & SegmentFlag.Urban ? (PAVEMENT_M[s.cls] ?? 0) : 0;
+      const hasKerb = !!(sf.flags & SurfaceFlag.Kerb) || urbanBridgePave > 0;
+      const flags = sf.flags | (urbanBridgePave > 0 ? SurfaceFlag.Kerb : 0);
+      const pave = hasKerb ? (sf.pavement > 0 ? sf.pavement : urbanBridgePave) : 0;
       const r = p.data[4]!;
-      p.data[6] = sf.flags + (oneway ? 16 : 0) + 32 * Math.min(15, sf.laneLines) + 512 * Math.round(pave * 10);
+      p.data[6] = flags + (oneway ? 16 : 0) + 32 * Math.min(15, sf.laneLines) + 512 * Math.round(pave * 10) + bridgeBit;
       p.data[7] = s.flags & (SegmentFlag.InferredWidth | SegmentFlag.Ford) ? r : -r;
       if (pave > 0) {
         p.data[4] = r + pave;

@@ -93,6 +93,7 @@ import {
 } from "./bridge-structures";
 import { markRoad, roadClassCode } from "./road-markings";
 import { catenaryMasts, cellRoadSurfaces } from "./cell-roads";
+import { prepareStreetCells } from "./street-prep";
 
 /** (PLAN-J8 VB4) the parked cars kept round the scene's centre [m] and at most (the nearest places first) */
 export const PARKED_REACH_M = 900;
@@ -579,7 +580,15 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
   let bridges = 0,
     bridgePiers = 0;
   const surfaces: Primitive[] = [];
-  const bridgeLines: { line: { lat: number; lon: number }[]; width: number; layer: number; d: number; water: boolean }[] = [];
+  const bridgeLines: {
+    line: { lat: number; lon: number }[];
+    width: number;
+    layer: number;
+    d: number;
+    water: boolean;
+    rail?: boolean;
+    foot?: boolean;
+  }[] = [];
   const bridgeAreas: { rings: { lat: number; lon: number }[][]; footprint: Primitive; layer: number; d: number }[] = [];
   const osmLayers: NonNullable<SceneryReply["osmLayers"]> = {};
   const surfaceDistance = (p: Primitive) => Math.hypot(Math.max(p.min[0], 0, -p.max[0]), Math.max(p.min[1], 0, -p.max[1]));
@@ -765,8 +774,17 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
               const mid = line[Math.floor(line.length / 2)];
               if (mid && mid.x >= 0 && mid.x < e && mid.y >= 0 && mid.y < e && line.length < 512) {
                 const d = Math.min(...locals.map((p) => Math.hypot(p[0], p[1])));
+                const foot = !water && !rail && (cls === "path" || cls === "pedestrian" || cls === "steps" || cls === "track");
                 if (d < radius + 250)
-                  bridgeLines.push({ line: line.map(geo), width, layer: Math.max(1, Math.min(5, Number(props.layer) || 1)), d, water });
+                  bridgeLines.push({
+                    line: line.map(geo),
+                    width,
+                    layer: Math.max(1, Math.min(5, Number(props.layer) || 1)),
+                    d,
+                    water,
+                    rail,
+                    foot,
+                  });
               }
               if (!water) continue; // Ground markings must not appear underneath a raised deck.
             }
@@ -1317,52 +1335,112 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
       const store = await caches.open(STREET_CACHE);
       const dLat = CELL_ROAD_REACH_M / 111_000,
         dLon = CELL_ROAD_REACH_M / (111_000 * Math.max(0.1, Math.cos(q.lat * D)));
-      const a = cellOf(q.lat - dLat, q.lon - dLon),
-        b = cellOf(q.lat + dLat, q.lon + dLon);
+      const centres: [number, number][] = [[q.lat, q.lon]];
+      if (q.eye && Number.isFinite(q.eye[0]) && Number.isFinite(q.eye[1])) {
+        const dEye = Math.hypot((q.eye[0] - q.lat) * 111_320, wrapLon(q.eye[1] - q.lon) * 111_320 * Math.cos(q.lat * D));
+        if (dEye <= radius + CELL_ROAD_REACH_M) centres.push([q.eye[0], q.eye[1]]);
+      }
+      const wantedCells = new Map<string, { x: number; y: number }>();
+      for (const [cLat, cLon] of centres) {
+        const a = cellOf(cLat - dLat, cLon - dLon),
+          b = cellOf(cLat + dLat, cLon + dLon);
+        for (let y = Math.min(a.y, b.y); y <= Math.max(a.y, b.y); y++)
+          for (let x = Math.min(a.x, b.x); x <= Math.max(a.x, b.x); x++) wantedCells.set(`${x}/${y}`, { x, y });
+      }
       const found = new Set<string>();
       const fresh: Primitive[] = [];
-      for (let y = Math.min(a.y, b.y); y <= Math.max(a.y, b.y); y++)
-        for (let x = Math.min(a.x, b.x); x <= Math.max(a.x, b.x); x++) {
-          const res = await store.match(streetCacheUrl(self.location.origin, x, y));
-          if (!res) {
-            streetBufs.set(`${x}/${y}`, null);
-            continue;
-          }
-          const buf = await res.arrayBuffer();
-          streetBufs.set(`${x}/${y}`, buf);
-          const o = cellOrigin(x, y);
-          const roads = cellRoadSurfaces(buf, (e, n) => {
-            const g = fromCell(o, e, n);
-            return localPoint(frame, g.lat, g.lon, 0) as [number, number, number];
-          });
-          found.add(`${x}/${y}`);
-          roadCellsFound.add(`${x}/${y}`);
-          // (RP9: the catenary's masts of the cell's electrified railways — on the ground already in; a steel mast, its arm over the
-          // tracks)
-          for (const m of catenaryMasts(buf, (e, n) => {
-            const g = fromCell(o, e, n);
-            const z = heightNow(g.lat, g.lon);
-            return localPoint(frame, g.lat, g.lon, z ?? Number.NaN) as [number, number, number];
-          })) {
-            if (!Number.isFinite(m.foot[2]) || Math.hypot(m.foot[0], m.foot[1]) > CELL_ROAD_REACH_M) continue;
-            const f = m.foot;
-            const mast = [stripPolygon([f[0] - 0.15, f[1], 0], [f[0] + 0.15, f[1], 0], 0.3)];
-            addSolid(polygonPrimitive(mast, f[2] - 0.5, f[2] + 7.4, 3, [0.36, 0.37, 0.37]), mast);
-            const tip: [number, number, number] = [f[0] + m.across[0] * m.reach, f[1] + m.across[1] * m.reach, 0];
-            const arm = [stripPolygon([f[0], f[1], 0], tip, 0.12)];
-            addSolid(polygonPrimitive(arm, f[2] + 6.9, f[2] + 7.15, 3, [0.36, 0.37, 0.37]), arm);
-            catenaryCount++;
-          }
-          for (const br of readBridges(buf)) {
-            const g0 = fromCell(o, br.points[0]![0], br.points[0]![1]);
-            const key = bridgeCanonicalKey(br.id, g0);
-            if (!cellBridges.has(key)) cellBridges.set(key, { b: br, o });
-          }
-          for (const p of roads) {
-            cellRoads.add(p);
-            fresh.push(p);
+      const preparedTiles14 = new Set<string>();
+      for (const { x, y } of wantedCells.values()) {
+        let res = await store.match(streetCacheUrl(self.location.origin, x, y));
+        if (!res) {
+          const x14 = x >> 1,
+            y14 = y >> 1,
+            k14 = `${x14}/${y14}`;
+          if (!preparedTiles14.has(k14)) {
+            preparedTiles14.add(k14);
+            try {
+              const omt = (await osmRaw.get(k14)) ?? (await fetchCount(osmUrl(x14, y14)));
+              if (omt && omt.byteLength > 0) {
+                const bdMap = new Map<string, ArrayBuffer>();
+                const quads: [number, number][] = [
+                  [x14 * 2, y14 * 2],
+                  [x14 * 2 + 1, y14 * 2],
+                  [x14 * 2, y14 * 2 + 1],
+                  [x14 * 2 + 1, y14 * 2 + 1],
+                ];
+                await Promise.all(
+                  quads.map(async ([cx, cy]) => {
+                    if (!inBdtopoBox(cx, cy)) return;
+                    try {
+                      const raw = await fetchCount(bdtopoUrl(cx, cy));
+                      if (raw) bdMap.set(`${cx}/${cy}`, raw);
+                    } catch {}
+                  }),
+                );
+                const builtCells = prepareStreetCells(
+                  omt,
+                  x14,
+                  y14,
+                  () => null,
+                  0,
+                  (cx, cy) => bdMap.get(`${cx}/${cy}`) ?? null,
+                );
+                for (const c of builtCells) {
+                  await store.put(
+                    streetCacheUrl(self.location.origin, c.x, c.y),
+                    new Response(c.buf, { headers: { "content-type": "application/octet-stream" } }),
+                  );
+                }
+                res = await store.match(streetCacheUrl(self.location.origin, x, y));
+              }
+            } catch {}
+          } else {
+            res = await store.match(streetCacheUrl(self.location.origin, x, y));
           }
         }
+        if (!res) {
+          streetBufs.set(`${x}/${y}`, null);
+          continue;
+        }
+        const buf = await res.arrayBuffer();
+        streetBufs.set(`${x}/${y}`, buf);
+        const o = cellOrigin(x, y);
+        const roads = cellRoadSurfaces(
+          buf,
+          (e, n) => {
+            const g = fromCell(o, e, n);
+            return localPoint(frame, g.lat, g.lon, 0) as [number, number, number];
+          },
+          true,
+        );
+        found.add(`${x}/${y}`);
+        roadCellsFound.add(`${x}/${y}`);
+        // (RP9: the catenary's masts of the cell's electrified railways — on the ground already in; a steel mast, its arm over the
+        // tracks)
+        for (const m of catenaryMasts(buf, (e, n) => {
+          const g = fromCell(o, e, n);
+          const z = heightNow(g.lat, g.lon);
+          return localPoint(frame, g.lat, g.lon, z ?? Number.NaN) as [number, number, number];
+        })) {
+          if (!Number.isFinite(m.foot[2]) || Math.hypot(m.foot[0], m.foot[1]) > radius) continue;
+          const f = m.foot;
+          const mast = [stripPolygon([f[0] - 0.15, f[1], 0], [f[0] + 0.15, f[1], 0], 0.3)];
+          addSolid(polygonPrimitive(mast, f[2] - 0.5, f[2] + 7.4, 3, [0.36, 0.37, 0.37]), mast);
+          const tip: [number, number, number] = [f[0] + m.across[0] * m.reach, f[1] + m.across[1] * m.reach, 0];
+          const arm = [stripPolygon([f[0], f[1], 0], tip, 0.12)];
+          addSolid(polygonPrimitive(arm, f[2] + 6.9, f[2] + 7.15, 3, [0.36, 0.37, 0.37]), arm);
+          catenaryCount++;
+        }
+        for (const br of readBridges(buf)) {
+          const g0 = fromCell(o, br.points[0]![0], br.points[0]![1]);
+          const key = bridgeCanonicalKey(br.id, g0);
+          if (!cellBridges.has(key)) cellBridges.set(key, { b: br, o });
+        }
+        for (const p of roads) {
+          cellRoads.add(p);
+          fresh.push(p);
+        }
+      }
       if (found.size) {
         // (OpenMapTiles' roads — kind 1 with a class kept — in the cells found: out; their middle's cell by the frame's flat inverse)
         const cosL = Math.max(0.05, Math.cos(q.lat * D));
@@ -1584,8 +1662,17 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
         deckZ0,
         deckZ1,
       });
-      const pylonBounds = [stripPolygon(pStart, pEnd, width + 8)];
-      addSolid(polygonPrimitive(pylonBounds, deckZ0 - 8, Math.max(deckZ0, deckZ1) + 16, 3, [0.58, 0.56, 0.52]), pylonBounds, pylonsMesh);
+      const dx = pEnd[0] - pStart[0],
+        dy = pEnd[1] - pStart[1],
+        L = Math.hypot(dx, dy) || 1;
+      const ux = dx / L,
+        uy = dy / L,
+        acX = -uy,
+        acY = ux;
+      const pylonOff = width / 2 + 1.8 * 0.8;
+      const c0: [number, number, number] = [pStart[0] - acX * pylonOff, pStart[1] - acY * pylonOff, 0];
+      const cornerFoot = [stripPolygon([c0[0] - ux * 1.8, c0[1] - uy * 1.8, 0], [c0[0] + ux * 1.8, c0[1] + uy * 1.8, 0], 3.6)];
+      addSolid(polygonPrimitive(cornerFoot, deckZ0 - 8, Math.max(deckZ0, deckZ1) + 14, 3, [0.58, 0.56, 0.52]), cornerFoot, pylonsMesh);
 
       const archMesh = buildArchRibsMesh({
         pStart: pStart as [number, number, number],
@@ -1595,83 +1682,26 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
         deckZ1,
         riseM: 5.5,
       });
-      addSolid(polygonPrimitive(pylonBounds, deckZ0 - 6, Math.max(deckZ0, deckZ1), 3, [0.35, 0.4, 0.38]), pylonBounds, archMesh);
+      const archBounds = [stripPolygon(pStart, pEnd, width)];
+      addSolid(polygonPrimitive(archBounds, deckZ0 - 6, Math.min(deckZ0, deckZ1) - thick, 3, [0.35, 0.4, 0.38]), archBounds, archMesh);
     }
     return made;
   };
-  bridgeAreas.sort((a, b) => a.d - b.d);
-  // (PLAN-PONT-ROUTES-AAA PR3: retire legacy flat OMT bridgeAreas where cellBridges exist)
-  if (cellBridges.size === 0) {
-    for (const v of bridgeAreas.slice(0, bridgeLimit)) {
-      try {
-        const outer = v.rings[0]!;
-        const lat = outer.reduce((sum, p) => sum + p.lat, 0) / outer.length,
-          lon = outer.reduce((sum, p) => sum + p.lon, 0) / outer.length;
-        // (its deck over its banks — the highest of its outline's ground, as a bridge line's —, not over the water at its middle:
-        // a deck 4 m over the river, under its quays, its shadow hidden beneath it)
-        let base = localPoint(frame, lat, lon, await height(lat, lon))[2];
-        const step = Math.max(1, Math.floor(outer.length / 16));
-        for (let i = 0; i < outer.length; i += step)
-          base = Math.max(base, localPoint(frame, outer[i]!.lat, outer[i]!.lon, await height(outer[i]!.lat, outer[i]!.lon))[2]);
-        const rings = v.rings.map((r) => r.map((at) => localPoint(frame, at.lat, at.lon, 0)));
-        const p = polygonPrimitive(rings, base + 4 * v.layer - 1.2, base + 4 * v.layer, 2, [0.095, 0.098, 0.1]);
-        if (addSolid(p, rings)) {
-          bridges++;
-          selectedAreas.push(v.footprint);
-        }
-      } catch (e) {
-        if (!errors.length) errors.push(String(e).slice(0, 220));
-      }
-    }
-  }
-  for (const v of bridgeLines) {
-    if (bridges >= bridgeLimit) break;
-    // (PLAN-PONT-ROUTES-AAA PR5: retire OMT bridge lines that double a migrated BD TOPO cell bridge)
-    if (cellBridges.size > 0) {
-      const mid = v.line[Math.floor(v.line.length / 2)]!;
-      let isDuplicate = false;
-      for (const e of cellBridges.values()) {
-        const cbMid = e.b.points[Math.floor(e.b.points.length / 2)]!;
-        const cbGeo = fromCell(e.o, cbMid[0], cbMid[1]);
-        const dLat = (cbGeo.lat - mid.lat) * 111320;
-        const dLon = (cbGeo.lon - mid.lon) * 111320 * Math.cos((mid.lat * Math.PI) / 180);
-        if (dLat * dLat + dLon * dLon < 100 * 100) {
-          isDuplicate = true;
-          break;
-        }
-      }
-      if (isDuplicate) continue;
-    }
-    try {
-      const mid = v.line[Math.floor(v.line.length / 2)]!;
-      const at = localPoint(frame, mid.lat, mid.lon, 0);
-      if (selectedAreas.some((p) => surfaceContains(at, p))) continue;
-      const points = await groundLine(v.line);
-      if (
-        deckBridge(
-          points,
-          v.width,
-          v.water ? 4 : 2,
-          v.water ? [0.018, 0.052, 0.055] : [0.095, 0.098, 0.1],
-          5.5 + 4 * Math.max(0, v.layer - 1),
-          BRIDGE_STYLES.road,
-          0,
-          v.layer,
-          v.line,
-        )
-      )
-        bridges++;
-    } catch (e) {
-      if (!errors.length) errors.push(String(e).slice(0, 220));
-    }
-  }
-  // (RP4: the street cells' bridges — the BD TOPO's axis, width with its sides, clearance —, the nearest first, on the same deck)
+  const bridgeNearD = (lat: number, lon: number) => {
+    const p = localPoint(frame, lat, lon, 0);
+    const dCenter = Math.hypot(p[0], p[1]);
+    if (!q.eye) return dCenter;
+    const dEye = Math.hypot((lat - q.eye[0]) * 111_320, wrapLon(lon - q.eye[1]) * 111_320 * Math.cos(q.lat * D));
+    return Math.min(dCenter, dEye);
+  };
+  // (RP4 / PLAN-PONT-ROUTES-AAA PR3/PR5: the street cells' canonical bridges FIRST — the BD TOPO's axis, width with its sides,
+  // clearance —, the nearest to the camera or scene center first, before distant OMT bridgeLines can exhaust bridgeLimit)
   {
     const list = [...cellBridges.values()]
       .map((e) => {
-        const g = fromCell(e.o, e.b.points[0]![0], e.b.points[0]![1]);
-        const p = localPoint(frame, g.lat, g.lon, 0);
-        return { ...e, d: Math.hypot(p[0], p[1]) };
+        const g0 = fromCell(e.o, e.b.points[0]![0], e.b.points[0]![1]);
+        const gm = fromCell(e.o, e.b.points[Math.floor(e.b.points.length / 2)]![0], e.b.points[Math.floor(e.b.points.length / 2)]![1]);
+        return { ...e, d: Math.min(bridgeNearD(g0.lat, g0.lon), bridgeNearD(gm.lat, gm.lon)) };
       })
       .sort((a, b) => a.d - b.d);
     for (const e of list) {
@@ -1701,6 +1731,67 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
         }
       } catch (err) {
         if (!errors.length) errors.push(String(err).slice(0, 220));
+      }
+    }
+  }
+  bridgeLines.sort((a, b) => {
+    const ma = a.line[Math.floor(a.line.length / 2)]!,
+      mb = b.line[Math.floor(b.line.length / 2)]!;
+    return Math.min(a.d, bridgeNearD(ma.lat, ma.lon)) - Math.min(b.d, bridgeNearD(mb.lat, mb.lon));
+  });
+  for (const v of bridgeLines) {
+    if (bridges >= bridgeLimit) break;
+    // (PLAN-PONT-ROUTES-AAA PR5: retire OMT bridge lines that double a migrated BD TOPO cell bridge)
+    if (cellBridges.size > 0) {
+      const mid = v.line[Math.floor(v.line.length / 2)]!;
+      let isDuplicate = false;
+      for (const e of cellBridges.values()) {
+        const cbMid = e.b.points[Math.floor(e.b.points.length / 2)]!;
+        const cbGeo = fromCell(e.o, cbMid[0], cbMid[1]);
+        const dLat = (cbGeo.lat - mid.lat) * 111320;
+        const dLon = (cbGeo.lon - mid.lon) * 111320 * Math.cos((mid.lat * Math.PI) / 180);
+        if (dLat * dLat + dLon * dLon < 100 * 100) {
+          isDuplicate = true;
+          break;
+        }
+      }
+      if (isDuplicate) continue;
+    }
+    try {
+      const mid = v.line[Math.floor(v.line.length / 2)]!;
+      const at = localPoint(frame, mid.lat, mid.lon, 0);
+      if (selectedAreas.some((p) => surfaceContains(at, p))) continue;
+      const points = await groundLine(v.line);
+      const style = v.rail ? BRIDGE_STYLES.rail : v.foot ? BRIDGE_STYLES.foot : BRIDGE_STYLES.road;
+      const colour = v.water ? [0.018, 0.052, 0.055] : v.rail ? [0.2, 0.19, 0.17] : v.foot ? [0.3, 0.29, 0.27] : [0.095, 0.098, 0.1];
+      if (deckBridge(points, v.width, v.water ? 4 : 2, colour, 5.5 + 4 * Math.max(0, v.layer - 1), style, 0, v.layer, v.line)) bridges++;
+    } catch (e) {
+      if (!errors.length) errors.push(String(e).slice(0, 220));
+    }
+  }
+  bridgeAreas.sort((a, b) => a.d - b.d);
+  // (PLAN-PONT-ROUTES-AAA PR3: fallback OMT bridgeAreas only where neither cellBridges nor bridgeLines built a 3D deck)
+  if (cellBridges.size === 0) {
+    for (const v of bridgeAreas.slice(0, bridgeLimit)) {
+      if (bridges >= bridgeLimit) break;
+      try {
+        const outer = v.rings[0]!;
+        const lat = outer.reduce((sum, p) => sum + p.lat, 0) / outer.length,
+          lon = outer.reduce((sum, p) => sum + p.lon, 0) / outer.length;
+        const c = localPoint(frame, lat, lon, 0);
+        if (deckHeightAt(c[0], c[1]) !== null) continue;
+        let base = localPoint(frame, lat, lon, await height(lat, lon))[2];
+        const step = Math.max(1, Math.floor(outer.length / 16));
+        for (let i = 0; i < outer.length; i += step)
+          base = Math.max(base, localPoint(frame, outer[i]!.lat, outer[i]!.lon, await height(outer[i]!.lat, outer[i]!.lon))[2]);
+        const rings = v.rings.map((r) => r.map((at) => localPoint(frame, at.lat, at.lon, 0)));
+        const p = polygonPrimitive(rings, base + 4 * v.layer - 1.2, base + 4 * v.layer, 2, [0.095, 0.098, 0.1]);
+        if (addSolid(p, rings)) {
+          bridges++;
+          selectedAreas.push(v.footprint);
+        }
+      } catch (e) {
+        if (!errors.length) errors.push(String(e).slice(0, 220));
       }
     }
   }

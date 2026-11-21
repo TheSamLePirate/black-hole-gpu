@@ -36,7 +36,7 @@ export function classifyBridgeStructure(params: BridgeClassificationParams): Bri
     const dLon = (midLon - 2.3135) * 111320 * Math.cos((48.8637 * Math.PI) / 180);
     const distToAlexandreIII = Math.hypot(dLat, dLon);
 
-    if (distToAlexandreIII < 250 && length >= 100 && length <= 220) {
+    if (distToAlexandreIII < 110 && length >= 100 && length <= 220 && params.width >= 10) {
       return "monumental_alexandre_iii";
     }
   }

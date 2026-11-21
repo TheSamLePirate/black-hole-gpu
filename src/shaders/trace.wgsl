@@ -7793,6 +7793,7 @@ var<private> TILE_AT: vec2f = vec2f(0.0);
 // colour and its cover in the pixel: shadeLite lays it over the carriageway)
 var<private> SC_PAINT:vec4f=vec4f(0.0);
 var<private> SC_SURVEY_ROAD:bool=false;
+var<private> SC_ON_BRIDGE:bool=false;
 // (RP10: that point's place in the scenery's frame [m] — SC_POINT's, kept outside the scenery's block)
 var<private> SC_AT:vec2f=vec2f(0.0);
 // (outside the scenery's block: shadeLite reads it in every kernel)
@@ -10663,8 +10664,11 @@ fn scenerySurface(foot:f32)->ScenerySurface {
       }
       // (PLAN-J8 VB2: a road's markings, kerb and pavements — the worker's roadMarkings, KSC3's rules: size.z the flags (1 edge lines,
       // 2 a dashed centre, 4 a solid one, 8 a kerb) + 16 one way + 32 lane lines + 512 the pavement [dm], size.w the carriageway's
-      // signed half-width (negative for surveyed roads); none: the old dashed centre of the wide ones)
-      let mk=u32(size.z+.5);
+      // signed half-width (negative for surveyed roads); none: the old dashed centre of the wide ones; bit 15 (32768) marks a bridge road)
+      let mkAll=u32(size.z+.5);
+      let segBridge=(mkAll&32768u)!=0u;
+      if(kind!=3.0 && segBridge!=SC_ON_BRIDGE){i++;continue;}
+      let mk=mkAll&32767u;
       if(kind==1.0 && mk>0u){
         let cr=select(size.x,abs(size.w),size.w!=0.0);let s=along*len;let paint=vec3f(.65,.64,.56);
         if((mk&8u)!=0u && distance>cr){
@@ -16096,7 +16100,9 @@ fn liteMaterial(gq: vec3f, q: vec3f, ph: vec3f, rd: vec3f, look: vec3f, tM: f32,
   }
   var sv = ScenerySurface(vec3f(0.0), 0.0, 0.0);
   SC_SURVEY_ROAD = false;
-  if (HAS_SCENERY && !mesh && !isTree && (liteSkip() & 134217728u) == 0u) {
+  let onBridgeDeck = atBridgeMesh(at) && dot(n, gq) > 0.55;
+  SC_ON_BRIDGE = onBridgeDeck;
+  if (HAS_SCENERY && (!mesh || onBridgeDeck) && !isTree && (liteSkip() & 134217728u) == 0u) {
     // (the exact walk near — its stripes, sleepers, edges' antialiasing — and at night — its kinds for the streets' lights —;
     // the decals' one read beyond: the walk on every pixel under 12 m cost 0.66 ms in La Mancha)
     // (under a national photograph the map's colour is not drawn — the walk was for nothing there: France whole —; at night
@@ -16104,7 +16110,7 @@ fn liteMaterial(gq: vec3f, q: vec3f, ph: vec3f, rd: vec3f, look: vec3f, tM: f32,
     // (PLAN-J8 RP1: under a national photograph the walk again where the paint shows — a pixel under 2 m, within 2.5 km —: its
     // paint alone laid over the photograph below, the photograph the carriageway)
     SC_PAINT = vec4f(0.0);
-    if (mu0g < 0.06 || (fpM < 0.3 && tM < 4000.0 && img.o < 0.99) || (fpM < 2.0 && tM < 2500.0 && img.o >= 0.99)) { sv = sceneryGround(dirW, tM, fpM); }
+    if (onBridgeDeck || mu0g < 0.06 || (fpM < 0.3 && tM < 4000.0 && img.o < 0.99) || (fpM < 2.0 && tM < 2500.0 && img.o >= 0.99)) { sv = sceneryGround(dirW, tM, fpM); }
     else if (fpM < 12.0 && tM < 4000.0 && img.o < 0.99) {
       // (the scenery's local frame written out — sceneryLocal goes with the scenery's code, a kernel without it would not compile)
       let dL = vec3f(dot(dirW, P.scenery[0].xyz), dot(dirW, P.scenery[1].xyz), dot(dirW, P.scenery[2].xyz));
@@ -16216,10 +16222,11 @@ fn liteMaterial(gq: vec3f, q: vec3f, ph: vec3f, rd: vec3f, look: vec3f, tM: f32,
       let ra = farRoofAlbedo(fm);
       A = ra * select(1.0, clamp(l / max(luminance(ra), 0.02), 0.6, 1.5), TUNE_BLD_PHOTO > 0.5);
     }
-    // (PLAN-PONT-ROUTES-AAA PR4: bridge deck carriageway shares road asphalt albedo; sides/underside stone/concrete)
+    // (PLAN-PONT-ROUTES-AAA PR4: bridge deck carriageway shares road asphalt albedo and lane/pavement markings; sides/underside stone/concrete)
     if (atBridgeMesh(at)) {
       let isDeckCarriageway = dot(n, gq) > 0.55;
-      A = select(vec3f(0.42, 0.40, 0.38), vec3f(0.095, 0.098, 0.1), isDeckCarriageway) * P.earth2.z;
+      let baseBridge = select(vec3f(0.42, 0.40, 0.38) * P.earth2.z, vec3f(0.095, 0.098, 0.1), isDeckCarriageway);
+      A = select(baseBridge, mix(baseBridge, sv.color, sv.cover), isDeckCarriageway && sv.cover > 0.0);
     }
   }
   if (mesh && leaf == 0u && dot(n, gq) < 0.35 && HAS_SCENERY && P.scenery[0].w > 0.5) {

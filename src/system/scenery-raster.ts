@@ -619,10 +619,7 @@ fn stripCorner(hi: vec4f, k: vec3f) -> vec4f {
   let c = BOX[vi];
   let k = vec3f(f32(c & 1u), f32((c >> 1u) & 1u), f32((c >> 2u) & 1u));
   if (!building(hi)) {
-    // (a bridge's strip: its own prism's shadow — its box's a square on the water far wider than the bridge —; another shape none)
-    let s = stripCorner(hi, k);
-    if (s.w < 0.5) { return vec4f(2.0, 2.0, 0.5, 1.0); }
-    return sunClip(s.xyz);
+    return vec4f(2.0, 2.0, 0.5, 1.0);
   }
   return sunClip(buildingCorner(lo, hi, k));
 }
