@@ -126,7 +126,7 @@ export function withSunShadow(trace: string, supported: boolean): string {
     `
 @group(0) @binding(${SUN_SHADOW_BINDING}) var sunShadowMap: texture_depth_2d;
 const SS_OFF = ${TABLE_SUN}u;
-// A ground point's light past the near march (rel: from the camera, the Earth's axes [m]): x the share of a 3 × 3 of the
+// A ground point's light past the near march (rel: from the camera, the body's axes [m]): x the share of a 3 × 3 of the
 // map's texels with no relief more than the near reach (c.y) before it towards the Sun; y where its ray leaves the patch
 // (m along it — the march resumed there); z the near reach [m]; w how far along it the nearest of those texels' relief
 // stands [m] (the map orthographic along the Sun: a texel is the ray's own column), 3e38 none; x −1: no map here.
@@ -172,7 +172,13 @@ fn sunShadowFarAt(rel: vec3f, base: f32) -> vec4f {
     // the Sun since it was drawn [m]: its depths are from the camera then)
     let C = bodies[SS_OFF + 6u + k];
     if (C.z <= 0.0) { continue; }
-    let dz = 0.5 - (dot(rel, L.xyz) + C.w) / (2.0 * L.w);
+    let along = dot(rel, L.xyz) + C.w;
+    // The receiver must be inside the map's depth volume as well as its square (Earth and the other bodies).
+    // Beyond the far plane, even a clear texel at 1 would otherwise become a false blocker. Try the next cascade,
+    // then return no map so the caller's horizons / relief march take over; never clamp the receiver's depth.
+    // Test in metres before normalization: division may round a point on the clip plane just inside (0, 1).
+    if (abs(along) >= L.w) { continue; }
+    let dz = 0.5 - along / (2.0 * L.w);
     let x = (a - C.x) / C.z;
     let y = (b - C.y) / C.z;
     let m = max(abs(x), abs(y));
@@ -184,8 +190,10 @@ fn sunShadowFarAt(rel: vec3f, base: f32) -> vec4f {
     if (k == 0u && w > 0.0 && C1.z > 0.0) {
       let x1 = (a - C1.x) / C1.z;
       let y1 = (b - C1.y) / C1.z;
-      if (max(abs(x1), abs(y1)) < 0.98) {
-        let r1 = sunCascadeRead(1u, x1, y1, 0.5 - (dot(rel, L.xyz) + C1.w) / (2.0 * L.w), base, C1.z, L);
+      let along1 = dot(rel, L.xyz) + C1.w;
+      if (max(abs(x1), abs(y1)) < 0.98 && abs(along1) < L.w) {
+        let dz1 = 0.5 - along1 / (2.0 * L.w);
+        let r1 = sunCascadeRead(1u, x1, y1, dz1, base, C1.z, L);
         r = vec3f(mix(r.x, r1.x, w), max(r.y, r1.y), min(r.z, r1.z));
       }
     }

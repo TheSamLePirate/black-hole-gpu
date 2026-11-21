@@ -3,6 +3,56 @@
 Problèmes constatés, pas encore réglés. Chaque entrée : la date (UTC), ce qui est mesuré ou observé et sa source, la cause
 connue ou supposée, la piste. Une entrée réglée est barrée avec le commit qui la règle, pas effacée.
 
+## ~~Grand carré d'ombre : récepteur hors profondeur des cascades~~ (21 novembre 2026, 07:44 UTC)
+
+**Corrigé le 21 novembre à 08:01 UTC — commit `fix(shadows): prevent square terrain shadows on Earth and Moon`.** Le lecteur partagé contrôle la
+distance du récepteur le long du Soleil, **en mètres avant normalisation**, dans la sélection et le fondu des
+cascades. Hors volume, la suivante puis la marche/horizons reprennent. Même correctif pour la Terre et la
+Lune (`encodeBodySunShadow`, cascade 0), sans agrandir ±20 km ni changer de texture/passe.
+
+**Vérifié** : `sun-shadow-depth`, rapport `20261121-080037-MacBook-Pro-de-olivier`, fenêtre visible M1 Max :
+1 test, 31 assertions, zéro erreur GPU/page. Treize cas sur le lecteur WGSL réel (plans proche/lointain,
+carte vide, occultant, cascade suivante, fondu) ; A/A exact, huit cas réfutent l'ancien lecteur injecté.
+La pose de Sam n'a plus le grand carré ; comparaison carte active/coupée : 2 211 pixels au seuil de 8 niveaux,
+contre un bruit A/A de 1 668, sur 1 714 770 pixels hors interface. Lune à 30 km : 0 pixel au même seuil, A/A 0,
+avec luminance médiane 117/255 (image non saturée). Lune à 5 km, Soleil rasant : couper toutes les ombres
+du relief change 8 479 pixels contre un bruit A/A de 459 ; les ombres légitimes restent présentes.
+Sources versionnées : `tests/e2e/sun-shadow-depth.e2e.test.ts`, `lib/sun-shadow-depth.ts`,
+`lib/square-shadow-view.ts` ; captures et JSON dans `remote-results/sun-shadow-depth/`.
+84/84 WGSL, TypeScript, Biome, inventaire du pipeline et 18 tests unitaires ciblés passent.
+
+**Historique du diagnostic initial (07:44 UTC, avant correction).** Sur le M1 Max, arbre `b179e0b6`, pose fournie par Sam :
+Monument Valley, latitude `36.876883648196284`, longitude `-110.51352643813274`, hauteur WGS84
+`19829.09353049848 m` (environ 18 km AGL), temps `-3295162.2539921496 M` (`2015-07-27 22:33 UTC`).
+Chargement par `game.load` puis `step(0)` ; coordonnées contrôlées, horloge gelée, sortie 2225 × 863,
+échelle 0,75, données et shaders prêts. La simple copie des réglages laisse un rig de la scène précédente :
+le premier essai a échoué sur les coordonnées et ne constitue pas une preuve d'image.
+
+**Preuves locales** : sonde `tests/e2e/zz-square-shadow.e2e.test.ts` (ignorée par git), journal
+`remote-results/square-shadow-20261121-depth.log`, captures et `state.json` dans
+`remote-results/square-shadow-20261121/`, rapport `20261121-074407-MacBook-Pro-de-olivier` :
+1 test passe, 6 assertions, aucune erreur de page/GPU. La carte de profondeur est lue par un compute
+(`TEXTURE_BINDING` → tampon), avec scope de validation ; aucune copie illégale de `sunDepth` sans `COPY_SRC`.
+
+- Référence A/A : 13 pixels diffèrent de plus de 8 niveaux de luminance, hors bandeau haut/marge gauche.
+  Couper seulement `sunShadowOn` enlève le carré : 456 148 pixels s'éclaircissent de plus de 8 niveaux.
+- Les cascades couvrent latéralement 374 943 pixels du sol raster (1668 × 647). La reconstruction de leurs
+  récepteurs au centre des pixels en compte 274 834 hors profondeur `[0, 1]` à ±20 km ; cette sonde n'intègre
+  pas la gigue sous-pixel. Exemple `(600,100)` : `dz=1.34549`, profondeur de carte **1**, soit un faux obstacle
+  `ahead=13819.6 m`. Le lecteur ne vérifie que x/y, puis assimile ce fond vide à un occultant.
+- À **±40 km**, sans couper les cascades, ces mêmes récepteurs sont tous dans la profondeur (`dz` maximal
+  0,93875 contre 1,37749 à ±20 km) et le grand carré disparaît. Le retour à ±20 km le rétablit
+  (12 pixels seulement diffèrent de plus de 8 niveaux de la référence). Ce changement de portée est un
+  **témoin de diagnostic**, pas un correctif livré ni une recommandation de doubler la profondeur.
+
+**Correctif proposé lors du diagnostic, désormais réalisé ci-dessus** : vérifier la profondeur du récepteur avant `sunCascadeRead` dans
+`src/system/terrain-raster-hint.ts` (`sunShadowFarAt`), y compris pour la seconde cascade dans le fondu.
+Une cascade sans couverture valide doit laisser la suivante, puis les horizons, prendre le relais.
+Le « trou des niveaux 0–2 » n'explique pas le grand carré : une profondeur vide à 1 ne l'ombre que parce
+que le récepteur dépasse lui-même 1. Un petit carré reste visible dans le diagnostic des ombres à ±40 km :
+ne pas déclarer tous les défauts d'ombre résolus. À ce stade initial, aucun shader produit modifié, aucun coût GPU mesuré.
+Le petit artefact relevé avec l'extension expérimentale à ±40 km n'a pas fait l'objet d'un correctif distinct.
+
 ## J9-3, prototype éteint : les feuilles proches beaucoup plus claires que la forêt (20 novembre 2026)
 
 **Observé sur kerr-mini**, A/B/A `20261120-104528-j9-geometry-final-prototype`, source et captures dans

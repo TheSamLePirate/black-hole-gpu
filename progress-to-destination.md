@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 20 nov. 12:48 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 21 nov. 08:01 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous. Ce qui est fermé quitte le tableau « En cours » pour la ligne « Fermé récemment ».
@@ -45,6 +45,7 @@ J4 (fermé, sortie non atteinte), J5 et J6 (fermés).
 
 | Session (T3) | Lot | État |
 |---|---|---|
+| Ombre carrée (21 nov.) | Cascades du relief, Terre et Lune | **Corrigé et vérifié localement** : contrôle en mètres avant normalisation, sélection et fondu ; 13 cas GPU, A/A exact, ancien lecteur réfuté ; pose exacte de Sam sans carré, Lune à 30 km et ombres conservées à 5 km. E2E : 31 assertions, zéro erreur. [Preuves et limites](docs/PROBLEMES-A-REGLER.md#grand-carré-dombre--récepteur-hors-profondeur-des-cascades-21-novembre-2026-0744-utc). |
 | Exécution J9 (20 nov.) | [Arbres proches en vraie géométrie](docs/PLAN-J9-ARBRES-PROCHES.md) | **Fermé et livré : J9-R (vraie géométrie 3D allumée par défaut, retrait du tracé primaire de restes dans le raster)** validé sur les deux Macs (201 assertions, 53 relevés Nominal, gains nets 12 à 14 ms au sol sur mini et 3 à 9 ms sur M1 Max, VRAM bornée à 10,11 Mo, 84/84 WGSL) |
 | Documentation vol bas (cette session) | [Référence FableFlight, VB0–VB8](docs/PLAN-DETAILS-VOL-BAS-FABLEFLIGHT.md) | **plan écrit, proposé** : routes, silhouettes et stationnement, lampadaires, feux et trafic ; complément à J8-L sans changement de priorité ; coûts estimés, aucun lot de code ni mesure exécuté |
 | Rendu (33d89754) | J4 / J5 — l'eau, les volumes, la généralisation | **fermés** ([PLAN-J4](docs/PLAN-J4-VOLUMES.md), [PLAN-J5](docs/PLAN-J5-GENERALISATION.md)) : l'eau à demi-rythme (J5-5, −6,0 à −6,4 ms, l'image la même) ; le sol à demi-rythme laissé au joueur (J5-6, réglage « demi » : −1,9 à −3,2 ms ; « auto » à chaque pixel) ; la FFT de la mer en deux passes (−0,9 ms) ; la carte d'ombre des arbres (−2,8 ms, forêt) ; Sam a refusé les arbitrages d'image (MSAA 1×, petits arbres, nuages amortis). Postes lourds restants : l'eau 16,2, les nuages d'orage 16,5, le décor d'une forêt ~7 ms |
@@ -11035,3 +11036,46 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   de nuit. L'ensemble des 8 vols J8-A sur kerr-mini (`20261120-181101-j8-a-coverage`, sortie 0) a prouvé l'absence
   totale de scène rapide, zéro requête réseau en vol et des recensements à 10 km conformes à 100 %.
 - **Clôture.** J8 (« Bâtiments, fleuves et détails au loin ») est déclaré **fermé et livré**.
+
+### 2026-11-21 07:44 UTC — Ombre carrée : reproduction exacte et cause en profondeur établie
+
+- **Contribution à la destination :** cohérence des ombres et validité de leur couverture (stratégie §§7 et 20).
+  Diagnostic observé et instrumenté, sans changement du pipeline produit.
+- **Réalisé :** pose de Sam restaurée par `game.load` + `step(0)`, coordonnées WGS84 contrôlées (19 829 m
+  ellipsoïde, environ 18 km AGL), heure et caméra gelées ; référence A/A, carte solaire seule désactivée,
+  profondeur ±40 km, retour à ±20 km. Sonde GPU valide (compute lisant `sunDepth`, sans `COPY_SRC`),
+  source locale ignorée `tests/e2e/zz-square-shadow.e2e.test.ts` ; résultat consigné dans
+  [PROBLEMES-A-REGLER](docs/PROBLEMES-A-REGLER.md).
+- **Preuves :** M1 Max, arbre `b179e0b6`, `remote-results/square-shadow-20261121-depth.log`, rapport
+  `20261121-074407-MacBook-Pro-de-olivier` : 1 test, 6 assertions, aucune erreur page/GPU. Le carré disparaît
+  sans cascades et à ±40 km, revient à ±20 km. Exemple de récepteur : `dz=1.34549`, carte vide à 1,
+  faux obstacle à 13,82 km. Reconstruction au centre des pixels : 274 834 récepteurs hors profondeur à
+  ±20 km, zéro à ±40 km ; A/A d'image 13 pixels au seuil de 8 niveaux contre environ 456 000 pour le témoin.
+- **Limites :** aucun correctif livré, aucune performance mesurée ; sonde de position sans gigue sous-pixel ;
+  petit carré encore visible dans le diagnostic d'ombres à ±40 km. Le premier essai, par copie de réglages,
+  a échoué sur la pose et a été écarté. Pas de campagne mini/PC (injoignables), pas de suite générale.
+- **Suite :** contrôler la couverture en profondeur avant les lectures et dans le fondu des cascades,
+  relayer aux horizons hors couverture, puis vérifier le correctif sur cette pose et les ombres légitimes.
+
+### 2026-11-21 08:01 UTC — Ombre carrée corrigée dans le lecteur partagé Terre/Lune
+
+- **Contribution à la destination :** couverture valide des ombres du relief (stratégie §§7 et 20), avec
+  les marches/horizons existants en relais. Aucune nouvelle passe, texture, portée ou option produit.
+- **Réalisé :** `terrain-raster-hint.ts` rejette les récepteurs hors volume **avant la division**, en mètres,
+  dans la sélection et le fondu. La Lune et les autres corps solaires utilisent ce même lecteur. Régression
+  versionnée `sun-shadow-depth.e2e.test.ts` et ses deux helpers ; références pipeline, catalogue et problèmes tenues.
+- **Preuves :** M1 Max, fenêtre visible, rapport `20261121-080037-MacBook-Pro-de-olivier`,
+  `remote-results/sun-shadow-depth-e2e.log` et `remote-results/sun-shadow-depth/results.json` : 1 test,
+  31 assertions, zéro erreur GPU/page. Treize cas GPU, A/A exact ; ancien lecteur injecté réfuté sur huit cas.
+  Pose exacte de Sam sans carré ; différence active/coupée 2 211 pixels (bruit A/A 1 668) sur 1 714 770.
+  Lune à 30 km : différence 0 et A/A 0, image non saturée (médiane 117/255). Lune à 5 km : témoin sans
+  ombres du relief 8 479 pixels contre bruit 459, ombres des cratères conservées. Exposition lunaire tenue
+  à partir de la radiance médiane, gigue désactivée pour cette mesure, horizons et tuiles prêts.
+  84/84 shaders WGSL compilent ; TypeScript, Biome, inventaire (`--check`, `--write --sizes`) et 18 tests
+  unitaires ciblés passent. Ni gain ni coût GPU différentiel mesuré.
+- **Essais écartés :** premier garde-fou sur profondeur normalisée réfuté au plan proche (arrondi GPU) ;
+  contrôle d'ombre lunaire remplacé car couper la carte relance la marche ; comparaisons lunaires antérieures
+  trop bruitées/surexposées, remplacées après calcul complet des horizons et contrôle de luminance.
+  Leurs journaux restent dans `remote-results/sun-shadow-depth-*-failed.log` et `*-superseded.log`.
+- **Limites :** vérifié ici, sans campagne mini/PC ni suite générale ; non commité/non poussé. Le petit
+  artefact de l'expérience ±40 km du diagnostic n'est pas couvert comme problème distinct.
