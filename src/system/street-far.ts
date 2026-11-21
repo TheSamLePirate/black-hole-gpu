@@ -5,7 +5,7 @@
 // plane in its axes' w — the cells give no ground); drawn by SceneryRaster (farLampVs: a head as the near ones', lit at night by shadeLite).
 // The near scene keeps its own lamps and cars (streetlamps.ts, traffic.ts — within their kept reach round its centre, scenery-worker.ts
 // lampReachM, trafficReachM): none of ours drawn within it. By day the far cars are drawn as their bodies.
-import { CELL_Z, cellBounds, cellKey, cellOf, cellOrigin, fromCell, toCell } from "./building-cells";
+import { CELL_Z, cellKey, cellOf, cellOrigin, fromCell } from "./building-cells";
 import { BLOCK_RECORDS, cellFrameInScene, cellPriority, type EyeState, POOL_RECORD_BYTES, RecordPool } from "./building-layer";
 import type { CellPool, CellPrepared, CellWant } from "./cell-pool";
 import type { GradeRunway } from "../game/runway-grade";
@@ -193,25 +193,11 @@ export class StreetFar {
       this.cells().forget(c.x, c.y);
       return;
     }
-    // (RP7: the cell's bridges among its far records — the far decks)
-    const b = cellBounds(c.x, c.y);
+    // (PLAN-PONT-ROUTES-AAA PR7: retire farBridges from car pool; bridges are drawn via unified 3D raster mesh)
     const o = cellOrigin(c.x, c.y);
-    const sw = toCell(o, b.south, b.west),
-      ne = toCell(o, b.north, b.east);
-    const decks = farBridges(
-      c.buf,
-      (e, n) =>
-        e >= Math.min(sw.east, ne.east) &&
-        e < Math.max(sw.east, ne.east) &&
-        n >= Math.min(sw.north, ne.north) &&
-        n < Math.max(sw.north, ne.north),
-    );
     const onRunway = trafficRunwayMask(sceneryFrame(o.lat, o.lon), EARTH_RUNWAYS, CAR_CELL_REACH);
-    const carsOnly = farCars(c.buf, h.segmentCount, onRunway);
-    const cars = new Float32Array(carsOnly.length + decks.length);
-    cars.set(carsOnly, 0);
-    cars.set(decks, carsOnly.length);
-    this.counts.bridges += decks.length / 8;
+    const cars = farCars(c.buf, h.segmentCount, onRunway);
+    this.counts.bridges = 0;
     const nCars = cars.length / 8;
     if (h.lampCount === 0 && nCars === 0) {
       this.counts.empty++;

@@ -165,10 +165,10 @@ export class BridgeContinuousProfile {
     const crossTy = ny;
     const crossTz = 0;
 
-    // Normal is Cross(tangent, crossTangent)
-    const normX = -ny * unitTz;
-    const normY = nx * unitTz;
-    const normZ = nx * unitTy - ny * unitTx;
+    // Normal is Cross(tangent, crossTangent) pointing upwards
+    const normX = -unitTz * ny;
+    const normY = unitTz * nx;
+    const normZ = unitTx * ny - unitTy * nx;
     const nLen = Math.hypot(normX, normY, normZ) || 1;
 
     // Cross section role and height adjustment
