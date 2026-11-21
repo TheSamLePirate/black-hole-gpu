@@ -4,7 +4,13 @@ import { bridgeCanonicalKey, type InterCellPort, matchInterCellPorts } from "../
 import { BridgeFlag, BridgeKind, type RoadSegmentRecord, SegmentFlag } from "../src/system/street-cells";
 import { type BridgePiece, chainBridges } from "../src/system/street-detail-prep";
 
-const makeSeg = (a: [number, number], b: [number, number], cls: string, roadId: number, level = 1): RoadSegmentRecord => ({
+const makeSeg = (
+  a: [number, number],
+  b: [number, number],
+  cls: RoadSegmentRecord["cls"],
+  roadId: number,
+  level = 1,
+): RoadSegmentRecord => ({
   a,
   b,
   cls,

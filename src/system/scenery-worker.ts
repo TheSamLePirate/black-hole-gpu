@@ -83,6 +83,7 @@ import {
   streetCacheUrl,
 } from "./street-cells";
 import { bridgeCanonicalKey } from "./bridge-ports";
+import { BridgeContinuousProfile } from "./bridge-surface-service";
 import { markRoad, roadClassCode } from "./road-markings";
 import { catenaryMasts, cellRoadSurfaces } from "./cell-roads";
 
@@ -1452,32 +1453,30 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
     colour: number[],
     clearance: number,
     style: BridgeStyle = BRIDGE_STYLES.road,
-    _flags = 0,
+    flags = 0,
   ): boolean => {
     // (PLAN-J8 J8-RP RP5, FableFlight's bridge_end: the deck from the ground at its two abutments — its ends —, straight between them,
     // lifted towards its middle to a clearance over what lies under it (5.5 m; a layer above the first 4 m more), cut in pieces of
     // 10 m at most, each on its own height; its thickness 1.2 m, a viaduct's (over 400 m) 1.8 m; concrete parapets; piers every
     // 34 m — a viaduct's 130 m — only where the deck passes more than 3.5 m over the ground at their foot. Before: one flat deck at
     // its highest point + 4 m a layer, piers every 40 m down to 5 m under the ground, 17 Nov 2026)
-    const span: number[] = [0];
-    for (let i = 1; i < points.length; i++)
-      span.push(span[i - 1]! + Math.hypot(points[i]![0] - points[i - 1]![0], points[i]![1] - points[i - 1]![1]));
-    const total = span[span.length - 1]!;
-    if (total < 1) return false;
-    const zA = points[0]![2],
-      zB = points[points.length - 1]![2];
-    // (the lift the middle needs: the clearance over each inner point's ground, against the line between the abutments)
-    let lift = 0;
-    for (let i = 1; i < points.length - 1; i++) {
-      const t = span[i]! / total;
-      const env = Math.min(1, 4 * t * (1 - t));
-      if (env > 0.05) lift = Math.max(lift, (points[i]![2] + clearance - (zA + (zB - zA) * t)) / env);
+    let totalLen = 0;
+    for (let i = 0; i < points.length - 1; i++) {
+      totalLen += Math.hypot(points[i + 1]![0] - points[i]![0], points[i + 1]![1] - points[i]![1]);
     }
-    lift = Math.min(Math.max(lift, total > 60 ? clearance * 0.5 : 0.6), 40);
-    const deckAt = (sv: number) => {
-      const t = sv / total;
-      return zA + (zB - zA) * t + lift * Math.min(1, 4 * t * (1 - t)) + 0.4;
-    };
+    const viaduct = totalLen > 400;
+    const thick = viaduct ? style.viaductThick : style.thick;
+    const profile = new BridgeContinuousProfile({
+      points: points as [number, number, number][],
+      width,
+      thickness: thick,
+      clearance,
+      flags,
+    });
+    const span = profile.spans;
+    const total = profile.totalLength;
+    if (total < 1) return false;
+    const deckAt = (sv: number) => profile.elevationAt(sv);
     decks.push({ pts: points, span, half: width / 2, at: deckAt });
     const groundAt = (sv: number) => {
       let k = 1;
@@ -1487,8 +1486,6 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
       const f = s1 > s0 ? (sv - s0) / (s1 - s0) : 0;
       return points[k - 1]![2] + (points[k]![2] - points[k - 1]![2]) * f;
     };
-    const viaduct = total > 400;
-    const thick = viaduct ? style.viaductThick : style.thick;
     let made = false;
     for (let i = 0; i < points.length - 1; i++) {
       const a = points[i]!,

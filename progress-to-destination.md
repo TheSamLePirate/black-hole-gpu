@@ -45,7 +45,7 @@ J4 (fermé, sortie non atteinte), J5 et J6 (fermés).
 
 | Session (T3) | Lot | État |
 |---|---|---|
-| Ponts et routes AAA (21 nov.) | [PR1 — Identité, ports et publication](docs/PLAN-PONT-ROUTES-AAA.md) | **PR1 livré et prouvé** : isolation stricte route/rail dans `chainBridges`, ordonnancement déterministe et sélection continue aux bifurcations, ports `OpenA`/`OpenB` transmis, clé canonique mondiale WGS84 dans `scenery-worker.ts` (`bridgeCanonicalKey`) ; [FICHE-PR1](docs/progress/pont-routes-aaa/FICHE-PR1.md). Suite : PR2. |
+| Ponts et routes AAA (21 nov.) | [PR2 — Profil et supports communs](docs/PLAN-PONT-ROUTES-AAA.md) | **PR2 livré et prouvé** : résolution de profil continu `BridgeContinuousProfile` garantissant $z(0)=z_A$ et $z(L)=z_B$ (fin du saut arbitraire +0.4m), gabarit d'intrados garanti, section transversale à rôles métriques, registre de support multi-niveaux avec hystérèse (`SupportSurfaceRegistry`) ; [FICHE-PR2](docs/progress/pont-routes-aaa/FICHE-PR2.md). Suite : PR3. |
 | Ombre carrée (21 nov.) | Cascades du relief, Terre et Lune | **Corrigé et vérifié localement** : contrôle en mètres avant normalisation, sélection et fondu ; 13 cas GPU, A/A exact, ancien lecteur réfuté ; pose exacte de Sam sans carré, Lune à 30 km et ombres conservées à 5 km. E2E : 31 assertions, zéro erreur. [Preuves et limites](docs/PROBLEMES-A-REGLER.md#grand-carré-dombre--récepteur-hors-profondeur-des-cascades-21-novembre-2026-0744-utc). |
 | Exécution J9 (20 nov.) | [Arbres proches en vraie géométrie](docs/PLAN-J9-ARBRES-PROCHES.md) | **Fermé et livré : J9-R (vraie géométrie 3D allumée par défaut, retrait du tracé primaire de restes dans le raster)** validé sur les deux Macs (201 assertions, 53 relevés Nominal, gains nets 12 à 14 ms au sol sur mini et 3 à 9 ms sur M1 Max, VRAM bornée à 10,11 Mo, 84/84 WGSL) |
 | Documentation vol bas (cette session) | [Référence FableFlight, VB0–VB8](docs/PLAN-DETAILS-VOL-BAS-FABLEFLIGHT.md) | **plan écrit, proposé** : routes, silhouettes et stationnement, lampadaires, feux et trafic ; complément à J8-L sans changement de priorité ; coûts estimés, aucun lot de code ni mesure exécuté |
@@ -11187,3 +11187,24 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   retiré de `street-detail-prep.ts`.
 - **Preuves :** `bun test tests/bridge-ports.test.ts tests/street-detail-prep.test.ts` (17 pass, 0 fail), vérification Biome et `tsc`.
 - **Suite :** PR2 — Profil et supports communs (surface canonique, profil continu, requêtes de contact indépendantes de la vue).
+
+### 2026-11-21 10:10 UTC — Ponts et routes AAA : Phase PR2 (Profil et supports communs)
+
+- **Contribution à la destination :** continuité de la surface de roulement aux culées (suppression du décrochement vertical de 40 cm),
+  garantie d'intrados sous ouvrage, et service spatial de support multi-niveaux avec hystérèse pour dissocier le tablier du sol sous-jacent.
+- **Réalisé :**
+  - [`src/system/bridge-surface-service.ts`](src/system/bridge-surface-service.ts) : classe `BridgeContinuousProfile` garantissant $z(0)=z_A$
+    et $z(L)=z_B$ et le respect du tirant d'air en tout point $s$ ($z(s) - \text{thick} \ge z_{\text{obstacle}} + \text{clearance}$) ;
+    définition de la section transversale à rôles métriques (`carriageway`, `sidewalk`, `parapet`) ; registre `SupportSurfaceRegistry`
+    permettant les requêtes 3D $(x,y,z)$ avec hystérèse pour éviter l'écrasement ou l'inversion d'étage.
+  - [`src/system/scenery-worker.ts`](src/system/scenery-worker.ts) : remplacement de la parabole empirique avec saut arbitraire par
+    `BridgeContinuousProfile`, respectant les cotes exactes de terrain aux extrémités.
+  - [`tests/bridge-surface.test.ts`](tests/bridge-surface.test.ts) : 4 tests prouvant la continuité aux culées ($|z(0)-z_A| < 10^{-6}$ m),
+    la continuité de pente ($< 0.01$ m de delta par cm), le respect du gabarit d'intrados, la section transversale et la séparation
+    multi-étages sans confusion.
+  - [`docs/progress/pont-routes-aaa/FICHE-PR2.md`](docs/progress/pont-routes-aaa/FICHE-PR2.md) : fiche de phase.
+- **Retraits :** ressaut systématique de `+ 0.4 m` aux culées dans `deckBridge` (`scenery-worker.ts`) ; parabole aveugle sans contrainte d'intrados.
+- **Preuves :** `bun test tests/bridges-corpus.test.ts tests/bridge-ports.test.ts tests/bridge-surface.test.ts` (13 pass, 0 fail),
+  contrôle Biome et compilation WGSL (84/84) sans régression.
+- **Suite :** PR3 — Géométrie continue routes/ponts (maillage 3D extrudé continu, suppression des marches horizontales de 10 m, culées et piles ancrées).
+
