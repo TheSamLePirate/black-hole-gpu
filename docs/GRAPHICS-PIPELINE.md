@@ -727,7 +727,7 @@ Paris jusqu'à `earthSettled` » chronométré par étape.
 
 <!-- pipeline-inventory:begin (bun scripts/pipeline-inventory.ts --write) -->
 
-_Généré le 2026-11-21T07:54:28Z sur `b179e0b6` (arbre de travail). Ne pas éditer à la main : relancer l'outil._
+_Généré le 2026-11-21T10:10:11Z sur `3060c224` (arbre de travail). Ne pas éditer à la main : relancer l'outil._
 
 **126 sites de création de pipeline** (82 rendu, 44 calcul, dont 62 asynchrones) et 42 `createShaderModule` dans 31 fichiers ; **43 programmes WGSL** (15 fichiers .wgsl, 28 chaînes dans le TypeScript) ; **66 libellés de passes** du profileur GPU (+ 11 sites à libellé dynamique).
 
@@ -800,12 +800,12 @@ _Généré le 2026-11-21T07:54:28Z sur `b179e0b6` (arbre de travail). Ne pas éd
 | `src/renderer.ts:1952` | compute async | — | — |
 | `src/renderer.ts:1990` | compute async | — | — |
 | `src/renderer.ts:6933` | compute async | — | `ep` |
-| `src/renderer.ts:7660` | compute | — | — |
-| `src/renderer.ts:8709` | compute | — | — |
-| `src/renderer.ts:10890` | compute async | `clouds` | `cloudShadow` |
-| `src/renderer.ts:10972` | compute async | `sky ambient write` | `cloudLightVolume` |
-| `src/renderer.ts:11054` | compute async | — | `skyAmbient` |
-| `src/renderer.ts:13377` | compute async | — | `probe` |
+| `src/renderer.ts:7654` | compute | — | — |
+| `src/renderer.ts:8703` | compute | — | — |
+| `src/renderer.ts:10884` | compute async | `clouds` | `cloudShadow` |
+| `src/renderer.ts:10966` | compute async | `sky ambient write` | `cloudLightVolume` |
+| `src/renderer.ts:11048` | compute async | — | `skyAmbient` |
+| `src/renderer.ts:13371` | compute async | — | `probe` |
 | `src/sea/fft-gpu.ts:117` | compute | — | — |
 | `src/ship.ts:832` | compute | — | `vs` |
 | `src/ship.ts:852` | render | — | `fsJetGlass` |
@@ -904,7 +904,7 @@ _Généré le 2026-11-21T07:54:28Z sur `b179e0b6` (arbre de travail). Ne pas éd
 
 | source | lignes | points d'entrée |
 |---|---:|---|
-| `src/shaders/trace.wgsl` | 17997 | 18 entrées : cloudLightVolume, aerial, lut, main, shade, shadeMark, shadeLiteFinish, shadeWaterFinish, shadeLiteLight, shadeLite, skyFill, shadeWater, clouds, skyAmbient, cloudShadow, env, probe, shadeStars |
+| `src/shaders/trace.wgsl` | 18000 | 18 entrées : cloudLightVolume, aerial, lut, main, shade, shadeMark, shadeLiteFinish, shadeWaterFinish, shadeLiteLight, shadeLite, skyFill, shadeWater, clouds, skyAmbient, cloudShadow, env, probe, shadeStars |
 | `src/shaders/ship.wgsl` | 2713 | 34 entrées : envCopy, envDown, envGGX, envSH, ctlVs, depthVs, vs, mirrorVs, shadowVs, fs, hullDepthVs, hullDepthFs, ownMaskFs, plumeVs, plumeFs, glowVs, glowFs, distVs, distFs, sheathVs, sheathFs, trailVs, trailFs, lampVs, lampFs, compVs, compFs, fsCabin, fsCabinGlass, fsJetGlass, motionVs, motionFs, composeColor, composeSurface |
 | `src/shaders/post.wgsl` | 1396 | 18 entrées : gatherH, atrous, beamH, beamV, polgrid, resolve, down, downShip, dof, flareMeter, up, meter, stars, motionBlur, temporal, occlusion, cloudTemporal, taau |
 | `src/system/scenery-raster.ts:208` | 1139 | 31 entrées : cull, cullBoxes, clampBoxes, shadowVs, shadowFs, proxyVs, proxyFs, boxVs, boxFs, bridgeMarkFs, boxMarkVs, boxShadowVs, meshShadowVs, meshVs, meshFs, boxSolidVs, benchCull, benchQuadVs, benchVs, benchShadowVs, farCull, farVs, farQuadVs, farFs, farLampCull, farLampVs, farCarCull, farCarVs, nearCellVs, nearCellShadowVs, farShadowVs |
@@ -942,9 +942,9 @@ _Généré le 2026-11-21T07:54:28Z sur `b179e0b6` (arbre de travail). Ne pas éd
 | `src/shaders/mips.wgsl` | 23 | vs (v), fs (f) |
 | `src/system/earth-tiles.ts:398` | 18 | vs (v), fs (f) |
 | `src/vegetation/tree-impostors.ts:136` | 17 | down (c) |
-| `src/renderer.ts:7665` | 16 | main (c) |
+| `src/renderer.ts:7659` | 16 | main (c) |
 | `src/system/earth-tiles.ts:1264` | 14 | main (c) |
-| `src/renderer.ts:8713` | 10 | main (c) |
+| `src/renderer.ts:8707` | 10 | main (c) |
 | `src/system/terrain-cache.ts:165` | 9 | main (c) |
 | `src/system/earth-tiles.ts:1254` | 8 | main (c) |
 
@@ -974,35 +974,35 @@ _Généré le 2026-11-21T07:54:28Z sur `b179e0b6` (arbre de travail). Ne pas éd
 | `sky (waiting)` | `src/renderer.ts:7485` | 1 |
 | `trace (discs)` | `src/renderer.ts:7542` | 1 |
 | `stars (raster)` | `src/renderer.ts:7550` | 1 |
-| `earth water: tiles` | `src/renderer.ts:7711` | 1 |
-| `body lite (raster)` | `src/renderer.ts:7734` | 1 |
-| `earth lite (raster)` | `src/renderer.ts:7757` | 1 |
-| `earth lite: light` | `src/renderer.ts:7766` | 1 |
-| `earth lite: finishing` | `src/renderer.ts:7776` | 1 |
-| `earth water (raster)` | `src/renderer.ts:7790` | 1 |
-| `earth water open (raster)` | `src/renderer.ts:7811` | 1 |
-| `earth water: finishing` | `src/renderer.ts:7822` | 1 |
-| `beam` | `src/renderer.ts:7880` | 1 |
-| `temporal` | `src/renderer.ts:8454` | 2 |
-| `taau` | `src/renderer.ts:8627` | 1 |
-| `stars` | `src/renderer.ts:8668` | 1 |
-| `motion blur` | `src/renderer.ts:8801` | 1 |
-| `occlusion depth` | `src/renderer.ts:8834` | 1 |
-| `denoise` | `src/renderer.ts:8866` | 1 |
-| `polarization` | `src/renderer.ts:8969` | 1 |
-| `depth of field` | `src/renderer.ts:9057` | 1 |
-| `lens flare meter` | `src/renderer.ts:9067` | 1 |
-| `light meter` | `src/renderer.ts:9091` | 1 |
-| `display` | `src/renderer.ts:10518` | 2 |
-| `clouds' shadow map` | `src/renderer.ts:10922` | 1 |
-| `clouds' light volume` | `src/renderer.ts:11003` | 1 |
-| `sky ambient` | `src/renderer.ts:11085` | 1 |
-| `clouds' history` | `src/renderer.ts:11801` | 1 |
-| `body raster heights` | `src/renderer.ts:12161` | 1 |
-| `scenery raster cull` | `src/renderer.ts:12413` | 1 |
-| `ground occlusion` | `src/renderer.ts:12453` | 1 |
-| `trees' shadow map` | `src/renderer.ts:12458` | 1 |
-| `horizon bake` | `src/renderer.ts:12736` | 1 |
+| `earth water: tiles` | `src/renderer.ts:7705` | 1 |
+| `body lite (raster)` | `src/renderer.ts:7728` | 1 |
+| `earth lite (raster)` | `src/renderer.ts:7751` | 1 |
+| `earth lite: light` | `src/renderer.ts:7760` | 1 |
+| `earth lite: finishing` | `src/renderer.ts:7770` | 1 |
+| `earth water (raster)` | `src/renderer.ts:7784` | 1 |
+| `earth water open (raster)` | `src/renderer.ts:7805` | 1 |
+| `earth water: finishing` | `src/renderer.ts:7816` | 1 |
+| `beam` | `src/renderer.ts:7874` | 1 |
+| `temporal` | `src/renderer.ts:8448` | 2 |
+| `taau` | `src/renderer.ts:8621` | 1 |
+| `stars` | `src/renderer.ts:8662` | 1 |
+| `motion blur` | `src/renderer.ts:8795` | 1 |
+| `occlusion depth` | `src/renderer.ts:8828` | 1 |
+| `denoise` | `src/renderer.ts:8860` | 1 |
+| `polarization` | `src/renderer.ts:8963` | 1 |
+| `depth of field` | `src/renderer.ts:9051` | 1 |
+| `lens flare meter` | `src/renderer.ts:9061` | 1 |
+| `light meter` | `src/renderer.ts:9085` | 1 |
+| `display` | `src/renderer.ts:10512` | 2 |
+| `clouds' shadow map` | `src/renderer.ts:10916` | 1 |
+| `clouds' light volume` | `src/renderer.ts:10997` | 1 |
+| `sky ambient` | `src/renderer.ts:11079` | 1 |
+| `clouds' history` | `src/renderer.ts:11795` | 1 |
+| `body raster heights` | `src/renderer.ts:12155` | 1 |
+| `scenery raster cull` | `src/renderer.ts:12407` | 1 |
+| `ground occlusion` | `src/renderer.ts:12447` | 1 |
+| `trees' shadow map` | `src/renderer.ts:12452` | 1 |
+| `horizon bake` | `src/renderer.ts:12730` | 1 |
 | `ship probe: mips` | `src/ship.ts:1930` | 1 |
 | `ship probe: GGX` | `src/ship.ts:1942` | 1 |
 | `ship probe: SH` | `src/ship.ts:1949` | 1 |
@@ -1023,14 +1023,14 @@ Libellés dynamiques (calculés à l'exécution) :
 
 - `src/gpuprof.ts:66` — `label`
 - `src/renderer.ts:7534` — `label`
-- `src/renderer.ts:7646` — `label`
-- `src/renderer.ts:7647` — `label`
-- `src/renderer.ts:8984` — `label`
-- `src/renderer.ts:11714` — `label`
-- `src/renderer.ts:12167` — `label`
-- `src/renderer.ts:12198` — `label`
-- `src/renderer.ts:12438` — `label`
-- `src/renderer.ts:12484` — `label`
+- `src/renderer.ts:7640` — `label`
+- `src/renderer.ts:7641` — `label`
+- `src/renderer.ts:8978` — `label`
+- `src/renderer.ts:11708` — `label`
+- `src/renderer.ts:12161` — `label`
+- `src/renderer.ts:12192` — `label`
+- `src/renderer.ts:12432` — `label`
+- `src/renderer.ts:12478` — `label`
 - `src/ship.ts:788` — `label`
 
 #### A.3b Passes jamais chronométrées (ni libellé du profileur, ni horodatage transmis)
@@ -1051,8 +1051,8 @@ Leur coût n'apparaît que dans l'intervalle de complétion de la frame (ou d'un
 | render pass | `src/mipgen.ts:69` |
 | render pass | `src/noise3d.ts:124` |
 | render pass | `src/renderer.ts:5653` |
-| compute pass | `src/renderer.ts:8728` |
-| compute pass | `src/renderer.ts:13396` |
+| compute pass | `src/renderer.ts:8722` |
+| compute pass | `src/renderer.ts:13390` |
 | compute pass | `src/sea/fft-gpu.ts:261` |
 | compute pass | `src/sea/fft-gpu.ts:265` |
 | render pass | `src/ship.ts:3286` |
