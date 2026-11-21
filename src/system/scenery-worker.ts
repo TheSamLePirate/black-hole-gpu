@@ -70,7 +70,7 @@ import { parkedKind } from "./car-shapes";
 import {
   type BridgeRecord,
   BridgeKind,
-  bridgePiers as pierPlaces,
+  // bridgePiers retired in PR6 in favor of computeStructurePierLocations
   readBridges,
   FurnitureFlag,
   FurnitureKind,
@@ -85,6 +85,12 @@ import {
 import { bridgeCanonicalKey } from "./bridge-ports";
 import { BridgeContinuousProfile, SupportSurfaceRegistry, type SupportRef } from "./bridge-surface-service";
 import { buildContinuousPierMesh, buildContinuousRailMesh, buildContinuousSliceMesh } from "./bridge-mesh";
+import {
+  buildAlexandreIIIPylonsMesh,
+  buildArchRibsMesh,
+  classifyBridgeStructure,
+  computeStructurePierLocations,
+} from "./bridge-structures";
 import { markRoad, roadClassCode } from "./road-markings";
 import { catenaryMasts, cellRoadSurfaces } from "./cell-roads";
 
@@ -1440,6 +1446,7 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
     style: BridgeStyle = BRIDGE_STYLES.road,
     flags = 0,
     layer = 1,
+    geoPoints?: { lat: number; lon: number }[],
   ): boolean => {
     // (PLAN-J8 J8-RP RP5, FableFlight's bridge_end: the deck from the ground at its two abutments — its ends —, straight between them,
     // lifted towards its middle to a clearance over what lies under it (5.5 m; a layer above the first 4 m more), cut in pieces of
@@ -1450,7 +1457,14 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
     for (let i = 0; i < points.length - 1; i++) {
       totalLen += Math.hypot(points[i + 1]![0] - points[i]![0], points[i + 1]![1] - points[i]![1]);
     }
-    const viaduct = totalLen > 400;
+    const family = classifyBridgeStructure({
+      length: totalLen,
+      width,
+      geoStart: geoPoints?.[0],
+      geoEnd: geoPoints?.[geoPoints.length - 1],
+      clearance,
+    });
+    const viaduct = family === "viaduct" || totalLen > 400;
     const thick = viaduct ? style.viaductThick : style.thick;
     const profile = new BridgeContinuousProfile({
       points: points as [number, number, number][],
@@ -1530,8 +1544,8 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
         }
       }
     }
-    // (the piers, along the whole bridge: where its deck stands more than 3.5 m over the ground at their foot)
-    for (const d of pierPlaces(total, viaduct)) {
+    // (PLAN-PONT-ROUTES-AAA PR6: pier placement derived from structural family; Alexandre III has 0 river piers)
+    for (const d of computeStructurePierLocations(total, family)) {
       if (d < 2 || d > total - 2) continue;
       const z = deckAt(d) - thick,
         g = groundAt(d);
@@ -1554,6 +1568,34 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
         intradosTop: z,
       });
       if (addSolid(polygonPrimitive(pier, g - 2, z, 3, [0.5, 0.49, 0.46]), pier, pierMesh)) bridgePiers++;
+    }
+
+    // (PLAN-PONT-ROUTES-AAA PR6: monumental architecture for Pont Alexandre III: 4 corner pylons and steel arch ribs)
+    if (family === "monumental_alexandre_iii") {
+      const pStart = points[0]!;
+      const pEnd = points[points.length - 1]!;
+      const deckZ0 = deckAt(0);
+      const deckZ1 = deckAt(total);
+
+      const pylonsMesh = buildAlexandreIIIPylonsMesh({
+        pStart: pStart as [number, number, number],
+        pEnd: pEnd as [number, number, number],
+        width,
+        deckZ0,
+        deckZ1,
+      });
+      const pylonBounds = [stripPolygon(pStart, pEnd, width + 8)];
+      addSolid(polygonPrimitive(pylonBounds, deckZ0 - 8, Math.max(deckZ0, deckZ1) + 16, 3, [0.58, 0.56, 0.52]), pylonBounds, pylonsMesh);
+
+      const archMesh = buildArchRibsMesh({
+        pStart: pStart as [number, number, number],
+        pEnd: pEnd as [number, number, number],
+        width,
+        deckZ0,
+        deckZ1,
+        riseM: 5.5,
+      });
+      addSolid(polygonPrimitive(pylonBounds, deckZ0 - 6, Math.max(deckZ0, deckZ1), 3, [0.35, 0.4, 0.38]), pylonBounds, archMesh);
     }
     return made;
   };
@@ -1615,6 +1657,7 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
           BRIDGE_STYLES.road,
           0,
           v.layer,
+          v.line,
         )
       )
         bridges++;
@@ -1634,12 +1677,25 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
     for (const e of list) {
       if (bridges >= bridgeLimit) break;
       try {
-        const pts = await groundLine(e.b.points.map(([east, north]) => fromCell(e.o, east, north)));
+        const geoPoints = e.b.points.map(([east, north]) => fromCell(e.o, east, north));
+        const pts = await groundLine(geoPoints);
         const rail = e.b.kind === BridgeKind.Rail,
           foot = e.b.kind === BridgeKind.Foot;
         const colour = rail ? [0.2, 0.19, 0.17] : foot ? [0.3, 0.29, 0.27] : [0.095, 0.098, 0.1];
         const style = rail ? BRIDGE_STYLES.rail : foot ? BRIDGE_STYLES.foot : BRIDGE_STYLES.road;
-        if (deckBridge(pts, Math.max(foot ? 2 : 4, e.b.width), 2, colour, e.b.clearance > 0 ? e.b.clearance : 5.5, style, e.b.flags, 1)) {
+        if (
+          deckBridge(
+            pts,
+            Math.max(foot ? 2 : 4, e.b.width),
+            2,
+            colour,
+            e.b.clearance > 0 ? e.b.clearance : 5.5,
+            style,
+            e.b.flags,
+            1,
+            geoPoints,
+          )
+        ) {
           bridges++;
           cellBridgeCount++;
         }
