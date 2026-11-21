@@ -82,6 +82,7 @@ import {
   STREET_CACHE,
   streetCacheUrl,
 } from "./street-cells";
+import { bridgeCanonicalKey } from "./bridge-ports";
 import { markRoad, roadClassCode } from "./road-markings";
 import { catenaryMasts, cellRoadSurfaces } from "./cell-roads";
 
@@ -1350,7 +1351,8 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
             catenaryCount++;
           }
           for (const br of readBridges(buf)) {
-            const key = `${br.id}:${Math.round(br.points[0]![0])}`;
+            const g0 = fromCell(o, br.points[0]![0], br.points[0]![1]);
+            const key = bridgeCanonicalKey(br.id, g0);
             if (!cellBridges.has(key)) cellBridges.set(key, { b: br, o });
           }
           for (const p of roads) {
@@ -1450,6 +1452,7 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
     colour: number[],
     clearance: number,
     style: BridgeStyle = BRIDGE_STYLES.road,
+    _flags = 0,
   ): boolean => {
     // (PLAN-J8 J8-RP RP5, FableFlight's bridge_end: the deck from the ground at its two abutments — its ends —, straight between them,
     // lifted towards its middle to a clearance over what lies under it (5.5 m; a layer above the first 4 m more), cut in pieces of
@@ -1572,7 +1575,7 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
           foot = e.b.kind === BridgeKind.Foot;
         const colour = rail ? [0.2, 0.19, 0.17] : foot ? [0.3, 0.29, 0.27] : [0.095, 0.098, 0.1];
         const style = rail ? BRIDGE_STYLES.rail : foot ? BRIDGE_STYLES.foot : BRIDGE_STYLES.road;
-        if (deckBridge(pts, Math.max(foot ? 2 : 4, e.b.width), 2, colour, e.b.clearance > 0 ? e.b.clearance : 5.5, style)) {
+        if (deckBridge(pts, Math.max(foot ? 2 : 4, e.b.width), 2, colour, e.b.clearance > 0 ? e.b.clearance : 5.5, style, e.b.flags)) {
           bridges++;
           cellBridgeCount++;
         }

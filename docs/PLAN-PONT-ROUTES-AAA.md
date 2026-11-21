@@ -438,7 +438,7 @@ et son retrait associé. Un échec d'acceptation reste ouvert ; « implémenté 
 | Phase | Travail et dépendances | Sortie vérifiable / retrait |
 |---|---|---|
 | **PR0 — Références et contrat** (fait) | Figer corpus réel + cas synthétiques ; relever sources/datums, phases et état actuel ; profil de coût sur les deux Macs ; valider les sondes | Fixtures rejouables (`src/system/bridge-corpus.ts`, `tests/bridges-corpus.test.ts`), défauts localisés, seuils renseignés, preuves A/A et témoins validés ([FICHE-PR0](progress/pont-routes-aaa/FICHE-PR0.md)) |
-| **PR1 — Identité, ports et publication** | Après PR0 : fragments, multi-surfaces, provenance ; rapprochement déterministe aux frontières ; décision de format/cache et capacités | Ordre d'arrivée sans effet sur ids/profil ; route et rail séparés ; bouts ouverts explicites ; supprimer la clé fondée sur x local dans le domaine migré |
+| **PR1 — Identité, ports et publication** (fait) | Après PR0 : fragments, multi-surfaces, provenance ; rapprochement déterministe aux frontières ; décision de format/cache et capacités | Isolation stricte route/rail et déterminisme dans `chainBridges`, ports `OpenA`/`OpenB` préservés, clé canonique mondiale `bridgeCanonicalKey` ([FICHE-PR1](progress/pont-routes-aaa/FICHE-PR1.md)) ; clé $x$ locale retirée |
 | **PR2 — Profil et supports communs** | Après PR1 : service de surface et contacts ; résoudre accès, profils, sections et gabarits ; politique de nivellement et conflits | Une référence de support testable ; raccords cohérents ; aucun saut avec caméra/qualité ; retirer les profils de support reconstruits séparément |
 | **PR3 — Géométrie continue routes/ponts** | Après PR2 : mesh des tabliers, culées et raccords ; courbes, sections, carrefours ; appuis génériques sûrs ; contacts issus de la surface canonique | Première traversée complète dessus/dessous ; retirer les prismes horizontaux comme autorité du tablier et le constructeur OMT surfacique dans le domaine remplacé |
 | **PR4 — Chaussée et raster communs** | Après PR3 : attributs de surface, matériau routier partagé, phases des lignes, pluie, profondeur/identité, lumière et ombres communes | Parité sur route d'accès et pont à sec/mouillé ; aucun retour au noyau général pour ces faces ; retirer la couleur générique et le veto ponts devenus inutiles |
@@ -630,9 +630,9 @@ la campagne e2e par défaut ; PR8 exécute le corpus défini et les parcours de 
 | État au 21 novembre | Preuve | Suite |
 |---|---|---|
 | Analyse des ponts/routes approfondie | Code, docs et sources primaires relus ; distinction preuves/inconnues | PR0 livré avec corpus et témoins |
-| Plan PR0–PR8 / PR-R engagé | PR0 livré (`src/system/bridge-corpus.ts`, `tests/bridges-corpus.test.ts`, [FICHE-PR0](progress/pont-routes-aaa/FICHE-PR0.md)) | PR1 — Identité, ports et publication |
+| Plan PR0–PR8 / PR-R engagé | PR0 et PR1 livrés ([FICHE-PR0](progress/pont-routes-aaa/FICHE-PR0.md), [FICHE-PR1](progress/pont-routes-aaa/FICHE-PR1.md)) | PR2 — Profil et supports communs |
 | Performance et validation finale | Non mesurées / non effectuées dans cette session documentaire | Ne pas écrire « livré » avant PR8 et PR-R |
 
-**Prochaine action de réalisation : PR1**, identité stable, ports intercellules et séparation route/rail.
+**Prochaine action de réalisation : PR2**, profil continu et service de surface de support multi-niveaux.
 chaussée continue, du terrain au tablier, avec ses usages sur le même support. La fidélité architecturale et la
 couverture mondiale se construisent sur cette autorité, sans reconduire des ponts différents selon le lecteur.

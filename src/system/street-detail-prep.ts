@@ -332,6 +332,8 @@ export function chainBridges(
 ): ChainedBridge[] {
   const key = (p: [number, number]) => `${Math.round(p[0] / JUNCTION_M)},${Math.round(p[1] / JUNCTION_M)}`;
   const near = (p: [number, number], q: [number, number]) => Math.hypot(p[0] - q[0], p[1] - q[1]) <= JUNCTION_M;
+  const isRail = (cls: string) => cls === "rail";
+  const isFoot = (cls: string) => cls === "path" || cls === "steps" || cls === "track";
   const at = new Map<string, number[]>();
   const add = (p: [number, number], i: number) => {
     for (let dx = -1; dx <= 1; dx++)
@@ -344,26 +346,58 @@ export function chainBridges(
     add(pc.a, i);
     add(pc.b, i);
   });
-  const others = (p: [number, number], i: number, level = pieces[i]!.seg.level) =>
+  const others = (p: [number, number], i: number, level = pieces[i]!.seg.level, cls = pieces[i]!.seg.cls) =>
     [...new Set(at.get(key(p)) ?? [])].filter(
-      (j) => j !== i && pieces[j]!.seg.level === level && (near(pieces[j]!.a, p) || near(pieces[j]!.b, p)),
+      (j) =>
+        j !== i &&
+        pieces[j]!.seg.level === level &&
+        isRail(pieces[j]!.seg.cls) === isRail(cls) &&
+        isFoot(pieces[j]!.seg.cls) === isFoot(cls) &&
+        (near(pieces[j]!.a, p) || near(pieces[j]!.b, p)),
     );
   const used = new Uint8Array(pieces.length);
   const out: ChainedBridge[] = [];
   // (start at a chain's end: a piece with an end met by no other; loops last)
-  const order = pieces.map((pc, i) => ({ i, end: others(pc.a, i).length === 0 || others(pc.b, i).length === 0 }));
-  order.sort((x, y) => Number(y.end) - Number(x.end));
+  const order = pieces.map((pc, i) => ({
+    i,
+    end: others(pc.a, i, pc.seg.level, pc.seg.cls).length === 0 || others(pc.b, i, pc.seg.level, pc.seg.cls).length === 0,
+  }));
+  order.sort((x, y) => {
+    if (x.end !== y.end) return Number(y.end) - Number(x.end);
+    return (pieces[x.i]!.seg.roadId >>> 0) - (pieces[y.i]!.seg.roadId >>> 0) || x.i - y.i;
+  });
   for (const { i: start } of order) {
     if (used[start]) continue;
     const s0 = pieces[start]!;
     // (oriented from its free end)
-    let tip: [number, number] = others(s0.a, start).length === 0 ? s0.b : s0.a;
+    let tip: [number, number] = others(s0.a, start, s0.seg.level, s0.seg.cls).length === 0 ? s0.b : s0.a;
     const points: [number, number][] = [tip === s0.b ? s0.a : s0.b, tip];
     const chain: BridgePiece[] = [s0];
     used[start] = 1;
     for (;;) {
-      const next = others(tip, -1, s0.seg.level).filter((j) => !used[j]);
+      const next = others(tip, -1, s0.seg.level, s0.seg.cls).filter((j) => !used[j]);
       if (!next.length) break;
+      if (next.length > 1) {
+        const prev = points[points.length - 2] ?? points[0]!;
+        const dx = tip[0] - prev[0];
+        const dy = tip[1] - prev[1];
+        const L = Math.hypot(dx, dy) || 1;
+        const ux = dx / L,
+          uy = dy / L;
+        next.sort((ja, jb) => {
+          const pa = pieces[ja]!,
+            pb = pieces[jb]!;
+          const sameA = pa.seg.roadId === s0.seg.roadId ? 1 : 0;
+          const sameB = pb.seg.roadId === s0.seg.roadId ? 1 : 0;
+          if (sameA !== sameB) return sameB - sameA;
+          const otherEndA = near(pa.a, tip) ? pa.b : pa.a;
+          const otherEndB = near(pb.a, tip) ? pb.b : pb.a;
+          const dotA = (otherEndA[0] - tip[0]) * ux + (otherEndA[1] - tip[1]) * uy;
+          const dotB = (otherEndB[0] - tip[0]) * ux + (otherEndB[1] - tip[1]) * uy;
+          if (Math.abs(dotA - dotB) > 1e-4) return dotB - dotA;
+          return (pa.seg.roadId >>> 0) - (pb.seg.roadId >>> 0) || ja - jb;
+        });
+      }
       const j = next[0]!;
       used[j] = 1;
       const pc = pieces[j]!;

@@ -45,7 +45,7 @@ J4 (fermé, sortie non atteinte), J5 et J6 (fermés).
 
 | Session (T3) | Lot | État |
 |---|---|---|
-| Ponts et routes AAA (21 nov.) | [PR0 — Références et contrat](docs/PLAN-PONT-ROUTES-AAA.md) | **PR0 livré et prouvé** : corpus de 12 cas (`src/system/bridge-corpus.ts`), sondes sans extraction textuelle de code, défauts historiques quantifiés (saut 2,75 m, contact pneu/dalle 1,63 m), dédoublonnage mondial unifié, témoins Règle 3 validés (A/A exact, défaut 10 cm détecté) ; [FICHE-PR0](docs/progress/pont-routes-aaa/FICHE-PR0.md). Suite : PR1. |
+| Ponts et routes AAA (21 nov.) | [PR1 — Identité, ports et publication](docs/PLAN-PONT-ROUTES-AAA.md) | **PR1 livré et prouvé** : isolation stricte route/rail dans `chainBridges`, ordonnancement déterministe et sélection continue aux bifurcations, ports `OpenA`/`OpenB` transmis, clé canonique mondiale WGS84 dans `scenery-worker.ts` (`bridgeCanonicalKey`) ; [FICHE-PR1](docs/progress/pont-routes-aaa/FICHE-PR1.md). Suite : PR2. |
 | Ombre carrée (21 nov.) | Cascades du relief, Terre et Lune | **Corrigé et vérifié localement** : contrôle en mètres avant normalisation, sélection et fondu ; 13 cas GPU, A/A exact, ancien lecteur réfuté ; pose exacte de Sam sans carré, Lune à 30 km et ombres conservées à 5 km. E2E : 31 assertions, zéro erreur. [Preuves et limites](docs/PROBLEMES-A-REGLER.md#grand-carré-dombre--récepteur-hors-profondeur-des-cascades-21-novembre-2026-0744-utc). |
 | Exécution J9 (20 nov.) | [Arbres proches en vraie géométrie](docs/PLAN-J9-ARBRES-PROCHES.md) | **Fermé et livré : J9-R (vraie géométrie 3D allumée par défaut, retrait du tracé primaire de restes dans le raster)** validé sur les deux Macs (201 assertions, 53 relevés Nominal, gains nets 12 à 14 ms au sol sur mini et 3 à 9 ms sur M1 Max, VRAM bornée à 10,11 Mo, 84/84 WGSL) |
 | Documentation vol bas (cette session) | [Référence FableFlight, VB0–VB8](docs/PLAN-DETAILS-VOL-BAS-FABLEFLIGHT.md) | **plan écrit, proposé** : routes, silhouettes et stationnement, lampadaires, feux et trafic ; complément à J8-L sans changement de priorité ; coûts estimés, aucun lot de code ni mesure exécuté |
@@ -11166,3 +11166,24 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   Contrôle statique `bun run check` propre.
 - **Limites / transitions restantes :** PR0 fige les contrats et les outils de mesure sans modifier le runtime de production.
 - **Suite :** PR1 — Identité, ports et publication (assemblage déterministe, ports intercellules, séparation stricte route/rail).
+
+### 2026-11-21 10:04 UTC — Ponts et routes AAA : Phase PR1 (Identité, ports et publication multi-tuiles)
+
+- **Contribution à la destination :** identité d'ouvrage globale et stable indépendante du repère de cellule (stratégie §7),
+  isolation stricte des modes de circulation dans l'assemblage et préservation des ports de frontière de tuile.
+- **Réalisé :**
+  - [`src/system/bridge-ports.ts`](src/system/bridge-ports.ts) : fonction `bridgeCanonicalKey` fondant la clé sur l'identité
+    et les coordonnées WGS84 de l'ouvrage (invariance intercellules), et fonction `matchInterCellPorts` pour relier les
+    ports ouverts aux frontières de tuiles par niveau et mode.
+  - [`src/system/street-detail-prep.ts`](src/system/street-detail-prep.ts) : isolation de mode dans `chainBridges` (les voies
+    ferrées et les sentiers piétons ne sont plus amalgamés avec la voirie routière au même niveau), tri déterministe par
+    `roadId` et continuité de tangence aux bifurcations.
+  - [`src/system/scenery-worker.ts`](src/system/scenery-worker.ts) : dédoublonnage des ponts via `bridgeCanonicalKey`,
+    transmission de `e.b.flags` (`OpenA`/`OpenB`) à `deckBridge`.
+  - [`tests/bridge-ports.test.ts`](tests/bridge-ports.test.ts) : suite validant l'isolation de mode, le déterminisme face
+    au mélange des pièces, les bouts ouverts et l'unicité de clé à travers deux repères locaux de cellules.
+  - [`docs/progress/pont-routes-aaa/FICHE-PR1.md`](docs/progress/pont-routes-aaa/FICHE-PR1.md) : compte-rendu de phase et preuves.
+- **Retraits :** clé locale `${br.id}:${Math.round(br.points[0]![0])}` retirée de `scenery-worker.ts` ; chaînage aveugle inter-modes
+  retiré de `street-detail-prep.ts`.
+- **Preuves :** `bun test tests/bridge-ports.test.ts tests/street-detail-prep.test.ts` (17 pass, 0 fail), vérification Biome et `tsc`.
+- **Suite :** PR2 — Profil et supports communs (surface canonique, profil continu, requêtes de contact indépendantes de la vue).
