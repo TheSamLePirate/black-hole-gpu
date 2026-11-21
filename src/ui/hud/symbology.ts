@@ -3354,15 +3354,22 @@ function drawAar(
   }
   // (the fuel given)
   const kg = (v: number) => Math.round(v).toLocaleString("en").replace(/,/g, " ");
-  text(
-    `FUEL ${kg(A.given)} / ${kg(A.want)} kg${A.practice ? " · PRACTICE" : ""}`,
-    x,
-    y0 + (A.takeup === null ? 34 : 50) * dpr,
-    col,
-    11,
-    "center",
-    true,
-  );
+  const fy = y0 + (A.takeup === null ? 34 : 50) * dpr;
+  text(`FUEL ${kg(A.given)} / ${kg(A.want)} kg${A.practice ? " · PRACTICE" : ""}`, x, fy, col, 11, "center", true);
+  // (assisted mode: tell the pilot the throttle closes the last metres into the basket or backs out)
+  if (A.mode === "assisted") {
+    const cue =
+      A.phase === "CLEARED"
+        ? t("SHIFT / ↑ TO CLOSE")
+        : A.phase === "CONTACT"
+          ? t("SHIFT / ↑ PUSH IN")
+          : A.phase === "FULL" || A.phase === "DEPART"
+            ? t("ALT / ↓ TO BACK OUT")
+            : A.phase === "BREAKAWAY"
+              ? t("ALT / ↓ BACK OFF")
+              : null;
+    if (cue) text(cue, x, fy + 16 * dpr, lit === LIGHT.off ? col : lit, 11, "center", true);
+  }
 }
 
 /**

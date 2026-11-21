@@ -173,3 +173,57 @@ test("auto on uneven frames — 8, 8 and 25 ms by turns, as the game's —: clea
   expect(seen.has("hose:contact")).toBe(true);
   expect(said.some((s) => /transfer complete/.test(s))).toBe(true);
 }, 300_000);
+
+test("assisted with continuous throttle, high altitude (10 km) and windy auto, and hose-to-pod alignment", () => {
+  // (1) assisted holding throttle continuously once cleared: connects cleanly without missing or overshooting 7.5 m past the basket
+  const held = refuel("assisted", 250, (_t, c) => {
+    const A = c.aar;
+    if (!A || A.stage !== "hose") return {};
+    if (A.s.full || A.leftAt !== null) return { throttle: -1 };
+    if (A.s.phase === "contact") return { throttle: A.s.takeup < 2 ? 0.8 : 0 };
+    return { throttle: A.s.cleared ? 1 : 0 };
+  });
+  expect(held.seen.has("hose:contact")).toBe(true);
+  expect(held.said.some((s) => /transfer complete/.test(s))).toBe(true);
+  expect(held.said.some((s) => /missed/.test(s))).toBe(false);
+
+  // (2) auto at 10 000 m (lower dynamic pressure, slower pitch/gamma response) and in windy crosswind (crabbed probe)
+  for (const [alt, weather] of [
+    [10_000, "fair"],
+    [6000, "windy"],
+  ] as const) {
+    resetFlights();
+    gcasForget();
+    const { c, fly } = cruise(alt, 215, 0.7);
+    c.jetToggle("ap");
+    c.jetToggle("athr");
+    c.s.f35AarMode = "auto";
+    c.s.weather = weather;
+    fleet.fuel.f35 = VESSELS.f35.fuelKg! - 800;
+    const said: string[] = [];
+    c.onRadio = (s) => said.push(s);
+    expect(c.tankerStart({ near: true })).toMatch(/TEXACO 11/);
+    let contacted = false;
+    let podErr = Infinity;
+    fly(300, () => {
+      const A = c.aar;
+      if (A?.s.phase === "contact" && !contacted) {
+        contacted = true;
+        const ships = c.combatShips();
+        const mrtt = ships.find((s) => s.id === "mrtt");
+        const lamps = ships.filter((s) => s.id.startsWith("lamp-"));
+        if (mrtt && lamps[1]) {
+          const pod = [-AAR.pod.x, AAR.pod.y, AAR.pod.z - AAR.pod.len / 2];
+          const exp = [0, 1, 2].map(
+            (k) => mrtt.rel[k]! + mrtt.axes[0][k]! * pod[0]! + mrtt.axes[1][k]! * pod[1]! + mrtt.axes[2][k]! * pod[2]!,
+          );
+          podErr = Math.hypot(...exp.map((v, k) => v - lamps[1]!.rel[k]!));
+        }
+      }
+      return !A && contacted;
+    });
+    expect(contacted).toBe(true);
+    expect(said.some((s) => /transfer complete/.test(s))).toBe(true);
+    expect(podErr).toBeLessThan(0.1);
+  }
+}, 300_000);

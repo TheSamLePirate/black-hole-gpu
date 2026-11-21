@@ -35,7 +35,7 @@ import type { MatchRules } from "../game/match";
 import type { Scenario } from "../game/scenarios";
 import { t, tf, tr } from "../i18n";
 import { unitsOf } from "../ui/unitsys";
-import { bodyFixedOf, groundRelief } from "../system/our-surface";
+import { altitudeOver, bodyFixedOf, groundRelief } from "../system/our-surface";
 import { store } from "../util/storage";
 import type { CameraController } from "../controls";
 import type { ShipMeshId } from "../ship";
@@ -210,7 +210,11 @@ function combatPlayer(this: CameraController): Player | null {
   const fr = this.sfFrame(cam);
   if (!g || !fr) return null;
   const [e, n] = enu(C.def.anchor, g);
-  const up = groundRelief("earth", bodyFixedOf("earth", g.lat, g.lon, 0)) + fr.h;
+  const nav = this.local ? null : this.ourNav(cam);
+  // (ellipsoidal height of the craft's origin: matches globeMap's E.p0 — using gearHeight fr.h shifted every airborne
+  // target 1.05 m down relative to its hoses and lights)
+  const up =
+    nav && nav.ref === "earth" ? altitudeOver("earth", nav.X, nav.t) : groundRelief("earth", bodyFixedOf("earth", g.lat, g.lon, 0)) + fr.h;
   const dot = (a: Vec3, b: Vec3) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
   const E = fr.east as Vec3,
     N = fr.north as Vec3,
@@ -403,7 +407,7 @@ export function enuToCam(c: CameraController, Cm: (v: Vec3 | null) => Vec3 | nul
  * place. The flat frame's vector taken in the craft's axes had put a unit 5 km off some 30 m from where it stood — the frames
  * part by 0.36° 40 km from the anchor —, sliding as the craft flew, floating or sunk on the 250 m grid's ground.
  */
-function globeMap(c: CameraController): {
+export function globeMap(c: CameraController): {
   pos: (p: V3, onGround?: boolean, lift?: number) => Vec3;
   dir: (at: V3, v: V3) => Vec3;
 } | null {
@@ -512,7 +516,7 @@ function combatShips(this: CameraController): {
       hidden,
     });
     // (a tanker refuelling us: its hoses, its pods' lights, our probe — controller/aar.ts)
-    if (this.aar?.tanker === q.id && q.alive && !hidden) out.unshift(...this.aarShips(P, M));
+    if (this.aar?.tanker === q.id && q.alive && !hidden) out.unshift(...this.aarShips(P, M, G));
   }
   // (the missiles in flight within 30 km, the nearest first — ours, the aggressors', the SAMs', another's in a room: their
   // bodies, their fins as the servos follow the guidance's command, their motors while they burn — game/missile-models.ts)

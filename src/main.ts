@@ -5257,7 +5257,7 @@ async function main() {
                 : m === "assisted"
                   ? { fr: "Assisté", en: "Assisted" }
                   : { fr: "Manuel", en: "Manual" },
-            on: (camera.aar?.mode ?? settings.f35AarMode) === m,
+            on: camera.aarModeNow() === m,
             run: () => say(camera.aarModeSet(m)),
           })),
           { label: { fr: "Coupé", en: "Off" }, run: () => say(camera.modesOff()) },

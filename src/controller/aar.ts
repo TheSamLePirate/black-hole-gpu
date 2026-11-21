@@ -25,8 +25,9 @@ import {
   trailPoint,
 } from "../game/aar";
 import type { Player } from "../game/combat";
-import { enuToCam } from "./combat";
+import { enuToCam, globeMap } from "./combat";
 import { bankAccel, type FormCraft, formationBank, formationStep } from "../game/formation";
+import { JET } from "../game/jet";
 import { fleet } from "../fleet";
 import { t, tf } from "../i18n";
 import { mountPose, type Mount } from "../mounts";
@@ -69,13 +70,20 @@ export interface AarCtl {
   slotRate?: number[];
   /** the tanker in a turn (told) */
   turning?: boolean;
-  /** an attempt at the basket under way (auto); how far the tip is off the basket's line now [m] */
+  /** an attempt at the basket under way (auto); how far the tip is off and behind the basket's line now [m] */
   going?: boolean;
   offLine: number;
+  along: number;
+  /** assisted: pre-contact reached (or pilot moved the throttle) */
+  arrived?: boolean;
+  /** the free basket's place last frame and eased rate in the tanker's frame [m/s] (leads bow-wave rise and wander) */
+  lastBasket?: number[];
+  basketRate?: number[];
   /** the last metres' throttle: its integral (the tanker's pace) */
   thrI?: number;
-  /** our pitch against the tanker's [rad], eased */
+  /** our pitch and crab (yaw) against the tanker's [rad], eased */
   pitch?: number;
+  yaw?: number;
   /** our last place in the fight's frame, our velocity from it; the step it was moved by — the place read is the one the
    *  step before left [s] */
   lastP?: number[];
@@ -101,6 +109,7 @@ declare module "../controls" {
     aarBegin: typeof aarBegin;
     aarJet: typeof aarJet;
     aarOff: typeof aarOff;
+    aarModeNow: typeof aarModeNow;
     aarModeSet: typeof aarModeSet;
     aarHud: typeof aarHud;
     aarShips: typeof aarShips;
@@ -163,6 +172,7 @@ function aarBegin(this: CameraController, tanker: number, name: string, side: Aa
     practice,
     retryAt: 0,
     offLine: 0,
+    along: 45,
     t: 0,
     leftAt: null,
   };
@@ -184,6 +194,11 @@ function aarOff(this: CameraController, why?: string) {
   if (f && m.alt !== null) m.alt = Math.round(f.h / 10) * 10;
   if (f && m.spd !== null) m.spd = Math.round(f.V);
   if (why) this.onPilotMessage?.(why);
+}
+
+/** The way refuelling is flown now (active session's, else the resolved default for the current assistance level). */
+function aarModeNow(this: CameraController): AarMode {
+  return this.aar?.mode ?? modeFor(this);
 }
 
 /** The way it is flown set (auto, assisted, manual; none: the next). What to say. */
@@ -302,10 +317,17 @@ function aarJet(
     if (e === "breakaway") A.retryAt = A.t + AAR.backTime + 2;
     if (e === "depart") A.leftAt = A.t;
   }
-  A.offLine = gapOf(tip, S.basket).off;
-  // (the tanker flies straight and level while it refuels us — behind its hose until cleared to depart —: its
+  const curGap = gapOf(tip, S.basket);
+  A.offLine = curGap.off;
+  A.along = curGap.along;
+  if (A.lastBasket && dt > 0 && S.phase !== "contact") {
+    const br = mul(sub(S.basket, A.lastBasket), 1 / dt);
+    A.basketRate = A.basketRate ? A.basketRate.map((x, k) => x + (br[k]! - x) * Math.min(1, dt / 0.35)) : br;
+  } else if (S.phase === "contact") A.basketRate = [0, 0, 0];
+  A.lastBasket = [...S.basket];
+  // (the tanker flies straight and level while it refuels us — behind its hose until the refuelling ends —: its
   // racetrack's turn put off, rolled out of if it was in one)
-  if (T.q.ai) T.q.ai.straight = A.stage === "hose" && A.leftAt === null;
+  if (T.q.ai) T.q.ai.straight = A.stage === "hose";
   // (its turns told as it rolls into them — and out)
   const tb = formationBank([0, 0, 1], T.u, T.r);
   if (Math.abs(tb) > 2 * (Math.PI / 180) && !A.turning) {
@@ -348,19 +370,22 @@ function aarJet(
       A.mode = "assisted";
       this.onPilotMessage?.(t("Refuelling: assisted — the throttle is yours"));
     } else {
-      const rate = Math.abs(A.d) < 8 ? 0.9 : 3;
+      const rate = Math.abs(A.d) < 8 ? 1.1 : 3;
       A.d += clamp(want - A.d, -rate * dt, rate * dt);
     }
   }
   // (free, the aim never more than 3 m ahead of the tip: arriving from afar, its lag not turned into an overshoot
   // through the basket)
-  if (S.phase !== "contact") A.d = Math.max(A.d, gapOf(tip, S.basket).along - 3);
+  if (S.phase !== "contact") A.d = Math.max(A.d, curGap.along - 3);
   if (A.mode === "assisted") {
-    // (the throttle: the closing speed — forward in, back out; the pre-contact reached by the systems from afar)
-    if (A.d > AAR.astern + 1 && inp.throttle <= 0) A.d = Math.max(AAR.astern, A.d - 3 * dt);
-    // (its aim a metre and a half at most ahead of or behind where the tip is: held, the throttle closes at a pace)
-    const now = S.phase === "contact" ? -S.takeup : gapOf(tip, S.basket).along;
-    A.d = clamp(A.d - inp.throttle * 1.2 * dt, Math.max(-(AAR.whip + 1), now - 1.5), Math.min(60, now + 1.5));
+    // (the throttle: the closing speed — forward in, back out; pre-contact reached by the systems from afar, then
+    // handed to the throttle — never plowing past the basket into the wing when free)
+    if (inp.throttle !== 0 || A.d <= AAR.astern + 0.05) A.arrived = true;
+    if (!A.arrived) A.d = Math.max(AAR.astern, A.d - 3 * dt);
+    const now = S.phase === "contact" ? -S.takeup : curGap.along;
+    const dMin = S.phase === "contact" ? -(AAR.whip + 1) : -2.5;
+    const ahead = S.phase === "contact" ? 1.5 : 2.5;
+    A.d = clamp(A.d - inp.throttle * 1.4 * dt, Math.max(dMin, now - ahead), Math.min(60, now + 1.5));
     // (after a breakaway: back out whatever is asked)
     if (S.phase === "breakaway") A.d = Math.max(A.d, AAR.backOff + 3);
     // (the stick: the line nudged — let go, back on it)
@@ -372,26 +397,29 @@ function aarJet(
   const axis = mul(hoseDir(), -1);
   const ref = S.phase === "contact" ? S.ref : S.basket;
   const aim = add(add(ref, mul(axis, -A.d)), [A.nudge[0], 0, A.nudge[1]]);
-  // (our tip's offset on our nose's pitch against the tanker's — our incidence raises the tip by tenths of a metre —,
-  // eased over some 8 s: a pull to climb raises the tip before the craft, an aim moved by it would push back down;
-  // and on the tanker's up: not our own bank nor yaw, which the turbulence swings — the aim would swing with them)
+  // (our tip's offset on our nose's pitch and crosswind crab against the tanker's — incidence raises the tip and a
+  // strong crosswind crabs the 6.9 m probe over a metre sideways —, eased over 4 s so fast gusts do not swing the aim)
   const pf = unit(P.fwd);
   const th = Math.atan2(dot(pf, T.u), Math.max(dot(pf, T.f), 0.3));
-  A.pitch = A.pitch === undefined ? th : A.pitch + (th - A.pitch) * Math.min(1, dt / 8);
+  const ps = Math.atan2(dot(pf, T.r), Math.max(dot(pf, T.f), 0.3));
+  A.pitch = A.pitch === undefined ? th : A.pitch + (th - A.pitch) * Math.min(1, dt / 4);
+  A.yaw = A.yaw === undefined ? ps : A.yaw + (ps - A.yaw) * Math.min(1, dt / 4);
   const tm = probeTipAt(A.probe);
-  const nf = unit(add(mul(T.f, Math.cos(A.pitch)), mul(T.u, Math.sin(A.pitch))));
+  const cp = Math.cos(A.pitch);
+  const nf = unit(add(add(mul(T.f, cp * Math.cos(A.yaw)), mul(T.r, cp * Math.sin(A.yaw))), mul(T.u, Math.sin(A.pitch))));
   const nu = unit(sub(T.u, mul(nf, dot(T.u, nf))));
   const nr = cross(nf, nu);
   const ours = add(add(mul(nr, -tm[0]!), mul(nf, tm[2]!)), mul(nu, tm[1]!));
   // (the last metres: what is left between the tip and its aim off the hose's line — across, up — trimmed away
-  // slowly; free only — locked, the hose holds it —, near its aim along the line)
+  // slowly while steady; free only — locked, the hose holds it —, near its aim along the line)
   const K = AAR_LAW;
+  const vzRel = P.v[2]! - T.v[2]!;
   const miss = sub(aim, tip);
   const onLine = dot(miss, axis);
   const off = sub(miss, mul(axis, onLine));
-  if (Math.abs(A.d) < 12 && S.phase === "astern" && Math.abs(onLine) < 3) {
-    A.trim[0] = clamp(A.trim[0] + K.kT * off[0]! * dt, -1.5, 1.5);
-    A.trim[1] = clamp(A.trim[1] + K.kT * off[2]! * dt, -1.5, 1.5);
+  if (Math.abs(A.d) < 12 && S.phase === "astern" && Math.abs(onLine) < 3 && Math.abs(vzRel) < 1) {
+    A.trim[0] = clamp(A.trim[0] + K.kT * off[0]! * dt, -0.8, 0.8);
+    A.trim[1] = clamp(A.trim[1] + K.kT * off[2]! * dt, -0.8, 0.8);
   }
   const O = sub(tToW(T, add(aim, [A.trim[0], 0, A.trim[1]])), ours);
   // (centred on the tanker: its up the sphere's exactly — off-centre, the lift would tilt it by e / R, a bias of tenths
@@ -415,20 +443,21 @@ function aarJet(
   }
   A.lastSlot = pod;
   const lead = A.slotRate ?? [0, 0];
-  // close in — the last tens of metres —: the formation's law across and up with its own gains, without its
-  // integrators (wound up over metres, they swing the height by metres for tens of seconds — the tip's trim above takes
-  // away what is left; the height's loop slow enough for the plane law's flight path, its phase margin some 60°); the
-  // closing on the throttle itself, on the speed over the ground — a PI on the closing speed asked, its integral the
-  // tanker's pace: the autothrottle, on the air's speed, would chase every gust —, a walking pace the last metres, no
-  // air brake (out, it pitches the craft and drops it by metres)
+  // close in — the last tens of metres —: the formation's law across with its own gains, and a damped vertical PD
+  // using instantaneous vertical velocity (the plane law's gamma hold lags ~2–3 s, so proportional height + fast
+  // integral trim porpoised in turbulence and above 9 km); the closing on the throttle itself, on the speed over the
+  // ground — a PI on the closing speed asked, its integral the tanker's pace —, no air brake
   const close = Math.abs(A.d) < 15;
-  const led = close
-    ? { ...slot, right: slot.right + clamp(lead[0]!, -2, 2) * (1.8 / K.wC), up: slot.up + clamp(lead[1]!, -2, 2) / K.wU }
-    : slot;
+  const led = close ? { ...slot, right: slot.right + clamp(lead[0]!, -2, 2) * (1.8 / K.wC) } : slot;
   const F = formationStep(o, f.V, L, led, close ? undefined : A.mem, dt, close ? { wC: K.wC, vC: 3, wU: K.wU, vU: K.vU } : { vA: 12 });
-  let { spd, brake, acc } = F;
+  let { gamma, spd, brake, acc } = F;
   let thr: number | undefined;
   if (close) {
+    const bUp = clamp(A.basketRate?.[2] ?? 0, -0.8, 0.8);
+    const pUp = clamp(lead[1]!, -2, 2);
+    const vTgtU = pUp + bUp;
+    const vs = T.v[2]! + clamp(K.wU * (F.up - K.kDz * (vzRel - vTgtU)) + vTgtU, -K.vU, K.vU);
+    gamma = clamp(Math.asin(clamp(vs / Math.max(f.V, 30), -1, 1)), -JET.gammaMax, JET.gammaMax);
     const vRel = dot(sub(vP, T.v), fw);
     const vMax = Math.abs(A.d) < 8 ? K.vNear : K.vA;
     const ev = clamp(K.kA * F.along, -vMax, vMax) - vRel;
@@ -442,13 +471,13 @@ function aarJet(
   m.alt = Math.round(f.h);
   m.hdg = Number.isFinite(f.hdg) ? f.hdg : null;
   m.spd = spd;
-  return { gamma: F.gamma, bank: F.bank, spd, acc, thr };
+  return { gamma, bank: F.bank, spd, acc, thr };
 }
 
-/** The last metres' laws (aarJet): across, the formation's natural frequency [rad/s]; up, its closing rate [1/s] and
- *  at most [m/s]; along, the closing speed asked per metre off [1/s] and at most — the last metres' [m/s] —, the
- *  throttle per m/s of its error and its integral's [1/s]; the tip's trim's rate [1/s]. */
-export const AAR_LAW = { wC: 0.55, wU: 0.4, vU: 2, kA: 0.25, vA: 2.5, vNear: 1.2, kTp: 0.25, kTi: 0.035, kT: 0.15 };
+/** The last metres' laws (aarJet): across, the formation's natural frequency [rad/s]; up, its closing rate [1/s],
+ *  vertical velocity damping [s], and at most [m/s]; along, the closing speed asked per metre off [1/s] and at most —
+ *  the last metres' [m/s] —, the throttle per m/s of its error and its integral's [1/s]; the tip's trim's rate [1/s]. */
+export const AAR_LAW = { wC: 0.6, wU: 0.55, kDz: 1.6, vU: 2.5, kA: 0.35, vA: 2.5, vNear: 1.4, kTp: 0.25, kTi: 0.035, kT: 0.05 };
 
 /** Where the autopilot wants the probe (auto): pre-contact, then through the basket, then the hose held in its range;
  *  backed out once full, after a miss, a breakaway. */
@@ -460,14 +489,14 @@ function aimDistance(A: AarCtl): number {
   if (S.phase === "contact") return -2.7;
   if (!S.cleared || A.t < A.retryAt) return (A.going = false), AAR.astern;
   // (an attempt begun once held steady at pre-contact a moment; given up — back to pre-contact — once the tip strays
-  // off the basket's line by more than a metre on the way)
+  // off the basket's line by more than a metre on the way, or passed the basket plane without locking)
   // (not into a turn: a contact begun on a straight leg — the tanker's roll moves the basket by metres)
   if (!A.going && S.steady > 1.5 && !A.turning) A.going = true;
-  if (A.going && A.offLine > 1.2) {
+  if (A.going && (A.offLine > 1.2 || A.along < -0.6)) {
     A.going = false;
     A.retryAt = A.t + 3;
   }
-  return A.going ? -1.5 : AAR.astern;
+  return A.going ? -2.5 : AAR.astern;
 }
 
 /** The HUD's word for where it is. */
@@ -495,16 +524,19 @@ function aarHud(this: CameraController, Cm: (v: V3 | null) => V3 | null) {
   const eye = add(P.p, add(add(mul(r, -e[0]), mul(f, e[2])), mul(u, e[1])));
   const M = enuToCam(this, Cm);
   if (!M) return null;
+  const G = globeMap(this);
+  const eyeCam = M(sub(eye, P.p) as V3);
   const toCam = (w: Vec): V3 => M(sub(w, eye) as V3);
   const tipW = tipOf(P, A.probe);
   const basketW = tToW(T, S.basket);
+  const basketCam = G ? (sub(G.pos(basketW as V3), eyeCam) as V3) : toCam(basketW);
   // (the gap in our own frame: the basket to the right, above, ahead of the probe's tip)
   const g = sub(basketW, tipW);
   return {
     phase: annunciator(S, A),
     mode: A.mode,
     lights: lightsOf(S) as AarLights,
-    basket: toCam(basketW),
+    basket: basketCam,
     tip: toCam(tipW),
     rim: AAR.basket.r,
     gap: [dot(g, r), dot(g, u), dot(g, f)] as V3,
@@ -558,6 +590,7 @@ function aarShips(
   this: CameraController,
   P: Player,
   M: (v: V3) => V3,
+  G: ReturnType<typeof globeMap> = null,
 ): { id: ShipMeshId; rel: V3; axes: [V3, V3, V3]; jet: F35Pose; hidden: boolean }[] {
   const A = this.aar;
   const out: { id: ShipMeshId; rel: V3; axes: [V3, V3, V3]; jet: F35Pose; hidden: boolean }[] = [];
@@ -566,20 +599,24 @@ function aarShips(
   if (!T) return out;
   const pose = { gear: 0, canopy: 0 } as F35Pose;
   const ax = (left: Vec, up: Vec, fwd: Vec): [V3, V3, V3] => [M(left as V3), M(up as V3), M(fwd as V3)];
+  const pos = (w: Vec): V3 => (G ? G.pos(w as V3) : M(sub(w, P.p) as V3));
+  const dir = (at: Vec, v: Vec): V3 => (G ? G.dir(at as V3, v as V3) : M(v as V3));
+  const axAt = (at: Vec, left: Vec, up: Vec, fwd: Vec): [V3, V3, V3] => [dir(at, left), dir(at, up), dir(at, fwd)];
   const left = mul(T.r, -1);
   for (const side of ["left", "right"] as AarSide[]) {
-    // (the hose: from the pod's tail to the basket — ours where it is, the other hanging —, the reel taking it in)
+    // (the hose: from the pod's tail to the basket — ours where it is, the other hanging —, the reel taking it in;
+    // placed through globeMap G just like the tanker mesh so the hose and pod lamp stay locked to the pod at all ranges)
     const exit = tToW(T, podExit(side));
     const b = tToW(T, side === A.side ? A.s.basket : trailPoint(side));
     const z = unit(sub(exit, b));
     const y = unit(sub(T.u, mul(z, dot(T.u, z))));
     const x = cross(y, z);
     const root = add(b, mul(z, AAR.hose + AAR.throat));
-    out.push({ id: "drogue", rel: M(sub(root, P.p) as V3), axes: ax(x, y, z), jet: pose, hidden: false });
+    out.push({ id: "drogue", rel: pos(root), axes: axAt(root, x, y, z), jet: pose, hidden: false });
     // (its pod's light: ours as its state, the other's amber — trailed, ready)
     const L = side === A.side ? lightsOf(A.s) : "amber";
     if (L !== "off")
-      out.push({ id: `lamp-${L}` as ShipMeshId, rel: M(sub(exit, P.p) as V3), axes: ax(left, T.u, T.f), jet: pose, hidden: false });
+      out.push({ id: `lamp-${L}` as ShipMeshId, rel: pos(exit), axes: axAt(exit, left, T.u, T.f), jet: pose, hidden: false });
   }
   // our probe: out of its door, sliding back in along its own line
   if (A.probe > 0.02) {
@@ -595,5 +632,5 @@ function aarShips(
 }
 
 export function installAar(C: { prototype: CameraController }) {
-  Object.assign(C.prototype, { aarBegin, aarJet, aarOff, aarModeSet, aarHud, aarShips, aarCrew });
+  Object.assign(C.prototype, { aarBegin, aarJet, aarOff, aarModeNow, aarModeSet, aarHud, aarShips, aarCrew });
 }

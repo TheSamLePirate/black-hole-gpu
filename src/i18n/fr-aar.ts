@@ -47,4 +47,8 @@ export default {
     "Ravitailleur : {0}, 25 km devant à 7 000 m — rendez-vous derrière son {1}",
   "Orbit, terrain following and refuelling off": "Orbite, suivi de terrain et ravitaillement coupés",
   "Behind {0}'s {1} — observation": "Derrière le {1} de {0} — observation",
+  "SHIFT / ↑ TO CLOSE": "MAJ / ↑ POUR ENTRER",
+  "SHIFT / ↑ PUSH IN": "MAJ / ↑ POUSSER",
+  "ALT / ↓ TO BACK OUT": "ALT / ↓ POUR RECULER",
+  "ALT / ↓ BACK OFF": "ALT / ↓ RECULER",
 };
