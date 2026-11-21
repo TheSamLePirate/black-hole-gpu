@@ -7569,15 +7569,9 @@ export class Renderer {
       const sy = Math.ceil(t.height / bh);
       // (the material taking every pixel — each one shaded, its buildings their triangles —: the rays' kernel would only
       // return at each, a dispatch of the tracer's size over the whole image for nothing, ~0.6 ms on an M1 — TERRE-UNREAL U6.
-      // But a bridge's deck is the rays' — shadeLite leaves it them —: with bridges in the scenery, run; skipped, the bridges
-      // were not drawn at all, the river seen through them. And the trees near the camera — nearTreesNow —: theirs too)
+      // PLAN-PONT-ROUTES-AAA PR4: bridge decks are now 3D raster meshes with shared carriageway material, so bridgeCount veto is retired)
       // (at a rate above 1 too since PLAN-J5 J5-6 — the material at the rate's pattern —: the pixels it leaves marked all the same)
-      const liteAll =
-        this.rasterLiteNow &&
-        (this.sceneryRaster?.meshes3d ?? true) &&
-        this.shadeSkip &&
-        this.earthScenery.bridgeCount === 0 &&
-        !this.nearTreesNow;
+      const liteAll = this.rasterLiteNow && (this.sceneryRaster?.meshes3d ?? true) && this.shadeSkip && !this.nearTreesNow;
       if (!liteAll || mark) {
         const sp = enc.beginComputePass(this.prof.pass(liteAll ? "earth raster: left pixels" : "earth shade (raster)"));
         sp.setBindGroup(0, this.hintBindFor(t, hint));

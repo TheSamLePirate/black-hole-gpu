@@ -16216,8 +16216,11 @@ fn liteMaterial(gq: vec3f, q: vec3f, ph: vec3f, rd: vec3f, look: vec3f, tM: f32,
       let ra = farRoofAlbedo(fm);
       A = ra * select(1.0, clamp(l / max(luminance(ra), 0.02), 0.6, 1.5), TUNE_BLD_PHOTO > 0.5);
     }
-    // (a bridge's deck: its stone and its roadway — the photograph under it is the river's: a speckled dark slab)
-    if (atBridgeMesh(at)) { A = vec3f(0.36, 0.34, 0.31) * P.earth2.z; }
+    // (PLAN-PONT-ROUTES-AAA PR4: bridge deck carriageway shares road asphalt albedo; sides/underside stone/concrete)
+    if (atBridgeMesh(at)) {
+      let isDeckCarriageway = dot(n, gq) > 0.55;
+      A = select(vec3f(0.42, 0.40, 0.38), vec3f(0.095, 0.098, 0.1), isDeckCarriageway) * P.earth2.z;
+    }
   }
   if (mesh && leaf == 0u && dot(n, gq) < 0.35 && HAS_SCENERY && P.scenery[0].w > 0.5) {
     let toB = mat3x3f(P.scenery[0].xyz, P.scenery[1].xyz, P.scenery[2].xyz);
@@ -16282,9 +16285,9 @@ fn liteMaterial(gq: vec3f, q: vec3f, ph: vec3f, rd: vec3f, look: vec3f, tM: f32,
   // runway's paving water lying in its hollows and the drops' rings spreading on it, near)
   var wetS = 0.0;
   var ripple = 0.0;
-  // (PLAN-J8 J8-RP RP10: a road's carriageway — the scene's surface of kind 1, its cover, under a photograph too — paved as a runway is:
-  // its asphalt's grain near, the rain's darker wet, its puddles and the drops' rings in the scene's own metres)
-  let roadPaved = select(0.0, sv.cover, sv.kind == 1.0 && !mesh && !isTree) * (1.0 - min(rwyPaved, 1.0));
+  // (PLAN-J8 J8-RP RP10, PLAN-PONT-ROUTES-AAA PR4: road's carriageway on ground and on bridge deck)
+  let isBridgeRoad = atBridgeMesh(at) && dot(n, gq) > 0.55;
+  let roadPaved = select(0.0, select(sv.cover, 1.0, isBridgeRoad), (sv.kind == 1.0 && !mesh && !isTree) || isBridgeRoad) * (1.0 - min(rwyPaved, 1.0));
   let paved = max(rwyPaved, roadPaved);
   let pavedAt = select(rwyAt, SC_AT, rwyPaved <= 0.0);
   if (roadPaved > 0.0 && fpM < 0.6) {
