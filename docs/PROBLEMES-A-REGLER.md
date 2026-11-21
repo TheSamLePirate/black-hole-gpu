@@ -3,6 +3,26 @@
 Problèmes constatés, pas encore réglés. Chaque entrée : la date (UTC), ce qui est mesuré ou observé et sa source, la cause
 connue ou supposée, la piste. Une entrée réglée est barrée avec le commit qui la règle, pas effacée.
 
+## Ponts et routes : géométrie, supports et parité incomplets (21 novembre 2026)
+
+**Établi en lecture du code `3a86f5e1` et sur entrées contrôlées, pas par une nouvelle observation en jeu.**
+`deckBridge` calcule un profil continu mais construit des prismes à dessus horizontal ; trafic et contacts ne lisent
+pas la même surface. Le constructeur ne distingue pas les bouts ouverts de tuiles des vraies culées. La recherche
+du tablier par XY ne porte pas d'identité/niveau. Les ponts contournent le matériau routier partagé ; leur loin
+emploie des dalles sur un plan de sol de cellule, sans hauteur de tablier pour les voitures. Les phases de pointillés
+des routes repartent par segment. Le nivellement `roadProfile/roadBank` existe comme fonctions, sans lecteur de
+production appliquant ce profil au terrain et aux contacts.
+
+Sonde du constructeur réel, cas **synthétique** de 100 m : marches jusqu'à 2,75 m ; ce n'est pas une mesure d'un
+pont réel. Le cas de chaînage route/rail et la clé de dédoublonnage locale révèlent des risques reproductibles ;
+aucun doublon trouvé dans les cinq records réels de Seine examinés. Les 37 tests unitaires ciblés passent,
+sans prouver la continuité du tablier. Sources locales : `remote-results/bridges-analysis-probes.json`,
+`remote-results/bridges-analysis-tests.log` ; sources de code et limites détaillées dans le
+[plan Ponts et routes AAA](PLAN-PONT-ROUTES-AAA.md#2-existant-vérifié-et-causes-des-écarts).
+
+**Suite proposée :** PR0–PR8/PR-R de ce plan, identité/profil communs avant finitions. Aucune correction implémentée
+par la session documentaire ; J8 conserve sa clôture historique.
+
 ## ~~Grand carré d'ombre : récepteur hors profondeur des cascades~~ (21 novembre 2026, 07:44 UTC)
 
 **Corrigé le 21 novembre à 08:01 UTC — commit `fix(shadows): prevent square terrain shadows on Earth and Moon`.** Le lecteur partagé contrôle la

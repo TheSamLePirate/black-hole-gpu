@@ -1,5 +1,9 @@
 # Plan — Détails en vol bas, référence FableFlight
 
+**Suite du 21 novembre 2026 :** le [plan Ponts et routes AAA](PLAN-PONT-ROUTES-AAA.md) approfondit les responsabilités
+communes des corridors et ouvrages après la clôture de J8 : supports, chaussées, trafic/mobilier, niveaux et LOD/PWA.
+Il réutilise les acquis VB, sans les déclarer à refaire ni changer les décisions historiques ci-dessous.
+
 **16 novembre 2026 — plan demandé par Sam après l'analyse comparative de FableFlight et BH GPU.**
 **État : documenté, proposé pour l'implémentation ; aucun lot de code commencé par cette session.**
 La demande présente autorise l'écriture du plan. Aucun jeu, test, benchmark ni script du projet n'a été lancé pour

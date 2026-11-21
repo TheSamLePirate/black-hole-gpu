@@ -6,6 +6,11 @@ Le raccord nocturne est stabilisé (`20261120-191626-j8-night-stabilized`), les 
 et le filtrage d'exclusion des véhicules sur les pistes d'atterrissage est actif et prouvé au Bourget (`20261120-194929-j8-bourget-clear`, 295 voitures exclues).
 Détail et sources au §8 et dans le journal du 20 novembre. L'en-tête initial et les décisions ci-dessous sont conservés comme historique.
 
+**Suite documentaire du 21 novembre :** [Ponts et routes AAA](PLAN-PONT-ROUTES-AAA.md) reprend les limites encore
+présentes de RP3–RP7/RP10 : profils et supports communs, géométrie continue, chaussée, usages, structures et proche/loin.
+Ce nouveau plan décrit PR0–PR8/PR-R, sans implémentation engagée ni réouverture de J8. Les états datés du §3 bis
+restent l'historique ; le nouveau plan confronte leurs intentions au code `3a86f5e1`.
+
 **Reprise du 20 novembre, après J9.** Les rapports du M1 Max montrent des périodes prolongées en mode rapide.
 La décision pouvait basculer au-dessus de 120 m/s alors que le carré complet couvrait encore la caméra. L'ordonnanceur
 continue désormais de demander une scène complète tant que ce carré la couvre. J8-A conserve ses assertions strictes.

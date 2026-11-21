@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 21 nov. 08:01 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 21 nov. 08:33 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous. Ce qui est fermé quitte le tableau « En cours » pour la ligne « Fermé récemment ».
@@ -45,6 +45,7 @@ J4 (fermé, sortie non atteinte), J5 et J6 (fermés).
 
 | Session (T3) | Lot | État |
 |---|---|---|
+| Analyse ponts/routes (21 nov.) | [Plan Ponts et routes AAA](docs/PLAN-PONT-ROUTES-AAA.md) | **Plan approfondi écrit, aucune implémentation** : contrats de corridors/ouvrages, supports indépendants de la vue, profils et nivellement, chaussée partagée, usages par niveau, structures, raster/ombres et LOD/PWA ; PR0–PR8/PR-R avec migrations et acceptation. Les 37 tests de l'analyse précédente ne valident pas la continuité des tabliers. Détails aux journaux du 21 nov. 08:18 et 08:33. |
 | Ombre carrée (21 nov.) | Cascades du relief, Terre et Lune | **Corrigé et vérifié localement** : contrôle en mètres avant normalisation, sélection et fondu ; 13 cas GPU, A/A exact, ancien lecteur réfuté ; pose exacte de Sam sans carré, Lune à 30 km et ombres conservées à 5 km. E2E : 31 assertions, zéro erreur. [Preuves et limites](docs/PROBLEMES-A-REGLER.md#grand-carré-dombre--récepteur-hors-profondeur-des-cascades-21-novembre-2026-0744-utc). |
 | Exécution J9 (20 nov.) | [Arbres proches en vraie géométrie](docs/PLAN-J9-ARBRES-PROCHES.md) | **Fermé et livré : J9-R (vraie géométrie 3D allumée par défaut, retrait du tracé primaire de restes dans le raster)** validé sur les deux Macs (201 assertions, 53 relevés Nominal, gains nets 12 à 14 ms au sol sur mini et 3 à 9 ms sur M1 Max, VRAM bornée à 10,11 Mo, 84/84 WGSL) |
 | Documentation vol bas (cette session) | [Référence FableFlight, VB0–VB8](docs/PLAN-DETAILS-VOL-BAS-FABLEFLIGHT.md) | **plan écrit, proposé** : routes, silhouettes et stationnement, lampadaires, feux et trafic ; complément à J8-L sans changement de priorité ; coûts estimés, aucun lot de code ni mesure exécuté |
@@ -11079,3 +11080,71 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   Leurs journaux restent dans `remote-results/sun-shadow-depth-*-failed.log` et `*-superseded.log`.
 - **Limites :** vérifié ici, sans campagne mini/PC ni suite générale ; non commité/non poussé. Le petit
   artefact de l'expérience ±40 km du diagnostic n'est pas couvert comme problème distinct.
+
+### 2026-11-21 08:18 UTC — Analyse des ponts et de leur parité avec les routes, proposition de suite
+
+- **Contribution à la destination :** responsabilités communes de surface, support et publication (§§7 et 20),
+  cohérence du proche et du loin. Analyse demandée par Sam ; aucun code produit ni objectif J8 modifié.
+- **Constats du code (`3a86f5e1`) :** `BridgeRecord` conserve un axe XY sans Z ni profil longitudinal ;
+  `scenery-worker.ts deckBridge` calcule une courbe mais construit chaque morceau de 10 m au plus à une
+  hauteur constante, prise au milieu. `deckHeightAt` donne au trafic la courbe continue, choisie au plus
+  proche en XY sans identité/niveau d'ouvrage. Le contact CPU prend le dessus plat des mêmes prismes.
+  `OpenA/OpenB` ne modifient pas ce constructeur. Le pied des piles est interpolé sur l'axe densifié, pas
+  interrogé au point exact de chaque pile. Les emprises surfaciques OMT ont encore leur ancien constructeur
+  plat (`base + 4*layer`), avant le dédoublonnage des lignes.
+- **Parité :** la chaussée routière lit les marquages, le grain, les rapiéçages et les flaques ; les ponts,
+  maillages, sautent `scenerySurface`, `roadPaved` et les reflets routiers des lampes. Leurs faces supérieures
+  reçoivent une teinte générique pierre (`trace.wgsl:16220`), leurs parties n'ont pas de matériau structurel.
+  Le trafic/lampes proches suivent encore OMT, même quand le tablier vient des cellules BD TOPO. Les voitures
+  lointaines n'ont pas de hauteur de tablier (`farCars`), le tablier lointain est une dalle de 1,2 m à
+  `clearance + 0,6 m` au-dessus du plan de cellule (`farBridges`). Il utilise le masque/culling des voitures
+  (centre seul pour le frustum), sans profil, piles et ombres d'ouvrage partagés.
+- **Preuves ciblées :** `bun test` sur street-detail-prep, street-cells, street-far, scenery-contact et
+  cell-roads : **37 passent**, zéro échec (`remote-results/bridges-analysis-tests.log`). Cela valide la
+  préparation existante, pas la continuité des tabliers. Sonde locale ignorée `scripts/zz-bridges-audit.ts` :
+  exécute le constructeur réel, seul `addSolid` remplacé par une collecte, **cas synthétique** de 100 m sur
+  terrain plat, tirant 5,5 m : 10 dalles, première à 2,0328 m, marches jusqu'à 2,75 m, écart au profil continu
+  jusqu'à 1,6294 m. Le chaînage accepte un tronçon routier puis ferroviaire au même niveau comme un seul
+  pont routier. La clé de dédoublonnage dépend du x local de la première extrémité : deux représentations
+  du même ouvrage dans des cellules différentes peuvent rester distinctes. **Non observé dans l'échantillon**
+  réel de la Seine 8297/5636 : 5 records, 5 identifiants, 5 clés. JSON : `remote-results/bridges-analysis-probes.json`.
+- **Données :** dans trois features de pont BD TOPO de cet échantillon, attributs de méthode/précision
+  altimétrique mais aucun attribut d'altitude explicite. Ne pas confondre richesse du produit et contenu
+  des tuiles reçues. La [fiche IGN](https://www.data.gouv.fr/datasets/bd-topo-r) décrit une base 3D ; un lot
+  d'acquisition doit vérifier quelles cotes sont réellement accessibles et leur datum. OSM
+  [layer](https://wiki.openstreetmap.org/wiki/Key:layer) ordonne les franchissements, sans donner une hauteur ;
+  [bridge:structure](https://wiki.openstreetmap.org/wiki/Key:bridge:structure) distingue les architectures quand renseigné.
+- **Proposition, à décider, sans rouvrir silencieusement J8 :** P0 fixtures et contrat d'acceptation ;
+  P1 identité globale et profil unique versionné, extrémités ouvertes recollées, voies/niveaux/matières conservés ;
+  P2 vrai maillage continu et raccords à la route, même support pour contacts et trafic ; P3 matériau de
+  chaussée partagé avec les routes (UV métriques, marquages, trottoirs, pluie, lumière) ; P4 véhicules/mobilier
+  rattachés à l'ouvrage exact, y compris au loin ; P5 familles structurelles et modèles dédiés pour les
+  ouvrages emblématiques, LOD issus du même ouvrage avec culling sur leur étendue et publication cohérente ;
+  P6 campagne jour/nuit/pluie, marche dessus/dessous, traversées de cellules et proche/loin, ressources et
+  coût mesurés sur les deux Macs. Aucune estimation de coût ni promesse de fidélité géographique absolue.
+- **Limites :** pas d'e2e ni de nouvelle capture du jeu, pas de mesure GPU ; les valeurs de la sonde ne
+  décrivent aucun pont réel. Analyse visuelle historique non réutilisée comme preuve actuelle. Résultats
+  et schéma de proposition montrés dans T3 ; aucune fonction produit changée.
+
+### 2026-11-21 08:33 UTC — Plan Ponts et routes AAA : supports, chaussées et ouvrages communs
+
+- **Contribution à la destination :** responsabilités de monde/surface et préparation hors frame (stratégie §§7,
+  19 et 20), continuité du parcours et migration des lecteurs ; session documentaire demandée par Sam.
+- **Réalisé :** [PLAN-PONT-ROUTES-AAA](docs/PLAN-PONT-ROUTES-AAA.md), analyse approfondie du code `3a86f5e1` et
+  plan PR0–PR8/PR-R. Contrats WGS84/datum, identités/ports intercellules, profils et sections, support à plusieurs
+  niveaux indépendant de la caméra et de la qualité, géométrie continue, matériau routier partagé, trafic/mobilier,
+  structures par travée, visibilité raster/ombres/eau, LOD, résidence, caches/PWA et reprise GPU. Corpus futur,
+  critères chiffrés proposés, budgets à mesurer et retraits définis. Carte de documentation, renvois J8/VB et
+  problèmes ouverts mis à jour ; J8 conserve sa clôture historique.
+- **Approfondissement :** `roadProfile/roadBank` n'ont pas de lecteur de production appliquant le nivellement ;
+  contraintes de pente incompatibles aux extrémités à déclarer, non masquer. Les phases de peinture sont locales
+  aux segments dans `scenerySurface` ; le veto `bridgeCount === 0` de `liteAll` existe encore. Le plan traite leur
+  remplacement avec les lecteurs concernés, sans affirmer de gain. `meshoptimizer` 1.3.0 et `webgpu-utils` 2.1.1
+  déjà présents sont réutilisables ; aucune nouvelle bibliothèque demandée par principe.
+- **Preuves :** lecture du code, plans, références et sources primaires IGN/OSM/OpenMapTiles ; résultats de l'audit
+  précédent conservés avec leurs limites (37 tests existants, cas synthétiques distincts des ouvrages réels).
+  Contrôle documentaire : 33 liens locaux du nouveau plan résolus, dix phases repérées, blocs de code équilibrés ;
+  `git diff --check` propre. Aucun code produit modifié, aucun nouveau test, e2e, jeu ou benchmark lancé.
+- **Limites / suite :** tous les lots d'implémentation restent à faire. Les seuils proposés mesurent la cohérence
+  interne, pas une précision géographique centimétrique. Cotes réellement disponibles, budgets, lieux exacts du
+  corpus complémentaire et fidélité des ouvrages remarquables à fixer en PR0/PR1 ; aucun coût/gain GPU établi.
