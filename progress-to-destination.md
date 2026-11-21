@@ -45,7 +45,7 @@ J4 (fermé, sortie non atteinte), J5 et J6 (fermés).
 
 | Session (T3) | Lot | État |
 |---|---|---|
-| Analyse ponts/routes (21 nov.) | [Plan Ponts et routes AAA](docs/PLAN-PONT-ROUTES-AAA.md) | **Plan approfondi écrit, aucune implémentation** : contrats de corridors/ouvrages, supports indépendants de la vue, profils et nivellement, chaussée partagée, usages par niveau, structures, raster/ombres et LOD/PWA ; PR0–PR8/PR-R avec migrations et acceptation. Les 37 tests de l'analyse précédente ne valident pas la continuité des tabliers. Détails aux journaux du 21 nov. 08:18 et 08:33. |
+| Ponts et routes AAA (21 nov.) | [PR0 — Références et contrat](docs/PLAN-PONT-ROUTES-AAA.md) | **PR0 livré et prouvé** : corpus de 12 cas (`src/system/bridge-corpus.ts`), sondes sans extraction textuelle de code, défauts historiques quantifiés (saut 2,75 m, contact pneu/dalle 1,63 m), dédoublonnage mondial unifié, témoins Règle 3 validés (A/A exact, défaut 10 cm détecté) ; [FICHE-PR0](docs/progress/pont-routes-aaa/FICHE-PR0.md). Suite : PR1. |
 | Ombre carrée (21 nov.) | Cascades du relief, Terre et Lune | **Corrigé et vérifié localement** : contrôle en mètres avant normalisation, sélection et fondu ; 13 cas GPU, A/A exact, ancien lecteur réfuté ; pose exacte de Sam sans carré, Lune à 30 km et ombres conservées à 5 km. E2E : 31 assertions, zéro erreur. [Preuves et limites](docs/PROBLEMES-A-REGLER.md#grand-carré-dombre--récepteur-hors-profondeur-des-cascades-21-novembre-2026-0744-utc). |
 | Exécution J9 (20 nov.) | [Arbres proches en vraie géométrie](docs/PLAN-J9-ARBRES-PROCHES.md) | **Fermé et livré : J9-R (vraie géométrie 3D allumée par défaut, retrait du tracé primaire de restes dans le raster)** validé sur les deux Macs (201 assertions, 53 relevés Nominal, gains nets 12 à 14 ms au sol sur mini et 3 à 9 ms sur M1 Max, VRAM bornée à 10,11 Mo, 84/84 WGSL) |
 | Documentation vol bas (cette session) | [Référence FableFlight, VB0–VB8](docs/PLAN-DETAILS-VOL-BAS-FABLEFLIGHT.md) | **plan écrit, proposé** : routes, silhouettes et stationnement, lampadaires, feux et trafic ; complément à J8-L sans changement de priorité ; coûts estimés, aucun lot de code ni mesure exécuté |
@@ -11148,3 +11148,21 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
 - **Limites / suite :** tous les lots d'implémentation restent à faire. Les seuils proposés mesurent la cohérence
   interne, pas une précision géographique centimétrique. Cotes réellement disponibles, budgets, lieux exacts du
   corpus complémentaire et fidélité des ouvrages remarquables à fixer en PR0/PR1 ; aucun coût/gain GPU établi.
+
+### 2026-11-21 09:58 UTC — Ponts et routes AAA : Phase PR0 (Références, corpus et contrat d'acceptation)
+
+- **Contribution à la destination :** contrats de monde/surface WGS84 et multi-niveaux, corpus de référence pérenne,
+  quantification reproductible des défauts géométriques et validation des sondes de mesure selon la règle 3 de CLAUDE.md.
+- **Réalisé :**
+  - [`src/system/bridge-corpus.ts`](src/system/bridge-corpus.ts) : définition des types d'interfaces transversaux (`SupportRef`,
+    `BridgeCorridor`, `BridgePort`, `SupportQuery`, `SupportSampleResult`), définition des 12 cas du corpus de référence (§10.1),
+    simulateur pur de la géométrie legacy `deckBridge` (`measureLegacyBridgeSteps`), sonde de dédoublonnage (`probeBridgeKeys`)
+    et sonde de témoin de marche (`evaluateStepWitness`).
+  - [`tests/bridges-corpus.test.ts`](tests/bridges-corpus.test.ts) : suite de tests automatisée vérifiant les 12 cas, les défauts
+    reproduits (10 dalles, marche max 2,75 m, divergence pneu/dessus 1,63 m), le dédoublonnage de clé intercellules, et les témoins
+    positifs/négatifs de la règle 3.
+  - [`docs/progress/pont-routes-aaa/FICHE-PR0.md`](docs/progress/pont-routes-aaa/FICHE-PR0.md) : fiche de phase consignant les résultats.
+- **Preuves :** `bun test tests/bridges-corpus.test.ts` (4 pass, 0 fail), vérification stricte des seuils d'acceptation de PR0.
+  Contrôle statique `bun run check` propre.
+- **Limites / transitions restantes :** PR0 fige les contrats et les outils de mesure sans modifier le runtime de production.
+- **Suite :** PR1 — Identité, ports et publication (assemblage déterministe, ports intercellules, séparation stricte route/rail).
