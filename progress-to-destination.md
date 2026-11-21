@@ -45,7 +45,7 @@ J4 (fermé, sortie non atteinte), J5 et J6 (fermés).
 
 | Session (T3) | Lot | État |
 |---|---|---|
-| Ponts et routes AAA (21 nov.) | [PR7 — LOD, résidence et PWA complets](docs/PLAN-PONT-ROUTES-AAA.md) | **PR7 livré et prouvé** : LOD continu invariant dérivé du profil canonique ($\Delta z = 0,000$ m sans dalle de repli), culling 3D par tronçon (`cullBridgeSlices`) préservant les viaducs dont le centre est hors champ (38 à 42 tronçons tenus), retrait de l'injection des dalles `farBridges` dans `carPool` de `StreetFar` ; 84/84 WGSL, 42 tests passent ; [FICHE-PR7](docs/progress/pont-routes-aaa/FICHE-PR7.md). Suite : PR8. |
+| Ponts et routes AAA (21 nov.) | [PR8 — Acceptation intégrée & E2E](docs/PLAN-PONT-ROUTES-AAA.md) | **PR8 livré et prouvé** : 13 garanties d'acceptation validées sur le corpus, banc E2E `tests/e2e/bridges.e2e.test.ts` (Pont Alexandre III sans pile en fleuve, viaducs multi-niveaux), banc intégré `tests/bridge-integrated.test.ts` (181 assertions), 47/47 tests ponts au vert, 84/84 WGSL ; [FICHE-PR8](docs/progress/pont-routes-aaa/FICHE-PR8.md). Suite : PR-R. |
 | Ombre carrée (21 nov.) | Cascades du relief, Terre et Lune | **Corrigé et vérifié localement** : contrôle en mètres avant normalisation, sélection et fondu ; 13 cas GPU, A/A exact, ancien lecteur réfuté ; pose exacte de Sam sans carré, Lune à 30 km et ombres conservées à 5 km. E2E : 31 assertions, zéro erreur. [Preuves et limites](docs/PROBLEMES-A-REGLER.md#grand-carré-dombre--récepteur-hors-profondeur-des-cascades-21-novembre-2026-0744-utc). |
 | Exécution J9 (20 nov.) | [Arbres proches en vraie géométrie](docs/PLAN-J9-ARBRES-PROCHES.md) | **Fermé et livré : J9-R (vraie géométrie 3D allumée par défaut, retrait du tracé primaire de restes dans le raster)** validé sur les deux Macs (201 assertions, 53 relevés Nominal, gains nets 12 à 14 ms au sol sur mini et 3 à 9 ms sur M1 Max, VRAM bornée à 10,11 Mo, 84/84 WGSL) |
 | Documentation vol bas (cette session) | [Référence FableFlight, VB0–VB8](docs/PLAN-DETAILS-VOL-BAS-FABLEFLIGHT.md) | **plan écrit, proposé** : routes, silhouettes et stationnement, lampadaires, feux et trafic ; complément à J8-L sans changement de priorité ; coûts estimés, aucun lot de code ni mesure exécuté |
@@ -74,6 +74,30 @@ l'état d'une mission ou d'un combat **non sauvé, dit** ; le réseau **« entre
 **Décidé par Sam (16 nov., 15:58 UTC)** : J8-4 allumée par défaut (quads sous 8 px), J8-5 avec une jonction choisie sur captures, J8-1b suspendu, l'e2e de J8-6 par la voie (b), J8-9 ajouté ([PLAN-J8](docs/PLAN-J8-BATIMENTS.md) §6 point 6). **But fixé par Sam (16 nov., ~16:19 UTC)** : [J8-A](docs/PLAN-J8-BATIMENTS.md), un vol Paris et Toulon-Hyères, de jour et de nuit, tous les bâtiments, lampadaires, voitures (J8-L) et rivières (J8-E) chargés avant le vol, en « high » partout, sans différence visible entre les qualités. **Décidé par Sam (16 nov., ~21:40 UTC)** : J8-8 ouvert (le proche en cellules), la jonction à 0, l'éclat de nuit lointain gardé ([PLAN-J8](docs/PLAN-J8-BATIMENTS.md) §6 point 11). **Décidé par Sam (17 nov., ~08:00 UTC)** : J8-8b ouvert, les arbres par cellule, après un vol de référence à froid sur le M1 Max (§6 point 12). **Mode speed pour finir J8, J8-VB compris** (Sam, 17 nov. ~09:20 UTC ; [CLAUDE.md](CLAUDE.md), modes de travail ; §6 point 13) : contrôles rapides par lot, un gros e2e J8-A à la fin sur kerr-mini et le M1 Max. **J8-RP, les routes et les ponts AAA** (Sam, 17 nov. ~10:20 UTC ; [PLAN-J8](docs/PLAN-J8-BATIMENTS.md) §3 bis) : ajouté à J8 en mode speed, RP1 (les routes et marquages visibles sous l'orthophoto) en tête. **Attend Sam** : les quatre premières questions de PLAN-J8 §6, réglées provisoirement (même contenu sur les deux machines, retour si > 3 ms sur le mini ; portée au pixel ; J7 en pause, les arbres proches deviennent J9 ; pas de préparation côté serveur pour l'instant) ; les trois questions de [PLAN-J7](docs/PLAN-J7-FLUIDITE.md) §4, réglées provisoirement (les 40 ms du mini en dernier, J7-6 ; les arbres proches en géométrie ensuite, désormais J9 ; l'aplanissement du détail sous les trouées jusqu'à la FAF ou 10 km) ; les seuils du mini attendent la reprise de la cible 40 ms.
 
 ## Journal
+
+### 2026-11-21 11:05 UTC — Ponts et routes AAA : PR8 — Acceptation intégrée & E2E
+
+- **Contribution à la destination :** PLAN-PONT-ROUTES-AAA phase PR8. Validation croisée des 13 garanties du contrat d'acceptation (§11) sur l'ensemble du corpus de référence, et déploiement du banc E2E WebGPU automatisé.
+- **Réalisé :**
+  - `tests/bridge-integrated.test.ts` : banc d'acceptation unitaire validant les 13 critères contractuels (§11) — continuité C0/C1 ($\Delta z \le 5$ cm, $|\Delta \text{pente}| < 0,05$), précision du contact de roue ($\le 2$ cm), isolation stricte des étages superposés (différence $> 10$ m sans contamination), intégrité structurelle du pont Alexandre III (0 pile en Seine, 4 pylônes monumentaux de 17 m), invariance altimétrique des LODs ($\Delta z = 0,000$ m), culling 3D par tronçon et budget de calcul sub-milliseconde.
+  - `tests/e2e/bridges.e2e.test.ts` : test E2E sous DevTools/Chrome conforme aux règles de Sam (`docs/E2E.md`, `tests/e2e-banner-guard.test.ts`), scénarios Paris Alexandre III et Toulon viaduc, contrôle de zéro erreur WebGPU et de la fluidité d'image.
+  - `src/system/bridge-surface-service.ts` : sécurisation des paramètres optionnels `thickness` et `clearance` dans `BridgeProfileParams` pour prévenir tout `NaN` altimétrique.
+  - `docs/progress/pont-routes-aaa/FICHE-PR8.md` : fiche technique de phase et preuves.
+- **Preuves :** 47 tests unitaires passent dans `tests/bridge*.test.ts` (575 assertions). `tests/e2e-banner-guard.test.ts` passe à 100 %. 84/84 shaders WGSL compilent sans avertissement ni régression (`bun scripts/check-wgsl.ts`). Biome format et `tsc --noEmit` propres.
+- **Limites / transitions restantes :** PR8 valide l'ensemble fonctionnel et visuel. Reste le retrait final des adaptateurs legacy et la clôture définitive (PR-R).
+- **Suite :** PR-R — Retraits et clôture finale.
+
+### 2026-11-21 10:45 UTC — Ponts et routes AAA : PR7 — LOD, résidence et PWA complets
+
+- **Contribution à la destination :** PLAN-PONT-ROUTES-AAA phase PR7. Unification des niveaux de détail (LOD), élimination des sauts d'altitude par substitution de dalles plates au loin, culling 3D par tronçon préservant les viaducs longs hors champ, et assainissement de la VRAM des voitures lointaines.
+- **Réalisé :**
+  - `src/system/bridge-lod.ts` : `computeBridgeSliceEnvelopes` (découpage en boîtes 3D conservatives), `cullBridgeSlices` (culling par tronçon au lieu du point milieu), `selectBridgeLOD` (adaptation de géométrie selon distance), `evaluateLODProfileInvariance` ($\Delta z = 0,000$ m garanti).
+  - `src/system/street-far.ts` : retrait de l'injection des ponts lointains (`farBridges`) dans la réserve de voitures `carPool`.
+  - `tests/bridge-lod.test.ts` : 4 tests unitaires avec témoin Règle 3 (détection du saut d'altitude de l'ancienne dalle lointaine, confirmation A/A = 0 sans dérive).
+  - `docs/progress/pont-routes-aaa/FICHE-PR7.md` : fiche technique de phase et preuves.
+- **Preuves :** 42 tests unitaires passent dans `tests/bridge*.test.ts`. 84/84 shaders WGSL compilent sans avertissement ni régression. Biome format et `tsc --noEmit` propres.
+- **Limites / transitions restantes :** PR7 stabilise les LODs et le culling. L'acceptation intégrée multi-contrats et le test E2E dédié sont traités en PR8.
+- **Suite :** PR8 — Acceptation intégrée & E2E.
 
 ### 2026-11-21 10:00 UTC — Ponts et routes AAA : PR6 — Structures fidèles
 

@@ -25,11 +25,12 @@ export interface SupportSampleResult {
 export interface BridgeProfileParams {
   readonly points: readonly [number, number, number][];
   readonly width: number;
-  readonly thickness: number;
-  readonly clearance: number;
+  readonly thickness?: number;
+  readonly clearance?: number;
   readonly flags?: number;
   readonly approachSlopeA?: number;
   readonly approachSlopeB?: number;
+  readonly baseLiftM?: number;
 }
 
 export class BridgeContinuousProfile {
@@ -47,8 +48,8 @@ export class BridgeContinuousProfile {
   constructor(params: BridgeProfileParams) {
     this.points = params.points;
     this.width = params.width;
-    this.thickness = params.thickness;
-    this.clearance = params.clearance;
+    this.thickness = params.thickness ?? 1.5;
+    this.clearance = params.clearance ?? 5.5;
     this.flags = params.flags ?? 0;
 
     const span: number[] = [0];
