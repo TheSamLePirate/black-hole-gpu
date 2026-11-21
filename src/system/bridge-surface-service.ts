@@ -253,6 +253,88 @@ export class SupportSurfaceRegistry {
     this.bridges.delete(surfaceId);
   }
 
+  /**
+   * Queries a bridge deck at local (x, y) with optional level / layer and vertical window.
+   * If expectedLevel is supplied, only bridges matching that level are considered.
+   * If expectedZ is supplied, only bridge decks within maxDeltaZ of expectedZ are considered.
+   * Returns null if no bridge matches or if the query falls outside the deck boundaries.
+   */
+  queryBridgeAt(
+    x: number,
+    y: number,
+    options?: {
+      readonly expectedZ?: number;
+      readonly expectedLevel?: number;
+      readonly maxDeltaZ?: number;
+    },
+  ): SupportSampleResult | null {
+    let bestCandidate: {
+      ref: SupportRef;
+      profile: BridgeContinuousProfile;
+      s: number;
+      u: number;
+      deckZ: number;
+      level: number;
+    } | null = null;
+    let minVertDist = Infinity;
+
+    for (const entry of this.bridges.values()) {
+      if (options?.expectedLevel !== undefined && entry.level !== options.expectedLevel) {
+        continue;
+      }
+      const proj = entry.profile.project(x, y);
+      const halfWidth = entry.profile.width / 2 + 0.5;
+      if (proj.distance <= halfWidth) {
+        const sample = entry.profile.sample(proj.s, proj.u);
+        const deckZ = sample.position[2];
+
+        if (options?.expectedZ !== undefined) {
+          const deltaZ = Math.abs(options.expectedZ - deckZ);
+          const maxDelta = options.maxDeltaZ ?? 2.5;
+          if (deltaZ > maxDelta) continue;
+          if (deltaZ < minVertDist) {
+            minVertDist = deltaZ;
+            bestCandidate = {
+              ref: entry.ref,
+              profile: entry.profile,
+              s: proj.s,
+              u: proj.u,
+              deckZ,
+              level: entry.level,
+            };
+          }
+        } else {
+          // If no expectedZ, pick candidate with matching level or closest 2D projection
+          bestCandidate = {
+            ref: entry.ref,
+            profile: entry.profile,
+            s: proj.s,
+            u: proj.u,
+            deckZ,
+            level: entry.level,
+          };
+          break;
+        }
+      }
+    }
+
+    if (!bestCandidate) return null;
+    const s = bestCandidate.profile.sample(bestCandidate.s, bestCandidate.u);
+    return {
+      found: true,
+      supportRef: bestCandidate.ref,
+      point: s.position,
+      elevation: s.position[2],
+      normal: s.normal,
+      tangent: s.tangent,
+      crossTangent: s.crossTangent,
+      surfaceRole: s.role,
+      distanceToAxis: Math.abs(bestCandidate.u),
+      sM: bestCandidate.s,
+      uM: bestCandidate.u,
+    };
+  }
+
   sample(ref: SupportRef, sM: number, uM: number): SupportSampleResult | null {
     const entry = this.bridges.get(ref.surfaceId);
     if (!entry) return null;

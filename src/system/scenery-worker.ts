@@ -83,7 +83,7 @@ import {
   streetCacheUrl,
 } from "./street-cells";
 import { bridgeCanonicalKey } from "./bridge-ports";
-import { BridgeContinuousProfile } from "./bridge-surface-service";
+import { BridgeContinuousProfile, SupportSurfaceRegistry, type SupportRef } from "./bridge-surface-service";
 import { buildContinuousPierMesh, buildContinuousRailMesh, buildContinuousSliceMesh } from "./bridge-mesh";
 import { markRoad, roadClassCode } from "./road-markings";
 import { catenaryMasts, cellRoadSurfaces } from "./cell-roads";
@@ -543,6 +543,7 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
     oneway: number;
     /** (PLAN-J8 J8-RP RP6) on a bridge: its cars on the deck (deckHeightAt) */
     bridge?: boolean;
+    layer?: number;
   }[] = [];
   // (Q8 D1: the vineyards' and orchards' polygons, for the decals alone)
   const rowCrops: Primitive[] = [];
@@ -554,6 +555,7 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
     width: number;
     /** (PLAN-J8 J8-RP RP6) on a bridge: its lamps on the deck */
     bridge?: boolean;
+    layer?: number;
   }[] = [];
   let lamps: StreetLamp[] = [];
   let lampGrid: Uint8Array | undefined;
@@ -711,7 +713,14 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
                   continue;
                 segs.push({ a: geo(line[j]!), b: geo(line[j + 1]!) });
               }
-              if (segs.length) roadLines.push({ segs, cls, oneway: Number(props.oneway) || 0, bridge: props.brunnel === "bridge" });
+              if (segs.length)
+                roadLines.push({
+                  segs,
+                  cls,
+                  oneway: Number(props.oneway) || 0,
+                  bridge: props.brunnel === "bridge",
+                  layer: Math.max(1, Number(props.layer) || 1),
+                });
             }
             // (Q8 L10: a town street's runs — its consecutive segments with their middles in the tile, near — for the lamps)
             if (!water && !rail && LAMP_CLASSES[cls] && props.brunnel !== "tunnel" && props.brunnel !== "ford") {
@@ -731,7 +740,14 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
                   continue;
                 }
                 if (!run) {
-                  run = { xy: [[locals[j]![0], locals[j]![1]]], geo: [geo(line[j]!)], cls, width, bridge: props.brunnel === "bridge" };
+                  run = {
+                    xy: [[locals[j]![0], locals[j]![1]]],
+                    geo: [geo(line[j]!)],
+                    cls,
+                    width,
+                    bridge: props.brunnel === "bridge",
+                    layer: Math.max(1, Number(props.layer) || 1),
+                  };
                   lampLines.push(run);
                 }
                 run.xy.push([locals[j + 1]![0], locals[j + 1]![1]]);
@@ -1397,26 +1413,15 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
     }
     return out;
   };
-  // (PLAN-J8 J8-RP RP6: the decks built — their axis, half-width and height along —: what rides or stands on a bridge set on its deck)
-  const decks: { pts: Vec3[]; span: number[]; half: number; at: (sv: number) => number }[] = [];
-  const deckHeightAt = (x: number, y: number): number | null => {
-    let best = Number.POSITIVE_INFINITY,
-      z: number | null = null;
-    for (const d of decks)
-      for (let i = 0; i + 1 < d.pts.length; i++) {
-        const A = d.pts[i]!,
-          B = d.pts[i + 1]!;
-        const dx = B[0] - A[0],
-          dy = B[1] - A[1],
-          L2 = dx * dx + dy * dy || 1;
-        const t = Math.max(0, Math.min(1, ((x - A[0]) * dx + (y - A[1]) * dy) / L2));
-        const e = Math.hypot(A[0] + dx * t - x, A[1] + dy * t - y);
-        if (e < d.half + 1.5 && e < best) {
-          best = e;
-          z = d.at(d.span[i]! + (d.span[i + 1]! - d.span[i]!) * t);
-        }
-      }
-    return z;
+  // (PLAN-PONT-ROUTES-AAA PR2/PR5: canonical multi-level bridge surface registry replacing naive 2D closest deckHeightAt)
+  const bridgeRegistry = new SupportSurfaceRegistry();
+  const deckHeightAt = (x: number, y: number, expectedZ?: number, expectedLayer?: number): number | null => {
+    const sample = bridgeRegistry.queryBridgeAt(x, y, {
+      expectedZ,
+      expectedLevel: expectedLayer,
+      maxDeltaZ: expectedZ !== undefined ? 2.5 : undefined,
+    });
+    return sample ? sample.elevation : null;
   };
   // (RP5: a bridge's build by its kind — a road's concrete deck and parapets; a railway's deeper deck (its ballast's trough) and
   // taller parapets; a footbridge's thin deck, its steel railings, its slender piers)
@@ -1434,6 +1439,7 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
     clearance: number,
     style: BridgeStyle = BRIDGE_STYLES.road,
     flags = 0,
+    layer = 1,
   ): boolean => {
     // (PLAN-J8 J8-RP RP5, FableFlight's bridge_end: the deck from the ground at its two abutments — its ends —, straight between them,
     // lifted towards its middle to a clearance over what lies under it (5.5 m; a layer above the first 4 m more), cut in pieces of
@@ -1457,7 +1463,12 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
     const total = profile.totalLength;
     if (total < 1) return false;
     const deckAt = (sv: number) => profile.elevationAt(sv);
-    decks.push({ pts: points, span, half: width / 2, at: deckAt });
+    const ref: SupportRef = {
+      assetId: `bridge_${bridges}`,
+      surfaceId: `surface_${bridges}`,
+      revision: "1",
+    };
+    bridgeRegistry.registerBridge(ref, profile, layer);
     const groundAt = (sv: number) => {
       let k = 1;
       while (k < span.length - 1 && span[k]! < sv) k++;
@@ -1573,6 +1584,22 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
   }
   for (const v of bridgeLines) {
     if (bridges >= bridgeLimit) break;
+    // (PLAN-PONT-ROUTES-AAA PR5: retire OMT bridge lines that double a migrated BD TOPO cell bridge)
+    if (cellBridges.size > 0) {
+      const mid = v.line[Math.floor(v.line.length / 2)]!;
+      let isDuplicate = false;
+      for (const e of cellBridges.values()) {
+        const cbMid = e.b.points[Math.floor(e.b.points.length / 2)]!;
+        const cbGeo = fromCell(e.o, cbMid[0], cbMid[1]);
+        const dLat = (cbGeo.lat - mid.lat) * 111320;
+        const dLon = (cbGeo.lon - mid.lon) * 111320 * Math.cos((mid.lat * Math.PI) / 180);
+        if (dLat * dLat + dLon * dLon < 100 * 100) {
+          isDuplicate = true;
+          break;
+        }
+      }
+      if (isDuplicate) continue;
+    }
     try {
       const mid = v.line[Math.floor(v.line.length / 2)]!;
       const at = localPoint(frame, mid.lat, mid.lon, 0);
@@ -1585,6 +1612,9 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
           v.water ? 4 : 2,
           v.water ? [0.018, 0.052, 0.055] : [0.095, 0.098, 0.1],
           5.5 + 4 * Math.max(0, v.layer - 1),
+          BRIDGE_STYLES.road,
+          0,
+          v.layer,
         )
       )
         bridges++;
@@ -1609,7 +1639,7 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
           foot = e.b.kind === BridgeKind.Foot;
         const colour = rail ? [0.2, 0.19, 0.17] : foot ? [0.3, 0.29, 0.27] : [0.095, 0.098, 0.1];
         const style = rail ? BRIDGE_STYLES.rail : foot ? BRIDGE_STYLES.foot : BRIDGE_STYLES.road;
-        if (deckBridge(pts, Math.max(foot ? 2 : 4, e.b.width), 2, colour, e.b.clearance > 0 ? e.b.clearance : 5.5, style, e.b.flags)) {
+        if (deckBridge(pts, Math.max(foot ? 2 : 4, e.b.width), 2, colour, e.b.clearance > 0 ? e.b.clearance : 5.5, style, e.b.flags, 1)) {
           bridges++;
           cellBridgeCount++;
         }
@@ -2000,10 +2030,11 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
     // (the ground's height already in only — the scene not held for the traffic: a point without it ends the run there)
     // (RP6: a bridge's road on its deck — deckHeightAt; none where no deck was built: its cars left out there)
     let onBridge = false;
+    let bridgeLayer = 1;
     const at = (q: { lat: number; lon: number }) => {
       if (onBridge) {
         const g = localPoint(frame, q.lat, q.lon, 0);
-        const z = deckHeightAt(g[0], g[1]);
+        const z = deckHeightAt(g[0], g[1], undefined, bridgeLayer);
         return z === null ? null : ([g[0], g[1], z] as [number, number, number]);
       }
       const h = heightNow(q.lat, q.lon);
@@ -2013,6 +2044,7 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
     const runs: { pts: [number, number, number][]; cls: string; oneway: number }[] = [];
     for (const r of roadLines) {
       onBridge = !!r.bridge;
+      bridgeLayer = r.layer ?? 1;
       let run: [number, number, number][] = [];
       let last: { lat: number; lon: number } | null = null;
       const close = () => {
@@ -2251,7 +2283,8 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
             if (z0 === undefined) continue;
             // (RP6: a bridge's rail on its deck — its local z the deck's top)
             const m0 = localPoint(frame, gm.lat, gm.lon, z0);
-            const zd = deckHeightAt(m0[0], m0[1]);
+            // (PLAN-PONT-ROUTES-AAA PR5: ground guardrail under a bridge stays on ground; only match deck if m0 is within 1.5m of deck)
+            const zd = deckHeightAt(m0[0], m0[1], m0[2]);
             const z = z0;
             const a = localPoint(frame, ga.lat, ga.lon, z),
               b = localPoint(frame, gb.lat, gb.lon, z);
@@ -2287,7 +2320,7 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
           b = r.geo[l.seg + 1]!;
         // (RP6: a bridge's lamp on its deck — none where no deck was built)
         if (r.bridge) {
-          const zd = deckHeightAt(l.foot[0], l.foot[1]);
+          const zd = deckHeightAt(l.foot[0], l.foot[1], undefined, r.layer);
           if (zd === null) continue;
           all.push({ ...l, foot: [l.foot[0], l.foot[1], zd], d });
           continue;
