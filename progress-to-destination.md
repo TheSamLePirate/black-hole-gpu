@@ -45,7 +45,7 @@ J4 (fermé, sortie non atteinte), J5 et J6 (fermés).
 
 | Session (T3) | Lot | État |
 |---|---|---|
-| Ponts et routes AAA (21 nov.) | [PR2 — Profil et supports communs](docs/PLAN-PONT-ROUTES-AAA.md) | **PR2 livré et prouvé** : résolution de profil continu `BridgeContinuousProfile` garantissant $z(0)=z_A$ et $z(L)=z_B$ (fin du saut arbitraire +0.4m), gabarit d'intrados garanti, section transversale à rôles métriques, registre de support multi-niveaux avec hystérèse (`SupportSurfaceRegistry`) ; [FICHE-PR2](docs/progress/pont-routes-aaa/FICHE-PR2.md). Suite : PR3. |
+| Ponts et routes AAA (21 nov.) | [PR3 — Géométrie continue routes/ponts](docs/PLAN-PONT-ROUTES-AAA.md) | **PR3 livré et prouvé** : maillage 3D extrudé continu (`buildContinuousSliceMesh`), zéro ressaut vertical aux jonctions de tranches ($\Delta z = 0,000$ m contre 2,75 m legacy), culées fermées/ouvertes conformes aux ports, parapets continus en pente, piles ancrées au sol ($g - 2$ m) et ajustées sous l'intrados, retrait des dalles plates OMT `bridgeAreas` dans le domaine couvert ; [FICHE-PR3](docs/progress/pont-routes-aaa/FICHE-PR3.md). Suite : PR4. |
 | Ombre carrée (21 nov.) | Cascades du relief, Terre et Lune | **Corrigé et vérifié localement** : contrôle en mètres avant normalisation, sélection et fondu ; 13 cas GPU, A/A exact, ancien lecteur réfuté ; pose exacte de Sam sans carré, Lune à 30 km et ombres conservées à 5 km. E2E : 31 assertions, zéro erreur. [Preuves et limites](docs/PROBLEMES-A-REGLER.md#grand-carré-dombre--récepteur-hors-profondeur-des-cascades-21-novembre-2026-0744-utc). |
 | Exécution J9 (20 nov.) | [Arbres proches en vraie géométrie](docs/PLAN-J9-ARBRES-PROCHES.md) | **Fermé et livré : J9-R (vraie géométrie 3D allumée par défaut, retrait du tracé primaire de restes dans le raster)** validé sur les deux Macs (201 assertions, 53 relevés Nominal, gains nets 12 à 14 ms au sol sur mini et 3 à 9 ms sur M1 Max, VRAM bornée à 10,11 Mo, 84/84 WGSL) |
 | Documentation vol bas (cette session) | [Référence FableFlight, VB0–VB8](docs/PLAN-DETAILS-VOL-BAS-FABLEFLIGHT.md) | **plan écrit, proposé** : routes, silhouettes et stationnement, lampadaires, feux et trafic ; complément à J8-L sans changement de priorité ; coûts estimés, aucun lot de code ni mesure exécuté |
@@ -11207,4 +11207,27 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
 - **Preuves :** `bun test tests/bridges-corpus.test.ts tests/bridge-ports.test.ts tests/bridge-surface.test.ts` (13 pass, 0 fail),
   contrôle Biome et compilation WGSL (84/84) sans régression.
 - **Suite :** PR3 — Géométrie continue routes/ponts (maillage 3D extrudé continu, suppression des marches horizontales de 10 m, culées et piles ancrées).
+
+### 2026-11-21 10:20 UTC — Ponts et routes AAA : Phase PR3 (Géométrie continue routes/ponts)
+
+- **Contribution à la destination :** suppression des falaises de 2,75 m et des discontinuités de surface de roulement (stratégie §7, §19 et §20),
+  culées d'extrémité réelles et conformes aux ports de tuile, garde-corps continus, et piles ancrées au terrain sous l'intrados exact.
+- **Réalisé :**
+  - [`src/system/bridge-mesh.ts`](src/system/bridge-mesh.ts) : `buildContinuousSliceMesh` pour la triangulation 3D extrudée continue
+    de tablier sans marche verticale ($\Delta z = 0,000$ m aux joints internes), `buildContinuousRailMesh` pour les parapets suivant la pente
+    du tablier, `buildContinuousPierMesh` pour les colonnes de piles ancrées au sol ($g - 2$ m) et tangentes à l'intrados, et `computeSlicePlane`
+    pour le plan analytique $z = Ax + By + C$.
+  - [`src/system/scenery-worker.ts`](src/system/scenery-worker.ts) : `addSolid` étendu avec `customMesh` pour injecter la vraie géométrie 3D
+    directement dans le buffer GPU de maillage (`scenery-raster.ts`), remplacement dans `deckBridge` des dalles plates disjointes par les
+    prismes extrudés continus, et désactivation des polygones plats OMT `bridgeAreas` dans le domaine couvert par les ponts vectoriels.
+  - [`tests/bridge-mesh.test.ts`](tests/bridge-mesh.test.ts) : 6 tests démontrant les témoins Règle 3 A/A et défaut injecté (+40 cm détecté),
+    la continuité rigoureuse sur ouvrage de 100 m ($\max |\Delta z| < 10^{-6}$ m), la gestion des culées ouvertes/fermées, la continuité
+    des garde-corps, l'ancrage des piles et le plan analytique.
+  - [`docs/progress/pont-routes-aaa/FICHE-PR3.md`](docs/progress/pont-routes-aaa/FICHE-PR3.md) : fiche de phase.
+- **Retraits :** dalles plates horizontales comme autorité du tablier dans `deckBridge` (`scenery-worker.ts`) ; neutralisation des aires
+  surfaciques OMT `bridgeAreas` superposées aux ouvrages vectoriels.
+- **Preuves :** `bun test tests/bridges-corpus.test.ts tests/bridge-ports.test.ts tests/bridge-surface.test.ts tests/bridge-mesh.test.ts`
+  (19 pass, 0 fail, 235 assertions), Biome check et TypeScript propres, compilation WGSL 84/84.
+- **Suite :** PR4 — Chaussée et raster communs (matériau partagé avec la route, marquages, pluie, retrait du veto bridgeCount de liteAll).
+
 

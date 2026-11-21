@@ -630,9 +630,9 @@ la campagne e2e par défaut ; PR8 exécute le corpus défini et les parcours de 
 | État au 21 novembre | Preuve | Suite |
 |---|---|---|
 | Analyse des ponts/routes approfondie | Code, docs et sources primaires relus ; distinction preuves/inconnues | PR0 livré avec corpus et témoins |
-| Plan PR0–PR8 / PR-R engagé | PR0, PR1 et PR2 livrés ([FICHE-PR0](progress/pont-routes-aaa/FICHE-PR0.md), [FICHE-PR1](progress/pont-routes-aaa/FICHE-PR1.md), [FICHE-PR2](progress/pont-routes-aaa/FICHE-PR2.md)) | PR3 — Géométrie continue routes/ponts |
+| Plan PR0–PR8 / PR-R engagé | PR0, PR1, PR2 et PR3 livrés ([FICHE-PR0](progress/pont-routes-aaa/FICHE-PR0.md), [FICHE-PR1](progress/pont-routes-aaa/FICHE-PR1.md), [FICHE-PR2](progress/pont-routes-aaa/FICHE-PR2.md), [FICHE-PR3](progress/pont-routes-aaa/FICHE-PR3.md)) | PR4 — Chaussée et raster communs |
 | Performance et validation finale | Non mesurées / non effectuées dans cette session documentaire | Ne pas écrire « livré » avant PR8 et PR-R |
 
-**Prochaine action de réalisation : PR3**, géométrie continue routes/ponts, maillage extrudé 3D sans dalles horizontales disjointes, culées et ancrage des piles.
+**Prochaine action de réalisation : PR4**, chaussée et raster communs, matériau routier partagé (asphalte, marquages, pluie), levée du veto `bridgeCount === 0`.
 chaussée continue, du terrain au tablier, avec ses usages sur le même support. La fidélité architecturale et la
 couverture mondiale se construisent sur cette autorité, sans reconduire des ponts différents selon le lecteur.

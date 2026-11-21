@@ -84,6 +84,7 @@ import {
 } from "./street-cells";
 import { bridgeCanonicalKey } from "./bridge-ports";
 import { BridgeContinuousProfile } from "./bridge-surface-service";
+import { buildContinuousPierMesh, buildContinuousRailMesh, buildContinuousSliceMesh } from "./bridge-mesh";
 import { markRoad, roadClassCode } from "./road-markings";
 import { catenaryMasts, cellRoadSurfaces } from "./cell-roads";
 
@@ -1256,51 +1257,30 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
   bridgeLines.sort((a, b) => a.d - b.d);
   const bridgeLimit = Math.round((q.mode === "high" ? 256 : 128) * k2);
   if (bridgeLines.length + bridgeAreas.length > bridgeLimit) budgetLimited = true;
-  // (a bridge's part with its triangles — a flat-topped prism, buildingMesh's —: the trees' and buildings' shadow map draws it
-  // as it is, whatever its outline — a deck's OSM area, a strip —, scenery-raster.ts; the view leaves it to the tracer's test)
-  const addSolid = (p: Primitive | null, rings?: number[][][]) => {
+  // (a bridge's part with its triangles — continuous 3D mesh when provided, buildingMesh for buildings:
+  // scenery-raster.ts draws it; the view leaves it to the tracer's test)
+  const addSolid = (p: Primitive | null, rings?: number[][][], customMesh?: { positions: number[]; triangles: number[] }) => {
     const mesh =
-      p && rings
+      customMesh ??
+      (p && rings
         ? buildingMesh(
             rings.map((r) => r.map((v) => [v[0]!, v[1]!] as [number, number])),
             p.data[0]!,
             p.data[0]!,
             [[0, 0, p.data[1]! - p.data[0]!]],
           )
-        : null;
+        : null);
     const meshB = mesh ? mesh.positions.length * 4 + mesh.triangles.length * 4 : 0;
     if (!p || storedBytes + 64 + p.data.length * 4 + meshB > budget - 6 * 1024 * 1024 * room) {
       budgetLimited = true;
       return false;
     }
-    if (mesh && mesh.triangles.length) p.mesh = mesh;
+    if (mesh?.triangles.length) p.mesh = mesh;
     prims.push(p);
     storedBytes += 64 + p.data.length * 4 + meshB;
     return true;
   };
   const selectedAreas: Primitive[] = [];
-  bridgeAreas.sort((a, b) => a.d - b.d);
-  for (const v of bridgeAreas.slice(0, bridgeLimit)) {
-    try {
-      const outer = v.rings[0]!;
-      const lat = outer.reduce((sum, p) => sum + p.lat, 0) / outer.length,
-        lon = outer.reduce((sum, p) => sum + p.lon, 0) / outer.length;
-      // (its deck over its banks — the highest of its outline's ground, as a bridge line's —, not over the water at its middle:
-      // a deck 4 m over the river, under its quays, its shadow hidden beneath it)
-      let base = localPoint(frame, lat, lon, await height(lat, lon))[2];
-      const step = Math.max(1, Math.floor(outer.length / 16));
-      for (let i = 0; i < outer.length; i += step)
-        base = Math.max(base, localPoint(frame, outer[i]!.lat, outer[i]!.lon, await height(outer[i]!.lat, outer[i]!.lon))[2]);
-      const rings = v.rings.map((r) => r.map((at) => localPoint(frame, at.lat, at.lon, 0)));
-      const p = polygonPrimitive(rings, base + 4 * v.layer - 1.2, base + 4 * v.layer, 2, [0.095, 0.098, 0.1]);
-      if (addSolid(p, rings)) {
-        bridges++;
-        selectedAreas.push(v.footprint);
-      }
-    } catch (e) {
-      if (!errors.length) errors.push(String(e).slice(0, 220));
-    }
-  }
   // (PLAN-J8 J8-RP RP2: in France the roads within CELL_ROAD_REACH_M from the street cells in the cache — the BD TOPO's axis and
   // measured width, their markings the cells' — in place of OpenMapTiles' in each cell found (their rails and waterways kept); a cell
   // not in the cache: OpenMapTiles' there as before)
@@ -1492,20 +1472,50 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
         b = points[i + 1]!,
         length = span[i + 1]! - span[i]!;
       if (length < 0.5) continue;
-      // (each part with its triangles — its strip's outline —: the view draws them as the buildings', 2 Nov 2026; before, their
-      // boxes marked the pixels the tracer's rays then shaded, 6.5 ms of kerr-mini's frame over the Seine)
+      // (PLAN-PONT-ROUTES-AAA PR3: continuous 3D bridge deck mesh without flat steps)
       const n = Math.max(1, Math.ceil(length / 10));
       for (let k = 0; k < n; k++) {
         const f0 = k / n,
           f1 = (k + 1) / n;
+        const s0 = span[i]! + length * f0,
+          s1 = span[i]! + length * f1;
         const pa: [number, number, number] = [a[0] + (b[0] - a[0]) * f0, a[1] + (b[1] - a[1]) * f0, 0],
           pb: [number, number, number] = [a[0] + (b[0] - a[0]) * f1, a[1] + (b[1] - a[1]) * f1, 0];
-        const top = deckAt(span[i]! + length * (f0 + f1) * 0.5);
+        const top0 = deckAt(s0),
+          top1 = deckAt(s1);
+        const isStart = i === 0 && k === 0,
+          isEnd = i === points.length - 2 && k === n - 1;
+        const deckSliceMesh = buildContinuousSliceMesh({
+          pa,
+          pb,
+          width,
+          top0,
+          top1,
+          thick,
+          isStart,
+          isEnd,
+          flags,
+        });
         const deck = [stripPolygon(pa, pb, width)];
-        made = addSolid(polygonPrimitive(deck, top - thick, top, kind, colour), deck) || made;
-        for (const side of [-1, 1]) {
+        const minZ = Math.min(top0, top1) - thick,
+          maxZ = Math.max(top0, top1);
+        made = addSolid(polygonPrimitive(deck, minZ, maxZ, kind, colour), deck, deckSliceMesh) || made;
+        for (const side of [-1, 1] as const) {
+          const railMesh = buildContinuousRailMesh({
+            pa,
+            pb,
+            width,
+            railW: style.railW,
+            railH: style.railH,
+            side,
+            top0,
+            top1,
+            isStart,
+            isEnd,
+            flags,
+          });
           const rail = [stripPolygon(pa, pb, style.railW, (side * width) / 2)];
-          addSolid(polygonPrimitive(rail, top, top + style.railH, 3, style.railColour), rail);
+          addSolid(polygonPrimitive(rail, minZ + thick, maxZ + style.railH, 3, style.railColour), rail, railMesh);
         }
       }
     }
@@ -1523,17 +1533,44 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
       const p: [number, number, number] = [A[0] + (B[0] - A[0]) * f, A[1] + (B[1] - A[1]) * f, 0];
       const ux = (B[0] - A[0]) / Math.max(1e-6, Math.hypot(B[0] - A[0], B[1] - A[1])),
         uy = (B[1] - A[1]) / Math.max(1e-6, Math.hypot(B[0] - A[0], B[1] - A[1]));
-      const pier = [
-        stripPolygon(
-          [p[0] - ux, p[1] - uy, 0],
-          [p[0] + ux, p[1] + uy, 0],
-          Math.min(viaduct ? style.viaductPier : style.pierMax, width * 0.5),
-        ),
-      ];
-      if (addSolid(polygonPrimitive(pier, g - 2, z, 3, [0.5, 0.49, 0.46]), pier)) bridgePiers++;
+      const pierWidth = Math.min(viaduct ? style.viaductPier : style.pierMax, width * 0.5);
+      const pier = [stripPolygon([p[0] - ux, p[1] - uy, 0], [p[0] + ux, p[1] + uy, 0], pierWidth)];
+      const pierMesh = buildContinuousPierMesh({
+        p,
+        width,
+        pierWidth,
+        groundFooting: g - 2,
+        intradosTop: z,
+      });
+      if (addSolid(polygonPrimitive(pier, g - 2, z, 3, [0.5, 0.49, 0.46]), pier, pierMesh)) bridgePiers++;
     }
     return made;
   };
+  bridgeAreas.sort((a, b) => a.d - b.d);
+  // (PLAN-PONT-ROUTES-AAA PR3: retire legacy flat OMT bridgeAreas where cellBridges exist)
+  if (cellBridges.size === 0) {
+    for (const v of bridgeAreas.slice(0, bridgeLimit)) {
+      try {
+        const outer = v.rings[0]!;
+        const lat = outer.reduce((sum, p) => sum + p.lat, 0) / outer.length,
+          lon = outer.reduce((sum, p) => sum + p.lon, 0) / outer.length;
+        // (its deck over its banks — the highest of its outline's ground, as a bridge line's —, not over the water at its middle:
+        // a deck 4 m over the river, under its quays, its shadow hidden beneath it)
+        let base = localPoint(frame, lat, lon, await height(lat, lon))[2];
+        const step = Math.max(1, Math.floor(outer.length / 16));
+        for (let i = 0; i < outer.length; i += step)
+          base = Math.max(base, localPoint(frame, outer[i]!.lat, outer[i]!.lon, await height(outer[i]!.lat, outer[i]!.lon))[2]);
+        const rings = v.rings.map((r) => r.map((at) => localPoint(frame, at.lat, at.lon, 0)));
+        const p = polygonPrimitive(rings, base + 4 * v.layer - 1.2, base + 4 * v.layer, 2, [0.095, 0.098, 0.1]);
+        if (addSolid(p, rings)) {
+          bridges++;
+          selectedAreas.push(v.footprint);
+        }
+      } catch (e) {
+        if (!errors.length) errors.push(String(e).slice(0, 220));
+      }
+    }
+  }
   for (const v of bridgeLines) {
     if (bridges >= bridgeLimit) break;
     try {
