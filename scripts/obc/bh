@@ -1,0 +1,15 @@
+#!/bin/sh
+# bh — Universal CLI for the entire Black Hole GPU `__bh` API & all 73 TARS tools (input & output).
+# Supports full stdin/stdout JSON piping (e.g. `echo '{"action":"list","field":"KSFO"}' | bh tool approach --stdin`).
+
+if [ "$1" = "tui" ]; then
+  shift
+  exec /obc/scripts/bh-tui "$@"
+fi
+
+if [ ! -x /usr/bin/node ] || head -n 1 /usr/bin/node 2>/dev/null | grep -q '^#!'; then
+  echo "Node.js not installed yet. Run: obc-install node (or click +Node / +Py+Node in HUD)" >&2
+  exit 1
+fi
+
+exec node /obc/lib/bh-cli.mjs "$@"

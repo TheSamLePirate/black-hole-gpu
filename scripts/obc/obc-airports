@@ -1,0 +1,165 @@
+#!/bin/sh
+# obc-airports — Node.js CLI: World Airports, Runways, Real Approaches (FAA CIFP / nav.dat), ILS & Flight Plans.
+# Usage:
+#   obc-airports list                              List built-in airfields sorted by distance
+#   obc-airports info <ICAO>                       List all runways & published approaches (ILS/LOC/RNAV/VOR)
+#   obc-airports preview [ICAO] [runway]           Preview auto-selected approach & wind/slope rationale
+#   obc-airports select <ICAO> [rwy] [appId] [via] Select active approach on all cockpit displays
+#   obc-airports ils [ICAO] [runway]               Engage full autopilot ILS approach
+#   obc-airports status | off | goaround           Check, cancel, or go-around active approach
+#   obc-airports goto <ICAO> [lineup|final|fly]    Place aircraft on runway threshold or final approach
+#   obc-airports route <DEP> <ARR>                 Build flight plan with departure & arrival procedures
+
+if [ ! -x /usr/bin/node ] || head -n 1 /usr/bin/node 2>/dev/null | grep -q '^#!'; then
+  echo "Node.js not installed yet. Run: obc-install node (or click +Node in HUD)" >&2
+  exit 1
+fi
+
+exec node --input-type=module - "$@" <<'JS'
+import { AvionicsBus, wgs84BearingDist } from "/obc/lib/obc.mjs";
+
+const bus = new AvionicsBus();
+const args = process.argv.slice(2);
+const asJson = args.includes("--json");
+const clean = args.filter((a) => a !== "--json");
+const sub = clean[0] ?? "list";
+
+function show(val) {
+  console.log(typeof val === "string" && !asJson ? val : JSON.stringify(val, null, 2));
+}
+
+switch (sub) {
+  case "list": {
+    const st = bus.read();
+    const r = bus.bhTool("f35", { action: "fields" });
+    const fields = r.ok && Array.isArray(r.result) ? r.result : [];
+    const rows = fields
+      .map((f) => {
+        const lat = f.lat ?? 0;
+        const lon = f.lon ?? 0;
+        const { distM, bearingDeg } = wgs84BearingDist(st.position.lat_deg, st.position.lon_deg, lat, lon);
+        return {
+          icao: f.icao || f.ident || f.name,
+          name: f.name || "",
+          lat,
+          lon,
+          dist_km: +(distM / 1000).toFixed(1),
+          bearing_deg: Math.round(bearingDeg),
+        };
+      })
+      .sort((a, b) => a.dist_km - b.dist_km);
+    if (asJson) {
+      show(rows);
+      break;
+    }
+    console.log("\x1b[1;36m╔══════════════════════════════════════════════════════════════╗\x1b[0m");
+    console.log("\x1b[1;36m║\x1b[1;37m     OBC-AIRPORTS · AIRFIELDS & RUNWAYS (WGS84 DISTANCE)     \x1b[1;36m║\x1b[0m");
+    console.log("\x1b[1;36m╚══════════════════════════════════════════════════════════════╝\x1b[0m");
+    for (const x of rows.slice(0, 16)) {
+      console.log(`  \x1b[1;32m${String(x.icao).padEnd(6)}\x1b[0m ${String(x.name).slice(0, 28).padEnd(28)} BRG ${String(x.bearing_deg).padStart(3, "0")}°  ${x.dist_km.toFixed(1).padStart(7)} km`);
+    }
+    break;
+  }
+
+  case "info": {
+    const code = (clean[1] ?? "LFPB").toUpperCase();
+    const r = bus.bhTool("approach", { action: "list", field: code });
+    if (!r.ok) {
+      console.error(`ERR: ${r.error}`);
+      process.exit(1);
+    }
+    if (asJson || typeof r.result === "string") {
+      show(r.result);
+      break;
+    }
+    const { field, name, approaches = [] } = r.result;
+    console.log(`\x1b[1;36mAIRPORT ${field} — ${name} (${approaches.length} approaches)\x1b[0m`);
+    for (const a of approaches) {
+      const freq = a.freqMHz ? `${a.freqMHz.toFixed(2)} MHz` : "—";
+      const id = a.ident ? `${a.ident}` : "—";
+      const cat = a.category ? `CAT ${a.category}` : "";
+      console.log(
+        `  \x1b[1;32m${String(a.id).padEnd(8)}\x1b[0m RWY ${String(a.runway).padEnd(4)} ${String(a.kind).padEnd(5)} ${a.slopeDeg.toFixed(1)}°  ${id.padEnd(5)} ${freq.padEnd(11)} ${cat.padEnd(7)} \x1b[2m${a.source}\x1b[0m`,
+      );
+    }
+    break;
+  }
+
+  case "preview": {
+    const toolArgs = { action: "preview" };
+    if (clean[1]) toolArgs.field = clean[1];
+    if (clean[2]) toolArgs.runway = clean[2];
+    const r = bus.bhTool("approach", toolArgs);
+    show(r.ok ? r.result : r);
+    break;
+  }
+
+  case "select": {
+    if (!clean[1]) {
+      console.error("Usage: obc-airports select <ICAO> [runway] [approachId] [via]");
+      process.exit(1);
+    }
+    const toolArgs = { action: "select", field: clean[1] };
+    if (clean[2]) toolArgs.runway = clean[2];
+    if (clean[3]) toolArgs.approach = clean[3];
+    if (clean[4]) toolArgs.via = clean[4];
+    const r = bus.bhTool("approach", toolArgs);
+    show(r.ok ? r.result : r);
+    break;
+  }
+
+  case "ils": {
+    const toolArgs = { action: "ils" };
+    if (clean[1]) toolArgs.field = clean[1];
+    if (clean[2]) toolArgs.runway = clean[2];
+    const r = bus.bhTool("approach", toolArgs);
+    show(r.ok ? r.result : r);
+    break;
+  }
+
+  case "status":
+  case "off":
+  case "goaround":
+  case "state": {
+    const r = bus.bhTool("approach", { action: sub });
+    show(r.ok ? r.result : r);
+    break;
+  }
+
+  case "goto": {
+    const field = clean[1] ?? "LFPB";
+    const how = clean[2] ?? "lineup";
+    if (how === "final") {
+      const r = bus.bhTool("f35", { action: "prepare", field, start: "final" });
+      show(r.ok ? r.result : r);
+    } else if (how === "fly") {
+      const r = bus.bhTool("place_ship", { mode: "fly", query: field, aglM: 1200, speedMs: 140 });
+      show(r.ok ? r.result : r);
+    } else {
+      const r = bus.bhTool("place_ship", { mode: "lineup", query: field });
+      show(r.ok ? r.result : r);
+    }
+    break;
+  }
+
+  case "route": {
+    const dep = clean[1];
+    const arr = clean[2];
+    if (!dep || !arr) {
+      console.error("Usage: obc-airports route <DEP_ICAO> <ARR_ICAO>");
+      process.exit(1);
+    }
+    bus.bhTool("flight_plan", { action: "clear" });
+    bus.bhTool("flight_plan", { action: "add", query: dep });
+    bus.bhTool("flight_plan", { action: "add", query: arr });
+    const proc = bus.bhTool("approach", { action: "procedures" });
+    const plan = bus.bhTool("flight_plan", { action: "show" });
+    show({ procedures: proc.result, plan: plan.result });
+    break;
+  }
+
+  default:
+    console.error("Usage: obc-airports [list|info|preview|select|ils|status|off|goaround|goto|route]");
+    process.exit(1);
+}
+JS

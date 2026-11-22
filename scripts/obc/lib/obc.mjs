@@ -1,12 +1,21 @@
 // obc.mjs — High-Performance Node.js Avionics, TUI & /dev/fb0 Framebuffer SDK for Black Hole GPU Linux OBC.
 // Zero third-party npm packages required. Uses Uint32Array packed XRGB8888 writes for ultra-fast real-time graphics.
 
+import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 
 export const TELEMETRY_PATH = "/obc/telemetry.json";
 export const TAU_PATH = "/obc/tau";
 export const CMD_PATH = "/obc/cmd";
 export const LAST_RESULT_PATH = "/obc/last_result.json";
+export const RPC_REQ_PATH = "/obc/rpc_req";
+export const RPC_RES_PATH = "/obc/rpc_res";
+
+function sleepMs(ms) {
+  // Never use Atomics.wait (futex_wait hangs on emulated aarch64); use lightweight Alpine sleep fallback only for async RPCs.
+  const sec = Math.max(0.02, ms / 1000).toFixed(3);
+  spawnSync("/bin/sleep", [sec], { stdio: "ignore" });
+}
 
 export class AvionicsBus {
   constructor() {
@@ -77,6 +86,66 @@ export class AvionicsBus {
 
   say(text) {
     return this.send({ kind: "say", text: String(text) });
+  }
+
+  /** Synchronous universal RPC to the full simulator `window.__bh` API & all 73 TARS tools. */
+  bhRpc(payload, timeoutMs = 10000) {
+    const id = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+    fs.writeFileSync(RPC_REQ_PATH, `${JSON.stringify({ ...payload, id })}\n`, "utf8");
+    const deadline = Date.now() + timeoutMs;
+    let polls = 0;
+    while (Date.now() < deadline) {
+      try {
+        const raw = fs.readFileSync(RPC_RES_PATH, "utf8").trim();
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          if (parsed && parsed.id === id) return parsed;
+        }
+      } catch {
+        // retry on transient read
+      }
+      polls++;
+      // Synchronous host RPCs resolve before writeFileSync even returns (polls === 1).
+      // Only async Promise RPCs need a brief sleep between retries.
+      sleepMs(polls < 5 ? 25 : 60);
+    }
+    return { id, ok: false, error: `RPC timeout after ${timeoutMs}ms` };
+  }
+
+  bhLs(path = "") {
+    return this.bhRpc({ op: "ls", path });
+  }
+
+  bhGet(path, depth = 3) {
+    return this.bhRpc({ op: "get", path, depth });
+  }
+
+  bhSet(path, value, refresh = true) {
+    return this.bhRpc({ op: "set", path, value, refresh });
+  }
+
+  bhCall(path, ...args) {
+    return this.bhRpc({ op: "call", path, args });
+  }
+
+  bhTools() {
+    return this.bhRpc({ op: "tools" });
+  }
+
+  bhTool(name, toolArgs = {}) {
+    return this.bhRpc({ op: "tool", name, toolArgs });
+  }
+
+  bhSearch(query) {
+    return this.bhRpc({ op: "search", query });
+  }
+
+  bhEval(expr) {
+    return this.bhRpc({ op: "eval", expr });
+  }
+
+  bhMcdu(action, opts = {}) {
+    return this.bhRpc({ op: "mcdu", action, ...opts });
   }
 }
 

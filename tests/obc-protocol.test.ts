@@ -68,9 +68,19 @@ test("normalizeWispUrl accepts ws/wss URLs and rejects http/javascript/invalid",
 });
 
 test("OBC_SCRIPTS catalog & emptyTelemetry contract", () => {
-  expect(OBC_SCRIPTS.length).toBeGreaterThanOrEqual(17);
+  expect(OBC_SCRIPTS.length).toBeGreaterThanOrEqual(27);
   expect(findObcScript("diag")?.name).toBe("obc-diag");
   expect(findObcScript("obc-orbit")?.id).toBe("orbit");
+  expect(findObcScript("bh")?.name).toBe("bh");
+  expect(findObcScript("bh-tui")?.category).toBe("tui");
+  expect(findObcScript("airports")?.name).toBe("obc-airports");
+  expect(findObcScript("f35")?.name).toBe("obc-f35");
+  expect(findObcScript("a320")?.name).toBe("obc-a320");
+  expect(findObcScript("f35-tui")?.category).toBe("tui");
+  expect(findObcScript("a320-tui")?.category).toBe("tui");
+  expect(findObcScript("f35-fb")?.graphical).toBe(true);
+  expect(findObcScript("a320-fb")?.graphical).toBe(true);
+  expect(findObcScript("ils-fb")?.graphical).toBe(true);
   expect(findObcScript("fuel")?.lang).toBe("python");
   expect(findObcScript("nav")?.lang).toBe("node");
   expect(findObcScript("top")?.category).toBe("tui");

@@ -1,0 +1,212 @@
+#!/bin/sh
+# bh-tui — Full Interactive __bh API & TARS Tool Explorer TUI (browse, inspect, set, call, run tools).
+# Keys: [↑/↓ or j/k] move  [Enter] open/inspect  [Backspace/h] up  [Tab] switch __bh / TARS Tools
+#       [e] edit/set value  [c] call method / run tool  [r] refresh  [q] quit
+# Usage: bh-tui [initial.path] [--frames N]
+
+if [ ! -x /usr/bin/node ] || head -n 1 /usr/bin/node 2>/dev/null | grep -q '^#!'; then
+  echo "Node.js not installed yet. Run: obc-install node (or click +Node in HUD)"
+  exit 1
+fi
+
+exec node --input-type=module - "$@" <<'JS'
+import { AvionicsBus } from "/obc/lib/obc.mjs";
+
+const args = process.argv.slice(2);
+let maxFrames = 0;
+const fi = args.indexOf("--frames");
+if (fi >= 0 && args[fi + 1]) maxFrames = Math.max(1, Number(args[fi + 1]) || 1);
+if (args.includes("--once")) maxFrames = 1;
+
+const bus = new AvionicsBus();
+let mode = "bh"; // "bh" | "tools"
+let curPath = args.find((a) => !a.startsWith("--") && a !== String(maxFrames)) ?? "";
+let items = [];
+let idx = 0;
+let scroll = 0;
+let previewLines = [];
+let promptMode = null; // null | { kind: "set"|"call"|"tool", target: string, buf: string }
+let statusMsg = "KEYS: [↑/↓] Move [Enter] Open/Inspect [Bksp] Up [Tab] __bh/TARS [e] Set [c] Call [r] Refresh [q] Quit";
+let frames = 0;
+
+function loadList() {
+  if (mode === "bh") {
+    const r = bus.bhLs(curPath);
+    items = r.ok && Array.isArray(r.result) ? r.result : [];
+  } else {
+    const r = bus.bhTools();
+    items = r.ok && Array.isArray(r.result) ? r.result : [];
+  }
+  idx = Math.max(0, Math.min(idx, Math.max(0, items.length - 1)));
+  loadPreview();
+}
+
+function loadPreview() {
+  const it = items[idx];
+  if (!it) {
+    previewLines = ["(empty)"];
+    return;
+  }
+  if (mode === "tools") {
+    previewLines = [
+      `TOOL: ${it.name}`,
+      `PARAMS: ${(it.params ?? []).join(", ") || "(none)"}`,
+      `REQUIRED: ${(it.required ?? []).join(", ") || "(none)"}`,
+      "",
+      ...(it.description ?? "").match(/.{1,34}/g) ?? [],
+    ];
+    return;
+  }
+  const full = curPath ? `${curPath}.${it.name}` : it.name;
+  if (it.kind === "fn") {
+    previewLines = [`METHOD: __bh.${full}`, `ARITY: ${it.arity ?? 0}`, "", "Press [c] to invoke", "Args JSON e.g. [\"LFPB\"]"];
+  } else {
+    const r = bus.bhGet(full, 2);
+    const txt = r.ok ? JSON.stringify(r.result, null, 2) : `ERR: ${r.error}`;
+    previewLines = txt.split("\n").slice(0, 14).map((l) => l.slice(0, 34));
+  }
+}
+
+function render() {
+  frames++;
+  const viewH = 14;
+  if (idx < scroll) scroll = idx;
+  if (idx >= scroll + viewH) scroll = idx - viewH + 1;
+
+  const title = mode === "bh" ? `BH-TUI · __bh${curPath ? `.${curPath}` : ""} (${items.length})` : `BH-TUI · TARS TOOLS (${items.length})`;
+  const out = [
+    "\x1b[?25l\x1b[H\x1b[2J",
+    "\x1b[1;36m╔══════════════════════════════════════════════════════════════╗\x1b[0m",
+    `\x1b[1;36m║\x1b[1;37m ${title.slice(0, 60).padEnd(60)} \x1b[1;36m║\x1b[0m`,
+    "\x1b[1;36m╠═══════════════════════════╦══════════════════════════════════╣\x1b[0m",
+  ];
+
+  for (let row = 0; row < viewH; row++) {
+    const i = scroll + row;
+    const it = items[i];
+    let left = "".padEnd(25);
+    if (it) {
+      const sel = i === idx;
+      const tag = mode === "bh" ? it.kind.slice(0, 3).padEnd(3) : "tl ";
+      const name = String(it.name ?? "").slice(0, 20).padEnd(20);
+      left = sel ? `\x1b[7;1;36m>${tag} ${name}\x1b[0m` : ` \x1b[36m${tag}\x1b[0m ${name}`;
+    } else {
+      left = " ".repeat(25);
+    }
+    const right = (previewLines[row] ?? "").slice(0, 32).padEnd(32);
+    out.push(`\x1b[1;36m║\x1b[0m ${left} \x1b[1;36m║\x1b[0m ${right} \x1b[1;36m║\x1b[0m`);
+  }
+  out.push("\x1b[1;36m╚═══════════════════════════╩══════════════════════════════════╝\x1b[0m");
+  if (promptMode) {
+    out.push(`\x1b[1;33m  ${promptMode.kind.toUpperCase()} ${promptMode.target} > ${promptMode.buf}█\x1b[0m`);
+  } else {
+    out.push(`\x1b[1;33m  ${statusMsg.slice(0, 62)}\x1b[0m`);
+  }
+  process.stdout.write(out.join("\r\n"));
+  if (maxFrames > 0 && frames >= maxFrames) cleanup();
+}
+
+function cleanup() {
+  try {
+    if (process.stdin.isTTY) process.stdin.setRawMode(false);
+    process.stdin.pause();
+  } catch {}
+  process.stdout.write("\x1b[?25h\x1b[0m\n");
+  process.exit(0);
+}
+process.on("SIGINT", cleanup);
+process.on("SIGTERM", cleanup);
+
+function submitPrompt() {
+  if (!promptMode) return;
+  const { kind, target, buf } = promptMode;
+  promptMode = null;
+  try {
+    if (kind === "set") {
+      let val = buf;
+      try { val = JSON.parse(buf); } catch {}
+      const r = bus.bhSet(target, val);
+      statusMsg = r.ok ? `SET ${target} OK` : `ERR: ${r.error}`;
+      loadList();
+    } else if (kind === "call") {
+      const a = buf.trim() ? JSON.parse(buf) : [];
+      const r = bus.bhCall(target, ...(Array.isArray(a) ? a : [a]));
+      statusMsg = r.ok ? `CALL OK` : `ERR: ${r.error}`;
+      previewLines = JSON.stringify(r.ok ? r.result : r.error, null, 2).split("\n").slice(0, 14).map((l) => l.slice(0, 32));
+    } else if (kind === "tool") {
+      const a = buf.trim() ? JSON.parse(buf) : {};
+      const r = bus.bhTool(target, a);
+      statusMsg = r.ok ? `TOOL ${target} OK` : `ERR: ${r.error}`;
+      previewLines = JSON.stringify(r.ok ? r.result : r.error, null, 2).split("\n").slice(0, 14).map((l) => l.slice(0, 32));
+    }
+  } catch (e) {
+    statusMsg = `PARSE ERR: ${e.message}`;
+  }
+  render();
+}
+
+loadList();
+render();
+
+if (process.stdin.isTTY && maxFrames === 0) {
+  process.stdin.setRawMode(true);
+  process.stdin.resume();
+  process.stdin.setEncoding("utf8");
+  process.stdin.on("data", (k) => {
+    if (k === "\x03") return cleanup();
+    if (promptMode) {
+      if (k === "\r" || k === "\n") return submitPrompt();
+      if (k === "\x1b") { promptMode = null; return render(); }
+      if (k === "\x7f" || k === "\b") { promptMode.buf = promptMode.buf.slice(0, -1); return render(); }
+      if (k >= " ") { promptMode.buf += k; return render(); }
+      return;
+    }
+    if (k === "q" || k === "Q") return cleanup();
+    if (k === "\t") {
+      mode = mode === "bh" ? "tools" : "bh";
+      idx = 0; scroll = 0;
+      loadList();
+      return render();
+    }
+    if (k === "\x1b[A" || k === "k") { idx = Math.max(0, idx - 1); loadPreview(); return render(); }
+    if (k === "\x1b[B" || k === "j") { idx = Math.min(Math.max(0, items.length - 1), idx + 1); loadPreview(); return render(); }
+    if (k === "r") { loadList(); statusMsg = "Refreshed"; return render(); }
+    if (k === "\x7f" || k === "\b" || k === "h") {
+      if (mode === "bh" && curPath) {
+        const p = curPath.split(".");
+        p.pop();
+        curPath = p.join(".");
+        idx = 0; scroll = 0;
+        loadList();
+      }
+      return render();
+    }
+    if (k === "\r" || k === "\n") {
+      const it = items[idx];
+      if (!it) return;
+      if (mode === "bh" && (it.kind === "obj" || it.kind === "arr")) {
+        curPath = curPath ? `${curPath}.${it.name}` : it.name;
+        idx = 0; scroll = 0;
+        loadList();
+      } else {
+        loadPreview();
+      }
+      return render();
+    }
+    if (k === "e" && mode === "bh" && items[idx]) {
+      const full = curPath ? `${curPath}.${items[idx].name}` : items[idx].name;
+      promptMode = { kind: "set", target: full, buf: "" };
+      return render();
+    }
+    if (k === "c" && items[idx]) {
+      if (mode === "bh") {
+        const full = curPath ? `${curPath}.${items[idx].name}` : items[idx].name;
+        promptMode = { kind: "call", target: full, buf: "[]" };
+      } else {
+        promptMode = { kind: "tool", target: items[idx].name, buf: "{}" };
+      }
+      return render();
+    }
+  });
+}
+JS

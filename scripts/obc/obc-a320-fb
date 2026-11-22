@@ -1,0 +1,181 @@
+#!/bin/sh
+# obc-a320-fb — Node.js Real-Time Graphical Airbus A320 ARC-Mode Navigation Display (ND) + ILS on /dev/fb0.
+# Reads live flight plan waypoints, published approach fixes & TCAS traffic directly from __bh!
+# Usage: obc-a320-fb [--seconds 20]
+
+if [ ! -x /usr/bin/node ] || head -n 1 /usr/bin/node 2>/dev/null | grep -q '^#!'; then
+  echo "Node.js not installed yet. Run: obc-install node (or click +Node in HUD)"
+  exit 1
+fi
+
+exec node --input-type=module - "$@" <<'JS'
+import { AvionicsBus, Framebuffer, packRgb, wgs84BearingDist } from "/obc/lib/obc.mjs";
+
+const args = process.argv.slice(2);
+let durSec = 20;
+const si = args.indexOf("--seconds");
+if (si >= 0 && args[si + 1]) durSec = Math.max(0.5, Number(args[si + 1]) || 20);
+
+const bus = new AvionicsBus();
+const fb = new Framebuffer("/dev/fb0", 512, 512);
+
+const BG = packRgb(4, 6, 10);
+const PANEL = packRgb(10, 16, 24);
+const ARC = packRgb(110, 140, 165);
+const CYAN = packRgb(62, 200, 255);
+const GREEN = packRgb(46, 230, 107);
+const AMBER = packRgb(255, 178, 42);
+const MAGENTA = packRgb(245, 96, 225);
+const WHITE = packRgb(240, 248, 255);
+
+const CX = 256;
+const CY = 420;
+const R = 300;
+const RANGE_M = 40 * 1852; // 40 NM ARC scale
+
+let running = true;
+process.on("SIGINT", () => (running = false));
+process.on("SIGTERM", () => (running = false));
+
+const tStart = performance.now();
+let tFps = tStart;
+let tPoll = 0;
+let frameN = 0;
+let fps = 0;
+let wps = [];
+let contacts = [];
+let appFixes = [];
+
+function drawArc(cx, cy, radius, col) {
+  let prev = null;
+  for (let deg = -165; deg <= -15; deg += 3) {
+    const a = (deg * Math.PI) / 180;
+    const x = Math.round(cx + radius * Math.cos(a));
+    const y = Math.round(cy + radius * Math.sin(a));
+    if (prev) fb.line(prev[0], prev[1], x, y, col);
+    prev = [x, y];
+  }
+}
+
+function projectPoint(hereLat, hereLon, hdgDeg, lat, lon) {
+  const { distM, bearingDeg } = wgs84BearingDist(hereLat, hereLon, lat, lon);
+  const relDeg = ((bearingDeg - hdgDeg + 540) % 360) - 180;
+  const relRad = ((relDeg - 90) * Math.PI) / 180;
+  const rPx = (distM / RANGE_M) * R;
+  return { x: Math.round(CX + rPx * Math.cos(relRad)), y: Math.round(CY + rPx * Math.sin(relRad)), distM };
+}
+
+function drawFrame() {
+  if (!running || performance.now() - tStart >= durSec * 1000) {
+    fb.close();
+    process.exit(0);
+  }
+  const now = performance.now();
+  const st = bus.read();
+  if (frameN >= 1 && (tPoll === 0 || now - tPoll > 800)) {
+    tPoll = now;
+    const fp = bus.bhTool("flight_plan", { action: "show" });
+    if (fp.ok && Array.isArray(fp.result?.waypoints)) wps = fp.result.waypoints;
+    const am = bus.bhCall("camera.approachMapData");
+    if (am.ok && Array.isArray(am.result?.fixes)) appFixes = am.result.fixes;
+    const trf = bus.bhTool("traffic", { action: "list", maxKm: 75, n: 12 });
+    if (trf.ok && Array.isArray(trf.result?.nearest)) contacts = trf.result.nearest;
+  }
+
+  fb.clearU32(BG);
+
+  // Top Airbus ND GS/TAS/HDG/Next-WP strip
+  fb.rect(0, 0, 512, 48, PANEL);
+  const gsKt = Math.round((st.flight.ground_speed_mps || st.flight.true_airspeed_mps) * 1.94384);
+  const tasKt = Math.round(st.flight.true_airspeed_mps * 1.94384);
+  fb.text(10, 8, `GS ${String(gsKt).padStart(3)}  TAS ${String(tasKt).padStart(3)}`, GREEN, 2);
+  fb.text(358, 8, `HDG ${Math.round(st.attitude.heading_deg).toString().padStart(3, "0")}`, WHITE, 2);
+  const nextWp = wps[0]?.name ?? st.nav?.runway?.ident ?? "DIRECT";
+  fb.text(10, 28, `ARC 40NM   TO ${String(nextWp).slice(0, 12)}`, CYAN, 2);
+
+  // Airbus ARC rings (10, 20, 40 NM) & rotating compass ticks
+  drawArc(CX, CY, Math.round(R * 0.25), packRgb(36, 52, 68));
+  drawArc(CX, CY, Math.round(R * 0.5), packRgb(48, 72, 92));
+  drawArc(CX, CY, R, ARC);
+
+  const hdg = st.attitude.heading_deg;
+  const baseTen = Math.floor(hdg / 10) * 10;
+  for (let deg = baseTen - 70; deg <= baseTen + 70; deg += 10) {
+    const rel = deg - hdg;
+    if (rel < -65 || rel > 65) continue;
+    const a = ((rel - 90) * Math.PI) / 180;
+    const x0 = Math.round(CX + R * Math.cos(a));
+    const y0 = Math.round(CY + R * Math.sin(a));
+    const x1 = Math.round(CX + (R - 12) * Math.cos(a));
+    const y1 = Math.round(CY + (R - 12) * Math.sin(a));
+    fb.line(x0, y0, x1, y1, WHITE);
+    if (((deg % 30) + 30) % 30 === 0) {
+      const lbl = String((((deg / 10) % 36) + 36) % 36).padStart(2, "0");
+      fb.text(Math.round(CX + (R + 8) * Math.cos(a)) - 8, Math.round(CY + (R + 8) * Math.sin(a)) - 6, lbl, WHITE, 1);
+    }
+  }
+  // Yellow Airbus lubber line
+  fb.rect(CX - 2, CY - R - 10, 4, 18, AMBER);
+
+  // Plot real Flight Plan legs (green Airbus route)
+  let prevPt = null;
+  for (const w of wps) {
+    const p = projectPoint(st.position.lat_deg, st.position.lon_deg, hdg, w.lat, w.lon);
+    if (prevPt) fb.line(prevPt.x, prevPt.y, p.x, p.y, GREEN);
+    if (p.y > 52 && p.y < 460 && p.x > 8 && p.x < 504) {
+      fb.circle(p.x, p.y, 4, MAGENTA, 12);
+      fb.text(p.x + 8, p.y - 4, String(w.name).slice(0, 6), WHITE, 1);
+    }
+    prevPt = p;
+  }
+
+  // Plot real published approach fixes (magenta)
+  for (const fx of appFixes) {
+    const p = projectPoint(st.position.lat_deg, st.position.lon_deg, hdg, fx.lat, fx.lon);
+    if (p.y > 52 && p.y < 460 && p.x > 8 && p.x < 504) {
+      fb.filledCircle(p.x, p.y, 3, MAGENTA);
+      fb.text(p.x + 6, p.y - 4, String(fx.name).slice(0, 6), MAGENTA, 1);
+    }
+  }
+
+  // Plot live TCAS traffic diamonds
+  for (const c of contacts) {
+    const relDeg = ((c.bearingDeg ?? 0) - hdg + 540) % 360 - 180;
+    if (relDeg < -75 || relDeg > 75) continue;
+    const relRad = ((relDeg - 90) * Math.PI) / 180;
+    const rPx = Math.min(R, ((c.distM ?? 0) / RANGE_M) * R);
+    const tx = Math.round(CX + rPx * Math.cos(relRad));
+    const ty = Math.round(CY + rPx * Math.sin(relRad));
+    if (ty > 52 && ty < 458) {
+      fb.line(tx, ty - 5, tx + 5, ty, CYAN);
+      fb.line(tx + 5, ty, tx, ty + 5, CYAN);
+      fb.line(tx, ty + 5, tx - 5, ty, CYAN);
+      fb.line(tx - 5, ty, tx, ty - 5, CYAN);
+    }
+  }
+
+  // Ownship yellow Airbus aircraft symbol at bottom center
+  fb.rect(CX - 2, CY - 14, 4, 24, AMBER);
+  fb.rect(CX - 16, CY - 2, 32, 4, AMBER);
+  fb.rect(CX - 7, CY + 8, 14, 3, AMBER);
+
+  // Bottom Airbus ND status bar + ILS LOC needle
+  fb.rect(0, 466, 512, 46, PANEL);
+  fb.hline(0, 511, 466, CYAN);
+  const rw = st.nav?.runway;
+  const locTxt = rw ? `ILS ${rw.ident} LOC ${rw.loc_deg >= 0 ? "+" : ""}${rw.loc_deg.toFixed(1)}` : "NAV MODE READY";
+  fb.text(10, 474, `${locTxt.slice(0, 24)}  FPS ${fps.toFixed(1)}`, GREEN, 2);
+  fb.text(10, 494, `ALT ${Math.round(st.position.altitude_msl_m * 3.28084)}FT  FLAP ${Math.round(st.systems.flaps * 100)}%  TRK ${contacts.length}`, WHITE, 1);
+
+  fb.flush();
+  frameN++;
+  if (now - tFps >= 1000) {
+    fps = (frameN * 1000) / (now - tFps);
+    frameN = 0;
+    tFps = now;
+  }
+  setTimeout(drawFrame, 35);
+}
+
+drawFrame();
+JS

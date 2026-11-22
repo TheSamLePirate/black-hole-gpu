@@ -5,6 +5,7 @@
 //      for low-latency 20-50 Hz avionics control loops in Python or Node.js.
 
 import type { MemoryFs, Vsock, VsockConnection, VsockListener } from "unkernel/web";
+import { handleBhRpc, handleBhRpcMaybeSync, type BhRpcRequest } from "./bh-rpc";
 import { formatTauText, parseObcCommand } from "./protocol";
 import type { ObcCommand, ObcCommandResult, ObcStatus, ObcTelemetry } from "./types";
 
@@ -36,7 +37,10 @@ export function wireObcMountFs(
   const refreshLiveFiles = () => {
     try {
       const t = adapter.sampleTelemetry();
-      atomicWrite("/telemetry.json", `${JSON.stringify(t)}\n`);
+      // Fixed-width trailing space padding keeps st_size constant so Linux 9p never truncates reads mid-token.
+      const telRaw = JSON.stringify(t);
+      const telPadded = telRaw.length < 2047 ? `${telRaw}${" ".repeat(2047 - telRaw.length)}\n` : `${telRaw}\n`;
+      atomicWrite("/telemetry.json", telPadded);
       const tauTxt = formatTauText({
         dtau_dt: t.dtau_dt,
         proper_time_s: t.proper_time_s,
@@ -59,9 +63,11 @@ export function wireObcMountFs(
     }
   };
   refreshLiveFiles();
-  const refreshTimer = setInterval(refreshLiveFiles, 150);
+  const refreshTimer = setInterval(refreshLiveFiles, 200);
   mem.writeFile("/cmd", "", { mode: 0o666 });
   mem.writeFile("/last_result.json", '{"ok":true,"msg":"ready"}\n', { mode: 0o444 });
+  mem.writeFile("/rpc_req", "", { mode: 0o666 });
+  mem.writeFile("/rpc_res", '{"ok":true,"id":0,"result":"ready"}\n', { mode: 0o444 });
 
   mem.mkdirp("/scripts", { mode: 0o755 });
   for (const [name, body] of Object.entries(scripts)) {
@@ -73,9 +79,58 @@ export function wireObcMountFs(
   }
 
   let handling = false;
+  let handlingRpc = false;
   const unsubChange = mem.onChange((change) => {
-    if (handling || change.path !== "/cmd") return;
     if (change.type !== "write" && change.type !== "create") return;
+
+    // 1. Universal __bh & TARS RPC channel (/obc/rpc_req -> /obc/rpc_res)
+    // Runs synchronously inside onChange whenever the RPC is synchronous (zero guest polling latency),
+    // and resolves asynchronously when the invoked tool/method returns a Promise.
+    if (change.path === "/rpc_req" && !handlingRpc) {
+      let rawRpc = "";
+      try {
+        rawRpc = mem.readText("/rpc_req").trim();
+      } catch {
+        return;
+      }
+      if (!rawRpc) return;
+      handlingRpc = true;
+      try {
+        mem.writeFile("/rpc_req", "", { mode: 0o666 });
+        let parsed: BhRpcRequest;
+        try {
+          parsed = JSON.parse(rawRpc) as BhRpcRequest;
+        } catch (e) {
+          atomicWrite("/rpc_res", `${JSON.stringify({ ok: false, error: e instanceof Error ? e.message : "malformed rpc json" })}\n`);
+          return;
+        }
+        const maybe = handleBhRpcMaybeSync(parsed);
+        if (maybe && typeof (maybe as Promise<unknown>).then === "function") {
+          void (maybe as Promise<unknown>).then(
+            (res) => {
+              onCommandHandled();
+              atomicWrite("/rpc_res", `${JSON.stringify(res)}\n`);
+            },
+            (e) => {
+              atomicWrite(
+                "/rpc_res",
+                `${JSON.stringify({ id: parsed.id, ok: false, error: e instanceof Error ? e.message : String(e) })}\n`,
+              );
+            },
+          );
+        } else {
+          onCommandHandled();
+          // Always atomicWrite (write .tmp + rename) so Linux 9p gets a fresh inode and never truncates larger responses!
+          atomicWrite("/rpc_res", `${JSON.stringify(maybe)}\n`);
+        }
+      } finally {
+        handlingRpc = false;
+      }
+      return;
+    }
+
+    // 2. Fast flight control command sink (/obc/cmd -> /obc/last_result.json)
+    if (handling || change.path !== "/cmd") return;
     let raw = "";
     try {
       raw = mem.readText("/cmd").trim();
@@ -149,7 +204,7 @@ export function startObcVsockServer(vsock: Vsock, adapter: ObcHostAdapter, onCom
           const line = pending.slice(0, nl).trim();
           pending = pending.slice(nl + 1);
           if (line) {
-            const reply = handleVsockRpc(line, adapter, onCommandHandled);
+            const reply = await handleVsockRpc(line, adapter, onCommandHandled);
             await writer.write(encoder.encode(`${JSON.stringify(reply)}\n`));
           }
           nl = pending.indexOf("\n");
@@ -202,7 +257,9 @@ export function startObcVsockServer(vsock: Vsock, adapter: ObcHostAdapter, onCom
   };
 }
 
-function handleVsockRpc(line: string, adapter: ObcHostAdapter, onCommandHandled: () => void): Record<string, unknown> {
+const BH_RPC_OPS = new Set(["ls", "get", "set", "call", "tools", "tool", "search", "eval", "mcdu"]);
+
+async function handleVsockRpc(line: string, adapter: ObcHostAdapter, onCommandHandled: () => void): Promise<Record<string, unknown>> {
   let msg: unknown;
   try {
     msg = JSON.parse(line);
@@ -219,6 +276,11 @@ function handleVsockRpc(line: string, adapter: ObcHostAdapter, onCommandHandled:
   }
   if (op === "ping") {
     return { ok: true, pong: true, t: Date.now() };
+  }
+  if (BH_RPC_OPS.has(op)) {
+    const res = await handleBhRpc(o as unknown as BhRpcRequest);
+    onCommandHandled();
+    return res as unknown as Record<string, unknown>;
   }
   const parsed = parseObcCommand(op === "cmd" && o.cmd !== undefined ? o.cmd : o);
   if (!parsed) return { ok: false, msg: "invalid command" };

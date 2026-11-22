@@ -1,0 +1,131 @@
+#!/bin/sh
+# obc-f35-tui — Node.js Real-Time F-35B/C Tactical WSO / Backseater Console TUI.
+# Keys: [1-4] Weapon (AMRAAM/9X/JDAM/JSM)  [r] Cycle Radar (RWS/TWS/STT)  [l] Lock Track
+#       [c] Flares/Chaff  [a] Toggle AP  [t] Toggle A/THR  [g] Gear  [i] Arm ILS  [q] Quit
+# Usage: obc-f35-tui [--frames N]
+
+if [ ! -x /usr/bin/node ] || head -n 1 /usr/bin/node 2>/dev/null | grep -q '^#!'; then
+  echo "Node.js not installed yet. Run: obc-install node (or click +Node in HUD)"
+  exit 1
+fi
+
+exec node --input-type=module - "$@" <<'JS'
+import { AvionicsBus, ansiBar } from "/obc/lib/obc.mjs";
+
+const args = process.argv.slice(2);
+let maxFrames = 0;
+const fi = args.indexOf("--frames");
+if (fi >= 0 && args[fi + 1]) maxFrames = Math.max(1, Number(args[fi + 1]) || 1);
+if (args.includes("--once")) maxFrames = 1;
+
+const bus = new AvionicsBus();
+const RADAR_MODES = ["RWS", "TWS", "STT"];
+let radarIdx = 1;
+let note = "KEYS: [1-4] WPN [r] RWS/TWS/STT [l] LOCK [c] CM [a] AP [t] ATHR [g] GEAR [i] ILS [q] QUIT";
+let frameCount = 0;
+let running = true;
+let timer = null;
+
+function cleanup() {
+  if (!running) return;
+  running = false;
+  if (timer) clearInterval(timer);
+  try {
+    if (process.stdin.isTTY) process.stdin.setRawMode(false);
+    process.stdin.pause();
+  } catch {}
+  process.stdout.write("\x1b[?25h\x1b[0m\n");
+  process.exit(0);
+}
+process.on("SIGINT", cleanup);
+process.on("SIGTERM", cleanup);
+
+if (process.stdin.isTTY && maxFrames === 0) {
+  try {
+    process.stdin.setRawMode(true);
+    process.stdin.resume();
+    process.stdin.setEncoding("utf8");
+    process.stdin.on("data", (k) => {
+      if (k === "q" || k === "Q" || k === "\x03") return cleanup();
+      if (k === "1") { bus.bhTool("weapons", { action: "select", weapon: "aim120" }); note = "WPN -> AIM-120 AMRAAM"; }
+      else if (k === "2") { bus.bhTool("weapons", { action: "select", weapon: "aim9x" }); note = "WPN -> AIM-9X"; }
+      else if (k === "3") { bus.bhTool("weapons", { action: "select", weapon: "jdam" }); note = "WPN -> GBU-32 JDAM"; }
+      else if (k === "4") { bus.bhTool("weapons", { action: "select", weapon: "jsm" }); note = "WPN -> JSM"; }
+      else if (k === "r" || k === "R") {
+        radarIdx = (radarIdx + 1) % RADAR_MODES.length;
+        bus.bhTool("weapons", { action: "radar", mode: RADAR_MODES[radarIdx] });
+        note = `RADAR -> ${RADAR_MODES[radarIdx]}`;
+      } else if (k === "l" || k === "L") {
+        const r = bus.bhTool("weapons", { action: "lock" });
+        note = `LOCK: ${String(r.result ?? "")}`;
+      } else if (k === "c" || k === "C") {
+        bus.bhTool("weapons", { action: "countermeasures" });
+        note = "FLARES & CHAFF DISPENSED";
+      } else if (k === "a" || k === "A") {
+        const jm = bus.bhGet("camera.jetModes", 1).result ?? {};
+        const next = !(jm.alt !== null || jm.hdg !== null);
+        bus.bhTool("jet_autopilot", { ap: next });
+        note = `F-35 AP -> ${next ? "ON" : "OFF"}`;
+      } else if (k === "t" || k === "T") {
+        const jm = bus.bhGet("camera.jetModes", 1).result ?? {};
+        const next = !(jm.spd !== null);
+        bus.bhTool("jet_autopilot", { athr: next });
+        note = `F-35 A/THR -> ${next ? "ON" : "OFF"}`;
+      } else if (k === "g" || k === "G") {
+        const st = bus.read();
+        bus.setGear(!(st.systems.gear > 0.5));
+        note = `GEAR -> ${!(st.systems.gear > 0.5) ? "DOWN" : "UP"}`;
+      } else if (k === "i" || k === "I") {
+        const r = bus.bhTool("approach", { action: "ils" });
+        note = `ILS: ${String(r.result ?? "").slice(0, 48)}`;
+      }
+    });
+  } catch {}
+}
+
+function render() {
+  if (!running) return;
+  frameCount++;
+  const st = bus.read();
+  const wp = bus.bhTool("weapons", { action: "status" }).result ?? {};
+  const trf = bus.bhTool("traffic", { action: "list", n: 5 }).result ?? { count: 0, nearest: [] };
+  const jm = bus.bhGet("camera.jetModes", 1).result ?? {};
+  const apOn = jm.alt !== null || jm.hdg !== null;
+  const athrOn = jm.spd !== null;
+
+  const radarStr = typeof wp.radar === "string" ? wp.radar : String(wp.radar?.mode ?? "TWS");
+  const lines = [
+    "\x1b[?25l\x1b[H\x1b[2J",
+    "\x1b[1;38;2;75;227;138m╔══════════════════════════════════════════════════════════════╗\x1b[0m",
+    `\x1b[1;38;2;75;227;138m║\x1b[1;37m  OBC-F35-TUI · F-35B/C TACTICAL WSO & RADAR CONSOLE         \x1b[1;38;2;75;227;138m║\x1b[0m`,
+    "\x1b[1;38;2;75;227;138m╠══════════════════════════════════════════════════════════════╣\x1b[0m",
+    `  CRAFT : \x1b[1;32m${st.vessel_id.toUpperCase().padEnd(6)}\x1b[0m  HDG ${Math.round(st.attitude.heading_deg).toString().padStart(3, "0")}°  TAS ${(st.flight.true_airspeed_mps * 1.94384).toFixed(0).padStart(4)} kt  M${st.flight.mach.toFixed(2)}  G ${st.flight.g_load.toFixed(1)}`,
+    `  ALT   : ${Math.round(st.position.altitude_msl_m * 3.28084).toString().padStart(6)} ft MSL   AGL ${st.position.height_over_ground_m.toFixed(0).padStart(6)} m   AOA ${st.flight.alpha_deg.toFixed(1)}°`,
+    `  MODES : AP:${apOn ? "\x1b[1;32mON \x1b[0m" : "\x1b[2mOFF\x1b[0m"}  A/THR:${athrOn ? "\x1b[1;32mON \x1b[0m" : "\x1b[2mOFF\x1b[0m"}  GEAR:${st.systems.gear > 0.5 ? "\x1b[1;32mDN\x1b[0m" : "UP"}  RADAR:\x1b[1;36m${radarStr}\x1b[0m`,
+    `  FUEL  : [${ansiBar(st.systems.fuel_frac, 24, "75;227;138")}] ${(st.systems.fuel_frac * 100).toFixed(1)}%  THR ${(st.systems.throttle * 100).toFixed(0)}%`,
+    "\x1b[38;2;52;137;153m  ── STORES & LOCK ─────────────────────────────────────────────\x1b[0m",
+    `  SEL   : \x1b[1;33m${String(wp.weapon ?? "AIM120").toUpperCase().padEnd(8)}\x1b[0m  LOCK : \x1b[1;35m${String(wp.lock ?? "NONE").slice(0, 26)}\x1b[0m`,
+    `  AMMO  : ${JSON.stringify(wp.stores ?? { aim120: 4, aim9x: 2, jdam: 2, jsm: 2 }).slice(0, 52)}`,
+    `  \x1b[38;2;52;137;153m── TACTICAL PICTURE / TRAFFIC (${String(trf.count ?? 0).padStart(2)} tracks) ───────────────────────\x1b[0m`,
+  ];
+  const near = Array.isArray(trf.nearest) ? trf.nearest : [];
+  if (near.length === 0) {
+    lines.push("  NO CONTACTS WITHIN 60 KM");
+  } else {
+    for (const c of near.slice(0, 5)) {
+      const col = c.iff === "hostile" ? "\x1b[1;31m" : c.iff === "friend" ? "\x1b[1;32m" : "\x1b[1;36m";
+      lines.push(
+        `  ${col}${String(c.name ?? "?").slice(0, 14).padEnd(14)}\x1b[0m BRG ${String(c.bearingDeg ?? 0).padStart(3, "0")}°  ${((c.distM ?? 0) / 1000).toFixed(1).padStart(5)} km  ALT ${String(c.altM ?? 0).padStart(5)} m  ${c.aspect ?? ""}`,
+      );
+    }
+  }
+  lines.push("\x1b[1;38;2;75;227;138m╚══════════════════════════════════════════════════════════════╝\x1b[0m");
+  lines.push(`  \x1b[1;33m${note.slice(0, 62)}\x1b[0m`);
+  process.stdout.write(lines.join("\r\n"));
+
+  if (maxFrames > 0 && frameCount >= maxFrames) cleanup();
+}
+
+render();
+if (running) timer = setInterval(render, 350);
+JS

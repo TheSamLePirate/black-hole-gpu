@@ -25,6 +25,8 @@ from typing import Any, Dict, Optional, Tuple
 TELEMETRY_PATH = "/obc/telemetry.json"
 TAU_PATH = "/obc/tau"
 CMD_PATH = "/obc/cmd"
+RPC_REQ_PATH = "/obc/rpc_req"
+RPC_RES_PATH = "/obc/rpc_res"
 VSOCK_HOST_CID = 2
 VSOCK_PORT = 4747
 
@@ -194,6 +196,57 @@ class AvionicsBus:
 
     def say(self, text: str) -> Dict[str, Any]:
         return self.send({"kind": "say", "text": str(text)})
+
+    def bh_rpc(self, payload: Dict[str, Any], timeout_s: float = 10.0) -> Dict[str, Any]:
+        """Universal RPC to the full simulator window.__bh API & all 73 TARS tools."""
+        req_id = f"{int(time.time() * 1000)}-{os.getpid()}-{int(time.monotonic() * 1e6) % 99999}"
+        body = dict(payload)
+        body["id"] = req_id
+        resp = self._rpc(body)
+        if resp is not None:
+            return resp
+        with open(RPC_REQ_PATH, "w", encoding="utf-8") as f:
+            f.write(json.dumps(body) + "\n")
+        deadline = time.monotonic() + timeout_s
+        while time.monotonic() < deadline:
+            try:
+                with open(RPC_RES_PATH, "r", encoding="utf-8") as f:
+                    parsed = json.load(f)
+                if isinstance(parsed, dict) and parsed.get("id") == req_id:
+                    return parsed
+            except (OSError, json.JSONDecodeError):
+                pass
+            time.sleep(0.01)
+        return {"id": req_id, "ok": False, "error": "RPC timeout"}
+
+    def bh_ls(self, path: str = "") -> Dict[str, Any]:
+        return self.bh_rpc({"op": "ls", "path": path})
+
+    def bh_get(self, path: str, depth: int = 3) -> Dict[str, Any]:
+        return self.bh_rpc({"op": "get", "path": path, "depth": depth})
+
+    def bh_set(self, path: str, value: Any, refresh: bool = True) -> Dict[str, Any]:
+        return self.bh_rpc({"op": "set", "path": path, "value": value, "refresh": refresh})
+
+    def bh_call(self, path: str, *args: Any) -> Dict[str, Any]:
+        return self.bh_rpc({"op": "call", "path": path, "args": list(args)})
+
+    def bh_tools(self) -> Dict[str, Any]:
+        return self.bh_rpc({"op": "tools"})
+
+    def bh_tool(self, name: str, **kwargs: Any) -> Dict[str, Any]:
+        return self.bh_rpc({"op": "tool", "name": name, "toolArgs": kwargs})
+
+    def bh_search(self, query: str) -> Dict[str, Any]:
+        return self.bh_rpc({"op": "search", "query": query})
+
+    def bh_eval(self, expr: str) -> Dict[str, Any]:
+        return self.bh_rpc({"op": "eval", "expr": expr})
+
+    def bh_mcdu(self, action: str, **kwargs: Any) -> Dict[str, Any]:
+        payload: Dict[str, Any] = {"op": "mcdu", "action": action}
+        payload.update(kwargs)
+        return self.bh_rpc(payload)
 
     def close(self) -> None:
         if self._file is not None:

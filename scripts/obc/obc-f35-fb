@@ -1,0 +1,130 @@
+#!/bin/sh
+# obc-f35-fb — Node.js Real-Time Graphical F-35 TSD / AN/APG-81 Tactical Radar Display on /dev/fb0.
+# Reads live contacts from `__bh.radar.picture()` & stores from `weapons` and renders at high FPS!
+# Usage: obc-f35-fb [--seconds 20]
+
+if [ ! -x /usr/bin/node ] || head -n 1 /usr/bin/node 2>/dev/null | grep -q '^#!'; then
+  echo "Node.js not installed yet. Run: obc-install node (or click +Node in HUD)"
+  exit 1
+fi
+
+exec node --input-type=module - "$@" <<'JS'
+import { AvionicsBus, Framebuffer, packRgb } from "/obc/lib/obc.mjs";
+
+const args = process.argv.slice(2);
+let durSec = 20;
+const si = args.indexOf("--seconds");
+if (si >= 0 && args[si + 1]) durSec = Math.max(0.5, Number(args[si + 1]) || 20);
+
+const bus = new AvionicsBus();
+const fb = new Framebuffer("/dev/fb0", 512, 512);
+
+const BG = packRgb(5, 13, 18);
+const PANEL = packRgb(10, 26, 34);
+const RING = packRgb(24, 72, 86);
+const CYAN = packRgb(52, 216, 255);
+const GREEN = packRgb(75, 227, 138);
+const AMBER = packRgb(255, 191, 71);
+const RED = packRgb(255, 85, 68);
+const WHITE = packRgb(236, 248, 255);
+
+const CX = 256;
+const CY = 276;
+const R = 180;
+
+let running = true;
+process.on("SIGINT", () => (running = false));
+process.on("SIGTERM", () => (running = false));
+
+const tStart = performance.now();
+let tFps = tStart;
+let tPoll = 0;
+let frameN = 0;
+let fps = 0;
+let sweep = -Math.PI / 2;
+let sweepDir = 1;
+let contacts = [];
+let radarMode = "TWS";
+
+function drawFrame() {
+  if (!running || performance.now() - tStart >= durSec * 1000) {
+    fb.close();
+    process.exit(0);
+  }
+  const now = performance.now();
+  const st = bus.read();
+  if (now - tPoll > 400) {
+    tPoll = now;
+    const trf = bus.bhTool("traffic", { action: "list", maxKm: 80, n: 18 });
+    if (trf.ok && Array.isArray(trf.result?.nearest)) contacts = trf.result.nearest;
+    const wp = bus.bhTool("weapons", { action: "status" });
+    if (wp.ok && wp.result?.radar) {
+      const rm = wp.result.radar;
+      radarMode = typeof rm === "string" ? rm : String(rm.mode ?? "TWS");
+    }
+  }
+
+  // F-35 AN/APG-81 ±60° azimuth scan sweep
+  sweep += sweepDir * 0.11;
+  if (sweep > -Math.PI / 2 + 1.05) sweepDir = -1;
+  if (sweep < -Math.PI / 2 - 1.05) sweepDir = 1;
+
+  fb.clearU32(BG);
+
+  // Header
+  fb.rect(0, 0, 512, 40, PANEL);
+  fb.hline(0, 511, 40, CYAN);
+  fb.text(10, 12, `F-35 TSD  ${radarMode}  80KM  HDG ${Math.round(st.attitude.heading_deg).toString().padStart(3, "0")}`, GREEN, 2);
+
+  // Range arcs & ±60° FCR radar cone
+  for (const frac of [0.33, 0.66, 1.0]) fb.circle(CX, CY, Math.round(R * frac), RING, 72);
+  const coneL = -Math.PI / 2 - 1.05;
+  const coneR = -Math.PI / 2 + 1.05;
+  fb.line(CX, CY, Math.round(CX + R * Math.cos(coneL)), Math.round(CY + R * Math.sin(coneL)), CYAN);
+  fb.line(CX, CY, Math.round(CX + R * Math.cos(coneR)), Math.round(CY + R * Math.sin(coneR)), CYAN);
+
+  // Active sweep beam + glow trail
+  for (let k = 4; k >= 0; k--) {
+    const a = sweep - sweepDir * k * 0.04;
+    const col = k === 0 ? GREEN : packRgb(16, Math.max(40, 175 - k * 32), Math.max(24, 96 - k * 16));
+    fb.line(CX, CY, Math.round(CX + R * Math.cos(a)), Math.round(CY + R * Math.sin(a)), col);
+  }
+
+  // Ownship F-35 silhouette at center
+  fb.line(CX, CY - 14, CX, CY + 12, WHITE);
+  fb.line(CX - 14, CY + 2, CX + 14, CY + 2, WHITE);
+  fb.line(CX - 6, CY + 10, CX + 6, CY + 10, WHITE);
+
+  // Plot real traffic / radar contacts relative to ownship heading
+  const hdg = st.attitude.heading_deg;
+  for (const c of contacts) {
+    const relDeg = ((c.bearingDeg ?? 0) - hdg + 540) % 360 - 180;
+    const relRad = ((relDeg - 90) * Math.PI) / 180;
+    const distPx = Math.min(R - 8, ((c.distM ?? 0) / 80000) * R);
+    const tx = Math.round(CX + distPx * Math.cos(relRad));
+    const ty = Math.round(CY + distPx * Math.sin(relRad));
+    const col = c.iff === "hostile" ? RED : c.iff === "friend" ? GREEN : CYAN;
+    fb.strokeRect(tx - 4, ty - 4, 9, 9, col);
+    fb.text(tx + 7, ty - 4, String(c.name ?? "").slice(0, 6), col, 1);
+  }
+
+  // Footer: Fuel, Throttle, Contacts & FPS
+  fb.rect(0, 462, 512, 50, PANEL);
+  fb.hline(0, 511, 462, CYAN);
+  fb.barGauge(10, 470, 145, 13, st.systems.fuel_frac, GREEN, BG, RING);
+  fb.barGauge(165, 470, 125, 13, st.systems.throttle, AMBER, BG, RING);
+  fb.text(302, 470, `TRK ${String(contacts.length).padStart(2)}  FPS ${fps.toFixed(1)}`, GREEN, 2);
+  fb.text(10, 490, `M${st.flight.mach.toFixed(2)}  G ${st.flight.g_load.toFixed(1)}  ALT ${Math.round(st.position.altitude_msl_m)}M`, WHITE, 2);
+
+  fb.flush();
+  frameN++;
+  if (now - tFps >= 1000) {
+    fps = (frameN * 1000) / (now - tFps);
+    frameN = 0;
+    tFps = now;
+  }
+  setTimeout(drawFrame, 35);
+}
+
+drawFrame();
+JS

@@ -42,7 +42,7 @@ await $`cp vendor/basis/basis_transcoder.wasm _site/basis_transcoder.wasm`;
 await $`mkdir -p _site/obc/scripts/lib`;
 await $`cp node_modules/unkernel/dist/unkernel.wasm _site/obc/unkernel.wasm`;
 await $`cp assets/obc/alpine.erofs assets/obc/distros.json _site/obc/`;
-await $`cp scripts/obc/obc-* _site/obc/scripts/ && cp scripts/obc/lib/*.py scripts/obc/lib/*.mjs _site/obc/scripts/lib/`;
+await $`cp scripts/obc/bh scripts/obc/bh-tui scripts/obc/obc-* _site/obc/scripts/ && cp scripts/obc/lib/*.py scripts/obc/lib/*.mjs _site/obc/scripts/lib/`;
 await $`mkdir -p _site/docs/video`;
 await $`cp -R gallery/. _site/docs/`;
 await $`cp docs/video/*.mp4 _site/docs/video/`;

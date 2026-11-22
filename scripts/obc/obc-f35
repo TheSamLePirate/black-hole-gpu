@@ -1,0 +1,179 @@
+#!/bin/sh
+# obc-f35 — Node.js CLI: Full F-35B/C Tactical Flight, Weapons, Radar, Autopilot, STOVL & PCD Controller.
+# Usage:
+#   obc-f35 status                                       Live F-35 avionics, stores, radar & AP status
+#   obc-f35 fly <field> [runway|final|cruise] [weather]  Spawn F-35 at any airfield (e.g. LFPB, LFTH, KEDW)
+#   obc-f35 ap [alt=<m>] [hdg=<deg>] [spd=<m/s>] [ap=on|off] [athr=on|off] [lnav=on|off]
+#   obc-f35 mode <orbit|hold|tf|tanker|off> [aglM=150] [radiusKm=6] [near=true]
+#   obc-f35 radar <RWS|TWS|STT>                          Set AN/APG-81 radar mode
+#   obc-f35 weapon <aim120|aim9x|jdam|jsm>               Select active weapon
+#   obc-f35 lock [target] | fire | cm | bogey            Lock track, fire, flares/chaff, AWACS bogey dope
+#   obc-f35 pcd <slot 0-3> <TSD|FCR|SMS|FUEL|ENG|EOTS|AP|OBC>  Switch 3D F-35 PCD portal page
+#   obc-f35 wingmen <0-3> | traffic | challenges | figures
+
+if [ ! -x /usr/bin/node ] || head -n 1 /usr/bin/node 2>/dev/null | grep -q '^#!'; then
+  echo "Node.js not installed yet. Run: obc-install node (or click +Node in HUD)" >&2
+  exit 1
+fi
+
+exec node --input-type=module - "$@" <<'JS'
+import { AvionicsBus } from "/obc/lib/obc.mjs";
+
+const bus = new AvionicsBus();
+const args = process.argv.slice(2);
+const asJson = args.includes("--json");
+const clean = args.filter((a) => a !== "--json");
+const sub = clean[0] ?? "status";
+
+function show(x) {
+  console.log(typeof x === "string" && !asJson ? x : JSON.stringify(x, null, 2));
+}
+
+function parseKv(tokens) {
+  const out = {};
+  for (const t of tokens) {
+    const eq = t.indexOf("=");
+    if (eq > 0) {
+      const k = t.slice(0, eq);
+      const v = t.slice(eq + 1);
+      if (v === "on" || v === "true") out[k] = true;
+      else if (v === "off" || v === "false") out[k] = false;
+      else if (/^-?\d+(\.\d+)?$/.test(v)) out[k] = Number(v);
+      else out[k] = v;
+    }
+  }
+  return out;
+}
+
+switch (sub) {
+  case "status": {
+    const st = bus.read();
+    const wp = bus.bhTool("weapons", { action: "status" });
+    const pcd = bus.bhTool("pcd", { action: "status" });
+    const rad = bus.bhCall("radar.stats");
+    const out = {
+      vessel: st.vessel_id,
+      pos: st.position,
+      att: st.attitude,
+      flight: st.flight,
+      systems: st.systems,
+      weapons: wp.ok ? wp.result : null,
+      pcd: pcd.ok ? pcd.result : null,
+      radar: rad.ok ? rad.result : null,
+    };
+    if (asJson) {
+      show(out);
+      break;
+    }
+    console.log("\x1b[1;32m╔══════════════════════════════════════════════════════════════╗\x1b[0m");
+    console.log(`\x1b[1;32m║\x1b[1;37m        OBC-F35 · TACTICAL AVIONICS & WEAPONS STATUS         \x1b[1;32m║\x1b[0m`);
+    console.log("\x1b[1;32m╚══════════════════════════════════════════════════════════════╝\x1b[0m");
+    console.log(`  CRAFT : ${st.vessel_id.toUpperCase()}  TAS ${st.flight.true_airspeed_mps.toFixed(0)} m/s (M${st.flight.mach.toFixed(2)})  ALT ${st.position.altitude_msl_m.toFixed(0)} m  AGL ${st.position.height_over_ground_m.toFixed(0)} m`);
+    console.log(`  LOAD  : G ${st.flight.g_load.toFixed(2)}  AOA ${st.flight.alpha_deg.toFixed(1)}°  THR ${(st.systems.throttle * 100).toFixed(0)}%  FUEL ${(st.systems.fuel_frac * 100).toFixed(1)}%`);
+    console.log(`  RADAR : ${JSON.stringify(rad.result ?? {})}`);
+    console.log(`  STORES: ${JSON.stringify(wp.result ?? {})}`);
+    console.log(`  PCD   : ${JSON.stringify(pcd.result ?? {})}`);
+    break;
+  }
+
+  case "fly": {
+    const field = clean[1] ?? "LFPB";
+    const start = clean[2] ?? "runway";
+    const weather = clean[3];
+    const toolArgs = { action: "prepare", field, start };
+    if (weather) toolArgs.weather = weather;
+    const r = bus.bhTool("f35", toolArgs);
+    show(r.ok ? r.result : r);
+    break;
+  }
+
+  case "ap": {
+    const kv = parseKv(clean.slice(1));
+    if (kv.hdg !== undefined) {
+      kv.hdgDeg = kv.hdg;
+      delete kv.hdg;
+    }
+    const r = bus.bhTool("jet_autopilot", kv);
+    show(r.ok ? r.result : r);
+    break;
+  }
+
+  case "mode": {
+    const action = clean[1] ?? "off";
+    const kv = parseKv(clean.slice(2));
+    const r = bus.bhTool("jet_mode", { action, ...kv });
+    show(r.ok ? r.result : r);
+    break;
+  }
+
+  case "radar": {
+    const mode = (clean[1] ?? "TWS").toUpperCase();
+    const r = bus.bhTool("weapons", { action: "radar", mode });
+    show(r.ok ? r.result : r);
+    break;
+  }
+
+  case "weapon": {
+    const weapon = (clean[1] ?? "aim120").toLowerCase();
+    const r = bus.bhTool("weapons", { action: "select", weapon });
+    show(r.ok ? r.result : r);
+    break;
+  }
+
+  case "lock": {
+    const r = bus.bhTool("weapons", clean[1] ? { action: "lock", target: clean[1] } : { action: "lock" });
+    show(r.ok ? r.result : r);
+    break;
+  }
+
+  case "fire": {
+    const r = bus.bhTool("weapons", { action: "fire" });
+    show(r.ok ? r.result : r);
+    break;
+  }
+
+  case "cm": {
+    const r = bus.bhTool("weapons", { action: "countermeasures" });
+    show(r.ok ? r.result : r);
+    break;
+  }
+
+  case "bogey": {
+    const r = bus.bhTool("weapons", { action: "bogey_dope" });
+    show(r.ok ? r.result : r);
+    break;
+  }
+
+  case "pcd": {
+    const slot = Number(clean[1] ?? 0);
+    const page = (clean[2] ?? "OBC").toUpperCase();
+    const r = bus.bhCall("pcd.pcd.show", slot, page);
+    show(r.ok ? { slot, page: r.result } : r);
+    break;
+  }
+
+  case "wingmen": {
+    const count = Number(clean[1] ?? 1);
+    const r = bus.bhTool("flight_lead", { action: "wingmen", count });
+    show(r.ok ? r.result : r);
+    break;
+  }
+
+  case "traffic": {
+    const r = bus.bhTool("traffic", { action: "list", n: 12 });
+    show(r.ok ? r.result : r);
+    break;
+  }
+
+  case "challenges":
+  case "figures": {
+    const r = bus.bhTool("f35", { action: sub });
+    show(r.ok ? r.result : r);
+    break;
+  }
+
+  default:
+    console.error("Usage: obc-f35 [status|fly|ap|mode|radar|weapon|lock|fire|cm|bogey|pcd|wingmen|traffic|challenges|figures]");
+    process.exit(1);
+}
+JS

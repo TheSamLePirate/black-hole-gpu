@@ -1,0 +1,132 @@
+#!/bin/sh
+# obc-a320 — Node.js CLI: Full Airbus A320 Flight Deck, FCU, Live MCDU & Lower ECAM Controller.
+# Usage:
+#   obc-a320 status                                      Live A320 FMGC, FCU, MCDU page & flight state
+#   obc-a320 fly <ICAO>                                  Switch to A320 & line up at airport (e.g. LFPB, LFPG, LFMN)
+#   obc-a320 fcu [alt=<m>] [hdg=<deg>] [spd=<m/s>] [ap=on|off] [athr=on|off] [lnav=on|off]
+#   obc-a320 mcdu screen                                 Render live 24x14 Captain MCDU screen in terminal
+#   obc-a320 mcdu page <menu|init|fpln|perf|prog|radnav|obc|status|sec>
+#   obc-a320 mcdu lsk <L|R> <1-6>                        Press MCDU line select key (L1..L6 / R1..R6)
+#   obc-a320 mcdu type "<text>"                          Type text into Captain MCDU scratchpad
+#   obc-a320 ecam <enginePage|wheelPage|fctlPage|fuelPage|elecPage|hydPage|cruisePage|statusPage|obcPage>
+#   obc-a320 gear <down|up> | flaps <0..1>
+
+if [ ! -x /usr/bin/node ] || head -n 1 /usr/bin/node 2>/dev/null | grep -q '^#!'; then
+  echo "Node.js not installed yet. Run: obc-install node (or click +Node in HUD)" >&2
+  exit 1
+fi
+
+exec node --input-type=module - "$@" <<'JS'
+import { AvionicsBus } from "/obc/lib/obc.mjs";
+
+const bus = new AvionicsBus();
+const args = process.argv.slice(2);
+const asJson = args.includes("--json");
+const clean = args.filter((a) => a !== "--json");
+const sub = clean[0] ?? "status";
+
+function show(x) {
+  console.log(typeof x === "string" && !asJson ? x : JSON.stringify(x, null, 2));
+}
+
+function readMcduScreen() {
+  const r = bus.bhMcdu("screen");
+  return r.ok ? r.result : null;
+}
+
+switch (sub) {
+  case "status": {
+    const st = bus.read();
+    const mcdu = readMcduScreen();
+    const ap = bus.bhTool("approach", { action: "state" });
+    const out = { vessel: st.vessel_id, position: st.position, flight: st.flight, systems: st.systems, mcdu: mcdu ? { pageId: mcdu.pageId, title: mcdu.title } : null, approach: ap.result };
+    if (asJson) { show(out); break; }
+    console.log("\x1b[1;36m╔══════════════════════════════════════════════════════════════╗\x1b[0m");
+    console.log("\x1b[1;36m║\x1b[1;37m        OBC-A320 · AIRBUS A320 FMGC / MCDU / ECAM            \x1b[1;36m║\x1b[0m");
+    console.log("\x1b[1;36m╚══════════════════════════════════════════════════════════════╝\x1b[0m");
+    console.log(`  CRAFT : ${st.vessel_id.toUpperCase()}  IAS ${(st.flight.true_airspeed_mps * 1.94384).toFixed(0)} kt (M${st.flight.mach.toFixed(2)})  ALT ${Math.round(st.position.altitude_msl_m * 3.28084)} ft`);
+    console.log(`  CFG   : THR ${(st.systems.throttle * 100).toFixed(0)}%  FLAPS ${(st.systems.flaps * 100).toFixed(0)}%  GEAR ${st.systems.gear > 0.5 ? "DOWN" : "UP"}  FUEL ${(st.systems.fuel_frac * 100).toFixed(1)}%`);
+    console.log(`  MCDU  : ${mcdu ? `${mcdu.pageId} (${mcdu.title})` : "switch to A320 first (obc-a320 fly LFPB)"}`);
+    break;
+  }
+
+  case "fly": {
+    const icao = clean[1] ?? "LFPB";
+    bus.bhTool("set_craft", { ship: true, vessel: "a320" });
+    const r = bus.bhTool("place_ship", { mode: "lineup", query: icao });
+    show(r.ok ? r.result : r);
+    break;
+  }
+
+  case "fcu": {
+    const kv = {};
+    for (const t of clean.slice(1)) {
+      const eq = t.indexOf("=");
+      if (eq > 0) {
+        const k = t.slice(0, eq);
+        const v = t.slice(eq + 1);
+        const mapped = k === "hdg" ? "hdgDeg" : k;
+        kv[mapped] = v === "on" || v === "true" ? true : v === "off" || v === "false" ? false : Number(v);
+      }
+    }
+    const r = bus.bhTool("jet_autopilot", kv);
+    show(r.ok ? r.result : r);
+    break;
+  }
+
+  case "mcdu": {
+    const op = clean[1] ?? "screen";
+    if (op === "screen") {
+      const scr = readMcduScreen();
+      if (!scr) {
+        console.error("MCDU unavailable (switch craft to A320: obc-a320 fly LFPB)");
+        process.exit(1);
+      }
+      if (asJson) { show(scr); break; }
+      console.log(`\x1b[1;36m┌──────── ${scr.title.padEnd(18)} ────────┐\x1b[0m`);
+      for (let i = 0; i < scr.lines.length; i++) {
+        const ln = scr.lines[i];
+        if (ln.ls || ln.rs) console.log(`\x1b[2m│ ${(ln.ls || "").padEnd(16)} ${(ln.rs || "").padStart(16)} │\x1b[0m`);
+        const body = ln.c ? ln.c.padStart(18).padEnd(33) : `${(ln.l || "").padEnd(16)} ${(ln.r || "").padStart(16)}`;
+        console.log(`│ \x1b[1;32m${body}\x1b[0m │`);
+      }
+      const spText = scr.scratchpad || scr.message || "";
+      console.log(`\x1b[1;33m│ SP: ${spText.padEnd(29)} │\x1b[0m`);
+      console.log("\x1b[1;36m└───────────────────────────────────┘\x1b[0m");
+    } else if (op === "page") {
+      const p = clean[2] ?? "menu";
+      const r = bus.bhMcdu("page", { page: p });
+      show(r.ok ? { pageId: r.result.pageId, title: r.result.title } : r);
+    } else if (op === "lsk") {
+      const side = (clean[2] ?? "L").toUpperCase();
+      const num = Number(clean[3] ?? 1);
+      const r = bus.bhMcdu("lsk", { lskSide: side, lskNum: num });
+      show(r.ok ? { pageId: r.result.pageId, title: r.result.title, scratchpad: r.result.scratchpad } : r);
+    } else if (op === "type") {
+      const txt = clean.slice(2).join(" ");
+      const r = bus.bhMcdu("type", { text: txt });
+      show(r.ok ? r.result : r);
+    }
+    break;
+  }
+
+  case "ecam": {
+    const page = clean[1] ?? "obcPage";
+    const r = bus.bhMcdu("ecam", { ecam: page });
+    show(r.ok ? r.result : r);
+    break;
+  }
+
+  case "gear":
+    show(bus.setGear(clean[1] !== "up"));
+    break;
+
+  case "flaps":
+    show(bus.setFlaps(Number(clean[1] ?? 0)));
+    break;
+
+  default:
+    console.error("Usage: obc-a320 [status|fly|fcu|mcdu|ecam|gear|flaps]");
+    process.exit(1);
+}
+JS
