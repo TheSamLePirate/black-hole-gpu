@@ -3201,7 +3201,7 @@ source readiness, pan metres and last CPU draw time. `interface({mapZoom:18})` o
 
 ## Linux On-Board Computer (`__bh.obc`)
 
-### `__bh.obc` → `{ status, boot, stop, reboot, suspend, resume, resetDataDisk, getConfig, setConfig, exec, write, readScreen, telemetry, openConsole, closeConsole, toggleConsole, runScript, setWispUrl, testWisp, listFiles, readGuestFile, writeGuestFile, captureFbDataUrl, scripts }`
+### `__bh.obc` → `{ status, boot, stop, reboot, suspend, resume, resetDataDisk, getConfig, setConfig, exec, write, readScreen, telemetry, openConsole, closeConsole, toggleConsole, runScript, installToolchain, setWispUrl, testWisp, listFiles, readGuestFile, writeGuestFile, captureFbDataUrl, scripts }`
 
 Embedded Linux On-Board Computer powered by Unkernel (Linux 7.x WASM + `kwemu` aarch64 JIT + Alpine 3.24 in a dedicated Web Worker — see [PLAN-LINUX-OBC.md](PLAN-LINUX-OBC.md)). Lazy-booted on demand with zero startup cost.
 
@@ -3215,7 +3215,8 @@ Embedded Linux On-Board Computer powered by Unkernel (Linux 7.x WASM + `kwemu` a
 - `readScreen()` — return the current 64×24 ANSI terminal mirror lines (plain text).
 - `telemetry()` — return the exact live `ObcTelemetry` snapshot exposed to Linux at `/obc/telemetry.json` and `AF_VSOCK:4747`.
 - `openConsole()` / `closeConsole()` / `toggleConsole()` — control the in-game `xterm.js` + `/dev/fb0` + Options + Script Editor HUD console overlay (`Ctrl+\`, `Ctrl+²`, `F11`).
-- `runScript(name)` — run a built-in avionics script (`"diag"`, `"orbit"`, `"reentry"`, `"ils"`, `"solar"`, `"fdr"`, `"fb-demo"`).
+- `runScript(name)` — run a built-in avionics script (`"diag"`, `"orbit"`, `"reentry"`, `"ils"`, `"solar"`, `"fdr"`, `"fuel"`, `"nav"`, `"kerr"`, `"auto"`, `"top"`, `"mission-tui"`, `"fmc-tui"`, `"fb-demo"`, `"pfd-fb"`, `"radar-fb"`, `"kerr-fb"`).
+- `installToolchain(profile)` — install `"python"`, `"node"`, or `"full"` (Python 3 + Node.js) via `apk` over Wisp and persist in IndexedDB `/data`.
 - `setWispUrl(url)` / `testWisp(url?)` — configure/persist a custom Wisp v1 WebSocket proxy URL (empty uses local dev `/__wisp`) and test the live Wisp v1 handshake latency.
 - `listFiles(dir?)` / `readGuestFile(path)` / `writeGuestFile(path, content)` — list, read, and save executable pilot scripts in `/home/pilot/*`.
 - `captureFbDataUrl()` — export the active `/dev/fb0` frame as a PNG data URL (null if inactive).

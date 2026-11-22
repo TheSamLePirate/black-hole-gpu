@@ -33,6 +33,24 @@ services:
       - CERES_DIR=/moon/ceres
     stop_grace_period: 10s
     restart: unless-stopped
+  # Wisp v1 WebSocket-to-TCP relay for the embedded Linux OBC (wss://code.samlepirate.org → host:3002, docs/DEPLOY.md)
+  wisp:
+    image: __ROOMS_IMAGE__
+    command: ["bun", "server/wisp-main.ts"]
+    ports:
+      - "3002:3002"
+    environment:
+      - PORT=3002
+      - WISP_MAX_CLIENTS=${WISP_MAX_CLIENTS:-32}
+      - WISP_MAX_PER_IP=${WISP_MAX_PER_IP:-8}
+      - WISP_ORIGINS=${WISP_ORIGINS:-}
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3002/health"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+    stop_grace_period: 10s
+    restart: unless-stopped
   # the worlds' relief tiles (server/moon-tiles.ts, PLAN-PLANETES-AAA P6, P7, P8): the Moon's LOLA 118 m and Mars's HRSC and
   # MOLA blend 200 m, read from the USGS's copies on AWS (8.5 and 11.4 GB once), cut into ~3–4 GB of tiles each in moon-data;
   # Mercury's MESSENGER 665 m and Ceres's Dawn HAMO 137 m (0.5 GB each, ~0.3 GB of tiles); then it exits (a later start only

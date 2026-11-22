@@ -1,0 +1,113 @@
+#!/bin/sh
+# obc-kerr-fb — Python Real-Time Graphical Gargantua / Kerr Spacetime & Accretion Disk Visualizer on /dev/fb0.
+# Usage: obc-kerr-fb [--seconds 20]
+
+if [ ! -x /usr/bin/python3 ] || head -n 1 /usr/bin/python3 2>/dev/null | grep -q '^#!'; then
+  echo "Python 3 not installed yet. Run: obc-install python (or click +Python in HUD)"
+  exit 1
+fi
+
+exec python3 - "$@" <<'PY'
+import math, signal, sys, time
+import obc
+
+dur = 20.0
+if "--seconds" in sys.argv:
+    i = sys.argv.index("--seconds")
+    if i + 1 < len(sys.argv):
+        dur = max(0.5, float(sys.argv[i + 1]))
+
+running = True
+def stop(*_a):
+    global running
+    running = False
+signal.signal(signal.SIGINT, stop)
+signal.signal(signal.SIGTERM, stop)
+
+bus = obc.AvionicsBus()
+with obc.Framebuffer() as fb:
+    W, H = fb.width, fb.height
+    cx, cy = W // 2, 246
+    panel = fb.color(8, 18, 28)
+    cyan = fb.color(98, 230, 255)
+    grid_c = fb.color(20, 48, 66)
+    black = fb.color(0, 0, 0)
+    photon = fb.color(255, 224, 150)
+    isco_c = fb.color(82, 210, 255)
+    white = fb.color(240, 248, 255)
+    amber = fb.color(255, 168, 56)
+    hot = fb.color(255, 235, 195)
+    blue_shift = fb.color(145, 215, 255)
+    red_shift = fb.color(195, 76, 36)
+    green = fb.color(125, 255, 154)
+
+    t0 = time.monotonic()
+    t_fps = t0
+    frames = 0
+    fps = 0.0
+    ang = 0.0
+
+    while running and (time.monotonic() - t0) < dur:
+        st = bus.read()
+        ang += 0.16
+        fb.clear(3, 8, 16)
+
+        # Header
+        fb.rect(0, 0, W, 40, panel)
+        fb.hline(0, W - 1, 40, cyan)
+        fb.text(12, 12, f"KERR SPACETIME  BODY {st.body[:9]}", cyan, scale=2)
+
+        # Curved gravitational well coordinate lines (warped radially toward horizon)
+        for gy in range(76, 420, 34):
+            prev = None
+            for gx in range(24, W - 24, 16):
+                dx, dy = gx - cx, gy - cy
+                dist = math.hypot(dx, dy) + 1.0
+                pull = min(38.0, 2400.0 / (dist + 28.0))
+                wx = int(gx - (dx / dist) * pull * 0.35)
+                wy = int(gy + pull * 0.85)
+                if prev is not None and 42 < wy < 438:
+                    fb.line(prev[0], prev[1], wx, wy, grid_c)
+                prev = (wx, wy)
+
+        # Relativistic lensed upper/lower halo & tilted Doppler-beamed accretion disk
+        for r in range(138, 72, -10):
+            fb.ellipse(cx, cy, r, int(r * 0.28), amber if r < 108 else red_shift, steps=64)
+        fb.circle(cx, cy, 74, photon, steps=72)
+        fb.circle(cx, cy, 72, hot, steps=72)
+        fb.circle(cx, cy, 114, isco_c, steps=72)
+
+        # Orbiting hot plasma knots (blue-shifted on approaching left, red-shifted on receding right)
+        for k in range(18):
+            a = ang + k * (2 * math.pi / 18)
+            rad = 84 + (k % 3) * 20
+            px = int(cx + rad * math.cos(a))
+            py = int(cy + rad * 0.28 * math.sin(a))
+            col = blue_shift if math.cos(a) < -0.2 else (hot if math.cos(a) < 0.35 else red_shift)
+            fb.filled_circle(px, py, 3, col)
+
+        # Event Horizon shadow (pure black core)
+        fb.filled_circle(cx, cy, 62, black)
+        fb.circle(cx, cy, 63, photon, steps=64)
+
+        # Live spacecraft marker on ISCO/orbit ring
+        sx = int(cx + 150 * math.cos(ang * 0.5))
+        sy = int(cy + 150 * 0.55 * math.sin(ang * 0.5))
+        fb.filled_circle(sx, sy, 5, white)
+        fb.circle(sx, sy, 9, green, steps=20)
+
+        # Footer: Proper-Time Dilation gauge d(tau)/dt
+        fb.rect(0, 440, W, 72, panel)
+        fb.hline(0, W - 1, 440, cyan)
+        fb.text(12, 450, f"DTAU/DT {st.dtau_dt:.8f}   FPS {fps:.1f}", amber if st.dtau_dt < 0.99 else green, scale=2)
+        fb.bar_gauge(12, 478, W - 24, 20, st.dtau_dt, cyan, black, grid_c)
+
+        fb.flush()
+        frames += 1
+        now = time.monotonic()
+        if now - t_fps >= 1.0:
+            fps = frames / (now - t_fps)
+            frames = 0
+            t_fps = now
+        time.sleep(0.05)
+PY

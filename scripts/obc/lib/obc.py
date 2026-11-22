@@ -391,6 +391,37 @@ class Framebuffer:
                 self.line(prev[0], prev[1], px, py, line_px)
             prev = (px, py)
 
+    def hline(self, x0: int, x1: int, y: int, px: bytes) -> None:
+        if y < 0 or y >= self.height:
+            return
+        a = max(0, min(x0, x1))
+        b = min(self.width, max(x0, x1) + 1)
+        if a >= b:
+            return
+        off = (y * self.width + a) * 4
+        self._buf[off : off + (b - a) * 4] = px * (b - a)
+
+    def vline(self, x: int, y0: int, y1: int, px: bytes) -> None:
+        if x < 0 or x >= self.width:
+            return
+        a = max(0, min(y0, y1))
+        b = min(self.height, max(y0, y1) + 1)
+        for yy in range(a, b):
+            off = (yy * self.width + x) * 4
+            self._buf[off : off + 4] = px
+
+    def stroke_rect(self, x: int, y: int, w: int, h: int, px: bytes) -> None:
+        self.rect(x, y, w, 1, px)
+        self.rect(x, y + h - 1, w, 1, px)
+        self.rect(x, y, 1, h, px)
+        self.rect(x + w - 1, y, 1, h, px)
+
+    def crosshair(self, cx: int, cy: int, size: int, px: bytes, gap: int = 4) -> None:
+        self.hline(cx - size, cx - gap, cy, px)
+        self.hline(cx + gap, cx + size, cy, px)
+        self.vline(cx, cy - size, cy - gap, px)
+        self.vline(cx, cy + gap, cy + size, px)
+
     def text(self, x: int, y: int, s: str, px: bytes, scale: int = 2) -> None:
         cx = x
         for ch in s.upper():

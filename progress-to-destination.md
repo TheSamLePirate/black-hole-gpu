@@ -77,6 +77,24 @@ l'état d'une mission ou d'un combat **non sauvé, dit** ; le réseau **« entre
 
 ## Journal
 
+### 2026-11-22 16:25 UTC — Suite AAA Python 3.14 & Node.js v24 (CLI, TUI & /dev/fb0 temps réel), optimisations perf OBC & relais Wisp Portainer (`wss://code.samlepirate.org/`)
+
+- **Contribution à la destination :** Suite applicative complète Python & Node.js pour l'OBC Linux ([PLAN-LINUX-OBC.md](docs/PLAN-LINUX-OBC.md)), accélération du rendu `/dev/fb0` (zéro allocation GC par frame, polling 30 Hz sans reflow UI) et mise en production du serveur Wisp v1 dans la pile Portainer `kerr` ([DEPLOY.md](docs/DEPLOY.md)).
+- **Réalisé :**
+  - **10 nouveaux programmes Python 3 & Node.js (`scripts/obc/*`) + SDK haute performance (`obc.mjs` `Uint32Array`, `obc.py`) :**
+    - **CLI :** `obc-fuel` (Python : Tsiolkovsky $\Delta v$, autonomie jet & Bingo, `--json`), `obc-nav` (Node.js : grand cercle WGS84 cap/distance/ETA, `--json`), `obc-kerr` (Python : métrique de Kerr, horizon, sphère de photons, ISCO, dilatation $d\tau/dt$), `obc-auto` (Node.js : pilotage bidirectionnel `/obc/cmd`).
+    - **TUI interactifs temps réel (ANSI 24 bits) :** `obc-top` (Node.js : moniteur avionique `htop`, sparklines, raccourcis SAS/train/gaz), `obc-mission-tui` (Python : directeur de vol orbital + $\Delta v$ circularisation), `obc-fmc-tui` (Node.js : FMS/MCDU + aiguilles ILS + terrains WGS84).
+    - **Graphiques temps réel `/dev/fb0` (512×512 XRGB8888) :** `obc-pfd-fb` (Python : Primary Flight Display, horizon artificiel rotatif, échelle de tangage, bandes TAS/ALT/HDG), `obc-radar-fb` (Node.js `Uint32Array` : radar tactique à balayage phosphore + ellipse orbitale à **16,9 fps** dans la VM), `obc-kerr-fb` (Python : disque d'accrétion Doppler de Gargantua + puits gravitationnel + jauge $d\tau/dt$).
+  - **Optimisations performances (`src/obc/fb-renderer.ts`, `src/obc/runtime.ts`, `src/obc/bridge.ts`, `scripts/obc/obc-install`) :** réutilisation d'un tampon `ImageData` unique (0 o/frame d'allocation GC), découplage du rafraîchissement `/dev/fb0` 30 Hz des reflows DOM/`xterm.fit()`, filtrage des réécritures 9p inchangées, `PYTHONDONTWRITEBYTECODE=1` & `NODE_OPTIONS="--max-old-space-size=128"`, et installateur rapide `+Py+Node` (`apk add --no-cache python3 nodejs`).
+  - **Serveur Wisp production & cartouche Portainer (`server/wisp-main.ts`, `server/wisp-relay.ts`, `deploy/compose.yml`, `deploy/portainer-wisp.yml`, `.github/workflows/rooms.yml`, `docs/DEPLOY.md`) :** service `wisp` sur le port `3002` dans `deploy/compose.yml` (réutilisant `__ROOMS_IMAGE__`) + pile autonome `deploy/portainer-wisp.yml`, défense SSRF complète (loopback, RFC1918, CGNAT, link-local, métadonnées cloud, IPv6 ULA), quotas par IP (`X-Real-IP`), allow-list d'origines et bascule par défaut du client vers `wss://code.samlepirate.org/` en production.
+- **Preuves :**
+  - E2E headed WebGPU (`bun run e2e obc`, 49,82 s) : **5/5 tests, 61 assertions, 0 erreur console/WebGPU**.
+  - Mesures réelles ([metrics.json](docs/progress/linux-obc/metrics.json)) : installation complète `Python 3.14.10` + `Node v24.22.3` via relais Wisp v1 en **8,25 s** (latence Wisp **2 ms**) ; cadence simulateur WebGPU **59,2 → 60,2 fps (16,9 → 16,6 ms)** ; `obc-radar-fb` **16,9 fps** temps réel, `obc-pfd-fb` **5,2 fps**, `obc-kerr-fb` **3,5 fps**.
+  - Captures archivées : [hud-tui-top.png](docs/progress/linux-obc/hud-tui-top.png), [fb0-pfd-python.png](docs/progress/linux-obc/fb0-pfd-python.png), [fb0-radar-node.png](docs/progress/linux-obc/fb0-radar-node.png), [fb0-kerr-python.png](docs/progress/linux-obc/fb0-kerr-python.png).
+  - Serveur `server/wisp-main.ts` vérifié en direct (`/health` + handshake binaire Wisp v1 `0x03 CONTINUE`) ; `tests/rooms-deploy.test.ts` et `tests/obc-wisp.test.ts` au vert.
+- **Limites / transitions restantes :** Configurer l'hôte Nginx Proxy Manager `code.samlepirate.org` → `host:3002` (Websockets Support activé) après redéploiement Portainer.
+- **Suite :** Push sur `main` pour déclencher `.github/workflows/rooms.yml` (qui pousse l'image `__ROOMS_IMAGE__` et met à jour la branche `deploy` avec le service `wisp` pour Portainer).
+
 ### 2026-11-22 12:30 UTC — Linux OBC AAA complet (Lots OBC-7 à OBC-11 : Options, Éditeur, Snapshot, Audio/evdev, Graphismes CRT/FB0, Crew distant & 3 cockpits 3D)
 
 - **Contribution à la destination :** Extension AAA complète de l'ordinateur de bord Linux embarqué ([PLAN-LINUX-OBC.md](docs/PLAN-LINUX-OBC.md), lots OBC-7 à OBC-11) — qualité visuelle, interactivité cockpit 3D sur les trois appareils, options matérielles/graphiques/réseau complètes et relais multi-machine `crew/` sans régression de cadence ni dépassement de budget bundle.

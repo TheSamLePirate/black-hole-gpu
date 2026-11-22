@@ -68,9 +68,17 @@ test("normalizeWispUrl accepts ws/wss URLs and rejects http/javascript/invalid",
 });
 
 test("OBC_SCRIPTS catalog & emptyTelemetry contract", () => {
-  expect(OBC_SCRIPTS.length).toBeGreaterThanOrEqual(7);
+  expect(OBC_SCRIPTS.length).toBeGreaterThanOrEqual(17);
   expect(findObcScript("diag")?.name).toBe("obc-diag");
   expect(findObcScript("obc-orbit")?.id).toBe("orbit");
+  expect(findObcScript("fuel")?.lang).toBe("python");
+  expect(findObcScript("nav")?.lang).toBe("node");
+  expect(findObcScript("top")?.category).toBe("tui");
+  expect(findObcScript("mission-tui")?.category).toBe("tui");
+  expect(findObcScript("fmc-tui")?.category).toBe("tui");
+  expect(findObcScript("pfd-fb")?.graphical).toBe(true);
+  expect(findObcScript("radar-fb")?.graphical).toBe(true);
+  expect(findObcScript("kerr-fb")?.graphical).toBe(true);
   expect(findObcScript("fb-demo")?.graphical).toBe(true);
   const tel = emptyTelemetry();
   expect(tel.v).toBe(1);

@@ -31,28 +31,35 @@ export function wireObcMountFs(
     mem.writeFile(tmp, content, { mode });
     mem.rename(tmp, path);
   };
+  let lastStatusJson = "";
+  let lastTauText = "";
   const refreshLiveFiles = () => {
     try {
       const t = adapter.sampleTelemetry();
       atomicWrite("/telemetry.json", `${JSON.stringify(t)}\n`);
-      atomicWrite(
-        "/tau",
-        formatTauText({
-          dtau_dt: t.dtau_dt,
-          proper_time_s: t.proper_time_s,
-          sim_time_s: t.sim_time_s,
-          warp: t.warp,
-          frozen: t.frozen,
-          body: t.body,
-        }),
-      );
-      atomicWrite("/status.json", `${JSON.stringify(getStatus())}\n`);
+      const tauTxt = formatTauText({
+        dtau_dt: t.dtau_dt,
+        proper_time_s: t.proper_time_s,
+        sim_time_s: t.sim_time_s,
+        warp: t.warp,
+        frozen: t.frozen,
+        body: t.body,
+      });
+      if (tauTxt !== lastTauText) {
+        lastTauText = tauTxt;
+        atomicWrite("/tau", tauTxt);
+      }
+      const stJson = `${JSON.stringify(getStatus())}\n`;
+      if (stJson !== lastStatusJson) {
+        lastStatusJson = stJson;
+        atomicWrite("/status.json", stJson);
+      }
     } catch {
       // keep previous snapshot on transient state transitions
     }
   };
   refreshLiveFiles();
-  const refreshTimer = setInterval(refreshLiveFiles, 200);
+  const refreshTimer = setInterval(refreshLiveFiles, 150);
   mem.writeFile("/cmd", "", { mode: 0o666 });
   mem.writeFile("/last_result.json", '{"ok":true,"msg":"ready"}\n', { mode: 0o444 });
 

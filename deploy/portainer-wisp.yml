@@ -1,0 +1,28 @@
+# Standalone Portainer Stack ("cartouche") for the Kerr Linux OBC Wisp v1 Server (wss://code.samlepirate.org/).
+# Note: This `wisp` service is ALSO included automatically in the main `kerr` stack (`deploy/compose.yml`).
+# Use this file ONLY if you want to deploy `wisp` as an independent stack in Portainer.
+#
+# Nginx Proxy Manager:
+#   Domain: code.samlepirate.org → Forward Hostname/IP: <docker-host> : 3002
+#   Websockets Support: ON  |  SSL: Force SSL + HTTP/2
+#   Health check: https://code.samlepirate.org/health
+version: "3.8"
+services:
+  wisp:
+    image: ghcr.io/thesamlepirate/black-hole-gpu:rooms-latest
+    container_name: kerr-obc-wisp
+    command: ["bun", "server/wisp-main.ts"]
+    ports:
+      - "3002:3002"
+    environment:
+      - PORT=3002
+      - WISP_MAX_CLIENTS=${WISP_MAX_CLIENTS:-32}
+      - WISP_MAX_PER_IP=${WISP_MAX_PER_IP:-8}
+      - WISP_ORIGINS=${WISP_ORIGINS:-}
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3002/health"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+    stop_grace_period: 10s
+    restart: unless-stopped

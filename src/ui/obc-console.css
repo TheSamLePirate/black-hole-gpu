@@ -140,12 +140,17 @@
 .obc-subbar {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
   padding: 5px 12px;
   background: rgba(5, 29, 40, 0.9);
   border-bottom: 1px solid color-mix(in srgb, var(--obc-accent) 18%, transparent);
   flex-shrink: 0;
-  overflow-x: auto;
+  flex-wrap: wrap;
+}
+
+.obc-subbar .obc-btn {
+  padding: 3px 6px;
+  font-size: 10px;
 }
 
 .obc-subbar-label {

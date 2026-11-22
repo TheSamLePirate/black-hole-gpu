@@ -143,21 +143,27 @@ export class ObcConsoleOverlay {
     );
     bar.append(title, actions);
 
-    // ── Quick avionics script bar ──────────────────────────────────────────────
+    // ── Quick avionics script bar (grouped: CLI · TUI · /dev/fb0 · APK) ────────
     const subbar = document.createElement("div");
     subbar.className = "obc-subbar";
-    const subLabel = document.createElement("span");
-    subLabel.className = "obc-subbar-label";
-    subLabel.textContent = "Scripts:";
-    subbar.append(subLabel);
-    for (const s of OBC_SCRIPTS) {
-      subbar.append(
-        mkBtn(s.label, () => void this.runtime.runScript(s.id), {
-          testid: `obc-script-${s.id}`,
-          title: `${s.cmd} — ${s.desc}`,
-        }),
-      );
-    }
+    const addGroup = (label: string, cat: "cli" | "tui" | "fb", first = false) => {
+      const lbl = document.createElement("span");
+      lbl.className = "obc-subbar-label";
+      if (!first) lbl.style.marginLeft = "8px";
+      lbl.textContent = label;
+      subbar.append(lbl);
+      for (const s of OBC_SCRIPTS.filter((x) => (x.category ?? "cli") === cat)) {
+        subbar.append(
+          mkBtn(s.label, () => void this.runtime.runScript(s.id), {
+            testid: `obc-script-${s.id}`,
+            title: `${s.cmd} — ${s.desc}`,
+          }),
+        );
+      }
+    };
+    addGroup("CLI:", "cli", true);
+    addGroup("TUI:", "tui");
+    addGroup("FB0:", "fb");
     const pkgLabel = document.createElement("span");
     pkgLabel.className = "obc-subbar-label";
     pkgLabel.style.marginLeft = "8px";
@@ -171,6 +177,10 @@ export class ObcConsoleOverlay {
       mkBtn("+Node", () => void this.runtime.installToolchain("node"), {
         testid: "obc-install-node",
         title: "Install Node.js & npm via apk (persisted in IndexedDB)",
+      }),
+      mkBtn("+Py+Node", () => void this.runtime.installToolchain("full"), {
+        testid: "obc-install-full",
+        title: "Install Python 3 + Node.js in one step via apk",
       }),
     );
 
@@ -298,7 +308,7 @@ export class ObcConsoleOverlay {
     this.wispInput = document.createElement("input");
     this.wispInput.className = "obc-wisp-input";
     this.wispInput.dataset.testid = "obc-wisp-input";
-    this.wispInput.placeholder = "wss://wisp.domaine.fr/ (empty = local /__wisp dev relay)";
+    this.wispInput.placeholder = "wss://code.samlepirate.org/ (empty = /__wisp dev, wss://code.samlepirate.org/ prod)";
     this.wispInput.value = this.runtime.getWispUrl();
     this.wispStatusEl = document.createElement("span");
     this.wispStatusEl.className = "obc-status-pill";

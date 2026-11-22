@@ -1,0 +1,63 @@
+#!/bin/sh
+# obc-auto — Node.js CLI: Bidirectional Flight Computer & Autopilot Control Bridge (/obc/cmd).
+# Usage:
+#   obc-auto status
+#   obc-auto throttle <0..1>
+#   obc-auto sas <on|off>
+#   obc-auto gear <down|up>
+#   obc-auto flaps <0..1>
+#   obc-auto hold <prograde|retrograde|normal|antinormal|radialOut|radialIn|target|none>
+#   obc-auto ap <circularize|hover|land|takeoff|orbit|dock|ils|none>
+#   obc-auto say "<message>"
+
+if [ ! -x /usr/bin/node ] || head -n 1 /usr/bin/node 2>/dev/null | grep -q '^#!'; then
+  echo "Node.js not installed yet. Run: obc-install node (or click +Node in HUD)"
+  exit 1
+fi
+
+exec node --input-type=module - "$@" <<'JS'
+import { AvionicsBus } from "/obc/lib/obc.mjs";
+
+const bus = new AvionicsBus();
+const [cmd = "status", ...rest] = process.argv.slice(2);
+const arg = rest.join(" ").trim();
+
+if (cmd === "status" || cmd === "-h" || cmd === "--help") {
+  const st = bus.read();
+  console.log(`VESSEL=${st.vessel_id} BODY=${st.body} THR=${(st.systems.throttle * 100).toFixed(0)}% SAS=${st.systems.sas} GEAR=${st.systems.gear} AP=${st.systems.autopilot} HOLD=${st.systems.hold}`);
+  if (cmd !== "status") {
+    console.log("Commands: status | throttle <0..1> | sas <on|off> | gear <down|up> | flaps <0..1> | hold <mode> | ap <mode> | say <msg>");
+  }
+  process.exit(0);
+}
+
+let res;
+switch (cmd) {
+  case "throttle":
+    res = bus.setThrottle(Number(arg));
+    break;
+  case "sas":
+    res = bus.setSas(arg === "on" || arg === "1" || arg === "true");
+    break;
+  case "gear":
+    res = bus.setGear(arg === "down" || arg === "1" || arg === "true");
+    break;
+  case "flaps":
+    res = bus.setFlaps(Number(arg));
+    break;
+  case "hold":
+    res = bus.setHold(arg || "none");
+    break;
+  case "ap":
+  case "autopilot":
+    res = bus.setAutopilot(arg || "none");
+    break;
+  case "say":
+    res = bus.say(arg || "OBC online");
+    break;
+  default:
+    console.error(`Unknown subcommand "${cmd}". Run: obc-auto --help`);
+    process.exit(1);
+}
+console.log(JSON.stringify(res));
+JS

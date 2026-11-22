@@ -155,6 +155,16 @@ server serves them read-only at `https://stream.samlepirate.org/svc/v1/moon/lola
 `done`, `error`). Locally, `bun server/moon-build.ts --body mars --rows 91 99 --cols 133 141` builds a box (z 0 rows and
 columns) into the git-ignored `data/`, which the dev server serves at the same paths.
 
+## The Linux OBC Wisp v1 relay (`wss://code.samlepirate.org/`)
+
+The embedded Linux OBC (`docs/PLAN-LINUX-OBC.md`) uses a Wisp v1 WebSocket-to-TCP relay (`server/wisp-main.ts`, `server/wisp-relay.ts`) to reach Alpine `apk` repositories, `curl`, Python `pip`, and Node `npm` from the browser.
+
+- **Portainer (`kerr` stack):** included automatically as the `wisp` service in `deploy/compose.yml` (reusing `__ROOMS_IMAGE__` on port `3002`, no extra Docker build required). A standalone stack template is also kept in `deploy/portainer-wisp.yml` if you prefer a separate Portainer stack.
+- **Nginx Proxy Manager:** create a Proxy Host for `code.samlepirate.org` → `host:3002` with **Websockets Support** enabled and TLS/HTTPS active.
+- **Security:** `wisp-main.ts` restricts WebSocket upgrades to allowed origins (`https://samlepirate.org`, `https://www.samlepirate.org`, `https://thesamlepirate.github.io`, `https://code.samlepirate.org`, `localhost`, plus optional `WISP_ORIGINS`), applies per-IP connection quotas via `X-Real-IP` (`WISP_MAX_PER_IP=8`, `WISP_MAX_CLIENTS=32`), and blocks loopback, RFC1918 private LANs, CGNAT, link-local, and cloud metadata addresses (`isBlockedHost`).
+- **Health check:** `https://code.samlepirate.org/health` returns `{ ok: true, protocol: "wisp/1", build, activeClients, totalStreams, ... }`.
+- **Client default:** the simulator uses `/__wisp` automatically in local dev and falls back to `wss://code.samlepirate.org/` in production (overridable in the OBC HUD Options drawer).
+
 ## The server stuck on an old build
 
 Check `https://samlepirate.org/version.json` against the last `deploy:` commit (`git log -1 origin/deploy`). Portainer 2.9.3

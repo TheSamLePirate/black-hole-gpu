@@ -1,0 +1,148 @@
+#!/bin/sh
+# obc-pfd-fb — Python Real-Time Graphical Primary Flight Display (Artificial Horizon + Tapes) on /dev/fb0.
+# Usage: obc-pfd-fb [--seconds 20]
+
+if [ ! -x /usr/bin/python3 ] || head -n 1 /usr/bin/python3 2>/dev/null | grep -q '^#!'; then
+  echo "Python 3 not installed yet. Run: obc-install python (or click +Python in HUD)"
+  exit 1
+fi
+
+exec python3 - "$@" <<'PY'
+import math, signal, sys, time
+import obc
+
+dur = 20.0
+if "--seconds" in sys.argv:
+    i = sys.argv.index("--seconds")
+    if i + 1 < len(sys.argv):
+        dur = max(0.5, float(sys.argv[i + 1]))
+
+running = True
+def stop(*_a):
+    global running
+    running = False
+signal.signal(signal.SIGINT, stop)
+signal.signal(signal.SIGTERM, stop)
+
+bus = obc.AvionicsBus()
+with obc.Framebuffer() as fb:
+    W, H = fb.width, fb.height
+    cx, cy = W // 2, H // 2
+    sky = fb.color(20, 96, 168)
+    sky_hi = fb.color(12, 66, 126)
+    gnd = fb.color(116, 72, 34)
+    gnd_lo = fb.color(82, 48, 22)
+    panel = fb.color(6, 20, 30)
+    panel_dark = fb.color(3, 12, 20)
+    cyan = fb.color(98, 230, 255)
+    white = fb.color(242, 250, 255)
+    amber = fb.color(255, 179, 71)
+    green = fb.color(125, 255, 154)
+    dim = fb.color(42, 108, 128)
+
+    # Attitude ball bounds
+    ax0, ay0, ax1, ay1 = 96, 56, W - 96, H - 84
+    aw = ax1 - ax0
+    row_sky = sky * aw
+    row_gnd = gnd * aw
+
+    t0 = time.monotonic()
+    frames = 0
+    fps = 0.0
+    t_fps = t0
+
+    while running and (time.monotonic() - t0) < dur:
+        st = bus.read()
+        roll_rad = math.radians(st.roll)
+        pitch_px = max(-140.0, min(140.0, st.pitch * 3.8))
+        sin_r = math.sin(roll_rad)
+        cos_r = math.cos(roll_rad)
+
+        # Clear outer bezel fast
+        fb.clear(4, 16, 24)
+
+        # Fast scanline artificial horizon inside attitude box
+        for y in range(ay0, ay1):
+            dy = (y - cy) - pitch_px
+            if abs(sin_r) < 1e-4:
+                is_sky = (dy * cos_r) < 0
+                fb.rect(ax0, y, aw, 1, sky if is_sky else gnd)
+            else:
+                # Line equation: (x - cx)*sin_r + dy*cos_r = 0 => x_cross = cx - dy*(cos_r/sin_r)
+                x_cross = cx - dy * (cos_r / sin_r)
+                split = int(round(x_cross))
+                left_is_sky = ((ax0 - cx) * sin_r + dy * cos_r) < 0
+                if split <= ax0:
+                    fb.rect(ax0, y, aw, 1, gnd if left_is_sky else sky)
+                elif split >= ax1:
+                    fb.rect(ax0, y, aw, 1, sky if left_is_sky else gnd)
+                else:
+                    lw = split - ax0
+                    rw = ax1 - split
+                    if left_is_sky:
+                        fb.rect(ax0, y, lw, 1, sky)
+                        fb.rect(split, y, rw, 1, gnd)
+                    else:
+                        fb.rect(ax0, y, lw, 1, gnd)
+                        fb.rect(split, y, rw, 1, sky)
+
+        # Horizon line & pitch ladder (-20, -10, +10, +20 deg)
+        for deg in (-20, -10, 0, 10, 20):
+            off = -deg * 3.8 + pitch_px
+            half = 110 if deg == 0 else (46 if abs(deg) == 20 else 28)
+            x1 = int(cx - half * cos_r - off * sin_r)
+            y1 = int(cy - half * sin_r + off * cos_r)
+            x2 = int(cx + half * cos_r - off * sin_r)
+            y2 = int(cy + half * sin_r + off * cos_r)
+            if ay0 + 8 < y1 < ay1 - 8 and ay0 + 8 < y2 < ay1 - 8:
+                fb.line(x1, y1, x2, y2, white if deg == 0 else cyan)
+
+        # Fixed aircraft boresight wings
+        fb.rect(cx - 58, cy - 2, 42, 4, amber)
+        fb.rect(cx + 16, cy - 2, 42, 4, amber)
+        fb.rect(cx - 4, cy - 4, 8, 8, white)
+        fb.stroke_rect(ax0, ay0, aw, ay1 - ay0, cyan)
+
+        # Top FMA strip
+        fb.rect(0, 0, W, 44, panel)
+        fb.hline(0, W - 1, 44, cyan)
+        thr_pct = int(round(float(st.systems.get("throttle", 0.0)) * 100))
+        sas = "SAS" if st.systems.get("sas") else "---"
+        ap = str(st.systems.get("autopilot", "MAN")).upper()[:6]
+        fb.text(12, 14, f"PFD {st.vessel_id[:6]}  THR {thr_pct:3d}%  {sas}  {ap}", cyan, scale=2)
+
+        # Left Speed Tape
+        fb.rect(8, ay0, 80, ay1 - ay0, panel_dark)
+        fb.stroke_rect(8, ay0, 80, ay1 - ay0, dim)
+        fb.text(16, ay0 + 8, "TAS", cyan, scale=2)
+        fb.rect(10, cy - 16, 76, 32, panel)
+        fb.stroke_rect(10, cy - 16, 76, 32, green)
+        fb.text(14, cy - 7, f"{st.true_airspeed:5.0f}", green, scale=2)
+        fb.text(14, ay1 - 24, f"M{st.mach:.2f}", amber, scale=2)
+
+        # Right Altitude Tape
+        fb.rect(W - 88, ay0, 80, ay1 - ay0, panel_dark)
+        fb.stroke_rect(W - 88, ay0, 80, ay1 - ay0, dim)
+        fb.text(W - 80, ay0 + 8, "ALT", cyan, scale=2)
+        fb.rect(W - 86, cy - 16, 76, 32, panel)
+        fb.stroke_rect(W - 86, cy - 16, 76, 32, cyan)
+        alt_lbl = f"{st.altitude_msl/1000:4.1f}K" if st.altitude_msl >= 10000 else f"{st.altitude_msl:5.0f}"
+        fb.text(W - 82, cy - 7, alt_lbl, white, scale=2)
+        vs_col = green if st.vertical_speed >= 0 else amber
+        fb.text(W - 84, ay1 - 24, f"{st.vertical_speed:+4.0f}", vs_col, scale=2)
+
+        # Bottom Heading Tape + Telemetry Footer
+        fb.rect(0, H - 76, W, 76, panel)
+        fb.hline(0, W - 1, H - 76, cyan)
+        fb.text(cx - 48, H - 64, f"HDG {int(round(st.heading))%360:03d}", green, scale=2)
+        fb.text(14, H - 30, f"G {st.g_load:+.1f}  AGL {st.height_over_ground:.0f}M  FPS {fps:.1f}", white, scale=2)
+
+        fb.flush()
+        frames += 1
+        now = time.monotonic()
+        if now - t_fps >= 1.0:
+            fps = frames / (now - t_fps)
+            frames = 0
+            t_fps = now
+        time.sleep(0.04)
+PY

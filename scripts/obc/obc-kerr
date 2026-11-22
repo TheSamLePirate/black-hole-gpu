@@ -1,0 +1,67 @@
+#!/bin/sh
+# obc-kerr — Python CLI: Kerr Black Hole Relativity & Proper-Time Dilation Calculator.
+# Usage: obc-kerr [spin_a=0.998] [r_M=3.0] [--json]
+
+if [ ! -x /usr/bin/python3 ] || head -n 1 /usr/bin/python3 2>/dev/null | grep -q '^#!'; then
+  echo "Python 3 not installed yet. Run: obc-install python (or click +Python in HUD)"
+  exit 1
+fi
+
+exec python3 - "$@" <<'PY'
+import json, math, sys
+import obc
+
+args = [a for a in sys.argv[1:] if not a.startswith("--")]
+as_json = "--json" in sys.argv[1:]
+
+a = float(args[0]) if len(args) >= 1 else 0.998
+a = max(0.0, min(0.999999, a))
+r_m = float(args[1]) if len(args) >= 2 else 2.5
+
+# Bardeen-Press-Teukolsky (1972) exact Kerr radii in units of M
+r_plus = 1.0 + math.sqrt(max(0.0, 1.0 - a * a))
+r_ergo_eq = 2.0
+r_ph_pro = 2.0 * (1.0 + math.cos((2.0 / 3.0) * math.acos(-a)))
+r_ph_ret = 2.0 * (1.0 + math.cos((2.0 / 3.0) * math.acos(a)))
+z1 = 1.0 + ((1.0 - a * a) ** (1.0 / 3.0)) * (((1.0 + a) ** (1.0 / 3.0)) + ((1.0 - a) ** (1.0 / 3.0)))
+z2 = math.sqrt(3.0 * a * a + z1 * z1)
+r_isco_pro = 3.0 + z2 - math.sqrt(max(0.0, (3.0 - z1) * (3.0 + z1 + 2.0 * z2)))
+r_isco_ret = 3.0 + z2 + math.sqrt(max(0.0, (3.0 - z1) * (3.0 + z1 + 2.0 * z2)))
+
+# Static/circular equatorial time dilation estimate at r_m
+denom = 1.0 - 3.0 / max(r_m, r_ph_pro + 0.001) + 2.0 * a / (max(r_m, r_ph_pro + 0.001) ** 1.5)
+dtau_circ = math.sqrt(max(1e-12, denom))
+years_per_hour = (1.0 / dtau_circ) / 8766.0
+
+bus = obc.AvionicsBus()
+st = bus.read()
+
+out = {
+    "spin_a": a,
+    "r_M": r_m,
+    "r_horizon_M": round(r_plus, 5),
+    "r_ergosphere_eq_M": r_ergo_eq,
+    "r_photon_pro_M": round(r_ph_pro, 5),
+    "r_photon_ret_M": round(r_ph_ret, 5),
+    "r_isco_pro_M": round(r_isco_pro, 5),
+    "r_isco_ret_M": round(r_isco_ret, 5),
+    "dtau_dt_circular": round(dtau_circ, 6),
+    "earth_years_per_ship_hour": round(years_per_hour, 4),
+    "live_ship_dtau_dt": st.dtau_dt,
+    "live_body": st.body,
+}
+
+if as_json:
+    print(json.dumps(out, indent=2))
+    sys.exit(0)
+
+print("\033[1;36m╔══════════════════════════════════════════════════════════════╗\033[0m")
+print("\033[1;36m║\033[1;37m       OBC-KERR (PYTHON) · KERR METRIC & TIME DILATION       \033[1;36m║\033[0m")
+print("\033[1;36m╚══════════════════════════════════════════════════════════════╝\033[0m")
+print(f"  SPIN PARAMETER a* : {a:.6f}    PROBE RADIUS : {r_m:.3f} M")
+print(f"  EVENT HORIZON r+  : {r_plus:.5f} M   ERGOSPHERE (eq) : {r_ergo_eq:.5f} M")
+print(f"  PHOTON SPHERE pro : {r_ph_pro:.5f} M   ret : {r_ph_ret:.5f} M")
+print(f"  ISCO (prograde)   : {r_isco_pro:.5f} M   ret : {r_isco_ret:.5f} M")
+print(f"  CIRCULAR dτ/dt    : \033[1;33m{dtau_circ:.6f}\033[0m  (1 ship hr = {years_per_hour:.3f} Earth yr)")
+print(f"  LIVE SHIP (/dev/tau): body={st.body}  dτ/dt=\033[1;32m{st.dtau_dt:.9f}\033[0m  τ={st.proper_time:.1f}s")
+PY

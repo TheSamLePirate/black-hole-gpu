@@ -1,0 +1,139 @@
+#!/bin/sh
+# obc-mission-tui — Python Real-Time Orbital Mission Control & Flight Director TUI.
+# Keys: [q] quit  [p] hold prograde  [r] hold retrograde  [c] AP circularize  [0] cut throttle
+# Usage: obc-mission-tui [--frames N]
+
+if [ ! -x /usr/bin/python3 ] || head -n 1 /usr/bin/python3 2>/dev/null | grep -q '^#!'; then
+  echo "Python 3 not installed yet. Run: obc-install python (or click +Python in HUD)"
+  exit 1
+fi
+
+exec python3 - "$@" <<'PY'
+import math, select, signal, sys, termios, time, tty
+import obc
+
+args = sys.argv[1:]
+max_frames = 0
+if "--frames" in args:
+    idx = args.index("--frames")
+    if idx + 1 < len(args):
+        max_frames = max(1, int(args[idx + 1]))
+elif "--once" in args:
+    max_frames = 1
+
+bus = obc.AvionicsBus()
+is_tty = sys.stdin.isatty() and max_frames == 0
+old_term = termios.tcgetattr(sys.stdin) if is_tty else None
+status_note = "KEYS: [p] PROGRADE  [r] RETRO  [c] CIRCULARIZE  [0] CUT  [q] QUIT"
+
+def restore(*_a):
+    if old_term is not None:
+        try:
+            termios.tcsetattr(sys.stdin, termios.TCSADRAIN, old_term)
+        except Exception:
+            pass
+    sys.stdout.write("\033[?25h\033[0m\n")
+    sys.stdout.flush()
+    sys.exit(0)
+
+signal.signal(signal.SIGINT, restore)
+signal.signal(signal.SIGTERM, restore)
+if is_tty:
+    tty.setcbreak(sys.stdin.fileno())
+
+MU = {
+    "earth": (3.986004418e14, 6371008.8),
+    "moon": (4.9048695e12, 1737400.0),
+    "mars": (4.282837e13, 3389500.0),
+    "jupiter": (1.26686534e17, 69911000.0),
+}
+
+def draw_ascii_orbit(ecc: float, phase: float) -> list[str]:
+    w, h = 23, 9
+    grid = [[" "] * w for _ in range(h)]
+    cx, cy = w // 2, h // 2
+    rx = 9.5
+    ry = max(2.5, 3.6 * math.sqrt(max(0.15, 1.0 - min(0.85, ecc) ** 2)))
+    for i in range(48):
+        a = (2 * math.pi * i) / 48
+        x = int(round(cx + rx * math.cos(a)))
+        y = int(round(cy + ry * math.sin(a)))
+        if 0 <= x < w and 0 <= y < h:
+            grid[y][x] = "·"
+    # Planet at center
+    grid[cy][cx] = "◉"
+    # Ship marker
+    sx = int(round(cx + rx * math.cos(phase)))
+    sy = int(round(cy + ry * math.sin(phase)))
+    if 0 <= sx < w and 0 <= sy < h:
+        grid[sy][sx] = "◆"
+    return ["".join(row) for row in grid]
+
+frame = 0
+t_start = time.monotonic()
+while True:
+    if is_tty:
+        r, _, _ = select.select([sys.stdin], [], [], 0)
+        if r:
+            ch = sys.stdin.read(1)
+            if ch in ("q", "Q", "\x03"):
+                restore()
+            elif ch in ("p", "P"):
+                bus.set_hold("prograde")
+                status_note = "HOLD -> PROGRADE"
+            elif ch in ("r", "R"):
+                bus.set_hold("retrograde")
+                status_note = "HOLD -> RETROGRADE"
+            elif ch in ("c", "C"):
+                bus.set_autopilot("circularize")
+                status_note = "AUTOPILOT -> CIRCULARIZE"
+            elif ch == "0":
+                bus.set_throttle(0.0)
+                status_note = "THROTTLE CUT (0%)"
+
+    st = bus.read()
+    frame += 1
+    orb = st.orbit or {}
+    ap_km = float(orb.get("apoapsis_m", st.altitude_msl)) / 1000.0
+    pe_km = float(orb.get("periapsis_m", st.altitude_msl)) / 1000.0
+    ecc = float(orb.get("eccentricity", 0.0))
+    inc = float(orb.get("inclination_deg", 0.0))
+    per = float(orb.get("period_s", 0.0))
+    mu, rad = MU.get(st.body.lower(), MU["earth"])
+    r_ap = rad + max(0.0, ap_km * 1000.0)
+    r_pe = rad + max(0.0, pe_km * 1000.0)
+    a_sma = max(rad + 1000.0, 0.5 * (r_ap + r_pe))
+    v_ap = math.sqrt(max(0.0, mu * (2.0 / r_ap - 1.0 / a_sma)))
+    v_circ = math.sqrt(mu / r_ap)
+    dv_circ = abs(v_circ - v_ap)
+
+    orb_lines = draw_ascii_orbit(ecc, (time.monotonic() - t_start) * 0.9)
+    info_lines = [
+        f"BODY   : \033[1;36m{st.body.upper()}\033[0m ({st.vessel_id.upper()})",
+        f"AP     : {ap_km:8.1f} km",
+        f"PE     : {pe_km:8.1f} km",
+        f"ECC    : {ecc:8.4f}   INC : {inc:5.1f}°",
+        f"PERIOD : {per/60:7.1f} min  V : {st.true_airspeed:6.0f} m/s",
+        f"CIRC Δv: \033[1;32m{dv_circ:7.1f} m/s\033[0m",
+        f"KERR τ : dτ/dt = {st.dtau_dt:.8f}",
+        f"TIME   : t={st.sim_time:.0f}s  τ={st.proper_time:.0f}s",
+        f"MODE   : AP={st.systems.get('autopilot','none')} HOLD={st.systems.get('hold','none')}",
+    ]
+
+    buf = [
+        "\033[?25l\033[H\033[2J",
+        "\033[1;36m╔══════════════════════════════════════════════════════════════╗\033[0m",
+        "\033[1;36m║\033[1;37m    OBC-MISSION-TUI (PYTHON) · ORBITAL FLIGHT DIRECTOR       \033[1;36m║\033[0m",
+        "\033[1;36m╠═══════════════════════╦══════════════════════════════════════╣\033[0m",
+    ]
+    for i in range(9):
+        buf.append(f"\033[1;36m║\033[38;2;98;230;255m{orb_lines[i]}\033[1;36m║\033[0m {info_lines[i]}")
+    buf.append("\033[1;36m╚═══════════════════════╩══════════════════════════════════════╝\033[0m")
+    buf.append(f"  \033[1;33m{status_note}\033[0m")
+    sys.stdout.write("\r\n".join(buf))
+    sys.stdout.flush()
+
+    if max_frames > 0 and frame >= max_frames:
+        restore()
+    time.sleep(0.22)
+PY

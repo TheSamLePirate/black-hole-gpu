@@ -164,6 +164,8 @@ export interface ObcScriptMeta {
   label: string;
   desc: string;
   cmd: string;
+  category?: "cli" | "tui" | "fb";
+  lang?: "sh" | "python" | "node";
   graphical?: boolean;
 }
 

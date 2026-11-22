@@ -1,0 +1,122 @@
+#!/bin/sh
+# obc-fmc-tui — Node.js Real-Time MCDU/FMC Approach & Airfield Navigation TUI.
+# Keys: [q] quit  [g] toggle Gear  [f] cycle Flaps (0 -> 0.5 -> 1)  [s] toggle SAS
+# Usage: obc-fmc-tui [--frames N]
+
+if [ ! -x /usr/bin/node ] || head -n 1 /usr/bin/node 2>/dev/null | grep -q '^#!'; then
+  echo "Node.js not installed yet. Run: obc-install node (or click +Node in HUD)"
+  exit 1
+fi
+
+exec node --input-type=module - "$@" <<'JS'
+import { AvionicsBus, wgs84BearingDist } from "/obc/lib/obc.mjs";
+
+const args = process.argv.slice(2);
+let maxFrames = 0;
+const fi = args.indexOf("--frames");
+if (fi >= 0 && args[fi + 1]) maxFrames = Math.max(1, Number(args[fi + 1]) || 1);
+if (args.includes("--once")) maxFrames = 1;
+
+const AIRFIELDS = [
+  { id: "LFPB", name: "Paris Le Bourget", lat: 48.9694, lon: 2.4414 },
+  { id: "LFPG", name: "Paris CDG", lat: 49.0097, lon: 2.5479 },
+  { id: "LFMN", name: "Nice Cote d'Azur", lat: 43.6584, lon: 7.2159 },
+  { id: "LFTH", name: "Toulon-Hyeres", lat: 43.0973, lon: 6.1460 },
+  { id: "KEDW", name: "Edwards AFB", lat: 34.9054, lon: -117.8837 },
+];
+
+const bus = new AvionicsBus();
+let frameCount = 0;
+let running = true;
+let note = "KEYS: [g] GEAR  [f] FLAPS  [s] SAS  [q] QUIT";
+let timer = null;
+
+function needle(val, limit, w = 21) {
+  const mid = Math.floor(w / 2);
+  const pos = Math.max(0, Math.min(w - 1, Math.round(mid + (val / limit) * mid)));
+  let s = "";
+  for (let i = 0; i < w; i++) s += i === pos ? "\x1b[1;35m◆\x1b[0m" : i === mid ? "│" : "─";
+  return s;
+}
+
+function cleanup() {
+  if (!running) return;
+  running = false;
+  if (timer) clearInterval(timer);
+  try {
+    if (process.stdin.isTTY) process.stdin.setRawMode(false);
+    process.stdin.pause();
+  } catch {}
+  process.stdout.write("\x1b[?25h\x1b[0m\n");
+  process.exit(0);
+}
+process.on("SIGINT", cleanup);
+process.on("SIGTERM", cleanup);
+
+if (process.stdin.isTTY && maxFrames === 0) {
+  try {
+    process.stdin.setRawMode(true);
+    process.stdin.resume();
+    process.stdin.setEncoding("utf8");
+    process.stdin.on("data", (k) => {
+      if (k === "q" || k === "Q" || k === "\x03") return cleanup();
+      const st = bus.read();
+      if (k === "g" || k === "G") {
+        bus.setGear(!(st.systems.gear > 0.5));
+        note = `GEAR -> ${!(st.systems.gear > 0.5) ? "DOWN" : "UP"}`;
+      } else if (k === "f" || k === "F") {
+        const next = st.systems.flaps < 0.25 ? 0.5 : st.systems.flaps < 0.75 ? 1.0 : 0.0;
+        bus.setFlaps(next);
+        note = `FLAPS -> ${Math.round(next * 100)}%`;
+      } else if (k === "s" || k === "S") {
+        bus.setSas(!st.systems.sas);
+        note = `SAS -> ${!st.systems.sas ? "ON" : "OFF"}`;
+      }
+    });
+  } catch {}
+}
+
+function render() {
+  if (!running) return;
+  const st = bus.read();
+  frameCount++;
+  const gs = Math.max(1, st.flight.ground_speed_mps || st.flight.true_airspeed_mps || 150);
+  const nearest = AIRFIELDS.map((a) => ({ ...a, ...wgs84BearingDist(st.position.lat_deg, st.position.lon_deg, a.lat, a.lon) }))
+    .sort((a, b) => a.distM - b.distM)
+    .slice(0, 3);
+  const rw = st.nav?.runway;
+
+  const out = [
+    "\x1b[?25l\x1b[H\x1b[2J",
+    "\x1b[1;38;2;62;200;255m╔══════════════════════════════════════════════════════════════╗\x1b[0m",
+    `\x1b[1;38;2;62;200;255m║\x1b[1;37m  OBC-FMC-TUI (NODE.JS) · AIRBUS/BOEING FMS & ILS MONITOR   \x1b[1;38;2;62;200;255m║\x1b[0m`,
+    "\x1b[1;38;2;62;200;255m╠══════════════════════════════════════════════════════════════╣\x1b[0m",
+    `  CRAFT : \x1b[1;32m${st.vessel_id.toUpperCase().padEnd(8)}\x1b[0m  HDG ${st.attitude.heading_deg.toFixed(0).padStart(3, "0")}°  TAS ${(st.flight.true_airspeed_mps * 1.94384).toFixed(0).padStart(4)} kt  M${st.flight.mach.toFixed(2)}`,
+    `  ALT   : ${Math.round(st.position.altitude_msl_m * 3.28084).toString().padStart(6)} ft MSL (${st.position.altitude_msl_m.toFixed(0)} m)   AGL ${st.position.height_over_ground_m.toFixed(0)} m`,
+    `  CFG   : GEAR ${st.systems.gear > 0.5 ? "\x1b[1;32mDOWN\x1b[0m" : "UP  "}   FLAPS ${(st.systems.flaps * 100).toFixed(0).padStart(3)}%   FUEL ${(st.systems.fuel_frac * 100).toFixed(0).padStart(3)}%`,
+    "\x1b[38;2;91;121;145m  ── ACTIVE ILS APPROACH ───────────────────────────────────────\x1b[0m",
+  ];
+  if (rw) {
+    out.push(`  RWY ${rw.ident} (${rw.name})  DME ${(rw.dist_m / 1852).toFixed(1)} NM`);
+    out.push(`  LOC L [${needle(rw.loc_deg, 2.5)}] R  (${rw.loc_deg >= 0 ? "+" : ""}${rw.loc_deg.toFixed(2)}°)`);
+    out.push(`  G/S D [${needle(rw.gs_deg, 0.7)}] U  (${rw.gs_deg >= 0 ? "+" : ""}${rw.gs_deg.toFixed(2)}°)`);
+  } else {
+    out.push("  NO ILS CAPTURED — MONITORING NEAREST AIRFIELDS");
+  }
+  out.push("\x1b[38;2;91;121;145m  ── NEAREST AIRFIELDS (WGS84) ─────────────────────────────────\x1b[0m");
+  for (const a of nearest) {
+    const km = (a.distM / 1000).toFixed(1).padStart(7);
+    const nm = (a.distM / 1852).toFixed(0).padStart(5);
+    const eta = (a.distM / gs / 60).toFixed(1).padStart(5);
+    out.push(`  \x1b[1;36m${a.id}\x1b[0m ${a.name.padEnd(18)} BRG ${a.bearingDeg.toFixed(0).padStart(3, "0")}°  ${km} km (${nm} NM)  ETA ${eta}m`);
+  }
+  out.push("\x1b[1;38;2;62;200;255m╚══════════════════════════════════════════════════════════════╝\x1b[0m");
+  out.push(`  \x1b[1;33m${note}\x1b[0m`);
+  process.stdout.write(out.join("\r\n"));
+
+  if (maxFrames > 0 && frameCount >= maxFrames) cleanup();
+}
+
+render();
+if (running) timer = setInterval(render, 250);
+JS

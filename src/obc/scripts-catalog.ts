@@ -1,15 +1,19 @@
 // Catalogue of built-in OBC avionics scripts (scripts/obc/*).
+// Includes instant shell tools + full Python 3 & Node.js CLI, interactive TUI, and real-time /dev/fb0 graphical apps.
 // Served live from `/obc/scripts/*` by server.ts (dev) and copied into `_site/obc/scripts/*` (Pages).
 
 import type { ObcScriptMeta } from "./types";
 
 export const OBC_SCRIPTS: readonly ObcScriptMeta[] = [
+  // ── Instant Shell & CLI Commands ───────────────────────────────────────────
   {
     id: "diag",
     name: "obc-diag",
     label: "Diag",
     desc: "System, WGS84 telemetry & Kerr dτ/dt diagnostic dashboard",
     cmd: "obc-diag",
+    category: "cli",
+    lang: "sh",
   },
   {
     id: "orbit",
@@ -17,6 +21,8 @@ export const OBC_SCRIPTS: readonly ObcScriptMeta[] = [
     label: "Orbit",
     desc: "Keplerian orbital elements & Hohmann Δv calculator",
     cmd: "obc-orbit",
+    category: "cli",
+    lang: "sh",
   },
   {
     id: "reentry",
@@ -24,6 +30,8 @@ export const OBC_SCRIPTS: readonly ObcScriptMeta[] = [
     label: "Reentry",
     desc: "Atmospheric entry corridor, dynamic pressure q & hull heating",
     cmd: "obc-reentry",
+    category: "cli",
+    lang: "sh",
   },
   {
     id: "ils",
@@ -31,6 +39,8 @@ export const OBC_SCRIPTS: readonly ObcScriptMeta[] = [
     label: "ILS",
     desc: "Runway Localizer & 3° Glide Slope approach guidance",
     cmd: "obc-ils",
+    category: "cli",
+    lang: "sh",
   },
   {
     id: "solar",
@@ -38,6 +48,8 @@ export const OBC_SCRIPTS: readonly ObcScriptMeta[] = [
     label: "Solar",
     desc: "Solar system, Gargantua & Lagrange L2/JWST synoptic",
     cmd: "obc-solar",
+    category: "cli",
+    lang: "sh",
   },
   {
     id: "fdr",
@@ -45,13 +57,114 @@ export const OBC_SCRIPTS: readonly ObcScriptMeta[] = [
     label: "FDR",
     desc: "Flight Data Recorder (samples telemetry & computes flight stats)",
     cmd: "obc-fdr 3",
+    category: "cli",
+    lang: "sh",
   },
+  {
+    id: "fuel",
+    name: "obc-fuel",
+    label: "Fuel·Py",
+    desc: "Python CLI: Tsiolkovsky Δv, jet endurance, range & bingo calculator",
+    cmd: "obc-fuel",
+    category: "cli",
+    lang: "python",
+  },
+  {
+    id: "nav",
+    name: "obc-nav",
+    label: "Nav·JS",
+    desc: "Node.js CLI: WGS84 great-circle bearing, distance & ETA to airfields",
+    cmd: "obc-nav",
+    category: "cli",
+    lang: "node",
+  },
+  {
+    id: "kerr",
+    name: "obc-kerr",
+    label: "Kerr·Py",
+    desc: "Python CLI: Kerr metric horizon, photon sphere, ISCO & time dilation",
+    cmd: "obc-kerr",
+    category: "cli",
+    lang: "python",
+  },
+  {
+    id: "auto",
+    name: "obc-auto",
+    label: "Auto·JS",
+    desc: "Node.js CLI: Bidirectional autopilot/throttle/gear/SAS command bridge",
+    cmd: "obc-auto status",
+    category: "cli",
+    lang: "node",
+  },
+
+  // ── Real-Time Interactive TUIs ─────────────────────────────────────────────
+  {
+    id: "top",
+    name: "obc-top",
+    label: "Top TUI",
+    desc: "Node.js interactive real-time avionics monitor (sparklines, SAS/gear/thr hotkeys)",
+    cmd: "obc-top",
+    category: "tui",
+    lang: "node",
+  },
+  {
+    id: "mission-tui",
+    name: "obc-mission-tui",
+    label: "Mission TUI",
+    desc: "Python interactive orbital flight director & circularization Δv TUI",
+    cmd: "obc-mission-tui",
+    category: "tui",
+    lang: "python",
+  },
+  {
+    id: "fmc-tui",
+    name: "obc-fmc-tui",
+    label: "FMC TUI",
+    desc: "Node.js interactive Airbus/Boeing FMS, ILS needles & nearest airfields TUI",
+    cmd: "obc-fmc-tui",
+    category: "tui",
+    lang: "node",
+  },
+
+  // ── Real-Time Graphical /dev/fb0 Applications ──────────────────────────────
   {
     id: "fb-demo",
     name: "obc-fb-demo",
-    label: "FB0 Demo",
-    desc: "Render live 512×512 XRGB8888 avionics graphics to /dev/fb0",
+    label: "Orbit FB0",
+    desc: "Live 512×512 XRGB8888 orbital & telemetry scope on /dev/fb0 (offline + Python)",
     cmd: "obc-fb-demo",
+    category: "fb",
+    lang: "sh",
+    graphical: true,
+  },
+  {
+    id: "pfd-fb",
+    name: "obc-pfd-fb",
+    label: "PFD FB0",
+    desc: "Python real-time graphical Primary Flight Display (horizon, pitch ladder, tapes)",
+    cmd: "obc-pfd-fb",
+    category: "fb",
+    lang: "python",
+    graphical: true,
+  },
+  {
+    id: "radar-fb",
+    name: "obc-radar-fb",
+    label: "Radar FB0",
+    desc: "Node.js real-time sweeping tactical radar & orbital ellipse scope on /dev/fb0",
+    cmd: "obc-radar-fb",
+    category: "fb",
+    lang: "node",
+    graphical: true,
+  },
+  {
+    id: "kerr-fb",
+    name: "obc-kerr-fb",
+    label: "Kerr FB0",
+    desc: "Python real-time Gargantua relativistic accretion disk & spacetime well on /dev/fb0",
+    cmd: "obc-kerr-fb",
+    category: "fb",
+    lang: "python",
     graphical: true,
   },
 ] as const;
@@ -65,6 +178,16 @@ export const OBC_SCRIPT_FILES = [
   "obc-fdr",
   "obc-fb-demo",
   "obc-install",
+  "obc-fuel",
+  "obc-nav",
+  "obc-kerr",
+  "obc-auto",
+  "obc-top",
+  "obc-mission-tui",
+  "obc-fmc-tui",
+  "obc-pfd-fb",
+  "obc-radar-fb",
+  "obc-kerr-fb",
 ] as const;
 
 export const OBC_LIB_FILES = ["lib/obc.py", "lib/obc.mjs"] as const;

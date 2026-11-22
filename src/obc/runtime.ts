@@ -27,7 +27,8 @@ import {
 
 const WISP_STORAGE_KEY = "kerr.obc.wisp";
 const CFG_STORAGE_KEY = "kerr.obc.cfg";
-const FB_POLL_MS = 40; // up to 25 Hz smooth framebuffer updates while /dev/fb0 is open
+export const DEFAULT_PROD_WISP_URL = "wss://code.samlepirate.org/";
+const FB_POLL_MS = 33; // up to 30 Hz smooth real-time framebuffer updates while /dev/fb0 is open
 
 export interface ObcFbFrame {
   width: number;
@@ -211,7 +212,7 @@ export class ObcRuntime {
 
   private async resolveWispUrl(): Promise<string> {
     if (this.wispUrl) return this.wispUrl;
-    if (typeof location === "undefined") return "";
+    if (typeof location === "undefined") return DEFAULT_PROD_WISP_URL;
     try {
       const r = await fetch("/__wisp", { method: "GET" });
       if (r.ok) {
@@ -219,9 +220,9 @@ export class ObcRuntime {
         return `${proto}//${location.host}/__wisp`;
       }
     } catch {
-      // no local wisp relay
+      // no local dev wisp relay — fall back to production Portainer Wisp server
     }
-    return "";
+    return DEFAULT_PROD_WISP_URL;
   }
 
   /** Probe a Wisp v1 WebSocket server (expects initial CONTINUE packet 0x03 on stream 0). */
@@ -439,6 +440,7 @@ export class ObcRuntime {
         distro: distroUrl,
         ...(restore ? { restore } : {}),
         memoryMiB: this.config.memoryMiB,
+        memoryFallbackMiB: [256, 128],
         jit: this.config.jit,
         disks: [{ kind: "data", template: "bundled", mode: this.config.persistData ? "persistent" : "snapshot" }],
         mounts: { "/obc": memFs },
@@ -600,7 +602,7 @@ export class ObcRuntime {
       "mkdir -p /home/pilot /etc/profile.d",
       "chmod 777 /home/pilot 2>/dev/null || true",
       "ln -sf /obc/tau /dev/tau",
-      "printf 'export PATH=/obc/scripts:$PATH\\nexport PYTHONPATH=/obc/lib\\nexport NODE_PATH=/obc/lib\\n' > /etc/profile.d/obc.sh",
+      "printf 'export PATH=/obc/scripts:$PATH\\nexport PYTHONPATH=/obc/lib\\nexport NODE_PATH=/obc/lib\\nexport PYTHONDONTWRITEBYTECODE=1\\nexport NODE_OPTIONS=\"--max-old-space-size=128\"\\n' > /etc/profile.d/obc.sh",
       "chmod 644 /etc/profile.d/obc.sh 2>/dev/null || true",
     ].join(" && ");
     try {
@@ -631,11 +633,15 @@ export class ObcRuntime {
       if (!this.vm || !this.fbMode) return;
       const frame = this.vm.frame();
       if (frame && frame.data.byteLength > 0) {
+        const wasNull = this.fbFrame === null;
         this.fbRev++;
         this.fbFramesInWindow++;
         const now = performance.now();
+        let fpsChanged = false;
         if (now - this.fbWindowStart >= 1000) {
-          this.fbFps = Math.round((this.fbFramesInWindow * 1000) / (now - this.fbWindowStart));
+          const nextFps = Math.round((this.fbFramesInWindow * 1000) / (now - this.fbWindowStart));
+          fpsChanged = nextFps !== this.fbFps;
+          this.fbFps = nextFps;
           this.fbFramesInWindow = 0;
           this.fbWindowStart = now;
         }
@@ -645,7 +651,8 @@ export class ObcRuntime {
           data: frame.data,
           rev: this.fbRev,
         };
-        this.emitState();
+        // Avoid triggering DOM/xterm UI reflows at 30 Hz — HUD & 3D cockpits watch `displayRev` directly.
+        if (wasNull || fpsChanged) this.emitState();
       }
     };
     pull();
@@ -667,7 +674,7 @@ export class ObcRuntime {
       }
     }
     try {
-      const wrapped = `export PATH=/obc/scripts:$PATH PYTHONPATH=/obc/lib NODE_PATH=/obc/lib; ${command}`;
+      const wrapped = `export PATH=/obc/scripts:$PATH PYTHONPATH=/obc/lib NODE_PATH=/obc/lib PYTHONDONTWRITEBYTECODE=1 NODE_OPTIONS="--max-old-space-size=128"; ${command}`;
       const res = await this.vm.exec("sh", ["-c", wrapped], { timeout: timeoutMs, encoding: "utf8" });
       const code = res.exitCode ?? -1;
       return {
@@ -738,13 +745,34 @@ export class ObcRuntime {
     return { ok: true, script: this.activeScript };
   }
 
-  async installToolchain(profile: "python" | "node" | "full"): Promise<{ ok: boolean }> {
+  async installToolchain(profile: "python" | "node" | "full"): Promise<{ ok: boolean; stdout: string; stderr: string }> {
     const st = await this.boot();
-    if (st.phase !== "ready" || !this.vm) return { ok: false };
+    if (st.phase !== "ready" || !this.vm) return { ok: false, stdout: "", stderr: "OBC not ready" };
     this.activeScript = `obc-install ${profile}`;
-    this.vm.write(`\x03obc-install ${profile}\n`);
     this.emitState();
-    return { ok: true };
+    const enc = new TextEncoder();
+    this.pushOutput(enc.encode(`\r\n\x1b[1;36m[OBC] Installing ${profile} toolchain via apk + Wisp...\r\n\x1b[0m`));
+    try {
+      const res = await this.vm.exec("sh", ["/obc/scripts/obc-install", profile], {
+        user: 0,
+        timeout: 120_000,
+        encoding: "utf8",
+      });
+      if (res.stdout) this.pushOutput(enc.encode(`${res.stdout.replace(/\n/g, "\r\n")}`));
+      if (res.stderr) this.pushOutput(enc.encode(`\x1b[33m${res.stderr.replace(/\n/g, "\r\n")}\x1b[0m`));
+      const ok = (res.exitCode ?? -1) === 0;
+      this.pushOutput(
+        enc.encode(ok ? "\x1b[1;32m[OBC] Toolchain ready!\r\n\x1b[0m" : "\x1b[1;31m[OBC] Toolchain install failed.\r\n\x1b[0m"),
+      );
+      return { ok, stdout: res.stdout, stderr: res.stderr };
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      this.pushOutput(enc.encode(`\x1b[1;31m[OBC] Install error: ${msg}\r\n\x1b[0m`));
+      return { ok: false, stdout: "", stderr: msg };
+    } finally {
+      this.activeScript = null;
+      this.emitState();
+    }
   }
 
   async stop(): Promise<void> {

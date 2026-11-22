@@ -18,6 +18,9 @@ interface ObcMetrics {
   bootMs: number;
   wispOk: boolean;
   wispLatencyMs: number;
+  toolchainInstallMs: number;
+  pythonVersion: string;
+  nodeVersion: string;
   suspendResumeMs: number;
   obcActiveFps: number;
   obcActiveFrameMs: number;
@@ -43,10 +46,11 @@ describe.skipIf(!E2E)("Linux OBC AAA (Unkernel aarch64, Wisp, Snapshot, Editor, 
     app.steps([
       "Baseline FPS (OBC éteint)",
       "Boot Linux aarch64, Pont __bh, Wisp & Éditeur",
-      "Snapshot Suspend/Resume & /dev/fb0 + Cockpit Ranger",
+      "Suite Python & Node.js (CLI, TUI & /dev/fb0 Temps Réel)",
+      "Snapshot Suspend/Resume & Cockpit Ranger",
       "Cockpits 3D F-35 PCD & A320 MCDU/LECAM + FPS",
     ]);
-    app.estimate(60);
+    app.estimate(95);
   }, 180_000);
 
   afterAll(() => {
@@ -160,8 +164,95 @@ describe.skipIf(!E2E)("Linux OBC AAA (Unkernel aarch64, Wisp, Snapshot, Editor, 
     expect(app.cdp.errors).toEqual([]);
   }, 90_000);
 
+  test("installs Python 3 & Node.js over Wisp and runs CLI, TUI, and real-time /dev/fb0 programs", async () => {
+    await app.step("Suite Python & Node.js (CLI, TUI & /dev/fb0 Temps Réel)");
+
+    // Install Python 3 + Node.js over local Wisp v1 relay
+    const tInst0 = performance.now();
+    const inst = await app.js<{ ok: boolean; stdout: string; stderr: string }>(`__bh.obc.installToolchain("full")`);
+    metrics.toolchainInstallMs = Math.round(performance.now() - tInst0);
+    expect(inst.ok).toBe(true);
+
+    const vers = await app.js<{ ok: boolean; stdout: string }>(`__bh.obc.exec("python3 --version && node --version")`);
+    expect(vers.ok).toBe(true);
+    const vLines = vers.stdout.trim().split(/\r?\n/);
+    metrics.pythonVersion = vLines[0] ?? "";
+    metrics.nodeVersion = vLines[1] ?? "";
+    expect(metrics.pythonVersion).toContain("Python 3");
+    expect(metrics.nodeVersion).toContain("v");
+
+    // 1. CLI programs (Python & Node.js)
+    const fuel = await app.js<{ ok: boolean; stdout: string }>(`__bh.obc.exec("obc-fuel --json")`);
+    expect(fuel.ok).toBe(true);
+    const fuelJson = JSON.parse(fuel.stdout) as { dv_avail_mps?: number; fuel_pct: number };
+    expect(fuelJson.fuel_pct).toBeGreaterThan(0);
+
+    const nav = await app.js<{ ok: boolean; stdout: string }>(`__bh.obc.exec("obc-nav paris --json")`);
+    expect(nav.ok).toBe(true);
+    const navJson = JSON.parse(nav.stdout) as { legs: { dist_km: number; bearing_deg: number }[] };
+    expect(navJson.legs.length).toBe(1);
+    expect(Number.isFinite(navJson.legs[0]!.dist_km)).toBe(true);
+
+    const kerr = await app.js<{ ok: boolean; stdout: string }>(`__bh.obc.exec("obc-kerr 0.998 2.5 --json")`);
+    expect(kerr.ok).toBe(true);
+    const kerrJson = JSON.parse(kerr.stdout) as { r_horizon_M: number; r_isco_pro_M: number };
+    expect(kerrJson.r_horizon_M).toBeGreaterThan(1.0);
+    expect(kerrJson.r_isco_pro_M).toBeLessThan(2.0);
+
+    const autoCmd = await app.js<{ ok: boolean; stdout: string }>(`__bh.obc.exec("obc-auto throttle 0.35")`);
+    expect(autoCmd.ok).toBe(true);
+    await app.waitFor("Math.abs(__bh.camera.pilot.throttle - 0.35) < 0.01", 5_000);
+    await app.js(`__bh.obc.exec("obc-auto throttle 0")`);
+
+    // 2. Real-time Interactive TUIs (Python & Node.js)
+    const topTui = await app.js<{ ok: boolean; stdout: string }>(`__bh.obc.exec("obc-top --frames 2")`);
+    expect(topTui.ok).toBe(true);
+    expect(topTui.stdout).toContain("OBC-TOP");
+
+    const misTui = await app.js<{ ok: boolean; stdout: string }>(`__bh.obc.exec("obc-mission-tui --frames 2")`);
+    expect(misTui.ok).toBe(true);
+    expect(misTui.stdout).toContain("OBC-MISSION-TUI");
+
+    const fmcTui = await app.js<{ ok: boolean; stdout: string }>(`__bh.obc.exec("obc-fmc-tui --frames 2")`);
+    expect(fmcTui.ok).toBe(true);
+    expect(fmcTui.stdout).toContain("OBC-FMC-TUI");
+
+    // Display live Node.js TUI in HUD console & capture screenshot
+    await app.js(`__bh.obc.runScript("obc-top --frames 3")`);
+    await Bun.sleep(900);
+    await app.shot(`${OUT}/hud-tui-top.png`);
+
+    // 3. Full Real-Time Graphical /dev/fb0 Programs (Python PFD, Node.js Radar, Python Kerr)
+    // 3a. Python Primary Flight Display (/dev/fb0)
+    await app.js(`__bh.obc.runScript("obc-pfd-fb --seconds 5")`);
+    await app.waitFor("__bh.obc.status().fbActive === true", 15_000);
+    await Bun.sleep(1100);
+    await app.shot(`${OUT}/fb0-pfd-python.png`);
+    await app.js(`__bh.obc.write("\\x03")`);
+    await app.waitFor("__bh.obc.status().fbActive === false", 10_000);
+
+    // 3b. Node.js Tactical Radar & Orbital Scope (/dev/fb0)
+    await app.js(`__bh.obc.runScript("obc-radar-fb --seconds 5")`);
+    await app.waitFor("__bh.obc.status().fbActive === true", 15_000);
+    await Bun.sleep(1100);
+    await app.shot(`${OUT}/fb0-radar-node.png`);
+    await app.js(`__bh.obc.write("\\x03")`);
+    await app.waitFor("__bh.obc.status().fbActive === false", 10_000);
+
+    // 3c. Python Gargantua Kerr Spacetime Visualizer (/dev/fb0)
+    await app.js(`__bh.obc.runScript("obc-kerr-fb --seconds 5")`);
+    await app.waitFor("__bh.obc.status().fbActive === true", 15_000);
+    await Bun.sleep(1100);
+    await app.shot(`${OUT}/fb0-kerr-python.png`);
+    await app.js(`__bh.obc.write("\\x03")`);
+    await app.waitFor("__bh.obc.status().fbActive === false", 10_000);
+
+    await app.stepDone(`${metrics.pythonVersion} + Node ${metrics.nodeVersion} · 10 apps CLI/TUI/FB0 OK`);
+    expect(app.cdp.errors).toEqual([]);
+  }, 180_000);
+
   test("suspends/resumes VM snapshot, renders live /dev/fb0 graphics, and shows 3D Ranger cockpit", async () => {
-    await app.step("Snapshot Suspend/Resume & /dev/fb0 + Cockpit Ranger");
+    await app.step("Snapshot Suspend/Resume & Cockpit Ranger");
 
     // Live VM snapshot suspend & resume round-trip
     const tSnap = await app.js<{

@@ -42,8 +42,8 @@ jobs:
         with:
           bun-version: 1.3.14
       - name: The network's tests
-        # (the server's own: its rooms, its defences, its world bounded, its codes, its deploy's paths — audit QA-07: three files)
-        run: bun test tests/net-core.test.ts tests/net-rooms.test.ts tests/net-server-defence.test.ts tests/net-world-bound.test.ts tests/room-code.test.ts tests/rooms-deploy.test.ts tests/lola-tiles.test.ts
+        # (the server's own: its rooms, its defences, its world bounded, its codes, its deploy's paths, and the Wisp relay)
+        run: bun test tests/net-core.test.ts tests/net-rooms.test.ts tests/net-server-defence.test.ts tests/net-world-bound.test.ts tests/room-code.test.ts tests/rooms-deploy.test.ts tests/lola-tiles.test.ts tests/obc-wisp.test.ts
       - name: Build and push the image
         id: image
         env:

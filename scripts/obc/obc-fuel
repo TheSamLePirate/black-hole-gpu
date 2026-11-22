@@ -1,0 +1,104 @@
+#!/bin/sh
+# obc-fuel — Python CLI: Tsiolkovsky Delta-V, Fuel Endurance, Range & Bingo Calculator.
+# Usage: obc-fuel [--isp 450] [--dv 1200] [--json]
+
+if [ ! -x /usr/bin/python3 ] || head -n 1 /usr/bin/python3 2>/dev/null | grep -q '^#!'; then
+  echo "Python 3 not installed yet. Run: obc-install python (or click +Python in HUD)"
+  exit 1
+fi
+
+exec python3 - "$@" <<'PY'
+import json, math, sys
+import obc
+
+args = sys.argv[1:]
+as_json = "--json" in args
+isp = None
+req_dv = None
+for i, a in enumerate(args):
+    if a == "--isp" and i + 1 < len(args):
+        isp = float(args[i + 1])
+    elif a == "--dv" and i + 1 < len(args):
+        req_dv = float(args[i + 1])
+
+bus = obc.AvionicsBus()
+st = bus.read()
+sys_info = st.systems or {}
+fuel_frac = float(sys_info.get("fuel_frac", 1.0))
+fuel_kg = sys_info.get("fuel_kg")
+thr = float(sys_info.get("throttle", 0.0))
+
+is_aircraft = st.vessel_kind == "aircraft" or st.vessel_id in ("f35", "f35b", "f35c", "a320")
+g0 = 9.80665
+
+if is_aircraft:
+    # Jet endurance & range estimate
+    max_fuel = 24000.0 if "a320" in st.vessel_id else 8300.0
+    cur_kg = float(fuel_kg) if fuel_kg is not None else fuel_frac * max_fuel
+    burn_kg_s = max(0.15, (0.65 if "a320" in st.vessel_id else 0.45) * (0.25 + 1.8 * thr))
+    endurance_s = cur_kg / burn_kg_s
+    speed = max(120.0, st.true_airspeed)
+    range_km = (endurance_s * speed) / 1000.0
+    bingo_kg = max_fuel * 0.18
+    res = {
+        "vessel": st.vessel_id,
+        "mode": "aircraft",
+        "fuel_pct": round(fuel_frac * 100.0, 1),
+        "fuel_kg": round(cur_kg, 1),
+        "burn_kg_min": round(burn_kg_s * 60.0, 1),
+        "endurance_min": round(endurance_s / 60.0, 1),
+        "range_km": round(range_km, 1),
+        "bingo_kg": round(bingo_kg, 1),
+        "bingo_warn": cur_kg <= bingo_kg,
+    }
+    if as_json:
+        print(json.dumps(res, indent=2))
+        sys.exit(0)
+    print("\033[1;36m╔══════════════════════════════════════════════════════════════╗\033[0m")
+    print("\033[1;36m║\033[1;37m       OBC-FUEL (PYTHON) · JET ENDURANCE & BINGO CALC        \033[1;36m║\033[0m")
+    print("\033[1;36m╚══════════════════════════════════════════════════════════════╝\033[0m")
+    print(f"  CRAFT     : {st.vessel_id.upper():10s}  TAS : {st.true_airspeed:6.1f} m/s  THR : {thr*100:5.1f}%")
+    print(f"  FUEL      : {cur_kg:8.1f} kg  ({fuel_frac*100:5.1f}%)   BINGO : {bingo_kg:.0f} kg")
+    print(f"  BURN FLOW : {burn_kg_s*60:8.1f} kg/min")
+    print(f"  ENDURANCE : {endurance_s/60:8.1f} min  |  EST RANGE : {range_km:7.1f} km")
+    if cur_kg <= bingo_kg:
+        print("  STATUS    : \033[1;31m⚠ BINGO FUEL — RTB IMMEDIATELY\033[0m")
+    else:
+        print("  STATUS    : \033[1;32mNOMINAL RESERVES\033[0m")
+else:
+    # Spacecraft Tsiolkovsky rocket equation
+    isp_eff = isp if isp is not None else (3800.0 if "ranger" in st.vessel_id else 4500.0)
+    dry_kg = 18000.0 if "ranger" in st.vessel_id else 65000.0
+    prop_full = dry_kg * 1.65
+    prop_cur = float(fuel_kg) if fuel_kg is not None else fuel_frac * prop_full
+    m0 = dry_kg + prop_cur
+    dv_avail = isp_eff * g0 * math.log(max(1.0, m0 / dry_kg))
+    prop_needed = None
+    if req_dv is not None and req_dv > 0:
+        m_after = m0 * math.exp(-req_dv / (isp_eff * g0))
+        prop_needed = max(0.0, m0 - m_after)
+    res = {
+        "vessel": st.vessel_id,
+        "mode": "spacecraft",
+        "isp_s": isp_eff,
+        "fuel_pct": round(fuel_frac * 100.0, 2),
+        "prop_kg": round(prop_cur, 1),
+        "mass_kg": round(m0, 1),
+        "dv_avail_mps": round(dv_avail, 1),
+        "req_dv_mps": req_dv,
+        "prop_needed_kg": round(prop_needed, 1) if prop_needed is not None else None,
+    }
+    if as_json:
+        print(json.dumps(res, indent=2))
+        sys.exit(0)
+    print("\033[1;36m╔══════════════════════════════════════════════════════════════╗\033[0m")
+    print("\033[1;36m║\033[1;37m     OBC-FUEL (PYTHON) · TSIOLKOVSKY DELTA-V CALCULATOR      \033[1;36m║\033[0m")
+    print("\033[1;36m╚══════════════════════════════════════════════════════════════╝\033[0m")
+    print(f"  VESSEL    : {st.vessel_id.upper():10s}  BODY : {st.body.upper():10s}  ISP : {isp_eff:.0f} s")
+    print(f"  PROPELLANT: {prop_cur:9.1f} kg ({fuel_frac*100:5.1f}%)  TOTAL MASS : {m0:.0f} kg")
+    print(f"  DELTA-V   : \033[1;32m{dv_avail:9.1f} m/s\033[0m  ({dv_avail/1000:.2f} km/s)")
+    if prop_needed is not None:
+        ok = prop_needed <= prop_cur
+        col = "\033[1;32mGO\033[0m" if ok else "\033[1;31mNO-GO (INSUFFICIENT PROP)\033[0m"
+        print(f"  BURN {req_dv:.0f} m/s -> NEEDS {prop_needed:.1f} kg  [{col}]")
+PY

@@ -1098,6 +1098,7 @@ export function installBh(c: BhContext) {
         closeConsole: () => obc.closeConsole(),
         toggleConsole: () => obc.toggleConsole(),
         runScript: (name: string) => obc.runScript(name),
+        installToolchain: (profile: "python" | "node" | "full") => obc.installToolchain(profile),
         setWispUrl: (url: string) => obc.setWispUrl(url),
         testWisp: (url?: string) => obc.testWisp(url),
         listFiles: (dir?: string) => obc.listFiles(dir),

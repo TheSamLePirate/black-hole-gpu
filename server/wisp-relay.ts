@@ -1,7 +1,8 @@
-// Dev-only Wisp v1 WebSocket-to-TCP relay (docs/PLAN-LINUX-OBC.md §6).
+// Wisp v1 WebSocket-to-TCP relay (docs/PLAN-LINUX-OBC.md §6, docs/DEPLOY.md).
+// Shared by local dev (`server.ts` on `/__wisp`) and production (`server/wisp-main.ts` on `wss://code.samlepirate.org/`).
 // Implements the 4 Wisp v1 packet types (CONNECT=0x01, DATA=0x02, CONTINUE=0x03, CLOSE=0x04)
-// using Bun's native TCP socket API (`Bun.connect`), bounded per client and strictly restricted
-// to same-origin pages in local development via `foreignOrigin(req)`.
+// using Bun's native TCP socket API (`Bun.connect`), with SSRF protection (blocks loopback, RFC1918,
+// link-local, cloud metadata, and IPv6 ULA), origin validation, and per-client/global quotas.
 
 import type { Socket } from "bun";
 import { foreignOrigin } from "./ear-relay";
@@ -19,12 +20,21 @@ const CLOSE_INVALID = 0x03;
 const CLOSE_THROTTLED = 0x44;
 
 export const WISP_LIMITS = {
-  maxClients: 4,
-  maxStreamsPerClient: 32,
+  maxClients: 32,
+  maxStreamsPerClient: 64,
   initialBuffer: 128,
   maxHostLen: 253,
   maxQueueBytes: 512 * 1024,
 } as const;
+
+export interface WispUpgradeOptions {
+  enabled: boolean;
+  maxClients?: number;
+  maxStreamsPerClient?: number;
+  maxClientsPerIp?: number;
+  clientIp?: string;
+  allowOrigin?: (origin: string) => boolean;
+}
 
 export interface WispStream {
   id: number;
@@ -36,6 +46,8 @@ export interface WispStream {
 
 export interface WispSession {
   kind: "wisp";
+  ip: string;
+  maxStreams: number;
   streams: Map<number, WispStream>;
   send(data: Uint8Array): void;
 }
@@ -46,6 +58,23 @@ interface WispSocketCtx {
 }
 
 let activeClients = 0;
+let totalConnections = 0;
+let totalStreams = 0;
+let totalBytesIn = 0;
+let totalBytesOut = 0;
+let blockedHosts = 0;
+const clientsByIp = new Map<string, number>();
+
+export function wispStats() {
+  return {
+    activeClients,
+    totalConnections,
+    totalStreams,
+    totalBytesIn,
+    totalBytesOut,
+    blockedHosts,
+  };
+}
 
 /** Build a Wisp v1 CONTINUE packet for `streamId` with `remaining` packet credits. */
 export function encodeContinue(streamId: number, remaining: number): Uint8Array {
@@ -109,26 +138,75 @@ export function decodeWispPacket(
   return null;
 }
 
-/** Check whether a host is a blocked link-local/metadata address (cloud metadata safety). */
+/**
+ * SSRF guard: block loopback, RFC1918 private networks, CGNAT, link-local,
+ * cloud metadata endpoints, IPv6 loopback/ULA/link-local, and local hostnames.
+ */
 export function isBlockedHost(host: string): boolean {
-  const h = host.toLowerCase();
-  return h === "169.254.169.254" || h === "metadata.google.internal" || h.startsWith("169.254.");
+  const h = host.toLowerCase().replace(/^\[|\]$/g, "");
+  if (!h) return true;
+  if (
+    h === "localhost" ||
+    h.endsWith(".localhost") ||
+    h.endsWith(".local") ||
+    h.endsWith(".internal") ||
+    h === "metadata.google.internal" ||
+    h === "metadata" ||
+    h === "0.0.0.0" ||
+    h === "::" ||
+    h === "::1"
+  ) {
+    return true;
+  }
+  // IPv6 private / link-local / mapped IPv4
+  if (h.includes(":")) {
+    if (h.startsWith("fe80:") || h.startsWith("fc") || h.startsWith("fd") || h.startsWith("::ffff:")) return true;
+  }
+  // Dotted IPv4 checks
+  const m = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(h);
+  if (m) {
+    const a = Number(m[1]);
+    const b = Number(m[2]);
+    if (a === 0 || a === 10 || a === 127) return true; // 0/8, 10/8, 127/8
+    if (a === 169 && b === 254) return true; // link-local & cloud metadata
+    if (a === 172 && b >= 16 && b <= 31) return true; // 172.16/12
+    if (a === 192 && b === 168) return true; // 192.168/16
+    if (a === 100 && b >= 64 && b <= 127) return true; // CGNAT 100.64/10
+    if (a >= 224) return true; // multicast / reserved
+  }
+  return false;
 }
 
 export function wispUpgrade(
   req: Request,
   srv: { upgrade(r: Request, o: { data: unknown }): boolean },
-  enabled: boolean,
+  enabledOrOpts: boolean | WispUpgradeOptions,
 ): Response | undefined {
-  if (!enabled) return new Response("disabled", { status: 404 });
+  const opts: WispUpgradeOptions = typeof enabledOrOpts === "boolean" ? { enabled: enabledOrOpts } : enabledOrOpts;
+  if (!opts.enabled) return new Response("disabled", { status: 404 });
   if (req.headers.get("upgrade")?.toLowerCase() !== "websocket") {
-    return Response.json({ ok: true, protocol: "wisp/1", clients: activeClients });
+    return Response.json(
+      { ok: true, protocol: "wisp/1", ...wispStats() },
+      { headers: { "access-control-allow-origin": "*" } },
+    );
   }
-  if (foreignOrigin(req)) return new Response("forbidden", { status: 403 });
-  if (activeClients >= WISP_LIMITS.maxClients) return new Response("too many clients", { status: 429 });
+  const origin = req.headers.get("origin");
+  if (opts.allowOrigin) {
+    if (origin && !opts.allowOrigin(origin)) return new Response("forbidden", { status: 403 });
+  } else if (foreignOrigin(req)) {
+    return new Response("forbidden", { status: 403 });
+  }
+  const maxClients = opts.maxClients ?? WISP_LIMITS.maxClients;
+  if (activeClients >= maxClients) return new Response("too many clients", { status: 429 });
+  const ip = opts.clientIp ?? "local";
+  const maxPerIp = opts.maxClientsPerIp ?? 8;
+  if ((clientsByIp.get(ip) ?? 0) >= maxPerIp) return new Response("too many connections from ip", { status: 429 });
+
   const ok = srv.upgrade(req, {
     data: {
       kind: "wisp",
+      ip,
+      maxStreams: opts.maxStreamsPerClient ?? WISP_LIMITS.maxStreamsPerClient,
       streams: new Map<number, WispStream>(),
       send: () => {},
     } satisfies WispSession,
@@ -138,7 +216,9 @@ export function wispUpgrade(
 
 export function wispOpen(ws: { data: unknown; send(d: Uint8Array): unknown }) {
   activeClients++;
+  totalConnections++;
   const session = ws.data as WispSession;
+  clientsByIp.set(session.ip, (clientsByIp.get(session.ip) ?? 0) + 1);
   session.send = (d: Uint8Array) => {
     try {
       ws.send(d);
@@ -181,16 +261,18 @@ export function wispMessage(ws: { data: unknown }, msg: string | ArrayBuffer | U
       return;
     }
     if (isBlockedHost(pkt.host)) {
+      blockedHosts++;
       session.send(encodeClose(pkt.streamId, CLOSE_REFUSED));
       return;
     }
-    if (session.streams.size >= WISP_LIMITS.maxStreamsPerClient) {
+    if (session.streams.size >= session.maxStreams) {
       session.send(encodeClose(pkt.streamId, CLOSE_THROTTLED));
       return;
     }
     if (session.streams.has(pkt.streamId)) {
       closeStream(session, pkt.streamId, CLOSE_NORMAL, false);
     }
+    totalStreams++;
     const stream: WispStream = { id: pkt.streamId, queue: [], queuedBytes: 0, closed: false };
     session.streams.set(pkt.streamId, stream);
     void Bun.connect<WispSocketCtx>({
@@ -212,6 +294,7 @@ export function wispMessage(ws: { data: unknown }, msg: string | ArrayBuffer | U
         data(_socket, chunk) {
           if (stream.closed) return;
           const bytes = chunk instanceof Uint8Array ? chunk : new Uint8Array(chunk);
+          totalBytesOut += bytes.byteLength;
           session.send(encodeData(stream.id, bytes));
         },
         close() {
@@ -233,6 +316,7 @@ export function wispMessage(ws: { data: unknown }, msg: string | ArrayBuffer | U
   if (pkt.type === "data") {
     const stream = session.streams.get(pkt.streamId);
     if (!stream || stream.closed) return;
+    totalBytesIn += pkt.payload.byteLength;
     if (stream.socket) {
       stream.socket.write(pkt.payload);
       session.send(encodeContinue(stream.id, WISP_LIMITS.initialBuffer));
@@ -255,6 +339,9 @@ export function wispMessage(ws: { data: unknown }, msg: string | ArrayBuffer | U
 export function wispClose(ws: { data: unknown }) {
   activeClients = Math.max(0, activeClients - 1);
   const session = ws.data as WispSession;
+  const n = (clientsByIp.get(session.ip) ?? 1) - 1;
+  if (n <= 0) clientsByIp.delete(session.ip);
+  else clientsByIp.set(session.ip, n);
   for (const id of [...session.streams.keys()]) {
     closeStream(session, id, CLOSE_NORMAL, false);
   }

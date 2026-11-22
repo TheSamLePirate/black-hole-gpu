@@ -101,9 +101,10 @@ export interface ObcDrawSource {
 
 type Canvas2D = OffscreenCanvasRenderingContext2D | CanvasRenderingContext2D;
 
-/** Scratch canvas used to scale `/dev/fb0` ImageData cleanly onto any target cockpit rectangle. */
+/** Scratch canvas & reusable ImageData used to blit `/dev/fb0` with zero per-frame allocations. */
 let fbScratch: OffscreenCanvas | null = null;
 let fbScratchCtx: OffscreenCanvasRenderingContext2D | null = null;
+let fbScratchImg: ImageData | null = null;
 let fbScratchRev = -1;
 
 function blitFramebuffer(
@@ -118,12 +119,13 @@ function blitFramebuffer(
   if (!fbScratch || fbScratch.width !== fb.width || fbScratch.height !== fb.height) {
     fbScratch = new OffscreenCanvas(fb.width, fb.height);
     fbScratchCtx = fbScratch.getContext("2d");
+    fbScratchImg = fbScratchCtx ? fbScratchCtx.createImageData(fb.width, fb.height) : null;
     fbScratchRev = -1;
   }
-  if (!fbScratchCtx) return;
+  if (!fbScratchCtx || !fbScratchImg) return;
   if (fbScratchRev !== fb.rev) {
-    const img = new ImageData(new Uint8ClampedArray(fb.data), fb.width, fb.height);
-    fbScratchCtx.putImageData(img, 0, 0);
+    fbScratchImg.data.set(fb.data);
+    fbScratchCtx.putImageData(fbScratchImg, 0, 0);
     fbScratchRev = fb.rev;
   }
   const scale = Math.min(w / fb.width, h / fb.height);

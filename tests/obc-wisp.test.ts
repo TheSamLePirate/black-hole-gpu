@@ -40,10 +40,29 @@ test("Wisp v1 packet encoding and decoding round-trip", () => {
   });
 });
 
-test("Wisp v1 decoder rejects truncated/invalid packets and blocks cloud metadata hosts", () => {
+test("Wisp v1 decoder rejects truncated/invalid packets and blocks SSRF private/metadata hosts", () => {
   expect(decodeWispPacket(new Uint8Array([1, 2]))).toBeNull();
   expect(decodeWispPacket(new Uint8Array([0x99, 1, 0, 0, 0]))).toBeNull();
-  expect(isBlockedHost("169.254.169.254")).toBe(true);
-  expect(isBlockedHost("metadata.google.internal")).toBe(true);
+  // Cloud metadata, loopback, RFC1918, CGNAT, IPv6 ULA/loopback blocked
+  for (const h of [
+    "169.254.169.254",
+    "metadata.google.internal",
+    "localhost",
+    "127.0.0.1",
+    "10.0.0.5",
+    "172.16.0.1",
+    "192.168.1.1",
+    "100.64.0.1",
+    "::1",
+    "fe80::1",
+    "fd12:3456::1",
+    "mybox.local",
+    "service.internal",
+  ]) {
+    expect(isBlockedHost(h)).toBe(true);
+  }
+  // Public package mirrors allowed
   expect(isBlockedHost("dl-cdn.alpinelinux.org")).toBe(false);
+  expect(isBlockedHost("pypi.org")).toBe(false);
+  expect(isBlockedHost("registry.npmjs.org")).toBe(false);
 });
