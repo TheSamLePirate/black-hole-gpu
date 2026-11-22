@@ -14,6 +14,7 @@ import { GARGANTUA_SYSTEM } from "../system/bodies";
 import { bodyState } from "../system/ephemeris";
 import { cartToGeodetic, flatteningOf } from "../system/ellipsoid";
 import { SOLAR_BODIES, solarBody, solarState } from "../system/solar";
+import { jwstTrack } from "../system/jwst";
 import { C_MPS, M_METRES, M_SECONDS } from "../units";
 import { isAircraft, VESSELS, type VesselId } from "../vessels";
 import type { Info } from "./flighthud";
@@ -64,9 +65,15 @@ export function trajSegments(p: OurPath | null, t: number, budget: number = SPAC
 
 /** The bodies worth drawing about a sphere: the Sun and its planets, the moons of the body flown about (or of its
  *  planet). */
-function bodiesNear(body: string, tm: number): InstrumentBody[] {
+function bodiesNear(body: string, tm: number, shipX?: V3): InstrumentBody[] {
   const planet = solarBody(body)?.parent === "sun" || body === "sun" ? body : (solarBody(body)?.parent ?? "");
-  return SOLAR_BODIES.filter((b) => b.parent === null || b.parent === "sun" || b.parent === planet)
+  // Include Earth's Moon when near Earth / Sun–Earth L1/L2 (outside Earth's SOI so body === "sun")
+  const nearEarth =
+    body === "sun" &&
+    shipX &&
+    Math.hypot(shipX[0] - bodyAt("earth", tm).pos[0], shipX[1] - bodyAt("earth", tm).pos[1], shipX[2] - bodyAt("earth", tm).pos[2]) * KM <
+      5e6;
+  return SOLAR_BODIES.filter((b) => b.parent === null || b.parent === "sun" || b.parent === planet || (nearEarth && b.id === "moon"))
     .slice(0, SPACE_BOUNDS.bodies)
     .map((b) => {
       const s = bodyAt(b.id, tm);
@@ -141,11 +148,16 @@ export function crewSpace(
       fate: i.ourFree?.fate ?? "",
       hit: i.ourFree?.hit ?? "",
     };
-    if (body) out.bodies = bodiesNear(body, tm);
-    // (the room's other spacecraft about the same body, within its sphere — N6)
+    if (body) out.bodies = bodiesNear(body, tm, i.X as V3 | undefined);
+    if (c.s.jwst) {
+      const jw = jwstTrack.peek(tm);
+      if (jw) out.jwst = [Math.round(jw.X[0] * KM), Math.round(jw.X[1] * KM), Math.round(jw.X[2] * KM)];
+    }
+    // (the room's other spacecraft about the same body, within its sphere — or within 5M km of us in heliocentric/L2 space — N6)
     if (out.state) {
       const b = bodyAt(body, tm);
-      const lim = Number.isFinite(out.state.soi) ? out.state.soi : 2e6;
+      const lim = Number.isFinite(out.state.soi) ? out.state.soi : 5e6;
+      const myR = out.state.r;
       out.others = roomCraft
         .list()
         .map((o) => ({
@@ -154,7 +166,9 @@ export function crewSpace(
           vessel: o.vessel,
           r: [r1((o.X[0] - b.pos[0]) * KM), r1((o.X[1] - b.pos[1]) * KM), r1((o.X[2] - b.pos[2]) * KM)] as V3,
         }))
-        .filter((o) => Math.hypot(...o.r) < lim)
+        .filter((o) =>
+          Number.isFinite(out.state!.soi) ? Math.hypot(...o.r) < lim : Math.hypot(o.r[0] - myR[0], o.r[1] - myR[1], o.r[2] - myR[2]) < lim,
+        )
         .slice(0, SPACE_BOUNDS.others);
     }
   }

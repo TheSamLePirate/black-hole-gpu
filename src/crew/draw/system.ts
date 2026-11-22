@@ -95,7 +95,32 @@ export function drawSystemMap(
       c.lineWidth = 2;
       c.stroke();
     } else if (m.kind === "node") p.star(m.x, m.y, 6, C.magenta, true);
-    else if (m.kind === "target") {
+    else if (m.kind === "lag-unstable") {
+      c.beginPath();
+      c.moveTo(m.x, m.y - 5);
+      c.lineTo(m.x + 5, m.y);
+      c.lineTo(m.x, m.y + 5);
+      c.lineTo(m.x - 5, m.y);
+      c.closePath();
+      c.fillStyle = "rgba(255, 196, 92, 0.25)";
+      c.fill();
+      c.strokeStyle = m.colour;
+      c.lineWidth = 1.4;
+      c.stroke();
+    } else if (m.kind === "lag-stable") {
+      c.beginPath();
+      c.moveTo(m.x, m.y - 5.5);
+      c.lineTo(m.x + 5, m.y + 4);
+      c.lineTo(m.x - 5, m.y + 4);
+      c.closePath();
+      c.fillStyle = "rgba(105, 235, 175, 0.25)";
+      c.fill();
+      c.strokeStyle = m.colour;
+      c.lineWidth = 1.4;
+      c.stroke();
+    } else if (m.kind === "jwst") {
+      p.star(m.x, m.y, 6, "#ffd45f", true);
+    } else if (m.kind === "target") {
       c.beginPath();
       c.arc(m.x, m.y, 9, 0, Math.PI * 2);
       c.strokeStyle = C.amber;
@@ -158,6 +183,8 @@ export function drawSystemMap(
           ["#3fd8ff", L("trajectoire libre", "free path")],
           ["#ff5ce1", L("trajectoire planifiée · poussées", "planned path · burns")],
           ["#8cb3cc", L("sphère d’influence", "sphere of influence")],
+          ["#ffc45c", L("Lagrange L1–L3 · orbite Halo", "Lagrange L1–L3 · Halo orbit")],
+          ["#69ebaf", L("Lagrange L4–L5 (stables)", "Lagrange L4–L5 (stable)")],
         ];
   // (top right, under the renderer's name: the zoom's buttons hold the bottom right)
   let ly = 36;
@@ -168,5 +195,8 @@ export function drawSystemMap(
     ly += 15;
   }
   c.restore();
-  return { span: scene.span, bodies: P.discs.map((d) => ({ id: d.id, x: r.x + d.x, y: r.y + d.y, r: d.r })) };
+  const markHits = P.marks
+    .filter((m) => m.id && (m.kind === "lag-unstable" || m.kind === "lag-stable" || m.kind === "jwst"))
+    .map((m) => ({ id: m.id!, x: r.x + m.x, y: r.y + m.y, r: 8 }));
+  return { span: scene.span, bodies: [...P.discs.map((d) => ({ id: d.id, x: r.x + d.x, y: r.y + d.y, r: d.r })), ...markHits] };
 }

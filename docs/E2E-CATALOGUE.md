@@ -140,6 +140,7 @@ Every e2e file (`tests/e2e/*.e2e.test.ts`, the `zz-` probes apart — kept whole
 | time.e2e.test.ts | Date and time panel by clicks: thirty days on the ship keeps its orbit; back to the start; a date chosen in UTC. | Earth: the Blue Marble | 2 | — |
 | eclipses.e2e.test.ts | Eclipse calculator by clicks: the 12 Aug 2026 total eclipse from Paris, "Go and see", the moons tab. | game:artemis, 1440×900, lang fr | ? | — |
 | photo-fps.e2e.test.ts | Photo mode left by its own button, its bar hidden and brought back; frame rate shown on request in Settings › Render. | Earth: the Blue Marble, 1280×800 | ? | — |
+| lagrange-jwst.e2e.test.ts | Lagrange points (L1–L5) & JWST at Sun–Earth L2: WebGPU close-up of JWST on its Southern Halo orbit, 3D map display and click/selection of `lag:earth:2`, Flight Computer N-body transfer plan from Earth LEO to a JWST-style SE-L2 Halo orbit, and closed-loop Halo orbit autopilot holding the spacecraft around L2. | game:artemis, 1440×900 | ~60 s here | captures remote-results/lagrange-jwst/*.png |
 
 ### Sky & rendering
 

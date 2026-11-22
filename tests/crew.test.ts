@@ -126,8 +126,8 @@ test("crew build stays independent: one small JS, no shader files, workers, imag
   // (its budget: the instruments, the actions, the globe's renderer, the coasts — 197 KB minified; the spacecraft
   // console, its 3D map, its views and stations (PLAN-VAISSEAUX K2–K5) — 257 KB on 2026-10-18, ~70 KB gzipped; the
   // tactical picture (PLAN-RADAR-AAA: the common symbology, the world's airfields, the compact picture's decoder and
-  // the track store) — 326 KB on 2026-10-21)
-  expect(scripts[0]!.size).toBeLessThan(360_000);
+  // the track store) — 326 KB on 2026-10-21; Lagrange L1–L5, 3D Richardson Halo loops & JWST — 366 KB on 2026-11-22)
+  expect(scripts[0]!.size).toBeLessThan(375_000);
   // (WebGPU only for the globe's photographed Earth, its shader inline — asked once the globe is shown: the e2e counts it)
   expect(await scripts[0]!.text()).not.toMatch(/audio-worklet|basis_transcoder|\.wgsl|ktx2|scenery-worker|plan-worker/);
 });

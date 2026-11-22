@@ -30,6 +30,7 @@ import type { Site } from "../../game/sites";
 import type { KerrOrbit } from "../../fc/kerr-ops";
 import { alignOverSite, firstReachable, sitePasses, type Pass, type SiteTrack } from "../../fc/land-ops";
 import { horizon, isco } from "../../physics";
+import { defaultHaloAzM, isLagrangeId, lagrangeStability, lagrangeStabilityText } from "../../system/lagrange";
 import { BODY_NAMES } from "../../targeting";
 import { G0 } from "../../units";
 import { store } from "../../util/storage";
@@ -77,7 +78,7 @@ export interface FcHost {
   };
   missionPlan(spec: {
     target: string;
-    arrival?: "orbit" | "flyby" | "freeReturn";
+    arrival?: "orbit" | "flyby" | "freeReturn" | "halo" | "station";
     altKm?: number;
     retKm?: number;
     orbit?: boolean;
@@ -600,7 +601,14 @@ export class FlightComputer {
   }
 
   /** The mission's choices, kept from one opening to the next. */
-  private mis = { target: "", arrival: "orbit" as "orbit" | "flyby" | "freeReturn", altKm: 200, retKm: 200, orbit: true };
+  private mis = {
+    target: "",
+    arrival: "orbit" as "orbit" | "flyby" | "freeReturn" | "halo" | "station",
+    altKm: 200,
+    haloKm: 260_000,
+    retKm: 200,
+    orbit: true,
+  };
 
   /**
    * MISSION: to another body — the destinations from here (grouped, how far), the arrival (an orbit, a
@@ -658,9 +666,42 @@ export class FlightComputer {
     // the arrival
     const dest = T.list.find((x) => x.id === M.target)!;
     const craft = dest.id === "iss" || (VESSEL_IDS as string[]).includes(dest.id);
+    const isLag = isLagrangeId(dest.id);
+    const isJwst = dest.id === "jwst";
     const fields: HTMLElement[] = [];
     let help = "";
-    if (T.universe === "ours" && !craft && dest.id !== "wormhole") {
+    if (T.universe === "ours" && isLag) {
+      if (M.arrival !== "halo" && M.arrival !== "station" && M.arrival !== "flyby") M.arrival = "halo";
+      const defAzKm = Math.round(defaultHaloAzM(dest.id, 0) / 1e3);
+      M.haloKm = defAzKm;
+      const seg = h("div", "fc-seg");
+      for (const [w, l] of [
+        ["halo", t("HALO (JWST)")],
+        ["station", t("LIBRATION")],
+        ["flyby", t("FLYBY")],
+      ] as [typeof M.arrival, string][]) {
+        const b = h("button", w === M.arrival ? "on" : "", l);
+        b.onclick = () => {
+          M.arrival = w;
+          this.setTab("mission");
+        };
+        seg.append(b);
+      }
+      fields.push(seg);
+      if (M.arrival === "halo")
+        fields.push(
+          numField(t("Halo A_z"), M.haloKm, "km", Math.max(1000, Math.round(defAzKm / 10)), (v) => (M.haloKm = v), { min: 1000 }).el,
+        );
+      const st = lagrangeStability(dest.id, 0);
+      help = st
+        ? tf("{0} — N-body transfer & insertion burn, then Halo orbit autopilot / station-keeping", lagrangeStabilityText(st))
+        : t("N-body transfer & insertion burn into a 3D Halo orbit (JWST-style) or libration point hold");
+    } else if (T.universe === "ours" && isJwst) {
+      help = t(
+        "N-body transfer from orbit to the James Webb Space Telescope on its Sun–Earth L2 Southern Halo orbit (200 m standoff, then station-keeping)",
+      );
+    } else if (T.universe === "ours" && !craft && dest.id !== "wormhole") {
+      if (M.arrival === "halo" || M.arrival === "station") M.arrival = "orbit";
       const seg = h("div", "fc-seg");
       for (const [w, l] of [
         ["orbit", t("ORBIT")],
@@ -710,15 +751,23 @@ export class FlightComputer {
     }
     this.op(tf("To {0}", dest.name), help, fields, () => {
       this.result.replaceChildren(h("div", "fc-busy", tf("Planning the mission to {0}… (the n-body paths aimed)", dest.name)));
-      void this.host.missionPlan({ target: M.target, arrival: M.arrival, altKm: M.altKm, retKm: M.retKm, orbit: M.orbit }).then((r) => {
-        if (this.tab !== "mission") return;
-        if (!r.ok) {
-          if (r.note) this.preview({ ok: false, note: r.note, burns: [], dvTotal: 0 });
-          else this.result.replaceChildren();
-          return;
-        }
-        this.preview({ ok: true, note: r.note, burns: r.burns, dvTotal: r.dvTotal, afterText: r.afterText, mission: true });
-      });
+      void this.host
+        .missionPlan({
+          target: M.target,
+          arrival: isJwst ? "station" : M.arrival,
+          altKm: isLag ? M.haloKm : M.altKm,
+          retKm: M.retKm,
+          orbit: M.orbit,
+        })
+        .then((r) => {
+          if (this.tab !== "mission") return;
+          if (!r.ok) {
+            if (r.note) this.preview({ ok: false, note: r.note, burns: [], dvTotal: 0 });
+            else this.result.replaceChildren();
+            return;
+          }
+          this.preview({ ok: true, note: r.note, burns: r.burns, dvTotal: r.dvTotal, afterText: r.afterText, mission: true });
+        });
       return null;
     });
   }

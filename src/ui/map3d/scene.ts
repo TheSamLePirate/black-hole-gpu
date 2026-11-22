@@ -15,6 +15,19 @@ import { mouth } from "../../wormhole";
 import { isco, horizon, photonOrbits } from "../../physics";
 import { OUR_COLOURS } from "../hudkit";
 import { issAxes, issOrbit, issTrack } from "../../system/iss";
+import { jwstHaloLoop, jwstTrack } from "../../system/jwst";
+import {
+  defaultHaloAzM,
+  haloOrbitLoop,
+  isLagrangeId,
+  lagrangeIdsFor,
+  lagrangeName,
+  lagrangeShortName,
+  lagrangeStability,
+  lagrangeState,
+  parseLagrangeId,
+  type LagrangeIndex,
+} from "../../system/lagrange";
 import { M_METRES, solarBody } from "../../system/solar";
 import { fleet } from "../../fleet";
 import { ephemerisVersion } from "../../system/de440";
@@ -24,12 +37,14 @@ import { VESSEL_IDS, VESSELS, type VesselId } from "../../vessels";
 import { t } from "../../i18n";
 
 const isCraftId = (id: string): id is VesselId => (VESSEL_IDS as readonly string[]).includes(id);
-/** a craft of the map: the station, the fleet's, another player's (R6) */
-export const isMapCraft = (id: string) => id === "iss" || isCraftId(id) || isNetTarget(id);
+/** a craft of the map: the station, JWST, the fleet's, another player's (R6) */
+export const isMapCraft = (id: string) => id === "iss" || id === "jwst" || isCraftId(id) || isNetTarget(id);
 
-/** A place in our universe's home frame at t: a body of the solar system's, the space station's, a craft's. */
+/** A place in our universe's home frame at t: a body of the solar system's, the space station's, JWST's, a Lagrange point's, a craft's. */
 export function ourPos(id: string, t: number): V3 {
   if (id === "iss") return (issTrack.peek(t)?.X ?? solarState("earth", t).pos) as V3;
+  if (id === "jwst") return (jwstTrack.peek(t)?.X ?? solarState("earth", t).pos) as V3;
+  if (isLagrangeId(id)) return (lagrangeState(id, t)?.pos ?? solarState("earth", t).pos) as V3;
   // (another player's: where his samples have him — a coasting craft along its orbit)
   if (isNetTarget(id)) return (netTargets.state(id as Body, t)?.pos ?? solarState("earth", t).pos) as V3;
   // (a drawing's: the analytic coast — fleet.ts pose)
@@ -113,7 +128,9 @@ export interface MapBody {
   /** the id a click targets (act.select) */
   id: string;
   name: string;
-  kind: "star" | "planet" | "moon" | "hole" | "mouth";
+  /** compact map pin label when different from full name (e.g. "SE-L2") */
+  shortName?: string;
+  kind: "star" | "planet" | "moon" | "hole" | "mouth" | "lagrange";
   parent: string | null;
   /** place now (the map's frame), radius [M], colour "r, g, b" */
   pos: V3;
@@ -132,6 +149,10 @@ export interface MapBody {
   air?: boolean;
   /** a line for the card: period, distance… */
   period?: number;
+  /** Lagrange point metadata (when kind === "lagrange") */
+  lagrange?: { primary: string; secondary: string; index: LagrangeIndex; stable: boolean };
+  /** 3D Halo orbit loop around this Lagrange point or JWST (home frame at t0) */
+  halo?: V3[];
 }
 
 export interface MapScene {
@@ -168,7 +189,11 @@ function cachedOrbit(key: string, t0: number, make: () => V3[], maxDt: number): 
 }
 
 // ------------------------------------------------------------------------------------ ours
-export function ourScene(t0: number, mouthRadius = 0.05): MapScene {
+export function ourScene(
+  t0: number,
+  mouthRadius = 0.05,
+  o: { lagrange?: boolean; jwst?: boolean; target?: string; focus?: string | null } = {},
+): MapScene {
   budget = 3;
   const bodies: MapBody[] = [];
   const pos = new Map<string, V3>();
@@ -277,6 +302,69 @@ export function ourScene(t0: number, mouthRadius = 0.05): MapScene {
       light: "sun",
       period: T,
     });
+  }
+  // JWST on its Southern Halo orbit around Sun–Earth L2
+  if (o.jwst !== false) {
+    const jw = jwstTrack.peek(t0);
+    if (jw) {
+      const halo = jwstHaloLoop(t0, 72) as V3[];
+      bodies.push({
+        id: "jwst",
+        name: "JWST",
+        kind: "moon",
+        parent: "earth",
+        pos: jw.X as V3,
+        radius: 12 / M_METRES,
+        col: "255, 212, 95",
+        pole: Z,
+        soi: 0,
+        orbit: halo,
+        orbitOff: [0, 0, 0],
+        light: "sun",
+        period: (178 * 86400) / M_SECONDS,
+      });
+    }
+  }
+  // Lagrange points (L1–L5) for Earth, Moon, Mars, Jupiter, Saturn (+ focused/targeted secondary)
+  if (o.lagrange !== false || isLagrangeId(o.target) || isLagrangeId(o.focus)) {
+    const secs = new Set<string>(["earth", "moon", "mars", "jupiter", "saturn"]);
+    for (const id of [o.target, o.focus]) {
+      if (id && isLagrangeId(id)) secs.add(parseLagrangeId(id)!.secondary);
+      else if (id && solarBody(id)?.parent) secs.add(id);
+    }
+    for (const sec of secs) {
+      const sb = solarBody(sec);
+      if (!sb?.parent) continue;
+      for (const lid of lagrangeIdsFor(sec)) {
+        if (o.lagrange === false && lid !== o.target && lid !== o.focus) continue;
+        const ls = lagrangeState(lid, t0);
+        if (!ls) continue;
+        const stab = lagrangeStability(lid, t0);
+        const stable = !!stab?.linearlyStable;
+        const col = stable ? "105, 235, 175" : ls.index >= 4 ? "255, 130, 120" : "255, 196, 92";
+        const showHalo =
+          ls.index <= 2 && (lid === "lag:earth:2" || lid === o.target || lid === o.focus || o.focus === sec || o.target === "jwst");
+        const halo = showHalo ? (haloOrbitLoop(lid, t0, { azM: defaultHaloAzM(lid, t0), branch: -1 }, 64) as V3[]) : undefined;
+        bodies.push({
+          id: lid,
+          name: lagrangeName(lid),
+          shortName: lagrangeShortName(lid),
+          kind: "lagrange",
+          parent: ls.index <= 2 ? sec : sb.parent,
+          pos: ls.pos as V3,
+          radius: 0,
+          col,
+          pole: ls.frame.ez as V3,
+          soi: 0,
+          orbit: null,
+          orbitOff: [0, 0, 0],
+          light: null,
+          period: stab ? (stab.inPlanePeriodDays * 86400) / M_SECONDS : undefined,
+          lagrange: { primary: sb.parent, secondary: sec, index: ls.index, stable },
+          halo,
+        });
+      }
+    }
   }
   // the fleet's craft not flown (fleet.ts): where they are, a turn of their Kepler orbit around the Earth
   const mu = solarBody("earth")!.mass;
@@ -513,7 +601,7 @@ export const dateOf = (t: number) => new Date(EPOCH_DATE + t * M_SECONDS * 1000)
 export function bodyPosAt(sc: MapScene, s: Settings, id: string, t: number): V3 | null {
   if (sc.universe === "ours") {
     if (id === "wormhole") return [0, 0, 0];
-    return SOLAR_BODIES.some((b) => b.id === id) || isMapCraft(id) ? ourPos(id, t) : null;
+    return SOLAR_BODIES.some((b) => b.id === id) || isMapCraft(id) || isLagrangeId(id) ? ourPos(id, t) : null;
   }
   const o = sc.origin(t);
   if (id === "hole") return sub([0, 0, 0], o);

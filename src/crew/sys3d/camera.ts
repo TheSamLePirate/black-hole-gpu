@@ -36,6 +36,7 @@ export interface ProjDisc {
   name: string;
 }
 export interface ProjMark {
+  id?: string;
   x: number;
   y: number;
   z: number;
@@ -121,7 +122,7 @@ export function project(sc: SystemScene, cam: MapCamera, W: number, H: number): 
   const marks: ProjMark[] = [];
   for (const m of sc.marks) {
     const q = P(m.pos);
-    if (q) marks.push({ x: q[0], y: q[1], z: q[2], label: m.label, colour: m.colour, kind: m.kind });
+    if (q) marks.push({ id: m.id, x: q[0], y: q[1], z: q[2], label: m.label, colour: m.colour, kind: m.kind });
   }
   return { lines, discs, marks, k: fl / dist };
 }

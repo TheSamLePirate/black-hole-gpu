@@ -17,6 +17,7 @@ import type { Vec3 } from "../physics";
 import type { Settings } from "../settings";
 import { issAxes } from "../system/iss";
 import { issCameraFrame } from "../system/iss-cameras";
+import { jwstAxes } from "../system/jwst";
 import { solarBody } from "../system/solar";
 import { fromBodyFixed, groundAboveSphere, toBodyFixed } from "../system/our-surface";
 import { craftRadius, craftSubjects, isCraft, isCraftLike, isSubject, ourTarget, type Body } from "../targeting";
@@ -68,6 +69,11 @@ export function subjectPose(s: Settings, b: Body, t: number): SubjectPose | null
     const [x, y, z] = issAxes(T.pos, T.vel, t);
     // (the station's x ahead, z to the nadir: as a craft's left, up, nose)
     return { X: T.pos, V: T.vel, ax: [[-y[0], -y[1], -y[2]], [-z[0], -z[1], -z[2]], x], length: 109, kind: "space" };
+  }
+  if (b === "jwst") {
+    const [x, y, z] = jwstAxes(T.pos, T.vel, t);
+    // CHASE sits behind ax[2] and slightly above ax[1], so ax = [x, y, −z] frames the 6.5 m gold primary mirror (+z) & Kapton sunshield (+y) head-on!
+    return { X: T.pos, V: T.vel, ax: [x, y, [-z[0], -z[1], -z[2]]], length: 24, kind: "space" };
   }
   const E = ourTarget(s, "earth" as Body, t);
   const up = unit(sub(T.pos, E.pos));

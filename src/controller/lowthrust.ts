@@ -16,10 +16,12 @@ import {
   bodyRadius,
   bodyHill,
   cameraHome,
+  isLagrangeTarget,
   isOurs,
   ourLook,
   ourTarget,
 } from "../targeting";
+import { defaultHaloAzM, haloState, matchHaloPhase } from "../system/lagrange";
 import { fromZamo } from "../geodesic";
 import { GARGANTUA_SYSTEM } from "../system/bodies";
 import { bodyState } from "../system/ephemeris";
@@ -566,6 +568,81 @@ function ourWant(this: CameraController, cam: ReturnType<typeof cameraFrame>, sa
   const air = GARGANTUA_SYSTEM.bodies.find((b) => b.id === tgt)?.surface?.atmosphere;
   // (a low orbit: 10 % of the radius, above 12 scale heights of air)
   const low = Tg.radius * 1.1 + (air ? (12 * air.H) / M_METRES : 0);
+  // (Lagrange Halo orbit autopilot — JWST-style: flies and maintains a 3D Halo / libration orbit around L1–L5)
+  if (P.auto === "orbit" && isLagrangeTarget(tgt)) {
+    const id = String(tgt);
+    const azM = this.ourHalo?.target === id ? this.ourHalo.azM : defaultHaloAzM(id, t);
+    const branch: 1 | -1 = this.ourHalo?.target === id ? this.ourHalo.branch : -1;
+    const haloReach = Math.max(azM * 3.5, 40_000e3) / M_METRES;
+    if (D < haloReach) {
+      if (!this.ourHalo || this.ourHalo.target !== id) {
+        const m = matchHaloPhase(id, nav.X, t, azM, branch);
+        this.ourHalo = { target: id, azM: m?.azM ?? azM, phase0: m?.phase0 ?? 0, branch };
+        this.onPilotMessage?.(tf("Halo orbit · {0}", BODY_NAMES[tgt] ?? id));
+      }
+      const H = this.ourHalo;
+      const h = haloState(id, t, H);
+      if (h) {
+        // Exact inertial acceleration of the reference Halo curve via central difference (cancels mouth/Earth/Moon tides)
+        const dtFd = Math.max(1e-4, Math.min(h.periodM * 1e-4, 0.05));
+        const hp = haloState(id, t + dtFd, H);
+        const hm = haloState(id, t - dtFd, H);
+        const aRef: Vec3 = hp && hm ? lin(sub3(hp.vel, hm.vel), 1 / (2 * dtFd), h.acc, 0) : h.acc;
+        const err = sub3(h.pos, nav.X);
+        const errM = Math.hypot(...err) * M_METRES;
+        const dvErr = sub3(h.vel, nav.V);
+        const driftMs = Math.hypot(...dvErr) * C_MPS;
+        const k = Math.min(1 / Math.max(8 * T, 1e-4), 0.25 * Math.sqrt(thr / Math.max(Math.hypot(...err), 1e-12)));
+        const vCorr = lin(err, k, err, 0);
+        const vMax = Math.min(0.02, Math.sqrt(2 * 0.4 * thr * Math.hypot(...err)));
+        const vcm = Math.hypot(...vCorr);
+        const vUse = vcm > vMax && vcm > 1e-15 ? lin(vCorr, vMax / vcm, vCorr, 0) : vCorr;
+        // Feed-forward: true Halo inertial acceleration minus local N-body gravity (near zero on a true Halo orbit!)
+        const ff = sub3(aRef, g.acc);
+        this.hubNote = { name: BODY_NAMES[tgt] ?? id, orbitAlt: Math.hypot(...h.synM), off: errM, drift: driftMs };
+        this.setHubWarp(Math.min(s.timeSpeed, Math.max(h.periodM / 90, 1e-3)));
+        return out(lin(h.vel, 1, vUse, 1), ff);
+      }
+    }
+    // Far from the Lagrange point: approach the Halo insertion point (phase0 = 0), then seamlessly capture into Halo!
+    this.ourHalo = null;
+    const hEntry = haloState(id, t, { azM, branch: -1, phase0: 0 });
+    const entryPos = hEntry ? hEntry.pos : Tg.pos;
+    const entryVel = hEntry ? hEntry.vel : Tg.vel;
+    const de = sub3(entryPos, nav.X);
+    const De = Math.hypot(...de);
+    const dhe = lin(de, 1 / Math.max(De, 1e-30), de, 0);
+    const relE = sub3(nav.V, entryVel);
+    const a = 0.6 * thr;
+    const vmax = s.engine === "crew" ? 0.15 : 0.4;
+    const vClose = Math.min(vmax, Math.sqrt(2 * a * Math.max(De, 0)));
+    const closing = -dot3(relE, dhe);
+    const ttg = (De + 1e-5) / Math.max(Math.abs(closing), vClose * 0.5, 1e-12);
+    this.hubNote = {
+      left: De * M_METRES,
+      closing: -closing * C_MPS,
+      ttg: ttg * 4.925490947e-6 * s.massSolar,
+      stand: azM,
+      name: BODY_NAMES[tgt] ?? id,
+    };
+    if (this.ourWarp === null) this.ourWarp = s.timeSpeed;
+    this.setHubWarp(Math.min(Math.max(ttg / 8, 1e-4), Math.max(this.railsLimit(cam).lim, 1e-4), 1e5));
+    let want = lin(entryVel, 1, dhe, vClose);
+    if (nav.ref !== "sun") {
+      const rb = OUR_BODIES.find((b) => b.id === nav.ref)?.radius ?? 0;
+      const Rv = sub3(nav.X, nav.refPos);
+      const Rd = Math.hypot(...Rv);
+      if (Rd < 10 * rb) {
+        const Rh = lin(Rv, 1 / Rd, Rv, 0);
+        const u = sub3(want, nav.refVel);
+        const ur = dot3(u, Rh);
+        if (ur < 0) want = lin(want, 1, Rh, -ur);
+      }
+    }
+    this.hubNote.asked = dot3(sub3(want, entryVel), dhe) * C_MPS;
+    return out(want);
+  }
+  this.ourHalo = null;
   if (P.auto === "orbit" && !(Tg.mass > 0)) return say(tf("Orbit: select a body with a mass"));
   if (circ) return this.ourCircWant(nav, Tg, say, out);
   const orbiting = P.auto === "orbit" && D < Math.min(soi, 50 * Tg.radius) && D > Tg.radius;

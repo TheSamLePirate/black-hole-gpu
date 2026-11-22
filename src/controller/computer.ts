@@ -30,6 +30,8 @@ import {
   type KerrOrbit,
 } from "../fc/kerr-ops";
 import { issOrbit } from "../system/iss";
+import { jwstOrbit } from "../system/jwst";
+import { isLagrangeId, lagrangeName, lagrangeState, parseLagrangeId } from "../system/lagrange";
 import { aeroForces, airAt } from "../aero";
 import { GEAR, groundR, toGlobal } from "../landing";
 import { planPath, type ManeuverNode } from "../maneuver";
@@ -122,6 +124,17 @@ function fcContext(
       targetName = "ISS";
       const o = id === "earth" ? issOrbit(nav.t) : null;
       if (o) st = o;
+    } else if (T === "jwst") {
+      targetName = BODY_NAMES.jwst;
+      const o = id === "sun" ? jwstOrbit(nav.t) : null;
+      if (o) st = o;
+    } else if (isLagrangeId(T)) {
+      targetName = lagrangeName(T);
+      const p = parseLagrangeId(T);
+      if (p && p.primary === id) {
+        const ls = lagrangeState(T, nav.t);
+        if (ls) st = { X: ls.pos, V: ls.vel };
+      }
     } else if (isCraft(T as Target)) {
       targetName = VESSELS[T as VesselId].name;
       const p = fleet.pose(T as VesselId, nav.t);

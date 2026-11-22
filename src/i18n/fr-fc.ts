@@ -2,6 +2,54 @@
 export default {
   // ---- the flight computer's panels (ui/fc/computer.ts)
   "FLIGHT COMPUTER": "ORDINATEUR DE VOL",
+  // ---- Lagrange points & JWST
+  JWST: "JWST",
+  "The James Webb Space Telescope, on its Southern Halo orbit around Sun–Earth L2":
+    "Le télescope spatial James Webb, sur son orbite Halo Sud autour de L2 Soleil–Terre",
+  "James Webb (JWST)": "James Webb (JWST)",
+  "The James Webb Space Telescope on its Southern Halo orbit around the Sun–Earth L2 Lagrange point (~1.5 million km beyond Earth), its 5-layer Kapton sunshield permanently turned toward the Sun.":
+    "Le télescope spatial James Webb sur son orbite Halo Sud autour du point de Lagrange L2 Soleil–Terre (~1,5 million de km au-delà de la Terre), son bouclier thermique en Kapton à 5 couches toujours tourné vers le Soleil.",
+  "Lagrange points on the map": "Points de Lagrange sur la carte",
+  "Shows the five Lagrange libration points (L1–L5) and Halo orbits on the 3D maps, selectable as navigation targets.":
+    "Affiche les cinq points de Lagrange (L1–L5) et les orbites Halo sur les cartes 3D, sélectionnables comme cibles de navigation.",
+  "JWST orbits Sun–Earth L2 in our universe (Gargantua-system scenes)":
+    "Le JWST orbite autour de L2 Soleil–Terre dans notre univers (scènes du système de Gargantua)",
+  "JWST: orbit unavailable at this date": "JWST : orbite indisponible à cette date",
+  "Camera: around JWST (Sun–Earth L2)": "Caméra : autour du JWST (L2 Soleil–Terre)",
+  "Lagrange points lie in our universe (Gargantua-system scenes)":
+    "Les points de Lagrange se trouvent dans notre univers (scènes du système de Gargantua)",
+  "{0}: unavailable": "{0} : indisponible",
+  "Stable (Routh μ = {0}) · libration {1} d": "Stable (Routh μ = {0}) · libration {1} j",
+  "Unstable (μ = {0} > 0.0385) · τ ≈ {1} d": "Instable (μ = {0} > 0,0385) · τ ≈ {1} j",
+  "Unstable (saddle) · τ ≈ {0} d · Halo ~{1} d": "Instable (selle) · τ ≈ {0} j · Halo ~{1} j",
+  "Halo orbit · {0}": "Orbite Halo · {0}",
+  "Station keeping: Lagrange point unavailable": "Maintien à poste : point de Lagrange indisponible",
+  "Station keeping: get closer to {0} first": "Maintien à poste : approchez-vous d'abord de {0}",
+  "Station keeping: JWST unavailable": "Maintien à poste : JWST indisponible",
+  "Station keeping: within 5 km of JWST": "Maintien à poste : à moins de 5 km du JWST",
+  "Station keeping · JWST · {0} m": "Maintien à poste · JWST · {0} m",
+  "Pick a destination (a body, a Lagrange point, JWST, the station, a craft, the wormhole)":
+    "Choisissez une destination (un astre, un point de Lagrange, le JWST, la station, un vaisseau, le trou de ver)",
+  "rendezvous 200 m beside JWST on its L2 Halo orbit, then station-keeping":
+    "rendez-vous à 200 m du JWST sur son orbite Halo L2, puis maintien à poste",
+  "into a {0} km Halo orbit (JWST-style)": "en orbite Halo de {0} km (type JWST)",
+  "station-keeping at the Lagrange point": "maintien à poste au point de Lagrange",
+  "Lagrange points & JWST": "Points de Lagrange & JWST",
+  "HALO (JWST)": "HALO (JWST)",
+  LIBRATION: "LIBRATION",
+  "Halo A_z": "Halo A_z",
+  "{0} — N-body transfer & insertion burn, then Halo orbit autopilot / station-keeping":
+    "{0} — transfert N-corps et poussée d'insertion, puis autopilote d'orbite Halo / maintien à poste",
+  "N-body transfer & insertion burn into a 3D Halo orbit (JWST-style) or libration point hold":
+    "Transfert N-corps et poussée d'insertion vers une orbite Halo 3D (type JWST) ou maintien au point de libration",
+  "N-body transfer from orbit to the James Webb Space Telescope on its Sun–Earth L2 Southern Halo orbit (200 m standoff, then station-keeping)":
+    "Transfert N-corps depuis l'orbite vers le télescope spatial James Webb sur son orbite Halo Sud à L2 Soleil–Terre (distance de sécurité 200 m, puis maintien à poste)",
+  Lagrange: "Lagrange",
+  "Show Lagrange points (L1–L5) and Halo orbits on the map": "Afficher les points de Lagrange (L1–L5) et les orbites Halo sur la carte",
+  "Lagrange L1–L3 (saddle · Halo)": "Lagrange L1–L3 (selle · Halo)",
+  "Lagrange L4–L5 (Routh stable)": "Lagrange L4–L5 (stables Routh)",
+  Stability: "Stabilité",
+  "Jacobi C_J": "Jacobi C_J",
   "The wormhole's mouth missed by {0} M": "Bouche du trou de ver manquée de {0} M",
   "Fold the {0} panel to the edge (the map takes the room)": "Replier le panneau {0} sur le bord (la carte prend la place)",
   ANALYSIS: "ANALYSE",

@@ -14,6 +14,7 @@
 import { wormholeSampleAt } from "../../system/wormhole-predict";
 import type { Settings } from "../../settings";
 import { solarBody, solarState } from "../../system/solar";
+import { isLagrangeId, lagrangeStability, lagrangeStabilityText } from "../../system/lagrange";
 import { nodeDvHome, ourApsides, type OurPath } from "../../system/our-predict";
 import { bodyCentre, BODY_NAMES, starCentre, type Body } from "../../targeting";
 import type { Target } from "../../settings";
@@ -124,6 +125,7 @@ const KIND_NOTE: Record<MapBody["kind"], string> = {
   moon: t("moon"),
   hole: t("hole"),
   mouth: t("mouth"),
+  lagrange: t("Lagrange"),
 };
 
 const clamp = (x: number, a: number, b: number) => Math.min(Math.max(x, a), b);
@@ -760,6 +762,9 @@ export class Map3D {
         },
       ),
       b("legend", "key", t("Legend"), t("What the map's lines and marks are"), () => this.showLegend(this.legend.hidden)),
+      b("lagrange", "L1–L5", t("Lagrange"), t("Show Lagrange points (L1–L5) and Halo orbits on the map"), () => {
+        this.host.s.lagrangePoints = !this.host.s.lagrangePoints;
+      }),
       b("fit", "fit", t("Frame"), t("Frame the focus and the ship's paths again (or double-click on empty space)"), () => this.fit()),
       b("cm", t("CoM"), t("Centre of mass"), t("The inertial frame of the centre of mass: Gargantua moves too"), () => (this.frame = "cm")),
       b("holeF", t("Hole"), t("Gargantua's frame"), t("Gargantua fixed at the centre"), () => (this.frame = "hole")),
@@ -1310,7 +1315,11 @@ export class Map3D {
     this.preview = clamp(this.preview, 0, span);
     const tp = t0 + this.preview;
     const previewing = this.preview > 0;
-    const sc = (this.scene = ours ? ourScene(tp, s.whRho) : theirScene(s, tp, cm));
+    const sc = (this.scene = ours
+      ? ourScene(tp, s.whRho, { lagrange: s.lagrangePoints, jwst: s.jwst, target: i.target, focus: this.focus })
+      : theirScene(s, tp, cm));
+    this.btns.lagrange?.classList.toggle("on", !!s.lagrangePoints);
+    if (this.btns.lagrange) this.btns.lagrange.hidden = !ours;
     if (fresh) {
       this.universe = universe;
       this.focus = null;
@@ -1376,7 +1385,7 @@ export class Map3D {
     // point inside a disc and deeper than the sphere's centre is behind it)
     const occluders: { x: number; y: number; r: number; z: number }[] = [];
     for (const b of sc.bodies) {
-      if (b.kind === "mouth") continue;
+      if (b.kind === "mouth" || b.kind === "lagrange") continue;
       const p = P(b.pos);
       if (!p.ok) continue;
       const r = rw(b.pos, b.radius) * p.k;
@@ -1517,6 +1526,27 @@ export class Map3D {
       pt.disc(p.x, p.y, R, null, `rgba(${b.col}, ${mine ? 0.55 : 0.22})`, (mine ? 1.3 : 1) * dpr, [3 * dpr, 4 * dpr]);
     }
 
+    // ---- Halo orbits & equilateral triangle guides for Lagrange points
+    for (const b of sc.bodies) {
+      if (b.kind !== "lagrange" || !b.lagrange) continue;
+      const lg = b.lagrange;
+      const secB = sc.byId.get(lg.secondary);
+      const priB = sc.byId.get(lg.primary);
+      const isActive = b.id === tgt || b.id === fid || (lg.secondary === "earth" && lg.index === 2 && tgt === "jwst");
+      // Draw 3D Halo orbit loop when visible and spread on screen
+      if (b.halo?.length) {
+        const pb = P(b.pos),
+          ph0 = P(b.halo[0]!);
+        if (pb.ok && ph0.ok && (Math.hypot(pb.x - ph0.x, pb.y - ph0.y) > 4 * dpr || isActive)) {
+          line(b.halo, isActive ? "255, 212, 95" : b.col, isActive ? 0.85 : 0.42, isActive ? 1.5 : 1.0, [4, 3], false);
+        }
+      }
+      // Subtle equilateral triangle legs for focused/targeted L4/L5
+      if (lg.index >= 4 && isActive && priB && secB) {
+        line([priB.pos, b.pos, secB.pos], b.col, 0.35, 1.0, [3, 4], false);
+      }
+    }
+
     // ---- bodies, back to front
     const list = sc.bodies
       .map((b) => ({ b, p: P(b.pos) }))
@@ -1524,29 +1554,100 @@ export class Map3D {
       .sort((a, b) => b.p.z - a.p.z);
     for (const { b, p } of list) {
       const moon = b.kind === "moon";
-      if (moon) {
+      const lag = b.kind === "lagrange";
+      if (lag && b.lagrange) {
+        const secB = sc.byId.get(b.lagrange.secondary);
+        const priB = sc.byId.get(b.lagrange.primary);
+        const ps = secB ? P(secB.pos) : null;
+        const pp = priB ? P(priB.pos) : null;
+        // Declutter: hide L1–L5 when its secondary hasn't separated from its primary on screen, unless targeted/focused
+        if (ps?.ok && pp?.ok && Math.hypot(ps.x - pp.x, ps.y - pp.y) < 28 * dpr && b.id !== tgt && b.id !== fid) continue;
+        if (ps?.ok && Math.hypot(ps.x - p.x, ps.y - p.y) < 8 * dpr && b.id !== tgt && b.id !== fid) continue;
+      } else if (moon) {
         // (a moon hidden in its planet's dot until the two spread apart)
         const pp = b.parent ? P(sc.byId.get(b.parent)!.pos) : null;
         if (pp && pp.ok && Math.hypot(pp.x - p.x, pp.y - p.y) < 6 * dpr && b.id !== tgt && b.id !== fid) continue;
       }
       if (p.x < -60 * dpr || p.y < -60 * dpr || p.x > cw + 60 * dpr || p.y > ch + 60 * dpr) continue;
       const r = rw(b.pos, b.radius) * p.k;
-      // (on the GPU: textured, lit — the station and the craft stay the canvas's dots)
       const craft = isMapCraft(b.id);
-      if (G && craft) pt.disc(p.x, p.y, Math.max(r, 3.2 * dpr), `rgba(${b.col}, 0.95)`, "rgba(0, 0, 0, 0.5)", 1 * dpr);
+      if (lag && b.lagrange) {
+        const R = (b.id === tgt || b.id === fid ? 5.5 : 4.2) * dpr;
+        if (b.lagrange.index >= 4) {
+          // Equilateral triangle for L4/L5 (emerald = Routh-stable, coral = unstable)
+          pt.poly(
+            p.x,
+            p.y,
+            [
+              [0, -R * 1.1],
+              [R, R * 0.8],
+              [-R, R * 0.8],
+            ],
+            `rgba(${b.col}, 0.28)`,
+            `rgba(${b.col}, 0.95)`,
+            1.3 * dpr,
+          );
+        } else {
+          // Diamond + subtle crosshair for collinear saddle points L1/L2/L3
+          pt.poly(
+            p.x,
+            p.y,
+            [
+              [0, -R],
+              [R, 0],
+              [0, R],
+              [-R, 0],
+            ],
+            `rgba(${b.col}, 0.25)`,
+            `rgba(${b.col}, 0.95)`,
+            1.3 * dpr,
+          );
+          pt.disc(p.x, p.y, 1.5 * dpr, `rgba(${b.col}, 0.95)`);
+        }
+      } else if (b.id === "jwst") {
+        // Golden hexagonal telescope badge for JWST
+        const R = 4.6 * dpr;
+        pt.poly(
+          p.x,
+          p.y,
+          [
+            [0, -R],
+            [R * 0.87, -R * 0.5],
+            [R * 0.87, R * 0.5],
+            [0, R],
+          ],
+          "rgba(255, 212, 95, 0.92)",
+          "rgba(20, 14, 4, 0.85)",
+          1.1 * dpr,
+        );
+        pt.disc(p.x, p.y, 2.8 * dpr, "rgba(255, 224, 120, 0.95)", "rgba(0, 0, 0, 0.6)", 0.9 * dpr);
+      } else if (G && craft) pt.disc(p.x, p.y, Math.max(r, 3.2 * dpr), `rgba(${b.col}, 0.95)`, "rgba(0, 0, 0, 0.5)", 1 * dpr);
       else if (!G || !this.gpuBody(G, sc, b, tp, dpr, pw, rw)) this.drawBody(ctx, sc, b, p, r, dpr, pw, rw);
-      const shown = Math.max(r, b.kind === "star" ? 5 * dpr : moon ? 2 * dpr : 3.2 * dpr);
+      const shown = lag ? 5.5 * dpr : Math.max(r, b.kind === "star" ? 5 * dpr : moon ? 2 * dpr : 3.2 * dpr);
       this.bodyHits.push({ id: b.id, x: p.x, y: p.y, r: shown });
       if (b.id === tgt) pt.disc(p.x, p.y, shown + 5 * dpr, null, "rgba(255, 138, 92, 0.95)", 1.4 * dpr);
-      const prio = b.id === fid ? 5 : b.id === tgt ? 4 : b.id === i.ref ? 3 : b.kind === "moon" ? 1 : 2;
+      const prio =
+        b.id === fid
+          ? 5
+          : b.id === tgt
+            ? 4
+            : b.id === i.ref
+              ? 3
+              : lag
+                ? b.lagrange?.secondary === "earth" && b.lagrange.index <= 2
+                  ? 2
+                  : 1
+                : b.kind === "moon"
+                  ? 1
+                  : 2;
       labels.push({
-        text: b.name,
+        text: b.shortName ?? b.name,
         x: p.x + shown + 4 * dpr,
         y: p.y - 3 * dpr,
         col: b.col,
         prio,
-        size: moon ? 8.5 : 9.5,
-        weight: moon ? 500 : 600,
+        size: lag || moon ? 8.5 : 9.5,
+        weight: lag ? 600 : moon ? 500 : 600,
         ax: p.x,
         ay: p.y,
         ar: shown + 3 * dpr,
@@ -2090,6 +2191,18 @@ export class Map3D {
         t("Closest approach (CA)"),
       ],
       [mk('<path d="M14 1l5 9H9z" fill="#ffc85a" stroke="rgba(0,0,0,.6)"/>'), t("The ship")],
+      ...(ours
+        ? ([
+            [
+              mk('<path d="M14 1l5 5-5 5-5-5z" fill="rgba(255,196,92,0.28)" stroke="rgb(255,196,92)" stroke-width="1.3"/>'),
+              t("Lagrange L1–L3 (saddle · Halo)"),
+            ],
+            [
+              mk('<path d="M14 1.5l5 9H9z" fill="rgba(105,235,175,0.28)" stroke="rgb(105,235,175)" stroke-width="1.3"/>'),
+              t("Lagrange L4–L5 (Routh stable)"),
+            ],
+          ] as [string, string][])
+        : []),
     ];
     const row = ([a, b]: [string, string]) => `<div class="m3-lg-row">${a}<span>${b}</span></div>`;
     this.legend.innerHTML = `<div class="m3-lg-head">${t("Legend")}</div>${rows.map(row).join("")}<div class="m3-lg-sep"></div>${marks.map(row).join("")}<div class="m3-lg-hint">${t("Hover a body: its card · click: target · double-click: focus")}</div>`;
@@ -2499,7 +2612,7 @@ export class Map3D {
           labels,
           dpr,
         );
-        if (cand.arrive && (solarBody(cand.arrive.body) || cand.arrive.body === "iss")) {
+        if (cand.arrive && (solarBody(cand.arrive.body) || isMapCraft(cand.arrive.body) || isLagrangeId(cand.arrive.body))) {
           const q = P(FA(ourPos(cand.arrive.body, cand.arrive.t), cand.arrive.t));
           if (q.ok) {
             this.paint.disc(q.x, q.y, 7 * dpr, null, `rgba(${CAND}, 0.95)`, 1.4 * dpr, [3 * dpr, 2 * dpr]);
@@ -2610,7 +2723,12 @@ export class Map3D {
       }
     }
     // the target where the plan meets it
-    if (i.ourArrive && i.ourArrive.body !== "wormhole" && (solarBody(i.ourArrive.body) || isMapCraft(i.ourArrive.body)) && plan) {
+    if (
+      i.ourArrive &&
+      i.ourArrive.body !== "wormhole" &&
+      (solarBody(i.ourArrive.body) || isMapCraft(i.ourArrive.body) || isLagrangeId(i.ourArrive.body)) &&
+      plan
+    ) {
       const q = P(FA(ourPos(i.ourArrive.body, i.ourArrive.t), i.ourArrive.t));
       if (q.ok) {
         this.paint.disc(q.x, q.y, 6 * dpr, null, "rgba(255, 170, 80, 0.9)", 1.2 * dpr, [2 * dpr, 2 * dpr]);
@@ -3134,8 +3252,18 @@ export class Map3D {
     rows.push([t("From the ship"), fmtDist(Math.max(d, 0), ours, s)]);
     if (b.radius > 0) rows.push([t("Radius"), b.kind === "hole" ? fmtLen(b.radius, s) : fmtDist(b.radius, ours, s)]);
     if (b.kind === "mouth") rows.push([t("Tunnel length"), fmtLen(s.whLength * s.whRho, s)]);
+    if (b.kind === "lagrange" && b.lagrange) {
+      const sec = sc.byId.get(b.lagrange.secondary);
+      if (sec) rows.push([tf("From {0}", sec.name), fmtDist(len(sub(b.pos, sec.pos)), ours, s)]);
+      const st = lagrangeStability(b.id, this.tlT0 + this.preview);
+      if (st) {
+        rows.push([t("Stability"), lagrangeStabilityText(st)]);
+        rows.push([t("Jacobi C_J"), st.jacobi.toFixed(5)]);
+      }
+    }
     const par = b.parent ? sc.byId.get(b.parent) : null;
-    if (par) rows.push([tf("From {0}", par.name), fmtDist(len(sub(b.pos, par.pos)), ours, s)]);
+    if (par && !(b.kind === "lagrange" && b.lagrange?.secondary === par.id))
+      rows.push([tf("From {0}", par.name), fmtDist(len(sub(b.pos, par.pos)), ours, s)]);
     if (b.period) rows.push([t("Period"), fmtDur(b.period, s)]);
     if (b.soi > 0 && Number.isFinite(b.soi)) rows.push([t("Sphere of influence"), fmtDist(b.soi, ours, s)]);
     const hint = b.id === i.target ? t("the target · double-click: centre it") : t("click: target · double-click: centre");

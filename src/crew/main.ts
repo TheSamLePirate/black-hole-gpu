@@ -1423,17 +1423,22 @@ function buildFc() {
     execute,
   });
   // the mission and its card
-  const target = field(L("Destination de la mission", "The mission's destination"), L("Lune, Mars, ISS…", "Moon, Mars, ISS…"));
+  const target = field(
+    L("Destination de la mission", "The mission's destination"),
+    L("Lune, Mars, SE-L2, JWST, ISS…", "Moon, Mars, SE-L2, JWST, ISS…"),
+  );
   const arr: Record<string, [string, string]> = {
     orbit: ["mise en orbite", "orbit insertion"],
+    halo: ["orbite Halo (JWST)", "Halo orbit (JWST)"],
+    station: ["point fixe (Lagrange)", "Lagrange hold"],
     flyby: ["survol", "flyby"],
     freeReturn: ["retour libre", "free return"],
   };
-  const arrival = choices(["orbit", "flyby", "freeReturn"], (k) => L(...arr[k]!), L("Arrivée", "Arrival"));
+  const arrival = choices(["orbit", "halo", "station", "flyby", "freeReturn"], (k) => L(...arr[k]!), L("Arrivée", "Arrival"));
   const sCard = el("div", "", "fc-card");
   const mission = (execute: boolean): Args => ({ target: target.value.trim().slice(0, 32), arrival: arrival.value, execute });
-  // the target (sp.target: a body, the station, a craft of the room by its name)
-  const tgt = field(L("Cible", "Target"), L("Lune, Mars, ISS, Endurance…", "Moon, Mars, ISS, Endurance…"));
+  // the target (sp.target: a body, a Lagrange point, JWST, the station, a craft of the room by its name)
+  const tgt = field(L("Cible", "Target"), L("Lune, SE-L2, EM-L4, JWST, ISS…", "Moon, SE-L2, EM-L4, JWST, ISS…"));
   // the systems (X3 · K6): each failure's checklist, its steps ticked here as on the pilot's tablet, its action once
   // all are — rebuilt as the pilot's figures change (syncSys)
   const sys = el("div", "", "fc-sys");
@@ -2132,17 +2137,33 @@ views.onWp = (i, x, y) => {
 };
 views.onMoveWp = (i, at) =>
   void fire(null, "nav.move", { index: i, lat: Math.round(at.lat * 1e5) / 1e5, lon: Math.round(at.lon * 1e5) / 1e5 });
-// a body touched on the system map (K6): taken for the target, a mission previewed to it
+// a body, Lagrange point, or JWST touched on the system map (K6): taken for the target, a mission previewed to it
 views.onBody = (id, x, y) => {
   const name = bodyName(id);
+  const isLag = id.startsWith("lag:");
+  const isJwst = id === "jwst";
+  const defaultArrival = isJwst ? "station" : isLag ? "halo" : "orbit";
   menu(x, y, name, L("Carte système", "System map"), [
     actButton(L("Prendre pour cible", "Take as target"), "sp.target", { name: id }, "ctx-body-target", (ok) => ok && closeMenu()),
     actButton(
-      L(`Mission vers ${name} — aperçu`, `Mission to ${name} — preview`),
+      isLag
+        ? L(`Orbite Halo vers ${name} — aperçu`, `Halo mission to ${name} — preview`)
+        : L(`Mission vers ${name} — aperçu`, `Mission to ${name} — preview`),
       "sp.mission",
-      { target: id, arrival: "orbit", execute: false },
+      { target: id, arrival: defaultArrival, execute: false },
       "ctx-body-mission",
     ),
+    ...(isLag
+      ? [
+          actButton(
+            L(`Orbite Halo vers ${name} — lancer`, `Halo mission to ${name} — fly`),
+            "sp.mission",
+            { target: id, arrival: "halo", execute: true },
+            "ctx-body-halo-go",
+            (ok) => ok && closeMenu(),
+          ),
+        ]
+      : []),
   ]);
 };
 // a burn dragged along the orbit (K6): its new time

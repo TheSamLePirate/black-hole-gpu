@@ -182,6 +182,8 @@ export interface InstrumentSpace {
   /** the propellant: the Δv it still holds [m/s] (null: not counted), the tank's share */
   budget?: { dv: number | null; prop: number | null } | null;
   bodies?: InstrumentBody[];
+  /** JWST position [km] in the home frame (Sun–Earth L2 Halo orbit) */
+  jwst?: V3 | null;
   /** the craft's sensors' picture (PLAN-RADAR-AAA RD4): the body it is about, its tracks the nearest first */
   spacePic?: { ref: string; tracks: InstrumentSpaceTrack[] } | null;
   /** the room's other spacecraft about the same body (N6) */
@@ -312,6 +314,7 @@ export function readSpace(x: Record<string, unknown>): InstrumentSpace {
         radius: b.radius as number,
         parent: label(b.parent, 16),
       }));
+  if (v3(x.jwst)) out.jwst = [...x.jwst];
   const a = x.att;
   if (record(a) && v3(a.nose) && v3(a.up)) out.att = { nose: [...a.nose], up: [...a.up] };
   const d = x.dock;
@@ -337,7 +340,7 @@ export function readSpace(x: Record<string, unknown>): InstrumentSpace {
   if (record(g) && finite(g.dist))
     out.target = {
       ...(v3(g.r) ? { r: [...g.r] as V3 } : {}),
-      id: label(g.id, 16),
+      id: label(g.id, 24),
       name: label(g.name),
       dist: g.dist,
       rate: num(g.rate),

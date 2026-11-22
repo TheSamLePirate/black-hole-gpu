@@ -84,6 +84,7 @@ export const BODY_COLOURS: Record<Target, string> = {
   k2: "255, 190, 120",
   edmunds: "220, 170, 120",
   iss: "95, 255, 208",
+  jwst: "255, 212, 92",
   ranger: "255, 214, 120",
   lander: "255, 160, 200",
   endurance: "200, 225, 255",

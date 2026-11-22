@@ -43,6 +43,18 @@ import type { Tool } from "./ai/agent";
 import { VideoWriter } from "./video";
 import { CONSTELLATIONS, NAMED_STARS, type ChartFrame } from "./skychart";
 import { issAxes, issElements, issOrbit, issStart, issTrack, setIssElements, station } from "./system/iss";
+import { jwstAxes, jwstHaloLoop, jwstOrbit, jwstStart, jwstTrack } from "./system/jwst";
+import {
+  defaultHaloAzM,
+  haloOrbitLoop,
+  haloState,
+  lagrangeIdsFor,
+  lagrangeStability,
+  lagrangeState,
+  refineHaloOrbit,
+  resolveLagrangeName,
+  testLagrangeStabilityNBody,
+} from "./system/lagrange";
 import { rangerHull, stationHulls } from "./system/collide";
 import { fleet } from "./fleet";
 import { ourState, referenceBody } from "./system/our-side";
@@ -424,6 +436,26 @@ export function installBh(c: BhContext) {
         cameraFrame: issCameraFrame,
         /** (Q6-ISS ISS5) elements given (CelesTrak's GP JSON object) — newer than those in use —: their epoch in use [ms] */
         setElements: setIssElements,
+      },
+      /** the James Webb Space Telescope on its Sun–Earth L2 Southern Halo orbit (system/jwst.ts) */
+      jwst: {
+        orbit: jwstOrbit,
+        track: jwstTrack,
+        axes: jwstAxes,
+        start: jwstStart,
+        haloLoop: jwstHaloLoop,
+      },
+      /** Lagrange points (L1–L5), linear & N-body stability, and 3D Richardson Halo orbits (system/lagrange.ts) */
+      lagrange: {
+        state: lagrangeState,
+        stability: lagrangeStability,
+        halo: haloState,
+        haloLoop: haloOrbitLoop,
+        defaultAzM: defaultHaloAzM,
+        refineHalo: refineHaloOrbit,
+        testStability: testLagrangeStabilityNBody,
+        idsFor: lagrangeIdsFor,
+        resolve: resolveLagrangeName,
       },
       /** the free camera to a target (the camera panel's Go to) */
       goTo,

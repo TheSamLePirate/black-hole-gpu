@@ -697,7 +697,17 @@ export class NetSession {
           if (!nodes.every(ok)) return;
           const c = this.d.camera;
           const now = c.nowTime();
-          const ahead = (nodes as ManeuverNode[]).filter((n) => n.t > now).map((n) => ({ t: n.t, dv: [...n.dv] as Vec3 }));
+          const ROLES = new Set(["depart", "mcc", "capture", "deorbit", "brake"]);
+          const THENS = new Set(["orbit", "land", "keep"]);
+          const ahead = (nodes as ManeuverNode[])
+            .filter((n) => n.t > now)
+            .map((n) => {
+              const out: ManeuverNode = { t: n.t, dv: [...n.dv] as Vec3 };
+              if (typeof n.role === "string" && ROLES.has(n.role)) out.role = n.role;
+              if (typeof n.then === "string" && THENS.has(n.then)) out.then = n.then;
+              if (typeof n.body === "string" && n.body.length > 0 && n.body.length <= 40) out.body = n.body;
+              return out;
+            });
           if (!ahead.length) return this.d.toast(tf("{0}'s plan: its burns are past", this.nameOf(from)));
           c.clearPlan();
           c.plan = { nodes: ahead, path: null, at: now, note: tf("{0}'s plan", this.nameOf(from)) };
@@ -1433,7 +1443,15 @@ export class NetSession {
   /** Our mission plan sent to another (N2): its burns, his to fly. What to say. */
   sharePlan(slot: number): string {
     if (!this.net?.room) return t("Not in a room");
-    const nodes = this.d.camera.plan.nodes.filter((n) => !n.goal).map((n) => ({ t: n.t, dv: n.dv }));
+    const nodes = this.d.camera.plan.nodes
+      .filter((n) => !n.goal)
+      .map((n) => ({
+        t: n.t,
+        dv: n.dv,
+        ...(n.role ? { role: n.role } : {}),
+        ...(n.then ? { then: n.then } : {}),
+        ...(n.body ? { body: n.body } : {}),
+      }));
     if (!nodes.length) return t("No plan to send (the map, MISSION)");
     this.net.event({ kind: "xplan", to: slot, nodes: nodes.slice(0, 12) });
     return tf("Plan sent to {0}: {1} burn(s)", this.nameOf(slot), nodes.length);

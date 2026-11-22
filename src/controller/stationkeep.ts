@@ -10,7 +10,9 @@ import { cross, dot as dot3, lin, sub as sub3 } from "../math/vec3";
 import type { Vec3 } from "../physics";
 import { fleet } from "../fleet";
 import { gravityHome, ourState } from "../system/our-side";
-import { BODY_NAMES, type Body, isCraft, isNetTarget } from "../targeting";
+import { BODY_NAMES, type Body, isCraft, isLagrangeTarget, isNetTarget } from "../targeting";
+import { lagrangeState } from "../system/lagrange";
+import { jwstAxes, jwstTrack } from "../system/jwst";
 import { C_MPS, M_METRES, M_SECONDS } from "../units";
 import { VESSELS, type VesselId } from "../vessels";
 import type { CameraController, DockTarget } from "../controls";
@@ -145,6 +147,54 @@ function keepWant(
 ): { beta: Vec3; ff: Vec3 } | null {
   const s = this.s;
   const t0 = nav.t;
+  // Lagrange libration point station-keeping: holds the exact Lagrange point L(t) against saddle instability
+  if (isLagrangeTarget(s.target)) {
+    const id = String(s.target);
+    const L = lagrangeState(id, t0);
+    if (!L) return say(t("Station keeping: Lagrange point unavailable"));
+    const gap = lin(sub3(L.pos, nav.X), M_METRES, L.pos, 0);
+    const d = Math.hypot(...gap);
+    if (d > Math.max(L.hill * M_METRES * 3, 50_000e3)) return say(tf("Station keeping: get closer to {0} first", BODY_NAMES[s.target]));
+    const dtFd = 1e-3;
+    const Lp = lagrangeState(id, t0 + dtFd);
+    const Lm = lagrangeState(id, t0 - dtFd);
+    const aL: Vec3 = Lp && Lm ? lin(sub3(Lp.vel, Lm.vel), 1 / (2 * dtFd), L.pos, 0) : [0, 0, 0];
+    const sp = Math.min(250, Math.sqrt(2 * 0.05 * d), 0.02 * d);
+    const want: Vec3 = d > 1e-6 ? lin(gap, sp / d, gap, 0) : [0, 0, 0];
+    const ff = sub3(aL, gravityHome(nav.X, t0).acc);
+    this.hubNote = { off: d, drift: Math.hypot(...sub3(nav.V, L.vel)) * C_MPS, name: BODY_NAMES[s.target] };
+    this.setHubWarp(Math.min(s.timeSpeed, 5000 / M_SECONDS));
+    return out(lin(L.vel, 1, want, 1 / C_MPS), ff);
+  }
+  // JWST station-keeping within 5 km (holds relative offset in JWST's sunshield frame)
+  if (s.target === "jwst") {
+    const jw = jwstTrack.state(t0, nav.X);
+    if (!jw) return say(t("Station keeping: JWST unavailable"));
+    const distM = Math.hypot(...sub3(nav.X, jw.X)) * M_METRES;
+    if (distM > 2 * KEEP.reach) return say(t("Station keeping: within 5 km of JWST"));
+    const A = jwstAxes(jw.X, jw.V, t0);
+    if (!this.keepRun || this.keepRun.target !== ("jwst" as unknown as DockTarget)) {
+      const rho = lin(sub3(nav.X, jw.X), M_METRES, nav.X, 0);
+      this.keepRun = {
+        target: "jwst" as unknown as DockTarget,
+        title: "JWST",
+        frame: "body",
+        at: [dot3(rho, A[0]), dot3(rho, A[1]), dot3(rho, A[2])],
+      };
+      this.onPilotMessage?.(tf("Station keeping · JWST · {0} m", Math.round(distM)));
+    }
+    const K = this.keepRun;
+    const rhoA = lin(lin(A[0], K.at[0], A[1], K.at[1]), 1 / M_METRES, A[2], K.at[2] / M_METRES);
+    const P = lin(jw.X, 1, rhoA, 1);
+    const gap = lin(sub3(P, nav.X), M_METRES, P, 0);
+    const d = Math.hypot(...gap);
+    const sp = keepSpeed(d);
+    const want: Vec3 = d > 1e-6 ? lin(gap, sp / d, gap, 0) : [0, 0, 0];
+    const ff = sub3(gravityHome(jw.X, t0).acc, gravityHome(nav.X, t0).acc);
+    this.hubNote = { off: d, drift: Math.hypot(...sub3(nav.V, jw.V)) * C_MPS, name: "JWST" };
+    this.setHubWarp(Math.min(s.timeSpeed, KEEP.warp / M_SECONDS));
+    return out(lin(jw.V, 1, want, 1 / C_MPS), ff);
+  }
   if (!this.keepRun) {
     const want = s.target === "iss" || isCraft(s.target) || isNetTarget(s.target) ? (s.target as DockTarget) : null;
     const g0 = (want ? this.dockGeometry({ target: want }) : null) ?? this.dockGeometry();

@@ -15,11 +15,14 @@ import {
   bodyHill,
   cameraHome,
   isCraft,
+  isLagrangeTarget,
   isOurBody,
   onOurSide,
   ourLook,
   ourTarget,
 } from "../targeting";
+import { defaultHaloAzM, lagrangeIdsFor, lagrangeName, lagrangeState } from "../system/lagrange";
+import { jwstTrack } from "../system/jwst";
 import { fromZamo, step as geoStep, toZamo } from "../geodesic";
 import { engineThrust, fuelOn, loadShare, pressureFactor, tank } from "../engine";
 import { dryThrust } from "../f35/engine";
@@ -337,7 +340,7 @@ async function planOurs(
   const target = kind === "wormhole" ? "wormhole" : kind === "orbit" ? nav.ref : String(s.target);
   // (the space station: a rendezvous beside its forward port — iss-plan.ts)
   if (kind === "target" && (s.target === "iss" || isCraft(s.target))) return this.planIss(nav);
-  if (kind === "target" && !isOurBody(s.target as Body))
+  if (kind === "target" && !isOurBody(s.target as Body) && !isLagrangeTarget(s.target) && s.target !== "jwst")
     return t("Transfer: select a body of ours as the target (Tab, or a click on the map)");
   // (the first burn at least a minute away, and ~10 s of the pilot's time at this warp)
   const o = { lead: Math.max(60 / M_SECONDS, 10 * (s.animate ? s.timeSpeed : 0)), mouthR: mouth(s).w.rho, accel: this.thrustMax() };
@@ -483,10 +486,14 @@ async function missionPlan(
         afterText: tf("Arrival 200 m off {0}'s port in {1}, then the docking autopilot", name(target), fmtDur((p.tArrive - nav.t) * Msec)),
       };
     }
-    if (target !== "wormhole" && !isOurBody(target as Body))
-      return fail(t("Pick a destination (a body, the station, a craft, the wormhole)"));
+    if (target !== "wormhole" && !isOurBody(target as Body) && !isLagrangeTarget(target) && target !== "jwst")
+      return fail(t("Pick a destination (a body, a Lagrange point, JWST, the station, a craft, the wormhole)"));
     if (target === nav.ref) return fail(tf("Already about {0}: the ORBIT tab's operations", name(target)));
-    const arrival = target === "wormhole" ? "flyby" : (spec.arrival ?? "orbit");
+    const isLag = isLagrangeTarget(target);
+    const isJwst = target === "jwst";
+    const arrival: Arrival =
+      target === "wormhole" ? "flyby" : isJwst ? "station" : isLag ? (spec.arrival ?? "halo") : (spec.arrival ?? "orbit");
+    const defaultAltKm = isLag ? Math.round(defaultHaloAzM(target, nav.t) / 1e3) : 200;
     const o = { lead, mouthR: mouth(s).w.rho, accel: this.thrustMax() };
     this.planBusy = true;
     try {
@@ -495,7 +502,13 @@ async function missionPlan(
         X: nav.X,
         V: nav.V,
         t: nav.t,
-        goal: { kind: "transfer", target, arrival, altM: (spec.altKm ?? 200) * 1e3, returnAltM: (spec.retKm ?? 200) * 1e3 },
+        goal: {
+          kind: "transfer",
+          target,
+          arrival,
+          altM: (spec.altKm ?? defaultAltKm) * 1e3,
+          returnAltM: (spec.retKm ?? 200) * 1e3,
+        },
         o,
       });
       if (gen !== this.planGen) return fail("");
@@ -523,12 +536,17 @@ async function missionPlan(
       };
       const arrive = { body: target, t: res.mission.tArrive };
       this.fcPreview(burns, res.note, { ours: res.path, arrive });
-      const what =
-        arrival === "orbit"
-          ? tf("into a {0} km orbit", spec.altKm ?? 200)
-          : arrival === "flyby"
-            ? tf("a flyby at {0} km", spec.altKm ?? 200)
-            : tf("round it at {0} km and back home to {1} km", spec.altKm ?? 200, spec.retKm ?? 200);
+      const what = isJwst
+        ? t("rendezvous 200 m beside JWST on its L2 Halo orbit, then station-keeping")
+        : arrival === "halo"
+          ? tf("into a {0} km Halo orbit (JWST-style)", Math.round(spec.altKm ?? defaultAltKm))
+          : arrival === "station"
+            ? t("station-keeping at the Lagrange point")
+            : arrival === "orbit"
+              ? tf("into a {0} km orbit", spec.altKm ?? 200)
+              : arrival === "flyby"
+                ? tf("a flyby at {0} km", spec.altKm ?? 200)
+                : tf("round it at {0} km and back home to {1} km", spec.altKm ?? 200, spec.retKm ?? 200);
       return {
         ok: true,
         note: res.note,
@@ -636,6 +654,24 @@ function missionTargets(this: CameraController): {
         const p = fleet.pose(id, nav.t);
         if (p) list.push({ id, name: VESSELS[id].name, group: t("Craft about the Earth"), far: fmt(dist(p.X as Vec3)) });
       }
+    }
+    if (s.jwst) {
+      const jw = jwstTrack.peek(nav.t);
+      list.push({ id: "jwst", name: "JWST (Sun–Earth L2)", group: t("Lagrange points & JWST"), far: jw ? fmt(dist(jw.X)) : "" });
+    }
+    // Key Lagrange points: Sun–Earth L1–L5, Earth–Moon L1–L5, current body's pair, plus Mars L2 & Jupiter L4/L5
+    const lagIds = new Set<string>([
+      ...lagrangeIdsFor("earth"),
+      ...lagrangeIdsFor("moon"),
+      ...(nav.ref !== "sun" && nav.ref !== "earth" && nav.ref !== "moon" ? lagrangeIdsFor(nav.ref) : []),
+      "lag:mars:2",
+      "lag:jupiter:4",
+      "lag:jupiter:5",
+    ]);
+    if (isLagrangeTarget(s.target)) lagIds.add(String(s.target));
+    for (const lid of lagIds) {
+      const ls = lagrangeState(lid, nav.t);
+      if (ls) list.push({ id: lid, name: lagrangeName(lid), group: t("Lagrange points & JWST"), far: fmt(dist(ls.pos)) });
     }
     if (s.wormhole) list.push({ id: "wormhole", name: t("The wormhole"), group: t("Beyond"), far: fmt(Math.hypot(...nav.X) * M_METRES) });
     return { universe: "ours", here: nav.ref, list };
@@ -792,7 +828,7 @@ function ourRefineTick(
     dv: node.dv,
     role: node.role,
     body: node.body,
-    then: node.then === "circularize" ? "circularize" : undefined,
+    then: node.then === "circularize" || node.then === "orbit" || node.then === "keep" ? node.then : undefined,
   };
   const generation = this.predictionGeneration;
   void runPlanner<{ node: PlanNode | null } | { error: string }>({
@@ -1535,6 +1571,15 @@ function nodeBurn(
         this.pilot.auto = "none";
         // (a circularization after the node: the trim where it is — the pilot's run kept, else a new one)
         if (then === "circularize") this.ourCirc = this.ourCirc ? { ...this.ourCirc, mode: "trim" } : { mode: "trim", spent0: this.spent };
+        // (a Lagrange Halo insertion: pre-seed the exact planned Halo parameters so the autopilot locks cleanly)
+        if (then === "orbit" && M && M.type === "lagrange" && isLagrangeTarget(M.goal.target)) {
+          this.ourHalo = {
+            target: M.goal.target,
+            azM: M.goal.altM,
+            phase0: M.haloPhase0 ?? 0,
+            branch: M.haloBranch ?? -1,
+          };
+        }
         if (then) this.pilot.setAuto(then);
         if (then === "dock")
           this.onPilotMessage?.(

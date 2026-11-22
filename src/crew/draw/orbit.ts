@@ -36,9 +36,27 @@ export const BODY_FR: Record<string, string> = {
   edmunds: "Edmunds",
   k2: "K2 (étoile)",
 };
-const BODY_EN: Record<string, string> = { wormhole: "Wormhole", mouth: "Wormhole mouth", k2: "K2 (star)" };
+const BODY_EN: Record<string, string> = { wormhole: "Wormhole", mouth: "Wormhole mouth", k2: "K2 (star)", jwst: "JWST", iss: "ISS" };
 /** a body's name in the console's language (English: its own name, capitalised) */
-export const bodyName = (id: string) => (lang() === "fr" ? BODY_FR[id] : BODY_EN[id]) ?? (id ? id[0]!.toUpperCase() + id.slice(1) : "—");
+export const bodyName = (id: string): string => {
+  const m = /^lag:([a-z0-9]+):([1-5])$/.exec(id);
+  if (m) {
+    const sec = m[1]!;
+    const idx = m[2]!;
+    const pri =
+      sec === "moon"
+        ? "earth"
+        : sec === "io" || sec === "europa" || sec === "ganymede" || sec === "callisto"
+          ? "jupiter"
+          : sec === "titan"
+            ? "saturn"
+            : sec === "charon"
+              ? "pluto"
+              : "sun";
+    return `${bodyName(pri)}–${bodyName(sec)} L${idx}`;
+  }
+  return (lang() === "fr" ? BODY_FR[id] : BODY_EN[id]) ?? (id ? id[0]!.toUpperCase() + id.slice(1) : "—");
+};
 
 const km = (x: number) => (Math.abs(x) >= 1e6 ? `${fmt(x / 1e6, 2)} Mkm` : `${fmt(x)} km`);
 

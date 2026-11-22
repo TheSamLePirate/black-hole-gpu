@@ -2445,6 +2445,70 @@ of sight, the picture's up and right, its field across [°] — what `__bh.issCa
 The collision hulls (src/system/collide.ts): `ranger` is the Ranger's hull (an object with a `bvh`, as docking.ts reads it), `station` the
 station's parts (an array of BVH or null).
 
+### `__bh.jwst` (James Webb Space Telescope at Sun–Earth L2)
+
+The James Webb Space Telescope flying on its Southern Halo orbit around Sun–Earth L2 (`src/system/jwst.ts`, `assets/jwst/jwst.bin`).
+
+### `__bh.jwst.orbit(t)` → `{X, V} \| null`
+
+JWST's deterministic Southern Halo orbit state at scene time `t` [M] in the home frame (`X` [M], `V` [c]).
+
+### `__bh.jwst.track` → JwstTracker
+
+The live tracker (`state(t, ship)`, `peek(t)`, `near`, `anchors`): deterministic Halo orbit afar; within 50 km of the player's craft, integrated with `gravityHome` velocity Verlet so relative drift is zero during formation flight.
+
+### `__bh.jwst.axes(X, V, t)` → `[ex, ey, ez]`
+
+JWST's real sun-shielding attitude in the home frame (`-Y` Kapton sunshield toward the Sun, `+Y` cold 6.5 m gold primary mirror side, `-Z` optical boresight).
+
+### `__bh.jwst.start(t, dist = 60)` → `{X, fwd, up, vel} \| null`
+
+Starting pose `dist` metres from JWST on its cold gold-mirror side, matching its velocity (used by `goTo("jwst")`).
+
+### `__bh.jwst.haloLoop(t0, n = 96)` → `Vec3[]`
+
+Sampled closed 3D Southern Halo loop of JWST around Sun–Earth L2 at epoch `t0` [M] (for 3D maps).
+
+### `__bh.lagrange` (Lagrange points, stability, and 3D Halo orbits)
+
+CR3BP/ER3BP Lagrange points (`lag:<secondary>:<1..5>`), linear/Routh stability analysis, real N-body stability probes, and 3rd-order Richardson + differentially-corrected Halo orbits (`src/system/lagrange.ts`).
+
+### `__bh.lagrange.state(id, t)` → `LagrangeState \| null`
+
+Instantaneous position, velocity, synodic frame, Hill radius, and dimensionless offset `gamma` for a Lagrange point (e.g. `"lag:earth:2"`, `"lag:moon:4"`) at scene time `t` [M].
+
+### `__bh.lagrange.stability(id, t?)` → `LagrangeStability \| null`
+
+Linear stability eigenvalues, Routh criterion check (`linearlyStable`, `kind`), e-folding divergence time `eFoldDays`, in-plane/vertical/libration periods, and Jacobi constant `jacobi`.
+
+### `__bh.lagrange.halo(id, t, params?)` → `HaloStateResult \| null`
+
+Evaluates a 3rd-order Richardson Halo orbit (for L1–L3) or libration orbit (for L4–L5) at scene time `t` [M]: inertial `pos`, `vel`, `acc`, synodic offset `synM`, period, and phase.
+
+### `__bh.lagrange.haloLoop(id, t0, params?, n = 96)` → `Vec3[]`
+
+Sampled closed 3D Halo / libration loop around `id` at epoch `t0` [M].
+
+### `__bh.lagrange.defaultAzM(id, t?)` → number
+
+Default vertical Halo amplitude `A_z` [m] for `id` (260 000 km for Sun–Earth L1/L2, 12 000 km for Earth–Moon L1/L2).
+
+### `__bh.lagrange.refineHalo(id, t0, params?)` → `HaloRefinement \| null`
+
+Full N-body differential corrector (shooting in `predictOurs`) that refines a 3rd-order Richardson Halo initial condition into a periodic N-body Halo orbit around `id`.
+
+### `__bh.lagrange.testStability(id, t0, days?, perturbKm?)` → `NBodyStabilityReport \| null`
+
+Full N-body stability probe in `predictOurs`: places a test particle perturbed by `perturbKm` from `id` and integrates for `days`, returning sampled synodic offsets, `maxOffsetKm`, `finalOffsetKm`, and `growthRatio`.
+
+### `__bh.lagrange.idsFor(secondary)` → `LagrangeId[]`
+
+Returns the five canonical Lagrange point IDs (`lag:<secondary>:1` … `:5`) for a secondary body (e.g. `"earth"`, `"moon"`, `"jupiter"`).
+
+### `__bh.lagrange.resolve(query, contextSecondary?)` → `LagrangeId \| null`
+
+Resolves French or English human names (`"SE-L2"`, `"Soleil-Terre L2"`, `"Earth-Moon L4"`, `"lag:earth:2"`, …) into a canonical `LagrangeId`.
+
 ### `__bh.sky` (the sky chart)
 
 The chart of constellations and named stars (src/skychart.ts). Named stars and constellations are looked up on our side only.

@@ -433,7 +433,7 @@ export const ACTS = {
     fam: "space",
     params: {
       target: { type: "string" },
-      arrival: { type: "string", enum: ["orbit", "flyby", "freeReturn"] },
+      arrival: { type: "string", enum: ["orbit", "flyby", "freeReturn", "halo", "station"] },
       altKm: { type: "number", minimum: 1, maximum: 1e7 },
       execute: { type: "boolean" },
     },

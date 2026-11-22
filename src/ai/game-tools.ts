@@ -50,6 +50,7 @@ import { MOUNTS, type Mount } from "../mounts";
 import { BODY_NAMES } from "../targeting";
 import { GARGANTUA_SYSTEM } from "../system/bodies";
 import { SOLAR_BODIES, solarBody } from "../system/solar";
+import { lagrangeIdsFor, lagrangeName, lagrangeStability, lagrangeStabilityText, resolveLagrangeName } from "../system/lagrange";
 import { FRENCH, lang as uiLang, tr, type Text } from "../i18n";
 import { sayResolved } from "../controller/approach";
 import { unitsFor } from "../ui/unitsys";
@@ -435,8 +436,10 @@ const fold = (s: string) =>
     .replace(/[^a-z0-9]+/g, " ")
     .trim();
 
-/** A body by its id or its name, English or French ("Lune", "moon", "Gargantua", "station"). */
+/** A body, craft, JWST, or Lagrange point by its id or name, English or French ("Lune", "SE-L2", "Soleil-Terre L2", "JWST"). */
 export function resolveBody(name: string): Target | null {
+  const lag = resolveLagrangeName(name);
+  if (lag) return lag as unknown as Target;
   const n = fold(name);
   const ids = [...Object.keys(BODY_NAMES), ...SOLAR_BODIES.map((b) => b.id)];
   const en = (id: string) => solarBody(id)?.name ?? (BODY_NAMES as Record<string, string>)[id] ?? id;
@@ -451,6 +454,11 @@ export function resolveBody(name: string): Target | null {
     station: "iss",
     "space station": "iss",
     "station spatiale": "iss",
+    jwst: "jwst",
+    "james webb": "jwst",
+    webb: "jwst",
+    "james webb space telescope": "jwst",
+    "telescope james webb": "jwst",
   };
   if (extra[n]) return extra[n] as Target;
   for (const id of ids) if (keys(id).includes(n)) return id as Target;
@@ -758,8 +766,25 @@ export function gameTools(h: GameHost): Tool[] {
     },
     {
       name: "list_bodies",
-      description: "The bodies of the ship's universe (radius, sphere of influence, distance, altitude) and the targets available.",
-      run: () => ({ bodies: tools.bodies(), soi: tools.soi(), targets: tools.targets() }),
+      description:
+        "The bodies of the ship's universe (radius, sphere of influence, distance, altitude), the targets available, JWST (at Sun-Earth L2), and the main Lagrange points (L1-L5) with their linear stability.",
+      run: () => ({
+        bodies: tools.bodies(),
+        soi: tools.soi(),
+        targets: tools.targets(),
+        jwst: { id: "jwst", name: "James Webb Space Telescope", location: "lag:earth:2 (Southern Halo, Az ≈ 260 000 km)" },
+        lagrange: ["earth", "moon", "mars", "jupiter", "saturn"].flatMap((sec) =>
+          lagrangeIdsFor(sec).map((id) => {
+            const st = lagrangeStability(id, camera.nowTime());
+            return {
+              id,
+              name: lagrangeName(id),
+              stable: st?.linearlyStable ?? false,
+              stability: st ? lagrangeStabilityText(st) : "",
+            };
+          }),
+        ),
+      }),
     },
     {
       name: "get_weather",
@@ -1406,10 +1431,10 @@ export function gameTools(h: GameHost): Tool[] {
     {
       name: "plan_mission",
       description:
-        "A mission to another body, the station or a craft, or the wormhole, planned by the flight computer (MISSION tab) and (execute: true, the default) flown; execute: false only works out its figures (the target and plan untouched — for a proposal). target: a body/craft name; arrival: orbit (altKm), flyby, freeReturn (retKm: the return's periapsis). Rendezvous with iss/ranger/lander/endurance ends 200 m from the port (then autopilot dock).",
+        "A mission to another body, a Lagrange point (e.g. 'Sun-Earth L2', 'EM-L1', 'lag:earth:2'), JWST, the station or a craft, or the wormhole, planned by the flight computer (MISSION tab) and (execute: true, the default) flown; execute: false only works out its figures (the target and plan untouched — for a proposal). target: a body/Lagrange/JWST/craft name; arrival: orbit (altKm), halo (JWST-style 3D Halo orbit around a Lagrange point, altKm = A_z), station (Lagrange libration hold / JWST rendezvous), flyby, freeReturn (retKm: the return's periapsis). Rendezvous with iss/ranger/lander/endurance ends 200 m from the port (then autopilot dock).",
       params: {
         target: { type: "string" },
-        arrival: { type: "string", enum: ["orbit", "flyby", "freeReturn"] },
+        arrival: { type: "string", enum: ["orbit", "flyby", "freeReturn", "halo", "station"] },
         altKm: { type: "number", minimum: 1, maximum: 1e7 },
         retKm: { type: "number", minimum: 1, maximum: 1e6 },
         execute: { type: "boolean" },

@@ -55,6 +55,7 @@ export const PLAYER_MENU: PlayerGroup[] = [
       "fuel",
       "autoWarp",
       "crewG",
+      "lagrangePoints",
     ],
   },
   {

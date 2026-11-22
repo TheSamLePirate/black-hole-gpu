@@ -168,6 +168,7 @@ import skyWGSL from "./shaders/sky.wgsl" with { type: "text" };
 import shipWGSL from "./shaders/ship.wgsl" with { type: "text" };
 import enduranceWGSL from "./shaders/endurance.wgsl" with { type: "text" };
 import stationWGSL from "./shaders/station.wgsl" with { type: "text" };
+import jwstWGSL from "./shaders/jwst.wgsl" with { type: "text" };
 import {
   ENV_H,
   ENV_W,
@@ -187,7 +188,9 @@ import { vesselHulls } from "./system/collide";
 import { seaCascadesOff } from "./system/cpu-client";
 import { EnduranceRenderer } from "./endurance";
 import { StationRenderer, type StationView } from "./station";
+import { JwstRenderer, type JwstView } from "./jwst";
 import { issAxes, issTrack, refreshIssElements, stationAngles } from "./system/iss";
+import { jwstAxes, jwstTrack } from "./system/jwst";
 import { loadRingProfile, ringOpacitySums } from "./system/ring-profile";
 import { GIANT_TOPS_TABLE } from "./system/giant-tops";
 import { GpuProfiler } from "./gpuprof";
@@ -342,6 +345,7 @@ const VENUS_GROUND = 0.12;
 
 /** the space station's loading stage, as the loading screen names it */
 const STATION_LOADING = t("The space station");
+const JWST_LOADING = t("James Webb (JWST)");
 
 const RENDER_MODES = { physical: 0, redshift: 1, temperature: 2, order: 3, steps: 4 } as const;
 const SHIFT_MODES = { full: 0, gravitational: 1, noBeaming: 2, none: 3 } as const;
@@ -918,9 +922,12 @@ export class Renderer {
   private enduranceLoading: Promise<void> | null = null;
   /** The International Space Station on its real orbit (station.ts, system/iss.ts). */
   readonly station: StationRenderer;
+  /** The James Webb Space Telescope on its Sun–Earth L2 Halo orbit (jwst.ts, system/jwst.ts). */
+  readonly jwst: JwstRenderer;
   readonly characterRenderer: CharacterRenderer;
   character: PlanetCharacter | null = null;
   private stationLoading: Promise<void> | null = null;
+  private jwstLoading: Promise<void> | null = null;
   /** the disk's reference luminance (log10 Y) of the last frame's parameters: the stars' scale */
   private walkStamp = -1;
   /** when the light probe last ran [ms, performance.now()]: the astronaut reads it while it is fresh */
@@ -1373,6 +1380,7 @@ export class Renderer {
       ship: string;
       endurance: string;
       station: string;
+      jwst: string;
       overlay: string;
       seafft: string;
     },
@@ -1884,6 +1892,7 @@ export class Renderer {
     this.ship.setAerial(this.aerialTex[0]!, this.aerialTex[1]!, this.aerialSampler);
     this.endurance = new EnduranceRenderer(device, src.endurance);
     this.station = new StationRenderer(device, src.station);
+    this.jwst = new JwstRenderer(device, src.jwst);
     this.station.onLoaded = () => this.invalidate();
     this.ship.onLoaded = () => this.invalidate();
     this.endurance.onLoaded = () => this.invalidate();
@@ -2614,6 +2623,7 @@ export class Renderer {
       ship: await wgsl(shipWGSL),
       endurance: await wgsl(enduranceWGSL),
       station: await wgsl(stationWGSL),
+      jwst: await wgsl(jwstWGSL),
       overlay: await wgsl(overlayWGSL),
     };
     loading.set("shaders", 0.3);
@@ -8936,9 +8946,13 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
         glow: preExposure(this.ev(s)) / 2 ** this.ev(s),
         contrails: this.shipContrails,
       },
-      // (on foot: the astronaut and the grass before it hide the hull — else the station, before it in orbit)
+      // (on foot: the astronaut and the grass before it hide the hull — else the station or JWST, before it in orbit)
       this.characterRenderer.occluder ??
-        (this.station.depthTexture() ? { depth: this.station.depthTexture()!, rect: this.station.rect } : undefined),
+        (this.station.depthTexture()
+          ? { depth: this.station.depthTexture()!, rect: this.station.rect }
+          : this.jwst.depthTexture()
+            ? { depth: this.jwst.depthTexture()!, rect: this.jwst.rect }
+            : undefined),
       t.sceneDepth,
       compose,
     );
@@ -8996,7 +9010,10 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
         this.encodeMotionBlur(enc, t);
       if (trace) trace(enc);
       // the space station, where it is on its orbit (before the Ranger: its glass reflects it — not the craft in the scene's)
-      if (s && i === r0) this.encodeStation(enc, t, s);
+      if (s && i === r0) {
+        this.encodeStation(enc, t, s);
+        this.encodeJwst(enc, t, s);
+      }
       if (s && i === r0) this.encodeCharacter(enc, t, s);
       if (s && shipOn && !inScene) this.encodeShipNow(enc, t, s, false);
       else if (i === r0 && !shipOn) {
@@ -9778,6 +9795,83 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
       })(),
     };
     this.station.encode(enc, t.hdr, t.sceneDepth, view);
+  }
+
+  /** Draws the James Webb Space Telescope (jwst.ts) on its Sun–Earth L2 Halo orbit when within 2,000 km. */
+  private encodeJwst(enc: GPUCommandEncoder, t: Target, s: Settings) {
+    this.jwst.rect = [0, 0, 0, 0];
+    if (!s.jwst || !s.wormhole || s.system !== "gargantua") return;
+    const cam = this.lastCam;
+    if (!cam || cam.region !== "throat" || cam.ell >= 0) return;
+    const w = mouth(s).w;
+    const time = this.lastTime;
+    const Xc = homeOf(w, cam.ell, cam.n);
+    const mR = 1476.625 * (s.massSolar || 1);
+    const peek = jwstTrack.peek(time);
+    if (!peek) return;
+    const distKm = (Math.hypot(Xc[0] - peek.X[0], Xc[1] - peek.X[1], Xc[2] - peek.X[2]) * mR) / 1e3;
+    if (!(distKm < 2000)) return;
+    if (!this.jwst.ready) {
+      this.jwstLoading ??= loading
+        .track(
+          "jwst",
+          JWST_LOADING,
+          this.jwst.load((u) => loading.fetch(u, "jwst")),
+        )
+        .then(
+          () => this.invalidate(),
+          (e) => console.error("JWST:", e),
+        );
+      return;
+    }
+    const st = jwstTrack.state(time, Xc);
+    if (!st) return;
+    const toCam = (v: Vec3): Vec3 => {
+      const r = homeToRep(w, cam.ell, cam.n, v);
+      return [
+        r[0] * cam.right[0] + r[1] * cam.right[1] + r[2] * cam.right[2],
+        r[0] * cam.up[0] + r[1] * cam.up[1] + r[2] * cam.up[2],
+        r[0] * cam.fwd[0] + r[1] * cam.fwd[1] + r[2] * cam.fwd[2],
+      ];
+    };
+    const unitV = (v: Vec3): Vec3 => {
+      const l = Math.hypot(...v) || 1;
+      return [v[0] / l, v[1] / l, v[2] / l];
+    };
+    const relH: Vec3 = [st.X[0] - Xc[0], st.X[1] - Xc[1], st.X[2] - Xc[2]];
+    const rel = toCam(relH).map((c) => c * mR) as Vec3;
+    if (s.ship && this.shipPose) {
+      const e = shipToCamera(this.shipPose, s.shipLookYaw, s.shipLookPitch).t;
+      for (let k = 0; k < 3; k++) rel[k]! += e[k]!;
+    }
+    if (Math.hypot(...rel) > 2e6) return;
+    const A = jwstAxes(st.X, st.V, time);
+    const axes = A.map((a) => unitV(toCam(a))) as [Vec3, Vec3, Vec3];
+    const sunB = this.lastBodies.find((b) => b.id === "sun");
+    const S = solarState("sun", time).pos;
+    const toSun: Vec3 = [S[0] - st.X[0], S[1] - st.X[1], S[2] - st.X[2]];
+    const dS = Math.hypot(...toSun);
+    const sunH = unitV(toSun);
+    const rhoS = Math.asin(Math.min((sunB?.radius ?? 0.00471 * dS) / dS, 1));
+    const T = sunB?.temperature ?? 5772;
+    const bb = blackbodyXYZ(T);
+    const rgb0 = xyzToLinearSRGB([bb[0] / bb[1], 1, bb[2] / bb[1]]).map((c) => Math.max(c, 0)) as Vec3;
+    const lum = 0.2126 * rgb0[0] + 0.7152 * rgb0[1] + 0.0722 * rgb0[2];
+    const Esun =
+      Math.PI * 10 ** (this.logYOf(Math.round(T / 50) * 50) - this.lastLogY) * (sunB?.brightness ?? 1) * ((sunB?.radius ?? 0) / dS) ** 2;
+    const sunE = rgb0.map((c) => (c / lum) * Esun) as Vec3;
+    const view: JwstView = {
+      rel,
+      axes,
+      sun: unitV(toCam(sunH)),
+      sunRadius: rhoS,
+      sunE,
+      tanH: Math.tan((s.fov * Math.PI) / 360),
+      aspect: t.width / t.height,
+      pre: preExposure(this.ev(s)),
+      mPerM: mR,
+    };
+    this.jwst.encode(enc, t.hdr, t.sceneDepth, view);
   }
 
   /**

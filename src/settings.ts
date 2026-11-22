@@ -82,6 +82,7 @@ export type Target =
   | SystemBody
   | OurBody
   | "iss"
+  | "jwst"
   | "ranger"
   | "lander"
   | "endurance"
@@ -230,6 +231,7 @@ export interface Settings {
   diskThickness: number; // scale height H/R (0 = infinitely thin slab)
   diskHaze: number; // the scattering mist over the volumetric disk (0: none)
   iss: boolean; // the International Space Station on its real orbit, near the Earth
+  jwst: boolean; // the James Webb Space Telescope on its Sun–Earth L2 Halo orbit
   endurance: boolean; // the Endurance on an orbit around the hole (cinematic scale)
   enduranceOrbit: number; // its orbit's radius [M]
   endurancePhase: number; // where on it at t = 0 [deg]
@@ -535,6 +537,7 @@ export interface Settings {
   autosaveEvery: number; // [s]
   rangerStatus: boolean; // the Ranger's status (sphere of influence, orbit, target) in the telemetry
   soiRings: boolean; // the spheres of influence on the map
+  lagrangePoints: boolean; // Lagrange points (L1–L5) and Halo orbits on the 3D maps
   pathInView: boolean; // the ship's future path drawn in the view (the cyan tube; the map keeps it)
   // the HUD's aids over the view (ui/hud/symbology.ts): each shown where it helps, each can be turned off
   hudHorizon: boolean; // the pitch ladder about the local vertical (no horizon line since 16 Nov 2026 — Sam)
@@ -654,6 +657,7 @@ export function defaultSettings(): Settings {
     diskThickness: 0,
     diskHaze: 0,
     iss: true,
+    jwst: true,
     endurance: false,
     enduranceOrbit: 24,
     endurancePhase: 0,
@@ -936,6 +940,7 @@ export function defaultSettings(): Settings {
     autosaveEvery: 10,
     rangerStatus: true,
     soiRings: true,
+    lagrangePoints: true,
     pathInView: true,
     hudHorizon: true,
     hudKind: "auto",
@@ -2093,6 +2098,7 @@ export const SETTING_KIND: Record<keyof Settings, SettingKind> = {
   diskThickness: "scene",
   diskHaze: "scene",
   iss: "scene",
+  jwst: "scene",
   endurance: "scene",
   enduranceOrbit: "scene",
   endurancePhase: "scene",
@@ -2374,6 +2380,7 @@ export const SETTING_KIND: Record<keyof Settings, SettingKind> = {
   autosaveEvery: "pref",
   rangerStatus: "pref",
   soiRings: "pref",
+  lagrangePoints: "pref",
   pathInView: "carried",
   hudHorizon: "pref",
   hudKind: "pref",

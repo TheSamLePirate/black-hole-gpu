@@ -314,6 +314,8 @@ import { watchMobile } from "./ui/mobile";
 import { TouchFlight } from "./ui/touchflight";
 import { ViewOverlay } from "./ui/overlay";
 import { gameTimeOf, issAxes, issStart, issTrack } from "./system/iss";
+import { jwstStart, jwstTrack } from "./system/jwst";
+import { defaultHaloAzM, haloState, isLagrangeId, lagrangeState } from "./system/lagrange";
 import { loadEphemerides } from "./system/de440";
 import { ephemerisUrls, JOVIAN } from "./system/ephemeris-files";
 import { store } from "./util/storage";
@@ -2607,6 +2609,47 @@ async function main() {
         BODY_NAMES.iss,
       );
     }
+    if (b === "jwst") {
+      if (!(S.system === "gargantua" && S.wormhole && S.jwst))
+        return t("JWST orbits Sun–Earth L2 in our universe (Gargantua-system scenes)");
+      if (!jwstTrack.peek(sim.time)) return t("JWST: orbit unavailable at this date");
+      const goal = (time: number): TravelGoal => {
+        const q = jwstStart(time, 38)!;
+        const st = jwstTrack.peek(time) ?? jwstTrack.peek(sim.time)!;
+        return { X: q.X, fwd: q.fwd, up: q.up, V: st.V, C: st.X };
+      };
+      return travelTo(
+        goal,
+        () => {
+          C.selectTarget("jwst", { focus: true });
+          panel.toast(t("Camera: around JWST (Sun–Earth L2)"));
+        },
+        BODY_NAMES.jwst,
+      );
+    }
+    if (isLagrangeId(b)) {
+      if (!(S.system === "gargantua" && S.wormhole)) return t("Lagrange points lie in our universe (Gargantua-system scenes)");
+      const L0 = lagrangeState(String(b), sim.time);
+      if (!L0) return tf("{0}: unavailable", BODY_NAMES[b] ?? String(b));
+      const azM = defaultHaloAzM(String(b), sim.time);
+      const goal = (time: number): TravelGoal => {
+        const L = lagrangeState(String(b), time) ?? L0;
+        const h = haloState(String(b), time, { azM, branch: -1, phase0: 0 });
+        const X = h ? h.pos : ([L.pos[0] + azM / M_METRES, L.pos[1], L.pos[2]] as Vec3);
+        const V = h ? h.vel : L.vel;
+        const d = [L.pos[0] - X[0], L.pos[1] - X[1], L.pos[2] - X[2]];
+        const l = Math.hypot(...d) || 1;
+        return { X, fwd: [d[0]! / l, d[1]! / l, d[2]! / l], up: L.frame.ez, V, C: L.pos };
+      };
+      return travelTo(
+        goal,
+        () => {
+          C.selectTarget(b, { focus: true });
+          panel.toast(tf("Camera: around {0}", BODY_NAMES[b] ?? String(b)));
+        },
+        BODY_NAMES[b] ?? String(b),
+      );
+    }
     const id = b === "hole" ? "gargantua" : b;
     const u = universeOf(id);
     C.setCinematic(null);
@@ -2739,6 +2782,14 @@ async function main() {
     } else if (b === "iss" && issTrack.peek(sim.time)) {
       C = (time) => (issTrack.peek(time) ?? issTrack.peek(sim.time)!).X;
       R = 400 / M_METRES;
+    } else if (b === "jwst" && jwstTrack.peek(sim.time)) {
+      C = (time) => (jwstTrack.peek(time) ?? jwstTrack.peek(sim.time)!).X;
+      R = 120 / M_METRES;
+    } else if (isLagrangeId(b) && lagrangeState(String(b), sim.time)) {
+      const id = String(b);
+      const azM = defaultHaloAzM(id, sim.time);
+      C = (time) => haloState(id, time, { azM, branch: -1, phase0: 0 })?.pos ?? lagrangeState(id, time)!.pos;
+      R = 5_000e3 / M_METRES;
     } else if (isCraft(b) && fleet.pose(b, sim.time)) {
       C = (time) => (fleet.pose(b, time) ?? fleet.pose(b, sim.time)!).X;
       R = (4 * craftRadius(b)) / M_METRES;

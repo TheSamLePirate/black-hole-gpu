@@ -14,6 +14,8 @@ import type { Vec3 } from "../physics";
 import { nodeDvComponents, nodeDvHome, predictOurs, type OurNode, type OurPath } from "./our-predict";
 import { referenceBody, soiOf } from "./our-side";
 import { M_METRES, M_SECONDS, solarBody, solarState, SOLAR_BODIES } from "./solar";
+import { isLagrangeId } from "./lagrange";
+import { planLagrangeTransfer, refineLagrangeNode } from "./lagrange-plan";
 import { C_MPS } from "../units";
 import { add, cross, dot, len as norm, scale, sub, unit } from "../math/vec3";
 
@@ -22,14 +24,14 @@ const MS = 1 / C; // 1 m/s
 const KM = 1e3 / M_METRES; // 1 km
 const DAY = 86400 / M_SECONDS;
 
-/** What to do at the target: go round it, pass it, or pass it and fall back home (a free return). */
-export type Arrival = "orbit" | "flyby" | "freeReturn";
+/** What to do at the target: go round it, pass it, pass it and fall back home, Halo orbit (JWST-style), or station-keep at a Lagrange point. */
+export type Arrival = "orbit" | "flyby" | "freeReturn" | "halo" | "station";
 export type Role = "depart" | "circ" | "mcc" | "capture" | "mccReturn" | "captureHome" | "arrive";
 
 export interface PlanNode extends OurNode {
   role: Role;
   /** the autopilot after this, the plan's last node */
-  then?: "circularize";
+  then?: "circularize" | "orbit" | "keep";
   /** the body a capture or a circularization is around */
   body?: string;
   /** a departure re-aimed (refineOurNode): the meeting time its path now has [M] */
@@ -56,8 +58,8 @@ export interface OurMission {
   /** the reference body at the departure */
   home: string;
   /** "direct": the target goes round home; "parent": home goes round the target; "sibling": both
-   *  go round the same body; "orbit": around home */
-  type: "direct" | "parent" | "sibling" | "orbit";
+   *  go round the same body; "orbit": around home; "lagrange": to a Lagrange point / JWST Halo orbit */
+  type: "direct" | "parent" | "sibling" | "orbit" | "lagrange";
   /** the chosen side of the target (B-plane direction: T, R components) */
   bDir: [number, number];
   /** the plan's end (arrival, or the free return's perigee), to size the predictions [M] */
@@ -72,6 +74,9 @@ export interface OurMission {
   trim?: boolean;
   /** the follow-up corrections added in flight after a mid-course correction (controller/plan.ts): two at most */
   followUps?: number;
+  /** Lagrange Halo orbit phase0 [rad] and branch (+1 northern, −1 southern like JWST) */
+  haloPhase0?: number;
+  haloBranch?: 1 | -1;
 }
 
 export interface OurPlanOk {
@@ -784,6 +789,7 @@ function clearOfRings(id: string, altM: number) {
 }
 
 export function planOurTransfer(X: Vec3, V: Vec3, t: number, goal0: OurGoal, o: PlanOptions): OurPlanResult {
+  if (isLagrangeId(goal0.target) || goal0.target === "jwst") return planLagrangeTransfer(X, V, t, goal0, o);
   const home = referenceBody(X, t);
   const clear = clearOfRings(goal0.target === home ? home : goal0.target, goal0.altM);
   const goal = { ...goal0, altM: clear.altM };
@@ -1432,6 +1438,7 @@ function aimAndBuild(X: Vec3, V: Vec3, t: number, m: OurMission, t1: number, dv0
  * move), or null when it is no longer needed (a correction under a few cm/s).
  */
 export function refineOurNode(X: Vec3, V: Vec3, t: number, m: OurMission, node: PlanNode, o: PlanOptions): PlanNode | null {
+  if (m.type === "lagrange" || isLagrangeId(m.goal.target) || m.goal.target === "jwst") return refineLagrangeNode(X, V, t, m, node, o);
   const tn = Math.max(node.t, t + o.lead);
   const g = m.goal;
   if (node.role === "arrive") {

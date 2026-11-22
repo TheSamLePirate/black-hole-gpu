@@ -1622,6 +1622,8 @@ export class CameraController {
   launchGoal: { altKm: number | null; incDeg: number | null } = { altKm: null, incDeg: null };
 
   ourOrbitR: { body: string; r: number } | null = null;
+  /** active Lagrange Halo orbit hold (controller/lowthrust.ts ourWant): target id, amplitude [m], phase0 [rad], branch */
+  ourHalo: { target: string; azM: number; phase0: number; branch: 1 | -1 } | null = null;
 
   /** what the autopilots measured as they flew (our universe): the approach's, the hold's */
   hubNote: {
