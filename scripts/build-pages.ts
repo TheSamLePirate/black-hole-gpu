@@ -41,7 +41,7 @@ await $`cp vendor/basis/basis_transcoder.wasm _site/basis_transcoder.wasm`;
 // Embedded Linux OBC assets (docs/PLAN-LINUX-OBC.md): kernel WASM, Alpine & Debian EROFS distros, and project scripts
 await $`mkdir -p _site/obc/scripts/lib`;
 await $`cp node_modules/unkernel/dist/unkernel.wasm _site/obc/unkernel.wasm`;
-await $`cp assets/obc/alpine.erofs assets/obc/distros.json _site/obc/`;
+await $`cp assets/obc/alpine.erofs assets/obc/distros.json assets/obc/obc-rs _site/obc/`;
 {
   const localDebian = Bun.file("assets/obc/debian.erofs");
   const debianPath = (await localDebian.exists()) ? "assets/obc/debian.erofs" : await (await import("unkernel/node")).fetchDistro("debian");

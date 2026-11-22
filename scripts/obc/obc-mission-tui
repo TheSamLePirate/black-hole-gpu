@@ -1,4 +1,9 @@
 #!/bin/sh
+
+# Native compiled Rust + Ratatui / /dev/fb0 engine (zero startup overhead, 30-60 Hz)
+if [ "${OBC_LEGACY:-0}" != "1" ] && [ -x /obc/bin/obc-rs ]; then
+  exec /obc/bin/obc-rs obc-mission-tui "$@"
+fi
 # obc-mission-tui — Python Real-Time Orbital Mission Control & Flight Director TUI.
 # Keys: [q] quit  [p] hold prograde  [r] hold retrograde  [c] AP circularize  [0] cut throttle
 # Usage: obc-mission-tui [--frames N]

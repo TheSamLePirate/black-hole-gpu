@@ -1,4 +1,9 @@
 #!/bin/sh
+
+# Native compiled Rust + Ratatui / /dev/fb0 engine (zero startup overhead, 30-60 Hz)
+if [ "${OBC_LEGACY:-0}" != "1" ] && [ -x /obc/bin/obc-rs ]; then
+  exec /obc/bin/obc-rs bh-tui "$@"
+fi
 # bh-tui — Full Interactive __bh API & TARS Tool Explorer TUI (browse, inspect, set, call, run tools).
 # Keys: [↑/↓ or j/k] move  [Enter] open/inspect  [Backspace/h] up  [Tab] switch __bh / TARS Tools
 #       [e] edit/set value  [c] call method / run tool  [r] refresh  [q] quit

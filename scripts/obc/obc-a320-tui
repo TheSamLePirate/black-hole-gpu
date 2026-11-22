@@ -1,4 +1,9 @@
 #!/bin/sh
+
+# Native compiled Rust + Ratatui / /dev/fb0 engine (zero startup overhead, 30-60 Hz)
+if [ "${OBC_LEGACY:-0}" != "1" ] && [ -x /obc/bin/obc-rs ]; then
+  exec /obc/bin/obc-rs obc-a320-tui "$@"
+fi
 # obc-a320-tui — Node.js Real-Time Airbus A320 FCU + Live Captain MCDU Mirror + ECAM Console TUI.
 # Keys: [a] AP  [t] A/THR  [i] ILS  [g] Gear  [f] Cycle Flaps  [1-6] MCDU L1-L6  [m] MCDU Menu  [e] Cycle ECAM  [q] Quit
 # Usage: obc-a320-tui [--frames N]

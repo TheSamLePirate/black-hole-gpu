@@ -1,0 +1,17 @@
+[package]
+name = "obc-tui"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+anyhow.workspace = true
+crossterm.workspace = true
+libc.workspace = true
+obc-core = { path = "../obc-core" }
+ratatui.workspace = true
+serde_json.workspace = true
+
+[lints]
+workspace = true

@@ -1,8 +1,8 @@
 #!/bin/sh
 # obc-install — Universal 1-click toolchain installer for Alpine 3.24 & Debian 13 (Trixie).
-# Supports: Python 3 + pip, Node.js + npm, Bun (+ bunx), Pi (@earendil-works/pi-coding-agent), Claude Code.
+# Supports: Python 3 + pip, Node.js + npm, Bun (+ bunx), Rust (rustc + cargo), Pi (@earendil-works/pi-coding-agent), Claude Code.
 # Installed packages & binaries persist in IndexedDB (/data/distros/<distro>/upper).
-# Usage: obc-install [python|node|bun|pi|claude|full|all]
+# Usage: obc-install [python|node|bun|rust|pi|claude|full|all]
 
 set -e
 
@@ -186,6 +186,16 @@ install_pi() {
   hash -r 2>/dev/null || true
 }
 
+install_rust() {
+  echo "── [Rust] rustc & cargo ──"
+  if [ "$DISTRO" = "alpine" ]; then
+    apk_add rust cargo musl-dev
+  else
+    apt_install rustc cargo gcc libc6-dev
+  fi
+  hash -r 2>/dev/null || true
+}
+
 install_claude() {
   echo "── [5/5] Claude Code ──"
   echo "Installing Claude Code into ~/.local/bin (about 130 MB to download, 360 MB on disk)..."
@@ -210,6 +220,9 @@ case "$TARGET" in
     ;;
   bun)
     install_bun
+    ;;
+  rust)
+    install_rust
     ;;
   pi)
     install_pi
@@ -247,7 +260,7 @@ case "$TARGET" in
     install_claude
     ;;
   *)
-    echo "Usage: obc-install [python|node|bun|pi|claude|full|all]"
+    echo "Usage: obc-install [python|node|bun|rust|pi|claude|full|all]"
     exit 1
     ;;
 esac
@@ -268,5 +281,7 @@ echo "  pip    : $(ver_of pip --version | awk '{print $2}')"
 echo "  Node   : $(ver_of node --version)"
 echo "  npm    : $(ver_of npm --version)"
 echo "  Bun    : $(ver_of bun --version)"
+echo "  Rust   : $(ver_of rustc --version)"
+echo "  Cargo  : $(ver_of cargo --version)"
 echo "  pi     : $(ver_of pi --version)"
 echo "  claude : $(ver_of claude --version)"

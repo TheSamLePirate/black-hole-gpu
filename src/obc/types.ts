@@ -13,7 +13,7 @@ export type ObcMemoryMiB = 512 | 1024 | 2048 | 4096;
 
 export const OBC_MEMORY_OPTIONS: readonly ObcMemoryMiB[] = [512, 1024, 2048, 4096];
 
-export type ObcToolchainProfile = "python" | "node" | "bun" | "claude" | "pi" | "full" | "all";
+export type ObcToolchainProfile = "python" | "node" | "bun" | "rust" | "claude" | "pi" | "full" | "all";
 
 export interface ObcConfig {
   /** Linux rootfs distribution ("alpine" = Alpine 3.24 musl, "debian" = Debian 13 Trixie glibc) */

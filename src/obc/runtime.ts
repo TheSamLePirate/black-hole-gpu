@@ -121,8 +121,8 @@ export class ObcRuntime {
   consoleOpen = false;
   viewMode: ObcViewMode = "term";
 
-  /** Pure VT100 terminal screen mirror (64×24) for 3D cockpit displays, Crew, MCDU, and __bh.obc.readScreen(). */
-  readonly term = new TermBuffer(64, 24);
+  /** Pure VT100 terminal screen mirror (100×26) for 3D cockpit displays, Crew, MCDU, and __bh.obc.readScreen(). */
+  readonly term = new TermBuffer(100, 26);
 
   private outListeners = new Set<(bytes: Uint8Array) => void>();
   private stateListeners = new Set<() => void>();
@@ -445,7 +445,18 @@ export class ObcRuntime {
         throw new Error(`Browser missing JSPI/WASM support: ${support.problems.join("; ")}`);
       }
 
-      const [projectFiles, effectiveWisp] = await Promise.all([loadProjectScripts(), this.resolveWispUrl()]);
+      const base = new URL("./", location.href);
+      const loadRustBinary = async (): Promise<Uint8Array | null> => {
+        try {
+          const r = await fetch(new URL("obc/obc-rs", base).toString());
+          if (!r.ok) return null;
+          return new Uint8Array(await r.arrayBuffer());
+        } catch {
+          return null;
+        }
+      };
+
+      const [projectFiles, effectiveWisp, rustBinary] = await Promise.all([loadProjectScripts(), this.resolveWispUrl(), loadRustBinary()]);
       this.netEnabled = Boolean(effectiveWisp);
 
       const memFs = new mod.MemoryFs();
@@ -458,9 +469,9 @@ export class ObcRuntime {
         () => {
           this.commandsHandled++;
         },
+        rustBinary,
       );
 
-      const base = new URL("./", location.href);
       const kernelUrl = new URL("obc/unkernel.wasm", base).toString();
       const distroFile = this.config.distro === "debian" ? "obc/debian.erofs" : "obc/alpine.erofs";
       const distroUrl = new URL(distroFile, base).toString();
@@ -521,7 +532,7 @@ export class ObcRuntime {
       if (!restore) {
         const heapMb = this.nodeMaxOldSpaceMiB();
         vm.write(
-          `export PATH="/obc/scripts:$HOME/.local/bin:$HOME/.bun/bin:/home/user/.local/bin:/home/user/.bun/bin:/usr/local/bin:$PATH:/usr/lib/kw/bin" PYTHONPATH=/obc/lib NODE_PATH=/obc/lib NODE_OPTIONS="--max-old-space-size=${heapMb}"; cd /home/pilot 2>/dev/null; clear; obc-diag\n`,
+          `export PATH="/obc/bin:/obc/scripts:$HOME/.local/bin:$HOME/.bun/bin:/home/user/.local/bin:/home/user/.bun/bin:/usr/local/bin:$PATH:/usr/lib/kw/bin" PYTHONPATH=/obc/lib NODE_PATH=/obc/lib NODE_OPTIONS="--max-old-space-size=${heapMb}"; cd /home/pilot 2>/dev/null; clear; obc-diag\n`,
         );
       }
 
@@ -644,7 +655,7 @@ export class ObcRuntime {
       "chmod 777 /home/pilot 2>/dev/null || true",
       "chown -R 1000:1000 /home/user/.local 2>/dev/null || true",
       "ln -sf /obc/tau /dev/tau",
-      `printf 'export PATH="/obc/scripts:$HOME/.local/bin:$HOME/.bun/bin:/home/user/.local/bin:/home/user/.bun/bin:/usr/local/bin:$PATH:/usr/lib/kw/bin"\\nexport PYTHONPATH=/obc/lib\\nexport NODE_PATH=/obc/lib\\nexport PYTHONDONTWRITEBYTECODE=1\\nexport NODE_OPTIONS="--max-old-space-size=${heapMb}"\\n' > /etc/profile.d/obc.sh`,
+      `printf 'export PATH="/obc/bin:/obc/scripts:$HOME/.local/bin:$HOME/.bun/bin:/home/user/.local/bin:/home/user/.bun/bin:/usr/local/bin:$PATH:/usr/lib/kw/bin"\\nexport PYTHONPATH=/obc/lib\\nexport NODE_PATH=/obc/lib\\nexport PYTHONDONTWRITEBYTECODE=1\\nexport NODE_OPTIONS="--max-old-space-size=${heapMb}"\\n' > /etc/profile.d/obc.sh`,
       "chmod 644 /etc/profile.d/obc.sh 2>/dev/null || true",
       "if [ -f /etc/bash.bashrc ] && ! grep -q '/etc/profile.d/obc.sh' /etc/bash.bashrc 2>/dev/null; then printf '\\n[ -r /etc/profile.d/obc.sh ] && . /etc/profile.d/obc.sh\\n' >> /etc/bash.bashrc; fi",
     ].join(" && ");
@@ -718,7 +729,7 @@ export class ObcRuntime {
     }
     try {
       const heapMb = this.nodeMaxOldSpaceMiB();
-      const wrapped = `export PATH="/obc/scripts:$HOME/.local/bin:$HOME/.bun/bin:/home/user/.local/bin:/home/user/.bun/bin:/usr/local/bin:$PATH:/usr/lib/kw/bin" PYTHONPATH=/obc/lib NODE_PATH=/obc/lib PYTHONDONTWRITEBYTECODE=1 NODE_OPTIONS="--max-old-space-size=${heapMb}"; ${command}`;
+      const wrapped = `export PATH="/obc/bin:/obc/scripts:$HOME/.local/bin:$HOME/.bun/bin:/home/user/.local/bin:/home/user/.bun/bin:/usr/local/bin:$PATH:/usr/lib/kw/bin" PYTHONPATH=/obc/lib NODE_PATH=/obc/lib PYTHONDONTWRITEBYTECODE=1 NODE_OPTIONS="--max-old-space-size=${heapMb}"; ${command}`;
       const res = await this.vm.exec("sh", ["-c", wrapped], { timeout: timeoutMs, encoding: "utf8" });
       const code = res.exitCode ?? -1;
       return {

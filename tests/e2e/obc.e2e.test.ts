@@ -29,6 +29,9 @@ interface ObcMetrics {
   nodeVersion: string;
   npmVersion: string;
   bunVersion: string;
+  rustVersion: string;
+  cargoVersion: string;
+  obcRsVersion: string;
   piVersion: string;
   claudeVersion: string;
   debianTools: {
@@ -197,10 +200,20 @@ describe.skipIf(!E2E)("Linux OBC AAA (Unkernel aarch64, Wisp, Snapshot, Editor, 
     expect(runPilot.ok).toBe(true);
     expect(runPilot.stdout).toContain("PILOT_SCRIPT_AAA_OK");
 
+    // Verify native compiled Rust + Ratatui / /dev/fb0 multi-call binary works IMMEDIATELY on first boot (no Python/Node needed!)
+    const obcRsVer = await app.js<{ ok: boolean; stdout: string }>(`__bh.obc.exec("obc-rs --version")`);
+    expect(obcRsVer.ok).toBe(true);
+    expect(obcRsVer.stdout).toContain("obc-rs");
+    expect(obcRsVer.stdout).toContain("ratatui");
+    metrics.obcRsVersion = obcRsVer.stdout.trim();
+    const hasRustBtn = await app.js<boolean>(`Boolean(document.querySelector('[data-testid="obc-install-rust"]'))`);
+    expect(hasRustBtn).toBe(true);
+
     // Verify offline avionics scripts execute cleanly
     const diag = await app.js<{ ok: boolean; stdout: string }>(`__bh.obc.exec("obc-diag && obc-orbit")`);
     expect(diag.ok).toBe(true);
     expect(diag.stdout).toContain("LINUX ON-BOARD COMPUTER");
+    expect(diag.stdout).toContain("obc-rs=native");
     expect(diag.stdout).toContain("HOHMANN");
 
     // Open Options drawer to verify UI + capture AAA HUD console with Options open
@@ -224,8 +237,16 @@ describe.skipIf(!E2E)("Linux OBC AAA (Unkernel aarch64, Wisp, Snapshot, Editor, 
       );
       return true;
     })()`);
-    await app.waitFor("window.__obcInst !== null", 840_000);
-    const res = await app.js<{ ok: boolean; stdout: string; stderr: string }>("window.__obcInst");
+    // Poll in 60 s liveness windows (never a silent >120 s wait; aborts early if the VM leaves "ready")
+    for (let w = 0; w < 18; w++) {
+      if (await app.waitOptional("window.__obcInst !== null", 60_000)) break;
+      const st = await app.js<{ phase: string }>("__bh.obc.status()");
+      if (st.phase !== "ready") {
+        throw new Error(`obc-install ${profile} aborted: OBC phase became ${st.phase}`);
+      }
+    }
+    const res = await app.js<{ ok: boolean; stdout: string; stderr: string } | null>("window.__obcInst");
+    if (!res) throw new Error(`obc-install ${profile} timed out`);
     if (!res.ok) {
       console.error(`[obc-install ${profile}] FAILED\nSTDOUT tail:\n${res.stdout.slice(-1200)}\nSTDERR tail:\n${res.stderr.slice(-1200)}`);
     }
@@ -260,6 +281,17 @@ describe.skipIf(!E2E)("Linux OBC AAA (Unkernel aarch64, Wisp, Snapshot, Editor, 
     expect(metrics.bunVersion).toMatch(/^\d+\.\d+/);
     expect(metrics.piVersion).toMatch(/^\d+\.\d+/);
     expect(metrics.claudeVersion.toLowerCase()).toContain("claude");
+
+    // Install Rust (rustc + cargo) on Alpine too so Rust + Ratatui development is available in-guest
+    const rustInst = await installAndWait("rust");
+    expect(rustInst.ok).toBe(true);
+    const rustVers = await app.js<{ ok: boolean; stdout: string }>(`__bh.obc.exec("rustc --version && cargo --version")`);
+    expect(rustVers.ok).toBe(true);
+    const rLines = rustVers.stdout.trim().split(/\r?\n/);
+    metrics.rustVersion = rLines[0] ?? "";
+    metrics.cargoVersion = rLines[1] ?? "";
+    expect(metrics.rustVersion).toContain("rustc");
+    expect(metrics.cargoVersion).toContain("cargo");
 
     // 1. CLI programs (Python & Node.js)
     const fuel = await app.js<{ ok: boolean; stdout: string }>(`__bh.obc.exec("obc-fuel --json")`);
@@ -719,7 +751,12 @@ describe.skipIf(!E2E)("Linux OBC AAA (Unkernel aarch64, Wisp, Snapshot, Editor, 
     expect(metrics.debianTools.pi).toMatch(/^\d+\.\d+/);
     expect(metrics.debianTools.claude.toLowerCase()).toContain("claude");
 
-    // Verify OBC scripts & __bh CLI work seamlessly on Debian 13 too
+    // Verify native Rust obc-rs binary + OBC scripts & __bh CLI work seamlessly on Debian 13 too
+    const debRs = await app.js<{ ok: boolean; stdout: string }>(`__bh.obc.exec("obc-rs --version && obc-top --frames 1")`);
+    expect(debRs.ok).toBe(true);
+    expect(debRs.stdout).toContain("obc-rs");
+    expect(debRs.stdout).toContain("OBC-TOP");
+
     const debBh = await app.js<{ ok: boolean; stdout: string }>(`__bh.obc.exec("bh get fleet.active --raw")`);
     expect(debBh.ok).toBe(true);
     expect(debBh.stdout.trim()).toBe("a320");

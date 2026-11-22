@@ -93,6 +93,7 @@ assets/approaches/raw/
 
 # Embedded Linux OBC large rootfs images (fetched lazily via unkernel/node fetchDistro on dev & Pages CI)
 assets/obc/debian.erofs
+rust/obc-suite/target/
 
 # Python bytecode (the asset builders)
 __pycache__/

@@ -277,6 +277,11 @@ const server = Bun.serve({
       if (!(await file.exists())) return new Response("not found", { status: 404 });
       return new Response(file, { headers: { "content-type": "application/json" } });
     },
+    "/obc/obc-rs": async (req) => {
+      const file = Bun.file("assets/obc/obc-rs");
+      if (!(await file.exists())) return new Response("not found", { status: 404 });
+      return serveRangeFile(req, file, "application/octet-stream");
+    },
     "/obc/scripts/*": async (req) => {
       const rel = new URL(req.url).pathname.slice("/obc/scripts/".length);
       if (!/^(lib\/)?[a-zA-Z0-9._-]+$/.test(rel) || rel.includes("..")) return new Response("not found", { status: 404 });

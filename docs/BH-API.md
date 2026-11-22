@@ -3217,7 +3217,7 @@ Embedded Linux On-Board Computer powered by Unkernel (Linux 7.x WASM + `kwemu` a
 - `telemetry()` — return the exact live `ObcTelemetry` snapshot exposed to Linux at `/obc/telemetry.json` and `AF_VSOCK:4747`.
 - `openConsole()` / `closeConsole()` / `toggleConsole()` — control the in-game `xterm.js` + `/dev/fb0` + Options + Script Editor HUD console overlay (`Ctrl+\`, `Ctrl+²`, `F11`).
 - `runScript(name)` — run a built-in avionics script (`"diag"`, `"orbit"`, `"reentry"`, `"ils"`, `"solar"`, `"fdr"`, `"fuel"`, `"nav"`, `"kerr"`, `"auto"`, `"top"`, `"mission-tui"`, `"fmc-tui"`, `"fb-demo"`, `"pfd-fb"`, `"radar-fb"`, `"kerr-fb"`, `"bh-tui"`, `"f35-tui"`, `"f35-fb"`, `"a320-tui"`, `"a320-fb"`, `"ils-fb"`).
-- `installToolchain(profile)` — install `"python"` (Python 3 + pip), `"node"` (Node.js + npm), `"bun"` (Bun + bunx), `"pi"` (`@earendil-works/pi-coding-agent`), `"claude"` (Claude Code), `"full"` (Python + Node + Bun), or `"all"` (all 7 tools) on both Alpine & Debian over Wisp and persist in IndexedDB `/data`.
+- `installToolchain(profile)` — install `"python"` (Python 3 + pip), `"node"` (Node.js + npm), `"bun"` (Bun + bunx), `"rust"` (rustc + cargo), `"pi"` (`@earendil-works/pi-coding-agent`), `"claude"` (Claude Code), `"full"` (Python + Node + Bun), or `"all"` on both Alpine & Debian over Wisp and persist in IndexedDB `/data`.
 - `setWispUrl(url)` / `testWisp(url?)` — configure/persist a custom Wisp v1 WebSocket proxy URL (empty uses local dev `/__wisp`) and test the live Wisp v1 handshake latency.
 - `listFiles(dir?)` / `readGuestFile(path)` / `writeGuestFile(path, content)` — list, read, and save executable pilot scripts in `/home/pilot/*`.
 - `captureFbDataUrl()` — export the active `/dev/fb0` frame as a PNG data URL (null if inactive).

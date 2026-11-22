@@ -1,4 +1,9 @@
 #!/bin/sh
+
+# Native compiled Rust + Ratatui / /dev/fb0 engine (zero startup overhead, 30-60 Hz)
+if [ "${OBC_LEGACY:-0}" != "1" ] && [ -x /obc/bin/obc-rs ]; then
+  exec /obc/bin/obc-rs obc-fmc-tui "$@"
+fi
 # obc-fmc-tui — Node.js Real-Time MCDU/FMC Approach & Airfield Navigation TUI.
 # Keys: [q] quit  [g] toggle Gear  [f] cycle Flaps (0 -> 0.5 -> 1)  [s] toggle SAS
 # Usage: obc-fmc-tui [--frames N]

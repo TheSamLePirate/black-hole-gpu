@@ -3383,7 +3383,7 @@ export function gameTools(h: GameHost): Tool[] {
         },
         script: { type: "string" },
         command: { type: "string" },
-        profile: { type: "string", enum: ["python", "node", "bun", "claude", "pi", "full", "all"] },
+        profile: { type: "string", enum: ["python", "node", "bun", "rust", "claude", "pi", "full", "all"] },
         distro: { type: "string", enum: ["alpine", "debian"] },
         theme: { type: "string", enum: ["auto", "interstellar", "f35", "a320", "amber"] },
         crtFx: { type: "boolean" },
@@ -3426,7 +3426,8 @@ export function gameTools(h: GameHost): Tool[] {
             return await obc.testWisp();
           case "install": {
             const p = String(a.profile ?? "all");
-            const valid = p === "python" || p === "node" || p === "bun" || p === "claude" || p === "pi" || p === "full" || p === "all";
+            const valid =
+              p === "python" || p === "node" || p === "bun" || p === "rust" || p === "claude" || p === "pi" || p === "full" || p === "all";
             return await obc.installToolchain(valid ? p : "all");
           }
           case "config":

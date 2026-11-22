@@ -1,4 +1,9 @@
 #!/bin/sh
+
+# Native compiled Rust + Ratatui / /dev/fb0 engine (zero startup overhead, 30-60 Hz)
+if [ "${OBC_LEGACY:-0}" != "1" ] && [ -x /obc/bin/obc-rs ]; then
+  exec /obc/bin/obc-rs obc-ils-fb "$@"
+fi
 # obc-ils-fb — Python Real-Time Graphical Precision Approach & ILS Plan + Vertical Profile Display on /dev/fb0.
 # Reads live runway geometry, approach fixes (IAF/IF/FAF/MAP) & vertical glidepath directly from __bh!
 # Keys: [q/Esc] quit  [+/-] scale zoom (10/20/40 NM)  [i] engage ILS  [g] toggle gear

@@ -18,7 +18,7 @@ export interface ObcHostAdapter {
   executeCommand(cmd: ObcCommand): ObcCommandResult;
 }
 
-/** Populate a `MemoryFs` mounted at `/obc` with live telemetry, tau, command sink, scripts, and libs. */
+/** Populate a `MemoryFs` mounted at `/obc` with live telemetry, tau, command sink, scripts, libs, and native `obc-rs` binary. */
 export function wireObcMountFs(
   mem: MemoryFs,
   adapter: ObcHostAdapter,
@@ -26,6 +26,7 @@ export function wireObcMountFs(
   scripts: Record<string, string>,
   lib: Record<string, string>,
   onCommandHandled: () => void,
+  rustBinary?: Uint8Array | null,
 ): () => void {
   const atomicWrite = (path: string, content: string, mode = 0o444) => {
     const tmp = `${path}.tmp`;
@@ -76,6 +77,10 @@ export function wireObcMountFs(
   mem.mkdirp("/lib", { mode: 0o755 });
   for (const [name, body] of Object.entries(lib)) {
     mem.writeFile(`/lib/${name}`, body, { mode: 0o644 });
+  }
+  if (rustBinary && rustBinary.byteLength > 0) {
+    mem.mkdirp("/bin", { mode: 0o755 });
+    mem.writeFile("/bin/obc-rs", rustBinary, { mode: 0o755 });
   }
 
   let handling = false;

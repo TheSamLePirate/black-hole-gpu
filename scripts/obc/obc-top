@@ -1,4 +1,9 @@
 #!/bin/sh
+
+# Native compiled Rust + Ratatui / /dev/fb0 engine (zero startup overhead, 30-60 Hz)
+if [ "${OBC_LEGACY:-0}" != "1" ] && [ -x /obc/bin/obc-rs ]; then
+  exec /obc/bin/obc-rs obc-top "$@"
+fi
 # obc-top — Node.js Real-Time Interactive Avionics & Systems TUI (htop-style).
 # Keys: [q] quit  [s] toggle SAS  [g] toggle Gear  [+/-] throttle ±10%  [0] cut throttle  [p] hold prograde
 # Usage: obc-top [--frames N]

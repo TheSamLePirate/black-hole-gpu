@@ -1,4 +1,9 @@
 #!/bin/sh
+
+# Native compiled Rust + Ratatui / /dev/fb0 engine (zero startup overhead, 30-60 Hz)
+if [ "${OBC_LEGACY:-0}" != "1" ] && [ -x /obc/bin/obc-rs ]; then
+  exec /obc/bin/obc-rs obc-kerr-fb "$@"
+fi
 # obc-kerr-fb — Python Real-Time Graphical Gargantua / Kerr Spacetime & Accretion Disk Visualizer on /dev/fb0.
 # Keys: [q/Esc] quit  [space] pause/resume spin  [+/-] tilt camera
 # Usage: obc-kerr-fb [--seconds 60]

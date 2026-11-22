@@ -300,6 +300,17 @@ export class ObcConsoleOverlay {
         },
       ),
       mkBtn(
+        "+Rust",
+        () => {
+          void this.runtime.installToolchain("rust");
+          this.focusActiveInput();
+        },
+        {
+          testid: "obc-install-rust",
+          title: "Install Rust (rustc + cargo) on Alpine or Debian",
+        },
+      ),
+      mkBtn(
         "+Pi",
         () => {
           void this.runtime.installToolchain("pi");

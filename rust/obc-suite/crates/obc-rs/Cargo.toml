@@ -1,0 +1,18 @@
+[package]
+name = "obc-rs"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[[bin]]
+name = "obc-rs"
+path = "src/main.rs"
+
+[dependencies]
+anyhow.workspace = true
+obc-fb = { path = "../obc-fb" }
+obc-tui = { path = "../obc-tui" }
+
+[lints]
+workspace = true

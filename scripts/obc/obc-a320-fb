@@ -1,4 +1,9 @@
 #!/bin/sh
+
+# Native compiled Rust + Ratatui / /dev/fb0 engine (zero startup overhead, 30-60 Hz)
+if [ "${OBC_LEGACY:-0}" != "1" ] && [ -x /obc/bin/obc-rs ]; then
+  exec /obc/bin/obc-rs obc-a320-fb "$@"
+fi
 # obc-a320-fb — Node.js Real-Time Graphical Airbus A320 ARC-Mode Navigation Display (ND) + ILS on /dev/fb0.
 # Reads live flight plan waypoints, published approach fixes & TCAS traffic directly from __bh!
 # Keys: [q/Esc] quit  [+/-] range (10/20/40/80/160 NM)  [a] AP1  [i] ILS  [g] Gear

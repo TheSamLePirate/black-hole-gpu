@@ -1,4 +1,9 @@
 #!/bin/sh
+
+# Native compiled Rust + Ratatui / /dev/fb0 engine (zero startup overhead, 30-60 Hz)
+if [ "${OBC_LEGACY:-0}" != "1" ] && [ -x /obc/bin/obc-rs ]; then
+  exec /obc/bin/obc-rs obc-pfd-fb "$@"
+fi
 # obc-pfd-fb — AAA Real-Time Primary Flight Display (Artificial Horizon, Bank Arc, Scrolling Tapes & ILS) on /dev/fb0.
 # Horizon math matches src/a320/du/pfd.ts identically (roll > 0 banks right, pitch > 0 shifts horizon down along rotated vertical).
 # Keys: [q/Esc] quit  [a] AP  [t] A/THR  [i] ILS  [g] Gear  [+/-] Throttle

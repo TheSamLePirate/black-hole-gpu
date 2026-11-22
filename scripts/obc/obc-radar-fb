@@ -1,4 +1,9 @@
 #!/bin/sh
+
+# Native compiled Rust + Ratatui / /dev/fb0 engine (zero startup overhead, 30-60 Hz)
+if [ "${OBC_LEGACY:-0}" != "1" ] && [ -x /obc/bin/obc-rs ]; then
+  exec /obc/bin/obc-rs obc-radar-fb "$@"
+fi
 # obc-radar-fb — Node.js Real-Time Graphical Tactical Radar & Orbital Scope on /dev/fb0.
 # Keys: [q/Esc] quit  [+/-] zoom scale  [s] toggle SAS  [p] hold prograde
 # Usage: obc-radar-fb [--seconds 60]

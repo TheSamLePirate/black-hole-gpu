@@ -1,4 +1,9 @@
 #!/bin/sh
+
+# Native compiled Rust + Ratatui / /dev/fb0 engine (zero startup overhead, 30-60 Hz)
+if [ "${OBC_LEGACY:-0}" != "1" ] && [ -x /obc/bin/obc-rs ]; then
+  exec /obc/bin/obc-rs obc-f35-tui "$@"
+fi
 # obc-f35-tui — Node.js Real-Time F-35B/C Tactical WSO / Backseater Console TUI.
 # Keys: [1-4] Weapon (AMRAAM/9X/JDAM/JSM)  [r] Cycle Radar (RWS/TWS/STT)  [l] Lock Track
 #       [c] Flares/Chaff  [a] Toggle AP  [t] Toggle A/THR  [g] Gear  [i] Arm ILS  [q] Quit
