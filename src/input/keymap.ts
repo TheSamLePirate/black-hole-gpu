@@ -15,6 +15,7 @@ export type KeyLayer = "system" | "flight" | "time" | "scene" | "character";
 export type KeyAction =
   // system
   | "tools"
+  | "obcConsole"
   | "gameMode"
   | "atlas"
   | "skyEvents"
@@ -542,6 +543,11 @@ export const KEYMAP: KeySection[] = [
         keys: "F10",
         text: "Game tools (developers: a local build or ?dev) — status, placement, targets, time, performance",
         bind: [codes("system", "F10", "tools")],
+      },
+      {
+        keys: "F11 · ⌃\\ · ⌃²",
+        text: "Linux OBC (On-Board Computer) HUD console — Alpine aarch64 shell, /dev/fb0 graphics, avionics scripts",
+        bind: [codes("system", "F11", "obcConsole")],
       },
       { keys: "I", text: "Details & physical readouts", bind: [scene("i", "details")] },
       {

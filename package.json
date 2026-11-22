@@ -34,7 +34,11 @@
   "type": "module",
   "dependencies": {
     "@mapbox/vector-tile": "3.0.0",
+    "@xterm/addon-fit": "^0.11.0",
+    "@xterm/addon-image": "^0.9.0",
+    "@xterm/xterm": "^6.0.0",
     "pbf": "5.1.2",
-    "thinking-orbs": "0.3.1"
+    "thinking-orbs": "0.3.1",
+    "unkernel": "^0.2.0-261121-e69adda"
   }
 }

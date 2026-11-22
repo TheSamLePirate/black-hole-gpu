@@ -3196,3 +3196,33 @@ source readiness, pan metres and last CPU draw time. `interface({mapZoom:18})` o
 `/mapzoom 18` is its positional command. See [corrections](CORRECTIONS-DETAILS-SOL-VOL.md).
 
 (`__bh.game.walk` and the placement on Gargantua's worlds: see the game section.)
+
+---
+
+## Linux On-Board Computer (`__bh.obc`)
+
+### `__bh.obc` → `{ status, boot, stop, reboot, suspend, resume, resetDataDisk, getConfig, setConfig, exec, write, readScreen, telemetry, openConsole, closeConsole, toggleConsole, runScript, setWispUrl, testWisp, listFiles, readGuestFile, writeGuestFile, captureFbDataUrl, scripts }`
+
+Embedded Linux On-Board Computer powered by Unkernel (Linux 7.x WASM + `kwemu` aarch64 JIT + Alpine 3.24 in a dedicated Web Worker — see [PLAN-LINUX-OBC.md](PLAN-LINUX-OBC.md)). Lazy-booted on demand with zero startup cost.
+
+- `status()` — runtime phase (`"off" | "booting" | "ready" | "suspended" | "error"`), boot time `[ms]`, memory `[MiB]`, `/dev/fb0` state & `fbFps`, `hasSnapshot`, Wisp proxy URL, active script, VSOCK client count, console state, and current `config`.
+- `boot()` / `stop()` / `reboot()` — start, cleanly shut down, or restart the Linux kernel Worker.
+- `suspend()` / `resume()` — suspend the live Linux VM into an in-memory `KernelSnapshot` (freeing Worker CPU) and resume it on demand.
+- `resetDataDisk()` — wipe the persisted IndexedDB `/data` overlay cleanly.
+- `getConfig()` / `setConfig(patch)` — read or update persisted OBC configuration (`memoryMiB`, `fbWidth`, `fbHeight`, `jit`, `persistData`, `crtFx`, `soundEnabled`, `theme`, `syncMode`).
+- `exec(command, timeoutMs?)` — run a shell command non-interactively via `vm.exec()` and return `{ ok, code, stdout, stderr }`.
+- `write(input)` — send raw interactive input bytes/keys to the Linux console TTY.
+- `readScreen()` — return the current 64×24 ANSI terminal mirror lines (plain text).
+- `telemetry()` — return the exact live `ObcTelemetry` snapshot exposed to Linux at `/obc/telemetry.json` and `AF_VSOCK:4747`.
+- `openConsole()` / `closeConsole()` / `toggleConsole()` — control the in-game `xterm.js` + `/dev/fb0` + Options + Script Editor HUD console overlay (`Ctrl+\`, `Ctrl+²`, `F11`).
+- `runScript(name)` — run a built-in avionics script (`"diag"`, `"orbit"`, `"reentry"`, `"ils"`, `"solar"`, `"fdr"`, `"fb-demo"`).
+- `setWispUrl(url)` / `testWisp(url?)` — configure/persist a custom Wisp v1 WebSocket proxy URL (empty uses local dev `/__wisp`) and test the live Wisp v1 handshake latency.
+- `listFiles(dir?)` / `readGuestFile(path)` / `writeGuestFile(path, content)` — list, read, and save executable pilot scripts in `/home/pilot/*`.
+- `captureFbDataUrl()` — export the active `/dev/fb0` frame as a PNG data URL (null if inactive).
+- `scripts()` — list the built-in avionics scripts mounted at `/obc/scripts/`.
+
+```js
+await app.js(`__bh.obc.boot()`);
+const res = await app.js(`__bh.obc.exec("uname -a && cat /obc/tau")`);
+```
+

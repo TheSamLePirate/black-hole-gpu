@@ -1,0 +1,31 @@
+#!/bin/sh
+# obc-solar — Planetary System, Gargantua & Lagrange Synoptic Overview.
+
+printf '\033[2J\033[H'
+printf '\033[1;36m╔══════════════════════════════════════════════════════════════╗\033[0m\n'
+printf '\033[1;36m║\033[1;37m       OBC EPHEMERIS SYNOPTIC — SOLAR / GARGANTUA / L2       \033[1;36m║\033[0m\n'
+printf '\033[1;36m╚══════════════════════════════════════════════════════════════╝\033[0m\n'
+
+cat /obc/telemetry.json 2>/dev/null | awk '
+function val(k,   m) {
+  if (match($0, "\"" k "\":[ ]*\"[^\"]*\"")) {
+    m = substr($0, RSTART + length(k) + 3, RLENGTH - length(k) - 3)
+    gsub(/^[: "]+|"+$/, "", m); return m
+  }
+  if (match($0, "\"" k "\":[ ]*[-0-9.eE+]+")) {
+    m = substr($0, RSTART + length(k) + 3, RLENGTH - length(k) - 3)
+    gsub(/^[: ]+/, "", m); return m
+  }
+  return ""
+}
+{
+  body = val("body")
+  tgt = val("target")
+  tau = val("dtau_dt") + 0
+  t = val("sim_time_s") + 0
+  printf "  CURRENT PRIMARY : \033[1;32m%s\033[0m\n", body
+  printf "  ACTIVE TARGET   : %s\n", (tgt != "" ? tgt : "none")
+  printf "  RELATIVISTIC τ  : dτ/dt = %.9f   SIM t = %.1f s\n\n", tau, t
+  printf "  SOLAR SYSTEM (AU) : ☀ ── ☿(0.39) ─ ♀(0.72) ─ ♁(1.00)+L2[JWST] ─ ♂(1.52) ─ ♃(5.2) ─ ♄(9.5)\n"
+  printf "  GARGANTUA SYSTEM  : ● Kerr(a=0.998) ─ Miller(dτ/dt≈0.000016) ─ Mann ─ Edmunds\n"
+}' || echo "Telemetry unavailable."

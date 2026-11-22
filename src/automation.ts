@@ -5,6 +5,7 @@
 //   __bh.game.help()
 import { issCameraList } from "./camera/iss-view";
 import { issCameraFrame, type IssCameraId } from "./system/iss-cameras";
+import { obc } from "./obc/runtime";
 import { hudHits, scopeRange } from "./ui/hud/symbology";
 import type { BootReport } from "./boot-timeline";
 import { bodyFixedOf, GEAR, gearHeight, groundBare, groundRelief, toBodyFixed } from "./system/our-surface";
@@ -1078,6 +1079,33 @@ export function installBh(c: BhContext) {
       setTime: (t: number) => sim.setTime(t),
       /** the simulation (sim.ts): its clocks, its step */
       sim,
+      /** the embedded Linux On-Board Computer (docs/PLAN-LINUX-OBC.md): lazy-booted Alpine aarch64 in Web Worker */
+      obc: {
+        status: () => obc.status(),
+        boot: () => obc.boot(),
+        stop: () => obc.stop(),
+        reboot: () => obc.reboot(),
+        suspend: () => obc.suspend(),
+        resume: () => obc.resume(),
+        resetDataDisk: () => obc.resetDataDisk(),
+        getConfig: () => obc.getConfig(),
+        setConfig: (patch: Parameters<typeof obc.setConfig>[0]) => obc.setConfig(patch),
+        exec: (command: string, timeoutMs?: number) => obc.exec(command, timeoutMs),
+        write: (input: string) => obc.write(input),
+        readScreen: () => obc.readScreen(),
+        telemetry: () => obc.telemetry(),
+        openConsole: () => obc.openConsole(),
+        closeConsole: () => obc.closeConsole(),
+        toggleConsole: () => obc.toggleConsole(),
+        runScript: (name: string) => obc.runScript(name),
+        setWispUrl: (url: string) => obc.setWispUrl(url),
+        testWisp: (url?: string) => obc.testWisp(url),
+        listFiles: (dir?: string) => obc.listFiles(dir),
+        readGuestFile: (path: string) => obc.readGuestFile(path),
+        writeGuestFile: (path: string, content: string) => obc.writeGuestFile(path, content),
+        captureFbDataUrl: () => obc.captureFbDataUrl(),
+        scripts: () => obc.scripts(),
+      },
     },
   });
 }

@@ -32,6 +32,8 @@ import { shownSpeed } from "./hud/model";
 import { drawGraph, type AssistGraph, type GraphPalette } from "./hud/graph";
 import { CHECKLISTS, NORMAL_CHECKLISTS } from "../game/systems";
 import { t as tx } from "../i18n";
+import { drawObcSurface } from "../obc/fb-renderer";
+import { obc } from "../obc/runtime";
 
 const W = 2048,
   H = 1024,
@@ -137,7 +139,21 @@ export function pfdAttitude(up: readonly number[] | null): { roll: number; pitch
 }
 
 /** The pages a display can show. */
-export const PAGES = ["pfd", "orbit", "nav", "systems", "docking", "plan", "clocks", "log", "approach", "landing", "ckl", "eecom"] as const;
+export const PAGES = [
+  "pfd",
+  "orbit",
+  "nav",
+  "systems",
+  "docking",
+  "plan",
+  "clocks",
+  "log",
+  "approach",
+  "landing",
+  "ckl",
+  "eecom",
+  "obc",
+] as const;
 export type PageId = (typeof PAGES)[number];
 /** each display's own page (its automatic one) */
 export const SLOT_PAGE: PageId[] = ["pfd", "orbit", "nav", "systems", "docking", "plan", "clocks", "log"];
@@ -154,9 +170,10 @@ const TAB_LABEL: Record<PageId, string> = {
   landing: "LDG",
   ckl: "CKL",
   eecom: "ECS",
+  obc: "OBC",
 };
-/** the tabs' strip: two rows of six at the screen's foot (drawing units: 512 × 683 a display) */
-const TABS = { cols: 6, rows: 2, x0: 12, y0: SH - 118, w: (SLOT - 24) / 6, h: 50 } as const;
+/** the tabs' strip: two rows of seven at the screen's foot (drawing units: 512 × 683 a display) */
+const TABS = { cols: 7, rows: 2, x0: 12, y0: SH - 118, w: (SLOT - 24) / 7, h: 50 } as const;
 
 /** What a touch on a page does (PLAN-VAISSEAUX X6a — the screens touched as the F-35's PCD is): a failure's
  *  checklist step ticked, its action given, a normal checklist's step or the next list, the SAS, the RCS's mode,
@@ -167,7 +184,8 @@ export type ScreenAct =
   | { kind: "nextList" }
   | { kind: "sas" }
   | { kind: "rcs" }
-  | { kind: "hold"; dir: "prograde" | "retrograde" };
+  | { kind: "hold"; dir: "prograde" | "retrograde" }
+  | { kind: "obc"; op: "boot" | "script" | "console"; script?: string };
 
 /** The tab under a point of a display (u, v: 0…1 across and down the screen, as the cabin's pick gives
  *  them), or null. */
@@ -207,6 +225,7 @@ export class CockpitScreens {
     const tab = tabAt(u, v);
     if (!tab || slot < 0 || slot >= 8) return undefined;
     this.pages[slot] = this.pages[slot] === tab ? null : tab;
+    if (this.pages[slot] === "obc" && obc.status().phase === "off") void obc.boot();
     this.pagesKey = this.pagesSetting();
     this.lastDraw = -Infinity;
     return this.pages[slot];
@@ -216,6 +235,7 @@ export class CockpitScreens {
   setPage(slot: number, page: PageId | null) {
     if (slot < 0 || slot >= 8) return;
     this.pages[slot] = page;
+    if (page === "obc" && obc.status().phase === "off") void obc.boot();
     this.pagesKey = this.pagesSetting();
     this.lastDraw = -Infinity;
   }
@@ -300,6 +320,32 @@ export class CockpitScreens {
       approach: (g, d) => (d.runway ? this.approachScreen(g, d.runway) : this.none(g, "APPROACH", "— no runway in reach —")),
       ckl: (g, d) => this.checklists(g, d),
       eecom: (g, d) => this.eecom(g, d),
+      obc: (g) => {
+        const st = obc.status();
+        const btnBarH = 56;
+        drawObcSurface(g, obc.drawSource(), 0, 0, SLOT, SH - btnBarH, "interstellar", {
+          footer: true,
+          hint: "TOUCH BOOT · CTRL+\\ / F11",
+        });
+        g.fillStyle = BG;
+        g.fillRect(0, SH - btnBarH, SLOT, btnBarH);
+        const bw = (SLOT - 30) / 4;
+        const by = SH - btnBarH + 6;
+        const bh = 44;
+        this.button(
+          g,
+          6,
+          by,
+          bw,
+          bh,
+          st.phase === "off" ? "BOOT" : st.phase === "suspended" ? "RESUME" : "DIAG",
+          st.phase === "off" || st.phase === "suspended" ? { kind: "obc", op: "boot" } : { kind: "obc", op: "script", script: "diag" },
+          st.phase === "ready",
+        );
+        this.button(g, 12 + bw, by, bw, bh, "ORB", { kind: "obc", op: "script", script: "orbit" });
+        this.button(g, 18 + bw * 2, by, bw, bh, "FB0", { kind: "obc", op: "script", script: "fb-demo" }, st.fbActive);
+        this.button(g, 24 + bw * 3, by, bw, bh, "HUD", { kind: "obc", op: "console" }, st.consoleOpen);
+      },
       landing: (g, d) => {
         const sf = d.info.surface as SurfaceLike | null | undefined;
         return sf ? this.landingScreen(g, d, sf) : this.none(g, "LANDING", "— no ground near —");

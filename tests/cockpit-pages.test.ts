@@ -6,9 +6,10 @@ import { CockpitScreens, PAGES, parsePages, tabAt } from "../src/ui/cockpitscree
 
 /** the (u, v) of a tab's centre: the strip's geometry inverted (the 2 % inset, 512 × 683 units) */
 const at = (k: number): [number, number] => {
-  const w = (512 - 24) / 6;
-  const x = 12 + (k % 6) * w + w / 2,
-    y = 683 - 118 + Math.floor(k / 6) * 50 + 25;
+  const cols = 7;
+  const w = (512 - 24) / cols;
+  const x = 12 + (k % cols) * w + w / 2,
+    y = 683 - 118 + Math.floor(k / cols) * 50 + 25;
   return [(x / 512 - 0.02) / 0.96, (y / 683 - 0.02) / 0.96];
 };
 

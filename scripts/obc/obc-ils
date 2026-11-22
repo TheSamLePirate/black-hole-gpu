@@ -1,0 +1,90 @@
+#!/bin/sh
+# obc-ils — ILS Approach Guidance (Localizer & 3 deg Glide Slope).
+# Pass `--fb` when Python 3 is installed to render live ILS crosshairs on /dev/fb0.
+
+if [ "$1" = "--fb" ] && [ -x /usr/bin/python3 ] && ! head -n 1 /usr/bin/python3 2>/dev/null | grep -q '^#!'; then
+  exec python3 - <<'PY'
+import time, obc
+bus = obc.AvionicsBus()
+with obc.Framebuffer() as fb:
+    cyan = fb.color(98, 230, 255)
+    dim = fb.color(32, 96, 118)
+    ok = fb.color(125, 255, 154)
+    amber = fb.color(255, 179, 71)
+    white = fb.color(235, 250, 255)
+    for _ in range(120):
+        st = bus.read()
+        fb.clear(4, 24, 34)
+        fb.text(18, 16, "OBC ILS APPROACH GUIDANCE", cyan, scale=2)
+        rw = st.nav.get("runway") if isinstance(st.nav, dict) else None
+        fb.rect(24, 52, 464, 1, dim)
+        fb.circle(256, 256, 140, dim)
+        fb.line(116, 256, 396, 256, dim)
+        fb.line(256, 116, 256, 396, dim)
+        if rw:
+            loc = max(-2.5, min(2.5, float(rw.get("loc_deg", 0.0))))
+            gs = max(-1.0, min(1.0, float(rw.get("gs_deg", 0.0))))
+            lx = int(256 - (loc / 2.5) * 120)
+            gy = int(256 - (gs / 1.0) * 120)
+            fb.line(lx, 126, lx, 386, ok if abs(loc) < 0.5 else amber)
+            fb.line(126, gy, 386, gy, ok if abs(gs) < 0.25 else amber)
+            fb.filled_circle(lx, gy, 6, white)
+            fb.text(24, 424, f"RWY {rw.get('ident','')}  DME {float(rw.get('dist_m',0))/1000:.1f} KM", ok, scale=2)
+            fb.text(24, 456, f"LOC {loc:+.2f}   GS {gs:+.2f}   AGL {st.height_over_ground:.0f}M", white, scale=2)
+        else:
+            fb.text(108, 246, "NO RUNWAY IN RANGE", amber, scale=2)
+            fb.text(24, 456, f"HDG {st.heading:05.1f}  MSL {st.altitude_msl:.0f}M  TAS {st.true_airspeed:.0f}", white, scale=2)
+        fb.flush()
+        time.sleep(0.15)
+PY
+fi
+
+printf '\033[2J\033[H'
+printf '\033[1;36m╔══════════════════════════════════════════════════════════════╗\033[0m\n'
+printf '\033[1;36m║\033[1;37m       OBC ILS APPROACH — LOCALIZER & 3° GLIDE SLOPE         \033[1;36m║\033[0m\n'
+printf '\033[1;36m╚══════════════════════════════════════════════════════════════╝\033[0m\n'
+
+cat /obc/telemetry.json 2>/dev/null | awk '
+function val(k,   m) {
+  if (match($0, "\"" k "\":[ ]*\"[^\"]*\"")) {
+    m = substr($0, RSTART + length(k) + 3, RLENGTH - length(k) - 3)
+    gsub(/^[: "]+|"+$/, "", m); return m
+  }
+  if (match($0, "\"" k "\":[ ]*[-0-9.eE+]+")) {
+    m = substr($0, RSTART + length(k) + 3, RLENGTH - length(k) - 3)
+    gsub(/^[: ]+/, "", m); return m
+  }
+  return ""
+}
+{
+  rwy = val("ident")
+  name = val("name")
+  dist = val("dist_m") + 0
+  loc = val("loc_deg") + 0
+  gs = val("gs_deg") + 0
+  alt = val("altitude_msl_m") + 0
+  agl = val("height_over_ground_m") + 0
+  tas = val("true_airspeed_mps") + 0
+  vs = val("vertical_speed_mps") + 0
+  hdg = val("heading_deg") + 0
+  if (rwy == "") {
+    printf "  NO ACTIVE RUNWAY IN RANGE\n"
+    printf "  HDG %05.1f°   MSL %7.0f m   AGL %6.0f m   TAS %5.1f m/s\n", hdg, alt, agl, tas
+    exit
+  }
+  printf "  RUNWAY  : \033[1;32m%s\033[0m (%s)\n", rwy, name
+  printf "  DIST    : %6.2f km (%.1f NM)   AGL : %5.0f m\n", dist/1000, dist/1852, agl
+  printf "  TAS     : %5.1f m/s (%.0f kt)  V/S : %+5.1f m/s\n", tas, tas*1.94384, vs
+  printf "  LOC DEV : %+6.2f°   G/S DEV : %+6.2f°\n\n", loc, gs
+  # Draw localizer scale (-2.5 .. +2.5 deg)
+  idx = int((loc / 2.5) * 10 + 10.5)
+  if (idx < 0) idx = 0; if (idx > 20) idx = 20
+  line = ""
+  for (i = 0; i <= 20; i++) line = line (i == idx ? "◆" : (i == 10 ? "│" : "─"))
+  printf "  LOC  L [%s] R\n", line
+  gidx = int((gs / 0.7) * 5 + 5.5)
+  if (gidx < 0) gidx = 0; if (gidx > 10) gidx = 10
+  gline = ""
+  for (i = 0; i <= 10; i++) gline = gline (i == gidx ? "◆" : (i == 5 ? "┼" : "─"))
+  printf "  G/S LO [%s] HI\n", gline
+}' || echo "Telemetry unavailable."

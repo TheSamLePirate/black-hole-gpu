@@ -2,6 +2,7 @@
 // radians for angles (heading, attitude, track); radar offsets east/north/up in metres. No dependency on the simulator.
 // Version 1 grows only by optional blocks: an older console ignores them, a newer one shows what an older pilot sends.
 import type { MapApproach } from "../world/approach-draw";
+import type { ObcCrewSnapshot } from "../obc/types";
 import { type InstrumentSpace, readSpace } from "./instruments-space";
 import { type PicBlock, readPicBlock } from "./picture";
 export const INSTRUMENT_KEYS = ["alt", "speed", "vz", "g", "q", "mach", "heat", "throttle", "fuel", "tau"] as const;
@@ -220,6 +221,8 @@ export interface InstrumentSnapshot extends InstrumentSpace {
    *  sensors hold, four times a second */
   pic?: PicBlock;
   zones?: InstrumentZone[];
+  /** embedded Linux OBC state mirror (lightweight terminal tail & status) */
+  obc?: ObcCrewSnapshot | null;
 }
 
 const record = (x: unknown): x is Record<string, unknown> => !!x && typeof x === "object" && !Array.isArray(x);
@@ -539,6 +542,24 @@ export function readInstruments(x: unknown): InstrumentSnapshot | null {
           .map((w) => label(w, 16))
           .filter(Boolean)
       : [],
+    ...(record(x.obc)
+      ? {
+          obc: {
+            phase:
+              x.obc.phase === "booting" || x.obc.phase === "ready" || x.obc.phase === "suspended" || x.obc.phase === "error"
+                ? x.obc.phase
+                : "off",
+            distro: label(x.obc.distro, 24) || "alpine-3.24",
+            fbActive: x.obc.fbActive === true,
+            dtauDt: finite(x.obc.dtauDt) ? x.obc.dtauDt : 1,
+            activeScript: typeof x.obc.activeScript === "string" ? x.obc.activeScript.slice(0, 32) : null,
+            lines: Array.isArray(x.obc.lines) ? x.obc.lines.slice(0, 20).map((s) => label(s, 96)) : [],
+            cursorRow: finite(x.obc.cursorRow) ? Math.max(0, Math.min(23, Math.round(x.obc.cursorRow))) : 0,
+            cursorCol: finite(x.obc.cursorCol) ? Math.max(0, Math.min(63, Math.round(x.obc.cursorCol))) : 0,
+            seq: finite(x.obc.seq) ? Math.max(0, Math.round(x.obc.seq)) : 0,
+          },
+        }
+      : {}),
   };
 }
 

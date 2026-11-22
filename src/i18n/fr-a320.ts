@@ -225,4 +225,12 @@ export default {
   Stand: "Poste",
   "The airport's ground network: loading…": "Le réseau de roulage de l'aéroport : chargement…",
   "{0} — lined up on the runway instead": "{0} — aligné sur la piste à la place",
+  "Linux OBC (EFB)": "Linux OBC (EFB)",
+  "Boot Linux OBC": "Démarrer Linux OBC",
+  OBC: "OBC",
+  "Console HUD": "Console HUD",
+  "LECAM OBC": "LECAM OBC",
+  "OBC shown on Lower ECAM": "OBC affiché sur le Lower ECAM",
+  "ILS Guide": "Guide ILS",
+  "FB0 Demo": "Démo FB0",
 };

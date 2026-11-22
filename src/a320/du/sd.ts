@@ -10,6 +10,8 @@ import type { DuData } from "./data";
 import { type Ctx, Display, fontOf } from "./display";
 import { bottomStrip, EcamSvg } from "./ecam-common";
 import { PAGES, type SdPage, type SdState } from "./sd-pages";
+import { drawObcSurface } from "../../obc/fb-renderer";
+import { obc } from "../../obc/runtime";
 
 export class Sd extends Display {
   private pages = new Map<string, { page: SdPage; svg: EcamSvg; inited: boolean }>();
@@ -25,8 +27,10 @@ export class Sd extends Display {
 
   /** The page wanted now: the panel's, else the FWC's. */
   pageFor(d: DuData, t: number): string {
-    // (the ECAM's — its control panel's button, a failure's page, STATUS —, else the panel's own without it)
+    // (the ECAM's — its control panel's button, a failure's page, STATUS, or Linux OBC —, else the panel's own without it)
+    if (String(d.deck["ecam/sd-page"] ?? "") === "obcPage") return "obcPage";
     const asked = d.ecam ? (d.ecam.sd ?? "") : String(d.deck["ecam/sd-page"] ?? "");
+    if (asked === "obcPage") return "obcPage";
     if (asked && this.pages.has(asked)) return asked;
     const S = this.state;
     // (a flight controls' check on the ground: the surfaces moved past a third of their travel)
@@ -46,6 +50,15 @@ export class Sd extends Display {
 
   draw(ctx: Ctx, d: DuData, t: number) {
     const name = this.pageFor(d, t);
+    if (name === "obcPage") {
+      drawObcSurface(ctx, obc.drawSource(), 12, 12, 1000, 996, "a320", {
+        footer: true,
+        hint: "MCDU OBC LINK · CTRL+\\ / F11",
+      });
+      this.state.last = name;
+      this.shown = name;
+      return;
+    }
     const P = this.pages.get(name)!;
     // (the others fetched in the background: no blank screen on the next button)
     for (const q of this.pages.values()) q.svg.get();

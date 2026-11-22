@@ -38,6 +38,11 @@ await $`mkdir -p _site/runways && cp -R assets/runways/v1 _site/runways/`;
 // (the approaches' real data — PLAN-APPROCHES AP0 —, their tiles beside the runways')
 await $`mkdir -p _site/approaches && cp -R assets/approaches/v1 _site/approaches/`;
 await $`cp vendor/basis/basis_transcoder.wasm _site/basis_transcoder.wasm`;
+// Embedded Linux OBC assets (docs/PLAN-LINUX-OBC.md): kernel WASM, Alpine EROFS distro, and project scripts
+await $`mkdir -p _site/obc/scripts/lib`;
+await $`cp node_modules/unkernel/dist/unkernel.wasm _site/obc/unkernel.wasm`;
+await $`cp assets/obc/alpine.erofs assets/obc/distros.json _site/obc/`;
+await $`cp scripts/obc/obc-* _site/obc/scripts/ && cp scripts/obc/lib/* _site/obc/scripts/lib/`;
 await $`mkdir -p _site/docs/video`;
 await $`cp -R gallery/. _site/docs/`;
 await $`cp docs/video/*.mp4 _site/docs/video/`;

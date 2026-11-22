@@ -8,6 +8,7 @@ import checklists from "../a320/checklists.json";
 import { t, tf } from "../i18n";
 import { SERVICES } from "../a320/services";
 import { button, el, h } from "./kit";
+import { obc } from "../obc/runtime";
 
 type V3 = [number, number, number];
 interface Item {
@@ -39,6 +40,8 @@ export interface A320PageDeps {
   push?(cmd: "call" | "straight" | "left" | "right" | "stop" | "disconnect"): string;
   /** the control an item names, shown on the deck (null: none) */
   marker(p: V3 | null): void;
+  /** toggle A320 Lower ECAM OBC page on/off (PLAN-LINUX-OBC) */
+  setSdPage?(page: string): void;
   toast(s: string): void;
 }
 
@@ -174,6 +177,47 @@ export class A320Page {
       ),
       button({ label: t("Gear gravity extension"), testid: "a320-gravity", onClick: () => this.d.toast(this.d.gravity()) }),
     );
+    const stObc = obc.status();
+    const obcRow = h("div", { class: "sy-row" });
+    obcRow.append(
+      button({
+        label: stObc.phase === "off" ? t("Boot Linux OBC") : `${t("OBC")}: ${stObc.phase.toUpperCase()}`,
+        on: stObc.phase === "ready",
+        testid: "a320-obc-boot",
+        onClick: () => {
+          void obc.boot().then(() => redo());
+          redo();
+        },
+      }),
+      button({
+        label: t("Console HUD"),
+        testid: "a320-obc-console",
+        onClick: () => obc.toggleConsole(),
+      }),
+      button({
+        label: t("LECAM OBC"),
+        testid: "a320-obc-lecam",
+        onClick: () => {
+          if (obc.status().phase === "off") void obc.boot();
+          this.d.setSdPage?.("obcPage");
+          this.d.toast(t("OBC shown on Lower ECAM"));
+        },
+      }),
+      button({
+        label: t("ILS Guide"),
+        testid: "a320-obc-ils",
+        onClick: () => void obc.runScript("ils"),
+      }),
+      button({
+        label: t("FB0 Demo"),
+        testid: "a320-obc-fb",
+        onClick: () => {
+          this.d.setSdPage?.("obcPage");
+          void obc.runScript("fb-demo");
+        },
+      }),
+    );
+    kids.push(el("div", "sy-h", t("Linux OBC (EFB)")), obcRow);
     // (the checklists: one chosen, its items ticked; an item with a marker shown on the deck)
     const opts: [string, string][] = [];
     GROUPS.forEach((g) => g.checklists.forEach((c, k) => opts.push([`${g.name}|${k}`, `${t(g.name)} — ${c.title}`])));

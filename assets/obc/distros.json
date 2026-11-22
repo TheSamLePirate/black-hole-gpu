@@ -1,0 +1,20 @@
+{
+	"abi": 3,
+	"base": "base-eaa33cc640286a2e",
+	"distros": [
+		{
+			"name": "alpine",
+			"file": "alpine.erofs",
+			"size": 4046848,
+			"sha256": "02460df31c14772659bb347a651693ac9aaa7a8c2477f05e4e5e4d5c756dd567",
+			"image": "alpine-3.24.4-e0d59c37c0882d76"
+		},
+		{
+			"name": "debian",
+			"file": "debian.erofs",
+			"size": 72593408,
+			"sha256": "d5894fa27ee868108c56c8a635d122687937c741f26535296e7b61b5e2c2f5e8",
+			"image": "debian-13.7-a6bb4b5e547bc28a"
+		}
+	]
+}

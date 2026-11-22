@@ -26,7 +26,8 @@ export type CrewView =
   | "timeline"
   | "rel"
   | "ground"
-  | "descent";
+  | "descent"
+  | "obc";
 
 /** The craft's profile: its own word (the K1 block), else the families it opens (an older pilot's snapshot). */
 export function profileOf(s: Pick<InstrumentSnapshot, "craft" | "caps" | "sys"> | null | undefined): CrewProfile {
@@ -39,8 +40,8 @@ export function profileOf(s: Pick<InstrumentSnapshot, "craft" | "caps" | "sys"> 
 /** Each profile's views, in their order: the F-35's tactical first (its mission, its flight, its sensors), the
  *  spacecraft's its orbit and its flight computer. */
 export const PROFILE_VIEWS: Record<CrewProfile, CrewView[]> = {
-  jet: ["air", "pfd", "nd", "approach", "radar", "map", "globe", "dash", "plan", "schematic", "telemetry"],
-  space: ["sdash", "orbit", "system", "navball", "dock", "budget", "eecom", "timeline", "rel", "ground", "globe", "telemetry"],
+  jet: ["air", "pfd", "nd", "approach", "radar", "map", "globe", "dash", "plan", "schematic", "telemetry", "obc"],
+  space: ["sdash", "orbit", "system", "navball", "dock", "budget", "eecom", "timeline", "rel", "ground", "globe", "telemetry", "obc"],
 };
 
 export type TileKey =

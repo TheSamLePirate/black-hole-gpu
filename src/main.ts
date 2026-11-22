@@ -76,6 +76,9 @@ import { CameraController, isTyping } from "./controls";
 import { effectiveBindings, freeCameraKeys } from "./input/bindings";
 import { matchKey, type KeyAction } from "./input/keymap";
 import { installBh } from "./automation";
+import { obc } from "./obc/runtime";
+import { createSimObcAdapter } from "./obc/sim-adapter";
+import { ObcConsoleOverlay } from "./ui/obc-console";
 import { netParams } from "./net/load";
 import { NetPanel } from "./ui/netpanel";
 import { NetMatch } from "./ui/netmatch";
@@ -3851,6 +3854,9 @@ async function main() {
           return t("Gear gravity extension: the gear falls by its own weight");
         },
         marker: (p) => (deckMarker.at = p),
+        setSdPage: (page) => {
+          deckPoser.props["ecam/sd-page"] = page;
+        },
         toast: (s) => panel.toast(s),
         // (on the ground: its services, its pushback — controller/a320ground.ts)
         ground: () =>
@@ -4302,6 +4308,7 @@ async function main() {
       if (!e.repeat && flying()) wheel.open(orderItems(), { fr: "Patrouille", en: "Flight" });
     },
     tools: () => DEV_TOOLS && toolsWin.toggle(),
+    obcConsole: () => obcConsole.toggle(),
     gameMode: (e, m) => {
       if (!e.repeat) setGameMode(m as GameMode);
     },
@@ -4622,6 +4629,18 @@ async function main() {
         else if (a.kind === "sas") pilotSas();
         else if (a.kind === "rcs") panel.toast(camera.rcsModeToggle());
         else if (a.kind === "hold") pilotHold(camera.pilot.hold === a.dir ? "none" : a.dir);
+        else if (a.kind === "obc") {
+          if (a.op === "boot") {
+            const st = obc.status();
+            void (st.phase === "suspended" || st.hasSnapshot ? obc.resume() : obc.boot());
+            panel.toast("Linux OBC");
+          } else if (a.op === "script" && a.script) {
+            void obc.runScript(a.script);
+            panel.toast(`OBC: ${a.script}`);
+          } else if (a.op === "console") {
+            obcConsole.toggle();
+          }
+        }
         return;
       }
       const p = cockpitScreens.clickScreen(slot, u, v);
@@ -4733,6 +4752,9 @@ async function main() {
       return d?.field ? (camera.approachForField(d.field.icao ?? d.name, W.at(-2) ?? null)?.a ?? null) : null;
     },
     insertArrival: () => camera.routeProcedures(),
+    setSdPage: (page) => {
+      deckPoser.props["ecam/sd-page"] = page;
+    },
   };
   let mcdus: [Mcdu, Mcdu] | null = null;
   const a320Mcdus = () => (mcdus ??= [new Mcdu(0, mcduHost), new Mcdu(1, mcduHost)]);
@@ -5596,6 +5618,16 @@ async function main() {
   });
 
   addEventListener("keydown", (e: KeyboardEvent) => {
+    // Dedicated Mac-safe Linux OBC HUD toggle (F11, Ctrl+\ or Ctrl+² / Ctrl+` — works even while xterm.js has focus)
+    if (
+      !titleScreen?.isOpen &&
+      ((e.code === "F11" && !e.metaKey && !e.ctrlKey && !e.altKey) ||
+        (e.ctrlKey && !e.metaKey && !e.altKey && (e.code === "Backslash" || e.code === "Backquote")))
+    ) {
+      e.preventDefault();
+      obcConsole.toggle();
+      return;
+    }
     if (isTyping(e) || e.metaKey || e.ctrlKey || titleScreen?.isOpen) return;
     // (Enter on a focused button presses it, not the game's binding)
     if (e.key === "Enter" && (e.target as HTMLElement | null)?.closest?.("button, a, [role=button]")) return;
@@ -7056,6 +7088,15 @@ async function main() {
     });
     if (DEV_TOOLS)
       topBar.add({ id: "btn-tools", label: t("Game tools"), icon: TB_ICONS.tools, key: "F10", run: () => toolsWin.toggle(), prio: 9 });
+    topBar.add({
+      id: "btn-obc",
+      label: t("Linux OBC"),
+      icon: TB_ICONS.obc,
+      key: "F11",
+      run: () => obcConsole.toggle(),
+      prio: 6,
+      testid: "topbar-obc",
+    });
     // the ship's least used controls (ui/flighthud.ts): the ⋯ menu takes them when narrow, like the actions
     topBar.overflowable(flightHud.barPieces);
     // (the page's bar, emptied)
@@ -8113,6 +8154,10 @@ async function main() {
         flightHud.showReport(lastReport);
         return `report: ${lastReport.title} — ${lastReport.letter}`;
       }
+      if (name === "obc_console") {
+        obcConsole.open();
+        return "Linux OBC console opened";
+      }
       // (a cockpit display's page: the cockpit view, the page on that display)
       const id = name.slice("cockpit_".length) as import("./ui/cockpitscreens").PageId;
       cockpitScreens.setPage(slot, id);
@@ -8306,6 +8351,20 @@ async function main() {
       return et.pending > 0 || et.orthoPending > 0 || (mt.active && mt.pending > 0) || renderer.earthScenery.pending;
     },
     () => settings.showNetwork,
+  );
+  // Embedded Linux On-Board Computer (docs/PLAN-LINUX-OBC.md): lazy-booted on demand, zero startup overhead
+  const obcConsole = new ObcConsoleOverlay(obc);
+  document.body.append(obcConsole.el);
+  obc.setAdapter(
+    createSimObcAdapter({
+      camera,
+      sim,
+      settings,
+      tools,
+      voice,
+      isFrozen: () => session.frozen,
+      lastDt: () => 1 / 60,
+    }),
   );
   // the automation handle (devtools, tests, scripts): debug/bh.ts
   installBh({

@@ -634,4 +634,7 @@ export default {
     "L'image tourne ici à {0} images par seconde, sous le plancher jouable de {1}. Un cran plus léger volerait plus régulièrement ; rien ne change si vous n'acceptez pas.",
   "images a second": "images par seconde",
   "Lighter settings applied — {0} in the settings puts them back": "Réglages allégés — {0} dans les réglages les remet",
+  "Linux OBC": "Linux OBC",
+  "Linux OBC (On-Board Computer) HUD console — Alpine aarch64 shell, /dev/fb0 graphics, avionics scripts":
+    "Console HUD Linux OBC (ordinateur de bord) — shell Alpine aarch64, graphique /dev/fb0, scripts avioniques",
 } satisfies Record<string, string>;

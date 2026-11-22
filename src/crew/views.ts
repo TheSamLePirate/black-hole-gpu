@@ -25,6 +25,8 @@ import { drawDescent } from "./draw/descent";
 import { defaultMapState, drawSystemMap } from "./draw/system";
 import { SystemRenderer } from "./sys3d/gpu";
 import { drawAirStatus, drawSpaceStatus } from "./draw/spacestat";
+import { drawObcView, type CrewObcAction } from "./draw/obc";
+import type { ObcCrewSnapshot } from "../obc/types";
 import type { CrewView } from "./profile";
 import { L } from "./lang";
 import { store } from "../util/storage";
@@ -53,6 +55,7 @@ const VIEW_WORDS: Record<CrewView, [string, string]> = {
   schematic: ["Systèmes", "Systems"],
   plan: ["Plan de vol", "Flight plan"],
   telemetry: ["Télémétrie", "Telemetry"],
+  obc: ["OBC Linux", "Linux OBC"],
 };
 /** a view's name in the console's language */
 export const viewName = (v: CrewView) => L(...VIEW_WORDS[v]);
@@ -168,6 +171,11 @@ export class CrewViews {
   private unproject: ((x: number, y: number) => Where | null) | null = null;
   /** where a menu was opened on the map or the ND (its crosshair while it is open) */
   marker: Point | null = null;
+  /** Latest Linux OBC snapshot received via BroadcastChannel("kerr-obc") */
+  private obcSnap: ObcCrewSnapshot | null = null;
+  private obcActions: CrewObcAction[] = [];
+  private obcBc: BroadcastChannel | null = null;
+  onObcAction: (action: "boot" | "script", script?: string) => void = () => {};
   /** a waypoint touched: its index, the finger's place, when; dragged once held 250 ms still (armed), else the map */
   private drag: { i: number; x: number; y: number; moved: boolean; at: number; armed: boolean } | null = null;
 
@@ -180,6 +188,21 @@ export class CrewViews {
     this.resize = new ResizeObserver(() => this.request());
     this.tiles.onLoad = () => this.request();
     this.resize.observe(canvas);
+    if (typeof BroadcastChannel !== "undefined") {
+      try {
+        this.obcBc = new BroadcastChannel("kerr-obc");
+        this.obcBc.onmessage = (ev: MessageEvent) => {
+          const msg = ev.data as { kind?: string; snap?: ObcCrewSnapshot } | null;
+          if (msg?.kind === "obc-state" && msg.snap) {
+            this.obcSnap = msg.snap;
+            if (this.view === "obc") this.request();
+          }
+        };
+        this.obcBc.postMessage({ kind: "obc-req-sync" });
+      } catch {
+        this.obcBc = null;
+      }
+    }
     canvas.addEventListener("pointerdown", (e) => {
       if (e.button !== 0) return;
       canvas.setPointerCapture(e.pointerId);
@@ -271,6 +294,18 @@ export class CrewViews {
         return;
       }
       // (a body touched on the map)
+      if (this.view === "obc" && this.moved < 8) {
+        const hit = this.obcActions.find((a) => x >= a.rect.x && x <= a.rect.x + a.rect.w && y >= a.rect.y && y <= a.rect.y + a.rect.h);
+        if (hit) {
+          this.onObcAction(hit.kind, hit.script);
+          if (this.obcBc) {
+            if (hit.kind === "boot") this.obcBc.postMessage({ kind: "obc-boot" });
+            else if (hit.script) this.obcBc.postMessage({ kind: "obc-script", script: hit.script });
+          }
+          this.pointers.delete(e.pointerId);
+          return;
+        }
+      }
       if (this.view === "system" && this.moved < 8) {
         const b = this.mapBodies
           .map((q) => ({ q, d: Math.hypot(q.x - x, q.y - y) }))
@@ -629,6 +664,10 @@ export class CrewViews {
       case "telemetry": {
         const end = this.paused ? this.pausedAt : (sc.history.at(-1)?.t ?? 0);
         this.readout = drawChart(p, r, sc.history, this.channel, this.window, end, this.inspect).readout;
+        break;
+      }
+      case "obc": {
+        this.obcActions = drawObcView(p, r, sc.snap?.obc ?? this.obcSnap);
         break;
       }
     }

@@ -4,6 +4,7 @@ import { EAR_LIMITS, earClosed, earOpened, earRelayRefusal, foreignOrigin, queue
 import { createMoonTiles } from "./server/moon-tiles";
 import { createRooms, type Peer } from "./server/rooms";
 import { createTraffic } from "./server/traffic";
+import { wispClose, wispMessage, wispOpen, wispUpgrade, type WispSession } from "./server/wisp-relay";
 
 const port = Number(process.env.PORT ?? 3000);
 // (started by a test or the flight lab — tests/e2e/lib/app.ts — for its own run: gone with its parent, never
@@ -245,6 +246,32 @@ const server = Bun.serve({
     "/openrouter.html": () => new Response(Bun.file("pwa/openrouter.html"), { headers: { "content-type": "text/html; charset=utf-8" } }),
     "/basis_transcoder.wasm": () =>
       new Response(Bun.file("vendor/basis/basis_transcoder.wasm"), { headers: { "content-type": "application/wasm" } }),
+    // Embedded Linux OBC assets (docs/PLAN-LINUX-OBC.md): kernel WASM, Alpine EROFS (with Range support), and live scripts
+    "/obc/unkernel.wasm": async (req) => {
+      const file = Bun.file("node_modules/unkernel/dist/unkernel.wasm");
+      if (!(await file.exists())) return new Response("not found", { status: 404 });
+      return serveRangeFile(req, file, "application/wasm");
+    },
+    "/obc/alpine.erofs": async (req) => {
+      const file = Bun.file("assets/obc/alpine.erofs");
+      if (!(await file.exists())) return new Response("not found", { status: 404 });
+      return serveRangeFile(req, file, "application/octet-stream");
+    },
+    "/obc/distros.json": async () => {
+      const file = Bun.file("assets/obc/distros.json");
+      if (!(await file.exists())) return new Response("not found", { status: 404 });
+      return new Response(file, { headers: { "content-type": "application/json" } });
+    },
+    "/obc/scripts/*": async (req) => {
+      const rel = new URL(req.url).pathname.slice("/obc/scripts/".length);
+      if (!/^(lib\/)?[a-zA-Z0-9._-]+$/.test(rel) || rel.includes("..")) return new Response("not found", { status: 404 });
+      const file = Bun.file(`scripts/obc/${rel}`);
+      if (!(await file.exists())) return new Response("not found", { status: 404 });
+      return new Response(file, { headers: { "content-type": "text/plain; charset=utf-8", "cache-control": "no-store" } });
+    },
+    // Dev-only Wisp v1 WebSocket-to-TCP relay for OBC internet access (docs/PLAN-LINUX-OBC.md §6)
+    "/__wisp": ((req: Request, srv: { upgrade(r: Request, o: { data: unknown }): boolean }) =>
+      wispUpgrade(req, srv, dev || process.env.KERR_WISP_RELAY === "1")) as never,
     // Dev only: read back files from snapshots/ (e.g. reference data for the precision probe).
     // Dev only: whether the relay to Deepgram is there (GET), the relay itself (a WebSocket)
     "/__deepgram": deepgramRelay("listen", [
@@ -272,6 +299,7 @@ const server = Bun.serve({
     // the page's side opened: Deepgram's opened with the key, what came before it queued
     open(ws) {
       if ((ws.data as unknown as Peer).kind === "rooms") return;
+      if ((ws.data as unknown as WispSession).kind === "wisp") return wispOpen(ws);
       const r = ws.data as unknown as Relay;
       earOpened();
       // (a relay's life bounded — the ear's minutes, the voice's line —: closed after it, the key not spent for ever)
@@ -291,6 +319,7 @@ const server = Bun.serve({
     },
     message(ws, m) {
       if ((ws.data as unknown as Peer).kind === "rooms") return rooms.websocket.message(ws as never, m as never);
+      if ((ws.data as unknown as WispSession).kind === "wisp") return wispMessage(ws, m as string | ArrayBuffer | Uint8Array);
       const r = ws.data as unknown as Relay;
       if (r.up?.readyState === WebSocket.OPEN) r.up.send(m);
       // (the queue before Deepgram's side opens: bounded)
@@ -299,6 +328,7 @@ const server = Bun.serve({
     },
     close(ws) {
       if ((ws.data as unknown as Peer).kind === "rooms") return rooms.websocket.close(ws as never);
+      if ((ws.data as unknown as WispSession).kind === "wisp") return wispClose(ws);
       const r = ws.data as unknown as Relay;
       earClosed();
       if (r.timer) clearTimeout(r.timer);
@@ -306,5 +336,46 @@ const server = Bun.serve({
     },
   },
 });
+
+/** Serve a static binary file with full HTTP Range (206 Partial Content) & HEAD support (needed by Unkernel HttpBase). */
+async function serveRangeFile(req: Request, file: ReturnType<typeof Bun.file>, contentType: string): Promise<Response> {
+  const size = file.size;
+  const etag = `"${size}-${file.lastModified}"`;
+  const baseHeaders: Record<string, string> = {
+    "content-type": contentType,
+    "accept-ranges": "bytes",
+    etag,
+    "cache-control": "public, max-age=3600",
+  };
+  if (req.method === "HEAD") {
+    return new Response(null, { status: 200, headers: { ...baseHeaders, "content-length": String(size) } });
+  }
+  const range = req.headers.get("range");
+  if (range) {
+    const m = /^bytes=(\d*)-(\d*)$/.exec(range.trim());
+    if (m) {
+      let start = m[1] ? Number.parseInt(m[1], 10) : 0;
+      let end = m[2] ? Number.parseInt(m[2], 10) : size - 1;
+      if (!m[1] && m[2]) {
+        const suffix = Number.parseInt(m[2], 10);
+        start = Math.max(0, size - suffix);
+        end = size - 1;
+      }
+      if (start >= size || start > end) {
+        return new Response(null, { status: 416, headers: { "content-range": `bytes */${size}` } });
+      }
+      end = Math.min(end, size - 1);
+      return new Response(file.slice(start, end + 1), {
+        status: 206,
+        headers: {
+          ...baseHeaders,
+          "content-range": `bytes ${start}-${end}/${size}`,
+          "content-length": String(end - start + 1),
+        },
+      });
+    }
+  }
+  return new Response(file, { status: 200, headers: { ...baseHeaders, "content-length": String(size) } });
+}
 
 console.log(`Black hole simulator → ${server.url}`);

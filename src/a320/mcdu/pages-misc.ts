@@ -10,6 +10,7 @@ import type { LskResult, Mcdu, Page } from "./mcdu";
 import { brackets, MC, type Line, run, type Screen } from "./screen";
 import { fuelFigures } from "./pages-init";
 import { distAlong, dur, hhmm, num, tons, trip } from "./util";
+import { obc } from "../../obc/runtime";
 
 const D = Math.PI / 180;
 const NM = 1852;
@@ -231,19 +232,91 @@ const status: Page = {
 
 const menu: Page = {
   screen(): Screen {
+    const obcSt = obc.status().phase.toUpperCase();
     const lines: Line[] = [
       { l: [run("<FMGC", MC.green)], rs: [run("SELECT ")], r: [run("NAV B/UP>")] },
       { l: [run("<ATSU")] },
       { l: [run("<AIDS")] },
       { l: [run("<CFDS")] },
-      {},
+      { l: [run("<OBC LINK", MC.cyan)], rs: [run("LINUX ")], r: [run(obcSt, obcSt === "READY" ? MC.green : MC.amber)] },
       {},
     ];
     return { title: [run("MCDU MENU")], lines };
   },
   lsk(m, side, n): LskResult {
     if (`${side}${n}` === "L1") return void m.open("status");
+    if (`${side}${n}` === "L5") {
+      if (obc.status().phase === "off") void obc.boot();
+      return void m.open("obc");
+    }
     m.say("NOT AVAILABLE");
+  },
+};
+
+/** Linux On-Board Computer MCDU page (docs/PLAN-LINUX-OBC.md §3.1): status, script triggers, LECAM toggle, scratchpad exec. */
+const obcPage: Page = {
+  screen(): Screen {
+    const st = obc.status();
+    const tel = obc.telemetry();
+    const tail = obc.term.tail(2);
+    const l4 = (tail[0] ?? "READY FOR COMMANDS").slice(0, 23);
+    const l5 = (tail[1] ?? "TYPE IN SP + R6 EXEC").slice(0, 23);
+    const stCol = st.phase === "ready" ? MC.green : st.phase === "error" ? MC.amber : MC.cyan;
+    const lines: Line[] = [
+      {
+        ls: [run(" STATE")],
+        l: [run(`<${st.phase === "off" ? "BOOT" : "DIAG"}`, MC.cyan)],
+        rs: [run("dTAU/dt ")],
+        r: [run(`${tel.dtau_dt.toFixed(4)}`, stCol)],
+      },
+      { ls: [run(" AVIONICS")], l: [run("<ILS GUIDE", MC.cyan)], r: [run("ORBIT>", MC.cyan)] },
+      { ls: [run(" DISPLAY")], l: [run("<LECAM OBC", MC.green)], r: [run("FB0 DEMO>", MC.cyan)] },
+      { ls: [run(" TTY[-2]")], l: [run(l4, MC.white, true)] },
+      { ls: [run(" TTY[-1]")], l: [run(l5, MC.green, true)] },
+      { l: [run("<RETURN")], rs: [run("HUD / SP ")], r: [run("EXEC/HUD>", MC.cyan)] },
+    ];
+    return { title: [run("OBC LINUX LINK", MC.cyan)], lines };
+  },
+  lsk(m, side, n, sp): LskResult {
+    const k = `${side}${n}`;
+    if (k === "L1") {
+      if (obc.status().phase === "off") void obc.boot();
+      else void obc.runScript("diag");
+      return true;
+    }
+    if (k === "R1") {
+      void obc.runScript("orbit");
+      return true;
+    }
+    if (k === "L2") {
+      void obc.runScript("ils");
+      return true;
+    }
+    if (k === "R2") {
+      void obc.runScript("fb-demo");
+      return true;
+    }
+    if (k === "L3") {
+      if (obc.status().phase === "off") void obc.boot();
+      m.host.setSdPage?.("obcPage");
+      m.say("LECAM OBC ACTIVE");
+      return true;
+    }
+    if (k === "R3") {
+      void obc.runScript("fb-demo");
+      m.host.setSdPage?.("obcPage");
+      return true;
+    }
+    if (k === "L6") return void m.open("menu");
+    if (k === "R6") {
+      if (sp && sp !== "CLR") {
+        obc.write(`${sp.toLowerCase()}\n`);
+        m.say("SENT TO OBC");
+        return true;
+      }
+      obc.toggleConsole();
+      return true;
+    }
   },
 };
 
@@ -267,4 +340,4 @@ const atc: Page = {
   },
 };
 
-export const MISC_PAGES: Record<string, Page> = { prog, fuelpred: fuelPred, radnav, data, status, menu, sec, atc };
+export const MISC_PAGES: Record<string, Page> = { prog, fuelpred: fuelPred, radnav, data, status, menu, sec, atc, obc: obcPage };

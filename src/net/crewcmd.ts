@@ -596,6 +596,20 @@ export const ACTS = {
     required: ["on"],
     say: (a) => onOff(a.on, ["SAS engagé", "SAS coupé"], ["SAS on", "SAS off"]),
   },
+  "cfg.obc": {
+    fam: "config",
+    params: {
+      action: { type: "string", enum: ["boot", "script", "stop"] },
+      script: { type: "string" },
+    },
+    required: ["action"],
+    say: (a) => {
+      if (a.action === "boot") return { fr: "OBC Linux démarré", en: "Linux OBC booted" };
+      if (a.action === "stop") return { fr: "OBC Linux arrêté", en: "Linux OBC stopped" };
+      const sc = typeof a.script === "string" ? a.script.slice(0, 20) : "diag";
+      return { fr: `OBC Linux : ${sc}`, en: `Linux OBC: ${sc}` };
+    },
+  },
 } satisfies Record<string, ActSpec>;
 export type Act = keyof typeof ACTS;
 const SPECS: Record<string, ActSpec> = ACTS;

@@ -11,11 +11,44 @@ import { type Airfield, fieldShown } from "../world/runways";
 import { drawSym, PAL, type SymSide, symColour } from "../radar/symbols";
 import { PCD_H, PCD_W } from "./pcd-size";
 import { type Units, type UnitSys, unitsOf } from "../ui/unitsys";
+import { drawObcSurface } from "../obc/fb-renderer";
+import { obc } from "../obc/runtime";
 
 type V3 = [number, number, number];
 
-export type PcdPage = "TSD" | "FCR" | "SMS" | "EOTS" | "AP" | "MSN" | "FCS" | "ENG" | "FUEL" | "STOVL" | "CNI" | "ADI" | "CKL" | "ICAWS";
-export const PCD_PAGES: PcdPage[] = ["TSD", "FCR", "SMS", "EOTS", "AP", "MSN", "FCS", "ENG", "FUEL", "STOVL", "CNI", "ADI", "CKL", "ICAWS"];
+export type PcdPage =
+  | "TSD"
+  | "FCR"
+  | "SMS"
+  | "EOTS"
+  | "AP"
+  | "MSN"
+  | "FCS"
+  | "ENG"
+  | "FUEL"
+  | "STOVL"
+  | "CNI"
+  | "ADI"
+  | "CKL"
+  | "ICAWS"
+  | "OBC";
+export const PCD_PAGES: PcdPage[] = [
+  "TSD",
+  "FCR",
+  "SMS",
+  "EOTS",
+  "AP",
+  "MSN",
+  "FCS",
+  "ENG",
+  "FUEL",
+  "STOVL",
+  "CNI",
+  "ADI",
+  "CKL",
+  "ICAWS",
+  "OBC",
+];
 /** What a touch asks of the craft (main.ts carries it out through the controller): a weapon chosen, the radar's
  *  mode, the radar's next lock, the countermeasures — never a shot. */
 export type PcdAction =
@@ -271,7 +304,7 @@ interface PcdKey {
   act?: () => string | null;
 }
 /** the pages drawn over a whole wide portal (maps); the others keep a portal's width, centred */
-const WIDE: ReadonlySet<PcdPage> = new Set(["TSD", "FCR", "EOTS"]);
+const WIDE: ReadonlySet<PcdPage> = new Set(["TSD", "FCR", "EOTS", "OBC"]);
 const TOP_STRIP: PcdRect = { x: 0, y: 0, w: PCD_W, h: TOP };
 const BOTTOM_STRIP: PcdRect = { x: NOTCH[0], y: PORTAL_END, w: NOTCH[1] - NOTCH[0], h: PCD_H - PORTAL_END };
 /** the data read every PERIOD [ms]; each part redrawn at its own pace (what moves fast often, the rest less) — in
@@ -294,6 +327,7 @@ const PAGE_PERIOD: Record<PcdPage, number> = {
   ADI: 100,
   CKL: 500,
   ICAWS: 250,
+  OBC: 100,
 };
 const FONT = `"Eurostile", "DIN Alternate", "Arial Narrow", sans-serif`;
 const RANGES = [5, 10, 20, 40, 80, 160];
@@ -418,6 +452,7 @@ export class Pcd {
   show(slot: number, page: PcdPage): string {
     const now = performance.now();
     this.pages[slot] = page;
+    if (page === "OBC" && obc.status().phase === "off") void obc.boot();
     this.menu = null;
     for (const P of this.portals())
       if (P.slot === slot || (P.full && P.slot === (slot & ~1))) {
@@ -458,6 +493,7 @@ export class Pcd {
           // (the arrows: the page before, the next)
           const i = PCD_PAGES.indexOf(this.pages[k]!);
           this.pages[k] = PCD_PAGES[(i + (x < f.x + 56 ? -1 : 1) + PCD_PAGES.length) % PCD_PAGES.length]!;
+          if (this.pages[k] === "OBC" && obc.status().phase === "off") void obc.boot();
           this.menu = null;
           redraw(true);
           return this.pages[k]!;
@@ -481,7 +517,10 @@ export class Pcd {
       if (this.menu === k) {
         const hit = this.menuItems(this.content(P)).find((m) => x >= m.r.x && x <= m.r.x + m.r.w && y >= m.r.y && y <= m.r.y + m.r.h);
         this.menu = null;
-        if (hit) this.pages[k] = hit.page;
+        if (hit) {
+          this.pages[k] = hit.page;
+          if (hit.page === "OBC" && obc.status().phase === "off") void obc.boot();
+        }
         redraw(!!hit);
         return hit ? hit.page : null;
       }
@@ -619,6 +658,52 @@ export class Pcd {
             act: () => this.act?.({ kind: "weapon", w }) ?? null,
           })),
           { label: "CM", act: () => this.act?.({ kind: "cm" }) ?? null },
+        ];
+      }
+      case "OBC": {
+        const st = obc.status();
+        return [
+          {
+            label: st.phase === "off" ? "BOOT" : st.phase === "suspended" ? "RESUME" : "DIAG",
+            on: st.phase === "ready",
+            act: () => {
+              const cur = obc.status();
+              if (cur.phase === "off") void obc.boot();
+              else if (cur.phase === "suspended" || cur.hasSnapshot) void obc.resume();
+              else void obc.runScript("diag");
+              return "OBC DIAG";
+            },
+          },
+          {
+            label: "ORB",
+            act: () => {
+              void obc.runScript("orbit");
+              return "OBC ORBIT";
+            },
+          },
+          {
+            label: "ILS",
+            act: () => {
+              void obc.runScript("ils");
+              return "OBC ILS";
+            },
+          },
+          {
+            label: "FB0",
+            on: st.fbActive,
+            act: () => {
+              void obc.runScript("fb-demo");
+              return "OBC FB0";
+            },
+          },
+          {
+            label: "HUD",
+            on: st.consoleOpen,
+            act: () => {
+              obc.toggleConsole();
+              return "OBC HUD";
+            },
+          },
         ];
       }
       default:
@@ -1039,6 +1124,12 @@ export class Pcd {
           break;
         case "ICAWS":
           this.icaws(r, d);
+          break;
+        case "OBC":
+          drawObcSurface(this.g, obc.drawSource(), r.x, r.y, r.w, r.h, "f35", {
+            footer: true,
+            hint: "TOUCH BOOT · CTRL+\\ / F11",
+          });
           break;
       }
     g.restore();

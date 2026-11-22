@@ -1,0 +1,295 @@
+/* AAA Embedded Linux OBC In-Game HUD Console Overlay (docs/PLAN-LINUX-OBC.md §3.2) */
+
+.obc-overlay {
+  --obc-accent: #62e6ff;
+  --obc-bg: rgba(4, 24, 34, 0.94);
+  --obc-bar: rgba(8, 44, 58, 0.96);
+  --obc-text: #c6f7ff;
+  position: fixed;
+  left: 50%;
+  bottom: 18px;
+  transform: translateX(-50%);
+  width: min(1120px, calc(100vw - 28px));
+  height: min(600px, calc(100vh - 80px));
+  display: flex;
+  flex-direction: column;
+  background: var(--obc-bg);
+  border: 1px solid color-mix(in srgb, var(--obc-accent) 48%, transparent);
+  border-radius: 10px;
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.78), inset 0 1px 0 rgba(198, 247, 255, 0.14);
+  backdrop-filter: blur(14px);
+  color: var(--obc-text);
+  font-family: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  z-index: 950;
+  overflow: hidden;
+}
+
+.obc-overlay[data-theme="amber"] {
+  --obc-accent: #ffb347;
+  --obc-bg: rgba(20, 12, 4, 0.95);
+  --obc-bar: rgba(38, 22, 6, 0.96);
+  --obc-text: #ffe3b3;
+}
+
+.obc-overlay[data-theme="f35"] {
+  --obc-accent: #4be38a;
+  --obc-bg: rgba(6, 15, 20, 0.95);
+  --obc-bar: rgba(11, 28, 36, 0.96);
+  --obc-text: #d8f8ff;
+}
+
+.obc-overlay[data-theme="a320"] {
+  --obc-accent: #3ec8ff;
+  --obc-bg: rgba(5, 8, 12, 0.96);
+  --obc-bar: rgba(14, 21, 30, 0.96);
+  --obc-text: #e6f5ff;
+}
+
+.obc-overlay[hidden] {
+  display: none;
+}
+
+.obc-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 7px 12px;
+  background: var(--obc-bar);
+  border-bottom: 1px solid color-mix(in srgb, var(--obc-accent) 28%, transparent);
+  flex-shrink: 0;
+  flex-wrap: wrap;
+}
+
+.obc-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: var(--obc-accent);
+}
+
+.obc-led {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: #466a78;
+  box-shadow: 0 0 8px currentColor;
+}
+
+.obc-led[data-phase="ready"] {
+  background: #7dff9a;
+  color: #7dff9a;
+}
+
+.obc-led[data-phase="booting"],
+.obc-led[data-phase="suspended"] {
+  background: #ffb347;
+  color: #ffb347;
+}
+
+.obc-led[data-phase="error"] {
+  background: #ff5a46;
+  color: #ff5a46;
+}
+
+.obc-meta {
+  font-size: 11px;
+  color: color-mix(in srgb, var(--obc-text) 65%, transparent);
+  font-weight: 500;
+}
+
+.obc-actions {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex-wrap: wrap;
+}
+
+.obc-btn {
+  appearance: none;
+  background: rgba(12, 62, 82, 0.82);
+  color: var(--obc-text);
+  border: 1px solid color-mix(in srgb, var(--obc-accent) 36%, transparent);
+  border-radius: 5px;
+  padding: 4px 8px;
+  font: 600 11px/1 "JetBrains Mono", ui-monospace, monospace;
+  cursor: pointer;
+  transition: background 120ms, border-color 120ms, color 120ms;
+}
+
+.obc-btn:hover {
+  background: rgba(24, 96, 124, 0.95);
+  border-color: var(--obc-accent);
+  color: #ffffff;
+}
+
+.obc-btn.on {
+  background: var(--obc-accent);
+  color: #041922;
+  border-color: #ffffff;
+}
+
+.obc-btn.danger {
+  border-color: rgba(255, 90, 70, 0.55);
+  color: #ff9c90;
+}
+
+.obc-subbar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px;
+  background: rgba(5, 29, 40, 0.9);
+  border-bottom: 1px solid color-mix(in srgb, var(--obc-accent) 18%, transparent);
+  flex-shrink: 0;
+  overflow-x: auto;
+}
+
+.obc-subbar-label {
+  font-size: 10px;
+  color: color-mix(in srgb, var(--obc-accent) 75%, transparent);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin-right: 2px;
+}
+
+/* Options & Script Editor Drawers */
+.obc-drawer {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  padding: 8px 12px;
+  background: rgba(3, 18, 26, 0.97);
+  border-bottom: 1px solid color-mix(in srgb, var(--obc-accent) 28%, transparent);
+  font-size: 11px;
+  flex-shrink: 0;
+}
+
+.obc-drawer[hidden] {
+  display: none;
+}
+
+.obc-drawer-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.obc-field {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  color: color-mix(in srgb, var(--obc-text) 82%, transparent);
+}
+
+.obc-select {
+  background: rgba(6, 36, 48, 0.95);
+  border: 1px solid color-mix(in srgb, var(--obc-accent) 42%, transparent);
+  border-radius: 4px;
+  color: #e6fbff;
+  padding: 3px 6px;
+  font: 600 11px "JetBrains Mono", ui-monospace, monospace;
+}
+
+.obc-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  cursor: pointer;
+  user-select: none;
+  color: var(--obc-text);
+}
+
+.obc-wisp-input {
+  flex: 1;
+  min-width: 180px;
+  background: rgba(6, 36, 48, 0.95);
+  border: 1px solid color-mix(in srgb, var(--obc-accent) 42%, transparent);
+  border-radius: 4px;
+  color: #e6fbff;
+  padding: 4px 8px;
+  font: 500 11px "JetBrains Mono", ui-monospace, monospace;
+}
+
+.obc-status-pill {
+  font-size: 11px;
+  color: #9ed7e6;
+}
+
+.obc-status-pill[data-ok="1"] {
+  color: #7dff9a;
+}
+
+.obc-status-pill[data-ok="0"] {
+  color: #ff7e6d;
+}
+
+.obc-editor-area {
+  width: 100%;
+  height: 128px;
+  resize: vertical;
+  background: #02121a;
+  border: 1px solid color-mix(in srgb, var(--obc-accent) 32%, transparent);
+  border-radius: 5px;
+  color: #dafaff;
+  padding: 8px;
+  font: 500 12px/1.35 "JetBrains Mono", ui-monospace, monospace;
+  box-sizing: border-box;
+}
+
+.obc-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  gap: 8px;
+  padding: 8px;
+  background: #03151e;
+}
+
+.obc-term-wrap {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  position: relative;
+  border: 1px solid color-mix(in srgb, var(--obc-accent) 24%, transparent);
+  border-radius: 6px;
+  padding: 6px;
+  background: #041922;
+  overflow: hidden;
+}
+
+.obc-term-wrap[hidden] {
+  display: none;
+}
+
+.obc-fb-wrap {
+  flex: 0 0 420px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid color-mix(in srgb, var(--obc-accent) 32%, transparent);
+  border-radius: 6px;
+  background: #04212c;
+  overflow: hidden;
+}
+
+.obc-fb-wrap.full {
+  flex: 1;
+}
+
+.obc-fb-wrap[hidden] {
+  display: none;
+}
+
+.obc-fb-canvas {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  cursor: crosshair;
+}

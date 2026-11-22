@@ -37,6 +37,7 @@ import type { FlightPhase } from "../game/phase";
 import type { FlightReport } from "../game/report";
 import type { LogEvent } from "../game/log";
 import type { TarsMemory } from "./memory";
+import { obc } from "../obc/runtime";
 import type { Tool } from "./agent";
 import type { Args } from "./tool-schema";
 import { SITES, type Site } from "../game/sites";
@@ -357,6 +358,8 @@ export const SCREENS = [
   "cockpit_log",
   "cockpit_approach",
   "cockpit_landing",
+  "cockpit_obc",
+  "obc_console",
   "entry_corridor",
   "hub_graph",
 ] as const;
@@ -3353,6 +3356,81 @@ export function gameTools(h: GameHost): Tool[] {
           })),
         };
       }),
+    },
+    {
+      name: "obc",
+      description:
+        "Control the embedded Linux On-Board Computer (Unkernel aarch64): check status, boot/stop/reboot/suspend/resume, open/close the HUD console, run a built-in avionics script (diag, orbit, reentry, ils, solar, fdr, fb-demo), read the current screen, test Wisp connectivity, read/update OBC config (theme, crtFx, memoryMiB), or execute a shell command inside Linux.",
+      params: {
+        action: {
+          type: "string",
+          enum: [
+            "status",
+            "boot",
+            "stop",
+            "reboot",
+            "suspend",
+            "resume",
+            "open",
+            "close",
+            "script",
+            "exec",
+            "screen",
+            "test_wisp",
+            "config",
+          ],
+        },
+        script: { type: "string" },
+        command: { type: "string" },
+        theme: { type: "string", enum: ["auto", "interstellar", "f35", "a320", "amber"] },
+        crtFx: { type: "boolean" },
+        memoryMiB: { type: "number", minimum: 128, maximum: 512, integer: true },
+      },
+      required: ["action"],
+      run: async (a) => {
+        switch (a.action) {
+          case "status":
+            return obc.status();
+          case "boot":
+            return await obc.boot();
+          case "stop":
+            await obc.stop();
+            return "OBC stopped";
+          case "reboot":
+            return await obc.reboot();
+          case "suspend":
+            return await obc.suspend();
+          case "resume":
+            return await obc.resume();
+          case "open":
+            obc.openConsole();
+            return "OBC HUD console opened";
+          case "close":
+            obc.closeConsole();
+            return "OBC HUD console closed";
+          case "script": {
+            const name = String(a.script ?? "diag");
+            return await obc.runScript(name);
+          }
+          case "exec": {
+            const cmd = String(a.command ?? "").trim();
+            if (!cmd) throw new Error("exec needs a command");
+            return await obc.exec(cmd);
+          }
+          case "screen":
+            return { lines: obc.readScreen().filter(Boolean) };
+          case "test_wisp":
+            return await obc.testWisp();
+          case "config":
+            return obc.setConfig({
+              ...(typeof a.theme === "string" ? { theme: a.theme as "auto" | "interstellar" | "f35" | "a320" | "amber" } : {}),
+              ...(typeof a.crtFx === "boolean" ? { crtFx: a.crtFx } : {}),
+              ...(a.memoryMiB === 128 || a.memoryMiB === 256 || a.memoryMiB === 512 ? { memoryMiB: a.memoryMiB } : {}),
+            });
+          default:
+            return obc.status();
+        }
+      },
     },
     {
       name: "memory",

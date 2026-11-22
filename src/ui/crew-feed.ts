@@ -22,6 +22,7 @@ import { TANKER } from "../controller/jetmodes";
 import { isGround, MISSILES } from "../game/combat";
 import { WGS84_A, WGS84_F, wgs84Direct, wgs84Inverse, wgs84Offset } from "../system/ellipsoid";
 import { type PicBlock, PicEncoder } from "../net/picture";
+import { obc } from "../obc/runtime";
 import { scopeRange } from "./hud/symbology";
 
 /** The tactical picture's encoder for the crew (PLAN-RADAR-AAA RD5): its numbers and its turns kept across the blocks. */
@@ -308,6 +309,7 @@ export function fitSnapshot(s: InstrumentSnapshot, max = 16_384 - 600): { data: 
     ["tracks/2", (d) => (d.tracks ? { ...d, tracks: d.tracks.slice(0, 16) } : d)],
     // (the picture: its rows by turns lightened last — the priority's first in the list, kept)
     ["pic/2", (d) => (d.pic ? { ...d, pic: { ...d.pic, r: d.pic.r.slice(0, Math.ceil(d.pic.r.length / 2)), h: undefined } } : d)],
+    ["obc", (d) => ({ ...d, obc: undefined })],
   ];
   for (const [name, f] of steps) {
     if (size(data) <= max) break;
@@ -520,6 +522,7 @@ export function crewSnapshot(
     next: status?.next ? { kind: status.next.kind, name: status.next.name, in: status.next.inS, body: status.next.body } : null,
     msn: i.msn ? { name: i.msn.name, brg: i.msn.brg * D, dist: i.msn.dist, dz: i.msn.dz } : null,
     warn: warnings(i, status, fuelKg, bingo),
+    ...(obc.status().phase !== "off" ? { obc: obc.crewSnapshot() } : {}),
     caps: { on: c.s.netCrewActions !== false, fam: crewFamilies(c), hold: true, aboard },
     sun: sunOver(body, t),
     arms: fleet.active === "f35" ? armsOf(c) : null,

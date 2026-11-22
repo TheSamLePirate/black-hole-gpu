@@ -35,6 +35,8 @@ export interface McduHost {
   selectApproach?(sel: { field: string; approach: string; via: string }): { ok: boolean; say: string };
   arrivalApproach?(): Approach | null;
   insertArrival?(): string;
+  /** Optional A320 Lower ECAM page override (e.g. "obcPage" or "" for automatic — PLAN-LINUX-OBC) */
+  setSdPage?(page: string): void;
 }
 
 /** What a MCDU's keys are: FlightGear's names (MCDU.nas). */

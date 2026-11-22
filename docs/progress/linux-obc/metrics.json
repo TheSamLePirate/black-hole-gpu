@@ -1,0 +1,17 @@
+{
+  "baselineFps": 61.3,
+  "baselineFrameMs": 16.3,
+  "bootMs": 627,
+  "uname": "Linux unkernel 7.3.4+ #909a1964cecb Fri Nov 20 16:38:40 UTC 2026 aarch64 Linux",
+  "dtauDt": 0.9999999967328015,
+  "throttleBefore": 0,
+  "throttleAfterCmd": 0.42,
+  "wispOk": true,
+  "wispLatencyMs": 5,
+  "suspendResumeMs": 405,
+  "fbWidth": 512,
+  "fbHeight": 512,
+  "fbPngBytes": 21542,
+  "obcActiveFps": 60.6,
+  "obcActiveFrameMs": 16.5
+}

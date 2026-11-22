@@ -55,6 +55,7 @@ export const TB_ICONS = {
     '<circle cx="12" cy="12" r="3"/><path d="M12 2.8v2.4M12 18.8v2.4M2.8 12h2.4M18.8 12h2.4M5.5 5.5l1.7 1.7M16.8 16.8l1.7 1.7M5.5 18.5l1.7-1.7M16.8 7.2l1.7-1.7"/>',
   info: '<circle cx="12" cy="12" r="8.5"/><path d="M12 11v5.5"/><circle cx="12" cy="7.8" r="1.1" class="f"/>',
   tools: '<path d="M14.5 5.5a4 4 0 0 0-5 5L4 16l4 4 5.5-5.5a4 4 0 0 0 5-5l-2.6 2.6-2.8-.6-.6-2.8z"/>',
+  obc: '<rect x="3" y="4.5" width="18" height="15" rx="2"/><path d="M7 9.5l3 2.5-3 2.5M12 14.5h5"/>',
 } as const;
 export const MODE_KEYS: Record<GameMode, string> = { ship: "F1", foot: "F2", free: "F3", photo: "F4" };
 /** A mode's name, translated (TARS, the toasts, the API). */

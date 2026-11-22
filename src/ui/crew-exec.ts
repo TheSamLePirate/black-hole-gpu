@@ -17,6 +17,7 @@ import { CHECKLISTS, type FailureKind } from "../game/systems";
 import { M_SECONDS } from "../units";
 import { unitsFor } from "./unitsys";
 import { LPD } from "../controller/lowthrust";
+import { obc } from "../obc/runtime";
 
 export interface CrewExecDeps {
   camera: CameraController;
@@ -65,6 +66,19 @@ const RUN: Record<Act, Run> = {
   "cfg.flaps": (a, x) => x.tool("controls", { flaps: a.pos }),
   "cfg.brake": (a, x) => x.tool("controls", { airBrake: a.on }),
   "cfg.sas": (a, x) => x.tool("controls", { sas: a.on }),
+  "cfg.obc": async (a) => {
+    if (a.action === "boot") {
+      await obc.boot();
+      return "OBC booted";
+    }
+    if (a.action === "stop") {
+      await obc.stop();
+      return "OBC stopped";
+    }
+    const sc = typeof a.script === "string" ? a.script.slice(0, 32) : "diag";
+    await obc.runScript(sc);
+    return `OBC ${sc}`;
+  },
   // (the flight plan: its tool's operations; a point changed in place by the controller's own)
   "nav.add": (a, x) =>
     x.tool("flight_plan", {

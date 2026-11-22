@@ -114,8 +114,8 @@ Les plans terminés restent comme historique des décisions. Avant de reprendre 
 (et [C0](progress/refraction-horizons/C0.md)), [PLAN-NUIT-URBAINE](PLAN-NUIT-URBAINE.md),
 [PLAN-AURORES-MAGNETOSPHERES](PLAN-AURORES-MAGNETOSPHERES.md), [PLAN-CAPTEURS-CAMERA-SECONDAIRE](PLAN-CAPTEURS-CAMERA-SECONDAIRE.md)
 (rien d'implémenté), [PLAN-PLANETES-AAA](PLAN-PLANETES-AAA.md), [PLAN-AVIATION-AAA](PLAN-AVIATION-AAA.md),
-[PLAN-IMAGE-VIPER11](PLAN-IMAGE-VIPER11.md) et [PLAN-SERVICES-SERVEUR-AAA](PLAN-SERVICES-SERVEUR-AAA.md) (plans sans
-implémentation). Abandonné : PLAN-ELECTRON (pas de fichier). Les autres sont terminés ou absorbés ; leur état figure en tête.
+[PLAN-IMAGE-VIPER11](PLAN-IMAGE-VIPER11.md), [PLAN-SERVICES-SERVEUR-AAA](PLAN-SERVICES-SERVEUR-AAA.md) et
+[PLAN-LINUX-OBC](PLAN-LINUX-OBC.md) (l'ordinateur de bord Linux embarqué AAA, nov. 2026). Abandonné : PLAN-ELECTRON (pas de fichier). Les autres sont terminés ou absorbés ; leur état figure en tête.
 
 ### 2.7 Suivi, journaux, historique
 

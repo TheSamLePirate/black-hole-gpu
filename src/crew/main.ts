@@ -353,6 +353,10 @@ const NOTES: Record<CrewView, [string, string]> = {
     "Glisser pour lire une mesure · historique reçu sur cet écran",
     "Drag to read a measure · the history received on this screen",
   ],
+  obc: [
+    "Ordinateur de bord Linux embarqué · terminal en direct et scripts avioniques",
+    "Embedded Linux On-Board Computer · live terminal and avionics scripts",
+  ],
 };
 function rangeControl() {
   const range = document.createElement("input");
@@ -706,6 +710,7 @@ const ICONS: Record<CrewView, string> = {
   schematic: '<path d="M12 3v18M5 9l7-2 7 2M8 18l4-1 4 1"/><circle cx="12" cy="12" r="1.5"/>',
   plan: '<path d="M3 18l5-6 4 3 4-7 5 4"/><circle cx="8" cy="12" r="1.5"/><circle cx="16" cy="8" r="1.5"/>',
   telemetry: '<path d="M3 17l4-5 4 3 4-8 6 6"/><path d="M3 21h18"/>',
+  obc: '<rect x="3" y="4.5" width="18" height="15" rx="2"/><path d="M7 9.5l3 2.5-3 2.5M12 14.5h5"/>',
 };
 /** the header's badge: the profile and the craft followed (F-35 · TACTIQUE, VAISSEAU · ENDURANCE) */
 function syncBadge() {
@@ -2168,6 +2173,9 @@ views.onBody = (id, x, y) => {
 };
 // a burn dragged along the orbit (K6): its new time
 views.onNodeMove = (i, dtS) => void fire(null, "sp.node", { action: "shift", index: i, dtS });
+views.onObcAction = (action, script) => {
+  if (net.room) void fire(null, "cfg.obc", script ? { action, script } : { action });
+};
 views.onGround = (at, x, y) => {
   const snap = snapNow();
   // (the Ground view of a spacecraft: the landing point designated where the finger touched — the LPD)

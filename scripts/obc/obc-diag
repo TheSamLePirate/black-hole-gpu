@@ -1,0 +1,65 @@
+#!/bin/sh
+# obc-diag — Instant offline avionics & Kerr relativity diagnostic dashboard.
+# Works on first boot with BusyBox awk/sh (zero internet or python3 required).
+
+C_CYN='\033[1;36m'
+C_GRN='\033[1;32m'
+C_YEL='\033[1;33m'
+C_DIM='\033[2;36m'
+C_WHT='\033[1;37m'
+C_RST='\033[0m'
+
+printf '\033[2J\033[H'
+printf "${C_CYN}╔══════════════════════════════════════════════════════════════╗${C_RST}\n"
+printf "${C_CYN}║${C_WHT}  BLACK HOLE GPU — LINUX ON-BOARD COMPUTER (OBC DIAGNOSTIC)  ${C_CYN}║${C_RST}\n"
+printf "${C_CYN}╚══════════════════════════════════════════════════════════════╝${C_RST}\n"
+
+KERNEL=$(uname -sr 2>/dev/null || echo "Linux")
+ARCH=$(uname -m 2>/dev/null || echo "aarch64")
+if [ -x /usr/bin/python3 ] && ! head -n 1 /usr/bin/python3 2>/dev/null | grep -q '^#!'; then
+  PY=$(python3 --version 2>&1)
+else
+  PY="standby (run: obc-install python)"
+fi
+if [ -x /usr/bin/node ] && ! head -n 1 /usr/bin/node 2>/dev/null | grep -q '^#!'; then
+  ND=$(node --version 2>&1)
+else
+  ND="standby (run: obc-install node)"
+fi
+
+printf "${C_DIM}KERNEL  :${C_RST} %s (%s)\n" "$KERNEL" "$ARCH"
+printf "${C_DIM}PYTHON  :${C_RST} %s\n" "$PY"
+printf "${C_DIM}NODE.JS :${C_RST} %s\n" "$ND"
+printf "${C_DIM}DEVICES :${C_RST} /dev/fb0=%s  /dev/tau=%s  /obc=%s\n" \
+  "$([ -e /dev/fb0 ] && echo OK || echo OFF)" \
+  "$([ -e /dev/tau ] && echo OK || echo LINK)" \
+  "$([ -r /obc/telemetry.json ] && echo MOUNTED || echo OFF)"
+
+if [ -r /obc/telemetry.json ]; then
+  printf "\n${C_CYN}── LIVE AVIONICS TELEMETRY (/obc/telemetry.json) ──────────────${C_RST}\n"
+  cat /obc/telemetry.json | awk '
+  function val(k,   m) {
+    if (match($0, "\"" k "\":[ ]*\"[^\"]*\"")) {
+      m = substr($0, RSTART + length(k) + 3, RLENGTH - length(k) - 3)
+      gsub(/^[: "]+|"+$/, "", m); return m
+    }
+    if (match($0, "\"" k "\":[ ]*[-0-9.eE+]+")) {
+      m = substr($0, RSTART + length(k) + 3, RLENGTH - length(k) - 3)
+      gsub(/^[: ]+/, "", m); return m
+    }
+    return "n/a"
+  }
+  {
+    printf "  VESSEL  : %-12s   BODY   : %-12s   WARP : %sx\n", val("vessel_id"), val("body"), val("warp")
+    printf "  WGS84   : LAT %9.4f°   LON %9.4f°   MSL : %.1f m\n", val("lat_deg")+0, val("lon_deg")+0, val("altitude_msl_m")+0
+    printf "  AGL     : %10.1f m   ELLIPS : %.1f m\n", val("height_over_ground_m")+0, val("height_ellipsoid_m")+0
+    printf "  ATTITUDE: HDG %6.1f°    PITCH %+6.1f°   ROLL : %+6.1f°\n", val("heading_deg")+0, val("pitch_deg")+0, val("roll_deg")+0
+    printf "  FLIGHT  : TAS %7.1f m/s  MACH %5.2f    G : %+5.2f  Q : %.0f Pa\n", val("true_airspeed_mps")+0, val("mach")+0, val("g_load")+0, val("dynamic_pressure_pa")+0
+    printf "  SYSTEMS : THR %3.0f%%  FUEL %3.0f%%  AP=%s  HOLD=%s\n", (val("throttle")+0)*100, (val("fuel_frac")+0)*100, val("autopilot"), val("hold")
+    printf "  KERR τ  : dτ/dt = %.9f   τ = %.1f s   t = %.1f s\n", val("dtau_dt")+0, val("proper_time_s")+0, val("sim_time_s")+0
+  }'
+else
+  printf "\n${C_YEL}Telemetry bridge /obc/telemetry.json not mounted yet.${C_RST}\n"
+fi
+
+printf "\n${C_GRN}Commands:${C_RST} obc-diag | obc-orbit | obc-reentry | obc-ils | obc-solar | obc-fdr | obc-fb-demo | obc-install\n"

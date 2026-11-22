@@ -1,0 +1,54 @@
+#!/bin/sh
+# obc-fdr — Flight Data Recorder (records telemetry snapshots to /home/pilot/fdr.jsonl
+# and produces statistical post-flight analysis).
+# Usage: obc-fdr [seconds=5]   or   obc-fdr --summary
+
+mkdir -p /home/pilot
+LOG="/home/pilot/fdr.jsonl"
+
+if [ "$1" = "--summary" ]; then
+  if [ ! -f "$LOG" ]; then
+    echo "No FDR data yet. Run: obc-fdr 5"
+    exit 0
+  fi
+  awk '
+  function num(k,   m) {
+    if (match($0, "\"" k "\":[ ]*[-0-9.eE+]+")) {
+      m = substr($0, RSTART + length(k) + 3, RLENGTH - length(k) - 3)
+      gsub(/^[: ]+/, "", m); return m + 0
+    }
+    return 0
+  }
+  BEGIN { n=0; maxG=-99; minG=99; maxSpd=0; maxAlt=-1e9; minFuel=1 }
+  {
+    n++
+    g = num("g_load"); spd = num("true_airspeed_mps"); alt = num("altitude_msl_m"); f = num("fuel_frac")
+    if (g > maxG) maxG = g; if (g < minG) minG = g
+    if (spd > maxSpd) maxSpd = spd
+    if (alt > maxAlt) maxAlt = alt
+    if (f < minFuel) minFuel = f
+  }
+  END {
+    printf "\033[1;36m=== OBC FLIGHT DATA RECORDER SUMMARY ===\033[0m\n"
+    printf "  SAMPLES   : %d\n", n
+    printf "  MAX SPEED : %.1f m/s\n", maxSpd
+    printf "  MAX ALT   : %.1f m MSL\n", maxAlt
+    printf "  G RANGE   : %+.2f g .. %+.2f g\n", minG, maxG
+    printf "  MIN FUEL  : %.1f%%\n", minFuel * 100
+  }' "$LOG"
+  exit 0
+fi
+
+DUR="${1:-3}"
+COUNT=$((DUR * 4))
+printf "OBC FDR: recording %d samples (%ss) -> %s ...\n" "$COUNT" "$DUR" "$LOG"
+i=0
+while [ "$i" -lt "$COUNT" ]; do
+  if [ -r /obc/telemetry.json ]; then
+    tr -d '\n' < /obc/telemetry.json >> "$LOG"
+    printf '\n' >> "$LOG"
+  fi
+  i=$((i + 1))
+  sleep 0.25 2>/dev/null || sleep 1
+done
+exec "$0" --summary

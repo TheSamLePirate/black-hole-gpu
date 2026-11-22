@@ -1,0 +1,152 @@
+# PLAN-LINUX-OBC : Ordinateur de bord Linux embarqué (OBC) AAA
+
+*Spécification et plan d'architecture validés et mis à jour le 22 novembre 2026 (confrontés à Unkernel `v0.2.0-261121-e69adda` et à l'architecture réelle du dépôt).*
+
+---
+
+## État et objet du document
+
+| Champ | Valeur |
+|---|---|
+| **Statut** | **Implémenté et vérifié en E2E WebGPU (Lots OBC-0 à OBC-6 livrés le 22 novembre 2026)** |
+| **Architecture cible** | Noyau Linux 7.x natif WebAssembly (`unkernel` `v0.2.0`) + émulateur CPU `aarch64` (`kwemu` + JIT Wasm) + Alpine Linux 3.24 (`alpine.erofs`, 4,05 Mo) |
+| **Périmètre** | Vaisseaux (*Ranger*, *Lander*, *Endurance*), Avions (*F-35B/C*, *A320* — MCDU, Lower ECAM & Tablette), Console HUD In-Game (`xterm.js` + `/dev/fb0`), Console équipage déportée `crew/`, `__bh.obc`, TARS |
+| **Documents liés** | [BH-API.md](BH-API.md), [COCKPIT.md](COCKPIT.md), [CREW.md](CREW.md), [HOTAS.md](HOTAS.md), [TARS.md](TARS.md), [src/input/keymap.ts](../src/input/keymap.ts), [VOL-AVIONS.md](VOL-AVIONS.md), [VOL-VAISSEAUX.md](VOL-VAISSEAUX.md) |
+| **Objectif** | Fournir un véritable ordinateur de bord Linux embarqué (`aarch64`, Alpine 3.24, Python/Node/C/Shell), démarré à la demande dans un Web Worker dédié (0 ms et 0 Mo au boot du simulateur), connecté en temps réel à la physique WGS84/Kerr via 9p (`/obc`) et `AF_VSOCK` (port 4747), affichable simultanément dans les cockpits 3D, en console HUD et sur la console équipage `crew/`. |
+
+---
+
+## 1. Vision et principes directeurs AAA
+
+1. **Performance garantie 60 FPS et coût nul hors utilisation :**
+   - **Boot paresseux (on-demand) :** Tant que le joueur n'ouvre pas la console OBC, ne sélectionne pas un onglet `OBC` ou n'appelle pas `__bh.obc.boot()` / TARS, aucun octet de `unkernel.wasm` ni d'`alpine.erofs` n'est téléchargé et aucun Worker n'est créé.
+   - **Isolation Web Worker :** `createKernel({ worker: true })` exécute le noyau Linux, le JIT `kwemu`, le réseau Wisp et le disque IndexedDB dans un Web Worker dédié, **sans** exiger `COOP/COEP` (compatible avec les tuiles cross-origin IGN/OSM/Esri ; `SharedArrayBuffer` est utilisé automatiquement si disponible).
+   - **Rendu cockpit dirty-checked (< 0,3 ms CPU/frame) :** Le canvas OBC n'est redessiné que lorsqu'une nouvelle frame `/dev/fb0` ou de nouveaux caractères terminal arrivent (cadence bornée à 15–30 Hz).
+2. **Un vrai Linux `aarch64` complet :**
+   - `unkernel` (`v0.2.0`) compile un noyau Linux 7.x avec vraie MMU (`fork`, `mmap`, `overlayfs`, `ext4`, `9p`, `AF_VSOCK`, `TCP/IP`, `/dev/fb0`) directement en WebAssembly, exécutant des binaires ARM64 (`aarch64`) non modifiés d'Alpine 3.24.
+   - Démarrage en ~0,3–0,8 s dans le navigateur, ~48–256 Mo de RAM invité, disque `/data` persistant en IndexedDB pour `/home/pilot/` et les paquets `apk` (`python3`, `nodejs`, `sqlite`, `gcc`, etc.).
+3. **Interconnexion totale et typée avec la physique (`__bh` & WGS84/Kerr) :**
+   - **Montage 9p hôte (`/obc`) :** fichiers virtuels temps réel (`/obc/telemetry.json`, `/obc/tau` + lien symbolique `/dev/tau`, `/obc/cmd`, `/obc/status.json`, `/obc/scripts/`, `/obc/lib/`).
+   - **Bus `AF_VSOCK` (port `4747`) :** flux bidirectionnel JSONL/RPC basse latence (20–50 Hz) pour les bibliothèques `obc` (Python / Node.js) et les scripts de pilotage automatique.
+   - **Validation stricte :** toute commande issue du Linux passe par un validateur borné (`src/obc/protocol.ts`) avant d'atteindre les contrôleurs du simulateur.
+4. **Multi-Head Display synchrone & Parité TARS :**
+   - Mêmes données et même instance Linux sur : cockpits 3D (*Ranger/Lander/Endurance*, *F-35 PCD*, *A320 MCDU + LECAM + Tablette*), console HUD in-game, console équipage `crew/`, API `__bh.obc` et outils TARS.
+
+---
+
+## 2. Architecture système et flux de données
+
+```
++-----------------------------------------------------------------------------------------+
+|                                     NAVIGATEUR                                          |
+|                                                                                         |
+|  +-----------------------------------------------------------------------------------+  |
+|  |                            MAIN THREAD (Simulateur WebGPU)                        |  |
+|  |  * WebGPU Renderer + Physique WGS84/Kerr (__bh, Fleet, Camera, Sim, Lagrange)     |  |
+|  |  * ObcRuntime + ObcBridge (src/obc/):                                             |  |
+|  |      - 9p Host Mount (/obc/telemetry.json, /obc/tau, /obc/cmd, /obc/scripts, lib) |  |
+|  |      - AF_VSOCK Server (port 4747, JSONL RPC 20-50 Hz)                            |  |
+|  |      - TermBuffer ANSI/VT100 + FbRenderer (/dev/fb0 RGBA ou miroir terminal)      |  |
+|  |  * Surfaces : CockpitScreens (OBC), F-35 PCD (OBC), A320 (MCDU/LECAM/Tablette),   |  |
+|  |               Console HUD (xterm.js + Sixel/IIP + FB0), Crew (crew-cmd/BC), TARS  |  |
+|  +-----------------------------------------^-----------------------------------------+  |
+|                                            | postMessage / Transferables (ou SAB)       |
+|  +-----------------------------------------v-----------------------------------------+  |
+|  |                        WEB WORKER (Unkernel WorkerKernel)                         |  |
+|  |  * unkernel.wasm (Linux 7.x + kwemu aarch64 JIT) + alpine.erofs + IndexedDB /data |  |
+|  |  * /dev/fb0 (512x512 XRGB8888) | /obc (9p) | AF_VSOCK:4747 | /dev/tau -> /obc/tau |  |
+|  +-----------------------------------------^-----------------------------------------+  |
++--------------------------------------------|--------------------------------------------+
+                                             | WebSocket Wisp v1
+                                             v
+                    +-------------------------------------------------+
+                    | Dev local : /__wisp (server/wisp-relay.ts)      |
+                    | Prod : Serveur Portainer Wisp (wss://...)       |
+                    +------------------------+------------------------+
+                                             v
+                                 Internet réel / LAN
+```
+
+---
+
+## 3. Les surfaces d'affichage (Multi-Head)
+
+### 3.1 Écrans physiques des cockpits 3D & Tablette
+Chaque surface bascule automatiquement entre **le framebuffer `/dev/fb0` (pixels purs 32 bpp)** lorsqu'une application graphique l'ouvre et **un miroir haute netteté du terminal** stylisé à la palette native de l'appareil dans le cas contraire :
+
+* **Vaisseaux (*Ranger*, *Lander*, *Endurance* — `src/ui/cockpitscreens.ts`) :**
+  Onglet tactile **`OBC`** ajouté dans la barre d'onglets (`7×2`) de chaque écran 3D (palette cyan *Interstellar* `#62e6ff`). Cliquer sur `OBC` démarre automatiquement le noyau si éteint.
+* **Chasseur *F-35B / F-35C* (`src/f35/pcd.ts`) :**
+  Nouveau portail **`OBC`** sélectionnable sur n'importe lequel des 4 portails du PCD (mode split ou pleine moitié gauche/droite), avec touches tactiles rapides (`BOOT`, `ORB`, `ILS`, `DIAG`, `FB0`, `TERM`).
+* **Airbus *A320* (`src/a320/mcdu/`, `src/a320/du/sd.ts`, `src/ui/a320page.ts`) :**
+  * **MCDU (`MCDU MENU` → `<OBC LINK`) :** page interactive pilotable au clavier physique du MCDU (état OBC, $d\tau/dt$, dernières lignes terminal, lancement de scripts via LSK, envoi du scratchpad comme commande Linux).
+  * **Lower ECAM (`LECAM` / SD) :** page graphique **`OBC`** sélectionnable affichant `/dev/fb0` ou le terminal stylisé Airbus directement sur l'écran 3D central inférieur.
+  * **Tablette A320 (`src/ui/a320page.ts`) :** section dédiée **`OBC`** (démarrage/arrêt, ouverture console, bascule écran `LECAM`, lancement des outils avioniques, état télémétrique).
+
+### 3.2 Console HUD In-Game (Overlay rétractable)
+* **Raccourcis clavier Mac sans conflit** (vérifiés dans `src/input/keymap.ts`, où `§`/`IntlBackslash`, `\` seul et `²` seul sont déjà assignés au vol) :
+  * **`Ctrl + \`** (`Control + Backslash`) — raccourci universel QWERTY / terminal.
+  * **`Ctrl + ²` / ``Ctrl + ` ``** (`Control + Backquote`) — variante ergonomique sur Mac ISO AZERTY.
+  * **`F11`** — touche fonction dédiée libre dans le jeu.
+  * **Bouton `OBC`** dans la barre supérieure du jeu.
+* **Fonctionnalités :** terminal `@xterm/xterm` 6.0 (24-bit TrueColor, `@xterm/addon-fit`, `@xterm/addon-image` pour Sixel/IIP), vue commutable **`Terminal | /dev/fb0 | Split`**, lanceur rapide de scripts (`Diag`, `Orbite`, `Rentrée`, `ILS`, `Solaire`, `FDR`, `Démo FB0`), boutons 1-clic **`Installer Python`** / **`Installer Node`**, réglage URL Wisp en direct, isolation totale du clavier pendant la saisie.
+
+### 3.3 Console Équipage déportée (`crew/`)
+* Nouvel onglet **`OBC`** dans `src/crew/` (`src/crew/draw/obc.ts`), **sans embarquer `xterm.js`** afin de respecter strictement le plafond de bundle de `tests/crew.test.ts` (`< 375 Ko`).
+* Affiche l'état OBC, $d\tau/dt$, les lignes du terminal en direct et permet d'envoyer des commandes (`obc.boot`, `obc.exec`, `obc.script`, `obc.input`) via `crew-cmd` (salle réseau) ou `BroadcastChannel("kerr-obc")` (second onglet local).
+
+---
+
+## 4. Capacités graphiques, suite avionique & bibliothèque `obc`
+
+### 4.1 Fonctionnement 100 % hors-ligne dès le 1er boot + Python/Node
+L'image `alpine.erofs` (4,05 Mo) est servie localement (`/obc/alpine.erofs`) et reste sous la limite binaire de 8 Mo/fichier (`scripts/check-repo-size.ts`).
+* **Suite immédiatement exécutable hors-ligne dès le premier boot** (montée en lecture sur `/obc/scripts/`, ajoutée au `PATH`) :
+  * `obc-diag` — tableau de bord avionique, WGS84, orbite, dilatation Kerr $d\tau/dt$ et état système (ANSI TrueColor).
+  * `obc-orbit` — calcul des éléments orbitaux ($a, e, P_e, A_p, T$), transfert de Hohmann et vue polaire (TUI immédiat hors-ligne + tracé `/dev/fb0` haute résolution).
+  * `obc-reentry` — couloir de rentrée atmosphérique, pression dynamique $q$, Mach, gradient thermique.
+  * `obc-ils` — alignement Localizer / plan de descente 3° Glide Slope sur les pistes du simulateur.
+  * `obc-solar` — synoptique du système solaire / Gargantua / points de Lagrange et JWST.
+  * `obc-fdr` — boîte noire 20 Hz enregistrant dans `/home/pilot/fdr.jsonl` (et SQLite si `python3` présent) + résumé statistique post-vol.
+  * `obc-fb-demo` — démonstrateur graphique natif `/dev/fb0` (XRGB8888 512×512 : radar orbital, horizon artificiel, télémétrie) fonctionnant même sans Python grâce à un générateur POSIX/awk, et enrichi dès que Python est installé.
+  * `obc-install` — installation 1-clic de `python3`, `nodejs`, `py3-pillow`, `sqlite` via `apk` (persistés sur le disque IndexedDB `/data`).
+* **Bibliothèques standard `obc` pré-montées (`/obc/lib/obc.py` et `/obc/lib/obc.mjs`) :**
+  * `AvionicsBus` (lecture `/obc/telemetry.json` ou streaming `AF_VSOCK:4747`, méthodes `read()`, `tau()`, `wait_tick()`, `set_throttle()`, `set_stick()`, `set_autopilot()`, `set_hold()`, `set_gear()`, `set_flaps()`, `say()`).
+  * `Framebuffer` (dessin 32 bpp XRGB8888 directement dans `/dev/fb0` sans dépendance externe : pixels, lignes, cercles, ellipses orbitales, grille, texte bitmap 5×7).
+
+---
+
+## 5. Dilatation temporelle relativiste & horloge de simulation
+
+* `/obc/tau` (et lien symbolique `/dev/tau` créé au boot) expose en temps réel : `dtau_dt` ($d\tau/dt$), `proper_time_s`, `sim_time_s`, `warp`, `frozen`, `body`.
+* Lorsque le simulateur est en pause ou gelé (`Space` / `__bh.freeze(true)`), le shell Linux reste interactif pour éditer ou inspecter des scripts, tandis que `state.frozen = true`, `sim_dt = 0` et `bus.wait_tick()` attendent le prochain pas de simulation (avec suspension complète optionnelle via `__bh.obc.suspend()`).
+
+---
+
+## 6. Réseau Wisp & persistance hybride
+
+* **Développement local (`server/wisp-relay.ts`) :** relais Wisp v1 intégré à `server.ts` sur `/__wisp` (actif en dev uniquement, protection `foreignOrigin(req)`, quotas de connexions/flux). `apk add python3` et `curl` fonctionnent immédiatement sans configuration.
+* **Production / Portainer :** URL Wisp personnalisable dans les réglages et dans la barre de la console OBC (sauvegardée via `src/util/storage.ts`), ex. `wss://wisp.domaine.fr/`.
+* **Persistance hybride :**
+  * `/home/pilot/` persisté localement dans IndexedDB via le disque `/data` d'Unkernel.
+  * `scripts/obc/` du dépôt Git monté en direct sur `/obc/scripts/` (éditable depuis l'IDE sur Mac et exécutable immédiatement dans le cockpit).
+
+---
+
+## 7. API `__bh.obc`, TARS et découpage des lots
+
+* **`__bh.obc` (`src/automation.ts`, documenté dans `docs/BH-API.md`) :** `status()`, `boot()`, `stop()`, `reboot()`, `suspend()`, `resume()`, `resetDataDisk()`, `getConfig()`, `setConfig(patch)`, `exec(cmd, timeoutMs?)`, `write(text)`, `readScreen()`, `telemetry()`, `openConsole()`, `closeConsole()`, `toggleConsole()`, `runScript(name)`, `setWispUrl(url)`, `testWisp(url?)`, `listFiles(dir?)`, `readGuestFile(path)`, `writeGuestFile(path, content)`, `captureFbDataUrl()`, `scripts()`.
+* **TARS (`src/ai/game-tools.ts`) :** outil unifié `obc` (`status`, `boot`, `stop`, `reboot`, `suspend`, `resume`, `open`, `close`, `script`, `exec`, `screen`, `test_wisp`, `config`) + écrans `cockpit_obc` / `obc_console` via `show_screen`.
+* **Lots de réalisation (tous livrés & vérifiés en E2E WebGPU) :**
+  * **Lot OBC-0** ✅ : Socle Unkernel `v0.2.0` (Web Worker, `alpine.erofs`, routes `server.ts`, `build-pages.ts`, relais Wisp dev `server/wisp-relay.ts`).
+  * **Lot OBC-1** ✅ : Pont I/O 9p atomique (`/obc`) + `AF_VSOCK:4747` + validateur `protocol.ts` + `TermBuffer` + `FbRenderer`.
+  * **Lot OBC-2** ✅ : Intégration Cockpits 3D (*Ranger/Lander/Endurance* `OBC`, *F-35* PCD `OBC`, *A320* MCDU `OBC LINK`, Lower ECAM `obcPage` et Tablette A320).
+  * **Lot OBC-3** ✅ : Console HUD In-Game (`xterm.js` + `/dev/fb0` + raccourcis Mac `Ctrl+\`, `Ctrl+²`, `F11` + barre supérieure).
+  * **Lot OBC-4** ✅ : Intégration Console équipage `crew/` (`< 375 Ko`, FR/EN, `BroadcastChannel` + relais distant `InstrumentSnapshot.obc` & `cfg.obc`).
+  * **Lot OBC-5** ✅ : Suite logicielle avionique `scripts/obc/` (outils hors-ligne + SDK Python/Node `obc`).
+  * **Lot OBC-6** ✅ : `__bh.obc`, outil TARS `obc`, documentation (`BH-API.md`, `E2E-CATALOGUE.md`, `progress-to-destination.md`), tests unitaires et E2E headed WebGPU.
+  * **Lot OBC-7** ✅ : Graphismes avioniques AAA (`fb-renderer.ts` 4 thèmes `interstellar`/`f35`/`a320`/`amber`, vignettage phosphore radial, scanlines 4 px, pied télémétrie, badge `FB0 <Hz>`, rendu planétaire/orbital `obc-fb-demo`, primitives `obc.py` et mode `--fb` sur `obc-ils` / `obc-reentry`).
+  * **Lot OBC-8** ✅ : Relais multi-machine `crew/` (`InstrumentSnapshot.obc` borné + `cfg.obc` + `crew/views.ts` / `crew/main.ts`, budget `< 375 Ko` préservé).
+  * **Lot OBC-9** ✅ : Console HUD complète (tiroir `Options` RAM/FB0/JIT/Persist/Reset/Theme/CRT/Audio/Clock/Wisp + testeur live `Test Wisp`, tiroir `Editor` `/home/pilot/*`, `Suspend`/`Resume`, export `PNG`, pointeur/molette `evdev`).
+  * **Lot OBC-10** ✅ : Interactivité 3D multi-cockpits (boutons tactiles 3D Ranger, 5 touches + portail large F-35B PCD, Lower ECAM + MCDU `OBC LINK` A320).
+  * **Lot OBC-11** ✅ : Vérification complète (`tsc`, `biome`, WGSL, `BH-API`, `build:pages`, `check-repo-size`, unitaires + E2E headed 4/4, 41 assertions, 61,3 → 60,6 fps, 5 captures archivées dans `docs/progress/linux-obc/`).

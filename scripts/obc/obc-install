@@ -1,0 +1,24 @@
+#!/bin/sh
+# obc-install — 1-click installer for Python 3, Node.js, and scientific packages via apk + Wisp.
+# Installed packages persist in IndexedDB (/data overlay).
+
+TARGET="${1:-python}"
+echo "OBC Package Manager — installing profile: $TARGET ..."
+
+case "$TARGET" in
+  python)
+    apk update && apk add --no-cache python3 py3-pip
+    ;;
+  node)
+    apk update && apk add --no-cache nodejs npm
+    ;;
+  full)
+    apk update && apk add --no-cache python3 py3-pip nodejs npm sqlite curl git
+    ;;
+  *)
+    echo "Usage: obc-install [python|node|full]"
+    exit 1
+    ;;
+esac
+
+echo "Done! Verify with: python3 --version / node --version"

@@ -1,0 +1,108 @@
+#!/bin/sh
+# obc-orbit — Live Keplerian Orbital Plotter & Hohmann Delta-V Calculator.
+# Renders directly to /dev/fb0 when python3 is installed (pass --fb), or crisp ANSI TUI offline.
+
+if [ "$1" = "--fb" ] && [ -x /usr/bin/python3 ] && ! head -n 1 /usr/bin/python3 2>/dev/null | grep -q '^#!'; then
+  exec python3 - <<'PY'
+import math, time, sys
+sys.path.insert(0, "/obc/lib")
+import obc
+
+bus = obc.AvionicsBus()
+with obc.Framebuffer() as fb:
+    CYAN = fb.color(98, 230, 255)
+    TEXT = fb.color(198, 247, 255)
+    DIM = fb.color(30, 105, 130)
+    GREEN = fb.color(125, 255, 154)
+    AMBER = fb.color(255, 179, 71)
+    for _ in range(30):
+        st = bus.read()
+        fb.clear(4, 33, 44)
+        fb.rect(0, 0, 512, 34, fb.color(8, 57, 74))
+        fb.text(12, 10, f"OBC ORBIT {st.body.upper()}", CYAN, 2)
+        cx, cy = 256, 260
+        for rr in (60, 110, 160, 200):
+            fb.circle(cx, cy, rr, DIM, 72)
+        fb.circle(cx, cy, 48, fb.color(26, 128, 176), 64)
+        orb = st.orbit or {}
+        e = min(0.85, max(0.0, float(orb.get("eccentricity", 0.05))))
+        a_px = 140.0
+        b_px = a_px * math.sqrt(max(0.05, 1.0 - e * e))
+        c_px = a_px * e
+        prev = None
+        for i in range(97):
+            th = 2.0 * math.pi * i / 96.0
+            px = int(cx - c_px + a_px * math.cos(th))
+            py = int(cy + b_px * math.sin(th))
+            if prev:
+                fb.line(prev[0], prev[1], px, py, CYAN)
+            prev = (px, py)
+        # Vessel marker
+        ang = (st.sim_time * 0.25) % (2.0 * math.pi)
+        vx = int(cx - c_px + a_px * math.cos(ang))
+        vy = int(cy + b_px * math.sin(ang))
+        fb.rect(vx - 4, vy - 4, 9, 9, GREEN)
+        ap_km = float(orb.get("apoapsis_m", 0.0)) / 1000.0
+        pe_km = float(orb.get("periapsis_m", 0.0)) / 1000.0
+        spd = float(orb.get("speed_mps", st.true_airspeed))
+        fb.text(14, 464, f"AP {ap_km:7.1f}KM  PE {pe_km:7.1f}KM", TEXT, 2)
+        fb.text(14, 486, f"E {e:.3f}  V {spd:6.0f}M/S  TAU {st.dtau_dt:.3f}", AMBER, 2)
+        fb.flush()
+        time.sleep(0.15)
+PY
+fi
+
+printf '\033[2J\033[H'
+printf '\033[1;36m╔══════════════════════════════════════════════════════════════╗\033[0m\n'
+printf '\033[1;36m║\033[1;37m        OBC ORBITAL MECHANICS & HOHMANN Δv CALCULATOR        \033[1;36m║\033[0m\n'
+printf '\033[1;36m╚══════════════════════════════════════════════════════════════╝\033[0m\n'
+
+cat /obc/telemetry.json 2>/dev/null | awk '
+function val(k,   m) {
+  if (match($0, "\"" k "\":[ ]*\"[^\"]*\"")) {
+    m = substr($0, RSTART + length(k) + 3, RLENGTH - length(k) - 3)
+    gsub(/^[: "]+|"+$/, "", m); return m
+  }
+  if (match($0, "\"" k "\":[ ]*[-0-9.eE+]+")) {
+    m = substr($0, RSTART + length(k) + 3, RLENGTH - length(k) - 3)
+    gsub(/^[: ]+/, "", m); return m
+  }
+  return 0
+}
+{
+  body = val("body")
+  ap = val("apoapsis_m") + 0
+  pe = val("periapsis_m") + 0
+  a = val("semi_major_m") + 0
+  e = val("eccentricity") + 0
+  inc = val("inclination_deg") + 0
+  per = val("period_s") + 0
+  spd = val("speed_mps") + 0
+  alt = val("altitude_m") + 0
+  printf "  PRIMARY BODY   : %s\n", body
+  printf "  APOAPSIS (Ap)  : %10.2f km\n", ap / 1000
+  printf "  PERIAPSIS (Pe) : %10.2f km\n", pe / 1000
+  printf "  SEMI-MAJOR (a) : %10.2f km\n", a / 1000
+  printf "  ECCENTRICITY   : %10.5f\n", e
+  printf "  INCLINATION    : %10.2f deg\n", inc
+  printf "  ORBITAL PERIOD : %10.1f s (%.1f min)\n", per, per / 60
+  printf "  VELOCITY       : %10.1f m/s   ALT : %.2f km\n\n", spd, alt / 1000
+  # Example Hohmann transfer from current radius to +200 km higher circular orbit (Earth mu)
+  mu = 3.986004418e14
+  r1 = (a > 6.371e6 ? a : 6.771e6)
+  r2 = r1 + 200000
+  v1 = sqrt(mu / r1)
+  v2 = sqrt(mu / r2)
+  vt1 = sqrt(mu * (2/r1 - 2/(r1+r2)))
+  vt2 = sqrt(mu * (2/r2 - 2/(r1+r2)))
+  dv1 = vt1 - v1; dv2 = v2 - vt2
+  printf "  \033[1;33mHOHMANN +200 km TRANSFER ESTIMATE:\033[0m\n"
+  printf "    Δv1 (raise) = %6.1f m/s   Δv2 (circ) = %6.1f m/s   TOTAL = %6.1f m/s\n\n", dv1, dv2, dv1 + dv2
+  printf "           . - ~ ~ ~ - .\n"
+  printf "       , \x27       Ap      \x27 ,\n"
+  printf "     ,         (%5.0fkm)    ,\n", ap/1000
+  printf "    ,           (●)          ,\n"
+  printf "     ,         %s         ,\n", substr(body "      ", 1, 6)
+  printf "       ,        Pe         ,\n"
+  printf "         \x27 - , _(%4.0fkm)_ ,\x27\n", pe/1000
+}' || echo "Telemetry unavailable."
