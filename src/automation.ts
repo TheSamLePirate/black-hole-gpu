@@ -1079,7 +1079,7 @@ export function installBh(c: BhContext) {
       setTime: (t: number) => sim.setTime(t),
       /** the simulation (sim.ts): its clocks, its step */
       sim,
-      /** the embedded Linux On-Board Computer (docs/PLAN-LINUX-OBC.md): lazy-booted Alpine aarch64 in Web Worker */
+      /** the embedded Linux On-Board Computer (docs/PLAN-LINUX-OBC.md): lazy-booted Alpine / Debian aarch64 in Web Worker */
       obc: {
         status: () => obc.status(),
         boot: () => obc.boot(),
@@ -1090,6 +1090,7 @@ export function installBh(c: BhContext) {
         resetDataDisk: () => obc.resetDataDisk(),
         getConfig: () => obc.getConfig(),
         setConfig: (patch: Parameters<typeof obc.setConfig>[0]) => obc.setConfig(patch),
+        switchDistro: (distro: "alpine" | "debian") => obc.switchDistro(distro),
         exec: (command: string, timeoutMs?: number) => obc.exec(command, timeoutMs),
         write: (input: string) => obc.write(input),
         readScreen: () => obc.readScreen(),
@@ -1098,7 +1099,7 @@ export function installBh(c: BhContext) {
         closeConsole: () => obc.closeConsole(),
         toggleConsole: () => obc.toggleConsole(),
         runScript: (name: string) => obc.runScript(name),
-        installToolchain: (profile: "python" | "node" | "full") => obc.installToolchain(profile),
+        installToolchain: (profile: Parameters<typeof obc.installToolchain>[0]) => obc.installToolchain(profile),
         setWispUrl: (url: string) => obc.setWispUrl(url),
         testWisp: (url?: string) => obc.testWisp(url),
         listFiles: (dir?: string) => obc.listFiles(dir),

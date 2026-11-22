@@ -1,41 +1,272 @@
 #!/bin/sh
-# obc-install — Fast 1-click installer for Python 3 + pip & Node.js + npm via apk + Wisp.
-# Installed packages persist in IndexedDB (/data overlay).
-# Usage: obc-install [python|node|full|dev]
+# obc-install — Universal 1-click toolchain installer for Alpine 3.24 & Debian 13 (Trixie).
+# Supports: Python 3 + pip, Node.js + npm, Bun (+ bunx), Pi (@earendil-works/pi-coding-agent), Claude Code.
+# Installed packages & binaries persist in IndexedDB (/data/distros/<distro>/upper).
+# Usage: obc-install [python|node|bun|pi|claude|full|all]
 
 set -e
 
-TARGET="${1:-full}"
-echo "OBC Package Manager — installing profile: $TARGET ..."
+TARGET="${1:-all}"
 
-# Ensure Alpine community repository is enabled (provides npm & community tools)
-MAIN_REPO=$(head -n 1 /etc/apk/repositories 2>/dev/null || echo "https://dl-cdn.alpinelinux.org/alpine/v3.24/main")
-COMM_REPO="${MAIN_REPO%/main}/community"
-if [ -w /etc/apk/repositories ] && ! grep -q "/community" /etc/apk/repositories 2>/dev/null; then
-  echo "$COMM_REPO" >> /etc/apk/repositories
+# Root elevation for system package steps: sudo unless already root.
+if [ "$(id -u)" != 0 ] && command -v sudo >/dev/null 2>&1; then
+  SUDO=sudo
+else
+  SUDO=
 fi
+
+# Ensure HOME and PATH cover user-local shims & global bins on both Alpine and Debian.
+if [ "${HOME:-/}" = / ] && [ "$(id -u)" != 0 ]; then
+  HOME="/home/$(id -un)"
+  export HOME
+fi
+mkdir -p "$HOME/.local/bin"
+export PATH="$HOME/.local/bin:/usr/local/bin:$PATH:/usr/lib/kw/bin"
+
+if command -v apk >/dev/null 2>&1; then
+  DISTRO=alpine
+elif command -v apt-get >/dev/null 2>&1; then
+  DISTRO=debian
+else
+  echo "OBC Package Manager: unsupported distro (neither apk nor apt-get found)" >&2
+  exit 1
+fi
+
+echo "OBC Package Manager ($DISTRO) — installing profile: $TARGET ..."
+
+APT_UPDATED=0
+COMM_REPO=""
+
+ensure_alpine_community() {
+  if [ "$DISTRO" != "alpine" ]; then return 0; fi
+  MAIN_REPO=$(head -n 1 /etc/apk/repositories 2>/dev/null || echo "https://dl-cdn.alpinelinux.org/alpine/v3.24/main")
+  COMM_REPO="${MAIN_REPO%/main}/community"
+  if ! grep -q "/community" /etc/apk/repositories 2>/dev/null; then
+    echo "$COMM_REPO" | $SUDO tee -a /etc/apk/repositories >/dev/null 2>&1 || true
+  fi
+}
+
+ensure_apt_update() {
+  if [ "$DISTRO" != "debian" ] || [ "$APT_UPDATED" = 1 ]; then return 0; fi
+  $SUDO DEBIAN_FRONTEND=noninteractive apt-get update -qq -o Acquire::Languages=none
+  APT_UPDATED=1
+}
+
+# Symlink a binary into /usr/local/bin (and ~/.local/bin if different) so both user & root find it.
+link_bin() {
+  NAME="$1"
+  SRC="$2"
+  [ -x "$SRC" ] || return 0
+  if [ "$SRC" != "$HOME/.local/bin/$NAME" ]; then
+    ln -sf "$SRC" "$HOME/.local/bin/$NAME" 2>/dev/null || true
+  fi
+  if [ "$SRC" != "/usr/local/bin/$NAME" ]; then
+    $SUDO ln -sf "$SRC" "/usr/local/bin/$NAME" 2>/dev/null || true
+  fi
+}
+
+is_real_bin() {
+  hash -r 2>/dev/null || true
+  P=$(command -v "$1" 2>/dev/null || true)
+  [ -n "$P" ] || return 1
+  case "$P" in
+    /usr/lib/kw/bin/*) return 1 ;;
+  esac
+  if [ "$1" = "python3" ] || [ "$1" = "node" ]; then
+    head -n 1 "$P" 2>/dev/null | grep -q '^#!' && return 1
+  fi
+  return 0
+}
+
+apk_add() {
+  ensure_alpine_community
+  for _try in 1 2 3; do
+    if $SUDO apk add --no-cache --no-progress -X "$COMM_REPO" "$@"; then
+      return 0
+    fi
+    echo "apk retry $_try/3..." >&2
+    sleep 2
+  done
+  return 1
+}
+
+apt_install() {
+  ensure_apt_update
+  mkdir -p /tmp/apt-archives/partial
+  # Keep .deb download cache in RAM tmpfs (/tmp) and skip per-file fsync on browser IndexedDB ext4.
+  for _try in 1 2; do
+    if $SUDO DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends \
+      -o Dir::Cache::archives=/tmp/apt-archives \
+      -o Dpkg::Options::="--force-unsafe-io" "$@"; then
+      rm -rf /tmp/apt-archives 2>/dev/null || true
+      return 0
+    fi
+    echo "apt-get retry $_try/2..." >&2
+    sleep 2
+  done
+  rm -rf /tmp/apt-archives 2>/dev/null || true
+  return 1
+}
+
+install_python() {
+  echo "── [1/5] Python 3 & pip ──"
+  if [ "$DISTRO" = "alpine" ]; then
+    apk_add python3 py3-pip
+  else
+    apt_install python3 python3-pip ca-certificates curl
+  fi
+  if [ -x /usr/bin/pip3 ]; then
+    link_bin pip /usr/bin/pip3
+  fi
+  hash -r 2>/dev/null || true
+}
+
+install_node() {
+  echo "── [2/5] Node.js & npm ──"
+  if [ "$DISTRO" = "alpine" ]; then
+    apk_add nodejs npm
+  else
+    # On Debian, Unkernel's /usr/lib/kw/bin/node shim installs official Node LTS + npm + npx cleanly into ~/.local/share/node.
+    if [ -x /usr/lib/kw/bin/node ] && ! is_real_bin node; then
+      node --version >/dev/null
+    elif ! is_real_bin node; then
+      apt_install nodejs npm
+    fi
+    for tool in node npm npx; do
+      [ -x "$HOME/.local/bin/$tool" ] && link_bin "$tool" "$HOME/.local/bin/$tool"
+    done
+  fi
+  hash -r 2>/dev/null || true
+}
+
+install_bun() {
+  echo "── [3/5] Bun & bunx ──"
+  if [ "$DISTRO" = "alpine" ]; then
+    apk_add libstdc++ pigz
+  fi
+  if ! is_real_bin bun; then
+    bun --version >/dev/null
+  fi
+  for tool in bun bunx; do
+    [ -x "$HOME/.local/bin/$tool" ] && link_bin "$tool" "$HOME/.local/bin/$tool"
+  done
+  hash -r 2>/dev/null || true
+}
+
+install_pi() {
+  echo "── [4/5] Pi coding agent (@earendil-works/pi-coding-agent) ──"
+  if ! is_real_bin npm; then
+    install_node
+  fi
+  # Prefer bun (native Zig, ~50x faster on emulated aarch64) when already installed; fall back to npm.
+  if is_real_bin bun; then
+    BUN_CACHE_DIR=/tmp/obc-bun-cache
+    mkdir -p "$BUN_CACHE_DIR"
+    BUN_INSTALL_CACHE_DIR="$BUN_CACHE_DIR" bun add -g --ignore-scripts @earendil-works/pi-coding-agent
+    rm -rf "$BUN_CACHE_DIR" 2>/dev/null || true
+    PI_BIN="$HOME/.bun/bin/pi"
+  else
+    NPM_PREFIX=$(npm prefix -g)
+    NPM_CACHE_DIR=/tmp/obc-npm-cache
+    mkdir -p "$NPM_CACHE_DIR"
+    NPM_FLAGS="--ignore-scripts --no-audit --no-fund --progress=false --maxsockets=4 --fetch-timeout=30000 --fetch-retry-mintimeout=2000 --fetch-retry-maxtimeout=10000 --fetch-retries=5 --cache=$NPM_CACHE_DIR"
+    if [ -w "$NPM_PREFIX" ] && [ -w "$NPM_PREFIX/bin" ]; then
+      # shellcheck disable=SC2086
+      npm install -g $NPM_FLAGS @earendil-works/pi-coding-agent
+    else
+      # shellcheck disable=SC2086
+      $SUDO npm install -g $NPM_FLAGS @earendil-works/pi-coding-agent
+    fi
+    rm -rf "$NPM_CACHE_DIR" 2>/dev/null || true
+    PI_BIN="$NPM_PREFIX/bin/pi"
+  fi
+  if [ -x "$PI_BIN" ]; then
+    link_bin pi "$PI_BIN"
+  fi
+  hash -r 2>/dev/null || true
+}
+
+install_claude() {
+  echo "── [5/5] Claude Code ──"
+  echo "Installing Claude Code into ~/.local/bin (about 130 MB to download, 360 MB on disk)..."
+  if [ "$DISTRO" = "alpine" ]; then
+    command -v zstd >/dev/null 2>&1 || apk_add zstd
+  else
+    command -v zstd >/dev/null 2>&1 || apt_install ca-certificates curl zstd
+  fi
+  if ! is_real_bin claude; then
+    claude --version >/dev/null
+  fi
+  [ -x "$HOME/.local/bin/claude" ] && link_bin claude "$HOME/.local/bin/claude"
+  hash -r 2>/dev/null || true
+}
 
 case "$TARGET" in
   python)
-    apk add --no-cache --no-progress python3 py3-pip
+    install_python
     ;;
   node)
-    apk add --no-cache --no-progress -X "$COMM_REPO" nodejs npm
+    install_node
+    ;;
+  bun)
+    install_bun
+    ;;
+  pi)
+    install_pi
+    ;;
+  claude)
+    install_claude
     ;;
   full)
-    apk add --no-cache --no-progress -X "$COMM_REPO" python3 py3-pip nodejs npm
+    if [ "$DISTRO" = "alpine" ]; then
+      echo "── [1-2/3] Alpine system packages (Python, pip, Node, npm, libstdc++, pigz) ──"
+      apk_add python3 py3-pip nodejs npm libstdc++ pigz
+      [ -x /usr/bin/pip3 ] && link_bin pip /usr/bin/pip3
+      hash -r 2>/dev/null || true
+    else
+      install_python
+      install_node
+    fi
+    install_bun
     ;;
-  dev)
-    apk add --no-cache --no-progress -X "$COMM_REPO" python3 py3-pip nodejs npm curl git
+  all|dev|ai)
+    if [ "$DISTRO" = "alpine" ]; then
+      echo "── [1-2/5] Alpine system packages (Python, pip, Node, npm, libstdc++, pigz, zstd) ──"
+      apk_add python3 py3-pip nodejs npm libstdc++ pigz zstd
+      [ -x /usr/bin/pip3 ] && link_bin pip /usr/bin/pip3
+      hash -r 2>/dev/null || true
+    else
+      echo "── [1/5] Debian system packages (Python 3, pip, curl, zstd) ──"
+      apt_install python3 python3-pip ca-certificates curl zstd
+      [ -x /usr/bin/pip3 ] && link_bin pip /usr/bin/pip3
+      hash -r 2>/dev/null || true
+      install_node
+    fi
+    install_bun
+    install_pi
+    install_claude
     ;;
   *)
-    echo "Usage: obc-install [python|node|full|dev]"
+    echo "Usage: obc-install [python|node|bun|pi|claude|full|all]"
     exit 1
     ;;
 esac
 
-if [ -x /usr/bin/pip3 ] && [ ! -e /usr/bin/pip ]; then
-  ln -sf /usr/bin/pip3 /usr/bin/pip 2>/dev/null || true
-fi
+hash -r 2>/dev/null || true
 
-echo "Done! Python: $(python3 --version 2>/dev/null || echo none) | pip: $(pip --version 2>/dev/null | awk '{print $2}' || echo none) | Node: $(node --version 2>/dev/null || echo none) | npm: $(npm --version 2>/dev/null || echo none)"
+ver_of() {
+  if is_real_bin "$1"; then
+    "$@" 2>/dev/null | head -n 1
+  else
+    echo "not-installed"
+  fi
+}
+
+echo "Done ($DISTRO)!"
+echo "  Python : $(ver_of python3 --version)"
+echo "  pip    : $(ver_of pip --version | awk '{print $2}')"
+echo "  Node   : $(ver_of node --version)"
+echo "  npm    : $(ver_of npm --version)"
+echo "  Bun    : $(ver_of bun --version)"
+echo "  pi     : $(ver_of pi --version)"
+echo "  claude : $(ver_of claude --version)"

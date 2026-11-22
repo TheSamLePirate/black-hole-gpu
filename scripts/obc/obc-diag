@@ -1,6 +1,6 @@
 #!/bin/sh
 # obc-diag — Instant offline avionics & Kerr relativity diagnostic dashboard.
-# Works on first boot with BusyBox awk/sh (zero internet or python3 required).
+# Works on first boot on both Alpine 3.24 & Debian 13 (zero internet or python3 required).
 
 C_CYN='\033[1;36m'
 C_GRN='\033[1;32m'
@@ -16,20 +16,41 @@ printf "${C_CYN}╚════════════════════�
 
 KERNEL=$(uname -sr 2>/dev/null || echo "Linux")
 ARCH=$(uname -m 2>/dev/null || echo "aarch64")
-if [ -x /usr/bin/python3 ] && ! head -n 1 /usr/bin/python3 2>/dev/null | grep -q '^#!'; then
-  PY=$(python3 --version 2>&1)
-else
-  PY="standby (run: obc-install python)"
-fi
-if [ -x /usr/bin/node ] && ! head -n 1 /usr/bin/node 2>/dev/null | grep -q '^#!'; then
-  ND=$(node --version 2>&1)
-else
-  ND="standby (run: obc-install node)"
-fi
+DISTRO=$(sed -n 's/^PRETTY_NAME="\([^"]*\)"/\1/p' /etc/os-release 2>/dev/null | head -n 1)
+[ -z "$DISTRO" ] && DISTRO="Linux"
+MEM_MB=$(awk '/^MemTotal:/ { printf "%.0f MiB", $2/1024 }' /proc/meminfo 2>/dev/null || echo "?")
 
-printf "${C_DIM}KERNEL  :${C_RST} %s (%s)\n" "$KERNEL" "$ARCH"
-printf "${C_DIM}PYTHON  :${C_RST} %s\n" "$PY"
-printf "${C_DIM}NODE.JS :${C_RST} %s\n" "$ND"
+has_real() {
+  P=$(command -v "$1" 2>/dev/null || true)
+  [ -n "$P" ] || return 1
+  case "$P" in
+    /usr/lib/kw/bin/*) return 1 ;;
+  esac
+  if [ "$1" = "python3" ] || [ "$1" = "node" ]; then
+    head -n 1 "$P" 2>/dev/null | grep -q '^#!' && return 1
+  fi
+  return 0
+}
+
+tool_tag() {
+  if has_real "$1"; then
+    printf "%s=%s" "$1" "$2"
+  else
+    printf "%s=off" "$1"
+  fi
+}
+
+PY_V=$(has_real python3 && python3 --version 2>&1 | awk '{print $2}' || echo "off")
+PIP_V=$(has_real pip && echo "ok" || (has_real pip3 && echo "ok" || echo "off"))
+ND_V=$(has_real node && node --version 2>&1 || echo "off")
+NPM_V=$(has_real npm && echo "ok" || echo "off")
+BUN_V=$(has_real bun && bun --version 2>&1 | head -n 1 || echo "off")
+PI_V=$(has_real pi && echo "ok" || echo "off")
+CL_V=$(has_real claude && echo "ok" || echo "off")
+
+printf "${C_DIM}DISTRO  :${C_RST} %s · %s (%s) · RAM %s\n" "$DISTRO" "$KERNEL" "$ARCH" "$MEM_MB"
+printf "${C_DIM}TOOLS   :${C_RST} py=%s  pip=%s  node=%s  npm=%s  bun=%s  pi=%s  claude=%s\n" \
+  "$PY_V" "$PIP_V" "$ND_V" "$NPM_V" "$BUN_V" "$PI_V" "$CL_V"
 printf "${C_DIM}DEVICES :${C_RST} /dev/fb0=%s  /dev/tau=%s  /obc=%s\n" \
   "$([ -e /dev/fb0 ] && echo OK || echo OFF)" \
   "$([ -e /dev/tau ] && echo OK || echo LINK)" \
@@ -62,4 +83,4 @@ else
   printf "\n${C_YEL}Telemetry bridge /obc/telemetry.json not mounted yet.${C_RST}\n"
 fi
 
-printf "\n${C_GRN}Commands:${C_RST} obc-diag | obc-orbit | obc-reentry | obc-ils | obc-solar | obc-fdr | obc-fb-demo | obc-install\n"
+printf "\n${C_GRN}Commands:${C_RST} bh | obc-diag | obc-pfd-fb | obc-f35-fb | obc-a320-fb | obc-ils-fb | obc-install [all]\n"

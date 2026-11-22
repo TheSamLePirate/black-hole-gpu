@@ -9,7 +9,8 @@ if [ ! -e /dev/fb0 ]; then
   exit 1
 fi
 
-if [ -x /usr/bin/python3 ] && ! head -n 1 /usr/bin/python3 2>/dev/null | grep -q '^#!'; then
+_P=$(command -v python3 2>/dev/null || true)
+if [ -n "$_P" ] && ! head -n 1 "$_P" 2>/dev/null | grep -q '^#!'; then
   exec python3 - <<'PY'
 import math, sys, time
 sys.path.insert(0, "/obc/lib")

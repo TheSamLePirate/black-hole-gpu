@@ -244,6 +244,23 @@ function closeStream(session: WispSession, streamId: number, reason: number, not
   if (notifyClient) session.send(encodeClose(streamId, reason));
 }
 
+function flushStreamQueue(session: WispSession, stream: WispStream) {
+  const socket = stream.socket;
+  if (!socket || stream.closed) return;
+  while (stream.queue.length > 0) {
+    const head = stream.queue[0]!;
+    const written = socket.write(head);
+    if (written <= 0) return;
+    if (written < head.byteLength) {
+      stream.queue[0] = head.subarray(written);
+      stream.queuedBytes -= written;
+      return;
+    }
+    stream.queue.shift();
+    stream.queuedBytes -= head.byteLength;
+  }
+}
+
 export function wispMessage(ws: { data: unknown }, msg: string | ArrayBuffer | Uint8Array) {
   const session = ws.data as WispSession;
   const raw =
@@ -286,16 +303,31 @@ export function wispMessage(ws: { data: unknown }, msg: string | ArrayBuffer | U
             return;
           }
           stream.socket = socket;
-          for (const chunk of stream.queue) socket.write(chunk);
-          stream.queue.length = 0;
-          stream.queuedBytes = 0;
+          flushStreamQueue(session, stream);
           session.send(encodeContinue(stream.id, WISP_LIMITS.initialBuffer));
+        },
+        drain() {
+          flushStreamQueue(session, stream);
+          if (!stream.closed && stream.queuedBytes === 0) {
+            session.send(encodeContinue(stream.id, WISP_LIMITS.initialBuffer));
+          }
         },
         data(_socket, chunk) {
           if (stream.closed) return;
           const bytes = chunk instanceof Uint8Array ? chunk : new Uint8Array(chunk);
           totalBytesOut += bytes.byteLength;
-          session.send(encodeData(stream.id, bytes));
+          // Chunk large upstream bursts (e.g. 130 MB downloads) into <=32 KiB Wisp DATA frames
+          const MAX_FRAME = 32768;
+          if (bytes.byteLength <= MAX_FRAME) {
+            session.send(encodeData(stream.id, bytes));
+          } else {
+            for (let off = 0; off < bytes.byteLength; off += MAX_FRAME) {
+              session.send(encodeData(stream.id, bytes.subarray(off, Math.min(off + MAX_FRAME, bytes.byteLength))));
+            }
+          }
+        },
+        end() {
+          closeStream(session, stream.id, CLOSE_NORMAL, true);
         },
         close() {
           closeStream(session, stream.id, CLOSE_NORMAL, true);
@@ -317,14 +349,21 @@ export function wispMessage(ws: { data: unknown }, msg: string | ArrayBuffer | U
     const stream = session.streams.get(pkt.streamId);
     if (!stream || stream.closed) return;
     totalBytesIn += pkt.payload.byteLength;
-    if (stream.socket) {
-      stream.socket.write(pkt.payload);
-      session.send(encodeContinue(stream.id, WISP_LIMITS.initialBuffer));
+    if (stream.socket && stream.queue.length === 0) {
+      const written = stream.socket.write(pkt.payload);
+      if (written < pkt.payload.byteLength) {
+        const rest = pkt.payload.slice(written);
+        stream.queue.push(rest);
+        stream.queuedBytes += rest.byteLength;
+      } else {
+        session.send(encodeContinue(stream.id, WISP_LIMITS.initialBuffer));
+      }
     } else if (stream.queuedBytes + pkt.payload.byteLength <= WISP_LIMITS.maxQueueBytes) {
       const copy = new Uint8Array(pkt.payload.byteLength);
       copy.set(pkt.payload);
       stream.queue.push(copy);
       stream.queuedBytes += copy.byteLength;
+      if (stream.socket) flushStreamQueue(session, stream);
     } else {
       closeStream(session, stream.id, CLOSE_THROTTLED, true);
     }

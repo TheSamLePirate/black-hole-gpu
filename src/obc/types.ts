@@ -7,9 +7,19 @@ export type ObcTheme = "interstellar" | "f35" | "a320" | "amber";
 
 export type ObcViewMode = "term" | "fb" | "split";
 
+export type ObcDistro = "alpine" | "debian";
+
+export type ObcMemoryMiB = 512 | 1024 | 2048 | 4096;
+
+export const OBC_MEMORY_OPTIONS: readonly ObcMemoryMiB[] = [512, 1024, 2048, 4096];
+
+export type ObcToolchainProfile = "python" | "node" | "bun" | "claude" | "pi" | "full" | "all";
+
 export interface ObcConfig {
-  /** Guest RAM in MiB (128, 256, or 512) */
-  memoryMiB: 128 | 256 | 512;
+  /** Linux rootfs distribution ("alpine" = Alpine 3.24 musl, "debian" = Debian 13 Trixie glibc) */
+  distro: ObcDistro;
+  /** Guest RAM in MiB (512, 1024, 2048 default, or 4096) */
+  memoryMiB: ObcMemoryMiB;
   /** Virtual /dev/fb0 width & height [px] */
   fbWidth: number;
   fbHeight: number;
@@ -28,7 +38,8 @@ export interface ObcConfig {
 }
 
 export const DEFAULT_OBC_CONFIG: ObcConfig = {
-  memoryMiB: 512,
+  distro: "alpine",
+  memoryMiB: 2048,
   fbWidth: 512,
   fbHeight: 512,
   jit: true,

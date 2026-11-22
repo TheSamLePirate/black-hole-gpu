@@ -9,9 +9,9 @@
 import "@xterm/xterm/css/xterm.css";
 import "./obc-console.css";
 import { drawObcSurface } from "../obc/fb-renderer";
-import type { ObcRuntime } from "../obc/runtime";
+import { normalizeDistro, normalizeMemoryMiB, type ObcRuntime } from "../obc/runtime";
 import { OBC_SCRIPTS } from "../obc/scripts-catalog";
-import type { ObcConfig, ObcTheme, ObcViewMode } from "../obc/types";
+import type { ObcConfig, ObcDistro, ObcTheme, ObcViewMode } from "../obc/types";
 
 interface XtermBundle {
   term: import("@xterm/xterm").Terminal;
@@ -83,6 +83,8 @@ export class ObcConsoleOverlay {
   private editorDrawer: HTMLDivElement;
   private wispInput: HTMLInputElement;
   private wispStatusEl: HTMLSpanElement;
+  private quickDistroSel: HTMLSelectElement;
+  private distroSel: HTMLSelectElement;
   private ramSel: HTMLSelectElement;
   private resSel: HTMLSelectElement;
   private themeSel: HTMLSelectElement;
@@ -144,8 +146,41 @@ export class ObcConsoleOverlay {
     this.metaEl.textContent = "STANDBY";
     title.append(this.ledEl, nameSpan, this.metaEl);
 
+    const cfg = this.runtime.getConfig();
+
+    const mkSelect = (opts: [string, string][], val: string, testid: string) => {
+      const s = document.createElement("select");
+      s.className = "obc-select";
+      s.dataset.testid = testid;
+      for (const [v, lbl] of opts) {
+        const o = document.createElement("option");
+        o.value = v;
+        o.textContent = lbl;
+        s.append(o);
+      }
+      s.value = val;
+      return s;
+    };
+
+    this.quickDistroSel = mkSelect(
+      [
+        ["alpine", "Alpine 3.24"],
+        ["debian", "Debian 13"],
+      ],
+      cfg.distro,
+      "obc-distro-quick",
+    );
+    this.quickDistroSel.title = "Switch Linux distribution (Alpine 3.24 musl or Debian 13 Trixie glibc)";
+    this.quickDistroSel.onchange = () => {
+      const d = normalizeDistro(this.quickDistroSel.value);
+      this.distroSel.value = d;
+      void this.runtime.switchDistro(d);
+      this.focusActiveInput();
+    };
+
     const actions = document.createElement("div");
     actions.className = "obc-actions";
+    actions.append(this.quickDistroSel);
 
     const modes: [ObcViewMode, string][] = [
       ["term", "TTY"],
@@ -228,18 +263,18 @@ export class ObcConsoleOverlay {
     const pkgLabel = document.createElement("span");
     pkgLabel.className = "obc-subbar-label";
     pkgLabel.style.marginLeft = "8px";
-    pkgLabel.textContent = "APK:";
+    pkgLabel.textContent = "PKG:";
     subbar.append(
       pkgLabel,
       mkBtn(
-        "+Python",
+        "+Py",
         () => {
           void this.runtime.installToolchain("python");
           this.focusActiveInput();
         },
         {
           testid: "obc-install-python",
-          title: "Install Python 3 & pip via apk (persisted in IndexedDB)",
+          title: "Install Python 3 & pip (apk on Alpine / apt on Debian, persisted in IndexedDB)",
         },
       ),
       mkBtn(
@@ -250,42 +285,60 @@ export class ObcConsoleOverlay {
         },
         {
           testid: "obc-install-node",
-          title: "Install Node.js & npm via apk (persisted in IndexedDB)",
+          title: "Install Node.js & npm (persisted in IndexedDB)",
         },
       ),
       mkBtn(
-        "+Py+Node",
+        "+Bun",
         () => {
-          void this.runtime.installToolchain("full");
+          void this.runtime.installToolchain("bun");
           this.focusActiveInput();
         },
         {
-          testid: "obc-install-full",
-          title: "Install Python 3, pip, Node.js & npm in one step via apk",
+          testid: "obc-install-bun",
+          title: "Install Bun & bunx via Unkernel shim (Alpine & Debian)",
+        },
+      ),
+      mkBtn(
+        "+Pi",
+        () => {
+          void this.runtime.installToolchain("pi");
+          this.focusActiveInput();
+        },
+        {
+          testid: "obc-install-pi",
+          title: "Install @earendil-works/pi-coding-agent (pi) via npm (Alpine & Debian)",
+        },
+      ),
+      mkBtn(
+        "+Claude",
+        () => {
+          void this.runtime.installToolchain("claude");
+          this.focusActiveInput();
+        },
+        {
+          testid: "obc-install-claude",
+          title: "Install Claude Code into ~/.local/bin (Alpine & Debian)",
+        },
+      ),
+      mkBtn(
+        "+All",
+        () => {
+          void this.runtime.installToolchain("all");
+          this.focusActiveInput();
+        },
+        {
+          testid: "obc-install-all",
+          title: "Install Python, pip, Node, npm, Bun, Pi & Claude Code (Alpine & Debian)",
         },
       ),
     );
 
     // ── Options Drawer (Hardware, Graphics, Audio, Wisp) ───────────────────────
-    const cfg = this.runtime.getConfig();
     this.optionsDrawer = document.createElement("div");
     this.optionsDrawer.className = "obc-drawer";
     this.optionsDrawer.dataset.testid = "obc-options-drawer";
     this.optionsDrawer.hidden = true;
-
-    const mkSelect = (opts: [string, string][], val: string, testid: string) => {
-      const s = document.createElement("select");
-      s.className = "obc-select";
-      s.dataset.testid = testid;
-      for (const [v, lbl] of opts) {
-        const o = document.createElement("option");
-        o.value = v;
-        o.textContent = lbl;
-        s.append(o);
-      }
-      s.value = val;
-      return s;
-    };
 
     const mkCheck = (label: string, checked: boolean, testid: string) => {
       const wrap = document.createElement("label");
@@ -309,11 +362,20 @@ export class ObcConsoleOverlay {
       return f;
     };
 
+    this.distroSel = mkSelect(
+      [
+        ["alpine", "Alpine 3.24 (4 MB, fast)"],
+        ["debian", "Debian 13 (72 MB, glibc)"],
+      ],
+      cfg.distro,
+      "obc-opt-distro",
+    );
     this.ramSel = mkSelect(
       [
-        ["128", "128 MiB"],
-        ["256", "256 MiB"],
         ["512", "512 MiB"],
+        ["1024", "1 GiB"],
+        ["2048", "2 GiB (default)"],
+        ["4096", "4 GiB"],
       ],
       String(cfg.memoryMiB),
       "obc-opt-ram",
@@ -372,6 +434,7 @@ export class ObcConsoleOverlay {
     const optRow1 = document.createElement("div");
     optRow1.className = "obc-drawer-row";
     optRow1.append(
+      mkField("Distro", this.distroSel),
       mkField("RAM", this.ramSel),
       mkField("/dev/fb0", this.resSel),
       mkField("Theme", this.themeSel),
@@ -422,9 +485,11 @@ export class ObcConsoleOverlay {
       "Apply & Reboot",
       () => {
         const [fw, fh] = this.resSel.value.split("x").map(Number);
-        const mem = Number(this.ramSel.value);
+        const mem = normalizeMemoryMiB(Number(this.ramSel.value));
+        const distro: ObcDistro = normalizeDistro(this.distroSel.value);
         this.runtime.setConfig({
-          memoryMiB: mem === 128 || mem === 512 ? mem : 256,
+          distro,
+          memoryMiB: mem,
           fbWidth: fw || 512,
           fbHeight: fh || 512,
           jit: this.jitChk.checked,
@@ -538,7 +603,7 @@ export class ObcConsoleOverlay {
       const el = t as HTMLElement | null;
       if (!el) return false;
       if (el.classList?.contains("xterm-helper-textarea")) return false;
-      return Boolean(el.closest?.(".obc-drawer") && /^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName));
+      return Boolean(el.closest?.(".obc-drawer, .obc-bar") && /^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName));
     };
 
     // Capture-phase window keyboard router while OBC console is open:
@@ -638,6 +703,7 @@ export class ObcConsoleOverlay {
       this.editorDrawer.hidden = true;
       this.edBtn.classList.remove("on");
       const cfg = this.runtime.getConfig();
+      this.distroSel.value = cfg.distro;
       this.ramSel.value = String(cfg.memoryMiB);
       this.resSel.value = `${cfg.fbWidth}x${cfg.fbHeight}`;
       this.themeSel.value = cfg.theme;
@@ -799,13 +865,14 @@ export class ObcConsoleOverlay {
     this.ledEl.dataset.phase = st.phase;
     this.el.dataset.theme = st.config.theme === "auto" ? "interstellar" : st.config.theme;
 
-    const parts: string[] = [st.phase.toUpperCase()];
+    const parts: string[] = [st.phase.toUpperCase(), st.distro.toUpperCase()];
     if (st.bootMs !== null) parts.push(`${st.bootMs}ms`);
-    parts.push(`${st.memoryMiB}MiB`);
+    parts.push(st.memoryMiB >= 1024 && st.memoryMiB % 1024 === 0 ? `${st.memoryMiB / 1024}GiB` : `${st.memoryMiB}MiB`);
     if (st.config.jit) parts.push("JIT");
     if (st.netEnabled) parts.push("WISP");
     if (st.fbActive) parts.push(`FB0 ${st.fbWidth}×${st.fbHeight}${st.fbFps ? ` @${st.fbFps}Hz` : ""}`);
     this.metaEl.textContent = parts.join(" · ");
+    if (this.quickDistroSel.value !== st.config.distro) this.quickDistroSel.value = st.config.distro;
 
     this.suspendBtn.textContent = st.phase === "suspended" || st.hasSnapshot ? "Resume" : "Suspend";
     this.suspendBtn.classList.toggle("on", st.phase === "suspended" || st.hasSnapshot);

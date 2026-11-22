@@ -19,6 +19,7 @@ if (parent)
     }
   }, 2000);
 const dev = process.env.NODE_ENV !== "production";
+let debianDistroPathPromise: Promise<string> | null = null;
 // TARS's ear (dev): the page's microphone relayed to Deepgram with the key of .env — the key never leaves this
 // server (a temporary token needs a key of a member's rights; a relay needs none)
 // (and in a test's run — KERR_EAR_RELAY=1 —: its server runs as production)
@@ -256,6 +257,20 @@ const server = Bun.serve({
       const file = Bun.file("assets/obc/alpine.erofs");
       if (!(await file.exists())) return new Response("not found", { status: 404 });
       return serveRangeFile(req, file, "application/octet-stream");
+    },
+    "/obc/debian.erofs": async (req) => {
+      const local = Bun.file("assets/obc/debian.erofs");
+      if (await local.exists()) return serveRangeFile(req, local, "application/octet-stream");
+      try {
+        debianDistroPathPromise ??= import("unkernel/node").then((m) => m.fetchDistro("debian"));
+        const p = await debianDistroPathPromise;
+        const file = Bun.file(p);
+        if (!(await file.exists())) return new Response("not found", { status: 404 });
+        return serveRangeFile(req, file, "application/octet-stream");
+      } catch (err) {
+        debianDistroPathPromise = null;
+        return new Response(`debian.erofs unavailable: ${err instanceof Error ? err.message : String(err)}`, { status: 503 });
+      }
     },
     "/obc/distros.json": async () => {
       const file = Bun.file("assets/obc/distros.json");

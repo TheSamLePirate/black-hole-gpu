@@ -19,9 +19,12 @@ import {
   DEFAULT_OBC_CONFIG,
   type ObcConfig,
   type ObcCrewSnapshot,
+  type ObcDistro,
+  type ObcMemoryMiB,
   type ObcPhase,
   type ObcStatus,
   type ObcTelemetry,
+  type ObcToolchainProfile,
   type ObcViewMode,
 } from "./types";
 
@@ -29,6 +32,19 @@ const WISP_STORAGE_KEY = "kerr.obc.wisp";
 const CFG_STORAGE_KEY = "kerr.obc.cfg";
 export const DEFAULT_PROD_WISP_URL = "wss://code.samlepirate.org/";
 const FB_POLL_MS = 33; // up to 30 Hz smooth real-time framebuffer updates while /dev/fb0 is open
+
+export function normalizeMemoryMiB(raw: unknown): ObcMemoryMiB {
+  if (raw === 512 || raw === 1024 || raw === 2048 || raw === 4096) return raw;
+  return DEFAULT_OBC_CONFIG.memoryMiB;
+}
+
+export function normalizeDistro(raw: unknown): ObcDistro {
+  return raw === "debian" ? "debian" : "alpine";
+}
+
+export function distroLabel(distro: ObcDistro): string {
+  return distro === "debian" ? "debian-13" : "alpine-3.24";
+}
 
 export interface ObcFbFrame {
   width: number;
@@ -42,7 +58,8 @@ function loadSavedConfig(): ObcConfig {
     const raw = store.get(CFG_STORAGE_KEY);
     if (!raw) return { ...DEFAULT_OBC_CONFIG };
     const o = JSON.parse(raw) as Partial<ObcConfig>;
-    const mem = o.memoryMiB === 128 || o.memoryMiB === 256 || o.memoryMiB === 512 ? o.memoryMiB : DEFAULT_OBC_CONFIG.memoryMiB;
+    const distro = normalizeDistro(o.distro);
+    const mem = normalizeMemoryMiB(o.memoryMiB);
     const fbWidth =
       typeof o.fbWidth === "number" && o.fbWidth >= 256 && o.fbWidth <= 1024 ? Math.round(o.fbWidth) : DEFAULT_OBC_CONFIG.fbWidth;
     const fbHeight =
@@ -50,6 +67,7 @@ function loadSavedConfig(): ObcConfig {
     const theme =
       o.theme === "auto" || o.theme === "interstellar" || o.theme === "f35" || o.theme === "a320" || o.theme === "amber" ? o.theme : "auto";
     return {
+      distro,
       memoryMiB: mem,
       fbWidth,
       fbHeight,
@@ -83,6 +101,7 @@ export class ObcRuntime {
   private phase: ObcPhase = "off";
   private bootMs: number | null = null;
   private config: ObcConfig = loadSavedConfig();
+  private actualMemoryMiB: number = this.config.memoryMiB;
   private transport = "none";
   private fbMode: DisplayMode | null = null;
   private fbFrame: ObcFbFrame | null = null;
@@ -136,12 +155,12 @@ export class ObcRuntime {
 
   setConfig(partial: Partial<ObcConfig>): ObcConfig {
     const next: ObcConfig = { ...this.config, ...partial };
-    if (next.memoryMiB !== 128 && next.memoryMiB !== 256 && next.memoryMiB !== 512) {
-      next.memoryMiB = 256;
-    }
+    next.distro = normalizeDistro(next.distro);
+    next.memoryMiB = normalizeMemoryMiB(next.memoryMiB);
     next.fbWidth = Math.max(256, Math.min(1024, Math.round(next.fbWidth)));
     next.fbHeight = Math.max(256, Math.min(1024, Math.round(next.fbHeight)));
     this.config = next;
+    if (this.phase !== "ready") this.actualMemoryMiB = next.memoryMiB;
     try {
       store.set(CFG_STORAGE_KEY, JSON.stringify(next));
     } catch {
@@ -149,6 +168,17 @@ export class ObcRuntime {
     }
     this.emitState();
     return { ...this.config };
+  }
+
+  /** Switch Linux distribution ("alpine" or "debian") and reboot if currently running. */
+  async switchDistro(distro: ObcDistro): Promise<ObcStatus> {
+    const target = normalizeDistro(distro);
+    const changed = this.config.distro !== target;
+    this.setConfig({ distro: target });
+    if (changed && (this.phase === "ready" || this.phase === "suspended")) {
+      return this.reboot();
+    }
+    return this.status();
   }
 
   get displayRev(): number {
@@ -297,8 +327,8 @@ export class ObcRuntime {
     return {
       phase: this.phase,
       bootMs: this.bootMs,
-      memoryMiB: this.config.memoryMiB,
-      distro: "alpine-3.24",
+      memoryMiB: this.phase === "ready" ? this.actualMemoryMiB : this.config.memoryMiB,
+      distro: distroLabel(this.config.distro),
       arch: "aarch64",
       worker: true,
       transport: this.transport,
@@ -335,7 +365,7 @@ export class ObcRuntime {
     const t = this.adapter.sampleTelemetry();
     return {
       phase: this.phase,
-      distro: "alpine-3.24",
+      distro: distroLabel(this.config.distro),
       fbActive: this.fbActive,
       dtauDt: t.dtau_dt,
       activeScript: this.activeScript,
@@ -397,9 +427,10 @@ export class ObcRuntime {
       this.term.clear();
       this.replayChunks = [];
       this.replayBytes = 0;
+      const label = distroLabel(this.config.distro);
       this.pushOutput(
         new TextEncoder().encode(
-          `\x1b[1;36m[OBC] Booting Unkernel Linux 7.x (aarch64 · ${this.config.memoryMiB}MiB · ${this.config.fbWidth}×${this.config.fbHeight}${this.config.jit ? " · JIT" : ""})...\r\n\x1b[0m`,
+          `\x1b[1;36m[OBC] Booting Unkernel Linux 7.x (${label} · aarch64 · ${this.config.memoryMiB}MiB · ${this.config.fbWidth}×${this.config.fbHeight}${this.config.jit ? " · JIT" : ""})...\r\n\x1b[0m`,
         ),
       );
     } else {
@@ -431,7 +462,8 @@ export class ObcRuntime {
 
       const base = new URL("./", location.href);
       const kernelUrl = new URL("obc/unkernel.wasm", base).toString();
-      const distroUrl = new URL("obc/alpine.erofs", base).toString();
+      const distroFile = this.config.distro === "debian" ? "obc/debian.erofs" : "obc/alpine.erofs";
+      const distroUrl = new URL(distroFile, base).toString();
       let lastPct = -1;
 
       const vm = await mod.createKernel({
@@ -440,7 +472,7 @@ export class ObcRuntime {
         distro: distroUrl,
         ...(restore ? { restore } : {}),
         memoryMiB: this.config.memoryMiB,
-        memoryFallbackMiB: [256, 128],
+        memoryFallbackMiB: [2048, 1024, 512, 256],
         jit: this.config.jit,
         disks: [{ kind: "data", template: "bundled", mode: this.config.persistData ? "persistent" : "snapshot" }],
         mounts: { "/obc": memFs },
@@ -469,6 +501,7 @@ export class ObcRuntime {
       });
 
       this.vm = vm;
+      this.actualMemoryMiB = vm.memoryMiB || this.config.memoryMiB;
       this.transport = vm.transport;
       if (vm.vsock) {
         this.vsockHandle = startObcVsockServer(vm.vsock, this.adapter, () => {
@@ -486,7 +519,10 @@ export class ObcRuntime {
       this.emitState();
 
       if (!restore) {
-        vm.write("export PATH=/obc/scripts:$PATH PYTHONPATH=/obc/lib NODE_PATH=/obc/lib; cd /home/pilot 2>/dev/null; clear; obc-diag\n");
+        const heapMb = this.nodeMaxOldSpaceMiB();
+        vm.write(
+          `export PATH="/obc/scripts:$HOME/.local/bin:$HOME/.bun/bin:/home/user/.local/bin:/home/user/.bun/bin:/usr/local/bin:$PATH:/usr/lib/kw/bin" PYTHONPATH=/obc/lib NODE_PATH=/obc/lib NODE_OPTIONS="--max-old-space-size=${heapMb}"; cd /home/pilot 2>/dev/null; clear; obc-diag\n`,
+        );
       }
 
       void vm.exited.then((res) => {
@@ -597,13 +633,20 @@ export class ObcRuntime {
     }
   }
 
+  private nodeMaxOldSpaceMiB(): number {
+    return Math.max(256, Math.min(1536, Math.floor(this.actualMemoryMiB * 0.45)));
+  }
+
   private async configureGuestEnvironment(vm: KernelHandle): Promise<void> {
+    const heapMb = this.nodeMaxOldSpaceMiB();
     const setupScript = [
-      "mkdir -p /home/pilot /etc/profile.d",
+      "mkdir -p /home/pilot /etc/profile.d /home/user/.local/bin",
       "chmod 777 /home/pilot 2>/dev/null || true",
+      "chown -R 1000:1000 /home/user/.local 2>/dev/null || true",
       "ln -sf /obc/tau /dev/tau",
-      "printf 'export PATH=/obc/scripts:$PATH\\nexport PYTHONPATH=/obc/lib\\nexport NODE_PATH=/obc/lib\\nexport PYTHONDONTWRITEBYTECODE=1\\nexport NODE_OPTIONS=\"--max-old-space-size=128\"\\n' > /etc/profile.d/obc.sh",
+      `printf 'export PATH="/obc/scripts:$HOME/.local/bin:$HOME/.bun/bin:/home/user/.local/bin:/home/user/.bun/bin:/usr/local/bin:$PATH:/usr/lib/kw/bin"\\nexport PYTHONPATH=/obc/lib\\nexport NODE_PATH=/obc/lib\\nexport PYTHONDONTWRITEBYTECODE=1\\nexport NODE_OPTIONS="--max-old-space-size=${heapMb}"\\n' > /etc/profile.d/obc.sh`,
       "chmod 644 /etc/profile.d/obc.sh 2>/dev/null || true",
+      "if [ -f /etc/bash.bashrc ] && ! grep -q '/etc/profile.d/obc.sh' /etc/bash.bashrc 2>/dev/null; then printf '\\n[ -r /etc/profile.d/obc.sh ] && . /etc/profile.d/obc.sh\\n' >> /etc/bash.bashrc; fi",
     ].join(" && ");
     try {
       await vm.exec("sh", ["-c", setupScript], { user: 0, timeout: 12_000 });
@@ -674,7 +717,8 @@ export class ObcRuntime {
       }
     }
     try {
-      const wrapped = `export PATH=/obc/scripts:$PATH PYTHONPATH=/obc/lib NODE_PATH=/obc/lib PYTHONDONTWRITEBYTECODE=1 NODE_OPTIONS="--max-old-space-size=128"; ${command}`;
+      const heapMb = this.nodeMaxOldSpaceMiB();
+      const wrapped = `export PATH="/obc/scripts:$HOME/.local/bin:$HOME/.bun/bin:/home/user/.local/bin:/home/user/.bun/bin:/usr/local/bin:$PATH:/usr/lib/kw/bin" PYTHONPATH=/obc/lib NODE_PATH=/obc/lib PYTHONDONTWRITEBYTECODE=1 NODE_OPTIONS="--max-old-space-size=${heapMb}"; ${command}`;
       const res = await this.vm.exec("sh", ["-c", wrapped], { timeout: timeoutMs, encoding: "utf8" });
       const code = res.exitCode ?? -1;
       return {
@@ -740,35 +784,81 @@ export class ObcRuntime {
     const st = await this.boot();
     if (st.phase !== "ready" || !this.vm) return { ok: false, script: cmd };
     this.activeScript = meta?.name ?? cmd.split(/\s+/)[0] ?? cmd;
-    this.vm.write(`\x03${cmd}\n`);
+    // Send Ctrl+C first and yield briefly so Debian bash's SIGINT readline flush never eats the 1st byte of `cmd`.
+    this.vm.write("\x03");
+    await new Promise((r) => setTimeout(r, 80));
+    if (this.vm && this.phase === "ready") this.vm.write(`${cmd}\n`);
     this.emitState();
     return { ok: true, script: this.activeScript };
   }
 
-  async installToolchain(profile: "python" | "node" | "full"): Promise<{ ok: boolean; stdout: string; stderr: string }> {
+  async installToolchain(profile: ObcToolchainProfile = "all"): Promise<{ ok: boolean; stdout: string; stderr: string }> {
     const st = await this.boot();
     if (st.phase !== "ready" || !this.vm) return { ok: false, stdout: "", stderr: "OBC not ready" };
     this.activeScript = `obc-install ${profile}`;
     this.emitState();
     const enc = new TextEncoder();
-    this.pushOutput(enc.encode(`\r\n\x1b[1;36m[OBC] Installing ${profile} toolchain via apk + Wisp...\r\n\x1b[0m`));
+    const dec = new TextDecoder();
+    const label = distroLabel(this.config.distro);
+    this.pushOutput(enc.encode(`\r\n\x1b[1;36m[OBC] Installing ${profile} toolchain on ${label} via Wisp...\r\n\x1b[0m`));
+    let stdout = "";
+    let stderr = "";
+    const appendCap = (cur: string, chunk: string) => (cur.length > 64_000 ? cur.slice(-32_000) + chunk : cur + chunk);
     try {
-      const res = await this.vm.exec("sh", ["/obc/scripts/obc-install", profile], {
-        user: 0,
-        timeout: 300_000,
-        encoding: "utf8",
-      });
-      if (res.stdout) this.pushOutput(enc.encode(`${res.stdout.replace(/\n/g, "\r\n")}`));
-      if (res.stderr) this.pushOutput(enc.encode(`\x1b[33m${res.stderr.replace(/\n/g, "\r\n")}\x1b[0m`));
-      const ok = (res.exitCode ?? -1) === 0;
+      const heapMb = this.nodeMaxOldSpaceMiB();
+      const proc = await this.vm.spawn(
+        "sh",
+        [
+          "-lc",
+          `export PATH="/obc/scripts:$HOME/.local/bin:/usr/local/bin:$PATH:/usr/lib/kw/bin" NODE_OPTIONS="--max-old-space-size=${heapMb}"; sh /obc/scripts/obc-install "${profile}"`,
+        ],
+        { pty: false },
+      );
+      const drain = async (stream: ReadableStream<Uint8Array>, isErr: boolean) => {
+        const reader = stream.getReader();
+        try {
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            const text = dec.decode(value, { stream: true });
+            if (isErr) {
+              stderr = appendCap(stderr, text);
+              this.pushOutput(enc.encode(`\x1b[33m${text.replace(/\r?\n/g, "\r\n")}\x1b[0m`));
+            } else {
+              stdout = appendCap(stdout, text);
+              this.pushOutput(enc.encode(text.replace(/\r?\n/g, "\r\n")));
+            }
+          }
+        } catch {
+          // stream closed on timeout or stop
+        } finally {
+          reader.releaseLock();
+        }
+      };
+      const timer = setTimeout(() => {
+        try {
+          void proc.kill("SIGTERM");
+        } catch {}
+      }, 900_000);
+      const [, , ended] = await Promise.all([drain(proc.stdout, false), drain(proc.stderr, true), proc.ended]).finally(() =>
+        clearTimeout(timer),
+      );
+      const ok = ended.type === "exit" && ended.code === 0;
+      if (ok && this.config.persistData) {
+        try {
+          await this.vm.sync({ timeout: 5000 });
+        } catch {
+          // best-effort sync
+        }
+      }
       this.pushOutput(
         enc.encode(ok ? "\x1b[1;32m[OBC] Toolchain ready!\r\n\x1b[0m" : "\x1b[1;31m[OBC] Toolchain install failed.\r\n\x1b[0m"),
       );
-      return { ok, stdout: res.stdout, stderr: res.stderr };
+      return { ok, stdout, stderr };
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       this.pushOutput(enc.encode(`\x1b[1;31m[OBC] Install error: ${msg}\r\n\x1b[0m`));
-      return { ok: false, stdout: "", stderr: msg };
+      return { ok: false, stdout, stderr: stderr ? `${stderr}\n${msg}` : msg };
     } finally {
       this.activeScript = null;
       this.emitState();

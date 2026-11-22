@@ -2,7 +2,8 @@
 # obc-nav — Node.js CLI: WGS84 Great-Circle Bearing/Distance/ETA & Hohmann Transfer Calculator.
 # Usage: obc-nav [paris|lebourget|nice|edwards|ksfo|ksc|toulon|<lat> <lon>] [--json]
 
-if [ ! -x /usr/bin/node ] || head -n 1 /usr/bin/node 2>/dev/null | grep -q '^#!'; then
+_N=$(command -v node 2>/dev/null || true)
+if [ -z "$_N" ] || case "$_N" in /usr/lib/kw/bin/*) true;; *) false;; esac || head -n 1 "$_N" 2>/dev/null | grep -q '^#!'; then
   echo "Node.js not installed yet. Run: obc-install node (or click +Node in HUD)"
   exit 1
 fi

@@ -3,7 +3,8 @@
 # Keys: [q] quit  [p] hold prograde  [r] hold retrograde  [c] AP circularize  [0] cut throttle
 # Usage: obc-mission-tui [--frames N]
 
-if [ ! -x /usr/bin/python3 ] || head -n 1 /usr/bin/python3 2>/dev/null | grep -q '^#!'; then
+_P=$(command -v python3 2>/dev/null || true)
+if [ -z "$_P" ] || case "$_P" in /usr/lib/kw/bin/*) true;; *) false;; esac || head -n 1 "$_P" 2>/dev/null | grep -q '^#!'; then
   echo "Python 3 not installed yet. Run: obc-install python (or click +Python in HUD)"
   exit 1
 fi

@@ -2,7 +2,8 @@
 # obc-orbit — Live Keplerian Orbital Plotter & Hohmann Delta-V Calculator.
 # Renders directly to /dev/fb0 when python3 is installed (pass --fb), or crisp ANSI TUI offline.
 
-if [ "$1" = "--fb" ] && [ -x /usr/bin/python3 ] && ! head -n 1 /usr/bin/python3 2>/dev/null | grep -q '^#!'; then
+_P=$(command -v python3 2>/dev/null || true)
+if [ "$1" = "--fb" ] && [ -n "$_P" ] && ! head -n 1 "$_P" 2>/dev/null | grep -q '^#!'; then
   exec python3 - <<'PY'
 import math, time, sys
 sys.path.insert(0, "/obc/lib")

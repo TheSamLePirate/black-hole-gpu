@@ -3,9 +3,10 @@ import { readCrewCmd } from "../src/net/crewcmd";
 import { readInstruments } from "../src/net/instruments";
 import { OBC_PALETTES } from "../src/obc/fb-renderer";
 import { emptyTelemetry, formatTauText, normalizeWispUrl, parseObcCommand } from "../src/obc/protocol";
+import { distroLabel, normalizeDistro, normalizeMemoryMiB } from "../src/obc/runtime";
 import { findObcScript, OBC_SCRIPTS } from "../src/obc/scripts-catalog";
 import { radAttitudeToDeg } from "../src/obc/sim-adapter";
-import { DEFAULT_OBC_CONFIG } from "../src/obc/types";
+import { DEFAULT_OBC_CONFIG, OBC_MEMORY_OPTIONS } from "../src/obc/types";
 import { keyEventToAnsi } from "../src/ui/obc-console";
 
 test("parseObcCommand: validates and clamps throttle, stick, flaps, autopilot, hold, sas, gear, say, ping", () => {
@@ -98,8 +99,21 @@ test("OBC_SCRIPTS catalog & emptyTelemetry contract", () => {
   expect(tel.position.height_ellipsoid_m).toBe(0);
 });
 
-test("DEFAULT_OBC_CONFIG & OBC_PALETTES include all 4 avionics themes", () => {
-  expect(DEFAULT_OBC_CONFIG.memoryMiB).toBe(512);
+test("DEFAULT_OBC_CONFIG, RAM/distro normalizers & OBC_PALETTES include all 4 avionics themes", () => {
+  expect(DEFAULT_OBC_CONFIG.distro).toBe("alpine");
+  expect(DEFAULT_OBC_CONFIG.memoryMiB).toBe(2048);
+  expect(OBC_MEMORY_OPTIONS).toEqual([512, 1024, 2048, 4096]);
+  expect(normalizeMemoryMiB(512)).toBe(512);
+  expect(normalizeMemoryMiB(1024)).toBe(1024);
+  expect(normalizeMemoryMiB(2048)).toBe(2048);
+  expect(normalizeMemoryMiB(4096)).toBe(4096);
+  expect(normalizeMemoryMiB(256)).toBe(2048);
+  expect(normalizeMemoryMiB("invalid")).toBe(2048);
+  expect(normalizeDistro("debian")).toBe("debian");
+  expect(normalizeDistro("alpine")).toBe("alpine");
+  expect(normalizeDistro("other")).toBe("alpine");
+  expect(distroLabel("alpine")).toBe("alpine-3.24");
+  expect(distroLabel("debian")).toBe("debian-13");
   expect(DEFAULT_OBC_CONFIG.fbWidth).toBe(512);
   expect(DEFAULT_OBC_CONFIG.crtFx).toBe(true);
   expect(OBC_PALETTES.interstellar.accent).toBe("#62e6ff");

@@ -3360,7 +3360,7 @@ export function gameTools(h: GameHost): Tool[] {
     {
       name: "obc",
       description:
-        "Control the embedded Linux On-Board Computer (Unkernel aarch64): check status, boot/stop/reboot/suspend/resume, open/close the HUD console, run a built-in avionics script (diag, orbit, reentry, ils, solar, fdr, fb-demo), read the current screen, test Wisp connectivity, read/update OBC config (theme, crtFx, memoryMiB), or execute a shell command inside Linux.",
+        "Control the embedded Linux On-Board Computer (Unkernel aarch64, Alpine 3.24 or Debian 13): check status, boot/stop/reboot/suspend/resume, open/close the HUD console, run a built-in avionics script (diag, orbit, reentry, ils, solar, fdr, fb-demo, bh-tui, pfd-fb, f35-fb, a320-fb, ils-fb), read the current screen, test Wisp connectivity, install toolchains (python, node, bun, claude, pi, full, all), read/update OBC config (distro alpine/debian, memoryMiB 512/1024/2048/4096, theme, crtFx), or execute a shell command inside Linux.",
       params: {
         action: {
           type: "string",
@@ -3378,13 +3378,16 @@ export function gameTools(h: GameHost): Tool[] {
             "screen",
             "test_wisp",
             "config",
+            "install",
           ],
         },
         script: { type: "string" },
         command: { type: "string" },
+        profile: { type: "string", enum: ["python", "node", "bun", "claude", "pi", "full", "all"] },
+        distro: { type: "string", enum: ["alpine", "debian"] },
         theme: { type: "string", enum: ["auto", "interstellar", "f35", "a320", "amber"] },
         crtFx: { type: "boolean" },
-        memoryMiB: { type: "number", minimum: 128, maximum: 512, integer: true },
+        memoryMiB: { type: "number", minimum: 512, maximum: 4096, integer: true },
       },
       required: ["action"],
       run: async (a) => {
@@ -3421,11 +3424,19 @@ export function gameTools(h: GameHost): Tool[] {
             return { lines: obc.readScreen().filter(Boolean) };
           case "test_wisp":
             return await obc.testWisp();
+          case "install": {
+            const p = String(a.profile ?? "all");
+            const valid = p === "python" || p === "node" || p === "bun" || p === "claude" || p === "pi" || p === "full" || p === "all";
+            return await obc.installToolchain(valid ? p : "all");
+          }
           case "config":
             return obc.setConfig({
+              ...(a.distro === "alpine" || a.distro === "debian" ? { distro: a.distro } : {}),
               ...(typeof a.theme === "string" ? { theme: a.theme as "auto" | "interstellar" | "f35" | "a320" | "amber" } : {}),
               ...(typeof a.crtFx === "boolean" ? { crtFx: a.crtFx } : {}),
-              ...(a.memoryMiB === 128 || a.memoryMiB === 256 || a.memoryMiB === 512 ? { memoryMiB: a.memoryMiB } : {}),
+              ...(a.memoryMiB === 512 || a.memoryMiB === 1024 || a.memoryMiB === 2048 || a.memoryMiB === 4096
+                ? { memoryMiB: a.memoryMiB }
+                : {}),
             });
           default:
             return obc.status();

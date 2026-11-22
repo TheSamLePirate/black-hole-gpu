@@ -3209,14 +3209,15 @@ Embedded Linux On-Board Computer powered by Unkernel (Linux 7.x WASM + `kwemu` a
 - `boot()` / `stop()` / `reboot()` — start, cleanly shut down, or restart the Linux kernel Worker.
 - `suspend()` / `resume()` — suspend the live Linux VM into an in-memory `KernelSnapshot` (freeing Worker CPU) and resume it on demand.
 - `resetDataDisk()` — wipe the persisted IndexedDB `/data` overlay cleanly.
-- `getConfig()` / `setConfig(patch)` — read or update persisted OBC configuration (`memoryMiB`, `fbWidth`, `fbHeight`, `jit`, `persistData`, `crtFx`, `soundEnabled`, `theme`, `syncMode`).
+- `getConfig()` / `setConfig(patch)` — read or update persisted OBC configuration (`distro: "alpine" | "debian"`, `memoryMiB: 512 | 1024 | 2048 | 4096` (default `2048`), `fbWidth`, `fbHeight`, `jit`, `persistData`, `crtFx`, `soundEnabled`, `theme`, `syncMode`).
+- `switchDistro(distro)` — switch between `"alpine"` (Alpine 3.24 musl) and `"debian"` (Debian 13 Trixie glibc), rebooting cleanly if currently running.
 - `exec(command, timeoutMs?)` — run a shell command non-interactively via `vm.exec()` and return `{ ok, code, stdout, stderr }`.
 - `write(input)` — send raw interactive input bytes/keys to the Linux console TTY.
 - `readScreen()` — return the current 64×24 ANSI terminal mirror lines (plain text).
 - `telemetry()` — return the exact live `ObcTelemetry` snapshot exposed to Linux at `/obc/telemetry.json` and `AF_VSOCK:4747`.
 - `openConsole()` / `closeConsole()` / `toggleConsole()` — control the in-game `xterm.js` + `/dev/fb0` + Options + Script Editor HUD console overlay (`Ctrl+\`, `Ctrl+²`, `F11`).
-- `runScript(name)` — run a built-in avionics script (`"diag"`, `"orbit"`, `"reentry"`, `"ils"`, `"solar"`, `"fdr"`, `"fuel"`, `"nav"`, `"kerr"`, `"auto"`, `"top"`, `"mission-tui"`, `"fmc-tui"`, `"fb-demo"`, `"pfd-fb"`, `"radar-fb"`, `"kerr-fb"`).
-- `installToolchain(profile)` — install `"python"`, `"node"`, or `"full"` (Python 3 + Node.js) via `apk` over Wisp and persist in IndexedDB `/data`.
+- `runScript(name)` — run a built-in avionics script (`"diag"`, `"orbit"`, `"reentry"`, `"ils"`, `"solar"`, `"fdr"`, `"fuel"`, `"nav"`, `"kerr"`, `"auto"`, `"top"`, `"mission-tui"`, `"fmc-tui"`, `"fb-demo"`, `"pfd-fb"`, `"radar-fb"`, `"kerr-fb"`, `"bh-tui"`, `"f35-tui"`, `"f35-fb"`, `"a320-tui"`, `"a320-fb"`, `"ils-fb"`).
+- `installToolchain(profile)` — install `"python"` (Python 3 + pip), `"node"` (Node.js + npm), `"bun"` (Bun + bunx), `"pi"` (`@earendil-works/pi-coding-agent`), `"claude"` (Claude Code), `"full"` (Python + Node + Bun), or `"all"` (all 7 tools) on both Alpine & Debian over Wisp and persist in IndexedDB `/data`.
 - `setWispUrl(url)` / `testWisp(url?)` — configure/persist a custom Wisp v1 WebSocket proxy URL (empty uses local dev `/__wisp`) and test the live Wisp v1 handshake latency.
 - `listFiles(dir?)` / `readGuestFile(path)` / `writeGuestFile(path, content)` — list, read, and save executable pilot scripts in `/home/pilot/*`.
 - `captureFbDataUrl()` — export the active `/dev/fb0` frame as a PNG data URL (null if inactive).

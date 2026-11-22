@@ -3,7 +3,8 @@
 # Keys: [a] AP  [t] A/THR  [i] ILS  [g] Gear  [f] Cycle Flaps  [1-6] MCDU L1-L6  [m] MCDU Menu  [e] Cycle ECAM  [q] Quit
 # Usage: obc-a320-tui [--frames N]
 
-if [ ! -x /usr/bin/node ] || head -n 1 /usr/bin/node 2>/dev/null | grep -q '^#!'; then
+_N=$(command -v node 2>/dev/null || true)
+if [ -z "$_N" ] || case "$_N" in /usr/lib/kw/bin/*) true;; *) false;; esac || head -n 1 "$_N" 2>/dev/null | grep -q '^#!'; then
   echo "Node.js not installed yet. Run: obc-install node (or click +Node in HUD)"
   exit 1
 fi

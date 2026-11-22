@@ -16,13 +16,30 @@ interface ObcMetrics {
   baselineFps: number;
   baselineFrameMs: number;
   bootMs: number;
+  alpineMemoryMiB: number;
+  debianBootMs: number;
+  debianMemoryMiB: number;
+  ram4gAllocatedMiB: number;
   wispOk: boolean;
   wispLatencyMs: number;
   toolchainInstallMs: number;
+  debianInstallMs: number;
   pythonVersion: string;
   pipVersion: string;
   nodeVersion: string;
   npmVersion: string;
+  bunVersion: string;
+  piVersion: string;
+  claudeVersion: string;
+  debianTools: {
+    python: string;
+    pip: string;
+    node: string;
+    npm: string;
+    bun: string;
+    pi: string;
+    claude: string;
+  };
   suspendResumeMs: number;
   obcActiveFps: number;
   obcActiveFrameMs: number;
@@ -50,14 +67,15 @@ describe.skipIf(!E2E)("Linux OBC AAA (Unkernel aarch64, Wisp, Snapshot, Editor, 
     await app.settled();
     app.steps([
       "Baseline FPS (OBC éteint)",
-      "Boot Linux aarch64, Pont __bh, Wisp & Éditeur",
-      "Installation Python 3 + Node.js & CLI __bh / Airports",
+      "Boot Alpine 3.24 (2 GiB), Pont __bh, Wisp & Options RAM/Distro",
+      "Alpine : Python, pip, Node, npm, Bun, Pi & Claude Code + CLI __bh",
       "TUIs Temps Réel & Graphiques /dev/fb0 (PFD, Radar, Kerr)",
       "Snapshot Suspend/Resume & Cockpit 3D Ranger",
       "F-35 100% piloté depuis Linux (CLI, TUI, ILS/TSD FB0 & PCD 3D)",
-      "A320 100% piloté depuis Linux (CLI, MCDU, TUI, ND FB0 & LECAM 3D) + FPS",
+      "A320 100% piloté depuis Linux (CLI, MCDU, TUI, ND FB0 & LECAM 3D)",
+      "Debian 13 Trixie (2 GiB / 4 GiB) : Python, pip, Node, npm, Bun, Pi & Claude Code",
     ]);
-    app.estimate(220);
+    app.estimate(540);
   }, 180_000);
 
   afterAll(() => {
@@ -94,16 +112,34 @@ describe.skipIf(!E2E)("Linux OBC AAA (Unkernel aarch64, Wisp, Snapshot, Editor, 
   });
 
   test("boots Linux aarch64 via F11, bridges __bh, verifies Wisp v1 relay & built-in script editor", async () => {
-    await app.step("Boot Linux aarch64, Pont __bh, Wisp & Éditeur");
+    await app.step("Boot Alpine 3.24 (2 GiB), Pont __bh, Wisp & Options RAM/Distro");
     await app.press("F11");
     await app.waitFor(`__bh.obc.status().consoleOpen === true`, 10_000);
     await app.waitFor(`__bh.obc.status().phase === "ready"`, 60_000);
 
-    const st = await app.js<{ phase: string; bootMs: number; arch: string; worker: boolean }>("__bh.obc.status()");
+    const st = await app.js<{ phase: string; bootMs: number; arch: string; worker: boolean; distro: string; memoryMiB: number }>(
+      "__bh.obc.status()",
+    );
     expect(st.phase).toBe("ready");
     expect(st.arch).toBe("aarch64");
     expect(st.worker).toBe(true);
+    expect(st.distro).toBe("alpine-3.24");
+    expect(st.memoryMiB).toBe(2048);
     metrics.bootMs = st.bootMs;
+    metrics.alpineMemoryMiB = st.memoryMiB;
+
+    // Verify Options drawer exposes 512 / 1024 / 2048 (default) / 4096 MiB and Alpine / Debian selectors
+    const uiOpts = await app.js<{ rams: string[]; distros: string[]; quickDistros: string[] }>(`(() => {
+      const vals = (sel) => [...document.querySelectorAll(sel + ' option')].map((o) => o.value);
+      return {
+        rams: vals('[data-testid="obc-opt-ram"]'),
+        distros: vals('[data-testid="obc-opt-distro"]'),
+        quickDistros: vals('[data-testid="obc-distro-quick"]'),
+      };
+    })()`);
+    expect(uiOpts.rams).toEqual(["512", "1024", "2048", "4096"]);
+    expect(uiOpts.distros).toEqual(["alpine", "debian"]);
+    expect(uiOpts.quickDistros).toEqual(["alpine", "debian"]);
 
     // Verify real Linux kernel & architecture via vm.exec
     const uname = await app.js<{ ok: boolean; stdout: string }>(`__bh.obc.exec("uname -a")`);
@@ -179,17 +215,34 @@ describe.skipIf(!E2E)("Linux OBC AAA (Unkernel aarch64, Wisp, Snapshot, Editor, 
     expect(app.cdp.errors).toEqual([]);
   }, 90_000);
 
-  test("installs Python 3 & Node.js over Wisp and verifies __bh CLI, Airports, Python & Node.js CLIs", async () => {
-    await app.step("Installation Python 3 + Node.js & CLI __bh / Airports");
+  const installAndWait = async (profile: string): Promise<{ ok: boolean; stdout: string; stderr: string }> => {
+    await app.js(`(() => {
+      window.__obcInst = null;
+      __bh.obc.installToolchain(${JSON.stringify(profile)}).then(
+        (r) => { window.__obcInst = r; },
+        (e) => { window.__obcInst = { ok: false, stdout: "", stderr: String(e) }; }
+      );
+      return true;
+    })()`);
+    await app.waitFor("window.__obcInst !== null", 840_000);
+    const res = await app.js<{ ok: boolean; stdout: string; stderr: string }>("window.__obcInst");
+    if (!res.ok) {
+      console.error(`[obc-install ${profile}] FAILED\nSTDOUT tail:\n${res.stdout.slice(-1200)}\nSTDERR tail:\n${res.stderr.slice(-1200)}`);
+    }
+    return res;
+  };
 
-    // Install Python 3 + Node.js over local Wisp v1 relay
+  test("installs Python, pip, Node, npm, Bun, Pi & Claude Code on Alpine and verifies __bh CLI & Airports", async () => {
+    await app.step("Alpine : Python, pip, Node, npm, Bun, Pi & Claude Code + CLI __bh");
+
+    // Install all 7 toolchains over local Wisp v1 relay on Alpine 3.24
     const tInst0 = performance.now();
-    const inst = await app.js<{ ok: boolean; stdout: string; stderr: string }>(`__bh.obc.installToolchain("full")`);
+    const inst = await installAndWait("all");
     metrics.toolchainInstallMs = Math.round(performance.now() - tInst0);
     expect(inst.ok).toBe(true);
 
     const vers = await app.js<{ ok: boolean; stdout: string }>(
-      `__bh.obc.exec("python3 --version && pip --version && node --version && npm --version")`,
+      `__bh.obc.exec("python3 --version && pip --version && node --version && npm --version && bun --version && pi --version && claude --version")`,
     );
     expect(vers.ok).toBe(true);
     const vLines = vers.stdout.trim().split(/\r?\n/);
@@ -197,10 +250,16 @@ describe.skipIf(!E2E)("Linux OBC AAA (Unkernel aarch64, Wisp, Snapshot, Editor, 
     metrics.pipVersion = vLines[1] ?? "";
     metrics.nodeVersion = vLines[2] ?? "";
     metrics.npmVersion = vLines[3] ?? "";
+    metrics.bunVersion = vLines[4] ?? "";
+    metrics.piVersion = vLines[5] ?? "";
+    metrics.claudeVersion = vLines[6] ?? "";
     expect(metrics.pythonVersion).toContain("Python 3");
     expect(metrics.pipVersion.toLowerCase()).toContain("pip");
     expect(metrics.nodeVersion).toContain("v");
     expect(metrics.npmVersion).toMatch(/^\d+\.\d+/);
+    expect(metrics.bunVersion).toMatch(/^\d+\.\d+/);
+    expect(metrics.piVersion).toMatch(/^\d+\.\d+/);
+    expect(metrics.claudeVersion.toLowerCase()).toContain("claude");
 
     // 1. CLI programs (Python & Node.js)
     const fuel = await app.js<{ ok: boolean; stdout: string }>(`__bh.obc.exec("obc-fuel --json")`);
@@ -276,10 +335,10 @@ describe.skipIf(!E2E)("Linux OBC AAA (Unkernel aarch64, Wisp, Snapshot, Editor, 
     expect(bhTui.stdout).toContain("BH-TUI");
 
     await app.stepDone(
-      `${metrics.pythonVersion} + pip + Node ${metrics.nodeVersion} + npm ${metrics.npmVersion} · ${metrics.tarsToolCount} outils TARS`,
+      `Alpine OK: ${metrics.pythonVersion} · pip · Node ${metrics.nodeVersion} · npm ${metrics.npmVersion} · Bun ${metrics.bunVersion} · pi ${metrics.piVersion} · Claude ${metrics.claudeVersion}`,
     );
     expect(app.cdp.errors).toEqual([]);
-  }, 360_000);
+  }, 760_000);
 
   test("runs interactive TUIs and real-time /dev/fb0 graphics (PFD, Radar, Kerr)", async () => {
     await app.step("TUIs Temps Réel & Graphiques /dev/fb0 (PFD, Radar, Kerr)");
@@ -551,7 +610,7 @@ describe.skipIf(!E2E)("Linux OBC AAA (Unkernel aarch64, Wisp, Snapshot, Editor, 
   }, 180_000);
 
   test("controls A320 end-to-end from Linux (obc-a320, MCDU, ECAM, obc-a320-tui, obc-a320-fb & 3D LECAM)", async () => {
-    await app.step("A320 100% piloté depuis Linux (CLI, MCDU, TUI, ND FB0 & LECAM 3D) + FPS");
+    await app.step("A320 100% piloté depuis Linux (CLI, MCDU, TUI, ND FB0 & LECAM 3D)");
 
     // ── 2. Airbus A320 100% controlled from Linux (obc-a320, obc-a320-tui, obc-a320-fb) ──
     const a320Fly = await app.js<{ ok: boolean; stdout: string }>(`__bh.obc.exec("obc-a320 fly LFPB")`);
@@ -612,12 +671,81 @@ describe.skipIf(!E2E)("Linux OBC AAA (Unkernel aarch64, Wisp, Snapshot, Editor, 
     await app.js(`__bh.obc.write("\\x03")`);
     await app.waitFor("__bh.obc.status().fbActive === false", 10_000);
 
-    // Cleanly stop OBC worker before exit
+    await app.stepDone("A320 piloté depuis Linux · MCDU, ECAM, TUI, ND FB0 & LECAM 3D OK");
+    expect(app.cdp.errors).toEqual([]);
+  }, 180_000);
+
+  test("switches live to Debian 13 (2 GiB & 4 GiB) and verifies Python, pip, Node, npm, Bun, Pi & Claude Code", async () => {
+    await app.step("Debian 13 Trixie (2 GiB / 4 GiB) : Python, pip, Node, npm, Bun, Pi & Claude Code");
+
+    // Switch live from Alpine 3.24 to Debian 13 Trixie
+    await app.js(`(() => { __bh.obc.openConsole(); document.querySelector('[data-testid="obc-mode-term"]')?.click(); })()`);
+    const debSt = await app.js<{ phase: string; bootMs: number; distro: string; memoryMiB: number }>(`__bh.obc.switchDistro("debian")`);
+    expect(debSt.phase).toBe("ready");
+    expect(debSt.distro).toBe("debian-13");
+    expect(debSt.memoryMiB).toBe(2048);
+    metrics.debianBootMs = debSt.bootMs;
+    metrics.debianMemoryMiB = debSt.memoryMiB;
+
+    const osRel = await app.js<{ ok: boolean; stdout: string }>(`__bh.obc.exec("cat /etc/os-release")`);
+    expect(osRel.ok).toBe(true);
+    expect(osRel.stdout).toContain("Debian GNU/Linux 13");
+
+    // Install all 7 toolchains on Debian 13 over local Wisp v1 relay
+    const tDeb0 = performance.now();
+    const debInst = await installAndWait("all");
+    metrics.debianInstallMs = Math.round(performance.now() - tDeb0);
+    expect(debInst.ok).toBe(true);
+
+    const debVers = await app.js<{ ok: boolean; stdout: string }>(
+      `__bh.obc.exec("python3 --version && pip --version && node --version && npm --version && bun --version && pi --version && claude --version")`,
+    );
+    expect(debVers.ok).toBe(true);
+    const dLines = debVers.stdout.trim().split(/\r?\n/);
+    metrics.debianTools = {
+      python: dLines[0] ?? "",
+      pip: dLines[1] ?? "",
+      node: dLines[2] ?? "",
+      npm: dLines[3] ?? "",
+      bun: dLines[4] ?? "",
+      pi: dLines[5] ?? "",
+      claude: dLines[6] ?? "",
+    };
+    expect(metrics.debianTools.python).toContain("Python 3");
+    expect(metrics.debianTools.pip.toLowerCase()).toContain("pip");
+    expect(metrics.debianTools.node).toContain("v");
+    expect(metrics.debianTools.npm).toMatch(/^\d+\.\d+/);
+    expect(metrics.debianTools.bun).toMatch(/^\d+\.\d+/);
+    expect(metrics.debianTools.pi).toMatch(/^\d+\.\d+/);
+    expect(metrics.debianTools.claude.toLowerCase()).toContain("claude");
+
+    // Verify OBC scripts & __bh CLI work seamlessly on Debian 13 too
+    const debBh = await app.js<{ ok: boolean; stdout: string }>(`__bh.obc.exec("bh get fleet.active --raw")`);
+    expect(debBh.ok).toBe(true);
+    expect(debBh.stdout.trim()).toBe("a320");
+
+    await app.js(`__bh.obc.runScript("obc-diag")`);
+    await app.waitFor(`__bh.obc.readScreen().join("\\n").includes("Debian")`, 15_000);
+    await Bun.sleep(400);
+    await app.shot(`${OUT}/hud-debian-13.png`);
+
+    // Verify 4 GiB RAM option boots cleanly (or falls back gracefully if host caps wasm32 memory)
+    await app.js(`__bh.obc.setConfig({ memoryMiB: 4096 })`);
+    const st4g = await app.js<{ phase: string; memoryMiB: number; distro: string }>(`__bh.obc.reboot()`);
+    expect(st4g.phase).toBe("ready");
+    expect(st4g.distro).toBe("debian-13");
+    expect(st4g.memoryMiB).toBeGreaterThanOrEqual(2048);
+    metrics.ram4gAllocatedMiB = st4g.memoryMiB;
+
+    // Restore default config (alpine, 2048 MiB) & cleanly stop OBC worker before exit
+    await app.js(`__bh.obc.setConfig({ distro: "alpine", memoryMiB: 2048 })`);
     await app.js("__bh.obc.stop()");
     const afterStop = await app.js<{ phase: string }>("__bh.obc.status()");
     expect(afterStop.phase).toBe("off");
 
-    await app.stepDone("A320 piloté depuis Linux · MCDU, ECAM, TUI, ND FB0 & LECAM 3D OK");
+    await app.stepDone(
+      `Debian 13 OK (${metrics.debianBootMs} ms · 4G→${st4g.memoryMiB} MiB): ${metrics.debianTools.python} · pip · Node ${metrics.debianTools.node} · npm · Bun ${metrics.debianTools.bun} · pi ${metrics.debianTools.pi} · Claude`,
+    );
     expect(app.cdp.errors).toEqual([]);
-  }, 180_000);
+  }, 900_000);
 });

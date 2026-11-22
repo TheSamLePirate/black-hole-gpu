@@ -2,7 +2,8 @@
 # obc-reentry — Atmospheric Entry Corridor & Thermal/Energy Monitor.
 # Pass `--fb` when Python 3 is installed to render live thermal & corridor gauges on /dev/fb0.
 
-if [ "$1" = "--fb" ] && [ -x /usr/bin/python3 ] && ! head -n 1 /usr/bin/python3 2>/dev/null | grep -q '^#!'; then
+_P=$(command -v python3 2>/dev/null || true)
+if [ "$1" = "--fb" ] && [ -n "$_P" ] && ! head -n 1 "$_P" 2>/dev/null | grep -q '^#!'; then
   exec python3 - <<'PY'
 import time, obc
 bus = obc.AvionicsBus()
