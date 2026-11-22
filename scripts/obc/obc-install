@@ -1,23 +1,32 @@
 #!/bin/sh
-# obc-install — Fast 1-click installer for Python 3 & Node.js via apk + Wisp.
+# obc-install — Fast 1-click installer for Python 3 + pip & Node.js + npm via apk + Wisp.
 # Installed packages persist in IndexedDB (/data overlay).
 # Usage: obc-install [python|node|full|dev]
+
+set -e
 
 TARGET="${1:-full}"
 echo "OBC Package Manager — installing profile: $TARGET ..."
 
+# Ensure Alpine community repository is enabled (provides npm & community tools)
+MAIN_REPO=$(head -n 1 /etc/apk/repositories 2>/dev/null || echo "https://dl-cdn.alpinelinux.org/alpine/v3.24/main")
+COMM_REPO="${MAIN_REPO%/main}/community"
+if [ -w /etc/apk/repositories ] && ! grep -q "/community" /etc/apk/repositories 2>/dev/null; then
+  echo "$COMM_REPO" >> /etc/apk/repositories
+fi
+
 case "$TARGET" in
   python)
-    apk add --no-cache python3
+    apk add --no-cache --no-progress python3 py3-pip
     ;;
   node)
-    apk add --no-cache nodejs
+    apk add --no-cache --no-progress -X "$COMM_REPO" nodejs npm
     ;;
   full)
-    apk add --no-cache python3 nodejs
+    apk add --no-cache --no-progress -X "$COMM_REPO" python3 py3-pip nodejs npm
     ;;
   dev)
-    apk add --no-cache python3 py3-pip nodejs npm curl git
+    apk add --no-cache --no-progress -X "$COMM_REPO" python3 py3-pip nodejs npm curl git
     ;;
   *)
     echo "Usage: obc-install [python|node|full|dev]"
@@ -25,4 +34,8 @@ case "$TARGET" in
     ;;
 esac
 
-echo "Done! Python: $(python3 --version 2>/dev/null || echo none) | Node: $(node --version 2>/dev/null || echo none)"
+if [ -x /usr/bin/pip3 ] && [ ! -e /usr/bin/pip ]; then
+  ln -sf /usr/bin/pip3 /usr/bin/pip 2>/dev/null || true
+fi
+
+echo "Done! Python: $(python3 --version 2>/dev/null || echo none) | pip: $(pip --version 2>/dev/null | awk '{print $2}' || echo none) | Node: $(node --version 2>/dev/null || echo none) | npm: $(npm --version 2>/dev/null || echo none)"

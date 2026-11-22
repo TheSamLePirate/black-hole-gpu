@@ -8,7 +8,7 @@ if [ ! -x /usr/bin/python3 ] || head -n 1 /usr/bin/python3 2>/dev/null | grep -q
   exit 1
 fi
 
-exec python3 - "$@" <<'PY'
+cat > /tmp/.obc-mission-tui.py <<'PY'
 import math, select, signal, sys, termios, time, tty
 import obc
 
@@ -137,3 +137,4 @@ while True:
         restore()
     time.sleep(0.22)
 PY
+exec python3 /tmp/.obc-mission-tui.py "$@"

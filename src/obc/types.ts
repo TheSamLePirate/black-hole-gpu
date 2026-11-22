@@ -28,7 +28,7 @@ export interface ObcConfig {
 }
 
 export const DEFAULT_OBC_CONFIG: ObcConfig = {
-  memoryMiB: 256,
+  memoryMiB: 512,
   fbWidth: 512,
   fbHeight: 512,
   jit: true,

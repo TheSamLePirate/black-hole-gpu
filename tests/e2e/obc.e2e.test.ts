@@ -20,7 +20,9 @@ interface ObcMetrics {
   wispLatencyMs: number;
   toolchainInstallMs: number;
   pythonVersion: string;
+  pipVersion: string;
   nodeVersion: string;
+  npmVersion: string;
   suspendResumeMs: number;
   obcActiveFps: number;
   obcActiveFrameMs: number;
@@ -186,13 +188,19 @@ describe.skipIf(!E2E)("Linux OBC AAA (Unkernel aarch64, Wisp, Snapshot, Editor, 
     metrics.toolchainInstallMs = Math.round(performance.now() - tInst0);
     expect(inst.ok).toBe(true);
 
-    const vers = await app.js<{ ok: boolean; stdout: string }>(`__bh.obc.exec("python3 --version && node --version")`);
+    const vers = await app.js<{ ok: boolean; stdout: string }>(
+      `__bh.obc.exec("python3 --version && pip --version && node --version && npm --version")`,
+    );
     expect(vers.ok).toBe(true);
     const vLines = vers.stdout.trim().split(/\r?\n/);
     metrics.pythonVersion = vLines[0] ?? "";
-    metrics.nodeVersion = vLines[1] ?? "";
+    metrics.pipVersion = vLines[1] ?? "";
+    metrics.nodeVersion = vLines[2] ?? "";
+    metrics.npmVersion = vLines[3] ?? "";
     expect(metrics.pythonVersion).toContain("Python 3");
+    expect(metrics.pipVersion.toLowerCase()).toContain("pip");
     expect(metrics.nodeVersion).toContain("v");
+    expect(metrics.npmVersion).toMatch(/^\d+\.\d+/);
 
     // 1. CLI programs (Python & Node.js)
     const fuel = await app.js<{ ok: boolean; stdout: string }>(`__bh.obc.exec("obc-fuel --json")`);
@@ -268,10 +276,10 @@ describe.skipIf(!E2E)("Linux OBC AAA (Unkernel aarch64, Wisp, Snapshot, Editor, 
     expect(bhTui.stdout).toContain("BH-TUI");
 
     await app.stepDone(
-      `${metrics.pythonVersion} + Node ${metrics.nodeVersion} · ${metrics.tarsToolCount} outils TARS, KSFO (${metrics.ksfoApproaches}), LFPB (${metrics.lfpbApproaches})`,
+      `${metrics.pythonVersion} + pip + Node ${metrics.nodeVersion} + npm ${metrics.npmVersion} · ${metrics.tarsToolCount} outils TARS`,
     );
     expect(app.cdp.errors).toEqual([]);
-  }, 240_000);
+  }, 360_000);
 
   test("runs interactive TUIs and real-time /dev/fb0 graphics (PFD, Radar, Kerr)", async () => {
     await app.step("TUIs Temps Réel & Graphiques /dev/fb0 (PFD, Radar, Kerr)");
@@ -289,11 +297,18 @@ describe.skipIf(!E2E)("Linux OBC AAA (Unkernel aarch64, Wisp, Snapshot, Editor, 
     expect(fmcTui.ok).toBe(true);
     expect(fmcTui.stdout).toContain("OBC-FMC-TUI");
 
-    // Display live Universal BH-TUI in HUD console & wait deterministically for TUI paint before capture
-    await app.js(`__bh.obc.runScript("bh-tui --frames 3")`);
+    // Display live Universal BH-TUI interactively (real TTY, NO --frames!) & prove real DOM keys (Tab -> TARS TOOLS, q -> quit) reach TUI!
+    await app.js(`__bh.obc.runScript("bh-tui")`);
     await app.waitFor(`__bh.obc.readScreen().join("\\n").includes("BH-TUI")`, 15_000);
     await Bun.sleep(300);
     await app.shot(`${OUT}/hud-bh-tui.png`);
+
+    // Send real DOM Tab key: bh-tui MUST switch from __bh tree to TARS TOOLS (and never trigger simulator Tab wheel!)
+    await app.press("Tab");
+    await app.waitFor(`__bh.obc.readScreen().join("\\n").includes("TARS TOOLS")`, 8_000);
+    // Send real DOM 'q' key: bh-tui MUST exit cleanly back to shell prompt
+    await app.press("KeyQ");
+    await Bun.sleep(400);
 
     // Display live Node.js TUI in HUD console & capture screenshot
     await app.js(`__bh.obc.runScript("obc-top --frames 3")`);
@@ -302,13 +317,19 @@ describe.skipIf(!E2E)("Linux OBC AAA (Unkernel aarch64, Wisp, Snapshot, Editor, 
     await app.shot(`${OUT}/hud-tui-top.png`);
 
     // 3. Full Real-Time Graphical /dev/fb0 Programs (Python PFD, Node.js Radar, Python Kerr)
-    // 3a. Python Primary Flight Display (/dev/fb0)
-    await app.js(`__bh.obc.runScript("obc-pfd-fb --seconds 5")`);
+    // 3a. Python Primary Flight Display (/dev/fb0) — ALSO verify real DOM key 'q' in /dev/fb0-only mode cleanly quits it!
+    await app.js(`__bh.obc.runScript("obc-pfd-fb --seconds 20")`);
     await app.waitFor("__bh.obc.status().fbActive === true", 15_000);
-    await Bun.sleep(1100);
+    await Bun.sleep(2200);
+    const pfdScreen1 = await app.js<string>(`__bh.obc.readScreen().join("\\n")`);
+    expect(pfdScreen1).not.toContain("Traceback");
     await app.shot(`${OUT}/fb0-pfd-python.png`);
-    await app.js(`__bh.obc.write("\\x03")`);
+    // Switch to /dev/fb0-only view (xterm hidden!) and send real DOM 'q' — must reach obc-pfd-fb and close /dev/fb0!
+    await app.js(`document.querySelector('[data-testid="obc-mode-fb"]')?.click()`);
+    await Bun.sleep(250);
+    await app.press("KeyQ");
     await app.waitFor("__bh.obc.status().fbActive === false", 10_000);
+    await app.js(`document.querySelector('[data-testid="obc-mode-split"]')?.click()`);
 
     // 3b. Node.js Tactical Radar & Orbital Scope (/dev/fb0)
     await app.js(`__bh.obc.runScript("obc-radar-fb --seconds 5")`);
@@ -429,6 +450,31 @@ describe.skipIf(!E2E)("Linux OBC AAA (Unkernel aarch64, Wisp, Snapshot, Editor, 
     expect(f35Fly.ok).toBe(true);
     await app.waitFor(`__bh.fleet.active === "f35"`, 20_000);
 
+    // Verify F-35 attitude in /obc/telemetry.json matches real __bh.camera.attitudeNow() in DEGREES (not radians!)
+    const attCheck = await app.js<{
+      simHdg: number;
+      obcHdg: number;
+      simPitch: number;
+      obcPitch: number;
+      simRoll: number;
+      obcRoll: number;
+    }>(`(() => {
+      const a = __bh.camera.attitudeNow();
+      const t = __bh.obc.telemetry().attitude;
+      const r2d = 180 / Math.PI;
+      return {
+        simHdg: ((((a.heading ?? 0) * r2d) % 360) + 360) % 360,
+        obcHdg: t.heading_deg,
+        simPitch: (a.pitch ?? 0) * r2d,
+        obcPitch: t.pitch_deg,
+        simRoll: (a.bank ?? 0) * r2d,
+        obcRoll: t.roll_deg,
+      };
+    })()`);
+    expect(Math.abs(attCheck.obcHdg - attCheck.simHdg)).toBeLessThan(1.0);
+    expect(Math.abs(attCheck.obcPitch - attCheck.simPitch)).toBeLessThan(1.0);
+    expect(Math.abs(attCheck.obcRoll - attCheck.simRoll)).toBeLessThan(1.0);
+
     // Control F-35 radar, weapon, ILS approach & PCD entirely from Linux CLI
     const f35Ops = await app.js<{ ok: boolean; stdout: string }>(
       `__bh.obc.exec("obc-f35 radar TWS && obc-f35 weapon aim120 && obc-airports select LFPB && obc-f35 pcd 0 OBC && obc-f35 status --json")`,
@@ -448,6 +494,21 @@ describe.skipIf(!E2E)("Linux OBC AAA (Unkernel aarch64, Wisp, Snapshot, Editor, 
     await Bun.sleep(300);
     await app.shot(`${OUT}/hud-f35-tui.png`);
 
+    // Capture AAA PFD artificial horizon in live F-35 flight (turning to HDG 150°, climbing to 1800m -> real bank & pitch!)
+    await app.js(`__bh.obc.exec("obc-f35 fly LFPB cruise && obc-f35 ap hdg=150 alt=1800 spd=210 ap=on athr=on")`);
+    await Bun.sleep(1800);
+    await app.js(`(() => { __bh.obc.openConsole(); document.querySelector('[data-testid="obc-mode-split"]')?.click(); })()`);
+    await app.js(`__bh.obc.runScript("obc-pfd-fb --seconds 12")`);
+    await app.waitFor("__bh.obc.status().fbActive === true", 15_000);
+    await Bun.sleep(2200);
+    const pfdScreen2 = await app.js<string>(`__bh.obc.readScreen().join("\\n")`);
+    expect(pfdScreen2).not.toContain("Traceback");
+    await app.shot(`${OUT}/fb0-pfd-banked.png`);
+    await app.press("KeyQ");
+    await app.waitFor("__bh.obc.status().fbActive === false", 10_000);
+
+    // Return to LFPB final approach for ILS + TSD + 3D PCD verification
+    await app.js(`__bh.obc.exec("obc-f35 fly LFPB final")`);
     await app.js(`document.querySelector('[data-testid="obc-mode-split"]')?.click()`);
     await app.js(`__bh.obc.runScript("obc-ils-fb --seconds 6")`);
     await app.waitFor("__bh.obc.status().fbActive === true", 15_000);

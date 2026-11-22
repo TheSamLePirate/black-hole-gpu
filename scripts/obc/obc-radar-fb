@@ -1,20 +1,20 @@
 #!/bin/sh
 # obc-radar-fb — Node.js Real-Time Graphical Tactical Radar & Orbital Scope on /dev/fb0.
-# Powered by Uint32Array packed XRGB8888 rendering in /obc/lib/obc.mjs for ultra-fast smooth FPS.
-# Usage: obc-radar-fb [--seconds 20]
+# Keys: [q/Esc] quit  [+/-] zoom scale  [s] toggle SAS  [p] hold prograde
+# Usage: obc-radar-fb [--seconds 60]
 
 if [ ! -x /usr/bin/node ] || head -n 1 /usr/bin/node 2>/dev/null | grep -q '^#!'; then
   echo "Node.js not installed yet. Run: obc-install node (or click +Node in HUD)"
   exit 1
 fi
 
-exec node --input-type=module - "$@" <<'JS'
-import { AvionicsBus, Framebuffer, packRgb } from "/obc/lib/obc.mjs";
+cat > /tmp/.obc-radar-fb.mjs <<'JS'
+import { AvionicsBus, Framebuffer, packRgb, startRawKeys } from "/obc/lib/obc.mjs";
 
 const args = process.argv.slice(2);
-let durSec = 20;
+let durSec = 60;
 const si = args.indexOf("--seconds");
-if (si >= 0 && args[si + 1]) durSec = Math.max(0.5, Number(args[si + 1]) || 20);
+if (si >= 0 && args[si + 1]) durSec = Math.max(0.5, Number(args[si + 1]) || 60);
 
 const bus = new AvionicsBus();
 const fb = new Framebuffer("/dev/fb0", 512, 512);
@@ -30,15 +30,38 @@ const WHITE = packRgb(235, 250, 255);
 const RED = packRgb(255, 90, 70);
 
 const CX = 256;
-const CY = 260;
-const R = 186;
+const CY = 256;
+const R = 182;
 
+let zoom = 1.0;
 let running = true;
-const stop = () => {
-  running = false;
-};
-process.on("SIGINT", stop);
-process.on("SIGTERM", stop);
+let note = "";
+let noteUntil = 0;
+
+process.on("SIGINT", () => (running = false));
+process.on("SIGTERM", () => (running = false));
+
+const stopKeys = startRawKeys((k) => {
+  if (k === "q" || k === "Q" || k === "\x03" || k === "\x1b") running = false;
+  else if (k === "+" || k === "=") {
+    zoom = Math.min(2.0, +(zoom + 0.25).toFixed(2));
+    note = `ZOOM ${zoom.toFixed(2)}X`;
+    noteUntil = performance.now() + 2000;
+  } else if (k === "-" || k === "_") {
+    zoom = Math.max(0.5, +(zoom - 0.25).toFixed(2));
+    note = `ZOOM ${zoom.toFixed(2)}X`;
+    noteUntil = performance.now() + 2000;
+  } else if (k === "s" || k === "S") {
+    const st0 = bus.read();
+    bus.setSas(!st0.systems.sas);
+    note = `SAS ${!st0.systems.sas ? "ON" : "OFF"}`;
+    noteUntil = performance.now() + 2000;
+  } else if (k === "p" || k === "P") {
+    bus.setHold("prograde");
+    note = "HOLD PROGRADE";
+    noteUntil = performance.now() + 2000;
+  }
+});
 
 const tStart = performance.now();
 let tFps = tStart;
@@ -48,10 +71,13 @@ let sweep = 0;
 
 function drawFrame() {
   if (!running || performance.now() - tStart >= durSec * 1000) {
+    stopKeys();
     fb.close();
     process.exit(0);
   }
+  const now = performance.now();
   const st = bus.read();
+  const hdg = ((st.attitude.heading_deg % 360) + 360) % 360;
   sweep = (sweep + 0.14) % (Math.PI * 2);
 
   fb.clearU32(BG);
@@ -59,47 +85,39 @@ function drawFrame() {
   // Header bar
   fb.rect(0, 0, 512, 42, PANEL);
   fb.hline(0, 511, 42, CYAN);
-  fb.text(12, 13, `OBC RADAR/ORBIT  ${st.vessel_id.slice(0, 8)}  ${st.body.slice(0, 8)}`, CYAN, 2);
+  const hdr = now < noteUntil ? `OBC RADAR  ${note}` : `OBC RADAR/ORBIT  ${st.vessel_id.slice(0, 8)}  ${st.body.slice(0, 8)}`;
+  fb.text(12, 13, hdr, now < noteUntil ? AMBER : CYAN, 2);
 
-  // Concentric range rings & cardinal axes
-  for (const frac of [0.33, 0.66, 1.0]) {
-    fb.circle(CX, CY, Math.round(R * frac), RING, 72);
-  }
+  for (const frac of [0.33, 0.66, 1.0]) fb.circle(CX, CY, Math.round(R * frac), RING, 72);
   fb.hline(CX - R, CX + R, CY, RING);
   fb.line(CX, CY - R, CX, CY + R, RING);
 
-  // Phosphor radar sweep trail (6 trailing rays)
   for (let k = 6; k >= 0; k--) {
     const a = sweep - k * 0.06;
     const col = k === 0 ? GREEN : packRgb(12, Math.max(30, 190 - k * 28), Math.max(24, 95 - k * 12));
     fb.line(CX, CY, Math.round(CX + R * Math.cos(a)), Math.round(CY + R * Math.sin(a)), col);
   }
 
-  // Live orbital ellipse (if orbit available) or runway approach cone
   const orb = st.orbit;
   if (orb && Number.isFinite(orb.eccentricity)) {
     const ecc = Math.max(0, Math.min(0.82, orb.eccentricity));
-    const rx = Math.round(R * 0.78);
+    const rx = Math.min(R - 4, Math.round(R * 0.72 * zoom));
     const ry = Math.round(rx * Math.sqrt(1 - ecc * ecc));
     fb.ellipse(CX, CY, rx, ry, CYAN, 72);
-    // Shaded central body
     fb.filledCircle(CX, CY, 26, packRgb(24, 92, 160));
     fb.circle(CX, CY, 28, CYAN, 48);
-    // AP & PE markers
     fb.filledCircle(CX + rx, CY, 4, AMBER);
     fb.filledCircle(CX - rx, CY, 4, GREEN);
-    // Ship heading vector on orbit
-    const hRad = ((st.attitude.heading_deg - 90) * Math.PI) / 180;
+    const hRad = ((hdg - 90) * Math.PI) / 180;
     const sx = Math.round(CX + rx * Math.cos(hRad));
     const sy = Math.round(CY + ry * Math.sin(hRad));
     fb.filledCircle(sx, sy, 6, WHITE);
     fb.circle(sx, sy, 10, AMBER, 24);
   } else {
-    // Aircraft nose marker & runway blip if in range
     fb.filledCircle(CX, CY, 6, WHITE);
     const rw = st.nav?.runway;
     if (rw) {
-      const distNorm = Math.min(0.9, Math.max(0.12, rw.dist_m / 40000));
+      const distNorm = Math.min(0.9, Math.max(0.12, (rw.dist_m / (40000 / zoom))));
       const locRad = ((rw.loc_deg * 3 - 90) * Math.PI) / 180;
       const rx = Math.round(CX + R * distNorm * Math.cos(locRad));
       const ry = Math.round(CY + R * distNorm * Math.sin(locRad));
@@ -108,17 +126,16 @@ function drawFrame() {
     }
   }
 
-  // Footer telemetry & fuel/throttle bar gauges
-  fb.rect(0, 458, 512, 54, PANEL);
-  fb.hline(0, 511, 458, CYAN);
-  fb.barGauge(12, 466, 150, 14, st.systems.fuel_frac, st.systems.fuel_frac < 0.15 ? RED : GREEN, BG, RING);
-  fb.barGauge(174, 466, 150, 14, st.systems.throttle, AMBER, BG, RING);
-  fb.text(336, 466, `FPS ${fps.toFixed(1)}`, GREEN, 2);
-  fb.text(12, 488, `ALT ${(st.position.altitude_msl_m / 1000).toFixed(1)}KM  V ${st.flight.true_airspeed_mps.toFixed(0)}  HDG ${Math.round(st.attitude.heading_deg)}`, WHITE, 2);
+  fb.rect(0, 454, 512, 58, PANEL);
+  fb.hline(0, 511, 454, CYAN);
+  fb.barGauge(12, 461, 150, 12, st.systems.fuel_frac, st.systems.fuel_frac < 0.15 ? RED : GREEN, BG, RING);
+  fb.barGauge(174, 461, 150, 12, st.systems.throttle, AMBER, BG, RING);
+  fb.text(336, 460, `FPS ${fps.toFixed(1)}`, GREEN, 2);
+  fb.text(12, 480, `ALT ${(st.position.altitude_msl_m / 1000).toFixed(1)}KM  V ${st.flight.true_airspeed_mps.toFixed(0)}  HDG ${Math.round(hdg).toString().padStart(3, "0")}`, WHITE, 2);
+  fb.text(12, 499, "KEYS: [+/-]ZOOM [S]SAS [P]PROGRADE [Q]QUIT", RING, 1);
 
   fb.flush();
   frameN++;
-  const now = performance.now();
   if (now - tFps >= 1000) {
     fps = (frameN * 1000) / (now - tFps);
     frameN = 0;
@@ -129,3 +146,4 @@ function drawFrame() {
 
 drawFrame();
 JS
+exec node /tmp/.obc-radar-fb.mjs "$@"

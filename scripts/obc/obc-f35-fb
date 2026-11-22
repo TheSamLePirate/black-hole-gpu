@@ -1,20 +1,21 @@
 #!/bin/sh
 # obc-f35-fb — Node.js Real-Time Graphical F-35 TSD / AN/APG-81 Tactical Radar Display on /dev/fb0.
-# Reads live contacts from `__bh.radar.picture()` & stores from `weapons` and renders at high FPS!
-# Usage: obc-f35-fb [--seconds 20]
+# Reads live contacts from `traffic` & stores from `weapons` and renders at 25-30 Hz!
+# Keys: [q/Esc] quit  [+/-] range (20/40/80/160 km)  [r] cycle RWS/TWS/STT  [l] lock  [c] countermeasures
+# Usage: obc-f35-fb [--seconds 60]
 
 if [ ! -x /usr/bin/node ] || head -n 1 /usr/bin/node 2>/dev/null | grep -q '^#!'; then
   echo "Node.js not installed yet. Run: obc-install node (or click +Node in HUD)"
   exit 1
 fi
 
-exec node --input-type=module - "$@" <<'JS'
-import { AvionicsBus, Framebuffer, packRgb } from "/obc/lib/obc.mjs";
+cat > /tmp/.obc-f35-fb.mjs <<'JS'
+import { AvionicsBus, Framebuffer, packRgb, startRawKeys } from "/obc/lib/obc.mjs";
 
 const args = process.argv.slice(2);
-let durSec = 20;
+let durSec = 60;
 const si = args.indexOf("--seconds");
-if (si >= 0 && args[si + 1]) durSec = Math.max(0.5, Number(args[si + 1]) || 20);
+if (si >= 0 && args[si + 1]) durSec = Math.max(0.5, Number(args[si + 1]) || 60);
 
 const bus = new AvionicsBus();
 const fb = new Framebuffer("/dev/fb0", 512, 512);
@@ -29,12 +30,52 @@ const RED = packRgb(255, 85, 68);
 const WHITE = packRgb(236, 248, 255);
 
 const CX = 256;
-const CY = 276;
-const R = 180;
+const CY = 272;
+const R = 178;
+const RANGES = [20, 40, 80, 160];
+const RADAR_MODES = ["RWS", "TWS", "STT"];
 
+let rangeIdx = 2; // 80 km default
+let modeIdx = 1;
 let running = true;
-process.on("SIGINT", () => (running = false));
-process.on("SIGTERM", () => (running = false));
+let contacts = [];
+let radarMode = "TWS";
+let note = "";
+let noteUntil = 0;
+
+function stop() {
+  running = false;
+}
+process.on("SIGINT", stop);
+process.on("SIGTERM", stop);
+
+const stopKeys = startRawKeys((k) => {
+  if (k === "q" || k === "Q" || k === "\x03" || k === "\x1b") {
+    running = false;
+  } else if (k === "+" || k === "=") {
+    rangeIdx = Math.max(0, rangeIdx - 1);
+    note = `RANGE ${RANGES[rangeIdx]} KM`;
+    noteUntil = performance.now() + 2000;
+  } else if (k === "-" || k === "_") {
+    rangeIdx = Math.min(RANGES.length - 1, rangeIdx + 1);
+    note = `RANGE ${RANGES[rangeIdx]} KM`;
+    noteUntil = performance.now() + 2000;
+  } else if (k === "r" || k === "R") {
+    modeIdx = (modeIdx + 1) % RADAR_MODES.length;
+    radarMode = RADAR_MODES[modeIdx];
+    bus.bhTool("weapons", { action: "radar", mode: radarMode });
+    note = `RADAR ${radarMode}`;
+    noteUntil = performance.now() + 2000;
+  } else if (k === "l" || k === "L") {
+    bus.bhTool("weapons", { action: "lock" });
+    note = "LOCK TARGET";
+    noteUntil = performance.now() + 2000;
+  } else if (k === "c" || k === "C") {
+    bus.bhTool("weapons", { action: "countermeasures" });
+    note = "FLARES/CHAFF";
+    noteUntil = performance.now() + 2000;
+  }
+});
 
 const tStart = performance.now();
 let tFps = tStart;
@@ -43,19 +84,19 @@ let frameN = 0;
 let fps = 0;
 let sweep = -Math.PI / 2;
 let sweepDir = 1;
-let contacts = [];
-let radarMode = "TWS";
 
 function drawFrame() {
   if (!running || performance.now() - tStart >= durSec * 1000) {
+    stopKeys();
     fb.close();
     process.exit(0);
   }
   const now = performance.now();
   const st = bus.read();
-  if (now - tPoll > 400) {
+  const rangeKm = RANGES[rangeIdx];
+  if (frameN >= 1 && (tPoll === 0 || now - tPoll > 450)) {
     tPoll = now;
-    const trf = bus.bhTool("traffic", { action: "list", maxKm: 80, n: 18 });
+    const trf = bus.bhTool("traffic", { action: "list", maxKm: rangeKm, n: 18 });
     if (trf.ok && Array.isArray(trf.result?.nearest)) contacts = trf.result.nearest;
     const wp = bus.bhTool("weapons", { action: "status" });
     if (wp.ok && wp.result?.radar) {
@@ -69,15 +110,29 @@ function drawFrame() {
   if (sweep > -Math.PI / 2 + 1.05) sweepDir = -1;
   if (sweep < -Math.PI / 2 - 1.05) sweepDir = 1;
 
+  const hdg = ((st.attitude.heading_deg % 360) + 360) % 360;
   fb.clearU32(BG);
 
   // Header
   fb.rect(0, 0, 512, 40, PANEL);
   fb.hline(0, 511, 40, CYAN);
-  fb.text(10, 12, `F-35 TSD  ${radarMode}  80KM  HDG ${Math.round(st.attitude.heading_deg).toString().padStart(3, "0")}`, GREEN, 2);
+  const hdr = now < noteUntil ? `F-35 TSD  ${note}` : `F-35 TSD  ${radarMode}  ${rangeKm}KM  HDG ${Math.round(hdg).toString().padStart(3, "0")}`;
+  fb.text(10, 12, hdr, now < noteUntil ? AMBER : GREEN, 2);
 
-  // Range arcs & ±60° FCR radar cone
+  // Range arcs & compass ticks around outer ring
   for (const frac of [0.33, 0.66, 1.0]) fb.circle(CX, CY, Math.round(R * frac), RING, 72);
+  for (let d = 0; d < 360; d += 30) {
+    const a = (((d - hdg - 90) * Math.PI) / 180);
+    const x0 = Math.round(CX + R * Math.cos(a));
+    const y0 = Math.round(CY + R * Math.sin(a));
+    const x1 = Math.round(CX + (R - 8) * Math.cos(a));
+    const y1 = Math.round(CY + (R - 8) * Math.sin(a));
+    fb.line(x0, y0, x1, y1, RING);
+    if (d % 90 === 0) {
+      const card = { 0: "N", 90: "E", 180: "S", 270: "W" }[d];
+      fb.text(Math.round(CX + (R + 10) * Math.cos(a)) - 4, Math.round(CY + (R + 10) * Math.sin(a)) - 4, card, CYAN, 1);
+    }
+  }
   const coneL = -Math.PI / 2 - 1.05;
   const coneR = -Math.PI / 2 + 1.05;
   fb.line(CX, CY, Math.round(CX + R * Math.cos(coneL)), Math.round(CY + R * Math.sin(coneL)), CYAN);
@@ -96,11 +151,11 @@ function drawFrame() {
   fb.line(CX - 6, CY + 10, CX + 6, CY + 10, WHITE);
 
   // Plot real traffic / radar contacts relative to ownship heading
-  const hdg = st.attitude.heading_deg;
+  const rangeM = rangeKm * 1000;
   for (const c of contacts) {
     const relDeg = ((c.bearingDeg ?? 0) - hdg + 540) % 360 - 180;
     const relRad = ((relDeg - 90) * Math.PI) / 180;
-    const distPx = Math.min(R - 8, ((c.distM ?? 0) / 80000) * R);
+    const distPx = Math.min(R - 8, ((c.distM ?? 0) / rangeM) * R);
     const tx = Math.round(CX + distPx * Math.cos(relRad));
     const ty = Math.round(CY + distPx * Math.sin(relRad));
     const col = c.iff === "hostile" ? RED : c.iff === "friend" ? GREEN : CYAN;
@@ -109,12 +164,13 @@ function drawFrame() {
   }
 
   // Footer: Fuel, Throttle, Contacts & FPS
-  fb.rect(0, 462, 512, 50, PANEL);
-  fb.hline(0, 511, 462, CYAN);
-  fb.barGauge(10, 470, 145, 13, st.systems.fuel_frac, GREEN, BG, RING);
-  fb.barGauge(165, 470, 125, 13, st.systems.throttle, AMBER, BG, RING);
-  fb.text(302, 470, `TRK ${String(contacts.length).padStart(2)}  FPS ${fps.toFixed(1)}`, GREEN, 2);
-  fb.text(10, 490, `M${st.flight.mach.toFixed(2)}  G ${st.flight.g_load.toFixed(1)}  ALT ${Math.round(st.position.altitude_msl_m)}M`, WHITE, 2);
+  fb.rect(0, 456, 512, 56, PANEL);
+  fb.hline(0, 511, 456, CYAN);
+  fb.barGauge(10, 463, 145, 12, st.systems.fuel_frac, GREEN, BG, RING);
+  fb.barGauge(165, 463, 125, 12, st.systems.throttle, AMBER, BG, RING);
+  fb.text(302, 462, `TRK ${String(contacts.length).padStart(2)}  FPS ${fps.toFixed(1)}`, GREEN, 2);
+  fb.text(10, 482, `M${st.flight.mach.toFixed(2)}  G ${st.flight.g_load.toFixed(1)}  ALT ${Math.round(st.position.altitude_msl_m)}M  [+/-]RNG [R]RAD [L]LCK [Q]`, WHITE, 1);
+  fb.text(10, 496, `PITCH ${st.attitude.pitch_deg >= 0 ? "+" : ""}${st.attitude.pitch_deg.toFixed(1)}  ROLL ${st.attitude.roll_deg >= 0 ? "+" : ""}${st.attitude.roll_deg.toFixed(1)}  TAS ${Math.round(st.flight.true_airspeed_mps * 1.94384)}KT`, CYAN, 1);
 
   fb.flush();
   frameN++;
@@ -128,3 +184,4 @@ function drawFrame() {
 
 drawFrame();
 JS
+exec node /tmp/.obc-f35-fb.mjs "$@"

@@ -1,18 +1,19 @@
 #!/bin/sh
 # obc-ils-fb — Python Real-Time Graphical Precision Approach & ILS Plan + Vertical Profile Display on /dev/fb0.
 # Reads live runway geometry, approach fixes (IAF/IF/FAF/MAP) & vertical glidepath directly from __bh!
-# Usage: obc-ils-fb [--seconds 20]
+# Keys: [q/Esc] quit  [+/-] scale zoom (10/20/40 NM)  [i] engage ILS  [g] toggle gear
+# Usage: obc-ils-fb [--seconds 60]
 
 if [ ! -x /usr/bin/python3 ] || head -n 1 /usr/bin/python3 2>/dev/null | grep -q '^#!'; then
   echo "Python 3 not installed yet. Run: obc-install python (or click +Python in HUD)"
   exit 1
 fi
 
-exec python3 - "$@" <<'PY'
+cat > /tmp/.obc-ils-fb.py <<'PY'
 import math, signal, sys, time
 import obc
 
-dur = 20.0
+dur = 60.0
 if "--seconds" in sys.argv:
     i = sys.argv.index("--seconds")
     if i + 1 < len(sys.argv):
@@ -25,8 +26,11 @@ def stop(*_a):
 signal.signal(signal.SIGINT, stop)
 signal.signal(signal.SIGTERM, stop)
 
+SCALES_NM = [10.0, 20.0, 40.0]
+scale_idx = 0
+
 bus = obc.AvionicsBus()
-with obc.Framebuffer() as fb:
+with obc.Framebuffer() as fb, obc.RawKeys() as keys:
     W, H = fb.width, fb.height
     panel = fb.color(8, 22, 32)
     cyan = fb.color(98, 230, 255)
@@ -44,11 +48,36 @@ with obc.Framebuffer() as fb:
     fps = 0.0
     last_app_t = 0.0
     app_map = None
+    note = ""
+    note_until = 0.0
 
     while running and (time.monotonic() - t0) < dur:
+        ch = keys.poll()
+        if ch:
+            if ch in ("q", "Q", "\x03", "\x1b"):
+                break
+            elif ch in ("+", "="):
+                scale_idx = max(0, scale_idx - 1)
+                note = f"SCALE {SCALES_NM[scale_idx]:.0f} NM"
+                note_until = time.monotonic() + 2.0
+            elif ch in ("-", "_"):
+                scale_idx = min(len(SCALES_NM) - 1, scale_idx + 1)
+                note = f"SCALE {SCALES_NM[scale_idx]:.0f} NM"
+                note_until = time.monotonic() + 2.0
+            elif ch in ("i", "I"):
+                bus.bh_tool("approach", action="ils")
+                note = "ILS ENGAGED"
+                note_until = time.monotonic() + 2.0
+            elif ch in ("g", "G"):
+                st0 = bus.read()
+                dn = not (st0.systems.get("gear", 0) > 0.5)
+                bus.set_gear(dn)
+                note = "GEAR DOWN" if dn else "GEAR UP"
+                note_until = time.monotonic() + 2.0
+
         st = bus.read()
         now = time.monotonic()
-        if now - last_app_t > 1.0:
+        if frames >= 1 and (last_app_t == 0.0 or now - last_app_t > 1.0):
             last_app_t = now
             r = bus.bh_call("camera.approachMapData")
             if r.get("ok") and isinstance(r.get("result"), dict):
@@ -61,39 +90,34 @@ with obc.Framebuffer() as fb:
         fb.hline(0, W - 1, 38, cyan)
         rw = st.nav.get("runway") if isinstance(st.nav, dict) else None
         title_id = (app_map.get("field", "") + " " + app_map.get("id", "")).strip() if app_map else (rw.get("ident", "STANDBY") if rw else "ILS STANDBY")
-        fb.text(10, 11, f"ILS APPROACH  {title_id[:16]}", cyan, scale=2)
+        hdr = note if now < note_until else f"ILS APPROACH  {title_id[:16]}"
+        fb.text(10, 11, hdr, amber if now < note_until else cyan, scale=2)
 
         # ── Top Half: Plan View (Runway + Extended Centerline + Fixes + Ship) ──
-        py0, py1 = 44, 274
+        py0, py1 = 44, 272
         pcx = W // 2
         thr_y = 88
         fb.stroke_rect(8, py0, W - 16, py1 - py0, dim)
-        # Extended centerline
         for yy in range(thr_y, py1 - 12, 10):
             fb.vline(pcx, yy, min(yy + 5, py1 - 12), dim)
-        # Runway rectangle
         fb.rect(pcx - 9, thr_y - 34, 18, 34, rwy_c)
         fb.stroke_rect(pcx - 9, thr_y - 34, 18, 34, white)
-        # Approach cone lines (±2.5 deg)
         fb.line(pcx, thr_y, pcx - 58, py1 - 12, dim)
         fb.line(pcx, thr_y, pcx + 58, py1 - 12, dim)
 
-        # Localizer & glideslope deviations
         loc = float(rw.get("loc_deg", 0.0)) if rw else 0.0
         gs = float(rw.get("gs_deg", 0.0)) if rw else 0.0
         dist_m = float(rw.get("dist_m", 12000.0)) if rw else 12000.0
 
-        # Aircraft symbol in plan view
-        span_m = max(15000.0, dist_m * 1.15)
+        span_m = max(SCALES_NM[scale_idx] * 1852.0, dist_m * 1.15)
         sy = int(min(py1 - 18, max(thr_y + 4, thr_y + (dist_m / span_m) * (py1 - thr_y - 20))))
         sx = int(max(36, min(W - 36, pcx + (loc / 3.5) * 140)))
         fb.filled_circle(sx, sy, 5, green if abs(loc) < 0.5 else amber)
         fb.line(sx, sy - 10, sx, sy + 8, white)
         fb.line(sx - 9, sy, sx + 9, sy, white)
+        fb.text(16, py0 + 8, f"PLAN {span_m/1852:.0f}NM  HDG {int(round(st.heading))%360:03d}", cyan, scale=1)
 
-        # Plot published fixes from __bh.camera.approachMapData()
         if app_map and isinstance(app_map.get("fixes"), list):
-            nfix = len(app_map["fixes"])
             for k, fx in enumerate(app_map["fixes"][:4]):
                 fy = thr_y + 24 + k * 34
                 if fy < py1 - 16:
@@ -101,17 +125,14 @@ with obc.Framebuffer() as fb:
                     fb.text(pcx + 12, fy - 4, f"{fx.get('name','')[:6]}", magenta, scale=1)
 
         # ── Bottom Half: Vertical 3° Glidepath Profile + LOC/GS Needles ────────
-        vy0, vy1 = 282, 424
+        vy0, vy1 = 278, 420
         fb.stroke_rect(8, vy0, W - 16, vy1 - vy0, dim)
         base_y = vy1 - 14
         thr_x = 46
         far_x = W - 24
-        # Ground slab
         fb.rect(10, base_y, W - 20, 12, ground_c)
         fb.hline(10, W - 10, base_y, amber)
-        # 3 deg glideslope line (from threshold on left rising to right)
         fb.line(thr_x, base_y, far_x, vy0 + 20, cyan)
-        # Aircraft vertical dot
         vx = int(max(thr_x, min(far_x, thr_x + (dist_m / span_m) * (far_x - thr_x))))
         max_h = max(900.0, span_m * math.tan(math.radians(3.4)))
         vy = int(max(vy0 + 10, min(base_y - 2, base_y - (max(0.0, st.height_over_ground) / max_h) * (base_y - vy0 - 16))))
@@ -119,26 +140,26 @@ with obc.Framebuffer() as fb:
         fb.text(16, vy0 + 8, f"GS 3.0  AGL {st.height_over_ground:.0f}M  DME {dist_m/1852:.1f}NM", white, scale=1)
 
         # ── Precision LOC & G/S Magenta Scale Bar ──────────────────────────────
-        fb.rect(0, 432, W, 80, panel)
-        fb.hline(0, W - 1, 432, cyan)
-        # LOC scale
-        lx0, lx1, ly = 64, 240, 456
+        fb.rect(0, 428, W, 84, panel)
+        fb.hline(0, W - 1, 428, cyan)
+        lx0, lx1, ly = 64, 240, 452
         fb.hline(lx0, lx1, ly, dim)
         for j in range(-2, 3):
             fb.circle((lx0 + lx1) // 2 + j * 36, ly, 3, white, steps=12)
         ldx = int(max(lx0, min(lx1, (lx0 + lx1) // 2 - (loc / 2.5) * 72)))
         fb.filled_circle(ldx, ly, 5, magenta)
-        fb.text(12, 450, "LOC", cyan, scale=2)
-        # G/S scale
+        fb.text(12, 446, "LOC", cyan, scale=2)
+
         gx0, gx1 = 316, 492
         fb.hline(gx0, gx1, ly, dim)
         for j in range(-2, 3):
             fb.circle((gx0 + gx1) // 2 + j * 36, ly, 3, white, steps=12)
         gdx = int(max(gx0, min(gx1, (gx0 + gx1) // 2 + (gs / 0.7) * 72)))
         fb.filled_circle(gdx, ly, 5, magenta)
-        fb.text(266, 450, "G/S", cyan, scale=2)
+        fb.text(266, 446, "G/S", cyan, scale=2)
 
-        fb.text(12, 484, f"TAS {st.true_airspeed*1.94384:3.0f}KT  VS {st.vertical_speed:+4.1f}  FPS {fps:.1f}", green, scale=2)
+        fb.text(12, 474, f"TAS {st.true_airspeed*1.94384:3.0f}KT  VS {st.vertical_speed:+4.1f}  FPS {fps:.1f}", green, scale=2)
+        fb.text(12, 498, "KEYS: [+/-]ZOOM [I]ILS [G]GEAR [Q]QUIT", dim, scale=1)
 
         fb.flush()
         frames += 1
@@ -146,5 +167,6 @@ with obc.Framebuffer() as fb:
             fps = frames / (now - t_fps)
             frames = 0
             t_fps = now
-        time.sleep(0.05)
+        time.sleep(0.04)
 PY
+exec python3 /tmp/.obc-ils-fb.py "$@"

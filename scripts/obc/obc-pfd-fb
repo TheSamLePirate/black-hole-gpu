@@ -1,17 +1,19 @@
 #!/bin/sh
-# obc-pfd-fb — Python Real-Time Graphical Primary Flight Display (Artificial Horizon + Tapes) on /dev/fb0.
-# Usage: obc-pfd-fb [--seconds 20]
+# obc-pfd-fb — AAA Real-Time Primary Flight Display (Artificial Horizon, Bank Arc, Scrolling Tapes & ILS) on /dev/fb0.
+# Horizon math matches src/a320/du/pfd.ts identically (roll > 0 banks right, pitch > 0 shifts horizon down along rotated vertical).
+# Keys: [q/Esc] quit  [a] AP  [t] A/THR  [i] ILS  [g] Gear  [+/-] Throttle
+# Usage: obc-pfd-fb [--seconds 60]
 
 if [ ! -x /usr/bin/python3 ] || head -n 1 /usr/bin/python3 2>/dev/null | grep -q '^#!'; then
   echo "Python 3 not installed yet. Run: obc-install python (or click +Python in HUD)"
   exit 1
 fi
 
-exec python3 - "$@" <<'PY'
+cat > /tmp/.obc-pfd-fb.py <<'PY'
 import math, signal, sys, time
 import obc
 
-dur = 20.0
+dur = 60.0
 if "--seconds" in sys.argv:
     i = sys.argv.index("--seconds")
     if i + 1 < len(sys.argv):
@@ -24,118 +26,313 @@ def stop(*_a):
 signal.signal(signal.SIGINT, stop)
 signal.signal(signal.SIGTERM, stop)
 
+PX_PER_DEG = 4.4  # Pitch ladder scale inside attitude indicator
+
 bus = obc.AvionicsBus()
-with obc.Framebuffer() as fb:
+with obc.Framebuffer() as fb, obc.RawKeys() as keys:
     W, H = fb.width, fb.height
-    cx, cy = W // 2, H // 2
-    sky = fb.color(20, 96, 168)
-    sky_hi = fb.color(12, 66, 126)
-    gnd = fb.color(116, 72, 34)
-    gnd_lo = fb.color(82, 48, 22)
-    panel = fb.color(6, 20, 30)
-    panel_dark = fb.color(3, 12, 20)
-    cyan = fb.color(98, 230, 255)
-    white = fb.color(242, 250, 255)
-    amber = fb.color(255, 179, 71)
-    green = fb.color(125, 255, 154)
-    dim = fb.color(42, 108, 128)
-
-    # Attitude ball bounds
-    ax0, ay0, ax1, ay1 = 96, 56, W - 96, H - 84
+    ax0, ay0, ax1, ay1 = 94, 48, W - 94, H - 86
     aw = ax1 - ax0
-    row_sky = sky * aw
-    row_gnd = gnd * aw
+    ah = ay1 - ay0
+    cx = (ax0 + ax1) // 2
+    cy = (ay0 + ay1) // 2
 
-    t0 = time.monotonic()
+    sky_top = fb.color(14, 72, 142)
+    sky_mid = fb.color(24, 114, 196)
+    gnd_top = fb.color(134, 82, 34)
+    gnd_bot = fb.color(86, 50, 20)
+    # Pre-allocated row buffers for zero-allocation scanline horizon rendering (~10x faster in Python)
+    row_sky_top = sky_top * aw
+    row_sky_mid = sky_mid * aw
+    row_gnd_top = gnd_top * aw
+    row_gnd_bot = gnd_bot * aw
+    buf = fb._buf
+    stride = W * 4
+    panel = fb.color(6, 18, 28)
+    panel_dark = fb.color(4, 12, 20)
+    cyan = fb.color(92, 226, 255)
+    white = fb.color(244, 250, 255)
+    amber = fb.color(255, 182, 54)
+    green = fb.color(96, 245, 136)
+    magenta = fb.color(242, 92, 224)
+    dim = fb.color(42, 94, 116)
+    tick_c = fb.color(160, 198, 214)
+
+    t_start = time.monotonic()
+    t_fps = t_start
     frames = 0
     fps = 0.0
-    t_fps = t0
+    note = ""
+    note_until = 0.0
 
-    while running and (time.monotonic() - t0) < dur:
+    while running and (time.monotonic() - t_start) < dur:
+        ch = keys.poll()
+        if ch:
+            if ch in ("q", "Q", "\x03", "\x1b"):
+                break
+            elif ch in ("g", "G"):
+                st0 = bus.read()
+                dn = not (st0.systems.get("gear", 0) > 0.5)
+                bus.set_gear(dn)
+                note = "GEAR DN" if dn else "GEAR UP"
+                note_until = time.monotonic() + 2.0
+            elif ch in ("+", "="):
+                st0 = bus.read()
+                nt = min(1.0, float(st0.systems.get("throttle", 0.0)) + 0.1)
+                bus.set_throttle(nt)
+                note = f"THR {int(nt*100)}%"
+                note_until = time.monotonic() + 2.0
+            elif ch in ("-", "_"):
+                st0 = bus.read()
+                nt = max(0.0, float(st0.systems.get("throttle", 0.0)) - 0.1)
+                bus.set_throttle(nt)
+                note = f"THR {int(nt*100)}%"
+                note_until = time.monotonic() + 2.0
+            elif ch in ("i", "I"):
+                bus.bh_tool("approach", action="ils")
+                note = "ILS ARMED"
+                note_until = time.monotonic() + 2.0
+            elif ch in ("a", "A"):
+                bus.bh_tool("jet_autopilot", ap=True)
+                note = "AP ENGAGED"
+                note_until = time.monotonic() + 2.0
+            elif ch in ("t", "T"):
+                bus.bh_tool("jet_autopilot", athr=True)
+                note = "A/THR ON"
+                note_until = time.monotonic() + 2.0
+
         st = bus.read()
-        roll_rad = math.radians(st.roll)
-        pitch_px = max(-140.0, min(140.0, st.pitch * 3.8))
+        is_air = st.vessel_kind == "aircraft" or st.altitude_msl < 30000.0
+        pitch_deg = max(-90.0, min(90.0, st.pitch))
+        roll_deg = st.roll
+        hdg_deg = st.heading % 360.0
+
+        # Exact Airbus/F-35 attitude math (matches src/a320/du/pfd.ts):
+        #   roll > 0 = banking RIGHT => horizon tilts UP on right, DOWN on left
+        #   pitch > 0 = nose UP => horizon translates DOWN along rotated vertical
+        #   Signed downward distance from horizon: v_down = (x-cx)*sin(roll) + (y-cy)*cos(roll) - pitch_px
+        roll_rad = math.radians(roll_deg)
         sin_r = math.sin(roll_rad)
         cos_r = math.cos(roll_rad)
+        pitch_px = max(-180.0, min(180.0, pitch_deg * PX_PER_DEG))
 
-        # Clear outer bezel fast
-        fb.clear(4, 16, 24)
+        fb.clear(4, 14, 22)
 
-        # Fast scanline artificial horizon inside attitude box
+        # ── 1. Zero-allocation scanline Sky & Ground fill inside attitude viewport
+        x0_b = ax0 * 4
+        aw_b = aw * 4
         for y in range(ay0, ay1):
-            dy = (y - cy) - pitch_px
+            dy = y - cy
+            c_term = dy * cos_r - pitch_px
+            r_sky = row_sky_top if y < cy - 55 else row_sky_mid
+            r_gnd = row_gnd_bot if y > cy + 55 else row_gnd_top
+            off = y * stride + x0_b
             if abs(sin_r) < 1e-4:
-                is_sky = (dy * cos_r) < 0
-                fb.rect(ax0, y, aw, 1, sky if is_sky else gnd)
+                buf[off : off + aw_b] = r_sky if c_term < 0 else r_gnd
             else:
-                # Line equation: (x - cx)*sin_r + dy*cos_r = 0 => x_cross = cx - dy*(cos_r/sin_r)
-                x_cross = cx - dy * (cos_r / sin_r)
-                split = int(round(x_cross))
-                left_is_sky = ((ax0 - cx) * sin_r + dy * cos_r) < 0
+                split = int(round(cx - c_term / sin_r))
+                left_is_sky = ((ax0 - cx) * sin_r + c_term) < 0
                 if split <= ax0:
-                    fb.rect(ax0, y, aw, 1, gnd if left_is_sky else sky)
+                    buf[off : off + aw_b] = r_gnd if left_is_sky else r_sky
                 elif split >= ax1:
-                    fb.rect(ax0, y, aw, 1, sky if left_is_sky else gnd)
+                    buf[off : off + aw_b] = r_sky if left_is_sky else r_gnd
                 else:
-                    lw = split - ax0
-                    rw = ax1 - split
+                    lb = (split - ax0) * 4
+                    rb = aw_b - lb
                     if left_is_sky:
-                        fb.rect(ax0, y, lw, 1, sky)
-                        fb.rect(split, y, rw, 1, gnd)
+                        buf[off : off + lb] = r_sky[:lb]
+                        buf[off + lb : off + aw_b] = r_gnd[:rb]
                     else:
-                        fb.rect(ax0, y, lw, 1, gnd)
-                        fb.rect(split, y, rw, 1, sky)
+                        buf[off : off + lb] = r_gnd[:lb]
+                        buf[off + lb : off + aw_b] = r_sky[:rb]
 
-        # Horizon line & pitch ladder (-20, -10, +10, +20 deg)
-        for deg in (-20, -10, 0, 10, 20):
-            off = -deg * 3.8 + pitch_px
-            half = 110 if deg == 0 else (46 if abs(deg) == 20 else 28)
-            x1 = int(cx - half * cos_r - off * sin_r)
-            y1 = int(cy - half * sin_r + off * cos_r)
-            x2 = int(cx + half * cos_r - off * sin_r)
-            y2 = int(cy + half * sin_r + off * cos_r)
-            if ay0 + 8 < y1 < ay1 - 8 and ay0 + 8 < y2 < ay1 - 8:
-                fb.line(x1, y1, x2, y2, white if deg == 0 else cyan)
+        # ── 2. Exact horizon line & clipped pitch ladder (-30..+30 deg) ────────
+        def ai_pt(u: float, v: float):
+            # Horizon-local (u along horizon right+, v downward+) -> screen (x, y)
+            return int(round(cx + u * cos_r + v * sin_r)), int(round(cy - u * sin_r + v * cos_r))
 
-        # Fixed aircraft boresight wings
-        fb.rect(cx - 58, cy - 2, 42, 4, amber)
-        fb.rect(cx + 16, cy - 2, 42, 4, amber)
-        fb.rect(cx - 4, cy - 4, 8, 8, white)
-        fb.stroke_rect(ax0, ay0, aw, ay1 - ay0, cyan)
+        # Thick white artificial horizon line across full attitude ball
+        hx0, hy0 = ai_pt(-260.0, pitch_px)
+        hx1, hy1 = ai_pt(260.0, pitch_px)
+        fb.line_clipped(hx0, hy0, hx1, hy1, white, ax0 + 1, ay0 + 1, ax1 - 2, ay1 - 2)
+        hx0b, hy0b = ai_pt(-260.0, pitch_px + 1.0)
+        hx1b, hy1b = ai_pt(260.0, pitch_px + 1.0)
+        fb.line_clipped(hx0b, hy0b, hx1b, hy1b, white, ax0 + 1, ay0 + 1, ax1 - 2, ay1 - 2)
 
-        # Top FMA strip
-        fb.rect(0, 0, W, 44, panel)
-        fb.hline(0, W - 1, 44, cyan)
+        # Pitch ladder rungs (-30..+30 in 5 deg increments)
+        for deg in (-30, -25, -20, -15, -10, -5, 5, 10, 15, 20, 25, 30):
+            v = pitch_px - deg * PX_PER_DEG
+            if abs(v) > 155:
+                continue
+            major = (deg % 10) == 0
+            half = 48.0 if major else 22.0
+            col = white if deg > 0 else amber
+            if deg > 0:
+                p0 = ai_pt(-half, v)
+                p1 = ai_pt(half, v)
+                fb.line_clipped(p0[0], p0[1], p1[0], p1[1], col, ax0 + 6, ay0 + 26, ax1 - 7, ay1 - 14)
+                if major:
+                    # Downward end-ticks pointing toward horizon
+                    tk0 = ai_pt(-half, v + 6.0)
+                    tk1 = ai_pt(half, v + 6.0)
+                    fb.line_clipped(p0[0], p0[1], tk0[0], tk0[1], col, ax0 + 6, ay0 + 26, ax1 - 7, ay1 - 14)
+                    fb.line_clipped(p1[0], p1[1], tk1[0], tk1[1], col, ax0 + 6, ay0 + 26, ax1 - 7, ay1 - 14)
+            else:
+                # Split dashed rungs for negative pitch (dive)
+                for seg_a, seg_b in ((-half, -12.0), (12.0, half)):
+                    p0 = ai_pt(seg_a, v)
+                    p1 = ai_pt(seg_b, v)
+                    fb.line_clipped(p0[0], p0[1], p1[0], p1[1], col, ax0 + 6, ay0 + 26, ax1 - 7, ay1 - 14)
+                if major:
+                    tk0 = ai_pt(-half, v - 6.0)
+                    tk1 = ai_pt(half, v - 6.0)
+                    pL = ai_pt(-half, v)
+                    pR = ai_pt(half, v)
+                    fb.line_clipped(pL[0], pL[1], tk0[0], tk0[1], col, ax0 + 6, ay0 + 26, ax1 - 7, ay1 - 14)
+                    fb.line_clipped(pR[0], pR[1], tk1[0], tk1[1], col, ax0 + 6, ay0 + 26, ax1 - 7, ay1 - 14)
+            if major:
+                lx, ly = ai_pt(half + 10.0, v - 3.0)
+                if ax0 + 4 < lx < ax1 - 18 and ay0 + 28 < ly < ay1 - 16:
+                    fb.text(lx, ly, f"{abs(deg):02d}", col, scale=1)
+
+        # ── 3. Top Bank-Angle Arc (0, ±10, ±20, ±30, ±45, ±60) + Roll Pointer ──
+        bank_r = 136
+        prev_b = None
+        for bdeg in range(-60, 61, 5):
+            ba = math.radians(bdeg - 90)
+            bx = int(round(cx + bank_r * math.cos(ba)))
+            by = int(round(cy + bank_r * math.sin(ba)))
+            if prev_b and ay0 + 2 < by < ay1 - 2 and ay0 + 2 < prev_b[1] < ay1 - 2:
+                fb.line(prev_b[0], prev_b[1], bx, by, white)
+            prev_b = (bx, by)
+        for bdeg in (-60, -45, -30, -20, -10, 0, 10, 20, 30, 45, 60):
+            ba = math.radians(bdeg - 90)
+            tlen = 10 if bdeg in (0, -30, 30, -45, 45) else 6
+            x0 = int(round(cx + bank_r * math.cos(ba)))
+            y0 = int(round(cy + bank_r * math.sin(ba)))
+            x1 = int(round(cx + (bank_r + tlen) * math.cos(ba)))
+            y1 = int(round(cy + (bank_r + tlen) * math.sin(ba)))
+            if ay0 + 1 < y1 < ay1 - 1:
+                fb.line(x0, y0, x1, y1, amber if bdeg == 0 else white)
+        # Live rotating roll pointer triangle inside the bank arc
+        clamped_roll = max(-60.0, min(60.0, -roll_deg))
+        ra = math.radians(clamped_roll - 90)
+        rx_tip = int(round(cx + (bank_r - 2) * math.cos(ra)))
+        ry_tip = int(round(cy + (bank_r - 2) * math.sin(ra)))
+        rx_l = int(round(cx + (bank_r - 12) * math.cos(ra - 0.045)))
+        ry_l = int(round(cy + (bank_r - 12) * math.sin(ra - 0.045)))
+        rx_r = int(round(cx + (bank_r - 12) * math.cos(ra + 0.045)))
+        ry_r = int(round(cy + (bank_r - 12) * math.sin(ra + 0.045)))
+        if ay0 + 2 < ry_tip < ay1 - 2:
+            fb.line(rx_tip, ry_tip, rx_l, ry_l, amber)
+            fb.line(rx_tip, ry_tip, rx_r, ry_r, amber)
+            fb.line(rx_l, ry_l, rx_r, ry_r, amber)
+
+        # ── 4. Fixed Airbus/F-35 Aircraft Boresight Symbol ────────────────────
+        fb.rect(cx - 58, cy - 3, 40, 6, panel_dark)
+        fb.rect(cx - 57, cy - 2, 38, 4, amber)
+        fb.rect(cx - 22, cy + 2, 4, 9, amber)
+        fb.rect(cx + 18, cy - 3, 40, 6, panel_dark)
+        fb.rect(cx + 19, cy - 2, 38, 4, amber)
+        fb.rect(cx + 18, cy + 2, 4, 9, amber)
+        fb.rect(cx - 4, cy - 4, 8, 8, panel_dark)
+        fb.stroke_rect(cx - 4, cy - 4, 8, 8, amber)
+        fb.stroke_rect(ax0, ay0, aw, ah, cyan)
+
+        # ── 5. ILS LOC & G/S Magenta Scales when on Approach ──────────────────
+        rw = st.nav.get("runway") if isinstance(st.nav, dict) else None
+        if rw:
+            loc_deg = float(rw.get("loc_deg", 0.0))
+            gs_deg = float(rw.get("gs_deg", 0.0))
+            # Bottom LOC dots inside attitude box
+            ly = ay1 - 12
+            for j in (-2, -1, 0, 1, 2):
+                fb.circle(cx + j * 28, ly, 3, white, steps=10)
+            lx = int(max(cx - 64, min(cx + 64, cx - (loc_deg / 2.5) * 56)))
+            fb.filled_circle(lx, ly, 5, magenta)
+            # Right G/S dots inside attitude box
+            gx = ax1 - 12
+            for j in (-2, -1, 0, 1, 2):
+                fb.circle(gx, cy + j * 28, 3, white, steps=10)
+            gy = int(max(cy - 64, min(cy + 64, cy + (gs_deg / 0.7) * 56)))
+            fb.filled_circle(gx, gy, 5, magenta)
+
+        # ── 6. Top FMA Strip ──────────────────────────────────────────────────
+        fb.rect(0, 0, W, 42, panel)
+        fb.hline(0, W - 1, 42, cyan)
         thr_pct = int(round(float(st.systems.get("throttle", 0.0)) * 100))
-        sas = "SAS" if st.systems.get("sas") else "---"
-        ap = str(st.systems.get("autopilot", "MAN")).upper()[:6]
-        fb.text(12, 14, f"PFD {st.vessel_id[:6]}  THR {thr_pct:3d}%  {sas}  {ap}", cyan, scale=2)
+        sas = "SAS" if st.systems.get("sas") else "MAN"
+        ap = str(st.systems.get("autopilot", "OFF")).upper()[:6]
+        banner = note if time.monotonic() < note_until else f"PFD {st.vessel_id[:6]}  THR {thr_pct:3d}%  {sas}  {ap}"
+        fb.text(10, 13, banner, amber if time.monotonic() < note_until else cyan, scale=2)
 
-        # Left Speed Tape
-        fb.rect(8, ay0, 80, ay1 - ay0, panel_dark)
-        fb.stroke_rect(8, ay0, 80, ay1 - ay0, dim)
-        fb.text(16, ay0 + 8, "TAS", cyan, scale=2)
-        fb.rect(10, cy - 16, 76, 32, panel)
-        fb.stroke_rect(10, cy - 16, 76, 32, green)
-        fb.text(14, cy - 7, f"{st.true_airspeed:5.0f}", green, scale=2)
-        fb.text(14, ay1 - 24, f"M{st.mach:.2f}", amber, scale=2)
+        # ── 7. Left Scrolling Airspeed Tape (kt for aircraft, m/s for space) ──
+        fb.rect(6, ay0, 82, ah, panel_dark)
+        fb.stroke_rect(6, ay0, 82, ah, dim)
+        spd_val = st.true_airspeed * 1.94384 if is_air else st.true_airspeed
+        spd_step = 20.0 if is_air else 500.0
+        spd_px = 2.0 if is_air else 0.08
+        base_spd = math.floor(spd_val / spd_step) * spd_step
+        for k in range(-6, 7):
+            v = base_spd + k * spd_step
+            if v < 0:
+                continue
+            ty = int(round(cy - (v - spd_val) * spd_px))
+            if ay0 + 24 < ty < ay1 - 28:
+                fb.hline(74, 86, ty, tick_c)
+                lbl = f"{int(v):4d}" if is_air else f"{v/1000:3.1f}K"
+                fb.text(12, ty - 3, lbl, tick_c, scale=1)
+        fb.text(14, ay0 + 6, "IAS KT" if is_air else "SPD MS", cyan, scale=1)
+        fb.rect(8, cy - 15, 78, 30, panel)
+        fb.stroke_rect(8, cy - 15, 78, 30, green)
+        fb.text(12, cy - 7, f"{spd_val:5.0f}", green, scale=2)
+        fb.text(12, ay1 - 22, f"M{st.mach:.2f}", amber, scale=2)
 
-        # Right Altitude Tape
-        fb.rect(W - 88, ay0, 80, ay1 - ay0, panel_dark)
-        fb.stroke_rect(W - 88, ay0, 80, ay1 - ay0, dim)
-        fb.text(W - 80, ay0 + 8, "ALT", cyan, scale=2)
-        fb.rect(W - 86, cy - 16, 76, 32, panel)
-        fb.stroke_rect(W - 86, cy - 16, 76, 32, cyan)
-        alt_lbl = f"{st.altitude_msl/1000:4.1f}K" if st.altitude_msl >= 10000 else f"{st.altitude_msl:5.0f}"
+        # ── 8. Right Scrolling Altitude Tape (ft for aircraft, km for space) ──
+        fb.rect(W - 88, ay0, 82, ah, panel_dark)
+        fb.stroke_rect(W - 88, ay0, 82, ah, dim)
+        alt_val = st.altitude_msl * 3.28084 if is_air else st.altitude_msl / 1000.0
+        alt_step = 500.0 if is_air else 20.0
+        alt_px = 0.08 if is_air else 2.2
+        base_alt = math.floor(alt_val / alt_step) * alt_step
+        for k in range(-6, 7):
+            v = base_alt + k * alt_step
+            ty = int(round(cy - (v - alt_val) * alt_px))
+            if ay0 + 24 < ty < ay1 - 28:
+                fb.hline(W - 86, W - 74, ty, tick_c)
+                lbl = f"{int(v):5d}" if is_air else f"{v:4.0f}K"
+                fb.text(W - 70, ty - 3, lbl, tick_c, scale=1)
+        fb.text(W - 80, ay0 + 6, "ALT FT" if is_air else "ALT KM", cyan, scale=1)
+        fb.rect(W - 86, cy - 15, 78, 30, panel)
+        fb.stroke_rect(W - 86, cy - 15, 78, 30, cyan)
+        alt_lbl = f"{alt_val:5.0f}" if is_air else f"{alt_val:4.1f}K"
         fb.text(W - 82, cy - 7, alt_lbl, white, scale=2)
         vs_col = green if st.vertical_speed >= 0 else amber
-        fb.text(W - 84, ay1 - 24, f"{st.vertical_speed:+4.0f}", vs_col, scale=2)
+        fb.text(W - 82, ay1 - 22, f"{st.vertical_speed:+4.0f}", vs_col, scale=2)
 
-        # Bottom Heading Tape + Telemetry Footer
-        fb.rect(0, H - 76, W, 76, panel)
-        fb.hline(0, W - 1, H - 76, cyan)
-        fb.text(cx - 48, H - 64, f"HDG {int(round(st.heading))%360:03d}", green, scale=2)
-        fb.text(14, H - 30, f"G {st.g_load:+.1f}  AGL {st.height_over_ground:.0f}M  FPS {fps:.1f}", white, scale=2)
+        # ── 9. Bottom Scrolling Compass Heading Tape + Attitude Readout ───────
+        fb.rect(0, H - 80, W, 80, panel)
+        fb.hline(0, W - 1, H - 80, cyan)
+        # Scrolling heading scale (every 10 deg)
+        hdg_y = H - 74
+        base_h = math.floor(hdg_deg / 10.0) * 10
+        for d_off in range(-50, 60, 10):
+            hd = (base_h + d_off) % 360
+            diff = ((hd - hdg_deg + 540.0) % 360.0) - 180.0
+            hx = int(round(cx + diff * 3.8))
+            if 20 < hx < W - 20:
+                fb.vline(hx, hdg_y, hdg_y + (9 if hd % 30 == 0 else 5), white)
+                if hd % 30 == 0:
+                    card = {0: "N", 90: "E", 180: "S", 270: "W"}.get(hd, f"{hd//10:02d}")
+                    fb.text(hx - 4, hdg_y + 12, card, cyan if card in "NESW" else tick_c, scale=1)
+        # Boxed current heading
+        fb.rect(cx - 34, hdg_y + 2, 68, 22, panel_dark)
+        fb.stroke_rect(cx - 34, hdg_y + 2, 68, 22, amber)
+        fb.text(cx - 18, hdg_y + 6, f"{int(round(hdg_deg))%360:03d}", green, scale=2)
+
+        # Footer numeric pitch/roll/G/FPS + keys
+        fb.text(10, H - 44, f"P {pitch_deg:+5.1f}  R {roll_deg:+5.1f}  G {st.g_load:+.1f}  FPS {fps:.1f}", white, scale=2)
+        fb.text(10, H - 18, "KEYS: [A]AP [T]ATHR [I]ILS [G]GEAR [+/-]THR [Q]QUIT", dim, scale=1)
 
         fb.flush()
         frames += 1
@@ -144,5 +341,6 @@ with obc.Framebuffer() as fb:
             fps = frames / (now - t_fps)
             frames = 0
             t_fps = now
-        time.sleep(0.04)
+        time.sleep(0.03)
 PY
+exec python3 /tmp/.obc-pfd-fb.py "$@"

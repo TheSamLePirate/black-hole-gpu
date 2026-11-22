@@ -8,7 +8,7 @@ if [ ! -x /usr/bin/node ] || head -n 1 /usr/bin/node 2>/dev/null | grep -q '^#!'
   exit 1
 fi
 
-exec node --input-type=module - "$@" <<'JS'
+cat > /tmp/.obc-fmc-tui.mjs <<'JS'
 import { AvionicsBus, wgs84BearingDist } from "/obc/lib/obc.mjs";
 
 const args = process.argv.slice(2);
@@ -120,3 +120,4 @@ function render() {
 render();
 if (running) timer = setInterval(render, 250);
 JS
+exec node /tmp/.obc-fmc-tui.mjs "$@"

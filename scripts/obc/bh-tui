@@ -9,7 +9,7 @@ if [ ! -x /usr/bin/node ] || head -n 1 /usr/bin/node 2>/dev/null | grep -q '^#!'
   exit 1
 fi
 
-exec node --input-type=module - "$@" <<'JS'
+cat > /tmp/.obc-bh-tui.mjs <<'JS'
 import { AvionicsBus } from "/obc/lib/obc.mjs";
 
 const args = process.argv.slice(2);
@@ -210,3 +210,4 @@ if (process.stdin.isTTY && maxFrames === 0) {
   });
 }
 JS
+exec node /tmp/.obc-bh-tui.mjs "$@"

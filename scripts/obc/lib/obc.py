@@ -19,6 +19,7 @@ import mmap
 import os
 import socket
 import struct
+import sys
 import time
 from typing import Any, Dict, Optional, Tuple
 
@@ -501,8 +502,91 @@ class Framebuffer:
             os.close(self._fd)
             self._fd = -1
 
+    def line_clipped(self, x0: int, y0: int, x1: int, y1: int, px: bytes, min_x: int, min_y: int, max_x: int, max_y: int) -> None:
+        # Liang-Barsky exact viewport clipping (for PFD pitch ladder & horizon inside attitude ball)
+        dx = float(x1 - x0)
+        dy = float(y1 - y0)
+        t0, t1 = 0.0, 1.0
+        for p, q in ((-dx, x0 - min_x), (dx, max_x - x0), (-dy, y0 - min_y), (dy, max_y - y0)):
+            if abs(p) < 1e-9:
+                if q < 0:
+                    return
+            else:
+                r = q / p
+                if p < 0:
+                    if r > t1:
+                        return
+                    if r > t0:
+                        t0 = r
+                else:
+                    if r < t0:
+                        return
+                    if r < t1:
+                        t1 = r
+        self.line(int(round(x0 + t0 * dx)), int(round(y0 + t0 * dy)), int(round(x0 + t1 * dx)), int(round(y0 + t1 * dy)), px)
+
     def __enter__(self) -> "Framebuffer":
         return self
+
+    def __exit__(self, *_args: Any) -> None:
+        self.close()
+
+
+class RawKeys:
+    """Non-blocking controlling-TTY key reader for Python TUIs & /dev/fb0 graphical apps."""
+
+    def __init__(self) -> None:
+        self._fd: int = -1
+        self._old: Any = None
+        self._owns_fd = False
+
+    def __enter__(self) -> "RawKeys":
+        try:
+            import termios, tty
+
+            if sys.stdin.isatty():
+                self._fd = sys.stdin.fileno()
+            else:
+                self._fd = os.open("/dev/tty", os.O_RDONLY | os.O_NONBLOCK)
+                self._owns_fd = True
+            self._old = termios.tcgetattr(self._fd)
+            tty.setcbreak(self._fd)
+        except Exception:
+            self._fd = -1
+            self._old = None
+        return self
+
+    def poll(self) -> Optional[str]:
+        if self._fd < 0:
+            return None
+        try:
+            import select
+
+            r, _, _ = select.select([self._fd], [], [], 0)
+            if not r:
+                return None
+            b = os.read(self._fd, 8)
+            if not b:
+                return None
+            return b.decode("utf-8", errors="ignore")
+        except Exception:
+            return None
+
+    def close(self) -> None:
+        if self._fd >= 0 and self._old is not None:
+            try:
+                import termios
+
+                termios.tcsetattr(self._fd, termios.TCSADRAIN, self._old)
+            except Exception:
+                pass
+        if self._owns_fd and self._fd >= 0:
+            try:
+                os.close(self._fd)
+            except OSError:
+                pass
+        self._fd = -1
+        self._old = None
 
     def __exit__(self, *_args: Any) -> None:
         self.close()

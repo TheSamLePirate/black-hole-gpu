@@ -349,6 +349,34 @@ export class Framebuffer {
     }
   }
 
+  lineClipped(x0, y0, x1, y1, col, minX, minY, maxX, maxY) {
+    const dx = x1 - x0;
+    const dy = y1 - y0;
+    let t0 = 0;
+    let t1 = 1;
+    const checks = [
+      [-dx, x0 - minX],
+      [dx, maxX - x0],
+      [-dy, y0 - minY],
+      [dy, maxY - y0],
+    ];
+    for (const [p, q] of checks) {
+      if (Math.abs(p) < 1e-9) {
+        if (q < 0) return;
+      } else {
+        const r = q / p;
+        if (p < 0) {
+          if (r > t1) return;
+          if (r > t0) t0 = r;
+        } else {
+          if (r < t0) return;
+          if (r < t1) t1 = r;
+        }
+      }
+    }
+    this.line(Math.round(x0 + t0 * dx), Math.round(y0 + t0 * dy), Math.round(x0 + t1 * dx), Math.round(y0 + t1 * dy), col);
+  }
+
   flush() {
     fs.writeSync(this.fd, this.buf, 0, this.buf.length, 0);
   }
@@ -356,6 +384,27 @@ export class Framebuffer {
   close() {
     if (this.fd >= 0) fs.closeSync(this.fd);
     this.fd = -1;
+  }
+}
+
+/** Attach raw-mode keyboard listener on stdin (TTY) and return a cleanup function. */
+export function startRawKeys(onKey) {
+  if (!process.stdin.isTTY) return () => {};
+  try {
+    process.stdin.setRawMode(true);
+    process.stdin.resume();
+    process.stdin.setEncoding("utf8");
+    const handler = (chunk) => onKey(chunk);
+    process.stdin.on("data", handler);
+    return () => {
+      try {
+        process.stdin.off("data", handler);
+        if (process.stdin.isTTY) process.stdin.setRawMode(false);
+        process.stdin.pause();
+      } catch {}
+    };
+  } catch {
+    return () => {};
   }
 }
 

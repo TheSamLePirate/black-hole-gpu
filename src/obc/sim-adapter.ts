@@ -29,6 +29,19 @@ export interface SimObcDeps {
 const R2D = 180 / Math.PI;
 const fin = (x: unknown, d = 0): number => (typeof x === "number" && Number.isFinite(x) ? x : d);
 
+/** Convert `camera.attitudeNow()` radians (`{ heading, pitch, bank }`) to aviation degrees matching `src/a320/du/data.ts`. */
+export function radAttitudeToDeg(att: { heading?: number; pitch?: number; bank?: number } | null | undefined): {
+  heading_deg: number;
+  pitch_deg: number;
+  roll_deg: number;
+} {
+  const rawHdg = fin(att?.heading, 0) * R2D;
+  const heading_deg = ((rawHdg % 360) + 360) % 360;
+  const pitch_deg = Math.max(-90, Math.min(90, fin(att?.pitch, 0) * R2D));
+  const roll_deg = Math.max(-180, Math.min(180, fin(att?.bank, 0) * R2D));
+  return { heading_deg, pitch_deg, roll_deg };
+}
+
 export function createSimObcAdapter(d: SimObcDeps): ObcHostAdapter {
   let stickTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -117,11 +130,7 @@ export function createSimObcAdapter(d: SimObcDeps): ObcHostAdapter {
           altitude_msl_m: altMsl,
           height_over_ground_m: agl,
         },
-        attitude: {
-          heading_deg: fin(attObj?.heading, 0),
-          pitch_deg: fin(attObj?.pitch, 0),
-          roll_deg: fin(attObj?.bank, 0),
-        },
+        attitude: radAttitudeToDeg(attObj),
         flight: {
           true_airspeed_mps: fin(af?.tas ?? (info?.air as { speed?: number } | undefined)?.speed ?? orb?.speed_mps, 0),
           ground_speed_mps: fin(af?.gs ?? geo?.gs ?? (info?.surface as { vHor?: number } | undefined)?.vHor, 0),

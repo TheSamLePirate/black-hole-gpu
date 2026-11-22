@@ -4,7 +4,9 @@ import { readInstruments } from "../src/net/instruments";
 import { OBC_PALETTES } from "../src/obc/fb-renderer";
 import { emptyTelemetry, formatTauText, normalizeWispUrl, parseObcCommand } from "../src/obc/protocol";
 import { findObcScript, OBC_SCRIPTS } from "../src/obc/scripts-catalog";
+import { radAttitudeToDeg } from "../src/obc/sim-adapter";
 import { DEFAULT_OBC_CONFIG } from "../src/obc/types";
+import { keyEventToAnsi } from "../src/ui/obc-console";
 
 test("parseObcCommand: validates and clamps throttle, stick, flaps, autopilot, hold, sas, gear, say, ping", () => {
   expect(parseObcCommand({ kind: "throttle", value: 1.5 })).toEqual({ kind: "throttle", value: 1 });
@@ -97,7 +99,7 @@ test("OBC_SCRIPTS catalog & emptyTelemetry contract", () => {
 });
 
 test("DEFAULT_OBC_CONFIG & OBC_PALETTES include all 4 avionics themes", () => {
-  expect(DEFAULT_OBC_CONFIG.memoryMiB).toBe(256);
+  expect(DEFAULT_OBC_CONFIG.memoryMiB).toBe(512);
   expect(DEFAULT_OBC_CONFIG.fbWidth).toBe(512);
   expect(DEFAULT_OBC_CONFIG.crtFx).toBe(true);
   expect(OBC_PALETTES.interstellar.accent).toBe("#62e6ff");
@@ -138,4 +140,36 @@ test("Crew remote relay validates cfg.obc orders and bounds obc snapshot block",
   expect(snap?.obc?.lines[1]?.length).toBe(96);
   expect(snap?.obc?.cursorRow).toBe(23);
   expect(snap?.obc?.cursorCol).toBe(0);
+});
+
+test("radAttitudeToDeg converts camera.attitudeNow() radians accurately to aviation degrees", () => {
+  const a1 = radAttitudeToDeg({ heading: Math.PI / 2, pitch: Math.PI / 6, bank: -Math.PI / 4 });
+  expect(a1.heading_deg).toBeCloseTo(90, 4);
+  expect(a1.pitch_deg).toBeCloseTo(30, 4);
+  expect(a1.roll_deg).toBeCloseTo(-45, 4);
+
+  // Negative heading wraps cleanly into [0, 360)
+  const a2 = radAttitudeToDeg({ heading: -Math.PI / 2, pitch: 0, bank: Math.PI / 3 });
+  expect(a2.heading_deg).toBeCloseTo(270, 4);
+  expect(a2.roll_deg).toBeCloseTo(60, 4);
+
+  expect(radAttitudeToDeg(null)).toEqual({ heading_deg: 0, pitch_deg: 0, roll_deg: 0 });
+});
+
+test("keyEventToAnsi translates navigation, TUI, and control keys cleanly for PTY & /dev/fb0 apps", () => {
+  const mk = (key: string, extra: Partial<KeyboardEvent> = {}) =>
+    keyEventToAnsi({ key, code: "", ctrlKey: false, altKey: false, metaKey: false, shiftKey: false, ...extra });
+  expect(mk("ArrowUp")).toBe("\x1b[A");
+  expect(mk("ArrowDown")).toBe("\x1b[B");
+  expect(mk("ArrowRight")).toBe("\x1b[C");
+  expect(mk("ArrowLeft")).toBe("\x1b[D");
+  expect(mk("Tab")).toBe("\t");
+  expect(mk("Tab", { shiftKey: true })).toBe("\x1b[Z");
+  expect(mk("Enter")).toBe("\r");
+  expect(mk("Backspace")).toBe("\x7f");
+  expect(mk("Escape")).toBe("\x1b");
+  expect(mk("q")).toBe("q");
+  expect(mk("+")).toBe("+");
+  expect(mk("c", { ctrlKey: true })).toBe("\x03");
+  expect(mk("k", { metaKey: true })).toBeNull();
 });

@@ -18,6 +18,50 @@ interface XtermBundle {
   fit: import("@xterm/addon-fit").FitAddon;
 }
 
+/** Translate a DOM KeyboardEvent into VT100/ANSI bytes for direct PTY delivery (e.g. in /dev/fb0-only mode). */
+export function keyEventToAnsi(e: Pick<KeyboardEvent, "key" | "code" | "ctrlKey" | "altKey" | "metaKey" | "shiftKey">): string | null {
+  if (e.metaKey) return null;
+  if (e.ctrlKey && !e.altKey) {
+    if (e.key.length === 1) {
+      const code = e.key.toUpperCase().charCodeAt(0);
+      if (code >= 65 && code <= 90) return String.fromCharCode(code - 64); // Ctrl+A .. Ctrl+Z
+    }
+    if (e.key === "[" || e.code === "BracketLeft") return "\x1b";
+    return null;
+  }
+  switch (e.key) {
+    case "ArrowUp":
+      return "\x1b[A";
+    case "ArrowDown":
+      return "\x1b[B";
+    case "ArrowRight":
+      return "\x1b[C";
+    case "ArrowLeft":
+      return "\x1b[D";
+    case "Home":
+      return "\x1b[H";
+    case "End":
+      return "\x1b[F";
+    case "PageUp":
+      return "\x1b[5~";
+    case "PageDown":
+      return "\x1b[6~";
+    case "Delete":
+      return "\x1b[3~";
+    case "Backspace":
+      return "\x7f";
+    case "Enter":
+      return "\r";
+    case "Tab":
+      return e.shiftKey ? "\x1b[Z" : "\t";
+    case "Escape":
+      return "\x1b";
+    default:
+      if (e.key.length === 1 && !e.altKey) return e.key;
+      return null;
+  }
+}
+
 const STARTER_SCRIPT = `#!/bin/sh
 # Custom OBC Avionics Script (saved in persistent /home/pilot/)
 echo "=== PILOT CUSTOM OBC SCRIPT ==="
@@ -60,6 +104,8 @@ export class ObcConsoleOverlay {
   private xtermLoading: Promise<void> | null = null;
   private unsubOut: (() => void) | null = null;
   private unsubState: (() => void) | null = null;
+  private onWinKeyDown: ((e: KeyboardEvent) => void) | null = null;
+  private onWinKeyUp: ((e: KeyboardEvent) => void) | null = null;
   private resizeObs: ResizeObserver | null = null;
   private fbRaf: number | null = null;
   private lastFbDrawRev = -1;
@@ -68,6 +114,7 @@ export class ObcConsoleOverlay {
     this.el = document.createElement("div");
     this.el.className = "obc-overlay";
     this.el.dataset.testid = "obc-console";
+    this.el.tabIndex = -1;
     this.el.hidden = true;
 
     const mkBtn = (label: string, onClick: () => void, opts: { cls?: string; testid?: string; title?: string } = {}) => {
@@ -106,7 +153,14 @@ export class ObcConsoleOverlay {
       ["fb", "/dev/fb0"],
     ];
     for (const [m, lbl] of modes) {
-      const b = mkBtn(lbl, () => this.runtime.setViewMode(m), { testid: `obc-mode-${m}` });
+      const b = mkBtn(
+        lbl,
+        () => {
+          this.runtime.setViewMode(m);
+          this.focusActiveInput();
+        },
+        { testid: `obc-mode-${m}` },
+      );
       this.modeBtns.set(m, b);
       actions.append(b);
     }
@@ -154,10 +208,17 @@ export class ObcConsoleOverlay {
       subbar.append(lbl);
       for (const s of OBC_SCRIPTS.filter((x) => (x.category ?? "cli") === cat)) {
         subbar.append(
-          mkBtn(s.label, () => void this.runtime.runScript(s.id), {
-            testid: `obc-script-${s.id}`,
-            title: `${s.cmd} — ${s.desc}`,
-          }),
+          mkBtn(
+            s.label,
+            () => {
+              void this.runtime.runScript(s.id);
+              this.focusActiveInput();
+            },
+            {
+              testid: `obc-script-${s.id}`,
+              title: `${s.cmd} — ${s.desc}`,
+            },
+          ),
         );
       }
     };
@@ -170,18 +231,39 @@ export class ObcConsoleOverlay {
     pkgLabel.textContent = "APK:";
     subbar.append(
       pkgLabel,
-      mkBtn("+Python", () => void this.runtime.installToolchain("python"), {
-        testid: "obc-install-python",
-        title: "Install Python 3 & pip via apk (persisted in IndexedDB)",
-      }),
-      mkBtn("+Node", () => void this.runtime.installToolchain("node"), {
-        testid: "obc-install-node",
-        title: "Install Node.js & npm via apk (persisted in IndexedDB)",
-      }),
-      mkBtn("+Py+Node", () => void this.runtime.installToolchain("full"), {
-        testid: "obc-install-full",
-        title: "Install Python 3 + Node.js in one step via apk",
-      }),
+      mkBtn(
+        "+Python",
+        () => {
+          void this.runtime.installToolchain("python");
+          this.focusActiveInput();
+        },
+        {
+          testid: "obc-install-python",
+          title: "Install Python 3 & pip via apk (persisted in IndexedDB)",
+        },
+      ),
+      mkBtn(
+        "+Node",
+        () => {
+          void this.runtime.installToolchain("node");
+          this.focusActiveInput();
+        },
+        {
+          testid: "obc-install-node",
+          title: "Install Node.js & npm via apk (persisted in IndexedDB)",
+        },
+      ),
+      mkBtn(
+        "+Py+Node",
+        () => {
+          void this.runtime.installToolchain("full");
+          this.focusActiveInput();
+        },
+        {
+          testid: "obc-install-full",
+          title: "Install Python 3, pip, Node.js & npm in one step via apk",
+        },
+      ),
     );
 
     // ── Options Drawer (Hardware, Graphics, Audio, Wisp) ───────────────────────
@@ -417,11 +499,12 @@ export class ObcConsoleOverlay {
     this.fbCanvas.className = "obc-fb-canvas";
     this.fbCanvas.width = cfg.fbWidth;
     this.fbCanvas.height = cfg.fbHeight;
+    this.fbCanvas.tabIndex = 0;
     this.fbCanvas.dataset.testid = "obc-fb-canvas";
     this.fbCtx = this.fbCanvas.getContext("2d")!;
     this.fbWrap.append(this.fbCanvas);
 
-    // Interactive evdev mouse/wheel forwarding on /dev/fb0 canvas
+    // Interactive evdev mouse/wheel forwarding on /dev/fb0 canvas + keyboard focus
     const sendPtr = (e: PointerEvent, down?: boolean) => {
       const rect = this.fbCanvas.getBoundingClientRect();
       if (rect.width <= 0 || rect.height <= 0) return;
@@ -430,7 +513,10 @@ export class ObcConsoleOverlay {
       this.runtime.sendPointer(nx, ny, down);
     };
     this.fbCanvas.addEventListener("pointermove", (e) => sendPtr(e));
-    this.fbCanvas.addEventListener("pointerdown", (e) => sendPtr(e, true));
+    this.fbCanvas.addEventListener("pointerdown", (e) => {
+      this.fbCanvas.focus();
+      sendPtr(e, true);
+    });
     this.fbCanvas.addEventListener("pointerup", (e) => sendPtr(e, false));
     this.fbCanvas.addEventListener(
       "wheel",
@@ -444,11 +530,57 @@ export class ObcConsoleOverlay {
     body.append(this.termWrap, this.fbWrap);
     this.el.append(bar, subbar, this.optionsDrawer, this.editorDrawer, body);
 
-    // Prevent keystrokes inside the OBC console from reaching simulator flight/scene handlers
-    this.el.addEventListener("keydown", (e) => {
-      if (e.code === "F11" || (e.ctrlKey && (e.code === "Backslash" || e.code === "Backquote"))) {
+    const isToggleKey = (e: KeyboardEvent) =>
+      (e.code === "F11" && !e.metaKey && !e.ctrlKey && !e.altKey) ||
+      (e.ctrlKey && !e.metaKey && !e.altKey && (e.code === "Backslash" || e.code === "Backquote"));
+
+    const isDrawerInput = (t: EventTarget | null): boolean => {
+      const el = t as HTMLElement | null;
+      if (!el) return false;
+      if (el.classList?.contains("xterm-helper-textarea")) return false;
+      return Boolean(el.closest?.(".obc-drawer") && /^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName));
+    };
+
+    // Capture-phase window keyboard router while OBC console is open:
+    //   - Guarantees keys reach TUIs & /dev/fb0 apps even in /dev/fb0-only mode or right after clicking a toolbar button
+    //   - Blocks Tab/WASD/G/F/1-4/etc. from leaking to the simulator flight controls or target wheel!
+    this.onWinKeyDown = (e: KeyboardEvent) => {
+      if (!this.isOpen || isToggleKey(e)) return;
+      if (isDrawerInput(e.target)) {
+        e.stopPropagation();
         return;
       }
+      const targetEl = e.target as HTMLElement | null;
+      const inXterm = Boolean(targetEl?.classList?.contains("xterm-helper-textarea"));
+      if (inXterm && !this.termWrap.hidden) {
+        // Let xterm.js handle the key directly; only block Tab from bubbling to simulator wheel
+        if (e.key === "Tab") e.preventDefault();
+        return;
+      }
+      // Forward directly to the Linux PTY (covers /dev/fb0-only mode, fbCanvas focus, or post-button click)
+      const seq = keyEventToAnsi(e);
+      if (seq !== null) {
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        this.runtime.write(seq);
+        if (!this.termWrap.hidden) this.xterm?.term.focus();
+      }
+    };
+    this.onWinKeyUp = (e: KeyboardEvent) => {
+      if (!this.isOpen || isToggleKey(e)) return;
+      if (isDrawerInput(e.target)) {
+        e.stopPropagation();
+        return;
+      }
+      // Never let keyup (especially Tab/WASD) trigger simulator release actions while OBC console is open
+      e.stopImmediatePropagation();
+    };
+    window.addEventListener("keydown", this.onWinKeyDown, true);
+    window.addEventListener("keyup", this.onWinKeyUp, true);
+
+    // Prevent keystrokes inside the OBC console from reaching simulator flight/scene handlers
+    this.el.addEventListener("keydown", (e) => {
+      if (isToggleKey(e)) return;
       e.stopPropagation();
     });
 
@@ -584,6 +716,19 @@ export class ObcConsoleOverlay {
     a.click();
   }
 
+  private focusActiveInput() {
+    requestAnimationFrame(() => {
+      if (this.el.hidden) return;
+      if (!this.termWrap.hidden && this.xterm) {
+        this.xterm.term.focus();
+      } else if (!this.fbWrap.hidden) {
+        this.fbCanvas.focus();
+      } else {
+        this.el.focus();
+      }
+    });
+  }
+
   private refitXterm() {
     requestAnimationFrame(() => {
       if (!this.el.hidden && !this.termWrap.hidden) {
@@ -713,6 +858,8 @@ export class ObcConsoleOverlay {
 
   dispose() {
     this.stopFbRenderLoop();
+    if (this.onWinKeyDown) window.removeEventListener("keydown", this.onWinKeyDown, true);
+    if (this.onWinKeyUp) window.removeEventListener("keyup", this.onWinKeyUp, true);
     this.unsubOut?.();
     this.unsubState?.();
     this.resizeObs?.disconnect();

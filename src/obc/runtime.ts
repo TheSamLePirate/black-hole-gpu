@@ -755,7 +755,7 @@ export class ObcRuntime {
     try {
       const res = await this.vm.exec("sh", ["/obc/scripts/obc-install", profile], {
         user: 0,
-        timeout: 120_000,
+        timeout: 300_000,
         encoding: "utf8",
       });
       if (res.stdout) this.pushOutput(enc.encode(`${res.stdout.replace(/\n/g, "\r\n")}`));
