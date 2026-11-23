@@ -12,7 +12,7 @@ services:
     restart: unless-stopped
 # rooms-begin
   rooms:
-    image: ghcr.io/thesamlepirate/black-hole-gpu:rooms-07d78d3-64.1
+    image: ghcr.io/thesamlepirate/black-hole-gpu:rooms-04a3324-65.1
     ports:
       - "3001:3001"
     volumes:
@@ -35,7 +35,7 @@ services:
     restart: unless-stopped
   # Wisp v1 WebSocket-to-TCP relay for the embedded Linux OBC (wss://code.samlepirate.org → host:3002, docs/DEPLOY.md)
   wisp:
-    image: ghcr.io/thesamlepirate/black-hole-gpu:rooms-07d78d3-64.1
+    image: ghcr.io/thesamlepirate/black-hole-gpu:rooms-04a3324-65.1
     command: ["bun", "server/wisp-main.ts"]
     ports:
       - "3002:3002"
@@ -56,7 +56,7 @@ services:
   # Mercury's MESSENGER 665 m and Ceres's Dawn HAMO 137 m (0.5 GB each, ~0.3 GB of tiles); then it exits (a later start only
   # checks them)
   moon-tiles:
-    image: ghcr.io/thesamlepirate/black-hole-gpu:rooms-07d78d3-64.1
+    image: ghcr.io/thesamlepirate/black-hole-gpu:rooms-04a3324-65.1
     command: ["sh", "-c", "bun server/moon-build.ts --body moon --out /moon/lola && bun server/moon-build.ts --body mars --out /moon/mars && bun server/moon-build.ts --body mercury --out /moon/mercury && bun server/moon-build.ts --body ceres --out /moon/ceres"]
     volumes:
       - moon-data:/moon
