@@ -44,6 +44,7 @@ function triggerDownload(bytes: Uint8Array, filename: string, mime = "applicatio
 export interface ObcManagerCallbacks {
   onApplyVisual: () => void;
   onResetWindow: () => void;
+  onResetTty: () => void;
   onCloseAfterApply: () => void;
 }
 
@@ -73,6 +74,7 @@ export class ObcMachineManager {
   readonly persistChk: HTMLInputElement;
   readonly crtChk: HTMLInputElement;
   readonly soundChk: HTMLInputElement;
+  readonly termMouseChk: HTMLInputElement;
   readonly fontRange: HTMLInputElement;
   readonly fontValEl: HTMLSpanElement;
   readonly opacityRange: HTMLInputElement;
@@ -519,6 +521,12 @@ export class ObcMachineManager {
     this.crtChk = crt.inp;
     const snd = mkCheck("Audio (/dev/dsp)", cfg.soundEnabled, "obc-opt-sound");
     this.soundChk = snd.inp;
+    const tMouse = mkCheck("TTY Mouse (clicks/wheel)", cfg.termMouse, "obc-opt-term-mouse");
+    this.termMouseChk = tMouse.inp;
+    this.termMouseChk.onchange = () => {
+      this.runtime.setConfig({ termMouse: this.termMouseChk.checked });
+      if (!this.termMouseChk.checked) this.cbs.onResetTty();
+    };
 
     this.fontRange = document.createElement("input");
     this.fontRange.type = "range";
@@ -580,6 +588,11 @@ export class ObcMachineManager {
       mkField("Opacity", opCtrl),
       crt.wrap,
       snd.wrap,
+      tMouse.wrap,
+      mkBtn("Reset TTY", () => this.cbs.onResetTty(), {
+        testid: "obc-reset-tty",
+        title: "Disable stuck mouse tracking & restore terminal state",
+      }),
       mkBtn("Reset Window", () => this.cbs.onResetWindow(), { testid: "obc-mgr-reset-win" }),
     );
 
@@ -654,6 +667,7 @@ export class ObcMachineManager {
     this.persistChk.checked = cfg.persistData;
     this.crtChk.checked = cfg.crtFx;
     this.soundChk.checked = cfg.soundEnabled;
+    this.termMouseChk.checked = cfg.termMouse;
     this.fontRange.value = String(cfg.fontSize);
     this.fontValEl.textContent = `${cfg.fontSize}px`;
     this.opacityRange.value = String(Math.round(cfg.panelOpacity * 100));
@@ -680,6 +694,7 @@ export class ObcMachineManager {
       wispMode,
       crtFx: this.crtChk.checked,
       soundEnabled: this.soundChk.checked,
+      termMouse: this.termMouseChk.checked,
       theme: this.themeSel.value as ObcConfig["theme"],
       syncMode: this.syncSel.value === "strict" ? "strict" : "interactive",
       fontSize: Number(this.fontRange.value) || 13,

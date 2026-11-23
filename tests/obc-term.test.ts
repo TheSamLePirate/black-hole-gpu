@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test";
 import { drawObcSurface } from "../src/obc/fb-renderer";
 import { TermBuffer } from "../src/obc/term-buffer";
+import { TerminalMouseGuard } from "../src/obc/term-mouse";
 
 test("TermBuffer: renders text, CRLF, CSI clear, SGR 16/256/truecolor, and scrollback", () => {
   const tb = new TermBuffer(32, 6);
@@ -99,4 +100,48 @@ test("drawObcSurface: renders standby, suspended, terminal mirror, and footer ac
   expect(calls.some((s) => s.includes("obc-diag"))).toBe(true);
   expect(calls.some((s) => s.includes("SUSPENDED"))).toBe(true);
   expect(calls.some((s) => s.includes("RANGER"))).toBe(true);
+});
+
+test("TerminalMouseGuard: blocks bare hover floods & stale mouse modes while preserving TUI clicks, wheel & normal keys", () => {
+  const g = new TerminalMouseGuard();
+
+  // 1. Before any app enables mouse tracking, stale SGR/X10/Focus sequences are dropped; normal keys untouched
+  expect(g.filterInput("\x1b[<35;42;12M\x1b[<0;10;5M\x1b[I", { allowMouse: true, nowMs: 100 })).toBe("");
+  expect(g.filterInput("ls -la\r\x1b[Aé", { allowMouse: true, nowMs: 100 })).toBe("ls -la\r\x1b[Aé");
+
+  // 2. App enters alt-screen & enables any-motion (?1003h) + SGR (?1006h) + focus (?1004h)
+  expect(g.observeGuestOutput("\x1b[?1049h\x1b[?1003;1006;1004h")).toBe(false);
+  expect(g.mouseTrackingActive).toBe(true);
+
+  // Bare hover motion (btn 35 / 39 / X10 hover) is ALWAYS suppressed so moving the mouse never floods serial TTY
+  expect(g.filterInput("\x1b[<35;42;12M\x1b[<35;43;12M\x1b[<39;44;12M", { allowMouse: true, nowMs: 200 })).toBe("");
+  expect(g.filterInput(`\x1b[M${String.fromCharCode(32 + 35, 50, 40)}`, { allowMouse: true, nowMs: 200 })).toBe("");
+
+  // Real clicks & releases pass immediately, even mixed with text
+  expect(g.filterInput("\x1b[<0;15;8M\x1b[<0;15;8m", { allowMouse: true, nowMs: 200 })).toBe("\x1b[<0;15;8M\x1b[<0;15;8m");
+
+  // Active button drag (btn 32) is throttled to 20 Hz (50 ms)
+  expect(g.filterInput("\x1b[<32;15;8M", { allowMouse: true, nowMs: 300 })).toBe("\x1b[<32;15;8M");
+  expect(g.filterInput("\x1b[<32;16;8M", { allowMouse: true, nowMs: 320 })).toBe("");
+  expect(g.filterInput("\x1b[<32;17;8M", { allowMouse: true, nowMs: 360 })).toBe("\x1b[<32;17;8M");
+
+  // Wheel (btn 64/65) is throttled to 30 Hz (33 ms)
+  expect(g.filterInput("\x1b[<64;15;8M", { allowMouse: true, nowMs: 400 })).toBe("\x1b[<64;15;8M");
+  expect(g.filterInput("\x1b[<65;15;8M", { allowMouse: true, nowMs: 410 })).toBe("");
+  expect(g.filterInput("\x1b[<65;15;8M", { allowMouse: true, nowMs: 440 })).toBe("\x1b[<65;15;8M");
+
+  // Suppressing during window drag/resize or when termMouse=false drops all mouse reports
+  expect(g.filterInput("\x1b[<0;15;8M", { allowMouse: false, nowMs: 500 })).toBe("");
+  expect(g.filterInput("\x1b[<0;15;8M", { allowMouse: true, suppressAllMouse: true, nowMs: 500 })).toBe("");
+
+  // 3. App leaves alt-screen without disabling mouse tracking -> auto-heals immediately!
+  expect(g.observeGuestOutput("\x1b[?1049l")).toBe(true);
+  expect(g.mouseTrackingActive).toBe(false);
+  expect(g.filterInput("\x1b[<0;15;8M", { allowMouse: true, nowMs: 600 })).toBe("");
+
+  // 4. App enables mouse on normal screen and exits back to /home/pilot prompt -> auto-heals!
+  expect(g.observeGuestOutput("\x1b[?1003h\x1b[?1006h")).toBe(false);
+  expect(g.mouseTrackingActive).toBe(true);
+  expect(g.observeGuestOutput("\r\n/home/pilot → ")).toBe(true);
+  expect(g.mouseTrackingActive).toBe(false);
 });

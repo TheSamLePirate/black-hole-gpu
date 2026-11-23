@@ -13,6 +13,7 @@ import "./obc-console.css";
 import { drawObcSurface } from "../obc/fb-renderer";
 import { normalizeDistro, type ObcRuntime } from "../obc/runtime";
 import { OBC_SCRIPTS } from "../obc/scripts-catalog";
+import { TERMINAL_FULL_SANE_SEQ, TERMINAL_MOUSE_RESET_SEQ, TerminalMouseGuard } from "../obc/term-mouse";
 import type { ObcTheme, ObcViewMode, ObcWindowBounds } from "../obc/types";
 import { store } from "../util/storage";
 import { ObcMachineManager } from "./obc-manager";
@@ -137,6 +138,8 @@ export class ObcConsoleOverlay {
 
   private xterm: XtermBundle | null = null;
   private xtermLoading: Promise<void> | null = null;
+  private mouseGuard = new TerminalMouseGuard();
+  private mouseDec = new TextDecoder();
   private unsubOut: (() => void) | null = null;
   private unsubState: (() => void) | null = null;
   private onWinKeyDown: ((e: KeyboardEvent) => void) | null = null;
@@ -377,6 +380,7 @@ export class ObcConsoleOverlay {
         this.applyVisualConfig();
       },
       onResetWindow: () => this.resetWindowBounds(),
+      onResetTty: () => this.resetTerminalModes(),
       onCloseAfterApply: () => {
         this.optBtn.classList.remove("on");
         this.refitXterm();
@@ -523,6 +527,19 @@ export class ObcConsoleOverlay {
       if (isToggleKey(e)) return;
       e.stopPropagation();
     });
+    // Isolate pointer, mouse & wheel events inside the OBC window so moving/scrolling never spins or zooms the 3D camera behind it
+    for (const evName of [
+      "pointerdown",
+      "pointermove",
+      "pointerup",
+      "mousedown",
+      "mousemove",
+      "mouseup",
+      "wheel",
+      "contextmenu",
+    ] as const) {
+      this.el.addEventListener(evName, (e) => e.stopPropagation());
+    }
 
     this.runtime.setConsoleController((open) => {
       if (open) this.show(false);
@@ -856,6 +873,12 @@ export class ObcConsoleOverlay {
     requestAnimationFrame(() => this.fitAndResizeGuest());
   }
 
+  resetTerminalModes() {
+    this.mouseGuard.resetModes(true);
+    this.xterm?.term.write(TERMINAL_FULL_SANE_SEQ);
+    this.refitXterm();
+  }
+
   private async ensureXterm(): Promise<void> {
     if (this.xterm) return;
     if (this.xtermLoading) return this.xtermLoading;
@@ -898,8 +921,20 @@ export class ObcConsoleOverlay {
       term.open(this.termWrap);
       fit.fit();
       this.runtime.resize(term.cols, term.rows);
-      term.onData((data) => this.runtime.write(data));
-      this.unsubOut = this.runtime.onOutput((bytes) => term.write(bytes));
+      term.onData((data) => {
+        const filtered = this.mouseGuard.filterInput(data, {
+          allowMouse: this.runtime.getConfig().termMouse,
+          suppressAllMouse: this.el.classList.contains("dragging") || this.el.classList.contains("resizing"),
+        });
+        if (filtered) this.runtime.write(filtered);
+      });
+      this.unsubOut = this.runtime.onOutput((bytes) => {
+        term.write(bytes);
+        const text = this.mouseDec.decode(bytes, { stream: true });
+        if (this.mouseGuard.observeGuestOutput(text)) {
+          term.write(TERMINAL_MOUSE_RESET_SEQ);
+        }
+      });
       this.resizeObs = new ResizeObserver(() => {
         if (!this.el.hidden && !this.termWrap.hidden) {
           try {

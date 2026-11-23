@@ -311,6 +311,25 @@ describe.skipIf(!E2E)("Linux OBC AAA (Unkernel aarch64, Wisp, Snapshot, Editor, 
     // Close Manager drawer before next step
     await app.js(`document.querySelector('[data-testid="obc-options-toggle"]')?.click()`);
 
+    // Verify mouse movements over xterm NEVER emit raw escape characters ([<35;...) even after a program enables ?1003h+?1006h
+    await app.js(`__bh.obc.write("printf '\\\\033[?1003h\\\\033[?1006hMOUSE_TEST\\\\n'\\n")`);
+    await app.waitFor(`__bh.obc.readScreen().join("\\n").includes("MOUSE_TEST")`, 8_000);
+    await app.js(`(() => {
+      const wrap = document.querySelector('[data-testid="obc-xterm"] .xterm-screen') || document.querySelector('[data-testid="obc-xterm"]');
+      const r = wrap.getBoundingClientRect();
+      for (let i = 0; i < 10; i++) {
+        const x = r.left + 40 + i * 24;
+        const y = r.top + 40 + i * 10;
+        wrap.dispatchEvent(new MouseEvent("mousemove", { bubbles: true, clientX: x, clientY: y }));
+        wrap.dispatchEvent(new PointerEvent("pointermove", { bubbles: true, clientX: x, clientY: y }));
+      }
+      return true;
+    })()`);
+    await Bun.sleep(250);
+    const afterMouse = await app.js<string>(`__bh.obc.readScreen().join("\\n")`);
+    expect(afterMouse).not.toContain("[<35;");
+    expect(afterMouse).not.toContain("35;");
+
     await app.stepDone(`Boot ${st.bootMs} ms · Wisp ${wisp.latencyMs} ms · /obc/cmd + Editor OK`);
     expect(app.cdp.errors).toEqual([]);
   }, 90_000);

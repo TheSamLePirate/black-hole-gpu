@@ -45,6 +45,8 @@ export interface ObcConfig {
   crtFx: boolean;
   /** Forward guest /dev/dsp & ALSA audio to WebAudio */
   soundEnabled: boolean;
+  /** Allow mouse clicks/scroll/drag reporting to mouse-aware TUIs (bare hover floods always suppressed) */
+  termMouse: boolean;
   /** Visual palette override ("auto" matches active craft) */
   theme: "auto" | ObcTheme;
   /** Sim-clock behavior when simulator is frozen/paused */
@@ -68,6 +70,7 @@ export const DEFAULT_OBC_CONFIG: ObcConfig = {
   wispMode: "auto",
   crtFx: true,
   soundEnabled: false,
+  termMouse: true,
   theme: "auto",
   syncMode: "interactive",
   fontSize: 13,

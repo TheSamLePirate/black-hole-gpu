@@ -3209,7 +3209,7 @@ Embedded Linux On-Board Computer powered by Unkernel (Linux 7.x WASM + `kwemu` a
 - `boot()` / `stop()` / `reboot()` — start, cleanly shut down, or restart the Linux kernel Worker.
 - `suspend()` / `resume()` — suspend the live Linux VM into an in-memory `KernelSnapshot` (freeing Worker CPU) and resume it on demand.
 - `resetDataDisk()` — wipe the persisted IndexedDB `/data` overlay cleanly.
-- `getConfig()` / `setConfig(patch)` — read or update persisted OBC configuration (`distro: "alpine" | "debian"`, `memoryMiB: 512 | 1024 | 2048 | 4096` (default `2048`), `cpus: 1 | 2 | 4`, `fbWidth`, `fbHeight`, `jit`, `shm`, `profile`, `persistData`, `wispMode`, `crtFx`, `soundEnabled`, `theme`, `syncMode`, `fontSize`, `panelOpacity`).
+- `getConfig()` / `setConfig(patch)` — read or update persisted OBC configuration (`distro: "alpine" | "debian"`, `memoryMiB: 512 | 1024 | 2048 | 4096` (default `2048`), `cpus: 1 | 2 | 4`, `fbWidth`, `fbHeight`, `jit`, `shm`, `profile`, `persistData`, `wispMode`, `crtFx`, `soundEnabled`, `termMouse`, `theme`, `syncMode`, `fontSize`, `panelOpacity`).
 - `switchDistro(distro)` — switch between `"alpine"` (Alpine 3.24 musl) and `"debian"` (Debian 13 Trixie glibc), rebooting cleanly if currently running.
 - `exec(command, timeoutMs?)` — run a shell command non-interactively via `vm.exec()` and return `{ ok, code, stdout, stderr }`.
 - `write(input)` — send raw interactive input bytes/keys to the Linux console TTY.

@@ -96,6 +96,7 @@ function loadSavedConfig(): ObcConfig {
       wispMode: normalizeWispMode(o.wispMode),
       crtFx: typeof o.crtFx === "boolean" ? o.crtFx : DEFAULT_OBC_CONFIG.crtFx,
       soundEnabled: typeof o.soundEnabled === "boolean" ? o.soundEnabled : DEFAULT_OBC_CONFIG.soundEnabled,
+      termMouse: typeof o.termMouse === "boolean" ? o.termMouse : DEFAULT_OBC_CONFIG.termMouse,
       theme,
       syncMode: o.syncMode === "strict" ? "strict" : "interactive",
       fontSize:
@@ -721,7 +722,7 @@ export class ObcRuntime {
       "chmod -R a+rX /home/pilot/docs /home/pilot/.claude /home/pilot/CLAUDE.md /home/pilot/AGENTS.md /home/pilot/README.md 2>/dev/null || true",
       "chown -R 1000:1000 /home/user/.local 2>/dev/null || true",
       "ln -sf /obc/tau /dev/tau",
-      `printf 'export PATH="/obc/bin:/obc/scripts:$HOME/.local/bin:$HOME/.bun/bin:/home/user/.local/bin:/home/user/.bun/bin:/usr/local/bin:$PATH:/usr/lib/kw/bin"\\nexport PYTHONPATH=/obc/lib\\nexport NODE_PATH=/obc/lib\\nexport PYTHONDONTWRITEBYTECODE=1\\nexport NODE_OPTIONS="--max-old-space-size=${heapMb}"\\n' > /etc/profile.d/obc.sh`,
+      `printf 'export PATH="/obc/bin:/obc/scripts:$HOME/.local/bin:$HOME/.bun/bin:/home/user/.local/bin:/home/user/.bun/bin:/usr/local/bin:$PATH:/usr/lib/kw/bin"\\nexport PYTHONPATH=/obc/lib\\nexport NODE_PATH=/obc/lib\\nexport PYTHONDONTWRITEBYTECODE=1\\nexport NODE_OPTIONS="--max-old-space-size=${heapMb}"\\nobc_reset_tty() { printf "\\033[?1000l\\033[?1002l\\033[?1003l\\033[?1005l\\033[?1006l\\033[?1015l\\033[?1004l\\033[?25h"; }\\n[ -n "$BASH_VERSION" ] && PROMPT_COMMAND="obc_reset_tty\${PROMPT_COMMAND:+; \$PROMPT_COMMAND}"\\n' > /etc/profile.d/obc.sh`,
       "chmod 644 /etc/profile.d/obc.sh 2>/dev/null || true",
       "if [ -f /etc/bash.bashrc ] && ! grep -q '/etc/profile.d/obc.sh' /etc/bash.bashrc 2>/dev/null; then printf '\\n[ -r /etc/profile.d/obc.sh ] && . /etc/profile.d/obc.sh\\n' >> /etc/bash.bashrc; fi",
     ].join(" && ");
@@ -1262,7 +1263,10 @@ export class ObcRuntime {
     const st = await this.boot();
     if (st.phase !== "ready" || !this.vm) return { ok: false, script: cmd };
     this.activeScript = meta?.name ?? cmd.split(/\s+/)[0] ?? cmd;
-    // Send Ctrl+C first and yield briefly so Debian bash's SIGINT readline flush never eats the 1st byte of `cmd`.
+    // Send Ctrl+C first and clear any stuck terminal mouse/alt-screen modes in xterm before launching `cmd`.
+    this.pushOutput(
+      new TextEncoder().encode("\x1b[?1000l\x1b[?1002l\x1b[?1003l\x1b[?1005l\x1b[?1006l\x1b[?1015l\x1b[?1004l\x1b[?1049l\x1b[?25h"),
+    );
     this.vm.write("\x03");
     await new Promise((r) => setTimeout(r, 80));
     if (this.vm && this.phase === "ready") this.vm.write(`${cmd}\n`);
