@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 23 nov. 08:45 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 23 nov. 09:15 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous. Ce qui est fermé quitte le tableau « En cours » pour la ligne « Fermé récemment ».
@@ -76,6 +76,23 @@ l'état d'une mission ou d'un combat **non sauvé, dit** ; le réseau **« entre
 **Décidé par Sam (16 nov., 15:58 UTC)** : J8-4 allumée par défaut (quads sous 8 px), J8-5 avec une jonction choisie sur captures, J8-1b suspendu, l'e2e de J8-6 par la voie (b), J8-9 ajouté ([PLAN-J8](docs/PLAN-J8-BATIMENTS.md) §6 point 6). **But fixé par Sam (16 nov., ~16:19 UTC)** : [J8-A](docs/PLAN-J8-BATIMENTS.md), un vol Paris et Toulon-Hyères, de jour et de nuit, tous les bâtiments, lampadaires, voitures (J8-L) et rivières (J8-E) chargés avant le vol, en « high » partout, sans différence visible entre les qualités. **Décidé par Sam (16 nov., ~21:40 UTC)** : J8-8 ouvert (le proche en cellules), la jonction à 0, l'éclat de nuit lointain gardé ([PLAN-J8](docs/PLAN-J8-BATIMENTS.md) §6 point 11). **Décidé par Sam (17 nov., ~08:00 UTC)** : J8-8b ouvert, les arbres par cellule, après un vol de référence à froid sur le M1 Max (§6 point 12). **Mode speed pour finir J8, J8-VB compris** (Sam, 17 nov. ~09:20 UTC ; [CLAUDE.md](CLAUDE.md), modes de travail ; §6 point 13) : contrôles rapides par lot, un gros e2e J8-A à la fin sur kerr-mini et le M1 Max. **J8-RP, les routes et les ponts AAA** (Sam, 17 nov. ~10:20 UTC ; [PLAN-J8](docs/PLAN-J8-BATIMENTS.md) §3 bis) : ajouté à J8 en mode speed, RP1 (les routes et marquages visibles sous l'orthophoto) en tête. **Attend Sam** : les quatre premières questions de PLAN-J8 §6, réglées provisoirement (même contenu sur les deux machines, retour si > 3 ms sur le mini ; portée au pixel ; J7 en pause, les arbres proches deviennent J9 ; pas de préparation côté serveur pour l'instant) ; les trois questions de [PLAN-J7](docs/PLAN-J7-FLUIDITE.md) §4, réglées provisoirement (les 40 ms du mini en dernier, J7-6 ; les arbres proches en géométrie ensuite, désormais J9 ; l'aplanissement du détail sous les trouées jusqu'à la FAF ou 10 km) ; les seuils du mini attendent la reprise de la cible 40 ms.
 
 ## Journal
+
+### 2026-11-23 09:15 UTC — Lot OBC-18 : Gestionnaire complet de la machine Linux (6 onglets Admin/Monitor/Disk/Wisp/Unkernel/Game) & panneau `linux-obc` déplaçable et redimensionnable
+
+- Contribution à la destination : expérience AAA d'administration système et d'ergonomie fenêtre en jeu (zéro coût au démarrage WebGPU, panneau console déplaçable/redimensionnable avec `SIGWINCH` temps réel et contrôle intégral d'Unkernel, du disque persistant IndexedDB, du relais Wisp et du pont simulateur).
+- Réalisé :
+  - **Gestionnaire AAA 6 onglets** ([src/ui/obc-manager.ts](src/ui/obc-manager.ts)) :
+    - `Monitor` : cartes KPI Unkernel temps réel (`vm.stats()` 1 Hz : phase/uptime, RAM/vCPU/transport, Wasm JIT live/compiled, Block I/O, Wisp RX/TX/TCP/DNS, VSOCK & `/dev/fb0`), résumé OS live (`probeGuest`) et table des processus avec `SIGTERM`/`SIGKILL`.
+    - `System & Unkernel` : distro Alpine/Debian, RAM 512M–4G, SMP vCPUs (`1`/`2`/`4` + diagnostic `webCpuBlocker`/`crossOriginIsolated`), résolution `/dev/fb0` (512×512 à 1024×768), JIT, `/dev/kwshm`, CPU Profiler + `Dump CPU Profile`, lecture `cmdline`.
+    - `Disk & Snapshots` : bascule persistance `/data` (`kwdisk:kwdata-v1`), compteur blocs IndexedDB + quota navigateur, `Flush / Sync Disk` (`vm.sync()`), table des montages `df -h`, Export/Import `/home/pilot` `.tar.gz`, Save/Load snapshot VM binaire `.kwsnap` (`encodeSnapshot`/`decodeSnapshot`), `Reset /data`.
+    - `Network & Wisp` : sélecteur de mode (`auto`, `prod`, `local`, `custom`, `off`), URL personnalisée, probe Wisp v1 + test HTTPS depuis Linux + `NetStats`.
+    - `Toolchains` : matrice de statut en direct des 11 outils (`obc-rs`, `pilot-kit`, `python3`, `pip`, `node`, `npm`, `bun`, `rustc`, `cargo`, `pi`, `claude`) avec boutons d'installation 1-clic.
+    - `Game & Logs` : thème, horloge `Interactive`/`Strict`, CRT FX, Audio `/dev/dsp`, curseurs taille de police (11–16 px) et opacité (72–100 %), routage 1-clic vers cockpits 3D (Ranger MFD / F-35 PCD / A320 MCDU+ECAM) et visionneuse de logs noyau temps réel.
+  - **Fenêtre déplaçable & redimensionnable 8 directions** ([src/ui/obc-console.ts](src/ui/obc-console.ts), [src/ui/obc-console.css](src/ui/obc-console.css)) : drag par barre titre (double-clic maximiser), 8 poignées `n/s/e/w/ne/nw/se/sw`, boutons `⌖` Reset Dock & `⛶` Maximiser, `clampWindowBounds` borné dans le viewport, persistance `localStorage` (`kerr.obc.win`) et `runtime.resize(cols, rows)` envoyant `SIGWINCH` au noyau.
+  - **Runtime, `__bh.obc` & TARS** : [src/obc/types.ts](src/obc/types.ts), [src/obc/runtime.ts](src/obc/runtime.ts), [src/automation.ts](src/automation.ts), [src/ai/game-tools.ts](src/ai/game-tools.ts), [docs/BH-API.md](docs/BH-API.md).
+- Preuves : `bun run check`, `bun scripts/bh-api.ts --check`, tests unitaires (`clampWindowBounds`, normalisateurs `cpus`/`wispMode`, `e2e-waits.test.ts`), et E2E WebGPU headed (`bun run e2e obc -t "boots Linux"`) vérifiant les 6 onglets, `kernelStats()`, `syncDisk()`, `diskInfo()`, `probeGuest()`, drag/resize/maximize/reset DOM et capture de `hud-manager-monitor.png` + `hud-options.png` (0 erreur console/WebGPU).
+- Limites / transitions restantes : le multi-CPU SMP (`cpus > 1`) requiert l'isolation cross-origin du navigateur (`crossOriginIsolated`), sinon Unkernel retombe proprement sur 1 vCPU et le gestionnaire affiche la raison exacte (`webCpuBlocker`).
+- Suite : commit & push sur `main` si demandé.
 
 ### 2026-11-23 08:45 UTC — Lot OBC-17 : Base de connaissances AAA & 5 Agent Skills dans `/home/pilot/` pour `claude` et `pi`
 

@@ -223,12 +223,92 @@ describe.skipIf(!E2E)("Linux OBC AAA (Unkernel aarch64, Wisp, Snapshot, Editor, 
     expect(diag.stdout).toContain("kit=docs+5skills");
     expect(diag.stdout).toContain("HOHMANN");
 
-    // Open Options drawer to verify UI + capture AAA HUD console with Options open
+    // Open AAA Linux Machine Manager to verify all 6 tabs, live Unkernel stats, Disk, Wisp, Drag & Resize!
     await app.js(`document.querySelector('[data-testid="obc-options-toggle"]')?.click()`);
+    await app.waitFor(`(document.querySelector('[data-testid="obc-mgr-kpis"]')?.children.length || 0) >= 6`, 5_000);
+    await Bun.sleep(500);
+    await app.shot(`${OUT}/hud-manager-monitor.png`);
+
+    // Verify live kernelStats(), diskInfo(), syncDisk(), and probeGuest() APIs
+    const mgrApi = await app.js<{
+      running: boolean;
+      jitLive: number;
+      syncOk: boolean;
+      persist: boolean;
+      procCount: number;
+      toolKeys: number;
+    }>(`(async () => {
+      const ks = __bh.obc.kernelStats();
+      const s = await __bh.obc.syncDisk();
+      const d = await __bh.obc.diskInfo();
+      const p = await __bh.obc.probeGuest();
+      return {
+        running: ks.running,
+        jitLive: ks.jit?.compiled ?? 0,
+        syncOk: s.ok,
+        persist: d.persistData,
+        procCount: p?.processes.length ?? 0,
+        toolKeys: Object.keys(p?.tools ?? {}).length,
+      };
+    })()`);
+    expect(mgrApi.running).toBe(true);
+    expect(mgrApi.jitLive).toBeGreaterThan(0);
+    expect(mgrApi.syncOk).toBe(true);
+    expect(mgrApi.persist).toBe(true);
+    expect(mgrApi.procCount).toBeGreaterThan(0);
+    expect(mgrApi.toolKeys).toBeGreaterThanOrEqual(10);
+
+    // Switch to Network & Wisp tab, run live Wisp probe & capture screenshot
+    await app.js(`document.querySelector('[data-testid="obc-mgr-tab-network"]')?.click()`);
     await app.js(`document.querySelector('[data-testid="obc-wisp-test"]')?.click()`);
     await app.waitFor(`(document.querySelector('[data-testid="obc-wisp-status"]')?.textContent || "").includes("OK")`, 5_000);
     await app.shot(`${OUT}/hud-options.png`);
-    // Close Options drawer before next step
+
+    // Verify real panel Drag, Resize (SE handle), Maximize & Dock Reset
+    const geom = await app.js<{
+      movedX: number;
+      movedY: number;
+      resizedW: number;
+      resizedH: number;
+      maxW: number;
+      resetOk: boolean;
+    }>(`(() => {
+      const box = document.querySelector('[data-testid="obc-console"]');
+      const bar = document.querySelector('[data-testid="obc-drag-bar"]');
+      const se = document.querySelector('[data-testid="obc-resize-se"]');
+      const r0 = box.getBoundingClientRect();
+      // Drag panel by (-40, -50)
+      bar.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, button: 0, clientX: r0.left + 80, clientY: r0.top + 12, pointerId: 1 }));
+      bar.dispatchEvent(new PointerEvent("pointermove", { bubbles: true, button: 0, clientX: r0.left + 40, clientY: r0.top - 38, pointerId: 1 }));
+      bar.dispatchEvent(new PointerEvent("pointerup", { bubbles: true, button: 0, clientX: r0.left + 40, clientY: r0.top - 38, pointerId: 1 }));
+      const r1 = box.getBoundingClientRect();
+      // Resize SE handle by (-80, -40)
+      se.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, button: 0, clientX: r1.right - 4, clientY: r1.bottom - 4, pointerId: 2 }));
+      se.dispatchEvent(new PointerEvent("pointermove", { bubbles: true, button: 0, clientX: r1.right - 84, clientY: r1.bottom - 44, pointerId: 2 }));
+      se.dispatchEvent(new PointerEvent("pointerup", { bubbles: true, button: 0, clientX: r1.right - 84, clientY: r1.bottom - 44, pointerId: 2 }));
+      const r2 = box.getBoundingClientRect();
+      // Maximize then Dock Reset
+      document.querySelector('[data-testid="obc-maximize"]')?.click();
+      const rMax = box.getBoundingClientRect();
+      document.querySelector('[data-testid="obc-dock-reset"]')?.click();
+      const rReset = box.getBoundingClientRect();
+      return {
+        movedX: Math.round(r1.left - r0.left),
+        movedY: Math.round(r1.top - r0.top),
+        resizedW: Math.round(r2.width - r1.width),
+        resizedH: Math.round(r2.height - r1.height),
+        maxW: Math.round(rMax.width),
+        resetOk: Math.abs(rReset.width - r0.width) <= 2,
+      };
+    })()`);
+    expect(geom.movedX).toBeLessThanOrEqual(-30);
+    expect(geom.movedY).toBeLessThanOrEqual(-40);
+    expect(geom.resizedW).toBeLessThanOrEqual(-70);
+    expect(geom.resizedH).toBeLessThanOrEqual(-30);
+    expect(geom.maxW).toBeGreaterThanOrEqual(1400);
+    expect(geom.resetOk).toBe(true);
+
+    // Close Manager drawer before next step
     await app.js(`document.querySelector('[data-testid="obc-options-toggle"]')?.click()`);
 
     await app.stepDone(`Boot ${st.bootMs} ms · Wisp ${wisp.latencyMs} ms · /obc/cmd + Editor OK`);

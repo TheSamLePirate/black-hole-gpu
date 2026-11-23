@@ -1,21 +1,58 @@
-// AAA In-Game Retractable HUD Console Overlay for the Linux On-Board Computer (docs/PLAN-LINUX-OBC.md §3.2).
+// AAA In-Game Draggable & Resizable HUD Console Overlay for the Linux On-Board Computer (docs/PLAN-LINUX-OBC.md).
 // Features:
+//   - Draggable title bar + 8-way resize handles + Maximize/Restore + Dock Reset + persisted geometry
+//   - Live SIGWINCH forwarding (`runtime.resize(cols, rows)`) on open & panel resize
 //   - Lazily loaded @xterm/xterm + FitAddon + ImageAddon (Sixel / IIP graphics)
 //   - Live /dev/fb0 canvas with interactive evdev pointer/wheel forwarding & PNG export
-//   - Full Options drawer (RAM, FB0 resolution, JIT, Persist /data + Reset, Theme, CRT FX, Audio /dev/dsp, Wisp URL + live probe)
+//   - Full AAA Linux Machine Manager (`ObcMachineManager`: Monitor, System/Unkernel, Disk/Snapshots, Network/Wisp, Toolchains, Game/Logs)
 //   - Built-in Script Editor drawer for /home/pilot/* & /obc/scripts/* (Load, Save, Save & Run)
 //   - Live VM Snapshot Suspend & Resume
 
 import "@xterm/xterm/css/xterm.css";
 import "./obc-console.css";
 import { drawObcSurface } from "../obc/fb-renderer";
-import { normalizeDistro, normalizeMemoryMiB, type ObcRuntime } from "../obc/runtime";
+import { normalizeDistro, type ObcRuntime } from "../obc/runtime";
 import { OBC_SCRIPTS } from "../obc/scripts-catalog";
-import type { ObcConfig, ObcDistro, ObcTheme, ObcViewMode } from "../obc/types";
+import type { ObcTheme, ObcViewMode, ObcWindowBounds } from "../obc/types";
+import { store } from "../util/storage";
+import { ObcMachineManager } from "./obc-manager";
+
+const WIN_STORAGE_KEY = "kerr.obc.win";
+export const OBC_MIN_WIDTH = 560;
+export const OBC_MIN_HEIGHT = 340;
+const OBC_VIEW_MARGIN = 10;
 
 interface XtermBundle {
   term: import("@xterm/xterm").Terminal;
   fit: import("@xterm/addon-fit").FitAddon;
+}
+
+/** Clamp a draggable/resizable OBC window cleanly inside the browser viewport. */
+export function clampWindowBounds(b: ObcWindowBounds, vw: number, vh: number): ObcWindowBounds {
+  const maxW = Math.max(OBC_MIN_WIDTH, vw - OBC_VIEW_MARGIN * 2);
+  const maxH = Math.max(OBC_MIN_HEIGHT, vh - OBC_VIEW_MARGIN * 2);
+  if (b.maximized) {
+    return { left: OBC_VIEW_MARGIN, top: 44, width: maxW, height: Math.max(OBC_MIN_HEIGHT, vh - 56), maximized: true };
+  }
+  const width = Math.max(OBC_MIN_WIDTH, Math.min(maxW, Math.round(b.width)));
+  const height = Math.max(OBC_MIN_HEIGHT, Math.min(maxH, Math.round(b.height)));
+  const left = Math.max(OBC_VIEW_MARGIN, Math.min(vw - width - OBC_VIEW_MARGIN, Math.round(b.left)));
+  const top = Math.max(OBC_VIEW_MARGIN, Math.min(vh - height - OBC_VIEW_MARGIN, Math.round(b.top)));
+  return { left, top, width, height, maximized: false };
+}
+
+function loadSavedWindowBounds(): ObcWindowBounds | null {
+  try {
+    const raw = store.get(WIN_STORAGE_KEY);
+    if (!raw) return null;
+    const o = JSON.parse(raw) as Partial<ObcWindowBounds>;
+    if (typeof o.left === "number" && typeof o.top === "number" && typeof o.width === "number" && typeof o.height === "number") {
+      return { left: o.left, top: o.top, width: o.width, height: o.height, maximized: Boolean(o.maximized) };
+    }
+  } catch {
+    // ignore corrupt saved geometry
+  }
+  return null;
 }
 
 /** Translate a DOM KeyboardEvent into VT100/ANSI bytes for direct PTY delivery (e.g. in /dev/fb0-only mode). */
@@ -71,6 +108,8 @@ cat /obc/telemetry.json | head -c 260
 echo ""
 `;
 
+type ResizeDir = "n" | "s" | "e" | "w" | "ne" | "nw" | "se" | "sw";
+
 export class ObcConsoleOverlay {
   readonly el: HTMLDivElement;
   private ledEl: HTMLSpanElement;
@@ -79,28 +118,22 @@ export class ObcConsoleOverlay {
   private fbWrap: HTMLDivElement;
   private fbCanvas: HTMLCanvasElement;
   private fbCtx: CanvasRenderingContext2D;
-  private optionsDrawer: HTMLDivElement;
+  private manager: ObcMachineManager;
   private editorDrawer: HTMLDivElement;
-  private wispInput: HTMLInputElement;
-  private wispStatusEl: HTMLSpanElement;
   private quickDistroSel: HTMLSelectElement;
-  private distroSel: HTMLSelectElement;
-  private ramSel: HTMLSelectElement;
-  private resSel: HTMLSelectElement;
-  private themeSel: HTMLSelectElement;
-  private syncSel: HTMLSelectElement;
-  private jitChk: HTMLInputElement;
-  private persistChk: HTMLInputElement;
-  private crtChk: HTMLInputElement;
-  private soundChk: HTMLInputElement;
   private suspendBtn: HTMLButtonElement;
   private optBtn: HTMLButtonElement;
   private edBtn: HTMLButtonElement;
+  private maxBtn: HTMLButtonElement;
   private edFileSel: HTMLSelectElement;
   private edPathInput: HTMLInputElement;
   private edText: HTMLTextAreaElement;
   private edStatusEl: HTMLSpanElement;
   private modeBtns = new Map<ObcViewMode, HTMLButtonElement>();
+
+  private winBounds: ObcWindowBounds | null = loadSavedWindowBounds();
+  private preMaxBounds: ObcWindowBounds | null = null;
+  private onWinResize: (() => void) | null = null;
 
   private xterm: XtermBundle | null = null;
   private xtermLoading: Promise<void> | null = null;
@@ -130,24 +163,6 @@ export class ObcConsoleOverlay {
       return b;
     };
 
-    // ── Top bar ────────────────────────────────────────────────────────────────
-    const bar = document.createElement("div");
-    bar.className = "obc-bar";
-
-    const title = document.createElement("div");
-    title.className = "obc-title";
-    this.ledEl = document.createElement("span");
-    this.ledEl.className = "obc-led";
-    this.ledEl.dataset.phase = "off";
-    const nameSpan = document.createElement("span");
-    nameSpan.textContent = "LINUX OBC · UNKERNEL AARCH64";
-    this.metaEl = document.createElement("span");
-    this.metaEl.className = "obc-meta";
-    this.metaEl.textContent = "STANDBY";
-    title.append(this.ledEl, nameSpan, this.metaEl);
-
-    const cfg = this.runtime.getConfig();
-
     const mkSelect = (opts: [string, string][], val: string, testid: string) => {
       const s = document.createElement("select");
       s.className = "obc-select";
@@ -162,6 +177,29 @@ export class ObcConsoleOverlay {
       return s;
     };
 
+    // ── Top bar (draggable handle + double-click to maximize) ──────────────────
+    const bar = document.createElement("div");
+    bar.className = "obc-bar";
+    bar.dataset.testid = "obc-drag-bar";
+
+    const title = document.createElement("div");
+    title.className = "obc-title";
+    const grip = document.createElement("span");
+    grip.className = "obc-drag-grip";
+    grip.textContent = "⋮⋮";
+    grip.title = "Drag to move · Double-click to maximize";
+    this.ledEl = document.createElement("span");
+    this.ledEl.className = "obc-led";
+    this.ledEl.dataset.phase = "off";
+    const nameSpan = document.createElement("span");
+    nameSpan.textContent = "LINUX OBC · UNKERNEL AARCH64";
+    this.metaEl = document.createElement("span");
+    this.metaEl.className = "obc-meta";
+    this.metaEl.textContent = "STANDBY";
+    title.append(grip, this.ledEl, nameSpan, this.metaEl);
+
+    const cfg = this.runtime.getConfig();
+
     this.quickDistroSel = mkSelect(
       [
         ["alpine", "Alpine 3.24"],
@@ -173,7 +211,7 @@ export class ObcConsoleOverlay {
     this.quickDistroSel.title = "Switch Linux distribution (Alpine 3.24 musl or Debian 13 Trixie glibc)";
     this.quickDistroSel.onchange = () => {
       const d = normalizeDistro(this.quickDistroSel.value);
-      this.distroSel.value = d;
+      this.manager.distroSel.value = d;
       void this.runtime.switchDistro(d);
       this.focusActiveInput();
     };
@@ -215,9 +253,14 @@ export class ObcConsoleOverlay {
       title: "Built-in script editor for /home/pilot/*",
     });
 
-    this.optBtn = mkBtn("Options", () => this.toggleOptions(), {
+    this.optBtn = mkBtn("Manager", () => this.toggleManager(), {
       testid: "obc-options-toggle",
-      title: "Configure RAM, /dev/fb0, JIT, CRT FX, Theme, Audio, Wisp proxy",
+      title: "Full Linux Machine Manager: Monitor, Unkernel Hardware, Persistent Disk, Wisp, Toolchains, Game & Logs",
+    });
+
+    this.maxBtn = mkBtn("⛶", () => this.toggleMaximize(), {
+      testid: "obc-maximize",
+      title: "Maximize / Restore OBC window",
     });
 
     actions.append(
@@ -228,11 +271,14 @@ export class ObcConsoleOverlay {
       this.optBtn,
       mkBtn("PNG", () => void this.downloadFbPng(), { testid: "obc-png", title: "Export current /dev/fb0 frame as PNG" }),
       mkBtn("Stop", () => void this.runtime.stop(), { cls: "danger", testid: "obc-stop" }),
+      mkBtn("⌖", () => this.resetWindowBounds(), { testid: "obc-dock-reset", title: "Reset window position & size" }),
+      this.maxBtn,
       mkBtn("✕", () => this.close(), { testid: "obc-close", title: "Close (Ctrl+\\ or F11)" }),
     );
     bar.append(title, actions);
+    this.wireDragBar(bar);
 
-    // ── Quick avionics script bar (grouped: CLI · TUI · /dev/fb0 · APK) ────────
+    // ── Quick avionics script bar (grouped: CLI · TUI · /dev/fb0 · PKG) ────────
     const subbar = document.createElement("div");
     subbar.className = "obc-subbar";
     const addGroup = (label: string, cat: "cli" | "tui" | "fb", first = false) => {
@@ -272,10 +318,7 @@ export class ObcConsoleOverlay {
           void this.runtime.installToolchain("python");
           this.focusActiveInput();
         },
-        {
-          testid: "obc-install-python",
-          title: "Install Python 3 & pip (apk on Alpine / apt on Debian, persisted in IndexedDB)",
-        },
+        { testid: "obc-install-python", title: "Install Python 3 & pip (Alpine & Debian)" },
       ),
       mkBtn(
         "+Node",
@@ -283,10 +326,7 @@ export class ObcConsoleOverlay {
           void this.runtime.installToolchain("node");
           this.focusActiveInput();
         },
-        {
-          testid: "obc-install-node",
-          title: "Install Node.js & npm (persisted in IndexedDB)",
-        },
+        { testid: "obc-install-node", title: "Install Node.js & npm (Alpine & Debian)" },
       ),
       mkBtn(
         "+Bun",
@@ -294,10 +334,7 @@ export class ObcConsoleOverlay {
           void this.runtime.installToolchain("bun");
           this.focusActiveInput();
         },
-        {
-          testid: "obc-install-bun",
-          title: "Install Bun & bunx via Unkernel shim (Alpine & Debian)",
-        },
+        { testid: "obc-install-bun", title: "Install Bun & bunx (Alpine & Debian)" },
       ),
       mkBtn(
         "+Rust",
@@ -305,10 +342,7 @@ export class ObcConsoleOverlay {
           void this.runtime.installToolchain("rust");
           this.focusActiveInput();
         },
-        {
-          testid: "obc-install-rust",
-          title: "Install Rust (rustc + cargo) on Alpine or Debian",
-        },
+        { testid: "obc-install-rust", title: "Install Rust (rustc + cargo) on Alpine or Debian" },
       ),
       mkBtn(
         "+Pi",
@@ -316,10 +350,7 @@ export class ObcConsoleOverlay {
           void this.runtime.installToolchain("pi");
           this.focusActiveInput();
         },
-        {
-          testid: "obc-install-pi",
-          title: "Install @earendil-works/pi-coding-agent (pi) via npm (Alpine & Debian)",
-        },
+        { testid: "obc-install-pi", title: "Install @earendil-works/pi-coding-agent (pi) via npm" },
       ),
       mkBtn(
         "+Claude",
@@ -327,10 +358,7 @@ export class ObcConsoleOverlay {
           void this.runtime.installToolchain("claude");
           this.focusActiveInput();
         },
-        {
-          testid: "obc-install-claude",
-          title: "Install Claude Code into ~/.local/bin (Alpine & Debian)",
-        },
+        { testid: "obc-install-claude", title: "Install Claude Code into ~/.local/bin" },
       ),
       mkBtn(
         "+All",
@@ -338,189 +366,22 @@ export class ObcConsoleOverlay {
           void this.runtime.installToolchain("all");
           this.focusActiveInput();
         },
-        {
-          testid: "obc-install-all",
-          title: "Install Python, pip, Node, npm, Bun, Pi & Claude Code (Alpine & Debian)",
-        },
+        { testid: "obc-install-all", title: "Install Python, pip, Node, npm, Bun, Pi & Claude Code" },
       ),
     );
 
-    // ── Options Drawer (Hardware, Graphics, Audio, Wisp) ───────────────────────
-    this.optionsDrawer = document.createElement("div");
-    this.optionsDrawer.className = "obc-drawer";
-    this.optionsDrawer.dataset.testid = "obc-options-drawer";
-    this.optionsDrawer.hidden = true;
-
-    const mkCheck = (label: string, checked: boolean, testid: string) => {
-      const wrap = document.createElement("label");
-      wrap.className = "obc-check";
-      const inp = document.createElement("input");
-      inp.type = "checkbox";
-      inp.checked = checked;
-      inp.dataset.testid = testid;
-      const sp = document.createElement("span");
-      sp.textContent = label;
-      wrap.append(inp, sp);
-      return { wrap, inp };
-    };
-
-    const mkField = (label: string, ctrl: HTMLElement) => {
-      const f = document.createElement("label");
-      f.className = "obc-field";
-      const sp = document.createElement("span");
-      sp.textContent = label;
-      f.append(sp, ctrl);
-      return f;
-    };
-
-    this.distroSel = mkSelect(
-      [
-        ["alpine", "Alpine 3.24 (4 MB, fast)"],
-        ["debian", "Debian 13 (72 MB, glibc)"],
-      ],
-      cfg.distro,
-      "obc-opt-distro",
-    );
-    this.ramSel = mkSelect(
-      [
-        ["512", "512 MiB"],
-        ["1024", "1 GiB"],
-        ["2048", "2 GiB (default)"],
-        ["4096", "4 GiB"],
-      ],
-      String(cfg.memoryMiB),
-      "obc-opt-ram",
-    );
-    this.resSel = mkSelect(
-      [
-        ["512x512", "512×512 (Square)"],
-        ["640x480", "640×480 (VGA)"],
-        ["800x600", "800×600 (SVGA)"],
-      ],
-      `${cfg.fbWidth}x${cfg.fbHeight}`,
-      "obc-opt-res",
-    );
-    this.themeSel = mkSelect(
-      [
-        ["auto", "Auto (Craft)"],
-        ["interstellar", "Interstellar Cyan"],
-        ["f35", "F-35 Tactical"],
-        ["a320", "Airbus ECAM"],
-        ["amber", "Retro Amber CRT"],
-      ],
-      cfg.theme,
-      "obc-opt-theme",
-    );
-    this.syncSel = mkSelect(
-      [
-        ["interactive", "Interactive"],
-        ["strict", "Strict Sim-Clock"],
-      ],
-      cfg.syncMode,
-      "obc-opt-sync",
-    );
-
-    const jit = mkCheck("JIT Compiler", cfg.jit, "obc-opt-jit");
-    this.jitChk = jit.inp;
-    const persist = mkCheck("Persist /data", cfg.persistData, "obc-opt-persist");
-    this.persistChk = persist.inp;
-    const crt = mkCheck("CRT / Phosphor FX", cfg.crtFx, "obc-opt-crt");
-    this.crtChk = crt.inp;
-    const snd = mkCheck("Audio (/dev/dsp)", cfg.soundEnabled, "obc-opt-sound");
-    this.soundChk = snd.inp;
-
-    // Live-apply visual options immediately without requiring reboot
-    this.themeSel.onchange = () => {
-      this.runtime.setConfig({ theme: this.themeSel.value as ObcConfig["theme"] });
-      this.lastFbDrawRev = -1;
-    };
-    this.crtChk.onchange = () => {
-      this.runtime.setConfig({ crtFx: this.crtChk.checked });
-      this.lastFbDrawRev = -1;
-    };
-    this.syncSel.onchange = () => {
-      this.runtime.setConfig({ syncMode: this.syncSel.value === "strict" ? "strict" : "interactive" });
-    };
-
-    const optRow1 = document.createElement("div");
-    optRow1.className = "obc-drawer-row";
-    optRow1.append(
-      mkField("Distro", this.distroSel),
-      mkField("RAM", this.ramSel),
-      mkField("/dev/fb0", this.resSel),
-      mkField("Theme", this.themeSel),
-      mkField("Clock", this.syncSel),
-      jit.wrap,
-      persist.wrap,
-      crt.wrap,
-      snd.wrap,
-    );
-
-    const optRow2 = document.createElement("div");
-    optRow2.className = "obc-drawer-row";
-    const wLabel = document.createElement("span");
-    wLabel.className = "obc-subbar-label";
-    wLabel.textContent = "Wisp Proxy:";
-    this.wispInput = document.createElement("input");
-    this.wispInput.className = "obc-wisp-input";
-    this.wispInput.dataset.testid = "obc-wisp-input";
-    this.wispInput.placeholder = "wss://code.samlepirate.org/ (empty = /__wisp dev, wss://code.samlepirate.org/ prod)";
-    this.wispInput.value = this.runtime.getWispUrl();
-    this.wispStatusEl = document.createElement("span");
-    this.wispStatusEl.className = "obc-status-pill";
-    this.wispStatusEl.dataset.testid = "obc-wisp-status";
-
-    const testWispBtn = mkBtn(
-      "Test Wisp",
-      async () => {
-        this.wispStatusEl.textContent = "Probing…";
-        this.wispStatusEl.dataset.ok = "";
-        const res = await this.runtime.testWisp(this.wispInput.value || undefined);
-        this.wispStatusEl.textContent = res.ok ? `✓ ${res.msg} (${res.latencyMs}ms)` : `✕ ${res.msg}`;
-        this.wispStatusEl.dataset.ok = res.ok ? "1" : "0";
-      },
-      { testid: "obc-wisp-test" },
-    );
-
-    const resetDiskBtn = mkBtn(
-      "Reset /data",
-      async () => {
-        const res = await this.runtime.resetDataDisk();
-        this.wispStatusEl.textContent = res.ok ? `✓ ${res.msg}` : `✕ ${res.msg}`;
-        this.wispStatusEl.dataset.ok = res.ok ? "1" : "0";
-      },
-      { cls: "danger", testid: "obc-reset-data", title: "Wipe persisted IndexedDB /data overlay" },
-    );
-
-    const applyRebootBtn = mkBtn(
-      "Apply & Reboot",
-      () => {
-        const [fw, fh] = this.resSel.value.split("x").map(Number);
-        const mem = normalizeMemoryMiB(Number(this.ramSel.value));
-        const distro: ObcDistro = normalizeDistro(this.distroSel.value);
-        this.runtime.setConfig({
-          distro,
-          memoryMiB: mem,
-          fbWidth: fw || 512,
-          fbHeight: fh || 512,
-          jit: this.jitChk.checked,
-          persistData: this.persistChk.checked,
-          crtFx: this.crtChk.checked,
-          soundEnabled: this.soundChk.checked,
-          theme: this.themeSel.value as ObcConfig["theme"],
-          syncMode: this.syncSel.value === "strict" ? "strict" : "interactive",
-        });
-        this.runtime.setWispUrl(this.wispInput.value);
+    // ── AAA Linux Machine Manager Drawer ───────────────────────────────────────
+    this.manager = new ObcMachineManager(this.runtime, {
+      onApplyVisual: () => {
         this.lastFbDrawRev = -1;
-        this.optionsDrawer.hidden = true;
-        this.optBtn.classList.remove("on");
-        if (this.runtime.status().phase === "ready") void this.runtime.reboot();
+        this.applyVisualConfig();
       },
-      { cls: "on", testid: "obc-opt-apply" },
-    );
-
-    optRow2.append(wLabel, this.wispInput, testWispBtn, this.wispStatusEl, resetDiskBtn, applyRebootBtn);
-    this.optionsDrawer.append(optRow1, optRow2);
+      onResetWindow: () => this.resetWindowBounds(),
+      onCloseAfterApply: () => {
+        this.optBtn.classList.remove("on");
+        this.refitXterm();
+      },
+    });
 
     // ── Built-in Script Editor Drawer ──────────────────────────────────────────
     this.editorDrawer = document.createElement("div");
@@ -604,7 +465,8 @@ export class ObcConsoleOverlay {
     );
 
     body.append(this.termWrap, this.fbWrap);
-    this.el.append(bar, subbar, this.optionsDrawer, this.editorDrawer, body);
+    this.el.append(bar, subbar, this.manager.el, this.editorDrawer, body);
+    this.attachResizeHandles();
 
     const isToggleKey = (e: KeyboardEvent) =>
       (e.code === "F11" && !e.metaKey && !e.ctrlKey && !e.altKey) ||
@@ -617,9 +479,7 @@ export class ObcConsoleOverlay {
       return Boolean(el.closest?.(".obc-drawer, .obc-bar") && /^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName));
     };
 
-    // Capture-phase window keyboard router while OBC console is open:
-    //   - Guarantees keys reach TUIs & /dev/fb0 apps even in /dev/fb0-only mode or right after clicking a toolbar button
-    //   - Blocks Tab/WASD/G/F/1-4/etc. from leaking to the simulator flight controls or target wheel!
+    // Capture-phase window keyboard router while OBC console is open
     this.onWinKeyDown = (e: KeyboardEvent) => {
       if (!this.isOpen || isToggleKey(e)) return;
       if (isDrawerInput(e.target)) {
@@ -629,11 +489,9 @@ export class ObcConsoleOverlay {
       const targetEl = e.target as HTMLElement | null;
       const inXterm = Boolean(targetEl?.classList?.contains("xterm-helper-textarea"));
       if (inXterm && !this.termWrap.hidden) {
-        // Let xterm.js handle the key directly; only block Tab from bubbling to simulator wheel
         if (e.key === "Tab") e.preventDefault();
         return;
       }
-      // Forward directly to the Linux PTY (covers /dev/fb0-only mode, fbCanvas focus, or post-button click)
       const seq = keyEventToAnsi(e);
       if (seq !== null) {
         e.preventDefault();
@@ -648,13 +506,19 @@ export class ObcConsoleOverlay {
         e.stopPropagation();
         return;
       }
-      // Never let keyup (especially Tab/WASD) trigger simulator release actions while OBC console is open
       e.stopImmediatePropagation();
     };
     window.addEventListener("keydown", this.onWinKeyDown, true);
     window.addEventListener("keyup", this.onWinKeyUp, true);
 
-    // Prevent keystrokes inside the OBC console from reaching simulator flight/scene handlers
+    this.onWinResize = () => {
+      if (this.winBounds) {
+        this.applyWindowBounds(this.winBounds, false);
+        this.refitXterm();
+      }
+    };
+    window.addEventListener("resize", this.onWinResize);
+
     this.el.addEventListener("keydown", (e) => {
       if (isToggleKey(e)) return;
       e.stopPropagation();
@@ -665,7 +529,185 @@ export class ObcConsoleOverlay {
       else this.hide(false);
     });
     this.unsubState = this.runtime.onState(() => this.syncUi());
+    this.applyVisualConfig();
+    if (this.winBounds) this.applyWindowBounds(this.winBounds, false);
     this.syncUi();
+  }
+
+  // ── Draggable & 8-Way Resizable Window Engine ──────────────────────────────
+
+  private currentRectBounds(): ObcWindowBounds {
+    const r = this.el.getBoundingClientRect();
+    return {
+      left: r.left,
+      top: r.top,
+      width: r.width || 1120,
+      height: r.height || 600,
+      maximized: Boolean(this.winBounds?.maximized),
+    };
+  }
+
+  private applyWindowBounds(raw: ObcWindowBounds, persist = true) {
+    const vw = typeof window !== "undefined" ? window.innerWidth : 1440;
+    const vh = typeof window !== "undefined" ? window.innerHeight : 900;
+    const b = clampWindowBounds(raw, vw, vh);
+    this.winBounds = b;
+    this.el.classList.add("custom-pos");
+    this.el.style.left = `${b.left}px`;
+    this.el.style.top = `${b.top}px`;
+    this.el.style.width = `${b.width}px`;
+    this.el.style.height = `${b.height}px`;
+    this.maxBtn.classList.toggle("on", b.maximized);
+    if (persist) {
+      try {
+        store.set(WIN_STORAGE_KEY, JSON.stringify(b));
+      } catch {
+        // ignore storage quota
+      }
+    }
+  }
+
+  resetWindowBounds() {
+    this.winBounds = null;
+    this.preMaxBounds = null;
+    this.el.classList.remove("custom-pos");
+    this.el.style.left = "";
+    this.el.style.top = "";
+    this.el.style.width = "";
+    this.el.style.height = "";
+    this.maxBtn.classList.remove("on");
+    try {
+      store.remove(WIN_STORAGE_KEY);
+    } catch {}
+    this.refitXterm();
+  }
+
+  private toggleMaximize() {
+    if (this.winBounds?.maximized) {
+      if (this.preMaxBounds) {
+        this.applyWindowBounds({ ...this.preMaxBounds, maximized: false });
+      } else {
+        this.resetWindowBounds();
+      }
+    } else {
+      this.preMaxBounds = this.currentRectBounds();
+      this.applyWindowBounds({ ...this.preMaxBounds, maximized: true });
+    }
+    this.refitXterm();
+  }
+
+  private wireDragBar(bar: HTMLDivElement) {
+    const isInteractive = (t: EventTarget | null) =>
+      Boolean((t as HTMLElement | null)?.closest?.("button, select, input, textarea, a, label"));
+
+    bar.addEventListener("dblclick", (e) => {
+      if (isInteractive(e.target)) return;
+      e.preventDefault();
+      this.toggleMaximize();
+    });
+
+    bar.addEventListener("pointerdown", (e) => {
+      if (e.button !== 0 || isInteractive(e.target)) return;
+      e.preventDefault();
+      const start = this.currentRectBounds();
+      if (start.maximized) return;
+      const sx = e.clientX;
+      const sy = e.clientY;
+      this.el.classList.add("dragging");
+      try {
+        bar.setPointerCapture(e.pointerId);
+      } catch {}
+
+      const onMove = (ev: PointerEvent) => {
+        this.applyWindowBounds(
+          {
+            left: start.left + (ev.clientX - sx),
+            top: start.top + (ev.clientY - sy),
+            width: start.width,
+            height: start.height,
+            maximized: false,
+          },
+          false,
+        );
+      };
+      const onUp = () => {
+        this.el.classList.remove("dragging");
+        bar.removeEventListener("pointermove", onMove);
+        bar.removeEventListener("pointerup", onUp);
+        bar.removeEventListener("pointercancel", onUp);
+        if (this.winBounds) this.applyWindowBounds(this.winBounds, true);
+      };
+      bar.addEventListener("pointermove", onMove);
+      bar.addEventListener("pointerup", onUp);
+      bar.addEventListener("pointercancel", onUp);
+    });
+  }
+
+  private attachResizeHandles() {
+    const dirs: ResizeDir[] = ["n", "s", "e", "w", "ne", "nw", "se", "sw"];
+    for (const dir of dirs) {
+      const h = document.createElement("div");
+      h.className = `obc-rz obc-rz-${dir}`;
+      h.dataset.testid = `obc-resize-${dir}`;
+      h.addEventListener("pointerdown", (e) => {
+        if (e.button !== 0) return;
+        e.preventDefault();
+        e.stopPropagation();
+        const start = this.currentRectBounds();
+        const sx = e.clientX;
+        const sy = e.clientY;
+        this.el.classList.add("resizing");
+        try {
+          h.setPointerCapture(e.pointerId);
+        } catch {}
+
+        const onMove = (ev: PointerEvent) => {
+          const dx = ev.clientX - sx;
+          const dy = ev.clientY - sy;
+          let left = start.left;
+          let top = start.top;
+          let width = start.width;
+          let height = start.height;
+
+          if (dir.includes("e")) width = Math.max(OBC_MIN_WIDTH, start.width + dx);
+          if (dir.includes("s")) height = Math.max(OBC_MIN_HEIGHT, start.height + dy);
+          if (dir.includes("w")) {
+            const nextW = Math.max(OBC_MIN_WIDTH, start.width - dx);
+            left = start.left + (start.width - nextW);
+            width = nextW;
+          }
+          if (dir.includes("n")) {
+            const nextH = Math.max(OBC_MIN_HEIGHT, start.height - dy);
+            top = start.top + (start.height - nextH);
+            height = nextH;
+          }
+          this.applyWindowBounds({ left, top, width, height, maximized: false }, false);
+        };
+
+        const onUp = () => {
+          this.el.classList.remove("resizing");
+          h.removeEventListener("pointermove", onMove);
+          h.removeEventListener("pointerup", onUp);
+          h.removeEventListener("pointercancel", onUp);
+          if (this.winBounds) this.applyWindowBounds(this.winBounds, true);
+          this.refitXterm();
+        };
+
+        h.addEventListener("pointermove", onMove);
+        h.addEventListener("pointerup", onUp);
+        h.addEventListener("pointercancel", onUp);
+      });
+      this.el.append(h);
+    }
+  }
+
+  private applyVisualConfig() {
+    const cfg = this.runtime.getConfig();
+    this.el.style.setProperty("--obc-opacity", String(cfg.panelOpacity));
+    if (this.xterm && this.xterm.term.options.fontSize !== cfg.fontSize) {
+      this.xterm.term.options.fontSize = cfg.fontSize;
+      this.refitXterm();
+    }
   }
 
   get isOpen(): boolean {
@@ -689,8 +731,9 @@ export class ObcConsoleOverlay {
   private show(notifyRuntime: boolean) {
     this.el.hidden = false;
     if (notifyRuntime) this.runtime.consoleOpen = true;
+    if (this.winBounds) this.applyWindowBounds(this.winBounds, false);
     void this.ensureXterm().then(() => {
-      this.xterm?.fit.fit();
+      this.fitAndResizeGuest();
       this.xterm?.term.focus();
     });
     if (this.runtime.status().phase === "off") {
@@ -703,27 +746,22 @@ export class ObcConsoleOverlay {
   private hide(notifyRuntime: boolean) {
     this.el.hidden = true;
     if (notifyRuntime) this.runtime.consoleOpen = false;
+    if (this.manager.isOpen) {
+      this.manager.close();
+      this.optBtn.classList.remove("on");
+    }
     this.stopFbRenderLoop();
   }
 
-  private toggleOptions() {
-    const next = this.optionsDrawer.hidden;
-    this.optionsDrawer.hidden = !next;
+  private toggleManager() {
+    const next = !this.manager.isOpen;
     this.optBtn.classList.toggle("on", next);
     if (next) {
       this.editorDrawer.hidden = true;
       this.edBtn.classList.remove("on");
-      const cfg = this.runtime.getConfig();
-      this.distroSel.value = cfg.distro;
-      this.ramSel.value = String(cfg.memoryMiB);
-      this.resSel.value = `${cfg.fbWidth}x${cfg.fbHeight}`;
-      this.themeSel.value = cfg.theme;
-      this.syncSel.value = cfg.syncMode;
-      this.jitChk.checked = cfg.jit;
-      this.persistChk.checked = cfg.persistData;
-      this.crtChk.checked = cfg.crtFx;
-      this.soundChk.checked = cfg.soundEnabled;
-      this.wispInput.value = this.runtime.getWispUrl();
+      this.manager.open();
+    } else {
+      this.manager.close();
     }
     this.refitXterm();
   }
@@ -733,7 +771,7 @@ export class ObcConsoleOverlay {
     this.editorDrawer.hidden = !next;
     this.edBtn.classList.toggle("on", next);
     if (next) {
-      this.optionsDrawer.hidden = true;
+      this.manager.close();
       this.optBtn.classList.remove("on");
       void this.refreshEditorFiles();
     }
@@ -806,14 +844,16 @@ export class ObcConsoleOverlay {
     });
   }
 
+  private fitAndResizeGuest() {
+    if (!this.xterm || this.el.hidden || this.termWrap.hidden) return;
+    try {
+      this.xterm.fit.fit();
+      this.runtime.resize(this.xterm.term.cols, this.xterm.term.rows);
+    } catch {}
+  }
+
   private refitXterm() {
-    requestAnimationFrame(() => {
-      if (!this.el.hidden && !this.termWrap.hidden) {
-        try {
-          this.xterm?.fit.fit();
-        } catch {}
-      }
-    });
+    requestAnimationFrame(() => this.fitAndResizeGuest());
   }
 
   private async ensureXterm(): Promise<void> {
@@ -825,10 +865,11 @@ export class ObcConsoleOverlay {
         import("@xterm/addon-fit"),
         import("@xterm/addon-image"),
       ]);
+      const cfg = this.runtime.getConfig();
       const term = new Terminal({
         cursorBlink: true,
         fontFamily: '"JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace',
-        fontSize: 13,
+        fontSize: cfg.fontSize,
         lineHeight: 1.2,
         scrollback: 2000,
         theme: {
@@ -856,12 +897,14 @@ export class ObcConsoleOverlay {
       }
       term.open(this.termWrap);
       fit.fit();
+      this.runtime.resize(term.cols, term.rows);
       term.onData((data) => this.runtime.write(data));
       this.unsubOut = this.runtime.onOutput((bytes) => term.write(bytes));
       this.resizeObs = new ResizeObserver(() => {
         if (!this.el.hidden && !this.termWrap.hidden) {
           try {
             fit.fit();
+            this.runtime.resize(term.cols, term.rows);
           } catch {}
         }
       });
@@ -875,10 +918,12 @@ export class ObcConsoleOverlay {
     const st = this.runtime.status();
     this.ledEl.dataset.phase = st.phase;
     this.el.dataset.theme = st.config.theme === "auto" ? "interstellar" : st.config.theme;
+    this.applyVisualConfig();
 
     const parts: string[] = [st.phase.toUpperCase(), st.distro.toUpperCase()];
     if (st.bootMs !== null) parts.push(`${st.bootMs}ms`);
     parts.push(st.memoryMiB >= 1024 && st.memoryMiB % 1024 === 0 ? `${st.memoryMiB / 1024}GiB` : `${st.memoryMiB}MiB`);
+    if (st.config.cpus > 1) parts.push(`${st.config.cpus}CPU`);
     if (st.config.jit) parts.push("JIT");
     if (st.netEnabled) parts.push("WISP");
     if (st.fbActive) parts.push(`FB0 ${st.fbWidth}×${st.fbHeight}${st.fbFps ? ` @${st.fbFps}Hz` : ""}`);
@@ -936,8 +981,10 @@ export class ObcConsoleOverlay {
 
   dispose() {
     this.stopFbRenderLoop();
+    this.manager.dispose();
     if (this.onWinKeyDown) window.removeEventListener("keydown", this.onWinKeyDown, true);
     if (this.onWinKeyUp) window.removeEventListener("keyup", this.onWinKeyUp, true);
+    if (this.onWinResize) window.removeEventListener("resize", this.onWinResize);
     this.unsubOut?.();
     this.unsubState?.();
     this.resizeObs?.disconnect();

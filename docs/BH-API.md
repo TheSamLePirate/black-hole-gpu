@@ -3201,27 +3201,33 @@ source readiness, pan metres and last CPU draw time. `interface({mapZoom:18})` o
 
 ## Linux On-Board Computer (`__bh.obc`)
 
-### `__bh.obc` → `{ status, boot, stop, reboot, suspend, resume, resetDataDisk, getConfig, setConfig, exec, write, readScreen, telemetry, openConsole, closeConsole, toggleConsole, runScript, installToolchain, setWispUrl, testWisp, listFiles, readGuestFile, writeGuestFile, captureFbDataUrl, scripts }`
+### `__bh.obc` → `{ status, boot, stop, reboot, suspend, resume, resetDataDisk, getConfig, setConfig, switchDistro, exec, write, readScreen, telemetry, openConsole, closeConsole, toggleConsole, runScript, installToolchain, setWispUrl, testWisp, listFiles, readGuestFile, writeGuestFile, captureFbDataUrl, scripts, resize, kernelStats, syncDisk, diskInfo, probeGuest, killProcess, routeToCockpit, getLogs, clearLogs, getProfile }`
 
-Embedded Linux On-Board Computer powered by Unkernel (Linux 7.x WASM + `kwemu` aarch64 JIT + Alpine 3.24 in a dedicated Web Worker — see [PLAN-LINUX-OBC.md](PLAN-LINUX-OBC.md)). Lazy-booted on demand with zero startup cost.
+Embedded Linux On-Board Computer powered by Unkernel (Linux 7.x WASM + `kwemu` aarch64 JIT + Alpine 3.24 / Debian 13 in a dedicated Web Worker — see [PLAN-LINUX-OBC.md](PLAN-LINUX-OBC.md)). Lazy-booted on demand with zero startup cost.
 
 - `status()` — runtime phase (`"off" | "booting" | "ready" | "suspended" | "error"`), boot time `[ms]`, memory `[MiB]`, `/dev/fb0` state & `fbFps`, `hasSnapshot`, Wisp proxy URL, active script, VSOCK client count, console state, and current `config`.
 - `boot()` / `stop()` / `reboot()` — start, cleanly shut down, or restart the Linux kernel Worker.
 - `suspend()` / `resume()` — suspend the live Linux VM into an in-memory `KernelSnapshot` (freeing Worker CPU) and resume it on demand.
 - `resetDataDisk()` — wipe the persisted IndexedDB `/data` overlay cleanly.
-- `getConfig()` / `setConfig(patch)` — read or update persisted OBC configuration (`distro: "alpine" | "debian"`, `memoryMiB: 512 | 1024 | 2048 | 4096` (default `2048`), `fbWidth`, `fbHeight`, `jit`, `persistData`, `crtFx`, `soundEnabled`, `theme`, `syncMode`).
+- `getConfig()` / `setConfig(patch)` — read or update persisted OBC configuration (`distro: "alpine" | "debian"`, `memoryMiB: 512 | 1024 | 2048 | 4096` (default `2048`), `cpus: 1 | 2 | 4`, `fbWidth`, `fbHeight`, `jit`, `shm`, `profile`, `persistData`, `wispMode`, `crtFx`, `soundEnabled`, `theme`, `syncMode`, `fontSize`, `panelOpacity`).
 - `switchDistro(distro)` — switch between `"alpine"` (Alpine 3.24 musl) and `"debian"` (Debian 13 Trixie glibc), rebooting cleanly if currently running.
 - `exec(command, timeoutMs?)` — run a shell command non-interactively via `vm.exec()` and return `{ ok, code, stdout, stderr }`.
 - `write(input)` — send raw interactive input bytes/keys to the Linux console TTY.
-- `readScreen()` — return the current 64×24 ANSI terminal mirror lines (plain text).
+- `resize(cols, rows)` — forward terminal size changes to Unkernel (`SIGWINCH` for Ratatui/TUI apps).
+- `readScreen()` — return the current 100×26 ANSI terminal mirror lines (plain text).
 - `telemetry()` — return the exact live `ObcTelemetry` snapshot exposed to Linux at `/obc/telemetry.json` and `AF_VSOCK:4747`.
-- `openConsole()` / `closeConsole()` / `toggleConsole()` — control the in-game `xterm.js` + `/dev/fb0` + Options + Script Editor HUD console overlay (`Ctrl+\`, `Ctrl+²`, `F11`).
+- `openConsole()` / `closeConsole()` / `toggleConsole()` — control the draggable & resizable in-game `xterm.js` + `/dev/fb0` + Linux Machine Manager + Script Editor HUD console overlay (`Ctrl+\`, `Ctrl+²`, `F11`).
 - `runScript(name)` — run a built-in avionics script (`"diag"`, `"orbit"`, `"reentry"`, `"ils"`, `"solar"`, `"fdr"`, `"fuel"`, `"nav"`, `"kerr"`, `"auto"`, `"top"`, `"mission-tui"`, `"fmc-tui"`, `"fb-demo"`, `"pfd-fb"`, `"radar-fb"`, `"kerr-fb"`, `"bh-tui"`, `"f35-tui"`, `"f35-fb"`, `"a320-tui"`, `"a320-fb"`, `"ils-fb"`).
 - `installToolchain(profile)` — install `"python"` (Python 3 + pip), `"node"` (Node.js + npm), `"bun"` (Bun + bunx), `"rust"` (rustc + cargo), `"pi"` (`@earendil-works/pi-coding-agent`), `"claude"` (Claude Code), `"full"` (Python + Node + Bun), or `"all"` on both Alpine & Debian over Wisp and persist in IndexedDB `/data`.
 - `setWispUrl(url)` / `testWisp(url?)` — configure/persist a custom Wisp v1 WebSocket proxy URL (empty uses local dev `/__wisp`) and test the live Wisp v1 handshake latency.
 - `listFiles(dir?)` / `readGuestFile(path)` / `writeGuestFile(path, content)` — list, read, and save executable pilot scripts in `/home/pilot/*`.
 - `captureFbDataUrl()` — export the active `/dev/fb0` frame as a PNG data URL (null if inactive).
 - `scripts()` — list the built-in avionics scripts mounted at `/obc/scripts/`.
+- `kernelStats()` — return live Unkernel VM hardware & I/O counters (`uptimeMs`, `cpus`, `jit`, `block`, `net`, `vsock`, `display`, `sound`, `shm`, `cmdline`, `memory64`, `crossOriginIsolated`).
+- `syncDisk()` / `diskInfo()` — flush Linux guest filesystems to IndexedDB `/data` (`vm.sync()`) and inspect IndexedDB block count & browser storage quota.
+- `probeGuest()` / `killProcess(pid, signal?)` — inspect live guest OS RAM, uptime, mounts (`df`), processes (`ps`), and installed toolchains, or send `SIGTERM`/`SIGKILL` to a process (PID > 1).
+- `routeToCockpit(target)` — 1-click route Linux OBC onto `"ranger"` (MFD slot 2), `"f35"` (PCD), or `"a320"` (Captain MCDU + Lower ECAM).
+- `getLogs()` / `clearLogs()` / `getProfile()` — read/clear host Unkernel logs and read CPU profiler reports when enabled.
 
 ```js
 await app.js(`__bh.obc.boot()`);

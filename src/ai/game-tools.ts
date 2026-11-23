@@ -3379,6 +3379,12 @@ export function gameTools(h: GameHost): Tool[] {
             "test_wisp",
             "config",
             "install",
+            "stats",
+            "sync_disk",
+            "disk_info",
+            "probe",
+            "route_cockpit",
+            "logs",
           ],
         },
         script: { type: "string" },
@@ -3388,6 +3394,9 @@ export function gameTools(h: GameHost): Tool[] {
         theme: { type: "string", enum: ["auto", "interstellar", "f35", "a320", "amber"] },
         crtFx: { type: "boolean" },
         memoryMiB: { type: "number", minimum: 512, maximum: 4096, integer: true },
+        cpus: { type: "number", minimum: 1, maximum: 4, integer: true },
+        wispMode: { type: "string", enum: ["auto", "prod", "local", "custom", "off"] },
+        cockpit: { type: "string", enum: ["ranger", "f35", "a320"] },
       },
       required: ["action"],
       run: async (a) => {
@@ -3430,6 +3439,20 @@ export function gameTools(h: GameHost): Tool[] {
               p === "python" || p === "node" || p === "bun" || p === "rust" || p === "claude" || p === "pi" || p === "full" || p === "all";
             return await obc.installToolchain(valid ? p : "all");
           }
+          case "stats":
+            return obc.kernelStats();
+          case "sync_disk":
+            return await obc.syncDisk();
+          case "disk_info":
+            return await obc.diskInfo();
+          case "probe":
+            return await obc.probeGuest();
+          case "route_cockpit": {
+            const c = a.cockpit === "f35" || a.cockpit === "a320" ? a.cockpit : "ranger";
+            return obc.routeToCockpit(c);
+          }
+          case "logs":
+            return { logs: obc.getLogs() };
           case "config":
             return obc.setConfig({
               ...(a.distro === "alpine" || a.distro === "debian" ? { distro: a.distro } : {}),
@@ -3437,6 +3460,14 @@ export function gameTools(h: GameHost): Tool[] {
               ...(typeof a.crtFx === "boolean" ? { crtFx: a.crtFx } : {}),
               ...(a.memoryMiB === 512 || a.memoryMiB === 1024 || a.memoryMiB === 2048 || a.memoryMiB === 4096
                 ? { memoryMiB: a.memoryMiB }
+                : {}),
+              ...(a.cpus === 1 || a.cpus === 2 || a.cpus === 4 ? { cpus: a.cpus } : {}),
+              ...(a.wispMode === "auto" ||
+              a.wispMode === "prod" ||
+              a.wispMode === "local" ||
+              a.wispMode === "custom" ||
+              a.wispMode === "off"
+                ? { wispMode: a.wispMode }
                 : {}),
             });
           default:

@@ -11,7 +11,13 @@ export type ObcDistro = "alpine" | "debian";
 
 export type ObcMemoryMiB = 512 | 1024 | 2048 | 4096;
 
+export type ObcCpuCount = 1 | 2 | 4;
+
+export type ObcWispMode = "auto" | "prod" | "local" | "custom" | "off";
+
 export const OBC_MEMORY_OPTIONS: readonly ObcMemoryMiB[] = [512, 1024, 2048, 4096];
+
+export const OBC_CPU_OPTIONS: readonly ObcCpuCount[] = [1, 2, 4];
 
 export type ObcToolchainProfile = "python" | "node" | "bun" | "rust" | "claude" | "pi" | "full" | "all";
 
@@ -20,13 +26,21 @@ export interface ObcConfig {
   distro: ObcDistro;
   /** Guest RAM in MiB (512, 1024, 2048 default, or 4096) */
   memoryMiB: ObcMemoryMiB;
+  /** SMP vCPU count requested from Unkernel (1, 2, or 4; requires crossOriginIsolated for >1) */
+  cpus: ObcCpuCount;
   /** Virtual /dev/fb0 width & height [px] */
   fbWidth: number;
   fbHeight: number;
   /** Enable kwemu Wasm JIT compiler */
   jit: boolean;
+  /** Enable /dev/kwshm host-guest shared memory device */
+  shm: boolean;
+  /** Enable Unkernel guest CPU sampler (`vm.profile()`) */
+  profile: boolean;
   /** Persist /data overlay (and /home/pilot) in IndexedDB */
   persistData: boolean;
+  /** Wisp v1 relay selection mode */
+  wispMode: ObcWispMode;
   /** Subtle CRT scanlines & cockpit phosphor glow FX */
   crtFx: boolean;
   /** Forward guest /dev/dsp & ALSA audio to WebAudio */
@@ -35,19 +49,29 @@ export interface ObcConfig {
   theme: "auto" | ObcTheme;
   /** Sim-clock behavior when simulator is frozen/paused */
   syncMode: "interactive" | "strict";
+  /** Terminal font size [px] (11..16) */
+  fontSize: number;
+  /** HUD console panel background opacity (0.72..1.0) */
+  panelOpacity: number;
 }
 
 export const DEFAULT_OBC_CONFIG: ObcConfig = {
   distro: "alpine",
   memoryMiB: 2048,
+  cpus: 1,
   fbWidth: 512,
   fbHeight: 512,
   jit: true,
+  shm: false,
+  profile: false,
   persistData: true,
+  wispMode: "auto",
   crtFx: true,
   soundEnabled: false,
   theme: "auto",
   syncMode: "interactive",
+  fontSize: 13,
+  panelOpacity: 0.94,
 };
 
 export interface ObcTelemetry {
@@ -215,4 +239,78 @@ export interface ObcCrewSnapshot {
   cursorRow: number;
   cursorCol: number;
   seq: number;
+}
+
+/** Live Unkernel VM & host hardware telemetry for the Linux Machine Manager. */
+export interface ObcKernelTelemetry {
+  running: boolean;
+  uptimeMs: number;
+  compileMs: number;
+  cpus: number;
+  memoryMiB: number;
+  memory64: boolean;
+  cmdline: string;
+  transport: string;
+  crossOriginIsolated: boolean;
+  cpuBlocker: string | null;
+  activeWispUrl: string;
+  switches: number;
+  idles: number;
+  yields: number;
+  jit: { enabled: boolean; requested: boolean; compiled: number; live: number; maxLive: number; freed: number; failed: number } | null;
+  block: { reads: number; writes: number; flushes: number; discards: number; bytesRead: number; bytesWritten: number } | null;
+  net: { rx: number; tx: number; tcpOpened: number; dns: number } | null;
+  vsock: { open: number; accepted: number; connected: number; bytesIn: number; bytesOut: number; resets: number } | null;
+  display: { attaches: number; detaches: number; width: number; height: number; fps: number } | null;
+  sound: { opens: number; starts: number; chunks: number; frames: number; playing: boolean } | null;
+  shm: { open: number; reads: number; writes: number; bytesRead: number; bytesWritten: number } | null;
+}
+
+/** Persistent /data IndexedDB & browser storage summary. */
+export interface ObcDiskInfo {
+  persistData: boolean;
+  idbBlocks: number | null;
+  storageUsageBytes: number | null;
+  storageQuotaBytes: number | null;
+  lastSyncAt: number | null;
+  hasSnapshot: boolean;
+}
+
+export interface ObcGuestProcess {
+  pid: number;
+  user: string;
+  mem: string;
+  cmd: string;
+}
+
+export interface ObcGuestMount {
+  fs: string;
+  size: string;
+  used: string;
+  avail: string;
+  pct: string;
+  mount: string;
+}
+
+/** Live OS telemetry gathered inside the Linux guest via a single fast probe. */
+export interface ObcGuestProbe {
+  uname: string;
+  distro: string;
+  uptime: string;
+  loadAvg: string;
+  memTotalMiB: number;
+  memUsedMiB: number;
+  memAvailMiB: number;
+  tools: Record<string, string>;
+  processes: ObcGuestProcess[];
+  mounts: ObcGuestMount[];
+}
+
+/** Persisted draggable & resizable geometry of the HUD OBC console window. */
+export interface ObcWindowBounds {
+  left: number;
+  top: number;
+  width: number;
+  height: number;
+  maximized: boolean;
 }

@@ -18,14 +18,21 @@ import { TermBuffer } from "./term-buffer";
 import {
   DEFAULT_OBC_CONFIG,
   type ObcConfig,
+  type ObcCpuCount,
   type ObcCrewSnapshot,
+  type ObcDiskInfo,
   type ObcDistro,
+  type ObcGuestMount,
+  type ObcGuestProbe,
+  type ObcGuestProcess,
+  type ObcKernelTelemetry,
   type ObcMemoryMiB,
   type ObcPhase,
   type ObcStatus,
   type ObcTelemetry,
   type ObcToolchainProfile,
   type ObcViewMode,
+  type ObcWispMode,
 } from "./types";
 
 const WISP_STORAGE_KEY = "kerr.obc.wisp";
@@ -36,6 +43,16 @@ const FB_POLL_MS = 33; // up to 30 Hz smooth real-time framebuffer updates while
 export function normalizeMemoryMiB(raw: unknown): ObcMemoryMiB {
   if (raw === 512 || raw === 1024 || raw === 2048 || raw === 4096) return raw;
   return DEFAULT_OBC_CONFIG.memoryMiB;
+}
+
+export function normalizeCpus(raw: unknown): ObcCpuCount {
+  if (raw === 1 || raw === 2 || raw === 4) return raw;
+  return DEFAULT_OBC_CONFIG.cpus;
+}
+
+export function normalizeWispMode(raw: unknown): ObcWispMode {
+  if (raw === "auto" || raw === "prod" || raw === "local" || raw === "custom" || raw === "off") return raw;
+  return DEFAULT_OBC_CONFIG.wispMode;
 }
 
 export function normalizeDistro(raw: unknown): ObcDistro {
@@ -69,14 +86,24 @@ function loadSavedConfig(): ObcConfig {
     return {
       distro,
       memoryMiB: mem,
+      cpus: normalizeCpus(o.cpus),
       fbWidth,
       fbHeight,
       jit: typeof o.jit === "boolean" ? o.jit : DEFAULT_OBC_CONFIG.jit,
+      shm: typeof o.shm === "boolean" ? o.shm : DEFAULT_OBC_CONFIG.shm,
+      profile: typeof o.profile === "boolean" ? o.profile : DEFAULT_OBC_CONFIG.profile,
       persistData: typeof o.persistData === "boolean" ? o.persistData : DEFAULT_OBC_CONFIG.persistData,
+      wispMode: normalizeWispMode(o.wispMode),
       crtFx: typeof o.crtFx === "boolean" ? o.crtFx : DEFAULT_OBC_CONFIG.crtFx,
       soundEnabled: typeof o.soundEnabled === "boolean" ? o.soundEnabled : DEFAULT_OBC_CONFIG.soundEnabled,
       theme,
       syncMode: o.syncMode === "strict" ? "strict" : "interactive",
+      fontSize:
+        typeof o.fontSize === "number" && o.fontSize >= 11 && o.fontSize <= 16 ? Math.round(o.fontSize) : DEFAULT_OBC_CONFIG.fontSize,
+      panelOpacity:
+        typeof o.panelOpacity === "number" && o.panelOpacity >= 0.72 && o.panelOpacity <= 1
+          ? Math.round(o.panelOpacity * 100) / 100
+          : DEFAULT_OBC_CONFIG.panelOpacity,
     };
   } catch {
     return { ...DEFAULT_OBC_CONFIG };
@@ -113,7 +140,13 @@ export class ObcRuntime {
   private commandsHandled = 0;
   private activeScript: string | null = null;
   private wispUrl = "";
+  private activeWispUrl = "";
   private netEnabled = false;
+  private lastSyncAt: number | null = null;
+  private cpuBlocker: string | null = null;
+  private hostLogs: string[] = [];
+  private termCols = 100;
+  private termRows = 26;
   private crewSeq = 0;
   private lastCrewTermRev = -1;
 
@@ -157,8 +190,12 @@ export class ObcRuntime {
     const next: ObcConfig = { ...this.config, ...partial };
     next.distro = normalizeDistro(next.distro);
     next.memoryMiB = normalizeMemoryMiB(next.memoryMiB);
+    next.cpus = normalizeCpus(next.cpus);
+    next.wispMode = normalizeWispMode(next.wispMode);
     next.fbWidth = Math.max(256, Math.min(1024, Math.round(next.fbWidth)));
     next.fbHeight = Math.max(256, Math.min(1024, Math.round(next.fbHeight)));
+    next.fontSize = Math.max(11, Math.min(16, Math.round(next.fontSize)));
+    next.panelOpacity = Math.max(0.72, Math.min(1, Math.round(next.panelOpacity * 100) / 100));
     this.config = next;
     if (this.phase !== "ready") this.actualMemoryMiB = next.memoryMiB;
     try {
@@ -241,6 +278,15 @@ export class ObcRuntime {
   }
 
   private async resolveWispUrl(): Promise<string> {
+    if (this.config.wispMode === "off") return "";
+    if (this.config.wispMode === "prod") return DEFAULT_PROD_WISP_URL;
+    if (this.config.wispMode === "local") {
+      if (typeof location === "undefined") return "";
+      const proto = location.protocol === "https:" ? "wss:" : "ws:";
+      return `${proto}//${location.host}/__wisp`;
+    }
+    if (this.config.wispMode === "custom") return this.wispUrl || DEFAULT_PROD_WISP_URL;
+    // "auto": explicit custom URL wins, else dev /__wisp when available, else production Wisp server
     if (this.wispUrl) return this.wispUrl;
     if (typeof location === "undefined") return DEFAULT_PROD_WISP_URL;
     try {
@@ -461,7 +507,9 @@ export class ObcRuntime {
         this.resolveWispUrl(),
         loadRustBinary(),
       ]);
+      this.activeWispUrl = effectiveWisp;
       this.netEnabled = Boolean(effectiveWisp);
+      this.cpuBlocker = mod.webCpuBlocker({ worker: true }) ?? null;
 
       const memFs = new mod.MemoryFs();
       this.unsubMount = wireObcMountFs(
@@ -489,7 +537,11 @@ export class ObcRuntime {
         ...(restore ? { restore } : {}),
         memoryMiB: this.config.memoryMiB,
         memoryFallbackMiB: [2048, 1024, 512, 256],
+        cpus: this.config.cpus,
         jit: this.config.jit,
+        shm: this.config.shm,
+        profile: this.config.profile,
+        consoleSize: { cols: this.termCols, rows: this.termRows },
         disks: [{ kind: "data", template: "bundled", mode: this.config.persistData ? "persistent" : "snapshot" }],
         mounts: { "/obc": memFs },
         display: { width: this.config.fbWidth, height: this.config.fbHeight },
@@ -502,7 +554,7 @@ export class ObcRuntime {
             }
           : {}),
         ...(effectiveWisp ? { net: { kind: "net" as const, backend: { kind: "wisp" as const, servers: [effectiveWisp] } } } : {}),
-        log: (msg) => console.debug("[OBC]", msg),
+        log: (msg) => this.pushLog(msg),
         onOutput: (bytes) => this.pushOutput(bytes),
         onDisplay: (mode) => this.handleDisplayChange(mode),
         onProgress: (p) => {
@@ -800,6 +852,407 @@ export class ObcRuntime {
       return;
     }
     this.vm.write(input);
+  }
+
+  /** Forward live console dimensions to Unkernel (`SIGWINCH` for Ratatui / vim / top / pi / claude). */
+  resize(cols: number, rows: number) {
+    const c = Math.max(40, Math.min(240, Math.round(cols)));
+    const r = Math.max(12, Math.min(80, Math.round(rows)));
+    if (c === this.termCols && r === this.termRows) return;
+    this.termCols = c;
+    this.termRows = r;
+    try {
+      this.vm?.resize(c, r);
+    } catch {
+      // ignore if worker exited
+    }
+  }
+
+  private pushLog(msg: string) {
+    const d = new Date();
+    const ts = `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}:${String(d.getSeconds()).padStart(2, "0")}`;
+    this.hostLogs.push(`[${ts}] ${msg}`);
+    if (this.hostLogs.length > 160) this.hostLogs.splice(0, this.hostLogs.length - 160);
+    console.debug("[OBC]", msg);
+  }
+
+  getLogs(): string[] {
+    return [...this.hostLogs];
+  }
+
+  clearLogs() {
+    this.hostLogs = [];
+  }
+
+  /** Return live Unkernel VM hardware & I/O counters (`vm.stats()`) plus browser host capabilities. */
+  kernelStats(): ObcKernelTelemetry {
+    const iso = typeof crossOriginIsolated === "boolean" ? crossOriginIsolated : false;
+    if (!this.vm || this.phase !== "ready") {
+      return {
+        running: false,
+        uptimeMs: 0,
+        compileMs: 0,
+        cpus: this.config.cpus,
+        memoryMiB: this.config.memoryMiB,
+        memory64: false,
+        cmdline: "",
+        transport: this.transport,
+        crossOriginIsolated: iso,
+        cpuBlocker: this.cpuBlocker,
+        activeWispUrl: this.activeWispUrl || this.wispUrl,
+        switches: 0,
+        idles: 0,
+        yields: 0,
+        jit: null,
+        block: null,
+        net: null,
+        vsock: null,
+        display: null,
+        sound: null,
+        shm: null,
+      };
+    }
+    const s = this.vm.stats();
+    return {
+      running: true,
+      uptimeMs: Math.round(s.uptimeMs ?? 0),
+      compileMs: Math.round(s.compileMs ?? 0),
+      cpus: s.cpus ?? 1,
+      memoryMiB: this.vm.memoryMiB || this.actualMemoryMiB,
+      memory64: Boolean(this.vm.memory64),
+      cmdline: this.vm.cmdline ?? "",
+      transport: this.transport,
+      crossOriginIsolated: iso,
+      cpuBlocker: this.cpuBlocker,
+      activeWispUrl: this.activeWispUrl,
+      switches: s.switches ?? 0,
+      idles: s.idles ?? 0,
+      yields: s.yields ?? 0,
+      jit: s.jit
+        ? {
+            enabled: s.jit.enabled,
+            requested: s.jit.requested,
+            compiled: s.jit.compiled,
+            live: s.jit.live,
+            maxLive: s.jit.maxLive,
+            freed: s.jit.freed,
+            failed: s.jit.failed,
+          }
+        : null,
+      block: s.block
+        ? {
+            reads: s.block.reads,
+            writes: s.block.writes,
+            flushes: s.block.flushes,
+            discards: s.block.discards,
+            bytesRead: s.block.bytesRead,
+            bytesWritten: s.block.bytesWritten,
+          }
+        : null,
+      net: s.net ? { rx: s.net.rx, tx: s.net.tx, tcpOpened: s.net.tcpOpened, dns: s.net.dns } : null,
+      vsock: s.vsock
+        ? {
+            open: s.vsock.open,
+            accepted: s.vsock.accepted,
+            connected: s.vsock.connected,
+            bytesIn: s.vsock.bytesIn,
+            bytesOut: s.vsock.bytesOut,
+            resets: s.vsock.resets,
+          }
+        : null,
+      display: s.display
+        ? {
+            attaches: s.display.attaches,
+            detaches: s.display.detaches,
+            width: this.fbMode?.width ?? 0,
+            height: this.fbMode?.height ?? 0,
+            fps: this.fbFps,
+          }
+        : null,
+      sound: s.sound
+        ? {
+            opens: s.sound.opens,
+            starts: s.sound.starts,
+            chunks: s.sound.chunks,
+            frames: s.sound.frames,
+            playing: Boolean(this.vm.sound?.playing),
+          }
+        : null,
+      shm: s.shm
+        ? {
+            open: s.shm.open,
+            reads: s.shm.reads,
+            writes: s.shm.writes,
+            bytesRead: s.shm.bytesRead,
+            bytesWritten: s.shm.bytesWritten,
+          }
+        : null,
+    };
+  }
+
+  /** Flush Linux guest filesystems and persistent IndexedDB `/data` disk right now. */
+  async syncDisk(): Promise<{ ok: boolean; msg: string; ms: number }> {
+    if (!this.vm || this.phase !== "ready") return { ok: false, msg: "OBC not running", ms: 0 };
+    const t0 = performance.now();
+    try {
+      const ok = await this.vm.sync({ timeout: 5000 });
+      const ms = Math.round(performance.now() - t0);
+      if (ok) this.lastSyncAt = Date.now();
+      this.pushLog(`Disk sync ${ok ? "OK" : "timeout"} (${ms} ms)`);
+      return { ok, msg: ok ? `Flushed /data (${ms} ms)` : "Sync timeout", ms };
+    } catch (e) {
+      return { ok: false, msg: e instanceof Error ? e.message : String(e), ms: Math.round(performance.now() - t0) };
+    }
+  }
+
+  /** Inspect persistent IndexedDB `/data` block count & browser storage quota. */
+  async diskInfo(): Promise<ObcDiskInfo> {
+    let storageUsageBytes: number | null = null;
+    let storageQuotaBytes: number | null = null;
+    try {
+      if (typeof navigator !== "undefined" && navigator.storage?.estimate) {
+        const est = await navigator.storage.estimate();
+        storageUsageBytes = typeof est.usage === "number" ? est.usage : null;
+        storageQuotaBytes = typeof est.quota === "number" ? est.quota : null;
+      }
+    } catch {
+      // ignore
+    }
+    let idbBlocks: number | null = null;
+    try {
+      if (typeof indexedDB !== "undefined") {
+        const mod = await import("unkernel/web");
+        const storeObj = new mod.IdbStore(`${mod.DATA_DISK_NAME}-${mod.DATA_DISK_VERSION}`);
+        idbBlocks = await storeObj.count();
+        await storeObj.close();
+      }
+    } catch {
+      idbBlocks = null;
+    }
+    return {
+      persistData: this.config.persistData,
+      idbBlocks,
+      storageUsageBytes,
+      storageQuotaBytes,
+      lastSyncAt: this.lastSyncAt,
+      hasSnapshot: this.savedSnapshot !== null || this.hibernatedState !== null,
+    };
+  }
+
+  /** Export `/home/pilot` as a gzipped tar archive for local backup. */
+  async exportPilotArchive(): Promise<{ ok: boolean; bytes?: Uint8Array; filename?: string; msg: string }> {
+    if (!this.vm || this.phase !== "ready") return { ok: false, msg: "OBC must be running to export /home/pilot" };
+    const res = await this.exec("tar -czf - -C /home pilot 2>/dev/null | base64 | tr -d '\\n'", 20_000);
+    if (!res.ok || !res.stdout.trim()) return { ok: false, msg: res.stderr || "tar export failed" };
+    try {
+      const bin = atob(res.stdout.trim());
+      const bytes = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+      return { ok: true, bytes, filename: `obc-pilot-${Date.now()}.tar.gz`, msg: `Exported ${(bytes.byteLength / 1024).toFixed(1)} KiB` };
+    } catch (e) {
+      return { ok: false, msg: e instanceof Error ? e.message : String(e) };
+    }
+  }
+
+  /** Import a `.tar.gz` backup into `/home/pilot` and sync to IndexedDB. */
+  async importPilotArchive(bytes: Uint8Array): Promise<{ ok: boolean; msg: string }> {
+    if (!this.vm || this.phase !== "ready") return { ok: false, msg: "OBC must be running to import /home/pilot" };
+    let b64 = "";
+    const chunk = 0x8000;
+    for (let i = 0; i < bytes.length; i += chunk) {
+      b64 += String.fromCharCode(...bytes.subarray(i, i + chunk));
+    }
+    try {
+      const res = await this.vm.exec("sh", ["-c", "base64 -d | tar -xzf - -C /home"], { input: btoa(b64), timeout: 20_000 });
+      if (res.exitCode !== 0) return { ok: false, msg: res.stderr || "tar import failed" };
+      await this.syncDisk();
+      return { ok: true, msg: `Imported ${(bytes.byteLength / 1024).toFixed(1)} KiB into /home/pilot` };
+    } catch (e) {
+      return { ok: false, msg: e instanceof Error ? e.message : String(e) };
+    }
+  }
+
+  /** Export a full binary Unkernel VM RAM snapshot (`.kwsnap`) when supported. */
+  async exportVmSnapshot(): Promise<{ ok: boolean; bytes?: Uint8Array; filename?: string; msg: string }> {
+    if (!this.vm || this.phase !== "ready") return { ok: false, msg: "OBC must be running" };
+    try {
+      const mod = await import("unkernel/web");
+      const snap = await this.vm.snapshot();
+      const bytes = mod.encodeSnapshot(snap);
+      return {
+        ok: true,
+        bytes,
+        filename: `obc-vm-${this.config.distro}-${Date.now()}.kwsnap`,
+        msg: `Snapshot ${(bytes.byteLength / (1024 * 1024)).toFixed(1)} MiB`,
+      };
+    } catch (e) {
+      return { ok: false, msg: e instanceof Error ? e.message : String(e) };
+    }
+  }
+
+  /** Restore a binary `.kwsnap` VM snapshot file. */
+  async importVmSnapshot(bytes: Uint8Array): Promise<{ ok: boolean; msg: string }> {
+    try {
+      const mod = await import("unkernel/web");
+      const snap = mod.decodeSnapshot(bytes);
+      await this.stop();
+      const st = await this.boot(snap);
+      return { ok: st.phase === "ready", msg: st.phase === "ready" ? "VM snapshot restored" : st.lastError || "Restore failed" };
+    } catch (e) {
+      return { ok: false, msg: e instanceof Error ? e.message : String(e) };
+    }
+  }
+
+  /** Collect live guest OS telemetry (RAM, uptime, mounts, processes, toolchains) in a single fast probe. */
+  async probeGuest(): Promise<ObcGuestProbe | null> {
+    if (!this.vm || this.phase !== "ready") return null;
+    const cmd = [
+      "echo '@@UNAME'; uname -srm",
+      "echo '@@DISTRO'; sed -n 's/^PRETTY_NAME=\"\\([^\"]*\\)\"/\\1/p' /etc/os-release 2>/dev/null | head -n 1",
+      "echo '@@UPTIME'; cat /proc/uptime 2>/dev/null; cat /proc/loadavg 2>/dev/null",
+      "echo '@@MEM'; awk '/^(MemTotal|MemAvailable|MemFree|Buffers|Cached):/{print $1,$2}' /proc/meminfo 2>/dev/null",
+      "echo '@@DF'; df -h 2>/dev/null | tail -n +2",
+      "echo '@@PS'; (ps -o pid,user,vsz,args 2>/dev/null || ps 2>/dev/null) | head -n 22",
+      "echo '@@TOOLS'",
+      'has_real(){ P=$(command -v "$1" 2>/dev/null || true); [ -n "$P" ] || return 1; case "$P" in /usr/lib/kw/bin/*) return 1;; esac; if [ "$1" = python3 ] || [ "$1" = node ]; then head -n 1 "$P" 2>/dev/null | grep -q \'^#!\' && return 1; fi; return 0; }',
+      'echo "obc-rs=$([ -x /obc/bin/obc-rs ] && echo native || echo off)"',
+      'echo "pilot-kit=$([ -r /home/pilot/CLAUDE.md ] && echo docs+5skills || echo off)"',
+      "echo \"python3=$(has_real python3 && python3 --version 2>&1 | awk '{print $2}' || echo off)\"",
+      "echo \"pip=$(has_real pip && pip --version 2>&1 | awk '{print $2}' || (has_real pip3 && pip3 --version 2>&1 | awk '{print $2}' || echo off))\"",
+      'echo "node=$(has_real node && node --version 2>&1 || echo off)"',
+      'echo "npm=$(has_real npm && npm --version 2>&1 | head -n 1 || echo off)"',
+      'echo "bun=$(has_real bun && bun --version 2>&1 | head -n 1 || echo off)"',
+      "echo \"rustc=$(has_real rustc && rustc --version 2>&1 | awk '{print $2}' || echo off)\"",
+      "echo \"cargo=$(has_real cargo && cargo --version 2>&1 | awk '{print $2}' || echo off)\"",
+      'echo "pi=$(has_real pi && pi --version 2>&1 | head -n 1 || echo off)"',
+      'echo "claude=$(has_real claude && claude --version 2>&1 | head -n 1 || echo off)"',
+    ].join("; ");
+    const res = await this.exec(cmd, 8000);
+    if (!res.ok) return null;
+
+    const sections: Record<string, string[]> = {};
+    let cur = "";
+    for (const rawLine of res.stdout.split(/\r?\n/)) {
+      const line = rawLine.trimEnd();
+      if (line.startsWith("@@")) {
+        cur = line.slice(2);
+        sections[cur] = [];
+      } else if (cur && line.trim()) {
+        sections[cur]!.push(line);
+      }
+    }
+
+    const memMap: Record<string, number> = {};
+    for (const l of sections.MEM ?? []) {
+      const [k, v] = l.split(/\s+/);
+      if (k && v) memMap[k.replace(":", "")] = Number(v) || 0;
+    }
+    const totalKb = memMap.MemTotal ?? 0;
+    const availKb = memMap.MemAvailable ?? (memMap.MemFree ?? 0) + (memMap.Buffers ?? 0) + (memMap.Cached ?? 0);
+    const usedKb = Math.max(0, totalKb - availKb);
+
+    const upSec = Number((sections.UPTIME?.[0] ?? "0").split(/\s+/)[0]) || 0;
+    const hh = Math.floor(upSec / 3600);
+    const mm = Math.floor((upSec % 3600) / 60);
+    const ss = Math.floor(upSec % 60);
+    const uptime = hh > 0 ? `${hh}h ${mm}m ${ss}s` : mm > 0 ? `${mm}m ${ss}s` : `${ss}s`;
+    const loadAvg = (sections.UPTIME?.[1] ?? "0.00 0.00 0.00").split(/\s+/).slice(0, 3).join(" ");
+
+    const mounts: ObcGuestMount[] = [];
+    for (const l of sections.DF ?? []) {
+      const p = l.trim().split(/\s+/);
+      if (p.length >= 6) {
+        mounts.push({ fs: p[0]!, size: p[1]!, used: p[2]!, avail: p[3]!, pct: p[4]!, mount: p.slice(5).join(" ") });
+      }
+    }
+
+    const processes: ObcGuestProcess[] = [];
+    for (const l of (sections.PS ?? []).slice(1)) {
+      const p = l.trim().split(/\s+/);
+      const pid = Number(p[0]);
+      if (Number.isFinite(pid) && pid > 0 && p.length >= 4) {
+        processes.push({ pid, user: p[1]!, mem: p[2]!, cmd: p.slice(3).join(" ").slice(0, 80) });
+      }
+    }
+
+    const tools: Record<string, string> = {};
+    for (const l of sections.TOOLS ?? []) {
+      const idx = l.indexOf("=");
+      if (idx > 0) tools[l.slice(0, idx)] = l.slice(idx + 1).trim() || "off";
+    }
+
+    return {
+      uname: sections.UNAME?.[0] ?? "Linux aarch64",
+      distro: sections.DISTRO?.[0] ?? distroLabel(this.config.distro),
+      uptime,
+      loadAvg,
+      memTotalMiB: Math.round(totalKb / 1024),
+      memUsedMiB: Math.round(usedKb / 1024),
+      memAvailMiB: Math.round(availKb / 1024),
+      tools,
+      processes,
+      mounts,
+    };
+  }
+
+  /** Terminate a guest process (refuses PID 1). */
+  async killProcess(pid: number, signal: "TERM" | "KILL" = "TERM"): Promise<{ ok: boolean; msg: string }> {
+    const p = Math.round(pid);
+    if (!Number.isFinite(p) || p <= 1) return { ok: false, msg: "Refusing to signal PID <= 1" };
+    const sig = signal === "KILL" ? "-KILL" : "-TERM";
+    const res = await this.exec(`kill ${sig} ${p}`, 4000);
+    return { ok: res.ok, msg: res.ok ? `Sent SIG${signal} to PID ${p}` : res.stderr.trim() || `kill ${p} failed` };
+  }
+
+  /** Read Unkernel CPU profiler report when `config.profile` is enabled. */
+  async getProfile(): Promise<string | null> {
+    if (!this.vm || this.phase !== "ready") return null;
+    try {
+      const rep = await this.vm.profile();
+      if (!rep) return null;
+      const mod = await import("unkernel/web");
+      return mod.formatProfile(rep);
+    } catch {
+      return null;
+    }
+  }
+
+  /** 1-click route Linux OBC onto a 3D cockpit display (Ranger MFD, F-35 PCD, or A320 MCDU+LECAM). */
+  routeToCockpit(target: "ranger" | "f35" | "a320"): { ok: boolean; msg: string } {
+    const bh = (globalThis as unknown as { __bh?: Record<string, unknown> }).__bh;
+    if (!bh) return { ok: false, msg: "Simulator __bh unavailable" };
+    try {
+      const settings = bh.settings as { shipMount?: string; cockpitPages?: string } | undefined;
+      const refresh = bh.refresh as (() => void) | undefined;
+      if (target === "ranger") {
+        const screens = bh.cockpitScreens as { setPage?: (i: number, p: string) => void; pagesSetting?: () => string } | undefined;
+        screens?.setPage?.(2, "obc");
+        if (settings && screens?.pagesSetting) settings.cockpitPages = screens.pagesSetting();
+        if (settings) settings.shipMount = "cockpit";
+        refresh?.();
+        return { ok: true, msg: "Routed OBC to Ranger MFD slot 2" };
+      }
+      if (target === "f35") {
+        const pcdWrap = bh.pcd as { pcd?: { halves: string[]; show: (half: number, page: string) => void } } | undefined;
+        if (pcdWrap?.pcd) {
+          pcdWrap.pcd.halves[0] = "full";
+          pcdWrap.pcd.show(0, "OBC");
+        }
+        if (settings) settings.shipMount = "cockpit";
+        refresh?.();
+        return { ok: true, msg: "Routed OBC to F-35 PCD" };
+      }
+      const mcduFn = bh.a320Mcdu as ((side: 0 | 1) => { setPage?: (p: string) => void } | null) | undefined;
+      mcduFn?.(0)?.setPage?.("obc");
+      if (settings) {
+        (settings as Record<string, unknown>).a320EcamPage = "obcPage";
+        settings.shipMount = "cockpit";
+      }
+      refresh?.();
+      return { ok: true, msg: "Routed OBC to A320 MCDU + Lower ECAM" };
+    } catch (e) {
+      return { ok: false, msg: e instanceof Error ? e.message : String(e) };
+    }
   }
 
   async runScript(idOrName: string): Promise<{ ok: boolean; script: string }> {

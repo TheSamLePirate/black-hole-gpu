@@ -5,11 +5,11 @@ import { readCrewCmd } from "../src/net/crewcmd";
 import { readInstruments } from "../src/net/instruments";
 import { OBC_PALETTES } from "../src/obc/fb-renderer";
 import { emptyTelemetry, formatTauText, normalizeWispUrl, parseObcCommand } from "../src/obc/protocol";
-import { distroLabel, normalizeDistro, normalizeMemoryMiB } from "../src/obc/runtime";
+import { distroLabel, normalizeCpus, normalizeDistro, normalizeMemoryMiB, normalizeWispMode } from "../src/obc/runtime";
 import { findObcScript, OBC_PILOT_KIT_FILES, OBC_SCRIPTS } from "../src/obc/scripts-catalog";
 import { radAttitudeToDeg } from "../src/obc/sim-adapter";
-import { DEFAULT_OBC_CONFIG, OBC_MEMORY_OPTIONS } from "../src/obc/types";
-import { keyEventToAnsi } from "../src/ui/obc-console";
+import { DEFAULT_OBC_CONFIG, OBC_CPU_OPTIONS, OBC_MEMORY_OPTIONS } from "../src/obc/types";
+import { clampWindowBounds, keyEventToAnsi, OBC_MIN_HEIGHT, OBC_MIN_WIDTH } from "../src/ui/obc-console";
 
 test("parseObcCommand: validates and clamps throttle, stick, flaps, autopilot, hold, sas, gear, say, ping", () => {
   expect(parseObcCommand({ kind: "throttle", value: 1.5 })).toEqual({ kind: "throttle", value: 1 });
@@ -205,4 +205,31 @@ test("OBC_PILOT_KIT_FILES: every /home/pilot doc and Claude/Pi SKILL.md exists w
     }
   }
   expect(skillCount).toBe(5);
+});
+
+test("clampWindowBounds & Unkernel config normalizers keep draggable/resizable OBC panel safely inside viewport", () => {
+  expect(OBC_CPU_OPTIONS).toEqual([1, 2, 4]);
+  expect(normalizeCpus(2)).toBe(2);
+  expect(normalizeCpus(8)).toBe(1);
+  expect(normalizeWispMode("off")).toBe("off");
+  expect(normalizeWispMode("prod")).toBe("prod");
+  expect(normalizeWispMode("bogus")).toBe("auto");
+
+  // Off-screen negative drag & undersized resize clamp cleanly inside 1440x900
+  const c1 = clampWindowBounds({ left: -200, top: -50, width: 200, height: 100, maximized: false }, 1440, 900);
+  expect(c1.width).toBe(OBC_MIN_WIDTH);
+  expect(c1.height).toBe(OBC_MIN_HEIGHT);
+  expect(c1.left).toBe(10);
+  expect(c1.top).toBe(10);
+
+  // Far bottom-right drag stays within viewport
+  const c2 = clampWindowBounds({ left: 1200, top: 800, width: 900, height: 500, maximized: false }, 1440, 900);
+  expect(c2.left).toBe(1440 - 900 - 10);
+  expect(c2.top).toBe(900 - 500 - 10);
+
+  // Maximized fills viewport cleanly under top HUD bar
+  const c3 = clampWindowBounds({ left: 100, top: 100, width: 800, height: 500, maximized: true }, 1440, 900);
+  expect(c3.maximized).toBe(true);
+  expect(c3.width).toBe(1420);
+  expect(c3.height).toBe(844);
 });

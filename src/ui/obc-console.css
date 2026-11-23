@@ -2,7 +2,8 @@
 
 .obc-overlay {
   --obc-accent: #62e6ff;
-  --obc-bg: rgba(4, 24, 34, 0.94);
+  --obc-opacity: 0.94;
+  --obc-bg: rgba(4, 24, 34, var(--obc-opacity));
   --obc-bar: rgba(8, 44, 58, 0.96);
   --obc-text: #c6f7ff;
   position: fixed;
@@ -24,23 +25,35 @@
   overflow: hidden;
 }
 
+.obc-overlay.custom-pos {
+  transform: none;
+  bottom: auto;
+}
+
+.obc-overlay.dragging,
+.obc-overlay.resizing {
+  user-select: none;
+  border-color: var(--obc-accent);
+  box-shadow: 0 28px 80px rgba(0, 0, 0, 0.88), 0 0 0 1px color-mix(in srgb, var(--obc-accent) 75%, transparent);
+}
+
 .obc-overlay[data-theme="amber"] {
   --obc-accent: #ffb347;
-  --obc-bg: rgba(20, 12, 4, 0.95);
+  --obc-bg: rgba(20, 12, 4, var(--obc-opacity));
   --obc-bar: rgba(38, 22, 6, 0.96);
   --obc-text: #ffe3b3;
 }
 
 .obc-overlay[data-theme="f35"] {
   --obc-accent: #4be38a;
-  --obc-bg: rgba(6, 15, 20, 0.95);
+  --obc-bg: rgba(6, 15, 20, var(--obc-opacity));
   --obc-bar: rgba(11, 28, 36, 0.96);
   --obc-text: #d8f8ff;
 }
 
 .obc-overlay[data-theme="a320"] {
   --obc-accent: #3ec8ff;
-  --obc-bg: rgba(5, 8, 12, 0.96);
+  --obc-bg: rgba(5, 8, 12, var(--obc-opacity));
   --obc-bar: rgba(14, 21, 30, 0.96);
   --obc-text: #e6f5ff;
 }
@@ -59,6 +72,19 @@
   border-bottom: 1px solid color-mix(in srgb, var(--obc-accent) 28%, transparent);
   flex-shrink: 0;
   flex-wrap: wrap;
+  cursor: grab;
+  user-select: none;
+}
+
+.obc-overlay.dragging .obc-bar {
+  cursor: grabbing;
+}
+
+.obc-drag-grip {
+  opacity: 0.55;
+  font-size: 12px;
+  letter-spacing: -1px;
+  margin-right: 2px;
 }
 
 .obc-title {
@@ -299,4 +325,235 @@
   height: 100%;
   object-fit: contain;
   cursor: crosshair;
+}
+
+/* ── AAA Linux Machine Manager Panel ──────────────────────────────────────── */
+.obc-mgr {
+  gap: 8px;
+  max-height: 295px;
+  overflow: hidden;
+}
+
+.obc-mgr-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding-bottom: 6px;
+  border-bottom: 1px solid color-mix(in srgb, var(--obc-accent) 20%, transparent);
+}
+
+.obc-mgr-tabs,
+.obc-mgr-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+.obc-mgr-tab {
+  padding: 4px 9px;
+  font-size: 10.5px;
+}
+
+.obc-mgr-body {
+  overflow-y: auto;
+  min-height: 0;
+  padding-right: 2px;
+}
+
+.obc-mgr-pane {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.obc-mgr-pane[hidden] {
+  display: none;
+}
+
+.obc-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 6px;
+}
+
+.obc-kpi {
+  background: rgba(6, 30, 42, 0.88);
+  border: 1px solid color-mix(in srgb, var(--obc-accent) 24%, transparent);
+  border-radius: 6px;
+  padding: 6px 8px;
+}
+
+.obc-kpi-lbl {
+  font-size: 9.5px;
+  letter-spacing: 0.08em;
+  color: color-mix(in srgb, var(--obc-accent) 76%, transparent);
+  text-transform: uppercase;
+}
+
+.obc-kpi-val {
+  font-size: 12.5px;
+  font-weight: 700;
+  color: #e8fcff;
+  margin-top: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.obc-kpi-val.ok {
+  color: #7dff9a;
+}
+
+.obc-kpi-val.warn {
+  color: #ffb347;
+}
+
+.obc-kpi-sub {
+  font-size: 10px;
+  color: color-mix(in srgb, var(--obc-text) 62%, transparent);
+  margin-top: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.obc-mgr-summary {
+  font-size: 10.5px;
+  color: color-mix(in srgb, var(--obc-text) 82%, transparent);
+  background: rgba(6, 26, 36, 0.72);
+  border: 1px solid color-mix(in srgb, var(--obc-accent) 16%, transparent);
+  border-radius: 5px;
+  padding: 5px 8px;
+}
+
+.obc-mgr-code {
+  font-size: 10px;
+  color: #93d8ec;
+  background: #02121a;
+  border: 1px solid color-mix(in srgb, var(--obc-accent) 18%, transparent);
+  border-radius: 5px;
+  padding: 5px 8px;
+  overflow-x: auto;
+  white-space: nowrap;
+}
+
+.obc-table-wrap {
+  max-height: 120px;
+  overflow-y: auto;
+  border: 1px solid color-mix(in srgb, var(--obc-accent) 20%, transparent);
+  border-radius: 5px;
+  background: #02121a;
+}
+
+.obc-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 10.5px;
+}
+
+.obc-table th,
+.obc-table td {
+  text-align: left;
+  padding: 3px 6px;
+  border-bottom: 1px solid rgba(98, 230, 255, 0.08);
+  white-space: nowrap;
+}
+
+.obc-table th {
+  position: sticky;
+  top: 0;
+  background: rgba(6, 32, 44, 0.96);
+  color: var(--obc-accent);
+  font-size: 9.5px;
+  letter-spacing: 0.06em;
+}
+
+.obc-btn-xs {
+  padding: 2px 5px;
+  font-size: 9.5px;
+  margin-right: 3px;
+}
+
+.obc-tool-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(175px, 1fr));
+  gap: 6px;
+}
+
+.obc-tool-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  padding: 5px 8px;
+  border-radius: 5px;
+  background: rgba(6, 30, 42, 0.85);
+  border: 1px solid color-mix(in srgb, var(--obc-accent) 20%, transparent);
+}
+
+.obc-tool-name {
+  font-size: 10.5px;
+  font-weight: 700;
+  color: #e6fbff;
+}
+
+.obc-tool-ver {
+  font-size: 10px;
+  color: #7d9aa6;
+}
+
+.obc-tool-ver.ok {
+  color: #7dff9a;
+}
+
+.obc-range-wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.obc-range-wrap input[type="range"] {
+  width: 68px;
+  accent-color: var(--obc-accent);
+}
+
+.obc-mgr-logs {
+  margin: 0;
+  max-height: 112px;
+  overflow-y: auto;
+  background: #02121a;
+  border: 1px solid color-mix(in srgb, var(--obc-accent) 20%, transparent);
+  border-radius: 5px;
+  padding: 6px 8px;
+  font-size: 10px;
+  line-height: 1.35;
+  color: #a9e6f5;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* ── 8-Way Resize Handles ─────────────────────────────────────────────────── */
+.obc-rz {
+  position: absolute;
+  z-index: 20;
+}
+
+.obc-rz-n { top: 0; left: 10px; right: 10px; height: 5px; cursor: ns-resize; }
+.obc-rz-s { bottom: 0; left: 10px; right: 10px; height: 5px; cursor: ns-resize; }
+.obc-rz-e { top: 10px; bottom: 10px; right: 0; width: 5px; cursor: ew-resize; }
+.obc-rz-w { top: 10px; bottom: 10px; left: 0; width: 5px; cursor: ew-resize; }
+.obc-rz-nw { top: 0; left: 0; width: 12px; height: 12px; cursor: nwse-resize; }
+.obc-rz-ne { top: 0; right: 0; width: 12px; height: 12px; cursor: nesw-resize; }
+.obc-rz-sw { bottom: 0; left: 0; width: 12px; height: 12px; cursor: nesw-resize; }
+.obc-rz-se {
+  bottom: 0;
+  right: 0;
+  width: 16px;
+  height: 16px;
+  cursor: nwse-resize;
+  background: linear-gradient(135deg, transparent 48%, color-mix(in srgb, var(--obc-accent) 65%, transparent) 50%, transparent 56%, transparent 68%, color-mix(in srgb, var(--obc-accent) 85%, transparent) 70%, transparent 76%);
+  border-bottom-right-radius: 10px;
 }
