@@ -1114,6 +1114,8 @@ export function installBh(c: BhContext) {
         probeGuest: () => obc.probeGuest(),
         killProcess: (pid: number, signal?: "TERM" | "KILL") => obc.killProcess(pid, signal),
         routeToCockpit: (target: "ranger" | "f35" | "a320") => obc.routeToCockpit(target),
+        screenCapture: () => obc.screenCapture(),
+        releaseScreenCapture: () => obc.releaseScreenCapture(),
         getLogs: () => obc.getLogs(),
         clearLogs: () => obc.clearLogs(),
         getProfile: () => obc.getProfile(),

@@ -558,3 +558,48 @@
   background: linear-gradient(135deg, transparent 48%, color-mix(in srgb, var(--obc-accent) 65%, transparent) 50%, transparent 56%, transparent 68%, color-mix(in srgb, var(--obc-accent) 85%, transparent) 70%, transparent 76%);
   border-bottom-right-radius: 10px;
 }
+
+/* Floating AAA indicator pill while a 3D cockpit screen (F-35 PCD / A320 LECAM-MCDU / Ranger-Lander MFD) captures input */
+.obc-screen-capture-badge {
+  position: fixed;
+  left: 50%;
+  bottom: 18px;
+  transform: translateX(-50%);
+  z-index: 950;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: rgba(6, 18, 26, 0.92);
+  border: 1px solid rgba(98, 230, 255, 0.55);
+  box-shadow: 0 8px 26px rgba(0, 0, 0, 0.55), 0 0 18px rgba(98, 230, 255, 0.18);
+  backdrop-filter: blur(8px);
+  color: #dff7ff;
+  font: 600 11.5px/1.2 ui-monospace, SFMono-Regular, Menlo, monospace;
+  letter-spacing: 0.03em;
+  pointer-events: auto;
+}
+
+.obc-scb-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #6ef894;
+  box-shadow: 0 0 10px #6ef894;
+  flex-shrink: 0;
+}
+
+.obc-scb-btn {
+  padding: 3px 9px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 196, 56, 0.55);
+  background: rgba(255, 196, 56, 0.14);
+  color: #ffc438;
+  font: 700 10.5px/1 ui-monospace, SFMono-Regular, Menlo, monospace;
+  cursor: pointer;
+}
+
+.obc-scb-btn:hover {
+  background: rgba(255, 196, 56, 0.28);
+}

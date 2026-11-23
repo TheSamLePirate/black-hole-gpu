@@ -2313,7 +2313,9 @@ impl BhTuiApp {
             return;
         }
         let mut spans = vec![
-            Span::styled(" [/] ", Style::default().fg(C_AMB).add_modifier(Modifier::BOLD)),
+            Span::styled(" [↑↓←→] ", Style::default().fg(C_AMB).add_modifier(Modifier::BOLD)),
+            Span::raw("Nav "),
+            Span::styled("[/] ", Style::default().fg(C_AMB).add_modifier(Modifier::BOLD)),
             Span::raw("Fuzzy "),
             Span::styled("[f] ", Style::default().fg(C_AMB).add_modifier(Modifier::BOLD)),
             Span::raw("All "),
@@ -2321,8 +2323,6 @@ impl BhTuiApp {
             Span::raw("Run "),
             Span::styled("[:] ", Style::default().fg(C_AMB).add_modifier(Modifier::BOLD)),
             Span::raw("Eval "),
-            Span::styled("[Tab] ", Style::default().fg(C_AMB).add_modifier(Modifier::BOLD)),
-            Span::raw("Tab "),
             Span::styled("[q] ", Style::default().fg(C_AMB).add_modifier(Modifier::BOLD)),
             Span::raw("Quit"),
         ];
@@ -2434,6 +2434,31 @@ impl TuiApp for BhTuiApp {
             }
             KeyCode::Down | KeyCode::Char('j') => self.move_selection(1),
             KeyCode::Up | KeyCode::Char('k') => self.move_selection(-1),
+            KeyCode::Right => {
+                if self.tab == 0
+                    && let Some(row) = self.selected_filtered()
+                    && self
+                        .entries
+                        .get(row.index)
+                        .is_some_and(|m| m.kind == "obj" || m.kind == "object")
+                {
+                    self.activate_selected(false);
+                } else {
+                    self.switch_tab(self.tab + 1);
+                }
+            }
+            KeyCode::Left => {
+                if self.tab == 0 && !self.bh_path.is_empty() {
+                    if let Some((parent, _)) = self.bh_path.rsplit_once('.') {
+                        self.bh_path = parent.to_string();
+                    } else {
+                        self.bh_path.clear();
+                    }
+                    self.reload_bh();
+                } else {
+                    self.switch_tab(self.tab + 4);
+                }
+            }
             KeyCode::PageDown | KeyCode::Char(']') => {
                 self.inspect_scroll = self.inspect_scroll.saturating_add(4);
             }

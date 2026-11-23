@@ -15,10 +15,13 @@ const C_CYN: Color = Color::Rgb(98, 230, 255);
 const C_GRN: Color = Color::Rgb(110, 248, 148);
 const C_AMB: Color = Color::Rgb(255, 196, 56);
 
+const TOP_CMDS: [&str; 5] = ["SAS", "GEAR", "PROGRADE", "RETRO", "HOLD OFF"];
+
 pub struct TopApp {
     bus: AvionicsBus,
     spd_hist: VecDeque<u64>,
     g_hist: VecDeque<u64>,
+    cmd_idx: usize,
     online: bool,
 }
 
@@ -29,6 +32,7 @@ impl TopApp {
             bus: AvionicsBus::new(),
             spd_hist: VecDeque::from(vec![0; 64]),
             g_hist: VecDeque::from(vec![10; 64]),
+            cmd_idx: 0,
             online: true,
         }
     }
@@ -68,12 +72,39 @@ impl TuiApp for TopApp {
         let t = self.bus.cached().clone();
         match key.code {
             KeyCode::Char('q' | 'Q') | KeyCode::Esc => return true,
-            KeyCode::Char('+' | ']' | '=') => {
+            KeyCode::Up | KeyCode::Char('+' | ']' | '=') => {
                 let _ = self.bus.set_throttle(t.systems.throttle + 0.1);
             }
-            KeyCode::Char('-' | '[' | '_') => {
+            KeyCode::Down | KeyCode::Char('-' | '[' | '_') => {
                 let _ = self.bus.set_throttle(t.systems.throttle - 0.1);
             }
+            KeyCode::Right => {
+                self.cmd_idx = (self.cmd_idx + 1) % TOP_CMDS.len();
+            }
+            KeyCode::Left => {
+                self.cmd_idx = if self.cmd_idx == 0 {
+                    TOP_CMDS.len() - 1
+                } else {
+                    self.cmd_idx - 1
+                };
+            }
+            KeyCode::Enter | KeyCode::Char(' ') => match self.cmd_idx {
+                0 => {
+                    let _ = self.bus.set_sas(!t.systems.sas);
+                }
+                1 => {
+                    let _ = self.bus.set_gear(t.systems.gear < 0.5);
+                }
+                2 => {
+                    let _ = self.bus.set_hold("prograde");
+                }
+                3 => {
+                    let _ = self.bus.set_hold("retrograde");
+                }
+                _ => {
+                    let _ = self.bus.set_hold("none");
+                }
+            },
             KeyCode::Char('s' | 'S') => {
                 let _ = self.bus.set_sas(!t.systems.sas);
             }
@@ -199,21 +230,24 @@ impl TuiApp for TopApp {
             sp_cols[1],
         );
 
-        frame.render_widget(
-            Paragraph::new(Line::from(vec![
-                Span::styled(" [+/-] ", Style::default().fg(C_AMB).add_modifier(Modifier::BOLD)),
-                Span::raw("Throttle  "),
-                Span::styled(" [s] ", Style::default().fg(C_AMB).add_modifier(Modifier::BOLD)),
-                Span::raw("SAS  "),
-                Span::styled(" [g] ", Style::default().fg(C_AMB).add_modifier(Modifier::BOLD)),
-                Span::raw("Gear  "),
-                Span::styled(" [p] ", Style::default().fg(C_AMB).add_modifier(Modifier::BOLD)),
-                Span::raw("Prograde  "),
-                Span::styled(" [q] ", Style::default().fg(C_AMB).add_modifier(Modifier::BOLD)),
-                Span::raw("Quit"),
-            ])),
-            rows[4],
-        );
+        let mut f_spans = vec![
+            Span::styled(" [↑↓] ", Style::default().fg(C_AMB).add_modifier(Modifier::BOLD)),
+            Span::raw("Thr "),
+            Span::styled("[←→+Ent] ", Style::default().fg(C_AMB).add_modifier(Modifier::BOLD)),
+        ];
+        for (i, label) in TOP_CMDS.iter().enumerate() {
+            if i == self.cmd_idx {
+                f_spans.push(Span::styled(
+                    format!("▸{label} "),
+                    Style::default().fg(C_GRN).add_modifier(Modifier::BOLD),
+                ));
+            } else {
+                f_spans.push(Span::styled(format!("{label} "), Style::default().fg(C_CYN)));
+            }
+        }
+        f_spans.push(Span::styled(" [q] ", Style::default().fg(C_AMB).add_modifier(Modifier::BOLD)));
+        f_spans.push(Span::raw("Quit"));
+        frame.render_widget(Paragraph::new(Line::from(f_spans)), rows[4]);
     }
 }
 

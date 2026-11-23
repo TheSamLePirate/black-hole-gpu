@@ -8,18 +8,26 @@ use ratatui::Frame;
 use ratatui::layout::{Constraint, Direction, Layout};
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
-use ratatui::widgets::{Block, BorderType, Borders, Gauge, Paragraph, Row, Table, Tabs};
+use ratatui::widgets::{Block, BorderType, Borders, Gauge, Paragraph, Row, Table, TableState, Tabs};
 use serde_json::{Value, json};
 
 const C_GRN: Color = Color::Rgb(75, 227, 138);
 const C_CYN: Color = Color::Rgb(92, 228, 255);
 const C_AMB: Color = Color::Rgb(255, 196, 56);
+const F35_WPNS: [(&str, &str); 4] = [
+    ("AIM-120", "aim120"),
+    ("AIM-9X", "aim9x"),
+    ("JDAM", "jdam"),
+    ("JSM", "jsm"),
+];
 
 pub struct F35TuiApp {
     bus: AvionicsBus,
     radar_mode: usize,
+    wpn_idx: usize,
     weapon: &'static str,
     tracks: Vec<(String, String, String, String)>,
+    track_state: TableState,
     tick_count: u32,
     online: bool,
 }
@@ -27,11 +35,15 @@ pub struct F35TuiApp {
 impl F35TuiApp {
     #[must_use]
     pub fn new() -> Self {
+        let mut ts = TableState::default();
+        ts.select(Some(0));
         let mut app = Self {
             bus: AvionicsBus::new(),
             radar_mode: 1,
+            wpn_idx: 0,
             weapon: "AIM-120",
             tracks: Vec::new(),
+            track_state: ts,
             tick_count: 0,
             online: true,
         };
@@ -41,11 +53,15 @@ impl F35TuiApp {
 
     #[must_use]
     pub fn offline() -> Self {
+        let mut ts = TableState::default();
+        ts.select(Some(0));
         Self {
             bus: AvionicsBus::new(),
             radar_mode: 1,
+            wpn_idx: 0,
             weapon: "AIM-120",
             tracks: vec![("AFR63PD".into(), "239°".into(), "8.9 km".into(), "207 m".into())],
+            track_state: ts,
             tick_count: 0,
             online: false,
         }
@@ -118,27 +134,54 @@ impl TuiApp for F35TuiApp {
         let modes = ["RWS", "TWS", "STT"];
         match key.code {
             KeyCode::Char('q' | 'Q') | KeyCode::Esc => return true,
-            KeyCode::Char('r' | 'R') | KeyCode::Tab => {
+            KeyCode::Right | KeyCode::Char('r' | 'R') | KeyCode::Tab => {
                 self.radar_mode = (self.radar_mode + 1) % 3;
                 let _ = self.bus.tars_tool("f35_radar", &json!({ "action": "mode", "mode": modes[self.radar_mode] }));
             }
+            KeyCode::Left => {
+                self.radar_mode = (self.radar_mode + 2) % 3;
+                let _ = self.bus.tars_tool("f35_radar", &json!({ "action": "mode", "mode": modes[self.radar_mode] }));
+            }
+            KeyCode::Down => {
+                if !self.tracks.is_empty() {
+                    let i = self.track_state.selected().map_or(0, |s| (s + 1) % self.tracks.len());
+                    self.track_state.select(Some(i));
+                }
+            }
+            KeyCode::Up => {
+                if !self.tracks.is_empty() {
+                    let n = self.tracks.len();
+                    let i = self.track_state.selected().map_or(0, |s| if s == 0 { n - 1 } else { s - 1 });
+                    self.track_state.select(Some(i));
+                }
+            }
+            KeyCode::Char(' ') => {
+                self.wpn_idx = (self.wpn_idx + 1) % F35_WPNS.len();
+                let (label, code) = F35_WPNS[self.wpn_idx];
+                self.weapon = label;
+                let _ = self.bus.tars_tool("f35_weapons", &json!({ "action": "select", "weapon": code }));
+            }
             KeyCode::Char('1') => {
+                self.wpn_idx = 0;
                 self.weapon = "AIM-120";
                 let _ = self.bus.tars_tool("f35_weapons", &json!({ "action": "select", "weapon": "aim120" }));
             }
             KeyCode::Char('2') => {
+                self.wpn_idx = 1;
                 self.weapon = "AIM-9X";
                 let _ = self.bus.tars_tool("f35_weapons", &json!({ "action": "select", "weapon": "aim9x" }));
             }
             KeyCode::Char('3') => {
+                self.wpn_idx = 2;
                 self.weapon = "JDAM";
                 let _ = self.bus.tars_tool("f35_weapons", &json!({ "action": "select", "weapon": "jdam" }));
             }
             KeyCode::Char('4') => {
+                self.wpn_idx = 3;
                 self.weapon = "JSM";
                 let _ = self.bus.tars_tool("f35_weapons", &json!({ "action": "select", "weapon": "jsm" }));
             }
-            KeyCode::Char('l' | 'L') => {
+            KeyCode::Enter | KeyCode::Char('l' | 'L') => {
                 let _ = self.bus.tars_tool("f35_radar", &json!({ "action": "lock_next" }));
             }
             KeyCode::Char('c' | 'C') => {
@@ -248,22 +291,21 @@ impl TuiApp for F35TuiApp {
                 .borders(Borders::ALL)
                 .border_type(BorderType::Rounded)
                 .border_style(Style::default().fg(C_CYN)),
-        );
-        frame.render_widget(trk_tbl, body[1]);
+        )
+        .row_highlight_style(Style::default().bg(Color::Rgb(16, 54, 72)).fg(C_AMB).add_modifier(Modifier::BOLD));
+        frame.render_stateful_widget(trk_tbl, body[1], &mut self.track_state);
 
         frame.render_widget(
             Paragraph::new(Line::from(vec![
-                Span::styled(" [1-4] ", Style::default().fg(C_AMB).add_modifier(Modifier::BOLD)),
-                Span::raw("Weapon  "),
-                Span::styled(" [r] ", Style::default().fg(C_AMB).add_modifier(Modifier::BOLD)),
-                Span::raw("RWS/TWS/STT  "),
-                Span::styled(" [l] ", Style::default().fg(C_AMB).add_modifier(Modifier::BOLD)),
-                Span::raw("Lock  "),
-                Span::styled(" [c] ", Style::default().fg(C_AMB).add_modifier(Modifier::BOLD)),
-                Span::raw("CM  "),
-                Span::styled(" [a] ", Style::default().fg(C_AMB).add_modifier(Modifier::BOLD)),
-                Span::raw("AP  "),
-                Span::styled(" [q] ", Style::default().fg(C_AMB).add_modifier(Modifier::BOLD)),
+                Span::styled(" [←→] ", Style::default().fg(C_AMB).add_modifier(Modifier::BOLD)),
+                Span::raw("Radar "),
+                Span::styled("[↑↓] ", Style::default().fg(C_AMB).add_modifier(Modifier::BOLD)),
+                Span::raw("Track "),
+                Span::styled("[Enter] ", Style::default().fg(C_AMB).add_modifier(Modifier::BOLD)),
+                Span::raw("Lock "),
+                Span::styled("[Space/1-4] ", Style::default().fg(C_AMB).add_modifier(Modifier::BOLD)),
+                Span::raw("Wpn "),
+                Span::styled("[q] ", Style::default().fg(C_AMB).add_modifier(Modifier::BOLD)),
                 Span::raw("Quit"),
             ])),
             rows[3],

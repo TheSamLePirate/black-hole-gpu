@@ -289,5 +289,19 @@ mod tests {
         let s_a320 = render_snapshot(&mut a320, 100, 30);
         assert!(s_a320.contains("OBC-A320-TUI"));
         assert!(s_a320.contains("OBC LINUX LINK"));
+
+        // Verify arrow keys work cleanly across all 6 TUIs without panicking
+        for code in [KeyCode::Right, KeyCode::Left, KeyCode::Down, KeyCode::Up] {
+            let ev = KeyEvent::new(code, KeyModifiers::NONE);
+            bh.on_key(ev);
+            top_app.on_key(ev);
+            mis.on_key(ev);
+            fmc_app.on_key(ev);
+            f35.on_key(ev);
+            a320.on_key(ev);
+        }
+        assert!(render_snapshot(&mut top_app, 100, 30).contains("[↑↓]"));
+        assert!(render_snapshot(&mut f35, 100, 30).contains("[←→]"));
+        assert!(render_snapshot(&mut a320, 100, 30).contains("[←→]"));
     }
 }

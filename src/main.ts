@@ -77,6 +77,7 @@ import { effectiveBindings, freeCameraKeys } from "./input/bindings";
 import { matchKey, type KeyAction } from "./input/keymap";
 import { installBh } from "./automation";
 import { obc } from "./obc/runtime";
+import { CockpitScreenCapture, shouldSuppressCameraDblClick } from "./obc/screen-capture";
 import { createSimObcAdapter } from "./obc/sim-adapter";
 import { ObcConsoleOverlay } from "./ui/obc-console";
 import { netParams } from "./net/load";
@@ -4633,11 +4634,24 @@ async function main() {
           if (a.op === "boot") {
             const st = obc.status();
             void (st.phase === "suspended" || st.hasSnapshot ? obc.resume() : obc.boot());
+            cockpitScreenCapture.attach({
+              id: `cabin:slot${slot}:obc`,
+              label: `${settings.vessel.toUpperCase()} OBC #${slot + 1}`,
+              kind: "obc",
+              slot,
+            });
             panel.toast("Linux OBC");
           } else if (a.op === "script" && a.script) {
             void obc.runScript(a.script);
+            cockpitScreenCapture.attach({
+              id: `cabin:slot${slot}:obc`,
+              label: `${settings.vessel.toUpperCase()} OBC #${slot + 1}`,
+              kind: "obc",
+              slot,
+            });
             panel.toast(`OBC: ${a.script}`);
           } else if (a.op === "console") {
+            cockpitScreenCapture.release();
             obcConsole.toggle();
           }
         }
@@ -5943,9 +5957,158 @@ async function main() {
     if (settings.vessel !== "f35" || !(settings.shipMount === "cockpit" || settings.shipMount === "cabin")) return false;
     const h = renderer.ship.jetPick(nx, ny);
     if (!h?.screen) return false;
+    cockpitScreenCapture.markScreenHit();
     const what = jetPcd.touch(h.screen.u, h.screen.v);
+    const pr = jetPcd.pageRect(h.screen.u, h.screen.v);
+    if (pr?.page === "OBC") {
+      cockpitScreenCapture.attach({ id: "f35:pcd:obc", label: "F-35 PCD · OBC", kind: "obc" });
+    } else {
+      cockpitScreenCapture.release();
+    }
     if (what) panel.toast(`PCD · ${what}`);
     return true;
+  };
+  // (AAA 3D cockpit screen guard: never reset camera on double-click when interacting with ANY 3D cockpit screen or control)
+  const hitAnyCockpitScreen = (nx: number, ny: number): boolean => {
+    if (!camera.piloting || camera.spectating) return false;
+    if (settings.vessel === "f35" && (settings.shipMount === "cockpit" || settings.shipMount === "cabin")) {
+      return !!renderer.ship.jetPick(nx, ny)?.screen;
+    }
+    if (onDeck()) {
+      const t = deckControls()?.target(nx, ny);
+      return t?.kind === "screen" || t?.kind === "control";
+    }
+    if (renderer.ship.cabinShown) {
+      const t = cockpitInput.move(nx, ny);
+      return t?.kind === "screen" || t?.kind === "control";
+    }
+    return false;
+  };
+  camera.isCockpitScreenInteraction = (nx, ny) =>
+    shouldSuppressCameraDblClick(hitAnyCockpitScreen(nx, ny), cockpitScreenCapture.active, cockpitScreenCapture.recentlyHitScreen());
+
+  // (AAA 3D cockpit screen input capture: clicking an OBC or MCDU 3D screen captures keyboard & mouse without dragging the camera)
+  const isA320LecamObc = () =>
+    String(deckPoser.props["ecam/sd-page"] ?? "") === "obcPage" || String(camera.a320Ecam?.sd ?? "") === "obcPage";
+  camera.onCockpitScreenPointer = (phase, nx, ny, button) => {
+    if (!camera.piloting || camera.spectating || obcConsole.isOpen) {
+      if (cockpitScreenCapture.active) cockpitScreenCapture.release();
+      return false;
+    }
+    // 1. F-35B/C Panoramic Cockpit Display
+    if (settings.vessel === "f35" && (settings.shipMount === "cockpit" || settings.shipMount === "cabin")) {
+      const h = renderer.ship.jetPick(nx, ny);
+      if (h?.screen) {
+        cockpitScreenCapture.markScreenHit();
+        const pr = jetPcd.pageRect(h.screen.u, h.screen.v);
+        if (pr?.page === "OBC") {
+          const lu = (h.screen.u - pr.rect.u0) / Math.max(1e-4, pr.rect.u1 - pr.rect.u0);
+          const lv = (h.screen.v - pr.rect.v0) / Math.max(1e-4, pr.rect.v1 - pr.rect.v0);
+          if (phase === "down") {
+            cockpitScreenCapture.attach({ id: "f35:pcd:obc", label: "F-35 PCD · OBC", kind: "obc" });
+            cockpitScreenCapture.forwardPointer(lu, lv, 1);
+          } else if (phase === "move") {
+            cockpitScreenCapture.forwardPointer(lu, lv, button);
+          } else {
+            cockpitScreenCapture.forwardPointer(lu, lv, 0);
+          }
+          return true;
+        }
+        if (phase === "down") cockpitScreenCapture.release();
+        return false;
+      }
+      if (phase === "down" && cockpitScreenCapture.active) cockpitScreenCapture.release();
+      return false;
+    }
+    // 2. Airbus A320 Flight Deck (Lower ECAM OBC + Captain/FO MCDU)
+    if (onDeck()) {
+      const t = deckControls()?.target(nx, ny);
+      if (t?.kind === "screen") {
+        cockpitScreenCapture.markScreenHit();
+        if (t.name === "LECAM" && isA320LecamObc()) {
+          if (phase === "down") {
+            cockpitScreenCapture.attach({ id: "a320:lecam:obc", label: "A320 LECAM · OBC", kind: "obc" });
+            cockpitScreenCapture.forwardPointer(t.u, t.v, 1);
+          } else if (phase === "move") {
+            cockpitScreenCapture.forwardPointer(t.u, t.v, button);
+          } else {
+            cockpitScreenCapture.forwardPointer(t.u, t.v, 0);
+          }
+          return true;
+        }
+        if (t.name === "MCDU1" || t.name === "MCDU2") {
+          const side: 0 | 1 = t.name === "MCDU2" ? 1 : 0;
+          const m = a320Mcdus()?.[side];
+          const isObc = m?.pageId === "obc";
+          if (phase === "down") {
+            cockpitScreenCapture.attach({
+              id: isObc ? `a320:mcdu${side}:obc` : `a320:mcdu${side}`,
+              label: isObc ? `A320 MCDU${side + 1} · OBC` : `A320 MCDU${side + 1}`,
+              kind: isObc ? "obc" : "mcdu",
+              side,
+            });
+          }
+          return true;
+        }
+        if (phase === "down") cockpitScreenCapture.release();
+        return false;
+      }
+      if (phase === "down" && t?.kind !== "control" && cockpitScreenCapture.active) {
+        cockpitScreenCapture.release();
+      }
+      return false;
+    }
+    // 3. Ranger / Lander / Endurance 3D Cabin Displays
+    if (renderer.ship.cabinShown) {
+      const t = cockpitInput.move(nx, ny);
+      if (t?.kind === "screen") {
+        cockpitScreenCapture.markScreenHit();
+        if (cockpitScreens.pages[t.slot] === "obc") {
+          if (phase === "down") {
+            cockpitScreenCapture.attach({
+              id: `cabin:slot${t.slot}:obc`,
+              label: `${settings.vessel.toUpperCase()} OBC #${t.slot + 1}`,
+              kind: "obc",
+              slot: t.slot,
+            });
+            cockpitScreenCapture.forwardPointer(t.u, t.v, 1);
+          } else if (phase === "move") {
+            cockpitScreenCapture.forwardPointer(t.u, t.v, button);
+          } else {
+            cockpitScreenCapture.forwardPointer(t.u, t.v, 0);
+          }
+          return true;
+        }
+        if (phase === "down") cockpitScreenCapture.release();
+        return false;
+      }
+      if (phase === "down" && cockpitScreenCapture.active) cockpitScreenCapture.release();
+    }
+    return false;
+  };
+  camera.onCockpitScreenWheel = (nx, ny, dir) => {
+    if (!camera.piloting || camera.spectating || obcConsole.isOpen) return false;
+    if (cockpitScreenCapture.active) {
+      return dir === 0 ? true : cockpitScreenCapture.forwardWheel(dir);
+    }
+    // Also route scroll wheel cleanly when hovering directly over any live OBC 3D screen
+    if (settings.vessel === "f35" && (settings.shipMount === "cockpit" || settings.shipMount === "cabin")) {
+      const h = renderer.ship.jetPick(nx, ny);
+      if (h?.screen && jetPcd.pageRect(h.screen.u, h.screen.v)?.page === "OBC") {
+        return dir === 0 ? true : cockpitScreenCapture.forwardWheel(dir);
+      }
+    } else if (onDeck()) {
+      const t = deckControls()?.target(nx, ny);
+      if (t?.kind === "screen" && ((t.name === "LECAM" && isA320LecamObc()) || t.name === "MCDU1" || t.name === "MCDU2")) {
+        return dir === 0 ? true : cockpitScreenCapture.forwardWheel(dir);
+      }
+    } else if (renderer.ship.cabinShown) {
+      const t = cockpitInput.move(nx, ny);
+      if (t?.kind === "screen" && cockpitScreens.pages[t.slot] === "obc") {
+        return dir === 0 ? true : cockpitScreenCapture.forwardWheel(dir);
+      }
+    }
+    return false;
   };
   // (the wheel over a radar — PLAN-RADAR-AAA P11 —: the HUD's scope's range a step, the PCD's TSD's or FCR's; the
   // camera's field untouched; `dir` 0 only asks whether it is over one)
@@ -8355,6 +8518,15 @@ async function main() {
   // Embedded Linux On-Board Computer (docs/PLAN-LINUX-OBC.md): lazy-booted on demand, zero startup overhead
   const obcConsole = new ObcConsoleOverlay(obc);
   document.body.append(obcConsole.el);
+  const cockpitScreenCapture = new CockpitScreenCapture(
+    obc,
+    () => a320Mcdus(),
+    () => obcConsole.isOpen,
+  );
+  obc.setScreenCaptureHandlers(
+    () => cockpitScreenCapture.current(),
+    () => cockpitScreenCapture.release(),
+  );
   obc.setAdapter(
     createSimObcAdapter({
       camera,

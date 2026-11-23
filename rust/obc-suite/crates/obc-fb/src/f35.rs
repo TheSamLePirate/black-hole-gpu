@@ -254,13 +254,17 @@ pub fn run(args: &[String]) -> Result<()> {
         if let Some(k) = keys.poll(wait_ms) {
             match k {
                 RawKey::Char('q' | 'Q') | RawKey::Esc | RawKey::CtrlC => break,
-                RawKey::Char('+' | '=') => rng_idx = (rng_idx + 1).min(ranges.len() - 1),
-                RawKey::Char('-' | '_') => rng_idx = rng_idx.saturating_sub(1),
-                RawKey::Char('r' | 'R') => {
+                RawKey::Up | RawKey::Char('+' | '=') => rng_idx = (rng_idx + 1).min(ranges.len() - 1),
+                RawKey::Down | RawKey::Char('-' | '_') => rng_idx = rng_idx.saturating_sub(1),
+                RawKey::Right | RawKey::Char('r' | 'R') => {
                     mode_idx = (mode_idx + 1) % modes.len();
                     let _ = bus.tars_tool("f35_radar", &json!({ "action": "mode", "mode": modes[mode_idx] }));
                 }
-                RawKey::Char('l' | 'L') => {
+                RawKey::Left => {
+                    mode_idx = (mode_idx + modes.len() - 1) % modes.len();
+                    let _ = bus.tars_tool("f35_radar", &json!({ "action": "mode", "mode": modes[mode_idx] }));
+                }
+                RawKey::Enter | RawKey::Char('l' | 'L') => {
                     let _ = bus.tars_tool("f35_radar", &json!({ "action": "lock_next" }));
                 }
                 RawKey::Char('c' | 'C') => {

@@ -152,12 +152,12 @@ pub fn run(args: &[String]) -> Result<()> {
         if let Some(k) = keys.poll(wait_ms) {
             match k {
                 RawKey::Char('q' | 'Q') | RawKey::Esc | RawKey::CtrlC => break,
-                RawKey::Char('+' | '=') => rng_idx = (rng_idx + 1).min(ranges.len() - 1),
-                RawKey::Char('-' | '_') => rng_idx = rng_idx.saturating_sub(1),
-                RawKey::Char('i' | 'I') => {
+                RawKey::Up | RawKey::Char('+' | '=') => rng_idx = (rng_idx + 1).min(ranges.len() - 1),
+                RawKey::Down | RawKey::Char('-' | '_') => rng_idx = rng_idx.saturating_sub(1),
+                RawKey::Left | RawKey::Enter | RawKey::Char('i' | 'I') => {
                     let _ = bus.set_autopilot("ils");
                 }
-                RawKey::Char('g' | 'G') => {
+                RawKey::Right | RawKey::Char('g' | 'G') => {
                     let _ = bus.set_gear(tel.systems.gear < 0.5);
                 }
                 _ => {}

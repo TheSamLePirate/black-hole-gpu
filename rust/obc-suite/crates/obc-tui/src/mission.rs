@@ -16,8 +16,12 @@ const C_CYN: Color = Color::Rgb(98, 230, 255);
 const C_GRN: Color = Color::Rgb(110, 248, 148);
 const C_AMB: Color = Color::Rgb(255, 196, 56);
 
+const MISSION_CMDS: [&str; 4] = ["CIRCULARIZE", "PROGRADE", "RETROGRADE", "HOLD OFF"];
+
 pub struct MissionApp {
     bus: AvionicsBus,
+    cmd_idx: usize,
+    zoom: f64,
     online: bool,
 }
 
@@ -26,6 +30,8 @@ impl MissionApp {
     pub fn new() -> Self {
         Self {
             bus: AvionicsBus::new(),
+            cmd_idx: 0,
+            zoom: 1.0,
             online: true,
         }
     }
@@ -34,6 +40,8 @@ impl MissionApp {
     pub fn offline() -> Self {
         Self {
             bus: AvionicsBus::new(),
+            cmd_idx: 0,
+            zoom: 1.0,
             online: false,
         }
     }
@@ -55,6 +63,30 @@ impl TuiApp for MissionApp {
     fn on_key(&mut self, key: KeyEvent) -> bool {
         match key.code {
             KeyCode::Char('q' | 'Q') | KeyCode::Esc => return true,
+            KeyCode::Right => self.cmd_idx = (self.cmd_idx + 1) % MISSION_CMDS.len(),
+            KeyCode::Left => {
+                self.cmd_idx = if self.cmd_idx == 0 {
+                    MISSION_CMDS.len() - 1
+                } else {
+                    self.cmd_idx - 1
+                };
+            }
+            KeyCode::Up => self.zoom = (self.zoom + 0.15).min(1.8),
+            KeyCode::Down => self.zoom = (self.zoom - 0.15).max(0.6),
+            KeyCode::Enter | KeyCode::Char(' ') => match self.cmd_idx {
+                0 => {
+                    let _ = self.bus.set_autopilot("circularize");
+                }
+                1 => {
+                    let _ = self.bus.set_hold("prograde");
+                }
+                2 => {
+                    let _ = self.bus.set_hold("retrograde");
+                }
+                _ => {
+                    let _ = self.bus.set_hold("none");
+                }
+            },
             KeyCode::Char('c' | 'C') => {
                 let _ = self.bus.set_autopilot("circularize");
             }
@@ -86,17 +118,18 @@ impl TuiApp for MissionApp {
         let inc = t.orbit.as_ref().map_or(0.0, |o| o.inclination_deg);
         let period_min = t.orbit.as_ref().map_or(92.0, |o| o.period_s / 60.0);
 
+        let zoom = self.zoom;
         let canvas = Canvas::default()
             .block(
                 Block::default()
-                    .title(" OBC-MISSION-TUI · ORBITAL PLOT ")
+                    .title(format!(" OBC-MISSION-TUI · ORBITAL PLOT ({zoom:.1}x) "))
                     .borders(Borders::ALL)
                     .border_type(BorderType::Rounded)
                     .border_style(Style::default().fg(C_CYN)),
             )
             .marker(Marker::Braille)
-            .x_bounds([-100.0, 100.0])
-            .y_bounds([-100.0, 100.0])
+            .x_bounds([-100.0 / zoom, 100.0 / zoom])
+            .y_bounds([-100.0 / zoom, 100.0 / zoom])
             .paint(move |ctx| {
                 ctx.draw(&Circle {
                     x: 0.0,
@@ -139,19 +172,24 @@ impl TuiApp for MissionApp {
         );
         frame.render_widget(tbl, cols[1]);
 
-        frame.render_widget(
-            Paragraph::new(Line::from(vec![
-                Span::styled(" [c] ", Style::default().fg(C_AMB).add_modifier(Modifier::BOLD)),
-                Span::raw("Circularize  "),
-                Span::styled(" [p] ", Style::default().fg(C_AMB).add_modifier(Modifier::BOLD)),
-                Span::raw("Prograde  "),
-                Span::styled(" [r] ", Style::default().fg(C_AMB).add_modifier(Modifier::BOLD)),
-                Span::raw("Retrograde  "),
-                Span::styled(" [q] ", Style::default().fg(C_AMB).add_modifier(Modifier::BOLD)),
-                Span::raw("Quit"),
-            ])),
-            rows[1],
-        );
+        let mut spans = vec![
+            Span::styled(" [←→+Ent] ", Style::default().fg(C_AMB).add_modifier(Modifier::BOLD)),
+        ];
+        for (i, cmd) in MISSION_CMDS.iter().enumerate() {
+            if i == self.cmd_idx {
+                spans.push(Span::styled(
+                    format!("▸{cmd} "),
+                    Style::default().fg(C_GRN).add_modifier(Modifier::BOLD),
+                ));
+            } else {
+                spans.push(Span::styled(format!("{cmd} "), Style::default().fg(C_CYN)));
+            }
+        }
+        spans.push(Span::styled(" [↑↓] ", Style::default().fg(C_AMB).add_modifier(Modifier::BOLD)));
+        spans.push(Span::raw("Zoom "));
+        spans.push(Span::styled(" [q] ", Style::default().fg(C_AMB).add_modifier(Modifier::BOLD)));
+        spans.push(Span::raw("Quit"));
+        frame.render_widget(Paragraph::new(Line::from(spans)), rows[1]);
     }
 }
 

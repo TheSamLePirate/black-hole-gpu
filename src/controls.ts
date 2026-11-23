@@ -374,6 +374,12 @@ export class CameraController {
   onPilotMessage?: (text: string) => void;
   /** a click in the F-35's cockpit (ndc): on its panoramic display, a touch — true: taken (main.ts) */
   onJetTouch?: (nx: number, ny: number) => boolean;
+  /** True when the pointer is over a 3D cockpit screen/control or a 3D screen owns capture: suppresses dblclick camera reset. */
+  isCockpitScreenInteraction?: (nx: number, ny: number) => boolean;
+  /** Pointer down/move/up routed to a 3D cockpit OBC/MCDU screen (returns true when captured so the camera does not drag). */
+  onCockpitScreenPointer?: (phase: "down" | "move" | "up", nx: number, ny: number, button: number) => boolean;
+  /** Mouse wheel routed to a hovered or captured 3D cockpit OBC/MCDU screen (returns true so camera FOV does not zoom). */
+  onCockpitScreenWheel?: (nx: number, ny: number, dir: number) => boolean;
   /** the wheel over a radar (PLAN-RADAR-AAA P11 — main.ts: the HUD's scope, the PCD's TSD and FCR): its range a step;
    *  true: taken (the camera's field untouched). (x, y) CSS px in the canvas, (nx, ny) its NDC, `dir` the notch's sign */
   onRadarWheel?: (x: number, y: number, nx: number, ny: number, dir: number) => boolean;
@@ -708,7 +714,10 @@ export class CameraController {
   cockpit: { input: CockpitPointer; active(): boolean; tip(id: string | null, x: number, y: number): void } | null = null;
   /** a control held by the pointer: which pointer, where it was pressed and when, where it is */
   private ckHeld: { id: number; x0: number; y0: number; t: number; x: number; y: number } | null = null;
+  /** a 3D cockpit screen held by the pointer (OBC / MCDU capture: prevents camera drag while clicking/dragging the screen) */
+  private ckScreenHeld: { id: number; x0: number; y0: number; t: number } | null = null;
   private ckWheel = 0;
+  private screenWheelAcc = 0;
 
   /** A pointer's place in the view's ndc (−1…1, y up). */
   private ndcOf(e: { clientX: number; clientY: number }): [number, number] {
@@ -743,6 +752,22 @@ export class CameraController {
         return;
       }
     }
+    // (3D cockpit screen capture: left-click on an OBC or MCDU screen captures keyboard & mouse without dragging the camera;
+    // clicking outside a captured screen releases capture cleanly)
+    if (e.button === 0 && !e.shiftKey && this.pointers.size === 0 && this.onCockpitScreenPointer) {
+      const [nx, ny] = this.ndcOf(e);
+      if (this.onCockpitScreenPointer("down", nx, ny, e.button)) {
+        try {
+          this.canvas.setPointerCapture(e.pointerId);
+        } catch {
+          // synthetic or already-ended pointer id
+        }
+        this.ckScreenHeld = { id: e.pointerId, x0: e.clientX, y0: e.clientY, t: performance.now() };
+        this.setHover(null);
+        this.canvas.style.cursor = "pointer";
+        return;
+      }
+    }
     // (a middle click: game-style mouse look, the free camera's)
     if (e.button === 1 && !this.piloting) {
       e.preventDefault();
@@ -774,6 +799,18 @@ export class CameraController {
     // (a spectator out: the pointer is its)
     if (this.spectator) {
       this.spectator.onUp(e);
+      return;
+    }
+    // (a 3D cockpit screen held: release pointer and run any screen touch click)
+    const sh = this.ckScreenHeld;
+    if (sh && e.pointerId === sh.id) {
+      this.ckScreenHeld = null;
+      const [nx, ny] = this.ndcOf(e);
+      this.onCockpitScreenPointer?.("up", nx, ny, e.button);
+      if (Math.hypot(e.clientX - sh.x0, e.clientY - sh.y0) < 6 && performance.now() - sh.t < 500) {
+        this.onJetTouch?.(nx, ny);
+      }
+      this.canvas.style.cursor = "";
       return;
     }
     // (a control let go: a click, or the end of its drag)
@@ -831,6 +868,9 @@ export class CameraController {
     if (!this.enabled || this.flyMode) return;
     // (the double tap taken already: not again from the browser's dblclick)
     if (!tap && performance.now() - this.tapDblAt < 600) return;
+    // (never reset/recenter the camera when double-clicking on a 3D cockpit screen or while a screen owns capture)
+    const [nx, ny] = this.ndcOf(e);
+    if (this.isCockpitScreenInteraction?.(nx, ny)) return;
     if (this.piloting && !this.cinematic) return this.setLook(0, 0);
     const r = this.canvas.getBoundingClientRect();
     const body = this.pickAt(e.clientX - r.left, e.clientY - r.top);
@@ -850,6 +890,13 @@ export class CameraController {
     // (a spectator out: the pointer is its)
     if (this.spectator) {
       this.spectator.onMove(e);
+      return;
+    }
+    // (a 3D cockpit screen held: forward pointer motion inside the screen without rotating the camera)
+    const sh = this.ckScreenHeld;
+    if (sh && e.pointerId === sh.id) {
+      const [nx, ny] = this.ndcOf(e);
+      this.onCockpitScreenPointer?.("move", nx, ny, e.buttons);
       return;
     }
     // (a control held: it follows the pointer)
@@ -944,6 +991,18 @@ export class CameraController {
       }
       if (this.cockpit.input.hover) {
         this.cockpit.tip(this.cockpit.input.focus, e.clientX, e.clientY);
+        return;
+      }
+    }
+    // (over a captured or hovered 3D cockpit OBC/MCDU screen: route scroll wheel to the screen, never zoom camera)
+    if (e.deltaY && this.onCockpitScreenWheel) {
+      const [nx, ny] = this.ndcOf(e);
+      if (this.onCockpitScreenWheel(nx, ny, 0)) {
+        this.screenWheelAcc += e.deltaMode === 1 ? e.deltaY * 16 : e.deltaY;
+        while (Math.abs(this.screenWheelAcc) >= 45) {
+          this.onCockpitScreenWheel(nx, ny, Math.sign(this.screenWheelAcc));
+          this.screenWheelAcc -= 45 * Math.sign(this.screenWheelAcc);
+        }
         return;
       }
     }

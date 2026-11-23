@@ -16,8 +16,12 @@ const C_CYN: Color = Color::Rgb(62, 200, 255);
 const C_GRN: Color = Color::Rgb(96, 246, 146);
 const C_AMB: Color = Color::Rgb(255, 196, 56);
 
+const A320_PAGES: [&str; 6] = ["obc", "menu", "fpln", "perf", "radnav", "prog"];
+
 pub struct A320TuiApp {
     bus: AvionicsBus,
+    page_idx: usize,
+    lsk_idx: u8,
     mcdu_title: String,
     mcdu_lines: Vec<String>,
     scratchpad: String,
@@ -30,6 +34,8 @@ impl A320TuiApp {
     pub fn new() -> Self {
         let mut app = Self {
             bus: AvionicsBus::new(),
+            page_idx: 0,
+            lsk_idx: 1,
             mcdu_title: "OBC LINUX LINK".into(),
             mcdu_lines: vec!["<OBC STATUS          READY>".into()],
             scratchpad: String::new(),
@@ -44,6 +50,8 @@ impl A320TuiApp {
     pub fn offline() -> Self {
         Self {
             bus: AvionicsBus::new(),
+            page_idx: 0,
+            lsk_idx: 1,
             mcdu_title: "OBC LINUX LINK".into(),
             mcdu_lines: vec![
                 "<OBC KERNEL    LINUX 7.3>".into(),
@@ -107,15 +115,45 @@ impl TuiApp for A320TuiApp {
         let t = self.bus.cached().clone();
         match key.code {
             KeyCode::Char('q' | 'Q') | KeyCode::Esc => return true,
+            KeyCode::Right => {
+                self.page_idx = (self.page_idx + 1) % A320_PAGES.len();
+                let _ = self.bus.mcdu("page", Some(A320_PAGES[self.page_idx]));
+                self.refresh_mcdu();
+            }
+            KeyCode::Left => {
+                self.page_idx = if self.page_idx == 0 {
+                    A320_PAGES.len() - 1
+                } else {
+                    self.page_idx - 1
+                };
+                let _ = self.bus.mcdu("page", Some(A320_PAGES[self.page_idx]));
+                self.refresh_mcdu();
+            }
+            KeyCode::Down => {
+                self.lsk_idx = if self.lsk_idx >= 6 { 1 } else { self.lsk_idx + 1 };
+            }
+            KeyCode::Up => {
+                self.lsk_idx = if self.lsk_idx <= 1 { 6 } else { self.lsk_idx - 1 };
+            }
+            KeyCode::Enter => {
+                let _ = self.bus.rpc(
+                    serde_json::json!({ "op": "mcdu", "action": "lsk", "lskSide": "L", "lskNum": self.lsk_idx }),
+                    1500,
+                );
+                self.refresh_mcdu();
+            }
             KeyCode::Char('o' | 'O') => {
+                self.page_idx = 0;
                 let _ = self.bus.mcdu("page", Some("obc"));
                 self.refresh_mcdu();
             }
             KeyCode::Char('f' | 'F') => {
+                self.page_idx = 2;
                 let _ = self.bus.mcdu("page", Some("fpln"));
                 self.refresh_mcdu();
             }
             KeyCode::Char('p' | 'P') => {
+                self.page_idx = 3;
                 let _ = self.bus.mcdu("page", Some("perf"));
                 self.refresh_mcdu();
             }
@@ -210,17 +248,15 @@ impl TuiApp for A320TuiApp {
 
         frame.render_widget(
             Paragraph::new(Line::from(vec![
-                Span::styled(" [o] ", Style::default().fg(C_AMB).add_modifier(Modifier::BOLD)),
-                Span::raw("MCDU OBC  "),
-                Span::styled(" [f] ", Style::default().fg(C_AMB).add_modifier(Modifier::BOLD)),
-                Span::raw("F-PLN  "),
-                Span::styled(" [p] ", Style::default().fg(C_AMB).add_modifier(Modifier::BOLD)),
-                Span::raw("PERF  "),
-                Span::styled(" [a] ", Style::default().fg(C_AMB).add_modifier(Modifier::BOLD)),
-                Span::raw("AP1  "),
-                Span::styled(" [g] ", Style::default().fg(C_AMB).add_modifier(Modifier::BOLD)),
-                Span::raw("Gear  "),
-                Span::styled(" [q] ", Style::default().fg(C_AMB).add_modifier(Modifier::BOLD)),
+                Span::styled(" [←→] ", Style::default().fg(C_AMB).add_modifier(Modifier::BOLD)),
+                Span::raw(format!("Page({}) ", A320_PAGES[self.page_idx].to_uppercase())),
+                Span::styled("[↑↓+Ent] ", Style::default().fg(C_AMB).add_modifier(Modifier::BOLD)),
+                Span::raw(format!("LSK L{} ", self.lsk_idx)),
+                Span::styled("[a] ", Style::default().fg(C_AMB).add_modifier(Modifier::BOLD)),
+                Span::raw("AP1 "),
+                Span::styled("[g] ", Style::default().fg(C_AMB).add_modifier(Modifier::BOLD)),
+                Span::raw("Gear "),
+                Span::styled("[q] ", Style::default().fg(C_AMB).add_modifier(Modifier::BOLD)),
                 Span::raw("Quit"),
             ])),
             rows[2],

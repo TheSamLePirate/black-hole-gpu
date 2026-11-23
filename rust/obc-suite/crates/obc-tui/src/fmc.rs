@@ -67,8 +67,11 @@ impl TuiApp for FmcApp {
                 let i = self.state.selected().map_or(0, |s| if s == 0 { n - 1 } else { s - 1 });
                 self.state.select(Some(i));
             }
-            KeyCode::Char('i' | 'I') => {
+            KeyCode::Right | KeyCode::Enter | KeyCode::Char('i' | 'I') => {
                 let _ = self.bus.set_autopilot("ils");
+            }
+            KeyCode::Left => {
+                let _ = self.bus.set_autopilot("none");
             }
             _ => {}
         }
@@ -166,10 +169,12 @@ impl TuiApp for FmcApp {
 
         frame.render_widget(
             Paragraph::new(Line::from(vec![
-                Span::styled(" [↑/↓] ", Style::default().fg(C_AMB).add_modifier(Modifier::BOLD)),
-                Span::raw("Select Airport  "),
-                Span::styled(" [i] ", Style::default().fg(C_AMB).add_modifier(Modifier::BOLD)),
+                Span::styled(" [↑↓] ", Style::default().fg(C_AMB).add_modifier(Modifier::BOLD)),
+                Span::raw("Airport  "),
+                Span::styled(" [→/Enter] ", Style::default().fg(C_AMB).add_modifier(Modifier::BOLD)),
                 Span::raw("Engage ILS  "),
+                Span::styled(" [←] ", Style::default().fg(C_AMB).add_modifier(Modifier::BOLD)),
+                Span::raw("ILS Off  "),
                 Span::styled(" [q] ", Style::default().fg(C_AMB).add_modifier(Modifier::BOLD)),
                 Span::raw("Quit"),
             ])),

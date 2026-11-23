@@ -146,10 +146,13 @@ pub fn run(args: &[String]) -> Result<()> {
         if let Some(k) = keys.poll(wait_ms) {
             match k {
                 RawKey::Char('q' | 'Q') | RawKey::Esc | RawKey::CtrlC => break,
-                RawKey::Char('+' | '=') => zoom = (zoom + 0.15).min(2.0),
-                RawKey::Char('-' | '_') => zoom = (zoom - 0.15).max(0.5),
-                RawKey::Char('p' | 'P') => {
+                RawKey::Up | RawKey::Char('+' | '=') => zoom = (zoom + 0.15).min(2.0),
+                RawKey::Down | RawKey::Char('-' | '_') => zoom = (zoom - 0.15).max(0.5),
+                RawKey::Right | RawKey::Char('p' | 'P') => {
                     let _ = bus.set_hold("prograde");
+                }
+                RawKey::Left => {
+                    let _ = bus.set_hold("retrograde");
                 }
                 _ => {}
             }

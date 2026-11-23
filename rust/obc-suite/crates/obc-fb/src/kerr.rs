@@ -174,8 +174,10 @@ pub fn run(args: &[String]) -> Result<()> {
         if let Some(k) = keys.poll(wait_ms) {
             match k {
                 RawKey::Char('q' | 'Q') | RawKey::Esc | RawKey::CtrlC => break,
-                RawKey::Char('+' | '=') => spin = (spin + 0.05).min(0.9998),
-                RawKey::Char('-' | '_') => spin = (spin - 0.05).max(0.0),
+                RawKey::Right | RawKey::Char('+' | '=') => spin = (spin + 0.05).min(0.9998),
+                RawKey::Left | RawKey::Char('-' | '_') => spin = (spin - 0.05).max(0.0),
+                RawKey::Up => spin = (spin + 0.01).min(0.9998),
+                RawKey::Down => spin = (spin - 0.01).max(0.0),
                 _ => {}
             }
         }

@@ -617,8 +617,8 @@ describe.skipIf(!E2E)("Linux OBC AAA (Unkernel aarch64, Wisp, Snapshot, Editor, 
       return true;
     })()`);
 
-    // Launch upgraded /dev/fb0 live orbital + telemetry scope
-    await app.js(`__bh.obc.runScript("fb-demo")`);
+    // Launch native Rust /dev/fb0 live orbital + telemetry scope (zero Python dependency, 30 Hz!)
+    await app.js(`__bh.obc.runScript("obc-radar-fb --seconds 15")`);
     await app.waitFor("__bh.obc.status().fbActive === true", 15_000);
 
     const st = await app.js<{ fbActive: boolean; fbWidth: number; fbHeight: number }>("__bh.obc.status()");
@@ -649,10 +649,65 @@ describe.skipIf(!E2E)("Linux OBC AAA (Unkernel aarch64, Wisp, Snapshot, Editor, 
       }
     })()`);
     await app.shot(`${OUT}/ranger-cockpit-obc.png`);
-    // Stop fb-demo cleanly so the interactive TTY is ready for Step 5 TUIs
+    // Stop fb-demo cleanly so the interactive TTY is ready on the 3D Ranger OBC screen
     await app.js(`__bh.obc.write("\\x03")`);
     await app.waitFor("__bh.obc.status().fbActive === false", 10_000);
-    await app.stepDone(`Suspend/Resume ${tSnap.ms} ms · /dev/fb0 ${st.fbWidth}×${st.fbHeight} sur HUD + Ranger`);
+
+    // Verify AAA 3D cockpit screen capture: clicking 3D OBC screen captures keyboard+mouse, dblclick does NOT reset camera!
+    const capCheck = await app.js<{
+      ptFound: boolean;
+      capturedKind: string | null;
+      badgeVisible: boolean;
+      lookKeptAfterDblClick: boolean;
+    }>(`(async () => {
+      __bh.camera.setLook(8, -12);
+      for (let i = 0; i < 4; i++) {
+        __bh.touch();
+        await new Promise((r) => requestAnimationFrame(r));
+      }
+      let pt = null;
+      for (let ny = 0.6; ny >= -0.85 && !pt; ny -= 0.03) {
+        for (let nx = -0.85; nx <= 0.85 && !pt; nx += 0.03) {
+          const h = __bh.cabinPick(nx, ny);
+          if (h?.screen?.slot === 2 && h.screen.v > 0.15 && h.screen.v < 0.65) pt = [nx, ny];
+        }
+      }
+      if (!pt) return { ptFound: false, capturedKind: null, badgeVisible: false, lookKeptAfterDblClick: false };
+      const cv = document.querySelector("canvas");
+      const r = cv.getBoundingClientRect();
+      const cx = r.left + ((pt[0] + 1) / 2) * r.width;
+      const cy = r.top + ((1 - pt[1]) / 2) * r.height;
+      cv.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, button: 0, clientX: cx, clientY: cy, pointerId: 9 }));
+      cv.dispatchEvent(new PointerEvent("pointerup", { bubbles: true, button: 0, clientX: cx, clientY: cy, pointerId: 9 }));
+      const cap = __bh.obc.screenCapture();
+      const badge = document.querySelector('[data-testid="obc-screen-capture-badge"]');
+      const badgeVisible = !!badge && getComputedStyle(badge).display !== "none";
+      const yawBefore = __bh.settings.shipLookYaw;
+      cv.dispatchEvent(new MouseEvent("dblclick", { bubbles: true, button: 0, clientX: cx, clientY: cy }));
+      const lookKeptAfterDblClick = Math.abs(__bh.settings.shipLookYaw - yawBefore) < 0.01 && Math.abs(__bh.settings.shipLookYaw) > 1;
+      return { ptFound: true, capturedKind: cap?.kind ?? null, badgeVisible, lookKeptAfterDblClick };
+    })()`);
+    expect(capCheck.ptFound).toBe(true);
+    expect(capCheck.capturedKind).toBe("obc");
+    expect(capCheck.badgeVisible).toBe(true);
+    expect(capCheck.lookKeptAfterDblClick).toBe(true);
+
+    // Type directly on the captured 3D screen (HUD console CLOSED!) and verify text arrives in the Linux TTY!
+    await app.js(`(() => {
+      for (const ch of "echo CAP3D_OK") {
+        window.dispatchEvent(new KeyboardEvent("keydown", { key: ch, bubbles: true, cancelable: true }));
+      }
+      window.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true }));
+      return true;
+    })()`);
+    await app.waitFor(`__bh.obc.readScreen().join("\\n").includes("CAP3D_OK")`, 6_000);
+    await app.shot(`${OUT}/ranger-cockpit-obc-captured.png`);
+    await app.js(`document.querySelector('[data-testid="obc-screen-capture-release"]')?.click()`);
+    const capAfterRelease = await app.js<unknown>(`__bh.obc.screenCapture()`);
+    expect(capAfterRelease).toBeNull();
+    await app.js(`__bh.camera.setLook(0, 0)`);
+
+    await app.stepDone(`Suspend/Resume ${tSnap.ms} ms · /dev/fb0 ${st.fbWidth}×${st.fbHeight} sur HUD + Ranger + Capture 3D`);
     expect(app.cdp.errors).toEqual([]);
   }, 60_000);
 

@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
 import { drawObcSurface } from "../src/obc/fb-renderer";
+import { CockpitScreenCapture, isCockpitScreenCaptured, shouldSuppressCameraDblClick, translateMcduKey } from "../src/obc/screen-capture";
 import { TermBuffer } from "../src/obc/term-buffer";
 import { TerminalMouseGuard } from "../src/obc/term-mouse";
 
@@ -155,4 +156,54 @@ test("TerminalMouseGuard: blocks bare hover floods & stale mouse modes while pre
   expect(g.mouseTrackingActive).toBe(true);
   expect(g.observeGuestOutput("\r\n/home/pilot → ")).toBe(true);
   expect(g.mouseTrackingActive).toBe(false);
+});
+
+test("CockpitScreenCapture: suppresses dblclick camera reset & routes keyboard/wheel cleanly to OBC and A320 MCDU", () => {
+  expect(shouldSuppressCameraDblClick(true, false, false)).toBe(true);
+  expect(shouldSuppressCameraDblClick(false, true, false)).toBe(true);
+  expect(shouldSuppressCameraDblClick(false, false, true)).toBe(true);
+  expect(shouldSuppressCameraDblClick(false, false, false)).toBe(false);
+
+  expect(translateMcduKey({ key: "a", ctrlKey: false, altKey: false, metaKey: false })).toEqual({ kind: "type", text: "A" });
+  expect(translateMcduKey({ key: "Backspace", ctrlKey: false, altKey: false, metaKey: false })).toEqual({ kind: "button", key: "CLR" });
+  expect(translateMcduKey({ key: "ArrowDown", ctrlKey: false, altKey: false, metaKey: false })).toEqual({ kind: "arrow", dir: "down" });
+
+  const written: string[] = [];
+  const pointers: [number, number, boolean][] = [];
+  const wheels: number[] = [];
+  let fbActive = false;
+  const mockObc = {
+    status: () => ({ phase: "ready", fbActive }),
+    boot: async () => ({ phase: "ready" }),
+    write: (s: string) => written.push(s),
+    sendPointer: (u: number, v: number, b: boolean) => pointers.push([u, v, b]),
+    sendWheel: (d: number) => wheels.push(d),
+  };
+
+  const cap = new CockpitScreenCapture(
+    mockObc as never,
+    () => null,
+    () => false,
+  );
+  expect(isCockpitScreenCaptured()).toBe(false);
+  cap.attach({ id: "f35:pcd:obc", label: "F-35 PCD · OBC", kind: "obc" });
+  expect(isCockpitScreenCaptured()).toBe(true);
+  expect(cap.current()?.id).toBe("f35:pcd:obc");
+
+  // Wheel in TTY mode sends ArrowDown / ArrowUp to TUI
+  cap.forwardWheel(1);
+  cap.forwardWheel(-1);
+  expect(written).toEqual(["\x1b[B", "\x1b[A"]);
+
+  // Wheel & pointer in /dev/fb0 mode forwards evdev
+  fbActive = true;
+  cap.forwardPointer(0.25, 0.75, 1);
+  cap.forwardWheel(1);
+  expect(pointers).toEqual([[0.25, 0.75, true]]);
+  expect(wheels).toEqual([1]);
+
+  cap.release();
+  expect(isCockpitScreenCaptured()).toBe(false);
+  expect(cap.current()).toBeNull();
+  cap.dispose();
 });

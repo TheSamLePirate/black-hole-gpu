@@ -3,6 +3,7 @@ import { radius, type Dneg } from "../wormhole";
 import { solarBody, spinVector, poleOfDate } from "../system/solar";
 
 import type { PoseKeys } from "../controls";
+import { isCockpitScreenCaptured } from "../obc/screen-capture";
 
 export const POSE_KEYS: PoseKeys[] = ["anchor", "whL", "distance", "inclination", "azimuth", "yaw", "pitch", "roll"];
 
@@ -68,8 +69,9 @@ export function wrapDeg(d: number) {
   return ((((d + 360) % 720) + 720) % 720) - 360;
 }
 
-/** Is a key going into a text field or the open Linux OBC console? (A slider, a checkbox, a button keep the keys flying.) */
+/** Is a key going into a text field, the open Linux OBC console, or a captured 3D cockpit screen? */
 export function isTyping(e: KeyboardEvent) {
+  if (isCockpitScreenCaptured()) return true;
   const t = e.target as HTMLElement | null;
   if (!t) return false;
   if (t.closest?.('[data-testid="obc-console"]')) return true;

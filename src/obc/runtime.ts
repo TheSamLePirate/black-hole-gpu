@@ -1226,6 +1226,25 @@ export class ObcRuntime {
     }
   }
 
+  private getScreenCaptureFn: (() => unknown) | null = null;
+  private releaseScreenCaptureFn: (() => void) | null = null;
+
+  /** Register 3D cockpit screen capture hooks from main.ts for `__bh.obc` inspection & release. */
+  setScreenCaptureHandlers(getFn: () => unknown, releaseFn: () => void) {
+    this.getScreenCaptureFn = getFn;
+    this.releaseScreenCaptureFn = releaseFn;
+  }
+
+  /** Return the currently captured 3D cockpit screen target (or null). */
+  screenCapture(): unknown {
+    return this.getScreenCaptureFn?.() ?? null;
+  }
+
+  /** Release any active 3D cockpit screen keyboard/mouse capture. */
+  releaseScreenCapture() {
+    this.releaseScreenCaptureFn?.();
+  }
+
   /** 1-click route Linux OBC onto a 3D cockpit display (Ranger MFD, F-35 PCD, or A320 MCDU+LECAM). */
   routeToCockpit(target: "ranger" | "f35" | "a320"): { ok: boolean; msg: string } {
     const bh = (globalThis as unknown as { __bh?: Record<string, unknown> }).__bh;
@@ -1251,8 +1270,12 @@ export class ObcRuntime {
         refresh?.();
         return { ok: true, msg: "Routed OBC to F-35 PCD" };
       }
-      const mcduFn = bh.a320Mcdu as ((side: 0 | 1) => { setPage?: (p: string) => void } | null) | undefined;
-      mcduFn?.(0)?.setPage?.("obc");
+      const mcduFn = bh.a320Mcdu as
+        | ((side: 0 | 1) => { open?: (p: string) => void; host?: { setSdPage?: (p: string) => void } } | null)
+        | undefined;
+      const mcdu = mcduFn?.(0);
+      mcdu?.open?.("obc");
+      mcdu?.host?.setSdPage?.("obcPage");
       if (settings) {
         (settings as Record<string, unknown>).a320EcamPage = "obcPage";
         settings.shipMount = "cockpit";

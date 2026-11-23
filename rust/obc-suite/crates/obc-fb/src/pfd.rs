@@ -390,19 +390,19 @@ pub fn run(args: &[String]) -> Result<()> {
         if let Some(k) = keys.poll(wait_ms) {
             match k {
                 RawKey::Char('q' | 'Q') | RawKey::Esc | RawKey::CtrlC => break,
-                RawKey::Char('+' | '=') => {
+                RawKey::Up | RawKey::Char('+' | '=') => {
                     let _ = bus.set_throttle(tel.systems.throttle + 0.1);
                 }
-                RawKey::Char('-' | '_') => {
+                RawKey::Down | RawKey::Char('-' | '_') => {
                     let _ = bus.set_throttle(tel.systems.throttle - 0.1);
                 }
-                RawKey::Char('s' | 'S') => {
+                RawKey::Left | RawKey::Char('s' | 'S') => {
                     let _ = bus.set_sas(!tel.systems.sas);
                 }
-                RawKey::Char('g' | 'G') => {
+                RawKey::Right | RawKey::Char('g' | 'G') => {
                     let _ = bus.set_gear(tel.systems.gear < 0.5);
                 }
-                RawKey::Char('a' | 'A') => {
+                RawKey::Enter | RawKey::Char('a' | 'A') => {
                     let next = if tel.systems.autopilot.is_empty() || tel.systems.autopilot == "off" {
                         "ap"
                     } else {

@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 23 nov. 11:08 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 23 nov. 11:25 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous. Ce qui est fermé quitte le tableau « En cours » pour la ligne « Fermé récemment ».
@@ -76,6 +76,19 @@ l'état d'une mission ou d'un combat **non sauvé, dit** ; le réseau **« entre
 **Décidé par Sam (16 nov., 15:58 UTC)** : J8-4 allumée par défaut (quads sous 8 px), J8-5 avec une jonction choisie sur captures, J8-1b suspendu, l'e2e de J8-6 par la voie (b), J8-9 ajouté ([PLAN-J8](docs/PLAN-J8-BATIMENTS.md) §6 point 6). **But fixé par Sam (16 nov., ~16:19 UTC)** : [J8-A](docs/PLAN-J8-BATIMENTS.md), un vol Paris et Toulon-Hyères, de jour et de nuit, tous les bâtiments, lampadaires, voitures (J8-L) et rivières (J8-E) chargés avant le vol, en « high » partout, sans différence visible entre les qualités. **Décidé par Sam (16 nov., ~21:40 UTC)** : J8-8 ouvert (le proche en cellules), la jonction à 0, l'éclat de nuit lointain gardé ([PLAN-J8](docs/PLAN-J8-BATIMENTS.md) §6 point 11). **Décidé par Sam (17 nov., ~08:00 UTC)** : J8-8b ouvert, les arbres par cellule, après un vol de référence à froid sur le M1 Max (§6 point 12). **Mode speed pour finir J8, J8-VB compris** (Sam, 17 nov. ~09:20 UTC ; [CLAUDE.md](CLAUDE.md), modes de travail ; §6 point 13) : contrôles rapides par lot, un gros e2e J8-A à la fin sur kerr-mini et le M1 Max. **J8-RP, les routes et les ponts AAA** (Sam, 17 nov. ~10:20 UTC ; [PLAN-J8](docs/PLAN-J8-BATIMENTS.md) §3 bis) : ajouté à J8 en mode speed, RP1 (les routes et marquages visibles sous l'orthophoto) en tête. **Attend Sam** : les quatre premières questions de PLAN-J8 §6, réglées provisoirement (même contenu sur les deux machines, retour si > 3 ms sur le mini ; portée au pixel ; J7 en pause, les arbres proches deviennent J9 ; pas de préparation côté serveur pour l'instant) ; les trois questions de [PLAN-J7](docs/PLAN-J7-FLUIDITE.md) §4, réglées provisoirement (les 40 ms du mini en dernier, J7-6 ; les arbres proches en géométrie ensuite, désormais J9 ; l'aplanissement du détail sous les trouées jusqu'à la FAF ou 10 km) ; les seuils du mini attendent la reprise de la cible 40 ms.
 
 ## Journal
+
+### 2026-11-23 11:25 UTC — Lot OBC-21 : Écrans 3D de cockpit AAA (anti-reset double-clic, capture clavier/souris/molette directe & flèches prioritaires dans les 12 apps OBC)
+
+- Contribution à la destination : ergonomie AAA d'utilisation directe des écrans 3D dans tous les cockpits (F-35B/C PCD, Airbus A320 LECAM/MCDU, Ranger/Lander/Endurance MFDs) sans conflit caméra ni fuite clavier vers les commandes de vol.
+- Réalisé :
+  - **Capture clavier/souris/molette 3D & garde double-clic** ([src/obc/screen-capture.ts](src/obc/screen-capture.ts), [src/controls.ts](src/controls.ts), [src/controller/util.ts](src/controller/util.ts), [src/main.ts](src/main.ts), [src/ui/obc-console.css](src/ui/obc-console.css), [src/obc/runtime.ts](src/obc/runtime.ts), [src/automation.ts](src/automation.ts)) :
+    - `camera.isCockpitScreenInteraction` désactive le reset caméra sur double-clic (`setLook(0, 0)` / `resetView()`) dès que le pointeur vise un écran ou un contrôle 3D (ou qu'un écran possède la capture).
+    - `CockpitScreenCapture` capture le clavier (`isTyping` + `keyEventToAnsi` pour Linux OBC / `translateMcduKey` pour MCDU A320), les clics/drags pointeur (sans faire pivoter la caméra) et la molette (`↑`/`↓` en TTY ou `evdev` en `/dev/fb0`), avec pastille HUD dédiée (`Click outside` / `Shift+Esc` / `[Release]`) et helpers `__bh.obc.screenCapture()` / `releaseScreenCapture()`.
+    - Correction du routage `routeToCockpit("a320")` (`open("obc")` + `host.setSdPage("obcPage")`).
+  - **Priorité aux flèches (`↑↓←→` + `Entrée`) dans les 12 programmes OBC Rust** ([obc-core/src/fb.rs](rust/obc-suite/crates/obc-core/src/fb.rs) CSI+SS3, les 6 TUIs Ratatui `bh_tui.rs`, `top.rs`, `mission.rs`, `fmc.rs`, `f35_tui.rs`, `a320_tui.rs`, et les 6 apps `/dev/fb0` `pfd.rs`, `f35.rs`, `a320.rs`, `ils.rs`, `radar.rs`, `kerr.rs`, binaire recompilé [assets/obc/obc-rs](assets/obc/obc-rs)).
+- Preuves : `cargo clippy --workspace --all-targets -- -D warnings` (0 warning), `cargo test --workspace` (11/11 pass), `tsc --noEmit`, `biome ci`, `bun test tests/obc-term.test.ts tests/obc-protocol.test.ts tests/obc-rpc.test.ts tests/e2e-waits.test.ts`, et E2E WebGPU headed vérifiant capture écran 3D + anti-reset double-clic + clavier direct terminal.
+- Limites / transitions restantes : le clic droit reste volontairement libre pour tourner la tête dans le cockpit même quand un écran 3D est capturé.
+- Suite : commit & push sur `main` à la demande de l'utilisateur.
 
 ### 2026-11-23 11:08 UTC — Lot OBC-20 : `bh-tui` AAA Command Center (exécution de toutes les fonctions `__bh` & 73 outils TARS, Fuzzy Search global 601 entrées, Quick Actions & barre `:eval`)
 
