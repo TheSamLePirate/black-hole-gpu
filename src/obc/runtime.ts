@@ -8,10 +8,11 @@
 //   - File explorer / script editor API for /home/pilot & /obc/scripts
 //   - Wisp v1 connectivity tester & persistent user configuration
 
-import type { DisplayMode, KernelHandle, KernelSnapshot, SoundChunk } from "unkernel/web";
+import type { DisplayMode, KernelHandle, KernelSnapshot, Pty, SoundChunk } from "unkernel/web";
 import { store } from "../util/storage";
 import { startObcVsockServer, wireObcMountFs, type ObcHostAdapter, type ObcMountHandle, type ObcVsockHandle } from "./bridge";
 import type { ObcDrawSource } from "./fb-renderer";
+import { createObcHostCommands } from "./host-commands";
 import { emptyTelemetry, normalizeWispUrl } from "./protocol";
 import { findObcScript, loadProjectScripts, OBC_SCRIPTS } from "./scripts-catalog";
 import { TermBuffer } from "./term-buffer";
@@ -30,8 +31,10 @@ import {
   type ObcPhase,
   type ObcStatus,
   type ObcTelemetry,
+  type ObcTerminalTabInfo,
   type ObcToolchainProfile,
   type ObcViewMode,
+  type ObcWarmupState,
   type ObcWispMode,
 } from "./types";
 
@@ -111,6 +114,18 @@ function loadSavedConfig(): ObcConfig {
   }
 }
 
+interface ObcPtyTabInternal {
+  id: string;
+  title: string;
+  cmd: string | null;
+  pty: Pty;
+  running: boolean;
+  exitCode: number | null;
+  replayChunks: Uint8Array[];
+  replayBytes: number;
+  listeners: Set<(bytes: Uint8Array) => void>;
+}
+
 export class ObcRuntime {
   private vm: KernelHandle | null = null;
   private bootPromise: Promise<ObcStatus> | null = null;
@@ -130,7 +145,14 @@ export class ObcRuntime {
   private bootMs: number | null = null;
   private config: ObcConfig = loadSavedConfig();
   private actualMemoryMiB: number = this.config.memoryMiB;
+  private activeCpus = 1;
   private transport = "none";
+  private warmupState: ObcWarmupState = "idle";
+  private hostCommandNames: string[] = [];
+  private ptyTabs = new Map<string, ObcPtyTabInternal>();
+  private tabListeners = new Set<() => void>();
+  private currentTabId = "main";
+  private nextTabSeq = 1;
   private fbMode: DisplayMode | null = null;
   private fbFrame: ObcFbFrame | null = null;
   private fbRev = 0;
@@ -511,6 +533,11 @@ export class ObcRuntime {
       this.activeWispUrl = effectiveWisp;
       this.netEnabled = Boolean(effectiveWisp);
       this.cpuBlocker = mod.webCpuBlocker({ worker: true }) ?? null;
+      const iso = typeof crossOriginIsolated === "boolean" ? crossOriginIsolated : false;
+      const hwCores =
+        typeof navigator !== "undefined" && typeof navigator.hardwareConcurrency === "number" ? navigator.hardwareConcurrency : 4;
+      const maxSmp = Math.max(1, Math.min(4, Math.floor(hwCores / 2) || 1));
+      const requestedCpus = iso && !this.cpuBlocker ? Math.max(1, Math.min(this.config.cpus, maxSmp)) : 1;
 
       const memFs = new mod.MemoryFs();
       this.mountHandle = wireObcMountFs(
@@ -527,6 +554,16 @@ export class ObcRuntime {
         { cols: this.termCols, rows: this.termRows },
       );
 
+      const hostCommands = createObcHostCommands({
+        adapter: this.adapter,
+        getStatus: () => this.status(),
+        getKernelStats: () => this.kernelStats(),
+        getWarmupState: () => this.warmupState,
+        getHostCommandNames: () => [...this.hostCommandNames],
+      });
+      this.hostCommandNames = Object.keys(hostCommands);
+      this.warmupState = "idle";
+
       const kernelUrl = new URL("obc/unkernel.wasm", base).toString();
       const distroFile = this.config.distro === "debian" ? "obc/debian.erofs" : "obc/alpine.erofs";
       const distroUrl = new URL(distroFile, base).toString();
@@ -539,13 +576,14 @@ export class ObcRuntime {
         ...(restore ? { restore } : {}),
         memoryMiB: this.config.memoryMiB,
         memoryFallbackMiB: [2048, 1024, 512, 256],
-        cpus: this.config.cpus,
+        cpus: requestedCpus,
         jit: this.config.jit,
         shm: this.config.shm,
         profile: this.config.profile,
         consoleSize: { cols: this.termCols, rows: this.termRows },
         disks: [{ kind: "data", template: "bundled", mode: this.config.persistData ? "persistent" : "snapshot" }],
         mounts: { "/obc": memFs },
+        commands: hostCommands,
         display: { width: this.config.fbWidth, height: this.config.fbHeight },
         vsock: true,
         ...(this.config.soundEnabled
@@ -572,6 +610,7 @@ export class ObcRuntime {
 
       this.vm = vm;
       this.actualMemoryMiB = vm.memoryMiB || this.config.memoryMiB;
+      this.activeCpus = vm.stats().cpus ?? requestedCpus;
       this.transport = vm.transport;
       if (vm.vsock) {
         this.vsockHandle = startObcVsockServer(vm.vsock, this.adapter, () => {
@@ -592,12 +631,12 @@ export class ObcRuntime {
       this.phase = "ready";
       this.startCrewBroadcastLoop();
       this.emitState();
+      this.emitTabs();
 
       if (!restore) {
-        const heapMb = this.nodeMaxOldSpaceMiB();
-        vm.write(
-          `export PATH="/obc/bin:/obc/scripts:$HOME/.local/bin:$HOME/.bun/bin:/home/user/.local/bin:/home/user/.bun/bin:/usr/local/bin:$PATH:/usr/lib/kw/bin" PYTHONPATH=/obc/lib NODE_PATH=/obc/lib NODE_OPTIONS="--max-old-space-size=${heapMb}"; cd /home/pilot 2>/dev/null; clear; obc-diag\n`,
-        );
+        const envLine = this.buildGuestEnvLine();
+        vm.write(`${envLine}; cd /home/pilot 2>/dev/null; clear; obc-diag\n`);
+        void this.warmupPageCache(vm);
       }
 
       void vm.exited.then((res) => {
@@ -709,13 +748,77 @@ export class ObcRuntime {
   }
 
   private nodeMaxOldSpaceMiB(): number {
-    return Math.max(256, Math.min(1536, Math.floor(this.actualMemoryMiB * 0.45)));
+    // 35% of guest RAM (256..768 MiB) avoids long V8 mark-sweep pauses on emulated aarch64 while leaving room for pi/tools.
+    return Math.max(256, Math.min(768, Math.floor(this.actualMemoryMiB * 0.35)));
+  }
+
+  private buildGuestEnvRecord(): Record<string, string> {
+    const heapMb = this.nodeMaxOldSpaceMiB();
+    return {
+      PATH: "/run/kw/bin:/obc/bin:/obc/scripts:/home/user/.local/bin:/home/user/.bun/bin:/root/.local/bin:/root/.bun/bin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/lib/kw/bin",
+      PYTHONPATH: "/obc/lib",
+      NODE_PATH: "/obc/lib",
+      PYTHONDONTWRITEBYTECODE: "1",
+      NODE_COMPILE_CACHE: "/home/pilot/.cache/v8-compile-cache",
+      NODE_OPTIONS: `--max-old-space-size=${heapMb}`,
+      TMPDIR: "/tmp",
+      XDG_CACHE_HOME: "/tmp/.cache",
+      BUN_INSTALL_CACHE_DIR: "/tmp/.bun-cache",
+      NPM_CONFIG_CACHE: "/tmp/.npm-cache",
+      PIP_CACHE_DIR: "/tmp/.pip-cache",
+      CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: "1",
+      DISABLE_AUTOUPDATER: "1",
+      DISABLE_TELEMETRY: "1",
+    };
+  }
+
+  private buildGuestEnvLine(): string {
+    const heapMb = this.nodeMaxOldSpaceMiB();
+    return [
+      'export PATH="/run/kw/bin:/obc/bin:/obc/scripts:$HOME/.local/bin:$HOME/.bun/bin:/home/user/.local/bin:/home/user/.bun/bin:/usr/local/bin:$PATH:/usr/lib/kw/bin"',
+      "PYTHONPATH=/obc/lib",
+      "NODE_PATH=/obc/lib",
+      "PYTHONDONTWRITEBYTECODE=1",
+      "NODE_COMPILE_CACHE=/home/pilot/.cache/v8-compile-cache",
+      `NODE_OPTIONS="--max-old-space-size=${heapMb}"`,
+      "TMPDIR=/tmp",
+      "XDG_CACHE_HOME=/tmp/.cache",
+      "BUN_INSTALL_CACHE_DIR=/tmp/.bun-cache",
+      "NPM_CONFIG_CACHE=/tmp/.npm-cache",
+      "PIP_CACHE_DIR=/tmp/.pip-cache",
+      "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1",
+      "DISABLE_AUTOUPDATER=1",
+      "DISABLE_TELEMETRY=1",
+    ].join(" ");
+  }
+
+  /** Silently pre-warm Linux RAM page cache for heavy installed binaries (claude, bun, node, pi) so first launch skips IndexedDB I/O. */
+  private async warmupPageCache(vm: KernelHandle): Promise<void> {
+    if (this.vm !== vm) return;
+    this.warmupState = "warming";
+    const warmCmd = [
+      "for b in claude bun node pi; do",
+      '  p=$(PATH="/home/user/.local/bin:/home/user/.bun/bin:/usr/local/bin:/usr/bin:/bin" command -v "$b" 2>/dev/null || true);',
+      '  case "$p" in ""|/usr/lib/kw/bin/*) continue;; esac;',
+      '  [ -r "$p" ] && nice -n 19 cat "$p" >/dev/null 2>&1 || true;',
+      "done;",
+      'for f in /home/pilot/.cache/v8-compile-cache/*; do [ -r "$f" ] && nice -n 19 cat "$f" >/dev/null 2>&1 || true; done',
+    ].join(" ");
+    try {
+      await vm.exec("sh", ["-c", warmCmd], { timeout: 25_000 });
+      if (this.vm === vm) {
+        this.warmupState = "ready";
+        this.pushLog("Page-cache pre-warm complete");
+      }
+    } catch {
+      if (this.vm === vm) this.warmupState = "idle";
+    }
   }
 
   private async configureGuestEnvironment(vm: KernelHandle): Promise<void> {
     const heapMb = this.nodeMaxOldSpaceMiB();
     const setupScript = [
-      "mkdir -p /home/pilot/docs /home/pilot/.claude/skills /home/pilot/.pi /home/pilot/.agents /etc/profile.d /home/user/.local/bin",
+      "mkdir -p /home/pilot/docs /home/pilot/.claude/skills /home/pilot/.pi /home/pilot/.agents /home/pilot/.cache/v8-compile-cache /tmp/.cache /tmp/.bun-cache /tmp/.npm-cache /tmp/.pip-cache /etc/profile.d /home/user/.local/bin",
       // Sync AAA docs & Claude/Pi agent skills from /obc/pilot-kit into /home/pilot (preserving user files)
       "if [ -d /obc/pilot-kit ]; then for f in CLAUDE.md AGENTS.md README.md; do [ -f /obc/pilot-kit/$f ] && cp -f /obc/pilot-kit/$f /home/pilot/$f; done; [ -d /obc/pilot-kit/docs ] && cp -Rf /obc/pilot-kit/docs/. /home/pilot/docs/; [ -d /obc/pilot-kit/skills ] && cp -Rf /obc/pilot-kit/skills/. /home/pilot/.claude/skills/; fi",
       // Mirror skills into .pi/skills and .agents/skills so BOTH Claude Code and Pi auto-discover every skill
@@ -724,11 +827,11 @@ export class ObcRuntime {
       "ln -sfn /home/pilot/.claude/skills /home/pilot/.agents/skills",
       // Also link CLAUDE.md / AGENTS.md into /home/user and /root if not already customized
       'for h in /home/user /root; do if [ -d "$h" ]; then [ -e "$h/CLAUDE.md" ] || ln -sfn /home/pilot/CLAUDE.md "$h/CLAUDE.md"; [ -e "$h/AGENTS.md" ] || ln -sfn /home/pilot/AGENTS.md "$h/AGENTS.md"; fi; done',
-      "chmod 777 /home/pilot 2>/dev/null || true",
+      "chmod 777 /home/pilot /home/pilot/.cache /home/pilot/.cache/v8-compile-cache /tmp/.cache /tmp/.bun-cache /tmp/.npm-cache /tmp/.pip-cache 2>/dev/null || true",
       "chmod -R a+rX /home/pilot/docs /home/pilot/.claude /home/pilot/CLAUDE.md /home/pilot/AGENTS.md /home/pilot/README.md 2>/dev/null || true",
       "chown -R 1000:1000 /home/user/.local 2>/dev/null || true",
       "ln -sf /obc/tau /dev/tau",
-      `printf 'export PATH="/obc/bin:/obc/scripts:$HOME/.local/bin:$HOME/.bun/bin:/home/user/.local/bin:/home/user/.bun/bin:/usr/local/bin:$PATH:/usr/lib/kw/bin"\\nexport PYTHONPATH=/obc/lib\\nexport NODE_PATH=/obc/lib\\nexport PYTHONDONTWRITEBYTECODE=1\\nexport NODE_OPTIONS="--max-old-space-size=${heapMb}"\\nobc_reset_tty() { printf "\\033[?1000l\\033[?1002l\\033[?1003l\\033[?1005l\\033[?1006l\\033[?1015l\\033[?1004l\\033[?25h"; }\\n[ -n "$BASH_VERSION" ] && PROMPT_COMMAND="obc_reset_tty\${PROMPT_COMMAND:+; \$PROMPT_COMMAND}"\\n' > /etc/profile.d/obc.sh`,
+      `printf 'export PATH="/run/kw/bin:/obc/bin:/obc/scripts:$HOME/.local/bin:$HOME/.bun/bin:/home/user/.local/bin:/home/user/.bun/bin:/usr/local/bin:$PATH:/usr/lib/kw/bin"\\nexport PYTHONPATH=/obc/lib\\nexport NODE_PATH=/obc/lib\\nexport PYTHONDONTWRITEBYTECODE=1\\nexport NODE_COMPILE_CACHE=/home/pilot/.cache/v8-compile-cache\\nexport NODE_OPTIONS="--max-old-space-size=${heapMb}"\\nexport TMPDIR=/tmp\\nexport XDG_CACHE_HOME=/tmp/.cache\\nexport BUN_INSTALL_CACHE_DIR=/tmp/.bun-cache\\nexport NPM_CONFIG_CACHE=/tmp/.npm-cache\\nexport PIP_CACHE_DIR=/tmp/.pip-cache\\nexport CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1\\nexport DISABLE_AUTOUPDATER=1\\nexport DISABLE_TELEMETRY=1\\nobc_reset_tty() { printf "\\033[?1000l\\033[?1002l\\033[?1003l\\033[?1005l\\033[?1006l\\033[?1015l\\033[?1004l\\033[?25h"; }\\n[ -n "$BASH_VERSION" ] && PROMPT_COMMAND="obc_reset_tty\${PROMPT_COMMAND:+; \$PROMPT_COMMAND}"\\n' > /etc/profile.d/obc.sh`,
       "chmod 644 /etc/profile.d/obc.sh 2>/dev/null || true",
       "if [ -f /etc/bash.bashrc ] && ! grep -q '/etc/profile.d/obc.sh' /etc/bash.bashrc 2>/dev/null; then printf '\\n[ -r /etc/profile.d/obc.sh ] && . /etc/profile.d/obc.sh\\n' >> /etc/bash.bashrc; fi",
     ].join(" && ");
@@ -801,8 +904,7 @@ export class ObcRuntime {
       }
     }
     try {
-      const heapMb = this.nodeMaxOldSpaceMiB();
-      const wrapped = `export PATH="/obc/bin:/obc/scripts:$HOME/.local/bin:$HOME/.bun/bin:/home/user/.local/bin:/home/user/.bun/bin:/usr/local/bin:$PATH:/usr/lib/kw/bin" PYTHONPATH=/obc/lib NODE_PATH=/obc/lib PYTHONDONTWRITEBYTECODE=1 NODE_OPTIONS="--max-old-space-size=${heapMb}"; ${command}`;
+      const wrapped = `${this.buildGuestEnvLine()}; ${command}`;
       const res = await this.vm.exec("sh", ["-c", wrapped], { timeout: timeoutMs, encoding: "utf8" });
       const code = res.exitCode ?? -1;
       return {
@@ -891,6 +993,21 @@ export class ObcRuntime {
 
   clearLogs() {
     this.hostLogs = [];
+  }
+
+  /** Return live active SMP vCPU count (1 if UP or not cross-origin isolated). */
+  get cpusActive(): number {
+    return this.phase === "ready" ? this.activeCpus : this.config.cpus;
+  }
+
+  /** Return current page-cache warmup state (`idle` | `warming` | `ready`). */
+  getWarmupState(): ObcWarmupState {
+    return this.warmupState;
+  }
+
+  /** Return the names of all registered Level 3 native HostCommands (`/run/kw/bin/*`). */
+  getHostCommandNames(): string[] {
+    return [...this.hostCommandNames];
   }
 
   /** Return live Unkernel VM hardware & I/O counters (`vm.stats()`) plus browser host capabilities. */
@@ -1318,15 +1435,8 @@ export class ObcRuntime {
     let stderr = "";
     const appendCap = (cur: string, chunk: string) => (cur.length > 64_000 ? cur.slice(-32_000) + chunk : cur + chunk);
     try {
-      const heapMb = this.nodeMaxOldSpaceMiB();
-      const proc = await this.vm.spawn(
-        "sh",
-        [
-          "-lc",
-          `export PATH="/obc/scripts:$HOME/.local/bin:/usr/local/bin:$PATH:/usr/lib/kw/bin" NODE_OPTIONS="--max-old-space-size=${heapMb}"; sh /obc/scripts/obc-install "${profile}"`,
-        ],
-        { pty: false },
-      );
+      const envLine = this.buildGuestEnvLine();
+      const proc = await this.vm.spawn("sh", ["-lc", `${envLine}; sh /obc/scripts/obc-install "${profile}"`], { pty: false });
       const drain = async (stream: ReadableStream<Uint8Array>, isErr: boolean) => {
         const reader = stream.getReader();
         try {
@@ -1363,6 +1473,9 @@ export class ObcRuntime {
         } catch {
           // best-effort sync
         }
+      }
+      if (ok && this.vm) {
+        void this.warmupPageCache(this.vm);
       }
       this.pushOutput(
         enc.encode(ok ? "\x1b[1;32m[OBC] Toolchain ready!\r\n\x1b[0m" : "\x1b[1;31m[OBC] Toolchain install failed.\r\n\x1b[0m"),
@@ -1403,9 +1516,204 @@ export class ObcRuntime {
     return this.boot();
   }
 
+  /** Multi-Tab Persistent PTY Sessions (keep claude/pi/shells warm in parallel without cold restarts!). */
+  onTabsChange(fn: () => void): () => void {
+    this.tabListeners.add(fn);
+    return () => this.tabListeners.delete(fn);
+  }
+
+  private emitTabs() {
+    for (const fn of this.tabListeners) fn();
+  }
+
+  activeTabId(): string {
+    return this.currentTabId;
+  }
+
+  listTabs(): ObcTerminalTabInfo[] {
+    const tabs: ObcTerminalTabInfo[] = [
+      {
+        id: "main",
+        title: "Main",
+        kind: "main",
+        pid: null,
+        running: this.phase === "ready",
+        exitCode: null,
+        cmd: null,
+        active: this.currentTabId === "main",
+      },
+    ];
+    for (const t of this.ptyTabs.values()) {
+      tabs.push({
+        id: t.id,
+        title: t.title,
+        kind: "pty",
+        pid: t.pty.pid,
+        running: t.running,
+        exitCode: t.exitCode,
+        cmd: t.cmd,
+        active: this.currentTabId === t.id,
+      });
+    }
+    return tabs;
+  }
+
+  async openTab(opts: { title?: string; cmd?: string; cwd?: string } = {}): Promise<ObcTerminalTabInfo | null> {
+    if (this.phase !== "ready" || !this.vm) {
+      const st = await this.boot();
+      if (st.phase !== "ready" || !this.vm) return null;
+    }
+    const vm = this.vm;
+    const id = `pty-${this.nextTabSeq++}`;
+    const title = opts.title?.trim() || (opts.cmd ? opts.cmd.split(/\s+/)[0]!.slice(0, 14) : `Shell ${this.nextTabSeq - 1}`);
+    const cmd = opts.cmd?.trim() || null;
+    try {
+      const pty = await vm.spawn("sh", ["-l"], {
+        pty: true,
+        cols: this.termCols,
+        rows: this.termRows,
+        cwd: opts.cwd || "/home/pilot",
+        env: this.buildGuestEnvRecord(),
+        detachable: true,
+      });
+      const tab: ObcPtyTabInternal = {
+        id,
+        title,
+        cmd,
+        pty,
+        running: true,
+        exitCode: null,
+        replayChunks: [],
+        replayBytes: 0,
+        listeners: new Set(),
+      };
+      this.ptyTabs.set(id, tab);
+      this.currentTabId = id;
+      this.emitTabs();
+
+      // Drain pull-stream continuously so guest never blocks on vsock flow control
+      void (async () => {
+        const reader = pty.output.getReader();
+        try {
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            if (!value || value.byteLength === 0) continue;
+            tab.replayChunks.push(value);
+            tab.replayBytes += value.byteLength;
+            while (tab.replayBytes > 65_536 && tab.replayChunks.length > 1) {
+              const drop = tab.replayChunks.shift()!;
+              tab.replayBytes -= drop.byteLength;
+            }
+            for (const fn of tab.listeners) fn(value);
+          }
+        } catch {
+          // pty closed or kernel stopped
+        } finally {
+          try {
+            reader.releaseLock();
+          } catch {}
+        }
+      })();
+
+      void pty.ended
+        .then((res) => {
+          tab.running = false;
+          tab.exitCode = res.type === "exit" ? res.code : -1;
+          const notice = new TextEncoder().encode(`\r\n\x1b[2;33m[Tab "${tab.title}" exited (${tab.exitCode})]\r\n\x1b[0m`);
+          tab.replayChunks.push(notice);
+          for (const fn of tab.listeners) fn(notice);
+          this.emitTabs();
+        })
+        .catch(() => {
+          tab.running = false;
+          this.emitTabs();
+        });
+
+      // Kick off requested command inside the fresh login shell (keeping the shell alive if it finishes)
+      if (cmd) {
+        void pty.write(`cd /home/pilot 2>/dev/null; ${cmd}\n`);
+      } else {
+        void pty.write("cd /home/pilot 2>/dev/null\n");
+      }
+
+      return this.listTabs().find((t) => t.id === id) ?? null;
+    } catch (e) {
+      this.pushLog(`openTab(${title}) failed: ${e instanceof Error ? e.message : String(e)}`);
+      return null;
+    }
+  }
+
+  switchTab(id: string): boolean {
+    if (id !== "main" && !this.ptyTabs.has(id)) return false;
+    if (this.currentTabId === id) return true;
+    this.currentTabId = id;
+    this.emitTabs();
+    return true;
+  }
+
+  async closeTab(id: string): Promise<boolean> {
+    if (id === "main") return false;
+    const tab = this.ptyTabs.get(id);
+    if (!tab) return false;
+    this.ptyTabs.delete(id);
+    if (this.currentTabId === id) this.currentTabId = "main";
+    try {
+      await tab.pty.close();
+    } catch {
+      try {
+        tab.pty.kill("SIGHUP");
+      } catch {}
+    }
+    this.emitTabs();
+    return true;
+  }
+
+  writeTab(id: string, input: string) {
+    if (id === "main") {
+      this.write(input);
+      return;
+    }
+    const tab = this.ptyTabs.get(id);
+    if (!tab || !tab.running) return;
+    void tab.pty.write(input).catch(() => {});
+  }
+
+  resizeTab(id: string, cols: number, rows: number) {
+    const c = Math.max(40, Math.min(240, Math.round(cols)));
+    const r = Math.max(10, Math.min(80, Math.round(rows)));
+    if (id === "main") {
+      this.resize(c, r);
+      return;
+    }
+    const tab = this.ptyTabs.get(id);
+    if (!tab || !tab.running) return;
+    try {
+      tab.pty.resize(c, r);
+    } catch {}
+  }
+
+  onTabOutput(id: string, fn: (bytes: Uint8Array) => void): () => void {
+    if (id === "main") return this.onOutput(fn);
+    const tab = this.ptyTabs.get(id);
+    if (!tab) return () => {};
+    tab.listeners.add(fn);
+    for (const chunk of tab.replayChunks) fn(chunk);
+    return () => tab.listeners.delete(fn);
+  }
+
   private cleanupVmHandles() {
     this.stopFbPolling();
     this.stopCrewBroadcastLoop();
+    for (const tab of this.ptyTabs.values()) {
+      try {
+        void tab.pty.close();
+      } catch {}
+    }
+    this.ptyTabs.clear();
+    this.currentTabId = "main";
+    this.activeCpus = 1;
+    this.warmupState = "idle";
     this.vsockHandle?.close();
     this.vsockHandle = null;
     this.mountHandle?.dispose();
@@ -1414,6 +1722,7 @@ export class ObcRuntime {
     this.fbMode = null;
     this.fbFrame = null;
     this.fbFps = 0;
+    this.emitTabs();
   }
 
   private initBroadcastChannel() {

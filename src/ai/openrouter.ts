@@ -185,20 +185,41 @@ export async function connect(win: Window = window, fetchFn: Fetch = fetch): Pro
     return null;
   }
   return new Promise((done) => {
-    const on = async (e: MessageEvent) => {
-      if (e.origin !== win.location.origin || (e.data as { type?: string })?.type !== "kerr-openrouter") return;
+    let settled = false;
+    let bc: BroadcastChannel | null = null;
+    const finish = (key: string | null) => {
+      if (settled) return;
+      settled = true;
+      clearInterval(watch);
       win.removeEventListener("message", on);
-      done(await exchangeCode(String((e.data as { code: string }).code), verifier, fetchFn));
+      try {
+        bc?.close();
+      } catch {}
+      done(key);
+    };
+    const handleCode = async (code: string) => {
+      finish(await exchangeCode(code, verifier, fetchFn));
+    };
+    const on = (e: MessageEvent) => {
+      if (e.origin !== win.location.origin || (e.data as { type?: string })?.type !== "kerr-openrouter") return;
+      void handleCode(String((e.data as { code: string }).code));
     };
     win.addEventListener("message", on);
+    // BroadcastChannel fallback keeps OAuth popup delivery working even under COOP: same-origin.
+    try {
+      if (typeof BroadcastChannel !== "undefined") {
+        bc = new BroadcastChannel("kerr-openrouter-oauth");
+        bc.onmessage = (e: MessageEvent) => {
+          if ((e.data as { type?: string })?.type !== "kerr-openrouter") return;
+          void handleCode(String((e.data as { code: string }).code));
+        };
+      }
+    } catch {}
     // (the popup closed without a code: given up)
     const watch = setInterval(() => {
       if (pop.closed) {
         clearInterval(watch);
-        setTimeout(() => {
-          win.removeEventListener("message", on);
-          done(null);
-        }, 1500);
+        setTimeout(() => finish(null), 1500);
       }
     }, 500);
   });

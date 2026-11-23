@@ -1,10 +1,15 @@
 #!/bin/sh
 # bh — Universal CLI for the entire Black Hole GPU `__bh` API & all 73 TARS tools (input & output).
-# Supports full stdin/stdout JSON piping (e.g. `echo '{"action":"list","field":"KSFO"}' | bh tool approach --stdin`).
+# Fast path: runs natively on the browser host via Unkernel HostCommand (/run/kw/bin/bh-host) in ~3 ms
+# with ZERO Node.js startup overhead. Falls back to `node /obc/lib/bh-cli.mjs` if unavailable.
 
 if [ "$1" = "tui" ]; then
   shift
   exec /obc/scripts/bh-tui "$@"
+fi
+
+if [ -x /run/kw/bin/bh-host ]; then
+  exec /run/kw/bin/bh-host "$@"
 fi
 
 _N=$(command -v node 2>/dev/null || true)

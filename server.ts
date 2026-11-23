@@ -65,13 +65,25 @@ const moonTiles = createMoonTiles("data/moon/lola");
 const marsTiles = createMoonTiles("data/mars/dem", "mars/dem");
 const mercuryTiles = createMoonTiles("data/mercury/dem", "mercury/dem");
 const ceresTiles = createMoonTiles("data/ceres/dem", "ceres/dem");
+const coiEnabled = process.env.KERR_NO_COI !== "1";
+/** Attach COOP/COEP: credentialless so Unkernel gets SharedArrayBuffer + multi-CPU SMP while cross-origin map tiles keep working. */
+function withCoiHeaders(res: Response): Response {
+  if (!coiEnabled) return res;
+  const headers = new Headers(res.headers);
+  headers.set("Cross-Origin-Opener-Policy", "same-origin");
+  headers.set("Cross-Origin-Embedder-Policy", "credentialless");
+  return new Response(res.body, { status: res.status, statusText: res.statusText, headers });
+}
+
 const server = Bun.serve({
   port,
   routes: {
-    "/": index,
+    "/__app": index,
+    "/__crew": crew,
+    "/": async (req: Request): Promise<Response> => withCoiHeaders(await fetch(new URL("/__app", req.url))),
     "/crew": () => Response.redirect("/crew/", 302),
-    "/crew/": crew,
-    "/crew/index.html": crew,
+    "/crew/": async (req: Request): Promise<Response> => withCoiHeaders(await fetch(new URL("/__crew", req.url))),
+    "/crew/index.html": async (req: Request): Promise<Response> => withCoiHeaders(await fetch(new URL("/__crew", req.url))),
     // Dev only: the page can POST a rendered PNG here (window.__bh.snapshot()) for offline inspection.
     "/__snapshot": {
       POST: async (req) => {

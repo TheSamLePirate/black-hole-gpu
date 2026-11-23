@@ -60,7 +60,7 @@ export interface ObcConfig {
 export const DEFAULT_OBC_CONFIG: ObcConfig = {
   distro: "alpine",
   memoryMiB: 2048,
-  cpus: 1,
+  cpus: 4,
   fbWidth: 512,
   fbHeight: 512,
   jit: true,
@@ -76,6 +76,19 @@ export const DEFAULT_OBC_CONFIG: ObcConfig = {
   fontSize: 13,
   panelOpacity: 0.94,
 };
+
+export type ObcWarmupState = "idle" | "warming" | "ready";
+
+export interface ObcTerminalTabInfo {
+  id: string;
+  title: string;
+  kind: "main" | "pty";
+  pid: number | null;
+  running: boolean;
+  exitCode: number | null;
+  cmd: string | null;
+  active: boolean;
+}
 
 export interface ObcTelemetry {
   /** Protocol schema version */

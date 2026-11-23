@@ -251,7 +251,7 @@ export class ObcMachineManager {
       [
         ["1", "1 vCPU (UP)"],
         ["2", "2 vCPUs (SMP)"],
-        ["4", "4 vCPUs (SMP)"],
+        ["4", "4 vCPUs (SMP, auto)"],
       ],
       String(cfg.cpus),
       "obc-opt-cpus",

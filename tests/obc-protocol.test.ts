@@ -210,7 +210,7 @@ test("OBC_PILOT_KIT_FILES: every /home/pilot doc and Claude/Pi SKILL.md exists w
 test("clampWindowBounds & Unkernel config normalizers keep draggable/resizable OBC panel safely inside viewport", () => {
   expect(OBC_CPU_OPTIONS).toEqual([1, 2, 4]);
   expect(normalizeCpus(2)).toBe(2);
-  expect(normalizeCpus(8)).toBe(1);
+  expect(normalizeCpus(8)).toBe(DEFAULT_OBC_CONFIG.cpus);
   expect(normalizeWispMode("off")).toBe("off");
   expect(normalizeWispMode("prod")).toBe("prod");
   expect(normalizeWispMode("bogus")).toBe("auto");

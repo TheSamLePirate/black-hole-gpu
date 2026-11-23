@@ -541,6 +541,17 @@ async function cacheFirst(request: Request, name: string): Promise<Response> {
   return res;
 }
 
+/** Ensure app HTML navigation responses carry COOP + COEP: credentialless (enables SharedArrayBuffer + SMP Unkernel even on GitHub Pages). */
+function withCoiHeaders(request: Request, res: Response): Response {
+  if (request.mode !== "navigate" || !isAppPage(request.url, ROOT)) return res;
+  if (res.status === 0 || res.type === "opaque" || res.redirected) return res;
+  if (res.headers.get("cross-origin-embedder-policy") && res.headers.get("cross-origin-opener-policy")) return res;
+  const headers = new Headers(res.headers);
+  headers.set("Cross-Origin-Opener-Policy", "same-origin");
+  headers.set("Cross-Origin-Embedder-Policy", "credentialless");
+  return new Response(res.body, { status: res.status, statusText: res.statusText, headers });
+}
+
 async function networkFirst(request: Request, name: string): Promise<Response> {
   const cache = await caches.open(name);
   try {
@@ -549,11 +560,11 @@ async function networkFirst(request: Request, name: string): Promise<Response> {
       void cache.put(request, res.clone());
       if (request.mode === "navigate" && isAppPage(request.url, ROOT)) void cache.put(ROOT, res.clone());
     }
-    return res;
+    return withCoiHeaders(request, res);
   } catch (e) {
     const hit =
       (await cache.match(request)) ?? (request.mode === "navigate" && isAppPage(request.url, ROOT) ? await cache.match(ROOT) : undefined);
-    if (hit) return hit;
+    if (hit) return withCoiHeaders(request, hit);
     throw e;
   }
 }

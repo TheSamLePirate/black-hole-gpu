@@ -3385,10 +3385,17 @@ export function gameTools(h: GameHost): Tool[] {
             "probe",
             "route_cockpit",
             "logs",
+            "list_tabs",
+            "open_tab",
+            "switch_tab",
+            "close_tab",
+            "bench",
           ],
         },
         script: { type: "string" },
         command: { type: "string" },
+        title: { type: "string" },
+        tabId: { type: "string" },
         profile: { type: "string", enum: ["python", "node", "bun", "rust", "claude", "pi", "full", "all"] },
         distro: { type: "string", enum: ["alpine", "debian"] },
         theme: { type: "string", enum: ["auto", "interstellar", "f35", "a320", "amber"] },
@@ -3453,6 +3460,19 @@ export function gameTools(h: GameHost): Tool[] {
           }
           case "logs":
             return { logs: obc.getLogs() };
+          case "list_tabs":
+            return { active: obc.activeTabId(), tabs: obc.listTabs() };
+          case "open_tab":
+            return await obc.openTab({
+              ...(typeof a.title === "string" && a.title ? { title: a.title } : {}),
+              ...(typeof a.command === "string" && a.command ? { cmd: a.command } : {}),
+            });
+          case "switch_tab":
+            return { ok: obc.switchTab(String(a.tabId ?? "main")), active: obc.activeTabId() };
+          case "close_tab":
+            return { ok: await obc.closeTab(String(a.tabId ?? "")), active: obc.activeTabId() };
+          case "bench":
+            return await obc.exec("obc-bench");
           case "config":
             return obc.setConfig({
               ...(a.distro === "alpine" || a.distro === "debian" ? { distro: a.distro } : {}),

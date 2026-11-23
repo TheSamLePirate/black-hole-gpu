@@ -183,7 +183,9 @@ install_pi() {
   if [ -x "$PI_BIN" ]; then
     link_bin pi "$PI_BIN"
   fi
+  mkdir -p /home/pilot/.cache/v8-compile-cache 2>/dev/null || true
   hash -r 2>/dev/null || true
+  echo "Tip: V8 bytecode cache enabled (NODE_COMPILE_CACHE). For instant (<5ms) AI in terminal, try: ai \"...\" or tars \"...\""
 }
 
 install_rust() {

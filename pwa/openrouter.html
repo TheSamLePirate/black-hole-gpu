@@ -20,11 +20,27 @@
       const code = new URLSearchParams(location.search).get("code");
       const m = document.getElementById("m");
       if (!code) m.textContent = "No code from OpenRouter: the connection was cancelled. You can close this window.";
-      else if (window.opener) {
-        window.opener.postMessage({ type: "kerr-openrouter", code }, location.origin);
-        m.textContent = "Connected. This window closes itself.";
-        setTimeout(() => window.close(), 400);
-      } else location.replace(`./#openrouter-code=${encodeURIComponent(code)}`);
+      else {
+        let delivered = false;
+        try {
+          if (typeof BroadcastChannel !== "undefined") {
+            const bc = new BroadcastChannel("kerr-openrouter-oauth");
+            bc.postMessage({ type: "kerr-openrouter", code });
+            bc.close();
+            delivered = true;
+          }
+        } catch {}
+        if (window.opener) {
+          window.opener.postMessage({ type: "kerr-openrouter", code }, location.origin);
+          delivered = true;
+        }
+        if (delivered) {
+          m.textContent = "Connected. This window closes itself.";
+          setTimeout(() => window.close(), 400);
+        } else {
+          location.replace(`./#openrouter-code=${encodeURIComponent(code)}`);
+        }
+      }
     </script>
   </body>
 </html>

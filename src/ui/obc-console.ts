@@ -26,6 +26,16 @@ const OBC_VIEW_MARGIN = 10;
 interface XtermBundle {
   term: import("@xterm/xterm").Terminal;
   fit: import("@xterm/addon-fit").FitAddon;
+  pane: HTMLDivElement;
+  mouseGuard: TerminalMouseGuard;
+  mouseDec: TextDecoder;
+  unsubOut: () => void;
+}
+
+interface XtermModules {
+  Terminal: typeof import("@xterm/xterm").Terminal;
+  FitAddon: typeof import("@xterm/addon-fit").FitAddon;
+  ImageAddon: typeof import("@xterm/addon-image").ImageAddon;
 }
 
 /** Clamp a draggable/resizable OBC window cleanly inside the browser viewport. */
@@ -132,15 +142,16 @@ export class ObcConsoleOverlay {
   private edStatusEl: HTMLSpanElement;
   private modeBtns = new Map<ObcViewMode, HTMLButtonElement>();
 
+  private tabBarEl: HTMLDivElement;
+  private tabListEl: HTMLDivElement;
   private winBounds: ObcWindowBounds | null = loadSavedWindowBounds();
   private preMaxBounds: ObcWindowBounds | null = null;
   private onWinResize: (() => void) | null = null;
 
-  private xterm: XtermBundle | null = null;
-  private xtermLoading: Promise<void> | null = null;
-  private mouseGuard = new TerminalMouseGuard();
-  private mouseDec = new TextDecoder();
-  private unsubOut: (() => void) | null = null;
+  private xtermMods: XtermModules | null = null;
+  private xtermModsLoading: Promise<XtermModules> | null = null;
+  private tabTerms = new Map<string, XtermBundle>();
+  private unsubTabs: (() => void) | null = null;
   private unsubState: (() => void) | null = null;
   private onWinKeyDown: ((e: KeyboardEvent) => void) | null = null;
   private onWinKeyUp: ((e: KeyboardEvent) => void) | null = null;
@@ -469,8 +480,42 @@ export class ObcConsoleOverlay {
       { passive: false },
     );
 
+    // ── Persistent Multi-Tab PTY Strip (keep claude / pi / shells warm in parallel!) ──
+    this.tabBarEl = document.createElement("div");
+    this.tabBarEl.className = "obc-tabbar";
+    this.tabBarEl.dataset.testid = "obc-tabbar";
+    this.tabListEl = document.createElement("div");
+    this.tabListEl.className = "obc-tabbar-list";
+    const tabAdd = document.createElement("div");
+    tabAdd.className = "obc-tabbar-add";
+    const openWarmTab = (title: string, cmd?: string) => {
+      void this.runtime.openTab({ title, cmd }).then(() => {
+        this.syncTabsUi();
+        this.focusActiveInput();
+      });
+    };
+    tabAdd.append(
+      mkBtn("+ Shell", () => openWarmTab("Shell"), {
+        testid: "obc-tab-add-shell",
+        title: "Open a new persistent Linux login shell PTY tab",
+      }),
+      mkBtn("+ Claude", () => openWarmTab("Claude", "claude"), {
+        testid: "obc-tab-add-claude",
+        title: "Launch Claude Code in a dedicated tab so it stays warm (0 cold restarts!)",
+      }),
+      mkBtn("+ Pi", () => openWarmTab("Pi", "pi"), {
+        testid: "obc-tab-add-pi",
+        title: "Launch Pi coding agent in a dedicated tab so it stays warm (0 cold restarts!)",
+      }),
+      mkBtn("+ AI", () => openWarmTab("AI·Fast", "ai"), {
+        testid: "obc-tab-add-ai",
+        title: "Open instant (<5ms) native browser-host AI REPL in its own tab",
+      }),
+    );
+    this.tabBarEl.append(this.tabListEl, tabAdd);
+
     body.append(this.termWrap, this.fbWrap);
-    this.el.append(bar, subbar, this.manager.el, this.editorDrawer, body);
+    this.el.append(bar, subbar, this.tabBarEl, this.manager.el, this.editorDrawer, body);
     this.attachResizeHandles();
 
     const isToggleKey = (e: KeyboardEvent) =>
@@ -501,8 +546,8 @@ export class ObcConsoleOverlay {
       if (seq !== null) {
         e.preventDefault();
         e.stopImmediatePropagation();
-        this.runtime.write(seq);
-        if (!this.termWrap.hidden) this.xterm?.term.focus();
+        this.runtime.writeTab(this.runtime.activeTabId(), seq);
+        if (!this.termWrap.hidden) this.activeXterm()?.term.focus();
       }
     };
     this.onWinKeyUp = (e: KeyboardEvent) => {
@@ -547,8 +592,10 @@ export class ObcConsoleOverlay {
       else this.hide(false);
     });
     this.unsubState = this.runtime.onState(() => this.syncUi());
+    this.unsubTabs = this.runtime.onTabsChange(() => this.syncTabsUi());
     this.applyVisualConfig();
     if (this.winBounds) this.applyWindowBounds(this.winBounds, false);
+    this.syncTabsUi();
     this.syncUi();
   }
 
@@ -719,13 +766,21 @@ export class ObcConsoleOverlay {
     }
   }
 
+  private activeXterm(): XtermBundle | null {
+    return this.tabTerms.get(this.runtime.activeTabId()) ?? this.tabTerms.get("main") ?? null;
+  }
+
   private applyVisualConfig() {
     const cfg = this.runtime.getConfig();
     this.el.style.setProperty("--obc-opacity", String(cfg.panelOpacity));
-    if (this.xterm && this.xterm.term.options.fontSize !== cfg.fontSize) {
-      this.xterm.term.options.fontSize = cfg.fontSize;
-      this.refitXterm();
+    let changed = false;
+    for (const bundle of this.tabTerms.values()) {
+      if (bundle.term.options.fontSize !== cfg.fontSize) {
+        bundle.term.options.fontSize = cfg.fontSize;
+        changed = true;
+      }
     }
+    if (changed) this.refitXterm();
   }
 
   get isOpen(): boolean {
@@ -750,14 +805,15 @@ export class ObcConsoleOverlay {
     this.el.hidden = false;
     if (notifyRuntime) this.runtime.consoleOpen = true;
     if (this.winBounds) this.applyWindowBounds(this.winBounds, false);
-    void this.ensureXterm().then(() => {
+    void this.ensureTabXterm(this.runtime.activeTabId()).then(() => {
       this.fitAndResizeGuest();
-      this.xterm?.term.focus();
+      this.activeXterm()?.term.focus();
     });
     if (this.runtime.status().phase === "off") {
       void this.runtime.boot();
     }
     this.startFbRenderLoop();
+    this.syncTabsUi();
     this.syncUi();
   }
 
@@ -852,8 +908,9 @@ export class ObcConsoleOverlay {
   private focusActiveInput() {
     requestAnimationFrame(() => {
       if (this.el.hidden) return;
-      if (!this.termWrap.hidden && this.xterm) {
-        this.xterm.term.focus();
+      const cur = this.activeXterm();
+      if (!this.termWrap.hidden && cur) {
+        cur.term.focus();
       } else if (!this.fbWrap.hidden) {
         this.fbCanvas.focus();
       } else {
@@ -863,10 +920,13 @@ export class ObcConsoleOverlay {
   }
 
   private fitAndResizeGuest(force = false) {
-    if (!this.xterm || this.el.hidden || this.termWrap.hidden) return;
+    const curId = this.runtime.activeTabId();
+    const cur = this.tabTerms.get(curId);
+    if (!cur || this.el.hidden || this.termWrap.hidden) return;
     try {
-      this.xterm.fit.fit();
-      this.runtime.resize(this.xterm.term.cols, this.xterm.term.rows, force);
+      cur.fit.fit();
+      if (curId === "main") this.runtime.resize(cur.term.cols, cur.term.rows, force);
+      else this.runtime.resizeTab(curId, cur.term.cols, cur.term.rows);
     } catch {}
   }
 
@@ -875,79 +935,166 @@ export class ObcConsoleOverlay {
   }
 
   resetTerminalModes() {
-    this.mouseGuard.resetModes(true);
-    this.xterm?.term.write(TERMINAL_FULL_SANE_SEQ);
+    const cur = this.activeXterm();
+    if (!cur) return;
+    cur.mouseGuard.resetModes(true);
+    cur.term.write(TERMINAL_FULL_SANE_SEQ);
     this.refitXterm();
   }
 
-  private async ensureXterm(): Promise<void> {
-    if (this.xterm) return;
-    if (this.xtermLoading) return this.xtermLoading;
-    this.xtermLoading = (async () => {
+  private async loadXtermModules(): Promise<XtermModules> {
+    if (this.xtermMods) return this.xtermMods;
+    if (this.xtermModsLoading) return this.xtermModsLoading;
+    this.xtermModsLoading = (async () => {
       const [{ Terminal }, { FitAddon }, { ImageAddon }] = await Promise.all([
         import("@xterm/xterm"),
         import("@xterm/addon-fit"),
         import("@xterm/addon-image"),
       ]);
-      const cfg = this.runtime.getConfig();
-      const term = new Terminal({
-        cursorBlink: true,
-        fontFamily: '"JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace',
-        fontSize: cfg.fontSize,
-        lineHeight: 1.2,
-        scrollback: 2000,
-        theme: {
-          background: "#041922",
-          foreground: "#c6f7ff",
-          cursor: "#62e6ff",
-          cursorAccent: "#041922",
-          selectionBackground: "rgba(98, 230, 255, 0.28)",
-          black: "#0c161c",
-          red: "#ff5a46",
-          green: "#7dff9a",
-          yellow: "#ffb347",
-          blue: "#58b8ff",
-          magenta: "#d58cff",
-          cyan: "#62e6ff",
-          white: "#c6f7ff",
-        },
+      this.xtermMods = { Terminal, FitAddon, ImageAddon };
+      return this.xtermMods;
+    })();
+    return this.xtermModsLoading;
+  }
+
+  private async ensureTabXterm(tabId: string): Promise<XtermBundle> {
+    const existing = this.tabTerms.get(tabId);
+    if (existing) return existing;
+    const { Terminal, FitAddon, ImageAddon } = await this.loadXtermModules();
+    const again = this.tabTerms.get(tabId);
+    if (again) return again;
+    const cfg = this.runtime.getConfig();
+    const pane = document.createElement("div");
+    pane.className = "obc-term-pane";
+    pane.dataset.tabId = tabId;
+    pane.hidden = this.runtime.activeTabId() !== tabId;
+    this.termWrap.append(pane);
+
+    const term = new Terminal({
+      cursorBlink: true,
+      fontFamily: '"JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace',
+      fontSize: cfg.fontSize,
+      lineHeight: 1.2,
+      scrollback: 2000,
+      theme: {
+        background: "#041922",
+        foreground: "#c6f7ff",
+        cursor: "#62e6ff",
+        cursorAccent: "#041922",
+        selectionBackground: "rgba(98, 230, 255, 0.28)",
+        black: "#0c161c",
+        red: "#ff5a46",
+        green: "#7dff9a",
+        yellow: "#ffb347",
+        blue: "#58b8ff",
+        magenta: "#d58cff",
+        cyan: "#62e6ff",
+        white: "#c6f7ff",
+      },
+    });
+    const fit = new FitAddon();
+    term.loadAddon(fit);
+    try {
+      term.loadAddon(new ImageAddon());
+    } catch {
+      // ImageAddon is optional if canvas/webgl unsupported
+    }
+    term.open(pane);
+    const mouseGuard = new TerminalMouseGuard();
+    const mouseDec = new TextDecoder();
+    term.onData((data) => {
+      const filtered = mouseGuard.filterInput(data, {
+        allowMouse: this.runtime.getConfig().termMouse,
+        suppressAllMouse: this.el.classList.contains("dragging") || this.el.classList.contains("resizing"),
       });
-      const fit = new FitAddon();
-      term.loadAddon(fit);
-      try {
-        term.loadAddon(new ImageAddon());
-      } catch {
-        // ImageAddon is optional if canvas/webgl unsupported
+      if (filtered) this.runtime.writeTab(tabId, filtered);
+    });
+    const unsubOut = this.runtime.onTabOutput(tabId, (bytes) => {
+      term.write(bytes);
+      const text = mouseDec.decode(bytes, { stream: true });
+      if (mouseGuard.observeGuestOutput(text)) {
+        term.write(TERMINAL_MOUSE_RESET_SEQ);
       }
-      term.open(this.termWrap);
-      fit.fit();
-      this.runtime.resize(term.cols, term.rows);
-      term.onData((data) => {
-        const filtered = this.mouseGuard.filterInput(data, {
-          allowMouse: this.runtime.getConfig().termMouse,
-          suppressAllMouse: this.el.classList.contains("dragging") || this.el.classList.contains("resizing"),
-        });
-        if (filtered) this.runtime.write(filtered);
-      });
-      this.unsubOut = this.runtime.onOutput((bytes) => {
-        term.write(bytes);
-        const text = this.mouseDec.decode(bytes, { stream: true });
-        if (this.mouseGuard.observeGuestOutput(text)) {
-          term.write(TERMINAL_MOUSE_RESET_SEQ);
-        }
-      });
+    });
+    const bundle: XtermBundle = { term, fit, pane, mouseGuard, mouseDec, unsubOut };
+    this.tabTerms.set(tabId, bundle);
+
+    if (!this.resizeObs) {
       this.resizeObs = new ResizeObserver(() => {
         if (!this.el.hidden && !this.termWrap.hidden) {
-          try {
-            fit.fit();
-            this.runtime.resize(term.cols, term.rows);
-          } catch {}
+          this.fitAndResizeGuest(false);
         }
       });
       this.resizeObs.observe(this.termWrap);
-      this.xterm = { term, fit };
-    })();
-    return this.xtermLoading;
+    }
+
+    if (!pane.hidden) {
+      try {
+        fit.fit();
+        if (tabId === "main") this.runtime.resize(term.cols, term.rows);
+        else this.runtime.resizeTab(tabId, term.cols, term.rows);
+      } catch {}
+    }
+    return bundle;
+  }
+
+  private syncTabsUi() {
+    const tabs = this.runtime.listTabs();
+    const validIds = new Set(tabs.map((t) => t.id));
+    // Dispose xterm panes for closed PTY tabs
+    for (const [id, b] of this.tabTerms.entries()) {
+      if (!validIds.has(id)) {
+        b.unsubOut();
+        b.term.dispose();
+        b.pane.remove();
+        this.tabTerms.delete(id);
+      }
+    }
+
+    this.tabListEl.replaceChildren();
+    for (const tab of tabs) {
+      const pill = document.createElement("div");
+      pill.className = `obc-tab-pill${tab.active ? " on" : ""}`;
+      pill.dataset.testid = `obc-tab-${tab.id}`;
+      pill.title = tab.cmd ? `${tab.title} (${tab.cmd})` : tab.title;
+      pill.onclick = () => {
+        this.runtime.switchTab(tab.id);
+        this.focusActiveInput();
+      };
+      const dot = document.createElement("span");
+      dot.className = `obc-tab-dot${tab.running ? " live" : ""}`;
+      const lbl = document.createElement("span");
+      lbl.textContent = tab.title;
+      pill.append(dot, lbl);
+      if (tab.kind === "pty") {
+        const closeBtn = document.createElement("button");
+        closeBtn.type = "button";
+        closeBtn.className = "obc-tab-close";
+        closeBtn.dataset.testid = `obc-tab-close-${tab.id}`;
+        closeBtn.textContent = "×";
+        closeBtn.title = `Close ${tab.title}`;
+        closeBtn.onclick = (e) => {
+          e.stopPropagation();
+          void this.runtime.closeTab(tab.id);
+        };
+        pill.append(closeBtn);
+      }
+      this.tabListEl.append(pill);
+    }
+
+    const activeId = this.runtime.activeTabId();
+    for (const [id, b] of this.tabTerms.entries()) {
+      b.pane.hidden = id !== activeId;
+    }
+    if (!this.el.hidden) {
+      void this.ensureTabXterm(activeId).then((b) => {
+        for (const [id, item] of this.tabTerms.entries()) {
+          item.pane.hidden = id !== this.runtime.activeTabId();
+        }
+        this.fitAndResizeGuest(true);
+        if (!this.termWrap.hidden) b.term.focus();
+      });
+    }
   }
 
   private syncUi() {
@@ -959,7 +1106,13 @@ export class ObcConsoleOverlay {
     const parts: string[] = [st.phase.toUpperCase(), st.distro.toUpperCase()];
     if (st.bootMs !== null) parts.push(`${st.bootMs}ms`);
     parts.push(st.memoryMiB >= 1024 && st.memoryMiB % 1024 === 0 ? `${st.memoryMiB / 1024}GiB` : `${st.memoryMiB}MiB`);
-    if (st.config.cpus > 1) parts.push(`${st.config.cpus}CPU`);
+    const activeCpus = this.runtime.cpusActive;
+    if (st.phase === "ready") {
+      parts.push(activeCpus > 1 ? `${activeCpus}CPU SMP` : "1CPU");
+      if (st.transport === "sab" || st.transport === "shared") parts.push("SAB");
+    } else if (st.config.cpus > 1) {
+      parts.push(`${st.config.cpus}CPU`);
+    }
     if (st.config.jit) parts.push("JIT");
     if (st.netEnabled) parts.push("WISP");
     if (st.fbActive) parts.push(`FB0 ${st.fbWidth}×${st.fbHeight}${st.fbFps ? ` @${st.fbFps}Hz` : ""}`);
@@ -1023,10 +1176,14 @@ export class ObcConsoleOverlay {
     if (this.onWinKeyDown) window.removeEventListener("keydown", this.onWinKeyDown, true);
     if (this.onWinKeyUp) window.removeEventListener("keyup", this.onWinKeyUp, true);
     if (this.onWinResize) window.removeEventListener("resize", this.onWinResize);
-    this.unsubOut?.();
+    this.unsubTabs?.();
     this.unsubState?.();
     this.resizeObs?.disconnect();
-    this.xterm?.term.dispose();
+    for (const b of this.tabTerms.values()) {
+      b.unsubOut();
+      b.term.dispose();
+    }
+    this.tabTerms.clear();
     this.el.remove();
   }
 }

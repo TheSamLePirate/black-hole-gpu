@@ -42,13 +42,22 @@ export function wireObcMountFs(
   };
   let lastStatusJson = "";
   let lastTauText = "";
-  const refreshLiveFiles = () => {
+  let lastTelSig = "";
+  let lastTelWriteMs = 0;
+  const refreshLiveFiles = (force = false) => {
     try {
       const t = adapter.sampleTelemetry();
+      const now = Date.now();
       // Fixed-width trailing space padding keeps st_size constant so Linux 9p never truncates reads mid-token.
+      // Skip redundant .tmp + rename churn when telemetry (excluding wall_ms) is unchanged; refresh at least every 1000 ms.
       const telRaw = JSON.stringify(t);
-      const telPadded = telRaw.length < 2047 ? `${telRaw}${" ".repeat(2047 - telRaw.length)}\n` : `${telRaw}\n`;
-      atomicWrite("/telemetry.json", telPadded);
+      const telSig = telRaw.replace(/"wall_ms":\d+,?/, "");
+      if (force || telSig !== lastTelSig || now - lastTelWriteMs >= 1000) {
+        lastTelSig = telSig;
+        lastTelWriteMs = now;
+        const telPadded = telRaw.length < 2047 ? `${telRaw}${" ".repeat(2047 - telRaw.length)}\n` : `${telRaw}\n`;
+        atomicWrite("/telemetry.json", telPadded);
+      }
       const tauTxt = formatTauText({
         dtau_dt: t.dtau_dt,
         proper_time_s: t.proper_time_s,
@@ -70,8 +79,8 @@ export function wireObcMountFs(
       // keep previous snapshot on transient state transitions
     }
   };
-  refreshLiveFiles();
-  const refreshTimer = setInterval(refreshLiveFiles, 200);
+  refreshLiveFiles(true);
+  const refreshTimer = setInterval(() => refreshLiveFiles(false), 250);
   mem.writeFile("/cmd", "", { mode: 0o666 });
   mem.writeFile("/last_result.json", '{"ok":true,"msg":"ready"}\n', { mode: 0o444 });
   mem.writeFile("/rpc_req", "", { mode: 0o666 });

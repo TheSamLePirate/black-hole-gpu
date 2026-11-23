@@ -189,6 +189,101 @@
   margin-right: 2px;
 }
 
+/* ── Persistent Multi-Tab PTY Strip (keep claude / pi / shells warm in parallel) ── */
+.obc-tabbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  padding: 4px 10px;
+  background: rgba(3, 21, 30, 0.96);
+  border-bottom: 1px solid color-mix(in srgb, var(--obc-accent) 22%, transparent);
+  flex-shrink: 0;
+  overflow-x: auto;
+}
+
+.obc-tabbar-list {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  flex-wrap: nowrap;
+}
+
+.obc-tabbar-add {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.obc-tab-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 8px;
+  border-radius: 5px;
+  border: 1px solid color-mix(in srgb, var(--obc-accent) 28%, transparent);
+  background: rgba(9, 44, 58, 0.65);
+  color: color-mix(in srgb, var(--obc-text) 82%, transparent);
+  font: 600 10.5px/1.1 "JetBrains Mono", ui-monospace, monospace;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.obc-tab-pill:hover {
+  border-color: var(--obc-accent);
+  color: #ffffff;
+}
+
+.obc-tab-pill.on {
+  background: color-mix(in srgb, var(--obc-accent) 24%, rgba(6, 36, 48, 0.95));
+  border-color: var(--obc-accent);
+  color: #ffffff;
+}
+
+.obc-tab-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #4f7280;
+}
+
+.obc-tab-dot.live {
+  background: #7dff9a;
+  box-shadow: 0 0 6px #7dff9a;
+}
+
+.obc-tab-close {
+  border: 0;
+  background: transparent;
+  color: inherit;
+  opacity: 0.65;
+  padding: 0 2px;
+  font: 700 11px/1 inherit;
+  cursor: pointer;
+}
+
+.obc-tab-close:hover {
+  opacity: 1;
+  color: #ff7c6e;
+}
+
+.obc-tabbar-add .obc-btn {
+  padding: 3px 7px;
+  font-size: 10px;
+}
+
+.obc-term-pane {
+  width: 100%;
+  height: 100%;
+  position: relative;
+}
+
+.obc-term-pane[hidden] {
+  display: none;
+}
+
 /* Options & Script Editor Drawers */
 .obc-drawer {
   display: flex;
