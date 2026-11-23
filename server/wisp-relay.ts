@@ -1,10 +1,18 @@
-// Wisp v1 WebSocket-to-TCP relay (docs/PLAN-LINUX-OBC.md §6, docs/DEPLOY.md).
+// AAA Wisp v1 WebSocket-to-TCP/UDP relay (docs/PLAN-LINUX-OBC.md §6, docs/DEPLOY.md).
 // Shared by local dev (`server.ts` on `/__wisp`) and production (`server/wisp-main.ts` on `wss://code.samlepirate.org/`).
-// Implements the 4 Wisp v1 packet types (CONNECT=0x01, DATA=0x02, CONTINUE=0x03, CLOSE=0x04)
-// using Bun's native TCP socket API (`Bun.connect`), with SSRF protection (blocks loopback, RFC1918,
-// link-local, cloud metadata, and IPv6 ULA), origin validation, and per-client/global quotas.
+//
+// Features:
+// - Full Wisp v1 binary protocol: CONNECT (0x01 TCP + UDP), DATA (0x02), CONTINUE (0x03), CLOSE (0x04)
+// - Real OS-level TCP backpressure (`socket.pause()` / `socket.resume()`) coupled with WebSocket
+//   `getBufferedAmount()` + `websocket.drain(ws)` and an ordered FIFO outbound frame queue so large
+//   downloads (Bun 48 MB, Claude Code 130 MB, Debian/Rust toolchains) NEVER drop frames or stall
+// - Strict DATA-before-CLOSE ordering on EOF
+// - Multi-layer SSRF protection on both hostnames AND resolved DNS IP addresses (loopback, RFC1918,
+//   CGNAT, link-local, cloud metadata, IPv6 ULA/link-local/mapped IPv4)
 
-import type { Socket } from "bun";
+import dgram from "node:dgram";
+import dns from "node:dns";
+import net from "node:net";
 import { foreignOrigin } from "./ear-relay";
 
 const PKT_CONNECT = 0x01;
@@ -13,18 +21,26 @@ const PKT_CONTINUE = 0x03;
 const PKT_CLOSE = 0x04;
 
 const STREAM_TCP = 0x01;
+const STREAM_UDP = 0x02;
+
 const CLOSE_NORMAL = 0x02;
-const CLOSE_REFUSED = 0x43;
-const CLOSE_UNREACHABLE = 0x42;
 const CLOSE_INVALID = 0x03;
-const CLOSE_THROTTLED = 0x44;
+const CLOSE_UNREACHABLE = 0x42;
+const CLOSE_TIMEOUT = 0x43;
+const CLOSE_REFUSED = 0x44;
+const CLOSE_BLOCKED = 0x48;
+const CLOSE_THROTTLED = 0x49;
 
 export const WISP_LIMITS = {
-  maxClients: 32,
-  maxStreamsPerClient: 64,
+  maxClients: 64,
+  maxStreamsPerClient: 96,
   initialBuffer: 128,
   maxHostLen: 253,
-  maxQueueBytes: 512 * 1024,
+  maxClientQueueBytes: 1024 * 1024,
+  maxFrameBytes: 32 * 1024,
+  wsHighWaterBytes: 512 * 1024,
+  wsLowWaterBytes: 128 * 1024,
+  connectTimeoutMs: 15_000,
 } as const;
 
 export interface WispUpgradeOptions {
@@ -34,13 +50,29 @@ export interface WispUpgradeOptions {
   maxClientsPerIp?: number;
   clientIp?: string;
   allowOrigin?: (origin: string) => boolean;
+  /** Test-only override allowing connections to 127.0.0.1 / ::1 in isolated unit tests. */
+  allowLoopbackForTest?: boolean;
+}
+
+export interface WispSocketLike {
+  data: unknown;
+  send(data: Uint8Array): number;
+  getBufferedAmount?(): number;
+  readyState?: number;
 }
 
 export interface WispStream {
   id: number;
-  socket?: Socket<WispSocketCtx>;
-  queue: Uint8Array[];
-  queuedBytes: number;
+  kind: "tcp" | "udp";
+  tcp?: net.Socket;
+  udp?: dgram.Socket;
+  udpHost?: string;
+  udpPort?: number;
+  clientQueue: Uint8Array[];
+  clientQueuedBytes: number;
+  connected: boolean;
+  pausedByWs: boolean;
+  rxPacketsSinceCredit: number;
   closed: boolean;
 }
 
@@ -48,31 +80,39 @@ export interface WispSession {
   kind: "wisp";
   ip: string;
   maxStreams: number;
+  allowLoopbackForTest: boolean;
   streams: Map<number, WispStream>;
-  send(data: Uint8Array): void;
-}
-
-interface WispSocketCtx {
-  session: WispSession;
-  stream: WispStream;
+  ws: WispSocketLike | null;
+  outQueue: Uint8Array[];
+  outQueueHead: number;
+  outQueuedBytes: number;
+  streamsPaused: boolean;
+  drainTimer: ReturnType<typeof setTimeout> | null;
+  closed: boolean;
 }
 
 let activeClients = 0;
+let activeStreams = 0;
 let totalConnections = 0;
 let totalStreams = 0;
 let totalBytesIn = 0;
 let totalBytesOut = 0;
 let blockedHosts = 0;
+let backpressurePauses = 0;
+let wsSendRetries = 0;
 const clientsByIp = new Map<string, number>();
 
 export function wispStats() {
   return {
     activeClients,
+    activeStreams,
     totalConnections,
     totalStreams,
     totalBytesIn,
     totalBytesOut,
     blockedHosts,
+    backpressurePauses,
+    wsSendRetries,
   };
 }
 
@@ -140,7 +180,7 @@ export function decodeWispPacket(
 
 /**
  * SSRF guard: block loopback, RFC1918 private networks, CGNAT, link-local,
- * cloud metadata endpoints, IPv6 loopback/ULA/link-local, and local hostnames.
+ * cloud metadata endpoints, IPv6 loopback/ULA/link-local/mapped-IPv4, and local hostnames.
  */
 export function isBlockedHost(host: string): boolean {
   const h = host.toLowerCase().replace(/^\[|\]$/g, "");
@@ -177,6 +217,109 @@ export function isBlockedHost(host: string): boolean {
   return false;
 }
 
+function isHostAllowed(host: string, allowLoopbackForTest: boolean): boolean {
+  if (!isBlockedHost(host)) return true;
+  if (!allowLoopbackForTest) return false;
+  const h = host.toLowerCase().replace(/^\[|\]$/g, "");
+  return h === "127.0.0.1" || h === "::1" || h === "localhost";
+}
+
+function setAllStreamsPaused(session: WispSession, paused: boolean) {
+  if (session.streamsPaused === paused) return;
+  session.streamsPaused = paused;
+  if (paused) backpressurePauses++;
+  for (const s of session.streams.values()) {
+    if (!s.tcp || s.closed) continue;
+    if (paused && !s.pausedByWs) {
+      s.pausedByWs = true;
+      s.tcp.pause();
+    } else if (!paused && s.pausedByWs) {
+      s.pausedByWs = false;
+      s.tcp.resume();
+    }
+  }
+}
+
+function scheduleDrainPoll(session: WispSession) {
+  if (session.drainTimer || session.closed) return;
+  session.drainTimer = setTimeout(() => {
+    session.drainTimer = null;
+    flushWsOut(session);
+  }, 15);
+}
+
+/**
+ * Flush queued server→client Wisp frames respecting WebSocket backpressure.
+ * Never drops a frame: if `ws.send()` returns `0` or bufferedAmount exceeds `wsHighWaterBytes`,
+ * upstream TCP sockets are paused until the client drains.
+ */
+function flushWsOut(session: WispSession) {
+  const ws = session.ws;
+  if (!ws || session.closed) return;
+  if (ws.readyState !== undefined && ws.readyState > 1) return;
+
+  while (session.outQueueHead < session.outQueue.length) {
+    const buffered = ws.getBufferedAmount?.() ?? 0;
+    if (buffered >= WISP_LIMITS.wsHighWaterBytes) {
+      setAllStreamsPaused(session, true);
+      scheduleDrainPoll(session);
+      return;
+    }
+    const frame = session.outQueue[session.outQueueHead]!;
+    let ret: number;
+    try {
+      ret = ws.send(frame);
+    } catch {
+      return;
+    }
+    if (ret === 0) {
+      // Bun refused the frame due to full send buffer — keep it at the head and retry after drain!
+      wsSendRetries++;
+      setAllStreamsPaused(session, true);
+      scheduleDrainPoll(session);
+      return;
+    }
+    // ret > 0 (sent immediately) or ret < 0 (accepted & queued in Bun's internal WS send buffer)
+    session.outQueueHead++;
+    session.outQueuedBytes -= frame.byteLength;
+    if (ret < 0) {
+      setAllStreamsPaused(session, true);
+      scheduleDrainPoll(session);
+      break;
+    }
+  }
+
+  // Compact queue array once head advances
+  if (session.outQueueHead > 0) {
+    if (session.outQueueHead >= session.outQueue.length) {
+      session.outQueue.length = 0;
+      session.outQueueHead = 0;
+      session.outQueuedBytes = 0;
+    } else if (session.outQueueHead >= 64) {
+      session.outQueue = session.outQueue.slice(session.outQueueHead);
+      session.outQueueHead = 0;
+    }
+  }
+
+  // Resume upstream TCP streams only once our queue is empty AND WebSocket send buffer is below low-water mark
+  if (session.outQueue.length === 0) {
+    const buffered = ws.getBufferedAmount?.() ?? 0;
+    if (buffered <= WISP_LIMITS.wsLowWaterBytes) {
+      setAllStreamsPaused(session, false);
+    } else {
+      setAllStreamsPaused(session, true);
+      scheduleDrainPoll(session);
+    }
+  }
+}
+
+function enqueueWsFrame(session: WispSession, frame: Uint8Array) {
+  if (session.closed || !session.ws) return;
+  session.outQueue.push(frame);
+  session.outQueuedBytes += frame.byteLength;
+  flushWsOut(session);
+}
+
 export function wispUpgrade(
   req: Request,
   srv: { upgrade(r: Request, o: { data: unknown }): boolean },
@@ -199,7 +342,7 @@ export function wispUpgrade(
   const maxClients = opts.maxClients ?? WISP_LIMITS.maxClients;
   if (activeClients >= maxClients) return new Response("too many clients", { status: 429 });
   const ip = opts.clientIp ?? "local";
-  const maxPerIp = opts.maxClientsPerIp ?? 8;
+  const maxPerIp = opts.maxClientsPerIp ?? 12;
   if ((clientsByIp.get(ip) ?? 0) >= maxPerIp) return new Response("too many connections from ip", { status: 429 });
 
   const ok = srv.upgrade(req, {
@@ -207,27 +350,35 @@ export function wispUpgrade(
       kind: "wisp",
       ip,
       maxStreams: opts.maxStreamsPerClient ?? WISP_LIMITS.maxStreamsPerClient,
+      allowLoopbackForTest: Boolean(opts.allowLoopbackForTest),
       streams: new Map<number, WispStream>(),
-      send: () => {},
+      ws: null,
+      outQueue: [],
+      outQueueHead: 0,
+      outQueuedBytes: 0,
+      streamsPaused: false,
+      drainTimer: null,
+      closed: false,
     } satisfies WispSession,
   });
   return ok ? undefined : new Response("upgrade failed", { status: 400 });
 }
 
-export function wispOpen(ws: { data: unknown; send(d: Uint8Array): unknown }) {
+export function wispOpen(ws: WispSocketLike) {
   activeClients++;
   totalConnections++;
   const session = ws.data as WispSession;
+  session.ws = ws;
   clientsByIp.set(session.ip, (clientsByIp.get(session.ip) ?? 0) + 1);
-  session.send = (d: Uint8Array) => {
-    try {
-      ws.send(d);
-    } catch {
-      // socket already closed
-    }
-  };
   // Wisp v1 handshake: server sends CONTINUE on stream 0 with initial buffer credit.
-  session.send(encodeContinue(0, WISP_LIMITS.initialBuffer));
+  enqueueWsFrame(session, encodeContinue(0, WISP_LIMITS.initialBuffer));
+}
+
+/** Must be wired to `Bun.serve({ websocket: { drain(ws) { wispDrain(ws); } } })` for full backpressure. */
+export function wispDrain(ws: WispSocketLike) {
+  const session = ws.data as WispSession;
+  if (session?.kind !== "wisp") return;
+  flushWsOut(session);
 }
 
 function closeStream(session: WispSession, streamId: number, reason: number, notifyClient: boolean) {
@@ -235,34 +386,181 @@ function closeStream(session: WispSession, streamId: number, reason: number, not
   if (!s || s.closed) return;
   s.closed = true;
   session.streams.delete(streamId);
-  try {
-    s.socket?.end();
-  } catch {
-    // ignore
+  activeStreams = Math.max(0, activeStreams - 1);
+  if (s.tcp) {
+    try {
+      s.tcp.removeAllListeners();
+      s.tcp.destroy();
+    } catch {
+      // ignore
+    }
+    s.tcp = undefined;
   }
-  s.queue.length = 0;
-  if (notifyClient) session.send(encodeClose(streamId, reason));
+  if (s.udp) {
+    try {
+      s.udp.close();
+    } catch {
+      // ignore
+    }
+    s.udp = undefined;
+  }
+  s.clientQueue.length = 0;
+  s.clientQueuedBytes = 0;
+  // Enqueue CLOSE in FIFO order so every preceding DATA frame arrives at the client first!
+  if (notifyClient) enqueueWsFrame(session, encodeClose(streamId, reason));
 }
 
-function flushStreamQueue(session: WispSession, stream: WispStream) {
-  const socket = stream.socket;
-  if (!socket || stream.closed) return;
-  while (stream.queue.length > 0) {
-    const head = stream.queue[0]!;
-    const written = socket.write(head);
-    if (written <= 0) return;
-    if (written < head.byteLength) {
-      stream.queue[0] = head.subarray(written);
-      stream.queuedBytes -= written;
+function flushClientToTcp(session: WispSession, stream: WispStream) {
+  const sock = stream.tcp;
+  if (!sock || !stream.connected || stream.closed) return;
+  let flushedAny = false;
+  while (stream.clientQueue.length > 0) {
+    const chunk = stream.clientQueue.shift()!;
+    stream.clientQueuedBytes -= chunk.byteLength;
+    flushedAny = true;
+    const ok = sock.write(chunk);
+    if (!ok) {
+      // Kernel TCP send buffer is full — wait for socket "drain" before issuing more Wisp CONTINUE credits
+      sock.once("drain", () => {
+        if (!stream.closed) {
+          flushClientToTcp(session, stream);
+          if (stream.clientQueue.length === 0) {
+            stream.rxPacketsSinceCredit = 0;
+            enqueueWsFrame(session, encodeContinue(stream.id, WISP_LIMITS.initialBuffer));
+          }
+        }
+      });
       return;
     }
-    stream.queue.shift();
-    stream.queuedBytes -= head.byteLength;
   }
+  if (flushedAny) {
+    stream.rxPacketsSinceCredit = 0;
+    enqueueWsFrame(session, encodeContinue(stream.id, WISP_LIMITS.initialBuffer));
+  }
+}
+
+function openTcpStream(session: WispSession, stream: WispStream, host: string, port: number) {
+  const sock = net.createConnection({
+    host,
+    port,
+    lookup: (hostname, opts, cb) => {
+      dns.lookup(hostname, opts, (err, address, family) => {
+        if (err) return cb(err, "", 4);
+        // Handle both `{ all: true }` array form and single address form cleanly
+        if (Array.isArray(address)) {
+          const safe = address.filter((entry) => isHostAllowed(entry.address, session.allowLoopbackForTest));
+          if (safe.length === 0) {
+            blockedHosts++;
+            return cb(Object.assign(new Error("blocked address"), { code: "EACCES" }), [] as never, 4);
+          }
+          return cb(null, safe as never, family);
+        }
+        if (!isHostAllowed(address, session.allowLoopbackForTest)) {
+          blockedHosts++;
+          return cb(Object.assign(new Error("blocked address"), { code: "EACCES" }), "", 4);
+        }
+        return cb(null, address, family);
+      });
+    },
+  });
+  stream.tcp = sock;
+  sock.setNoDelay(true);
+  sock.setKeepAlive(true, 30_000);
+  sock.setTimeout(WISP_LIMITS.connectTimeoutMs);
+
+  sock.on("connect", () => {
+    sock.setTimeout(0);
+    if (stream.closed || session.closed) {
+      sock.destroy();
+      return;
+    }
+    stream.connected = true;
+    if (session.streamsPaused) {
+      stream.pausedByWs = true;
+      sock.pause();
+    }
+    flushClientToTcp(session, stream);
+    enqueueWsFrame(session, encodeContinue(stream.id, WISP_LIMITS.initialBuffer));
+  });
+
+  sock.on("timeout", () => {
+    if (!stream.connected) {
+      closeStream(session, stream.id, CLOSE_TIMEOUT, true);
+    }
+  });
+
+  sock.on("data", (buf: Buffer) => {
+    if (stream.closed || session.closed) return;
+    const bytes = new Uint8Array(buf.buffer, buf.byteOffset, buf.byteLength);
+    totalBytesOut += bytes.byteLength;
+    const MAX = WISP_LIMITS.maxFrameBytes;
+    if (bytes.byteLength <= MAX) {
+      enqueueWsFrame(session, encodeData(stream.id, bytes));
+    } else {
+      for (let off = 0; off < bytes.byteLength; off += MAX) {
+        enqueueWsFrame(session, encodeData(stream.id, bytes.subarray(off, Math.min(off + MAX, bytes.byteLength))));
+      }
+    }
+  });
+
+  sock.on("end", () => {
+    closeStream(session, stream.id, CLOSE_NORMAL, true);
+  });
+
+  sock.on("close", () => {
+    closeStream(session, stream.id, CLOSE_NORMAL, true);
+  });
+
+  sock.on("error", (err: NodeJS.ErrnoException) => {
+    const code = err?.code;
+    const reason =
+      code === "EACCES"
+        ? CLOSE_BLOCKED
+        : code === "ECONNREFUSED"
+          ? CLOSE_REFUSED
+          : code === "ETIMEDOUT"
+            ? CLOSE_TIMEOUT
+            : CLOSE_UNREACHABLE;
+    closeStream(session, stream.id, reason, true);
+  });
+}
+
+function openUdpStream(session: WispSession, stream: WispStream, host: string, port: number) {
+  dns.lookup(host, (err, address, family) => {
+    if (stream.closed || session.closed) return;
+    if (err || !address) {
+      closeStream(session, stream.id, CLOSE_UNREACHABLE, true);
+      return;
+    }
+    if (!isHostAllowed(address, session.allowLoopbackForTest)) {
+      blockedHosts++;
+      closeStream(session, stream.id, CLOSE_BLOCKED, true);
+      return;
+    }
+    const udp = dgram.createSocket(family === 6 ? "udp6" : "udp4");
+    stream.udp = udp;
+    stream.udpHost = address;
+    stream.udpPort = port;
+    stream.connected = true;
+    udp.on("message", (msg) => {
+      if (stream.closed || session.closed) return;
+      const bytes = new Uint8Array(msg.buffer, msg.byteOffset, msg.byteLength);
+      totalBytesOut += bytes.byteLength;
+      enqueueWsFrame(session, encodeData(stream.id, bytes));
+    });
+    udp.on("error", () => closeStream(session, stream.id, CLOSE_UNREACHABLE, true));
+    while (stream.clientQueue.length > 0) {
+      const payload = stream.clientQueue.shift()!;
+      stream.clientQueuedBytes -= payload.byteLength;
+      udp.send(payload, port, address);
+    }
+    enqueueWsFrame(session, encodeContinue(stream.id, WISP_LIMITS.initialBuffer));
+  });
 }
 
 export function wispMessage(ws: { data: unknown }, msg: string | ArrayBuffer | Uint8Array) {
   const session = ws.data as WispSession;
+  if (session.closed) return;
   const raw =
     typeof msg === "string"
       ? new TextEncoder().encode(msg)
@@ -273,75 +571,40 @@ export function wispMessage(ws: { data: unknown }, msg: string | ArrayBuffer | U
   if (!pkt) return;
 
   if (pkt.type === "connect") {
-    if (pkt.streamId === 0 || pkt.streamType !== STREAM_TCP) {
-      session.send(encodeClose(pkt.streamId, CLOSE_INVALID));
+    if (pkt.streamId === 0 || (pkt.streamType !== STREAM_TCP && pkt.streamType !== STREAM_UDP)) {
+      enqueueWsFrame(session, encodeClose(pkt.streamId, CLOSE_INVALID));
       return;
     }
-    if (isBlockedHost(pkt.host)) {
+    if (!isHostAllowed(pkt.host, session.allowLoopbackForTest)) {
       blockedHosts++;
-      session.send(encodeClose(pkt.streamId, CLOSE_REFUSED));
+      enqueueWsFrame(session, encodeClose(pkt.streamId, CLOSE_BLOCKED));
       return;
     }
     if (session.streams.size >= session.maxStreams) {
-      session.send(encodeClose(pkt.streamId, CLOSE_THROTTLED));
+      enqueueWsFrame(session, encodeClose(pkt.streamId, CLOSE_THROTTLED));
       return;
     }
     if (session.streams.has(pkt.streamId)) {
       closeStream(session, pkt.streamId, CLOSE_NORMAL, false);
     }
     totalStreams++;
-    const stream: WispStream = { id: pkt.streamId, queue: [], queuedBytes: 0, closed: false };
+    activeStreams++;
+    const stream: WispStream = {
+      id: pkt.streamId,
+      kind: pkt.streamType === STREAM_UDP ? "udp" : "tcp",
+      clientQueue: [],
+      clientQueuedBytes: 0,
+      connected: false,
+      pausedByWs: false,
+      rxPacketsSinceCredit: 0,
+      closed: false,
+    };
     session.streams.set(pkt.streamId, stream);
-    void Bun.connect<WispSocketCtx>({
-      hostname: pkt.host,
-      port: pkt.port,
-      data: { session, stream },
-      socket: {
-        open(socket) {
-          if (stream.closed) {
-            socket.end();
-            return;
-          }
-          stream.socket = socket;
-          flushStreamQueue(session, stream);
-          session.send(encodeContinue(stream.id, WISP_LIMITS.initialBuffer));
-        },
-        drain() {
-          flushStreamQueue(session, stream);
-          if (!stream.closed && stream.queuedBytes === 0) {
-            session.send(encodeContinue(stream.id, WISP_LIMITS.initialBuffer));
-          }
-        },
-        data(_socket, chunk) {
-          if (stream.closed) return;
-          const bytes = chunk instanceof Uint8Array ? chunk : new Uint8Array(chunk);
-          totalBytesOut += bytes.byteLength;
-          // Chunk large upstream bursts (e.g. 130 MB downloads) into <=32 KiB Wisp DATA frames
-          const MAX_FRAME = 32768;
-          if (bytes.byteLength <= MAX_FRAME) {
-            session.send(encodeData(stream.id, bytes));
-          } else {
-            for (let off = 0; off < bytes.byteLength; off += MAX_FRAME) {
-              session.send(encodeData(stream.id, bytes.subarray(off, Math.min(off + MAX_FRAME, bytes.byteLength))));
-            }
-          }
-        },
-        end() {
-          closeStream(session, stream.id, CLOSE_NORMAL, true);
-        },
-        close() {
-          closeStream(session, stream.id, CLOSE_NORMAL, true);
-        },
-        error() {
-          closeStream(session, stream.id, CLOSE_UNREACHABLE, true);
-        },
-        connectError() {
-          closeStream(session, stream.id, CLOSE_REFUSED, true);
-        },
-      },
-    }).catch(() => {
-      closeStream(session, stream.id, CLOSE_REFUSED, true);
-    });
+    if (pkt.streamType === STREAM_UDP) {
+      openUdpStream(session, stream, pkt.host, pkt.port);
+    } else {
+      openTcpStream(session, stream, pkt.host, pkt.port);
+    }
     return;
   }
 
@@ -349,21 +612,40 @@ export function wispMessage(ws: { data: unknown }, msg: string | ArrayBuffer | U
     const stream = session.streams.get(pkt.streamId);
     if (!stream || stream.closed) return;
     totalBytesIn += pkt.payload.byteLength;
-    if (stream.socket && stream.queue.length === 0) {
-      const written = stream.socket.write(pkt.payload);
-      if (written < pkt.payload.byteLength) {
-        const rest = pkt.payload.slice(written);
-        stream.queue.push(rest);
-        stream.queuedBytes += rest.byteLength;
-      } else {
-        session.send(encodeContinue(stream.id, WISP_LIMITS.initialBuffer));
+    if (stream.kind === "udp") {
+      if (stream.udp && stream.connected && stream.udpHost && stream.udpPort) {
+        stream.udp.send(pkt.payload, stream.udpPort, stream.udpHost);
+      } else if (stream.clientQueuedBytes + pkt.payload.byteLength <= WISP_LIMITS.maxClientQueueBytes) {
+        const copy = new Uint8Array(pkt.payload.byteLength);
+        copy.set(pkt.payload);
+        stream.clientQueue.push(copy);
+        stream.clientQueuedBytes += copy.byteLength;
       }
-    } else if (stream.queuedBytes + pkt.payload.byteLength <= WISP_LIMITS.maxQueueBytes) {
+      return;
+    }
+    if (stream.tcp && stream.connected && stream.clientQueue.length === 0) {
+      const ok = stream.tcp.write(pkt.payload);
+      if (ok) {
+        stream.rxPacketsSinceCredit++;
+        if (stream.rxPacketsSinceCredit >= 16) {
+          stream.rxPacketsSinceCredit = 0;
+          enqueueWsFrame(session, encodeContinue(stream.id, WISP_LIMITS.initialBuffer));
+        }
+      } else {
+        stream.tcp.once("drain", () => {
+          if (!stream.closed) {
+            flushClientToTcp(session, stream);
+            stream.rxPacketsSinceCredit = 0;
+            enqueueWsFrame(session, encodeContinue(stream.id, WISP_LIMITS.initialBuffer));
+          }
+        });
+      }
+    } else if (stream.clientQueuedBytes + pkt.payload.byteLength <= WISP_LIMITS.maxClientQueueBytes) {
       const copy = new Uint8Array(pkt.payload.byteLength);
       copy.set(pkt.payload);
-      stream.queue.push(copy);
-      stream.queuedBytes += copy.byteLength;
-      if (stream.socket) flushStreamQueue(session, stream);
+      stream.clientQueue.push(copy);
+      stream.clientQueuedBytes += copy.byteLength;
+      if (stream.connected) flushClientToTcp(session, stream);
     } else {
       closeStream(session, stream.id, CLOSE_THROTTLED, true);
     }
@@ -376,8 +658,18 @@ export function wispMessage(ws: { data: unknown }, msg: string | ArrayBuffer | U
 }
 
 export function wispClose(ws: { data: unknown }) {
-  activeClients = Math.max(0, activeClients - 1);
   const session = ws.data as WispSession;
+  if (session.closed) return;
+  session.closed = true;
+  session.ws = null;
+  if (session.drainTimer) {
+    clearTimeout(session.drainTimer);
+    session.drainTimer = null;
+  }
+  session.outQueue.length = 0;
+  session.outQueueHead = 0;
+  session.outQueuedBytes = 0;
+  activeClients = Math.max(0, activeClients - 1);
   const n = (clientsByIp.get(session.ip) ?? 1) - 1;
   if (n <= 0) clientsByIp.delete(session.ip);
   else clientsByIp.set(session.ip, n);

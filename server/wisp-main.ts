@@ -8,12 +8,12 @@
 
 import { clientAddress } from "./address";
 import { defaultOrigin } from "./rooms";
-import { WISP_LIMITS, wispClose, wispMessage, wispOpen, wispStats, wispUpgrade } from "./wisp-relay";
+import { WISP_LIMITS, wispClose, wispDrain, wispMessage, wispOpen, wispStats, wispUpgrade } from "./wisp-relay";
 
 const port = Number(process.env.PORT ?? 3002);
 const build = process.env.BUILD_SHA ?? "dev";
 const maxClients = Math.max(1, Math.min(256, Number(process.env.WISP_MAX_CLIENTS ?? WISP_LIMITS.maxClients) || WISP_LIMITS.maxClients));
-const maxPerIp = Math.max(1, Math.min(32, Number(process.env.WISP_MAX_PER_IP ?? 8) || 8));
+const maxPerIp = Math.max(1, Math.min(32, Number(process.env.WISP_MAX_PER_IP ?? 12) || 12));
 
 const extraOrigins = (process.env.WISP_ORIGINS ?? "")
   .split(",")
@@ -24,7 +24,7 @@ const allowOrigin = (o: string): boolean => {
   if (defaultOrigin(o)) return true;
   try {
     const u = new URL(o);
-    if (u.origin === "https://code.samlepirate.org") return true;
+    if (u.protocol === "https:" && (u.hostname === "samlepirate.org" || u.hostname.endsWith(".samlepirate.org"))) return true;
     return extraOrigins.includes(u.origin);
   } catch {
     return false;
@@ -60,9 +60,13 @@ const server = Bun.serve<unknown>({
   websocket: {
     open: (ws) => wispOpen(ws),
     message: (ws, msg) => wispMessage(ws, msg),
+    drain: (ws) => wispDrain(ws),
     close: (ws) => wispClose(ws),
-    maxPayloadLength: 256 * 1024,
+    backpressureLimit: 8 * 1024 * 1024,
+    closeOnBackpressureLimit: false,
+    maxPayloadLength: 512 * 1024,
     idleTimeout: 120,
+    sendPings: true,
   },
 });
 

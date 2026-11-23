@@ -1,5 +1,18 @@
 import { expect, test } from "bun:test";
-import { decodeWispPacket, encodeClose, encodeContinue, encodeData, isBlockedHost } from "../server/wisp-relay";
+import { createHash } from "node:crypto";
+import net from "node:net";
+import {
+  decodeWispPacket,
+  encodeClose,
+  encodeContinue,
+  encodeData,
+  isBlockedHost,
+  wispClose,
+  wispDrain,
+  wispMessage,
+  wispOpen,
+  wispUpgrade,
+} from "../server/wisp-relay";
 
 test("Wisp v1 packet encoding and decoding round-trip", () => {
   const cont = encodeContinue(0, 128);
@@ -66,3 +79,102 @@ test("Wisp v1 decoder rejects truncated/invalid packets and blocks SSRF private/
   expect(isBlockedHost("pypi.org")).toBe(false);
   expect(isBlockedHost("registry.npmjs.org")).toBe(false);
 });
+
+test("Wisp v1 relay streams a 20 MB upstream TCP burst with zero dropped bytes and exact SHA-256 integrity", async () => {
+  const TOTAL_BYTES = 20 * 1024 * 1024; // 20 MiB (> Bun's default 16 MiB WS backpressure limit!)
+  const CHUNK_SIZE = 256 * 1024;
+  const expectedHash = createHash("sha256");
+
+  // 1. Local high-speed upstream TCP server blasting 20 MiB as fast as the OS accepts
+  const upstream = net.createServer((sock) => {
+    let sent = 0;
+    const pump = () => {
+      while (sent < TOTAL_BYTES) {
+        const n = Math.min(CHUNK_SIZE, TOTAL_BYTES - sent);
+        const buf = Buffer.allocUnsafe(n);
+        for (let i = 0; i < n; i += 4) buf.writeUInt32LE((sent + i) >>> 0, i);
+        expectedHash.update(buf);
+        sent += n;
+        if (!sock.write(buf)) {
+          sock.once("drain", pump);
+          return;
+        }
+      }
+      sock.end();
+    };
+    pump();
+  });
+  await new Promise<void>((r) => upstream.listen(0, "127.0.0.1", r));
+  const upPort = (upstream.address() as net.AddressInfo).port;
+
+  // 2. Local Wisp server using the exact production backpressure & drain wiring
+  const wispSrv = Bun.serve<unknown>({
+    port: 0,
+    fetch(req, srv) {
+      return (
+        wispUpgrade(req, srv, {
+          enabled: true,
+          allowOrigin: () => true,
+          allowLoopbackForTest: true,
+        }) ?? new Response("ok")
+      );
+    },
+    websocket: {
+      open: (ws) => wispOpen(ws),
+      message: (ws, msg) => wispMessage(ws, msg),
+      drain: (ws) => wispDrain(ws),
+      close: (ws) => wispClose(ws),
+      backpressureLimit: 1024 * 1024, // intentionally tight 1 MiB limit to force real backpressure!
+      closeOnBackpressureLimit: false,
+      maxPayloadLength: 512 * 1024,
+    },
+  });
+
+  try {
+    const gotHash = createHash("sha256");
+    let gotBytes = 0;
+    let closeReason = -1;
+
+    await new Promise<void>((resolve, reject) => {
+      const ws = new WebSocket(`ws://127.0.0.1:${wispSrv.port}/`);
+      ws.binaryType = "arraybuffer";
+      const timer = setTimeout(() => reject(new Error(`timeout after ${gotBytes}/${TOTAL_BYTES} bytes`)), 15_000);
+      ws.onopen = () => {
+        const hb = new TextEncoder().encode("127.0.0.1");
+        const c = new Uint8Array(8 + hb.length);
+        const dv = new DataView(c.buffer);
+        c[0] = 0x01;
+        dv.setUint32(1, 1, true);
+        c[5] = 0x01;
+        dv.setUint16(6, upPort, true);
+        c.set(hb, 8);
+        ws.send(c);
+      };
+      ws.onmessage = (ev) => {
+        const raw = new Uint8Array(ev.data as ArrayBuffer);
+        const pkt = decodeWispPacket(raw);
+        if (!pkt) return;
+        if (pkt.type === "data" && pkt.streamId === 1) {
+          gotBytes += pkt.payload.byteLength;
+          gotHash.update(pkt.payload);
+        } else if (pkt.type === "close" && pkt.streamId === 1) {
+          closeReason = pkt.reason;
+          clearTimeout(timer);
+          ws.close();
+          resolve();
+        }
+      };
+      ws.onerror = (e) => {
+        clearTimeout(timer);
+        reject(new Error(String(e)));
+      };
+    });
+
+    expect(gotBytes).toBe(TOTAL_BYTES);
+    expect(closeReason).toBe(0x02);
+    expect(gotHash.digest("hex")).toBe(expectedHash.digest("hex"));
+  } finally {
+    wispSrv.stop(true);
+    upstream.close();
+  }
+}, 20_000);

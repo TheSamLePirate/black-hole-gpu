@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 23 nov. 11:25 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 23 nov. 12:12 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous. Ce qui est fermé quitte le tableau « En cours » pour la ligne « Fermé récemment ».
@@ -76,6 +76,16 @@ l'état d'une mission ou d'un combat **non sauvé, dit** ; le réseau **« entre
 **Décidé par Sam (16 nov., 15:58 UTC)** : J8-4 allumée par défaut (quads sous 8 px), J8-5 avec une jonction choisie sur captures, J8-1b suspendu, l'e2e de J8-6 par la voie (b), J8-9 ajouté ([PLAN-J8](docs/PLAN-J8-BATIMENTS.md) §6 point 6). **But fixé par Sam (16 nov., ~16:19 UTC)** : [J8-A](docs/PLAN-J8-BATIMENTS.md), un vol Paris et Toulon-Hyères, de jour et de nuit, tous les bâtiments, lampadaires, voitures (J8-L) et rivières (J8-E) chargés avant le vol, en « high » partout, sans différence visible entre les qualités. **Décidé par Sam (16 nov., ~21:40 UTC)** : J8-8 ouvert (le proche en cellules), la jonction à 0, l'éclat de nuit lointain gardé ([PLAN-J8](docs/PLAN-J8-BATIMENTS.md) §6 point 11). **Décidé par Sam (17 nov., ~08:00 UTC)** : J8-8b ouvert, les arbres par cellule, après un vol de référence à froid sur le M1 Max (§6 point 12). **Mode speed pour finir J8, J8-VB compris** (Sam, 17 nov. ~09:20 UTC ; [CLAUDE.md](CLAUDE.md), modes de travail ; §6 point 13) : contrôles rapides par lot, un gros e2e J8-A à la fin sur kerr-mini et le M1 Max. **J8-RP, les routes et les ponts AAA** (Sam, 17 nov. ~10:20 UTC ; [PLAN-J8](docs/PLAN-J8-BATIMENTS.md) §3 bis) : ajouté à J8 en mode speed, RP1 (les routes et marquages visibles sous l'orthophoto) en tête. **Attend Sam** : les quatre premières questions de PLAN-J8 §6, réglées provisoirement (même contenu sur les deux machines, retour si > 3 ms sur le mini ; portée au pixel ; J7 en pause, les arbres proches deviennent J9 ; pas de préparation côté serveur pour l'instant) ; les trois questions de [PLAN-J7](docs/PLAN-J7-FLUIDITE.md) §4, réglées provisoirement (les 40 ms du mini en dernier, J7-6 ; les arbres proches en géométrie ensuite, désormais J9 ; l'aplanissement du détail sous les trouées jusqu'à la FAF ou 10 km) ; les seuils du mini attendent la reprise de la cible 40 ms.
 
 ## Journal
+
+### 2026-11-23 12:12 UTC — Relais Wisp v1 AAA (`wss://code.samlepirate.org/`) : backpressure TCP↔WebSocket complète, FIFO strict `DATA→CLOSE` & support UDP
+
+- Contribution à la destination : fiabilité AAA des téléchargements lourds dans l'OBC Linux (Bun 48 Mo, Claude Code 130 Mo, Debian/Rust) via le serveur dédié `wss://code.samlepirate.org/` sans perte silencieuse de trames ni blocage.
+- Réalisé :
+  - **Backpressure bout-en-bout (`node:net` + `ws.drain`)** ([server/wisp-relay.ts](server/wisp-relay.ts), [server/wisp-main.ts](server/wisp-main.ts), [server.ts](server.ts)) : remplacement de `Bun.connect` (sans `.pause()`) par `net.createConnection` avec `socket.pause()`/`socket.resume()` pilotés par `ws.getBufferedAmount()` (`512 Kio` / `128 Kio`) et `websocket.drain(ws)` ; file d'envoi FIFO ordonnée garantissant la ré-émission si `ws.send() === 0` et l'envoi de tous les `DATA` avant `CLOSE` ; support complet Wisp v1 UDP (`0x02`) ; garde SSRF appliquée aussi sur les adresses IP résolues par `dns.lookup` ; `backpressureLimit: 8 Mio` + `sendPings: true` ; `allowOrigin` étendu à `https://*.samlepirate.org` ; compteurs `/health` (`activeStreams`, `backpressurePauses`, `wsSendRetries`).
+  - **Test de stress 20 Mio SHA-256** ([tests/obc-wisp.test.ts](tests/obc-wisp.test.ts)) : rafale TCP amont de 20 Mio à travers le relais Wisp sous `backpressureLimit: 1 Mio`, vérifiée octet pour octet par SHA-256.
+- Preuves : `tsc --noEmit`, `biome ci`, 48/48 tests serveur (`rooms.yml`, dont 20 Mio SHA-256 en 377 ms), et téléchargement réel complet de `bun-linux-aarch64-musl.zip` (`47 901 555 / 47 901 555` octets en 4,1 s à **11,7 Mo/s** contre un blocage définitif à 29,77 Mo sur l'ancien build `07d78d3`).
+- Limites / transitions restantes : le serveur de production `wss://code.samlepirate.org/` recevra le nouveau binaire dès la fin du workflow `.github/workflows/rooms.yml` et le prochain cycle de polling Portainer (ou pull manuel dans Portainer).
+- Suite : vérifier `curl https://code.samlepirate.org/health` après redéploiement Portainer.
 
 ### 2026-11-23 11:25 UTC — Lot OBC-21 : Écrans 3D de cockpit AAA (anti-reset double-clic, capture clavier/souris/molette directe & flèches prioritaires dans les 12 apps OBC)
 

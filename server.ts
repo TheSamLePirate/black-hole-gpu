@@ -4,7 +4,7 @@ import { EAR_LIMITS, earClosed, earOpened, earRelayRefusal, foreignOrigin, queue
 import { createMoonTiles } from "./server/moon-tiles";
 import { createRooms, type Peer } from "./server/rooms";
 import { createTraffic } from "./server/traffic";
-import { wispClose, wispMessage, wispOpen, wispUpgrade, type WispSession } from "./server/wisp-relay";
+import { wispClose, wispDrain, wispMessage, wispOpen, wispUpgrade, type WispSession } from "./server/wisp-relay";
 
 const port = Number(process.env.PORT ?? 3000);
 // (started by a test or the flight lab — tests/e2e/lib/app.ts — for its own run: gone with its parent, never
@@ -353,6 +353,9 @@ const server = Bun.serve({
       else if (queueFits(r.queue, m)) r.queue.push(m);
       else ws.close(1009, "queue");
     },
+    drain(ws) {
+      if ((ws.data as unknown as WispSession).kind === "wisp") return wispDrain(ws);
+    },
     close(ws) {
       if ((ws.data as unknown as Peer).kind === "rooms") return rooms.websocket.close(ws as never);
       if ((ws.data as unknown as WispSession).kind === "wisp") return wispClose(ws);
@@ -361,6 +364,8 @@ const server = Bun.serve({
       if (r.timer) clearTimeout(r.timer);
       if (r.up && r.up.readyState <= WebSocket.OPEN) r.up.close();
     },
+    backpressureLimit: 8 * 1024 * 1024,
+    closeOnBackpressureLimit: false,
   },
 });
 
