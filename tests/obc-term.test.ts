@@ -26,6 +26,17 @@ test("TermBuffer: renders text, CRLF, CSI clear, SGR 16/256/truecolor, and scrol
   tb.write("\x1b[2J\x1b[HFRESH");
   expect(tb.lines()[0]).toBe("FRESH");
   expect(tb.lines()[1]).toBe("");
+
+  // Dynamic resize preserves existing cells and clamps cursor cleanly
+  tb.resize(64, 20);
+  expect(tb.cols).toBe(64);
+  expect(tb.rows).toBe(20);
+  expect(tb.lines()[0]).toBe("FRESH");
+  tb.resize(24, 8);
+  expect(tb.cols).toBe(24);
+  expect(tb.rows).toBe(8);
+  expect(tb.row).toBeLessThan(8);
+  expect(tb.col).toBeLessThan(24);
 });
 
 test("TermBuffer: streams multi-byte UTF-8 chunks without corrupting characters", () => {

@@ -494,11 +494,21 @@ describe.skipIf(!E2E)("Linux OBC AAA (Unkernel aarch64, Wisp, Snapshot, Editor, 
     expect(fmcTui.ok).toBe(true);
     expect(fmcTui.stdout).toContain("OBC-FMC-TUI");
 
-    // Display live Universal BH-TUI interactively (real TTY, NO --frames!) & prove real DOM keys (Tab -> TARS TOOLS, q -> quit) reach TUI!
+    // Display live Universal BH-TUI interactively (real TTY, NO --frames!) & prove real DOM keys + Split-mode live reflow!
     await app.js(`__bh.obc.runScript("bh-tui")`);
     await app.waitFor(`__bh.obc.readScreen().join("\\n").includes("BH-TUI")`, 15_000);
     await Bun.sleep(300);
     await app.shot(`${OUT}/hud-bh-tui.png`);
+
+    // Switch live to Split mode while bh-tui is running: /obc/tty_size + TermBuffer must reflow cleanly with BH-TUI still on row 0!
+    await app.js(`document.querySelector('[data-testid="obc-mode-split"]')?.click()`);
+    await Bun.sleep(500);
+    const splitScreen = await app.js<string[]>(`__bh.obc.readScreen()`);
+    expect(splitScreen[0] ?? "").toContain("BH-TUI");
+    expect(splitScreen.at(-1) ?? "").toContain("Quit");
+    await app.shot(`${OUT}/hud-bh-tui-split.png`);
+    await app.js(`document.querySelector('[data-testid="obc-mode-term"]')?.click()`);
+    await Bun.sleep(350);
 
     // Send real DOM Tab key: bh-tui MUST switch from __bh tree to TARS TOOLS (and never trigger simulator Tab wheel!)
     await app.press("Tab");

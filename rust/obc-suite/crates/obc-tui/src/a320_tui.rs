@@ -136,8 +136,8 @@ impl TuiApp for A320TuiApp {
             .direction(Direction::Vertical)
             .constraints([
                 Constraint::Length(3),
-                Constraint::Min(12),
-                Constraint::Length(2),
+                Constraint::Min(6),
+                Constraint::Length(1),
             ])
             .split(frame.area());
 

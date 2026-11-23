@@ -10,7 +10,7 @@
 
 import type { DisplayMode, KernelHandle, KernelSnapshot, SoundChunk } from "unkernel/web";
 import { store } from "../util/storage";
-import { startObcVsockServer, wireObcMountFs, type ObcHostAdapter, type ObcVsockHandle } from "./bridge";
+import { startObcVsockServer, wireObcMountFs, type ObcHostAdapter, type ObcMountHandle, type ObcVsockHandle } from "./bridge";
 import type { ObcDrawSource } from "./fb-renderer";
 import { emptyTelemetry, normalizeWispUrl } from "./protocol";
 import { findObcScript, loadProjectScripts, OBC_SCRIPTS } from "./scripts-catalog";
@@ -117,7 +117,7 @@ export class ObcRuntime {
   private savedSnapshot: KernelSnapshot | null = null;
   private hibernatedState: { activeScript: string | null } | null = null;
   private vsockHandle: ObcVsockHandle | null = null;
-  private unsubMount: (() => void) | null = null;
+  private mountHandle: ObcMountHandle | null = null;
   private fbTimer: ReturnType<typeof setInterval> | null = null;
   private crewTimer: ReturnType<typeof setInterval> | null = null;
   private bc: BroadcastChannel | null = null;
@@ -513,7 +513,7 @@ export class ObcRuntime {
       this.cpuBlocker = mod.webCpuBlocker({ worker: true }) ?? null;
 
       const memFs = new mod.MemoryFs();
-      this.unsubMount = wireObcMountFs(
+      this.mountHandle = wireObcMountFs(
         memFs,
         this.adapter,
         () => this.status(),
@@ -524,6 +524,7 @@ export class ObcRuntime {
         },
         rustBinary,
         projectFiles.pilotKit,
+        { cols: this.termCols, rows: this.termRows },
       );
 
       const kernelUrl = new URL("obc/unkernel.wasm", base).toString();
@@ -581,6 +582,11 @@ export class ObcRuntime {
       if (!restore) {
         await this.configureGuestEnvironment(vm);
       }
+      // Push exact live xterm dimensions into the freshly booted kernel immediately
+      try {
+        vm.resize(this.termCols, this.termRows);
+      } catch {}
+      this.mountHandle?.setTtySize(this.termCols, this.termRows);
 
       this.bootMs = Math.round(performance.now() - t0);
       this.phase = "ready";
@@ -855,13 +861,15 @@ export class ObcRuntime {
     this.vm.write(input);
   }
 
-  /** Forward live console dimensions to Unkernel (`SIGWINCH` for Ratatui / vim / top / pi / claude). */
-  resize(cols: number, rows: number) {
+  /** Forward live console dimensions to Unkernel (`SIGWINCH`), 9p `/obc/tty_size`, and the 3D cockpit TermBuffer. */
+  resize(cols: number, rows: number, force = false) {
     const c = Math.max(40, Math.min(240, Math.round(cols)));
-    const r = Math.max(12, Math.min(80, Math.round(rows)));
-    if (c === this.termCols && r === this.termRows) return;
+    const r = Math.max(10, Math.min(80, Math.round(rows)));
+    if (!force && c === this.termCols && r === this.termRows) return;
     this.termCols = c;
     this.termRows = r;
+    this.term.resize(c, r);
+    this.mountHandle?.setTtySize(c, r);
     try {
       this.vm?.resize(c, r);
     } catch {
@@ -1377,8 +1385,8 @@ export class ObcRuntime {
     this.stopCrewBroadcastLoop();
     this.vsockHandle?.close();
     this.vsockHandle = null;
-    this.unsubMount?.();
-    this.unsubMount = null;
+    this.mountHandle?.dispose();
+    this.mountHandle = null;
     this.vm = null;
     this.fbMode = null;
     this.fbFrame = null;

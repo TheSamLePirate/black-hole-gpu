@@ -73,7 +73,7 @@ impl TuiApp for MissionApp {
         let t = self.bus.cached();
         let rows = Layout::default()
             .direction(Direction::Vertical)
-            .constraints([Constraint::Min(12), Constraint::Length(2)])
+            .constraints([Constraint::Min(8), Constraint::Length(1)])
             .split(frame.area());
         let cols = Layout::default()
             .direction(Direction::Horizontal)

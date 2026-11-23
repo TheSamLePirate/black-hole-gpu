@@ -46,8 +46,8 @@ function xterm256(n: number): string {
 const blankCell = (): TermCell => ({ ch: " ", fg: null, bg: null, bold: false, dim: false });
 
 export class TermBuffer {
-  readonly cols: number;
-  readonly rows: number;
+  cols: number;
+  rows: number;
   grid: TermCell[][];
   row = 0;
   col = 0;
@@ -77,6 +77,23 @@ export class TermBuffer {
     }
     this.row = 0;
     this.col = 0;
+    this.rev++;
+  }
+
+  /** Resize the screen mirror to match the live xterm.js dimensions (preserving existing content). */
+  resize(cols: number, rows: number) {
+    const c = Math.max(20, Math.min(240, Math.round(cols)));
+    const r = Math.max(8, Math.min(80, Math.round(rows)));
+    if (c === this.cols && r === this.rows) return;
+    const next: TermCell[][] = Array.from({ length: r }, (_, rowIdx) => {
+      const oldRow = this.grid[rowIdx];
+      return Array.from({ length: c }, (_, colIdx) => (oldRow && colIdx < oldRow.length ? oldRow[colIdx]! : blankCell()));
+    });
+    this.cols = c;
+    this.rows = r;
+    this.grid = next;
+    this.row = Math.min(this.row, r - 1);
+    this.col = Math.min(this.col, c - 1);
     this.rev++;
   }
 

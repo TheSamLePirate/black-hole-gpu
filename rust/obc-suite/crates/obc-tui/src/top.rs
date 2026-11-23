@@ -95,9 +95,9 @@ impl TuiApp for TopApp {
             .constraints([
                 Constraint::Length(3),
                 Constraint::Length(3),
-                Constraint::Min(9),
-                Constraint::Length(5),
-                Constraint::Length(2),
+                Constraint::Min(6),
+                Constraint::Length(4),
+                Constraint::Length(1),
             ])
             .split(frame.area());
 

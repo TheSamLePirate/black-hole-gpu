@@ -146,6 +146,7 @@ export class ObcConsoleOverlay {
   private onWinKeyUp: ((e: KeyboardEvent) => void) | null = null;
   private resizeObs: ResizeObserver | null = null;
   private fbRaf: number | null = null;
+  private lastSyncedPhase = "";
   private lastFbDrawRev = -1;
 
   constructor(private runtime: ObcRuntime) {
@@ -861,16 +862,16 @@ export class ObcConsoleOverlay {
     });
   }
 
-  private fitAndResizeGuest() {
+  private fitAndResizeGuest(force = false) {
     if (!this.xterm || this.el.hidden || this.termWrap.hidden) return;
     try {
       this.xterm.fit.fit();
-      this.runtime.resize(this.xterm.term.cols, this.xterm.term.rows);
+      this.runtime.resize(this.xterm.term.cols, this.xterm.term.rows, force);
     } catch {}
   }
 
-  private refitXterm() {
-    requestAnimationFrame(() => this.fitAndResizeGuest());
+  private refitXterm(force = false) {
+    requestAnimationFrame(() => this.fitAndResizeGuest(force));
   }
 
   resetTerminalModes() {
@@ -980,7 +981,9 @@ export class ObcConsoleOverlay {
       this.fbCanvas.height = st.config.fbHeight;
       this.lastFbDrawRev = -1;
     }
-    this.refitXterm();
+    const becameReady = st.phase === "ready" && this.lastSyncedPhase !== "ready";
+    this.lastSyncedPhase = st.phase;
+    this.refitXterm(becameReady);
   }
 
   private startFbRenderLoop() {

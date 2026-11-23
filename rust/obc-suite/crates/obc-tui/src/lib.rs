@@ -84,6 +84,8 @@ impl Drop for TerminalGuard {
         if self.active {
             let _ = disable_raw_mode();
             let mut out = io::stdout();
+            // Always clear any mouse/focus reporting modes on exit
+            let _ = out.write_all(b"\x1b[?1000l\x1b[?1002l\x1b[?1003l\x1b[?1006l\x1b[?1004l");
             if self.alt_screen {
                 let _ = execute!(out, LeaveAlternateScreen);
             } else {
@@ -92,6 +94,58 @@ impl Drop for TerminalGuard {
             let _ = out.flush();
         }
     }
+}
+
+/// Detect the exact live terminal dimensions:
+/// 1. `/obc/tty_size` (live 9p host file written by `xterm.js` `FitAddon` on open, Split/TTY toggle, and panel resize)
+/// 2. Kernel `TIOCGWINSZ` (`crossterm::terminal::size()`) when valid (`>= 40×10`)
+/// 3. `COLUMNS`/`LINES` env vars, else safe `100×26` default.
+#[must_use]
+fn detect_tty_size() -> (u16, u16) {
+    if let Ok(raw) = std::fs::read_to_string("/obc/tty_size") {
+        let mut parts = raw.split_whitespace();
+        if let (Some(cs), Some(rs)) = (parts.next(), parts.next())
+            && let (Ok(c), Ok(r)) = (cs.parse::<u16>(), rs.parse::<u16>())
+            && (40..=240).contains(&c)
+            && (10..=80).contains(&r)
+        {
+            return (c, r);
+        }
+    }
+    if let Ok((c, r)) = crossterm::terminal::size()
+        && c >= 40
+        && r >= 10
+    {
+        return (c.min(240), r.min(80));
+    }
+    let cols = std::env::var("COLUMNS")
+        .ok()
+        .and_then(|v| v.parse::<u16>().ok())
+        .filter(|&n| n >= 40)
+        .unwrap_or(100);
+    let rows = std::env::var("LINES")
+        .ok()
+        .and_then(|v| v.parse::<u16>().ok())
+        .filter(|&n| n >= 10)
+        .unwrap_or(26);
+    (cols, rows)
+}
+
+fn make_fixed_terminal(cols: u16, rows: u16) -> Result<Terminal<CrosstermBackend<Stdout>>> {
+    let backend = CrosstermBackend::new(io::stdout());
+    let mut terminal = Terminal::with_options(
+        backend,
+        TerminalOptions {
+            viewport: Viewport::Fixed(Rect::new(0, 0, cols, rows)),
+        },
+    )?;
+    execute!(
+        io::stdout(),
+        crossterm::terminal::Clear(crossterm::terminal::ClearType::All),
+        crossterm::cursor::MoveTo(0, 0)
+    )?;
+    terminal.clear()?;
+    Ok(terminal)
 }
 
 /// Shared event loop for interactive TTY mode (`CrosstermBackend`) and headless `--frames N` mode (`TestBackend`).
@@ -123,46 +177,22 @@ pub fn run_tui<A: TuiApp>(app: &mut A, opts: TuiRunOpts, tick_ms: u64) -> Result
     // Explicit `--frames N` on a TTY draws on the main screen so the final Ratatui frame remains visible.
     let alt_screen = opts.frames.is_none();
     let _guard = TerminalGuard::enter(alt_screen)?;
-    let backend = CrosstermBackend::new(io::stdout());
-    // Unkernel's virtual serial TTY reports TIOCGWINSZ = (0, 0). Fall back to a crisp fixed viewport
-    // (100×26, matching the HUD xterm + TermBuffer) whenever the kernel reports an uninitialized size.
-    let tty_size = crossterm::terminal::size().unwrap_or((0, 0));
-    let (mut terminal, vp_height): (Terminal<CrosstermBackend<Stdout>>, u16) =
-        if tty_size.0 >= 40 && tty_size.1 >= 12 {
-            (Terminal::new(backend)?, tty_size.1)
-        } else {
-            let cols = std::env::var("COLUMNS")
-                .ok()
-                .and_then(|v| v.parse::<u16>().ok())
-                .filter(|&n| n >= 40)
-                .unwrap_or(100);
-            let rows = std::env::var("LINES")
-                .ok()
-                .and_then(|v| v.parse::<u16>().ok())
-                .filter(|&n| n >= 12)
-                .unwrap_or(26);
-            (
-                Terminal::with_options(
-                    backend,
-                    TerminalOptions {
-                        viewport: Viewport::Fixed(Rect::new(0, 0, cols, rows)),
-                    },
-                )?,
-                rows,
-            )
-        };
-    execute!(
-        io::stdout(),
-        crossterm::terminal::Clear(crossterm::terminal::ClearType::All),
-        crossterm::cursor::MoveTo(0, 0)
-    )?;
-    terminal.clear()?;
+    let (mut cur_cols, mut cur_rows) = detect_tty_size();
+    let mut terminal = make_fixed_terminal(cur_cols, cur_rows)?;
 
     let tick_rate = Duration::from_millis(tick_ms.max(40));
     let mut last_tick = Instant::now().checked_sub(tick_rate).unwrap_or_else(Instant::now);
     let mut rendered = 0u32;
 
     loop {
+        // Dynamically track live xterm.js resizes (Split/TTY toggle, Manager drawer, draggable window resize)
+        let (next_cols, next_rows) = detect_tty_size();
+        if (next_cols, next_rows) != (cur_cols, cur_rows) {
+            cur_cols = next_cols;
+            cur_rows = next_rows;
+            terminal = make_fixed_terminal(cur_cols, cur_rows)?;
+        }
+
         if last_tick.elapsed() >= tick_rate {
             app.tick();
             last_tick = Instant::now();
@@ -175,21 +205,35 @@ pub fn run_tui<A: TuiApp>(app: &mut A, opts: TuiRunOpts, tick_ms: u64) -> Result
             if !alt_screen {
                 let _ = execute!(
                     io::stdout(),
-                    crossterm::cursor::MoveTo(0, vp_height.saturating_sub(1))
+                    crossterm::cursor::MoveTo(0, cur_rows.saturating_sub(1))
                 );
             }
             break;
         }
         let wait = tick_rate.saturating_sub(last_tick.elapsed());
-        if event::poll(wait)?
-            && let Event::Key(key) = event::read()?
-            && key.kind == KeyEventKind::Press
-        {
-            if key.code == KeyCode::Char('c') && key.modifiers.contains(KeyModifiers::CONTROL) {
-                break;
-            }
-            if app.on_key(key) {
-                break;
+        if event::poll(wait)? {
+            match event::read()? {
+                Event::Key(key) if key.kind == KeyEventKind::Press => {
+                    if key.code == KeyCode::Char('c') && key.modifiers.contains(KeyModifiers::CONTROL) {
+                        break;
+                    }
+                    if app.on_key(key) {
+                        break;
+                    }
+                }
+                Event::Resize(c, r) => {
+                    let (tc, tr) = if c >= 40 && r >= 10 {
+                        (c.min(240), r.min(80))
+                    } else {
+                        detect_tty_size()
+                    };
+                    if (tc, tr) != (cur_cols, cur_rows) {
+                        cur_cols = tc;
+                        cur_rows = tr;
+                        terminal = make_fixed_terminal(cur_cols, cur_rows)?;
+                    }
+                }
+                _ => {}
             }
         }
     }

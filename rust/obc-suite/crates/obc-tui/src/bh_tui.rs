@@ -195,8 +195,8 @@ impl TuiApp for BhTuiApp {
             .direction(Direction::Vertical)
             .constraints([
                 Constraint::Length(3),
-                Constraint::Min(10),
-                Constraint::Length(2),
+                Constraint::Min(6),
+                Constraint::Length(1),
             ])
             .split(frame.area());
 

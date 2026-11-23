@@ -18,7 +18,12 @@ export interface ObcHostAdapter {
   executeCommand(cmd: ObcCommand): ObcCommandResult;
 }
 
-/** Populate a `MemoryFs` mounted at `/obc` with live telemetry, tau, command sink, scripts, libs, pilot-kit docs/skills, and native `obc-rs` binary. */
+export interface ObcMountHandle {
+  dispose(): void;
+  setTtySize(cols: number, rows: number): void;
+}
+
+/** Populate a `MemoryFs` mounted at `/obc` with live telemetry, tau, tty_size, command sink, scripts, libs, pilot-kit docs/skills, and native `obc-rs` binary. */
 export function wireObcMountFs(
   mem: MemoryFs,
   adapter: ObcHostAdapter,
@@ -28,7 +33,8 @@ export function wireObcMountFs(
   onCommandHandled: () => void,
   rustBinary?: Uint8Array | null,
   pilotKit?: Record<string, string>,
-): () => void {
+  initialTtySize: { cols: number; rows: number } = { cols: 100, rows: 26 },
+): ObcMountHandle {
   const atomicWrite = (path: string, content: string, mode = 0o444) => {
     const tmp = `${path}.tmp`;
     mem.writeFile(tmp, content, { mode });
@@ -70,6 +76,12 @@ export function wireObcMountFs(
   mem.writeFile("/last_result.json", '{"ok":true,"msg":"ready"}\n', { mode: 0o444 });
   mem.writeFile("/rpc_req", "", { mode: 0o666 });
   mem.writeFile("/rpc_res", '{"ok":true,"id":0,"result":"ready"}\n', { mode: 0o444 });
+  const setTtySize = (cols: number, rows: number) => {
+    const raw = `${Math.round(cols)} ${Math.round(rows)}`;
+    // Fixed 16-byte padded file so 9p st_size never shrinks or truncates across live resizes
+    atomicWrite("/tty_size", `${raw.padEnd(15, " ")}\n`);
+  };
+  setTtySize(initialTtySize.cols, initialTtySize.rows);
 
   mem.mkdirp("/scripts", { mode: 0o755 });
   for (const [name, body] of Object.entries(scripts)) {
@@ -173,9 +185,12 @@ export function wireObcMountFs(
       handling = false;
     }
   });
-  return () => {
-    clearInterval(refreshTimer);
-    unsubChange();
+  return {
+    dispose() {
+      clearInterval(refreshTimer);
+      unsubChange();
+    },
+    setTtySize,
   };
 }
 
