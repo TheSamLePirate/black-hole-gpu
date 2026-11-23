@@ -6,7 +6,7 @@ pub mod fb;
 pub mod geo;
 pub mod telemetry;
 
-pub use bus::AvionicsBus;
+pub use bus::{AvionicsBus, BhCatalog, BhMember, TarsParamSpec, TarsToolInfo};
 pub use fb::{Framebuffer, RawKey, RawKeyReader, rgb};
 pub use geo::{Airport, KerrMetrics, WORLD_AIRPORTS, kerr_metrics, wgs84_bearing_dist};
 pub use telemetry::{Attitude, Flight, Nav, Orbit, Position, RunwayNav, Systems, Telemetry};

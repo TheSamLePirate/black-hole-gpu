@@ -287,7 +287,7 @@ export function startObcVsockServer(vsock: Vsock, adapter: ObcHostAdapter, onCom
   };
 }
 
-const BH_RPC_OPS = new Set(["ls", "get", "set", "call", "tools", "tool", "search", "eval", "mcdu"]);
+const BH_RPC_OPS = new Set(["ls", "get", "set", "call", "tools", "tool", "search", "eval", "mcdu", "catalog"]);
 
 async function handleVsockRpc(line: string, adapter: ObcHostAdapter, onCommandHandled: () => void): Promise<Record<string, unknown>> {
   let msg: unknown;

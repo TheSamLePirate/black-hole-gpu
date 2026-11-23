@@ -8,7 +8,7 @@ import { checkArgs, type Args } from "../ai/tool-schema";
 
 export interface BhRpcRequest {
   id?: string | number;
-  op: "ls" | "get" | "set" | "call" | "tools" | "tool" | "search" | "eval" | "mcdu";
+  op: "ls" | "get" | "set" | "call" | "tools" | "tool" | "search" | "eval" | "mcdu" | "catalog";
   path?: string;
   value?: unknown;
   args?: unknown[];
@@ -166,6 +166,120 @@ interface LsEntry {
   kind: "fn" | "obj" | "arr" | "num" | "str" | "bool" | "null";
   preview: string;
   arity?: number;
+  fnParams?: string[];
+}
+
+interface RichParamSpec {
+  name: string;
+  type: string;
+  required: boolean;
+  description?: string;
+  enum?: string[];
+  min?: number;
+  max?: number;
+  integer?: boolean;
+}
+
+/** Extract JS parameter names from a function's source for interactive TUI call forms. */
+function extractFnParams(fn: (...a: unknown[]) => unknown): string[] {
+  try {
+    const src = Function.prototype.toString
+      .call(fn)
+      .replace(/\/\*[\s\S]*?\*\//g, "")
+      .replace(/\/\/[^\n]*/g, "")
+      .trim();
+    const m = /^[^(]*\(([^)]*)\)/.exec(src) ?? /^(?:async\s+)?([A-Za-z_$][\w$]*)\s*=>/.exec(src);
+    if (!m?.[1]?.trim()) return [];
+    return splitArgs(m[1])
+      .map((p) =>
+        p
+          .split("=")[0]!
+          .trim()
+          .replace(/^\.\.\./, "…"),
+      )
+      .filter((p) => p.length > 0 && p.length <= 32)
+      .slice(0, 8);
+  } catch {
+    return [];
+  }
+}
+
+function serializeParamSpecs(t: Tool): RichParamSpec[] {
+  const req = new Set(t.required ?? []);
+  return Object.entries(t.params ?? {}).map(([name, spec]) => {
+    const out: RichParamSpec = {
+      name,
+      type: spec.type,
+      required: req.has(name),
+    };
+    if (spec.description) out.description = String(spec.description).slice(0, 140);
+    if (spec.type === "string" && spec.enum) out.enum = [...spec.enum];
+    if (spec.type === "number") {
+      if (spec.minimum !== undefined) out.min = spec.minimum;
+      if (spec.maximum !== undefined) out.max = spec.maximum;
+      if (spec.integer) out.integer = true;
+    }
+    return out;
+  });
+}
+
+function serializeToolSummary(t: Tool) {
+  return {
+    name: t.name,
+    description: String(t.description ?? "").slice(0, 220),
+    params: Object.keys(t.params ?? {}),
+    required: t.required ?? [],
+    paramSpecs: serializeParamSpecs(t),
+  };
+}
+
+function buildCatalog(root: Record<string, unknown>) {
+  const members: { path: string; kind: LsEntry["kind"]; preview: string; arity?: number; fnParams?: string[] }[] = [];
+  const deepRoots = new Set(["settings", "obc", "fleet", "camera", "flight", "lagrange", "jwst", "tars", "cockpitScreens", "audio"]);
+  const MAX_MEMBERS = 500;
+
+  const pushEntry = (path: string, entry: LsEntry) => {
+    if (members.length >= MAX_MEMBERS) return;
+    const rec: { path: string; kind: LsEntry["kind"]; preview: string; arity?: number; fnParams?: string[] } = {
+      path,
+      kind: entry.kind,
+      preview: entry.preview,
+    };
+    if (entry.arity !== undefined) rec.arity = entry.arity;
+    if (entry.fnParams && entry.fnParams.length > 0) rec.fnParams = entry.fnParams;
+    members.push(rec);
+  };
+
+  for (const top of listMembers(root)) {
+    pushEntry(top.name, top);
+    if (top.kind !== "obj" || members.length >= MAX_MEMBERS) continue;
+    let sub: unknown;
+    try {
+      sub = root[top.name];
+    } catch {
+      continue;
+    }
+    if (!sub || typeof sub !== "object") continue;
+    const subObj = sub as Record<string, unknown>;
+    for (const child of listMembers(subObj)) {
+      const p2 = `${top.name}.${child.name}`;
+      pushEntry(p2, child);
+      if (child.kind === "obj" && deepRoots.has(top.name) && members.length < MAX_MEMBERS) {
+        try {
+          const grand = subObj[child.name];
+          if (grand && typeof grand === "object" && !Array.isArray(grand)) {
+            for (const g of listMembers(grand).slice(0, 40)) {
+              pushEntry(`${p2}.${g.name}`, g);
+            }
+          }
+        } catch {
+          // ignore unreadable subtree
+        }
+      }
+    }
+  }
+  const tools = getTarsTools(root).map(serializeToolSummary);
+  return { members, tools };
 }
 
 function listMembers(target: unknown): LsEntry[] {
@@ -191,7 +305,14 @@ function listMembers(target: unknown): LsEntry[] {
     if (val === null || val === undefined) {
       entries.push({ name, kind: "null", preview: String(val) });
     } else if (typeof val === "function") {
-      entries.push({ name, kind: "fn", preview: `fn(${val.length})`, arity: val.length });
+      const fnParams = extractFnParams(val as (...a: unknown[]) => unknown);
+      entries.push({
+        name,
+        kind: "fn",
+        preview: fnParams.length > 0 ? `fn(${fnParams.join(", ")})` : `fn(${val.length})`,
+        arity: val.length,
+        fnParams,
+      });
     } else if (Array.isArray(val)) {
       entries.push({ name, kind: "arr", preview: `Array(${val.length})` });
     } else if (typeof val === "object") {
@@ -262,13 +383,10 @@ export function handleBhRpcMaybeSync(req: BhRpcRequest): BhRpcResponse | Promise
         return { id, ok: true, result: safeSerialize(ret, depth) };
       }
       case "tools": {
-        const tools = getTarsTools(root).map((t) => ({
-          name: t.name,
-          description: String(t.description ?? "").slice(0, 140),
-          params: Object.keys(t.params ?? {}),
-          required: t.required ?? [],
-        }));
-        return { id, ok: true, result: tools };
+        return { id, ok: true, result: getTarsTools(root).map(serializeToolSummary) };
+      }
+      case "catalog": {
+        return { id, ok: true, result: buildCatalog(root) };
       }
       case "tool": {
         const name = String(req.name ?? "").trim();

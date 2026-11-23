@@ -75,7 +75,10 @@ function installMockBh() {
           {
             name: "approach",
             description: "List or engage ILS approaches at any airfield",
-            params: { action: { type: "string" }, field: { type: "string" } },
+            params: {
+              action: { type: "string", enum: ["list", "select", "engage"], description: "Operation mode" },
+              field: { type: "string", description: "ICAO code" },
+            },
             required: ["action"],
             run(args: Record<string, unknown>) {
               return { field: args.field ?? "LFPB", action: args.action };
@@ -171,4 +174,22 @@ test("handleBhRpc op:mcdu controls Captain MCDU screen, page, lsk, type, button,
   const ecam = await handleBhRpc({ id: 15, op: "mcdu", action: "ecam", ecam: "obcPage" });
   expect(ecam).toEqual({ id: 15, ok: true, result: { ecam: "obcPage" } });
   expect(getSdPage()).toBe("obcPage");
+});
+
+test("handleBhRpc op:catalog indexes nested __bh members with fnParams and rich TARS paramSpecs", async () => {
+  installMockBh();
+  const res = await handleBhRpc({ id: 16, op: "catalog" });
+  expect(res.ok).toBe(true);
+  const cat = res.result as {
+    members: { path: string; kind: string; fnParams?: string[] }[];
+    tools: { name: string; paramSpecs: { name: string; required: boolean; enum?: string[] }[] }[];
+  };
+  const addFn = cat.members.find((m) => m.path === "camera.add");
+  expect(addFn?.kind).toBe("fn");
+  expect(addFn?.fnParams).toEqual(["a", "b"]);
+  expect(cat.members.some((m) => m.path === "settings.bloom" && m.kind === "num")).toBe(true);
+  const approach = cat.tools.find((t) => t.name === "approach");
+  expect(approach?.paramSpecs[0]?.name).toBe("action");
+  expect(approach?.paramSpecs[0]?.required).toBe(true);
+  expect(approach?.paramSpecs[0]?.enum).toEqual(["list", "select", "engage"]);
 });

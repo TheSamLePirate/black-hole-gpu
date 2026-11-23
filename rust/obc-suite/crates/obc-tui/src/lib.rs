@@ -10,6 +10,7 @@ pub mod a320_tui;
 pub mod bh_tui;
 pub mod f35_tui;
 pub mod fmc;
+pub mod fuzzy;
 pub mod mission;
 pub mod top;
 

@@ -502,18 +502,42 @@ describe.skipIf(!E2E)("Linux OBC AAA (Unkernel aarch64, Wisp, Snapshot, Editor, 
 
     // Switch live to Split mode while bh-tui is running: /obc/tty_size + TermBuffer must reflow cleanly with BH-TUI still on row 0!
     await app.js(`document.querySelector('[data-testid="obc-mode-split"]')?.click()`);
-    await Bun.sleep(500);
+    await app.waitFor(`(__bh.obc.readScreen()[0] || "").includes("BH-TUI")`, 6_000);
+    await Bun.sleep(250);
     const splitScreen = await app.js<string[]>(`__bh.obc.readScreen()`);
     expect(splitScreen[0] ?? "").toContain("BH-TUI");
     expect(splitScreen.at(-1) ?? "").toContain("Quit");
     await app.shot(`${OUT}/hud-bh-tui-split.png`);
     await app.js(`document.querySelector('[data-testid="obc-mode-term"]')?.click()`);
-    await Bun.sleep(350);
+    await app.waitFor(`(__bh.obc.readScreen()[0] || "").includes("BH-TUI")`, 6_000);
+    await Bun.sleep(200);
 
     // Send real DOM Tab key: bh-tui MUST switch from __bh tree to TARS TOOLS (and never trigger simulator Tab wheel!)
     await app.press("Tab");
     await app.waitFor(`__bh.obc.readScreen().join("\\n").includes("TARS TOOLS")`, 8_000);
-    // Send real DOM 'q' key: bh-tui MUST exit cleanly back to shell prompt
+
+    // Open Global Fuzzy Search ('f'), type "get_state", verify live fuzzy match, open Runner Modal & execute live!
+    await app.press("KeyF");
+    await app.waitFor(`__bh.obc.readScreen().join("\\n").includes("FUZZY COMMAND PALETTE")`, 6_000);
+    await app.js(`__bh.obc.write("get_state")`);
+    await app.waitFor(`__bh.obc.readScreen().join("\\n").includes("get_state")`, 6_000);
+    await Bun.sleep(250);
+    await app.shot(`${OUT}/hud-bh-tui-fuzzy.png`);
+    // Enter opens RUN TARS TOOL modal (or executes Quick Action if matched first); handle either cleanly:
+    await app.press("Enter");
+    await Bun.sleep(350);
+    const afterFirstEnter = await app.js<string>(`__bh.obc.readScreen().join("\\n")`);
+    if (afterFirstEnter.includes("RUN TARS TOOL")) {
+      await app.shot(`${OUT}/hud-bh-tui-modal.png`);
+      await app.press("Enter");
+    }
+    await app.waitFor(`__bh.obc.readScreen().join("\\n").includes("RESULT")`, 8_000);
+    await Bun.sleep(250);
+    await app.shot(`${OUT}/hud-bh-tui-result.png`);
+
+    // Clear search (Esc) and send real DOM 'q' key: bh-tui MUST exit cleanly back to shell prompt
+    await app.press("Escape");
+    await Bun.sleep(150);
     await app.press("KeyQ");
     await Bun.sleep(400);
 
