@@ -18,7 +18,7 @@ export interface ObcHostAdapter {
   executeCommand(cmd: ObcCommand): ObcCommandResult;
 }
 
-/** Populate a `MemoryFs` mounted at `/obc` with live telemetry, tau, command sink, scripts, libs, and native `obc-rs` binary. */
+/** Populate a `MemoryFs` mounted at `/obc` with live telemetry, tau, command sink, scripts, libs, pilot-kit docs/skills, and native `obc-rs` binary. */
 export function wireObcMountFs(
   mem: MemoryFs,
   adapter: ObcHostAdapter,
@@ -27,6 +27,7 @@ export function wireObcMountFs(
   lib: Record<string, string>,
   onCommandHandled: () => void,
   rustBinary?: Uint8Array | null,
+  pilotKit?: Record<string, string>,
 ): () => void {
   const atomicWrite = (path: string, content: string, mode = 0o444) => {
     const tmp = `${path}.tmp`;
@@ -81,6 +82,15 @@ export function wireObcMountFs(
   if (rustBinary && rustBinary.byteLength > 0) {
     mem.mkdirp("/bin", { mode: 0o755 });
     mem.writeFile("/bin/obc-rs", rustBinary, { mode: 0o755 });
+  }
+  if (pilotKit) {
+    for (const [rel, body] of Object.entries(pilotKit)) {
+      const clean = rel.replace(/^\/+/, "");
+      const slash = clean.lastIndexOf("/");
+      if (slash > 0) mem.mkdirp(`/pilot-kit/${clean.slice(0, slash)}`, { mode: 0o755 });
+      else mem.mkdirp("/pilot-kit", { mode: 0o755 });
+      mem.writeFile(`/pilot-kit/${clean}`, body, { mode: 0o444 });
+    }
   }
 
   let handling = false;

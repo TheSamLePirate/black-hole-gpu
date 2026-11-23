@@ -295,21 +295,42 @@ export const OBC_SCRIPT_FILES = [
 
 export const OBC_LIB_FILES = ["lib/obc.py", "lib/obc.mjs", "lib/bh-cli.mjs"] as const;
 
+/** AAA documentation & Claude/Pi agent skills synced into `/home/pilot/` on boot. */
+export const OBC_PILOT_KIT_FILES = [
+  "CLAUDE.md",
+  "AGENTS.md",
+  "README.md",
+  "docs/OBC-ARCHITECTURE.md",
+  "docs/BH-API-GUIDE.md",
+  "docs/TTY-AND-FB0.md",
+  "docs/UNKERNEL-LINUX.md",
+  "skills/obc-build-fb-app/SKILL.md",
+  "skills/obc-build-tui-app/SKILL.md",
+  "skills/obc-control-sim/SKILL.md",
+  "skills/obc-manage-linux/SKILL.md",
+  "skills/obc-rust-dev/SKILL.md",
+] as const;
+
 export function findObcScript(idOrName: string): ObcScriptMeta | undefined {
   const q = idOrName.trim().toLowerCase();
   return OBC_SCRIPTS.find((s) => s.id === q || s.name === q || s.label.toLowerCase() === q);
 }
 
-/** Fetch all project scripts & libraries from `/obc/scripts/*` for live 9p mounting into Linux. */
-export async function loadProjectScripts(baseUrl = "/obc/scripts"): Promise<{
+/** Fetch all project scripts, libraries & `/home/pilot` docs/skills for live 9p mounting into Linux. */
+export async function loadProjectScripts(
+  baseUrl = "/obc/scripts",
+  pilotKitBaseUrl = "/obc/pilot-kit",
+): Promise<{
   scripts: Record<string, string>;
   lib: Record<string, string>;
+  pilotKit: Record<string, string>;
 }> {
   const scripts: Record<string, string> = {};
   const lib: Record<string, string> = {};
-  const fetchText = async (path: string): Promise<string | null> => {
+  const pilotKit: Record<string, string> = {};
+  const fetchText = async (url: string): Promise<string | null> => {
     try {
-      const r = await fetch(`${baseUrl}/${path}`, { cache: "no-store" });
+      const r = await fetch(url, { cache: "no-store" });
       return r.ok ? await r.text() : null;
     } catch {
       return null;
@@ -317,13 +338,17 @@ export async function loadProjectScripts(baseUrl = "/obc/scripts"): Promise<{
   };
   await Promise.all([
     ...OBC_SCRIPT_FILES.map(async (f) => {
-      const text = await fetchText(f);
+      const text = await fetchText(`${baseUrl}/${f}`);
       if (text !== null) scripts[f] = text;
     }),
     ...OBC_LIB_FILES.map(async (f) => {
-      const text = await fetchText(f);
+      const text = await fetchText(`${baseUrl}/${f}`);
       if (text !== null) lib[f.slice("lib/".length)] = text;
     }),
+    ...OBC_PILOT_KIT_FILES.map(async (f) => {
+      const text = await fetchText(`${pilotKitBaseUrl}/${f}`);
+      if (text !== null) pilotKit[f] = text;
+    }),
   ]);
-  return { scripts, lib };
+  return { scripts, lib, pilotKit };
 }

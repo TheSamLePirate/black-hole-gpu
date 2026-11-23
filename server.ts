@@ -289,6 +289,13 @@ const server = Bun.serve({
       if (!(await file.exists())) return new Response("not found", { status: 404 });
       return new Response(file, { headers: { "content-type": "text/plain; charset=utf-8", "cache-control": "no-store" } });
     },
+    "/obc/pilot-kit/*": async (req) => {
+      const rel = new URL(req.url).pathname.slice("/obc/pilot-kit/".length);
+      if (!/^[a-zA-Z0-9._/-]+$/.test(rel) || rel.includes("..") || rel.startsWith("/")) return new Response("not found", { status: 404 });
+      const file = Bun.file(`scripts/obc/pilot-kit/${rel}`);
+      if (!(await file.exists())) return new Response("not found", { status: 404 });
+      return new Response(file, { headers: { "content-type": "text/markdown; charset=utf-8", "cache-control": "no-store" } });
+    },
     // Dev-only Wisp v1 WebSocket-to-TCP relay for OBC internet access (docs/PLAN-LINUX-OBC.md §6)
     "/__wisp": ((req: Request, srv: { upgrade(r: Request, o: { data: unknown }): boolean }) =>
       wispUpgrade(req, srv, dev || process.env.KERR_WISP_RELAY === "1")) as never,

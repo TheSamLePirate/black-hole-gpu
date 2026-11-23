@@ -1,10 +1,12 @@
 import { expect, test } from "bun:test";
+import { existsSync, readFileSync } from "node:fs";
+import { join } from "node:path";
 import { readCrewCmd } from "../src/net/crewcmd";
 import { readInstruments } from "../src/net/instruments";
 import { OBC_PALETTES } from "../src/obc/fb-renderer";
 import { emptyTelemetry, formatTauText, normalizeWispUrl, parseObcCommand } from "../src/obc/protocol";
 import { distroLabel, normalizeDistro, normalizeMemoryMiB } from "../src/obc/runtime";
-import { findObcScript, OBC_SCRIPTS } from "../src/obc/scripts-catalog";
+import { findObcScript, OBC_PILOT_KIT_FILES, OBC_SCRIPTS } from "../src/obc/scripts-catalog";
 import { radAttitudeToDeg } from "../src/obc/sim-adapter";
 import { DEFAULT_OBC_CONFIG, OBC_MEMORY_OPTIONS } from "../src/obc/types";
 import { keyEventToAnsi } from "../src/ui/obc-console";
@@ -186,4 +188,21 @@ test("keyEventToAnsi translates navigation, TUI, and control keys cleanly for PT
   expect(mk("+")).toBe("+");
   expect(mk("c", { ctrlKey: true })).toBe("\x03");
   expect(mk("k", { metaKey: true })).toBeNull();
+});
+
+test("OBC_PILOT_KIT_FILES: every /home/pilot doc and Claude/Pi SKILL.md exists with valid frontmatter", () => {
+  const root = join(import.meta.dir, "..", "scripts", "obc", "pilot-kit");
+  expect(OBC_PILOT_KIT_FILES.length).toBeGreaterThanOrEqual(12);
+  let skillCount = 0;
+  for (const rel of OBC_PILOT_KIT_FILES) {
+    const abs = join(root, rel);
+    expect(existsSync(abs)).toBe(true);
+    const body = readFileSync(abs, "utf8");
+    expect(body.length).toBeGreaterThan(200);
+    if (rel.endsWith("SKILL.md")) {
+      skillCount++;
+      expect(body).toMatch(/^---\nname: [a-z0-9-]+\ndescription: .+\n---/m);
+    }
+  }
+  expect(skillCount).toBe(5);
 });

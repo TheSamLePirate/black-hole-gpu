@@ -39,7 +39,7 @@ await $`mkdir -p _site/runways && cp -R assets/runways/v1 _site/runways/`;
 await $`mkdir -p _site/approaches && cp -R assets/approaches/v1 _site/approaches/`;
 await $`cp vendor/basis/basis_transcoder.wasm _site/basis_transcoder.wasm`;
 // Embedded Linux OBC assets (docs/PLAN-LINUX-OBC.md): kernel WASM, Alpine & Debian EROFS distros, and project scripts
-await $`mkdir -p _site/obc/scripts/lib`;
+await $`mkdir -p _site/obc/scripts/lib _site/obc/pilot-kit`;
 await $`cp node_modules/unkernel/dist/unkernel.wasm _site/obc/unkernel.wasm`;
 await $`cp assets/obc/alpine.erofs assets/obc/distros.json assets/obc/obc-rs _site/obc/`;
 {
@@ -47,7 +47,7 @@ await $`cp assets/obc/alpine.erofs assets/obc/distros.json assets/obc/obc-rs _si
   const debianPath = (await localDebian.exists()) ? "assets/obc/debian.erofs" : await (await import("unkernel/node")).fetchDistro("debian");
   await $`cp ${debianPath} _site/obc/debian.erofs`;
 }
-await $`cp scripts/obc/bh scripts/obc/bh-tui scripts/obc/obc-* _site/obc/scripts/ && cp scripts/obc/lib/*.py scripts/obc/lib/*.mjs _site/obc/scripts/lib/`;
+await $`cp scripts/obc/bh scripts/obc/bh-tui scripts/obc/obc-* _site/obc/scripts/ && cp scripts/obc/lib/*.py scripts/obc/lib/*.mjs _site/obc/scripts/lib/ && cp -R scripts/obc/pilot-kit/. _site/obc/pilot-kit/`;
 await $`mkdir -p _site/docs/video`;
 await $`cp -R gallery/. _site/docs/`;
 await $`cp docs/video/*.mp4 _site/docs/video/`;

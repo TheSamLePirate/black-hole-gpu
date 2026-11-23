@@ -209,11 +209,18 @@ describe.skipIf(!E2E)("Linux OBC AAA (Unkernel aarch64, Wisp, Snapshot, Editor, 
     const hasRustBtn = await app.js<boolean>(`Boolean(document.querySelector('[data-testid="obc-install-rust"]'))`);
     expect(hasRustBtn).toBe(true);
 
-    // Verify offline avionics scripts execute cleanly
+    // Verify offline avionics scripts & /home/pilot AAA docs + Claude/Pi skills on first boot
+    const kitCheck = await app.js<{ ok: boolean; stdout: string }>(
+      `__bh.obc.exec("test -r /home/pilot/CLAUDE.md && test -r /home/pilot/AGENTS.md && test -r /home/pilot/README.md && test -r /home/pilot/docs/OBC-ARCHITECTURE.md && test -r /home/pilot/docs/BH-API-GUIDE.md && test -r /home/pilot/docs/TTY-AND-FB0.md && test -r /home/pilot/docs/UNKERNEL-LINUX.md && test -r /home/pilot/.claude/skills/obc-build-fb-app/SKILL.md && test -r /home/pilot/.pi/skills/obc-build-tui-app/SKILL.md && test -r /home/pilot/.agents/skills/obc-rust-dev/SKILL.md && echo PILOT_KIT_OK")`,
+    );
+    expect(kitCheck.ok).toBe(true);
+    expect(kitCheck.stdout).toContain("PILOT_KIT_OK");
+
     const diag = await app.js<{ ok: boolean; stdout: string }>(`__bh.obc.exec("obc-diag && obc-orbit")`);
     expect(diag.ok).toBe(true);
     expect(diag.stdout).toContain("LINUX ON-BOARD COMPUTER");
     expect(diag.stdout).toContain("obc-rs=native");
+    expect(diag.stdout).toContain("kit=docs+5skills");
     expect(diag.stdout).toContain("HOHMANN");
 
     // Open Options drawer to verify UI + capture AAA HUD console with Options open

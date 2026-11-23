@@ -456,7 +456,11 @@ export class ObcRuntime {
         }
       };
 
-      const [projectFiles, effectiveWisp, rustBinary] = await Promise.all([loadProjectScripts(), this.resolveWispUrl(), loadRustBinary()]);
+      const [projectFiles, effectiveWisp, rustBinary] = await Promise.all([
+        loadProjectScripts(new URL("obc/scripts", base).toString(), new URL("obc/pilot-kit", base).toString()),
+        this.resolveWispUrl(),
+        loadRustBinary(),
+      ]);
       this.netEnabled = Boolean(effectiveWisp);
 
       const memFs = new mod.MemoryFs();
@@ -470,6 +474,7 @@ export class ObcRuntime {
           this.commandsHandled++;
         },
         rustBinary,
+        projectFiles.pilotKit,
       );
 
       const kernelUrl = new URL("obc/unkernel.wasm", base).toString();
@@ -651,8 +656,17 @@ export class ObcRuntime {
   private async configureGuestEnvironment(vm: KernelHandle): Promise<void> {
     const heapMb = this.nodeMaxOldSpaceMiB();
     const setupScript = [
-      "mkdir -p /home/pilot /etc/profile.d /home/user/.local/bin",
+      "mkdir -p /home/pilot/docs /home/pilot/.claude/skills /home/pilot/.pi /home/pilot/.agents /etc/profile.d /home/user/.local/bin",
+      // Sync AAA docs & Claude/Pi agent skills from /obc/pilot-kit into /home/pilot (preserving user files)
+      "if [ -d /obc/pilot-kit ]; then for f in CLAUDE.md AGENTS.md README.md; do [ -f /obc/pilot-kit/$f ] && cp -f /obc/pilot-kit/$f /home/pilot/$f; done; [ -d /obc/pilot-kit/docs ] && cp -Rf /obc/pilot-kit/docs/. /home/pilot/docs/; [ -d /obc/pilot-kit/skills ] && cp -Rf /obc/pilot-kit/skills/. /home/pilot/.claude/skills/; fi",
+      // Mirror skills into .pi/skills and .agents/skills so BOTH Claude Code and Pi auto-discover every skill
+      "rm -rf /home/pilot/.pi/skills /home/pilot/.agents/skills 2>/dev/null || true",
+      "ln -sfn /home/pilot/.claude/skills /home/pilot/.pi/skills",
+      "ln -sfn /home/pilot/.claude/skills /home/pilot/.agents/skills",
+      // Also link CLAUDE.md / AGENTS.md into /home/user and /root if not already customized
+      'for h in /home/user /root; do if [ -d "$h" ]; then [ -e "$h/CLAUDE.md" ] || ln -sfn /home/pilot/CLAUDE.md "$h/CLAUDE.md"; [ -e "$h/AGENTS.md" ] || ln -sfn /home/pilot/AGENTS.md "$h/AGENTS.md"; fi; done',
       "chmod 777 /home/pilot 2>/dev/null || true",
+      "chmod -R a+rX /home/pilot/docs /home/pilot/.claude /home/pilot/CLAUDE.md /home/pilot/AGENTS.md /home/pilot/README.md 2>/dev/null || true",
       "chown -R 1000:1000 /home/user/.local 2>/dev/null || true",
       "ln -sf /obc/tau /dev/tau",
       `printf 'export PATH="/obc/bin:/obc/scripts:$HOME/.local/bin:$HOME/.bun/bin:/home/user/.local/bin:/home/user/.bun/bin:/usr/local/bin:$PATH:/usr/lib/kw/bin"\\nexport PYTHONPATH=/obc/lib\\nexport NODE_PATH=/obc/lib\\nexport PYTHONDONTWRITEBYTECODE=1\\nexport NODE_OPTIONS="--max-old-space-size=${heapMb}"\\n' > /etc/profile.d/obc.sh`,

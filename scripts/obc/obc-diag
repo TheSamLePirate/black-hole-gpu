@@ -49,15 +49,17 @@ RS_V=$(has_real rustc && rustc --version 2>&1 | awk '{print $2}' || echo "off")
 PI_V=$(has_real pi && echo "ok" || echo "off")
 CL_V=$(has_real claude && echo "ok" || echo "off")
 OBCRS_V=$([ -x /obc/bin/obc-rs ] && echo "native" || echo "off")
+KIT_V=$([ -r /home/pilot/CLAUDE.md ] && echo "docs+5skills" || echo "off")
 
 printf "${C_DIM}DISTRO  :${C_RST} %s · %s (%s) · RAM %s\n" "$DISTRO" "$KERNEL" "$ARCH" "$MEM_MB"
 printf "${C_DIM}TOOLS   :${C_RST} py=%s pip=%s node=%s npm=%s bun=%s rust=%s pi=%s claude=%s\n" \
   "$PY_V" "$PIP_V" "$ND_V" "$NPM_V" "$BUN_V" "$RS_V" "$PI_V" "$CL_V"
-printf "${C_DIM}DEVICES :${C_RST} /dev/fb0=%s  /dev/tau=%s  /obc=%s  obc-rs=%s\n" \
+printf "${C_DIM}DEVICES :${C_RST} /dev/fb0=%s  /dev/tau=%s  /obc=%s  obc-rs=%s  kit=%s\n" \
   "$([ -e /dev/fb0 ] && echo OK || echo OFF)" \
   "$([ -e /dev/tau ] && echo OK || echo LINK)" \
   "$([ -r /obc/telemetry.json ] && echo MOUNTED || echo OFF)" \
-  "$OBCRS_V"
+  "$OBCRS_V" \
+  "$KIT_V"
 
 if [ -r /obc/telemetry.json ]; then
   printf "\n${C_CYN}── LIVE AVIONICS TELEMETRY (/obc/telemetry.json) ──────────────${C_RST}\n"
