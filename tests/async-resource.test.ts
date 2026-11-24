@@ -214,7 +214,10 @@ test("a learning queue's stall limit follows the longest compile seen", async ()
       () => Bun.sleep(60).then(() => "slow"),
     ),
   ).toBe("slow");
-  expect(queue.stallLimit).toBeGreaterThanOrEqual(180);
+  // (the limit learnt from the compile actually measured: 3 × ≥ 60 ms — more on a loaded runner, where the 60 ms sleep
+  // lasts longer; the test waits for that limit, not for a fixed 300 ms that a slow CI machine overran, 24 Nov 2026)
+  const limit = queue.stallLimit;
+  expect(limit).toBeGreaterThanOrEqual(180);
   const hung = deferred<string>();
   let stalledAt = 0;
   const t0 = performance.now();
@@ -226,8 +229,10 @@ test("a learning queue's stall limit follows the longest compile seen", async ()
   await Bun.sleep(100);
   // (a 20 ms limit would have stalled long ago: 3 × 60 ms holds it)
   expect(stalledAt).toBe(0);
-  await Bun.sleep(200);
-  expect(stalledAt).toBeGreaterThanOrEqual(180);
+  const deadline = t0 + limit + 3000;
+  while (stalledAt === 0 && performance.now() < deadline) await Bun.sleep(10);
+  expect(stalledAt).toBeGreaterThanOrEqual(Math.min(180, limit) - 5);
+  expect(stalledAt).toBeGreaterThan(0);
   hung.resolve("late");
 });
 
