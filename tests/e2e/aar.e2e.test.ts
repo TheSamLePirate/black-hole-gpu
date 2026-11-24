@@ -60,21 +60,25 @@ describe.skipIf(!E2E)("the air refuelling", () => {
 
   test("the contact, the fuel taken to full; back out, cleared to depart", async () => {
     await app.waitFor(`__bh.camera.aar?.s.phase === "contact"`, 120_000);
+    const contactAt = Date.now();
     await Bun.sleep(2500);
     await view("around", { yaw: 150, pitch: 6, dist: 16 });
     await shot("contact-outside");
     await view("cockpit");
     await shot("contact-cockpit");
     await app.waitFor(`!__bh.camera.aar`, 360_000);
+    console.log(`  the contact made ${((Date.now() - contactAt) / 1000).toFixed(1)} s before the end`);
     const fuel = await app.js<number>(`__bh.fleet.fuel.f35`);
     console.log(`  after the refuelling: ${fuel.toFixed(0)} kg aboard`);
     expect(fuel).toBeGreaterThan(5700);
     // (the TCAS in TA ONLY while refuelling: no resolution advisory said against the tanker — 14 Nov 2026, "Climb, climb!" through the
     // contact before)
-    const ra = await app.js<string[]>(
-      `__bh.voice.said.filter((l) => /Climb, climb|Descend, descend|Montez, montez|Descendez, descendez/.test(l.text)).map((l) => l.text)`,
+    // (each said with its age [s] at the refuelling's end: before the contact, through it, or as the TA ONLY was let go)
+    const said = await app.js<{ text: string; ageS: number }[]>(
+      `__bh.voice.said.filter((l) => /Climb, climb|Descend, descend|Montez, montez|Descendez, descendez/.test(l.text))
+        .map((l) => ({ text: l.text, ageS: +((performance.now() - l.at) / 1000).toFixed(1) }))`,
     );
-    console.log(`  resolution advisories said: ${ra.length}`);
-    expect(ra).toEqual([]);
+    console.log(`  resolution advisories said: ${said.length}${said.map((l) => ` · "${l.text}" ${l.ageS} s before the end`).join("")}`);
+    expect(said.map((l) => l.text)).toEqual([]);
   }, 500_000);
 });

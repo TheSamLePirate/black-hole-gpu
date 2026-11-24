@@ -368,9 +368,11 @@ describe.skipIf(!E2E)("Linux OBC AAA (Unkernel aarch64, Wisp, Snapshot, Editor, 
     metrics.toolchainInstallMs = Math.round(performance.now() - tInst0);
     expect(inst.ok).toBe(true);
 
-    const vers = await app.js<{ ok: boolean; stdout: string }>(
-      `__bh.obc.exec("python3 --version && pip --version && node --version && npm --version && bun --version && pi --version && claude --version")`,
+    // (seven interpreters started one after the other in the emulated aarch64 guest: exec's default 15 s is too short a cap)
+    const vers = await app.js<{ ok: boolean; code: number; stdout: string; stderr: string }>(
+      `__bh.obc.exec("python3 --version && pip --version && node --version && npm --version && bun --version && pi --version && claude --version", 90000)`,
     );
+    if (!vers.ok) console.error(`[obc versions alpine] code ${vers.code}\nSTDOUT:\n${vers.stdout}\nSTDERR:\n${vers.stderr.slice(-1200)}`);
     expect(vers.ok).toBe(true);
     const vLines = vers.stdout.trim().split(/\r?\n/);
     metrics.pythonVersion = vLines[0] ?? "";
@@ -924,9 +926,11 @@ describe.skipIf(!E2E)("Linux OBC AAA (Unkernel aarch64, Wisp, Snapshot, Editor, 
     metrics.debianInstallMs = Math.round(performance.now() - tDeb0);
     expect(debInst.ok).toBe(true);
 
-    const debVers = await app.js<{ ok: boolean; stdout: string }>(
-      `__bh.obc.exec("python3 --version && pip --version && node --version && npm --version && bun --version && pi --version && claude --version")`,
+    const debVers = await app.js<{ ok: boolean; code: number; stdout: string; stderr: string }>(
+      `__bh.obc.exec("python3 --version && pip --version && node --version && npm --version && bun --version && pi --version && claude --version", 90000)`,
     );
+    if (!debVers.ok)
+      console.error(`[obc versions debian] code ${debVers.code}\nSTDOUT:\n${debVers.stdout}\nSTDERR:\n${debVers.stderr.slice(-1200)}`);
     expect(debVers.ok).toBe(true);
     const dLines = debVers.stdout.trim().split(/\r?\n/);
     metrics.debianTools = {
