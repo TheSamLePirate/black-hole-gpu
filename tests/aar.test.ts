@@ -3,6 +3,7 @@ import { gcasForget } from "../src/controller/gcas";
 import { advanceFrameClock } from "../src/frameclock";
 import { AAR, aarNew, aarStep, basketFree, gapOf, hoseDir, trailPoint } from "../src/game/aar";
 import { fleet } from "../src/fleet";
+import { tcasAdvise } from "../src/radar/tcas";
 import { VESSELS } from "../src/vessels";
 import { cruise } from "./helpers/envelope";
 import { resetFlights } from "./helpers/flight";
@@ -63,6 +64,7 @@ function refuel(
   mode: "auto" | "assisted" | "manual",
   seconds: number,
   input?: (t: number, c: ReturnType<typeof cruise>["c"]) => { throttle?: number },
+  after = 0,
 ) {
   const { c, fly } = cruise(6000, 215, 0.7);
   c.jetToggle("ap");
@@ -93,8 +95,8 @@ function refuel(
         const q = c.combat!.world.targets.find((x) => x.id === A.tanker)!;
         bank = Math.max(bank, Math.acos(Math.min(1, q.up[2])) * (180 / Math.PI));
       }
-      // (the TCAS in TA ONLY while it refuels: no "Climb, climb!" for the tanker metres ahead)
-      if (A.stage === "hose") ra += (c.tcas ?? []).filter((a) => a.level === "RA").length;
+      // (the TCAS in TA ONLY while it refuels — the rendezvous too —: no "Climb, climb!" for the tanker metres ahead)
+      ra += (c.tcas ?? []).filter((a) => a.level === "RA").length;
       if (A.s.phase === "contact") {
         tMax = Math.max(tMax, A.s.takeup);
         worst = Math.max(worst, A.s.closure);
@@ -102,12 +104,34 @@ function refuel(
     }
     return !c.aar && seen.size > 1;
   });
+  // (then `after` s more, the session over, a few metres behind and below the tanker: the RAs against it — and those
+  // its TCAS would give on TA/RA at once, the race the e2e met 1 run in 3 on 24 Nov 2026: "Descend, descend!" just
+  // after the departure)
+  let raAfter = 0,
+    raBare = 0,
+    held = 0;
+  const tankerId = c.aarTaHold?.id;
+  if (after > 0)
+    fly(after, () => {
+      raAfter += (c.tcas ?? []).filter((a) => a.level === "RA").length;
+      if (c.aarTaHold) held += 1 / 30;
+      const P = c.combatPlayer();
+      const q = c.combat?.world.targets.find((x) => `cmb:${x.id}` === tankerId);
+      if (P && q) {
+        const r = [0, 1, 2].map((k) => q.p[k]! - P.p[k]!) as [number, number, number];
+        raBare +=
+          tcasAdvise(P.v as [number, number, number], 6000, [{ id: "tk", r, v: q.v as [number, number, number] }])[0]?.level === "RA"
+            ? 1
+            : 0;
+      }
+      return false;
+    });
   c.pilotInput = pin;
-  return { c, said, seen, tMax, full, bank, ra };
+  return { c, said, seen, tMax, full, bank, ra, raAfter, raBare, held };
 }
 
 test("auto: the jet's systems fly it — pre-contact, the contact, the fuel taken, back out, cleared to depart", () => {
-  const { c, said, seen, full, bank, ra } = refuel("auto", 400);
+  const { c, said, seen, full, bank, ra, raAfter, raBare, held } = refuel("auto", 400, undefined, 40);
   console.log(`  ${[...seen].join(" → ")} · ${said.filter((s) => /TEXACO|Refuel/.test(s)).join(" · ")}`);
   expect(seen.has("hose:contact")).toBe(true);
   expect(said.some((s) => /fuel flowing/.test(s))).toBe(true);
@@ -121,6 +145,11 @@ test("auto: the jet's systems fly it — pre-contact, the contact, the fuel take
   expect(bank).toBeLessThan(1);
   // (no resolution advisory against the tanker — 14 Nov 2026: some 3 000 steps of them through the contact before)
   expect(ra).toBe(0);
+  // (nor in the 40 s after the departure: TA ONLY held until clear of it — 24 Nov 2026)
+  console.log(
+    `  after the departure: ${raAfter} RA steps (TA ONLY held ${held.toFixed(1)} s); on TA/RA at once, ${raBare} steps would have been`,
+  );
+  expect(raAfter).toBe(0);
 }, 300_000);
 
 test("assisted: held on the basket's line, the throttle closes — forward in, back out once full", () => {

@@ -5,7 +5,7 @@
 // and the PCD draw.
 // (Its methods, out of controls.ts: installed on its prototype — `this` the controller.)
 import { l16Key } from "../net/link16";
-import { tcasAdvise } from "../radar/tcas";
+import { aarTaOnly, tcasAdvise } from "../radar/tcas";
 import { worldIdOf } from "./fightproxy";
 import { cameraFrame } from "../camera";
 import { fleet } from "../fleet";
@@ -302,6 +302,12 @@ function pictureStep(this: CameraController, fix: RadarFix, radarOn: boolean) {
   // (the TCAS — RD4 —: the transponders heard graded, TCAS II's way; the RAs inhibited low, and while refuelling — TA ONLY,
   // as the receiver sets it: the tanker's closing a few metres off called "Climb, climb!" through the contact)
   const heard = this.picture.tracks.filter((T) => T.sensors & SENSOR.TCAS && T.side !== "dead");
+  // (TA ONLY held past the session's end until clear of the tanker — radar/tcas.ts aarTaOnly —: it ended a few
+  // metres behind it)
+  const hold = this.aarTaHold ?? null;
+  const tk = hold ? this.picture.byId.get(hold.id) : undefined;
+  const mode = aarTaOnly(!!this.aar, hold, tk && tk.side !== "dead" ? { r: tk.rt as V3 } : null, this.radarT);
+  this.aarTaHold = mode.hold;
   this.tcas =
     this.s.tcas === false
       ? []
@@ -310,7 +316,7 @@ function pictureStep(this: CameraController, fix: RadarFix, radarOn: boolean) {
           fix.own.agl,
           heard.map((T) => ({ id: T.id, r: T.rt, v: T.v })),
           undefined,
-          !!this.aar,
+          mode.taOnly,
         );
   for (const a of this.tcas) {
     const T = this.picture.byId.get(a.id)!;

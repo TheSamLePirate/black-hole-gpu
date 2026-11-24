@@ -44,6 +44,9 @@ Il classe chaque transpondeur comme le TCAS II :
 - **avis de résolution (RA)** : à 25 s, sur un intrus qui se rapproche. Il demande de monter ou de descendre, à
   l'écart de là où passera l'intrus. Pas de RA sous 300 m sol.
   Pas de RA non plus pendant un ravitaillement en vol (TA ONLY, comme le règle le ravitaillé) : le ravitailleur, à quelques mètres, reste un TA.
+  Le TA ONLY tient toute la session (jonction, pré-contact, contact, dégagement) et, depuis le 24 novembre 2026, après elle
+  jusqu'à ce que le ravitaillé soit dégagé du ravitailleur — à 2 NM ou à 1 200 ft au-dessus ou au-dessous, ou sa piste
+  perdue 5 s (`radar/tcas.ts` `aarTaOnly`) : la session finit à quelques mètres derrière et sous lui.
 
 Où on le voit et l'entend :
 

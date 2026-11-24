@@ -3,6 +3,32 @@
 Problèmes constatés, pas encore réglés. Chaque entrée : la date (UTC), ce qui est mesuré ou observé et sa source, la cause
 connue ou supposée, la piste. Une entrée réglée est barrée avec le commit qui la règle, pas effacée.
 
+## ~~« Descend, descend! » contre le ravitailleur, 1 e2e `aar` sur 3~~ (relevé le 24 novembre 2026, campagne e2e 1) — réglé le même jour (`d51017b2`)
+
+- **Constat** : un RA « Descend, descend! » dit une fois pendant l'e2e `aar` malgré le TA ONLY (1 lancement sur 3, ici).
+- **Cause** : le TA ONLY suivait `!!this.aar`, nul dès la fin de la session (« cleared to depart », sonde rentrée). Le ravitaillé reste
+  alors à quelques mètres derrière et sous le ravitailleur, à sa vitesse ; au moindre rapprochement, RA. Sans tête, sur les 40 s qui
+  suivent le départ : 454 pas d'RA sans maintien.
+- **Correction** : `radar/tcas.ts` `aarTaOnly`, `controls.aarTaHold` posé par `aarOff` : TA ONLY toute la session et après, tant que le
+  ravitailleur est à moins de 2 NM et 1 200 ft (ou hors de l'image moins de 5 s). Tests `tcas.test.ts`, `aar.test.ts` (0 RA après le départ).
+
+## ~~Un avion de ligne garé dessiné 23 m sous le sol (SFO)~~ (relevé le 24 novembre 2026, e2e `traffic-free-camera`) — réglé le même jour (`825f1d45`)
+
+- **Constat** : N796UA, un 777 garé à SFO (0,7 kt, `alt_baro` −200 ft numérique et non « ground ») étiqueté « −23 m », en vol sous le sol.
+- **Cause** : `server/traffic.ts` ne le compte au sol que si `alt_baro === "ground"` ; beaucoup de transpondeurs au parking envoient une
+  altitude-pression.
+- **Correction** : `traffic/feed.ts` `groundedReport` : lent (< 35 kt), en palier et au plus au sol de l'aérodrome voisin (tuiles des
+  pistes, altitude mer + géoïde) plus 270 m (baro) ou 60 m (géométrique) — au sol ; hélicoptères, planeurs, ballons, drones laissés à leur
+  source. `controller/traffic.ts` ne dessine plus un avion en vol sous le sol du monde (posé dessus, sous 9 000 m). Test `traffic-ground.test.ts`.
+
+## ~~OBC : `pi` introuvable après `obc-install` ; téléchargement de Claude Code coupé par Wisp~~ (relevé le 24 novembre 2026, e2e `obc`) — réglé le même jour (`6f493924`)
+
+- **Constat** : `sh: pi: not found` (127) sur Alpine et Debian ; une fois, « wget: connection closed prematurely » sur les 130 Mo de Claude Code.
+- **Cause** : sans `BUN_INSTALL`, `bun add -g` suit `XDG_CACHE_HOME` (`/tmp/.cache`) : `pi` dans `/tmp/.cache/.bun/bin`, hors PATH et en RAM.
+  Le shim kw de Claude Code télécharge en flux, sans reprise.
+- **Correction** : `BUN_INSTALL=$HOME/.bun` (obc-install, env invité, `profile.d`), `pi` lié depuis `bun pm bin -g` ; Claude Code
+  téléchargé par `obc-install` sur le disque de données, repris par plage HTTP (8 essais), vérifié (zstd puis SHA-256 du manifeste).
+
 ## Ponts et routes : géométrie, supports et parité incomplets (21 novembre 2026)
 
 **Établi en lecture du code `3a86f5e1` et sur entrées contrôlées, pas par une nouvelle observation en jeu.**
