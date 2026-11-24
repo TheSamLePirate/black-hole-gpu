@@ -160,6 +160,11 @@
     <span class="badge badge-success">✓ Accepté · 201/201 checks</span>
   </div>
 
+  <div class="card" style="border-left: 3px solid var(--chart-1, #f43f5e);">
+    <div class="section-title">Correction du 24 novembre 2026 (relecture)</div>
+    <p style="font-size: 12px; margin: 0;">Valeurs kerr-mini corrigées d'après le journal cité (<code>remote-results/20261120-144232-j9-a-mini/log</code>, commit <code>19afd14b</code>) : Chamonix 71,4 → 60,2 → 71,8 ms (la planche donnait 71,2 → 59,1), Maures 60 m 59,7 → 60,3 → 59,9 ms (la planche donnait 59,3 → 59,8 → 59,2, « neutre »). Ces A/B/A comparent le levier <code>nearTreeGeometryOn</code> dans le code J9 ; aucun A/B avant J9 / J9 n'existe ; hiver et redessins d'ombre en mouvement non mesurés. Le passage M1 Max (<code>remote-results/j9-a-local</code>, non montré ici) est invalide (bridage thermique : 36 Heavy et 19 Trapping sur 70 relevés) ; le critère §6.5 n'est pas rempli sur M1 Max.</p>
+  </div>
+
   <div class="grid-stats">
     <div class="stat-card">
       <div class="stat-label">Gain GPU Maures</div>
@@ -168,8 +173,8 @@
     </div>
     <div class="stat-card">
       <div class="stat-label">Gain GPU Chamonix</div>
-      <div class="stat-value">−12,1 ms</div>
-      <div class="stat-sub">71,2 ms → 59,1 ms (+20 % fps)</div>
+      <div class="stat-value">−11,2 ms</div>
+      <div class="stat-sub">71,4 ms → 60,2 ms (+19 % fps) · corrigé 24 nov. (était −12,1 ms, 71,2 → 59,1)</div>
     </div>
     <div class="stat-card">
       <div class="stat-label">Mémoire VRAM GPU</div>
@@ -208,18 +213,18 @@
         <tr>
           <td><strong>Maures vol bas</strong> (60 m AGL)</td>
           <td>0 / 123 (sol)</td>
-          <td class="num">59,3 ms</td>
-          <td class="num"><strong>59,8 ms</strong></td>
-          <td class="num">59,2 ms</td>
-          <td class="num" style="color: var(--muted-foreground);">~ 0 ms (neutre)</td>
+          <td class="num">59,7 ms</td>
+          <td class="num"><strong>60,3 ms</strong></td>
+          <td class="num">59,9 ms</td>
+          <td class="num" style="color: var(--muted-foreground);">+0,6 ms (corrigé 24 nov. ; était 59,3 / 59,8 / 59,2, « neutre »)</td>
         </tr>
         <tr>
           <td><strong>Chamonix pente</strong> (5 m AGL)</td>
           <td>18 (2 L0 + 16 L1) / 73</td>
-          <td class="num">71,2 ms</td>
-          <td class="num"><strong>59,1 ms</strong></td>
+          <td class="num">71,4 ms</td>
+          <td class="num"><strong>60,2 ms</strong></td>
           <td class="num">71,8 ms</td>
-          <td class="num gain">−12,1 ms (−17 %)</td>
+          <td class="num gain">−11,2 ms (−16 %) (corrigé 24 nov. ; était 71,2 / 59,1, −12,1 ms)</td>
         </tr>
       </tbody>
     </table>
@@ -251,19 +256,19 @@
 
         <!-- Maures vol bas bars -->
         <text x="390" y="155" fill="var(--foreground)" font-size="11" text-anchor="middle" font-weight="600">Maures vol (60 m)</text>
-        <rect x="340" y="51.05" width="28" height="88.95" rx="3" fill="var(--chart-1, #f43f5e)" opacity="0.8" />
-        <text x="354" y="46" fill="var(--foreground)" font-size="10" text-anchor="middle" font-family="var(--font-mono)">59.3</text>
-        <rect x="375" y="50.3" width="28" height="89.7" rx="3" fill="var(--chart-2, #22c55e)" />
-        <text x="389" y="45" fill="var(--foreground)" font-size="10" text-anchor="middle" font-family="var(--font-mono)">59.8</text>
-        <rect x="410" y="51.2" width="28" height="88.8" rx="3" fill="var(--chart-1, #f43f5e)" opacity="0.5" />
-        <text x="424" y="46" fill="var(--foreground)" font-size="10" text-anchor="middle" font-family="var(--font-mono)">59.2</text>
+        <rect x="340" y="50.45" width="28" height="89.55" rx="3" fill="var(--chart-1, #f43f5e)" opacity="0.8" />
+        <text x="354" y="46" fill="var(--foreground)" font-size="10" text-anchor="middle" font-family="var(--font-mono)">59.7</text>
+        <rect x="375" y="49.55" width="28" height="90.45" rx="3" fill="var(--chart-2, #22c55e)" />
+        <text x="389" y="45" fill="var(--foreground)" font-size="10" text-anchor="middle" font-family="var(--font-mono)">60.3</text>
+        <rect x="410" y="50.15" width="28" height="89.85" rx="3" fill="var(--chart-1, #f43f5e)" opacity="0.5" />
+        <text x="424" y="46" fill="var(--foreground)" font-size="10" text-anchor="middle" font-family="var(--font-mono)">59.9</text>
 
         <!-- Chamonix bars -->
         <text x="570" y="155" fill="var(--foreground)" font-size="11" text-anchor="middle" font-weight="600">Chamonix (5 m)</text>
-        <rect x="520" y="33.2" width="28" height="106.8" rx="3" fill="var(--chart-1, #f43f5e)" opacity="0.8" />
-        <text x="534" y="28" fill="var(--foreground)" font-size="10" text-anchor="middle" font-family="var(--font-mono)">71.2</text>
-        <rect x="555" y="51.35" width="28" height="88.65" rx="3" fill="var(--chart-2, #22c55e)" />
-        <text x="569" y="46" fill="var(--success, #22c55e)" font-size="10" text-anchor="middle" font-weight="700" font-family="var(--font-mono)">59.1</text>
+        <rect x="520" y="32.9" width="28" height="107.1" rx="3" fill="var(--chart-1, #f43f5e)" opacity="0.8" />
+        <text x="534" y="28" fill="var(--foreground)" font-size="10" text-anchor="middle" font-family="var(--font-mono)">71.4</text>
+        <rect x="555" y="49.7" width="28" height="90.3" rx="3" fill="var(--chart-2, #22c55e)" />
+        <text x="569" y="45" fill="var(--success, #22c55e)" font-size="10" text-anchor="middle" font-weight="700" font-family="var(--font-mono)">60.2</text>
         <rect x="590" y="32.3" width="28" height="107.7" rx="3" fill="var(--chart-1, #f43f5e)" opacity="0.5" />
         <text x="604" y="27" fill="var(--foreground)" font-size="10" text-anchor="middle" font-family="var(--font-mono)">71.8</text>
       </svg>
