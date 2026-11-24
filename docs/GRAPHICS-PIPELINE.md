@@ -20,6 +20,82 @@ Windows/D3D12. Les numéros de ligne sont ceux de `da4e75bd`.
 
 ---
 
+### PONT-ROUTES — revue A : un profil, une surface, un contact (24 novembre 2026, branche de l'agent)
+
+**Code, non mesuré** (aucun e2e ni banc lancé dans ce lot ; les vues à vérifier sont listées dans
+[PLAN-PONT-ROUTES-AAA](PLAN-PONT-ROUTES-AAA.md) en tête). Ce qui change pour le pipeline :
+
+- **Enregistrement du décor (buffer `world forests and OSM scenery`)** : une tranche de tablier ou de parapet
+  (polygone de genre 2–4 parmi les solides) porte `data[11] = DECK_PLANE` (−1) et **un vec4 après ses arêtes** :
+  le plan de son dessus `z = a x + b y + c` et son épaisseur (`scenery-data.ts`). Le traceur (`sceneryQuery`, capots plats)
+  et les marques de ponts (`boxMarkVs`, `stripCorner`) l'ignorent ; le contact CPU (`scenery-contact.ts topAt`) le lit.
+  +16 o par tranche. Le maillage des tranches (`bridge-mesh.ts`) : faces CCW vues de l'extérieur, coins mitrés aux
+  coudes, piles orientées le long de l'axe ; le pipeline `meshVs/meshFs` reste sans culling (inchangé).
+- **Profil** (`bridge-surface-service.ts`) : courbe verticale bornée (rampe smoothstep + plateau, pentes d'approche aux
+  extrémités, pente ≤ 5 %/8 %/3,5 %), stations ≤ 10/20/40 m selon la distance (`bridge-lod.ts selectBridgeLOD`, désormais
+  branché dans `scenery-worker.ts deckBridge` ; le culling par enveloppe 3D de PR7, jamais branché, est retiré).
+  Les demi-ponts coupés par une tuile z 14 sont joints avant le profil (`bridge-ports.ts joinBridgeHalves`,
+  `clipLineToTile` pour OpenMapTiles).
+- **`shadeLite` (`liteMaterial`)** : le tablier ne prend plus que la surface d'une route ou de sa peinture (genres 1, 5) ;
+  la marche `sceneryGround` sur un tablier n'a plus lieu que sous 2 m de pied de pixel à moins de 2,5 km (avant : chaque
+  pixel de tablier à toute distance). Taille inlinée (`scripts/wgsl-inline-size.ts`) : `shadeLite` 8 528 → 8 530 lignes
+  (earth-raster), les autres noyaux inchangés ; la ligne qui sautait les polygones dans `scenerySurface` a été retirée
+  (+1 ligne dans chaque noyau) au profit du seul test de genre dans `liteMaterial`. Coût GPU **non mesuré**.
+- **Chargement** : le worker du décor ne prépare plus de cellule « rue » lui-même (e633d82b : bâtiments absents, génération
+  0, réseau en série dans la scène) ; il nomme les cellules absentes ou incomplètes (`streetMissing`), la scène est
+  redemandée quand le pool des rues les rend (`scenery.ts streetCellArrived`, au plus toutes les 20 s) ;
+  `streetCellComplete` (drapeau `CellStreetFlag.Built`) refuse les cellules incomplètes du cache.
+- **CPU, routes des tabliers** : le bit `ROAD_ON_BRIDGE` (32768, `road-markings.ts`) écarte leurs segments de l'exclusion
+  des arbres, des décalques et du contact « exclu » ; un tablier n'exclut les arbres que si son intrados est à moins de
+  25 m du sol.
+
+### PONT-ROUTES B1/B2 — revêtement des routes et marquages aux carrefours (24 novembre 2026, branche de l'agent)
+
+**Code, non mesuré** (pas d'e2e ni de banc dans ce lot ; tailles inlinées par `scripts/wgsl-inline-size.ts`).
+
+- **`shadeLite` (`liteMaterial` → `roadPavement`, nouvelle fonction)** : le matériau de chaussée — enrobé (granulat proche,
+  bandes de roulement assombries et polies, fissures, rapiéçages), béton (dalles de 4,5 m, joints filtrés sur l'empreinte),
+  pavés (rangées décalées, joints, bombé par pierre), gravier et terre (ornières) ; humidité par matériau (assombrissement,
+  flaques dans les ornières et joints, brillance réduite des sols meubles), lustre sec des bandes de roulement. Chaque détail
+  s'efface dans sa moyenne avec le pied de pixel (granulat < 7 cm, pavés < 25 cm, bandes < 2 m). Lu par `shadeLite` seul
+  (vérifié par le modèle d'inlining : absent de `shade` et `main`), et seulement avec le décor (`HAS_SCENERY`).
+- **`scenerySurface` (partagée, dans tous les noyaux Terre)** : perd les bandes de roulement et fissures de RP10 (passées au
+  matériau) et rend les coordonnées de la route gagnante (`SC_ROAD`, `SC_ROAD_DIR`) ; l'abscisse des tirets lit `data[11]`
+  (≤ 0 : moins l'abscisse du début du segment le long de sa route) — tirets continus d'un segment à l'autre.
+- **Tailles inlinées (earth-raster, avant la revue → après A+B1/B2)** : `shadeLite` 8 528 → 8 787 (+3,0 %) ; `shade`
+  27 225 → 27 073 ; `main` 42 601 → 42 449 ; `env` 59 316 → 58 860 ; Lune/planètes `shadeLite` −0,4 à −0,8 %. Coût GPU
+  **non mesuré**.
+- **Données (worker du décor, hors image)** : matériau par segment (`road-surface.ts` : données BD TOPO/OMT puis règle de
+  classe et de lieu ; bits 16–18 du mot de route, bits 5–7 des drapeaux de surface d'une cellule KSC5 — format inchangé) ;
+  courbes arrondies (Bézier quadratique en trois morceaux aux coudes de 3–60°) ; fins de lignes aux carrefours selon les rôles
+  des branches (`armRoles`) ; lignes de cédez-le-passage/stop par rôle dans la préparation des cellules (mobilier VB7).
+  Plus de segments de surface près des carrefours et des courbes (non compté).
+
+### PONT-ROUTES B3 — ponts remarquables : suspendus et à haubans (24 novembre 2026, branche de l'agent)
+
+**Code, non mesuré, non vu** (aucune capture ; vues à juger listées dans la fiche
+[FICHE-REVUE-A-B](progress/pont-routes-aaa/FICHE-REVUE-A-B.md)).
+
+- **Données (worker du décor)** : `bridge-catalogue.ts` (Golden Gate, Normandie, Tancarville, Millau, Brooklyn, Akashi
+  Kaikyō — chiffres sourcés, tours dérivées d'OSM à ±20–50 m) ; `bridge-notable.ts` construit, dans `NOTABLE_REACH_M`
+  (45 km) de l'œil ou du centre de la scène, le tablier roulable (même `deckBridge`, profil, contact, registre) puis la
+  structure accrochée à ce tablier (`notableParts(…, profile.deckAt)`) : tours/pylônes, entretoises, poutre de rigidité,
+  massifs d'ancrage, câbles porteurs (parabole), suspentes, haubans (éventail, semi-éventail, semi-harpe, harpe ; un ou
+  deux plans). Hauteurs MSL + N du plan géoïde de la scène. Les tabliers des données sous un pont remarquable sont écartés
+  (registre).
+- **Enregistrement du décor** : `Primitive.meshTag` — les triangles d'une pièce peinte portent `BRIDGE_PAINT | peinture`
+  (0xfff3····) ; nouvelle liste `structCables` de `packScenery`, **après les lampadaires**, depuis un sommet pair, ses
+  triangles marqués `STRUCT_CABLE | 0x8000 vertical | peinture << 11 | diamètre [cm]` (0xfff2····). Pièces solides
+  (kind 3, boîte BVH) : collision et carte d'ombre comme les autres maillages.
+- **`meshVs` / `meshFs` (`scenery-raster.ts`, pipelines inchangés)** : 0xfff3 → code `turbine`, feuille `10 + peinture/16` ;
+  0xfff2 → paire ouverte à un pixel au moins (verticale : en travers de la vue ; sinon le long du haut du repère), part de
+  couverture gardée par le tirage existant des conducteurs (`v.bridge` 5 → `discard` par couverture, code `turbine`).
+- **`shadeLite` (`liteMaterial`)** : palette de 8 peintures lue à la feuille 10…11 dans la branche des pièces peintes
+  (International Orange linéaire 0,527/0,037/0,025, béton, blanc, acier sombre, granit, gris-vert, argent, ocre) : `shadeLite` earth-raster 8 793 lignes inlinées au total (8 528 avant la revue).
+  +5 lignes inlinées.
+- Les tours au-delà de la scène ordinaire sont dessinées parce que la scène les contient (jusqu'à 45 km) ; aucune couche
+  lointaine dédiée. Ombres : seulement dans l'étendue de la carte d'ombre autour de la caméra.
+
 ### J9 — contenu source et inspection (20 novembre 2026)
 
 `vegetation/tree-leaf.ts` possède désormais le masque `leafMask` partagé par la cuisson des imposteurs et l'inspection de

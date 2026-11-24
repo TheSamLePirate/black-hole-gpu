@@ -5,6 +5,7 @@
 // inferred: the BD TOPO and OpenMapTiles give the roads' widths and lanes, not their markings, crossings or signals. Pure, in the cell's
 // frame (east, north metres): street-prep.ts runs it for each cell, the tests too.
 import type { Primitive } from "./scenery-data";
+import { withCellSurface } from "./road-surface";
 import { surfaceContains } from "./scenery-geometry";
 import {
   type BridgeRecord,
@@ -50,8 +51,15 @@ const MAJOR = new Set<RoadClass>(["motorway", "trunk", "primary", "secondary"]);
 const NO_CROSSING = new Set<RoadClass>(["motorway", "trunk", "service", "track", "path", "steps"]);
 const NO_SURFACE = new Set<RoadClass>(["track", "path", "steps", ""]);
 
-/** A segment's carriageway (VB2): its markings, its kerb and pavements (street-cells.ts's rules). */
+/** A segment's carriageway (VB2): its markings, its kerb and pavements (street-cells.ts's rules); (B1) its material in the flags' bits
+ *  5–7 when the segment names it (road-surface.ts withCellSurface). */
 export function segmentSurface(s: RoadSegmentRecord): SegmentSurface {
+  const out = segmentMarkings(s);
+  if (s.material !== undefined && s.cls !== "rail") out.flags = withCellSurface(out.flags, s.material);
+  return out;
+}
+
+function segmentMarkings(s: RoadSegmentRecord): SegmentSurface {
   const out: SegmentSurface = { flags: 0, laneLines: 0, pavement: 0 };
   // (a railway's track: no road's markings; under a catenary or not — J8-RP RP9)
   if (s.cls === "rail") return { ...out, flags: s.electric ? SurfaceFlag.Electrified : 0 };
@@ -140,9 +148,27 @@ export function segmentNexts(
   return segs.map((_, i) => (i >= NEXT_REVERSED - 2 ? { a: NEXT_NONE, b: NEXT_NONE } : { b: next(i, 1), a: next(i, 0) }));
 }
 
+/** (B2) a class's rank at a junction: the higher the road the junction's through road */
+export const RANK: Record<string, number> = { motorway: 7, trunk: 6, primary: 5, secondary: 4, tertiary: 3, minor: 2, service: 1 };
+const rankOf = (s: { cls: string }) => RANK[s.cls] ?? 0;
+const roleTop = (arms: readonly { cls: string }[]) => arms.reduce((m, s) => Math.max(m, rankOf(s)), 0);
 /**
- * The furniture (VB7): at each urban junction of three arms or more, none a bridge or a tunnel, its stop or yield lines, crossings and
- * signals; along the fast roads outside the towns and the bridges, their guardrails. `leftHand`: the traffic's side.
+ * (B2, 24 Nov 2026) Each arm's role at a junction: « major » — the through road: its class the junction's highest, two arms of it at
+ * least —, « minor » — below that road: it gives way —, « equal » — no through road (the arms' highest class on one arm only, or every
+ * arm the same): nothing marked, the priority to the right. Inferred: neither source gives the junctions' priorities.
+ */
+export function armRoles(arms: readonly { cls: string }[]): ("major" | "minor" | "equal")[] {
+  const top = roleTop(arms);
+  const tops = arms.filter((s) => rankOf(s) === top).length;
+  const through = tops >= 2 && tops < arms.length;
+  return arms.map((s) => (!through ? "equal" : rankOf(s) === top ? "major" : "minor"));
+}
+
+/**
+ * The furniture (VB7, B2): at each junction of three arms or more, none a bridge or a tunnel, its lines by its arms' roles (armRoles: a
+ * yield or stop line on an arm that gives way, a stop line at signals, a yield entering a roundabout, none between equals), and in a
+ * town its crossings and signals; along the fast roads outside the towns and the bridges, their guardrails. `leftHand`: the traffic's
+ * side.
  */
 export function streetFurniture(
   segs: readonly RoadSegmentRecord[],
@@ -174,13 +200,22 @@ export function streetFurniture(
           if (s.cls !== "rail" && Math.hypot(p[0] - J.east, p[1] - J.north) <= 1.5 * JUNCTION_M) arms.push({ s, end });
         }
     if (arms.length < 3) return;
-    if (!arms.some((x) => x.s.flags & SegmentFlag.Urban)) return;
+    const urban = arms.some((x) => x.s.flags & SegmentFlag.Urban);
     if (arms.some((x) => x.s.flags & (SegmentFlag.Bridge | SegmentFlag.Tunnel)) || J.flags & JunctionFlag.Levels) return;
     const round = !!(J.flags & JunctionFlag.Roundabout);
-    const signals = !round && (J.width >= SIGNAL_WIDE_M || (arms.length >= 4 && arms.filter((x) => MAJOR.has(x.s.cls)).length >= 2));
-    for (const { s, end } of arms) {
+    const signals =
+      urban && !round && (J.width >= SIGNAL_WIDE_M || (arms.length >= 4 && arms.filter((x) => MAJOR.has(x.s.cls)).length >= 2));
+    const roles = armRoles(arms.map((x) => x.s));
+    for (const [ai, { s, end }] of arms.entries()) {
       if (round && s.flags & SegmentFlag.Roundabout) continue;
       if (s.cls === "track" || s.cls === "path" || s.cls === "steps") continue;
+      // (B2: the line an arm gets — at signals a stop line; entering a roundabout a yield; an arm below the junction's through road a
+      // yield (a stop where that road is a trunk or above); arms of equal rank none — the priority to the right where nothing is
+      // marked —; outside a town only the minor arms' and the roundabouts' lines, no crossing)
+      const role = roles[ai]!;
+      const line = signals || round || role === "minor";
+      if (!urban && !line) continue;
+      const yieldLine = round || (role === "minor" && !signals && roleTop(arms.map((x) => x.s)) < RANK.trunk!);
       const p = end ? s.b : s.a,
         q = end ? s.a : s.b;
       const L = Math.hypot(q[0] - p[0], q[1] - p[1]);
@@ -197,7 +232,7 @@ export function streetFurniture(
       const heading = Math.atan2(uy, ux);
       const cx = p[0] + ux * back,
         cy = p[1] + uy * back;
-      if (inbound) {
+      if (inbound && line) {
         // (a two-way's line across its incoming half — on −r's side —, a one way's across it all)
         const half = oneway ? 0 : s.width / 4;
         out.push({
@@ -206,9 +241,11 @@ export function streetFurniture(
           heading,
           length: oneway ? s.width : s.width / 2,
           kind: FurnitureKind.StopLine,
-          flags: FurnitureFlag.Inferred | (round ? FurnitureFlag.Yield : 0),
+          flags: FurnitureFlag.Inferred | (yieldLine ? FurnitureFlag.Yield : 0),
           junction: ji,
         });
+      }
+      if (inbound) {
         if (signals)
           out.push({
             east: cx - rx * (s.width / 2 + 0.5),
@@ -220,7 +257,7 @@ export function streetFurniture(
             junction: ji,
           });
       }
-      if (!NO_CROSSING.has(s.cls))
+      if (urban && !NO_CROSSING.has(s.cls))
         out.push({
           east: p[0] + ux * (back + CROSSING_BEYOND_M),
           north: p[1] + uy * (back + CROSSING_BEYOND_M),
@@ -284,7 +321,7 @@ export function streetFurniture(
         heading: Math.atan2(uy, ux),
         length: L,
         kind: FurnitureKind.Guardrail,
-        flags: FurnitureFlag.Inferred,
+        flags: FurnitureFlag.Inferred | (s.flags & SegmentFlag.Bridge ? FurnitureFlag.OnBridge : 0),
         junction: 0xffff,
       });
   }

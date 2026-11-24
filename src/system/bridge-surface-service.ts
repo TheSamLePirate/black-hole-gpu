@@ -1,7 +1,24 @@
-// Bridge & Road AAA — Common Surface & Support Service (PLAN-PONT-ROUTES-AAA.md PR2)
-// Provides continuous C1 profile resolution, intrados clearance guarantees,
-// multi-level support queries with hysteresis, and canonical surface evaluation.
+// Bridge & Road AAA — the deck's canonical surface and the support service (PLAN-PONT-ROUTES-AAA.md PR2, revised 24 Nov 2026).
+//
+// One owner: a bridge's long profile is decided here, once, by the scene's worker (scenery-worker.ts deckBridge); the drawn mesh
+// (bridge-mesh.ts), the contact (each slice's plane — scenery-contact.ts topAt), the cars, the lamps and the guardrails all read the
+// same piecewise-linear surface through its stations (`deckAt`). Nothing else lifts a deck.
+//
+// The profile (review A7, 24 Nov 2026 — the old one divided the lift it needed by a parabola's envelope, 0 at the abutments: a 600 m
+// bridge over a 5 m dip rose 18 m, 1 200 m 36 m, its ends at 10–15 %): a vertical curve of bounded grade —
+//   z(s) = baseline(s) + H · r(s / Lr) · r((T − s) / Lr) + eA(s) + eB(s)
+// where baseline is the straight line between the two end heights, r the smoothstep (3u² − 2u³, 1 past u = 1) — a ramp of length Lr
+// up to a crest plateau H over the baseline, C1 —, and eA, eB two Hermite terms that bring the deck's grade at each end to the
+// approach road's (its value 0 and its slope (gApproach − gBaseline) at the end, both 0 at L_end). H is the clearance the plateau's
+// samples need (ground + clearance + thickness over the baseline); the ramp's steepest grade 1.5 H / Lr plus the baseline's stays
+// within the class's maxGrade (5 % a fast road, 8 % a minor one, 3.5 % a railway): Lr grows to keep it, H is capped where even
+// Lr = T / 2 cannot (a short bridge stays nearly flat — its clearance is then what it is; piers, not humps, carry it). A long bridge
+// gets a drainage crest of 0.2 % of its length (≤ 1 m).
+// An open end (BridgeFlag.OpenA/OpenB: the tile's edge cut the bridge and its other half was not found — bridge-ports.ts
+// joinBridgeHalves joins them when both cells are read) is mid-span, not an abutment: its height the clearance over the ground there,
+// its approach grade 0 (level with the half beyond) — never the ground.
 
+/** a support's identity: its asset, its surface, its revision (the scene's) */
 export interface SupportRef {
   readonly assetId: string;
   readonly surfaceId: string;
@@ -23,27 +40,59 @@ export interface SupportSampleResult {
 }
 
 export interface BridgeProfileParams {
+  /** the axis on the ground: x, y in the scene's frame [m], z the ground there (the frame's local height) */
   readonly points: readonly [number, number, number][];
   readonly width: number;
   readonly thickness?: number;
+  /** the least clearance under the intrados over the ground [m] */
   readonly clearance?: number;
+  /** BridgeFlag bits (OpenA / OpenB: that end mid-span) */
   readonly flags?: number;
+  /** the approach road's grade beyond each end, along A → B (dz/ds) — the deck's grade there */
   readonly approachSlopeA?: number;
   readonly approachSlopeB?: number;
-  readonly baseLiftM?: number;
+  /** the steepest grade the deck may take (0.05 default) */
+  readonly maxGrade?: number;
+  /** an end's height given (a joined bridge's, a measured one) — else its ground's (its clearance's, open) */
+  readonly endZA?: number;
+  readonly endZB?: number;
+  /** the parapet's band at each edge: its width and height over the deck [m] — the drawn rails' (bridge-mesh.ts) */
+  readonly railW?: number;
+  readonly railH?: number;
+  /** the stations' spacing [m]: the drawn slices' length (≤ 10 m near) */
+  readonly sliceM?: number;
 }
+
+/** OpenA / OpenB (street-cells.ts BridgeFlag): not imported to keep this module free of the cells' format */
+const OPEN_A = 4,
+  OPEN_B = 8;
+const ramp = (u: number) => (u <= 0 ? 0 : u >= 1 ? 1 : u * u * (3 - 2 * u));
+const rampD = (u: number) => (u <= 0 || u >= 1 ? 0 : 6 * u * (1 - u));
 
 export class BridgeContinuousProfile {
   readonly totalLength: number;
+  /** the axis's cumulative lengths at its points [m] */
   readonly spans: number[];
   readonly zA: number;
   readonly zB: number;
+  /** the crest plateau over the baseline [m] and its ramps' length [m] */
   readonly lift: number;
+  readonly rampM: number;
   readonly width: number;
   readonly thickness: number;
   readonly clearance: number;
   readonly flags: number;
+  readonly maxGrade: number;
+  readonly railW: number;
+  readonly railH: number;
+  /** the stations [m along the axis]: the drawn slices' ends, the polyline's vertices among them */
+  readonly stations: number[];
   private readonly points: readonly [number, number, number][];
+  private readonly gA: number;
+  private readonly gB: number;
+  private readonly endA: number;
+  private readonly endB: number;
+  private readonly stationZ: number[];
 
   constructor(params: BridgeProfileParams) {
     this.points = params.points;
@@ -51,70 +100,166 @@ export class BridgeContinuousProfile {
     this.thickness = params.thickness ?? 1.5;
     this.clearance = params.clearance ?? 5.5;
     this.flags = params.flags ?? 0;
-
+    this.maxGrade = params.maxGrade ?? 0.05;
+    this.railW = params.railW ?? 0.3;
+    this.railH = params.railH ?? 1.0;
+    const pts = this.points;
     const span: number[] = [0];
-    for (let i = 1; i < this.points.length; i++) {
-      const p0 = this.points[i - 1]!;
-      const p1 = this.points[i]!;
-      span.push(span[i - 1]! + Math.hypot(p1[0] - p0[0], p1[1] - p0[1]));
-    }
+    for (let i = 1; i < pts.length; i++) span.push(span[i - 1]! + Math.hypot(pts[i]![0] - pts[i - 1]![0], pts[i]![1] - pts[i - 1]![1]));
     this.spans = span;
-    this.totalLength = span[span.length - 1]!;
-
-    if (this.totalLength < 0.5) {
-      this.zA = this.points[0]?.[2] ?? 0;
-      this.zB = this.points[this.points.length - 1]?.[2] ?? this.zA;
+    const T = span[span.length - 1] ?? 0;
+    this.totalLength = T;
+    const above = this.clearance + this.thickness;
+    const z0 = pts[0]?.[2] ?? 0,
+      z1 = pts[pts.length - 1]?.[2] ?? z0;
+    const openA = !!(this.flags & OPEN_A),
+      openB = !!(this.flags & OPEN_B);
+    this.zA = params.endZA ?? (openA ? z0 + above : z0);
+    this.zB = params.endZB ?? (openB ? z1 + above : z1);
+    const g = this.maxGrade;
+    const clampG = (v: number | undefined, open: boolean) => (open ? 0 : Math.max(-g, Math.min(g, v ?? 0)));
+    this.gA = params.endZA !== undefined ? clampG(params.approachSlopeA, false) : clampG(params.approachSlopeA, openA);
+    this.gB = params.endZB !== undefined ? clampG(params.approachSlopeB, false) : clampG(params.approachSlopeB, openB);
+    if (T < 0.5) {
       this.lift = 0;
+      this.rampM = 0;
+      this.endA = this.endB = 0;
+      this.stations = [0, T];
+      this.stationZ = [this.zA, this.zB];
       return;
     }
-
-    this.zA = this.points[0]![2];
-    this.zB = this.points[this.points.length - 1]![2];
-
-    // Compute required lift so that intrados (deck - thickness) clears obstacle points
-    let requiredLift = 0;
-    for (let i = 1; i < this.points.length - 1; i++) {
-      const t = span[i]! / this.totalLength;
-      const env = Math.min(1, 4 * t * (1 - t));
-      if (env > 0.05) {
-        const baselineZ = this.zA + (this.zB - this.zA) * t;
-        // Intrados clearance requirement: deckZ - thickness >= groundZ + clearance
-        const targetDeckZ = this.points[i]![2] + this.clearance + this.thickness;
-        const needed = (targetDeckZ - baselineZ) / env;
-        requiredLift = Math.max(requiredLift, needed);
+    const gBase = (this.zB - this.zA) / T;
+    const room = g - Math.abs(gBase);
+    // (the ramps' least length: a tenth of the bridge, 15–120 m — a short crest is not a kink)
+    const minRamp = Math.min(T / 2, Math.max(15, Math.min(120, 0.1 * T)));
+    let Lr = minRamp,
+      H = 0;
+    for (let it = 0; it < 5; it++) {
+      let need = 0;
+      for (let i = 1; i < pts.length - 1; i++) {
+        const d = Math.min(span[i]!, T - span[i]!);
+        if (d < Lr) continue;
+        need = Math.max(need, pts[i]![2] + above - (this.zA + gBase * span[i]!));
       }
+      H = need;
+      const want = room > 1e-4 ? (1.5 * H) / room : T / 2;
+      const next = Math.min(T / 2, Math.max(minRamp, want));
+      if (next <= Lr + 1e-6) break;
+      Lr = next;
     }
-
-    // Smooth bounded lift: no arbitrary +0.4 offset at ends!
-    // Minimum aesthetic lift for long bridges (> 60m)
-    const minLift = this.totalLength > 60 ? this.clearance * 0.4 : 0.0;
-    this.lift = Math.min(Math.max(requiredLift, minLift), 40.0);
+    // (the grade's bound: the plateau no higher than the longest ramps allow)
+    const hMax = room > 0 ? (room * Lr) / 1.5 : 0;
+    H = Math.min(Math.max(H, 0), hMax);
+    // (a long bridge's drainage crest)
+    if (T > 60) H = Math.max(H, Math.min(0.002 * T, 1, hMax));
+    this.lift = H;
+    this.rampM = Lr;
+    this.endA = Math.min(Lr, T / 2, 60);
+    this.endB = Math.min(Lr, T / 2, 60);
+    // (the stations: every polyline vertex, and between them every sliceM at most)
+    const slice = Math.max(1, params.sliceM ?? 10);
+    const st: number[] = [0];
+    for (let i = 1; i < span.length; i++) {
+      const a = span[i - 1]!,
+        b = span[i]!;
+      if (b - a < 1e-3) continue;
+      const n = Math.max(1, Math.ceil((b - a) / slice));
+      for (let k = 1; k <= n; k++) st.push(a + ((b - a) * k) / n);
+    }
+    this.stations = st;
+    this.stationZ = st.map((s) => this.elevationAt(s));
   }
 
-  /**
-   * Continuous elevation at curvilinear coordinate s in [0, totalLength].
-   * At s=0, returns exactly zA (no +0.4m step!).
-   * At s=totalLength, returns exactly zB.
-   */
+  /** the vertical curve, analytic (C1): exactly zA at s = 0, zB at s = totalLength */
   elevationAt(s: number): number {
-    if (this.totalLength <= 0) return this.zA;
-    const clampedS = Math.max(0, Math.min(this.totalLength, s));
-    const t = clampedS / this.totalLength;
-    // Parabolic profile: 4*t*(1-t) is strictly 0 at t=0 and t=1
-    const parabolicEnv = Math.min(1, 4 * t * (1 - t));
-    return this.zA + (this.zB - this.zA) * t + this.lift * parabolicEnv;
+    const T = this.totalLength;
+    if (T <= 0) return this.zA;
+    const x = Math.max(0, Math.min(T, s));
+    const gBase = (this.zB - this.zA) / T;
+    let z = this.zA + gBase * x;
+    if (this.rampM > 0) z += this.lift * ramp(x / this.rampM) * ramp((T - x) / this.rampM);
+    if (this.endA > 0 && x < this.endA) z += (this.gA - gBase) * x * (1 - x / this.endA) ** 2;
+    const y = T - x;
+    if (this.endB > 0 && y < this.endB) z -= (this.gB - gBase) * y * (1 - y / this.endB) ** 2;
+    return z;
   }
 
-  /**
-   * Intrados (underside of the deck) elevation at s.
-   */
+  /** its grade dz/ds, analytic */
+  slopeAt(s: number): number {
+    const T = this.totalLength;
+    if (T <= 0) return 0;
+    const x = Math.max(0, Math.min(T, s));
+    const gBase = (this.zB - this.zA) / T;
+    let d = gBase;
+    if (this.rampM > 0) {
+      const L = this.rampM;
+      d += this.lift * ((rampD(x / L) / L) * ramp((T - x) / L) - ramp(x / L) * (rampD((T - x) / L) / L));
+    }
+    if (this.endA > 0 && x < this.endA) {
+      const u = x / this.endA;
+      d += (this.gA - gBase) * (1 - u) * (1 - 3 * u);
+    }
+    const y = T - x;
+    if (this.endB > 0 && y < this.endB) {
+      const u = y / this.endB;
+      d += (this.gB - gBase) * (1 - u) * (1 - 3 * u);
+    }
+    return d;
+  }
+
+  /** the drawn deck's top at s: the stations' heights, linear between them — the mesh's and the contact's surface */
+  deckAt(s: number): number {
+    const st = this.stations;
+    const x = Math.max(0, Math.min(this.totalLength, s));
+    let lo = 0,
+      hi = st.length - 1;
+    while (hi - lo > 1) {
+      const m = (lo + hi) >> 1;
+      if (st[m]! <= x) lo = m;
+      else hi = m;
+    }
+    const a = st[lo]!,
+      b = st[hi]!;
+    const f = b > a ? (x - a) / (b - a) : 0;
+    return this.stationZ[lo]! + (this.stationZ[hi]! - this.stationZ[lo]!) * f;
+  }
+
+  /** the intrados (the deck's underside) at s, drawn */
   intradosAt(s: number): number {
-    return this.elevationAt(s) - this.thickness;
+    return this.deckAt(s) - this.thickness;
+  }
+
+  /** the axis point at s [the scene's frame] and its unit direction */
+  axisAt(s: number): { x: number; y: number; tx: number; ty: number } {
+    const span = this.spans,
+      pts = this.points;
+    const x = Math.max(0, Math.min(this.totalLength, s));
+    let k = 1;
+    while (k < span.length - 1 && span[k]! < x) k++;
+    const p0 = pts[k - 1]!,
+      p1 = pts[k]!;
+    const L = span[k]! - span[k - 1]!;
+    const f = L > 1e-6 ? (x - span[k - 1]!) / L : 0;
+    const l2 = Math.hypot(p1[0] - p0[0], p1[1] - p0[1]) || 1;
+    return { x: p0[0] + (p1[0] - p0[0]) * f, y: p0[1] + (p1[1] - p0[1]) * f, tx: (p1[0] - p0[0]) / l2, ty: (p1[1] - p0[1]) / l2 };
+  }
+
+  /** the ground under the axis at s (the points' heights, linear) */
+  groundAt(s: number): number {
+    const span = this.spans,
+      pts = this.points;
+    const x = Math.max(0, Math.min(this.totalLength, s));
+    let k = 1;
+    while (k < span.length - 1 && span[k]! < x) k++;
+    const L = span[k]! - span[k - 1]!;
+    const f = L > 1e-6 ? (x - span[k - 1]!) / L : 0;
+    return pts[k - 1]![2] + (pts[k]![2] - pts[k - 1]![2]) * f;
   }
 
   /**
-   * Evaluates 3D position, unit tangent and normal on the bridge deck at (s, u).
-   * s in [0, totalLength], u in [-width/2, width/2] (across axis).
+   * The drawn surface at (s, u): u across the axis [m, + to the left of A → B]. The deck's top across its whole width — its carriageway
+   * and its pavements are one flat top in the mesh —; within the parapets' band (railW at each edge) their top, railH over it (the drawn
+   * rails'); `role` names the band.
    */
   sample(
     s: number,
@@ -126,139 +271,149 @@ export class BridgeContinuousProfile {
     crossTangent: [number, number, number];
     role: "carriageway" | "sidewalk" | "parapet";
   } {
-    const clampedS = Math.max(0, Math.min(this.totalLength, s));
-    let segIdx = 1;
-    while (segIdx < this.spans.length - 1 && this.spans[segIdx]! < clampedS) {
-      segIdx++;
-    }
-    const s0 = this.spans[segIdx - 1]!;
-    const s1 = this.spans[segIdx]!;
-    const segLen = s1 - s0;
-    const f = segLen > 1e-6 ? (clampedS - s0) / segLen : 0;
-
-    const p0 = this.points[segIdx - 1]!;
-    const p1 = this.points[segIdx]!;
-
-    const cx = p0[0] + (p1[0] - p0[0]) * f;
-    const cy = p0[1] + (p1[1] - p0[1]) * f;
-    const cz = this.elevationAt(clampedS);
-
-    const segL2D = Math.hypot(p1[0] - p0[0], p1[1] - p0[1]) || 1;
-    const tx = (p1[0] - p0[0]) / segL2D;
-    const ty = (p1[1] - p0[1]) / segL2D;
-
-    // Normal across in XY (to the left of tangent)
-    const nx = -ty;
-    const ny = tx;
-
-    // Slope dz/ds
-    const tNorm = clampedS / Math.max(this.totalLength, 1e-6);
-    const dEnvDt = 4 * (1 - 2 * tNorm);
-    const dzDs = (this.zB - this.zA) / Math.max(this.totalLength, 1e-6) + (this.lift * dEnvDt) / Math.max(this.totalLength, 1e-6);
-
-    const tangentL = Math.hypot(1, dzDs);
-    const unitTx = tx / tangentL;
-    const unitTy = ty / tangentL;
-    const unitTz = dzDs / tangentL;
-
-    // Cross tangent along u
-    const crossTx = nx;
-    const crossTy = ny;
-    const crossTz = 0;
-
-    // Normal is Cross(tangent, crossTangent) pointing upwards
-    const normX = -unitTz * ny;
-    const normY = unitTz * nx;
-    const normZ = unitTx * ny - unitTy * nx;
-    const nLen = Math.hypot(normX, normY, normZ) || 1;
-
-    // Cross section role and height adjustment
-    const halfWidth = this.width / 2;
-    const absU = Math.abs(u);
-    let role: "carriageway" | "sidewalk" | "parapet" = "carriageway";
-    let roleHeightOffset = 0;
-
-    if (absU > halfWidth - 0.3) {
-      role = "parapet";
-      roleHeightOffset = 1.0;
-    } else if (absU > halfWidth - 2.0 && this.width >= 10.0) {
-      role = "sidewalk";
-      roleHeightOffset = 0.15;
-    }
-
+    const x = Math.max(0, Math.min(this.totalLength, s));
+    const a = this.axisAt(x);
+    const nx = -a.ty,
+      ny = a.tx;
+    // (the drawn slice's grade: its two stations')
+    const st = this.stations;
+    let k = 1;
+    while (k < st.length - 1 && st[k]! < x) k++;
+    const ds = st[k]! - st[k - 1]!;
+    const dz = ds > 1e-6 ? (this.deckAt(st[k]!) - this.deckAt(st[k - 1]!)) / ds : 0;
+    const tl = Math.hypot(1, dz);
+    const half = this.width / 2;
+    const au = Math.abs(u);
+    const role: "carriageway" | "sidewalk" | "parapet" =
+      au > half - this.railW ? "parapet" : au > half - 2 && this.width >= 10 ? "sidewalk" : "carriageway";
+    const z = this.deckAt(x) + (role === "parapet" ? this.railH : 0);
+    const n = [-dz * a.tx, -dz * a.ty, 1];
+    const nl = Math.hypot(n[0]!, n[1]!, n[2]!);
     return {
-      position: [cx + nx * u, cy + ny * u, cz + roleHeightOffset],
-      normal: [normX / nLen, normY / nLen, normZ / nLen],
-      tangent: [unitTx, unitTy, unitTz],
-      crossTangent: [crossTx, crossTy, crossTz],
+      position: [a.x + nx * u, a.y + ny * u, z],
+      normal: [n[0]! / nl, n[1]! / nl, n[2]! / nl],
+      tangent: [a.tx / tl, a.ty / tl, dz / tl],
+      crossTangent: [nx, ny, 0],
       role,
     };
   }
 
-  /**
-   * Finds the closest point on the bridge axis from local (x, y).
-   */
+  /** the nearest point of the axis to (x, y): its abscissa, its signed offset (+ left), its distance */
   project(x: number, y: number): { s: number; u: number; distance: number } {
-    let bestDist = Infinity;
-    let bestS = 0;
-    let bestU = 0;
-
-    for (let i = 0; i < this.points.length - 1; i++) {
-      const p0 = this.points[i]!;
-      const p1 = this.points[i + 1]!;
-      const dx = p1[0] - p0[0];
-      const dy = p1[1] - p0[1];
+    let best = Infinity,
+      bestS = 0,
+      bestU = 0;
+    const pts = this.points;
+    for (let i = 0; i < pts.length - 1; i++) {
+      const p0 = pts[i]!,
+        p1 = pts[i + 1]!;
+      const dx = p1[0] - p0[0],
+        dy = p1[1] - p0[1];
       const L2 = dx * dx + dy * dy;
       if (L2 < 1e-6) continue;
-
       const t = Math.max(0, Math.min(1, ((x - p0[0]) * dx + (y - p0[1]) * dy) / L2));
-      const projX = p0[0] + dx * t;
-      const projY = p0[1] + dy * t;
-      const dist = Math.hypot(x - projX, y - projY);
-
-      if (dist < bestDist) {
-        bestDist = dist;
-        const segLen = this.spans[i + 1]! - this.spans[i]!;
-        bestS = this.spans[i]! + segLen * t;
-
-        // Signed u: cross product (dx, dy) x (x - projX, y - projY)
-        const L = Math.sqrt(L2);
-        const signedU = (dx * (y - projY) - dy * (x - projX)) / L;
-        bestU = signedU;
+      const px = p0[0] + dx * t,
+        py = p0[1] + dy * t;
+      const d = Math.hypot(x - px, y - py);
+      if (d < best) {
+        best = d;
+        bestS = this.spans[i]! + (this.spans[i + 1]! - this.spans[i]!) * t;
+        bestU = (dx * (y - py) - dy * (x - px)) / Math.sqrt(L2);
       }
     }
+    return { s: bestS, u: bestU, distance: best };
+  }
 
-    return { s: bestS, u: bestU, distance: bestDist };
+  /** the axis's box [min x, min y, max x, max y] widened by `pad` */
+  bounds(pad = 0): [number, number, number, number] {
+    let x0 = Infinity,
+      y0 = Infinity,
+      x1 = -Infinity,
+      y1 = -Infinity;
+    for (const p of this.points) {
+      x0 = Math.min(x0, p[0]);
+      y0 = Math.min(y0, p[1]);
+      x1 = Math.max(x1, p[0]);
+      y1 = Math.max(y1, p[1]);
+    }
+    return [x0 - pad, y0 - pad, x1 + pad, y1 + pad];
   }
 }
 
+/** the registry's grid [m]: each deck listed in the cells its axis's box (widened by its half-width) touches */
+const GRID_M = 64;
+
+interface Entry {
+  readonly ref: SupportRef;
+  readonly profile: BridgeContinuousProfile;
+  readonly level: number;
+}
+
 /**
- * Surface Registry: manages multiple levels of support (ground, bridges, elevated roads)
- * without camera/view dependence, supporting hysteresis for consistent actor queries.
+ * The decks a scene holds (the world's: the scene worker registers each deck it builds), queried by place and level — the cars, the
+ * lamps and the guardrails on a bridge —, independent of the view. A grid index (64 m) keeps a query to the decks near it (review A4:
+ * a guardrail's piece scanned every bridge and every point).
  */
 export class SupportSurfaceRegistry {
-  private readonly bridges = new Map<
-    string,
-    {
-      readonly ref: SupportRef;
-      readonly profile: BridgeContinuousProfile;
-      readonly level: number;
-    }
-  >();
+  private readonly bridges = new Map<string, Entry>();
+  private readonly grid = new Map<number, Entry[]>();
+  private static key(i: number, j: number) {
+    return (i + 32768) * 65536 + (j + 32768);
+  }
 
   registerBridge(ref: SupportRef, profile: BridgeContinuousProfile, level = 1): void {
-    this.bridges.set(ref.surfaceId, { ref, profile, level });
+    if (this.bridges.has(ref.surfaceId)) this.unregisterBridge(ref.surfaceId);
+    const e: Entry = { ref, profile, level };
+    this.bridges.set(ref.surfaceId, e);
+    const [x0, y0, x1, y1] = profile.bounds(profile.width / 2 + 1);
+    for (let j = Math.floor(y0 / GRID_M); j <= Math.floor(y1 / GRID_M); j++)
+      for (let i = Math.floor(x0 / GRID_M); i <= Math.floor(x1 / GRID_M); i++) {
+        const k = SupportSurfaceRegistry.key(i, j);
+        (this.grid.get(k) ?? this.grid.set(k, []).get(k)!).push(e);
+      }
   }
 
   unregisterBridge(surfaceId: string): void {
+    const e = this.bridges.get(surfaceId);
+    if (!e) return;
     this.bridges.delete(surfaceId);
+    for (const [k, list] of this.grid) {
+      const i = list.indexOf(e);
+      if (i >= 0) list.splice(i, 1);
+      if (!list.length) this.grid.delete(k);
+    }
+  }
+
+  get size() {
+    return this.bridges.size;
+  }
+
+  private near(x: number, y: number): readonly Entry[] {
+    return this.grid.get(SupportSurfaceRegistry.key(Math.floor(x / GRID_M), Math.floor(y / GRID_M))) ?? [];
+  }
+
+  private result(e: Entry, s: number, u: number): SupportSampleResult {
+    const v = e.profile.sample(s, u);
+    return {
+      found: true,
+      supportRef: e.ref,
+      point: v.position,
+      elevation: v.position[2],
+      normal: v.normal,
+      tangent: v.tangent,
+      crossTangent: v.crossTangent,
+      surfaceRole: v.role,
+      distanceToAxis: Math.abs(u),
+      sM: s,
+      uM: u,
+    };
   }
 
   /**
-   * Queries a bridge deck at local (x, y) with optional level / layer and vertical window.
-   * If expectedLevel is supplied, only bridges matching that level are considered.
-   * If expectedZ is supplied, only bridge decks within maxDeltaZ of expectedZ are considered.
-   * Returns null if no bridge matches or if the query falls outside the deck boundaries.
+   * The deck over (x, y) — within its drawn width (`margin` past it: 0 by default) —: with `expectedZ`, the one whose surface there is
+   * nearest that height within `maxDeltaZ` (2.5 m); else the one of `expectedLevel` first (the source's layer), then the one whose
+   * axis is nearest (no longer the first registered). `role: false` reads the deck's top even in the parapets' band (what stands
+   * on the deck at its edge — a lamp's foot, a guardrail's post).
    */
   queryBridgeAt(
     x: number,
@@ -267,196 +422,91 @@ export class SupportSurfaceRegistry {
       readonly expectedZ?: number;
       readonly expectedLevel?: number;
       readonly maxDeltaZ?: number;
+      readonly margin?: number;
+      readonly deckTop?: boolean;
     },
   ): SupportSampleResult | null {
-    let bestCandidate: {
-      ref: SupportRef;
-      profile: BridgeContinuousProfile;
-      s: number;
-      u: number;
-      deckZ: number;
-      level: number;
-    } | null = null;
-    let minVertDist = Infinity;
-
-    for (const entry of this.bridges.values()) {
-      if (options?.expectedLevel !== undefined && entry.level !== options.expectedLevel) {
-        continue;
+    let best: { e: Entry; s: number; u: number; score: number } | null = null;
+    const margin = options?.margin ?? 0;
+    for (const e of this.near(x, y)) {
+      const p = e.profile.project(x, y);
+      if (p.distance > e.profile.width / 2 + margin) continue;
+      // (past an end: off the deck)
+      if (p.s <= 1e-6 && e.profile.totalLength > 0) {
+        const a = e.profile.axisAt(0);
+        if ((x - a.x) * a.tx + (y - a.y) * a.ty < -0.01) continue;
       }
-      const proj = entry.profile.project(x, y);
-      const halfWidth = entry.profile.width / 2 + 0.5;
-      if (proj.distance <= halfWidth) {
-        const sample = entry.profile.sample(proj.s, proj.u);
-        const deckZ = sample.position[2];
-
-        if (options?.expectedZ !== undefined) {
-          const deltaZ = Math.abs(options.expectedZ - deckZ);
-          const maxDelta = options.maxDeltaZ ?? 2.5;
-          if (deltaZ > maxDelta) continue;
-          if (deltaZ < minVertDist) {
-            minVertDist = deltaZ;
-            bestCandidate = {
-              ref: entry.ref,
-              profile: entry.profile,
-              s: proj.s,
-              u: proj.u,
-              deckZ,
-              level: entry.level,
-            };
-          }
-        } else {
-          // If no expectedZ, pick candidate with matching level or closest 2D projection
-          bestCandidate = {
-            ref: entry.ref,
-            profile: entry.profile,
-            s: proj.s,
-            u: proj.u,
-            deckZ,
-            level: entry.level,
-          };
-          break;
-        }
+      if (p.s >= e.profile.totalLength - 1e-6) {
+        const a = e.profile.axisAt(e.profile.totalLength);
+        if ((x - a.x) * a.tx + (y - a.y) * a.ty > 0.01) continue;
       }
+      let score: number;
+      if (options?.expectedZ !== undefined) {
+        const dz = Math.abs(options.expectedZ - e.profile.deckAt(p.s));
+        if (dz > (options.maxDeltaZ ?? 2.5)) continue;
+        score = dz;
+      } else {
+        score = Math.abs(p.u) + (options?.expectedLevel !== undefined && e.level !== options.expectedLevel ? 1e6 : 0);
+      }
+      if (!best || score < best.score) best = { e, s: p.s, u: p.u, score };
     }
-
-    if (!bestCandidate) return null;
-    const s = bestCandidate.profile.sample(bestCandidate.s, bestCandidate.u);
-    return {
-      found: true,
-      supportRef: bestCandidate.ref,
-      point: s.position,
-      elevation: s.position[2],
-      normal: s.normal,
-      tangent: s.tangent,
-      crossTangent: s.crossTangent,
-      surfaceRole: s.role,
-      distanceToAxis: Math.abs(bestCandidate.u),
-      sM: bestCandidate.s,
-      uM: bestCandidate.u,
-    };
-  }
-
-  sample(ref: SupportRef, sM: number, uM: number): SupportSampleResult | null {
-    const entry = this.bridges.get(ref.surfaceId);
-    if (!entry) return null;
-
-    const s = entry.profile.sample(sM, uM);
-    return {
-      found: true,
-      supportRef: entry.ref,
-      point: s.position,
-      elevation: s.position[2],
-      normal: s.normal,
-      tangent: s.tangent,
-      crossTangent: s.crossTangent,
-      surfaceRole: s.role,
-      distanceToAxis: Math.abs(uM),
-      sM,
-      uM,
-    };
+    if (!best) return null;
+    if (options?.deckTop) {
+      const r = this.result(best.e, best.s, 0);
+      const a = best.e.profile.axisAt(best.s);
+      return { ...r, point: [a.x - a.ty * best.u, a.y + a.tx * best.u, r.elevation], uM: best.u, distanceToAxis: Math.abs(best.u) };
+    }
+    return this.result(best.e, best.s, best.u);
   }
 
   /**
-   * Multi-level support query:
-   * Finds the appropriate support surface at local (x, y, z) among ground and bridges.
-   * If `previousSupport` is provided, applies hysteresis to prevent popping between levels.
+   * Something that stands on a deck near (x, y) — a lamp's foot, set beside a carriageway, often past the deck's edge (review A9) —
+   * brought onto it: its offset across clamped inside the parapets by `inset` [m], on the deck's top there. Null: no deck within
+   * `margin` of its edge.
+   */
+  snapOnDeck(
+    x: number,
+    y: number,
+    options?: { readonly expectedLevel?: number; readonly margin?: number; readonly inset?: number },
+  ): [number, number, number] | null {
+    const r = this.queryBridgeAt(x, y, { expectedLevel: options?.expectedLevel, margin: options?.margin ?? 3 });
+    if (!r?.supportRef) return null;
+    const e = this.bridges.get(r.supportRef.surfaceId)!;
+    const half = Math.max(0, e.profile.width / 2 - e.profile.railW - (options?.inset ?? 0.4));
+    const u = Math.max(-half, Math.min(half, r.uM));
+    const a = e.profile.axisAt(r.sM);
+    return [a.x - a.ty * u, a.y + a.tx * u, e.profile.deckAt(r.sM)];
+  }
+
+  sample(ref: SupportRef, sM: number, uM: number): SupportSampleResult | null {
+    const e = this.bridges.get(ref.surfaceId);
+    return e ? this.result(e, sM, uM) : null;
+  }
+
+  /**
+   * Multi-level support at (x, y, z) among the ground (groundZ) and the decks: the previous support kept while the actor stays on it
+   * (hysteresis), else the deck nearest its height when nearer than the ground.
    */
   query(position: [number, number, number], groundZ: number, volumeRadius = 2.0, previousSupport?: SupportRef): SupportSampleResult {
     const [x, y, z] = position;
-
-    // 1. Hysteresis check: if previousSupport is set and valid, check if actor is still on it
     if (previousSupport) {
       const prev = this.bridges.get(previousSupport.surfaceId);
       if (prev) {
-        const proj = prev.profile.project(x, y);
-        const halfWidth = prev.profile.width / 2 + 1.0; // 1m margin
-        if (proj.distance <= halfWidth) {
-          const sample = prev.profile.sample(proj.s, proj.u);
-          // Check if actor elevation is still within vertical range of this deck (e.g. 2.5m)
-          if (Math.abs(z - sample.position[2]) <= Math.max(volumeRadius, 2.5)) {
-            return {
-              found: true,
-              supportRef: prev.ref,
-              point: sample.position,
-              elevation: sample.position[2],
-              normal: sample.normal,
-              tangent: sample.tangent,
-              crossTangent: sample.crossTangent,
-              surfaceRole: sample.role,
-              distanceToAxis: Math.abs(proj.u),
-              sM: proj.s,
-              uM: proj.u,
-            };
-          }
+        const p = prev.profile.project(x, y);
+        if (p.distance <= prev.profile.width / 2 + 1) {
+          const r = this.result(prev, p.s, p.u);
+          if (Math.abs(z - r.elevation) <= Math.max(volumeRadius, 2.5)) return r;
         }
       }
     }
-
-    // 2. Candidate search among bridges
-    interface Candidate {
-      ref: SupportRef;
-      profile: BridgeContinuousProfile;
-      s: number;
-      u: number;
-      deckZ: number;
-      deltaZ: number;
+    let best: { e: Entry; s: number; u: number; d: number } | null = null;
+    for (const e of this.near(x, y)) {
+      const p = e.profile.project(x, y);
+      if (p.distance > e.profile.width / 2 + 0.5) continue;
+      const d = Math.abs(z - e.profile.sample(p.s, p.u).position[2]);
+      if (d < Math.abs(z - groundZ) && d <= Math.max(volumeRadius * 2, 3.5) && (!best || d < best.d)) best = { e, s: p.s, u: p.u, d };
     }
-    const candidates: Candidate[] = [];
-
-    for (const entry of this.bridges.values()) {
-      const proj = entry.profile.project(x, y);
-      const halfWidth = entry.profile.width / 2 + 0.5;
-      if (proj.distance <= halfWidth) {
-        const sample = entry.profile.sample(proj.s, proj.u);
-        const deckZ = sample.position[2];
-        const deltaZ = z - deckZ; // positive if actor is above deck
-        candidates.push({
-          ref: entry.ref,
-          profile: entry.profile,
-          s: proj.s,
-          u: proj.u,
-          deckZ,
-          deltaZ,
-        });
-      }
-    }
-
-    // If actor is close to a bridge deck (within volumeRadius or deltaZ >= -0.5m and deltaZ <= 3.0m)
-    // Select the best matching bridge above ground
-    let bestCandidate: Candidate | null = null;
-    let minVertDist = Infinity;
-
-    for (const c of candidates) {
-      // If actor is closer to this bridge deck than to the ground, or above the bridge
-      const distToDeck = Math.abs(c.deltaZ);
-      const distToGround = Math.abs(z - groundZ);
-
-      if (distToDeck < distToGround && distToDeck <= Math.max(volumeRadius * 2, 3.5)) {
-        if (distToDeck < minVertDist) {
-          minVertDist = distToDeck;
-          bestCandidate = c;
-        }
-      }
-    }
-
-    if (bestCandidate) {
-      const s = bestCandidate.profile.sample(bestCandidate.s, bestCandidate.u);
-      return {
-        found: true,
-        supportRef: bestCandidate.ref,
-        point: s.position,
-        elevation: s.position[2],
-        normal: s.normal,
-        tangent: s.tangent,
-        crossTangent: s.crossTangent,
-        surfaceRole: s.role,
-        distanceToAxis: Math.abs(bestCandidate.u),
-        sM: bestCandidate.s,
-        uM: bestCandidate.u,
-      };
-    }
-
-    // 3. Fallback to ground support
+    if (best) return this.result(best.e, best.s, best.u);
     return {
       found: true,
       point: [x, y, groundZ],

@@ -3,7 +3,7 @@ import type { Vec3 } from "../physics";
 import { dot, sub } from "../math/vec3";
 import { cartToGeodetic, WGS84_A, WGS84_F } from "./ellipsoid";
 import { crownOf, ForestKind, type ForestFrame, forestTreesNear, readForest, shapeOf, trunkOf } from "./forest";
-import { D, SCENERY_GRID, sceneryFrame, wrapLon, type SceneryReply } from "./scenery-data";
+import { D, DECK_PLANE, SCENERY_GRID, sceneryFrame, wrapLon, type SceneryReply } from "./scenery-data";
 
 export class SceneryContact {
   readonly f: Float32Array;
@@ -68,6 +68,12 @@ export class SceneryContact {
   topAt(base: number, x: number, y: number) {
     const f = this.f,
       top = f[base + 1]!;
+    // (review A2: a deck's or a parapet's slice — its drawn top's plane after its edges, DECK_PLANE —: the surface the mesh draws, not
+    // its box's top — a 10 m slice on a 10 % grade was a 1 m step)
+    if (f[base + 11] === DECK_PLANE) {
+      const at = base + 12 + f[base + 2]! * 4;
+      return f[at]! * x + f[at + 1]! * y + f[at + 2]!;
+    }
     if (f[base + 3] !== 1) return top;
     const planes = (f[base + 11]! >>> 14) & 15,
       at = base + 12 + f[base + 2]! * 4 + 4;
@@ -98,6 +104,8 @@ export class SceneryContact {
     this.visit(p, Math.max(line, area, 0.15), true, (b) => {
       const f = this.f;
       if (f[b + 11]! < 0.5) {
+        // (review A5: a deck's road — road-markings.ts ROAD_ON_BRIDGE — is not the ground's)
+        if (f[b + 5]! <= 2 && (f[b + 6]! & 32768) !== 0) return;
         const dx = f[b + 2]! - f[b]!,
           dy = f[b + 3]! - f[b + 1]!;
         const t = Math.max(0, Math.min(1, ((p[0] - f[b]!) * dx + (p[1] - f[b + 1]!) * dy) / (dx * dx + dy * dy || 1)));
@@ -212,8 +220,9 @@ export class SceneryContact {
     this.visit(p, radius, false, (b) => {
       const f = this.f;
       if (this.polygon(p, b, radius)) {
-        const bottom = f[b]!,
-          top = this.topAt(b, p[0], p[1]);
+        const top = this.topAt(b, p[0], p[1]);
+        // (a deck's slice: its intrados its plane less its thickness, there)
+        const bottom = f[b + 11] === DECK_PLANE ? top - f[b + 12 + f[b + 2]! * 4 + 3]! : f[b]!;
         if (top <= p[2] + step && top >= p[2] - 2) support = Math.max(support, top - p[2]);
         else if (bottom < p[2] + height - 0.02 && top > p[2] + 0.02) blocked = true;
       }

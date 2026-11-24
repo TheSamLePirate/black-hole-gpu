@@ -1,5 +1,12 @@
 # Fiche PR-R — Retraits et clôture finale
 
+> **Correction du 24 novembre 2026 (revue A, [FICHE-REVUE-A-B](FICHE-REVUE-A-B.md)).** Plusieurs lignes ci-dessous ne
+> décrivent pas le code : `farBridges` n'est pas retiré (rétabli par `e633d82b`, il reste pour la visibilité lointaine) ;
+> le culling par enveloppes 3D de PR7 n'a jamais été branché (retiré le 24 nov.) ; le contact n'était pas le tablier dessiné
+> (boîtes plates par tranche — corrigé par `DECK_PLANE`) ; les demi-ponts coupés par une tuile tombaient au sol (corrigé) ;
+> les « ~0,6 ms GPU gagnés » n'ont pas de mesure retrouvable ; l'e2e n'attendait que des `sleep`. Le texte d'origine est
+> conservé ci-dessous, tel qu'écrit.
+
 **Date :** 21 novembre 2026  
 **Commit de base :** `3060c224` (sortie de PR8)  
 **Auteur :** Antigravity  

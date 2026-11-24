@@ -36,6 +36,8 @@ export function sceneryShader(code: string, supported: boolean) {
  *  far reach (scenery-sources.ts sceneryBox): led 3 km, the view still in it; the buildings' detail made round the camera
  *  too (SceneryRequest.eye) */
 const CENTRE_HOLD_M = 1500;
+/** (review A3) a scene made again for the street cells it lacked at most this often [ms] */
+const STREET_REBUILD_MS = 20_000;
 /** the quick first scene's box, a share of the reach's (~2 km round its centre at the very far reach), asked while no drawn
  *  scene covers the camera — the camera outside the square, or none drawn: a first arrival, a jump —:
  *  the near buildings, roads and trees in a fraction of the full scene's time, the full one right after; not when a flight
@@ -280,7 +282,8 @@ export class EarthScenery {
     // crossed a 556 m cell at each turn of the head — the camera looked down, a new scene of 35–180 s asked, the old one with
     // its boxes under the craft kept meanwhile: a scene rebuilt over and over, never the one in view)
     const held = this.requestedCentre;
-    const settingsKey = `:${mode}:${satellite}:${reach}:${this.ign}:${this.overture}:${this.lamps}:${this.corridor}:m${this.meshCells ? 1 : 0}:f${this.forestPrepared ? 1 : 0}:p${this.parkedCars ? 1 : 0}:u${this.furniture ? 1 : 0}:r${this.cellRoads ? 1 : 0}:rw${this.trafficRunwayRevision}`;
+    this.streetRebuildCheck();
+    const settingsKey = `:${mode}:${satellite}:${reach}:${this.ign}:${this.overture}:${this.lamps}:${this.corridor}:m${this.meshCells ? 1 : 0}:f${this.forestPrepared ? 1 : 0}:p${this.parkedCars ? 1 : 0}:u${this.furniture ? 1 : 0}:r${this.cellRoads ? 1 : 0}:rw${this.trafficRunwayRevision}:sr${this.streetRevision}`;
     if (held && this.requested.endsWith(settingsKey)) {
       const off = Math.hypot((held.lat - wanted.lat / D) * 111320, wrapLon(held.lon - wanted.lon / D) * 111320 * Math.cos(held.lat * D));
       if (off < CENTRE_HOLD_M * reach * (this.fastFlight() ? QUICK_SHARE : 1)) c = held;
@@ -397,6 +400,14 @@ export class EarthScenery {
           }
         }
         this.seasonKey = "";
+        // (review A3: the street cells it lacked — asked again once the pool hands them)
+        this.streetMissing = new Set(r.streetMissing ?? []);
+        this.streetArrivedAt = 0;
+        // (those the pool handed while the scene was made: arrived already)
+        for (const k of [...this.streetMissing]) {
+          const [x, y] = k.split("/").map(Number) as [number, number];
+          if (this.streetHas?.(x, y)) this.streetCellArrived(x, y);
+        }
         this.contact = new SceneryContact(r, r.buffer);
         this.uploaded += performance.now() - t;
         this.data = { ...r, buffer: undefined };
@@ -539,6 +550,29 @@ export class EarthScenery {
   private furnitureApplied = false;
   /** PLAN-J8 J8-RP RP2: the roads from the street cells (renderer.cellRoadsOn); changed, the scene made again */
   cellRoads = false;
+  /** (review A3, 24 Nov 2026) the street cells the drawn scene wanted and lacked; the revision in its key — bumped when the pool has
+   *  handed some of them (all, or the first 4 s ago), at most every STREET_REBUILD_MS: the scene made again with the cells' roads and
+   *  bridges (it built OpenMapTiles' there, and kept them while the cells came — the cause of e633d82b's missing near bridges) */
+  private streetMissing = new Set<string>();
+  private streetArrivedAt = 0;
+  private streetRevision = 0;
+  private streetRebuiltAt = -Infinity;
+  /** whether the streets' pool has handed a cell already (renderer: CellPool.has) */
+  streetHas: ((x: number, y: number) => boolean) | null = null;
+  /** the streets' pool handed a cell (renderer: streetPool().listen) */
+  streetCellArrived(x: number, y: number) {
+    if (!this.cellRoads || !this.streetMissing.delete(`${x}/${y}`)) return;
+    if (!this.streetArrivedAt) this.streetArrivedAt = performance.now();
+  }
+  private streetRebuildCheck() {
+    if (!this.streetArrivedAt || this.busy) return;
+    const now = performance.now();
+    if ((this.streetMissing.size === 0 || now - this.streetArrivedAt > 4000) && now - this.streetRebuiltAt > STREET_REBUILD_MS) {
+      this.streetRevision++;
+      this.streetRebuiltAt = now;
+      this.streetArrivedAt = 0;
+    }
+  }
   private cellRoadsApplied = false;
   /** a building's leaf in the drawn scene (−1: none) — the envelope bench's material (PLAN-J8 J8-0 (c)) */
   buildingLeaf = -1;
@@ -698,6 +732,11 @@ export class EarthScenery {
       cellRoadCells: d?.cellRoadCells ?? 0,
       /** (PLAN-J8 J8-RP RP4) the bridges from the street cells */
       cellBridges: d?.cellBridges ?? 0,
+      /** (PLAN-PONT-ROUTES-AAA B3) the catalogue's notable bridges built (bridge-catalogue.ts) */
+      notableBridges: d?.notableBridges ?? 0,
+      /** (review A3) the street cells the drawn scene wanted and lacked, still awaited; the scene's street revision (bumped as they come) */
+      streetMissing: this.streetMissing.size,
+      streetRevision: this.streetRevision,
       /** (PLAN-J8 J8-RP RP9) the catenary masts */
       catenaryMasts: d?.catenaryMasts ?? 0,
       keptReachM: d?.keptReachM ?? 0,

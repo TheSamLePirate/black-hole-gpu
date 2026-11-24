@@ -74,12 +74,18 @@ export function seed(x: number, y: number) {
   h = Math.imul(h ^ (h >>> 13), 1274126177);
   return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
 }
+/** (PLAN-PONT-ROUTES-AAA, review A2, 24 Nov 2026) a deck's or a parapet's slice (a polygon of kind 2–4 among the solids): its data[11]
+ *  this mark, and one vec4 after its edges — its top's plane z = a x + b y + c and its thickness [m] (bridge-mesh.ts computeSlicePlane:
+ *  the drawn top exactly) —; scenery-contact.ts topAt reads it, the tracer's flat caps do not (its marks' exact test, unchanged) */
+export const DECK_PLANE = -1;
 export interface Primitive {
   min: Vec3;
   max: Vec3;
   data: number[];
   /** a building's triangles for the raster (roof-mesh.ts): its visibility and its shadow map */
   mesh?: { positions: number[]; triangles: number[] };
+  /** (PLAN-PONT-ROUTES-AAA B3) its triangles' tag when not a building's nor a plain bridge part's: BRIDGE_PAINT | its paint */
+  meshTag?: number;
 }
 /** the buildings within this of the scene's centre [m] get their triangles — the shadow map's (its ±900 m round the camera)
  *  and the raster's visibility, the material's buildings (docs/progress/raster-aaa/TERRE-UNREAL.md U2: out to where they are
@@ -308,6 +314,14 @@ export const LAMP_ARM_BIT = 0x8000;
 /** (PLAN-J8 VB7) a traffic signal's head among the lamps: its head's tag with this bit, its cycle's phase in the 10 bits below (0…1023) */
 export const SIGNAL_BIT = 0x4000;
 export const LAMP_HEAD = 0xfff50000;
+/** (PLAN-PONT-ROUTES-AAA B3) a notable bridge's painted part — a tower, a girder, an anchorage —: this | its paint (bridge-notable.ts
+ *  BridgePaint) — scenery-raster.ts meshVs codes it as the painted parts (RASTER_CODE.turbine, its leaf 10 + paint / 16) */
+export const BRIDGE_PAINT = 0xfff30000;
+/** (B3) a notable bridge's cable — a main cable, a suspender, a stay —: this | 0x8000 when vertical (opened across the view, not up)
+ *  | its paint << 11 | its diameter [cm] (11 bits); its pairs of vertices from an even vertex, as a conductor's */
+export const STRUCT_CABLE = 0xfff20000;
+export const structCableTag = (diameterM: number, vertical: boolean, paint: number) =>
+  (STRUCT_CABLE | (vertical ? 0x8000 : 0) | ((paint & 15) << 11) | Math.max(1, Math.min(2047, Math.round(diameterM * 100)))) >>> 0;
 export function packScenery(
   prims: Primitive[],
   pixels: Uint32Array,
@@ -349,6 +363,9 @@ export function packScenery(
    *  its side and texel in the palette's unused entry 0 (0: none) */
   lamps: { positions: number[]; triangles: number[]; signal?: number }[] = [],
   lampGrid?: Uint8Array,
+  /** (PLAN-PONT-ROUTES-AAA B3) the notable bridges' cables (bridge-notable.ts: pairs of vertices), tagged structCableTag, after the
+   *  lamps from an even vertex */
+  structCables: { positions: number[]; triangles: number[]; tag: number }[] = [],
 ) {
   // (PLAN-J8 VB3: each car its shape)
   const carShapes = cars.map((c, i) => carShape(c.kind ?? carKind(i), c.lamps ?? true));
@@ -410,6 +427,12 @@ export function packScenery(
   const lampPad = lamps.length ? (4 - (vertexCount % 4)) % 4 : 0;
   vertexCount += lampPad + lamps.length * 12;
   triangleCount += lamps.length * 6;
+  const structPad = structCables.length ? vertexCount % 2 : 0;
+  vertexCount += structPad;
+  for (const m of structCables) {
+    vertexCount += m.positions.length / 3;
+    triangleCount += m.triangles.length / 3;
+  }
   const meshOffset = forestOffset + (forest ? forestVec4s(forest.frame) : 0),
     triangleOffset = meshOffset + Math.ceil((vertexCount * 3) / 4);
   // (after the triangles, a tag a triangle: a building triangle's leaf — its record's offset from geomOffset [vec4] —: the raster
@@ -461,7 +484,7 @@ export function packScenery(
       f.set(p.mesh.positions, meshOffset * 4 + v * 3);
       for (const k of p.mesh.triangles) u[t++] = v + k;
       v += p.mesh.positions.length / 3;
-      u.fill(p.data[3] === 1 ? (offsets.get(p) ?? 0) : 0, tag, (tag += p.mesh.triangles.length / 3));
+      u.fill(p.data[3] === 1 ? (offsets.get(p) ?? 0) : (p.meshTag ?? 0), tag, (tag += p.mesh.triangles.length / 3));
     }
     turbines.forEach((m, i) => {
       f.set(m.positions, meshOffset * 4 + v * 3);
@@ -521,6 +544,13 @@ export function packScenery(
         (tag += 2),
       );
     });
+    v += structPad;
+    for (const m of structCables) {
+      f.set(m.positions, meshOffset * 4 + v * 3);
+      for (const k of m.triangles) u[t++] = v + k;
+      v += m.positions.length / 3;
+      u.fill(m.tag, tag, (tag += m.triangles.length / 3));
+    }
     f.set([turbines.length, pylons.length, cars.length, lamps.length], (triangleOffset + triangleCount) * 4);
   }
   return buffer;
@@ -630,6 +660,11 @@ export interface SceneryReply {
   /** (PLAN-J8 J8-RP RP2) the road segments drawn from the street cells, and the cells they came from */
   cellRoads?: number;
   cellRoadCells?: number;
+  /** (review A3) the street cells this scene wanted and found not cached (or incomplete) — "x/y" z 15 keys: the page asks the scene
+   *  again when the streets' pool hands one (scenery.ts streetCellArrived) */
+  streetMissing?: string[];
+  /** (PLAN-PONT-ROUTES-AAA B3) the catalogue's notable bridges built (bridge-catalogue.ts) */
+  notableBridges?: number;
   /** (PLAN-J8 J8-RP RP4) the bridges built from the street cells */
   cellBridges?: number;
   /** (PLAN-J8 J8-RP RP9) the catenary masts drawn */

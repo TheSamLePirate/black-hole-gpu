@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { buildContinuousPierMesh, buildContinuousRailMesh, buildContinuousSliceMesh, computeSlicePlane } from "../src/system/bridge-mesh";
 import { BridgeContinuousProfile } from "../src/system/bridge-surface-service";
 import { BridgeFlag } from "../src/system/street-cells";
-import { CORPUS_CASES } from "../src/system/bridge-corpus";
+import { CORPUS_CASES } from "./fixtures/bridge-corpus";
 
 describe("PR3 — Continuous 3D Bridge Deck Mesh, Abutments and Piers", () => {
   test("Rule 3 witness: positive witness detects injected step defect, negative witness confirms A/A = 0", () => {

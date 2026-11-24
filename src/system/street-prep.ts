@@ -6,6 +6,7 @@
 // cut to SEGMENT_MAX_M, each in the cell of its middle — the BD TOPO's in France, OpenMapTiles' elsewhere, its width and lanes inferred by
 // its class), its junctions (the roads' ends met within JUNCTION_M, three or more), its places (VB4), and the details street-detail-prep.ts
 // derives (the surfaces, the continuations, the furniture). No ground. Pure: the cell workers run it, the tests too.
+import { inferRoadSurface } from "./road-surface";
 import { VectorTile } from "@mapbox/vector-tile";
 import { PbfReader } from "pbf";
 import { inBdtopoBox } from "./bdtopo";
@@ -139,6 +140,8 @@ interface RoadMeta {
   roadId: number;
   /** a railway's track electrified (RP9) */
   electric?: boolean;
+  /** (B1) its surface material where the data say it (road-surface.ts) — else inferred at the cut, with its place */
+  material?: number;
 }
 
 /** J8-RP RP9 — the BD TOPO's troncon_de_voie_ferree as a track's attributes: its tracks, its level, electrified */
@@ -220,6 +223,8 @@ function bdtopoRoad(pr: Record<string, unknown>): RoadMeta | null {
     level,
     speed: v,
     roadId: sourceKey(String(pr.cleabs ?? "")),
+    // (B1: its nature names gravel and earth; the rest by the rule)
+    material: nature === "Route empierrée" || nature === "Chemin" || nature === "Sentier" ? inferRoadSurface({ cls, nature }) : undefined,
   };
 }
 
@@ -244,6 +249,11 @@ function omtRoad(pr: Record<string, unknown>, id: number | undefined): RoadMeta 
     level,
     speed: ROAD_TRAFFIC[cls]?.speed ?? SPEED[cls]!,
     roadId: sourceKey(`osm:${id ?? 0}:${c}`),
+    // (B1: OpenMapTiles' surface — paved, unpaved — and a pedestrian way's setts; the rest by the rule at the cut)
+    material:
+      pr.surface === "paved" || pr.surface === "unpaved" || pr.subclass === "pedestrian"
+        ? inferRoadSurface({ cls, subclass: String(pr.subclass ?? ""), surface: String(pr.surface ?? "") })
+        : undefined,
   };
 }
 
@@ -451,7 +461,18 @@ export function prepareStreetCells(
             gb = toGeo(pb);
           const ma = toCell(c.origin, ga.lat, ga.lon),
             mb = toCell(c.origin, gb.lat, gb.lon);
-          c.segments.push({ ...meta, a: [ma.east, ma.north], b: [mb.east, mb.north], s0: s + (L * q) / k });
+          c.segments.push({
+            ...meta,
+            a: [ma.east, ma.north],
+            b: [mb.east, mb.north],
+            s0: s + (L * q) / k,
+            // (B1: the data's material, else the rule's — its class, its town, its place)
+            material:
+              meta.cls === "rail"
+                ? undefined
+                : (meta.material ??
+                  inferRoadSurface({ cls: meta.cls, urban: !!(meta.flags & SegmentFlag.Urban), lat: mid.lat, lon: mid.lon })),
+          });
           // (whether its ends are its road piece's own — the continuations': an end inside the piece goes on to its next segment)
           c.pieces.push({ a: j === 0 && q === 0, b: j === pts.length - 2 && q === k - 1 });
         }
@@ -675,7 +696,12 @@ export function prepareStreetCells(
     const next = segmentNexts(c.segments, c.pieces, nearEdge);
     const surfaces = c.segments.map((sg, i) => ({ ...segmentSurface(sg), bridge: bridgeOf.get(i) ?? NO_BRIDGE }));
     const furniture = streetFurniture(c.segments, junctions, leftHand);
-    const flags = (P.thinned ? CellStreetFlag.Thinned : 0) | (leftHand ? CellStreetFlag.LeftHand : 0);
+    // (review A3/A4: prepared with its building cell; its guardrails' OnBridge written)
+    const flags =
+      (P.thinned ? CellStreetFlag.Thinned : 0) |
+      (leftHand ? CellStreetFlag.LeftHand : 0) |
+      (buildings(c.x, c.y) ? CellStreetFlag.Built : 0) |
+      CellStreetFlag.FurnitureBridges;
     return {
       x: c.x,
       y: c.y,

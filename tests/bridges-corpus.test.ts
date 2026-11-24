@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { CORPUS_CASES, evaluateStepWitness, measureLegacyBridgeSteps, probeBridgeKeys } from "../src/system/bridge-corpus";
+import { CORPUS_CASES, evaluateStepWitness, measureLegacyBridgeSteps, probeBridgeKeys } from "./fixtures/bridge-corpus";
 
 describe("PR0 — Bridge and Road AAA Corpus & Acceptance Contract", () => {
   test("the 12 reference corpus cases are defined and conform to contract specifications", () => {

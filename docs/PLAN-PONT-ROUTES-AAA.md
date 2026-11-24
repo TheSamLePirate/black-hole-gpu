@@ -1,7 +1,15 @@
 # Ponts et routes AAA — une chaussée continue dans un monde à plusieurs niveaux
 
 **21 novembre 2026 — plan demandé par Sam : « Crée un plan pour pont-routes-AAA md. Analyse profondément ».**
-**État : analyse approfondie et plan proposés ; aucune phase d'implémentation commencée.**
+**État à la tête (24 novembre 2026, branche de l'agent — à fusionner par le lead) :** PR0–PR8 et PR-R livrés le 21 novembre
+(`b192a361..e633d82b`), puis **revue A** (dix défauts corrigés : jonction des demi-ponts aux bords de tuile,
+contact = tablier dessiné, cellules « rue » préparées par le seul pool, glissières et lampadaires sur le tablier, routes de
+tablier hors du sol, matière du tablier, courbe verticale bornée, LOD branché, requêtes = maillage, tests réels) et
+**demande B de Sam** (revêtement des routes, marquages aux carrefours, ponts remarquables suspendus et à haubans).
+**Rien de tout cela n'est mesuré ni vu** : aucun e2e ni banc lancé ; les tailles inlinées et les tests unitaires sont les
+seules preuves. Fiche : [FICHE-REVUE-A-B](progress/pont-routes-aaa/FICHE-REVUE-A-B.md). Les affirmations de FICHE-PR-R
+(« farBridges retiré », « culling par enveloppes », « ~0,6 ms gagnés ») sont corrigées là-bas.
+Historique : *analyse approfondie et plan proposés le 21 novembre ; aucune phase d'implémentation commencée à cette date.*
 **Mode : normal**, par défaut selon [CLAUDE.md](../CLAUDE.md). Le mode speed historique de J8 ne s'étend pas à ce chantier.
 Base examinée : **`3a86f5e1`**, avec le journal d'analyse du 21 novembre. Le code fait foi si le dépôt évolue.
 
