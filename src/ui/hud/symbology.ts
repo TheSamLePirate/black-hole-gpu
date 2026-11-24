@@ -28,6 +28,7 @@ import { drawApproach } from "../../world/approach-draw";
 import { fieldShown, fieldsNearCached } from "../../world/runways";
 import { drawApproachHud, drawSpaceHud, drawSpaceScope, type ApproachHudInfo, type SpaceHudInfo } from "./kindhud";
 import { t, tf } from "../../i18n";
+import { heldCode, keyLabel, layout } from "../../input/bindings";
 
 /** The phase lets this element show (hud/declutter.ts — none given: all). */
 const on = (F: { show?: Record<HudItem, boolean> }, k: HudItem) => !F.show || F.show[k];
@@ -3356,20 +3357,33 @@ function drawAar(
   const kg = (v: number) => Math.round(v).toLocaleString("en").replace(/,/g, " ");
   const fy = y0 + (A.takeup === null ? 34 : 50) * dpr;
   text(`FUEL ${kg(A.given)} / ${kg(A.want)} kg${A.practice ? " · PRACTICE" : ""}`, x, fy, col, 11, "center", true);
-  // (assisted mode: tell the pilot the throttle closes the last metres into the basket or backs out)
+  // (assisted mode: tell the pilot the throttle closes the last metres into the basket or backs out — its keys as the
+  // player set them, input/bindings.ts, and the arrows)
   if (A.mode === "assisted") {
+    const K = throttleKeys();
     const cue =
       A.phase === "CLEARED"
-        ? t("SHIFT / ↑ TO CLOSE")
+        ? tf("{0} / ↑ TO CLOSE", K.up)
         : A.phase === "CONTACT"
-          ? t("SHIFT / ↑ PUSH IN")
+          ? tf("{0} / ↑ PUSH IN", K.up)
           : A.phase === "FULL" || A.phase === "DEPART"
-            ? t("ALT / ↓ TO BACK OUT")
+            ? tf("{0} / ↓ TO BACK OUT", K.down)
             : A.phase === "BREAKAWAY"
-              ? t("ALT / ↓ BACK OFF")
+              ? tf("{0} / ↓ BACK OFF", K.down)
               : null;
     if (cue) text(cue, x, fy + 16 * dpr, lit === LIGHT.off ? col : lit, 11, "center", true);
   }
+}
+
+/** The throttle's held keys as this keyboard prints them (⇧, Alt by default), built again only when one is rebound or the
+ *  keyboard's layout arrives — the HUD draws them every frame. */
+let thrKeys: { at: string; up: string; down: string } | null = null;
+function throttleKeys(): { up: string; down: string } {
+  const u = heldCode("throttleUp"),
+    d = heldCode("throttleDown");
+  const at = `${u} ${d} ${layout.size}`;
+  if (thrKeys?.at !== at) thrKeys = { at, up: keyLabel({ code: u }), down: keyLabel({ code: d }) };
+  return thrKeys;
 }
 
 /**

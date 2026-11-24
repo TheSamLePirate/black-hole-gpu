@@ -164,3 +164,19 @@ La capture `av-l3-montee.jpg` remplacée ; l'« Auto-GCAS: recovered » qu'on y 
 (`game/gcas.ts` `gcasThreat` : pas de ressource quand le point le plus bas prédit est l'instant présent et que le jet s'en éloigne —
 en montée, ou dans la minute qui suit l'envol sans descendre). Revolé sur kerr-mini (2/2, run `20261116-113827-appr-l3`) : la montée
 est le pilote seul, +16 m/s à 117 m/s (le +35 m/s d'avant était la ressource du GCAS) ; capture remplacée, cours (tableau des recettes) à jour.
+
+## 2026-11-24 — le ravitaillement en vol écrit pour d97a6ee4 (recette non revolée)
+
+Le commit d97a6ee4 (21 novembre 2026, « fix(aar): stabilize probe-drogue capture, assisted mode cues, and hose-to-pod
+alignment ») a changé la loi du ravitaillement en vol (`controller/aar.ts` : PD vertical amorti `kDz` 1,6 s, `wU` 0,55/s,
+`vU` 2,5 m/s ; correction fine bornée à ±0,8 m ; visée auto à −2,5 m avec abandon quand la pointe passe le plan du panier ;
+la main rendue en assisté au pré-contact, `arrived`) et les repères du HUD (`symbology.ts`, la ligne de l'assisté) sans
+toucher au cours. Ce jour : VOL-AVIONS.md (partie I, leçon 9 : un paragraphe « Ravitaillement en vol » nouveau ;
+partie II §4.1 : la loi détaillée) et apprendre-avions.html (leçon 9 : un encadré) écrits d'après le code ; le repère
+du HUD affiche désormais les touches de manette réglées par le joueur (⇧ et Alt par défaut) au lieu de « SHIFT » / « ALT »
+codés en dur.
+
+**Ouvert** : la recette n'a **pas** été revolée. Ni l'e2e `aar` (automatique, contact et plein) ni une recette en
+**assisté** (pré-contact atteint, `arrived`, gaz + jusqu'au contact, repère du HUD lu en FR et en EN, avec une touche de
+manette remappée) n'ont été lancés après d97a6ee4 ; aucune capture refaite. Le cours ne cite pas de chiffre mesuré pour
+le ravitaillement.

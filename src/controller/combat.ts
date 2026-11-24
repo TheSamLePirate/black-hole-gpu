@@ -124,7 +124,7 @@ export function combatBests(): Record<string, { time: number; at: string }> {
   return store.getJSON<Record<string, { time: number; at: string }>>(BEST_KEY, {});
 }
 
-/** The ground's height [m above the mean radius] at east, north of an anchor. */
+/** The ground's height [m over the WGS84 ellipsoid: groundRelief, the relief over the figure] at east, north of an anchor. */
 function groundAt(anchor: { lat: number; lon: number }) {
   return (e: number, n: number) => {
     const lat = anchor.lat + n / (D * R_EARTH);
@@ -200,21 +200,23 @@ function combatEnd(this: CameraController) {
   fleet.payload.f35 = 0;
 }
 
-/** The player in the fight's frame now: its place (east, north of the anchor; up: over the mean radius — the
- *  ground's own measure), velocity, nose, top. Null: elsewhere. */
+/** The player in the fight's frame now: its place (east, north of the anchor; up: its origin's height over the WGS84
+ *  ellipsoid — the ground's (groundRelief) and globeMap's own measure), velocity, nose, top. Null: elsewhere (off the
+ *  Earth: geoNow is null unless the craft flies by the Earth). */
 function combatPlayer(this: CameraController): Player | null {
   const C = this.combat;
   if (!C) return null;
   const g = this.geoNow();
   const cam = cameraFrame(this.s);
   const fr = this.sfFrame(cam);
-  if (!g || !fr) return null;
+  const nav = this.ourNav(cam);
+  if (!g || !fr || !nav || nav.ref !== "earth") return null;
   const [e, n] = enu(C.def.anchor, g);
-  const nav = this.local ? null : this.ourNav(cam);
-  // (ellipsoidal height of the craft's origin: matches globeMap's E.p0 — using gearHeight fr.h shifted every airborne
-  // target 1.05 m down relative to its hoses and lights)
-  const up =
-    nav && nav.ref === "earth" ? altitudeOver("earth", nav.X, nav.t) : groundRelief("earth", bodyFixedOf("earth", g.lat, g.lon, 0)) + fr.h;
+  // (the craft's origin's geodetic height over the WGS84 ellipsoid — where globeMap places it, E.p0 —, one way only:
+  // the relief under it plus fr.h was its gear's height over the ground, GEAR — 1.08 m on the F-35 — under its origin,
+  // and over a deck the deck's, not the sea's: every frame point read off it — the tanker's hoses, its lights — that much
+  // off. `this.local` once picked that path; geoNow is null off the Earth, so it only ever ran with a stale local frame)
+  const up = altitudeOver("earth", nav.X, nav.t);
   const dot = (a: Vec3, b: Vec3) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
   const E = fr.east as Vec3,
     N = fr.north as Vec3,

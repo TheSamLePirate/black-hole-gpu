@@ -467,6 +467,39 @@ point (magenta). Le manche coupe la NAV.
 **suivi de terrain** à 100, 150 ou 300 m (il suit le relief, **pas les bâtiments** — le GCAS non plus ; il engage
 seul l'AP et l'auto-manette), ravitaillement en vol, « voler vers… » un point de la carte.
 
+**Ravitaillement en vol** (F-35B et C, perche dans le panier ; Tab › Navigation › Modes du pilote automatique ›
+Ravitaillement en vol : **Ravitailleur à 25 km** ou **tout près**, puis **Automatique / Assisté / Manuel**). TEXACO 11
+est rejoint par l'interception derrière son tuyau droit ; la perche sort (2,5 s). **Pré-contact** : la pointe de la
+perche à 5 m derrière le panier, sur l'axe du tuyau ; tenue stable plus de 2 s (entre 1,5 et 9 m derrière, à moins de
+1,6 m de l'axe, moins de 0,6 m/s de rapprochement), le ravitailleur dit
+« cleared contact » (HUD `AAR CLEARED`, feu orange). Le panier se verrouille si la pointe y entre à moins de 0,42 m de
+son axe, entre 0,25 et 2,6 m/s de rapprochement ; plus vite il rebondit, décentré il est manqué. Verrouillé, la pointe
+pousse le tuyau : le carburant passe (feu vert, `FUEL FLOW`) tant qu'il est enfoncé de 0,9 à 4,6 m ; au-delà de 6,5 m,
+**breakaway** (feu rouge : reculer à 15 m, attendre d'être à nouveau autorisé).
+- **Automatique** (par défaut au niveau Débutant) : les systèmes font tout. Une tentative part après 1,5 s stable au
+  pré-contact, autorisé et hors virage du ravitailleur ; ils visent **2,5 m au-delà du panier** à 1,1 m/s au plus
+  (la visée jamais plus de 3 m devant la pointe), et **abandonnent** — retour au pré-contact, nouvel essai 3 s plus
+  tard — si la pointe s'écarte de plus de 1,2 m de l'axe ou dépasse le plan du panier de 0,6 m sans verrouiller.
+  Verrouillés, ils tiennent le tuyau enfoncé de 2,7 m ; plein, ils ressortent. Les gaz font passer en assisté, le
+  manche franchement braqué (plus de la moitié) en manuel.
+- **Assisté** (par défaut aux autres niveaux) : les systèmes tiennent la pointe sur l'axe et l'amènent au pré-contact ;
+  **arrivé** là (ou dès que vous touchez aux gaz), la distance est à vous : **gaz + / ↑** avance la visée (1,4 m/s
+  plein débattement), **gaz − / ↓** la recule, lâchés elle est tenue. Libre, la visée ne va jamais à plus de 2,5 m
+  au-delà du panier, ni à plus de 2,5 m devant la pointe (1,5 m derrière elle) : on ne fonce pas à travers le panier
+  vers l'aile.
+  Le manche décale la ligne (±2 m), lâché elle revient. Le HUD l'écrit sous le carburant, avec **les touches que vous
+  avez réglées** (⇧ et Alt par défaut) : `⇧ / ↑ TO CLOSE` (autorisé), `⇧ / ↑ PUSH IN` (verrouillé), `Alt / ↓ TO BACK
+  OUT` (plein, départ), `Alt / ↓ BACK OFF` (breakaway) — en français `POUR ENTRER`, `POUSSER`, `POUR RECULER`,
+  `RECULER`.
+- **Manuel** : vous pilotez tout ; le HUD montre le panier (anneau à la couleur du feu), la pointe, l'écart (▲▼ ◀▶ en
+  mètres) et la vitesse de rapprochement (rouge au-delà du rebond).
+
+**Réussi quand** : `c.aar.s.phase === "contact"` puis `c.aar.s.flowing`, le carburant donné (`c.aar.s.given`) jusqu'à
+`want` ; « cleared to depart » à la fin. **Erreurs** : arriver trop vite (rebond, « too fast ») ; pousser au-delà de
+6,5 m (breakaway) ; en assisté, pousser les gaz avant le pré-contact sans regarder l'écart. **Recette non revolée** :
+la loi et les repères du HUD ont changé le 21 novembre 2026 (d97a6ee4) ; ce texte suit le code, l'e2e `aar` ne l'a
+pas encore revolé (voir [apprendre-a-voler-examens.md](progress/apprendre-a-voler-examens.md)).
+
 **Par `__bh`** : `c.nav` (le plan), `c.tfStart(150)`, `c.orbitStart({…})`, `c.tankerStart({ near: true })`,
 `c.modesOff()` ; TARS fait la même chose par ses outils `jet_mode` et `approach`.
 
@@ -781,7 +814,43 @@ La loi avion exige le mode `"plane"`, **q > 300 Pa** et aucun maintien.
   d'appontage. F-35B : appontage vertical ; décollage court sur `150 m × (m/20,9 t)²`, rotation à 52 m/s.
 - **Ravitaillement en vol** (`game/aar.ts`) : TEXACO 11 à 7 000 m, 210 m/s ; capture à moins de 0,42 m de l'axe du panier,
   entre 0,25 et 2,6 m/s ; 20 kg/s ; modes level, auto, assisted, manual. (`controller/refuel.ts` est le ravitaillement
-  des vaisseaux.)
+  des vaisseaux.) La loi des derniers mètres (`controller/aar.ts` `aarJet`, `AAR_LAW`, état du code au 21 novembre 2026,
+  d97a6ee4) :
+  - **Visée** : la pointe à `d` m derrière le panier sur l'axe du tuyau (verrouillé : derrière le point de rencontre). Auto
+    (`aimDistance`) : pré-contact 5 m ; tentative après 1,5 s stable, autorisé, ravitailleur hors virage, visée **−2,5 m**
+    (au-delà du panier), `d` mené à 1,1 m/s sous 8 m (3 m/s plus loin) ; **abandon** (retour 5 m, nouvel essai à +3 s) si
+    l'écart à l'axe dépasse 1,2 m **ou** si la pointe passe le plan du panier de plus de 0,6 m sans verrouiller
+    (`along < −0,6`) ; verrouillé −2,7 m ; plein 6 m ; breakaway 19 m ; départ 30 m. Libre, la visée jamais plus de 3 m
+    devant la pointe.
+  - **Assisté** : les systèmes ramènent `d` au pré-contact à 3 m/s jusqu'à `arrived` (pré-contact atteint à 5 cm près,
+    ou manette touchée) ; ensuite la manette déplace `d` à 1,4 m/s (plein débattement), bornée autour de `a`, la
+    position de la pointe sur l'axe (libre : son écart au panier ; verrouillé : −enfoncement) — libre
+    [max(−2,5 ; a − 2,5) ; a + 1,5] m, verrouillé [max(−7,5 ; a − 1,5) ; a + 1,5] m, 60 m au plus ; après un
+    breakaway ≥ 18 m. Le manche décale la ligne (0,8 m/s en roulis, 0,6 m/s en tangage, ±2 m,
+    retour à 0,4/s lâché). En auto, la manette passe en assisté, le manche au-delà de 0,5 en manuel.
+  - **Décalage de la pointe** : l'assiette **et la dérive (lacet)** de l'avion par rapport au ravitailleur, lissées sur
+    4 s, placent la pointe de la perche (6,9 m devant, 0,95 m à droite).
+  - **Correction fine** (`trim`) : l'écart résiduel latéral et vertical de la pointe intégré à 0,05/s, borné à
+    **±0,8 m**, seulement libre, sous 12 m de visée, à moins de 3 m de la visée le long de l'axe et à moins de 1 m/s de
+    vitesse verticale relative.
+  - **Sous 15 m** (`close`) : en travers, la loi de formation (`wC` 0,6 rad/s, 3 m/s au plus, en avance sur la
+    vitesse latérale du pod) ; **en vertical, un PD amorti** sur la vitesse verticale instantanée — `vz = vz_ravitailleur
+    + clamp(wU·(écart − kDz·(vz_rel − vz_cible)) + vz_cible, ±vU)` avec `wU` 0,55/s, `kDz` 1,6 s, `vU` 2,5 m/s ;
+    `vz_cible` = vitesse verticale du pod (lissée 0,5 s, ±2 m/s) + celle du panier libre (lissée 0,35 s, ±0,8 m/s : la
+    montée par l'onde d'étrave, la dérive ; 0 verrouillé) —, convertie en pente bornée à ±12° (`JET.gammaMax`) ; le long
+    de l'axe, la manette elle-même sur la vitesse sol (PI : vitesse demandée 0,35/s × écart, 2,5 m/s au plus, **1,4 m/s**
+    sous 8 m ; `kTp` 0,25, `kTi` 0,035/s, intégrale 0,05–0,98), sans aérofrein. Au-delà de 15 m, la loi de formation
+    avec ses intégrateurs.
+  - **Le ravitailleur** vole droit et à plat tant que le receveur est au stade `hose`, jusqu'à la fin du ravitaillement
+    (départ compris).
+  - **HUD** (`symbology.ts` `drawAar`) : en **assisté**, une ligne sous le carburant, à la couleur du feu du pod :
+    `CLEARED` → « {gaz+} / ↑ TO CLOSE », `CONTACT` → « {gaz+} / ↑ PUSH IN », `FULL` / `DEPART` → « {gaz−} / ↓ TO BACK
+    OUT », `BREAKAWAY` → « {gaz−} / ↓ BACK OFF » (FR : POUR ENTRER, POUSSER, POUR RECULER, RECULER) ; {gaz+} et {gaz−}
+    sont les touches réglées (`input/bindings.ts` `heldCode("throttleUp" / "throttleDown")`, ⇧ et Alt par défaut ;
+    étiquette mise en cache, recalculée au changement de touche). Le panier du HUD, les tuyaux et les feux des pods
+    sont placés par `globeMap` comme le ravitailleur (WGS84), la hauteur du receveur dans le repère du combat étant
+    sa hauteur ellipsoïdale (`combatPlayer` : `altitudeOver`).
+  - `c.aarModeNow()` donne le mode actif (`level` résolu). **Non revolé par e2e depuis d97a6ee4** (ouvert).
 - **Pannes** : aucune panne électrique, hydraulique ou moteur pour le F-35 (`game/systems.ts` ne couvre que les
   vaisseaux) ; seulement le G-LOC et les dégâts de combat.
 - **U / F7** : sur une piste, U fait le **décollage automatique** du F-35 (`controller/runwaytakeoff.ts`, `RWY_TAKEOFF` :
