@@ -18,7 +18,8 @@ import {
   synodicRelState,
   testLagrangeStabilityNBody,
 } from "../src/system/lagrange";
-import { planOurTransfer } from "../src/system/our-plan";
+import { planOurTransfer, stateAt } from "../src/system/our-plan";
+import { lagrangeGoalState } from "../src/system/lagrange-plan";
 import { jwstAxes, jwstHaloLoop, jwstOrbit, jwstStart, JwstTracker } from "../src/system/jwst";
 import { ourOrbitPose } from "../src/game/place";
 import { readSpace } from "../src/net/instruments-space";
@@ -26,7 +27,7 @@ import { readCrewCmd } from "../src/net/crewcmd";
 import { systemScene } from "../src/crew/sys3d/scene";
 import type { InstrumentSnapshot } from "../src/net/instruments";
 import { predictOurs } from "../src/system/our-predict";
-import { M_METRES, M_SECONDS, solarState } from "../src/system/solar";
+import { EPOCH_DATE, M_METRES, M_SECONDS, solarState } from "../src/system/solar";
 import { dot, len, sub, unit } from "../src/math/vec3";
 import { C_MPS } from "../src/units";
 
@@ -248,6 +249,14 @@ describe("Lagrange & JWST N-body mission planner (Flight Computer)", () => {
   const opts = { lead: 60 / M_SECONDS, mouthR: 0 };
   const goal = (target: string, arrival: "halo" | "station") => ({ kind: "transfer" as const, target, arrival, altM: 0, returnAltM: 0 });
   const sumDvKms = (nodes: { dv: [number, number, number] }[]) => (nodes.reduce((s, n) => s + Math.hypot(...n.dv), 0) * C_MPS) / 1e3;
+  /** Where the planned path (its burns, the insertion's included) is at the arrival against the orbit or point aimed at:
+   *  the miss [km] and the velocity left to match [m/s] — what the autopilot then takes over. */
+  const arrival = (plan: Exclude<ReturnType<typeof planOurTransfer>, { error: string }>) => {
+    const m = plan.mission;
+    const g = lagrangeGoalState(m.goal.target, m.goal.arrival, m.goal.altM, m.tArrive!, m.haloPhase0 ?? 0, m.haloBranch ?? -1)!;
+    const st = stateAt(plan.path, m.tArrive!)!;
+    return { missKm: (len(sub(st.X, g.pos)) * M_METRES) / 1e3, dvLeftMs: len(sub(st.V, g.vel)) * C_MPS };
+  };
 
   test("plans Earth LEO → Sun–Earth L2 Halo orbit (JWST-style) with realistic Δv and Halo insertion", () => {
     const leo = ourOrbitPose({ body: "earth", altKm: 400, inc: 28.5 }, 0);
@@ -261,10 +270,45 @@ describe("Lagrange & JWST N-body mission planner (Flight Computer)", () => {
     expect(cap).toBeTruthy();
     expect(cap!.then).toBe("orbit");
     expect(cap!.body).toBe("lag:earth:2");
-    // Realistic LEO -> SE-L2 Halo total Δv is ~3.1–5.5 km/s
+    // Realistic LEO -> SE-L2 Halo total Δv: ~3.2 km/s departure + ~0.4 km/s insertion (the arrival's phase chosen —
+    // lagrange-plan.ts: at the x–z crossing it took 6.7 + 0.5)
     const dvKms = sumDvKms(plan.nodes);
-    expect(dvKms).toBeGreaterThan(2.5);
-    expect(dvKms).toBeLessThan(6.5);
+    expect(dvKms).toBeGreaterThan(3.0);
+    expect(dvKms).toBeLessThan(4.5);
+    // …and it arrives: on the Halo within 50 km (aimed at 500 km, then the mid-course), its velocity matched
+    const a = arrival(plan);
+    console.log(
+      `  LEO → SE-L2 Halo: ${dvKms.toFixed(2)} km/s, arrival ${a.missKm.toFixed(1)} km off, ${a.dvLeftMs.toFixed(3)} m/s left · ${plan.note}`,
+    );
+    expect(a.missKm).toBeLessThan(50);
+    expect(a.dvLeftMs).toBeLessThan(1);
+    expect(plan.note).toContain("A_z 260,000 km");
+  });
+
+  test("at the present date (2026-11-24): LEO → Sun–Earth L2 Halo, the same Δv and arrival", () => {
+    const now = (Date.UTC(2026, 10, 24) - EPOCH_DATE) / 1000 / M_SECONDS;
+    const leo = ourOrbitPose({ body: "earth", altKm: 400, inc: 28.5 }, now);
+    const plan = planOurTransfer(leo.X, leo.vel, now, goal("lag:earth:2", "halo"), opts);
+    expect("error" in plan).toBe(false);
+    if ("error" in plan) return;
+    const dvKms = sumDvKms(plan.nodes);
+    const a = arrival(plan);
+    console.log(
+      `  2026-11-24 LEO → SE-L2 Halo: ${dvKms.toFixed(2)} km/s, arrival ${a.missKm.toFixed(1)} km off, ${a.dvLeftMs.toFixed(3)} m/s left`,
+    );
+    expect(dvKms).toBeGreaterThan(3.0);
+    expect(dvKms).toBeLessThan(4.5);
+    expect(a.missKm).toBeLessThan(50);
+    expect(a.dvLeftMs).toBeLessThan(1);
+  });
+
+  test("an amplitude beyond the point's orbits: flown at the range's edge, the note says both", () => {
+    const leo = ourOrbitPose({ body: "earth", altKm: 300 }, 0);
+    const plan = planOurTransfer(leo.X, leo.vel, 0, { ...goal("lag:moon:2", "halo"), altM: 900_000e3 }, opts);
+    expect("error" in plan).toBe(false);
+    if ("error" in plan) return;
+    expect(plan.note).toContain("asked 900,000 km");
+    expect(plan.mission.goal.altM).toBeLessThan(900_000e3);
   });
 
   test("plans Earth LEO → Earth–Moon L2 Halo orbit & Earth–Moon L4 station-keeping", () => {
@@ -276,12 +320,21 @@ describe("Lagrange & JWST N-body mission planner (Flight Computer)", () => {
       const dvEmL2 = sumDvKms(emL2.nodes);
       expect(dvEmL2).toBeGreaterThan(2.8);
       expect(dvEmL2).toBeLessThan(6.5);
+      const a = arrival(emL2);
+      console.log(
+        `  LEO → EM-L2 Halo: ${dvEmL2.toFixed(2)} km/s, arrival ${a.missKm.toFixed(1)} km off, ${a.dvLeftMs.toFixed(3)} m/s left`,
+      );
+      expect(a.missKm).toBeLessThan(20);
+      expect(a.dvLeftMs).toBeLessThan(1);
     }
 
     const emL4 = planOurTransfer(leo.X, leo.vel, 0, goal("lag:moon:4", "station"), opts);
     expect("error" in emL4).toBe(false);
     if (!("error" in emL4)) {
       expect(emL4.nodes.some((n) => n.role === "capture" && n.then === "keep" && n.body === "lag:moon:4")).toBe(true);
+      const a = arrival(emL4);
+      expect(a.missKm).toBeLessThan(20);
+      expect(a.dvLeftMs).toBeLessThan(1);
     }
   });
 
@@ -294,6 +347,11 @@ describe("Lagrange & JWST N-body mission planner (Flight Computer)", () => {
     expect(cap).toBeTruthy();
     expect(cap!.then).toBe("keep");
     expect(cap!.body).toBe("jwst");
+    // at the 200 m standoff on its mirror side (+Z: in front of the primary) within the station keeping's reach (5 km)
+    const a = arrival(jwstPlan);
+    console.log(`  LEO → JWST: arrival ${a.missKm.toFixed(2)} km off the standoff, ${a.dvLeftMs.toFixed(3)} m/s left`);
+    expect(a.missKm).toBeLessThan(5);
+    expect(a.dvLeftMs).toBeLessThan(1);
   });
 });
 

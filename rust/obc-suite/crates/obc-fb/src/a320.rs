@@ -17,13 +17,16 @@ const C_CYN: u32 = rgb(82, 214, 255);
 const C_MAG: u32 = rgb(246, 98, 232);
 const C_AMB: u32 = rgb(255, 194, 58);
 
+/// Navigation display; `range` is in the display units (km metric, NM imperial: `Telemetry::unit_sys`).
 pub fn render_a320_nd(
     fb: &mut Framebuffer,
     t: &Telemetry,
-    range_nm: f64,
+    range: f64,
     fps: f64,
     scratch: &mut String,
 ) {
+    let u = t.unit_sys();
+    let range_m = range * u.dist_unit_m();
     let w = fb.width as i32;
     let h = fb.height as i32;
     fb.clear(C_BG);
@@ -38,10 +41,16 @@ pub fn render_a320_nd(
     fb.fill_rect(0, 0, w, 38, C_PANEL);
     fb.hline(0, w - 1, 38, C_BORDER);
     scratch.clear();
-    let _ = write!(scratch, "GS {:3.0} TAS {:3.0}", t.flight.ground_speed_mps * 1.94384, t.tas_knots());
+    let _ = write!(
+        scratch,
+        "GS {:3.0} TAS {:3.0} {}",
+        u.spd(t.flight.ground_speed_mps),
+        u.spd(t.flight.true_airspeed_mps),
+        u.spd_name()
+    );
     fb.draw_text(8, 8, scratch, C_GRN, 1);
     scratch.clear();
-    let _ = write!(scratch, "RNG {:3.0}NM", range_nm);
+    let _ = write!(scratch, "RNG {:3.0}{}", range, u.dist_name());
     fb.draw_text(8, 22, scratch, C_CYN, 1);
 
     fb.fill_rect(cx - 28, 6, 56, 24, C_BG);
@@ -61,8 +70,9 @@ pub fn render_a320_nd(
     scratch.clear();
     let _ = write!(
         scratch,
-        "ALT {:5.0}FT  AP:{}",
-        t.alt_msl_feet(),
+        "ALT {:5.0}{}  AP:{}",
+        u.alt(t.position.altitude_msl_m),
+        u.alt_name(),
         if t.systems.autopilot.is_empty() { "OFF" } else { &t.systems.autopilot }
     );
     fb.draw_text(w - (scratch.len() as i32) * 6 - 10, 22, scratch, C_GRN, 1);
@@ -135,20 +145,20 @@ pub fn render_a320_nd(
             apt.lat_deg,
             apt.lon_deg,
         );
-        let dist_nm = dist_km * 0.539_956_8;
-        if dist_nm > range_nm * 1.15 {
+        let dist_m = dist_km * 1000.0;
+        if dist_m > range_m * 1.15 {
             continue;
         }
         let rel = (brg - hdg).to_radians();
-        let dpx = (dist_nm / range_nm) * f64::from(radius);
+        let dpx = (dist_m / range_m) * f64::from(radius);
         let px = f64::from(cx) + dpx * rel.sin();
         let py = f64::from(cy) - dpx * rel.cos();
         if px >= xmin && px <= xmax && py >= ymin && py <= ymax {
             let (ix, iy) = (px.round() as i32, py.round() as i32);
             fb.circle(ix, iy, 4, C_MAG);
             fb.draw_text(ix + 7, iy - 3, apt.icao, C_MAG, 1);
-            if nearest_pt.is_none_or(|(_, _, best)| dist_nm < best) {
-                nearest_pt = Some((px, py, dist_nm));
+            if nearest_pt.is_none_or(|(_, _, best)| dist_m < best) {
+                nearest_pt = Some((px, py, dist_m));
             }
         }
     }
@@ -183,7 +193,10 @@ pub fn run(args: &[String]) -> Result<()> {
     let keys = RawKeyReader::enter();
     let mut scratch = String::with_capacity(128);
 
-    let ranges = [10.0_f64, 20.0, 40.0, 80.0, 160.0];
+    // Range ladders in the display units: km (metric, the default) or NM (imperial).
+    let ranges_km = [20.0_f64, 40.0, 80.0, 160.0, 320.0];
+    let ranges_nm = [10.0_f64, 20.0, 40.0, 80.0, 160.0];
+    let ranges_len = ranges_km.len();
     let mut rng_idx = 2usize;
     let start = Instant::now();
     let mut frames = 0u32;
@@ -198,6 +211,7 @@ pub fn run(args: &[String]) -> Result<()> {
         }
         let t_frame = Instant::now();
         let tel = bus.telemetry().clone();
+        let ranges = if tel.unit_sys().is_metric() { &ranges_km } else { &ranges_nm };
         render_a320_nd(&mut fb, &tel, ranges[rng_idx], fps, &mut scratch);
         fb.present()?;
 
@@ -213,7 +227,7 @@ pub fn run(args: &[String]) -> Result<()> {
         if let Some(k) = keys.poll(wait_ms) {
             match k {
                 RawKey::Char('q' | 'Q') | RawKey::Esc | RawKey::CtrlC => break,
-                RawKey::Up | RawKey::Char('+' | '=') => rng_idx = (rng_idx + 1).min(ranges.len() - 1),
+                RawKey::Up | RawKey::Char('+' | '=') => rng_idx = (rng_idx + 1).min(ranges_len - 1),
                 RawKey::Down | RawKey::Char('-' | '_') => rng_idx = rng_idx.saturating_sub(1),
                 RawKey::Left | RawKey::Char('i' | 'I') => {
                     let _ = bus.set_autopilot("ils");

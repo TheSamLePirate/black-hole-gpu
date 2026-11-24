@@ -3,7 +3,7 @@
 Every feature of the **Black Hole GPU** simulator is exposed on the browser's `window.__bh` object and through **73 TARS tools**. From Linux, you have complete read/write/call access to all of it via:
 
 1. The **`bh` CLI** (easiest for shell scripts, pipelines, and quick inspection)
-2. The **`/obc/rpc_req` → `/obc/rpc_res`** 9p RPC bridge (works from any language: Rust, Python, Node, C, sh)
+2. The keyed **`/obc/rpc/<id>.req` → `/obc/rpc/<id>.res`** 9p RPC bridge (works from any language: Rust, Python, Node, C, sh)
 3. The **interactive `bh-tui`** explorer (Ratatui live tree browser + TARS tool directory)
 
 ---
@@ -45,11 +45,17 @@ printf '{"action":"list","field":"LFPB"}\n' | bh tool approach --stdin
 
 ---
 
-## 2. Raw RPC Wire Protocol (`/obc/rpc_req` → `/obc/rpc_res`)
+## 2. Raw RPC Wire Protocol (`/obc/rpc/<id>.req` → `/obc/rpc/<id>.res`)
 
 Use this directly from **Rust**, **C**, **Python (`obc.py`)**, or **Node (`obc.mjs`)** — zero shelling out required:
 
-### Request (`BhRpcRequest` written as single JSON line to `/obc/rpc_req`)
+### Request (`BhRpcRequest` written as one JSON line, ending with `\n`, to `/obc/rpc/<id>.req`)
+
+`<id>` is your request id and must be a safe file name (`[A-Za-z0-9_-][A-Za-z0-9_.-]{0,95}`). Make it unique across
+processes: the libraries use `<lang>-<pid>-<random 8 hex>-<seq>` (`rs-…`, `py-…`, `js-…`). Create the file exclusively
+(`O_CREAT|O_EXCL`), write the whole line; the host takes it once the trailing newline has arrived and deletes it.
+Lines over 262 144 characters are refused with `{"ok":false,"code":"E2BIG",…}`. The single slot `/obc/rpc_req` is
+the legacy channel, for older hosts without `/obc/rpc` only.
 
 | `op` | Fields | Description |
 |---|---|---|
@@ -63,14 +69,14 @@ Use this directly from **Rust**, **C**, **Python (`obc.py`)**, or **Node (`obc.m
 | `"eval"` | `id`, `expr` | Evaluates JS expression with `bh` = `window.__bh` |
 | `"mcdu"` | `id`, `action`, `side?` (`0\|1`), `page?`, `lskSide?`, `lskNum?`, `text?`, `dir?`, `ecam?` | Direct A320 Captain/FO MCDU (`screen`, `page`, `lsk`, `type`, `button`, `arrow`) & Lower ECAM (`ecam`) |
 
-### Response (`BhRpcResponse` read from `/obc/rpc_res`)
+### Response (`BhRpcResponse` read from `/obc/rpc/<id>.res`, then deleted by you)
 
 ```json
-{ "id": "rs-42", "ok": true, "result": { ... } }
+{ "id": "rs-412-9f3a01bc-42", "ok": true, "result": { ... } }
 ```
 On error:
 ```json
-{ "id": "rs-42", "ok": false, "error": "reason" }
+{ "id": "rs-412-9f3a01bc-42", "ok": false, "error": "reason" }
 ```
 
 > **CRITICAL field names**:
@@ -78,7 +84,8 @@ On error:
 > - `op: "ls"` returns items with `"kind"` (`"fn"`, `"obj"`, `"number"`, `"string"`, `"boolean"`).
 > - `op: "tool"` expects `"toolArgs"` (never `"args"`).
 > - `op: "mcdu"` expects `"action"`, `"page"`, `"ecam"`, `"text"`, `"lskSide"`, `"lskNum"`.
-> - Poll `/obc/rpc_res` until parsed JSON has matching `"id"`. Synchronous host RPCs resolve immediately inside `onChange` (~1–5 ms).
+> - Poll `/obc/rpc/<id>.res` (and, as a fallback, the single slot `/obc/rpc_res`, which also receives every reply) until the parsed JSON has your `"id"`, then delete `<id>.res` (unread replies are swept after 60 s). Synchronous host RPCs resolve immediately inside `onChange` (~1–5 ms).
+> - Over `AF_VSOCK:4747` the same requests go one JSON line each; an oversize line is answered with `E2BIG` and skipped up to its newline.
 
 ---
 

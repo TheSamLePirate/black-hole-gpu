@@ -351,6 +351,7 @@ function advanceMethod(this: CameraController, dt: number, time?: number): boole
   // (no craft flown: the others coasting flown to the frame's end all the same — their integrator's, not the
   // analytic coast's then the integrator's again 5 s on: a jump)
   if (!this.piloting && s.animate && Number.isFinite(this.time) && timeRate(s) > 0) fleet.stepFree(this.time + timeRate(s) * dt);
+  this.trafficStepped = false;
   if (pilotNow) {
     if (away) {
       // (the view is the spectator's)
@@ -387,6 +388,9 @@ function advanceMethod(this: CameraController, dt: number, time?: number): boole
     if (Math.hypot(...this.flyVel) > 1e-3 * this.flySpeed) this.fly(this.flyVel, dt);
     else this.flyVel = [0, 0, 0];
   }
+  // (the real traffic's clock when no flight step ran it — no craft flown, the free camera, a tour, a craft docked or
+  // a puppet's —: the frame's own, so the aircraft and the ships fly on — controller/traffic.ts trafficStep; paused, still)
+  if (!this.trafficStepped && this.traffic && s.animate) this.trafficStep?.(dt);
   // the views on the ship after its flight (Cinemachine's late update: the rig sees where the craft went this
   // frame — a view placed before it showed each turn rigid first, then smoothed a frame late): the director's
   // shot (controller/cine.ts), the attach point eased and softened (stepMount, controller/camrig.ts), the lens —

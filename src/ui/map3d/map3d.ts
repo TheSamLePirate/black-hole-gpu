@@ -123,6 +123,7 @@ const KIND_NOTE: Record<MapBody["kind"], string> = {
   star: t("star"),
   planet: t("planet"),
   moon: t("moon"),
+  craft: t("spacecraft"),
   hole: t("hole"),
   mouth: t("mouth"),
   lagrange: t("Lagrange"),
@@ -878,7 +879,7 @@ export class Map3D {
     if (!ref || ref.id === "sun") return "sun";
     // (a preview or a plan out to the Sun's sphere — a mission to another planet —: the whole of it)
     for (const p of [i.cand?.kind === "ours" ? i.cand.ours : null, i.ourPlan]) if (p && p.refs.includes("sun")) return "sun";
-    return ref.kind === "moon" && ref.parent ? ref.parent : ref.id;
+    return (ref.kind === "moon" || ref.kind === "craft") && ref.parent ? ref.parent : ref.id;
   }
 
   setFocus(id: string | null) {
@@ -1188,7 +1189,7 @@ export class Map3D {
       edmunds: [0.95, 0.75, 0.5],
     };
     const air = b.air ? { col: AIR[b.id] ?? col, k: 0.9 } : undefined;
-    const base = { c, R, L, ax: axV, col, air, minPx: (b.kind === "moon" ? 2 : 3.2) * dpr } as GpuBody;
+    const base = { c, R, L, ax: axV, col, air, minPx: (b.kind === "moon" || b.kind === "craft" ? 2 : 3.2) * dpr } as GpuBody;
     if (b.kind === "star") return G.body({ ...base, kind: BodyKind.Star, minPx: 5 * dpr }), true;
     if (b.kind === "mouth") return G.body({ ...base, kind: BodyKind.Mouth, minPx: 4 * dpr }), true;
     if (b.kind === "hole") {
@@ -1508,7 +1509,7 @@ export class Map3D {
           pb = P(add(b.orbit[0]!, b.orbitOff));
         if (pp.ok && pb.ok && Math.hypot(pp.x - pb.x, pp.y - pb.y) < 9 * dpr && b.id !== tgt && b.id !== fid) continue;
       }
-      const hi = b.id === tgt ? 0.75 : b.id === fid || b.id === i.ref ? 0.55 : b.kind === "moon" ? 0.22 : 0.32;
+      const hi = b.id === tgt ? 0.75 : b.id === fid || b.id === i.ref ? 0.55 : b.kind === "moon" || b.kind === "craft" ? 0.22 : 0.32;
       line(b.orbit, b.id === tgt ? "255, 150, 100" : b.col, hi, b.id === tgt ? 1.5 : 1.1, [], true, b.orbitOff);
     }
 
@@ -1553,7 +1554,7 @@ export class Map3D {
       .filter((q) => q.p.ok)
       .sort((a, b) => b.p.z - a.p.z);
     for (const { b, p } of list) {
-      const moon = b.kind === "moon";
+      const moon = b.kind === "moon" || b.kind === "craft";
       const lag = b.kind === "lagrange";
       if (lag && b.lagrange) {
         const secB = sc.byId.get(b.lagrange.secondary);
@@ -1637,7 +1638,7 @@ export class Map3D {
                 ? b.lagrange?.secondary === "earth" && b.lagrange.index <= 2
                   ? 2
                   : 1
-                : b.kind === "moon"
+                : b.kind === "moon" || b.kind === "craft"
                   ? 1
                   : 2;
       labels.push({
@@ -2067,7 +2068,7 @@ export class Map3D {
       }
     };
     drawRings(false);
-    const minR = b.kind === "moon" ? 2 * dpr : 3.2 * dpr;
+    const minR = b.kind === "moon" || b.kind === "craft" ? 2 * dpr : 3.2 * dpr;
     if (r < minR) {
       ctx.beginPath();
       ctx.arc(p.x, p.y, minR, 0, 2 * Math.PI);

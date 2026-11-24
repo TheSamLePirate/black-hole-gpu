@@ -20,7 +20,7 @@
 
 1. **Performance garantie 60 FPS et coût nul hors utilisation :**
    - **Boot paresseux (on-demand) :** Tant que le joueur n'ouvre pas la console OBC, ne sélectionne pas un onglet `OBC` ou n'appelle pas `__bh.obc.boot()` / TARS, aucun octet de `unkernel.wasm` ni d'`alpine.erofs` n'est téléchargé et aucun Worker n'est créé.
-   - **Isolation Web Worker :** `createKernel({ worker: true })` exécute le noyau Linux, le JIT `kwemu`, le réseau Wisp et le disque IndexedDB dans un Web Worker dédié, **sans** exiger `COOP/COEP` (compatible avec les tuiles cross-origin IGN/OSM/Esri ; `SharedArrayBuffer` est utilisé automatiquement si disponible).
+   - **Isolation Web Worker :** `createKernel({ worker: true })` exécute le noyau Linux, le JIT `kwemu`, le réseau Wisp et le disque IndexedDB dans un Web Worker dédié. **Un seul vCPU marche sans `COOP/COEP` ; plusieurs vCPU (SMP, `cpus` 2 ou 4) exigent `SharedArrayBuffer`, donc une page isolée des autres origines** (`crossOriginIsolated`) : `Cross-Origin-Opener-Policy: same-origin` + `Cross-Origin-Embedder-Policy: credentialless` (`credentialless` et non `require-corp` : les tuiles IGN/OSM/swisstopo/GIBS/WorldCover, Overture, les API météo, OpenRouter et le serveur de salons sont lus par `fetch` en CORS, que COEP laisse passer). Ajoutés à tout le site le 23 nov. 2026 (d11d75d1), ces en-têtes ne sont envoyés depuis la revue du 24 nov. 2026 qu'au joueur qui les a demandés — cookie `kerr_coi` (`src/obc/isolation.ts`), posé au premier démarrage de l'OBC en SMP (effet au chargement suivant) et réglable dans le gestionnaire (onglet Système, « Multiprocesseur ») — : le jeu sans OBC est servi comme avant. Lus par nginx (`map $cookie_kerr_coi`), le serveur de dev (`server.ts`, `KERR_COI=1/0` pour forcer) et le Service Worker (`cookieStore`, pour GitHub Pages). Coûts de l'isolation et risques à vérifier : [DEPLOY.md](DEPLOY.md) « Cross-origin isolation ».
    - **Rendu cockpit dirty-checked (< 0,3 ms CPU/frame) :** Le canvas OBC n'est redessiné que lorsqu'une nouvelle frame `/dev/fb0` ou de nouveaux caractères terminal arrivent (cadence bornée à 15–30 Hz).
 2. **Un vrai Linux `aarch64` complet :**
    - `unkernel` (`v0.2.0`) compile un noyau Linux 7.x avec vraie MMU (`fork`, `mmap`, `overlayfs`, `ext4`, `9p`, `AF_VSOCK`, `TCP/IP`, `/dev/fb0`) directement en WebAssembly, exécutant des binaires ARM64 (`aarch64`) non modifiés d'Alpine 3.24.
@@ -66,6 +66,30 @@
                                              v
                                  Internet réel / LAN
 ```
+
+### 2.1 Contrats hôte ↔ invité : RPC `__bh` et télémétrie (24 novembre 2026)
+
+* **RPC `__bh` / TARS sur 9p, par identifiant** (`src/obc/bridge.ts`) : l'invité écrit une ligne JSON terminée par `\n`
+  dans `/obc/rpc/<id>.req` (création exclusive) et lit `/obc/rpc/<id>.res` (écrit par renommage atomique), qu'il
+  supprime ensuite ; l'hôte prend la requête quand la ligne est complète (une requête plus grosse que le message 9p
+  arrive en plusieurs écritures), la supprime, et balaie les réponses non lues (60 s, 256 fichiers au plus). Chaque
+  réponse est aussi écrite dans la case unique historique `/obc/rpc_res` (repli si le client 9p de l'invité garde un
+  fichier absent en cache) ; `/obc/rpc_req` ne sert plus qu'aux hôtes antérieurs sans `/obc/rpc`. Les identifiants
+  portent le pid et un nonce aléatoire (`rs-<pid>-<nonce>-<seq>`, `py-…`, `js-…` : `obc-core/src/bus.rs`,
+  `scripts/obc/lib/obc.py`, `obc.mjs`), si bien que deux programmes concurrents (deux TUI Rust, une boucle Python) ne
+  lisent jamais la réponse l'un de l'autre et qu'une réponse asynchrone n'écrase plus une réponse synchrone.
+* **AF_VSOCK:4747** : une ligne de plus de 262 144 caractères reçoit `{"ok":false,"code":"E2BIG",…}` et le flux est
+  ignoré jusqu'au saut de ligne suivant (`JsonlLineSplitter`), au lieu d'être tronqué en silence puis lu comme du
+  JSON corrompu. Vérifié par `tests/obc-bridge.test.ts` (statique, hors navigateur).
+* **Télémétrie v1** (`/obc/telemetry.json`) : un seul schéma déclaré en quatre endroits — `ObcTelemetry`
+  (`src/obc/types.ts`), `Telemetry` (`obc-core/src/telemetry.rs`), `TELEMETRY_FIELDS` (`obc.py`, `obc.mjs`).
+  `tests/obc-telemetry-contract.test.ts` lit les noms de champs dans chaque source et échoue au moindre écart. Le
+  champ `units` (`"metric"` par défaut, `"imperial"` en option : `settings.units`, `src/ui/unitsys.ts`) porte le
+  choix du joueur ; les applications invitées (TUI/fb Rust `UnitSys`, `obc.py` `Units`, `obc.mjs` `unitsOf`)
+  affichent hauteurs, vitesses et distances dans ces unités (`OBC_UNITS=metric|imperial` force un programme). Les
+  autres champs restent SI. `obc.mjs` `wgs84Inverse` / `wgs84BearingDist` calculent la géodésique WGS84 (Vincenty,
+  repli marqué `approx` sur la sphère authalique près des antipodes) ; `obc-core` `wgs84_bearing_dist` reste une
+  approximation par rayons de courbure locaux (< 0,1 %), documentée comme telle.
 
 ---
 
@@ -127,6 +151,9 @@ L'image `alpine.erofs` (4,05 Mo) est servie localement (`/obc/alpine.erofs`) et 
 
 * **Développement local (`server/wisp-relay.ts`) :** relais Wisp v1 intégré à `server.ts` sur `/__wisp` (actif en dev uniquement, protection `foreignOrigin(req)`, quotas de connexions/flux). `apk add python3` et `curl` fonctionnent immédiatement sans configuration.
 * **Production / Portainer :** URL Wisp personnalisable dans les réglages et dans la barre de la console OBC (sauvegardée via `src/util/storage.ts`), ex. `wss://wisp.domaine.fr/`.
+* **Sécurité du relais (revue du 24 nov. 2026, dev et prod) :** adresses vérifiées numériquement sur leur forme canonique (`src/util/ip-guard.ts` : littéraux IPv6 longs, IPv4 mappées, NAT64, formes numériques IPv4 héritées, et chaque adresse résolue ; le relais résout lui-même puis se connecte au littéral vérifié), ports de destination sur liste blanche (`WISP_TCP_PORTS` = 80, 443, 9418 ; `WISP_UDP_PORTS` = 53 ; 25/465/587/2525 toujours refusés), `Origin` autorisée exigée, plafonds de débit par IP et global, crédits Wisp `CONTINUE` respectés (un seul gestionnaire `drain` par flux, file bornée, client qui ignore ses crédits fermé en `THROTTLED`), socket UDP connectée à sa seule destination, en-têtes `X-Real-IP` crus seulement d'un proxy de confiance (`TRUSTED_PROXIES`). Détails et variables : [DEPLOY.md](DEPLOY.md) ; preuves : `tests/obc-wisp-security.test.ts`.
+* **Privilèges de l'invité (revue du 24 nov. 2026) :** tout code de l'invité (y compris un script d'installation `npm`/`pip`) peut parler au pont `__bh` et aux commandes hôte ; il n'a donc pas les droits de la page. `src/obc/bh-rpc.ts` ne suit que les racines de `RPC_ROOTS` (liste explicite : `renderer`, `gpu`, `obc`, `net`, `pwa`, `snapshot`, `render`, `video`… exclus), refuse `__proto__`/`constructor`/`prototype`, les clés au nom de secret et tout objet de page (Window, Document, nœuds DOM, EventTarget, Storage, objets GPU/WebGL/Canvas, `fetch`/`eval`/`Function`/minuteries) ; les valeurs entrantes perdent leurs clés `__proto__`, les résultats masquent les clés API du joueur. `hfetch` : HTTPS public seulement, `credentials: "omit"`, jamais l'origine de la page (ses routes de dev `/__snapshot`, `/__deepgram`) ni un hôte privé, l'URL finale revérifiée après redirection. Limite connue : la commande `ai` utilise toujours la clé OpenRouter du joueur sans la révéler (dépense possible par un code invité). Preuves : `tests/obc-rpc.test.ts`, `tests/obc-perf.test.ts`.
+* **Images et dépendances épinglées (24 nov. 2026) :** `@xterm/xterm`, `@xterm/addon-fit`, `@xterm/addon-image` et `unkernel` en versions exactes dans `package.json` ; `debian.erofs` (hors Git) téléchargé depuis la release de la version épinglée d'unkernel (`scripts/obc-distro.ts`, `UNKERNEL_RELEASE`) puis vérifié (taille + SHA-256) contre `assets/obc/distros.json` par `build-pages.ts` (échec du build sinon) et par la route de dev `/obc/debian.erofs`. Monter unkernel : changer `UNKERNEL_RELEASE`, `distros.json` (depuis celui de la release) et la version de `package.json` ensemble.
 * **Persistance hybride :**
   * `/home/pilot/` persisté localement dans IndexedDB via le disque `/data` d'Unkernel.
   * `scripts/obc/` du dépôt Git monté en direct sur `/obc/scripts/` (éditable depuis l'IDE sur Mac et exécutable immédiatement dans le cockpit).

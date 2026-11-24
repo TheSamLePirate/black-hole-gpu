@@ -122,6 +122,16 @@ export const CREDITS: CreditSection[] = [
       },
       {
         what: {
+          fr: "Le télescope spatial James Webb — « The James Webb Space Telescope »",
+          en: "The James Webb Space Telescope — “The James Webb Space Telescope”",
+        },
+        who: "Ignazio Pillitteri (Sketchfab)",
+        licence: CC_BY,
+        url: "https://sketchfab.com/3d-models/the-james-webb-space-telescope-dcb95b3193be49e7a60192055df2315d",
+        readme: "assets/jwst/README.md",
+      },
+      {
+        what: {
           fr: "Les porte-avions (Gerald R. Ford, Kiev, Implacable), les avions de ligne et les navires du trafic",
           en: "The carriers (Gerald R. Ford, Kiev, Implacable), the airliners and the ships of the traffic",
         },
@@ -321,6 +331,44 @@ export const CREDITS: CreditSection[] = [
         who: "Jakub Antalík",
         licence: "MIT",
         url: "https://github.com/Jakubantalik/thinking-orbs",
+      },
+      {
+        what: {
+          fr: "L'ordinateur de bord Linux — unkernel (noyau Linux et busybox d'Alpine)",
+          en: "The Linux on-board computer — unkernel (Linux kernel and Alpine's busybox)",
+        },
+        who: "pithings · Linux kernel contributors · BusyBox",
+        licence: "MIT AND GPL-2.0-only",
+        url: "https://github.com/pithings/unkernel",
+      },
+      {
+        what: { fr: "Les distributions de l'ordinateur de bord", en: "The on-board computer's distributions" },
+        who: {
+          fr: "Alpine Linux · Debian — leurs paquets sous leurs propres licences, sources chez leurs projets",
+          en: "Alpine Linux · Debian — their packages under their own licences, sources from their projects",
+        },
+        url: "https://www.alpinelinux.org",
+      },
+      {
+        what: { fr: "Le terminal — xterm.js", en: "The terminal — xterm.js" },
+        who: "The xterm.js authors",
+        licence: "MIT",
+        url: "https://github.com/xtermjs/xterm.js",
+      },
+      {
+        what: {
+          fr: "Les applications Rust de l'ordinateur de bord — Ratatui, crossterm",
+          en: "The on-board computer's Rust apps — Ratatui, crossterm",
+        },
+        who: "The Ratatui and crossterm developers",
+        licence: "MIT",
+        url: "https://ratatui.rs",
+      },
+      {
+        what: { fr: "La préparation des maillages — meshoptimizer", en: "Mesh preparation — meshoptimizer" },
+        who: "Arseny Kapoulkine",
+        licence: "MIT",
+        url: "https://github.com/zeux/meshoptimizer",
       },
       { what: { fr: "Inter", en: "Inter" }, who: "Rasmus Andersson", licence: "SIL OFL 1.1" },
       { what: { fr: "JetBrains Mono", en: "JetBrains Mono" }, who: "JetBrains", licence: "SIL OFL 1.1" },

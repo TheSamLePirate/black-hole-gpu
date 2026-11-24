@@ -272,12 +272,13 @@ with obc.Framebuffer() as fb, obc.RawKeys() as keys:
         banner = note if time.monotonic() < note_until else f"PFD {st.vessel_id[:6]}  THR {thr_pct:3d}%  {sas}  {ap}"
         fb.text(10, 13, banner, amber if time.monotonic() < note_until else cyan, scale=2)
 
-        # ── 7. Left Scrolling Airspeed Tape (kt for aircraft, m/s for space) ──
+        # ── 7. Left Scrolling Airspeed Tape (aircraft: m/s by default or kt; space: m/s) ──
+        units = st.units
         fb.rect(6, ay0, 82, ah, panel_dark)
         fb.stroke_rect(6, ay0, 82, ah, dim)
-        spd_val = st.true_airspeed * 1.94384 if is_air else st.true_airspeed
-        spd_step = 20.0 if is_air else 500.0
-        spd_px = 2.0 if is_air else 0.08
+        spd_val = units.spd(st.true_airspeed) if is_air else st.true_airspeed
+        spd_step = (10.0 if units.metric else 20.0) if is_air else 500.0
+        spd_px = (4.0 if units.metric else 2.0) if is_air else 0.08
         base_spd = math.floor(spd_val / spd_step) * spd_step
         for k in range(-6, 7):
             v = base_spd + k * spd_step
@@ -288,18 +289,18 @@ with obc.Framebuffer() as fb, obc.RawKeys() as keys:
                 fb.hline(74, 86, ty, tick_c)
                 lbl = f"{int(v):4d}" if is_air else f"{v/1000:3.1f}K"
                 fb.text(12, ty - 3, lbl, tick_c, scale=1)
-        fb.text(14, ay0 + 6, "IAS KT" if is_air else "SPD MS", cyan, scale=1)
+        fb.text(14, ay0 + 6, ("IAS MS" if units.metric else "IAS KT") if is_air else "SPD MS", cyan, scale=1)
         fb.rect(8, cy - 15, 78, 30, panel)
         fb.stroke_rect(8, cy - 15, 78, 30, green)
         fb.text(12, cy - 7, f"{spd_val:5.0f}", green, scale=2)
         fb.text(12, ay1 - 22, f"M{st.mach:.2f}", amber, scale=2)
 
-        # ── 8. Right Scrolling Altitude Tape (ft for aircraft, km for space) ──
+        # ── 8. Right Scrolling Altitude Tape (aircraft: m by default or ft; space: km) ──
         fb.rect(W - 88, ay0, 82, ah, panel_dark)
         fb.stroke_rect(W - 88, ay0, 82, ah, dim)
-        alt_val = st.altitude_msl * 3.28084 if is_air else st.altitude_msl / 1000.0
-        alt_step = 500.0 if is_air else 20.0
-        alt_px = 0.08 if is_air else 2.2
+        alt_val = units.alt(st.altitude_msl) if is_air else st.altitude_msl / 1000.0
+        alt_step = (100.0 if units.metric else 500.0) if is_air else 20.0
+        alt_px = (0.4 if units.metric else 0.08) if is_air else 2.2
         base_alt = math.floor(alt_val / alt_step) * alt_step
         for k in range(-6, 7):
             v = base_alt + k * alt_step
@@ -308,7 +309,7 @@ with obc.Framebuffer() as fb, obc.RawKeys() as keys:
                 fb.hline(W - 86, W - 74, ty, tick_c)
                 lbl = f"{int(v):5d}" if is_air else f"{v:4.0f}K"
                 fb.text(W - 70, ty - 3, lbl, tick_c, scale=1)
-        fb.text(W - 80, ay0 + 6, "ALT FT" if is_air else "ALT KM", cyan, scale=1)
+        fb.text(W - 80, ay0 + 6, ("ALT M" if units.metric else "ALT FT") if is_air else "ALT KM", cyan, scale=1)
         fb.rect(W - 86, cy - 15, 78, 30, panel)
         fb.stroke_rect(W - 86, cy - 15, 78, 30, cyan)
         alt_lbl = f"{alt_val:5.0f}" if is_air else f"{alt_val:4.1f}K"

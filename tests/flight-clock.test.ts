@@ -24,7 +24,10 @@ const WALL: Record<string, { n: number; why: string }> = {
   "controller/docking.ts": { n: 2, why: "the network (another's host craft carried on from its last sample)" },
   "controller/wingmen.ts": { n: 1, why: "the network (another's wingmen, their samples' age)" },
   "controller/formation.ts": { n: 1, why: "the network (a leader's samples and their grace)" },
-  "controller/traffic.ts": { n: 2, why: "the network (the real traffic's reports, wall-dated)" },
+  "controller/traffic.ts": {
+    n: 4,
+    why: "the network (the real traffic's reports, wall-dated); the paths' fitting held to a share of the frame's CPU time (FitBudget)",
+  },
   "game/tools.ts": { n: 2, why: "the world runways' cache (world/runways3d.ts, its own wall clock)" },
   "game/out-of-view.ts": { n: 1, why: "the interface (how long the page was out of view — no frame runs meanwhile)" },
   "game/frame.ts": { n: 1, why: "the interface (a failing stage tried again every 5 s of the wall's time)" },

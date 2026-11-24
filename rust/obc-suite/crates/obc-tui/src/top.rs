@@ -179,7 +179,7 @@ impl TuiApp for TopApp {
                 Row::new([
                     "WGS84 POSITION".into(),
                     format!("LAT {:+.4}°  LON {:+.4}°", t.position.lat_deg, t.position.lon_deg),
-                    format!("MSL {:.1} m  AGL {:.1} m", t.position.altitude_msl_m, t.position.height_over_ground_m),
+                    format!("MSL {}  AGL {}", t.unit_sys().f_alt(t.position.altitude_msl_m), t.unit_sys().f_alt(t.position.height_over_ground_m)),
                 ]),
                 Row::new([
                     "ATTITUDE".into(),
@@ -188,8 +188,8 @@ impl TuiApp for TopApp {
                 ]),
                 Row::new([
                     "FLIGHT".into(),
-                    format!("TAS {:.1} m/s ({:.0} kt)", t.flight.true_airspeed_mps, t.tas_knots()),
-                    format!("MACH {:.2}  VS {:+.1} m/s", t.flight.mach, t.flight.vertical_speed_mps),
+                    format!("TAS {}", t.unit_sys().f_spd(t.flight.true_airspeed_mps)),
+                    format!("MACH {:.2}  VS {}", t.flight.mach, t.unit_sys().f_vs(t.flight.vertical_speed_mps)),
                 ]),
                 Row::new([
                     "SYSTEMS".into(),

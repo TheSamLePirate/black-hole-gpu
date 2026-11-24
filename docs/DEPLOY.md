@@ -161,9 +161,71 @@ The embedded Linux OBC (`docs/PLAN-LINUX-OBC.md`) uses a Wisp v1 WebSocket-to-TC
 
 - **Portainer (`kerr` stack):** included automatically as the `wisp` service in `deploy/compose.yml` (reusing `__ROOMS_IMAGE__` on port `3002`, no extra Docker build required). A standalone stack template is also kept in `deploy/portainer-wisp.yml` if you prefer a separate Portainer stack.
 - **Nginx Proxy Manager:** create a Proxy Host for `code.samlepirate.org` → `host:3002` with **Websockets Support** enabled and TLS/HTTPS active.
-- **Security:** `wisp-main.ts` restricts WebSocket upgrades to allowed origins (`https://samlepirate.org`, `https://www.samlepirate.org`, `https://thesamlepirate.github.io`, `https://code.samlepirate.org`, `localhost`, plus optional `WISP_ORIGINS`), applies per-IP connection quotas via `X-Real-IP` (`WISP_MAX_PER_IP=8`, `WISP_MAX_CLIENTS=32`), and blocks loopback, RFC1918 private LANs, CGNAT, link-local, and cloud metadata addresses (`isBlockedHost`).
-- **Health check:** `https://code.samlepirate.org/health` returns `{ ok: true, protocol: "wisp/1", build, activeClients, totalStreams, ... }`.
+- **Security (since 24 Nov 2026; the relay is reachable by anyone, so it is built to be safe as an open endpoint):**
+  - **Origin required.** An upgrade without an allowed `Origin` is refused (403): `https://samlepirate.org`,
+    `https://www.samlepirate.org`, `https://thesamlepirate.github.io`, any `https://*.samlepirate.org`, `localhost`, plus
+    `WISP_ORIGINS` (comma-separated). A browser cannot lie about its Origin, so no other site can use the relay through its
+    visitors; a script can forge it, which is why the next three guards do not depend on it.
+  - **Destinations checked numerically** (`src/util/ip-guard.ts`): IP literals in any spelling (IPv6 long forms, IPv4-mapped,
+    NAT64, 6to4, zoned) and every resolved address must be public — loopback, RFC 1918, CGNAT, link-local and cloud metadata,
+    documentation, benchmarking, multicast, reserved, ULA, site-local refused; IPv6 must be global unicast. Legacy numeric IPv4
+    forms (`2130706433`, `127.1`, `0x7f.1`) and local names (single labels such as Docker service names, `.local`,
+    `.internal`, `.home.arpa`…) are refused. The relay resolves names itself and connects to the checked literal.
+  - **Destination ports:** `WISP_TCP_PORTS` (default `80,443,9418`: HTTP, HTTPS, `git://`; add `22` for git over SSH if
+    wanted), `WISP_UDP_PORTS` (default `53`; `0` = no UDP — unkernel's client does not use UDP today). Mail ports 25, 465,
+    587 and 2525 are refused whatever the lists say.
+  - **Caps:** `WISP_MAX_CLIENTS` (32 in the stack) WebSockets at once, `WISP_MAX_PER_IP` (8) per client IP, 96 streams per
+    WebSocket, `WISP_IP_CONNECTS_PER_SEC` (20/s, burst ×5) stream opens per IP, `WISP_IP_BYTES_PER_SEC` (4 MiB/s, burst 8 s)
+    per IP and `WISP_GLOBAL_BYTES_PER_SEC` (24 MiB/s) for the relay, both directions; a client sending past its Wisp credits is
+    closed (`THROTTLED`) at a bounded queue.
+  - **Client IP:** `X-Real-IP` / `X-Forwarded-For` are believed only from a trusted proxy (`TRUSTED_PROXIES`, default
+    loopback + private ranges, where Nginx Proxy Manager reaches the container from; `server/address.ts`). Port 3002 is
+    published on the host: **keep it closed to the internet** (firewall), so every client comes through the proxy. If Docker
+    runs its userland proxy on this host (every published connection then seems to come from the bridge gateway), set
+    `TRUSTED_PROXIES` to the proxy's own address.
+  - **Why no signed token:** the site is static (Pages, nginx); a token handed to any visitor is handed to any script, so it
+    would add a round trip without stopping a forger. What bounds abuse is the destination/port allowlist and the caps: the
+    worst a forger gets is a slow HTTP(S)/git egress, counted by IP.
+- **Health check:** `https://code.samlepirate.org/health` returns `{ ok: true, protocol: "wisp/1", build, activeClients, totalStreams, blockedHosts, blockedPorts, throttledStreams, ratePauses, udpDropped, ... }`.
 - **Client default:** the simulator uses `/__wisp` automatically in local dev and falls back to `wss://code.samlepirate.org/` in production (overridable in the OBC HUD Options drawer).
+
+## Cross-origin isolation (the Linux OBC's multi-CPU)
+
+Unkernel runs more than one vCPU only with `SharedArrayBuffer`, which the browser grants only to a **cross-origin isolated**
+page: `Cross-Origin-Opener-Policy: same-origin` + `Cross-Origin-Embedder-Policy: credentialless`. One vCPU works without.
+The headers were added to the whole site on 23 Nov 2026 (d11d75d1); since the review of 24 Nov 2026 they are sent **only to a
+player who asked for them**, so the game without the OBC is served as before:
+
+- **The `kerr_coi` cookie** (`src/obc/isolation.ts`): absent — not isolated; `1` — isolated from the next load; `0` — the
+  player said no (never set again by itself). The OBC sets `1` at its first boot with more than one vCPU (the boot itself
+  runs on one vCPU; SMP from the next load); the player switches it in the OBC manager (System tab, "Multi-CPU", with a
+  reload button). `crossOriginIsolated` and the vCPU count show in the same tab and in `__bh.obc.kernelStats()`.
+- **Who reads it:** nginx (`deploy/nginx.conf`: `map $cookie_kerr_coi` → `$kerr_coop` / `$kerr_coep`, empty = no header,
+  `Vary: Cookie` on the page so a revalidation never mixes the two), the dev server (`server.ts`: the `/` and `/crew/`
+  pages; `KERR_COI=1` / `KERR_COI=0` force it on / off, `KERR_NO_COI=1` off as before), and the Service Worker (`src/sw.ts`:
+  through `cookieStore`, for GitHub Pages which sends no headers; it also removes them from a page cached while isolated).
+  Where the worker has no `cookieStore` (Firefox, Safari), Pages stays non-isolated: one vCPU there.
+- **The hashed assets** carry `Cross-Origin-Resource-Policy: same-origin` (nginx): only this site embeds them; harmless for
+  the game (all same-origin), and needed by nothing — `credentialless` does not ask CORP of same-origin files.
+
+What isolation changes for the rest of the game (read from the code on 24 Nov 2026, **not yet checked in a browser**):
+
+- **Data loads — unaffected.** Every cross-origin resource is read by `fetch` in CORS mode or by an `<img crossorigin>`
+  (IGN Géoplateforme, swisstopo, ESA WorldCover, GIBS, EOX, Mapterhorn, OpenFreeMap/OSM tiles, the Overture PMTiles
+  ranges on S3, Open-Meteo, NOAA SWPC, CelesTrak, VATSIM, Overpass/Nominatim/Photon, OpenRouter, Anthropic/OpenAI,
+  stream.samlepirate.org); COEP does not apply to CORS responses, and `credentialless` would only drop cookies from
+  no-cors loads, of which the game has none. The Service Worker keeps only non-opaque tile responses. No web fonts, no
+  cross-origin iframe, no cross-origin worker script. WebSockets (rooms, Wisp, Deepgram relay) and WebRTC are outside COEP.
+- **Popups — changed.** COOP `same-origin` puts a cross-origin popup in another browsing-context group: the OpenRouter
+  sign-in popup loses `window.opener` and its handle reads `closed` at once. The callback page (`pwa/openrouter.html`)
+  also answers through a `BroadcastChannel`, and `connect()` (`src/ai/openrouter.ts`) no longer gives up 1.5 s after
+  `closed` when the page is isolated (five minutes instead); `tests/obc-isolation.test.ts` proves the two paths.
+  `window.open(…, "noopener")` (the title's docs) is unaffected.
+- **Workers — to check.** The game's own workers (`/*-worker.js`, same origin) are served with the page's COEP by nginx
+  (location `/`) but without it by the dev server and GitHub Pages. Chrome takes a dedicated worker's policy from its
+  creator; a browser applying the HTML rule strictly (a worker script without COEP under an isolated owner) could refuse
+  them. Only for isolated players; check Firefox once its WebGPU runs the game.
+- **Safari** does not know `credentialless`: no isolation, nothing broken (one vCPU).
 
 ## The server stuck on an old build
 

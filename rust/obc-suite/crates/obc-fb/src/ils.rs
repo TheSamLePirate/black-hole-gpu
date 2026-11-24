@@ -2,7 +2,7 @@
 
 use crate::FbRunOpts;
 use anyhow::Result;
-use obc_core::{AvionicsBus, Framebuffer, RawKey, RawKeyReader, Telemetry, rgb};
+use obc_core::{AvionicsBus, Framebuffer, NM_M, RawKey, RawKeyReader, Telemetry, rgb};
 use std::fmt::Write as _;
 use std::time::Instant;
 
@@ -15,23 +15,23 @@ const C_GRN: u32 = rgb(96, 246, 146);
 const C_MAG: u32 = rgb(246, 98, 232);
 const C_AMB: u32 = rgb(255, 194, 58);
 
+/// Split ILS display; `range` is in the display units (km metric, NM imperial: `Telemetry::unit_sys`). The geometry is
+/// computed in metres; only the labels change with the units.
 pub fn render_ils(
     fb: &mut Framebuffer,
     t: &Telemetry,
-    range_nm: f64,
+    range: f64,
     fps: f64,
     scratch: &mut String,
 ) {
     let w = fb.width as i32;
     let h = fb.height as i32;
     fb.clear(C_BG);
+    let u = t.unit_sys();
+    let range_m = range * u.dist_unit_m();
 
     let rwy_id = t.nav.runway.as_ref().map_or("NO ILS", |r| r.ident.as_str());
-    let dist_nm = t
-        .nav
-        .runway
-        .as_ref()
-        .map_or(0.0, |r| r.dist_m * 0.000_539_956_8);
+    let dist_m = t.nav.runway.as_ref().map_or(0.0, |r| r.dist_m);
     let loc_deg = t.nav.runway.as_ref().map_or(0.0, |r| r.loc_deg);
     let gs_deg = t.nav.runway.as_ref().map_or(0.0, |r| r.gs_deg);
 
@@ -41,8 +41,12 @@ pub fn render_ils(
     scratch.clear();
     let _ = write!(
         scratch,
-        "RS-ILS {}  DME {:4.1}NM  LOC {:+4.2}  GS {:+4.2}",
-        rwy_id, dist_nm, loc_deg, gs_deg
+        "RS-ILS {}  DME {:4.1}{}  LOC {:+4.2}  GS {:+4.2}",
+        rwy_id,
+        u.dist(dist_m),
+        u.dist_name(),
+        loc_deg,
+        gs_deg
     );
     fb.draw_text(8, 11, scratch, C_CYN, 1);
 
@@ -63,17 +67,17 @@ pub fn render_ils(
     fb.line(left_x, plan_cy, right_x, plan_cy - cone_h, C_BORDER);
     fb.line(left_x, plan_cy, right_x, plan_cy + cone_h, C_BORDER);
 
-    // FAF / IF markers at 5 NM & 10 NM
-    for (nm, lbl) in [(5.0, "FAF"), (10.0, "IF")] {
-        if nm <= range_nm {
-            let mx = left_x + ((nm / range_nm) * span_x).round() as i32;
+    // FAF / IF markers at 5 NM & 10 NM (9.3 and 18.5 km)
+    for (mark_m, lbl) in [(5.0 * NM_M, "FAF"), (10.0 * NM_M, "IF")] {
+        if mark_m <= range_m {
+            let mx = left_x + ((mark_m / range_m) * span_x).round() as i32;
             fb.vline(mx, plan_cy - 6, plan_cy + 6, C_MAG);
             fb.draw_text_centered(mx, plan_cy + 10, lbl, C_MAG, 1);
         }
     }
 
     // Live aircraft position in plan view
-    let ac_x = left_x + ((dist_nm / range_nm).clamp(0.0, 1.0) * span_x).round() as i32;
+    let ac_x = left_x + ((dist_m / range_m).clamp(0.0, 1.0) * span_x).round() as i32;
     let ac_y = plan_cy + ((loc_deg / 2.5).clamp(-1.2, 1.2) * f64::from(cone_h)).round() as i32;
     fb.fill_triangle((ac_x - 7, ac_y), (ac_x + 5, ac_y - 5), (ac_x + 5, ac_y + 5), C_AMB);
 
@@ -86,17 +90,17 @@ pub fn render_ils(
     fb.draw_text(16, prof_top + 6, "3 DEG GLIDEPATH PROFILE", C_CYN, 1);
     fb.hline(left_x, right_x, ground_y, C_GRN);
 
-    // Ideal 3° glideslope line (tan(3°) ≈ 318 ft/NM)
-    let max_alt_ft = range_nm * 360.0;
-    let ideal_top_y = ground_y - ((range_nm * 318.4 / max_alt_ft).clamp(0.0, 1.0) * prof_h).round() as i32;
+    // Ideal 3° glideslope line (tan 3° = 0.0524); the profile's top is a 3.4° slope (0.0592)
+    let max_h_m = range_m * 0.059_2;
+    let ideal_top_y = ground_y - ((range_m * 0.052_4 / max_h_m).clamp(0.0, 1.0) * prof_h).round() as i32;
     fb.line(left_x, ground_y, right_x, ideal_top_y, C_MAG);
 
-    // Live aircraft altitude dot (AGL ft)
-    let agl_ft = (t.position.height_over_ground_m * 3.280_84).max(0.0);
-    let ac_py = ground_y - ((agl_ft / max_alt_ft).clamp(0.0, 1.0) * prof_h).round() as i32;
+    // Live aircraft height dot (AGL)
+    let agl_m = t.position.height_over_ground_m.max(0.0);
+    let ac_py = ground_y - ((agl_m / max_h_m).clamp(0.0, 1.0) * prof_h).round() as i32;
     fb.fill_circle(ac_x, ac_py, 5, C_AMB);
     scratch.clear();
-    let _ = write!(scratch, "{:.0}FT", agl_ft);
+    let _ = write!(scratch, "{:.0}{}", u.alt(agl_m), u.alt_name());
     fb.draw_text(ac_x - 16, (ac_py - 14).max(prof_top + 16), scratch, C_WHT, 1);
 
     // Footer
@@ -105,11 +109,15 @@ pub fn render_ils(
     scratch.clear();
     let _ = write!(
         scratch,
-        "AGL {:4.0}M  TAS {:3.0}KT  VS {:+5.0}FPM  RNG {:2.0}NM  FPS {:2.0} [+-IGQ]",
-        t.position.height_over_ground_m,
-        t.tas_knots(),
-        t.vs_fpm(),
-        range_nm,
+        "AGL {:4.0}{}  TAS {:3.0}{}  VS {:+5.1}{}  RNG {:2.0}{}  FPS {:2.0} [+-IGQ]",
+        u.alt(t.position.height_over_ground_m),
+        u.alt_name(),
+        u.spd(t.flight.true_airspeed_mps),
+        u.spd_name(),
+        u.vs(t.flight.vertical_speed_mps),
+        u.vs_name(),
+        range,
+        u.dist_name(),
         fps
     );
     fb.draw_text(8, h - 17, scratch, C_WHT, 1);
@@ -122,7 +130,10 @@ pub fn run(args: &[String]) -> Result<()> {
     let keys = RawKeyReader::enter();
     let mut scratch = String::with_capacity(128);
 
-    let ranges = [10.0_f64, 20.0, 40.0];
+    // Range ladders in the display units: km (metric, the default) or NM (imperial).
+    let ranges_km = [20.0_f64, 40.0, 80.0];
+    let ranges_nm = [10.0_f64, 20.0, 40.0];
+    let ranges_len = ranges_km.len();
     let mut rng_idx = 0usize;
     let start = Instant::now();
     let mut frames = 0u32;
@@ -137,6 +148,7 @@ pub fn run(args: &[String]) -> Result<()> {
         }
         let t_frame = Instant::now();
         let tel = bus.telemetry().clone();
+        let ranges = if tel.unit_sys().is_metric() { &ranges_km } else { &ranges_nm };
         render_ils(&mut fb, &tel, ranges[rng_idx], fps, &mut scratch);
         fb.present()?;
 
@@ -152,7 +164,7 @@ pub fn run(args: &[String]) -> Result<()> {
         if let Some(k) = keys.poll(wait_ms) {
             match k {
                 RawKey::Char('q' | 'Q') | RawKey::Esc | RawKey::CtrlC => break,
-                RawKey::Up | RawKey::Char('+' | '=') => rng_idx = (rng_idx + 1).min(ranges.len() - 1),
+                RawKey::Up | RawKey::Char('+' | '=') => rng_idx = (rng_idx + 1).min(ranges_len - 1),
                 RawKey::Down | RawKey::Char('-' | '_') => rng_idx = rng_idx.saturating_sub(1),
                 RawKey::Left | RawKey::Enter | RawKey::Char('i' | 'I') => {
                     let _ = bus.set_autopilot("ils");

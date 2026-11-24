@@ -38,8 +38,8 @@ export default {
     "Des F-35 qui volent avec le vôtre dans l'air de la Terre — Deux, Trois, Quatre — chacun à son poste dans la formation choisie, volés avec les forces du vrai avion ; ils obéissent aux ordres du leader (Tab maintenu › Patrouille), annoncent leurs contacts, se battent en combat et peuvent être perdus.",
   Traffic: "Trafic",
   "Real traffic": "Trafic réel",
-  "The real aircraft (ADS-B: adsb.lol, OpenSky) and ships (AIS: aisstream.io) about your craft, live — through the game's relay, refreshed every few seconds. Off: none asked. Offline: none.":
-    "Les avions (ADS-B : adsb.lol, OpenSky) et les navires (AIS : aisstream.io) réels autour de votre appareil, en direct — par le relais du jeu, rafraîchis toutes les quelques secondes. Désactivé : rien n'est demandé. Hors ligne : rien.",
+  "The real aircraft (ADS-B: adsb.lol, OpenSky) and ships (AIS: aisstream.io) about your craft — about the camera when none is flown, or when it has gone far from it —, live, through the game's relay, refreshed every few seconds. Off: none asked. Offline, or under the title screen: none.":
+    "Les avions (ADS-B : adsb.lol, OpenSky) et les navires (AIS : aisstream.io) réels autour de votre appareil — autour de la caméra quand aucun n'est piloté, ou quand elle s'en est éloignée —, en direct, par le relais du jeu, rafraîchis toutes les quelques secondes. Désactivé : rien n'est demandé. Hors ligne, ou sous l'écran titre : rien.",
   "Aircraft delayed": "Avions en différé",
   "How far behind the real time the real aircraft are drawn: delayed, each flies the smoothest path through its known positions (its turns, its climbs as they were), banked and nose-up as the flight's laws ask; live, it is carried on from its last report and corrected at each new one.":
     "De combien de temps les avions réels sont montrés en retard sur le temps réel : en différé, chacun vole la trajectoire la plus lisse par ses positions connues (ses virages, ses montées tels qu'ils ont été), incliné et cabré comme le veulent les lois du vol ; en direct, il est prolongé depuis son dernier message et corrigé à chaque nouveau.",

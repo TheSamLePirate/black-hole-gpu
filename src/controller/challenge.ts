@@ -21,7 +21,7 @@ import {
 import { SITES } from "../game/sites";
 import { t, tf, tr } from "../i18n";
 import { unitsOf } from "../ui/unitsys";
-import { bodyFixedOf, groundRelief } from "../system/our-surface";
+import { altitudeOver, bodyFixedOf, groundRelief } from "../system/our-surface";
 import { store } from "../util/storage";
 import type { CameraController } from "../controls";
 
@@ -79,6 +79,14 @@ export function bests(): Record<string, Best> {
 }
 
 const relief = (lat: number, lon: number) => groundRelief("earth", bodyFixedOf("earth", lat, lon, 0));
+
+/** The craft's origin's geodetic height over the WGS84 ellipsoid [m] — the gates' measure (relief + agl) —; null off the
+ *  Earth. (The relief under it plus sfFrame's h was its gear's height — GEAR, 1.08 m on the F-35 — under the origin, and over
+ *  a deck the deck's: as combat.ts combatPlayer.) */
+function heightNow(c: CameraController, cam: ReturnType<typeof cameraFrame>): number | null {
+  const nav = c.ourNav(cam);
+  return nav && nav.ref === "earth" ? altitudeOver("earth", nav.X, nav.t) : null;
+}
 
 /** A challenge begun (the craft already placed at its start — ui/challengepanel.ts). */
 function challengeStart(this: CameraController, def: ChallengeDef) {
@@ -146,10 +154,12 @@ function challengeStep(this: CameraController, dt: number) {
   const cam = cameraFrame(this.s);
   const fr = this.sfFrame(cam);
   const agl = fr?.h ?? 0;
+  const hNow = heightNow(this, cam);
+  if (hNow === null) return;
   C.t += dt;
   const d = C.def;
   const onGround = !!this.rolling || !!this.ourLanded;
-  const pos = { lat: g.lat, lon: g.lon, alt: relief(g.lat, g.lon) + agl };
+  const pos = { lat: g.lat, lon: g.lon, alt: hNow };
   const touched = this.lastTouch && this.lastTouch.n !== C.touch ? this.lastTouch : null;
   if (touched) C.touch = touched.n;
   if (d.kind === "gates") {
@@ -228,8 +238,8 @@ function challengeHud(this: CameraController, C3: (v: V3 | null) => V3 | null) {
   const cam = cameraFrame(this.s);
   const fr = this.sfFrame(cam);
   const gates: { c: (V3 | null)[]; k: number; n: number; dist: number }[] = [];
-  if (g && fr && C.status === "run" && d.kind === "gates") {
-    const here = relief(g.lat, g.lon) + fr.h;
+  const here = g && fr && C.status === "run" && d.kind === "gates" ? heightNow(this, cam) : null;
+  if (g && fr && here !== null) {
     for (let i = C.next; i < Math.min(C.next + 3, C.gates.length); i++) {
       const G = C.gates[i]!;
       const [e0, n0] = enu(g, G);

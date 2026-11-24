@@ -16,7 +16,7 @@ if [ -z "$_N" ] || case "$_N" in /usr/lib/kw/bin/*) true;; *) false;; esac || he
 fi
 
 cat > /tmp/.obc-a320-fb.mjs <<'JS'
-import { AvionicsBus, Framebuffer, packRgb, startRawKeys, wgs84BearingDist } from "/obc/lib/obc.mjs";
+import { AvionicsBus, Framebuffer, packRgb, startRawKeys, unitsOf, wgs84BearingDist } from "/obc/lib/obc.mjs";
 
 const args = process.argv.slice(2);
 let durSec = 60;
@@ -38,9 +38,12 @@ const WHITE = packRgb(240, 248, 255);
 const CX = 256;
 const CY = 418;
 const R = 296;
-const RANGES_NM = [10, 20, 40, 80, 160];
+// Range ladders in the display units: km (metric, the default) or NM (imperial).
+const RANGES = { metric: [20, 40, 80, 160, 320], imperial: [10, 20, 40, 80, 160] };
+let unitSys = unitsOf(bus.read().units);
+const rangeLabel = () => `RANGE ${RANGES[unitSys.sys][rangeIdx]} ${unitSys.distName.toUpperCase()}`;
 
-let rangeIdx = 2; // 40 NM default
+let rangeIdx = 2; // 80 km (40 NM) default
 let running = true;
 let note = "";
 let noteUntil = 0;
@@ -53,11 +56,11 @@ const stopKeys = startRawKeys((k) => {
     running = false;
   } else if (k === "+" || k === "=") {
     rangeIdx = Math.max(0, rangeIdx - 1);
-    note = `RANGE ${RANGES_NM[rangeIdx]} NM`;
+    note = rangeLabel();
     noteUntil = performance.now() + 2000;
   } else if (k === "-" || k === "_") {
-    rangeIdx = Math.min(RANGES_NM.length - 1, rangeIdx + 1);
-    note = `RANGE ${RANGES_NM[rangeIdx]} NM`;
+    rangeIdx = Math.min(RANGES.metric.length - 1, rangeIdx + 1);
+    note = rangeLabel();
     noteUntil = performance.now() + 2000;
   } else if (k === "i" || k === "I") {
     bus.bhTool("approach", { action: "ils" });
@@ -111,8 +114,9 @@ function drawFrame() {
   }
   const now = performance.now();
   const st = bus.read();
-  const rangeNm = RANGES_NM[rangeIdx];
-  const rangeM = rangeNm * 1852;
+  unitSys = unitsOf(st.units);
+  const range = RANGES[unitSys.sys][rangeIdx];
+  const rangeM = range * unitSys.distUnitM;
 
   if (frameN >= 1 && (tPoll === 0 || now - tPoll > 800)) {
     tPoll = now;
@@ -120,7 +124,7 @@ function drawFrame() {
     if (fp.ok && Array.isArray(fp.result?.waypoints)) wps = fp.result.waypoints;
     const am = bus.bhCall("camera.approachMapData");
     if (am.ok && Array.isArray(am.result?.fixes)) appFixes = am.result.fixes;
-    const trf = bus.bhTool("traffic", { action: "list", maxKm: Math.round(rangeNm * 1.852), n: 12 });
+    const trf = bus.bhTool("traffic", { action: "list", maxKm: Math.round(rangeM / 1000), n: 12 });
     if (trf.ok && Array.isArray(trf.result?.nearest)) contacts = trf.result.nearest;
   }
 
@@ -129,12 +133,12 @@ function drawFrame() {
 
   // Top Airbus ND GS/TAS/HDG/Next-WP strip
   fb.rect(0, 0, 512, 48, PANEL);
-  const gsKt = Math.round((st.flight.ground_speed_mps || st.flight.true_airspeed_mps) * 1.94384);
-  const tasKt = Math.round(st.flight.true_airspeed_mps * 1.94384);
-  fb.text(10, 8, `GS ${String(gsKt).padStart(3)}  TAS ${String(tasKt).padStart(3)}`, GREEN, 2);
+  const gsV = Math.round(unitSys.spd(st.flight.ground_speed_mps || st.flight.true_airspeed_mps));
+  const tasV = Math.round(unitSys.spd(st.flight.true_airspeed_mps));
+  fb.text(10, 8, `GS ${String(gsV).padStart(3)}  TAS ${String(tasV).padStart(3)} ${unitSys.spdName.toUpperCase()}`, GREEN, 2);
   fb.text(358, 8, `HDG ${Math.round(hdg).toString().padStart(3, "0")}`, WHITE, 2);
   const nextWp = wps[0]?.name ?? st.nav?.runway?.ident ?? "DIRECT";
-  const line2 = now < noteUntil ? note : `ARC ${rangeNm}NM   TO ${String(nextWp).slice(0, 12)}`;
+  const line2 = now < noteUntil ? note : `ARC ${range}${unitSys.distName.toUpperCase()}   TO ${String(nextWp).slice(0, 12)}`;
   fb.text(10, 28, line2, now < noteUntil ? AMBER : CYAN, 2);
 
   // Airbus ARC rings (25%, 50%, 100%) + range labels
@@ -209,7 +213,7 @@ function drawFrame() {
   const rw = st.nav?.runway;
   const locTxt = rw ? `ILS ${rw.ident} LOC ${rw.loc_deg >= 0 ? "+" : ""}${rw.loc_deg.toFixed(1)}` : "NAV MODE READY";
   fb.text(10, 471, `${locTxt.slice(0, 24)}  FPS ${fps.toFixed(1)}`, GREEN, 2);
-  fb.text(10, 493, `ALT ${Math.round(st.position.altitude_msl_m * 3.28084)}FT  FLAP ${Math.round(st.systems.flaps * 100)}%  TRK ${contacts.length}  [+/-]RNG [I]ILS [Q]`, WHITE, 1);
+  fb.text(10, 493, `ALT ${unitSys.fAlt(st.position.altitude_msl_m).toUpperCase()}  FLAP ${Math.round(st.systems.flaps * 100)}%  TRK ${contacts.length}  [+/-]RNG [I]ILS [Q]`, WHITE, 1);
 
   fb.flush();
   frameN++;

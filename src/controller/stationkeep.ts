@@ -28,6 +28,7 @@ declare module "../controls" {
     /** an undocking's backing off asked: the held point that far further out [m] */
     keepAway?: number;
     keepWant: typeof keepWant;
+    jwstFollow: typeof jwstFollow;
     keepKey: typeof keepKey;
     keepHold: typeof keepHold;
     rendezvousStart: typeof rendezvousStart;
@@ -155,10 +156,8 @@ function keepWant(
     const gap = lin(sub3(L.pos, nav.X), M_METRES, L.pos, 0);
     const d = Math.hypot(...gap);
     if (d > Math.max(L.hill * M_METRES * 3, 50_000e3)) return say(tf("Station keeping: get closer to {0} first", BODY_NAMES[s.target]));
-    const dtFd = 1e-3;
-    const Lp = lagrangeState(id, t0 + dtFd);
-    const Lm = lagrangeState(id, t0 - dtFd);
-    const aL: Vec3 = Lp && Lm ? lin(sub3(Lp.vel, Lm.vel), 1 / (2 * dtFd), L.pos, 0) : [0, 0, 0];
+    // (the point's own inertial acceleration: its position's exact second derivative — lagrange.ts)
+    const aL: Vec3 = L.acc;
     const sp = Math.min(250, Math.sqrt(2 * 0.05 * d), 0.02 * d);
     const want: Vec3 = d > 1e-6 ? lin(gap, sp / d, gap, 0) : [0, 0, 0];
     const ff = sub3(aL, gravityHome(nav.X, t0).acc);
@@ -168,7 +167,8 @@ function keepWant(
   }
   // JWST station-keeping within 5 km (holds relative offset in JWST's sunshield frame)
   if (s.target === "jwst") {
-    const jw = jwstTrack.state(t0, nav.X);
+    // (read, not moved: the simulation's step moves the tracker — jwstFollow)
+    const jw = jwstTrack.peek(t0);
     if (!jw) return say(t("Station keeping: JWST unavailable"));
     const distM = Math.hypot(...sub3(nav.X, jw.X)) * M_METRES;
     if (distM > 2 * KEEP.reach) return say(t("Station keeping: within 5 km of JWST"));
@@ -232,6 +232,18 @@ function keepWant(
   return out(lin(Vp, 1, want, 1 / C_MPS), ff);
 }
 
+/**
+ * JWST's tracker moved on with the flight (sim.ts, once per completed step, at the step's time): within 50 km of the
+ * craft, JWST flown in the same gravity as it (system/jwst.ts JwstTracker). The one writer of the tracker — the
+ * renderer, the maps, the HUD, station keeping read it (`peek`), so where the camera looks from never re-anchors it.
+ */
+function jwstFollow(this: CameraController, t: number) {
+  const s = this.s;
+  if (!s.jwst || !s.wormhole) return;
+  const nav = this.ourNav(cameraFrame(s));
+  if (nav) jwstTrack.state(t, nav.X);
+}
+
 export function installStationKeep(C: { prototype: CameraController }) {
-  Object.assign(C.prototype, { keepWant, keepKey, keepHold, rendezvousStart, inApproachEllipsoid });
+  Object.assign(C.prototype, { keepWant, jwstFollow, keepKey, keepHold, rendezvousStart, inApproachEllipsoid });
 }

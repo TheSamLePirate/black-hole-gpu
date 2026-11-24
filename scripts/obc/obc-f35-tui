@@ -16,7 +16,7 @@ if [ -z "$_N" ] || case "$_N" in /usr/lib/kw/bin/*) true;; *) false;; esac || he
 fi
 
 cat > /tmp/.obc-f35-tui.mjs <<'JS'
-import { AvionicsBus, ansiBar } from "/obc/lib/obc.mjs";
+import { AvionicsBus, ansiBar, unitsOf } from "/obc/lib/obc.mjs";
 
 const args = process.argv.slice(2);
 let maxFrames = 0;
@@ -105,8 +105,8 @@ function render() {
     "\x1b[1;38;2;75;227;138m╔══════════════════════════════════════════════════════════════╗\x1b[0m",
     `\x1b[1;38;2;75;227;138m║\x1b[1;37m  OBC-F35-TUI · F-35B/C TACTICAL WSO & RADAR CONSOLE         \x1b[1;38;2;75;227;138m║\x1b[0m`,
     "\x1b[1;38;2;75;227;138m╠══════════════════════════════════════════════════════════════╣\x1b[0m",
-    `  CRAFT : \x1b[1;32m${st.vessel_id.toUpperCase().padEnd(6)}\x1b[0m  HDG ${Math.round(st.attitude.heading_deg).toString().padStart(3, "0")}°  TAS ${(st.flight.true_airspeed_mps * 1.94384).toFixed(0).padStart(4)} kt  M${st.flight.mach.toFixed(2)}  G ${st.flight.g_load.toFixed(1)}`,
-    `  ALT   : ${Math.round(st.position.altitude_msl_m * 3.28084).toString().padStart(6)} ft MSL   AGL ${st.position.height_over_ground_m.toFixed(0).padStart(6)} m   AOA ${st.flight.alpha_deg.toFixed(1)}°`,
+    `  CRAFT : \x1b[1;32m${st.vessel_id.toUpperCase().padEnd(6)}\x1b[0m  HDG ${Math.round(st.attitude.heading_deg).toString().padStart(3, "0")}°  TAS ${unitsOf(st.units).fSpd(st.flight.true_airspeed_mps).padStart(7)}  M${st.flight.mach.toFixed(2)}  G ${st.flight.g_load.toFixed(1)}`,
+    `  ALT   : ${unitsOf(st.units).fAlt(st.position.altitude_msl_m).padStart(9)} MSL   AGL ${unitsOf(st.units).fAlt(st.position.height_over_ground_m).padStart(9)}   AOA ${st.flight.alpha_deg.toFixed(1)}°`,
     `  MODES : AP:${apOn ? "\x1b[1;32mON \x1b[0m" : "\x1b[2mOFF\x1b[0m"}  A/THR:${athrOn ? "\x1b[1;32mON \x1b[0m" : "\x1b[2mOFF\x1b[0m"}  GEAR:${st.systems.gear > 0.5 ? "\x1b[1;32mDN\x1b[0m" : "UP"}  RADAR:\x1b[1;36m${radarStr}\x1b[0m`,
     `  FUEL  : [${ansiBar(st.systems.fuel_frac, 24, "75;227;138")}] ${(st.systems.fuel_frac * 100).toFixed(1)}%  THR ${(st.systems.throttle * 100).toFixed(0)}%`,
     "\x1b[38;2;52;137;153m  ── STORES & LOCK ─────────────────────────────────────────────\x1b[0m",

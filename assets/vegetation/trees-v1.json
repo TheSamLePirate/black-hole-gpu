@@ -1,12 +1,25 @@
 {
-  "format": 1,
-  "sourceSha256": "b31429154c38b2fd3860c3d7ad9f0b9f80ccb6146ae50d6213dd006e310c7518",
-  "file": "trees-v1-b31429154c38b2fd.bin",
-  "sha256": "aa5613b290976ae9525c9231061242f9e277304e3d62122d4d2bb64bd028cf96",
+  "format": 2,
+  "sourceSha256": "1a95a303e00030d60a848809338ef60a91db8e112f919c5506396188ba8a1bde",
+  "file": "trees-v1-1a95a303e00030d6.bin",
+  "sha256": "b17b8cd01df0c46c5f411ec611e8e70b907506a18988f5538b6b025761ab349f",
   "meshoptimizer": "1.3.0",
   "compression": "gzip",
-  "rawBytes": 9519424,
-  "bytes": 3979761,
+  "rawBytes": 3949312,
+  "bytes": 2278887,
+  "vertexBytes": 16,
+  "box": {
+    "lo": [
+      -1.416211724281311,
+      -1.4224343299865723,
+      -0.21806040406227112
+    ],
+    "ext": [
+      2.8171257972717285,
+      2.76955509185791,
+      1.3977519273757935
+    ]
+  },
   "barkLodStudy": [
     {
       "kind": 1,
@@ -246,6 +259,8 @@
       "lod": 0,
       "error": 0,
       "radius": 0.2893717234556458,
+      "baseVertex": 0,
+      "firstIndex": 0,
       "bounds": {
         "lo": [
           -0.2571278214454651,
@@ -267,6 +282,8 @@
       "lod": 0,
       "error": 0,
       "radius": 0.14502677985240234,
+      "baseVertex": 22366,
+      "firstIndex": 37764,
       "bounds": {
         "lo": [
           -0.1271635890007019,
@@ -288,6 +305,8 @@
       "lod": 0,
       "error": 0,
       "radius": 0.15200000000000002,
+      "baseVertex": 44442,
+      "firstIndex": 74868,
       "bounds": {
         "lo": [
           -0.1612204760313034,
@@ -309,6 +328,8 @@
       "lod": 0,
       "error": 0,
       "radius": 0.072,
+      "baseVertex": 52056,
+      "firstIndex": 88734,
       "bounds": {
         "lo": [
           -0.08099526911973953,
@@ -330,6 +351,8 @@
       "lod": 0,
       "error": 0,
       "radius": 0.3571760096619312,
+      "baseVertex": 57320,
+      "firstIndex": 98430,
       "bounds": {
         "lo": [
           -0.29872605204582214,
@@ -351,6 +374,8 @@
       "lod": 0,
       "error": 0,
       "radius": 0.17019278449446287,
+      "baseVertex": 70386,
+      "firstIndex": 120714,
       "bounds": {
         "lo": [
           -0.1519749015569687,
@@ -372,6 +397,8 @@
       "lod": 0,
       "error": 0,
       "radius": 0.32471964417436877,
+      "baseVertex": 83618,
+      "firstIndex": 143022,
       "bounds": {
         "lo": [
           -0.26229071617126465,
@@ -393,6 +420,8 @@
       "lod": 0,
       "error": 0,
       "radius": 0.153595420752538,
+      "baseVertex": 84030,
+      "firstIndex": 143730,
       "bounds": {
         "lo": [
           -0.13638609647750854,
@@ -414,6 +443,8 @@
       "lod": 0,
       "error": 0,
       "radius": 1.4506571276414466,
+      "baseVertex": 84442,
+      "firstIndex": 144438,
       "bounds": {
         "lo": [
           -1.3073101043701172,
@@ -435,6 +466,8 @@
       "lod": 0,
       "error": 0,
       "radius": 0.6570143880339072,
+      "baseVertex": 96376,
+      "firstIndex": 166584,
       "bounds": {
         "lo": [
           -0.5907434821128845,
@@ -456,6 +489,8 @@
       "lod": 0,
       "error": 0,
       "radius": 0.13158935079761755,
+      "baseVertex": 108946,
+      "firstIndex": 189264,
       "bounds": {
         "lo": [
           -0.1153983399271965,
@@ -477,6 +512,8 @@
       "lod": 0,
       "error": 0,
       "radius": 0.06521256850003819,
+      "baseVertex": 128580,
+      "firstIndex": 222420,
       "bounds": {
         "lo": [
           -0.05728840455412865,
@@ -498,6 +535,8 @@
       "lod": 1,
       "error": 0.00933,
       "radius": 0.2893717234556458,
+      "baseVertex": 148756,
+      "firstIndex": 256374,
       "bounds": {
         "lo": [
           -0.2739829421043396,
@@ -519,6 +558,8 @@
       "lod": 1,
       "error": 0.00469,
       "radius": 0.14502677985240234,
+      "baseVertex": 156760,
+      "firstIndex": 270234,
       "bounds": {
         "lo": [
           -0.13527235388755798,
@@ -540,6 +581,8 @@
       "lod": 1,
       "error": 0.00508,
       "radius": 0.15200000000000002,
+      "baseVertex": 164704,
+      "firstIndex": 283968,
       "bounds": {
         "lo": [
           -0.182883158326149,
@@ -561,6 +604,8 @@
       "lod": 1,
       "error": 0.00243,
       "radius": 0.072,
+      "baseVertex": 167830,
+      "firstIndex": 289458,
       "bounds": {
         "lo": [
           -0.08660811930894852,
@@ -582,6 +627,8 @@
       "lod": 1,
       "error": 0.01144,
       "radius": 0.3571760096619312,
+      "baseVertex": 169998,
+      "firstIndex": 293322,
       "bounds": {
         "lo": [
           -0.31316158175468445,
@@ -603,6 +650,8 @@
       "lod": 1,
       "error": 0.00548,
       "radius": 0.17019278449446287,
+      "baseVertex": 174744,
+      "firstIndex": 301692,
       "bounds": {
         "lo": [
           -0.1589851677417755,
@@ -624,6 +673,8 @@
       "lod": 1,
       "error": 0.01044,
       "radius": 0.32471964417436877,
+      "baseVertex": 179512,
+      "firstIndex": 309960,
       "bounds": {
         "lo": [
           -0.26798373460769653,
@@ -645,6 +696,8 @@
       "lod": 1,
       "error": 0.00498,
       "radius": 0.153595420752538,
+      "baseVertex": 179694,
+      "firstIndex": 310242,
       "bounds": {
         "lo": [
           -0.14235812425613403,
@@ -666,6 +719,8 @@
       "lod": 1,
       "error": 0.04663,
       "radius": 1.4506571276414466,
+      "baseVertex": 179876,
+      "firstIndex": 310524,
       "bounds": {
         "lo": [
           -1.416211724281311,
@@ -687,6 +742,8 @@
       "lod": 1,
       "error": 0.02107,
       "radius": 0.6570143880339072,
+      "baseVertex": 184076,
+      "firstIndex": 318444,
       "bounds": {
         "lo": [
           -0.6163008213043213,
@@ -708,6 +765,8 @@
       "lod": 1,
       "error": 0.00427,
       "radius": 0.13158935079761755,
+      "baseVertex": 188548,
+      "firstIndex": 326754,
       "bounds": {
         "lo": [
           -0.11627331376075745,
@@ -729,6 +788,8 @@
       "lod": 1,
       "error": 0.0022,
       "radius": 0.06521256850003819,
+      "baseVertex": 195568,
+      "firstIndex": 338904,
       "bounds": {
         "lo": [
           -0.06015788018703461,

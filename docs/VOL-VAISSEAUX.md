@@ -247,6 +247,71 @@ __bh.camera.missionCommit(); __bh.camera.fcExecute();
 **Erreurs** : avancer tout le vol dans un seul appel synchrone (le worker ne répond pas dedans) ; changer la date
 (`game.setDate`) après avoir planifié — le plan est abandonné.
 
+## Leçon 6 bis — Les points de Lagrange, l'orbite Halo et JWST
+
+**À comprendre** — autour de deux corps qui tournent l'un autour de l'autre (le Soleil et la Terre avec sa Lune, la
+Terre et la Lune, Jupiter et ses lunes…), cinq points accompagnent le second sans moteur : **L1** entre les deux, **L2**
+au-delà du second, **L3** de l'autre côté du premier, **L4** et **L5** à 60° devant et derrière lui sur son orbite. Le jeu
+les calcule pour chaque couple (`src/system/lagrange.ts`) ; un couple Soleil–planète prend la planète **avec ses lunes**
+(leur barycentre : Soleil–(Terre+Lune)). **L1, L2, L3 sont instables** (des cols : un écart double en quelques semaines —
+à L2 Soleil–Terre, ×e en ≈ 23 jours ; à L2 Terre–Lune, en ≈ 2 jours) : on n'y reste qu'en corrigeant. **L4 et L5 sont
+stables** tant que le second est moins de 1/26 du couple (critère de Routh) — pas Pluton–Charon. Autour de L1/L2 on ne
+se pose pas au point : on décrit une **orbite Halo**, une boucle en trois dimensions qui en fait le tour (celle de JWST à
+L2 Soleil–Terre : amplitude verticale A_z 260 000 km, ≈ 180 jours par tour) ; autour de L4/L5, une petite **boucle de
+libration** (l'épicycle des Troyens, à la période du couple, et une oscillation verticale indépendante). Ces orbites
+suivent l'angle du couple : la même à toute date, et le jeu, la carte, l'équipage et le réseau voient la même.
+
+**Au clavier**
+- **Tab** : les cibles comprennent L1–L5 Soleil–Terre et Terre–Lune (et JWST quand il est affiché) ; la carte (**M**)
+  les montre (Soleil–Terre, Terre–Lune, Mars, Jupiter, Saturne ; L1–L3 en ambre, L4–L5 stables en vert, instables en rouge) avec la boucle Halo, et
+  un clic les cible.
+- **O** — l'onglet **MISSION** : le groupe « Points de Lagrange & JWST » (JWST, L1–L5 Soleil–Terre et Terre–Lune, ceux du
+  corps où l'on est, L2 de Mars, L4/L5 de Jupiter). L'arrivée : **HALO (JWST)** (une orbite Halo — ou la boucle autour de
+  L4/L5 — d'amplitude **Halo A_z**, le défaut du point proposé), **LIBRATION** (au point même, puis maintien à poste),
+  **SURVOL** (on y passe, sans poussée d'insertion). Le champ A_z n'accepte que les amplitudes que le modèle sait voler
+  (Soleil–Terre L2 : 15 000 à 980 000 km ; Terre–Lune L2 : ≈ 650 à 42 000 km) : une valeur hors de cette plage est
+  ramenée au bord, **avec un message sous le champ** ; la note du plan dit l'amplitude retenue (« A_z 260,000 km ») et,
+  si elle a été ramenée, celle demandée.
+- **PLAN** puis **EXÉCUTER** : trois poussées — le départ (choisi sur une révolution de l'orbite de parking et, pour une
+  Halo, à la phase d'arrivée la moins chère), une correction à mi-route (à 40 % du trajet, revisée en vol), l'insertion à
+  l'arrivée. Durées : Terre → L1/L2 Soleil–Terre ou JWST ≈ 29 jours ; Terre → L1–L5 Terre–Lune ≈ 4,2 jours. Calculé par le
+  planificateur (tests unitaires, pas encore revolé en jeu) : depuis 400 km, **3,32 km/s** de départ et **0,39 km/s**
+  d'insertion vers la Halo de L2 Soleil–Terre (4,1 km/s au total le 24 novembre 2026), arrivée à quelques kilomètres de
+  l'orbite ; vers la Halo de L2 Terre–Lune depuis 300 km : 3,9 + 1,1 km/s.
+- À l'insertion, l'**autopilote Halo** prend la suite (HALO : `orbit` avec l'amplitude et la phase du plan) ou le
+  **maintien à poste** (LIBRATION, JWST : `keep`).
+- **⇧0 — l'autopilote Halo à la main** : la cible étant un point de Lagrange, à moins de max(3,5 × A_z, 40 000 km) du point
+  il se cale sur la phase de l'orbite la plus proche de l'appareil (« Halo orbit · … ») et la tient : la vitesse de
+  l'orbite, plus une correction vers elle, la gravité compensée par l'accélération propre de l'orbite ; l'accélération du
+  temps plafonnée à un tour en 90 s. Plus loin, il vole vers le point d'entrée de l'orbite (freinage calculé sur 60 % de
+  la poussée) puis s'y cale. Le hub montre l'écart à l'orbite et la dérive.
+- **⇧8 — maintien à poste au point** : la cible étant un point de Lagrange, à moins de max(3 rayons de Hill, 50 000 km)
+  (≈ 4,4 millions de km à L2 Soleil–Terre, ≈ 190 000 km à L2 Terre–Lune), il tient le point exact (approche à
+  min(250 m/s, √(0,1·d), 0,02·d)), accélération ≤ ×5 000 ; plus loin : « Station keeping: get closer to … first ».
+- **JWST** : **Tab** jusqu'à JWST, ou la caméra (« Aller à » JWST, 38 m de son miroir). **⇧8** à moins de 10 km : tenu à
+  la position relative où il est enclenché, dans le repère du télescope (bouclier vers le Soleil, miroir de l'autre côté,
+  axe de visée +Z), accélération ≤ ×10. Une mission FC vers JWST arrive à 200 m de son côté miroir puis maintient à poste.
+
+**Par `__bh`**
+
+```js
+__bh.game.setDate("2026-11-24T12:00:00Z");
+__bh.game.orbit("earth", { altKm: 400, inc: 28.5 });
+__bh.camera.selectTarget("lag:earth:2");
+const r = await __bh.camera.missionPlan({ target: "lag:earth:2", arrival: "halo", altKm: 260000 });  // r.note : Δv, A_z
+__bh.camera.missionCommit(); __bh.camera.fcExecute();
+// directement sur l'orbite, puis l'autopilote Halo :
+const t = __bh.time(), P = { azM: __bh.lagrange.defaultAzM("lag:earth:2"), branch: -1, phase0: 0 };
+const h = __bh.lagrange.halo("lag:earth:2", t, P);          // pos, vel, acc, synM, periodDays, azM
+__bh.game.placeAt({ frame: "ours", X: h.pos, vel: h.vel, fwd: [0, 1, 0], up: [0, 0, 1], note: "SE-L2 Halo" });
+const p = __bh.camera.pilot; p.auto = "none"; p.setAuto("orbit");   // __bh.camera.ourHalo : cible, azM, phase0
+__bh.lagrange.azRange("lag:earth:2");                        // { minM, maxM } : les amplitudes possibles
+```
+
+**Erreurs** : chercher à « se poser » sur L1/L2 sans maintien (le point s'éloigne en quelques jours) ; enclencher ⇧0 à des
+millions de km (il y va à la loi d'approche : planifier avec l'ordinateur de vol) ; ⇧8 trop loin du point ou de JWST
+(refusé) ; demander une amplitude hors de la plage (ramenée au bord — lire le message et la note).
+
 ## Leçon 7 — Le rendez-vous et l'amarrage
 
 **À comprendre** — la mécanique orbitale de proximité est contre-intuitive : **pousser vers la cible fait monter,
@@ -443,7 +508,10 @@ Les recettes de ce cours ont été volées telles quelles par l'e2e `tests/e2e/a
 | 10 — décollage lunaire (Lander posé, puis Ranger) | Lander : +10 m en 3 s, orbite 100,0 ± 0,04 km (Pe 100,1 / Ap 101,0, note 20/20) ; Ranger : 100,0 ± 0,04 km (11 nov. 2026) |
 
 Non vérifiés en jeu : l'aller vers la Lune planifié, l'amarrage à la main, la finale à la main, l'Endurance et
-Gargantua, les pannes.
+Gargantua, les pannes ; **la leçon 6 bis** (points de Lagrange, missions HALO/LIBRATION, autopilote Halo, maintien à
+poste au point et auprès de JWST — écrite le 24 novembre 2026 d'après le code et ses tests unitaires ; l'e2e
+`lagrange-jwst` tient l'autopilote Halo 10 jours mais n'est pas encore relancé, et `apprendre-vaisseaux.e2e.test.ts` ne
+vole pas encore ces recettes).
 
 ---
 
@@ -682,13 +750,13 @@ dérive tenue à 1 km d'un appareil), `beginner` (comme assisté, vitesses ×0,5
 | hover (« Hold position ») | 8 | les deux | jamais (un toucher le termine) | — |
 | circularize | 9 | notre côté : un nœud à l'apside puis un ajustement ; trou : cercle de Kerr ; **dans la sphère d'un monde de Gargantua** (Miller, Mann, Edmunds) : un cercle autour de lui, à la distance où il est engagé, dans son repère (`controller/planet.ts` `localCircWant`, depuis le 11 nov. 2026) | notre côté : **devient `node`**, puis ajustement fini (< 0,2 m/s) → none ; trou : jamais ; monde : sur le cercle (distance à 1 %, vitesse à 0,2 %) → none, « In orbit around … » | « only around the black hole » ; « inside the photon orbit » |
 | approach | 0 | les deux | arrivée → `orbit` (corps massif) ou `hover` | « select a body (Tab) » ; « Landed on … » |
-| orbit | ⇧0 | les deux | jamais (tient la hauteur où il a été enclenché) | « select a body with a mass » |
+| orbit | ⇧0 | les deux | jamais (tient la hauteur où il a été enclenché) ; **cible point de Lagrange : l'orbite Halo** (L1–L3) ou la boucle de libration (L4/L5) — à moins de max(3,5 A_z, 40 000 km), calé sur la phase la plus proche (« Halo orbit · … »), sinon vol vers son point d'entrée (`lowthrust.ts`, `ourHalo`) | « select a body with a mass » |
 | node | Exécuter (FC, hub) | les deux | dernier nœud → `then` (circularize, orbit, approach, dock) ou none | dans la gorge ; plan de l'autre univers |
 | transfer | Exécuter | trou seulement (moteur Crew) | → circularize / orbit / approach | pas de plan ; réservoir vide |
 | land | F7 | les deux + mondes de Gargantua | toucher → none (« Landed on … ») | pas de sol ; appareil sans train ; poussée < 1,05 × poids |
 | takeoff | U | les deux | orbite atteinte → circularize (les deux ; Gargantua : depuis le 11 nov. 2026 — départ vertical en poussée vectorée jusqu'à 200 m, montée au-dessus de l'air, puis CIRC à l'apogée de la montée) | comme land |
 | dock | B | notre côté ; Endurance près du trou | capture → none ; au-delà de 3 km : rendez-vous planifié → `node` → `dock` | Δv ≥ 10 km/s ; cible hors de portée |
-| keep (maintien de station) | ⇧8 | notre côté | jamais | au-delà de 5 km (abandon au-delà de 10 km) ; amarré : désamarre et recule de 30 m |
+| keep (maintien de station) | ⇧8 | notre côté | jamais | au-delà de 5 km (abandon au-delà de 10 km) ; amarré : désamarre et recule de 30 m ; **cible point de Lagrange** : tient le point exact, refusé au-delà de max(3 rayons de Hill, 50 000 km) (« Station keeping: get closer to … first ») ; **cible JWST** : tient l'écart dans le repère du télescope, refusé au-delà de 10 km (« Station keeping: within 5 km of JWST ») (`stationkeep.ts`) |
 | entry | ⇧G (`glideTo`) | les deux | plané → toucher → none ; Lander → `land` ; sans site, sous le Mach de passation → none | pas de bouclier (Endurance) ; ni air ni sol ; pas de site en orbite ; pas de désorbitation trouvée |
 | burns | FC | mondes de Gargantua | poussées faites → none | loin du monde |
 
@@ -724,6 +792,7 @@ Détails utiles :
 | takeoff | `circularize` → souvent `node` → circularize → none (Gargantua : `orbit`) |
 | entry | `land` (Lander, ou corps sans air avec site) ; none (toucher, pas de site) |
 | dock (> 3 km) | `node` (rendez-vous) → `dock` → none à la capture |
+| mission FC vers un point de Lagrange ou JWST | `node` (départ, correction, insertion) → `orbit` (HALO : l'orbite Halo du plan, son A_z et sa phase) ou `keep` (LIBRATION, JWST) ; SURVOL : `node` → none |
 | transfer | circularize / orbit / approach |
 | node (dernier) | son `then` ou none |
 | tout sauf takeoff | none au toucher |
@@ -736,7 +805,8 @@ l'orbite circulaire (« Circular: … », `auto` revient à `none`) ; près du t
 ### 4.4 Plafonds d'accélération des autopilotes
 
 Avec `autoWarp` (défaut vrai), l'accélération **est** le plafond ; sinon le souhait du pilote, plafonné. approach :
-arrivée en ~8 s ; dock : ×10 au-delà de 150 m, ×5 au-delà de 40 m, ×2 au-delà de 4 m, temps réel dedans ; keep ≤ ×10 ;
+arrivée en ~8 s ; dock : ×10 au-delà de 150 m, ×5 au-delà de 40 m, ×2 au-delà de 4 m, temps réel dedans ; keep ≤ ×10
+(au point de Lagrange : ≤ ×5 000) ; orbite Halo : un tour en 90 s au plus vite (≈ 2 jours par seconde à L2 Soleil–Terre) ;
 land : croisière ≤ ×1 000 puis temps réel ; entry : attente ≤ ×1 000, plan et poussée en temps réel, ≤ ×500 jusqu'à
 l'interface d'entrée, ×4 dans l'air ; transfer ≤ 1e5. Dans l'air dense, tout sauf `node` est plafonné à ×4.
 

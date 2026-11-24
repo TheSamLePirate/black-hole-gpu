@@ -30,6 +30,84 @@ RPC_REQ_PATH = "/obc/rpc_req"
 RPC_RES_PATH = "/obc/rpc_res"
 VSOCK_HOST_CID = 2
 VSOCK_PORT = 4747
+# Keyed RPC (src/obc/bridge.ts, docs/PLAN-LINUX-OBC.md §2.1): <id>.req written here, <id>.res read back.
+RPC_DIR = "/obc/rpc"
+_RPC_NONCE = os.urandom(4).hex()
+_RPC_SEQ = 0
+
+
+def next_rpc_id() -> str:
+    """A request id unique across processes: py-<pid>-<nonce>-<seq> (a safe file name)."""
+    global _RPC_SEQ
+    _RPC_SEQ += 1
+    return f"py-{os.getpid()}-{_RPC_NONCE}-{_RPC_SEQ}"
+
+
+def _reply_for(raw: str, req_id: str) -> Optional[Dict[str, Any]]:
+    try:
+        parsed = json.loads(raw)
+    except (ValueError, TypeError):
+        return None
+    if isinstance(parsed, dict) and parsed.get("id") == req_id:
+        return parsed
+    return None
+
+
+# The telemetry v1 schema (dotted leaf paths of /obc/telemetry.json, `ObcTelemetry` in src/obc/types.ts). Checked
+# against the TypeScript, Rust and Node schemas by tests/obc-telemetry-contract.test.ts.
+TELEMETRY_FIELDS: Tuple[str, ...] = (
+    "v", "wall_ms", "sim_time_s", "sim_dt", "warp", "frozen", "dtau_dt", "proper_time_s", "vessel_id",
+    "vessel_kind", "body", "units", "position.lat_deg", "position.lon_deg", "position.height_ellipsoid_m",
+    "position.altitude_msl_m", "position.height_over_ground_m", "attitude.heading_deg", "attitude.pitch_deg",
+    "attitude.roll_deg", "flight.true_airspeed_mps", "flight.ground_speed_mps", "flight.vertical_speed_mps",
+    "flight.mach", "flight.dynamic_pressure_pa", "flight.alpha_deg", "flight.beta_deg", "flight.g_load",
+    "flight.stalled", "flight.on_ground", "flight.hull_temp_k", "orbit.body", "orbit.apoapsis_m",
+    "orbit.periapsis_m", "orbit.semi_major_m", "orbit.eccentricity", "orbit.inclination_deg", "orbit.period_s",
+    "orbit.speed_mps", "orbit.altitude_m", "systems.throttle", "systems.fuel_frac", "systems.fuel_kg",
+    "systems.gear", "systems.flaps", "systems.sas", "systems.autopilot", "systems.hold", "systems.rcs_mode",
+    "nav.target", "nav.runway.ident", "nav.runway.name", "nav.runway.dist_m", "nav.runway.loc_deg",
+    "nav.runway.gs_deg", "nav.runway.elev_m",
+)
+
+
+class Units:
+    """Display units, like the simulator's src/ui/unitsys.ts: metric by default (m, m/s, km), imperial as the option
+    (ft, kt, NM, ft/min). The telemetry carries the player's choice ("units"); OBC_UNITS=metric|imperial overrides it."""
+
+    def __init__(self, sys_name: str = "metric") -> None:
+        env = os.environ.get("OBC_UNITS", "").strip().lower()
+        chosen = env or str(sys_name or "metric").strip().lower()
+        self.sys = "imperial" if chosen == "imperial" else "metric"
+        self.metric = self.sys == "metric"
+        self.alt_name = "m" if self.metric else "ft"
+        self.spd_name = "m/s" if self.metric else "kt"
+        self.vs_name = "m/s" if self.metric else "ft/min"
+        self.dist_name = "km" if self.metric else "NM"
+        self.dist_unit_m = 1000.0 if self.metric else 1852.0
+
+    def alt(self, m: float) -> float:
+        return m if self.metric else m / 0.3048
+
+    def spd(self, mps: float) -> float:
+        return mps if self.metric else mps * 3600.0 / 1852.0
+
+    def vs(self, mps: float) -> float:
+        return mps if self.metric else mps / 0.3048 * 60.0
+
+    def dist(self, m: float) -> float:
+        return m / self.dist_unit_m
+
+    def f_alt(self, m: float) -> str:
+        return f"{self.alt(m):.0f} {self.alt_name}"
+
+    def f_spd(self, mps: float) -> str:
+        return f"{self.spd(mps):.0f} {self.spd_name}"
+
+    def f_vs(self, mps: float) -> str:
+        return f"{mps:+.1f} m/s" if self.metric else f"{self.vs(mps):+.0f} ft/min"
+
+    def f_dist(self, m: float, digits: int = 1) -> str:
+        return f"{self.dist(m):.{digits}f} {self.dist_name}"
 
 
 class State:
@@ -46,6 +124,7 @@ class State:
         self.vessel_id: str = str(raw.get("vessel_id", "unknown"))
         self.vessel_kind: str = str(raw.get("vessel_kind", "spacecraft"))
         self.body: str = str(raw.get("body", "earth"))
+        self.units: Units = Units(str(raw.get("units", "metric")))
 
         pos = raw.get("position") or {}
         self.lat: float = float(pos.get("lat_deg", 0.0))
@@ -199,25 +278,48 @@ class AvionicsBus:
         return self.send({"kind": "say", "text": str(text)})
 
     def bh_rpc(self, payload: Dict[str, Any], timeout_s: float = 10.0) -> Dict[str, Any]:
-        """Universal RPC to the full simulator window.__bh API & all 73 TARS tools."""
-        req_id = f"{int(time.time() * 1000)}-{os.getpid()}-{int(time.monotonic() * 1e6) % 99999}"
+        """Universal RPC to the full simulator window.__bh API & all 73 TARS tools.
+
+        AF_VSOCK first; else the keyed 9p files /obc/rpc/<id>.req -> <id>.res (the single slot
+        /obc/rpc_res as fallback, /obc/rpc_req only on an older host without /obc/rpc)."""
+        req_id = next_rpc_id()
         body = dict(payload)
         body["id"] = req_id
         resp = self._rpc(body)
         if resp is not None:
             return resp
-        with open(RPC_REQ_PATH, "w", encoding="utf-8") as f:
-            f.write(json.dumps(body) + "\n")
+        line = json.dumps(body) + "\n"
+        req_path = f"{RPC_DIR}/{req_id}.req"
+        res_path = f"{RPC_DIR}/{req_id}.res"
+        keyed = True
+        try:
+            with open(req_path, "x", encoding="utf-8") as f:
+                f.write(line)
+        except OSError:
+            keyed = False
+            with open(RPC_REQ_PATH, "w", encoding="utf-8") as f:
+                f.write(line)
         deadline = time.monotonic() + timeout_s
         while time.monotonic() < deadline:
-            try:
-                with open(RPC_RES_PATH, "r", encoding="utf-8") as f:
-                    parsed = json.load(f)
-                if isinstance(parsed, dict) and parsed.get("id") == req_id:
+            for path in ((res_path, RPC_RES_PATH) if keyed else (RPC_RES_PATH,)):
+                try:
+                    with open(path, "r", encoding="utf-8") as f:
+                        parsed = _reply_for(f.read(), req_id)
+                except OSError:
+                    continue
+                if parsed is not None:
+                    if keyed:
+                        try:
+                            os.remove(res_path)
+                        except OSError:
+                            pass
                     return parsed
-            except (OSError, json.JSONDecodeError):
-                pass
             time.sleep(0.01)
+        if keyed:
+            try:
+                os.remove(req_path)
+            except OSError:
+                pass
         return {"id": req_id, "ok": False, "error": "RPC timeout"}
 
     def bh_ls(self, path: str = "") -> Dict[str, Any]:

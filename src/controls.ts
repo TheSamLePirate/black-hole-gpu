@@ -1296,6 +1296,11 @@ export class CameraController {
   /** the real traffic's own clock [s since 1970]: the frames' time — still while the game is paused (its image
    *  converges), catching the wall clock up after (controller/traffic.ts trafficStep) */
   trafficT?: number;
+  /** the traffic's focus (traffic/focus.ts — main.ts sets it each frame): where the sea's own life is made and how far the
+   *  aircraft's lights reach — the flown craft, else the view's eye —; null: none set (geoNow then: a test's controller) */
+  trafficAt: { lat: number; lon: number; alt: number; airR?: number } | null = null;
+  /** the traffic's clock stepped this frame (by the flight's step; else the frame's own — controller/lens.ts) */
+  trafficStepped = false;
   /** our AI wingmen (controller/wingmen.ts), null: none flying */
   wing: WingState | null = null;
   /** the room's others' AI wingmen (their host flies them): by his slot, their states and when heard [s] */

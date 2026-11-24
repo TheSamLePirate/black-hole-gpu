@@ -18,7 +18,7 @@ if [ -z "$_N" ] || case "$_N" in /usr/lib/kw/bin/*) true;; *) false;; esac || he
 fi
 
 exec node --input-type=module - "$@" <<'JS'
-import { AvionicsBus } from "/obc/lib/obc.mjs";
+import { AvionicsBus, unitsOf } from "/obc/lib/obc.mjs";
 
 const bus = new AvionicsBus();
 const args = process.argv.slice(2);
@@ -45,7 +45,8 @@ switch (sub) {
     console.log("\x1b[1;36m╔══════════════════════════════════════════════════════════════╗\x1b[0m");
     console.log("\x1b[1;36m║\x1b[1;37m        OBC-A320 · AIRBUS A320 FMGC / MCDU / ECAM            \x1b[1;36m║\x1b[0m");
     console.log("\x1b[1;36m╚══════════════════════════════════════════════════════════════╝\x1b[0m");
-    console.log(`  CRAFT : ${st.vessel_id.toUpperCase()}  IAS ${(st.flight.true_airspeed_mps * 1.94384).toFixed(0)} kt (M${st.flight.mach.toFixed(2)})  ALT ${Math.round(st.position.altitude_msl_m * 3.28084)} ft`);
+    const u = unitsOf(st.units);
+    console.log(`  CRAFT : ${st.vessel_id.toUpperCase()}  IAS ${u.fSpd(st.flight.true_airspeed_mps)} (M${st.flight.mach.toFixed(2)})  ALT ${u.fAlt(st.position.altitude_msl_m)}`);
     console.log(`  CFG   : THR ${(st.systems.throttle * 100).toFixed(0)}%  FLAPS ${(st.systems.flaps * 100).toFixed(0)}%  GEAR ${st.systems.gear > 0.5 ? "DOWN" : "UP"}  FUEL ${(st.systems.fuel_frac * 100).toFixed(1)}%`);
     console.log(`  MCDU  : ${mcdu ? `${mcdu.pageId} (${mcdu.title})` : "switch to A320 first (obc-a320 fly LFPB)"}`);
     break;

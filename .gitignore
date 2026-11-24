@@ -45,6 +45,10 @@ assets/Interstellar Endurance/
 assets/Lander Exterior Interstellar Model/
 # raw Ranger cockpit as supplied; the app uses assets/ranger/cockpit.bin (scripts/cockpit-convert.py, build-cockpit.ts)
 assets/Interstellar Ranger One Cockpit/
+# raw JWST model as downloaded from Sketchfab (CC BY 4.0, 7.5 MB); the app uses assets/jwst/jwst.bin (scripts/build-jwst.ts)
+assets/jwst/scene.gltf
+assets/jwst/scene.bin
+assets/jwst/textures/
 # local texture packs, not used by the app (340 MB together)
 assets/tex/
 assets/textures/

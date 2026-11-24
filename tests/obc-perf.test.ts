@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import type { HostCommand, HostCommandContext } from "unkernel/web";
-import { createObcHostCommands, type FetchLike, parseCliVal, resolveAiProvider } from "../src/obc/host-commands";
+import { createObcHostCommands, type FetchLike, hfetchRefusal, parseCliVal, resolveAiProvider } from "../src/obc/host-commands";
 import { emptyTelemetry } from "../src/obc/protocol";
 import { DEFAULT_OBC_CONFIG, type ObcKernelTelemetry, type ObcStatus } from "../src/obc/types";
 
@@ -189,6 +189,8 @@ describe("OBC Level 1+2+3 Performance & Native Host Commands", () => {
     const prev = g.__bh;
     g.__bh = {
       fleet: { active: "f35b", count: 6 },
+      // (an RPC root — src/obc/bh-rpc.ts RPC_ROOTS: a member outside them is not reachable from the guest)
+      camera: { ping: (x: number) => x * 2 },
       ping: (x: number) => x * 2,
     };
     try {
@@ -201,9 +203,12 @@ describe("OBC Level 1+2+3 Performance & Native Host Commands", () => {
       expect(got.code).toBe(0);
       expect(got.stdout.trim()).toBe("f35b");
 
-      const called = await runHost(cmds["bh-host"]!, "bh-host", ["call", "ping", "21"]);
+      const called = await runHost(cmds["bh-host"]!, "bh-host", ["call", "camera.ping", "21"]);
       expect(called.code).toBe(0);
       expect(JSON.parse(called.stdout)).toBe(42);
+      // (the same function at a root outside RPC_ROOTS: refused)
+      const outside = await runHost(cmds["bh-host"]!, "bh-host", ["call", "ping", "21"]);
+      expect(outside.code).not.toBe(0);
     } finally {
       g.__bh = prev;
     }
@@ -242,5 +247,53 @@ describe("OBC Level 1+2+3 Performance & Native Host Commands", () => {
     expect(res.stdout).toContain("HTTP 200");
     expect(res.stdout).toContain("x-test: ok");
     expect(res.stdout).toContain("hello-native-host");
+  });
+
+  test("hfetch: public HTTPS only, no cookies; the page's origin, private hosts, http and redirects to them refused", async () => {
+    const seen: { url: string; init?: RequestInit }[] = [];
+    let redirectTo = "";
+    const mockFetch: FetchLike = async (url, init) => {
+      seen.push({ url: String(url), init });
+      const res = new Response("body", { status: 200 });
+      if (redirectTo) Object.defineProperty(res, "url", { value: redirectTo });
+      return res;
+    };
+    const cmds = createObcHostCommands(makeDeps(mockFetch));
+    const g = globalThis as unknown as { location?: unknown };
+    const prevLoc = g.location;
+    g.location = { origin: "https://samlepirate.org" };
+    try {
+      for (const url of [
+        "http://example.com/",
+        "https://samlepirate.org/__snapshot",
+        "https://localhost:3000/__deepgram",
+        "https://127.0.0.1/",
+        "https://[::ffff:7f00:1]/",
+        "https://169.254.169.254/latest/meta-data/",
+        "https://10.0.0.1/",
+        "https://2130706433/",
+        "https://user:pass@example.com/",
+        "file:///etc/passwd",
+      ]) {
+        const r = await runHost(cmds.hfetch!, "hfetch", [url]);
+        expect({ url, code: r.code, refused: r.stderr.includes("refused") }).toEqual({ url, code: 2, refused: true });
+      }
+      expect(seen.length).toBe(0);
+      expect(hfetchRefusal("https://samlepirate.org/x", "https://samlepirate.org")).toBe("the page's own origin");
+
+      // negative witness: a public HTTPS URL goes, without credentials
+      const ok = await runHost(cmds.hfetch!, "hfetch", ["https://api.github.com/zen"]);
+      expect(ok.code).toBe(0);
+      expect(ok.stdout).toBe("body");
+      expect(seen[0]?.init?.credentials).toBe("omit");
+
+      // a redirect landing on the page's own origin: nothing shown
+      redirectTo = "https://samlepirate.org/__snapshots/x";
+      const red = await runHost(cmds.hfetch!, "hfetch", ["https://example.com/r"]);
+      expect(red.code).toBe(2);
+      expect(red.stdout).toBe("");
+    } finally {
+      g.location = prevLoc;
+    }
   });
 });

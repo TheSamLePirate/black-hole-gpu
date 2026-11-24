@@ -409,6 +409,21 @@ else why not. `["saturn", "wormhole", "hole"]` from the Earth: Saturn, the wormh
 The itinerary under way: the stop voyaged to now, how many begun (`i`) of how many (`of`); null when none (its last stop
 reached and held).
 
+### `__bh.trafficFocus()` → { focus, here, moves, status, at, asks, planes, ships }
+
+The real traffic's focus (`src/traffic/focus.ts`, docs/CAMERA.md "The traffic about the camera"; 24 Nov 2026) and the
+feed's state (`src/traffic/feed.ts`), copied. `focus`: where the traffic is asked — `{ lat, lon }` [°, WGS84 geodetic],
+`alt` [m over the sea, `geoNow`'s], `airR`, `seaR` [km], `who` (`"craft"` the flown craft, `"view"` the view's eye: the free
+camera with no craft, a spectator 60 km or more from the craft, a subject or a tour), `jumps` (its moves of half a radius
+or more so far) — or null (the setting off, the title screen, far from the Earth, the view above 160 km). `here`: the place
+followed now, even off (`{ lat, lon, alt }` or null — the sea's own life is made about it). `moves`: its re-centrings so far
+(a quarter radius each: a free camera flown fast must not add one each frame). `status`: the feed's (`off`, `waiting`,
+`live`, `error`, `offline`); `at`: the place last asked (null off); `asks`: `{ air, sea, trace }` sent so far (the relay's
+pace: air 15 s — 10 s after a jump —, sea 10 s — 5 s —, a trace 15 s); `planes`, `ships`: how many held. The aircraft and
+ships themselves: `__bh.camera.trafficNow()`, `__bh.camera.seaNow()` (Earth-fixed metres), their marks
+`__bh.camera.trafficOverlay(fmt, __bh.camera.viewController())`, `seaOverlay(fmt, view)` — the view's controller places
+them from the view (a spectator's, else the camera's own). e2e: `traffic-free-camera`.
+
 ### `__bh.spectate(on: boolean)` → boolean
 
 Puts the camera out of the ship as a free spectator (`on: true`; the ship goes on flying) or back into it (`false`). Returns whether the spectator is out. Refused with a toast ("fly one first (K)") when no craft is being flown: the spectator starts only from a piloted ship (`startSpectator` in `controller/spectator.ts`). No e2e test calls it.
@@ -778,7 +793,7 @@ The other members tests read:
 | `shoreSwellOn` | boolean (read/write) | the coastal swell field (PLAN-MER-WEBGPU L1–L2, `system/earth-swell.ts`) baked on the shore's levels and read by the water — refracted crests, breaking by the shoaled height, the wash timed by the crests (default true); false: the surf's bands by the depth alone, as before — an A/B's switch |
 | `earthShore.stats()` | `{ compiled, swellCompiled, error, key, job, levels: [{ level, published, bakes, field, fieldBakes, fromCoarse }] }` | the shore's distances and the swell field on the relief cache's levels 3–6: the swell's key (`""`: no field — no Earth sea, no swell, `shoreSwellOn` off), the level whose field is being baked (`job.sweeps` of 48), each level's distances and field published, its bakes, whether its field's edges took the coarser level's phases |
 | `shoreSwellAblate` | number (read/write) | the swell field's reading ablated for an A/B (runtime branches: 1 no crests on the water's normal, 2 no groups, 4 not read by the open sea's kernel, 8 no surf nor wash from it; default 0) |
-| `nearTreeGeometryOn` | boolean, true | J9-3 / J9-4 / J9-5 / J9-6 / J9-A / J9-R: indexed 3D geometry inside 80 m (24 KTG1 models: 12 × LOD 0 + 12 × LOD 1 in 2 shared vertex/index buffers, selected by projected error with a GPU hysteresis anchor; direct handover at 80 m to `sceneryTreeImpostor` and alpha-cut LOD 1 3D shadows in `tsmTex` layer 0). On by default in J9-R after full acceptance J9-A. `sceneryRaster.nearTrees` exposes diagnostic `ready`, `error`, `gpuBytes()` (`{ vertices, indices, lists, draws, uniforms, total, capacity, slots }` bounded to 10.1 MB), `readCounts()` (`{ instances, lod0, lod1, shadow, overflow }` per species/aspect), and `capacity` (1 for the injected overflow witness, 4096 normally). `reachM` is a diagnostic radius in metres (80 normally); `debugTreeId` isolates a local tree after selection: positive hides it, negative draws only its opposite id, zero draws all. Hidden trees stay out of proxy visibility and shadow lists. PWA/offline caching registered in `noteAsset`. Retired legacy near-tree rays in raster mode. |
+| `nearTreeGeometryOn` | boolean, true | PLAN-J9: indexed 3D geometry inside 80 m (24 KTG1 format-2 models: 12 × LOD 0 + 12 × LOD 1, quantised 16-byte vertices and uint16 indices in 2 shared buffers; one pipeline each for view, shadows and cut proxies). A per-tree GPU state (direction-independent hysteresis ±5 % about each tree's limit, LOD band 2.9–3.5 px) crossfades geometry and the tree's crown proxy over 0.3 s by a per-pixel dither (the impostor on the proxy's pixels); shadow casters are the drawn trees at their drawn LOD with the same wind sway. Off — or while the asset (fetched in a worker from the entry veil on, retried 1, 2, 4 … 60 s after a failure) and pipelines are not in —: the near trees are their crowns' proxies cut to the crowns (no ring of bare ground). `sceneryRaster.nearTrees` exposes diagnostic `ready`, `error`, `timings` (`{ decodedIn: "worker"\|"page", decodeMs, uploadMs }`), `gpuBytes()` (`{ vertices, indices, lists, draws, uniforms, state, total, capacity, slots, ready, timings }`), `readCounts()` (`{ instances, lod0, lod1, shadow, shadowLod0, shadowLod1, proxies, overflow }`: per model; `proxies` the cut proxies, round and cone), and `capacity` (1 for the injected overflow witness, 4096 normally). `reachM` is a diagnostic radius in metres (80 normally); `debugTreeId` isolates a local tree after selection: positive hides it, negative draws only its opposite id, zero draws all. Hidden trees stay out of proxy visibility and shadow lists. PWA/offline caching registered in `noteAsset` (`vegetation/tree-asset-load.ts`). The rays' near-tree path and its lever `nearTreesRays` were retired on 24 Nov 2026. |
 | `treeImpostorPreview(layer)` | async → `{ png, bakeMs, models }` | (PLAN-VEGETATION-V2 V2b) bakes the trees' hemi-octahedral impostors once (`treeImpostors`, `vegetation/tree-impostors.ts`) and returns layer 0–11 (kind × proportion) lit as a PNG data URL, the bake's time [ms] and the twelve models (kind, aspect, leaves, triangles, radius) |
 | `treeWindOn` | boolean (read/write) | (V2e, F1) the near trees sway in the surface wind (forest.wgsl `forestSway`: a lean the gusts raise and a sway at the tree's own rate, ≤ 2 % of its height and 0.5 m, none past 300–500 m; the raster writes their motion for the history) — default true; false: still, the A/B. `earthScenery.sway`, `sceneryRaster.sway`: the wind given (towards east, north; strength 0…2 from `u10` / 8; the clock) |
 | `treeImpostorsOn` | boolean (read/write) | (V2c) the far trees (> 200–300 m) of the raster's material read from their impostors (default true); false: their plain shapes and noise, as before — an A/B's switch |
@@ -902,7 +917,6 @@ The other members tests read:
 | `sceneryQuickLead` | number | (PLAN-J6 J6-1, 15 Nov 2026) a fast flight's quick scenery scene (outside the current full square) centred at most this many of its radii ahead — 2.5 (1.2 before: it came behind a craft at 150 m/s, no buildings ahead on arriving over Toulon); a lever for comparisons |
 | `seaFftSplitProfile` | boolean | (a measure, 15 Nov 2026) the sea's FFT profiled step by step — each its own pass in `prof`: `sea fft: modes and rows`, `: columns and assembly`, `: foam`, `: mips` —; false (default): one pass, `sea fft` |
 | `walkRasterOn` | boolean | (PLAN-J5 J5-3, 15 Nov 2026 — a measure) the walker on the Earth drawn by the raster, its walking grid still sent (`P.walk[0].w` 2: trace.wgsl `rasterPrimary`); false (default): the traced pipeline while walking, as ever — its march meets the grid the feet stand on. On foot at Chamonix (kerr-mini): raster 67.3 ms (fixed scale 67.8), traced 54.8 (115.8) |
-| `nearTreesRays` | boolean | (PLAN-J5 J5-3a legacy fallback, retired in J9-R) former near trees rays carving in raster; replaced by real geometry `nearTreeGeometryOn` (default false) |
 | ~~`waterHalfRate`~~ | — | (PLAN-J5 J5-5) the water at half rate — a pixel in two a frame, workgroups of 32 threads, each result written to the pixel beside it — **confirmed by Sam (15 Nov 2026) and made the only path** (trace.wgsl `WATER_HALF`, `WATER_WG_Y` constants): the lever and the old path retired (J5-R2). J0 −6.0 to −7.4 ms on kerr-mini |
 | `cloudLightRuntimeOff` | boolean | (PLAN-J5 J5-1, 15 Nov 2026 — a measure) the clouds' sunward march off at run time, its code still compiled (trace.wgsl `FLAG_CLOUD_LIGHT_OFF`, the frame's flags' bit 256): against `renderer.tune = { TUNE_CLOUD_LIGHT: 0 }`, which compiles it out — its work against its presence (storm, kerr-mini: −6.0 / −8.7 ms). Default false |
 | `rasterRingsOn` | boolean | the far raster rings about the patch (the height cache's two coarser levels) drawn; off: those pixels marched from the camera (default true) |
@@ -2455,15 +2469,19 @@ JWST's deterministic Southern Halo orbit state at scene time `t` [M] in the home
 
 ### `__bh.jwst.track` → JwstTracker
 
-The live tracker (`state(t, ship)`, `peek(t)`, `near`, `anchors`): deterministic Halo orbit afar; within 50 km of the player's craft, integrated with `gravityHome` velocity Verlet so relative drift is zero during formation flight.
+The live tracker (`state(t, ship)`, `peek(t)`, `near`, `anchors`): deterministic Halo orbit afar; within 50 km of the player's craft, integrated with `gravityHome` velocity Verlet so relative drift is zero during formation flight. One writer: the simulation's step calls `state` with the craft's position (`controller/stationkeep.ts` `jwstFollow`, from `sim.ts`); the renderer, the maps, the HUD and station keeping only `peek` (since 2026-11-24: the renderer's `state` with the camera's position could re-anchor it).
 
 ### `__bh.jwst.axes(X, V, t)` → `[ex, ey, ez]`
 
-JWST's real sun-shielding attitude in the home frame (`-Y` Kapton sunshield toward the Sun, `+Y` cold 6.5 m gold primary mirror side, `-Z` optical boresight).
+JWST's real sun-shielding attitude in the home frame (`-Y` Kapton sunshield toward the Sun, `+Y` cold 6.5 m gold primary mirror side, `+Z` optical boresight — the secondary mirror stands in front of the primary along `+Z` in `jwst.bin`).
 
-### `__bh.jwst.start(t, dist = 60)` → `{X, fwd, up, vel} \| null`
+### `__bh.jwst.start(t, dist = 42)` → `{X, fwd, up, vel} \| null`
 
-Starting pose `dist` metres from JWST on its cold gold-mirror side, matching its velocity (used by `goTo("jwst")`).
+Starting pose `dist` metres (default 42; the Go to of the camera panel asks 38) from JWST on its cold gold-mirror side (`+X`, `+Y`, `+Z` of its axes), matching its velocity.
+
+### `__bh.jwst.gpu()` → `{ready, preparing, stats, rect}`
+
+Its renderer's life cycle (`src/jwst.ts`): `ready` (pipelines and mesh made), `preparing` (under way: begun within 100 000 km), `stats` (`prepared`, `released` — its GPU memory let go after 120 s beyond 300 000 km —, `shadowDraws` — the shadow map drawn again only when the Sun moves in its frame —, `draws`), `rect` (its box this frame, `[0, 0, 0, 0]` when not drawn: farther than 2 000 km or under 1 px of radius). *Used in:* `tests/e2e/lagrange-jwst.e2e.test.ts`.
 
 ### `__bh.jwst.haloLoop(t0, n = 96)` → `Vec3[]`
 
@@ -2475,7 +2493,7 @@ CR3BP/ER3BP Lagrange points (`lag:<secondary>:<1..5>`), linear/Routh stability a
 
 ### `__bh.lagrange.state(id, t)` → `LagrangeState \| null`
 
-Instantaneous position, velocity, synodic frame, Hill radius, and dimensionless offset `gamma` for a Lagrange point (e.g. `"lag:earth:2"`, `"lag:moon:4"`) at scene time `t` [M].
+Position, velocity and acceleration (`pos`, `vel`, `acc`: each the exact time derivative of the one before — the pair's frame turning, tilting and breathing), synodic frame (its `omegaVec` the full rotation), Hill radius, and dimensionless offset `gamma` for a Lagrange point (e.g. `"lag:earth:2"`, `"lag:moon:4"`) at scene time `t` [M]. A Sun–planet pair is the Sun and the planet with its moons (their barycentre: Sun–(Earth+Moon)).
 
 ### `__bh.lagrange.stability(id, t?)` → `LagrangeStability \| null`
 
@@ -2483,15 +2501,23 @@ Linear stability eigenvalues, Routh criterion check (`linearlyStable`, `kind`), 
 
 ### `__bh.lagrange.halo(id, t, params?)` → `HaloStateResult \| null`
 
-Evaluates a 3rd-order Richardson Halo orbit (for L1–L3) or libration orbit (for L4–L5) at scene time `t` [M]: inertial `pos`, `vel`, `acc`, synodic offset `synM`, period, and phase.
+Evaluates a 3rd-order Richardson Halo orbit (for L1–L3) or the linear libration loop (for L4–L5: the short-period eigen-mode in the plane, its eigenvector on the synodic axes, and the vertical mode at the pair's rate) at scene time `t` [M]: inertial `pos`, `vel`, `acc` (exact derivatives), synodic offset `synM` [m], mean period `periodM`/`periodDays`, `phase` and the amplitude flown `azM`. `params`: `azM` [m], `branch` (−1 south, JWST's), `phase0` — the phase at the pair's synodic angle θ = 0: the phase runs as τ = ν θ(t) + phase0 (θ unwrapped about the mean motion), so any date gives the same orbit (until 2026-11-24 it ran as the day's angular rate × the time from 2067, off by up to 28 km/s at Earth–Moon L2).
 
 ### `__bh.lagrange.haloLoop(id, t0, params?, n = 96)` → `Vec3[]`
 
-Sampled closed 3D Halo / libration loop around `id` at epoch `t0` [M].
+Sampled closed 3D Halo / libration loop around `id` at epoch `t0` [M] (about L4/L5: the next in-plane period from the phase at `t0`).
 
 ### `__bh.lagrange.defaultAzM(id, t?)` → number
 
-Default vertical Halo amplitude `A_z` [m] for `id` (260 000 km for Sun–Earth L1/L2, 12 000 km for Earth–Moon L1/L2).
+Default vertical Halo amplitude `A_z` [m] for `id` (260 000 km for Sun–Earth L1/L2, 12 000 km for Earth–Moon L1/L2; else from the pair's reference length — `t` no longer used: a constant of the point).
+
+### `__bh.lagrange.azRange(id)` → `{minM, maxM} \| null`
+
+The amplitudes the point's orbits can take [m]: Richardson's expansion's range about L1–L3 (0.01–0.65 γ R̄), the linear loops' about L4/L5 (10⁻⁵–0.05 R̄). The flight computer's Halo A_z field clamps to it with a message; the planner's note says the amplitude flown.
+
+### `__bh.lagrange.phase0At(id, t, tau, params?)` → number
+
+The `phase0` that puts the orbit at phase `tau` at time `t` (0: the Halo's x–z plane crossing nearest the secondary).
 
 ### `__bh.lagrange.refineHalo(id, t0, params?)` → `HaloRefinement \| null`
 
@@ -3201,7 +3227,7 @@ source readiness, pan metres and last CPU draw time. `interface({mapZoom:18})` o
 
 ## Linux On-Board Computer (`__bh.obc`)
 
-### `__bh.obc` → `{ status, boot, stop, reboot, suspend, resume, resetDataDisk, getConfig, setConfig, switchDistro, exec, write, readScreen, telemetry, openConsole, closeConsole, toggleConsole, runScript, installToolchain, setWispUrl, testWisp, listFiles, readGuestFile, writeGuestFile, captureFbDataUrl, scripts, resize, kernelStats, syncDisk, diskInfo, probeGuest, killProcess, routeToCockpit, getLogs, clearLogs, getProfile }`
+### `__bh.obc` → `{ status, boot, stop, reboot, suspend, resume, resetDataDisk, getConfig, setConfig, switchDistro, exec, write, readScreen, telemetry, openConsole, closeConsole, toggleConsole, runScript, installToolchain, setWispUrl, testWisp, listFiles, readGuestFile, writeGuestFile, captureFbDataUrl, scripts, resize, kernelStats, syncDisk, diskInfo, probeGuest, killProcess, routeToCockpit, screenCapture, releaseScreenCapture, getLogs, clearLogs, getProfile, listTabs, activeTabId, openTab, switchTab, closeTab, writeTab, resizeTab, warmupState, hostCommands }`
 
 Embedded Linux On-Board Computer powered by Unkernel (Linux 7.x WASM + `kwemu` aarch64 JIT + Alpine 3.24 / Debian 13 in a dedicated Web Worker — see [PLAN-LINUX-OBC.md](PLAN-LINUX-OBC.md)). Lazy-booted on demand with zero startup cost.
 
@@ -3227,6 +3253,29 @@ Embedded Linux On-Board Computer powered by Unkernel (Linux 7.x WASM + `kwemu` a
 - `syncDisk()` / `diskInfo()` — flush Linux guest filesystems to IndexedDB `/data` (`vm.sync()`) and inspect IndexedDB block count & browser storage quota.
 - `probeGuest()` / `killProcess(pid, signal?)` — inspect live guest OS RAM, uptime, mounts (`df`), processes (`ps`), and installed toolchains, or send `SIGTERM`/`SIGKILL` to a process (PID > 1).
 - `routeToCockpit(target)` — 1-click route Linux OBC onto `"ranger"` (MFD slot 2), `"f35"` (PCD), or `"a320"` (Captain MCDU + Lower ECAM).
+- `screenCapture()` — the 3D cockpit screen that holds the keyboard and mouse now (`src/obc/screen-capture.ts`), or `null`:
+  `{ id, label, kind: "obc" | "mcdu", side?, slot? }` (ids `"f35:pcd:obc"`, `"a320:lecam:obc"`, `"a320:mcdu<side>"` — or
+  `"a320:mcdu<side>:obc"` on its OBC page, of kind `"obc"` —, `"cabin:slot<n>:obc"` for a Ranger/Lander/Endurance MFD). A captured OBC whose Linux is not ready yet (no `/dev/fb0` drawn either) does not take the keys:
+  they keep flying the craft and the badge (`[data-testid=obc-screen-capture-badge]`, `data-state="waiting"`) says so;
+  `data-state="captured"` once it types. A key's release always reaches the game (no stuck flight key), and the auto-repeat
+  of a key held before the capture is not typed.
+- `releaseScreenCapture()` — release that capture (as a click outside, `Shift+Esc` / `Alt+Esc`, or the badge's button).
+- `listTabs()` — the console's terminal tabs, `ObcTerminalTabInfo[]`: `{ id, title, kind: "main" | "pty", pid, running,
+  exitCode, cmd, active }`; `"main"` (the boot console, `running` while the phase is `"ready"`) always first, then the PTY tabs.
+- `activeTabId()` — the id of the tab shown (and typed into) in the console: `"main"` or `"pty-<n>"`.
+- `openTab({ title?, cmd?, cwd? }?)` — open a persistent login-shell PTY tab (`sh -l` in `cwd`, default `/home/pilot`;
+  boots the OBC first if needed), run `cmd` in it if given, make it active; resolves to its `ObcTerminalTabInfo`, or `null`
+  if the OBC could not boot or the spawn failed. Each tab keeps its last 64 KiB of output for a redraw.
+- `switchTab(id)` — show tab `id`; `false` if there is no such tab.
+- `closeTab(id)` — close a PTY tab (its shell gets the PTY's hangup) and fall back to `"main"` if it was shown; `false` for
+  `"main"` or an unknown id.
+- `writeTab(id, input)` — send raw input to tab `id` (`"main"` = `write(input)`); ignored if the tab has exited.
+- `resizeTab(id, cols, rows)` — resize tab `id`'s PTY (clamped to 40–240 columns, 10–80 rows; `"main"` = `resize`).
+- `warmupState()` — the page-cache pre-warm after boot (`"idle" | "warming" | "ready"`): `claude`, `bun`, `node`, `pi` and the
+  V8 compile cache read once at low priority so their first launch skips the IndexedDB reads.
+- `hostCommands()` — the names of the native host commands linked into `/run/kw/bin/` (first on the guest's `PATH`) and run
+  in the page's JS over AF_VSOCK: `["bh-host", "tars", "ai", "hfetch", "obc-bench"]` (`src/obc/host-commands.ts`); empty
+  before the first boot.
 - `getLogs()` / `clearLogs()` / `getProfile()` — read/clear host Unkernel logs and read CPU profiler reports when enabled.
 
 ```js

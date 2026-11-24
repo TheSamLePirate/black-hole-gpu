@@ -2,6 +2,7 @@ import { expect, test } from "bun:test";
 import { createHash } from "node:crypto";
 import net from "node:net";
 import {
+  DEFAULT_WISP_POLICY,
   decodeWispPacket,
   encodeClose,
   encodeContinue,
@@ -116,6 +117,8 @@ test("Wisp v1 relay streams a 20 MB upstream TCP burst with zero dropped bytes a
           enabled: true,
           allowOrigin: () => true,
           allowLoopbackForTest: true,
+          clientIp: "198.51.100.20",
+          policy: { ...DEFAULT_WISP_POLICY, tcpPorts: new Set([upPort]), ipBytesPerSec: 0, globalBytesPerSec: 0 },
         }) ?? new Response("ok")
       );
     },
@@ -136,7 +139,8 @@ test("Wisp v1 relay streams a 20 MB upstream TCP burst with zero dropped bytes a
     let closeReason = -1;
 
     await new Promise<void>((resolve, reject) => {
-      const ws = new WebSocket(`ws://127.0.0.1:${wispSrv.port}/`);
+      // (an Origin is required by the relay; Bun's WebSocket client takes it as a header)
+      const ws = new WebSocket(`ws://127.0.0.1:${wispSrv.port}/`, { headers: { Origin: "http://localhost" } } as never);
       ws.binaryType = "arraybuffer";
       const timer = setTimeout(() => reject(new Error(`timeout after ${gotBytes}/${TOTAL_BYTES} bytes`)), 15_000);
       ws.onopen = () => {

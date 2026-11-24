@@ -44,6 +44,13 @@ services:
       - WISP_MAX_CLIENTS=${WISP_MAX_CLIENTS:-32}
       - WISP_MAX_PER_IP=${WISP_MAX_PER_IP:-8}
       - WISP_ORIGINS=${WISP_ORIGINS:-}
+      # (destination ports, byte-rate caps, trusted proxies — server/wisp-main.ts, docs/DEPLOY.md; keep 3002 closed to the
+      # internet: clients come through Nginx Proxy Manager)
+      - WISP_TCP_PORTS=${WISP_TCP_PORTS:-80,443,9418}
+      - WISP_UDP_PORTS=${WISP_UDP_PORTS:-53}
+      - WISP_IP_BYTES_PER_SEC=${WISP_IP_BYTES_PER_SEC:-4194304}
+      - WISP_GLOBAL_BYTES_PER_SEC=${WISP_GLOBAL_BYTES_PER_SEC:-25165824}
+      - TRUSTED_PROXIES=${TRUSTED_PROXIES:-}
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3002/health"]
       interval: 30s

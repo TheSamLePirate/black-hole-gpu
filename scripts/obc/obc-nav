@@ -1,5 +1,5 @@
 #!/bin/sh
-# obc-nav — Node.js CLI: WGS84 Great-Circle Bearing/Distance/ETA & Hohmann Transfer Calculator.
+# obc-nav — Node.js CLI: WGS84 geodesic (Vincenty) Bearing/Distance/ETA & Hohmann Transfer Calculator.
 # Usage: obc-nav [paris|lebourget|nice|edwards|ksfo|ksc|toulon|<lat> <lon>] [--json]
 
 _N=$(command -v node 2>/dev/null || true)
@@ -71,7 +71,7 @@ if (asJson) {
 }
 
 console.log("\x1b[1;36m╔══════════════════════════════════════════════════════════════╗\x1b[0m");
-console.log("\x1b[1;36m║\x1b[1;37m       OBC-NAV (NODE.JS) · WGS84 GREAT-CIRCLE NAVIGATOR      \x1b[1;36m║\x1b[0m");
+console.log("\x1b[1;36m║\x1b[1;37m       OBC-NAV (NODE.JS) · WGS84 GEODESIC NAVIGATOR          \x1b[1;36m║\x1b[0m");
 console.log("\x1b[1;36m╚══════════════════════════════════════════════════════════════╝\x1b[0m");
 console.log(`  POS : ${lat.toFixed(4)}° N, ${lon.toFixed(4)}° E   HDG : ${st.attitude.heading_deg.toFixed(1)}°   GS : ${gs.toFixed(1)} m/s`);
 console.log("  ──────────────────────────────────────────────────────────────");

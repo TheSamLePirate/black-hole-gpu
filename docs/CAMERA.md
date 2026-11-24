@@ -67,7 +67,26 @@ and pick its view in the camera panel:
 
 Choosing one of these views stops the free camera following your own craft. The craft followed has its ground held by the world
 as your own has (PLAN-J2 J2-2, 12 Nov 2026): an airliner of the traffic parked or rolling, seen from 3 km, stands on the same ground as
-seen from 60 m (`earthTiles.setAnchors`, `renderer.subjectFocus`).
+seen from 60 m (`earthTiles.setAnchors`, `renderer.subjectFocus` — with no craft flown too, since 24 Nov 2026).
+
+## The traffic about the camera
+
+The real aircraft and ships (and the sea's own life, the carriers) live about the **traffic's focus**
+(`src/traffic/focus.ts`, Sam's request of 24 Nov 2026: always on, even in the free camera with no craft): the craft
+you fly, else the view's own eye — the free camera with no craft at all, a spectator gone 60 km or more from the craft
+(the craft again under 40 km), the camera following an airliner or a ship, a tour, a tripod. They are asked of the relay
+about it, flown a minute behind on their paths, drawn, labelled (their lights, their names) from the view and can be
+followed with the views above — whether a craft is flown or not.
+
+- **Hysteresis**: the place asked moves only once the focus has gone a quarter of its radius (30 km low down) — a free
+  camera flown fast does not ask anew each frame —; a jump of half its radius or more (a teleport, a voyage) is asked at
+  once, within the sources' pace (air 10 s, sea 5 s); what lies beyond 1.6 radii is let go.
+- **Radius by height**: the air 120 km low down, up to 160 km from 15 km up (the lights then seen as far as 128 km); the
+  sea 60 km up to 90 km (the relay serves 250 km at most).
+- **Off**: the setting (Settings › Real traffic), the page offline, far from the Earth (the view's own focus above 160 km, on
+  again under 140 km), and under the title screen — its scene is no flight and its menus cover the labels; the relay's and
+  its sources' quotas are kept for play.
+- `__bh.trafficFocus()` — [BH-API.md](BH-API.md).
 
 ## Keys
 
@@ -86,7 +105,8 @@ Aboard a craft, **G** stays the landing gear.
 
 - `__bh.goTo(target)`, `__bh.tour(stops, hold?)`, `__bh.touring()`, `__bh.voyage()` (the voyage's figures),
   `__bh.cam` (the smoothness sensor: jumps, snapped aims, fov jumps, speed breaks) — [BH-API.md](BH-API.md).
-- e2e: `camera-smooth` (14 situations through the sensor), `camera-voyage`, `camera-subject` —
+- e2e: `camera-smooth` (14 situations through the sensor), `camera-voyage`, `camera-subject`, `traffic-free-camera` (the
+  traffic about a free camera with no craft) —
   [E2E-CATALOGUE.md](E2E-CATALOGUE.md).
 - Films: `bun scripts/camera-video.ts [voyage cine montage subject tour]` — 720p, 30 images a second, frame by
   frame (the game frozen and stepped), encoded by ffmpeg into `remote-results/camera-video/`.
@@ -99,6 +119,7 @@ Aboard a craft, **G** stays the landing gear.
 | `src/camera/voyager.ts` | the voyage played on the controller; the throat's passage (`startThroat`) |
 | `src/camera/cinevoyage.ts`, `skim.ts` | the cinematic voyage, the low passes |
 | `src/camera/subjectcam.ts` | the views about a craft |
+| `src/traffic/focus.ts` | the traffic's focus: the craft, else the view's eye; hysteresis, radii by height |
 | `src/camera/speed.ts` | the speed by the surface |
 | `src/camera/metrics.ts` | the smoothness sensor |
 | `src/ui/voyagehud.ts`, `src/ui/camerapanel.ts` | the voyage card, the camera panel |

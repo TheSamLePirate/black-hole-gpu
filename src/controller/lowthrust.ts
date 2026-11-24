@@ -583,11 +583,9 @@ function ourWant(this: CameraController, cam: ReturnType<typeof cameraFrame>, sa
       const H = this.ourHalo;
       const h = haloState(id, t, H);
       if (h) {
-        // Exact inertial acceleration of the reference Halo curve via central difference (cancels mouth/Earth/Moon tides)
-        const dtFd = Math.max(1e-4, Math.min(h.periodM * 1e-4, 0.05));
-        const hp = haloState(id, t + dtFd, H);
-        const hm = haloState(id, t - dtFd, H);
-        const aRef: Vec3 = hp && hm ? lin(sub3(hp.vel, hm.vel), 1 / (2 * dtFd), h.acc, 0) : h.acc;
+        // (the reference orbit's own inertial acceleration: the exact second derivative of its position — lagrange.ts —,
+        // the pair's frame and the barycentre's fall in it)
+        const aRef: Vec3 = h.acc;
         const err = sub3(h.pos, nav.X);
         const errM = Math.hypot(...err) * M_METRES;
         const dvErr = sub3(h.vel, nav.V);

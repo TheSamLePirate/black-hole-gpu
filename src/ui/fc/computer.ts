@@ -30,7 +30,7 @@ import type { Site } from "../../game/sites";
 import type { KerrOrbit } from "../../fc/kerr-ops";
 import { alignOverSite, firstReachable, sitePasses, type Pass, type SiteTrack } from "../../fc/land-ops";
 import { horizon, isco } from "../../physics";
-import { defaultHaloAzM, isLagrangeId, lagrangeStability, lagrangeStabilityText } from "../../system/lagrange";
+import { defaultHaloAzM, haloAzRangeM, isLagrangeId, lagrangeStability, lagrangeStabilityText } from "../../system/lagrange";
 import { BODY_NAMES } from "../../targeting";
 import { G0 } from "../../units";
 import { store } from "../../util/storage";
@@ -108,7 +108,7 @@ function numField(
   unit: string,
   step: number,
   onChange: (v: number) => void,
-  o: { min?: number; max?: number; digits?: number } = {},
+  o: { min?: number; max?: number; digits?: number; clamped?: (asked: number, kept: number) => string } = {},
 ) {
   const w = h("label", "fc-num");
   const l = h("span", "fc-num-l", label);
@@ -117,9 +117,12 @@ function numField(
   inp.step = String(step);
   inp.value = value.toFixed(o.digits ?? 0);
   const u = h("span", "fc-num-u", unit);
+  // (a value brought into the field's range: said under it, not silently — `clamped` words it)
+  const warn = h("span", "fc-num-warn fc-warnc");
   const set = (v: number) => {
     const c = Math.min(Math.max(v, o.min ?? -Infinity), o.max ?? Infinity);
     inp.value = c.toFixed(o.digits ?? 0);
+    warn.textContent = o.clamped && Number.isFinite(v) && c !== v ? o.clamped(v, c) : "";
     onChange(c);
   };
   const bump = (k: number) => (e: MouseEvent) => set(Number(inp.value) + k * step * (e.shiftKey ? 10 : e.altKey ? 0.1 : 1));
@@ -130,6 +133,7 @@ function numField(
   inp.onchange = () => set(Number(inp.value));
   inp.onkeydown = (e) => e.stopPropagation();
   w.append(l, minus, inp, plus, u);
+  if (o.clamped) w.append(warn);
   return { el: w, get: () => Number(inp.value), set: (v: number) => (inp.value = v.toFixed(o.digits ?? 0)) };
 }
 
@@ -606,6 +610,8 @@ export class FlightComputer {
     arrival: "orbit" as "orbit" | "flyby" | "freeReturn" | "halo" | "station",
     altKm: 200,
     haloKm: 260_000,
+    /** the Lagrange point haloKm was set for (its default put back when another is chosen) */
+    haloFor: "",
     retKm: 200,
     orbit: true,
   };
@@ -672,8 +678,17 @@ export class FlightComputer {
     let help = "";
     if (T.universe === "ours" && isLag) {
       if (M.arrival !== "halo" && M.arrival !== "station" && M.arrival !== "flyby") M.arrival = "halo";
-      const defAzKm = Math.round(defaultHaloAzM(dest.id, 0) / 1e3);
-      M.haloKm = defAzKm;
+      const defAzKm = Math.round(defaultHaloAzM(dest.id) / 1e3);
+      // (the point's default when the destination changes — the pilot's own kept across this tab's redraws)
+      if (M.haloFor !== dest.id) {
+        M.haloFor = dest.id;
+        M.haloKm = defAzKm;
+      }
+      // the amplitudes its orbits can take (Richardson's range about L1–L3, the linear loops' about L4/L5)
+      const azR = haloAzRangeM(dest.id);
+      const azMinKm = azR ? Math.ceil(azR.minM / 1e3) : 1000;
+      const azMaxKm = azR ? Math.floor(azR.maxM / 1e3) : Number.POSITIVE_INFINITY;
+      M.haloKm = Math.min(Math.max(M.haloKm, azMinKm), azMaxKm);
       const seg = h("div", "fc-seg");
       for (const [w, l] of [
         ["halo", t("HALO (JWST)")],
@@ -690,7 +705,18 @@ export class FlightComputer {
       fields.push(seg);
       if (M.arrival === "halo")
         fields.push(
-          numField(t("Halo A_z"), M.haloKm, "km", Math.max(1000, Math.round(defAzKm / 10)), (v) => (M.haloKm = v), { min: 1000 }).el,
+          numField(t("Halo A_z"), M.haloKm, "km", Math.max(1000, Math.round(defAzKm / 10)), (v) => (M.haloKm = v), {
+            min: azMinKm,
+            max: azMaxKm,
+            clamped: (asked, kept) =>
+              tf(
+                "A_z {0} km is outside this point's orbits ({1}–{2} km): {3} km kept",
+                Math.round(asked).toLocaleString(),
+                azMinKm.toLocaleString(),
+                azMaxKm.toLocaleString(),
+                Math.round(kept).toLocaleString(),
+              ),
+          }).el,
         );
       const st = lagrangeStability(dest.id, 0);
       help = st

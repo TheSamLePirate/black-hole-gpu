@@ -113,6 +113,9 @@ export interface ObcTelemetry {
   vessel_kind: "spacecraft" | "aircraft" | "free";
   /** Reference celestial body ("earth", "moon", "gargantua", "miller", etc.) */
   body: string;
+  /** The player's display units (`settings.units`, `src/ui/unitsys.ts`): metric by default, imperial as the option. Guest apps
+   * show heights, speeds and distances in them; the other fields stay SI. */
+  units: "metric" | "imperial";
   /** Geodetic WGS84 position (Earth) or planetocentric lat/lon/height */
   position: {
     lat_deg: number;

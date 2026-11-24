@@ -21,10 +21,10 @@ const TSM_OFF = ${TABLE_TSM}u;
 // The share of the Sun a scenery-frame point p sees past the trees (layer 0) or the buildings (layer 1) (0…1), −1 off the
 // map: its texels round it, each lit where nothing stands nearer the Sun than the point less a bias — the proxies are wider
 // than the shapes they stand for (a crown's lit side not shadowed by its own proxy): 1.5 m, and a texel's width along the
-// slope.
-fn treeShadowAt(p: vec3f) -> f32 { return shadowLayerAt(p, 0); }
-fn buildingShadowAt(p: vec3f) -> f32 { return shadowLayerAt(p, 1); }
-fn shadowLayerAt(p: vec3f, layer: i32) -> f32 {
+// slope. nl: the receiver's normal · the Sun (its slope for the near trees' finer bias; 1 when unknown).
+fn treeShadowAt(p: vec3f, nl: f32) -> f32 { return shadowLayerAt(p, 0, nl); }
+fn buildingShadowAt(p: vec3f) -> f32 { return shadowLayerAt(p, 1, 1.0); }
+fn shadowLayerAt(p: vec3f, layer: i32, nl: f32) -> f32 {
   let c = bodies[TSM_OFF + 3u];
   if (c.w < 0.5) { return -1.0; }
   let R = bodies[TSM_OFF];
@@ -35,7 +35,11 @@ fn shadowLayerAt(p: vec3f, layer: i32) -> f32 {
   if (any(uv <= vec2f(0.01)) || any(uv >= vec2f(0.99))) { return -1.0; }
   let n = vec2i(textureDimensions(tsmTex));
   let nearK = select(0.0, 1.0 - smoothstep(55.0, 85.0, length(p - P.scenery[3].xyz)), layer == 0 && P.scenery[6].w > 1.5);
-  let bias = mix(1.5 + 2.0 * R.w / f32(n.x), 0.55 + R.w / f32(n.x), nearK);
+  // (near the 3D trees' casters the bias is cut — their dappled light kept —, by the receiver's slope to the Sun: a texel's width
+  // along it, tan θ of it, standing above the surface — J9 review, 24 Nov 2026: the flat 0.55 m + half a texel crawled on slopes
+  // and walls lit at a grazing Sun; facing the Sun ~0.57 m, at 60° ~1.3 m, at a grazing Sun the proxies' own 2.4 m)
+  let tanT = select(4.0, clamp(sqrt(max(1.0 - nl * nl, 0.0)) / max(nl, 0.05), 0.0, 4.0), nl > 0.0);
+  let bias = mix(1.5 + 2.0 * R.w / f32(n.x), 0.35 + 2.0 * R.w / f32(n.x) * (0.25 + 0.5 * tanT), nearK);
   let z = 0.5 - dot(q, L.xyz) / (2.0 * L.w) - bias / (2.0 * L.w);
   // (past either end of the map's depth range — a valley below a mesa's rim, the Sun low —: nothing known there, not a
   // shadow — beyond the far end the cleared map compared as an occluder, a whole plain shaded to a straight line; the rays)

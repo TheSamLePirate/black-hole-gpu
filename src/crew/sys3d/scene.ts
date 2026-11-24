@@ -8,11 +8,15 @@
 import type { InstrumentSnapshot } from "../../net/instruments";
 import { type Conic, conicOf, nuAfter, radiusAt, type V3 } from "../orbitmath";
 import {
+  defaultLibrationAz,
   haloLoopFromStates,
   lagrangeFromStates,
   lagrangeId,
   lagrangeShortName,
+  pairMeanMotion,
+  pairRefLength,
   ROUTH_MU,
+  systemBarycentre,
   type LagrangeIndex,
 } from "../../system/lagrange-math";
 import { L } from "../lang";
@@ -237,31 +241,30 @@ export function systemScene(s: InstrumentSnapshot | null, focus: Focus = "body",
     }
   }
   if (s.target && byId.has(s.target.id)) marks.push({ pos: place(s.target.id), label: s.target.name, colour: "#ffb43c", kind: "target" });
-  // Lagrange points (L1–L5) computed directly from the snapshot's bodies (moves smoothly with `ahead`!)
-  const velOf = (id: string): V3 => {
-    const b = byId.get(id);
-    if (!b?.v) return [0, 0, 0];
-    return b.v;
-  };
+  // Lagrange points (L1–L5) computed directly from the snapshot's bodies (moves smoothly with `ahead`!) — the game's
+  // pairs (system/lagrange.ts): a planet about the Sun with its moons sent as one (their barycentre and summed GM: the
+  // Sun–(Earth+Moon) points), the orbits' amplitudes and shapes from the same rule and reference length R̄ (lagrange-math)
+  // — the network's JWST mark sits on this loop
   for (const b of B) {
     if (!b.parent || !b.v || !b.mu) continue;
     const par = byId.get(b.parent);
     if (!par || !par.v || !par.mu) continue;
     // Show Sun–Earth, Earth–Moon, Sun–Mars, Sun–Jupiter, Sun–Saturn, and any active pair
-    if (
-      !["earth", "moon", "mars", "jupiter", "saturn"].includes(b.id) &&
-      s.target?.id !== `lag:${b.id}:1` &&
-      !s.target?.id.startsWith(`lag:${b.id}:`)
-    )
-      continue;
+    if (!["earth", "moon", "mars", "jupiter", "saturn"].includes(b.id) && !s.target?.id.startsWith(`lag:${b.id}:`)) continue;
+    const moons =
+      par.id === "sun" ? B.filter((q) => q.parent === b.id && q.v && q.mu).map((q) => ({ p: place(q.id), v: q.v!, m: q.mu! })) : [];
+    const sec = systemBarycentre({ p: place(b.id), v: b.v, m: b.mu }, moons);
     const p1 = place(par.id);
-    const p2 = place(b.id);
-    const v1 = velOf(par.id);
-    const v2 = velOf(b.id);
-    const muRatio = b.mu / (par.mu + b.mu);
+    const v1 = par.v;
+    const p2 = sec.p;
+    const v2 = sec.v;
+    const gm = par.mu + sec.m;
+    const muRatio = sec.m / gm;
+    const n = pairMeanMotion(b.id, 1);
+    const Rref = n ? pairRefLength(gm, n) : len(sub(p2, p1));
     for (const idx of [1, 2, 3, 4, 5] as LagrangeIndex[]) {
       const lid = lagrangeId(b.id, idx);
-      const lp = lagrangeFromStates(p1, v1, par.mu, p2, v2, b.mu, idx);
+      const lp = lagrangeFromStates(p1, v1, par.mu, p2, v2, sec.m, idx);
       const stable = idx >= 4 && muRatio < ROUTH_MU;
       marks.push({
         id: lid,
@@ -272,8 +275,8 @@ export function systemScene(s: InstrumentSnapshot | null, focus: Focus = "body",
       });
       // Draw 3D Halo orbit ring for Sun–Earth L2 (JWST) and any targeted L1/L2 point
       if (idx <= 2 && (lid === "lag:earth:2" || s.target?.id === lid || (lid === "lag:moon:2" && st?.body === "moon"))) {
-        const azKm = b.id === "earth" ? 260_000 : b.id === "moon" ? 12_000 : lp.gamma * lp.frame.R * 0.18;
-        const loop = haloLoopFromStates(p1, v1, par.mu, p2, v2, b.mu, idx as 1 | 2, azKm, -1, 64) as V3[];
+        const azKm = defaultLibrationAz(b.id, idx, muRatio, Rref, 1000);
+        const loop = haloLoopFromStates(p1, v1, par.mu, p2, v2, sec.m, idx as 1 | 2, azKm, -1, 64, Rref) as V3[];
         lines.push({ pts: loop, colour: [1, 0.83, 0.37, s.target?.id === lid ? 0.85 : 0.45], width: 1.3, dashed: true });
       }
     }

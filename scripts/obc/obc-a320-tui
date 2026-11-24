@@ -15,7 +15,7 @@ if [ -z "$_N" ] || case "$_N" in /usr/lib/kw/bin/*) true;; *) false;; esac || he
 fi
 
 cat > /tmp/.obc-a320-tui.mjs <<'JS'
-import { AvionicsBus } from "/obc/lib/obc.mjs";
+import { AvionicsBus, unitsOf } from "/obc/lib/obc.mjs";
 
 const args = process.argv.slice(2);
 let maxFrames = 0;
@@ -107,9 +107,10 @@ function render() {
       }
     : null;
   const fcu = bus.bhGet("camera.jetModes", 1).result ?? {};
-  const spdStr = fcu.spd != null ? `${Math.round(fcu.spd * 1.94384)}kt` : "---";
+  const u = unitsOf(st.units);
+  const spdStr = fcu.spd != null ? u.fSpd(fcu.spd) : "---";
   const hdgStr = fcu.hdg != null ? `${Math.round((fcu.hdg * 180) / Math.PI)}°` : "---";
-  const altStr = fcu.alt != null ? `${Math.round(fcu.alt * 3.28084)}ft` : "-----";
+  const altStr = fcu.alt != null ? u.fAlt(fcu.alt) : "-----";
 
   const lines = [
     "\x1b[?25l\x1b[H\x1b[2J",
@@ -117,7 +118,7 @@ function render() {
     "\x1b[1;38;2;62;200;255m║\x1b[1;37m       OBC-A320-TUI · AIRBUS A320 FCU + LIVE MCDU            \x1b[1;38;2;62;200;255m║\x1b[0m",
     "\x1b[1;38;2;62;200;255m╠══════════════════════════════════════════════════════════════╣\x1b[0m",
     `  FCU   : SPD \x1b[1;33m${spdStr.padEnd(6)}\x1b[0m HDG \x1b[1;33m${hdgStr.padEnd(5)}\x1b[0m ALT \x1b[1;33m${altStr.padEnd(8)}\x1b[0m AP1:${fcu.alt != null || fcu.hdg != null ? "\x1b[1;32mON \x1b[0m" : "OFF"} A/THR:${fcu.spd != null ? "\x1b[1;32mON \x1b[0m" : "OFF"}`,
-    `  LIVE  : IAS ${(st.flight.true_airspeed_mps * 1.94384).toFixed(0).padStart(3)}kt  M${st.flight.mach.toFixed(2)}  ALT ${Math.round(st.position.altitude_msl_m * 3.28084).toString().padStart(5)}ft  AGL ${st.position.height_over_ground_m.toFixed(0)}m  GEAR ${st.systems.gear > 0.5 ? "DN" : "UP"}  FLAP ${(st.systems.flaps * 100).toFixed(0)}%`,
+    `  LIVE  : IAS ${u.fSpd(st.flight.true_airspeed_mps).padStart(7)}  M${st.flight.mach.toFixed(2)}  ALT ${u.fAlt(st.position.altitude_msl_m).padStart(8)}  AGL ${u.fAlt(st.position.height_over_ground_m)}  GEAR ${st.systems.gear > 0.5 ? "DN" : "UP"}  FLAP ${(st.systems.flaps * 100).toFixed(0)}%`,
     "\x1b[38;2;62;200;255m╠──────────────────────────────┬───────────────────────────────╣\x1b[0m",
   ];
   const rw = st.nav?.runway;
@@ -125,7 +126,7 @@ function render() {
     `ECAM SD : ${ECAM_PAGES[ecamIdx]}`,
     `FUEL    : ${(st.systems.fuel_frac * 100).toFixed(1)}%`,
     `THR     : ${(st.systems.throttle * 100).toFixed(0)}%`,
-    rw ? `ILS RWY : ${rw.ident} (${(rw.dist_m / 1852).toFixed(1)} NM)` : "ILS RWY : STANDBY",
+    rw ? `ILS RWY : ${rw.ident} (${u.fDist(rw.dist_m)})` : "ILS RWY : STANDBY",
     rw ? `LOC DEV : ${rw.loc_deg >= 0 ? "+" : ""}${rw.loc_deg.toFixed(2)}°` : "LOC DEV : —",
     rw ? `G/S DEV : ${rw.gs_deg >= 0 ? "+" : ""}${rw.gs_deg.toFixed(2)}°` : "G/S DEV : —",
     `VESSEL  : ${st.vessel_id.toUpperCase()}`,

@@ -257,6 +257,15 @@ pertinent.
   sur l'étiquette.
 
   *Fait le 2026-10-15 — [fiche](progress/aviation/T2.md) : A320 et CRJ-900 (chaque type à sa longueur), feux aux saumons, traînées ; le trafic montré une minute en différé sur son vol reconstruit (vitesse, route, vario lissés puis intégrés ; virage coordonné, incidence par la portance) ; en patrouille avec DJT101 F-HBUZ (A321neo réel) au-dessus de Paris, tenu à 10,8 m. Écarts : pas de roulage au sol, une livrée par modèle.*
+
+  *Le 24 novembre 2026 (demande de Sam : « les avions et les bateaux toujours actifs, même en caméra libre sans appareil ») :
+  le trafic n'est plus lié à l'appareil piloté. Un foyer unique (`src/traffic/focus.ts`) — l'appareil, sinon l'œil de la
+  vue (caméra libre sans appareil, spectateur à plus de 60 km, sujet suivi, tournée) — centre les demandes au relais avec
+  hystérésis (recentré au quart du rayon, saut demandé aussitôt au rythme des sources), rayon selon la hauteur (air
+  120 → 160 km, mer 60 → 90 km), éteint sous l'écran titre, au-delà de 160 km, hors ligne et par le réglage ; la vie en mer
+  faite autour de lui ; maillages, étiquettes et sillages placés depuis la vue (`othersFromView`) ; l'horloge du trafic
+  tourne sans vol ; l'ajustement des trajectoires borné à 1,5 ms par image (un lot de 200 rapports coûtait 62–68 ms en une
+  image, mesuré sous bun). Fait dans le code et en tests unitaires ; e2e `traffic-free-camera` écrit, non lancé.*
 - **T3. Les bateaux sur la mer.**
   - Le porte-conteneurs converti, plus des variantes (pétrolier, ferry, chalutier, voilier), à la taille
     donnée par l'AIS.

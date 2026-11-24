@@ -8570,7 +8570,7 @@ fn rasterAO(px: vec2f) -> f32 { return 1.0; }
 // END_GTAO
 // BEGIN_TREE_SHADOW (system/tree-shadow.ts withTreeShadow supplies the trees' and buildings' shadow map's lookup)
 // (the share of the Sun a scenery-frame point sees past them: −1 where the map has nothing — the rays then, as before)
-fn treeShadowAt(p: vec3f) -> f32 { return -1.0; }
+fn treeShadowAt(p: vec3f, nl: f32) -> f32 { return -1.0; }
 fn buildingShadowAt(p: vec3f) -> f32 { return -1.0; }
 // END_TREE_SHADOW
 // (shade's ground point from the camera, the Earth's axes [m] — the relief's shadow map's lookup —, set by earthNear)
@@ -10618,7 +10618,7 @@ fn sceneryShadow(light:vec3f,normal:vec3f)->f32 {
   // frames — from 200 to 300 m a share of the pixels, the hand-over blended over the frames (docs/PLAN-BATIMENTS-AAA.md B8);
   // TUNE_SC_SKIP 64: the map's alone (B2–B5); 32: every ray, as before the map)
   if((TUNE_SC_SKIP&32u)==0u){
-    let m=treeShadowAt(SC_POINT+n*.35);
+    let m=treeShadowAt(SC_POINT+n*.35,dot(n,d));
     if(m>=0.0){
       var b=1.0;
       if((TUNE_SC_SKIP&64u)==0u && fract(SC_SAMPLE*5.17+.29)>smoothstep(200.0,300.0,SC_DISTANCE)){
@@ -10767,21 +10767,36 @@ fn sceneryTreeGeometry(dW:vec3f,id:u32,t:f32,bits:u32,shade:f32)->f32 {
   let gi=u32(((hd.i0+ci)%hd.columns+hd.columns)%hd.columns);let gj=bitcast<u32>(hd.j0+cj);
   let uv=vec2f(f32(ci)+.12+.76*forestUnit(forestHash(gi,gj,1u)),f32(cj)+.12+.76*forestUnit(forestHash(gi,gj,2u)));
   let base=vec3f(hd.C.x+hd.C.y*uv.x+hd.C.z*uv.y,hd.Dm.x+hd.Dm.y*uv.x+hd.Dm.z*uv.y,f32(word&0x3fffffu)/100.0-20000.0);
-  var n=nearTreeNormal(bits);let height=2.0+f32(word>>26u)*.5;let seed=forestUnit(forestHash(gi,gj,4u));
+  let n=nearTreeNormal(bits);let height=2.0+f32(word>>26u)*.5;let seed=forestUnit(forestHash(gi,gj,4u));
   let leaf=(bits&65536u)!=0u;
   let hit=ForestHit(t,n,kind,select(1u,0u,leaf),base,height,seed,select(1.0,shade,leaf));
   let p=P.scenery[3].xyz+sceneryLocal(dW)*t-vec3f(0.0,0.0,sceneryLiftM(t));
   SC_POINT=p;SC_DISTANCE=t;
   let look=forestLook(hit,n,p,sceneryColourAt(base.xy));
-  if(leaf){
-    let clump=vec3f(gnoise(p*.9),gnoise(p*.9+vec3f(17.1,3.7,-5.3)),gnoise(p*.9+vec3f(-8.3,11.9,2.1)));
-    n=normalize(n+.55*clump);
-  }
-  let grain=select(gnoise(p*vec3f(5.0,5.0,0.7)),gnoise(p*5.3),leaf);
   WS_T=look.through*select(0.0,shade*shade,leaf);
-  WS=vec4f(normalize(sceneryGlobal(n)),1.0);
-  WS_A=look.albedo*(0.8+0.2*grain);
+  WS_A=look.albedo;
+  treeFinishAsk(p,n,select(1u,2u,leaf));
   return t;
+}
+// (the tree's leaf clumps in its normal and its grain in its albedo, asked by whichever path met it — sceneryTreeGeometry, the
+// impostor, the plain crown — and done once, by shadeLite: sceneryTreeFinish. J9 review, 24 Nov 2026: each path had its own
+// copies of the noise — 15 gnoise inlined in shadeLite, +954 inlined lines over J9 —, now 4)
+var<private> TREE_FIN: vec4f = vec4f(0.0);
+var<private> TREE_FIN_N: vec3f = vec3f(0.0);
+// mode: 0 the normal as it is, no grain; 1 bark's grain; 2 leaves' clumps and grain
+fn treeFinishAsk(p: vec3f, n: vec3f, mode: u32) {
+  TREE_FIN = vec4f(p, f32(mode));
+  TREE_FIN_N = n;
+}
+fn sceneryTreeFinish() {
+  let p = TREE_FIN.xyz;
+  let mode = u32(TREE_FIN.w + 0.5);
+  var n = TREE_FIN_N;
+  if (mode == 2u) {
+    n = normalize(n + 0.55 * vec3f(gnoise(p * 0.9), gnoise(p * 0.9 + vec3f(17.1, 3.7, -5.3)), gnoise(p * 0.9 + vec3f(-8.3, 11.9, 2.1))));
+  }
+  if (mode > 0u) { WS_A *= 0.8 + 0.2 * gnoise(select(p * vec3f(5.0, 5.0, 0.7), p * 5.3, mode == 2u)); }
+  WS = vec4f(normalize(sceneryGlobal(n)), 1.0);
 }
 fn sceneryTreeLite(dW: vec3f, id: u32, tMax: f32, rnd: vec4f) -> f32 {
   WS = vec4f(0.0);
@@ -10819,34 +10834,19 @@ fn sceneryTreeLite(dW: vec3f, id: u32, tMax: f32, rnd: vec4f) -> f32 {
     let pi = o + d * ih.t;
     SC_POINT = pi;
     SC_DISTANCE = ih.t;
-    var ni = ih.n;
-    let lk = forestLook(th, ni, pi, sceneryColourAt(tree.base.xy));
-    if (nearGeo && ih.leaf) {
-      let clump = vec3f(gnoise(pi * 0.9), gnoise(pi * 0.9 + vec3f(17.1, 3.7, -5.3)), gnoise(pi * 0.9 + vec3f(-8.3, 11.9, 2.1)));
-      ni = normalize(ni + 0.55 * clump);
-    }
-    let gr = select(gnoise(pi * vec3f(5.0, 5.0, 0.7)), gnoise(pi * 5.3), ih.leaf);
+    let lk = forestLook(th, ih.n, pi, sceneryColourAt(tree.base.xy));
     WS_T = lk.through * select(1.0, select(0.0, ih.shade * ih.shade, ih.leaf), nearGeo);
-    WS = vec4f(normalize(sceneryGlobal(ni)), 1.0);
-    WS_A = lk.albedo * select(select(1.0, mix(0.55, 1.15, ih.shade), ih.leaf), 0.8 + 0.2 * gr, nearGeo);
+    WS_A = lk.albedo * select(select(1.0, mix(0.55, 1.15, ih.shade), ih.leaf), 1.0, nearGeo);
+    treeFinishAsk(pi, ih.n, select(0u, select(1u, 2u, ih.leaf), nearGeo));
     return ih.t;
   }
   let p = o + d * tree.t;
   SC_POINT = p;
   SC_DISTANCE = tree.t;
-  var n = tree.n;
-  let look = forestLook(tree, n, p, sceneryColourAt(tree.base.xy));
+  let look = forestLook(tree, tree.n, p, sceneryColourAt(tree.base.xy));
   WS_T = look.through;
-  var alb: vec3f;
-  if (tree.part == 1u) {
-    alb = look.albedo * (0.8 + 0.2 * gnoise(p * vec3f(5.0, 5.0, 0.7)));
-  } else {
-    let clump = vec3f(gnoise(p * 0.9), gnoise(p * 0.9 + vec3f(17.1, 3.7, -5.3)), gnoise(p * 0.9 + vec3f(-8.3, 11.9, 2.1)));
-    n = normalize(n + 0.55 * clump);
-    alb = look.albedo * (0.8 + 0.2 * gnoise(p * 5.3));
-  }
-  WS = vec4f(normalize(sceneryGlobal(n)), 1.0);
-  WS_A = alb;
+  WS_A = look.albedo;
+  treeFinishAsk(p, tree.n, select(2u, 1u, tree.part == 1u));
   return tree.t;
 }
 // The OSM water's cover at a ground point of the scenery's frame (shadeLite: the lakes and rivers its material draws as
@@ -15373,11 +15373,6 @@ fn rasterLiteOn() -> bool { return (u32(P.mouthList[1].y + 0.5) & RASTER_LITE_FL
 // the material's on, the leftovers' kernel (shade) not compiled yet: the pixels the material does not take are main's
 const RASTER_SHADE_LATE_FLAG = 1024u;
 fn rasterShadeLate() -> bool { return (u32(P.mouthList[1].y + 0.5) & RASTER_SHADE_LATE_FLAG) != 0u; }
-// The trees within RASTER_NEAR_TREES_M of the camera the rays' kernel's, not the material's (renderer.nearTreesNow,
-// mouthList[1].y + 2048: shade run this frame, the camera low near the scenery)
-const RASTER_NEAR_TREES_FLAG = 2048u;
-const RASTER_NEAR_TREES_M = 80.0;
-fn rasterNearTreesOn() -> bool { return (u32(P.mouthList[1].y + 0.5) & RASTER_NEAR_TREES_FLAG) != 0u; }
 struct RasterRay { look: vec3f, rd: vec3f, kM: f32 };
 // the camera ray through an image point [px]: its look (the camera's frame), its unit direction in the squashed space, and
 // how many metres of the physical ray a unit of it is
@@ -15438,10 +15433,8 @@ fn rasterLiteTakes(px: vec2f, k: u32) -> bool {
   let tM = terrainRasterHint(px);
   if (tM <= 0.0) { return false; }
   // (a tree before the ground — U2 —: the material's; against the sky, the rays'; the ground, the sea's too — its water is the
-  // material's, seaShade — ; but near — RASTER_NEAR_TREES_FLAG, the rays' kernel run —, the rays': its crown carved, what
-  // stands behind it found — the material tests the proxy's tree alone, the trees and buildings behind it gone in a ring round
-  // each crown, glaring close by)
-  if (rasterNearTreesOn() && terrainRasterId(px) != 0u && terrainRasterDepth(px) < RASTER_NEAR_TREES_M) { return false; }
+  // material's, seaShade. Near, since J9 — its rays' branch retired on 24 Nov 2026 —: the tree's real geometry, or its crown's
+  // proxy cut to the crown — tree-near.ts —: no envelope ring hiding what stands behind)
   return true;
 }
 // the mesh's normal at a pixel (the body's physical axes), from its neighbours' distances — none where a neighbour is off
@@ -15522,7 +15515,7 @@ fn liteSun(q: vec3f, gq: vec3f, hG: f32, Ls: vec3f, Lp: vec3f, Esun: vec3f, fx: 
     // the Sun — at 0.35 m its own depth shadowed it, a speckle over the roofs)
     let lift = select(n * 0.35, n * 1.2 + Lp * 1.5, mesh);
     let sp = P.scenery[3].xyz + (dirW * tM + lift) * toSc;
-    let m = treeShadowAt(sp);
+    let m = treeShadowAt(sp, dot(n, Lp));
     let b = buildingShadowAt(sp);
     LITE_SH_DBG = vec2f(m, b);
     var sh = 1.0;
@@ -17069,6 +17062,7 @@ fn shadeLite(@builtin(global_invocation_id) gp: vec3u, @builtin(workgroup_id) wi
     if (tt > 0.0) {
       tM = tt;
       isTree = true;
+      sceneryTreeFinish();
     }
   }
   let ab = squashOf(k);
@@ -17888,7 +17882,7 @@ fn keyLight() {
   // HAS_SCENERY — the Earth-raster profile compiles the probe without the scenery's code, the map and its parameters are there)
   if (isEarth(kn) && P.scenery[0].w > 0.5 && P.scenery[2].w > 0.5) {
     let sp = P.scenery[3].xyz;
-    SHIP_SC_OCC = vec2f(treeShadowAt(sp), buildingShadowAt(sp));
+    SHIP_SC_OCC = vec2f(treeShadowAt(sp, 1.0), buildingShadowAt(sp));
     var s = 1.0;
     if (SHIP_SC_OCC.x >= 0.0) { s = min(s, SHIP_SC_OCC.x); }
     if (SHIP_SC_OCC.y >= 0.0) { s = min(s, SHIP_SC_OCC.y); }

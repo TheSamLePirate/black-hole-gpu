@@ -47,7 +47,9 @@ import { issAxes, issElements, issOrbit, issStart, issTrack, setIssElements, sta
 import { jwstAxes, jwstHaloLoop, jwstOrbit, jwstStart, jwstTrack } from "./system/jwst";
 import {
   defaultHaloAzM,
+  haloAzRangeM,
   haloOrbitLoop,
+  haloPhase0At,
   haloState,
   lagrangeIdsFor,
   lagrangeStability,
@@ -202,6 +204,8 @@ export interface BhContext {
   voyage: () => unknown;
   tour: (stops: Target[], hold?: number) => string | null;
   touring: () => { stop: Target | null; i: number; of: number } | null;
+  /** the real traffic's focus (traffic/focus.ts) and the feed's state: where it is asked, whom it follows, its re-centrings */
+  trafficFocus: () => unknown;
   /** the spectator out (a free camera, the ship flying on) or back; whether it is out */
   spectate(on: boolean): boolean;
   /** a photograph's view on the Earth: the tripod there, or the free camera at altM over the ellipsoid; why not, or null */
@@ -445,6 +449,13 @@ export function installBh(c: BhContext) {
         axes: jwstAxes,
         start: jwstStart,
         haloLoop: jwstHaloLoop,
+        /** its renderer's life cycle (jwst.ts): prepared, under preparation, its counts, its box this frame */
+        gpu: () => ({
+          ready: renderer.jwst.ready,
+          preparing: !!renderer.jwst.preparing,
+          stats: { ...renderer.jwst.stats },
+          rect: [...renderer.jwst.rect],
+        }),
       },
       /** Lagrange points (L1–L5), linear & N-body stability, and 3D Richardson Halo orbits (system/lagrange.ts) */
       lagrange: {
@@ -453,6 +464,8 @@ export function installBh(c: BhContext) {
         halo: haloState,
         haloLoop: haloOrbitLoop,
         defaultAzM: defaultHaloAzM,
+        azRange: haloAzRangeM,
+        phase0At: haloPhase0At,
         refineHalo: refineHaloOrbit,
         testStability: testLagrangeStabilityNBody,
         idsFor: lagrangeIdsFor,
@@ -1050,6 +1063,9 @@ export function installBh(c: BhContext) {
        *  touring(): { stop, i, of } while under way, else null */
       tour: c.tour,
       touring: c.touring,
+      /** the real traffic's focus (traffic/focus.ts — the flown craft, else the view's eye): { focus: { lat, lon, alt, airR,
+       *  seaR, who, jumps } | null, here, moves, status, at, asks: { air, sea, trace }, planes, ships } */
+      trafficFocus: c.trafficFocus,
       spectate: (on: boolean) => c.spectate(on),
       viewAt: (lat: number, lon: number, o?: { altM?: number; heading?: number; pitch?: number; fov?: number; tripod?: boolean }) =>
         c.viewAt(lat, lon, o),

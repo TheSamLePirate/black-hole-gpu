@@ -15,7 +15,7 @@ if [ -z "$_N" ] || case "$_N" in /usr/lib/kw/bin/*) true;; *) false;; esac || he
 fi
 
 cat > /tmp/.obc-fmc-tui.mjs <<'JS'
-import { AvionicsBus, wgs84BearingDist } from "/obc/lib/obc.mjs";
+import { AvionicsBus, unitsOf, wgs84BearingDist } from "/obc/lib/obc.mjs";
 
 const args = process.argv.slice(2);
 let maxFrames = 0;
@@ -97,13 +97,13 @@ function render() {
     "\x1b[1;38;2;62;200;255m╔══════════════════════════════════════════════════════════════╗\x1b[0m",
     `\x1b[1;38;2;62;200;255m║\x1b[1;37m  OBC-FMC-TUI (NODE.JS) · AIRBUS/BOEING FMS & ILS MONITOR   \x1b[1;38;2;62;200;255m║\x1b[0m`,
     "\x1b[1;38;2;62;200;255m╠══════════════════════════════════════════════════════════════╣\x1b[0m",
-    `  CRAFT : \x1b[1;32m${st.vessel_id.toUpperCase().padEnd(8)}\x1b[0m  HDG ${st.attitude.heading_deg.toFixed(0).padStart(3, "0")}°  TAS ${(st.flight.true_airspeed_mps * 1.94384).toFixed(0).padStart(4)} kt  M${st.flight.mach.toFixed(2)}`,
-    `  ALT   : ${Math.round(st.position.altitude_msl_m * 3.28084).toString().padStart(6)} ft MSL (${st.position.altitude_msl_m.toFixed(0)} m)   AGL ${st.position.height_over_ground_m.toFixed(0)} m`,
+    `  CRAFT : \x1b[1;32m${st.vessel_id.toUpperCase().padEnd(8)}\x1b[0m  HDG ${st.attitude.heading_deg.toFixed(0).padStart(3, "0")}°  TAS ${unitsOf(st.units).fSpd(st.flight.true_airspeed_mps).padStart(7)}  M${st.flight.mach.toFixed(2)}`,
+    `  ALT   : ${unitsOf(st.units).fAlt(st.position.altitude_msl_m).padStart(9)} MSL   AGL ${unitsOf(st.units).fAlt(st.position.height_over_ground_m)}`,
     `  CFG   : GEAR ${st.systems.gear > 0.5 ? "\x1b[1;32mDOWN\x1b[0m" : "UP  "}   FLAPS ${(st.systems.flaps * 100).toFixed(0).padStart(3)}%   FUEL ${(st.systems.fuel_frac * 100).toFixed(0).padStart(3)}%`,
     "\x1b[38;2;91;121;145m  ── ACTIVE ILS APPROACH ───────────────────────────────────────\x1b[0m",
   ];
   if (rw) {
-    out.push(`  RWY ${rw.ident} (${rw.name})  DME ${(rw.dist_m / 1852).toFixed(1)} NM`);
+    out.push(`  RWY ${rw.ident} (${rw.name})  DME ${unitsOf(st.units).fDist(rw.dist_m)}`);
     out.push(`  LOC L [${needle(rw.loc_deg, 2.5)}] R  (${rw.loc_deg >= 0 ? "+" : ""}${rw.loc_deg.toFixed(2)}°)`);
     out.push(`  G/S D [${needle(rw.gs_deg, 0.7)}] U  (${rw.gs_deg >= 0 ? "+" : ""}${rw.gs_deg.toFixed(2)}°)`);
   } else {

@@ -16,7 +16,7 @@ import type { FormCraft } from "../game/formation";
 import type { RadarObject } from "../game/radar";
 import { bodyFixedOf, groundRelief } from "../system/our-surface";
 import { geodeticToCart, WGS84_A, WGS84_F } from "../system/ellipsoid";
-import { earthView, viewEcef } from "./netcraft";
+import { earthView } from "./netcraft";
 import { formationLabel, formSlotFor } from "./formation";
 import { t, tf } from "../i18n";
 import type { Plane } from "../traffic/feed";
@@ -135,9 +135,35 @@ export function radii(lat: number) {
 /**
  * An aircraft's flight through its reports of the last minutes (one run of them, none further apart than GAP_MAX;
  * game/flightpath.ts), in the lat/lon of one of them scaled to metres (east R·cos φ₀·Δλ, north R·Δφ — exactly what
- * `placeOf` undoes; the frame's scale by each report given) — refitted when its reports change. `rest`: its
- * altitude on the ground.
+ * `placeOf` undoes; the frame's scale by each report given) — refitted when its reports change, within the frame's
+ * fitting budget (fitBudget: else its path as it was, or carried on from its report, until a frame has room). `rest`:
+ * its altitude on the ground.
  */
+/**
+ * A frame's share of time for fitting paths [ms] (24 Nov 2026, the traffic always on): the relay's answer brings a report
+ * for every aircraft at once — 200 of them, each path fitted again on the same frame, measured 62 to 68 ms in one frame
+ * every 15 s (tests/traffic-perf.test.ts) —; now at least one a frame, the others as long as the frame's share lasts, the
+ * rest the next frames (their old path meanwhile: no jump — a new placing is eased over 5 s anyway). One for the aircraft,
+ * one for the ships (seatraffic.ts).
+ */
+export class FitBudget {
+  private until = 0;
+  private used = 0;
+  constructor(private ms: number) {}
+  /** a new frame: its share from now */
+  start() {
+    this.until = performance.now() + this.ms;
+    this.used = 0;
+  }
+  /** a fit allowed now (the first of a frame always) */
+  take(): boolean {
+    if (this.used > 0 && performance.now() > this.until) return false;
+    this.used++;
+    return true;
+  }
+}
+export const FIT_MS = 1.5;
+const fitBudget = new FitBudget(FIT_MS);
 const paths = new Map<string, { key: string; S: FlightPath; t: number[]; lat: number; lon: number; gnd: boolean[] }>();
 function pathOf(hist: readonly Plane[], rest: (q: Plane) => number) {
   const n = hist.length;
@@ -150,6 +176,8 @@ function pathOf(hist: readonly Plane[], rest: (q: Plane) => number) {
   const key = `${pts.length}:${pts[0]!.t}:${last.t}`;
   const P0 = paths.get(last.id);
   if (P0?.key === key) return P0;
+  // (the frame's fitting spent — a batch of reports in at once —: the path it had, the rest next frame)
+  if (!fitBudget.take()) return P0 ?? null;
   const o = pts[pts.length >> 1]!;
   const c0 = R_EQ * Math.cos(o.lat * D);
   const knots: FlightKnot[] = pts.map((q) => {
@@ -205,6 +233,7 @@ function trafficNow(this: CameraController): TrafficCraft[] {
   if (cache.at === now && cache.of === F) return cache.list;
   const td = now - Math.max(0, this.s.trafficDelay ?? 0);
   const out: TrafficCraft[] = [];
+  fitBudget.start();
   for (const T of F.planes.values()) {
     const p = T.p;
     // (taken over by a mission — controller/mission.ts —: flown by the game from there, not by its reports)
@@ -362,9 +391,11 @@ function trafficForm(this: CameraController): string {
   return tf("Formation {0} on {1} — #{2}", formationLabel(S.formShape), `${name}${c.reg && c.cs ? ` (${c.reg})` : ""}`, S.formPos);
 }
 
-/** A frame of the traffic: the aircraft followed (a formation's lead, the radar's lock) asked fresh; its radar
- *  source (the aircraft about us, neutral, answering). */
+/** A frame of the traffic: the aircraft followed (a formation's lead, the radar's lock, the camera's subject) asked
+ *  fresh; its radar source (the aircraft about us, neutral, answering). Run by the flight's step, else by the frame's
+ *  own (controller/lens.ts: no craft flown — the free camera —, the traffic flies on all the same). */
 function trafficStep(this: CameraController, dt = 0) {
+  this.trafficStepped = true;
   // (its clock: on with the frames — paused, the game's frames stop and so does it: every motion still, the image
   // converging —, behind the wall clock after a pause catching it up half again as fast; far behind, set to it)
   const wall = Date.now() / 1000;
@@ -375,7 +406,10 @@ function trafficStep(this: CameraController, dt = 0) {
   }
   if (this.traffic) {
     const lock = this.radar.lock?.startsWith("trf:") ? this.radar.lock.slice(4) : null;
-    this.traffic.focus = this.form?.trafficId ?? lock;
+    // (the airliner the camera follows — the camera panel's views about a craft, camera/subjectcam.ts —: its trace too)
+    const vt = String(this.viewController().s.target);
+    const followed = vt.startsWith("trf:") ? vt.slice(4) : null;
+    this.traffic.focus = this.form?.trafficId ?? lock ?? followed;
   }
   if (!this.traffic?.planes.size) {
     this.radarSources.delete("trf");
@@ -406,39 +440,59 @@ function trafficLead(this: CameraController, id: string): FormCraft | null {
   return c ? { p: c.p, v: c.v, fwd: c.fwd, aLat: G * Math.tan(c.bank) } : null;
 }
 
-/** The traffic for the renderer: the nearest dozen with a mesh within 25 km — their place and axes on the camera's,
- *  the axes scaled to their type's length; hidden behind what the image holds nearer. */
-function trafficShips(this: CameraController): { id: AirlinerId; rel: Vec3; axes: [Vec3, Vec3, Vec3]; hidden: boolean; far: boolean }[] {
+/**
+ * The `max` nearest of a list within `range` [m] of a place fixed to the Earth (each one's place `p` there), nearest first:
+ * their distances found once, only the near ones sorted — the meshes, the labels and the lights made for those alone.
+ */
+export function nearest<T extends { p: readonly number[] }>(list: readonly T[], at: readonly number[], range: number, max: number): T[] {
+  const near: { c: T; d: number }[] = [];
+  const r2 = range * range;
+  for (const c of list) {
+    const x = c.p[0]! - at[0]!,
+      y = c.p[1]! - at[1]!,
+      z = c.p[2]! - at[2]!;
+    const d = x * x + y * y + z * z;
+    if (d < r2) near.push({ c, d });
+  }
+  near.sort((a, b) => a.d - b.d);
+  const out: T[] = [];
+  for (let i = 0; i < near.length && i < max; i++) out.push(near[i]!.c);
+  return out;
+}
+
+/** The traffic for the renderer: the nearest dozen with a mesh within 25 km of the view (`view`: its controller — a
+ *  spectator's, else this one; the free camera with no craft too) — their place and axes on the view's camera's, from its
+ *  place, the axes scaled to their type's length; hidden behind what the image holds nearer. */
+function trafficShips(
+  this: CameraController,
+  view: CameraController = this,
+): { id: AirlinerId; rel: Vec3; axes: [Vec3, Vec3, Vec3]; hidden: boolean; far: boolean }[] {
   const list = this.trafficNow();
   if (!list.length) return [];
-  const E = earthView(this);
+  const E = earthView(view);
   if (!E) return [];
-  const pv = viewEcef(this, E);
   const cam = (b: readonly number[]) => E.toCam(E.toHome(b as Vec3));
   const n = (v: Vec3, k: number): Vec3 => {
     const l = Math.hypot(...v) || 1;
     return [(v[0] / l) * k, (v[1] / l) * k, (v[2] / l) * k];
   };
-  return (
-    list
-      .filter((c) => c.mesh)
-      .map((c) => ({ t: c, rel: cam([0, 1, 2].map((k) => c.p[k]! - E.p0[k]!)) }))
-      // (near the view — a spectator's, far from the craft flown maybe —: those drawn)
-      .map((x) => ({ ...x, d: Math.hypot(x.t.p[0]! - pv[0], x.t.p[1]! - pv[1], x.t.p[2]! - pv[2]) }))
-      .filter((x) => x.d < 25_000)
-      .sort((a, b) => a.d - b.d)
-      .slice(0, 12)
-      .map(({ t: c, rel }) => {
-        const s = c.len / (c.mesh === "a320t" ? 37.7 : 36.2);
-        return {
-          id: c.mesh!,
-          rel,
-          axes: [n(cam(c.right.map((x) => -x)), s), n(cam(c.up), s), n(cam(c.fwd), s)] as [Vec3, Vec3, Vec3],
-          hidden: false,
-          far: true,
-        };
-      })
-  );
+  const out: { id: AirlinerId; rel: Vec3; axes: [Vec3, Vec3, Vec3]; hidden: boolean; far: boolean }[] = [];
+  for (const c of nearest(
+    list.filter((c) => c.mesh),
+    E.p0,
+    25_000,
+    12,
+  )) {
+    const s = c.len / (c.mesh === "a320t" ? 37.7 : 36.2);
+    out.push({
+      id: c.mesh!,
+      rel: cam([c.p[0]! - E.p0[0], c.p[1]! - E.p0[1], c.p[2]! - E.p0[2]]),
+      axes: [n(cam([-c.right[0]!, -c.right[1]!, -c.right[2]!]), s), n(cam(c.up), s), n(cam(c.fwd), s)],
+      hidden: false,
+      far: true,
+    });
+  }
+  return out;
 }
 
 /** A label and its lights for the overlay: on the camera's axes [m] (x right, y up, z ahead). */
@@ -451,23 +505,33 @@ export interface TrafficMark {
   lights: { at: Vec3; colour: string; on: boolean; size: number }[];
 }
 
+/** The overlay's aircraft lights' reach [m]: 80 km — from high up (the traffic's focus asked wider: traffic/focus.ts) up to
+ *  four fifths of its radius, never beyond the horizon. */
+export function lightsReach(alt: number, airR?: number): number {
+  if (!airR) return 80_000;
+  const h = Math.max(0, alt);
+  return Math.max(80_000, Math.min(0.8 * airR * 1e3, Math.sqrt(2 * WGS84_A * h + h * h)));
+}
+
 /**
- * The traffic's labels and lights within 80 km (the nearest 24): its callsign, registration, type, altitude in the
- * units chosen; the red and green navigation lights at its wingtips and the white at its tail, the red beacon
- * (a flash a second), the white strobes (two flashes each 1.2 s), its landing lights under 3 000 m.
+ * The traffic's labels and lights within 80 km of the view (the nearest 24; farther from high up — lightsReach): its
+ * callsign, registration, type, altitude in the units chosen; the red and green navigation lights at its wingtips and
+ * the white at its tail, the red beacon (a flash a second), the white strobes (two flashes each 1.2 s), its landing
+ * lights under 3 000 m. `view`: the view's controller (a spectator's, else this one — the free camera with no craft too).
  */
-function trafficOverlay(this: CameraController, fmtAlt: (m: number) => string): TrafficMark[] {
+function trafficOverlay(this: CameraController, fmtAlt: (m: number) => string, view: CameraController = this): TrafficMark[] {
   const list = this.trafficNow();
   if (!list.length) return [];
-  const E = earthView(this);
+  const E = earthView(view);
   if (!E) return [];
   const cam = (b: readonly number[]) => E.toCam(E.toHome(b as Vec3));
   const tNow = performance.now() / 1000;
+  const F = this.trafficAt;
+  const reach = F ? lightsReach(F.alt, F.airR) : 80_000;
   const out: TrafficMark[] = [];
-  for (const c of list) {
-    const rel = cam([0, 1, 2].map((k) => c.p[k]! - E.p0[k]!));
+  for (const c of nearest(list, E.p0, reach, 24)) {
+    const rel = cam([c.p[0]! - E.p0[0], c.p[1]! - E.p0[1], c.p[2]! - E.p0[2]]);
     const dist = Math.hypot(...rel);
-    if (dist > 80_000) continue;
     const at = (x: number, y: number, z: number): Vec3 =>
       cam([0, 1, 2].map((k) => c.p[k]! - E.p0[k]! + c.right[k]! * x + c.up[k]! * y + c.fwd[k]! * z));
     const ph = (Number.parseInt(c.id.slice(-3), 16) % 1000) / 1000;
@@ -494,7 +558,7 @@ function trafficOverlay(this: CameraController, fmtAlt: (m: number) => string): 
     const label = [c.cs, c.reg, c.type, c.gnd ? "GND" : fmtAlt(c.alt)].filter(Boolean).join(" · ");
     out.push({ id: c.id, at: rel, dist, label, lights });
   }
-  return out.sort((a, b) => a.dist - b.dist).slice(0, 24);
+  return out;
 }
 
 export function installTraffic(C: { prototype: CameraController }) {

@@ -248,10 +248,11 @@ impl TuiApp for F35TuiApp {
             .constraints([Constraint::Percentage(42), Constraint::Percentage(58)])
             .split(rows[2]);
 
+        let u = t.unit_sys();
         let status = Table::new(
             vec![
-                Row::new(["HDG / ALT".to_string(), format!("{:03.0}° / {:.0} ft", t.heading_wrapped(), t.alt_msl_feet())]),
-                Row::new(["TAS / MACH".to_string(), format!("{:.0} kt / M{:.2}", t.tas_knots(), t.flight.mach)]),
+                Row::new(["HDG / ALT".to_string(), format!("{:03.0}° / {}", t.heading_wrapped(), u.f_alt(t.position.altitude_msl_m))]),
+                Row::new(["TAS / MACH".to_string(), format!("{} / M{:.2}", u.f_spd(t.flight.true_airspeed_mps), t.flight.mach)]),
                 Row::new(["G-LOAD / AOA".to_string(), format!("{:+.2} G / {:.1}°", t.flight.g_load, t.flight.alpha_deg)]),
                 Row::new(["AUTOPILOT".to_string(), format!("{} (GEAR {})", t.systems.autopilot, if t.systems.gear > 0.5 { "DN" } else { "UP" })]),
                 Row::new(["SELECTED WPN".to_string(), self.weapon.to_string()]),
