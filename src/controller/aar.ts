@@ -156,6 +156,8 @@ function aarBegin(this: CameraController, tanker: number, name: string, side: Aa
   const now = fleet.fuel.f35 ?? full;
   const room = full - now;
   const practice = !!this.s.f35InfiniteFuel || room < 200;
+  // (TA ONLY from the session itself now — radar/tcas.ts aarTaOnly)
+  this.aarTaHold = null;
   this.aar = {
     tanker,
     name,
@@ -183,6 +185,9 @@ function aarOff(this: CameraController, why?: string) {
   const A = this.aar;
   if (!A) return;
   this.aar = null;
+  // (the TCAS left in TA ONLY until clear of the tanker — controller/radar.ts, radar/tcas.ts aarTaOnly —: the session ends
+  // a few metres behind and below it)
+  this.aarTaHold = { id: `cmb:${A.tanker}`, seen: this.radarT };
   // (its racetrack taken up again)
   const q = this.combat?.world.targets.find((x) => x.id === A.tanker);
   if (q?.ai) q.ai.straight = false;

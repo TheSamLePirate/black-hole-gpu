@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { TCAS, tcasAdvise } from "../src/radar/tcas";
+import { AAR_TA_ONLY, aarTaOnly, TCAS, tcasAdvise } from "../src/radar/tcas";
 
 // The TCAS (PLAN-RADAR-AAA RD4): TCAS II's grading at its sensitivity level 5.
 
@@ -52,4 +52,28 @@ test("TA ONLY — the receiver while it refuels —: the tanker 12 m ahead closi
   const a = tcasAdvise([0, 210, 0], 6000, tanker, undefined, true)[0]!;
   expect(a.level).toBe("TA");
   expect(a.sense).toBeUndefined();
+});
+
+test("TA ONLY past the refuelling's end until clear of the tanker — the 'Descend, descend!' race (24 Nov 2026)", () => {
+  // (the session ended 15 m behind and 6 m below the tanker, closing at 0.4 m/s: on TA/RA at once, an RA to descend)
+  const tk = { r: [0, 15, 6] as [number, number, number] };
+  const other = [{ id: "cmb:1", r: tk.r, v: [0, 209.6, 0] as [number, number, number] }];
+  const bare = tcasAdvise([0, 210, 0], 6000, other, undefined, false)[0]!;
+  expect(bare.level).toBe("RA");
+  expect(bare.sense).toBe("descend");
+  // (in the session — the rendezvous, the contact, the breakaway —: TA ONLY whatever the picture)
+  expect(aarTaOnly(true, null, null, 0).taOnly).toBe(true);
+  // (just after: held while the tanker is near, its hold moved on)
+  const m = aarTaOnly(false, { id: "cmb:1", seen: 10 }, tk, 12);
+  expect(m.taOnly).toBe(true);
+  expect(m.hold).toEqual({ id: "cmb:1", seen: 12 });
+  expect(tcasAdvise([0, 210, 0], 6000, other, undefined, m.taOnly)[0]!.sense).toBeUndefined();
+  // (its track out of the picture a moment: still held; gone longer than AAR_TA_ONLY.lost: let go)
+  expect(aarTaOnly(false, m.hold, null, 13).taOnly).toBe(true);
+  expect(aarTaOnly(false, m.hold, null, 12 + AAR_TA_ONLY.lost + 0.1)).toEqual({ taOnly: false, hold: null });
+  // (clear of it — 2 NM apart, or 1 200 ft above or below —: TA/RA again)
+  expect(aarTaOnly(false, m.hold, { r: [0, AAR_TA_ONLY.clearD + 10, 0] }, 60)).toEqual({ taOnly: false, hold: null });
+  expect(aarTaOnly(false, m.hold, { r: [0, 300, AAR_TA_ONLY.clearH + 5] }, 60)).toEqual({ taOnly: false, hold: null });
+  // (no refuelling: TA/RA)
+  expect(aarTaOnly(false, null, null, 0)).toEqual({ taOnly: false, hold: null });
 });

@@ -813,8 +813,11 @@ La loi avion exige le mode `"plane"`, **q > 300 Pa** et aucun maintien.
   catapulte 72 m/s en fin de course, puis 250 m et 150 m/s tenus ; course du brin 100 m à ≤ 4,5 g ; notes de l'officier
   d'appontage. F-35B : appontage vertical ; décollage court sur `150 m × (m/20,9 t)²`, rotation à 52 m/s.
 - **Ravitaillement en vol** (`game/aar.ts`) : TEXACO 11 à 7 000 m, 210 m/s ; capture à moins de 0,42 m de l'axe du panier,
-  entre 0,25 et 2,6 m/s ; 20 kg/s ; modes level, auto, assisted, manual. (`controller/refuel.ts` est le ravitaillement
-  des vaisseaux.) La loi des derniers mètres (`controller/aar.ts` `aarJet`, `AAR_LAW`, état du code au 21 novembre 2026,
+  entre 0,25 et 2,6 m/s ; 20 kg/s ; modes level, auto, assisted, manual. Le TCAS du ravitaillé est en **TA ONLY** pendant
+  toute la session (jonction, pré-contact, contact, dégagement) et **depuis le 24 novembre 2026** le reste après sa fin,
+  tant que le ravitailleur est à moins de 2 NM et de 1 200 ft (ou absent de l'image moins de 5 s) : la session finit à
+  quelques mètres derrière et sous lui, et un « Descend, descend! » tombait contre lui juste après le départ
+  (`radar/tcas.ts` `aarTaOnly`, `controls.aarTaHold`). (`controller/refuel.ts` est le ravitaillement des vaisseaux.) La loi des derniers mètres (`controller/aar.ts` `aarJet`, `AAR_LAW`, état du code au 21 novembre 2026,
   d97a6ee4) :
   - **Visée** : la pointe à `d` m derrière le panier sur l'axe du tuyau (verrouillé : derrière le point de rencontre). Auto
     (`aimDistance`) : pré-contact 5 m ; tentative après 1,5 s stable, autorisé, ravitailleur hors virage, visée **−2,5 m**
