@@ -189,6 +189,44 @@ The embedded Linux OBC (`docs/PLAN-LINUX-OBC.md`) uses a Wisp v1 WebSocket-to-TC
 - **Health check:** `https://code.samlepirate.org/health` returns `{ ok: true, protocol: "wisp/1", build, activeClients, totalStreams, blockedHosts, blockedPorts, throttledStreams, ratePauses, udpDropped, ... }`.
 - **Client default:** the simulator uses `/__wisp` automatically in local dev and falls back to `wss://code.samlepirate.org/` in production (overridable in the OBC HUD Options drawer).
 
+## Cross-origin isolation (the Linux OBC's multi-CPU)
+
+Unkernel runs more than one vCPU only with `SharedArrayBuffer`, which the browser grants only to a **cross-origin isolated**
+page: `Cross-Origin-Opener-Policy: same-origin` + `Cross-Origin-Embedder-Policy: credentialless`. One vCPU works without.
+The headers were added to the whole site on 23 Nov 2026 (d11d75d1); since the review of 24 Nov 2026 they are sent **only to a
+player who asked for them**, so the game without the OBC is served as before:
+
+- **The `kerr_coi` cookie** (`src/obc/isolation.ts`): absent — not isolated; `1` — isolated from the next load; `0` — the
+  player said no (never set again by itself). The OBC sets `1` at its first boot with more than one vCPU (the boot itself
+  runs on one vCPU; SMP from the next load); the player switches it in the OBC manager (System tab, "Multi-CPU", with a
+  reload button). `crossOriginIsolated` and the vCPU count show in the same tab and in `__bh.obc.kernelStats()`.
+- **Who reads it:** nginx (`deploy/nginx.conf`: `map $cookie_kerr_coi` → `$kerr_coop` / `$kerr_coep`, empty = no header,
+  `Vary: Cookie` on the page so a revalidation never mixes the two), the dev server (`server.ts`: the `/` and `/crew/`
+  pages; `KERR_COI=1` / `KERR_COI=0` force it on / off, `KERR_NO_COI=1` off as before), and the Service Worker (`src/sw.ts`:
+  through `cookieStore`, for GitHub Pages which sends no headers; it also removes them from a page cached while isolated).
+  Where the worker has no `cookieStore` (Firefox, Safari), Pages stays non-isolated: one vCPU there.
+- **The hashed assets** carry `Cross-Origin-Resource-Policy: same-origin` (nginx): only this site embeds them; harmless for
+  the game (all same-origin), and needed by nothing — `credentialless` does not ask CORP of same-origin files.
+
+What isolation changes for the rest of the game (read from the code on 24 Nov 2026, **not yet checked in a browser**):
+
+- **Data loads — unaffected.** Every cross-origin resource is read by `fetch` in CORS mode or by an `<img crossorigin>`
+  (IGN Géoplateforme, swisstopo, ESA WorldCover, GIBS, EOX, Mapterhorn, OpenFreeMap/OSM tiles, the Overture PMTiles
+  ranges on S3, Open-Meteo, NOAA SWPC, CelesTrak, VATSIM, Overpass/Nominatim/Photon, OpenRouter, Anthropic/OpenAI,
+  stream.samlepirate.org); COEP does not apply to CORS responses, and `credentialless` would only drop cookies from
+  no-cors loads, of which the game has none. The Service Worker keeps only non-opaque tile responses. No web fonts, no
+  cross-origin iframe, no cross-origin worker script. WebSockets (rooms, Wisp, Deepgram relay) and WebRTC are outside COEP.
+- **Popups — changed.** COOP `same-origin` puts a cross-origin popup in another browsing-context group: the OpenRouter
+  sign-in popup loses `window.opener` and its handle reads `closed` at once. The callback page (`pwa/openrouter.html`)
+  also answers through a `BroadcastChannel`, and `connect()` (`src/ai/openrouter.ts`) no longer gives up 1.5 s after
+  `closed` when the page is isolated (five minutes instead); `tests/obc-isolation.test.ts` proves the two paths.
+  `window.open(…, "noopener")` (the title's docs) is unaffected.
+- **Workers — to check.** The game's own workers (`/*-worker.js`, same origin) are served with the page's COEP by nginx
+  (location `/`) but without it by the dev server and GitHub Pages. Chrome takes a dedicated worker's policy from its
+  creator; a browser applying the HTML rule strictly (a worker script without COEP under an isolated owner) could refuse
+  them. Only for isolated players; check Firefox once its WebGPU runs the game.
+- **Safari** does not know `credentialless`: no isolation, nothing broken (one vCPU).
+
 ## The server stuck on an old build
 
 Check `https://samlepirate.org/version.json` against the last `deploy:` commit (`git log -1 origin/deploy`). Portainer 2.9.3

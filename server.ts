@@ -4,6 +4,7 @@ import { EAR_LIMITS, earClosed, earOpened, earRelayRefusal, foreignOrigin, queue
 import { createMoonTiles } from "./server/moon-tiles";
 import { createRooms, type Peer } from "./server/rooms";
 import { createTraffic } from "./server/traffic";
+import { coiWanted, withCoi } from "./src/obc/isolation";
 import { type WispSession, wispClose, wispDrain, wispMessage, wispOpen, wispPolicyFromEnv, wispUpgrade } from "./server/wisp-relay";
 
 const port = Number(process.env.PORT ?? 3000);
@@ -66,14 +67,13 @@ const moonTiles = createMoonTiles("data/moon/lola");
 const marsTiles = createMoonTiles("data/mars/dem", "mars/dem");
 const mercuryTiles = createMoonTiles("data/mercury/dem", "mercury/dem");
 const ceresTiles = createMoonTiles("data/ceres/dem", "ceres/dem");
-const coiEnabled = process.env.KERR_NO_COI !== "1";
-/** Attach COOP/COEP: credentialless so Unkernel gets SharedArrayBuffer + multi-CPU SMP while cross-origin map tiles keep working. */
-function withCoiHeaders(res: Response): Response {
-  if (!coiEnabled) return res;
-  const headers = new Headers(res.headers);
-  headers.set("Cross-Origin-Opener-Policy", "same-origin");
-  headers.set("Cross-Origin-Embedder-Policy", "credentialless");
-  return new Response(res.body, { status: res.status, statusText: res.statusText, headers });
+// (the pages cross-origin isolated — COOP same-origin + COEP credentialless: SharedArrayBuffer for the Linux OBC's
+// multi-CPU — only for a player who asked for it, its kerr_coi cookie, as nginx does (src/obc/isolation.ts); KERR_COI=1 / =0
+// forces it on / off, KERR_NO_COI=1 off as before)
+const coiForce: "1" | "0" | null =
+  process.env.KERR_COI === "1" ? "1" : process.env.KERR_COI === "0" || process.env.KERR_NO_COI === "1" ? "0" : null;
+function withCoiHeaders(req: Request, res: Response): Response {
+  return withCoi(res, coiWanted(req.headers.get("cookie"), coiForce));
 }
 
 const server = Bun.serve({
@@ -81,10 +81,10 @@ const server = Bun.serve({
   routes: {
     "/__app": index,
     "/__crew": crew,
-    "/": async (req: Request): Promise<Response> => withCoiHeaders(await fetch(new URL("/__app", req.url))),
+    "/": async (req: Request): Promise<Response> => withCoiHeaders(req, await fetch(new URL("/__app", req.url))),
     "/crew": () => Response.redirect("/crew/", 302),
-    "/crew/": async (req: Request): Promise<Response> => withCoiHeaders(await fetch(new URL("/__crew", req.url))),
-    "/crew/index.html": async (req: Request): Promise<Response> => withCoiHeaders(await fetch(new URL("/__crew", req.url))),
+    "/crew/": async (req: Request): Promise<Response> => withCoiHeaders(req, await fetch(new URL("/__crew", req.url))),
+    "/crew/index.html": async (req: Request): Promise<Response> => withCoiHeaders(req, await fetch(new URL("/__crew", req.url))),
     // Dev only: the page can POST a rendered PNG here (window.__bh.snapshot()) for offline inspection.
     "/__snapshot": {
       POST: async (req) => {

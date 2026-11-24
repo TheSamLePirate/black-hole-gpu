@@ -76,6 +76,13 @@ export default {
   "Shared Mem (/dev/kwshm)": "Mémoire partagée (/dev/kwshm)",
   "CPU Profiler": "Profileur du processeur",
   Distro: "Distribution",
+  "Multi-CPU: cross-origin isolated page (from the next load)":
+    "Multiprocesseur : page isolée des autres origines (au prochain chargement)",
+  "Needed for more than one vCPU (SharedArrayBuffer). Isolation cuts the page's link to the windows it opens (the OpenRouter sign-in then waits for its answer through the browser).":
+    "Nécessaire pour plus d'un vCPU (SharedArrayBuffer). L'isolation coupe le lien de la page avec les fenêtres qu'elle ouvre (la connexion à OpenRouter attend alors sa réponse par le navigateur).",
+  "Reload the page to apply": "Recharger la page pour l'appliquer",
+  "one vCPU: the page is not cross-origin isolated (Multi-CPU, then reload)":
+    "un seul vCPU : la page n'est pas isolée des autres origines (cocher Multiprocesseur, puis recharger)",
   "Dump CPU Profile": "Relever le profil du processeur",
   "Reading Unkernel CPU profile…": "Lecture du profil processeur d'Unkernel…",
   "Profiler inactive (enable CPU Profiler + Apply & Reboot first).":

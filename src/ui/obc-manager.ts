@@ -10,6 +10,7 @@ import {
   normalizeWispMode,
   type ObcRuntime,
 } from "../obc/runtime";
+import { isolationState, setIsolationWanted } from "../obc/isolation";
 import type { ObcConfig, ObcDistro, ObcGuestProbe, ObcKernelTelemetry, ObcPhase, ObcToolchainProfile, ObcWispMode } from "../obc/types";
 
 export type ObcManagerTab = "monitor" | "system" | "storage" | "network" | "toolchains" | "game";
@@ -88,6 +89,7 @@ export class ObcMachineManager {
   readonly jitChk: HTMLInputElement;
   readonly shmChk: HTMLInputElement;
   readonly profileChk: HTMLInputElement;
+  readonly coiChk: HTMLInputElement;
   readonly persistChk: HTMLInputElement;
   readonly crtChk: HTMLInputElement;
   readonly soundChk: HTMLInputElement;
@@ -322,6 +324,34 @@ export class ObcMachineManager {
     );
     sysRow2.append(jit.wrap, shm.wrap, prof.wrap, dumpProfBtn);
 
+    // (more than one vCPU needs SharedArrayBuffer, so a cross-origin-isolated page: the player's choice, from the next load —
+    // src/obc/isolation.ts; asked for by itself at the first SMP boot, never against a "no")
+    const iso = isolationState();
+    const coi = mkCheck(
+      t("Multi-CPU: cross-origin isolated page (from the next load)"),
+      iso.wanted || (iso.isolated && !iso.refused),
+      "obc-opt-coi",
+    );
+    coi.wrap.title = t(
+      "Needed for more than one vCPU (SharedArrayBuffer). Isolation cuts the page's link to the windows it opens (the OpenRouter sign-in then waits for its answer through the browser).",
+    );
+    this.coiChk = coi.inp;
+    const coiStatus = document.createElement("span");
+    coiStatus.className = "obc-status-pill";
+    coiStatus.dataset.testid = "obc-coi-status";
+    const reloadBtn = mkBtn(t("Reload now"), () => location.reload(), { testid: "obc-coi-reload" });
+    reloadBtn.hidden = true;
+    this.coiChk.onchange = () => {
+      setIsolationWanted(this.coiChk.checked);
+      const now = isolationState().isolated;
+      const pending = now !== this.coiChk.checked;
+      coiStatus.textContent = pending ? t("Reload the page to apply") : "";
+      reloadBtn.hidden = !pending;
+    };
+    const sysRow3 = document.createElement("div");
+    sysRow3.className = "obc-drawer-row";
+    sysRow3.append(coi.wrap, reloadBtn, coiStatus);
+
     this.hostCapsEl = document.createElement("div");
     this.hostCapsEl.className = "obc-mgr-summary";
     this.cmdlineEl = document.createElement("div");
@@ -329,7 +359,7 @@ export class ObcMachineManager {
     this.profileOutEl = document.createElement("pre");
     this.profileOutEl.className = "obc-mgr-logs";
     this.profileOutEl.hidden = true;
-    pSys.append(sysRow1, sysRow2, this.hostCapsEl, this.cmdlineEl, this.profileOutEl);
+    pSys.append(sysRow1, sysRow2, sysRow3, this.hostCapsEl, this.cmdlineEl, this.profileOutEl);
 
     // ── TAB 3: DISK & SNAPSHOTS (Persistent IndexedDB /data, Backup/Restore) ─
     const pDisk = mkPane("storage");
@@ -692,6 +722,8 @@ export class ObcMachineManager {
     this.jitChk.checked = cfg.jit;
     this.shmChk.checked = cfg.shm;
     this.profileChk.checked = cfg.profile;
+    const iso = isolationState();
+    this.coiChk.checked = iso.wanted || (iso.isolated && !iso.refused);
     this.persistChk.checked = cfg.persistData;
     this.crtChk.checked = cfg.crtFx;
     this.soundChk.checked = cfg.soundEnabled;
@@ -818,7 +850,11 @@ export class ObcMachineManager {
     );
 
     // Tab 2: Host capabilities & cmdline
-    this.hostCapsEl.textContent = `Host: worker=true · transport=${ks.transport} · memory64=${ks.memory64} · crossOriginIsolated=${ks.crossOriginIsolated} · SMP=${ks.cpuBlocker ? `1 CPU (${ks.cpuBlocker})` : "available"} · switches=${ks.switches} · yields=${ks.yields}`;
+    this.hostCapsEl.textContent = `Host: worker=true · transport=${ks.transport} · memory64=${ks.memory64} · crossOriginIsolated=${ks.crossOriginIsolated} · SMP=${ks.cpuBlocker ? `1 CPU (${ks.cpuBlocker})` : "available"} · switches=${ks.switches} · yields=${ks.yields}${
+      !ks.crossOriginIsolated && st.config.cpus > 1
+        ? ` — ${t("one vCPU: the page is not cross-origin isolated (Multi-CPU, then reload)")}`
+        : ""
+    }`;
     this.cmdlineEl.textContent = ks.cmdline ? `cmdline: ${ks.cmdline}` : t("cmdline: (boot VM to inspect active kernel cmdline)");
 
     // Tab 4: Network KPIs

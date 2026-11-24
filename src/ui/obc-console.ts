@@ -13,6 +13,7 @@ import "./obc-console.css";
 import { t, tf } from "../i18n";
 import { drawObcSurface } from "../obc/fb-renderer";
 import { KeyHoldGate } from "../obc/held-keys";
+import { askIsolationForSmp } from "../obc/isolation";
 import { normalizeDistro, type ObcRuntime } from "../obc/runtime";
 import { OBC_SCRIPTS } from "../obc/scripts-catalog";
 import { TERMINAL_FULL_SANE_SEQ, TERMINAL_MOUSE_RESET_SEQ, TerminalMouseGuard } from "../obc/term-mouse";
@@ -1145,6 +1146,9 @@ export class ObcConsoleOverlay {
       this.lastFbDrawRev = -1;
     }
     const becameReady = st.phase === "ready" && this.lastSyncedPhase !== "ready";
+    // (the OBC booted with more than one vCPU in a page not cross-origin isolated: isolation asked for from the next load —
+    // once, never against the player's "no"; src/obc/isolation.ts)
+    if (st.phase === "booting" && this.lastSyncedPhase !== "booting") askIsolationForSmp(st.config.cpus);
     this.lastSyncedPhase = st.phase;
     this.refitXterm(becameReady);
   }

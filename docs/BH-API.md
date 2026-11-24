@@ -3201,7 +3201,7 @@ source readiness, pan metres and last CPU draw time. `interface({mapZoom:18})` o
 
 ## Linux On-Board Computer (`__bh.obc`)
 
-### `__bh.obc` → `{ status, boot, stop, reboot, suspend, resume, resetDataDisk, getConfig, setConfig, switchDistro, exec, write, readScreen, telemetry, openConsole, closeConsole, toggleConsole, runScript, installToolchain, setWispUrl, testWisp, listFiles, readGuestFile, writeGuestFile, captureFbDataUrl, scripts, resize, kernelStats, syncDisk, diskInfo, probeGuest, killProcess, routeToCockpit, getLogs, clearLogs, getProfile }`
+### `__bh.obc` → `{ status, boot, stop, reboot, suspend, resume, resetDataDisk, getConfig, setConfig, switchDistro, exec, write, readScreen, telemetry, openConsole, closeConsole, toggleConsole, runScript, installToolchain, setWispUrl, testWisp, listFiles, readGuestFile, writeGuestFile, captureFbDataUrl, scripts, resize, kernelStats, syncDisk, diskInfo, probeGuest, killProcess, routeToCockpit, screenCapture, releaseScreenCapture, getLogs, clearLogs, getProfile, listTabs, activeTabId, openTab, switchTab, closeTab, writeTab, resizeTab, warmupState, hostCommands }`
 
 Embedded Linux On-Board Computer powered by Unkernel (Linux 7.x WASM + `kwemu` aarch64 JIT + Alpine 3.24 / Debian 13 in a dedicated Web Worker — see [PLAN-LINUX-OBC.md](PLAN-LINUX-OBC.md)). Lazy-booted on demand with zero startup cost.
 
@@ -3227,6 +3227,29 @@ Embedded Linux On-Board Computer powered by Unkernel (Linux 7.x WASM + `kwemu` a
 - `syncDisk()` / `diskInfo()` — flush Linux guest filesystems to IndexedDB `/data` (`vm.sync()`) and inspect IndexedDB block count & browser storage quota.
 - `probeGuest()` / `killProcess(pid, signal?)` — inspect live guest OS RAM, uptime, mounts (`df`), processes (`ps`), and installed toolchains, or send `SIGTERM`/`SIGKILL` to a process (PID > 1).
 - `routeToCockpit(target)` — 1-click route Linux OBC onto `"ranger"` (MFD slot 2), `"f35"` (PCD), or `"a320"` (Captain MCDU + Lower ECAM).
+- `screenCapture()` — the 3D cockpit screen that holds the keyboard and mouse now (`src/obc/screen-capture.ts`), or `null`:
+  `{ id, label, kind: "obc" | "mcdu", side?, slot? }` (ids `"f35:pcd:obc"`, `"a320:lecam:obc"`, `"a320:mcdu<side>"` — or
+  `"a320:mcdu<side>:obc"` on its OBC page, of kind `"obc"` —, `"cabin:slot<n>:obc"` for a Ranger/Lander/Endurance MFD). A captured OBC whose Linux is not ready yet (no `/dev/fb0` drawn either) does not take the keys:
+  they keep flying the craft and the badge (`[data-testid=obc-screen-capture-badge]`, `data-state="waiting"`) says so;
+  `data-state="captured"` once it types. A key's release always reaches the game (no stuck flight key), and the auto-repeat
+  of a key held before the capture is not typed.
+- `releaseScreenCapture()` — release that capture (as a click outside, `Shift+Esc` / `Alt+Esc`, or the badge's button).
+- `listTabs()` — the console's terminal tabs, `ObcTerminalTabInfo[]`: `{ id, title, kind: "main" | "pty", pid, running,
+  exitCode, cmd, active }`; `"main"` (the boot console, `running` while the phase is `"ready"`) always first, then the PTY tabs.
+- `activeTabId()` — the id of the tab shown (and typed into) in the console: `"main"` or `"pty-<n>"`.
+- `openTab({ title?, cmd?, cwd? }?)` — open a persistent login-shell PTY tab (`sh -l` in `cwd`, default `/home/pilot`;
+  boots the OBC first if needed), run `cmd` in it if given, make it active; resolves to its `ObcTerminalTabInfo`, or `null`
+  if the OBC could not boot or the spawn failed. Each tab keeps its last 64 KiB of output for a redraw.
+- `switchTab(id)` — show tab `id`; `false` if there is no such tab.
+- `closeTab(id)` — close a PTY tab (its shell gets the PTY's hangup) and fall back to `"main"` if it was shown; `false` for
+  `"main"` or an unknown id.
+- `writeTab(id, input)` — send raw input to tab `id` (`"main"` = `write(input)`); ignored if the tab has exited.
+- `resizeTab(id, cols, rows)` — resize tab `id`'s PTY (clamped to 40–240 columns, 10–80 rows; `"main"` = `resize`).
+- `warmupState()` — the page-cache pre-warm after boot (`"idle" | "warming" | "ready"`): `claude`, `bun`, `node`, `pi` and the
+  V8 compile cache read once at low priority so their first launch skips the IndexedDB reads.
+- `hostCommands()` — the names of the native host commands linked into `/run/kw/bin/` (first on the guest's `PATH`) and run
+  in the page's JS over AF_VSOCK: `["bh-host", "tars", "ai", "hfetch", "obc-bench"]` (`src/obc/host-commands.ts`); empty
+  before the first boot.
 - `getLogs()` / `clearLogs()` / `getProfile()` — read/clear host Unkernel logs and read CPU profiler reports when enabled.
 
 ```js
