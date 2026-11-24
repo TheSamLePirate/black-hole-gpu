@@ -33,7 +33,7 @@ import {
   type PlanNode,
   type PlanOptions,
 } from "./our-plan";
-import { defaultHaloAzM, haloState, isLagrangeId, lagrangeName, lagrangeState, parseLagrangeId } from "./lagrange";
+import { haloAzOf, haloPhase0At, haloState, isLagrangeId, lagrangeName, lagrangeState, parseLagrangeId } from "./lagrange";
 import { JWST_HALO, jwstAxes, jwstOrbit } from "./jwst";
 
 const C = C_MPS;
@@ -43,6 +43,7 @@ const DAY = 86400 / M_SECONDS;
 
 const kms = (v: number) => (v * C >= 1000 ? `${((v * C) / 1000).toFixed(2)} km/s` : `${(v * C).toFixed(0)} m/s`);
 const days = (dt: number) => (dt >= 2 * DAY ? `${(dt / DAY).toFixed(1)} d` : `${(dt / (DAY / 24)).toFixed(1)} h`);
+const kmTxt = (m: number) => `${Math.round(m / 1e3).toLocaleString("en")} km`;
 
 export interface LagrangeArrivalState {
   pos: Vec3;
@@ -66,14 +67,15 @@ export function lagrangeGoalState(
   if (target === "jwst") {
     const st = jwstOrbit(t);
     if (!st) return null;
-    // 200 m standoff on JWST's mirror side (+X, +Y, −Z)
+    // 200 m standoff on JWST's mirror side (+X, +Y, +Z: the boresight is +Z — the secondary mirror stands in front of
+    // the primary along it, jwst.ts jwstAxes —; until 2026-11-24 −Z put the arrival behind the primary)
     const A = jwstAxes(st.X, st.V, t);
-    const off = scale(unit(add(add(scale(A[0], 0.55), A[1], 0.35), A[2], -0.76)), 200 / M_METRES);
+    const off = scale(unit(add(add(scale(A[0], 0.55), A[1], 0.35), A[2], 0.76)), 200 / M_METRES);
     return { pos: add(st.X, off), vel: st.V, azM: JWST_HALO.azM, phase0: JWST_HALO.phase0, branch: JWST_HALO.branch };
   }
   if (!isLagrangeId(target)) return null;
   if (arrival === "halo" || arrival === "orbit") {
-    const azM = altM > 1000e3 ? altM : defaultHaloAzM(target, t);
+    const azM = haloAzOf(target, altM).azM;
     const h = haloState(target, t, { azM, branch, phase0 });
     if (!h) return null;
     return { pos: h.pos, vel: h.vel, azM, phase0, branch };
@@ -215,77 +217,82 @@ function firstGuessLagrange(
     }
   }
 
-  // Pick optimal Halo phase0 so the arrival lies on the side facing the incoming transfer
+  // The orbit's amplitude (the one asked, else the point's own — as flown: within the model's range, haloAzOf) and its
+  // phase at the arrival
   const tArr0 = t + o.lead + tof;
-  const azM = isJwst
-    ? JWST_HALO.azM
-    : arrival === "halo" || arrival === "orbit"
-      ? altM > 1000e3
-        ? altM
-        : defaultHaloAzM(target, tArr0)
-      : 0;
-  let phase0 = isJwst ? JWST_HALO.phase0 : 0;
-  if (!isJwst && (arrival === "halo" || arrival === "orbit") && parsed.index <= 2) {
-    // Choose phase = 0 (x–z plane crossing closest to secondary -> minimum transfer energy!)
-    phase0 = 0;
-  }
+  const haloArrival = !isJwst && (arrival === "halo" || arrival === "orbit");
+  const azM = isJwst ? JWST_HALO.azM : haloArrival ? haloAzOf(target, altM).azM : 0;
 
   // Case 1: Local transfer within home's gravity well (Earth -> SE-L1/L2/JWST, Earth -> EM-L1..L5, Moon -> EM-L1/L2)
   const local = home === parsed.primary || (home === parsed.secondary && parsed.index <= 2);
   if (local && inParking) {
-    const goalAt = (ta: number) => lagrangeGoalState(target, arrival, azM, ta, phase0, -1)!;
-    const tgt = goalAt(tArr0);
-    const hArr = solarState(home, tArr0);
-    const targetDir = unit(sub(tgt.pos, hArr.pos));
-    const targetDist = norm(sub(tgt.pos, hArr.pos));
-
-    // Scan one parking orbit to find the departure time whose prograde velocity aligns best with leaving toward targetDir
+    // Scan one parking orbit for the departure whose two-body Lambert arc (around `home`, `tof`) reaches the arrival
+    // point the cheapest: its departure burn plus its velocity left to match at the arrival (the insertion's)
     const period = el.period;
     const nScan = 48;
-    let bestT1 = t + o.lead;
-    let bestDv: Vec3 = [0, 0, 0];
-    let bestScore = Infinity;
-    for (let k = 0; k <= nScan; k++) {
-      const tk = t + o.lead + (period * k) / nScan;
-      const st = coastOrbit(home, hb.mass, r0, v0, tk - t, t);
-      const hk = solarState(home, tk);
-      const Xk = add(hk.pos, st.r);
-      const Vk = add(hk.vel, st.v);
-      const rMag = norm(st.r);
-      // Departure apsis is opposite to targetDir (periapsis on the far side from L2/Moon!)
-      // Use Lambert around `home` from st.r to targetVec in tof!
-      const gK = goalAt(tk + tof);
-      const hKArr = solarState(home, tk + tof);
-      const r2 = sub(gK.pos, hKArr.pos);
-      const orbN = unit(cross(st.r, st.v));
-      const lam = lambert(hb.mass, st.r, r2, tof, orbN);
-      if (lam) {
-        const dvHome = sub(lam.v1, st.v);
-        const dvMag = norm(dvHome);
-        // Penalize dives into the planet
-        const elL = elementsOf(hb.mass, st.r, lam.v1);
-        const pen = elL.rp < hb.radius * 1.01 ? 1e3 : 0;
-        const score = dvMag + pen;
-        if (score < bestScore) {
-          bestScore = score;
-          bestT1 = tk;
-          bestDv = nodeDvComponents(Xk, Vk, tk, dvHome);
-        }
-      } else {
-        // Fallback: analytical Hohmann-like tangential burn when r_hat ≈ -targetDir
-        const align = dot(unit(st.r), targetDir);
-        const aT = (rMag + targetDist) / 2;
-        const vNeed = Math.sqrt(Math.max(hb.mass * (2 / rMag - 1 / aT), 0));
-        const dvMag = Math.abs(vNeed - norm(st.v)) + (1 + align) * 0.01;
-        if (dvMag < bestScore) {
-          bestScore = dvMag;
-          bestT1 = tk;
-          bestDv = [vNeed - norm(st.v), 0, 0];
+    const scan = (phase0: number) => {
+      const goalAt = (ta: number) => lagrangeGoalState(target, arrival, azM, ta, phase0, -1)!;
+      const tgt = goalAt(tArr0);
+      const hArr = solarState(home, tArr0);
+      const targetDir = unit(sub(tgt.pos, hArr.pos));
+      const targetDist = norm(sub(tgt.pos, hArr.pos));
+      let bestT1 = t + o.lead;
+      let bestDv: Vec3 = [0, 0, 0];
+      let bestScore = Infinity;
+      for (let k = 0; k <= nScan; k++) {
+        const tk = t + o.lead + (period * k) / nScan;
+        const st = coastOrbit(home, hb.mass, r0, v0, tk - t, t);
+        const hk = solarState(home, tk);
+        const Xk = add(hk.pos, st.r);
+        const Vk = add(hk.vel, st.v);
+        const rMag = norm(st.r);
+        // Departure apsis is opposite to targetDir (periapsis on the far side from L2/Moon!)
+        // Use Lambert around `home` from st.r to targetVec in tof!
+        const gK = goalAt(tk + tof);
+        const hKArr = solarState(home, tk + tof);
+        const r2 = sub(gK.pos, hKArr.pos);
+        const orbN = unit(cross(st.r, st.v));
+        const lam = lambert(hb.mass, st.r, r2, tof, orbN);
+        if (lam) {
+          const dvHome = sub(lam.v1, st.v);
+          const dvMag = norm(dvHome);
+          // Penalize dives into the planet
+          const elL = elementsOf(hb.mass, st.r, lam.v1);
+          const pen = elL.rp < hb.radius * 1.01 ? 1e3 : 0;
+          const ins = arrival === "flyby" ? 0 : norm(sub(add(hKArr.vel, lam.v2), gK.vel));
+          const score = dvMag + ins + pen;
+          if (score < bestScore) {
+            bestScore = score;
+            bestT1 = tk;
+            bestDv = nodeDvComponents(Xk, Vk, tk, dvHome);
+          }
+        } else {
+          // Fallback: analytical Hohmann-like tangential burn when r_hat ≈ -targetDir
+          const align = dot(unit(st.r), targetDir);
+          const aT = (rMag + targetDist) / 2;
+          const vNeed = Math.sqrt(Math.max(hb.mass * (2 / rMag - 1 / aT), 0));
+          const dvMag = Math.abs(vNeed - norm(st.v)) + (1 + align) * 0.01;
+          if (dvMag < bestScore) {
+            bestScore = dvMag;
+            bestT1 = tk;
+            bestDv = [vNeed - norm(st.v), 0, 0];
+          }
         }
       }
+      return { t1: bestT1, dv0: bestDv, tArrive: bestT1 + tof, phase0, azM, score: bestScore };
+    };
+    if (!(haloArrival && parsed.index <= 3)) return scan(isJwst ? JWST_HALO.phase0 : 0);
+    // A Halo arrival: the arrival's phase chosen too — the orbit's clock runs with the pair's synodic angle, so each
+    // phase τ at tArr0 has its phase0 (haloPhase0At); twelve tried, the cheapest kept (from LEO to Sun–Earth L2 the
+    // insertion where the transfer meets the loop: ≈ 3.3 km/s + 0.4 km/s, against 6.7 + 0.5 at the x–z crossing)
+    let best: ReturnType<typeof scan> | null = null;
+    for (let k = 0; k < 12; k++) {
+      const s = scan(haloPhase0At(target, tArr0, (k / 12) * 2 * Math.PI, { azM, branch: -1 }));
+      if (!best || s.score < best.score) best = s;
     }
-    return { t1: bestT1, dv0: bestDv, tArrive: bestT1 + tof, phase0, azM };
+    return best!;
   }
+  const phase0 = isJwst ? JWST_HALO.phase0 : haloArrival && parsed.index <= 3 ? haloPhase0At(target, tArr0, 0, { azM, branch: -1 }) : 0;
 
   // Case 2: Heliocentric or non-parking transfer — direct Lambert around the dominant central body
   const central = home === "sun" || !local ? "sun" : home;
@@ -469,6 +476,12 @@ export function planLagrangeTransfer(X: Vec3, V: Vec3, t: number, goal: OurGoal,
     const thenMode = isJwst ? "keep" : goal.arrival === "station" ? "keep" : "orbit";
     nodes.push({ t: tArrive, dv: dvInsert, role: "capture", body: target, then: thenMode as PlanNode["then"] });
     note += ` · ${isJwst ? "rendezvous" : goal.arrival === "station" ? "insertion" : "Halo insertion"} ${kms(norm(dvInsert))}`;
+    // (the amplitude flown, said — and the one asked when the model's range changed it: never silently)
+    if (!isJwst && goal.arrival !== "station") {
+      const A = haloAzOf(target, goal.altM);
+      note += ` · A_z ${kmTxt(A.azM)}`;
+      if (A.clamped) note += ` (asked ${kmTxt(goal.altM)}: valid ${kmTxt(A.minM)}–${kmTxt(A.maxM)})`;
+    }
   } else {
     nodes.push({ t: tArrive, dv: [0, 0, 0], role: "arrive", body: target });
   }

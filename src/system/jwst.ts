@@ -3,12 +3,15 @@
 //
 // Attitude: real thermal-protection geometry — the 5-layer Kapton sunshield (−Y in model frame)
 // permanently faces the Sun to keep the 6.5 m gold-coated beryllium primary mirror (+Y cold side,
-// optical boresight −Z) in cryogenic deep-space shadow.
+// optical boresight +Z) in cryogenic deep-space shadow.
 //
 // Dynamics: deterministic analytical Halo orbit afar (identical across all network peers & crew
-// consoles); within 50 km of the player's spacecraft, integrated with the game's own full N-body
-// `gravityHome` (velocity Verlet, same fall as the ship: zero relative drift during formation flight
-// or station-keeping).
+// consoles: lagrange.ts haloState, its phase clocked by the Sun–EMB synodic angle — any date gives
+// the same orbit); within 50 km of the player's spacecraft, integrated with the game's own full
+// N-body `gravityHome` (velocity Verlet, same fall as the ship: zero relative drift during formation
+// flight or station-keeping). The tracker has one writer, the simulation's step (controller/
+// stationkeep.ts jwstFollow, from sim.ts); the renderer, the maps, the HUD and the station keeping
+// read it with `peek`.
 
 import type { Vec3 } from "../physics";
 import { add, cross, dot, len, lin, scale, sub, unit } from "../math/vec3";
@@ -45,7 +48,8 @@ export function jwstHaloLoop(t0: number, n = 96): Vec3[] {
  * Model frame (scripts/build-jwst.ts):
  *  - −Y faces the Sun (hot sunshield Layer 5 + spacecraft bus + solar array)
  *  - +Y faces away from the Sun (cold observatory side: 6.5 m gold primary mirror)
- *  - −Z is the primary mirror optical boresight (observing deep space perpendicular to the Sun)
+ *  - +Z is the primary mirror optical boresight (observing deep space perpendicular to the Sun): the primary's disc
+ *    lies in x–y at z ≈ 1.8 m, the secondary on its struts in front of it at z ≈ 4.9 m (read from jwst.bin)
  *  - +X is the lateral kite wing axis (+Y × +Z = +X, right-handed)
  */
 export function jwstAxes(X: Vec3, _V: Vec3, t: number): [Vec3, Vec3, Vec3] {
