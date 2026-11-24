@@ -48,6 +48,59 @@ connue ou supposée, la piste. Une entrée réglée est barrée avec le commit q
   3 m effacées dès 0,8 m d'empreinte.
 - **Correction** : `trace.wgsl` `roadPavement` : traces en `paveCover` (part de la bande dans le pixel), rustines gardées jusqu'à 2–4 m.
   e2e : 1,007 / 1,002.
+## Un trait clair et un « poteau » sombre à travers un F-35 posé sur le mont Faron (relevé le 24 novembre 2026, e2e `j2-contact-camera`, campagne 1)
+
+- **Constat** : F-35 posé sur le flanc sud du mont Faron (43,1405° N, 5,942° E, scène J0, 11 h UTC), caméra « autour » à ~25 m
+  devant lui (yaw 180, tangage 8°) : un trait rectiligne bleu pâle, couleur de ciel, part de l'emplanture de l'aile droite vers la
+  gauche de l'image, s'élargissant vers le bord ; et un trait vertical brun sombre (un « poteau ») descend du train avant jusqu'au
+  bas de l'image. Reproduit sur ce Mac (sonde jetable, 24 nov., 14 lancements) ; vu de 1,5 km, de côté ou de plus haut (yaw 160,
+  tangage 20°) : rien. Sur le mont Diablo (Californie), vu de derrière seulement : rien (la vue de face n'y a pas été essayée).
+- **Écarté** (les deux traits restent) : la passe du vaisseau entière (`debugSkipShip`), sa carte d'ombre, ses jets, lampes,
+  traînées et panaches (`ship.debugSkip`), `shipInScene`, l'air J3-2, le chemin prédit (`pathInView` ; `cameraPath` nul), les
+  ancres de contact J2-2, les réverbères (`earthStreetLamps`), l'herbe (`earthGrass`), la TAAU, les imposteurs, les arbres proches
+  en 3D (`nearTreeGeometryOn`) et leurs ombres, la couche `#overlay`, et dans `liteSkip` : ombre de l'appareil, ombres de contact,
+  occlusion du sol, ciel/rebond, spéculaire, vallées, ombres du relief et du décor (bits 2 et 4, interrupteurs `groundSpecular`/
+  `skyOpen` allumés pour qu'ils passent).
+- **Ce qui les fait disparaître** : `liteSkip` 64 (les arbres retirés du matériau du raster) — les deux traits partent ; et le
+  pipeline tracé (`earthPipeline` « trace »). `surfaceAt` lit sous le trait clair des arbres réels (objets 243157, 243158, 243849,
+  11 à 30 m), sous le « poteau » du sol (15,8 m) : rien de la visibilité n'a cette forme ; c'est l'ombrage des arbres du matériau
+  (`shadeLite`, `sceneryTreeLite` — ses arbres tracés dans le matériau) qui les dessine.
+- **Piste** : un arbre du matériau dégénéré à la place de l'appareil (un tronc — le poteau — et un houppier étiré en fil vers
+  l'horizon — le trait), ou un rayon du matériau qui rencontre l'appareil comme un arbre ; lire l'enregistrement d'arbre que
+  `sceneryTreeLite` touche sur ces pixels (sonde du tracé d'une colonne, `colTraceFrame`) et regarder les exclusions de forêt
+  autour d'un appareil posé (`forest-exclusions.ts`). Non réglé dans cette session.
+
+## ~~Le navire suivi en caméra libre, sans appareil : ni coque ni sillage~~ (relevé le 24 novembre 2026, e2e `traffic-free-camera`, campagne 1) — réglé le même jour (`c716fefd`)
+
+- **Constat** : « JILLIAN IRENE » suivi à 49 m (vue Chase, aucun appareil piloté, baie de San Francisco) : ses feux seuls, ni coque
+  ni sillage. Sonde : un porte-conteneurs à 484 m invisible ; dessiné en gris plat (`ship.debugFs` 8) ou sans le test d'occultation
+  du trafic (`far` éteint) ; la profondeur d'occlusion sous la coque à quelques mètres (`moments.y` de la mer : 0,6 à 7 m pour une
+  mer à 150 m–3 km).
+- **Cause** : `subjectStep` (camera/subjectcam.ts) plaçait la vue pour le début du pas, la simulation avançant son horloge après :
+  le rendu dessinait la Terre une image de son mouvement orbital plus loin (patch proche à −223 m d'ellipsoïde pour une vue à 67 m, à
+  ×1 ; −2,8 km à ×10 ; juste à l'arrêt). Le maillage de la mer (`seaSurf.hc` borné à 0,3 m) tombait sous la caméra et le navire,
+  testé contre cette distance, était caché entier.
+- **Correction** : la vue placée pour la fin de l'image (comme le rig, controller/rig.ts) et l'horloge du contrôleur à cette fin
+  (`shipTime`, controller/lens.ts) : ce qui lit la vue (le trafic placé depuis elle, `geoNow`, le HUD) le fait à l'instant dessiné.
+  e2e `traffic-free-camera` : hauteur du sol dessiné et de la vue à moins de 10 m (avant 290 m ; après 12,5 / 12,5 m), le chalutier
+  suivi à 76 m avec sa coque et son sillage.
+
+## ~~J9 : ombres des arbres proches à 0, `carvedOpenings` 0, hystérésis des Maures sans objet~~ (relevé le 24 novembre 2026, e2e `j9-reference`, campagne 1) — réglé le même jour (`d592aec7`)
+
+- **Cause** : les redessins de la carte d'ombre proche étaient gardés par la hauteur de l'œil sur l'origine du repère du décor
+  (l'ellipsoïde), non sur le sol : au-dessus de 120 m d'ellipsoïde (Chamonix, les Maures), seule la première image de la passation
+  (ses proxies) était dessinée ; et les compteurs d'ombre étaient lus après la remise à zéro de chaque image.
+- **Correction** : garde sur la hauteur WGS84 de l'œil au-dessus du sol, comptes du dernier dessin gardés ; contrôle d'hystérésis
+  par arbre (témoin positif : `nearTrees.hysteresis` éteint). Revérifié sur ce Mac (M1 Max, 24 nov., `J9_GEOMETRY/TRANSITIONS/SHADOWS`) :
+  pass ; Maures carvedOpenings 758, croisés 12, rebasculés 0 (éteint : 20, 3) ; Chamonix carvedOpenings 432, croisés 6, 0 (éteint : 14, 7).
+
+## ~~Le marcheur translucide en raster (fantôme)~~ (relevé le 24 novembre 2026, e2e `walk-raster`, campagne 1) — réglé le même jour (`6d003e5b`)
+
+- **Constat** : à pied à Chamonix, pipeline raster : l'astronaute n'est qu'un fantôme orangé, l'herbe absente.
+- **Cause** : E11 (marcheur, herbe, pierres, couvert bas, ombre portée) encodé après E5 `temporal` : l'image de la TAAU — celle que
+  montre l'écran dès que l'image vivante est rendue sous le canevas — ne les recevait jamais ; seule fuyait l'image d'avant.
+- **Correction** : E11 avant le temporel, son mouvement écrit (marque w 1 ; le marcheur au même pixel, l'herbe reprojetée par le sol).
+  Vérifié en image ici (walk-raster, `WALK_SPOTS` 45,80 ; 6,98) : astronaute opaque, herbe et pierres présentes.
 
 ## ~~« Descend, descend! » contre le ravitailleur, 1 e2e `aar` sur 3~~ (relevé le 24 novembre 2026, campagne e2e 1) — réglé le même jour (`d51017b2`)
 

@@ -111,7 +111,11 @@ fn ggx(N:vec3f,V:vec3f,L:vec3f,rough:f32,f0:vec3f)->vec3f{
 }
 // The colour, and for the vessel drawn after: the distance [m] × coverage and the coverage (ship.wgsl: its occluder).
 // (the occluder's alpha: the grass's blending reads it — the rg16float target keeps red and green)
-struct Out { @location(0) color:vec4f, @location(1) occluder:vec4f };
+// (and its motion on the live image — drawn before the history: the craft's mark, w 1 — whole this frame, unjittered —; the
+// astronaut's history at the same pixel (z 1, no shift: the walker the camera follows), the grass's, stones' and low cover's
+// where the ground's point was (z 0: reprojected by the ground's depth, as the ground they stand on) — post.wgsl temporal, taau;
+// the grass's mark by its coverage, premultiplied)
+struct Out { @location(0) color:vec4f, @location(1) occluder:vec4f, @location(2) motion:vec4f };
 @fragment fn fs(v:V,@builtin(front_facing) front:bool)->Out {
  let pixel=vec2u(v.clip.xy);let at=min(pixel.y,u32(u.image.y)-1u)*u32(u.image.x)+min(pixel.x,u32(u.image.x)-1u);
  if(sceneDepth[at]*u.image.z<length(v.p)-.025){discard;}
@@ -130,7 +134,7 @@ struct Out { @location(0) color:vec4f, @location(1) occluder:vec4f };
  let diffuse=color/PI;let direct=(diffuse*nl+ggx(n,eye,L,rough,f0)*nl)*Ek*vis;
  let F=f0+(vec3f(1)-f0)*pow(1-max(dot(n,eye),0),5);
  let ambient=diffuse*(vec3f(1)-F)*ambientIrradiance(n)+envSpecular(reflect(-eye,n),rough)*F;
- var o:Out;o.color=vec4f((direct+ambient)*u.image.w,1);o.occluder=vec4f(length(v.p),1,0,1);return o;
+ var o:Out;o.color=vec4f((direct+ambient)*u.image.w,1);o.occluder=vec4f(length(v.p),1,0,1);o.motion=vec4f(0,0,1,1);return o;
 }
 @vertex fn screenVs(@builtin(vertex_index) k:u32)->@builtin(position) vec4f {let p=array<vec2f,3>(vec2f(-1,-1),vec2f(3,-1),vec2f(-1,3));return vec4f(p[k],0,1);}
 // The astronaut's shadow and contact occlusion on what the tracer drew: the traced light is the key's
@@ -187,7 +191,7 @@ fn skin(v:SkinIn)->SkinV{
  // the split sum's scale and bias, the specular occluded with the cavities, Lagarde)
  let ab=envAB(rough,nv);let so=clamp(pow(nv+ao,exp2(-16*rough-1))-1+ao,0.0,1.0);
  let ambient=diffuse*ambientIrradiance(N)*ao+envSpecular(reflect(-V,N),rough)*(f0*ab.x+ab.y)*so;
- var o:Out;o.color=vec4f((direct+ambient)*u.image.w,1);o.occluder=vec4f(length(v.p),1,0,1);return o;
+ var o:Out;o.color=vec4f((direct+ambient)*u.image.w,1);o.occluder=vec4f(length(v.p),1,0,1);o.motion=vec4f(0,0,1,1);return o;
 }
 
 // Same packed OSM/WorldCover BVH as the planet renderer: direct sunlight at each near-field fragment.
@@ -529,7 +533,7 @@ fn bezierTangent(p0:vec3f,p1:vec3f,p2:vec3f,p3:vec3f,t:f32)->vec3f{let s=1-t;ret
  // the sky and the ground's light, darker into the field (its depth: the roots)
  let ao=mix(.22,1.0,pow(t,.7));
  let ambient=albedo/PI*ambientIrradiance(n)*ao+envSpecular(reflect(-eye,n),.5)*.03*ao;
- var o:Out;o.color=vec4f((direct+ambient)*u.image.w*coverage,coverage);o.occluder=vec4f(length(v.p)*coverage,coverage,0,coverage);return o;
+ var o:Out;o.color=vec4f((direct+ambient)*u.image.w*coverage,coverage);o.occluder=vec4f(length(v.p)*coverage,coverage,0,coverage);o.motion=vec4f(0,0,0,coverage);return o;
 }
 
 // ======================================================================== the stones
@@ -599,7 +603,7 @@ struct SV { @builtin(position) clip:vec4f, @location(0) p:vec3f, @location(1) up
  let nl=max(dot(n,L),0);
  let direct=(albedo/PI*nl+ggx(n,eye,L,.7,vec3f(.04))*nl)*keyIrradiance()*vis;
  let ambient=albedo/PI*ambientIrradiance(n)*mix(.5,1.0,smoothstep(-.35,.3,v.up));
- var o:Out;o.color=vec4f((direct+ambient)*u.image.w,1);o.occluder=vec4f(length(v.p),1,0,1);return o;
+ var o:Out;o.color=vec4f((direct+ambient)*u.image.w,1);o.occluder=vec4f(length(v.p),1,0,1);o.motion=vec4f(0,0,0,1);return o;
 }
 // ======================================================================== the low cover (VIPER B5)
 // Round the camera low over the Earth (under COVER_CAMERA_MAX), out to its reach (~240 m) past the grass's 30 m: a
@@ -699,5 +703,5 @@ struct CoverV { @builtin(position) clip:vec4f, @location(0) p:vec3f, @location(1
  let wrap=max((dot(n,L)+.4)/1.4,0);
  let direct=albedo/PI*wrap*keyIrradiance()*vis;
  let ambient=albedo/PI*ambientIrradiance(n)*inner;
- var o:Out;o.color=vec4f((direct+ambient)*u.image.w,1);o.occluder=vec4f(length(v.p),1,0,1);return o;
+ var o:Out;o.color=vec4f((direct+ambient)*u.image.w,1);o.occluder=vec4f(length(v.p),1,0,1);o.motion=vec4f(0,0,0,1);return o;
 }

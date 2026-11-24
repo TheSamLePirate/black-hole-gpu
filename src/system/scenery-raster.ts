@@ -2623,6 +2623,7 @@ export class SceneryRaster {
         },
         ...(descriptor && k === 0 ? { timestampWrites: descriptor } : {}),
       });
+    this.nearTrees.keepShadowCounts(enc);
     const trees = layer(0);
     if (!(this.debugSkip & 1)) this.nearTrees.drawShadow(trees, this.drawBind);
     for (let l = 0; l < 2; l++) {

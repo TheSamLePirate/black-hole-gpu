@@ -73,6 +73,8 @@ const GRASS_FIGURES = 17;
 const GRASS_VEC4S = GRASS_FIGURES + VEGETATION.length * VEGETATION_VEC4S + VEGETATION.length;
 /** a stone's bytes (character.wgsl Stone: three vec4) */
 const STONE_BYTES = 48;
+/** the live image's motion's format (terrain-raster.ts TERRAIN_RASTER_MOTION_FORMAT, renderer craftMotion) */
+const MOTION: GPUTextureFormat = "rgba16float";
 /** the occluder's format: distance [m] × coverage, coverage (ship.wgsl reads it as the station's) */
 const OCCLUDER: GPUTextureFormat = "rg16float";
 /** the levels' first instances in the one blade buffer, and its capacity */
@@ -244,6 +246,8 @@ export class CharacterRenderer {
   private depth: GPUTexture | null = null;
   /** the astronaut's and the grass's distance for the vessel drawn after them (ship.wgsl's occluder) */
   private occluderTex: GPUTexture | null = null;
+  /** the motion written where no live image's is handed (an offline render's target): its own, never read */
+  private motionScratch: GPUTexture | null = null;
   private envSampler: GPUSampler;
   private probeKey: unknown[] = [];
   private shadow: GPUTexture;
@@ -318,9 +322,12 @@ export class CharacterRenderer {
     d.queue.writeBuffer(this.indices, 0, new Uint32Array(idx));
     this.count = idx.length;
     const vertex: GPUVertexBufferLayout = { arrayStride: 12, attributes: [{ shaderLocation: 0, offset: 0, format: "float32x3" }] };
+    // (the third: the live image's motion — the craft's mark, w 1: whole this frame, its history by its own motion —, the pass
+    // drawn before the history since 24 Nov 2026; character.wgsl Out.motion)
     const targets = (blend?: GPUBlendState): GPUColorTargetState[] => [
       { format: "rgba16float", ...(blend ? { blend } : {}) },
       { format: OCCLUDER, ...(blend ? { blend } : {}) },
+      { format: MOTION, ...(blend ? { blend } : {}) },
     ];
     // (premultiplied: the grass's coverage at its edges and far away; its occluder a coverage-weighted distance)
     const premultiplied: GPUBlendState = {
@@ -715,6 +722,8 @@ export class CharacterRenderer {
     sceneryBuffer: GPUBuffer,
     probe: CharacterProbe,
     world: GrassWorld = { wind: null, paved: () => false },
+    /** the live image's motion target (renderer sceneMotion), asked once something is drawn; null: an image without history */
+    motionNow: (() => GPUTexture) | null = null,
   ) {
     const began = performance.now();
     const others = this.remoteWalkers;
@@ -820,8 +829,12 @@ export class CharacterRenderer {
         format: OCCLUDER,
         usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING,
       });
+      this.motionScratch = null;
       this.size = key;
     }
+    const motion =
+      motionNow?.() ??
+      (this.motionScratch ??= this.d.createTexture({ size: [width, height], format: MOTION, usage: GPUTextureUsage.RENDER_ATTACHMENT }));
     // (the bind groups follow their resources: a new occlusion depth buffer, scenery buffer or probe — made again)
     const resources = [sceneDepth, sceneryBuffer, probe.sh, probe.env, probe.shipShadow];
     if (resources.some((r, i) => r !== this.probeKey[i])) {
@@ -1001,6 +1014,7 @@ export class CharacterRenderer {
       colorAttachments: [
         { view: target.createView({ baseMipLevel: 0, mipLevelCount: 1 }), loadOp: "load", storeOp: "store" },
         { view: this.occluderTex!.createView(), clearValue: [0, 0, 0, 0], loadOp: "clear", storeOp: "store" },
+        { view: motion.createView(), loadOp: "load", storeOp: "store" },
       ],
       depthStencilAttachment: { view: this.depth!.createView(), depthClearValue: 0, depthLoadOp: "clear", depthStoreOp: "discard" },
     });

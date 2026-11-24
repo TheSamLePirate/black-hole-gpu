@@ -2,7 +2,7 @@ import { afterEach, beforeEach, expect, test } from "bun:test";
 import { withGpuStubs } from "./lib/gpu-stubs";
 import { published } from "./lib/published-tiles";
 import type { Vec3 } from "../src/physics";
-import { EarthTiles, enlarge, RETRY_MAX_MS, retryDelay, TILE, tileImagery } from "../src/system/earth-tiles";
+import { EarthTiles, enlarge, FAIL_SHOWN, RETRY_MAX_MS, retryDelay, TILE, tileImagery } from "../src/system/earth-tiles";
 import { geodeticToCart, WGS84_F } from "../src/system/ellipsoid";
 
 // CM1 (docs/PLAN-CHARGEMENT-MONDE.md): no hole for good. A relief tile that will not load is never given the global map's
@@ -145,6 +145,36 @@ test("CM1: a stand-in's own heights in at last — no longer a stand-in, its fai
   // (Terrarium's flat 100 m now)
   const L = T.levels.find((l) => l.z === 13)!;
   expect(L.data[T.slotOf(L, L.want!.x0, L.want!.y0)]![0]).toBeCloseTo(100, 3);
+});
+
+test("the pill's « Relief N failed »: the tiles failing now — wanted, refused FAIL_SHOWN times in a row —, never a refusal retried", async () => {
+  let refuse = true;
+  globalThis.fetch = ((url: string) => {
+    const m = /terrarium\/(\d+)\//.exec(String(url));
+    if (m && Number(m[1]) >= 13)
+      return refuse ? Promise.reject(new TypeError("Failed to fetch")) : Promise.resolve(new Response(new Blob([new Uint8Array(8)])));
+    return new Promise(() => {});
+  }) as unknown as typeof fetch;
+  const t = track(published(new EarthTiles(withGpuStubs(fakeDevice()))));
+  const T = t as unknown as Inside;
+  // (another place than the tests above: their tiles answered at last are kept in memory)
+  t.update(camAt(22, 20, 2), 1e-3);
+  for (const [z, x, y] of t.wanted()) if (z < 13) t.put(z, x, y, new Float32Array(TILE * TILE).fill(500));
+  t.update(camAt(22, 20, 2), 1e-3);
+  for (let k = 0; k < 50 && t.standIns < 32; k++) await Bun.sleep(5);
+  // (refused once each: the cumulative count has them, the pill none — they are asked again)
+  expect(t.failed).toBe(32);
+  expect(t.failing).toBe(0);
+  // (refused FAIL_SHOWN times in a row — the retries' wait stood for —: shown; one no longer wanted: not)
+  for (const f of T.failures.values()) f.n = FAIL_SHOWN;
+  T.failures.set("13/0/0", { n: FAIL_SHOWN, at: 0 });
+  expect(t.failing).toBe(32);
+  // (in at last: none failing)
+  refuse = false;
+  globalThis.dispatchEvent(new Event("online"));
+  for (let k = 0; k < 100 && t.standIns > 0; k++) await Bun.sleep(5);
+  expect(t.failing).toBe(0);
+  expect(t.failed).toBe(32);
 });
 
 test("CM1: the night's lights refused — the day's imagery drawn alone, its lights 0", async () => {

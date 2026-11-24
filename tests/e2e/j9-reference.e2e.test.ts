@@ -285,40 +285,62 @@ test.skipIf(!E2E)(
             expect(underProbe.pixels).toBeGreaterThan(0);
             expect(underProbe.validDepth).toBe(underProbe.pixels);
             expect(underProbe.identified).toBe(underProbe.pixels);
-            // (the hand-over's band is ±5 % of the reach about each tree's limit — 76…84 m at 80 m —, the LOD's 0.50…0.56 of it: the
-            // camera brought to one place from 12 m behind, then from 12 m ahead, along its heading — each crossing both bands for
-            // the trees about them —; the per-tree state keeps what it had in the band: strictly more geometry and LOD 0 coming
-            // back than going in, whichever way the camera last moved. Waits past the 0.3 s crossfade)
+            // (hysteresis, per tree — review of 24 Nov 2026: the in-view LOD 0 count was 2 at the Maures, 2 = 2 failed a strict
+            // test with no meaning. The per-tree state — a byte per cell of the 64 × 64 torus, readState(): bit 7 the hand-over's
+            // target, bit 6 the LOD — is read for every tree within reach, in view or not. The camera goes FORWARD metres ahead
+            // along its heading (coming from 30 m behind), then BACK metres back — less than the narrowest band (the LOD's 0.06 of the reach, 4.6 m at 80;
+            // the hand-over's 0.1, 8 m; the projected error's 2.9…3.5 px, ≥ 20 % of a crossing distance ≥ 26 m) —: the trees
+            // that crossed a threshold on the way forward must keep their state on the way back. Positive witness: the bands
+            // collapsed (nearTrees.hysteresis=false) — some of them flip back. Negative witness: A/A, the state read twice at
+            // one place — no change.)
+            const FORWARD = 8;
+            const BACK = 2.5;
             const along = (m: number) => {
               const h = (v.heading * Math.PI) / 180;
               return `${v.lat + (m * Math.cos(h)) / 111_320},${v.lon + (m * Math.sin(h)) / (111_320 * Math.cos((v.lat * Math.PI) / 180))}`;
             };
             const hold = `altM:${ground + v.agl},heading:${v.heading},pitch:${v.pitch},fov:50`;
-            await app.js(`__bh.viewAt(${along(-12)},{${hold}})`);
-            await Bun.sleep(800);
-            await app.js(`__bh.viewAt(${v.lat},${v.lon},{${hold}})`);
-            await Bun.sleep(800);
-            const approachCounts = await app.js<{ instances: number[]; lod0: number[]; lod1: number[]; overflow: number }>(
-              "__bh.renderer.sceneryRaster.nearTrees.readCounts()",
-            );
-            await app.js(`__bh.viewAt(${along(12)},{${hold}})`);
-            await Bun.sleep(800);
-            await app.js(`__bh.viewAt(${v.lat},${v.lon},{${hold}})`);
-            await Bun.sleep(800);
-            const recedeCounts = await app.js<{ instances: number[]; lod0: number[]; lod1: number[]; overflow: number }>(
-              "__bh.renderer.sceneryRaster.nearTrees.readCounts()",
-            );
-            await app.js(`__bh.viewAt(${v.lat},${v.lon},{altM:${ground + v.agl},heading:${v.heading},pitch:${v.pitch},fov:50})`);
-            await Bun.sleep(800);
-            expect(approachCounts.overflow).toBe(0);
-            expect(recedeCounts.overflow).toBe(0);
-            const approachTotal = approachCounts.instances.reduce((a, b) => a + b, 0);
-            const recedeTotal = recedeCounts.instances.reduce((a, b) => a + b, 0);
-            const approachLod0 = approachCounts.lod0.reduce((a, b) => a + b, 0);
-            const recedeLod0 = recedeCounts.lod0.reduce((a, b) => a + b, 0);
-            // (strict: equal counts would pass with no hysteresis at all — review of 24 Nov 2026)
-            expect(recedeTotal).toBeGreaterThan(approachTotal);
-            expect(recedeLod0).toBeGreaterThan(approachLod0);
+            // (frames drawn while waiting, past the 0.3 s crossfade: the state advances once a cull)
+            const settleAt = async (m: number) => {
+              expect(await app.js(`__bh.viewAt(${along(m)},{${hold}})`)).toBeNull();
+              await app.js(
+                "(async()=>{const t=performance.now();while(performance.now()-t<900){__bh.touch();await new Promise(requestAnimationFrame);}return true;})()",
+              );
+              return app.js<number[]>("__bh.renderer.sceneryRaster.nearTrees.readState()");
+            };
+            const BITS = 0xc0;
+            const hysteresisRun = async (on: boolean) => {
+              await app.js(`(() => {__bh.renderer.sceneryRaster.nearTrees.hysteresis=${on};__bh.touch();return true;})()`);
+              // (from far enough behind that the way to `before` and on is one way for every tree — 30 m, past every band: a way back
+              // and forth within a band changes nothing, by design)
+              await settleAt(-30);
+              const before = await settleAt(-FORWARD);
+              const ahead = await settleAt(0);
+              const again = await app.js<number[]>("__bh.renderer.sceneryRaster.nearTrees.readState()");
+              const back = await settleAt(-BACK);
+              const crossed: number[] = [];
+              for (let c = 0; c < ahead.length; c++) if ((before[c]! & BITS) !== (ahead[c]! & BITS)) crossed.push(c);
+              const flipped = crossed.filter((c) => (back[c]! & BITS) !== (ahead[c]! & BITS));
+              const aaChanged = ahead.filter((b, c) => (b & BITS) !== (again[c]! & BITS)).length;
+              const lodCrossed = crossed.filter((c) => ((before[c]! ^ ahead[c]!) & 0x40) !== 0).length;
+              const handCrossed = crossed.filter((c) => ((before[c]! ^ ahead[c]!) & 0x80) !== 0).length;
+              const near = ahead.filter((b) => b & 0x80).length;
+              return { on, crossed: crossed.length, lodCrossed, handCrossed, flipped: flipped.length, aaChanged, near };
+            };
+            const hysteresisOn = await hysteresisRun(true);
+            const hysteresisOff = await hysteresisRun(false);
+            await app.js("(() => {__bh.renderer.sceneryRaster.nearTrees.hysteresis=true;__bh.touch();return true;})()");
+            await settleAt(0);
+            console.log(JSON.stringify({ hysteresisOn, hysteresisOff }));
+            // (meaningful: trees crossed a band forward; A/A nothing changed)
+            expect(hysteresisOn.aaChanged).toBe(0);
+            expect(hysteresisOff.aaChanged).toBe(0);
+            // (trees about the bands — the hand-over's, the LOD's, either: Chamonix crossed only the LOD's, 6 trees)
+            expect(hysteresisOn.crossed).toBeGreaterThanOrEqual(3);
+            expect(hysteresisOff.crossed).toBeGreaterThanOrEqual(3);
+            // (strict: with the bands, none of the trees that crossed goes back; without them, some do — the witness)
+            expect(hysteresisOn.flipped).toBe(0);
+            expect(hysteresisOff.flipped).toBeGreaterThan(0);
             const transitions = {
               calm: {
                 pixels: calmProbe.pixels,
@@ -330,10 +352,8 @@ test.skipIf(!E2E)(
               wind: windProbe,
               winter: winterProbe,
               underside: underProbe,
-              approachTotal,
-              recedeTotal,
-              approachLod0,
-              recedeLod0,
+              hysteresisOn,
+              hysteresisOff,
             };
             console.log(JSON.stringify({ transitions }));
             await Bun.write(`${OUT}/${v.name}-transitions.json`, JSON.stringify(transitions, null, 2));

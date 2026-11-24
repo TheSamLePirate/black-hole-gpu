@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { App, E2E, stopServer } from "./lib/app";
 
-// The real traffic with no craft at all (Sam, 24 Nov 2026: « les avions et les bateaux toujours actifs, même en caméra libre sans appareil »; traffic/focus.ts): the craft left, the free camera over San Francisco Bay — the relay asked about the camera (`__bh.trafficFocus()`: who "view"), the aircraft and the ships about it live, moving, labelled and drawn from the view (`renderer.othersFromView`); an airliner then a ship followed by the camera panel's Chase view (target `trf:…`, `ais:…`), the airliner's trace asked; a jump to Marseille asked anew at once; the setting off: none asked.
+// The real traffic with no craft at all (Sam, 24 Nov 2026: « les avions et les bateaux toujours actifs, même en caméra libre sans appareil »; traffic/focus.ts): the craft left, the free camera over San Francisco Bay — the relay asked about the camera (`__bh.trafficFocus()`: who "view"), the aircraft and the ships about it live, moving, labelled and drawn from the view (`renderer.othersFromView`); an airliner then a ship (one under way when there is one) followed by the camera panel's Chase view (target `trf:…`, `ais:…`), the airliner's trace asked, the ship's drawn ground at the view's height over the sea within 10 m (24 Nov 2026: a frame of the Earth's motion apart, 290 m — the followed ship hidden under the sea, no hull, no wake); a jump to Marseille asked anew at once; the setting off: none asked.
 // Steps: 1 boot · 2 leave the craft · 3 the free camera over the bay · 4 the traffic live · 5 moving, labelled, drawn · 6 an airliner followed · 7 a ship followed · 8 the jump to Marseille · 9 the setting off. Shots in TFC_OUT (remote-results/traffic-free-camera): bay, airliner, ship, marseille.
 // Live data: adsb.lol through the dev server's relay (needs internet); the ships the AIS's if the relay has its key, else the sea's own life (game/seasim.ts) — either counts. Few aircraft at night over the bay: at least 3 asked.
 // Duration: ~4 min (boot and tiles ~1.5 min, each wait capped at 45 s).
@@ -169,8 +169,10 @@ describe.skipIf(!E2E)("the traffic about a free camera with no craft", () => {
     await app.stepDone(`${id} suivi à ${follow.dist.toFixed(0)} m`);
 
     await app.step("a ship followed");
+    // (one under way if there is one — its wake drawn too —, else the nearest)
     const sid = await app.js<string | null>(`(() => {
-      const m = __bh.camera.seaOverlay(${fmtS}, __bh.camera.viewController())[0]; return m ? m.id.slice(4) : null; })()`);
+      const ov = __bh.camera.seaOverlay(${fmtS}, __bh.camera.viewController()), sog = new Map(__bh.camera.seaNow().map((c) => ["ais:" + c.id, c.sog]));
+      const m = ov.find((x) => (sog.get(x.id) ?? 0) > 0.8) ?? ov[0]; return m ? m.id.slice(4) : null; })()`);
     if (!sid) throw new Error("no ship within 30 km of the view to follow");
     await app.scenario(`ship ais:${sid}`);
     await app.js(`(() => { const vc = __bh.camera.viewController();
@@ -181,8 +183,17 @@ describe.skipIf(!E2E)("the traffic about a free camera with no craft", () => {
       const m = __bh.camera.seaOverlay(${fmtS}, __bh.camera.viewController()).find((x) => x.id === "ais:${sid}");
       return { dist: m.dist, label: m.label }; })()`);
     console.log(`  followed ${ship.label}: ${ship.dist.toFixed(0)} m off`);
+    // (the view placed for the time the frame shows, its controller's clock that end — camera/subjectcam.ts, controller/lens.ts,
+    // 24 Nov 2026: placed for the step's start and read there, the near patch's ground stood a frame of the Earth's motion off it,
+    // 290 m at ×1 here — the sea's mesh under the view, the followed ship hidden under the sea's distance, its wake with it): the
+    // renderer's height over the sea and the view's agree)
+    const hgt = await app.js<{ view: number; drawn: number }>(
+      `(() => ({ view: __bh.camera.viewController().geoNow().alt, drawn: __bh.renderer.seaSurf?.hc ?? NaN }))()`,
+    );
+    console.log(`  height over the sea: the view's ${hgt.view.toFixed(1)} m, the drawn ground's ${hgt.drawn.toFixed(1)} m`);
     await app.shot(`${OUT}/ship.png`);
-    await app.stepDone(`${ship.label} suivi à ${ship.dist.toFixed(0)} m`);
+    expect(Math.abs(hgt.drawn - hgt.view)).toBeLessThan(10);
+    await app.stepDone(`${ship.label} suivi à ${ship.dist.toFixed(0)} m · hauteur ${hgt.drawn.toFixed(0)}/${hgt.view.toFixed(0)} m`);
   }, 180_000);
 
   test("a jump to Marseille asked at once; the setting off: none asked", async () => {
