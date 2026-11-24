@@ -1,7 +1,10 @@
-import { afterEach, describe, expect, test } from "bun:test";
+import { afterEach, describe, expect, setDefaultTimeout, test } from "bun:test";
 import { TrafficFeed, type Plane, type Ship } from "../src/traffic/feed";
 import { TrafficFocus } from "../src/traffic/focus";
 import { overPlace, resetFlights } from "./helpers/flight";
+
+// (N-body planning and century sweeps take seconds alone, tens of seconds on a loaded Mac or a parallel CI runner: 60 s, not the 5 s default)
+setDefaultTimeout(60_000);
 
 // The traffic's CPU cost a frame (Sam, 24 Nov 2026: the traffic always on — the free camera with no craft too): a busy
 // sky and sea — 200 aircraft and 200 ships within 100 km of a free camera over the bay, each with five minutes of reports
@@ -160,6 +163,7 @@ describe("the traffic's cost a frame", () => {
     );
     expect(n[0]).toBe(N);
     expect(n[1]).toBeGreaterThanOrEqual(N);
-    expect(all.med).toBeLessThan(20);
+    // (≈ 1.7 ms alone on the M1 Max; the bound guards the old 62–228 ms frames, with room for a loaded Mac or CI runner)
+    expect(all.med).toBeLessThan(40);
   });
 });

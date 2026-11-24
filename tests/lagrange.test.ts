@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test";
+import { describe, expect, setDefaultTimeout, test } from "bun:test";
 import {
   collinearGamma,
   defaultHaloAzM,
@@ -30,6 +30,9 @@ import { predictOurs } from "../src/system/our-predict";
 import { EPOCH_DATE, M_METRES, M_SECONDS, solarState } from "../src/system/solar";
 import { dot, len, sub, unit } from "../src/math/vec3";
 import { C_MPS } from "../src/units";
+
+// (N-body planning and century sweeps take seconds alone, tens of seconds on a loaded Mac or a parallel CI runner: 60 s, not the 5 s default)
+setDefaultTimeout(60_000);
 
 describe("Lagrange points: exact Euler quintics, positions & IDs", () => {
   test("ID parsing, naming, and multilingual resolution", () => {

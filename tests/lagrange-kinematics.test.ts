@@ -3,7 +3,7 @@
 // but on the pair's synodic angle; velocity and acceleration are the exact derivatives of the position (checked against
 // central differences, with DE440 loaded as in the game); the L4/L5 loops are the libration eigen-modes; the crew console
 // draws the game's own pairs and loops; JWST's tracker is moved by its one writer.
-import { beforeAll, describe, expect, test } from "bun:test";
+import { beforeAll, describe, expect, setDefaultTimeout, test } from "bun:test";
 import { addEphemeris } from "../src/system/de440";
 import {
   defaultHaloAzM,
@@ -30,6 +30,9 @@ import type { InstrumentSnapshot } from "../src/net/instruments";
 import { C_MPS } from "../src/units";
 import { len, sub } from "../src/math/vec3";
 import type { Vec3 } from "../src/physics";
+
+// (N-body planning and century sweeps take seconds alone, tens of seconds on a loaded Mac or a parallel CI runner: 60 s, not the 5 s default)
+setDefaultTimeout(60_000);
 
 const tOf = (ms: number) => (ms - EPOCH_DATE) / 1000 / M_SECONDS;
 const NOW = tOf(Date.UTC(2026, 10, 24));
