@@ -337,6 +337,7 @@ import { lang, onLangChange, t, tf, tr } from "./i18n";
 import { ORDERS, type OrderId } from "./game/orders";
 import { FORMATION_IDS, FORMATIONS } from "./game/formations";
 import { TrafficFeed } from "./traffic/feed";
+import { TrafficFocus } from "./traffic/focus";
 import { unitsFor } from "./ui/unitsys";
 import { TILE_REACH, ZG1 } from "./system/earth-tiles";
 import { DETAIL_REACH } from "./system/scenery-data";
@@ -3146,17 +3147,20 @@ async function main() {
    *  player's, a craft of the fleet not flown — on the Earth, as shipFocus gives the flown one (the renderer holds its ground too);
    *  null when the camera follows none. */
   function subjectFocus() {
-    // (the free camera's own settings — the spectator's —: its target and its view about it, chosen in the camera panel)
+    // (the free camera's own settings — the spectator's, or the camera's own with no craft flown (24 Nov 2026: an airliner
+    // of the traffic followed with no craft at all) —: its target and its view about it, chosen in the camera panel)
     const vc = camera.viewController();
     const b = vc.s.target;
-    if (!camera.spectating || !isCraftLike(b) || b === "iss" || (isCraft(b as Body) && b === fleet.active)) return null;
+    if (camera.piloting && !camera.spectating) return null;
+    if (!isCraftLike(b) || b === "iss" || (camera.piloting && isCraft(b as Body) && b === fleet.active)) return null;
     if (!vc.subjectActive() && vc.s.subjectView !== "around") return null;
     const X = ourTarget(vc.s, b as Body, sim.time).pos;
     if (referenceBody(X, sim.time) !== "earth") return null;
     const e = solarBody("earth")!;
     const q = toBodyFixed("earth", X, sim.time);
-    const r = Math.hypot(...q);
-    return { body: "earth", c: q.map((x) => x / e.radius) as [number, number, number], altKm: ((r - e.radius) * M_METRES) / 1e3 };
+    // (its height over the WGS84 figure, as shipFocus's — `|q| − radius` put it up to 21 km off)
+    const h = cartToGeodetic(e.radius, flatteningOf("earth"), q).h;
+    return { body: "earth", c: q.map((x) => x / e.radius) as [number, number, number], altKm: (h * M_METRES) / 1e3 };
   }
 
   /** The autopilots: flying, or assisting (the pilot flies, the HUD's director shows their commands). */
@@ -4938,6 +4942,7 @@ async function main() {
       // (the others where they were, on this camera's axes)
       const S = shipToCamera({ eye: pose.eye, aim: pose.aim, up: pose.up }, 0, 0).S as M3r;
       renderer.combatOthers = othersTo(othersBetween(d.others, next.data.others, u), (v) => mulS(S, v));
+      renderer.othersFromView = false;
       renderer.seaWakes = d.wakes;
       renderer.shipContrails = trailsAt(tape.index(f.t), u);
       renderer.shipReentry = null;
@@ -5694,7 +5699,11 @@ async function main() {
       renderer.setCameraPath(st.path);
       renderer.autoExposureEV = st.ev;
       sim.time = st.time;
-      if (st.others) renderer.combatOthers = st.others;
+      if (st.others) {
+        // (a replay's trailer: the others placed from its craft's camera)
+        renderer.combatOthers = st.others;
+        renderer.othersFromView = false;
+      }
       if (st.jet) renderer.jetPose = st.jet;
       if (st.wakes) renderer.seaWakes = st.wakes;
       if (st.contrails !== undefined) renderer.shipContrails = st.contrails;
@@ -8719,6 +8728,17 @@ async function main() {
     // (an itinerary: its stops voyaged to in turn, through the wormhole where one lies beyond it; null: begun)
     tour: (stops: Target[], hold?: number) => startTour(stops, hold),
     touring: () => (tour ? { stop: tour.stops[Math.max(0, tour.i - 1)] ?? null, i: tour.i, of: tour.stops.length } : null),
+    // (the real traffic's focus — traffic/focus.ts —: where it is asked, whom it follows, its re-centrings; the feed's state)
+    trafficFocus: () => ({
+      focus: trafficFocus.now && { ...trafficFocus.now },
+      here: trafficFocus.here && { ...trafficFocus.here },
+      moves: trafficFocus.moves,
+      status: trafficFeed.status,
+      at: trafficFeed.at && { ...trafficFeed.at },
+      asks: { ...trafficFeed.asks },
+      planes: trafficFeed.planes.size,
+      ships: trafficFeed.ships.size,
+    }),
     // (the voyage under way — camera/voyager.ts —: its figures, null when none)
     voyage: () => {
       const v = camera.viewController().voyage;
@@ -8932,6 +8952,8 @@ async function main() {
   // (the real traffic — traffic/feed.ts, T1 —: asked of the relay about the flown craft, its sources credited)
   const trafficFeed = new TrafficFeed();
   camera.traffic = trafficFeed;
+  // (its focus — traffic/focus.ts —: the flown craft, else the view's eye; re-centred with hysteresis)
+  const trafficFocus = new TrafficFocus();
   const trafficCredit = Object.assign(document.createElement("div"), { className: "scenery-credit traffic-credit", hidden: true });
   trafficCredit.dataset.testid = "traffic-credit";
   document.body.append(trafficCredit);
@@ -9253,9 +9275,18 @@ async function main() {
       missionHud.tick();
       instructorPanel.tick();
     });
-    // (the real traffic about us: asked when due — off by the setting, offline, far from the Earth)
+    // (the real traffic about its focus — traffic/focus.ts (Sam, 24 Nov 2026: always on, the free camera with no craft too) —:
+    // the flown craft, else the view's eye (a spectator's, the free camera's, a subject's or a tour's view — its final pose
+    // over the WGS84 Earth); asked when due — off by the setting, offline, far from the Earth, under the title screen: its
+    // scene is no flight, and its menus would sit over the labels — the relay's and its sources' quota kept for play)
     frameGuard.run("traffic", () => {
-      trafficFeed.tick(now / 1000, settings.traffic && camera.piloting ? camera.geoNow() : null, settings.traffic);
+      const vc = camera.viewController();
+      const craft = camera.piloting ? camera.geoNow() : null;
+      const view = vc === camera && camera.piloting ? craft : vc.geoNow();
+      const F = trafficFocus.update({ on: settings.traffic && !titleScreen.isOpen, craft, view });
+      const here = trafficFocus.here;
+      camera.trafficAt = here ? { lat: here.lat, lon: here.lon, alt: here.alt, airR: F?.airR } : null;
+      trafficFeed.tick(now / 1000, F, settings.traffic);
       {
         const live =
           trafficFeed.status === "live" &&
@@ -9269,15 +9300,16 @@ async function main() {
     netGuard("match", () => netMatch.frame());
     netGuard("voice", () => netVoice.frame());
     // (who speaks: a mark before his name)
-    // (the real traffic's labels and lights — controller/traffic.ts)
+    // (the real traffic's labels and lights — controller/traffic.ts —, from the view: the craft's, a spectator's, the free
+    // camera's with no craft; none under the title screen nor in a replay)
     frameGuard.run("overlays", () => {
+      const vc = camera.viewController();
+      const u = unitsFor(settings);
       viewOverlay.trafficMarks =
-        camera.piloting && !replay.active
+        !replay.active && !titleScreen.isOpen
           ? [
-              ...(settings.traffic
-                ? [...camera.trafficOverlay(unitsFor(settings).fAlt), ...camera.seaOverlay(unitsFor(settings).fSpd)]
-                : []),
-              ...camera.carrierOverlay(unitsFor(settings).fSpd),
+              ...(settings.traffic ? [...camera.trafficOverlay(u.fAlt, vc), ...camera.seaOverlay(u.fSpd, vc)] : []),
+              ...camera.carrierOverlay(u.fSpd, vc),
             ]
           : [];
       viewOverlay.netTags = netSession.tags.map((g) => (netVoice.speaking(g.slot) ? { ...g, name: `◉ ${g.name}` } : g));

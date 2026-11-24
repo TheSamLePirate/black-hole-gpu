@@ -66,7 +66,27 @@ et choisir sa vue dans le panneau caméra :
 | **Cockpit** | à son poste — le cockpit, la passerelle —, regard vers l'avant (glisser = tourner la tête) |
 | **Tour** | posée en avant de sa route — au sol, ou dans l'espace en le suivant —, pivotant pour le suivre, la focale resserrée sur lui ; reposée plus loin une fois qu'il est passé et loin |
 
-Choisir une de ces vues arrête le suivi de votre propre appareil par la caméra libre.
+Choisir une de ces vues arrête le suivi de votre propre appareil par la caméra libre. Depuis le 24 novembre 2026, ces
+vues marchent aussi sans aucun appareil piloté (le sol de l'appareil suivi tenu de même, `renderer.subjectFocus`).
+
+## Le trafic autour de la caméra
+
+Les avions et les bateaux réels (avec la vie en mer et les porte-avions) vivent autour du **foyer du trafic**
+(`src/traffic/focus.ts`, demande de Sam du 24 novembre 2026 : toujours actifs, même en caméra libre sans appareil) :
+l'appareil piloté, sinon l'œil de la vue elle-même — la caméra libre sans appareil, un spectateur parti à 60 km ou plus de
+l'appareil (l'appareil à nouveau sous 40 km), la caméra qui suit un avion de ligne ou un bateau, une tournée, un trépied.
+Ils sont demandés au relais autour de lui, rejoués une minute en différé sur leur trajectoire, dessinés, étiquetés (leurs
+feux, leurs noms) depuis la vue et peuvent être suivis par les vues ci-dessus — qu'un appareil soit piloté ou non.
+
+- **Hystérésis** : le lieu demandé ne bouge qu'une fois le foyer parti d'un quart de son rayon (30 km à basse altitude) —
+  une caméra libre rapide ne redemande pas à chaque image — ; un saut d'un demi-rayon ou plus (téléportation, voyage) est
+  demandé aussitôt, au rythme des sources (air 10 s, mer 5 s) ; ce qui reste au-delà de 1,6 rayon est oublié.
+- **Rayon selon la hauteur** : l'air 120 km en bas, jusqu'à 160 km dès 15 km de haut (les feux alors visibles jusqu'à
+  128 km) ; la mer 60 km, jusqu'à 90 km (le relais sert 250 km au plus).
+- **Éteint** : par le réglage (Réglages › Trafic réel), page hors ligne, loin de la Terre (le foyer de la vue au-dessus de
+  160 km, rallumé sous 140 km), et sous l'écran titre — sa scène n'est pas un vol et ses menus couvrent les étiquettes ;
+  les quotas du relais et de ses sources sont gardés pour le jeu.
+- `__bh.trafficFocus()` — [BH-API.md](BH-API.md).
 
 ## Touches
 
@@ -85,7 +105,8 @@ Choisir une de ces vues arrête le suivi de votre propre appareil par la caméra
 
 - `__bh.goTo(cible)`, `__bh.tour(étapes, pause?)`, `__bh.touring()`, `__bh.voyage()` (les chiffres du voyage),
   `__bh.cam` (le capteur de fluidité : sauts, visées cassées, sauts de focale, cassures de vitesse) — [BH-API.md](BH-API.md).
-- e2e : `camera-smooth` (14 situations passées au capteur), `camera-voyage`, `camera-subject` —
+- e2e : `camera-smooth` (14 situations passées au capteur), `camera-voyage`, `camera-subject`, `traffic-free-camera` (le
+  trafic autour d'une caméra libre sans appareil) —
   [E2E-CATALOGUE.md](E2E-CATALOGUE.md).
 - Films : `bun scripts/camera-video.ts [voyage cine montage subject tour]` — 720p, 30 images/s, image par image (jeu
   figé et avancé pas à pas), encodés par ffmpeg dans `remote-results/camera-video/`.
@@ -98,6 +119,7 @@ Choisir une de ces vues arrête le suivi de votre propre appareil par la caméra
 | `src/camera/voyager.ts` | le voyage joué par le contrôleur ; la traversée de la gorge (`startThroat`) |
 | `src/camera/cinevoyage.ts`, `skim.ts` | le voyage ciné, les rase-mottes |
 | `src/camera/subjectcam.ts` | les vues autour d'un appareil |
+| `src/traffic/focus.ts` | le foyer du trafic : l'appareil, sinon l'œil de la vue ; hystérésis, rayons selon la hauteur |
 | `src/camera/speed.ts` | la vitesse selon la surface |
 | `src/camera/metrics.ts` | le capteur de fluidité |
 | `src/ui/voyagehud.ts`, `src/ui/camerapanel.ts` | la carte du voyage, le panneau caméra |

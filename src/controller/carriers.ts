@@ -271,8 +271,12 @@ function fightShips(c: CameraController): { p: Vec3; port: Vec3; up: Vec3; bow: 
     });
 }
 
-/** The carriers for the renderer: within 40 km, their place and axes on the camera's (their meshes to size). */
-function carrierShips(this: CameraController): {
+/** The carriers for the renderer: within 40 km of the view, their place and axes on its camera's (their meshes to size);
+ *  `view`: the view's controller (a spectator's, else this one — the free camera with no craft too). */
+function carrierShips(
+  this: CameraController,
+  view: CameraController = this,
+): {
   id: CarrierId | "frigate";
   rel: Vec3;
   axes: [Vec3, Vec3, Vec3];
@@ -284,7 +288,7 @@ function carrierShips(this: CameraController): {
   const list = this.carrierNow();
   const hostile = fightShips(this);
   if (!list.length && !hostile.length) return [];
-  const E = earthView(this);
+  const E = earthView(view);
   if (!E) return [];
   const cam = (b: readonly number[]) => E.toCam(E.toHome(b as Vec3));
   const unit = (v: Vec3): Vec3 => {
@@ -359,15 +363,16 @@ export function meatball(kind: CarrierId, l: readonly number[]): { angle: number
 /**
  * Their labels within 60 km (name · speed in the units chosen); the Ford's IFLOLS seen from astern — its green datum
  * bars, its amber ball off them by the glide path's error (red very low); by night their decks' lights — the landing
- * area's edges and centreline, the drop lights under its ramp —, their navigation lights.
+ * area's edges and centreline, the drop lights under its ramp —, their navigation lights. `view`: the view's controller
+ * (a spectator's, else this one — the free camera with no craft too): the labels from where it is, the night where it is.
  */
-function carrierOverlay(this: CameraController, fmtSpd: (ms: number) => string): TrafficMark[] {
+function carrierOverlay(this: CameraController, fmtSpd: (ms: number) => string, view: CameraController = this): TrafficMark[] {
   const list = this.carrierNow();
   if (!list.length) return [];
-  const E = earthView(this);
+  const E = earthView(view);
   if (!E) return [];
   const cam = (b: readonly number[]) => E.toCam(E.toHome(b as Vec3));
-  const g = this.geoNow();
+  const g = view.geoNow();
   const ms = J2000_MS + daysOf(this.nowTime()) * 86400e3;
   const night = g ? azAltAt("sun", (g.lat * Math.PI) / 180, (g.lon * Math.PI) / 180, 0, ms).alt < -1 : false;
   const white = "rgba(255, 250, 235, 1)",
