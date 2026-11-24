@@ -1,5 +1,8 @@
 //! Strongly-typed OBC avionics telemetry matching `src/obc/types.ts` (`ObcTelemetry` v1).
+//! The field names are checked against the TypeScript, Python and Node schemas by
+//! `tests/obc-telemetry-contract.test.ts`: a field added on one side only fails that test.
 
+use crate::units::UnitSys;
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::Path;
@@ -101,6 +104,8 @@ pub struct Telemetry {
     pub vessel_id: String,
     pub vessel_kind: String,
     pub body: String,
+    /// The player's display units (`"metric"` default | `"imperial"`), `settings.units` in the simulator.
+    pub units: String,
     pub position: Position,
     pub attitude: Attitude,
     pub flight: Flight,
@@ -123,6 +128,7 @@ impl Default for Telemetry {
             vessel_id: "unknown".into(),
             vessel_kind: "free".into(),
             body: "earth".into(),
+            units: "metric".into(),
             position: Position::default(),
             attitude: Attitude::default(),
             flight: Flight::default(),
@@ -158,7 +164,13 @@ impl Telemetry {
         self.attitude.heading_deg.rem_euclid(360.0)
     }
 
-    /// Indicated / true airspeed in knots (for aircraft displays).
+    /// The display units: the player's choice (metric unless imperial), `OBC_UNITS` overriding it.
+    #[must_use]
+    pub fn unit_sys(&self) -> UnitSys {
+        UnitSys::resolve(&self.units)
+    }
+
+    /// True airspeed in knots (imperial displays; prefer `unit_sys().spd(..)`).
     #[must_use]
     pub fn tas_knots(&self) -> f64 {
         self.flight.true_airspeed_mps * 1.943_844_492_44
@@ -197,5 +209,17 @@ mod tests {
         assert!((t.attitude.roll_deg - (-29.9)).abs() < 1e-6);
         assert!((t.tas_knots() - 400.0).abs() < 0.2);
         assert!((t.alt_msl_feet() - 6000.0).abs() < 1.0);
+        // No "units" in the frame (an older host): metric.
+        assert_eq!(t.units, "metric");
+    }
+
+    #[test]
+    fn units_follow_the_telemetry() {
+        let mut t: Telemetry = serde_json::from_str(r#"{"v":1,"units":"imperial"}"#).unwrap();
+        if std::env::var("OBC_UNITS").is_err() {
+            assert_eq!(t.unit_sys(), UnitSys::Imperial);
+            t.units = "metric".into();
+            assert_eq!(t.unit_sys(), UnitSys::Metric);
+        }
     }
 }

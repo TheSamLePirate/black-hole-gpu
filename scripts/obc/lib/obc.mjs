@@ -14,6 +14,52 @@ export const RPC_RES_PATH = "/obc/rpc_res";
 /** Keyed RPC (src/obc/bridge.ts, docs/PLAN-LINUX-OBC.md §2.1): `<id>.req` written here, `<id>.res` read back. */
 export const RPC_DIR = "/obc/rpc";
 
+/**
+ * The telemetry v1 schema (dotted leaf paths of `/obc/telemetry.json`, `ObcTelemetry` in src/obc/types.ts). Checked
+ * against the TypeScript, Rust and Python schemas by tests/obc-telemetry-contract.test.ts.
+ */
+export const TELEMETRY_FIELDS = Object.freeze([
+  "v", "wall_ms", "sim_time_s", "sim_dt", "warp", "frozen", "dtau_dt", "proper_time_s", "vessel_id", "vessel_kind",
+  "body", "units", "position.lat_deg", "position.lon_deg", "position.height_ellipsoid_m", "position.altitude_msl_m",
+  "position.height_over_ground_m", "attitude.heading_deg", "attitude.pitch_deg", "attitude.roll_deg",
+  "flight.true_airspeed_mps", "flight.ground_speed_mps", "flight.vertical_speed_mps", "flight.mach",
+  "flight.dynamic_pressure_pa", "flight.alpha_deg", "flight.beta_deg", "flight.g_load", "flight.stalled",
+  "flight.on_ground", "flight.hull_temp_k", "orbit.body", "orbit.apoapsis_m", "orbit.periapsis_m",
+  "orbit.semi_major_m", "orbit.eccentricity", "orbit.inclination_deg", "orbit.period_s", "orbit.speed_mps",
+  "orbit.altitude_m", "systems.throttle", "systems.fuel_frac", "systems.fuel_kg", "systems.gear", "systems.flaps",
+  "systems.sas", "systems.autopilot", "systems.hold", "systems.rcs_mode", "nav.target", "nav.runway.ident",
+  "nav.runway.name", "nav.runway.dist_m", "nav.runway.loc_deg", "nav.runway.gs_deg", "nav.runway.elev_m",
+]);
+
+/**
+ * Display units, like the simulator's src/ui/unitsys.ts: metric by default (m, m/s, km), imperial as the option (ft,
+ * kt, NM, ft/min). Pass the telemetry's `units` (the player's choice); `OBC_UNITS=metric|imperial` overrides it.
+ */
+export function unitsOf(sys = "metric") {
+  const chosen = String(process.env.OBC_UNITS || sys || "metric")
+    .trim()
+    .toLowerCase();
+  const metric = chosen !== "imperial";
+  const u = {
+    sys: metric ? "metric" : "imperial",
+    metric,
+    altName: metric ? "m" : "ft",
+    spdName: metric ? "m/s" : "kt",
+    vsName: metric ? "m/s" : "ft/min",
+    distName: metric ? "km" : "NM",
+    distUnitM: metric ? 1000 : 1852,
+    alt: (m) => (metric ? m : m / 0.3048),
+    spd: (v) => (metric ? v : (v * 3600) / 1852),
+    vs: (v) => (metric ? v : (v / 0.3048) * 60),
+    dist: (m) => m / (metric ? 1000 : 1852),
+  };
+  u.fAlt = (m) => `${Math.round(u.alt(m))} ${u.altName}`;
+  u.fSpd = (v) => `${Math.round(u.spd(v))} ${u.spdName}`;
+  u.fVs = (v) => (metric ? `${v >= 0 ? "+" : ""}${v.toFixed(1)} m/s` : `${v >= 0 ? "+" : ""}${Math.round(u.vs(v))} ft/min`);
+  u.fDist = (m, digits = 1) => `${u.dist(m).toFixed(digits)} ${u.distName}`;
+  return u;
+}
+
 const RPC_NONCE = randomBytes(4).toString("hex");
 let rpcSeq = 0;
 
@@ -446,19 +492,86 @@ export function startRawKeys(onKey) {
   }
 }
 
-/** WGS84 great-circle distance [m] and initial bearing [deg] between two geodetic coordinates. */
-export function wgs84BearingDist(lat1, lon1, lat2, lon2) {
-  const R = 6371008.8;
+const WGS84_A = 6378137;
+const WGS84_F = 1 / 298.257223563;
+const WGS84_B = WGS84_A * (1 - WGS84_F);
+
+/**
+ * Geodesic distance [m] and initial / final bearings [deg] between two geodetic (WGS84) points: Vincenty's inverse
+ * formula on the WGS84 ellipsoid (sub-millimetre for ordinary distances). For nearly antipodal points, where it does not
+ * converge, it falls back to the great circle on the WGS84 authalic sphere (R = 6 371 007.2 m), flagged `approx: true`.
+ */
+export function wgs84Inverse(lat1, lon1, lat2, lon2) {
   const d2r = Math.PI / 180;
-  const p1 = lat1 * d2r;
-  const p2 = lat2 * d2r;
-  const dp = (lat2 - lat1) * d2r;
-  const dl = (lon2 - lon1) * d2r;
-  const a = Math.sin(dp / 2) ** 2 + Math.cos(p1) * Math.cos(p2) * Math.sin(dl / 2) ** 2;
-  const distM = 2 * R * Math.atan2(Math.sqrt(a), Math.sqrt(Math.max(0, 1 - a)));
-  const y = Math.sin(dl) * Math.cos(p2);
-  const x = Math.cos(p1) * Math.sin(p2) - Math.sin(p1) * Math.cos(p2) * Math.cos(dl);
-  const bearingDeg = ((Math.atan2(y, x) * 180) / Math.PI + 360) % 360;
+  const L = (lon2 - lon1) * d2r;
+  const U1 = Math.atan((1 - WGS84_F) * Math.tan(lat1 * d2r));
+  const U2 = Math.atan((1 - WGS84_F) * Math.tan(lat2 * d2r));
+  const sinU1 = Math.sin(U1);
+  const cosU1 = Math.cos(U1);
+  const sinU2 = Math.sin(U2);
+  const cosU2 = Math.cos(U2);
+  let lambda = L;
+  let sinSigma = 0;
+  let cosSigma = 1;
+  let sigma = 0;
+  let cos2Alpha = 1;
+  let cos2SigmaM = 0;
+  let sinLambda = 0;
+  let cosLambda = 1;
+  let converged = false;
+  for (let i = 0; i < 200; i++) {
+    sinLambda = Math.sin(lambda);
+    cosLambda = Math.cos(lambda);
+    const t1 = cosU2 * sinLambda;
+    const t2 = cosU1 * sinU2 - sinU1 * cosU2 * cosLambda;
+    sinSigma = Math.sqrt(t1 * t1 + t2 * t2);
+    if (sinSigma === 0) return { distM: 0, bearingDeg: 0, finalBearingDeg: 0, approx: false };
+    cosSigma = sinU1 * sinU2 + cosU1 * cosU2 * cosLambda;
+    sigma = Math.atan2(sinSigma, cosSigma);
+    const sinAlpha = (cosU1 * cosU2 * sinLambda) / sinSigma;
+    cos2Alpha = 1 - sinAlpha * sinAlpha;
+    cos2SigmaM = cos2Alpha !== 0 ? cosSigma - (2 * sinU1 * sinU2) / cos2Alpha : 0;
+    const C = (WGS84_F / 16) * cos2Alpha * (4 + WGS84_F * (4 - 3 * cos2Alpha));
+    const prev = lambda;
+    lambda =
+      L +
+      (1 - C) * WGS84_F * sinAlpha * (sigma + C * sinSigma * (cos2SigmaM + C * cosSigma * (-1 + 2 * cos2SigmaM * cos2SigmaM)));
+    if (Math.abs(lambda - prev) < 1e-12) {
+      converged = true;
+      break;
+    }
+  }
+  if (!converged) {
+    const R = 6371007.2;
+    const p1 = lat1 * d2r;
+    const p2 = lat2 * d2r;
+    const a = Math.sin((p2 - p1) / 2) ** 2 + Math.cos(p1) * Math.cos(p2) * Math.sin(L / 2) ** 2;
+    const distM = 2 * R * Math.atan2(Math.sqrt(a), Math.sqrt(Math.max(0, 1 - a)));
+    const y = Math.sin(L) * Math.cos(p2);
+    const x = Math.cos(p1) * Math.sin(p2) - Math.sin(p1) * Math.cos(p2) * Math.cos(L);
+    const bearingDeg = ((Math.atan2(y, x) / d2r) % 360 + 360) % 360;
+    return { distM, bearingDeg, finalBearingDeg: bearingDeg, approx: true };
+  }
+  const uSq = (cos2Alpha * (WGS84_A * WGS84_A - WGS84_B * WGS84_B)) / (WGS84_B * WGS84_B);
+  const A = 1 + (uSq / 16384) * (4096 + uSq * (-768 + uSq * (320 - 175 * uSq)));
+  const B = (uSq / 1024) * (256 + uSq * (-128 + uSq * (74 - 47 * uSq)));
+  const dSigma =
+    B *
+    sinSigma *
+    (cos2SigmaM +
+      (B / 4) *
+        (cosSigma * (-1 + 2 * cos2SigmaM * cos2SigmaM) -
+          (B / 6) * cos2SigmaM * (-3 + 4 * sinSigma * sinSigma) * (-3 + 4 * cos2SigmaM * cos2SigmaM)));
+  const distM = WGS84_B * A * (sigma - dSigma);
+  const a1 = Math.atan2(cosU2 * sinLambda, cosU1 * sinU2 - sinU1 * cosU2 * cosLambda);
+  const a2 = Math.atan2(cosU1 * sinLambda, -sinU1 * cosU2 + cosU1 * sinU2 * cosLambda);
+  const norm = (r) => ((r / d2r) % 360 + 360) % 360;
+  return { distM, bearingDeg: norm(a1), finalBearingDeg: norm(a2), approx: false };
+}
+
+/** WGS84 geodesic distance [m] and initial bearing [deg] between two geodetic coordinates (Vincenty, `wgs84Inverse`). */
+export function wgs84BearingDist(lat1, lon1, lat2, lon2) {
+  const { distM, bearingDeg } = wgs84Inverse(lat1, lon1, lat2, lon2);
   return { distM, bearingDeg };
 }
 

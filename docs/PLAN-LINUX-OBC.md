@@ -67,6 +67,30 @@
                                  Internet réel / LAN
 ```
 
+### 2.1 Contrats hôte ↔ invité : RPC `__bh` et télémétrie (24 novembre 2026)
+
+* **RPC `__bh` / TARS sur 9p, par identifiant** (`src/obc/bridge.ts`) : l'invité écrit une ligne JSON terminée par `\n`
+  dans `/obc/rpc/<id>.req` (création exclusive) et lit `/obc/rpc/<id>.res` (écrit par renommage atomique), qu'il
+  supprime ensuite ; l'hôte prend la requête quand la ligne est complète (une requête plus grosse que le message 9p
+  arrive en plusieurs écritures), la supprime, et balaie les réponses non lues (60 s, 256 fichiers au plus). Chaque
+  réponse est aussi écrite dans la case unique historique `/obc/rpc_res` (repli si le client 9p de l'invité garde un
+  fichier absent en cache) ; `/obc/rpc_req` ne sert plus qu'aux hôtes antérieurs sans `/obc/rpc`. Les identifiants
+  portent le pid et un nonce aléatoire (`rs-<pid>-<nonce>-<seq>`, `py-…`, `js-…` : `obc-core/src/bus.rs`,
+  `scripts/obc/lib/obc.py`, `obc.mjs`), si bien que deux programmes concurrents (deux TUI Rust, une boucle Python) ne
+  lisent jamais la réponse l'un de l'autre et qu'une réponse asynchrone n'écrase plus une réponse synchrone.
+* **AF_VSOCK:4747** : une ligne de plus de 262 144 caractères reçoit `{"ok":false,"code":"E2BIG",…}` et le flux est
+  ignoré jusqu'au saut de ligne suivant (`JsonlLineSplitter`), au lieu d'être tronqué en silence puis lu comme du
+  JSON corrompu. Vérifié par `tests/obc-bridge.test.ts` (statique, hors navigateur).
+* **Télémétrie v1** (`/obc/telemetry.json`) : un seul schéma déclaré en quatre endroits — `ObcTelemetry`
+  (`src/obc/types.ts`), `Telemetry` (`obc-core/src/telemetry.rs`), `TELEMETRY_FIELDS` (`obc.py`, `obc.mjs`).
+  `tests/obc-telemetry-contract.test.ts` lit les noms de champs dans chaque source et échoue au moindre écart. Le
+  champ `units` (`"metric"` par défaut, `"imperial"` en option : `settings.units`, `src/ui/unitsys.ts`) porte le
+  choix du joueur ; les applications invitées (TUI/fb Rust `UnitSys`, `obc.py` `Units`, `obc.mjs` `unitsOf`)
+  affichent hauteurs, vitesses et distances dans ces unités (`OBC_UNITS=metric|imperial` force un programme). Les
+  autres champs restent SI. `obc.mjs` `wgs84Inverse` / `wgs84BearingDist` calculent la géodésique WGS84 (Vincenty,
+  repli marqué `approx` sur la sphère authalique près des antipodes) ; `obc-core` `wgs84_bearing_dist` reste une
+  approximation par rayons de courbure locaux (< 0,1 %), documentée comme telle.
+
 ---
 
 ## 3. Les surfaces d'affichage (Multi-Head)

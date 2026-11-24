@@ -32,7 +32,9 @@ def stop(*_a):
 signal.signal(signal.SIGINT, stop)
 signal.signal(signal.SIGTERM, stop)
 
-SCALES_NM = [10.0, 20.0, 40.0]
+# Scale ladders in the display units: km (metric, the default) or NM (imperial).
+SCALES = {"metric": [20.0, 40.0, 80.0], "imperial": [10.0, 20.0, 40.0]}
+units = obc.Units()
 scale_idx = 0
 
 bus = obc.AvionicsBus()
@@ -64,11 +66,11 @@ with obc.Framebuffer() as fb, obc.RawKeys() as keys:
                 break
             elif ch in ("+", "="):
                 scale_idx = max(0, scale_idx - 1)
-                note = f"SCALE {SCALES_NM[scale_idx]:.0f} NM"
+                note = f"SCALE {SCALES[units.sys][scale_idx]:.0f} {units.dist_name.upper()}"
                 note_until = time.monotonic() + 2.0
             elif ch in ("-", "_"):
-                scale_idx = min(len(SCALES_NM) - 1, scale_idx + 1)
-                note = f"SCALE {SCALES_NM[scale_idx]:.0f} NM"
+                scale_idx = min(len(SCALES["metric"]) - 1, scale_idx + 1)
+                note = f"SCALE {SCALES[units.sys][scale_idx]:.0f} {units.dist_name.upper()}"
                 note_until = time.monotonic() + 2.0
             elif ch in ("i", "I"):
                 bus.bh_tool("approach", action="ils")
@@ -82,6 +84,7 @@ with obc.Framebuffer() as fb, obc.RawKeys() as keys:
                 note_until = time.monotonic() + 2.0
 
         st = bus.read()
+        units = st.units
         now = time.monotonic()
         if frames >= 1 and (last_app_t == 0.0 or now - last_app_t > 1.0):
             last_app_t = now
@@ -115,13 +118,13 @@ with obc.Framebuffer() as fb, obc.RawKeys() as keys:
         gs = float(rw.get("gs_deg", 0.0)) if rw else 0.0
         dist_m = float(rw.get("dist_m", 12000.0)) if rw else 12000.0
 
-        span_m = max(SCALES_NM[scale_idx] * 1852.0, dist_m * 1.15)
+        span_m = max(SCALES[units.sys][scale_idx] * units.dist_unit_m, dist_m * 1.15)
         sy = int(min(py1 - 18, max(thr_y + 4, thr_y + (dist_m / span_m) * (py1 - thr_y - 20))))
         sx = int(max(36, min(W - 36, pcx + (loc / 3.5) * 140)))
         fb.filled_circle(sx, sy, 5, green if abs(loc) < 0.5 else amber)
         fb.line(sx, sy - 10, sx, sy + 8, white)
         fb.line(sx - 9, sy, sx + 9, sy, white)
-        fb.text(16, py0 + 8, f"PLAN {span_m/1852:.0f}NM  HDG {int(round(st.heading))%360:03d}", cyan, scale=1)
+        fb.text(16, py0 + 8, f"PLAN {units.dist(span_m):.0f}{units.dist_name.upper()}  HDG {int(round(st.heading))%360:03d}", cyan, scale=1)
 
         if app_map and isinstance(app_map.get("fixes"), list):
             for k, fx in enumerate(app_map["fixes"][:4]):
@@ -143,7 +146,7 @@ with obc.Framebuffer() as fb, obc.RawKeys() as keys:
         max_h = max(900.0, span_m * math.tan(math.radians(3.4)))
         vy = int(max(vy0 + 10, min(base_y - 2, base_y - (max(0.0, st.height_over_ground) / max_h) * (base_y - vy0 - 16))))
         fb.filled_circle(vx, vy, 5, magenta)
-        fb.text(16, vy0 + 8, f"GS 3.0  AGL {st.height_over_ground:.0f}M  DME {dist_m/1852:.1f}NM", white, scale=1)
+        fb.text(16, vy0 + 8, f"GS 3.0  AGL {units.f_alt(st.height_over_ground).upper()}  DME {units.f_dist(dist_m).upper()}", white, scale=1)
 
         # ── Precision LOC & G/S Magenta Scale Bar ──────────────────────────────
         fb.rect(0, 428, W, 84, panel)
@@ -164,7 +167,7 @@ with obc.Framebuffer() as fb, obc.RawKeys() as keys:
         fb.filled_circle(gdx, ly, 5, magenta)
         fb.text(266, 446, "G/S", cyan, scale=2)
 
-        fb.text(12, 474, f"TAS {st.true_airspeed*1.94384:3.0f}KT  VS {st.vertical_speed:+4.1f}  FPS {fps:.1f}", green, scale=2)
+        fb.text(12, 474, f"TAS {units.f_spd(st.true_airspeed).upper()}  VS {units.f_vs(st.vertical_speed).upper()}  FPS {fps:.1f}", green, scale=2)
         fb.text(12, 498, "KEYS: [+/-]ZOOM [I]ILS [G]GEAR [Q]QUIT", dim, scale=1)
 
         fb.flush()

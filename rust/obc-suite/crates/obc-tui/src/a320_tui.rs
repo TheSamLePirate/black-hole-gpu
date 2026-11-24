@@ -179,12 +179,13 @@ impl TuiApp for A320TuiApp {
             ])
             .split(frame.area());
 
+        let u = t.unit_sys();
         let fcu = Paragraph::new(format!(
-            " FCU: SPD {:3.0} kt · HDG {:03.0}° · ALT {:5.0} ft · V/S {:+5.0} fpm · AP:{} · FLAPS {:2.0}% · GEAR {}",
-            t.tas_knots(),
+            " FCU: SPD {} · HDG {:03.0}° · ALT {} · V/S {} · AP:{} · FLAPS {:2.0}% · GEAR {}",
+            u.f_spd(t.flight.true_airspeed_mps),
             t.heading_wrapped(),
-            t.alt_msl_feet(),
-            t.vs_fpm(),
+            u.f_alt(t.position.altitude_msl_m),
+            u.f_vs(t.flight.vertical_speed_mps),
             if t.systems.autopilot.is_empty() { "OFF" } else { &t.systems.autopilot },
             t.systems.flaps * 100.0,
             if t.systems.gear > 0.5 { "DOWN" } else { "UP" }
@@ -225,7 +226,7 @@ impl TuiApp for A320TuiApp {
             .nav
             .runway
             .as_ref()
-            .map_or_else(|| "NONE".into(), |r| format!("{} ({:.1} NM)", r.ident, r.dist_m * 0.000_539_957));
+            .map_or_else(|| "NONE".into(), |r| format!("{} ({})", r.ident, u.f_dist(r.dist_m, 1)));
         let ecam = Table::new(
             vec![
                 Row::new(["THRUST".to_string(), format!("{:.0}%", t.systems.throttle * 100.0)]),
@@ -233,7 +234,7 @@ impl TuiApp for A320TuiApp {
                 Row::new(["PITCH / ROLL".to_string(), format!("{:+.1}° / {:+.1}°", t.attitude.pitch_deg, t.attitude.roll_deg)]),
                 Row::new(["MACH / G".to_string(), format!("M{:.2} / {:+.2} G", t.flight.mach, t.flight.g_load)]),
                 Row::new(["ILS APPROACH".to_string(), rwy]),
-                Row::new(["AGL".to_string(), format!("{:.0} m", t.position.height_over_ground_m)]),
+                Row::new(["AGL".to_string(), u.f_alt(t.position.height_over_ground_m)]),
             ],
             [Constraint::Length(14), Constraint::Min(14)],
         )

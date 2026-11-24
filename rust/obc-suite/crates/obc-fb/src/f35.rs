@@ -136,11 +136,14 @@ pub fn render_f35_tsd(
     fb.fill_rect(0, h - 26, w, 26, C_PANEL);
     fb.hline(0, w - 1, h - 26, C_RING);
     scratch.clear();
+    let u = t.unit_sys();
     let _ = write!(
         scratch,
-        "TAS {:3.0}KT ALT {:5.0}FT P{:+4.1} R{:+4.1} FPS {:2.0} [+-RLCQ]",
-        t.tas_knots(),
-        t.alt_msl_feet(),
+        "TAS {:3.0}{} ALT {:5.0}{} P{:+4.1} R{:+4.1} FPS {:2.0} [+-RLCQ]",
+        u.spd(t.flight.true_airspeed_mps),
+        u.spd_name(),
+        u.alt(t.position.altitude_msl_m),
+        u.alt_name(),
         t.attitude.pitch_deg,
         t.attitude.roll_deg,
         fps
