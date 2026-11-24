@@ -420,9 +420,16 @@ followed now, even off (`{ lat, lon, alt }` or null — the sea's own life is ma
 (a quarter radius each: a free camera flown fast must not add one each frame). `status`: the feed's (`off`, `waiting`,
 `live`, `error`, `offline`); `at`: the place last asked (null off); `asks`: `{ air, sea, trace }` sent so far (the relay's
 pace: air 15 s — 10 s after a jump —, sea 10 s — 5 s —, a trace 15 s); `planes`, `ships`: how many held. The aircraft and
-ships themselves: `__bh.camera.trafficNow()`, `__bh.camera.seaNow()` (Earth-fixed metres), their marks
+ships themselves: `__bh.camera.trafficNow()`, `__bh.camera.seaNow()` (Earth-fixed metres; each aircraft also its `alt` over
+the ellipsoid and `msl` over the sea — the label's —, and since 24 Nov 2026 its place against the game's runways,
+`src/traffic/runway-phase.ts`: `phase` — `parked`, `taxi`, `takeoff`, `landing`, `approach`, `climb`, `cruise`, `descent`,
+`rotor` —, `gear` 0 up … 1 down as drawn and `gearWanted`, `over` its wheels' height over the ground [m], `runway`
+`{ key, a, c, pull }` — the way it lines up with, « KSFO:KSFO 10R< » for 28L, its distance past the threshold and off the axis
+as reported [m], how far it is drawn pulled onto it —, `landing` its touchdown made up through a gap in its reports,
+`traffic/landing.ts`), their marks
 `__bh.camera.trafficOverlay(fmt, __bh.camera.viewController())`, `seaOverlay(fmt, view)` — the view's controller places
-them from the view (a spectator's, else the camera's own). e2e: `traffic-free-camera`.
+them from the view (a spectator's, else the camera's own). e2e: `traffic-free-camera`, `traffic-runways` (a made-up feed: `camera.traffic`
+replaced, `camera.trafficClock` the test's).
 
 ### `__bh.spectate(on: boolean)` → boolean
 

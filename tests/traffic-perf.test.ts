@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, setDefaultTimeout, test } from "bun:test";
 import { TrafficFeed, type Plane, type Ship } from "../src/traffic/feed";
 import { TrafficFocus } from "../src/traffic/focus";
+import { runwayFrame, setWorldRunways } from "../src/game/sites";
 import { overPlace, resetFlights } from "./helpers/flight";
 
 // (N-body planning and century sweeps take seconds alone, tens of seconds on a loaded Mac or a parallel CI runner: 60 s, not the 5 s default)
@@ -11,9 +12,28 @@ setDefaultTimeout(60_000);
 // — drawn a minute behind (the default delay, on their fitted paths): what the page spends each frame on them (their
 // places — controller/traffic.ts trafficNow, seatraffic.ts seaNow —, the renderer's meshes, the overlay's labels and
 // lights, the wakes), the first frame (every path fitted) apart. A bun-side measure (this machine's CPU, no GPU, no
-// page): the figures printed; the bound only catches a regression by an order of magnitude.
+// page): the figures printed; the bound only catches a regression by an order of magnitude. SFO's four runways graded
+// (24 Nov 2026: each aircraft low over the ground placed against them — traffic/runway-phase.ts —, the rigged A320s near
+// the view posed — trafficRig).
 
-afterEach(resetFlights);
+afterEach(() => {
+  setWorldRunways([]);
+  resetFlights();
+});
+
+/** KSFO's runways as world/runways3d.ts makes them (OurAirports: le threshold, heading, length, half width) */
+const SFO_RUNWAYS = (
+  [
+    ["10L", 37.62874, -122.39341, 117.79, 3618],
+    ["10R", 37.6263, -122.39312, 117.8, 3469],
+    ["1L", 37.6079, -122.38295, 27.81, 2331],
+    ["1R", 37.60633, -122.38106, 27.81, 2638],
+  ] as const
+).map(([le, lat, lon, rwy, len]) => {
+  const f = runwayFrame({ body: "earth", name: `KSFO ${le}`, lat, lon, runway: true, rwy, elev: 4 }, len, 30.5, 48);
+  f.world = { field: "KSFO", measuring: false };
+  return f;
+});
 
 const D = Math.PI / 180;
 const SFO = { lat: 37.62, lon: -122.38 };
@@ -101,6 +121,7 @@ describe("the traffic's cost a frame", () => {
   test(`${N} aircraft and ${N} ships about a free camera with no craft, a minute behind`, () => {
     const { c } = overPlace("earth", SFO.lat, SFO.lon, 0.6, true);
     c.setPilot(false);
+    setWorldRunways(SFO_RUNWAYS);
     const t0 = 1_800_000_000;
     let now = t0;
     c.trafficClock = () => now;

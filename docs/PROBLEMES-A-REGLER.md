@@ -102,6 +102,41 @@ connue ou supposée, la piste. Une entrée réglée est barrée avec le commit q
 - **Correction** : E11 avant le temporel, son mouvement écrit (marque w 1 ; le marcheur au même pixel, l'herbe reprojetée par le sol).
   Vérifié en image ici (walk-raster, `WALK_SPOTS` 45,80 ; 6,98) : astronaute opaque, herbe et pierres présentes.
 
+## Trafic réel au sol invisible vu d'au-dessus en caméra libre (relevé le 24 novembre 2026, e2e `traffic-runways`, ce Mac)
+
+- **Constat** : les avions de ligne au sol (ou bas), placés juste (roues sur le sol de contact ± 0,5 m, `sys.groundAt`), ne sont pas
+  dessinés quand la caméra libre les voit d'en haut avec le sol derrière : leurs feux et étiquettes seuls
+  (`docs/progress/traffic-runways/parked-above.jpg`). La même vue avec `renderer.shipInScene = false` les montre, train sorti
+  (`parked-above-noscene.jpg` — le reste de l'image noir : ce chemin n'est pas fait pour la caméra libre). Vus avec le ciel
+  derrière (finale, montée), ils sont dessinés (`final.jpg`, `gearup.jpg`).
+- **Cause supposée** : le test d'occultation des engins non pilotés (`ship.wgsl`, `far` : `sceneDepth` plus proche que le fragment)
+  sur le chemin « dans la scène » (PLAN-J1 J1-5) — `sceneDepth` reconstruit au minimum des échantillons frais du bloc (`post.wgsl`
+  `occlusion`), ou la profondeur de l'engin réécrite dans la scène. Non vérifié.
+- **Piste** : mesurer `sceneDepth` sous l'avion contre sa distance ; borner le test pour un engin posé (marge de quelques mètres) ou
+  ne pas l'appliquer au trafic proche. Hors du lot du trafic (passe E12a) : à la session du rendu. Aussi relevé : la caméra libre
+  basse au-dessus de SFO dessine encore la mer sur l'aérodrome tant que le relief n'est pas arrivé (16 tuiles en attente après 60 s).
+
+## Trafic réel : le train des avions dessinés sans gréement reste sorti (relevé le 24 novembre 2026, `traffic/runway-phase.ts`)
+
+- **Constat** : la phase et le train de chaque avion sont décidés (`gear`, `gearWanted` de `camera.trafficNow()`), mais seul l'A320 du
+  jeu a un train mobile. Les avions de ligne au maillage A320 ne le prennent que dans 4 km de la vue et à 4 au plus
+  (`TRAFFIC_RIG`, emplacements gréés `JET_SLOTS` partagés avec les F-35) ; au-delà, et pour tous les régionaux (maillage
+  `crj900`), le maillage simple (`assets/traffic/*.bin`) porte son train sorti, figé, même en croisière.
+- **Piste** : séparer le train des maillages simples dans `scripts/build-airliners.ts` (ses sources ne sont pas dans le dépôt) et
+  le cacher par instance selon `gear` ; ou un gréement du CRJ. Restent aussi : l'ombre du trafic au sol (instances `shadow: false`),
+  la livrée de l'A320 du jeu sur tous les avions de ligne proches, le coût GPU des A320 gréés **non mesuré**.
+
+## ~~Un avion en courte finale à SFO étiqueté « −17 m »~~ (relevé le 24 novembre 2026, campagne e2e 2, `traffic-free-camera` sur kerr-mini) — réglé le même jour
+
+- **Constat** : UAL2623 (B38M), en courte finale à 3,2 km de la caméra, étiqueté « −17 m », en vol, descendant (log
+  `remote-results/campaign2/20261124-172345-c2-traffic-free-camera.log`).
+- **Cause** : l'étiquette donnait la hauteur sur l'ellipsoïde (`alt`), pas sur la mer ; à SFO l'ellipsoïde est ~32 m sous la mer : −17 m
+  sur l'ellipsoïde, c'est ~15 m sur la mer, ~11 m sur la piste. Rien ne posait non plus une finale sur la piste du jeu : un écart
+  géométrique de quelques dizaines de mètres la laissait flotter ou s'enfoncer.
+- **Correction** : `controller/traffic.ts` étiquette `msl` (hauteur sur la mer, géoïde retiré) ; `traffic/runway-phase.ts` place la
+  finale sur l'axe et le plan de 3° de la piste alignée, jamais sous le sol. Tests `traffic-runway.test.ts` (−17 m et −60 m sur
+  l'ellipsoïde en courte finale : en vol au-dessus de la piste, train sorti, étiquette sur la mer), e2e `traffic-runways`.
+
 ## ~~« Descend, descend! » contre le ravitailleur, 1 e2e `aar` sur 3~~ (relevé le 24 novembre 2026, campagne e2e 1) — réglé le même jour (`d51017b2`)
 
 - **Constat** : un RA « Descend, descend! » dit une fois pendant l'e2e `aar` malgré le TA ONLY (1 lancement sur 3, ici).
