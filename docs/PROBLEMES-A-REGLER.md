@@ -3,6 +3,52 @@
 Problèmes constatés, pas encore réglés. Chaque entrée : la date (UTC), ce qui est mesuré ou observé et sa source, la cause
 connue ou supposée, la piste. Une entrée réglée est barrée avec le commit qui la règle, pas effacée.
 
+## Pont de Cheviré (Nantes) : tablier à 25 m au-dessus de la Loire au lieu de ~55 m, en morceaux (relevé le 24 novembre 2026, campagne e2e 2, `bridges-notable`)
+
+- **Constat** (kerr-mini, `20261124-181051-c2-bridges-notable-3`, capture `chevire.png`) : vu de 900 m à l'est, le viaduc traverse la Loire
+  presque à plat, ~10–15 m au-dessus de l'eau ; sa plus grande pièce de tablier (copie CPU du décor) culmine à **25,2 m au-dessus de la mer**
+  (le pont réel : 52 m de tirant d'air). Le tablier est en **4 pièces** dans la boîte de 500 × 1 700 m ; sur la ligne médiane de la plus
+  grande, des marches de **1,5 à 11 m** entre tranches de tabliers voisins (47,1972 N, 1,6147 O). Une bande claire sur l'eau sous le tablier.
+- **Cause (lecture du code)** : un pont des cellules « rue » (BD TOPO) n'a pas de hauteur de tablier, seulement un **tirant d'air minimal**
+  (`street-cells.ts` : 5,5 m, codé en dm sur un octet, ≤ 25,5 m) au-dessus du sol aux culées, borné par la pente maximale (5 % pour ≥ 14 m de
+  large) ; un long viaduc découpé en plusieurs tronçons donne plusieurs tabliers aux bouts non raccordés en hauteur.
+- **Piste** : la cote Z des tronçons BD TOPO (géométrie 3D) comme hauteur de tablier dans la préparation des cellules, ou une entrée au
+  catalogue des ponts remarquables (`bridge-catalogue.ts`, famille poutre à ajouter) ; raccorder en hauteur les bouts de tabliers voisins.
+
+## Ponts et routes, campagne e2e 2 : à revoir à l'œil (relevé le 24 novembre 2026, `bridges`, `bridges-notable`, kerr-mini)
+
+- **Golden Gate depuis Battery Spencer** (`golden-gate-1km.png`) : derrière les arbres, à gauche, devant la tour nord, des blocs gris en
+  escalier (imposteurs lointains ou couche lointaine ?) masquent une partie de la tour. Non diagnostiqué.
+- **Rues de Paris** (`paris-wet-street-dry.png`, `grenelle-deck-low.png`) : de fines lignes claires courbes traversent la chaussée (bords
+  de voies d'un carrefour ?) ; le relief herbeux déborde sur le trottoir le long des façades (nivellement `roadBank` sans lecteur, déjà noté
+  plus bas). Sur l'approche du pont Alexandre III, un marquage en boucle fermée au milieu de la chaussée (`alexandre-iii-deck-low.png`).
+- **Pont Alexandre III** : classé `monumental_alexandre_iii` (tablier lu : 150 × 24 m, à 15 m du point du classement ; l'arc sous le tablier
+  présent dans le contact) ; ses quatre pylônes sont des pavés unis, l'arc à peine visible depuis la Seine à 120 m (`alexandre-iii.png`).
+- **Scène pleine à San Francisco** : ~108 s de construction sur kerr-mini (étape « forest », les collines de Marin), faite deux fois à la
+  vue à 30 km (révision des cellules « rue » 0 → 1) : la vue attend ~3 min ; le pont y est dès la première.
+- **Plafond des ponts** : `bridges = 1024` (le plafond `bridgeLimit` en mode haut) dans toutes les vues de Paris — les plus proches
+  gardés, les autres non dessinés.
+
+## ~~Golden Gate : un second tablier au ras de l'eau, 60 m sous le tablier remarquable ; l'appui à 0,3 m au-dessus de la chaussée~~ (relevé le 24 novembre 2026, campagne e2e 2) — réglé le même jour (`72801f59`)
+
+- **Constat** : vue basse le long du pont : une route à piles dans l'eau, marquée et roulée, sous et à côté du tablier rouge ; la ligne
+  médiane échantillonnée sautait de 48 m en moyenne (p99) entre les deux. Puis, le double retiré, l'appui du marcheur 0,31 m au-dessus
+  du dessus dessiné sur la travée de rive sud (et 0,33 m à Millau).
+- **Cause** : le double d'une source n'était cherché que par le **sommet du milieu** de sa ligne ; ceux du pont des cellules, serrés sur
+  une approche, tombaient hors du tablier remarquable. Les caissons de poutre du pont remarquable avaient un dessus de contact plat à la
+  hauteur de leur **bout haut** : 0,69 m au-dessus de la chaussée sur la pente de 6,5 %.
+- **Correction** : `bridge-structures.ts` `lineUnderDeck` (le milieu, ou la moitié de la longueur échantillonnée tous les 15 m, sur
+  l'autre tablier) ; dessus de contact de la poutre au bout bas (`bridge-notable.ts`). Tests `bridge-structures.test.ts`,
+  `bridge-notable.test.ts` (témoin : 0,687 m avec l'ancien code) ; e2e `bridges-notable` : ligne médiane sans marche, appui à 0 cm.
+
+## ~~L'asphalte s'assombrit avec la distance (6 % entre 1 cm et 1,2 m d'empreinte)~~ (relevé le 24 novembre 2026, e2e `road-pavement-slice`) — réglé le même jour (`098390d0`)
+
+- **Constat** : moyenne de l'asphalte sur une plaque de 2 m : 1,007 au pixel fin, 0,948 à 1,2 m.
+- **Cause** : la bande des traces de roues filtrée par un `smoothstep` élargi par l'empreinte (la bande grandissait) ; les rustines de
+  3 m effacées dès 0,8 m d'empreinte.
+- **Correction** : `trace.wgsl` `roadPavement` : traces en `paveCover` (part de la bande dans le pixel), rustines gardées jusqu'à 2–4 m.
+  e2e : 1,007 / 1,002.
+
 ## ~~« Descend, descend! » contre le ravitailleur, 1 e2e `aar` sur 3~~ (relevé le 24 novembre 2026, campagne e2e 1) — réglé le même jour (`d51017b2`)
 
 - **Constat** : un RA « Descend, descend! » dit une fois pendant l'e2e `aar` malgré le TA ONLY (1 lancement sur 3, ici).
