@@ -123,6 +123,10 @@ describe.skipIf(!E2E)("Paris bridges and streets: the GPU's cost pass by pass", 
         let view = await showView(app, v);
         if (v.key.startsWith("rivoli")) {
           // (the street itself, as bridges.e2e: the widest road within 120 m along 115°, the camera on its axis 2.5 m up, 70 m along it)
+          // (the same street every run, for the sides' images to compare: rue de Rivoli's segment the search found on both sides on
+          // 24 Nov 2026 — the widest road found varied with what had loaded, four streets over eight runs; PRC_STREET=search: found again)
+          if (!street && process.env.PRC_STREET !== "search")
+            street = { at: [48.86304192322913, 2.3359613581689698], look: [48.86282834722133, 2.3368605853095223] };
           if (!street) {
             const road = await widestRoad(app, v.at, 120, 115);
             if (road) {
