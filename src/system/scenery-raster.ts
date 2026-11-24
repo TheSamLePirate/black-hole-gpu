@@ -778,7 +778,10 @@ fn meshLeaf(tri: u32) -> f32 {
     o.leaf = 10.0 + f32(tg & 15u) / 16.0;
   }
   // (B3: a notable bridge's cable — STRUCT_CABLE | 0x8000 vertical | paint << 11 | its diameter [cm] —: its pair opened to a pixel at
-  // least, along the frame's up — a vertical suspender across the view —, the share its diameter covers kept by meshFs, painted)
+  // least, the share its diameter covers kept by meshFs, painted. 25 Nov 2026 — the Golden Gate's main cable read as a flat wide
+  // ribbon from the deck (campaign 2): opened across its own line and the view — a billboard turned about the cable, whatever the
+  // eye — (its line the triangle's two distinct points: each pair is one point twice), its side ±1 in pyl.z: meshShade bulges the
+  // distance as a cylinder's front, the normal rebuilt from it round; the frame's up — the old way — where the eye looks along it)
   if (fam == 0xfff20000u) {
     o.bridge = 5.0;
     o.leaf = 10.0 + f32((tg >> 11u) & 15u) / 16.0;
@@ -787,9 +790,23 @@ fn meshLeaf(tri: u32) -> f32 {
     let px = 2.0 * u.up.w * max(v.z, 1.0) / u.image.y;
     let w = f32(tg & 0x7ffu) / 100.0;
     let half = max(0.5 * w, 0.5 * px);
-    o.pyl = vec4f(w / (2.0 * half), sc.misc.x, 0.0, 0.0);
-    let s = select(-half, half, (id & 1u) == 1u);
-    if ((tg & 0x8000u) != 0u) { v = v + vec3f(s, 0.0, 0.0); } else { v = view(wp + vec3f(0.0, 0.0, s)); }
+    let side = select(-1.0, 1.0, (id & 1u) == 1u);
+    o.pyl = vec4f(w / (2.0 * half), sc.misc.x, side, w);
+    let c0 = (vi / 3u) * 3u;
+    let q0 = meshVertex(c0);
+    let q1 = meshVertex(c0 + 1u);
+    let q2 = meshVertex(c0 + 2u);
+    let e01 = q1 - q0;
+    let e02 = q2 - q0;
+    let e12 = q2 - q1;
+    var line = e01;
+    if (dot(e02, e02) > dot(line, line)) { line = e02; }
+    if (dot(e12, e12) > dot(line, line)) { line = e12; }
+    let toEye = sc.cam.xyz - wp;
+    let ac = cross(line, toEye);
+    if (dot(ac, ac) > 1e-6 * dot(line, line) * dot(toEye, toEye)) {
+      v = view(wp + normalize(ac) * (side * half));
+    } else if ((tg & 0x8000u) != 0u) { v = v + vec3f(side * half, 0.0, 0.0); } else { v = view(wp + vec3f(0.0, 0.0, side * half)); }
   }
   // (Q8 L10: a street lamp's head — its leaf 7, shadeLite's —: its four vertices at its centre opened towards the camera to a
   // pixel and a half at least, as a car's lamps; its pole — 4, as a conductor —: each pair opened across the view to a pixel at
@@ -871,9 +888,16 @@ fn meshShade(v: MV) -> vec4f {
       if (!(leg || girt || x1 || x2)) { discard; }
     }
   }
-  // (B3: a notable bridge's cable — 5 — painted as the painted parts are, its coverage the conductors')
+  // (B3: a notable bridge's cable — 5 — painted as the painted parts are, its coverage the conductors'; 25 Nov 2026: where it spans
+  // two pixels or more — its coverage whole —, its distance that of a cylinder's front across it (pyl.z the side −1 … 1, pyl.w its
+  // diameter): rasterNormal rebuilds a round normal from it, lit and shaded as a round cable; under that, its coverage alone as before)
+  var dist = d;
+  if (v.bridge > 4.5 && v.pyl.x > 0.999) {
+    let a = clamp(v.pyl.z, -1.0, 1.0);
+    dist = d - 0.5 * v.pyl.w * sqrt(max(1.0 - a * a, 0.0));
+  }
   let code = select(select(select(${RASTER_CODE.mesh}.0 + v.bridge, ${RASTER_CODE.turbine}.0, v.bridge > 1.5), ${RASTER_CODE.pylon}.0, v.bridge > 2.5), ${RASTER_CODE.turbine}.0, v.bridge > 4.5);
-  return vec4f(d, v.leaf, d, code * ${RASTER_CODE_SCALE}.0);
+  return vec4f(dist, v.leaf, dist, code * ${RASTER_CODE_SCALE}.0);
 }
 // The buildings without triangles — the far ones, past BUILDING_MESH_M — as their boxes, solid (no margin, the top flat), turned
 // as their footprints are (buildingCorner):

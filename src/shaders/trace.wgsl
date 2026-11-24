@@ -16390,11 +16390,12 @@ fn liteMaterial(gq: vec3f, q: vec3f, ph: vec3f, rd: vec3f, look: vec3f, tM: f32,
     // green, beige —, its lamps' glass dark by day)
     let cg = atTag(at);
     // (PLAN-PONT-ROUTES-AAA B3: a notable bridge's painted part or cable — its leaf 10 + paint / 16, bridge-notable.ts BridgePaint: the
-    // Golden Gate's International Orange (sRGB #C0362C, linear), concrete, white, dark steel, granite, grey-green, silver, ochre)
+    // Golden Gate's International Orange (sRGB #C0362C, linear), concrete, white, dark steel, granite, grey-green, silver, ochre; 25 Nov
+    // 2026: gilded bronze — Pont Alexandre III's Fames)
     if (cg > 9.97 && cg < 11.0) {
-      let pi = u32(fract(cg) * 16.0 + 0.5) & 7u;
-      var paint = array<vec3f, 8>(vec3f(0.527, 0.037, 0.025), vec3f(0.42, 0.41, 0.39), vec3f(0.66, 0.67, 0.68), vec3f(0.12, 0.13, 0.14),
-        vec3f(0.42, 0.38, 0.32), vec3f(0.26, 0.33, 0.3), vec3f(0.5, 0.52, 0.54), vec3f(0.5, 0.38, 0.2));
+      let pi = min(u32(fract(cg) * 16.0 + 0.5) & 15u, 8u);
+      var paint = array<vec3f, 9>(vec3f(0.527, 0.037, 0.025), vec3f(0.42, 0.41, 0.39), vec3f(0.66, 0.67, 0.68), vec3f(0.12, 0.13, 0.14),
+        vec3f(0.42, 0.38, 0.32), vec3f(0.26, 0.33, 0.3), vec3f(0.5, 0.52, 0.54), vec3f(0.5, 0.38, 0.2), vec3f(0.62, 0.41, 0.1));
       A = paint[pi] * P.earth2.z;
     } else if (cg > 4.92 && cg < 4.99) {
       // (PLAN-J8 VB3: a car's glass — car-shapes.ts —: dark, the sky mirrored at a grazing look as a building's windows)

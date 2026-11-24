@@ -127,10 +127,11 @@ describe("PLAN-PONT-ROUTES-AAA PR8 — Integrated Acceptance Guarantees", () => 
       deckZ1: alex.points[alex.points.length - 1]![2],
     });
 
-    // 4 pylons, 20 vertices each (4 walls * 4 + 4 cap) = 80 vertices * 3 coords = 240
-    expect(pylonsMesh.positions.length).toBe(240);
-    // 4 pylons, 10 triangles each (4 walls * 2 + 2 cap) = 40 triangles * 3 indices = 120
-    expect(pylonsMesh.triangles.length).toBe(120);
+    // (25 Nov 2026: four pylons of eight prisms each — base, pedestal, column, capital, plinth, the group and its wings —, 8 vertices
+    // and 12 triangles a prism)
+    expect(pylonsMesh.pylons.length).toBe(32);
+    expect(pylonsMesh.positions.length).toBe(32 * 8 * 3);
+    expect(pylonsMesh.triangles.length).toBe(32 * 12 * 3);
   });
 
   test("Guarantee 11 & 12: Continuous 3D mesh generation and performance budget", () => {

@@ -22,6 +22,8 @@ export enum BridgePaint {
   GreyGreen = 5,
   Silver = 6,
   Ochre = 7,
+  /** (25 Nov 2026) gilded bronze — Pont Alexandre III's Fames and Pegasi */
+  Gilded = 8,
 }
 
 export interface Wgs84 {
@@ -92,7 +94,7 @@ export interface NotableParts {
 }
 
 /** a box between two points on its axis (a → b, any direction), its section w × d at a and w2 × d2 at b — CCW outward faces */
-function prism(
+export function prism(
   a: Vec3,
   b: Vec3,
   wa: number,

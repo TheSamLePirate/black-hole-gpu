@@ -93,6 +93,7 @@ import { BRIDGE_SHARE, selectBridgeLOD } from "./bridge-lod";
 import { NOTABLE_BRIDGES } from "./bridge-catalogue";
 import { notableDeckAxis, notableParts } from "./bridge-notable";
 import {
+  ALEXANDRE_III,
   buildAlexandreIIIPylonsMesh,
   buildArchRibsMesh,
   classifyBridgeStructure,
@@ -1720,13 +1721,28 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
         });
         if (addSolid(polygonPrimitive(pier, g - 2, z, 3, [0.5, 0.49, 0.46]), pier, pierMesh)) bridgePiers++;
       }
-    // (PLAN-PONT-ROUTES-AAA PR6: Pont Alexandre III — its four corner pylons, each its own solid (review A9: they hung on one corner's
-    // primitive), and its steel arch ribs under the deck)
+    // (PLAN-PONT-ROUTES-AAA PR6: Pont Alexandre III — its four corner pylons, each its own solids (review A9: they hung on one corner's
+    // primitive); 25 Nov 2026: in their parts — base, pedestal, column, capital in granite, the gilded group with its wings —, and its
+    // steel arch from springings 6.3 m under its crown to the intrados, its open spandrels, each piece its own solid (the river under
+    // the arch open): painted parts, tagged as the notable bridges' (BRIDGE_PAINT | paint — the raster's palette))
     if (family === "monumental_alexandre_iii") {
       const pStart = points[0]!,
         pEnd = points[points.length - 1]!;
       const deckZ0 = profile.deckAt(0),
         deckZ1 = profile.deckAt(total);
+      const painted = (so: {
+        positions: number[];
+        triangles: number[];
+        footprint: [number, number][];
+        bottom: number;
+        top: number;
+        paint: number;
+      }) => {
+        const foot = [[...so.footprint, so.footprint[0]!].map((v) => [v[0], v[1], 0] as Vec3)];
+        const p = polygonPrimitive(foot, so.bottom, so.top, 3, [0.58, 0.56, 0.52]);
+        if (p) p.meshTag = (BRIDGE_PAINT | so.paint) >>> 0;
+        addSolid(p, foot, so);
+      };
       const pyl = buildAlexandreIIIPylonsMesh({
         pStart: pStart as [number, number, number],
         pEnd: pEnd as [number, number, number],
@@ -1734,20 +1750,18 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
         deckZ0,
         deckZ1,
       });
-      for (const one of pyl.pylons) {
-        const foot = [[...one.footprint, one.footprint[0]!].map((v) => [v[0], v[1], 0] as Vec3)];
-        addSolid(polygonPrimitive(foot, one.bottom, one.top, 3, [0.58, 0.56, 0.52]), foot, one);
-      }
-      const archMesh = buildArchRibsMesh({
+      for (const one of pyl.pylons) painted(one);
+      const arch = buildArchRibsMesh({
         pStart: pStart as [number, number, number],
         pEnd: pEnd as [number, number, number],
         width,
         deckZ0,
         deckZ1,
-        riseM: 5.5,
+        deckZMid: profile.deckAt(total / 2),
+        thick,
+        riseM: ALEXANDRE_III.rise,
       });
-      const archBounds = [stripPolygon(pStart, pEnd, width)];
-      addSolid(polygonPrimitive(archBounds, deckZ0 - 6, Math.min(deckZ0, deckZ1) - thick, 3, [0.35, 0.4, 0.38]), archBounds, archMesh);
+      for (const one of arch.parts) painted(one);
     }
     return made ? profile : null;
   };
