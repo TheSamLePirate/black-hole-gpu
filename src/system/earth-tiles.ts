@@ -139,6 +139,9 @@ const IMAGERY_TIMEOUT = "imagery timeout";
 export const RETRY_BASE_MS = 2000;
 export const RETRY_MAX_MS = 30000;
 export const retryDelay = (n: number) => Math.min(RETRY_BASE_MS * 2 ** Math.max(n - 1, 0), RETRY_MAX_MS);
+/** a relief tile shown as failed (the pill's « Relief N failed », `failing`) once its load has failed this many times in a row —
+ *  ~6 s of retries (2 then 4 s apart): a refusal, a time-out or a shared file's failure retried and in since never shown */
+export const FAIL_SHOWN = 3;
 /** CM1: the day's imagery in, the night's lights waited for that much longer at most — then the day drawn alone (its lights
  *  0), the lights asked again with the tile's imagery (ST-05: a stalled or refused GIBS night had held every tile's photograph) */
 const NIGHT_GRACE_MS = 3000;
@@ -1175,9 +1178,22 @@ export class EarthTiles {
   get imagery() {
     return this.pages.version;
   }
-  /** tiles loaded, failed (for the readouts) */
+  /** tiles loaded; failed — cumulative, every tile's first failure, the transient ones (retried, in since) too: a diagnostic */
   loaded = 0;
   failed = 0;
+  /** The relief tiles failing now: still wanted by a window, their load failed FAIL_SHOWN times in a row (asked again meanwhile,
+   *  retryDelay) — out of the count as soon as one comes in, or its window leaves it. The pill's « Relief N failed » (main.ts):
+   *  until 24 Nov 2026 it showed `failed`'s growth — a tile timed out once (15 s, queue and decode included), or each of the 16
+   *  tiles under one shared z 15 file, counted though asked again and in a moment later. */
+  get failing() {
+    let n = 0;
+    for (const [key, f] of this.failures) {
+      if (f.n < FAIL_SHOWN) continue;
+      const [z, x, y] = key.split("/").map(Number) as [number, number, number];
+      if (this.levels.some((L) => L.z === z && this.wantHas(L, x, y))) n++;
+    }
+    return n;
+  }
   /** CM0: each tile's arrival timed — asked, in, written, its imagery, its national heights, drawn — (tile-arrivals.ts) */
   readonly arrivals = new ArrivalLog();
   /**

@@ -8815,7 +8815,7 @@ async function main() {
   dataMeter.dataset.testid = "data-meter";
   dataMeter.dataset.state = "idle";
   document.body.append(dataMeter);
-  let failSeen = { earth: 0, moon: 0, scenery: "" as string | null },
+  let failSeen = { moon: 0, scenery: "" as string | null },
     failUntil = 0,
     failText = "",
     horizonMax = 0;
@@ -8865,10 +8865,13 @@ async function main() {
     // (the failures since the last look: shown 12 s — the tiles' (their heights then from the coarser map), the scenery's)
     const err = sc.status === "degraded" ? (sc.lastError ?? "degraded") : null;
     const fails: string[] = [];
-    if (et.failed > failSeen.earth) fails.push(`${t("Relief")} ${et.failed - failSeen.earth} ${t("failed")}`);
+    // (the relief's: the tiles failing now — wanted, refused FAIL_SHOWN times in a row —, shown while they last; a refusal
+    // retried and in since never shown — earth-tiles.ts failing)
+    const reliefFailing = et.failing;
+    if (reliefFailing > 0) segs.push({ text: `⚠ ${t("Relief")} ${reliefFailing} ${t("failed")}`, kind: "failed" });
     if (mt.failed > failSeen.moon) fails.push(`${t("Terrain")} ${mt.failed - failSeen.moon} ${t("failed")}`);
     if (err && err !== failSeen.scenery) fails.push(`${t("Scenery")} ${t("degraded")}`);
-    failSeen = { earth: et.failed, moon: mt.failed, scenery: err };
+    failSeen = { moon: mt.failed, scenery: err };
     if (fails.length) {
       failText = fails.join(" · ");
       failUntil = now + 12_000;
