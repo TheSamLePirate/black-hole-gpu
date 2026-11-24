@@ -215,11 +215,14 @@ export async function connect(win: Window = window, fetchFn: Fetch = fetch): Pro
         };
       }
     } catch {}
-    // (the popup closed without a code: given up)
+    // (the popup closed without a code: given up. The page cross-origin isolated — COOP same-origin, asked for by the Linux
+    // OBC's multi-CPU, src/obc/isolation.ts —: the popup gone to openrouter.ai is in another browsing-context group and its
+    // handle reads `closed` at once, the code comes back by the BroadcastChannel — given up only after five minutes)
+    const severed = bc !== null && (win as { crossOriginIsolated?: boolean }).crossOriginIsolated === true;
     const watch = setInterval(() => {
       if (pop.closed) {
         clearInterval(watch);
-        setTimeout(() => finish(null), 1500);
+        setTimeout(() => finish(null), severed ? 5 * 60_000 : 1500);
       }
     }, 500);
   });

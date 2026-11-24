@@ -39,6 +39,7 @@ import {
   type ZoneTile,
   tileKind,
 } from "./pwa/rules";
+import { COI_COOKIE, coiWanted, withCoi } from "./obc/isolation";
 import { decodeRelief, encodeRelief, isReliefGrid, RELIEF_CODEC } from "./pwa/relief-codec";
 import {
   OVERTURE_BUCKET,
@@ -541,15 +542,24 @@ async function cacheFirst(request: Request, name: string): Promise<Response> {
   return res;
 }
 
-/** Ensure app HTML navigation responses carry COOP + COEP: credentialless (enables SharedArrayBuffer + SMP Unkernel even on GitHub Pages). */
-function withCoiHeaders(request: Request, res: Response): Response {
+/**
+ * The page's cross-origin isolation (COOP same-origin + COEP credentialless: SharedArrayBuffer for the Linux OBC's
+ * multi-CPU — src/obc/isolation.ts): as the player's kerr_coi cookie says, read through the worker's cookieStore — the
+ * headers added on GitHub Pages (no headers of its own), removed from a page cached while it was on. Where the worker
+ * cannot read the cookie (no cookieStore: Firefox, Safari), the server's answer as it is (nginx decides by the cookie).
+ */
+async function withCoiHeaders(request: Request, res: Response): Promise<Response> {
   if (request.mode !== "navigate" || !isAppPage(request.url, ROOT)) return res;
   if (res.status === 0 || res.type === "opaque" || res.redirected) return res;
-  if (res.headers.get("cross-origin-embedder-policy") && res.headers.get("cross-origin-opener-policy")) return res;
-  const headers = new Headers(res.headers);
-  headers.set("Cross-Origin-Opener-Policy", "same-origin");
-  headers.set("Cross-Origin-Embedder-Policy", "credentialless");
-  return new Response(res.body, { status: res.status, statusText: res.statusText, headers });
+  const store = (self as unknown as { cookieStore?: { get(name: string): Promise<{ value?: string } | null> } }).cookieStore;
+  if (!store) return res;
+  let value: string | undefined;
+  try {
+    value = (await store.get(COI_COOKIE))?.value;
+  } catch {
+    return res;
+  }
+  return withCoi(res, coiWanted(value ? `${COI_COOKIE}=${value}` : null));
 }
 
 async function networkFirst(request: Request, name: string): Promise<Response> {

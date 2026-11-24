@@ -16,7 +16,7 @@ if [ -z "$_N" ] || case "$_N" in /usr/lib/kw/bin/*) true;; *) false;; esac || he
 fi
 
 cat > /tmp/.obc-f35-fb.mjs <<'JS'
-import { AvionicsBus, Framebuffer, packRgb, startRawKeys } from "/obc/lib/obc.mjs";
+import { AvionicsBus, Framebuffer, packRgb, startRawKeys, unitsOf } from "/obc/lib/obc.mjs";
 
 const args = process.argv.slice(2);
 let durSec = 60;
@@ -176,7 +176,7 @@ function drawFrame() {
   fb.barGauge(165, 463, 125, 12, st.systems.throttle, AMBER, BG, RING);
   fb.text(302, 462, `TRK ${String(contacts.length).padStart(2)}  FPS ${fps.toFixed(1)}`, GREEN, 2);
   fb.text(10, 482, `M${st.flight.mach.toFixed(2)}  G ${st.flight.g_load.toFixed(1)}  ALT ${Math.round(st.position.altitude_msl_m)}M  [+/-]RNG [R]RAD [L]LCK [Q]`, WHITE, 1);
-  fb.text(10, 496, `PITCH ${st.attitude.pitch_deg >= 0 ? "+" : ""}${st.attitude.pitch_deg.toFixed(1)}  ROLL ${st.attitude.roll_deg >= 0 ? "+" : ""}${st.attitude.roll_deg.toFixed(1)}  TAS ${Math.round(st.flight.true_airspeed_mps * 1.94384)}KT`, CYAN, 1);
+  fb.text(10, 496, `PITCH ${st.attitude.pitch_deg >= 0 ? "+" : ""}${st.attitude.pitch_deg.toFixed(1)}  ROLL ${st.attitude.roll_deg >= 0 ? "+" : ""}${st.attitude.roll_deg.toFixed(1)}  TAS ${unitsOf(st.units).fSpd(st.flight.true_airspeed_mps).toUpperCase()}`, CYAN, 1);
 
   fb.flush();
   frameN++;

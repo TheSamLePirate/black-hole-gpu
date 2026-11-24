@@ -10,7 +10,7 @@ You have **full real-time bidirectional control** over the entire simulator — 
 |---|---|
 | `README.md` | Quick-start commands, installed tools, creating & running programs in `/home/pilot` |
 | `docs/OBC-ARCHITECTURE.md` | `/obc/*` 9p files, `telemetry.json` exact schema, `/obc/cmd` protocol, `AF_VSOCK:4747`, 3D cockpits, SDKs |
-| `docs/BH-API-GUIDE.md` | Full `window.__bh` API + 73 TARS tools via `bh` CLI & `/obc/rpc_req`, units, WGS84 datums, F-35/A320/Orbit recipes |
+| `docs/BH-API-GUIDE.md` | Full `window.__bh` API + 73 TARS tools via `bh` CLI & `/obc/rpc/<id>.req`, units, WGS84 datums, F-35/A320/Orbit recipes |
 | `docs/TTY-AND-FB0.md` | Building TUIs (Ratatui / Python / Node) & `/dev/fb0` graphics (`FBIOGET_VSCREENINFO` + `mmap`, `TIOCGWINSZ=(0,0)` fix, 1:1 PFD math) |
 | `docs/UNKERNEL-LINUX.md` | Unkernel `aarch64` specifics: Alpine vs Debian, Wisp networking, persistence, `/usr/lib/kw/bin` stubs, RAM/Cargo limits |
 
@@ -35,7 +35,7 @@ Load the relevant `SKILL.md` before executing complex tasks:
    - Always distinguish **WGS84 ellipsoid height** (`height_ellipsoid_m`), **MSL** (`altitude_msl_m`), and **AGL** (`height_over_ground_m`).
 5. **9p `/obc/telemetry.json` padding**: Fixed 2048-byte space-padded JSON with atomic rename. Always `.trim()` before parsing and keep the last valid frame on transient read errors.
 6. **Clean exit & keyboard discipline**: Every interactive TUI and `/dev/fb0` app MUST restore terminal raw mode on exit and quit cleanly on `q`, `Esc`, or `Ctrl+C` (closing `/dev/fb0` automatically hands the display back to the terminal).
-7. **Persistence**: Put new user programs in `/home/pilot/` (or `$HOME/.local/bin/` for global commands) — `/home/pilot` persists across reboots on the IndexedDB `/data` disk, whereas `/obc/*` is a host 9p mount (read-only except `/obc/cmd` and `/obc/rpc_req`).
+7. **Persistence**: Put new user programs in `/home/pilot/` (or `$HOME/.local/bin/` for global commands) — `/home/pilot` persists across reboots on the IndexedDB `/data` disk, whereas `/obc/*` is a host 9p mount (read-only except `/obc/cmd`, `/obc/rpc/` and `/obc/rpc_req`).
 8. **PATH & stubs**: `/usr/lib/kw/bin/` holds Unkernel lazy-install stubs. Always keep `/obc/bin:/obc/scripts:$HOME/.local/bin:$HOME/.bun/bin:/usr/local/bin` **ahead** of `/usr/lib/kw/bin` (configured automatically in `/etc/profile.d/obc.sh`).
 
 ## Quick Sanity Check Commands

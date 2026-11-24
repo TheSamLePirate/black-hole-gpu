@@ -4,6 +4,7 @@
 // keys kept apart from the root app's on the same origin (src/util/storage.ts); empty: the root.
 import { readdirSync } from "node:fs";
 import { $ } from "bun";
+import { pinnedDistroPath } from "./obc-distro";
 
 const subpath = process.env.KERR_SUBPATH ?? "";
 await $`rm -rf _site`;
@@ -43,8 +44,9 @@ await $`mkdir -p _site/obc/scripts/lib _site/obc/pilot-kit`;
 await $`cp node_modules/unkernel/dist/unkernel.wasm _site/obc/unkernel.wasm`;
 await $`cp assets/obc/alpine.erofs assets/obc/distros.json assets/obc/obc-rs _site/obc/`;
 {
-  const localDebian = Bun.file("assets/obc/debian.erofs");
-  const debianPath = (await localDebian.exists()) ? "assets/obc/debian.erofs" : await (await import("unkernel/node")).fetchDistro("debian");
+  // (Debian, not in Git: the pinned unkernel release's image, its size and sha256 checked against assets/obc/distros.json —
+  // scripts/obc-distro.ts; a mismatch fails the build)
+  const debianPath = await pinnedDistroPath("debian", "assets/obc/debian.erofs", true);
   await $`cp ${debianPath} _site/obc/debian.erofs`;
 }
 await $`cp scripts/obc/bh scripts/obc/bh-tui scripts/obc/obc-* _site/obc/scripts/ && cp scripts/obc/lib/*.py scripts/obc/lib/*.mjs _site/obc/scripts/lib/ && cp -R scripts/obc/pilot-kit/. _site/obc/pilot-kit/`;

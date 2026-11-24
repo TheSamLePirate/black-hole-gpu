@@ -2,9 +2,213 @@
 // Exposes the entire live `window.__bh` API and all 73 TARS tools to Linux CLI, TUI, and graphical apps
 // over AF_VSOCK:4747 (async JSONL) and 9p `/obc/rpc_req` -> `/obc/rpc_res`, with safe cycle-free
 // bounded serialization so no circular DOM/WebGPU reference ever breaks JSON transport.
+//
+// Guest privileges (review of 24 Nov 2026): whatever runs in the guest — including a package's install script — can
+// write to this bridge, so it is NOT the page. Every property step (paths, `eval` chains, assignments) goes through
+// `rpcStep`, which:
+// - follows only the explicit roots of `RPC_ROOTS` from `__bh` (a new `__bh` member is not reachable until added);
+// - refuses `__proto__`, `constructor`, `prototype` and the other prototype/Function-internals keys (no pollution, no
+//   Function constructor), and keys named like secrets (api keys, tokens, passwords, cookies);
+// - refuses walking into or calling page objects: Window/Document/DOM nodes, every EventTarget (workers, sockets, audio,
+//   GPU devices), Storage, Location, Navigator, GPU*/WebGL*/Canvas* objects, and the page's `fetch`/`eval`/`Function`/
+//   timers. `get` renders such a value as a `[Ctor]` tag, never its fields.
+// Incoming values (`set`, call arguments, tool arguments) lose their `__proto__`/`constructor`/`prototype` keys, and
+// serialized results have secret-named fields and the player's stored API keys redacted.
 
 import type { Tool } from "../ai/agent";
 import { checkArgs, type Args } from "../ai/tool-schema";
+import { store } from "../util/storage";
+
+/** The `__bh` roots the guest may reach (everything else, present or future, is refused). */
+export const RPC_ROOTS: ReadonlySet<string> = new Set([
+  // reading the simulation and flying
+  "settings",
+  "refresh",
+  "touch",
+  "preset",
+  "presets",
+  "camera",
+  "cam",
+  "flight",
+  "fleet",
+  "sim",
+  "simState",
+  "ourState",
+  "viewPose",
+  "time",
+  "setTime",
+  "setDate",
+  "step",
+  "freeze",
+  "held",
+  "phase",
+  "mode",
+  "mission",
+  "game",
+  "hud",
+  "sys",
+  "mapView",
+  "radar",
+  "relief",
+  "sky",
+  "skyLoading",
+  "iss",
+  "issCamera",
+  "issCameras",
+  "jwst",
+  "lagrange",
+  "goTo",
+  "voyage",
+  "tour",
+  "touring",
+  "spectate",
+  "viewAt",
+  "scenes",
+  "recorder",
+  "mx",
+  // cockpits, screens and crew voices
+  "a320Mcdu",
+  "a320DeckAt",
+  "cockpitScreens",
+  "cockpitControlAt",
+  "cockpitScreenPoint",
+  "cabinPick",
+  "pcd",
+  "voice",
+  "capcom",
+  "music",
+  "sound",
+  "audio",
+  "tars",
+  // menus and diagnostics
+  "intro",
+  "entry",
+  "menu",
+  "bench",
+  "graphicsDiagnostic",
+  "videoState",
+]);
+// (left out on purpose: renderer, gpu — raw GPU objects —; obc — the guest reconfiguring its own host, e.g. its Wisp relay —;
+// net, netLight — the player's multiplayer identity —; pwa; snapshot, render, video, captureScenes — dev POSTs and heavy
+// captures —; boot, resize.)
+
+/** Keys never followed nor assigned: prototype pollution, the Function constructor, legacy accessors. */
+const FORBIDDEN_KEYS: ReadonlySet<string> = new Set([
+  "__proto__",
+  "constructor",
+  "prototype",
+  "__defineGetter__",
+  "__defineSetter__",
+  "__lookupGetter__",
+  "__lookupSetter__",
+  "caller",
+  "callee",
+  "arguments",
+]);
+
+const SECRET_KEY_SUFFIXES = [
+  "apikey",
+  "secret",
+  "password",
+  "passwd",
+  "cookie",
+  "cookies",
+  "credential",
+  "credentials",
+  "authorization",
+  "token",
+  "privatekey",
+];
+
+/** Whether a property name reads like a secret (`apiKey`, `OPENROUTER_API_KEY`, `accessToken`, `password`…). */
+export function isSecretKey(key: string): boolean {
+  const k = key.toLowerCase().replace(/[^a-z0-9]/g, "");
+  return k === "bearer" || SECRET_KEY_SUFFIXES.some((s) => k.endsWith(s));
+}
+
+// (the browser's own class names, whole — a game class such as `ScreenStack` or `AudioBus` is not one; most of these are
+// EventTargets anyway, caught by instanceof)
+const PAGE_CTOR_RE =
+  /^(GPU[A-Z][A-Za-z0-9]*|WebGL[A-Za-z0-9]*|HTML[A-Za-z]*Element|HTMLDocument|SVG[A-Za-z]*Element|Canvas(RenderingContext2D|Gradient|Pattern)|OffscreenCanvas(RenderingContext2D)?|ImageBitmap(RenderingContext)?|CSSStyleDeclaration|CSSStyleSheet|Window|Document|Location|History|Navigator|Screen|Storage|StorageManager|IDB[A-Z][A-Za-z]*|Cache|CacheStorage|ServiceWorker[A-Za-z]*|Worker|SharedWorker|WebSocket|XMLHttpRequest|EventSource|BroadcastChannel|MessagePort|MessageChannel|(Offline)?AudioContext|AudioWorkletNode|MediaStream[A-Za-z]*|MediaRecorder|RTC[A-Z][A-Za-z]*|CookieStore|Clipboard|Crypto|SubtleCrypto|FileSystem[A-Za-z]*Handle|Notification)$/;
+
+function ctorName(v: object): string {
+  try {
+    return (Object.getPrototypeOf(v) as { constructor?: { name?: unknown } } | null)?.constructor?.name?.toString() ?? "";
+  } catch {
+    return "";
+  }
+}
+
+let pageFunctions: Set<unknown> | null = null;
+function isPageFunction(v: unknown): boolean {
+  if (!pageFunctions) {
+    const g = globalThis as Record<string, unknown>;
+    pageFunctions = new Set(
+      ["fetch", "eval", "Function", "setTimeout", "setInterval", "open", "postMessage", "importScripts", "alert", "confirm", "prompt"]
+        .map((n) => g[n])
+        .filter((f) => typeof f === "function"),
+    );
+  }
+  return pageFunctions.has(v);
+}
+
+/** A page object's tag (`Window`, `HTMLCanvasElement`, `GPUDevice`…), or null for an ordinary value. */
+export function pageObjectTag(v: unknown): string | null {
+  if (v === null || (typeof v !== "object" && typeof v !== "function")) return null;
+  if (v === globalThis) return "Window";
+  if (typeof v === "function") return isPageFunction(v) ? `native ${(v as { name?: string }).name || "function"}` : null;
+  if (typeof EventTarget !== "undefined" && v instanceof EventTarget) return ctorName(v) || "EventTarget";
+  if (typeof Storage !== "undefined" && v instanceof Storage) return "Storage";
+  const name = ctorName(v);
+  return PAGE_CTOR_RE.test(name) ? name : null;
+}
+
+/** Thrown for a step the guest may not take. */
+export class RpcDenied extends Error {}
+
+/**
+ * One guarded property step: `holder[key]`, with `root` the `__bh` object. A root key outside `RPC_ROOTS` reads as
+ * undefined when `__bh` has no such member, and is refused when it has one.
+ */
+export function rpcStep(root: unknown, holder: unknown, key: string, path: string): unknown {
+  if (FORBIDDEN_KEYS.has(key)) throw new RpcDenied(`"${key}" is not reachable from the OBC (in "${path}")`);
+  if (isSecretKey(key)) throw new RpcDenied(`"${key}" looks like a secret and is not reachable from the OBC (in "${path}")`);
+  if (holder === null || holder === undefined || (typeof holder !== "object" && typeof holder !== "function")) {
+    throw new Error(`Cannot read "${key}" of ${String(holder)} in "${path}"`);
+  }
+  const holderTag = pageObjectTag(holder);
+  if (holderTag) throw new RpcDenied(`${holderTag} is a page object, not reachable from the OBC (in "${path}")`);
+  if (holder === root && !RPC_ROOTS.has(key)) {
+    if (key in (root as object)) throw new RpcDenied(`__bh.${key} is not exposed to the OBC`);
+    return undefined;
+  }
+  const v = (holder as Record<string, unknown>)[key];
+  const tag = pageObjectTag(v);
+  if (tag) throw new RpcDenied(`"${path}" is a page object (${tag}), not reachable from the OBC`);
+  return v;
+}
+
+/** A value from the guest with every `__proto__`/`constructor`/`prototype` key dropped (deep, bounded). */
+export function sanitizeIncoming(v: unknown, depth = 0): unknown {
+  if (v === null || typeof v !== "object" || depth > 32) return v;
+  if (Array.isArray(v)) return v.map((x) => sanitizeIncoming(x, depth + 1));
+  const out: Record<string, unknown> = {};
+  for (const k of Object.keys(v)) {
+    if (FORBIDDEN_KEYS.has(k)) continue;
+    out[k] = sanitizeIncoming((v as Record<string, unknown>)[k], depth + 1);
+  }
+  return out;
+}
+
+const KEY_PATTERN_RE = /\bsk-(?:or-v1-|or-|ant-|proj-)?[A-Za-z0-9_-]{20,}/g;
+/** A string with the player's stored keys (OpenRouter, Deepgram) and anything shaped like an API key redacted. */
+function redactString(s: string): string {
+  let out = s.replace(KEY_PATTERN_RE, "[redacted]");
+  for (const k of [store.get("kerr.openrouter.key"), store.get("kerr.deepgram.key")]) {
+    if (k && k.length >= 8 && out.includes(k)) out = out.split(k).join("[redacted]");
+  }
+  return out;
+}
 
 export interface BhRpcRequest {
   id?: string | number;
@@ -58,7 +262,8 @@ export function safeSerialize(val: unknown, maxDepth = 4, maxKeys = 64, maxArr =
   const walk = (v: unknown, depth: number): unknown => {
     if (v === null || v === undefined) return v ?? null;
     const t = typeof v;
-    if (t === "boolean" || t === "string") return t === "string" && (v as string).length > 4000 ? `${(v as string).slice(0, 4000)}…` : v;
+    if (t === "boolean") return v;
+    if (t === "string") return redactString((v as string).length > 4000 ? `${(v as string).slice(0, 4000)}…` : (v as string));
     if (t === "number") return Number.isFinite(v) ? v : String(v);
     if (t === "bigint") return v.toString();
     if (t === "symbol") return String(v);
@@ -68,14 +273,11 @@ export function safeSerialize(val: unknown, maxDepth = 4, maxKeys = 64, maxArr =
     const obj = v as object;
     if (seen.has(obj)) return "[Circular]";
     if (obj instanceof Date) return obj.toISOString();
-    if (obj instanceof Error) return { error: obj.message, name: obj.name };
+    if (obj instanceof Error) return { error: redactString(obj.message), name: obj.name };
     if (typeof Element !== "undefined" && obj instanceof Element) return `[DOM <${obj.tagName.toLowerCase()}>]`;
-    if (typeof EventTarget !== "undefined" && obj instanceof EventTarget && !(obj instanceof Map) && !(obj instanceof Set)) {
-      const ctor = (obj as { constructor?: { name?: string } }).constructor?.name ?? "EventTarget";
-      if (ctor.includes("Canvas") || ctor.includes("GPU") || ctor.includes("Audio") || ctor.includes("Window")) {
-        return `[${ctor}]`;
-      }
-    }
+    // (page objects — Window, DOM, EventTargets, Storage, GPU… — as a tag, never their fields)
+    const pageTag = pageObjectTag(obj);
+    if (pageTag) return `[${pageTag}]`;
     if (ArrayBuffer.isView(obj)) {
       const ta = obj as unknown as { length: number; [i: number]: number };
       const n = Math.min(ta.length ?? 0, 24);
@@ -93,7 +295,9 @@ export function safeSerialize(val: unknown, maxDepth = 4, maxKeys = 64, maxArr =
           out["…"] = `(+${obj.size - maxKeys} more)`;
           break;
         }
-        out[String(k)] = walk(mv, depth - 1);
+        const mk = String(k);
+        if (FORBIDDEN_KEYS.has(mk)) continue;
+        out[mk] = isSecretKey(mk) ? "[redacted]" : walk(mv, depth - 1);
       }
       return out;
     }
@@ -127,6 +331,11 @@ export function safeSerialize(val: unknown, maxDepth = 4, maxKeys = 64, maxArr =
     const lim = Math.min(keys.length, maxKeys);
     for (let i = 0; i < lim; i++) {
       const k = keys[i]!;
+      if (FORBIDDEN_KEYS.has(k)) continue;
+      if (isSecretKey(k)) {
+        out[k] = "[redacted]";
+        continue;
+      }
       try {
         out[k] = walk((obj as Record<string, unknown>)[k], depth - 1);
       } catch {
@@ -139,7 +348,14 @@ export function safeSerialize(val: unknown, maxDepth = 4, maxKeys = 64, maxArr =
   return walk(val, maxDepth);
 }
 
-/** Resolve a dot-separated path (optionally prefixed with `__bh.`) returning parent, key, and value. */
+/** `__bh` as the guest sees it: its `RPC_ROOTS` members only. */
+export function rpcRootView(root: Record<string, unknown>): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  for (const k of RPC_ROOTS) if (k in root) out[k] = root[k];
+  return out;
+}
+
+/** Resolve a dot-separated path (optionally prefixed with `__bh.`) returning parent, key, and value — every step guarded. */
 function resolvePath(
   root: Record<string, unknown>,
   rawPath: string | undefined,
@@ -151,14 +367,19 @@ function resolvePath(
   let parent: Record<string, unknown> | null = null;
   let key = "";
   for (const part of parts) {
-    if (cur === null || cur === undefined || (typeof cur !== "object" && typeof cur !== "function")) {
-      throw new Error(`Cannot read "${part}" of ${String(cur)} in path "${clean}"`);
-    }
     parent = cur as Record<string, unknown>;
     key = part;
-    cur = parent[part];
+    cur = rpcStep(root, parent, part, clean);
   }
   return { parent, key, value: cur };
+}
+
+/** Assign `value` at `parent[key]` (guarded): never a `__bh` root, a forbidden or secret key, nor onto a page object. */
+function assignGuarded(root: Record<string, unknown>, parent: Record<string, unknown> | null, key: string, value: unknown, path: string) {
+  if (!parent || !key || parent === root) throw new RpcDenied(`cannot assign to __bh root ("${path}")`);
+  if (FORBIDDEN_KEYS.has(key) || isSecretKey(key)) throw new RpcDenied(`"${key}" cannot be assigned from the OBC`);
+  if (pageObjectTag(parent)) throw new RpcDenied(`cannot assign onto a page object ("${path}")`);
+  parent[key] = sanitizeIncoming(value);
 }
 
 interface LsEntry {
@@ -250,12 +471,12 @@ function buildCatalog(root: Record<string, unknown>) {
     members.push(rec);
   };
 
-  for (const top of listMembers(root)) {
+  for (const top of listMembers(root, root)) {
     pushEntry(top.name, top);
     if (top.kind !== "obj" || members.length >= MAX_MEMBERS) continue;
     let sub: unknown;
     try {
-      sub = root[top.name];
+      sub = rpcStep(root, root, top.name, top.name);
     } catch {
       continue;
     }
@@ -282,8 +503,9 @@ function buildCatalog(root: Record<string, unknown>) {
   return { members, tools };
 }
 
-function listMembers(target: unknown): LsEntry[] {
+function listMembers(target: unknown, root?: unknown): LsEntry[] {
   if (target === null || target === undefined || typeof target !== "object") return [];
+  if (pageObjectTag(target)) return [];
   const obj = target as Record<string, unknown>;
   const names = new Set<string>();
   for (const k of Object.keys(obj)) names.add(k);
@@ -294,12 +516,18 @@ function listMembers(target: unknown): LsEntry[] {
     }
   }
   const entries: LsEntry[] = [];
-  for (const name of [...names].sort().slice(0, 160)) {
+  const visible = [...names].filter((n) => !FORBIDDEN_KEYS.has(n) && !isSecretKey(n) && (target !== root || RPC_ROOTS.has(n)));
+  for (const name of visible.sort().slice(0, 160)) {
     let val: unknown;
     try {
       val = obj[name];
     } catch {
       entries.push({ name, kind: "null", preview: "[getter error]" });
+      continue;
+    }
+    const tag = pageObjectTag(val);
+    if (tag) {
+      entries.push({ name, kind: "null", preview: `[${tag}] (page object, not reachable)` });
       continue;
     }
     if (val === null || val === undefined) {
@@ -349,18 +577,18 @@ export function handleBhRpcMaybeSync(req: BhRpcRequest): BhRpcResponse | Promise
     switch (req.op) {
       case "ls": {
         const { value } = resolvePath(root, req.path);
-        return { id, ok: true, result: listMembers(value) };
+        return { id, ok: true, result: listMembers(value, root) };
       }
       case "get": {
         const { value } = resolvePath(root, req.path);
         const depth = Math.max(1, Math.min(6, Number(req.depth ?? 3) || 3));
-        return { id, ok: true, result: safeSerialize(value, depth) };
+        return { id, ok: true, result: safeSerialize(value === root ? rpcRootView(root) : value, depth) };
       }
       case "set": {
         if (!req.path) return { id, ok: false, error: "set requires path" };
         const { parent, key } = resolvePath(root, req.path);
-        if (!parent || !key) return { id, ok: false, error: "cannot assign to __bh root" };
-        parent[key] = req.value;
+        assignGuarded(root, parent, key, req.value, req.path);
+        if (!parent) return { id, ok: false, error: "cannot assign to __bh root" };
         if (req.refresh !== false && req.path.replace(/^__bh\.?/, "").startsWith("settings.")) {
           const ref = root.refresh;
           if (typeof ref === "function") (ref as () => void)();
@@ -371,7 +599,7 @@ export function handleBhRpcMaybeSync(req: BhRpcRequest): BhRpcResponse | Promise
         if (!req.path) return { id, ok: false, error: "call requires path" };
         const { parent, value } = resolvePath(root, req.path);
         if (typeof value !== "function") return { id, ok: false, error: `${req.path} is not a function` };
-        const args = Array.isArray(req.args) ? req.args : [];
+        const args = Array.isArray(req.args) ? (sanitizeIncoming(req.args) as unknown[]) : [];
         const depth = Math.max(1, Math.min(6, Number(req.depth ?? 4) || 4));
         const ret = (value as (...a: unknown[]) => unknown).apply(parent ?? root, args);
         if (isPromiseLike(ret)) {
@@ -393,7 +621,7 @@ export function handleBhRpcMaybeSync(req: BhRpcRequest): BhRpcResponse | Promise
         if (!name) return { id, ok: false, error: "tool requires name" };
         const tool = getTarsTools(root).find((t) => t.name === name);
         if (!tool) return { id, ok: false, error: `unknown TARS tool "${name}"` };
-        const chk = checkArgs(tool, (req.toolArgs ?? {}) as Args);
+        const chk = checkArgs(tool, sanitizeIncoming(req.toolArgs ?? {}) as Args);
         if (!chk.ok) return { id, ok: false, error: chk.error };
         const res = tool.run(chk.args, new AbortController().signal);
         if (isPromiseLike(res)) {
@@ -410,14 +638,14 @@ export function handleBhRpcMaybeSync(req: BhRpcRequest): BhRpcResponse | Promise
           .toLowerCase();
         if (!q) return { id, ok: true, result: { paths: [], tools: [] } };
         const paths: { path: string; kind: string; preview: string }[] = [];
-        for (const top of listMembers(root)) {
+        for (const top of listMembers(root, root)) {
           if (top.name.toLowerCase().includes(q)) {
             paths.push({ path: top.name, kind: top.kind, preview: top.preview });
           }
           if (top.kind === "obj" && paths.length < 60) {
             try {
-              const sub = root[top.name];
-              for (const child of listMembers(sub)) {
+              const sub = rpcStep(root, root, top.name, top.name);
+              for (const child of listMembers(sub, root)) {
                 const full = `${top.name}.${child.name}`;
                 if (full.toLowerCase().includes(q)) {
                   paths.push({ path: full, kind: child.kind, preview: child.preview });
@@ -442,7 +670,7 @@ export function handleBhRpcMaybeSync(req: BhRpcRequest): BhRpcResponse | Promise
         // supports bh.foo.bar(1, "x", {a: true})[0]?.baz and `bh.path = value`.
         const depth = Math.max(1, Math.min(6, Number(req.depth ?? 4) || 4));
         return evalSafeChain(root, expr).then(
-          (ret) => ({ id, ok: true, result: safeSerialize(ret, depth) }),
+          (ret) => ({ id, ok: true, result: safeSerialize(ret === root ? rpcRootView(root) : ret, depth) }),
           (e) => ({ id, ok: false, error: e instanceof Error ? e.message : String(e) }),
         );
       }
@@ -558,9 +786,14 @@ function parseArgToken(root: Record<string, unknown>, raw: string): Promise<unkn
     return JSON.parse(s);
   }
   if ((s.startsWith("{") && s.endsWith("}")) || (s.startsWith("[") && s.endsWith("]"))) {
-    return JSON.parse(s);
+    return sanitizeIncoming(JSON.parse(s));
   }
-  return evalSafeChain(root, s);
+  // (a nested chain's value becomes an argument or a key: never a page object, nor `__bh` itself)
+  return Promise.resolve(evalSafeChain(root, s)).then((v) => {
+    const tag = v === root ? "__bh" : pageObjectTag(v);
+    if (tag) throw new RpcDenied(`${tag} cannot be passed as an argument from the OBC`);
+    return v;
+  });
 }
 
 /** Split top-level comma-separated argument list honoring quotes and nested brackets/parens. */
@@ -635,8 +868,8 @@ export async function evalSafeChain(root: Record<string, unknown>, rawExpr: stri
     const rhs = expr.slice(assignIdx + 1).trim();
     const val = await parseArgToken(root, rhs);
     const { parent, key } = resolvePath(root, lhs);
-    if (!parent || !key) throw new Error(`Cannot assign to "${lhs}"`);
-    parent[key] = val;
+    assignGuarded(root, parent, key, val, lhs);
+    if (!parent) throw new Error(`Cannot assign to "${lhs}"`);
     if (lhs.startsWith("settings.") && typeof root.refresh === "function") {
       (root.refresh as () => void)();
     }
@@ -685,7 +918,7 @@ export async function evalSafeChain(root: Record<string, unknown>, rawExpr: stri
         throw new Error(`Cannot index ${String(cur)}`);
       }
       parent = cur;
-      cur = (cur as Record<string, unknown>)[String(keyVal)];
+      cur = rpcStep(root, cur, String(keyVal), expr);
       continue;
     }
 
@@ -726,7 +959,7 @@ export async function evalSafeChain(root: Record<string, unknown>, rawExpr: stri
       throw new Error(`Cannot read "${key}" of ${String(cur)}`);
     }
     parent = cur;
-    cur = (cur as Record<string, unknown>)[key];
+    cur = rpcStep(root, cur, key, expr);
   }
   return cur;
 }

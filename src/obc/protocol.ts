@@ -196,6 +196,7 @@ export function emptyTelemetry(): ObcTelemetry {
     vessel_id: "ranger",
     vessel_kind: "spacecraft",
     body: "earth",
+    units: "metric",
     position: {
       lat_deg: 0,
       lon_deg: 0,

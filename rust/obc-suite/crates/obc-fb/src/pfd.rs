@@ -224,14 +224,20 @@ pub fn render_pfd(fb: &mut Framebuffer, t: &Telemetry, fps: f64, scratch: &mut S
 
     fb.stroke_rect(ai_x0, ai_y0, ai_x1 - ai_x0, ai_y1 - ai_y0, C_BORDER);
 
-    // ── 7. Left Airspeed Tape (kt for aircraft, m/s for spacecraft) ──
+    // ── 7. Left Airspeed Tape (aircraft: the player's units, m/s by default or kt; spacecraft: m/s) ──
     let is_ac = t.is_aircraft();
+    let u = t.unit_sys();
+    let ac_metric = !is_ac || u.is_metric();
     let spd_val = if is_ac {
-        t.tas_knots()
+        u.spd(t.flight.true_airspeed_mps)
     } else {
         t.flight.true_airspeed_mps
     };
-    let spd_step = if is_ac { 20.0 } else { 500.0 };
+    let spd_step = match (is_ac, ac_metric) {
+        (false, _) => 500.0,
+        (true, true) => 10.0,
+        (true, false) => 20.0,
+    };
     fb.fill_rect(4, ai_y0, tape_w, ai_y1 - ai_y0, C_PANEL);
     fb.stroke_rect(4, ai_y0, tape_w, ai_y1 - ai_y0, C_BORDER);
     let base_s = (spd_val / spd_step).floor() * spd_step;
@@ -241,13 +247,14 @@ pub fn render_pfd(fb: &mut Framebuffer, t: &Telemetry, fps: f64, scratch: &mut S
             continue;
         }
         let y = cy - ((v - spd_val) / spd_step * 34.0).round() as i32;
-        if y > ai_y0 + 8 && y < ai_y1 - 8 {
+        if y > ai_y0 + 16 && y < ai_y1 - 8 {
             fb.hline(4 + tape_w - 10, 4 + tape_w - 2, y, C_WHITE);
             scratch.clear();
             let _ = write!(scratch, "{:.0}", v);
             fb.draw_text(10, y - 3, scratch, C_DIM, 1);
         }
     }
+    fb.draw_text(10, ai_y0 + 4, if is_ac { u.spd_name() } else { "M/S" }, C_CYAN, 1);
     fb.fill_rect(6, cy - 12, tape_w - 4, 24, C_BG);
     fb.stroke_rect(6, cy - 12, tape_w - 4, 24, C_CYAN);
     scratch.clear();
@@ -257,13 +264,17 @@ pub fn render_pfd(fb: &mut Framebuffer, t: &Telemetry, fps: f64, scratch: &mut S
     let _ = write!(scratch, "M{:.2}", t.flight.mach);
     fb.draw_text(12, ai_y1 - 14, scratch, C_CYAN, 1);
 
-    // ── 8. Right Altitude Tape (ft for aircraft, km for spacecraft) + VSI ──
+    // ── 8. Right Altitude Tape (aircraft: m by default or ft; spacecraft: km) + VSI ──
     let alt_val = if is_ac {
-        t.alt_msl_feet()
+        u.alt(t.position.altitude_msl_m)
     } else {
         t.position.altitude_msl_m * 1e-3
     };
-    let alt_step = if is_ac { 500.0 } else { 50.0 };
+    let alt_step = match (is_ac, ac_metric) {
+        (false, _) => 50.0,
+        (true, true) => 100.0,
+        (true, false) => 500.0,
+    };
     let alt_x = w - tape_w - 4;
     fb.fill_rect(alt_x, ai_y0, tape_w, ai_y1 - ai_y0, C_PANEL);
     fb.stroke_rect(alt_x, ai_y0, tape_w, ai_y1 - ai_y0, C_BORDER);
@@ -271,24 +282,26 @@ pub fn render_pfd(fb: &mut Framebuffer, t: &Telemetry, fps: f64, scratch: &mut S
     for k in -4..=4 {
         let v = base_a + f64::from(k) * alt_step;
         let y = cy - ((v - alt_val) / alt_step * 34.0).round() as i32;
-        if y > ai_y0 + 8 && y < ai_y1 - 8 {
+        if y > ai_y0 + 16 && y < ai_y1 - 8 {
             fb.hline(alt_x + 2, alt_x + 10, y, C_WHITE);
             scratch.clear();
             let _ = write!(scratch, "{:.0}", v);
             fb.draw_text(alt_x + 14, y - 3, scratch, C_DIM, 1);
         }
     }
+    fb.draw_text(alt_x + 14, ai_y0 + 4, if is_ac { u.alt_name() } else { "KM" }, C_CYAN, 1);
     fb.fill_rect(alt_x + 2, cy - 12, tape_w - 4, 24, C_BG);
     fb.stroke_rect(alt_x + 2, cy - 12, tape_w - 4, 24, C_CYAN);
     scratch.clear();
     let _ = write!(scratch, "{:>6.0}", alt_val);
     fb.draw_text(alt_x + 6, cy - 4, scratch, C_GREEN, 1);
     scratch.clear();
-    let _ = write!(
-        scratch,
-        "VS{:+.0}",
-        if is_ac { t.vs_fpm() * 0.01 } else { t.flight.vertical_speed_mps }
-    );
+    // Vertical speed: m/s (metric, one decimal) or hundreds of ft/min (imperial, as on an airliner's VSI)
+    if is_ac && !ac_metric {
+        let _ = write!(scratch, "VS{:+.0}", u.vs(t.flight.vertical_speed_mps) * 0.01);
+    } else {
+        let _ = write!(scratch, "VS{:+.1}", t.flight.vertical_speed_mps);
+    }
     fb.draw_text(alt_x + 6, ai_y1 - 14, scratch, C_AMBER, 1);
 
     // ── 9. Bottom Scrolling Heading Compass Tape + Boxed HDG ──
@@ -345,11 +358,12 @@ pub fn render_pfd(fb: &mut Framebuffer, t: &Telemetry, fps: f64, scratch: &mut S
     scratch.clear();
     let _ = write!(
         scratch,
-        "P {:+5.1} R {:+5.1} G {:+4.1} AGL {:5.0}M FPS {:2.0} [Q]",
+        "P {:+5.1} R {:+5.1} G {:+4.1} AGL {:5.0}{} FPS {:2.0} [Q]",
         pitch_deg,
         roll_deg,
         t.flight.g_load,
-        t.position.height_over_ground_m,
+        u.alt(t.position.height_over_ground_m),
+        u.alt_name(),
         fps
     );
     fb.draw_text(8, foot_y + 4, scratch, C_WHITE, 1);

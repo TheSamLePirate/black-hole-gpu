@@ -23,8 +23,10 @@ The browser runs Linux `aarch64` inside a dedicated Web Worker (`Unkernel`) and 
 | `/obc/status.json` | `0444` | Host → Guest | OBC runtime status (`phase`, `distro`, `memoryMiB`, `fbActive`, `fbWidth`, `fbHeight`, `fbFps`, `wispUrl`, `commandsHandled`) |
 | `/obc/cmd` | `0666` | Guest → Host | Fast flight-control command sink (newline-delimited JSON, validated & applied immediately) |
 | `/obc/last_result.json` | `0444` | Host → Guest | Result of the most recent `/obc/cmd` write (`{"ok":true,"msg":"..."}`) |
-| `/obc/rpc_req` | `0666` | Guest → Host | Universal `__bh` & TARS RPC request (`BhRpcRequest` JSON) |
-| `/obc/rpc_res` | `0444` | Host → Guest | Universal `__bh` & TARS RPC response (`BhRpcResponse` JSON, atomic rename) |
+| `/obc/rpc/<id>.req` | new file | Guest → Host | Keyed `__bh` & TARS RPC request (`BhRpcRequest`, one JSON line ending with `\n`; `<id>` = `<lang>-<pid>-<nonce>-<seq>`) |
+| `/obc/rpc/<id>.res` | `0444` | Host → Guest | Its reply (`BhRpcResponse`, atomic rename); delete it once read (swept after 60 s) |
+| `/obc/rpc_req` | `0666` | Guest → Host | Legacy single-slot request (older hosts without `/obc/rpc`) |
+| `/obc/rpc_res` | `0444` | Host → Guest | Every reply, last one wins (fallback; match your `id`) |
 | `/obc/bin/obc-rs` | `0755` | Read-only | Native static `aarch64` Rust multi-call binary (12 Ratatui TUIs & `/dev/fb0` apps) |
 | `/obc/scripts/*` | `0755` | Read-only | All 28 built-in OBC CLI/TUI/FB0 wrapper & utility scripts |
 | `/obc/lib/*` | `0644` | Read-only | Zero-dependency SDKs: `obc.py` (`PYTHONPATH`), `obc.mjs` (`NODE_PATH`), `bh-cli.mjs` |
@@ -49,6 +51,7 @@ The browser runs Linux `aarch64` inside a dedicated Web Worker (`Unkernel`) and 
   "vessel_id": "f35",
   "vessel_kind": "aircraft",
   "body": "earth",
+  "units": "metric",
   "position": {
     "lat_deg": 48.9694,
     "lon_deg": 2.4414,
@@ -107,7 +110,9 @@ The browser runs Linux `aarch64` inside a dedicated Web Worker (`Unkernel`) and 
 ```
 
 - `vessel_id`: `"ranger"`, `"f35"`, `"a320"`, `"shuttle"`, `"capsule"`, etc.
-- `vessel_kind`: `"aircraft"` or `"spacecraft"`.
+- `vessel_kind`: `"aircraft"`, `"spacecraft"` or `"free"`.
+- `units`: the player's display units, `"metric"` (default: m, m/s, km) or `"imperial"` (ft, kt, NM, ft/min). Show heights, speeds and distances in them (`state.units` — an `obc.Units` — in Python, `unitsOf(tel.units)` in Node, `Telemetry::unit_sys()` in Rust; `OBC_UNITS=imperial` forces one program). Every other field stays SI.
+- The field list is `TELEMETRY_FIELDS` in `obc.py` / `obc.mjs` (checked against the host type by a contract test).
 - `orbit`: `null` when not in a Keplerian orbit; object when orbiting a body.
 - `nav.target` & `nav.runway`: nullable objects.
 

@@ -110,7 +110,7 @@ impl TuiApp for FmcApp {
                 .block(Block::default().title(" ILS GLIDESLOPE ").borders(Borders::ALL))
                 .gauge_style(Style::default().fg(C_CYN))
                 .percent(gs_pct)
-                .label(rwy.map_or_else(|| "STANDBY".into(), |r| format!("DME {:.1} NM · {:+.2}°", r.dist_m * 0.000_539_957, r.gs_deg))),
+                .label(rwy.map_or_else(|| "STANDBY".into(), |r| format!("DME {} · {:+.2}°", t.unit_sys().f_dist(r.dist_m, 1), r.gs_deg))),
             top_cols[1],
         );
 

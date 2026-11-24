@@ -10,13 +10,16 @@
 
 import "@xterm/xterm/css/xterm.css";
 import "./obc-console.css";
+import { t, tf } from "../i18n";
 import { drawObcSurface } from "../obc/fb-renderer";
+import { KeyHoldGate } from "../obc/held-keys";
+import { askIsolationForSmp } from "../obc/isolation";
 import { normalizeDistro, type ObcRuntime } from "../obc/runtime";
 import { OBC_SCRIPTS } from "../obc/scripts-catalog";
 import { TERMINAL_FULL_SANE_SEQ, TERMINAL_MOUSE_RESET_SEQ, TerminalMouseGuard } from "../obc/term-mouse";
 import type { ObcTheme, ObcViewMode, ObcWindowBounds } from "../obc/types";
 import { store } from "../util/storage";
-import { ObcMachineManager } from "./obc-manager";
+import { ObcMachineManager, obcPhaseLabel } from "./obc-manager";
 
 const WIN_STORAGE_KEY = "kerr.obc.win";
 export const OBC_MIN_WIDTH = 560;
@@ -159,6 +162,7 @@ export class ObcConsoleOverlay {
   private fbRaf: number | null = null;
   private lastSyncedPhase = "";
   private lastFbDrawRev = -1;
+  private keyGate = new KeyHoldGate();
 
   constructor(private runtime: ObcRuntime) {
     this.el = document.createElement("div");
@@ -202,7 +206,7 @@ export class ObcConsoleOverlay {
     const grip = document.createElement("span");
     grip.className = "obc-drag-grip";
     grip.textContent = "⋮⋮";
-    grip.title = "Drag to move · Double-click to maximize";
+    grip.title = t("Drag to move · Double-click to maximize");
     this.ledEl = document.createElement("span");
     this.ledEl.className = "obc-led";
     this.ledEl.dataset.phase = "off";
@@ -210,7 +214,7 @@ export class ObcConsoleOverlay {
     nameSpan.textContent = "LINUX OBC · UNKERNEL AARCH64";
     this.metaEl = document.createElement("span");
     this.metaEl.className = "obc-meta";
-    this.metaEl.textContent = "STANDBY";
+    this.metaEl.textContent = obcPhaseLabel("off");
     title.append(grip, this.ledEl, nameSpan, this.metaEl);
 
     const cfg = this.runtime.getConfig();
@@ -223,7 +227,7 @@ export class ObcConsoleOverlay {
       cfg.distro,
       "obc-distro-quick",
     );
-    this.quickDistroSel.title = "Switch Linux distribution (Alpine 3.24 musl or Debian 13 Trixie glibc)";
+    this.quickDistroSel.title = t("Switch Linux distribution (Alpine 3.24 musl or Debian 13 Trixie glibc)");
     this.quickDistroSel.onchange = () => {
       const d = normalizeDistro(this.quickDistroSel.value);
       this.manager.distroSel.value = d;
@@ -237,7 +241,7 @@ export class ObcConsoleOverlay {
 
     const modes: [ObcViewMode, string][] = [
       ["term", "TTY"],
-      ["split", "Split"],
+      ["split", t("Split")],
       ["fb", "/dev/fb0"],
     ];
     for (const [m, lbl] of modes) {
@@ -254,41 +258,41 @@ export class ObcConsoleOverlay {
     }
 
     this.suspendBtn = mkBtn(
-      "Suspend",
+      t("Suspend"),
       () => {
         const st = this.runtime.status();
         if (st.phase === "suspended" || st.hasSnapshot) void this.runtime.resume();
         else void this.runtime.suspend();
       },
-      { testid: "obc-suspend", title: "Suspend VM to in-memory snapshot or resume instantly" },
+      { testid: "obc-suspend", title: t("Suspend VM to in-memory snapshot or resume instantly") },
     );
 
-    this.edBtn = mkBtn("Editor", () => this.toggleEditor(), {
+    this.edBtn = mkBtn(t("Editor"), () => this.toggleEditor(), {
       testid: "obc-editor-toggle",
-      title: "Built-in script editor for /home/pilot/*",
+      title: t("Built-in script editor for /home/pilot/*"),
     });
 
-    this.optBtn = mkBtn("Manager", () => this.toggleManager(), {
+    this.optBtn = mkBtn(t("Manager"), () => this.toggleManager(), {
       testid: "obc-options-toggle",
-      title: "Full Linux Machine Manager: Monitor, Unkernel Hardware, Persistent Disk, Wisp, Toolchains, Game & Logs",
+      title: t("Full Linux Machine Manager: Monitor, Unkernel Hardware, Persistent Disk, Wisp, Toolchains, Game & Logs"),
     });
 
     this.maxBtn = mkBtn("⛶", () => this.toggleMaximize(), {
       testid: "obc-maximize",
-      title: "Maximize / Restore OBC window",
+      title: t("Maximize / Restore OBC window"),
     });
 
     actions.append(
-      mkBtn("Boot", () => void this.runtime.boot(), { testid: "obc-boot" }),
+      mkBtn(t("Boot"), () => void this.runtime.boot(), { testid: "obc-boot" }),
       this.suspendBtn,
-      mkBtn("Reboot", () => void this.runtime.reboot(), { testid: "obc-reboot" }),
+      mkBtn(t("Reboot"), () => void this.runtime.reboot(), { testid: "obc-reboot" }),
       this.edBtn,
       this.optBtn,
-      mkBtn("PNG", () => void this.downloadFbPng(), { testid: "obc-png", title: "Export current /dev/fb0 frame as PNG" }),
-      mkBtn("Stop", () => void this.runtime.stop(), { cls: "danger", testid: "obc-stop" }),
-      mkBtn("⌖", () => this.resetWindowBounds(), { testid: "obc-dock-reset", title: "Reset window position & size" }),
+      mkBtn("PNG", () => void this.downloadFbPng(), { testid: "obc-png", title: t("Export current /dev/fb0 frame as PNG") }),
+      mkBtn(t("Stop"), () => void this.runtime.stop(), { cls: "danger", testid: "obc-stop" }),
+      mkBtn("⌖", () => this.resetWindowBounds(), { testid: "obc-dock-reset", title: t("Reset window position & size") }),
       this.maxBtn,
-      mkBtn("✕", () => this.close(), { testid: "obc-close", title: "Close (Ctrl+\\ or F11)" }),
+      mkBtn("✕", () => this.close(), { testid: "obc-close", title: t("Close (Ctrl+\\ or F11)") }),
     );
     bar.append(title, actions);
     this.wireDragBar(bar);
@@ -333,7 +337,7 @@ export class ObcConsoleOverlay {
           void this.runtime.installToolchain("python");
           this.focusActiveInput();
         },
-        { testid: "obc-install-python", title: "Install Python 3 & pip (Alpine & Debian)" },
+        { testid: "obc-install-python", title: t("Install Python 3 & pip (Alpine & Debian)") },
       ),
       mkBtn(
         "+Node",
@@ -341,7 +345,7 @@ export class ObcConsoleOverlay {
           void this.runtime.installToolchain("node");
           this.focusActiveInput();
         },
-        { testid: "obc-install-node", title: "Install Node.js & npm (Alpine & Debian)" },
+        { testid: "obc-install-node", title: t("Install Node.js & npm (Alpine & Debian)") },
       ),
       mkBtn(
         "+Bun",
@@ -349,7 +353,7 @@ export class ObcConsoleOverlay {
           void this.runtime.installToolchain("bun");
           this.focusActiveInput();
         },
-        { testid: "obc-install-bun", title: "Install Bun & bunx (Alpine & Debian)" },
+        { testid: "obc-install-bun", title: t("Install Bun & bunx (Alpine & Debian)") },
       ),
       mkBtn(
         "+Rust",
@@ -357,7 +361,7 @@ export class ObcConsoleOverlay {
           void this.runtime.installToolchain("rust");
           this.focusActiveInput();
         },
-        { testid: "obc-install-rust", title: "Install Rust (rustc + cargo) on Alpine or Debian" },
+        { testid: "obc-install-rust", title: t("Install Rust (rustc + cargo) on Alpine or Debian") },
       ),
       mkBtn(
         "+Pi",
@@ -365,7 +369,7 @@ export class ObcConsoleOverlay {
           void this.runtime.installToolchain("pi");
           this.focusActiveInput();
         },
-        { testid: "obc-install-pi", title: "Install @earendil-works/pi-coding-agent (pi) via npm" },
+        { testid: "obc-install-pi", title: t("Install @earendil-works/pi-coding-agent (pi) via npm") },
       ),
       mkBtn(
         "+Claude",
@@ -373,7 +377,7 @@ export class ObcConsoleOverlay {
           void this.runtime.installToolchain("claude");
           this.focusActiveInput();
         },
-        { testid: "obc-install-claude", title: "Install Claude Code into ~/.local/bin" },
+        { testid: "obc-install-claude", title: t("Install Claude Code into ~/.local/bin") },
       ),
       mkBtn(
         "+All",
@@ -381,7 +385,7 @@ export class ObcConsoleOverlay {
           void this.runtime.installToolchain("all");
           this.focusActiveInput();
         },
-        { testid: "obc-install-all", title: "Install Python, pip, Node, npm, Bun, Pi & Claude Code" },
+        { testid: "obc-install-all", title: t("Install Python, pip, Node, npm, Bun, Pi & Claude Code") },
       ),
     );
 
@@ -407,7 +411,11 @@ export class ObcConsoleOverlay {
 
     const edTop = document.createElement("div");
     edTop.className = "obc-drawer-row";
-    this.edFileSel = mkSelect([["/home/pilot/custom.sh", "/home/pilot/custom.sh (new)"]], "/home/pilot/custom.sh", "obc-ed-select");
+    this.edFileSel = mkSelect(
+      [["/home/pilot/custom.sh", tf("{0} (new)", "/home/pilot/custom.sh")]],
+      "/home/pilot/custom.sh",
+      "obc-ed-select",
+    );
     this.edPathInput = document.createElement("input");
     this.edPathInput.className = "obc-wisp-input";
     this.edPathInput.dataset.testid = "obc-ed-path";
@@ -424,10 +432,10 @@ export class ObcConsoleOverlay {
       }
     };
 
-    const edRefresh = mkBtn("Refresh", () => void this.refreshEditorFiles(), { testid: "obc-ed-refresh" });
-    const edLoad = mkBtn("Load", () => void this.loadEditorFile(this.edPathInput.value), { testid: "obc-ed-load" });
-    const edSave = mkBtn("Save", () => void this.saveEditorFile(false), { testid: "obc-ed-save" });
-    const edRun = mkBtn("Save & Run", () => void this.saveEditorFile(true), { cls: "on", testid: "obc-ed-run" });
+    const edRefresh = mkBtn(t("Refresh"), () => void this.refreshEditorFiles(), { testid: "obc-ed-refresh" });
+    const edLoad = mkBtn(t("Load file"), () => void this.loadEditorFile(this.edPathInput.value), { testid: "obc-ed-load" });
+    const edSave = mkBtn(t("Save"), () => void this.saveEditorFile(false), { testid: "obc-ed-save" });
+    const edRun = mkBtn(t("Save & Run"), () => void this.saveEditorFile(true), { cls: "on", testid: "obc-ed-run" });
 
     edTop.append(this.edFileSel, this.edPathInput, edRefresh, edLoad, edSave, edRun, this.edStatusEl);
     this.edText = document.createElement("textarea");
@@ -497,19 +505,19 @@ export class ObcConsoleOverlay {
     tabAdd.append(
       mkBtn("+ Shell", () => openWarmTab("Shell"), {
         testid: "obc-tab-add-shell",
-        title: "Open a new persistent Linux login shell PTY tab",
+        title: t("Open a new persistent Linux login shell PTY tab"),
       }),
       mkBtn("+ Claude", () => openWarmTab("Claude", "claude"), {
         testid: "obc-tab-add-claude",
-        title: "Launch Claude Code in a dedicated tab so it stays warm (0 cold restarts!)",
+        title: t("Launch Claude Code in a dedicated tab so it stays warm (0 cold restarts!)"),
       }),
       mkBtn("+ Pi", () => openWarmTab("Pi", "pi"), {
         testid: "obc-tab-add-pi",
-        title: "Launch Pi coding agent in a dedicated tab so it stays warm (0 cold restarts!)",
+        title: t("Launch Pi coding agent in a dedicated tab so it stays warm (0 cold restarts!)"),
       }),
       mkBtn("+ AI", () => openWarmTab("AI·Fast", "ai"), {
         testid: "obc-tab-add-ai",
-        title: "Open instant (<5ms) native browser-host AI REPL in its own tab",
+        title: t("Open instant (<5ms) native browser-host AI REPL in its own tab"),
       }),
     );
     this.tabBarEl.append(this.tabListEl, tabAdd);
@@ -532,6 +540,13 @@ export class ObcConsoleOverlay {
     // Capture-phase window keyboard router while OBC console is open
     this.onWinKeyDown = (e: KeyboardEvent) => {
       if (!this.isOpen || isToggleKey(e)) return;
+      // (the auto-repeat of a key held before the console opened — a flight key held through the F11 —: still the
+      // craft's, which holds it; not typed into the terminal)
+      if (!this.keyGate.accept(e)) {
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        return;
+      }
       if (isDrawerInput(e.target)) {
         e.stopPropagation();
         return;
@@ -550,14 +565,9 @@ export class ObcConsoleOverlay {
         if (!this.termWrap.hidden) this.activeXterm()?.term.focus();
       }
     };
-    this.onWinKeyUp = (e: KeyboardEvent) => {
-      if (!this.isOpen || isToggleKey(e)) return;
-      if (isDrawerInput(e.target)) {
-        e.stopPropagation();
-        return;
-      }
-      e.stopImmediatePropagation();
-    };
+    // (a key let go: noted, never stopped — controls.ts must see every release, or a flight key held while the
+    // console opened stays pressed; a keyup has no default action to swallow)
+    this.onWinKeyUp = (e: KeyboardEvent) => this.keyGate.release(e);
     window.addEventListener("keydown", this.onWinKeyDown, true);
     window.addEventListener("keyup", this.onWinKeyUp, true);
 
@@ -802,6 +812,7 @@ export class ObcConsoleOverlay {
   }
 
   private show(notifyRuntime: boolean) {
+    if (this.el.hidden) this.keyGate.reset();
     this.el.hidden = false;
     if (notifyRuntime) this.runtime.consoleOpen = true;
     if (this.winBounds) this.applyWindowBounds(this.winBounds, false);
@@ -861,21 +872,21 @@ export class ObcConsoleOverlay {
       o.textContent = lbl;
       this.edFileSel.append(o);
     };
-    addOpt("/home/pilot/custom.sh", "/home/pilot/custom.sh (new)");
+    addOpt("/home/pilot/custom.sh", tf("{0} (new)", "/home/pilot/custom.sh"));
     for (const f of pilotFiles) addOpt(`/home/pilot/${f}`, `/home/pilot/${f}`);
-    for (const f of sysScripts) addOpt(`/obc/scripts/${f}`, `/obc/scripts/${f} (template)`);
+    for (const f of sysScripts) addOpt(`/obc/scripts/${f}`, tf("{0} (template)", `/obc/scripts/${f}`));
   }
 
   private async loadEditorFile(path: string) {
-    this.edStatusEl.textContent = "Loading…";
+    this.edStatusEl.textContent = t("Loading…");
     const text = await this.runtime.readGuestFile(path);
     if (text === null) {
-      this.edStatusEl.textContent = `New file (${path})`;
+      this.edStatusEl.textContent = tf("New file ({0})", path);
       this.edStatusEl.dataset.ok = "";
       return;
     }
     this.edText.value = text;
-    this.edStatusEl.textContent = `Loaded ${path} (${text.length} B)`;
+    this.edStatusEl.textContent = tf("Loaded {0} ({1} B)", path, text.length);
     this.edStatusEl.dataset.ok = "1";
   }
 
@@ -1072,7 +1083,7 @@ export class ObcConsoleOverlay {
         closeBtn.className = "obc-tab-close";
         closeBtn.dataset.testid = `obc-tab-close-${tab.id}`;
         closeBtn.textContent = "×";
-        closeBtn.title = `Close ${tab.title}`;
+        closeBtn.title = tf("Close {0}", tab.title);
         closeBtn.onclick = (e) => {
           e.stopPropagation();
           void this.runtime.closeTab(tab.id);
@@ -1103,7 +1114,7 @@ export class ObcConsoleOverlay {
     this.el.dataset.theme = st.config.theme === "auto" ? "interstellar" : st.config.theme;
     this.applyVisualConfig();
 
-    const parts: string[] = [st.phase.toUpperCase(), st.distro.toUpperCase()];
+    const parts: string[] = [obcPhaseLabel(st.phase), st.distro.toUpperCase()];
     if (st.bootMs !== null) parts.push(`${st.bootMs}ms`);
     parts.push(st.memoryMiB >= 1024 && st.memoryMiB % 1024 === 0 ? `${st.memoryMiB / 1024}GiB` : `${st.memoryMiB}MiB`);
     const activeCpus = this.runtime.cpusActive;
@@ -1119,7 +1130,7 @@ export class ObcConsoleOverlay {
     this.metaEl.textContent = parts.join(" · ");
     if (this.quickDistroSel.value !== st.config.distro) this.quickDistroSel.value = st.config.distro;
 
-    this.suspendBtn.textContent = st.phase === "suspended" || st.hasSnapshot ? "Resume" : "Suspend";
+    this.suspendBtn.textContent = st.phase === "suspended" || st.hasSnapshot ? t("Resume") : t("Suspend");
     this.suspendBtn.classList.toggle("on", st.phase === "suspended" || st.hasSnapshot);
 
     const effectiveMode: ObcViewMode = st.fbActive && st.viewMode === "term" ? "split" : st.viewMode;
@@ -1135,6 +1146,9 @@ export class ObcConsoleOverlay {
       this.lastFbDrawRev = -1;
     }
     const becameReady = st.phase === "ready" && this.lastSyncedPhase !== "ready";
+    // (the OBC booted with more than one vCPU in a page not cross-origin isolated: isolation asked for from the next load —
+    // once, never against the player's "no"; src/obc/isolation.ts)
+    if (st.phase === "booting" && this.lastSyncedPhase !== "booting") askIsolationForSmp(st.config.cpus);
     this.lastSyncedPhase = st.phase;
     this.refitXterm(becameReady);
   }

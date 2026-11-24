@@ -3,8 +3,13 @@
 // Ranger/Lander/Endurance MFD OBC), keyboard and mouse inputs are captured directly into that screen
 // (Linux OBC terminal / /dev/fb0 pointer / A320 MCDU) while suppressing flight shortcuts and double-click
 // camera resets until the pilot clicks outside the screen or presses Shift+Esc / Alt+Esc.
+//
+// Key releases are never stopped (controls.ts must see every keyup, or a flight key held through the click stays
+// pressed), and while the Linux OBC is still booting the keys keep flying the craft — the badge says so.
 
+import { t, tf } from "../i18n";
 import { keyEventToAnsi } from "../ui/obc-console";
+import { KeyHoldGate } from "./held-keys";
 import type { ObcRuntime } from "./runtime";
 
 export type CockpitScreenTargetKind = "obc" | "mcdu";
@@ -26,10 +31,16 @@ export interface McduCaptureLike {
 }
 
 let activeScreenCapture = false;
+/** Whether the captured screen takes the keys now (an OBC still booting does not: they fly the craft). */
+let captureOwnsKeys: () => boolean = () => true;
 
-/** Global fast predicate checked by `isTyping(e)` so flight keys never fire while a 3D screen is captured. */
+/**
+ * Global fast predicate checked by `isTyping(e)` so flight keys never fire while a 3D screen takes the keyboard:
+ * captured, and able to use them (an MCDU; an OBC ready or drawing /dev/fb0) — an OBC still booting leaves them
+ * to the flight rather than swallow them.
+ */
 export function isCockpitScreenCaptured(): boolean {
-  return activeScreenCapture;
+  return activeScreenCapture && captureOwnsKeys();
 }
 
 /** Pure helper: whether double-click camera reset must be suppressed on the 3D canvas. */
@@ -74,6 +85,9 @@ export class CockpitScreenCapture {
   private lastScreenHitAt = -Infinity;
   private badgeEl: HTMLElement | null = null;
   private badgeTextEl: HTMLElement | null = null;
+  private badgeBtnEl: HTMLButtonElement | null = null;
+  private badgeTimer: ReturnType<typeof setInterval> | null = null;
+  private keyGate = new KeyHoldGate();
   private onKeyDownBound: (e: KeyboardEvent) => void;
   private onKeyUpBound: (e: KeyboardEvent) => void;
 
@@ -107,11 +121,26 @@ export class CockpitScreenCapture {
     return performance.now() - this.lastScreenHitAt < windowMs;
   }
 
+  /**
+   * Whether the captured screen takes the keys now: an MCDU always; an OBC once its Linux is ready (or its
+   * /dev/fb0 drawn) — before, the keys keep flying the craft instead of being swallowed.
+   */
+  ownsKeys(): boolean {
+    if (!this.focus) return false;
+    if (this.focus.kind === "mcdu") return true;
+    const st = this.obc.status();
+    return st.phase === "ready" || Boolean(st.fbActive);
+  }
+
   /** Capture keyboard & mouse input into the given 3D cockpit screen. */
   attach(target: CockpitScreenFocus) {
     this.markScreenHit();
+    const again = this.focus?.id === target.id;
     this.focus = { ...target };
     activeScreenCapture = true;
+    captureOwnsKeys = () => this.ownsKeys();
+    // (a key held through the click — a flight key — is not the screen's to type: only those pressed from now on)
+    if (!again) this.keyGate.reset();
     if (target.kind === "obc" && this.obc.status().phase === "off") {
       void this.obc.boot();
     }
@@ -123,6 +152,7 @@ export class CockpitScreenCapture {
     if (!this.focus && !activeScreenCapture) return;
     this.focus = null;
     activeScreenCapture = false;
+    captureOwnsKeys = () => true;
     this.renderBadge();
   }
 
@@ -175,8 +205,15 @@ export class CockpitScreenCapture {
       return;
     }
     if (e.metaKey) return;
+    // (the auto-repeat of a key held before the capture — a flight key —: the craft's, not typed on the screen)
+    if (!this.keyGate.accept(e)) return;
 
     if (this.focus.kind === "obc") {
+      // (Linux still booting: nothing to type into — the keys go on flying the craft, the badge says so)
+      if (!this.ownsKeys()) {
+        this.renderBadge();
+        return;
+      }
       const seq = keyEventToAnsi(e);
       if (seq !== null) {
         e.preventDefault();
@@ -226,10 +263,10 @@ export class CockpitScreenCapture {
     }
   }
 
+  /** A key let go: noted, never stopped — controls.ts (and every held-key handler) must see each release, or a
+   *  flight key held through the click or the F11 stays pressed (a keyup has no default action to swallow). */
   private handleKeyUp(e: KeyboardEvent) {
-    if (!this.focus || this.isHudConsoleOpen() || isObcConsoleToggleKey(e) || e.metaKey) return;
-    e.stopPropagation();
-    e.stopImmediatePropagation();
+    this.keyGate.release(e);
   }
 
   private ensureBadge() {
@@ -247,7 +284,7 @@ export class CockpitScreenCapture {
     btn.type = "button";
     btn.className = "obc-scb-btn";
     btn.dataset.testid = "obc-screen-capture-release";
-    btn.textContent = "Release";
+    btn.textContent = t("Release");
     btn.addEventListener("pointerdown", (ev) => ev.stopPropagation());
     btn.addEventListener("click", (ev) => {
       ev.stopPropagation();
@@ -258,9 +295,22 @@ export class CockpitScreenCapture {
     document.body.append(el);
     this.badgeEl = el;
     this.badgeTextEl = text;
+    this.badgeBtnEl = btn;
+  }
+
+  /** While an OBC is captured but does not take the keys yet, the badge is redrawn until it does (then the timer stops). */
+  private syncBadgeTimer() {
+    const waiting = this.focus?.kind === "obc" && !this.ownsKeys();
+    if (waiting && !this.badgeTimer && typeof window !== "undefined") {
+      this.badgeTimer = setInterval(() => this.renderBadge(), 500);
+    } else if (!waiting && this.badgeTimer) {
+      clearInterval(this.badgeTimer);
+      this.badgeTimer = null;
+    }
   }
 
   private renderBadge() {
+    this.syncBadgeTimer();
     if (typeof document === "undefined") return;
     this.ensureBadge();
     if (!this.badgeEl || !this.badgeTextEl) return;
@@ -268,13 +318,21 @@ export class CockpitScreenCapture {
       this.badgeEl.style.display = "none";
       return;
     }
-    const modeHint = this.focus.kind === "obc" ? "TTY / Arrows / Mouse" : "MCDU Keyboard";
-    this.badgeTextEl.textContent = `${this.focus.label} · ${modeHint} captured · Click outside or Shift+Esc`;
+    const owns = this.ownsKeys();
+    this.badgeEl.dataset.state = owns ? "captured" : "waiting";
+    if (this.badgeBtnEl) this.badgeBtnEl.textContent = t("Release");
+    this.badgeTextEl.textContent = !owns
+      ? tf("{0} · Linux starting: the keys still fly the craft · Click outside or Shift+Esc", this.focus.label)
+      : this.focus.kind === "obc"
+        ? tf("{0} · terminal, arrows and mouse captured · Click outside or Shift+Esc", this.focus.label)
+        : tf("{0} · MCDU keyboard captured · Click outside or Shift+Esc", this.focus.label);
     this.badgeEl.style.display = "flex";
   }
 
   dispose() {
     this.release();
+    if (this.badgeTimer) clearInterval(this.badgeTimer);
+    this.badgeTimer = null;
     if (typeof window !== "undefined") {
       window.removeEventListener("keydown", this.onKeyDownBound, true);
       window.removeEventListener("keyup", this.onKeyUpBound, true);

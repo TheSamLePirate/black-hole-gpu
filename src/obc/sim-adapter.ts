@@ -12,6 +12,7 @@ import type { Simulation } from "../sim";
 import { geoidDeg } from "../system/geoid-grid";
 import { bodyFixedOf, heightOverGround } from "../system/our-surface";
 import { M_SECONDS } from "../system/solar";
+import { unitsFor } from "../ui/unitsys";
 import { isAircraft, type VesselId } from "../vessels";
 import type { ObcHostAdapter } from "./bridge";
 import type { ObcCommand, ObcCommandResult, ObcTelemetry } from "./types";
@@ -123,6 +124,7 @@ export function createSimObcAdapter(d: SimObcDeps): ObcHostAdapter {
         vessel_id: vesselId,
         vessel_kind: !camera.piloting ? "free" : aircraft ? "aircraft" : "spacecraft",
         body,
+        units: unitsFor(settings).sys,
         position: {
           lat_deg: latDeg,
           lon_deg: lonDeg,
