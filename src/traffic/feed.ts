@@ -43,6 +43,31 @@ export const FEED = {
   history: 900,
 } as const;
 
+/**
+ * A report on the ground though its source does not say so. adsb.lol says "ground" only when the transponder sets its
+ * flag; many parked or taxiing aircraft send a numeric barometric altitude instead (N796UA, a 777 parked at SFO: 0.7 kt,
+ * alt_baro −200 ft — drawn 23 m under the ground, 24 Nov 2026). Slow — under `gsMax` [m/s], 35 kt, below any
+ * aircraft's flying speed but a rotorcraft's, a balloon's, a glider's or a drone's (their categories left as reported)
+ * —, level, and at or below the nearby airfield's ground plus a margin: on the ground. The margin [m] wide for a
+ * barometric altitude (its pressure altitude: QNH 980…1045 hPa puts it ±270 m off), narrow for a geometric one.
+ */
+export const GROUNDED = { gsMax: 18, vsMax: 3, marginGeom: 60, marginBaro: 270 } as const;
+/** the categories that fly slowly (ADS-B's A7 rotorcraft, B1 glider, B2 lighter than air, B3 parachutist, B4
+ *  ultralight, B6 drone, B7 space; OpenSky's 8–12, 14, 15): left as their source says */
+const SLOW_FLYERS = /^(A7|B[1-467]|cat(8|9|10|11|12|14|15))$/;
+
+/**
+ * Whether a report is on the ground: its source's flag, else (see GROUNDED) slow, level and at the ground of the
+ * airfield about it — `fieldH` that ground's height over the WGS84 ellipsoid [m] (null: no airfield known there);
+ * `baro`: its altitude was barometric (raised by the geoid since, its margin the wider).
+ */
+export function groundedReport(p: Pick<Plane, "gnd" | "gs" | "vs" | "alt" | "cat">, fieldH: number | null, baro: boolean): boolean {
+  if (p.gnd) return true;
+  if (fieldH === null || !Number.isFinite(fieldH)) return false;
+  if (!(p.gs < GROUNDED.gsMax) || Math.abs(p.vs) > GROUNDED.vsMax || SLOW_FLYERS.test(p.cat)) return false;
+  return p.alt <= fieldH + (baro ? GROUNDED.marginBaro : GROUNDED.marginGeom);
+}
+
 export class TrafficFeed {
   readonly planes = new Map<string, TrackedPlane>();
   readonly ships = new Map<number, TrackedShip>();
@@ -61,6 +86,9 @@ export class TrafficFeed {
     private base: () => string = () => trafficBase(),
     private get: (url: string) => Promise<Response> = (url) => fetch(url),
     private online: () => boolean = () => typeof navigator === "undefined" || navigator.onLine !== false,
+    /** the ground of the airfield about a place: its height over the WGS84 ellipsoid [m] (its elevation over the sea
+     *  raised by the geoid), null when none is known there (main.ts: world/runways.ts's tiles) */
+    private fieldAt: (lat: number, lon: number) => number | null = () => null,
   ) {}
 
   /** Drops everything (the setting off, far from the Earth). */
@@ -110,9 +138,19 @@ export class TrafficFeed {
    *  poorer source leaves out (OpenSky: the registration, the type) kept from before. */
   private merge(p: Plane, now: number) {
     // (a barometric altitude — over the sea —: over the ellipsoid, as the geometric ones and our places, by the geoid)
+    const baro = !!p.baro;
     if (p.baro) {
       p.alt += geoidDeg(p.lat, p.lon);
       p.baro = false;
+    }
+    // (on the ground though its source did not flag it — parked, taxiing —: on the airfield's ground; GROUNDED)
+    if (!p.gnd && p.gs < GROUNDED.gsMax) {
+      const h = this.fieldAt(p.lat, p.lon);
+      if (groundedReport(p, h, baro)) {
+        p.gnd = true;
+        p.alt = h!;
+        p.vs = 0;
+      }
     }
     const T = this.planes.get(p.id);
     if (T) {

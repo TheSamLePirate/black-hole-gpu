@@ -14,7 +14,7 @@ import type { CraftVoice } from "./a320/sound/types";
 import { FAILURES, failureById } from "./a320/failures";
 import type { ServiceId } from "./a320/services";
 import { siteByName } from "./world/fieldsite";
-import { fieldByCode, fieldCached } from "./world/runways";
+import { fieldByCode, fieldCached, fieldsNearCached } from "./world/runways";
 import type { FailureKind } from "./game/systems";
 import { holeFleet } from "./holefleet";
 import { SceneryHitboxes } from "./ui/scenery-hitboxes";
@@ -8930,7 +8930,12 @@ async function main() {
   );
   document.body.append(aerosolCredit);
   // (the real traffic — traffic/feed.ts, T1 —: asked of the relay about the flown craft, its sources credited)
-  const trafficFeed = new TrafficFeed();
+  // (a report on the ground its source did not flag — parked, taxiing: traffic/feed.ts GROUNDED — told by the ground
+  // of the airfield about it, 5 km at most, from the runways' tiles: its elevation over the sea raised by the geoid)
+  const trafficFeed = new TrafficFeed(undefined, undefined, undefined, (lat, lon) => {
+    const f = fieldsNearCached("traffic-ground", lat, lon, 5000, (a) => a.kind !== "seaplane", 5000)[0];
+    return f ? f.elev + geoidDeg(f.lat, f.lon) : null;
+  });
   camera.traffic = trafficFeed;
   const trafficCredit = Object.assign(document.createElement("div"), { className: "scenery-credit traffic-credit", hidden: true });
   trafficCredit.dataset.testid = "traffic-credit";

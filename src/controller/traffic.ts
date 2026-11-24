@@ -122,6 +122,8 @@ const KNOTS_MAX = 100;
 const BANK_MAX = 30 * D;
 const ROLL_RATE = 7 * D;
 const BANK_LAG = 1;
+/** under this altitude over the ellipsoid [m] a flying aircraft's ground is asked (none higher: Everest 8 849 m) */
+const FLOOR_CHECK = 9000;
 export const R_EQ = 6_378_137;
 const E2 = WGS84_F * (2 - WGS84_F);
 
@@ -213,6 +215,9 @@ function trafficNow(this: CameraController): TrafficCraft[] {
     // (on the ground: its wheels on the relief there)
     const wheels = af.mesh ? (MESH[af.mesh].wheels * af.len) / MESH[af.mesh].len : 1.5;
     const restAt = (lat: number, lon: number) => groundRelief("earth", bodyFixedOf("earth", lat, lon, 0)) + wheels;
+    // (never under the world's ground: a flying report below it — a source's altitude error, a parked one not told
+    // on the ground — drawn on its wheels there; high enough, no ground to ask)
+    const above = (lat: number, lon: number, a: number) => (a < FLOOR_CHECK ? Math.max(a, restAt(lat, lon)) : a);
     const E0 = easing.get(p.id);
     const path = td < now ? pathOf(T.hist, (q) => restAt(q.lat, q.lon)) : null;
     const f = path ? flightAt(path.S, td) : null;
@@ -225,7 +230,7 @@ function trafficNow(this: CameraController): TrafficCraft[] {
       gnd = path.gnd[i]! && path.gnd[i + 1]!;
       const la = path.lat + f.x[1]! / (D * R_EQ),
         lo = path.lon + f.x[0]! / (D * R_EQ * Math.cos(path.lat * D));
-      alt = gnd ? restAt(la, lo) : f.x[2]!;
+      alt = gnd ? restAt(la, lo) : above(la, lo, f.x[2]!);
       P = placeOf(path.lat, path.lon, f.x[0]!, f.x[1]!, alt);
       L = enuAt(la, lo);
       const r = radii(la);
@@ -245,7 +250,7 @@ function trafficNow(this: CameraController): TrafficCraft[] {
       const pc = E0 && !q.gnd && !back ? { ...q, gs: q.gs + E0.vb } : q;
       const c = carry(pc, rate, td - q.t);
       gnd = q.gnd;
-      alt = q.gnd ? restAt(q.lat, q.lon) : c.alt;
+      alt = q.gnd ? restAt(q.lat, q.lon) : above(q.lat + c.n / (D * R_EQ), q.lon + c.e / (D * R_EQ * Math.cos(q.lat * D)), c.alt);
       P = placeOf(q.lat, q.lon, c.e, c.n, alt);
       L = enuAt(q.lat, q.lon);
       [ve, vn, vu] = [pc.gs * Math.sin(c.trk), pc.gs * Math.cos(c.trk), q.gnd ? 0 : q.vs];
