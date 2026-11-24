@@ -15443,6 +15443,11 @@ fn rasterLiteTakes(px: vec2f, k: u32) -> bool {
   // the water about it: one river, not the kernel's own shading in the box's patch)
   if (terrainRasterBridge(px)) { return terrainRasterHint(px) > 0.0; }
   if (terrainRasterBuilding(px)) { return false; }
+  // (25 Nov 2026 — PROBLEMES « blocs gris » before the Golden Gate's north tower, Battery Spencer: a tree's crown proxy against the
+  // sky — no ground behind it (hint 0), its id in g, alpha 0: surfaceAt said « tree », nearest 80–107 m — went to the rays' kernel,
+  // whose trees were retired with J9 on 24 Nov 2026: grey sky-coloured blocks at its shading rate. The material's: shadeLite seeks
+  // the crown past the proxy, leaves the pixel stale where it misses)
+  if (terrainRasterId(px) != 0u) { return true; }
   let tM = terrainRasterHint(px);
   if (tM <= 0.0) { return false; }
   // (a tree before the ground — U2 —: the material's; against the sky, the rays'; the ground, the sea's too — its water is the
@@ -17075,13 +17080,21 @@ fn shadeLite(@builtin(global_invocation_id) gp: vec3u, @builtin(workgroup_id) wi
     // (four per-pixel draws, the frame's — the blue noise's channels, independent —: the impostors' fade, their view's pick, their cover)
     let surface=terrainRasterTreeSurface(centre);
     var tt=-1.0;
+    // (against the sky — no ground behind: the crown sought to 60 m past its proxy's front)
+    let tMax = select(tM, terrainRasterDepth(centre) + 60.0, tM <= 0.0);
     if(surface>0u){tt=sceneryTreeGeometry(normalize(toBody(ray.look)),treeId,terrainRasterDepth(centre),surface,terrainRasterTreeShade(centre));}
-    else{tt=sceneryTreeLite(normalize(toBody(ray.look)), treeId, tM, blueDraws(vec2u(centre), P.frame.x));}
+    else{tt=sceneryTreeLite(normalize(toBody(ray.look)), treeId, tMax, blueDraws(vec2u(centre), P.frame.x));}
     if (tt > 0.0) {
       tM = tt;
       isTree = true;
       sceneryTreeFinish();
     }
+  }
+  // (a tree's proxy against the sky, its crown missed — between its leaves, past its edge —: no ground to shade, the pixel left to the
+  // reconstruction, as shadeMark leaves its others)
+  if (tM <= 0.0) {
+    moments[idx] = vec2f(RASTER_STALE, terrainRasterDepth(centre) / EARTH_RM * bodyRadius(k));
+    return;
   }
   let ab = squashOf(k);
   let rd = ray.rd;
