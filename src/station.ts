@@ -10,8 +10,8 @@ import type { Vec3 } from "./physics";
 import { m34mul, partTransforms, setStationGeometry, PORT_NAMES, type M34, type StationJoint, type StationPort } from "./system/iss";
 import { dragonMesh } from "./system/dragon";
 import { stationHulls, TriBVH } from "./system/collide";
+import { compositeMeshBox, MESH_STRIDE as STRIDE, MeshBox, meshBoxPass, meshBoxPipelines, sphereBox } from "./meshbox";
 
-const STRIDE = 24;
 /** the shadow map's reach: the station's bounding sphere [m] */
 const REACH = 62;
 const SHADOW = 2048;
@@ -20,16 +20,6 @@ interface Mesh {
   vbuf: GPUBuffer;
   ibuf: GPUBuffer;
   count: number;
-}
-interface Box {
-  w: number;
-  h: number;
-  color: GPUTexture;
-  depthColor: GPUTexture;
-  depth: GPUTexture;
-  resColor: GPUTexture;
-  resDepth: GPUTexture;
-  comp?: GPUBindGroup;
 }
 
 /** What the renderer gives for a frame: the station seen from the camera. */
@@ -77,10 +67,10 @@ export class StationRenderer {
   private shadowTex: GPUTexture;
   private bind: { g: GPUBindGroup; sceneDepth: GPUBuffer } | null = null;
   private shadowBind: GPUBindGroup;
-  private box: Box | null = null;
+  private box: MeshBox;
   /** its box's resolved depth (distance [m], coverage): the Ranger hidden behind it */
   depthTexture(): GPUTexture | null {
-    return this.rect[2] > 0 ? (this.box?.resDepth ?? null) : null;
+    return this.rect[2] > 0 ? (this.box.current?.resDepth ?? null) : null;
   }
   /** where it was drawn [x, y, w, h] (w = 0: not drawn) */
   rect: [number, number, number, number] = [0, 0, 0, 0];
@@ -94,50 +84,12 @@ export class StationRenderer {
     const d = device;
     const module = (this.module = d.createShaderModule({ code: wgsl, label: "station" }));
     this.uniform = d.createBuffer({ size: (6 + 9 + 39) * 16, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
-    const buffers: GPUVertexBufferLayout[] = [
-      {
-        arrayStride: STRIDE,
-        attributes: [
-          { shaderLocation: 0, offset: 0, format: "float32x3" },
-          { shaderLocation: 1, offset: 12, format: "snorm8x4" },
-          { shaderLocation: 2, offset: 16, format: "unorm8x4" },
-          { shaderLocation: 3, offset: 20, format: "uint8x4" },
-        ],
-      },
-    ];
-    this.pipe = d.createRenderPipeline({
-      layout: "auto",
-      vertex: { module, entryPoint: "vs", buffers },
-      fragment: { module, entryPoint: "fs", targets: [{ format: "rgba16float" }, { format: "rg16float" }] },
-      // (no culling: its panels are single sheets)
-      primitive: { topology: "triangle-list", cullMode: "none" },
-      depthStencil: { format: "depth24plus", depthWriteEnabled: true, depthCompare: "less" },
-      multisample: { count: 4 },
-    });
-    this.shadowPipe = d.createRenderPipeline({
-      layout: "auto",
-      vertex: { module, entryPoint: "shadowVs", buffers },
-      primitive: { topology: "triangle-list", cullMode: "none" },
-      depthStencil: { format: "depth32float", depthWriteEnabled: true, depthCompare: "less", depthBias: 2, depthBiasSlopeScale: 2 },
-    });
-    this.comp = d.createRenderPipeline({
-      layout: "auto",
-      vertex: { module, entryPoint: "compVs" },
-      fragment: {
-        module,
-        entryPoint: "compFs",
-        targets: [
-          {
-            format: "rgba16float",
-            blend: {
-              color: { srcFactor: "one", dstFactor: "one-minus-src-alpha", operation: "add" },
-              alpha: { srcFactor: "zero", dstFactor: "one", operation: "add" },
-            },
-          },
-        ],
-      },
-      primitive: { topology: "triangle-list" },
-    });
+    // (meshbox.ts: the pipelines it shares with JWST's — its own created at start-up, as before)
+    const P = meshBoxPipelines(module, "station");
+    this.pipe = d.createRenderPipeline(P.main);
+    this.shadowPipe = d.createRenderPipeline(P.shadow);
+    this.comp = d.createRenderPipeline(P.comp);
+    this.box = new MeshBox(d);
     this.shadowTex = d.createTexture({
       size: [SHADOW, SHADOW],
       format: "depth32float",
@@ -225,33 +177,17 @@ export class StationRenderer {
       H = hdr.height;
     const p = v.rel;
     const R = REACH;
-    if (p[2] < -R) return;
     const dist = Math.hypot(...p);
-    // the box: the bounding sphere's projection (all of the image when the camera is inside it)
-    let bx = 0,
-      by = 0,
-      bw = W,
-      bh = H;
-    if (p[2] > R + 0.5 && dist > R * 1.05) {
-      const sx = (x: number, z: number) => ((x / (z * v.tanH * v.aspect) + 1) / 2) * W;
-      const sy = (y: number, z: number) => ((1 - y / (z * v.tanH)) / 2) * H;
-      const zr = p[2] - R;
-      const x0 = Math.floor(Math.min(sx(p[0] - R, zr), sx(p[0] - R, p[2] + R))) - 4;
-      const x1 = Math.ceil(Math.max(sx(p[0] + R, zr), sx(p[0] + R, p[2] + R))) + 4;
-      const y0 = Math.floor(Math.min(sy(p[1] + R, zr), sy(p[1] + R, p[2] + R))) - 4;
-      const y1 = Math.ceil(Math.max(sy(p[1] - R, zr), sy(p[1] - R, p[2] + R))) + 4;
-      bx = Math.max(0, x0);
-      by = Math.max(0, y0);
-      bw = Math.min(W, x1) - bx;
-      bh = Math.min(H, y1) - by;
-    }
-    if (bw <= 0 || bh <= 0) return;
+    // the box: the bounding sphere's projection (all of the image when the camera is inside it — meshbox.ts)
+    const rect = sphereBox(p, R, W, H, v.tanH, v.aspect);
+    if (!rect) return;
+    const [bx, by, bw, bh] = rect;
     // (the finer level near: its download started when first wanted)
     const fine = dist < 2500 || bw > 500;
     if (fine && !this.meshes[1]) this.fetchLod(1).catch((e) => console.error("ISS:", e));
     const mesh = (fine && this.meshes[1]) || this.meshes[0] || this.meshes[1];
     if (!mesh) return;
-    const box = this.ensureBox(Math.ceil(bw / 64) * 64, Math.ceil(bh / 64) * 64);
+    const box = this.box.ensure(Math.ceil(bw / 64) * 64, Math.ceil(bh / 64) * 64);
     // the uniforms
     const u = new Float32Array((6 + 9 + 39) * 4);
     u.set([v.tanH * v.aspect, v.tanH, Math.max(dist - R * 1.2, 0.05), dist + R * 1.2], 0);
@@ -301,26 +237,7 @@ export class StationRenderer {
         }),
       };
     }
-    const rp = enc.beginRenderPass({
-      label: "station",
-      colorAttachments: [
-        {
-          view: box.color.createView(),
-          resolveTarget: box.resColor.createView(),
-          loadOp: "clear",
-          storeOp: "discard",
-          clearValue: [0, 0, 0, 0],
-        },
-        {
-          view: box.depthColor.createView(),
-          resolveTarget: box.resDepth.createView(),
-          loadOp: "clear",
-          storeOp: "discard",
-          clearValue: [0, 0, 0, 0],
-        },
-      ],
-      depthStencilAttachment: { view: box.depth.createView(), depthLoadOp: "clear", depthClearValue: 1, depthStoreOp: "discard" },
-    });
+    const rp = enc.beginRenderPass({ label: "station", ...meshBoxPass(box) });
     rp.setPipeline(this.pipe);
     rp.setBindGroup(0, this.bind.g);
     rp.setVertexBuffer(0, mesh.vbuf);
@@ -333,43 +250,7 @@ export class StationRenderer {
       rp.drawIndexed(this.dragon.count);
     }
     rp.end();
-    const cp = enc.beginRenderPass({
-      label: "station composite",
-      colorAttachments: [{ view: hdr.createView({ baseMipLevel: 0, mipLevelCount: 1 }), loadOp: "load", storeOp: "store" }],
-    });
-    cp.setPipeline(this.comp);
-    box.comp ??= d.createBindGroup({
-      layout: this.comp.getBindGroupLayout(0),
-      entries: [
-        { binding: 0, resource: { buffer: this.uniform } },
-        { binding: 4, resource: box.resColor.createView() },
-      ],
-    });
-    cp.setBindGroup(0, box.comp);
-    cp.setScissorRect(bx, by, Math.min(box.w, W - bx), Math.min(box.h, H - by));
-    cp.draw(3);
-    cp.end();
+    compositeMeshBox(d, enc, "station composite", hdr, this.comp, this.uniform, box, bx, by);
     this.rect = [bx, by, box.w, box.h];
-  }
-
-  private ensureBox(w: number, h: number): Box {
-    const b = this.box;
-    if (b && b.w >= w && b.h >= h && b.w <= 1.5 * w + 64 && b.h <= 1.5 * h + 64) return b;
-    if (b) for (const t of [b.color, b.depthColor, b.depth, b.resColor, b.resDepth]) t.destroy();
-    const d = this.device;
-    const ms = (format: GPUTextureFormat) =>
-      d.createTexture({ size: [w, h], format, sampleCount: 4, usage: GPUTextureUsage.RENDER_ATTACHMENT });
-    const res = (format: GPUTextureFormat) =>
-      d.createTexture({ size: [w, h], format, usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING });
-    this.box = {
-      w,
-      h,
-      color: ms("rgba16float"),
-      depthColor: ms("rg16float"),
-      depth: ms("depth24plus"),
-      resColor: res("rgba16float"),
-      resDepth: res("rg16float"),
-    };
-    return this.box;
   }
 }

@@ -180,3 +180,14 @@ codés en dur.
 **assisté** (pré-contact atteint, `arrived`, gaz + jusqu'au contact, repère du HUD lu en FR et en EN, avec une touche de
 manette remappée) n'ont été lancés après d97a6ee4 ; aucune capture refaite. Le cours ne cite pas de chiffre mesuré pour
 le ravitaillement.
+
+## 2026-11-24 — Vaisseaux, leçon 6 bis : points de Lagrange, orbite Halo, JWST (écrite, pas encore revolée)
+
+La leçon 6 bis (VOL-VAISSEAUX partie I, apprendre-vaisseaux.html `#l6b`) et les lignes de la référence (§4.2 `orbit` vers un
+point de Lagrange = l'autopilote Halo, `keep` au point et auprès de JWST ; §4.3 les missions HALO/LIBRATION/SURVOL ; §4.4 les
+plafonds d'accélération) sont écrites d'après le code (`lagrange.ts`, `lagrange-plan.ts`, `lowthrust.ts`, `stationkeep.ts`,
+`ui/fc/computer.ts`) après la revue de 07021ba5 (la phase des orbites Halo corrigée, les boucles L4/L5 refaites, le champ A_z
+borné avec un message). **Aucune de ces recettes n'est revolée par un e2e** : `apprendre-vaisseaux.e2e.test.ts` ne les vole
+pas ; `lagrange-jwst.e2e.test.ts` (autopilote Halo tenu 10 jours à la date du jour, ≤ 20 km et ≤ 1 m/s) est modifié mais
+pas relancé. Les Δv cités viennent des tests unitaires du planificateur (`tests/lagrange.test.ts`), pas d'un vol en jeu.
+Capture de la leçon à faire.

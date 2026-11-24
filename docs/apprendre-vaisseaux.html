@@ -64,6 +64,7 @@ svg text{font-family:system-ui,sans-serif;fill:var(--fg)}
   <a href="#l4">4 · Circulariser, Hohmann</a>
   <a href="#l5">5 · Changer de plan</a>
   <a href="#l6">6 · Aller vers la Lune</a>
+  <a href="#l6b">6 bis · Lagrange, Halo, JWST</a>
   <a href="#l7">7 · Rendez-vous, amarrage</a>
   <a href="#l8">8 · Rentrée et plané</a>
   <a href="#l9">9 · Se poser sur la Lune</a>
@@ -279,6 +280,31 @@ for (let i = 0; i &lt; 150 &amp;&amp; p.engineNow &gt; 0.01; i++) __bh.step(1 / 
 __bh.camera.missionCommit(); __bh.camera.fcExecute();
 // avancer par paquets de pas avec une image entre (le worker répond entre les images) ;
 // réussi : status().soi === "moon" &amp;&amp; status === "orbit". Ne pas changer la date après : le plan serait abandonné.</pre></details>
+</section>
+
+<section id="l6b">
+<h2>Leçon 6 bis — Les points de Lagrange, l'orbite Halo et JWST</h2>
+<p>Autour de deux corps qui tournent ensemble (le Soleil et la Terre avec sa Lune, la Terre et la Lune…), cinq points accompagnent le second sans moteur : <b>L1</b> entre les deux, <b>L2</b> au-delà, <b>L3</b> à l'opposé, <b>L4</b> et <b>L5</b> à 60° devant et derrière. <b>L1–L3 sont instables</b> (à L2 Soleil–Terre un écart est multiplié par e en ≈ 23 jours, à L2 Terre–Lune en ≈ 2 jours) : on y vole une <b>orbite Halo</b> entretenue — celle de JWST, A_z 260 000 km, ≈ 180 jours par tour. <b>L4–L5 sont stables</b> (sauf Pluton–Charon) : une petite boucle de libration suffit.</p>
+<ol class="steps">
+<li><kbd>Tab</kbd> : les cibles comprennent L1–L5 Soleil–Terre et Terre–Lune, et JWST ; la carte (<kbd>M</kbd>) les montre avec la boucle Halo.</li>
+<li><kbd>O</kbd> → <b>MISSION</b> → « Points de Lagrange &amp; JWST » ; l'arrivée <b>HALO (JWST)</b> (amplitude <b>Halo A_z</b> : une valeur hors des orbites possibles est ramenée au bord, avec un message), <b>LIBRATION</b> (au point, puis maintien à poste) ou <b>SURVOL</b> ; <b>PLAN</b>, <b>EXÉCUTER</b> : départ, correction à mi-route, insertion. Vers L2 Soleil–Terre ≈ 29 jours, vers les points Terre–Lune ≈ 4,2 jours. Calculé (tests unitaires, pas encore revolé en jeu) : depuis 400 km, 3,32 km/s puis 0,39 km/s d'insertion ; la note du plan dit l'amplitude retenue.</li>
+<li>À l'insertion, l'<b>autopilote Halo</b> (<code>orbit</code>) tient l'orbite du plan ; LIBRATION et JWST passent au <b>maintien à poste</b>.</li>
+<li><kbd>⇧</kbd><kbd>0</kbd> à la main, la cible étant un point de Lagrange : à moins de max(3,5 A_z, 40 000 km), il se cale sur la phase la plus proche de l'orbite et la suit (temps plafonné à un tour en 90 s).</li>
+<li><kbd>⇧</kbd><kbd>8</kbd> : maintien au point exact (à moins de 3 rayons de Hill — ≈ 4,4 millions de km à L2 Soleil–Terre) ou auprès de JWST (à moins de 10 km, l'écart tenu dans le repère du télescope).</li>
+</ol>
+<p><i>Capture à faire (JWST et la boucle Halo sur la carte) : cette leçon n'est pas encore volée par <code>apprendre-vaisseaux.e2e.test.ts</code>.</i></p>
+<details><summary>Par <code>__bh</code></summary>
+<pre>__bh.game.setDate("2026-11-24T12:00:00Z");
+__bh.game.orbit("earth", { altKm: 400, inc: 28.5 });
+__bh.camera.selectTarget("lag:earth:2");
+const r = await __bh.camera.missionPlan({ target: "lag:earth:2", arrival: "halo", altKm: 260000 });   // r.note : Δv, A_z
+__bh.camera.missionCommit(); __bh.camera.fcExecute();
+// directement sur l'orbite, puis l'autopilote Halo :
+const t = __bh.time(), P = { azM: __bh.lagrange.defaultAzM("lag:earth:2"), branch: -1, phase0: 0 };
+const h = __bh.lagrange.halo("lag:earth:2", t, P);
+__bh.game.placeAt({ frame: "ours", X: h.pos, vel: h.vel, fwd: [0, 1, 0], up: [0, 0, 1], note: "SE-L2 Halo" });
+const p = __bh.camera.pilot; p.auto = "none"; p.setAuto("orbit");
+__bh.lagrange.azRange("lag:earth:2");   // les amplitudes possibles</pre></details>
 </section>
 
 <section id="l7">

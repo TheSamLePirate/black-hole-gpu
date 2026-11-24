@@ -1,32 +1,50 @@
-// Lagrange points (L1–L5), linear & Routh stability analysis, and 3rd-order Richardson Halo /
-// Lissajous orbits for any two-body pair in our solar system (Sun–planet via system barycentre
-// for planets with massive moons like Earth–Moon, and planet–moon pairs like Earth–Moon).
+// Lagrange points (L1–L5), linear & Routh stability analysis, 3rd-order Richardson Halo orbits about L1–L3 and the
+// linear libration loops about L4/L5, for any two-body pair in our solar system (Sun–planet via the planet system's
+// barycentre — Sun–(Earth+Moon) —, and planet–moon pairs like Earth–Moon).
 //
 // Units match solar.ts / our-side.ts: lengths and times in M (10⁸ M☉), velocities in c, GM in M.
-// Pure functions `lagrangeFromStates` also work in arbitrary consistent units (e.g. km, km/s, km³/s²
-// on the crew console's 3D system map).
+// The pure math (lagrange-math.ts) also works in arbitrary consistent units (km, km/s, km³/s² on the crew
+// console's 3D system map) — one owner for both screens.
+//
+// Kinematics: every state here (a point, a Halo) is pos/vel/acc with vel and acc the exact time derivatives of pos
+// (the pair's frame turning, tilting and breathing — synodicKinematics —, the barycentre's own fall); the orbits' phase
+// runs with the pair's synodic angle θ(t), counted in a fixed plane and unwrapped about the mean motion (pairConst).
 
 import type { Vec3 } from "../physics";
-import { add, cross, dot, len, scale, sub } from "../math/vec3";
+import { add, cross, dot, len, scale, sub, unit } from "../math/vec3";
 import { M_METRES, M_SECONDS, SOLAR_BODIES, solarBody, solarState } from "./solar";
+import { ephemerisVersion } from "./de440";
+import { eclDir } from "./orientation";
 import { predictOurs } from "./our-predict";
 import { t, tf } from "../i18n";
 import {
   collinearCn,
   collinearGamma,
+  defaultLibrationAz,
   haloLoopFromStates,
   isLagrangeId,
   lagrangeFromStates,
   lagrangeId,
   lagrangeShortName,
   lagrangeSynodicCoords,
+  librationAzRange,
+  librationAz,
+  librationLoop,
+  librationModel,
+  librationOffset,
   PAIR_SHORT,
-  richardsonCoeffs,
+  pairMeanMotion,
+  pairRefLength,
   ROUTH_MU,
   synodicFrameFromStates,
+  synodicKinematics,
+  synodicPoint,
+  systemBarycentre,
   type LagrangeId,
   type LagrangeIndex,
+  type LibrationModel,
   type SynodicFrame,
+  type SynodicKinematics,
 } from "./lagrange-math";
 
 export {
@@ -180,7 +198,8 @@ for (const b of SOLAR_BODIES) {
 /**
  * Effective state and mass of a pair (primary, secondary) at scene time t [M]:
  * For Sun–Planet pairs whose planet has moons (crucially Sun–Earth + Moon!), uses the planet system's
- * barycentre and combined mass so Sun–Earth L1–L5 match JPL's real Sun–EMB CR3BP without monthly wobble.
+ * barycentre and combined mass so Sun–Earth L1–L5 match JPL's real Sun–EMB CR3BP without monthly wobble
+ * (lagrange-math.ts systemBarycentre: the crew console's map merges them the same way).
  */
 export function pairStates(
   secondary: string,
@@ -201,35 +220,124 @@ export function pairStates(
   if (!b1) return null;
   const s1 = solarState(b1.id, t);
   const s2 = solarState(b2.id, t);
-  let p2 = s2.pos;
-  let v2 = s2.vel;
-  let m2 = b2.mass;
-  if (b1.id === "sun") {
-    const moons = MOONS_BY_PARENT.get(b2.id);
-    if (moons && moons.length) {
-      let mTot = m2;
-      let px = p2[0] * m2,
-        py = p2[1] * m2,
-        pz = p2[2] * m2;
-      let vx = v2[0] * m2,
-        vy = v2[1] * m2,
-        vz = v2[2] * m2;
-      for (const q of moons) {
-        const sq = solarState(q.id, t);
-        mTot += q.mass;
-        px += sq.pos[0] * q.mass;
-        py += sq.pos[1] * q.mass;
-        pz += sq.pos[2] * q.mass;
-        vx += sq.vel[0] * q.mass;
-        vy += sq.vel[1] * q.mass;
-        vz += sq.vel[2] * q.mass;
-      }
-      p2 = [px / mTot, py / mTot, pz / mTot];
-      v2 = [vx / mTot, vy / mTot, vz / mTot];
-      m2 = mTot;
+  const moons = b1.id === "sun" ? (MOONS_BY_PARENT.get(b2.id) ?? []) : [];
+  const sys = systemBarycentre(
+    { p: s2.pos, v: s2.vel, m: b2.mass },
+    moons.map((q) => {
+      const sq = solarState(q.id, t);
+      return { p: sq.pos, v: sq.vel, m: q.mass };
+    }),
+  );
+  return { primary: b1.id, secondary: b2.id, p1: s1.pos, v1: s1.vel, m1: b1.mass, p2: sys.p, v2: sys.v, m2: sys.m };
+}
+
+/**
+ * A pair's constants: its mean motion n̄ [rad/M] (lagrange-math PAIR_PERIOD_DAYS, else the osculating one at t = 0),
+ * its reference length R̄ [M] (amplitudes' unit), the fixed plane the synodic angle θ is counted in — the secondary's
+ * Laplace plane (solar.ts `orbit.laplace`), the ecliptic for the planets and the Moon —, oriented so θ grows, and θ's
+ * branch anchor (θ at t = 0 on the mean motion's line: it only picks the 2π branch, robust to the ephemeris loaded),
+ * the finite-difference step of the pair's accelerations [M] (10⁻⁴ of its period).
+ */
+interface PairConst {
+  n: number;
+  Rref: number;
+  gm: number;
+  pole: Vec3;
+  a: Vec3;
+  b: Vec3;
+  theta0: number;
+  h: number;
+}
+const PAIR_CONST = new Map<string, PairConst | null>();
+
+function pairConst(secondary: string): PairConst | null {
+  if (PAIR_CONST.has(secondary)) return PAIR_CONST.get(secondary)!;
+  const P = pairStates(secondary, 0);
+  const b2 = solarBody(secondary);
+  let out: PairConst | null = null;
+  if (P && b2) {
+    const gm = P.m1 + P.m2;
+    const d = sub(P.p2, P.p1);
+    const dv = sub(P.v2, P.v1);
+    const hv = cross(d, dv);
+    let n = pairMeanMotion(secondary, M_SECONDS);
+    if (!n) {
+      // (osculating: vis-viva's semi-major axis)
+      const a = 1 / (2 / len(d) - dot(dv, dv) / gm);
+      n = a > 0 ? Math.sqrt(gm / (a * a * a)) : len(hv) / dot(d, d);
     }
+    let pole: Vec3 = b2.orbit ? eclDir(b2.orbit.laplace[0], b2.orbit.laplace[1]) : [0, 0, 1];
+    if (dot(pole, hv) < 0) pole = scale(pole, -1);
+    const a = unit(cross(pole, Math.abs(pole[0]) < 0.9 ? [1, 0, 0] : [0, 1, 0]));
+    const b = cross(pole, a);
+    out = {
+      n,
+      Rref: pairRefLength(gm, n),
+      gm,
+      pole,
+      a,
+      b,
+      theta0: Math.atan2(dot(d, b), dot(d, a)),
+      h: (2 * Math.PI * 1e-4) / n,
+    };
   }
-  return { primary: b1.id, secondary: b2.id, p1: s1.pos, v1: s1.vel, m1: b1.mass, p2, v2, m2 };
+  PAIR_CONST.set(secondary, out);
+  return out;
+}
+
+/** A pair's synodic angle θ(t) [rad] — counted in its fixed reference plane, unwrapped about its mean motion's line —
+ *  and its first and second time derivatives [rad/M, rad/M²], from the relative position and its derivatives. */
+function synodicAngle(c: PairConst, t: number, d: Vec3, d1: Vec3, d2: Vec3): { theta: number; dTheta: number; ddTheta: number } {
+  const x = dot(d, c.a),
+    y = dot(d, c.b);
+  const rho2 = x * x + y * y;
+  const mean = c.theta0 + c.n * t;
+  const w = Math.atan2(y, x) - mean;
+  const theta = mean + (w - 2 * Math.PI * Math.round(w / (2 * Math.PI)));
+  const N = dot(c.pole, cross(d, d1));
+  const N1 = dot(c.pole, cross(d, d2));
+  const rho21 = 2 * (x * dot(d1, c.a) + y * dot(d1, c.b));
+  return { theta, dTheta: N / rho2, ddTheta: N1 / rho2 - (N * rho21) / (rho2 * rho2) };
+}
+
+/** The pair's kinematics at t: its states, its synodic frame with that frame's exact derivatives (the bodies'
+ *  accelerations and jerks by central differences of their velocities over the pair's step), and its synodic angle. */
+interface PairKinematics {
+  pair: NonNullable<ReturnType<typeof pairStates>>;
+  c: PairConst;
+  kin: SynodicKinematics;
+  theta: number;
+  dTheta: number;
+  ddTheta: number;
+}
+const KIN_CACHE = new Map<string, PairKinematics | null>();
+
+function pairKinematics(secondary: string, t: number): PairKinematics | null {
+  // (a few calls a frame ask the same instant — the map, the HUD, the tracker, the autopilot: kept, the last 32;
+  // the ephemeris's version in the key: DE440 loaded after a first look changes them)
+  const key = `${secondary}|${t}|${ephemerisVersion}`;
+  const hit = KIN_CACHE.get(key);
+  if (hit !== undefined) return hit;
+  const c = pairConst(secondary);
+  const P = pairStates(secondary, t);
+  let out: PairKinematics | null = null;
+  if (c && P) {
+    const h = c.h;
+    const Pp = pairStates(secondary, t + h)!;
+    const Pm = pairStates(secondary, t - h)!;
+    const acc = (vp: Vec3, vm: Vec3): Vec3 => scale(sub(vp, vm), 1 / (2 * h));
+    const jerk = (vp: Vec3, v: Vec3, vm: Vec3): Vec3 => scale(add(sub(vp, v), sub(vm, v)), 1 / (h * h));
+    const a1 = acc(Pp.v1, Pm.v1),
+      a2 = acc(Pp.v2, Pm.v2);
+    const j1 = jerk(Pp.v1, P.v1, Pm.v1),
+      j2 = jerk(Pp.v2, P.v2, Pm.v2);
+    const kin = synodicKinematics(P.p1, P.v1, a1, j1, P.m1, P.p2, P.v2, a2, j2, P.m2);
+    const th = synodicAngle(c, t, sub(P.p2, P.p1), sub(P.v2, P.v1), sub(a2, a1));
+    out = { pair: P, c, kin, ...th };
+  }
+  if (KIN_CACHE.size >= 32) KIN_CACHE.delete(KIN_CACHE.keys().next().value!);
+  KIN_CACHE.set(key, out);
+  return out;
 }
 
 export interface LagrangeState {
@@ -237,10 +345,12 @@ export interface LagrangeState {
   primary: string;
   secondary: string;
   index: LagrangeIndex;
-  /** home-frame position [M] and velocity [c] */
+  /** home-frame position [M], velocity [c] and acceleration [c²/M] — exact derivatives of the position (the pair's
+   *  frame turning, tilting and breathing) */
   pos: Vec3;
   vel: Vec3;
-  /** instantaneous synodic frame */
+  acc: Vec3;
+  /** instantaneous synodic frame (its omegaVec the full rotation: the turn and the plane's tilt) */
   frame: SynodicFrame;
   /** dimensionless offset γ (distance from secondary for L1/L2, from primary for L3, 1 for L4/L5) */
   gamma: number;
@@ -257,25 +367,34 @@ export interface LagrangeState {
 export function lagrangeState(id: string, t: number): LagrangeState | null {
   const parsed = parseLagrangeId(id);
   if (!parsed) return null;
-  const pair = pairStates(parsed.secondary, t);
-  if (!pair) return null;
-  const r = lagrangeFromStates(pair.p1, pair.v1, pair.m1, pair.p2, pair.v2, pair.m2, parsed.index);
-  const distSecondary = len(sub(r.pos, pair.p2));
-  const hill = r.frame.R * Math.cbrt(r.frame.mu / 3);
+  const K = pairKinematics(parsed.secondary, t);
+  if (!K) return null;
+  const { frame } = K.kin;
+  const { xi, eta, gamma } = lagrangeSynodicCoords(frame.mu, parsed.index);
+  const P = synodicPoint(K.kin, [xi, eta, 0], [0, 0, 0], [0, 0, 0]);
+  const distSecondary = len(sub(P.pos, K.pair.p2));
+  const hill = frame.R * Math.cbrt(frame.mu / 3);
   return {
     id: id as LagrangeId,
     primary: parsed.primary,
     secondary: parsed.secondary,
     index: parsed.index,
-    pos: r.pos,
-    vel: r.vel,
-    frame: r.frame,
-    gamma: r.gamma,
-    xi: r.xi,
-    eta: r.eta,
+    pos: P.pos,
+    vel: P.vel,
+    acc: P.acc,
+    frame,
+    gamma,
+    xi,
+    eta,
     distSecondary,
     hill,
   };
+}
+
+/** A pair's mean motion n̄ [rad/M] and reference length R̄ [M] (null: no such pair). */
+export function pairMean(secondary: string): { n: number; Rref: number } | null {
+  const c = pairConst(secondary);
+  return c ? { n: c.n, Rref: c.Rref } : null;
 }
 
 // ------------------------------------------------------------------------------------ linear & Routh stability analysis
@@ -309,7 +428,9 @@ export interface LagrangeStability {
 export function lagrangeStability(id: string, t = 0): LagrangeStability | null {
   const st = lagrangeState(id, t);
   if (!st) return null;
-  const { mu, omega } = st.frame;
+  const { mu } = st.frame;
+  // (the CR3BP's time unit: the pair's mean motion — its periods the same any day of the year)
+  const omega = pairConst(st.secondary)?.n ?? st.frame.omega;
   const secPerRad = M_SECONDS / Math.max(omega, 1e-30);
   const toDays = (dimlessRate: number) => (dimlessRate > 1e-15 ? (2 * Math.PI * secPerRad) / (dimlessRate * 86400) : Infinity);
   const toEfoldDays = (dimlessRate: number) => (dimlessRate > 1e-15 ? secPerRad / (dimlessRate * 86400) : Infinity);
@@ -385,208 +506,163 @@ export function lagrangeStability(id: string, t = 0): LagrangeStability | null {
 // ------------------------------------------------------------------------------------ 3rd-order Richardson Halo orbits (JWST-style)
 
 export interface HaloParams {
-  /** vertical (out-of-plane) amplitude A_z [m] */
+  /** vertical (out-of-plane) amplitude A_z [m] (about L4/L5 also the loop's in-plane semi-major axis) */
   azM: number;
   /** +1 northern Halo, −1 southern Halo (JWST flies a southern Halo orbit around Sun–Earth L2) */
   branch: 1 | -1;
-  /** phase offset at t = 0 [rad] */
+  /** phase at synodic angle θ = 0 [rad]: τ = ν θ(t) + phase0 (haloPhase0At gives the one for a phase at a date) */
   phase0: number;
 }
 
-/** Realistic default Halo amplitude A_z [m] for a Lagrange point (JWST ≈ 260,000 km at SE-L2, 12,000 km at EM-L2). */
-export function defaultHaloAzM(id: string, t = 0): number {
+/** Realistic default Halo amplitude A_z [m] for a Lagrange point (JWST ≈ 260,000 km at SE-L2, 12,000 km at EM-L2).
+ *  A constant of the point — from the pair's reference length R̄, not its distance that day: an orbit asked with the
+ *  default at two instants is one orbit (`_t` kept for the callers, unused). */
+export function defaultHaloAzM(id: string, _t = 0): number {
   const p = parseLagrangeId(id);
-  if (!p) return 100_000e3;
-  if (p.secondary === "earth" && (p.index === 1 || p.index === 2)) return 260_000e3; // JWST-like (~260k km z, ~750k km y)
-  if (p.secondary === "moon" && (p.index === 1 || p.index === 2)) return 12_000e3; // Lunar Gateway / Queqiao scale
-  const st = lagrangeState(id, t);
-  if (!st) return 100_000e3;
-  if (p.index <= 2) return Math.max(5_000e3, st.gamma * st.frame.R * M_METRES * 0.18);
-  if (p.index === 3) return Math.max(50_000e3, st.frame.R * M_METRES * 0.04);
-  // L4/L5: modest 3D tadpole/inclined libration orbit
-  return Math.max(10_000e3, st.hill * M_METRES * 0.25);
+  const c = p ? pairConst(p.secondary) : null;
+  if (!p || !c) return 100_000e3;
+  // (lagrange-math's rule, the crew console's too: JWST-like 260,000 km at SE-L1/L2, 12,000 km at EM-L1/L2…)
+  return defaultLibrationAz(p.secondary, p.index, pairMu(p.primary, c), c.Rref * M_METRES, 1);
+}
+
+/** The pair's mass ratio μ = m₂/(m₁ + m₂) (the secondary with its moons about the Sun). */
+function pairMu(primary: string, c: PairConst): number {
+  return (c.gm - solarBody(primary)!.mass) / c.gm;
+}
+
+/** The libration model of a point for an amplitude [m] (kept: a few amplitudes a session), with its pair's constants. */
+const MODELS = new Map<string, { m: LibrationModel; c: PairConst; mu: number } | null>();
+function modelFor(id: string, azM: number): { m: LibrationModel; c: PairConst; mu: number } | null {
+  const key = `${id}|${azM}`;
+  const hit = MODELS.get(key);
+  if (hit !== undefined) return hit;
+  const p = parseLagrangeId(id);
+  const c = p ? pairConst(p.secondary) : null;
+  let out: { m: LibrationModel; c: PairConst; mu: number } | null = null;
+  if (p && c) {
+    const b1 = solarBody(p.primary)!;
+    const mu = (c.gm - b1.mass) / c.gm;
+    out = { m: librationModel(mu, p.index, azM / M_METRES / c.Rref), c, mu };
+  }
+  if (MODELS.size >= 64) MODELS.delete(MODELS.keys().next().value!);
+  MODELS.set(key, out);
+  return out;
+}
+
+/**
+ * The amplitudes a point's orbits can take [m] — Richardson's expansion's range about L1–L3 (HALO_AZ_DIM × γ R̄),
+ * the linear loops' about L4/L5 (LOOP_AMP_DIM × R̄) — and the one a request becomes (`effective(azM)`): what the
+ * flight computer's field and the planner's note show, so no amplitude is changed silently.
+ */
+export function haloAzRangeM(id: string): { minM: number; maxM: number } | null {
+  const p = parseLagrangeId(id);
+  const c = p ? pairConst(p.secondary) : null;
+  if (!p || !c) return null;
+  const [minM, maxM] = librationAzRange(pairMu(p.primary, c), p.index, c.Rref * M_METRES);
+  return { minM, maxM };
+}
+
+/** The vertical amplitude [m] an orbit asked with `azM` is flown at (after the model's range). */
+export function haloEffectiveAzM(id: string, azM: number): number | null {
+  const M = modelFor(id, azM);
+  return M ? librationAz(M.m) * M.c.Rref * M_METRES : null;
+}
+
+/**
+ * A request's amplitude [m] (≤ 1,000 km or none: the point's default) as it will be flown: `azM` the effective one,
+ * `clamped` when the range changed it, the range itself — the planner's note and the flight computer's field say it.
+ */
+export function haloAzOf(id: string, askedM?: number): { azM: number; askedM: number; clamped: boolean; minM: number; maxM: number } {
+  const asked = askedM !== undefined && askedM > 1000e3 ? askedM : defaultHaloAzM(id);
+  const r = haloAzRangeM(id) ?? { minM: 0, maxM: Infinity };
+  const azM = haloEffectiveAzM(id, asked) ?? asked;
+  // (a relative 10⁻⁹: the range's round trip through R̄)
+  return { azM, askedM: asked, clamped: Math.abs(azM - asked) > 1e-9 * asked, ...r };
 }
 
 export interface HaloStateResult {
-  /** home-frame position [M], velocity [c], and inertial acceleration [c²/M] */
+  /** home-frame position [M], velocity [c] and inertial acceleration [c²/M] — the exact first and second time
+   *  derivatives of the reference orbit's position (the pair's frame, the clock θ(t), the barycentre's own fall) */
   pos: Vec3;
   vel: Vec3;
   acc: Vec3;
   /** synodic offset from the Lagrange point [m] (along ex, ey, ez) */
   synM: Vec3;
-  /** Halo period [M of scene time] */
+  /** the orbit's mean period [M of scene time] (2π / (ν n̄)) */
   periodM: number;
-  /** Halo period [days] */
+  /** its mean period [days] */
   periodDays: number;
-  /** current Halo phase angle τ1 [rad] */
+  /** current phase τ = ν θ(t) + phase0 [rad] (the loop's in-plane one about L4/L5) */
   phase: number;
+  /** the vertical amplitude flown [m] (the one asked, brought within haloAzRangeM) */
+  azM: number;
   /** Lagrange point state at t */
   lagrange: LagrangeState;
 }
 
-/**
- * Evaluates a 3D Halo (for L1/L2/L3) or Lissajous/tadpole libration orbit (for L4/L5) around `id`
- * at scene time `t` [M]. Returns exact inertial position, velocity, and acceleration in the home frame.
- */
-export function haloState(id: string, t: number, params?: Partial<HaloParams>): HaloStateResult | null {
+/** Everything of an orbit at t but its phase: the point, the pair's kinematics, the model (shared by the phase scans). */
+function haloContext(id: string, t: number, params?: Partial<HaloParams>) {
   const L = lagrangeState(id, t);
   if (!L) return null;
-  const { frame, gamma, index } = L;
+  const K = pairKinematics(L.secondary, t)!;
   const azM = params?.azM ?? defaultHaloAzM(id, t);
-  const branch: 1 | -1 = params?.branch ?? -1;
-  const phase0 = params?.phase0 ?? 0;
+  const M = modelFor(id, azM);
+  if (!M) return null;
+  return { L, K, M, branch: (params?.branch ?? -1) as 1 | -1 };
+}
 
-  let dx = 0,
-    dy = 0,
-    dz = 0; // synodic offset from L-point [M]
-  let vx = 0,
-    vy = 0,
-    vz = 0; // time derivative in synodic frame [c]
-  let ax = 0,
-    ay = 0,
-    az = 0; // 2nd derivative in synodic frame [c²/M]
-  let periodM = (2 * Math.PI) / Math.max(frame.omega, 1e-30);
-  let phase = 0;
-
-  if (index <= 3) {
-    const scaleL = gamma * frame.R;
-    const azDim = azM / M_METRES / Math.max(scaleL, 1e-30);
-    const C = richardsonCoeffs(frame.mu, index as 1 | 2 | 3, gamma, azDim);
-    const rate = C.lam * C.omega * frame.omega; // dτ1/dt [rad/M]
-    periodM = (2 * Math.PI) / Math.max(rate, 1e-30);
-    phase = rate * t + phase0;
-    const c1 = Math.cos(phase),
-      s1 = Math.sin(phase);
-    const c2 = Math.cos(2 * phase),
-      s2 = Math.sin(2 * phase);
-    const c3 = Math.cos(3 * phase),
-      s3 = Math.sin(3 * phase);
-    const Ax = C.Ax,
-      Az = C.Az;
-    const Ax2 = Ax * Ax,
-      Az2 = Az * Az,
-      Ax3 = Ax2 * Ax;
-    const k2x = C.a23 * Ax2 - C.a24 * Az2;
-    const k3x = C.a31 * Ax3 - C.a32 * Ax * Az2;
-    const k2y = C.b21 * Ax2 - C.b22 * Az2;
-    const k3y = C.b31 * Ax3 - C.b32 * Ax * Az2;
-    const k3z = C.d32 * Az * Ax2 - C.d31 * Az * Az2;
-
-    const xs = C.a21 * Ax2 + C.a22 * Az2 - Ax * c1 + k2x * c2 + k3x * c3;
-    const ys = C.k * Ax * s1 + k2y * s2 + k3y * s3;
-    const zs = branch * (Az * c1 + C.d21 * Ax * Az * (c2 - 3) + k3z * c3);
-
-    const dxs = Ax * s1 - 2 * k2x * s2 - 3 * k3x * s3;
-    const dys = C.k * Ax * c1 + 2 * k2y * c2 + 3 * k3y * c3;
-    const dzs = branch * (-Az * s1 - 2 * C.d21 * Ax * Az * s2 - 3 * k3z * s3);
-
-    const ddxs = Ax * c1 - 4 * k2x * c2 - 9 * k3x * c3;
-    const ddys = -C.k * Ax * s1 - 4 * k2y * s2 - 9 * k3y * s3;
-    const ddzs = branch * (-Az * c1 - 4 * C.d21 * Ax * Az * c2 - 9 * k3z * c3);
-
-    dx = scaleL * xs;
-    dy = scaleL * ys;
-    dz = scaleL * zs;
-    vx = scaleL * rate * dxs;
-    vy = scaleL * rate * dys;
-    vz = scaleL * rate * dzs;
-    ax = scaleL * rate * rate * ddxs;
-    ay = scaleL * rate * rate * ddys;
-    az = scaleL * rate * rate * ddzs;
-  } else {
-    // L4 / L5: gentle 3D stable epicyclic/libration loop around the equilateral point
-    const disc = Math.max(0, 1 - 27 * frame.mu * (1 - frame.mu));
-    const wShort = Math.sqrt((1 + Math.sqrt(disc)) / 2);
-    const rate = wShort * frame.omega;
-    periodM = (2 * Math.PI) / Math.max(rate, 1e-30);
-    phase = rate * t + phase0;
-    const A = azM / M_METRES;
-    // Slight 2:1 ellipse aligned with the tangent at L4/L5 + out-of-plane inclination
-    const c1 = Math.cos(phase),
-      s1 = Math.sin(phase);
-    dx = 0.6 * A * c1;
-    dy = 1.2 * A * s1;
-    dz = branch * 0.5 * A * c1;
-    vx = -0.6 * A * rate * s1;
-    vy = 1.2 * A * rate * c1;
-    vz = -branch * 0.5 * A * rate * s1;
-    ax = -0.6 * A * rate * rate * c1;
-    ay = -1.2 * A * rate * rate * s1;
-    az = -branch * 0.5 * A * rate * rate * c1;
-  }
-
-  // Transform synodic offset (dx, dy, dz) from L-point into the inertial home frame
-  const offSyn = add(add(scale(frame.ex, dx), frame.ey, dy), frame.ez, dz);
-  const velSyn = add(add(scale(frame.ex, vx), frame.ey, vy), frame.ez, vz);
-  const accSyn = add(add(scale(frame.ex, ax), frame.ey, ay), frame.ez, az);
-  const pos = add(L.pos, offSyn);
-  // v = v_L + v_syn + ω × offSyn + (Rdot/R) * offSyn
-  const breath = frame.Rdot / Math.max(frame.R, 1e-30);
-  const vel = add(add(add(L.vel, velSyn), cross(frame.omegaVec, offSyn)), offSyn, breath);
-  // Inertial acceleration of the Halo reference point: a_L_centrip + a_syn + 2 ω × v_syn + ω × (ω × offSyn)
-  const rFromB = sub(pos, frame.B);
-  const acc = add(
-    add(add(accSyn, cross(frame.omegaVec, velSyn), 2), cross(frame.omegaVec, cross(frame.omegaVec, rFromB))),
-    scale(frame.B, 0),
-  );
-  // Add barycentre's own inertial acceleration around its host (approx −GM_host/r^3 or central diff if needed)
+function haloAt(ctx: NonNullable<ReturnType<typeof haloContext>>, phase0: number): HaloStateResult {
+  const { L, K, M, branch } = ctx;
+  const o = librationOffset(M.m, branch, phase0, K.theta);
+  const th1 = K.dTheta,
+    th2 = K.ddTheta;
+  const du: Vec3 = [o.du[0] * th1, o.du[1] * th1, o.du[2] * th1];
+  const ddu: Vec3 = [o.ddu[0] * th1 * th1 + o.du[0] * th2, o.ddu[1] * th1 * th1 + o.du[1] * th2, o.ddu[2] * th1 * th1 + o.du[2] * th2];
+  const P = synodicPoint(K.kin, o.u, du, ddu);
+  const R = K.kin.R * M_METRES;
+  const periodM = (2 * Math.PI) / (M.m.nu * M.c.n);
   return {
-    pos,
-    vel,
-    acc,
-    synM: [dx * M_METRES, dy * M_METRES, dz * M_METRES],
+    pos: P.pos,
+    vel: P.vel,
+    acc: P.acc,
+    synM: [(o.u[0] - L.xi) * R, (o.u[1] - L.eta) * R, o.u[2] * R],
     periodM,
     periodDays: (periodM * M_SECONDS) / 86400,
-    phase,
+    phase: M.m.nu * K.theta + phase0,
+    azM: librationAz(M.m) * M.c.Rref * M_METRES,
     lagrange: L,
   };
 }
 
 /**
- * Samples a closed 3D Halo orbit loop around `id` at epoch `t0` [M] (drawn in the instantaneous synodic
- * frame anchored at L(t0), so the 3D map renders a clean closed loop around the Lagrange point!).
+ * Evaluates a 3D Halo (for L1/L2/L3) or the libration loop (for L4/L5: the short-period mode and the vertical one)
+ * around `id` at scene time `t` [M]. Its phase runs with the pair's synodic angle θ(t) (lagrange-math LibrationModel):
+ * the same at any date, across the network, without the instantaneous rate integrated from the epoch. Returns the
+ * position, velocity and inertial acceleration in the home frame, each the exact derivative of the one before.
+ */
+export function haloState(id: string, t: number, params?: Partial<HaloParams>): HaloStateResult | null {
+  const ctx = haloContext(id, t, params);
+  return ctx ? haloAt(ctx, params?.phase0 ?? 0) : null;
+}
+
+/** The phase0 that puts an orbit at phase `tau` at time t (e.g. 0: the Halo's x–z plane crossing nearest the secondary). */
+export function haloPhase0At(id: string, t: number, tau: number, params?: Partial<HaloParams>): number {
+  const ctx = haloContext(id, t, params);
+  if (!ctx) return tau;
+  const p = tau - ctx.M.m.nu * ctx.K.theta;
+  return p - 2 * Math.PI * Math.floor(p / (2 * Math.PI));
+}
+
+/**
+ * Samples one revolution of the orbit around `id` at epoch `t0` [M] (drawn in the synodic frame held at t0, so the 3D
+ * map shows a clean loop around the Lagrange point: the Halo's closed one; about L4/L5 the next in-plane period from
+ * the phase at t0, its vertical swing at the pair's rate).
  */
 export function haloOrbitLoop(id: string, t0: number, params?: Partial<HaloParams>, n = 96): Vec3[] {
-  const L0 = lagrangeState(id, t0);
-  if (!L0) return [];
-  const azM = params?.azM ?? defaultHaloAzM(id, t0);
-  const branch: 1 | -1 = params?.branch ?? -1;
-  const h0 = haloState(id, t0, { azM, branch, phase0: params?.phase0 ?? 0 });
-  if (!h0) return [];
-  const { frame, gamma, index } = L0;
-  const pts: Vec3[] = [];
-  if (index <= 3) {
-    const scaleL = gamma * frame.R;
-    const azDim = azM / M_METRES / Math.max(scaleL, 1e-30);
-    const C = richardsonCoeffs(frame.mu, index as 1 | 2 | 3, gamma, azDim);
-    const Ax = C.Ax,
-      Az = C.Az,
-      Ax2 = Ax * Ax,
-      Az2 = Az * Az,
-      Ax3 = Ax2 * Ax;
-    const k2x = C.a23 * Ax2 - C.a24 * Az2;
-    const k3x = C.a31 * Ax3 - C.a32 * Ax * Az2;
-    const k2y = C.b21 * Ax2 - C.b22 * Az2;
-    const k3y = C.b31 * Ax3 - C.b32 * Ax * Az2;
-    const k3z = C.d32 * Az * Ax2 - C.d31 * Az * Az2;
-    for (let j = 0; j <= n; j++) {
-      const ph = (j / n) * 2 * Math.PI;
-      const xs = C.a21 * Ax2 + C.a22 * Az2 - Ax * Math.cos(ph) + k2x * Math.cos(2 * ph) + k3x * Math.cos(3 * ph);
-      const ys = C.k * Ax * Math.sin(ph) + k2y * Math.sin(2 * ph) + k3y * Math.sin(3 * ph);
-      const zs = branch * (Az * Math.cos(ph) + C.d21 * Ax * Az * (Math.cos(2 * ph) - 3) + k3z * Math.cos(3 * ph));
-      pts.push(add(L0.pos, add(add(scale(frame.ex, scaleL * xs), frame.ey, scaleL * ys), frame.ez, scaleL * zs)));
-    }
-  } else {
-    const A = azM / M_METRES;
-    for (let j = 0; j <= n; j++) {
-      const ph = (j / n) * 2 * Math.PI;
-      const dx = 0.6 * A * Math.cos(ph);
-      const dy = 1.2 * A * Math.sin(ph);
-      const dz = branch * 0.5 * A * Math.cos(ph);
-      pts.push(add(L0.pos, add(add(scale(frame.ex, dx), frame.ey, dy), frame.ez, dz)));
-    }
-  }
-  return pts;
+  const ctx = haloContext(id, t0, params);
+  if (!ctx) return [];
+  const k = ctx.K.kin;
+  return librationLoop(ctx.M.m, ctx.branch, params?.phase0 ?? 0, ctx.K.theta, k.B, k.e, k.R, n);
 }
 
 /**
@@ -607,20 +683,19 @@ export function synodicRelState(id: string, X: Vec3, V: Vec3, t: number): { rM: 
 }
 
 /**
- * Fits the closest Halo orbit phase φ0 at time `t` to a spacecraft's current position `X` around `id`,
- * so engaging the Halo autopilot smoothly locks onto the Halo orbit without unnecessary phasing burns.
+ * Fits the closest orbit phase φ0 at time `t` to a spacecraft's current position `X` around `id`,
+ * so engaging the Halo autopilot smoothly locks onto the orbit without unnecessary phasing burns.
  */
 export function matchHaloPhase(id: string, X: Vec3, t: number, azM?: number, branch: 1 | -1 = -1): { phase0: number; azM: number } | null {
-  const L = lagrangeState(id, t);
-  if (!L) return null;
+  const ctx = haloContext(id, t, { azM, branch });
+  if (!ctx) return null;
   const az = azM ?? defaultHaloAzM(id, t);
+  const miss = (ph0: number) => len(sub(haloAt(ctx, ph0).pos, X));
   let bestPh = 0,
     bestD = Infinity;
   for (let k = 0; k < 36; k++) {
     const ph0 = (k / 36) * 2 * Math.PI;
-    const h = haloState(id, t, { azM: az, branch, phase0: ph0 });
-    if (!h) continue;
-    const d = len(sub(h.pos, X));
+    const d = miss(ph0);
     if (d < bestD) (bestD = d), (bestPh = ph0);
   }
   // Golden-section polish around bestPh
@@ -629,12 +704,11 @@ export function matchHaloPhase(id: string, X: Vec3, t: number, azM?: number, bra
   for (let it = 0; it < 20; it++) {
     const a = lo + (hi - lo) / 3,
       b = hi - (hi - lo) / 3;
-    const da = len(sub(haloState(id, t, { azM: az, branch, phase0: a })!.pos, X));
-    const db = len(sub(haloState(id, t, { azM: az, branch, phase0: b })!.pos, X));
-    if (da < db) hi = b;
+    if (miss(a) < miss(b)) hi = b;
     else lo = a;
   }
-  return { phase0: (lo + hi) / 2, azM: az };
+  const p = (lo + hi) / 2;
+  return { phase0: p - 2 * Math.PI * Math.floor(p / (2 * Math.PI)), azM: az };
 }
 
 /**
@@ -648,7 +722,9 @@ export function refineHaloOrbit(
   t0: number,
   params?: Partial<HaloParams>,
 ): { X0: Vec3; V0: Vec3; halfPeriodM: number; dvCorrectionMs: number; residualVxMs: number; ok: boolean } | null {
-  const h0 = haloState(id, t0, { azM: params?.azM, branch: params?.branch ?? -1, phase0: 0 });
+  const P0 = { azM: params?.azM, branch: params?.branch ?? -1 };
+  // (phase 0 at t0: the x–z plane crossing, y = 0 — the clock's phase0 that puts it there)
+  const h0 = haloState(id, t0, { ...P0, phase0: haloPhase0At(id, t0, 0, P0) });
   if (!h0) return null;
   const L0 = h0.lagrange;
   const { frame } = L0;

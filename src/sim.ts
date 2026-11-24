@@ -71,6 +71,8 @@ export class Simulation {
       if (s.cinematic && s.wormhole && s.waterSpeed > 0) this.renderer.water.clock += dt * s.waterSpeed * Math.min(1, warpFactor(s));
     }
     setSceneTime(this.time); // every display and prediction sees the completed step's clock
+    // (JWST's near-field tracker moved on with the craft, here only — the renderer reads it: stationkeep.ts jwstFollow)
+    this.camera.jwstFollow(this.time);
     const f = this.camera.pilot.fired;
     if (f.at !== this.lastFired) {
       this.lastFired = f.at;

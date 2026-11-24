@@ -207,6 +207,7 @@ export default {
   star: "étoile",
   planet: "planète",
   moon: "lune",
+  spacecraft: "engin spatial",
   hole: "trou noir",
   mouth: "embouchure",
   "Play the preview: the bodies and the ship move on along their paths":

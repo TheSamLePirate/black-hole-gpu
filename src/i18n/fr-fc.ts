@@ -38,6 +38,8 @@ export default {
   "HALO (JWST)": "HALO (JWST)",
   LIBRATION: "LIBRATION",
   "Halo A_z": "Halo A_z",
+  "A_z {0} km is outside this point's orbits ({1}–{2} km): {3} km kept":
+    "A_z {0} km hors des orbites de ce point ({1}–{2} km) : {3} km retenus",
   "{0} — N-body transfer & insertion burn, then Halo orbit autopilot / station-keeping":
     "{0} — transfert N-corps et poussée d'insertion, puis autopilote d'orbite Halo / maintien à poste",
   "N-body transfer & insertion burn into a 3D Halo orbit (JWST-style) or libration point hold":

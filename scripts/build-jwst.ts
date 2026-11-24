@@ -1,6 +1,19 @@
 // Builds assets/jwst/jwst.bin from assets/jwst/scene.gltf + assets/jwst/scene.bin.
 // Pure Bun/TypeScript — no Blender required.
 //
+// Source model: "The James Webb Space Telescope" by Ignazio Pillitteri (@gnaz),
+// https://sketchfab.com/3d-models/the-james-webb-space-telescope-dcb95b3193be49e7a60192055df2315d — licensed CC BY 4.0
+// (https://creativecommons.org/licenses/by/4.0/): jwst.bin is a derived work under the same licence, its credit due
+// wherever it is shown. To rebuild: on that page, "Download 3D Model" → glTF (a free Sketchfab account), unzip
+// `scene.gltf` and `scene.bin` into assets/jwst/ (ignored by git: .gitignore — never committed; the textures are not
+// used), then `bun scripts/build-jwst.ts`.
+//
+// What it does: the scene's hierarchy flattened into one mesh in the model's own axes and units (metres; no rotation:
+// the glTF already has the sunshield's normal along Y, its Sun side −Y), centred on its bounding box; each vertex
+// given a surface kind and an sRGB colour (classifyMaterial); then the vertices byte-identical once packed (position,
+// quantised normal, colour) welded and the mesh reordered for the vertex cache and the vertex fetch (meshoptimizer
+// `reorderMesh`, devDependency 1.3.0) — the same image, fewer vertices shaded.
+//
 // Binary format (little endian, gzipped):
 //   "JWST" (4 bytes)
 //   u32 version = 1
@@ -8,13 +21,16 @@
 //   u32 indexCount
 //   f32 boundingRadius [m]
 //   vertices: vertexCount × 24 bytes:
-//     pos:    3 × f32 [m] (centred around model origin; -Y faces Sun, +Y cold mirror side, -Z mirror boresight)
+//     pos:    3 × f32 [m] (centred around model origin; -Y faces Sun, +Y cold mirror side, +Z mirror boresight:
+//             the primary's 6.5 m disc lies in x–y at z ≈ 1.8 m, the secondary on its struts at z ≈ 4.9 m — read from
+//             jwst.bin by the kinds and positions, 2026-11-24)
 //     normal: 4 × snorm8
 //     color:  4 × unorm8 (sRGB rgb, alpha = surface kind: 0 hull/structure, 1 gold mirror, 2 Kapton foil, 3 solar array)
 //     part:   4 × u8 (0, 0, 0, 0)
 //   indices: indexCount × u32
 
 import { gzipSync } from "bun";
+import { MeshoptEncoder } from "meshoptimizer";
 
 const SRC_GLTF = "assets/jwst/scene.gltf";
 const SRC_BIN = "assets/jwst/scene.bin";
@@ -288,15 +304,43 @@ async function main() {
     outU8[o + 19] = colors[4 * i + 3]!;
     // part u8x4 = 0
   }
-  const idxOff = HEADER + nv * STRIDE;
-  for (let i = 0; i < ni; i++) outDv.setUint32(idxOff + i * 4, indices[i]!, true);
+  // the vertices identical once packed, welded (the glTF repeats them per face and per primitive)
+  const weld = new Map<string, number>();
+  const firstOf: number[] = [];
+  const welded = new Uint32Array(ni);
+  const vtx = (i: number) => outU8.subarray(HEADER + i * STRIDE, HEADER + (i + 1) * STRIDE);
+  for (let k = 0; k < ni; k++) {
+    const i = indices[k]!;
+    const key = String.fromCharCode(...vtx(i));
+    let to = weld.get(key);
+    if (to === undefined) {
+      to = firstOf.length;
+      weld.set(key, to);
+      firstOf.push(i);
+    }
+    welded[k] = to;
+  }
+  // the triangles ordered for the vertex cache, the vertices for their fetch (meshoptimizer)
+  await MeshoptEncoder.ready;
+  const [remap, nOut] = MeshoptEncoder.reorderMesh(welded, true, false);
+  const final = new ArrayBuffer(HEADER + nOut * STRIDE + ni * 4);
+  const fU8 = new Uint8Array(final);
+  const fDv = new DataView(final);
+  fU8.set(outU8.subarray(0, HEADER), 0);
+  fDv.setUint32(8, nOut, true);
+  for (let w = 0; w < firstOf.length; w++) {
+    const to = remap[w]!;
+    if (to !== 0xffffffff) fU8.set(vtx(firstOf[w]!), HEADER + to * STRIDE);
+  }
+  const idxOff = HEADER + nOut * STRIDE;
+  for (let i = 0; i < ni; i++) fDv.setUint32(idxOff + i * 4, welded[i]!, true);
 
-  const gz = gzipSync(new Uint8Array(raw), { level: 9 });
+  const gz = gzipSync(new Uint8Array(final), { level: 9 });
   await Bun.write(OUT_BIN, gz);
   console.log(
-    `JWST built: ${nv.toLocaleString()} verts, ${(ni / 3).toLocaleString()} tris, reach ${reach.toFixed(2)} m, ` +
-      `size ${(maxX - minX).toFixed(2)} × ${(maxY - minY).toFixed(2)} × ${(maxZ - minZ).toFixed(2)} m, ` +
-      `raw ${(raw.byteLength / 1e6).toFixed(2)} MB -> gz ${(gz.byteLength / 1e6).toFixed(2)} MB (${OUT_BIN})`,
+    `JWST built: ${nv.toLocaleString()} verts read, ${nOut.toLocaleString()} once welded and reordered, ${(ni / 3).toLocaleString()} tris, ` +
+      `reach ${reach.toFixed(2)} m, size ${(maxX - minX).toFixed(2)} × ${(maxY - minY).toFixed(2)} × ${(maxZ - minZ).toFixed(2)} m, ` +
+      `raw ${(final.byteLength / 1e6).toFixed(2)} MB -> gz ${(gz.byteLength / 1e6).toFixed(2)} MB (${OUT_BIN})`,
   );
 }
 

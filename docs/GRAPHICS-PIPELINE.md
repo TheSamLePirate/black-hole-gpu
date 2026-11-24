@@ -248,8 +248,8 @@ R reconstruction/sortie, S ombres/sondes amorties, Z hors budget (diagnostic, ch
 | E6 | `taau` | `taau`, **à la taille de la toile** | toile > cible × 1,01 ; un pixel de maillage mobile reprojeté par son mouvement (`terrain raster motion`, liaison 49, J1-2) ; désoccultation par le mouvement de l'image d'avant (liaison 50) ; **l'appareil (w 1, J1-5) : ses 3 × 3 pixels internes pris comme échantillons de la frame, à leur centre (sans gigue)** ; rejet par identité comme `temporal` (éteint par défaut) | → `taau.out` → display | R |
 | E7 | `stars` | `stars` | étoiles splattées (sinon copie hist→hdr) | → `hdr` | R |
 | E8 | `motion blur` | `motionBlur` | `s.motionBlur > 0` (éteint par défaut) ; un maillage mobile et l'appareil (J1-5) par leur propre mouvement (liaison 49) | → `hdr` | R |
-| E10 | station (3 passes, non chronométrées) | `station.wgsl` (`station.ts:221`) | ISS affichée, < 3 000 km de la Terre | `sceneDepth` → `hdr` | M |
-| E10b | JWST (3 passes : `jwst: shadow map`, `jwst`, `jwst composite`, non chronométrées) | `jwst.wgsl` (`src/jwst.ts`, `src/shaders/jwst.wgsl`) | JWST affiché (`s.jwst`), < 2 000 km du télescope sur son orbite Halo Sud autour de L2 Soleil–Terre | `sceneDepth` → `hdr` | M |
+| E10 | station (3 passes, non chronométrées) | `station.wgsl` (`station.ts`, la boîte, ses pipelines et la composition partagés avec E10b : `src/meshbox.ts`, 24 nov. 2026) | ISS affichée, < 3 000 km de la Terre | `sceneDepth` → `hdr` | M |
+| E10b | JWST (3 passes : `jwst: shadow map`, `jwst`, `jwst composite`, non chronométrées) | `jwst.wgsl` (`src/jwst.ts`, `src/shaders/jwst.wgsl`, boîte commune `src/meshbox.ts`) | JWST affiché (`s.jwst`), **prêt** (rien sur le GPU avant l'approche : module, 3 pipelines **asynchrones** et maillage créés à < 100 000 km — `JWST_PREPARE_KM` —, depuis le 24 nov. 2026 ; avant : 3 pipelines synchrones et une ombre depth32 2048² de 16 Mio au constructeur du renderer), < 2 000 km, **rayon apparent ≥ 1 px** (`JWST_MIN_PX` : au-delà de ~7 km à 1 440 px et 60° il est sous le pixel — avant, les trois passes tournaient jusqu'à 2 000 km) ; `jwst: shadow map` **seulement à ≥ 24 px de rayon** (`JWST_SHADOW_PX` ; texture créée là) et **redessinée seulement quand la direction du Soleil dans le repère du télescope bouge de plus de 2·10⁻⁴ rad** (la carte est faite dans le repère du modèle, `lightM` ; elle change avec son roulis lent, pas avec la caméra) ; maillage, ombre et boîte libérés après 120 s au-delà de 300 000 km (pipelines gardés). Lit le traqueur de JWST sans le déplacer (`jwstTrack.peek` ; seul `sim.ts` → `jwstFollow` l'avance). **Non mesuré** (aucune A/B GPU de ces portes) | `sceneDepth` → `hdr` | M |
 | E11 | `character solar shadow`, `character shadow on traced terrain`, `grass: shade, footprints, blades`, `low cover: clumps`, `character HDR` / `character and grass HDR` | `character.wgsl` (`character-renderer.ts:918–1030`) | marcheur, herbe ou couvert bas | `sceneDepth`, SH, ombre → `hdr` | M |
 | E12 | `ship: shadow map`, `ship: shading (MSAA)`, `ship: own mask`, `ship: hull distance`, `ship: thrusters and plasma` (+ clear des panaches non chronométré) | `ship.wgsl` (`ship.ts:2635–3104`) | vaisseau ou engins visibles (à moins de 20 km : `craftsShown` — **depuis le 24 nov. 2026 aussi le trafic réel, les navires et les porte-avions vus sans appareil** : caméra libre, tournée, vue d'un spectateur ; `combatOthers` placés alors depuis la vue elle-même par `sim.ts`, `renderer.othersFromView`, sans œil d'appareil à ajouter — code, non mesuré), **hors image vivante** (rendus hors ligne) ou `shipInScene` éteint — sinon E12a avant le temporel (la station et le marcheur se dessinent alors après lui, contre `sceneDepth` qui le contient ; ses verres ne reflètent plus la station) | `hdr` (reflets), `sceneDepth`, env/SH → `resolved`, `plume` → display, bloom, masque cockpit suivant | M/S |
 | E13 | endurance (2 passes, non chronométrées) | `endurance.wgsl` (`endurance.ts:262`) | `s.endurance` | → `hdr` | M |
@@ -377,7 +377,9 @@ soumettre (`renderer.ts:10842`).
   (non : à 2/3, −2,1 dB en virage contre une référence à pleine échelle, pour ~8 % de GPU ; l'épingle gardée, le levier `rasterScaleFree` retiré, lot R1).
 - **Modules** : `TerrainRaster` (distance + profondeur W×H, `sunDepth` 4096×2048, maillages), `SceneryRaster` (indirects,
   listes 32 Mio, tsm), `Ship` (env, SH, ombre 4096×2048, `resolved` W×H, panaches demi-résolution, MSAA), personnage,
-  station, Endurance, cartes en surimpression.
+  station, **JWST (paresseux depuis le 24 nov. 2026 : maillage 107 384 sommets / 98 879 triangles ≈ 3,8 Mo, ombre depth32
+  2048² 16 Mio seulement quand il est grand à l'image, boîte MSAA à sa taille — tout libéré loin ; `src/jwst.ts`)**,
+  Endurance, cartes en surimpression.
 
 ### 4.3 Mémoire mesurée
 
@@ -518,7 +520,8 @@ mesuré + 10 %). **Depuis `da4e75bd` plusieurs budgets Terre-raster sont à leur
   1re image (≈ 200–380 ms, E0/E11) tombe juste après la marque `renderer`.
 - **Au démarrage, asynchrones attendus** : post ×18 et display ×2 (`auxCompiled`) ; non attendus : cockpit mask ×2, warp
   grid, GTAO. Puis `getCompilationInfo` sur 9 modules (`renderer.ts:2427–2465`).
-- **Paresseux** : cache de terrain (2), horizons et rivage terrestres, raster du terrain, raster du décor (16), raster des
+- **Paresseux** : **JWST (3, `createRenderPipelineAsync`, à l'approche — < 100 000 km —, `src/jwst.ts` ; synchrones au
+  constructeur avant le 24 nov. 2026)**, cache de terrain (2), horizons et rivage terrestres, raster du terrain, raster du décor (16), raster des
   corps (4), horizons des corps (2 sync), tuile des géantes (7 sync, **recréés à chaque appel**), mips d'imagerie (1),
   packers des cartes Terre/HD et nuages du jour (sync, **nouveau module à chaque chargement**), BC7/BC5 (2, en cache), mips
   des écrans (`MipGen.warm` pour le F-35), carte 3D (6 sync par instance, à l'ouverture), `carryHistory` (au 1er
