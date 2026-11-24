@@ -133,10 +133,12 @@ describe.skipIf(!E2E)("the traffic about a free camera with no craft", () => {
 
   test("followable: an airliner, then a ship, by the camera panel's Chase view — no craft", async () => {
     await app.step("an airliner followed");
-    // (the nearest airborne one with a mesh within 60 km)
+    // (the nearest airborne one with a mesh within 60 km, flying: over 40 m/s — a parked airliner whose transponder
+    // reports a numeric barometric height instead of "ground" counts as airborne, e.g. N796UA at SFO's gate, 0.7 kt,
+    // alt_baro −200 ft, 24 Nov 2026: followed, it "moved 0 m in 4 s")
     const id = await app.js<string | null>(`(() => {
       const vc = __bh.camera.viewController(), by = new Map(__bh.camera.trafficNow().map((c) => [c.id, c]));
-      const m = __bh.camera.trafficOverlay(${fmtA}, vc).find((x) => { const c = by.get(x.id); return c && c.mesh && !c.gnd && x.dist < 60000; });
+      const m = __bh.camera.trafficOverlay(${fmtA}, vc).find((x) => { const c = by.get(x.id); return c && c.mesh && !c.gnd && Math.hypot(...c.v) > 40 && x.dist < 60000; });
       return m ? m.id : null; })()`);
     if (!id) throw new Error("no airborne airliner within 60 km of the bay to follow");
     await app.scenario(`airliner trf:${id}`);
