@@ -18,7 +18,8 @@ import { readPng } from "./lib/png";
 // Duration: ~7 min on kerr-mini (414 s on 24 Nov 2026, the Earth data on disk).
 // Done when: the seven views shot with their GPU times, the shimmer and the five decks' profiles measured, no page error.
 
-const OUT = process.env.BRIDGES_OUT ?? "remote-results/bridges-notable";
+// (an A/B — scripts/ab-e2e.ts —: each side its own folder)
+const OUT = `${process.env.BRIDGES_OUT ?? "remote-results/bridges-notable"}${process.env.AB_SIDE ? `-${process.env.AB_SIDE}` : ""}`;
 const png = (f: string) => readPng(new Uint8Array(readFileSync(f)));
 
 /**

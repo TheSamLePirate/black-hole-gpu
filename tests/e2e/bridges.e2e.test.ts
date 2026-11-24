@@ -16,7 +16,8 @@ import { type BridgeView, gpuTimes, sceneStats, showView, widestRoad } from "./l
 // Duration: ~8 min on kerr-mini (400 s on 24 Nov 2026, the Earth data on disk).
 // Done when: the six views shot with their GPU times (and the three diagnostic shots), the scene's bridge counts asserted, no page error.
 
-const OUT = process.env.BRIDGES_OUT ?? "remote-results/bridges";
+// (an A/B — scripts/ab-e2e.ts —: each side its own folder)
+const OUT = `${process.env.BRIDGES_OUT ?? "remote-results/bridges"}${process.env.AB_SIDE ? `-${process.env.AB_SIDE}` : ""}`;
 
 const VIEWS: (BridgeView & { label: string })[] = [
   {
