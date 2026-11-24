@@ -1,19 +1,62 @@
-//! Bidirectional simulator control bus (`/obc/cmd`) and universal `__bh` / TARS RPC client
-//! (`/obc/rpc_req` -> `/obc/rpc_res`).
+//! Bidirectional simulator control bus (`/obc/cmd`) and universal `__bh` / TARS RPC client.
+//!
+//! RPC over 9p is keyed by request id (`src/obc/bridge.ts`, docs/PLAN-LINUX-OBC.md §2.1): the request is written to
+//! `/obc/rpc/<id>.req`, the reply read from `/obc/rpc/<id>.res` (then removed). The single slot `/obc/rpc_res`, which
+//! the host also writes, is the fallback; `/obc/rpc_req` is used only when the host has no `/obc/rpc` directory (an
+//! older host). Ids are `rs-<pid>-<nonce>-<seq>`: unique across concurrent Rust apps, not only within one process.
 
 use crate::telemetry::{TELEMETRY_PATH, Telemetry};
 use serde_json::{Value, json};
 use std::fs::{self, OpenOptions};
-use std::io::Write;
+use std::io::{Read, Write};
+use std::sync::OnceLock;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::thread;
-use std::time::{Duration, Instant};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 pub const CMD_PATH: &str = "/obc/cmd";
 pub const RPC_REQ_PATH: &str = "/obc/rpc_req";
 pub const RPC_RES_PATH: &str = "/obc/rpc_res";
+/// Keyed RPC directory: `<id>.req` written by the guest, `<id>.res` written by the host.
+pub const RPC_DIR: &str = "/obc/rpc";
 
 static RPC_SEQ: AtomicU64 = AtomicU64::new(1);
+static RPC_NONCE: OnceLock<u32> = OnceLock::new();
+
+/// A per-process random nonce (from `/dev/urandom`, else the clock mixed with the pid).
+fn rpc_nonce() -> u32 {
+    *RPC_NONCE.get_or_init(|| {
+        let mut buf = [0u8; 4];
+        if fs::File::open("/dev/urandom")
+            .and_then(|mut f| f.read_exact(&mut buf))
+            .is_ok()
+        {
+            return u32::from_le_bytes(buf);
+        }
+        let nanos = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map_or(0, |d| d.as_nanos());
+        let mixed = (nanos as u64) ^ (u64::from(std::process::id()) << 32);
+        (mixed ^ (mixed >> 29)).wrapping_mul(0x9E37_79B9_7F4A_7C15) as u32
+    })
+}
+
+/// The next RPC id of this process: `rs-<pid>-<nonce>-<seq>` (a safe file name, `[A-Za-z0-9_.-]`).
+#[must_use]
+pub fn next_rpc_id() -> String {
+    format!(
+        "rs-{}-{:08x}-{}",
+        std::process::id(),
+        rpc_nonce(),
+        RPC_SEQ.fetch_add(1, Ordering::Relaxed)
+    )
+}
+
+/// Parse one reply file's text, keeping it only when it answers `id`.
+fn reply_for(raw: &str, id: &str) -> Option<Value> {
+    let v = serde_json::from_str::<Value>(raw.trim()).ok()?;
+    (v.get("id").and_then(Value::as_str) == Some(id)).then_some(v)
+}
 
 /// Rich metadata for a live `__bh` member returned by `op: "ls"` or `op: "catalog"`.
 #[derive(Debug, Clone)]
@@ -259,10 +302,11 @@ impl AvionicsBus {
         self.send_cmd(&json!({ "kind": "hold", "mode": mode }))
     }
 
-    /// Synchronous RPC call to the host's `src/obc/bh-rpc.ts` over 9p (`/obc/rpc_req` -> `/obc/rpc_res`).
+    /// Synchronous RPC call to the host's `src/obc/bh-rpc.ts` over 9p (keyed `/obc/rpc/<id>.req` -> `<id>.res`,
+    /// falling back to the single slot `/obc/rpc_req` -> `/obc/rpc_res` on an older host).
     #[must_use]
     pub fn rpc(&self, mut req: Value, timeout_ms: u64) -> Option<Value> {
-        let id = format!("rs-{}", RPC_SEQ.fetch_add(1, Ordering::Relaxed));
+        let id = next_rpc_id();
         if let Some(obj) = req.as_object_mut() {
             obj.insert("id".into(), Value::String(id.clone()));
         }
@@ -270,20 +314,38 @@ impl AvionicsBus {
             return None;
         };
         body.push('\n');
-        if fs::write(RPC_REQ_PATH, body.as_bytes()).is_err() {
+        let req_path = format!("{RPC_DIR}/{id}.req");
+        let res_path = format!("{RPC_DIR}/{id}.res");
+        let keyed = OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&req_path)
+            .and_then(|mut f| f.write_all(body.as_bytes()))
+            .is_ok();
+        if !keyed && fs::write(RPC_REQ_PATH, body.as_bytes()).is_err() {
             return None;
         }
         let deadline = Instant::now() + Duration::from_millis(timeout_ms);
         loop {
-            if let Ok(raw) = fs::read_to_string(RPC_RES_PATH) {
-                let trimmed = raw.trim();
-                if let Ok(v) = serde_json::from_str::<Value>(trimmed)
-                    && v.get("id").and_then(Value::as_str) == Some(id.as_str())
-                {
-                    return Some(v);
+            if keyed
+                && let Ok(raw) = fs::read_to_string(&res_path)
+                && let Some(v) = reply_for(&raw, &id)
+            {
+                let _ = fs::remove_file(&res_path);
+                return Some(v);
+            }
+            if let Ok(raw) = fs::read_to_string(RPC_RES_PATH)
+                && let Some(v) = reply_for(&raw, &id)
+            {
+                if keyed {
+                    let _ = fs::remove_file(&res_path);
                 }
+                return Some(v);
             }
             if Instant::now() >= deadline {
+                if keyed {
+                    let _ = fs::remove_file(&req_path);
+                }
                 return None;
             }
             thread::sleep(Duration::from_millis(12));
@@ -435,5 +497,37 @@ impl AvionicsBus {
             (_, None) => json!({ "op": "mcdu", "action": action }),
         };
         unwrap_rpc_result(self.rpc(req, 1800)).ok()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn rpc_ids_are_unique_safe_file_names_with_pid_and_nonce() {
+        let a = next_rpc_id();
+        let b = next_rpc_id();
+        assert_ne!(a, b);
+        let pid = std::process::id().to_string();
+        let parts: Vec<&str> = a.split('-').collect();
+        assert_eq!(parts.len(), 4, "{a}");
+        assert_eq!(parts[0], "rs");
+        assert_eq!(parts[1], pid);
+        assert_eq!(parts[2].len(), 8);
+        assert!(u32::from_str_radix(parts[2], 16).is_ok());
+        assert!(
+            a.chars()
+                .all(|c| c.is_ascii_alphanumeric() || matches!(c, '_' | '.' | '-'))
+        );
+        assert!(a.len() <= 96);
+    }
+
+    #[test]
+    fn reply_for_keeps_only_the_matching_id() {
+        assert!(reply_for(r#"{"id":"rs-1-a-1","ok":true}"#, "rs-1-a-1").is_some());
+        assert!(reply_for(r#"{"id":"rs-2-b-1","ok":true}"#, "rs-1-a-1").is_none());
+        assert!(reply_for("garbage", "rs-1-a-1").is_none());
+        assert!(reply_for("{\"id\":\"x\",\"ok\":true}\n   ", "x").is_some());
     }
 }

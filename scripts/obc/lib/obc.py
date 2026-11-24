@@ -28,6 +28,27 @@ TAU_PATH = "/obc/tau"
 CMD_PATH = "/obc/cmd"
 RPC_REQ_PATH = "/obc/rpc_req"
 RPC_RES_PATH = "/obc/rpc_res"
+# Keyed RPC (src/obc/bridge.ts, docs/PLAN-LINUX-OBC.md §2.1): <id>.req written here, <id>.res read back.
+RPC_DIR = "/obc/rpc"
+_RPC_NONCE = os.urandom(4).hex()
+_RPC_SEQ = 0
+
+
+def next_rpc_id() -> str:
+    """A request id unique across processes: py-<pid>-<nonce>-<seq> (a safe file name)."""
+    global _RPC_SEQ
+    _RPC_SEQ += 1
+    return f"py-{os.getpid()}-{_RPC_NONCE}-{_RPC_SEQ}"
+
+
+def _reply_for(raw: str, req_id: str) -> Optional[Dict[str, Any]]:
+    try:
+        parsed = json.loads(raw)
+    except (ValueError, TypeError):
+        return None
+    if isinstance(parsed, dict) and parsed.get("id") == req_id:
+        return parsed
+    return None
 VSOCK_HOST_CID = 2
 VSOCK_PORT = 4747
 
@@ -199,25 +220,48 @@ class AvionicsBus:
         return self.send({"kind": "say", "text": str(text)})
 
     def bh_rpc(self, payload: Dict[str, Any], timeout_s: float = 10.0) -> Dict[str, Any]:
-        """Universal RPC to the full simulator window.__bh API & all 73 TARS tools."""
-        req_id = f"{int(time.time() * 1000)}-{os.getpid()}-{int(time.monotonic() * 1e6) % 99999}"
+        """Universal RPC to the full simulator window.__bh API & all 73 TARS tools.
+
+        AF_VSOCK first; else the keyed 9p files /obc/rpc/<id>.req -> <id>.res (the single slot
+        /obc/rpc_res as fallback, /obc/rpc_req only on an older host without /obc/rpc)."""
+        req_id = next_rpc_id()
         body = dict(payload)
         body["id"] = req_id
         resp = self._rpc(body)
         if resp is not None:
             return resp
-        with open(RPC_REQ_PATH, "w", encoding="utf-8") as f:
-            f.write(json.dumps(body) + "\n")
+        line = json.dumps(body) + "\n"
+        req_path = f"{RPC_DIR}/{req_id}.req"
+        res_path = f"{RPC_DIR}/{req_id}.res"
+        keyed = True
+        try:
+            with open(req_path, "x", encoding="utf-8") as f:
+                f.write(line)
+        except OSError:
+            keyed = False
+            with open(RPC_REQ_PATH, "w", encoding="utf-8") as f:
+                f.write(line)
         deadline = time.monotonic() + timeout_s
         while time.monotonic() < deadline:
-            try:
-                with open(RPC_RES_PATH, "r", encoding="utf-8") as f:
-                    parsed = json.load(f)
-                if isinstance(parsed, dict) and parsed.get("id") == req_id:
+            for path in ((res_path, RPC_RES_PATH) if keyed else (RPC_RES_PATH,)):
+                try:
+                    with open(path, "r", encoding="utf-8") as f:
+                        parsed = _reply_for(f.read(), req_id)
+                except OSError:
+                    continue
+                if parsed is not None:
+                    if keyed:
+                        try:
+                            os.remove(res_path)
+                        except OSError:
+                            pass
                     return parsed
-            except (OSError, json.JSONDecodeError):
-                pass
             time.sleep(0.01)
+        if keyed:
+            try:
+                os.remove(req_path)
+            except OSError:
+                pass
         return {"id": req_id, "ok": False, "error": "RPC timeout"}
 
     def bh_ls(self, path: str = "") -> Dict[str, Any]:

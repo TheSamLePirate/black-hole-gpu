@@ -2,6 +2,7 @@
 // Zero third-party npm packages required. Uses Uint32Array packed XRGB8888 writes for ultra-fast real-time graphics.
 
 import { spawnSync } from "node:child_process";
+import { randomBytes } from "node:crypto";
 import fs from "node:fs";
 
 export const TELEMETRY_PATH = "/obc/telemetry.json";
@@ -10,6 +11,26 @@ export const CMD_PATH = "/obc/cmd";
 export const LAST_RESULT_PATH = "/obc/last_result.json";
 export const RPC_REQ_PATH = "/obc/rpc_req";
 export const RPC_RES_PATH = "/obc/rpc_res";
+/** Keyed RPC (src/obc/bridge.ts, docs/PLAN-LINUX-OBC.md §2.1): `<id>.req` written here, `<id>.res` read back. */
+export const RPC_DIR = "/obc/rpc";
+
+const RPC_NONCE = randomBytes(4).toString("hex");
+let rpcSeq = 0;
+
+/** A request id unique across processes: `js-<pid>-<nonce>-<seq>` (a safe file name). */
+export function nextRpcId() {
+  rpcSeq += 1;
+  return `js-${process.pid}-${RPC_NONCE}-${rpcSeq}`;
+}
+
+function replyFor(raw, id) {
+  try {
+    const parsed = JSON.parse(raw);
+    return parsed && parsed.id === id ? parsed : null;
+  } catch {
+    return null;
+  }
+}
 
 function sleepMs(ms) {
   // Never use Atomics.wait (futex_wait hangs on emulated aarch64); use lightweight Alpine sleep fallback only for async RPCs.
@@ -88,27 +109,44 @@ export class AvionicsBus {
     return this.send({ kind: "say", text: String(text) });
   }
 
-  /** Synchronous universal RPC to the full simulator `window.__bh` API & all 73 TARS tools. */
+  /**
+   * Synchronous universal RPC to the full simulator `window.__bh` API & all 73 TARS tools, over the keyed 9p files
+   * `/obc/rpc/<id>.req` -> `<id>.res` (the single slot `/obc/rpc_res` as fallback; `/obc/rpc_req` only on an older host).
+   */
   bhRpc(payload, timeoutMs = 10000) {
-    const id = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
-    fs.writeFileSync(RPC_REQ_PATH, `${JSON.stringify({ ...payload, id })}\n`, "utf8");
+    const id = nextRpcId();
+    const line = `${JSON.stringify({ ...payload, id })}\n`;
+    const reqPath = `${RPC_DIR}/${id}.req`;
+    const resPath = `${RPC_DIR}/${id}.res`;
+    let keyed = true;
+    try {
+      fs.writeFileSync(reqPath, line, { encoding: "utf8", flag: "wx" });
+    } catch {
+      keyed = false;
+      fs.writeFileSync(RPC_REQ_PATH, line, "utf8");
+    }
+    const paths = keyed ? [resPath, RPC_RES_PATH] : [RPC_RES_PATH];
     const deadline = Date.now() + timeoutMs;
     let polls = 0;
     while (Date.now() < deadline) {
-      try {
-        const raw = fs.readFileSync(RPC_RES_PATH, "utf8").trim();
-        if (raw) {
-          const parsed = JSON.parse(raw);
-          if (parsed && parsed.id === id) return parsed;
+      for (const p of paths) {
+        let parsed = null;
+        try {
+          parsed = replyFor(fs.readFileSync(p, "utf8"), id);
+        } catch {
+          // not written yet
         }
-      } catch {
-        // retry on transient read
+        if (parsed) {
+          if (keyed) fs.rmSync(resPath, { force: true });
+          return parsed;
+        }
       }
       polls++;
       // Synchronous host RPCs resolve before writeFileSync even returns (polls === 1).
       // Only async Promise RPCs need a brief sleep between retries.
       sleepMs(polls < 5 ? 25 : 60);
     }
+    if (keyed) fs.rmSync(reqPath, { force: true });
     return { id, ok: false, error: `RPC timeout after ${timeoutMs}ms` };
   }
 
