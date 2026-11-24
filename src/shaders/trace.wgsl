@@ -7794,6 +7794,10 @@ var<private> TILE_AT: vec2f = vec2f(0.0);
 var<private> SC_PAINT:vec4f=vec4f(0.0);
 var<private> SC_SURVEY_ROAD:bool=false;
 var<private> SC_ON_BRIDGE:bool=false;
+// (PLAN-PONT-ROUTES-AAA B1/B2: the winning road's own coordinates — its distance from its axis, its carriageway's half-width, its
+// abscissa along its road [m], its packed word — and its direction (the scene's frame), for the raster material's pavement)
+var<private> SC_ROAD:vec4f=vec4f(0.0);
+var<private> SC_ROAD_DIR:vec2f=vec2f(1.0,0.0);
 // (RP10: that point's place in the scenery's frame [m] — SC_POINT's, kept outside the scenery's block)
 var<private> SC_AT:vec2f=vec2f(0.0);
 // (outside the scenery's block: shadeLite reads it in every kernel)
@@ -10634,7 +10638,7 @@ fn sceneryShadow(light:vec3f,normal:vec3f)->f32 {
 struct ScenerySurface { color:vec3f, cover:f32, kind:f32 };
 fn scenerySurface(foot:f32)->ScenerySurface {
   var out=ScenerySurface(vec3f(0.0),0.0,0.0);
-  SC_PAINT=vec4f(0.0);SC_SURVEY_ROAD=false;SC_AT=SC_POINT.xy;
+  SC_PAINT=vec4f(0.0);SC_SURVEY_ROAD=false;SC_AT=SC_POINT.xy;SC_ROAD=vec4f(0.0);
   if(!HAS_SCENERY || P.scenery[0].w<.5 || P.scenery[2].w<.5 || SC_DISTANCE>P.scenery[1].w){return out;}
   let point=SC_POINT.xy;let aa=max(.12,foot*.75);let header=scenery[1];let total=u32(header.y);var i=0u;var priority=0.0;var dryIsland=false;
   while(i<total){
@@ -10643,7 +10647,7 @@ fn scenerySurface(foot:f32)->ScenerySurface {
     if(any(point<lo.xy-vec2f(aa)) || any(point>hi.xy+vec2f(aa))){i=u32(lo.w);continue;}
     if(hi.w<0.0){i++;continue;}
     let base=u32(header.z+hi.w);let p=scenery[base];let size=scenery[base+1u];var color=scenery[base+2u].xyz;
-    var kind=p.w;var cover=0.0;var rank=1.0;
+    var kind=p.w;var cover=0.0;var rank=1.0;var road=vec4f(0.0);var rdir=vec2f(1.0,0.0);
     if(scenery[base+2u].w>.5){
       cover=select(0.0,1.0,sceneryPolygon(point,base,u32(p.z)));
       if(kind==4.0 && cover==0.0 && sceneryPolygon(point,base,u32(scenery[base+2u].w))){dryIsland=true;}
@@ -10651,6 +10655,8 @@ fn scenerySurface(foot:f32)->ScenerySurface {
       kind=size.y;let line=p.zw-p.xy;let len=max(length(line),.001);let along=clamp(dot(point-p.xy,line)/(len*len),0.0,1.0);
       let distance=length(point-p.xy-line*along);
       cover=1.0-smoothstep(max(0.0,size.x-aa),size.x+aa,distance);
+      // (B2: its abscissa along its road — the segment's start's, scenery[base+2].w ≤ 0, kept so its dashes run on across segments)
+      road=vec4f(distance,select(size.x,abs(size.w),size.w!=0.0),along*len-scenery[base+2u].w,size.z);rdir=line/len;
       rank=select(2.0,3.0,kind==2.0);
       // (PLAN-J8 VB7: a junction's paint — kind 5, over the road: size.z its pattern, 0 a line, 1 a zebra's 0.5 m bands, 2 a yield's
       // dashes —, its extent across the road along the segment; under a 2 m pixel only)
@@ -10670,25 +10676,12 @@ fn scenerySurface(foot:f32)->ScenerySurface {
       if(kind!=3.0 && segBridge!=SC_ON_BRIDGE){i++;continue;}
       let mk=mkAll&32767u;
       if(kind==1.0 && mk>0u){
-        let cr=select(size.x,abs(size.w),size.w!=0.0);let s=along*len;let paint=vec3f(.65,.64,.56);
+        let cr=road.y;let s=road.z;let paint=vec3f(.65,.64,.56);
         if((mk&8u)!=0u && distance>cr){
           // (its pavement: concrete, the kerb's edge lighter)
           color=mix(vec3f(.30,.295,.28),vec3f(.46,.45,.43),1.0-smoothstep(.1,.1+aa,abs(distance-cr-.1)));
         }else if(foot<2.0){
-          // (PLAN-J8 J8-RP RP10: the asphalt's wear by its class — a busy road's (a centre line or lane lines) the wheels' two paths in
-          // each lane darkened and polished, 1.6 m apart; a minor street's (no line) crazed with cracks, greyer)
-          let lanesW=(mk>>5u)&15u;let oneW=(mk&16u)!=0u;
-          if(cover>0.0 && ((mk&6u)!=0u || lanesW>0u)){
-            let kW=select(f32(lanesW/2u+1u),f32(lanesW+1u),oneW);
-            let wW=select(cr,2.0*cr,oneW)/kW;let xW=select(distance,distance+cr,oneW);
-            let uW=abs(fract(xW/wW)-.5)*wW;
-            let track=1.0-smoothstep(.22,.22+aa,abs(uW-.8));
-            color*=1.0-.13*track*(1.0-smoothstep(1.0,2.0,foot));
-          }else if(cover>0.0 && foot<1.0){
-            let cn=vnoise(vec3f(point*.55,17.0))*.7+vnoise(vec3f(point*2.1,19.0))*.3;
-            let crack=1.0-smoothstep(.012,.012+aa*.25,abs(cn-.5));
-            color=mix(color*1.06,color*.55,crack*(1.0-smoothstep(.5,1.0,foot)));
-          }
+          // (RP10's wheel paths and cracks: the raster material's pavement now — roadPavement, B1)
           var m=0.0;
           if((mk&1u)!=0u){m=max(m,1.0-smoothstep(.075,.075+aa,abs(distance-(cr-.3))));}
           let dash=1.0-smoothstep(3.0-aa,3.0+aa,s%9.0);
@@ -10710,7 +10703,7 @@ fn scenerySurface(foot:f32)->ScenerySurface {
         }
       }else if(kind==1.0 && size.x>=3.5 && foot<2.0){
         let stripe=1.0-smoothstep(.09,.09+aa,distance);
-        let dash=1.0-smoothstep(3.0-aa,3.0+aa,(along*len)%9.0);
+        let dash=1.0-smoothstep(3.0-aa,3.0+aa,road.z%9.0);
         color=mix(color,vec3f(.65,.64,.56),stripe*dash);
       }
       if(kind==2.0 && foot<1.5){
@@ -10722,7 +10715,7 @@ fn scenerySurface(foot:f32)->ScenerySurface {
       }
     }
     if(cover>0.0 && (rank>priority || (rank==priority && cover>out.cover))){
-      priority=rank;out=ScenerySurface(color,cover,kind);SC_SURVEY_ROAD=kind==1.0 && size.w<0.0;
+      priority=rank;out=ScenerySurface(color,cover,kind);SC_SURVEY_ROAD=kind==1.0 && size.w<0.0;SC_ROAD=road;SC_ROAD_DIR=rdir;
     }
     i++;
   }
@@ -16009,6 +16002,122 @@ fn atAO(a: RasterAttr) -> f32 { if (a.vis) { return select(rasterAO(a.px), 1.0, 
 // and the clouds in front of it (liteFinish) and the water over it (liteWater, shadeWater).
 // (the raster ground's surface in two steps — its material, then its light —: liteSurface their composition; the material's
 // record the light reads, a pixel's whole (one step a kernel each: shadeLite's registers' edge, the journal of 11 Nov 2026))
+// PLAN-PONT-ROUTES-AAA B1 (24 Nov 2026) — a road's surface material, its « revêtement », shared by the roads on the ground and the
+// bridges' decks: the raster material's alone (liteMaterial, shadeLite — not the traced kernels). Its kind the road's packed word's
+// bits 16–18 (road-markings.ts RoadSurface: 0 asphalt, 1 concrete, 2 setts, 3 gravel, 4 earth — the data's where it says, the
+// class's and the place's inferred else); `road` the walk's SC_ROAD (its distance from the axis, the carriageway's half-width, the
+// abscissa along the road, the word), `dir` its direction, `xy` the world point (the scenery frame's origin added: still as the
+// frame moves), `fpM` the pixel's footprint [m]. Each detail fades into its own mean as the pixel outgrows it (no shimmer): the
+// aggregate under 7 cm, the setts and the joints under ~0.25 m, the wheel paths and the cracks under ~1–2 m.
+// Returned: the albedo's factor (about 1: the road's own colour is the walk's), a tilt of the normal [the scene's frame, x y],
+// the dry polish (a sheen: the wheel paths' rubbed asphalt), where water stands when it rains (0…1, before the rain's own noise),
+// how much darker it is wet (the material's pores).
+struct Pavement { tint: vec3f, tilt: vec2f, polish: f32, puddle: f32, wetDark: f32 };
+// (the share of a footprint f centred at x that [a, b] covers — boxCover's, which goes with the scenery's code)
+fn paveCover(x: f32, a: f32, b: f32, f: f32) -> f32 { return clamp((min(x + 0.5 * f, b) - max(x - 0.5 * f, a)) / f, 0.0, 1.0); }
+fn roadPavement(mat: u32, road: vec4f, dir: vec2f, xy: vec2f, fpM: f32) -> Pavement {
+  var o = Pavement(vec3f(1.0), vec2f(0.0), 0.0, 0.0, 0.68);
+  let d = road.x;
+  let cr = max(road.y, 0.5);
+  let s = road.z;
+  let mk = u32(road.w + 0.5);
+  let aa = max(fpM, 0.004);
+  let across = vec2f(-dir.y, dir.x);
+  // (the wheel paths: each lane's two, 1.6 m apart about its centre — the lanes the word's, a street without lines one each way)
+  let lanes = (mk >> 5u) & 15u;
+  let one = (mk & 16u) != 0u;
+  let busy = (mk & 6u) != 0u || lanes > 0u;
+  let k = select(f32(lanes / 2u + 1u), f32(lanes + 1u), one);
+  let lw = select(cr, 2.0 * cr, one) / k;
+  let x = select(d, d + cr, one);
+  let uL = abs(fract(x / lw) - 0.5) * lw;
+  let inCarriage = 1.0 - smoothstep(cr - 0.1, cr + aa, d);
+  let track = (1.0 - smoothstep(0.24, 0.24 + aa, abs(uL - 0.8))) * select(0.55, 1.0, busy) * inCarriage;
+  let mid = 1.0 - smoothstep(0.8, 2.0, fpM);
+  let near = 1.0 - smoothstep(0.25, 0.7, fpM);
+  let fine = 1.0 - smoothstep(0.025, 0.07, fpM);
+  // (the tone over metres; the grain over decimetres; the aggregate's stones over centimetres — along the road's own coordinates:
+  // exact in a float whatever the place)
+  let tone = vnoise(vec3f(xy * 0.14, 3.0));
+  let grain = vnoise(vec3f(s * 2.3, d * 2.3, 5.0));
+  let agg = vnoise(vec3f(s * 26.0, d * 26.0, 7.0));
+  let agg2 = vnoise(vec3f(s * 26.0 + 9.7, d * 26.0 + 4.1, 11.0));
+  var t = 1.0;
+  if (mat == 1u) {
+    // (concrete: slabs 4.5 m long between the lanes' joints — a sawn joint a centimetre wide, dark, its share of the pixel's mean
+    // once it is under the pixel —, each slab its own shade; the wheels' rubber a grey band)
+    let sj = abs(fract(s / 4.5 + 0.5) - 0.5) * 4.5;
+    let lj = abs(fract(x / lw + 0.5) - 0.5) * lw;
+    let jw = 0.012;
+    let joint = max(paveCover(sj, -jw, jw, aa), paveCover(lj, -jw, jw, aa) * inCarriage);
+    let slab = hash31(vec3f(floor(s / 4.5), floor(x / lw), 31.0));
+    t = (0.94 + 0.12 * slab * mid) * (1.0 - 0.5 * joint) * (1.0 - 0.07 * track * mid);
+    t *= 1.0 + fine * 0.18 * (agg - 0.5);
+    o.tilt = fine * 0.05 * (agg2 - 0.5) * across;
+    o.puddle = 0.25 * tone + 0.5 * joint;
+    o.wetDark = 0.75;
+  } else if (mat == 2u) {
+    // (setts — pavés —: rows across the road 0.16 m long, stones 0.12 m wide staggered row to row, each its own stone and rounded,
+    // the joints between them dark and filled when it rains; their mean beyond a quarter metre)
+    let r = s / 0.16;
+    let ri = floor(r);
+    let c = (d + 0.06 * (ri - 2.0 * floor(ri * 0.5))) / 0.12;
+    let ci = floor(c);
+    let ru = fract(r) - 0.5;
+    let cu = fract(c) - 0.5;
+    let jr = paveCover(abs(ru) * 0.16, 0.065, 0.09, aa);
+    let jc = paveCover(abs(cu) * 0.12, 0.048, 0.07, aa);
+    let joint = max(jr, jc);
+    let stone = hash31(vec3f(ri, ci, 47.0));
+    let sett = 1.0 - smoothstep(0.08, 0.25, fpM);
+    t = mix(0.9, (0.78 + 0.4 * stone) * (1.0 - 0.55 * joint), sett) * (1.0 + mid * 0.1 * (tone - 0.5));
+    o.tilt = sett * (1.0 - joint) * 0.35 * (ru * dir + cu * across);
+    o.polish = 0.04 * sett * (1.0 - joint);
+    o.puddle = 0.3 * tone + 0.6 * joint * sett;
+    o.wetDark = 0.66;
+  } else if (mat == 3u || mat == 4u) {
+    // (gravel, earth: loose stones or soil, rough; the wheels' ruts lower — darker, packed —, the water lies in them)
+    let rut = track * mid;
+    t = (0.88 + 0.24 * grain * near) * (1.0 + fine * select(0.5, 0.25, mat == 4u) * (agg - 0.5)) * (1.0 - 0.14 * rut);
+    t *= 0.92 + 0.16 * tone;
+    o.tilt = (fine * 0.25 * (agg2 - 0.5) + near * 0.15 * (grain - 0.5)) * across + rut * 0.2 * sign(uL - 0.8) * across;
+    o.puddle = 0.85 * rut + 0.3 * tone;
+    o.wetDark = select(0.6, 0.52, mat == 4u);
+  } else {
+    // (asphalt: its tone over metres; its grain; its aggregate near — the chippings' light and dark, a slight relief —; the wheel
+    // paths darkened and polished; a quiet street crazed with cracks, greyer; the repairs' patches)
+    t = (0.93 + 0.14 * tone) * (1.0 + near * 0.1 * (grain - 0.5)) * (1.0 + fine * 0.32 * (agg - 0.5));
+    t *= 1.0 - 0.12 * track * mid;
+    o.polish = 0.05 * track * mid;
+    o.tilt = fine * 0.07 * ((agg - 0.5) * dir + (agg2 - 0.5) * across);
+    if (!busy && fpM < 1.0) {
+      let cn = vnoise(vec3f(xy * 0.55, 17.0)) * 0.7 + vnoise(vec3f(xy * 2.1, 19.0)) * 0.3;
+      let crack = 1.0 - smoothstep(0.012, 0.012 + aa * 0.25, abs(cn - 0.5));
+      t *= mix(1.06, 0.55, crack * (1.0 - smoothstep(0.5, 1.0, fpM)));
+    }
+    if (fpM < 1.5) {
+      let pc = floor(xy / 4.0);
+      if (hash31(vec3f(pc, 41.0)) < 0.08) {
+        let f = fract(xy / 4.0);
+        let inPatch = step(0.12, f.x) * step(f.x, 0.88) * step(0.2, f.y) * step(f.y, 0.8);
+        let toneP = select(1.18, 0.78, hash31(vec3f(pc, 43.0)) < 0.5);
+        t *= mix(1.0, toneP, inPatch * (1.0 - smoothstep(0.8, 1.5, fpM)));
+      }
+    }
+    o.puddle = 0.55 * track + 0.35 * tone;
+  }
+  // (a pavement — the kerb's other side, the word's bit 8 —: its slabs of 0.5 m, their joints)
+  if ((mk & 8u) != 0u && d > cr) {
+    let pj = max(paveCover(abs(fract(s / 0.5 + 0.5) - 0.5) * 0.5, 0.0, 0.006, aa), paveCover(abs(fract((d - cr) / 0.5 + 0.5) - 0.5) * 0.5, 0.0, 0.006, aa));
+    t = (1.0 - 0.35 * pj * near) * (0.95 + 0.1 * hash31(vec3f(floor(s / 0.5), floor((d - cr) / 0.5), 53.0)) * near);
+    o.tilt = vec2f(0.0);
+    o.polish = 0.0;
+    o.puddle = 0.2 * tone;
+    o.wetDark = 0.7;
+  }
+  o.tint = vec3f(t);
+  return o;
+}
 struct LiteMat {
   A: vec3f,
   n: vec3f,
@@ -16302,21 +16411,15 @@ fn liteMaterial(gq: vec3f, q: vec3f, ph: vec3f, rd: vec3f, look: vec3f, tM: f32,
   let roadPaved = select(0.0, select(sv.cover, 1.0, isBridgeRoad), (sv.kind == 1.0 && !mesh && !isTree) || isBridgeRoad) * (1.0 - min(rwyPaved, 1.0));
   let paved = max(rwyPaved, roadPaved);
   let pavedAt = select(rwyAt, SC_AT, rwyPaved <= 0.0);
-  if (roadPaved > 0.0 && fpM < 0.6) {
-    let gr = vnoise(vec3f(SC_AT * 9.0, 5.0)) * 0.6 + vnoise(vec3f(SC_AT * 1.7, 9.0)) * 0.4;
-    A *= 1.0 + roadPaved * 0.12 * (gr - 0.5) * (1.0 - smoothstep(0.2, 0.6, fpM));
-  }
-  // (RP10: its patches — repairs of a few metres, square-cut, fresher (darker) or older (greyer) than the road about them —, seen
-  // under a pixel of 1.5 m)
-  if (roadPaved > 0.0 && fpM < 1.5) {
-    let pc = floor(SC_AT / 4.0);
-    let ph = hash31(vec3f(pc, 41.0));
-    if (ph < 0.08) {
-      let f = fract(SC_AT / 4.0);
-      let inPatch = step(0.12, f.x) * step(f.x, 0.88) * step(0.2, f.y) * step(f.y, 0.8);
-      let tone = select(1.18, 0.78, hash31(vec3f(pc, 43.0)) < 0.5);
-      A *= mix(1.0, tone, roadPaved * inPatch * (1.0 - smoothstep(0.8, 1.5, fpM)));
-    }
+  // (PLAN-PONT-ROUTES-AAA B1: the road's surface material — roadPavement: asphalt, concrete, setts, gravel, earth, a pavement's slabs —
+  // on the ground and on a deck, near: its detail over the walk's colour, its relief in the normal; RP10's wheel paths, cracks and
+  // patches among it)
+  var pv = Pavement(vec3f(1.0), vec2f(0.0), 0.0, 0.0, 0.68);
+  let roadMat = (u32(SC_ROAD.w + 0.5) >> 16u) & 7u;
+  if (HAS_SCENERY && roadPaved > 0.0 && sv.kind == 1.0 && fpM < 3.0) {
+    pv = roadPavement(roadMat, SC_ROAD, SC_ROAD_DIR, SC_AT + P.scenery[6].xy, fpM);
+    A *= mix(vec3f(1.0), pv.tint, roadPaved);
+    n = normalize(n + (P.scenery[0].xyz * pv.tilt.x + P.scenery[1].xyz * pv.tilt.y) * roadPaved);
   }
   if (HAS_WX && WX_W > 0.0 && P.wx[5].x > 0.0 && !isTree) {
     let wet = P.wx[5].x * WX_W;
@@ -16324,7 +16427,9 @@ fn liteMaterial(gq: vec3f, q: vec3f, ph: vec3f, rd: vec3f, look: vec3f, tM: f32,
     if (paved > 0.0) {
       let pn = vnoise(vec3f(pavedAt.x * 0.08, pavedAt.y * 0.2, 3.0)) * 0.6 + vnoise(vec3f(pavedAt.x * 0.31, pavedAt.y * 0.55, 7.0)) * 0.28
         + vnoise(vec3f(pavedAt.x * 1.3, pavedAt.y * 1.7, 11.0)) * 0.12;
-      pud = smoothstep(0.7 - 0.06 * min(P.wx[5].y, 1.0), 0.8 - 0.06 * min(P.wx[5].y, 1.0), pn) * paved * wet;
+      // (B1: on a road, where its material holds water — its wheel paths' ruts, its setts' joints — with the rain's noise)
+      let pq = select(pn, 0.55 * pn + 0.6 * pv.puddle, roadPaved > 0.0);
+      pud = smoothstep(0.7 - 0.06 * min(P.wx[5].y, 1.0), 0.8 - 0.06 * min(P.wx[5].y, 1.0), pq) * paved * wet;
       let footM = max(length(fx), length(fy)) * EARTH_RM;
       let near = smoothstep(0.1, 0.02, footM) * min(P.wx[5].y, 1.0);
       if (near > 0.0) {
@@ -16345,10 +16450,14 @@ fn liteMaterial(gq: vec3f, q: vec3f, ph: vec3f, rd: vec3f, look: vec3f, tM: f32,
     // (a roof's slate and a wall's stone darker wet too, less than the soil — their pores fewer; the buildings drawn as boxes too —
     // a leaf, the scenery on —, not the meshes' alone: they had the soil's ×0.58, PLAN-J3 J3-5 inventory, 13 Nov 2026)
     let bldWet = mesh || (leaf > 0u && P.scenery[0].w > 0.5);
-    A *= mix(vec3f(1.0), vec3f(select(mix(0.58, 0.7, paved), 0.75, bldWet)), wet);
+    // (B1: a road's darkening its material's — its pores —, a loose surface's sheen less)
+    let wetDark = select(mix(0.58, 0.7, paved), mix(mix(0.58, 0.7, paved), pv.wetDark, roadPaved), roadPaved > 0.0);
+    A *= mix(vec3f(1.0), vec3f(select(wetDark, 0.75, bldWet)), wet);
     A *= 1.0 - 0.35 * pud;
-    wetS = wet * select(mix(0.08, 0.3, paved), 0.12, bldWet) + pud * 0.4;
+    wetS = wet * select(mix(0.08, 0.3, paved), 0.12, bldWet) * select(1.0, 0.4, roadPaved > 0.0 && roadMat >= 3u) + pud * 0.4;
   }
+  // (B1: the wheels' polish — a dry sheen of the sky at grazing angles)
+  wetS += pv.polish * roadPaved;
   // (L3 — the shore's wet band and the swash on it, PLAN-MER-WEBGPU §5: the ground next to the sea — the shore's distances positive
   // on land only within a node of a sea node — and under the waves' run-up (Stockdon 2006 for a beach of slope ~0.08: R2 ≈ 0.078
   // √(Hs L0), the sea's state the swell field's, else the FFT's): darker and glossy, the sand wet; under the swash's edge — run up as

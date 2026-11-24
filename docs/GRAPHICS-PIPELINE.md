@@ -49,6 +49,28 @@ Windows/D3D12. Les numéros de ligne sont ceux de `da4e75bd`.
   des arbres, des décalques et du contact « exclu » ; un tablier n'exclut les arbres que si son intrados est à moins de
   25 m du sol.
 
+### PONT-ROUTES B1/B2 — revêtement des routes et marquages aux carrefours (24 novembre 2026, branche de l'agent)
+
+**Code, non mesuré** (pas d'e2e ni de banc dans ce lot ; tailles inlinées par `scripts/wgsl-inline-size.ts`).
+
+- **`shadeLite` (`liteMaterial` → `roadPavement`, nouvelle fonction)** : le matériau de chaussée — enrobé (granulat proche,
+  bandes de roulement assombries et polies, fissures, rapiéçages), béton (dalles de 4,5 m, joints filtrés sur l'empreinte),
+  pavés (rangées décalées, joints, bombé par pierre), gravier et terre (ornières) ; humidité par matériau (assombrissement,
+  flaques dans les ornières et joints, brillance réduite des sols meubles), lustre sec des bandes de roulement. Chaque détail
+  s'efface dans sa moyenne avec le pied de pixel (granulat < 7 cm, pavés < 25 cm, bandes < 2 m). Lu par `shadeLite` seul
+  (vérifié par le modèle d'inlining : absent de `shade` et `main`), et seulement avec le décor (`HAS_SCENERY`).
+- **`scenerySurface` (partagée, dans tous les noyaux Terre)** : perd les bandes de roulement et fissures de RP10 (passées au
+  matériau) et rend les coordonnées de la route gagnante (`SC_ROAD`, `SC_ROAD_DIR`) ; l'abscisse des tirets lit `data[11]`
+  (≤ 0 : moins l'abscisse du début du segment le long de sa route) — tirets continus d'un segment à l'autre.
+- **Tailles inlinées (earth-raster, avant la revue → après A+B1/B2)** : `shadeLite` 8 528 → 8 787 (+3,0 %) ; `shade`
+  27 225 → 27 073 ; `main` 42 601 → 42 449 ; `env` 59 316 → 58 860 ; Lune/planètes `shadeLite` −0,4 à −0,8 %. Coût GPU
+  **non mesuré**.
+- **Données (worker du décor, hors image)** : matériau par segment (`road-surface.ts` : données BD TOPO/OMT puis règle de
+  classe et de lieu ; bits 16–18 du mot de route, bits 5–7 des drapeaux de surface d'une cellule KSC5 — format inchangé) ;
+  courbes arrondies (Bézier quadratique en trois morceaux aux coudes de 3–60°) ; fins de lignes aux carrefours selon les rôles
+  des branches (`armRoles`) ; lignes de cédez-le-passage/stop par rôle dans la préparation des cellules (mobilier VB7).
+  Plus de segments de surface près des carrefours et des courbes (non compté).
+
 ### J9 — contenu source et inspection (20 novembre 2026)
 
 `vegetation/tree-leaf.ts` possède désormais le masque `leafMask` partagé par la cuisson des imposteurs et l'inspection de

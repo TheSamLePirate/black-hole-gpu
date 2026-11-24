@@ -28,7 +28,8 @@
 //   next      (one a segment, in the segments' order — VB6's traffic) 0 u16 the next at b (driving a → b, b reached)   2 u16 the next at a
 //            (driving b → a): a segment's index in this cell, its bit 15 set when that one is driven b → a (entered at its b); NEXT_NONE none
 //            (a dead end, a one way against, a level not met), NEXT_ELSEWHERE its road going on into a neighbouring cell
-//   surface   (one a segment — VB2's carriageway) 0 u8 flags (SurfaceFlag: edge lines, the centre line dashed or solid, a kerb)
+//   surface   (one a segment — VB2's carriageway) 0 u8 flags (SurfaceFlag: edge lines, the centre line dashed or solid, a kerb; bits
+//            5–7 its surface material + 1 — road-surface.ts, PLAN-PONT-ROUTES-AAA B1, 24 Nov 2026; 0 in a cell written before)
 //            1 u8 the lane lines besides the centre's   2 u8 each pavement's width [dm] (0: none)   3 u8 its bridge's index in this
 //            cell (NO_BRIDGE: on none — J8-RP RP6: what rides on it takes the deck's height)
 //   furniture (VB7) 0 f32 east   4 f32 north [m] (its centre)   8 u16 heading (0 … 2π over 0 … 65535: the arm's way out of the junction —
@@ -75,6 +76,11 @@
 //    from SURFACE_MINOR_CENTRE_M), solid on the trunks, dashed elsewhere, none on a roundabout; the lane lines between the lanes of
 //    each way (lanes − 1 on a one way, lanes − 2 on a two-way); a kerb and pavements in the towns on the primary to minor classes
 //    (PAVEMENT_M by class), a kerb alone on a town's service road; nothing on a track, a path, steps, nor a ford.
+//  - (PLAN-PONT-ROUTES-AAA B2, 24 Nov 2026 — supersedes the stop line on every arm below) the lines by the arms' roles
+//    (street-detail-prep.ts armRoles): an arm below the junction's through road gives way — a yield line, a stop line where that road
+//    is a trunk or above —, in a town or not; arms of equal rank none (the priority to the right); at signals and entering a
+//    roundabout as below; the crossings and signals in the towns alone. A bridge's guardrails FurnitureFlag.OnBridge
+//    (CellStreetFlag.FurnitureBridges). A cell prepared with its building cell: CellStreetFlag.Built.
 //  - the furniture (VB7): at the urban junctions of three arms or more, none of them a bridge or a tunnel: for each arm long enough
 //    (FURNITURE_ARM_MIN_M past its line): a stop line (FurnitureKind.StopLine — a yield line, FurnitureFlag.Yield, entering a roundabout)
 //    `widest / 2 + STOP_BACK_M` from the centre across the lanes coming in (the right half of a two-way; the whole of a one way coming in;
@@ -355,6 +361,9 @@ export interface RoadSegmentRecord {
   roadId: number;
   /** a railway's track electrified (J8-RP RP9: the preparation's; in the bytes its surface's SurfaceFlag.Electrified, not the segment's) */
   electric?: boolean;
+  /** (PLAN-PONT-ROUTES-AAA B1) its surface material (road-surface.ts RoadSurface: the preparation's; in the bytes its surface's flags'
+   *  bits 5–7, road-surface.ts withCellSurface — not the segment's) */
+  material?: number;
 }
 export interface JunctionRecord {
   east: number;

@@ -1,11 +1,14 @@
 // PLAN-J8 J8-VB VB2 — a near road's markings, kerb and pavements, from the scene's own line (OpenMapTiles': its class, its width by
 // class, its way) and the town at its middle, by KSC3's rules (street-detail-prep.ts segmentSurface — the approaches session's): its
 // lanes from its width (3.25 m each, two at least both ways); packed in the surface segment's free pair (scenery-geometry.ts
-// surfaceSegment's data[6], data[7]) — data[6] the flags (SurfaceFlag) + 16 one way + 32 lane lines + 512 the pavement [dm], data[7]
-// the carriageway's half-width —, a kerbed one's record widened by its pavements: trace.wgsl scenerySurface paints them.
+// surfaceSegment's data[6], data[7]) — data[6] the flags (SurfaceFlag) + 16 one way + 32 lane lines + 512 the pavement [dm] + 32768 on a
+// deck (ROAD_ON_BRIDGE) + 65536 × its surface material (road-surface.ts, B1), data[7] the carriageway's half-width; data[11] ≤ 0 minus
+// its start's abscissa along its road (B2: the dashes' phase run on) —, a kerbed one's record widened by its pavements: trace.wgsl
+// scenerySurface paints them, roadPavement its material.
 import type { Primitive } from "./scenery-data";
 import { ROAD_CODES, type RoadClass, SegmentFlag, SurfaceFlag } from "./street-cells";
 import { segmentSurface } from "./street-detail-prep";
+import { ROAD_SURFACE_UNIT, RoadSurface } from "./road-surface";
 
 /** (review A5, 24 Nov 2026) a road's or a railway's surface segment on a bridge's deck: this bit in its data[6] (cell-roads.ts sets it).
  *  The deck alone draws it (trace.wgsl scenerySurface, SC_ON_BRIDGE); every reader of the ground leaves it out — the forest's exclusion,
@@ -23,8 +26,9 @@ export function roadClassCode(cls: string): number {
   return i > 0 ? i : 0;
 }
 
-/** A road segment (kind 1, its class kept) marked in place: its pair packed, a kerbed one widened by its pavements. */
-export function markRoad(p: Primitive, urban: boolean): void {
+/** A road segment (kind 1, its class kept) marked in place: its pair packed, a kerbed one widened by its pavements; (B1) its surface
+ *  material in the word's bits 16–18 (road-surface.ts). */
+export function markRoad(p: Primitive, urban: boolean, material: RoadSurface = RoadSurface.Asphalt): void {
   const d = p.data;
   if (d[5] !== 1 || !(d[6]! > 0)) return;
   const w = 2 * d[4]!,
@@ -42,7 +46,7 @@ export function markRoad(p: Primitive, urban: boolean): void {
     roadId: 0,
   });
   const pave = sf.flags & SurfaceFlag.Kerb ? sf.pavement : 0;
-  d[6] = sf.flags + (oneway ? 16 : 0) + 32 * Math.min(15, sf.laneLines) + 512 * Math.round(pave * 10);
+  d[6] = (sf.flags & 15) + (oneway ? 16 : 0) + 32 * Math.min(15, sf.laneLines) + 512 * Math.round(pave * 10) + material * ROAD_SURFACE_UNIT;
   d[7] = d[4]!;
   if (pave > 0) {
     d[4] = d[4]! + pave;

@@ -97,6 +97,7 @@ import {
   computeStructurePierLocations,
 } from "./bridge-structures";
 import { isDeckRoad, markRoad, roadClassCode } from "./road-markings";
+import { inferRoadSurface, type RoadSurface, roadSurfaceColour } from "./road-surface";
 import { catenaryMasts, cellRoadSurfaces } from "./cell-roads";
 
 /** (review A5) a deck clears the trees under it where its intrados is within this of the ground [m] — a tree taller pokes through */
@@ -587,6 +588,8 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
   let bridges = 0,
     bridgePiers = 0;
   const surfaces: Primitive[] = [];
+  /** (B1) OpenMapTiles' road segments' surface material, until markRoad packs it */
+  const omtMaterial = new Map<Primitive, RoadSurface>();
   const bridgeLines: {
     line: { lat: number; lon: number }[];
     width: number;
@@ -717,13 +720,15 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
                   ? 3
                   : 1.5
             : roadWidth(rail ? "rail" : cls.replace("_construction", ""), subclass) * (props.ramp === 1 ? 0.65 : 1);
-          const color = water
-            ? [0.018, 0.052, 0.055]
-            : rail
-              ? [0.1, 0.085, 0.06]
-              : props.surface === "unpaved" || cls === "track"
-                ? [0.19, 0.145, 0.095]
-                : [0.095, 0.098, 0.1];
+          // (B1: a road's surface material — OpenMapTiles' surface, its class, its place: road-surface.ts — and its colour)
+          const material = inferRoadSurface({
+            cls: cls.replace("_construction", ""),
+            subclass,
+            surface: String(props.surface ?? ""),
+            lat: q.lat,
+            lon: q.lon,
+          });
+          const color = water ? [0.018, 0.052, 0.055] : rail ? [0.1, 0.085, 0.06] : roadSurfaceColour(material);
           for (const line of f.loadGeometry()) {
             const locals = line.map(point);
             // (Q8 D1: a main road's segments — their middles in the tile — for the traffic, not on a bridge nor in a tunnel)
@@ -800,6 +805,8 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
               }
               if (!water) continue; // Ground markings must not appear underneath a raised deck.
             }
+            // (B2: the abscissa along the line — its dashes run on from one segment to the next)
+            let along = 0;
             for (let j = 0; j < locals.length - 1; j++) {
               const a = locals[j]!,
                 b = locals[j + 1]!,
@@ -807,12 +814,17 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
                 bb = line[j + 1]!;
               const mx = (aa.x + bb.x) / 2,
                 my = (aa.y + bb.y) / 2;
-              if (mx < 0 || mx >= e || my < 0 || my >= e || Math.hypot(b[0] - a[0], b[1] - a[1]) < 0.1) continue;
+              const L = Math.hypot(b[0] - a[0], b[1] - a[1]);
+              const s0 = along;
+              along += L;
+              if (mx < 0 || mx >= e || my < 0 || my >= e || L < 0.1) continue;
               const p = surfaceSegment(a, b, width, water ? 3 : rail ? 2 : 1, color);
-              // (PLAN-J8 VB2: a road's class and way kept for its markings — roadMarkings, once the town is known)
+              // (PLAN-J8 VB2: a road's class and way kept for its markings — roadMarkings, once the town is known; B1 its material)
               if (!water && !rail) {
                 p.data[6] = roadClassCode(cls);
                 p.data[7] = Number(props.oneway) || 0;
+                p.data[11] = -s0;
+                omtMaterial.set(p, material);
               }
               if (surfaceDistance(p) <= radius + 500) surfaces.push(p);
             }
@@ -2657,7 +2669,8 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
         return [c[0], c[1]] as [number, number];
       }),
     ]);
-    for (const p of keptSurfaces) if (!cellRoads.has(p)) markRoad(p, town((p.data[0]! + p.data[2]!) / 2, (p.data[1]! + p.data[3]!) / 2));
+    for (const p of keptSurfaces)
+      if (!cellRoads.has(p)) markRoad(p, town((p.data[0]! + p.data[2]!) / 2, (p.data[1]! + p.data[3]!) / 2), omtMaterial.get(p));
   } catch (e) {
     if (surveyErrors.length < 4) surveyErrors.push(`road markings: ${String(e).slice(0, 200)}`);
   }
