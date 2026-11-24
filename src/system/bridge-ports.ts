@@ -323,9 +323,11 @@ export function joinDeckPieces(list: readonly GeoBridge[], maxDistM = 3): Joined
     open[i]![0] || open[i]![1] ? { ...b, flags: b.flags | (open[i]![0] ? OPEN_A : 0) | (open[i]![1] ? OPEN_B : 0) } : b,
   );
   // (the paired ends' flags as written: a pair joinBridgeHalves did not join — a third end nearer — goes back to an abutment)
+  // (a bridge joinBridgeHalves left alone comes back with its own points' array — the original's)
+  const byPoints = new Map(list.map((b) => [b.points, b] as const));
   const joined = joinBridgeHalves(flagged, maxDistM).map((b) => {
-    const orig = list.find((o) => o.id === b.id && o.points[0] === b.points[0]) ?? list.find((o) => o.points[0] === b.points[0]);
-    return orig && orig.points.length === b.points.length ? { ...b, flags: orig.flags } : b;
+    const orig = byPoints.get(b.points);
+    return orig ? { ...b, flags: orig.flags } : b;
   });
   // (2) the branches: a closed end on another deck's axis (its segments' grid), away from that deck's own ends
   const segCell = 40;
@@ -381,7 +383,8 @@ export const HALF_SIDE_M = 2.5;
  * one half runs past the edge over the other (an overlap) or stops short of it (a gap) by up to a segment. An open end B of one (its way
  * out `d`) and an open end A of another — the same kind and layer, the second's way out against the first's, its point within
  * HALF_SIDE_M of the first's line and HALF_GAP_M along it either way — are spliced: the first's points past the second's open point
- * dropped (an overlap), then the second's. The pair nearest along first; one pair a call (joinBridgeHalves calls again). Null: none.
+ * dropped (an overlap), then the second's. The pairs nearest along first, each bridge in one a call (joinBridgeHalves calls again:
+ * a viaduct over three tiles). Null: none.
  */
 export function spliceOpenHalves(list: readonly GeoBridge[]): GeoBridge[] | null {
   const lat0 = list[0]?.points[0]?.lat ?? 0;
@@ -400,7 +403,7 @@ export function spliceOpenHalves(list: readonly GeoBridge[]): GeoBridge[] | null
       ends.push({ i, end, p, d: [(p[0] - q[0]) / L, (p[1] - q[1]) / L] });
     }
   });
-  let best: { a: End; b: End; along: number } | null = null;
+  const pairs: { a: End; b: End; along: number }[] = [];
   for (const a of ends)
     for (const b of ends) {
       if (a.i === b.i) continue;
@@ -411,33 +414,41 @@ export function spliceOpenHalves(list: readonly GeoBridge[]): GeoBridge[] | null
       const along = (b.p[0] - a.p[0]) * a.d[0] + (b.p[1] - a.p[1]) * a.d[1],
         side = Math.abs((b.p[0] - a.p[0]) * a.d[1] - (b.p[1] - a.p[1]) * a.d[0]);
       if (Math.abs(along) > HALF_GAP_M || side > HALF_SIDE_M) continue;
-      if (!best || Math.abs(along) < Math.abs(best.along)) best = { a, b, along };
+      pairs.push({ a, b, along });
     }
-  if (!best) return null;
-  const { a, b } = best;
-  // (the first oriented to end at its open B, the second to start at its open A)
-  const A = a.end === 1 ? list[a.i]! : reversed(list[a.i]!);
-  const B = b.end === 0 ? list[b.i]! : reversed(list[b.i]!);
-  const q = xy(B.points[0]!);
-  // (the first's points past the second's open point — along the first's way out — dropped: the overlap)
-  let keep = A.points.length;
-  while (keep > 1) {
-    const p = xy(A.points[keep - 1]!);
-    if ((p[0] - q[0]) * a.d[0] + (p[1] - q[1]) * a.d[1] <= 0) break;
-    keep--;
+  if (!pairs.length) return null;
+  // (the nearest along first, each bridge in one pair at most this call)
+  pairs.sort((x, y) => Math.abs(x.along) - Math.abs(y.along));
+  const taken = new Set<number>();
+  const out: GeoBridge[] = [];
+  for (const { a, b } of pairs) {
+    if (taken.has(a.i) || taken.has(b.i)) continue;
+    taken.add(a.i);
+    taken.add(b.i);
+    // (the first oriented to end at its open B, the second to start at its open A)
+    const A = a.end === 1 ? list[a.i]! : reversed(list[a.i]!);
+    const B = b.end === 0 ? list[b.i]! : reversed(list[b.i]!);
+    const q = xy(B.points[0]!);
+    // (the first's points past the second's open point — along the first's way out — dropped: the overlap)
+    let keep = A.points.length;
+    while (keep > 1) {
+      const p = xy(A.points[keep - 1]!);
+      if ((p[0] - q[0]) * a.d[0] + (p[1] - q[1]) * a.d[1] <= 0) break;
+      keep--;
+    }
+    const hA = A.heights ?? A.points.map(() => Number.NaN),
+      hB = B.heights ?? B.points.map(() => Number.NaN);
+    out.push({
+      id: Math.min(A.id >>> 0, B.id >>> 0),
+      kind: A.kind,
+      flags: ((A.flags | B.flags) & ~(OPEN_A | OPEN_B)) | (A.flags & OPEN_A) | (B.flags & OPEN_B),
+      width: Math.max(A.width, B.width),
+      layer: A.layer,
+      crossed: A.crossed | B.crossed,
+      clearance: Math.max(A.clearance, B.clearance),
+      points: [...A.points.slice(0, keep), ...B.points],
+      ...(A.heights || B.heights ? { heights: [...hA.slice(0, keep), ...hB] } : {}),
+    });
   }
-  const hA = A.heights ?? A.points.map(() => Number.NaN),
-    hB = B.heights ?? B.points.map(() => Number.NaN);
-  const joined: GeoBridge = {
-    id: Math.min(A.id >>> 0, B.id >>> 0),
-    kind: A.kind,
-    flags: ((A.flags | B.flags) & ~(OPEN_A | OPEN_B)) | (A.flags & OPEN_A) | (B.flags & OPEN_B),
-    width: Math.max(A.width, B.width),
-    layer: A.layer,
-    crossed: A.crossed | B.crossed,
-    clearance: Math.max(A.clearance, B.clearance),
-    points: [...A.points.slice(0, keep), ...B.points],
-    ...(A.heights || B.heights ? { heights: [...hA.slice(0, keep), ...hB] } : {}),
-  };
-  return [...list.filter((_, i) => i !== a.i && i !== b.i), joined];
+  return [...list.filter((_, i) => !taken.has(i)), ...out];
 }
