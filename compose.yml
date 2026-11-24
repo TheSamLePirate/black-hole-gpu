@@ -12,7 +12,7 @@ services:
     restart: unless-stopped
 # rooms-begin
   rooms:
-    image: ghcr.io/thesamlepirate/black-hole-gpu:rooms-04a3324-65.1
+    image: ghcr.io/thesamlepirate/black-hole-gpu:rooms-18a6e4d-67.1
     ports:
       - "3001:3001"
     volumes:
@@ -35,7 +35,7 @@ services:
     restart: unless-stopped
   # Wisp v1 WebSocket-to-TCP relay for the embedded Linux OBC (wss://code.samlepirate.org → host:3002, docs/DEPLOY.md)
   wisp:
-    image: ghcr.io/thesamlepirate/black-hole-gpu:rooms-04a3324-65.1
+    image: ghcr.io/thesamlepirate/black-hole-gpu:rooms-18a6e4d-67.1
     command: ["bun", "server/wisp-main.ts"]
     ports:
       - "3002:3002"
@@ -44,6 +44,13 @@ services:
       - WISP_MAX_CLIENTS=${WISP_MAX_CLIENTS:-32}
       - WISP_MAX_PER_IP=${WISP_MAX_PER_IP:-8}
       - WISP_ORIGINS=${WISP_ORIGINS:-}
+      # (destination ports, byte-rate caps, trusted proxies — server/wisp-main.ts, docs/DEPLOY.md; keep 3002 closed to the
+      # internet: clients come through Nginx Proxy Manager)
+      - WISP_TCP_PORTS=${WISP_TCP_PORTS:-80,443,9418}
+      - WISP_UDP_PORTS=${WISP_UDP_PORTS:-53}
+      - WISP_IP_BYTES_PER_SEC=${WISP_IP_BYTES_PER_SEC:-4194304}
+      - WISP_GLOBAL_BYTES_PER_SEC=${WISP_GLOBAL_BYTES_PER_SEC:-25165824}
+      - TRUSTED_PROXIES=${TRUSTED_PROXIES:-}
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3002/health"]
       interval: 30s
@@ -56,7 +63,7 @@ services:
   # Mercury's MESSENGER 665 m and Ceres's Dawn HAMO 137 m (0.5 GB each, ~0.3 GB of tiles); then it exits (a later start only
   # checks them)
   moon-tiles:
-    image: ghcr.io/thesamlepirate/black-hole-gpu:rooms-04a3324-65.1
+    image: ghcr.io/thesamlepirate/black-hole-gpu:rooms-18a6e4d-67.1
     command: ["sh", "-c", "bun server/moon-build.ts --body moon --out /moon/lola && bun server/moon-build.ts --body mars --out /moon/mars && bun server/moon-build.ts --body mercury --out /moon/mercury && bun server/moon-build.ts --body ceres --out /moon/ceres"]
     volumes:
       - moon-data:/moon
