@@ -6,6 +6,7 @@ import { cartToGeodetic, geodeticToCart, WGS84_A, WGS84_F } from "../../src/syst
 import { readSegment, readStreetHeader, SegmentFlag, STREET_CACHE, streetCacheUrl } from "../../src/system/street-cells";
 import { type Way, waysOf } from "../../src/traffic/landing";
 import { App, E2E, stopServer } from "./lib/app";
+import { gpuTimes, passesJs } from "./lib/bridge-views";
 
 // The real traffic against the game's runways (traffic/runway-phase.ts — Sam, 24 Nov 2026: « positions cohérentes avec les pistes du
 // jeu, au sol jamais sous le sol, décollage et atterrissage sur les pistes, train sorti au décollage et à l'atterrissage, rentré en
@@ -23,6 +24,9 @@ import { App, E2E, stopServer } from "./lib/app";
 // rolled out · 6 take-off: lift-off · 7 take-off: gear up · 8 cruise: gear up, drawn plain · 9 parked (liveries, shadows) · 10 costs.
 // Shots in TRW_OUT (remote-results/traffic-runways): final, rollout, liftoff, gearup, cruise-b738, cruise-crj, parked,
 // parked-noshadow, parked-dal, parked-crj.
+// TRW_COST=1 (a measure, not judged — perf lot of 24 Nov 2026): at the short final and at the gates, the render scale pinned at 0.75,
+// the GPU's time with the traffic's craft drawn and without (renderer.debugSkipShip: the craft's whole pass), on/off/off/on, and each
+// pass's median (gpuprof) — in TRW_OUT/cost.json (~1.5 min more; 256 s in all on kerr-mini, 24 Nov 2026).
 // Duration: ~6–7 min (boot and SFO's tiles ~1.5 min, each moment 15 s of the traffic's clock, each wait capped at 45–60 s; the costs
 // ~1 min).
 // Done when: the parked shots are taken, every moment's phase, gear, runway and height over the ground asserted, the costs printed.
@@ -264,6 +268,44 @@ describe.skipIf(!E2E)("the real traffic on the game's runways: on them, never un
     }
     return best;
   };
+  /** TRW_COST: the craft's pass measured at a moment, drawn (on) and skipped (off), on off off on — GPU p50 and the passes' medians */
+  const costs: Record<string, unknown> = {};
+  const cost = async (name: string) => {
+    if (process.env.TRW_COST !== "1") return;
+    await app.js(`(() => { __bh.forceScale(0.75); __bh.touch(); return 1; })()`);
+    await app.settled(60_000);
+    await Bun.sleep(2000);
+    type Prof = { frames: number; sum: number; passes: Record<string, number> };
+    const runs: { on: boolean; p50: number; p95: number; prof: Prof }[] = [];
+    for (const on of [true, false, false, true]) {
+      await app.js(`(() => { __bh.renderer.debugSkipShip = ${!on}; __bh.touch(); return 1; })()`);
+      await Bun.sleep(1000);
+      const g = await gpuTimes(app);
+      runs.push({ on, p50: g.p50, p95: g.p95, prof: await app.js<Prof>(passesJs(24)) });
+    }
+    await app.js(`(() => { __bh.renderer.debugSkipShip = false; __bh.forceScale(null); __bh.touch(); return 1; })()`);
+    const others = await app.js<{ n: number; a320: number }>(
+      `(() => { const o = __bh.renderer.combatOthers ?? []; return { n: o.length, a320: o.filter((x) => x.a320).length }; })()`,
+    );
+    const avg = (on: boolean, f: (r: (typeof runs)[number]) => number) => {
+      const x = runs.filter((r) => r.on === on).map(f);
+      return +(x.reduce((a, b) => a + b, 0) / x.length).toFixed(2);
+    };
+    const labels = [...new Set(runs.flatMap((r) => Object.keys(r.prof.passes)))];
+    const passes = Object.fromEntries(
+      labels.map((l) => [l, { on: avg(true, (r) => r.prof.passes[l] ?? 0), off: avg(false, (r) => r.prof.passes[l] ?? 0) }]),
+    );
+    costs[name] = {
+      others,
+      p50: { on: avg(true, (r) => r.p50), off: avg(false, (r) => r.p50) },
+      runs: runs.map((r) => ({ on: r.on, p50: r.p50, p95: r.p95 })),
+      passes,
+    };
+    console.log(
+      `  cost at ${name}: GPU p50 with the craft ${avg(true, (r) => r.p50)} ms, without ${avg(false, (r) => r.p50)} ms (${others.n} drawn, ${others.a320} rigged A320)`,
+    );
+    await Bun.write(`${OUT}/cost.json`, JSON.stringify(costs, null, 1));
+  };
   /** the rigged A320 drawn for it: its gear's position as drawn (null: none rigged near the view) */
   const rigGear = () =>
     app.js<number | null>(`(() => { const o = __bh.renderer.combatOthers.find((x) => x.id === "a320" && x.a320);
@@ -365,6 +407,7 @@ describe.skipIf(!E2E)("the real traffic on the game's runways: on them, never un
     let w = onWay(W28L, u.lat, u.lon);
     let rig = await rigGear();
     await app.shot(`${OUT}/final.png`);
+    await cost("final");
     console.log(
       `  final: ${c.phase}, ${w.a.toFixed(0)} m past 28L's threshold, ${w.c.toFixed(1)} m off its axis (reported 30), wheels ${c.over.toFixed(1)} m up (its origin ${(u.h - u.ground).toFixed(1)} m over the ground), ${c.msl.toFixed(0)} m over the sea; gear ${c.gear} wanted ${c.gearWanted}, rig ${rig}; runway ${JSON.stringify(c.runway)}`,
     );
@@ -506,6 +549,7 @@ describe.skipIf(!E2E)("the real traffic on the game's runways: on them, never un
       expect(Math.abs(v.h - v.ground - wheels)).toBeLessThan(0.5);
       expect(k.gear).toBe(1);
     }
+    await cost("parked");
     console.log(`  parked: ${rows.join(" | ")}`);
     // (their liveries: the rigged A320s' and the CRJ's, each its airline's — two different at least)
     const liveries = await app.js<string[]>(

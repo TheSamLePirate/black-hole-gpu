@@ -225,6 +225,10 @@ function sceneryBVH(prims: Primitive[], placed?: Map<Primitive, number>) {
 const isWater = (p: Primitive) => (p.data[11]! > 0.5 ? p.data[3] === 4 : p.data[5] === 3);
 /** a water polygon's edges at most a band (waterBands) */
 const BAND_EDGES = 24;
+/** a banded polygon's first float: −(this + its bands' count) — trace.wgsl surfaceRecord; a flat surface's bottom never so low */
+export const BANDED = 1e6;
+/** the margin a band takes its edges over [m] (waterBands) */
+const BAND_SLACK = 0.05;
 /**
  * A large water polygon cut into horizontal bands for the water's tree (TERRE-UNREAL U6): trace.wgsl sceneryPolygon counts
  * the edges a ray along +x crosses at the point's height — only the edges whose span takes in that height count, so a
@@ -254,7 +258,9 @@ export function waterBands(p: Primitive): Primitive[] {
       const e = 12 + 4 * i;
       const ya = d[e + 1]!,
         yb = d[e + 3]!;
-      if (Math.max(ya, yb) < lo || Math.min(ya, yb) > hi) continue;
+      // (a band holds every edge reaching within BAND_SLACK of it: one that spans no height of the band crosses nothing there — it
+      // costs a test, never a wrong count —, and its box's float32 edges, a hair off the float64 cut, still find every edge they need)
+      if (Math.max(ya, yb) < lo - BAND_SLACK || Math.min(ya, yb) > hi + BAND_SLACK) continue;
       edges.push(d[e]!, ya, d[e + 2]!, yb);
       x0 = Math.min(x0, d[e]!, d[e + 2]!);
       x1 = Math.max(x1, d[e]!, d[e + 2]!);
@@ -381,11 +387,24 @@ export function packScenery(
       leaves.push(p);
       continue;
     }
+    const at: number[] = [];
     for (const b of parts) {
-      placed.set(b, (surface.geometries.length + bands.length) / 4);
+      at.push((surface.geometries.length + bands.length) / 4);
+      placed.set(b, at.at(-1)!);
       for (const v of b.data) bands.push(v);
       leaves.push(b);
     }
+    // (perf lot of 24 Nov 2026: the surfaces' own walk — trace.wgsl scenerySurface, at each ground pixel near — tested the whole polygon,
+    // the Seine's thousands of edges wherever a pixel fell in its box, while the water's tree read its bands. Its bands' table after
+    // them — their records' places, a float each —, and the whole record's first two floats — a flat surface's bottom and top, unused
+    // — their count and the table's place: scenerySurface reads the band holding the point's height alone (surfaceRecord), the same
+    // crossings, the same answer. The whole record kept for the CPU's readers — scenery-contact, the ground map —.)
+    const table = (surface.geometries.length + bands.length) / 4;
+    bands.push(...at);
+    while (bands.length % 4) bands.push(0);
+    const w = surface.offsets.get(p)! * 4;
+    surface.geometries[w] = -(BANDED + parts.length);
+    surface.geometries[w + 1] = table;
   }
   const water = sceneryBVH(leaves, placed);
   const nodeCount = nodes.length / 8,

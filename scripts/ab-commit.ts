@@ -8,6 +8,10 @@
 // AB_CMD="<command>": that measure run between them instead of ab-pages.ts, given AB_A_URL, AB_B_URL and AB_OUT.
 // The commit's repository: this tree if it is a checkout, else KERR_AB_REPO (default ~/Documents/DEV/black-hole-gpu,
 // the mini's own checkout — the remote runner's copies are not ones). Results in AB_OUT (remote-results/…-ab-<rev>).
+// AB_TREE_A=<tar> / AB_TREE_B=<tar>: that side laid out from a `git archive` of its commit made elsewhere, not checked out here — a
+// machine whose git does not run (kerr-mini, 24 Nov 2026: the Xcode licence not accepted, /usr/bin/git refused): e.g.
+//   git archive -o A.tar <rev> src server server.ts index.html crew pwa vendor gallery scripts package.json bun.lock bunfig.toml tsconfig.json
+//   scp A.tar kerr-mini:kerr-lab/ab-trees/ ; … AB_TREE_A=~/kerr-lab/ab-trees/A.tar … bun scripts/ab-commit.ts <rev>
 import { $ } from "bun";
 import { existsSync, mkdirSync, rmSync, symlinkSync } from "node:fs";
 import { homedir } from "node:os";
@@ -21,16 +25,22 @@ const repo = existsSync(join(here, ".git")) ? here : (process.env.KERR_AB_REPO ?
 const dir = `/tmp/kerr-ab-${rev.slice(0, 12)}`;
 const out = process.env.AB_OUT ?? `remote-results/${new Date().toISOString().replace(/[:.]/g, "").slice(0, 15)}-ab-${rev.slice(0, 8)}`;
 
-await $`git -C ${repo} fetch -q origin`.nothrow();
+const treeA = process.env.AB_TREE_A?.replace(/^~(?=\/)/, homedir());
+const treeB = process.env.AB_TREE_B?.replace(/^~(?=\/)/, homedir());
+if (!treeA || (process.env.AB_REV_B && !treeB)) await $`git -C ${repo} fetch -q origin`.nothrow();
 // (git-lfs maybe not installed there: its filters off — the LFS files' pointers left, this tree's assets used)
 const noLfs = ["-c", "filter.lfs.process=", "-c", "filter.lfs.smudge=cat", "-c", "filter.lfs.clean=cat", "-c", "filter.lfs.required=false"];
-const worktree = async (dir: string, rev: string) => {
-  if (existsSync(dir)) await $`git -C ${repo} worktree remove --force ${dir}`.nothrow();
+const worktree = async (dir: string, rev: string, tar?: string) => {
+  if (existsSync(dir) && !tar) await $`git -C ${repo} worktree remove --force ${dir}`.nothrow();
   rmSync(dir, { recursive: true, force: true });
-  await $`git -C ${repo} ${noLfs} -c core.hooksPath=/dev/null worktree add --quiet --force --detach ${dir} ${rev}`.env({
-    ...process.env,
-    GIT_LFS_SKIP_SMUDGE: "1",
-  });
+  if (tar) {
+    mkdirSync(dir, { recursive: true });
+    await $`tar -xf ${tar} -C ${dir}`;
+  } else
+    await $`git -C ${repo} ${noLfs} -c core.hooksPath=/dev/null worktree add --quiet --force --detach ${dir} ${rev}`.env({
+      ...process.env,
+      GIT_LFS_SKIP_SMUDGE: "1",
+    });
   // (this tree's node_modules and assets: the commit's own reference a subset of them)
   rmSync(join(dir, "node_modules"), { recursive: true, force: true });
   symlinkSync(join(here, "node_modules"), join(dir, "node_modules"));
@@ -38,10 +48,10 @@ const worktree = async (dir: string, rev: string) => {
   symlinkSync(join(here, "assets"), join(dir, "assets"));
   if (existsSync(join(here, ".env"))) symlinkSync(join(here, ".env"), join(dir, ".env"));
 };
-await worktree(dir, rev);
+await worktree(dir, rev, treeA);
 const revB = process.env.AB_REV_B;
 const dirB = revB ? `/tmp/kerr-ab-b-${revB.slice(0, 12)}` : here;
-if (revB) await worktree(dirB, revB);
+if (revB) await worktree(dirB, revB, treeB);
 // (its dev server's own folders, not in the repository: the rooms' database's)
 for (const d of [dir, dirB, here]) mkdirSync(join(d, "snapshots"), { recursive: true });
 
@@ -90,7 +100,9 @@ try {
 } finally {
   A.kill();
   B.kill();
-  await $`git -C ${repo} worktree remove --force ${dir}`.nothrow();
-  if (revB) await $`git -C ${repo} worktree remove --force ${dirB}`.nothrow();
+  if (treeA) rmSync(dir, { recursive: true, force: true });
+  else await $`git -C ${repo} worktree remove --force ${dir}`.nothrow();
+  if (revB && treeB) rmSync(dirB, { recursive: true, force: true });
+  else if (revB) await $`git -C ${repo} worktree remove --force ${dirB}`.nothrow();
 }
 console.log(`A/B ${rev} (A) against ${revB ?? "this tree"} (B): ${out}`);

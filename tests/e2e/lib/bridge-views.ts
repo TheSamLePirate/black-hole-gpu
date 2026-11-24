@@ -105,7 +105,7 @@ export async function showView(app: App, v: BridgeView): Promise<ViewState> {
   // (the scene, its data and street cells about the view's own place)
   const again = await app.waitOptional(sceneAbout(v.at, v.holds), 30_000);
   dataOk = (await dataIn(app, `${v.key} (placed)`, v.dataMs ?? 45_000)) && dataOk;
-  const streets = await app.waitOptional(`__bh.renderer.earthScenery.stats().streetMissing === 0`, 30_000);
+  const streets = await app.waitOptional(`(__bh.renderer.earthScenery.stats().streetMissing ?? 0) === 0`, 30_000);
   if (!ready && !again) console.log(`  ${v.key}: the scene not ready about the place — ${JSON.stringify(await sceneDiag(app))}`);
   await app.settled(60_000);
   const fov = await app.js<number>(`__bh.camera.viewController().s.fov`);
@@ -141,6 +141,28 @@ export const gpuTimes = (app: App) =>
     return { p50: q(0.5), p95: q(0.95), n: ms.length, fps: +fps.toFixed(1) };
   })()`);
 
+/** in the page: the profiler on every frame, `n` profiled frames with every frame touched — each label's median [ms], the summed
+ *  passes' median, the internal image's size */
+export const passesJs = (n: number) => `(async () => {
+  const R = __bh.renderer, P = R.prof, frame = () => new Promise((q) => requestAnimationFrame(q));
+  P.enabled = true; P.every = 1;
+  for (let i = 0; i < 20; i++) { __bh.touch(); await frame(); }
+  P.reset();
+  const per = {}, sums = [];
+  let seen = 0, guard = 0;
+  while (seen < ${n} && guard++ < ${n * 8}) {
+    __bh.touch(); await frame();
+    if (P.frames > seen) {
+      seen = P.frames; sums.push(P.frameMs);
+      for (const p of P.table()) if (p.at === P.frames - 1) (per[p.label] ??= []).push(p.last);
+    }
+  }
+  P.enabled = false;
+  const med = (v) => { const s = [...v].sort((a, b) => a - b); return +s[s.length >> 1].toFixed(3); };
+  const passes = {};
+  for (const [k, v] of Object.entries(per)) if (v.length >= Math.max(3, seen >> 2)) passes[k] = med(v);
+  return { frames: seen, sum: sums.length ? med(sums) : 0, passes, w: R.live?.width ?? 0, h: R.live?.height ?? 0 };
+})()`;
 /** the scene's counts, the pipeline drawing it, the GPU's errors */
 export const sceneStats = (app: App) =>
   app.js<Record<string, number | string | boolean>>(`(() => {
