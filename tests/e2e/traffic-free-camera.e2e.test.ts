@@ -155,7 +155,7 @@ describe.skipIf(!E2E)("the traffic about a free camera with no craft", () => {
       const m = __bh.camera.trafficOverlay(${fmtA}, vc).find((x) => x.id === "${id}");
       return { dist: m ? m.dist : 1e9, moved: Math.hypot(...c.p.map((x, i) => x - ${JSON.stringify(p0)}[i])), trace: __bh.camera.traffic.focus,
         who: __bh.trafficFocus().focus?.who ?? "none",
-        mesh: __bh.renderer.othersFromView && __bh.renderer.combatOthers.some((o) => (o.id === "a320t" || o.id === "crj900") && Math.hypot(...o.rel) < 2000) };
+        mesh: __bh.renderer.othersFromView && __bh.renderer.combatOthers.some((o) => (o.id === "a320t" || o.id === "crj900" || (o.id === "a320" && !!o.a320)) && Math.hypot(...o.rel) < 2000) };
     })()`);
     console.log(
       `  followed ${id}: ${follow.dist.toFixed(0)} m off, moved ${follow.moved.toFixed(0)} m in 4 s, trace ${follow.trace}, focus ${follow.who}, mesh ${follow.mesh}`,

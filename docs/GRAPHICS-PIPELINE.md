@@ -70,6 +70,19 @@ Windows/D3D12. Les numéros de ligne sont ceux de `da4e75bd`.
   courbes arrondies (Bézier quadratique en trois morceaux aux coudes de 3–60°) ; fins de lignes aux carrefours selon les rôles
   des branches (`armRoles`) ; lignes de cédez-le-passage/stop par rôle dans la préparation des cellules (mobilier VB7).
   Plus de segments de surface près des carrefours et des courbes (non compté).
+- **Correctif du 24 novembre 2026 (soir) — marquages en anneaux** (`scenerySurface`, tous les noyaux Terre) : entre segments de
+  même rang, le gagnant est désormais **le plus profond dans sa bande** (`size.x − distance` ; un polygone garde sa couverture),
+  plus le premier rencontré (couverture 1 = 1). La bande d'un segment finit en demi-disques (distance bornée à ses bouts) ; avec
+  les morceaux de 1–2 m des courbes B2 et des fins de lignes aux carrefours, le premier rencontré peignait ses lignes à sa propre
+  distance : cercles de rive et boucles fermées de lignes de voie (SFO, approche du pont Alexandre III). Le plus profond est
+  l'axe le plus proche : les marquages suivent la polyligne ; à un T, la route secondaire cède au bord de la principale. La
+  peinture gardée à part (`SC_PAINT`, RP1, photographie nationale) ne vient plus que de la route ou de la voie ferrée gagnante,
+  par la même règle (avant : le maximum de tous les segments, anneaux compris) ; celle des carrefours (genre 5) inchangée.
+  Test : `tests/cell-roads.test.ts` (modèle CPU de la marche sur une rampe courbe ; l'ancienne règle, témoin positif). Tailles
+  inlinées (`wgsl-inline-size.ts`, avant → après) : `shadeLite` earth-raster 7 915 → 7 919, `shade` 27 072 → 27 076, `main`
+  42 444 → 42 448, `env` 58 862 → 58 874. `check-wgsl` passé (kerr-mini) ; observé avant/après au même point de vue sur
+  kerr-mini (bretelles de SFO, approche du pont Alexandre III : `docs/progress/campagne-e2e-2026-11-24/marquages-*.jpg`).
+  Coût GPU **non mesuré**. Reste : les passages piétons (genre 5) gardent leurs bouts arrondis (PROBLEMES).
 
 ### PONT-ROUTES B3 — ponts remarquables : suspendus et à haubans (24 novembre 2026, branche de l'agent)
 
@@ -889,7 +902,7 @@ Paris jusqu'à `earthSettled` » chronométré par étape.
 
 <!-- pipeline-inventory:begin (bun scripts/pipeline-inventory.ts --write) -->
 
-_Généré le 2026-11-24T17:43:52Z sur `7ca257bd` (arbre de travail). Ne pas éditer à la main : relancer l'outil._
+_Généré le 2026-11-24T18:49:37Z sur `ffbecf26` (arbre de travail). Ne pas éditer à la main : relancer l'outil._
 
 **130 sites de création de pipeline** (86 rendu, 44 calcul, dont 66 asynchrones) et 43 `createShaderModule` dans 32 fichiers ; **44 programmes WGSL** (16 fichiers .wgsl, 28 chaînes dans le TypeScript) ; **66 libellés de passes** du profileur GPU (+ 11 sites à libellé dynamique).
 
@@ -968,10 +981,10 @@ _Généré le 2026-11-24T17:43:52Z sur `7ca257bd` (arbre de travail). Ne pas éd
 | `src/renderer.ts:6948` | compute async | — | `ep` |
 | `src/renderer.ts:7662` | compute | — | — |
 | `src/renderer.ts:8711` | compute | — | — |
-| `src/renderer.ts:11002` | compute async | `clouds` | `cloudShadow` |
-| `src/renderer.ts:11084` | compute async | `sky ambient write` | `cloudLightVolume` |
-| `src/renderer.ts:11166` | compute async | — | `skyAmbient` |
-| `src/renderer.ts:13524` | compute async | — | `probe` |
+| `src/renderer.ts:11009` | compute async | `clouds` | `cloudShadow` |
+| `src/renderer.ts:11091` | compute async | `sky ambient write` | `cloudLightVolume` |
+| `src/renderer.ts:11173` | compute async | — | `skyAmbient` |
+| `src/renderer.ts:13531` | compute async | — | `probe` |
 | `src/sea/fft-gpu.ts:117` | compute | — | — |
 | `src/ship.ts:832` | compute | — | `vs` |
 | `src/ship.ts:852` | render | — | `fsJetGlass` |
@@ -1071,7 +1084,7 @@ _Généré le 2026-11-24T17:43:52Z sur `7ca257bd` (arbre de travail). Ne pas éd
 
 | source | lignes | points d'entrée |
 |---|---:|---|
-| `src/shaders/trace.wgsl` | 18129 | 18 entrées : cloudLightVolume, aerial, lut, main, shade, shadeMark, shadeLiteFinish, shadeWaterFinish, shadeLiteLight, shadeLite, skyFill, shadeWater, clouds, skyAmbient, cloudShadow, env, probe, shadeStars |
+| `src/shaders/trace.wgsl` | 18142 | 18 entrées : cloudLightVolume, aerial, lut, main, shade, shadeMark, shadeLiteFinish, shadeWaterFinish, shadeLiteLight, shadeLite, skyFill, shadeWater, clouds, skyAmbient, cloudShadow, env, probe, shadeStars |
 | `src/shaders/ship.wgsl` | 2713 | 34 entrées : envCopy, envDown, envGGX, envSH, ctlVs, depthVs, vs, mirrorVs, shadowVs, fs, hullDepthVs, hullDepthFs, ownMaskFs, plumeVs, plumeFs, glowVs, glowFs, distVs, distFs, sheathVs, sheathFs, trailVs, trailFs, lampVs, lampFs, compVs, compFs, fsCabin, fsCabinGlass, fsJetGlass, motionVs, motionFs, composeColor, composeSurface |
 | `src/shaders/post.wgsl` | 1396 | 18 entrées : gatherH, atrous, beamH, beamV, polgrid, resolve, down, downShip, dof, flareMeter, up, meter, stars, motionBlur, temporal, occlusion, cloudTemporal, taau |
 | `src/system/scenery-raster.ts:208` | 1167 | 31 entrées : cull, cullBoxes, clampBoxes, shadowVs, shadowFs, proxyVs, proxyFs, boxVs, boxFs, bridgeMarkFs, boxMarkVs, boxShadowVs, meshShadowVs, meshVs, meshFs, boxSolidVs, benchCull, benchQuadVs, benchVs, benchShadowVs, farCull, farVs, farQuadVs, farFs, farLampCull, farLampVs, farCarCull, farCarVs, nearCellVs, nearCellShadowVs, farShadowVs |
@@ -1161,16 +1174,16 @@ _Généré le 2026-11-24T17:43:52Z sur `7ca257bd` (arbre de travail). Ne pas éd
 | `depth of field` | `src/renderer.ts:9079` | 1 |
 | `lens flare meter` | `src/renderer.ts:9089` | 1 |
 | `light meter` | `src/renderer.ts:9113` | 1 |
-| `display` | `src/renderer.ts:10630` | 2 |
-| `clouds' shadow map` | `src/renderer.ts:11034` | 1 |
-| `clouds' light volume` | `src/renderer.ts:11115` | 1 |
-| `sky ambient` | `src/renderer.ts:11197` | 1 |
-| `clouds' history` | `src/renderer.ts:11920` | 1 |
-| `body raster heights` | `src/renderer.ts:12280` | 1 |
-| `scenery raster cull` | `src/renderer.ts:12558` | 1 |
-| `ground occlusion` | `src/renderer.ts:12598` | 1 |
-| `trees' shadow map` | `src/renderer.ts:12603` | 1 |
-| `horizon bake` | `src/renderer.ts:12883` | 1 |
+| `display` | `src/renderer.ts:10637` | 2 |
+| `clouds' shadow map` | `src/renderer.ts:11041` | 1 |
+| `clouds' light volume` | `src/renderer.ts:11122` | 1 |
+| `sky ambient` | `src/renderer.ts:11204` | 1 |
+| `clouds' history` | `src/renderer.ts:11927` | 1 |
+| `body raster heights` | `src/renderer.ts:12287` | 1 |
+| `scenery raster cull` | `src/renderer.ts:12565` | 1 |
+| `ground occlusion` | `src/renderer.ts:12605` | 1 |
+| `trees' shadow map` | `src/renderer.ts:12610` | 1 |
+| `horizon bake` | `src/renderer.ts:12890` | 1 |
 | `ship probe: mips` | `src/ship.ts:1930` | 1 |
 | `ship probe: GGX` | `src/ship.ts:1942` | 1 |
 | `ship probe: SH` | `src/ship.ts:1949` | 1 |
@@ -1194,11 +1207,11 @@ Libellés dynamiques (calculés à l'exécution) :
 - `src/renderer.ts:7648` — `label`
 - `src/renderer.ts:7649` — `label`
 - `src/renderer.ts:8995` — `label`
-- `src/renderer.ts:11833` — `label`
-- `src/renderer.ts:12286` — `label`
-- `src/renderer.ts:12317` — `label`
-- `src/renderer.ts:12583` — `label`
-- `src/renderer.ts:12629` — `label`
+- `src/renderer.ts:11840` — `label`
+- `src/renderer.ts:12293` — `label`
+- `src/renderer.ts:12324` — `label`
+- `src/renderer.ts:12590` — `label`
+- `src/renderer.ts:12636` — `label`
 - `src/ship.ts:788` — `label`
 
 #### A.3b Passes jamais chronométrées (ni libellé du profileur, ni horodatage transmis)
@@ -1223,7 +1236,7 @@ Leur coût n'apparaît que dans l'intervalle de complétion de la frame (ou d'un
 | render pass | `src/noise3d.ts:124` |
 | render pass | `src/renderer.ts:5668` |
 | compute pass | `src/renderer.ts:8730` |
-| compute pass | `src/renderer.ts:13543` |
+| compute pass | `src/renderer.ts:13550` |
 | compute pass | `src/sea/fft-gpu.ts:261` |
 | compute pass | `src/sea/fft-gpu.ts:265` |
 | render pass | `src/ship.ts:3286` |
@@ -1261,10 +1274,10 @@ Leur coût n'apparaît que dans l'intervalle de complétion de la frame (ou d'un
 | `moons` | main 76.7 · env 50.3 · aerial 0.6 · shadeLite 25.8 | 153k |
 | `mars` | main 87.6 · env 50.3 · aerial 0.6 · shadeLite 37.6 | 176k |
 | `titan` | main 90.6 · env 50.3 · aerial 0.6 · shadeLite 42.7 | 184k |
-| `venus` | main 90.3 · env 50.3 · aerial 0.6 · shadeLite 43.3 | 185k |
+| `venus` | main 90.4 · env 50.3 · aerial 0.6 · shadeLite 43.4 | 185k |
 | `earth-only` | main 50.2 · env 44.0 · aerial 0.7 | 95k |
 | `kerr-jet` | main 31.9 · env 27.9 · lut 28.2 | 88k |
-| `eclipse` | main 46.0 · env 37.6 · aerial 0.6 | 84k |
+| `eclipse` | main 46.0 · env 37.7 · aerial 0.6 | 84k |
 | `general` | main 151.3 · env 73.5 · lut 146.9 | 372k |
 
 <!-- pipeline-inventory:end -->

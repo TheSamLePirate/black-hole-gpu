@@ -1,4 +1,5 @@
 import { expect, test } from "bun:test";
+import trace from "../src/shaders/trace.wgsl" with { type: "text" };
 import { catenaryMasts, cellRoadSurfaces } from "../src/system/cell-roads";
 import {
   encodeStreetCell,
@@ -104,4 +105,130 @@ test("RP9: the catenary's masts — every 60 m along an electrified railway, bes
     expect(Math.abs(m.foot[1])).toBeCloseTo(2.25 + 3.2, 6);
     expect(m.foot[0] % 60).toBeCloseTo(0, 6);
   }
+});
+
+// (24 Nov 2026, the campaign's « rings » — SFO's ramps, the Pont Alexandre III's approach: a road's markings drawn as chains of circles
+// and closed loops.) A segment's strip ends in round caps (trace.wgsl scenerySurface clamps its distance to its ends); B2's bends cut a
+// curve in pieces of 1–2 m, each piece's cap over its neighbours. The shader kept the FIRST segment met among equals (cover 1 = 1), so a
+// piece's cap drew its markings at its own distance — an edge line's circle about each end, a lane line's stadium. The rule now: within
+// a rank the deepest (size.x − distance) wins — the nearest axis: the markings follow the road's polyline. A CPU model of the shader's
+// walk (its winner, its edge/centre/lane paint) over the cell's real pieces; the old rule its positive witness.
+
+type Prim = ReturnType<typeof cellRoadSurfaces>[number];
+/** trace.wgsl scenerySurface's road paint at `pt` (kind 1, foot 0.1 m): its winner by `rule`, its markings' cover m */
+function paintModel(prims: readonly Prim[], pt: [number, number], rule: "first" | "deepest"): number {
+  const aa = 0.12;
+  const ss = (e0: number, e1: number, x: number) => {
+    const t = Math.min(1, Math.max(0, (x - e0) / (e1 - e0)));
+    return t * t * (3 - 2 * t);
+  };
+  let best = -1e9,
+    bestCover = 0,
+    out = 0;
+  for (const p of prims) {
+    const d = p.data;
+    const lx = d[2]! - d[0]!,
+      ly = d[3]! - d[1]!;
+    const len = Math.max(Math.hypot(lx, ly), 0.001);
+    const along = Math.min(1, Math.max(0, ((pt[0] - d[0]!) * lx + (pt[1] - d[1]!) * ly) / (len * len)));
+    const distance = Math.hypot(pt[0] - d[0]! - lx * along, pt[1] - d[1]! - ly * along);
+    const cover = 1 - ss(Math.max(0, d[4]! - aa), d[4]! + aa, distance);
+    if (cover <= 0) continue;
+    const key = d[4]! - distance;
+    const mk = d[6]! & 32767;
+    const cr = d[7] !== 0 ? Math.abs(d[7]!) : d[4]!;
+    const s = along * len - d[11]!;
+    let m = 0;
+    if (distance <= cr) {
+      if (mk & 1) m = Math.max(m, 1 - ss(0.075, 0.075 + aa, Math.abs(distance - (cr - 0.3))));
+      const dash = 1 - ss(3 - aa, 3 + aa, s % 9);
+      if (mk & 2) m = Math.max(m, (1 - ss(0.075, 0.075 + aa, distance)) * dash);
+      const lanes = (mk >> 5) & 15;
+      if (lanes > 0) {
+        const ldash = 1 - ss(3 - aa, 3 + aa, s % 13);
+        const one = (mk & 16) !== 0;
+        const k = one ? lanes + 1 : Math.floor(lanes / 2) + 1;
+        const w = (one ? 2 * cr : cr) / k;
+        const f = (one ? distance + cr : distance) / w;
+        const j = Math.round(f);
+        if (j >= 1 && j <= k - 1) m = Math.max(m, (1 - ss(0.06, 0.06 + aa, Math.abs(f - j) * w)) * ldash);
+      }
+    }
+    const wins = rule === "first" ? cover > bestCover : key > best;
+    if (wins) {
+      best = key;
+      bestCover = cover;
+      out = m;
+    }
+  }
+  return out;
+}
+
+/** the painted samples off every marking's offset from the road's polyline (its pieces' nearest distance) — the rings */
+function strayPaint(prims: readonly Prim[], rule: "first" | "deepest", offsets: number[]): number {
+  let stray = 0;
+  const lo = [Math.min(...prims.map((p) => p.min[0]!)), Math.min(...prims.map((p) => p.min[1]!))];
+  const hi = [Math.max(...prims.map((p) => p.max[0]!)), Math.max(...prims.map((p) => p.max[1]!))];
+  for (let x = lo[0]!; x <= hi[0]!; x += 0.1)
+    for (let y = lo[1]!; y <= hi[1]!; y += 0.1) {
+      if (paintModel(prims, [x, y], rule) < 0.5) continue;
+      let dl = Infinity;
+      for (const p of prims) {
+        const d = p.data;
+        const lx = d[2]! - d[0]!,
+          ly = d[3]! - d[1]!;
+        const t = Math.min(1, Math.max(0, ((x - d[0]!) * lx + (y - d[1]!) * ly) / (lx * lx + ly * ly)));
+        dl = Math.min(dl, Math.hypot(x - d[0]! - lx * t, y - d[1]! - ly * t));
+      }
+      if (offsets.every((o) => Math.abs(dl - o) > 0.2)) stray++;
+    }
+  return stray;
+}
+
+test("B2 rings (24 Nov 2026): a curve's markings follow its polyline — the deepest strip wins, not the first met", () => {
+  // (a ramp: an arc of 30 m radius in 8 m segments — 15° a bend, each rounded in three pieces of ~1.3 m —, 9 m wide, its edge lines,
+  // a dashed centre, two lane lines)
+  const segs: RoadSegmentRecord[] = [];
+  const R = 30,
+    step = 8 / R;
+  for (let k = 0; k < 8; k++) {
+    const p = (t: number): [number, number] => [R * Math.sin(t), R - R * Math.cos(t)];
+    segs.push(seg(p(k * step), p((k + 1) * step), { s0: k * 8, roadId: 7, flags: 0 }));
+  }
+  const next = segs.map((_, i) => ({ a: i > 0 ? i - 1 : NEXT_NONE, b: i < segs.length - 1 ? i + 1 : NEXT_NONE }));
+  const surfaces: SegmentSurface[] = segs.map(() => ({
+    flags: SurfaceFlag.EdgeLines | SurfaceFlag.CentreDashed,
+    laneLines: 2,
+    pavement: 0,
+    bridge: 0xff,
+  }));
+  const buf = encodeStreetCell(
+    { z: 15, x: 1, y: 2, generation: 0, originLat: 37.6, originLon: -122.4 },
+    [],
+    segs,
+    [],
+    [],
+    0,
+    next,
+    [],
+    surfaces,
+  );
+  const prims = cellRoadSurfaces(buf, (e, n) => [e, n, 0]);
+  // (the bends rounded: three pieces each, short)
+  expect(prims.length).toBe(8 + 7 * 3);
+  expect(Math.min(...prims.map((p) => Math.hypot(p.data[2]! - p.data[0]!, p.data[3]! - p.data[1]!)))).toBeLessThan(2);
+  // (the markings' offsets: edge cr − 0.3, centre 0, the lane line between centre and edge: cr / 2)
+  const offsets = [4.5 - 0.3, 0, 4.5 / 2];
+  // (positive witness: the old rule — the first met among equals — paints rings, in the emission order and reversed: 7 263 and 7 136
+  // stray samples of 1 dm² on 24 Nov 2026, against 0)
+  expect(strayPaint(prims, "first", offsets)).toBeGreaterThan(50);
+  expect(strayPaint([...prims].reverse(), "first", offsets)).toBeGreaterThan(50);
+  // (the rule now: nothing off the markings, whatever the walk's order)
+  expect(strayPaint(prims, "deepest", offsets)).toBe(0);
+  expect(strayPaint([...prims].reverse(), "deepest", offsets)).toBe(0);
+  // (the shader carries that rule — the model above mirrors it)
+  const walk = trace.slice(trace.indexOf("fn scenerySurface("), trace.indexOf("fn sceneryMirror("));
+  expect(walk).toContain("key=size.x-distance;");
+  expect(walk).toContain("rank==priority && key>best");
+  expect(walk).not.toContain("cover>out.cover");
 });
