@@ -3,6 +3,20 @@
 Problèmes constatés, pas encore réglés. Chaque entrée : la date (UTC), ce qui est mesuré ou observé et sa source, la cause
 connue ou supposée, la piste. Une entrée réglée est barrée avec le commit qui la règle, pas effacée.
 
+## Trafic réel au sol invisible vu d'au-dessus en caméra libre (relevé le 24 novembre 2026, e2e `traffic-runways`, ce Mac)
+
+- **Constat** : les avions de ligne au sol (ou bas), placés juste (roues sur le sol de contact ± 0,5 m, `sys.groundAt`), ne sont pas
+  dessinés quand la caméra libre les voit d'en haut avec le sol derrière : leurs feux et étiquettes seuls
+  (`docs/progress/traffic-runways/parked-above.jpg`). La même vue avec `renderer.shipInScene = false` les montre, train sorti
+  (`parked-above-noscene.jpg` — le reste de l'image noir : ce chemin n'est pas fait pour la caméra libre). Vus avec le ciel
+  derrière (finale, montée), ils sont dessinés (`final.jpg`, `gearup.jpg`).
+- **Cause supposée** : le test d'occultation des engins non pilotés (`ship.wgsl`, `far` : `sceneDepth` plus proche que le fragment)
+  sur le chemin « dans la scène » (PLAN-J1 J1-5) — `sceneDepth` reconstruit au minimum des échantillons frais du bloc (`post.wgsl`
+  `occlusion`), ou la profondeur de l'engin réécrite dans la scène. Non vérifié.
+- **Piste** : mesurer `sceneDepth` sous l'avion contre sa distance ; borner le test pour un engin posé (marge de quelques mètres) ou
+  ne pas l'appliquer au trafic proche. Hors du lot du trafic (passe E12a) : à la session du rendu. Aussi relevé : la caméra libre
+  basse au-dessus de SFO dessine encore la mer sur l'aérodrome tant que le relief n'est pas arrivé (16 tuiles en attente après 60 s).
+
 ## Trafic réel : le train des avions dessinés sans gréement reste sorti (relevé le 24 novembre 2026, `traffic/runway-phase.ts`)
 
 - **Constat** : la phase et le train de chaque avion sont décidés (`gear`, `gearWanted` de `camera.trafficNow()`), mais seul l'A320 du
