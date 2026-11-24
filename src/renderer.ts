@@ -9404,6 +9404,10 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
     /** a ground unit's pose (src/game/ground-units.ts) */
     ground?: { yaw: number; pitch: number; left: number; burnt: number };
   }[] = [];
+  /** combatOthers placed from the drawn view's own camera (sim.ts: no craft flown — the free camera, a tour —, or a
+   *  spectator's view: the Earth's traffic, the sea's ships, the carriers): drawn from its place when the view has no
+   *  craft's eye; false — a craft's view, a replay's — they need one */
+  othersFromView = false;
   /** the scenery's exclusions: the sites' runways, the landscapes' viewpoints, the world's runways near (RD13) */
   private sceneryExclusions: SceneryExclusion[] = SCENERY_EXCLUSIONS;
   private trafficRunwayFrames = new Set(EARTH_RUNWAYS);
@@ -9569,10 +9573,13 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
     return this.combatGlares.map((g) => ({ c: [g.rel[0] + eye[0], g.rel[1] + eye[1], g.rel[2] + eye[2]] as Vec3, r: g.r, rgb: g.rgb }));
   }
 
-  /** The fight's aircraft as instances: their place from the eye, their axes. */
+  /** The fight's aircraft — and the Earth's traffic — as instances: their place from the eye (the craft's; the view's own
+   *  place when it has none and they were placed from it — othersFromView: the free camera, a spectator), their axes. */
   private combatShips(s: Settings): ShipInstance[] {
-    if (!this.combatOthers.length || !s.ship || !this.shipPose) return [];
-    const eye = shipToCamera(this.shipPose, s.shipLookYaw, s.shipLookPitch).t;
+    if (!this.combatOthers.length) return [];
+    const eye: Vec3 | null =
+      s.ship && this.shipPose ? shipToCamera(this.shipPose, s.shipLookYaw, s.shipLookPitch).t : this.othersFromView ? [0, 0, 0] : null;
+    if (!eye) return [];
     return (
       this.combatOthers
         // (its mesh asked for — a missile's the first time one flies —: drawn once in)

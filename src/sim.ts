@@ -99,12 +99,23 @@ export class Simulation {
     r.shipPlace = c.spectating ? c.shipFromView() : null;
     if (r.shipPlace && r.shipPlace.dist < 2e4) changed = true;
     const flying = c.piloting && !c.cinematic;
+    // (the Earth's traffic — the real aircraft and ships, the sea's own life, the carriers — drawn about the view whether a
+    // craft is flown or not (Sam, 24 Nov 2026: the free camera with no craft, a spectator, a tour): placed from the view's
+    // own camera — a spectator's, else this one —, the renderer told so (othersFromView: no craft's eye to add when the
+    // view has none); its wakes on the sea near the view)
+    const vc = c.viewController();
+    const earthOthers = () => [...c.carrierShips(vc), ...c.trafficShips(vc), ...c.seaShips(vc)];
     if (!flying) {
       if (r.shipThrust) changed = true;
       r.shipThrust = null;
       r.shipReentry = null;
       r.shipContrails = null;
       r.shake = [0, 0];
+      r.combatOthers = earthOthers();
+      r.othersFromView = true;
+      r.seaWakes = [...c.carrierWakes(), ...c.seaWakes(vc)];
+      // (the traffic moving near the view: drawn afresh — the free camera's image converges when nothing moves)
+      if (r.combatOthers.length) changed = true;
       return changed;
     }
     // the re-entry's buffeting: the whole image offset (and zoomed so no edge shows — renderer.writeDisplay) while the plasma
@@ -149,13 +160,17 @@ export class Simulation {
         : null;
     // the condensation trails (kept in the air: paused, as they were) — and a fight's missiles' smoke
     r.shipContrails = c.contrailsFrame();
-    // a fight's aircraft (controller/combat.ts)
-    r.combatOthers = [...c.carrierShips(), ...c.combatShips(), ...c.wingShips(), ...c.trafficShips(), ...c.seaShips()];
+    // a fight's aircraft (controller/combat.ts); a spectator out (its view not the craft's): the Earth's traffic about it — the
+    // fight's and the wingmen's are placed from the craft, not drawn in a spectator's view (as before)
+    r.combatOthers = c.spectating
+      ? earthOthers()
+      : [...c.carrierShips(), ...c.combatShips(), ...c.wingShips(), ...c.trafficShips(), ...c.seaShips()];
+    r.othersFromView = c.spectating;
     // (its flares burning, its chaff's glints — PLAN-RADAR-AAA RD8a)
     r.combatGlares = c.combatGlares();
     // the ships' wakes on the sea (controller/seatraffic.ts; trace.wgsl seaWake)
     // (the flown craft's own mark first — low over the sea: its downwash, its spray — N6b)
-    r.seaWakes = [...ourWake(c), ...c.carrierWakes(), ...c.seaWakes()];
+    r.seaWakes = [...ourWake(c), ...c.carrierWakes(), ...c.seaWakes(vc)];
     // (the sea's height about us — the renderer's, from the marine model or the wind —: the ships' motion)
     r.seaSwell = c.seaSwell ?? null;
     c.seaHs = r.seaHs;

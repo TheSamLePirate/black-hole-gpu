@@ -199,7 +199,7 @@ R reconstruction/sortie, S ombres/sondes amorties, Z hors budget (diagnostic, ch
 | E10 | station (3 passes, non chronométrées) | `station.wgsl` (`station.ts:221`) | ISS affichée, < 3 000 km de la Terre | `sceneDepth` → `hdr` | M |
 | E10b | JWST (3 passes : `jwst: shadow map`, `jwst`, `jwst composite`, non chronométrées) | `jwst.wgsl` (`src/jwst.ts`, `src/shaders/jwst.wgsl`) | JWST affiché (`s.jwst`), < 2 000 km du télescope sur son orbite Halo Sud autour de L2 Soleil–Terre | `sceneDepth` → `hdr` | M |
 | E11 | `character solar shadow`, `character shadow on traced terrain`, `grass: shade, footprints, blades`, `low cover: clumps`, `character HDR` / `character and grass HDR` | `character.wgsl` (`character-renderer.ts:918–1030`) | marcheur, herbe ou couvert bas | `sceneDepth`, SH, ombre → `hdr` | M |
-| E12 | `ship: shadow map`, `ship: shading (MSAA)`, `ship: own mask`, `ship: hull distance`, `ship: thrusters and plasma` (+ clear des panaches non chronométré) | `ship.wgsl` (`ship.ts:2635–3104`) | vaisseau ou engins visibles, **hors image vivante** (rendus hors ligne) ou `shipInScene` éteint — sinon E12a avant le temporel (la station et le marcheur se dessinent alors après lui, contre `sceneDepth` qui le contient ; ses verres ne reflètent plus la station) | `hdr` (reflets), `sceneDepth`, env/SH → `resolved`, `plume` → display, bloom, masque cockpit suivant | M/S |
+| E12 | `ship: shadow map`, `ship: shading (MSAA)`, `ship: own mask`, `ship: hull distance`, `ship: thrusters and plasma` (+ clear des panaches non chronométré) | `ship.wgsl` (`ship.ts:2635–3104`) | vaisseau ou engins visibles (à moins de 20 km : `craftsShown` — **depuis le 24 nov. 2026 aussi le trafic réel, les navires et les porte-avions vus sans appareil** : caméra libre, tournée, vue d'un spectateur ; `combatOthers` placés alors depuis la vue elle-même par `sim.ts`, `renderer.othersFromView`, sans œil d'appareil à ajouter — code, non mesuré), **hors image vivante** (rendus hors ligne) ou `shipInScene` éteint — sinon E12a avant le temporel (la station et le marcheur se dessinent alors après lui, contre `sceneDepth` qui le contient ; ses verres ne reflètent plus la station) | `hdr` (reflets), `sceneDepth`, env/SH → `resolved`, `plume` → display, bloom, masque cockpit suivant | M/S |
 | E13 | endurance (2 passes, non chronométrées) | `endurance.wgsl` (`endurance.ts:262`) | `s.endurance` | → `hdr` | M |
 | E14 | `bloom down …` | `downShip` puis `down` | bloom, lens flare ou faisceau | chaîne de mips de `hdr` | R |
 | E15 | `beam` ×2 | `beamH`/`beamV` | bande radio, faisceau > 0 | → `beam` | R |
@@ -511,6 +511,11 @@ pas — le cache du pilote répond en ~45 ms ; il faut une branche vivante sur u
 - **Simulation → rendu** : `writeParams` lit l'état accepté (temps, caméra en float64, corps, Soleil) ; les différences vers
   l'origine locale sont faites en float64 avant la conversion (contrat de §7.3 de la stratégie). Les hauteurs sont
   géodésiques (WGS84 + géoïde, `TABLE_GEOID`).
+- **Simulation → rendu, le trafic** (24 nov. 2026) : les avions et navires réels, la vie en mer et les porte-avions sont
+  donnés chaque image par `sim.applyRender` dans `combatOthers` (maillages) et `seaWakes` (sillages), qu'un appareil soit
+  piloté ou non — autour du foyer du trafic (`traffic/focus.ts` : l'appareil, sinon l'œil de la vue). Sans appareil ou
+  depuis un spectateur, placés depuis la vue (`othersFromView`) ; leur ajustement de trajectoire borné à 1,5 ms par image
+  et par famille (`FitBudget`, `controller/traffic.ts`) — coût CPU mesuré sous bun, pas dans la page.
 - **Rendu → simulation** : rien de décisif. Le sol de contact de l'appareil ne vient pas des cibles GPU ; les sondes
   (mer, planètes, histogramme) n'alimentent que l'image et l'exposition.
 - **Rendu → interface** : `sceneDepth` et `moments` servent aux cartes en surimpression ; les écrans du cockpit (PCD, DU)
@@ -728,7 +733,7 @@ Paris jusqu'à `earthSettled` » chronométré par étape.
 
 <!-- pipeline-inventory:begin (bun scripts/pipeline-inventory.ts --write) -->
 
-_Généré le 2026-11-22T10:52:18Z sur `d97a6ee4` (arbre de travail). Ne pas éditer à la main : relancer l'outil._
+_Généré le 2026-11-24T12:00:18Z sur `d11d75d1` (arbre de travail). Ne pas éditer à la main : relancer l'outil._
 
 **129 sites de création de pipeline** (85 rendu, 44 calcul, dont 62 asynchrones) et 43 `createShaderModule` dans 32 fichiers ; **44 programmes WGSL** (16 fichiers .wgsl, 28 chaînes dans le TypeScript) ; **66 libellés de passes** du profileur GPU (+ 11 sites à libellé dynamique).
 
@@ -807,10 +812,10 @@ _Généré le 2026-11-22T10:52:18Z sur `d97a6ee4` (arbre de travail). Ne pas éd
 | `src/renderer.ts:6943` | compute async | — | `ep` |
 | `src/renderer.ts:7664` | compute | — | — |
 | `src/renderer.ts:8713` | compute | — | — |
-| `src/renderer.ts:10978` | compute async | `clouds` | `cloudShadow` |
-| `src/renderer.ts:11060` | compute async | `sky ambient write` | `cloudLightVolume` |
-| `src/renderer.ts:11142` | compute async | — | `skyAmbient` |
-| `src/renderer.ts:13465` | compute async | — | `probe` |
+| `src/renderer.ts:10985` | compute async | `clouds` | `cloudShadow` |
+| `src/renderer.ts:11067` | compute async | `sky ambient write` | `cloudLightVolume` |
+| `src/renderer.ts:11149` | compute async | — | `skyAmbient` |
+| `src/renderer.ts:13472` | compute async | — | `probe` |
 | `src/sea/fft-gpu.ts:117` | compute | — | — |
 | `src/ship.ts:832` | compute | — | `vs` |
 | `src/ship.ts:852` | render | — | `fsJetGlass` |
@@ -920,7 +925,7 @@ _Généré le 2026-11-22T10:52:18Z sur `d97a6ee4` (arbre de travail). Ne pas éd
 | `src/shaders/overlay.wgsl` | 279 | vsLine (v), fsLine (f), vsLineD (v), fsLineD (f), vsFull (v), fsComposite (f), fsMagVol (f), fsMagComp (f) |
 | `src/system/terrain-raster.ts:181` | 255 | terrainVs (v), terrainSunVs (v), terrainFs (f), ringFs (f), screenVs (v), inspectFs (f) |
 | `src/shaders/seafft.wgsl` | 232 | rowsSpec (c), colsAssemble (c), mip (c), foamWorld (c) |
-| `src/shaders/jwst.wgsl` | 221 | vs (v), shadowVs (v), fs (f), compVs (v), compFs (f) |
+| `src/shaders/jwst.wgsl` | 222 | vs (v), shadowVs (v), fs (f), compVs (v), compFs (f) |
 | `src/shaders/station.wgsl` | 209 | vs (v), shadowVs (v), fs (f), compVs (v), compFs (f) |
 | `src/system/giant-tile.ts:45` | 175 | seed (c) |
 | `src/shaders/horizon.wgsl` | 172 | bake (c), mip (c) |
@@ -999,16 +1004,16 @@ _Généré le 2026-11-22T10:52:18Z sur `d97a6ee4` (arbre de travail). Ne pas éd
 | `depth of field` | `src/renderer.ts:9068` | 1 |
 | `lens flare meter` | `src/renderer.ts:9078` | 1 |
 | `light meter` | `src/renderer.ts:9102` | 1 |
-| `display` | `src/renderer.ts:10606` | 2 |
-| `clouds' shadow map` | `src/renderer.ts:11010` | 1 |
-| `clouds' light volume` | `src/renderer.ts:11091` | 1 |
-| `sky ambient` | `src/renderer.ts:11173` | 1 |
-| `clouds' history` | `src/renderer.ts:11889` | 1 |
-| `body raster heights` | `src/renderer.ts:12249` | 1 |
-| `scenery raster cull` | `src/renderer.ts:12501` | 1 |
-| `ground occlusion` | `src/renderer.ts:12541` | 1 |
-| `trees' shadow map` | `src/renderer.ts:12546` | 1 |
-| `horizon bake` | `src/renderer.ts:12824` | 1 |
+| `display` | `src/renderer.ts:10613` | 2 |
+| `clouds' shadow map` | `src/renderer.ts:11017` | 1 |
+| `clouds' light volume` | `src/renderer.ts:11098` | 1 |
+| `sky ambient` | `src/renderer.ts:11180` | 1 |
+| `clouds' history` | `src/renderer.ts:11896` | 1 |
+| `body raster heights` | `src/renderer.ts:12256` | 1 |
+| `scenery raster cull` | `src/renderer.ts:12508` | 1 |
+| `ground occlusion` | `src/renderer.ts:12548` | 1 |
+| `trees' shadow map` | `src/renderer.ts:12553` | 1 |
+| `horizon bake` | `src/renderer.ts:12831` | 1 |
 | `ship probe: mips` | `src/ship.ts:1930` | 1 |
 | `ship probe: GGX` | `src/ship.ts:1942` | 1 |
 | `ship probe: SH` | `src/ship.ts:1949` | 1 |
@@ -1032,11 +1037,11 @@ Libellés dynamiques (calculés à l'exécution) :
 - `src/renderer.ts:7650` — `label`
 - `src/renderer.ts:7651` — `label`
 - `src/renderer.ts:8992` — `label`
-- `src/renderer.ts:11802` — `label`
-- `src/renderer.ts:12255` — `label`
-- `src/renderer.ts:12286` — `label`
-- `src/renderer.ts:12526` — `label`
-- `src/renderer.ts:12572` — `label`
+- `src/renderer.ts:11809` — `label`
+- `src/renderer.ts:12262` — `label`
+- `src/renderer.ts:12293` — `label`
+- `src/renderer.ts:12533` — `label`
+- `src/renderer.ts:12579` — `label`
 - `src/ship.ts:788` — `label`
 
 #### A.3b Passes jamais chronométrées (ni libellé du profileur, ni horodatage transmis)
@@ -1061,7 +1066,7 @@ Leur coût n'apparaît que dans l'intervalle de complétion de la frame (ou d'un
 | render pass | `src/noise3d.ts:124` |
 | render pass | `src/renderer.ts:5663` |
 | compute pass | `src/renderer.ts:8732` |
-| compute pass | `src/renderer.ts:13484` |
+| compute pass | `src/renderer.ts:13491` |
 | compute pass | `src/sea/fft-gpu.ts:261` |
 | compute pass | `src/sea/fft-gpu.ts:265` |
 | render pass | `src/ship.ts:3286` |

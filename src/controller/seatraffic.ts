@@ -13,8 +13,9 @@ import { SHIP_MESH, shipLights, shipMotion, shipRcs, shipSize } from "../game/sh
 import { azAltAt } from "../eclipse/earth-moon";
 import { J2000_MS } from "../system/timescale";
 import { daysOf } from "../system/solar";
-import { earthView, viewEcef } from "./netcraft";
-import { enuAt, placeOf, R_EQ, radii, wrap } from "./traffic";
+import { earthView } from "./netcraft";
+import { enuAt, FIT_MS, FitBudget, nearest, placeOf, R_EQ, radii, wrap } from "./traffic";
+import { geodeticToCart, WGS84_A, WGS84_F } from "../system/ellipsoid";
 import type { TrafficMark } from "./traffic";
 import type { Ship } from "../traffic/feed";
 import type { Vec3 } from "../math/vec3";
@@ -66,6 +67,8 @@ const STILL = 0.25;
 /** Each ship's way through its reports about `td` (refitted when they change: a report in or out), in the lat/lon
  *  of one scaled to metres. */
 const ways = new Map<number, { key: string; F: FlightPath; lat: number; lon: number }>();
+/** the frame's share for fitting the ships' ways (controller/traffic.ts FitBudget: the aircraft's has its own) */
+const fitBudget = new FitBudget(FIT_MS);
 function wayOf(hist: readonly Ship[], td: number) {
   const n = hist.length;
   if (n < 2) return null;
@@ -80,6 +83,8 @@ function wayOf(hist: readonly Ship[], td: number) {
   const key = `${pts.length}:${pts[0]!.t}:${last.t}`;
   const W0 = ways.get(last.mmsi);
   if (W0?.key === key) return W0;
+  // (the frame's fitting spent — controller/traffic.ts FitBudget —: its way as it was, the rest next frame)
+  if (!fitBudget.take()) return W0 ?? null;
   const o = pts[pts.length >> 1]!;
   const c0 = R_EQ * Math.cos(o.lat * D);
   const knots: FlightKnot[] = pts.map((q) => {
@@ -176,11 +181,14 @@ function seaNow(this: CameraController): SeaCraft[] {
   const F = this.traffic;
   const now = this.trafficClock ? this.trafficClock() : (this.trafficT ?? Date.now() / 1000);
   // (kept a frame — the clock still, frozen: kept while the sea's floor and the place, to 0.01°, are the same)
-  const g0 = this.geoNow();
+  // (about the traffic's focus — the flown craft, else the view's eye: the free camera with no craft too — traffic/focus.ts;
+  // a test's controller, none set: its own place)
+  const g0 = this.trafficAt ?? this.geoNow();
   const where = g0 ? `${g0.lat.toFixed(2)},${g0.lon.toFixed(2)}` : "";
   if (cache.at === now && cache.of === F && cache.gen === seaGen() && cache.where === where) return cache.list;
   const td = now - Math.max(0, this.s.trafficDelay ?? 0);
   const hs = this.seaHs ?? 1;
+  fitBudget.start();
   const out: SeaCraft[] = [];
   for (const T of F?.ships.values() ?? []) {
     const s = T.s;
@@ -223,15 +231,14 @@ function seaNow(this: CameraController): SeaCraft[] {
     );
   }
   if (F && ways.size > 2 * F.ships.size + 50) for (const k of ways.keys()) if (!F.ships.has(k)) ways.delete(k);
-  // (the sea's own life — game/seasim.ts —: where the AIS has no ship within 40 km of us, a made-up traffic, the same for all)
-  const g = this.s.seaLife !== false ? this.geoNow() : null;
+  // (the sea's own life — game/seasim.ts —: where the AIS has no ship within 40 km of the focus, a made-up traffic, the same
+  // for all)
+  const g = this.s.seaLife !== false ? g0 : null;
   if (g && g.alt < 20_000) {
-    const near = out.some((c) => {
-      const up = unit(c.p);
-      const la = Math.asin(up[2]!) / D,
-        lo = Math.atan2(up[1]!, up[0]!) / D;
-      return Math.hypot((la - g.lat) * 111_320, (wrap((lo - g.lon) * D) / D) * 111_320 * Math.cos(g.lat * D)) < 40_000;
-    });
+    // (the distance in the Earth's axes from the focus's place on the WGS84 ellipsoid — once —: before 24 Nov 2026 each
+    // ship's latitude was read as its geocentric one, up to 0.19° — 21 km — off the geodetic)
+    const o = geodeticToCart(WGS84_A, WGS84_F, g.lat * D, g.lon * D, 0);
+    const near = out.some((c) => (c.p[0]! - o[0]) ** 2 + (c.p[1]! - o[1]) ** 2 + (c.p[2]! - o[2]) ** 2 < 40_000 ** 2);
     if (!near)
       for (const q of simShips(g.lat, g.lon, td, 30_000)) {
         if (this.seaTaken?.has(String(q.mmsi))) continue;
@@ -282,65 +289,60 @@ function seaStep(this: CameraController) {
   );
 }
 
-/** The ships for the renderer: the nearest eight within 20 km — their place and axes on the camera's, the axes
+/** The ships for the renderer: the nearest twelve within 20 km of the view (`view`: its controller — a spectator's, else
+ *  this one; the free camera with no craft too) — their place and axes on the view's camera's, from its place, the axes
  *  scaled to their length and beam; hidden under the sea's surface and behind what the image holds nearer. */
 function seaShips(
   this: CameraController,
+  view: CameraController = this,
 ): { id: ShipTypeId; rel: Vec3; axes: [Vec3, Vec3, Vec3]; hidden: boolean; far: boolean; mirror: boolean }[] {
   const list = this.seaNow();
   if (!list.length) return [];
-  const E = earthView(this);
+  const E = earthView(view);
   if (!E) return [];
-  const pv = viewEcef(this, E);
   const cam = (b: readonly number[]) => E.toCam(E.toHome(b as Vec3));
   const n = (v: Vec3, k: number): Vec3 => {
     const l = Math.hypot(...v) || 1;
     return [(v[0] / l) * k, (v[1] / l) * k, (v[2] / l) * k];
   };
-  return (
-    list
-      .map((c) => ({ c, rel: cam([0, 1, 2].map((k) => c.p[k]! - E.p0[k]!)) }))
-      // (near the view — a spectator's, far from the craft flown maybe —: those drawn)
-      .map((x) => ({ ...x, d: Math.hypot(x.c.p[0]! - pv[0], x.c.p[1]! - pv[1], x.c.p[2]! - pv[2]) }))
-      .filter((x) => x.d < 20_000)
-      .sort((a, b) => a.d - b.d)
-      // (the nearest twelve — the craft's pass draws forty: the fight's, the traffic's, the carriers' with them)
-      .slice(0, 12)
-      .map(({ c, rel }) => {
-        const M = SHIP_MESH[c.mesh];
-        const kz = c.len / M.len,
-          kx = c.beam / M.beam;
-        return {
-          id: c.mesh,
-          rel,
-          axes: [n(cam(c.right.map((x) => -x)), kx), n(cam(c.up), Math.sqrt(kx * kz)), n(cam(c.fwd), kz)] as [Vec3, Vec3, Vec3],
-          hidden: false,
-          far: true,
-          mirror: true,
-        };
-      })
-  );
+  // (the nearest twelve — the craft's pass draws forty: the fight's, the traffic's, the carriers' with them)
+  return nearest(list, E.p0, 20_000, 12).map((c) => {
+    const M = SHIP_MESH[c.mesh];
+    const kz = c.len / M.len,
+      kx = c.beam / M.beam;
+    return {
+      id: c.mesh,
+      rel: cam([c.p[0]! - E.p0[0], c.p[1]! - E.p0[1], c.p[2]! - E.p0[2]]),
+      axes: [n(cam([-c.right[0]!, -c.right[1]!, -c.right[2]!]), kx), n(cam(c.up), Math.sqrt(kx * kz)), n(cam(c.fwd), kz)] as [
+        Vec3,
+        Vec3,
+        Vec3,
+      ],
+      hidden: false,
+      far: true,
+      mirror: true,
+    };
+  });
 }
 
-/** The ships' wakes for the sea's shader (renderer.seaWakes): the nearest eight under way within 15 km — their
- *  place fixed to the Earth [m], their heading, speed [m/s], length and beam [m]. */
-function seaWakes(this: CameraController): { p: Vec3; fwd: Vec3; U: number; len: number; beam: number }[] {
+/** The ships' wakes for the sea's shader (renderer.seaWakes): the nearest eight under way within 15 km of the view
+ *  (`view`: as seaShips') — their place fixed to the Earth [m], their heading, speed [m/s], length and beam [m]. */
+function seaWakes(this: CameraController, view: CameraController = this): { p: Vec3; fwd: Vec3; U: number; len: number; beam: number }[] {
   const list = this.seaNow();
   if (!list.length) return [];
-  const E = earthView(this);
+  const E = earthView(view);
   if (!E) return [];
-  return list
-    .filter((c) => c.sog > 0.8)
-    .map((c) => ({ c, d: Math.hypot(...[0, 1, 2].map((k) => c.p[k]! - E.p0[k]!)) }))
-    .filter((x) => x.d < 15_000)
-    .sort((a, b) => a.d - b.d)
-    .slice(0, 8)
-    .map(({ c }) => {
-      // (its heading on the sea: its bow's way, level)
-      const up = unit(c.p);
-      const f = c.fwd.map((x, i) => x - up[i]! * (c.fwd[0]! * up[0]! + c.fwd[1]! * up[1]! + c.fwd[2]! * up[2]!));
-      return { p: c.p as Vec3, fwd: unit(f) as Vec3, U: c.sog, len: c.len, beam: c.beam };
-    });
+  return nearest(
+    list.filter((c) => c.sog > 0.8),
+    E.p0,
+    15_000,
+    8,
+  ).map((c) => {
+    // (its heading on the sea: its bow's way, level)
+    const up = unit(c.p);
+    const f = c.fwd.map((x, i) => x - up[i]! * (c.fwd[0]! * up[0]! + c.fwd[1]! * up[1]! + c.fwd[2]! * up[2]!));
+    return { p: c.p as Vec3, fwd: unit(f) as Vec3, U: c.sog, len: c.len, beam: c.beam };
+  });
 }
 /**
  * The flown craft's own mark on the sea (renderer.seaWakes' first; trace.wgsl seaWake: its downwash, its trail, its spray):
@@ -370,25 +372,25 @@ const unit = (a: readonly number[]) => {
 };
 
 /**
- * The ships' labels within 30 km (the nearest 16: name · kind · speed in the units chosen) and, the Sun down, their
- * navigation lights.
+ * The ships' labels within 30 km of the view (the nearest 16: name · kind · speed in the units chosen) and, the Sun down
+ * where the view is, their navigation lights. `view`: the view's controller (a spectator's, else this one — the free
+ * camera with no craft too).
  */
-function seaOverlay(this: CameraController, fmtSpd: (ms: number) => string): TrafficMark[] {
+function seaOverlay(this: CameraController, fmtSpd: (ms: number) => string, view: CameraController = this): TrafficMark[] {
   const list = this.seaNow();
   if (!list.length) return [];
-  const E = earthView(this);
+  const E = earthView(view);
   if (!E) return [];
   const cam = (b: readonly number[]) => E.toCam(E.toHome(b as Vec3));
-  // (night: the Sun under the horizon where we are)
-  const g = this.geoNow();
+  // (night: the Sun under the horizon where the view is)
+  const g = view.geoNow();
   const ms = J2000_MS + daysOf(this.nowTime()) * 86400e3;
   const night = g ? azAltAt("sun", g.lat * D, g.lon * D, 0, ms).alt < -1 : false;
   const colours = { white: "rgba(255, 250, 235, 1)", red: "rgba(255, 50, 40, 1)", green: "rgba(60, 255, 120, 1)" };
   const out: TrafficMark[] = [];
-  for (const c of list) {
-    const rel = cam([0, 1, 2].map((k) => c.p[k]! - E.p0[k]!));
+  for (const c of nearest(list, E.p0, 30_000, 16)) {
+    const rel = cam([c.p[0]! - E.p0[0], c.p[1]! - E.p0[1], c.p[2]! - E.p0[2]]);
     const dist = Math.hypot(...rel);
-    if (dist > 30_000) continue;
     const at = (x: number, y: number, z: number): Vec3 =>
       cam([0, 1, 2].map((k) => c.p[k]! - E.p0[k]! - c.right[k]! * x + c.up[k]! * y + c.fwd[k]! * z));
     const lights = night
@@ -402,7 +404,7 @@ function seaOverlay(this: CameraController, fmtSpd: (ms: number) => string): Tra
     const label = [c.name || `MMSI ${c.mmsi}`, c.kind, c.sog > 0.3 ? fmtSpd(c.sog) : null].filter(Boolean).join(" · ");
     out.push({ id: `ais:${c.id}`, at: rel, dist, label, lights });
   }
-  return out.sort((a, b) => a.dist - b.dist).slice(0, 16);
+  return out;
 }
 
 export function installSeaTraffic(C: { prototype: CameraController }) {

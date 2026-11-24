@@ -1,12 +1,15 @@
 // The real traffic as a page reads it (docs/PLAN-AVIATION-AAA.md, T1, T2): the aircraft and ships about the
-// flown craft, asked of the relay (server/traffic.ts: the dev server's own, else the room server's) — the air every
-// 15 s within 120 km (the sources' pace), the sea every 10 s within 60 km; the aircraft followed (a formation's
-// lead, the radar's lock) its own quarter of an hour's trace every 15 s —; off when the setting says so or the page
-// is offline. Each aircraft kept with its reports of the last quarter of an hour: T2 draws it some 30 s behind the
-// real time, between two of them (controller/traffic.ts). Its sources' attribution kept to be shown.
+// traffic's focus (traffic/focus.ts: the flown craft, else the view's own eye — the free camera with no craft too),
+// asked of the relay (server/traffic.ts: the dev server's own, else the room server's) — the air every 15 s within
+// 120 km (the sources' pace; up to 160 km from high up), the sea every 10 s within 60 km (up to 90); the aircraft
+// followed (a formation's lead, the radar's lock, the camera's subject) its own quarter of an hour's trace every 15 s —;
+// off when the setting says so or the page is offline. Each aircraft kept with its reports of the last quarter of an
+// hour: T2 draws it some 30 s behind the real time, between two of them (controller/traffic.ts). Its sources'
+// attribution kept to be shown.
 
 import type { Plane, Ship } from "../../server/traffic";
 import { geoidDeg } from "../system/geoid-grid";
+import { surfaceM } from "./focus";
 
 export type { Plane, Ship };
 
@@ -32,8 +35,8 @@ export function trafficBase(loc: { hostname: string; protocol: string; host: str
 }
 
 export const FEED = {
-  /** the asks' periods [s] and radii [km]; the followed one's trace's period [s]; an aircraft dropped unheard this
-   *  long [s]; the history kept [s] */
+  /** the asks' periods [s] and radii [km] (the focus's when it gives them); the followed one's trace's period [s]; an
+   *  aircraft dropped unheard this long [s]; the history kept [s] */
   airEvery: 15,
   seaEvery: 10,
   traceEvery: 15,
@@ -41,7 +44,23 @@ export const FEED = {
   seaR: 60,
   keep: 120,
   history: 900,
+  /** the focus jumped (traffic/focus.ts): its new place asked at once — no sooner than this after the last ask [s] (the
+   *  air: adsb.lol's pace at the relay, 10 s; the sea's) —; what lies beyond this share of its radii dropped */
+  jumpAir: 10,
+  jumpSea: 5,
+  beyond: 1.6,
+  /** the reports' upkeep (the unheard, the far) every this [s] — not each frame */
+  upkeep: 1,
 } as const;
+
+/** Where the traffic is asked: a place over the Earth [°], its radii [km] (FEED's when none), its focus's jumps so far. */
+export interface FeedAt {
+  lat: number;
+  lon: number;
+  airR?: number;
+  seaR?: number;
+  jumps?: number;
+}
 
 export class TrafficFeed {
   readonly planes = new Map<string, TrackedPlane>();
@@ -52,9 +71,17 @@ export class TrafficFeed {
   error = "";
   /** one aircraft followed (a formation's lead, the radar's lock): its recent trace asked every 15 s */
   focus: string | null = null;
+  /** where it was last asked about (null: off) */
+  at: FeedAt | null = null;
+  /** the asks sent so far (a meter: the relay's pace kept) */
+  readonly asks = { air: 0, sea: 0, trace: 0 };
   private focusAt = -1e9;
   private airAt = -1e9;
   private seaAt = -1e9;
+  private keptAt = -1e9;
+  private jumps: number | undefined = undefined;
+  /** the focus jumped: its new place to ask as soon as the pace allows */
+  private hurry = { air: false, sea: false };
   private busy = { air: false, sea: false, plane: false };
 
   constructor(
@@ -68,13 +95,17 @@ export class TrafficFeed {
     this.planes.clear();
     this.ships.clear();
     this.credit = {};
+    this.at = null;
+    this.jumps = undefined;
+    this.hurry = { air: false, sea: false };
   }
 
   /**
-   * A frame: `now` [s, the page's clock], `at` where the flown craft is over the Earth (null: not near it), `on` the
-   * setting. The air and the sea asked when due; the old reports dropped.
+   * A frame: `now` [s, the page's clock], `at` the traffic's focus over the Earth (traffic/focus.ts — the flown craft,
+   * else the view's eye; null: none near the Earth), `on` the setting. The air and the sea asked when due — at once when
+   * the focus has jumped, within the sources' pace —; the old reports and those left far behind dropped, once a second.
    */
-  tick(now: number, at: { lat: number; lon: number } | null, on: boolean) {
+  tick(now: number, at: FeedAt | null, on: boolean) {
     if (!on || !at) {
       if (this.status !== "off") this.clear();
       this.status = "off";
@@ -85,20 +116,42 @@ export class TrafficFeed {
       return;
     }
     if (this.status === "off") this.status = "waiting";
-    if (now - this.airAt >= FEED.airEvery && !this.busy.air) {
+    this.at = at;
+    // (the focus jumped — a teleport, a voyage, the view gone from the craft —: its new place asked now, what lies far
+    // behind let go; the first focus is none)
+    if (at.jumps !== undefined && this.jumps !== undefined && at.jumps !== this.jumps) {
+      this.dropBeyond(at);
+      this.hurry.air = this.hurry.sea = true;
+    }
+    this.jumps = at.jumps;
+    if (now - this.airAt >= (this.hurry.air ? FEED.jumpAir : FEED.airEvery) && !this.busy.air) {
       this.airAt = now;
+      this.hurry.air = false;
       void this.ask("air", at, now);
     }
     if (this.focus && now - this.focusAt >= FEED.traceEvery && !this.busy.plane) {
       this.focusAt = now;
       void this.askTrace(this.focus, now);
     }
-    if (now - this.seaAt >= FEED.seaEvery && !this.busy.sea) {
+    if (now - this.seaAt >= (this.hurry.sea ? FEED.jumpSea : FEED.seaEvery) && !this.busy.sea) {
       this.seaAt = now;
+      this.hurry.sea = false;
       void this.ask("sea", at, now);
     }
-    for (const [k, v] of this.planes) if (now - v.heard > FEED.keep) this.planes.delete(k);
-    for (const [k, v] of this.ships) if (now - v.heard > FEED.keep * 3) this.ships.delete(k);
+    if (now - this.keptAt >= FEED.upkeep) {
+      this.keptAt = now;
+      for (const [k, v] of this.planes) if (now - v.heard > FEED.keep) this.planes.delete(k);
+      for (const [k, v] of this.ships) if (now - v.heard > FEED.keep * 3) this.ships.delete(k);
+      this.dropBeyond(at);
+    }
+  }
+
+  /** What lies beyond FEED.beyond of the radii from the focus let go (the aircraft followed kept: its trace is asked). */
+  private dropBeyond(at: FeedAt) {
+    const ra = FEED.beyond * (at.airR ?? FEED.airR) * 1e3,
+      rs = FEED.beyond * (at.seaR ?? FEED.seaR) * 1e3;
+    for (const [k, v] of this.planes) if (k !== this.focus && surfaceM(at, v.p) > ra) this.planes.delete(k);
+    for (const [k, v] of this.ships) if (Number.isFinite(v.s.lat) && surfaceM(at, v.s) > rs) this.ships.delete(k);
   }
 
   /** The credits to show: those of the sources that gave something now. */
@@ -163,6 +216,7 @@ export class TrafficFeed {
 
   private async askTrace(id: string, now: number) {
     this.busy.plane = true;
+    this.asks.trace++;
     try {
       const res = await this.get(`${this.base()}/traffic/trace?id=${encodeURIComponent(id)}`);
       if (res.ok) {
@@ -185,10 +239,11 @@ export class TrafficFeed {
     }
   }
 
-  private async ask(what: "air" | "sea", at: { lat: number; lon: number }, now: number) {
+  private async ask(what: "air" | "sea", at: FeedAt, now: number) {
     this.busy[what] = true;
+    this.asks[what]++;
     try {
-      const r = what === "air" ? FEED.airR : FEED.seaR;
+      const r = what === "air" ? (at.airR ?? FEED.airR) : (at.seaR ?? FEED.seaR);
       const res = await this.get(`${this.base()}/traffic/${what}?lat=${at.lat.toFixed(4)}&lon=${at.lon.toFixed(4)}&r=${r}`);
       if (!res.ok) throw new Error(`${what} ${res.status}`);
       const j = (await res.json()) as { planes?: Plane[]; ships?: Ship[]; attribution?: string };

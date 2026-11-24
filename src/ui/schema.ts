@@ -4765,7 +4765,7 @@ export const SCHEMA: ControlDef[] = [
     group: "Traffic",
     label: "Real traffic",
     effect: "none",
-    help: "The real aircraft (ADS-B: adsb.lol, OpenSky) and ships (AIS: aisstream.io) about your craft, live — through the game's relay, refreshed every few seconds. Off: none asked. Offline: none.",
+    help: "The real aircraft (ADS-B: adsb.lol, OpenSky) and ships (AIS: aisstream.io) about your craft — about the camera when none is flown, or when it has gone far from it —, live, through the game's relay, refreshed every few seconds. Off: none asked. Offline, or under the title screen: none.",
     keywords: "traffic real aircraft airliners ships ais adsb opensky",
   },
   {

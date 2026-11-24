@@ -409,6 +409,21 @@ else why not. `["saturn", "wormhole", "hole"]` from the Earth: Saturn, the wormh
 The itinerary under way: the stop voyaged to now, how many begun (`i`) of how many (`of`); null when none (its last stop
 reached and held).
 
+### `__bh.trafficFocus()` → { focus, here, moves, status, at, asks, planes, ships }
+
+The real traffic's focus (`src/traffic/focus.ts`, docs/CAMERA.md "The traffic about the camera"; 24 Nov 2026) and the
+feed's state (`src/traffic/feed.ts`), copied. `focus`: where the traffic is asked — `{ lat, lon }` [°, WGS84 geodetic],
+`alt` [m over the sea, `geoNow`'s], `airR`, `seaR` [km], `who` (`"craft"` the flown craft, `"view"` the view's eye: the free
+camera with no craft, a spectator 60 km or more from the craft, a subject or a tour), `jumps` (its moves of half a radius
+or more so far) — or null (the setting off, the title screen, far from the Earth, the view above 160 km). `here`: the place
+followed now, even off (`{ lat, lon, alt }` or null — the sea's own life is made about it). `moves`: its re-centrings so far
+(a quarter radius each: a free camera flown fast must not add one each frame). `status`: the feed's (`off`, `waiting`,
+`live`, `error`, `offline`); `at`: the place last asked (null off); `asks`: `{ air, sea, trace }` sent so far (the relay's
+pace: air 15 s — 10 s after a jump —, sea 10 s — 5 s —, a trace 15 s); `planes`, `ships`: how many held. The aircraft and
+ships themselves: `__bh.camera.trafficNow()`, `__bh.camera.seaNow()` (Earth-fixed metres), their marks
+`__bh.camera.trafficOverlay(fmt, __bh.camera.viewController())`, `seaOverlay(fmt, view)` — the view's controller places
+them from the view (a spectator's, else the camera's own). e2e: `traffic-free-camera`.
+
 ### `__bh.spectate(on: boolean)` → boolean
 
 Puts the camera out of the ship as a free spectator (`on: true`; the ship goes on flying) or back into it (`false`). Returns whether the spectator is out. Refused with a toast ("fly one first (K)") when no craft is being flown: the spectator starts only from a piloted ship (`startSpectator` in `controller/spectator.ts`). No e2e test calls it.
