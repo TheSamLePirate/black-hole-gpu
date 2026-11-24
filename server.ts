@@ -169,6 +169,11 @@ const server = Bun.serve({
       if (!r.success) return new Response(r.logs.join("\n"), { status: 500 });
       return new Response(await r.outputs[0]!.text(), { headers: { "content-type": "text/javascript" } });
     },
+    "/tree-asset-worker.js": async () => {
+      const r = await Bun.build({ entrypoints: ["./src/vegetation/tree-asset-worker.ts"], target: "browser", minify: !dev });
+      if (!r.success) return new Response(r.logs.join("\n"), { status: 500 });
+      return new Response(await r.outputs[0]!.text(), { headers: { "content-type": "text/javascript" } });
+    },
     "/terrain-mesh-worker.js": async () => {
       const r = await Bun.build({ entrypoints: ["./src/system/terrain-mesh-worker.ts"], target: "browser", minify: !dev });
       if (!r.success) return new Response(r.logs.join("\n"), { status: 500 });
@@ -250,6 +255,7 @@ const server = Bun.serve({
         "earth-surface-worker.js",
         "wgsl-specialise-worker.js",
         "tile-decode-worker.js",
+        "tree-asset-worker.js",
         "terrain-mesh-worker.js",
         "scenery-worker.js",
         "cell-worker.js",

@@ -5,7 +5,8 @@ import { App, E2E, stopServer } from "./lib/app";
 // scenery's tiles in), the scene's clock held, the third-person camera; each way its frames' GPU time over 4 s and a shot — the feet
 // against the ground the image draws (the raster's mesh from the height cache, the tracer's march on the walker's own grid).
 // Duration: ~4 min on kerr-mini.
-// (and the raster with the near trees left to the material — renderer.nearTreesRays false —: the rays' share of the near field)
+// (and the raster with the near trees' geometry off — renderer.nearTreeGeometryOn false: their crowns' cut proxies, the material's;
+// the rays' near-tree path and its lever nearTreesRays were retired on 24 Nov 2026)
 // Done when: the three ways measured and shot, at Chamonix then at WALK_SPOTS' other places.
 afterAll(stopServer);
 const OUT = process.env.WALK_OUT ?? "remote-results/walk-raster";
@@ -16,13 +17,14 @@ test.skipIf(!E2E || process.env.E2E_PROBE !== "1")(
     const app = await App.boot({ width: 1600, height: 900, hash: "scene=game:artemis", tiles: true });
     try {
       for (const [lat, lon] of SPOTS) {
-        // (false: traced; true: the raster; "near": the raster with the near trees the material's too — renderer.nearTreesRays false)
-        // ("imp": as "near", the near trees read from their impostors — renderer.tune IMPOSTOR_NEAR_M −100, PLAN-J5 J5-3b)
-        const ways = (process.env.WALK_WAYS?.split(",") ?? ["false", "true", "near", "false"]).map((w) =>
+        // (false: traced; true: the raster, the near trees' geometry on — the default —; "cut": the raster, that geometry off — the
+        // crowns' cut proxies —; "imp": as "cut", the near trees read from their impostors — renderer.tune IMPOSTOR_NEAR_M −100,
+        // PLAN-J5 J5-3b)
+        const ways = (process.env.WALK_WAYS?.split(",") ?? ["false", "true", "cut", "false"]).map((w) =>
           w === "false" ? false : w === "true" ? true : w,
         );
         for (const on of ways) {
-          await app.js(`(() => { __bh.renderer.walkRasterOn = ${on !== false}; __bh.renderer.nearTreesRays = ${on !== "near" && on !== "imp"};
+          await app.js(`(() => { __bh.renderer.walkRasterOn = ${on !== false}; __bh.renderer.nearTreeGeometryOn = ${on !== "cut" && on !== "imp"};
             __bh.renderer.tune = ${on === "imp" ? "{ IMPOSTOR_NEAR_M: -100 }" : "{}"};
             Object.assign(__bh.settings, { traffic: false, autosave: false, damage: false, showFps: true, dof: false, motionBlur: 0 });
             __bh.game.setDate("2026-07-10T10:30:00Z");
@@ -59,7 +61,7 @@ test.skipIf(!E2E || process.env.E2E_PROBE !== "1")(
         }
       }
       await app.js(
-        `(() => { __bh.renderer.walkRasterOn = false; __bh.renderer.nearTreesRays = true; __bh.renderer.tune = {}; return 1; })()`,
+        `(() => { __bh.renderer.walkRasterOn = false; __bh.renderer.nearTreeGeometryOn = true; __bh.renderer.tune = {}; return 1; })()`,
       );
       expect(await app.js<number>("__bh.renderer.gpuErrors")).toBe(0);
     } finally {

@@ -11,6 +11,8 @@ import { TerrainCache } from "./system/terrain-cache";
 import { EarthHorizons } from "./system/earth-horizons";
 import { EarthShore, type SwellInput } from "./system/earth-shore";
 import { IMPOSTOR_BINDING, IMPOSTOR_TEXTURE_LIMIT, TreeImpostors } from "./vegetation/tree-impostors";
+import { preloadTreeAssets } from "./vegetation/tree-asset-load";
+import { NEAR_TREE_FADE_S } from "./vegetation/tree-near";
 import { EH_HEADER_VEC4S, EH_NODE_VEC4S } from "./system/terrain-cache-layout";
 import {
   composeTracer,
@@ -408,10 +410,6 @@ const RASTER_WATER_FLAG = 256;
 /** the parameters' raster bit for "shade not compiled yet": the pixels the material does not take are traced (trace.wgsl
  *  RASTER_SHADE_LATE_FLAG) */
 const RASTER_SHADE_LATE_FLAG = 1024;
-/** the parameters' raster bit for the trees near the camera taken by the rays' kernel (trace.wgsl RASTER_NEAR_TREES_FLAG) */
-const RASTER_NEAR_TREES_FLAG = 2048;
-/** within this the trees are the rays' kernel's (trace.wgsl RASTER_NEAR_TREES_M) [m] */
-const RASTER_NEAR_TREES_M = 80;
 /** the temporal pass's least weight of a fresh pixel with the raster's ground at every pixel (taParams[0]'s 1/16 otherwise) */
 const RASTER_LITE_ALPHA = 0.3;
 /** the automatic rate's start by the hardware's tier (tier.ts: 0 software … 4 high-end) — then by the measure */
@@ -829,6 +827,11 @@ interface OfflineJob {
 
 /** Trees and buildings stand above the ground [m]: the nearest scenery's distance taken this much under the camera's height. */
 const SCENERY_TOP_M = 60;
+/** (J9) the near trees' shadow casters drawn again once the camera has moved this far [m] (their hand-over band ±4 m at 80 m) */
+const NEAR_TSM_STEP_M = 8;
+/** (J9) … and this often per unit of wind [Hz]: forest.wgsl forestSwayAt's crowns move at most ~0.45 m/s per unit (its amplitude
+ *  min(0.02 h, 0.5) m at 1.2/√h Hz, the most at h = 25 m), a quarter of the map's 0.88 m texel in ~0.5 s */
+const NEAR_TSM_SWAY_HZ = 2;
 
 /** The camera's eye on its near body's axes [its radii] (float64): where the tracer's rays start (trace.wgsl nearCam). */
 /** The relief's shadow map's axes (encodeSunShadow, encodeBodySunShadow): right across the Sun L and the vertical — any
@@ -5617,10 +5620,9 @@ export class Renderer {
   /** (PLAN-J5 J5-3, a measure) the walker on the Earth drawn by the raster — its walking grid still sent (P.walk[0].w 2: trace.wgsl
    *  rasterPrimary) —; false: the traced pipeline while walking, as ever (its march meets the grid the feet stand on) */
   walkRasterOn = false;
-  /** (PLAN-J5 J5-3a legacy fallback, retired in J9-R) the trees within 80 m of the camera given to the rays' kernel (shade) —
-   *  retired by J9-R in favor of real 3D geometry nearTreeGeometryOn; kept as fallback */
-  nearTreesRays = false;
-  /** (PLAN-J9 AAA near tree geometry) 3D near trees geometry on by default in raster mode after acceptance J9-A. */
+  /** (PLAN-J9) the near trees as real 3D geometry in the raster (on since J9-R). Off — or while its asset and pipelines are on
+   *  their way —: their crowns' proxies cut to the crowns (tree-near.ts nearProxyFs), the material's; the rays' kernel no longer
+   *  takes them (its lever nearTreesRays and the RASTER_NEAR_TREES flag retired by the review of 24 Nov 2026) */
   nearTreeGeometryOn = true;
   /** PLAN-MER-WEBGPU S2: the sea's crests drawn before the land behind them where it stands over the waves (A/B lever) */
   seaCrestsOverLand = true;
@@ -7037,11 +7039,18 @@ export class Renderer {
   departureReady(): boolean | null {
     const F = this.shipFocus ?? this.departure;
     if (F?.body !== "earth" || F.altKm > 60) return null;
-    return !!this.earthMaps.tier && this.earthTiles.coarseReady(10);
+    // (J9, review of 24 Nov 2026: the near trees' geometry asked under the veil — not at their first frame —, and waited for
+    // once the scenery raster is there: in, or failed — its cut proxies then, the asset asked again later)
+    const nt = this.sceneryRaster?.nearTrees;
+    if (this.nearTreeGeometryOn && !nt?.ready) preloadTreeAssets();
+    const trees = !nt || !this.nearTreeGeometryOn || nt.ready || !!nt.error;
+    return !!this.earthMaps.tier && this.earthTiles.coarseReady(10) && trees;
   }
 
   prewarmEarthFlight(s: Settings) {
     if (!this.stableProfiles || !this.rasterHint || s.earthPipeline !== "raster" || this.lost) return;
+    // (J9: the near trees' geometry asked too — fetched and checked in its worker —, its pipelines with the scenery raster's)
+    if (this.nearTreeGeometryOn && !this.sceneryRaster?.nearTrees.ready) preloadTreeAssets();
     const key =
       this.featuresOf(s) |
       (s.wormhole ? 512 : 0) |
@@ -7432,31 +7441,17 @@ export class Renderer {
     this.rasterLiteNow = false;
     this.rasterWaterNow = false;
     this.rasterShadeLate = false;
-    this.nearTreesNow = false;
     if (!quality && hint && this.rasterPrimaryOn && this.rasterLite && this.traceVariant("shadeLite")) {
       this.rasterLiteNow = true;
       this.rasterShadeLate = shadeLate;
       // (its water's pass — shadeWater — once its kernel is there: shadeLite leaves it the water's pixels)
       // (not another world's: its water is bodyLite's — and the Earth's unseen sea would stop the FFT, seaFftParams)
       this.rasterWaterNow = !this.bodyRasterNow && !!this.traceVariant("shadeWater");
-      // (J9-R: real 3D geometry nearTreeGeometryOn replaces the near-tree rays march in raster mode;
-      // nearTreesNow is only enabled as a legacy fallback when nearTreeGeometryOn is explicitly disabled)
-      this.nearTreesNow =
-        !this.nearTreeGeometryOn &&
-        this.nearTreesRays &&
-        !shadeLate &&
-        !this.bodyRasterNow &&
-        this.earthScenery.active &&
-        this.liveEyeHM > 0 &&
-        this.liveEyeHM - SCENERY_TOP_M < RASTER_NEAR_TREES_M &&
-        !!this.traceVariant("shade") &&
-        (this.rasterRate === 1 || !!this.traceVariant("shadeMark"));
       this.paramsF[MOUTH_LIST_AT + 5] =
         this.paramsF[MOUTH_LIST_AT + 5]! +
         RASTER_LITE_FLAG +
         (this.rasterWaterNow ? RASTER_WATER_FLAG : 0) +
-        (shadeLate ? RASTER_SHADE_LATE_FLAG : 0) +
-        (this.nearTreesNow ? RASTER_NEAR_TREES_FLAG : 0);
+        (shadeLate ? RASTER_SHADE_LATE_FLAG : 0);
       this.device.queue.writeBuffer(this.paramBuf, (MOUTH_LIST_AT + 4) * 4, this.paramsF.subarray(MOUTH_LIST_AT + 4, MOUTH_LIST_AT + 8));
     }
     // (the cloud pass: the clouds marched once a texel of half the image, before the rays that read them)
@@ -7581,7 +7576,7 @@ export class Renderer {
       // return at each, a dispatch of the tracer's size over the whole image for nothing, ~0.6 ms on an M1 — TERRE-UNREAL U6.
       // PLAN-PONT-ROUTES-AAA PR4: bridge decks are now 3D raster meshes with shared carriageway material, so bridgeCount veto is retired)
       // (at a rate above 1 too since PLAN-J5 J5-6 — the material at the rate's pattern —: the pixels it leaves marked all the same)
-      const liteAll = this.rasterLiteNow && (this.sceneryRaster?.meshes3d ?? true) && this.shadeSkip && !this.nearTreesNow;
+      const liteAll = this.rasterLiteNow && (this.sceneryRaster?.meshes3d ?? true) && this.shadeSkip;
       if (!liteAll || mark) {
         const sp = enc.beginComputePass(this.prof.pass(liteAll ? "earth raster: left pixels" : "earth shade (raster)"));
         sp.setBindGroup(0, this.hintBindFor(t, hint));
@@ -11240,8 +11235,6 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
   rasterLite = true;
   /** this frame: the material draws the ground, the old per-pixel kernel (shade) not compiled yet — its leftover pixels traced */
   private rasterShadeLate = false;
-  /** the trees near the camera the rays' kernel's this frame (RASTER_NEAR_TREES_FLAG: shade run, the camera low near them) */
-  private nearTreesNow = false;
   /** the live view's eye over the Earth's ground [m] (0: not over it) */
   private liveEyeHM = 0;
   /** shadeLite this frame */
@@ -11576,6 +11569,11 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
   private tsmRevisionNext = -1;
   private tsmNearKey = "";
   private tsmNearKeyNext = "";
+  /** (J9) the camera at the near trees' last shadow drawing (scenery frame), its count, the fade's settling time [ms] */
+  private tsmNearCam: number[] | null = null;
+  private tsmNearBase = "";
+  private tsmNearEpoch = 0;
+  private tsmNearSettleAt = 0;
   private tsmTableOn = false;
   private tsmDrawn = false;
   /** the relief's shadow map drawn this frame (encodeSunShadow): its frame cleared otherwise — not the last one's read */
@@ -12405,11 +12403,29 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
       const nt = this.sceneryRaster.nearTrees;
       const nearActive = this.nearTreeGeometryOn && nt.ready ? 1 : 0;
       const nearReach = nearActive ? Math.round(nt.reachM) : 0;
-      const nearSnap =
-        nearActive && Math.abs(scp[14] ?? 0) < nearReach + 40
-          ? `${Math.round((scp[12] ?? 0) / 32)},${Math.round((scp[13] ?? 0) / 32)}`
-          : "0";
-      const nearKey = `${nearActive}:${nearReach}:${Math.trunc(nt.debugTreeId)}:${Math.trunc(nt.capacity)}:${nearSnap}`;
+      // (J9, review of 24 Nov 2026: the near trees' casters are the drawn trees — tree-near.ts —, whose state follows the camera
+      // and whose crowns sway: the map drawn again once the camera has gone NEAR_TSM_STEP_M from its last near drawing — not on a
+      // 32 m grid, up to ~22 m late —, once more when the hand-over's fade has settled after it, and as the wind moves the crowns
+      // by a quarter of a texel. Bounded: one drawing per 8 m travelled near the trees, ≤ 2 a second per unit of wind (≤ 4))
+      const nearBase = `${nearActive}:${nearReach}:${Math.trunc(nt.debugTreeId)}:${Math.trunc(nt.capacity)}`;
+      let nearKey = nearBase;
+      if (nearActive && Math.abs(scp[14] ?? 0) < nearReach + 40) {
+        const now = performance.now();
+        const cam = [scp[12] ?? 0, scp[13] ?? 0, scp[14] ?? 0];
+        const c = this.tsmNearCam;
+        if (nearBase !== this.tsmNearBase || !c || Math.hypot(cam[0]! - c[0]!, cam[1]! - c[1]!, cam[2]! - c[2]!) > NEAR_TSM_STEP_M) {
+          this.tsmNearBase = nearBase;
+          this.tsmNearCam = cam;
+          this.tsmNearEpoch++;
+          this.tsmNearSettleAt = now + NEAR_TREE_FADE_S * 1000 + 100;
+        } else if (this.tsmNearSettleAt && now >= this.tsmNearSettleAt) {
+          this.tsmNearEpoch++;
+          this.tsmNearSettleAt = 0;
+        }
+        const w = Math.min(this.sceneryRaster.sway[2] ?? 0, 2);
+        const sway = w > 0 ? Math.floor(this.sceneryRaster.clock * NEAR_TSM_SWAY_HZ * w) : 0;
+        nearKey = `${nearBase}:${this.tsmNearEpoch}:${sway}`;
+      } else this.tsmNearCam = null;
       // (the shadow map drawn again only when its frame has moved — the camera 128 m in the Sun's plane, the Sun turned —, or
       // the scenery or near-tree geometry state changed: the trees stand still, the Sun moves slowly; else the last one kept)
       const fr = this.treeShadowFrame(scp);

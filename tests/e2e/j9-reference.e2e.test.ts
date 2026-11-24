@@ -12,7 +12,8 @@ import {
   treeSurfaceProbe,
 } from "./lib/tree-surface-probe";
 
-// J9-0: the near forest at a known height over loaded WGS84 ground, with and without near-tree rays.
+// J9-0: the near forest at a known height over loaded WGS84 ground, the near trees' geometry off (their proxies cut to their
+// crowns — the rays' path retired on 24 Nov 2026: this A is no longer J9-0's) and on.
 // Three fixed views (Maures floor, Maures low flight height, Chamonix slope), A/B/A in each. No craft is flown.
 // Strict readiness, actual render dimensions and samples recorded; missing data fail instead of being ignored.
 // Duration: ~6 min on kerr-mini.
@@ -80,14 +81,10 @@ test.skipIf(!E2E)(
         }
         const trees = await app.js<number>("__bh.renderer.earthScenery.stats().trees");
         expect(trees).toBeGreaterThan(0);
-        for (const [index, rays] of [true, false, true].entries()) {
-          await app.progress(
-            `A/B/A ${index + 1}/3 · ${GEOMETRY ? `geometry ${!rays}` : `rays ${rays}`}`,
-            JSON.stringify({ ground, trees }),
-          );
-          await app.js(
-            `(() => { __bh.renderer.nearTreesRays = ${GEOMETRY ? true : rays}; __bh.renderer.nearTreeGeometryOn = ${GEOMETRY && !rays}; __bh.touch(); return true; })()`,
-          );
+        // (cut: the near geometry off — its crowns' cut proxies, the interim the game shows while the asset loads)
+        for (const [index, cut] of [true, false, true].entries()) {
+          await app.progress(`A/B/A ${index + 1}/3 · geometry ${!cut}`, JSON.stringify({ ground, trees }));
+          await app.js(`(() => { __bh.renderer.nearTreeGeometryOn = ${!cut}; __bh.touch(); return true; })()`);
           // Only settling, not a readiness shortcut: all data were required above.
           await Bun.sleep(2000);
           const result = await app.js<{
@@ -101,29 +98,31 @@ test.skipIf(!E2E)(
           const R=__bh.renderer, gpu=[]; let last=R.completedFrames; const start=performance.now();
           while(performance.now()-start<12000){ __bh.touch(); await new Promise(requestAnimationFrame);
             if(R.completedFrames!==last){const n=R.completedFrames-last;last=R.completedFrames;gpu.push(...R.completedDurations.slice(-n));} }
-          return {gpu,raster:R.rasterPrimaryNow,near:R.nearTreesNow,width:document.querySelector("#view").width,height:document.querySelector("#view").height,scale:R.live.width/document.querySelector("#view").width,internalWidth:R.live.width,internalHeight:R.live.height,tier:R.tier.level,rasterRate:R.rasterRate};
+          return {gpu,raster:R.rasterPrimaryNow,near:R.nearTreeGeometryOn&&!!R.sceneryRaster?.nearTrees.ready,width:document.querySelector("#view").width,height:document.querySelector("#view").height,scale:R.live.width/document.querySelector("#view").width,internalWidth:R.live.width,internalHeight:R.live.height,tier:R.tier.level,rasterRate:R.rasterRate};
         })()`);
           expect(result.raster).toBe(true);
-          expect(result.near).toBe(GEOMETRY ? true : rays);
+          expect(result.near).toBe(!cut);
           expect(result.gpu.length).toBeGreaterThan(20);
           expect(result.gpu.every((x) => Number.isFinite(x) && x > 0)).toBe(true);
           const ordered = [...result.gpu].sort((a, b) => a - b);
           const counts = GEOMETRY
-            ? await app.js<{ instances: number[]; lod0: number[]; lod1: number[]; overflow: number }>(
+            ? await app.js<{ instances: number[]; lod0: number[]; lod1: number[]; proxies: number[]; overflow: number }>(
                 "__bh.renderer.sceneryRaster.nearTrees.readCounts()",
               )
             : null;
           if (counts) {
             expect(counts.overflow).toBe(0);
-            if (rays) expect(counts.instances.reduce((a, b) => a + b, 0)).toBe(0);
-            else if (v.agl < 10) {
+            if (cut) {
+              expect(counts.instances.reduce((a, b) => a + b, 0)).toBe(0);
+              if (v.agl < 10) expect(counts.proxies.reduce((a, b) => a + b, 0)).toBeGreaterThan(0);
+            } else if (v.agl < 10) {
               expect(counts.instances.reduce((a, b) => a + b, 0)).toBeGreaterThan(0);
               expect(counts.lod0.reduce((a, b) => a + b, 0)).toBeGreaterThan(0);
               expect(counts.lod1.reduce((a, b) => a + b, 0)).toBeGreaterThan(0);
             }
           }
           const surface =
-            GEOMETRY && !rays && v.agl < 10
+            GEOMETRY && !cut && v.agl < 10
               ? await app.js<{ aaDelta: number; pixels: number; validDepth: number; identified: number; sky: number }>(TREE_SURFACE_PROBE)
               : null;
           if (surface) {
@@ -134,14 +133,14 @@ test.skipIf(!E2E)(
           }
           const entry = {
             surface,
-            geometry: GEOMETRY && !rays,
+            geometry: !cut,
             reachM: GEOMETRY ? REACH : null,
             counts,
             view: v,
             ground,
             trees,
             index,
-            rays: GEOMETRY ? true : rays,
+            cutProxies: cut,
             ...result,
             p50: ordered[Math.floor(ordered.length * 0.5)],
             p95: ordered[Math.floor(ordered.length * 0.95)],
@@ -149,7 +148,7 @@ test.skipIf(!E2E)(
           report.push(entry);
           console.log(JSON.stringify({ ...entry, gpu: `${result.gpu.length} samples in samples.json` }));
           await Bun.write(`${OUT}/samples.json`, JSON.stringify(report, null, 2));
-          await app.shot(`${OUT}/${v.name}-${index}-${rays ? "rays" : GEOMETRY ? "geometry" : "smooth"}.png`);
+          await app.shot(`${OUT}/${v.name}-${index}-${cut ? "cut" : "geometry"}.png`);
         }
         if (GEOMETRY && v.agl < 10) {
           if (process.env.J9_OCCLUSION === "1" && (v.name === "maures-floor" || process.env.J9_CASES === v.name)) {
@@ -286,17 +285,26 @@ test.skipIf(!E2E)(
             expect(underProbe.pixels).toBeGreaterThan(0);
             expect(underProbe.validDepth).toBe(underProbe.pixels);
             expect(underProbe.identified).toBe(underProbe.pixels);
-            await app.js(`__bh.viewAt(${v.lat},${v.lon},{altM:${ground + v.agl + 12},heading:${v.heading},pitch:${v.pitch},fov:50})`);
-            await Bun.sleep(600);
-            await app.js(`__bh.viewAt(${v.lat},${v.lon},{altM:${ground + v.agl + 6},heading:${v.heading},pitch:${v.pitch},fov:50})`);
-            await Bun.sleep(300);
+            // (the hand-over's band is ±5 % of the reach about each tree's limit — 76…84 m at 80 m —, the LOD's 0.50…0.56 of it: the
+            // camera brought to one place from 12 m behind, then from 12 m ahead, along its heading — each crossing both bands for
+            // the trees about them —; the per-tree state keeps what it had in the band: strictly more geometry and LOD 0 coming
+            // back than going in, whichever way the camera last moved. Waits past the 0.3 s crossfade)
+            const along = (m: number) => {
+              const h = (v.heading * Math.PI) / 180;
+              return `${v.lat + (m * Math.cos(h)) / 111_320},${v.lon + (m * Math.sin(h)) / (111_320 * Math.cos((v.lat * Math.PI) / 180))}`;
+            };
+            const hold = `altM:${ground + v.agl},heading:${v.heading},pitch:${v.pitch},fov:50`;
+            await app.js(`__bh.viewAt(${along(-12)},{${hold}})`);
+            await Bun.sleep(800);
+            await app.js(`__bh.viewAt(${v.lat},${v.lon},{${hold}})`);
+            await Bun.sleep(800);
             const approachCounts = await app.js<{ instances: number[]; lod0: number[]; lod1: number[]; overflow: number }>(
               "__bh.renderer.sceneryRaster.nearTrees.readCounts()",
             );
-            await app.js(`__bh.viewAt(${v.lat},${v.lon},{altM:${ground + v.agl},heading:${v.heading},pitch:${v.pitch},fov:50})`);
-            await Bun.sleep(600);
-            await app.js(`__bh.viewAt(${v.lat},${v.lon},{altM:${ground + v.agl + 6},heading:${v.heading},pitch:${v.pitch},fov:50})`);
-            await Bun.sleep(300);
+            await app.js(`__bh.viewAt(${along(12)},{${hold}})`);
+            await Bun.sleep(800);
+            await app.js(`__bh.viewAt(${v.lat},${v.lon},{${hold}})`);
+            await Bun.sleep(800);
             const recedeCounts = await app.js<{ instances: number[]; lod0: number[]; lod1: number[]; overflow: number }>(
               "__bh.renderer.sceneryRaster.nearTrees.readCounts()",
             );
@@ -308,8 +316,9 @@ test.skipIf(!E2E)(
             const recedeTotal = recedeCounts.instances.reduce((a, b) => a + b, 0);
             const approachLod0 = approachCounts.lod0.reduce((a, b) => a + b, 0);
             const recedeLod0 = recedeCounts.lod0.reduce((a, b) => a + b, 0);
-            expect(recedeTotal).toBeGreaterThanOrEqual(approachTotal);
-            expect(recedeLod0).toBeGreaterThanOrEqual(approachLod0);
+            // (strict: equal counts would pass with no hysteresis at all — review of 24 Nov 2026)
+            expect(recedeTotal).toBeGreaterThan(approachTotal);
+            expect(recedeLod0).toBeGreaterThan(approachLod0);
             const transitions = {
               calm: {
                 pixels: calmProbe.pixels,
@@ -550,7 +559,7 @@ test.skipIf(!E2E)(
     } finally {
       await app
         .js(
-          "(() => {__bh.renderer.nearTreesRays=false;__bh.renderer.nearTreeGeometryOn=true;if(__bh.renderer.sceneryRaster)__bh.renderer.sceneryRaster.nearTrees.debugTreeId=0;delete globalThis.__j9Surfaces;return true;})()",
+          "(() => {__bh.renderer.nearTreeGeometryOn=true;if(__bh.renderer.sceneryRaster)__bh.renderer.sceneryRaster.nearTrees.debugTreeId=0;delete globalThis.__j9Surfaces;return true;})()",
         )
         .catch(() => {});
       app.close();
