@@ -16025,7 +16025,9 @@ fn roadPavement(mat: u32, road: vec4f, dir: vec2f, xy: vec2f, fpM: f32) -> Pavem
   let x = select(d, d + cr, one);
   let uL = abs(fract(x / lw) - 0.5) * lw;
   let inCarriage = 1.0 - smoothstep(cr - 0.1, cr + aa, d);
-  let track = (1.0 - smoothstep(0.24, 0.24 + aa, abs(uL - 0.8))) * select(0.55, 1.0, busy) * inCarriage;
+  // (box-filtered over the pixel — the band's share of it —: a smoothstep widened by the footprint grew the band, the road darkening
+  // with distance — road-pavement-slice, 24 Nov 2026)
+  let track = paveCover(abs(uL - 0.8), -0.24, 0.24, aa) * select(0.55, 1.0, busy) * inCarriage;
   // (its mean over a lane — two bands of 0.48 m in 3.5 m —: what the wheel paths leave in a pixel wider than they are)
   let trackMean = 0.27 * select(0.55, 1.0, busy) * inCarriage;
   let mid = 1.0 - smoothstep(0.8, 2.0, fpM);
@@ -16091,13 +16093,15 @@ fn roadPavement(mat: u32, road: vec4f, dir: vec2f, xy: vec2f, fpM: f32) -> Pavem
       let crack = 1.0 - smoothstep(0.012, 0.012 + aa * 0.25, abs(cn - 0.5));
       t *= mix(1.06, 0.55, crack * (1.0 - smoothstep(0.5, 1.0, fpM)));
     }
-    if (fpM < 1.5) {
+    // (a repair's patch — ~3 m × 2.4 m in a 4 m cell —: kept while the pixel is smaller than it, faded once it is under a pixel — faded
+    // from 0.8 m it went at a few hundred metres, the road's tone popping)
+    if (fpM < 4.0) {
       let pc = floor(xy / 4.0);
       if (hash31(vec3f(pc, 41.0)) < 0.08) {
         let f = fract(xy / 4.0);
         let inPatch = step(0.12, f.x) * step(f.x, 0.88) * step(0.2, f.y) * step(f.y, 0.8);
         let toneP = select(1.18, 0.78, hash31(vec3f(pc, 43.0)) < 0.5);
-        t *= mix(1.0, toneP, inPatch * (1.0 - smoothstep(0.8, 1.5, fpM)));
+        t *= mix(1.0, toneP, inPatch * (1.0 - smoothstep(2.0, 4.0, fpM)));
       }
     }
     o.puddle = 0.55 * track + 0.35 * tone;
