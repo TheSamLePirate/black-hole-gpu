@@ -143,7 +143,7 @@ Relevé initial :
   ne pas l'appliquer au trafic proche. Hors du lot du trafic (passe E12a) : à la session du rendu. Aussi relevé : la caméra libre
   basse au-dessus de SFO dessine encore la mer sur l'aérodrome tant que le relief n'est pas arrivé (16 tuiles en attente après 60 s).
 
-## ~~Trafic réel : le train des avions dessinés sans gréement reste sorti~~ (relevé le 24 novembre 2026, `traffic/runway-phase.ts`) — réglé le même jour (`COMMIT`, branche d'agent)
+## ~~Trafic réel : le train des avions dessinés sans gréement reste sorti~~ (relevé le 24 novembre 2026, `traffic/runway-phase.ts`) — réglé le même jour (`8e733d41`, branche d'agent)
 
 - **Constat** : la phase et le train de chaque avion sont décidés (`gear`, `gearWanted` de `camera.trafficNow()`), mais seul l'A320 du
   jeu a un train mobile. Les avions de ligne au maillage A320 ne le prennent que dans 4 km de la vue et à 4 au plus

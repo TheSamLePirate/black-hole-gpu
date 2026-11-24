@@ -706,10 +706,11 @@ pas — le cache du pilote répond en ~45 ms ; il faut une branche vivante sur u
   `shipShadow`, `Params.seafft[3]`) ; la carte se redessine alors chaque image. Levier de mesure `ship.trafficCast`,
   `camera.trafficRigMax`. **Mesuré** (kerr-mini, 24 nov. 2026, 1600 × 1000, vue des portes G de SFO — 3 A320 gréés, un
   CRJ, le trafic et les navires de la baie dans l'image —, branche d'agent sur `18a6e4dd`, e2e `traffic-runways` étape
-  « costs », job `20261124-222347-trw-gear` : `renderer.lastGpuMs`, médiane sur 3 s, ABBA sur deux tours ; ce sont des
-  complétions, pas le temps GPU pur — §8.1) : image 76,3 ms ; A/A −0,2 ms ; **les A320 gréés** (contre les mêmes dessinés
-  simples, `trafficRigMax` 0) **+2,8 ms** ; **les ombres du trafic** (contre `trafficCast` éteint) **0,0 à 0,9 ms, dans le
-  bruit** ; **toutes les passes de l'appareil** (E12a entière, `debugSkipShip`) **8,2 ms**. Le même passage sur ce Mac
+  « costs », jobs `20261124-222347-trw-gear` puis `20261124-223643-trw-final` (`8e733d41`) : `renderer.lastGpuMs`, médiane
+  sur 3 s, ABBA sur deux tours ; ce sont des complétions, pas le temps GPU pur — §8.1) : image 76,3 / 77,0 ms ; A/A −0,2 /
+  −0,4 ms ; **les A320 gréés** (3 dans l'image, contre les mêmes dessinés simples, `trafficRigMax` 0) **+2,8 / +2,4 ms** ;
+  **les ombres du trafic** (contre `trafficCast` éteint) **0,0 / +0,8 ms, au bord du bruit** ; **toutes les passes de
+  l'appareil** (E12a entière, `debugSkipShip`) **8,2 / 7,9 ms**. Le même passage sur ce Mac
   (M1 Max, chargé par d'autres sessions) : A/A −2,4 ms — non retenu. Correctif lié : la carte de l'A320 simple était lue à
   l'envers (v retourné) depuis T2 — ses hublots sur le dos —, corrigé dans `build-airliners.ts` et le `.bin`.
 - **Rendu → simulation** : rien de décisif. Le sol de contact de l'appareil ne vient pas des cibles GPU ; les sondes
