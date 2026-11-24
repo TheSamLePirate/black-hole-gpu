@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 25 nov. 00:30 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 25 nov. 01:30 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous. Ce qui est fermé quitte le tableau « En cours » pour la ligne « Fermé récemment ».
@@ -77,6 +77,14 @@ l'état d'une mission ou d'un combat **non sauvé, dit** ; le réseau **« entre
 **Décidé par Sam (16 nov., 15:58 UTC)** : J8-4 allumée par défaut (quads sous 8 px), J8-5 avec une jonction choisie sur captures, J8-1b suspendu, l'e2e de J8-6 par la voie (b), J8-9 ajouté ([PLAN-J8](docs/PLAN-J8-BATIMENTS.md) §6 point 6). **But fixé par Sam (16 nov., ~16:19 UTC)** : [J8-A](docs/PLAN-J8-BATIMENTS.md), un vol Paris et Toulon-Hyères, de jour et de nuit, tous les bâtiments, lampadaires, voitures (J8-L) et rivières (J8-E) chargés avant le vol, en « high » partout, sans différence visible entre les qualités. **Décidé par Sam (16 nov., ~21:40 UTC)** : J8-8 ouvert (le proche en cellules), la jonction à 0, l'éclat de nuit lointain gardé ([PLAN-J8](docs/PLAN-J8-BATIMENTS.md) §6 point 11). **Décidé par Sam (17 nov., ~08:00 UTC)** : J8-8b ouvert, les arbres par cellule, après un vol de référence à froid sur le M1 Max (§6 point 12). **Mode speed pour finir J8, J8-VB compris** (Sam, 17 nov. ~09:20 UTC ; [CLAUDE.md](CLAUDE.md), modes de travail ; §6 point 13) : contrôles rapides par lot, un gros e2e J8-A à la fin sur kerr-mini et le M1 Max. **J8-RP, les routes et les ponts AAA** (Sam, 17 nov. ~10:20 UTC ; [PLAN-J8](docs/PLAN-J8-BATIMENTS.md) §3 bis) : ajouté à J8 en mode speed, RP1 (les routes et marquages visibles sous l'orthophoto) en tête. **Attend Sam** : les quatre premières questions de PLAN-J8 §6, réglées provisoirement (même contenu sur les deux machines, retour si > 3 ms sur le mini ; portée au pixel ; J7 en pause, les arbres proches deviennent J9 ; pas de préparation côté serveur pour l'instant) ; les trois questions de [PLAN-J7](docs/PLAN-J7-FLUIDITE.md) §4, réglées provisoirement (les 40 ms du mini en dernier, J7-6 ; les arbres proches en géométrie ensuite, désormais J9 ; l'aplanissement du détail sous les trouées jusqu'à la FAF ou 10 km) ; les seuils du mini attendent la reprise de la cible 40 ms.
 
 ## Journal
+
+### 2026-11-25 01:30 UTC — Paris : −3,8 à −9,3 ms GPU sur kerr-mini (eau lue une fois, polygones d'eau en bandes, pluie par longueur de rayon)
+
+- Contribution : §8 (coût des vues de ville sur le mini, cible 40 ms), règle 1 (gain maximal lu sur les ablations avant chaque levier).
+- Constat (A/B `0f461b3e` contre `18a6e4dd`, kerr-mini, ABBA, échelle 0,75) : la fusion routes et ponts ne coûte rien de mesurable ; le temps était là avant. Ablations (Grenelle / Rivoli pluie) : eau lue deux fois par pixel + passe d'eau −18,2 / −3,9 ms, parcours des surfaces −6,5 / −5,6, lumière soleil/ciel −5,8 / −3,6, imagerie −1,3 / −4,1, nuages sous la pluie 9,4.
+- Réalisé (fusion `3d3c4e3f`) : `597fe783`/`5d7999f3` l'eau lue une fois — le noyau matériau la range dans son enregistrement, le noyau de lumière passe de 2 478 à 2 003 lignes ; polygones d'eau découpés en bandes dans le parcours des surfaces (réponses identiques sur 6 000 points, `scenery-water-tree.test.ts`) ; `61b4812e` puits de pluie échantillonnés selon la longueur du rayon (un pas par 100 m, 2 au moins) ; e2e `paris-routes-cost` ; `ab-commit.ts` accepte `AB_TREE_A/B` (le git du mini ne tourne plus : licence Xcode).
+- Mesuré (kerr-mini, `5d7999f3` contre `18a6e4dd`, A/A ≤ 2,4 ms) : GPU p50 Grenelle 67,7 → 62,3 ms, Alexandre III 70,0 → 63,8, Rivoli sec 61,2 → 57,4, Rivoli pluie 76,6 → 67,4 ; « earth lite: light » −3,3 à −5,7 ms, nuages sous la pluie 9,78 → 4,19. Image : écart moyen 0,15–1,85/255, sous l'écart d'un même code entre deux passages. Variantes rejetées (allocation de registres d'Apple : +1,3 à +3 ms) consignées.
+- Reste : 57–67 ms, loin des 40 ; parcours des 92–96 000 segments de rue (−6 ms éteint), eau de la Seine ~9,4 ms, lumière 3,6–5,8 ms ; trafic aérien +7,6 à +8,7 ms à SFO et une passe de finition à 27 ms aux portes — confié à un agent.
 
 ### 2026-11-25 00:30 UTC — Trafic AAA : train sur chaque avion de ligne, ombres du trafic, couleurs des compagnies
 
