@@ -12358,7 +12358,11 @@ fn wxRainShafts(ro: vec3f, rd: vec3f, tHit: f32, Ls: vec3f, E: vec3f, jit: f32) 
   let physicalLs = airPhysicalDirection(Ls);
   let stepM = EARTH_RM * airRayScale(rd);
   let ct = dot(airPhysicalDirection(rd), physicalLs);
-  let N = 10u;
+  // (the steps by the ray's length: what varies along it — the cells' 9 km and the curtains' 3 km noise, the streaks' 400 m, the light
+  // and the veils — is smooth over a few hundred metres; a street's walls 30 m away took the sky's ten steps, the cloud pass 9 ms of a
+  // wet street's 76 on kerr-mini (perf lot of 24 Nov 2026). A step each 100 m, two at least, ten past a kilometre as before — the same
+  // transmittance where σ is near constant)
+  let N = clamp(u32(ceil((t1 - t0) * stepM / 100.0)), 2u, 10u);
   var Tv = 1.0;
   var col = vec3f(0.0);
   var taW = 0.0;
