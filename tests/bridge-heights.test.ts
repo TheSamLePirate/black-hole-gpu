@@ -24,6 +24,7 @@ import {
   STREET_FORMAT,
 } from "../src/system/street-cells";
 import { chainBridges } from "../src/system/street-detail-prep";
+import { farBridges } from "../src/system/street-far";
 import { deckHeightOn, prepareStreetCells } from "../src/system/street-prep";
 
 const seg = (a: [number, number], b: [number, number], o: Partial<RoadSegmentRecord> = {}): RoadSegmentRecord => ({
@@ -369,4 +370,47 @@ describe.skipIf(!C)("Pont de Cheviré (Nantes) — the e2e's Earth data on disk"
       }
     }
   });
+});
+
+test("the far layer's deck at its survey: each segment's slab at its height over the drawn ground (format 5: its clearance's 9 m)", () => {
+  const buf = encodeStreetCell(
+    { z: 15, x: 1, y: 2, generation: 0, originLat: 47, originLon: -1.6 },
+    [],
+    [],
+    [],
+    [],
+    0,
+    [],
+    [],
+    [],
+    [
+      {
+        id: 9,
+        kind: BridgeKind.Road,
+        flags: BridgeFlag.Measured,
+        width: 15,
+        layer: 1,
+        crossed: Crossed.Water,
+        clearance: 9,
+        length: 200,
+        points: [
+          [0, 0],
+          [0, 100],
+          [0, 200],
+        ],
+        heights: [10, Number.NaN, 60],
+      },
+    ],
+  );
+  // (the ground drawn 2 m over the sea, the geoid's N 50 m: a height over the sea h is h + 48 over the ground)
+  const rec = farBridges(
+    buf,
+    () => true,
+    (_e, _n, h) => h + 50 - 2,
+  );
+  expect(rec.length).toBe(16);
+  expect(rec[7]!).toBeCloseTo((10 + 35) / 2 + 48 - 0.6, 4);
+  expect(rec[15]!).toBeCloseTo((35 + 60) / 2 + 48 - 0.6, 4);
+  // (without the ground: as before, its clearance)
+  expect(farBridges(buf, () => true)[7]!).toBeCloseTo(9.6, 4);
 });
