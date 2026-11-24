@@ -143,7 +143,10 @@ diagnostic ; pas de fondu, proxies découpés prêts ; boîte de quantification)
 une fois par tri, avant le test de vue : cible géométrie sous 95 % de la limite de l'arbre (portée × gigue ±4 % par graine),
 proxy au-delà de 105 %, inchangée entre les deux — **hystérésis indépendante du sens de déplacement** (l'ancre traînante
 `anchor` de 2,5 m est retirée) ; LOD 0 si erreur projetée > 3,5 px et < 50 % de la limite, LOD 1 sous 2,9 px ou au-delà de
-56 % ; progression du fondu 0…63 par pas `63 × dt / 0,3 s`. `nearKeep` place l'arbre en géométrie si la progression > 0, et
+56 % ; progression du fondu 0…63 par pas `63 × dt / 0,3 s`. Levier de mesure seulement : `nearTrees.hysteresis = false`
+(`nearU.b.z`) réduit chaque bande à un seuil (témoin positif de j9-reference) ; `readState()` lit l'octet de chaque cellule. Les
+comptes d'ombre de `readCounts()` sont ceux du dernier tri qui a dessiné la carte (copiés par `keepShadowCounts`, 480 octets) :
+les listes d'ombre ne sont remplies qu'aux images où elle est redessinée. `nearKeep` place l'arbre en géométrie si la progression > 0, et
 son proxy découpé tant qu'elle est < 63 ; **les deux se partagent les pixels par un tramage par pixel et par image**
 (`nearDither`, bruit de gradient entrelacé en phase de l'image ; le TAA l'intègre) : fondu de 0,3 s à 80 m au lieu d'un saut
 par arbre. Le matériau lit l'imposteur sur les pixels du proxy (`impNear = 0` quand la géométrie est active).
@@ -153,7 +156,9 @@ par arbre. Le matériau lit l'imposteur sur les pixels du proxy (`impNear = 0` q
 dessiné** (tranches 24…47, 12 modèles × 2 LOD), les autres dans les listes d'ombre proxy. `nearTreeShadowVs` applique **le
 même balancement du vent** que la vue. Le cache de la carte (`renderer`, clé `tsmNearKey`) se redessine quand la caméra a
 parcouru 8 m depuis le dernier dessin proche (au lieu d'une grille de 32 m, jusqu'à ~22 m de retard), une fois de plus
-0,4 s après (fondu terminé), et au rythme du vent : 2 Hz par unité de vent, ≤ 4 Hz (le houppier bouge au plus ~0,45 m/s par
+0,4 s après (fondu terminé) — **l'œil à moins de portée + 40 m au-dessus du sol WGS84** (`liveEyeHM` ; jusqu'au 24 nov. 2026 la
+hauteur au-dessus de l'origine du repère du décor, sur l'ellipsoïde : tout lieu au-dessus de 120 m d'altitude ellipsoïdale —
+Chamonix, les Maures — n'avait que le dessin du premier instant du fondu, ses lanceurs les proxies ; `carvedOpenings` 0) —, et au rythme du vent : 2 Hz par unité de vent, ≤ 4 Hz (le houppier bouge au plus ~0,45 m/s par
 unité, un quart de texel de 0,88 m en ~0,5 s). Coût non mesuré. `treeShadowAt(p, nl)` : biais proche fonction de la pente du
 récepteur au Soleil (`0,35 + texel × (0,25 + 0,5 tan θ)`, θ borné à tan 4 : ~0,57 m face au Soleil, ~1,3 m à 60°, ~2,3 m
 rasant) au lieu de `0,55 m + ½ texel` pour tout récepteur à moins de 85 m ; filtre bilinéaire 2 × 2 proche fondu vers 3 × 3

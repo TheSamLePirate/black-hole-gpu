@@ -37,8 +37,9 @@ const aspects = TREE_MODEL_KINDS.flatMap((k) => TREE_ASPECTS[k]!);
 export const NEAR_TREE_WGSL = /* wgsl */ `
 struct NearDraw { count:u32, instances:atomic<u32>, first:u32, vertex:i32, base:u32 };
 struct NearDraws { items:array<NearDraw,${NEAR_TREE_SLOTS}>, overflow:atomic<u32> };
-// a: geometry on (asset and pipelines in), reach [m], capacity, debug tree; b: fade step a cull, cut proxies drawn;
-// lo, ext: the asset's quantisation box
+// a: geometry on (asset and pipelines in), reach [m], capacity, debug tree; b: fade step a cull, cut proxies drawn, the
+// hysteresis taken out (1: the measures' positive witness — j9-reference —, never in the game); lo, ext: the asset's
+// quantisation box
 struct NearU { a:vec4f, b:vec4f, lo:vec4f, ext:vec4f };
 @group(1) @binding(27) var<uniform> nearU:NearU;
 @group(1) @binding(28) var<storage,read_write> nearDraws:NearDraws;
@@ -83,10 +84,12 @@ fn nearSelect(k:u32,t:Tree,hd:ForestHead)->NearSel {
   let s=(atomicLoad(&nearState[w])>>sh)&255u;
   var tgt=s>>7u;var lod=(s>>6u)&1u;var prog=s&63u;
   let on=nearU.a.x>.5;
-  if(!on){tgt=0u;}else if(d<lim*NEAR_LO){tgt=1u;}else if(d>lim*NEAR_HI){tgt=0u;}
+  // (the bands: kept; or, for the measure's witness alone, each collapsed to its middle — one threshold each way)
+  let hy=nearU.b.z<.5;
+  if(!on){tgt=0u;}else if(d<lim*select(1.0,NEAR_LO,hy)){tgt=1u;}else if(d>lim*select(1.0,NEAR_HI,hy)){tgt=0u;}
   let pxPerM=(0.5*u.image.y)/(max(d,1.0)*max(u.up.w,0.1));
   let errPx=0.025*max(t.height,2.0*mr.y)*pxPerM;
-  if(errPx>3.5 && d<0.5*lim){lod=0u;}else if(errPx<2.9 || d>0.56*lim){lod=1u;}
+  if(errPx>select(3.2,3.5,hy) && d<select(.53,.5,hy)*lim){lod=0u;}else if(errPx<select(3.2,2.9,hy) || d>select(.53,.56,hy)*lim){lod=1u;}
   let step=u32(nearU.b.x);
   if(tgt==1u){prog=min(prog+step,63u);}else{prog=u32(max(i32(prog)-i32(step),0));}
   if(!on){prog=0u;}
@@ -248,6 +251,9 @@ export class NearTreeGeometry {
   capacity = NEAR_TREE_CAP;
   /** Surface witness only: >0 hides this local tree id; <0 draws only its opposite. Zero draws all. */
   debugTreeId = 0;
+  /** Measure lever only (j9-reference's positive witness): false collapses the hand-over's and the LOD's bands to one
+   *  threshold each. Always true in the game. */
+  hysteresis = true;
   /** the geometry drawn: its asset uploaded and its pipelines compiled */
   ready = false;
   /** the last failure (kept until a later ask succeeds: the asset is asked again, 1, 2, 4 … 60 s apart) */
@@ -265,6 +271,9 @@ export class NearTreeGeometry {
   private lists: GPUBuffer;
   private draws: GPUBuffer;
   private state: GPUBuffer;
+  /** the Sun's casters' draws as last culled: the shadow lists are filled only in the frames the map is drawn again
+   *  (renderer treeShadowFrame), the draws reset every frame — readCounts' shadow counts are these */
+  private shadowDraws: GPUBuffer;
   private reset = new Uint32Array(NEAR_TREE_SLOTS * 5 + 1);
   private vBuf: GPUBuffer | null = null;
   private iBuf: GPUBuffer | null = null;
@@ -287,7 +296,11 @@ export class NearTreeGeometry {
       size: Math.ceil(this.reset.byteLength / 16) * 16,
       usage: GPUBufferUsage.STORAGE | GPUBufferUsage.INDIRECT | GPUBufferUsage.COPY_DST | GPUBufferUsage.COPY_SRC,
     });
-    this.state = d.createBuffer({ size: STATE_WORDS * 4, usage: GPUBufferUsage.STORAGE });
+    this.state = d.createBuffer({ size: STATE_WORDS * 4, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC });
+    this.shadowDraws = d.createBuffer({
+      size: NEAR_TREE_SHADOW_DRAWS * 20,
+      usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.COPY_SRC,
+    });
     const C = GPUShaderStage.COMPUTE,
       V = GPUShaderStage.VERTEX,
       F = GPUShaderStage.FRAGMENT;
@@ -442,7 +455,7 @@ export class NearTreeGeometry {
         Number.isFinite(this.debugTreeId) ? Math.trunc(this.debugTreeId) : 0,
         step,
         cut ? 1 : 0,
-        0,
+        this.hysteresis ? 0 : 1,
         0,
       ],
       0,
@@ -474,6 +487,12 @@ export class NearTreeGeometry {
       }
     }
   }
+  /** the Sun's casters' counts kept for readCounts (encodeShadow, after this frame's cull filled them): 480 bytes copied */
+  keepShadowCounts(enc: GPUCommandEncoder) {
+    // (the geometry off or not in: none cast — the proxies' lists cast for them)
+    if (!this.on || !this.ready) return enc.clearBuffer(this.shadowDraws);
+    enc.copyBufferToBuffer(this.draws, SHADOW0 * 20, this.shadowDraws, 0, NEAR_TREE_SHADOW_DRAWS * 20);
+  }
   drawShadow(pass: GPURenderPassEncoder, main: GPUBindGroup) {
     if (!this.on || !this.ready || !this.vBuf || !this.iBuf || !this.shadowPipe) return;
     pass.setBindGroup(0, main);
@@ -486,23 +505,42 @@ export class NearTreeGeometry {
       pass.drawIndexedIndirect(this.draws, (SHADOW0 + m) * 20);
     }
   }
+  /** The view's and cut proxies' counts of the last cull; the Sun's (`shadow*`) of the last cull that drew the shadow map. */
   async readCounts() {
-    const b = this.d.createBuffer({ size: this.draws.size, usage: GPUBufferUsage.MAP_READ | GPUBufferUsage.COPY_DST });
+    const size = this.draws.size;
+    const b = this.d.createBuffer({ size: size + this.shadowDraws.size, usage: GPUBufferUsage.MAP_READ | GPUBufferUsage.COPY_DST });
     try {
       const enc = this.d.createCommandEncoder();
-      enc.copyBufferToBuffer(this.draws, 0, b, 0, b.size);
+      enc.copyBufferToBuffer(this.draws, 0, b, 0, size);
+      enc.copyBufferToBuffer(this.shadowDraws, 0, b, size, this.shadowDraws.size);
       this.d.queue.submit([enc.finish()]);
       await b.mapAsync(GPUMapMode.READ);
       const words = new Uint32Array(b.getMappedRange());
       const at = (slot: number) => words[slot * 5 + 1]!;
+      const sun = (slot: number) => words[size / 4 + (slot - SHADOW0) * 5 + 1]!;
       const lod0 = Array.from({ length: NEAR_TREE_MODELS }, (_, i) => at(i));
       const lod1 = Array.from({ length: NEAR_TREE_MODELS }, (_, i) => at(NEAR_TREE_MODELS + i));
-      const shadowLod0 = Array.from({ length: NEAR_TREE_MODELS }, (_, i) => at(SHADOW0 + i));
-      const shadowLod1 = Array.from({ length: NEAR_TREE_MODELS }, (_, i) => at(SHADOW0 + NEAR_TREE_MODELS + i));
+      const shadowLod0 = Array.from({ length: NEAR_TREE_MODELS }, (_, i) => sun(SHADOW0 + i));
+      const shadowLod1 = Array.from({ length: NEAR_TREE_MODELS }, (_, i) => sun(SHADOW0 + NEAR_TREE_MODELS + i));
       const shadow = shadowLod0.map((n, i) => n + shadowLod1[i]!);
       const proxies = [at(PROXY0), at(PROXY0 + 1)];
       const instances = lod0.map((n, i) => n + lod1[i]!);
       return { instances, lod0, lod1, shadow, shadowLod0, shadowLod1, proxies, overflow: words[NEAR_TREE_SLOTS * 5]! };
+    } finally {
+      b.destroy();
+    }
+  }
+  /** Diagnostic: the per-tree state, a byte per cell of the 64 × 64 torus ((gi & 63) + (gj & 63) · 64 of the world grid) —
+   *  bit 7 the hand-over's target (geometry), bit 6 the LOD (1), bits 0–5 the fade. Kept as last advanced: a cell out of
+   *  reach keeps its last byte. */
+  async readState() {
+    const b = this.d.createBuffer({ size: this.state.size, usage: GPUBufferUsage.MAP_READ | GPUBufferUsage.COPY_DST });
+    try {
+      const enc = this.d.createCommandEncoder();
+      enc.copyBufferToBuffer(this.state, 0, b, 0, b.size);
+      this.d.queue.submit([enc.finish()]);
+      await b.mapAsync(GPUMapMode.READ);
+      return Array.from(new Uint8Array(b.getMappedRange()));
     } finally {
       b.destroy();
     }
@@ -513,7 +551,7 @@ export class NearTreeGeometry {
     const l = this.lists.size;
     const d = this.draws.size;
     const u = this.u.size;
-    const s = this.state.size;
+    const s = this.state.size + this.shadowDraws.size;
     return {
       vertices: v,
       indices: i,
@@ -531,7 +569,15 @@ export class NearTreeGeometry {
   dispose() {
     this.disposed = true;
     this.ready = false;
-    for (const b of [this.u, this.lists, this.draws, this.state, ...(this.vBuf ? [this.vBuf] : []), ...(this.iBuf ? [this.iBuf] : [])])
+    for (const b of [
+      this.u,
+      this.lists,
+      this.draws,
+      this.state,
+      this.shadowDraws,
+      ...(this.vBuf ? [this.vBuf] : []),
+      ...(this.iBuf ? [this.iBuf] : []),
+    ])
       b.destroy();
   }
 }

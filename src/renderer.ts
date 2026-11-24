@@ -12426,7 +12426,10 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
       // by a quarter of a texel. Bounded: one drawing per 8 m travelled near the trees, ≤ 2 a second per unit of wind (≤ 4))
       const nearBase = `${nearActive}:${nearReach}:${Math.trunc(nt.debugTreeId)}:${Math.trunc(nt.capacity)}`;
       let nearKey = nearBase;
-      if (nearActive && Math.abs(scp[14] ?? 0) < nearReach + 40) {
+      // (near the trees: the eye's height over the WGS84 ground — scp[14] is its height over the scenery frame's origin, on the
+      // ellipsoid: until 24 Nov 2026 tested here, it kept every place above 120 m of ellipsoidal height — Chamonix, the Maures —
+      // from the redraws below, the map left with the casters of the hand-over's first frame: the proxies)
+      if (nearActive && this.liveEyeHM > 0 && this.liveEyeHM < nearReach + 40) {
         const now = performance.now();
         const cam = [scp[12] ?? 0, scp[13] ?? 0, scp[14] ?? 0];
         const c = this.tsmNearCam;
