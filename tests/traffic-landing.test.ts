@@ -5,6 +5,7 @@ import { setGroundHeights } from "../src/system/our-surface";
 import type { Plane, TrafficFeed } from "../src/traffic/feed";
 import { LANDING, withLanding } from "../src/traffic/landing";
 import { trafficRig } from "../src/controller/traffic";
+import { MESH } from "../src/game/airtypes";
 import { cruise } from "./helpers/envelope";
 import { resetFlights } from "./helpers/flight";
 
@@ -20,8 +21,9 @@ afterEach(() => {
 const D = Math.PI / 180;
 /** a runway 3 km long landing east (090), its threshold at 46° N, 4° E, its ground 120 m over the ellipsoid */
 const R: RunwayFrame = runwayFrame({ body: "earth", name: "Test", lat: 46, lon: 4, runway: true, rwy: 90, elev: 0 }, 3000, 30, 0);
+/** (the A320 at 37.6 m: its wheels under its plain mesh's origin — game/airtypes.ts MESH.a320t, its gear baked 24 Nov 2026) */
 const GROUND = 120,
-  WHEELS = 3.9;
+  WHEELS = (MESH.a320t.wheels * 37.6) / MESH.a320t.len;
 const rest = () => GROUND + WHEELS;
 const kE = 1 / (D * 6_378_137 * Math.cos(46 * D)),
   kN = 1 / (D * 6_378_137);

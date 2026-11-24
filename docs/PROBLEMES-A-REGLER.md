@@ -143,15 +143,27 @@ Relevé initial :
   ne pas l'appliquer au trafic proche. Hors du lot du trafic (passe E12a) : à la session du rendu. Aussi relevé : la caméra libre
   basse au-dessus de SFO dessine encore la mer sur l'aérodrome tant que le relief n'est pas arrivé (16 tuiles en attente après 60 s).
 
-## Trafic réel : le train des avions dessinés sans gréement reste sorti (relevé le 24 novembre 2026, `traffic/runway-phase.ts`)
+## ~~Trafic réel : le train des avions dessinés sans gréement reste sorti~~ (relevé le 24 novembre 2026, `traffic/runway-phase.ts`) — réglé le même jour (`COMMIT`, branche d'agent)
 
 - **Constat** : la phase et le train de chaque avion sont décidés (`gear`, `gearWanted` de `camera.trafficNow()`), mais seul l'A320 du
   jeu a un train mobile. Les avions de ligne au maillage A320 ne le prennent que dans 4 km de la vue et à 4 au plus
   (`TRAFFIC_RIG`, emplacements gréés `JET_SLOTS` partagés avec les F-35) ; au-delà, et pour tous les régionaux (maillage
   `crj900`), le maillage simple (`assets/traffic/*.bin`) porte son train sorti, figé, même en croisière.
-- **Piste** : séparer le train des maillages simples dans `scripts/build-airliners.ts` (ses sources ne sont pas dans le dépôt) et
-  le cacher par instance selon `gear` ; ou un gréement du CRJ. Restent aussi : l'ombre du trafic au sol (instances `shadow: false`),
-  la livrée de l'A320 du jeu sur tous les avions de ligne proches, le coût GPU des A320 gréés **non mesuré**.
+- **Cause réelle** (relevée en le corrigeant) : les maillages simples **n'avaient aucun train à montrer** — l'A320 fourni est
+  construit train rentré (ses roues dans leurs puits), celui du CRJ était coupé par `build-airliners.ts` (ses moignons restaient
+  sous le ventre) — : au sol, ils tenaient sur rien, le ventre de l'A320 à 2,3 m. Et la carte de l'A320 simple était lue à l'envers
+  depuis T2 (ses hublots sur le dos, la peinture des moteurs sur le fuselage).
+- **Correction** : le train de l'A320 FlightGear du jeu (GPL v2) cuit dans les deux maillages (`scripts/build-traffic-gear.ts`,
+  meshoptimizer, `traffic/airliner-gear.ts`), replié par instance d'après `gear` (`ship.wgsl` `trafficGearPos` : la rotation de
+  FlightGear autour de la charnière de chaque jambe, rétrécie dans sa soute) ; `MESH.a320t.wheels` 3,9 → 3,22 m ; la carte retournée
+  (`build-airliners.ts` et le `.bin`). Avec lui : les livrées par compagnie (`traffic/livery.ts`, cartes blanchies par
+  `scripts/whiten-airliner-maps.py`, A320 gréé sur sa livrée blanche), les ombres au sol du trafic et des navires
+  (`src/ship-casters.ts`, moitié droite de la carte d'ombre), le coût GPU mesuré (e2e `traffic-runways`, étape « costs »). Tests
+  `traffic-gear.test.ts`, `traffic-livery.test.ts`, e2e `traffic-runways` (737 et CRJ en croisière train rentré, CRJ garé train
+  sorti, quatre livrées, ombres), `traffic-free-camera`.
+- **Reste ouvert** : l'A320 gréé et le simple ont des repères un peu différents (l'échange à 4 km de la vue n'est pas mesuré à
+  l'image près) ; la retraite du train simple est une rotation et un rétrécissement, sans trappes ; le CRJ porte des jambes d'A320
+  raccourcies ; de légers fantômes des titres d'origine (« A320 ») restent visibles de près sur la carte simple blanchie.
 
 ## ~~Un avion en courte finale à SFO étiqueté « −17 m »~~ (relevé le 24 novembre 2026, campagne e2e 2, `traffic-free-camera` sur kerr-mini) — réglé le même jour
 

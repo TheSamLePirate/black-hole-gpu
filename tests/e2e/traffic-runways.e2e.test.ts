@@ -1,4 +1,5 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import { airframeOf, MESH } from "../../src/game/airtypes";
 import { runwayFrame } from "../../src/game/sites";
 import { cellOf, cellOrigin, toCell } from "../../src/system/building-cells";
 import { cartToGeodetic, geodeticToCart, WGS84_A, WGS84_F } from "../../src/system/ellipsoid";
@@ -13,12 +14,18 @@ import { App, E2E, stopServer } from "./lib/app";
 // from 01R 15 m off, its climb 20 m high, three parked at the gates. Each framed by the camera beside it at the moment judged: on
 // short final (on the axis, gear down), rolled out (on the runway, its wheels on its graded level), lifting off (gear down), climbing
 // past 150 m (gear wanted up, then up), parked (on the ground, not under it, at OSM's G stands on the apron — off every road of the
-// game's street cells) — the A320's rig drawn near the view (its gear).
+// game's street cells) — the A320's rig drawn near the view (its gear). Since 24 Nov 2026 (PROBLEMES « le train des avions dessinés
+// sans gréement »): every airliner its gear — the plain meshes' baked (traffic/airliner-gear.ts), up in cruise on a 737 drawn plain
+// and on a CRJ —, its airline's colours by its callsign (traffic/livery.ts: United, Delta, Southwest at the gates, SkyWest's CRJ beside
+// them, American's 737 and SkyWest's CRJ in cruise), its shadow on the apron (ship-casters.ts: the shadow map's second half), and
+// what they cost — the rigged A320s, the shadows, all the craft's passes — on the parked view (ABBA, an A/A beside).
 // Steps: 1 boot · 2 the free camera at SFO, its runways and ground in · 3 the airliners made up · 4 landing: short final · 5 landing:
-// rolled out · 6 take-off: lift-off · 7 take-off: gear up · 8 parked. Shots in TRW_OUT (remote-results/traffic-runways): final,
-// rollout, liftoff, gearup, parked.
-// Duration: ~4–5 min (boot and SFO's tiles ~1.5 min, each moment 15 s of the traffic's clock, each wait capped at 45–60 s).
-// Done when: the parked shot is taken, every moment's phase, gear, runway and height over the ground asserted.
+// rolled out · 6 take-off: lift-off · 7 take-off: gear up · 8 cruise: gear up, drawn plain · 9 parked (liveries, shadows) · 10 costs.
+// Shots in TRW_OUT (remote-results/traffic-runways): final, rollout, liftoff, gearup, cruise-b738, cruise-crj, parked,
+// parked-noshadow, parked-dal, parked-crj.
+// Duration: ~6–7 min (boot and SFO's tiles ~1.5 min, each moment 15 s of the traffic's clock, each wait capped at 45–60 s; the costs
+// ~1 min).
+// Done when: the parked shots are taken, every moment's phase, gear, runway and height over the ground asserted, the costs printed.
 
 const OUT = process.env.TRW_OUT ?? "remote-results/traffic-runways";
 const D = Math.PI / 180;
@@ -33,8 +40,8 @@ const frame = (le: string, lat: number, lon: number, hdg: number, len: number) =
 };
 const W28L = waysOf(frame("10R", 37.6263, -122.39312, 117.8, 3469))[1]!;
 const W01R = waysOf(frame("1R", 37.60633, -122.38106, 27.81, 2638))[0]!;
-/** the A320's wheels under its plain mesh's origin at 37.6 m (game/airtypes.ts) */
-const WHEELS = (3.9 * 37.6) / 37.7;
+/** the A320's wheels under its plain mesh's origin at 37.6 m (game/airtypes.ts MESH.a320t — its gear baked 24 Nov 2026) */
+const WHEELS = (MESH.a320t.wheels * 37.6) / MESH.a320t.len;
 
 function at(w: Way, a: number, c: number) {
   const q = [0, 1, 2].map((k) => w.o[k]! + w.d[k]! * a + w.r[k]! * c) as [number, number, number];
@@ -49,7 +56,16 @@ function onWay(w: Way, lat: number, lon: number) {
 const glide3 = (x: number) => Math.max(0, x) * Math.tan(3 * D);
 
 type Plane = Record<string, unknown> & { t: number };
-const base = (id: string, cs: string, reg: string) => ({ id, cs, reg, type: "A320", cat: "A3", hdg: null, roll: null, src: "adsb.lol" });
+const base = (id: string, cs: string, reg: string, type = "A320") => ({
+  id,
+  cs,
+  reg,
+  type,
+  cat: type === "CRJ9" ? "A2" : "A3",
+  hdg: null,
+  roll: null,
+  src: "adsb.lol",
+});
 
 /** the landing on 28L: a 3° final from 9 km at 70 m/s, 30 m north of the axis, 25 m high; « ground » from 700 m on; braking 2 m/s² */
 function landing(G: number): Plane[] {
@@ -105,10 +121,33 @@ function takeoff(G: number): Plane[] {
  *  N796UA's reported place and two beside — on the landside « Arrivals » road under the departures' deck and inside boarding area A's
  *  connector: the deck and the building hid them (parked-above.png), read then as an occlusion fault of the traffic's meshes. */
 const PARKED = [
-  { id: "e2ep01", lat: 37.61795, lon: -122.390384, hdg: 207 },
-  { id: "e2ep02", lat: 37.618255, lon: -122.391106, hdg: 207 },
-  { id: "e2ep03", lat: 37.618556, lon: -122.391837, hdg: 208 },
+  { id: "e2ep01", lat: 37.61795, lon: -122.390384, hdg: 207, cs: "UAL501", type: "A320" },
+  { id: "e2ep02", lat: 37.618255, lon: -122.391106, hdg: 207, cs: "DAL77", type: "A320" },
+  { id: "e2ep03", lat: 37.618556, lon: -122.391837, hdg: 208, cs: "SWA12", type: "B738" },
+  // (a CRJ — the plain mesh, its gear baked — beside them, a stand further along the pier)
+  { id: "e2ep04", lat: 37.618857, lon: -122.392568, hdg: 208, cs: "SKW5501", type: "CRJ9" },
 ];
+/** two in cruise, drawn plain: American's 737 at 9 000 m 12 km north of the field (the rigged A320 left out by the measuring lever
+ *  `trafficRigMax` for its shot: within 4 km of the view it would be the game's A320), SkyWest's CRJ at 4 500 m 8 km south; reports
+ *  every 10 s along a straight track */
+function cruise(id: string, cs: string, type: string, lat: number, lon: number, trk: number, alt: number, gs: number): Plane[] {
+  const out: Plane[] = [];
+  for (let k = 0; k <= 44; k++) {
+    const d = gs * 10 * k - gs * 220;
+    out.push({
+      ...base(id, cs, `N${id.slice(-3)}CR`, type),
+      lat: lat + (d * Math.cos(trk * D)) / 111_000,
+      lon: lon + (d * Math.sin(trk * D)) / (111_000 * Math.cos(lat * D)),
+      alt,
+      gs,
+      trk,
+      vs: 0,
+      gnd: false,
+      t: T0 + 10 * k,
+    });
+  }
+  return out;
+}
 /** a parked airliner's clearance from the roads: its fuselage's half-width [m] — its origin this far off any road's carriageway */
 const ROAD_CLEAR_M = 2;
 
@@ -240,9 +279,11 @@ describe.skipIf(!E2E)("the real traffic on the game's runways: on them, never un
       "landing: rolled out",
       "take-off: lift-off",
       "take-off: gear up",
+      "cruise: gear up, drawn plain",
       "parked",
+      "costs",
     ]);
-    app.estimate(200);
+    app.estimate(330);
     await app.step("boot");
     await app.waitFor("__bh.camera.piloting", 120_000);
     await app.js(`(() => { Object.assign(__bh.settings, { traffic: true, autosave: false, trafficDelay: ${DELAY} }); return 1; })()`);
@@ -284,10 +325,12 @@ describe.skipIf(!E2E)("the real traffic on the game's runways: on them, never un
     const planes = [
       landing(G28),
       takeoff(G01),
+      cruise("e2ec01", "AAL100", "B738", 37.72, -122.39, 90, 9000, 230),
+      cruise("e2ec02", "SKW3001", "CRJ9", 37.545, -122.36, 270, 4500, 180),
       ...PARKED.map((q) => [
-        { ...base(q.id, q.id.toUpperCase(), ""), lat: q.lat, lon: q.lon, alt: 0, gs: 0, trk: q.hdg, hdg: q.hdg, vs: 0, gnd: true, t: T0 },
+        { ...base(q.id, q.cs, "", q.type), lat: q.lat, lon: q.lon, alt: 0, gs: 0, trk: q.hdg, hdg: q.hdg, vs: 0, gnd: true, t: T0 },
         {
-          ...base(q.id, q.id.toUpperCase(), ""),
+          ...base(q.id, q.cs, "", q.type),
           lat: q.lat,
           lon: q.lon,
           alt: 0,
@@ -307,7 +350,7 @@ describe.skipIf(!E2E)("the real traffic on the game's runways: on them, never un
       __bh.camera.traffic = { planes: new Map(planes.map((h) => [h[0].id, { p: h.at(-1), prev: h.at(-2) ?? null, hist: h, heard: 1e12 }])),
         ships: new Map(), status: "live", credit: {}, attribution: [], focus: null, asks: { air: 0, sea: 0, trace: 0 } };
       return __bh.camera.traffic.planes.size; })()`);
-    expect(n).toBe(5);
+    expect(n).toBe(8);
     await app.stepDone(`${n} avions de ligne · horloge du trafic à T0`);
 
     // ---- landing: short final
@@ -398,6 +441,46 @@ describe.skipIf(!E2E)("the real traffic on the game's runways: on them, never un
     expect(rig!).toBeLessThan(0.05);
     await app.stepDone(`montée · ${c.over.toFixed(0)} m · train ${c.gear.toFixed(2)} (rig ${rig})`);
 
+    // ---- cruise: gear up on the plain meshes (a 737 — the game's A320 left out by the measuring lever, the 737 drawn plain within
+    // 4 km of the view —, a CRJ), their airlines' colours
+    await app.step("cruise: gear up, drawn plain");
+    await app.scenario("cruise, plain meshes");
+    await app.js(`(() => { __bh.camera.trafficRigMax = 0; return 1; })()`);
+    const plainOf = (mesh: string) =>
+      app.js<{
+        gear: number;
+        livery: string;
+      } | null>(`(() => { const o = __bh.renderer.combatOthers.filter((x) => x.id === "${mesh}" && x.traffic)
+        .sort((a, b) => Math.hypot(...a.rel) - Math.hypot(...b.rel))[0];
+        return o ? { gear: o.traffic.gear, livery: o.traffic.livery.icao + " " + o.traffic.livery.pattern } : null; })()`);
+    const cruiseRows: string[] = [];
+    for (const [id, mesh, shot] of [
+      ["e2ec01", "a320t", "cruise-b738"],
+      ["e2ec02", "crj900", "cruise-crj"],
+    ] as const) {
+      c = (await craft(id))!;
+      await frameOn(c, 140, 8, 1.3);
+      await runTo(GEARUP + 2);
+      c = (await craft(id))!;
+      const inst = (await app.waitFor(
+        `(() => { const o = __bh.renderer.combatOthers.filter((x) => x.id === "${mesh}" && x.traffic)
+          .sort((a, b) => Math.hypot(...a.rel) - Math.hypot(...b.rel))[0];
+          return o ? { gear: o.traffic.gear, livery: o.traffic.livery.icao + " " + o.traffic.livery.pattern, d: Math.hypot(...o.rel) } : null; })()`,
+        20_000,
+      )) as { gear: number; livery: string; d: number };
+      await app.shot(`${OUT}/${shot}.png`);
+      cruiseRows.push(
+        `${id} ${c.phase} ${c.msl.toFixed(0)} m over the sea, gear ${c.gear.toFixed(2)} wanted ${c.gearWanted}; drawn ${mesh}, gear ${inst.gear.toFixed(2)}, livery ${inst.livery}`,
+      );
+      expect(c.phase).toBe("cruise");
+      expect(c.gear).toBeLessThan(0.05);
+      expect(inst.gear).toBeLessThan(0.05);
+    }
+    console.log(`  cruise: ${cruiseRows.join(" | ")}`);
+    await app.js(`(() => { __bh.camera.trafficRigMax = undefined; return 1; })()`);
+    expect(await plainOf("crj900")).not.toBeNull();
+    await app.stepDone(`737 et CRJ en croisière, train rentré, maillages simples`);
+
     // ---- parked
     await app.step("parked");
     await app.scenario("parked at the gates");
@@ -409,19 +492,54 @@ describe.skipIf(!E2E)("the real traffic on the game's runways: on them, never un
     for (const q of PARKED) {
       const k = (await craft(q.id))!;
       const v = await under(k);
+      // (its wheels under its mesh's origin at its type's length — game/airtypes.ts)
+      const af = airframeOf(q.type);
+      const wheels = (MESH[af.mesh!].wheels * af.len) / MESH[af.mesh!].len;
       // (on the apron, not on a road: its place off every road's carriageway in the game's street cells)
       const road = await roadClearance(q.lat, q.lon);
       rows.push(
-        `${q.id} ${k.phase} gnd ${k.gnd} origin ${(v.h - v.ground).toFixed(2)} m over the ground, gear ${k.gear}, nearest road ${road.clear.toFixed(1)} m off (${road.what})`,
+        `${q.id} ${q.cs} ${q.type} ${k.phase} gnd ${k.gnd} origin ${(v.h - v.ground).toFixed(2)} m over the ground (wheels ${wheels.toFixed(2)}), gear ${k.gear}, nearest road ${road.clear.toFixed(1)} m off (${road.what})`,
       );
       expect(road.clear).toBeGreaterThan(ROAD_CLEAR_M);
       expect(k.gnd).toBe(true);
       expect(k.phase).toBe("parked");
-      expect(Math.abs(v.h - v.ground - WHEELS)).toBeLessThan(0.5);
+      expect(Math.abs(v.h - v.ground - wheels)).toBeLessThan(0.5);
       expect(k.gear).toBe(1);
     }
-    await app.shot(`${OUT}/parked.png`);
     console.log(`  parked: ${rows.join(" | ")}`);
+    // (their liveries: the rigged A320s' and the CRJ's, each its airline's — two different at least)
+    const liveries = await app.js<string[]>(
+      `__bh.renderer.combatOthers.filter((x) => x.traffic && (x.id === "a320" || x.id === "crj900") && x.cast).map((x) => x.id + " " + x.traffic.livery.icao + " " + x.traffic.livery.pattern)`,
+    );
+    console.log(`  liveries drawn about the gates: ${liveries.join(" | ")}`);
+    expect(new Set(liveries.map((x) => x.split(" ")[1])).size).toBeGreaterThanOrEqual(2);
+    // (their shadows: the shadow map's second half about the group looked at — on, then off by the measuring lever)
+    const group = () =>
+      app.js<{ r: number; d: number } | null>(
+        `(() => { const b = __bh.renderer.ship.shadowBound2; return b ? { r: b.r, d: Math.hypot(...b.c) } : null; })()`,
+      );
+    await app.shot(`${OUT}/parked.png`);
+    const on = await group();
+    await app.js(`(() => { __bh.renderer.ship.trafficCast = false; __bh.touch(); return 1; })()`);
+    await app.shot(`${OUT}/parked-noshadow.png`);
+    const off = await group();
+    await app.js(`(() => { __bh.renderer.ship.trafficCast = true; __bh.touch(); return 1; })()`);
+    console.log(
+      `  shadows: the second half's sphere ${on ? `r ${on.r.toFixed(0)} m at ${on.d.toFixed(0)} m` : "none"}; without the casters ${off ? `r ${off.r.toFixed(0)} m` : "none"}`,
+    );
+    expect(on).not.toBeNull();
+    expect(on!.r).toBeLessThan(470);
+    expect(off).toBeNull();
+    // (Delta's A320 close — the game's A320 under its colours: its white livery, its fin, its belly)
+    const k2 = (await craft("e2ep02"))!;
+    await frameOn(k2, 70, 1, 0.75);
+    await runTo(GEARUP + 2);
+    await app.shot(`${OUT}/parked-dal.png`);
+    // (the CRJ beside them, its gear baked: its plain mesh)
+    const k4 = (await craft("e2ep04"))!;
+    await frameOn(k4, 60, 1, 0.9);
+    await runTo(GEARUP + 2);
+    await app.shot(`${OUT}/parked-crj.png`);
     // (a diagnostic, not judged: seen from above with the ground behind, the same view from 40 m up, then without the craft drawn into
     // the scene — until 24 Nov 2026 the parked ones stood under the landside deck and in a building, hidden by them, their lights shown)
     await frameOn(c, -30, -15, 1.5);
@@ -430,6 +548,51 @@ describe.skipIf(!E2E)("the real traffic on the game's runways: on them, never un
     await app.shot(`${OUT}/parked-above-noscene.png`);
     await app.js(`(() => { __bh.renderer.shipInScene = true; __bh.touch(); return 1; })()`);
     expect(app.cdp.errors).toEqual([]);
-    await app.stepDone(`3 au parking, au sol`);
-  }, 360_000);
+    await app.stepDone(`4 au parking, au sol · livrées ${liveries.length} · ombres r ${on?.r.toFixed(0)} m`);
+
+    // ---- costs (a measure, not judged): the parked view, the images' GPU time (renderer.lastGpuMs, median over 3 s) — all drawn; the
+    // rigged A320s drawn plain (trafficRigMax 0); the casters out of the shadow map (ship.trafficCast); none of the craft's passes
+    // (debugSkipShip) — ABBA over two rounds, the first condition again as an A/A
+    await app.step("costs");
+    await app.scenario("costs at the gates");
+    await frameOn(c, -30, 0.5, 1.5);
+    await runTo(GEARUP + 2);
+    const conds: Record<string, string> = {
+      all: "",
+      rig0: "__bh.camera.trafficRigMax = 0;",
+      nocast: "__bh.renderer.ship.trafficCast = false;",
+      noship: "__bh.renderer.debugSkipShip = true;",
+    };
+    const reset = "__bh.camera.trafficRigMax = undefined; __bh.renderer.ship.trafficCast = true; __bh.renderer.debugSkipShip = false;";
+    const gpuP50 = (set: string) =>
+      app.js<{ p50: number; p95: number; n: number }>(`(async () => { ${reset} ${set} __bh.touch();
+        const r = __bh.renderer, f = () => new Promise((q) => requestAnimationFrame(q)), g = [];
+        for (let i = 0; i < 30; i++) await f();
+        let last = r.completedFrames ?? 0; const t0 = performance.now();
+        while (performance.now() - t0 < 3000) { await f(); const d = r.completedFrames ?? 0; if (d !== last && r.lastGpuMs > 0) g.push(r.lastGpuMs); last = d; }
+        g.sort((a, b) => a - b);
+        return { p50: +(g[Math.floor(g.length / 2)] ?? 0).toFixed(2), p95: +(g[Math.floor(g.length * 0.95)] ?? 0).toFixed(2), n: g.length }; })()`);
+    const order = ["all", "rig0", "nocast", "noship", "noship", "nocast", "rig0", "all", "all"];
+    const res: Record<string, number[]> = {};
+    for (const [i, k] of order.entries()) {
+      const m = await gpuP50(conds[k]!);
+      // (the last "all": the A/A's second side)
+      const key = i === order.length - 1 ? "all-AA" : k;
+      (res[key] ??= []).push(m.p50);
+      await app.progress(`coûts ${i + 1}/${order.length} · ${k} ${m.p50} ms (p95 ${m.p95}, ${m.n} images)`);
+    }
+    await app.js(`(() => { ${reset} return 1; })()`);
+    const med = (a: number[]) => [...a].sort((x, y) => x - y)[Math.floor(a.length / 2)]!;
+    const M = Object.fromEntries(Object.entries(res).map(([k, v]) => [k, med(v)]));
+    console.log(
+      `  costs (GPU ms, median of the medians): ${Object.entries(res)
+        .map(([k, v]) => `${k} ${v.join("/")}`)
+        .join(
+          " · ",
+        )} → all ${M.all} · rigged A320s ${(M.all! - M.rig0!).toFixed(2)} ms · shadows ${(M.all! - M.nocast!).toFixed(2)} ms · every craft pass ${(M.all! - M.noship!).toFixed(2)} ms · A/A ${(M.all! - M["all-AA"]!).toFixed(2)} ms`,
+    );
+    await app.stepDone(
+      `coûts : A320 gréés ${(M.all! - M.rig0!).toFixed(2)} ms · ombres ${(M.all! - M.nocast!).toFixed(2)} ms · passes ${(M.all! - M.noship!).toFixed(2)} ms`,
+    );
+  }, 540_000);
 });

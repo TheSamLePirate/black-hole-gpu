@@ -7,7 +7,9 @@ export type AirlinerMesh = "a320t" | "crj900";
 
 /** The meshes' own lengths and spans [m] (scripts/build-airliners.ts), and where on them [m, the mesh's frame: x its
  *  left, y up, z its nose] its lights are — a wingtip's navigation light (the left one: x > 0), the tail's, the
- *  beacon on its back, the landing lights under its nose — and how far its wheels are under its origin. */
+ *  beacon on its back, the landing lights under its nose —, how far its wheels are under its origin (its gear down, its
+ *  oleos in under its weight), and its gear's legs (scripts/build-traffic-gear.ts — traffic/airliner-gear.ts: the nose's and
+ *  the left main's hinge, axis and angle up [°]; the right's mirrored), retracted by ship.wgsl trafficGearPos. */
 export const MESH = {
   a320t: {
     len: 37.7,
@@ -16,7 +18,11 @@ export const MESH = {
     tail: [0, 1.4, -21.1],
     beacon: [0, 2.1, 1.5],
     landing: [0, -1.3, 11.4],
-    wheels: 3.9,
+    wheels: 3.22,
+    gear: {
+      nose: { at: [0.471, -0.974, 11.004], axis: [-1, 0, 0], up: 90 },
+      main: { at: [3.846, -0.43, -0.97], axis: [0.015, -0.174, 0.985], up: -81.11 },
+    },
   },
   crj900: {
     len: 36.2,
@@ -25,7 +31,11 @@ export const MESH = {
     tail: [0, 1.2, -18.1],
     beacon: [0, 1.6, 2.0],
     landing: [0, -0.9, 14.0],
-    wheels: 2.2,
+    wheels: 2.19,
+    gear: {
+      nose: { at: [0.4, -0.3, 15.324], axis: [-1, 0, 0], up: 90 },
+      main: { at: [2.085, -0.45, -1.484], axis: [0.015, -0.174, 0.985], up: -81.11 },
+    },
   },
 } as const;
 

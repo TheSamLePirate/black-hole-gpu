@@ -9421,6 +9421,10 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
     a320?: { props: import("./a320/rig").Props; spins: import("./a320/rig").Props };
     /** drawn instead while its own mesh comes in (the traffic's rigged A320: the plain airliner it stands in for) */
     alt?: { id: ShipMeshId; rel: Vec3; axes: [Vec3, Vec3, Vec3] };
+    /** a caster on or near the ground (a traffic airliner low, a ship — ship-casters.ts: the shadow map's second half) */
+    cast?: boolean;
+    /** a traffic airliner's gear 0…1 and livery (ship.ts ShipInstance.traffic) */
+    traffic?: import("./ship").ShipInstance["traffic"];
   }[] = [];
   /** combatOthers placed from the drawn view's own camera (sim.ts: no craft flown — the free camera, a tour —, or a
    *  spectator's view: the Earth's traffic, the sea's ships, the carriers): drawn from its place when the view has no
@@ -9619,6 +9623,8 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
           fins: o.fins,
           motor: o.motor,
           ground: o.ground,
+          cast: o.cast,
+          traffic: o.traffic,
         }))
     );
   }

@@ -428,8 +428,15 @@ the ellipsoid and `msl` over the sea — the label's —, and since 24 Nov 2026 
 as reported [m], how far it is drawn pulled onto it —, `landing` its touchdown made up through a gap in its reports,
 `traffic/landing.ts`), their marks
 `__bh.camera.trafficOverlay(fmt, __bh.camera.viewController())`, `seaOverlay(fmt, view)` — the view's controller places
-them from the view (a spectator's, else the camera's own). e2e: `traffic-free-camera`, `traffic-runways` (a made-up feed: `camera.traffic`
-replaced, `camera.trafficClock` the test's).
+them from the view (a spectator's, else the camera's own). What the renderer draws of them: `__bh.renderer.combatOthers`, each
+airliner's instance with (since 24 Nov 2026) `cast` (on the ground or under 60 m over it: its shadow in the craft's shadow map's
+second half when the view looks at it — `src/ship-casters.ts`; the ships `cast` too) and `traffic` `{ gear, livery }` — its gear
+0…1 (the plain meshes' baked gear folded by it, `ship.wgsl` `trafficGearPos`) and its airline's colours by its callsign
+(`src/traffic/livery.ts` `liveryOf`: `icao`, `pattern`, `tail`, `stripe`, `body`, `engine` — on the plain meshes and on the game's
+A320 drawn near the view alike). Measuring levers: `__bh.camera.trafficRigMax` (none: 4 — the game's A320 drawn for that many at
+most within 4 km; 0: all plain) and `__bh.renderer.ship.trafficCast` (true; false: the traffic's and the ships' shadows left out).
+e2e: `traffic-free-camera`, `traffic-runways` (a made-up feed: `camera.traffic` replaced, `camera.trafficClock` the test's — gear,
+liveries, shadows and their costs since 24 Nov 2026).
 
 ### `__bh.spectate(on: boolean)` → boolean
 
@@ -832,6 +839,7 @@ The other members tests read:
 | `skyFillOn` | boolean | while the Earth-raster scene's `main` compiles, the raster's ground and a waiting sky (`skyFill`: the clear air, the far Earth of the day map) draw the image, their kernels compiled first (default true); false: no image before `main`, as before. `skyWaiting` (read): this frame drawn so |
 | `prewarmEarthFlight(settings)` / `prewarmStop()` | function | the Earth's low flight compiled ahead (main.ts: the title open; never on e2e pages — call it yourself), and its queued compiles dropped |
 | `terrainRasterStats.ringBuilds` / `terrainRaster.ringReuse` | object / boolean | the raster's far rings' rebuilds since the start: `kept` (a window's step, the same cut), `rebuilt` (a cut changed — every step in flight), `vertexWrites` (its level changed: the grid is the level's), `ms` (their CPU time). `ringReuse` (true; a measuring lever): false rebuilds and rewrites the vertices at every step, as before 14 Nov 2026. J0 flight (kerr-mini): 283 rebuilds, vertices written 6 times for 99, 326 ms for 393–425 |
+| `ship.trafficCast` | boolean | (a measuring lever, true) the casters on the ground other than the war's units — the traffic's airliners on the ground or low over it, the ships (`ship-casters.ts`) — in the shadow map's second half when the view looks at them; false: left out (their cost: e2e `traffic-runways`, step « costs »). `ship.shadowBound2` (read): that half's sphere in the camera's axes, null none |
 | `ship.lastBox` | number[] | the last box the craft's pass drew in: `[x, y, w, h, image w, image h]` (a measure: 14 Nov 2026, the MSAA's cost follows the craft's pixels, not this box's area) |
 | `ship.msaa` | number (read only) | the craft's pass's samples this page: 4 (its MSAA), or 1 when `globalThis.__shipMsaa = 1` was set before the load (a measure: 14 Nov 2026, the MSAA costs 4–5 ms on kerr-mini — PROBLEMES) |
 | `ship.debugFs` | number | (a measuring mask, 0 in play — `ship.wgsl` `fs`, the uniform's `air.x`, no recompile) 1 no shadow map read, 2 no screen reflection, 4 no probe specular, 8 a flat grey (no shading at all); with `ship.debugSkip` `hull-half` (half of each hull's triangles drawn). `tests/e2e/perf-ab.e2e.test.ts` `SET=ship` (14 Nov 2026: none of these parts priced over the noise — the craft's cost follows its pixels) |
