@@ -188,7 +188,7 @@ import { vesselHulls } from "./system/collide";
 import { seaCascadesOff } from "./system/cpu-client";
 import { EnduranceRenderer } from "./endurance";
 import { StationRenderer, type StationView } from "./station";
-import { JwstRenderer, type JwstView } from "./jwst";
+import { JWST_DRAW_KM, JWST_PREPARE_KM, JwstRenderer, type JwstView } from "./jwst";
 import { issAxes, issTrack, refreshIssElements, stationAngles } from "./system/iss";
 import { jwstAxes, jwstTrack } from "./system/jwst";
 import { loadRingProfile, ringOpacitySums } from "./system/ring-profile";
@@ -927,7 +927,6 @@ export class Renderer {
   readonly characterRenderer: CharacterRenderer;
   character: PlanetCharacter | null = null;
   private stationLoading: Promise<void> | null = null;
-  private jwstLoading: Promise<void> | null = null;
   /** the disk's reference luminance (log10 Y) of the last frame's parameters: the stars' scale */
   private walkStamp = -1;
   /** when the light probe last ran [ms, performance.now()]: the astronaut reads it while it is fresh */
@@ -9797,35 +9796,38 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
     this.station.encode(enc, t.hdr, t.sceneDepth, view);
   }
 
-  /** Draws the James Webb Space Telescope (jwst.ts) on its Sun–Earth L2 Halo orbit when within 2,000 km. */
+  /**
+   * Draws the James Webb Space Telescope (jwst.ts) on its Sun–Earth L2 Halo orbit: prepared on approach (within
+   * JWST_PREPARE_KM: its pipelines compiled in the background, its mesh fetched), drawn within JWST_DRAW_KM when it
+   * covers a pixel, its GPU memory let go far away (jwst.ts). Reads JWST's tracker, never moves it (the simulation's
+   * step does: stationkeep.ts jwstFollow) — a camera far from the craft cannot re-anchor it.
+   */
   private encodeJwst(enc: GPUCommandEncoder, t: Target, s: Settings) {
     this.jwst.rect = [0, 0, 0, 0];
-    if (!s.jwst || !s.wormhole || s.system !== "gargantua") return;
+    const now = performance.now();
+    if (!s.jwst || !s.wormhole || s.system !== "gargantua") return this.jwst.distance(Number.POSITIVE_INFINITY, now);
     const cam = this.lastCam;
-    if (!cam || cam.region !== "throat" || cam.ell >= 0) return;
+    if (!cam || cam.region !== "throat" || cam.ell >= 0) return this.jwst.distance(Number.POSITIVE_INFINITY, now);
     const w = mouth(s).w;
     const time = this.lastTime;
     const Xc = homeOf(w, cam.ell, cam.n);
     const mR = 1476.625 * (s.massSolar || 1);
-    const peek = jwstTrack.peek(time);
-    if (!peek) return;
-    const distKm = (Math.hypot(Xc[0] - peek.X[0], Xc[1] - peek.X[1], Xc[2] - peek.X[2]) * mR) / 1e3;
-    if (!(distKm < 2000)) return;
-    if (!this.jwst.ready) {
-      this.jwstLoading ??= loading
+    const st = jwstTrack.peek(time);
+    if (!st) return;
+    const distKm = (Math.hypot(Xc[0] - st.X[0], Xc[1] - st.X[1], Xc[2] - st.X[2]) * mR) / 1e3;
+    this.jwst.distance(distKm, now);
+    if (distKm < JWST_PREPARE_KM && !this.jwst.ready && !this.jwst.preparing)
+      void loading
         .track(
           "jwst",
           JWST_LOADING,
-          this.jwst.load((u) => loading.fetch(u, "jwst")),
+          this.jwst.prepare((u) => loading.fetch(u, "jwst")),
         )
         .then(
           () => this.invalidate(),
           (e) => console.error("JWST:", e),
         );
-      return;
-    }
-    const st = jwstTrack.state(time, Xc);
-    if (!st) return;
+    if (!(distKm < JWST_DRAW_KM) || !this.jwst.ready) return;
     const toCam = (v: Vec3): Vec3 => {
       const r = homeToRep(w, cam.ell, cam.n, v);
       return [

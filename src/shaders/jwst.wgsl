@@ -1,6 +1,8 @@
 // The James Webb Space Telescope (src/jwst.ts): assets/jwst/jwst.bin on its Sun–Earth L2 Halo orbit.
-// Drawn as the ISS is (station.wgsl): into a 4× MSAA depth-tested box with a 2048×2048 Sun shadow map,
-// composited into the linear HDR buffer before bloom.
+// Drawn as the ISS is (station.wgsl): into a 4× MSAA depth-tested box, composited into the linear HDR buffer
+// before bloom. Its 2048×2048 Sun shadow map is drawn in the telescope's own frame (lightM: the Sun's direction
+// there — it changes only with the slow roll, so the map is kept between frames) and only when it is large on the
+// image (lightM.w = 1); otherwise a 1×1 stand-in is bound and the sunlit side is unshadowed.
 //
 // Surface kinds (encoded in vertex color alpha × 255):
 //   0: dark composite booms, radiator, optical bench, brackets
@@ -14,10 +16,11 @@ struct U {
   img: vec4f,      // image width, height; metres per M; pre-exposure
   sun: vec4f,      // towards the Sun (camera frame); w: its angular radius
   sunE: vec4f,     // its irradiance (rgb, tracer units); w: ambient starlight scale
-  light: vec4f,    // shadow map box: centre (camera frame) and radius [m]
+  light: vec4f,    // the telescope's centre (camera frame); w: the shadow map's radius [m]
   row0: vec4f,     // model -> camera affine transform (3 rows)
   row1: vec4f,
   row2: vec4f,
+  lightM: vec4f,   // towards the Sun in the model frame; w: 1 its self-shadowing on, 0 off
 };
 
 @group(0) @binding(0) var<uniform> u: U;
@@ -39,6 +42,7 @@ struct VOut {
   @location(2) col: vec3f,
   @location(3) @interpolate(flat) kind: u32,
   @location(4) q: vec3f,
+  @location(5) nq: vec3f,
 };
 
 fn toCam(x: vec3f, w: f32) -> vec3f {
@@ -65,26 +69,30 @@ fn vs(v: VIn) -> VOut {
   o.col = pow(v.c.rgb, vec3f(2.2));
   o.kind = u32(v.c.a * 255.0 + 0.5);
   o.q = v.p;
+  o.nq = v.n.xyz;
   o.pos = project(q);
   return o;
 }
 
+// The shadow map's clip space, in the model frame (centred on the model's origin, radius u.light.w): the same
+// map for any camera, redrawn only when the Sun's direction in the model frame moves (src/jwst.ts).
 fn lightClip(q: vec3f) -> vec3f {
-  let l = u.sun.xyz;
+  let l = u.lightM.xyz;
   let e1 = normalize(cross(l, select(vec3f(0.0, 1.0, 0.0), vec3f(1.0, 0.0, 0.0), abs(l.y) > 0.9)));
   let e2 = cross(l, e1);
-  let d = q - u.light.xyz;
   let R = u.light.w;
-  return vec3f(dot(d, e1) / R, dot(d, e2) / R, 0.5 - 0.5 * dot(d, l) / R);
+  return vec3f(dot(q, e1) / R, dot(q, e2) / R, 0.5 - 0.5 * dot(q, l) / R);
 }
 
 @vertex
 fn shadowVs(v: VIn) -> @builtin(position) vec4f {
-  return vec4f(lightClip(toCam(v.p, 1.0)), 1.0);
+  return vec4f(lightClip(v.p), 1.0);
 }
 
+// q, n: the model frame's
 fn shadowAt(q: vec3f, n: vec3f) -> f32 {
-  let c = lightClip(q + n * 0.025 + u.sun.xyz * 0.02);
+  if (u.lightM.w < 0.5) { return 1.0; }
+  let c = lightClip(q + n * 0.025 + u.lightM.xyz * 0.02);
   let uv = vec2f(0.5 + 0.5 * c.x, 0.5 - 0.5 * c.y);
   if (any(uv < vec2f(0.0)) || any(uv > vec2f(1.0))) { return 1.0; }
   let texel = 1.0 / vec2f(textureDimensions(shadowTex));
@@ -132,7 +140,11 @@ fn fs(in: VOut) -> FOut {
 
   let V = -in.p / dist;
   var N = normalize(in.n);
-  if (dot(N, V) < 0.0) { N = -N; }
+  var Nq = normalize(in.nq);
+  if (dot(N, V) < 0.0) {
+    N = -N;
+    Nq = -Nq;
+  }
   let fw = fwidth(in.q);
 
   var base = in.col;
@@ -191,7 +203,7 @@ fn fs(in: VOut) -> FOut {
   let L = u.sun.xyz;
   let nl = dot(N, L);
   if (nl > 0.0 && dot(u.sunE.rgb, u.sunE.rgb) > 0.0) {
-    let vis = shadowAt(in.p, N);
+    let vis = shadowAt(in.q, Nq);
     let H = normalize(L + V);
     let nh = clamp(dot(N, H), 0.0, 1.0);
     let F = F0 + (1.0 - F0) * pow(1.0 - clamp(dot(V, H), 0.0, 1.0), 5.0);

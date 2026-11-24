@@ -2455,15 +2455,19 @@ JWST's deterministic Southern Halo orbit state at scene time `t` [M] in the home
 
 ### `__bh.jwst.track` → JwstTracker
 
-The live tracker (`state(t, ship)`, `peek(t)`, `near`, `anchors`): deterministic Halo orbit afar; within 50 km of the player's craft, integrated with `gravityHome` velocity Verlet so relative drift is zero during formation flight.
+The live tracker (`state(t, ship)`, `peek(t)`, `near`, `anchors`): deterministic Halo orbit afar; within 50 km of the player's craft, integrated with `gravityHome` velocity Verlet so relative drift is zero during formation flight. One writer: the simulation's step calls `state` with the craft's position (`controller/stationkeep.ts` `jwstFollow`, from `sim.ts`); the renderer, the maps, the HUD and station keeping only `peek` (since 2026-11-24: the renderer's `state` with the camera's position could re-anchor it).
 
 ### `__bh.jwst.axes(X, V, t)` → `[ex, ey, ez]`
 
-JWST's real sun-shielding attitude in the home frame (`-Y` Kapton sunshield toward the Sun, `+Y` cold 6.5 m gold primary mirror side, `-Z` optical boresight).
+JWST's real sun-shielding attitude in the home frame (`-Y` Kapton sunshield toward the Sun, `+Y` cold 6.5 m gold primary mirror side, `+Z` optical boresight — the secondary mirror stands in front of the primary along `+Z` in `jwst.bin`).
 
-### `__bh.jwst.start(t, dist = 60)` → `{X, fwd, up, vel} \| null`
+### `__bh.jwst.start(t, dist = 42)` → `{X, fwd, up, vel} \| null`
 
-Starting pose `dist` metres from JWST on its cold gold-mirror side, matching its velocity (used by `goTo("jwst")`).
+Starting pose `dist` metres (default 42; the Go to of the camera panel asks 38) from JWST on its cold gold-mirror side (`+X`, `+Y`, `+Z` of its axes), matching its velocity.
+
+### `__bh.jwst.gpu()` → `{ready, preparing, stats, rect}`
+
+Its renderer's life cycle (`src/jwst.ts`): `ready` (pipelines and mesh made), `preparing` (under way: begun within 100 000 km), `stats` (`prepared`, `released` — its GPU memory let go after 120 s beyond 300 000 km —, `shadowDraws` — the shadow map drawn again only when the Sun moves in its frame —, `draws`), `rect` (its box this frame, `[0, 0, 0, 0]` when not drawn: farther than 2 000 km or under 1 px of radius). *Used in:* `tests/e2e/lagrange-jwst.e2e.test.ts`.
 
 ### `__bh.jwst.haloLoop(t0, n = 96)` → `Vec3[]`
 
@@ -2475,7 +2479,7 @@ CR3BP/ER3BP Lagrange points (`lag:<secondary>:<1..5>`), linear/Routh stability a
 
 ### `__bh.lagrange.state(id, t)` → `LagrangeState \| null`
 
-Instantaneous position, velocity, synodic frame, Hill radius, and dimensionless offset `gamma` for a Lagrange point (e.g. `"lag:earth:2"`, `"lag:moon:4"`) at scene time `t` [M].
+Position, velocity and acceleration (`pos`, `vel`, `acc`: each the exact time derivative of the one before — the pair's frame turning, tilting and breathing), synodic frame (its `omegaVec` the full rotation), Hill radius, and dimensionless offset `gamma` for a Lagrange point (e.g. `"lag:earth:2"`, `"lag:moon:4"`) at scene time `t` [M]. A Sun–planet pair is the Sun and the planet with its moons (their barycentre: Sun–(Earth+Moon)).
 
 ### `__bh.lagrange.stability(id, t?)` → `LagrangeStability \| null`
 
@@ -2483,15 +2487,23 @@ Linear stability eigenvalues, Routh criterion check (`linearlyStable`, `kind`), 
 
 ### `__bh.lagrange.halo(id, t, params?)` → `HaloStateResult \| null`
 
-Evaluates a 3rd-order Richardson Halo orbit (for L1–L3) or libration orbit (for L4–L5) at scene time `t` [M]: inertial `pos`, `vel`, `acc`, synodic offset `synM`, period, and phase.
+Evaluates a 3rd-order Richardson Halo orbit (for L1–L3) or the linear libration loop (for L4–L5: the short-period eigen-mode in the plane, its eigenvector on the synodic axes, and the vertical mode at the pair's rate) at scene time `t` [M]: inertial `pos`, `vel`, `acc` (exact derivatives), synodic offset `synM` [m], mean period `periodM`/`periodDays`, `phase` and the amplitude flown `azM`. `params`: `azM` [m], `branch` (−1 south, JWST's), `phase0` — the phase at the pair's synodic angle θ = 0: the phase runs as τ = ν θ(t) + phase0 (θ unwrapped about the mean motion), so any date gives the same orbit (until 2026-11-24 it ran as the day's angular rate × the time from 2067, off by up to 28 km/s at Earth–Moon L2).
 
 ### `__bh.lagrange.haloLoop(id, t0, params?, n = 96)` → `Vec3[]`
 
-Sampled closed 3D Halo / libration loop around `id` at epoch `t0` [M].
+Sampled closed 3D Halo / libration loop around `id` at epoch `t0` [M] (about L4/L5: the next in-plane period from the phase at `t0`).
 
 ### `__bh.lagrange.defaultAzM(id, t?)` → number
 
-Default vertical Halo amplitude `A_z` [m] for `id` (260 000 km for Sun–Earth L1/L2, 12 000 km for Earth–Moon L1/L2).
+Default vertical Halo amplitude `A_z` [m] for `id` (260 000 km for Sun–Earth L1/L2, 12 000 km for Earth–Moon L1/L2; else from the pair's reference length — `t` no longer used: a constant of the point).
+
+### `__bh.lagrange.azRange(id)` → `{minM, maxM} \| null`
+
+The amplitudes the point's orbits can take [m]: Richardson's expansion's range about L1–L3 (0.01–0.65 γ R̄), the linear loops' about L4/L5 (10⁻⁵–0.05 R̄). The flight computer's Halo A_z field clamps to it with a message; the planner's note says the amplitude flown.
+
+### `__bh.lagrange.phase0At(id, t, tau, params?)` → number
+
+The `phase0` that puts the orbit at phase `tau` at time `t` (0: the Halo's x–z plane crossing nearest the secondary).
 
 ### `__bh.lagrange.refineHalo(id, t0, params?)` → `HaloRefinement \| null`
 

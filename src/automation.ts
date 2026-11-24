@@ -47,7 +47,9 @@ import { issAxes, issElements, issOrbit, issStart, issTrack, setIssElements, sta
 import { jwstAxes, jwstHaloLoop, jwstOrbit, jwstStart, jwstTrack } from "./system/jwst";
 import {
   defaultHaloAzM,
+  haloAzRangeM,
   haloOrbitLoop,
+  haloPhase0At,
   haloState,
   lagrangeIdsFor,
   lagrangeStability,
@@ -445,6 +447,13 @@ export function installBh(c: BhContext) {
         axes: jwstAxes,
         start: jwstStart,
         haloLoop: jwstHaloLoop,
+        /** its renderer's life cycle (jwst.ts): prepared, under preparation, its counts, its box this frame */
+        gpu: () => ({
+          ready: renderer.jwst.ready,
+          preparing: !!renderer.jwst.preparing,
+          stats: { ...renderer.jwst.stats },
+          rect: [...renderer.jwst.rect],
+        }),
       },
       /** Lagrange points (L1–L5), linear & N-body stability, and 3D Richardson Halo orbits (system/lagrange.ts) */
       lagrange: {
@@ -453,6 +462,8 @@ export function installBh(c: BhContext) {
         halo: haloState,
         haloLoop: haloOrbitLoop,
         defaultAzM: defaultHaloAzM,
+        azRange: haloAzRangeM,
+        phase0At: haloPhase0At,
         refineHalo: refineHaloOrbit,
         testStability: testLagrangeStabilityNBody,
         idsFor: lagrangeIdsFor,
