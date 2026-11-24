@@ -151,7 +151,7 @@ export const LITE_MAT_IN = [18, 19, 20, 21] as const;
 /**
  * shadeLite deferred (journal 11 Nov 2026: the kernel on its registers' edge — any of the surfaces, the specular or the detail
  * compiled out, −11 to −12.5 ms over a forest): its material and its light two kernels — shadeLite ends writing the material's
- * record (liteMaterial → liteMatStore, the pixel marked RASTER_MAT less its water — liteMatMark), shadeLiteLight reads it back, lights it (liteLight) and
+ * record (liteMaterial → liteMatStore, the pixel marked RASTER_MAT), shadeLiteLight reads it back, lights it (liteLight) and
  * finishes as shadeLite did (liteEpilogue). Where the device takes the record's four more textures; shadeLite whole otherwise.
  */
 export function withLiteDeferred(trace: string, supported: boolean): string {
@@ -161,8 +161,8 @@ export function withLiteDeferred(trace: string, supported: boolean): string {
   return trace.replace(
     marker,
     () => `let at = rasterAttrAt(centre, k);
-  moments[idx] = vec2f(liteMatMark(wat), tM / EARTH_RM * bodyRadius(k));
   liteMatStore(gid.xy, liteMaterial(gq, q, ph, rd, ray.look, tM, fp, fx, fy, tn, hG, Ls, Lp, Li, E, isTree, anchored, at), tM, isTree,
-    !isTree && (meshW || atLeaf(at) > 0u));`,
+    !isTree && (meshW || atLeaf(at) > 0u), wat);
+  moments[idx] = vec2f(RASTER_MAT, tM / EARTH_RM * bodyRadius(k));`,
   );
 }
