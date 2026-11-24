@@ -58,6 +58,9 @@ The TCAS grades each transponder:
   - It says climb or descend, away from where the intruder will pass (the intruder's own RA heeded).
   - It is inhibited under 1 000 ft over the ground.
   - It is inhibited while the craft refuels in the air (TA ONLY, as a receiver sets it): the tanker a few metres ahead stays a TA.
+    TA ONLY holds through the whole session (the rendezvous, pre-contact, the contact, the breakaway) and, since 24 Nov 2026,
+    after it until the receiver is clear of the tanker — 2 NM apart or 1 200 ft above or below, or its track gone 5 s
+    (`radar/tcas.ts` `aarTaOnly`): the session ends a few metres behind and below it.
 
 Where it shows:
 

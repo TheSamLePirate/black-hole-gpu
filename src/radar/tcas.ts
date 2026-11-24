@@ -52,6 +52,39 @@ export const TCAS = {
   raRate: 1500 * 0.00508,
 } as const;
 
+/** TA ONLY kept after a refuelling until the receiver is clear of its tanker: this far apart [m] (2 NM) or this far
+ *  above or below [m] (1 200 ft); the tanker's track gone this long [s] (out of the picture) */
+export const AAR_TA_ONLY = { clearD: 2 * 1852, clearH: 1200 * 0.3048, lost: 5 } as const;
+
+/** The tanker a refuelling left TA ONLY on: its track's id, when it was last heard [s, the radar's clock]. */
+export interface AarTaHold {
+  id: string;
+  seen: number;
+}
+
+/**
+ * The receiver's TCAS mode around an air refuelling (the procedure: TA ONLY from the join to the departure, TA/RA once
+ * clear of the tanker). `inSession`: a refuelling engaged (the rendezvous, pre-contact, the contact, the breakaway, back
+ * out); `hold`: the tanker the last one ended with (null: none); `tanker`: its track relative to us now (east, north,
+ * up [m]; null: not in the picture); `t` the radar's clock [s]. TA ONLY all through the session; after it, while the
+ * tanker is within AAR_TA_ONLY's volume (or out of the picture less than its `lost`) — the session's end left the
+ * receiver a few metres behind and below the tanker, holding its speed: closing by a few dm/s on its racetrack's turn,
+ * an RA "Descend, descend!" against the tanker it had just left (e2e aar, 24 Nov 2026, 1 run in 3). The hold kept,
+ * moved on, or let go.
+ */
+export function aarTaOnly(
+  inSession: boolean,
+  hold: AarTaHold | null,
+  tanker: { r: V3 } | null,
+  t: number,
+): { taOnly: boolean; hold: AarTaHold | null } {
+  if (inSession) return { taOnly: true, hold };
+  if (!hold) return { taOnly: false, hold: null };
+  if (!tanker) return t - hold.seen < AAR_TA_ONLY.lost ? { taOnly: true, hold } : { taOnly: false, hold: null };
+  const near = Math.hypot(tanker.r[0], tanker.r[1]) < AAR_TA_ONLY.clearD && Math.abs(tanker.r[2]) < AAR_TA_ONLY.clearH;
+  return near ? { taOnly: true, hold: { id: hold.id, seen: t } } : { taOnly: false, hold: null };
+}
+
 /**
  * The advisories (the others within the TCAS's reach, the most urgent first): `ownV` the craft's velocity over the
  * ground [m/s], `agl` its height over the ground [m] (the RAs inhibited low), `theirRa` an intruder's own RA's sense

@@ -1,6 +1,6 @@
 import { frameNow } from "./frameclock";
 import { t } from "./i18n";
-import type { TcasAdvisory } from "./radar/tcas";
+import type { AarTaHold, TcasAdvisory } from "./radar/tcas";
 import type { MlsReading } from "./game/mls";
 import { JetPad, type JetPadOut } from "./input/jetpad";
 import { SpacePad, type SpacePadOut } from "./input/spacepad";
@@ -1325,6 +1325,8 @@ export class CameraController {
   trails = new TrailStore();
   /** the TCAS's advisories now (PLAN-RADAR-AAA RD4 — radar/tcas.ts): the most urgent first */
   tcas: TcasAdvisory[] = [];
+  /** the tanker a refuelling ended behind: the TCAS kept in TA ONLY until clear of it (radar/tcas.ts aarTaOnly) */
+  aarTaHold: AarTaHold | null = null;
   /** the Link 16 heard (PLAN-RADAR-AAA RD12 — net/link16.ts): the things the room's teammates' radars hold, by their
    *  shared key — their IFF, who said it, when [ms]; our slot and whether a match runs (the keys' own reading) */
   readonly l16In = new Map<string, { iff: string; from: number; at: number }>();
