@@ -130,7 +130,7 @@ export interface MapBody {
   name: string;
   /** compact map pin label when different from full name (e.g. "SE-L2") */
   shortName?: string;
-  kind: "star" | "planet" | "moon" | "hole" | "mouth" | "lagrange";
+  kind: "star" | "planet" | "moon" | "craft" | "hole" | "mouth" | "lagrange";
   parent: string | null;
   /** place now (the map's frame), radius [M], colour "r, g, b" */
   pos: V3;
@@ -290,7 +290,7 @@ export function ourScene(
     bodies.push({
       id: "iss",
       name: "ISS",
-      kind: "moon",
+      kind: "craft",
       parent: "earth",
       pos: iss.X as V3,
       radius: 55 / M_METRES,
@@ -311,7 +311,7 @@ export function ourScene(
       bodies.push({
         id: "jwst",
         name: "JWST",
-        kind: "moon",
+        kind: "craft",
         parent: "earth",
         pos: jw.X as V3,
         radius: 12 / M_METRES,

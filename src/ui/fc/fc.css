@@ -42,6 +42,9 @@
 .fc-num input { all: unset; box-sizing: border-box; width: 100%; padding: 4px 6px; text-align: right; border-radius: 5px; background: rgba(0, 0, 0, 0.35); border: 1px solid rgba(160, 210, 255, 0.16); font: 600 12px "JetBrains Mono", ui-monospace, monospace; color: #fff; }
 .fc-num input:focus { border-color: rgba(111, 210, 255, 0.7); }
 .fc-num-u { font: 500 11px "JetBrains Mono", monospace; color: rgba(176, 196, 222, 0.72); }
+/* (a value brought into the field's range: the message under the whole row) */
+.fc-num-warn { grid-column: 1 / -1; font-size: 11px; line-height: 1.3; }
+.fc-num-warn:empty { display: none; }
 .fc-step { padding: 2px 0; width: 22px; text-align: center; }
 .fc-result { margin-top: 8px; }
 .fc-card { border: 1px solid rgba(111, 210, 255, 0.28); border-radius: 8px; padding: 9px 10px; background: rgba(20, 40, 70, 0.28); display: flex; flex-direction: column; gap: 7px; }
