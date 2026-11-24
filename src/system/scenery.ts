@@ -732,6 +732,11 @@ export class EarthScenery {
       cellRoadCells: d?.cellRoadCells ?? 0,
       /** (PLAN-J8 J8-RP RP4) the bridges from the street cells */
       cellBridges: d?.cellBridges ?? 0,
+      /** (PLAN-PONT-ROUTES-AAA B3) the catalogue's notable bridges built (bridge-catalogue.ts) */
+      notableBridges: d?.notableBridges ?? 0,
+      /** (review A3) the street cells the drawn scene wanted and lacked, still awaited; the scene's street revision (bumped as they come) */
+      streetMissing: this.streetMissing.size,
+      streetRevision: this.streetRevision,
       /** (PLAN-J8 J8-RP RP9) the catenary masts */
       catenaryMasts: d?.catenaryMasts ?? 0,
       keptReachM: d?.keptReachM ?? 0,

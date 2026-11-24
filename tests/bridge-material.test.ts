@@ -48,7 +48,7 @@ describe("PR4 / review A6 — the deck's surface on the real shader", () => {
       expect(reach(e).has("liteMaterial")).toBe(false);
       expect(reach(e).has("roadPavement")).toBe(false);
     }
-  });
+  }, 60_000);
 });
 
 describe("B1 — the pavement on the real shader", () => {

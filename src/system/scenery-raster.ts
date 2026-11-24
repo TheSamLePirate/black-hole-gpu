@@ -761,6 +761,26 @@ fn meshLeaf(tri: u32) -> f32 {
     o.pyl = vec4f(${CABLE_WIDTH_M} / (2.0 * half), sc.misc.x, 0.0, 0.0);
     v = view(wp + vec3f(0.0, 0.0, select(-half, half, (id & 1u) == 1u)));
   }
+  // (PLAN-PONT-ROUTES-AAA B3: a notable bridge's painted part — a tower, a girder, an anchorage: BRIDGE_PAINT | its paint —, coded as
+  // the painted parts, its leaf 10 + paint / 16 — shadeLite's palette)
+  if (fam == 0xfff30000u) {
+    o.bridge = 2.0;
+    o.leaf = 10.0 + f32(tg & 15u) / 16.0;
+  }
+  // (B3: a notable bridge's cable — STRUCT_CABLE | 0x8000 vertical | paint << 11 | its diameter [cm] —: its pair opened to a pixel at
+  // least, along the frame's up — a vertical suspender across the view —, the share its diameter covers kept by meshFs, painted)
+  if (fam == 0xfff20000u) {
+    o.bridge = 5.0;
+    o.leaf = 10.0 + f32((tg >> 11u) & 15u) / 16.0;
+    let t = u32(scenery[3].z) * 4u + vi;
+    let id = bitcast<u32>(scenery[t / 4u][t % 4u]);
+    let px = 2.0 * u.up.w * max(v.z, 1.0) / u.image.y;
+    let w = f32(tg & 0x7ffu) / 100.0;
+    let half = max(0.5 * w, 0.5 * px);
+    o.pyl = vec4f(w / (2.0 * half), sc.misc.x, 0.0, 0.0);
+    let s = select(-half, half, (id & 1u) == 1u);
+    if ((tg & 0x8000u) != 0u) { v = v + vec3f(s, 0.0, 0.0); } else { v = view(wp + vec3f(0.0, 0.0, s)); }
+  }
   // (Q8 L10: a street lamp's head — its leaf 7, shadeLite's —: its four vertices at its centre opened towards the camera to a
   // pixel and a half at least, as a car's lamps; its pole — 4, as a conductor —: each pair opened across the view to a pixel at
   // least, the even one to the left, its coverage's share kept by meshFs)
@@ -841,7 +861,8 @@ fn meshShade(v: MV) -> vec4f {
       if (!(leg || girt || x1 || x2)) { discard; }
     }
   }
-  let code = select(select(${RASTER_CODE.mesh}.0 + v.bridge, ${RASTER_CODE.turbine}.0, v.bridge > 1.5), ${RASTER_CODE.pylon}.0, v.bridge > 2.5);
+  // (B3: a notable bridge's cable — 5 — painted as the painted parts are, its coverage the conductors')
+  let code = select(select(select(${RASTER_CODE.mesh}.0 + v.bridge, ${RASTER_CODE.turbine}.0, v.bridge > 1.5), ${RASTER_CODE.pylon}.0, v.bridge > 2.5), ${RASTER_CODE.turbine}.0, v.bridge > 4.5);
   return vec4f(d, v.leaf, d, code * ${RASTER_CODE_SCALE}.0);
 }
 // The buildings without triangles — the far ones, past BUILDING_MESH_M — as their boxes, solid (no margin, the top flat), turned

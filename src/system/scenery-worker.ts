@@ -90,6 +90,8 @@ import { bridgeCanonicalKey, clipLineToTile, type GeoBridge, joinBridgeHalves } 
 import { BridgeContinuousProfile, SupportSurfaceRegistry } from "./bridge-surface-service";
 import { buildContinuousPierMesh, buildContinuousRailMesh, buildContinuousSliceMesh, computeSlicePlane, mitres } from "./bridge-mesh";
 import { selectBridgeLOD } from "./bridge-lod";
+import { NOTABLE_BRIDGES } from "./bridge-catalogue";
+import { notableDeckAxis, notableParts } from "./bridge-notable";
 import {
   buildAlexandreIIIPylonsMesh,
   buildArchRibsMesh,
@@ -100,6 +102,8 @@ import { isDeckRoad, markRoad, roadClassCode } from "./road-markings";
 import { inferRoadSurface, type RoadSurface, roadSurfaceColour } from "./road-surface";
 import { catenaryMasts, cellRoadSurfaces } from "./cell-roads";
 
+/** (B3) a notable bridge built in the scene within this of the eye or the centre [m] — its towers seen from tens of kilometres */
+export const NOTABLE_REACH_M = 45_000;
 /** (review A5) a deck clears the trees under it where its intrados is within this of the ground [m] — a tree taller pokes through */
 export const TREE_UNDER_DECK_M = 25;
 /** (PLAN-J8 VB4) the parked cars kept round the scene's centre [m] and at most (the nearest places first) */
@@ -144,6 +148,8 @@ import {
   sceneryExcluded,
   seed,
   DECK_PLANE,
+  BRIDGE_PAINT,
+  structCableTag,
   type Primitive,
   type SceneryRequest,
   type SceneryReply,
@@ -586,7 +592,10 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
     buildings = 0,
     vertices = 0;
   let bridges = 0,
-    bridgePiers = 0;
+    bridgePiers = 0,
+    notableBridges = 0;
+  /** (B3) the notable bridges' cables (packScenery's structCables) */
+  const structCables: { positions: number[]; triangles: number[]; tag: number }[] = [];
   const surfaces: Primitive[] = [];
   /** (B1) OpenMapTiles' road segments' surface material, until markRoad packs it */
   const omtMaterial = new Map<Primitive, RoadSurface>();
@@ -1555,12 +1564,14 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
     maxGrade: number;
     /** its distance to the eye or the scene's centre [m] (its LOD — bridge-lod.ts) */
     d: number;
+    /** its piers by its family (default) — none: a notable bridge's, its towers its supports (B3) */
+    piers?: boolean;
   }
   // (PLAN-J8 J8-RP RP4/RP5, PLAN-PONT-ROUTES-AAA, review A1/A2/A7/A8/A9: one deck for every bridge — its profile decided once
   // (bridge-surface-service.ts), drawn in slices between its stations (their corners mitred: no crack at a bend), each slice's top a
   // plane the contact reads; its parapets the same; its piers by its structure; registered with its real layer. Returns whether a
   // part was made)
-  const deckBridge = (o: DeckBuild): boolean => {
+  const deckBridge = (o: DeckBuild): BridgeContinuousProfile | null => {
     const { points, width, kind, colour, clearance, style, flags } = o;
     let totalLen = 0;
     for (let i = 0; i < points.length - 1; i++)
@@ -1589,7 +1600,7 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
       sliceM: lod.sliceLengthM,
     });
     const total = profile.totalLength;
-    if (total < 1) return false;
+    if (total < 1) return null;
     const serial = deckSerial++;
     bridgeRegistry.registerBridge(
       { assetId: `bridge_${serial}`, surfaceId: `surface_${serial}`, revision: String(q.id) },
@@ -1662,7 +1673,7 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
     }
     // (PLAN-PONT-ROUTES-AAA PR6: the piers by the structural family — Alexandre III none in the Seine —, each where the intrados
     // stands PIER_MIN_M over the ground at its foot; review A9: its mesh turned along the axis as its collision strip is)
-    if (lod.drawPiers)
+    if (lod.drawPiers && o.piers !== false)
       for (const d of computeStructurePierLocations(total, family)) {
         if (d < 2 || d > total - 2) continue;
         const z = profile.intradosAt(d),
@@ -1711,7 +1722,7 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
       const archBounds = [stripPolygon(pStart, pEnd, width)];
       addSolid(polygonPrimitive(archBounds, deckZ0 - 6, Math.min(deckZ0, deckZ1) - thick, 3, [0.35, 0.4, 0.38]), archBounds, archMesh);
     }
-    return made;
+    return made ? profile : null;
   };
   const bridgeNearD = (lat: number, lon: number) => {
     const p = localPoint(frame, lat, lon, 0);
@@ -1729,6 +1740,65 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
   /** a road bridge's steepest grade by its width (a fast road's 5 %, a minor one's 8 %), a railway's 3.5 %, a footbridge's 8 % */
   const gradeOf = (kind: number, width: number) =>
     kind === BridgeKind.Rail ? 0.035 : kind === BridgeKind.Foot ? 0.08 : width >= 14 ? 0.05 : 0.08;
+  // (PLAN-PONT-ROUTES-AAA B3: the catalogue's notable bridges within NOTABLE_REACH_M of the eye or the centre — their towers seen from
+  // tens of kilometres —, first: their own deck (drivable, the same profile, contact and registry as any — deckBridge), their painted
+  // solids (towers, girders, anchorages: collidable, in the shadow map), their cables (widened to a pixel by the raster); the data's
+  // decks under them left out — the registry finds them there)
+  for (const nb of NOTABLE_BRIDGES) {
+    const mid = { lat: (nb.ends[0].lat + nb.ends[1].lat) / 2, lon: (nb.ends[0].lon + nb.ends[1].lon) / 2 };
+    const d = Math.min(
+      bridgeNearD(nb.ends[0].lat, nb.ends[0].lon),
+      bridgeNearD(nb.ends[1].lat, nb.ends[1].lon),
+      bridgeNearD(mid.lat, mid.lon),
+    );
+    if (d > NOTABLE_REACH_M) continue;
+    try {
+      const grounds = new Map<string, number>();
+      for (const g of [...nb.ends, ...nb.towers]) grounds.set(`${g.lat},${g.lon}`, await height(g.lat, g.lon));
+      const nf = {
+        local: (lat: number, lon: number, h: number) => localPoint(frame, lat, lon, h) as Vec3,
+        geoid: sea,
+        ground: (lat: number, lon: number) => grounds.get(`${lat},${lon}`) ?? sea(lat, lon),
+      };
+      const slab = { ...BRIDGE_STYLES.road, thick: 0.6, viaductThick: 0.6 };
+      const deckProfile = deckBridge({
+        points: notableDeckAxis(nb, nf),
+        width: nb.deckWidth,
+        kind: 2,
+        colour: [0.095, 0.098, 0.1],
+        // (its points are the roadway's heights: no clearance asked over them — the catalogue's deck is the deck)
+        clearance: -slab.thick,
+        style: slab,
+        flags: 0,
+        layer: 1,
+        approach: [undefined, undefined],
+        maxGrade: 0.065,
+        d,
+        piers: false,
+      });
+      if (!deckProfile) continue;
+      bridges++;
+      // (its structure hung on the deck just built — one owner: the profile's drawn top)
+      const parts = notableParts(nb, nf, (x) => deckProfile.deckAt(x));
+      for (const so of parts.solids) {
+        const p = polygonPrimitive([so.ring], so.bottom, so.top, 3, [0.5, 0.5, 0.5]);
+        if (p) p.meshTag = (BRIDGE_PAINT | so.paint) >>> 0;
+        addSolid(p, [so.ring], so);
+      }
+      for (const c of parts.cables) {
+        const bytes = c.positions.length * 4 + (c.triangles.length / 3) * 16;
+        if (storedBytes + bytes > budget - 2 * 1024 * 1024) {
+          budgetLimited = true;
+          break;
+        }
+        storedBytes += bytes;
+        structCables.push({ positions: c.positions, triangles: c.triangles, tag: structCableTag(c.diameter, c.vertical, c.paint) });
+      }
+      notableBridges++;
+    } catch (e) {
+      if (surveyErrors.length < 4) surveyErrors.push(`notable bridge ${nb.id}: ${String(e).slice(0, 200)}`);
+    }
+  }
   // (RP4 / PLAN-PONT-ROUTES-AAA PR3/PR5: the street cells' canonical bridges FIRST — the BD TOPO's axis, width with its sides,
   // clearance —, the nearest to the camera or scene centre first, before distant OMT bridgeLines can exhaust bridgeLimit)
   {
@@ -1784,6 +1854,10 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
     for (const { b, d } of list) {
       if (bridges >= bridgeLimit) break;
       try {
+        // (a notable bridge's deck already there: this one its data's double)
+        const m = b.points[Math.floor(b.points.length / 2)]!;
+        const mAt = localPoint(frame, m.lat, m.lon, 0);
+        if (bridgeRegistry.queryBridgeAt(mAt[0], mAt[1], { margin: 10 })) continue;
         const pts = await groundLine(b.points);
         const rail = b.kind === BridgeKind.Rail,
           foot = b.kind === BridgeKind.Foot;
@@ -2695,6 +2769,7 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
       ...signalHeads,
     ],
     lampGrid,
+    structCables,
   );
   return {
     id: q.id,
@@ -2763,6 +2838,7 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
     pavedPolygons: keptSurfaces.filter((v) => v.data.length > 12 && v.data[3] === 5).length,
     bridges,
     bridgePiers,
+    notableBridges,
     osmLayers,
     coverPixels: classes.reduce((s, v) => s + Number(v > 0), 0),
     rgbPixels,

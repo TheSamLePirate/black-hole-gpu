@@ -16033,6 +16033,8 @@ fn roadPavement(mat: u32, road: vec4f, dir: vec2f, xy: vec2f, fpM: f32) -> Pavem
   let uL = abs(fract(x / lw) - 0.5) * lw;
   let inCarriage = 1.0 - smoothstep(cr - 0.1, cr + aa, d);
   let track = (1.0 - smoothstep(0.24, 0.24 + aa, abs(uL - 0.8))) * select(0.55, 1.0, busy) * inCarriage;
+  // (its mean over a lane — two bands of 0.48 m in 3.5 m —: what the wheel paths leave in a pixel wider than they are)
+  let trackMean = 0.27 * select(0.55, 1.0, busy) * inCarriage;
   let mid = 1.0 - smoothstep(0.8, 2.0, fpM);
   let near = 1.0 - smoothstep(0.25, 0.7, fpM);
   let fine = 1.0 - smoothstep(0.025, 0.07, fpM);
@@ -16051,7 +16053,7 @@ fn roadPavement(mat: u32, road: vec4f, dir: vec2f, xy: vec2f, fpM: f32) -> Pavem
     let jw = 0.012;
     let joint = max(paveCover(sj, -jw, jw, aa), paveCover(lj, -jw, jw, aa) * inCarriage);
     let slab = hash31(vec3f(floor(s / 4.5), floor(x / lw), 31.0));
-    t = (0.94 + 0.12 * slab * mid) * (1.0 - 0.5 * joint) * (1.0 - 0.07 * track * mid);
+    t = (1.0 + 0.12 * (slab - 0.5) * mid) * (1.0 - 0.5 * joint) * (1.0 - 0.07 * mix(trackMean, track, mid));
     t *= 1.0 + fine * 0.18 * (agg - 0.5);
     o.tilt = fine * 0.05 * (agg2 - 0.5) * across;
     o.puddle = 0.25 * tone + 0.5 * joint;
@@ -16070,7 +16072,8 @@ fn roadPavement(mat: u32, road: vec4f, dir: vec2f, xy: vec2f, fpM: f32) -> Pavem
     let joint = max(jr, jc);
     let stone = hash31(vec3f(ri, ci, 47.0));
     let sett = 1.0 - smoothstep(0.08, 0.25, fpM);
-    t = mix(0.9, (0.78 + 0.4 * stone) * (1.0 - 0.55 * joint), sett) * (1.0 + mid * 0.1 * (tone - 0.5));
+    // (their mean — a stone's 0.98, the joints a third of the surface at 0.45 of it —: 0.79)
+    t = mix(0.79, (0.78 + 0.4 * stone) * (1.0 - 0.55 * joint), sett) * (1.0 + mid * 0.1 * (tone - 0.5));
     o.tilt = sett * (1.0 - joint) * 0.35 * (ru * dir + cu * across);
     o.polish = 0.04 * sett * (1.0 - joint);
     o.puddle = 0.3 * tone + 0.6 * joint * sett;
@@ -16078,7 +16081,7 @@ fn roadPavement(mat: u32, road: vec4f, dir: vec2f, xy: vec2f, fpM: f32) -> Pavem
   } else if (mat == 3u || mat == 4u) {
     // (gravel, earth: loose stones or soil, rough; the wheels' ruts lower — darker, packed —, the water lies in them)
     let rut = track * mid;
-    t = (0.88 + 0.24 * grain * near) * (1.0 + fine * select(0.5, 0.25, mat == 4u) * (agg - 0.5)) * (1.0 - 0.14 * rut);
+    t = (1.0 + 0.24 * (grain - 0.5) * near) * (1.0 + fine * select(0.5, 0.25, mat == 4u) * (agg - 0.5)) * (1.0 - 0.14 * mix(trackMean, track, mid));
     t *= 0.92 + 0.16 * tone;
     o.tilt = (fine * 0.25 * (agg2 - 0.5) + near * 0.15 * (grain - 0.5)) * across + rut * 0.2 * sign(uL - 0.8) * across;
     o.puddle = 0.85 * rut + 0.3 * tone;
@@ -16087,8 +16090,8 @@ fn roadPavement(mat: u32, road: vec4f, dir: vec2f, xy: vec2f, fpM: f32) -> Pavem
     // (asphalt: its tone over metres; its grain; its aggregate near — the chippings' light and dark, a slight relief —; the wheel
     // paths darkened and polished; a quiet street crazed with cracks, greyer; the repairs' patches)
     t = (0.93 + 0.14 * tone) * (1.0 + near * 0.1 * (grain - 0.5)) * (1.0 + fine * 0.32 * (agg - 0.5));
-    t *= 1.0 - 0.12 * track * mid;
-    o.polish = 0.05 * track * mid;
+    t *= 1.0 - 0.12 * mix(trackMean, track, mid);
+    o.polish = 0.05 * mix(trackMean, track, mid);
     o.tilt = fine * 0.07 * ((agg - 0.5) * dir + (agg2 - 0.5) * across);
     if (!busy && fpM < 1.0) {
       let cn = vnoise(vec3f(xy * 0.55, 17.0)) * 0.7 + vnoise(vec3f(xy * 2.1, 19.0)) * 0.3;
@@ -16376,7 +16379,14 @@ fn liteMaterial(gq: vec3f, q: vec3f, ph: vec3f, rd: vec3f, look: vec3f, tM: f32,
     // (Q8 D1: a car — system/traffic.ts —: its paint one of eight by its index — white, silver, grey, black, red, blue, dark
     // green, beige —, its lamps' glass dark by day)
     let cg = atTag(at);
-    if (cg > 4.92 && cg < 4.99) {
+    // (PLAN-PONT-ROUTES-AAA B3: a notable bridge's painted part or cable — its leaf 10 + paint / 16, bridge-notable.ts BridgePaint: the
+    // Golden Gate's International Orange (sRGB #C0362C, linear), concrete, white, dark steel, granite, grey-green, silver, ochre)
+    if (cg > 9.97 && cg < 11.0) {
+      let pi = u32(fract(cg) * 16.0 + 0.5) & 7u;
+      var paint = array<vec3f, 8>(vec3f(0.527, 0.037, 0.025), vec3f(0.42, 0.41, 0.39), vec3f(0.66, 0.67, 0.68), vec3f(0.12, 0.13, 0.14),
+        vec3f(0.42, 0.38, 0.32), vec3f(0.26, 0.33, 0.3), vec3f(0.5, 0.52, 0.54), vec3f(0.5, 0.38, 0.2));
+      A = paint[pi] * P.earth2.z;
+    } else if (cg > 4.92 && cg < 4.99) {
       // (PLAN-J8 VB3: a car's glass — car-shapes.ts —: dark, the sky mirrored at a grazing look as a building's windows)
       A = vec3f(0.035, 0.04, 0.045) * P.earth2.z;
       glass = 1.0;

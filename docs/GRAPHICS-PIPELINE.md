@@ -71,6 +71,31 @@ Windows/D3D12. Les numéros de ligne sont ceux de `da4e75bd`.
   des branches (`armRoles`) ; lignes de cédez-le-passage/stop par rôle dans la préparation des cellules (mobilier VB7).
   Plus de segments de surface près des carrefours et des courbes (non compté).
 
+### PONT-ROUTES B3 — ponts remarquables : suspendus et à haubans (24 novembre 2026, branche de l'agent)
+
+**Code, non mesuré, non vu** (aucune capture ; vues à juger listées dans la fiche
+[FICHE-REVUE-A-B](progress/pont-routes-aaa/FICHE-REVUE-A-B.md)).
+
+- **Données (worker du décor)** : `bridge-catalogue.ts` (Golden Gate, Normandie, Tancarville, Millau, Brooklyn, Akashi
+  Kaikyō — chiffres sourcés, tours dérivées d'OSM à ±20–50 m) ; `bridge-notable.ts` construit, dans `NOTABLE_REACH_M`
+  (45 km) de l'œil ou du centre de la scène, le tablier roulable (même `deckBridge`, profil, contact, registre) puis la
+  structure accrochée à ce tablier (`notableParts(…, profile.deckAt)`) : tours/pylônes, entretoises, poutre de rigidité,
+  massifs d'ancrage, câbles porteurs (parabole), suspentes, haubans (éventail, semi-éventail, semi-harpe, harpe ; un ou
+  deux plans). Hauteurs MSL + N du plan géoïde de la scène. Les tabliers des données sous un pont remarquable sont écartés
+  (registre).
+- **Enregistrement du décor** : `Primitive.meshTag` — les triangles d'une pièce peinte portent `BRIDGE_PAINT | peinture`
+  (0xfff3····) ; nouvelle liste `structCables` de `packScenery`, **après les lampadaires**, depuis un sommet pair, ses
+  triangles marqués `STRUCT_CABLE | 0x8000 vertical | peinture << 11 | diamètre [cm]` (0xfff2····). Pièces solides
+  (kind 3, boîte BVH) : collision et carte d'ombre comme les autres maillages.
+- **`meshVs` / `meshFs` (`scenery-raster.ts`, pipelines inchangés)** : 0xfff3 → code `turbine`, feuille `10 + peinture/16` ;
+  0xfff2 → paire ouverte à un pixel au moins (verticale : en travers de la vue ; sinon le long du haut du repère), part de
+  couverture gardée par le tirage existant des conducteurs (`v.bridge` 5 → `discard` par couverture, code `turbine`).
+- **`shadeLite` (`liteMaterial`)** : palette de 8 peintures lue à la feuille 10…11 dans la branche des pièces peintes
+  (International Orange linéaire 0,527/0,037/0,025, béton, blanc, acier sombre, granit, gris-vert, argent, ocre) : `shadeLite` earth-raster 8 793 lignes inlinées au total (8 528 avant la revue).
+  +5 lignes inlinées.
+- Les tours au-delà de la scène ordinaire sont dessinées parce que la scène les contient (jusqu'à 45 km) ; aucune couche
+  lointaine dédiée. Ombres : seulement dans l'étendue de la carte d'ombre autour de la caméra.
+
 ### J9 — contenu source et inspection (20 novembre 2026)
 
 `vegetation/tree-leaf.ts` possède désormais le masque `leafMask` partagé par la cuisson des imposteurs et l'inspection de
