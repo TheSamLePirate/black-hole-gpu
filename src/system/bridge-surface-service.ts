@@ -61,6 +61,31 @@ export interface BridgeProfileParams {
   readonly railH?: number;
   /** the stations' spacing [m]: the drawn slices' length (≤ 10 m near) */
   readonly sliceM?: number;
+  /** (street cells' format 6, 25 Nov 2026) the deck's surveyed top at each point [the frame's z] — the BD TOPO's Z: the profile follows
+   *  it (piecewise linear), brought to each closed end's height (its ground, or `endZA`/`endZB`) over a ramp of grade ≤ 4 % — refused
+   *  (the clearance's curve then) where it lies more than MEASURED_UNDER_M under the ground 20 m or more from the ends */
+  readonly measured?: readonly number[];
+}
+
+/** a surveyed deck this far under the ground under it is no deck's (a section's Z taken from the ground model): refused [m] */
+export const MEASURED_UNDER_M = 1;
+/** the steepest grade the surveyed deck's ramp to an end's height takes [dz/ds], its shortest [m] */
+const MEASURED_RAMP_GRADE = 0.04,
+  MEASURED_RAMP_MIN_M = 30;
+
+/**
+ * Whether a surveyed deck can be the profile: one finite height a point, none more than MEASURED_UNDER_M under the ground (`points`'
+ * z) 20 m or more from the ends.
+ */
+export function measuredDeckUsable(points: readonly [number, number, number][], measured: readonly number[] | undefined): boolean {
+  if (!measured || measured.length !== points.length || points.length < 2 || !measured.every(Number.isFinite)) return false;
+  let s = 0;
+  const span = [0];
+  for (let i = 1; i < points.length; i++)
+    span.push((s += Math.hypot(points[i]![0] - points[i - 1]![0], points[i]![1] - points[i - 1]![1])));
+  for (let i = 0; i < points.length; i++)
+    if (span[i]! >= 20 && s - span[i]! >= 20 && measured[i]! < points[i]![2] - MEASURED_UNDER_M) return false;
+  return true;
 }
 
 /** OpenA / OpenB (street-cells.ts BridgeFlag): not imported to keep this module free of the cells' format */
@@ -93,6 +118,13 @@ export class BridgeContinuousProfile {
   private readonly endA: number;
   private readonly endB: number;
   private readonly stationZ: number[];
+  /** (format 6) the surveyed deck followed (measuredDeckUsable), its two ends' corrections [m] and their ramps' lengths [m] */
+  readonly measuredUsed: boolean;
+  private readonly measured: readonly number[] | null;
+  private readonly corrA: number;
+  private readonly corrB: number;
+  private readonly corrLA: number;
+  private readonly corrLB: number;
 
   constructor(params: BridgeProfileParams) {
     this.points = params.points;
@@ -120,6 +152,20 @@ export class BridgeContinuousProfile {
     const clampG = (v: number | undefined, open: boolean) => (open ? 0 : Math.max(-g, Math.min(g, v ?? 0)));
     this.gA = params.endZA !== undefined ? clampG(params.approachSlopeA, false) : clampG(params.approachSlopeA, openA);
     this.gB = params.endZB !== undefined ? clampG(params.approachSlopeB, false) : clampG(params.approachSlopeB, openB);
+    // (format 6: the surveyed deck — its ends brought to the abutments' heights, an open end left at its survey: mid-span, its other
+    // half's the same survey)
+    this.measuredUsed = T >= 0.5 && measuredDeckUsable(pts, params.measured);
+    this.measured = this.measuredUsed ? params.measured! : null;
+    if (this.measured) {
+      const m = this.measured;
+      this.zA = params.endZA ?? (openA ? m[0]! : z0);
+      this.zB = params.endZB ?? (openB ? m[m.length - 1]! : z1);
+      this.corrA = this.zA - m[0]!;
+      this.corrB = this.zB - m[m.length - 1]!;
+      const len = (c: number) => Math.min(T / 2, Math.max(MEASURED_RAMP_MIN_M, (1.5 * Math.abs(c)) / MEASURED_RAMP_GRADE));
+      this.corrLA = len(this.corrA);
+      this.corrLB = len(this.corrB);
+    } else this.corrA = this.corrB = this.corrLA = this.corrLB = 0;
     if (T < 0.5) {
       this.lift = 0;
       this.rampM = 0;
@@ -175,6 +221,7 @@ export class BridgeContinuousProfile {
     const T = this.totalLength;
     if (T <= 0) return this.zA;
     const x = Math.max(0, Math.min(T, s));
+    if (this.measured) return this.measuredAt(x);
     const gBase = (this.zB - this.zA) / T;
     let z = this.zA + gBase * x;
     if (this.rampM > 0) z += this.lift * ramp(x / this.rampM) * ramp((T - x) / this.rampM);
@@ -184,11 +231,32 @@ export class BridgeContinuousProfile {
     return z;
   }
 
-  /** its grade dz/ds, analytic */
+  /** (format 6) the surveyed deck at x: its points' heights, linear between them, each end's correction faded over its ramp (1 − a
+   *  smoothstep: C1 at the abutment's approach and at the survey) */
+  private measuredAt(x: number): number {
+    const m = this.measured!,
+      span = this.spans,
+      T = this.totalLength;
+    let k = 1;
+    while (k < span.length - 1 && span[k]! < x) k++;
+    const L = span[k]! - span[k - 1]!;
+    const f = L > 1e-6 ? (x - span[k - 1]!) / L : 0;
+    let z = m[k - 1]! + (m[k]! - m[k - 1]!) * f;
+    if (this.corrLA > 0) z += this.corrA * (1 - ramp(x / this.corrLA));
+    if (this.corrLB > 0) z += this.corrB * (1 - ramp((T - x) / this.corrLB));
+    return z;
+  }
+
+  /** its grade dz/ds, analytic (the surveyed deck's by a central difference over 0.5 m) */
   slopeAt(s: number): number {
     const T = this.totalLength;
     if (T <= 0) return 0;
     const x = Math.max(0, Math.min(T, s));
+    if (this.measured) {
+      const a = Math.max(0, x - 0.25),
+        b = Math.min(T, x + 0.25);
+      return b > a ? (this.measuredAt(b) - this.measuredAt(a)) / (b - a) : 0;
+    }
     const gBase = (this.zB - this.zA) / T;
     let d = gBase;
     if (this.rampM > 0) {
@@ -424,11 +492,14 @@ export class SupportSurfaceRegistry {
       readonly maxDeltaZ?: number;
       readonly margin?: number;
       readonly deckTop?: boolean;
+      /** (25 Nov 2026) the decks of `expectedLevel` alone (not merely preferred) */
+      readonly sameLevel?: boolean;
     },
   ): SupportSampleResult | null {
     let best: { e: Entry; s: number; u: number; score: number } | null = null;
     const margin = options?.margin ?? 0;
     for (const e of this.near(x, y)) {
+      if (options?.sameLevel && options.expectedLevel !== undefined && e.level !== options.expectedLevel) continue;
       const p = e.profile.project(x, y);
       if (p.distance > e.profile.width / 2 + margin) continue;
       // (past an end: off the deck)

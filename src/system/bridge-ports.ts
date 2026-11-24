@@ -137,16 +137,25 @@ export interface GeoBridge {
   readonly crossed: number;
   readonly clearance: number;
   readonly points: readonly Wgs84Point[];
+  /** (street cells' format 6) each point's surveyed deck height over the sea [m] (NaN none); absent: none */
+  readonly heights?: readonly number[];
 }
 
 /** OpenA / OpenB (street-cells.ts BridgeFlag) */
 const OPEN_A = 4,
   OPEN_B = 8;
 const KIND_NAME = ["road", "road", "rail", "foot"] as const;
+/** the mean of two heights, either NaN or absent left out (NaN: neither) */
+const meanOf = (a: number | undefined, b: number | undefined) => {
+  const fa = a !== undefined && Number.isFinite(a),
+    fb = b !== undefined && Number.isFinite(b);
+  return fa && fb ? (a! + b!) / 2 : fa ? a! : fb ? b! : Number.NaN;
+};
 
 const reversed = (b: GeoBridge): GeoBridge => ({
   ...b,
   points: [...b.points].reverse(),
+  ...(b.heights ? { heights: [...b.heights].reverse() } : {}),
   flags: (b.flags & ~(OPEN_A | OPEN_B)) | (b.flags & OPEN_A ? OPEN_B : 0) | (b.flags & OPEN_B ? OPEN_A : 0),
 });
 
@@ -199,13 +208,236 @@ export function joinBridgeHalves(list: readonly GeoBridge[], maxDistM = 3): GeoB
         crossed: a.crossed | b.crossed,
         clearance: Math.max(a.clearance, b.clearance),
         points: [...a.points, ...b.points.slice(1)],
+        // (the surveyed heights joined as the points — the shared point's the mean of those given)
+        ...(a.heights || b.heights
+          ? {
+              heights: [
+                ...(a.heights ?? a.points.map(() => Number.NaN)).slice(0, -1),
+                meanOf(a.heights?.[a.points.length - 1], b.heights?.[0]),
+                ...(b.heights ?? b.points.map(() => Number.NaN)).slice(1),
+              ],
+            }
+          : {}),
       });
     }
-    if (!used.size) return out;
+    if (!used.size) {
+      // (none met within maxDistM: the halves that overlap or fall short past the edge — each tile's line clipped with its own
+      // margin, its segments kept by their middles —, spliced; none either: done)
+      const spliced = spliceOpenHalves(out);
+      if (!spliced) return out;
+      out = spliced;
+      continue;
+    }
     out.forEach((b, i) => {
       if (!used.has(i)) next.push(b);
     });
     out = next;
   }
   return out;
+}
+
+/**
+ * (street cells' format 6, 25 Nov 2026) A bridge's surveyed heights with their gaps filled along its axis — linear between two given,
+ * the nearest given at either end — or null where fewer than two are given (its profile then its clearance's).
+ */
+export function fillHeights(points: readonly Wgs84Point[], heights: readonly number[] | undefined): number[] | null {
+  if (!heights || heights.length !== points.length) return null;
+  const known = heights.map((h, i) => (Number.isFinite(h) ? i : -1)).filter((i) => i >= 0);
+  if (known.length < 2) return null;
+  const s: number[] = [0];
+  for (let i = 1; i < points.length; i++) {
+    const a = points[i - 1]!,
+      b = points[i]!;
+    s.push(s[i - 1]! + Math.hypot((b.lat - a.lat) * 111_132, (b.lon - a.lon) * 111_320 * Math.cos((a.lat * Math.PI) / 180)));
+  }
+  return heights.map((h, i) => {
+    if (Number.isFinite(h)) return h;
+    const a = [...known].reverse().find((k) => k < i),
+      b = known.find((k) => k > i);
+    if (a === undefined) return heights[b!]!;
+    if (b === undefined) return heights[a]!;
+    return heights[a]! + ((heights[b]! - heights[a]!) * (s[i]! - s[a]!)) / Math.max(1e-6, s[b]! - s[a]!);
+  });
+}
+
+/** a deck piece after joinDeckPieces: an end met mid-way by another deck of its kind and layer (a branch: its height that deck's) */
+export interface JoinedDeck {
+  readonly bridge: GeoBridge;
+  readonly branchA: boolean;
+  readonly branchB: boolean;
+}
+
+/**
+ * (25 Nov 2026 — Pont de Cheviré, campaign 2: a viaduct drawn in four pieces, 1.5–11 m steps between them) Decks that meet join in
+ * height, generically — as joinBridgeHalves joins a tile edge's halves —: (1) two closed ends (abutments, as each piece was written)
+ * within `maxDistM` of each other, of the same kind and layer, are not abutments but one structure's middle: both made open and joined
+ * into one axis (joinBridgeHalves); (2) a closed end within `maxDistM` of another deck's axis of its kind and layer, away from that
+ * deck's ends (a branch — a ramp off a viaduct —) is flagged: the scene builds it after the others, its end at that deck's drawn top
+ * (the registry's). Ends meeting nothing stay abutments.
+ */
+export function joinDeckPieces(list: readonly GeoBridge[], maxDistM = 3): JoinedDeck[] {
+  const cosL = Math.cos(((list[0]?.points[0]?.lat ?? 0) * Math.PI) / 180);
+  const xy = (p: Wgs84Point): [number, number] => [p.lon * 111_320 * cosL, p.lat * 111_132];
+  const cell = maxDistM * 2;
+  const key = (x: number, y: number) => `${Math.floor(x / cell)},${Math.floor(y / cell)}`;
+  // (1) the closed ends' grid; each end paired with its nearest partner once
+  type End = { i: number; end: 0 | 1; x: number; y: number };
+  const ends: End[] = [];
+  const grid = new Map<string, End[]>();
+  list.forEach((b, i) => {
+    for (const end of [0, 1] as const) {
+      if (b.flags & (end ? OPEN_B : OPEN_A) || b.points.length < 2) continue;
+      const [x, y] = xy(end ? b.points[b.points.length - 1]! : b.points[0]!);
+      const e = { i, end, x, y };
+      ends.push(e);
+      const k = key(x, y);
+      (grid.get(k) ?? grid.set(k, []).get(k)!).push(e);
+    }
+  });
+  const open = list.map(() => [false, false]);
+  const paired = new Set<End>();
+  for (const e of ends) {
+    if (paired.has(e)) continue;
+    let best: End | null = null,
+      bestD = maxDistM;
+    for (let dx = -1; dx <= 1; dx++)
+      for (let dy = -1; dy <= 1; dy++)
+        for (const f of grid.get(`${Math.floor(e.x / cell) + dx},${Math.floor(e.y / cell) + dy}`) ?? []) {
+          if (f.i === e.i || paired.has(f)) continue;
+          const a = list[e.i]!,
+            b = list[f.i]!;
+          if (a.kind !== b.kind || a.layer !== b.layer) continue;
+          const d = Math.hypot(f.x - e.x, f.y - e.y);
+          if (d <= bestD) {
+            bestD = d;
+            best = f;
+          }
+        }
+    if (!best) continue;
+    paired.add(e);
+    paired.add(best);
+    open[e.i]![e.end] = true;
+    open[best.i]![best.end] = true;
+  }
+  const flagged = list.map((b, i) =>
+    open[i]![0] || open[i]![1] ? { ...b, flags: b.flags | (open[i]![0] ? OPEN_A : 0) | (open[i]![1] ? OPEN_B : 0) } : b,
+  );
+  // (the paired ends' flags as written: a pair joinBridgeHalves did not join — a third end nearer — goes back to an abutment)
+  const joined = joinBridgeHalves(flagged, maxDistM).map((b) => {
+    const orig = list.find((o) => o.id === b.id && o.points[0] === b.points[0]) ?? list.find((o) => o.points[0] === b.points[0]);
+    return orig && orig.points.length === b.points.length ? { ...b, flags: orig.flags } : b;
+  });
+  // (2) the branches: a closed end on another deck's axis (its segments' grid), away from that deck's own ends
+  const segCell = 40;
+  const segs = new Map<string, { j: number; a: [number, number]; b: [number, number] }[]>();
+  joined.forEach((b, j) => {
+    for (let k = 1; k < b.points.length; k++) {
+      const a = xy(b.points[k - 1]!),
+        c = xy(b.points[k]!);
+      const x0 = Math.floor((Math.min(a[0], c[0]) - maxDistM) / segCell),
+        x1 = Math.floor((Math.max(a[0], c[0]) + maxDistM) / segCell),
+        y0 = Math.floor((Math.min(a[1], c[1]) - maxDistM) / segCell),
+        y1 = Math.floor((Math.max(a[1], c[1]) + maxDistM) / segCell);
+      for (let gx = x0; gx <= x1; gx++)
+        for (let gy = y0; gy <= y1; gy++) {
+          const kk = `${gx},${gy}`;
+          (segs.get(kk) ?? segs.set(kk, []).get(kk)!).push({ j, a, b: c });
+        }
+    }
+  });
+  const onAxis = (i: number, p: Wgs84Point) => {
+    const [x, y] = xy(p);
+    for (const s of segs.get(`${Math.floor(x / segCell)},${Math.floor(y / segCell)}`) ?? []) {
+      if (s.j === i) continue;
+      const o = joined[s.j]!,
+        me = joined[i]!;
+      if (o.kind !== me.kind || o.layer !== me.layer) continue;
+      const dx = s.b[0] - s.a[0],
+        dy = s.b[1] - s.a[1];
+      const t = Math.max(0, Math.min(1, ((x - s.a[0]) * dx + (y - s.a[1]) * dy) / Math.max(dx * dx + dy * dy, 1e-9)));
+      if (Math.hypot(x - s.a[0] - t * dx, y - s.a[1] - t * dy) > maxDistM) continue;
+      // (not at that deck's own end — two ends that met are (1)'s; an end near another's end is its abutment's neighbour, not a branch)
+      const [ex0, ey0] = xy(o.points[0]!),
+        [ex1, ey1] = xy(o.points[o.points.length - 1]!);
+      if (Math.hypot(x - ex0, y - ey0) <= maxDistM || Math.hypot(x - ex1, y - ey1) <= maxDistM) continue;
+      return true;
+    }
+    return false;
+  };
+  return joined.map((b, i) => ({
+    bridge: b,
+    branchA: !(b.flags & OPEN_A) && b.points.length >= 2 && onAxis(i, b.points[0]!),
+    branchB: !(b.flags & OPEN_B) && b.points.length >= 2 && onAxis(i, b.points[b.points.length - 1]!),
+  }));
+}
+
+/** (25 Nov 2026) an open end's partner past the edge: along its way within this [m], this far across it at most [m] */
+export const HALF_GAP_M = 80;
+export const HALF_SIDE_M = 2.5;
+
+/**
+ * (25 Nov 2026 — Pont de Cheviré, campaign 2: its halves 30 m apart along the deck at the z 14 edge, never joined within 3 m) Two halves
+ * of a bridge whose open ends do not meet: each tile's line is clipped with its own margin and its segments kept by their middles, so
+ * one half runs past the edge over the other (an overlap) or stops short of it (a gap) by up to a segment. An open end B of one (its way
+ * out `d`) and an open end A of another — the same kind and layer, the second's way out against the first's, its point within
+ * HALF_SIDE_M of the first's line and HALF_GAP_M along it either way — are spliced: the first's points past the second's open point
+ * dropped (an overlap), then the second's. The pair nearest along first; one pair a call (joinBridgeHalves calls again). Null: none.
+ */
+export function spliceOpenHalves(list: readonly GeoBridge[]): GeoBridge[] | null {
+  const lat0 = list[0]?.points[0]?.lat ?? 0;
+  const cosL = Math.cos((lat0 * Math.PI) / 180);
+  const xy = (p: Wgs84Point): [number, number] => [p.lon * 111_320 * cosL, p.lat * 111_132];
+  // (each open end oriented as an end B: its point, its way out)
+  type End = { i: number; end: 0 | 1; p: [number, number]; d: [number, number] };
+  const ends: End[] = [];
+  list.forEach((b, i) => {
+    if (b.points.length < 2) return;
+    for (const end of [0, 1] as const) {
+      if (!(b.flags & (end ? OPEN_B : OPEN_A))) continue;
+      const p = xy(end ? b.points[b.points.length - 1]! : b.points[0]!),
+        q = xy(end ? b.points[b.points.length - 2]! : b.points[1]!);
+      const L = Math.hypot(p[0] - q[0], p[1] - q[1]) || 1;
+      ends.push({ i, end, p, d: [(p[0] - q[0]) / L, (p[1] - q[1]) / L] });
+    }
+  });
+  let best: { a: End; b: End; along: number } | null = null;
+  for (const a of ends)
+    for (const b of ends) {
+      if (a.i === b.i) continue;
+      const A = list[a.i]!,
+        B = list[b.i]!;
+      if (A.kind !== B.kind || A.layer !== B.layer) continue;
+      if (a.d[0] * b.d[0] + a.d[1] * b.d[1] > -0.8) continue;
+      const along = (b.p[0] - a.p[0]) * a.d[0] + (b.p[1] - a.p[1]) * a.d[1],
+        side = Math.abs((b.p[0] - a.p[0]) * a.d[1] - (b.p[1] - a.p[1]) * a.d[0]);
+      if (Math.abs(along) > HALF_GAP_M || side > HALF_SIDE_M) continue;
+      if (!best || Math.abs(along) < Math.abs(best.along)) best = { a, b, along };
+    }
+  if (!best) return null;
+  const { a, b } = best;
+  // (the first oriented to end at its open B, the second to start at its open A)
+  const A = a.end === 1 ? list[a.i]! : reversed(list[a.i]!);
+  const B = b.end === 0 ? list[b.i]! : reversed(list[b.i]!);
+  const q = xy(B.points[0]!);
+  // (the first's points past the second's open point — along the first's way out — dropped: the overlap)
+  let keep = A.points.length;
+  while (keep > 1) {
+    const p = xy(A.points[keep - 1]!);
+    if ((p[0] - q[0]) * a.d[0] + (p[1] - q[1]) * a.d[1] <= 0) break;
+    keep--;
+  }
+  const hA = A.heights ?? A.points.map(() => Number.NaN),
+    hB = B.heights ?? B.points.map(() => Number.NaN);
+  const joined: GeoBridge = {
+    id: Math.min(A.id >>> 0, B.id >>> 0),
+    kind: A.kind,
+    flags: ((A.flags | B.flags) & ~(OPEN_A | OPEN_B)) | (A.flags & OPEN_A) | (B.flags & OPEN_B),
+    width: Math.max(A.width, B.width),
+    layer: A.layer,
+    crossed: A.crossed | B.crossed,
+    clearance: Math.max(A.clearance, B.clearance),
+    points: [...A.points.slice(0, keep), ...B.points],
+    ...(A.heights || B.heights ? { heights: [...hA.slice(0, keep), ...hB] } : {}),
+  };
+  return [...list.filter((_, i) => i !== a.i && i !== b.i), joined];
 }

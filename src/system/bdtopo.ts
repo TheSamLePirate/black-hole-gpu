@@ -70,3 +70,61 @@ export function clipRing(ring: Point[], e: number): Point[] {
   if (pts.length < 3) return [];
   return [...pts, pts[0]!];
 }
+
+// (PLAN-PONT-ROUTES-AAA, the bridges' real decks — 25 Nov 2026) The BD TOPO's sections carry a 3D geometry — each vertex's altitude
+// over the IGN69 levelling (the sea's, mean sea level: the geoid's N to add for the ellipsoid) —, but its vector tiles (the TMS above)
+// are 2D: their properties name the altimetric method (« Z corrigé ») and precision, never the heights. The Géoplateforme's WFS hands
+// the same sections with their Z (GeoJSON [lon, lat, z]; -1000 where the survey has none). One request a z 14 tile — the street
+// cells' preparation unit — for the sections over the ground (bridges: position_par_rapport_au_sol > 0), roads and railways together,
+// their cleabs and geometry alone: ~10–35 kB in a city (Nantes 13 kB, central Paris 35 kB for 88 sections), none in the country.
+// Read on 24 Nov 2026: Pont de Cheviré's three sections rise 10 → 60.7 → 10 m over 1.5 km, continuous from one section to the next.
+
+/** the BD TOPO's bridge sections with their heights over a z 14 tile (the WFS: GeoJSON, both typenames in one query) */
+export function bdtopoDecksUrl(x14: number, y14: number): string {
+  const n = 2 ** 14;
+  const lat = (t: number) => Math.atan(Math.sinh(Math.PI * (1 - (2 * t) / n))) / (Math.PI / 180);
+  const w = ((x14 / n) * 360 - 180).toFixed(6),
+    e = (((x14 + 1) / n) * 360 - 180).toFixed(6),
+    no = lat(y14).toFixed(6),
+    s = lat(y14 + 1).toFixed(6);
+  // (CQL's BBOX in EPSG:4326's own axis order: latitude first)
+  const f = encodeURIComponent(`position_par_rapport_au_sol>'0' AND BBOX(geometrie,${s},${w},${no},${e})`);
+  return (
+    "https://data.geopf.fr/wfs/ows?SERVICE=WFS&VERSION=2.0.0&REQUEST=GetFeature" +
+    "&TYPENAMES=(BDTOPO_V3:troncon_de_route)(BDTOPO_V3:troncon_de_voie_ferree)&OUTPUTFORMAT=application/json" +
+    `&PROPERTYNAME=(cleabs,geometrie)(cleabs,geometrie)&CQL_FILTER=${f};${f}`
+  );
+}
+
+/** a section's vertices: longitude, latitude [°], its altitude over the sea [m] (NaN: none surveyed) */
+export type DeckLine = [number, number, number][];
+
+/**
+ * The WFS's answer as each section's 3D lines by its cleabs (the vector tiles' own identity): the survey's -1000 (and any absurd
+ * value: under -50 m or over 9 000 m) taken as none (NaN). A section with no height at all is left out. Malformed: an empty map.
+ */
+export function parseBdtopoDecks(json: unknown): Map<string, DeckLine[]> {
+  const out = new Map<string, DeckLine[]>();
+  const feats = (json as { features?: unknown } | null)?.features;
+  if (!Array.isArray(feats)) return out;
+  for (const f of feats as { properties?: { cleabs?: unknown }; geometry?: { type?: string; coordinates?: unknown } }[]) {
+    const id = typeof f?.properties?.cleabs === "string" ? f.properties.cleabs : null;
+    const g = f?.geometry;
+    if (!id || !g) continue;
+    const lines = (
+      g.type === "LineString" ? [g.coordinates] : g.type === "MultiLineString" ? (g.coordinates as unknown[]) : []
+    ) as unknown[];
+    for (const line of lines) {
+      if (!Array.isArray(line)) continue;
+      const pts: DeckLine = [];
+      for (const c of line as unknown[]) {
+        if (!Array.isArray(c) || typeof c[0] !== "number" || typeof c[1] !== "number") continue;
+        const z = typeof c[2] === "number" && c[2] > -50 && c[2] < 9000 ? c[2] : Number.NaN;
+        pts.push([c[0], c[1], z]);
+      }
+      if (pts.length < 2 || !pts.some((p) => Number.isFinite(p[2]))) continue;
+      (out.get(id) ?? out.set(id, []).get(id)!).push(pts);
+    }
+  }
+  return out;
+}

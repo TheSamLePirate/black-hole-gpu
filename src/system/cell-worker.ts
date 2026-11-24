@@ -7,7 +7,7 @@
 // "street"} — the cell « rue » (street-prep.ts): OpenMapTiles' z 14 tile, the four building cells under it (from the prepared cache, or
 // prepared now), its four street cells put in their cache (kerr-street-v<format>), the asked one handed. PLAN-J8 J8-8: {…, kind: "mesh"} —
 // the near buildings' mesh cell (mesh-prep.ts), kept in kerr-mesh-v<format>.
-import { bdtopoUrl } from "./bdtopo";
+import { bdtopoDecksUrl, bdtopoUrl, type DeckLine, parseBdtopoDecks } from "./bdtopo";
 import { inBdtopoBox, overtureCell, overtureTile } from "./cell-overture";
 import { prepareOvertureCells } from "./cell-prep-overture";
 import { CellSource, readHeader } from "./building-cells";
@@ -22,7 +22,7 @@ import { blockSides, blocksWithin, CANOPY_Z, IGN_MNH, IgnLand, inIgnBox } from "
 import { encodeMeshCell, MESH_CACHE, meshCacheUrl, MeshCellFlag, readMeshHeader } from "./mesh-cells";
 import { prepareMeshCell, prepareOvertureMeshCells } from "./mesh-prep";
 import { STREET_CACHE, streetCacheUrl, streetRoadsUrl } from "./street-cells";
-import { prepareStreetCells } from "./street-prep";
+import { bdtopoHasBridges, prepareStreetCells } from "./street-prep";
 import { bdtopoOwned } from "./cell-prep";
 import { overtureOwned } from "./cell-prep-overture";
 import { FOREST_CACHE, forestCacheUrl } from "./forest-cells";
@@ -312,6 +312,16 @@ async function streetCell(x: number, y: number, signal: AbortSignal): Promise<{ 
       /* its roads OpenMapTiles' */
     }
   }
+  // (format 6, 25 Nov 2026: where those tiles hold a bridge's section, their surveyed heights — the WFS's 3D lines over the z 14
+  // tile, one request, through the Service Worker's cache as a tile; none, or a failure: the bridges' profiles by their clearance)
+  let decks: Map<string, DeckLine[]> | null = null;
+  if ([...bd.values()].some(bdtopoHasBridges))
+    try {
+      const t = await fetch(bdtopoDecksUrl(x14, y14), { signal });
+      if (t.ok) decks = parseBdtopoDecks(await t.json());
+    } catch {
+      /* none: by their clearance */
+    }
   // (the roads' revision: the response's Last-Modified day, else none)
   const lm = Date.parse(r.headers.get("last-modified") ?? "");
   const day = Number.isFinite(lm) ? Number(new Date(lm).toISOString().slice(0, 10).replaceAll("-", "")) : 0;
@@ -322,6 +332,8 @@ async function streetCell(x: number, y: number, signal: AbortSignal): Promise<{ 
     (cx, cy) => built.get(`${cx}/${cy}`) ?? null,
     day,
     (cx, cy) => bd.get(`${cx}/${cy}`) ?? null,
+    false,
+    decks,
   );
   for (const c of cells) await keep(STREET_CACHE, streetCacheUrl(self.location.origin, c.x, c.y), c.buf);
   const mine = cells.find((c) => c.x === x && c.y === y)!;

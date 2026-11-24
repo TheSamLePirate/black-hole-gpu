@@ -51,6 +51,15 @@ export function classify(url: string, scope: string, method = "GET", dirs: reado
   if (u.hostname === "data.geopf.fr" && u.pathname === "/wms-r" && u.searchParams.get("REQUEST") === "GetMap") return "tile";
   // (and its buildings — the BD TOPO, I5 —: the vector tiles of its TMS)
   if (u.hostname === "data.geopf.fr" && u.pathname.startsWith("/tms/1.0.0/BDTOPO/")) return "tile";
+  // (and its bridges' surveyed heights — the WFS's 3D sections over a z 14 tile, street cells' format 6 (bdtopo.ts bdtopoDecksUrl) —:
+  // kept as a tile, a zone's too)
+  if (
+    u.hostname === "data.geopf.fr" &&
+    u.pathname === "/wfs/ows" &&
+    u.searchParams.get("REQUEST") === "GetFeature" &&
+    (u.searchParams.get("TYPENAMES") ?? "").includes("BDTOPO_V3:troncon_de_route")
+  )
+    return "tile";
   // (swisstopo's over Switzerland — I7 —: SWISSIMAGE's WMTS tiles, the terrain service's meshes)
   if (u.hostname === "wmts.geo.admin.ch" && u.pathname.startsWith("/1.0.0/ch.swisstopo.swissimage/")) return "tile";
   if (u.hostname === "3d.geo.admin.ch" && u.pathname.startsWith("/ch.swisstopo.terrain.3d/") && u.pathname.endsWith(".terrain"))
