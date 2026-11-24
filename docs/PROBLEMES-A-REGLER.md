@@ -21,7 +21,17 @@ connue ou supposée, la piste. Une entrée réglée est barrée avec le commit q
   escalier (imposteurs lointains ou couche lointaine ?) masquent une partie de la tour. Non diagnostiqué.
 - **Rues de Paris** (`paris-wet-street-dry.png`, `grenelle-deck-low.png`) : de fines lignes claires courbes traversent la chaussée (bords
   de voies d'un carrefour ?) ; le relief herbeux déborde sur le trottoir le long des façades (nivellement `roadBank` sans lecteur, déjà noté
-  plus bas). Sur l'approche du pont Alexandre III, un marquage en boucle fermée au milieu de la chaussée (`alexandre-iii-deck-low.png`).
+  plus bas). ~~Sur l'approche du pont Alexandre III, un marquage en boucle fermée au milieu de la chaussée (`alexandre-iii-deck-low.png`).~~
+  **Réglé par ffbecf26** (24 nov. 2026, soir), avec les chaînes d'anneaux blancs des bretelles de SFO (`traffic-runways`,
+  `parked-above.png`) : `scenerySurface` gardait, entre segments égaux, le premier rencontré ; la bande d'un segment finit en
+  demi-disques, et les morceaux de 1–2 m des courbes B2 et des fins de lignes aux carrefours peignaient leurs lignes autour de leurs
+  bouts (cercles de rive, boucles des lignes de voie). Le plus profond dans sa bande gagne désormais (l'axe le plus proche) ;
+  la peinture gardée à part (RP1) est celle de la route gagnante. Vu sur kerr-mini avant/après au même point de vue
+  (`docs/progress/campagne-e2e-2026-11-24/marquages-sfo-{avant,apres}.jpg`, `marquages-alexandre-iii-{avant,apres}.jpg`). Les
+  « fines lignes claires courbes » des rues de Paris sont probablement la même cause (bords de lignes autour des bouts de morceaux) :
+  **non revu**. Reste ouvert : un passage piéton (genre 5) a des bouts arrondis — une pilule zébrée à l'approche du pont
+  (`marquages-alexandre-iii-apres.jpg`) : sa bande finit aussi en demi-disques (piste : couper la couverture d'un genre 5 hors de
+  son segment, `along` non borné).
 - **Pont Alexandre III** : classé `monumental_alexandre_iii` (tablier lu : 150 × 24 m, à 15 m du point du classement ; l'arc sous le tablier
   présent dans le contact) ; ses quatre pylônes sont des pavés unis, l'arc à peine visible depuis la Seine à 120 m (`alexandre-iii.png`).
 - **Scène pleine à San Francisco** : ~108 s de construction sur kerr-mini (étape « forest », les collines de Marin), faite deux fois à la
@@ -102,7 +112,24 @@ connue ou supposée, la piste. Une entrée réglée est barrée avec le commit q
 - **Correction** : E11 avant le temporel, son mouvement écrit (marque w 1 ; le marcheur au même pixel, l'herbe reprojetée par le sol).
   Vérifié en image ici (walk-raster, `WALK_SPOTS` 45,80 ; 6,98) : astronaute opaque, herbe et pierres présentes.
 
-## Trafic réel au sol invisible vu d'au-dessus en caméra libre (relevé le 24 novembre 2026, e2e `traffic-runways`, ce Mac)
+## ~~Trafic réel au sol invisible vu d'au-dessus en caméra libre~~ (relevé le 24 novembre 2026, e2e `traffic-runways`, ce Mac) — pas un défaut du rendu : le placement du test, corrigé le même jour
+
+- **Cause établie (24 nov. 2026, soir)** : les trois avions « au parking » du test n'étaient pas sur l'aire de trafic. E2EP01
+  (37,6152 N, −122,39) était à 4,7 m de l'axe de la route « Arrivals » de l'aérogare internationale et à 6,4 m d'un tronçon en
+  pont de niveau 2 (le tablier des départs) — OpenStreetMap, Overpass — ; E2EP03 (37,6143 N, −122,3887) dans le bâtiment de
+  liaison de la jetée A. Le tablier et le bâtiment les cachaient, à juste titre (sur `parked-above.png` de
+  `20261124-190941-traffic-runways-main`, seule la dérive d'E2EP01 dépasse du tablier ; les feux, dessinés sans test
+  d'occultation, restaient). Le chemin `shipInScene = false` les montrait parce qu'il ne dessine pas la scène (image noire,
+  `parked-above-noscene.jpg`) : rien n'y occulte — la comparaison ne disait rien du test `far` de `ship.wgsl`.
+- **Correction** : le test les place aux postes G2, G5 et G6 d'OpenStreetMap (aire de la jetée G, cap d'entrée) et vérifie
+  qu'aucun n'est sur une route des cellules « rue » du jeu (axe à plus de 2 m de la chaussée ; mesuré 12,1–13,6 m, le plus proche
+  un chemin de 2 m — la passerelle). Vus d'au-dessus avec le sol derrière, les trois sont dessinés entiers sur le chemin « dans la
+  scène » (kerr-mini, `20261124-194524-trw-after-3`, `docs/progress/campagne-e2e-2026-11-24/trafic-sfo-parking-apres.jpg`
+  contre `…-avant.jpg`). Aucun code du rendu changé ; `sceneDepth` sous l'avion non relevé numériquement (pas d'accès `__bh`).
+- Reste : la caméra libre basse au-dessus de SFO dessine encore la mer sur l'aérodrome tant que le relief n'est pas arrivé (relevé
+  initial, non revu).
+
+Relevé initial :
 
 - **Constat** : les avions de ligne au sol (ou bas), placés juste (roues sur le sol de contact ± 0,5 m, `sys.groundAt`), ne sont pas
   dessinés quand la caméra libre les voit d'en haut avec le sol derrière : leurs feux et étiquettes seuls

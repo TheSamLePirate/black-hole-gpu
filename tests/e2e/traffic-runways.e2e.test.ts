@@ -1,6 +1,8 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { runwayFrame } from "../../src/game/sites";
+import { cellOf, cellOrigin, toCell } from "../../src/system/building-cells";
 import { cartToGeodetic, geodeticToCart, WGS84_A, WGS84_F } from "../../src/system/ellipsoid";
+import { readSegment, readStreetHeader, SegmentFlag, STREET_CACHE, streetCacheUrl } from "../../src/system/street-cells";
 import { type Way, waysOf } from "../../src/traffic/landing";
 import { App, E2E, stopServer } from "./lib/app";
 
@@ -10,7 +12,8 @@ import { App, E2E, stopServer } from "./lib/app";
 // live feed set aside; the traffic's clock the test's): one landing on 28L reported 30 m off its axis and 25 m high, one taking off
 // from 01R 15 m off, its climb 20 m high, three parked at the gates. Each framed by the camera beside it at the moment judged: on
 // short final (on the axis, gear down), rolled out (on the runway, its wheels on its graded level), lifting off (gear down), climbing
-// past 150 m (gear wanted up, then up), parked (on the ground, not under it) — the A320's rig drawn near the view (its gear).
+// past 150 m (gear wanted up, then up), parked (on the ground, not under it, at OSM's G stands on the apron — off every road of the
+// game's street cells) — the A320's rig drawn near the view (its gear).
 // Steps: 1 boot · 2 the free camera at SFO, its runways and ground in · 3 the airliners made up · 4 landing: short final · 5 landing:
 // rolled out · 6 take-off: lift-off · 7 take-off: gear up · 8 parked. Shots in TRW_OUT (remote-results/traffic-runways): final,
 // rollout, liftoff, gearup, parked.
@@ -97,12 +100,17 @@ function takeoff(G: number): Plane[] {
   }
   return out;
 }
-/** three parked at the international terminal's gates (N796UA's place, 24 Nov 2026, and two beside), on the ground */
+/** three parked at the international terminal's boarding area G, on its apron: OpenStreetMap's parking positions G2, G5, G6 (their
+ *  lead-in lines' stop, 18 m back along them, the nose on their heading in — Overpass, 24 Nov 2026). Until 24 Nov 2026 they stood at
+ *  N796UA's reported place and two beside — on the landside « Arrivals » road under the departures' deck and inside boarding area A's
+ *  connector: the deck and the building hid them (parked-above.png), read then as an occlusion fault of the traffic's meshes. */
 const PARKED = [
-  { id: "e2ep01", lat: 37.6152, lon: -122.39, hdg: 280 },
-  { id: "e2ep02", lat: 37.6162, lon: -122.3912, hdg: 190 },
-  { id: "e2ep03", lat: 37.6143, lon: -122.3887, hdg: 10 },
+  { id: "e2ep01", lat: 37.61795, lon: -122.390384, hdg: 207 },
+  { id: "e2ep02", lat: 37.618255, lon: -122.391106, hdg: 207 },
+  { id: "e2ep03", lat: 37.618556, lon: -122.391837, hdg: 208 },
 ];
+/** a parked airliner's clearance from the roads: its fuselage's half-width [m] — its origin this far off any road's carriageway */
+const ROAD_CLEAR_M = 2;
 
 /** the moments judged [s after T0]: short final (a ≈ −600 m), rolled out, lift-off + 3 s, gear up, parked */
 const FINAL = (9000 - 600) / 70;
@@ -172,6 +180,50 @@ describe.skipIf(!E2E)("the real traffic on the game's runways: on them, never un
       lon = g.lon / D;
     const ground = await app.js<number>(`__bh.sys.groundAt(${lat}, ${lon})`);
     return { lat, lon, h: g.h, ground };
+  };
+  /** the street cells' nearest road to a place (the game's own: the scene's roads, decks included, tunnels and railways not): its
+   *  axis's distance less its half-width [m] — negative on it —, and which. The cells about it asked of the streets' pool (the scene
+   *  asks them too), read from their cache. */
+  const roadClearance = async (lat: number, lon: number) => {
+    const keys = new Map<string, { x: number; y: number }>();
+    for (const [de, dn] of [
+      [0, 0],
+      [-60, 0],
+      [60, 0],
+      [0, -60],
+      [0, 60],
+    ] as const) {
+      const c = cellOf(lat + dn / 111_000, lon + de / (111_000 * Math.cos(lat * D)));
+      keys.set(`${c.x}/${c.y}`, c);
+    }
+    const cells = [...keys.values()];
+    await app.js(`(() => { __bh.sys.streets.want(${JSON.stringify(cells.map((c) => ({ ...c, priority: 0, d: 0 })))}); return 1; })()`);
+    let best = { clear: Number.POSITIVE_INFINITY, what: "none" };
+    for (const c of cells) {
+      const path = streetCacheUrl("", c.x, c.y);
+      const b64 = await app.waitFor(
+        `(async () => { const r = await (await caches.open("${STREET_CACHE}")).match(location.origin + "${path}"); if (!r) return null;
+          const b = new Uint8Array(await r.arrayBuffer()); let s = ""; for (let i = 0; i < b.length; i += 8192) s += String.fromCharCode(...b.subarray(i, i + 8192));
+          return btoa(s); })()`,
+        60_000,
+      );
+      const bytes = Buffer.from(String(b64), "base64");
+      const buf = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer;
+      const h = readStreetHeader(buf);
+      if (!h) continue;
+      const p = toCell(cellOrigin(c.x, c.y), lat, lon);
+      for (let i = 0; i < h.segmentCount; i++) {
+        const s = readSegment(buf, i);
+        if (s.cls === "rail" || s.flags & SegmentFlag.Tunnel) continue;
+        const dx = s.b[0] - s.a[0],
+          dy = s.b[1] - s.a[1];
+        const t = Math.max(0, Math.min(1, ((p.east - s.a[0]) * dx + (p.north - s.a[1]) * dy) / Math.max(dx * dx + dy * dy, 1e-9)));
+        const clear = Math.hypot(p.east - s.a[0] - dx * t, p.north - s.a[1] - dy * t) - s.width / 2;
+        if (clear < best.clear)
+          best = { clear, what: `${s.cls} ${s.width.toFixed(1)} m${s.flags & SegmentFlag.Bridge ? " (deck)" : ""}, cell ${c.x}/${c.y}` };
+      }
+    }
+    return best;
   };
   /** the rigged A320 drawn for it: its gear's position as drawn (null: none rigged near the view) */
   const rigGear = () =>
@@ -350,13 +402,19 @@ describe.skipIf(!E2E)("the real traffic on the game's runways: on them, never un
     await app.step("parked");
     await app.scenario("parked at the gates");
     c = (await craft("e2ep01"))!;
-    await frameOn(c, 150, 0.5, 1.5);
+    // (from the apron's side, its tail to the camera's left: turned 150° the camera stood behind pier G's building)
+    await frameOn(c, -30, 0.5, 1.5);
     await runTo(GEARUP + 2);
     const rows: string[] = [];
     for (const q of PARKED) {
       const k = (await craft(q.id))!;
       const v = await under(k);
-      rows.push(`${q.id} ${k.phase} gnd ${k.gnd} origin ${(v.h - v.ground).toFixed(2)} m over the ground, gear ${k.gear}`);
+      // (on the apron, not on a road: its place off every road's carriageway in the game's street cells)
+      const road = await roadClearance(q.lat, q.lon);
+      rows.push(
+        `${q.id} ${k.phase} gnd ${k.gnd} origin ${(v.h - v.ground).toFixed(2)} m over the ground, gear ${k.gear}, nearest road ${road.clear.toFixed(1)} m off (${road.what})`,
+      );
+      expect(road.clear).toBeGreaterThan(ROAD_CLEAR_M);
       expect(k.gnd).toBe(true);
       expect(k.phase).toBe("parked");
       expect(Math.abs(v.h - v.ground - WHEELS)).toBeLessThan(0.5);
@@ -364,9 +422,9 @@ describe.skipIf(!E2E)("the real traffic on the game's runways: on them, never un
     }
     await app.shot(`${OUT}/parked.png`);
     console.log(`  parked: ${rows.join(" | ")}`);
-    // (a diagnostic, not judged: seen from above with the ground behind, a traffic mesh near the ground was hidden by the
-    // occlusion test, its lights shown — the same view from 40 m up, then without the craft drawn into the scene)
-    await frameOn(c, 150, -15, 1.5);
+    // (a diagnostic, not judged: seen from above with the ground behind, the same view from 40 m up, then without the craft drawn into
+    // the scene — until 24 Nov 2026 the parked ones stood under the landside deck and in a building, hidden by them, their lights shown)
+    await frameOn(c, -30, -15, 1.5);
     await app.shot(`${OUT}/parked-above.png`);
     await app.js(`(() => { __bh.renderer.shipInScene = false; __bh.touch(); return 1; })()`);
     await app.shot(`${OUT}/parked-above-noscene.png`);
