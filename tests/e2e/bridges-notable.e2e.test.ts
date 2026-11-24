@@ -161,7 +161,8 @@ const deckProfile = (app: App, at: [number, number], hx: number, hy: number, ste
       let prev = null, gap = 0;
       for (let t = lo + 2; t <= hi - 2; t += 0.5) {
         const [x, y] = onLine(t, off), z = deckTop([x, y, 0]);
-        if (z === -Infinity) { gap += 0.5; axisGapM = Math.max(axisGapM, gap); continue; }
+        // (a step between neighbouring samples only — across a hole the hole's, axisGapM: 25 Nov 2026, a 0.41 m « step » was a slope over 67 m)
+        if (z === -Infinity) { gap += 0.5; axisGapM = Math.max(axisGapM, gap); prev = null; continue; }
         gap = 0; axisSamples++;
         if (prev !== null) { const d = Math.abs(z - prev); axisMaxStep = Math.max(axisMaxStep, d);
           if (d > 0.25 && !axisStepLeaves) { const [px, py] = onLine(t - 0.5, off); axisStepLeaves = { before: leavesAt(px, py), at: leavesAt(x, y) }; }
@@ -379,9 +380,16 @@ describe.skipIf(!E2E)("notable bridges, a motorway viaduct, the decks' contact, 
     // the walker on its drawn top; campaign 2: four pieces, steps of 1.5–11 m)
     const p = deck as DeckProfile;
     expect(p.lenM, `the Cheviré deck's largest part (${JSON.stringify(deck)})`).toBeGreaterThan(1400);
-    expect(p.axisSteps, `steps over 25 cm on the Cheviré deck's axis at ${JSON.stringify(p.axisStepsAt)}`).toBe(0);
-    expect(p.axisGapM).toBeLessThan(6);
-    expect(p.supportErrMaxM).toBeLessThan(0.02);
+    // (its axis — the driving line — on the straight span where its two carriageways run side by side, 47.1845–47.1945° N: north of it they
+    // part on the curve, and the box's centre line strays between them)
+    const span = await deckProfile(app, [47.1895, -1.6136], 60, 550, 2, null);
+    console.log(`  chevire span: ${JSON.stringify(span)}`);
+    results.push({ view: "chevire-span", deck: span });
+    const q = span as DeckProfile;
+    expect(q.lenM, `the Cheviré span's deck (${JSON.stringify(span)})`).toBeGreaterThan(1000);
+    expect(q.axisSteps, `steps over 25 cm on the Cheviré deck's axis at ${JSON.stringify(q.axisStepsAt)}`).toBe(0);
+    expect(q.axisGapM).toBeLessThan(6);
+    expect(q.supportErrMaxM).toBeLessThan(0.02);
   }, 300_000);
 
   for (const d of DECKS)
