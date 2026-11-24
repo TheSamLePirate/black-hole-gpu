@@ -415,7 +415,9 @@ export async function resolveWispTarget(
     return { refused: "unreachable" };
   }
   if (!list.length) return { refused: "unreachable" };
-  for (const entry of list) {
+  // (IPv4 first: a container often has no IPv6 route out; the order is otherwise the resolver's)
+  const ordered = [...list.filter((e) => !e.address.includes(":")), ...list.filter((e) => e.address.includes(":"))];
+  for (const entry of ordered) {
     const e = classifyHost(entry.address);
     if ((e.kind === "ipv4" || e.kind === "ipv6") && addressAllowed(loop, e.text)) {
       return { address: e.text, family: e.kind === "ipv4" ? 4 : 6 };
