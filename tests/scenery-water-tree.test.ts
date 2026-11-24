@@ -162,3 +162,41 @@ test("the surfaces' walk reads a large water polygon's band — its record's ban
   // (nearly every point inside the river's height read from a band)
   expect(banded).toBeGreaterThan(3000);
 });
+
+test("a large paved polygon's bands after the scene's bytes — the same answer (perf 24 Nov 2026)", () => {
+  // (a ragged pedestrian area: 200 edges a side — its bands appended after the scene's bytes)
+  const ring: [number, number, number][] = [];
+  for (let i = 0; i <= 200; i++) ring.push([i * 2, 15 * Math.sin(i * 0.41), 0]);
+  for (let i = 200; i >= 0; i--) ring.push([i * 2, 120 + 12 * Math.cos(i * 0.29), 0]);
+  ring.push(ring[0]!);
+  const square = polygonPrimitive([ring], 0, 0, 5, [0.12, 0.12, 0.115])!;
+  const road = surfaceSegment([0, -100, 0], [200, -100, 0], 9, 1, [0.3, 0.3, 0.3]);
+  const f = new Float32Array(packScenery([], new Uint32Array(16), [road, square], undefined, 4));
+  const [surfAt, surfNodes, surfGeom] = [f[4]!, f[5]!, f[6]!];
+  let base = -1;
+  for (let i = 0; i < surfNodes; i++) {
+    const leaf = f[(surfAt + i * 2 + 1) * 4 + 3]!;
+    if (leaf >= 0 && f[(surfGeom + leaf) * 4 + 11]! > 0.5) base = surfGeom + leaf;
+  }
+  expect(f[base * 4]!).toBeLessThan(-1e6);
+  // (its table past the whole record — after the scene's bytes)
+  expect(surfGeom + f[base * 4 + 1]!).toBeGreaterThan(base);
+  const rec = (b: number) => Array.from(f.subarray(b * 4, b * 4 + 12 + 4 * f[b * 4 + 2]!));
+  let r = 11;
+  const rnd = () => (r = (r * 16807) % 2147483647) / 2147483647;
+  for (let k = 0; k < 4000; k++) {
+    const p: [number, number] = [Math.fround(-20 + rnd() * 440), Math.fround(-40 + rnd() * 200)];
+    const rb = surfaceRecord(f, p, base);
+    const d = rb < 0 ? null : rec(rb);
+    expect(d ? inside(d, p, d[2]!) : false).toBe(inside(square.data, p, square.data[2]!));
+  }
+  // (a budget short of the bands by a float: no room, the polygon left whole, the buffer within it)
+  const g = new Float32Array(packScenery([], new Uint32Array(16), [road, square], undefined, 4, f.byteLength - 4));
+  expect(g.byteLength).toBeLessThan(f.byteLength);
+  let whole = -1;
+  for (let i = 0; i < g[5]!; i++) {
+    const leaf = g[(g[4]! + i * 2 + 1) * 4 + 3]!;
+    if (leaf >= 0 && g[(g[6]! + leaf) * 4 + 11]! > 0.5) whole = g[6]! + leaf;
+  }
+  expect(g[whole * 4]!).toBe(0);
+});

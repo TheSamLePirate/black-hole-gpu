@@ -223,7 +223,7 @@ function sceneryBVH(prims: Primitive[], placed?: Map<Primitive, number>) {
 }
 /** a surface of water: a polygon of kind 4 (its colour's w the outer ring's edges), a line of kind 3 (scenery-geometry.ts) */
 const isWater = (p: Primitive) => (p.data[11]! > 0.5 ? p.data[3] === 4 : p.data[5] === 3);
-/** a water polygon's edges at most a band (waterBands) */
+/** a large polygon's edges at most a band (waterBands: the water's, and for the surfaces' walk the other large ones') */
 const BAND_EDGES = 24;
 /** a banded polygon's first float: −(this + its bands' count) — trace.wgsl surfaceRecord; a flat surface's bottom never so low */
 export const BANDED = 1e6;
@@ -458,8 +458,31 @@ export function packScenery(
   // writes it in its visibility, shadeLite finds the building there, its walls' and roof's material — Q3, C0-10 —; a bridge's 0;
   // a wind turbine's TURBINE_TAG — Q8 D1)
   // (then a header (turbines, pylons, 0, 0), three vec4 a turbine, two a pylon — Q8 D1)
-  const bytes = (triangleOffset + triangleCount + 1 + 3 * turbines.length + 2 * pylons.length + 2 * cars.length) * 16;
-  if (bytes > budget) throw new Error("scenery budget exceeded");
+  const sceneBytes = (triangleOffset + triangleCount + 1 + 3 * turbines.length + 2 * pylons.length + 2 * cars.length) * 16;
+  if (sceneBytes > budget) throw new Error("scenery budget exceeded");
+  // (perf lot of 24 Nov 2026: the other large surface polygons — the paved areas', squares and pedestrian zones, 150–600 edges each over
+  // Paris, 77 000 in all about the rue de Rivoli — banded as the water's for the surfaces' walk (surfaceRecord), their bands and tables
+  // after the scene's bytes, the largest first, within the budget's room and a sixteenth of it at most — none beyond: the polygon whole)
+  const tail = sceneBytes / 16;
+  const extra: number[] = [];
+  const patches: number[] = [];
+  let room = Math.min(budget - sceneBytes, budget / 16) / 4;
+  const large = surfaces.filter((p) => p.data[11]! > 0.5 && !isWater(p) && p.data[2]! > BAND_EDGES).sort((a, b) => b.data[2]! - a.data[2]!);
+  for (const p of large) {
+    const parts = waterBands(p);
+    const size = parts.reduce((n, b) => n + b.data.length, 0) + Math.ceil(parts.length / 4) * 4;
+    if (parts.length < 2 || size > room) continue;
+    room -= size;
+    const at: number[] = [];
+    for (const b of parts) {
+      at.push(tail + extra.length / 4 - surfaceGeom);
+      for (const v of b.data) extra.push(v);
+    }
+    patches.push(surface.offsets.get(p)! * 4, -(BANDED + parts.length), tail + extra.length / 4 - surfaceGeom);
+    extra.push(...at);
+    while (extra.length % 4) extra.push(0);
+  }
+  const bytes = sceneBytes + extra.length * 4;
   const buffer = new ArrayBuffer(bytes),
     f = new Float32Array(buffer),
     u = new Uint32Array(buffer);
@@ -476,6 +499,11 @@ export function packScenery(
   f.set(surface.nodes, surfaceOffset * 4);
   f.set(surface.geometries, surfaceGeom * 4);
   f.set(bands, surfaceGeom * 4 + surface.geometries.length);
+  f.set(extra, tail * 4);
+  for (let i = 0; i < patches.length; i += 3) {
+    f[surfaceGeom * 4 + patches[i]!] = patches[i + 1]!;
+    f[surfaceGeom * 4 + patches[i]! + 1] = patches[i + 2]!;
+  }
   f.set(water.nodes, waterOffset * 4);
   u.set(pixels, pixelOffset * 4);
   if (decals) {
