@@ -164,6 +164,9 @@ export function predictEntry(
   let wasIn = false;
   const acc = (xq: V3, vq: V3, tq: number) => add(env.gravity(xq, vq), airAccel(env, c, xq, vq, bank(tq, xq, vq)).a);
   const airH = airTop(env.atm);
+  // (the air's acceleration at the step's end is the next step's k1: same t, x, v — kept, not evaluated twice;
+  // aeroForces is most of the cost, and the guidance runs a whole fall at each update)
+  let aEnd: V3 | null = null;
   for (let i = 0; i < 40000 && t < tMax; i++) {
     const sp = len(add(v, env.ground(x), -1));
     const h = heightOf(env, x);
@@ -172,7 +175,7 @@ export function predictEntry(
     let dt = h > airH ? Math.min(5, vr < 0 ? Math.max((h - airH) / -vr, 0.5) : 5) : Math.min(Math.max(1500 / Math.max(sp, 1), 0.1), 2);
     dt = Math.max(Math.min(dt, (0.1 * h) / Math.max(-vr, 1e-3) + 0.05), 0.02);
     // RK4
-    const k1v = acc(x, v, t),
+    const k1v = aEnd ? add(env.gravity(x, v), aEnd) : acc(x, v, t),
       k1x = v;
     const x2 = add(x, k1x, dt / 2),
       v2 = add(v, k1v, dt / 2);
@@ -189,11 +192,13 @@ export function predictEntry(
     x = [0, 1, 2].map((j) => x[j]! + (dt / 6) * (k1x[j]! + 2 * k2x[j]! + 2 * k3x[j]! + k4x[j]!)) as V3;
     v = [0, 1, 2].map((j) => v[j]! + (dt / 6) * (k1v[j]! + 2 * k2v[j]! + 2 * k3v[j]! + k4v[j]!)) as V3;
     t += dt;
-    const A = airAccel(env, c, x, v, bank(t, x, v));
+    const bEnd = bank(t, x, v);
+    const A = airAccel(env, c, x, v, bEnd);
+    aEnd = A.a;
     if (A.out) {
       wasIn = true;
       const va = add(v, env.ground(x), -1);
-      const ax = attitudeFor(x, va, c.alpha, bank(t, x, v), env.normal?.(x));
+      const ax = attitudeFor(x, va, c.alpha, bEnd, env.normal?.(x));
       const u = unit([dot(va, ax[0]), dot(va, ax[1]), dot(va, ax[2])]);
       skin = heatStep(c.aero, skin, airAt(env.atm, A.h), A.out, u, dt);
       res.heatPeak = Math.max(res.heatPeak, A.out.heat);

@@ -103,7 +103,9 @@ test("the guidance brings the handover over its aim — 400 km on and 120 km acr
   // (the handover the aim's 40 km short of the place: as far from it, whatever the track's curve)
   expect(Math.abs(m.dist - 40e3) / 1e3).toBeLessThan(10);
   expect(Math.abs(g.lastMiss!.along + 40e3) / 1e3).toBeLessThan(12);
-  // (can exceed 20 s under `--parallel` CPU contention on GitHub Actions runners — run 45150747415 hit 20.2 s)
+  // (the cost: 172 guidance updates — every 8 s of the fall —, each a whole predicted rest of the fall (RK4: aeroForces
+  // most of the time). 2.2–3.3 s on this Mac's M1 Max under load, 24 Nov 2026; the CI's runner under `--parallel`
+  // 20.2 s (run 45150747415, ~7× — the 2 s test's runner went 6× too): 60 s, three times the CI's worst)
 }, 60_000);
 
 test("the guidance updated every 2 s: a handful of bank reversals, the load under 2.5 g, the handover on its aim", () => {
@@ -173,7 +175,8 @@ test("the deorbit from a 400 km orbit: a burn found whose entry ends over the pl
   expect(Math.abs(plan!.miss.along + 40e3) / 1e3).toBeLessThan(5);
   // (the first pass whose crossrange the Ranger's lift reaches)
   expect(Math.abs(plan!.miss.across) / 1e3).toBeLessThan(600);
-}, 60_000);
+  // (0.8–1.0 s on an M1 Max, 24 Nov 2026; ~7 s at the CI's worst 7× — its 20 s never hit)
+}, 20000);
 
 /**
  * The Lander's deorbit and guided entry on a still Earth (no crossrange the ground's turning adds), the
