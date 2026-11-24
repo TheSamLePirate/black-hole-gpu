@@ -97,6 +97,7 @@ import {
   buildArchRibsMesh,
   classifyBridgeStructure,
   computeStructurePierLocations,
+  lineUnderDeck,
 } from "./bridge-structures";
 import { isDeckRoad, markRoad, roadClassCode } from "./road-markings";
 import { inferRoadSurface, type RoadSurface, roadSurfaceColour } from "./road-surface";
@@ -1529,6 +1530,12 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
   const notableDecks = new SupportSurfaceRegistry(),
     cellDecks = new SupportSurfaceRegistry();
   let deckSerial = 0;
+  /** a data bridge under another source's deck: its double (bridge-structures.ts lineUnderDeck) */
+  const underDeckOf = (line: readonly { lat: number; lon: number }[], regs: readonly SupportSurfaceRegistry[]) =>
+    lineUnderDeck(
+      line.map((p) => localPoint(frame, p.lat, p.lon, 0)),
+      (x, y) => regs.some((r) => r.queryBridgeAt(x, y, { margin: 10 }) !== null),
+    );
   /** the deck's drawn top at a frame point (its parapets' band read as the deck's), the deck by height (`expectedZ`) or by layer, or null */
   const deckHeightAt = (x: number, y: number, expectedZ?: number, expectedLayer?: number, margin = 1): number | null =>
     bridgeRegistry.queryBridgeAt(x, y, { expectedZ, expectedLevel: expectedLayer, margin, deckTop: true })?.elevation ?? null;
@@ -1860,9 +1867,7 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
       if (bridges >= bridgeLimit) break;
       try {
         // (a notable bridge's deck already there: this one its data's double)
-        const m = b.points[Math.floor(b.points.length / 2)]!;
-        const mAt = localPoint(frame, m.lat, m.lon, 0);
-        if (notableDecks.queryBridgeAt(mAt[0], mAt[1], { margin: 10 })) continue;
+        if (underDeckOf(b.points, [notableDecks])) continue;
         const pts = await groundLine(b.points);
         const rail = b.kind === BridgeKind.Rail,
           foot = b.kind === BridgeKind.Foot;
@@ -1920,7 +1925,7 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
       try {
         const mid = b.points[Math.floor(b.points.length / 2)]!;
         const at = localPoint(frame, mid.lat, mid.lon, 0);
-        if (notableDecks.queryBridgeAt(at[0], at[1], { margin: 10 }) || cellDecks.queryBridgeAt(at[0], at[1], { margin: 10 })) continue;
+        if (underDeckOf(b.points, [notableDecks, cellDecks])) continue;
         if (selectedAreas.some((p) => surfaceContains(at, p))) continue;
         const points = await groundLine(b.points);
         const style =

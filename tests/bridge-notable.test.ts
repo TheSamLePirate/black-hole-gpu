@@ -75,6 +75,18 @@ describe("B3 — the structure on the deck", () => {
     expect(deck.deckAt(0) - N).toBeCloseTo(64, 1);
   });
 
+  test("its girder's contact boxes never over the drivable deck — not on its steepest grade either (campaign 2, 24 Nov 2026)", () => {
+    let worst = -Infinity;
+    // (the girder's pieces: its paint, as deep as the girder — the towers' legs and struts are taller or across)
+    for (const so of parts.solids.filter((p) => p.paint === gg.girderPaint && p.top - p.bottom < gg.girderDepth + 2))
+      for (const v of so.ring) {
+        const q = deck.project(v[0], v[1]);
+        if (q.distance <= gg.deckWidth / 2) worst = Math.max(worst, so.top - deck.deckAt(q.s));
+      }
+    expect(worst).toBeGreaterThan(-Infinity);
+    expect(worst).toBeLessThanOrEqual(0);
+  });
+
   test("its towers rise from the sea to 227 m over it; their feet never under the sea's level", () => {
     const towers = parts.solids.filter((p) => p.paint === BridgePaint.InternationalOrange && p.top - N > 226);
     expect(towers.length).toBe(4);

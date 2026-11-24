@@ -281,3 +281,33 @@ export function buildArchRibsMesh(params: {
 
   return { positions, triangles, normals };
 }
+
+/**
+ * A data bridge lying under another source's deck — its double, left out (scenery-worker): its middle vertex on that deck, or `share`
+ * of its length — sampled every `stepM` — (campaign 2, 24 Nov 2026: the middle vertex alone missed the Golden Gate's street-cell double,
+ * its vertices crowded on an approach; a second deck was drawn at the sea's clearance, 60 m under the notable one, its piers in the
+ * water). A road crossing under it — a fraction of its length — is kept. `line`: frame points [east, north] [m].
+ */
+export function lineUnderDeck(
+  line: readonly (readonly [number, number] | readonly number[])[],
+  onDeck: (x: number, y: number) => boolean,
+  stepM = 15,
+  share = 0.5,
+): boolean {
+  if (line.length === 0) return false;
+  const m = line[Math.floor(line.length / 2)]!;
+  if (onDeck(m[0]!, m[1]!)) return true;
+  let n = 0,
+    hit = 0;
+  for (let i = 1; i < line.length; i++) {
+    const a = line[i - 1]!,
+      b = line[i]!;
+    const k = Math.max(1, Math.ceil(Math.hypot(b[0]! - a[0]!, b[1]! - a[1]!) / stepM));
+    for (let j = 0; j < k; j++) {
+      const t = (j + 0.5) / k;
+      n++;
+      if (onDeck(a[0]! + (b[0]! - a[0]!) * t, a[1]! + (b[1]! - a[1]!) * t)) hit++;
+    }
+  }
+  return n > 0 && hit >= share * n;
+}

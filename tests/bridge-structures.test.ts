@@ -8,6 +8,7 @@ import {
   computeStructurePierLocations,
   buildAlexandreIIIPylonsMesh,
   buildArchRibsMesh,
+  lineUnderDeck,
 } from "../src/system/bridge-structures";
 import { CORPUS_CASES } from "./fixtures/bridge-corpus";
 
@@ -169,5 +170,52 @@ describe("PR6 — Structural Families and Notable Bridge Silhouettes", () => {
       maxZ = Math.max(maxZ, arch.positions[i]!);
     }
     expect(maxZ).toBeCloseTo(deckZ0, 1);
+  });
+});
+
+describe("a data bridge under another source's deck (campaign 2, 24 Nov 2026)", () => {
+  // (a deck 1 300 m along the north axis, 27 m wide: |x| ≤ 13.7 + its margin, 0 ≤ y ≤ 1 300)
+  const deck = (x: number, y: number) => Math.abs(x) <= 23.7 && y >= 0 && y <= 1300;
+  test("its double kept out though its middle vertex lies on an approach: most of its length is on the deck", () => {
+    // (the Golden Gate's double: the deck's two ends, then eight vertices crowded on a curving approach off its south end)
+    const line: [number, number][] = [
+      [0, 1290],
+      [0, 10],
+      ...Array.from({ length: 8 }, (_, i) => [-(i + 1) * 6, -(i + 1) * 8] as [number, number]),
+    ];
+    expect(deck(...line[Math.floor(line.length / 2)]!)).toBe(false);
+    expect(lineUnderDeck(line, deck)).toBe(true);
+  });
+  test("a road crossing under it — a fraction of its length — kept; a parallel bridge 60 m aside kept; its middle on the deck left out", () => {
+    expect(
+      lineUnderDeck(
+        [
+          [-300, 600],
+          [0, 600],
+          [300, 600],
+        ],
+        deck,
+      ),
+    ).toBe(true); // (its middle on the deck — the rule before)
+    expect(
+      lineUnderDeck(
+        [
+          [-300, 600],
+          [-100, 600],
+          [300, 600],
+        ],
+        deck,
+      ),
+    ).toBe(false);
+    expect(
+      lineUnderDeck(
+        [
+          [60, 0],
+          [60, 1300],
+        ],
+        deck,
+      ),
+    ).toBe(false);
+    expect(lineUnderDeck([], deck)).toBe(false);
   });
 });

@@ -295,7 +295,9 @@ export function notableParts(nb: NotableBridge, f: NotableFrame, deckZ?: (x: num
       ...m,
       ring: footRing(at((s0 + s1) / 2), along((s0 + s1) / 2), s1 - s0, nb.deckWidth),
       bottom: Math.min(a[2], b[2]) - nb.girderDepth / 2,
-      top: Math.max(a[2], b[2]) + nb.girderDepth / 2,
+      // (its contact box's flat top its lower end's — under the slab all along the piece: its higher end's stood up to 0.7 m over the
+      // roadway on the Golden Gate's 6.5 % approach, the walker and the cars held on it — campaign 2, 24 Nov 2026; the mesh drawn sloped)
+      top: Math.min(a[2], b[2]) + nb.girderDepth / 2,
       paint: nb.girderPaint,
     });
   }
