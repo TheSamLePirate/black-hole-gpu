@@ -784,6 +784,8 @@ export class ObcRuntime {
       "TMPDIR=/tmp",
       "XDG_CACHE_HOME=/tmp/.cache",
       "BUN_INSTALL_CACHE_DIR=/tmp/.bun-cache",
+      // (bun's global packages and bins: without BUN_INSTALL they follow XDG_CACHE_HOME into /tmp — RAM, off PATH)
+      'BUN_INSTALL="$HOME/.bun"',
       "NPM_CONFIG_CACHE=/tmp/.npm-cache",
       "PIP_CACHE_DIR=/tmp/.pip-cache",
       "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1",
@@ -831,7 +833,7 @@ export class ObcRuntime {
       "chmod -R a+rX /home/pilot/docs /home/pilot/.claude /home/pilot/CLAUDE.md /home/pilot/AGENTS.md /home/pilot/README.md 2>/dev/null || true",
       "chown -R 1000:1000 /home/user/.local 2>/dev/null || true",
       "ln -sf /obc/tau /dev/tau",
-      `printf 'export PATH="/run/kw/bin:/obc/bin:/obc/scripts:$HOME/.local/bin:$HOME/.bun/bin:/home/user/.local/bin:/home/user/.bun/bin:/usr/local/bin:$PATH:/usr/lib/kw/bin"\\nexport PYTHONPATH=/obc/lib\\nexport NODE_PATH=/obc/lib\\nexport PYTHONDONTWRITEBYTECODE=1\\nexport NODE_COMPILE_CACHE=/home/pilot/.cache/v8-compile-cache\\nexport NODE_OPTIONS="--max-old-space-size=${heapMb}"\\nexport TMPDIR=/tmp\\nexport XDG_CACHE_HOME=/tmp/.cache\\nexport BUN_INSTALL_CACHE_DIR=/tmp/.bun-cache\\nexport NPM_CONFIG_CACHE=/tmp/.npm-cache\\nexport PIP_CACHE_DIR=/tmp/.pip-cache\\nexport CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1\\nexport DISABLE_AUTOUPDATER=1\\nexport DISABLE_TELEMETRY=1\\nobc_reset_tty() { printf "\\033[?1000l\\033[?1002l\\033[?1003l\\033[?1005l\\033[?1006l\\033[?1015l\\033[?1004l\\033[?25h"; }\\n[ -n "$BASH_VERSION" ] && PROMPT_COMMAND="obc_reset_tty\${PROMPT_COMMAND:+; \$PROMPT_COMMAND}"\\n' > /etc/profile.d/obc.sh`,
+      `printf 'export PATH="/run/kw/bin:/obc/bin:/obc/scripts:$HOME/.local/bin:$HOME/.bun/bin:/home/user/.local/bin:/home/user/.bun/bin:/usr/local/bin:$PATH:/usr/lib/kw/bin"\\nexport PYTHONPATH=/obc/lib\\nexport NODE_PATH=/obc/lib\\nexport PYTHONDONTWRITEBYTECODE=1\\nexport NODE_COMPILE_CACHE=/home/pilot/.cache/v8-compile-cache\\nexport NODE_OPTIONS="--max-old-space-size=${heapMb}"\\nexport TMPDIR=/tmp\\nexport XDG_CACHE_HOME=/tmp/.cache\\nexport BUN_INSTALL_CACHE_DIR=/tmp/.bun-cache\\nexport BUN_INSTALL="$HOME/.bun"\\nexport NPM_CONFIG_CACHE=/tmp/.npm-cache\\nexport PIP_CACHE_DIR=/tmp/.pip-cache\\nexport CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1\\nexport DISABLE_AUTOUPDATER=1\\nexport DISABLE_TELEMETRY=1\\nobc_reset_tty() { printf "\\033[?1000l\\033[?1002l\\033[?1003l\\033[?1005l\\033[?1006l\\033[?1015l\\033[?1004l\\033[?25h"; }\\n[ -n "$BASH_VERSION" ] && PROMPT_COMMAND="obc_reset_tty\${PROMPT_COMMAND:+; \$PROMPT_COMMAND}"\\n' > /etc/profile.d/obc.sh`,
       "chmod 644 /etc/profile.d/obc.sh 2>/dev/null || true",
       "if [ -f /etc/bash.bashrc ] && ! grep -q '/etc/profile.d/obc.sh' /etc/bash.bashrc 2>/dev/null; then printf '\\n[ -r /etc/profile.d/obc.sh ] && . /etc/profile.d/obc.sh\\n' >> /etc/bash.bashrc; fi",
     ].join(" && ");
