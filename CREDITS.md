@@ -19,7 +19,7 @@ them in More… › Credits.
 - [The astronaut](https://github.com/momentchan/false-earth) — false-earth, Ming-Jyun Hung · CGTrader licence
 - [The International Space Station](https://science.nasa.gov/3d-resources/) — NASA (NASA 3D Resources)
 - [The James Webb Space Telescope — “The James Webb Space Telescope”](https://sketchfab.com/3d-models/the-james-webb-space-telescope-dcb95b3193be49e7a60192055df2315d) — Ignazio Pillitteri (Sketchfab) · CC BY 4.0
-- The carriers (Gerald R. Ford, Kiev, Implacable), the airliners and the ships of the traffic — 3D models supplied, under their authors' licences
+- The carriers (Gerald R. Ford, Kiev, Implacable), the airliners and the ships of the traffic — 3D models supplied, under their authors' licences; the airliners' landing gear (since 24 Nov 2026) is the FlightGear A320-family's above (GNU GPL v2), baked into them by scripts/build-traffic-gear.ts, and their maps' original schemes (Airbus's rollout titles, CityJet's) painted white by scripts/whiten-airliner-maps.py — each airline's colours laid on by the game, colours only, no name or mark
 
 ## The sky
 

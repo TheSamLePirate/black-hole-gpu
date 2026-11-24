@@ -108,6 +108,13 @@ struct Ship {
   // (PLAN-J3 J3-2) the air between the eye and the craft: z 1 when the tracer's aerial table is written this frame (its reach and the
   // metres per unit in sh[12], from the probe's kernel); y, w unused (band 4 and the night floor, retired at J5-R)
   air: vec4f,
+  // (24 Nov 2026) the traffic's plain airliners' gear (game/airtypes.ts MESH — scripts/build-traffic-gear.ts): by mesh (0 the A320's,
+  // 1 the CRJ's), by leg (the nose, the left main, the right main) its hinge and its angle up [rad] (w), its axis
+  tgear: array<vec4f, 12>,
+  // and their paint's places (src/traffic/livery.ts — ship.ts TRAFFIC_PAINT_GEO): by mesh (0 the plain A320, 1 the CRJ, 2 the game's
+  // A320), three vec4s — its belly's, its windows' and its crown's heights [m], the fin's root (z, its front); the fuselage's
+  // half-width, the nacelles' |x| from, to, their bottom; their top, their z from, to, the fin's half-thickness
+  tpaint: array<vec4f, 9>,
 };
 
 // A craft drawn: craft → camera frame, then its kind (0 Ranger, 1 Lander, 2 Endurance, 3 F-35), in the shadow
@@ -411,6 +418,8 @@ fn stickPos(v: VIn) -> vec3f {
 // (the A320's too: its materials 100–119, its flight deck's 120–139, their parts their rig's nodes — src/a320/rig.ts)
 fn isJet(m: f32) -> bool { return (m > 29.5 && m < 39.5) || (m > 99.5 && m < 139.5); }
 fn jetMap(v: VIn, ii: u32) -> mat4x4f { return inst[u32(inst[ii].flags.w + 0.5) + u32(v.ao)].model; }
+// (a traffic airliner drawn as the game's A320: its livery's record, the last of its slot's — ship.ts A320_LIVERY_REC, MAX_PARTS − 1)
+const A320_LIVERY_REC = 191u;
 /** The A320's texel for a material and a UV in its own image: the layer, the UV in it (a cell of the atlas: its UV
  *  wrapped — the engines' repeat —, kept half a texel off the cell's edges), the cell's scale (the derivatives'). */
 fn a320Map(part: u32, uv: vec2f) -> vec4f {
@@ -497,10 +506,34 @@ fn groundPos(v: VIn, ii: u32) -> vec3f {
   if (v.mat > 77.5 && v.uv.x + 0.5 > R[0].z) { return vec3f(0.0, R[1].y, R[1].z); }
   return groundPose(v.pos, v, ii, false);
 }
+// The traffic's plain airliners' landing gear (src/traffic/airliner-gear.ts, scripts/build-traffic-gear.ts: the game's A320's legs
+// baked into the plain meshes — materials 55 its paint, 56 its chrome, 57 its tyres, 58 its hubs; each vertex's leg in its ambient
+// occlusion: 1 + leg): turned about its hinge towards its bay by the A320's angle (its position 0.2…0.8 — FlightGear's), shrunk into
+// it under 0.6 — at 0 a point, nothing drawn. The position 0…1 in the instance's record (ship.ts: its model[0].x — traffic/livery.ts
+// liveryRecord); no record: up (an airliner drawn by a mission, in the air).
+fn isTrafficGear(m: f32) -> bool { return m > 54.5 && m < 58.5; }
+fn trafficGear(ii: u32) -> f32 {
+  return select(0.0, inst[u32(inst[ii].flags.w + 0.5)].model[0].x, inst[ii].flags.w > 0.5);
+}
+/** the leg's turn — its axis (xyz) and angle [rad] (w) — and its hinge (xyz) and shrink (w) at the instance's gear position */
+fn trafficLeg(v: VIn, ii: u32) -> array<vec4f, 2> {
+  let kind = u32(inst[ii].flags.x + 0.5);
+  let k = min(select(0u, 6u, kind == 5u) + 2u * min(u32(max(v.ao - 0.5, 0.0)), 2u), 10u);
+  let g = clamp(trafficGear(ii), 0.0, 1.0);
+  let H = S.tgear[k];
+  let A = S.tgear[k + 1u];
+  return array<vec4f, 2>(vec4f(A.xyz, H.w * (1.0 - clamp((g - 0.2) / 0.6, 0.0, 1.0))), vec4f(H.xyz, smoothstep(0.0, 0.6, g)));
+}
+fn trafficGearPos(v: VIn, ii: u32) -> vec3f {
+  let L = trafficLeg(v, ii);
+  return L[1].xyz + rotAbout((v.pos - L[1].xyz) * L[1].w, L[0].xyz, L[0].w);
+}
+
 /** A vertex where it is drawn, in its craft's frame (the F-35's parts posed; the Ranger's gear and sticks; a missile's fins; a
- *  ground unit's turret and arm). */
+ *  ground unit's turret and arm; a plain airliner's gear). */
 fn shipPos(v: VIn, ii: u32) -> vec3f {
   if (isJet(v.mat)) { return jetPos(v, ii); }
+  if (isTrafficGear(v.mat)) { return trafficGearPos(v, ii); }
   if (isFin(v.mat) && inst[ii].flags.w > 0.5) { return finPos(v, ii); }
   if (isTurret(v.mat) && inst[ii].flags.w > 0.5) { return groundPos(v, ii); }
   return stickPos(v);
@@ -580,6 +613,10 @@ fn shipVertex(v: VIn, ii: u32) -> VOut {
     nrm = rotAbout(v.nrm, a.xyz, a.w);
   }
   if (isTurret(v.mat) && inst[ii].flags.w > 0.5) { nrm = groundPose(v.nrm, v, ii, true); }
+  if (isTrafficGear(v.mat)) {
+    let L = trafficLeg(v, ii);
+    nrm = rotAbout(v.nrm, L[0].xyz, L[0].w);
+  }
   if (a320Bent(v)) { nrm = a320FlexN(pos, nrm, a320Tip(ii)); }
   let p = (M * vec4f(pos, 1.0)).xyz;
   o.p = p;
@@ -632,7 +669,11 @@ fn shadowVs(v: VIn, @builtin(instance_index) ii: u32) -> @builtin(position) vec4
   // (the cockpit's glass lets the light in: out of the map)
   if (abs(v.mat - 71.0) < 0.5) { return vec4f(2.0, 2.0, 2.0, 1.0); }
   // (posed as drawn: the F-35's parts, a missile's fins, a ground unit's turret and gun — their shadows turning with them)
-  let q = select(select(v.pos, jetPos(v, ii), isJet(v.mat)), shipPos(v, ii), (isFin(v.mat) || isTurret(v.mat)) && inst[ii].flags.w > 0.5);
+  let q = select(
+    select(v.pos, jetPos(v, ii), isJet(v.mat)),
+    shipPos(v, ii),
+    ((isFin(v.mat) || isTurret(v.mat)) && inst[ii].flags.w > 0.5) || isTrafficGear(v.mat),
+  );
   // (its half: the sphere holds the caster — none crosses into the other)
   let second = inst[ii].flags.y > 1.5;
   let c = lightClipB((inst[ii].model * vec4f(q, 1.0)).xyz, select(S.bound, S.bound2, second));
@@ -867,6 +908,59 @@ fn pcdLight(uv: vec2f, dx: vec2f, dy: vec2f, cosV: f32) -> vec3f {
   return c * S.pcd1.x;
 }
 
+// The real traffic's liveries (src/traffic/livery.ts — Sam, 24 Nov 2026): an airline's colours laid on its airliner's own places
+// (ship.ts TRAFFIC_PAINT_GEO, S.tpaint by mesh: its belly's, windows' and crown's heights, its fin, its nacelles) over its white
+// map — its windows, doors and panel lines kept by the map's own light against its white (`detail`): its fin; a cheatline under its
+// windows; its lower fuselage under them; its upper fuselage over them; all of it; its nacelles. Colours only — no name, no mark.
+// The livery's record (traffic/livery.ts liveryRecord): model[0] = (gear, pattern, engine r, g), [1] = (fin rgb, engine b),
+// [2] = (cheatline rgb), [3] = (fuselage rgb); pattern 0: none — the map as it is. `fw` the position's footprint (the edges'
+// antialiasing).
+fn trafficPaint(base: vec3f, q: vec3f, R: mat4x4f, geo: u32, engine: bool, fw: f32) -> vec3f {
+  let pattern = u32(R[0].y + 0.5);
+  if (pattern == 0u) { return base; }
+  let G0 = S.tpaint[geo * 3u];
+  let G1 = S.tpaint[geo * 3u + 1u];
+  let G2 = S.tpaint[geo * 3u + 2u];
+  let eng = vec3f(R[0].z, R[0].w, R[1].w);
+  let lum = dot(base, vec3f(0.2126, 0.7152, 0.0722));
+  let detail = clamp(lum / 0.72, 0.0, 1.0);
+  let aq = abs(q.x);
+  // (its nacelles: by their box — the plain meshes' —, or the A320's engines' own material)
+  let inNacelle = aq > G1.y && aq < G1.z && q.y > G1.w && q.y < G2.x && q.z > G2.y && q.z < G2.z;
+  if (engine || inNacelle) { return eng * mix(0.85, 1.0, detail); }
+  // (its fin: over the crown, aft of its root, its thickness)
+  let e = max(fw, 0.01);
+  if (aq < G2.w && q.z < G0.w) {
+    let fin = smoothstep(G0.z, G0.z + 0.08 + e, q.y);
+    if (fin > 0.0) { return mix(base, R[1].xyz * mix(0.9, 1.0, detail), fin); }
+  }
+  // (out of the fuselage — the wings, the tailplane —: the map's)
+  if (aq > G1.x) { return base; }
+  let w = G0.y;
+  let y = q.y;
+  // (a band [a, b] of the fuselage's height, its edges antialiased)
+  var paint = 0.0;
+  var col = R[3].xyz;
+  var stripe = 0.0;
+  switch pattern {
+    case 2u: { stripe = smoothstep(w - 0.66 - e, w - 0.66 + e, y) * (1.0 - smoothstep(w - 0.4 - e, w - 0.4 + e, y)); }
+    case 3u: {
+      paint = 1.0 - smoothstep(w - 0.52 - e, w - 0.52 + e, y);
+      stripe = smoothstep(w - 0.52 - e, w - 0.52 + e, y) * (1.0 - smoothstep(w - 0.4 - e, w - 0.4 + e, y));
+    }
+    case 4u: {
+      paint = smoothstep(w + 0.36 - e, w + 0.36 + e, y);
+      stripe = smoothstep(w + 0.26 - e, w + 0.26 + e, y) * (1.0 - paint);
+    }
+    case 5u: { paint = smoothstep(G0.x + 0.3 - e, G0.x + 0.3 + e, y); }
+    default: {}
+  }
+  // (the belly's own grey under a crown or a cheatline: none — the map's white)
+  var c = mix(base, col * detail, paint);
+  c = mix(c, R[2].xyz * detail, stripe);
+  return c;
+}
+
 @fragment
 fn fs(in: VOut, @builtin(front_facing) front: bool) -> @location(0) vec4f {
   // (S.air.x bit 8 — ship.debugFs, a measure —: a flat grey at once, the shading left out: what the geometry, its raster and its MSAA cost alone)
@@ -1021,9 +1115,15 @@ fn fs(in: VOut, @builtin(front_facing) front: bool) -> @location(0) vec4f {
     case 100u, 101u, 102u, 103u, 104u, 105u, 112u, 113u, 114u: {
       let c = a320Map(part, in.uv);
       let L = i32(c.x + 0.5);
-      let a = textureSampleGrad(a320Albedo, mapSamp, c.yz, L, duvx * c.w, duvy * c.w);
+      // (a traffic airliner — its livery's record after its rig's parts, ship.ts A320_LIVERY_REC —: the white livery (layer 3, once in:
+      // the record's model[2].w) under its airline's colours; the flown one's, another player's: its own livery)
+      var liv = mat4x4f();
+      if (kind == 21u && I.flags.w > 0.5) { liv = inst[u32(I.flags.w + 0.5) + A320_LIVERY_REC].model; }
+      let painted = u32(liv[0].y + 0.5) > 0u;
+      let a = textureSampleGrad(a320Albedo, mapSamp, c.yz, select(L, 3, painted && L == 0 && liv[2].w > 0.5), duvx * c.w, duvy * c.w);
       if (part == 105u && a.a < 0.5) { discard; }
       albedo = a.rgb;
+      if (painted && (part == 100u || part == 103u)) { albedo = trafficPaint(albedo, in.q, liv, 2u, part == 103u, fw); }
       var tn = textureSampleGrad(a320Normal, mapSamp, c.yz, L, duvx * c.w, duvy * c.w).xyz * 2.0 - 1.0;
       tn.y = -tn.y;
       let d2 = cross(dpy, ng);
@@ -1053,11 +1153,11 @@ fn fs(in: VOut, @builtin(front_facing) front: bool) -> @location(0) vec4f {
       coat = 0.0;
     }
     // the A320's flight deck (docs/PLAN-A320.md, A5 — scripts/build-a320-cockpit.py): FlightGear's maps, the A320's
-    // array's layers 3–6 (the panels, the other panels, the glareshield, the atlas — their UVs in them) — matte
+    // array's layers 4–7 (3: the traffic's white livery) (the panels, the other panels, the glareshield, the atlas — their UVs in them) — matte
     // painted panels, the glareshield's fabric, the knobs' satin plastic, the seats' leather; the push-buttons' lights,
     // the INOP placards and the FCU's and radios' displays glowing; no grime inside
     case 120u, 121u, 122u, 123u, 124u, 125u, 131u, 132u, 133u: {
-      let L = select(6, 3 + i32(part) - 120, part <= 122u);
+      let L = select(7, 4 + i32(part) - 120, part <= 122u);
       let a = textureSampleGrad(a320Albedo, mapSamp, in.uv, L, duvx, duvy);
       if (a.a < 0.5) { discard; }
       albedo = a.rgb;
@@ -1116,6 +1216,10 @@ fn fs(in: VOut, @builtin(front_facing) front: bool) -> @location(0) vec4f {
     case 40u, 41u: {
       let layer = select(1, 0, part == 40u);
       albedo = textureSampleGrad(trafficAlbedo, mapSamp, in.uv, layer, duvx, duvy).rgb;
+      // (its airline's colours over its white map — its record's: traffic/livery.ts; none, the map's)
+      if (I.flags.w > 0.5 && (kind == 4u || kind == 5u)) {
+        albedo = trafficPaint(albedo, in.q, inst[u32(I.flags.w + 0.5)].model, kind - 4u, false, fw);
+      }
       metal = 0.15;
       rough = 0.32 + 0.1 * grime;
       coat = 0.45 * coat;
@@ -1139,6 +1243,12 @@ fn fs(in: VOut, @builtin(front_facing) front: bool) -> @location(0) vec4f {
       coat = 0.0;
     }
     case 47u: { albedo = vec3f(0.30, 0.05, 0.035); metal = 0.0; rough = 0.7; coat = 0.0; }
+    // the plain airliners' gear (scripts/build-traffic-gear.ts — the game's A320's): its painted struts, its chromed sliding tubes,
+    // its tyres, its hubs
+    case 55u: { albedo = vec3f(0.6, 0.61, 0.62) * (0.9 + 0.12 * grime); metal = 0.1; rough = 0.42 + 0.15 * grime; coat = 0.2 * coat; }
+    case 56u: { albedo = vec3f(0.62, 0.62, 0.64); metal = 1.0; rough = 0.16 + 0.1 * grime; coat = 0.0; }
+    case 57u: { albedo = vec3f(0.028, 0.028, 0.03) * (1.0 + 0.4 * grime); metal = 0.0; rough = 0.85; coat = 0.0; }
+    case 58u: { albedo = vec3f(0.42, 0.43, 0.44) * (0.85 + 0.2 * grime); metal = 0.6; rough = 0.4 + 0.12 * grime; coat = 0.0; }
     case 48u: { albedo = vec3f(0.72, 0.72, 0.69); metal = 0.0; rough = 0.45 + 0.15 * grime; coat = 0.2 * coat; }
     case 49u: { albedo = vec3f(0.025, 0.045, 0.11); metal = 0.0; rough = 0.4; coat = 0.2 * coat; }
     case 50u: { albedo = vec3f(0.16, 0.19, 0.16); metal = 0.0; rough = 0.8; coat = 0.0; }

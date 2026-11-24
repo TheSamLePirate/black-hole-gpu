@@ -684,7 +684,35 @@ pas — le cache du pilote répond en ~45 ms ; il faut une branche vivante sur u
   inverseurs — `trafficRig`) dans la même passe E12, sur les emplacements gréés `JET_SLOTS` partagés avec les F-35 ; son
   maillage (`assets/a320/a320.bin`, 107 449 triangles, cartes KTX2) demandé au premier avion proche, l'avion simple
   (`a320t`, champ `alt`) dessiné en attendant (`combatShips`). Coût CPU sous bun (200 avions, 4 pistes de SFO) : +0,15 à
-  0,25 ms médiane par image contre `main` (ce Mac, A/B intercalé, charge partagée) ; coût GPU des A320 gréés **non mesuré**.
+  0,25 ms médiane par image contre `main` (ce Mac, A/B intercalé, charge partagée).
+  **Train, livrées, ombres du trafic (24 nov. 2026, branche d'agent)** — toujours dans E12/E12a, sans passe ni pipeline
+  nouveaux : (1) **le train des maillages simples** (`a320t`, `crj900`) — ils n'en montraient aucun (l'A320 fourni construit
+  train rentré, celui du CRJ coupé par `build-airliners.ts`) — est celui de l'A320 FlightGear du jeu, cuit dans leurs `.bin`
+  par `scripts/build-traffic-gear.ts` (meshoptimizer : 32 840 → 6 616 triangles, matériaux 55–58, la jambe de chaque sommet
+  dans son AO) ; `ship.wgsl` `trafficGearPos` le replie par instance (`shipPos` : `vs`, `depthVs`, `motionVs` et `shadowVs`)
+  d'après `gear` de `traffic/runway-phase.ts`, l'enregistrement d'instance `MSL_AT + i` (`traffic/livery.ts`
+  `liveryRecord` : position du train et livrée), les charnières en uniforme (`S.tgear`, 12 vec4, écrit une fois —
+  `traffic/airliner-gear.ts` `gearUniform` d'après `game/airtypes.ts` `MESH`) ; les maillages simples passent de 5 070 / 5 172
+  à 11 686 / 11 506 triangles. (2) **Les livrées** : les couleurs de la compagnie (indicatif OACI, `traffic/livery.ts`,
+  50 compagnies, sinon blanc et dérive d'une couleur sourde) posées par `trafficPaint` sur la dérive, une ligne sous les
+  hublots, le bas ou le haut du fuselage, les nacelles — places par maillage en uniforme (`S.tpaint`, 9 vec4,
+  `TRAFFIC_PAINT_GEO`) — sur les cartes simples blanchies (`scripts/whiten-airliner-maps.py`) et, pour l'A320 gréé, sur la
+  couche 3 du tableau de couleurs de l'A320 (la livrée blanche, 4 096², ~21 Mio en BC7/ASTC, chargée au premier avion du
+  trafic dessiné en A320 — `loadTrafficWhite` ; le poste de pilotage passe aux couches 4–7) ; l'enregistrement de livrée de
+  l'A320 gréé est le dernier de son emplacement (`A320_LIVERY_REC` = 191). (3) **Les ombres** : la moitié droite de la
+  carte d'ombre de l'appareil (`ship: shadow map`), sans porte-avions proche, prend le groupe regardé de **lanceurs au sol**
+  (`src/ship-casters.ts` `shadowGroup`) — unités de la guerre (200 m, comme avant), avions du trafic au sol ou à moins de
+  60 m (`cast`), navires — dans 4 km devant la caméra, sa sphère ≤ 450 m ; lue par le sol et la mer (`trace.wgsl`
+  `shipShadow`, `Params.seafft[3]`) ; la carte se redessine alors chaque image. Levier de mesure `ship.trafficCast`,
+  `camera.trafficRigMax`. **Mesuré** (kerr-mini, 24 nov. 2026, 1600 × 1000, vue des portes G de SFO — 3 A320 gréés, un
+  CRJ, le trafic et les navires de la baie dans l'image —, branche d'agent sur `18a6e4dd`, e2e `traffic-runways` étape
+  « costs », jobs `20261124-222347-trw-gear` puis `20261124-223643-trw-final` (`8e733d41`) : `renderer.lastGpuMs`, médiane
+  sur 3 s, ABBA sur deux tours ; ce sont des complétions, pas le temps GPU pur — §8.1) : image 76,3 / 77,0 ms ; A/A −0,2 /
+  −0,4 ms ; **les A320 gréés** (3 dans l'image, contre les mêmes dessinés simples, `trafficRigMax` 0) **+2,8 / +2,4 ms** ;
+  **les ombres du trafic** (contre `trafficCast` éteint) **0,0 / +0,8 ms, au bord du bruit** ; **toutes les passes de
+  l'appareil** (E12a entière, `debugSkipShip`) **8,2 / 7,9 ms**. Le même passage sur ce Mac
+  (M1 Max, chargé par d'autres sessions) : A/A −2,4 ms — non retenu. Correctif lié : la carte de l'A320 simple était lue à
+  l'envers (v retourné) depuis T2 — ses hublots sur le dos —, corrigé dans `build-airliners.ts` et le `.bin`.
 - **Rendu → simulation** : rien de décisif. Le sol de contact de l'appareil ne vient pas des cibles GPU ; les sondes
   (mer, planètes, histogramme) n'alimentent que l'image et l'exposition.
 - **Rendu → interface** : `sceneDepth` et `moments` servent aux cartes en surimpression ; les écrans du cockpit (PCD, DU)
@@ -902,7 +930,7 @@ Paris jusqu'à `earthSettled` » chronométré par étape.
 
 <!-- pipeline-inventory:begin (bun scripts/pipeline-inventory.ts --write) -->
 
-_Généré le 2026-11-24T18:49:37Z sur `ffbecf26` (arbre de travail). Ne pas éditer à la main : relancer l'outil._
+_Généré le 2026-11-24T21:49:58Z sur `18a6e4dd` (arbre de travail). Ne pas éditer à la main : relancer l'outil._
 
 **130 sites de création de pipeline** (86 rendu, 44 calcul, dont 66 asynchrones) et 43 `createShaderModule` dans 32 fichiers ; **44 programmes WGSL** (16 fichiers .wgsl, 28 chaînes dans le TypeScript) ; **66 libellés de passes** du profileur GPU (+ 11 sites à libellé dynamique).
 
@@ -981,33 +1009,33 @@ _Généré le 2026-11-24T18:49:37Z sur `ffbecf26` (arbre de travail). Ne pas éd
 | `src/renderer.ts:6948` | compute async | — | `ep` |
 | `src/renderer.ts:7662` | compute | — | — |
 | `src/renderer.ts:8711` | compute | — | — |
-| `src/renderer.ts:11009` | compute async | `clouds` | `cloudShadow` |
-| `src/renderer.ts:11091` | compute async | `sky ambient write` | `cloudLightVolume` |
-| `src/renderer.ts:11173` | compute async | — | `skyAmbient` |
-| `src/renderer.ts:13531` | compute async | — | `probe` |
+| `src/renderer.ts:11015` | compute async | `clouds` | `cloudShadow` |
+| `src/renderer.ts:11097` | compute async | `sky ambient write` | `cloudLightVolume` |
+| `src/renderer.ts:11179` | compute async | — | `skyAmbient` |
+| `src/renderer.ts:13537` | compute async | — | `probe` |
 | `src/sea/fft-gpu.ts:117` | compute | — | — |
-| `src/ship.ts:832` | compute | — | `vs` |
-| `src/ship.ts:852` | render | — | `fsJetGlass` |
-| `src/ship.ts:879` | render | — | `fs` |
-| `src/ship.ts:892` | render | — | `fs` |
-| `src/ship.ts:902` | render | — | `mirrorVs`, `fs` |
-| `src/ship.ts:910` | render | — | `shadowVs` |
-| `src/ship.ts:926` | render | — | `plumeVs`, `plumeFs` |
-| `src/ship.ts:938` | render | — | `glowVs`, `glowFs` |
-| `src/ship.ts:945` | render | — | `sheathVs`, `sheathFs` |
-| `src/ship.ts:954` | render | — | `trailVs`, `trailFs` |
-| `src/ship.ts:974` | render | — | `lampVs`, `lampFs` |
-| `src/ship.ts:993` | render | — | `distVs`, `distFs` |
-| `src/ship.ts:1000` | render | — | `hullDepthVs`, `hullDepthFs` |
-| `src/ship.ts:1011` | render | — | `fsCabin` |
-| `src/ship.ts:1019` | render | — | `ctlVs`, `fsCabin` |
-| `src/ship.ts:1027` | render | — | `fsCabinGlass` |
-| `src/ship.ts:1049` | render | — | `depthVs`, `ownMaskFs` |
-| `src/ship.ts:1056` | render | — | `depthVs`, `hullDepthFs` |
-| `src/ship.ts:1064` | render | `ship: the frame before` | `compVs`, `compFs` |
-| `src/ship.ts:1093` | render async | — | `motionVs`, `motionFs` |
-| `src/ship.ts:1100` | compute async | — | `composeColor` |
-| `src/ship.ts:1101` | compute async | — | `composeSurface` |
+| `src/ship.ts:853` | compute | — | `vs` |
+| `src/ship.ts:873` | render | — | `fsJetGlass` |
+| `src/ship.ts:900` | render | — | `fs` |
+| `src/ship.ts:913` | render | — | `fs` |
+| `src/ship.ts:923` | render | — | `mirrorVs`, `fs` |
+| `src/ship.ts:931` | render | — | `shadowVs` |
+| `src/ship.ts:947` | render | — | `plumeVs`, `plumeFs` |
+| `src/ship.ts:959` | render | — | `glowVs`, `glowFs` |
+| `src/ship.ts:966` | render | — | `sheathVs`, `sheathFs` |
+| `src/ship.ts:975` | render | — | `trailVs`, `trailFs` |
+| `src/ship.ts:995` | render | — | `lampVs`, `lampFs` |
+| `src/ship.ts:1014` | render | — | `distVs`, `distFs` |
+| `src/ship.ts:1021` | render | — | `hullDepthVs`, `hullDepthFs` |
+| `src/ship.ts:1032` | render | — | `fsCabin` |
+| `src/ship.ts:1040` | render | — | `ctlVs`, `fsCabin` |
+| `src/ship.ts:1048` | render | — | `fsCabinGlass` |
+| `src/ship.ts:1070` | render | — | `depthVs`, `ownMaskFs` |
+| `src/ship.ts:1077` | render | — | `depthVs`, `hullDepthFs` |
+| `src/ship.ts:1085` | render | `ship: the frame before` | `compVs`, `compFs` |
+| `src/ship.ts:1114` | render async | — | `motionVs`, `motionFs` |
+| `src/ship.ts:1121` | compute async | — | `composeColor` |
+| `src/ship.ts:1122` | compute async | — | `composeSurface` |
 | `src/sky.ts:134` | compute | — | `decode` |
 | `src/sky.ts:135` | compute | — | `down` |
 | `src/station.ts:89` | render | — | — |
@@ -1085,7 +1113,7 @@ _Généré le 2026-11-24T18:49:37Z sur `ffbecf26` (arbre de travail). Ne pas éd
 | source | lignes | points d'entrée |
 |---|---:|---|
 | `src/shaders/trace.wgsl` | 18142 | 18 entrées : cloudLightVolume, aerial, lut, main, shade, shadeMark, shadeLiteFinish, shadeWaterFinish, shadeLiteLight, shadeLite, skyFill, shadeWater, clouds, skyAmbient, cloudShadow, env, probe, shadeStars |
-| `src/shaders/ship.wgsl` | 2713 | 34 entrées : envCopy, envDown, envGGX, envSH, ctlVs, depthVs, vs, mirrorVs, shadowVs, fs, hullDepthVs, hullDepthFs, ownMaskFs, plumeVs, plumeFs, glowVs, glowFs, distVs, distFs, sheathVs, sheathFs, trailVs, trailFs, lampVs, lampFs, compVs, compFs, fsCabin, fsCabinGlass, fsJetGlass, motionVs, motionFs, composeColor, composeSurface |
+| `src/shaders/ship.wgsl` | 2823 | 34 entrées : envCopy, envDown, envGGX, envSH, ctlVs, depthVs, vs, mirrorVs, shadowVs, fs, hullDepthVs, hullDepthFs, ownMaskFs, plumeVs, plumeFs, glowVs, glowFs, distVs, distFs, sheathVs, sheathFs, trailVs, trailFs, lampVs, lampFs, compVs, compFs, fsCabin, fsCabinGlass, fsJetGlass, motionVs, motionFs, composeColor, composeSurface |
 | `src/shaders/post.wgsl` | 1396 | 18 entrées : gatherH, atrous, beamH, beamV, polgrid, resolve, down, downShip, dof, flareMeter, up, meter, stars, motionBlur, temporal, occlusion, cloudTemporal, taau |
 | `src/system/scenery-raster.ts:208` | 1167 | 31 entrées : cull, cullBoxes, clampBoxes, shadowVs, shadowFs, proxyVs, proxyFs, boxVs, boxFs, bridgeMarkFs, boxMarkVs, boxShadowVs, meshShadowVs, meshVs, meshFs, boxSolidVs, benchCull, benchQuadVs, benchVs, benchShadowVs, farCull, farVs, farQuadVs, farFs, farLampCull, farLampVs, farCarCull, farCarVs, nearCellVs, nearCellShadowVs, farShadowVs |
 | `src/shaders/display.wgsl` | 949 | vs (v), fs (f) |
@@ -1174,26 +1202,26 @@ _Généré le 2026-11-24T18:49:37Z sur `ffbecf26` (arbre de travail). Ne pas éd
 | `depth of field` | `src/renderer.ts:9079` | 1 |
 | `lens flare meter` | `src/renderer.ts:9089` | 1 |
 | `light meter` | `src/renderer.ts:9113` | 1 |
-| `display` | `src/renderer.ts:10637` | 2 |
-| `clouds' shadow map` | `src/renderer.ts:11041` | 1 |
-| `clouds' light volume` | `src/renderer.ts:11122` | 1 |
-| `sky ambient` | `src/renderer.ts:11204` | 1 |
-| `clouds' history` | `src/renderer.ts:11927` | 1 |
-| `body raster heights` | `src/renderer.ts:12287` | 1 |
-| `scenery raster cull` | `src/renderer.ts:12565` | 1 |
-| `ground occlusion` | `src/renderer.ts:12605` | 1 |
-| `trees' shadow map` | `src/renderer.ts:12610` | 1 |
-| `horizon bake` | `src/renderer.ts:12890` | 1 |
-| `ship probe: mips` | `src/ship.ts:1930` | 1 |
-| `ship probe: GGX` | `src/ship.ts:1942` | 1 |
-| `ship probe: SH` | `src/ship.ts:1949` | 1 |
-| `ship: shadow map` | `src/ship.ts:2896` | 1 |
-| `ship: shading (MSAA)` | `src/ship.ts:2914` | 1 |
-| `ship: own mask` | `src/ship.ts:3155` | 1 |
-| `ship: hull distance` | `src/ship.ts:3187` | 1 |
-| `ship: thrusters and plasma` | `src/ship.ts:3205` | 1 |
-| `ship: motion` | `src/ship.ts:3331` | 1 |
-| `ship: into the scene` | `src/ship.ts:3389` | 1 |
+| `display` | `src/renderer.ts:10643` | 2 |
+| `clouds' shadow map` | `src/renderer.ts:11047` | 1 |
+| `clouds' light volume` | `src/renderer.ts:11128` | 1 |
+| `sky ambient` | `src/renderer.ts:11210` | 1 |
+| `clouds' history` | `src/renderer.ts:11933` | 1 |
+| `body raster heights` | `src/renderer.ts:12293` | 1 |
+| `scenery raster cull` | `src/renderer.ts:12571` | 1 |
+| `ground occlusion` | `src/renderer.ts:12611` | 1 |
+| `trees' shadow map` | `src/renderer.ts:12616` | 1 |
+| `horizon bake` | `src/renderer.ts:12896` | 1 |
+| `ship probe: mips` | `src/ship.ts:1990` | 1 |
+| `ship probe: GGX` | `src/ship.ts:2002` | 1 |
+| `ship probe: SH` | `src/ship.ts:2009` | 1 |
+| `ship: shadow map` | `src/ship.ts:2969` | 1 |
+| `ship: shading (MSAA)` | `src/ship.ts:2987` | 1 |
+| `ship: own mask` | `src/ship.ts:3228` | 1 |
+| `ship: hull distance` | `src/ship.ts:3260` | 1 |
+| `ship: thrusters and plasma` | `src/ship.ts:3278` | 1 |
+| `ship: motion` | `src/ship.ts:3404` | 1 |
+| `ship: into the scene` | `src/ship.ts:3462` | 1 |
 | `terrain raster visibility` | `src/system/terrain-raster.ts:1086` | 1 |
 | `body raster visibility` | `src/system/terrain-raster.ts:1139` | 1 |
 | `terrain from the Sun` | `src/system/terrain-raster.ts:1282` | 1 |
@@ -1207,12 +1235,12 @@ Libellés dynamiques (calculés à l'exécution) :
 - `src/renderer.ts:7648` — `label`
 - `src/renderer.ts:7649` — `label`
 - `src/renderer.ts:8995` — `label`
-- `src/renderer.ts:11840` — `label`
-- `src/renderer.ts:12293` — `label`
-- `src/renderer.ts:12324` — `label`
-- `src/renderer.ts:12590` — `label`
-- `src/renderer.ts:12636` — `label`
-- `src/ship.ts:788` — `label`
+- `src/renderer.ts:11846` — `label`
+- `src/renderer.ts:12299` — `label`
+- `src/renderer.ts:12330` — `label`
+- `src/renderer.ts:12596` — `label`
+- `src/renderer.ts:12642` — `label`
+- `src/ship.ts:806` — `label`
 
 #### A.3b Passes jamais chronométrées (ni libellé du profileur, ni horodatage transmis)
 
@@ -1236,12 +1264,12 @@ Leur coût n'apparaît que dans l'intervalle de complétion de la frame (ou d'un
 | render pass | `src/noise3d.ts:124` |
 | render pass | `src/renderer.ts:5668` |
 | compute pass | `src/renderer.ts:8730` |
-| compute pass | `src/renderer.ts:13550` |
+| compute pass | `src/renderer.ts:13556` |
 | compute pass | `src/sea/fft-gpu.ts:261` |
 | compute pass | `src/sea/fft-gpu.ts:265` |
-| render pass | `src/ship.ts:3286` |
-| render pass | `src/ship.ts:3299` |
 | render pass | `src/ship.ts:3359` |
+| render pass | `src/ship.ts:3372` |
+| render pass | `src/ship.ts:3432` |
 | compute pass | `src/sky.ts:166` |
 | station: shadow map | `src/station.ts:210` |
 | station | `src/station.ts:240` |

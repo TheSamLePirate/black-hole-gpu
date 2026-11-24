@@ -8,6 +8,7 @@ import { type Way, waysOf } from "../src/traffic/landing";
 import { GEAR, gearStep, gearTarget, matchRunway, RUNWAY_PHASE, runwayPlace, type TrafficPhase } from "../src/traffic/runway-phase";
 import { TRAFFIC_RIG, trafficRig } from "../src/controller/traffic";
 import { geoidDeg } from "../src/system/geoid-grid";
+import { MESH } from "../src/game/airtypes";
 import { overPlace, resetFlights } from "./helpers/flight";
 
 // The real traffic against the game's runways (traffic/runway-phase.ts — Sam, 24 Nov 2026: airliners consistent with the
@@ -203,8 +204,8 @@ function fly(planes: Plane[][], id: string, t0: number, t1: number, dt = 0.1) {
   }
   return { c, frames };
 }
-/** the A320's wheels under its plain mesh's origin [m] (game/airtypes.ts MESH.a320t: 3.9 m at 37.7 m) */
-const WHEELS = (3.9 * 37.6) / 37.7;
+/** the A320's wheels under its plain mesh's origin [m] (game/airtypes.ts MESH.a320t: at 37.7 m — its gear baked 24 Nov 2026) */
+const WHEELS = (MESH.a320t.wheels * 37.6) / MESH.a320t.len;
 
 describe("drawn by the controller (controller/traffic.ts), a minute behind", () => {
   test("an approach to 28L 35 m off and 25 m high, reported every 2 s: on its axis, down onto the runway, no jump, gear down", () => {
@@ -357,7 +358,7 @@ describe("drawn by the controller (controller/traffic.ts), a minute behind", () 
     const { frames } = fly([[p, later]], "aad012", T0 + 2, T0 + 10, 1);
     const k = frames.at(-1)!;
     // (its wheels under its plain mesh's origin: a 777's, 63.7 m long)
-    const wheels = (3.9 * k.k.len) / 37.7;
+    const wheels = (MESH.a320t.wheels * k.k.len) / MESH.a320t.len;
     console.log(
       `  N796UA: reported ${(-200 * 0.3048).toFixed(0)} m baro; drawn ${k.h.toFixed(2)} m over the ellipsoid, the ground at ${GROUND} m, its wheels ${wheels.toFixed(2)} m under its origin — ${k.k.phase}, gear ${k.k.gear}`,
     );
@@ -409,7 +410,7 @@ describe("drawn by the controller (controller/traffic.ts), a minute behind", () 
       expect(reps.every((p) => !p.gnd)).toBe(true);
       const { frames, c } = fly([reps], id, T0 + 0.5, T0 + 1.5, 0.25);
       const F = frames.at(-1)!;
-      const wheels = (3.9 * F.k.len) / 37.7;
+      const wheels = (MESH.a320t.wheels * F.k.len) / MESH.a320t.len;
       const mark = c.trafficOverlay((m) => `${m.toFixed(0)} m`, c).find((x) => x.id === id);
       console.log(
         `  reported ${h} m over the ellipsoid (the ground at ${GROUND} m): drawn ${F.h.toFixed(1)} m — its wheels ${(F.h - GROUND - wheels).toFixed(1)} m over the runway, ${F.k.phase}, gear ${F.k.gear}; label « ${mark?.label} »`,

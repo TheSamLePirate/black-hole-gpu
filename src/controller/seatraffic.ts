@@ -295,7 +295,7 @@ function seaStep(this: CameraController) {
 function seaShips(
   this: CameraController,
   view: CameraController = this,
-): { id: ShipTypeId; rel: Vec3; axes: [Vec3, Vec3, Vec3]; hidden: boolean; far: boolean; mirror: boolean }[] {
+): { id: ShipTypeId; rel: Vec3; axes: [Vec3, Vec3, Vec3]; hidden: boolean; far: boolean; mirror: boolean; cast: boolean }[] {
   const list = this.seaNow();
   if (!list.length) return [];
   const E = earthView(view);
@@ -321,6 +321,8 @@ function seaShips(
       hidden: false,
       far: true,
       mirror: true,
+      // (its shadow on the sea when the view looks at it — ship-casters.ts: within 4 km)
+      cast: true,
     };
   });
 }

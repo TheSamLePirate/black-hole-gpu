@@ -27,6 +27,7 @@ import { EARTH_RUNWAYS } from "../game/sites";
 import { type Way, withLanding } from "../traffic/landing";
 import { FLOOR, GEAR, gearStep, gearTarget, runwayPlace, type TrafficPhase } from "../traffic/runway-phase";
 import { earthView } from "./netcraft";
+import { type Livery, liveryOf } from "../traffic/livery";
 import { formationLabel, formSlotFor } from "./formation";
 import { t, tf } from "../i18n";
 import type { Plane } from "../traffic/feed";
@@ -37,6 +38,9 @@ declare module "../controls" {
   interface CameraController {
     /** the real flights a mission took over (their ICAO hex): left out of the traffic drawn */
     trafficTaken?: Set<string>;
+    /** (a measuring lever — tests/e2e/traffic-runways: the rigged A320s' cost) the game's A320 drawn for this many of the traffic's
+     *  airliners at most (none set: TRAFFIC_RIG.max) */
+    trafficRigMax?: number;
     trafficStep: typeof trafficStep;
     trafficNow: typeof trafficNow;
     trafficShips: typeof trafficShips;
@@ -715,7 +719,14 @@ export interface TrafficInstance {
   far: boolean;
   a320?: { props: Props; spins: Props };
   alt?: { id: AirlinerId; rel: Vec3; axes: [Vec3, Vec3, Vec3] };
+  /** on the ground or low over it (its shadow there — ship-casters.ts), its gear 0…1 (the plain meshes' — ship.wgsl
+   *  trafficGearPos) and its airline's livery (traffic/livery.ts) */
+  cast: boolean;
+  traffic: { gear: number; livery: Livery };
 }
+
+/** a traffic airliner casts its shadow on the ground under this height of its wheels [m] (ship-casters.ts: within 4 km of the view) */
+export const CAST_OVER = 60;
 
 /** The traffic for the renderer: the nearest dozen with a mesh within 25 km of the view (`view`: its controller — a
  *  spectator's, else this one; the free camera with no craft too) — their place and axes on the view's camera's, from its
@@ -747,7 +758,9 @@ function trafficShips(this: CameraController, view: CameraController = this): Tr
       axes: [n(cam([-c.right[0]!, -c.right[1]!, -c.right[2]!]), s), n(cam(c.up), s), n(cam(c.fwd), s)] as [Vec3, Vec3, Vec3],
     };
     const d = Math.hypot(c.p[0]! - E.p0[0], c.p[1]! - E.p0[1], c.p[2]! - E.p0[2]);
-    if (c.mesh === "a320t" && d < TRAFFIC_RIG.near && rigged < TRAFFIC_RIG.max) {
+    // (its gear as its phase wants it, its airline's colours by its callsign — the plain mesh's and the game's A320's alike)
+    const own = { cast: c.gnd || c.over < CAST_OVER, traffic: { gear: c.gear, livery: liveryOf(c.cs, c.reg) } };
+    if (c.mesh === "a320t" && d < TRAFFIC_RIG.near && rigged < (this.trafficRigMax ?? TRAFFIC_RIG.max)) {
       rigged++;
       // (the game's A320 — its origin its belly, its wheels 1.59 m under it, the plain mesh's 3.9 m —, its rig)
       const k = c.len / A320_LEN;
@@ -760,10 +773,11 @@ function trafficShips(this: CameraController, view: CameraController = this): Tr
         far: true,
         a320: trafficRig(c, now),
         alt: plain,
+        ...own,
       });
       continue;
     }
-    out.push({ ...plain, hidden: false, far: true });
+    out.push({ ...plain, hidden: false, far: true, ...own });
   }
   return out;
 }

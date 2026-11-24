@@ -7,6 +7,9 @@
 //
 // Format (little endian): "TRFC", u32 version 1, vertex count, index count, 6 × f32 bounds (min, max), then the
 // vertices (10 × f32: position, normal, material, ambient occlusion, UV) and the u32 indices.
+// Then (24 Nov 2026 — run after this one, done at its end): scripts/whiten-airliner-maps.py (the maps' original schemes painted
+// white: the traffic's liveries are laid on by the shader, src/traffic/livery.ts) and scripts/build-traffic-gear.ts (their landing
+// gear: the A320's built gear up, the CRJ's cut out here — the game's FlightGear A320's legs baked into both).
 
 const dir = process.argv[2] ?? "/tmp/models";
 const out = "assets/traffic";
@@ -107,7 +110,9 @@ function normals(pos: number[], idx: number[]): number[] {
       const idx = [...I.a].map((i) => i + base);
       for (let i = 0; i < P.n; i++) {
         m.pos.push(P.a[3 * i]!, P.a[3 * i + 1]!, P.a[3 * i + 2]!);
-        m.uv.push(T ? T.a[2 * i]! : 0, T ? T.a[2 * i + 1]! : 0);
+        // (its v turned over: the GLB's map stands upside down against glTF's top-left origin — drawn so from T2 until 24 Nov 2026,
+        // its windows on the crown and its engines' paint on the fuselage)
+        m.uv.push(T ? T.a[2 * i]! : 0, T ? 1 - T.a[2 * i + 1]! : 0);
         m.part.push(p.material === 1 || p.material === 2 ? 42 : 40);
       }
       m.idx.push(...idx);
@@ -158,3 +163,7 @@ function normals(pos: number[], idx: number[]): number[] {
   await write("crj900", m);
   await Bun.$`sips -s format jpeg -s formatOptions 85 -Z 2048 ${`${dir}/crj/textures/CRJ-900_Cityjet_texture-4k.tga.png`} --out ${`${out}/crj900.jpg`}`.quiet();
 }
+
+// ---- their maps made plain white, their landing gear baked (traffic/livery.ts, traffic/airliner-gear.ts)
+await Bun.$`python3 scripts/whiten-airliner-maps.py`;
+await Bun.$`bun scripts/build-traffic-gear.ts`;

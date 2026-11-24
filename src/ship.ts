@@ -118,6 +118,10 @@ import guTowerUrl from "../assets/traffic/gu-tower.bin";
 import guFuelUrl from "../assets/traffic/gu-fuel.bin";
 import guCraterUrl from "../assets/traffic/gu-crater.bin";
 import { GROUND_UNITS, type GroundUnitId } from "./game/ground-units";
+import { MESH as AIRLINER_MESH } from "./game/airtypes";
+import { gearUniform } from "./traffic/airliner-gear";
+import { type Livery, liveryRecord, TRAFFIC_PAINT_GEO } from "./traffic/livery";
+import { shadowGroup } from "./ship-casters";
 import { MISSILE_SHAPES, type MissileMeshId } from "./game/missile-models";
 import cargoHullUrl from "../assets/traffic/cargo-hull.jpg";
 import cargoBridgeUrl from "../assets/traffic/cargo-bridge.jpg";
@@ -251,6 +255,12 @@ export interface ShipInstance {
   motor?: { level: number; air: number };
   /** a ground unit (src/game/ground-units.ts): its turret's yaw and its arm's pitch [rad], its rails' missiles left, burnt 0–1 */
   ground?: { yaw: number; pitch: number; left: number; burnt: number };
+  /** a caster on or near the ground — a traffic airliner on it or low over it, a ship (ship-casters.ts): in the shadow map's second half
+   *  when the view looks at it, no carrier near */
+  cast?: boolean;
+  /** a traffic airliner (controller/traffic.ts): its gear 0 (up) … 1 (down) — a plain mesh's, folded by ship.wgsl trafficGearPos —, its
+   *  airline's livery (traffic/livery.ts; null: the mesh's own) */
+  traffic?: { gear: number; livery: Livery | null };
 }
 
 /** PLAN-J1 J1-5 — the scene the craft goes into before the history (ShipRenderer.encodeShip's last argument): the frame's number
@@ -400,7 +410,11 @@ const SHREF_AT = GLASS_AT + 2 * 16;
 const LIFT_AT = SHREF_AT + 2 * 16;
 /** (PLAN-J3 J3-2) the craft's air: z 1 when the tracer's aerial table is written this frame */
 const AIR_AT = LIFT_AT + 16;
-const SHIP_UNIFORM_BYTES = AIR_AT + 16;
+/** (24 Nov 2026) then the traffic's plain airliners' gear legs (S.tgear: 12 vec4s) and their liveries' places (S.tpaint: 9) — written
+ *  once (traffic/airliner-gear.ts gearUniform, traffic/livery.ts TRAFFIC_PAINT_GEO) */
+const TGEAR_AT = AIR_AT + 16;
+const TPAINT_AT = TGEAR_AT + 12 * 16;
+const SHIP_UNIFORM_BYTES = TPAINT_AT + 9 * 16;
 const INST_FLOATS = 20;
 /**
  * The craft's pass's samples (its shading's pipelines, its box's colour and depth): 4, its MSAA; 1 (a measure, read once at the
@@ -416,8 +430,11 @@ const MAX_PARTS = 192;
 const DECK_PARTS = 1280;
 const JET_SLOTS = 8;
 const JET_FLOATS = 16;
-/** the missiles' records (their fins' deflections, their hinge — ship.wgsl finAxis): one an instance, after the decks' */
+/** the missiles' records (their fins' deflections, their hinge — ship.wgsl finAxis): one an instance, after the decks' — a ground
+ *  unit's pose, a plain traffic airliner's gear and livery (traffic/livery.ts liveryRecord) the same */
 const MSL_AT = MAX_INST + JET_SLOTS * MAX_PARTS + DECK_PARTS;
+/** an A320's slot's last record (ship.wgsl A320_LIVERY_REC): a traffic airliner's livery drawn on the game's A320 (zeros: its own) */
+const A320_LIVERY_REC = MAX_PARTS - 1;
 
 const norm = (a: V3): V3 => {
   const l = Math.hypot(...a) || 1;
@@ -573,7 +590,8 @@ export class ShipRenderer {
   private jetMaps: { albedo: GPUTexture; normal: GPUTexture; mr: GPUTexture } | null = null;
   private jetMapsLoading = false;
   /** the A320's mesh as built (its rig), its maps (three layers each: the livery's fuselage, the static elements,
-   *  the atlas — scripts/build-a320-maps.py), the livery painted on them and the one asked */
+   *  the atlas — scripts/build-a320-maps.py; the colours' a fourth once a traffic airliner asks it: the plain white livery, under the
+   *  airlines' colours — loadTrafficWhite), the livery painted on them and the one asked */
   private a320Mesh: A320Mesh | null = null;
   private a320Maps: { albedo: GPUTexture; normal: GPUTexture } | null = null;
   private a320MapsLoading = false;
@@ -811,6 +829,9 @@ export class ShipRenderer {
     }
     this.shBuf = d.createBuffer({ size: 24 * 16, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC }); // (sh[13..21] free since band 4 was retired at J5-R; sh[22] the probe's scale)
     this.uniform = d.createBuffer({ size: SHIP_UNIFORM_BYTES, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
+    // (the traffic's plain airliners' gear legs and liveries' places: constants)
+    d.queue.writeBuffer(this.uniform, TGEAR_AT, gearUniform(AIRLINER_MESH));
+    d.queue.writeBuffer(this.uniform, TPAINT_AT, TRAFFIC_PAINT_GEO);
     this.jetBuf = d.createBuffer({ size: this.jetData.byteLength, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST });
     this.trailBuf = d.createBuffer({ size: MAX_SEGMENTS * SEG_FLOATS * 4, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST });
     this.instBuf = d.createBuffer({ size: this.instData.byteLength, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST });
@@ -1396,7 +1417,7 @@ export class ShipRenderer {
   }
 
   /** The A320's flight deck (assets/a320/a320-cockpit.bin: scripts/build-a320-cockpit.py): its vertices as built, its
-   *  glass last; its four layers of maps added to the A320's (layers 3–6). */
+   *  glass last; its four layers of maps added to the A320's (layers 4–7). */
   private async loadA320Deck() {
     if (this.deckLoading) return;
     this.deckLoading = true;
@@ -1436,7 +1457,36 @@ export class ShipRenderer {
     this.onLoaded?.();
   }
 
-  /** The deck's maps: the A320's colour array made again with seven layers — its three, the deck's four. */
+  /** The A320's colour array made again with `layers` layers (its own copied over; the old one destroyed once the GPU is done with it):
+   *  the traffic's white livery (layer 3), the deck's four (4–7). */
+  private growA320Albedo(layers: number): GPUTexture {
+    const d = this.device;
+    const target = ktxTarget(d);
+    const old = this.a320Maps!.albedo;
+    if (old.depthOrArrayLayers >= layers) return old;
+    const tex = d.createTexture({
+      size: [old.width, old.height, layers],
+      format: old.format,
+      mipLevelCount: old.mipLevelCount,
+      usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.COPY_SRC,
+    });
+    const enc = d.createCommandEncoder();
+    for (let l = 0; l < old.mipLevelCount; l++) {
+      const w = Math.max(1, old.width >> l),
+        h = Math.max(1, old.height >> l);
+      const bw = target === "rgba" ? w : Math.ceil(w / 4) * 4,
+        bh = target === "rgba" ? h : Math.ceil(h / 4) * 4;
+      enc.copyTextureToTexture({ texture: old, mipLevel: l }, { texture: tex, mipLevel: l }, [bw, bh, old.depthOrArrayLayers]);
+    }
+    d.queue.submit([enc.finish()]);
+    this.a320Maps = { ...this.a320Maps!, albedo: tex };
+    // (a livery written meanwhile went to the old array: painted again on the new one — paintA320 sees it)
+    this.device.queue.onSubmittedWorkDone().then(() => old.destroy());
+    return tex;
+  }
+
+  /** The deck's maps: the A320's colour array made again with eight layers — its three, the traffic's white livery's (3: written
+   *  when a traffic airliner first asks it), the deck's four. */
   private async loadDeckLayers() {
     if (this.deckLayers || !this.a320Maps) return;
     this.deckLayers = true;
@@ -1444,31 +1494,38 @@ export class ShipRenderer {
     const target = ktxTarget(d);
     try {
       const imgs = await Promise.all([a320Deck0, a320Deck1, a320Deck2, a320Deck3].map((u) => ktxLevels(u, target)));
-      const old = this.a320Maps.albedo;
-      const tex = d.createTexture({
-        size: [old.width, old.height, 7],
-        format: old.format,
-        mipLevelCount: old.mipLevelCount,
-        usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.COPY_SRC,
-      });
-      const enc = d.createCommandEncoder();
-      for (let l = 0; l < old.mipLevelCount; l++) {
-        const w = Math.max(1, old.width >> l),
-          h = Math.max(1, old.height >> l);
-        const bw = target === "rgba" ? w : Math.ceil(w / 4) * 4,
-          bh = target === "rgba" ? h : Math.ceil(h / 4) * 4;
-        enc.copyTextureToTexture({ texture: old, mipLevel: l }, { texture: tex, mipLevel: l }, [bw, bh, 3]);
-      }
-      d.queue.submit([enc.finish()]);
-      imgs.forEach((im, k) => writeLevels(d, tex, im.levels, im.width, im.height, target, 3 + k));
-      this.a320Maps = { ...this.a320Maps, albedo: tex };
-      // (a livery written meanwhile went to the old array: painted again on the new one — paintA320 sees it)
-      this.device.queue.onSubmittedWorkDone().then(() => old.destroy());
+      const tex = this.growA320Albedo(8);
+      imgs.forEach((im, k) => writeLevels(d, tex, im.levels, im.width, im.height, target, 4 + k));
       this.bind();
       this.onLoaded?.();
     } catch (e) {
       console.error("A320 deck maps:", e);
       this.deckLayers = false;
+    }
+  }
+
+  /**
+   * The traffic's white livery (layer 3 of the A320's colour array — under the airlines' colours, traffic/livery.ts, ship.wgsl
+   * trafficPaint): asked by the first traffic airliner drawn as the game's A320 — its 4 096² map, ~21 MiB in BC7/ASTC, not made for a
+   * flown A320 alone. Until it is in, the traffic's A320s their colours over the livery flown (its record's flag, A320_LIVERY_REC).
+   */
+  private trafficWhite: "" | "loading" | "ok" = "";
+  private async loadTrafficWhite() {
+    if (this.trafficWhite || !this.a320Maps) return;
+    this.trafficWhite = "loading";
+    const d = this.device;
+    const target = ktxTarget(d);
+    try {
+      const W = await ktxLevels(liveryWhite, target);
+      if (!this.a320Maps) throw new Error("A320 maps gone");
+      const tex = this.growA320Albedo(4);
+      writeLevels(d, tex, W.levels, W.width, W.height, target, 3);
+      this.trafficWhite = "ok";
+      this.bind();
+      this.onLoaded?.();
+    } catch (e) {
+      console.error("A320 traffic livery:", e);
+      this.trafficWhite = "";
     }
   }
 
@@ -1910,6 +1967,9 @@ export class ShipRenderer {
    *  pre-pass), "hull" (the craft's solid triangles), "glass" (the F-35's canopy and visor; "glass-sr" without the
    *  traced image's reflection, "glass-flat" a flat tint), "plume" (the flames, trails, lamps). */
   debugSkip = new Set<string>();
+  /** (a measuring lever) the casters on the ground other than the war's units — the traffic's airliners, the ships (ship-casters.ts) —
+   *  in the shadow map's second half; false: none of them (their shadows' cost, tests/e2e/traffic-runways) */
+  trafficCast = true;
   /** (a measuring mask, 0 in play — ship.wgsl fs, S.air.x): 1 no shadow map read, 2 no screen reflection, 4 no probe specular, 8 no shading
    *  at all (a flat grey: the geometry's cost alone) — the
    *  hull's shading's parts priced by A/B (tests/e2e/perf-ab.e2e.test.ts SET=ship); a uniform, no recompile */
@@ -2250,6 +2310,8 @@ export class ShipRenderer {
       fins?: number[];
       motor?: ShipInstance["motor"];
       ground?: ShipInstance["ground"];
+      cast?: boolean;
+      traffic?: ShipInstance["traffic"];
     }[] = this.flown ? [{ id: this.vessel, R, t, shadow: true, far: !!v.place, mirror: !!sea?.flown }] : [];
     for (const o of v.others ?? [])
       if (list.length < MAX_INST && this.meshes[o.id])
@@ -2267,31 +2329,27 @@ export class ShipRenderer {
           fins: o.fins,
           motor: o.motor,
           ground: o.ground,
+          cast: o.cast,
+          traffic: o.traffic,
         });
     // (the nearest carrier within 20 km: the map's second half)
     let big = -1;
     list.forEach((it, i) => {
       if (it.big && Math.hypot(...it.t) < 20_000 && (big < 0 || Math.hypot(...it.t) < Math.hypot(...list[big]!.t))) big = i;
     });
-    // (no carrier: the ground units looked at — those within 200 m of the one nearest the view's centre, within 4 km — the second half
-    // instead: their shadows on the ground they stand on, a few decimetres a texel — Sam, 6 Nov 2026: « ajoute les ombres »)
-    const group = new Set<number>();
-    if (big < 0) {
-      // (the one nearest the view's centre — the smallest angle off the camera's axis, in front —: the lens on a tank had the
-      // trucks nearer the eye in the map, the tank without its shadow)
-      let near = -1,
-        best = Infinity;
-      list.forEach((it, i) => {
-        const d = Math.hypot(...it.t);
-        if (!GROUND_UNITS[it.id as GroundUnitId] || d > 4000 || it.t[2] <= 0) return;
-        const off = Math.acos(Math.min(1, it.t[2] / d));
-        if (off < best) (best = off), (near = i);
-      });
-      if (near >= 0)
-        list.forEach((it, i) => {
-          if (GROUND_UNITS[it.id as GroundUnitId] && Math.hypot(...sub(it.t, list[near]!.t)) < 200) group.add(i);
-        });
-    }
+    // (no carrier: the casters on the ground looked at — the war's ground units, the traffic's airliners on the ground or low over it,
+    // the ships — the second half instead: the one nearest the view's centre within 4 km and those about it, a few decimetres a texel
+    // (ship-casters.ts — Sam, 6 Nov 2026: « ajoute les ombres »; 24 Nov 2026: the traffic's too))
+    const group =
+      big < 0
+        ? shadowGroup(
+            list.map((it) => ({
+              t: it.t,
+              r: this.meshes[it.id]?.bound.r ?? 50,
+              kind: GROUND_UNITS[it.id as GroundUnitId] ? ("unit" as const) : it.cast && this.trafficCast ? ("craft" as const) : null,
+            })),
+          )
+        : new Set<number>();
     const groupBalls: { c: V3; r: number }[] = [];
     // (the others' engines firing: their jets after the flown craft's — appendJets)
     const lit: { id: VesselId; R: M3; t: V3; thrust: NonNullable<ShipInstance["thrust"]>; exit: { p: V3; d: V3 } | null }[] = [];
@@ -2327,7 +2385,7 @@ export class ShipRenderer {
         this.writeParts(mats, parts);
         if (i === 0) this.jetExit = nozzleExit(this.jetMesh, mats);
         else if (it.thrust) lit.push({ id: "f35", R: it.R, t: it.t, thrust: it.thrust, exit: nozzleExit(this.jetMesh, mats) });
-      } else if (it.id === "a320" && this.a320Mesh && jetSlot < JET_SLOTS && partCount(this.a320Mesh) <= MAX_PARTS) {
+      } else if (it.id === "a320" && this.a320Mesh && jetSlot < JET_SLOTS && partCount(this.a320Mesh) <= A320_LIVERY_REC) {
         // (an A320: its rig's maps — the flown one's, another's as it sent them, else at rest)
         parts = MAX_INST + jetSlot++ * MAX_PARTS;
         const R = i === 0 && this.flown ? v.a320 : it.a320;
@@ -2335,6 +2393,15 @@ export class ShipRenderer {
         this.writeParts(mats, parts);
         // (its wings' bend: the tip's rise in its first part's record — ship.wgsl a320Flex, src/a320/flex.ts)
         this.instData[parts * INST_FLOATS + 16] = Number(R?.props?.["sim/wing-flex"] ?? 0) || 0;
+        // (a traffic airliner's livery — its slot's last record; zeros: its own livery, the flown one's, another player's)
+        const liv = i === 0 && this.flown ? null : (it.traffic?.livery ?? null);
+        const rec = liveryRecord(liv, 1);
+        // (its white livery under the colours: layer 3, asked by the first — model[2].w 1 once it is in)
+        if (liv) {
+          if (this.trafficWhite === "") void this.loadTrafficWhite();
+          rec[11] = this.trafficWhite === "ok" ? 1 : 0;
+        }
+        this.instData.set(rec, (parts + A320_LIVERY_REC) * INST_FLOATS);
         if (i === 0 && this.flown) this.a320Now = { mats, props: R?.props ?? A320_REST.props };
         if (i > 0 && it.thrust) lit.push({ id: "a320", R: it.R, t: it.t, thrust: it.thrust, exit: null });
       } else if (i > 0 && it.thrust && !isTraffic(it.id)) lit.push({ id: it.id, R: it.R, t: it.t, thrust: it.thrust, exit: null });
@@ -2346,6 +2413,12 @@ export class ShipRenderer {
         this.instData.set([f[0] ?? 0, f[1] ?? 0, f[2] ?? 0, f[3] ?? 0, shape.hingeZ, shape.roll0, 0, 0], parts * INST_FLOATS);
         mslRecs = Math.max(mslRecs, i + 1);
         if (it.motor && it.motor.level > 0) motors.push({ R: it.R, t: it.t, shape, ...it.motor });
+      }
+      // (a plain traffic airliner: its gear and its livery — ship.wgsl trafficGearPos, trafficPaint)
+      if ((it.id === "a320t" || it.id === "crj900") && it.traffic) {
+        parts = MSL_AT + i;
+        this.instData.set(liveryRecord(it.traffic.livery, it.traffic.gear), parts * INST_FLOATS);
+        mslRecs = Math.max(mslRecs, i + 1);
       }
       // (a ground unit: its turret's and arm's pose, its rails' missiles, its burning — ship.wgsl groundPos)
       const unit = GROUND_UNITS[it.id as GroundUnitId];
