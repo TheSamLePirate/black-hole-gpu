@@ -160,14 +160,13 @@ describe("PR4 — Shared Road Carriageway Material and Raster Integration", () =
       meshes3d: boolean;
       shadeSkip: boolean;
       bridgeCount: number;
-      nearTreesNow: boolean;
       legacyVeto: boolean;
     }) => {
       if (params.legacyVeto) {
-        return params.rasterLiteNow && params.meshes3d && params.shadeSkip && params.bridgeCount === 0 && !params.nearTreesNow;
+        return params.rasterLiteNow && params.meshes3d && params.shadeSkip && params.bridgeCount === 0;
       }
-      // PR4: bridgeCount veto retired
-      return params.rasterLiteNow && params.meshes3d && params.shadeSkip && !params.nearTreesNow;
+      // PR4: bridgeCount veto retired (and the near trees' rays — nearTreesNow — retired on 24 Nov 2026, J9 review)
+      return params.rasterLiteNow && params.meshes3d && params.shadeSkip;
     };
 
     const sceneWithBridges = {
@@ -175,7 +174,6 @@ describe("PR4 — Shared Road Carriageway Material and Raster Integration", () =
       meshes3d: true,
       shadeSkip: true,
       bridgeCount: 12,
-      nearTreesNow: false,
     };
 
     // Legacy behavior: blocked by bridgeCount === 0 veto

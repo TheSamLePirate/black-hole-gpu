@@ -1,4 +1,4 @@
-import { NearTreeGeometry, NEAR_TREE_WGSL } from "../vegetation/tree-near";
+import { NEAR_TREE_SLOTS, NEAR_TREE_WGSL, NearTreeGeometry } from "../vegetation/tree-near";
 // The world's trees drawn as raster instances (docs/PLAN-RENDU-RASTER-AAA.md étape 1b): not their look — the instance
 // only says which tree a pixel sees, and the tracer's kernel shade tests that tree alone, exactly, with the forest's own
 // shapes (trace.wgsl worldScenery: forestCandidate) instead of walking the grid of cells along every camera ray.
@@ -321,10 +321,12 @@ fn cull(@builtin(global_invocation_id) g: vec3u, @builtin(num_workgroups) n: vec
   let R = length(vec2f(max(t.r.x, t.trunkR) * 1.5, 0.5 * (top - lo))) + 0.5;
   // (the trees within the shadow map's reach — in view or not: one behind the camera shades the ground before it —: its two
   // lists, a round crown's or a cone's)
+  // (J9: the near tree's state advanced — its hand-over, LOD and fade — before either view: the Sun's casters are the drawn trees)
+  let ns = nearSelect(k, t, hd);
   if (sun.c.w > 0.5) {
     let q = centre - sun.c.xyz;
     if (abs(dot(q, sun.r.xyz)) < sun.r.w + R && abs(dot(q, sun.u.xyz)) < sun.u.w + R) {
-      if (!nearShadowKeep(k, t, hd)) {
+      if (!nearShadowKeep(k, ns)) {
         let ls = ${LISTS + 1}u + select(0u, 1u, t.cone);
         let at = atomicAdd(&draws[ls].instances, 1u);
         if (at < CAP) { listsOut[ls * CAP + at] = k; }
@@ -340,7 +342,7 @@ fn cull(@builtin(global_invocation_id) g: vec3u, @builtin(num_workgroups) n: vec
   // (a tree under ~1.2 px of radius — sc.east.w — not drawn: no shape at that size, the forest's colour the ground's imagery
   // there; hundreds of thousands of micro-triangles, stacked deep at a grazing view, were most of the pass)
   if (R / max(v.z, 1.0) / ty * (0.5 * u.image.y) < sc.east.w) { return; }
-  if(nearKeep(k,t,hd)){return;}
+  if (nearKeep(k, t, ns)) { return; }
   let list = select(0u, 1u, t.cone) + select(2u, 0u, length(v) < sc.cam.w);
   let at = atomicAdd(&draws[list].instances, 1u);
   if (at < CAP) { listsOut[list * CAP + at] = k; }
@@ -348,13 +350,9 @@ fn cull(@builtin(global_invocation_id) g: vec3u, @builtin(num_workgroups) n: vec
 // the counts kept within the lists' room (the draws read them as they are)
 @compute @workgroup_size(${LISTS})
 fn clampDraws(@builtin(local_invocation_index) i: u32) {
-  let mLim = select(24u, 36u, sun.c.w > 0.5);
-  for(var m=i;m<mLim;m+=4u){atomicStore(&nearDraws.items[m].instances,min(atomicLoad(&nearDraws.items[m].instances),u32(nearU.z)));}
-  if(i==0u){
-    let cur=sc.cam.xyz;
-    let old=select(cur,nearDraws.anchor.xyz,nearDraws.anchor.w>.5 && length(cur-nearDraws.anchor.xyz)<200.0);
-    let dv=cur-old;let dl=length(dv);
-    nearDraws.anchor=vec4f(select(old,cur-dv*(2.5/dl),dl>2.5),1.0);
+  // (J9: the near draws' counts within their capacity too — the view's, the Sun's, the cut proxies')
+  for (var m = i; m < ${NEAR_TREE_SLOTS}u; m += ${LISTS}u) {
+    atomicStore(&nearDraws.items[m].instances, min(atomicLoad(&nearDraws.items[m].instances), u32(nearU.a.z)));
   }
   atomicStore(&draws[i].instances, min(atomicLoad(&draws[i].instances), CAP));
   if (i == 0u) {
@@ -465,7 +463,16 @@ struct ShadowV {
     }
     return;
   }
-  // (the unit cone: the base disc crossed, or its side x² + y² = z² between z −1 and 0)
+  if (!unitConeLine(q, L)) { discard; }
+}
+// the line through q along L (the crown's unit frame) crossing the unit sphere
+fn unitSphereLine(q: vec3f, L: vec3f) -> bool {
+  let s = dot(q, L);
+  return dot(q, q) - s * s <= 1.0;
+}
+// ... or the unit cone — apex at 0, its base disc of radius 1 at z = −1: the base disc crossed, or its side x² + y² = z²
+// between z −1 and 0
+fn unitConeLine(q: vec3f, L: vec3f) -> bool {
   var hit = false;
   if (abs(L.z) > 1e-6) {
     let b = q.xy + ((-1.0 - q.z) / L.z) * L.xy;
@@ -486,13 +493,16 @@ struct ShadowV {
     let z = q.z + (-c / bq) * L.z;
     hit = z >= -1.0 && z <= 0.0;
   }
-  if (!hit) { discard; }
+  return hit;
 }
 @vertex fn proxyVs(@location(0) m: vec4f, @builtin(instance_index) ii: u32) -> V {
-  var o: V;
   let k = listsIn[LIST * CAP + ii];
   let hd = forestHead(u32(forestData(2u).x));
-  let t = treeOf(k, hd);
+  return proxyOut(m, k, treeOf(k, hd));
+}
+// a proxy's corner m about tree t (cell k) on the screen — proxyVs's, and the near trees' cut proxies' (tree-near.ts nearProxyVs)
+fn proxyOut(m: vec4f, k: u32, t: Tree) -> V {
+  var o: V;
   let part = u32(m.w);
   var p: vec3f;
   // (a part this tree has not — a cone's list draws no round crown, a shrub no trunk —: every corner at one point)
@@ -1447,6 +1457,7 @@ export class SceneryRaster {
       ],
     });
     this.nearTrees = new NearTreeGeometry(device, this.module, this.drawLayout);
+    this.nearTrees.setProxyMeshes(this.meshes.slice(0, 2), this.meshCounts.slice(0, 2));
     const cullPipeLayout = device.createPipelineLayout({ bindGroupLayouts: [this.cullLayout, this.nearTrees.cullLayout] });
     const drawPipeLayout = device.createPipelineLayout({ bindGroupLayouts: [this.drawLayout] });
     void device
@@ -2304,6 +2315,8 @@ export class SceneryRaster {
     // a near proxy's 80 faces and trunk ten times the triangles for a shadow it cannot resolve)
     this.reset[(LISTS + 1) * 4] = this.meshCounts[2]!;
     this.reset[(LISTS + 2) * 4] = this.meshCounts[3]!;
+    // (J9: the near trees' cut proxies drawn with the near lists' meshes)
+    (this.nearTrees as NearTreeGeometry | undefined)?.setProxyMeshes(this.meshes.slice(0, 2), this.meshCounts.slice(0, 2));
     this.lod = { ...lod };
   }
   getLod(): SceneryRasterLod {

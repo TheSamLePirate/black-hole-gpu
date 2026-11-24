@@ -1,7 +1,14 @@
 // J9-2: build shared geometry in Bun, never in the image loop.
 // Packs 24 models: the 12 full near models (LOD 0) followed by the 12 structured tuft/limb LOD 1 models.
 import { MeshoptEncoder, MeshoptSimplifier } from "meshoptimizer";
-import { encodeTreeAssets, type TreeAssetModel, TREE_ASSET_FORMAT, TREE_VERTEX_FLOATS } from "../src/vegetation/tree-assets";
+import {
+  encodeTreeAssets,
+  packTreeAssets,
+  TREE_ASSET_FORMAT,
+  TREE_VERTEX_BYTES,
+  TREE_VERTEX_FLOATS,
+  type TreeAssetModel,
+} from "../src/vegetation/tree-assets";
 import { TREE_ASPECTS, TREE_MODEL_KINDS, type TreeMesh, treeModel } from "../src/vegetation/tree-model";
 
 await Promise.all([MeshoptEncoder.ready, MeshoptSimplifier.ready]);
@@ -164,7 +171,9 @@ for (const path of [
   sourceHash.update(path);
   sourceHash.update(await Bun.file(path).arrayBuffer());
 }
-const bytes = encodeTreeAssets(models),
+// (format 2: quantised and GPU-ready — tree-assets.ts —; the float models above stay the build's own)
+const packed = packTreeAssets(models);
+const bytes = encodeTreeAssets(packed),
   zip = Bun.gzipSync(bytes, { level: 9 });
 const out = process.argv[2] ?? "assets/vegetation/trees-v1";
 const generation = sourceHash.digest("hex");
@@ -187,12 +196,14 @@ const manifest = {
   compression: "gzip",
   rawBytes: bytes.byteLength,
   bytes: zip.byteLength,
+  vertexBytes: TREE_VERTEX_BYTES,
+  box: { lo: packed.lo, ext: packed.ext },
   barkLodStudy,
   lodStudy,
-  models: models.map(({ vertices, indices, ...m }) => ({
+  models: packed.models.map(({ vertexCount, indexCount, ...m }) => ({
     ...m,
-    vertices: vertices.length / TREE_VERTEX_FLOATS,
-    triangles: indices.length / 3,
+    vertices: vertexCount,
+    triangles: indexCount / 3,
   })),
 };
 await Bun.write(`${out}.json`, `${JSON.stringify(manifest, null, 2)}\n`);

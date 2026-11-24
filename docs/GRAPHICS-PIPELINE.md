@@ -29,25 +29,77 @@ branches, dans la même enveloppe ; la cuisson au démarrage reprend ces modèle
 Les cibles, layouts et passes de production ne changent pas dans ce lot. L'inspection e2e utilise des cibles temporaires
 rgba8unorm/depth24plus, détruites après lecture, sans coût de frame revendiqué. Le rendu proche dans le jeu reste à J9-3.
 
-### J9-3 / J9-4 / J9-5 / J9-A / J9-R — arbres proches en vraie géométrie, LOD 0/1, raccord aux imposteurs et ombres 3D découpées (20 novembre 2026)
+### J9 — arbres proches en vraie géométrie, LOD 0/1, raccord aux imposteurs, ombres 3D découpées (20 nov. 2026 ; revu le 24 nov. 2026)
 
-`vegetation/tree-near.ts` possède les buffers et pipelines de vraie géométrie proche, derrière
-`renderer.nearTreeGeometryOn` **allumé par défaut après acceptation J9-A** (retrait au lot J9-R du tracé primaire de restes `nearTreesRays` dans le raster). KTG1 (`trees-v1-b31429154c38b2fd.bin`, 24 modèles : 12 × LOD 0 + 12 × LOD 1, −62,4 % de triangles en LOD 1) est importé comme asset du bundle : chargement/décompression/validation
-et uploads une fois au premier allumage dans **deux tampons partagés** (1 tampon de sommets de 6,83 Mo et 1 tampon d'indices de 2,69 Mo, indexés par `firstIndex` et `baseVertex`). Vingt-quatre pipelines de
-rendu asynchrones pour la visibilité (`nearTreeVs`/`nearTreeFs`, `NEAR_MODEL = 0..23`) et douze pipelines d'ombre (`nearTreeShadowVs`/`nearTreeShadowFs`, `NEAR_MODEL = 24..35`, LOD 1) sont compilés à cet allumage ; rayon normal 80 m.
+`vegetation/tree-near.ts` possède les buffers et pipelines de la géométrie proche, derrière `renderer.nearTreeGeometryOn`
+(allumé depuis J9-R). **Le tracé des arbres proches par le noyau des rayons est retiré (revue du 24 nov.)** : drapeau
+`RASTER_NEAR_TREES_FLAG` (2048), `RASTER_NEAR_TREES_M`, `rasterNearTreesOn()`, sa branche de `rasterLiteTakes`,
+`renderer.nearTreesNow` et le levier `nearTreesRays` n'existent plus. Tant que la géométrie n'est pas là (asset ou pipelines
+en route, échec, ou levier éteint), les arbres proches sont dessinés par **leurs proxies découpés au houppier**
+(`nearProxyVs`/`nearProxyFs`, pipeline `near tree cut proxy`) : la droite caméra–fragment est testée dans le repère unitaire
+du houppier balancé (sphère ou cône, les tests de `shadowFs` factorisés en `unitSphereLine`/`unitConeLine`), le fragment
+manqué est rejeté — l'enveloppe entière masquait les arbres et bâtiments derrière (« anneau de sol nu »). Le matériau
+(`sceneryTreeLite`, houppier simple `detail −1`) touche ce même houppier.
 
-La passe existante `scenery raster cull` publie les instances : groupe 1, uniforme binding 27 (allumé/prêt, portée,
-capacité, id d’isolement diagnostic), stockage 28 (36 arguments indexés de 20 octets + compteur de dépassement + ancre d'hystérésis GPU `anchor` : 752 octets), listes écrites 29,
-relues au sommet 30 (36 × 4 096 u32, 576 Kio). Lorsque la carte d'ombre des arbres est redessinée (`sun.c.w > 0.5`), `nearShadowKeep` capture avant le test de frustum caméra tous les arbres dans la sphère proche (`≤ 1,05 × portée`, vus ou hors champ) dans les tranches `24..35` (les arbres au-delà, ou en dépassement de capacité, restant dans les listes d'ombre proxy `LISTS + 1 / 2`), et `encodeShadow` appelle `nearTrees.drawShadow` dans la couche 0 de `tsmTex`. `treeShadowAt` (`system/tree-shadow.ts`) réduit dans ce domaine proche le biais à `0,55 m + 1 texel` et utilise le filtre bilinéaire `2 × 2` (`0,88 m`) avant de fondre vers le filtre `3 × 3` entre 55 et 85 m. Le choix LOD 0 / LOD 1 en visibilité dépend de l'erreur projetée (`errPx`) modulée par l'ancre d'hystérésis (`±5 %`) et la gigue déterministe par cellule (`±4 %`). L’uniforme 27 est aussi lu par le fragment pour le témoin d’occlusion : id positif masqué, négatif seul conservé, zéro normal ; le tri ne réintroduit pas les arbres masqués dans les proxies. `clampDraws` borne les comptes et met à jour l'ancre d'hystérésis ; un refus dépassement reste dans les proxies,
-jamais un arbre supprimé. Le dessin est dans `terrain raster visibility`, avant les proxies, avec les buffers de sommets
-entrelacés (40 octets) et indices KTG1 partagés. Les buffers et pipelines sont au renderer, détruits avec le décor.
+**Asset (format 2, 24 nov.)** : `trees-v1-1a95a303e00030d6.bin` (KTG1, format 2 ; 24 modèles : 12 × LOD 0 + 12 × LOD 1),
+**3 949 312 octets décompressés, 2 278 887 octets gzip** (format 1 : 9 519 424 et 3 979 761). Sommet de 16 octets
+(position `unorm16x4` dans la boîte commune de l'asset, normale octaédrique `snorm16x2`, attributs `unorm8x4` : u, v,
+matière, ombrage) au lieu de 40 ; indices `uint16` locaux à leur modèle (tous < 65 536 sommets, `baseVertex`). Les deux blobs
+sont dans l'ordre d'upload : vues du tampon décompressé, envoyées telles quelles (plus de concaténation). Récupération,
+décompression et contrôle dans un worker (`tree-asset-worker.js`, `vegetation/tree-asset-load.ts` ; sur la page à défaut),
+demandés **sous le voile d'entrée** (`renderer.departureReady`, qui attend la géométrie prête ou en échec une fois le décor
+raster créé, 15 s au plus comme le voile) et au titre (`prewarmEarthFlight`). Un échec est redemandé après 1, 2, 4 … 60 s.
+Mesuré côté Bun (pas dans le navigateur), Apple M1 Max, 24 nov. 2026, médiane de 9 : décompression 17,1 → 9,7 ms,
+décodage + concaténation 22,2 → 0,17 ms (script ponctuel de la session, non commité). Mémoire GPU des sommets et
+indices : 3 244 896 + 702 816 = 3 947 712 octets au lieu de 8 112 240 + 1 405 632 = 9 517 872 (tailles des tampons
+calculées depuis le manifeste, non relevées dans le navigateur).
 
-Pas de nouvelle cible : le fragment rejette les vides du masque partagé (et les cartes de feuilles en hiver lorsque `v.bare > 0.5`) puis écrit la profondeur réelle, l'identité et le
-mouvement (`o.mot` uniquement lorsque le vent déplace l'arbre, `any(sw != vec2f(0.0))`) ; g/b/a de la visibilité (r du sol conservé). Sous code 0, bit 17 de a = géométrie, normale octaédrique 2×8 bits,
-bit 16 = feuille ; la fraction (pas de 1/64 du float32 à cette magnitude) porte l'ombrage sur 64 niveaux. `terrainRasterTreeSurface` et `sceneryTreeGeometry` lisent cette
-surface dans le matériau (`earth lite`) ; `rasterLiteTakes` la prend même dans le domaine des rayons proches, sans
-`forestCandidate` ni marche de grille primaire. Lorsque la géométrie proche est active (`P.scenery[6].w = 2`), `sceneryTreeLite` passe directement dès 80 m aux imposteurs V2 (`sceneryTreeImpostor`, `impNear = 0`) avec la même rotation par cellule et la même enveloppe, et prolonge en hiver les feuillus nus par `forestTwigs` jusqu'à 160 m. Les versions sans décor gardent leurs stubs et ne lisent aucune ressource
-nouvelle. `forestLook` et la chaîne lumière/air/finition restent communs.
+**Pipelines : trois au lieu de 36** (`near tree geometry`, `near tree shadow`, `near tree cut proxy`), compilés à la
+création du décor raster, sans constante `NEAR_MODEL` : le modèle se relit de l'arbre (`nearModelOf`), la liste de l'instance
+vient de l'attribut d'instance `uint32` lu dans le tampon des listes lié à l'offset de sa tranche (`setVertexBuffer(1, …)`).
+WebGPU n'ayant ni décompte indirect ni multi-draw, les 24 dessins de vue, 24 d'ombre et 2 de proxies découpés restent encodés
+(un dessin vide a 0 instance) ; plus de changement de pipeline entre eux.
+
+**Sélection (`scenery raster cull`)** : groupe 1 — uniforme 27 (`NearU`, 64 octets : allumé/prêt, portée, capacité, id
+diagnostic ; pas de fondu, proxies découpés prêts ; boîte de quantification), stockage 28 (50 arguments indexés de 20 octets
++ dépassement : 1 008 octets), listes 29 (50 × 4 096 u32, 800 Kio ; aussi `VERTEX`), **état par arbre 31** (`nearState`,
+4 096 octets : un octet par cellule d'un tore 64 × 64 de la grille mondiale de 7 m, 448 m). `nearSelect` avance l'état
+une fois par tri, avant le test de vue : cible géométrie sous 95 % de la limite de l'arbre (portée × gigue ±4 % par graine),
+proxy au-delà de 105 %, inchangée entre les deux — **hystérésis indépendante du sens de déplacement** (l'ancre traînante
+`anchor` de 2,5 m est retirée) ; LOD 0 si erreur projetée > 3,5 px et < 50 % de la limite, LOD 1 sous 2,9 px ou au-delà de
+56 % ; progression du fondu 0…63 par pas `63 × dt / 0,3 s`. `nearKeep` place l'arbre en géométrie si la progression > 0, et
+son proxy découpé tant qu'elle est < 63 ; **les deux se partagent les pixels par un tramage par pixel et par image**
+(`nearDither`, bruit de gradient entrelacé en phase de l'image ; le TAA l'intègre) : fondu de 0,3 s à 80 m au lieu d'un saut
+par arbre. Le matériau lit l'imposteur sur les pixels du proxy (`impNear = 0` quand la géométrie est active).
+`clampDraws` borne les 50 comptes ; un dépassement retombe dans les proxies, jamais un arbre supprimé.
+
+**Ombres** : `nearShadowKeep` met en géométrie d'ombre **les arbres dessinés en géométrie** (progression ≥ 32), **au LOD
+dessiné** (tranches 24…47, 12 modèles × 2 LOD), les autres dans les listes d'ombre proxy. `nearTreeShadowVs` applique **le
+même balancement du vent** que la vue. Le cache de la carte (`renderer`, clé `tsmNearKey`) se redessine quand la caméra a
+parcouru 8 m depuis le dernier dessin proche (au lieu d'une grille de 32 m, jusqu'à ~22 m de retard), une fois de plus
+0,4 s après (fondu terminé), et au rythme du vent : 2 Hz par unité de vent, ≤ 4 Hz (le houppier bouge au plus ~0,45 m/s par
+unité, un quart de texel de 0,88 m en ~0,5 s). Coût non mesuré. `treeShadowAt(p, nl)` : biais proche fonction de la pente du
+récepteur au Soleil (`0,35 + texel × (0,25 + 0,5 tan θ)`, θ borné à tan 4 : ~0,57 m face au Soleil, ~1,3 m à 60°, ~2,3 m
+rasant) au lieu de `0,55 m + ½ texel` pour tout récepteur à moins de 85 m ; filtre bilinéaire 2 × 2 proche fondu vers 3 × 3
+entre 55 et 85 m (inchangé).
+
+Pas de nouvelle cible : le fragment rejette les vides du masque partagé (et les cartes de feuilles en hiver lorsque
+`v.bare > 0.5`), puis écrit la profondeur réelle, l'identité et le mouvement (`o.mot` uniquement lorsque le vent déplace
+l'arbre) ; g/b/a de la visibilité (r du sol conservé). Sous code 0, bit 17 de a = géométrie, normale octaédrique 2×8 bits,
+bit 16 = feuille ; la fraction porte l'ombrage sur 64 niveaux. `terrainRasterTreeSurface` et `sceneryTreeGeometry` lisent
+cette surface dans le matériau (`earth lite`), sans `forestCandidate` ni marche de grille primaire. **Bruit du matériau
+d'arbre mis en commun (24 nov.)** : `sceneryTreeGeometry`, l'imposteur et le houppier simple demandent leurs touffes et leur
+grain (`treeFinishAsk`), faits une fois par `shadeLite` (`sceneryTreeFinish`, 4 `gnoise` au lieu de 15) : `shadeLite`
+inliné 8 528 → 7 649 lignes (Terre raster ; avant J9 : 7 574), `shade` 27 225 → 27 224 (le retrait du chemin des rayons ne
+retirait qu'un test : son tracé des arbres est le `worldScenery` commun) — `scripts/wgsl-inline-size.ts`, 24 nov. 2026.
+Budgets `tests/kernel-budget.json` remis aux valeurs d'avant J9 (`d5a28dea`), ou plus serrés quand J9-6 les avait serrés.
+Lorsque la géométrie est active (`P.scenery[6].w = 2`), `sceneryTreeLite` passe aux imposteurs V2 dès la portée proche
+(`impNear = 0`) et prolonge en hiver les feuillus nus par `forestTwigs` jusqu'à 160 m. Les versions sans décor gardent leurs
+stubs. `forestLook` et la chaîne lumière/air/finition restent communs.
+
+**Mesures** : aucune mesure GPU de cette révision (fondu, proxies découpés, ombres au vent, pipelines uniques, sommets
+quantifiés) ; les chiffres J9-A sont ceux de leurs fiches (`docs/progress/j9/`), dont la passe M1 Max est invalide (bridage
+thermique) ; aucun A/B avant-J9 contre J9 n'existe.
 
 ## 1. Vue d'ensemble
 
@@ -155,7 +207,7 @@ R reconstruction/sortie, S ombres/sondes amorties, Z hors budget (diagnostic, ch
 | C6b | `terrain raster visibility` | `terrain-raster.ts:600` (`encodeTerrainRasterVisibility` `renderer.ts:10290`) | **rendu** : patch `terrainVs/Fs`, anneaux `ringFs`, proxies d'arbres, boîtes, maillages de bâtiments ; **seconde cible `terrain raster motion`** (`rgba16float`, PLAN-J1 J1-2, 10 nov.) : le mouvement sur l'image depuis l'image précédente des maillages mobiles du décor et, **depuis le 12 nov. (V2e, F1), des houppiers que le vent balance** (`proxyFs`, leur position à l'horloge d'avant par la caméra d'avant ; forest.wgsl `forestSway` : vent de surface, ≤ 2 % de la hauteur, ≤ 0,5 m, éteint de 300 à 500 m ; le traceur le lit par `P.scenery[7]`, le raster par `sc.misc.yzw` ; la carte d'ombre des arbres reste immobile) (voitures — cinq silhouettes depuis VB3, 17/11 : `car-shapes.ts`, leur verre `CAR_GLASS_BIT` ; VB4, 17/11 : les voitures garées des places des cellules « rue », lues du cache par le worker du décor dans 900 m, à l'arrêt, feux éteints, `renderer.parkedCarsOn` ; VB5b, 17/11 : chaque feu vu le long de son faisceau — un phare de l'avant, son cœur dans l'axe, un feu arrière de l'arrière —, sa part de lumière dans la fraction du tag, le quad fermé de l'autre côté — `carAhead` ; RP7, 17/11 : au-delà de la scène, les tabliers des ponts des cellules « rue » tirés par le chemin des voitures lointaines (`farCarVs`, une dalle de béton par segment de tablier) ; RP2, 17/11 : en France, les routes de la scène dans 2,5 km lues des cellules « rue » du cache — axe et largeur BD TOPO — au lieu d'OMT, `cellRoadsOn` ; VB5a, 17/11 : les lampadaires proches à 12 sommets — mât, potence élargie vers le haut de l'écran (`LAMP_ARM_BIT`), tête — en trois formes, `lampShape` —, pales — leur point à l'horloge et par la caméra d'avant, `meshVs`), z 1 où donné, z 2 une voiture ramenée par sa boucle (saut > ¼ d'image : sans historique) ; effacée à 0, lue par `temporal` et `taau` ; **copiée en fin d'image** (copie non chronométrée avant la soumission, `renderer.keepMotion`, ~9 Mo à 1440×810, seulement si `sceneryRaster.motionOn`) dans `motion, the frame before` (même taille, lue à l'image suivante : désoccultations) | raster primaire, fenêtre du cache prête, ≤ 4,19 Mpx | maillages, `TABLE_TERRAIN`, décor → **distance rgba32f W×H** (r sol, g id d'instance, b surface la plus proche, a code·2¹⁸ + normale) ; **identité `r32uint` W×H** (`terrain raster identity`, PLAN-J1 J1-2, 12 nov. : objet 20 bits | génération 12 bits — la publication du décor, `sc.ident.x` —, 0 rien ; écrite par les proxies d'arbres et les maillages de bâtiments, 0 par le sol, laissée par les boîtes et marques ; lue par `renderer.surfaceAt`) ; **profondeur `depth32float` gardée** (Z inversé, `depthStoreOp: "store"` depuis le 12 nov. ; lue par `surfaceAt(…, true)`) ; ~~**mouvement analytique du rigide**~~ (`renderer.rigidMotionOn`, éteint, jamais lu) **retiré le 13 nov.** (PLAN-J2 J2-8 : ses entrées `terrainVsMot`/`terrainFsMot`/`ringFsMot`, les champs `pd/pr/pu/pf` — l'uniforme du terrain 13 → 9 vec4 —, le `rigidMotion` du décor) | V ; **les anneaux reconstruits au CPU à chaque pas de fenêtre** (`drawRing`) : sommets écrits au seul changement de niveau, découpe par boîtes (`ringCut`), tableau réutilisé — 393–425 → 326 ms sur un vol J0 (14 nov.) |
 | C6c | `terrain from the Sun` | `terrain-raster.ts:802` ; `renderer.ts:9804` | rendu profondeur `terrainSunVs`, bâtiments `boxShadowVs/meshShadowVs` | Soleil tourné > 5e-5 rad, centres ou cuissons changés ; sinon gardée | → `sunDepth` (2 cascades 2048², ±1,5 / ±10 km, profondeur ±20 km) + `TABLE_SUN` → traceur 37 ; lecteur partagé `sunShadowFarAt` : récepteur strictement dans la profondeur (0,1), y compris dans le fondu ; sinon cascade suivante puis horizons/marche du lecteur (21 nov. 2026, carré d'ombre) | S |
 | C6d | `ground occlusion` | `gtao.ts:128` | `gtao`, demi-résolution | `gtao` actif | distance → `t.ao` r32f → traceur 47 | M |
-| C6e | `trees' shadow map` (+ couche bâtiments non chronométrée) | `scenery-raster.ts:1084` | rendu profondeur sur `tsmTex` 2048²×2 ; les arbres découpés à leur houppier vu du Soleil (`shadowFs`, depuis le 14 nov. 2026 ; les proxies entiers et leur levier `treeShadowCut` retirés à J5-R, 15 nov.) | caméra déplacée de 128 m dans le plan du Soleil **ou le long du Soleil** (le centre calé aussi sur cet axe depuis le 15 nov. 2026, J4-5 : il suivait la caméra, la carte redessinée **à chaque image** en vol — 359 fois par vol de 20 s sur les Maures, 36 après ; **GPU p50 55,9 → 53,1 ms**, A B A B A, kerr-mini ; `tsmDraws` le compte ; l'ancien chemin et son levier retirés à J4-R), Soleil, révision du décor, bascule de la découpe | → `tsmTex`, `TABLE_TSM` → traceur 41 | S |
+| C6e | `trees' shadow map` (+ couche bâtiments non chronométrée) | `scenery-raster.ts:1084` | rendu profondeur sur `tsmTex` 2048²×2 ; les arbres découpés à leur houppier vu du Soleil (`shadowFs`, depuis le 14 nov. 2026 ; les proxies entiers et leur levier `treeShadowCut` retirés à J5-R, 15 nov.) | caméra déplacée de 128 m dans le plan du Soleil **ou le long du Soleil** (le centre calé aussi sur cet axe depuis le 15 nov. 2026, J4-5 : il suivait la caméra, la carte redessinée **à chaque image** en vol — 359 fois par vol de 20 s sur les Maures, 36 après ; **GPU p50 55,9 → 53,1 ms**, A B A B A, kerr-mini ; `tsmDraws` le compte ; l'ancien chemin et son levier retirés à J4-R), Soleil, révision du décor, bascule de la découpe ; **arbres proches en géométrie (J9, revu le 24 nov.)** : état de la géométrie proche, caméra déplacée de 8 m depuis le dernier dessin proche puis une fois le fondu fini (+0,4 s), et le vent (2 Hz par unité, ≤ 4 Hz) — coût non mesuré | → `tsmTex`, `TABLE_TSM` → traceur 41 | S |
 | C6′ | `body raster heights`, `body raster visibility`, `body from the Sun` | `body-raster.ts:420`, `:507`, `:537` ; `terrain-raster.ts:705`, `:905` | `bodyHeights` (calcul), `bodyVs/Fs` (+ nuages de Mann), `bodySunVs` | autre monde à relief, < 1,5 rayon | même cible de distance ; `sunDepth` cascade 0 ; même contrôle de profondeur du récepteur que C6c (Lune et autres corps éclairés par le Soleil), puis `nearShadow` reprend sa marche/horizons hors couverture | V/S |
 | C7 | `clouds' shadow map` | `renderer.ts:9187` | trace `cloudShadow` (**module entier**, non spécialisé), 48×48 | près de la Terre, ombre des nuages | → `csmTex` 384² → `TABLE_CSM` → traceur 40, C8, C11 | A |
 | C8 | `clouds' light volume` | `renderer.ts:9275` | trace `cloudLightVolume` (module entier), 1 bande sur 4 | passe des nuages active | → `clvTex` 1536×72 → `TABLE_CLV` → C11 | A |
