@@ -9401,6 +9401,10 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
     motor?: { level: number; air: number };
     /** a ground unit's pose (src/game/ground-units.ts) */
     ground?: { yaw: number; pitch: number; left: number; burnt: number };
+    /** an A320's rig (a traffic airliner near the view: controller/traffic.ts trafficRig — its gear, flaps, reversers) */
+    a320?: { props: import("./a320/rig").Props; spins: import("./a320/rig").Props };
+    /** drawn instead while its own mesh comes in (the traffic's rigged A320: the plain airliner it stands in for) */
+    alt?: { id: ShipMeshId; rel: Vec3; axes: [Vec3, Vec3, Vec3] };
   }[] = [];
   /** combatOthers placed from the drawn view's own camera (sim.ts: no craft flown — the free camera, a tour —, or a
    *  spectator's view: the Earth's traffic, the sea's ships, the carriers): drawn from its place when the view has no
@@ -9580,7 +9584,9 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
     if (!eye) return [];
     return (
       this.combatOthers
-        // (its mesh asked for — a missile's the first time one flies —: drawn once in)
+        // (its mesh asked for — a missile's the first time one flies —: drawn once in; the traffic's rigged A320 meanwhile
+        // as the plain airliner it stands in for, not gone)
+        .map((o) => (o.alt && !o.hidden && !this.ship.has(o.id) ? { ...o, ...o.alt, a320: undefined } : o))
         .filter((o) => !o.hidden && this.ship.has(o.id))
         .map((o) => ({
           id: o.id,
@@ -9588,6 +9594,7 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
           t: [o.rel[0] + eye[0], o.rel[1] + eye[1], o.rel[2] + eye[2]] as Vec3,
           shadow: false,
           jet: o.jet,
+          a320: o.a320,
           // (a fight's aircraft always over the image; the traffic's hidden behind what it holds nearer — a cloud, a
           // mountain)
           far: o.far ?? false,

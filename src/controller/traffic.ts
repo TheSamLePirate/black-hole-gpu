@@ -7,15 +7,25 @@
 // path refitted) closed over 5 s, never a jump. Flown by the flight's laws: its coordinated turn's bank (eased, at a
 // roll rate an airliner's), its nose above its path by the incidence its lift asks (its weight, its turn, the air's
 // density, its flaps when slow). Placed on the WGS84 Earth (its geometric altitude over the ellipsoid; on the
-// ground, its wheels on the relief).
+// ground, its wheels on the relief — the ground the player's gear stands on, a runway's graded level —; in the air never
+// under them). Against the game's runways (traffic/runway-phase.ts, 24 Nov 2026 — the one owner of its runway, its phase,
+// its gear): drawn on the axis of the one it lines up with, onto its glide on its final, rolled out on it; its landing
+// made up through the gap in its reports (traffic/landing.ts: lost on short final, heard again taxiing — not across the
+// grass); its gear moved by its phase — the A320 family's rig near the view (src/a320/pose.ts), its legs and doors.
 // (Its methods, out of controls.ts: installed on its prototype — `this` the controller.)
 import type { AirlinerId } from "../ship";
+import { A320Poser } from "../a320/pose";
+import type { Props } from "../a320/rig";
 import { airframeOf, MESH, rcsOf } from "../game/airtypes";
 import { type FlightKnot, type FlightPath, fitFlight, flightAt, flightLaws } from "../game/flightpath";
 import type { FormCraft } from "../game/formation";
 import type { RadarObject } from "../game/radar";
 import { bodyFixedOf, groundRelief } from "../system/our-surface";
 import { geodeticToCart, WGS84_A, WGS84_F } from "../system/ellipsoid";
+import { geoidDeg } from "../system/geoid-grid";
+import { EARTH_RUNWAYS } from "../game/sites";
+import { type Way, withLanding } from "../traffic/landing";
+import { FLOOR, GEAR, gearStep, gearTarget, runwayPlace, type TrafficPhase } from "../traffic/runway-phase";
 import { earthView } from "./netcraft";
 import { formationLabel, formSlotFor } from "./formation";
 import { t, tf } from "../i18n";
@@ -64,11 +74,30 @@ export interface TrafficCraft {
   fwd: number[];
   up: number[];
   right: number[];
+  /** its height over the WGS84 ellipsoid [m] (its place's), over the sea [m] (the geoid taken off: what an altimeter and
+   *  its label say — at SFO the ellipsoid lies 32 m under the sea: a final's 15 m over the sea is −17 m over it) */
   alt: number;
+  msl: number;
   gnd: boolean;
   /** its bank [rad] (right wing down +), its report's age [s] */
   bank: number;
   age: number;
+  /** its wheels' height over the ground [m] (0 on the ground), its nose over its path [rad] and its pitch over the
+   *  horizon [rad], how long since it touched down [s] (NaN: in the air, or not seen to) */
+  over: number;
+  alpha: number;
+  pitch: number;
+  sinceTd: number;
+  /** its phase, its gear's position 0 (up) … 1 (down) and the one wanted (traffic/runway-phase.ts) */
+  phase: TrafficPhase;
+  gear: number;
+  gearWanted: 0 | 1;
+  /** the runway it lines up with: its way's key (« KSFO 28L> »), its distance past the threshold and off the axis [m] as
+   *  reported, drawn pulled onto it 0…1 (null: none) */
+  runway: { key: string; a: number; c: number; pull: number } | null;
+  /** where it lands, made up through the gap in its reports (traffic/landing.ts): its runway's way, its touchdown [s,
+   *  the traffic's clock] */
+  landing: { way: Way; td: number } | null;
 }
 
 /** the turn rate kept at most [rad/s]; carried on at most [s] */
@@ -86,21 +115,33 @@ export function enuAt(lat: number, lon: number) {
   };
 }
 
+/** a landing carried on past its last report: its rollout's braking [m/s²] */
+export const ROLLOUT = 2;
+
 /** A report carried on `dt` [s] (back, before it, when < 0): its place (east, north [m] from its report's, its
- *  altitude [m]) and its track [rad]. */
-function carry(p: Plane, rate: number, dt: number) {
+ *  altitude [m]), its track [rad] and ground speed [m/s]. `over`: its height over its wheels' rest at its report [m]
+ *  — descending, ahead of it (its coverage lost on short final) —: once down at its descent's rate, rolled out, braking
+ *  to a stop, not carried on at its approach's speed (nor frozen 30 s on, still at it). */
+function carry(p: Plane, rate: number, dt: number, over = Number.NaN) {
   const psi = p.trk * D;
-  const t = Math.min(Math.max(dt, -GAP_MAX), AHEAD_MAX);
+  const land = !p.gnd && dt > 0 && p.vs < -0.5 && Number.isFinite(over);
+  // (down: its reported height eased onto the runway — floorOver: twice FLOOR under it, its wheels 0.4 m up)
+  const tg = land ? Math.max(0, (over + 2 * FLOOR) / -p.vs) : Number.POSITIVE_INFINITY;
+  const t = Math.min(Math.max(dt, -GAP_MAX), land ? Math.max(AHEAD_MAX, tg + p.gs / ROLLOUT) : AHEAD_MAX);
+  // (along its way as far as at its speed this long: braking from touchdown)
+  const roll = Math.min(Math.max(t - tg, 0), p.gs / ROLLOUT);
+  const te = t > tg ? tg + roll - (0.5 * ROLLOUT * roll * roll) / Math.max(p.gs, 1) : t;
+  const gs = t > tg ? p.gs - ROLLOUT * roll : p.gs;
   let e: number, n: number;
   if (Math.abs(rate) > 1e-5) {
     const R = p.gs / rate;
-    e = R * (Math.cos(psi) - Math.cos(psi + rate * t));
-    n = R * (Math.sin(psi + rate * t) - Math.sin(psi));
+    e = R * (Math.cos(psi) - Math.cos(psi + rate * te));
+    n = R * (Math.sin(psi + rate * te) - Math.sin(psi));
   } else {
-    e = p.gs * Math.sin(psi) * t;
-    n = p.gs * Math.cos(psi) * t;
+    e = p.gs * Math.sin(psi) * te;
+    n = p.gs * Math.cos(psi) * te;
   }
-  return { e, n, alt: p.gnd ? 0 : p.alt + p.vs * t, trk: psi + rate * t };
+  return { e, n, alt: p.gnd ? 0 : p.alt + p.vs * t, trk: psi + rate * te, gs, down: t > tg };
 }
 
 /** Its turn rate [rad/s] from its last two reports (none: straight). */
@@ -167,7 +208,7 @@ export class FitBudget {
 export const FIT_MS = 1.5;
 const fitBudget = new FitBudget(FIT_MS);
 const paths = new Map<string, { key: string; S: FlightPath; t: number[]; lat: number; lon: number; gnd: boolean[] }>();
-function pathOf(hist: readonly Plane[], rest: (q: Plane) => number) {
+function pathOf(hist: readonly Plane[], rest: (q: Plane) => number, made = "") {
   const n = hist.length;
   if (n < 2) return null;
   const last = hist[n - 1]!;
@@ -175,7 +216,7 @@ function pathOf(hist: readonly Plane[], rest: (q: Plane) => number) {
   while (j > 0 && n - j < KNOTS_MAX && hist[j]!.t - hist[j - 1]!.t <= GAP_MAX && last.t - hist[j - 1]!.t <= WINDOW) j--;
   if (n - j < 2) return null;
   const pts = hist.slice(j);
-  const key = `${pts.length}:${pts[0]!.t}:${last.t}`;
+  const key = `${pts.length}:${pts[0]!.t}:${last.t}${made}`;
   const P0 = paths.get(last.id);
   if (P0?.key === key) return P0;
   // (the frame's fitting spent — a batch of reports in at once —: the path it had, the rest next frame)
@@ -207,23 +248,68 @@ export function placeOf(lat: number, lon: number, e: number, n: number, alt: num
 }
 
 /**
+ * Its reports with its landing made up through their gap (traffic/landing.ts: lost on short final, heard again off
+ * the runway), by aircraft — made again when its reports or the runways about change.
+ */
+const landings = new Map<string, { n: number; t: number; rn: number; last: unknown; L: ReturnType<typeof withLanding> }>();
+function landingOf(T: { p: Plane; hist: readonly Plane[] }, rest: (lat: number, lon: number) => number) {
+  // (its reports and the runways as they were: the same — no string made each frame for each aircraft)
+  const n = T.hist.length,
+    t = T.p.t,
+    rn = EARTH_RUNWAYS.length,
+    last = EARTH_RUNWAYS[rn - 1];
+  const L0 = landings.get(T.p.id);
+  if (L0 && L0.n === n && L0.t === t && L0.rn === rn && L0.last === last) return L0.L;
+  const L = withLanding(T.hist, EARTH_RUNWAYS, rest);
+  landings.set(T.p.id, { n, t, rn, last, L });
+  return L;
+}
+
+/**
  * The smoothing's state by aircraft: what places it (its report carried on, or its path), the gap left to close
  * (fixed to the Earth [m]) and since when, its speed's bias along its track learnt from its reports' jumps [m/s],
  * where it was drawn last, its velocity and bank then (a new placing joined to it without a jump).
  */
 const easing = new Map<
   string,
-  { key: string; off: number[]; at: number; vb: number; last: number[] | null; v: number[]; drawn: number; bank: number }
+  {
+    key: string;
+    off: number[];
+    at: number;
+    vb: number;
+    last: number[] | null;
+    v: number[];
+    drawn: number;
+    bank: number;
+    /** its pitch over the horizon the last frame in the air [rad]; when it touched down (NaN: in the air) */
+    pitch: number;
+    tdAt: number;
+    /** its phase the frame before (null: none yet), its gear wanted (null: none yet) and its position 0…1 */
+    phase: TrafficPhase | null;
+    gearT: 0 | 1 | null;
+    gear: number;
+  }
 >();
+/** the derotation: the nose held up this long after the mains touch [s], lowered over this long [s] */
+const DEROT = { hold: 1.2, down: 3 };
+const smooth = (x: number) => {
+  const u = Math.min(1, Math.max(0, x));
+  return u * u * (3 - 2 * u);
+};
 /** the gap's closing time [s]; the speed bias's gain and its bound [m/s] */
 const CLOSE = 5;
+/** a new placing this long [s] after the last frame drawn — or before it —: a cut, not a gap closed */
+const CUT = 2;
 const VB_GAIN = 0.3;
 const VB_MAX = 15;
+/** the runways asked about an aircraft whose wheels are under this over the ground [m] (traffic/runway-phase.ts) */
+const RUNWAY_LOW = 1200;
 
 /**
  * The traffic now (the setting's delay behind the real time): each aircraft's place, velocity, axes — on its path
  * at that moment, else carried on from its last report —, flown by the flight's laws; a change of what places it
- * eased out. Cached a frame.
+ * eased out; against the game's runways (traffic/runway-phase.ts: its axis, its glide, its phase, its gear). Cached a
+ * frame.
  */
 let cache: { at: number; list: TrafficCraft[]; of: unknown } = { at: -1, list: [], of: null };
 function trafficNow(this: CameraController): TrafficCraft[] {
@@ -241,26 +327,36 @@ function trafficNow(this: CameraController): TrafficCraft[] {
     // (taken over by a mission — controller/mission.ts —: flown by the game from there, not by its reports)
     if (this.trafficTaken?.has(p.id)) continue;
     const af = airframeOf(p.type, p.cat);
-    // (on the ground: its wheels on the relief there)
+    // (on the ground: its wheels on the relief there — the ground the player's gear stands on, a runway's graded level)
     const wheels = af.mesh ? (MESH[af.mesh].wheels * af.len) / MESH[af.mesh].len : 1.5;
     const restAt = (lat: number, lon: number) => groundRelief("earth", bodyFixedOf("earth", lat, lon, 0)) + wheels;
-    // (never under the world's ground: a flying report below it — a source's altitude error, a parked one not told
-    // on the ground — drawn on its wheels there; high enough, no ground to ask)
-    const above = (lat: number, lon: number, a: number) => (a < FLOOR_CHECK ? Math.max(a, restAt(lat, lon)) : a);
     const E0 = easing.get(p.id);
-    const path = td < now ? pathOf(T.hist, (q) => restAt(q.lat, q.lon)) : null;
+    // (its landing made up through the gap in its reports — onto the runway it lined up with, not across the grass —:
+    // flown on its path live too, as far as it goes)
+    const H = landingOf(T, restAt);
+    const path = td < now || H.key ? pathOf(H.hist, (q) => restAt(q.lat, q.lon), H.key) : null;
     const f = path ? flightAt(path.S, td) : null;
-    let P: number[], L: ReturnType<typeof enuAt>, alt: number, key: string, gnd: boolean;
+    let L: ReturnType<typeof enuAt>, key: string, gnd: boolean, la: number, lo: number, altR: number, sure: boolean;
     let ve: number, vn: number, vu: number, ae: number, an: number, au: number, omega: number;
+    let ramp = 1;
     if (path && f) {
       // (on its path: the spline's place, velocity and acceleration — from its lat/lon scale to metres there)
       let i = 0;
       while (i < path.t.length - 2 && path.t[i + 1]! < td) i++;
       gnd = path.gnd[i]! && path.gnd[i + 1]!;
-      const la = path.lat + f.x[1]! / (D * R_EQ),
-        lo = path.lon + f.x[0]! / (D * R_EQ * Math.cos(path.lat * D));
-      alt = gnd ? restAt(la, lo) : above(la, lo, f.x[2]!);
-      P = placeOf(path.lat, path.lon, f.x[0]!, f.x[1]!, alt);
+      la = path.lat + f.x[1]! / (D * R_EQ);
+      lo = path.lon + f.x[0]! / (D * R_EQ * Math.cos(path.lat * D));
+      altR = f.x[2]!;
+      // (its height as made up — its landing through the gap —, or between a report on the ground and one in the air — its
+      // touchdown, its lift-off —: its own, trusted to the runway; else a report's, eased onto it)
+      sure = td >= H.from || path.gnd[i]! || path.gnd[i + 1]!;
+      // (between the ground and the air: its height off the ground eased in from the report on the ground — its lift-off —,
+      // out to it — its touchdown —: the smoothing spline passes near its knots, not through them, and the ground's
+      // segments are drawn on the ground — no step of metres where they meet)
+      if (!gnd && (path.gnd[i]! || path.gnd[i + 1]!)) {
+        const u = Math.min(1, Math.max(0, (td - path.t[i]!) / Math.max(path.t[i + 1]! - path.t[i]!, 1e-3)));
+        ramp = (path.gnd[i]! ? smooth(u) : 1) * (path.gnd[i + 1]! ? smooth(1 - u) : 1);
+      }
       L = enuAt(la, lo);
       const r = radii(la);
       const ke = (r.N * Math.cos(la * D)) / (R_EQ * Math.cos(path.lat * D)),
@@ -274,27 +370,56 @@ function trafficNow(this: CameraController): TrafficCraft[] {
       // taught —; before its first, heard too lately for the delay: carried back from it, its path reached in time)
       const first = T.hist[0];
       const back = first !== undefined && td < first.t;
-      const q = back ? first : p;
-      const rate = back ? rateOf(q, null) : rateOf(p, T.prev);
+      // (past its made-up landing: from where it left it — braked to a stop on the runway)
+      const pl = H.key ? H.hist.at(-1)! : p;
+      const q = back ? first : pl;
+      const rate = back ? rateOf(q, null) : rateOf(pl, T.prev);
       const pc = E0 && !q.gnd && !back ? { ...q, gs: q.gs + E0.vb } : q;
-      const c = carry(pc, rate, td - q.t);
-      gnd = q.gnd;
-      alt = q.gnd ? restAt(q.lat, q.lon) : above(q.lat + c.n / (D * R_EQ), q.lon + c.e / (D * R_EQ * Math.cos(q.lat * D)), c.alt);
-      P = placeOf(q.lat, q.lon, c.e, c.n, alt);
+      const low = !q.gnd && !back && pc.alt < FLOOR_CHECK;
+      const c = carry(pc, rate, td - q.t, low ? pc.alt - restAt(q.lat, q.lon) : Number.NaN);
+      // (rolled out on the runway: as on the ground — no bank, no climb)
+      gnd = q.gnd || c.down;
+      sure = false;
+      la = q.lat + c.n / (D * R_EQ);
+      lo = q.lon + c.e / (D * R_EQ * Math.cos(q.lat * D));
+      altR = c.alt;
       L = enuAt(q.lat, q.lon);
-      [ve, vn, vu] = [pc.gs * Math.sin(c.trk), pc.gs * Math.cos(c.trk), q.gnd ? 0 : q.vs];
-      [ae, an, au] = [rate * vn, -rate * ve, 0];
-      omega = rate;
+      [ve, vn, vu] = [c.gs * Math.sin(c.trk), c.gs * Math.cos(c.trk), gnd ? 0 : q.vs];
+      [ae, an, au] = c.down ? [-ROLLOUT * Math.sin(c.trk), -ROLLOUT * Math.cos(c.trk), 0] : [rate * vn, -rate * ve, 0];
+      omega = c.down ? 0 : rate;
       key = `${back ? "b" : "c"}${q.t}`;
     }
+    // (against the runways — traffic/runway-phase.ts, the one owner of its runway, its phase, its gear —: on the axis of
+    // the one it lines up with, onto its glide, rolled out on it; its wheels never under the ground — high enough, no
+    // ground to ask: Everest 8 849 m)
+    const low = gnd || altR < FLOOR_CHECK;
+    const g0 = low ? restAt(la, lo) : 0;
+    const over0 = gnd ? 0 : !low ? altR : ramp < 1 ? Math.max(altR - g0, 0) * ramp : altR - g0;
+    const gsH = Math.hypot(ve, vn);
+    const RP = runwayPlace(
+      { lat: la, lon: lo, over: over0, gnd, ve, vn, vu, acc: gsH > 0.1 ? (ae * ve + an * vn) / gsH : 0, rotor: !af.mesh, sure },
+      low && over0 < RUNWAY_LOW ? EARTH_RUNWAYS : [],
+      E0?.phase ?? null,
+    );
+    const g = RP.lat !== la || RP.lon !== lo ? restAt(RP.lat, RP.lon) : g0;
+    const alt = low ? g + RP.over : altR;
+    const over = low ? RP.over : altR;
+    // (its vertical rate and acceleration as drawn: eased onto the ground, onto the glide)
+    au = RP.gnd ? 0 : au * (1 - RP.wV);
+    vu = RP.vu;
+    gnd = RP.gnd;
+    la = RP.lat;
+    lo = RP.lon;
+    let P = geodeticToCart(WGS84_A, WGS84_F, la * D, lo * D, alt) as number[];
     const v = [0, 1, 2].map((i) => L.E[i]! * ve + L.N[i]! * vn + L.U[i]! * vu);
     // (a new placing: where it was drawn, carried on to now, and where this one puts it — the gap closed over 5 s; a
     // report carried on after another, its along-track part teaching the speed's bias)
     if (!E0 || E0.key !== key) {
       let off = [0, 0, 0];
       let vb = E0?.vb ?? 0;
-      if (E0?.last) {
-        const dt = now - E0.drawn;
+      // (drawn a moment ago only: after a jump of the traffic's clock — seconds on, or back — a cut, no gap to close)
+      const dt = E0 ? now - E0.drawn : Number.NaN;
+      if (E0?.last && dt >= 0 && dt < CUT) {
         const was = E0.last.map((x, i) => x + E0.v[i]! * dt);
         off = was.map((x, i) => x - P[i]!);
         if (Math.hypot(...off) > 2000) off = [0, 0, 0];
@@ -304,30 +429,66 @@ function trafficNow(this: CameraController): TrafficCraft[] {
           vb = Math.max(-VB_MAX, Math.min(VB_MAX, vb + (VB_GAIN * along) / Math.max(p.t - T.prev.t, 2)));
         }
       }
-      easing.set(p.id, { key, off, at: now, vb, last: null, v: [0, 0, 0], drawn: now, bank: E0?.bank ?? 0 });
+      easing.set(p.id, {
+        key,
+        off,
+        at: now,
+        vb,
+        last: null,
+        v: [0, 0, 0],
+        drawn: now,
+        bank: E0?.bank ?? 0,
+        pitch: E0?.pitch ?? 0,
+        tdAt: E0?.tdAt ?? Number.NaN,
+        phase: E0?.phase ?? null,
+        gearT: E0?.gearT ?? null,
+        gear: E0?.gear ?? Number.NaN,
+      });
     }
     const Ez = easing.get(p.id)!;
-    const k = Math.exp(-Math.max(0, now - Ez.at) / CLOSE);
-    P = P.map((x, i) => x + Ez.off[i]! * k);
+    // (the clock set back before the gap was opened: none left to close)
+    const k = now < Ez.at ? 0 : Math.exp(-(now - Ez.at) / CLOSE);
+    // (the gap closed along the ground, never through it: near the ground its part downwards left out — on the ground,
+    // low over it, the wheels kept on it)
+    let off = Ez.off.map((x) => x * k);
+    if (low && over < GEAR.down) {
+      const down = Math.min(0, off[0]! * L.U[0]! + off[1]! * L.U[1]! + off[2]! * L.U[2]!);
+      if (down < 0) off = off.map((x, i) => x - L.U[i]! * down);
+    }
+    P = P.map((x, i) => x + off[i]!);
     // (the flight's laws: its coordinated turn's bank — eased, at an airliner's roll rate —, its incidence)
     const laws = flightLaws([ve, vn, vu], [ae, an, au], alt, af.len > 30 ? 5500 : af.len > 18 ? 4000 : 1000, omega);
-    const bankTo = gnd ? 0 : Math.max(-BANK_MAX, Math.min(BANK_MAX, laws.bank));
+    // (near the ground: no more bank than its wingtip's height allows)
+    const bankMax = Math.min(BANK_MAX, Math.asin(Math.min(1, (Math.max(over, 0) + wheels) / Math.max(af.span / 2, 1))));
+    const bankTo = gnd ? 0 : Math.max(-bankMax, Math.min(bankMax, laws.bank));
     const dt = Math.max(0, now - Ez.drawn);
     const step = (bankTo - Ez.bank) * (1 - Math.exp(-dt / BANK_LAG));
     const bank = Ez.bank + Math.max(-ROLL_RATE * dt, Math.min(ROLL_RATE * dt, step));
-    const alpha = gnd || !af.mesh ? 0 : laws.alpha;
+    // (its nose: above its path by its incidence in the air; down, its mains on the runway first, its nose held up a
+    // second and lowered over three — the derotation —, not dropped)
+    const gs = Math.hypot(ve, vn);
+    const gamma = gs > 1 ? laws.gamma : 0;
+    if (!gnd) Ez.tdAt = Number.NaN;
+    else if (!Number.isFinite(Ez.tdAt)) Ez.tdAt = dt < 1 && Ez.pitch > 0 ? now : now - DEROT.hold - DEROT.down;
+    const sinceTd = gnd ? now - Ez.tdAt : Number.NaN;
+    const derot = gnd ? 1 - smooth((sinceTd - DEROT.hold) / DEROT.down) : 0;
+    const alpha = !af.mesh ? 0 : gnd ? Math.max(Ez.pitch, 0) * derot : laws.alpha;
+    if (!gnd) Ez.pitch = gamma + alpha;
+    // (its gear: wanted by its phase, moved over its travel — first seen: as wanted)
+    const gearT = gearTarget(Ez.gearT, RP.phase, over, vu);
+    Ez.gear = Number.isFinite(Ez.gear) ? gearStep(Ez.gear, gearT, Math.min(dt, 10)) : gearT;
+    Ez.gearT = gearT;
+    Ez.phase = RP.phase;
     Ez.last = P;
     Ez.v = v;
     Ez.drawn = now;
     Ez.bank = bank;
-    const gs = Math.hypot(ve, vn);
     // (standing: its reported heading)
     const psi = (p.hdg ?? p.trk) * D;
     const hdir =
       gs > 0.1
         ? [0, 1, 2].map((i) => (L.E[i]! * ve + L.N[i]! * vn) / gs)
         : [0, 1, 2].map((i) => L.E[i]! * Math.sin(psi) + L.N[i]! * Math.cos(psi));
-    const gamma = gs > 1 ? laws.gamma : 0;
     const fwd0 = unit([0, 1, 2].map((i) => hdir[i]! * Math.cos(gamma) + L.U[i]! * Math.sin(gamma)));
     const r0 = unit(cross(fwd0, L.U));
     const u0 = cross(r0, fwd0);
@@ -350,9 +511,19 @@ function trafficNow(this: CameraController): TrafficCraft[] {
       up,
       right,
       alt,
+      msl: alt - geoidDeg(la, lo),
       gnd,
       bank,
       age: now - p.t,
+      over: gnd ? 0 : over,
+      alpha,
+      pitch: gamma + alpha,
+      sinceTd,
+      phase: RP.phase,
+      gear: Ez.gear,
+      gearWanted: gearT,
+      runway: RP.rwy ? { key: RP.rwy.way.key, a: RP.rwy.a, c: RP.rwy.c, pull: RP.wLat } : null,
+      landing: H.way && H.td !== undefined ? { way: H.way, td: H.td } : null,
     });
   }
   if (easing.size > 4 * F.planes.size + 50)
@@ -360,6 +531,8 @@ function trafficNow(this: CameraController): TrafficCraft[] {
       if (!F.planes.has(k)) {
         easing.delete(k);
         paths.delete(k);
+        landings.delete(k);
+        posers.delete(k);
       }
   cache = { at: now, list: out, of: F };
   return out;
@@ -465,13 +638,90 @@ export function nearest<T extends { p: readonly number[] }>(list: readonly T[], 
   return out;
 }
 
+/** The jets drawn with the A320's mesh (the A320 family, and the others of its size — game/airtypes.ts) near the view:
+ *  the game's own A320 instead, its rig moving (its gear, flaps, spoilers, reversers) — within this [m], the nearest this
+ *  many (the renderer's rigged slots: ship.ts JET_SLOTS, shared with the F-35s) —; the A320's length [m] and its wheels'
+ *  rest under its origin [m] (gear.ts: its belly, 1.59 m over the ground) */
+export const TRAFFIC_RIG = { near: 4000, max: 4 } as const;
+const A320_LEN = 37.57;
+const A320_WHEELS = 1.59;
+
+/** Each rigged airliner's rig (src/a320/pose.ts): its moving parts from its flight. */
+const posers = new Map<string, { P: A320Poser; at: number }>();
+/**
+ * An airliner's moving parts as its flight shows them (src/a320/pose.ts — its actuators' own rates): its gear as its phase
+ * wants it (traffic/runway-phase.ts — moved over its travel, its doors in their sequence), its flaps FULL on the approach
+ * and on the rollout (CONF 3 above 900 m, CONF 1+F on the take-off roll and the climb-out under 900 m), its landing lights
+ * below 3 000 m and rolling on the runway, its ground spoilers out at touchdown, its reversers from a second and a half
+ * after it down to 70 kt, its engines' N1 (take-off, approach, reverse, idle), its nose's oleo free while the nose is held
+ * up.
+ */
+export function trafficRig(c: TrafficCraft, now: number) {
+  let R = posers.get(c.id);
+  if (!R) posers.set(c.id, (R = { P: new A320Poser(), at: now - 10 }));
+  const dt = Math.min(Math.max(now - R.at, 0), 10);
+  R.at = now;
+  const gs = Math.hypot(c.v[0]!, c.v[1]!, c.v[2]!);
+  const since = Number.isFinite(c.sinceTd) ? c.sinceTd : Number.POSITIVE_INFINITY;
+  const landing = c.phase === "landing";
+  const rev = c.gnd && landing && since > 1.5 && gs > 36 ? 1 : 0;
+  const spoil = c.gnd && landing && since > 0.3 && gs > 15 ? 1 : 0;
+  const nose = c.gnd && c.alpha < 0.3 * D;
+  const out = c.phase === "takeoff" || c.phase === "climb";
+  const flapLever = c.gnd
+    ? landing && gs > 20
+      ? 4
+      : c.phase === "takeoff"
+        ? 1
+        : 0
+    : out
+      ? c.over < 900
+        ? 1
+        : 0
+      : c.over < 900 && (c.phase === "approach" || landing)
+        ? 4
+        : c.over < 2000 && c.gearWanted === 1
+          ? 3
+          : 0;
+  return R.P.step({
+    dt,
+    pitch: 0,
+    yaw: 0,
+    roll: Math.max(-1, Math.min(1, -c.bank / (25 * D))),
+    trim: 0,
+    flapLever,
+    ias: gs / 0.514444,
+    speedBrake: 0,
+    groundSpoilers: spoil,
+    gear: c.gear,
+    comp: c.gnd ? [nose ? 0.12 : 0, 0.12, 0.12] : [0, 0, 0],
+    onGround: c.gnd,
+    groundSpeed: c.gnd ? gs : 0,
+    steer: 0,
+    n1: rev ? [70, 70] : c.phase === "takeoff" ? [92, 92] : c.gnd ? [24, 24] : out ? [85, 85] : c.over < 900 ? [52, 52] : [78, 78],
+    reverser: [rev, rev],
+    alpha: c.alpha / D,
+    landingLights: c.gnd ? c.phase === "takeoff" || landing : c.over < 3000,
+  });
+}
+
+/** An airliner as the renderer draws it: its mesh, its place and axes on the view's camera; the A320's rig moving
+ *  (`a320`), and while that mesh comes in, the plain one it stands in for (`alt`). */
+export interface TrafficInstance {
+  id: AirlinerId | "a320";
+  rel: Vec3;
+  axes: [Vec3, Vec3, Vec3];
+  hidden: boolean;
+  far: boolean;
+  a320?: { props: Props; spins: Props };
+  alt?: { id: AirlinerId; rel: Vec3; axes: [Vec3, Vec3, Vec3] };
+}
+
 /** The traffic for the renderer: the nearest dozen with a mesh within 25 km of the view (`view`: its controller — a
  *  spectator's, else this one; the free camera with no craft too) — their place and axes on the view's camera's, from its
- *  place, the axes scaled to their type's length; hidden behind what the image holds nearer. */
-function trafficShips(
-  this: CameraController,
-  view: CameraController = this,
-): { id: AirlinerId; rel: Vec3; axes: [Vec3, Vec3, Vec3]; hidden: boolean; far: boolean }[] {
+ *  place, the axes scaled to their type's length; hidden behind what the image holds nearer. The A320's size near the view
+ *  (TRAFFIC_RIG): the game's A320, its rig moving — its gear as its phase wants it. */
+function trafficShips(this: CameraController, view: CameraController = this): TrafficInstance[] {
   const list = this.trafficNow();
   if (!list.length) return [];
   const E = earthView(view);
@@ -481,7 +731,9 @@ function trafficShips(
     const l = Math.hypot(...v) || 1;
     return [(v[0] / l) * k, (v[1] / l) * k, (v[2] / l) * k];
   };
-  const out: { id: AirlinerId; rel: Vec3; axes: [Vec3, Vec3, Vec3]; hidden: boolean; far: boolean }[] = [];
+  const now = this.trafficClock ? this.trafficClock() : (this.trafficT ?? Date.now() / 1000);
+  const out: TrafficInstance[] = [];
+  let rigged = 0;
   for (const c of nearest(
     list.filter((c) => c.mesh),
     E.p0,
@@ -489,13 +741,29 @@ function trafficShips(
     12,
   )) {
     const s = c.len / (c.mesh === "a320t" ? 37.7 : 36.2);
-    out.push({
+    const plain = {
       id: c.mesh!,
       rel: cam([c.p[0]! - E.p0[0], c.p[1]! - E.p0[1], c.p[2]! - E.p0[2]]),
-      axes: [n(cam([-c.right[0]!, -c.right[1]!, -c.right[2]!]), s), n(cam(c.up), s), n(cam(c.fwd), s)],
-      hidden: false,
-      far: true,
-    });
+      axes: [n(cam([-c.right[0]!, -c.right[1]!, -c.right[2]!]), s), n(cam(c.up), s), n(cam(c.fwd), s)] as [Vec3, Vec3, Vec3],
+    };
+    const d = Math.hypot(c.p[0]! - E.p0[0], c.p[1]! - E.p0[1], c.p[2]! - E.p0[2]);
+    if (c.mesh === "a320t" && d < TRAFFIC_RIG.near && rigged < TRAFFIC_RIG.max) {
+      rigged++;
+      // (the game's A320 — its origin its belly, its wheels 1.59 m under it, the plain mesh's 3.9 m —, its rig)
+      const k = c.len / A320_LEN;
+      const down = (MESH.a320t.wheels * c.len) / MESH.a320t.len - A320_WHEELS * k;
+      out.push({
+        id: "a320",
+        rel: cam([0, 1, 2].map((i) => c.p[i]! - c.up[i]! * down - E.p0[i]!)),
+        axes: [n(cam([-c.right[0]!, -c.right[1]!, -c.right[2]!]), k), n(cam(c.up), k), n(cam(c.fwd), k)],
+        hidden: false,
+        far: true,
+        a320: trafficRig(c, now),
+        alt: plain,
+      });
+      continue;
+    }
+    out.push({ ...plain, hidden: false, far: true });
   }
   return out;
 }
@@ -520,7 +788,7 @@ export function lightsReach(alt: number, airR?: number): number {
 
 /**
  * The traffic's labels and lights within 80 km of the view (the nearest 24; farther from high up — lightsReach): its
- * callsign, registration, type, altitude in the units chosen; the red and green navigation lights at its wingtips and
+ * callsign, registration, type, altitude over the sea in the units chosen (an altimeter's, not the ellipsoid's); the red and green navigation lights at its wingtips and
  * the white at its tail, the red beacon (a flash a second), the white strobes (two flashes each 1.2 s), its landing
  * lights under 3 000 m. `view`: the view's controller (a spectator's, else this one — the free camera with no craft too).
  */
@@ -558,9 +826,12 @@ function trafficOverlay(this: CameraController, fmtAlt: (m: number) => string, v
       { at: at(bcn[0]!, bcn[1]!, bcn[2]!), colour: "rgba(255, 40, 30, 1)", on: beacon, size: 1.3 },
       { at: at(-tip[0]!, tip[1]!, tip[2]!), colour: "rgba(255, 255, 255, 1)", on: strobe, size: 1.6 },
       { at: at(tip[0]!, tip[1]!, tip[2]!), colour: "rgba(255, 255, 255, 1)", on: strobe, size: 1.6 },
-      ...(!c.gnd && c.alt < 3000 ? [{ at: at(land[0]!, land[1]!, land[2]!), colour: "rgba(255, 250, 230, 1)", on: true, size: 2.2 }] : []),
+      // (its landing lights: low in the air, and rolling down the runway — its take-off, its landing)
+      ...((c.gnd ? c.phase === "takeoff" || c.phase === "landing" : c.over < 3000)
+        ? [{ at: at(land[0]!, land[1]!, land[2]!), colour: "rgba(255, 250, 230, 1)", on: true, size: 2.2 }]
+        : []),
     ];
-    const label = [c.cs, c.reg, c.type, c.gnd ? "GND" : fmtAlt(c.alt)].filter(Boolean).join(" · ");
+    const label = [c.cs, c.reg, c.type, c.gnd ? "GND" : fmtAlt(c.msl)].filter(Boolean).join(" · ");
     out.push({ id: c.id, at: rel, dist, label, lights });
   }
   return out;

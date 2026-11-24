@@ -646,7 +646,14 @@ pas — le cache du pilote répond en ~45 ms ; il faut une branche vivante sur u
   donnés chaque image par `sim.applyRender` dans `combatOthers` (maillages) et `seaWakes` (sillages), qu'un appareil soit
   piloté ou non — autour du foyer du trafic (`traffic/focus.ts` : l'appareil, sinon l'œil de la vue). Sans appareil ou
   depuis un spectateur, placés depuis la vue (`othersFromView`) ; leur ajustement de trajectoire borné à 1,5 ms par image
-  et par famille (`FitBudget`, `controller/traffic.ts`) — coût CPU mesuré sous bun, pas dans la page.
+  et par famille (`FitBudget`, `controller/traffic.ts`) — coût CPU mesuré sous bun, pas dans la page. Depuis le
+  24 nov. 2026 (`traffic/runway-phase.ts`) : chaque avion bas placé contre les pistes du jeu (`EARTH_RUNWAYS` — axe, plan de
+  descente, phase, train) ; les avions de ligne au maillage A320 dans 4 km de la vue, les 4 plus proches, dessinés avec
+  **l'A320 du jeu et son gréement** (`id: "a320"`, `a320` = propriétés de `src/a320/pose.ts` : train, volets, spoilers,
+  inverseurs — `trafficRig`) dans la même passe E12, sur les emplacements gréés `JET_SLOTS` partagés avec les F-35 ; son
+  maillage (`assets/a320/a320.bin`, 107 449 triangles, cartes KTX2) demandé au premier avion proche, l'avion simple
+  (`a320t`, champ `alt`) dessiné en attendant (`combatShips`). Coût CPU sous bun (200 avions, 4 pistes de SFO) : +0,15 à
+  0,25 ms médiane par image contre `main` (ce Mac, A/B intercalé, charge partagée) ; coût GPU des A320 gréés **non mesuré**.
 - **Rendu → simulation** : rien de décisif. Le sol de contact de l'appareil ne vient pas des cibles GPU ; les sondes
   (mer, planètes, histogramme) n'alimentent que l'image et l'exposition.
 - **Rendu → interface** : `sceneDepth` et `moments` servent aux cartes en surimpression ; les écrans du cockpit (PCD, DU)
