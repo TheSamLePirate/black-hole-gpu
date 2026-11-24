@@ -4,7 +4,7 @@ import { EAR_LIMITS, earClosed, earOpened, earRelayRefusal, foreignOrigin, queue
 import { createMoonTiles } from "./server/moon-tiles";
 import { createRooms, type Peer } from "./server/rooms";
 import { createTraffic } from "./server/traffic";
-import { wispClose, wispDrain, wispMessage, wispOpen, wispUpgrade, type WispSession } from "./server/wisp-relay";
+import { type WispSession, wispClose, wispDrain, wispMessage, wispOpen, wispPolicyFromEnv, wispUpgrade } from "./server/wisp-relay";
 
 const port = Number(process.env.PORT ?? 3000);
 // (started by a test or the flight lab — tests/e2e/lib/app.ts — for its own run: gone with its parent, never
@@ -19,6 +19,7 @@ if (parent)
     }
   }, 2000);
 const dev = process.env.NODE_ENV !== "production";
+const wispPolicy = wispPolicyFromEnv();
 let debianDistroPathPromise: Promise<string> | null = null;
 // TARS's ear (dev): the page's microphone relayed to Deepgram with the key of .env — the key never leaves this
 // server (a temporary token needs a key of a member's rights; a relay needs none)
@@ -309,8 +310,17 @@ const server = Bun.serve({
       return new Response(file, { headers: { "content-type": "text/markdown; charset=utf-8", "cache-control": "no-store" } });
     },
     // Dev-only Wisp v1 WebSocket-to-TCP relay for OBC internet access (docs/PLAN-LINUX-OBC.md §6)
-    "/__wisp": ((req: Request, srv: { upgrade(r: Request, o: { data: unknown }): boolean }) =>
-      wispUpgrade(req, srv, dev || process.env.KERR_WISP_RELAY === "1")) as never,
+    // (the page's own Origin required — foreignOrigin —, the same ports, address guard and caps as production, counted by the
+    // socket's address: the dev server has no proxy in front)
+    "/__wisp": ((
+      req: Request,
+      srv: { upgrade(r: Request, o: { data: unknown }): boolean; requestIP(r: Request): { address: string } | null },
+    ) =>
+      wispUpgrade(req, srv, {
+        enabled: dev || process.env.KERR_WISP_RELAY === "1",
+        clientIp: srv.requestIP(req)?.address,
+        policy: wispPolicy,
+      })) as never,
     // Dev only: read back files from snapshots/ (e.g. reference data for the precision probe).
     // Dev only: whether the relay to Deepgram is there (GET), the relay itself (a WebSocket)
     "/__deepgram": deepgramRelay("listen", [

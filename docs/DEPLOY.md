@@ -161,8 +161,32 @@ The embedded Linux OBC (`docs/PLAN-LINUX-OBC.md`) uses a Wisp v1 WebSocket-to-TC
 
 - **Portainer (`kerr` stack):** included automatically as the `wisp` service in `deploy/compose.yml` (reusing `__ROOMS_IMAGE__` on port `3002`, no extra Docker build required). A standalone stack template is also kept in `deploy/portainer-wisp.yml` if you prefer a separate Portainer stack.
 - **Nginx Proxy Manager:** create a Proxy Host for `code.samlepirate.org` → `host:3002` with **Websockets Support** enabled and TLS/HTTPS active.
-- **Security:** `wisp-main.ts` restricts WebSocket upgrades to allowed origins (`https://samlepirate.org`, `https://www.samlepirate.org`, `https://thesamlepirate.github.io`, `https://code.samlepirate.org`, `localhost`, plus optional `WISP_ORIGINS`), applies per-IP connection quotas via `X-Real-IP` (`WISP_MAX_PER_IP=8`, `WISP_MAX_CLIENTS=32`), and blocks loopback, RFC1918 private LANs, CGNAT, link-local, and cloud metadata addresses (`isBlockedHost`).
-- **Health check:** `https://code.samlepirate.org/health` returns `{ ok: true, protocol: "wisp/1", build, activeClients, totalStreams, ... }`.
+- **Security (since 24 Nov 2026; the relay is reachable by anyone, so it is built to be safe as an open endpoint):**
+  - **Origin required.** An upgrade without an allowed `Origin` is refused (403): `https://samlepirate.org`,
+    `https://www.samlepirate.org`, `https://thesamlepirate.github.io`, any `https://*.samlepirate.org`, `localhost`, plus
+    `WISP_ORIGINS` (comma-separated). A browser cannot lie about its Origin, so no other site can use the relay through its
+    visitors; a script can forge it, which is why the next three guards do not depend on it.
+  - **Destinations checked numerically** (`server/ip-guard.ts`): IP literals in any spelling (IPv6 long forms, IPv4-mapped,
+    NAT64, 6to4, zoned) and every resolved address must be public — loopback, RFC 1918, CGNAT, link-local and cloud metadata,
+    documentation, benchmarking, multicast, reserved, ULA, site-local refused; IPv6 must be global unicast. Legacy numeric IPv4
+    forms (`2130706433`, `127.1`, `0x7f.1`) and local names (single labels such as Docker service names, `.local`,
+    `.internal`, `.home.arpa`…) are refused. The relay resolves names itself and connects to the checked literal.
+  - **Destination ports:** `WISP_TCP_PORTS` (default `80,443,9418`: HTTP, HTTPS, `git://`; add `22` for git over SSH if
+    wanted), `WISP_UDP_PORTS` (default `53`; `0` = no UDP — unkernel's client does not use UDP today). Mail ports 25, 465,
+    587 and 2525 are refused whatever the lists say.
+  - **Caps:** `WISP_MAX_CLIENTS` (32 in the stack) WebSockets at once, `WISP_MAX_PER_IP` (8) per client IP, 96 streams per
+    WebSocket, `WISP_IP_CONNECTS_PER_SEC` (20/s, burst ×5) stream opens per IP, `WISP_IP_BYTES_PER_SEC` (4 MiB/s, burst 8 s)
+    per IP and `WISP_GLOBAL_BYTES_PER_SEC` (24 MiB/s) for the relay, both directions; a client sending past its Wisp credits is
+    closed (`THROTTLED`) at a bounded queue.
+  - **Client IP:** `X-Real-IP` / `X-Forwarded-For` are believed only from a trusted proxy (`TRUSTED_PROXIES`, default
+    loopback + private ranges, where Nginx Proxy Manager reaches the container from; `server/address.ts`). Port 3002 is
+    published on the host: **keep it closed to the internet** (firewall), so every client comes through the proxy. If Docker
+    runs its userland proxy on this host (every published connection then seems to come from the bridge gateway), set
+    `TRUSTED_PROXIES` to the proxy's own address.
+  - **Why no signed token:** the site is static (Pages, nginx); a token handed to any visitor is handed to any script, so it
+    would add a round trip without stopping a forger. What bounds abuse is the destination/port allowlist and the caps: the
+    worst a forger gets is a slow HTTP(S)/git egress, counted by IP.
+- **Health check:** `https://code.samlepirate.org/health` returns `{ ok: true, protocol: "wisp/1", build, activeClients, totalStreams, blockedHosts, blockedPorts, throttledStreams, ratePauses, udpDropped, ... }`.
 - **Client default:** the simulator uses `/__wisp` automatically in local dev and falls back to `wss://code.samlepirate.org/` in production (overridable in the OBC HUD Options drawer).
 
 ## The server stuck on an old build
