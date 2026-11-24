@@ -10641,20 +10641,25 @@ fn scenerySurface(foot:f32)->ScenerySurface {
   SC_PAINT=vec4f(0.0);SC_SURVEY_ROAD=false;SC_AT=SC_POINT.xy;SC_ROAD=vec4f(0.0);
   if(!HAS_SCENERY || P.scenery[0].w<.5 || P.scenery[2].w<.5 || SC_DISTANCE>P.scenery[1].w){return out;}
   let point=SC_POINT.xy;let aa=max(.12,foot*.75);let header=scenery[1];let total=u32(header.y);var i=0u;var priority=0.0;var dryIsland=false;
+  // (the winner's key within its rank — a polygon's cover, a line's depth inside its strip —, and the paint of the winning road or rail:
+  // see below, 24 Nov 2026)
+  var best=-1e9;var lineRank=0.0;var lineKey=-1e9;var linePaint=vec4f(0.0);
   while(i<total){
     cost(6u);
     let lo=scenery[u32(header.x)+i*2u];let hi=scenery[u32(header.x)+i*2u+1u];
     if(any(point<lo.xy-vec2f(aa)) || any(point>hi.xy+vec2f(aa))){i=u32(lo.w);continue;}
     if(hi.w<0.0){i++;continue;}
     let base=u32(header.z+hi.w);let p=scenery[base];let size=scenery[base+1u];var color=scenery[base+2u].xyz;
-    var kind=p.w;var cover=0.0;var rank=1.0;var road=vec4f(0.0);var rdir=vec2f(1.0,0.0);
+    var kind=p.w;var cover=0.0;var rank=1.0;var road=vec4f(0.0);var rdir=vec2f(1.0,0.0);var key=0.0;var segPaint=vec4f(0.0);var isLine=false;
     if(scenery[base+2u].w>.5){
-      cover=select(0.0,1.0,sceneryPolygon(point,base,u32(p.z)));
+      cover=select(0.0,1.0,sceneryPolygon(point,base,u32(p.z)));key=cover;
       if(kind==4.0 && cover==0.0 && sceneryPolygon(point,base,u32(scenery[base+2u].w))){dryIsland=true;}
     }else{
       kind=size.y;let line=p.zw-p.xy;let len=max(length(line),.001);let along=clamp(dot(point-p.xy,line)/(len*len),0.0,1.0);
       let distance=length(point-p.xy-line*along);
       cover=1.0-smoothstep(max(0.0,size.x-aa),size.x+aa,distance);
+      // (its depth inside its strip — the rank's tie-break: the nearest axis wins, a polyline's distance; see the choice below)
+      key=size.x-distance;isLine=true;
       // (B2: its abscissa along its road — the segment's start's, scenery[base+2].w ≤ 0, kept so its dashes run on across segments)
       road=vec4f(distance,select(size.x,abs(size.w),size.w!=0.0),along*len-scenery[base+2u].w,size.z);rdir=line/len;
       rank=select(2.0,3.0,kind==2.0);
@@ -10699,7 +10704,7 @@ fn scenerySurface(foot:f32)->ScenerySurface {
           }
           color=mix(color,paint,m);
           // (RP1: the paint kept apart — its cover the marking's in the road's —, for a photograph's ground)
-          if(m*cover>SC_PAINT.w){SC_PAINT=vec4f(paint,m*cover);}
+          segPaint=vec4f(paint,m*cover);
         }
       }else if(kind==1.0 && size.x>=3.5 && foot<2.0){
         let stripe=1.0-smoothstep(.09,.09+aa,distance);
@@ -10711,14 +10716,22 @@ fn scenerySurface(foot:f32)->ScenerySurface {
         let sleeper=1.0-smoothstep(.18,.18+aa,(along*len)%.7);
         color=mix(color,vec3f(.18,.15,.10),sleeper);color=mix(color,vec3f(.42),rail);
         // (PLAN-J8 J8-RP RP9: the rails over a national photograph too — RP1's paint: the steel's line, its cover in the pixel)
-        if(rail*cover>SC_PAINT.w){SC_PAINT=vec4f(vec3f(.42),rail*cover);}
+        segPaint=vec4f(vec3f(.42),rail*cover);
       }
     }
-    if(cover>0.0 && (rank>priority || (rank==priority && cover>out.cover))){
-      priority=rank;out=ScenerySurface(color,cover,kind);SC_SURVEY_ROAD=kind==1.0 && size.w<0.0;SC_ROAD=road;SC_ROAD_DIR=rdir;
+    // (24 Nov 2026: within a rank the deepest wins — a line's size.x − distance, a polygon's cover —, not the first met. A segment's
+    // strip ends in round caps (its distance clamped to its ends): where a road's pieces overlap — each piece's cap over its
+    // neighbour, B2's bends cut in pieces of 1–2 m, a junction's trims —, the first met drew its markings at its own distance, rings
+    // about its ends (an edge line's circle of radius cr − 0.3, a lane line's closed loop). The deepest is the nearest axis: the
+    // markings follow the road's polyline, a T's side road yields to the through road at its edge. The paint kept apart (RP1) is the
+    // winning road's or rail's alone, by the same rule — the junctions' paint (kind 5) its own.)
+    if(cover>0.0 && isLine && kind!=5.0 && (rank>lineRank || (rank==lineRank && key>lineKey))){lineRank=rank;lineKey=key;linePaint=segPaint;}
+    if(cover>0.0 && (rank>priority || (rank==priority && key>best))){
+      priority=rank;best=key;out=ScenerySurface(color,cover,kind);SC_SURVEY_ROAD=kind==1.0 && size.w<0.0;SC_ROAD=road;SC_ROAD_DIR=rdir;
     }
     i++;
   }
+  if(linePaint.w>SC_PAINT.w){SC_PAINT=linePaint;}
   if(dryIsland && out.kind==3.0){out.cover=0.0;}
   out.cover*=P.scenery[3].w*smoothstep(P.scenery[1].w,P.scenery[1].w-300.0,SC_DISTANCE);
   return out;
