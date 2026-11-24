@@ -9,6 +9,7 @@
 // The craft's place, velocity and axes asked of the targeting (craftSubjects, the fleet, the station's tracker).
 // (Its methods: installed on the controller's prototype — `this` the controller.)
 import { setHomePose } from "../camera";
+import { timeRate } from "../clock";
 import { lookQ, qAxes, qSlerp } from "../cine/follow";
 import type { V3 } from "../cine/rig";
 import type { CameraController } from "../controls";
@@ -113,7 +114,11 @@ function subjectStep(this: CameraController, dt: number): boolean {
     }
   }
   const s = this.s;
-  const t = Number.isFinite(this.frameEnd) ? this.frameEnd : this.nowTime();
+  // (placed for the time the frame shows — the simulation moves its clock on after this step, as the rig's (controller/rig.ts):
+  // placed for the step's start, the view lagged the world it is drawn in by a frame's motion — the Earth's 30 km/s × a frame,
+  // 290 m at ×1 over San Francisco Bay, 2.8 km at ×10: the near patch's ground and its sea mesh stood that far off the view,
+  // the followed ship hidden under the sea's distance — 24 Nov 2026)
+  const t = Number.isFinite(this.frameEnd) ? this.frameEnd : this.nowTime() + (s.animate && timeRate(s) > 0 ? dt * timeRate(s) : 0);
   const P = subjectPose(s, s.target, t);
   if (!P) return false;
   const L = this.subject;

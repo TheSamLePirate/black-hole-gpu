@@ -388,6 +388,13 @@ function advanceMethod(this: CameraController, dt: number, time?: number): boole
     if (Math.hypot(...this.flyVel) > 1e-3 * this.flySpeed) this.fly(this.flyVel, dt);
     else this.flyVel = [0, 0, 0];
   }
+  // (the view placed by the rig or about a craft for the time the frame shows — its end, controller/rig.ts, camera/subjectcam.ts:
+  // the simulation moves its clock on after this step —: this controller's clock that end too, as a flight's (shipClock), so what
+  // reads the view from it this frame — the traffic placed from the view (earthView), geoNow, the HUD — reads it at the instant it
+  // was placed for and the renderer draws. Placed for the end and read at the start, the view stood a frame of the Earth's
+  // motion off what was drawn from it: 290 m at ×1 over San Francisco Bay, the followed ship drawn under the sea, 24 Nov 2026)
+  if ((subjectPlaced || this.rig.on) && !Number.isFinite(this.shipTime) && s.animate && timeRate(s) > 0 && Number.isFinite(this.time))
+    this.shipTime = Number.isFinite(this.frameEnd) ? this.frameEnd : this.time + timeRate(s) * dt;
   // (the real traffic's clock when no flight step ran it — no craft flown, the free camera, a tour, a craft docked or
   // a puppet's —: the frame's own, so the aircraft and the ships fly on — controller/traffic.ts trafficStep; paused, still)
   if (!this.trafficStepped && this.traffic && s.animate) this.trafficStep?.(dt);
