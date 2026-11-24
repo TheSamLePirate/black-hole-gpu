@@ -7,7 +7,14 @@ import { describe, expect, test } from "bun:test";
 import { readKept, earthDataDir } from "./e2e/lib/earth-cache";
 import { bdtopoDecksUrl, bdtopoUrl, parseBdtopoDecks } from "../src/system/bdtopo";
 import { selectBridgeLOD } from "../src/system/bridge-lod";
-import { fillHeights, type GeoBridge, joinBridgeHalves, joinDeckPieces, spliceOpenHalves } from "../src/system/bridge-ports";
+import {
+  fillHeights,
+  type GeoBridge,
+  joinBridgeHalves,
+  joinDeckPieces,
+  levelTwinDecks,
+  spliceOpenHalves,
+} from "../src/system/bridge-ports";
 import { BridgeContinuousProfile, measuredDeckUsable } from "../src/system/bridge-surface-service";
 import { cellOrigin, fromCell } from "../src/system/building-cells";
 import { prepareBdtopoCell } from "../src/system/cell-prep";
@@ -413,4 +420,52 @@ test("the far layer's deck at its survey: each segment's slab at its height over
   expect(rec[15]!).toBeCloseTo((35 + 60) / 2 + 48 - 0.6, 4);
   // (without the ground: as before, its clearance)
   expect(farBridges(buf, () => true)[7]!).toBeCloseTo(9.6, 4);
+});
+
+test("twin carriageways overlapping across: one surface — their surveys' mean where they overlap (Cheviré: 0.3–0.4 m ridges)", () => {
+  const a = geo({ id: 1, width: 15.5, points: line(47.18, 11, 20), heights: Array(11).fill(40) });
+  const east = (d: number) => line(47.18, 11, 20).map((p) => ({ ...p, lon: p.lon + d / 75_900 }));
+  const b = geo({ id: 2, width: 15.5, points: east(10.6), heights: Array(11).fill(40.4) });
+  const far = geo({ id: 3, width: 15.5, points: east(30), heights: Array(11).fill(45) });
+  const leveled = levelTwinDecks([a, b, far]);
+  for (const h of leveled[0]!.heights!) expect(h).toBeCloseTo(40.2, 6);
+  for (const h of leveled[1]!.heights!) expect(h).toBeCloseTo(40.2, 6);
+  // (30 m aside: not a twin; another layer: neither)
+  for (const h of leveled[2]!.heights!) expect(h).toBe(45);
+  expect(levelTwinDecks([a, { ...b, layer: 2 }])[0]!.heights![0]).toBe(40);
+});
+
+describe.skipIf(!C)("Pont de Cheviré's carriageways leveled", () => {
+  test("after leveling, the two decks' heights at their nearest points within 5 cm (before: up to 0.4 m)", () => {
+    const L = levelTwinDecks(C!.map((d) => d.bridge));
+    const p = L[0]!,
+      q = L[1]!;
+    const hp = fillHeights(p.points, p.heights)!,
+      hq = fillHeights(q.points, q.heights)!;
+    const gap = (hs: number[], other: number[], from: GeoBridge, to: GeoBridge) => {
+      let worst = 0;
+      from.points.forEach((pt, k) => {
+        let best = Infinity,
+          h = Number.NaN;
+        to.points.forEach((r, m) => {
+          const d = Math.hypot((r.lat - pt.lat) * 111_132, (r.lon - pt.lon) * 75_700);
+          if (d < best) {
+            best = d;
+            h = other[m]!;
+          }
+        });
+        if (best < 12) worst = Math.max(worst, Math.abs(h - hs[k]!));
+      });
+      return worst;
+    };
+    const before = gap(
+      fillHeights(C![0]!.bridge.points, C![0]!.bridge.heights)!,
+      fillHeights(C![1]!.bridge.points, C![1]!.bridge.heights)!,
+      C![0]!.bridge,
+      C![1]!.bridge,
+    );
+    const after = gap(hp, hq, p, q);
+    console.log(`  Cheviré carriageways: height gap at the nearest points ${before.toFixed(3)} → ${after.toFixed(3)} m`);
+    expect(after).toBeLessThan(before);
+  });
 });

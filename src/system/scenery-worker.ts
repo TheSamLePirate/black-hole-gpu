@@ -86,7 +86,15 @@ import {
   STREET_CACHE,
   streetCacheUrl,
 } from "./street-cells";
-import { bridgeCanonicalKey, clipLineToTile, fillHeights, type GeoBridge, joinBridgeHalves, joinDeckPieces } from "./bridge-ports";
+import {
+  bridgeCanonicalKey,
+  clipLineToTile,
+  fillHeights,
+  type GeoBridge,
+  joinBridgeHalves,
+  joinDeckPieces,
+  levelTwinDecks,
+} from "./bridge-ports";
 import { BridgeContinuousProfile, SupportSurfaceRegistry } from "./bridge-surface-service";
 import { buildContinuousPierMesh, buildContinuousRailMesh, buildContinuousSliceMesh, computeSlicePlane, mitres } from "./bridge-mesh";
 import { BRIDGE_SHARE, selectBridgeLOD } from "./bridge-lod";
@@ -1819,12 +1827,15 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
   ): [number | undefined, number | undefined] => {
     const out: [number | undefined, number | undefined] = [undefined, undefined];
     for (const end of [0, 1] as const) {
-      if (!(end ? branchB : branchA) || pts.length < 2) continue;
+      const branch = end ? branchB : branchA;
+      // (a surveyed deck's every end: where it overlaps another surveyed piece of the same structure — Grenelle's sections over the Île
+      // aux Cygnes, each its own Z 0.4–0.5 m apart (kerr-mini, 25 Nov 2026) — it takes that deck's top, within 1.5 m of its own)
+      if ((!branch && !measured) || pts.length < 2) continue;
       const p = end ? pts[pts.length - 1]! : pts[0]!;
       const r = bridgeRegistry.queryBridgeAt(p[0], p[1], { expectedLevel: layer, sameLevel: true, margin: 2, deckTop: true });
       if (!r) continue;
       const own = measured ? (end ? measured[measured.length - 1]! : measured[0]!) : undefined;
-      if (own === undefined || Math.abs(r.elevation - own) < 3) out[end] = r.elevation;
+      if (own === undefined || Math.abs(r.elevation - own) < (branch ? 3 : 1.5)) out[end] = r.elevation;
     }
     return out;
   };
@@ -1940,7 +1951,7 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
       }
     // (25 Nov 2026: the halves joined, then the pieces that meet — end to end: one axis; a branch: built after, its end on the other
     // deck's top —, the nearest first)
-    const list = joinDeckPieces(joinBridgeHalves([...cellBridges.values()].map(geoOf)))
+    const list = joinDeckPieces(levelTwinDecks(joinBridgeHalves([...cellBridges.values()].map(geoOf))))
       .map((j) => ({ ...j, d: nearestD(j.bridge.points) }))
       .sort((a, b) => Number(a.branchA || a.branchB) - Number(b.branchA || b.branchB) || a.d - b.d);
     for (const { bridge: b, branchA, branchB, d } of list) {

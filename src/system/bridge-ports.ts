@@ -452,3 +452,82 @@ export function spliceOpenHalves(list: readonly GeoBridge[]): GeoBridge[] | null
   }
   return [...list.filter((_, i) => !taken.has(i)), ...out];
 }
+
+/**
+ * (25 Nov 2026 — Pont de Cheviré's two carriageways, kerr-mini: two decks 10.6 m apart, 15.5 m wide — overlapping by 5 m —, each on
+ * its own surveyed Z, 0.3–0.4 m apart: a ridge along the overlap) Twin decks — surveyed, of the same kind and layer, parallel (their
+ * axes within 18°), overlapping across (their axes nearer than their half-widths' sum) — take the mean of their two surveys wherever
+ * they overlap: one surface across them (the real bridge's one deck), the carriageways' cross-fall (≤ a few decimetres) left out.
+ * Outside the overlap each keeps its own. The surveyed heights read as `heights` (NaN none); a deck without them is left alone.
+ */
+export function levelTwinDecks(list: readonly GeoBridge[]): GeoBridge[] {
+  const lat0 = list[0]?.points[0]?.lat ?? 0;
+  const cosL = Math.cos((lat0 * Math.PI) / 180);
+  const xy = (p: Wgs84Point): [number, number] => [p.lon * 111_320 * cosL, p.lat * 111_132];
+  const P = list.map((b) => b.points.map(xy));
+  const box = P.map((pts) => {
+    let x0 = Infinity,
+      y0 = Infinity,
+      x1 = -Infinity,
+      y1 = -Infinity;
+    for (const [x, y] of pts) {
+      x0 = Math.min(x0, x);
+      y0 = Math.min(y0, y);
+      x1 = Math.max(x1, x);
+      y1 = Math.max(y1, y);
+    }
+    return [x0, y0, x1, y1] as const;
+  });
+  const out = list.map((b) => (b.heights ? [...b.heights] : null));
+  /** B's surveyed height under A's point k, where they overlap and run parallel (NaN: not there) */
+  const under = (i: number, k: number, j: number): number => {
+    const A = list[i]!,
+      B = list[j]!,
+      pa = P[i]![k]!,
+      pb = P[j]!;
+    const reach = (A.width + B.width) / 2 - 0.5;
+    const ka = Math.min(k, P[i]!.length - 2);
+    const tax = P[i]![ka + 1]![0] - P[i]![ka]![0],
+      tay = P[i]![ka + 1]![1] - P[i]![ka]![1];
+    const la = Math.hypot(tax, tay) || 1;
+    let best = reach,
+      h = Number.NaN;
+    for (let s = 1; s < pb.length; s++) {
+      const a = pb[s - 1]!,
+        c = pb[s]!;
+      const dx = c[0] - a[0],
+        dy = c[1] - a[1];
+      const L2 = dx * dx + dy * dy;
+      if (L2 < 1e-6) continue;
+      const t = ((pa[0] - a[0]) * dx + (pa[1] - a[1]) * dy) / L2;
+      if (t < 0 || t > 1) continue;
+      const d = Math.abs((pa[0] - a[0]) * dy - (pa[1] - a[1]) * dx) / Math.sqrt(L2);
+      if (d >= best) continue;
+      if (Math.abs((tax * dx + tay * dy) / (la * Math.sqrt(L2))) < 0.95) continue;
+      const ha = B.heights![s - 1]!,
+        hc = B.heights![s]!;
+      if (!Number.isFinite(ha) || !Number.isFinite(hc)) continue;
+      best = d;
+      h = ha + (hc - ha) * t;
+    }
+    return h;
+  };
+  for (let i = 0; i < list.length; i++)
+    for (let j = 0; j < list.length; j++) {
+      if (i === j || !list[i]!.heights || !list[j]!.heights) continue;
+      const A = list[i]!,
+        B = list[j]!;
+      if (A.kind !== B.kind || A.layer !== B.layer) continue;
+      const m = (A.width + B.width) / 2,
+        a = box[i]!,
+        b = box[j]!;
+      if (a[0] > b[2] + m || b[0] > a[2] + m || a[1] > b[3] + m || b[1] > a[3] + m) continue;
+      for (let k = 0; k < A.points.length; k++) {
+        const own = A.heights![k]!;
+        if (!Number.isFinite(own)) continue;
+        const h = under(i, k, j);
+        if (Number.isFinite(h)) out[i]![k] = (own + h) / 2;
+      }
+    }
+  return list.map((b, i) => (out[i] ? { ...b, heights: out[i]! } : b));
+}
