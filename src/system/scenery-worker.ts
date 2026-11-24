@@ -1524,6 +1524,10 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
   // (PLAN-PONT-ROUTES-AAA PR2/PR5: the decks' registry — the world's support surfaces, queried by place and level: the cars, the lamps
   // and the guardrails on a bridge; review A4: indexed by a grid)
   const bridgeRegistry = new SupportSurfaceRegistry();
+  /** the decks of an authoritative source — the catalogue's notable bridges, the street cells' — a later source's double is left out
+   *  under (not the same source's own neighbours: a motorway's twin decks side by side) */
+  const notableDecks = new SupportSurfaceRegistry(),
+    cellDecks = new SupportSurfaceRegistry();
   let deckSerial = 0;
   /** the deck's drawn top at a frame point (its parapets' band read as the deck's), the deck by height (`expectedZ`) or by layer, or null */
   const deckHeightAt = (x: number, y: number, expectedZ?: number, expectedLayer?: number, margin = 1): number | null =>
@@ -1566,6 +1570,8 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
     d: number;
     /** its piers by its family (default) — none: a notable bridge's, its towers its supports (B3) */
     piers?: boolean;
+    /** a registry it is listed in besides the scene's (its source's: notableDecks, cellDecks) */
+    also?: SupportSurfaceRegistry;
   }
   // (PLAN-J8 J8-RP RP4/RP5, PLAN-PONT-ROUTES-AAA, review A1/A2/A7/A8/A9: one deck for every bridge — its profile decided once
   // (bridge-surface-service.ts), drawn in slices between its stations (their corners mitred: no crack at a bend), each slice's top a
@@ -1602,11 +1608,9 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
     const total = profile.totalLength;
     if (total < 1) return null;
     const serial = deckSerial++;
-    bridgeRegistry.registerBridge(
-      { assetId: `bridge_${serial}`, surfaceId: `surface_${serial}`, revision: String(q.id) },
-      profile,
-      o.layer,
-    );
+    const ref = { assetId: `bridge_${serial}`, surfaceId: `surface_${serial}`, revision: String(q.id) };
+    bridgeRegistry.registerBridge(ref, profile, o.layer);
+    o.also?.registerBridge(ref, profile, o.layer);
     const st = profile.stations;
     const axis = st.map((s) => profile.axisAt(s));
     const across = mitres(
@@ -1775,6 +1779,7 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
         maxGrade: 0.065,
         d,
         piers: false,
+        also: notableDecks,
       });
       if (!deckProfile) continue;
       bridges++;
@@ -1836,7 +1841,7 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
           const res = await store.match(streetCacheUrl(self.location.origin, x, y));
           const buf = res ? await res.arrayBuffer() : null;
           if (!buf || !streetCellComplete(buf)) {
-            streetMissing.push(k);
+            // (not among the scene's own wanted cells: no rebuild waits on it — its half stays open, held at its clearance)
             continue;
           }
           const o = cellOrigin(x, y);
@@ -1857,7 +1862,7 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
         // (a notable bridge's deck already there: this one its data's double)
         const m = b.points[Math.floor(b.points.length / 2)]!;
         const mAt = localPoint(frame, m.lat, m.lon, 0);
-        if (bridgeRegistry.queryBridgeAt(mAt[0], mAt[1], { margin: 10 })) continue;
+        if (notableDecks.queryBridgeAt(mAt[0], mAt[1], { margin: 10 })) continue;
         const pts = await groundLine(b.points);
         const rail = b.kind === BridgeKind.Rail,
           foot = b.kind === BridgeKind.Foot;
@@ -1877,6 +1882,7 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
             geoPoints: b.points,
             approach: await approachGrades(b.points, pts, b.flags),
             maxGrade: gradeOf(b.kind, width),
+            also: cellDecks,
             d,
           })
         ) {
@@ -1914,7 +1920,7 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
       try {
         const mid = b.points[Math.floor(b.points.length / 2)]!;
         const at = localPoint(frame, mid.lat, mid.lon, 0);
-        if (bridgeRegistry.queryBridgeAt(at[0], at[1], { margin: 10 })) continue;
+        if (notableDecks.queryBridgeAt(at[0], at[1], { margin: 10 }) || cellDecks.queryBridgeAt(at[0], at[1], { margin: 10 })) continue;
         if (selectedAreas.some((p) => surfaceContains(at, p))) continue;
         const points = await groundLine(b.points);
         const style =
