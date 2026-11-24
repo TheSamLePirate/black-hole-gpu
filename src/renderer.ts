@@ -8876,15 +8876,20 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
   /** The craft (ShipRenderer.encodeShip) for target t: `inScene` — PLAN-J1 J1-5 — into the live image's scene before the history,
    *  with its motion and identity in the scene's targets (the Earth's visibility's, else the renderer's own motion target);
    *  else composited by the display after it, as before. */
-  private encodeShipNow(enc: GPUCommandEncoder, t: Target, s: Settings, inScene: boolean) {
+  /** The live image's motion target the meshes drawn into the scene before the history write (the craft — J1-5 —, the
+   *  astronaut and the living ground): the visibility pass's, its size; else the renderer's own, cleared — once a frame: the
+   *  getter encodePost hands both */
+  private sceneMotion(enc: GPUCommandEncoder, t: Target): GPUTexture {
+    const terrainMotion = this.terrainRaster?.motionTexture() ?? null;
+    return terrainMotion && terrainMotion.width === t.width && terrainMotion.height === t.height
+      ? terrainMotion
+      : this.craftMotionTarget(enc, t);
+  }
+  private encodeShipNow(enc: GPUCommandEncoder, t: Target, s: Settings, inScene: boolean, motionNow?: () => GPUTexture) {
     let compose: ShipCompose | undefined;
     if (inScene) {
       const own = this.terrainRaster?.surfaceTextures() ?? null;
-      const terrainMotion = this.terrainRaster?.motionTexture() ?? null;
-      const motion =
-        terrainMotion && terrainMotion.width === t.width && terrainMotion.height === t.height
-          ? terrainMotion
-          : this.craftMotionTarget(enc, t);
+      const motion = motionNow ? motionNow() : this.sceneMotion(enc, t);
       compose = { frame: this.frameStamp, motion, identity: own?.identity ?? null, stars: t.stars };
     }
     this.ship.encodeShip(
@@ -8960,7 +8965,7 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
     const rect = new Float32Array(this.ship.rectFor(t.hdr));
     this.device.queue.writeBuffer(this.displayBuf, 112, rect);
     this.device.queue.writeBuffer(t.shipRect, 0, rect);
-    if (inScene) this.craftMotionOn = this.ship.composed;
+    if (inScene) this.craftMotionOn ||= this.ship.composed;
   }
 
   private encodePost(enc: GPUCommandEncoder, t: Target, s?: Settings) {
@@ -9003,7 +9008,16 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
       if (s && i === r0 && t === this.live) this.craftMotionOn = false;
       // the occlusion depth the raster passes below test against (Z-P1: fresh, not the stale pixels' own)
       if (s && i === r0) this.encodeSceneDepth(enc, t);
-      if (s && inScene) this.encodeShipNow(enc, t, s, true);
+      // (the live image's motion target, asked by the first mesh drawn into the scene — made, or cleared, once)
+      let motion: GPUTexture | null = null;
+      const motionNow = () => (motion ??= this.sceneMotion(enc, t));
+      // (the astronaut and the living ground — grass, stones, low cover — and the astronaut's shadow on the ground, into the
+      // live image before the history (24 Nov 2026): drawn after it, as they were, the temporal upsampling's image — the one
+      // shown whenever the live image is rendered under the canvas — never had them: a ghost of the frame before's, leaked
+      // through the pixels the interleaved shading leaves, was all that showed. Their pixels marked as the craft's (motion
+      // w 1): whole this frame, unjittered, their history by their own motion)
+      if (s && i === r0) this.encodeCharacter(enc, t, s, t === this.live ? motionNow : null);
+      if (s && inScene) this.encodeShipNow(enc, t, s, true, motionNow);
       if (s && i === r0 && t === this.live && this.encodeTemporal(enc, t, s) && s.motionBlur > 0 && !this.costViewMode)
         this.encodeMotionBlur(enc, t);
       if (trace) trace(enc);
@@ -9012,7 +9026,6 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
         this.encodeStation(enc, t, s);
         this.encodeJwst(enc, t, s);
       }
-      if (s && i === r0) this.encodeCharacter(enc, t, s);
       if (s && shipOn && !inScene) this.encodeShipNow(enc, t, s, false);
       else if (i === r0 && !shipOn) {
         this.device.queue.writeBuffer(t.shipRect, 0, new Float32Array(4));
@@ -9291,7 +9304,7 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
     return out;
   }
 
-  private encodeCharacter(enc: GPUCommandEncoder, target: Target, s: Settings) {
+  private encodeCharacter(enc: GPUCommandEncoder, target: Target, s: Settings, motionNow: (() => GPUTexture) | null) {
     const c = this.character,
       frame = c?.frame() ?? null;
     this.characterRenderer.remoteWalkers = this.netWalkersOnCamera(s);
@@ -9376,7 +9389,10 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
         // (the landed vessel's box: the walker's, else asked of the walk's own conversion — no walker out)
         hull: frame ? c!.hullNow() : view && c?.body === "earth" && c.ours ? c.vesselHull() : null,
       },
+      motionNow,
     );
+    // (its pixels' motion written: the temporal passes read it, its frame kept for the next one's disocclusions)
+    if (motionNow && this.characterRenderer.drawing) this.craftMotionOn = true;
   }
 
   /** the Kp the auroras are drawn with, and where it came from (system/space-weather.ts kpFor — AM1) */
