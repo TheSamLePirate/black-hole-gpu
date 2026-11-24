@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 24 nov. 21:15 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 25 nov. 00:30 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous. Ce qui est fermé quitte le tableau « En cours » pour la ligne « Fermé récemment ».
@@ -77,6 +77,13 @@ l'état d'une mission ou d'un combat **non sauvé, dit** ; le réseau **« entre
 **Décidé par Sam (16 nov., 15:58 UTC)** : J8-4 allumée par défaut (quads sous 8 px), J8-5 avec une jonction choisie sur captures, J8-1b suspendu, l'e2e de J8-6 par la voie (b), J8-9 ajouté ([PLAN-J8](docs/PLAN-J8-BATIMENTS.md) §6 point 6). **But fixé par Sam (16 nov., ~16:19 UTC)** : [J8-A](docs/PLAN-J8-BATIMENTS.md), un vol Paris et Toulon-Hyères, de jour et de nuit, tous les bâtiments, lampadaires, voitures (J8-L) et rivières (J8-E) chargés avant le vol, en « high » partout, sans différence visible entre les qualités. **Décidé par Sam (16 nov., ~21:40 UTC)** : J8-8 ouvert (le proche en cellules), la jonction à 0, l'éclat de nuit lointain gardé ([PLAN-J8](docs/PLAN-J8-BATIMENTS.md) §6 point 11). **Décidé par Sam (17 nov., ~08:00 UTC)** : J8-8b ouvert, les arbres par cellule, après un vol de référence à froid sur le M1 Max (§6 point 12). **Mode speed pour finir J8, J8-VB compris** (Sam, 17 nov. ~09:20 UTC ; [CLAUDE.md](CLAUDE.md), modes de travail ; §6 point 13) : contrôles rapides par lot, un gros e2e J8-A à la fin sur kerr-mini et le M1 Max. **J8-RP, les routes et les ponts AAA** (Sam, 17 nov. ~10:20 UTC ; [PLAN-J8](docs/PLAN-J8-BATIMENTS.md) §3 bis) : ajouté à J8 en mode speed, RP1 (les routes et marquages visibles sous l'orthophoto) en tête. **Attend Sam** : les quatre premières questions de PLAN-J8 §6, réglées provisoirement (même contenu sur les deux machines, retour si > 3 ms sur le mini ; portée au pixel ; J7 en pause, les arbres proches deviennent J9 ; pas de préparation côté serveur pour l'instant) ; les trois questions de [PLAN-J7](docs/PLAN-J7-FLUIDITE.md) §4, réglées provisoirement (les 40 ms du mini en dernier, J7-6 ; les arbres proches en géométrie ensuite, désormais J9 ; l'aplanissement du détail sous les trouées jusqu'à la FAF ou 10 km) ; les seuils du mini attendent la reprise de la cible 40 ms.
 
 ## Journal
+
+### 2026-11-25 00:30 UTC — Trafic AAA : train sur chaque avion de ligne, ombres du trafic, couleurs des compagnies
+
+- Contribution : §19 (aéroports crédibles), §8 (coût mesuré, levier `camera.trafficRigMax`), préparation des assets hors image (meshoptimizer).
+- Réalisé (fusion `858d09f9`, `8e733d41`, `f1b4bc2c`) : les maillages simples n'avaient **aucun** train (l'A320 construit train rentré, celui du CRJ coupé) — les jets garés flottaient à 2,3 m ; train de l'A320 FlightGear (GPL v2, déjà au dépôt) cuit dans `a320.bin`/`crj900.bin` (`scripts/build-traffic-gear.ts`, 32 840 → 6 616 triangles), replié par instance selon `gear` (charnière et angle FlightGear), ombre comprise ; texture de l'A320 simple remise à l'endroit (à l'envers depuis T2) ; ombres des avions au sol/sous 60 m et des navires dans la moitié « décor » de la carte d'ombre de l'appareil (`src/ship-casters.ts`, 4 km, levier `ship.trafficCast`) ; couleurs de ~50 compagnies par préfixe OACI (`src/traffic/livery.ts`, sans nom ni logo), cartes blanchies (`scripts/whiten-airliner-maps.py`), couche de livrée blanche de l'A320 gréé chargée au premier A320 du trafic.
+- Preuve : `traffic-runways` vert 3 fois (2 sur kerr-mini, 1 ici), `traffic-free-camera` 2 fois ; tests `traffic-gear` (6), `traffic-livery`, liés 207/207 ; `check-wgsl` 85/85. **Mesuré** (kerr-mini, vue des portes de SFO, temps d'image médian sur 3 s, ABBA, A/A −0,2/−0,4 ms) : 3 A320 gréés +2,4 à +2,8 ms contre maillages simples ; ombres du trafic 0 à +0,8 ms ; toutes passes d'appareils 7,9–8,2 ms. Temps d'image, pas GPU pur.
+- Ouvert : pas de trappes de train ; jambes d'A320 raccourcies sur le CRJ ; fantômes des titres « A320 » de près ; passage gréé/simple à 4 km non comparé image par image ; ~21 Mio de la couche de livrée non mesurés en jeu.
 
 ### 2026-11-24 21:15 UTC — Marquages routiers sans anneaux ; avions garés de l'e2e sur l'aire de SFO
 
