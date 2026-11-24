@@ -9168,6 +9168,48 @@ fn seaCraftWake(o: ptr<function, SeaWake>, A: vec4f, B: vec4f, up: vec3f, footM:
     (*o).g += 0.03 * hover * s0 * wave * rh / max(rr, 0.1);
   }
 }
+// A ship's Kelvin waves (seaWake), at a point x aft of its bow and ay abeam [m]: their slope (∂h/∂x, ∂h/∂|y|). In the 19.47° wedge,
+// the two angles θ the phase is stationary at (2r·tan²θ − tanθ + r = 0, r = ay/x: the transverse waves and the divergent), their phase
+// k₀(x cosθ + ay sinθ)/cos²θ (k₀ = g/U²). Their steepness by the hull's Froude number Fn = U/√(gL) — the wave making: a slow hull
+// (Fn ≲ 0.1) raises low divergent waves near it and hardly any transverse ones; a fast one (0.35) both, steep on the cusps —, not by
+// its length (the old height ∝ L at a 2.6 m wavelength: slopes of 0.3 to 0.75, the transverse arcs a target of concentric rings);
+// the transverse falling as 1/√distance and smoothed over the turbulent wake's strip (`axis`), the divergent slower along the cusps
+// (≈ distance^−1/3); jit (−1…1) the sea's own noise there: their phase wandering, their crests broken short. U [m/s], L [m], reach the
+// pattern's [m], footM the pixel's footprint: a train the pixel does not resolve faded out of the slope (x, y) into the slopes'
+// variance (z — LEAN, as the sea's own: the V's arms still a rougher, brighter band under the glint where its short divergent
+// waves are below the pixel).
+fn kelvinSlope(x: f32, ay: f32, U: f32, L: f32, reach: f32, footM: f32, jit: f32, axis: f32) -> vec3f {
+  let r = ay / max(x, 1e-3);
+  if (r > 0.40) { return vec3f(0.0); }
+  let k0 = 9.81 / (U * U);
+  let steep = smoothstep(0.08, 0.35, U / sqrt(9.81 * max(L, 1.0)));
+  let q = sqrt(L / (x + L)) * exp(-2.0 * x / reach);
+  let cusp = smoothstep(0.29, 0.354, r);
+  let edge = smoothstep(0.40, 0.354, r) * (1.0 + 2.0 * cusp);
+  let disc = sqrt(max(1.0 - 8.0 * r * r, 0.0));
+  let rr = max(r, 1e-4);
+  // (the crests broken: where the noise is near nought — meandering lines — the waves fall low)
+  let broken = 0.6 + 0.6 * abs(jit);
+  var g = vec3f(0.0);
+  for (var j = 0; j < 2; j++) {
+    let tr = j == 0;
+    let tt = select((1.0 + disc) / (4.0 * rr), (1.0 - disc) / (4.0 * rr), tr);
+    let ct = inverseSqrt(1.0 + tt * tt);
+    let st = tt * ct;
+    let kk = k0 / (ct * ct);
+    // (the divergent waves faint on the axis — short there —, both faded where unresolved)
+    let seen = smoothstep(2.0 * footM, 6.0 * footM, TAU / kk);
+    let lit = select(smoothstep(0.05, 0.25, r), 1.0, tr);
+    let res = seen * lit;
+    let s = select((0.12 + 0.04 * steep) * mix(q, sqrt(q), cusp), (0.02 + 0.035 * steep) * q * (1.0 - 0.75 * axis), tr);
+    let ph = kk * (x * ct + ay * st) + jit * select(-0.7, 0.9, tr);
+    let a = s * edge * broken;
+    g -= vec3f(a * res * sin(ph) * vec2f(ct, st), -a * a * (1.0 - seen) * lit);
+  }
+  // (the two trains' sum never past a crest's breaking steepness, ak ≈ 0.4: the bow's cusps of a fast hull)
+  let m = length(g.xy);
+  return select(g, vec3f(g.xy * (0.4 / max(m, 1e-6)), g.z), m > 0.4);
+}
 fn seaWake(up: vec3f, footM: f32) -> SeaWake {
   var o: SeaWake;
   let n = u32(P.wake[0].x + 0.5);
@@ -9196,49 +9238,36 @@ fn seaWake(up: vec3f, footM: f32) -> SeaWake {
     let ay = abs(y);
     let reach = 40.0 * L + 2500.0;
     if (x < -0.2 * L || x > reach || ay > 0.42 * max(x, 0.0) + 2.0 * beam + 20.0) { continue; }
-    let k0 = 9.81 / (U * U);
-    let fr = smoothstep(0.8, 3.0, U);
-    // (its white water: a big hull's, under way — a yacht's at a walking pace hardly any)
+    // (its white water: a big hull's, under way — a yacht's at a walking pace hardly any —; its screw's wash right aft, even slow)
     let churn = smoothstep(1.5, 6.0, U) * (0.35 + 0.65 * smoothstep(15.0, 80.0, L));
-    // the Kelvin waves
+    let slow = smoothstep(0.6, 2.5, U);
+    // (its turbulent wake: a beam or two wide, broadening aft)
+    let xs = x - L;
+    let xw = max(xs, 0.0);
+    let w = 0.5 * beam * sqrt(1.0 + xw / (4.0 * beam));
+    // (the sea's own noise here, anchored on the water — the turbulent wake's foam and the Kelvin crests' breaks: one read)
+    let pn = gnoiseI(anchor, vec3f(u, c, tclock * 0.05) / 5.0);
+    // the Kelvin waves (kelvinSlope), the sea's noise breaking their crests (25 Nov 2026)
     if (x > 0.0) {
-      let r = ay / x;
-      let a0 = min(0.006 * L + 0.1, 1.6) * fr * sqrt(L / (x + L)) * exp(-x / reach * 2.0);
-      let edge = smoothstep(0.40, 0.354, r) * (1.0 + 1.5 * smoothstep(0.29, 0.354, r));
-      let disc = sqrt(max(1.0 - 8.0 * r * r, 0.0));
-      let rr = max(r, 1e-4);
-      for (var j = 0; j < 2; j++) {
-        let tt = select((1.0 + disc) / (4.0 * rr), (1.0 - disc) / (4.0 * rr), j == 0);
-        let th = atan(tt);
-        let ct = cos(th);
-        let st = sin(th);
-        let kk = k0 / (ct * ct);
-        let lam = TAU / kk;
-        // (the divergent waves faint on the axis — short there —, both faded where unresolved)
-        let res = smoothstep(2.0 * footM, 6.0 * footM, lam) * select(smoothstep(0.05, 0.25, r), 1.0, j == 0);
-        let ph = kk * (x * ct + ay * st);
-        let a = a0 * edge * res * select(0.7, 1.0, j == 0);
-        let dh = -a * sin(ph) * kk;
-        // (∂h/∂x, ∂h/∂|y|) → the Earth's axes: x grows aft (−f), y along side
-        o.g += dh * (ct * -f + st * sign(y) * side);
-      }
+      let axis = smoothstep(1.4 * w, 0.5 * w, ay) * smoothstep(0.7 * L, 1.1 * L, x) * slow;
+      let kg = kelvinSlope(x, ay, U, L, reach, footM, pn, axis);
+      // (∂h/∂x, ∂h/∂|y|) → the Earth's axes: x grows aft (−f), y along side; the unresolved trains' variance
+      o.g += kg.x * -f + kg.y * sign(y) * side;
+      o.rough = max(o.rough, kg.z);
     }
     // the turbulent wake aft of the stern and its smoothed strip; the bow wave along its sides
-    let xs = x - L;
     if (xs > -0.1 * L) {
-      let xw = max(xs, 0.0);
-      let w = 0.5 * beam * sqrt(1.0 + xw / (4.0 * beam));
       let life = 3.0 * L + 80.0;
-      let pn = gnoiseI(anchor, vec3f(u, c, tclock * 0.05) / 5.0);
-      let band = smoothstep(w, 0.45 * w, ay) * exp(-xw / life) * churn;
+      let wash = 0.55 * slow * exp(-xw / (L + 15.0));
+      let band = smoothstep(w, 0.45 * w, ay) * max(exp(-xw / life) * churn, wash);
       // (its white water a lace drawn out along the course — the cells a metre or two, stretched aft — where the pixel
       // resolves it, its mean beyond; the bubbles under it outlast the foam: the wake's pale turquoise lane)
       let lace = noise01(anchor + vec3i(0, 0, 6), vec3f(x / 4.5, y / 1.2, tclock * 0.03));
       let fine = smoothstep(1.5, 0.5, footM);
       let white = band * clamp(0.5 + 0.6 * pn, 0.0, 1.0);
       o.foam = max(o.foam, mix(white * 0.75, white * smoothstep(0.55 - 0.4 * white, 0.9 - 0.3 * white, lace), fine));
-      o.bub = max(o.bub, smoothstep(1.3 * w, 0.5 * w, ay) * exp(-xw / (2.5 * life)) * churn);
-      o.calm = max(o.calm, smoothstep(1.8 * w, w, ay) * exp(-xw / (2.0 * life)) * churn * 0.7);
+      o.bub = max(o.bub, smoothstep(1.3 * w, 0.5 * w, ay) * max(exp(-xw / (2.5 * life)) * churn, 1.5 * wash));
+      o.calm = max(o.calm, smoothstep(1.8 * w, w, ay) * max(exp(-xw / (2.0 * life)) * churn * 0.7, 0.8 * slow * exp(-xw / (2.0 * L + 40.0))));
     }
     if (x > 0.0 && x < 0.6 * L) {
       let bw = 0.5 * beam + 0.06 * x + 1.0;
@@ -10555,14 +10584,17 @@ fn worldScenery(dW:vec3f,tMax:f32,rnd:f32)->f32 {
       let F=u32(forestData(2u).x);
       if(F>0u){
         let hd=forestHead(F);let k=i32(RASTER_ID-1u);
-        let c=forestCandidate(o,d,k%max(hd.w,1),k/max(hd.w,1),TUNE_FOREST_DETAIL,hd);
+        // (the tree lifted by Λ at its own distance, as its raster drew it — not the ground's: sceneryTreeLite, 25 Nov 2026)
+        let ts=forestCandidateStart(P.scenery[3].xyz,d,k%max(hd.w,1),k/max(hd.w,1),hd);
+        let oT=P.scenery[3].xyz-vec3f(0.0,0.0,sceneryLiftM(min(ts,P.scenery[1].w)));
+        let c=forestCandidate(oT,d,k%max(hd.w,1),k/max(hd.w,1),TUNE_FOREST_DETAIL,hd);
         if(c.t>0.0 && c.t<hit.t){tree=c;RASTER_PATH=0u;}
-        else{tree=forestQueryFrom(o,d,forestCandidateStart(o,d,k%max(hd.w,1),k/max(hd.w,1),hd),hit.t,false,TUNE_FOREST_DETAIL);RASTER_PATH=1u;}
+        else{tree=forestQueryFrom(oT,d,ts,hit.t,false,TUNE_FOREST_DETAIL);RASTER_PATH=1u;}
       }
     }
   }else{tree=forestQuery(o,d,hit.t,false,TUNE_FOREST_DETAIL);}
   if(tree.kind>0u){
-    let p=o+d*tree.t;
+    let p=P.scenery[3].xyz+d*tree.t-vec3f(0.0,0.0,sceneryLiftM(min(tree.t,P.scenery[1].w)));
     SC_POINT=p;SC_DISTANCE=tree.t;
     var n=tree.n;var alb:vec3f;
     var look=ForestLook(vec3f(0.12,0.16,0.08),vec3f(0.0));
@@ -10636,6 +10668,22 @@ fn sceneryShadow(light:vec3f,normal:vec3f)->f32 {
   return mix(select(1.0,0.0,blocked),1.0,fade);
 }
 struct ScenerySurface { color:vec3f, cover:f32, kind:f32 };
+// A surface line's strip at `point` (scenerySurface; the scenery's frame [m]): x the distance from its axis a → b, y the abscissa
+// along it (0 … its length), z its cover at that half-width, filtered over aa. A road's or a rail's piece ends in round caps — its
+// distance taken to its nearest end: the pieces of a polyline join without a gap —; a junction's paint (kind 5: a zebra's bars, a
+// stop or yield line — `square`) is cut straight across at its ends, the kerb's line: its cover the strip's across × its length's
+// (25 Nov 2026: the caps drew a crossing as a striped pill, a stop line with rounded tips)
+fn sceneryStrip(point:vec2f,a:vec2f,b:vec2f,half:f32,aa:f32,square:bool)->vec3f {
+  let line=b-a;let len=max(length(line),.001);let dir=line/len;
+  let s=dot(point-a,dir);let along=clamp(s,0.0,len);
+  if(square){
+    let across=abs(dot(point-a,vec2f(-dir.y,dir.x)));
+    let ends=1.0-smoothstep(-aa,aa,max(-s,s-len));
+    return vec3f(across,along,(1.0-smoothstep(max(0.0,half-aa),half+aa,across))*ends);
+  }
+  let distance=length(point-a-dir*along);
+  return vec3f(distance,along,1.0-smoothstep(max(0.0,half-aa),half+aa,distance));
+}
 fn scenerySurface(foot:f32)->ScenerySurface {
   var out=ScenerySurface(vec3f(0.0),0.0,0.0);
   SC_PAINT=vec4f(0.0);SC_SURVEY_ROAD=false;SC_AT=SC_POINT.xy;SC_ROAD=vec4f(0.0);
@@ -10655,11 +10703,15 @@ fn scenerySurface(foot:f32)->ScenerySurface {
       cover=select(0.0,1.0,sceneryPolygon(point,base,u32(p.z)));key=cover;
       if(kind==4.0 && cover==0.0 && sceneryPolygon(point,base,u32(scenery[base+2u].w))){dryIsland=true;}
     }else{
-      kind=size.y;let line=p.zw-p.xy;let len=max(length(line),.001);let along=clamp(dot(point-p.xy,line)/(len*len),0.0,1.0);
-      let distance=length(point-p.xy-line*along);
-      cover=1.0-smoothstep(max(0.0,size.x-aa),size.x+aa,distance);
-      // (its depth inside its strip — the rank's tie-break: the nearest axis wins, a polyline's distance; see the choice below)
-      key=size.x-distance;isLine=true;
+      kind=size.y;let line=p.zw-p.xy;let len=max(length(line),.001);
+      let strip=sceneryStrip(point,p.xy,p.zw,size.x,aa,kind==5.0);
+      let distance=strip.x;let along=strip.y/len;
+      cover=strip.z;
+      // (its depth inside its strip — the rank's tie-break: the nearest axis wins, a polyline's distance; see the choice below —; a
+      // carriageway's depth before any pavement's: a kerbed road's pavements, widened to the façades (pavement-reach.ts), never
+      // drawn across a crossing street's carriageway at a junction's mouth — 25 Nov 2026)
+      let crK=select(size.x,abs(size.w),size.w!=0.0);
+      key=select(size.x-distance,64.0+crK-distance,distance<=crK);isLine=true;
       // (B2: its abscissa along its road — the segment's start's, scenery[base+2].w ≤ 0, kept so its dashes run on across segments)
       road=vec4f(distance,select(size.x,abs(size.w),size.w!=0.0),along*len-scenery[base+2u].w,size.z);rdir=line/len;
       rank=select(2.0,3.0,kind==2.0);
@@ -10817,12 +10869,15 @@ fn sceneryTreeLite(dW: vec3f, id: u32, tMax: f32, rnd: vec4f) -> f32 {
   let F = u32(forestData(2u).x);
   if (F == 0u) { return -1.0; }
   let d = sceneryLocal(dW);
-  // (R4b: as worldScenery — the tree its raster drew lifted, tested lifted)
-  let o = P.scenery[3].xyz - vec3f(0.0, 0.0, sceneryLiftM(min(tMax, P.scenery[1].w)));
   let hd = forestHead(F);
   let k = i32(id - 1u);
   let ci = k % max(hd.w, 1);
   let cj = k / max(hd.w, 1);
+  // (R4b: the tree its raster drew lifted — each vertex by Λ at its own distance —, tested lifted by Λ at its own: the ray's origin
+  // lowered by Λ where the ray comes within reach of it (forestCandidateStart). 25 Nov 2026: Λ was taken at the ground's distance
+  // behind it — kilometres on a rise looking out, a metre or more —: the trees on Mont Faron tested a metre and a half below where
+  // they stood, a band of misses along the horizontal, the far ground's haze drawn through them — the pale streak across a craft)
+  let o = P.scenery[3].xyz - vec3f(0.0, 0.0, sceneryLiftM(min(forestCandidateStart(P.scenery[3].xyz, d, ci, cj, hd), P.scenery[1].w)));
   let nearGeo = P.scenery[6].w > 1.5;
   // (its plain crown whole — detail −1 —: the proxy the raster drew round it covers it, no more; in winter with near geometry on,
   // 160 m of twigs bridge the bare 3D skeleton to the far canopy)
@@ -16436,6 +16491,9 @@ fn liteMaterial(gq: vec3f, q: vec3f, ph: vec3f, rd: vec3f, look: vec3f, tM: f32,
   // patches among it)
   var pv = Pavement(vec3f(1.0), vec2f(0.0), 0.0, 0.0, 0.68);
   let roadMat = (u32(SC_ROAD.w + 0.5) >> 16u) & 7u;
+  // (a town pavement — a kerbed road's past its kerb, out to the façades: pavement-reach.ts — laid level: the relief's metre of bumps
+  // against the walls — the survey's ground about the buildings — not in its light; 25 Nov 2026)
+  if (roadPaved > 0.0 && sv.kind == 1.0 && SC_ROAD.x > SC_ROAD.y && (u32(SC_ROAD.w + 0.5) & 8u) != 0u) { n = normalize(mix(n, gq, 0.8 * roadPaved)); }
   if (HAS_SCENERY && roadPaved > 0.0 && sv.kind == 1.0 && fpM < 3.0) {
     pv = roadPavement(roadMat, SC_ROAD, SC_ROAD_DIR, SC_AT + P.scenery[6].xy, fpM);
     A *= mix(vec3f(1.0), pv.tint, roadPaved);

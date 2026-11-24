@@ -729,6 +729,8 @@ export class EarthScenery {
       furniture: d?.furniture ?? 0,
       /** (PLAN-J8 J8-RP RP2) the road segments from the street cells, their cells */
       cellRoads: d?.cellRoads ?? 0,
+      /** (25 Nov 2026) the kerbed cell roads widened to their façades (pavement-reach.ts) */
+      pavementsWidened: d?.pavementsWidened ?? 0,
       cellRoadCells: d?.cellRoadCells ?? 0,
       /** (PLAN-J8 J8-RP RP4) the bridges from the street cells */
       cellBridges: d?.cellBridges ?? 0,

@@ -102,6 +102,7 @@ import {
 import { isDeckRoad, markRoad, roadClassCode } from "./road-markings";
 import { inferRoadSurface, type RoadSurface, roadSurfaceColour } from "./road-surface";
 import { catenaryMasts, cellRoadSurfaces } from "./cell-roads";
+import { facadeReach, kerbedRoad, widenRecord } from "./pavement-reach";
 
 /** (B3) a notable bridge built in the scene within this of the eye or the centre [m] — its towers seen from tens of kilometres */
 export const NOTABLE_REACH_M = 45_000;
@@ -2741,6 +2742,30 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
   } catch (e) {
     if (surveyErrors.length < 4) surveyErrors.push(`lamps: ${String(e).slice(0, 200)}`);
   }
+  // (25 Nov 2026: a town street's pavements out to its façades — pavement-reach.ts: each kerbed cell road's record widened to the
+  // footprints beside it, the scene's and its mesh cells' — the relief's grass and photograph no longer between pavement and wall)
+  let pavementsWidened = 0;
+  try {
+    const nearHouses = (x0: number, y0: number, x1: number, y1: number) => {
+      const out = new Set<Primitive>();
+      for (const grid of [houses, cutHouses])
+        if (grid.size)
+          for (let y = Math.floor(y0 / 32); y <= Math.floor(y1 / 32); y++)
+            for (let x = Math.floor(x0 / 32); x <= Math.floor(x1 / 32); x++) for (const v of grid.get(cellKey(x, y)) ?? []) out.add(v);
+      return [...out];
+    };
+    for (const p of cellRoads) {
+      if (!kerbedRoad(p)) continue;
+      const d = p.data;
+      const R = facadeReach([d[0]!, d[1]!], [d[2]!, d[3]!], Math.abs(d[7]!), d[4]!, nearHouses);
+      if (R !== null) {
+        widenRecord(p, R);
+        pavementsWidened++;
+      }
+    }
+  } catch (e) {
+    if (surveyErrors.length < 4) surveyErrors.push(`pavements: ${String(e).slice(0, 200)}`);
+  }
   // (PLAN-J8 J8-VB VB2: the roads' markings, kerbs and pavements — street-detail-prep.ts segmentSurface's rules, KSC3's —, from the
   // scene's own lines: their class, their width (OpenMapTiles' by class — the BD TOPO's measured ones are the cells'), their lanes by
   // the width (3.25 m each, two at least both ways), their way, the town at their middle; packed in the segment's free pair: data[6]
@@ -2814,6 +2839,7 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
     furniture: furnitureCount,
     cellRoads: cellRoadCount,
     cellRoadCells,
+    pavementsWidened,
     streetMissing: [...new Set(streetMissing)].slice(0, 256),
     cellBridges: cellBridgeCount,
     catenaryMasts: catenaryCount,

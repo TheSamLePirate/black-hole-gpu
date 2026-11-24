@@ -660,6 +660,8 @@ export interface SceneryReply {
   /** (PLAN-J8 J8-RP RP2) the road segments drawn from the street cells, and the cells they came from */
   cellRoads?: number;
   cellRoadCells?: number;
+  /** (25 Nov 2026) the kerbed cell roads whose pavements were widened to the façades beside them (pavement-reach.ts) */
+  pavementsWidened?: number;
   /** (review A3) the street cells this scene wanted and found not cached (or incomplete) — "x/y" z 15 keys: the page asks the scene
    *  again when the streets' pool hands one (scenery.ts streetCellArrived) */
   streetMissing?: string[];
