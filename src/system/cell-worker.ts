@@ -302,16 +302,19 @@ async function streetCell(x: number, y: number, signal: AbortSignal): Promise<{ 
   for (const [cx, cy] of quads) built.set(`${cx}/${cy}`, await buildingBytes(cx, cy, signal));
   // (in France, each cell's BD TOPO tile — its troncon_de_route: the roads' widths, lanes, ways, bridges — through the Service Worker's
   // cache, the tile the building cell was prepared from; a tile that does not come: that cell's roads OpenMapTiles')
+  // (25 Nov 2026: the four asked together — one round trip, not four, before the bridges' heights' own)
   const bd = new Map<string, ArrayBuffer>();
-  for (const [cx, cy] of quads) {
-    if (!inBdtopoBox(cx, cy)) continue;
-    try {
-      const t = await fetch(bdtopoUrl(cx, cy), { signal });
-      if (t.ok) bd.set(`${cx}/${cy}`, await t.arrayBuffer());
-    } catch {
-      /* its roads OpenMapTiles' */
-    }
-  }
+  await Promise.all(
+    quads.map(async ([cx, cy]) => {
+      if (!inBdtopoBox(cx, cy)) return;
+      try {
+        const t = await fetch(bdtopoUrl(cx, cy), { signal });
+        if (t.ok) bd.set(`${cx}/${cy}`, await t.arrayBuffer());
+      } catch {
+        /* its roads OpenMapTiles' */
+      }
+    }),
+  );
   // (format 6, 25 Nov 2026: where those tiles hold a bridge's section, their surveyed heights — the WFS's 3D lines over the z 14
   // tile, one request, through the Service Worker's cache as a tile; none, or a failure: the bridges' profiles by their clearance)
   let decks: Map<string, DeckLine[]> | null = null;

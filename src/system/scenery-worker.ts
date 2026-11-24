@@ -1330,6 +1330,8 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
   }
   // Estimated bridge elevation is explicit: tile data provides layer, not surveyed deck/pier geometry.
   bridgeLines.sort((a, b) => a.d - b.d);
+  /** the solids the scene's bytes refused (a deck left out for the budget: its slices among them) */
+  let solidsRefused = 0;
   // (a bridge's part with its triangles — continuous 3D mesh when provided, buildingMesh for buildings:
   // scenery-raster.ts draws it; the view leaves it to the tracer's test)
   const addSolid = (p: Primitive | null, rings?: number[][][], customMesh?: { positions: number[]; triangles: number[] }) => {
@@ -1346,6 +1348,7 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
     const meshB = mesh ? mesh.positions.length * 4 + mesh.triangles.length * 4 : 0;
     if (!p || storedBytes + 64 + p.data.length * 4 + meshB > budget - 6 * 1024 * 1024 * room) {
       budgetLimited = true;
+      if (p) solidsRefused++;
       return false;
     }
     if (mesh?.triangles.length) p.mesh = mesh;
@@ -1796,11 +1799,13 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
       budgetLimited = true;
       return null;
     }
-    const before = storedBytes;
+    const before = storedBytes,
+      refused = solidsRefused;
     const made = deckBridge({ ...o, pressure: bridgeBytes / bridgeShare });
     bridgeBytes += storedBytes - before;
     if (made) bridges++;
-    else if (budgetLimited) bridgesDropped++;
+    // (left out for the scene's bytes — not a degenerate axis)
+    else if (solidsRefused > refused) bridgesDropped++;
     return made;
   };
   /** (25 Nov 2026, bridge-ports.ts joinDeckPieces) a branch's ends on the deck it meets — its drawn top there, the registry's (that
@@ -2068,10 +2073,11 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
       const p = polygonPrimitive(rings, base + 4 * v.layer - 1.2, base + 4 * v.layer, 2, [0.095, 0.098, 0.1]);
       bridgeCandidates++;
       const before = storedBytes;
+      const refused = solidsRefused;
       if (addSolid(p, rings)) {
         bridges++;
         selectedAreas.push(v.footprint);
-      } else bridgesDropped++;
+      } else if (solidsRefused > refused) bridgesDropped++;
       bridgeBytes += storedBytes - before;
     } catch (e) {
       if (!errors.length) errors.push(String(e).slice(0, 220));
