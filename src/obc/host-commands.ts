@@ -5,7 +5,8 @@
 //   - `tars`     : Instant native TARS flight & simulator agent CLI (streams live replies & invokes all 73 tools)
 //   - `ai`       : Instant native streaming LLM CLI (OpenRouter / Anthropic / OpenAI via native browser fetch(),
 //                  bypassing aarch64 Node/Bun startup, guest OpenSSL TLS, and Wisp!)
-//   - `hfetch`   : Native browser-host HTTP/HTTPS fetcher (bypasses Wisp & guest TLS for CORS endpoints)
+//   - `hfetch`   : Native browser-host HTTPS fetcher (bypasses Wisp & guest TLS for CORS endpoints) — public HTTPS
+//                  only, no cookies, never the page's own origin nor a private host (`hfetchRefusal`)
 //   - `obc-bench`: Live SMP / SharedArrayBuffer / JIT / V8 cache / HostCommand performance diagnostic
 
 import type { HostCommand, HostCommandContext } from "unkernel/web";
@@ -15,6 +16,7 @@ import { runOrders } from "../ai/tars-agent";
 import type { Tool } from "../ai/agent";
 import { handleBhRpc } from "./bh-rpc";
 import type { ObcHostAdapter } from "./bridge";
+import { isBlockedHost } from "../util/ip-guard";
 import type { ObcKernelTelemetry, ObcStatus, ObcWarmupState } from "./types";
 
 export type FetchLike = (input: string | URL | Request, init?: RequestInit) => Promise<Response>;
@@ -33,6 +35,38 @@ export interface ResolvedAiProvider {
   apiKey: string;
   model: string;
   endpoint: string;
+}
+
+/** The page's origin (the browser), or null (tests, workers without one). */
+function pageOrigin(): string | null {
+  const loc = (globalThis as { location?: { origin?: string } }).location;
+  return loc?.origin && loc.origin !== "null" ? loc.origin : null;
+}
+
+/**
+ * Why `hfetch` refuses a URL, or null: the guest's code runs it with the page's network position, so only public HTTPS,
+ * never the page's own origin (its dev endpoints — `/__snapshot`, `/__deepgram`… — and its storage), never a private,
+ * loopback, link-local or local-name host (src/util/ip-guard.ts), never credentials in the URL.
+ */
+export function hfetchRefusal(raw: string, origin: string | null): string | null {
+  let u: URL;
+  try {
+    u = new URL(raw);
+  } catch {
+    return "not a URL";
+  }
+  if (u.protocol !== "https:") return "https only";
+  if (u.username || u.password) return "no credentials in the URL";
+  if (origin) {
+    try {
+      const o = new URL(origin);
+      if (u.origin === o.origin || u.hostname === o.hostname) return "the page's own origin";
+    } catch {
+      // (an unparsable origin: nothing to compare)
+    }
+  }
+  if (isBlockedHost(u.hostname)) return "private, loopback or local host";
+  return null;
 }
 
 /** Parse a CLI value token into JSON primitive/object/array (exact parity with bh-cli.mjs). */
@@ -773,7 +807,7 @@ Credentials auto-detected (in order):
       if (a === "-h" || a === "--help") {
         await writeOut(
           ctx.stdout,
-          `hfetch — Native browser-host HTTP fetcher (bypasses Wisp & guest TLS)\nUsage: hfetch [-i] [-X METHOD] [-H "Key: Value"] [-d DATA] <url>\n`,
+          `hfetch — Native browser-host HTTPS fetcher (bypasses Wisp & guest TLS; public HTTPS only, no cookies, never the page's own origin or a private host)\nUsage: hfetch [-i] [-X METHOD] [-H "Key: Value"] [-d DATA] https://<url>\n`,
         );
         return 0;
       } else if (a === "-i") {
@@ -792,13 +826,24 @@ Credentials auto-detected (in order):
       }
     }
 
-    if (!url || !/^https?:\/\//i.test(url)) {
+    if (!url) {
       await writeOut(ctx.stderr, "Usage: hfetch [-i] [-X METHOD] [-H 'K: V'] [-d DATA] https://...\n");
       return 1;
     }
+    const refusal = hfetchRefusal(url, pageOrigin());
+    if (refusal) {
+      await writeOut(ctx.stderr, `hfetch: refused — ${refusal}\n`);
+      return 2;
+    }
 
     try {
-      const res = await fetchFn(url, { method, headers, body, signal: ctx.signal });
+      // (never the page's cookies or HTTP auth; the final URL after redirects checked again before anything is shown)
+      const res = await fetchFn(url, { method, headers, body, signal: ctx.signal, credentials: "omit", mode: "cors" });
+      const finalRefusal = res.url ? hfetchRefusal(res.url, pageOrigin()) : null;
+      if (finalRefusal) {
+        await writeOut(ctx.stderr, `hfetch: refused after redirect to ${res.url} — ${finalRefusal}\n`);
+        return 2;
+      }
       if (showHeaders) {
         let hdr = `HTTP ${res.status} ${res.statusText}\n`;
         res.headers.forEach((v, k) => {

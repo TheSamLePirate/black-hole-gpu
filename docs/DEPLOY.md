@@ -166,7 +166,7 @@ The embedded Linux OBC (`docs/PLAN-LINUX-OBC.md`) uses a Wisp v1 WebSocket-to-TC
     `https://www.samlepirate.org`, `https://thesamlepirate.github.io`, any `https://*.samlepirate.org`, `localhost`, plus
     `WISP_ORIGINS` (comma-separated). A browser cannot lie about its Origin, so no other site can use the relay through its
     visitors; a script can forge it, which is why the next three guards do not depend on it.
-  - **Destinations checked numerically** (`server/ip-guard.ts`): IP literals in any spelling (IPv6 long forms, IPv4-mapped,
+  - **Destinations checked numerically** (`src/util/ip-guard.ts`): IP literals in any spelling (IPv6 long forms, IPv4-mapped,
     NAT64, 6to4, zoned) and every resolved address must be public — loopback, RFC 1918, CGNAT, link-local and cloud metadata,
     documentation, benchmarking, multicast, reserved, ULA, site-local refused; IPv6 must be global unicast. Legacy numeric IPv4
     forms (`2130706433`, `127.1`, `0x7f.1`) and local names (single labels such as Docker service names, `.local`,

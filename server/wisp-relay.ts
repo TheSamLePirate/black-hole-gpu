@@ -4,7 +4,7 @@
 // Protocol: Wisp v1 binary — CONNECT (0x01, TCP and UDP), DATA (0x02), CONTINUE (0x03), CLOSE (0x04).
 //
 // Security (review of 24 Nov 2026 — the relay is reachable by anyone who can open a WebSocket to it):
-// - Destinations checked numerically on the canonical address (server/ip-guard.ts), for IP literals AND for every resolved
+// - Destinations checked numerically on the canonical address (src/util/ip-guard.ts), for IP literals AND for every resolved
 //   address; the relay resolves names itself and connects to the checked IP literal (no second resolution, no rebinding).
 // - Destination ports: an allowlist per protocol (WispPolicy.tcpPorts / udpPorts, WISP_TCP_PORTS / WISP_UDP_PORTS), and mail
 //   submission/relay ports (25, 465, 587, 2525) refused whatever the list says.
@@ -25,9 +25,9 @@ import dgram from "node:dgram";
 import dns from "node:dns";
 import net from "node:net";
 import { foreignOrigin } from "./ear-relay";
-import { classifyHost, isBlockedAddress, isBlockedHost, isBlockedName, isLoopbackAddress } from "./ip-guard";
+import { classifyHost, isBlockedAddress, isBlockedHost, isBlockedName, isLoopbackAddress } from "../src/util/ip-guard";
 
-export { isBlockedHost } from "./ip-guard";
+export { isBlockedHost } from "../src/util/ip-guard";
 
 const PKT_CONNECT = 0x01;
 const PKT_DATA = 0x02;

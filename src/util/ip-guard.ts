@@ -1,4 +1,4 @@
-// Address guard for the relays that open sockets on a client's behalf (the OBC's Wisp relay, server/wisp-relay.ts; the
+// Address guard for whatever opens a connection on someone else's behalf (the OBC's Wisp relay, server/wisp-relay.ts; the
 // client-address trust of server/address.ts). Every check is numeric, on the canonical address — never on the text a client
 // sent: before 24 Nov 2026 `isBlockedHost` matched text prefixes, so `0:0:0:0:0:0:0:1`, `::0:1`, `0:0:0:0:0:ffff:7f00:1` or
 // `0:0:0:0:0:ffff:a9fe:a9fe` (loopback, the cloud metadata service) went through, an IP literal skipping the resolver's check.
@@ -13,7 +13,7 @@
 //   numeric is read as such a form (the WHATWG URL rule).
 // - Zoned IPv6 (`fe80::1%eth0`) refused.
 
-import net from "node:net";
+// Isomorphic (no Node module): used by the relays (server/) and by the OBC's `hfetch` host command in the page.
 
 /** A host as written by a client, classified. */
 export type HostLiteral =
@@ -25,26 +25,32 @@ export type HostLiteral =
 
 /** A canonical dotted-quad IPv4 (four decimal labels 0–255, no leading zeros) → its 32-bit value, else null. */
 export function parseIpv4(s: string): number | null {
-  const m = /^(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)$/.exec(s);
+  const m =
+    /^(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)$/.exec(
+      s,
+    );
   if (!m) return null;
   return ((Number(m[1]) << 24) | (Number(m[2]) << 16) | (Number(m[3]) << 8) | Number(m[4])) >>> 0;
 }
 
 /** An IPv6 literal (no zone, optional embedded IPv4 tail) → its 128-bit value, else null. */
 export function parseIpv6(s: string): bigint | null {
-  if (!s || s.includes("%") || net.isIP(s) !== 6) return null;
+  if (!s || s.length > 45 || !/^[0-9a-f:.]+$/i.test(s)) return null;
   let text = s.toLowerCase();
-  // (an embedded IPv4 tail → two hextets)
-  const tail = /(\d+\.\d+\.\d+\.\d+)$/.exec(text);
+  // (an embedded IPv4 tail, after a colon → two hextets)
+  const tail = /:(\d+\.\d+\.\d+\.\d+)$/.exec(text);
   if (tail) {
     const v4 = parseIpv4(tail[1]!);
     if (v4 === null) return null;
     text = `${text.slice(0, -tail[1]!.length)}${(v4 >>> 16).toString(16)}:${(v4 & 0xffff).toString(16)}`;
   }
+  if (text.includes(".")) return null;
   const halves = text.split("::");
   if (halves.length > 2) return null;
   const head = halves[0] ? halves[0].split(":") : [];
   const rest = halves.length === 2 ? (halves[1] ? halves[1].split(":") : []) : null;
+  // ("::" stands for at least one group of zeros)
+  if (rest !== null && head.length + rest.length > 7) return null;
   const groups = rest === null ? head : [...head, ...new Array(8 - head.length - rest.length).fill("0"), ...rest];
   if (groups.length !== 8) return null;
   let v = 0n;
@@ -96,7 +102,7 @@ const V4_BLOCKED: readonly [number, number][] = (
 export function isBlockedIpv4(v: number): boolean {
   for (const [base, bits] of V4_BLOCKED) {
     const mask = bits === 0 ? 0 : (0xffffffff << (32 - bits)) >>> 0;
-    if (((v & mask) >>> 0) === base) return true;
+    if ((v & mask) >>> 0 === base) return true;
   }
   return false;
 }
@@ -183,7 +189,7 @@ export function cidrMatcher(list: string): (address: string) => boolean {
     if (v4v !== null) {
       return v4.some(([base, bits]) => {
         const mask = bits === 0 ? 0 : (0xffffffff << (32 - bits)) >>> 0;
-        return ((v4v! & mask) >>> 0) === ((base & mask) >>> 0);
+        return (v4v! & mask) >>> 0 === (base & mask) >>> 0;
       });
     }
     if (c.kind === "ipv6") return v6.some(([base, bits]) => bits === 0 || inPrefix6(c.value, base, bits));

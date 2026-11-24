@@ -9,7 +9,7 @@
 // is never in them; if the host's Docker runs the userland proxy (every published connection then seems to come from the bridge's
 // gateway), set TRUSTED_PROXIES to the proxy's own address or keep the ports closed to the internet (docs/DEPLOY.md).
 
-import { cidrMatcher } from "./ip-guard";
+import { cidrMatcher } from "../src/util/ip-guard";
 
 const DEFAULT_TRUSTED = "127.0.0.0/8, ::1, 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16, fc00::/7";
 

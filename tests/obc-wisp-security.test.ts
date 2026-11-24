@@ -3,7 +3,7 @@ import { createHash } from "node:crypto";
 import dgram from "node:dgram";
 import net from "node:net";
 import { clientAddress, setTrustedProxies } from "../server/address";
-import { classifyHost, isBlockedAddress, isBlockedHost } from "../server/ip-guard";
+import { classifyHost, isBlockedAddress, isBlockedHost } from "../src/util/ip-guard";
 import {
   CLOSE_BLOCKED,
   CLOSE_THROTTLED,
@@ -120,6 +120,11 @@ const ATTACK_HOSTS = [
   "fe80::1",
   "FE80::1",
   "fe80::1%eth0",
+  // malformed IPv6 (refused, never handed to a resolver)
+  "1:2:3:4:5:6:7:8::",
+  "1::2::3",
+  ":::",
+  "::ffff:1.2.3.256",
   "fec0::1",
   "ff02::1",
   "2001:db8::1",
