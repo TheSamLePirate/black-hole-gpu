@@ -284,7 +284,7 @@ export function streetFurniture(
         heading: Math.atan2(uy, ux),
         length: L,
         kind: FurnitureKind.Guardrail,
-        flags: FurnitureFlag.Inferred,
+        flags: FurnitureFlag.Inferred | (s.flags & SegmentFlag.Bridge ? FurnitureFlag.OnBridge : 0),
         junction: 0xffff,
       });
   }

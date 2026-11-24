@@ -6,7 +6,7 @@ import { readHeader } from "./building-cells";
 import { geoidMap } from "./geoid-grid";
 import { FOREST_CACHE, forestCacheUrl } from "./forest-cells";
 import { MESH_CACHE, meshCacheUrl } from "./mesh-cells";
-import { STREET_CACHE, streetCacheUrl } from "./street-cells";
+import { STREET_CACHE, streetCacheUrl, streetCellComplete } from "./street-cells";
 import { prepareZoneCells, type ZoneCells } from "./zone-cells";
 
 type Reply = { id: number; buf?: ArrayBuffer; ms?: number; error?: string };
@@ -127,7 +127,9 @@ export const streetStore: CellStore = {
   async get(x, y) {
     try {
       const r = await (await caches.open(STREET_CACHE)).match(streetCacheUrl(location.origin, x, y));
-      return r ? await r.arrayBuffer() : null;
+      const buf = r ? await r.arrayBuffer() : null;
+      // (review A3: an incomplete cell — prepared without its building cell — not a hit: prepared again, its entry replaced)
+      return buf && streetCellComplete(buf) ? buf : null;
     } catch {
       return null;
     }

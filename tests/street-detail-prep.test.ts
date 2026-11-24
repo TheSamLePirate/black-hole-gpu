@@ -197,7 +197,7 @@ test("J8-RP RP4: a tile's bridge pieces chained into one deck — its abutments,
   const river: Primitive = {
     min: [100, -500, 0],
     max: [200, 500, 0],
-    data: [0, 0, 1, 4, 100, -500, 200, 500, 0, 0, 0, 4, 100, -500, 200, -500, 200, -500, 200, 500, 200, 500, 100, 500, 100, 500, 100, -500],
+    data: [0, 0, 4, 4, 100, -500, 200, 500, 0, 0, 0, 4, 100, -500, 200, -500, 200, -500, 200, 500, 200, 500, 100, 500, 100, 500, 100, -500],
   };
   const ponts: [[number, number], [number, number]][] = [
     [

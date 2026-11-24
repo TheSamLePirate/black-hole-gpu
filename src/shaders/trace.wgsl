@@ -16100,9 +16100,12 @@ fn liteMaterial(gq: vec3f, q: vec3f, ph: vec3f, rd: vec3f, look: vec3f, tM: f32,
   }
   var sv = ScenerySurface(vec3f(0.0), 0.0, 0.0);
   SC_SURVEY_ROAD = false;
+  // (review A6: a deck's road walked only where its paint shows — a pixel under 2 m, within 2.5 km —, its own segments alone; farther
+  // the deck's plain carriageway)
   let onBridgeDeck = atBridgeMesh(at) && dot(n, gq) > 0.55;
+  let deckWalk = onBridgeDeck && fpM < 2.0 && tM < 2500.0;
   SC_ON_BRIDGE = onBridgeDeck;
-  if (HAS_SCENERY && (!mesh || onBridgeDeck) && !isTree && (liteSkip() & 134217728u) == 0u) {
+  if (HAS_SCENERY && (!mesh || deckWalk) && !isTree && (liteSkip() & 134217728u) == 0u) {
     // (the exact walk near — its stripes, sleepers, edges' antialiasing — and at night — its kinds for the streets' lights —;
     // the decals' one read beyond: the walk on every pixel under 12 m cost 0.66 ms in La Mancha)
     // (under a national photograph the map's colour is not drawn — the walk was for nothing there: France whole —; at night
@@ -16110,7 +16113,7 @@ fn liteMaterial(gq: vec3f, q: vec3f, ph: vec3f, rd: vec3f, look: vec3f, tM: f32,
     // (PLAN-J8 RP1: under a national photograph the walk again where the paint shows — a pixel under 2 m, within 2.5 km —: its
     // paint alone laid over the photograph below, the photograph the carriageway)
     SC_PAINT = vec4f(0.0);
-    if (onBridgeDeck || mu0g < 0.06 || (fpM < 0.3 && tM < 4000.0 && img.o < 0.99) || (fpM < 2.0 && tM < 2500.0 && img.o >= 0.99)) { sv = sceneryGround(dirW, tM, fpM); }
+    if (deckWalk || mu0g < 0.06 || (fpM < 0.3 && tM < 4000.0 && img.o < 0.99) || (fpM < 2.0 && tM < 2500.0 && img.o >= 0.99)) { sv = sceneryGround(dirW, tM, fpM); }
     else if (fpM < 12.0 && tM < 4000.0 && img.o < 0.99) {
       // (the scenery's local frame written out — sceneryLocal goes with the scenery's code, a kernel without it would not compile)
       let dL = vec3f(dot(dirW, P.scenery[0].xyz), dot(dirW, P.scenery[1].xyz), dot(dirW, P.scenery[2].xyz));
@@ -16223,10 +16226,12 @@ fn liteMaterial(gq: vec3f, q: vec3f, ph: vec3f, rd: vec3f, look: vec3f, tM: f32,
       A = ra * select(1.0, clamp(l / max(luminance(ra), 0.02), 0.6, 1.5), TUNE_BLD_PHOTO > 0.5);
     }
     // (PLAN-PONT-ROUTES-AAA PR4: bridge deck carriageway shares road asphalt albedo and lane/pavement markings; sides/underside stone/concrete)
+    // (review A6: the deck takes its own road's surface alone — a road's or its paint's, kinds 1 and 5 —: no river's, no land use's)
     if (atBridgeMesh(at)) {
       let isDeckCarriageway = dot(n, gq) > 0.55;
       let baseBridge = select(vec3f(0.42, 0.40, 0.38) * P.earth2.z, vec3f(0.095, 0.098, 0.1), isDeckCarriageway);
-      A = select(baseBridge, mix(baseBridge, sv.color, sv.cover), isDeckCarriageway && sv.cover > 0.0);
+      let deckRoad = isDeckCarriageway && sv.cover > 0.0 && (sv.kind == 1.0 || sv.kind == 5.0);
+      A = select(baseBridge, mix(baseBridge, sv.color, sv.cover), deckRoad);
     }
   }
   if (mesh && leaf == 0u && dot(n, gq) < 0.35 && HAS_SCENERY && P.scenery[0].w > 0.5) {

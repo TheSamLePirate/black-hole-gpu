@@ -207,6 +207,22 @@ export enum CellStreetFlag {
   Thinned = 1,
   /** its traffic drives on the left (drivesLeft) */
   LeftHand = 2,
+  /** (review A3, 24 Nov 2026) prepared with its building cell (its lamps' town, its places' exclusions): a cell without it and without
+   *  a generation — the scene worker's own since e633d82b, its buildings left out — is incomplete: streetCellComplete */
+  Built = 4,
+  /** (review A4) its guardrails' FurnitureFlag.OnBridge written: their absence says a rail on the ground */
+  FurnitureBridges = 8,
+}
+
+/**
+ * (review A3) Whether a cached street cell is whole: prepared with its building cell (CellStreetFlag.Built), or — a cell of an older
+ * preparation, before the flag — dated by its source (a generation) or holding lamps (its town was known). The scene worker's cells of
+ * e633d82b (buildings left out, generation 0, no lamp) fail it: the pool prepares them again, the scene reads them as missing.
+ */
+export function streetCellComplete(buf: ArrayBuffer): boolean {
+  const h = readStreetHeader(buf);
+  if (!h) return false;
+  return (h.flags & CellStreetFlag.Built) !== 0 || h.generation !== 0 || h.lampCount > 0;
 }
 export enum FurnitureKind {
   StopLine = 1,
@@ -273,6 +289,8 @@ export enum FurnitureFlag {
   Inferred = 1,
   /** a yield line (entering a roundabout), not a stop line */
   Yield = 2,
+  /** (review A4) a guardrail along a bridge's segment: on its deck (CellStreetFlag.FurnitureBridges says the flag is written) */
+  OnBridge = 4,
 }
 export enum PlaceKind {
   Along = 0,

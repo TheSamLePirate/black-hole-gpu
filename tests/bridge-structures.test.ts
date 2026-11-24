@@ -9,7 +9,7 @@ import {
   buildAlexandreIIIPylonsMesh,
   buildArchRibsMesh,
 } from "../src/system/bridge-structures";
-import { CORPUS_CASES } from "../src/system/bridge-corpus";
+import { CORPUS_CASES } from "./fixtures/bridge-corpus";
 
 describe("PR6 — Structural Families and Notable Bridge Silhouettes", () => {
   test("Rule 3 witness: positive witness detects generic piers in river channel, negative witness confirms A/A = 0", () => {

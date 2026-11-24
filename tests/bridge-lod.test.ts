@@ -1,124 +1,81 @@
-// Bridge & Road AAA — PR7: Unified LOD, 3D Envelope Culling and Offline Streaming Tests
-// Verifies 3D envelope culling for long viaducts, continuous LOD invariance without flat slab jumps,
-// and retirement of farBridges from car pool.
+// Bridge & Road AAA — a bridge's level of detail (PLAN-PONT-ROUTES-AAA PR7; review A8, 24 Nov 2026): the scene worker picks the
+// stations' spacing and the parapets by distance (bridge-lod.ts selectBridgeLOD, wired in scenery-worker.ts deckBridge). The deck
+// drawn at each LOD is compared here mesh to mesh — the slices the worker builds (bridge-mesh.ts) on the stations the profile gives —:
+// at their common stations the very same heights; between them the coarser chord within its bound; the support every reader queries
+// (profile.deckAt) the drawn mesh's at both.
 
 import { describe, expect, test } from "bun:test";
-import {
-  computeBridgeSliceEnvelopes,
-  cullBridgeSlices,
-  selectBridgeLOD,
-  evaluateLODProfileInvariance,
-  type Bridge3DEnvelope,
-} from "../src/system/bridge-lod";
+import { selectBridgeLOD } from "../src/system/bridge-lod";
+import { buildContinuousSliceMesh } from "../src/system/bridge-mesh";
 import { BridgeContinuousProfile } from "../src/system/bridge-surface-service";
-import { CORPUS_CASES } from "../src/system/bridge-corpus";
 
-describe("PR7 — Unified LOD, 3D Envelope Culling and Offline Streaming", () => {
-  test("Rule 3 witness: positive witness detects flat slab altitude jump at LOD transition, negative witness confirms A/A = 0", () => {
-    const caseAlexandre = CORPUS_CASES.CASE_REAL_SEINE_ALEXANDRE_III!;
-    const profile = new BridgeContinuousProfile({
-      points: caseAlexandre.points,
-      width: caseAlexandre.widthM,
-      thickness: 1.5,
-      clearance: caseAlexandre.clearanceM,
-    });
-
-    const midS = profile.totalLength / 2; // Midpoint of bridge
-    const trueElevation = profile.elevationAt(midS);
-
-    // Legacy behavior: distant LOD replaced the continuous arch profile with a flat horizontal slab at abutment height + 0.4m
-    const legacyFlatSlabElevation = caseAlexandre.points[0]![2] + 0.4;
-    const legacyAltitudeJump = Math.abs(trueElevation - legacyFlatSlabElevation);
-
-    // Modern behavior: LOD retains exact profile elevation at any distance
-    const invarianceA = evaluateLODProfileInvariance(profile, [0, 20, 40, midS, 100, profile.totalLength]);
-    const invarianceB = evaluateLODProfileInvariance(profile, [0, 20, 40, midS, 100, profile.totalLength]);
-
-    // Negative witness: A/A = 0
-    expect(invarianceA.maxDeltaZM).toBe(invarianceB.maxDeltaZM);
-    expect(invarianceA.maxDeltaZM).toBe(0);
-    expect(invarianceA.invariant).toBe(true);
-
-    // Positive witness: legacy flat slab defect detected (> 3m altitude cliff)
-    expect(legacyAltitudeJump).toBeGreaterThan(3.0);
+/** a valley 600 m wide crossed by a road: its ground every 20 m */
+const valley = (): [number, number, number][] =>
+  Array.from({ length: 31 }, (_, i) => {
+    const x = i * 20;
+    const t = x / 600;
+    return [x, 0.2 * x, 30 - 25 * Math.sin(Math.PI * t)] as [number, number, number];
   });
 
-  test("3D envelope culling: long viaduct remains rendered when center is off-screen but spans cross view volume", () => {
-    const viaductCase = CORPUS_CASES.CASE_SYNTH_LONG_VIADUCT!; // 1200m viaduct from x=0 to x=1200
-    const profile = new BridgeContinuousProfile({
-      points: viaductCase.points,
-      width: viaductCase.widthM,
-      thickness: 1.8,
-      clearance: viaductCase.clearanceM,
+/** the deck's top meshes of a profile: each slice's top-corner heights at its two stations */
+const meshTops = (p: BridgeContinuousProfile) => {
+  const out = new Map<number, number>();
+  const st = p.stations;
+  for (let k = 0; k + 1 < st.length; k++) {
+    const a = p.axisAt(st[k]!),
+      b = p.axisAt(st[k + 1]!);
+    const m = buildContinuousSliceMesh({
+      pa: [a.x, a.y, 0],
+      pb: [b.x, b.y, 0],
+      width: 12,
+      top0: p.deckAt(st[k]!),
+      top1: p.deckAt(st[k + 1]!),
+      thick: 1.2,
     });
+    out.set(Math.round(st[k]! * 1000), m.positions[2]!);
+    out.set(Math.round(st[k + 1]! * 1000), m.positions[8]!);
+  }
+  return out;
+};
 
-    // 1200m viaduct broken into 10m slices
-    const envelopes = computeBridgeSliceEnvelopes(viaductCase.points, viaductCase.widthM, profile, 10.0);
-    expect(envelopes.length).toBe(120); // 120 slices of 10m
-
-    // Midpoint of the bridge is at x = 600m
-    const overallMidpoint: [number, number, number] = [600, 0, 370];
-
-    // Camera is positioned at x = 850m looking towards x = 1100m.
-    // View frustum covers x in [750, 1150].
-    // Note: overallMidpoint (x=600) is BEHIND the camera (x < 750) and completely outside the frustum!
-    const frustumMinX = 750;
-    const frustumMaxX = 1150;
-
-    const frustumVisible = (env: Bridge3DEnvelope) => {
-      return env.max[0] >= frustumMinX && env.min[0] <= frustumMaxX;
-    };
-
-    // If culling was naively based on overall center/midpoint:
-    const midpointInFrustum = overallMidpoint[0] >= frustumMinX && overallMidpoint[0] <= frustumMaxX;
-    expect(midpointInFrustum).toBe(false); // Midpoint alone would erroneously cull the entire viaduct!
-
-    // With slice envelope culling:
-    const cullResult = cullBridgeSlices(envelopes, frustumVisible);
-    expect(cullResult.anyVisible).toBe(true);
-    // Slices between 750m and 1150m (approx 40 slices) are kept rendered
-    expect(cullResult.visibleCount).toBeGreaterThanOrEqual(38);
-    expect(cullResult.visibleCount).toBeLessThanOrEqual(42);
+describe("PR7 / review A8 — the LOD the scene picks, mesh against mesh", () => {
+  test("the selection by distance: 10 m slices and parapets near, 20 m to 2.5 km, 40 m without parapets beyond", () => {
+    expect(selectBridgeLOD(200)).toEqual({ lodLevel: 0, sliceLengthM: 10, drawParapets: true, drawPiers: true });
+    expect(selectBridgeLOD(1200)).toEqual({ lodLevel: 1, sliceLengthM: 20, drawParapets: true, drawPiers: true });
+    expect(selectBridgeLOD(4000)).toEqual({ lodLevel: 2, sliceLengthM: 40, drawParapets: false, drawPiers: true });
   });
 
-  test("LOD selection adapts detail based on distance while preserving geometry", () => {
-    // Near distance: 200m -> LOD 0 (10m slices, all fine architectural details active)
-    const lodNear = selectBridgeLOD(200);
-    expect(lodNear.lodLevel).toBe(0);
-    expect(lodNear.sliceLengthM).toBe(10.0);
-    expect(lodNear.drawParapets).toBe(true);
-    expect(lodNear.drawPiers).toBe(true);
-    expect(lodNear.drawArchRibs).toBe(true);
-    expect(lodNear.drawPylons).toBe(true);
-
-    // Medium distance: 1200m -> LOD 1 (20m slices, parapets and piers kept)
-    const lodMed = selectBridgeLOD(1200);
-    expect(lodMed.lodLevel).toBe(1);
-    expect(lodMed.sliceLengthM).toBe(20.0);
-    expect(lodMed.drawParapets).toBe(true);
-    expect(lodMed.drawPiers).toBe(true);
-
-    // Far distance: 4000m -> LOD 2 (40m slices, thin sub-pixel parapets culled, deck & piers preserved)
-    const lodFar = selectBridgeLOD(4000);
-    expect(lodFar.lodLevel).toBe(2);
-    expect(lodFar.sliceLengthM).toBe(40.0);
-    expect(lodFar.drawParapets).toBe(false);
-    expect(lodFar.drawPiers).toBe(true);
+  test("LOD 0 and LOD 2 meshes: the same heights at their common stations, the coarse chord within its bound between them", () => {
+    const pts = valley();
+    const near = new BridgeContinuousProfile({ points: pts, width: 12, thickness: 1.2, clearance: 5.5, sliceM: 10 });
+    const far = new BridgeContinuousProfile({ points: pts, width: 12, thickness: 1.2, clearance: 5.5, sliceM: 40 });
+    const a = meshTops(near),
+      b = meshTops(far);
+    let common = 0;
+    for (const [s, z] of b) {
+      const zn = a.get(s);
+      if (zn === undefined) continue;
+      common++;
+      // (negative witness: the same curve, the same station — the same height to the float)
+      expect(Math.abs(z - zn)).toBeLessThan(1e-9);
+    }
+    expect(common).toBeGreaterThanOrEqual(15);
+    // (between stations the coarse deck's chord: within κ h² / 8 of the curve, κ ≤ 6 H / Lr² — measured, not assumed)
+    const kappa = (6 * far.lift) / Math.max(far.rampM, 1) ** 2;
+    let worst = 0;
+    for (let s = 0; s <= far.totalLength; s += 1) worst = Math.max(worst, Math.abs(far.deckAt(s) - far.elevationAt(s)));
+    expect(worst).toBeLessThanOrEqual((kappa * 40 * 40) / 8 + 1e-6);
+    // (positive witness: a coarse deck read against the fine curve between stations is not the same surface)
+    let differs = 0;
+    for (let s = 5; s < far.totalLength; s += 10) differs = Math.max(differs, Math.abs(far.deckAt(s) - near.deckAt(s)));
+    expect(differs).toBeGreaterThan(0);
   });
 
-  test("offline resilience: bridge continuous profile needs zero network requests once points are loaded", () => {
-    // Verified: BridgeContinuousProfile evaluation is 100% pure local arithmetic
-    const caseAlexandre = CORPUS_CASES.CASE_REAL_SEINE_ALEXANDRE_III!;
-    const profile = new BridgeContinuousProfile({
-      points: caseAlexandre.points,
-      width: caseAlexandre.widthM,
-      thickness: 1.5,
-      clearance: caseAlexandre.clearanceM,
-    });
-
-    const sample = profile.sample(80, 0);
-    expect(sample.position[0]).toBeDefined();
-    expect(sample.normal[2]).toBeGreaterThan(0.9);
-    expect(sample.role).toBe("carriageway");
+  test("the support each reader queries is the drawn mesh's top at either LOD (the registry's deckAt = the slice's corners)", () => {
+    for (const sliceM of [10, 40]) {
+      const p = new BridgeContinuousProfile({ points: valley(), width: 12, thickness: 1.2, clearance: 5.5, sliceM });
+      const tops = meshTops(p);
+      for (const s of p.stations) expect(Math.abs(p.deckAt(s) - tops.get(Math.round(s * 1000))!)).toBeLessThan(1e-9);
+    }
   });
 });

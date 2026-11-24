@@ -675,7 +675,12 @@ export function prepareStreetCells(
     const next = segmentNexts(c.segments, c.pieces, nearEdge);
     const surfaces = c.segments.map((sg, i) => ({ ...segmentSurface(sg), bridge: bridgeOf.get(i) ?? NO_BRIDGE }));
     const furniture = streetFurniture(c.segments, junctions, leftHand);
-    const flags = (P.thinned ? CellStreetFlag.Thinned : 0) | (leftHand ? CellStreetFlag.LeftHand : 0);
+    // (review A3/A4: prepared with its building cell; its guardrails' OnBridge written)
+    const flags =
+      (P.thinned ? CellStreetFlag.Thinned : 0) |
+      (leftHand ? CellStreetFlag.LeftHand : 0) |
+      (buildings(c.x, c.y) ? CellStreetFlag.Built : 0) |
+      CellStreetFlag.FurnitureBridges;
     return {
       x: c.x,
       y: c.y,

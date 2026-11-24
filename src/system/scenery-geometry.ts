@@ -69,7 +69,9 @@ export function surfaceContains(p: Vec3, primitive: Primitive, margin = 0) {
     return Math.hypot(p[0] - v[0]! - t * x, p[1] - v[1]! - t * y) < v[4]! + margin;
   }
   let inside = false;
-  for (let i = 12; i < v.length; i += 4) {
+  // (its edges alone: a deck's slice carries its plane after them — scenery-data.ts DECK_PLANE)
+  const end = Math.min(v.length, 12 + 4 * v[2]!);
+  for (let i = 12; i < end; i += 4) {
     if (margin > 0) {
       const dx = v[i + 2]! - v[i]!,
         dy = v[i + 3]! - v[i + 1]!;

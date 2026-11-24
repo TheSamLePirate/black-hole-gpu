@@ -83,11 +83,18 @@ export function buildAlexandreIIIPylonsMesh(params: {
   readonly deckZ1: number;
   readonly bankZ0?: number;
   readonly bankZ1?: number;
-}): { positions: number[]; triangles: number[]; normals: number[] } {
+}): {
+  positions: number[];
+  triangles: number[];
+  normals: number[];
+  /** each pylon on its own (review A9): its mesh, its footprint's four corners, its foot and top — its own collision solid */
+  pylons: { positions: number[]; triangles: number[]; footprint: [number, number][]; bottom: number; top: number }[];
+} {
   const { pStart, pEnd, width, deckZ0, deckZ1 } = params;
   const positions: number[] = [];
   const triangles: number[] = [];
   const normals: number[] = [];
+  const pylons: { positions: number[]; triangles: number[]; footprint: [number, number][]; bottom: number; top: number }[] = [];
 
   const dx = pEnd[0] - pStart[0];
   const dy = pEnd[1] - pStart[1];
@@ -138,6 +145,8 @@ export function buildAlexandreIIIPylonsMesh(params: {
   for (const c of corners) {
     const topZ = c.deckZ + pylonHeightAboveDeck;
     const botZ = c.bottomZ;
+    const first = positions.length / 3,
+      firstT = triangles.length;
 
     // 4 corners of the pylon footprint in XY
     const p0: [number, number] = [c.cx - dirX * pylonHalfW - acX * pylonHalfW, c.cy - dirY * pylonHalfW - acY * pylonHalfW];
@@ -174,9 +183,16 @@ export function buildAlexandreIIIPylonsMesh(params: {
       normals.push(0, 0, 1);
     }
     triangles.push(capBaseIdx, capBaseIdx + 1, capBaseIdx + 2, capBaseIdx, capBaseIdx + 2, capBaseIdx + 3);
+    pylons.push({
+      positions: positions.slice(first * 3),
+      triangles: triangles.slice(firstT).map((k) => k - first),
+      footprint: footprint.map((q) => [q[0], q[1]] as [number, number]),
+      bottom: botZ,
+      top: topZ,
+    });
   }
 
-  return { positions, triangles, normals };
+  return { positions, triangles, normals, pylons };
 }
 
 /**

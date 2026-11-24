@@ -2403,6 +2403,8 @@ export class Renderer {
     this.buildingFar?.dispose();
     this.buildingFar = null;
     this.streetFar?.dispose();
+    this.streetSceneUnlisten?.();
+    this.streetSceneUnlisten = null;
     this.streetFar = null;
     this.nearMeshes?.dispose();
     this.nearMeshes = null;
@@ -2667,6 +2669,8 @@ export class Renderer {
       r.buildingFar = null;
       r.streetFar?.dispose();
       r.streetFar = null;
+      r.streetSceneUnlisten?.();
+      r.streetSceneUnlisten = null;
       r.nearMeshes?.dispose();
       r.nearMeshes = null;
       r.sceneryRaster?.dispose();
@@ -11400,6 +11404,8 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
     this.buildingFar?.dispose();
     this.buildingFar = null;
     this.streetFar?.dispose();
+    this.streetSceneUnlisten?.();
+    this.streetSceneUnlisten = null;
     this.streetFar = null;
   }
   get farBudgetMiB() {
@@ -11410,6 +11416,8 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
    *  with the far layer; false: none) */
   farLampsOn = true;
   private streetFar: StreetFar | null = null;
+  /** (review A3) the near scene's listener on the streets' pool */
+  private streetSceneUnlisten: (() => void) | null = null;
   /** (the far lamps') what is resident: cells, lamps, the pool's blocks; the cells wanted, those missing */
   farLamps() {
     return this.streetFar?.stats() ?? null;
@@ -12463,6 +12471,11 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
           if (!this.streetFar) {
             this.streetFar = new StreetFar(this.sceneryRaster, streetPool);
             this.streetFar.groundAt = (lat, lon) => groundBare("earth", bodyFixedOf("earth", lat, lon, 0));
+            // (review A3: the near scene made again when the street cells it lacked arrive)
+            const scene = this.earthScenery;
+            this.streetSceneUnlisten?.();
+            this.streetSceneUnlisten = streetPool().listen((c) => scene.streetCellArrived(c.x, c.y));
+            scene.streetHas = (x, y) => streetPool().has(x, y);
           }
           this.streetFar.update(this.farEye, box, this.earthTiles.nightRoads, performance.now(), {
             lamps: st.lampReachM,
@@ -12726,6 +12739,8 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
     this.buildingFar?.dispose();
     this.buildingFar = null;
     this.streetFar?.dispose();
+    this.streetSceneUnlisten?.();
+    this.streetSceneUnlisten = null;
     this.streetFar = null;
     this.nearMeshes?.dispose();
     this.nearMeshes = null;

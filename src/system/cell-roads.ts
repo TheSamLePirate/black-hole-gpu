@@ -5,6 +5,7 @@
 // road-markings.ts packs them; none on a bridge (its deck is the bridge's — RP4) nor in a tunnel. Pure but for `toLocal`.
 import type { Primitive } from "./scenery-data";
 import { surfaceSegment } from "./scenery-geometry";
+import { ROAD_ON_BRIDGE } from "./road-markings";
 import { PAVEMENT_M, readSegment, readStreetHeader, roadRuns, SegmentFlag, SurfaceFlag, readSurface } from "./street-cells";
 
 /** a road's colour by its class: asphalt, a track's or a path's earth, steps' stone */
@@ -34,7 +35,7 @@ export function cellRoadSurfaces(
       if (s.flags & SegmentFlag.Tunnel) continue;
       const isBridge = !!(s.flags & SegmentFlag.Bridge);
       if (isBridge && !includeBridges) continue;
-      const bridgeBit = isBridge ? 32768 : 0;
+      const bridgeBit = isBridge ? ROAD_ON_BRIDGE : 0;
       const a = toLocal(s.a[0], s.a[1]),
         b = toLocal(s.b[0], s.b[1]);
       const L = Math.hypot(b[0] - a[0], b[1] - a[1]);

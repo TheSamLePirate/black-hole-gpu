@@ -111,6 +111,11 @@ export class CellPool {
     return () => this.listeners.delete(fn);
   }
 
+  /** whether a cell was handed (and not forgotten since) */
+  has(x: number, y: number) {
+    return this.done.has(cellKey(x, y));
+  }
+
   /** a cell to prepare again when next wanted (its source's newer generation, its bytes evicted) */
   forget(x: number, y: number) {
     this.done.delete(cellKey(x, y));

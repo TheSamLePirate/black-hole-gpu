@@ -74,6 +74,10 @@ export function seed(x: number, y: number) {
   h = Math.imul(h ^ (h >>> 13), 1274126177);
   return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
 }
+/** (PLAN-PONT-ROUTES-AAA, review A2, 24 Nov 2026) a deck's or a parapet's slice (a polygon of kind 2–4 among the solids): its data[11]
+ *  this mark, and one vec4 after its edges — its top's plane z = a x + b y + c and its thickness [m] (bridge-mesh.ts computeSlicePlane:
+ *  the drawn top exactly) —; scenery-contact.ts topAt reads it, the tracer's flat caps do not (its marks' exact test, unchanged) */
+export const DECK_PLANE = -1;
 export interface Primitive {
   min: Vec3;
   max: Vec3;
@@ -630,6 +634,9 @@ export interface SceneryReply {
   /** (PLAN-J8 J8-RP RP2) the road segments drawn from the street cells, and the cells they came from */
   cellRoads?: number;
   cellRoadCells?: number;
+  /** (review A3) the street cells this scene wanted and found not cached (or incomplete) — "x/y" z 15 keys: the page asks the scene
+   *  again when the streets' pool hands one (scenery.ts streetCellArrived) */
+  streetMissing?: string[];
   /** (PLAN-J8 J8-RP RP4) the bridges built from the street cells */
   cellBridges?: number;
   /** (PLAN-J8 J8-RP RP9) the catenary masts drawn */

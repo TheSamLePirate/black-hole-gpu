@@ -7,6 +7,13 @@ import type { Primitive } from "./scenery-data";
 import { ROAD_CODES, type RoadClass, SegmentFlag, SurfaceFlag } from "./street-cells";
 import { segmentSurface } from "./street-detail-prep";
 
+/** (review A5, 24 Nov 2026) a road's or a railway's surface segment on a bridge's deck: this bit in its data[6] (cell-roads.ts sets it).
+ *  The deck alone draws it (trace.wgsl scenerySurface, SC_ON_BRIDGE); every reader of the ground leaves it out — the forest's exclusion,
+ *  the decals, the ground's paint: no asphalt nor markings on the river under a deck, no trees cleared under a viaduct by its road */
+export const ROAD_ON_BRIDGE = 32768;
+/** whether a surface segment rides a deck (ROAD_ON_BRIDGE) — not the ground's */
+export const isDeckRoad = (p: Primitive): boolean => p.data.length === 12 && p.data[5]! <= 2 && (p.data[6]! & ROAD_ON_BRIDGE) !== 0;
+
 /** a lane's width [m]: the lanes of a road from its width */
 export const LANE_WIDTH_M = 3.25;
 
