@@ -3,7 +3,7 @@
 Problèmes constatés, pas encore réglés. Chaque entrée : la date (UTC), ce qui est mesuré ou observé et sa source, la cause
 connue ou supposée, la piste. Une entrée réglée est barrée avec le commit qui la règle, pas effacée.
 
-## Pont de Cheviré (Nantes) : tablier à 25 m au-dessus de la Loire au lieu de ~55 m, en morceaux (relevé le 24 novembre 2026, campagne e2e 2, `bridges-notable`)
+## ~~Pont de Cheviré (Nantes) : tablier à 25 m au-dessus de la Loire au lieu de ~55 m, en morceaux~~ (relevé le 24 novembre 2026, campagne e2e 2, `bridges-notable`) — réglé le 25 novembre 2026 (`924b34ea`, `6f1fdcd2`, `629aedc0`)
 
 - **Constat** (kerr-mini, `20261124-181051-c2-bridges-notable-3`, capture `chevire.png`) : vu de 900 m à l'est, le viaduc traverse la Loire
   presque à plat, ~10–15 m au-dessus de l'eau ; sa plus grande pièce de tablier (copie CPU du décor) culmine à **25,2 m au-dessus de la mer**
@@ -14,11 +14,37 @@ connue ou supposée, la piste. Une entrée réglée est barrée avec le commit q
   large) ; un long viaduc découpé en plusieurs tronçons donne plusieurs tabliers aux bouts non raccordés en hauteur.
 - **Piste** : la cote Z des tronçons BD TOPO (géométrie 3D) comme hauteur de tablier dans la préparation des cellules, ou une entrée au
   catalogue des ponts remarquables (`bridge-catalogue.ts`, famille poutre à ajouter) ; raccorder en hauteur les bouts de tabliers voisins.
+- **Causes trouvées (25 nov.)** : (1) les tuiles vectorielles BD TOPO du jeu sont 2D (leurs propriétés nomment la méthode altimétrique, jamais
+  la cote) ; (2) les « 4 morceaux » : chaque cellule z 15 lit sa propre tuile BD TOPO, découpée avec une marge — le même tronçon s'y arrête
+  ~30 m au-delà du bord ou en deçà, jamais à moins de 1 m de l'autre cellule (`JUNCTION_M`) : pas de chaînage ; de même aux bords z 14
+  (`joinBridgeHalves` à 3 m) ; (3) la boîte de mesure de l'e2e, autour du point de Wikipédia, était 330 m à l'ouest du vrai axe.
+- **Correction** : la BD TOPO 3D par le WFS de la Géoplateforme (une requête par tuile z 14 à pont, `bdtopo.ts bdtopoDecksUrl`), cellules
+  « rue » au **format 6** (hauteur relevée par point d'axe, tirant sur deux octets), profil du tablier sur le relevé (`measured`, raccord
+  aux culées ≤ 4 %) jusque dans la couche lointaine ; chaînage des recouvrements/trous au bord des cellules (`chainBridges`) et des tuiles
+  (`spliceOpenHalves`) ; culées jointives fusionnées, bretelles posées sur le tablier rejoint (`joinDeckPieces`) ; chaussées jumelles
+  nivelées à la moyenne de leurs relevés où elles se recouvrent (`levelTwinDecks`). Hors relevé (étranger) : tirant par la largeur d'eau
+  franchie (`ruleClearance`, ≤ 45 m) ; pas d'entrée de catalogue nécessaire pour Cheviré.
+- **Preuves** : `tests/bridge-heights.test.ts` (données réelles sur disque : deux tabliers de 1 683 / 1 674 m, crête 60,5 / 60,6 m ; témoins
+  positifs : l'ancien chaînage donnait cinq morceaux de 227–1 059 m). A/B e2e sur kerr-mini (`remote-results/20261124-221208-ponts-ab-notable`,
+  A = `18a6e4dd`, B = `698dbd22`) : crête **25,2 → 60,6 m** au-dessus de la mer, plus grande pièce **1 043 → 1 651 m**, marches > 25 cm sur
+  l'axe **25 (11,1 m au plus) → 2 (0,41 m au plus, entre les deux chaussées jumelles — nivelées depuis par `629aedc0`)** ; GPU de la vue
+  p50/p95 47,2/52,5 → 44,2/47,1 ms. Captures `docs/progress/ponts-2026-11-25/chevire-{avant,apres}.jpg`.
+- **Reste** : la bande claire sur l'eau sous le tablier (visible avant et après) ; à froid, la préparation des cellules attend une requête WFS
+  de plus (29 cellules encore en préparation à la prise de vue côté B) ; Bay Bridge, Øresund etc. à l'étranger : tirant par règle.
 
 ## Ponts et routes, campagne e2e 2 : à revoir à l'œil (relevé le 24 novembre 2026, `bridges`, `bridges-notable`, kerr-mini)
 
 - **Golden Gate depuis Battery Spencer** (`golden-gate-1km.png`) : derrière les arbres, à gauche, devant la tour nord, des blocs gris en
-  escalier (imposteurs lointains ou couche lointaine ?) masquent une partie de la tour. Non diagnostiqué.
+  escalier (imposteurs lointains ou couche lointaine ?) masquent une partie de la tour. **Diagnostic partiel (25 nov., kerr-mini, captures
+  `docs/progress/ponts-2026-11-25/golden-gate-1km-diag-*.jpg`)** : ce ne sont ni les arbres de la matière raster (`liteSkip` 64 : les arbres
+  disparaissent, les blocs restent), ni les imposteurs (`treeImpostorsOn` false), ni la géométrie des arbres proches, ni la couche lointaine
+  des bâtiments ; la vue de coût du traceur (`costView` 1) les montre sans travail de rayon (pixels du raster, silhouette en escalier dans la
+  visibilité elle-même) et `liteSkip` 1024 (shadeLite seul) les montre hors de `shadeLite` : une surface raster ombrée par une autre passe
+  (`shadeWater` probable : de l'eau dessinée au-dessus de la colline ?). **Non réglé** ; piste : lire le code de visibilité de ces pixels.
+- **Golden Gate, câble porteur en ruban plat depuis le tablier** (`golden-gate-tablier.jpg`) — **réglé le 25 nov. (`698dbd22`)** : le câble
+  était ouvert le long du haut du repère ; il l'est désormais en travers de sa ligne et de la vue, sa distance celle du devant d'un cylindre
+  (normale ronde rebâtie par `rasterNormal`). Vu sur kerr-mini (`golden-gate-deck-low-{avant,apres}.jpg`) ; scintillement à 30 km inchangé
+  (A/B de l'e2e : réussi des deux côtés). Reste un liseré clair au bord du câble (la normale non rebâtie sur ses pixels de bord).
 - **Rues de Paris** (`paris-wet-street-dry.png`, `grenelle-deck-low.png`) : de fines lignes claires courbes traversent la chaussée (bords
   de voies d'un carrefour ?) ; le relief herbeux déborde sur le trottoir le long des façades (nivellement `roadBank` sans lecteur, déjà noté
   plus bas). ~~Sur l'approche du pont Alexandre III, un marquage en boucle fermée au milieu de la chaussée (`alexandre-iii-deck-low.png`).~~
@@ -32,12 +58,19 @@ connue ou supposée, la piste. Une entrée réglée est barrée avec le commit q
   **non revu**. Reste ouvert : un passage piéton (genre 5) a des bouts arrondis — une pilule zébrée à l'approche du pont
   (`marquages-alexandre-iii-apres.jpg`) : sa bande finit aussi en demi-disques (piste : couper la couverture d'un genre 5 hors de
   son segment, `along` non borné).
-- **Pont Alexandre III** : classé `monumental_alexandre_iii` (tablier lu : 150 × 24 m, à 15 m du point du classement ; l'arc sous le tablier
-  présent dans le contact) ; ses quatre pylônes sont des pavés unis, l'arc à peine visible depuis la Seine à 120 m (`alexandre-iii.png`).
+- ~~**Pont Alexandre III** : classé `monumental_alexandre_iii` (tablier lu : 150 × 24 m, à 15 m du point du classement ; l'arc sous le tablier
+  présent dans le contact) ; ses quatre pylônes sont des pavés unis, l'arc à peine visible depuis la Seine à 120 m (`alexandre-iii.png`).~~
+  **Réglé le 25 nov. (`698dbd22`)** : pylônes en huit pièces (socle, piédestal, colonne effilée, chapiteau, plinthe en granit ; groupe et ailes
+  dorés — palette 9 peintures) jusqu'à 22,6 m au-dessus du tablier ; l'arc posé sur sa vraie portée (107,5 m, flèche 6,28 m), clé à l'intrados,
+  cinq nervures et les montants des tympans, en 12 pièces (la rivière dessous libre au contact). Vu sur kerr-mini
+  (`docs/progress/ponts-2026-11-25/alexandre-iii-{avant,apres}.jpg`). Tests `bridge-structures.test.ts`.
 - **Scène pleine à San Francisco** : ~108 s de construction sur kerr-mini (étape « forest », les collines de Marin), faite deux fois à la
   vue à 30 km (révision des cellules « rue » 0 → 1) : la vue attend ~3 min ; le pont y est dès la première.
-- **Plafond des ponts** : `bridges = 1024` (le plafond `bridgeLimit` en mode haut) dans toutes les vues de Paris — les plus proches
-  gardés, les autres non dessinés.
+- ~~**Plafond des ponts** : `bridges = 1024` (le plafond `bridgeLimit` en mode haut) dans toutes les vues de Paris — les plus proches
+  gardés, les autres non dessinés.~~ **Réglé le 25 nov. (`924b34ea`, compte corrigé `3252fc19`)** : plus de plafond en nombre ; une part de
+  30 % des octets du décor pour les tabliers, les plus proches d'abord, la LOD grossie à mesure (`bridge-lod.ts`), un tablier écarté compté
+  (`stats().bridgesDropped`). A/B kerr-mini (`remote-results/20261124-221143-ponts-ab-bridges`) : Paris 1 024 → 1 135–1 157 ponts (tous les
+  candidats), 3,2–3,8 Mo sur 20,1 Mo de part ; GPU p50 des vues de Paris dans le bruit (Grenelle 55,0 → 54,1 ms, Rivoli 59,6 → 60,2 ms).
 
 ## ~~Golden Gate : un second tablier au ras de l'eau, 60 m sous le tablier remarquable ; l'appui à 0,3 m au-dessus de la chaussée~~ (relevé le 24 novembre 2026, campagne e2e 2) — réglé le même jour (`72801f59`)
 

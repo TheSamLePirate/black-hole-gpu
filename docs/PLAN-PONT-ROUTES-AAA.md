@@ -9,6 +9,17 @@ tablier hors du sol, matière du tablier, courbe verticale bornée, LOD branché
 **Rien de tout cela n'est mesuré ni vu** : aucun e2e ni banc lancé ; les tailles inlinées et les tests unitaires sont les
 seules preuves. Fiche : [FICHE-REVUE-A-B](progress/pont-routes-aaa/FICHE-REVUE-A-B.md). Les affirmations de FICHE-PR-R
 (« farBridges retiré », « culling par enveloppes », « ~0,6 ms gagnés ») sont corrigées là-bas.
+**Revue C (25 novembre 2026, branche de l'agent `worktree-agent-a778ae4d5c3455e9e`, à fusionner par le lead)** — les défauts de la
+campagne 2 : **(1)** les tabliers sur la cote Z relevée de la BD TOPO (le WFS de la Géoplateforme : ses tuiles vectorielles sont 2D),
+cellules « rue » au format 6 (une hauteur par point, tirant sur deux octets), un tronçon coupé par deux cellules ou deux tuiles
+chaîné entier (recouvrements et trous au bord), les pièces qui se touchent jointes en hauteur, hors relevé un tirant par la largeur
+d'eau franchie (`ruleClearance`) — Cheviré d'un seul tablier de 1,68 km, crête 60,5 m (relevé) ; **(2)** le pont Alexandre III :
+pylônes en huit pièces (socle, piédestal, colonne, chapiteau, groupe doré et ailes), arc sur la vraie portée (107,5 m, flèche 6,28 m)
+avec ses montants ; **(3)** les câbles du Golden Gate ouverts en travers de leur ligne et de la vue, leur distance celle d'un cylindre
+(normale ronde) ; **(4)** plus de plafond de 1 024 ponts : une part de 30 % des octets du décor, la LOD grossie à mesure.
+Preuves : tests unitaires (`bridge-heights`, `bridge-cable-raster`, `bridge-structures`), A/B e2e sur kerr-mini (`bridges`,
+`bridges-notable`, A = `18a6e4dd`), captures dans [ponts-2026-11-25](progress/ponts-2026-11-25/). Restent ouverts : voir
+PROBLEMES-A-REGLER (blocs gris de Battery Spencer, latence du WFS à froid).
 Historique : *analyse approfondie et plan proposés le 21 novembre ; aucune phase d'implémentation commencée à cette date.*
 **Mode : normal**, par défaut selon [CLAUDE.md](../CLAUDE.md). Le mode speed historique de J8 ne s'étend pas à ce chantier.
 Base examinée : **`3a86f5e1`**, avec le journal d'analyse du 21 novembre. Le code fait foi si le dépôt évolue.
