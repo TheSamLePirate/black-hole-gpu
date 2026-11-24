@@ -10166,6 +10166,29 @@ fn sceneryEllipsoid(o:vec3f,d:vec3f,c:vec3f,r:vec3f)->vec4f {
   if(t<0.001){return vec4f(-1.0);}
   return vec4f(t,normalize((o+d*t-c)/(r*r)));
 }
+// The record a surface's polygon is tested from at a point (scenerySurface): the polygon's own, or for a large water polygon — its
+// first float −(10⁶ + its bands' count), its second their table's place, scenery-data.ts packScenery — the band holding the point's height
+// (waterBands: every edge reaching into it, the crossings along +x at that height the polygon's own; uniform heights from the
+// polygon's box, each band's own box checked — a step to its neighbour —, the whole polygon if none holds it); 0xffffffff: the point
+// above or below the polygon, outside it. (Perf lot of 24 Nov 2026: the Seine's thousands of edges were tested at every pixel of its
+// box walked, over Paris on kerr-mini.)
+fn surfaceRecord(point:vec2f,base:u32)->u32 {
+  let head=scenery[base];
+  if(head.x>-1e6){return base;}
+  let n=u32(-head.x-1e6);
+  let box=scenery[base+1u];
+  if(point.y<box.y || point.y>box.w){return 0xffffffffu;}
+  let h=max((box.w-box.y)/f32(n),1.0);
+  var b=min(u32(max((point.y-box.y)/h,0.0)),n-1u);
+  let root=scenery[1].z;let table=u32(root+head.y);
+  for(var k=0u;k<3u;k++){
+    let rb=u32(root+scenery[table+b/4u][b%4u]);
+    let s=scenery[rb+1u];
+    if(point.y>=s.y && point.y<=s.w){return rb;}
+    if(point.y<s.y && b>0u){b--;}else if(point.y>s.w && b+1u<n){b++;}else{break;}
+  }
+  return base;
+}
 fn sceneryPolygon(p:vec2f,base:u32,count:u32)->bool {
   var inside=false;
   for(var i=0u;i<count;i++){
@@ -10652,8 +10675,13 @@ fn scenerySurface(foot:f32)->ScenerySurface {
     let base=u32(header.z+hi.w);let p=scenery[base];let size=scenery[base+1u];var color=scenery[base+2u].xyz;
     var kind=p.w;var cover=0.0;var rank=1.0;var road=vec4f(0.0);var rdir=vec2f(1.0,0.0);var key=0.0;var segPaint=vec4f(0.0);var isLine=false;
     if(scenery[base+2u].w>.5){
-      cover=select(0.0,1.0,sceneryPolygon(point,base,u32(p.z)));key=cover;
-      if(kind==4.0 && cover==0.0 && sceneryPolygon(point,base,u32(scenery[base+2u].w))){dryIsland=true;}
+      // (a large water polygon: the band holding the point's height alone — surfaceRecord —, the same answer)
+      let rb=surfaceRecord(point,base);
+      if(rb!=0xffffffffu){
+        cover=select(0.0,1.0,sceneryPolygon(point,rb,u32(scenery[rb].z)));
+        if(kind==4.0 && cover==0.0 && sceneryPolygon(point,rb,u32(scenery[rb+2u].w))){dryIsland=true;}
+      }
+      key=cover;
     }else{
       kind=size.y;let line=p.zw-p.xy;let len=max(length(line),.001);let along=clamp(dot(point-p.xy,line)/(len*len),0.0,1.0);
       let distance=length(point-p.xy-line*along);
@@ -16922,11 +16950,16 @@ fn octDecode(e: vec2f) -> vec3f {
   if (n.z < 0.0) { n = vec3f((1.0 - abs(n.yx)) * select(vec2f(-1.0), vec2f(1.0), n.xy >= vec2f(0.0)), n.z); }
   return normalize(n);
 }
-// (the record: A and the distance; the normal, the flags — a tree, glass, the surface's class, the road's kind —, the night's lights;
-// the one emission a pixel has — a tree's transmission, a building's windows, a runway's lamps — and the orthophoto's share; a
-// building's glass and its sky's share, else the runway's paving and the road's cover; the wet, the rain's rings)
-fn liteMatStore(px: vec2u, m: LiteMat, tM: f32, isTree: bool, bo: bool) {
-  let flags = select(0u, 1u, isTree) | select(0u, 2u, m.glass > 0.5) | (min(m.cover, 255u) << 2u) | (u32(clamp(m.roadKind, 0.0, 7.0)) << 10u);
+// (the record: A and the distance; the normal, the flags — a tree, glass, the surface's class, the road's kind, the water's cover and
+// kind —, the night's lights; the one emission a pixel has — a tree's transmission, a building's windows, a runway's lamps — and the
+// orthophoto's share; a building's glass and its sky's share, else the runway's paving and the road's cover; the wet, the rain's rings)
+// (the water — liteWater, read by shadeLite before its material —: its cover on 9 bits, rounded up — a share over 0 stays one —, its
+// kind on 2, bits 13–23 of the flags, an integer under 2²⁴ exact in the float: shadeLiteLight read it again — the same walk of the
+// water's tree, the same relief — at every ground pixel, ~3 ms over the Seine on kerr-mini — perf lot of 24 Nov 2026)
+fn liteMatStore(px: vec2u, m: LiteMat, tM: f32, isTree: bool, bo: bool, wat: vec4f) {
+  let wq = u32(ceil(clamp(wat.x, 0.0, 1.0) * 511.0)) << 13u;
+  let flags = select(0u, 1u, isTree) | select(0u, 2u, m.glass > 0.5) | (min(m.cover, 255u) << 2u) | (u32(clamp(m.roadKind, 0.0, 7.0)) << 10u)
+    | wq | (u32(clamp(wat.z, 0.0, 3.0)) << 22u);
   let extra = select(select(m.rwyLamps, m.bldE, bo), WS_T, isTree);
   textureStore(matOut0, vec2i(px), vec4f(m.A, tM));
   textureStore(matOut1, vec2i(px), vec4f(octEncode(m.n), f32(flags), m.lights));
@@ -16934,7 +16967,7 @@ fn liteMatStore(px: vec2u, m: LiteMat, tM: f32, isTree: bool, bo: bool) {
   textureStore(matOut3, vec2i(px), vec4f(select(m.rwyPaved, m.bldS, bo), select(m.roadCover, m.bldAO, bo), m.wetS, m.ripple));
 }
 // The deferred raster ground's light (withLiteDeferred): a pixel shadeLite left with its material's record — its ray, point, light
-// and footprint found again as shadeLite found them, its water read again —, lit (liteLight), its last touches and its finish
+// and footprint found again as shadeLite found them, its water from the record —, lit (liteLight), its last touches and its finish
 // (liteEpilogue: its surface to liteOut for shadeLiteFinish)
 @compute @workgroup_size(8, 8)
 fn shadeLiteLight(@builtin(global_invocation_id) gp: vec3u) {
@@ -17006,12 +17039,9 @@ fn shadeLiteLight(@builtin(global_invocation_id) gp: vec3u) {
   m.cover = (flags >> 2u) & 255u;
   m.roadKind = f32((flags >> 10u) & 7u);
   let G = liteLight(gq, q, tM, fx, fy, hG, ray.look, Ls, Lp, Li, E, isTree, at, m);
+  // (the water shadeLite read — its cover and kind in the record's flags, liteMatStore —: liteEpilogue's alone reads them)
   var wat = vec4f(0.0);
-  if (!mesh && !isTree && (liteSkip() & 1u) == 0u) {
-    let lvl0 = select(0.0, runwayGrade(gq).y, rwyCount() > 0u);
-    let nW = select(gq, tn, dot(tn, tn) > 0.5);
-    wat = liteWater(gq, fx, fy, hG, fp * EARTH_RM, nW, toBody(ray.look), tM, lvl0);
-  }
+  if (!mesh && !isTree && (liteSkip() & 1u) == 0u) { wat = vec4f(f32((flags >> 13u) & 511u) / 511.0, 0.0, f32((flags >> 22u) & 3u), 0.0); }
   liteEpilogue(gid.xy, idx, centre, pos, G, rd, tH, tM, Ls, E, k, mesh, isTree, wat, gq, hG, at);
 }
 @compute @workgroup_size(8, 8)

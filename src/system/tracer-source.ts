@@ -162,7 +162,7 @@ export function withLiteDeferred(trace: string, supported: boolean): string {
     marker,
     () => `let at = rasterAttrAt(centre, k);
   liteMatStore(gid.xy, liteMaterial(gq, q, ph, rd, ray.look, tM, fp, fx, fy, tn, hG, Ls, Lp, Li, E, isTree, anchored, at), tM, isTree,
-    !isTree && (meshW || atLeaf(at) > 0u));
+    !isTree && (meshW || atLeaf(at) > 0u), wat);
   moments[idx] = vec2f(RASTER_MAT, tM / EARTH_RM * bodyRadius(k));`,
   );
 }
