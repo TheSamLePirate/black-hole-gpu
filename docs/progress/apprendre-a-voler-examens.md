@@ -164,3 +164,14 @@ La capture `av-l3-montee.jpg` remplacée ; l'« Auto-GCAS: recovered » qu'on y 
 (`game/gcas.ts` `gcasThreat` : pas de ressource quand le point le plus bas prédit est l'instant présent et que le jet s'en éloigne —
 en montée, ou dans la minute qui suit l'envol sans descendre). Revolé sur kerr-mini (2/2, run `20261116-113827-appr-l3`) : la montée
 est le pilote seul, +16 m/s à 117 m/s (le +35 m/s d'avant était la ressource du GCAS) ; capture remplacée, cours (tableau des recettes) à jour.
+
+## 2026-11-24 — Vaisseaux, leçon 6 bis : points de Lagrange, orbite Halo, JWST (écrite, pas encore revolée)
+
+La leçon 6 bis (VOL-VAISSEAUX partie I, apprendre-vaisseaux.html `#l6b`) et les lignes de la référence (§4.2 `orbit` vers un
+point de Lagrange = l'autopilote Halo, `keep` au point et auprès de JWST ; §4.3 les missions HALO/LIBRATION/SURVOL ; §4.4 les
+plafonds d'accélération) sont écrites d'après le code (`lagrange.ts`, `lagrange-plan.ts`, `lowthrust.ts`, `stationkeep.ts`,
+`ui/fc/computer.ts`) après la revue de 07021ba5 (la phase des orbites Halo corrigée, les boucles L4/L5 refaites, le champ A_z
+borné avec un message). **Aucune de ces recettes n'est revolée par un e2e** : `apprendre-vaisseaux.e2e.test.ts` ne les vole
+pas ; `lagrange-jwst.e2e.test.ts` (autopilote Halo tenu 10 jours à la date du jour, ≤ 20 km et ≤ 1 m/s) est modifié mais
+pas relancé. Les Δv cités viennent des tests unitaires du planificateur (`tests/lagrange.test.ts`), pas d'un vol en jeu.
+Capture de la leçon à faire.
