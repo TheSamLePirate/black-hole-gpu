@@ -18,6 +18,7 @@ them in More… › Credits.
 - [The A320's display font (ECAM)](https://github.com/flybywiresim) — FlyByWire Simulations · GNU GPL v3
 - [The astronaut](https://github.com/momentchan/false-earth) — false-earth, Ming-Jyun Hung · CGTrader licence
 - [The International Space Station](https://science.nasa.gov/3d-resources/) — NASA (NASA 3D Resources)
+- [The James Webb Space Telescope — “The James Webb Space Telescope”](https://sketchfab.com/3d-models/the-james-webb-space-telescope-dcb95b3193be49e7a60192055df2315d) — Ignazio Pillitteri (Sketchfab) · CC BY 4.0
 - The carriers (Gerald R. Ford, Kiev, Implacable), the airliners and the ships of the traffic — 3D models supplied, under their authors' licences
 
 ## The sky
@@ -75,6 +76,11 @@ them in More… › Credits.
 ## Software and fonts
 
 - [The loading orb — thinking-orbs](https://github.com/Jakubantalik/thinking-orbs) — Jakub Antalík · MIT
+- [The Linux on-board computer — unkernel (Linux kernel and Alpine's busybox)](https://github.com/pithings/unkernel) — pithings · Linux kernel contributors · BusyBox · MIT AND GPL-2.0-only
+- [The on-board computer's distributions](https://www.alpinelinux.org) — Alpine Linux · Debian — their packages under their own licences, sources from their projects
+- [The terminal — xterm.js](https://github.com/xtermjs/xterm.js) — The xterm.js authors · MIT
+- [The on-board computer's Rust apps — Ratatui, crossterm](https://ratatui.rs) — The Ratatui and crossterm developers · MIT
+- [Mesh preparation — meshoptimizer](https://github.com/zeux/meshoptimizer) — Arseny Kapoulkine · MIT
 - Inter — Rasmus Andersson · SIL OFL 1.1
 - JetBrains Mono — JetBrains · SIL OFL 1.1
 - Rajdhani — Indian Type Foundry · SIL OFL 1.1
