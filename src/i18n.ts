@@ -36,6 +36,7 @@ import frSpaceSchool from "./i18n/fr-spaceschool";
 import frA320 from "./i18n/fr-a320";
 import frA320Deck from "./i18n/fr-a320-deck";
 import frA320Ground from "./i18n/fr-a320-ground";
+import frObc from "./i18n/fr-obc";
 
 export type Lang = "fr" | "en";
 export type Text = Record<Lang, string>;
@@ -173,3 +174,4 @@ addFrench(frAssist);
 addFrench(frPwa);
 addFrench(frFc);
 addFrench(frBodies);
+addFrench(frObc);

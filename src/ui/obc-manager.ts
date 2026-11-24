@@ -1,6 +1,7 @@
 // AAA Linux Machine Manager panel embedded inside the OBC HUD Console.
 // Full Admin / Monitor / Unkernel Hardware / Persistent Disk / Wisp Network / Toolchains / Game & Logs suite.
 
+import { t, tf } from "../i18n";
 import {
   DEFAULT_PROD_WISP_URL,
   normalizeCpus,
@@ -9,12 +10,28 @@ import {
   normalizeWispMode,
   type ObcRuntime,
 } from "../obc/runtime";
-import type { ObcConfig, ObcDistro, ObcGuestProbe, ObcKernelTelemetry, ObcToolchainProfile, ObcWispMode } from "../obc/types";
+import type { ObcConfig, ObcDistro, ObcGuestProbe, ObcKernelTelemetry, ObcPhase, ObcToolchainProfile, ObcWispMode } from "../obc/types";
 
 export type ObcManagerTab = "monitor" | "system" | "storage" | "network" | "toolchains" | "game";
 
+/** The machine's state, in the interface's language (the console's title bar, the monitor's first card). */
+export function obcPhaseLabel(phase: ObcPhase): string {
+  switch (phase) {
+    case "off":
+      return t("STANDBY");
+    case "booting":
+      return t("BOOTING");
+    case "ready":
+      return t("READY");
+    case "suspended":
+      return t("SUSPENDED");
+    case "error":
+      return t("ERROR");
+  }
+}
+
 function fmtBytes(n: number | null | undefined): string {
-  if (n === null || n === undefined || !Number.isFinite(n)) return "n/a";
+  if (n === null || n === undefined || !Number.isFinite(n)) return t("n/a");
   if (n < 1024) return `${n} B`;
   if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KiB`;
   if (n < 1024 * 1024 * 1024) return `${(n / (1024 * 1024)).toFixed(1)} MiB`;
@@ -145,6 +162,12 @@ export class ObcMachineManager {
       return { wrap, inp };
     };
 
+    const th = (label: string) => {
+      const c = document.createElement("th");
+      c.textContent = label;
+      return c;
+    };
+
     const mkField = (label: string, ctrl: HTMLElement) => {
       const f = document.createElement("label");
       f.className = "obc-field";
@@ -161,12 +184,12 @@ export class ObcMachineManager {
     tabBar.className = "obc-mgr-tabs";
 
     const tabs: [ObcManagerTab, string][] = [
-      ["monitor", "Monitor"],
-      ["system", "System & Unkernel"],
-      ["storage", "Disk & Snapshots"],
-      ["network", "Network & Wisp"],
-      ["toolchains", "Toolchains"],
-      ["game", "Game & Logs"],
+      ["monitor", t("Monitor")],
+      ["system", t("System & Unkernel")],
+      ["storage", t("Disk & Snapshots")],
+      ["network", t("Network & Wisp")],
+      ["toolchains", t("Toolchains")],
+      ["game", t("Game & Logs")],
     ];
     for (const [id, lbl] of tabs) {
       const b = mkBtn(lbl, () => this.selectTab(id), {
@@ -177,14 +200,14 @@ export class ObcMachineManager {
       tabBar.append(b);
     }
 
-    const applyRebootBtn = mkBtn("Apply & Reboot", () => this.applyHardwareAndReboot(), {
+    const applyRebootBtn = mkBtn(t("Apply & Reboot"), () => this.applyHardwareAndReboot(), {
       cls: "on",
       testid: "obc-opt-apply",
-      title: "Save all hardware, Unkernel, Disk & Wisp settings and reboot VM if running",
+      title: t("Save all hardware, Unkernel, Disk & Wisp settings and reboot VM if running"),
     });
-    const refreshAllBtn = mkBtn("↻ Refresh", () => void this.refreshAll(true), {
+    const refreshAllBtn = mkBtn(`↻ ${t("Refresh")}`, () => void this.refreshAll(true), {
       testid: "obc-mgr-refresh",
-      title: "Refresh live kernel stats, guest OS probe, processes & disk quota",
+      title: t("Refresh live kernel stats, guest OS probe, processes & disk quota"),
     });
 
     const headerActions = document.createElement("div");
@@ -215,13 +238,16 @@ export class ObcMachineManager {
 
     this.guestSummaryEl = document.createElement("div");
     this.guestSummaryEl.className = "obc-mgr-summary";
-    this.guestSummaryEl.textContent = "Boot the Linux OBC to inspect live kernel & OS metrics.";
+    this.guestSummaryEl.textContent = t("Boot the Linux OBC to inspect live kernel & OS metrics.");
 
     const procWrap = document.createElement("div");
     procWrap.className = "obc-table-wrap";
     const procTable = document.createElement("table");
     procTable.className = "obc-table";
-    procTable.innerHTML = "<thead><tr><th>PID</th><th>USER</th><th>VSZ</th><th>COMMAND</th><th>SIGNAL</th></tr></thead>";
+    procTable
+      .createTHead()
+      .insertRow()
+      .append(...["PID", t("USER"), "VSZ", t("COMMAND"), t("SIGNAL")].map(th));
     this.procBody = document.createElement("tbody");
     procTable.append(this.procBody);
     procWrap.append(procTable);
@@ -231,7 +257,7 @@ export class ObcMachineManager {
     const pSys = mkPane("system");
     this.distroSel = mkSelect(
       [
-        ["alpine", "Alpine 3.24 (4 MB, musl, fast)"],
+        ["alpine", t("Alpine 3.24 (4 MB, musl, fast)")],
         ["debian", "Debian 13 Trixie (72 MB, glibc)"],
       ],
       cfg.distro,
@@ -241,7 +267,7 @@ export class ObcMachineManager {
       [
         ["512", "512 MiB"],
         ["1024", "1 GiB"],
-        ["2048", "2 GiB (default)"],
+        ["2048", t("2 GiB (default)")],
         ["4096", "4 GiB"],
       ],
       String(cfg.memoryMiB),
@@ -251,14 +277,14 @@ export class ObcMachineManager {
       [
         ["1", "1 vCPU (UP)"],
         ["2", "2 vCPUs (SMP)"],
-        ["4", "4 vCPUs (SMP, auto)"],
+        ["4", t("4 vCPUs (SMP, auto)")],
       ],
       String(cfg.cpus),
       "obc-opt-cpus",
     );
     this.resSel = mkSelect(
       [
-        ["512x512", "512×512 (Square)"],
+        ["512x512", t("512×512 (Square)")],
         ["640x480", "640×480 (VGA)"],
         ["800x600", "800×600 (SVGA)"],
         ["1024x768", "1024×768 (XGA)"],
@@ -267,17 +293,17 @@ export class ObcMachineManager {
       "obc-opt-res",
     );
 
-    const jit = mkCheck("Wasm JIT Compiler", cfg.jit, "obc-opt-jit");
+    const jit = mkCheck(t("Wasm JIT Compiler"), cfg.jit, "obc-opt-jit");
     this.jitChk = jit.inp;
-    const shm = mkCheck("Shared Mem (/dev/kwshm)", cfg.shm, "obc-opt-shm");
+    const shm = mkCheck(t("Shared Mem (/dev/kwshm)"), cfg.shm, "obc-opt-shm");
     this.shmChk = shm.inp;
-    const prof = mkCheck("CPU Profiler", cfg.profile, "obc-opt-profile");
+    const prof = mkCheck(t("CPU Profiler"), cfg.profile, "obc-opt-profile");
     this.profileChk = prof.inp;
 
     const sysRow1 = document.createElement("div");
     sysRow1.className = "obc-drawer-row";
     sysRow1.append(
-      mkField("Distro", this.distroSel),
+      mkField(t("Distro"), this.distroSel),
       mkField("RAM", this.ramSel),
       mkField("vCPUs", this.cpuSel),
       mkField("/dev/fb0", this.resSel),
@@ -285,12 +311,12 @@ export class ObcMachineManager {
     const sysRow2 = document.createElement("div");
     sysRow2.className = "obc-drawer-row";
     const dumpProfBtn = mkBtn(
-      "Dump CPU Profile",
+      t("Dump CPU Profile"),
       async () => {
         this.profileOutEl.hidden = false;
-        this.profileOutEl.textContent = "Reading Unkernel CPU profile…";
+        this.profileOutEl.textContent = t("Reading Unkernel CPU profile…");
         const rep = await this.runtime.getProfile();
-        this.profileOutEl.textContent = rep ?? "Profiler inactive (enable CPU Profiler + Apply & Reboot first).";
+        this.profileOutEl.textContent = rep ?? t("Profiler inactive (enable CPU Profiler + Apply & Reboot first).");
       },
       { testid: "obc-mgr-profile-dump" },
     );
@@ -307,16 +333,16 @@ export class ObcMachineManager {
 
     // ── TAB 3: DISK & SNAPSHOTS (Persistent IndexedDB /data, Backup/Restore) ─
     const pDisk = mkPane("storage");
-    const persist = mkCheck("Persist /data (IndexedDB kwdisk:kwdata-v1)", cfg.persistData, "obc-opt-persist");
+    const persist = mkCheck(t("Persist /data (IndexedDB kwdisk:kwdata-v1)"), cfg.persistData, "obc-opt-persist");
     this.persistChk = persist.inp;
     this.diskStatusEl = document.createElement("span");
     this.diskStatusEl.className = "obc-status-pill";
     this.diskStatusEl.dataset.testid = "obc-disk-status";
 
     const syncDiskBtn = mkBtn(
-      "Flush / Sync Disk",
+      t("Flush / Sync Disk"),
       async () => {
-        this.diskStatusEl.textContent = "Syncing…";
+        this.diskStatusEl.textContent = t("Syncing…");
         this.diskStatusEl.dataset.ok = "";
         const r = await this.runtime.syncDisk();
         this.diskStatusEl.textContent = r.ok ? `✓ ${r.msg}` : `✕ ${r.msg}`;
@@ -327,9 +353,9 @@ export class ObcMachineManager {
     );
 
     const exportPilotBtn = mkBtn(
-      "Export /home/pilot (.tar.gz)",
+      t("Export /home/pilot (.tar.gz)"),
       async () => {
-        this.diskStatusEl.textContent = "Archiving /home/pilot…";
+        this.diskStatusEl.textContent = t("Archiving /home/pilot…");
         const r = await this.runtime.exportPilotArchive();
         this.diskStatusEl.textContent = r.ok ? `✓ ${r.msg}` : `✕ ${r.msg}`;
         this.diskStatusEl.dataset.ok = r.ok ? "1" : "0";
@@ -345,18 +371,18 @@ export class ObcMachineManager {
     importPilotInp.onchange = async () => {
       const f = importPilotInp.files?.[0];
       if (!f) return;
-      this.diskStatusEl.textContent = `Importing ${f.name}…`;
+      this.diskStatusEl.textContent = tf("Importing {0}…", f.name);
       const r = await this.runtime.importPilotArchive(new Uint8Array(await f.arrayBuffer()));
       this.diskStatusEl.textContent = r.ok ? `✓ ${r.msg}` : `✕ ${r.msg}`;
       this.diskStatusEl.dataset.ok = r.ok ? "1" : "0";
       importPilotInp.value = "";
     };
-    const importPilotBtn = mkBtn("Import /home/pilot", () => importPilotInp.click(), { testid: "obc-pilot-import" });
+    const importPilotBtn = mkBtn(t("Import /home/pilot"), () => importPilotInp.click(), { testid: "obc-pilot-import" });
 
     const exportSnapBtn = mkBtn(
-      "Save VM Snapshot (.kwsnap)",
+      t("Save VM Snapshot (.kwsnap)"),
       async () => {
-        this.diskStatusEl.textContent = "Capturing VM snapshot…";
+        this.diskStatusEl.textContent = t("Capturing VM snapshot…");
         const r = await this.runtime.exportVmSnapshot();
         this.diskStatusEl.textContent = r.ok ? `✓ ${r.msg}` : `✕ ${r.msg}`;
         this.diskStatusEl.dataset.ok = r.ok ? "1" : "0";
@@ -372,16 +398,16 @@ export class ObcMachineManager {
     importSnapInp.onchange = async () => {
       const f = importSnapInp.files?.[0];
       if (!f) return;
-      this.diskStatusEl.textContent = `Restoring ${f.name}…`;
+      this.diskStatusEl.textContent = tf("Restoring {0}…", f.name);
       const r = await this.runtime.importVmSnapshot(new Uint8Array(await f.arrayBuffer()));
       this.diskStatusEl.textContent = r.ok ? `✓ ${r.msg}` : `✕ ${r.msg}`;
       this.diskStatusEl.dataset.ok = r.ok ? "1" : "0";
       importSnapInp.value = "";
     };
-    const importSnapBtn = mkBtn("Load VM Snapshot", () => importSnapInp.click(), { testid: "obc-snap-import" });
+    const importSnapBtn = mkBtn(t("Load VM Snapshot"), () => importSnapInp.click(), { testid: "obc-snap-import" });
 
     const resetDiskBtn = mkBtn(
-      "Reset /data",
+      t("Reset /data"),
       async () => {
         const res = await this.runtime.resetDataDisk();
         this.diskStatusEl.textContent = res.ok ? `✓ ${res.msg}` : `✕ ${res.msg}`;
@@ -390,7 +416,7 @@ export class ObcMachineManager {
         this.wispStatusEl.dataset.ok = this.diskStatusEl.dataset.ok;
         void this.refreshDisk();
       },
-      { cls: "danger", testid: "obc-reset-data", title: "Wipe persisted IndexedDB /data overlay" },
+      { cls: "danger", testid: "obc-reset-data", title: t("Wipe persisted IndexedDB /data overlay") },
     );
 
     const diskRow1 = document.createElement("div");
@@ -408,8 +434,10 @@ export class ObcMachineManager {
     mountsWrap.className = "obc-table-wrap";
     const mountsTable = document.createElement("table");
     mountsTable.className = "obc-table";
-    mountsTable.innerHTML =
-      "<thead><tr><th>FILESYSTEM</th><th>SIZE</th><th>USED</th><th>AVAIL</th><th>USE%</th><th>MOUNT</th></tr></thead>";
+    mountsTable
+      .createTHead()
+      .insertRow()
+      .append(...[t("FILESYSTEM"), t("SIZE"), t("USED"), t("AVAIL"), t("USE%"), t("MOUNT")].map(th));
     this.mountsBody = document.createElement("tbody");
     mountsTable.append(this.mountsBody);
     mountsWrap.append(mountsTable);
@@ -419,11 +447,11 @@ export class ObcMachineManager {
     const pNet = mkPane("network");
     this.wispModeSel = mkSelect(
       [
-        ["auto", "Auto (dev /__wisp → prod)"],
-        ["prod", `Production (${DEFAULT_PROD_WISP_URL})`],
-        ["local", "Local Dev Relay (/__wisp)"],
-        ["custom", "Custom Wisp URL"],
-        ["off", "Disabled (Offline / Air-Gapped)"],
+        ["auto", t("Auto (dev /__wisp → prod)")],
+        ["prod", tf("Production ({0})", DEFAULT_PROD_WISP_URL)],
+        ["local", t("Local Dev Relay (/__wisp)")],
+        ["custom", t("Custom Wisp URL")],
+        ["off", t("Disabled (Offline / Air-Gapped)")],
       ],
       cfg.wispMode,
       "obc-opt-wisp-mode",
@@ -438,7 +466,7 @@ export class ObcMachineManager {
     this.wispInput = document.createElement("input");
     this.wispInput.className = "obc-wisp-input";
     this.wispInput.dataset.testid = "obc-wisp-input";
-    this.wispInput.placeholder = "wss://code.samlepirate.org/ (empty = Auto)";
+    this.wispInput.placeholder = tf("{0} (empty = Auto)", DEFAULT_PROD_WISP_URL);
     this.wispInput.value = this.runtime.getWispUrl();
 
     this.wispStatusEl = document.createElement("span");
@@ -446,9 +474,9 @@ export class ObcMachineManager {
     this.wispStatusEl.dataset.testid = "obc-wisp-status";
 
     const testWispBtn = mkBtn(
-      "Test Wisp",
+      t("Test Wisp"),
       async () => {
-        this.wispStatusEl.textContent = "Probing…";
+        this.wispStatusEl.textContent = t("Probing…");
         this.wispStatusEl.dataset.ok = "";
         const res = await this.runtime.testWisp(this.wispInput.value || undefined);
         this.wispStatusEl.textContent = res.ok ? `✓ ${res.msg} (${res.latencyMs}ms)` : `✕ ${res.msg}`;
@@ -458,17 +486,17 @@ export class ObcMachineManager {
     );
 
     const testCurlBtn = mkBtn(
-      "Guest HTTPS Check",
+      t("Guest HTTPS Check"),
       async () => {
-        this.wispStatusEl.textContent = "Running curl in Linux…";
+        this.wispStatusEl.textContent = t("Running curl in Linux…");
         this.wispStatusEl.dataset.ok = "";
         const r = await this.runtime.exec(
           "curl -fsS --max-time 6 https://code.samlepirate.org/health || wget -qO- https://code.samlepirate.org/health",
           9000,
         );
         this.wispStatusEl.textContent = r.ok
-          ? `✓ Guest HTTPS OK (${r.stdout.trim().slice(0, 40)})`
-          : `✕ ${r.stderr.trim().slice(0, 50) || "failed"}`;
+          ? `✓ ${tf("Guest HTTPS OK ({0})", r.stdout.trim().slice(0, 40))}`
+          : `✕ ${r.stderr.trim().slice(0, 50) || t("failed")}`;
         this.wispStatusEl.dataset.ok = r.ok ? "1" : "0";
       },
       { testid: "obc-wisp-guest-check" },
@@ -476,7 +504,7 @@ export class ObcMachineManager {
 
     const netRow1 = document.createElement("div");
     netRow1.className = "obc-drawer-row";
-    netRow1.append(mkField("Wisp Mode", this.wispModeSel), this.wispInput, testWispBtn, testCurlBtn, this.wispStatusEl);
+    netRow1.append(mkField(t("Wisp Mode"), this.wispModeSel), this.wispInput, testWispBtn, testCurlBtn, this.wispStatusEl);
 
     this.netStatsEl = document.createElement("div");
     this.netStatsEl.className = "obc-kpi-grid";
@@ -487,10 +515,10 @@ export class ObcMachineManager {
     const toolsTop = document.createElement("div");
     toolsTop.className = "obc-drawer-row";
     toolsTop.append(
-      mkBtn("Install All Core (7)", () => void this.runtime.installToolchain("all"), { cls: "on", testid: "obc-mgr-install-all" }),
+      mkBtn(t("Install All Core (7)"), () => void this.runtime.installToolchain("all"), { cls: "on", testid: "obc-mgr-install-all" }),
       mkBtn("+Rust (rustc+cargo)", () => void this.runtime.installToolchain("rust"), { testid: "obc-mgr-install-rust" }),
-      mkBtn("Run obc-diag", () => void this.runtime.runScript("diag"), { testid: "obc-mgr-run-diag" }),
-      mkBtn("Open bh-tui", () => void this.runtime.runScript("bh-tui"), { testid: "obc-mgr-run-bhtui" }),
+      mkBtn(tf("Run {0}", "obc-diag"), () => void this.runtime.runScript("diag"), { testid: "obc-mgr-run-diag" }),
+      mkBtn(tf("Open {0}", "bh-tui"), () => void this.runtime.runScript("bh-tui"), { testid: "obc-mgr-run-bhtui" }),
     );
     this.toolGridEl = document.createElement("div");
     this.toolGridEl.className = "obc-tool-grid";
@@ -500,28 +528,28 @@ export class ObcMachineManager {
     const pGame = mkPane("game");
     this.themeSel = mkSelect(
       [
-        ["auto", "Auto (Craft)"],
+        ["auto", t("Auto (Craft)")],
         ["interstellar", "Interstellar Cyan"],
         ["f35", "F-35 Tactical"],
         ["a320", "Airbus ECAM"],
-        ["amber", "Retro Amber CRT"],
+        ["amber", t("Retro Amber CRT")],
       ],
       cfg.theme,
       "obc-opt-theme",
     );
     this.syncSel = mkSelect(
       [
-        ["interactive", "Interactive"],
-        ["strict", "Strict Sim-Clock"],
+        ["interactive", t("Interactive")],
+        ["strict", t("Strict Sim-Clock")],
       ],
       cfg.syncMode,
       "obc-opt-sync",
     );
-    const crt = mkCheck("CRT / Phosphor FX", cfg.crtFx, "obc-opt-crt");
+    const crt = mkCheck(t("CRT / Phosphor FX"), cfg.crtFx, "obc-opt-crt");
     this.crtChk = crt.inp;
-    const snd = mkCheck("Audio (/dev/dsp)", cfg.soundEnabled, "obc-opt-sound");
+    const snd = mkCheck(t("Audio (/dev/dsp)"), cfg.soundEnabled, "obc-opt-sound");
     this.soundChk = snd.inp;
-    const tMouse = mkCheck("TTY Mouse (clicks/wheel)", cfg.termMouse, "obc-opt-term-mouse");
+    const tMouse = mkCheck(t("TTY Mouse (clicks/wheel)"), cfg.termMouse, "obc-opt-term-mouse");
     this.termMouseChk = tMouse.inp;
     this.termMouseChk.onchange = () => {
       this.runtime.setConfig({ termMouse: this.termMouseChk.checked });
@@ -582,34 +610,34 @@ export class ObcMachineManager {
     opCtrl.className = "obc-range-wrap";
     opCtrl.append(this.opacityRange, this.opacityValEl);
     gRow1.append(
-      mkField("Theme", this.themeSel),
-      mkField("Clock", this.syncSel),
-      mkField("Font", fontCtrl),
-      mkField("Opacity", opCtrl),
+      mkField(t("Theme"), this.themeSel),
+      mkField(t("Clock"), this.syncSel),
+      mkField(t("Font"), fontCtrl),
+      mkField(t("Opacity"), opCtrl),
       crt.wrap,
       snd.wrap,
       tMouse.wrap,
-      mkBtn("Reset TTY", () => this.cbs.onResetTty(), {
+      mkBtn(t("Reset TTY"), () => this.cbs.onResetTty(), {
         testid: "obc-reset-tty",
-        title: "Disable stuck mouse tracking & restore terminal state",
+        title: t("Disable stuck mouse tracking & restore terminal state"),
       }),
-      mkBtn("Reset Window", () => this.cbs.onResetWindow(), { testid: "obc-mgr-reset-win" }),
+      mkBtn(t("Reset Window"), () => this.cbs.onResetWindow(), { testid: "obc-mgr-reset-win" }),
     );
 
     this.gameStatusEl = document.createElement("span");
     this.gameStatusEl.className = "obc-status-pill";
-    const route = (t: "ranger" | "f35" | "a320") => {
-      const r = this.runtime.routeToCockpit(t);
+    const route = (target: "ranger" | "f35" | "a320") => {
+      const r = this.runtime.routeToCockpit(target);
       this.gameStatusEl.textContent = r.ok ? `✓ ${r.msg}` : `✕ ${r.msg}`;
       this.gameStatusEl.dataset.ok = r.ok ? "1" : "0";
     };
     const gRow2 = document.createElement("div");
     gRow2.className = "obc-drawer-row";
     gRow2.append(
-      mkBtn("Route → Ranger MFD", () => route("ranger"), { testid: "obc-route-ranger" }),
-      mkBtn("Route → F-35 PCD", () => route("f35"), { testid: "obc-route-f35" }),
-      mkBtn("Route → A320 MCDU+ECAM", () => route("a320"), { testid: "obc-route-a320" }),
-      mkBtn("Clear Logs", () => {
+      mkBtn(tf("Route → {0}", "Ranger MFD"), () => route("ranger"), { testid: "obc-route-ranger" }),
+      mkBtn(tf("Route → {0}", "F-35 PCD"), () => route("f35"), { testid: "obc-route-f35" }),
+      mkBtn(tf("Route → {0}", "A320 MCDU+ECAM"), () => route("a320"), { testid: "obc-route-a320" }),
+      mkBtn(t("Clear Logs"), () => {
         this.runtime.clearLogs();
         this.renderLogs();
       }),
@@ -753,62 +781,62 @@ export class ObcMachineManager {
     // Tab 1: Monitor KPIs
     this.kpiGrid.replaceChildren(
       this.mkKpi(
-        "VM STATE",
-        st.phase.toUpperCase(),
-        ks.running ? `Uptime ${fmtUptime(ks.uptimeMs)} · Boot ${st.bootMs ?? 0}ms` : "Standby",
+        t("VM STATE"),
+        obcPhaseLabel(st.phase),
+        ks.running ? tf("Uptime {0} · Boot {1} ms", fmtUptime(ks.uptimeMs), st.bootMs ?? 0) : t("Standby"),
         ks.running,
       ),
       this.mkKpi(
         "RAM / vCPU",
         `${ks.memoryMiB} MiB · ${ks.cpus} CPU`,
         this.lastProbe
-          ? `Used ${this.lastProbe.memUsedMiB} / ${this.lastProbe.memTotalMiB} MiB`
+          ? tf("Used {0} / {1} MiB", this.lastProbe.memUsedMiB, this.lastProbe.memTotalMiB)
           : `${ks.memory64 ? "wasm64" : "wasm32"} · ${ks.transport}`,
       ),
       this.mkKpi(
         "WASM JIT",
-        ks.jit ? `${ks.jit.live} live / ${ks.jit.compiled}` : st.config.jit ? "ENABLED" : "INTERP",
-        ks.jit ? `max ${ks.jit.maxLive} · fail ${ks.jit.failed}` : `Compile ${ks.compileMs}ms`,
+        ks.jit ? tf("{0} live / {1}", ks.jit.live, ks.jit.compiled) : st.config.jit ? t("ENABLED") : t("INTERPRETED"),
+        ks.jit ? tf("max {0} · failed {1}", ks.jit.maxLive, ks.jit.failed) : tf("Compile {0} ms", ks.compileMs),
         ks.jit ? ks.jit.enabled : undefined,
       ),
       this.mkKpi(
         "BLOCK I/O",
         ks.block ? `${fmtBytes(ks.block.bytesRead)} R` : "—",
-        ks.block ? `${fmtBytes(ks.block.bytesWritten)} W · ${ks.block.flushes} flush` : "Idle",
+        ks.block ? tf("{0} W · {1} flushes", fmtBytes(ks.block.bytesWritten), ks.block.flushes) : t("Idle"),
       ),
       this.mkKpi(
         "WISP NET",
-        ks.net ? `${ks.net.tcpOpened} TCP · ${ks.net.dns} DNS` : st.netEnabled ? "READY" : "OFFLINE",
-        ks.net ? `RX ${ks.net.rx} · TX ${ks.net.tx} pkts` : ks.activeWispUrl || "No relay",
+        ks.net ? `${ks.net.tcpOpened} TCP · ${ks.net.dns} DNS` : st.netEnabled ? t("READY") : t("OFFLINE"),
+        ks.net ? tf("RX {0} · TX {1} packets", ks.net.rx, ks.net.tx) : ks.activeWispUrl || t("No relay"),
         st.netEnabled,
       ),
       this.mkKpi(
         "VSOCK & /dev/fb0",
-        ks.display && st.fbActive ? `${st.fbWidth}×${st.fbHeight} @${st.fbFps}Hz` : `VSOCK ${ks.vsock?.open ?? 0} open`,
-        ks.vsock ? `In ${fmtBytes(ks.vsock.bytesIn)} · Out ${fmtBytes(ks.vsock.bytesOut)}` : `Cmds ${st.commandsHandled}`,
+        ks.display && st.fbActive ? `${st.fbWidth}×${st.fbHeight} @${st.fbFps}Hz` : tf("VSOCK {0} open", ks.vsock?.open ?? 0),
+        ks.vsock ? tf("In {0} · Out {1}", fmtBytes(ks.vsock.bytesIn), fmtBytes(ks.vsock.bytesOut)) : tf("Commands {0}", st.commandsHandled),
       ),
     );
 
     // Tab 2: Host capabilities & cmdline
     this.hostCapsEl.textContent = `Host: worker=true · transport=${ks.transport} · memory64=${ks.memory64} · crossOriginIsolated=${ks.crossOriginIsolated} · SMP=${ks.cpuBlocker ? `1 CPU (${ks.cpuBlocker})` : "available"} · switches=${ks.switches} · yields=${ks.yields}`;
-    this.cmdlineEl.textContent = ks.cmdline ? `cmdline: ${ks.cmdline}` : "cmdline: (boot VM to inspect active kernel cmdline)";
+    this.cmdlineEl.textContent = ks.cmdline ? `cmdline: ${ks.cmdline}` : t("cmdline: (boot VM to inspect active kernel cmdline)");
 
     // Tab 4: Network KPIs
     this.netStatsEl.replaceChildren(
-      this.mkKpi("STATUS", st.netEnabled ? "CONNECTED" : "OFFLINE", ks.activeWispUrl || "Wisp disabled", st.netEnabled),
-      this.mkKpi("PACKETS", ks.net ? `${ks.net.rx} RX / ${ks.net.tx} TX` : "0 / 0", "Virtio kwnet frames"),
-      this.mkKpi("TCP STREAMS", ks.net ? String(ks.net.tcpOpened) : "0", "Opened over Wisp v1"),
-      this.mkKpi("DNS QUERIES", ks.net ? String(ks.net.dns) : "0", "Resolved via relay"),
+      this.mkKpi(t("STATUS"), st.netEnabled ? t("CONNECTED") : t("OFFLINE"), ks.activeWispUrl || t("Wisp disabled"), st.netEnabled),
+      this.mkKpi(t("PACKETS"), ks.net ? `${ks.net.rx} RX / ${ks.net.tx} TX` : "0 / 0", t("Virtio kwnet frames")),
+      this.mkKpi(t("TCP STREAMS"), ks.net ? String(ks.net.tcpOpened) : "0", t("Opened over Wisp v1")),
+      this.mkKpi(t("DNS QUERIES"), ks.net ? String(ks.net.dns) : "0", t("Resolved via relay")),
     );
 
     // Tab 6: Game bridge info + Logs
-    this.gameInfoEl.textContent = `Craft: ${tel.vessel_id.toUpperCase()} (${tel.vessel_kind}) @ ${tel.body.toUpperCase()} · dτ/dt=${tel.dtau_dt.toFixed(6)} · warp=${tel.warp}x · /obc/cmd=${st.commandsHandled} · vsock=${st.vsockClients}`;
+    this.gameInfoEl.textContent = `${t("Craft:")} ${tel.vessel_id.toUpperCase()} (${tel.vessel_kind}) @ ${tel.body.toUpperCase()} · dτ/dt=${tel.dtau_dt.toFixed(6)} · warp=${tel.warp}x · /obc/cmd=${st.commandsHandled} · vsock=${st.vsockClients}`;
     this.renderLogs();
   }
 
   private renderLogs() {
     const logs = this.runtime.getLogs();
-    this.logsPreEl.textContent = logs.length ? logs.join("\n") : "[OBC] No host kernel logs yet.";
+    this.logsPreEl.textContent = logs.length ? logs.join("\n") : t("[OBC] No host kernel logs yet.");
     this.logsPreEl.scrollTop = this.logsPreEl.scrollHeight;
   }
 
@@ -817,20 +845,20 @@ export class ObcMachineManager {
     const quotaPct =
       info.storageUsageBytes !== null && info.storageQuotaBytes
         ? `${((info.storageUsageBytes / info.storageQuotaBytes) * 100).toFixed(1)}%`
-        : "n/a";
+        : t("n/a");
     this.diskKpisEl.replaceChildren(
       this.mkKpi(
-        "PERSIST MODE",
-        info.persistData ? "INDEXEDDB" : "EPHEMERAL",
-        info.persistData ? "kwdisk:kwdata-v1" : "RAM snapshot",
+        t("PERSIST MODE"),
+        info.persistData ? "INDEXEDDB" : t("EPHEMERAL"),
+        info.persistData ? "kwdisk:kwdata-v1" : t("RAM snapshot"),
         info.persistData,
       ),
-      this.mkKpi("IDB BLOCKS", info.idbBlocks !== null ? String(info.idbBlocks) : "n/a", "Saved 4 KiB blocks"),
-      this.mkKpi("BROWSER QUOTA", fmtBytes(info.storageUsageBytes), `of ${fmtBytes(info.storageQuotaBytes)} (${quotaPct})`),
+      this.mkKpi(t("IDB BLOCKS"), info.idbBlocks !== null ? String(info.idbBlocks) : t("n/a"), t("Saved 4 KiB blocks")),
+      this.mkKpi(t("BROWSER QUOTA"), fmtBytes(info.storageUsageBytes), tf("of {0} ({1})", fmtBytes(info.storageQuotaBytes), quotaPct)),
       this.mkKpi(
-        "LAST SYNC",
-        info.lastSyncAt ? new Date(info.lastSyncAt).toLocaleTimeString() : "Not synced",
-        info.hasSnapshot ? "RAM snapshot held" : "Live disk",
+        t("LAST SYNC"),
+        info.lastSyncAt ? new Date(info.lastSyncAt).toLocaleTimeString() : t("Not synced"),
+        info.hasSnapshot ? t("RAM snapshot held") : t("Live disk"),
       ),
     );
   }
@@ -843,7 +871,16 @@ export class ObcMachineManager {
       const p = await this.runtime.probeGuest();
       if (!p) return;
       this.lastProbe = p;
-      this.guestSummaryEl.textContent = `${p.distro} · ${p.uname} · up ${p.uptime} · load ${p.loadAvg} · RAM ${p.memUsedMiB}/${p.memTotalMiB} MiB (${p.memAvailMiB} MiB free)`;
+      this.guestSummaryEl.textContent = tf(
+        "{0} · {1} · up {2} · load {3} · RAM {4}/{5} MiB ({6} MiB free)",
+        p.distro,
+        p.uname,
+        p.uptime,
+        p.loadAvg,
+        p.memUsedMiB,
+        p.memTotalMiB,
+        p.memAvailMiB,
+      );
 
       // Processes table
       this.procBody.replaceChildren();
@@ -896,7 +933,7 @@ export class ObcMachineManager {
       // Toolchains status grid
       const toolDefs: { key: string; label: string; install?: ObcToolchainProfile }[] = [
         { key: "obc-rs", label: "obc-rs (Rust+Ratatui)" },
-        { key: "pilot-kit", label: "/home/pilot Docs+Skills" },
+        { key: "pilot-kit", label: t("/home/pilot Docs+Skills") },
         { key: "python3", label: "Python 3", install: "python" },
         { key: "pip", label: "pip", install: "python" },
         { key: "node", label: "Node.js", install: "node" },
@@ -908,26 +945,26 @@ export class ObcMachineManager {
         { key: "claude", label: "Claude Code", install: "claude" },
       ];
       this.toolGridEl.replaceChildren();
-      for (const t of toolDefs) {
-        const ver = p.tools[t.key] ?? "off";
+      for (const tool of toolDefs) {
+        const ver = p.tools[tool.key] ?? "off";
         const ok = ver !== "off";
         const row = document.createElement("div");
         row.className = "obc-tool-card";
         const left = document.createElement("div");
         const nm = document.createElement("div");
         nm.className = "obc-tool-name";
-        nm.textContent = t.label;
+        nm.textContent = tool.label;
         const vv = document.createElement("div");
         vv.className = `obc-tool-ver${ok ? " ok" : ""}`;
-        vv.textContent = ok ? ver : "not installed";
+        vv.textContent = ok ? ver : t("not installed");
         left.append(nm, vv);
         row.append(left);
-        if (t.install && !ok) {
+        if (tool.install && !ok) {
           const btn = document.createElement("button");
           btn.type = "button";
           btn.className = "obc-btn obc-btn-xs";
-          btn.textContent = "Install";
-          btn.onclick = () => void this.runtime.installToolchain(t.install!);
+          btn.textContent = t("Install");
+          btn.onclick = () => void this.runtime.installToolchain(tool.install!);
           row.append(btn);
         }
         this.toolGridEl.append(row);

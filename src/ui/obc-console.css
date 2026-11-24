@@ -685,6 +685,26 @@
   flex-shrink: 0;
 }
 
+/* (captured, Linux still starting: the keys still fly the craft — an amber, pulsing dot) */
+.obc-screen-capture-badge[data-state="waiting"] {
+  border-color: rgba(255, 196, 56, 0.55);
+}
+
+.obc-screen-capture-badge[data-state="waiting"] .obc-scb-dot {
+  background: #ffc438;
+  box-shadow: 0 0 10px #ffc438;
+  animation: obc-scb-pulse 1s ease-in-out infinite alternate;
+}
+
+@keyframes obc-scb-pulse {
+  from {
+    opacity: 0.35;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
 .obc-scb-btn {
   padding: 3px 9px;
   border-radius: 999px;
