@@ -4,6 +4,7 @@ import { EAR_LIMITS, earClosed, earOpened, earRelayRefusal, foreignOrigin, queue
 import { createMoonTiles } from "./server/moon-tiles";
 import { createRooms, type Peer } from "./server/rooms";
 import { createTraffic } from "./server/traffic";
+import { pinnedDistroPath } from "./scripts/obc-distro";
 import { coiWanted, withCoi } from "./src/obc/isolation";
 import { type WispSession, wispClose, wispDrain, wispMessage, wispOpen, wispPolicyFromEnv, wispUpgrade } from "./server/wisp-relay";
 
@@ -275,7 +276,8 @@ const server = Bun.serve({
       const local = Bun.file("assets/obc/debian.erofs");
       if (await local.exists()) return serveRangeFile(req, local, "application/octet-stream");
       try {
-        debianDistroPathPromise ??= import("unkernel/node").then((m) => m.fetchDistro("debian"));
+        // (the pinned release's image, size and sha256 checked — scripts/obc-distro.ts)
+        debianDistroPathPromise ??= pinnedDistroPath("debian", "assets/obc/debian.erofs", false);
         const p = await debianDistroPathPromise;
         const file = Bun.file(p);
         if (!(await file.exists())) return new Response("not found", { status: 404 });
