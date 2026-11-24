@@ -40,6 +40,15 @@ connue ou supposée, la piste. Une entrée réglée est barrée avec le commit q
   e2e `traffic-free-camera` : hauteur du sol dessiné et de la vue à moins de 10 m (avant 290 m ; après 12,5 / 12,5 m), le chalutier
   suivi à 76 m avec sa coque et son sillage.
 
+## ~~J9 : ombres des arbres proches à 0, `carvedOpenings` 0, hystérésis des Maures sans objet~~ (relevé le 24 novembre 2026, e2e `j9-reference`, campagne 1) — réglé le même jour (`d592aec7`)
+
+- **Cause** : les redessins de la carte d'ombre proche étaient gardés par la hauteur de l'œil sur l'origine du repère du décor
+  (l'ellipsoïde), non sur le sol : au-dessus de 120 m d'ellipsoïde (Chamonix, les Maures), seule la première image de la passation
+  (ses proxies) était dessinée ; et les compteurs d'ombre étaient lus après la remise à zéro de chaque image.
+- **Correction** : garde sur la hauteur WGS84 de l'œil au-dessus du sol, comptes du dernier dessin gardés ; contrôle d'hystérésis
+  par arbre (témoin positif : `nearTrees.hysteresis` éteint). Revérifié sur ce Mac (M1 Max, 24 nov., `J9_GEOMETRY/TRANSITIONS/SHADOWS`) :
+  pass ; Maures carvedOpenings 758, croisés 12, rebasculés 0 (éteint : 20, 3) ; Chamonix carvedOpenings 432, croisés 6, 0 (éteint : 14, 7).
+
 ## ~~Le marcheur translucide en raster (fantôme)~~ (relevé le 24 novembre 2026, e2e `walk-raster`, campagne 1) — réglé le même jour (`6d003e5b`)
 
 - **Constat** : à pied à Chamonix, pipeline raster : l'astronaute n'est qu'un fantôme orangé, l'herbe absente.
