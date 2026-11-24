@@ -9,6 +9,8 @@ COPY src/net/proto.ts src/net/proto.ts
 COPY src/net/inbound.ts src/net/inbound.ts
 # (the Moon's relief tiles' codec — server/moon-tiles.ts —: a file alone, no import)
 COPY src/system/lola-codec.ts src/system/lola-codec.ts
+# (the address guard of the Wisp relay and the trusted proxies — server/wisp-relay.ts, server/address.ts —: a file alone, no import)
+COPY src/util/ip-guard.ts src/util/ip-guard.ts
 ARG BUILD_SHA=dev
 ENV PORT=3001 DATA=/data BUILD_SHA=$BUILD_SHA NODE_ENV=production
 VOLUME /data

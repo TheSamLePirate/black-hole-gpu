@@ -423,6 +423,7 @@ test("a client honouring its credits uploads everything through a slow reader, n
 
 test("UDP: the destination's datagrams come back, a stranger's never; inbound past the session cap is dropped", async () => {
   const dest = dgram.createSocket("udp4");
+  dest.on("error", () => {}); // (the blast's last datagrams may meet the relay's socket already closed: ICMP, as above)
   await new Promise<void>((r) => dest.bind(0, "127.0.0.1", r));
   const destPort = dest.address().port;
   let blast = 0;
@@ -443,6 +444,9 @@ test("UDP: the destination's datagrams come back, a stranger's never; inbound pa
   // a stranger writing to the relay's UDP port
   const relayPort = r.session.streams.get(1)!.udp!.address().port;
   const stranger = dgram.createSocket("udp4");
+  // (Linux answers the stranger with ICMP port unreachable — the relay's socket is connected to the destination alone —, and
+  // reports it on the stranger's socket as ECONNREFUSED: the refusal this test expects, not a failure; macOS stays silent)
+  stranger.on("error", () => {});
   await new Promise<void>((res) => stranger.send(Buffer.from("spoof"), relayPort, "127.0.0.1", () => res()));
   await sleep(150);
   expect(r.dataOf(1)).toBe("ping");

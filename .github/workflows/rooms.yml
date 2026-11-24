@@ -17,6 +17,7 @@ on:
       - "src/net/proto.ts"
       - "src/net/inbound.ts"
       - "src/system/lola-codec.ts"
+      - "src/util/ip-guard.ts"
       - "deploy/Dockerfile.rooms"
       - "deploy/compose.yml"
       - "deploy/render-compose.sh"
