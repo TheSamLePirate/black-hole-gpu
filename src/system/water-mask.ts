@@ -18,6 +18,8 @@ const TILE = 256;
 const SS = 4;
 /** OpenMapTiles' `water` classes left out: the sea's (the game's own) and the pools */
 const WATER_SKIP = new Set(["ocean", "sea", "swimming_pool"]);
+/** (25 Nov 2026) the sea's own classes — `sea` asks their coverage alone (water-flatten.ts clearSeaNoise) */
+const SEA_CLASSES = new Set(["ocean", "sea"]);
 /** each `waterway` class's width [m] (OpenMapTiles gives none): a river's, a canal's, a stream's, a ditch's */
 export const WATERWAY_WIDTH_M: Record<string, number> = { river: 40, canal: 18, stream: 4, drain: 2, ditch: 1.5 };
 /** a bridge's deck beyond its class's carriageway: its parapets, both sides [m] (J8-RP RP7) */
@@ -34,10 +36,12 @@ export function waterMask(
   sub: { k: number; x: number; y: number } = { k: 0, x: 0, y: 0 },
   /** (25 Nov 2026) the bridges' decks cut out (the water seen from afar); false: the bed under them the river's (water-flatten.ts) */
   cutBridges = true,
+  /** (25 Nov 2026) the sea's coverage instead (its `ocean`/`sea` polygons alone: no line, no deck cut) — water-flatten.ts clearSeaNoise */
+  sea = false,
 ): Float32Array | null {
   const layers = new VectorTile(new PbfReader(raw instanceof Uint8Array ? raw : new Uint8Array(raw))).layers;
   const water = layers.water,
-    ways = layers.waterway;
+    ways = sea ? undefined : layers.waterway;
   if (!water && !ways) return null;
   const m = new Float32Array(TILE * TILE);
   if (water) {
@@ -48,7 +52,8 @@ export function waterMask(
     const hits = new Uint16Array(TILE * TILE);
     for (let f = 0; f < water.length; f++) {
       const ft = water.feature(f);
-      if (ft.type !== 3 || WATER_SKIP.has(String(ft.properties.class ?? ""))) continue;
+      const cls = String(ft.properties.class ?? "");
+      if (ft.type !== 3 || (sea ? !SEA_CLASSES.has(cls) : WATER_SKIP.has(cls))) continue;
       // (its rings — the outer and its holes: even-odd —, in samples)
       const rings = ft.loadGeometry().map((r) => r.map((p) => [(p.x * k - ox) * SS, (p.y * k - oy) * SS] as [number, number]));
       let y0 = S,
@@ -103,7 +108,7 @@ export function waterMask(
   }
   // (J8-RP RP7: the bridges' decks cut out — a road's, a railway's, a footbridge's —, each its class's width and its parapets, their
   // share of a texel as a line's)
-  const roads = cutBridges ? layers.transportation : undefined;
+  const roads = cutBridges && !sea ? layers.transportation : undefined;
   if (roads) {
     const k = (TILE * 2 ** sub.k) / roads.extent;
     const ox = sub.x * TILE,

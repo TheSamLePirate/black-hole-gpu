@@ -82,6 +82,32 @@ test("a lake's polygon covers its texels, its hole and the sea none", () => {
   expect(at(e, 64, 100)).toBeLessThan(0.6);
 });
 
+test("(25 Nov 2026) the sea's coverage asked alone: its polygons, no lake, no river, no deck cut", () => {
+  const t = tile({
+    water: [
+      { type: 3, cls: "lake", rings: [sq(1024, 1024, 3072, 3072)] },
+      { type: 3, cls: "ocean", rings: [sq(0, 0, 900, 4096)] },
+    ],
+    waterway: [
+      {
+        type: 2,
+        cls: "river",
+        rings: [
+          [
+            [0, 3600],
+            [4096, 3600],
+          ],
+        ],
+      },
+    ],
+  });
+  const s = waterMask(t, 10, undefined, false, true)!;
+  expect(at(s, 20, 128)).toBe(1); // the sea
+  expect(at(s, 100, 100)).toBe(0); // the lake
+  expect(at(s, 128, 225)).toBe(0); // the river
+  expect(at(s, 250, 10)).toBe(0); // land
+});
+
 test("a river's line: its width over the pixel, a stream under a texel its share of it, a tunnel none", () => {
   // (a river across the tile at y 2048; a stream at y 1024; at 10 m a texel a river 40 m wide covers ~4 texels, a stream 4 m 0.4)
   const t = tile({

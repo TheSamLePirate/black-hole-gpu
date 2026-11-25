@@ -5,7 +5,7 @@
 import type { OrthoFit } from "./national";
 import { roadLightByte, roadMask, spreadLights, tileMetresPerPixel } from "./night-roads";
 import { waterMask } from "./water-mask";
-import { clearOverWater, flattenUnderWater } from "./water-flatten";
+import { clearOverWater, clearSeaNoise, flattenUnderWater } from "./water-flatten";
 import { cellFootBoxesKept, cellLevelRoadsKept, levelTileMarked } from "./street-level";
 import { type DelightIn, type DelightStats, delightTile } from "./ortho-delight";
 
@@ -220,6 +220,11 @@ export async function decodeTile(
     const T2 = 256 * 256;
     if (cover && q.level !== false) flattenUnderWater(q.heights.subarray(0, T2), cover, tileMetresPerPixel(q.z, q.y));
     if (cover && q.heights.length >= 2 * T2) clearOverWater(q.heights.subarray(T2, 2 * T2), cover);
+    // (25 Nov 2026: the ground in the sea brought to its level where the survey held the water's surface just over it)
+    if (q.level !== false) {
+      const sea = waterMask(q.mvt, tileMetresPerPixel(q.z, q.y), q.sub, false, true);
+      if (sea) clearSeaNoise(q.heights.subarray(0, T2), sea);
+    }
     return { heights: q.heights };
   }
   if (q.op === "terrarium512") {

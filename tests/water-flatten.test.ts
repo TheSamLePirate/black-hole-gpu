@@ -4,7 +4,7 @@
 // (nothing levelled: the ridge's 5 m stayed).
 import { expect, test } from "bun:test";
 import { isFine, markFine } from "../src/system/earth-tiles";
-import { clearOverWater, FLATTEN_RADIUS_M, flattenUnderWater } from "../src/system/water-flatten";
+import { clearOverWater, clearSeaNoise, FLATTEN_RADIUS_M, flattenUnderWater, SEA_NOISE_M } from "../src/system/water-flatten";
 
 const T = 256;
 /** a river 60 texels wide (x 100–160) at 2 m, the land at 8 m; mpp 2 */
@@ -79,4 +79,35 @@ test("a far level's overground over the river (a deck's 48 m) cleared; over the 
   expect(over[30 * T + 40]).toBe(15);
   // (no water: nothing)
   expect(clearOverWater(over, new Float32Array(T * T))).toBe(0);
+});
+
+// (25 Nov 2026 — Nice's bay: the IGN's z 16–17 held the sea's surface at −0.3 … +0.43 m, the runways' level took the decimetres over
+// 0.3 m for land and lifted the bay before 04L to 3.6 m. The positive witness fails without clearSeaNoise: the bay's +0.43 stays)
+test("the ground in the sea just over its level brought to it; a breakwater, the bed, the land and the banks kept; the mark kept", () => {
+  const sea = new Float32Array(T * T),
+    h = new Float32Array(T * T);
+  // (the sea over x < 128; its edge half covered at x 128; the land beyond)
+  for (let y = 0; y < T; y++)
+    for (let x = 0; x < T; x++) {
+      sea[y * T + x] = x < 128 ? 1 : x === 128 ? 0.5 : 0;
+      h[y * T + x] = x < 128 ? 0.43 : 0.6;
+    }
+  h[10 * T + 10] = -0.32; // the bed
+  h[20 * T + 20] = 3.5; // a breakwater
+  h[30 * T + 30] = SEA_NOISE_M; // at the bound: the noise's
+  h[40 * T + 40] = 0.21; // a survey's texel
+  markFine(h.subarray(40 * T + 40, 40 * T + 41), true);
+  const n = clearSeaNoise(h, sea);
+  expect(n).toBe(128 * T - 2);
+  expect(h[5 * T + 5]).toBe(0);
+  expect(h[30 * T + 30]).toBe(0);
+  expect(h[10 * T + 10]).toBeCloseTo(-0.32, 5);
+  expect(h[20 * T + 20]).toBeCloseTo(3.5, 5);
+  expect(Math.abs(h[40 * T + 40]!)).toBeLessThan(1e-30);
+  expect(isFine(h[40 * T + 40]!)).toBe(true);
+  // (the edge, half the sea's, and the land as they were)
+  expect(h[5 * T + 128]).toBeCloseTo(0.6, 5);
+  expect(h[5 * T + 200]).toBeCloseTo(0.6, 5);
+  // (no sea: nothing)
+  expect(clearSeaNoise(h, new Float32Array(T * T))).toBe(0);
 });
