@@ -24,3 +24,26 @@ test("the flown craft is hidden by a nearer scene whenever the eye is outside it
   // (the test itself, in the hull's fragment: hidden where the occlusion depth is nearer)
   expect(wgsl).toContain("if (sceneDepth[q.y * u32(S.img.x) + q.x] * S.img.z < length(in.p) * 0.999) { discard; }");
 });
+
+test("(26 Nov) its see-through parts obey the same occlusion: the canopy hidden, the flames' march ended at the scene", () => {
+  // (the glass: the same instance bit, the same depth — before the bug, fsJetGlass never read the scene's depth)
+  const glass = wgsl.slice(wgsl.indexOf("fn fsJetGlass("), wgsl.indexOf("fn fsJetGlass(") + 1600);
+  expect(glass).toContain(
+    "if ((u32(inst[in.ii].flags.z + 0.5) & 1u) == 1u && sceneDistAt(in.p) < length(in.p) * 0.999) { discard; }",
+  );
+  const plume = wgsl.slice(wgsl.indexOf("fn plumeFs("), wgsl.indexOf("fn plumeFs(") + 2400);
+  expect(plume).toContain("let tScene = sceneDistAt(R * rw);");
+  expect(plume).toContain("let tEnd = min(tf, tScene);");
+  // (their bind groups carry the target's occlusion depth — an auto layout drops a binding the shader does not read, and wants it when
+  // it does)
+  expect(ship).toContain("{ binding: 11, resource: { buffer: mb } },\n        ];");
+  expect(ship).toContain("res.plumeBind = { gen: this.bindGen, mb, out: withDepth(this.pipes.plume), in: withDepth(this.pipes.plumeIn) };");
+});
+
+/** the march's end along a ray as plumeFs takes it: the box's exit, or the scene's distance when nearer; null when hidden */
+const marchEnd = (tn: number, tf: number, scene: number) => (tf <= tn || scene <= tn ? null : Math.min(tf, scene));
+test("(26 Nov) the flames' march: the scene beyond the box leaves it whole, a crown before it hides it, a crown inside it ends it", () => {
+  expect(marchEnd(20, 40, 1e30)).toBe(40);
+  expect(marchEnd(20, 40, 6)).toBeNull();
+  expect(marchEnd(20, 40, 30)).toBe(30);
+});
