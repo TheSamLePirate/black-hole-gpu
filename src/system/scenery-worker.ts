@@ -102,6 +102,7 @@ import { NOTABLE_BRIDGES } from "./bridge-catalogue";
 import { notableDeckAxis, notableParts } from "./bridge-notable";
 import {
   ALEXANDRE_III,
+  areaUnderDeck,
   buildAlexandreIIIPylonsMesh,
   buildArchRibsMesh,
   classifyBridgeStructure,
@@ -2069,15 +2070,16 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
       const outer = v.rings[0]!;
       const lat = outer.reduce((sum, p) => sum + p.lat, 0) / outer.length,
         lon = outer.reduce((sum, p) => sum + p.lon, 0) / outer.length;
-      const c = localPoint(frame, lat, lon, 0);
-      if (deckHeightAt(c[0], c[1], undefined, undefined, 3) !== null) continue;
       const step = Math.max(1, Math.floor(outer.length / 16));
-      let covered = false;
-      for (let i = 0; i < outer.length && !covered; i += step) {
-        const p = localPoint(frame, outer[i]!.lat, outer[i]!.lon, 0);
-        covered = deckHeightAt(p[0], p[1], undefined, undefined, 3) !== null;
-      }
-      if (covered) continue;
+      // (review A9; 26 Nov 2026 — its inside too: bridge-structures.ts areaUnderDeck)
+      if (
+        areaUnderDeck(
+          outer.map((g) => localPoint(frame, g.lat, g.lon, 0)),
+          (at) => surfaceContains(at, v.footprint),
+          (x, y) => deckHeightAt(x, y, undefined, undefined, 3) !== null,
+        )
+      )
+        continue;
       let base = localPoint(frame, lat, lon, await height(lat, lon))[2];
       for (let i = 0; i < outer.length; i += step)
         base = Math.max(base, localPoint(frame, outer[i]!.lat, outer[i]!.lon, await height(outer[i]!.lat, outer[i]!.lon))[2]);
