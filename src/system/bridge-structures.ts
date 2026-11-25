@@ -340,3 +340,41 @@ export function lineUnderDeck(
   }
   return n > 0 && hit >= share * n;
 }
+
+/**
+ * (review A9; 26 Nov 2026 — PROBLEMES « L'eau sous Cheviré ») Whether an OpenStreetMap bridge area lies under a deck already built: its
+ * centre, its outline (16 points at most) or its inside — 7 × 7 over its box, within its outline (`contains`) — on a deck (`onDeck`, the
+ * registry's, in plan). Cheviré's area, wider than its two surveyed carriageways, its centre between them, its outline off both, was
+ * drawn as a slab a few metres over the Loire — the light band 60 m under the real deck. `ring`: its outline in the frame (z unused).
+ */
+export function areaUnderDeck(
+  ring: readonly (readonly number[])[],
+  contains: (at: Vec3) => boolean,
+  onDeck: (x: number, y: number) => boolean,
+): boolean {
+  if (!ring.length) return false;
+  const cx = ring.reduce((s, p) => s + p[0]!, 0) / ring.length,
+    cy = ring.reduce((s, p) => s + p[1]!, 0) / ring.length;
+  if (onDeck(cx, cy)) return true;
+  const step = Math.max(1, Math.floor(ring.length / 16));
+  let x0 = Number.POSITIVE_INFINITY,
+    y0 = Number.POSITIVE_INFINITY,
+    x1 = Number.NEGATIVE_INFINITY,
+    y1 = Number.NEGATIVE_INFINITY;
+  for (let i = 0; i < ring.length; i += step) {
+    const p = ring[i]!;
+    if (onDeck(p[0]!, p[1]!)) return true;
+  }
+  for (const p of ring) {
+    x0 = Math.min(x0, p[0]!);
+    y0 = Math.min(y0, p[1]!);
+    x1 = Math.max(x1, p[0]!);
+    y1 = Math.max(y1, p[1]!);
+  }
+  for (let j = 0; j < 7; j++)
+    for (let i = 0; i < 7; i++) {
+      const at: Vec3 = [x0 + ((x1 - x0) * (i + 0.5)) / 7, y0 + ((y1 - y0) * (j + 0.5)) / 7, 0];
+      if (contains(at) && onDeck(at[0], at[1])) return true;
+    }
+  return false;
+}

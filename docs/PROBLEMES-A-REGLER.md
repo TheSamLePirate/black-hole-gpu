@@ -220,6 +220,14 @@ connue ou supposée, la piste. Une entrée réglée est barrée avec le commit q
   (`chevire-lit-aplani-apres.jpg`) : ce n'était donc pas l'arête du relief ; `surfaceAt` y dit « ground » à ~609 m (juste à l'ouest de
   l'axe), aucun levier essayé ne l'ôte — **cause non trouvée**, prochaine piste : la lecture de la couleur de l'eau intérieure (le
   photographique ou la peinture d'une route sous l'eau) pixel par pixel avec un mode de débogage de `liteWater`.
+  **26 nov. — toujours ouverte, mieux cernée** (ce Mac M1 Max, e2e de diagnostic non versionnés) : ni la photographie (`liteSkip` 128),
+  ni le spéculaire (67108864), ni le ciel et le rebond (32768), ni la couche lointaine des rues (`farLampsOn` false : ses dalles de ponts),
+  ni les bits `TUNE_GSKIP` (sans effet sur le raster) ne l'ôtent ; **le matin (Soleil à l'est, derrière la caméra) elle est plus
+  blanche** : une surface éclairée, pas un reflet, haute d'une dizaine de pixels à 600 m. Hypothèse essayée : l'aire de pont d'OSM
+  (deux aires sur l'axe de Cheviré, 47,184–47,199 N) en dalle — leur test « sous un tablier » sonde désormais aussi leur intérieur
+  (`81a59623`, `bridge-structures.ts areaUnderDeck`, test unitaire avec témoin) — **la bande reste après** (`chevire-sans-dalle-apres.jpg`) :
+  ce n'était pas elle (ou pas seulement). Prochaine piste : `surfaceAt` sur les lignes de la bande (y ≈ 0,59–0,60 à 1600 × 1000) avec
+  le code du raster et la feuille, puis couper une à une les passes du raster (`sea surface`, les marques de ponts, les maillages).
   **Les reflets détachés sur la Seine — règle 1** : le reflet d'une façade vient du SSR (`seaSSR`, dans `earth water` / C19, C19d) ;
   là où l'image ne montre pas la façade (son pied caché par la rive), le repli tracé (`waterMirror` → `sceneryMirror`) ne connaît que le
   relief et les arbres, pas les bâtiments proches (cellules maillées, hors du BVH du décor). Plafond : la seule part « reflet » de l'eau ;
@@ -228,6 +236,13 @@ connue ou supposée, la piste. Une entrée réglée est barrée avec le commit q
   reflet planaire (un rendu de plus) ; (c) un SSR raté qui s'efface vers la sonde — ne recolle pas le reflet, le rend seulement plus
   flou. **Non fait** : aucun n'est à la fois correct et bon marché ; (a) demande un index des cellules proches par rayon (à mesurer
   d'abord, kerr-mini de retour).
+  **26 nov. — plafond mesuré, (a) chiffré, non fait** (ce Mac M1 Max, vue de Grenelle, profileur GPU allumé — ~10 ms de surcoût sur
+  Apple, tampons qui se chevauchent : ordres de grandeur) : `earth water (raster)` 2,46 ms + `earth water: finishing` 0,38 ms — **le
+  plafond du reflet ≈ 2,8 ms** (toute l'eau ombrée) ; `nearCells()` : **19 cellules, 14 519 bâtiments (~760 par cellule)**, 894 k
+  triangles. Un rayon réfléchi de 300 m traverse 1–2 cellules : ~1 500 tests de boîte englobante par pixel d'eau sans index par
+  cellule, sur ~0,5 M pixels d'eau (estimé) — ~0,75 G tests une image, des dizaines de ms : **au-delà du plafond de plusieurs ordres**.
+  (a) n'est faisable qu'avec un index par cellule (une grille de ses bâtiments, préparée avec la cellule) — un lot à part, à mesurer sur
+  kerr-mini. Rien de lent n'est fusionné.
   **Reste aussi** : les reflets de bâtiments détachés sur la Seine — l'SSR ne trouve une
   façade que là où l'image la montre (son pied caché par la rive : la moitié haute du reflet manque) ; le repli tracé (`sceneryMirror`) ne
   connaît que les arbres, et les bâtiments proches (cellules maillées) ne sont pas dans le BVH du décor : non réglé.

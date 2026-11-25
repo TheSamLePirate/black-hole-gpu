@@ -7,6 +7,7 @@ import {
   classifyBridgeStructure,
   computeStructurePierLocations,
   ALEXANDRE_III,
+  areaUnderDeck,
   buildAlexandreIIIPylonsMesh,
   buildArchRibsMesh,
   lineUnderDeck,
@@ -224,5 +225,28 @@ describe("a data bridge under another source's deck (campaign 2, 24 Nov 2026)", 
       ),
     ).toBe(false);
     expect(lineUnderDeck([], deck)).toBe(false);
+  });
+});
+
+describe("an OpenStreetMap bridge area under a deck already built (26 Nov 2026 — Cheviré's light band)", () => {
+  // (two surveyed carriageways 15 m wide, their axes at x ±9 m, along y 0 … 600; an area 60 m wide over them, its outline off both)
+  const onDeck = (x: number, y: number) => y >= 0 && y <= 600 && (Math.abs(x - 9) <= 7.5 || Math.abs(x + 9) <= 7.5);
+  const ring = [
+    [-30, -20, 0],
+    [30, -20, 0],
+    [30, 620, 0],
+    [-30, 620, 0],
+  ];
+  const inside = (at: readonly number[]) => at[0]! > -30 && at[0]! < 30 && at[1]! > -20 && at[1]! < 620;
+  test("its inside over a deck: under it — the old test (its centre, its outline) said not, and drew its slab over the water", () => {
+    // (the old test's witness: the centre — between the carriageways, x 0 — and the outline off the decks)
+    expect(onDeck(0, 300)).toBe(false);
+    expect(ring.some((p) => onDeck(p[0]!, p[1]!))).toBe(false);
+    expect(areaUnderDeck(ring, inside, onDeck)).toBe(true);
+  });
+  test("an area with no deck over it: not under one (its slab drawn)", () => {
+    expect(areaUnderDeck(ring, inside, () => false)).toBe(false);
+    // (a deck beside it, outside its outline: not under one)
+    expect(areaUnderDeck(ring, inside, (x) => x > 40)).toBe(false);
   });
 });
