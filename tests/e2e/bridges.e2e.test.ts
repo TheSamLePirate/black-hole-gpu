@@ -10,10 +10,14 @@ import { type BridgeView, gpuTimes, sceneStats, showView, widestRoad } from "./l
 // ground loaded there (lib/bridge-views.ts: an altitude guessed over the sea stood it under the streets on 24 Nov 2026), each view waited
 // on its conditions (the scene about the place, its bridges in, its data, its street cells, its compiles), shot, its GPU time read
 // (renderer.lastGpuMs, p50 and p95 over 90 images), nothing assumed: a condition not met is said and the view still shot.
-// Duration: ~7 min on kerr-mini (400 s on 24 Nov 2026, the Earth data on disk).
-// Done when: the six views shot with their GPU times, the scene's bridge counts asserted, no page error.
+// (25 Nov 2026) Every bridge in the scene drawn — no count's cap, the decks' share of the bytes (bridge-lod.ts): none left out
+// (bridgesDropped 0) in the Paris views; the Golden Gate from Battery Spencer shot again with the trees' material cut (liteSkip 64), the
+// far buildings off and the near trees' geometry off — which of them makes the grey stair-stepped blocks before the north tower.
+// Duration: ~8 min on kerr-mini (400 s on 24 Nov 2026, the Earth data on disk).
+// Done when: the six views shot with their GPU times (and the three diagnostic shots), the scene's bridge counts asserted, no page error.
 
-const OUT = process.env.BRIDGES_OUT ?? "remote-results/bridges";
+// (an A/B — scripts/ab-e2e.ts —: each side its own folder)
+const OUT = `${process.env.BRIDGES_OUT ?? "remote-results/bridges"}${process.env.AB_SIDE ? `-${process.env.AB_SIDE}` : ""}`;
 
 const VIEWS: (BridgeView & { label: string })[] = [
   {
@@ -122,12 +126,34 @@ describe.skipIf(!E2E)("bridges and roads AAA: real places, default setup", () =>
       const gpu = await gpuTimes(app);
       const sc = await sceneStats(app);
       await app.shot(`${OUT}/${v.key}.png`);
+      const diag: string[] = [];
+      if (v.key === "golden-gate-1km") {
+        // (the grey stair-stepped blocks before the north tower — PROBLEMES, campaign 2 —: shot again with one part cut each time)
+        for (const [name, on, off] of [
+          [
+            "trees-material-cut",
+            "__bh.renderer.liteSkip = (__bh.renderer.liteSkip | 64)",
+            "__bh.renderer.liteSkip = (__bh.renderer.liteSkip & ~64)",
+          ],
+          ["far-buildings-off", "__bh.renderer.farBuildingsOn = false", "__bh.renderer.farBuildingsOn = true"],
+          ["near-trees-off", "__bh.renderer.nearTreeGeometryOn = false", "__bh.renderer.nearTreeGeometryOn = true"],
+        ] as const) {
+          await app.js(`(() => { ${on}; __bh.touch(); return 1; })()`);
+          await app.settled(30_000);
+          await Bun.sleep(1500);
+          const f = `${OUT}/${v.key}-${name}.png`;
+          await app.shot(f);
+          diag.push(f);
+          await app.js(`(() => { ${off}; __bh.touch(); return 1; })()`);
+        }
+        await app.settled(30_000);
+      }
       results.push({
         view: v.key,
         ...view,
         gpu,
         ...sc,
-        shots: [`${OUT}/${v.key}.png`, ...(v.key === "paris-wet-street" ? [`${OUT}/${v.key}-dry.png`] : [])],
+        shots: [`${OUT}/${v.key}.png`, ...(v.key === "paris-wet-street" ? [`${OUT}/${v.key}-dry.png`] : []), ...diag],
       });
       await app.stepDone(
         `${v.key}: GPU p50 ${gpu.p50} ms p95 ${gpu.p95} ms · ponts ${sc.bridges} (cellules ${sc.cellBridges}, remarquables ${sc.notableBridges})`,
@@ -138,6 +164,8 @@ describe.skipIf(!E2E)("bridges and roads AAA: real places, default setup", () =>
       expect(sc.streetMissing).toBe(0);
       expect(sc.gpuErrors).toBe(0);
       expect(gpu.n).toBeGreaterThan(30);
+      // (every bridge of the scene drawn — the stats exist since 25 Nov 2026)
+      if (sc.bridgeCandidates !== null) expect(sc.bridgesDropped, `${v.key}: decks left out past their share`).toBe(0);
     }, 360_000);
 
   test("no page error over the views", () => {

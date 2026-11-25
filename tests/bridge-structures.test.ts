@@ -6,10 +6,12 @@ import { describe, expect, test } from "bun:test";
 import {
   classifyBridgeStructure,
   computeStructurePierLocations,
+  ALEXANDRE_III,
   buildAlexandreIIIPylonsMesh,
   buildArchRibsMesh,
   lineUnderDeck,
 } from "../src/system/bridge-structures";
+import { BridgePaint } from "../src/system/bridge-notable";
 import { CORPUS_CASES } from "./fixtures/bridge-corpus";
 
 describe("PR6 — Structural Families and Notable Bridge Silhouettes", () => {
@@ -105,71 +107,76 @@ describe("PR6 — Structural Families and Notable Bridge Silhouettes", () => {
     expect(girderPiers[1]).toBeCloseTo((100 * 2) / 3, 1);
   });
 
-  test("Alexandre III generates 4 monumental corner pylons rising 14m above deck", () => {
+  test("Alexandre III's four pylons in their parts — granite base, pedestal, column, capital, a gilded group — to 22.6 m over the deck (campaign 2: plain boxes to 14 m)", () => {
     const pStart: [number, number, number] = [-80, 0, 32.0];
     const pEnd: [number, number, number] = [80, 0, 32.0];
-    const width = 40.0;
-    const deckZ0 = 32.0;
-    const deckZ1 = 32.0;
-
-    const pylons = buildAlexandreIIIPylonsMesh({
-      pStart,
-      pEnd,
-      width,
-      deckZ0,
-      deckZ1,
-    });
-
-    expect(pylons.positions.length).toBeGreaterThan(0);
-    expect(pylons.triangles.length).toBeGreaterThan(0);
+    const pylons = buildAlexandreIIIPylonsMesh({ pStart, pEnd, width: 40, deckZ0: 32, deckZ1: 32 });
     expect(pylons.normals.length).toBe(pylons.positions.length);
-
-    // 4 pylons, each having 4 vertical wall quads (16 verts) + 1 top cap quad (4 verts) = 20 verts * 4 = 80 verts
-    expect(pylons.positions.length).toBe(80 * 3);
-
-    // Check maximum height of pylon vertices
-    let maxZ = -Infinity;
-    let minZ = Infinity;
+    // (each pylon: base, pedestal, column, capital, plinth, the group's body and two wings — 8 solids; the old: one box)
+    expect(pylons.pylons.length).toBe(4 * 8);
+    let maxZ = -Infinity,
+      minZ = Infinity;
     for (let i = 2; i < pylons.positions.length; i += 3) {
       maxZ = Math.max(maxZ, pylons.positions[i]!);
       minZ = Math.min(minZ, pylons.positions[i]!);
     }
-
-    // Pylon top is deckZ + 14m = 46.0m
-    expect(maxZ).toBeCloseTo(46.0, 3);
-    // Pylon bottom reaches down towards river bank
-    expect(minZ).toBeLessThan(deckZ0);
+    // (the wings' tips — their section about the tip point —, a little over it)
+    expect(maxZ).toBeGreaterThanOrEqual(32 + ALEXANDRE_III.wingTop);
+    expect(maxZ).toBeLessThan(32 + ALEXANDRE_III.wingTop + 0.6);
+    expect(minZ).toBeLessThan(32 - 8);
+    const gilded = pylons.pylons.filter((p) => p.paint === BridgePaint.Gilded);
+    expect(gilded.length).toBe(4 * 3);
+    for (const g of gilded) expect(g.bottom).toBeGreaterThanOrEqual(32 + ALEXANDRE_III.plinthTop - 1e-6);
+    // (the column slimmer than its base: a silhouette, not a pavé)
+    const widths = pylons.pylons
+      .slice(0, 5)
+      .map((p) => Math.hypot(p.footprint[1]![0] - p.footprint[0]![0], p.footprint[1]![1] - p.footprint[0]![1]));
+    expect(widths[0]!).toBeCloseTo(ALEXANDRE_III.base, 6);
+    expect(widths[2]!).toBeCloseTo(ALEXANDRE_III.columnFoot, 6);
+    // (outside the deck: the base clear of the roadway's edge)
+    for (const p of pylons.pylons.slice(0, 1)) for (const [, y] of p.footprint) expect(Math.abs(y)).toBeGreaterThanOrEqual(20);
+    // (every face wound outward — the prisms' rule)
+    for (const p of pylons.pylons) {
+      const c = [0, 1, 2].map((k) => p.positions.filter((_, i) => i % 3 === k).reduce((a, v) => a + v, 0) / (p.positions.length / 3));
+      for (let k = 0; k < p.triangles.length; k += 3) {
+        const P = (i: number) => [p.positions[i * 3]!, p.positions[i * 3 + 1]!, p.positions[i * 3 + 2]!];
+        const [A, B, C] = [P(p.triangles[k]!), P(p.triangles[k + 1]!), P(p.triangles[k + 2]!)];
+        const e1 = [B[0]! - A[0]!, B[1]! - A[1]!, B[2]! - A[2]!],
+          e2 = [C[0]! - A[0]!, C[1]! - A[1]!, C[2]! - A[2]!];
+        const n = [e1[1]! * e2[2]! - e1[2]! * e2[1]!, e1[2]! * e2[0]! - e1[0]! * e2[2]!, e1[0]! * e2[1]! - e1[1]! * e2[0]!];
+        const m = [0, 1, 2].map((q) => (A[q]! + B[q]! + C[q]!) / 3 - c[q]!);
+        expect(n[0]! * m[0]! + n[1]! * m[1]! + n[2]! * m[2]!).toBeGreaterThanOrEqual(-1e-6);
+      }
+    }
   });
 
-  test("Alexandre III generates 3 continuous low-rise steel arch ribs beneath deck", () => {
+  test("Alexandre III's arch: five ribs over its 107.5 m span, springing 6.3 m under the crown, the crown at the intrados; in pieces, the river under it open (campaign 2: hidden in the deck)", () => {
     const pStart: [number, number, number] = [-80, 0, 32.0];
     const pEnd: [number, number, number] = [80, 0, 32.0];
-    const width = 40.0;
-    const deckZ0 = 32.0;
-    const deckZ1 = 32.0;
-    const riseM = 5.5;
-
-    const arch = buildArchRibsMesh({
-      pStart,
-      pEnd,
-      width,
-      deckZ0,
-      deckZ1,
-      riseM,
-    });
-
-    expect(arch.positions.length).toBeGreaterThan(0);
-    expect(arch.triangles.length).toBeGreaterThan(0);
+    const arch = buildArchRibsMesh({ pStart, pEnd, width: 24, deckZ0: 32, deckZ1: 32, thick: 1.2, riseM: ALEXANDRE_III.rise });
     expect(arch.normals.length).toBe(arch.positions.length);
-
-    // Check parabolic arch crown elevation at midpoint (x=0)
-    // Springing at abutments is deckZ - riseM = 32 - 5.5 = 26.5m
-    // Crown at midpoint rises up by riseM = 26.5 + 5.5 = 32.0m (tight to deck intrados)
-    let maxZ = -Infinity;
-    for (let i = 2; i < arch.positions.length; i += 3) {
-      maxZ = Math.max(maxZ, arch.positions[i]!);
+    expect(arch.parts.length).toBe(12);
+    let maxZ = -Infinity,
+      minZ = Infinity,
+      minX = Infinity,
+      maxX = -Infinity;
+    for (let i = 0; i < arch.positions.length; i += 3) {
+      minX = Math.min(minX, arch.positions[i]!);
+      maxX = Math.max(maxX, arch.positions[i]!);
+      maxZ = Math.max(maxZ, arch.positions[i + 2]!);
+      minZ = Math.min(minZ, arch.positions[i + 2]!);
     }
-    expect(maxZ).toBeCloseTo(deckZ0, 1);
+    // (the crown under the intrados — 30.8 m —, never through the deck)
+    expect(maxZ).toBeLessThanOrEqual(30.8 + 1e-6);
+    // (the springings 6.3 m under the crown, and the ribs' depth under them: seen from the water)
+    expect(minZ).toBeLessThan(30.8 - ALEXANDRE_III.rise - 1);
+    // (its span the real one, centred — not the deck's whole length on the quays)
+    expect(maxX - minX).toBeGreaterThan(105);
+    expect(maxX - minX).toBeLessThan(110);
+    // (the middle pieces' collision boxes start near the crown: the river's clearance kept under them)
+    const mid = arch.parts[Math.floor(arch.parts.length / 2)]!;
+    expect(mid.bottom).toBeGreaterThan(30.8 - 3);
+    for (const p of arch.parts) expect(p.paint).toBe(BridgePaint.Silver);
   });
 });
 

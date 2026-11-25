@@ -732,6 +732,13 @@ export class EarthScenery {
       cellRoadCells: d?.cellRoadCells ?? 0,
       /** (PLAN-J8 J8-RP RP4) the bridges from the street cells */
       cellBridges: d?.cellBridges ?? 0,
+      /** (25 Nov 2026) the decks considered, left out past their share of the scene's bytes, their bytes and share; those on a
+       *  surveyed profile (street cells' format 6) */
+      bridgeCandidates: d?.bridgeCandidates ?? 0,
+      bridgesDropped: d?.bridgesDropped ?? 0,
+      bridgeBytes: d?.bridgeBytes ?? 0,
+      bridgeShare: d?.bridgeShare ?? 0,
+      measuredBridges: d?.measuredBridges ?? 0,
       /** (PLAN-PONT-ROUTES-AAA B3) the catalogue's notable bridges built (bridge-catalogue.ts) */
       notableBridges: d?.notableBridges ?? 0,
       /** (review A3) the street cells the drawn scene wanted and lacked, still awaited; the scene's street revision (bumped as they come) */

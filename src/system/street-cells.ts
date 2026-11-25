@@ -37,9 +37,11 @@
 //            [cm] (a line's and a crossing's across the road, a guardrail's along it; a signal's 0)   12 u8 kind (FurnitureKind)   13 u8 flags (FurnitureFlag)   14 u16 its junction's index (NO_JUNCTION none)
 //   bridge    (J8-RP RP4, RP7 — one a bridge, its length varying; after the furniture) 0 u32 its identity (its first segment's road's)
 //            4 u16 its axis's points   6 u8 kind (BridgeKind)   7 u8 flags (BridgeFlag)   8 f32 the deck's width [m] (the carriageway and
-//            its pavements or parapets)   12 i8 its layer (the source's level)   13 u8 what it crosses (Crossed: bits)   14 u8 the least
-//            clearance over it [dm]   15 u8 reserved (0)   16 f32 its length [m]   20 its axis's points, each f32 east, f32 north [m]
-//            (the first and the last its abutments)
+//            its pavements or parapets)   12 i8 its layer (the source's level)   13 u8 what it crosses (Crossed: bits)   14 u16 the least
+//            clearance over it [dm] (format 6: two bytes — a viaduct's tens of metres; format 5's one byte stopped at 25.5 m)   16 f32 its
+//            length [m]   20 its axis's points, each f32 east, f32 north [m], f32 its deck's height over the sea [m] (format 6, 25 Nov 2026:
+//            the BD TOPO's surveyed Z of its sections, the roadway's — NaN where none: abroad, or not surveyed; BridgeFlag.Measured when
+//            two or more are given) (the first and the last its abutments)
 //
 // The rules (agreed with the render session):
 //  - the sources: in France (the IGN's box, bdtopo.ts inBdtopoBox) the BD TOPO's `troncon_de_route`, from the very tile the building
@@ -96,9 +98,11 @@
 //    widest carriageway and its pavements (in the towns) or parapets; what it crosses from OpenMapTiles' water, rails and roads under its
 //    axis (its approaches left out); its least clearance CLEARANCE_M (RAIL_CLEARANCE_M over a railway); BridgeFlag.Confirmed where the
 //    BD TOPO's construction_lineaire or construction_surfacique « Pont » lies near; written in every cell holding one of its segments,
-//    whole — the drawing and the far layer keep one by its identity. No height (the BD TOPO's sections have none): the drawing sets the
-//    deck between its abutments' ground as drawn (FableFlight's bridge_end), raised to its clearance; its piers bridgePiers', kept where
-//    the deck stands PIER_MIN_M over the ground. Each segment on a bridge names it (its surface's byte 3: RP6).
+//    whole — the drawing and the far layer keep one by its identity. Its heights (format 6, 25 Nov 2026): the BD TOPO's surveyed Z of its
+//    sections (bdtopo.ts bdtopoDecksUrl — the WFS: the vector tiles are 2D) at each axis point, BridgeFlag.Measured — the drawing's deck
+//    follows them; none (abroad, unsurveyed): the drawing sets the deck between its abutments' ground as drawn (FableFlight's
+//    bridge_end), raised to its clearance (ruleClearance: by what it crosses, a wide water's by its width); its piers bridgePiers',
+//    kept where the deck stands PIER_MIN_M over the ground. Each segment on a bridge names it (its surface's byte 3: RP6).
 //  - the tunnels' mouths (J8-RP RP8): FurnitureKind.TunnelPortal where a tunnel's segment meets one out of it on the ground.
 //  - the railways (J8-RP RP9, format 5): their tracks as segments of the class « rail » — the BD TOPO's troncon_de_voie_ferree in France
 //    (its nature, its tracks as `lanes`, its level: bridges and tunnels — the metro under the ground —, electrified: the surface's
@@ -107,8 +111,10 @@
 //    between a track and a road; a railway's bridge BridgeKind.Rail; its tunnels' mouths as a road's.
 import { CELL_Z } from "./building-cells";
 
-export const STREET_FORMAT = 5;
-export const STREET_MAGIC = 0x3543534b; // "KSC5"
+// (format 6, 25 Nov 2026 — PLAN-PONT-ROUTES-AAA, the bridges' real decks: a bridge's points carry its deck's surveyed height, its clearance
+// two bytes; the rest as format 5)
+export const STREET_FORMAT = 6;
+export const STREET_MAGIC = 0x3643534b; // "KSC6"
 export const STREET_HEADER_BYTES = 64;
 export const LAMP_BYTES = 16;
 export const NEXT_BYTES = 4;
@@ -116,7 +122,7 @@ export const SURFACE_BYTES = 4;
 export const FURNITURE_BYTES = 16;
 /** a bridge record's fixed part and a point of its axis */
 export const BRIDGE_HEAD_BYTES = 20;
-export const BRIDGE_POINT_BYTES = 8;
+export const BRIDGE_POINT_BYTES = 12;
 /** a segment on no bridge (its surface's byte 3) */
 export const NO_BRIDGE = 0xff;
 /** the piers' spacing (FableFlight's roads.rs: 34 m; a viaduct's — longer than VIADUCT_M — 130 m) and where a pier stands: the deck
@@ -128,6 +134,22 @@ export const PIER_MIN_M = 3.5;
 /** a bridge's least clearance over what it crosses [m] (FableFlight's 5.5 m; a railway's catenary 6 m) */
 export const CLEARANCE_M = 5.5;
 export const RAIL_CLEARANCE_M = 6;
+/**
+ * (25 Nov 2026) A bridge's least clearance where no height is surveyed — abroad (OpenMapTiles' bridges), or a BD TOPO section without
+ * its Z —, by what it crosses: a railway's catenary RAIL_CLEARANCE_M; a road's CLEARANCE_M; water by the length of its axis over the
+ * water (`waterM`, sampled — the river's width as crossed): a stream or a city's river (≤ 100 m, the Seine's 150 m: 5.5–7 m —
+ * Paris's bridges stand 7–10 m over the Seine) its road's clearance, a wide river or an estuary — a navigable channel the more
+ * likely, the higher — 3.5 cm more a metre past 100 m, at most WATER_CLEARANCE_MAX_M (Saint-Nazaire's 61 m, the Golden Gate's 67 m
+ * are the catalogue's): Cheviré's ~450 m of Loire → 17.8 m (its real 52 m is the BD TOPO's Z — measured, not this rule). The
+ * profile's grade still bounds what a short bridge can reach (bridge-surface-service.ts). A documented rule, not a survey.
+ */
+export const WATER_CLEARANCE_MAX_M = 45;
+export function ruleClearance(crossed: number, waterM: number): number {
+  let c = crossed ? CLEARANCE_M : 0;
+  if (crossed & 4 /* Crossed.Rail */) c = Math.max(c, RAIL_CLEARANCE_M);
+  if (crossed & 1 /* Crossed.Water */) c = Math.max(c, Math.min(WATER_CLEARANCE_MAX_M, CLEARANCE_M + 0.035 * Math.max(0, waterM - 100)));
+  return c;
+}
 /** a railway's tracks apart and its ballast's width beyond its outer rails [m] (J8-RP RP9) */
 export const RAIL_TRACK_M = 4.5;
 export const RAIL_BALLAST_M = 3;
@@ -252,14 +274,16 @@ export enum BridgeFlag {
   /** its first (A) or last (B) point is not an abutment: the bridge goes on in another tile's cells (the same point there) */
   OpenA = 4,
   OpenB = 8,
+  /** (format 6) its deck's heights surveyed (the BD TOPO's Z at two of its points or more): its profile theirs, not a clearance's */
+  Measured = 16,
 }
 export enum Crossed {
   Water = 1,
   Road = 2,
   Rail = 4,
 }
-/** a bridge (J8-RP RP4) — no height: the drawing sets its deck between its abutments' ground as drawn (FableFlight's bridge_end), raised
- *  to its clearance over what it crosses */
+/** a bridge (J8-RP RP4) — its deck's surveyed heights where the BD TOPO gives them (format 6: BridgeFlag.Measured), else none: the
+ *  drawing sets its deck between its abutments' ground as drawn (FableFlight's bridge_end), raised to its clearance over what it crosses */
 export interface BridgeRecord {
   id: number;
   kind: BridgeKind;
@@ -271,6 +295,8 @@ export interface BridgeRecord {
   clearance: number;
   length: number;
   points: [number, number][];
+  /** (format 6) each point's deck height over the sea [m] (the roadway's — the BD TOPO's Z, IGN69); NaN none; absent: none at all */
+  heights?: number[];
 }
 export enum SurfaceFlag {
   EdgeLines = 1,
@@ -364,6 +390,10 @@ export interface RoadSegmentRecord {
   /** (PLAN-PONT-ROUTES-AAA B1) its surface material (road-surface.ts RoadSurface: the preparation's; in the bytes its surface's flags'
    *  bits 5–7, road-surface.ts withCellSurface — not the segment's) */
   material?: number;
+  /** (format 6) a bridge segment's deck height over the sea at a and at b [m] — the BD TOPO's surveyed Z (NaN none): the preparation's,
+   *  carried into its bridge's points (BridgeRecord.heights), not the segment's bytes */
+  za?: number;
+  zb?: number;
 }
 export interface JunctionRecord {
   east: number;
@@ -530,14 +560,15 @@ export function encodeStreetCell(
     v.setFloat32(o + 8, b.width, true);
     v.setInt8(o + 12, Math.max(-128, Math.min(127, Math.round(b.layer))));
     v.setUint8(o + 13, b.crossed & 255);
-    v.setUint8(o + 14, Math.max(0, Math.min(255, Math.round(b.clearance * 10))));
+    v.setUint16(o + 14, Math.max(0, Math.min(65535, Math.round(b.clearance * 10))), true);
     v.setFloat32(o + 16, b.length, true);
     o += BRIDGE_HEAD_BYTES;
-    for (const [e, n] of b.points) {
+    b.points.forEach(([e, n], k) => {
       v.setFloat32(o, e, true);
       v.setFloat32(o + 4, n, true);
+      v.setFloat32(o + 8, b.heights?.[k] ?? Number.NaN, true);
       o += BRIDGE_POINT_BYTES;
-    }
+    });
   }
   return buf;
 }
@@ -696,9 +727,11 @@ export function readBridges(buf: ArrayBuffer): BridgeRecord[] {
   for (let i = 0; i < h.bridgeCount; i++) {
     const n = v.getUint16(o + 4, true);
     const points: [number, number][] = [];
+    const heights: number[] = [];
     for (let k = 0; k < n; k++) {
       const p = o + BRIDGE_HEAD_BYTES + k * BRIDGE_POINT_BYTES;
       points.push([v.getFloat32(p, true), v.getFloat32(p + 4, true)]);
+      heights.push(v.getFloat32(p + 8, true));
     }
     out.push({
       id: v.getUint32(o, true),
@@ -707,9 +740,10 @@ export function readBridges(buf: ArrayBuffer): BridgeRecord[] {
       width: v.getFloat32(o + 8, true),
       layer: v.getInt8(o + 12),
       crossed: v.getUint8(o + 13),
-      clearance: v.getUint8(o + 14) / 10,
+      clearance: v.getUint16(o + 14, true) / 10,
       length: v.getFloat32(o + 16, true),
       points,
+      ...(heights.some(Number.isFinite) ? { heights } : {}),
     });
     o += BRIDGE_HEAD_BYTES + n * BRIDGE_POINT_BYTES;
   }

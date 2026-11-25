@@ -170,6 +170,9 @@ export const sceneStats = (app: App) =>
     return { status: s.status, quick: s.quick, lat: s.lat, lon: s.lon, bridges: s.bridges, bridgePiers: s.bridgePiers,
       cellBridges: s.cellBridges, notableBridges: s.notableBridges, cellRoads: s.cellRoads, streetMissing: s.streetMissing,
       streetRevision: s.streetRevision, furniture: s.furniture,
+      // (25 Nov 2026: the decks considered, left out past their share, their bytes and share; those on their survey — absent before)
+      bridgeCandidates: s.bridgeCandidates ?? null, bridgesDropped: s.bridgesDropped ?? null, bridgeBytes: s.bridgeBytes ?? null,
+      bridgeShare: s.bridgeShare ?? null, measuredBridges: s.measuredBridges ?? null, budgetLimited: s.budgetLimited ?? null,
       pipeline: __bh.renderer.earthPipelineNow?.(__bh.settings) ?? "?", gpuErrors: __bh.renderer.gpuErrors ?? 0 };
   })()`);
 

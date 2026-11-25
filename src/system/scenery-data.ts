@@ -686,6 +686,13 @@ export interface SceneryReply {
   notableBridges?: number;
   /** (PLAN-J8 J8-RP RP4) the bridges built from the street cells */
   cellBridges?: number;
+  /** (25 Nov 2026) the decks considered, those left out past the decks' share of the bytes (bridge-lod.ts BRIDGE_SHARE), their
+   *  bytes and that share; the decks drawn on their surveyed profile (street cells' format 6) */
+  bridgeCandidates?: number;
+  bridgesDropped?: number;
+  bridgeBytes?: number;
+  bridgeShare?: number;
+  measuredBridges?: number;
   /** (PLAN-J8 J8-RP RP9) the catenary masts drawn */
   catenaryMasts?: number;
   /** (Q8 D1) the main roads' lines the traffic read, their pieces */
