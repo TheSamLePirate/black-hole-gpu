@@ -163,9 +163,16 @@ connue ou supposée, la piste. Une entrée réglée est barrée avec le commit q
   invaliderait toutes les cellules en cache et les zones hors ligne) ; les rues posées sur le relief national (`c87fb232`,
   `street-level.ts` : profil `roadProfile`, dévers `roadBank`, trottoirs une bordure de 0,12 m au-dessus de la chaussée, fondus sur
   1,5 m — dans les tuiles mêmes, le sol unique du raster et du contact ; 65 tuiles, 1 025 145 pixels nivelés dans la vue de la rue
-  de Paris, ce Mac). Reste : le nivellement suit le trottoir de la classe, pas celui élargi jusqu'aux façades (les emprises ne sont
+  de Paris, ce Mac). ~~Reste : le nivellement suit le trottoir de la classe, pas celui élargi jusqu'aux façades (les emprises ne sont
   pas lues là) — un reste de marche au pied d'une façade au-delà ; une tuile décodée avant que sa cellule « rue » soit en cache
-  reste non nivelée jusqu'à son prochain chargement. ~~Sur l'approche du pont Alexandre III, un marquage en boucle fermée au milieu de la chaussée (`alexandre-iii-deck-low.png`).~~
+  reste non nivelée jusqu'à son prochain chargement.~~ **Réglés le 26 nov. 2026** (`0f3c83f6`, `74a3ba7b`, `06cc801c`) : trottoirs
+  nivelés jusqu'aux façades des cellules de bâtiments, niveaux fondus aux carrefours ; une tuile venue avant ses cellules garde son
+  relevé et se nivelle de nouveau à leur arrivée (le même sol quel que soit l'ordre) ; le nivellement dans le worker de décodage —
+  arrivée sur la rue (ce Mac) : plus longue image 283 → 83 ms, images > 100 ms 25 → 0. Vérifié dans la tuile : chaussée plate au
+  millimètre, bordure +0,12 m. **Reste ouvert** : le détail procédural (`earthDetail`, sa couche fine `o3`, ±3 m × terre, que la
+  résolution des données n'efface pas) remet ±0,4 m en travers de la rue dans le sol du contact et celui du GPU — à décider (fondre
+  `o3` selon la résolution, ou couper le détail sous les rues nivelées comme sous les pistes) ; la tache sombre au pied de la façade
+  gauche de la vue (`rue-paris-worker-apres.jpg`) reste à expliquer. ~~Sur l'approche du pont Alexandre III, un marquage en boucle fermée au milieu de la chaussée (`alexandre-iii-deck-low.png`).~~
   **Réglé par ffbecf26** (24 nov. 2026, soir), avec les chaînes d'anneaux blancs des bretelles de SFO (`traffic-runways`,
   `parked-above.png`) : `scenerySurface` gardait, entre segments égaux, le premier rencontré ; la bande d'un segment finit en
   demi-disques, et les morceaux de 1–2 m des courbes B2 et des fins de lignes aux carrefours peignaient leurs lignes autour de leurs
@@ -316,7 +323,9 @@ connue ou supposée, la piste. Une entrée réglée est barrée avec le commit q
   l'appareil cachent une instance là où la profondeur d'occultation de la scène tient plus près (`ship.wgsl`, le bit « far ») ;
   l'appareil piloté ne l'avait que placé par un spectateur. La vue « autour », 24 m devant lui, était derrière un houppier à 5–6 m
   de l'œil : 20 943 de ses 21 006 pixels dessinés par-dessus ; désormais caché dès que l'œil est hors de lui (pas en cabine), 64–74
-  après (le bord de son ombre, le verre de la verrière — vu, reste) ; e2e `faron-tree-streak` l'affirme, test `craft-occlusion`.
+  après (le bord de son ombre, ~~le verre de la verrière — vu, reste~~ — **réglé le 26 nov. 2026, `7ba593ce`** : le verre et
+  les flammes obéissent à la même occultation, 50 pixels restants, l'ombre au sol) ; e2e `faron-tree-streak` l'affirme, test
+  `craft-occlusion`.
 
 
 - **Constat** : F-35 posé sur le flanc sud du mont Faron (43,1405° N, 5,942° E, scène J0, 11 h UTC), caméra « autour » à ~25 m

@@ -514,6 +514,9 @@ interface ShipTargetRes {
   jetGlassGen?: number;
   jetGlassHdr?: GPUTexture;
   jetGlassPipe?: GPURenderPipeline;
+  jetGlassMoments?: GPUBuffer;
+  /** (26 Nov 2026) the flames' bind groups with this target's occlusion depth (ship.wgsl plumeFs: their march ends at the scene) */
+  plumeBind?: { gen: number; mb: GPUBuffer; out: GPUBindGroup; in: GPUBindGroup };
   /** the station's depth bound (group 1), and which texture it holds */
   occBind?: { tex: GPUTexture; g: GPUBindGroup };
   /** the F-35's own shading pipeline's bind groups (pipes.shipJet), as the shading's */
@@ -566,8 +569,6 @@ export class ShipRenderer {
   private trailCount = 0;
   private jetCount = 0;
   private plumeBinds: {
-    plume: GPUBindGroup;
-    plumeIn: GPUBindGroup;
     hullDepth: GPUBindGroup;
     glow: GPUBindGroup;
     dist: GPUBindGroup;
@@ -611,7 +612,7 @@ export class ShipRenderer {
   /** the objects of the deck under the pointer (their indices: DeckMesh.objects) — lit over (main.ts); their runs */
   deckHover: number[] | null = null;
   private deckRuns: Map<number, [number, number][]> | null = null;
-  private hoverBind: { g: GPUBindGroup; gen: number; hdr: GPUTexture } | null = null;
+  private hoverBind: { g: GPUBindGroup; gen: number; hdr: GPUTexture; mb: GPUBuffer } | null = null;
   /** the deck drawn this frame (the hull's glass then left out), its parts' maps (the pointer's picks: deckpick.ts) */
   private deckDrawn = false;
   private deckMatsNow: Float32Array<ArrayBuffer> | null = null;
@@ -1987,23 +1988,20 @@ export class ShipRenderer {
     ];
     this.bindGen++;
 
-    // (the hull's passes read the instances: the F-35's parts posed)
-    // (air: the flames read the air between them and the eye — J3-2 shipAir: the probe's buffer, the aerial table)
-    const pb = (p: GPURenderPipeline, jets = true, air = false) =>
+    // (the hull's passes read the instances: the F-35's parts posed — the flames' own groups, with the air they read — J3-2 shipAir —
+    // and each target's occlusion depth, made per target: res.plumeBind)
+    const pb = (p: GPURenderPipeline) =>
       d.createBindGroup({
         layout: p.getBindGroupLayout(0),
         entries: [
           { binding: 0, resource: { buffer: this.uniform } },
-          ...(jets ? [{ binding: 9, resource: { buffer: this.jetBuf } }] : [{ binding: 12, resource: { buffer: this.instBuf } }]),
-          ...(air ? [{ binding: 1, resource: { buffer: this.shBuf } }, ...this.aerialEntries()] : []),
+          { binding: 12, resource: { buffer: this.instBuf } },
         ],
       });
     this.plumeBinds = {
-      plume: pb(this.pipes.plume, true, true),
-      plumeIn: pb(this.pipes.plumeIn, true, true),
-      hullDepth: pb(this.pipes.hullDepth, false),
-      glow: pb(this.pipes.glow, false),
-      dist: pb(this.pipes.dist, false),
+      hullDepth: pb(this.pipes.hullDepth),
+      glow: pb(this.pipes.glow),
+      dist: pb(this.pipes.dist),
     };
     this.shadowBind = d.createBindGroup({
       layout: this.pipes.shadow.getBindGroupLayout(0),
@@ -3204,15 +3202,24 @@ export class ShipRenderer {
         // (an A320 among them: the pipeline with its glass's code — GLASS_A320)
         const a320 = glassy.some((dr) => dr.mesh === this.meshes.a320);
         const main = a320 ? (this.a320GlassPipe ??= this.glassPipe!(0, true)) : this.pipes.jetGlass;
-        if (!res.jetGlassBind || res.jetGlassGen !== this.bindGen || res.jetGlassHdr !== hdr || res.jetGlassPipe !== main) {
-          const keep = [0, 1, 2, 3, 12, 16, 22, 27, 41, 42, 43];
-          res.jetGlassBind = this.device.createBindGroup({
-            layout: main.getBindGroupLayout(0),
-            entries: [...this.shipEntries!.filter((e) => keep.includes(e.binding)), { binding: 10, resource: hdr.createView() }],
-          });
+        // (11: the occlusion depth — the glass hidden where the scene is nearer, as the hull — 26 Nov 2026)
+        const glassEntries = (): GPUBindGroupEntry[] => [
+          ...this.shipEntries!.filter((e) => [0, 1, 2, 3, 12, 16, 22, 27, 41, 42, 43].includes(e.binding)),
+          { binding: 10, resource: hdr.createView() },
+          { binding: 11, resource: { buffer: mb } },
+        ];
+        if (
+          !res.jetGlassBind ||
+          res.jetGlassGen !== this.bindGen ||
+          res.jetGlassHdr !== hdr ||
+          res.jetGlassPipe !== main ||
+          res.jetGlassMoments !== mb
+        ) {
+          res.jetGlassBind = this.device.createBindGroup({ layout: main.getBindGroupLayout(0), entries: glassEntries() });
           res.jetGlassGen = this.bindGen;
           res.jetGlassHdr = hdr;
           res.jetGlassPipe = main;
+          res.jetGlassMoments = mb;
         }
         const gm = this.debugSkip.has("glass-flat") ? 2 : this.debugSkip.has("glass-sr") ? 1 : 0;
         if (gm && !this.glassModes[gm]) this.glassModes[gm] = this.glassPipe!(gm);
@@ -3220,15 +3227,7 @@ export class ShipRenderer {
         rp.setPipeline(gp);
         rp.setBindGroup(
           0,
-          gm
-            ? this.device.createBindGroup({
-                layout: gp.getBindGroupLayout(0),
-                entries: [
-                  ...this.shipEntries!.filter((e) => [0, 1, 2, 3, 12, 16, 22, 27, 41, 42, 43].includes(e.binding)),
-                  { binding: 10, resource: hdr.createView() },
-                ],
-              })
-            : res.jetGlassBind,
+          gm ? this.device.createBindGroup({ layout: gp.getBindGroupLayout(0), entries: glassEntries() }) : res.jetGlassBind,
         );
         for (const dr of glassy) {
           rp.setVertexBuffer(0, dr.mesh.vbuf);
@@ -3242,17 +3241,19 @@ export class ShipRenderer {
       if (hov && deckDraw) {
         this.glassModes[3] ??= this.glassPipe!(3);
         const gp = this.glassModes[3]!;
-        if (!this.hoverBind || this.hoverBind.gen !== this.bindGen || this.hoverBind.hdr !== hdr)
+        if (!this.hoverBind || this.hoverBind.gen !== this.bindGen || this.hoverBind.hdr !== hdr || this.hoverBind.mb !== mb)
           this.hoverBind = {
             g: this.device.createBindGroup({
               layout: gp.getBindGroupLayout(0),
               entries: [
                 ...this.shipEntries!.filter((e) => [0, 1, 2, 3, 12, 16, 22, 27, 41, 42, 43].includes(e.binding)),
                 { binding: 10, resource: hdr.createView() },
+                { binding: 11, resource: { buffer: mb } },
               ],
             }),
             gen: this.bindGen,
             hdr,
+            mb,
           };
         rp.setPipeline(gp);
         rp.setBindGroup(0, this.hoverBind.g);
@@ -3391,9 +3392,24 @@ export class ShipRenderer {
         pp.setIndexBuffer(occl.m.ibuf, "uint32");
         pp.drawIndexed(occl.n);
       }
-      for (const inside of this.debugSkip.has("plume-jets") ? [] : [false, true]) {
+      // (the flames' groups with this target's occlusion depth — 26 Nov 2026: their march ends at the scene)
+      if (this.jetCount > 0 && (!res.plumeBind || res.plumeBind.gen !== this.bindGen || res.plumeBind.mb !== mb)) {
+        const withDepth = (p: GPURenderPipeline) =>
+          this.device.createBindGroup({
+            layout: p.getBindGroupLayout(0),
+            entries: [
+              { binding: 0, resource: { buffer: this.uniform } },
+              { binding: 9, resource: { buffer: this.jetBuf } },
+              { binding: 1, resource: { buffer: this.shBuf } },
+              ...this.aerialEntries(),
+              { binding: 11, resource: { buffer: mb } },
+            ],
+          });
+        res.plumeBind = { gen: this.bindGen, mb, out: withDepth(this.pipes.plume), in: withDepth(this.pipes.plumeIn) };
+      }
+      for (const inside of this.debugSkip.has("plume-jets") || !res.plumeBind ? [] : [false, true]) {
         pp.setPipeline(inside ? this.pipes.plumeIn : this.pipes.plume);
-        pp.setBindGroup(0, inside ? B.plumeIn : B.plume);
+        pp.setBindGroup(0, inside ? res.plumeBind!.in : res.plumeBind!.out);
         for (let i = 0; i < this.jetCount; i++) if (this.jetInside[i] === inside) pp.draw(36, 1, 0, i);
       }
       if (trails && !this.debugSkip.has("trails")) {
