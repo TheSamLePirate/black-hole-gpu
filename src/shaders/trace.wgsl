@@ -16263,13 +16263,21 @@ fn liteMaterial(gq: vec3f, q: vec3f, ph: vec3f, rd: vec3f, look: vec3f, tM: f32,
   let faceDir = (tn - gq * upF) / max(length(tn - gq * upF), 1e-6);
   var faceC = vec3f(0.0);
   var faceK = 0.0;
+  // (a step's face in the mesh — a kerb, a low wall, the survey's ground stepped by a building's foot —, steep where the smooth
+  // relief is not: the photograph seen from above smeared down it in columns, each pixel its own line of the photograph — beside a
+  // parked car in a Paris street, 25 Nov 2026. Read there through a round footprint of a metre at least: the photograph's mean
+  // across the face, no columns)
+  let ngF = atNg(at, gq);
+  let stepFace = !isTree && upF > 0.62 && dot(ngF, gq) < 0.5;
+  let fxI = select(fx, normalize(fx + vec3f(1e-12)) * max(length(fx), 1.0 / EARTH_RM), stepFace);
+  let fyI = select(fy, normalize(fy + vec3f(1e-12)) * max(length(fy), 1.0 / EARTH_RM), stepFace);
   if ((liteSkip() & 128u) == 0u) {
     // (the samples down the face read through a small round footprint — a metre: one tap a level —, not the pixel's stretched
     // one: a wall filling the view at 4 anisotropic reads a pixel cost 60 ms)
     let fs = 1.0 / EARTH_RM;
     for (var i = 0; i <= select(0, 3, faceW > 0.0); i++) {
       TILE_AT_ON = anchored && i == 0;
-      let t = earthImageryAniso(normalize(gq + faceDir * (2.5 * f32(i) * fs)), select(normalize(fx + vec3f(1e-12)) * fs, fx, i == 0), select(normalize(fy + vec3f(1e-12)) * fs, fy, i == 0));
+      let t = earthImageryAniso(normalize(gq + faceDir * (2.5 * f32(i) * fs)), select(normalize(fx + vec3f(1e-12)) * fs, fxI, i == 0), select(normalize(fy + vec3f(1e-12)) * fs, fyI, i == 0));
       TILE_AT_ON = false;
       if (i == 0) { img = t; continue; }
       let c = t.c.rgb * P.earth2.z;
@@ -16287,7 +16295,7 @@ fn liteMaterial(gq: vec3f, q: vec3f, ph: vec3f, rd: vec3f, look: vec3f, tM: f32,
   // building's, a runway's graded ground), else the ellipsoid's; a tree's its own, its colour its look. The mesh's kept for the
   // scenery's shadows — ng: the point lifted off its own triangles —, the smooth one lights)
   var n = gq;
-  var ng = atNg(at, gq);
+  var ng = ngF;
   if ((liteSkip() & 16u) == 0u) {
     n = tn;
     if (dot(n, n) < 0.5) { n = ng; }

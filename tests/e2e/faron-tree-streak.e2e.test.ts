@@ -79,6 +79,21 @@ describe.skipIf(!E2E)("Mont Faron: no tree streak through a craft at rest", () =
     await set(`R.liftOn = true; R.liteSkip = ${base} | 64;`);
     await app.shot(`${OUT}/b-no-material-trees.png`);
     await set(`R.liteSkip = ${base};`);
+    // (diagnostic, FARON_DIAG=1: the parts the lift reaches, each alone — the scenery raster's projection lift zeroed (its trees and
+    // buildings drawn unlifted, the tracer's kept), the near trees' 3D geometry off, the craft's passes off)
+    const diag: [string, string, string][] =
+      process.env.FARON_DIAG === "1"
+        ? [
+            ["e-raster-lift-zero", "R.sceneryRaster.lift.fill(0);", "R.liftNow = ''; R.liftAsked = null;"],
+            ["f-no-near-geometry", "R.nearTreeGeometryOn = false;", "R.nearTreeGeometryOn = true;"],
+            ["g-no-craft", "R.debugSkipShip = true;", "R.debugSkipShip = false;"],
+          ]
+        : [];
+    for (const [name, off, on] of diag) {
+      await set(off);
+      await app.shot(`${OUT}/${name}.png`);
+      await set(on);
+    }
     const read = async (f: string) => readPng(new Uint8Array(await Bun.file(`${OUT}/${f}.png`).arrayBuffer()));
     const A = await read("a-as-is"),
       D = await read("d-no-lift");
@@ -98,6 +113,18 @@ describe.skipIf(!E2E)("Mont Faron: no tree streak through a craft at rest", () =
       }
     }
     await Bun.write(`${OUT}/streak-mask.png`, writePng(A.width, A.height, mask));
+    // (each diagnostic image against A on the streak's pixels — the lift's: how many it changes there)
+    for (const [name] of diag) {
+      const E = await read(name);
+      let n = 0;
+      for (const [x, y] of movedAt) {
+        const i = y * A.width + x;
+        let m = 0;
+        for (let c = 0; c < 3; c++) m = Math.max(m, Math.abs(A.data[i * A.channels + c]! - E.data[i * E.channels + c]!));
+        if (m > 48) n++;
+      }
+      console.log(`  ${name}: the streak's pixels it changes ${n} of ${movedAt.length}`);
+    }
     console.log(`  pixels the lift moves: ${moved} (before the fix, 25 Nov 2026: 9 982 — the pale streak) → ${OUT}/streak-mask.png`);
     // (the points asked — FARON_POINTS "x,y;…": the raster's texel there — r the hint, g the tree, b its distance, a its code)
     // (and a dozen of the pixels the lift moves, spread over them)
