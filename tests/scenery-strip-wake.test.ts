@@ -57,7 +57,7 @@ test("a crossing's strip is square-ended: no paint past its ends (the old round 
   expect(r[1]).toBe(10);
   // (the shader carries it: the walk's lines through sceneryStrip, square for kind 5)
   const walk = trace.slice(trace.indexOf("fn scenerySurface("), trace.indexOf("fn sceneryMirror("));
-  expect(walk).toContain("sceneryStrip(point,p.xy,p.zw,size.x,aa,kind==5.0)");
+  expect(walk).toContain("sceneryStrip(point,p.xy,p.zw,half,aa,kind==5.0)");
   const fn = trace.slice(trace.indexOf("fn sceneryStrip("), trace.indexOf("fn scenerySurface("));
   expect(fn).toContain("let ends=1.0-smoothstep(-aa,aa,max(-s,s-len));");
 });

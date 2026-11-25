@@ -14,7 +14,8 @@ import { readPng } from "./lib/png";
 // deck, placed from those samples. Each view waits on its conditions (capped, said with the scene's state when not met), streetMissing
 // 0, GPU p50/p95 over 90 images.
 // (25 Nov 2026) Pont de Cheviré on its surveyed deck (the BD TOPO's Z, street cells' format 6): its crest ≥ 45 m over the sea, one
-// continuous deck ≥ 1.4 km, no step over 25 cm on its axis; the Golden Gate's main cables shaded round (the driver's view).
+// continuous deck ≥ 1.4 km, no step over 25 cm on its axis; the Loire's bed under it levelled (no ridge over its water); the Golden
+// Gate's main cables shaded round (the driver's view).
 // Duration: ~7 min on kerr-mini (414 s on 24 Nov 2026, the Earth data on disk).
 // Done when: the seven views shot with their GPU times, the shimmer and the five decks' profiles measured, no page error.
 
@@ -382,6 +383,16 @@ describe.skipIf(!E2E)("notable bridges, a motorway viaduct, the decks' contact, 
     expect(p.lenM, `the Cheviré deck's largest part (${JSON.stringify(deck)})`).toBeGreaterThan(1400);
     // (its axis — the driving line — on the straight span where its two carriageways run side by side, 47.1845–47.1945° N: north of it they
     // part on the curve, and the box's centre line strays between them)
+    // (25 Nov 2026 — water-flatten.ts: the Loire's bed levelled under its water; before, a 5.1 m ridge under the deck — 47.1920 N,
+    // 1.6135 W — and 3–5 m spikes stood 3 m over its 2.3 m water: the light band. The relief across the river under the deck and 150 m
+    // west of it, over the sea)
+    const bed = await app.js<{ under: number[]; west: number[] }>(`(() => {
+      const N = __bh.sys.geoid(47.1925, -1.6140), row = (lon) => [47.1920, 47.1925, 47.1930].map((lat) => +(__bh.sys.groundAt(lat, lon) - N).toFixed(2));
+      return { under: row(-1.6135), west: row(-1.6155) };
+    })()`);
+    console.log(`  chevire bed over the sea: under the deck ${bed.under.join(" ")} · 150 m west ${bed.west.join(" ")}`);
+    results.push({ view: "chevire-bed", bed });
+    expect(Math.max(...bed.under), `the Loire's bed under the deck (${JSON.stringify(bed)})`).toBeLessThan(Math.max(...bed.west) + 1);
     const span = await deckProfile(app, [47.1895, -1.6136], 60, 550, 2, null);
     console.log(`  chevire span: ${JSON.stringify(span)}`);
     results.push({ view: "chevire-span", deck: span });

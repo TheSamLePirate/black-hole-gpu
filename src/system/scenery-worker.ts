@@ -111,7 +111,7 @@ import {
 import { isDeckRoad, markRoad, roadClassCode } from "./road-markings";
 import { inferRoadSurface, type RoadSurface, roadSurfaceColour } from "./road-surface";
 import { catenaryMasts, cellRoadSurfaces } from "./cell-roads";
-import { facadeReach, kerbedRoad, widenRecord } from "./pavement-reach";
+import { facadeSides, kerbedRoad, widenRecordSides } from "./pavement-reach";
 
 /** (B3) a notable bridge built in the scene within this of the eye or the centre [m] — its towers seen from tens of kilometres */
 export const NOTABLE_REACH_M = 45_000;
@@ -2861,9 +2861,9 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
     for (const p of cellRoads) {
       if (!kerbedRoad(p)) continue;
       const d = p.data;
-      const R = facadeReach([d[0]!, d[1]!], [d[2]!, d[3]!], Math.abs(d[7]!), d[4]!, nearHouses);
-      if (R !== null) {
-        widenRecord(p, R);
+      const w = facadeSides([d[0]!, d[1]!], [d[2]!, d[3]!], Math.abs(d[7]!), d[4]!, nearHouses);
+      if (w) {
+        widenRecordSides(p, w.left, w.right);
         pavementsWidened++;
       }
     }

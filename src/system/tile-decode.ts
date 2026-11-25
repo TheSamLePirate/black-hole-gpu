@@ -5,6 +5,7 @@
 import type { OrthoFit } from "./national";
 import { roadLightByte, roadMask, spreadLights, tileMetresPerPixel } from "./night-roads";
 import { waterMask } from "./water-mask";
+import { flattenUnderWater } from "./water-flatten";
 import { type DelightIn, type DelightStats, delightTile } from "./ortho-delight";
 
 /** a tile's side [px] (earth-tiles.ts TILE) */
@@ -172,7 +173,10 @@ export type DecodeRequest =
       roads?: { z: number; y: number; mvt: ArrayBuffer | null; sub: { k: number; x: number; y: number } } | null;
     }
   /** (L7b's prototype — ortho-delight.ts) `delight`: the canopy under it, its cast shadows lifted before its colours */
-  | { id: number; op: "ortho"; blob: Blob; fit: OrthoFit; delight?: DelightIn };
+  | { id: number; op: "ortho"; blob: Blob; fit: OrthoFit; delight?: DelightIn }
+  /** (25 Nov 2026 — water-flatten.ts) a relief tile's ground (TILE², its row-major heights) levelled under its inland water: OpenFreeMap's
+   *  vector tile over it (its square `sub` of it), its metres a texel from its z and row */
+  | { id: number; op: "flatten"; heights: Float32Array; mvt: ArrayBuffer; z: number; y: number; sub: { k: number; x: number; y: number } };
 export type DecodeReply = {
   id: number;
   ms: number;
@@ -189,6 +193,11 @@ export async function decodeTile(
   q: DecodeRequest,
 ): Promise<{ heights?: Float32Array; words?: Uint32Array; water?: Uint8Array; delight?: DelightStats }> {
   if (q.op === "terrarium") return { heights: terrariumHeights(await pixels(q.blob)) };
+  if (q.op === "flatten") {
+    const cover = waterMask(q.mvt, tileMetresPerPixel(q.z, q.y), q.sub, false);
+    if (cover) flattenUnderWater(q.heights, cover, tileMetresPerPixel(q.z, q.y));
+    return { heights: q.heights };
+  }
   if (q.op === "terrarium512") {
     // (read whole at its size, no scaling: an interpolated Terrarium byte is a wrong height)
     const img = await createImageBitmap(q.blob, { colorSpaceConversion: "none", premultiplyAlpha: "none" });

@@ -32,6 +32,8 @@ export function waterMask(
   raw: ArrayBuffer | Uint8Array,
   mpp: number,
   sub: { k: number; x: number; y: number } = { k: 0, x: 0, y: 0 },
+  /** (25 Nov 2026) the bridges' decks cut out (the water seen from afar); false: the bed under them the river's (water-flatten.ts) */
+  cutBridges = true,
 ): Float32Array | null {
   const layers = new VectorTile(new PbfReader(raw instanceof Uint8Array ? raw : new Uint8Array(raw))).layers;
   const water = layers.water,
@@ -101,7 +103,7 @@ export function waterMask(
   }
   // (J8-RP RP7: the bridges' decks cut out — a road's, a railway's, a footbridge's —, each its class's width and its parapets, their
   // share of a texel as a line's)
-  const roads = layers.transportation;
+  const roads = cutBridges ? layers.transportation : undefined;
   if (roads) {
     const k = (TILE * 2 ** sub.k) / roads.extent;
     const ox = sub.x * TILE,

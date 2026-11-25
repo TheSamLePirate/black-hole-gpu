@@ -134,7 +134,11 @@ connue ou supposée, la piste. Une entrée réglée est barrée avec le commit q
   il allait au noyau des rayons, dont les arbres ont été retirés avec J9 le 24 nov. (blocs couleur de ciel, au pas d'ombrage). Désormais
   pris par `shadeLite`, qui cherche la couronne jusqu'à 60 m au-delà du proxy et laisse un raté à la reconstruction. Vu sur kerr-mini
   (`docs/progress/ponts-2026-11-25/golden-gate-1km-apres-arbres.jpg`, e2e `bridges` 7/7, GPU de la vue 47,2 / 51,3 ms). Test
-  `tests/raster-sky-trees.test.ts`. Reste : quelques points sombres au bord des couronnes (pixels ratés laissés à la reconstruction).
+  `tests/raster-sky-trees.test.ts`. Reste : quelques points sombres au bord des couronnes (pixels ratés laissés à la reconstruction) —
+  essayé le 26 nov. (`beb2615e`, **repris par `9f22bb29`**) : ces pixels tracés d'abord par la passe des rayons (`main`), `shadeLite`
+  n'y dessinant que la couronne rencontrée — les points sombres partis, mais `main` y dessinait ses propres couronnes tracées, pâles :
+  un halo clair au bord des couronnes, pire (ce Mac, `bridges`, Battery Spencer, `golden-gate-1km-couronnes-apres.jpg`). **Non réglé** ;
+  piste : au raté, le ciel lu dans la sonde (`skyMirror`) écrit par `shadeLite` lui-même.
 - **Golden Gate, câble porteur en ruban plat depuis le tablier** (`golden-gate-tablier.jpg`) — **réglé le 25 nov. (`698dbd22`)** : le câble
   était ouvert le long du haut du repère ; il l'est désormais en travers de sa ligne et de la vue, sa distance celle du devant d'un cylindre
   (normale ronde rebâtie par `rasterNormal`). Vu sur kerr-mini (`golden-gate-deck-low-{avant,apres}.jpg`) ; scintillement à 30 km inchangé
@@ -151,9 +155,17 @@ connue ou supposée, la piste. Une entrée réglée est barrée avec le commit q
   façades ; entre deux rangs de bâtiments, chaque route bordée est élargie jusqu'au rang le plus proche, d'un seul rang de 2,5 m au
   plus vers lui (une pelouse de square en face n'est pas pavée) (`pavement-reach.ts`, test
   `pavement-reach.test.ts`), la chaussée passant toujours avant un trottoir aux carrefours, et le trottoir est posé de niveau dans
-  la lumière (sa normale vers la verticale). Reste : la géométrie du relief garde ses marches d'un mètre (visibles en silhouette
+  la lumière (sa normale vers la verticale). ~~Reste : la géométrie du relief garde ses marches d'un mètre (visibles en silhouette
   près des façades) — le nivellement `roadProfile/roadBank` sans lecteur, plus bas ; un côté de rue plus large que l'autre garde une
-  bande de sol (l'enregistrement est symétrique). ~~Sur l'approche du pont Alexandre III, un marquage en boucle fermée au milieu de la chaussée (`alexandre-iii-deck-low.png`).~~
+  bande de sol (l'enregistrement est symétrique).~~ **Réglés le 25 nov. 2026** : chaque côté son trottoir (`c3b4cea0` :
+  l'enregistrement GPU du décor porte le côté gauche dans sa demi-largeur, le droit dans 6 bits libres de son mot — le format des
+  cellules « rue », un octet de trottoir dans un enregistrement de surface de 4 octets sans octet libre, n'a pas été changé : il
+  invaliderait toutes les cellules en cache et les zones hors ligne) ; les rues posées sur le relief national (`c87fb232`,
+  `street-level.ts` : profil `roadProfile`, dévers `roadBank`, trottoirs une bordure de 0,12 m au-dessus de la chaussée, fondus sur
+  1,5 m — dans les tuiles mêmes, le sol unique du raster et du contact ; 65 tuiles, 1 025 145 pixels nivelés dans la vue de la rue
+  de Paris, ce Mac). Reste : le nivellement suit le trottoir de la classe, pas celui élargi jusqu'aux façades (les emprises ne sont
+  pas lues là) — un reste de marche au pied d'une façade au-delà ; une tuile décodée avant que sa cellule « rue » soit en cache
+  reste non nivelée jusqu'à son prochain chargement. ~~Sur l'approche du pont Alexandre III, un marquage en boucle fermée au milieu de la chaussée (`alexandre-iii-deck-low.png`).~~
   **Réglé par ffbecf26** (24 nov. 2026, soir), avec les chaînes d'anneaux blancs des bretelles de SFO (`traffic-runways`,
   `parked-above.png`) : `scenerySurface` gardait, entre segments égaux, le premier rencontré ; la bande d'un segment finit en
   demi-disques, et les morceaux de 1–2 m des courbes B2 et des fins de lignes aux carrefours peignaient leurs lignes autour de leurs
@@ -201,6 +213,21 @@ connue ou supposée, la piste. Une entrée réglée est barrée avec le commit q
   **La bande claire reste** : une arête du relief sous le tablier (5,1 m au-dessus de la mer contre 0,5–2,3 m pour l'eau — la trace du
   pont dans le modèle de terrain) ; l'eau, désormais de l'eau, y est dessinée sur une marche de 3–5 m. La cause est la forme du relief
   sous l'eau : à régler en aplanissant le relief sous les polygones d'eau intérieure (préparation du terrain), hors de ce lot.
+  **26 nov. (`6723eff9`) — le lit aplani là où les tuiles du relief sont préparées** (`water-flatten.ts` : ouverture morphologique des
+  hauteurs de l'eau sur ±48 m, le lit sous les ponts compris, dans le worker de décodage — un seul propriétaire : raster, traceur, contact,
+  eau) : mesuré par `groundAt` (ce Mac M1 Max, e2e `bridges-notable` 7/7, `remote-results/ponts-7-local/notable`) **2,23–2,27 m
+  au-dessus de la mer sous le tablier contre 2,23–2,27 m à 150 m à l'ouest (avant : 5,1 m)**. **La bande claire reste pourtant**
+  (`chevire-lit-aplani-apres.jpg`) : ce n'était donc pas l'arête du relief ; `surfaceAt` y dit « ground » à ~609 m (juste à l'ouest de
+  l'axe), aucun levier essayé ne l'ôte — **cause non trouvée**, prochaine piste : la lecture de la couleur de l'eau intérieure (le
+  photographique ou la peinture d'une route sous l'eau) pixel par pixel avec un mode de débogage de `liteWater`.
+  **Les reflets détachés sur la Seine — règle 1** : le reflet d'une façade vient du SSR (`seaSSR`, dans `earth water` / C19, C19d) ;
+  là où l'image ne montre pas la façade (son pied caché par la rive), le repli tracé (`waterMirror` → `sceneryMirror`) ne connaît que le
+  relief et les arbres, pas les bâtiments proches (cellules maillées, hors du BVH du décor). Plafond : la seule part « reflet » de l'eau ;
+  sur J0 l'eau entière coûte 10,6 ms (kerr-mini) ; à Paris non mesurée. Correctifs possibles : (a) les bâtiments des cellules proches dans
+  le repli tracé — une marche de plus par pixel d'eau calme, coût non borné tant que leurs cellules n'ont pas d'index par rayon ; (b) un
+  reflet planaire (un rendu de plus) ; (c) un SSR raté qui s'efface vers la sonde — ne recolle pas le reflet, le rend seulement plus
+  flou. **Non fait** : aucun n'est à la fois correct et bon marché ; (a) demande un index des cellules proches par rayon (à mesurer
+  d'abord, kerr-mini de retour).
   **Reste aussi** : les reflets de bâtiments détachés sur la Seine — l'SSR ne trouve une
   façade que là où l'image la montre (son pied caché par la rive : la moitié haute du reflet manque) ; le repli tracé (`sceneryMirror`) ne
   connaît que les arbres, et les bâtiments proches (cellules maillées) ne sont pas dans le BVH du décor : non réglé.
@@ -232,9 +259,12 @@ connue ou supposée, la piste. Une entrée réglée est barrée avec le commit q
   long de l'horizon, derrière l'appareil. e2e `faron-tree-streak` : pixels rendus plus pâles par le relèvement sur un sol sombre
   5 816 et 3 257 avant, 9 après (`docs/progress/sf-ciel-inverse-2026-11-25/faron-apres.jpg` contre
   `docs/progress/routes-defauts-2026-11-25/faron-avant.jpg`) ; test `sea-crest-occlusion.test.ts`.
-- **Le « poteau » : pas un défaut** — le tronc d'un arbre proche (~10 m) dont le houppier est en haut à gauche. Reste ouvert à côté : l'aile
-  gauche de l'appareil (≈ 30 m) est dessinée devant ce houppier (≈ 10 m selon la visibilité) — une occultation appareil/arbre proche
-  à regarder (`sceneDepth` sur les pixels d'arbres J9).
+- **Le « poteau » : pas un défaut** — le tronc d'un arbre proche (~10 m) dont le houppier est en haut à gauche. ~~Reste ouvert à côté :
+  l'aile gauche de l'appareil (≈ 30 m) est dessinée devant ce houppier~~ — **réglé le 25 nov. 2026 (`599c2425`)** : les passes de
+  l'appareil cachent une instance là où la profondeur d'occultation de la scène tient plus près (`ship.wgsl`, le bit « far ») ;
+  l'appareil piloté ne l'avait que placé par un spectateur. La vue « autour », 24 m devant lui, était derrière un houppier à 5–6 m
+  de l'œil : 20 943 de ses 21 006 pixels dessinés par-dessus ; désormais caché dès que l'œil est hors de lui (pas en cabine), 64–74
+  après (le bord de son ombre, le verre de la verrière — vu, reste) ; e2e `faron-tree-streak` l'affirme, test `craft-occlusion`.
 
 
 - **Constat** : F-35 posé sur le flanc sud du mont Faron (43,1405° N, 5,942° E, scène J0, 11 h UTC), caméra « autour » à ~25 m
@@ -410,8 +440,9 @@ Relevé initial :
 pas la même surface. Le constructeur ne distingue pas les bouts ouverts de tuiles des vraies culées. La recherche
 du tablier par XY ne porte pas d'identité/niveau. Les ponts contournent le matériau routier partagé ; leur loin
 emploie des dalles sur un plan de sol de cellule, sans hauteur de tablier pour les voitures. Les phases de pointillés
-des routes repartent par segment. Le nivellement `roadProfile/roadBank` existe comme fonctions, sans lecteur de
-production appliquant ce profil au terrain et aux contacts.
+des routes repartent par segment. ~~Le nivellement `roadProfile/roadBank` existe comme fonctions, sans lecteur de
+production appliquant ce profil au terrain et aux contacts.~~ (Lu depuis le 25 nov. 2026, `c87fb232` : `street-level.ts`, dans les
+tuiles de relief nationales — le terrain et les contacts ensemble.)
 
 Sonde du constructeur réel, cas **synthétique** de 100 m : marches jusqu'à 2,75 m ; ce n'est pas une mesure d'un
 pont réel. Le cas de chaînage route/rail et la clé de dédoublonnage locale révèlent des risques reproductibles ;

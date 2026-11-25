@@ -955,6 +955,14 @@ export function nationalBoxNear(lat: number, lon: number, imagery = false): Nati
 }
 const NO_BOX: NationalSource["box"] = { west: 0, east: 0, south: 0, north: 0 };
 
+/** the relief tiles' level from which the streets are laid on them (street-level.ts: a street cell's, z 15, holds a tile there) */
+export const STREET_LEVEL_Z = 15;
+/** the streets' leveller (the page's: street-level.ts from the cached street cell holding the tile — renderer.ts), null none */
+let streetLeveller: ((z: number, x: number, y: number, h: Float32Array) => Promise<number>) | null = null;
+export function setStreetLeveller(f: ((z: number, x: number, y: number, h: Float32Array) => Promise<number>) | null) {
+  streetLeveller = f;
+}
+
 /**
  * A tile's heights from its national source (I2, I7): its ground marked as a survey's (markFine), the global data's
  * (Terrarium) where it has none; its overground, when it has one, after them — one array (drawnHeight). `ground`: the
@@ -982,6 +990,14 @@ async function nationalHeights(
   const r = await src.heights(z, x, y, signal, hlod, undefined, coarse);
   if (!r) return terrarium(z, x, y, signal);
   const { h, over } = r;
+  // (the streets laid on it — street-level.ts: the one ground the raster and the contact read, levelled once, here)
+  if (streetLeveller && z >= STREET_LEVEL_Z) {
+    try {
+      await streetLeveller(z, x, y, h.subarray(0, TILE * TILE));
+    } catch {
+      /* (no street cell, a broken one: the survey's ground as it is) */
+    }
+  }
   markFine(h, true);
   if (h.some((e) => Number.isNaN(e))) {
     // (CM1: Terrarium refused — the tile a stand-in —, its gaps the stand-in's heights: the national ones not lost for them)
@@ -2437,6 +2453,8 @@ export class EarthTiles {
         const s = this.slotOf(L, x, y);
         const fill = this.standInKeys.has(key) && L.key[s] === key ? (L.data[s] ?? undefined) : undefined;
         h = await nationalHeights(src, L.z, ((x % L.n) + L.n) % L.n, y, ctl.signal, !!ground, ground, coarse, fill);
+        // (25 Nov 2026 — water-flatten.ts: the ground under the inland water made level here, once, for every reader of the relief)
+        if (!ground && L.z >= FLATTEN_Z0) h = await flattenInland(L.z, ((x % L.n) + L.n) % L.n, y, h, ctl.signal);
       } finally {
         clearTimeout(timer);
       }
@@ -3807,6 +3825,26 @@ function parentBlob(url: string): Promise<Blob> {
 export const roadsUrl = (z: number, x: number, y: number) => `https://tiles.openfreemap.org/planet/latest/${z}/${x}/${y}.pbf`;
 // (the vector tiles in, the last few kept — a z 13 one serves its four z 14 tiles —, never cancelled by one tile's abort)
 const roadFiles = new Map<string, Promise<ArrayBuffer | null>>();
+/** (25 Nov 2026) the relief's levels whose ground is levelled under the inland water (water-flatten.ts): a texel of 19 m and finer */
+export const FLATTEN_Z0 = 13;
+/**
+ * A national relief tile's ground levelled under its inland water (water-flatten.ts — the bed's spikes, a deck's ridge, the river's
+ * own surface level): OpenFreeMap's vector tile over it (night-roads' z 13, its square of it), the work in the decode worker. No tile,
+ * a failure: the heights as they came.
+ */
+async function flattenInland(z: number, x: number, y: number, h: Float32Array, signal: AbortSignal): Promise<Float32Array> {
+  const rk = Math.max(z - ROAD_MVT_Z1, 0);
+  const sub = { k: rk, x: x - ((x >> rk) << rk), y: y - ((y >> rk) << rk) };
+  try {
+    const mvt = await fetchRoads(z - rk, x >> rk, y >> rk, signal);
+    if (!mvt || signal.aborted) return h;
+    const r = await decodeOff({ op: "flatten", heights: h.slice(0, TILE * TILE), mvt, z, y, sub });
+    if (r.heights && r.heights.length === TILE * TILE) h.set(r.heights, 0);
+  } catch {
+    /* the heights as they came */
+  }
+  return h;
+}
 async function fetchRoads(z: number, x: number, y: number, signal: AbortSignal): Promise<ArrayBuffer | null> {
   const url = roadsUrl(z, x, y);
   let p = roadFiles.get(url);
