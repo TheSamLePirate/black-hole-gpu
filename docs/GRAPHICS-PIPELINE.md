@@ -101,6 +101,11 @@ l'e2e, aucune requête IGN). GPU p50 = `renderer.lastGpuMs` sur 90 images ; le b
   | 0,5 en gris plat (géométrie, MSAA seuls) | 2,37 | 1,99 |
 
   Avant le lot la même passe valait 9,45 (finale) et 7,06 (parking) ms (`tc-amp`).
+- **La table aérienne ailleurs qu'à SFO — l'image** (ce Mac, M1 Max, 25 nov. 2026, après la fusion : `paris-routes-cost` `PRC_VIEWS=rivoli-dry`,
+  `ab-commit.ts 3a7228a6` — main avant le lot — contre l'arbre, A B B A) : rue de Rivoli, écart moyen A ↔ B 0,13 / 0,35 contre A/A
+  0,34 et B/B 0,17 (0–255) — **la même image** (`docs/progress/perf-trafic-2026-11-25/rivoli-table-aerienne-planche.jpg`). Le temps GPU
+  de ce Mac (partagé avec d'autres e2e pendant la course) n'est pas retenu : B +1,4 à +2,2 ms sur toutes les passes à la fois (y compris
+  des noyaux que le lot ne touche pas, `trace`, `trace (discs)`), à reprendre sur kerr-mini — **non mesuré** là.
 - **Reste** : la passe d'ombrage vaut encore 5–6,6 ms par image, dont **3–4,2 ms d'ombrage de pixels** (au-dessus du gris plat) —
   surtout l'A320 gréé proche (88–155 px ; son niveau 4 cm garde 62 % de ses triangles, plus grossier il faudrait ses pièces soudées) : le shader unique de l'appareil (`fs`,
   37 textures, toutes les branches de tous les engins) paie ses registres partout ; un `fs` propre aux avions de ligne (comme `HULL_JET`
