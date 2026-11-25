@@ -91,8 +91,8 @@ Windows/D3D12. Les numéros de ligne sont ceux de `da4e75bd`.
 
 ### Le coût net de la journée du 25 novembre 2026 — campagne sur kerr-mini (main 091ddd33 + b8fd6cf8 contre 18a6e4dd) — mesuré
 
-**Mesuré**, kerr-mini (Mac mini M1, sans fenêtre, état thermique nominal avant la campagne, GPU 1 278 MHz), 25 nov. 2026 vers 17 h 50–19 h 00 UTC (dossiers à l'heure de Paris)
-UTC. `scripts/ab-commit.ts` + `scripts/ab-e2e.ts`, A B B A (deux tours), A = l'arbre de 18a6e4dd (`AB_TREE_A`, le début de la journée), B =
+**Mesuré**, kerr-mini (Mac mini M1, sans fenêtre, état thermique nominal avant la campagne, GPU 1 278 MHz), 25 nov. 2026 vers 17 h 50–19 h 00
+UTC (dossiers à l'heure de Paris). `scripts/ab-commit.ts` + `scripts/ab-e2e.ts`, A B B A (deux tours), A = l'arbre de 18a6e4dd (`AB_TREE_A`, le début de la journée), B =
 main 091ddd33 fusionné avec b8fd6cf8 (`aa337add`). `paris-routes-cost` et `traffic-cost` : le test de B contre les deux serveurs (échelle
 épinglée 0,75, GPU p50 sur 90 images) ; `bridges` et `bridges-notable` : chaque côté son propre test (`AB_E2E_OWN`, nouveau — l'API de
 18a6e4dd), à l'échelle du jeu. A/A et B/B : l'écart entre les deux tours d'un même côté. Données disque des e2e (aucune requête IGN).
