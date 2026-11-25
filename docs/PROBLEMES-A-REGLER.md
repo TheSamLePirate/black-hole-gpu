@@ -21,7 +21,21 @@ connue ou supposée, la piste. Une entrée réglée est barrée avec le commit q
   ligne serait le levier ; les ombres des avions garés (seconde moitié de la carte d'ombre) paraissent étirées et floues au sol
   (`docs/progress/perf-trafic-2026-11-25/parking-*.jpg`) — non examinées.
 
-## Pont de Cheviré (Nantes) : tablier à 25 m au-dessus de la Loire au lieu de ~55 m, en morceaux (relevé le 24 novembre 2026, campagne e2e 2, `bridges-notable`)
+## Le sol du Luxembourg (et d'Arlon) posé au niveau de la mer par la source IGN (relevé le 25 novembre 2026, analyse PLAN-LUXEMBOURG-AAA)
+
+- **Constat** (ce Mac, 25/11, code du jeu exécuté sous Bun, pas vu en jeu) : `IGN.heights` sur Luxembourg-Ville rend une grille
+  **entièrement à 0,0 m** à z 12, 14 et 16 (65 536 échantillons ; le sol réel y est à 237–310 m). Sur une grille de tuiles z 13 de
+  49,40–50,25 N × 5,65–6,61 E, le WMS-R RGE ALTI répond 0,0 m exact sur 117 tuiles et en partie sur 56 (de Luxembourg-Ville à
+  Ettelbruck, et Arlon en Belgique) ; de vraies valeurs au sud (marge du RGE ALTI) ; rien au nord (Terrarium). Carte :
+  [progress/luxembourg/relief-ign-sur-luxembourg-2026-11-25.png](progress/luxembourg/relief-ign-sur-luxembourg-2026-11-25.png).
+- **Cause (lecture du code)** : la terre de la source IGN est un rectangle (`ORTHO_BOX`, `holds: () => true`, `earth-tiles.ts:160,848`)
+  placé avant Mapterhorn dans `NATIONAL` ; `ignGrid` (`earth-tiles.ts:681`) ne rejette que `< −100` ou `> 9000`, et le RGE ALTI remplit
+  de 0 une partie de son emprise hors de France. Le même rectangle barre Overture dans la scène proche et y affiche le crédit IGN.
+- **Piste** : [PLAN-LUXEMBOURG-AAA](PLAN-LUXEMBOURG-AAA.md) LU-0 — l'IGN sur le contour de la France seulement, une grille tout à 0,0
+  refusée ; Mapterhorn (0,5–1 m) prend alors le Luxembourg, la Belgique et les autres voisins du rectangle. L'étendue des 0 hors du
+  Luxembourg n'est pas cartographiée.
+
+## ~~Pont de Cheviré (Nantes) : tablier à 25 m au-dessus de la Loire au lieu de ~55 m, en morceaux~~ (relevé le 24 novembre 2026, campagne e2e 2, `bridges-notable`) — réglé le 25 novembre 2026 (`924b34ea`, `6f1fdcd2`, `629aedc0`)
 
 - **Constat** (kerr-mini, `20261124-181051-c2-bridges-notable-3`, capture `chevire.png`) : vu de 900 m à l'est, le viaduc traverse la Loire
   presque à plat, ~10–15 m au-dessus de l'eau ; sa plus grande pièce de tablier (copie CPU du décor) culmine à **25,2 m au-dessus de la mer**
@@ -32,14 +46,62 @@ connue ou supposée, la piste. Une entrée réglée est barrée avec le commit q
   large) ; un long viaduc découpé en plusieurs tronçons donne plusieurs tabliers aux bouts non raccordés en hauteur.
 - **Piste** : la cote Z des tronçons BD TOPO (géométrie 3D) comme hauteur de tablier dans la préparation des cellules, ou une entrée au
   catalogue des ponts remarquables (`bridge-catalogue.ts`, famille poutre à ajouter) ; raccorder en hauteur les bouts de tabliers voisins.
+- **Causes trouvées (25 nov.)** : (1) les tuiles vectorielles BD TOPO du jeu sont 2D (leurs propriétés nomment la méthode altimétrique, jamais
+  la cote) ; (2) les « 4 morceaux » : chaque cellule z 15 lit sa propre tuile BD TOPO, découpée avec une marge — le même tronçon s'y arrête
+  ~30 m au-delà du bord ou en deçà, jamais à moins de 1 m de l'autre cellule (`JUNCTION_M`) : pas de chaînage ; de même aux bords z 14
+  (`joinBridgeHalves` à 3 m) ; (3) la boîte de mesure de l'e2e, autour du point de Wikipédia, était 330 m à l'ouest du vrai axe.
+- **Correction** : la BD TOPO 3D par le WFS de la Géoplateforme (une requête par tuile z 14 à pont, `bdtopo.ts bdtopoDecksUrl`), cellules
+  « rue » au **format 6** (hauteur relevée par point d'axe, tirant sur deux octets), profil du tablier sur le relevé (`measured`, raccord
+  aux culées ≤ 4 %) jusque dans la couche lointaine ; chaînage des recouvrements/trous au bord des cellules (`chainBridges`) et des tuiles
+  (`spliceOpenHalves`) ; culées jointives fusionnées, bretelles posées sur le tablier rejoint (`joinDeckPieces`) ; chaussées jumelles
+  nivelées à la moyenne de leurs relevés où elles se recouvrent (`levelTwinDecks`). Hors relevé (étranger) : tirant par la largeur d'eau
+  franchie (`ruleClearance`, ≤ 45 m) ; pas d'entrée de catalogue nécessaire pour Cheviré.
+- **Preuves** : `tests/bridge-heights.test.ts` (données réelles sur disque : deux tabliers de 1 683 / 1 674 m, crête 60,5 / 60,6 m ; témoins
+  positifs : l'ancien chaînage donnait cinq morceaux de 227–1 059 m). A/B e2e sur kerr-mini (`remote-results/20261124-221208-ponts-ab-notable`,
+  A = `18a6e4dd`, B = `698dbd22`) : crête **25,2 → 60,6 m** au-dessus de la mer, plus grande pièce **1 043 → 1 651 m**, marches > 25 cm sur
+  l'axe **25 (11,1 m au plus) → 2 (0,41 m au plus, entre les deux chaussées jumelles — nivelées depuis par `629aedc0`)** ; GPU de la vue
+  p50/p95 47,2/52,5 → 44,2/47,1 ms. Captures `docs/progress/ponts-2026-11-25/chevire-{avant,apres}.jpg`.
+- **Vérifié après tous les correctifs** (kerr-mini, 25 nov. ~00:05 UTC, `629aedc0`+, `remote-results/20261125-000142-ponts-after-2`) :
+  e2e Cheviré **réussi** — crête 60,4 m, plus grande pièce 1 651 m, ligne de conduite sur la travée droite 1 100 m sans marche (0,071 m au
+  plus), sans trou, appui 0 cm ; `streetMissing` 0. Capture `chevire-apres-final.jpg`.
+- **Reste** : la bande claire sur l'eau sous le tablier (visible avant et après) ; **Grenelle** : à la bretelle de l'île aux Cygnes
+  (48,8503 N), le tablier de la bretelle (descendant à 35,2 m) et celui du pont (37,5 m) se recouvrent à leur fourche : 0,43–0,54 m sur trois
+  échantillons de l'axe (e2e `bridges-notable` en échec sur ce seul point ; avant, sans relevé, les deux étaient plats au tirant) ; à froid, la préparation des cellules attend une requête WFS
+  de plus (29 cellules encore en préparation à la prise de vue côté B) ; Bay Bridge, Øresund etc. à l'étranger : tirant par règle.
 
 ## Ponts et routes, campagne e2e 2 : à revoir à l'œil (relevé le 24 novembre 2026, `bridges`, `bridges-notable`, kerr-mini)
 
 - **Golden Gate depuis Battery Spencer** (`golden-gate-1km.png`) : derrière les arbres, à gauche, devant la tour nord, des blocs gris en
-  escalier (imposteurs lointains ou couche lointaine ?) masquent une partie de la tour. Non diagnostiqué.
-- **Rues de Paris** (`paris-wet-street-dry.png`, `grenelle-deck-low.png`) : de fines lignes claires courbes traversent la chaussée (bords
-  de voies d'un carrefour ?) ; le relief herbeux déborde sur le trottoir le long des façades (nivellement `roadBank` sans lecteur, déjà noté
-  plus bas). ~~Sur l'approche du pont Alexandre III, un marquage en boucle fermée au milieu de la chaussée (`alexandre-iii-deck-low.png`).~~
+  escalier (imposteurs lointains ou couche lointaine ?) masquent une partie de la tour. **Diagnostic partiel (25 nov., kerr-mini, captures
+  `docs/progress/ponts-2026-11-25/golden-gate-1km-diag-*.jpg`)** : ce ne sont ni les arbres de la matière raster (`liteSkip` 64 : les arbres
+  disparaissent, les blocs restent), ni les imposteurs (`treeImpostorsOn` false), ni la géométrie des arbres proches, ni la couche lointaine
+  des bâtiments ; la vue de coût du traceur (`costView` 1) les montre sans travail de rayon (pixels du raster, silhouette en escalier dans la
+  visibilité elle-même) et `liteSkip` 1024 (shadeLite seul) les montre hors de `shadeLite` : une surface raster ombrée par une autre passe
+  (`shadeWater` probable : de l'eau dessinée au-dessus de la colline ?). **Réglé le 25 nov. (`05a44c32`)** : `surfaceAt` y lisait « tree »,
+  sol 0, plus proche 80–107 m, alpha 0 — le **proxy de couronne d'un arbre devant le ciel** ; `rasterLiteTakes` refusait un pixel sans sol,
+  il allait au noyau des rayons, dont les arbres ont été retirés avec J9 le 24 nov. (blocs couleur de ciel, au pas d'ombrage). Désormais
+  pris par `shadeLite`, qui cherche la couronne jusqu'à 60 m au-delà du proxy et laisse un raté à la reconstruction. Vu sur kerr-mini
+  (`docs/progress/ponts-2026-11-25/golden-gate-1km-apres-arbres.jpg`, e2e `bridges` 7/7, GPU de la vue 47,2 / 51,3 ms). Test
+  `tests/raster-sky-trees.test.ts`. Reste : quelques points sombres au bord des couronnes (pixels ratés laissés à la reconstruction).
+- **Golden Gate, câble porteur en ruban plat depuis le tablier** (`golden-gate-tablier.jpg`) — **réglé le 25 nov. (`698dbd22`)** : le câble
+  était ouvert le long du haut du repère ; il l'est désormais en travers de sa ligne et de la vue, sa distance celle du devant d'un cylindre
+  (normale ronde rebâtie par `rasterNormal`). Vu sur kerr-mini (`golden-gate-deck-low-{avant,apres}.jpg`) ; scintillement à 30 km inchangé
+  (A/B de l'e2e : réussi des deux côtés). Reste un liseré clair au bord du câble (la normale non rebâtie sur ses pixels de bord).
+- **Rues de Paris** (`paris-wet-street-dry.png`, `grenelle-deck-low.png`) : ~~de fines lignes claires courbes traversent la chaussée (bords
+  de voies d'un carrefour ?) ; le relief herbeux déborde sur le trottoir le long des façades~~ (nivellement `roadBank` sans lecteur, déjà noté
+  plus bas). **Réglé par `c02620c0`, `a1f3b0c8` et `2cd9386f`** (25 nov. 2026), vu sur kerr-mini au même point de vue
+  (`docs/progress/routes-defauts-2026-11-25/rue-paris-{avant,apres}.jpg`, `rue-paris-ombres-{avant,apres}.jpg`) : **les lignes** n'étaient
+  pas des marquages mais des fuites d'ombre — la vue de débogage des ombres (`liteSkip` 8192, e2e `paris-street-shadows`) les montrait
+  éclairées dans l'ombre des immeubles. `liteSun` conditionnait les ombres (relief, contact, décor, appareil) par la normale de l'image de
+  profondeur (`rasterNormal`) ; sur les marches du relief du levé (bords de mailles d'un mètre, en courbes de niveau) elle se détourne du
+  Soleil : ombres sautées, sol éclairé par sa normale lisse. Le sol est désormais conditionné par la verticale (test
+  `lite-sun-gate.test.ts`). **Le trottoir** : les cellules « rue » donnent le trottoir d'une classe (2–3 m), pas l'emplacement des
+  façades ; entre deux rangs de bâtiments, chaque route bordée est élargie jusqu'au rang le plus proche, d'un seul rang de 2,5 m au
+  plus vers lui (une pelouse de square en face n'est pas pavée) (`pavement-reach.ts`, test
+  `pavement-reach.test.ts`), la chaussée passant toujours avant un trottoir aux carrefours, et le trottoir est posé de niveau dans
+  la lumière (sa normale vers la verticale). Reste : la géométrie du relief garde ses marches d'un mètre (visibles en silhouette
+  près des façades) — le nivellement `roadProfile/roadBank` sans lecteur, plus bas ; un côté de rue plus large que l'autre garde une
+  bande de sol (l'enregistrement est symétrique). ~~Sur l'approche du pont Alexandre III, un marquage en boucle fermée au milieu de la chaussée (`alexandre-iii-deck-low.png`).~~
   **Réglé par ffbecf26** (24 nov. 2026, soir), avec les chaînes d'anneaux blancs des bretelles de SFO (`traffic-runways`,
   `parked-above.png`) : `scenerySurface` gardait, entre segments égaux, le premier rencontré ; la bande d'un segment finit en
   demi-disques, et les morceaux de 1–2 m des courbes B2 et des fins de lignes aux carrefours peignaient leurs lignes autour de leurs
@@ -47,15 +109,26 @@ connue ou supposée, la piste. Une entrée réglée est barrée avec le commit q
   la peinture gardée à part (RP1) est celle de la route gagnante. Vu sur kerr-mini avant/après au même point de vue
   (`docs/progress/campagne-e2e-2026-11-24/marquages-sfo-{avant,apres}.jpg`, `marquages-alexandre-iii-{avant,apres}.jpg`). Les
   « fines lignes claires courbes » des rues de Paris sont probablement la même cause (bords de lignes autour des bouts de morceaux) :
-  **non revu**. Reste ouvert : un passage piéton (genre 5) a des bouts arrondis — une pilule zébrée à l'approche du pont
+  **non revu**. ~~Reste ouvert : un passage piéton (genre 5) a des bouts arrondis — une pilule zébrée à l'approche du pont
   (`marquages-alexandre-iii-apres.jpg`) : sa bande finit aussi en demi-disques (piste : couper la couverture d'un genre 5 hors de
-  son segment, `along` non borné).
-- **Pont Alexandre III** : classé `monumental_alexandre_iii` (tablier lu : 150 × 24 m, à 15 m du point du classement ; l'arc sous le tablier
-  présent dans le contact) ; ses quatre pylônes sont des pavés unis, l'arc à peine visible depuis la Seine à 120 m (`alexandre-iii.png`).
+  son segment, `along` non borné).~~ **Réglé par `c02620c0`** (25 nov. 2026) : `scenerySurface` lit la bande d'une ligne par
+  `sceneryStrip` — bouts en demi-disque pour les morceaux de route (ils se raccordent), coupés droit pour la peinture d'un
+  carrefour (genre 5 : zèbre, lignes d'arrêt et de cédez-le-passage). Tests `scenery-strip-wake.test.ts` (modèle CPU : les
+  demi-disques peignaient 12,6 m² au-delà des bouts d'un zèbre de 4 m, 0 désormais), tranche GPU `strip-wake-slice` (le
+  shader égal au modèle à 2·10⁻⁴).
+- ~~**Pont Alexandre III** : classé `monumental_alexandre_iii` (tablier lu : 150 × 24 m, à 15 m du point du classement ; l'arc sous le tablier
+  présent dans le contact) ; ses quatre pylônes sont des pavés unis, l'arc à peine visible depuis la Seine à 120 m (`alexandre-iii.png`).~~
+  **Réglé le 25 nov. (`698dbd22`)** : pylônes en huit pièces (socle, piédestal, colonne effilée, chapiteau, plinthe en granit ; groupe et ailes
+  dorés — palette 9 peintures) jusqu'à 22,6 m au-dessus du tablier ; l'arc posé sur sa vraie portée (107,5 m, flèche 6,28 m), clé à l'intrados,
+  cinq nervures et les montants des tympans, en 12 pièces (la rivière dessous libre au contact). Vu sur kerr-mini
+  (`docs/progress/ponts-2026-11-25/alexandre-iii-{avant,apres}.jpg`). Tests `bridge-structures.test.ts`.
 - **Scène pleine à San Francisco** : ~108 s de construction sur kerr-mini (étape « forest », les collines de Marin), faite deux fois à la
   vue à 30 km (révision des cellules « rue » 0 → 1) : la vue attend ~3 min ; le pont y est dès la première.
-- **Plafond des ponts** : `bridges = 1024` (le plafond `bridgeLimit` en mode haut) dans toutes les vues de Paris — les plus proches
-  gardés, les autres non dessinés.
+- ~~**Plafond des ponts** : `bridges = 1024` (le plafond `bridgeLimit` en mode haut) dans toutes les vues de Paris — les plus proches
+  gardés, les autres non dessinés.~~ **Réglé le 25 nov. (`924b34ea`, compte corrigé `3252fc19`)** : plus de plafond en nombre ; une part de
+  30 % des octets du décor pour les tabliers, les plus proches d'abord, la LOD grossie à mesure (`bridge-lod.ts`), un tablier écarté compté
+  (`stats().bridgesDropped`). A/B kerr-mini (`remote-results/20261124-221143-ponts-ab-bridges`) : Paris 1 024 → 1 135–1 157 ponts (tous les
+  candidats), 3,2–3,8 Mo sur 20,1 Mo de part ; GPU p50 des vues de Paris dans le bruit (Grenelle 55,0 → 54,1 ms, Rivoli 59,6 → 60,2 ms).
 
 ## ~~Golden Gate : un second tablier au ras de l'eau, 60 m sous le tablier remarquable ; l'appui à 0,3 m au-dessus de la chaussée~~ (relevé le 24 novembre 2026, campagne e2e 2) — réglé le même jour (`72801f59`)
 
@@ -97,6 +170,30 @@ connue ou supposée, la piste. Une entrée réglée est barrée avec le commit q
   l'horizon — le trait), ou un rayon du matériau qui rencontre l'appareil comme un arbre ; lire l'enregistrement d'arbre que
   `sceneryTreeLite` touche sur ces pixels (sonde du tracé d'une colonne, `colTraceFrame`) et regarder les exclusions de forêt
   autour d'un appareil posé (`forest-exclusions.ts`). Non réglé dans cette session.
+- **Suite (25 nov. 2026, kerr-mini, e2e `faron-tree-streak`, nouveau)** : le trait **suit le relèvement de l'air** (R4a/R4b) :
+  `renderer.liftOn = false` l'efface (`docs/progress/routes-defauts-2026-11-25/faron-avant.jpg` contre `faron-avant-sans-relevement.jpg`) ;
+  9 982 pixels changent entre les deux vues. Ses pixels (texture de distance du raster) : des **arbres proches en vraie géométrie
+  J9** (bit 131072, à ~10 m), le sol derrière eux à 16–56 km (`hint`) ou le ciel (0). Une incohérence trouvée en chemin est
+  corrigée (`c02620c0`) : le matériau testait l'arbre relevé à la distance du **sol** derrière lui (Λ(portée) jusqu'à ~0,3 m), plus
+  à la sienne — **le trait reste** (4 760 et 4 575 pixels après, même vue : il ne vient pas de là). Le « poteau » : le tronc d'un
+  arbre proche (~10 m), son houppier derrière lequel l'appareil est pourtant dessiné devant — une occultation appareil/arbre
+  proche à regarder (`sceneDepth` sur les pixels J9). **Piste suivante** : ce qui, pour un pixel d'arbre J9 au-dessus d'un sol
+  très lointain, dépend du relèvement — la visibilité des arbres J9 (`NearTreeGeometry`, relèvement par sommet ?), la profondeur
+  d'occultation, la finition de l'air (`liteFinish`). Non réglé.
+
+## ~~Le sillage d'un navire en anneaux concentriques réguliers~~ (relevé le 24 novembre 2026, e2e `traffic-free-camera`, campagne 1) — réglé le 25 novembre 2026 (`c02620c0`)
+
+- **Constat** : derrière « Kerlouan » (chalutier, 1,9 m/s) suivi à 76 m, un coin plein d'anneaux concentriques très réguliers,
+  très contrastés au soleil bas (`docs/progress/campagne-e2e-2026-11-24/navire-suivi-apres.jpg`).
+- **Cause** : `seaWake` donnait aux vagues de Kelvin une hauteur ∝ la longueur de la coque, quelle que soit sa vitesse : à
+  2 m/s la longueur d'onde transversale fait 2,6 m — pentes de 0,3 à 1,8 (modèle CPU) ; transversales aussi fortes que les
+  cuspides, sans aucune irrégularité.
+- **Correction** : `kelvinSlope` — la cambrure par le nombre de Froude, transversales faibles et lissées sur le sillage
+  turbulent, divergentes fortes sur les cuspides à 19,5°, crêtes brisées par le bruit de la mer, trains non résolus dans la
+  variance des pentes, somme bornée à ak 0,4 ; le remous de l'hélice aux basses vitesses. Tests `scenery-strip-wake.test.ts`
+  (l'ancien modèle témoin : pente max 1,8 contre ≤ 0,4), tranche GPU `strip-wake-slice`, e2e `ship-wake` (nouveau : le Ford
+  à 28 kt, un bateau lent) et `traffic-free-camera` : `docs/progress/routes-defauts-2026-11-25/sillage-*.jpg`. Coût GPU des
+  sillages dans le bruit d'une passe (GRAPHICS-PIPELINE). Le V d'un bateau lent reste discret par vent frais (physique).
 
 ## ~~Le navire suivi en caméra libre, sans appareil : ni coque ni sillage~~ (relevé le 24 novembre 2026, e2e `traffic-free-camera`, campagne 1) — réglé le même jour (`c716fefd`)
 

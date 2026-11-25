@@ -4,7 +4,8 @@ import { App, E2E, stopServer } from "./lib/app";
 // The real traffic with no craft at all (Sam, 24 Nov 2026: « les avions et les bateaux toujours actifs, même en caméra libre sans appareil »; traffic/focus.ts): the craft left, the free camera over San Francisco Bay — the relay asked about the camera (`__bh.trafficFocus()`: who "view"), the aircraft and the ships about it live, moving, labelled and drawn from the view (`renderer.othersFromView`); an airliner then a ship (one under way when there is one) followed by the camera panel's Chase view (target `trf:…`, `ais:…`), the airliner's trace asked, the ship's drawn ground at the view's height over the sea within 10 m (24 Nov 2026: a frame of the Earth's motion apart, 290 m — the followed ship hidden under the sea, no hull, no wake); a jump to Marseille asked anew at once; the setting off: none asked.
 // Steps: 1 boot · 2 leave the craft · 3 the free camera over the bay · 4 the traffic live · 5 moving, labelled, drawn · 6 an airliner followed · 7 a ship followed · 8 the jump to Marseille · 9 the setting off. Shots in TFC_OUT (remote-results/traffic-free-camera): bay, airliner, ship, marseille.
 // Live data: adsb.lol through the dev server's relay (needs internet); the ships the AIS's if the relay has its key, else the sea's own life (game/seasim.ts) — either counts. Few aircraft at night over the bay: at least 3 asked.
-// Duration: ~4 min (boot and tiles ~1.5 min, each wait capped at 45 s).
+// The ship's view also measures the wakes' GPU cost there (with and without them, in turn).
+// Duration: ~4.5 min (boot and tiles ~1.5 min, each wait capped at 45 s).
 // Done when: the setting turned off has emptied the feed, after the four shots.
 
 const OUT = process.env.TFC_OUT ?? "remote-results/traffic-free-camera";
@@ -192,6 +193,26 @@ describe.skipIf(!E2E)("the traffic about a free camera with no craft", () => {
     );
     console.log(`  height over the sea: the view's ${hgt.view.toFixed(1)} m, the drawn ground's ${hgt.drawn.toFixed(1)} m`);
     await app.shot(`${OUT}/ship.png`);
+    // (25 Nov 2026: the wakes' cost in this view — the GPU time with them and without — renderer.seaWakes held empty —, three times
+    // each in turn, 60 images each: their p50s' medians; the Kelvin waves made over then, compared on both sides)
+    const wakeCost = await app.js<{ on: number; off: number; wakes: number }>(`(async () => {
+      const R = __bh.renderer, f = () => new Promise((q) => requestAnimationFrame(q));
+      const p50 = async () => { const ms = []; for (let i = 0; i < 60; i++) { __bh.touch(); await f(); if (R.lastGpuMs > 0) ms.push(R.lastGpuMs); }
+        ms.sort((a, b) => a - b); return ms[Math.floor(ms.length / 2)] ?? 0; };
+      const wakes = R.seaWakes.length; const on = [], off = [];
+      for (let k = 0; k < 3; k++) {
+        on.push(await p50());
+        Object.defineProperty(R, "seaWakes", { get: () => [], set: () => {}, configurable: true });
+        for (let i = 0; i < 10; i++) await f();
+        off.push(await p50());
+        Object.defineProperty(R, "seaWakes", { value: [], writable: true, configurable: true, enumerable: true });
+        for (let i = 0; i < 10; i++) await f();
+      }
+      const med = (v) => +[...v].sort((a, b) => a - b)[1].toFixed(2);
+      return { on: med(on), off: med(off), wakes }; })()`);
+    console.log(
+      `  the wakes' cost here: GPU p50 ${wakeCost.on} ms with ${wakeCost.wakes} wakes, ${wakeCost.off} ms without (Δ ${(wakeCost.on - wakeCost.off).toFixed(2)} ms)`,
+    );
     expect(Math.abs(hgt.drawn - hgt.view)).toBeLessThan(10);
     await app.stepDone(`${ship.label} suivi à ${ship.dist.toFixed(0)} m · hauteur ${hgt.drawn.toFixed(0)}/${hgt.view.toFixed(0)} m`);
   }, 180_000);

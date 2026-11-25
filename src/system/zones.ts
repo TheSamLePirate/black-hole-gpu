@@ -33,7 +33,7 @@ import {
 } from "./earth-tiles";
 import { WGS84_A } from "./ellipsoid";
 import surfaceManifest from "../../assets/earth-surface/manifest.json";
-import { BDTOPO_Z, bdtopoUrl, inBdtopoBox } from "./bdtopo";
+import { BDTOPO_Z, bdtopoDecksUrl, bdtopoUrl, inBdtopoBox } from "./bdtopo";
 import { blockChains, blockSides, CANOPY_NEAR, CANOPY_Z, tilesWithin } from "./ign-canopy";
 import { SWISS_GROUND_G, swissTerrainUrl, tileSource } from "./national";
 import { D as DEG, type SceneryMode } from "./scenery-data";
@@ -530,9 +530,13 @@ export function sceneryZoneChains(
  *  past it `night-roads` bakes them as points of light) */
 export const ZONE_STREET_REACH_M = 12_000;
 /** the roads' z 14 tiles round a zone within the streets' reach (OpenMapTiles' — the scenery's own tiles, osmUrl): each prepared into
- *  its four street cells once the zone is in (zone-cells.ts zoneStreetTiles) */
-export function streetTileZoneChains(lat: number, lon: number, radius: number): ZoneChain[] {
-  return tilesWithin(OSM_Z, lat, lon, radius + ZONE_STREET_REACH_M).map((t) => [osmUrl(t.x, t.y)]);
+ *  its four street cells once the zone is in (zone-cells.ts zoneStreetTiles) — and, in the IGN's box, its bridges' surveyed heights
+ *  (street cells' format 6, 25 Nov 2026: bdtopo.ts bdtopoDecksUrl — the preparation asks it where its BD TOPO tiles hold a bridge; the
+ *  zone holds it for every tile, the IGN's sources on (`ign`): offline, a tile without it draws its bridges by their clearance) */
+export function streetTileZoneChains(lat: number, lon: number, radius: number, ign = true): ZoneChain[] {
+  return tilesWithin(OSM_Z, lat, lon, radius + ZONE_STREET_REACH_M).flatMap((t): ZoneChain[] =>
+    ign && inBdtopoBox(t.x, t.y, OSM_Z) ? [[osmUrl(t.x, t.y)], [bdtopoDecksUrl(t.x, t.y)]] : [[osmUrl(t.x, t.y)]],
+  );
 }
 
 /** the far buildings' reach round the camera [m] (building-far.ts FAR_REACH_M — copied: that module is the renderer's; tests/
@@ -593,7 +597,7 @@ export function zoneChains(
   // (the far buildings' cells round it — J8-9 (1) —, with the scenery's buildings: the far layer's whole reach)
   if (o.scenery) for (const chain of farCellZoneChains(lat, lon, radius)) add(chain);
   // (the streets' roads round it — J8-L —: the lamps' and the cars' reach)
-  if (o.scenery) for (const chain of streetTileZoneChains(lat, lon, radius)) add(chain);
+  if (o.scenery) for (const chain of streetTileZoneChains(lat, lon, radius, o.relief)) add(chain);
   // (the runways' round it — the airfields, the ILS —, whatever the sources)
   for (const chain of runwayZoneChains(lat, lon, radius)) add(chain);
   // (the regional surface packs it reaches — Le Bourget's under Paris —, whatever the sources: the game asks them below 20 km)

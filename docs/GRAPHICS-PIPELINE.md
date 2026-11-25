@@ -107,6 +107,106 @@ l'e2e, aucune requête IGN). GPU p50 = `renderer.lastGpuMs` sur 90 images ; le b
   pour le F-35) est le levier suivant. Les ombres des avions garés au sol (seconde moitié de la carte) paraissent étirées et floues
   (captures `parking-*.jpg`) — non examinées ici. `ship: motion` (0,6–1 ms) redessine tous les maillages ; la boîte de la passe couvre
   toute l'image dès que le trafic s'étale (effacement et résolution MSAA plein écran) — non mesurés séparément.
+### Routes, ombres, arbres, sillages — défauts de la campagne e2e 2 (25 novembre 2026, branche de l'agent, `c02620c0`, `a1f3b0c8`)
+
+- **`scenerySurface` (tous les noyaux Terre) → `sceneryStrip`** (nouvelle petite fonction) : la bande d'une ligne. Les
+  morceaux de route gardent leurs bouts en demi-disque (ils se raccordent) ; la peinture d'un carrefour (genre 5 : zèbre,
+  lignes d'arrêt et de cédez-le-passage) est coupée droit à ses bouts — plus de « pilule » zébrée. **Clé de rang** : une
+  chaussée passe avant tout trottoir (`64 + cr − d` sous la bordure, `size.x − d` au-delà) — un trottoir élargi ne couvre
+  jamais l'embouchure d'une rue transversale ; entre chaussées, l'axe le plus proche gagne toujours (règle de `ffbecf26`).
+- **Données (worker du décor, hors image) — `pavement-reach.ts`** : chaque route de cellule bordée d'une ville, entre deux
+  rangs de bâtiments, est élargie jusqu'au rang le plus proche (de chaque côté la médiane, sur ses points, du bord d'emprise
+  le plus proche en travers — celles de la scène et des cellules de maillage —, au plus 8 m au-delà de la bordure ; des
+  bâtiments d'un seul côté — un square, un parc, un quai — : 2,5 m de plus au plus vers eux, la pelouse d'en face gardée) : plus d'herbe ni de photographie
+  entre trottoir et mur. `earthScenery.stats().pavementsWidened` : scène de la rue de Paris (kerr-mini), 15 751 des 58 827
+  routes de cellule avec la règle finale (`2cd9386f`) ; 15 844 avec la première (`c02620c0`), 6 000 avec les deux rangs seuls
+  (`a1f3b0c8`) — périmés.
+- **`shadeLite`/`shadeWater` → `liteSun` (`a1f3b0c8`)** : les ombres du relief (cascades, horizons), les ombres de contact,
+  la carte d'ombre du décor et l'ombre de l'appareil étaient conditionnées par la normale reçue — pour le sol celle de l'image
+  de profondeur (`rasterNormal`, les distances des voisins) ; sur les marches du relief du levé (bords de ses mailles d'un
+  mètre, en courbes de niveau) elle se détourne du Soleil : ombres sautées, sol éclairé par la normale lisse — **les fines
+  lignes claires courbes des rues de Paris**. Le sol est désormais conditionné (et son point d'ombre relevé) par la verticale,
+  un maillage par sa propre normale. Observé sur kerr-mini : la vue de débogage des ombres (`liteSkip` 8192) sans ses lignes
+  (`docs/progress/routes-defauts-2026-11-25/rue-paris-ombres-*.jpg`). Coût : quelques lectures de la carte de plus sur les
+  sols tournés du Soleil, **non mesuré seul**. **Tout le lot sur la rue de Paris sous la pluie** (`bridges -t "wet asphalt"`,
+  kerr-mini, une passe chacun, `18a6e4dd` puis `2cd9386f` lancés l'un après l'autre le 25 nov. vers 03 h 40 UTC) : GPU p50
+  70,0 → 68,1 ms, p95 73,2 → 73,3 ms ; une paire plus tôt (00 h 15) : 60,8 → 59,8 ms (sans la règle finale des trottoirs) —
+  **pas de surcoût visible, aucun gain revendiqué** (une passe, la machine pas dans le même état d'une paire à l'autre).
+- **`shadeLite` (`liteMaterial`)** : un trottoir (route bordée, au-delà de sa bordure) posé de niveau — sa normale à 80 %
+  vers la verticale : les bosses d'un mètre du relief contre les murs hors de sa lumière (la géométrie du relief reste).
+- **`shadeLite` → `sceneryTreeLite`, `shade`/`main` → `worldScenery`** : l'arbre que le raster a dessiné est testé relevé
+  (R4b) à **sa propre distance** (`forestCandidateStart`), plus à celle du sol derrière lui — kilomètres sous l'horizontale
+  sur une hauteur : arbres testés jusqu'à Λ(portée) trop bas (Λ(4,6 km) ≈ 0,28 m, relevé `sceneryLiftNow` lu sur le mont Faron) —
+  incohérence corrigée ; **elle n'était pas la cause du trait pâle du mont Faron**, qui reste (il suit pourtant le relèvement :
+  `liftOn` faux l'efface ; e2e `faron-tree-streak`, PROBLEMES).
+- **`shadeWater`/`shadeWaterOpen`/`shade` → `seaWake` → `kelvinSlope`** (nouvelle petite fonction) : les vagues de Kelvin
+  par leur cambrure selon le nombre de Froude (plus de hauteur ∝ longueur de coque : pentes jusqu'à 1,8 derrière un
+  chalutier à 2 m/s — les anneaux concentriques), transversales faibles et lissées sur le sillage turbulent, divergentes
+  fortes sur les cuspides à 19,5°, crêtes brisées par le bruit de la mer (une lecture partagée avec l'écume), trains non
+  résolus dans la variance des pentes, somme bornée à ak 0,4 ; plus d'`atan`/`cos`/`sin` par train ; le remous de l'hélice
+  et la bande lisse aux basses vitesses.
+- **Tailles inlinées** (`wgsl-inline-size.ts`, earth-raster, `18a6e4dd` → `a1f3b0c8`) : `shadeLite` 7 919 → 7 966, `shade`
+  27 076 → 27 109, `shadeWater` 5 608 → 5 622, `shadeWaterOpen` 4 902 → 4 916, `shadeLiteLight` 2 478 → 2 479, `main`
+  42 448 → 42 471, `env` 58 874 → 58 943. `check-wgsl` passé (ce Mac, et kerr-mini pour `c02620c0`).
+- **Coût GPU des sillages** (ce Mac, M1 Max, e2e `ship-wake`, une passe de chaque côté, GPU p50 avec puis sans
+  `renderer.seaWakes`, trois fois en alternance, médianes) : vue arrière haute du Ford 1,0 → 0,7 ms, vue de travers basse
+  0,5 → 0,2 ms — **dans le bruit d'une seule passe**, aucun gain revendiqué ; à 76 m du chalutier (`traffic-free-camera`) :
+  −0,1 puis +0,8 ms selon les passes (vue en direct, bruitée). Coût GPU des autres changements **non mesuré**.
+
+### PONT-ROUTES — revue C : tabliers relevés, ponts entiers, tous dessinés, câbles ronds, Alexandre III (25 novembre 2026, branche de l'agent)
+
+**Code, vérifié par tests unitaires et par un A/B e2e sur kerr-mini** (mesures plus bas). Ce qui change pour le pipeline :
+
+- **Chargement (cellules « rue », hors image)** : format **6** (`kerr-street-v6`, KSC6 ; le cache v5 effacé à la création du
+  pool, chaque cellule refaite à sa première demande). Un point d'axe de pont porte la hauteur relevée du tablier au-dessus de
+  la mer (`BRIDGE_POINT_BYTES` 8 → 12), le tirant minimal passe sur deux octets. **Nouvelle requête** : la BD TOPO 3D des
+  tronçons « sur le sol » d'une tuile z 14 par le **WFS** de la Géoplateforme (`bdtopo.ts bdtopoDecksUrl` ; les tuiles
+  vectorielles TMS sont 2D), une seule par tuile et seulement si une de ses tuiles BD TOPO a un pont (`bdtopoHasBridges`) ;
+  8–35 ko ; classée « tuile » par la PWA (`pwa/rules.ts`), budget « rate » du SW (service « other »), ajoutée aux zones
+  (`zones.ts streetTileZoneChains`, IGN allumé). Hors ligne sans elle : le profil du tirant comme avant.
+- **Préparation** (`street-prep.ts`, `street-detail-prep.ts`) : les tronçons d'un même pont coupés par deux cellules z 15 —
+  chaque cellule lit sa propre tuile BD TOPO, découpée avec une marge : recouvrement ou trou d'un segment au bord — sont
+  chaînés (recouvrement : jusqu'au bout lointain ; trou ≤ 80 m dans l'axe : franchi). Hors relevé : tirant par l'eau franchie
+  (`ruleClearance`, 5,5 m + 3,5 cm/m au-delà de 100 m d'eau, ≤ 45 m).
+- **Worker du décor** (`scenery-worker.ts`) : demi-ponts z 14 qui se recouvrent ou s'arrêtent court épissés
+  (`bridge-ports.ts spliceOpenHalves`), culées jointives fusionnées et bretelles posées sur le tablier qu'elles rejoignent
+  (`joinDeckPieces`, registre) ; profil sur le relevé (`BridgeContinuousProfile.measured`, raccord aux culées ≤ 4 %, refusé
+  sous le sol). **Plus de plafond en nombre** (`bridgeLimit` = 256 × k², 1 024 à Paris) : une **part de 30 % des octets du
+  décor** (`bridge-lod.ts BRIDGE_SHARE`), les plus proches d'abord, la LOD grossie à mesure que la part se remplit (niveau 3 :
+  cordes de 80 m, ni parapet ni pile — sauf viaduc) ; au-delà, un tablier écarté est compté (`stats().bridgesDropped`).
+  Couche lointaine : un tablier relevé à sa hauteur (`street-far.ts farBridges`).
+- **`meshVs` / `meshShade` (`scenery-raster.ts`, pipelines inchangés)** : un câble de pont remarquable (0xfff2) est ouvert
+  **en travers de sa ligne et de la vue** (la ligne : les deux points distincts du triangle) au lieu du haut du repère ; son
+  côté ±1 et son diamètre passent en `pyl.z/w` ; là où il couvre ses pixels en entier, **la distance écrite est celle du
+  devant d'un cylindre** (`d − r√(1−a²)`) : `rasterNormal` en refait une normale ronde. Sous un pixel : la couverture tirée,
+  inchangée (pas de scintillement).
+- **Pont Alexandre III** (`bridge-structures.ts`) : chaque pylône en huit solides peints (socle, piédestal, colonne effilée,
+  chapiteau, plinthe en granit ; groupe et ailes **dorés**) jusqu'à 22,6 m au-dessus du tablier ; l'arc : cinq nervures sur la
+  vraie portée (107,5 m, flèche 6,28 m), naissances sous la clé, clé à l'intrados, montants des tympans, en 12 pièces (la
+  rivière dessous reste libre au contact). Tous marqués `BRIDGE_PAINT | peinture`.
+- **`shadeLite` (`liteMaterial`)** : palette des pièces peintes 8 → 9 (doré linéaire 0,62/0,41/0,10) : +1 ligne.
+  `check-wgsl` 85/85 (ce Mac, 25 nov.).
+- **Mesuré** (kerr-mini, 24 nov. 2026 ~22:15 UTC, sans fenêtre, A/B `bridges.e2e` en une même tâche : A = `18a6e4dd`, B = `698dbd22`,
+  `remote-results/20261124-221143-ponts-ab-bridges`, `lastGpuMs` sur 90 images, p50 / p95 en ms) : Grenelle 55,0 / 57,3 → 54,1 / 57,2 ;
+  Alexandre III 64,4 / 75,1 → 56,1 / 59,2 (B : 28 cellules « rue » encore en préparation à la prise — scène non comparable) ;
+  rue de Rivoli 59,6 / 64,2 → 60,2 / 65,2 ; Millau 35,4 / 40,7 → 33,4 / 34,8 ; Golden Gate à 1 km 47,5 / 55,3 → 48,5 / 61,1 ;
+  à 30 km 37,3 / 39,2 → 38,0 / 40,4. Ponts dessinés à Paris **1 024 (plafond) → 1 135–1 157 (tous les candidats)** pour
+  3,2–3,8 Mo d'octets de tabliers (la part : 20,1 Mo). Une seule passe par côté : l'écart p50 reste dans le bruit de ±1–2 ms
+  de ces vues, sauf Alexandre III (scène incomplète côté B). Préparation des cellules à froid plus lente côté B (requêtes WFS
+  la première fois : 163 réponses téléchargées puis gardées, 0 échec) : `streetMissing` 28 à Paris et 46 à Millau à la prise.
+- **Mesuré** (kerr-mini, 24 nov. 2026 ~23:30 UTC, A/B `bridges-notable.e2e`, mêmes côtés, `remote-results/20261124-221208-ponts-ab-notable`) :
+  Cheviré 47,2 / 52,5 → 44,2 / 47,1 ms (crête 25,2 → 60,6 m sur la mer) ; Golden Gate au téléobjectif à 30 km 34,5 / 44,1 → 34,4 / 36,4 ;
+  tabliers vus du conducteur : Grenelle 48,5 / 53,8 → 52,7 / 60,9, Alexandre III 50,0 / 52,1 → 50,5 / 62,0, Millau 37,7 / 45,0 → 37,0 / 45,0,
+  Golden Gate 43,3 / 45,1 → 43,6 / 49,0 (une passe par côté ; Grenelle et Alexandre III : plus de pièces — pylônes, arc, tous les ponts —,
+  écart non séparé du bruit d'une passe). Scintillement des câbles à 30 km : sous la moitié du décalage d'un pixel des deux côtés.
+- **Non mesuré** : `levelTwinDecks`, les bouts posés sur un tablier recouvrant (`629aedc0`), `farBridges` relevé (`6f1fdcd2`).
+- **`rasterLiteTakes` / `shadeLite` (trace.wgsl, `05a44c32`)** : le proxy de couronne d'un arbre devant le ciel (id en g, sol 0, alpha 0)
+  est pris par `shadeLite` (avant : le noyau des rayons `shade`, sans arbres depuis J9 — les blocs gris de Battery Spencer) ; la couronne
+  cherchée jusqu'à 60 m au-delà du proxy ; un raté laissé `RASTER_STALE` à la reconstruction. +8 lignes ; `check-wgsl` 85/85 (ce Mac).
+- **Mesuré après tous les correctifs** (kerr-mini, 25 nov. 2026 ~00:40 UTC, `05a44c32`, `remote-results/20261125-003315-ponts-after-bridges-2`,
+  une passe, p50 / p95 ms) : Grenelle 56,4 / 63,3, Alexandre III 58,8 / 64,9, Rivoli 58,8 / 62,6, Millau 33,4 / 39,7, Golden Gate à 1 km
+  47,2 / 51,3, à 30 km 37,3 / 38,9 ; `bridgesDropped` 0 partout, Paris 1 007–1 166 ponts (les pièces jointes en comptent moins).
+  `bridges-notable` (`629aedc0`) : Cheviré 45,2 / 53,7, Golden Gate au conducteur 46,1 / 75,6 (p95 d'une seule passe).
 
 ### PERF — ponts et rues de Paris (24 novembre 2026, branche de l'agent) — mesuré
 
@@ -876,7 +976,7 @@ fini. Les marques entre crochets sont celles de `__bh.boot()` (`src/boot-timelin
 | 8 | Lancement d'un mode | voile d'entrée : attend le noyau de la scène (`scene-tracer`), ≤ 90 s (`ui/entry.ts:67`) ; arrêt de la pré-compilation | la clé de la scène choisie | voile 400 ms, HUD 600 ms | oui (≤ 90 s) | entrée en orbite 2,1 s (E10, e2e) ; vol libre depuis le titre (Edwards, profil neuf, ce Mac, CM3 12/11, `title-departure`) : voile levé à 2,2–2,6 s **sur une image noire** — cartes globales de la Terre et tuiles demandées seulement après, 1re tuile à 11,3 s ; **après CM3** : le voile attend aussi le sol du départ (cartes, chaque niveau z ≤ 10 dessiné autour de l'appareil ; ≤ 15 s, `__bh.entry.lastWait`) — levé à 3,3–3,7 s (Edwards), 3,5 s (Le Bourget), relief dessiné 29–50 %, plus d'image noire | `__bh.entry`, aucune marque dans `boot()` |
 | 9 | Arrivée près de la Terre | cartes globales med puis high ; **tuiles** relief z6–17 (8 en vol, décodées en worker) et imagerie, IGN (14 en vol ; SW : WMS-R 25/s et 10 en vol, WMTS/TMS 16 en vol sans débit depuis CM2 12/11 — avant, les orthophotos attendaient 5 s derrière les grilles ; les 429 viennent du seul WMS-R, `pwa.stats().served.geopf`), ortho (8) ; une tuile en échec : son parent agrandi en attendant, redemandée (2 s → 30 s, aussitôt au retour du réseau ; CM1 12/11 — plus la carte mondiale à 4,9 km) ; l'imagerie de jour publiée sans la nuit si celle-ci manque ou tarde de 3 s ; cuissons du cache ; raster créé (pipelines async) | si non pré-compilé : `shadeLite` → `skyFill` → `clouds` (secondes, **image du ciel d'attente**) → `main` → … ; raster du terrain et du décor | sol grossier 2–6 s, puis affiné | **non** (le ciel d'attente remplace `main`) | ILS LFTH froid : côtés complets 38 s, file vide 44 s ; vue à 90 % en 8,1 s (rejeu, ce Mac, T8j 3/11) ; Paris relief 57 s (kerr-mini, M0b 2/11) ; **Paris 900 m froid (ce Mac, CM0 12/11, `tile-arrival`)** : vue à 90 % en 4,9–6,1 s avec ou sans SW, mais avec le SW imagerie z 9–14 reçue p50 5 s (0,25 s sans), orthophotos dessinées 4–5 s (0,7 s), relief IGN 22–23 s (7–8 s) ; à 20 Mbit/s vue à 90 % en 21–22 s, z 11–14 jamais entiers en 60 s | `earthTiles.pending`, `renderer.earthSettled` (booléen) ; **par tuile** : `earthTiles.arrivals` (demandée → reçue → écrite → dessinée, par source ; CM0) |
 | 10 | Décor (forêts, bâtiments, routes) | worker du décor : WorldCover, OSM, BD TOPO/Overture, canopée IGN, forêt, BVH ; scène rapide (35 %) puis complète. Le worker continue de préparer des scènes complètes tant que le carré publié couvre la caméra (J8-A, 20 nov. 2026). **Hors de cette couverture, en vol rapide (> 120 m/s), chaque scène rapide centrée jusqu'à 2,5 fois son rayon devant (`renderer.sceneryQuickLead` — **16 nov. : ne suffit pas, bâtiments devant à l'arrivée sur Toulon 1 passage sur 6 ; le décor en retard, pas absent : 41 une fois laissé finir ; PROBLEMES** —, 1,2 avant le 15 nov. : arrivée derrière l'avion, aucun bâtiment devant en arrivant sur Toulon ; e2e `parcours-ville`)** ; fondu 600 ms ; buffer ≤ 64 Mio ; **bâtiments plafonnés** (8 000 × portée², 32 000 en `high`/`veryFar`, les plus proches **du centre de la scène** gardés — `cutBuildings`, `keptReachM`) ; les arbres de la canopée IGN exclus des emprises des seuls bâtiments gardés : sur les îlots coupés, la canopée (MNH, qui contient les toits) plante des arbres — `earthScenery.clearCut` (éteint, décision de Sam) les exclut aussi des emprises coupées ; **plafond de 32 000 bâtiments gardés le long du couloir de vol** (`earthScenery.corridor`, 13 nov. : de l'œil à l'au-delà du centre, non plus autour du centre seul ; `clearCut` allumé : les arbres refusés aux îlots coupés) | `shade` quand le décor entre (profil : déjà compilé) | arbres et bâtiments en fondu | non | scènes 24–33 s (kerr-mini, T8o 6/11) ; couverture 0,97 (T8m) ; **Paris, ce Mac, 12/11, `cut-buildings-trees`** : 215 000–261 000 bâtiments coupés, gardés à 2,5 km du centre ; `clearCut` : 1,22–1,37 M → 0,64–0,68 M arbres, grille des emprises coupées 0,5–0,75 s et forêt +0,9–1,3 s dans le worker (une scène chaude 22–23 s), image GPU inchangée dans le bruit (thermique « Heavy ») | `earthScenery.stats()`, compteur de données |
-| 10 b | Cellules préparées (PLAN-J8) | le trafic et le stationnement sont filtrés côté CPU avec les axes WGS84 des pistes. Les cellules lointaines concernées sont réémises quand les pistes du catalogue changent. Workers des cellules (`cell-worker.js`, pools de `cell-workers.ts`) hors de l'image : **bâtiments** z 15 (J8-3, `kerr-cells-v1`, lus par la couche lointaine), **rues** (J8-L, `kerr-street-v5` depuis le 17/11 — KSC3 : la potence des lampes, les suites et surfaces des tronçons, le mobilier des jonctions, J8-VB VB2/VB5a/VB6/VB7 ; KSC4 : les ponts chaînés par tuile, l'indice de pont par tronçon, les bouches de tunnel, J8-RP RP2/RP4/RP6/RP7/RP8 ; KSC5 : les voies ferrées, RP9 ; les caches des formats anciens effacés à la création du pool —, lampadaires et voitures lointains), **forêt par cellule** (J8-8b lot 1, 17/11 : `kerr-forest-v1` — `forest-cells.ts`, `forest-prep.ts`, `forest-cover.ts`, `forest-exclusions.ts` — : les candidats de la grille fixe de la forêt par cellule z 15 ; **assemblés par la scène depuis le lot 2** (17/11, `renderer.forestCellsOn`, éteint par défaut tant que non mesuré : le worker du décor lit les cellules sous son cadre dans `kerr-forest-v1` avant `growForest` — `forest-assembly.ts` `preparedForest`, phase `forest cells`. Avec les maillages proches, la lecture BD TOPO est évitée quand les cellules couvrent toutes les positions plantables du disque (J8-8b, 20 nov.) — et ne décide plus que le sol, l'espèce, la hauteur et le pied des cases couvertes ; les clés du cache lues une fois par scène ; une cellule sans canopée laissée à une scène qui a celle de l'IGN ; le pool forêt demandé à 7 km de l'œil seulement avec `forestPoolOn` (éteint : les cellules des zones seules) ; lot 3 (non mesuré) : les cellules lues dès le début de la scène, et toutes là avec les maillages proches, la BD TOPO n'est plus téléchargée ni décodée par la scène ; `growForest` et le décodage BD TOPO pour les arbres retirés au lot 3) ; Toulon, 4 cellules en 0,6 s, 120–210 ms la cellule, ~34 Ko, image la plus longue 18 ms, kerr-mini, `j8-forest-cells`), **maillages proches** (J8-8 lot 1, 17/11 : `kerr-mesh-v1` — `mesh-cells.ts`, `mesh-prep.ts`, le code des enregistrements partagé avec le worker du décor, `building-mesh-prep.ts` — ; **rien ne les dessine encore** : réserve GPU et dessin au lot 2) ; une zone en couloir les prépare après ses tuiles (maillages : à moins de `MESH_NEAR_M` = 1 500 m du tracé) ; `flightReady({ track })` les compte | — | — | non (workers) | maillages : Toulon centre, 9 cellules en 1,1 s à froid, médiane 254 ms la cellule, 7 854 bâtiments, 8,0 Mo, image la plus longue 10 ms (ce Mac, 17/11, `j8-mesh-cells`) ; Paris centre 345 ms la cellule et ~2,75 ko le bâtiment hors navigateur (`scripts/j8-8-mesh-measure.ts`, un fil) | `__bh.sys.cells` / `streets` / `meshes` `.stats()` |
+| 10 b | Cellules préparées (PLAN-J8) | le trafic et le stationnement sont filtrés côté CPU avec les axes WGS84 des pistes. Les cellules lointaines concernées sont réémises quand les pistes du catalogue changent. Workers des cellules (`cell-worker.js`, pools de `cell-workers.ts`) hors de l'image : **bâtiments** z 15 (J8-3, `kerr-cells-v1`, lus par la couche lointaine), **rues** (J8-L, `kerr-street-v6` depuis le 25/11 — KSC6 : la hauteur relevée des tabliers, BD TOPO 3D par le WFS ; KSC3 : la potence des lampes, les suites et surfaces des tronçons, le mobilier des jonctions, J8-VB VB2/VB5a/VB6/VB7 ; KSC4 : les ponts chaînés par tuile, l'indice de pont par tronçon, les bouches de tunnel, J8-RP RP2/RP4/RP6/RP7/RP8 ; KSC5 : les voies ferrées, RP9 ; les caches des formats anciens effacés à la création du pool —, lampadaires et voitures lointains), **forêt par cellule** (J8-8b lot 1, 17/11 : `kerr-forest-v1` — `forest-cells.ts`, `forest-prep.ts`, `forest-cover.ts`, `forest-exclusions.ts` — : les candidats de la grille fixe de la forêt par cellule z 15 ; **assemblés par la scène depuis le lot 2** (17/11, `renderer.forestCellsOn`, éteint par défaut tant que non mesuré : le worker du décor lit les cellules sous son cadre dans `kerr-forest-v1` avant `growForest` — `forest-assembly.ts` `preparedForest`, phase `forest cells`. Avec les maillages proches, la lecture BD TOPO est évitée quand les cellules couvrent toutes les positions plantables du disque (J8-8b, 20 nov.) — et ne décide plus que le sol, l'espèce, la hauteur et le pied des cases couvertes ; les clés du cache lues une fois par scène ; une cellule sans canopée laissée à une scène qui a celle de l'IGN ; le pool forêt demandé à 7 km de l'œil seulement avec `forestPoolOn` (éteint : les cellules des zones seules) ; lot 3 (non mesuré) : les cellules lues dès le début de la scène, et toutes là avec les maillages proches, la BD TOPO n'est plus téléchargée ni décodée par la scène ; `growForest` et le décodage BD TOPO pour les arbres retirés au lot 3) ; Toulon, 4 cellules en 0,6 s, 120–210 ms la cellule, ~34 Ko, image la plus longue 18 ms, kerr-mini, `j8-forest-cells`), **maillages proches** (J8-8 lot 1, 17/11 : `kerr-mesh-v1` — `mesh-cells.ts`, `mesh-prep.ts`, le code des enregistrements partagé avec le worker du décor, `building-mesh-prep.ts` — ; **rien ne les dessine encore** : réserve GPU et dessin au lot 2) ; une zone en couloir les prépare après ses tuiles (maillages : à moins de `MESH_NEAR_M` = 1 500 m du tracé) ; `flightReady({ track })` les compte | — | — | non (workers) | maillages : Toulon centre, 9 cellules en 1,1 s à froid, médiane 254 ms la cellule, 7 854 bâtiments, 8,0 Mo, image la plus longue 10 ms (ce Mac, 17/11, `j8-mesh-cells`) ; Paris centre 345 ms la cellule et ~2,75 ko le bâtiment hors navigateur (`scripts/j8-8-mesh-measure.ts`, un fil) | `__bh.sys.cells` / `streets` / `meshes` `.stats()` |
 | 11 | Vol | re-cuissons du cache (≈16/s en vol bas, M0b), nouvelles tuiles (publiées au début de l'image sous budget, une soumission de mips par image — J2-1), décor reconstruit 40–50 s, bandes des horizons ; gouverneurs (bloc, taux raster, échelle, palier) | clé en avance (`aheadKey`) ; rien de neuf sous le profil | — | non | vol de 2 min à Chamonix 30–32 ms médian, p95 37–40, max 72,6 (kerr-mini, M0b) | `game.perf()`, `gpu.frames()` |
 | 12 | Voyage vers un autre corps | `NEAR_KIND` change → nouvelle clé — **depuis le 13/11, le noyau du corps visé demandé dès le départ du voyage** (`renderer.prewarmNear`, `main.ts` `travelTo`, non urgent ; levier de mesure `prewarmVoyage`) ; cartes HD + tuiles Lune/Mars ; bake des horizons ; raster des corps | `main`/`env`/`shadeLite` du corps (Mars 86k, Lune 73k lignes) ; **Jupiter proche 203–219 s à froid** (M1 Max, 6/11) ; **60 s** sur kerr-mini (13/11), ~47 s à l'arrivée d'un voyage anticipé | l'ancienne clé couvre si possible | parfois | Lune prête 7,9 s, trou de ver 8,6 s (kerr-mini 27/10) | `compileReport()` ; aucun chrono de re-streaming |
 | 13 | Carte 3D, trace au sol | `MapGpu` : 6 pipelines sync à l'ouverture, même device | 6 sync | carte | court | non mesuré | aucun |
@@ -1067,7 +1167,7 @@ Paris jusqu'à `earthSettled` » chronométré par étape.
 
 <!-- pipeline-inventory:begin (bun scripts/pipeline-inventory.ts --write) -->
 
-_Généré le 2026-11-25T04:20:46Z sur `11893cd4` (arbre de travail). Ne pas éditer à la main : relancer l'outil._
+_Généré le 2026-11-25T07:36:14Z sur `0c2f0407` (arbre de travail). Ne pas éditer à la main : relancer l'outil._
 
 **130 sites de création de pipeline** (86 rendu, 44 calcul, dont 66 asynchrones) et 43 `createShaderModule` dans 32 fichiers ; **44 programmes WGSL** (16 fichiers .wgsl, 28 chaînes dans le TypeScript) ; **66 libellés de passes** du profileur GPU (+ 11 sites à libellé dynamique).
 
@@ -1196,32 +1296,32 @@ _Généré le 2026-11-25T04:20:46Z sur `11893cd4` (arbre de travail). Ne pas éd
 | `src/system/hd-maps.ts:300` | render | — | `vs`, `entry` |
 | `src/system/horizon-maps.ts:628` | compute | `horizon bake` | `bake` |
 | `src/system/horizon-maps.ts:629` | compute | `horizon mips` | `mip` |
-| `src/system/scenery-raster.ts:1485` | compute async | — | `cull` |
-| `src/system/scenery-raster.ts:1488` | compute async | — | `clampDraws` |
-| `src/system/scenery-raster.ts:1491` | compute async | — | `cullBoxes` |
-| `src/system/scenery-raster.ts:1494` | compute async | — | `clampBoxes` |
-| `src/system/scenery-raster.ts:1498` | render async | — | `proxyVs`, `proxyFs` |
-| `src/system/scenery-raster.ts:1523` | render async | — | `boxVs`, `boxFs` |
-| `src/system/scenery-raster.ts:1536` | render async | — | `boxMarkVs`, `bridgeMarkFs` |
-| `src/system/scenery-raster.ts:1549` | render async | — | `boxSolidVs`, `meshFs` |
-| `src/system/scenery-raster.ts:1563` | render async | — | `meshVs`, `meshFs` |
-| `src/system/scenery-raster.ts:1579` | render async | — | `shadowVs`, `shadowFs` |
-| `src/system/scenery-raster.ts:1594` | render async | — | `boxShadowVs` |
-| `src/system/scenery-raster.ts:1602` | render async | `envelope bench cull` | `meshShadowVs` |
-| `src/system/scenery-raster.ts:1662` | compute async | — | `benchCull` |
-| `src/system/scenery-raster.ts:1666` | render async | — | `benchVs`, `meshFs` |
-| `src/system/scenery-raster.ts:1677` | render async | — | `benchShadowVs` |
-| `src/system/scenery-raster.ts:1683` | render async | `envelope bench` | `benchQuadVs`, `meshFs` |
-| `src/system/scenery-raster.ts:1794` | compute async | — | `farCull` |
-| `src/system/scenery-raster.ts:1798` | render async | — | `farVs`, `farFs` |
-| `src/system/scenery-raster.ts:1805` | render async | — | `farQuadVs`, `farFs` |
-| `src/system/scenery-raster.ts:1812` | render async | — | `farShadowVs` |
-| `src/system/scenery-raster.ts:1987` | render async | — | `nearCellShadowVs` |
-| `src/system/scenery-raster.ts:1993` | render async | `far lamps draw` | `nearCellVs`, `meshFs` |
-| `src/system/scenery-raster.ts:2130` | render async | — | `farLampVs`, `farFs` |
-| `src/system/scenery-raster.ts:2137` | compute async | — | `farLampCull` |
-| `src/system/scenery-raster.ts:2141` | render async | — | `farCarVs`, `farFs` |
-| `src/system/scenery-raster.ts:2148` | compute async | — | `farCarCull` |
+| `src/system/scenery-raster.ts:1509` | compute async | — | `cull` |
+| `src/system/scenery-raster.ts:1512` | compute async | — | `clampDraws` |
+| `src/system/scenery-raster.ts:1515` | compute async | — | `cullBoxes` |
+| `src/system/scenery-raster.ts:1518` | compute async | — | `clampBoxes` |
+| `src/system/scenery-raster.ts:1522` | render async | — | `proxyVs`, `proxyFs` |
+| `src/system/scenery-raster.ts:1547` | render async | — | `boxVs`, `boxFs` |
+| `src/system/scenery-raster.ts:1560` | render async | — | `boxMarkVs`, `bridgeMarkFs` |
+| `src/system/scenery-raster.ts:1573` | render async | — | `boxSolidVs`, `meshFs` |
+| `src/system/scenery-raster.ts:1587` | render async | — | `meshVs`, `meshFs` |
+| `src/system/scenery-raster.ts:1603` | render async | — | `shadowVs`, `shadowFs` |
+| `src/system/scenery-raster.ts:1618` | render async | — | `boxShadowVs` |
+| `src/system/scenery-raster.ts:1626` | render async | `envelope bench cull` | `meshShadowVs` |
+| `src/system/scenery-raster.ts:1686` | compute async | — | `benchCull` |
+| `src/system/scenery-raster.ts:1690` | render async | — | `benchVs`, `meshFs` |
+| `src/system/scenery-raster.ts:1701` | render async | — | `benchShadowVs` |
+| `src/system/scenery-raster.ts:1707` | render async | `envelope bench` | `benchQuadVs`, `meshFs` |
+| `src/system/scenery-raster.ts:1818` | compute async | — | `farCull` |
+| `src/system/scenery-raster.ts:1822` | render async | — | `farVs`, `farFs` |
+| `src/system/scenery-raster.ts:1829` | render async | — | `farQuadVs`, `farFs` |
+| `src/system/scenery-raster.ts:1836` | render async | — | `farShadowVs` |
+| `src/system/scenery-raster.ts:2011` | render async | — | `nearCellShadowVs` |
+| `src/system/scenery-raster.ts:2017` | render async | `far lamps draw` | `nearCellVs`, `meshFs` |
+| `src/system/scenery-raster.ts:2154` | render async | — | `farLampVs`, `farFs` |
+| `src/system/scenery-raster.ts:2161` | compute async | — | `farLampCull` |
+| `src/system/scenery-raster.ts:2165` | render async | — | `farCarVs`, `farFs` |
+| `src/system/scenery-raster.ts:2172` | compute async | — | `farCarCull` |
 | `src/system/terrain-cache.ts:300` | compute async | — | `main` |
 | `src/system/terrain-cache.ts:301` | compute async | — | — |
 | `src/system/terrain-raster.ts:638` | render async | — | `terrainSunVs` |
@@ -1249,10 +1349,10 @@ _Généré le 2026-11-25T04:20:46Z sur `11893cd4` (arbre de travail). Ne pas éd
 
 | source | lignes | points d'entrée |
 |---|---:|---|
-| `src/shaders/trace.wgsl` | 18192 | 18 entrées : cloudLightVolume, aerial, lut, main, shade, shadeMark, shadeLiteFinish, shadeWaterFinish, shadeLiteLight, shadeLite, skyFill, shadeWater, clouds, skyAmbient, cloudShadow, env, probe, shadeStars |
+| `src/shaders/trace.wgsl` | 18269 | 18 entrées : cloudLightVolume, aerial, lut, main, shade, shadeMark, shadeLiteFinish, shadeWaterFinish, shadeLiteLight, shadeLite, skyFill, shadeWater, clouds, skyAmbient, cloudShadow, env, probe, shadeStars |
 | `src/shaders/ship.wgsl` | 2823 | 34 entrées : envCopy, envDown, envGGX, envSH, ctlVs, depthVs, vs, mirrorVs, shadowVs, fs, hullDepthVs, hullDepthFs, ownMaskFs, plumeVs, plumeFs, glowVs, glowFs, distVs, distFs, sheathVs, sheathFs, trailVs, trailFs, lampVs, lampFs, compVs, compFs, fsCabin, fsCabinGlass, fsJetGlass, motionVs, motionFs, composeColor, composeSurface |
 | `src/shaders/post.wgsl` | 1396 | 18 entrées : gatherH, atrous, beamH, beamV, polgrid, resolve, down, downShip, dof, flareMeter, up, meter, stars, motionBlur, temporal, occlusion, cloudTemporal, taau |
-| `src/system/scenery-raster.ts:208` | 1167 | 31 entrées : cull, cullBoxes, clampBoxes, shadowVs, shadowFs, proxyVs, proxyFs, boxVs, boxFs, bridgeMarkFs, boxMarkVs, boxShadowVs, meshShadowVs, meshVs, meshFs, boxSolidVs, benchCull, benchQuadVs, benchVs, benchShadowVs, farCull, farVs, farQuadVs, farFs, farLampCull, farLampVs, farCarCull, farCarVs, nearCellVs, nearCellShadowVs, farShadowVs |
+| `src/system/scenery-raster.ts:208` | 1191 | 31 entrées : cull, cullBoxes, clampBoxes, shadowVs, shadowFs, proxyVs, proxyFs, boxVs, boxFs, bridgeMarkFs, boxMarkVs, boxShadowVs, meshShadowVs, meshVs, meshFs, boxSolidVs, benchCull, benchQuadVs, benchVs, benchShadowVs, farCull, farVs, farQuadVs, farFs, farLampCull, farLampVs, farCarCull, farCarVs, nearCellVs, nearCellShadowVs, farShadowVs |
 | `src/shaders/display.wgsl` | 949 | vs (v), fs (f) |
 | `src/shaders/character.wgsl` | 708 | 22 entrées : avatarVs, shadowVs, fs, screenVs, groundShadow, skinVs, skinShadowVs, skinFs, grassLight, grassTrample, grassBlades, grassClamp, grassVs, grassFs, stonesGrow, stonesClamp, stoneVs, stoneFs, coverGrow, coverClamp, coverVs, coverFs |
 | `src/shaders/map.wgsl` | 616 | bodyVs (v), bodyFs (f), skyVs (v), skyFs (f), bodyDepthFs (f), lineVs (v), lineFs (f), planiVs (v), planiFs (f), markVs (v), markFs (f) |
@@ -1430,19 +1530,19 @@ Leur coût n'apparaît que dans l'intervalle de complétion de la frame (ou d'un
 
 | profil | noyaux (lignes inlinées, en milliers) | total |
 |---|---|---:|
-| `earth-raster` | shade 27.1 · shadeMark 0.3 · shadeLite 7.9 · shadeLiteFinish 0.8 · shadeLiteLight 2.0 · shadeWater 5.6 · shadeWaterOpen 4.9 · shadeWaterFinish 1.2 · shadeStars 0.3 · discs 29.9 · clouds 3.8 · skyFill 0.7 · main 42.5 · env 58.9 · aerial 0.7 | 187k |
-| `earth-raster-wx` | shade 32.1 · shadeMark 0.3 · shadeLite 7.9 · shadeLiteFinish 0.8 · shadeLiteLight 2.0 · shadeWater 5.6 · shadeWaterOpen 4.9 · shadeWaterFinish 1.2 · shadeStars 0.3 · discs 29.9 · clouds 3.8 · skyFill 0.7 · main 45.4 · env 58.9 · aerial 0.7 | 195k |
+| `earth-raster` | shade 27.1 · shadeMark 0.3 · shadeLite 8.0 · shadeLiteFinish 0.8 · shadeLiteLight 2.0 · shadeWater 5.6 · shadeWaterOpen 4.9 · shadeWaterFinish 1.2 · shadeStars 0.3 · discs 29.9 · clouds 3.8 · skyFill 0.7 · main 42.5 · env 59.0 · aerial 0.7 | 187k |
+| `earth-raster-wx` | shade 32.1 · shadeMark 0.3 · shadeLite 8.0 · shadeLiteFinish 0.8 · shadeLiteLight 2.0 · shadeWater 5.6 · shadeWaterOpen 4.9 · shadeWaterFinish 1.2 · shadeStars 0.3 · discs 29.9 · clouds 3.8 · skyFill 0.7 · main 45.4 · env 59.0 · aerial 0.7 | 195k |
 | `earth-trace` | main 66.1 · env 62.5 · aerial 0.6 | 129k |
 | `earth-photo` | main 67.9 | 68k |
-| `game-space` | main 54.1 · env 50.4 · aerial 0.6 | 105k |
-| `moon` | main 75.9 · env 50.4 · aerial 0.6 · shadeLite 25.6 | 153k |
-| `moons` | main 76.7 · env 50.4 · aerial 0.6 · shadeLite 25.8 | 154k |
-| `mars` | main 87.6 · env 50.4 · aerial 0.6 · shadeLite 37.6 | 176k |
-| `titan` | main 90.7 · env 50.4 · aerial 0.6 · shadeLite 42.8 | 184k |
-| `venus` | main 90.4 · env 50.4 · aerial 0.6 · shadeLite 43.4 | 185k |
+| `game-space` | main 54.2 · env 50.4 · aerial 0.6 | 105k |
+| `moon` | main 75.9 · env 50.4 · aerial 0.6 · shadeLite 25.7 | 153k |
+| `moons` | main 76.8 · env 50.4 · aerial 0.6 · shadeLite 25.8 | 154k |
+| `mars` | main 87.7 · env 50.4 · aerial 0.6 · shadeLite 37.7 | 176k |
+| `titan` | main 90.8 · env 50.4 · aerial 0.6 · shadeLite 42.8 | 185k |
+| `venus` | main 90.5 · env 50.4 · aerial 0.6 · shadeLite 43.4 | 185k |
 | `earth-only` | main 50.2 · env 44.1 · aerial 0.7 | 95k |
 | `kerr-jet` | main 31.9 · env 27.9 · lut 28.2 | 88k |
-| `eclipse` | main 46.0 · env 37.7 · aerial 0.6 | 84k |
-| `general` | main 151.3 · env 73.5 · lut 147.0 | 372k |
+| `eclipse` | main 46.1 · env 37.7 · aerial 0.6 | 84k |
+| `general` | main 151.4 · env 73.6 · lut 147.1 | 372k |
 
 <!-- pipeline-inventory:end -->

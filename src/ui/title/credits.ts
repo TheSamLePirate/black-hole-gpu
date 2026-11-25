@@ -135,7 +135,10 @@ export const CREDITS: CreditSection[] = [
           fr: "Les porte-avions (Gerald R. Ford, Kiev, Implacable), les avions de ligne et les navires du trafic",
           en: "The carriers (Gerald R. Ford, Kiev, Implacable), the airliners and the ships of the traffic",
         },
-        who: { fr: "Modèles 3D fournis, sous la licence de leurs auteurs", en: "3D models supplied, under their authors' licences" },
+        who: {
+          fr: "Modèles 3D fournis, sous la licence de leurs auteurs ; le train d'atterrissage des avions de ligne (depuis le 24 nov. 2026) est celui de la famille A320 de FlightGear ci-dessus (GNU GPL v2), intégré par scripts/build-traffic-gear.ts, et les livrées d'origine de leurs textures (titres Airbus, CityJet) repeintes en blanc par scripts/whiten-airliner-maps.py — les couleurs de chaque compagnie posées par le jeu, couleurs seules, ni nom ni marque",
+          en: "3D models supplied, under their authors' licences; the airliners' landing gear (since 24 Nov 2026) is the FlightGear A320-family's above (GNU GPL v2), baked into them by scripts/build-traffic-gear.ts, and their maps' original schemes (Airbus's rollout titles, CityJet's) painted white by scripts/whiten-airliner-maps.py — each airline's colours laid on by the game, colours only, no name or mark",
+        },
       },
     ],
   },

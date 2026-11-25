@@ -11,7 +11,7 @@ import {
   type BridgeRecord,
   BridgeFlag,
   BridgeKind,
-  CLEARANCE_M,
+  ruleClearance,
   Crossed,
   CROSSING_BEYOND_M,
   FURNITURE_ARM_MIN_M,
@@ -19,7 +19,6 @@ import {
   FurnitureKind,
   type FurnitureRecord,
   GUARDRAIL_OFF_M,
-  RAIL_CLEARANCE_M,
   VIADUCT_M,
   JunctionFlag,
   type JunctionRecord,
@@ -343,6 +342,10 @@ export interface ChainedBridge {
   pieces: BridgePiece[];
 }
 
+/** (25 Nov 2026) a bridge's section met past a cell's edge: the tip this near its line (overlap), or its next piece this far ahead
+ *  of the tip at most (gap) [m] — the z 15 tiles' margins leave up to a segment either way */
+export const BRIDGE_OVERLAP_SIDE_M = 1.5;
+export const BRIDGE_GAP_M = 80;
 /** a bridge confirmed by the BD TOPO's own: within this of a « Pont » construction [m] */
 export const BRIDGE_CONFIRM_M = 15;
 /** a deck's side beyond its carriageway outside the towns (parapets) [m]; in the towns, its pavements (PAVEMENT_M) */
@@ -409,11 +412,18 @@ export function chainBridges(
     // (oriented from its free end)
     let tip: [number, number] = others(s0.a, start, s0.seg.level, s0.seg.cls).length === 0 ? s0.b : s0.a;
     const points: [number, number][] = [tip === s0.b ? s0.a : s0.b, tip];
+    // (format 6: each point's surveyed deck height — its pieces' ends', the mean of those given where two pieces meet)
+    const zEnd = (pc: BridgePiece, p: [number, number]) => (p === pc.b ? (pc.seg.zb ?? Number.NaN) : (pc.seg.za ?? Number.NaN));
+    const heights: number[] = [zEnd(s0, points[0]!), zEnd(s0, tip)];
     const chain: BridgePiece[] = [s0];
     used[start] = 1;
-    for (;;) {
+    // (25 Nov 2026 — Pont de Cheviré's four pieces: a section cut by two z 15 cells is each cell's from its own tile, the BD TOPO's
+    // vector tiles clipped with a margin — the two cells' segments overlap past their edge, or leave a gap, by up to a segment, never
+    // meeting within JUNCTION_M —: past the pieces met end to end, the same section's next piece where the tip lies on it (overlap:
+    // on to its far end) or ahead of it, in line, within BRIDGE_GAP_M (a gap: across to it); then the chain's other way the same)
+    const step = (): boolean => {
       const next = others(tip, -1, s0.seg.level, s0.seg.cls).filter((j) => !used[j]);
-      if (!next.length) break;
+      if (!next.length) return across();
       if (next.length > 1) {
         const prev = points[points.length - 2] ?? points[0]!;
         const dx = tip[0] - prev[0];
@@ -438,10 +448,72 @@ export function chainBridges(
       const j = next[0]!;
       used[j] = 1;
       const pc = pieces[j]!;
-      tip = near(pc.a, tip) ? pc.b : pc.a;
+      const enter = near(pc.a, tip) ? pc.a : pc.b;
+      const zIn = zEnd(pc, enter),
+        zPrev = heights[heights.length - 1]!;
+      heights[heights.length - 1] = Number.isFinite(zPrev) && Number.isFinite(zIn) ? (zPrev + zIn) / 2 : Number.isFinite(zIn) ? zIn : zPrev;
+      tip = enter === pc.a ? pc.b : pc.a;
       points.push(tip);
+      heights.push(zEnd(pc, tip));
       chain.push(pc);
-    }
+      return true;
+    };
+    const across = (): boolean => {
+      const prev = points[points.length - 2] ?? points[0]!;
+      const L0 = Math.hypot(tip[0] - prev[0], tip[1] - prev[1]) || 1;
+      const ux = (tip[0] - prev[0]) / L0,
+        uy = (tip[1] - prev[1]) / L0;
+      let best: { j: number; near: [number, number] | null; far: [number, number]; score: number; zTip: number } | null = null;
+      pieces.forEach((pc, j) => {
+        if (used[j] || pc.seg.roadId !== s0.seg.roadId || pc.seg.level !== s0.seg.level) return;
+        const L = Math.hypot(pc.b[0] - pc.a[0], pc.b[1] - pc.a[1]);
+        if (L < 0.1) return;
+        const vx = (pc.b[0] - pc.a[0]) / L,
+          vy = (pc.b[1] - pc.a[1]) / L;
+        const dot = vx * ux + vy * uy;
+        if (Math.abs(dot) < 0.9) return;
+        const far = dot > 0 ? pc.b : pc.a,
+          nearEnd = dot > 0 ? pc.a : pc.b;
+        // (on it: the tip within BRIDGE_OVERLAP_SIDE_M of its line, between its ends, its far end ahead)
+        const t = (tip[0] - pc.a[0]) * vx + (tip[1] - pc.a[1]) * vy,
+          side = Math.abs((tip[0] - pc.a[0]) * vy - (tip[1] - pc.a[1]) * vx);
+        const ahead = (far[0] - tip[0]) * ux + (far[1] - tip[1]) * uy;
+        if (t > -0.5 && t < L + 0.5 && side <= BRIDGE_OVERLAP_SIDE_M && ahead > 0.5) {
+          const za = pc.seg.za ?? Number.NaN,
+            zb = pc.seg.zb ?? Number.NaN;
+          const zt = za + (zb - za) * Math.max(0, Math.min(1, t / L));
+          if (!best || best.score > 0) best = { j, near: null, far, score: 0, zTip: zt };
+          return;
+        }
+        // (ahead of it, in line: its near end within BRIDGE_GAP_M along, BRIDGE_OVERLAP_SIDE_M + 0.5 across)
+        const along = (nearEnd[0] - tip[0]) * ux + (nearEnd[1] - tip[1]) * uy,
+          off = Math.abs((nearEnd[0] - tip[0]) * uy - (nearEnd[1] - tip[1]) * ux);
+        if (along > 0 && along <= BRIDGE_GAP_M && off <= BRIDGE_OVERLAP_SIDE_M + 0.5 && (!best || along < best.score))
+          best = { j, near: nearEnd, far, score: along, zTip: Number.NaN };
+      });
+      if (!best) return false;
+      const { j, near: nearEnd, far, zTip } = best;
+      used[j] = 1;
+      const pc = pieces[j]!;
+      const zPrev = heights[heights.length - 1]!;
+      if (Number.isFinite(zTip)) heights[heights.length - 1] = Number.isFinite(zPrev) ? (zPrev + zTip) / 2 : zTip;
+      if (nearEnd) {
+        points.push(nearEnd);
+        heights.push(zEnd(pc, nearEnd));
+      }
+      tip = far;
+      points.push(tip);
+      heights.push(zEnd(pc, tip));
+      chain.push(pc);
+      return true;
+    };
+    while (step());
+    // (and from its start, the other way)
+    points.reverse();
+    heights.reverse();
+    chain.reverse();
+    tip = points[points.length - 1]!;
+    while (step());
     let length = 0;
     for (let k = 1; k < points.length; k++) length += Math.hypot(points[k]![0] - points[k - 1]![0], points[k]![1] - points[k - 1]![1]);
     const widest = chain.reduce((w, pc) => Math.max(w, pc.seg.width), 0);
@@ -451,6 +523,8 @@ export function chainBridges(
     const rail = chain.every((pc) => pc.seg.cls === "rail");
     // (what it crosses: its axis every 5 m, its ends' approaches left out — the roads that lead onto it)
     let crossed = 0;
+    // (its length over the water [m]: the water's samples — every 5 m — the clearance's rule's width)
+    let waterM = 0;
     const keep = widest / 2 + 5;
     let walked = 0;
     for (let k = 1; k < points.length; k++) {
@@ -462,11 +536,14 @@ export function chainBridges(
         if (s < keep || s > length - keep) continue;
         const f = d / L;
         const x: [number, number, number] = [p[0] + (q[0] - p[0]) * f, p[1] + (q[1] - p[1]) * f, 0];
+        let wet = false;
         for (const prim of surfaces) {
           if (!surfaceContains(x, prim)) continue;
           const k2 = kindOf(prim);
           crossed |= k2 >= 3 ? Crossed.Water : k2 === 2 ? Crossed.Rail : Crossed.Road;
+          wet ||= k2 >= 3;
         }
+        if (wet) waterM += 5;
       }
       walked += L;
     }
@@ -484,6 +561,8 @@ export function chainBridges(
     if (length > VIADUCT_M) flags |= BridgeFlag.Viaduct;
     if (atEdge(points[0]!)) flags |= BridgeFlag.OpenA;
     if (atEdge(points[points.length - 1]!)) flags |= BridgeFlag.OpenB;
+    const surveyed = heights.filter(Number.isFinite).length;
+    if (surveyed >= 2) flags |= BridgeFlag.Measured;
     out.push({
       bridge: {
         id: Math.min(...chain.map((pc) => pc.seg.roadId >>> 0)),
@@ -492,9 +571,10 @@ export function chainBridges(
         width: widest + 2 * side,
         layer: lead.level,
         crossed,
-        clearance: crossed & Crossed.Rail ? RAIL_CLEARANCE_M : crossed ? CLEARANCE_M : 0,
+        clearance: ruleClearance(crossed, waterM),
         length,
         points,
+        ...(surveyed ? { heights } : {}),
       },
       pieces: chain,
     });

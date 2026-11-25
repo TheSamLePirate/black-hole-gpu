@@ -12,7 +12,8 @@ import type { GradeRunway } from "../game/runway-grade";
 import { EARTH_RUNWAYS } from "../game/sites";
 import { sceneryFrame } from "./scenery-data";
 import type { SceneryRaster } from "./scenery-raster";
-import { readBridges, readLamp, readSegment, readStreetHeader, SegmentFlag } from "./street-cells";
+import { BridgeFlag, readBridges, readLamp, readSegment, readStreetHeader, SegmentFlag } from "./street-cells";
+import { geoidDeg } from "./geoid";
 import { LAMP_REACH_M } from "./streetlamps";
 import { ROAD_TRAFFIC, TRAFFIC_REACH_M, trafficRunwayMask } from "./traffic";
 
@@ -67,22 +68,49 @@ export function farCars(buf: ArrayBuffer, segments: number, onRunway?: ReturnTyp
  * segments its start xy, its run xy [m] in the cell's frame, its phase 0.5 (its middle), its speed 0, its half-width (> 0: a bridge's,
  * not a car's), its deck's height over the cell's drawn ground [m] (its clearance and its thickness's half — the far deck a level slab).
  * A bridge spanning cells is in each that carries it (readBridges): kept by the cell holding its first point alone — `inCell` — drawn once.
+ * (25 Nov 2026, street cells' format 6) A surveyed deck (BridgeFlag.Measured): each segment's slab at its survey — `overGround(east,
+ * north, hSea)` the height over the cell's drawn ground of a height over the sea there — less its thickness's half, the near deck's
+ * height seen from afar (Cheviré's crest 60 m, not its 9 m clearance).
  */
-export function farBridges(buf: ArrayBuffer, inCell: (east: number, north: number) => boolean): Float32Array {
+export function farBridges(
+  buf: ArrayBuffer,
+  inCell: (east: number, north: number) => boolean,
+  overGround?: (east: number, north: number, hSea: number) => number,
+): Float32Array {
   const out: number[] = [];
   for (const br of readBridges(buf)) {
     const p0 = br.points[0];
     if (!p0 || !inCell(p0[0], p0[1])) continue;
     const half = Math.max(1.5, br.width / 2);
     const h = (br.clearance > 0 ? br.clearance : 5.5) + 0.6;
+    const surveyed = overGround && br.flags & BridgeFlag.Measured ? filled(br.points, br.heights) : null;
     for (let i = 0; i + 1 < br.points.length; i++) {
       const a = br.points[i]!,
         b = br.points[i + 1]!;
       if (Math.hypot(b[0] - a[0], b[1] - a[1]) < 1) continue;
-      out.push(a[0], a[1], b[0] - a[0], b[1] - a[1], 0.5, 0, half, h);
+      const hs = surveyed ? overGround!((a[0] + b[0]) / 2, (a[1] + b[1]) / 2, (surveyed[i]! + surveyed[i + 1]!) / 2) - 0.6 : h;
+      out.push(a[0], a[1], b[0] - a[0], b[1] - a[1], 0.5, 0, half, hs);
     }
   }
   return new Float32Array(out);
+}
+
+/** a bridge's surveyed heights, their gaps filled along its axis (cell frame); null: fewer than two */
+function filled(points: readonly [number, number][], heights: readonly number[] | undefined): number[] | null {
+  if (!heights || heights.length !== points.length) return null;
+  const known = heights.map((v, i) => (Number.isFinite(v) ? i : -1)).filter((i) => i >= 0);
+  if (known.length < 2) return null;
+  const s = [0];
+  for (let i = 1; i < points.length; i++)
+    s.push(s[i - 1]! + Math.hypot(points[i]![0] - points[i - 1]![0], points[i]![1] - points[i - 1]![1]));
+  return heights.map((v, i) => {
+    if (Number.isFinite(v)) return v;
+    const a = [...known].reverse().find((k) => k < i),
+      b = known.find((k) => k > i);
+    if (a === undefined) return heights[b!]!;
+    if (b === undefined) return heights[a]!;
+    return heights[a]! + ((heights[b]! - heights[a]!) * (s[i]! - s[a]!)) / Math.max(1e-6, s[b]! - s[a]!);
+  });
 }
 
 interface Resident {
@@ -198,6 +226,8 @@ export class StreetFar {
     const o = cellOrigin(c.x, c.y);
     const sw = toCell(o, b.south, b.west),
       ne = toCell(o, b.north, b.east);
+    // (format 6: a surveyed deck's height over the cell's drawn plane — the one its frame carries, taken now —, the geoid's N added)
+    const plane = this.groundAt ? this.groundPlane(c.x, c.y) : null;
     const decks = farBridges(
       c.buf,
       (e, n) =>
@@ -205,6 +235,12 @@ export class StreetFar {
         e < Math.max(sw.east, ne.east) &&
         n >= Math.min(sw.north, ne.north) &&
         n < Math.max(sw.north, ne.north),
+      plane
+        ? (e, n, hSea) => {
+            const g = fromCell(o, e, n);
+            return hSea + geoidDeg(g.lat, g.lon) - (plane[0] + plane[1] * e + plane[2] * n);
+          }
+        : undefined,
     );
     const onRunway = trafficRunwayMask(sceneryFrame(o.lat, o.lon), EARTH_RUNWAYS, CAR_CELL_REACH);
     const carsOnly = farCars(c.buf, h.segmentCount, onRunway);
@@ -235,7 +271,7 @@ export class StreetFar {
       data[4 * i + 1] = l.north;
       data[4 * i + 2] = l.height;
     }
-    const r: Resident = { x: c.x, y: c.y, slot, blocks, lamps: h.lampCount, carBlocks, cars: nCars };
+    const r: Resident = { x: c.x, y: c.y, slot, blocks, lamps: h.lampCount, carBlocks, cars: nCars, ...(plane ? { plane } : {}) };
     this.writeFrame(r);
     if (blocks.length) this.raster.lampUpload(blocks, data, slot);
     if (carBlocks.length) this.raster.carUpload(carBlocks, cars, slot);

@@ -9,7 +9,7 @@
 import { inferRoadSurface } from "./road-surface";
 import { VectorTile } from "@mapbox/vector-tile";
 import { PbfReader } from "pbf";
-import { inBdtopoBox } from "./bdtopo";
+import { type DeckLine, inBdtopoBox } from "./bdtopo";
 import { cellBounds, cellOrigin, fromCell, readHeader, readRecord, sourceKey, toCell } from "./building-cells";
 import { roadWidth } from "./scenery-geometry";
 import { builtUp, LAMP_CLASSES, lampsAlong } from "./streetlamps";
@@ -394,6 +394,70 @@ export function placesOf(
   return { places: kept, thinned: true };
 }
 
+/** (format 6) whether a BD TOPO z 15 tile holds a section over the ground (a bridge's: position_par_rapport_au_sol > 0) — its heights
+ *  then worth the WFS's request (bdtopo.ts bdtopoDecksUrl) */
+export function bdtopoHasBridges(bytes: ArrayBuffer | Uint8Array): boolean {
+  if (!bytes.byteLength) return false;
+  const layers = new VectorTile(new PbfReader(bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes))).layers;
+  for (const name of ["troncon_de_route", "troncon_de_voie_ferree"]) {
+    const l = layers[name];
+    for (let i = 0; l && i < l.length; i++) if ((Number(l.feature(i).properties.position_par_rapport_au_sol) || 0) > 0) return true;
+  }
+  return false;
+}
+
+/** a point's distance off a surveyed line beyond which its height is not read [m] (the vector tile's and the WFS's lines are the same
+ *  section: they agree within the tiles' quantisation, ~0.1 m at z 15) */
+export const DECK_SURVEY_OFF_M = 6;
+
+/**
+ * (format 6) A bridge section's surveyed heights read along its line: the WFS's 3D lines (`lines`: lon, lat, z over the sea — NaN none)
+ * in `origin`'s frame, each line's missing heights filled along it (linear between the surveyed ones, the nearest at its ends); a
+ * point's height that of its nearest line point, interpolated along that line — NaN farther than DECK_SURVEY_OFF_M from every line.
+ */
+export function deckHeightOn(lines: readonly DeckLine[], origin: { lat: number; lon: number }): (p: [number, number]) => number {
+  const polys: { x: number; y: number; z: number }[][] = [];
+  for (const line of lines) {
+    const pts = line.map(([lon, lat, z]) => {
+      const m = toCell(origin, lat, lon);
+      return { x: m.east, y: m.north, z };
+    });
+    const known = pts.map((p, i) => (Number.isFinite(p.z) ? i : -1)).filter((i) => i >= 0);
+    if (!known.length) continue;
+    // (the missing heights: between two surveyed, by the length along; before the first, after the last, theirs)
+    const s: number[] = [0];
+    for (let i = 1; i < pts.length; i++) s.push(s[i - 1]! + Math.hypot(pts[i]!.x - pts[i - 1]!.x, pts[i]!.y - pts[i - 1]!.y));
+    let k = 0;
+    for (let i = 0; i < pts.length; i++) {
+      if (Number.isFinite(pts[i]!.z)) continue;
+      while (k < known.length - 1 && known[k + 1]! < i) k++;
+      const a = known[k]!,
+        b = known.find((j) => j > i);
+      if (a > i || b === undefined) pts[i]!.z = pts[a > i ? a : known[known.length - 1]!]!.z;
+      else pts[i]!.z = pts[a]!.z + ((pts[b]!.z - pts[a]!.z) * (s[i]! - s[a]!)) / Math.max(1e-6, s[b]! - s[a]!);
+    }
+    polys.push(pts);
+  }
+  return (p) => {
+    let best = DECK_SURVEY_OFF_M,
+      z = Number.NaN;
+    for (const pts of polys)
+      for (let i = 1; i < pts.length; i++) {
+        const a = pts[i - 1]!,
+          b = pts[i]!;
+        const dx = b.x - a.x,
+          dy = b.y - a.y;
+        const t = Math.max(0, Math.min(1, ((p[0] - a.x) * dx + (p[1] - a.y) * dy) / Math.max(dx * dx + dy * dy, 1e-9)));
+        const d = Math.hypot(p[0] - a.x - t * dx, p[1] - a.y - t * dy);
+        if (d < best) {
+          best = d;
+          z = a.z + (b.z - a.z) * t;
+        }
+      }
+    return z;
+  };
+}
+
 /**
  * An OpenMapTiles z 14 tile's four z 15 street cells (north-west, north-east, south-west, south-east, as cell-prep-overture.ts orders
  * them). `buildings(x, y)`: the building cell of a z 15 cell (its bytes, or null) — the town's test for the lamps; `bdtopo(x, y)`: in
@@ -408,6 +472,9 @@ export function prepareStreetCells(
   bdtopo: (x: number, y: number) => ArrayBuffer | Uint8Array | null = () => null,
   /** the fiche's measure: the places without the assumed lanes counted too (placesBefore) */
   measure = false,
+  /** (format 6) the BD TOPO's bridge sections with their surveyed heights over this tile, by cleabs (bdtopo.ts parseBdtopoDecks of
+   *  bdtopoDecksUrl(x14, y14)); null: none known — the bridges' profiles by their clearance */
+  decks: ReadonlyMap<string, DeckLine[]> | null = null,
 ): PreparedStreetCell[] {
   const n = 2 ** OSM_Z;
   const tileOrigin = cellOrigin(x14, y14, OSM_Z);
@@ -436,12 +503,14 @@ export function prepareStreetCells(
     return cells[Math.floor(fy) * 2 + Math.floor(fx)]!;
   };
   /** a road's line (its points in `origin`'s frame) simplified and cut into segments, each kept in the cell of its middle (`accept`:
-   *  whether that cell takes this source's roads) — its ends noted for the junctions */
+   *  whether that cell takes this source's roads) — its ends noted for the junctions; `zAt`: a bridge section's surveyed deck height
+   *  over the sea at a point of `origin`'s frame (format 6 — NaN none) */
   const road = (
     xy: [number, number][],
     origin: { lat: number; lon: number },
     meta: RoadMeta,
     accept: (c: (typeof cells)[number]) => boolean,
+    zAt?: (p: [number, number]) => number,
   ) => {
     const pts = simplify(xy, SIMPLIFY_M);
     const toGeo = (p: [number, number]) => fromCell(origin, p[0], p[1]);
@@ -472,6 +541,7 @@ export function prepareStreetCells(
                 ? undefined
                 : (meta.material ??
                   inferRoadSurface({ cls: meta.cls, urban: !!(meta.flags & SegmentFlag.Urban), lat: mid.lat, lon: mid.lon })),
+            ...(zAt ? { za: zAt(pa), zb: zAt(pb) } : {}),
           });
           // (whether its ends are its road piece's own — the continuations': an end inside the piece goes on to its next segment)
           c.pieces.push({ a: j === 0 && q === 0, b: j === pts.length - 2 && q === k - 1 });
@@ -507,6 +577,9 @@ export function prepareStreetCells(
       if (!meta) continue;
       const e = f.extent,
         nz = 2 ** (OSM_Z + 1);
+      // (format 6: a bridge section's surveyed heights — the WFS's 3D lines of its cleabs —, read along its 2D line)
+      const surveyed = meta.level > 0 ? decks?.get(String((f.properties as Record<string, unknown>).cleabs ?? "")) : undefined;
+      const zAt = surveyed ? deckHeightOn(surveyed, c.origin) : undefined;
       for (const line of f.loadGeometry()) {
         const xy = line.map((v) => {
           const lon = ((c.x + v.x / e) / nz) * 360 - 180,
@@ -514,7 +587,7 @@ export function prepareStreetCells(
           const m = toCell(c.origin, lat, lon);
           return [m.east, m.north] as [number, number];
         });
-        const r = road(xy, c.origin, meta, (k) => k === c);
+        const r = road(xy, c.origin, meta, (k) => k === c, zAt);
         c.vertices.before += r.before;
         c.vertices.after += r.after;
       }
