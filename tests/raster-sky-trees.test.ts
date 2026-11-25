@@ -28,3 +28,26 @@ test("shadeLite seeks the crown past its proxy against the sky, and leaves a mis
   expect(lite).toContain("sceneryTreeLite(normalize(toBody(ray.look)), treeId, tMax,");
   expect(lite).toContain("if (tM <= 0.0) {\n    moments[idx] = vec2f(RASTER_STALE,");
 });
+
+test("a thin part's edge keeps its rebuilt normal: the neighbour off the surface on one side, the other side's taken (the cables' fringe)", () => {
+  const rn = wgsl.slice(
+    wgsl.indexOf("fn rasterNormal(px: vec2f, tM: f32, k: u32) -> vec3f {"),
+    wgsl.indexOf("// The sunlight on a raster pixel's surface"),
+  );
+  expect(rn).toContain("if ((tx <= 0.0 || abs(tx - tM) > 0.08 * tM) && px.x - 1.0 >= 0.0) {\n    sx = -sx;");
+  expect(rn).toContain("if ((ty <= 0.0 || abs(ty - tM) > 0.08 * tM) && px.y - 1.0 >= 0.0) {\n    sy = -sy;");
+});
+test("the water's own mirror marches past a crossing still in the water — the river bed's bumps are no banks (the floating pieces)", () => {
+  const wm = wgsl.slice(wgsl.indexOf("fn waterMirror("), wgsl.indexOf("struct SurfaceImage"));
+  expect(wm).toContain("if (!sceneryMirrorWet(rp, tc * EARTH_RM, footM)) {");
+  expect(wgsl).toContain("fn sceneryMirrorWet(rp:vec3f,tM:f32,footM:f32)->bool {");
+  const stubs = readFileSync(new URL("../src/system/scenery.ts", import.meta.url), "utf8");
+  expect(stubs).toContain("fn sceneryMirrorWet(r:vec3f,t:f32,f:f32)->bool{return false;}");
+});
+
+test("a river's steep relief well inside its polygon is water, not a bank (the Loire's floating land, the light band under Cheviré)", () => {
+  const lw = wgsl.slice(wgsl.indexOf("fn liteWater("), wgsl.indexOf("// (PLAN-J1 J1-4: what of the visibility"));
+  expect(lw).toContain("if (flat < 0.999 && osm.y > 0.3 && !tileW) {");
+  expect(lw).toContain("let inner = sceneryWaterAt(P.scenery[3].xyz + (dirW * tM) * toW2, WATER_INNER_M, tM);");
+  expect(lw).toContain("flat = max(flat, smoothstep(0.97, 0.995, inner.x));");
+});

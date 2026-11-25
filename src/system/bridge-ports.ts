@@ -260,6 +260,10 @@ export function fillHeights(points: readonly Wgs84Point[], heights: readonly num
   });
 }
 
+/** (25 Nov 2026) two ends turning more than this from a straight line are a fork's, not one structure's [°] (street-detail-prep.ts
+ *  BRIDGE_FORK_DEG's) */
+const FORK_DEG = 40;
+
 /** a deck piece after joinDeckPieces: an end met mid-way by another deck of its kind and layer (a branch: its height that deck's) */
 export interface JoinedDeck {
   readonly bridge: GeoBridge;
@@ -280,24 +284,29 @@ export function joinDeckPieces(list: readonly GeoBridge[], maxDistM = 3): Joined
   const xy = (p: Wgs84Point): [number, number] => [p.lon * 111_320 * cosL, p.lat * 111_132];
   const cell = maxDistM * 2;
   const key = (x: number, y: number) => `${Math.floor(x / cell)},${Math.floor(y / cell)}`;
-  // (1) the closed ends' grid; each end paired with its nearest partner once
-  type End = { i: number; end: 0 | 1; x: number; y: number };
+  // (1) the ends' grid — a closed end paired with its nearest partner once: another closed end, or an open one (a tile edge's half
+  // whose other half ended on an abutment there — Grenelle's, 25 Nov 2026); the two in line (their ways out within 180° ± BRIDGE_FORK
+  // — a fork's ramp is not the bridge going on)
+  type End = { i: number; end: 0 | 1; x: number; y: number; dx: number; dy: number; open: boolean };
   const ends: End[] = [];
   const grid = new Map<string, End[]>();
   list.forEach((b, i) => {
     for (const end of [0, 1] as const) {
-      if (b.flags & (end ? OPEN_B : OPEN_A) || b.points.length < 2) continue;
+      if (b.points.length < 2) continue;
       const [x, y] = xy(end ? b.points[b.points.length - 1]! : b.points[0]!);
-      const e = { i, end, x, y };
+      const [qx, qy] = xy(end ? b.points[b.points.length - 2]! : b.points[1]!);
+      const L = Math.hypot(x - qx, y - qy) || 1;
+      const e = { i, end, x, y, dx: (x - qx) / L, dy: (y - qy) / L, open: !!(b.flags & (end ? OPEN_B : OPEN_A)) };
       ends.push(e);
       const k = key(x, y);
       (grid.get(k) ?? grid.set(k, []).get(k)!).push(e);
     }
   });
+  const inLine = -Math.cos((FORK_DEG * Math.PI) / 180);
   const open = list.map(() => [false, false]);
   const paired = new Set<End>();
   for (const e of ends) {
-    if (paired.has(e)) continue;
+    if (e.open || paired.has(e)) continue;
     let best: End | null = null,
       bestD = maxDistM;
     for (let dx = -1; dx <= 1; dx++)
@@ -307,6 +316,7 @@ export function joinDeckPieces(list: readonly GeoBridge[], maxDistM = 3): Joined
           const a = list[e.i]!,
             b = list[f.i]!;
           if (a.kind !== b.kind || a.layer !== b.layer) continue;
+          if (e.dx * f.dx + e.dy * f.dy > inLine) continue;
           const d = Math.hypot(f.x - e.x, f.y - e.y);
           if (d <= bestD) {
             bestD = d;

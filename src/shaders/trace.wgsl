@@ -10095,8 +10095,15 @@ fn waterMirror(q: vec3f, rd: vec3f, Ls: vec3f, E: vec3f, sky: vec3f, footM: f32)
         let rm = length(pm);
         if (rm - 1.0 - earthHeight(pm / rm, max(footM, m * EARTH_RM * 0.003)) / EARTH_RM < 0.0) { hi = m; } else { lo = m; }
       }
-      tHit = 0.5 * (lo + hi);
-      break;
+      // (25 Nov 2026 — the Loire under Cheviré, the Seine: dark pieces floating mid-river, a light band under a deck — the relief under
+      // a river is the survey's, not level: its bed's leftovers, a deck's or a pier's trace, 1–5 m over the water drawn on it
+      // (kerr-mini, groundAt across the Loire), and the mirrored ray met them as banks. A crossing still in the water is no bank:
+      // the march goes on)
+      let tc = 0.5 * (lo + hi);
+      if (!sceneryMirrorWet(rp, tc * EARTH_RM, footM)) {
+        tHit = tc;
+        break;
+      }
     }
     tPrev = t;
     fPrev = f;
@@ -10828,6 +10835,12 @@ fn scenerySurface(foot:f32)->ScenerySurface {
 // The shore's trees in calm water (waterMirror): the reflected ray (physical) from the water's point here
 // (SC_POINT) through the forest grid, near; their light (the sun on their leaves, the sky) and distance [m]
 // (−1: none)
+// (25 Nov 2026) whether the mirrored ray from the water's point (SC_POINT) along rp meets, tM metres on, still the scenery's water — a
+// river's bed under it, not a bank (waterMirror)
+fn sceneryMirrorWet(rp:vec3f,tM:f32,footM:f32)->bool {
+  if(!HAS_SCENERY || P.scenery[0].w<.5 || P.scenery[2].w<.5){return false;}
+  return sceneryWaterAt(SC_POINT+sceneryLocal(rp)*tM,max(footM,tM*0.003),SC_DISTANCE+tM).x>=0.5;
+}
 fn sceneryMirror(rp:vec3f,Ls:vec3f,E:vec3f,sky:vec3f)->vec4f {
   if(!HAS_SCENERY || P.scenery[0].w<.5 || P.scenery[2].w<.5 || SC_DISTANCE>2500.0){return vec4f(0.0,0.0,0.0,-1.0);}
   let d=sceneryLocal(rp);
@@ -15559,10 +15572,20 @@ fn rasterLiteTakes(px: vec2f, k: u32) -> bool {
 // the mesh's normal at a pixel (the body's physical axes), from its neighbours' distances — none where a neighbour is off
 // the surface (a silhouette, the sky): 0
 fn rasterNormal(px: vec2f, tM: f32, k: u32) -> vec3f {
-  let sx = select(1.0, -1.0, px.x + 1.0 >= P.res.x);
-  let sy = select(1.0, -1.0, px.y + 1.0 >= P.res.y);
-  let tx = terrainRasterHint(px + vec2f(sx, 0.0));
-  let ty = terrainRasterHint(px + vec2f(0.0, sy));
+  var sx = select(1.0, -1.0, px.x + 1.0 >= P.res.x);
+  var sy = select(1.0, -1.0, px.y + 1.0 >= P.res.y);
+  var tx = terrainRasterHint(px + vec2f(sx, 0.0));
+  var ty = terrainRasterHint(px + vec2f(0.0, sy));
+  // (25 Nov 2026 — a thin part's edge: its neighbour on one side off the surface, the other side's taken — a bridge's cable lost its
+  // rebuilt round normal at its edge pixels, a bright fringe along it)
+  if ((tx <= 0.0 || abs(tx - tM) > 0.08 * tM) && px.x - 1.0 >= 0.0) {
+    sx = -sx;
+    tx = terrainRasterHint(px + vec2f(sx, 0.0));
+  }
+  if ((ty <= 0.0 || abs(ty - tM) > 0.08 * tM) && px.y - 1.0 >= 0.0) {
+    sy = -sy;
+    ty = terrainRasterHint(px + vec2f(0.0, sy));
+  }
   if (tx <= 0.0 || ty <= 0.0 || abs(tx - tM) > 0.08 * tM || abs(ty - tM) > 0.08 * tM) { return vec3f(0.0); }
   // (not across a seam between two of the relief's rings — their meshes meet within their tolerance, not smoothly: the normal
   // there tipped, a line of false slope along the seam — the cascades' white water drew it over the sea)
@@ -15963,6 +15986,8 @@ fn bodyLiteAir(gid: vec2u, k: u32) {
 // open deep sea leaves shadeLite before the ground's material is read for it — on a sea view shadeLite spent ~33 ms on kerr-mini
 // on pixels it then handed to shadeWater (S0, 10 Nov 2026). x the water's cover, y calm (0 the sea, 0.6 a river, 0.92 a lake),
 // z its kind (0 sea, 1 river, 2 lake), w 1 when the sea there is open and deep (no bed shows: shadeWater needs no ground under it).
+// (25 Nov 2026) a footprint [m] for the water's polygon whose cover, whole, says a point lies well inside it (liteWater)
+const WATER_INNER_M = 14.0;
 fn liteWater(gq: vec3f, fx: vec3f, fy: vec3f, hG: f32, fpM: f32, nW: vec3f, dirW: vec3f, tM: f32, lvl: f32) -> vec4f {
     let rel0 = earthRelief(gq, fx, fy);
   // (the point's height known to half a footprint: the ray jittered within its pixel, the distance read at its centre — at
@@ -16013,7 +16038,17 @@ fn liteWater(gq: vec3f, fx: vec3f, fy: vec3f, hG: f32, fpM: f32, nW: vec3f, dirW
     // ground the relief raises over the sea within it, land; the T7 survey, Sam: the Calanques' faces striped with the sea)
     // (under the sea's level — the mesh the bed's, a drowned ridge's slopes steep —: water whatever its slope; over it, flat
     // ground alone — the T7 survey: Étretat's banks shown as white sand out of the sea)
-    let flat = max(smoothstep(0.82, 0.94, dot(nW, gq)), 1.0 - smoothstep(0.3, 1.5, hW));
+    var flat = max(smoothstep(0.82, 0.94, dot(nW, gq)), 1.0 - smoothstep(0.3, 1.5, hW));
+    // (25 Nov 2026 — the Loire under Cheviré: the relief inside a river is the survey's, not level — a deck's or a pier's trace, a
+    // bed's leftovers, 1–5 m spikes (kerr-mini, groundAt across it) —, their slopes taken for banks: land drawn mid-river, its
+    // photograph's dark water and shadows floating, the deck itself photographed from above a light band under the real one. A
+    // river's or a lake's steep relief more than ~10 m inside its polygon is no bank: water. The sea's polygon keeps the test — its
+    // outline over a cliff)
+    if (flat < 0.999 && osm.y > 0.3 && !tileW) {
+      let toW2 = mat3x3f(P.scenery[0].xyz, P.scenery[1].xyz, P.scenery[2].xyz);
+      let inner = sceneryWaterAt(P.scenery[3].xyz + (dirW * tM) * toW2, WATER_INNER_M, tM);
+      flat = max(flat, smoothstep(0.97, 0.995, inner.x));
+    }
     // (the tiles' cover as it is — filtered, a texel's share: its bank the filter's, a river under the pixel a share of it, fading —;
     // the scene's polygon's sharpened)
     osm.x = select(smoothstep(0.35, 0.65, osm.x), osm.x, tileW) * flat * select(1.0, 1.0 - smoothstep(3.0, 8.0, hW), osm.y < 0.3);
