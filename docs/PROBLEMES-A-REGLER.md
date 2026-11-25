@@ -21,7 +21,7 @@ connue ou supposée, la piste. Une entrée réglée est barrée avec le commit q
   escalier (imposteurs lointains ou couche lointaine ?) masquent une partie de la tour. Non diagnostiqué.
 - **Rues de Paris** (`paris-wet-street-dry.png`, `grenelle-deck-low.png`) : ~~de fines lignes claires courbes traversent la chaussée (bords
   de voies d'un carrefour ?) ; le relief herbeux déborde sur le trottoir le long des façades~~ (nivellement `roadBank` sans lecteur, déjà noté
-  plus bas). **Réglé par `c02620c0` et `a1f3b0c8`** (25 nov. 2026), vu sur kerr-mini au même point de vue
+  plus bas). **Réglé par `c02620c0`, `a1f3b0c8` et `2cd9386f`** (25 nov. 2026), vu sur kerr-mini au même point de vue
   (`docs/progress/routes-defauts-2026-11-25/rue-paris-{avant,apres}.jpg`, `rue-paris-ombres-{avant,apres}.jpg`) : **les lignes** n'étaient
   pas des marquages mais des fuites d'ombre — la vue de débogage des ombres (`liteSkip` 8192, e2e `paris-street-shadows`) les montrait
   éclairées dans l'ombre des immeubles. `liteSun` conditionnait les ombres (relief, contact, décor, appareil) par la normale de l'image de
