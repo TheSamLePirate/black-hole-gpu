@@ -3,6 +3,24 @@
 Problèmes constatés, pas encore réglés. Chaque entrée : la date (UTC), ce qui est mesuré ou observé et sa source, la cause
 connue ou supposée, la piste. Une entrée réglée est barrée avec le commit qui la règle, pas effacée.
 
+## ~~Au parking de SFO, la finition du sol à 27 ms : l'air marché à chaque pixel~~ (relevé le 24 novembre 2026, e2e `traffic-runways` `TRW_COST=1`) — réglé le 25 novembre 2026 (branche d'agent)
+
+- **Mesuré** (kerr-mini, `20261124-214324-trw-cost` puis `20261125-040312-tc-amp`, e2e `traffic-cost`) : `earth lite: finishing` 23–27 ms
+  au parking G de SFO, 2 ms en courte finale ; couper l'air et les nuages sur la surface (`liteSkip` 2048) y rend **−22 ms de GPU p50**.
+- **Cause** : l'œil à 33 m au-dessus de la mer, soit +0,9 m au-dessus de l'ellipsoïde (géoïde −32 m), le sol 30 m plus bas ; les colonnes de
+  la table aérienne s'arrêtaient à h = 0, des dizaines de fois avant le sol, `apCovers` les refusait : chaque pixel marchait son air.
+- **Réglé** : la colonne s'arrête au niveau de la mer sous la caméra moins 10 m (`trace.wgsl` `aerial`, `geoidN`). Mesure et images :
+  GRAPHICS-PIPELINE « PERF — le trafic réel ».
+
+## Le trafic réel : l'A320 gréé proche coûte encore ~6 ms d'ombrage ; ses ombres au sol étirées et floues (relevé le 25 novembre 2026, e2e `traffic-cost`, kerr-mini)
+
+- **Mesuré** (`20261125-040312-tc-amp`, passe amplifiée ×6) : la passe d'ombrage de l'appareil 7–9,5 ms par image, dont 6–8 pour les A320
+  gréés à moins d'1 km ; la moitié la géométrie (106 000 triangles), la moitié l'ombrage des pixels. Réglé le 25 nov. : l'A320 loin dessiné
+  simple (`renderer.trafficRigShare`), les niveaux de détail du trafic (`ship.lodPx`, l'A320 gréé : 107 449 → 66 153 triangles à 4 cm).
+- **Reste** : l'ombrage des pixels (le `fs` unique de l'appareil, toutes les branches de tous les engins) — un `fs` propre aux avions de
+  ligne serait le levier ; les ombres des avions garés (seconde moitié de la carte d'ombre) paraissent étirées et floues au sol
+  (`docs/progress/perf-trafic-2026-11-25/parking-*.jpg`) — non examinées.
+
 ## Le sol du Luxembourg (et d'Arlon) posé au niveau de la mer par la source IGN (relevé le 25 novembre 2026, analyse PLAN-LUXEMBOURG-AAA)
 
 - **Constat** (ce Mac, 25/11, code du jeu exécuté sous Bun, pas vu en jeu) : `IGN.heights` sur Luxembourg-Ville rend une grille

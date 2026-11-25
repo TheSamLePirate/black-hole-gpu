@@ -20,6 +20,93 @@ Windows/D3D12. Les numéros de ligne sont ceux de `da4e75bd`.
 
 ---
 
+### PERF — le trafic réel : l'air au parking, l'A320 gréé loin, les niveaux de détail (25 novembre 2026, branche de l'agent) — mesuré
+
+**Mesuré**, kerr-mini (Mac mini M1, sans fenêtre, image interne 1200×750 : échelle épinglée 0,75 par `__bh.forceScale`, chaque image
+touchée, profileur sur chaque image), e2e **`traffic-cost`** (nouveau : le trafic inventé de `traffic-runways` à SFO —
+`tests/e2e/lib/sfo-traffic.ts`, partagé —, la caméra libre en Chase tenue en **courte finale** et **au parking G** ; données disque de
+l'e2e, aucune requête IGN). GPU p50 = `renderer.lastGpuMs` sur 90 images ; le bruit d'une mesure à l'autre est de **±2 à 3 ms** (A/A
+−2,5 / +0,75 / −3,0 / +3,35 ms) : une coupe sous 3 ms ne se lit pas seule.
+
+- **Où partait le temps (avant, `20261125-033339-tc-diag`, `20261125-040312-tc-amp`)** — appareils dessinés (`ship.lastDraws`) : en finale
+  11 instances, **526 562 triangles**, dont **quatre A320 gréés à 106 261 triangles** — un à 226 m (rayon 95 px), **trois à 3,6–3,8 km
+  (rayon 6 px)** —, un porte-conteneurs à 53 466 triangles à 12,8 km (10 px) ; au parking 13 instances, 569 946 triangles (trois A320
+  gréés à 138–244 m, 88–155 px). Coût de chaque passe de l'appareil **amplifié** (`ship.debugRepeat` : la passe dessinée 6 fois de plus,
+  Δ / 6 — au-dessus du bruit) :
+
+  | Passe (Δ/6, ms) | finale | parking |
+  |---|---:|---:|
+  | `ship: shading (MSAA)` (profondeur préalable + coques + verres), tout | 9,45 | 7,06 |
+  | — seulement les appareils à moins d'1 km / au-delà | 8,0 / 1,9 | 6,1 / 3,9 |
+  | — ombrage gris plat (`debugFs` 8 : géométrie, MSAA seuls) | 4,1 | 3,5 |
+  | — sans lecture de la carte d'ombre / du reflet d'écran / de la sonde (`debugFs` 1/2/4) | 7,7 / 9,1 / 10,1 | 6,8 / 7,2 / 7,7 |
+  | — les A320 dessinés simples (`trafficRigMax` 0) | 4,55 | 5,1 |
+  | `ship: shadow map` | 0,43 | 1,3 |
+  | `ship: motion` | 0,97 | 0,63 |
+
+  Lecture : la passe d'ombrage de l'appareil coûte 7–9,5 ms, dont **la moitié la géométrie** (gris plat 3,5–4,1 ms : 106 000
+  triangles par A320, des triangles bien sous le pixel loin, chacun ombré par quad) et la moitié l'ombrage — l'A320 proche
+  (95–155 px) en porte l'essentiel ; ni la carte d'ombre de la coque, ni le reflet d'écran, ni la sonde ne pèsent plus d'1,7 ms.
+  **La profondeur réécrite par l'ombrage après la profondeur préalable** (soupçon : test de profondeur tardif avec les `discard`) :
+  essayée en levier (`depthWriteEnabled` false), **finale −1,1, parking +0,6 ms : au bruit — retirée**
+  (`20261125-044408-tc-levers`).
+- **Le passage de finition du sol à 27 ms au parking : l'air marché pixel par pixel.** `earth lite: finishing` 23–27 ms au parking,
+  1,7–2 ms en finale ; la coupe `liteSkip` 2048 (ni air ni nuages sur la surface) **−22,05 ms de GPU p50 au parking**, −2,35 en finale
+  (`tc-amp`) — le temps est réel, pas un chevauchement. Cause : l'œil au parking est à **33 m au-dessus de la mer, soit +0,9 m au-dessus
+  de l'ellipsoïde** (géoïde −32,3 m à SFO, le tablier à −29,5 m ellipsoïdal) ; les colonnes de la table aérienne (`aerial`, C10)
+  s'arrêtaient à la sphère h = 0 — atteinte à 0,9 m / sin(θ) quand le sol est à 30 m / sin(θ) : `apCovers` (une colonne finie avant la
+  moitié de la distance lue) refusait la table et **chaque pixel du sol marchait son air (`earthAir`)**. En finale, l'œil à +42 m
+  ellipsoïdal, le rapport 0,57 passait de justesse. **Corrigé** : la colonne s'arrête au niveau de la mer sous la caméra moins 10 m
+  (`geoidN`, EGM2008 ; plus bas que le sol, elle est seulement plus longue) — partout où le géoïde est négatif (Californie −32 m, océan
+  Indien −107 m), un œil bas n'y retombe plus.
+- **L'A320 gréé seulement s'il est grand sur l'image** (`renderer.trafficRigShare` 0,06 : demi-longueur ≥ 6 % de la demi-hauteur, soit
+  ~60 px de long sur une image de 1 000 px ; retombe simple sous 80 % de ce seuil, pas de bascule) : les trois A320 à 3,6 km (12 px de
+  long) dessinés en avion simple (11 686 triangles, train cuit, livrée) au lieu de l'A320 gréé (106 261) — en finale 526 562 → 242 837
+  triangles.
+- **Les niveaux de détail du trafic** (`src/ship-lod.ts`, meshoptimizer 1.3.0 déjà en dépendance : par matériau et par pièce mobile —
+  jambe de train, nœud du gréement —, bords verrouillés, erreurs 4 / 16 / 64 / 256 / 1 024 cm, un niveau gardé s'il retire ¼ des
+  triangles ; faits dans le worker CPU, `system/cpu-worker.ts` job `lod`, 18–175 ms par maillage sur ce Mac) ; chaque instance dessinée au
+  plus grossier dont l'erreur reste sous **0,5 px** là où elle est (`ship.lodPx`) — la même image. A320 simple 11 686 → 6 338 / 3 628 /
+  1 267 / 766 / 424 ; CRJ 11 506 → 7 268 / 4 642 / 1 830 ; porte-conteneurs 53 466 → 35 208 / 17 205 ; **A320 gréé 107 449 → 66 153
+  (4 cm) / 15 468 / 3 915 / 2 335** (son verre après ses triangles opaques). En finale 242 837 → 154 600 triangles (avant l'A320 gréé).
+- **Leviers, A/B dans la page** (off on on off off on, puis captures off / on / off comparées ; `20261125-044408-tc-levers`, l'air déjà
+  corrigé) — GPU p50 off → on, écart d'image moyen off/on contre A/A (0–255) :
+
+  | Levier | finale | parking |
+  |---|---|---|
+  | A320 gréé selon sa taille (`trafficRigShare` 0 → 0,06) | 76,5 → 71,8 · 3,34 / 2,59 | 58,1 → 58,2 · 1,16 / 1,09 |
+  | niveaux de détail (sans l'A320 gréé ; `lodPx` 0 → 0,5) | 73,5 → 71,8 · 3,29 / 3,26 | 59,4 → 59,5 · 1,54 / 1,72 |
+  | les deux (+ l'essai retiré de la profondeur) | 81,8 → 72,0 (médianes 74,7 → 71,6) · 3,02 / 2,86 | 58,9 → 57,6 · 1,34 / 1,30 |
+
+  Les écarts d'image off/on restent dans l'A/A (la mer qui bouge, l'avion en finale) : aucune perte visible.
+- **Le lot tel que livré** (l'arbre de la branche contre 11893cd4 — `scripts/ab-commit.ts` + `ab-e2e.ts`, `AB_TREE_A`, A B B A,
+  `20261125-050752-tc-ab4`, kerr-mini) — moyennes des deux côtés, ms :
+
+  | Moment | GPU p50 | GPU p50 par tour (A / B) | GPU p50 p95 | `earth lite: finishing` | `earth water: finishing` | triangles dessinés |
+  |---|---:|---|---:|---:|---:|---:|
+  | courte finale | 79,6 → **70,9** (−8,7) | 82,3, 76,8 / 73,7, 68,1 | 114,7 → 101,7 | 1,62 → 0,43 | 5,19 → 3,25 | 526 562 → 113 552 |
+  | parking G | 79,8 → **54,8** (−25,0) | 80,9, 78,7 / 54,5, 55,1 | 115,4 → 85,9 | 23,07 → 1,66 | — | 569 946 → 260 859 |
+
+  Captures (même vue, A1 contre B2) : `docs/progress/perf-trafic-2026-11-25/finale-avant.jpg` / `finale-apres.jpg`,
+  `parking-avant.jpg` / `parking-apres.jpg` — la même image ; écarts ×4 des leviers contre leur A/A : `*-leviers-ecart-x4.jpg`,
+  `*-leviers-aa-x4.jpg`. La part de chaque correctif dans ces −8,7 / −25 ms se lit au-dessus (l'air : ~−22 ms au parking, la coupe
+  `noair` ; en finale l'eau finie −1,9 ms aussi, ses colonnes au ras de la mer) ; les leviers de dessin, au bruit dans l'image entière,
+  se lisent en passe amplifiée (`20261125-051955-tc-lodamp`, `lodamp`, l'A320 loin déjà simple) — `ship: shading (MSAA)` Δ/6 :
+
+  | `lodPx` | finale | parking |
+  |---|---:|---:|
+  | 0 (maillages entiers) | 6,93 | 7,33 |
+  | **0,5 (le lot)** | **6,61** | **4,99** |
+  | 4 (essai : l'A320 proche à son niveau 63 cm, visible) | 5,04 | 3,70 |
+  | 0,5 en gris plat (géométrie, MSAA seuls) | 2,37 | 1,99 |
+
+  Avant le lot la même passe valait 9,45 (finale) et 7,06 (parking) ms (`tc-amp`).
+- **Reste** : la passe d'ombrage vaut encore 5–6,6 ms par image, dont **3–4,2 ms d'ombrage de pixels** (au-dessus du gris plat) —
+  surtout l'A320 gréé proche (88–155 px ; son niveau 4 cm garde 62 % de ses triangles, plus grossier il faudrait ses pièces soudées) : le shader unique de l'appareil (`fs`,
+  37 textures, toutes les branches de tous les engins) paie ses registres partout ; un `fs` propre aux avions de ligne (comme `HULL_JET`
+  pour le F-35) est le levier suivant. Les ombres des avions garés au sol (seconde moitié de la carte) paraissent étirées et floues
+  (captures `parking-*.jpg`) — non examinées ici. `ship: motion` (0,6–1 ms) redessine tous les maillages ; la boîte de la passe couvre
+  toute l'image dès que le trafic s'étale (effacement et résolution MSAA plein écran) — non mesurés séparément.
 ### Routes, ombres, arbres, sillages — défauts de la campagne e2e 2 (25 novembre 2026, branche de l'agent, `c02620c0`, `a1f3b0c8`)
 
 - **`scenerySurface` (tous les noyaux Terre) → `sceneryStrip`** (nouvelle petite fonction) : la bande d'une ligne. Les
@@ -168,7 +255,7 @@ chaque image touchée, profileur sur chaque image, médianes de 40 images profil
   donc dans les 92 000–96 000 segments des rues et leur marche.
 - **L'appareil en caméra libre, trafic réel, A320 gréés (SFO, e2e `traffic-runways` `TRW_COST=1`)** : sa passe entière (`debugSkipShip`)
   +8,7 ms en courte finale (8 appareils dessinés dont 4 A320 gréés ; GPU p50 86,3 contre 77,7) et +7,6 ms au parking (11 ; 88,5 contre
-  80,9) — `20261124-214324-trw-cost`. Au parking, `earth lite: finishing` 27 ms (2 ms en finale) : non expliqué, hors de ce lot.
+  80,9) — `20261124-214324-trw-cost`. Au parking, `earth lite: finishing` 27 ms (2 ms en finale) : non expliqué, hors de ce lot. (Expliqué et réglé le 25 nov. 2026 : la table aérienne arrêtée à h = 0 sous un œil au-dessus d'un sol plus bas — « PERF — le trafic réel » ci-dessus.)
 
 ### PONT-ROUTES — revue A : un profil, une surface, un contact (24 novembre 2026, branche de l'agent)
 
@@ -456,7 +543,7 @@ R reconstruction/sortie, S ombres/sondes amorties, Z hors budget (diagnostic, ch
 | C7 | `clouds' shadow map` | `renderer.ts:9187` | trace `cloudShadow` (**module entier**, non spécialisé), 48×48 | près de la Terre, ombre des nuages | → `csmTex` 384² → `TABLE_CSM` → traceur 40, C8, C11 | A |
 | C8 | `clouds' light volume` | `renderer.ts:9275` | trace `cloudLightVolume` (module entier), 1 bande sur 4 | passe des nuages active | → `clvTex` 1536×72 → `TABLE_CLV` → C11 | A |
 | C9 | `sky ambient` | `renderer.ts:9357` | trace `skyAmbient` (module entier) | près de la Terre, 1 frame sur 3 (aussi en qualité) | → `TABLE_SKY` → tous les noyaux | A |
-| C10 | `aerial perspective` | `renderer.ts:6349` | trace `aerial`, volume 96×54×32 | caméra dans l'air, noyau compilé | → `aerialTex` 3D → noyaux principaux, `env` | A |
+| C10 | `aerial perspective` | `renderer.ts:6349` | trace `aerial`, volume 96×54×32 ; **chaque colonne arrêtée, sur la Terre, au niveau de la mer sous la caméra moins 10 m (géoïde EGM2008, `geoidN`) et non plus à h = 0 de l'ellipsoïde (25 nov. 2026)** : là où le géoïde est sous l'ellipsoïde (SFO −32 m), un œil à quelques mètres du sol pouvait être au-dessus de h = 0, ses colonnes finies des dizaines de fois avant le sol, `apCovers` les refusait et chaque pixel du sol marchait son air (`earth lite: finishing` 23–27 ms au parking de SFO, kerr-mini — voir « PERF — le trafic réel ») | caméra dans l'air, noyau compilé | → `aerialTex` 3D → noyaux principaux, `env` | A |
 | C11 | `clouds (half)` | `renderer.ts:6404` | trace `clouds`, demi-résolution (/32 amorti) ; sous la pluie, les averses (`wxRainShafts`) **un pas par 100 m de rayon, 2 au moins, 10 au-delà d'un kilomètre (24 nov. 2026 ; avant : 10 pour tout rayon, le mur d'une rue à 30 m compris) — rue de Rivoli sous la pluie 9,8 → 4,2 ms, kerr-mini (`prc-v3`)** | **Terre raster seulement** | indice + C7/C8 → `cloudCurA/B` | A |
 | C12 | `clouds' history` | `renderer.ts:9907` | `post.wgsl` `cloudTemporal` | après C11 | → `cloudA/B` → traceur 38/39, occlusion depth | A |
 | C13 | `sky (waiting)` | `renderer.ts:6429` | trace `skyFill`, pleine résolution | le `main` de la scène pas encore compilé (ciel d'attente) | remplace C14–C17 | A |
@@ -487,7 +574,7 @@ R reconstruction/sortie, S ombres/sondes amorties, Z hors budget (diagnostic, ch
 | E3 | `resolve` | `resolve` | toujours | → **`hdr` mip 0** rgba16f | R |
 | E4 | `denoise` ×4 | `atrous` | convergence ≥ 2 spp ou offline | `hdr` ↔ `denoise` | R |
 | E9 | `occlusion depth` | `occlusion` | toujours ; **avant le temporel depuis J1-5** (12 nov. : l'appareil s'y teste et s'y écrit) | `moments`, `stamps`, nuages → **`sceneDepth`** f32 → l'appareil, tous les composites | R |
-| E12a | `ship: shadow map`, `ship: shading (MSAA)` (**4 à 5 ms sur kerr-mini pour son MSAA 4×**, mesuré le 14 nov. par `SHIP_MSAA` 1 contre 4 — PROBLEMES), `ship: own mask`, **`ship: motion`**, **`ship: into the scene`**, `ship: hull distance`, `ship: thrusters and plasma` | `ship.wgsl` (`ship.ts` `encodeShip`, `encodeCompose` ; `renderer.ts` `encodeShipNow`) | **PLAN-J1 J1-5 (12 nov.)** : image vivante, `renderer.shipInScene` (allumé), les pipelines de la composition compilées (async, sinon E12) | comme E12 — **et, depuis PLAN-J3 J3-2 (13 nov.), la coque (`fs`), les traînées (`trailFs`), les flammes (`plumeFs`), le halo des feux (`lampFs`, transmittance seule) et les verrières (`fsJetGlass`) vus à travers l'air de leur distance** : la table aérienne du traceur (`aerialTex`, liaisons 41–43 de `ship.wgsl`, `shipAir` : c × T + L × alpha, au-delà de 50 m), sa portée et l'échelle en `sh[12]` (écrites par `keyLight` dans `envBuf` + 7, recopiées par `envSH`), `S.air.z` 1 quand la table est écrite cette image (`renderer.shipAirAllowed`) ; les traînées sans leur ancien `exp(−d/120 km)` —, puis `ship: motion` (hors cockpit : les maillages opaques une fois, une seule échantillon, la pose d'avant par clé d'instance — `motionVs/motionFs` → boîte `rgba32float` : px vers l'image d'avant, z 1 / 2 sans historique + 4 × instance, distance [M]) ; `ship: into the scene` (`composeColor`, `composeSurface`, sur la boîte) : où l'image de l'appareil est opaque (alpha 1 et surface du mouvement), sa couleur → **`hdr`** (avant le temporel), sa distance → `sceneDepth` (min), les étoiles splattées dessous effacées (`stars`) ; son mouvement (w 1 : l'appareil ; z 1, ou 2 depuis le cockpit — sous son masque, sans historique) → `terrain raster motion` ou, sans visibilité de la Terre, **`craft motion`** (cible du renderer) ; son identité (objet 2²⁰ − 1 − instance, génération `ship.craftGen`) → `terrain raster identity`  (copiée entière dans `resolved`, puis ces pixels effacés à 0 ; masque **`ship: in the scene`** effacé puis 1 là — lu là où l'appareil cache quelque chose : pluie, rayures de la verrière, cartes en surimpression, et pour épargner l'appareil de la brume de chaleur et de la profondeur de champ) ; poids de la frame ≥ 0,5 à ses pixels dans `temporal`/`taau` (`CRAFT_ALPHA` : déjà antialiasé par le MSAA, sans gigue — l'historique à 0,9 le ramollissait, −19 % de netteté mesurée) | M/S |
+| E12a | `ship: shadow map`, `ship: shading (MSAA)` (**4 à 5 ms sur kerr-mini pour son MSAA 4×**, mesuré le 14 nov. par `SHIP_MSAA` 1 contre 4 — PROBLEMES), `ship: own mask`, **`ship: motion`**, **`ship: into the scene`**, `ship: hull distance`, `ship: thrusters and plasma` | `ship.wgsl` (`ship.ts` `encodeShip`, `encodeCompose` ; `renderer.ts` `encodeShipNow`) | **PLAN-J1 J1-5 (12 nov.)** : image vivante, `renderer.shipInScene` (allumé), les pipelines de la composition compilées (async, sinon E12) | comme E12 — **et, depuis PLAN-J3 J3-2 (13 nov.), la coque (`fs`), les traînées (`trailFs`), les flammes (`plumeFs`), le halo des feux (`lampFs`, transmittance seule) et les verrières (`fsJetGlass`) vus à travers l'air de leur distance** : la table aérienne du traceur (`aerialTex`, liaisons 41–43 de `ship.wgsl`, `shipAir` : c × T + L × alpha, au-delà de 50 m), sa portée et l'échelle en `sh[12]` (écrites par `keyLight` dans `envBuf` + 7, recopiées par `envSH`), `S.air.z` 1 quand la table est écrite cette image (`renderer.shipAirAllowed`) ; les traînées sans leur ancien `exp(−d/120 km)` —, puis `ship: motion` (hors cockpit : les maillages opaques une fois, une seule échantillon, la pose d'avant par clé d'instance — `motionVs/motionFs` → boîte `rgba32float` : px vers l'image d'avant, z 1 / 2 sans historique + 4 × instance, distance [M]) ; `ship: into the scene` (`composeColor`, `composeSurface`, sur la boîte) : où l'image de l'appareil est opaque (alpha 1 et surface du mouvement), sa couleur → **`hdr`** (avant le temporel), sa distance → `sceneDepth` (min), les étoiles splattées dessous effacées (`stars`) ; son mouvement (w 1 : l'appareil ; z 1, ou 2 depuis le cockpit — sous son masque, sans historique) → `terrain raster motion` ou, sans visibilité de la Terre, **`craft motion`** (cible du renderer) ; son identité (objet 2²⁰ − 1 − instance, génération `ship.craftGen`) → `terrain raster identity`  (copiée entière dans `resolved`, puis ces pixels effacés à 0 ; masque **`ship: in the scene`** effacé puis 1 là — lu là où l'appareil cache quelque chose : pluie, rayures de la verrière, cartes en surimpression, et pour épargner l'appareil de la brume de chaleur et de la profondeur de champ) ; poids de la frame ≥ 0,5 à ses pixels dans `temporal`/`taau` (`CRAFT_ALPHA` : déjà antialiasé par le MSAA, sans gigue — l'historique à 0,9 le ramollissait, −19 % de netteté mesurée). **Depuis le 25 nov. 2026** : les maillages du trafic (avions simples, navires, A320 gréé) dessinés à leur **niveau de détail** (`src/ship-lod.ts`, meshoptimizer par matériau et par pièce mobile, bords verrouillés, fait dans le worker CPU ; le plus grossier dont l'erreur reste sous `ship.lodPx` = 0,5 px là où il est ; jamais l'appareil piloté) — la même liste `draws` pour la profondeur préalable, l'ombrage, le mouvement et la carte d'ombre ; l'A320 du trafic dessiné gréé seulement si sa demi-longueur couvre 6 % de la demi-hauteur de l'image (`renderer.trafficRigShare`), sinon l'avion simple | M/S |
 | E5 | `temporal` (2 sites : temps réel et passage de relais, temps additionnés) | `temporal` | live, reprojection (un pixel de maillage mobile : par son mouvement — `terrain raster motion`, liaison 49, J1-2 ; un pixel qu'un mobile couvrait à l'image d'avant et plus maintenant, ou une voiture ramenée par sa boucle — z 2 — : sans historique, `motion, the frame before`, liaison 50 ; **un pixel de l'appareil — w 1, J1-5 — : neuf, entier, sans albédo du sol, voisinage 3 × 3 au pixel ; au passage de relais, lui et ceux qu'il couvrait : l'image de la frame** ; **rejet par identité** — `renderer.identityReject`, **allumé par défaut depuis le 12 nov. (piste (b) de Sam)** — : un pixel **mobile** (l'appareil, une voiture : mouvement z 1) dont le mot d'identité n'est dans aucun des 3 × 3 autour de son historique dans `identity, the frame before` (liaisons 51, 52) : sans historique ; le décor immobile garde le sien, sauf à l'image où une **nouvelle publication du décor** est dessinée (génération changée, `TA.pFwd.w`) : ce qui apparaît ou disparaît voit le poids de son historique coupé au quart (compte `idRejects`, 8 mots, liaison 53, `renderer.identityRejects()`)), historique valide ; **J2-0 (12 nov.)** : avec `renderer.stageProbe` (diagnostic éteint par défaut), une copie non chronométrée de `hdr` mip 0 juste avant la passe → `stage probe: shade` (rgba16f W×H, créée à la demande ; lue par `renderer.sceneStages()` avec `hist[idx]` et `taau.out` : l'image avant/après le temporel et après la TAAU, dans une soumission) | `hdr`, historique → `hist`, `alb` | R |
 | E6 | `taau` | `taau`, **à la taille de la toile** | toile > cible × 1,01 ; un pixel de maillage mobile reprojeté par son mouvement (`terrain raster motion`, liaison 49, J1-2) ; désoccultation par le mouvement de l'image d'avant (liaison 50) ; **l'appareil (w 1, J1-5) : ses 3 × 3 pixels internes pris comme échantillons de la frame, à leur centre (sans gigue)** ; rejet par identité comme `temporal` (éteint par défaut) | → `taau.out` → display | R |
 | E7 | `stars` | `stars` | étoiles splattées (sinon copie hist→hdr) | → `hdr` | R |
@@ -1080,7 +1167,7 @@ Paris jusqu'à `earthSettled` » chronométré par étape.
 
 <!-- pipeline-inventory:begin (bun scripts/pipeline-inventory.ts --write) -->
 
-_Généré le 2026-11-25T03:04:40Z sur `fd2611dc` (arbre de travail). Ne pas éditer à la main : relancer l'outil._
+_Généré le 2026-11-25T07:36:14Z sur `0c2f0407` (arbre de travail). Ne pas éditer à la main : relancer l'outil._
 
 **130 sites de création de pipeline** (86 rendu, 44 calcul, dont 66 asynchrones) et 43 `createShaderModule` dans 32 fichiers ; **44 programmes WGSL** (16 fichiers .wgsl, 28 chaînes dans le TypeScript) ; **66 libellés de passes** du profileur GPU (+ 11 sites à libellé dynamique).
 
@@ -1159,33 +1246,33 @@ _Généré le 2026-11-25T03:04:40Z sur `fd2611dc` (arbre de travail). Ne pas éd
 | `src/renderer.ts:6948` | compute async | — | `ep` |
 | `src/renderer.ts:7662` | compute | — | — |
 | `src/renderer.ts:8711` | compute | — | — |
-| `src/renderer.ts:11015` | compute async | `clouds` | `cloudShadow` |
-| `src/renderer.ts:11097` | compute async | `sky ambient write` | `cloudLightVolume` |
-| `src/renderer.ts:11179` | compute async | — | `skyAmbient` |
-| `src/renderer.ts:13537` | compute async | — | `probe` |
+| `src/renderer.ts:11042` | compute async | `clouds` | `cloudShadow` |
+| `src/renderer.ts:11124` | compute async | `sky ambient write` | `cloudLightVolume` |
+| `src/renderer.ts:11206` | compute async | — | `skyAmbient` |
+| `src/renderer.ts:13564` | compute async | — | `probe` |
 | `src/sea/fft-gpu.ts:117` | compute | — | — |
-| `src/ship.ts:853` | compute | — | `vs` |
-| `src/ship.ts:873` | render | — | `fsJetGlass` |
-| `src/ship.ts:900` | render | — | `fs` |
-| `src/ship.ts:913` | render | — | `fs` |
-| `src/ship.ts:923` | render | — | `mirrorVs`, `fs` |
-| `src/ship.ts:931` | render | — | `shadowVs` |
-| `src/ship.ts:947` | render | — | `plumeVs`, `plumeFs` |
-| `src/ship.ts:959` | render | — | `glowVs`, `glowFs` |
-| `src/ship.ts:966` | render | — | `sheathVs`, `sheathFs` |
-| `src/ship.ts:975` | render | — | `trailVs`, `trailFs` |
-| `src/ship.ts:995` | render | — | `lampVs`, `lampFs` |
-| `src/ship.ts:1014` | render | — | `distVs`, `distFs` |
-| `src/ship.ts:1021` | render | — | `hullDepthVs`, `hullDepthFs` |
-| `src/ship.ts:1032` | render | — | `fsCabin` |
-| `src/ship.ts:1040` | render | — | `ctlVs`, `fsCabin` |
-| `src/ship.ts:1048` | render | — | `fsCabinGlass` |
-| `src/ship.ts:1070` | render | — | `depthVs`, `ownMaskFs` |
-| `src/ship.ts:1077` | render | — | `depthVs`, `hullDepthFs` |
-| `src/ship.ts:1085` | render | `ship: the frame before` | `compVs`, `compFs` |
-| `src/ship.ts:1114` | render async | — | `motionVs`, `motionFs` |
-| `src/ship.ts:1121` | compute async | — | `composeColor` |
-| `src/ship.ts:1122` | compute async | — | `composeSurface` |
+| `src/ship.ts:857` | compute | — | `vs` |
+| `src/ship.ts:877` | render | — | `fsJetGlass` |
+| `src/ship.ts:904` | render | — | `fs` |
+| `src/ship.ts:917` | render | — | `fs` |
+| `src/ship.ts:927` | render | — | `mirrorVs`, `fs` |
+| `src/ship.ts:935` | render | — | `shadowVs` |
+| `src/ship.ts:951` | render | — | `plumeVs`, `plumeFs` |
+| `src/ship.ts:963` | render | — | `glowVs`, `glowFs` |
+| `src/ship.ts:970` | render | — | `sheathVs`, `sheathFs` |
+| `src/ship.ts:979` | render | — | `trailVs`, `trailFs` |
+| `src/ship.ts:999` | render | — | `lampVs`, `lampFs` |
+| `src/ship.ts:1018` | render | — | `distVs`, `distFs` |
+| `src/ship.ts:1025` | render | — | `hullDepthVs`, `hullDepthFs` |
+| `src/ship.ts:1036` | render | — | `fsCabin` |
+| `src/ship.ts:1044` | render | — | `ctlVs`, `fsCabin` |
+| `src/ship.ts:1052` | render | — | `fsCabinGlass` |
+| `src/ship.ts:1074` | render | — | `depthVs`, `ownMaskFs` |
+| `src/ship.ts:1081` | render | — | `depthVs`, `hullDepthFs` |
+| `src/ship.ts:1089` | render | `ship: the frame before` | `compVs`, `compFs` |
+| `src/ship.ts:1118` | render async | — | `motionVs`, `motionFs` |
+| `src/ship.ts:1125` | compute async | — | `composeColor` |
+| `src/ship.ts:1126` | compute async | — | `composeSurface` |
 | `src/sky.ts:134` | compute | — | `decode` |
 | `src/sky.ts:135` | compute | — | `down` |
 | `src/station.ts:89` | render | — | — |
@@ -1262,7 +1349,7 @@ _Généré le 2026-11-25T03:04:40Z sur `fd2611dc` (arbre de travail). Ne pas éd
 
 | source | lignes | points d'entrée |
 |---|---:|---|
-| `src/shaders/trace.wgsl` | 18255 | 18 entrées : cloudLightVolume, aerial, lut, main, shade, shadeMark, shadeLiteFinish, shadeWaterFinish, shadeLiteLight, shadeLite, skyFill, shadeWater, clouds, skyAmbient, cloudShadow, env, probe, shadeStars |
+| `src/shaders/trace.wgsl` | 18269 | 18 entrées : cloudLightVolume, aerial, lut, main, shade, shadeMark, shadeLiteFinish, shadeWaterFinish, shadeLiteLight, shadeLite, skyFill, shadeWater, clouds, skyAmbient, cloudShadow, env, probe, shadeStars |
 | `src/shaders/ship.wgsl` | 2823 | 34 entrées : envCopy, envDown, envGGX, envSH, ctlVs, depthVs, vs, mirrorVs, shadowVs, fs, hullDepthVs, hullDepthFs, ownMaskFs, plumeVs, plumeFs, glowVs, glowFs, distVs, distFs, sheathVs, sheathFs, trailVs, trailFs, lampVs, lampFs, compVs, compFs, fsCabin, fsCabinGlass, fsJetGlass, motionVs, motionFs, composeColor, composeSurface |
 | `src/shaders/post.wgsl` | 1396 | 18 entrées : gatherH, atrous, beamH, beamV, polgrid, resolve, down, downShip, dof, flareMeter, up, meter, stars, motionBlur, temporal, occlusion, cloudTemporal, taau |
 | `src/system/scenery-raster.ts:208` | 1191 | 31 entrées : cull, cullBoxes, clampBoxes, shadowVs, shadowFs, proxyVs, proxyFs, boxVs, boxFs, bridgeMarkFs, boxMarkVs, boxShadowVs, meshShadowVs, meshVs, meshFs, boxSolidVs, benchCull, benchQuadVs, benchVs, benchShadowVs, farCull, farVs, farQuadVs, farFs, farLampCull, farLampVs, farCarCull, farCarVs, nearCellVs, nearCellShadowVs, farShadowVs |
@@ -1352,26 +1439,26 @@ _Généré le 2026-11-25T03:04:40Z sur `fd2611dc` (arbre de travail). Ne pas éd
 | `depth of field` | `src/renderer.ts:9079` | 1 |
 | `lens flare meter` | `src/renderer.ts:9089` | 1 |
 | `light meter` | `src/renderer.ts:9113` | 1 |
-| `display` | `src/renderer.ts:10643` | 2 |
-| `clouds' shadow map` | `src/renderer.ts:11047` | 1 |
-| `clouds' light volume` | `src/renderer.ts:11128` | 1 |
-| `sky ambient` | `src/renderer.ts:11210` | 1 |
-| `clouds' history` | `src/renderer.ts:11933` | 1 |
-| `body raster heights` | `src/renderer.ts:12293` | 1 |
-| `scenery raster cull` | `src/renderer.ts:12571` | 1 |
-| `ground occlusion` | `src/renderer.ts:12611` | 1 |
-| `trees' shadow map` | `src/renderer.ts:12616` | 1 |
-| `horizon bake` | `src/renderer.ts:12896` | 1 |
-| `ship probe: mips` | `src/ship.ts:1990` | 1 |
-| `ship probe: GGX` | `src/ship.ts:2002` | 1 |
-| `ship probe: SH` | `src/ship.ts:2009` | 1 |
-| `ship: shadow map` | `src/ship.ts:2969` | 1 |
-| `ship: shading (MSAA)` | `src/ship.ts:2987` | 1 |
-| `ship: own mask` | `src/ship.ts:3228` | 1 |
-| `ship: hull distance` | `src/ship.ts:3260` | 1 |
-| `ship: thrusters and plasma` | `src/ship.ts:3278` | 1 |
-| `ship: motion` | `src/ship.ts:3404` | 1 |
-| `ship: into the scene` | `src/ship.ts:3462` | 1 |
+| `display` | `src/renderer.ts:10670` | 2 |
+| `clouds' shadow map` | `src/renderer.ts:11074` | 1 |
+| `clouds' light volume` | `src/renderer.ts:11155` | 1 |
+| `sky ambient` | `src/renderer.ts:11237` | 1 |
+| `clouds' history` | `src/renderer.ts:11960` | 1 |
+| `body raster heights` | `src/renderer.ts:12320` | 1 |
+| `scenery raster cull` | `src/renderer.ts:12598` | 1 |
+| `ground occlusion` | `src/renderer.ts:12638` | 1 |
+| `trees' shadow map` | `src/renderer.ts:12643` | 1 |
+| `horizon bake` | `src/renderer.ts:12923` | 1 |
+| `ship probe: mips` | `src/ship.ts:2026` | 1 |
+| `ship probe: GGX` | `src/ship.ts:2038` | 1 |
+| `ship probe: SH` | `src/ship.ts:2045` | 1 |
+| `ship: shadow map` | `src/ship.ts:3029` | 1 |
+| `ship: shading (MSAA)` | `src/ship.ts:3050` | 1 |
+| `ship: own mask` | `src/ship.ts:3291` | 1 |
+| `ship: hull distance` | `src/ship.ts:3323` | 1 |
+| `ship: thrusters and plasma` | `src/ship.ts:3341` | 1 |
+| `ship: motion` | `src/ship.ts:3468` | 1 |
+| `ship: into the scene` | `src/ship.ts:3526` | 1 |
 | `terrain raster visibility` | `src/system/terrain-raster.ts:1086` | 1 |
 | `body raster visibility` | `src/system/terrain-raster.ts:1139` | 1 |
 | `terrain from the Sun` | `src/system/terrain-raster.ts:1282` | 1 |
@@ -1385,12 +1472,12 @@ Libellés dynamiques (calculés à l'exécution) :
 - `src/renderer.ts:7648` — `label`
 - `src/renderer.ts:7649` — `label`
 - `src/renderer.ts:8995` — `label`
-- `src/renderer.ts:11846` — `label`
-- `src/renderer.ts:12299` — `label`
-- `src/renderer.ts:12330` — `label`
-- `src/renderer.ts:12596` — `label`
-- `src/renderer.ts:12642` — `label`
-- `src/ship.ts:806` — `label`
+- `src/renderer.ts:11873` — `label`
+- `src/renderer.ts:12326` — `label`
+- `src/renderer.ts:12357` — `label`
+- `src/renderer.ts:12623` — `label`
+- `src/renderer.ts:12669` — `label`
+- `src/ship.ts:810` — `label`
 
 #### A.3b Passes jamais chronométrées (ni libellé du profileur, ni horodatage transmis)
 
@@ -1414,12 +1501,12 @@ Leur coût n'apparaît que dans l'intervalle de complétion de la frame (ou d'un
 | render pass | `src/noise3d.ts:124` |
 | render pass | `src/renderer.ts:5668` |
 | compute pass | `src/renderer.ts:8730` |
-| compute pass | `src/renderer.ts:13556` |
+| compute pass | `src/renderer.ts:13583` |
 | compute pass | `src/sea/fft-gpu.ts:261` |
 | compute pass | `src/sea/fft-gpu.ts:265` |
-| render pass | `src/ship.ts:3359` |
-| render pass | `src/ship.ts:3372` |
-| render pass | `src/ship.ts:3432` |
+| render pass | `src/ship.ts:3422` |
+| render pass | `src/ship.ts:3435` |
+| render pass | `src/ship.ts:3496` |
 | compute pass | `src/sky.ts:166` |
 | station: shadow map | `src/station.ts:210` |
 | station | `src/station.ts:240` |

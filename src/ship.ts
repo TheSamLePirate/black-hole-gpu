@@ -73,7 +73,8 @@ import {
 import { GEAR_HINGES, gearMesh } from "./gear-mesh";
 import type { GpuProfiler } from "./gpuprof";
 import { cockpitHull, samplePoints, vesselHulls } from "./system/collide";
-import { buildBVH, imageMipsOff } from "./system/cpu-client";
+import { buildBVH, imageMipsOff, meshLodsOff } from "./system/cpu-client";
+import { pickLod } from "./ship-lod";
 import { cabinHitOf } from "./cockpit/pick";
 import { MAX_SEGMENTS, SEG_FLOATS } from "./contrails";
 import { VESSELS, type JetDef, type VesselId } from "./vessels";
@@ -460,6 +461,9 @@ interface Mesh {
   solid?: number;
   /** its box's centre and half-diagonal, its box (ship frame) [m] */
   bound: { c: V3; r: number; lo: V3; hi: V3 };
+  /** its levels of detail, coarser and coarser (ship-lod.ts — the traffic's meshes): each its triangles over the same vertices, its
+   *  error [m]; made off the page's thread once the mesh is in */
+  lods?: { mesh: Mesh; error: number }[];
 }
 
 interface ShipTargetRes {
@@ -1177,13 +1181,29 @@ export class ShipRenderer {
     const ibuf = d.createBuffer({ size: idx.byteLength, usage: GPUBufferUsage.INDEX | GPUBufferUsage.COPY_DST });
     d.queue.writeBuffer(ibuf, 0, idx);
     const c: V3 = [0, 1, 2].map((j) => (lo[j]! + hi[j]!) / 2) as V3;
-    this.meshes[id] = { vbuf, ibuf, count: ni, bound: { c, r: Math.hypot(...sub(hi, lo)) / 2, lo, hi } };
+    const mesh: Mesh = { vbuf, ibuf, count: ni, bound: { c, r: Math.hypot(...sub(hi, lo)) / 2, lo, hi } };
+    this.meshes[id] = mesh;
+    this.lodsFor(mesh, verts, idx);
     // (the maps: the traffic's with its first mesh; again with the carriers' with the first carrier)
     const want = isCarrier(id) ? TRAFFIC_MAPS.length + CARRIER_MAPS.length : TRAFFIC_MAPS.length;
     if (want > this.trafficMapsLayers) {
       this.trafficMapsLayers = want;
       await this.loadTrafficMaps(want);
     }
+  }
+
+  /** A mesh's levels of detail (ship-lod.ts), made in the CPU worker: drawn whole until they come, or if they never do. */
+  private lodsFor(mesh: Mesh, verts: Float32Array, idx: Uint32Array) {
+    const d = this.device;
+    void meshLodsOff(verts, idx, mesh.solid ?? idx.length).then((levels) => {
+      if (!levels?.length || mesh.lods) return;
+      mesh.lods = levels.map((l) => {
+        const b = d.createBuffer({ size: l.idx.byteLength, usage: GPUBufferUsage.INDEX | GPUBufferUsage.COPY_DST });
+        d.queue.writeBuffer(b, 0, l.idx as Uint32Array<ArrayBuffer>);
+        const solid = mesh.solid === undefined ? undefined : l.solid;
+        return { mesh: { vbuf: mesh.vbuf, ibuf: b, count: l.idx.length, solid, bound: mesh.bound }, error: l.error };
+      });
+    });
   }
 
   /** The traffic's colour maps: one array, a layer each, its mipmaps made from the image. */
@@ -1366,6 +1386,8 @@ export class ShipRenderer {
     const ibuf = d.createBuffer({ size: idx.byteLength, usage: GPUBufferUsage.INDEX | GPUBufferUsage.COPY_DST });
     d.queue.writeBuffer(ibuf, 0, idx);
     this.meshes.a320 = { vbuf, ibuf, count: idx.length, solid, bound: { c, r, lo, hi } };
+    // (its levels of detail — the traffic's A320s, drawn rigged near the view: their parts apart, ship-lod.ts; never the flown one)
+    this.lodsFor(this.meshes.a320, verts, idx);
     void this.loadA320Maps();
   }
 
@@ -1965,7 +1987,8 @@ export class ShipRenderer {
 
   /** Parts of the raster left out, to measure what each costs (the e2e's A/B): "shadow", "pre" (the depth
    *  pre-pass), "hull" (the craft's solid triangles), "glass" (the F-35's canopy and visor; "glass-sr" without the
-   *  traced image's reflection, "glass-flat" a flat tint), "plume" (the flames, trails, lamps). */
+   *  traced image's reflection, "glass-flat" a flat tint), "plume" (the flames, trails, lamps), "motion"
+   *  (its motion pass). */
   debugSkip = new Set<string>();
   /** (a measuring lever) the casters on the ground other than the war's units — the traffic's airliners, the ships (ship-casters.ts) —
    *  in the shadow map's second half; false: none of them (their shadows' cost, tests/e2e/traffic-runways) */
@@ -1976,6 +1999,19 @@ export class ShipRenderer {
   debugFs = 0;
   /** the last box the craft's pass drew in: [x, y, w, h, image w, image h] (a measure — its MSAA's area) */
   lastBox: number[] = [];
+  /** (a measure) the instances drawn last: their mesh, its solid triangles, their distance [m], their bounding radius on the image as
+   *  a share of its half-height (× H/2: pixels), in the shadow map (1 the first half, 2 the second) — tests/e2e/traffic-cost */
+  lastDraws: { id: string; tris: number; d: number; r: number; cast: number }[] = [];
+  /** The traffic's levels of detail (ship-lod.ts): each instance drawn at the coarsest whose error stays within this many pixels where
+   *  it stands (0.5: under half a pixel — the same image); 0: the meshes whole (a measuring lever, as before 25 Nov 2026). */
+  lodPx = 0.5;
+  /** the image drawn into's height [px] (encodeShip): the levels of detail's pixels */
+  private imageH = 1000;
+  /** (a measuring lever, 0 in play) the shadow map's, the shading's (its depth pre-pass, hulls, glass) and the motion's passes drawn that many
+   *  times more: their cost amplified above the frame's noise (tests/e2e/traffic-cost — a pass's cost = Δ / repeats) */
+  debugRepeat = { shadow: 0, shade: 0, motion: 0 };
+  /** (a measuring lever, null in play) the other craft drawn: those it keeps — tests/e2e/traffic-cost prices them by kind and distance */
+  debugOthers: ((o: ShipInstance) => boolean) | null = null;
   /** the craft's pass's samples this page (SHIP_MSAA: 4, or 1 set before the load as a measure) */
   readonly msaa = SHIP_MSAA;
   private glassPipe?: (mode: number, a320?: boolean) => GPURenderPipeline;
@@ -2314,7 +2350,7 @@ export class ShipRenderer {
       traffic?: ShipInstance["traffic"];
     }[] = this.flown ? [{ id: this.vessel, R, t, shadow: true, far: !!v.place, mirror: !!sea?.flown }] : [];
     for (const o of v.others ?? [])
-      if (list.length < MAX_INST && this.meshes[o.id])
+      if (list.length < MAX_INST && this.meshes[o.id] && (!this.debugOthers || this.debugOthers(o)))
         list.push({
           id: o.id,
           R: o.S,
@@ -2354,6 +2390,7 @@ export class ShipRenderer {
     // (the others' engines firing: their jets after the flown craft's — appendJets)
     const lit: { id: VesselId; R: M3; t: V3; thrust: NonNullable<ShipInstance["thrust"]>; exit: { p: V3; d: V3 } | null }[] = [];
     this.draws = [];
+    this.lastDraws = [];
     this.bound2 = null;
     // (PLAN-J1 J1-5: each instance's key — its pose the frame before matched by it, its motion on the image from that)
     const ranks = new Map<string, number>();
@@ -2369,8 +2406,20 @@ export class ShipRenderer {
     // (the shadow map's sphere: about the flown craft and those near it)
     let sc: V3 | null = null,
       sr = 0;
+    // (the image's pixels a metre at a metre's distance: an instance's level of detail by its error there — lodPx)
+    const pxM = (0.5 * this.imageH) / tanH;
     list.forEach((it, i) => {
-      const me = i === 0 && inCabin ? this.cockpit!.mesh : this.meshes[it.id]!;
+      const whole = i === 0 && inCabin ? this.cockpit!.mesh : this.meshes[it.id]!;
+      // (not the flown craft — its own mask, its cockpit —: the others by their distance, their nearest point's)
+      let me = whole;
+      if (whole.lods && this.lodPx > 0 && !(i === 0 && this.flown)) {
+        const k = pickLod(
+          whole.lods.map((l) => l.error),
+          pxM / Math.max(Math.hypot(...it.t) - whole.bound.r * Math.hypot(...it.R[0]!), 1),
+          this.lodPx,
+        );
+        if (k >= 0) me = whole.lods[k]!.mesh;
+      }
       // (the cabin in another craft: moved by its offset on the craft's axes)
       const o = i === 0 && inCabin ? this.cabinOffset : null;
       const tt: V3 = o ? ([0, 1, 2].map((r) => it.t[r]! + it.R[r]![0]! * o[0] + it.R[r]![1]! * o[1] + it.R[r]![2]! * o[2]) as V3) : it.t;
@@ -2432,6 +2481,16 @@ export class ShipRenderer {
       // mirrored in the sea — bit 1)
       const second = i === big || group.has(i);
       this.instData.set([kind[it.id], it.shadow ? 1 : second ? 2 : 0, (it.far ? 1 : 0) + (it.mirror ? 2 : 0), parts], i * INST_FLOATS + 16);
+      {
+        const d = Math.hypot(...it.t);
+        this.lastDraws.push({
+          id: it.id,
+          tris: Math.round((me.solid ?? me.count) / 3),
+          d: Math.round(d),
+          r: +(me.bound.r / Math.max(d, 1e-3) / tanH).toFixed(5),
+          cast: it.shadow ? 1 : second ? 2 : 0,
+        });
+      }
       this.draws.push({
         mesh: me,
         shadow: it.shadow || second,
@@ -2888,6 +2947,7 @@ export class ShipRenderer {
     for (const o of v.others ?? []) this.has(o.id);
     if (!this.flown && !(v.others ?? []).some((o) => this.meshes[o.id])) return;
     const res = this.target(hdr);
+    this.imageH = hdr.height;
     this.writeUniform(v, mesh);
     // (the image's size and the metres per M: the other craft's depths against the traced image's)
     this.device.queue.writeBuffer(this.uniform, 240, new Float32Array([hdr.width, hdr.height, v.mPerM ?? 1, sceneDepth ? 1 : 0]));
@@ -2964,7 +3024,7 @@ export class ShipRenderer {
       this.shadowKeyDrawn = this.shadowKey;
       this.shadowDraws++;
     }
-    if (!this.debugSkip.has("shadow") && draw) {
+    for (let rep = draw ? this.debugRepeat.shadow : -1; rep >= 0 && !this.debugSkip.has("shadow"); rep--) {
       const sp = enc.beginRenderPass(
         this.pass("ship: shadow map", {
           colorAttachments: [],
@@ -2983,222 +3043,225 @@ export class ShipRenderer {
     }
     const b = res.box;
     const jets = this.jetCount > 0;
-    const rp = enc.beginRenderPass(
-      this.pass("ship: shading (MSAA)", {
-        colorAttachments: [
-          SHIP_MSAA === 4
-            ? {
-                view: b.color.createView(),
-                resolveTarget: b.small.createView(),
-                loadOp: "clear",
-                storeOp: "discard",
-                clearValue: [0, 0, 0, 0],
-              }
-            : // (one sample — a measure —: drawn straight into the resolved image)
-              { view: b.small.createView(), loadOp: "clear", storeOp: "store", clearValue: [0, 0, 0, 0] },
-        ],
-        depthStencilAttachment: { view: b.depth.createView(), depthClearValue: 0, depthLoadOp: "clear", depthStoreOp: "discard" },
-      }),
-    );
-    // the depth pre-pass (its bindings: the uniform, the instances)
-    this.depthBind ??= this.device.createBindGroup({
-      layout: this.pipes.depthPre.getBindGroupLayout(0),
-      entries: [
-        { binding: 0, resource: { buffer: this.uniform } },
-        { binding: 12, resource: { buffer: this.instBuf } },
-      ],
-    });
-    rp.setPipeline(this.pipes.depthPre);
-    rp.setBindGroup(0, this.depthBind);
-    if (!this.debugSkip.has("pre"))
-      this.draws.forEach((dr) => {
-        rp.setVertexBuffer(0, dr.mesh.vbuf);
-        rp.setIndexBuffer(dr.mesh.ibuf, "uint32");
-        rp.drawIndexed(dr.cabin ? this.cockpit!.solid : (dr.mesh.solid ?? dr.mesh.count), 1, 0, 0, dr.inst);
-      });
-    rp.setPipeline(this.pipes.ship);
-    // (the traced image the craft are drawn over: its sharp reflections — ship.wgsl screenRefl —, its
-    // depths: what hides the other craft)
     const mb = sceneDepth ?? (this.momentsBuf ??= this.device.createBuffer({ size: 16, usage: GPUBufferUsage.STORAGE }));
-    if (!res.bind || res.bindGen !== this.bindGen || res.bindMoments !== mb) {
-      res.bind = this.device.createBindGroup({
-        layout: this.pipes!.ship.getBindGroupLayout(0),
-        entries: [...this.shipEntries!, { binding: 10, resource: hdr.createView() }, { binding: 11, resource: { buffer: mb } }],
-      });
-      res.bindGen = this.bindGen;
-      res.bindMoments = mb;
-    }
-    // (the F-35's own pipeline for its meshes — ship.wgsl HULL_JET: its maps alone, the other craft's procedural plating and
-    // grime out of its pixels, the whole cockpit's from inside —, its bind groups its own: an auto layout is its pipeline's)
-    if (!res.jetBind || res.jetBindGen !== this.bindGen || res.jetBindMoments !== mb || res.jetBindHdr !== hdr) {
-      res.jetBind = this.device.createBindGroup({
-        layout: this.pipes!.shipJet.getBindGroupLayout(0),
-        entries: [...this.shipEntries!, { binding: 10, resource: hdr.createView() }, { binding: 11, resource: { buffer: mb } }],
-      });
-      res.jetBindGen = this.bindGen;
-      res.jetBindMoments = mb;
-      res.jetBindHdr = hdr;
-    }
-    if (res.jetOcc?.tex !== occTex)
-      res.jetOcc = {
-        tex: occTex,
-        g: this.device.createBindGroup({
-          layout: this.pipes.shipJet.getBindGroupLayout(1),
-          entries: [{ binding: 0, resource: occTex.createView() }],
+    // (debugRepeat.shade, a measure: the pass drawn that many times more — its cost amplified above the frame's noise)
+    for (let rep = this.debugRepeat.shade; rep >= 0; rep--) {
+      const rp = enc.beginRenderPass(
+        this.pass("ship: shading (MSAA)", {
+          colorAttachments: [
+            SHIP_MSAA === 4
+              ? {
+                  view: b.color.createView(),
+                  resolveTarget: b.small.createView(),
+                  loadOp: "clear",
+                  storeOp: "discard",
+                  clearValue: [0, 0, 0, 0],
+                }
+              : // (one sample — a measure —: drawn straight into the resolved image)
+                { view: b.small.createView(), loadOp: "clear", storeOp: "store", clearValue: [0, 0, 0, 0] },
+          ],
+          depthStencilAttachment: { view: b.depth.createView(), depthClearValue: 0, depthLoadOp: "clear", depthStoreOp: "discard" },
         }),
-      };
-    let jetNow = false;
-    rp.setBindGroup(0, res.bind);
-    rp.setBindGroup(1, res.occBind!.g);
-    this.draws.forEach((dr) => {
-      if (dr.cabin || this.debugSkip.has("hull") || (dr.mesh === this.deckMesh && this.debugSkip.has("deck"))) return;
-      if (dr.inst === 0 && this.deckDrawn && this.debugSkip.has("a320-hull")) return;
-      const jet = dr.mesh === this.meshes.f35;
-      if (jet !== jetNow) {
-        rp.setPipeline(jet ? this.pipes!.shipJet : this.pipes!.ship);
-        rp.setBindGroup(0, jet ? res.jetBind! : res.bind!);
-        rp.setBindGroup(1, jet ? res.jetOcc!.g : res.occBind!.g);
-        jetNow = jet;
-      }
-      rp.setVertexBuffer(0, dr.mesh.vbuf);
-      rp.setIndexBuffer(dr.mesh.ibuf, "uint32");
-      // (debugSkip "hull-half", a measure: the first half of each hull's triangles — is its cost the geometry's? PLAN-J3 J3-6)
-      const n = dr.mesh.solid ?? dr.mesh.count;
-      rp.drawIndexed(this.debugSkip.has("hull-half") ? Math.floor(n / 6) * 3 : n, 1, 0, 0, dr.inst);
-    });
-    // the craft's images in the sea, where nothing else is drawn
-    const mirrored = v.sea ? this.draws.filter((dr) => dr.mirror) : [];
-    if (mirrored.length) {
-      if (!res.mirrorBind || res.mirrorGen !== this.bindGen || res.mirrorMoments !== mb || res.mirrorHdr !== hdr) {
-        res.mirrorBind = this.device.createBindGroup({
-          layout: this.pipes.mirror.getBindGroupLayout(0),
+      );
+      // the depth pre-pass (its bindings: the uniform, the instances)
+      this.depthBind ??= this.device.createBindGroup({
+        layout: this.pipes.depthPre.getBindGroupLayout(0),
+        entries: [
+          { binding: 0, resource: { buffer: this.uniform } },
+          { binding: 12, resource: { buffer: this.instBuf } },
+        ],
+      });
+      rp.setPipeline(this.pipes.depthPre);
+      rp.setBindGroup(0, this.depthBind);
+      if (!this.debugSkip.has("pre"))
+        this.draws.forEach((dr) => {
+          rp.setVertexBuffer(0, dr.mesh.vbuf);
+          rp.setIndexBuffer(dr.mesh.ibuf, "uint32");
+          rp.drawIndexed(dr.cabin ? this.cockpit!.solid : (dr.mesh.solid ?? dr.mesh.count), 1, 0, 0, dr.inst);
+        });
+      rp.setPipeline(this.pipes.ship);
+      // (the traced image the craft are drawn over: its sharp reflections — ship.wgsl screenRefl —, its
+      // depths: what hides the other craft)
+      if (!res.bind || res.bindGen !== this.bindGen || res.bindMoments !== mb) {
+        res.bind = this.device.createBindGroup({
+          layout: this.pipes!.ship.getBindGroupLayout(0),
           entries: [...this.shipEntries!, { binding: 10, resource: hdr.createView() }, { binding: 11, resource: { buffer: mb } }],
         });
-        res.mirrorGen = this.bindGen;
-        res.mirrorMoments = mb;
-        res.mirrorHdr = hdr;
+        res.bindGen = this.bindGen;
+        res.bindMoments = mb;
       }
-      if (res.mirrorOcc?.tex !== occTex)
-        res.mirrorOcc = {
+      // (the F-35's own pipeline for its meshes — ship.wgsl HULL_JET: its maps alone, the other craft's procedural plating and
+      // grime out of its pixels, the whole cockpit's from inside —, its bind groups its own: an auto layout is its pipeline's)
+      if (!res.jetBind || res.jetBindGen !== this.bindGen || res.jetBindMoments !== mb || res.jetBindHdr !== hdr) {
+        res.jetBind = this.device.createBindGroup({
+          layout: this.pipes!.shipJet.getBindGroupLayout(0),
+          entries: [...this.shipEntries!, { binding: 10, resource: hdr.createView() }, { binding: 11, resource: { buffer: mb } }],
+        });
+        res.jetBindGen = this.bindGen;
+        res.jetBindMoments = mb;
+        res.jetBindHdr = hdr;
+      }
+      if (res.jetOcc?.tex !== occTex)
+        res.jetOcc = {
           tex: occTex,
           g: this.device.createBindGroup({
-            layout: this.pipes.mirror.getBindGroupLayout(1),
+            layout: this.pipes.shipJet.getBindGroupLayout(1),
             entries: [{ binding: 0, resource: occTex.createView() }],
           }),
         };
-      rp.setPipeline(this.pipes.mirror);
-      rp.setBindGroup(0, res.mirrorBind);
-      rp.setBindGroup(1, res.mirrorOcc.g);
-      for (const dr of mirrored) {
+      let jetNow = false;
+      rp.setBindGroup(0, res.bind);
+      rp.setBindGroup(1, res.occBind!.g);
+      this.draws.forEach((dr) => {
+        if (dr.cabin || this.debugSkip.has("hull") || (dr.mesh === this.deckMesh && this.debugSkip.has("deck"))) return;
+        if (dr.inst === 0 && this.deckDrawn && this.debugSkip.has("a320-hull")) return;
+        const jet = dr.mesh === this.meshes.f35;
+        if (jet !== jetNow) {
+          rp.setPipeline(jet ? this.pipes!.shipJet : this.pipes!.ship);
+          rp.setBindGroup(0, jet ? res.jetBind! : res.bind!);
+          rp.setBindGroup(1, jet ? res.jetOcc!.g : res.occBind!.g);
+          jetNow = jet;
+        }
         rp.setVertexBuffer(0, dr.mesh.vbuf);
         rp.setIndexBuffer(dr.mesh.ibuf, "uint32");
-        rp.drawIndexed(dr.mesh.solid ?? dr.mesh.count, 1, 0, 0, dr.inst);
+        // (debugSkip "hull-half", a measure: the first half of each hull's triangles — is its cost the geometry's? PLAN-J3 J3-6)
+        const n = dr.mesh.solid ?? dr.mesh.count;
+        rp.drawIndexed(this.debugSkip.has("hull-half") ? Math.floor(n / 6) * 3 : n, 1, 0, 0, dr.inst);
+      });
+      // the craft's images in the sea, where nothing else is drawn
+      const mirrored = v.sea ? this.draws.filter((dr) => dr.mirror) : [];
+      if (mirrored.length) {
+        if (!res.mirrorBind || res.mirrorGen !== this.bindGen || res.mirrorMoments !== mb || res.mirrorHdr !== hdr) {
+          res.mirrorBind = this.device.createBindGroup({
+            layout: this.pipes.mirror.getBindGroupLayout(0),
+            entries: [...this.shipEntries!, { binding: 10, resource: hdr.createView() }, { binding: 11, resource: { buffer: mb } }],
+          });
+          res.mirrorGen = this.bindGen;
+          res.mirrorMoments = mb;
+          res.mirrorHdr = hdr;
+        }
+        if (res.mirrorOcc?.tex !== occTex)
+          res.mirrorOcc = {
+            tex: occTex,
+            g: this.device.createBindGroup({
+              layout: this.pipes.mirror.getBindGroupLayout(1),
+              entries: [{ binding: 0, resource: occTex.createView() }],
+            }),
+          };
+        rp.setPipeline(this.pipes.mirror);
+        rp.setBindGroup(0, res.mirrorBind);
+        rp.setBindGroup(1, res.mirrorOcc.g);
+        for (const dr of mirrored) {
+          rp.setVertexBuffer(0, dr.mesh.vbuf);
+          rp.setIndexBuffer(dr.mesh.ibuf, "uint32");
+          rp.drawIndexed(dr.mesh.solid ?? dr.mesh.count, 1, 0, 0, dr.inst);
+        }
       }
-    }
-    // the F-35's glass, over all that (its canopy, the helmet's visor)
-    // (inside the A320: its hull's glass too — its windshield's water and frost only, ship.wgsl a320Glass: tinted, it
-    // would hide the view)
-    const glassy = this.draws.filter((dr) => !dr.cabin && dr.mesh.solid !== undefined && dr.mesh.solid < dr.mesh.count);
-    if (glassy.length && !this.debugSkip.has("glass")) {
-      // (an A320 among them: the pipeline with its glass's code — GLASS_A320)
-      const a320 = glassy.some((dr) => dr.mesh === this.meshes.a320);
-      const main = a320 ? (this.a320GlassPipe ??= this.glassPipe!(0, true)) : this.pipes.jetGlass;
-      if (!res.jetGlassBind || res.jetGlassGen !== this.bindGen || res.jetGlassHdr !== hdr || res.jetGlassPipe !== main) {
-        const keep = [0, 1, 2, 3, 12, 16, 22, 27, 41, 42, 43];
-        res.jetGlassBind = this.device.createBindGroup({
-          layout: main.getBindGroupLayout(0),
-          entries: [...this.shipEntries!.filter((e) => keep.includes(e.binding)), { binding: 10, resource: hdr.createView() }],
-        });
-        res.jetGlassGen = this.bindGen;
-        res.jetGlassHdr = hdr;
-        res.jetGlassPipe = main;
+      // the F-35's glass, over all that (its canopy, the helmet's visor)
+      // (inside the A320: its hull's glass too — its windshield's water and frost only, ship.wgsl a320Glass: tinted, it
+      // would hide the view)
+      const glassy = this.draws.filter((dr) => !dr.cabin && dr.mesh.solid !== undefined && dr.mesh.solid < dr.mesh.count);
+      if (glassy.length && !this.debugSkip.has("glass")) {
+        // (an A320 among them: the pipeline with its glass's code — GLASS_A320)
+        const a320 = glassy.some((dr) => dr.mesh === this.meshes.a320);
+        const main = a320 ? (this.a320GlassPipe ??= this.glassPipe!(0, true)) : this.pipes.jetGlass;
+        if (!res.jetGlassBind || res.jetGlassGen !== this.bindGen || res.jetGlassHdr !== hdr || res.jetGlassPipe !== main) {
+          const keep = [0, 1, 2, 3, 12, 16, 22, 27, 41, 42, 43];
+          res.jetGlassBind = this.device.createBindGroup({
+            layout: main.getBindGroupLayout(0),
+            entries: [...this.shipEntries!.filter((e) => keep.includes(e.binding)), { binding: 10, resource: hdr.createView() }],
+          });
+          res.jetGlassGen = this.bindGen;
+          res.jetGlassHdr = hdr;
+          res.jetGlassPipe = main;
+        }
+        const gm = this.debugSkip.has("glass-flat") ? 2 : this.debugSkip.has("glass-sr") ? 1 : 0;
+        if (gm && !this.glassModes[gm]) this.glassModes[gm] = this.glassPipe!(gm);
+        const gp = gm ? this.glassModes[gm]! : main;
+        rp.setPipeline(gp);
+        rp.setBindGroup(
+          0,
+          gm
+            ? this.device.createBindGroup({
+                layout: gp.getBindGroupLayout(0),
+                entries: [
+                  ...this.shipEntries!.filter((e) => [0, 1, 2, 3, 12, 16, 22, 27, 41, 42, 43].includes(e.binding)),
+                  { binding: 10, resource: hdr.createView() },
+                ],
+              })
+            : res.jetGlassBind,
+        );
+        for (const dr of glassy) {
+          rp.setVertexBuffer(0, dr.mesh.vbuf);
+          rp.setIndexBuffer(dr.mesh.ibuf, "uint32");
+          rp.drawIndexed(dr.mesh.count - dr.mesh.solid!, 1, dr.mesh.solid!, 0, dr.inst);
+        }
       }
-      const gm = this.debugSkip.has("glass-flat") ? 2 : this.debugSkip.has("glass-sr") ? 1 : 0;
-      if (gm && !this.glassModes[gm]) this.glassModes[gm] = this.glassPipe!(gm);
-      const gp = gm ? this.glassModes[gm]! : main;
-      rp.setPipeline(gp);
-      rp.setBindGroup(
-        0,
-        gm
-          ? this.device.createBindGroup({
+      // the deck's control under the pointer: its triangles again, lit (FlightGear's highlight — GLASS_MODE 3)
+      const hov = this.deckDrawn && this.deckHover?.length && this.deckRuns && this.deckMesh ? this.deckHover : null;
+      const deckDraw = hov ? this.draws.find((dr) => dr.mesh === this.deckMesh) : null;
+      if (hov && deckDraw) {
+        this.glassModes[3] ??= this.glassPipe!(3);
+        const gp = this.glassModes[3]!;
+        if (!this.hoverBind || this.hoverBind.gen !== this.bindGen || this.hoverBind.hdr !== hdr)
+          this.hoverBind = {
+            g: this.device.createBindGroup({
               layout: gp.getBindGroupLayout(0),
               entries: [
                 ...this.shipEntries!.filter((e) => [0, 1, 2, 3, 12, 16, 22, 27, 41, 42, 43].includes(e.binding)),
                 { binding: 10, resource: hdr.createView() },
               ],
-            })
-          : res.jetGlassBind,
-      );
-      for (const dr of glassy) {
-        rp.setVertexBuffer(0, dr.mesh.vbuf);
-        rp.setIndexBuffer(dr.mesh.ibuf, "uint32");
-        rp.drawIndexed(dr.mesh.count - dr.mesh.solid!, 1, dr.mesh.solid!, 0, dr.inst);
+            }),
+            gen: this.bindGen,
+            hdr,
+          };
+        rp.setPipeline(gp);
+        rp.setBindGroup(0, this.hoverBind.g);
+        rp.setVertexBuffer(0, this.deckMesh!.vbuf);
+        rp.setIndexBuffer(this.deckMesh!.ibuf, "uint32");
+        for (const ob of hov) for (const [first, n] of this.deckRuns!.get(ob) ?? []) rp.drawIndexed(n, 1, first, 0, deckDraw.inst);
       }
-    }
-    // the deck's control under the pointer: its triangles again, lit (FlightGear's highlight — GLASS_MODE 3)
-    const hov = this.deckDrawn && this.deckHover?.length && this.deckRuns && this.deckMesh ? this.deckHover : null;
-    const deckDraw = hov ? this.draws.find((dr) => dr.mesh === this.deckMesh) : null;
-    if (hov && deckDraw) {
-      this.glassModes[3] ??= this.glassPipe!(3);
-      const gp = this.glassModes[3]!;
-      if (!this.hoverBind || this.hoverBind.gen !== this.bindGen || this.hoverBind.hdr !== hdr)
-        this.hoverBind = {
-          g: this.device.createBindGroup({
-            layout: gp.getBindGroupLayout(0),
-            entries: [
-              ...this.shipEntries!.filter((e) => [0, 1, 2, 3, 12, 16, 22, 27, 41, 42, 43].includes(e.binding)),
-              { binding: 10, resource: hdr.createView() },
-            ],
-          }),
-          gen: this.bindGen,
-          hdr,
-        };
-      rp.setPipeline(gp);
-      rp.setBindGroup(0, this.hoverBind.g);
-      rp.setVertexBuffer(0, this.deckMesh!.vbuf);
-      rp.setIndexBuffer(this.deckMesh!.ibuf, "uint32");
-      for (const ob of hov) for (const [first, n] of this.deckRuns!.get(ob) ?? []) rp.drawIndexed(n, 1, first, 0, deckDraw.inst);
-    }
-    // the cabin (its own shader), then its glass, over the cabin and the view
-    if (this.inCabin && this.cockpit) {
-      if (!this.cabinBinds || this.cabinBinds.gen !== this.bindGen) {
-        const make = (layout: GPUBindGroupLayout) =>
-          this.device.createBindGroup({
-            layout,
-            entries: [
-              ...this.shipEntries!.filter((e) => [0, 1, 2, 3, 7, 8, 12].includes(e.binding)),
-              { binding: 17, resource: this.screenTexture().createView() },
-              { binding: 20, resource: { buffer: this.ctlBuf! } },
-              { binding: 21, resource: this.placardTexture().createView() },
-            ],
-          });
-        this.cabinBinds = {
-          gen: this.bindGen,
-          cabin: make(this.pipes.cabin.getBindGroupLayout(0)),
-          glass: make(this.pipes.glass.getBindGroupLayout(0)),
-          ctl: make(this.pipes.ctl.getBindGroupLayout(0)),
-        };
+      // the cabin (its own shader), then its glass, over the cabin and the view
+      if (this.inCabin && this.cockpit) {
+        if (!this.cabinBinds || this.cabinBinds.gen !== this.bindGen) {
+          const make = (layout: GPUBindGroupLayout) =>
+            this.device.createBindGroup({
+              layout,
+              entries: [
+                ...this.shipEntries!.filter((e) => [0, 1, 2, 3, 7, 8, 12].includes(e.binding)),
+                { binding: 17, resource: this.screenTexture().createView() },
+                { binding: 20, resource: { buffer: this.ctlBuf! } },
+                { binding: 21, resource: this.placardTexture().createView() },
+              ],
+            });
+          this.cabinBinds = {
+            gen: this.bindGen,
+            cabin: make(this.pipes.cabin.getBindGroupLayout(0)),
+            glass: make(this.pipes.glass.getBindGroupLayout(0)),
+            ctl: make(this.pipes.ctl.getBindGroupLayout(0)),
+          };
+        }
+        rp.setVertexBuffer(0, this.cockpit.mesh.vbuf);
+        rp.setIndexBuffer(this.cockpit.mesh.ibuf, "uint32");
+        // (the solid triangles, then the glass's — the last of the indices)
+        const ck = this.cockpit;
+        rp.setPipeline(this.pipes.cabin);
+        rp.setBindGroup(0, this.cabinBinds.cabin);
+        rp.drawIndexed(ck.solid, 1, 0, 0, 0);
+        // (its controls, their moving parts posed — before the glass, which blends over all)
+        rp.setPipeline(this.pipes.ctl);
+        rp.setBindGroup(0, this.cabinBinds.ctl);
+        rp.setVertexBuffer(0, ck.controls.vbuf);
+        rp.setIndexBuffer(ck.controls.ibuf, "uint32");
+        rp.drawIndexed(ck.controls.count, 1, 0, 0, 0);
+        rp.setVertexBuffer(0, ck.mesh.vbuf);
+        rp.setIndexBuffer(ck.mesh.ibuf, "uint32");
+        rp.setPipeline(this.pipes.glass);
+        rp.setBindGroup(0, this.cabinBinds.glass);
+        rp.drawIndexed(ck.mesh.count - ck.solid, 1, ck.solid, 0, 0);
       }
-      rp.setVertexBuffer(0, this.cockpit.mesh.vbuf);
-      rp.setIndexBuffer(this.cockpit.mesh.ibuf, "uint32");
-      // (the solid triangles, then the glass's — the last of the indices)
-      const ck = this.cockpit;
-      rp.setPipeline(this.pipes.cabin);
-      rp.setBindGroup(0, this.cabinBinds.cabin);
-      rp.drawIndexed(ck.solid, 1, 0, 0, 0);
-      // (its controls, their moving parts posed — before the glass, which blends over all)
-      rp.setPipeline(this.pipes.ctl);
-      rp.setBindGroup(0, this.cabinBinds.ctl);
-      rp.setVertexBuffer(0, ck.controls.vbuf);
-      rp.setIndexBuffer(ck.controls.ibuf, "uint32");
-      rp.drawIndexed(ck.controls.count, 1, 0, 0, 0);
-      rp.setVertexBuffer(0, ck.mesh.vbuf);
-      rp.setIndexBuffer(ck.mesh.ibuf, "uint32");
-      rp.setPipeline(this.pipes.glass);
-      rp.setBindGroup(0, this.cabinBinds.glass);
-      rp.drawIndexed(ck.mesh.count - ck.solid, 1, ck.solid, 0, 0);
+      rp.end();
     }
-    rp.end();
     // (the flown craft's own opaque parts alone — from the cockpit: the next frame's rays they hide not traced)
     if (v.ownMask && this.flown && this.draws.some((dr) => dr.inst === 0)) {
       if (!res.own || res.own.w !== bw || res.own.h !== bh) {
@@ -3389,9 +3452,10 @@ export class ShipRenderer {
     const b = res.box!;
     const [x0, y0, bw, bh] = res.rect;
     const d = this.device;
-    const drawMotion = !v.inside;
+    // (debugSkip "motion", a measure: its motion pass left out — the composition then writes none)
+    const drawMotion = !v.inside && !this.debugSkip.has("motion");
     this.writePrevPoses(c.frame);
-    if (drawMotion) {
+    for (let rep = drawMotion ? this.debugRepeat.motion : -1; rep >= 0; rep--) {
       this.motionBind ??= d.createBindGroup({
         layout: P.motion.getBindGroupLayout(0),
         entries: [

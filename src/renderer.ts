@@ -9419,13 +9419,24 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
     ground?: { yaw: number; pitch: number; left: number; burnt: number };
     /** an A320's rig (a traffic airliner near the view: controller/traffic.ts trafficRig — its gear, flaps, reversers) */
     a320?: { props: import("./a320/rig").Props; spins: import("./a320/rig").Props };
-    /** drawn instead while its own mesh comes in (the traffic's rigged A320: the plain airliner it stands in for) */
+    /** drawn instead while its own mesh comes in (the traffic's rigged A320: the plain airliner it stands in for) — and while it is
+     *  small on the image (trafficRigShare) */
     alt?: { id: ShipMeshId; rel: Vec3; axes: [Vec3, Vec3, Vec3] };
+    /** the traffic aircraft's own id (its feed's): its mesh's choice held from frame to frame */
+    uid?: string;
     /** a caster on or near the ground (a traffic airliner low, a ship — ship-casters.ts: the shadow map's second half) */
     cast?: boolean;
     /** a traffic airliner's gear 0…1 and livery (ship.ts ShipInstance.traffic) */
     traffic?: import("./ship").ShipInstance["traffic"];
   }[] = [];
+  /** The traffic's A320s drawn rigged — the game's A320, its gear, flaps, spoilers and reversers moving, 106 000 triangles — while their
+   *  half-length covers at least this share of the image's half-height (0.06: some 60 px long on a 1 000 px image; drawn plain under
+   *  four fifths of it, once rigged); the plain airliner — its gear baked, its livery, 11 700 triangles — smaller. Perf lot of 25 Nov
+   *  2026 (tests/e2e/traffic-cost): three rigged A320s 3.6 km off the short final, 12 px long, drew 320 000 triangles. 0: always
+   *  rigged within the controller's reach (a measuring lever — as before). */
+  trafficRigShare = 0.06;
+  /** the traffic aircraft drawn rigged last frame (by their feed's id): the band's side */
+  private rigShown = new Set<string>();
   /** combatOthers placed from the drawn view's own camera (sim.ts: no craft flown — the free camera, a tour —, or a
    *  spectator's view: the Earth's traffic, the sea's ships, the carriers): drawn from its place when the view has no
    *  craft's eye; false — a craft's view, a replay's — they need one */
@@ -9602,31 +9613,47 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
     const eye: Vec3 | null =
       s.ship && this.shipPose ? shipToCamera(this.shipPose, s.shipLookYaw, s.shipLookPitch).t : this.othersFromView ? [0, 0, 0] : null;
     if (!eye) return [];
-    return (
-      this.combatOthers
-        // (its mesh asked for — a missile's the first time one flies —: drawn once in; the traffic's rigged A320 meanwhile
-        // as the plain airliner it stands in for, not gone)
-        .map((o) => (o.alt && !o.hidden && !this.ship.has(o.id) ? { ...o, ...o.alt, a320: undefined } : o))
-        .filter((o) => !o.hidden && this.ship.has(o.id))
-        .map((o) => ({
-          id: o.id,
-          S: [0, 1, 2].map((k) => [o.axes[0][k]!, o.axes[1][k]!, o.axes[2][k]!]) as [Vec3, Vec3, Vec3],
-          t: [o.rel[0] + eye[0], o.rel[1] + eye[1], o.rel[2] + eye[2]] as Vec3,
-          shadow: false,
-          jet: o.jet,
-          a320: o.a320,
-          // (a fight's aircraft always over the image; the traffic's hidden behind what it holds nearer — a cloud, a
-          // mountain)
-          far: o.far ?? false,
-          big: o.big,
-          mirror: o.mirror,
-          fins: o.fins,
-          motor: o.motor,
-          ground: o.ground,
-          cast: o.cast,
-          traffic: o.traffic,
-        }))
-    );
+    const tanH = Math.tan((s.fov * Math.PI) / 360);
+    const rigged = new Set<string>();
+    const small = (o: Renderer["combatOthers"][number]) => {
+      if (!o.uid || !(this.trafficRigShare > 0)) return false;
+      // (its half-length over the image's half-height: the A320's 18.8 m at its type's scale — its axes' length —, from the eye)
+      const k = Math.hypot(...o.axes[2]);
+      const d = Math.hypot(o.rel[0] + eye[0], o.rel[1] + eye[1], o.rel[2] + eye[2]);
+      const share = (18.8 * k) / Math.max(d * tanH, 1e-6);
+      // (a band between drawing it rigged and plain: no swap back and forth about the threshold)
+      const on = share >= this.trafficRigShare * (this.rigShown.has(o.uid) ? 0.8 : 1);
+      if (on) rigged.add(o.uid);
+      return !on;
+    };
+    const out = this.combatOthers
+      // (its mesh asked for — a missile's the first time one flies —: drawn once in; the traffic's rigged A320 meanwhile
+      // as the plain airliner it stands in for, not gone — and while it is small on the image: its rig's parts, its 106 000
+      // triangles drawn for a few pixels, the plain mesh's 11 700 the same there — trafficRigShare)
+      .map((o) =>
+        o.alt && !o.hidden && (!this.ship.has(o.id) || (small(o) && this.ship.has(o.alt.id))) ? { ...o, ...o.alt, a320: undefined } : o,
+      )
+      .filter((o) => !o.hidden && this.ship.has(o.id))
+      .map((o) => ({
+        id: o.id,
+        S: [0, 1, 2].map((k) => [o.axes[0][k]!, o.axes[1][k]!, o.axes[2][k]!]) as [Vec3, Vec3, Vec3],
+        t: [o.rel[0] + eye[0], o.rel[1] + eye[1], o.rel[2] + eye[2]] as Vec3,
+        shadow: false,
+        jet: o.jet,
+        a320: o.a320,
+        // (a fight's aircraft always over the image; the traffic's hidden behind what it holds nearer — a cloud, a
+        // mountain)
+        far: o.far ?? false,
+        big: o.big,
+        mirror: o.mirror,
+        fins: o.fins,
+        motor: o.motor,
+        ground: o.ground,
+        cast: o.cast,
+        traffic: o.traffic,
+      }));
+    this.rigShown = rigged;
+    return out;
   }
 
   /** The fleet's Endurance on Gargantua's side, near the camera: at its true size (holefleet.ts). */
