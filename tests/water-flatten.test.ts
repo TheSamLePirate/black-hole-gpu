@@ -4,7 +4,7 @@
 // (nothing levelled: the ridge's 5 m stayed).
 import { expect, test } from "bun:test";
 import { isFine, markFine } from "../src/system/earth-tiles";
-import { FLATTEN_RADIUS_M, flattenUnderWater } from "../src/system/water-flatten";
+import { clearOverWater, FLATTEN_RADIUS_M, flattenUnderWater } from "../src/system/water-flatten";
 
 const T = 256;
 /** a river 60 texels wide (x 100–160) at 2 m, the land at 8 m; mpp 2 */
@@ -58,4 +58,25 @@ test("each texel's survey mark (its last bit — markFine) kept", () => {
   flattenUnderWater(h, cover, 2);
   expect(isFine(h[60 * T + 130]!)).toBe(true);
   expect(Math.abs(h[60 * T + 130]! - 2)).toBeLessThan(1e-5);
+});
+
+// (26 Nov 2026 — Cheviré's light band: the far levels' overground — the IGN's surface over its ground, I6 — a 50 m deck over the Loire,
+// drawn as a dam and read by the inland water's falls as one. Cleared over the water; the land's and the banks' kept. The positive
+// witness fails on the code before: nothing cleared, the deck's 48 m stood over the river)
+test("a far level's overground over the river (a deck's 48 m) cleared; over the land and on the banks kept", () => {
+  const { cover } = scene();
+  const over = new Float32Array(T * T);
+  // (the deck across the river and onto both banks, a building on the land)
+  for (let y = 120; y < 126; y++) for (let x = 80; x < 180; x++) over[y * T + x] = 48;
+  over[30 * T + 40] = 15;
+  const cleared = clearOverWater(over, cover);
+  expect(cleared).toBe(6 * 60);
+  for (let x = 100; x < 160; x++) expect(over[122 * T + x]).toBe(0);
+  // (the bank's texels — half covered — and the land's approach kept: the viaduct's silhouette over the land stays)
+  expect(over[122 * T + 99]).toBe(48);
+  expect(over[122 * T + 160]).toBe(48);
+  expect(over[122 * T + 85]).toBe(48);
+  expect(over[30 * T + 40]).toBe(15);
+  // (no water: nothing)
+  expect(clearOverWater(over, new Float32Array(T * T))).toBe(0);
 });
