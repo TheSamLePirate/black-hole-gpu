@@ -22,6 +22,7 @@ import type { Vec3 } from "../math/vec3";
 import type { CameraController } from "../controls";
 import { fleet } from "../fleet";
 import { geoidDeg } from "../system/geoid-grid";
+import { bodyFixedOf, groundRelief, reliefKnown } from "../system/our-surface";
 import { seaGen, simShips } from "../game/seasim";
 
 declare module "../controls" {
@@ -242,6 +243,10 @@ function seaNow(this: CameraController): SeaCraft[] {
     if (!near)
       for (const q of simShips(g.lat, g.lon, td, 30_000)) {
         if (this.seaTaken?.has(String(q.mmsi))) continue;
+        // (none on land: its lanes were checked against the oceans' mask — ~8 km a pixel —, the ground there may stand over the sea
+        // — a lagoon's shore, a reclaimed flat: 25 Nov 2026, a fishing boat on the US 101 by Brisbane Lagoon, the camera following
+        // it under the hill. The world's ground at its place, over the sea: over SIM_SHIP_LAND_M, not drawn)
+        if (simShipOnLand(q.lat, q.lon)) continue;
         const Z = shipSize(q.type, q.len, q.beam);
         const c = q.cog * D;
         out.push(
@@ -263,6 +268,16 @@ function seaNow(this: CameraController): SeaCraft[] {
   }
   cache = { at: now, list: out, of: F, gen: seaGen(), where };
   return out;
+}
+
+/** a made-up ship's ground over the sea above which it is on land, not drawn [m] */
+export const SIM_SHIP_LAND_M = 2;
+/** Whether the world's ground at a geodetic place [°] stands over the sea there by more than SIM_SHIP_LAND_M (its relief — the
+ *  contact ground near, the map's far —, over the WGS84 figure, less the geoid); never without the relief set. */
+export function simShipOnLand(lat: number, lon: number): boolean {
+  if (!reliefKnown("earth")) return false;
+  const h = groundRelief("earth", bodyFixedOf("earth", lat, lon, 0));
+  return h - geoidDeg(lat, lon) > SIM_SHIP_LAND_M;
 }
 
 /** A frame of the sea's traffic: its radar source (surface contacts, neutral, their AIS answering). */

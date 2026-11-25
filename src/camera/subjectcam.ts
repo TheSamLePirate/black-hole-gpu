@@ -174,6 +174,10 @@ function subjectStep(this: CameraController, dt: number): boolean {
       high = 0.5 * lenM * L.zoom;
     const h = turn(lz, ly, L.yaw, L.pitch);
     X = [0, 1, 2].map((i) => P.X[i]! + (-h.f[i]! * back + ly[i]! * high) / M_METRES) as Vec3;
+    // (never under the ground there: a ship on a lagoon at a hill's foot, a low aircraft by a slope — 25 Nov 2026, San Francisco
+    // Bay with the relief's fine tiles missing: the view 17 m over Brisbane Lagoon stood under the coarse relief drawn there, the
+    // town's ground and houses seen from beneath, hanging upside down in the sky)
+    if (P.kind !== "space") X = aboveEarthGround(X, t, 2.5);
     // (looking a little ahead of it: its way, not its tail)
     const aim = comb(P.X, P.ax, [0, 0, 0.6 * lenM]);
     fwd = unit(sub(aim, X));
@@ -204,6 +208,20 @@ function subjectStep(this: CameraController, dt: number): boolean {
 }
 
 const dotV = (a: Vec3, b: Vec3) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+
+/** A home-frame point X [M] raised, along the Earth's vertical, to `margin` [m] over its ground there (its relief where known — the
+ *  same ground the craft stands on, groundAboveSphere), if under it; itself otherwise, and far from the ground (over 20 km up). */
+export function aboveEarthGround(X: Vec3, t: number, margin: number): Vec3 {
+  const q = toBodyFixed("earth", X, t);
+  const R = len(q);
+  const R0 = solarBody("earth")!.radius;
+  if ((R - R0) * M_METRES > 20_000) return X;
+  const u = unit(q);
+  const g = groundAboveSphere("earth", [u[0] * R0, u[1] * R0, u[2] * R0]);
+  const rMin = R0 + (g + margin) / M_METRES;
+  if (R >= rMin) return X;
+  return fromBodyFixed("earth", [u[0] * rMin, u[1] * rMin, u[2] * rMin], t);
+}
 
 export function installSubjectCam(C: { prototype: CameraController }) {
   Object.assign(C.prototype, { subjectStep, subjectLook, subjectActive, towerSet, towerPlace });
