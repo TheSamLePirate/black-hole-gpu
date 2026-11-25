@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 25 nov. 18:30 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 25 nov. 21:00 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous. Ce qui est fermé quitte le tableau « En cours » pour la ligne « Fermé récemment ».
@@ -78,6 +78,14 @@ l'état d'une mission ou d'un combat **non sauvé, dit** ; le réseau **« entre
 **Décidé par Sam (16 nov., 15:58 UTC)** : J8-4 allumée par défaut (quads sous 8 px), J8-5 avec une jonction choisie sur captures, J8-1b suspendu, l'e2e de J8-6 par la voie (b), J8-9 ajouté ([PLAN-J8](docs/PLAN-J8-BATIMENTS.md) §6 point 6). **But fixé par Sam (16 nov., ~16:19 UTC)** : [J8-A](docs/PLAN-J8-BATIMENTS.md), un vol Paris et Toulon-Hyères, de jour et de nuit, tous les bâtiments, lampadaires, voitures (J8-L) et rivières (J8-E) chargés avant le vol, en « high » partout, sans différence visible entre les qualités. **Décidé par Sam (16 nov., ~21:40 UTC)** : J8-8 ouvert (le proche en cellules), la jonction à 0, l'éclat de nuit lointain gardé ([PLAN-J8](docs/PLAN-J8-BATIMENTS.md) §6 point 11). **Décidé par Sam (17 nov., ~08:00 UTC)** : J8-8b ouvert, les arbres par cellule, après un vol de référence à froid sur le M1 Max (§6 point 12). **Mode speed pour finir J8, J8-VB compris** (Sam, 17 nov. ~09:20 UTC ; [CLAUDE.md](CLAUDE.md), modes de travail ; §6 point 13) : contrôles rapides par lot, un gros e2e J8-A à la fin sur kerr-mini et le M1 Max. **J8-RP, les routes et les ponts AAA** (Sam, 17 nov. ~10:20 UTC ; [PLAN-J8](docs/PLAN-J8-BATIMENTS.md) §3 bis) : ajouté à J8 en mode speed, RP1 (les routes et marquages visibles sous l'orthophoto) en tête. **Attend Sam** : les quatre premières questions de PLAN-J8 §6, réglées provisoirement (même contenu sur les deux machines, retour si > 3 ms sur le mini ; portée au pixel ; J7 en pause, les arbres proches deviennent J9 ; pas de préparation côté serveur pour l'instant) ; les trois questions de [PLAN-J7](docs/PLAN-J7-FLUIDITE.md) §4, réglées provisoirement (les 40 ms du mini en dernier, J7-6 ; les arbres proches en géométrie ensuite, désormais J9 ; l'aplanissement du détail sous les trouées jusqu'à la FAF ou 10 km) ; les seuils du mini attendent la reprise de la cible 40 ms.
 
 ## Journal
+
+### 2026-11-25 21:00 UTC — Coût de la journée mesuré sur kerr-mini : aucune régression, SFO −24 ms, Paris −5 à −7 ms
+
+- Contribution : §8 (budget tenu lot par lot, règle 3 : A/A à chaque vue), §15 (palier du mini à 25 images/s).
+- Réalisé (fusion sur main, agent `8a8b1adc` `ab-e2e` — `AB_E2E_OWN`, chaque côté joue son propre test —, `b8fd6cf8` feux d'approche : leur croisement calculé seulement là où le segment œil-sol passe au-dessus de leur champ, le géoïde lu une fois par pixel ; mesures `e8b32b6e` dans GRAPHICS-PIPELINE).
+- Preuves : **mesuré sur kerr-mini** (nominal, 18:50–20:40 UTC, A B B A) — A = `18a6e4dd` (début de journée), B = main `091ddd33` + `b8fd6cf8` (relief fondu et niveau de piste de SFO compris) ; 18 vues : aucune plus lente au-delà de l'A/A. GPU p50 : parking de SFO 74,5 → 50,5 (−24,0), courte finale 67,7 → 62,6, Grenelle 54,3 → 49,5, Alexandre III 58,1 → 51,5, Rivoli pluie 61,5 → 55,6, Cheviré 47,5 → 44,3 ; tablier de Millau +1,8 (A/A 3,2, p95 +5,8 — à surveiller). Gains par passe : `earth lite: light` −2 à −4,3 ms, surface de la mer plus dessinée à Paris ni au parking, `clouds (half)` sous la pluie −4,4, finition du sol au parking 20,4 → 1,6. `b8fd6cf8` : sans effet mesurable (gardé : évite un calcul par pixel feux allumés). J0 Toulon inchangé (première campagne, sur `4e95c6bc`). Captures `docs/progress/perf-journee-2026-11-25/` (première campagne, sur `4e95c6bc`). Après fusion : `check-wgsl` 85/85, tsc, `pipeline-inventory --check`, suite complète **2 899/2 899**.
+- Limites : `earth lite (raster)` en légère hausse (+0,9–1,0 ms Rivoli, +0,25–0,7 ailleurs), sous le gain net — lot non identifié (marche des routes et garde des feux écartées) ; J0 non remesuré sur `091ddd33` ; relief fondu et piste de SFO non mesurés séparément.
+- Suite : miroir de la Seine repris moins cher (branche `seine-mirror-cheap`, ce Mac Grenelle +1,5 → +0,48 ms, image identique) — ABBA sur kerr-mini en cours avant fusion.
 
 ### 2026-11-25 18:30 UTC — Ponts/eau : la baie de SFO rendue à l'eau ; les reflets de la Seine par cellule essayés, trop chers, retirés
 

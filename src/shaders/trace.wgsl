@@ -11134,6 +11134,8 @@ struct RwyPave {
 }
 fn runwayPave(hit: vec3f, gq: vec3f, q: vec3f, rd: vec3f, Ls: vec3f, fx: vec3f, fy: vec3f, A0: vec3f, nIn: vec3f) -> RwyPave {
   var o = RwyPave(A0, nIn, vec3f(0.0), 0.0, vec2f(0.0));
+  // (the geoid under the point, read when an approach's lights want it — once)
+  var gN = 1e9;
   for (var k = 0u; k < rwyCount(); k++) {
     let rel = P.runways[4u + 4u * k].xyz + hit;
     let ra = dot(rel, P.runways[2u + 4u * k].xyz);
@@ -11152,12 +11154,18 @@ fn runwayPave(hit: vec3f, gq: vec3f, q: vec3f, rd: vec3f, Ls: vec3f, fx: vec3f, 
     var la = ra;
     var lc = rc;
     var lk = 1.0;
-    if (!onStrip && lit) {
+    // (only where the ray from the eye to the ground passes over the lights' field — the segment's box across theirs: the eye's place
+    // and the ground's in the runway's frame —, the geoid read once a pixel: worked out for every pixel and runway, it cost the
+    // material's kernel ~1 ms at the rue de Rivoli, four runways within 150 km — kerr-mini, 25 Nov 2026)
+    let ae = dot(P.runways[4u + 4u * k].xyz, P.runways[2u + 4u * k].xyz);
+    let ce = dot(P.runways[4u + 4u * k].xyz, P.runways[3u + 4u * k].xyz);
+    if (!onStrip && lit && min(ae, ra) < L + 1000.0 && max(ae, ra) > -1000.0 && min(ce, rc) < 25.0 && max(ce, rc) > -25.0) {
+      if (gN > 1e8) { gN = geoidN(gq); }
       let up = P.runways[1u + 4u * k].xyz;
       let tH = length(hit);
       let dv = hit / max(tH, 1e-6);
       let du = dot(dv, up);
-      let tL = (P.runways[4u + 4u * k].w + geoidN(gq) + 0.64 - dot(P.runways[4u + 4u * k].xyz, up)) / min(du, -1e-6);
+      let tL = (P.runways[4u + 4u * k].w + gN + 0.64 - dot(P.runways[4u + 4u * k].xyz, up)) / min(du, -1e-6);
       if (du < -1e-4 && tL > 0.0 && tL < tH) {
         let relL = P.runways[4u + 4u * k].xyz + dv * tL;
         la = dot(relL, P.runways[2u + 4u * k].xyz);

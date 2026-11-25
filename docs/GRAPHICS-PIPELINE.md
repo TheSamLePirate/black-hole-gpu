@@ -20,6 +20,53 @@ Windows/D3D12. Les numéros de ligne sont ceux de `da4e75bd`.
 
 ---
 
+### Le coût net de la journée du 25 novembre 2026 — campagne sur kerr-mini (main 091ddd33 + b8fd6cf8 contre 18a6e4dd) — mesuré
+
+**Mesuré**, kerr-mini (Mac mini M1, sans fenêtre, état thermique nominal avant la campagne, GPU 1 278 MHz), 25 nov. 2026 vers 18 h 50–20 h 40
+UTC. `scripts/ab-commit.ts` + `scripts/ab-e2e.ts`, A B B A (deux tours), A = l'arbre de 18a6e4dd (`AB_TREE_A`, le début de la journée), B =
+main 091ddd33 fusionné avec b8fd6cf8 (`aa337add`). `paris-routes-cost` et `traffic-cost` : le test de B contre les deux serveurs (échelle
+épinglée 0,75, GPU p50 sur 90 images) ; `bridges` et `bridges-notable` : chaque côté son propre test (`AB_E2E_OWN`, nouveau — l'API de
+18a6e4dd), à l'échelle du jeu. A/A et B/B : l'écart entre les deux tours d'un même côté. Données disque des e2e (aucune requête IGN).
+Dossiers : `remote-results/20261125-185006-prc2`, `…-185010-br2`, `…-185012-brn2`, `…-185015-tc2`.
+
+| Vue (e2e) | A p50 | B p50 | Δ p50 | A p95 | B p95 | A/A | B/B |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| Pont de Grenelle (prc) | 54,3 | 49,5 | **−4,8** | 59,0 | 53,5 | 1,0 | 0,3 |
+| Pont Alexandre III (prc) | 58,1 | 51,5 | **−6,6** | 63,5 | 56,8 | 2,0 | 1,3 |
+| Rue de Rivoli, sec (prc) | 48,5 | 48,8 | +0,3 | 51,8 | 52,5 | 0,5 | 1,0 |
+| Rue de Rivoli, pluie (prc) | 61,5 | 55,6 | **−5,9** | 65,7 | 59,5 | 2,3 | 0,2 |
+| Grenelle, bord de tuile (bridges) | 53,7 | 49,3 | **−4,4** | 57,5 | 52,4 | 0,2 | 0,1 |
+| Alexandre III (bridges) | 59,3 | 55,4 | −3,9 | 70,3 | 65,0 | 4,2 | 4,5 |
+| Rue mouillée de Paris (bridges) | 58,6 | 56,0 | −2,6 | 63,5 | 60,8 | 0,7 | 1,8 |
+| Millau (bridges) | 33,3 | 33,0 | −0,4 | 39,5 | 40,0 | 0,9 | 0,3 |
+| Golden Gate à 1 km (bridges) | 46,7 | 44,9 | −1,8 | 55,3 | 55,8 | 0,2 | 2,4 |
+| Golden Gate à 30 km (bridges) | 37,1 | 37,4 | +0,2 | 39,2 | 39,0 | 0,5 | 0,3 |
+| Golden Gate à 30 km (notable) | 34,7 | 34,4 | −0,3 | 36,5 | 36,5 | 1,4 | 1,0 |
+| Cheviré (notable) | 47,5 | 44,3 | **−3,2** | 52,5 | 48,4 | 1,1 | 0,9 |
+| Tablier de Grenelle (notable) | 49,0 | 48,8 | −0,3 | 56,5 | 56,1 | 0,5 | 0,9 |
+| Tablier d'Alexandre III (notable) | 50,7 | 49,4 | −1,3 | 56,6 | 58,2 | 1,0 | 0,2 |
+| Tablier de Millau (notable) | 36,2 | 38,0 | +1,8 | 41,7 | 47,5 | 3,2 | 0,1 |
+| Tablier du Golden Gate (notable) | 47,5 | 44,2 | **−3,3** | 60,5 | 60,1 | 3,6 | 1,4 |
+| SFO, courte finale (traffic-cost) | 67,7 | 62,6 | **−5,1** | 98,5 | 92,7 | 4,5 | 4,4 |
+| SFO, parking G (traffic-cost) | 74,5 | 50,5 | **−24,0** | 105,3 | 81,4 | 0,2 | 0,3 |
+
+- **Aucune vue plus lente au-delà de l'écart A/A.** Le tablier de Millau (+1,8, p95 +5,8) reste sous l'écart de son côté A (3,2) — à surveiller,
+  non bissecté ; la première campagne (main 4e95c6bc, ~16 h UTC, `…-154037-brn-day`) le donnait à +0,3.
+- **Par passe** (`prc`, `tc` — les passes de calcul s'attribuent) : `earth lite: light` −2 à −4,3 ms partout (l'eau lue une fois, lot des
+  ponts et rues de Paris) ; la surface maillée de la mer n'est plus dessinée à Paris ni au parking de SFO (`sea surface` 27–48 ms
+  de passe de rendu chevauchée → 0 : le lot de la surface de la mer) ; `clouds (half)` −4,4 ms sous la pluie (les averses par la longueur du
+  rayon) ; `earth lite: finishing` 20,4 → 1,6 ms au parking (la table d'air arrêtée à la mer). **Une passe en hausse** : `earth lite (raster)`
+  (le matériau) +0,9 à +1,0 ms rue de Rivoli, +0,25 à +0,7 ailleurs — sous le gain net de chaque vue ; ni la marche des routes (coupe
+  `liteSkip` 2²⁷ : −2,25 à −3,35 ms sur 18a6e4dd comme sur main, `remote-results/20261125-170829-prc-roads`) ni la garde des feux d'approche
+  (b8fd6cf8 contre main 4e95c6bc, Rivoli et Alexandre III : `earth lite (raster)` 14,4–14,6 des deux côtés, GPU p50 au bruit,
+  `remote-results/20261125-163303-prc-guard`) ; le lot en cause non trouvé.
+- **J0 Toulon** (première campagne, main 4e95c6bc contre 18a6e4dd, vol de 70 s, `J0_PHASES=flight`, `…-160208-j0-day`) : GPU p50 49,7 / 50,1
+  contre 50,2 / 49,9 ms, p95 72,6 / 72,8 contre 72,7 / 72,4 — **inchangé** ; images par seconde 19,5 / 19,3 contre 19,3 / 19,4.
+- **Non mesuré** : J0 sur main 091ddd33 (seulement sur 4e95c6bc) ; le fondu du relief des routes (3e1c92e4) et le niveau de piste de SFO
+  (9cf0849a) seuls — seulement dans le total ci-dessus ; les vues de Toulon des ponts (aucune).
+- Captures avant/après (A1 contre B2 de la première campagne, main 4e95c6bc — la même image que 091ddd33 sur ces vues, sauf les deux lots
+  ci-dessus) : `docs/progress/perf-journee-2026-11-25/` (`paris-*`, `ponts-*`, `trafic-*`, `j0-virage-avant-apres.jpg`).
+
 ### Le relief procédural fin fondu sur le sol relevé (25 novembre 2026, branche de l'agent, `3e1c92e4`, décision de Sam du 25 novembre)
 
 - **`earthDetail` (`trace.wgsl`, `terrain.ts`), une règle commune `surveyKept` / `tfbmFs`** : la couche fine `o3` (32 → 8 m, ±3 m × la
