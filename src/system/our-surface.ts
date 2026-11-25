@@ -224,6 +224,10 @@ function figureAt(id: string, p: Vec3): { h: number; g: Vec3 } {
 }
 
 /** The ground's height above the figure [m] under a body-fixed point (0: none known). */
+/** Whether a body's relief is set (groundRelief otherwise 0 everywhere: the figure alone). */
+export function reliefKnown(id: string): boolean {
+  return reliefs.has(id);
+}
 export function groundRelief(id: string, q: Vec3): number {
   const f = reliefs.get(id);
   if (!f) return 0;

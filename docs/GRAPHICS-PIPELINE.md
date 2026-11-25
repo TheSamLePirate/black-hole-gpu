@@ -20,6 +20,30 @@ Windows/D3D12. Les numéros de ligne sont ceux de `da4e75bd`.
 
 ---
 
+### Ciel inversé de San Francisco, trait du mont Faron, colonnes d'une rue de Paris (25 novembre 2026, branche de l'agent, `9f850c5a`, `8d4e0be1`, `2813d883`, `cd789643`)
+
+- **`sea surface` (C18b, `terrain-raster.ts` `seaFs`) — `8d4e0be1`** : une crête gardée devant la terre derrière elle (une falaise
+  sur une baie) doit l'être aussi devant **la surface la plus proche** (`vis.b` : un arbre, la boîte d'un bâtiment devant le sol),
+  plus seulement devant le sol (`vis.r`). Sur le mont Faron l'horizon marin à 25–57 km, relevé par l'air (R4b), passait devant la
+  ligne de la terre et restait sur les arbres à 10 m de la caméra : **le trait pâle rectiligne près du F-35 posé**. Cherché par
+  parties (e2e `faron-tree-streak`, `FARON_DIAG=1`, kerr-mini) : ni le relèvement de projection du raster, ni la géométrie 3D des
+  arbres proches, ni l'appareil n'y touchaient (9 à 28 pixels sur 4 670). Pixels rendus plus pâles par le relèvement sur un sol
+  sombre : 5 816 et 3 257 avant (kerr-mini), 9 après (ce Mac). Coût : une comparaison de plus par fragment de mer hors pleine
+  mer, **non mesuré**.
+- **Vue « poursuite » (`camera/subjectcam.ts`) et vie de la mer (`controller/seatraffic.ts`) — `9f850c5a`, hors GPU** : la vue
+  n'est jamais sous le sol (`aboveEarthGround`, 2,5 m au-dessus du sol du monde) ; un navire inventé dont le sol est à plus de 2 m
+  au-dessus de la mer n'est pas dessiné (`simShipOnLand`). Le « ciel » de la baie de San Francisco : un chalutier inventé sur la
+  rive de la lagune de Brisbane (le masque des océans : ~8 km le pixel), la caméra 17 m au-dessus de la mer donc 19–28 m sous le
+  sol (tuiles ou non) — la ville et son sol vus par-dessous. Présent avant le lot des routes (`18a6e4dd`) et sans lui (ses sources
+  retirées sur `main`) ; e2e `sf-ship-sky` (hauteur de la vue sur son sol : −27,5 m sans tuiles, −19,1 m avec, +2,5 m corrigé).
+- **`shadeLite` (`liteMaterial`) — `2813d883`, `c279f169`** : la face d'une marche du maillage (normale de l'image de profondeur
+  raide, relief lisse non — une bordure, un muret, le sol du levé en marche au pied d'un bâtiment) lit la photographie par une
+  empreinte ronde d'un mètre au moins, ni le détail du revêtement (joints, pavés, fissures) ni les scans de détail n'y sont posés
+  d'en haut, la couleur unie de la surface gardée (`cd789643` : retirer aussi la marche des routes noircissait les faces — la
+  photographie y est l'ombre d'un toit) : plus de colonnes étirées sur la face (la colonne x 0,93 de la rue de Paris : distances 8,12–8,19 m sur
+  7 % de la hauteur de l'image). La normale de l'image de profondeur lue une seule fois (partagée avec la lumière). Coût **non
+  mesuré**.
+
 ### PERF — le trafic réel : l'air au parking, l'A320 gréé loin, les niveaux de détail (25 novembre 2026, branche de l'agent) — mesuré
 
 **Mesuré**, kerr-mini (Mac mini M1, sans fenêtre, image interne 1200×750 : échelle épinglée 0,75 par `__bh.forceScale`, chaque image
@@ -568,7 +592,7 @@ R reconstruction/sortie, S ombres/sondes amorties, Z hors budget (diagnostic, ch
 | C16 | `stars (raster)` | `renderer.ts:6500` | trace `shadeStars`, un fil par étoile (≤120 000) | raster, étoiles splattées | → `t.stars` | R |
 | C17 | `earth shade (raster)` ; `earth raster: left pixels` | `renderer.ts:6512` | trace `shade` (+ `shadeMark`) ; **`shadeMark` seul** quand `liteAll` et une cadence > 1 (PLAN-J5 J5-6, 15 nov.) | raster et **pas `liteAll`** : ponts, arbres < 80 m, boîtes marquées ; `shadeMark` à toute cadence > 1 — **il marque aussi les pixels du matériau de la Terre laissés** (`RASTER_STALE`, l'albédo et la profondeur), que le `resolve` rebâtit | → `accum`… pour les restes ; `moments` des pixels laissés | M |
 | C18 | `earth lite (raster)` / `body lite (raster)`, puis `earth lite: light`, `earth lite: finishing` | `encodeLite` | trace `shadeLite`. Depuis J8-A (20 nov.), `liteLight` introduit progressivement la lueur urbaine des seuls bâtiments lointains entre 1,5 et 4 km de la caméra. L’émission des fenêtres suit toujours le matériau. Sous 2 m de pied de pixel à moins de 2,5 km, la chaussée de largeur mesurée conserve son matériau avec 25 % de la part photographique (RP1/RP2). **Différé (11 nov., `withLiteDeferred`, l'appareil prenant 37 textures)** : `shadeLite` ne fait plus que le **matériau** (`liteMaterial`, 6,7 k lignes inlinées) et écrit son enregistrement — 4 `rgba32float` `matOut0…3`, groupe 1 liaisons 14–17 : albédo et distance ; normale (oct), drapeaux (arbre, verre, classe, route, **eau : couvert sur 9 bits et genre sur 2, bits 13–23 — 24 nov. 2026**), lumières de nuit ; l'émission unique (transmission d'arbre, fenêtres, feux de piste) et la part d'orthophoto ; verre/AO de bâtiment ou pavage/couvert de route, humidité, ondes —, le pixel marqué `RASTER_MAT` (−11,5) ; `shadeLiteLight` (2,0 k lignes inlinées depuis le 24 nov. 2026 ; 2,5 k avant) relit (liaisons 18–21), retrouve rayon, point, lumière et empreinte, **prend l'eau que `shadeLite` a lue dans les drapeaux de l'enregistrement (`liteWater` n'y est plus rappelé : la passe −3,3 à −5,7 ms sur les vues de Paris, kerr-mini, voir « PERF — ponts et rues de Paris » en tête)**, éclaire (`liteLight`) et finit (`liteEpilogue`) vers `liteOut` ; mesuré forêt kerr-mini : 18,1 + 18,4 + 3,0 ms (39,5 contre 42,1) ; **découpé (11 nov., `tracer-source.ts` `withLiteSplit`)** : il écrit la radiance de surface et la distance dans `liteOut` (`rgba32float`, groupe 1 liaison 13, sa propre mise en page `liteLayout`) et marque le pixel `RASTER_SPLIT` (−9,5) ; `shadeLiteFinish` (trace, 0,8 k lignes inlinées) met l'air et les nuages (`liteFinishAt` → `liteFinish`), `liteOut` lu à la place de la LUT (groupe 1 liaison 2) ; les deux compilés par paire (`liteWithFinish`) — mesuré sur kerr-mini (Toulon, forêt à 120 m) : 46 → 41 + 3 ms ; Terre : un fil par pixel, chaque frame — **à une cadence > 1 (`earthRasterShading` « demi »… ; « auto » garde 1 sous le matériau), un fil par pixel du motif, serrés (`rasterPixel`), le matériau, sa lumière et sa finition lancés sur la largeur divisée ; les autres marqués par `shadeMark` (PLAN-J5 J5-6, 15 nov. : « demi » mesuré J0 −1,9 à −3,2 ms, les Maures −5,7 à −6,3, kerr-mini, A/B ×2)** ; **l'eau classée d'abord (`liteWater`) : la pleine mer profonde sort aussitôt ; la mer peu profonde aussi, après la seule lecture de l'imagerie (son albédo dans `accum`, `w` = 2)** (S2 et S3, 10 nov. ; `liteSkip` 2³⁰ l'A/B des deux) ; autres corps : `bodyLite` → `shadeNear`, dont la mer de Miller ombrée par le `seaShade` de la Terre (`SEA_ALIEN`, 10 nov.) ; à une cadence > 1 son `shadeMark` (mise en page `mainLayout`) dans la même passe, **le groupe 1 de la LUT relié avant lui** (11 nov. : le groupe 1 du matériau laissé lié invalidait la passe sur la Lune — erreur WebGPU à chaque image, vue par l'e2e `apprendre-vaisseaux`) | `shadeLite` compilé | → `accum`, `moments`, `stamps` | M |
-| C18b | `sea surface` (rendu) puis `sea surface resolve` (calcul) | `encodeSeaSurface` → `TerrainRaster.encodeSea` | `terrain-raster.ts` `seaVs`/`seaFs` (CDLOD de `sea/surface-nodes.ts`, 16² quads par nœud, 200–900 nœuds) et `seaResolve` | Terre, sous 3 km au-dessus de la mer, FFT prête, `seaSurfaceOn` (PLAN-MER-WEBGPU S2) | lit `moments` (pixels de pleine mer), la visibilité, la FFT, la table des rivages (une crête gardée devant le sol plus haut que les vagues, son point en mer : `seaCrestsOverLand`) → cible r32float + profondeur propres → `moments.y` (la distance de la surface déplacée) → `shadeWater` | W |
+| C18b | `sea surface` (rendu) puis `sea surface resolve` (calcul) | `encodeSeaSurface` → `TerrainRaster.encodeSea` | `terrain-raster.ts` `seaVs`/`seaFs` (CDLOD de `sea/surface-nodes.ts`, 16² quads par nœud, 200–900 nœuds) et `seaResolve` | Terre, sous 3 km au-dessus de la mer, FFT prête, `seaSurfaceOn` (PLAN-MER-WEBGPU S2) | lit `moments` (pixels de pleine mer), la visibilité, la FFT, la table des rivages (une crête gardée devant le sol plus haut que les vagues, son point en mer : `seaCrestsOverLand` ; et devant la surface la plus proche — un arbre, un bâtiment —, `8d4e0be1`) → cible r32float + profondeur propres → `moments.y` (la distance de la surface déplacée) → `shadeWater` | W |
 | C19 | `earth water (raster)` | `encodeLite` | trace `shadeWater`, pleine résolution ; la distance de la surface lue dans `moments.y` (celle de `sea surface` où elle est dessinée) ; l'albédo du fond laissé par `shadeLite` (`accum.w` = 2) éclairé ici ; le SSR seulement à moins de 8 km d'une terre (`seaAllAround`, une lecture du masque de mer) ; **le SSR lit `moments`/`accum` d'autres pixels, dont ceux d'eau que cette même passe écrit (marque 4e30, autres groupes de travail, sans ordre) : cause des points blancs/cyan de la mer (M1 Max, 12 nov.) — écartés (`mk > 3e30`) depuis le 13 nov. (décision de Sam), toujours depuis le lot R1 (le levier `seaSsrSafe` retiré : `shadeWaterFinish`, qui finit des pixels d'eau en lisant les autres, a la même course)** ; **l'eau étagée, première étape (13 nov., `withLiteSplit`, décision 1 de Sam) : sa fin — l'air et les nuages, `liteFinish` — sortie du noyau : il écrit la radiance de sa surface et la distance dans `liteOut` (mise en page `liteLayout`, groupe 1 `lite`) et marque le pixel `RASTER_SPLIT_WATER` (−10,25 ; −10,75 si l'eau couvre plus de la moitié du pixel) — C19d les finit ; **E2 (13 nov.) : compilé avec `WATER_REFL_DEFER` (mise en page `waterLayout` : `liteOut` et `matOut0…2`, liaisons 13–16), il laisse les reflets de la mer à C19d — leur enregistrement dans les trois premières textures du sol différé** ; ses pixels ne sont plus lus par le SSR pendant qu'il les écrit (la course des points blancs disparaît par construction)** ; **la houle côtière (L1–L2) y coûte +2,0 / +2,2 ms sur une côte** (sonde `coast-swell`, toutes les passes relevées, kerr-mini, 15 nov., 0234f17c : allumée contre compilée hors, rien ailleurs) ; **sa passe à part (`shadeSwell`, J4-4) essayée et retirée** : −0,4 à +0,3 ms, le travail déplacé, pas réduit ([PLAN-J4 §10](PLAN-J4-VOLUMES.md)) ; **à demi-rythme depuis le 15 nov. 2026 (PLAN-J5 J5-5, `WATER_HALF`, réglage provisoire)** : un pixel sur deux par image (damier tourné chaque image), des groupes de 32 fils par tuile (`WATER_WG_Y` 4), le résultat écrit aussi au pixel voisin de la paire (l'historique a les deux en deux images ; le voisin ombré quand celui du damier n'est pas de l'eau) — **J0 −6,0 à −6,4 ms, à 30 m sur la mer −6,6 / −7,2 (kerr-mini), l'image la même** ; la moitié des fils d'un groupe de 64 sortis ne rendait rien (le coût suit les groupes) ; **confirmé par Sam le 15 nov. : le seul chemin, l'ancien et son levier retirés (J5-R2)** ; **sa finition (C19d) au même demi-rythme** (le pixel fini recopié au voisin) : J0 −7,4 ms en tout (48,1 contre 55,6) | Terre, noyau prêt, sa passe de finition compilée | → `liteOut`, `moments`… + mot « mer vue » → sonde de mer | W |
 | C19c | `earth water open (raster)` | `encodeLite` | trace `shadeWater` compilé avec `WATER_OPEN` (entrée `shadeWaterOpen`) : les pixels de pleine mer — sans fond connu à 60 m, sans rivage à portée du lavis, pas d'eau intérieure —, le code des côtes et de l'eau intérieure retiré (PLAN-MER-WEBGPU S3) ; `shadeWater` les lui laisse (`P.seafft[0].x` = 2) ; **sa fin vers `liteOut` comme `shadeWater` (13 nov.)** | noyau compilé (après l'image), FFT de la mer active, `seaWaterOpenOn` | → `liteOut`, `moments` | W |
 | C19t | `earth water: tiles` | `encodeWaterTiles` | **la classification de l'écran par tuiles, premier lot (13 nov., décision 1 de Sam)** : un petit module à part (`earth water: tiles`, un groupe de 8 × 8 fils par tuile 8 × 8) lit les marques de `moments` et liste les tuiles qui tiennent un pixel marqué eau (`RASTER_WATER`, (−8, −5] — dont les crêtes que `sea surface resolve` marque −5,25 sur le ciel et devant la terre) — son compte devient l'`x` des arguments indirects (`y`, `z` = 1) ; la liste est recopiée dans la queue de `stamps` (`copyBufferToBuffer`), où C19, C19c et C19d lisent leur tuile (`waterTilePixel`) : **ces trois passes sont lancées en indirect (`dispatchWorkgroupsIndirect`) sur les seules tuiles d'eau**. Plafond mesuré avant (règle 1, J0 sans eau, kerr-mini) : les trois passes lancées plein écran sans rien à faire coûtaient 0,86 + 0,77 + 0,51 = **2,1 ms** ; le module lui-même 0,21–0,23 ms. **Mesuré (A/B A B B A, kerr-mini, 13 nov., a5b2c60b contre l'arbre)** : sur J0 (presque toute la mer) neutre — GPU p50 57,15 → 56,9 ms, les passes de l'eau 12,3 → 12,05 ms ; **sur la terre** (le même vol parti de la plaine du Gapeau, `J0_START=43.12,6.13,300,20,140`) **50,45 → 49,3 ms (−1,15)**, les passes de l'eau 1,70 → 1,08 ms. **Une première version marquait les tuiles depuis les noyaux du sol (`shadeLite`, sa lumière) : +0,8 ms pour eux (A/B J0, deux fois), et les tuiles de crêtes seules oubliées — retirée** | eau du raster lancée | `stamps` (mots des tuiles) → liste, arguments indirects → `stamps` (liste) | W |
@@ -1183,7 +1207,7 @@ Paris jusqu'à `earthSettled` » chronométré par étape.
 
 <!-- pipeline-inventory:begin (bun scripts/pipeline-inventory.ts --write) -->
 
-_Généré le 2026-11-25T08:04:20Z sur `5d6624f2` (arbre de travail). Ne pas éditer à la main : relancer l'outil._
+_Généré le 2026-11-25T08:20:12Z sur `7e19f0c0` (arbre de travail). Ne pas éditer à la main : relancer l'outil._
 
 **130 sites de création de pipeline** (86 rendu, 44 calcul, dont 66 asynchrones) et 43 `createShaderModule` dans 32 fichiers ; **44 programmes WGSL** (16 fichiers .wgsl, 28 chaînes dans le TypeScript) ; **66 libellés de passes** du profileur GPU (+ 11 sites à libellé dynamique).
 
@@ -1340,11 +1364,11 @@ _Généré le 2026-11-25T08:04:20Z sur `5d6624f2` (arbre de travail). Ne pas éd
 | `src/system/scenery-raster.ts:2172` | compute async | — | `farCarCull` |
 | `src/system/terrain-cache.ts:300` | compute async | — | `main` |
 | `src/system/terrain-cache.ts:301` | compute async | — | — |
-| `src/system/terrain-raster.ts:638` | render async | — | `terrainSunVs` |
-| `src/system/terrain-raster.ts:669` | render async | — | `terrainVs` |
-| `src/system/terrain-raster.ts:767` | render async | — | `screenVs`, `inspectFs` |
-| `src/system/terrain-raster.ts:789` | render async | `sea surface` | `seaVs`, `seaFs` |
-| `src/system/terrain-raster.ts:797` | compute async | `sea surface resolve` | `seaResolve` |
+| `src/system/terrain-raster.ts:643` | render async | — | `terrainSunVs` |
+| `src/system/terrain-raster.ts:674` | render async | — | `terrainVs` |
+| `src/system/terrain-raster.ts:772` | render async | — | `screenVs`, `inspectFs` |
+| `src/system/terrain-raster.ts:794` | render async | `sea surface` | `seaVs`, `seaFs` |
+| `src/system/terrain-raster.ts:802` | compute async | `sea surface resolve` | `seaResolve` |
 | `src/system/warp-grid.ts:133` | compute async | — | — |
 | `src/ui/map3d/gpu.ts:166` | render | `map: bodies` | `bodyVs`, `bodyFs` |
 | `src/ui/map3d/gpu.ts:174` | render | `map: the bodies` | `bodyVs`, `bodyDepthFs` |
@@ -1365,7 +1389,7 @@ _Généré le 2026-11-25T08:04:20Z sur `5d6624f2` (arbre de travail). Ne pas éd
 
 | source | lignes | points d'entrée |
 |---|---:|---|
-| `src/shaders/trace.wgsl` | 18304 | 18 entrées : cloudLightVolume, aerial, lut, main, shade, shadeMark, shadeLiteFinish, shadeWaterFinish, shadeLiteLight, shadeLite, skyFill, shadeWater, clouds, skyAmbient, cloudShadow, env, probe, shadeStars |
+| `src/shaders/trace.wgsl` | 18314 | 18 entrées : cloudLightVolume, aerial, lut, main, shade, shadeMark, shadeLiteFinish, shadeWaterFinish, shadeLiteLight, shadeLite, skyFill, shadeWater, clouds, skyAmbient, cloudShadow, env, probe, shadeStars |
 | `src/shaders/ship.wgsl` | 2823 | 34 entrées : envCopy, envDown, envGGX, envSH, ctlVs, depthVs, vs, mirrorVs, shadowVs, fs, hullDepthVs, hullDepthFs, ownMaskFs, plumeVs, plumeFs, glowVs, glowFs, distVs, distFs, sheathVs, sheathFs, trailVs, trailFs, lampVs, lampFs, compVs, compFs, fsCabin, fsCabinGlass, fsJetGlass, motionVs, motionFs, composeColor, composeSurface |
 | `src/shaders/post.wgsl` | 1396 | 18 entrées : gatherH, atrous, beamH, beamV, polgrid, resolve, down, downShip, dof, flareMeter, up, meter, stars, motionBlur, temporal, occlusion, cloudTemporal, taau |
 | `src/system/scenery-raster.ts:208` | 1191 | 31 entrées : cull, cullBoxes, clampBoxes, shadowVs, shadowFs, proxyVs, proxyFs, boxVs, boxFs, bridgeMarkFs, boxMarkVs, boxShadowVs, meshShadowVs, meshVs, meshFs, boxSolidVs, benchCull, benchQuadVs, benchVs, benchShadowVs, farCull, farVs, farQuadVs, farFs, farLampCull, farLampVs, farCarCull, farCarVs, nearCellVs, nearCellShadowVs, farShadowVs |
@@ -1374,7 +1398,7 @@ _Généré le 2026-11-25T08:04:20Z sur `5d6624f2` (arbre de travail). Ne pas éd
 | `src/shaders/map.wgsl` | 616 | bodyVs (v), bodyFs (f), skyVs (v), skyFs (f), bodyDepthFs (f), lineVs (v), lineFs (f), planiVs (v), planiFs (f), markVs (v), markFs (f) |
 | `src/shaders/forest.wgsl` | 422 |  |
 | `src/shaders/overlay.wgsl` | 279 | vsLine (v), fsLine (f), vsLineD (v), fsLineD (f), vsFull (v), fsComposite (f), fsMagVol (f), fsMagComp (f) |
-| `src/system/terrain-raster.ts:181` | 255 | terrainVs (v), terrainSunVs (v), terrainFs (f), ringFs (f), screenVs (v), inspectFs (f) |
+| `src/system/terrain-raster.ts:186` | 255 | terrainVs (v), terrainSunVs (v), terrainFs (f), ringFs (f), screenVs (v), inspectFs (f) |
 | `src/shaders/jwst.wgsl` | 234 | vs (v), shadowVs (v), fs (f), compVs (v), compFs (f) |
 | `src/shaders/seafft.wgsl` | 232 | rowsSpec (c), colsAssemble (c), mip (c), foamWorld (c) |
 | `src/shaders/station.wgsl` | 209 | vs (v), shadowVs (v), fs (f), compVs (v), compFs (f) |
@@ -1384,7 +1408,7 @@ _Généré le 2026-11-25T08:04:20Z sur `5d6624f2` (arbre de travail). Ne pas éd
 | `src/system/earth-swell.ts:111` | 164 | swellInit (c), swellFinish (c) |
 | `src/system/bc-encode.ts:13` | 163 | bc7 (c), bc5 (c) |
 | `src/shaders/endurance.wgsl` | 145 | vs (v), fs (f), compVs (v), compFs (f) |
-| `src/system/terrain-raster.ts:51` | 126 | seaVs (v), seaFs (f), seaResolve (c) |
+| `src/system/terrain-raster.ts:51` | 131 | seaVs (v), seaFs (f), seaResolve (c) |
 | `src/crew/sys3d/gpu.ts:9` | 101 | vl (v), fl (f), vd (v), fd (f) |
 | `src/system/body-raster.ts:103` | 91 | bodyHeights (c), bodyVs (v), bodySunVs (v), bodyCloudVs (v), bodyCloudFs (f), bodyFs (f) |
 | `src/system/earth-horizons.ts:83` | 76 | bake (c) |
@@ -1475,11 +1499,11 @@ _Généré le 2026-11-25T08:04:20Z sur `5d6624f2` (arbre de travail). Ne pas éd
 | `ship: thrusters and plasma` | `src/ship.ts:3341` | 1 |
 | `ship: motion` | `src/ship.ts:3468` | 1 |
 | `ship: into the scene` | `src/ship.ts:3526` | 1 |
-| `terrain raster visibility` | `src/system/terrain-raster.ts:1086` | 1 |
-| `body raster visibility` | `src/system/terrain-raster.ts:1139` | 1 |
-| `terrain from the Sun` | `src/system/terrain-raster.ts:1282` | 1 |
-| `body from the Sun` | `src/system/terrain-raster.ts:1340` | 1 |
-| `terrain raster inspector` | `src/system/terrain-raster.ts:1393` | 1 |
+| `terrain raster visibility` | `src/system/terrain-raster.ts:1091` | 1 |
+| `body raster visibility` | `src/system/terrain-raster.ts:1144` | 1 |
+| `terrain from the Sun` | `src/system/terrain-raster.ts:1287` | 1 |
+| `body from the Sun` | `src/system/terrain-raster.ts:1345` | 1 |
+| `terrain raster inspector` | `src/system/terrain-raster.ts:1398` | 1 |
 
 Libellés dynamiques (calculés à l'exécution) :
 
@@ -1535,7 +1559,7 @@ Leur coût n'apparaît que dans l'intervalle de complétion de la frame (ou d'un
 | render pass | `src/system/hd-maps.ts:320` |
 | horizon mips | `src/system/horizon-maps.ts:767` |
 | terrain cache fade | `src/system/terrain-cache.ts:482` |
-| compute pass | `src/system/terrain-raster.ts:923` |
+| compute pass | `src/system/terrain-raster.ts:928` |
 | warp grid | `src/system/warp-grid.ts:164` |
 | render pass | `src/ui/map3d/gpu.ts:503` |
 | tree impostor down | `src/vegetation/tree-impostors.ts:363` |

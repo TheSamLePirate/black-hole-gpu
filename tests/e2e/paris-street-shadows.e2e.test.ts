@@ -55,6 +55,12 @@ describe.skipIf(!E2E)("probe: a Paris street's shadows and pavements", () => {
       }
       return out; })()`);
     console.log(`  cross-section [offset m (+ right of the way), ground m]: ${JSON.stringify(section)}`);
+    // (a column of the image by the white car, bottom right — the smeared columns: what the visibility drew down it, its distances —
+    // equal ones a face standing up)
+    const column = await app.js(`(async () => { const out = []; for (let k = 0; k < 20; k++) { const y = 0.72 + k * 0.01;
+      const s = await __bh.renderer.surfaceAt(0.93, y); out.push([+y.toFixed(2), s?.kind ?? "null", s ? +s.ground.toFixed(2) : -1, s?.level ?? -9]); }
+      return out; })()`);
+    console.log(`  the column at x 0.93 [y, kind, distance m, level]: ${JSON.stringify(column)}`);
     console.log(
       `  surfaces near: ${JSON.stringify(await app.js(`(() => { const s = __bh.renderer.earthScenery.stats(); return { cellRoads: s.cellRoads, pavementsWidened: s.pavementsWidened, furniture: s.furniture, buildings: s.buildings }; })()`))}`,
     );

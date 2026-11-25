@@ -152,7 +152,12 @@ fn seaUvC(x: vec2f, c: u32) -> vec2f {
     // (a crest before the land: the ground behind it farther, standing over the waves' bound — its height from the camera's, its
     // distance, the curve —, and the crest's own point the sea's by the shore's distances — a beach, a polder, a field: land)
     let dg = vis.r;
-    if (!(dg > ds + 1.0)) { discard; }
+    // (and nothing nearer before it: the nearest surface drawn — b: a tree, a building's proxy before the ground — farther than the
+    // crest too. 25 Nov 2026: the ground's alone was tested — a lifted crest at the horizon 25–57 km off, the land behind it
+    // farther, was kept over the trees 10 m before the camera on Mont Faron: the sea's pale horizon drawn through them, a straight
+    // band along the horizon — gone without the air's lift, which raised the crest over the land's line)
+    let dn = select(dg, vis.b, vis.b > 0.0);
+    if (!(dg > ds + 1.0) || !(dn > ds + 1.0)) { discard; }
     let O = sea.upC.xyz * (sea.tu.w + sea.upC.w);
     let hG = length(normalize(v.pb) * dg + O) - sea.tu.w;
     if (!(hG > sea.misc.w)) { discard; }

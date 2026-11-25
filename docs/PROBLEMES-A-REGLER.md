@@ -74,6 +74,30 @@ connue ou supposée, la piste. Une entrée réglée est barrée avec le commit q
   voir l'entrée « L'eau sous Cheviré » ci-dessous.** Reste : à froid, la préparation des cellules attend une requête WFS
   de plus (29 cellules encore en préparation à la prise de vue côté B) ; Bay Bridge, Øresund etc. à l'étranger : tirant par règle.
 
+## ~~Le ciel de la baie de San Francisco : une ville et son sol à l'envers au-dessus d'un navire suivi~~ (relevé le 24 novembre 2026, e2e `traffic-free-camera`) — réglé le 25 novembre 2026 (`9f850c5a`)
+
+- **Constat** : derrière un chalutier inventé suivi en vue « poursuite », le haut de l'image rempli de rues, de maisons et de réverbères
+  pendus à l'envers ; sur l'eau, de grandes taches sombres à bords droits.
+- **Antérieur au lot des routes** : la même vue (même temps simulé, même navire) avec les sources du lot retirées sur `main` la montre
+  (`docs/progress/sf-ciel-inverse-2026-11-25/sans-mon-lot.jpg`), comme l'essai de `18a6e4dd` (`18a6e4dd-tfc-haut.jpg`).
+- **Cause** : la vie de la mer (`game/seasim.ts`) vérifie ses routes sur le masque des océans (~8 km le pixel) : un chalutier naviguait
+  sur la rive de la lagune de Brisbane, et la vue 76 m derrière lui, 17 m au-dessus de la mer, était 19 à 28 m **sous le sol** (avec ou
+  sans tuiles) : la ville et son sol vus par-dessous. Les taches sombres de cette vue : le sol du rivage vu au ras de la mer à travers
+  laquelle la caméra était (pas examinées sous Cheviré ni à Grenelle — l'agent des ponts).
+- **Correction** : la vue « poursuite » jamais sous le sol du monde (`aboveEarthGround`, 2,5 m) ; un navire inventé dont le sol est à
+  plus de 2 m au-dessus de la mer n'est pas dessiné (`simShipOnLand`). e2e `sf-ship-sky` (nouveau) : hauteur de la vue sur son sol
+  −27,5 m (sans tuiles) et −19,1 m (tuiles) sans la correction, +2,5 m avec ; la vue d'ensemble à 1,2 km au-dessus de son sol
+  (témoin négatif) ; test `view-ship-ground.test.ts`. Après : `apres-tfc.jpg` (un voilier en mer, son sillage).
+
+## ~~Des colonnes étirées sur le sol d'une rue de Paris, à côté d'une voiture garée~~ (relevé le 25 novembre 2026, `rue-paris-apres.jpg`) — réglé le même jour (`2813d883`, `cd789643`)
+
+- **Cause** : une face dressée dans le maillage du relief (une bordure, un muret : la colonne x 0,93 de la vue, distances 8,12–8,19 m
+  sur 7 % de la hauteur de l'image — e2e `paris-street-shadows`) là où le relief lisse ne l'est pas : la photographie, la marche des
+  routes, leur matériau et les scans de détail y sont lus d'en haut, chaque pixel une ligne d'eux — des colonnes.
+- **Correction** : sur la face d'une marche (normale de l'image de profondeur raide, relief lisse non) la photographie lue par une
+  empreinte d'un mètre au moins, ni le détail du revêtement ni les scans de détail posés d'en haut, la couleur unie de la surface
+  gardée (test `lite-sun-gate.test.ts`). Vu sur ce Mac (kerr-mini éteint), même vue : `docs/progress/sf-ciel-inverse-2026-11-25/rue-paris-colonnes-{avant,apres}.jpg`.
+
 ## Ponts et routes, campagne e2e 2 : à revoir à l'œil (relevé le 24 novembre 2026, `bridges`, `bridges-notable`, kerr-mini)
 
 - **Golden Gate depuis Battery Spencer** (`golden-gate-1km.png`) : derrière les arbres, à gauche, devant la tour nord, des blocs gris en
@@ -177,7 +201,18 @@ connue ou supposée, la piste. Une entrée réglée est barrée avec le commit q
   3 m effacées dès 0,8 m d'empreinte.
 - **Correction** : `trace.wgsl` `roadPavement` : traces en `paveCover` (part de la bande dans le pixel), rustines gardées jusqu'à 2–4 m.
   e2e : 1,007 / 1,002.
-## Un trait clair et un « poteau » sombre à travers un F-35 posé sur le mont Faron (relevé le 24 novembre 2026, e2e `j2-contact-camera`, campagne 1)
+## ~~Un trait clair et un « poteau » sombre à travers un F-35 posé sur le mont Faron~~ (relevé le 24 novembre 2026, e2e `j2-contact-camera`, campagne 1) — le trait réglé le 25 novembre 2026 (`8d4e0be1`)
+
+- **Cause du trait (`8d4e0be1`)** : la surface de la mer (`terrain-raster.ts` `seaFs`) garde une crête dressée devant la terre derrière
+  elle en ne regardant que la distance du sol (`vis.r`), pas celle de la surface la plus proche (`vis.b`). L'horizon marin à 25–57 km,
+  relevé par l'air (R4b), passait devant la ligne de la terre et restait dessiné sur les arbres proches (J9, ~10 m) : la bande pâle le
+  long de l'horizon, derrière l'appareil. e2e `faron-tree-streak` : pixels rendus plus pâles par le relèvement sur un sol sombre
+  5 816 et 3 257 avant, 9 après (`docs/progress/sf-ciel-inverse-2026-11-25/faron-apres.jpg` contre
+  `docs/progress/routes-defauts-2026-11-25/faron-avant.jpg`) ; test `sea-crest-occlusion.test.ts`.
+- **Le « poteau » : pas un défaut** — le tronc d'un arbre proche (~10 m) dont le houppier est en haut à gauche. Reste ouvert à côté : l'aile
+  gauche de l'appareil (≈ 30 m) est dessinée devant ce houppier (≈ 10 m selon la visibilité) — une occultation appareil/arbre proche
+  à regarder (`sceneDepth` sur les pixels d'arbres J9).
+
 
 - **Constat** : F-35 posé sur le flanc sud du mont Faron (43,1405° N, 5,942° E, scène J0, 11 h UTC), caméra « autour » à ~25 m
   devant lui (yaw 180, tangage 8°) : un trait rectiligne bleu pâle, couleur de ciel, part de l'emplanture de l'aile droite vers la

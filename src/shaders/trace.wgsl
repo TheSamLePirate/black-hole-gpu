@@ -16312,13 +16312,21 @@ fn liteMaterial(gq: vec3f, q: vec3f, ph: vec3f, rd: vec3f, look: vec3f, tM: f32,
   let faceDir = (tn - gq * upF) / max(length(tn - gq * upF), 1e-6);
   var faceC = vec3f(0.0);
   var faceK = 0.0;
+  // (a step's face in the mesh — a kerb, a low wall, the survey's ground stepped by a building's foot —, steep where the smooth
+  // relief is not: the photograph seen from above smeared down it in columns, each pixel its own line of the photograph — beside a
+  // parked car in a Paris street, 25 Nov 2026. Read there through a round footprint of a metre at least: the photograph's mean
+  // across the face, no columns)
+  let ngF = atNg(at, gq);
+  let stepFace = !isTree && upF > 0.62 && dot(ngF, gq) < 0.5;
+  let fxI = select(fx, normalize(fx + vec3f(1e-12)) * max(length(fx), 1.0 / EARTH_RM), stepFace);
+  let fyI = select(fy, normalize(fy + vec3f(1e-12)) * max(length(fy), 1.0 / EARTH_RM), stepFace);
   if ((liteSkip() & 128u) == 0u) {
     // (the samples down the face read through a small round footprint — a metre: one tap a level —, not the pixel's stretched
     // one: a wall filling the view at 4 anisotropic reads a pixel cost 60 ms)
     let fs = 1.0 / EARTH_RM;
     for (var i = 0; i <= select(0, 3, faceW > 0.0); i++) {
-      TILE_AT_ON = anchored && i == 0;
-      let t = earthImageryAniso(normalize(gq + faceDir * (2.5 * f32(i) * fs)), select(normalize(fx + vec3f(1e-12)) * fs, fx, i == 0), select(normalize(fy + vec3f(1e-12)) * fs, fy, i == 0));
+      TILE_AT_ON = anchored && i == 0 && !stepFace;
+      let t = earthImageryAniso(normalize(gq + faceDir * (2.5 * f32(i) * fs)), select(normalize(fx + vec3f(1e-12)) * fs, fxI, i == 0), select(normalize(fy + vec3f(1e-12)) * fs, fyI, i == 0));
       TILE_AT_ON = false;
       if (i == 0) { img = t; continue; }
       let c = t.c.rgb * P.earth2.z;
@@ -16336,7 +16344,7 @@ fn liteMaterial(gq: vec3f, q: vec3f, ph: vec3f, rd: vec3f, look: vec3f, tM: f32,
   // building's, a runway's graded ground), else the ellipsoid's; a tree's its own, its colour its look. The mesh's kept for the
   // scenery's shadows — ng: the point lifted off its own triangles —, the smooth one lights)
   var n = gq;
-  var ng = atNg(at, gq);
+  var ng = ngF;
   if ((liteSkip() & 16u) == 0u) {
     n = tn;
     if (dot(n, n) < 0.5) { n = ng; }
@@ -16412,7 +16420,7 @@ fn liteMaterial(gq: vec3f, q: vec3f, ph: vec3f, rd: vec3f, look: vec3f, tM: f32,
   }
   // (Q7 L8 / VIPER B3: the detail scans on the ground near — the photograph's albedo times the scan's ratio, its normal tilted —,
   // where the scenery's frame is known and its scans are in; liteSkip 2147483648 none — an A/B)
-  if (DETAIL_BOUND && !mesh && !isTree && fpM < 300.0 && HAS_SCENERY && P.scenery[0].w > 0.5 && P.scenery[6].z > 0.5 && (liteSkip() & 2147483648u) == 0u) {
+  if (DETAIL_BOUND && !mesh && !isTree && !stepFace && fpM < 300.0 && HAS_SCENERY && P.scenery[0].w > 0.5 && P.scenery[6].z > 0.5 && (liteSkip() & 2147483648u) == 0u) {
     let dL = vec3f(dot(dirW, P.scenery[0].xyz), dot(dirW, P.scenery[1].xyz), dot(dirW, P.scenery[2].xyz));
     let xy = (P.scenery[3].xyz + dL * tM).xy + P.scenery[6].xy;
     // (Q7 L8: the season's snow — seasonSnow — hides it: the material read from the bare ground's albedo, its contrast and tilt
@@ -16586,7 +16594,9 @@ fn liteMaterial(gq: vec3f, q: vec3f, ph: vec3f, rd: vec3f, look: vec3f, tM: f32,
   // (a town pavement — a kerbed road's past its kerb, out to the façades: pavement-reach.ts — laid level: the relief's metre of bumps
   // against the walls — the survey's ground about the buildings — not in its light; 25 Nov 2026)
   if (roadPaved > 0.0 && sv.kind == 1.0 && SC_ROAD.x > SC_ROAD.y && (u32(SC_ROAD.w + 0.5) & 8u) != 0u) { n = normalize(mix(n, gq, 0.8 * roadPaved)); }
-  if (HAS_SCENERY && roadPaved > 0.0 && sv.kind == 1.0 && fpM < 3.0) {
+  // (a step's face — stepFace —: no pavement's detail laid on it from above — its joints, setts and cracks one point a pixel, columns
+  // down the face —; the surface's plain colour kept)
+  if (HAS_SCENERY && roadPaved > 0.0 && sv.kind == 1.0 && fpM < 3.0 && !stepFace) {
     pv = roadPavement(roadMat, SC_ROAD, SC_ROAD_DIR, SC_AT + P.scenery[6].xy, fpM);
     A *= mix(vec3f(1.0), pv.tint, roadPaved);
     n = normalize(n + (P.scenery[0].xyz * pv.tilt.x + P.scenery[1].xyz * pv.tilt.y) * roadPaved);
