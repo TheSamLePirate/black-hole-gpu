@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 25 nov. 08:15 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 25 nov. 09:00 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous. Ce qui est fermé quitte le tableau « En cours » pour la ligne « Fermé récemment ».
@@ -78,6 +78,14 @@ l'état d'une mission ou d'un combat **non sauvé, dit** ; le réseau **« entre
 **Décidé par Sam (16 nov., 15:58 UTC)** : J8-4 allumée par défaut (quads sous 8 px), J8-5 avec une jonction choisie sur captures, J8-1b suspendu, l'e2e de J8-6 par la voie (b), J8-9 ajouté ([PLAN-J8](docs/PLAN-J8-BATIMENTS.md) §6 point 6). **But fixé par Sam (16 nov., ~16:19 UTC)** : [J8-A](docs/PLAN-J8-BATIMENTS.md), un vol Paris et Toulon-Hyères, de jour et de nuit, tous les bâtiments, lampadaires, voitures (J8-L) et rivières (J8-E) chargés avant le vol, en « high » partout, sans différence visible entre les qualités. **Décidé par Sam (16 nov., ~21:40 UTC)** : J8-8 ouvert (le proche en cellules), la jonction à 0, l'éclat de nuit lointain gardé ([PLAN-J8](docs/PLAN-J8-BATIMENTS.md) §6 point 11). **Décidé par Sam (17 nov., ~08:00 UTC)** : J8-8b ouvert, les arbres par cellule, après un vol de référence à froid sur le M1 Max (§6 point 12). **Mode speed pour finir J8, J8-VB compris** (Sam, 17 nov. ~09:20 UTC ; [CLAUDE.md](CLAUDE.md), modes de travail ; §6 point 13) : contrôles rapides par lot, un gros e2e J8-A à la fin sur kerr-mini et le M1 Max. **J8-RP, les routes et les ponts AAA** (Sam, 17 nov. ~10:20 UTC ; [PLAN-J8](docs/PLAN-J8-BATIMENTS.md) §3 bis) : ajouté à J8 en mode speed, RP1 (les routes et marquages visibles sous l'orthophoto) en tête. **Attend Sam** : les quatre premières questions de PLAN-J8 §6, réglées provisoirement (même contenu sur les deux machines, retour si > 3 ms sur le mini ; portée au pixel ; J7 en pause, les arbres proches deviennent J9 ; pas de préparation côté serveur pour l'instant) ; les trois questions de [PLAN-J7](docs/PLAN-J7-FLUIDITE.md) §4, réglées provisoirement (les 40 ms du mini en dernier, J7-6 ; les arbres proches en géométrie ensuite, désormais J9 ; l'aplanissement du détail sous les trouées jusqu'à la FAF ou 10 km) ; les seuils du mini attendent la reprise de la cible 40 ms.
 
 ## Journal
+
+### 2026-11-25 09:00 UTC — Ponts, revue D : fourche de Grenelle, taches sur la Loire, liseré des câbles
+
+- Contribution : §19 (ponts et eau crédibles de près).
+- Réalisé (fusion sur main, agent `cbbd1eb0`…`7cfc10cf`) : une jonction de plus de 40° termine la chaîne d'un pont et un bout fermé rejoint le bout ouvert de l'autre moitié dans l'axe (Grenelle : un tablier droit, la rampe de l'île aux Cygnes posée dessus) ; l'eau d'une rivière ou d'un lac reste de l'eau sur une pente raide à plus de ~10 m dans son polygone (la mer garde l'ancienne règle des falaises) et le miroir de l'eau calme ne prend plus une bosse du lit pour une berge (`sceneryMirrorWet`) ; la normale d'un pixel de bord d'une pièce fine (câble) rebâtie depuis le voisin de l'autre côté.
+- Preuves : **observé** — `bridges-notable` 7/7 sur kerr-mini (`cbbd1eb0`) puis sur ce Mac (`3bd3cf7b`, M1 Max : chiffres non comparables au mini) ; marche maximale sur l'axe de Grenelle 0,13 m ; captures `docs/progress/ponts-2026-11-25/chevire-eau-apres.jpg`, `grenelle-deck-low-{avant,apres}.jpg`, `golden-gate-deck-low-lisere-apres.jpg`. Après fusion sur main (ce Mac) : tsc, Biome, `check-wgsl` 85/85, `pipeline-inventory --check`, 211 tests (gardes e2e, crédits, ponts, raster, décor). **Non mesuré** : le coût des changements de l'eau (pas d'A/B, mini injoignable) ; `bridges` non refait depuis.
+- Limites / transitions : la bande claire sous Cheviré (une crête du relief de 5 m sous le tablier : aplanir le relief sous les polygones d'eau intérieure à la préparation — hors du lot ; le message de `3bd3cf7b` la dit réglée à tort) ; les reflets de la Seine en morceaux (le reflet d'écran ne trouve un immeuble que s'il est à l'image, le secours tracé ne connaît que les arbres, les immeubles proches sont dans les cellules maillées) ; points sombres au bord des couronnes contre le ciel.
+- Suite : relief aplani sous l'eau intérieure ; reflets des immeubles proches ; `bridges` + A/B de l'eau au retour du mini.
 
 ### 2026-11-25 08:15 UTC — Trafic à SFO : −25 ms au parking (table d'air sous un géoïde négatif), −8,7 ms en courte finale (A320 gréé selon sa taille, LOD meshoptimizer)
 
