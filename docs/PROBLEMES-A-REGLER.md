@@ -133,7 +133,11 @@ connue ou supposée, la piste. Une entrée réglée est barrée avec le commit q
   il allait au noyau des rayons, dont les arbres ont été retirés avec J9 le 24 nov. (blocs couleur de ciel, au pas d'ombrage). Désormais
   pris par `shadeLite`, qui cherche la couronne jusqu'à 60 m au-delà du proxy et laisse un raté à la reconstruction. Vu sur kerr-mini
   (`docs/progress/ponts-2026-11-25/golden-gate-1km-apres-arbres.jpg`, e2e `bridges` 7/7, GPU de la vue 47,2 / 51,3 ms). Test
-  `tests/raster-sky-trees.test.ts`. Reste : quelques points sombres au bord des couronnes (pixels ratés laissés à la reconstruction).
+  `tests/raster-sky-trees.test.ts`. Reste : quelques points sombres au bord des couronnes (pixels ratés laissés à la reconstruction) —
+  essayé le 26 nov. (`beb2615e`, **repris par `9f22bb29`**) : ces pixels tracés d'abord par la passe des rayons (`main`), `shadeLite`
+  n'y dessinant que la couronne rencontrée — les points sombres partis, mais `main` y dessinait ses propres couronnes tracées, pâles :
+  un halo clair au bord des couronnes, pire (ce Mac, `bridges`, Battery Spencer, `golden-gate-1km-couronnes-apres.jpg`). **Non réglé** ;
+  piste : au raté, le ciel lu dans la sonde (`skyMirror`) écrit par `shadeLite` lui-même.
 - **Golden Gate, câble porteur en ruban plat depuis le tablier** (`golden-gate-tablier.jpg`) — **réglé le 25 nov. (`698dbd22`)** : le câble
   était ouvert le long du haut du repère ; il l'est désormais en travers de sa ligne et de la vue, sa distance celle du devant d'un cylindre
   (normale ronde rebâtie par `rasterNormal`). Vu sur kerr-mini (`golden-gate-deck-low-{avant,apres}.jpg`) ; scintillement à 30 km inchangé
@@ -200,6 +204,21 @@ connue ou supposée, la piste. Une entrée réglée est barrée avec le commit q
   **La bande claire reste** : une arête du relief sous le tablier (5,1 m au-dessus de la mer contre 0,5–2,3 m pour l'eau — la trace du
   pont dans le modèle de terrain) ; l'eau, désormais de l'eau, y est dessinée sur une marche de 3–5 m. La cause est la forme du relief
   sous l'eau : à régler en aplanissant le relief sous les polygones d'eau intérieure (préparation du terrain), hors de ce lot.
+  **26 nov. (`6723eff9`) — le lit aplani là où les tuiles du relief sont préparées** (`water-flatten.ts` : ouverture morphologique des
+  hauteurs de l'eau sur ±48 m, le lit sous les ponts compris, dans le worker de décodage — un seul propriétaire : raster, traceur, contact,
+  eau) : mesuré par `groundAt` (ce Mac M1 Max, e2e `bridges-notable` 7/7, `remote-results/ponts-7-local/notable`) **2,23–2,27 m
+  au-dessus de la mer sous le tablier contre 2,23–2,27 m à 150 m à l'ouest (avant : 5,1 m)**. **La bande claire reste pourtant**
+  (`chevire-lit-aplani-apres.jpg`) : ce n'était donc pas l'arête du relief ; `surfaceAt` y dit « ground » à ~609 m (juste à l'ouest de
+  l'axe), aucun levier essayé ne l'ôte — **cause non trouvée**, prochaine piste : la lecture de la couleur de l'eau intérieure (le
+  photographique ou la peinture d'une route sous l'eau) pixel par pixel avec un mode de débogage de `liteWater`.
+  **Les reflets détachés sur la Seine — règle 1** : le reflet d'une façade vient du SSR (`seaSSR`, dans `earth water` / C19, C19d) ;
+  là où l'image ne montre pas la façade (son pied caché par la rive), le repli tracé (`waterMirror` → `sceneryMirror`) ne connaît que le
+  relief et les arbres, pas les bâtiments proches (cellules maillées, hors du BVH du décor). Plafond : la seule part « reflet » de l'eau ;
+  sur J0 l'eau entière coûte 10,6 ms (kerr-mini) ; à Paris non mesurée. Correctifs possibles : (a) les bâtiments des cellules proches dans
+  le repli tracé — une marche de plus par pixel d'eau calme, coût non borné tant que leurs cellules n'ont pas d'index par rayon ; (b) un
+  reflet planaire (un rendu de plus) ; (c) un SSR raté qui s'efface vers la sonde — ne recolle pas le reflet, le rend seulement plus
+  flou. **Non fait** : aucun n'est à la fois correct et bon marché ; (a) demande un index des cellules proches par rayon (à mesurer
+  d'abord, kerr-mini de retour).
   **Reste aussi** : les reflets de bâtiments détachés sur la Seine — l'SSR ne trouve une
   façade que là où l'image la montre (son pied caché par la rive : la moitié haute du reflet manque) ; le repli tracé (`sceneryMirror`) ne
   connaît que les arbres, et les bâtiments proches (cellules maillées) ne sont pas dans le BVH du décor : non réglé.

@@ -220,3 +220,21 @@ test("J8-RP RP7: the Seine at the pont Alexandre III (OpenFreeMap z 14, the e2e'
   expect(at(m, bx + 15, by)).toBeGreaterThan(0.8);
   expect(at(m, bx, by)).toBeLessThan(0.2);
 });
+
+test("(25 Nov 2026) the bed under a deck the river's when the relief is levelled (cutBridges false — water-flatten.ts)", () => {
+  const river: Feat = { type: 3, cls: "river", rings: [sq(100 * 16, 0, 140 * 16, 4096)] };
+  const bridge: Feat = {
+    type: 2,
+    cls: "secondary",
+    brunnel: "bridge",
+    rings: [
+      [
+        [90 * 16, 128 * 16],
+        [150 * 16, 128 * 16],
+      ],
+    ],
+  };
+  const t = tile({ water: [river], transportation: [bridge] });
+  expect(at(waterMask(t, 1)!, 120, 128)).toBeLessThan(0.01);
+  expect(at(waterMask(t, 1, { k: 0, x: 0, y: 0 }, false)!, 120, 128)).toBeGreaterThan(0.99);
+});
