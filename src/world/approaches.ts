@@ -451,6 +451,21 @@ export function approachesFor(f: Airfield): Approach[] {
   );
 }
 
+/** Whether a runway end has a precision approach — an ILS, the FAA's CIFP or nav.dat's — in its place's tile (the approach lights'
+ *  structures stand at such an end: src/world/approach-lights.ts); null while the tile is not in (asked then). `field` its airfield's
+ *  ident, `end` its designation as our data writes it. */
+export function ilsAt(field: string, end: string, lat: number, lon: number): boolean | null {
+  const t = tiles.get(tileKey(lat, lon));
+  if (!t) {
+    if (!(index === null && indexFailedAt !== null)) void loadApproachTile(lat, lon);
+    return index === null && indexFailedAt !== null ? false : null;
+  }
+  return (
+    t.records.some((r) => r.f === field && (r.r === end || r.was === end) && r.k === "ILS") ||
+    t.cifp.some((r) => r.f === field && (r.r === end || r.was === end) && r.k === "ILS")
+  );
+}
+
 /** The same, its tile awaited. */
 export async function approachesForAsync(f: Airfield): Promise<Approach[]> {
   await loadApproachTile(f.lat, f.lon);

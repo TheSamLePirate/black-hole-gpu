@@ -32,6 +32,7 @@ connue ou supposée, la piste. Une entrée réglée est barrée avec le commit q
 
 ## La ligne sombre pointillée et l'eau verte de la baie de San Francisco en courte finale : le réel, pas un défaut (relevé le 25 novembre 2026, `finale-apres.jpg`, diagnostiqué le même jour)
 
+- **25 nov. 2026, plus tard** : les structures de la rampe sont maintenant en 3D (`src/world/approach-lights.ts`, aux extrémités dotées d'un ILS ; e2e `approach-lights`, `docs/progress/etiquettes-als-2026-11-25/als-sfo-28l-*.jpg`). Restent : la nuit, les feux (`runwayLights`) au sol ou à l'eau sous les têtes ; l'ALSF entier partout (un MALSR plus court non distingué).
 - **La ligne** (ce Mac, e2e `traffic-cost` `final-above`, `docs/progress/perf-trafic-2026-11-25/finale-dessus-leviers-planche.jpg`) :
   ni une ombre (elle reste sans les appareils, sans leurs ombres), ni une couture de polygone. Sans l'imagerie, une ligne claire **avec ses
   barres transversales** — la rampe d'approche de 28L/28R sur pilotis dans la baie, cartographiée dans OpenStreetMap (transport, jetée)
