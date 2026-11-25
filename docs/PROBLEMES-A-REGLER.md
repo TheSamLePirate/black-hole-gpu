@@ -61,11 +61,19 @@ connue ou supposée, la piste. Une entrée réglée est barrée avec le commit q
   `parking-dessus-leviers-planche.jpg`) : elles restent sans les ombres du trafic (`ship.trafficCast` false), sans l'ombre des appareils
   sur le sol (`liteSkip` 2097152) et sans les appareils (`debugSkipShip`) ; elles **disparaissent sans l'imagerie** (`liteSkip` 128) — ce
   sont les avions, passerelles et leurs ombres **photographiés** dans l'orthophoto NAIP de l'aire de trafic, plaqués à plat et vus rasants
-  (étirés) à sa résolution (floue). Nos ombres (seconde moitié de la carte) sont nettes, attachées aux roues, du bon côté. **Piste** (hors
+  (étirés) à sa résolution (floue). Nos ombres (seconde moitié de la carte) sont nettes, attachées aux roues, du bon côté. ~~**Piste** (hors
   de ce lot : le matériau des surfaces, `scenerySurface`, domaine de l'agent des routes) : sur les pavés d'aérodrome (polygones `aeroway`
   d'OpenMapTiles, genre 5, aujourd'hui de la même couleur que les places piétonnes), garder le matériau de pavage et seulement ~25 % de
   la photo près — comme la chaussée relevée (`SC_SURVEY_ROAD`, `photoSurface`) —, une couleur ou un drapeau propre aux aires d'aérodrome
-  pour les distinguer des places (dont la photo est le détail).
+  pour les distinguer des places (dont la photo est le détail).~~
+  **Réglé le 25 nov. 2026 (`093fdaa3`)** : les aires de trafic (`aeroway` classe `apron`) ont leur couleur, un béton
+  (`scenery-geometry.ts APRON_COLOUR`, `pavedAreaColour`) ; le matériau les reconnaît (`SC_APRON`) et n'y garde que 25 % de la photo près,
+  la photo entière revenue de 1,8 à 2,5 km et de 1,4 à 2 m par pixel (pas d'anneau). Places piétonnes, pistes, voies de circulation et
+  hélistations gardent la couleur et la photo d'avant (test `tests/apron-paving.test.ts` ; non revu à l'œil). Vu sur kerr-mini (A/B A B B A
+  contre `280a4600`, `traffic-cost` parked et parked-above, `docs/progress/perf-trafic-2026-11-25/parking-aire-{avant,apres}.jpg`,
+  `parking-dessus-aire-{avant,apres}.jpg`) : les avions, passerelles et ombres photographiés près des portes partis, le béton porte
+  l'ombre du terminal. Restent : les passerelles photographiées encore devinées à 25 % le long du terminal ; une tache étirée au milieu
+  de la vue basse et une au premier plan, hors du polygone de l'aire (voie de circulation ou rien : non identifié).
 
 ## La ligne sombre pointillée et l'eau verte de la baie de San Francisco en courte finale : le réel, pas un défaut (relevé le 25 novembre 2026, `finale-apres.jpg`, diagnostiqué le même jour)
 
@@ -174,8 +182,17 @@ connue ou supposée, la piste. Une entrée réglée est barrée avec le commit q
   `tests/raster-sky-trees.test.ts`. Reste : quelques points sombres au bord des couronnes (pixels ratés laissés à la reconstruction) —
   essayé le 25 nov. (`beb2615e`, **repris par `9f22bb29`**) : ces pixels tracés d'abord par la passe des rayons (`main`), `shadeLite`
   n'y dessinant que la couronne rencontrée — les points sombres partis, mais `main` y dessinait ses propres couronnes tracées, pâles :
-  un halo clair au bord des couronnes, pire (ce Mac, `bridges`, Battery Spencer, `golden-gate-1km-couronnes-apres.jpg`). **Non réglé** ;
-  piste : au raté, le ciel lu dans la sonde (`skyMirror`) écrit par `shadeLite` lui-même.
+  un halo clair au bord des couronnes, pire (ce Mac, `bridges`, Battery Spencer, `golden-gate-1km-couronnes-apres.jpg`). ~~**Non réglé** ;
+  piste : au raté, le ciel lu dans la sonde (`skyMirror`) écrit par `shadeLite` lui-même.~~ **Réglé le 25 nov. 2026 (`280a4600`)** :
+  au raté, `shadeLite` marque le pixel `RASTER_SKY` ; la passe de finition (`shadeLiteFinish`) le remplit d'après ses voisins (2 px) — une
+  structure du raster la plus proche (tour, bâtiment) lui prête sa couleur, le ciel (rien de dessiné) : le ciel lui-même, l'air et les
+  nuages jusqu'au bout de l'air (`liteFinish`, comme `skyFill`) ; seulement des arbres autour (trou entre les feuilles, autre couronne
+  derrière) ou la Terre derrière : laissé à la reconstruction comme avant. Le ciel partout (premier essai, ce Mac) traçait un liseré bleu
+  devant la tour nord et entre couronnes superposées : retiré. Vu sur kerr-mini (A/B A B B A contre `38c5ba52`,
+  `golden-gate-1km-couronnes-ciel-{avant,apres}.jpg`, `…-zoom-avant-apres.jpg`) : les points sombres partis au bord des couronnes devant
+  le ciel ; forêt des Maures vue de 60 m (témoin, aucun ciel derrière) inchangée (écart A/B 0,40 % contre A/A 0,93 %,
+  `maures-canopee-temoin-avant-apres.jpg`). Reste : quelques points sombres là où une couronne passe devant une autre sans ciel à 2 px ;
+  au bord, le ciel propre sans le flou des suspentes que la reconstruction y étalait.
 - **Golden Gate, câble porteur en ruban plat depuis le tablier** (`golden-gate-tablier.jpg`) — **réglé le 25 nov. (`698dbd22`)** : le câble
   était ouvert le long du haut du repère ; il l'est désormais en travers de sa ligne et de la vue, sa distance celle du devant d'un cylindre
   (normale ronde rebâtie par `rasterNormal`). Vu sur kerr-mini (`golden-gate-deck-low-{avant,apres}.jpg`) ; scintillement à 30 km inchangé

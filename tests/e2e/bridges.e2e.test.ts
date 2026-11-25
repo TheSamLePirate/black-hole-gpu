@@ -79,6 +79,25 @@ const VIEWS: (BridgeView & { label: string })[] = [
     dataMs: 60_000,
   },
 ];
+// (a witness, not a bridge — run only when BRIDGES_ONLY names it, 25 Nov 2026: the crowns' edges against the sky fixed at Battery
+// Spencer — RASTER_SKY —, a forest seen from above, no sky behind its crowns, must not change: the Maures, 60 m over the canopy)
+const WITNESSES: (BridgeView & { label: string; witness?: boolean })[] = [
+  {
+    key: "maures-canopy",
+    label: "Witness — the Maures' forest from 60 m over its canopy: crowns with no sky behind them",
+    at: [43.19, 6.25],
+    aglM: 60,
+    look: [43.1925, 6.2545],
+    lookAglM: 0,
+    holds: "true",
+    witness: true,
+  },
+];
+// (BRIDGES_ONLY=<key>,<key>: those views alone — the witnesses among them —, e.g. golden-gate-1km,maures-canopy for an A/B)
+const only = process.env.BRIDGES_ONLY?.split(",").filter(Boolean);
+const RUN: (BridgeView & { label: string; witness?: boolean })[] = only
+  ? [...VIEWS, ...WITNESSES].filter((v) => only.includes(v.key))
+  : VIEWS;
 
 describe.skipIf(!E2E)("bridges and roads AAA: real places, default setup", () => {
   let app: App;
@@ -87,7 +106,7 @@ describe.skipIf(!E2E)("bridges and roads AAA: real places, default setup", () =>
   beforeAll(async () => {
     mkdirSync(OUT, { recursive: true });
     app = await App.boot({ width: 1600, height: 1000, hash: `scene=${encodeURIComponent("Earth: the Blue Marble")}`, tiles: true });
-    app.steps(VIEWS.map((v) => v.label));
+    app.steps(RUN.map((v) => v.label));
     app.estimate(480);
   }, 180_000);
 
@@ -98,7 +117,7 @@ describe.skipIf(!E2E)("bridges and roads AAA: real places, default setup", () =>
     stopServer();
   });
 
-  for (const v of VIEWS)
+  for (const v of RUN)
     test(v.label, async () => {
       await app.step(v.label);
       let view = await showView(app, v);
@@ -160,7 +179,7 @@ describe.skipIf(!E2E)("bridges and roads AAA: real places, default setup", () =>
         view.ready,
       );
       expect(view.ready, `${v.label}: the scene never held ${v.holds} (${JSON.stringify(sc)})`).toBe(true);
-      expect((sc.bridges as number) + (sc.notableBridges as number)).toBeGreaterThan(0);
+      if (!v.witness) expect((sc.bridges as number) + (sc.notableBridges as number)).toBeGreaterThan(0);
       expect(sc.streetMissing).toBe(0);
       expect(sc.gpuErrors).toBe(0);
       expect(gpu.n).toBeGreaterThan(30);

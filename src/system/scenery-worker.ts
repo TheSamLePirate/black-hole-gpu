@@ -55,6 +55,7 @@ import {
 } from "./scenery-sources";
 import {
   makeDecals,
+  pavedAreaColour,
   roadWidth,
   ROW_ORCHARD,
   ROW_VINE,
@@ -709,7 +710,7 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
                   : RIVER_CLASSES.has(cls)
                     ? RIVER_COLOUR
                     : [0.018, 0.052, 0.055]
-                : [0.12, 0.12, 0.115],
+                : pavedAreaColour(name, cls),
             );
             if (p && surfaceDistance(p) <= radius + 500) {
               if (props.brunnel === "bridge" || cls === "bridge") {

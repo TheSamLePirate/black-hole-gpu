@@ -23,10 +23,55 @@ test("a tree's pixel with no ground behind it is the material's, not the rays'",
   expect(takes.indexOf("if (terrainRasterBuilding(px)) { return false; }")).toBeLessThan(id);
 });
 
-test("shadeLite seeks the crown past its proxy against the sky, and leaves a miss stale (no ground shaded at 0 m)", () => {
+test("shadeLite seeks the crown past its proxy against the sky, and marks a miss for the sky (no ground shaded at 0 m)", () => {
   expect(lite).toContain("let tMax = select(tM, terrainRasterDepth(centre) + 60.0, tM <= 0.0);");
   expect(lite).toContain("sceneryTreeLite(normalize(toBody(ray.look)), treeId, tMax,");
-  expect(lite).toContain("if (tM <= 0.0) {\n    moments[idx] = vec2f(RASTER_STALE,");
+  expect(lite).toContain("if (tM <= 0.0) {\n    moments[idx] = vec2f(RASTER_SKY,");
+});
+
+// (25 Nov 2026, later: the miss left stale — RASTER_STALE — was a pixel never shaded, its history dark: dark specks at the crowns'
+// edges; traced by main — beb2615e, reverted — its own pale crowns. The finishing pass now draws the sky there itself)
+const finish = wgsl.slice(wgsl.indexOf("fn shadeLiteFinish(@builtin"), wgsl.indexOf("fn shadeWaterFinish("));
+const liteFinish = wgsl.slice(wgsl.indexOf("fn liteFinish(idx: u32,"), wgsl.indexOf("const RASTER_WATER_FLAG"));
+const mark = (name: string) => Number(wgsl.match(new RegExp(`const ${name} = (-?[0-9.e]+);`))?.[1]);
+
+test("the sky's mark is its own: no other pixel's mark, the water's ranges nor the cockpit's mask", () => {
+  const sky = mark("RASTER_SKY");
+  expect(Number.isFinite(sky)).toBe(true);
+  for (const m of ["RASTER_SPLIT", "RASTER_MAT", "RASTER_STALE"]) expect(Math.abs(sky - mark(m))).toBeGreaterThan(0.5);
+  // (the water's: RASTER_WATER − 3 … RASTER_WATER; the split water's: RASTER_SPLIT_WATER − 0.6 … + 0.1; the cockpit's −1.5 … −0.5)
+  const w = mark("RASTER_WATER"),
+    sw = mark("RASTER_SPLIT_WATER");
+  expect(sky <= w - 3 || sky > w).toBe(true);
+  expect(sky <= sw - 0.6 || sky >= sw + 0.1).toBe(true);
+  expect(sky < -1.5 || sky > -0.5).toBe(true);
+  // (past the air's end: the sky's depth)
+  expect(mark("LITE_SKY_M")).toBeGreaterThanOrEqual(1e8);
+});
+
+test("the finishing pass fills a missed crown from what is about it: a structure lends its colour, the sky is drawn, trees alone leave it stale", () => {
+  const at = finish.indexOf("if (mk == RASTER_SKY) {");
+  expect(at).toBeGreaterThan(0);
+  // (before the split's own test returns it)
+  expect(at).toBeLessThan(finish.indexOf("if (mk != RASTER_SPLIT && !wat) { return; }"));
+  const branch = finish.slice(at, finish.indexOf("if (mk != RASTER_SPLIT && !wat)"));
+  // (the pixels about it, two at most: a structure the raster drew — the tower behind the crown, Battery Spencer: the sky drawn there
+  // was a sky-blue rim —, the sky — nothing drawn —; the nearest wins, a structure on a tie)
+  expect(branch).toContain("for (var dy = -2; dy <= 2; dy++) {");
+  expect(branch).toContain("if (terrainRasterBuilding(c) || terrainRasterMesh(c)) {");
+  expect(branch).toContain("} else if (terrainRasterDepth(c) <= 0.0 && terrainRasterHint(c) <= 0.0) { sd = min(sd, d); }");
+  expect(branch).toContain("if (nd < 99 && nd <= sd) {");
+  // (no sky about it — a gap between leaves, a crown behind it: the sky drawn there was a blue line between crowns —: stale, as before)
+  const stale = branch.indexOf("if (sd == 99) {\n      moments[idx] = vec2f(RASTER_STALE,");
+  expect(stale).toBeGreaterThan(branch.indexOf("if (nd < 99 && nd <= sd) {"));
+  expect(branch).toContain("let dq = b * b - dot(ro, ro) + 1.0;");
+  // (else the sky: no surface, LITE_SKY_M away, through the pass's one call — liteFinish inlined once: a second call for the sky doubled
+  // the kernel, 1 716 inlined lines, 25 Nov 2026 — kernel-budget.test.ts holds it)
+  expect(finish).toContain("var g = vec4f(0.0, 0.0, 0.0, LITE_SKY_M);");
+  expect(finish.split("liteFinishAt(").length - 1).toBe(1);
+  expect(finish.indexOf("liteFinishAt(gid.xy, g.rgb, g.a, !wat,")).toBeGreaterThan(at + branch.length);
+  // (the clouds read as a sky pixel's — bound 0 — there, not as the proxy's, ~100 m away)
+  expect(liteFinish).toContain("cloudsBuffered(centre, select(terrainRasterDepth(centre), 0.0, tM >= LITE_SKY_M))");
 });
 
 test("a thin part's edge keeps its rebuilt normal: the neighbour off the surface on one side, the other side's taken (the cables' fringe)", () => {

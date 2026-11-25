@@ -12,6 +12,18 @@ export function roadWidth(cls: string, subclass = "") {
   if (cls === "rail") return 3;
   return subclass === "pedestrian" ? 4 : 2;
 }
+/** a paved area's colour (a polygon of kind 5): a pedestrian square's, a runway's, a taxiway's — the photograph is their detail */
+export const PAVED_COLOUR = [0.12, 0.12, 0.115] as const;
+/**
+ * an aerodrome's apron (OpenMapTiles' aeroway polygon, class apron): concrete, its own colour — trace.wgsl SC_APRON_COLOUR tells it from
+ * the other paved areas by it: its paving kept near and the photograph only a quarter of it (as a surveyed carriageway's), the aircraft,
+ * jet bridges and their shadows the orthophoto holds there no longer drawn flat and stretched (PROBLEMES, SFO's gates, 25 Nov 2026)
+ */
+export const APRON_COLOUR = [0.31, 0.305, 0.29] as const;
+/** the colour of a paved polygon from its vector tile layer and class (OpenMapTiles: transportation's areas, aeroway's pavements) */
+export function pavedAreaColour(layer: string, cls: string): number[] {
+  return [...(layer === "aeroway" && cls === "apron" ? APRON_COLOUR : PAVED_COLOUR)];
+}
 export function surfaceSegment(a: Vec3, b: Vec3, width: number, kind: number, color: number[]): Primitive {
   const r = width / 2;
   return {
