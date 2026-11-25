@@ -20,6 +20,22 @@ Windows/D3D12. Les numéros de ligne sont ceux de `da4e75bd`.
 
 ---
 
+### PONT-ROUTES — revue D : fourche de Grenelle, eau sous Cheviré, liseré des câbles (25 novembre 2026, branche de l'agent)
+
+**Code, tests statiques ; e2e `bridges-notable` 7/7** (kerr-mini `cbbd1eb0`, puis ce Mac M1 Max `3bd3cf7b` — kerr-mini injoignable).
+
+- **Préparation des ponts (hors image)** : une jointure de plus de 40° termine la chaîne d'un pont (`BRIDGE_FORK_DEG`) ; dans la scène, un
+  bout fermé rejoint dans l'axe le bout ouvert d'une autre moitié (`joinDeckPieces`). Grenelle : un tablier droit, la bretelle une branche.
+- **`rasterNormal` (trace.wgsl, partagée)** : quand le voisin d'un côté est hors de la surface, celui de l'autre côté est pris (bord d'une
+  pièce mince — le liseré clair des câbles). +8 lignes.
+- **`liteWater` (shadeLite)** : la pente du relief à plus de ~10 m à l'intérieur d'un polygone de rivière ou de lac n'est plus une rive
+  (une requête `sceneryWaterAt` de plus, empreinte 14 m, seulement sur les pixels d'eau en pente) ; **`waterMirror`** : un croisement du
+  relief encore dans l'eau n'est pas une rive (`sceneryMirrorWet`, bloc du décor, bouchon sans décor dans `scenery.ts`).
+- **Mesuré** (une passe, p50 / p95 ms) : kerr-mini `cbbd1eb0` — Cheviré 48,3 / 57,8, Grenelle (conducteur) 52,5 / 61,1, Alexandre III
+  51,8 / 56,4, Millau 36,8 / 43,1, Golden Gate 51,0 / 60,9, téléobjectif 30 km 36,3 / 39,4 ; ce Mac `3bd3cf7b` (autre machine, non
+  comparable) — Cheviré 24,3 / 28,3, Grenelle 29,0 / 32,1, Alexandre III 30,3 / 35,2, Millau 20,0 / 26,2, Golden Gate 26,5 / 39,8. Coût
+  propre des changements d'eau **non séparé** (pas d'A/B : kerr-mini injoignable).
+
 ### PONT-ROUTES — revue C : tabliers relevés, ponts entiers, tous dessinés, câbles ronds, Alexandre III (25 novembre 2026, branche de l'agent)
 
 **Code, vérifié par tests unitaires et par un A/B e2e sur kerr-mini** (mesures plus bas). Ce qui change pour le pipeline :
@@ -1034,7 +1050,7 @@ Paris jusqu'à `earthSettled` » chronométré par étape.
 
 <!-- pipeline-inventory:begin (bun scripts/pipeline-inventory.ts --write) -->
 
-_Généré le 2026-11-25T02:30:28Z sur `e7022587` (arbre de travail). Ne pas éditer à la main : relancer l'outil._
+_Généré le 2026-11-25T08:01:12Z sur `3bd3cf7b` (arbre de travail). Ne pas éditer à la main : relancer l'outil._
 
 **130 sites de création de pipeline** (86 rendu, 44 calcul, dont 66 asynchrones) et 43 `createShaderModule` dans 32 fichiers ; **44 programmes WGSL** (16 fichiers .wgsl, 28 chaînes dans le TypeScript) ; **66 libellés de passes** du profileur GPU (+ 11 sites à libellé dynamique).
 
@@ -1216,7 +1232,7 @@ _Généré le 2026-11-25T02:30:28Z sur `e7022587` (arbre de travail). Ne pas éd
 
 | source | lignes | points d'entrée |
 |---|---:|---|
-| `src/shaders/trace.wgsl` | 18192 | 18 entrées : cloudLightVolume, aerial, lut, main, shade, shadeMark, shadeLiteFinish, shadeWaterFinish, shadeLiteLight, shadeLite, skyFill, shadeWater, clouds, skyAmbient, cloudShadow, env, probe, shadeStars |
+| `src/shaders/trace.wgsl` | 18227 | 18 entrées : cloudLightVolume, aerial, lut, main, shade, shadeMark, shadeLiteFinish, shadeWaterFinish, shadeLiteLight, shadeLite, skyFill, shadeWater, clouds, skyAmbient, cloudShadow, env, probe, shadeStars |
 | `src/shaders/ship.wgsl` | 2823 | 34 entrées : envCopy, envDown, envGGX, envSH, ctlVs, depthVs, vs, mirrorVs, shadowVs, fs, hullDepthVs, hullDepthFs, ownMaskFs, plumeVs, plumeFs, glowVs, glowFs, distVs, distFs, sheathVs, sheathFs, trailVs, trailFs, lampVs, lampFs, compVs, compFs, fsCabin, fsCabinGlass, fsJetGlass, motionVs, motionFs, composeColor, composeSurface |
 | `src/shaders/post.wgsl` | 1396 | 18 entrées : gatherH, atrous, beamH, beamV, polgrid, resolve, down, downShip, dof, flareMeter, up, meter, stars, motionBlur, temporal, occlusion, cloudTemporal, taau |
 | `src/system/scenery-raster.ts:208` | 1191 | 31 entrées : cull, cullBoxes, clampBoxes, shadowVs, shadowFs, proxyVs, proxyFs, boxVs, boxFs, bridgeMarkFs, boxMarkVs, boxShadowVs, meshShadowVs, meshVs, meshFs, boxSolidVs, benchCull, benchQuadVs, benchVs, benchShadowVs, farCull, farVs, farQuadVs, farFs, farLampCull, farLampVs, farCarCull, farCarVs, nearCellVs, nearCellShadowVs, farShadowVs |
@@ -1397,19 +1413,19 @@ Leur coût n'apparaît que dans l'intervalle de complétion de la frame (ou d'un
 
 | profil | noyaux (lignes inlinées, en milliers) | total |
 |---|---|---:|
-| `earth-raster` | shade 27.1 · shadeMark 0.3 · shadeLite 7.9 · shadeLiteFinish 0.8 · shadeLiteLight 2.0 · shadeWater 5.6 · shadeWaterOpen 4.9 · shadeWaterFinish 1.2 · shadeStars 0.3 · discs 29.9 · clouds 3.8 · skyFill 0.7 · main 42.5 · env 58.9 · aerial 0.7 | 187k |
-| `earth-raster-wx` | shade 32.1 · shadeMark 0.3 · shadeLite 7.9 · shadeLiteFinish 0.8 · shadeLiteLight 2.0 · shadeWater 5.6 · shadeWaterOpen 4.9 · shadeWaterFinish 1.2 · shadeStars 0.3 · discs 29.9 · clouds 3.8 · skyFill 0.7 · main 45.4 · env 58.9 · aerial 0.7 | 195k |
-| `earth-trace` | main 66.1 · env 62.5 · aerial 0.6 | 129k |
+| `earth-raster` | shade 27.2 · shadeMark 0.3 · shadeLite 8.0 · shadeLiteFinish 0.8 · shadeLiteLight 2.0 · shadeWater 5.6 · shadeWaterOpen 4.9 · shadeWaterFinish 1.2 · shadeStars 0.3 · discs 29.9 · clouds 3.8 · skyFill 0.7 · main 42.5 · env 58.9 · aerial 0.7 | 187k |
+| `earth-raster-wx` | shade 32.1 · shadeMark 0.3 · shadeLite 8.0 · shadeLiteFinish 0.8 · shadeLiteLight 2.0 · shadeWater 5.6 · shadeWaterOpen 4.9 · shadeWaterFinish 1.2 · shadeStars 0.3 · discs 29.9 · clouds 3.8 · skyFill 0.7 · main 45.4 · env 58.9 · aerial 0.7 | 195k |
+| `earth-trace` | main 66.1 · env 62.6 · aerial 0.6 | 129k |
 | `earth-photo` | main 67.9 | 68k |
 | `game-space` | main 54.2 · env 50.4 · aerial 0.6 | 105k |
-| `moon` | main 75.9 · env 50.4 · aerial 0.6 · shadeLite 25.7 | 152k |
-| `moons` | main 76.7 · env 50.4 · aerial 0.6 · shadeLite 25.8 | 154k |
-| `mars` | main 87.6 · env 50.4 · aerial 0.6 · shadeLite 37.6 | 176k |
-| `titan` | main 90.7 · env 50.4 · aerial 0.6 · shadeLite 42.8 | 184k |
+| `moon` | main 75.9 · env 50.4 · aerial 0.6 · shadeLite 25.7 | 153k |
+| `moons` | main 76.7 · env 50.4 · aerial 0.6 · shadeLite 25.9 | 154k |
+| `mars` | main 87.6 · env 50.4 · aerial 0.6 · shadeLite 37.7 | 176k |
+| `titan` | main 90.7 · env 50.4 · aerial 0.6 · shadeLite 42.8 | 185k |
 | `venus` | main 90.4 · env 50.4 · aerial 0.6 · shadeLite 43.4 | 185k |
 | `earth-only` | main 50.2 · env 44.1 · aerial 0.7 | 95k |
 | `kerr-jet` | main 31.9 · env 27.9 · lut 28.2 | 88k |
 | `eclipse` | main 46.0 · env 37.7 · aerial 0.6 | 84k |
-| `general` | main 151.3 · env 73.5 · lut 147.0 | 372k |
+| `general` | main 151.5 · env 73.7 · lut 147.1 | 372k |
 
 <!-- pipeline-inventory:end -->

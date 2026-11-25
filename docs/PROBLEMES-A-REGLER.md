@@ -46,9 +46,14 @@ connue ou supposée, la piste. Une entrée réglée est barrée avec le commit q
 - **Vérifié après tous les correctifs** (kerr-mini, 25 nov. ~00:05 UTC, `629aedc0`+, `remote-results/20261125-000142-ponts-after-2`) :
   e2e Cheviré **réussi** — crête 60,4 m, plus grande pièce 1 651 m, ligne de conduite sur la travée droite 1 100 m sans marche (0,071 m au
   plus), sans trou, appui 0 cm ; `streetMissing` 0. Capture `chevire-apres-final.jpg`.
-- **Reste** : la bande claire sur l'eau sous le tablier (visible avant et après) ; **Grenelle** : à la bretelle de l'île aux Cygnes
+- ~~**Reste** : la bande claire sur l'eau sous le tablier (visible avant et après) ; **Grenelle** : à la bretelle de l'île aux Cygnes
   (48,8503 N), le tablier de la bretelle (descendant à 35,2 m) et celui du pont (37,5 m) se recouvrent à leur fourche : 0,43–0,54 m sur trois
-  échantillons de l'axe (e2e `bridges-notable` en échec sur ce seul point ; avant, sans relevé, les deux étaient plats au tirant) ; à froid, la préparation des cellules attend une requête WFS
+  échantillons de l'axe (e2e `bridges-notable` en échec sur ce seul point ; avant, sans relevé, les deux étaient plats au tirant) ;~~
+  **Grenelle réglé le 25 nov. (`cbbd1eb0`)** : le tronçon BD TOPO du pont tournait de 56° vers la bretelle de l'île à la coupure de tuile ;
+  une jointure de plus de 40° termine désormais la chaîne (`BRIDGE_FORK_DEG`), un bout fermé rejoint dans l'axe le bout ouvert de l'autre
+  moitié (`joinDeckPieces`) : le pont droit d'un tablier, la bretelle une branche posée dessus. e2e `bridges-notable` **7/7** sur kerr-mini
+  (`remote-results/20261125-044442-ponts-d-notable` : Grenelle sans marche, 0,13 m au plus). **Bande claire et taches sombres sous Cheviré :
+  voir l'entrée « L'eau sous Cheviré » ci-dessous.** Reste : à froid, la préparation des cellules attend une requête WFS
   de plus (29 cellules encore en préparation à la prise de vue côté B) ; Bay Bridge, Øresund etc. à l'étranger : tirant par règle.
 
 ## Ponts et routes, campagne e2e 2 : à revoir à l'œil (relevé le 24 novembre 2026, `bridges`, `bridges-notable`, kerr-mini)
@@ -68,7 +73,7 @@ connue ou supposée, la piste. Une entrée réglée est barrée avec le commit q
 - **Golden Gate, câble porteur en ruban plat depuis le tablier** (`golden-gate-tablier.jpg`) — **réglé le 25 nov. (`698dbd22`)** : le câble
   était ouvert le long du haut du repère ; il l'est désormais en travers de sa ligne et de la vue, sa distance celle du devant d'un cylindre
   (normale ronde rebâtie par `rasterNormal`). Vu sur kerr-mini (`golden-gate-deck-low-{avant,apres}.jpg`) ; scintillement à 30 km inchangé
-  (A/B de l'e2e : réussi des deux côtés). Reste un liseré clair au bord du câble (la normale non rebâtie sur ses pixels de bord).
+  (A/B de l'e2e : réussi des deux côtés). Reste un liseré clair au bord du câble (la normale non rebâtie sur ses pixels de bord) — **réglé le 25 nov. (`acf90972`)** : `rasterNormal` prend le voisin de l'autre côté quand celui d'un côté est hors de la surface (`golden-gate-deck-low-lisere-apres.jpg`).
 - **Rues de Paris** (`paris-wet-street-dry.png`, `grenelle-deck-low.png`) : de fines lignes claires courbes traversent la chaussée (bords
   de voies d'un carrefour ?) ; le relief herbeux déborde sur le trottoir le long des façades (nivellement `roadBank` sans lecteur, déjà noté
   plus bas). ~~Sur l'approche du pont Alexandre III, un marquage en boucle fermée au milieu de la chaussée (`alexandre-iii-deck-low.png`).~~
@@ -95,6 +100,29 @@ connue ou supposée, la piste. Une entrée réglée est barrée avec le commit q
   30 % des octets du décor pour les tabliers, les plus proches d'abord, la LOD grossie à mesure (`bridge-lod.ts`), un tablier écarté compté
   (`stats().bridgesDropped`). A/B kerr-mini (`remote-results/20261124-221143-ponts-ab-bridges`) : Paris 1 024 → 1 135–1 157 ponts (tous les
   candidats), 3,2–3,8 Mo sur 20,1 Mo de part ; GPU p50 des vues de Paris dans le bruit (Grenelle 55,0 → 54,1 ms, Rivoli 59,6 → 60,2 ms).
+
+## L'eau sous Cheviré (et la Seine) : bande claire sous le tablier, taches sombres flottantes (relevé le 25 novembre 2026, kerr-mini)
+
+- **Constat** : `chevire-apres-final.jpg` — une bande claire sur la Loire à l'aplomb du tablier, des taches sombres au milieu du fleuve ;
+  sur la Seine (Grenelle, Alexandre III), des reflets de bâtiments détachés de leurs objets.
+- **Diagnostic** (kerr-mini, e2e de diagnostic non versionnés) : `surfaceAt` dit « ground » partout (rien de dessiné par-dessus) ;
+  aucun levier n'y change rien — `seaSurfaceOn`, `seaWaterOpenOn`, `seaProbeOn`, ombres du décor, couche lointaine, imagerie
+  (`liteSkip` 128, 65536) —, ni le resserrement du test de l'SSR (`df5cf31d`, repris par `3bd3cf7b`). Le relief lu par `groundAt` en
+  travers de la Loire n'est pas plan : eau à 0,5 m au-dessus de la mer à l'est, 2,3 m à l'ouest, et des **pointes de 3 à 5 m** dans le lit
+  (sous le tablier même, 5,1 m à 47,1920 N, 1,6135 O). `liteWater` tient pour une rive toute pente de l'eau à plus de 1,5 m au-dessus de
+  la mer (`flat`, conçu pour les falaises sous le polygone de la mer) : ces pointes y devenaient de la terre — la photographie de l'eau et
+  de ses ombres en taches sombres, le tablier photographié d'en haut en bande claire sous le vrai.
+- **Correction** (`3bd3cf7b`) : à plus de ~10 m à l'intérieur du polygone d'une rivière ou d'un lac (sa couverture entière sous une
+  empreinte de 14 m, `WATER_INNER_M`), la pente du relief n'est plus une rive ; le polygone de la mer garde le test. Et le miroir de l'eau
+  calme ne prend plus une pointe du lit pour une rive (`ac2aeea9`, `sceneryMirrorWet`). Tests statiques `tests/raster-sky-trees.test.ts`.
+- **Vérifié** (ce Mac M1 Max — kerr-mini injoignable —, 25 nov. ~06:30 UTC, `3bd3cf7b`, e2e `bridges-notable` **7/7**,
+  `remote-results/ponts-6-local/notable`) : **les taches sombres ont disparu** (`chevire-eau-apres.jpg` contre `chevire-apres-final.jpg`).
+  **La bande claire reste** : une arête du relief sous le tablier (5,1 m au-dessus de la mer contre 0,5–2,3 m pour l'eau — la trace du
+  pont dans le modèle de terrain) ; l'eau, désormais de l'eau, y est dessinée sur une marche de 3–5 m. La cause est la forme du relief
+  sous l'eau : à régler en aplanissant le relief sous les polygones d'eau intérieure (préparation du terrain), hors de ce lot.
+  **Reste aussi** : les reflets de bâtiments détachés sur la Seine — l'SSR ne trouve une
+  façade que là où l'image la montre (son pied caché par la rive : la moitié haute du reflet manque) ; le repli tracé (`sceneryMirror`) ne
+  connaît que les arbres, et les bâtiments proches (cellules maillées) ne sont pas dans le BVH du décor : non réglé.
 
 ## ~~Golden Gate : un second tablier au ras de l'eau, 60 m sous le tablier remarquable ; l'appui à 0,3 m au-dessus de la chaussée~~ (relevé le 24 novembre 2026, campagne e2e 2) — réglé le même jour (`72801f59`)
 
