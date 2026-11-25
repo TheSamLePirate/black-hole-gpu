@@ -3,6 +3,16 @@
 Problèmes constatés, pas encore réglés. Chaque entrée : la date (UTC), ce qui est mesuré ou observé et sa source, la cause
 connue ou supposée, la piste. Une entrée réglée est barrée avec le commit qui la règle, pas effacée.
 
+## Nice : la moitié basse de la vue d'approche de 04 en sable (relevé le 25 novembre 2026, `waterfront-runways`, kerr-mini)
+
+- **Observé** (`remote-results/20261125-223112-waterfront-runways`, A main `c972b544` et B le correctif `3508b982` pareils ; les
+  sondes du soir aussi) : la vue d'approche (1,5 km avant le seuil de 04 sur son axe, 80 m au-dessus) montre l'eau bleue jusqu'à mi-image,
+  puis, sous une limite horizontale nette, un fond beige uni — du sable — sur toute la moitié basse. Absent des deux courses de 21 h 19 UTC
+  (même code). Non diagnostiqué ; candidats : la surface de la mer (son maillage, sa portée) et la profondeur de Dean sous la caméra
+  (le fond vu à travers l'eau), selon l'état de la mer du moment (le vent réel).
+- **Piste** : la même vue avec `seaSurfaceOn` coupé, `liteSkip` 1, l'état de la mer imposé (`seaOverride`) ; journaliser
+  `seaSurfaceDrawn` et la mer (`WF_LEVERS=1`).
+
 ## ~~Nice : des stries régulières sur la baie à l'ouest de l'aéroport, sur main et pas sur 18a6e4dd~~ (relevé le 25 novembre 2026, `waterfront-runways`, kerr-mini) — la plaque réglée (`3508b982`), les stries non reproduites
 
 - **25 nov. 2026, soir — ce qui a été établi** (kerr-mini, sondes sous leviers et A/B ; `docs/progress/pistes-bord-de-mer-2026-11-25/`) :
