@@ -174,8 +174,17 @@ connue ou supposée, la piste. Une entrée réglée est barrée avec le commit q
   `tests/raster-sky-trees.test.ts`. Reste : quelques points sombres au bord des couronnes (pixels ratés laissés à la reconstruction) —
   essayé le 25 nov. (`beb2615e`, **repris par `9f22bb29`**) : ces pixels tracés d'abord par la passe des rayons (`main`), `shadeLite`
   n'y dessinant que la couronne rencontrée — les points sombres partis, mais `main` y dessinait ses propres couronnes tracées, pâles :
-  un halo clair au bord des couronnes, pire (ce Mac, `bridges`, Battery Spencer, `golden-gate-1km-couronnes-apres.jpg`). **Non réglé** ;
-  piste : au raté, le ciel lu dans la sonde (`skyMirror`) écrit par `shadeLite` lui-même.
+  un halo clair au bord des couronnes, pire (ce Mac, `bridges`, Battery Spencer, `golden-gate-1km-couronnes-apres.jpg`). ~~**Non réglé** ;
+  piste : au raté, le ciel lu dans la sonde (`skyMirror`) écrit par `shadeLite` lui-même.~~ **Réglé le 25 nov. 2026 (`280a4600`)** :
+  au raté, `shadeLite` marque le pixel `RASTER_SKY` ; la passe de finition (`shadeLiteFinish`) le remplit d'après ses voisins (2 px) — une
+  structure du raster la plus proche (tour, bâtiment) lui prête sa couleur, le ciel (rien de dessiné) : le ciel lui-même, l'air et les
+  nuages jusqu'au bout de l'air (`liteFinish`, comme `skyFill`) ; seulement des arbres autour (trou entre les feuilles, autre couronne
+  derrière) ou la Terre derrière : laissé à la reconstruction comme avant. Le ciel partout (premier essai, ce Mac) traçait un liseré bleu
+  devant la tour nord et entre couronnes superposées : retiré. Vu sur kerr-mini (A/B A B B A contre `38c5ba52`,
+  `golden-gate-1km-couronnes-ciel-{avant,apres}.jpg`, `…-zoom-avant-apres.jpg`) : les points sombres partis au bord des couronnes devant
+  le ciel ; forêt des Maures vue de 60 m (témoin, aucun ciel derrière) inchangée (écart A/B 0,40 % contre A/A 0,93 %,
+  `maures-canopee-temoin-avant-apres.jpg`). Reste : quelques points sombres là où une couronne passe devant une autre sans ciel à 2 px ;
+  au bord, le ciel propre sans le flou des suspentes que la reconstruction y étalait.
 - **Golden Gate, câble porteur en ruban plat depuis le tablier** (`golden-gate-tablier.jpg`) — **réglé le 25 nov. (`698dbd22`)** : le câble
   était ouvert le long du haut du repère ; il l'est désormais en travers de sa ligne et de la vue, sa distance celle du devant d'un cylindre
   (normale ronde rebâtie par `rasterNormal`). Vu sur kerr-mini (`golden-gate-deck-low-{avant,apres}.jpg`) ; scintillement à 30 km inchangé
