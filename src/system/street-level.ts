@@ -10,7 +10,7 @@
 // scene's own rule) —, and where carriageways meet (a junction, a crossing street) the carriageways first, blended by how central each
 // is: no kerb across a crossing street, no step between two roads' profiles. Run in the decode worker (tile-decode.ts "level"), in the
 // order street-level-book.ts keeps. Pure.
-import { cellOrigin, fromCell, readHeader, readRecord } from "./building-cells";
+import { cellOrigin, fromCell, readHeader, readRecord, toCell } from "./building-cells";
 import { facadeSides, PAVEMENT_REACH_MAX_M } from "./pavement-reach";
 import type { Primitive } from "./scenery-data";
 import { PAVEMENT_M, type RoadClass, readSegment, readStreetHeader, readSurface, roadRuns, SegmentFlag, SurfaceFlag } from "./street-cells";
@@ -54,6 +54,68 @@ export function cellFootBoxes(buf: ArrayBuffer): FootBox[] {
     out.push({ lat: g.lat, lon: g.lon, hl: r.halfLength, hw: r.halfWidth, heading: r.heading });
   }
   return out;
+}
+
+/** (26 Nov 2026) the cells read already — a tile's 3×3 shared with its neighbours': each cell's roads and footprints parsed once (the
+ *  decode worker's memory), keyed by its header and size; the last CELLS_KEPT */
+const CELLS_KEPT = 48;
+const parsed = new Map<string, LevelRoad[] | FootBox[]>();
+function once<T extends LevelRoad[] | FootBox[]>(key: string, make: () => T): T {
+  const got = parsed.get(key);
+  if (got) {
+    parsed.delete(key);
+    parsed.set(key, got);
+    return got as T;
+  }
+  const v = make();
+  parsed.set(key, v);
+  if (parsed.size > CELLS_KEPT) parsed.delete(parsed.keys().next().value!);
+  return v;
+}
+/** cellLevelRoads, a cell parsed once */
+export function cellLevelRoadsKept(buf: ArrayBuffer): LevelRoad[] {
+  const h = readStreetHeader(buf);
+  if (!h) return [];
+  return once(`s/${h.x}/${h.y}/${h.generation}/${buf.byteLength}`, () => cellLevelRoads(buf));
+}
+/** cellFootBoxes, a cell parsed once */
+export function cellFootBoxesKept(buf: ArrayBuffer): FootBox[] {
+  const h = readHeader(buf);
+  if (!h) return [];
+  return once(`b/${h.x}/${h.y}/${h.generation}/${h.count}/${buf.byteLength}`, () => cellFootBoxes(buf));
+}
+
+/** (a diagnosis — renderer.streetLevelProbe) a street cell's roads within `m` metres of a place: their class, flags, layer, width,
+ *  distance, and whether the levelling takes them (else why not) */
+export function roadsAbout(buf: ArrayBuffer, lat: number, lon: number, m: number) {
+  const h = readStreetHeader(buf);
+  if (!h) return [];
+  const o = cellOrigin(h.x, h.y, h.z);
+  const c = toCell(o, lat, lon);
+  const out: { cls: string; flags: number; level: number; width: number; d: number; levelled: string }[] = [];
+  for (const run of roadRuns(buf)) {
+    let best = Infinity;
+    for (let k = 1; k < run.points.length; k++) {
+      const [ax, ay] = run.points[k - 1]!,
+        [bx, by] = run.points[k]!;
+      const lx = bx - ax,
+        ly = by - ay,
+        L2 = lx * lx + ly * ly;
+      const t = L2 > 0 ? Math.min(1, Math.max(0, ((c.east - ax) * lx + (c.north - ay) * ly) / L2)) : 0;
+      best = Math.min(best, Math.hypot(c.east - ax - lx * t, c.north - ay - ly * t));
+    }
+    if (best > m) continue;
+    const why =
+      run.flags & (SegmentFlag.Bridge | SegmentFlag.Tunnel)
+        ? run.flags & SegmentFlag.Bridge
+          ? "no: a bridge"
+          : "no: a tunnel"
+        : !ROAD_PROFILE[run.cls] || run.cls === "rail"
+          ? `no: class "${run.cls}" has no profile`
+          : "yes";
+    out.push({ cls: run.cls, flags: run.flags, level: run.level, width: run.width, d: +best.toFixed(1), levelled: why });
+  }
+  return out.sort((a, b) => a.d - b.d);
 }
 
 /** A street cell's roads to level: its runs (street-cells.ts roadRuns) — no bridge, no tunnel, a class with a profile —, their axis as
@@ -249,52 +311,112 @@ export function levelTile(
     levels.push({ p, cum, s, prof, bank, road, left, right, box: [minE - reach, minN - reach, maxE + reach, maxN + reach] });
   }
   if (!levels.length) return 0;
-  let moved = 0;
-  for (let j = 0; j < side; j++)
-    for (let i = 0; i < side; i++) {
-      const k = j * side + i;
-      const h0 = h[k]!;
-      if (!Number.isFinite(h0)) continue;
-      const e = colE[i]!,
-        nn = rowN[j]!;
-      // (every road reaching it: its carriageway's level there — the edge's beyond it — blended by an influence whole on its
-      // carriageway and falling smoothly to none across its pavements and fade: where two roads meet, one surface warped between
-      // their levels, no step; its kerb blended alike, none on a carriageway; how much of the survey replaced: whole on a
-      // carriageway, else its pavements' cover — whole to the façade, fading past it)
-      let iW = 0,
-        iT = 0,
-        iK = 0,
-        cover = 0,
-        onRoad = false;
-      for (const L of levels) {
-        if (e < L.box[0]! || nn < L.box[1]! || e > L.box[2]! || nn > L.box[3]!) continue;
-        const q = nearestOn(L.p, L.cum, e, nn);
-        const ad = Math.abs(q.d);
-        const r = L.road.r;
-        const Rs = q.d >= 0 ? L.left[q.k]! : L.right[q.k]!;
-        const reach = Rs + FADE_M;
-        if (ad > reach) continue;
-        // (the profile and the banking at its abscissa — the nearest sample's, linear between)
-        const at = interp(L.s, L.prof, q.s);
-        const bk = interp(L.s, L.bank, q.s);
-        const inf = 1 - smooth(r, reach, ad);
-        if (inf <= 0) continue;
-        iW += inf;
-        iT += inf * (at + bk * Math.max(-r, Math.min(r, q.d)));
-        if (Rs > r + 0.01) iK += inf * KERB_M;
-        if (ad <= r) onRoad = true;
-        cover = Math.max(cover, 1 - smooth(Rs, reach, ad));
-      }
-      if (iW <= 0) continue;
-      const w = onRoad ? 1 : cover;
-      if (w <= 0) continue;
-      const t = (iT + (onRoad ? 0 : iK)) / iW;
-      const v = h0 + (t - h0) * w;
-      if (Math.abs(v - h0) > 1e-4) {
-        h[k] = v;
-        moved++;
+  // (every road reaching a pixel: its carriageway's level there — the edge's beyond it — blended by an influence whole on its
+  // carriageway and falling smoothly to none across its pavements and fade: where two roads meet, one surface warped between their
+  // levels, no step; its kerb blended alike, none on a carriageway; how much of the survey replaced: whole on a carriageway, else its
+  // pavements' cover — whole to the façade, fading past it. Each road's segments over their own pixels within the road's widest
+  // reach, each pixel's nearest segment kept — 26 Nov 2026: every pixel testing every road had cost ~170 ms a tile with a 3×3 of
+  // town cells)
+  const N = side * side;
+  const iW = new Float64Array(N),
+    iT = new Float64Array(N),
+    iK = new Float64Array(N),
+    cover = new Float64Array(N);
+  const onRoad = new Uint8Array(N);
+  const stamp = new Int32Array(N),
+    bestD2 = new Float64Array(N),
+    segOf = new Int32Array(N),
+    tOf = new Float64Array(N),
+    leftOf = new Uint8Array(N),
+    touched = new Int32Array(N);
+  // (the columns' metres rise with i, the rows' fall with j)
+  const firstAtLeast = (a: Float64Array, v: number) => {
+    let lo = 0,
+      hi = a.length;
+    while (lo < hi) {
+      const m = (lo + hi) >> 1;
+      if (a[m]! < v) lo = m + 1;
+      else hi = m;
+    }
+    return lo;
+  };
+  const rowDown = Float64Array.from(rowN, (v) => -v);
+  let id = 0;
+  for (const L of levels) {
+    id++;
+    let nt = 0;
+    const r = L.road.r;
+    let reachMax = 0;
+    for (let k = 0; k < L.left.length; k++) reachMax = Math.max(reachMax, L.left[k]!, L.right[k]!);
+    reachMax += FADE_M;
+    const r2 = reachMax * reachMax;
+    for (let k = 1; k < L.p.length; k++) {
+      const ax = L.p[k - 1]![0],
+        ay = L.p[k - 1]![1],
+        lx = L.p[k]![0] - ax,
+        ly = L.p[k]![1] - ay;
+      const L2 = lx * lx + ly * ly;
+      const i0 = firstAtLeast(colE, Math.min(ax, ax + lx) - reachMax),
+        i1 = firstAtLeast(colE, Math.max(ax, ax + lx) + reachMax + 1e-9) - 1;
+      const j0 = firstAtLeast(rowDown, -(Math.max(ay, ay + ly) + reachMax)),
+        j1 = firstAtLeast(rowDown, -(Math.min(ay, ay + ly) - reachMax) + 1e-9) - 1;
+      for (let j = j0; j <= j1; j++) {
+        const n0 = rowN[j]!;
+        for (let i = i0; i <= i1; i++) {
+          const e0 = colE[i]!;
+          const t = L2 > 0 ? Math.min(1, Math.max(0, ((e0 - ax) * lx + (n0 - ay) * ly) / L2)) : 0;
+          const dx = e0 - (ax + lx * t),
+            dy = n0 - (ay + ly * t);
+          const d2 = dx * dx + dy * dy;
+          if (d2 > r2) continue;
+          const px = j * side + i;
+          if (stamp[px] !== id) {
+            stamp[px] = id;
+            touched[nt++] = px;
+          } else if (d2 >= bestD2[px]!) continue;
+          bestD2[px] = d2;
+          segOf[px] = k - 1;
+          tOf[px] = t;
+          leftOf[px] = lx * (n0 - ay) - ly * (e0 - ax) >= 0 ? 1 : 0;
+        }
       }
     }
+    for (let m = 0; m < nt; m++) {
+      const px = touched[m]!;
+      if (!Number.isFinite(h[px]!)) continue;
+      const kk = segOf[px]!;
+      const ad = Math.sqrt(bestD2[px]!);
+      const d = leftOf[px] ? ad : -ad;
+      const Rs = leftOf[px] ? L.left[kk]! : L.right[kk]!;
+      const reach = Rs + FADE_M;
+      if (ad > reach) continue;
+      const inf = 1 - smooth(r, reach, ad);
+      if (inf <= 0) continue;
+      // (the profile and the banking at its abscissa — the nearest sample's, linear between)
+      const sAt = L.cum[kk]! + (L.cum[kk + 1]! - L.cum[kk]!) * tOf[px]!;
+      const at = interp(L.s, L.prof, sAt);
+      const bk = interp(L.s, L.bank, sAt);
+      iW[px] = iW[px]! + inf;
+      iT[px] = iT[px]! + inf * (at + bk * Math.max(-r, Math.min(r, d)));
+      if (Rs > r + 0.01) iK[px] = iK[px]! + inf * KERB_M;
+      if (ad <= r) onRoad[px] = 1;
+      cover[px] = Math.max(cover[px]!, 1 - smooth(Rs, reach, ad));
+    }
+  }
+  let moved = 0;
+  for (let k = 0; k < N; k++) {
+    if (iW[k]! <= 0) continue;
+    const on = onRoad[k] === 1;
+    const w = on ? 1 : cover[k]!;
+    if (w <= 0) continue;
+    const h0 = h[k]!;
+    const t = (iT[k]! + (on ? 0 : iK[k]!)) / iW[k]!;
+    const v = h0 + (t - h0) * w;
+    if (Math.abs(v - h0) > 1e-4) {
+      h[k] = v;
+      moved++;
+    }
+  }
   return moved;
 }
 
@@ -322,32 +444,6 @@ function along(p: [number, number][], cum: number[], d: number): [number, number
   while (k < p.length - 1 && cum[k]! < d) k++;
   const f = Math.min(1, Math.max(0, (d - cum[k - 1]!) / Math.max(cum[k]! - cum[k - 1]!, 1e-9)));
   return [p[k - 1]![0] + (p[k]![0] - p[k - 1]![0]) * f, p[k - 1]![1] + (p[k]![1] - p[k - 1]![1]) * f];
-}
-/** a place's nearest point on a polyline: its signed distance (left of the way positive), abscissa [m] and segment (0: p[0] → p[1]) */
-function nearestOn(p: [number, number][], cum: number[], e: number, n: number): { d: number; s: number; k: number } {
-  let best = Infinity,
-    d = 0,
-    s = 0,
-    seg = 0;
-  for (let k = 1; k < p.length; k++) {
-    const ax = p[k - 1]![0],
-      ay = p[k - 1]![1],
-      lx = p[k]![0] - ax,
-      ly = p[k]![1] - ay;
-    const L2 = lx * lx + ly * ly;
-    const t = L2 > 0 ? Math.min(1, Math.max(0, ((e - ax) * lx + (n - ay) * ly) / L2)) : 0;
-    const qx = ax + lx * t,
-      qy = ay + ly * t;
-    const dist = Math.hypot(e - qx, n - qy);
-    if (dist < best) {
-      best = dist;
-      const side = lx * (n - ay) - ly * (e - ax);
-      d = side >= 0 ? dist : -dist;
-      s = cum[k - 1]! + Math.sqrt(L2) * t;
-      seg = k - 1;
-    }
-  }
-  return { d, s, k: seg };
 }
 /** linear interpolation of ys over xs (ascending) at x, clamped */
 function interp(xs: number[], ys: number[], x: number): number {

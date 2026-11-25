@@ -67,6 +67,11 @@ describe.skipIf(!E2E)("probe: a Paris street's shadows and pavements", () => {
       }
       return out; })()`);
     console.log(`  cross-section [offset m (+ right of the way), ground m]: ${JSON.stringify(section)}`);
+    // (what the street cell holds at the section's middle — whether the levelling takes its roads, else why not —, and the surveys kept)
+    const mid: [number, number] = [road.a[0] + (road.b[0] - road.a[0]) * (10 / lenM), road.a[1] + (road.b[1] - road.a[1]) * (10 / lenM)];
+    console.log(
+      `  the street cell there: ${JSON.stringify(await app.js(`__bh.renderer.streetLevelProbe(${mid[0]}, ${mid[1]}, 30)`))}; the levelling: ${JSON.stringify(await app.js(`__bh.renderer.earthTiles.streetLevelStats()`))}`,
+    );
     // (a column of the image by the white car, bottom right — the smeared columns: what the visibility drew down it, its distances —
     // equal ones a face standing up)
     const column = await app.js(`(async () => { const out = []; for (let k = 0; k < 20; k++) { const y = 0.72 + k * 0.01;

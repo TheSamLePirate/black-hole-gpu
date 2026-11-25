@@ -6,7 +6,7 @@ import type { OrthoFit } from "./national";
 import { roadLightByte, roadMask, spreadLights, tileMetresPerPixel } from "./night-roads";
 import { waterMask } from "./water-mask";
 import { flattenUnderWater } from "./water-flatten";
-import { cellFootBoxes, cellLevelRoads, levelTileMarked } from "./street-level";
+import { cellFootBoxesKept, cellLevelRoadsKept, levelTileMarked } from "./street-level";
 import { type DelightIn, type DelightStats, delightTile } from "./ortho-delight";
 
 /** a tile's side [px] (earth-tiles.ts TILE) */
@@ -200,8 +200,8 @@ export async function decodeTile(
 ): Promise<{ heights?: Float32Array; words?: Uint32Array; water?: Uint8Array; delight?: DelightStats; moved?: number }> {
   if (q.op === "terrarium") return { heights: terrariumHeights(await pixels(q.blob)) };
   if (q.op === "level") {
-    const roads = q.streets.flatMap(cellLevelRoads);
-    const boxes = q.buildings.flatMap(cellFootBoxes);
+    const roads = q.streets.flatMap(cellLevelRoadsKept);
+    const boxes = q.buildings.flatMap(cellFootBoxesKept);
     const moved = levelTileMarked(q.heights, TILE, q.z, q.x, q.y, roads, boxes);
     return { heights: q.heights, moved };
   }

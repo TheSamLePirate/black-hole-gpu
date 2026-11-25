@@ -268,6 +268,8 @@ import { setNearBuildingsContact } from "./system/scenery-contact";
 import type { EyeState } from "./system/building-layer";
 import { cellPool, forestPool, meshPool, onStreetCell, streetPool } from "./system/cell-workers";
 import { CELL_CACHE, cellCacheUrl } from "./system/cell-pool";
+import { cellOf } from "./system/building-cells";
+import { roadsAbout } from "./system/street-level";
 import { forestWants } from "./system/forest-assembly";
 import { LANDSCAPES, LANDSCAPE_CLEARING_M } from "./system/landscapes";
 const SCENERY_EXCLUSIONS: SceneryExclusion[] = [
@@ -5206,6 +5208,16 @@ export class Renderer {
     return this.earthTiles.streetLevelCpu;
   }
   readonly streetLevelWhere = "worker";
+  /** (a diagnosis) the street cell holding a place: there or not, complete, and its roads within `m` metres — whether the levelling
+   *  takes each (street-level.ts roadsAbout) */
+  async streetLevelProbe(lat: number, lon: number, m = 30) {
+    const c = cellOf(lat, lon);
+    if (typeof caches === "undefined") return { cell: [c.x, c.y], present: false, complete: false, roads: [] };
+    const res = await (await caches.open(STREET_CACHE)).match(streetCacheUrl(location.origin, c.x, c.y));
+    if (!res) return { cell: [c.x, c.y], present: false, complete: false, roads: [] };
+    const buf = await res.arrayBuffer();
+    return { cell: [c.x, c.y], present: true, complete: streetCellComplete(buf), roads: roadsAbout(buf, lat, lon, m) };
+  }
   private streetCellUnlisten: (() => void) | null = null;
   /** a z 15 street cell's bytes cached (complete) and its building cell's — null while it is not there; the last 64 present kept */
   private streetCellBytes = new Map<string, Promise<{ street: ArrayBuffer; buildings: ArrayBuffer | null } | null>>();
