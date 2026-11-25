@@ -229,7 +229,7 @@ test("B2 rings (24 Nov 2026): a curve's markings follow its polyline — the dee
   expect(strayPaint([...prims].reverse(), "deepest", offsets)).toBe(0);
   // (the shader carries that rule — the model above mirrors it)
   const walk = trace.slice(trace.indexOf("fn scenerySurface("), trace.indexOf("fn sceneryMirror("));
-  expect(walk).toContain("key=select(size.x-distance,64.0+crK-distance,distance<=crK);");
+  expect(walk).toContain("key=select(half-distance,64.0+crK-distance,distance<=crK);");
   expect(walk).toContain("rank==priority && key>best");
   expect(walk).not.toContain("cover>out.cover");
 });

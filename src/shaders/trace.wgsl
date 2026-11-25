@@ -10747,14 +10747,19 @@ fn scenerySurface(foot:f32)->ScenerySurface {
       key=cover;
     }else{
       kind=size.y;let line=p.zw-p.xy;let len=max(length(line),.001);
-      let strip=sceneryStrip(point,p.xy,p.zw,size.x,aa,kind==5.0);
+      // (a kerbed road's pavements each side its own — pavement-reach.ts, 25 Nov 2026 —: size.x the left one's reach, the word's
+      // pavement [dm, 6 bits] the right one's beyond the kerb; the right of a → b its own half-width)
+      var half=size.x;
+      let mkW=u32(size.z+.5);
+      if(kind==1.0 && (mkW&8u)!=0u && size.w!=0.0 && line.x*(point.y-p.y)-line.y*(point.x-p.x)<0.0){half=abs(size.w)+f32((mkW>>9u)&63u)*.1;}
+      let strip=sceneryStrip(point,p.xy,p.zw,half,aa,kind==5.0);
       let distance=strip.x;let along=strip.y/len;
       cover=strip.z;
       // (its depth inside its strip — the rank's tie-break: the nearest axis wins, a polyline's distance; see the choice below —; a
       // carriageway's depth before any pavement's: a kerbed road's pavements, widened to the façades (pavement-reach.ts), never
       // drawn across a crossing street's carriageway at a junction's mouth — 25 Nov 2026)
-      let crK=select(size.x,abs(size.w),size.w!=0.0);
-      key=select(size.x-distance,64.0+crK-distance,distance<=crK);isLine=true;
+      let crK=select(half,abs(size.w),size.w!=0.0);
+      key=select(half-distance,64.0+crK-distance,distance<=crK);isLine=true;
       // (B2: its abscissa along its road — the segment's start's, scenery[base+2].w ≤ 0, kept so its dashes run on across segments)
       road=vec4f(distance,select(size.x,abs(size.w),size.w!=0.0),along*len-scenery[base+2u].w,size.z);rdir=line/len;
       rank=select(2.0,3.0,kind==2.0);
