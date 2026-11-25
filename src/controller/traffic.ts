@@ -793,6 +793,8 @@ export interface TrafficMark {
   label: string;
   /** its lights: where (the camera's axes [m]), their colour, lit now */
   lights: { at: Vec3; colour: string; on: boolean; size: number }[];
+  /** its object's radius [m] (half its length): the overlay's occlusion test (renderer.labelSeen) — none: 25 m */
+  r?: number;
 }
 
 /** The overlay's aircraft lights' reach [m]: 80 km — from high up (the traffic's focus asked wider: traffic/focus.ts) up to
@@ -849,7 +851,7 @@ function trafficOverlay(this: CameraController, fmtAlt: (m: number) => string, v
         : []),
     ];
     const label = [c.cs, c.reg, c.type, c.gnd ? "GND" : fmtAlt(c.msl)].filter(Boolean).join(" · ");
-    out.push({ id: c.id, at: rel, dist, label, lights });
+    out.push({ id: c.id, at: rel, dist, label, lights, r: c.len / 2 });
   }
   return out;
 }
