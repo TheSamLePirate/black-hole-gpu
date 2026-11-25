@@ -109,6 +109,23 @@ describe.skipIf(!E2E)("waterfront runways: the water past and beside them stays 
         console.log(
           `  ${f.key} rwy ${r.hdg}° ${r.len} m elev ${r.elev} (${r.field ?? "site"}, measured ${r.measured}) strip ${r.strip.join(" ")} · before ${r.before.join(" ")} · past ${r.past.join(" ")} · right ${r.right.map((x) => x.join("/")).join(" ")} · left ${r.left.map((x) => x.join("/")).join(" ")}`,
         );
+      // (WF_LEVERS=1: the overview again with the sea's parts cut one at a time — the sea's surface mesh, the coastal swell field —, and
+      // the sea's state as drawn; a diagnosis — Nice's bay stripes, PROBLEMES 25 Nov 2026)
+      if (process.env.WF_LEVERS === "1")
+        for (const [k, on, off] of [
+          ["sea-surface-off", "__bh.renderer.seaSurfaceOn = false", "__bh.renderer.seaSurfaceOn = true"],
+          ["swell-off", "__bh.renderer.shoreSwellOn = false", "__bh.renderer.shoreSwellOn = true"],
+        ] as const) {
+          const sea =
+            await app.js(`(() => { const r = __bh.renderer; return { hs: r.seaHs, active: r.seaFftActive, drawn: r.seaSurfaceDrawn,
+            scale: __bh.viewPose()?.scale, w: __bh.viewPose()?.width, swell: r.earthShore?.stats?.()?.key }; })()`);
+          console.log(`  ${f.key} sea ${JSON.stringify(sea)}`);
+          await app.js(`(() => { ${on}; __bh.touch(); return true; })()`);
+          const f0 = await app.js<number>(`__bh.viewPose()?.frame ?? 0`);
+          await app.waitOptional(`(__bh.touch(), (__bh.viewPose()?.frame ?? 0) >= ${f0 + 30})`, 20_000);
+          await app.shot(`${OUT}/${f.key}-overview-${k}.png`);
+          await app.js(`(() => { ${off}; __bh.touch(); return true; })()`);
+        }
       // (the approach to the end named, 1.5 km out on its axis, ~80 m over its threshold — a 3° slope —, aimed 300 m down the runway)
       const turn = (h: number) => Math.abs(((h - f.shotHdg + 540) % 360) - 180);
       const pick = rws
