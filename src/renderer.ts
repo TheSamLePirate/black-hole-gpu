@@ -5209,7 +5209,7 @@ export class Renderer {
   get streetRelevelled() {
     return this.earthTiles.streetLevelStats().relevelled;
   }
-  /** the levelling's time [ms] — in the decode worker since 26 Nov 2026 —: total, longest tile, tiles */
+  /** the levelling's time [ms] — in the decode worker since 25 Nov 2026 —: total, longest tile, tiles */
   get streetLevelCpu() {
     return this.earthTiles.streetLevelCpu;
   }

@@ -3,7 +3,7 @@
 Problèmes constatés, pas encore réglés. Chaque entrée : la date (UTC), ce qui est mesuré ou observé et sa source, la cause
 connue ou supposée, la piste. Une entrée réglée est barrée avec le commit qui la règle, pas effacée.
 
-## L'eau de la baie de San Francisco verte émeraude près de l'approche de 28L : ce n'est pas de l'eau pour le rendu (relevé le 25 novembre 2026, `als-sfo-28l-day-close.jpg` ; diagnostiqué le même jour, non réglé — hors du lot : la classification de l'eau, `liteWater`)
+## ~~L'eau de la baie de San Francisco verte émeraude près de l'approche de 28L : ce n'est pas de l'eau pour le rendu~~ (relevé le 25 novembre 2026, `als-sfo-28l-day-close.jpg`) — réglé le 26 (`9cf0849a`, branche des ponts) : c'était le niveau de la piste étendu sur la baie
 
 - **Constat** (ce Mac, sonde `zz-water-colour` sous leviers, `docs/progress/etiquettes-als-2026-11-25/baie-sfo-eau-leviers.jpg`) : vue
   à 10 m au-dessus de la baie, 450 m avant 28L, l'eau proche sRGB ~(31–55, 64–74, 22–41), émeraude. Elle **ne change pas** avec
@@ -20,6 +20,25 @@ connue ou supposée, la piste. Une entrée réglée est barrée avec le commit q
 - **Piste** (au lot de l'eau — l'agent des ponts y travaille, `liteWater`) : tenir pour de l'eau un pixel sous le polygone d'eau d'OSM
   (« ocean » d'OpenMapTiles) même si le relief y dépasse la mer de quelques mètres, ou reconnaître les plans d'eau hydro-aplatis du
   relief (une étendue plate à moins de ~3 m de la mer).
+- **25 nov. — la vraie cause, réglée** (ce Mac M1 Max, e2e de diagnostic non versionné) : les **données** sous la baie sont à
+  **−0,3 à −1,5 m** (au-dessous de la mer, `earthTiles.heightAt`, nu) ; le **contact** à **+2,3 à +3,1 m** jusqu'à 600 m avant le seuil,
+  puis la mer au-delà de 700 m : c'est le **niveau de la piste** (28L, 3,1 m) — `runwayGrade`/`gradeAt` amène le relief au niveau de la
+  piste sur sa bande et **300 m au-delà de ses extrémités, adouci sur 600 m**, et 100 m sur ses côtés : à SFO le seuil est au rivage,
+  ce niveau couvrait la baie ; `liteWater` tient tout ce qui est nivelé pour de la terre (`water × (1 − lvl)`). Ni le 3DEP hydro-aplati,
+  ni le polygone d'OSM (présent : `ocean` dans la tuile z 14). **Correction** au propriétaire — le nivellement des pistes
+  (`game/runway-grade.ts` `Grade.past`/`levelOver`, son jumeau WGSL `runwayGrade`/`runwayLevelOver`) : **hors de la bande revêtue d'une
+  piste réelle** (au-delà de ses extrémités, de ses côtés, fondu sur 30 m), **le niveau ne relève que la terre des données** (0 … 0,3 m
+  au-dessus de la mer et plus) ; l'eau garde le sien. Une seule règle pour le dessin (`earthHeightExactG`/`StepG`, l'eau du raster et
+  du tracé) et le contact (`terrain.ts earthHeightSampler`, les pieds du décor) : un appareil au-dessus de la baie est au-dessus de l'eau.
+  Les pistes inventées (sans le drapeau des pistes réelles) gardent leur remblai sur la mer. **Vérifié** (ce Mac M1 Max) : sur l'axe de
+  28L, contact **0,00 MSL de 200 à 1 000 m avant le seuil** (avant : 3,10 → 0,96) et 150–300 m à côté (avant 2,3) ; le terrain de SFO
+  inchangé (3,0–3,1 m, 500 et 1 500 m le long de la piste, 250 m à côté) ; la baie dessinée en eau (`baie-sfo-28l-avant.jpg` →
+  `baie-sfo-28l-apres.jpg`, même vue que la sonde de l'agent du trafic ; `sfo-terrain-apres.jpg`) ; **Toulon-Hyères** : la même vue
+  du bout de piste de LFTH avant/après identique (`hyeres-piste-avant.jpg`, `hyeres-piste-apres.jpg`), le contact sur une grille de
+  16 × 11 points autour des pistes inchangé hors de quelques cellules de salins à 0–0,3 m (relevées avant de 0,4–0,8 m, laissées à
+  leur niveau). Tests `runway-parity.test.ts` (la parité CPU recalculée, la baie non relevée, la bande et la terre relevées, une piste
+  inventée gardée). **Non vérifié** : la parité GPU (`ellipsoid.e2e`, non relancé), le coût (attendu nul), d'autres aéroports en bord
+  d'eau (LaGuardia, Boston, Nice, Hong Kong).
 
 ## ~~Au parking de SFO, la finition du sol à 27 ms : l'air marché à chaque pixel~~ (relevé le 24 novembre 2026, e2e `traffic-runways` `TRW_COST=1`) — réglé le 25 novembre 2026 (branche d'agent)
 
@@ -153,7 +172,7 @@ connue ou supposée, la piste. Une entrée réglée est barrée avec le commit q
   pris par `shadeLite`, qui cherche la couronne jusqu'à 60 m au-delà du proxy et laisse un raté à la reconstruction. Vu sur kerr-mini
   (`docs/progress/ponts-2026-11-25/golden-gate-1km-apres-arbres.jpg`, e2e `bridges` 7/7, GPU de la vue 47,2 / 51,3 ms). Test
   `tests/raster-sky-trees.test.ts`. Reste : quelques points sombres au bord des couronnes (pixels ratés laissés à la reconstruction) —
-  essayé le 26 nov. (`beb2615e`, **repris par `9f22bb29`**) : ces pixels tracés d'abord par la passe des rayons (`main`), `shadeLite`
+  essayé le 25 nov. (`beb2615e`, **repris par `9f22bb29`**) : ces pixels tracés d'abord par la passe des rayons (`main`), `shadeLite`
   n'y dessinant que la couronne rencontrée — les points sombres partis, mais `main` y dessinait ses propres couronnes tracées, pâles :
   un halo clair au bord des couronnes, pire (ce Mac, `bridges`, Battery Spencer, `golden-gate-1km-couronnes-apres.jpg`). **Non réglé** ;
   piste : au raté, le ciel lu dans la sonde (`skyMirror`) écrit par `shadeLite` lui-même.
@@ -183,7 +202,7 @@ connue ou supposée, la piste. Une entrée réglée est barrée avec le commit q
   1,5 m — dans les tuiles mêmes, le sol unique du raster et du contact ; 65 tuiles, 1 025 145 pixels nivelés dans la vue de la rue
   de Paris, ce Mac). ~~Reste : le nivellement suit le trottoir de la classe, pas celui élargi jusqu'aux façades (les emprises ne sont
   pas lues là) — un reste de marche au pied d'une façade au-delà ; une tuile décodée avant que sa cellule « rue » soit en cache
-  reste non nivelée jusqu'à son prochain chargement.~~ **Réglés le 26 nov. 2026** (`0f3c83f6`, `74a3ba7b`, `06cc801c`) : trottoirs
+  reste non nivelée jusqu'à son prochain chargement.~~ **Réglés le 25 nov. 2026** (`0f3c83f6`, `74a3ba7b`, `06cc801c`) : trottoirs
   nivelés jusqu'aux façades des cellules de bâtiments, niveaux fondus aux carrefours ; une tuile venue avant ses cellules garde son
   relevé et se nivelle de nouveau à leur arrivée (le même sol quel que soit l'ordre) ; le nivellement dans le worker de décodage —
   arrivée sur la rue (ce Mac) : plus longue image 283 → 83 ms, images > 100 ms 25 → 0. Vérifié dans la tuile : chaussée plate au
@@ -241,14 +260,14 @@ connue ou supposée, la piste. Une entrée réglée est barrée avec le commit q
   **La bande claire reste** : une arête du relief sous le tablier (5,1 m au-dessus de la mer contre 0,5–2,3 m pour l'eau — la trace du
   pont dans le modèle de terrain) ; l'eau, désormais de l'eau, y est dessinée sur une marche de 3–5 m. La cause est la forme du relief
   sous l'eau : à régler en aplanissant le relief sous les polygones d'eau intérieure (préparation du terrain), hors de ce lot.
-  **26 nov. (`6723eff9`) — le lit aplani là où les tuiles du relief sont préparées** (`water-flatten.ts` : ouverture morphologique des
+  **25 nov. (`6723eff9`) — le lit aplani là où les tuiles du relief sont préparées** (`water-flatten.ts` : ouverture morphologique des
   hauteurs de l'eau sur ±48 m, le lit sous les ponts compris, dans le worker de décodage — un seul propriétaire : raster, traceur, contact,
   eau) : mesuré par `groundAt` (ce Mac M1 Max, e2e `bridges-notable` 7/7, `remote-results/ponts-7-local/notable`) **2,23–2,27 m
   au-dessus de la mer sous le tablier contre 2,23–2,27 m à 150 m à l'ouest (avant : 5,1 m)**. **La bande claire reste pourtant**
   (`chevire-lit-aplani-apres.jpg`) : ce n'était donc pas l'arête du relief ; `surfaceAt` y dit « ground » à ~609 m (juste à l'ouest de
   l'axe), aucun levier essayé ne l'ôte — **cause non trouvée**, prochaine piste : la lecture de la couleur de l'eau intérieure (le
   photographique ou la peinture d'une route sous l'eau) pixel par pixel avec un mode de débogage de `liteWater`.
-  **26 nov. — toujours ouverte, mieux cernée** (ce Mac M1 Max, e2e de diagnostic non versionnés) : ni la photographie (`liteSkip` 128),
+  **25 nov. — toujours ouverte, mieux cernée** (ce Mac M1 Max, e2e de diagnostic non versionnés) : ni la photographie (`liteSkip` 128),
   ni le spéculaire (67108864), ni le ciel et le rebond (32768), ni la couche lointaine des rues (`farLampsOn` false : ses dalles de ponts),
   ni les bits `TUNE_GSKIP` (sans effet sur le raster) ne l'ôtent ; **le matin (Soleil à l'est, derrière la caméra) elle est plus
   blanche** : une surface éclairée, pas un reflet, haute d'une dizaine de pixels à 600 m. Hypothèse essayée : l'aire de pont d'OSM
@@ -256,7 +275,7 @@ connue ou supposée, la piste. Une entrée réglée est barrée avec le commit q
   (`81a59623`, `bridge-structures.ts areaUnderDeck`, test unitaire avec témoin) — **la bande reste après** (`chevire-sans-dalle-apres.jpg`) :
   ce n'était pas elle (ou pas seulement). Prochaine piste : `surfaceAt` sur les lignes de la bande (y ≈ 0,59–0,60 à 1600 × 1000) avec
   le code du raster et la feuille, puis couper une à une les passes du raster (`sea surface`, les marques de ponts, les maillages).
-  **26 nov. — cause trouvée, réglée (`06a919ed`)** (ce Mac M1 Max, e2e de diagnostic non versionnés) : `surfaceAt` y dit « ground »
+  **25 nov. — cause trouvée, réglée (`06a919ed`)** (ce Mac M1 Max, e2e de diagnostic non versionnés) : `surfaceAt` y dit « ground »
   (code 4, l'eau intérieure ombrée par `shadeWater`) ; de près (250 m plus près, `chevire-bande-avant.jpg`) la bande est **de l'eau
   blanche striée** : les **chutes** de l'eau intérieure (`shadeWater`, `fallOn` : de l'eau blanche où le relief lu à ±25 m est raide).
   **Témoin** : les chutes coupées (modification temporaire du shader), la bande disparaît (`chevire-bande-chutes-coupees.jpg`). Le relief
@@ -283,14 +302,14 @@ connue ou supposée, la piste. Une entrée réglée est barrée avec le commit q
   reflet planaire (un rendu de plus) ; (c) un SSR raté qui s'efface vers la sonde — ne recolle pas le reflet, le rend seulement plus
   flou. **Non fait** : aucun n'est à la fois correct et bon marché ; (a) demande un index des cellules proches par rayon (à mesurer
   d'abord, kerr-mini de retour).
-  **26 nov. — plafond mesuré, (a) chiffré, non fait** (ce Mac M1 Max, vue de Grenelle, profileur GPU allumé — ~10 ms de surcoût sur
+  **25 nov. — plafond mesuré, (a) chiffré, non fait** (ce Mac M1 Max, vue de Grenelle, profileur GPU allumé — ~10 ms de surcoût sur
   Apple, tampons qui se chevauchent : ordres de grandeur) : `earth water (raster)` 2,46 ms + `earth water: finishing` 0,38 ms — **le
   plafond du reflet ≈ 2,8 ms** (toute l'eau ombrée) ; `nearCells()` : **19 cellules, 14 519 bâtiments (~760 par cellule)**, 894 k
   triangles. Un rayon réfléchi de 300 m traverse 1–2 cellules : ~1 500 tests de boîte englobante par pixel d'eau sans index par
   cellule, sur ~0,5 M pixels d'eau (estimé) — ~0,75 G tests une image, des dizaines de ms : **au-delà du plafond de plusieurs ordres**.
   (a) n'est faisable qu'avec un index par cellule (une grille de ses bâtiments, préparée avec la cellule) — un lot à part, à mesurer sur
   kerr-mini. Rien de lent n'est fusionné.
-  **26 nov. — l'index par cellule : conception et coût estimé (non construit, décision de lot)**.
+  **25 nov. — l'index par cellule : conception et coût estimé (non construit, décision de lot)**.
   *Données* (préparées avec la cellule, dans le worker du maillage — `cell-workers.ts meshPool`, hors image —, publiées dans la région
   des cellules proches à côté de leurs enregistrements, `NEAR_REGION_BYTES`) : pour chaque bâtiment de la cellule sa boîte (x, y min/max
   dans le repère de la cellule, pied et sommet au-dessus de l'ellipsoïde : deux vec4, 32 o) ; une grille fixe de cases de 25 m sur le
@@ -308,6 +327,22 @@ connue ou supposée, la piste. Une entrée réglée est barrée avec le commit q
   plus que le calcul), sous le plafond de ~2,8 ms. À mesurer avant toute fusion : A/B sur kerr-mini à Grenelle et Alexandre III (eau
   du raster, p50/p95), témoin positif (un bâtiment au bord de l'eau, son reflet entier là où l'SSR le coupait), A/A.
   *Limites* : les bâtiments des cellules proches seulement (~2 km) ; au-delà, l'SSR et la sonde ; les arbres restent ceux du BVH du décor.
+  **25 nov. — construit, mesuré, retiré** (`cd8dcb14`, repris par `228c50b9` ; levier `renderer.nearMirrorOn`) : l'index tel que conçu
+  (cases de 32 m, préparé avec la cellule, dans la région proche), parcouru depuis `inlandWater` là où l'SSR manque, les murs rencontrés
+  exactement, portée 800 m (à 300 m les tours de Beaugrenelle, à ~500 m, restaient en morceaux). **L'image** : les reflets entiers à
+  Grenelle et Alexandre III (`seine-miroir-grenelle-avant.jpg` / `-apres.jpg`, `seine-miroir-alexandre-iii-avant.jpg` / `-apres.jpg`,
+  ce Mac), sans fenêtres (la couleur unie du mur). Index : 19 cellules 255 865 vec4 (Grenelle), 24 cellules 436 605 (Alexandre III).
+  **Le coût** (GPU p50 / p95 par série de 90 images, `lastGpuMs`, profileur coupé, allumé/coupé en A B B A A B B A) :
+  | vue, machine | allumé p50 (p95) | coupé p50 (p95) | écart p50 | A/A (étendue des p50) |
+  |---|---|---|---|---|
+  | Grenelle, **kerr-mini** | 70,5 · 70,2 · 70,0 · 70,4 (73,1–73,9) | 65,3 · 65,1 · 65,1 · 64,8 (67,5–69,1) | **+5,2 ms** | 0,5 / 0,5 |
+  | Alexandre III, kerr-mini (10 cellules sur 21 résidentes) | 69,9 · 66,5 · 66,8 · 67,3 (69,0–74,7) | 66,9 · 66,8 · 64,0 · 63,7 (65,9–69,5) | ≈ +1,7 (dérive) | 3,4 / 3,2 |
+  | Grenelle, ce Mac M1 Max (A B B A A B) | 22,0 · 21,3 · 21,3 (23,3–24,4) | 20,0 · 19,9 · 19,8 (21,8–22,2) | +1,4 | 0,7 / 0,2 |
+  | Alexandre III, ce Mac | 20,9 · 21,1 · 20,7 (23,0–23,4) | 19,9 · 20,4 · 20,0 (21,9–22,6) | +0,8 | 0,4 / 0,5 |
+  **Au-delà du plafond de 2,8 ms sur kerr-mini (+5,2 ms à Grenelle)** : non fusionné, retiré de la branche ; l'estimation de la revue F
+  (0,2–1 ms) était trop basse — les index font ~13 500 vec4 par cellule (3× l'estimé) et la marche lit 19 cellules par pixel d'eau. Pistes
+  pour un prochain essai : ne marcher que les cellules que le rayon traverse (une grille des cellules elles-mêmes), une portée qui suit la
+  hauteur des bâtiments, un rendu à demi-résolution du reflet, ou l'option (b) (un reflet planaire) à chiffrer.
   **Reste aussi** : les reflets de bâtiments détachés sur la Seine — l'SSR ne trouve une
   façade que là où l'image la montre (son pied caché par la rive : la moitié haute du reflet manque) ; le repli tracé (`sceneryMirror`) ne
   connaît que les arbres, et les bâtiments proches (cellules maillées) ne sont pas dans le BVH du décor : non réglé.
@@ -344,7 +379,7 @@ connue ou supposée, la piste. Une entrée réglée est barrée avec le commit q
   l'appareil cachent une instance là où la profondeur d'occultation de la scène tient plus près (`ship.wgsl`, le bit « far ») ;
   l'appareil piloté ne l'avait que placé par un spectateur. La vue « autour », 24 m devant lui, était derrière un houppier à 5–6 m
   de l'œil : 20 943 de ses 21 006 pixels dessinés par-dessus ; désormais caché dès que l'œil est hors de lui (pas en cabine), 64–74
-  après (le bord de son ombre, ~~le verre de la verrière — vu, reste~~ — **réglé le 26 nov. 2026, `7ba593ce`** : le verre et
+  après (le bord de son ombre, ~~le verre de la verrière — vu, reste~~ — **réglé le 25 nov. 2026, `7ba593ce`** : le verre et
   les flammes obéissent à la même occultation, 50 pixels restants, l'ombre au sol) ; e2e `faron-tree-streak` l'affirme, test
   `craft-occlusion`.
 

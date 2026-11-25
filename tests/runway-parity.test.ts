@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
 import { geodeticNormal, geodeticToCart, WGS84_A, WGS84_F } from "../src/system/ellipsoid";
+import { gradeAt, levelOver } from "../src/game/runway-grade";
 import { EARTH_RUNWAYS, runwayFrame, runwayGrade, runwayWeight, setWorldRunways } from "../src/game/sites";
 
 // CPU boundary cases in physical WGS84 metres. GPU numerical parity runs in ellipsoid.e2e.test.ts.
@@ -102,7 +103,7 @@ test("runwayGrade: the near runways' list (T8c) gives the full scan's answers, a
   const ease = (x: number) => (x <= 0 ? 0 : x >= 1 ? 1 : x * x * (3 - 2 * x));
   const reference = (q: [number, number, number]) => {
     const point = geodeticToCart(WGS84_A, WGS84_F, Math.atan2(q[2], Math.hypot(q[0], q[1])), Math.atan2(q[1], q[0]), 0);
-    const g = { flat: 0, level: 0, elev: 0, cut: 0 };
+    const g = { flat: 0, level: 0, elev: 0, cut: 0, past: 0 };
     for (const r of EARTH_RUNWAYS) {
       if (r.world?.measuring) continue;
       const d = point.map((v, i) => v - r.origin[i]!);
@@ -121,6 +122,8 @@ test("runwayGrade: the near runways' list (T8c) gives the full scan's answers, a
       if (level > g.level) {
         g.level = level;
         g.elev = r.elev;
+        // (25 Nov 2026: off a real airfield's paved strip, eased over 30 m — the level lifts the land alone there: levelOver)
+        g.past = world ? ease(Math.max(-a, a - r.len, c - r.halfWidth, 0) / 30) : 0;
       }
       g.flat = Math.max(g.flat, wa * wc, level);
       // (PLAN-J7 J7-1: a real airfield's approach funnel — its width and 80 m at the threshold, widening by the slope of ±300 m 10 km
@@ -202,4 +205,47 @@ test("J7-1: the approach funnel — the detail off under a real airfield's final
   } finally {
     setWorldRunways(saved);
   }
+});
+
+// (25 Nov 2026 — PROBLEMES « L'eau de la baie de San Francisco »: SFO's bay before 28L, its data at −0.3 to −1.5 m, was raised to the
+// runway's 3.1 m out to 900 m past its end — drawn and felt as land. Off a real airfield's strip the level lifts the land alone. The
+// positive witness fails on the code before: the bay lifted whole)
+test("off a real airfield's strip the level lifts the land alone: the bay before SFO's 28L stays the sea's; the strip and the land lifted", () => {
+  const sfo = runwayFrame(
+    { body: "earth", name: "KSFO 28L", lat: 37.6117, lon: -122.3578, runway: true, rwy: 298, elev: 3.1 },
+    3618,
+    30,
+    16,
+  );
+  const saved = EARTH_RUNWAYS.filter((r) => r.world);
+  setWorldRunways([sfo]);
+  try {
+    const at = (a: number, c: number) =>
+      geodeticNormal(WGS84_A, WGS84_F, sfo.origin.map((v, i) => v + a * sfo.along[i]! + c * sfo.across[i]!) as [number, number, number]);
+    // (450 m before the threshold on the axis: the level's place, past the strip — the bay's data −1 m: not lifted; land at 3 m: lifted)
+    const bay = runwayGrade(at(-450, 0));
+    expect(bay.level).toBeGreaterThan(0.5);
+    expect(bay.past).toBeCloseTo(1, 6);
+    expect(levelOver(bay, -1)).toBe(0);
+    expect(levelOver(bay, 3)).toBeCloseTo(bay.level, 6);
+    // (beside the strip, 150 m off its axis: the same)
+    const side = runwayGrade(at(1000, 150));
+    expect(side.past).toBeCloseTo(1, 6);
+    expect(levelOver(side, -1)).toBe(0);
+    // (on the strip: whatever the data — a runway on the shore, its embankment — lifted whole)
+    const strip = runwayGrade(at(1000, 0));
+    expect(strip.past).toBe(0);
+    expect(levelOver(strip, -1)).toBeCloseTo(1, 6);
+  } finally {
+    setWorldRunways(saved);
+  }
+});
+
+test("a made-up airfield (no world runway's flag) keeps its level over the map's sea — its embankment on the shore", () => {
+  const r = runwayFrame({ body: "earth", name: "made-up", lat: 30.4, lon: 130.97, runway: true, rwy: 90, elev: 20 }, 2000, 30, 0);
+  const q = r.origin.map((v, i) => v - 200 * r.along[i]!) as [number, number, number];
+  const g = gradeAt(q, [r]);
+  expect(g.level).toBeGreaterThan(0.5);
+  expect(g.past).toBe(0);
+  expect(levelOver(g, -1)).toBe(g.level);
 });

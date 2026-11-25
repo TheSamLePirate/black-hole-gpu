@@ -1126,7 +1126,7 @@ export class EarthTiles {
   dropped = { loads: 0, refines: 0, ortho: 0, kept: 0 };
   /** the tiles drawn from the global data while their national source's heights come (refine) */
   private refining = new Map<string, { ctl: AbortController; L: Level; x: number; y: number; surface: boolean }>();
-  /** (26 Nov 2026) the streets laid on the national relief's tiles z ≥ 15 (street-level.ts, in the decode worker) in
+  /** (25 Nov 2026) the streets laid on the national relief's tiles z ≥ 15 (street-level.ts, in the decode worker) in
    *  street-level-book.ts's order — a tile come before its street cells levelled again from its survey when they come: the same
    *  ground whatever arrives first, the one ground of the raster and the contact. Off: the tiles fetched after kept as surveyed. */
   streetLevelOn = true;
@@ -1198,7 +1198,7 @@ export class EarthTiles {
     return { ...this.streetBook.stats, kept: this.streetBook.kept, cpu: { ...this.streetLevelCpu } };
   }
   /**
-   * (26 Nov 2026) Street cells arrived (z 15 — the streets' pool's, renderer.ts): the relief tiles levelled while one of them was
+   * (25 Nov 2026) Street cells arrived (z 15 — the streets' pool's, renderer.ts): the relief tiles levelled while one of them was
    * missing levelled again from their survey (street-level-book.ts), their inland water flattened again, kept and drawn — the same
    * ground as if the cells had come first.
    */
@@ -2554,7 +2554,7 @@ export class EarthTiles {
         const s = this.slotOf(L, x, y);
         const fill = this.standInKeys.has(key) && L.key[s] === key ? (L.data[s] ?? undefined) : undefined;
         h = await nationalHeights(src, L.z, ((x % L.n) + L.n) % L.n, y, ctl.signal, !!ground, ground, coarse, fill);
-        // (26 Nov 2026 — the streets laid on it: street-level-book.ts, the levelling in the decode worker; its survey kept while a street
+        // (25 Nov 2026 — the streets laid on it: street-level-book.ts, the levelling in the decode worker; its survey kept while a street
         // cell about it is missing — levelled again when it comes, streetCellsArrived)
         if (!ground && L.z >= STREET_LEVEL_Z && this.streetLevelOn && this.streetRead)
           this.noteLevelled(
@@ -2563,7 +2563,7 @@ export class EarthTiles {
           );
         // (25 Nov 2026 — water-flatten.ts: the ground under the inland water made level here, once, for every reader of the relief)
         if (!ground && L.z >= FLATTEN_Z0) h = await flattenInland(L.z, ((x % L.n) + L.n) % L.n, y, h, ctl.signal);
-        // (26 Nov 2026 — the far levels' overground cleared over that water: a deck's surface model was a dam under the bridge, and the
+        // (25 Nov 2026 — the far levels' overground cleared over that water: a deck's surface model was a dam under the bridge, and the
         // inland water's falls took it for one — Cheviré's light band. Its ground levelled already at the first pass)
         else if (ground && h.length > TILE * TILE && L.z >= OVER_WATER_Z0)
           h = await flattenInland(L.z, ((x % L.n) + L.n) % L.n, y, h, ctl.signal, false);
@@ -3939,7 +3939,7 @@ export const roadsUrl = (z: number, x: number, y: number) => `https://tiles.open
 const roadFiles = new Map<string, Promise<ArrayBuffer | null>>();
 /** (25 Nov 2026) the relief's levels whose ground is levelled under the inland water (water-flatten.ts): a texel of 19 m and finer */
 export const FLATTEN_Z0 = 13;
-/** (26 Nov 2026) the far levels whose overground (I6, up to HLOD_Z1) is cleared over the inland water (water-flatten.ts clearOverWater):
+/** (25 Nov 2026) the far levels whose overground (I6, up to HLOD_Z1) is cleared over the inland water (water-flatten.ts clearOverWater):
  *  those whose OpenFreeMap tile the street levels fetch already (night-roads ROAD_Z0 — the offline zones hold it); z 11's kept */
 export const OVER_WATER_Z0 = ROAD_Z0;
 /**

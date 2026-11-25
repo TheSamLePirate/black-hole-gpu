@@ -141,7 +141,7 @@ export const streetStore: CellStore = {
 let streets: CellPool | null = null;
 /** the streets' pool if it was made (null: never asked — flightReady reads it without making its workers) */
 export const streetPoolMade = () => streets;
-/** (26 Nov 2026) who hears the street cells handed — the relief's levelling (renderer.ts → EarthTiles.streetCellsArrived) —, the
+/** (25 Nov 2026) who hears the street cells handed — the relief's levelling (renderer.ts → EarthTiles.streetCellsArrived) —, the
  *  pool made or not yet: held here, listening once it is */
 const streetHearers = new Set<(c: CellPrepared) => void>();
 export function onStreetCell(fn: (c: CellPrepared) => void): () => void {

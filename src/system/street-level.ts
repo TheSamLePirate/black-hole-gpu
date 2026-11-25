@@ -5,7 +5,7 @@
 // them) levelled under each road of the street cell holding it, before they are kept: along its axis the profile the road's class
 // allows (street-detail-prep.ts roadProfile: smoothed over a window, its grade bounded), across its carriageway its banking
 // (roadBank: none in a town), its pavements a kerb's height over the carriageway's edge, faded into the ground over FADE_M past them.
-// Bridges and tunnels left out (their decks are the scene's). (26 Nov 2026) A kerbed street's pavements levelled out to its façades —
+// Bridges and tunnels left out (their decks are the scene's). (25 Nov 2026) A kerbed street's pavements levelled out to its façades —
 // each segment, each side, the footprints of the building cells about the tile met across it (pavement-reach.ts facadeSides, the
 // scene's own rule) —, and where carriageways meet (a junction, a crossing street) the carriageways first, blended by how central each
 // is: no kerb across a crossing street, no step between two roads' profiles. Run in the decode worker (tile-decode.ts "level"), in the
@@ -56,7 +56,7 @@ export function cellFootBoxes(buf: ArrayBuffer): FootBox[] {
   return out;
 }
 
-/** (26 Nov 2026) the cells read already — a tile's 3×3 shared with its neighbours': each cell's roads and footprints parsed once (the
+/** (25 Nov 2026) the cells read already — a tile's 3×3 shared with its neighbours': each cell's roads and footprints parsed once (the
  *  decode worker's memory), keyed by its header and size; the last CELLS_KEPT */
 const CELLS_KEPT = 48;
 const parsed = new Map<string, LevelRoad[] | FootBox[]>();
@@ -315,7 +315,7 @@ export function levelTile(
   // carriageway and falling smoothly to none across its pavements and fade: where two roads meet, one surface warped between their
   // levels, no step; its kerb blended alike, none on a carriageway; how much of the survey replaced: whole on a carriageway, else its
   // pavements' cover — whole to the façade, fading past it. Each road's segments over their own pixels within the road's widest
-  // reach, each pixel's nearest segment kept — 26 Nov 2026: every pixel testing every road had cost ~170 ms a tile with a 3×3 of
+  // reach, each pixel's nearest segment kept — 25 Nov 2026: every pixel testing every road had cost ~170 ms a tile with a 3×3 of
   // town cells)
   const N = side * side;
   const iW = new Float64Array(N),

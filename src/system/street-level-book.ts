@@ -1,4 +1,4 @@
-// The streets' levelling of the relief, whatever arrives first (26 Nov 2026; PROBLEMES « Ponts et routes » — street-level.ts levelled a
+// The streets' levelling of the relief, whatever arrives first (25 Nov 2026; PROBLEMES « Ponts et routes » — street-level.ts levelled a
 // national relief tile with the street cells cached when it came: a tile before its cells kept its survey's steps until it was fetched
 // again, the ground depending on the order of two arrivals). Each tile levelled with the cells about it (its own z 15 cell and its eight
 // neighbours'); while one of them is missing its survey is kept (the heights as they came, before any levelling), and when a cell

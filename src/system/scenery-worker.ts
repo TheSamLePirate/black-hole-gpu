@@ -5,7 +5,7 @@ import { PbfReader } from "pbf";
 import { installNetActivity } from "./net-activity";
 import type { Vec3 } from "../physics";
 import { earthDetail, toHalf } from "../terrain";
-import { gradeAt } from "../game/runway-grade";
+import { gradeAt, levelOver } from "../game/runway-grade";
 import { geodeticToCart as cartOf, WGS84_A as RA, WGS84_F as RF } from "./ellipsoid";
 import { forestFrame, forestVec4s, growForest } from "./forest";
 import { BDTOPO_Z, bdtopoHeight, bdtopoStands, bdtopoUrl, clipRing, inBdtopoBox } from "./bdtopo";
@@ -449,7 +449,7 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
   // (a survey's ground — the IGN's, swisstopo's, 3DEP's: data, no detail added —: an airfield's level alone)
   const levelled = (h: number, lat: number, lon: number) => {
     const g = graded(lat, lon);
-    return g && g.level > 0 ? h + (g.elev - h) * g.level : h;
+    return g && g.level > 0 ? h + (g.elev - h) * levelOver(g, h) : h;
   };
   // (the heights at hand without waiting — the IGN's ground once its survey is in, a Terrarium tile once decoded —: the forest's
   // ~700 000 nodes and the 32 000 buildings' feet read at once, not each through a promise)
@@ -486,7 +486,7 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
       b = lon * D,
       res = Math.max(25, (40075016 * Math.cos(a)) / (2 ** demZoom * 256));
     const g = graded(lat, lon);
-    if (g && g.level > 0) h0 += (g.elev - h0) * g.level;
+    if (g && g.level > 0) h0 += (g.elev - h0) * levelOver(g, h0);
     const cut = g ? g.cut : 0;
     const detail = cut < 1 ? (1 - cut) * earthDetail([Math.cos(a) * Math.cos(b), Math.cos(a) * Math.sin(b), Math.sin(a)], h0, 0.5, res) : 0;
     return Math.max(0, h0 + detail) + sea(lat, lon);
@@ -2071,7 +2071,7 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
       const lat = outer.reduce((sum, p) => sum + p.lat, 0) / outer.length,
         lon = outer.reduce((sum, p) => sum + p.lon, 0) / outer.length;
       const step = Math.max(1, Math.floor(outer.length / 16));
-      // (review A9; 26 Nov 2026 — its inside too: bridge-structures.ts areaUnderDeck)
+      // (review A9; 25 Nov 2026 — its inside too: bridge-structures.ts areaUnderDeck)
       if (
         areaUnderDeck(
           outer.map((g) => localPoint(frame, g.lat, g.lon, 0)),

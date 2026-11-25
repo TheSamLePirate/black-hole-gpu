@@ -60,7 +60,7 @@ test("each texel's survey mark (its last bit — markFine) kept", () => {
   expect(Math.abs(h[60 * T + 130]! - 2)).toBeLessThan(1e-5);
 });
 
-// (26 Nov 2026 — Cheviré's light band: the far levels' overground — the IGN's surface over its ground, I6 — a 50 m deck over the Loire,
+// (25 Nov 2026 — Cheviré's light band: the far levels' overground — the IGN's surface over its ground, I6 — a 50 m deck over the Loire,
 // drawn as a dam and read by the inland water's falls as one. Cleared over the water; the land's and the banks' kept. The positive
 // witness fails on the code before: nothing cleared, the deck's 48 m stood over the river)
 test("a far level's overground over the river (a deck's 48 m) cleared; over the land and on the banks kept", () => {

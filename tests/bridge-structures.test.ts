@@ -228,7 +228,7 @@ describe("a data bridge under another source's deck (campaign 2, 24 Nov 2026)", 
   });
 });
 
-describe("an OpenStreetMap bridge area under a deck already built (26 Nov 2026 — Cheviré's light band)", () => {
+describe("an OpenStreetMap bridge area under a deck already built (25 Nov 2026 — Cheviré's light band)", () => {
   // (two surveyed carriageways 15 m wide, their axes at x ±9 m, along y 0 … 600; an area 60 m wide over them, its outline off both)
   const onDeck = (x: number, y: number) => y >= 0 && y <= 600 && (Math.abs(x - 9) <= 7.5 || Math.abs(x + 9) <= 7.5);
   const ring = [
