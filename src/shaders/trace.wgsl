@@ -7228,6 +7228,8 @@ var<private> RWY_HIT: vec4f = vec4f(0.0);
 // (26 Nov 2026 — runway-grade.ts Grade.past: the last runwayGrade's — how far its level's place lies off a real airfield's paved strip,
 // 0 on it … 1 past 30 m —; read by runwayLevelOver right after that call)
 var<private> RWY_PAST: f32 = 0.0;
+// (26 Nov 2026) how far calm water mirrors the near cells' buildings the image does not hold [m] (nearMirror: 40 bins of 32 m at most a cell)
+const NEAR_MIRROR_M = 800.0;
 
 // The windsocks (PLAN-METEO W4): one beside each end's touchdown zone of the runways near — 300 m in, 70 m
 // out on the landing's left —, a 6 m mast and its sock 3.6 m long, five bands orange and white, streaming
@@ -9983,8 +9985,15 @@ fn inlandWater(q: vec3f, view: vec3f, light: vec3f, Eg: vec3f, sky: vec3f, footM
   if (clearM.x >= 0.0) { refl = clearM * clamp(sky / max(skyIrradiance(0.0, normal), vec3f(1e-30)), vec3f(0.0), vec3f(2.0)); }
   // (near, the world mirrored — the banks, the bridges, the buildings — from the raster's image)
   if (NEAR_DETAIL && RASTER_SHADE && dot(rUp, normal) > 0.005) {
-    let ssr = seaSSR(SEA_D, normalize(vec3f(rUp.xy, rUp.z * AIR.ab)));
+    let rP = normalize(vec3f(rUp.xy, rUp.z * AIR.ab));
+    let ssr = seaSSR(SEA_D, rP);
     refl = mix(refl, ssr.rgb, ssr.w);
+    // (26 Nov 2026 — PROBLEMES « les reflets de la Seine »: where the image does not hold it — a façade whose foot the bank hides, its
+    // reflection in pieces —, the near cells' buildings met by the mirrored ray, NEAR_MIRROR_M out: nearMirror)
+    if (ssr.w < 0.99 && HAS_SCENERY && P.scenery[0].w > 0.5) {
+      let nm = nearMirror(SEA_D, rP, NEAR_MIRROR_M, Eg, Ls, sky, normal);
+      if (nm.w > 0.0) { refl = mix(nm.rgb, refl, ssr.w); }
+    }
   }
   // (the Sun's glint: Beckmann over the facet's unresolved slopes, Smith's masking)
   let H = normalize(Ls + V);
@@ -10598,6 +10607,102 @@ fn nearCellFrame(g: u32) -> i32 {
   let b = (g - u32(t.w)) / 1024u;
   let tw = u32(t.z) * 4u + b;
   return i32(u32(t.y) + 4u * bitcast<u32>(scenery[tw / 4u][tw % 4u]));
+}
+// (26 Nov 2026 — PROBLEMES « les reflets de la Seine »: near-meshes.ts cellMirrorIndex) The near cells' buildings mirrored by calm water
+// where the image does not hold them (the SSR missed: a façade whose foot the bank hides): from the water's point `D` (from the camera,
+// the body's axes [m]) along `rd` (the body's axes) within `reach` [m], each cell of the region's mirror list (right after the frames: NEAR_MESH_SLOTS · 4 vec4s on) walked
+// — its origin's w its index —, the ray taken into its frame, its grid's bins crossed in order (a DDA), each bin's leaves' boxes tested,
+// a box met: its footprint's walls met exactly, bottom to top. Its wall lit as rasterBuilding's plain colour by the Sun (`Eg`, `Ls`) and
+// the sky; rgb, w the distance (−1 none). Lever: renderer.nearMirrorOn (the list empty: no cell walked)
+fn nearMirror(D: vec3f, rd: vec3f, reach: f32, Eg: vec3f, Ls: vec3f, sky: vec3f, up: vec3f) -> vec4f {
+  let tail = scenery[arrayLength(&scenery) - 1u];
+  if (tail.x != 7777777.0) { return vec4f(0.0, 0.0, 0.0, -1.0); }
+  // (the scene's frame: the point 0.2 m over the water — its own surface never met)
+  let p = P.scenery[3].xyz + sceneryLocal(D) + vec3f(0.0, 0.0, 0.2);
+  let d = normalize(sceneryLocal(rd));
+  let frames = u32(tail.y);
+  let list = frames + 1024u;
+  let count = min(u32(scenery[list].x), 64u);
+  var best = reach;
+  var g = 0u;
+  var nB = vec3f(0.0);
+  for (var c = 0u; c < count; c++) {
+    let f = frames + 4u * u32(scenery[list + 1u + c / 4u][c % 4u]);
+    let o = scenery[f];
+    let idx = u32(o.w);
+    if (idx == 0u) { continue; }
+    let E = scenery[f + 1u].xyz;
+    let N = scenery[f + 2u].xyz;
+    let U = scenery[f + 3u].xyz;
+    let r = p - o.xyz;
+    let pc = vec3f(dot(r, E), dot(r, N), dot(r, U));
+    let dc = vec3f(dot(d, E), dot(d, N), dot(d, U));
+    let h0 = scenery[idx];
+    let h1 = scenery[idx + 1u];
+    let B = h1.x;
+    let dxy = select(dc.xy, vec2f(1e-7), abs(dc.xy) < vec2f(1e-7));
+    let inv = 1.0 / dxy;
+    // (the ray within the grid's box)
+    let ta = (h0.xy * B - pc.xy) * inv;
+    let tb = ((h0.xy + h0.zw) * B - pc.xy) * inv;
+    let t0 = max(max(min(ta.x, tb.x), min(ta.y, tb.y)), 0.0);
+    let t1 = min(min(max(ta.x, tb.x), max(ta.y, tb.y)), best);
+    if (t1 <= t0) { continue; }
+    let nxy = vec2i(h0.zw);
+    let q = pc.xy + dc.xy * (t0 + 0.01);
+    var cell = clamp(vec2i(floor(q / B)) - vec2i(h0.xy), vec2i(0), nxy - 1);
+    let stepI = select(vec2i(-1), vec2i(1), dxy >= vec2f(0.0));
+    var tNext = (vec2f(cell + vec2i(h0.xy) + max(stepI, vec2i(0))) * B - pc.xy) * inv;
+    let tDelta = abs(B * inv);
+    var tc = t0;
+    for (var k = 0u; k < 40u; k++) {
+      if (any(cell < vec2i(0)) || any(cell >= nxy) || tc > best) { break; }
+      let b = u32(cell.y * nxy.x + cell.x);
+      let bv = scenery[idx + u32(h1.y) + b / 2u];
+      let odd = (b & 1u) == 1u;
+      let start = u32(select(bv.x, bv.z, odd));
+      let cnt = min(u32(select(bv.y, bv.w, odd)), 48u);
+      for (var e = 0u; e < cnt; e++) {
+        let ea = idx + u32(h1.z) + 2u * (start + e);
+        let bx = scenery[ea];
+        let bz = scenery[ea + 1u];
+        let ua = (bx.xy - pc.xy) * inv;
+        let ub = (bx.zw - pc.xy) * inv;
+        let s0 = max(max(min(ua.x, ub.x), min(ua.y, ub.y)), 0.0);
+        let s1 = min(min(max(ua.x, ub.x), max(ua.y, ub.y)), best);
+        if (s1 < s0) { continue; }
+        let z0 = pc.z + dc.z * s0;
+        let z1 = pc.z + dc.z * s1;
+        if (min(z0, z1) > bz.y || max(z0, z1) < bz.x) { continue; }
+        // (its walls met exactly: the footprint's edges, bottom to top)
+        let gl = bitcast<u32>(bz.z);
+        let edges = min(u32(scenery[gl].z), 96u);
+        for (var w = 0u; w < edges; w++) {
+          let line = scenery[gl + 3u + w];
+          let v = line.zw - line.xy;
+          let den = dxy.x * v.y - dxy.y * v.x;
+          if (abs(den) < 1e-9) { continue; }
+          let w0 = line.xy - pc.xy;
+          let t = (w0.x * v.y - w0.y * v.x) / den;
+          let s = (w0.x * dxy.y - w0.y * dxy.x) / den;
+          if (t <= 0.05 || t >= best || s < 0.0 || s > 1.0) { continue; }
+          let z = pc.z + dc.z * t;
+          if (z < bz.x || z > bz.y) { continue; }
+          best = t;
+          g = gl;
+          var nn = normalize(vec2f(v.y, -v.x));
+          nn = select(nn, -nn, dot(nn, dxy) > 0.0);
+          nB = E * nn.x + N * nn.y;
+        }
+      }
+      if (tNext.x < tNext.y) { tc = tNext.x; tNext.x += tDelta.x; cell.x += stepI.x; }
+      else { tc = tNext.y; tNext.y += tDelta.y; cell.y += stepI.y; }
+    }
+  }
+  if (g == 0u) { return vec4f(0.0, 0.0, 0.0, -1.0); }
+  let n = normalize(sceneryGlobal(nB));
+  let alb = scenery[g + 2u].xyz;
+  return vec4f(alb / PI * (Eg * max(dot(n, Ls), 0.0) + sky * 0.5 * (1.0 + dot(n, up))), best);
 }
 fn buildingFaceAt(g:u32,p:vec3f,d:vec3f,t:f32)->SceneryHit {
   let head=scenery[g];let count=u32(head.z);
