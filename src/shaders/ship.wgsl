@@ -367,7 +367,7 @@ fn project(p0: vec3f) -> vec4f {
   return vec4f(xy, NEAR, p.z);
 }
 
-// (26 Nov 2026 — PROBLEMES « mont Faron »: the canopy and the flames seen through a near crown) The scene's occlusion distance [m]
+// (25 Nov 2026 — PROBLEMES « mont Faron »: the canopy and the flames seen through a near crown) The scene's occlusion distance [m]
 // along a camera-frame point or direction — the traced or rastered image's (post.wgsl occlusion): what hides the craft's hull (fs), its
 // glass (fsJetGlass) and ends its flames' march (plumeFs). None given (S.img.w 0): infinitely far.
 fn sceneDistAt(p: vec3f) -> f32 {

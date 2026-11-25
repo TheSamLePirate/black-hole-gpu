@@ -80,6 +80,13 @@ describe.skipIf(!E2E)("probe: a Paris street's shadows and pavements", () => {
       const s = await __bh.renderer.surfaceAt(0.93, y); out.push([+y.toFixed(2), s?.kind ?? "null", s ? +s.ground.toFixed(2) : -1, s?.level ?? -9]); }
       return out; })()`);
     console.log(`  the column at x 0.93 [y, kind, distance m, level]: ${JSON.stringify(column)}`);
+    // (26 Nov 2026: the dark lump at the left façade's foot, ~(0.40–0.45, 0.37–0.41) of the image — what the visibility holds there: its
+    // kind, its ground and nearest distances, its level — against the pavement just below it)
+    const lump =
+      await app.js(`(async () => { const out = []; for (const [x, y] of [[0.4, 0.38], [0.425, 0.39], [0.45, 0.395], [0.425, 0.42], [0.425, 0.45]]) {
+      const s = await __bh.renderer.surfaceAt(x, y); out.push([x, y, s?.kind ?? "null", s ? +s.ground.toFixed(2) : -1, s ? +s.nearest.toFixed(2) : -1, s?.level ?? -9, s?.object ?? -1]); }
+      return out; })()`);
+    console.log(`  the left façade's foot [x, y, kind, ground m, nearest m, level, object]: ${JSON.stringify(lump)}`);
     console.log(
       `  surfaces near: ${JSON.stringify(await app.js(`(() => { const s = __bh.renderer.earthScenery.stats(); return { cellRoads: s.cellRoads, pavementsWidened: s.pavementsWidened, furniture: s.furniture, buildings: s.buildings, streetLevelled: __bh.renderer.streetLevelled, streetLevelTiles: __bh.renderer.streetLevelTiles }; })()`))}`,
     );

@@ -515,7 +515,7 @@ interface ShipTargetRes {
   jetGlassHdr?: GPUTexture;
   jetGlassPipe?: GPURenderPipeline;
   jetGlassMoments?: GPUBuffer;
-  /** (26 Nov 2026) the flames' bind groups with this target's occlusion depth (ship.wgsl plumeFs: their march ends at the scene) */
+  /** (25 Nov 2026) the flames' bind groups with this target's occlusion depth (ship.wgsl plumeFs: their march ends at the scene) */
   plumeBind?: { gen: number; mb: GPUBuffer; out: GPUBindGroup; in: GPUBindGroup };
   /** the station's depth bound (group 1), and which texture it holds */
   occBind?: { tex: GPUTexture; g: GPUBindGroup };
@@ -3202,7 +3202,7 @@ export class ShipRenderer {
         // (an A320 among them: the pipeline with its glass's code — GLASS_A320)
         const a320 = glassy.some((dr) => dr.mesh === this.meshes.a320);
         const main = a320 ? (this.a320GlassPipe ??= this.glassPipe!(0, true)) : this.pipes.jetGlass;
-        // (11: the occlusion depth — the glass hidden where the scene is nearer, as the hull — 26 Nov 2026)
+        // (11: the occlusion depth — the glass hidden where the scene is nearer, as the hull — 25 Nov 2026)
         const glassEntries = (): GPUBindGroupEntry[] => [
           ...this.shipEntries!.filter((e) => [0, 1, 2, 3, 12, 16, 22, 27, 41, 42, 43].includes(e.binding)),
           { binding: 10, resource: hdr.createView() },
@@ -3392,7 +3392,7 @@ export class ShipRenderer {
         pp.setIndexBuffer(occl.m.ibuf, "uint32");
         pp.drawIndexed(occl.n);
       }
-      // (the flames' groups with this target's occlusion depth — 26 Nov 2026: their march ends at the scene)
+      // (the flames' groups with this target's occlusion depth — 25 Nov 2026: their march ends at the scene)
       if (this.jetCount > 0 && (!res.plumeBind || res.plumeBind.gen !== this.bindGen || res.plumeBind.mb !== mb)) {
         const withDepth = (p: GPURenderPipeline) =>
           this.device.createBindGroup({

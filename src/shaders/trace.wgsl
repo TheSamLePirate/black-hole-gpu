@@ -6822,6 +6822,30 @@ fn ridgedMFw(p0: vec3f, oct: f32, lam0: f32, res: f32) -> f32 {
   }
   return sum / norm;
 }
+// (25 Nov 2026, Sam's decision of 25 Nov — terrain.ts surveyKept, tfbmFs: one rule) the finest layer's octaves faded where a survey
+// holds them — the coarser layers' rule on the surveyed ground, whole by res ≤ DETAIL_SURVEY_RES / 2, none on the global data's
+const DETAIL_SURVEY_RES = 25.0;
+fn surveyKept(lam: f32, res: f32) -> f32 {
+  return 1.0 - (1.0 - smoothstep(0.5 * DETAIL_SURVEY_RES, DETAIL_SURVEY_RES, res)) * (1.0 - octaveKept(lam, res));
+}
+fn tfbmFs(p0: vec3f, oct: f32, lam0: f32, res: f32) -> f32 {
+  var p = p0;
+  var a = 0.5;
+  var s = 0.0;
+  var n = 0.0;
+  var lam = lam0;
+  for (var i = 0; f32(i) < oct; i++) {
+    cost(8u);
+    let fade = clamp(oct - f32(i), 0.0, 1.0);
+    let w = surveyKept(lam, res);
+    if (w > 0.0) { s += a * fade * gnoise(p) * w; }
+    n += a * fade;
+    p = p * 2.03 + vec3f(1.7, 9.2, 3.1);
+    a *= 0.5;
+    lam /= 2.03;
+  }
+  return s / max(n, 1e-6);
+}
 fn tfbmFw(p0: vec3f, oct: f32, lam0: f32, res: f32) -> f32 {
   let i0 = firstKept(lam0, res);
   var p = p0;
@@ -6896,7 +6920,8 @@ fn earthDetail(q: vec3f, h0: f32, foot: f32, res: f32) -> f32 {
   let o2 = layerOctF(20000.0, foot, EARTH_RM, 3.0);
   if (o2 > 0.0 && land > 0.0) { h += tfbmFw(q * 20000.0 + vec3f(5.0), o2, EARTH_RM / 20000.0, res) * min(o2, 1.0) * 50.0 * land * (1.0 - mount); }
   let o3 = layerOctF(200000.0, foot, EARTH_RM, 3.0);
-  if (o3 > 0.0 && land > 0.0) { h += tfbmF(q * 200000.0 + vec3f(3.0), o3) * min(o3, 1.0) * (3.0 + 8.0 * mount) * land; }
+  // (the finest, 32 → 8 m: faded where a survey holds it — surveyKept; the global data's ground unchanged)
+  if (o3 > 0.0 && land > 0.0) { h += tfbmFs(q * 200000.0 + vec3f(3.0), o3, EARTH_RM / 200000.0, res) * min(o3, 1.0) * (3.0 + 8.0 * mount) * land; }
   return h;
 }
 // ---- the runways (src/game/sites.ts: runwayWeight — the same figures, the ground graded alike for the
@@ -6934,6 +6959,7 @@ fn runwayGrade(g: vec3f) -> vec4f {
   var lv = 0.0;
   var el = 0.0;
   var cut = 0.0;
+  var past = 0.0;
   for (var k = 0u; k < rwyCount(); k++) {
     let d = point - earthSurface(P.runways[1u + 4u * k].xyz);
     let L = P.runways[1u + 4u * k].w;
@@ -6956,12 +6982,22 @@ fn runwayGrade(g: vec3f) -> vec4f {
     if (la * lc > lv) {
       lv = la * lc;
       el = P.runways[4u + 4u * k].w;
+      // (25 Nov 2026 — runway-grade.ts past: off a real airfield's paved strip its level lifts the land alone — SFO's bay before 28L,
+      // raised to the runway's 3.1 m out to 900 m, drawn and felt as land)
+      past = select(0.0, smoothstep(0.0, 1.0, max(max(-a, a - L), max(c - hw, 0.0)) / 30.0), world);
     }
     let flat = max(wa * wc, la * lc);
     w = max(w, flat);
     cut = max(cut, max(flat, select(0.0, approachCut(a, c, L, hw), world)));
   }
+  RWY_PAST = past;
   return vec4f(w, lv, el, cut);
+}
+// (25 Nov 2026 — runway-grade.ts levelOver, the same figures: change both) The last runwayGrade's level `lv` at a point whose data ground
+// is `h` [m over the sea, before the grading]: whole on the strip; off a real airfield's strip, the land's alone — the water stays its own
+fn runwayLevelOver(lv: f32, h: f32) -> f32 {
+  if (RWY_PAST <= 0.0) { return lv; }
+  return lv * (1.0 - RWY_PAST * (1.0 - smoothstep(0.0, 1.0, h / 0.3)));
 }
 // the share of a pixel of footprint fw [m] a band lo…hi along x covers (the band thinner than the pixel:
 // its share of it)
@@ -7214,6 +7250,9 @@ fn runwayShade(a0: f32, c0: f32, L: f32, hw: f32, fw: vec2f, el: f32, rev: bool,
 }
 // (the hit point from the camera [m, the Earth's squashed axes] — set by earthNear for its ground, w: on)
 var<private> RWY_HIT: vec4f = vec4f(0.0);
+// (25 Nov 2026 — runway-grade.ts Grade.past: the last runwayGrade's — how far its level's place lies off a real airfield's paved strip,
+// 0 on it … 1 past 30 m —; read by runwayLevelOver right after that call)
+var<private> RWY_PAST: f32 = 0.0;
 
 // The windsocks (PLAN-METEO W4): one beside each end's touchdown zone of the runways near — 300 m in, 70 m
 // out on the landing's left —, a 6 m mast and its sock 3.6 m long, five bands orange and white, streaming
@@ -8249,7 +8288,7 @@ fn earthHeightExactG(q: vec3f, foot: f32) -> f32 {
   // (a runway's airfield graded: at its level, its detail off — and under its approaches' funnels (w) —: the gear's ground the same)
   var g = vec4f(0.0);
   if (HAS_RWY) { g = runwayGrade(q); }
-  let h0 = mix(hr.x, g.z, g.y);
+  let h0 = mix(hr.x, g.z, runwayLevelOver(g.y, hr.x));
   if (g.w >= 1.0) { return max(h0, 0.0); }
   if (NEAR_DETAIL && GROUND_DETAIL) { return max(h0 + (1.0 - g.w) * earthDetail(q, h0, foot, hr.y), 0.0); }
   return max(h0, 0.0);
@@ -8286,12 +8325,13 @@ fn earthHeightStepG(q: vec3f, foot: f32) -> f32 {
   if (HAS_RWY) { g = runwayGrade(q); }
   if (P.tiles.w > 0.5) {
     let hr = earthH(q, foot, true);
-    let h1 = mix(hr.x, g.z, g.y);
+    let h1 = mix(hr.x, g.z, runwayLevelOver(g.y, hr.x));
     if (NEAR_DETAIL && GROUND_DETAIL) { return max(h1 + (1.0 - g.w) * earthDetail(q, h1, max(foot * 4.0, 1.0), hr.y), 0.0); }
     return max(h1, 0.0);
   }
   let texelM = EARTH_RM * TAU / f32(textureDimensions(earthElev).x);
-  let h0 = mix(textureSampleLevel(earthElev, bgSamp, earthUV(q), max(log2(max(foot, 1.0) / texelM), 0.0)).r, g.z, g.y);
+  let hm = textureSampleLevel(earthElev, bgSamp, earthUV(q), max(log2(max(foot, 1.0) / texelM), 0.0)).r;
+  let h0 = mix(hm, g.z, runwayLevelOver(g.y, hm));
   if (NEAR_DETAIL && GROUND_DETAIL) { return max(h0 + (1.0 - g.w) * earthDetail(q, h0, max(foot * 4.0, 1.0), texelM), 0.0); }
   return max(h0, 0.0);
 }
@@ -11254,7 +11294,7 @@ fn earthGround(q: vec3f, rd: vec3f, Ls: vec3f, E: vec3f, fx: vec3f, fy: vec3f, h
   // (an airfield levelled — sites.ts runwayGrade —: land, even where the map had the sea — a runway's
   // embankment on the shore, Tanegashima's)
   var lvl = 0.0;
-  if (HAS_RWY && RWY_HIT.w > 0.5) { lvl = runwayGrade(gq).y; }
+  if (HAS_RWY && RWY_HIT.w > 0.5) { lvl = runwayLevelOver(runwayGrade(gq).y, hG); }
   // (the sea's mask is the global relief map's — a few km a texel —: a ground the fine relief puts over the sea's
   // level — 0 there, its noise off below 40 m — is land whatever it says, and so is what the scenery draws on land —
   // the coast's hills and cliffs, a seaside town's low streets were shaded as the sea)
@@ -17328,7 +17368,10 @@ fn shadeLite(@builtin(global_invocation_id) gp: vec3u, @builtin(workgroup_id) wi
   var wat = vec4f(0.0);
   if (!meshW && !isTree && (liteSkip() & 1u) == 0u) {
     let dirW0 = toBody(ray.look);
-    let lvl0 = select(0.0, runwayGrade(gq).y, rwyCount() > 0u);
+    // (25 Nov 2026: off a real airfield's strip, levelled only where the data have land — runwayLevelOver: the ground drawn, hG, lifted
+    // to the runway's level there, left at the sea over the water)
+    var lvl0 = 0.0;
+    if (rwyCount() > 0u) { lvl0 = runwayLevelOver(runwayGrade(gq).y, hG); }
     let nW = select(gq, tn, dot(tn, tn) > 0.5);
     wat = liteWater(gq, fx, fy, hG, fp * EARTH_RM, nW, dirW0, tM, lvl0);
     // (liteSkip 1073741824 — an A/B —: the open sea's ground read anyway, as before PLAN-MER-WEBGPU S2)
@@ -17626,8 +17669,12 @@ fn shadeWater(@builtin(workgroup_id) wid: vec3u, @builtin(local_invocation_id) l
     let dL = normalize((downW * toF).xy + vec2f(1e-6, 0.0));
     // (a fall has water above it and below it; a steep bank, land on its upper side — the river's outline over its banks, the
     // relief at 30 m softening them, made their slopes white: the water looked for a few metres up and down the slope)
+    // (25 Nov 2026 — as far as the slope was read from: ±ds on a level whose texel is as wide — 26 m at ±25 m —, the land's relief
+    // reaches 2·ds into the water. At 12 m, Cheviré's approach viaduct on the banks — the far levels' overground, its 45 m — still made
+    // white water 25–50 m out from each bank under the deck; its part over the river is cleared where the relief is prepared,
+    // water-flatten.ts clearOverWater)
     if (steep > 0.0) {
-      let reach = max(12.0, 3.0 * footSea);
+      let reach = max(2.0 * ds, 3.0 * footSea);
       let above = sceneryWaterAt(vec3f(pL.xy - dL * reach, pL.z), footSea, tM).x;
       let below = sceneryWaterAt(vec3f(pL.xy + dL * reach, pL.z), footSea, tM).x;
       steep *= smoothstep(0.3, 0.8, min(above, below));

@@ -342,7 +342,7 @@ export function lineUnderDeck(
 }
 
 /**
- * (review A9; 26 Nov 2026 — PROBLEMES « L'eau sous Cheviré ») Whether an OpenStreetMap bridge area lies under a deck already built: its
+ * (review A9; 25 Nov 2026 — PROBLEMES « L'eau sous Cheviré ») Whether an OpenStreetMap bridge area lies under a deck already built: its
  * centre, its outline (16 points at most) or its inside — 7 × 7 over its box, within its outline (`contains`) — on a deck (`onDeck`, the
  * registry's, in plan). Cheviré's area, wider than its two surveyed carriageways, its centre between them, its outline off both, was
  * drawn as a slab a few metres over the Loire — the light band 60 m under the real deck. `ring`: its outline in the frame (z unused).
