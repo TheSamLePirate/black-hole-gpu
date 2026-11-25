@@ -11699,13 +11699,6 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
   drawnBuildingCells(): { x: number; y: number }[] {
     return [...(this.buildingFar?.drawnCells() ?? []), ...(this.nearMeshes?.drawnCells() ?? [])];
   }
-  /** (26 Nov 2026 — a lever, the ABBA's) the water's mirror of the near cells' buildings (near-meshes.ts mirrorOn, trace.wgsl nearMirror) */
-  get nearMirrorOn() {
-    return this.nearMeshes?.mirrorOn ?? false;
-  }
-  set nearMirrorOn(on: boolean) {
-    if (this.nearMeshes) this.nearMeshes.mirrorOn = on;
-  }
   nearCells() {
     return this.nearMeshes?.stats() ?? null;
   }
