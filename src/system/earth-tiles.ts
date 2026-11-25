@@ -2453,6 +2453,8 @@ export class EarthTiles {
         const s = this.slotOf(L, x, y);
         const fill = this.standInKeys.has(key) && L.key[s] === key ? (L.data[s] ?? undefined) : undefined;
         h = await nationalHeights(src, L.z, ((x % L.n) + L.n) % L.n, y, ctl.signal, !!ground, ground, coarse, fill);
+        // (25 Nov 2026 — water-flatten.ts: the ground under the inland water made level here, once, for every reader of the relief)
+        if (!ground && L.z >= FLATTEN_Z0) h = await flattenInland(L.z, ((x % L.n) + L.n) % L.n, y, h, ctl.signal);
       } finally {
         clearTimeout(timer);
       }
@@ -3823,6 +3825,26 @@ function parentBlob(url: string): Promise<Blob> {
 export const roadsUrl = (z: number, x: number, y: number) => `https://tiles.openfreemap.org/planet/latest/${z}/${x}/${y}.pbf`;
 // (the vector tiles in, the last few kept — a z 13 one serves its four z 14 tiles —, never cancelled by one tile's abort)
 const roadFiles = new Map<string, Promise<ArrayBuffer | null>>();
+/** (25 Nov 2026) the relief's levels whose ground is levelled under the inland water (water-flatten.ts): a texel of 19 m and finer */
+export const FLATTEN_Z0 = 13;
+/**
+ * A national relief tile's ground levelled under its inland water (water-flatten.ts — the bed's spikes, a deck's ridge, the river's
+ * own surface level): OpenFreeMap's vector tile over it (night-roads' z 13, its square of it), the work in the decode worker. No tile,
+ * a failure: the heights as they came.
+ */
+async function flattenInland(z: number, x: number, y: number, h: Float32Array, signal: AbortSignal): Promise<Float32Array> {
+  const rk = Math.max(z - ROAD_MVT_Z1, 0);
+  const sub = { k: rk, x: x - ((x >> rk) << rk), y: y - ((y >> rk) << rk) };
+  try {
+    const mvt = await fetchRoads(z - rk, x >> rk, y >> rk, signal);
+    if (!mvt || signal.aborted) return h;
+    const r = await decodeOff({ op: "flatten", heights: h.slice(0, TILE * TILE), mvt, z, y, sub });
+    if (r.heights && r.heights.length === TILE * TILE) h.set(r.heights, 0);
+  } catch {
+    /* the heights as they came */
+  }
+  return h;
+}
 async function fetchRoads(z: number, x: number, y: number, signal: AbortSignal): Promise<ArrayBuffer | null> {
   const url = roadsUrl(z, x, y);
   let p = roadFiles.get(url);

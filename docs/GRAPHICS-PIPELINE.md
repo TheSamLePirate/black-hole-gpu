@@ -142,6 +142,11 @@ l'e2e, aucune requête IGN). GPU p50 = `renderer.lastGpuMs` sur 90 images ; le b
   | 0,5 en gris plat (géométrie, MSAA seuls) | 2,37 | 1,99 |
 
   Avant le lot la même passe valait 9,45 (finale) et 7,06 (parking) ms (`tc-amp`).
+- **La table aérienne ailleurs qu'à SFO — l'image** (ce Mac, M1 Max, 25 nov. 2026, après la fusion : `paris-routes-cost` `PRC_VIEWS=rivoli-dry`,
+  `ab-commit.ts 3a7228a6` — main avant le lot — contre l'arbre, A B B A) : rue de Rivoli, écart moyen A ↔ B 0,13 / 0,35 contre A/A
+  0,34 et B/B 0,17 (0–255) — **la même image** (`docs/progress/perf-trafic-2026-11-25/rivoli-table-aerienne-planche.jpg`). Le temps GPU
+  de ce Mac (partagé avec d'autres e2e pendant la course) n'est pas retenu : B +1,4 à +2,2 ms sur toutes les passes à la fois (y compris
+  des noyaux que le lot ne touche pas, `trace`, `trace (discs)`), à reprendre sur kerr-mini — **non mesuré** là.
 - **Reste** : la passe d'ombrage vaut encore 5–6,6 ms par image, dont **3–4,2 ms d'ombrage de pixels** (au-dessus du gris plat) —
   surtout l'A320 gréé proche (88–155 px ; son niveau 4 cm garde 62 % de ses triangles, plus grossier il faudrait ses pièces soudées) : le shader unique de l'appareil (`fs`,
   37 textures, toutes les branches de tous les engins) paie ses registres partout ; un `fs` propre aux avions de ligne (comme `HULL_JET`
@@ -193,6 +198,22 @@ l'e2e, aucune requête IGN). GPU p50 = `renderer.lastGpuMs` sur 90 images ; le b
   `renderer.seaWakes`, trois fois en alternance, médianes) : vue arrière haute du Ford 1,0 → 0,7 ms, vue de travers basse
   0,5 → 0,2 ms — **dans le bruit d'une seule passe**, aucun gain revendiqué ; à 76 m du chalutier (`traffic-free-camera`) :
   −0,1 puis +0,8 ms selon les passes (vue en direct, bruitée). Coût GPU des autres changements **non mesuré**.
+
+### PONT-ROUTES — revue E : le lit des rivières aplani (26 novembre 2026, branche de l'agent)
+
+**Code, tests unitaires ; e2e `bridges-notable` 7/7 et `bridges` 7/7 sur ce Mac (M1 Max ; kerr-mini injoignable)**.
+
+- **Chargement du relief (hors image)** : chaque tuile nationale de niveau ≥ 13 (`FLATTEN_Z0`), à sa première passe, voit son sol aplani
+  sous l'eau intérieure — `earth-tiles.ts refine` → `flattenInland` : la tuile vectorielle d'OpenFreeMap z 13 déjà demandée pour les
+  rues (`fetchRoads`, son cache), puis une requête **`flatten` au worker de décodage** (`tile-decode.ts` : `waterMask` sans découper les
+  ponts, `water-flatten.ts flattenUnderWater` : ouverture morphologique ±48 m, filtre de van Herk). Mesuré hors navigateur (ce Mac, 26
+  nov., tuile synthétique mi-eau) : 6–19 ms la tuile selon la résolution (`scripts` non, `bun -e` ; un chiffre de CPU de worker, non
+  mesuré en jeu). Pas d'eau : sortie immédiate. Tous les lecteurs (relief raster, `earthH` du traceur, contact, `groundAt`) lisent le sol aplani.
+- (`beb2615e`, `main` traçant les proxys de couronnes devant le ciel, **repris par `9f22bb29`** : un halo pâle au bord des couronnes.)
+- **Mesuré** (ce Mac M1 Max, 26 nov., une passe, p50 / p95 ms, `remote-results/ponts-7-local`) : `bridges` — Grenelle 26,5 / 29,6,
+  Alexandre III 28,3 / 32,9, Rivoli 29,1 / 31,2, Millau 17,2 / 21,5, Golden Gate 1 km 25,9 / 33,2, 30 km 14,7 / 17,5 ; `bridges-notable` —
+  Cheviré 19,8 / 21,1, Grenelle 24,1 / 28,0, Alexandre III 23,5 / 25,0, Millau 16,9 / 19,9, Golden Gate 22,9 / 31,9. Sans A/B (kerr-mini
+  injoignable) : aucun écart attribué.
 
 ### PONT-ROUTES — revue D : fourche de Grenelle, eau sous Cheviré, liseré des câbles (25 novembre 2026, branche de l'agent)
 
@@ -1224,7 +1245,7 @@ Paris jusqu'à `earthSettled` » chronométré par étape.
 
 <!-- pipeline-inventory:begin (bun scripts/pipeline-inventory.ts --write) -->
 
-_Généré le 2026-11-25T09:01:45Z sur `c87fb232` (arbre de travail). Ne pas éditer à la main : relancer l'outil._
+_Généré le 2026-11-25T09:03:58Z sur `cc358ac3` (arbre de travail). Ne pas éditer à la main : relancer l'outil._
 
 **130 sites de création de pipeline** (86 rendu, 44 calcul, dont 66 asynchrones) et 43 `createShaderModule` dans 32 fichiers ; **44 programmes WGSL** (16 fichiers .wgsl, 28 chaînes dans le TypeScript) ; **66 libellés de passes** du profileur GPU (+ 11 sites à libellé dynamique).
 
@@ -1347,7 +1368,7 @@ _Généré le 2026-11-25T09:01:45Z sur `c87fb232` (arbre de travail). Ne pas éd
 | `src/system/earth-shore.ts:272` | compute async | `earth shore bake` | — |
 | `src/system/earth-tiles.ts:1311` | compute | — | `main` |
 | `src/system/earth-tiles.ts:1312` | compute | `bc7 study: a layer` | `main` |
-| `src/system/earth-tiles.ts:3350` | render | `imagery mips` | `vs`, `fs` |
+| `src/system/earth-tiles.ts:3352` | render | `imagery mips` | `vs`, `fs` |
 | `src/system/giant-tile.ts:244` | compute | `giant tile` | `e` |
 | `src/system/gtao.ts:118` | compute async | — | `gtao` |
 | `src/system/hd-maps.ts:300` | render | — | `vs`, `entry` |
@@ -1572,7 +1593,7 @@ Leur coût n'apparaît que dans l'intervalle de complétion de la frame (ou d'un
 | render pass | `src/system/earth-maps.ts:276` |
 | compute pass | `src/system/earth-tiles.ts:1336` |
 | compute pass | `src/system/earth-tiles.ts:1365` |
-| imagery mips | `src/system/earth-tiles.ts:3381` |
+| imagery mips | `src/system/earth-tiles.ts:3383` |
 | render pass | `src/system/hd-maps.ts:320` |
 | horizon mips | `src/system/horizon-maps.ts:767` |
 | terrain cache fade | `src/system/terrain-cache.ts:482` |
