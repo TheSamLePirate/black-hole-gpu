@@ -39,8 +39,8 @@ test("liteMaterial: a step's face in the mesh reads the photograph through a met
   expect(mat).toContain("let stepFace = !isTree && upF > 0.62 && dot(ngF, gq) < 0.5;");
   expect(mat).toContain("max(length(fx), 1.0 / EARTH_RM), stepFace)");
   expect(mat).toContain("select(normalize(fx + vec3f(1e-12)) * fs, fxI, i == 0)");
-  // (nor the roads' walk, paint, decals nor the detail scans laid on it from above)
-  expect(mat).toContain("!isTree && !stepFace && (liteSkip() & 134217728u) == 0u");
+  // (nor the pavement's detail nor the detail scans laid on it from above — the surface's plain colour kept)
+  expect(mat).toContain("sv.kind == 1.0 && fpM < 3.0 && !stepFace");
   expect(mat).toContain("!mesh && !isTree && !stepFace && fpM < 300.0");
   // (one depth-image normal read, shared with the light's)
   expect(mat).toContain("var ng = ngF;");

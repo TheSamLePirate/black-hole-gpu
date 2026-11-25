@@ -16276,7 +16276,7 @@ fn liteMaterial(gq: vec3f, q: vec3f, ph: vec3f, rd: vec3f, look: vec3f, tM: f32,
     // one: a wall filling the view at 4 anisotropic reads a pixel cost 60 ms)
     let fs = 1.0 / EARTH_RM;
     for (var i = 0; i <= select(0, 3, faceW > 0.0); i++) {
-      TILE_AT_ON = anchored && i == 0;
+      TILE_AT_ON = anchored && i == 0 && !stepFace;
       let t = earthImageryAniso(normalize(gq + faceDir * (2.5 * f32(i) * fs)), select(normalize(fx + vec3f(1e-12)) * fs, fxI, i == 0), select(normalize(fy + vec3f(1e-12)) * fs, fyI, i == 0));
       TILE_AT_ON = false;
       if (i == 0) { img = t; continue; }
@@ -16332,8 +16332,7 @@ fn liteMaterial(gq: vec3f, q: vec3f, ph: vec3f, rd: vec3f, look: vec3f, tM: f32,
   let onBridgeDeck = atBridgeMesh(at) && dot(n, gq) > 0.55;
   let deckWalk = onBridgeDeck && fpM < 2.0 && tM < 2500.0;
   SC_ON_BRIDGE = onBridgeDeck;
-  // (a step's face — stepFace —: no road, paint or decal laid on it from above — each pixel one point of them, columns down the face)
-  if (HAS_SCENERY && (!mesh || deckWalk) && !isTree && !stepFace && (liteSkip() & 134217728u) == 0u) {
+  if (HAS_SCENERY && (!mesh || deckWalk) && !isTree && (liteSkip() & 134217728u) == 0u) {
     // (the exact walk near — its stripes, sleepers, edges' antialiasing — and at night — its kinds for the streets' lights —;
     // the decals' one read beyond: the walk on every pixel under 12 m cost 0.66 ms in La Mancha)
     // (under a national photograph the map's colour is not drawn — the walk was for nothing there: France whole —; at night
@@ -16546,7 +16545,9 @@ fn liteMaterial(gq: vec3f, q: vec3f, ph: vec3f, rd: vec3f, look: vec3f, tM: f32,
   // (a town pavement — a kerbed road's past its kerb, out to the façades: pavement-reach.ts — laid level: the relief's metre of bumps
   // against the walls — the survey's ground about the buildings — not in its light; 25 Nov 2026)
   if (roadPaved > 0.0 && sv.kind == 1.0 && SC_ROAD.x > SC_ROAD.y && (u32(SC_ROAD.w + 0.5) & 8u) != 0u) { n = normalize(mix(n, gq, 0.8 * roadPaved)); }
-  if (HAS_SCENERY && roadPaved > 0.0 && sv.kind == 1.0 && fpM < 3.0) {
+  // (a step's face — stepFace —: no pavement's detail laid on it from above — its joints, setts and cracks one point a pixel, columns
+  // down the face —; the surface's plain colour kept)
+  if (HAS_SCENERY && roadPaved > 0.0 && sv.kind == 1.0 && fpM < 3.0 && !stepFace) {
     pv = roadPavement(roadMat, SC_ROAD, SC_ROAD_DIR, SC_AT + P.scenery[6].xy, fpM);
     A *= mix(vec3f(1.0), pv.tint, roadPaved);
     n = normalize(n + (P.scenery[0].xyz * pv.tilt.x + P.scenery[1].xyz * pv.tilt.y) * roadPaved);
