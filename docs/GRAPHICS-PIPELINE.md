@@ -20,6 +20,35 @@ Windows/D3D12. Les numéros de ligne sont ceux de `da4e75bd`.
 
 ---
 
+### Rues nivelées hors du fil de la page, quel que soit l'ordre ; verre et flammes derrière un arbre proche (26 novembre 2026, branche de l'agent, `0f3c83f6`, `74a3ba7b`, `7ba593ce`)
+
+- **Nivellement des rues (`earth-tiles.ts refine`, `street-level-book.ts`, `tile-decode.ts` op `level`) — `0f3c83f6`, `74a3ba7b`** :
+  le nivellement quitte le fil de la page pour le worker de décodage (comme l'aplanissement de l'eau) ; il se place dans `refine`,
+  après les hauteurs nationales (marquées, marques conservées) et avant l'aplanissement de l'eau. Une tuile arrivée avant une
+  cellule « rue » de son voisinage 3 × 3 garde son relevé (48 au plus, 256 Kio chacun) et se nivelle de nouveau à partir de lui quand
+  le pool des rues remet la cellule (`cell-workers.ts onStreetCell` → `EarthTiles.streetCellsArrived`), puis l'eau, puis `put`/`keep`
+  — le même sol quel que soit l'ordre (test dans les deux ordres, témoin). Trottoirs nivelés jusqu'aux façades des cellules de
+  bâtiments (`facadeSides` par segment et par côté), niveaux des routes fondus aux carrefours. Chaque route parcourt ses seuls pixels
+  par segment, les cellules sont lues une fois par le worker (48 gardées). Sonde : `renderer.streetLevelProbe`.
+  **Mesuré** (ce Mac, M1 Max, sans écran, machine chargée par d'autres agents — charge moyenne 8 à 15 —, sonde
+  `paris-street-shadows`, arrivée sur la rue de Paris, données Terre sur disque) :
+
+  | | temps de nivellement par tuile (moyen / max) | où | plus longue image de l'arrivée | images > 50 ms / > 100 ms |
+  |---|---|---|---|---|
+  | avant (`e6268c1f`, fil de la page) | 22,6 / 294 ms (244 tuiles) | page | 283 ms (fil principal 283 ms) | 35 / 18 |
+  | worker, première version (`0f3c83f6`) | 206 / 665 ms (266 tuiles) | worker | 133 ms | 11 / 4 |
+  | worker, par segment (`74a3ba7b`) | 26,2 / 108 ms (467 passages, dont 355 renivellements) | worker | 117 ms (fil principal 117 ms, GPU 133 ms) | 3 / 2 |
+
+  Une passe chacune, sur une machine chargée : l'écart des images longues est un ordre de grandeur, pas une mesure fine ; les
+  passages de la troisième ligne comptent les renivellements (une tuile venue avant ses cellules). Banc synthétique (3 × 3 de
+  cellules de ville, 3 040 routes, 30 000 emprises) : par segment 2,7 × plus rapide que chaque pixel contre chaque route, sol identique
+  au bit près.
+- **Verre et flammes de l'appareil (`ship.wgsl fsJetGlass`, `plumeFs`, `sceneDistAt`) — `7ba593ce`** : le verre d'une instance
+  « far » (tout appareil dont l'œil n'est pas dans la cabine) est caché là où la scène tient plus près, comme la coque ; la marche des
+  flammes s'arrête à la distance de la scène. Les groupes du verre et des flammes portent la profondeur d'occultation de la cible
+  (binding 11 ; ceux des flammes faits par cible, `res.plumeBind`). FARON. Coût GPU **non mesuré** (une lecture de `sceneDepth` par
+  fragment du verre et des flammes).
+
 ### Appareil derrière un arbre proche, trottoirs par côté, rues posées sur le relief (25 novembre 2026, branche de l'agent, `599c2425`, `c3b4cea0`, `c87fb232`)
 
 - **Passes de l'appareil (`ship.ts`, `ship.wgsl` `fs`) — `599c2425`** : l'appareil piloté est caché là où la profondeur
@@ -35,7 +64,8 @@ Windows/D3D12. Les numéros de ligne sont ceux de `da4e75bd`.
   sous les routes des cellules « rue » en cache autour d'elle avant d'être gardée — le sol unique de la cache du raster et du
   contact : profil `roadProfile` le long de la route, dévers `roadBank` en travers (nul en ville), trottoirs une bordure de 0,12 m
   au-dessus de la chaussée, fondus sur 1,5 m. Rue de Paris (ce Mac) : 65 tuiles, 1 025 145 pixels nivelés. Temps CPU par tuile
-  **non mesuré dans la page** (sur le thread principal, à l'arrivée d'une tuile). `renderer.streetLevelOn` (comparaison).
+  **non mesuré dans la page** (sur le thread principal, à l'arrivée d'une tuile) — mesuré depuis : 22,6 ms en moyenne, 294 ms au plus, sur
+  la page (section du 26 novembre ci-dessus, qui le déplace dans le worker). `renderer.streetLevelOn` (comparaison).
 
 ### Ciel inversé de San Francisco, trait du mont Faron, colonnes d'une rue de Paris (25 novembre 2026, branche de l'agent, `9f850c5a`, `8d4e0be1`, `2813d883`, `cd789643`)
 
