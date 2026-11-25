@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 import trace from "../src/shaders/trace.wgsl" with { type: "text" };
 import type { Vec3 } from "../src/physics";
-import { facadeReach, kerbedRoad, PAVEMENT_REACH_MAX_M, widenRecord } from "../src/system/pavement-reach";
+import { facadeReach, kerbedRoad, PAVEMENT_OPEN_SIDE_M, PAVEMENT_REACH_MAX_M, widenRecord } from "../src/system/pavement-reach";
 import type { Primitive } from "../src/system/scenery-data";
 import { polygonPrimitive, surfaceSegment } from "../src/system/scenery-geometry";
 
@@ -61,8 +61,9 @@ test("a square, a park, a far façade: the class's pavement kept; a façade near
   expect(facadeReach([0, 0], [40, 0], 4, 7, lookup([box(0, 9, 9, 30)]))).toBeNull();
   // (a corner building across its end — the cross street's —: none of its points meets it across)
   expect(facadeReach([0, 0], [40, 0], 4, 7, lookup([box(42, -20, 60, 20)]))).toBeNull();
-  // (a park on one side, façades on the other: the class's pavement kept — the lawn not paved over)
-  expect(facadeReach([0, 0], [40, 0], 4, 7, lookup([box(-5, -30, 45, -9.5)]))).toBeNull();
+  // (a park on one side, façades on the other: towards them by 2.5 m at most — the lawn across not paved over more)
+  expect(facadeReach([0, 0], [40, 0], 4, 7, lookup([box(-5, -30, 45, -8.5)]))).toBeCloseTo(8.5, 6);
+  expect(facadeReach([0, 0], [40, 0], 4, 7, lookup([box(-5, -30, 45, -11)]))).toBeCloseTo(7 + PAVEMENT_OPEN_SIDE_M, 6);
   // (a bridge's road, an unkerbed one: never)
   const bridge = street();
   bridge.data[6] = 8 + 32768;
