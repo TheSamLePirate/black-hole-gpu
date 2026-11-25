@@ -6999,6 +6999,9 @@ fn lampV(d: vec2f) -> f32 {
 // approach lights (ALSF) 900 m out — a barrette of five every 30 m, a crossbar 300 m out — and their
 // sequenced flashers running to the threshold twice a second (the rabbit); the threshold's identification
 // strobes either side, once a second. Each found by rounding to its nearest: a few lamps a pixel.
+// (the landing end's approach lights there — a game site's always, a world runway's where its end has an ILS: runwayFlags 64 its le
+// end, 128 its far one — renderer nearRunways, src/world/approach-lights.ts alsEnds, the structures' own ends; set by runwayPave)
+var<private> RWY_ALS: bool = true;
 fn runwayLights(a: f32, c: f32, L: f32, hw: f32, t: f32) -> vec3f {
   let W = vec3f(1.0, 0.93, 0.78);
   let Y = vec3f(1.0, 0.72, 0.22);
@@ -7025,7 +7028,7 @@ fn runwayLights(a: f32, c: f32, L: f32, hw: f32, t: f32) -> vec3f {
       l += 0.7 * W * lampV(vec2f(a - 30.0 * kt, ac - 9.0 - 1.5 * x));
     }
   }
-  if (a < -15.0 && a > -915.0) {
+  if (RWY_ALS && a < -15.0 && a > -915.0) {
     let ka = round(a / 30.0);
     let x = clamp(round(c), -2.0, 2.0);
     l += 1.5 * W * lampV(vec2f(a - 30.0 * ka, c - x));
@@ -11102,15 +11105,38 @@ fn runwayPave(hit: vec3f, gq: vec3f, q: vec3f, rd: vec3f, Ls: vec3f, fx: vec3f, 
     // (the strip, its shoulders and the taxiway left of it — A2)
     let onStrip = ra >= -120.0 && ra <= L + 120.0 && rc <= hw + 60.0 && rc >= -210.0;
     let lit = P.runways[17].y > 0.01 || dot(gq, airPhysicalDirection(Ls)) < 0.06;
-    if (!onStrip && !(lit && ra > -1000.0 && ra < L + 1000.0 && abs(rc) < 25.0)) { continue; }
+    // (beyond the strip, the approach lights where they stand — on their structures' heads, the runway's level 0.64 m up
+    // (src/world/approach-lights.ts: the plane 0.5 m over it, the heads' centres 0.14 over that) —, not on the water or the ground under
+    // them: the view's ray where it crosses that level, nearer than the ground it meets — the lamps over the bay 3.5 m above its
+    // water at San Francisco's 28L; a ground over the level: its own point, as before)
+    var la = ra;
+    var lc = rc;
+    var lk = 1.0;
+    if (!onStrip && lit) {
+      let up = P.runways[1u + 4u * k].xyz;
+      let tH = length(hit);
+      let dv = hit / max(tH, 1e-6);
+      let du = dot(dv, up);
+      let tL = (P.runways[4u + 4u * k].w + geoidN(gq) + 0.64 - dot(P.runways[4u + 4u * k].xyz, up)) / min(du, -1e-6);
+      if (du < -1e-4 && tL > 0.0 && tL < tH) {
+        let relL = P.runways[4u + 4u * k].xyz + dv * tL;
+        la = dot(relL, P.runways[2u + 4u * k].xyz);
+        lc = dot(relL, P.runways[3u + 4u * k].xyz);
+        lk = tL / tH;
+      }
+    }
+    if (!onStrip && !(lit && la > -1000.0 && la < L + 1000.0 && abs(lc) < 25.0)) { continue; }
     // (the pixel's footprint on this runway's ground, along and across it [m])
     let ak = P.runways[2u + 4u * k].xyz;
     let ck = P.runways[3u + 4u * k].xyz;
     LAMP_F = vec4f(dot(fx, ak), dot(fx, ck), dot(fy, ak), dot(fy, ck)) * EARTH_RM;
     let fl = runwayFlags(k);
     let rev = (fl & 1u) != 0u;
+    RWY_ALS = (fl & 16u) == 0u || (fl & select(64u, 128u, rev)) != 0u;
     if (!onStrip) {
-      if ((fl & 16u) == 0u || (fl & 32u) != 0u) { o.lamps += runwayLights(select(ra, L - ra, rev), select(rc, -rc, rev), L, hw, P.runways[17].x); }
+      // (the lamps' footprint where the ray meets their level: nearer, smaller)
+      LAMP_F *= lk;
+      if ((fl & 16u) == 0u || (fl & 32u) != 0u) { o.lamps += runwayLights(select(la, L - la, rev), select(lc, -lc, rev), L, hw, P.runways[17].x); }
       continue;
     }
     // (its published end's designation: packed by fours in runways[17].zw — 37 to a place)

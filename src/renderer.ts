@@ -1,4 +1,6 @@
 import { holeFleet } from "./holefleet";
+import { alsEnds } from "./world/approach-lights";
+import { ilsAt } from "./world/approaches";
 import { SharpnessProbe, type SharpRow } from "./frame-probes";
 import { loadSeaMask } from "./game/seasim";
 import { kpFor } from "./system/space-weather";
@@ -4991,7 +4993,10 @@ export class Renderer {
       // (w: the runway's level [m] — its airfield graded to it (sites.ts runwayGrade), the windsocks' and the
       // buildings' feet)
       // (its across's w: the landing end and its flags — trace.wgsl runwayFlags)
-      out.set([...r.p, r.len, ...r.along, r.halfWidth, ...r.across, rev | (r.flags & ~1), ...d, r.elev], 4 + 16 * k);
+      // (its ends with approach lights — an ILS there: src/world/approach-lights.ts alsEnds, the structures' own —: 64 its le end, 128
+      // its far one; trace.wgsl runwayLights lights the landing end's only where it has them)
+      const als = r.world ? alsEnds([r], ilsAt).reduce((m, e) => m | (e.end === 0 ? 64 : 128), 0) : 0;
+      out.set([...r.p, r.len, ...r.along, r.halfWidth, ...r.across, rev | (r.flags & ~1) | als, ...d, r.elev], 4 + 16 * k);
     });
     if (near.length) {
       const st = near[0]!.r.site;

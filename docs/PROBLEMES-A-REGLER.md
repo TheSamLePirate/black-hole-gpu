@@ -3,6 +3,24 @@
 Problèmes constatés, pas encore réglés. Chaque entrée : la date (UTC), ce qui est mesuré ou observé et sa source, la cause
 connue ou supposée, la piste. Une entrée réglée est barrée avec le commit qui la règle, pas effacée.
 
+## L'eau de la baie de San Francisco verte émeraude près de l'approche de 28L : ce n'est pas de l'eau pour le rendu (relevé le 25 novembre 2026, `als-sfo-28l-day-close.jpg` ; diagnostiqué le même jour, non réglé — hors du lot : la classification de l'eau, `liteWater`)
+
+- **Constat** (ce Mac, sonde `zz-water-colour` sous leviers, `docs/progress/etiquettes-als-2026-11-25/baie-sfo-eau-leviers.jpg`) : vue
+  à 10 m au-dessus de la baie, 450 m avant 28L, l'eau proche sRGB ~(31–55, 64–74, 22–41), émeraude. Elle **ne change pas** avec
+  l'eau claire forcée (`renderer.tune` `TUNE_GSKIP` 1024 : la couleur du corps de `seaWaterOf` remplacée par celle de l'océan clair),
+  **ni sans l'eau** (`liteSkip` 1, `groundSpecular` vrai pour que le bit passe) ; elle **change sans l'imagerie** (`liteSkip` 128 :
+  gris-vert). Ces pixels sont donc dessinés comme du **sol**, couverts de la photo NAIP de l'eau turbide de la baie.
+- **Cause** : le sol de contact y est à −29,3 à −29,9 m ellipsoïdaux, soit **+2,4 à +3,0 m au-dessus de la mer** (géoïde −32,29 m) —
+  le relief USGS 3DEP « hydro-aplati », ses plans d'eau posés à la cote de l'eau au relevé, au-dessus du niveau moyen qu'en déduit le
+  géoïde —, au-dessus du seuil de `liteWater` (le relief au-dessus de la mer : de la terre). À 800 m et plus, le sol est à la mer
+  (−32,29) : de l'eau, et sa couleur y est celle du corps (`day.png` à 25 m : sRGB (91, 90, 52), kaki).
+- **La couleur du corps elle-même est déjà celle d'une eau turbide** (`seaWaterOf`, Kd490 de la baie 0,69–1,3 m⁻¹ — ESA OC-CCI) :
+  réflectance (0,067 ; 0,066 ; 0,037) à 0,69 (kaki), (0,10 ; 0,068 ; 0,035) à 1,3 (brun) ; Doxaran et al. 2002 (Remote Sensing of
+  Environment 81, la Gironde) : les eaux très chargées, R(rouge) ≈ R(vert) > R(bleu). Non modifiée faute de défaut établi.
+- **Piste** (au lot de l'eau — l'agent des ponts y travaille, `liteWater`) : tenir pour de l'eau un pixel sous le polygone d'eau d'OSM
+  (« ocean » d'OpenMapTiles) même si le relief y dépasse la mer de quelques mètres, ou reconnaître les plans d'eau hydro-aplatis du
+  relief (une étendue plate à moins de ~3 m de la mer).
+
 ## ~~Au parking de SFO, la finition du sol à 27 ms : l'air marché à chaque pixel~~ (relevé le 24 novembre 2026, e2e `traffic-runways` `TRW_COST=1`) — réglé le 25 novembre 2026 (branche d'agent)
 
 - **Mesuré** (kerr-mini, `20261124-214324-trw-cost` puis `20261125-040312-tc-amp`, e2e `traffic-cost`) : `earth lite: finishing` 23–27 ms
@@ -32,7 +50,7 @@ connue ou supposée, la piste. Une entrée réglée est barrée avec le commit q
 
 ## La ligne sombre pointillée et l'eau verte de la baie de San Francisco en courte finale : le réel, pas un défaut (relevé le 25 novembre 2026, `finale-apres.jpg`, diagnostiqué le même jour)
 
-- **25 nov. 2026, plus tard** : les structures de la rampe sont maintenant en 3D (`src/world/approach-lights.ts`, aux extrémités dotées d'un ILS ; e2e `approach-lights`, `docs/progress/etiquettes-als-2026-11-25/als-sfo-28l-*.jpg`). Restent : la nuit, les feux (`runwayLights`) au sol ou à l'eau sous les têtes ; l'ALSF entier partout (un MALSR plus court non distingué).
+- **25 nov. 2026, plus tard** : les structures de la rampe sont maintenant en 3D (`src/world/approach-lights.ts`, aux extrémités dotées d'un ILS ; e2e `approach-lights`, `docs/progress/etiquettes-als-2026-11-25/als-sfo-28l-*.jpg`). Leurs feux de nuit sur les têtes depuis (`runwayPave`). Reste : l'ALSF entier partout (un MALSR plus court non distingué).
 - **La ligne** (ce Mac, e2e `traffic-cost` `final-above`, `docs/progress/perf-trafic-2026-11-25/finale-dessus-leviers-planche.jpg`) :
   ni une ombre (elle reste sans les appareils, sans leurs ombres), ni une couture de polygone. Sans l'imagerie, une ligne claire **avec ses
   barres transversales** — la rampe d'approche de 28L/28R sur pilotis dans la baie, cartographiée dans OpenStreetMap (transport, jetée)
