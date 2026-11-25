@@ -20,6 +20,25 @@ Windows/D3D12. Les numéros de ligne sont ceux de `da4e75bd`.
 
 ---
 
+### Le relief procédural fin fondu sur le sol relevé (26 novembre 2026, branche de l'agent, `3e1c92e4`, décision de Sam du 25 novembre)
+
+- **`earthDetail` (`trace.wgsl`, `terrain.ts`), une règle commune `surveyKept` / `tfbmFs`** : la couche fine `o3` (32 → 8 m, ±3 m × la
+  terre) perd ses octaves là où un relevé les tient — la règle des couches `o1`/`o2` (`octaveKept`), entière sous une résolution de
+  12,5 m, nulle sur les données globales (res ≥ 25 m, `DETAIL_SURVEY_RES` = `TILE_RES_MIN`), lisse entre les deux (pas de couture au
+  bord d'un relevé). Une octave de poids nul n'est pas calculée. Sur le relevé de l'IGN à 1 m : plus aucun relief procédural.
+- **Vérifié** (`detail-survey.e2e`, ce Mac, avant = `4e95c6bc`, après deux fois ; `remote-results/local/ds-*`) :
+
+  | Lieu | sol du contact / sol dessiné, avant (m) | après (m) | images A/B (écart moyen, % de pixels > 16) | A/A |
+  |---|---|---|---|---|
+  | Paris, rue (LiDAR) | +0,10 / +0,14 / +0,19 ; chaussée en V (±0,4 m) | −0,002 / −0,022 / −0,001 ; chaussée plate à 2 mm, bordure +0,12 | 7,0 · 12,4 % | 0,5 · 0,01 % |
+  | Mont Faron (bois) | −0,03 / +0,06 / +0,05 | +0,03 / +0,02 / +0,07 | 6,9 · 11,6 % | 1,3 · 0,9 % |
+  | Chamonix (pente 70–80 %) | +0,76 / −0,65 / +0,41 | +0,23 / −0,40 / +0,04 | 8,5 · 13,9 % | 2,6 · 3,0 % |
+  | Toubkal (données globales seules) | +0,106 / +0,641 / +0,208 | **identiques au mm** | 0,9 · 0,2 % (la ligne de crête lointaine seule, le relief encore en chargement) | 0,6 · 0,03 % |
+
+  Le contact et l'image s'accordent à 2 cm sur la rue ; sur forte pente l'écart restant suit la pente (le maillage du raster entre
+  ses sommets contre la bicubique du contact — tel quel sur le Toubkal, que le changement ne touche pas). Le relief global inchangé au
+  bit : `tests/detail-survey.test.ts` (valeurs d'avant à cinq lieux). Coût GPU : MINI.
+
 ### Rues nivelées hors du fil de la page, quel que soit l'ordre ; verre et flammes derrière un arbre proche (26 novembre 2026, branche de l'agent, `0f3c83f6`, `74a3ba7b`, `06cc801c`, `7ba593ce`)
 
 - **Nivellement des rues (`earth-tiles.ts refine`, `street-level-book.ts`, `tile-decode.ts` op `level`) — `0f3c83f6`, `74a3ba7b`** :
@@ -49,8 +68,9 @@ Windows/D3D12. Les numéros de ligne sont ceux de `da4e75bd`.
   bordure à +0,12 m (34,034 m). **Reste** : le sol du contact (`groundAt`) et celui que dessine le GPU y ajoutent le détail procédural
   (`terrain.ts` / `trace.wgsl` `earthDetail`, sa couche fine `o3` — longueurs d'onde 32 → 8 m, ±3 m × `land` — que la résolution des
   données ne fait pas disparaître, à la différence des couches `o1`/`o2`) : ±0,4 m en travers de la même rue (78,04 → 78,89 m sur
-  ±3,5 m). Décision à prendre (Sam) : fondre `o3` selon la résolution des données (tout sol relevé finement change), ou une marque
-  « rue nivelée » dans la tuile qui coupe le détail dessous (comme les pistes, `runway-grade.ts`). Banc synthétique (3 × 3 de
+  ±3,5 m). ~~Décision à prendre (Sam) : fondre `o3` selon la résolution des données (tout sol relevé finement change), ou une marque
+  « rue nivelée » dans la tuile qui coupe le détail dessous (comme les pistes, `runway-grade.ts`).~~ Sam, 25 nov. : fondre `o3` —
+  fait, `3e1c92e4` (section ci-dessus). Banc synthétique (3 × 3 de
   cellules de ville, 3 040 routes, 30 000 emprises) : par segment 2,7 × plus rapide que chaque pixel contre chaque route, sol identique
   au bit près.
 - **Verre et flammes de l'appareil (`ship.wgsl fsJetGlass`, `plumeFs`, `sceneDistAt`) — `7ba593ce`** : le verre d'une instance
@@ -1325,7 +1345,7 @@ Paris jusqu'à `earthSettled` » chronométré par étape.
 
 <!-- pipeline-inventory:begin (bun scripts/pipeline-inventory.ts --write) -->
 
-_Généré le 2026-11-25T12:52:29Z sur `219cdf3c` (arbre de travail). Ne pas éditer à la main : relancer l'outil._
+_Généré le 2026-11-25T14:59:14Z sur `ee36e969` (arbre de travail). Ne pas éditer à la main : relancer l'outil._
 
 **130 sites de création de pipeline** (86 rendu, 44 calcul, dont 66 asynchrones) et 43 `createShaderModule` dans 32 fichiers ; **44 programmes WGSL** (16 fichiers .wgsl, 28 chaînes dans le TypeScript) ; **66 libellés de passes** du profileur GPU (+ 11 sites à libellé dynamique).
 
@@ -1507,7 +1527,7 @@ _Généré le 2026-11-25T12:52:29Z sur `219cdf3c` (arbre de travail). Ne pas éd
 
 | source | lignes | points d'entrée |
 |---|---:|---|
-| `src/shaders/trace.wgsl` | 18345 | 18 entrées : cloudLightVolume, aerial, lut, main, shade, shadeMark, shadeLiteFinish, shadeWaterFinish, shadeLiteLight, shadeLite, skyFill, shadeWater, clouds, skyAmbient, cloudShadow, env, probe, shadeStars |
+| `src/shaders/trace.wgsl` | 18370 | 18 entrées : cloudLightVolume, aerial, lut, main, shade, shadeMark, shadeLiteFinish, shadeWaterFinish, shadeLiteLight, shadeLite, skyFill, shadeWater, clouds, skyAmbient, cloudShadow, env, probe, shadeStars |
 | `src/shaders/ship.wgsl` | 2838 | 34 entrées : envCopy, envDown, envGGX, envSH, ctlVs, depthVs, vs, mirrorVs, shadowVs, fs, hullDepthVs, hullDepthFs, ownMaskFs, plumeVs, plumeFs, glowVs, glowFs, distVs, distFs, sheathVs, sheathFs, trailVs, trailFs, lampVs, lampFs, compVs, compFs, fsCabin, fsCabinGlass, fsJetGlass, motionVs, motionFs, composeColor, composeSurface |
 | `src/shaders/post.wgsl` | 1396 | 18 entrées : gatherH, atrous, beamH, beamV, polgrid, resolve, down, downShip, dof, flareMeter, up, meter, stars, motionBlur, temporal, occlusion, cloudTemporal, taau |
 | `src/system/scenery-raster.ts:208` | 1191 | 31 entrées : cull, cullBoxes, clampBoxes, shadowVs, shadowFs, proxyVs, proxyFs, boxVs, boxFs, bridgeMarkFs, boxMarkVs, boxShadowVs, meshShadowVs, meshVs, meshFs, boxSolidVs, benchCull, benchQuadVs, benchVs, benchShadowVs, farCull, farVs, farQuadVs, farFs, farLampCull, farLampVs, farCarCull, farCarVs, nearCellVs, nearCellShadowVs, farShadowVs |
@@ -1690,17 +1710,17 @@ Leur coût n'apparaît que dans l'intervalle de complétion de la frame (ou d'un
 |---|---|---:|
 | `earth-raster` | shade 27.2 · shadeMark 0.3 · shadeLite 8.1 · shadeLiteFinish 0.8 · shadeLiteLight 2.0 · shadeWater 5.6 · shadeWaterOpen 4.9 · shadeWaterFinish 1.2 · shadeStars 0.3 · discs 29.9 · clouds 3.8 · skyFill 0.7 · main 42.5 · env 59.0 · aerial 0.7 | 187k |
 | `earth-raster-wx` | shade 32.2 · shadeMark 0.3 · shadeLite 8.1 · shadeLiteFinish 0.8 · shadeLiteLight 2.0 · shadeWater 5.6 · shadeWaterOpen 4.9 · shadeWaterFinish 1.2 · shadeStars 0.3 · discs 29.9 · clouds 3.8 · skyFill 0.7 · main 45.4 · env 59.0 · aerial 0.7 | 195k |
-| `earth-trace` | main 66.2 · env 62.8 · aerial 0.6 | 130k |
-| `earth-photo` | main 68.0 | 68k |
-| `game-space` | main 54.2 · env 50.4 · aerial 0.6 | 105k |
-| `moon` | main 75.9 · env 50.4 · aerial 0.6 · shadeLite 25.8 | 153k |
-| `moons` | main 76.8 · env 50.4 · aerial 0.6 · shadeLite 25.9 | 154k |
-| `mars` | main 87.7 · env 50.4 · aerial 0.6 · shadeLite 37.8 | 177k |
-| `titan` | main 90.8 · env 50.4 · aerial 0.6 · shadeLite 42.9 | 185k |
-| `venus` | main 90.5 · env 50.4 · aerial 0.6 · shadeLite 43.5 | 185k |
-| `earth-only` | main 50.2 · env 44.1 · aerial 0.7 | 95k |
-| `kerr-jet` | main 31.9 · env 27.9 · lut 28.2 | 88k |
+| `earth-trace` | main 66.3 · env 62.8 · aerial 0.6 | 130k |
+| `earth-photo` | main 68.1 | 68k |
+| `game-space` | main 54.3 · env 50.4 · aerial 0.6 | 105k |
+| `moon` | main 76.0 · env 50.4 · aerial 0.6 · shadeLite 25.8 | 153k |
+| `moons` | main 76.9 · env 50.4 · aerial 0.6 · shadeLite 25.9 | 154k |
+| `mars` | main 87.8 · env 50.4 · aerial 0.6 · shadeLite 37.8 | 177k |
+| `titan` | main 90.9 · env 50.4 · aerial 0.6 · shadeLite 43.0 | 185k |
+| `venus` | main 90.6 · env 50.4 · aerial 0.6 · shadeLite 43.6 | 185k |
+| `earth-only` | main 50.3 · env 44.1 · aerial 0.7 | 95k |
+| `kerr-jet` | main 32.0 · env 27.9 · lut 28.3 | 88k |
 | `eclipse` | main 46.1 · env 37.7 · aerial 0.6 | 84k |
-| `general` | main 151.7 · env 73.9 · lut 147.3 | 373k |
+| `general` | main 151.9 · env 73.9 · lut 147.6 | 373k |
 
 <!-- pipeline-inventory:end -->

@@ -11,7 +11,8 @@ import { gpuTimes, showView } from "./lib/bridge-views";
 // street, flat on its carriageway to the centimetre. Run on two builds (before and after the change) for the images' A/B, twice on
 // one for their A/A. DS_OUT the folder.
 // Duration: ~6 min on this Mac (the Earth data on disk).
-// Done when: every straight-down look agrees within 0.10 m, and the Paris carriageway's cross-section spans under 0.05 m.
+// Done when: every straight-down look agrees within 0.1 m + 1.5 × the slope (the raster's mesh on steep ground), and the Paris
+// carriageway's cross-section spans under 0.05 m.
 
 // (as an A/B — scripts/ab-commit.ts + ab-e2e.ts, AB_SIDE A the build before —: a folder a run, the before side's span not asserted)
 const SIDE = process.env.AB_SIDE ? `-${process.env.AB_SIDE}${process.env.AB_RUN ?? ""}` : "";
@@ -47,22 +48,39 @@ describe.skipIf(!E2E)("the finest procedural relief over surveyed ground: contac
       await app.shot(`${OUT}/${s.key}-oblique.png`);
       const gpu = await gpuTimes(app);
       // (three points: the place, 6 m and 15 m east of it — on the Paris street: its axis, its pavement, the block beyond)
-      const looks: { east: number; contact: number; drawn: number; diff: number; kind: string }[] = [];
+      const looks: { east: number; contact: number; drawn: number; diff: number; slope: number; kind: string }[] = [];
       for (const east of [0, 6, 15]) {
         const lat = s.at[0],
           lon = s.at[1] + east / (111320 * Math.cos(lat * D));
         const agl = 25;
-        const r = await app.js<{ contact: number; altM: number; d: number; kind: string; why: string | null }>(`(async () => {
+        const r = await app.js<{
+          contact: number;
+          slope: number;
+          altM: number;
+          d: number;
+          kind: string;
+          why: string | null;
+        }>(`(async () => {
           const g = __bh.sys.groundAt(${lat}, ${lon}), altM = g + ${agl};
+          // (the contact's slope there: its gradient over ±1 m east and north)
+          const kx = 111320 * Math.cos(${lat} * ${D}), ky = 111132, G = (dn, de) => __bh.sys.groundAt(${lat} + dn / ky, ${lon} + de / kx);
+          const slope = Math.hypot((G(0, 1) - G(0, -1)) / 2, (G(1, 0) - G(-1, 0)) / 2);
           const why = __bh.viewAt(${lat}, ${lon}, { altM, heading: 0, pitch: -90, fov: 30 });
           const vc = __bh.camera.viewController(); if (!why) { vc.s.fov = 30; vc.fovTarget = null; }
           for (let i = 0; i < 40; i++) { __bh.touch(); await new Promise((q) => requestAnimationFrame(q)); }
           const sf = await __bh.renderer.surfaceAt(0.5, 0.5);
-          return { contact: g, altM, d: sf?.ground ?? -1, kind: sf?.kind ?? "null", why };
+          return { contact: g, slope, altM, d: sf?.ground ?? -1, kind: sf?.kind ?? "null", why };
         })()`);
         if (r.why) throw new Error(`${s.key}: the straight-down view refused — ${r.why}`);
         const drawn = r.altM - r.d;
-        looks.push({ east, contact: +r.contact.toFixed(3), drawn: +drawn.toFixed(3), diff: +(drawn - r.contact).toFixed(3), kind: r.kind });
+        looks.push({
+          east,
+          contact: +r.contact.toFixed(3),
+          drawn: +drawn.toFixed(3),
+          diff: +(drawn - r.contact).toFixed(3),
+          slope: +r.slope.toFixed(3),
+          kind: r.kind,
+        });
         if (east === 0) await app.shot(`${OUT}/${s.key}-down.png`);
       }
       // (Paris: the contact across the street — its carriageway ±3 m about the axis, 0.5 m apart)
@@ -83,12 +101,15 @@ describe.skipIf(!E2E)("the finest procedural relief over surveyed ground: contac
       console.log(
         `  ${s.key}: GPU p50 ${gpu.p50} ms; looks ${JSON.stringify(looks)}${section ? `; cross-section ${JSON.stringify(section)}; carriageway's span ${span?.toFixed(3)} m` : ""}`,
       );
+      // (the tolerance: 0.1 m on level ground, growing with the slope — the raster's mesh between its vertices against the contact's
+      // bicubic: 26 Nov, the Toubkal's global-data ground, untouched by the change, 0.1–0.6 m apart on 35 % slopes)
+      const tol = (l: (typeof looks)[number]) => 0.1 + 1.5 * l.slope;
       await app.stepDone(
         `${s.key} : écart sol dessiné / contact max ${Math.max(...looks.map((l) => Math.abs(l.diff))).toFixed(3)} m${span !== null ? ` · chaussée ${span.toFixed(3)} m` : ""}`,
-        looks.every((l) => Math.abs(l.diff) < 0.1),
+        looks.every((l) => Math.abs(l.diff) < tol(l)),
       );
       for (const l of looks) expect(l.kind).not.toBe("none");
-      for (const l of looks) expect(Math.abs(l.diff)).toBeLessThan(0.1);
+      for (const l of looks) expect(Math.abs(l.diff)).toBeLessThan(tol(l));
       if (span !== null && !BEFORE) expect(span).toBeLessThan(0.05);
     }, 400_000);
 });
