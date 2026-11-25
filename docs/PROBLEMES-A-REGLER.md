@@ -12,14 +12,36 @@ connue ou supposée, la piste. Une entrée réglée est barrée avec le commit q
 - **Réglé** : la colonne s'arrête au niveau de la mer sous la caméra moins 10 m (`trace.wgsl` `aerial`, `geoidN`). Mesure et images :
   GRAPHICS-PIPELINE « PERF — le trafic réel ».
 
-## Le trafic réel : l'A320 gréé proche coûte encore ~6 ms d'ombrage ; ses ombres au sol étirées et floues (relevé le 25 novembre 2026, e2e `traffic-cost`, kerr-mini)
+## Le trafic réel : l'A320 gréé proche coûte encore ~6 ms d'ombrage ; « ses ombres au sol étirées et floues » — la photo (relevé le 25 novembre 2026, e2e `traffic-cost`, kerr-mini)
 
 - **Mesuré** (`20261125-040312-tc-amp`, passe amplifiée ×6) : la passe d'ombrage de l'appareil 7–9,5 ms par image, dont 6–8 pour les A320
   gréés à moins d'1 km ; la moitié la géométrie (106 000 triangles), la moitié l'ombrage des pixels. Réglé le 25 nov. : l'A320 loin dessiné
   simple (`renderer.trafficRigShare`), les niveaux de détail du trafic (`ship.lodPx`, l'A320 gréé : 107 449 → 66 153 triangles à 4 cm).
 - **Reste** : l'ombrage des pixels (le `fs` unique de l'appareil, toutes les branches de tous les engins) — un `fs` propre aux avions de
-  ligne serait le levier ; les ombres des avions garés (seconde moitié de la carte d'ombre) paraissent étirées et floues au sol
-  (`docs/progress/perf-trafic-2026-11-25/parking-*.jpg`) — non examinées.
+  ligne serait le levier.
+- **Les « ombres étirées et floues » au parking (`parking-apres.jpg`) : pas les nôtres — diagnostiqué le 25 nov. 2026** (ce Mac, e2e
+  `traffic-cost` `TC_LOOKS=looks TC_LOOKS_ONLY=1`, captures sous leviers, `docs/progress/perf-trafic-2026-11-25/parking-leviers-planche.jpg`,
+  `parking-dessus-leviers-planche.jpg`) : elles restent sans les ombres du trafic (`ship.trafficCast` false), sans l'ombre des appareils
+  sur le sol (`liteSkip` 2097152) et sans les appareils (`debugSkipShip`) ; elles **disparaissent sans l'imagerie** (`liteSkip` 128) — ce
+  sont les avions, passerelles et leurs ombres **photographiés** dans l'orthophoto NAIP de l'aire de trafic, plaqués à plat et vus rasants
+  (étirés) à sa résolution (floue). Nos ombres (seconde moitié de la carte) sont nettes, attachées aux roues, du bon côté. **Piste** (hors
+  de ce lot : le matériau des surfaces, `scenerySurface`, domaine de l'agent des routes) : sur les pavés d'aérodrome (polygones `aeroway`
+  d'OpenMapTiles, genre 5, aujourd'hui de la même couleur que les places piétonnes), garder le matériau de pavage et seulement ~25 % de
+  la photo près — comme la chaussée relevée (`SC_SURVEY_ROAD`, `photoSurface`) —, une couleur ou un drapeau propre aux aires d'aérodrome
+  pour les distinguer des places (dont la photo est le détail).
+
+## La ligne sombre pointillée et l'eau verte de la baie de San Francisco en courte finale : le réel, pas un défaut (relevé le 25 novembre 2026, `finale-apres.jpg`, diagnostiqué le même jour)
+
+- **La ligne** (ce Mac, e2e `traffic-cost` `final-above`, `docs/progress/perf-trafic-2026-11-25/finale-dessus-leviers-planche.jpg`) :
+  ni une ombre (elle reste sans les appareils, sans leurs ombres), ni une couture de polygone. Sans l'imagerie, une ligne claire **avec ses
+  barres transversales** — la rampe d'approche de 28L/28R sur pilotis dans la baie, cartographiée dans OpenStreetMap (transport, jetée)
+  et dessinée par la marche des routes (elle disparaît avec `liteSkip` 2²⁷) ; avec l'imagerie, ses pylônes et leurs ombres
+  **photographiés** (NAIP) en tirets sombres — qui restent sans la marche des routes. C'est la vraie structure de SFO. **Piste** : la
+  rampe d'approche en objets 3D (pylônes, feux, comme `runways3d` fait les feux de piste) — un chantier de contenu, pas un correctif.
+- **L'eau verte** : Kd490 de la baie 0,69 m⁻¹ (ESA OC-CCI, l'octet 162 de `assets/earth/water-kd490.png`) — eau turbide, son corps
+  brun-vert ; avec l'imagerie, la photo NAIP de cette eau sous la surface (`under`), sans l'imagerie la couleur sarcelle du polygone d'eau ;
+  le côté gauche, plus scintillant, est le reflet du ciel sous l'angle de vue. Aucune frontière nette, aucun « bloc » dans les captures
+  sous leviers. Non changé.
 
 ## Le sol du Luxembourg (et d'Arlon) posé au niveau de la mer par la source IGN (relevé le 25 novembre 2026, analyse PLAN-LUXEMBOURG-AAA)
 
