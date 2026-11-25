@@ -32,8 +32,12 @@ Windows/D3D12. Les numéros de ligne sont ceux de `da4e75bd`.
 - **Mesuré** (ce Mac M1 Max, chauffe « Moderate », `lastGpuMs` p50 sur 90 images, A B B A A B B A, scénario de l'essai) — Grenelle :
   essai `cd8dcb14` +1,4 à +1,6 ms ; coupes (2) +0,9 ; (1)+(2)+(3) **+0,48 ms** (allumé 20,7–21,0 sans la première série de chauffe,
   coupé 20,2–20,6). Passe `earth water (raster)` 3,09 ms (allumé). Alexandre III (21 cellules) : non séparable du bruit (±3 ms), la passe
-  d'eau entière 1,53 ms. Image identique aux coupes près (écart moyen 0,27 contre 0,26 en A/A). **kerr-mini : à mesurer** (plafond 2,8 ms ;
-  estimé ~1,7 par le rapport des deux machines sur l'essai — non mesuré).
+  d'eau entière 1,53 ms. Image identique aux coupes près (écart moyen 0,27 contre 0,26 en A/A).
+- **Mesuré sur kerr-mini** (25 nov. 2026, 20:02 UTC, `b94d93be`, `seine-mirror.e2e`, headless, mêmes séries ;
+  `remote-results/20261125-200215-seine-mirror-cheap`) — Grenelle (19 cellules) : allumé 54,2 · 53,7 · 54,5 · 54,3 (p95 57,4–58,4), coupé
+  52,2 · 52,4 · 51,6 · 52,2 (p95 55,2–56,1) : **+2,1 ms** sous le plafond de 2,8 (essai `cd8dcb14` : +5,2) ; A/A 0,8 / 0,8. Passe
+  `earth water (raster)` 8,79 ms allumé (essai : 14,69). Alexandre III (7 cellules sur 21 résidentes) : +1,1 ms — toutes cellules
+  résidentes non mesuré. Captures `docs/progress/ponts-2026-11-25/seine-miroir-*-mini-{avant,apres}.jpg`.
 
 ### Le relief procédural fin fondu sur le sol relevé (25 novembre 2026, branche de l'agent, `3e1c92e4`, décision de Sam du 25 novembre)
 
