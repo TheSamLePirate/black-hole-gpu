@@ -10068,8 +10068,15 @@ fn waterMirror(q: vec3f, rd: vec3f, Ls: vec3f, E: vec3f, sky: vec3f, footM: f32)
         let rm = length(pm);
         if (rm - 1.0 - earthHeight(pm / rm, max(footM, m * EARTH_RM * 0.003)) / EARTH_RM < 0.0) { hi = m; } else { lo = m; }
       }
-      tHit = 0.5 * (lo + hi);
-      break;
+      // (25 Nov 2026 — the Loire under Cheviré, the Seine: dark pieces floating mid-river, a light band under a deck — the relief under
+      // a river is the survey's, not level: its bed's leftovers, a deck's or a pier's trace, 1–5 m over the water drawn on it
+      // (kerr-mini, groundAt across the Loire), and the mirrored ray met them as banks. A crossing still in the water is no bank:
+      // the march goes on)
+      let tc = 0.5 * (lo + hi);
+      if (!sceneryMirrorWet(rp, tc * EARTH_RM, footM)) {
+        tHit = tc;
+        break;
+      }
     }
     tPrev = t;
     fPrev = f;
@@ -10778,6 +10785,12 @@ fn scenerySurface(foot:f32)->ScenerySurface {
 // The shore's trees in calm water (waterMirror): the reflected ray (physical) from the water's point here
 // (SC_POINT) through the forest grid, near; their light (the sun on their leaves, the sky) and distance [m]
 // (−1: none)
+// (25 Nov 2026) whether the mirrored ray from the water's point (SC_POINT) along rp meets, tM metres on, still the scenery's water — a
+// river's bed under it, not a bank (waterMirror)
+fn sceneryMirrorWet(rp:vec3f,tM:f32,footM:f32)->bool {
+  if(!HAS_SCENERY || P.scenery[0].w<.5 || P.scenery[2].w<.5){return false;}
+  return sceneryWaterAt(SC_POINT+sceneryLocal(rp)*tM,max(footM,tM*0.003),SC_DISTANCE+tM).x>=0.5;
+}
 fn sceneryMirror(rp:vec3f,Ls:vec3f,E:vec3f,sky:vec3f)->vec4f {
   if(!HAS_SCENERY || P.scenery[0].w<.5 || P.scenery[2].w<.5 || SC_DISTANCE>2500.0){return vec4f(0.0,0.0,0.0,-1.0);}
   let d=sceneryLocal(rp);

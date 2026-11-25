@@ -45,3 +45,11 @@ test("the water's mirror from the image: its hit on the surface found, not 8 % o
   expect(ssr).toContain("for (var j = 0; j < 6; j++) {");
   expect(wgsl).toContain("const SSR_HIT_SHARE = 0.01;");
 });
+
+test("the water's own mirror marches past a crossing still in the water — the river bed's bumps are no banks (the floating pieces)", () => {
+  const wm = wgsl.slice(wgsl.indexOf("fn waterMirror("), wgsl.indexOf("struct SurfaceImage"));
+  expect(wm).toContain("if (!sceneryMirrorWet(rp, tc * EARTH_RM, footM)) {");
+  expect(wgsl).toContain("fn sceneryMirrorWet(rp:vec3f,tM:f32,footM:f32)->bool {");
+  const stubs = readFileSync(new URL("../src/system/scenery.ts", import.meta.url), "utf8");
+  expect(stubs).toContain("fn sceneryMirrorWet(r:vec3f,t:f32,f:f32)->bool{return false;}");
+});
