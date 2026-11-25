@@ -110,3 +110,22 @@ export function flattenUnderWater(
   }
   return lowered;
 }
+
+/**
+ * (26 Nov 2026 — PROBLEMES « L'eau sous Cheviré ») A far level's overground (earth-tiles.ts I6: the IGN's surface less its ground, TILE²
+ * row-major, 0 where none) cleared over its inland water (`cover`, the same grid, the bridges not cut out): the surface model over a river
+ * is a deck, a boat, a pier — drawn as a wall of relief down to the water (a dam under the far layer's deck) —, and the inland water's
+ * falls, which read the relief ±25 m about a pixel (trace.wgsl shadeWater: these levels at that footprint), took the Cheviré deck's
+ * 50 m for a fall: the light band of white water under the viaduct. The decks are the bridges' own (the near scene, the far layer to
+ * 12 km); over the sea the same rule already held (T7, `surveyOnly`). Returns the texels cleared.
+ */
+export function clearOverWater(over: Float32Array, cover: Float32Array): number {
+  let cleared = 0;
+  const n = Math.min(over.length, cover.length);
+  for (let i = 0; i < n; i++)
+    if (cover[i]! >= FLATTEN_COVER && over[i]! > 0) {
+      over[i] = 0;
+      cleared++;
+    }
+  return cleared;
+}

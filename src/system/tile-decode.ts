@@ -5,7 +5,7 @@
 import type { OrthoFit } from "./national";
 import { roadLightByte, roadMask, spreadLights, tileMetresPerPixel } from "./night-roads";
 import { waterMask } from "./water-mask";
-import { flattenUnderWater } from "./water-flatten";
+import { clearOverWater, flattenUnderWater } from "./water-flatten";
 import { type DelightIn, type DelightStats, delightTile } from "./ortho-delight";
 
 /** a tile's side [px] (earth-tiles.ts TILE) */
@@ -175,8 +175,18 @@ export type DecodeRequest =
   /** (L7b's prototype — ortho-delight.ts) `delight`: the canopy under it, its cast shadows lifted before its colours */
   | { id: number; op: "ortho"; blob: Blob; fit: OrthoFit; delight?: DelightIn }
   /** (25 Nov 2026 — water-flatten.ts) a relief tile's ground (TILE², its row-major heights) levelled under its inland water: OpenFreeMap's
-   *  vector tile over it (its square `sub` of it), its metres a texel from its z and row */
-  | { id: number; op: "flatten"; heights: Float32Array; mvt: ArrayBuffer; z: number; y: number; sub: { k: number; x: number; y: number } };
+   *  vector tile over it (its square `sub` of it), its metres a texel from its z and row; (26 Nov) its overground after it, when the
+   *  array has one (2 · TILE²), cleared over that water; `level` false: the ground as it is (a second pass's, levelled already) */
+  | {
+      id: number;
+      op: "flatten";
+      heights: Float32Array;
+      mvt: ArrayBuffer;
+      z: number;
+      y: number;
+      sub: { k: number; x: number; y: number };
+      level?: boolean;
+    };
 export type DecodeReply = {
   id: number;
   ms: number;
@@ -195,7 +205,9 @@ export async function decodeTile(
   if (q.op === "terrarium") return { heights: terrariumHeights(await pixels(q.blob)) };
   if (q.op === "flatten") {
     const cover = waterMask(q.mvt, tileMetresPerPixel(q.z, q.y), q.sub, false);
-    if (cover) flattenUnderWater(q.heights, cover, tileMetresPerPixel(q.z, q.y));
+    const T2 = 256 * 256;
+    if (cover && q.level !== false) flattenUnderWater(q.heights.subarray(0, T2), cover, tileMetresPerPixel(q.z, q.y));
+    if (cover && q.heights.length >= 2 * T2) clearOverWater(q.heights.subarray(T2, 2 * T2), cover);
     return { heights: q.heights };
   }
   if (q.op === "terrarium512") {

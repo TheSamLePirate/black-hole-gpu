@@ -2455,6 +2455,10 @@ export class EarthTiles {
         h = await nationalHeights(src, L.z, ((x % L.n) + L.n) % L.n, y, ctl.signal, !!ground, ground, coarse, fill);
         // (25 Nov 2026 — water-flatten.ts: the ground under the inland water made level here, once, for every reader of the relief)
         if (!ground && L.z >= FLATTEN_Z0) h = await flattenInland(L.z, ((x % L.n) + L.n) % L.n, y, h, ctl.signal);
+        // (26 Nov 2026 — the far levels' overground cleared over that water: a deck's surface model was a dam under the bridge, and the
+        // inland water's falls took it for one — Cheviré's light band. Its ground levelled already at the first pass)
+        else if (ground && h.length > TILE * TILE && L.z >= OVER_WATER_Z0)
+          h = await flattenInland(L.z, ((x % L.n) + L.n) % L.n, y, h, ctl.signal, false);
       } finally {
         clearTimeout(timer);
       }
@@ -3827,19 +3831,22 @@ export const roadsUrl = (z: number, x: number, y: number) => `https://tiles.open
 const roadFiles = new Map<string, Promise<ArrayBuffer | null>>();
 /** (25 Nov 2026) the relief's levels whose ground is levelled under the inland water (water-flatten.ts): a texel of 19 m and finer */
 export const FLATTEN_Z0 = 13;
+/** (26 Nov 2026) the far levels whose overground (I6, up to HLOD_Z1) is cleared over the inland water (water-flatten.ts clearOverWater):
+ *  those whose OpenFreeMap tile the street levels fetch already (night-roads ROAD_Z0 — the offline zones hold it); z 11's kept */
+export const OVER_WATER_Z0 = ROAD_Z0;
 /**
  * A national relief tile's ground levelled under its inland water (water-flatten.ts — the bed's spikes, a deck's ridge, the river's
  * own surface level): OpenFreeMap's vector tile over it (night-roads' z 13, its square of it), the work in the decode worker. No tile,
  * a failure: the heights as they came.
  */
-async function flattenInland(z: number, x: number, y: number, h: Float32Array, signal: AbortSignal): Promise<Float32Array> {
+async function flattenInland(z: number, x: number, y: number, h: Float32Array, signal: AbortSignal, level = true): Promise<Float32Array> {
   const rk = Math.max(z - ROAD_MVT_Z1, 0);
   const sub = { k: rk, x: x - ((x >> rk) << rk), y: y - ((y >> rk) << rk) };
   try {
     const mvt = await fetchRoads(z - rk, x >> rk, y >> rk, signal);
     if (!mvt || signal.aborted) return h;
-    const r = await decodeOff({ op: "flatten", heights: h.slice(0, TILE * TILE), mvt, z, y, sub });
-    if (r.heights && r.heights.length === TILE * TILE) h.set(r.heights, 0);
+    const r = await decodeOff({ op: "flatten", heights: h.slice(), mvt, z, y, sub, level });
+    if (r.heights && r.heights.length === h.length) h.set(r.heights, 0);
   } catch {
     /* the heights as they came */
   }
