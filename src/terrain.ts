@@ -4,6 +4,7 @@
 // own axes (x away from its primary, y along its orbit, z north).
 
 import { WGS84_A } from "./system/ellipsoid";
+import { levelOver } from "./game/runway-grade";
 import { geoidAt } from "./system/geoid-grid";
 
 export type V3 = [number, number, number];
@@ -636,7 +637,7 @@ export function earthHeightSampler(
   tiles?: (q: V3, foot: number) => { h: number; res: number; rem: number },
   /** where the ground is graded (runways: game/sites.ts runwayGrade) — flat, 0…1: the drawn detail taken off
    * there; level, 0…1: the relief brought to elev [m] */
-  graded?: (q: V3) => { flat: number; level: number; elev: number; cut?: number },
+  graded?: (q: V3) => { flat: number; level: number; elev: number; cut?: number; past?: number },
 ) {
   const texelA = (EARTH_RM * 2 * Math.PI) / W;
   const fromMap = mapHeightSampler(map, W, H);
@@ -655,7 +656,7 @@ export function earthHeightSampler(
     const g = graded?.(q);
     // (the detail taken off where the runways grade it — their airfields, and their approaches' funnels: runway-grade.ts cut)
     const cut = g ? (g.cut ?? g.flat) : 0;
-    if (g && g.level > 0) h0 += (g.elev - h0) * g.level;
+    if (g && g.level > 0) h0 += (g.elev - h0) * levelOver(g, h0);
     return Math.max(h0 + (detail && cut < 1 ? (1 - cut) * earthDetail(q, h0, foot, res) : 0), 0) + geoidAt(q);
   };
   return Object.assign((q: V3, foot = 0.05): number => sample(q, foot, true), {

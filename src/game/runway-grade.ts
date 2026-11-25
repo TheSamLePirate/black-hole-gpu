@@ -28,9 +28,21 @@ export interface Grade {
   elev: number;
   /** the detail's share taken off: max(flat, the approach funnel's) */
   cut: number;
+  /** (26 Nov 2026) how far the level's place lies off a real airfield's paved strip (0 on it … 1 past `pavedEase` m beyond its ends or
+   *  sides — that of the runway levelling most): there the level lifts the land alone (levelOver), never the water */
+  past: number;
 }
-/** a runway's grading's figures [m] (the shader's runwayGrade holds the same: change both) */
-export const RUNWAY_GRADE = { levelPast: 300, levelEase: 600, levelSide: 320, levelSideEase: 300 } as const;
+/** a runway's grading's figures [m] (the shader's runwayGrade holds the same: change both); (26 Nov 2026) `pavedEase`: off a real
+ *  runway's strip, the ground lifted to its level only where the data have land — `landLo` … `landHi` [m over the sea] */
+export const RUNWAY_GRADE = {
+  levelPast: 300,
+  levelEase: 600,
+  levelSide: 320,
+  levelSideEase: 300,
+  pavedEase: 30,
+  landLo: 0,
+  landHi: 0.3,
+} as const;
 /** the approach funnel (J7-1): from the threshold, the runway's half width and 80 m either side, widening by the same slope as to ±300 m
  *  10 km out (`half` at `widen`) — on to the approach's initial point, 18.5 km out (~±460 m there: Sam's decision of 16 Nov 2026, the
  *  detail measured over the data by > 300 m between 10 and 18.5 km for 6.7 % of the world's runway ends —; faded over 300 m along and
@@ -54,7 +66,7 @@ export function approachCut(a: number, c: number, L: number, hw: number): number
 
 /** The grade at `point` (body-fixed metres on the WGS84 surface) from these runways. */
 export function gradeAt(point: V3, runways: readonly GradeRunway[]): Grade {
-  const g: Grade = { flat: 0, level: 0, elev: 0, cut: 0 };
+  const g: Grade = { flat: 0, level: 0, elev: 0, cut: 0, past: 0 };
   const G = RUNWAY_GRADE;
   for (const r of runways) {
     if (r.world?.measuring) continue;
@@ -81,6 +93,9 @@ export function gradeAt(point: V3, runways: readonly GradeRunway[]): Grade {
     if (level > g.level) {
       g.level = level;
       g.elev = r.elev;
+      // (a real airfield: off its paved strip — past its ends, beside its sides —, its level over the water was the sea raised to the
+      // runway's: SFO's bay 300–900 m before 28L at +2.3–3.1 m, drawn and felt as land, its photograph emerald — PROBLEMES 25 Nov 2026)
+      g.past = world ? ease(Math.max(-a, a - r.len, c - r.halfWidth, 0) / G.pavedEase) : 0;
     }
     const flat = Math.max(wa * wc, level);
     g.flat = Math.max(g.flat, flat);
@@ -88,4 +103,15 @@ export function gradeAt(point: V3, runways: readonly GradeRunway[]): Grade {
     g.cut = Math.max(g.cut, flat, world ? approachCut(a, c, r.len, r.halfWidth) : 0);
   }
   return g;
+}
+
+/**
+ * (26 Nov 2026) The level's share at a point whose data ground is `h` [m over the sea, before the grading]: the whole on the strip; off
+ * a real airfield's strip (`past`), the land's alone — the sea, a bay, a river under the runway's level stay at their own (the water
+ * drawn, a craft over it over the water). The gear (terrain.ts), the scenery's feet and the tracer (trace.wgsl runwayLevelOver) alike.
+ */
+export function levelOver(g: { level: number; past?: number }, h: number): number {
+  if (!g.past) return g.level;
+  const G = RUNWAY_GRADE;
+  return g.level * (1 - g.past * (1 - ease((h - G.landLo) / (G.landHi - G.landLo))));
 }
