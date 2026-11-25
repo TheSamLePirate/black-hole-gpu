@@ -3,7 +3,47 @@
 Problèmes constatés, pas encore réglés. Chaque entrée : la date (UTC), ce qui est mesuré ou observé et sa source, la cause
 connue ou supposée, la piste. Une entrée réglée est barrée avec le commit qui la règle, pas effacée.
 
+## Nice : des stries régulières sur la baie à l'ouest de l'aéroport, sur main et pas sur 18a6e4dd (relevé le 25 novembre 2026, `waterfront-runways`, kerr-mini)
+
+- **Observé** (`remote-results/20261125-211951-waterfront-ab`, midi du 21 juin, vue d'ensemble à 3 km au sud-ouest et 700 m, approche de 04 à
+  1,5 km ; `docs/progress/pistes-bord-de-mer-2026-11-25/nce-baie-stries-avant-apres.jpg`, `nce-approche-avant-apres.jpg`) : sur main
+  `8355e189`, la baie entre l'embouchure du Var et le bout sud-ouest des pistes porte des rangées de vagues très régulières, contrastées, en
+  arcs (un motif plus qu'une houle) ; sur `18a6e4dd`, à la même heure, la même eau est lisse — en partie sous la plaque sombre que le
+  niveau des pistes y posait alors. Ni à LaGuardia, ni à Boston, ni à Hong Kong.
+- **Cause non établie** : la zone dépasse la plaque de l'ancien niveau (le correctif `9cf0849a` n'est donc pas seul en cause) ; candidats —
+  l'eau du jour (surface de la mer, lumière de l'eau lue une fois), un fond à 0 m sous une eau sans bathymétrie (RGE ALTI : la mer à 0) où les
+  creux des vagues découvrent le sol. Une course par côté : l'état de la mer peut différer d'une course à l'autre.
+- **Piste** : la même vue sur main sous leviers (`liteSkip`, surface de la mer coupée, `__bh.sys.groundBareAt` le long d'une ligne de la baie
+  pour le fond), puis bissecter entre `18a6e4dd` et main si le motif tient.
+
+## Hong Kong (VHHH) : les pistes au niveau de la mer, 0–1 m au lieu de ~8,5 m (relevé le 25 novembre 2026, `waterfront-runways`, kerr-mini)
+
+- **Mesuré** : les trois pistes 07/25 mesurées par le jeu (`sys.runways()`, `world.measured` 2) à 1,0 / 0,0 / 0,0 m au-dessus de la mer
+  (l'aérodrome publie 28 ft, 8,5 m) — sur `18a6e4dd` comme sur main ; le sol de l'île à 0–1,5 m autour, 0 à 300 m de part et d'autre.
+  L'approche de 07 à 1,5 km ne montre ni la piste ni ses marques, l'île floue au ras de l'eau
+  (`docs/progress/pistes-bord-de-mer-2026-11-25/hkg-{approche,ensemble}-avant-apres.jpg`).
+- **Cause supposée** : le relief global sous Chek Lap Kok (terre gagnée sur la mer, 1998 ; la troisième piste, 2022) à la mer dans les
+  données ; le niveau mesuré lit ce relief. Non vérifié dans les tuiles.
+- **Piste** : prendre l'altitude publiée (OurAirports `elevation_ft`) quand la mesure tombe à ≤ 1 m sur une île gagnée sur la mer ; la terre
+  de l'aérodrome relevée à ce niveau (son contour, pas seulement la bande).
+
+## La vue de conducteur sur le tablier de Millau regarde un pylône (relevé le 25 novembre 2026, `bridges-notable`, kerr-mini)
+
+- **Observé** (`remote-results/20261125-211447-millau-ab`, 8 courses, `18a6e4dd` et `8355e189` pareils ;
+  `docs/progress/perf-journee-2026-11-25/millau-tablier-avant-apres-mini.jpg`) : la vue « deck-millau-low » est posée sur l'axe du tablier
+  (150 m avant son milieu, 6 m au-dessus, visée 200 m plus loin) — or les pylônes de Millau se dressent sur cet axe, entre les deux chaussées :
+  un pylône remplit la moitié de l'image. Le temps GPU de cette vue (p50 31–38 ms, étendue A/A 3,3 à 6,8 ms) mesure donc surtout un mur
+  proche ; c'est la vue dont la campagne du jour lisait +1,8 / +5,8 ms (bruit, remesuré seul : −0,4 ms).
+- **Cause** : `bridges-notable.e2e.test.ts` place la caméra par `deckProfile` (`centre`, `axisDeg`) sans décalage latéral.
+- **Piste** : poser la vue sur une chaussée (≈ 6–8 m à droite de l'axe) et viser le long d'elle ; la vue change alors de nature — ses
+  temps ne se comparent plus aux précédents (nouvelle référence A/A à prendre).
+
 ## ~~L'eau de la baie de San Francisco verte émeraude près de l'approche de 28L : ce n'est pas de l'eau pour le rendu~~ (relevé le 25 novembre 2026, `als-sfo-28l-day-close.jpg`) — réglé le 26 (`9cf0849a`, branche des ponts) : c'était le niveau de la piste étendu sur la baie
+
+- **25 nov. 2026, vérifié ailleurs** (kerr-mini, `waterfront-runways.e2e`, `18a6e4dd` contre main `8355e189`) : à LaGuardia, Boston Logan et
+  Nice, l'eau au-delà des bouts et le long des pistes revenue à 0 m (avant : relevée au niveau de la piste, 1,2–5,1 m — des plaques sombres
+  sur l'eau), les bandes à leur niveau, la terre des données gardée (`docs/progress/pistes-bord-de-mer-2026-11-25/`). Restent deux constats
+  à part : les stries de la baie de Nice et les pistes de Hong Kong au niveau de la mer (ci-dessus).
 
 - **Constat** (ce Mac, sonde `zz-water-colour` sous leviers, `docs/progress/etiquettes-als-2026-11-25/baie-sfo-eau-leviers.jpg`) : vue
   à 10 m au-dessus de la baie, 450 m avant 28L, l'eau proche sRGB ~(31–55, 64–74, 22–41), émeraude. Elle **ne change pas** avec
@@ -365,7 +405,7 @@ connue ou supposée, la piste. Une entrée réglée est barrée avec le commit q
   2,8 ms sur kerr-mini (règle 1 : gain maximal lu avant d'ouvrir le lot), pas d'y renoncer.
   **Repris le 25 nov. (soir), branche `seine-mirror-cheap`** : trois coupes exactes (boule par cellule, plus haut sommet par cellule et
   par case, murs d'une feuille testés une fois) — ce Mac, Grenelle : +1,5 → **+0,48 ms**, image identique ; **kerr-mini, Grenelle :
-  +2,1 ms** (plafond 2,8 ; essai +5,2) — fusionné. Reste : Alexandre III avec toutes ses cellules résidentes non mesuré (7/21 : +1,1 ms) ;
+  +2,1 ms** (plafond 2,8 ; essai +5,2) — fusionné. Alexandre III avec ses 21 cellules résidentes et mirées (kerr-mini, 25 nov. 21:14 UTC, `8355e189`) : **+0,9 ms** p50 (A/A 0,6) — sous le plafond. Reste :
   les murs mirés sans fenêtres (couleur unie du mur).
   **Reste aussi** : les reflets de bâtiments détachés sur la Seine — l'SSR ne trouve une
   façade que là où l'image la montre (son pied caché par la rive : la moitié haute du reflet manque) ; le repli tracé (`sceneryMirror`) ne

@@ -80,8 +80,14 @@ Windows/D3D12. Les numéros de ligne sont ceux de `da4e75bd`.
 - **Mesuré sur kerr-mini** (25 nov. 2026, 20:02 UTC, `b94d93be`, `seine-mirror.e2e`, headless, mêmes séries ;
   `remote-results/20261125-200215-seine-mirror-cheap`) — Grenelle (19 cellules) : allumé 54,2 · 53,7 · 54,5 · 54,3 (p95 57,4–58,4), coupé
   52,2 · 52,4 · 51,6 · 52,2 (p95 55,2–56,1) : **+2,1 ms** sous le plafond de 2,8 (essai `cd8dcb14` : +5,2) ; A/A 0,8 / 0,8. Passe
-  `earth water (raster)` 8,79 ms allumé (essai : 14,69). Alexandre III (7 cellules sur 21 résidentes) : +1,1 ms — toutes cellules
-  résidentes non mesuré. Captures `docs/progress/ponts-2026-11-25/seine-miroir-*-mini-{avant,apres}.jpg`.
+  `earth water (raster)` 8,79 ms allumé (essai : 14,69). Alexandre III (7 cellules sur 21 résidentes) : +1,1 ms — *périmé : mesuré avec
+  un tiers des cellules, remplacé ci-dessous*. Captures `docs/progress/ponts-2026-11-25/seine-miroir-*-mini-{avant,apres}.jpg`.
+- **Mesuré sur kerr-mini, Alexandre III avec ses 21 cellules résidentes et mirées** (25 nov. 2026, 21:14 UTC, main `8355e189` + test
+  `b53c0a7d` — l'e2e attend `nearCells()` complet : `missing` 0, `mirrorCells` = `cells` = `wanted` = 21, index 377 946 vec4 ; headless ;
+  `remote-results/20261125-211412-seine-a3`) — allumé 49,6 · 49,3 · 49,9 · 49,3 (p95 52,6–54,6), coupé 48,6 · 48,3 · 48,8 · 48,7
+  (p95 51,5–52,1) : **+0,9 ms** p50 (p95 ≈ +1,5), A/A 0,6 / 0,5 — sous le plafond de 2,8 ms. Passe `earth water (raster)` 4,22 ms
+  allumé. Témoin positif : le grand bâtiment de la rive gauche reflété entier allumé, absent coupé
+  (`seine-miroir-alexandre-iii-21cellules-mini-{avant,apres}.jpg`).
 
 ### Le coût net de la journée du 25 novembre 2026 — campagne sur kerr-mini (main 091ddd33 + b8fd6cf8 contre 18a6e4dd) — mesuré
 
@@ -115,6 +121,13 @@ Dossiers : `remote-results/20261125-185006-prc2`, `…-185010-br2`, `…-185012-
 
 - **Aucune vue plus lente au-delà de l'écart A/A.** Le tablier de Millau (+1,8, p95 +5,8) reste sous l'écart de son côté A (3,2) — à surveiller,
   non bissecté ; la première campagne (main 4e95c6bc, ~16 h UTC, `…-154037-brn-day`) le donnait à +0,3.
+- **Millau remesuré seul** (kerr-mini, headless, 25 nov. 2026, 21:15–21:40 UTC ; A = `18a6e4dd`, B = main `8355e189` ; `bridges-notable`
+  réduit à la vue de Millau par `AB_E2E_TEST=Millau` (`scripts/ab-e2e.ts`), chaque côté son propre test, A B B A A B B A, `lastGpuMs` sur
+  90 images ; `remote-results/20261125-211447-millau-ab`) — GPU p50 A 33,2 · 36,5 · 35,6 · 36,5 (moyenne 35,5, étendue 3,3), B 35,2 · 38,1 ·
+  31,3 · 35,6 (35,1, étendue 6,8) : **−0,4 ms**, p95 A 36,2–49,1 (médiane 40,8), B 34,7–43,4 (41,3) : +0,5 — **bruit, aucune régression** ;
+  le +1,8 / +5,8 de la campagne était dans l'écart A/A de cette vue (3,3 à 6,8 ms), non bissecté. Limite : la vue de conducteur est posée
+  sur l'axe du tablier, où se dressent les pylônes de Millau — un pylône remplit la moitié de l'image (des deux côtés :
+  `docs/progress/perf-journee-2026-11-25/millau-tablier-avant-apres-mini.jpg`), un témoin pauvre du tablier et de son coût (PROBLEMES).
 - **Par passe** (`prc`, `tc` — les passes de calcul s'attribuent) : `earth lite: light` −2 à −4,3 ms partout (l'eau lue une fois, lot des
   ponts et rues de Paris) ; la surface maillée de la mer n'est plus dessinée à Paris ni au parking de SFO (`sea surface` 27–48 ms
   de passe de rendu chevauchée → 0 : le lot de la surface de la mer) ; `clouds (half)` −4,4 ms sous la pluie (les averses par la longueur du
@@ -125,7 +138,12 @@ Dossiers : `remote-results/20261125-185006-prc2`, `…-185010-br2`, `…-185012-
   `remote-results/20261125-163303-prc-guard`) ; le lot en cause non trouvé.
 - **J0 Toulon** (première campagne, main 4e95c6bc contre 18a6e4dd, vol de 70 s, `J0_PHASES=flight`, `…-160208-j0-day`) : GPU p50 49,7 / 50,1
   contre 50,2 / 49,9 ms, p95 72,6 / 72,8 contre 72,7 / 72,4 — **inchangé** ; images par seconde 19,5 / 19,3 contre 19,3 / 19,4.
-- **Non mesuré** : J0 sur main 091ddd33 (seulement sur 4e95c6bc) ; le fondu du relief des routes (3e1c92e4) et le niveau de piste de SFO
+- **J0 Toulon sur main `8355e189`** (fin de journée, toutes les fusions du 25 comprises — miroir de la Seine, couronnes, aires de SFO) contre
+  18a6e4dd (kerr-mini, headless, 25 nov. 2026, 21:40–21:55 UTC, A B B A, même commande que la première campagne, `J0_PHASES=flight`, chaque
+  côté son propre test ; `remote-results/20261125-211451-j0-net`) : GPU p50 A 47,1 / 47,7, B 46,4 / 46,7 ms (**−0,85**, A/A 0,6, B/B 0,3),
+  p95 A 70,7 / 73,0, B 69,2 / 69,4 (−2,5) ; images par seconde A 20,6 / 20,2, B 21,0 / 20,7 — **inchangé, au plus un léger gain** au bord de
+  l'A/A ; image du virage identique (`docs/progress/perf-journee-2026-11-25/j0-virage-avant-apres-8355e189.jpg`).
+- **Non mesuré** : J0 sur main 091ddd33 (mesuré sur 4e95c6bc puis sur 8355e189, ci-dessus) ; le fondu du relief des routes (3e1c92e4) et le niveau de piste de SFO
   (9cf0849a) seuls — seulement dans le total ci-dessus ; les vues de Toulon des ponts (aucune).
 - Captures avant/après (A1 contre B2 de la première campagne, main 4e95c6bc — la même image que 091ddd33 sur ces vues, sauf les deux lots
   ci-dessus) : `docs/progress/perf-journee-2026-11-25/` (`paris-*`, `ponts-*`, `trafic-*`, `j0-virage-avant-apres.jpg`).
@@ -407,6 +425,18 @@ l'e2e, aucune requête IGN). GPU p50 = `renderer.lastGpuMs` sur 90 images ; le b
   ne relève plus que la terre des données (0 … 0,3 m au-dessus de la mer et plus) ; l'eau garde son niveau et reste de l'eau. Le
   contact (`terrain.ts earthHeightSampler`) et les pieds du décor (`scenery-worker.ts`) suivent la même règle. Aucune passe, aucune
   ressource ; une sélection de plus par appel de `runwayGrade`. Coût non mesuré (attendu nul).
+- **Vérifié sur kerr-mini aux aéroports en bord d'eau** (25 nov. 2026, 21:20–21:28 UTC, `waterfront-runways.e2e` — le test de main contre
+  le serveur de `18a6e4dd` puis de main `8355e189`, une course chacun ; `remote-results/20261125-211951-waterfront-ab`) : LaGuardia,
+  Boston Logan, Nice, Hong Kong, 12 pistes mesurées deux fois. **Sol au-dessus de la mer** (`sys.groundAt` − géoïde) : chaque bande à son
+  niveau, à 0,00 m près des deux côtés ; sur l'axe au-delà des bouts, là où les données ont l'eau, avant → après : LaGuardia 04/22 au-delà
+  de 22 4,0 → **0** (50 à 300 m), 13 avant le seuil 2,0 → **0** ; Boston 14/32, 4R/22L, 9/27, 15R/33L 1,2–4,6 → **0** de 150 à 600 m ;
+  Nice 04L/04R au-delà de 22R/22L 3,0–3,6 → **0** dès 150–300 m ; à côté (150–300 m du bord) l'eau revenue à 0 où l'ancien niveau la
+  relevait (Boston 14/32 droite 4,0 → 0 ; LaGuardia 13/31 gauche 3,5 → 0) ; la terre des données gardée (Boston 4R au-delà 4,8 / 2,7,
+  LaGuardia 04 avant le seuil 6,9 / 7,3, Nice côté ville 3,0–4,1). **Image** : à LaGuardia, Boston et Nice, les plaques sombres sur l'eau
+  au-delà des bouts et le long des pistes (le sol relevé vu sous l'eau) ont disparu ; l'eau reste de l'eau, le remblai et la piste à leur
+  niveau (`docs/progress/pistes-bord-de-mer-2026-11-25/{lga,bos,nce,hkg}-{approche,ensemble}-avant-apres.jpg`). Hong Kong identique des
+  deux côtés — ses pistes mesurées à 0–1 m (PROBLEMES). Nice : des stries régulières sur la baie à l'ouest de l'aéroport après, pas avant
+  (PROBLEMES, cause non établie). Coût GPU du correctif toujours **non mesuré** séparément (dans le total de la journée).
 
 ### PONT-ROUTES — revue G : la bande de Cheviré (les chutes sur le sursol), la surface de la mer dessinée sur la Seine (25 novembre 2026, branche de l'agent)
 
@@ -1485,7 +1515,7 @@ Paris jusqu'à `earthSettled` » chronométré par étape.
 
 <!-- pipeline-inventory:begin (bun scripts/pipeline-inventory.ts --write) -->
 
-_Généré le 2026-11-25T20:04:32Z sur `093fdaa3` (arbre de travail). Ne pas éditer à la main : relancer l'outil._
+_Généré le 2026-11-25T20:46:43Z sur `c81632f6` (arbre de travail). Ne pas éditer à la main : relancer l'outil._
 
 **130 sites de création de pipeline** (86 rendu, 44 calcul, dont 66 asynchrones) et 43 `createShaderModule` dans 32 fichiers ; **44 programmes WGSL** (16 fichiers .wgsl, 28 chaînes dans le TypeScript) ; **66 libellés de passes** du profileur GPU (+ 11 sites à libellé dynamique).
 

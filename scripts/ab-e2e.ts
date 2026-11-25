@@ -5,7 +5,8 @@
 //   bun scripts/remote.ts run -- AB_E2E=tests/e2e/buildings.e2e.test.ts AB_CMD=scripts/ab-e2e.ts bun scripts/ab-commit.ts <rev>
 // AB_E2E_OWN=1: each side runs its own copy of the test (its tree's — ab-commit's AB_A_DIR, AB_B_DIR —: an older commit's test with the
 // API it knew), from its own folder; AB_E2E_OUT_ENV=<NAME>: that variable set to an absolute folder per run (<AB_OUT>/<side><run>) —
-// a test writing under its own folder would write into a tree removed after the A/B.
+// a test writing under its own folder would write into a tree removed after the A/B. AB_E2E_TEST=<pattern>: only the tests whose name matches
+// (`bun test -t`, both sides — one view of a long e2e, e.g. AB_E2E_TEST=Millau).
 import { resolve } from "node:path";
 import { $ } from "bun";
 
@@ -26,7 +27,8 @@ for (const [i, side] of order.entries()) {
   const extra: Record<string, string> = outEnv
     ? { [outEnv]: resolve(process.cwd(), process.env.AB_OUT ?? "remote-results", `${side}${i + 1}`) }
     : {};
-  const r = await $`bun test ./${file} --timeout 1800000`
+  const only = process.env.AB_E2E_TEST ? ["-t", process.env.AB_E2E_TEST] : [];
+  const r = await $`bun test ./${file} --timeout 1800000 ${only}`
     .cwd(cwd)
     .env({ ...process.env, ...extra, E2E: "1", E2E_URL: side === "A" ? a : b, AB_SIDE: side, AB_RUN: String(i + 1) })
     .nothrow();
