@@ -64,7 +64,7 @@ describe("B1 — the pavement on the real shader", () => {
 
   test("the material read from the road's word (bits 16–18), applied near and on Earth's scenery alone", () => {
     expect(lite).toContain("let roadMat = (u32(SC_ROAD.w + 0.5) >> 16u) & 7u;");
-    expect(lite).toContain("if (HAS_SCENERY && roadPaved > 0.0 && sv.kind == 1.0 && fpM < 3.0) {");
+    expect(lite).toContain("if (HAS_SCENERY && roadPaved > 0.0 && sv.kind == 1.0 && fpM < 3.0 && !stepFace) {");
     expect(lite).toContain("pv = roadPavement(roadMat, SC_ROAD, SC_ROAD_DIR, SC_AT + P.scenery[6].xy, fpM);");
   });
 
