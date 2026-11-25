@@ -17,7 +17,9 @@ import { at, FINAL, frameOn, GEARUP, injectTraffic, runTo, sfoPlanes, W01R, W28L
 //     off on, then off / on / off shots compared pixel by pixel
 //     (the A/A beside the A/B).
 // Run by scripts/ab-e2e.ts (AB_SIDE, AB_RUN name the results) for an A B B A between two commits; alone it is one side.
-// Shots: <OUT>/<side>-<moment>[-off|-on|-off2].png, the differences ×4 -diff-aa / -diff-ab.png. Results <OUT>/tc-<side>.json.
+// Shots: <OUT>/<side>-<moment>[-<lever>-off|-on|-off2].png, the differences ×4 -diff-aa / -diff-ab.png. Results <OUT>/tc-<side>.json.
+// TC_LOOKS=looks (or "name=js;…"): each moment shot under each lever, no timing (TC_LOOKS_ONLY=1: those alone) — <side>-<moment>-look-<name>.png;
+// the moments final-above and parked-above frame them from above (the apron's shadows, the bay's water).
 // Earth data: the e2e disk cache (SFO: USGS/NAIP, no IGN).
 // Duration: ~2 min to the first moment on kerr-mini, then ~40 s a moment, ~25 s a cut, ~2.5 min an A/B.
 // Done when: each moment measured with ≥ 16 profiled frames and its craft drawn, no GPU error.
@@ -107,6 +109,23 @@ const ablate = (spec: string) => {
 };
 const ABLATE = ablate(process.env.TC_ABLATE ?? "");
 const MOMENTS = (process.env.TC_MOMENTS ?? "final,parked").split(",");
+/** TC_LOOKS=<set>|"name=js;…": shots of each moment under these levers (TC_LOOKS_ONLY=1: those alone, no timing) — what draws what */
+const LOOK_SETS: Record<string, string> = {
+  looks: [
+    "base=",
+    "noimagery=__bh.renderer.liteSkip = 128",
+    "nosurfaces=__bh.renderer.liteSkip = 8",
+    "nocraftshadow=__bh.renderer.liteSkip = 2097152",
+    "nocast=__bh.renderer.ship.trafficCast = false",
+    "noship=__bh.renderer.debugSkipShip = true",
+    "nowatersurf=__bh.renderer.seaSurfaceOn = false",
+  ].join("\n"),
+};
+const LOOKS = (() => {
+  const spec = process.env.TC_LOOKS ?? "";
+  const lines = LOOK_SETS[spec] ? LOOK_SETS[spec]!.split("\n") : spec.split(";");
+  return lines.filter((l) => l.includes("=")).map((l) => [l.slice(0, l.indexOf("=")), l.slice(l.indexOf("=") + 1)] as const);
+})();
 /** each cut's sides: base cut cut base, TC_ROUNDS times (default 1) */
 const ORDER = Array.from({ length: Number(process.env.TC_ROUNDS ?? 1) }, () => [false, true, true, false]).flat();
 
@@ -150,6 +169,9 @@ describe.skipIf(!E2E)("the live traffic's aircraft: what drawing them costs, pas
   const SPOTS: Record<string, { id: string; yaw: number; pitch: number; zoom: number; m: number }> = {
     final: { id: "e2e281", yaw: 60, pitch: 3, zoom: 2.5, m: FINAL },
     parked: { id: "e2ep01", yaw: -30, pitch: 0.5, zoom: 1.5, m: GEARUP + 2 },
+    // (from above: the parked ones' shadows on the apron, the bay's water under the final)
+    "parked-above": { id: "e2ep01", yaw: -30, pitch: -40, zoom: 1.2, m: GEARUP + 2 },
+    "final-above": { id: "e2e281", yaw: 60, pitch: -25, zoom: 3, m: FINAL },
   };
   type Prof = { frames: number; sum: number; passes: Record<string, number>; w: number; h: number };
   for (const key of MOMENTS)
@@ -164,6 +186,20 @@ describe.skipIf(!E2E)("the live traffic's aircraft: what drawing them costs, pas
         await app.js(`(() => { __bh.forceScale(${SCALE}); __bh.touch(); return 1; })()`);
         await app.settled(60_000);
         await Bun.sleep(2000);
+        // (TC_LOOKS — shots only, no timing —: the moment under each lever, for what draws what)
+        for (const [name, js] of LOOKS) {
+          await app.js(`(() => { ${RESET}; ${js}; __bh.touch(); return 1; })()`);
+          await app.settled(60_000);
+          await Bun.sleep(2500);
+          await app.shot(`${OUT}/${SIDE}-${key}-look-${name}.png`);
+        }
+        if (LOOKS.length) await app.js(`(() => { ${RESET}; __bh.touch(); return 1; })()`);
+        if (LOOKS.length && process.env.TC_LOOKS_ONLY === "1") {
+          await app.shot(`${OUT}/${SIDE}-${key}.png`);
+          await app.js(`(() => { __bh.forceScale(null); return 1; })()`);
+          await app.stepDone(`${key}: ${LOOKS.length} captures`);
+          return;
+        }
         const gpu = await gpuTimes(app);
         const prof = await app.js<Prof>(passesJs(30));
         const drawn = await app.js<{ box: number[]; draws: { id: string; tris: number; d: number; px: number; cast: number }[] }>(`(() => {
