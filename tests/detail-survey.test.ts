@@ -2,7 +2,7 @@ import { expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { DETAIL_SURVEY_RES, earthDetail, surveyKept } from "../src/terrain";
 
-// (26 Nov 2026, Sam's decision of 25 Nov) The procedural relief's finest layer (o3: 32 → 8 m, ±3 m on land) faded wherever a survey
+// (25 Nov 2026, Sam's decision of 25 Nov) The procedural relief's finest layer (o3: 32 → 8 m, ±3 m on land) faded wherever a survey
 // holds the ground finer than it — the coarser layers' rule (octaveKept) —, for the contact (terrain.ts) and the GPU (trace.wgsl) alike:
 // it had put ±0.4 m back across the levelled streets of Paris. The global data's ground (res ≥ 25 m) unchanged to the bit.
 
@@ -33,8 +33,13 @@ const BEFORE: [number, number, number, number, number][] = [
   [36.1, -112.1, 2100, 4900, 383.199766920254],
 ];
 
-test("where nothing is surveyed (res ≥ 25 m), the detail as before, to the bit", () => {
-  for (const [la, lo, h0, res, v] of BEFORE) expect(earthDetail(at(la, lo), h0, 0.05, res)).toBe(v);
+// (the values were taken on Apple silicon; Linux x64's libm (CI) differs at ~1e-11 — the same code path, hence a relative 1e-9,
+// far under the change's own scale: the fade moves the ground by 0.1–1 m)
+test("where nothing is surveyed (res ≥ 25 m), the detail as before (to 1e-9, libm aside)", () => {
+  for (const [la, lo, h0, res, v] of BEFORE) {
+    const got = earthDetail(at(la, lo), h0, 0.05, res);
+    expect(Math.abs(got - v)).toBeLessThanOrEqual(1e-9 * Math.max(1, Math.abs(v)));
+  }
 });
 
 test("on a survey's ground (1 m), no procedural relief left; the global data's there had some (the witness)", () => {

@@ -343,6 +343,9 @@ connue ou supposée, la piste. Une entrée réglée est barrée avec le commit q
   (0,2–1 ms) était trop basse — les index font ~13 500 vec4 par cellule (3× l'estimé) et la marche lit 19 cellules par pixel d'eau. Pistes
   pour un prochain essai : ne marcher que les cellules que le rayon traverse (une grille des cellules elles-mêmes), une portée qui suit la
   hauteur des bâtiments, un rendu à demi-résolution du reflet, ou l'option (b) (un reflet planaire) à chiffrer.
+  **Sam, 25 nov. 2026 (soir) : « le visuel était très bon… il faudra vraiment trouver un moyen d'avoir ce résultat »** — l'image de
+  `cd8dcb14` est la cible (reflets entiers des bâtiments proches sur l'eau calme) ; le travail ouvert est de la tenir sous le plafond de
+  2,8 ms sur kerr-mini (règle 1 : gain maximal lu avant d'ouvrir le lot), pas d'y renoncer.
   **Reste aussi** : les reflets de bâtiments détachés sur la Seine — l'SSR ne trouve une
   façade que là où l'image la montre (son pied caché par la rive : la moitié haute du reflet manque) ; le repli tracé (`sceneryMirror`) ne
   connaît que les arbres, et les bâtiments proches (cellules maillées) ne sont pas dans le BVH du décor : non réglé.
