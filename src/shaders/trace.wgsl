@@ -7845,6 +7845,10 @@ var<private> TILE_AT: vec2f = vec2f(0.0);
 // colour and its cover in the pixel: shadeLite lays it over the carriageway)
 var<private> SC_PAINT:vec4f=vec4f(0.0);
 var<private> SC_SURVEY_ROAD:bool=false;
+// (an aerodrome's apron won the point — a paved polygon of the apron's colour, scenery-geometry.ts APRON_COLOUR —: its paving kept near,
+// the photograph a quarter of it — the aircraft, jet bridges and their shadows the orthophoto holds there not drawn flat, SFO 25 Nov 2026)
+var<private> SC_APRON:bool=false;
+const SC_APRON_COLOUR = vec3f(0.31, 0.305, 0.29);
 var<private> SC_ON_BRIDGE:bool=false;
 // (PLAN-PONT-ROUTES-AAA B1/B2: the winning road's own coordinates — its distance from its axis, its carriageway's half-width, its
 // abscissa along its road [m], its packed word — and its direction (the scene's frame), for the raster material's pavement)
@@ -10884,7 +10888,7 @@ fn sceneryStrip(point:vec2f,a:vec2f,b:vec2f,half:f32,aa:f32,square:bool)->vec3f 
 }
 fn scenerySurface(foot:f32)->ScenerySurface {
   var out=ScenerySurface(vec3f(0.0),0.0,0.0);
-  SC_PAINT=vec4f(0.0);SC_SURVEY_ROAD=false;SC_AT=SC_POINT.xy;SC_ROAD=vec4f(0.0);
+  SC_PAINT=vec4f(0.0);SC_SURVEY_ROAD=false;SC_APRON=false;SC_AT=SC_POINT.xy;SC_ROAD=vec4f(0.0);
   if(!HAS_SCENERY || P.scenery[0].w<.5 || P.scenery[2].w<.5 || SC_DISTANCE>P.scenery[1].w){return out;}
   let point=SC_POINT.xy;let aa=max(.12,foot*.75);let header=scenery[1];let total=u32(header.y);var i=0u;var priority=0.0;var dryIsland=false;
   // (the winner's key within its rank — a polygon's cover, a line's depth inside its strip —, and the paint of the winning road or rail:
@@ -10987,7 +10991,7 @@ fn scenerySurface(foot:f32)->ScenerySurface {
     // winning road's or rail's alone, by the same rule — the junctions' paint (kind 5) its own.)
     if(cover>0.0 && isLine && kind!=5.0 && (rank>lineRank || (rank==lineRank && key>lineKey))){lineRank=rank;lineKey=key;linePaint=segPaint;}
     if(cover>0.0 && (rank>priority || (rank==priority && key>best))){
-      priority=rank;best=key;out=ScenerySurface(color,cover,kind);SC_SURVEY_ROAD=kind==1.0 && size.w<0.0;SC_ROAD=road;SC_ROAD_DIR=rdir;
+      priority=rank;best=key;out=ScenerySurface(color,cover,kind);SC_SURVEY_ROAD=kind==1.0 && size.w<0.0;SC_APRON=!isLine && kind==5.0 && all(abs(color-SC_APRON_COLOUR)<vec3f(1e-3));SC_ROAD=road;SC_ROAD_DIR=rdir;
     }
     i++;
   }
@@ -16573,6 +16577,7 @@ fn liteMaterial(gq: vec3f, q: vec3f, ph: vec3f, rd: vec3f, look: vec3f, tM: f32,
   }
   var sv = ScenerySurface(vec3f(0.0), 0.0, 0.0);
   SC_SURVEY_ROAD = false;
+  SC_APRON = false;
   // (review A6: a deck's road walked only where its paint shows — a pixel under 2 m, within 2.5 km —, its own segments alone; farther
   // the deck's plain carriageway)
   let onBridgeDeck = atBridgeMesh(at) && dot(n, gq) > 0.55;
@@ -16601,7 +16606,10 @@ fn liteMaterial(gq: vec3f, q: vec3f, ph: vec3f, rd: vec3f, look: vec3f, tM: f32,
     if (DECAL_ROW.x > 0.5) { A *= mix(1.0, rowCrop(xyc + P.scenery[6].xy, DECAL_ROW.x, DECAL_ROW.y, fpM), DECAL_ROW.z); }
   }
   // A surveyed carriageway carries its material under the markings even when the photo under it is coarse.
-  let photoSurface = img.o * select(1.0, 0.25, SC_SURVEY_ROAD && tM < 2500.0 && fpM < 2.0);
+  // (an aerodrome's apron likewise — SC_APRON —, the photograph back whole from 1.8 to 2.5 km and from 1.4 to 2 m a pixel: no ring on
+  // its wide concrete)
+  var photoSurface = img.o * select(1.0, 0.25, SC_SURVEY_ROAD && tM < 2500.0 && fpM < 2.0);
+  if (SC_APRON) { photoSurface = img.o * mix(0.25, 1.0, max(smoothstep(1800.0, 2500.0, tM), smoothstep(1.4, 2.0, fpM))); }
   A = mix(A, sv.color, select(sv.cover, 0.0, sv.kind == 3.0 || sv.kind == 4.0) * (1.0 - photoSurface));
   if (SC_PAINT.w > 0.0) { A = mix(A, SC_PAINT.rgb, SC_PAINT.w * photoSurface); }
   if (!mesh && !isTree && fpM < 10.0 && (liteSkip() & 16u) == 0u) {
