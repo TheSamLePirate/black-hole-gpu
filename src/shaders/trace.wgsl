@@ -15490,10 +15490,20 @@ fn rasterLiteTakes(px: vec2f, k: u32) -> bool {
 // the mesh's normal at a pixel (the body's physical axes), from its neighbours' distances — none where a neighbour is off
 // the surface (a silhouette, the sky): 0
 fn rasterNormal(px: vec2f, tM: f32, k: u32) -> vec3f {
-  let sx = select(1.0, -1.0, px.x + 1.0 >= P.res.x);
-  let sy = select(1.0, -1.0, px.y + 1.0 >= P.res.y);
-  let tx = terrainRasterHint(px + vec2f(sx, 0.0));
-  let ty = terrainRasterHint(px + vec2f(0.0, sy));
+  var sx = select(1.0, -1.0, px.x + 1.0 >= P.res.x);
+  var sy = select(1.0, -1.0, px.y + 1.0 >= P.res.y);
+  var tx = terrainRasterHint(px + vec2f(sx, 0.0));
+  var ty = terrainRasterHint(px + vec2f(0.0, sy));
+  // (25 Nov 2026 — a thin part's edge: its neighbour on one side off the surface, the other side's taken — a bridge's cable lost its
+  // rebuilt round normal at its edge pixels, a bright fringe along it)
+  if ((tx <= 0.0 || abs(tx - tM) > 0.08 * tM) && px.x - 1.0 >= 0.0) {
+    sx = -sx;
+    tx = terrainRasterHint(px + vec2f(sx, 0.0));
+  }
+  if ((ty <= 0.0 || abs(ty - tM) > 0.08 * tM) && px.y - 1.0 >= 0.0) {
+    sy = -sy;
+    ty = terrainRasterHint(px + vec2f(0.0, sy));
+  }
   if (tx <= 0.0 || ty <= 0.0 || abs(tx - tM) > 0.08 * tM || abs(ty - tM) > 0.08 * tM) { return vec3f(0.0); }
   // (not across a seam between two of the relief's rings — their meshes meet within their tolerance, not smoothly: the normal
   // there tipped, a line of false slope along the seam — the cascades' white water drew it over the sea)

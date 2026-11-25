@@ -28,3 +28,12 @@ test("shadeLite seeks the crown past its proxy against the sky, and leaves a mis
   expect(lite).toContain("sceneryTreeLite(normalize(toBody(ray.look)), treeId, tMax,");
   expect(lite).toContain("if (tM <= 0.0) {\n    moments[idx] = vec2f(RASTER_STALE,");
 });
+
+test("a thin part's edge keeps its rebuilt normal: the neighbour off the surface on one side, the other side's taken (the cables' fringe)", () => {
+  const rn = wgsl.slice(
+    wgsl.indexOf("fn rasterNormal(px: vec2f, tM: f32, k: u32) -> vec3f {"),
+    wgsl.indexOf("// The sunlight on a raster pixel's surface"),
+  );
+  expect(rn).toContain("if ((tx <= 0.0 || abs(tx - tM) > 0.08 * tM) && px.x - 1.0 >= 0.0) {\n    sx = -sx;");
+  expect(rn).toContain("if ((ty <= 0.0 || abs(ty - tM) > 0.08 * tM) && px.y - 1.0 >= 0.0) {\n    sy = -sy;");
+});
