@@ -344,6 +344,8 @@ export interface ChainedBridge {
 
 /** (25 Nov 2026) a bridge's section met past a cell's edge: the tip this near its line (overlap), or its next piece this far ahead
  *  of the tip at most (gap) [m] — the z 15 tiles' margins leave up to a segment either way */
+/** (25 Nov 2026) a joint turning more than this ends a bridge's chain: a fork, not the bridge going on [°] */
+export const BRIDGE_FORK_DEG = 40;
 export const BRIDGE_OVERLAP_SIDE_M = 1.5;
 export const BRIDGE_GAP_M = 80;
 /** a bridge confirmed by the BD TOPO's own: within this of a « Pont » construction [m] */
@@ -446,8 +448,22 @@ export function chainBridges(
         });
       }
       const j = next[0]!;
-      used[j] = 1;
       const pc = pieces[j]!;
+      // (25 Nov 2026 — Pont de Grenelle: at the Île aux Cygnes its BD TOPO section turns 56° down the ramp to the island, the bridge's
+      // straight way on another section in the next tile; one deck round that corner overlapped itself, its flat and its falling slices
+      // 0.5 m apart: a fork is not the bridge going on. A joint turning more than BRIDGE_FORK_DEG ends the chain there — the ramp its own
+      // deck, a branch on this one's top; the bridge's other half met in the scene, in line — bridge-ports.ts joinDeckPieces)
+      if (points.length >= 2) {
+        const prev = points[points.length - 2]!;
+        const far = near(pc.a, tip) ? pc.b : pc.a;
+        const ux = tip[0] - prev[0],
+          uy = tip[1] - prev[1],
+          vx = far[0] - tip[0],
+          vy = far[1] - tip[1];
+        const c = (ux * vx + uy * vy) / ((Math.hypot(ux, uy) || 1) * (Math.hypot(vx, vy) || 1));
+        if (c < Math.cos((BRIDGE_FORK_DEG * Math.PI) / 180)) return false;
+      }
+      used[j] = 1;
       const enter = near(pc.a, tip) ? pc.a : pc.b;
       const zIn = zEnd(pc, enter),
         zPrev = heights[heights.length - 1]!;

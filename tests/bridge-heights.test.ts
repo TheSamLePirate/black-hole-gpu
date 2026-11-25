@@ -469,3 +469,84 @@ describe.skipIf(!C)("Pont de Cheviré's carriageways leveled", () => {
     expect(after).toBeLessThan(before);
   });
 });
+
+describe("a fork is not the bridge going on (Pont de Grenelle's ramp to the Île aux Cygnes, 25 Nov 2026)", () => {
+  test("a joint turning more than 40° ends the chain, even on one section (format 6 before: one deck round the corner)", () => {
+    const pieces = [
+      { cell: 0, index: 0, a: [0, 0] as [number, number], b: [100, 0] as [number, number], seg: seg([0, 0], [100, 0]) },
+      { cell: 0, index: 1, a: [100, 0] as [number, number], b: [140, 55] as [number, number], seg: seg([100, 0], [140, 55]) },
+    ];
+    expect(chainBridges(pieces, [], [], () => false).length).toBe(2);
+    // (a gentle bend — 20° — stays one deck)
+    const bend = [pieces[0]!, { ...pieces[1]!, b: [194, 34] as [number, number], seg: seg([100, 0], [194, 34]) }];
+    expect(chainBridges(bend, [], [], () => false).length).toBe(1);
+  });
+  test("a closed end meeting another half's open end in line joins it; a ramp's end there at an angle is a branch", () => {
+    const north = geo({ id: 1, points: line(47.18, 6, 20) });
+    const south = geo({ id: 2, flags: BridgeFlag.OpenA, points: line(47.18 + 100 / 111_132, 6, 20) });
+    const ramp = geo({
+      id: 3,
+      width: 7,
+      points: [
+        { lat: 47.18 + 100 / 111_132, lon: -1.6 },
+        { lat: 47.18 + 130 / 111_132, lon: -1.6 + 40 / 75_900 },
+      ],
+    });
+    const j = joinDeckPieces([north, south, ramp]);
+    const main = j.find((d) => lenOf(d.bridge) > 150)!;
+    expect(lenOf(main.bridge)).toBeCloseTo(200, 0);
+    const r = j.find((d) => d.bridge.id === 3)!;
+    expect(r.branchA).toBe(true);
+  });
+});
+
+const G = (() => {
+  const dir = earthDataDir();
+  const all = new Map<string, GeoBridge>();
+  for (const y14 of [5636, 5637]) {
+    const x14 = 8295;
+    const osm = readKept(dir, `https://tiles.openfreemap.org/planet/latest/14/${x14}/${y14}.pbf`, null);
+    const decks = readKept(dir, bdtopoDecksUrl(x14, y14), null);
+    const bd = (x: number, y: number) => readKept(dir, bdtopoUrl(x, y), null)?.body ?? null;
+    const quads = [0, 1, 2, 3].map((k) => [x14 * 2 + (k % 2), y14 * 2 + Math.floor(k / 2)] as const);
+    if (!osm || !decks || !quads.every(([x, y]) => bd(x, y))) return null;
+    const cells = prepareStreetCells(
+      osm.body,
+      x14,
+      y14,
+      (x, y) => prepareBdtopoCell(bd(x, y)!, x, y, () => 0).buf,
+      20261125,
+      bd,
+      false,
+      parseBdtopoDecks(JSON.parse(new TextDecoder().decode(decks.body))),
+    );
+    for (const c of cells) {
+      const o = cellOrigin(c.x, c.y);
+      for (const b of readBridges(c.buf)) {
+        const points = b.points.map(([e, n]) => fromCell(o, e, n));
+        all.set(`${b.id}:${points[0]!.lat.toFixed(6)}`, { ...b, points });
+      }
+    }
+  }
+  const near = [...all.values()].filter((b) =>
+    b.points.some((p) => Math.hypot((p.lat - 48.8503) * 111_132, (p.lon - 2.2801) * 73_300) < 120),
+  );
+  return joinDeckPieces(levelTwinDecks(joinBridgeHalves(near)));
+})();
+describe.skipIf(!G)("Pont de Grenelle on the Île aux Cygnes — the e2e's Earth data on disk", () => {
+  test("the bridge one straight deck across the tile's edge; the island's ramp its own, a branch on it (before: one deck turning 56°)", () => {
+    const main = G!.find((d) => lenOf(d.bridge) > 200)!;
+    expect(main).toBeDefined();
+    // (straight: every joint within 40°)
+    const pts = main.bridge.points.map((p) => [p.lon * 73_300, p.lat * 111_132] as const);
+    for (let k = 1; k + 1 < pts.length; k++) {
+      const u = [pts[k]![0] - pts[k - 1]![0], pts[k]![1] - pts[k - 1]![1]],
+        v = [pts[k + 1]![0] - pts[k]![0], pts[k + 1]![1] - pts[k]![1]];
+      expect((u[0]! * v[0]! + u[1]! * v[1]!) / (Math.hypot(u[0]!, u[1]!) * Math.hypot(v[0]!, v[1]!))).toBeGreaterThan(
+        Math.cos((40 * Math.PI) / 180),
+      );
+    }
+    const ramp = G!.find((d) => d !== main && (d.branchA || d.branchB));
+    expect(ramp).toBeDefined();
+  });
+});
