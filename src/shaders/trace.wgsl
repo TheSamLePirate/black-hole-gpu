@@ -9970,9 +9970,6 @@ fn seaSkySSR(r: vec3f) -> vec4f {
   return vec4f(c.rgb / c.a, smoothstep(0.0, 0.06, min(min(uv.x, 1.0 - uv.x), min(uv.y, 1.0 - uv.y))));
 }
 
-// (25 Nov 2026) a mirrored ray's hit on the image: within this share of the depth there, or these metres, behind the surface it found
-const SSR_HIT_SHARE = 0.01;
-const SSR_HIT_M = 2.0;
 fn seaSSR(D: vec3f, r: vec3f) -> vec4f {
   let d0 = length(D);
   let s0 = 1.0 + 0.004 * d0;
@@ -9988,20 +9985,13 @@ fn seaSSR(D: vec3f, r: vec3f) -> vec4f {
       if (sc.z - dz > max(0.08 * dz, 15.0)) { return vec4f(0.0); }
       var lo = sPrev;
       var hi = s;
-      for (var j = 0; j < 6; j++) {
+      for (var j = 0; j < 4; j++) {
         let m = 0.5 * (lo + hi);
         let sm = seaScreen(D + r * m);
         let dm = terrainRasterDepth(sm.xy);
         if (dm > 0.0 && sm.z > dm) { hi = m; } else { lo = m; }
       }
       let sh = seaScreen(D + r * hi);
-      // (25 Nov 2026 — the Loire under Cheviré, the Seine at Grenelle: a light band under the deck, dark pieces mid-river, buildings'
-      // and pylons' reflections floating away from them — the ray accepted 8 % of the depth behind a surface (40 m at 500 m) after a
-      // coarse step: it had passed behind the deck, a tree, a façade, and took their colour where nothing stands. The crossing
-      // bisected, the hit must lie on the surface there — within its pixel's depth spread and a few metres — or the ray went behind
-      // it: no reflection from the image (the relief's own and the sky's then))
-      let dh = terrainRasterDepth(sh.xy);
-      if (dh <= 0.0 || sh.z - dh > max(SSR_HIT_SHARE * dh, SSR_HIT_M)) { return vec4f(0.0); }
       var px = vec2u(clamp(sh.xy, vec2f(0.0), P.res.xy - 1.0));
       // (a pixel this frame's shading writes — other threads of this very dispatch — read from its neighbour across, which
       // no rate's pattern shades in the same frame: the last frame's colour, whole, not a value torn mid-write; at every
@@ -15922,6 +15912,8 @@ fn bodyLiteAir(gid: vec2u, k: u32) {
 // open deep sea leaves shadeLite before the ground's material is read for it — on a sea view shadeLite spent ~33 ms on kerr-mini
 // on pixels it then handed to shadeWater (S0, 10 Nov 2026). x the water's cover, y calm (0 the sea, 0.6 a river, 0.92 a lake),
 // z its kind (0 sea, 1 river, 2 lake), w 1 when the sea there is open and deep (no bed shows: shadeWater needs no ground under it).
+// (25 Nov 2026) a footprint [m] for the water's polygon whose cover, whole, says a point lies well inside it (liteWater)
+const WATER_INNER_M = 14.0;
 fn liteWater(gq: vec3f, fx: vec3f, fy: vec3f, hG: f32, fpM: f32, nW: vec3f, dirW: vec3f, tM: f32, lvl: f32) -> vec4f {
     let rel0 = earthRelief(gq, fx, fy);
   // (the point's height known to half a footprint: the ray jittered within its pixel, the distance read at its centre — at
@@ -15972,7 +15964,17 @@ fn liteWater(gq: vec3f, fx: vec3f, fy: vec3f, hG: f32, fpM: f32, nW: vec3f, dirW
     // ground the relief raises over the sea within it, land; the T7 survey, Sam: the Calanques' faces striped with the sea)
     // (under the sea's level — the mesh the bed's, a drowned ridge's slopes steep —: water whatever its slope; over it, flat
     // ground alone — the T7 survey: Étretat's banks shown as white sand out of the sea)
-    let flat = max(smoothstep(0.82, 0.94, dot(nW, gq)), 1.0 - smoothstep(0.3, 1.5, hW));
+    var flat = max(smoothstep(0.82, 0.94, dot(nW, gq)), 1.0 - smoothstep(0.3, 1.5, hW));
+    // (25 Nov 2026 — the Loire under Cheviré: the relief inside a river is the survey's, not level — a deck's or a pier's trace, a
+    // bed's leftovers, 1–5 m spikes (kerr-mini, groundAt across it) —, their slopes taken for banks: land drawn mid-river, its
+    // photograph's dark water and shadows floating, the deck itself photographed from above a light band under the real one. A
+    // river's or a lake's steep relief more than ~10 m inside its polygon is no bank: water. The sea's polygon keeps the test — its
+    // outline over a cliff)
+    if (flat < 0.999 && osm.y > 0.3 && !tileW) {
+      let toW2 = mat3x3f(P.scenery[0].xyz, P.scenery[1].xyz, P.scenery[2].xyz);
+      let inner = sceneryWaterAt(P.scenery[3].xyz + (dirW * tM) * toW2, WATER_INNER_M, tM);
+      flat = max(flat, smoothstep(0.97, 0.995, inner.x));
+    }
     // (the tiles' cover as it is — filtered, a texel's share: its bank the filter's, a river under the pixel a share of it, fading —;
     // the scene's polygon's sharpened)
     osm.x = select(smoothstep(0.35, 0.65, osm.x), osm.x, tileW) * flat * select(1.0, 1.0 - smoothstep(3.0, 8.0, hW), osm.y < 0.3);
