@@ -15971,7 +15971,8 @@ fn liteFinish(idx: u32, centre: vec2f, pos: vec2f, G: vec3f, rd: vec3f, tH: f32,
     return;
   }
   let ro = nearCam();
-  var cs = cloudsBuffered(centre, terrainRasterDepth(centre));
+  // (the sky — a crown's proxy missed, RASTER_SKY —: the clouds of the sky's pixels, bound 0)
+  var cs = cloudsBuffered(centre, select(terrainRasterDepth(centre), 0.0, tM >= LITE_SKY_M));
   // (no cloud pass this frame: the weather's layers flat, a stand-in)
   if (cs.alpha < 0.0) { cs = cloudsLiteFallback(ro, rd, tH, Ls, E); }
   let alpha = max(cs.alpha, 0.0);
@@ -17101,6 +17102,10 @@ fn liteFinishAt(gid: vec2u, G: vec3f, tM: f32, blend: bool, water: bool) {
 // (moments.x of a pixel shadeLite shaded and left to shadeLiteFinish this frame — tracer-source.ts withLiteSplit —: its surface in
 // liteOut; below RASTER_WATER's range, above nothing else's)
 const RASTER_SPLIT = -9.5;
+// (moments.x of a tree's crown proxy against the sky whose crown shadeLite's ray missed — no ground behind it —: the finishing pass
+// draws the sky there, LITE_SKY_M away — past the air's end, the sky's depth —; below RASTER_MAT, above nothing else's)
+const RASTER_SKY = -12.5;
+const LITE_SKY_M = 1e9;
 // (moments.x of a pixel shadeWater shaded and left to the same finishing pass, run again after the water's — tracer-source.ts
 // withLiteSplit, the staged water's first step (CHALLENGE-J1-J2 idea 2, Sam's decision of 13 Nov 2026) —: RASTER_SPLIT_WATER, less
 // a half where its water covers over half the pixel (liteFinish's water mark); below RASTER_SPLIT, above RASTER_MAT)
@@ -17118,8 +17123,65 @@ fn shadeLiteFinish(@builtin(global_invocation_id) gp: vec3u) {
   let idx = gid.y * u32(P.res.x) + gid.x;
   let mk = moments[idx].x;
   let wat = mk < RASTER_SPLIT_WATER + 0.1 && mk > RASTER_SPLIT_WATER - 0.6;
-  if (mk != RASTER_SPLIT && !wat) { return; }
-  let g = textureLoad(lutDirIn, vec2i(gid.xy), 0);
+  // (a tree's crown proxy with nothing of the raster's ground behind it, its crown missed — shadeLite's RASTER_SKY —: what is behind
+  // it told by the pixels about it (two at most), the nearest: a structure the raster drew — a bridge's tower, a building — lends its
+  // colour (its pixel's this frame or the last: either the structure's), the sky — nothing drawn there — the sky itself, the air and
+  // the clouds to the air's end over no surface, as skyFill draws it; only trees about it — a gap between leaves, another crown
+  // behind — or a ray meeting the Earth's figure (main's far ground): left to the reconstruction as before (RASTER_STALE).
+  // (25 Nov 2026: stale everywhere, dark specks at the crowns' edges against the sky, Battery Spencer; the sky everywhere, a
+  // sky-blue rim round the crowns before the Golden Gate's north tower and between overlapping crowns)
+  // (the sky's surface: none, LITE_SKY_M away — past the air's end)
+  var g = vec4f(0.0, 0.0, 0.0, LITE_SKY_M);
+  if (mk == RASTER_SKY) {
+    let k = u32(P.near1.w);
+    let centre = vec2f(gid.xy) + 0.5;
+    let W = u32(P.res.x);
+    var nb = vec2i(-1);
+    var nd = 99;
+    var sd = 99;
+    for (var dy = -2; dy <= 2; dy++) {
+      for (var dx = -2; dx <= 2; dx++) {
+        let d = dx * dx + dy * dy;
+        let p = vec2i(gid.xy) + vec2i(dx, dy);
+        if (d == 0 || any(p < vec2i(0)) || p.x >= i32(W) || p.y >= i32(P.res.y)) { continue; }
+        let c = vec2f(p) + 0.5;
+        if (terrainRasterBuilding(c) || terrainRasterMesh(c)) {
+          if (d < nd) {
+            nb = p;
+            nd = d;
+          }
+        } else if (terrainRasterDepth(c) <= 0.0 && terrainRasterHint(c) <= 0.0) { sd = min(sd, d); }
+      }
+    }
+    if (nd < 99 && nd <= sd) {
+      let a = accum[u32(nb.y) * W + u32(nb.x)];
+      var col = a.rgb / max(a.a, 1e-6);
+      let old = accum[idx];
+      if ((P.frame.z & FLAG_TEMPORAL) != 0u && stamps[idx] >= P.frame.y && old.a > 0.0) { col = mix(old.rgb / old.a, col, P.ext.w); }
+      if (isNan(col.r + col.g + col.b)) { col = vec3f(0.0); }
+      accum[idx] = vec4f(col, 1.0);
+      moments[idx] = vec2f(rasterMark(0.0, 0.0), terrainRasterDepth(vec2f(nb) + 0.5) / EARTH_RM * bodyRadius(k));
+      stamps[idx] = P.frame.x;
+      return;
+    }
+    if (sd == 99) {
+      moments[idx] = vec2f(RASTER_STALE, terrainRasterDepth(centre) / EARTH_RM * bodyRadius(k));
+      return;
+    }
+    let ro = nearCam();
+    let rd = rasterRay(centre, k).rd;
+    let b = dot(ro, rd);
+    let dq = b * b - dot(ro, ro) + 1.0;
+    if (dq > 0.0 && -b - sqrt(dq) > 0.0) {
+      moments[idx] = vec2f(RASTER_STALE, terrainRasterDepth(centre) / EARTH_RM * bodyRadius(k));
+      return;
+    }
+  } else {
+    if (mk != RASTER_SPLIT && !wat) { return; }
+    g = textureLoad(lutDirIn, vec2i(gid.xy), 0);
+  }
+  // (one call — liteFinish inlined once: the sky's own call doubled the kernel, 1 716 inlined lines, 25 Nov 2026 —; the sky's blended
+  // with its history, no water: wat false)
   liteFinishAt(gid.xy, g.rgb, g.a, !wat, wat && mk < RASTER_SPLIT_WATER - 0.25);
 }
 // The water's finishing pass with its reflections (the staged water's E2 — PLAN-MER-WEBGPU §6; tracer-source.ts
@@ -17444,10 +17506,11 @@ fn shadeLite(@builtin(global_invocation_id) gp: vec3u, @builtin(workgroup_id) wi
       sceneryTreeFinish();
     }
   }
-  // (a tree's proxy against the sky, its crown missed — between its leaves, past its edge —: no ground to shade, the pixel left to the
-  // reconstruction, as shadeMark leaves its others)
+  // (a tree's proxy against the sky, its crown missed — between its leaves, past its edge —: no ground to shade, the sky drawn there
+  // by the finishing pass — RASTER_SKY, shadeLiteFinish. 25 Nov 2026: left to the reconstruction — RASTER_STALE —, the history of a
+  // pixel never shaded: dark specks at the crowns' edges, Battery Spencer; traced by main instead — beb2615e —, its own pale crowns)
   if (tM <= 0.0) {
-    moments[idx] = vec2f(RASTER_STALE, terrainRasterDepth(centre) / EARTH_RM * bodyRadius(k));
+    moments[idx] = vec2f(RASTER_SKY, LITE_SKY_M / EARTH_RM * bodyRadius(k));
     return;
   }
   let ab = squashOf(k);
