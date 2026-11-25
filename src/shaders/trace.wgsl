@@ -15036,12 +15036,7 @@ fn main(@builtin(global_invocation_id) gid: vec3u, @builtin(local_invocation_id)
   // (the raster's primary visibility: a ray whose pixel the patch covers is shade's, not traced here)
   let rasterAt = vec2f(f32(px), f32(py)) + 0.5;
   // (shade not compiled yet — RASTER_SHADE_LATE_FLAG —: only the material's pixels left, the others traced here)
-  // (25 Nov 2026: a tree's crown proxy against the sky — no ground behind, no tree triangle — traced here too: shadeLite, after, draws
-  // the crown where its ray meets it and leaves the sky this pass drew where it misses — no dark speck of a stale pixel at its edge)
-  let skyProxy = terrainRasterHint(rasterAt) <= 0.0 && terrainRasterId(rasterAt) > 0u && terrainRasterTreeSurface(rasterAt) == 0u &&
-    !terrainRasterBuilding(rasterAt);
   let rasterSkip = interleaved && inRange && (rasterPrimary() || DISC_ONLY) && (terrainRasterHint(rasterAt) > 0.0 || terrainRasterId(rasterAt) > 0u) &&
-    !(skyProxy && !DISC_ONLY) &&
     !mirageEscapes(rasterRay(rasterAt, u32(P.near1.w)).look) &&
     (DISC_ONLY || !rasterShadeLate() || rasterLiteTakes(rasterAt, u32(P.near1.w)));
 
@@ -17243,9 +17238,12 @@ fn shadeLite(@builtin(global_invocation_id) gp: vec3u, @builtin(workgroup_id) wi
       sceneryTreeFinish();
     }
   }
-  // (a tree's proxy against the sky, its crown missed — between its leaves, past its edge —: no ground to shade, the sky the rays'
-  // pass (main) drew there before kept — 25 Nov 2026: left stale, the reconstruction's dark specks at the crowns' edges)
-  if (tM <= 0.0) { return; }
+  // (a tree's proxy against the sky, its crown missed — between its leaves, past its edge —: no ground to shade, the pixel left to the
+  // reconstruction, as shadeMark leaves its others)
+  if (tM <= 0.0) {
+    moments[idx] = vec2f(RASTER_STALE, terrainRasterDepth(centre) / EARTH_RM * bodyRadius(k));
+    return;
+  }
   let ab = squashOf(k);
   let rd = ray.rd;
   let tH = tM / ray.kM;

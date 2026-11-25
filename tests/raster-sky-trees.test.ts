@@ -23,15 +23,10 @@ test("a tree's pixel with no ground behind it is the material's, not the rays'",
   expect(takes.indexOf("if (terrainRasterBuilding(px)) { return false; }")).toBeLessThan(id);
 });
 
-test("shadeLite seeks the crown past its proxy against the sky; a miss keeps the sky the rays' pass drew (no stale dark speck)", () => {
+test("shadeLite seeks the crown past its proxy against the sky, and leaves a miss stale (no ground shaded at 0 m)", () => {
   expect(lite).toContain("let tMax = select(tM, terrainRasterDepth(centre) + 60.0, tM <= 0.0);");
   expect(lite).toContain("sceneryTreeLite(normalize(toBody(ray.look)), treeId, tMax,");
-  expect(lite).toContain("if (tM <= 0.0) { return; }");
-  // (the rays' pass traces those pixels first — its skip leaves a crown's proxy against the sky to it)
-  expect(wgsl).toContain("!(skyProxy && !DISC_ONLY) &&");
-  expect(wgsl).toContain(
-    "let skyProxy = terrainRasterHint(rasterAt) <= 0.0 && terrainRasterId(rasterAt) > 0u && terrainRasterTreeSurface(rasterAt) == 0u &&",
-  );
+  expect(lite).toContain("if (tM <= 0.0) {\n    moments[idx] = vec2f(RASTER_STALE,");
 });
 
 test("a thin part's edge keeps its rebuilt normal: the neighbour off the surface on one side, the other side's taken (the cables' fringe)", () => {
