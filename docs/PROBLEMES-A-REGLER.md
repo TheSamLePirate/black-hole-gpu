@@ -262,6 +262,24 @@ connue ou supposée, la piste. Une entrée réglée est barrée avec le commit q
   cellule, sur ~0,5 M pixels d'eau (estimé) — ~0,75 G tests une image, des dizaines de ms : **au-delà du plafond de plusieurs ordres**.
   (a) n'est faisable qu'avec un index par cellule (une grille de ses bâtiments, préparée avec la cellule) — un lot à part, à mesurer sur
   kerr-mini. Rien de lent n'est fusionné.
+  **26 nov. — l'index par cellule : conception et coût estimé (non construit, décision de lot)**.
+  *Données* (préparées avec la cellule, dans le worker du maillage — `cell-workers.ts meshPool`, hors image —, publiées dans la région
+  des cellules proches à côté de leurs enregistrements, `NEAR_REGION_BYTES`) : pour chaque bâtiment de la cellule sa boîte (x, y min/max
+  dans le repère de la cellule, pied et sommet au-dessus de l'ellipsoïde : deux vec4, 32 o) ; une grille fixe de cases de 25 m sur le
+  carré de la cellule (z 15 : ~800 m à Paris → 32 × 32 = 1 024 cases), chaque case un début et un compte dans une liste d'indices de
+  bâtiments (u32) — un bâtiment inscrit dans toutes les cases que couvre sa boîte. Ordre de grandeur (760 bâtiments par cellule à
+  Paris, ~3 cases chacun) : 1 024 × 8 o + ~2 300 × 4 o + 760 × 32 o ≈ **42 Ko par cellule, ~0,8 Mo pour les 19 cellules** de Grenelle
+  (une fraction des 26 Mo d'enregistrements déjà résidents).
+  *Marche* (dans le repli du reflet de l'eau calme — `waterMirror` → `sceneryMirror`, là seulement où l'SSR a manqué) : le rayon réfléchi
+  descendu dans le repère de chaque cellule qu'il traverse (1–2 sur 300 m), parcouru case par case (DDA, ≤ 12 cases de 25 m sur 300 m),
+  chaque case ses boîtes testées (test des plaques, ~20 opérations), la plus proche touchée ombrée de la façade de son bâtiment par
+  `rasterBuilding` (ses faces exactes : un seul bâtiment, ~10–30 arêtes), pas de triangle.
+  *Coût estimé* (rien de mesuré) : ~2–4 boîtes par case dans le centre de Paris → **~30–50 boîtes par pixel** contre ~1 500 sans index ;
+  sur ~0,5 M pixels d'eau (estimé) dont la moitié ombrée par image (l'eau à demi-rythme, J5-5) et seulement ceux où l'SSR manque
+  (estimé 10–30 %) : **~1–4 M tests de boîte par image** — de l'ordre de **0,2–1 ms** sur M1 Max (estimé ; les lectures dispersées
+  plus que le calcul), sous le plafond de ~2,8 ms. À mesurer avant toute fusion : A/B sur kerr-mini à Grenelle et Alexandre III (eau
+  du raster, p50/p95), témoin positif (un bâtiment au bord de l'eau, son reflet entier là où l'SSR le coupait), A/A.
+  *Limites* : les bâtiments des cellules proches seulement (~2 km) ; au-delà, l'SSR et la sonde ; les arbres restent ceux du BVH du décor.
   **Reste aussi** : les reflets de bâtiments détachés sur la Seine — l'SSR ne trouve une
   façade que là où l'image la montre (son pied caché par la rive : la moitié haute du reflet manque) ; le repli tracé (`sceneryMirror`) ne
   connaît que les arbres, et les bâtiments proches (cellules maillées) ne sont pas dans le BVH du décor : non réglé.
