@@ -20,6 +20,52 @@ Windows/D3D12. Les numéros de ligne sont ceux de `da4e75bd`.
 
 ---
 
+### Routes, ombres, arbres, sillages — défauts de la campagne e2e 2 (25 novembre 2026, branche de l'agent, `c02620c0`, `a1f3b0c8`)
+
+- **`scenerySurface` (tous les noyaux Terre) → `sceneryStrip`** (nouvelle petite fonction) : la bande d'une ligne. Les
+  morceaux de route gardent leurs bouts en demi-disque (ils se raccordent) ; la peinture d'un carrefour (genre 5 : zèbre,
+  lignes d'arrêt et de cédez-le-passage) est coupée droit à ses bouts — plus de « pilule » zébrée. **Clé de rang** : une
+  chaussée passe avant tout trottoir (`64 + cr − d` sous la bordure, `size.x − d` au-delà) — un trottoir élargi ne couvre
+  jamais l'embouchure d'une rue transversale ; entre chaussées, l'axe le plus proche gagne toujours (règle de `ffbecf26`).
+- **Données (worker du décor, hors image) — `pavement-reach.ts`** : chaque route de cellule bordée d'une ville, entre deux
+  rangs de bâtiments, est élargie jusqu'au rang le plus proche (de chaque côté la médiane, sur ses points, du bord d'emprise
+  le plus proche en travers — celles de la scène et des cellules de maillage —, au plus 8 m au-delà de la bordure ; des
+  bâtiments d'un seul côté — un square, un parc, un quai — : 2,5 m de plus au plus vers eux, la pelouse d'en face gardée) : plus d'herbe ni de photographie
+  entre trottoir et mur. `earthScenery.stats().pavementsWidened` : scène de la rue de Paris (kerr-mini), 15 751 des 58 827
+  routes de cellule avec la règle finale (`2cd9386f`) ; 15 844 avec la première (`c02620c0`), 6 000 avec les deux rangs seuls
+  (`a1f3b0c8`) — périmés.
+- **`shadeLite`/`shadeWater` → `liteSun` (`a1f3b0c8`)** : les ombres du relief (cascades, horizons), les ombres de contact,
+  la carte d'ombre du décor et l'ombre de l'appareil étaient conditionnées par la normale reçue — pour le sol celle de l'image
+  de profondeur (`rasterNormal`, les distances des voisins) ; sur les marches du relief du levé (bords de ses mailles d'un
+  mètre, en courbes de niveau) elle se détourne du Soleil : ombres sautées, sol éclairé par la normale lisse — **les fines
+  lignes claires courbes des rues de Paris**. Le sol est désormais conditionné (et son point d'ombre relevé) par la verticale,
+  un maillage par sa propre normale. Observé sur kerr-mini : la vue de débogage des ombres (`liteSkip` 8192) sans ses lignes
+  (`docs/progress/routes-defauts-2026-11-25/rue-paris-ombres-*.jpg`). Coût : quelques lectures de la carte de plus sur les
+  sols tournés du Soleil, **non mesuré seul**. **Tout le lot sur la rue de Paris sous la pluie** (`bridges -t "wet asphalt"`,
+  kerr-mini, une passe chacun, `18a6e4dd` puis `2cd9386f` lancés l'un après l'autre le 25 nov. vers 03 h 40 UTC) : GPU p50
+  70,0 → 68,1 ms, p95 73,2 → 73,3 ms ; une paire plus tôt (00 h 15) : 60,8 → 59,8 ms (sans la règle finale des trottoirs) —
+  **pas de surcoût visible, aucun gain revendiqué** (une passe, la machine pas dans le même état d'une paire à l'autre).
+- **`shadeLite` (`liteMaterial`)** : un trottoir (route bordée, au-delà de sa bordure) posé de niveau — sa normale à 80 %
+  vers la verticale : les bosses d'un mètre du relief contre les murs hors de sa lumière (la géométrie du relief reste).
+- **`shadeLite` → `sceneryTreeLite`, `shade`/`main` → `worldScenery`** : l'arbre que le raster a dessiné est testé relevé
+  (R4b) à **sa propre distance** (`forestCandidateStart`), plus à celle du sol derrière lui — kilomètres sous l'horizontale
+  sur une hauteur : arbres testés jusqu'à Λ(portée) trop bas (Λ(4,6 km) ≈ 0,28 m, relevé `sceneryLiftNow` lu sur le mont Faron) —
+  incohérence corrigée ; **elle n'était pas la cause du trait pâle du mont Faron**, qui reste (il suit pourtant le relèvement :
+  `liftOn` faux l'efface ; e2e `faron-tree-streak`, PROBLEMES).
+- **`shadeWater`/`shadeWaterOpen`/`shade` → `seaWake` → `kelvinSlope`** (nouvelle petite fonction) : les vagues de Kelvin
+  par leur cambrure selon le nombre de Froude (plus de hauteur ∝ longueur de coque : pentes jusqu'à 1,8 derrière un
+  chalutier à 2 m/s — les anneaux concentriques), transversales faibles et lissées sur le sillage turbulent, divergentes
+  fortes sur les cuspides à 19,5°, crêtes brisées par le bruit de la mer (une lecture partagée avec l'écume), trains non
+  résolus dans la variance des pentes, somme bornée à ak 0,4 ; plus d'`atan`/`cos`/`sin` par train ; le remous de l'hélice
+  et la bande lisse aux basses vitesses.
+- **Tailles inlinées** (`wgsl-inline-size.ts`, earth-raster, `18a6e4dd` → `a1f3b0c8`) : `shadeLite` 7 919 → 7 966, `shade`
+  27 076 → 27 109, `shadeWater` 5 608 → 5 622, `shadeWaterOpen` 4 902 → 4 916, `shadeLiteLight` 2 478 → 2 479, `main`
+  42 448 → 42 471, `env` 58 874 → 58 943. `check-wgsl` passé (ce Mac, et kerr-mini pour `c02620c0`).
+- **Coût GPU des sillages** (ce Mac, M1 Max, e2e `ship-wake`, une passe de chaque côté, GPU p50 avec puis sans
+  `renderer.seaWakes`, trois fois en alternance, médianes) : vue arrière haute du Ford 1,0 → 0,7 ms, vue de travers basse
+  0,5 → 0,2 ms — **dans le bruit d'une seule passe**, aucun gain revendiqué ; à 76 m du chalutier (`traffic-free-camera`) :
+  −0,1 puis +0,8 ms selon les passes (vue en direct, bruitée). Coût GPU des autres changements **non mesuré**.
+
 ### PONT-ROUTES — revue A : un profil, une surface, un contact (24 novembre 2026, branche de l'agent)
 
 **Code, non mesuré** (aucun e2e ni banc lancé dans ce lot ; les vues à vérifier sont listées dans
@@ -902,7 +948,7 @@ Paris jusqu'à `earthSettled` » chronométré par étape.
 
 <!-- pipeline-inventory:begin (bun scripts/pipeline-inventory.ts --write) -->
 
-_Généré le 2026-11-24T18:49:37Z sur `ffbecf26` (arbre de travail). Ne pas éditer à la main : relancer l'outil._
+_Généré le 2026-11-25T02:38:18Z sur `2cd9386f` (arbre de travail). Ne pas éditer à la main : relancer l'outil._
 
 **130 sites de création de pipeline** (86 rendu, 44 calcul, dont 66 asynchrones) et 43 `createShaderModule` dans 32 fichiers ; **44 programmes WGSL** (16 fichiers .wgsl, 28 chaînes dans le TypeScript) ; **66 libellés de passes** du profileur GPU (+ 11 sites à libellé dynamique).
 
@@ -1084,7 +1130,7 @@ _Généré le 2026-11-24T18:49:37Z sur `ffbecf26` (arbre de travail). Ne pas éd
 
 | source | lignes | points d'entrée |
 |---|---:|---|
-| `src/shaders/trace.wgsl` | 18142 | 18 entrées : cloudLightVolume, aerial, lut, main, shade, shadeMark, shadeLiteFinish, shadeWaterFinish, shadeLiteLight, shadeLite, skyFill, shadeWater, clouds, skyAmbient, cloudShadow, env, probe, shadeStars |
+| `src/shaders/trace.wgsl` | 18205 | 18 entrées : cloudLightVolume, aerial, lut, main, shade, shadeMark, shadeLiteFinish, shadeWaterFinish, shadeLiteLight, shadeLite, skyFill, shadeWater, clouds, skyAmbient, cloudShadow, env, probe, shadeStars |
 | `src/shaders/ship.wgsl` | 2713 | 34 entrées : envCopy, envDown, envGGX, envSH, ctlVs, depthVs, vs, mirrorVs, shadowVs, fs, hullDepthVs, hullDepthFs, ownMaskFs, plumeVs, plumeFs, glowVs, glowFs, distVs, distFs, sheathVs, sheathFs, trailVs, trailFs, lampVs, lampFs, compVs, compFs, fsCabin, fsCabinGlass, fsJetGlass, motionVs, motionFs, composeColor, composeSurface |
 | `src/shaders/post.wgsl` | 1396 | 18 entrées : gatherH, atrous, beamH, beamV, polgrid, resolve, down, downShip, dof, flareMeter, up, meter, stars, motionBlur, temporal, occlusion, cloudTemporal, taau |
 | `src/system/scenery-raster.ts:208` | 1167 | 31 entrées : cull, cullBoxes, clampBoxes, shadowVs, shadowFs, proxyVs, proxyFs, boxVs, boxFs, bridgeMarkFs, boxMarkVs, boxShadowVs, meshShadowVs, meshVs, meshFs, boxSolidVs, benchCull, benchQuadVs, benchVs, benchShadowVs, farCull, farVs, farQuadVs, farFs, farLampCull, farLampVs, farCarCull, farCarVs, nearCellVs, nearCellShadowVs, farShadowVs |
@@ -1265,19 +1311,19 @@ Leur coût n'apparaît que dans l'intervalle de complétion de la frame (ou d'un
 
 | profil | noyaux (lignes inlinées, en milliers) | total |
 |---|---|---:|
-| `earth-raster` | shade 27.1 · shadeMark 0.3 · shadeLite 7.9 · shadeLiteFinish 0.8 · shadeLiteLight 2.5 · shadeWater 5.6 · shadeWaterOpen 4.9 · shadeWaterFinish 1.2 · shadeStars 0.3 · discs 29.9 · clouds 3.8 · skyFill 0.7 · main 42.4 · env 58.9 · aerial 0.7 | 187k |
-| `earth-raster-wx` | shade 32.1 · shadeMark 0.3 · shadeLite 7.9 · shadeLiteFinish 0.8 · shadeLiteLight 2.5 · shadeWater 5.6 · shadeWaterOpen 4.9 · shadeWaterFinish 1.2 · shadeStars 0.3 · discs 29.9 · clouds 3.8 · skyFill 0.7 · main 45.4 · env 58.9 · aerial 0.7 | 195k |
-| `earth-trace` | main 66.1 · env 62.4 · aerial 0.6 | 129k |
-| `earth-photo` | main 67.8 | 68k |
-| `game-space` | main 54.1 · env 50.3 · aerial 0.6 | 105k |
-| `moon` | main 75.8 · env 50.3 · aerial 0.6 · shadeLite 25.6 | 152k |
-| `moons` | main 76.7 · env 50.3 · aerial 0.6 · shadeLite 25.8 | 153k |
-| `mars` | main 87.6 · env 50.3 · aerial 0.6 · shadeLite 37.6 | 176k |
-| `titan` | main 90.6 · env 50.3 · aerial 0.6 · shadeLite 42.7 | 184k |
-| `venus` | main 90.4 · env 50.3 · aerial 0.6 · shadeLite 43.4 | 185k |
-| `earth-only` | main 50.2 · env 44.0 · aerial 0.7 | 95k |
+| `earth-raster` | shade 27.1 · shadeMark 0.3 · shadeLite 8.0 · shadeLiteFinish 0.8 · shadeLiteLight 2.5 · shadeWater 5.6 · shadeWaterOpen 4.9 · shadeWaterFinish 1.2 · shadeStars 0.3 · discs 29.9 · clouds 3.8 · skyFill 0.7 · main 42.5 · env 58.9 · aerial 0.7 | 187k |
+| `earth-raster-wx` | shade 32.1 · shadeMark 0.3 · shadeLite 8.0 · shadeLiteFinish 0.8 · shadeLiteLight 2.5 · shadeWater 5.6 · shadeWaterOpen 4.9 · shadeWaterFinish 1.2 · shadeStars 0.3 · discs 29.9 · clouds 3.8 · skyFill 0.7 · main 45.4 · env 58.9 · aerial 0.7 | 195k |
+| `earth-trace` | main 66.1 · env 62.5 · aerial 0.6 | 129k |
+| `earth-photo` | main 67.9 | 68k |
+| `game-space` | main 54.2 · env 50.4 · aerial 0.6 | 105k |
+| `moon` | main 75.9 · env 50.4 · aerial 0.6 · shadeLite 25.7 | 153k |
+| `moons` | main 76.8 · env 50.4 · aerial 0.6 · shadeLite 25.8 | 154k |
+| `mars` | main 87.7 · env 50.4 · aerial 0.6 · shadeLite 37.7 | 176k |
+| `titan` | main 90.7 · env 50.4 · aerial 0.6 · shadeLite 42.8 | 185k |
+| `venus` | main 90.4 · env 50.4 · aerial 0.6 · shadeLite 43.4 | 185k |
+| `earth-only` | main 50.2 · env 44.1 · aerial 0.7 | 95k |
 | `kerr-jet` | main 31.9 · env 27.9 · lut 28.2 | 88k |
 | `eclipse` | main 46.0 · env 37.7 · aerial 0.6 | 84k |
-| `general` | main 151.3 · env 73.5 · lut 146.9 | 372k |
+| `general` | main 151.4 · env 73.6 · lut 147.0 | 372k |
 
 <!-- pipeline-inventory:end -->

@@ -19,9 +19,21 @@ connue ou supposée, la piste. Une entrée réglée est barrée avec le commit q
 
 - **Golden Gate depuis Battery Spencer** (`golden-gate-1km.png`) : derrière les arbres, à gauche, devant la tour nord, des blocs gris en
   escalier (imposteurs lointains ou couche lointaine ?) masquent une partie de la tour. Non diagnostiqué.
-- **Rues de Paris** (`paris-wet-street-dry.png`, `grenelle-deck-low.png`) : de fines lignes claires courbes traversent la chaussée (bords
-  de voies d'un carrefour ?) ; le relief herbeux déborde sur le trottoir le long des façades (nivellement `roadBank` sans lecteur, déjà noté
-  plus bas). ~~Sur l'approche du pont Alexandre III, un marquage en boucle fermée au milieu de la chaussée (`alexandre-iii-deck-low.png`).~~
+- **Rues de Paris** (`paris-wet-street-dry.png`, `grenelle-deck-low.png`) : ~~de fines lignes claires courbes traversent la chaussée (bords
+  de voies d'un carrefour ?) ; le relief herbeux déborde sur le trottoir le long des façades~~ (nivellement `roadBank` sans lecteur, déjà noté
+  plus bas). **Réglé par `c02620c0` et `a1f3b0c8`** (25 nov. 2026), vu sur kerr-mini au même point de vue
+  (`docs/progress/routes-defauts-2026-11-25/rue-paris-{avant,apres}.jpg`, `rue-paris-ombres-{avant,apres}.jpg`) : **les lignes** n'étaient
+  pas des marquages mais des fuites d'ombre — la vue de débogage des ombres (`liteSkip` 8192, e2e `paris-street-shadows`) les montrait
+  éclairées dans l'ombre des immeubles. `liteSun` conditionnait les ombres (relief, contact, décor, appareil) par la normale de l'image de
+  profondeur (`rasterNormal`) ; sur les marches du relief du levé (bords de mailles d'un mètre, en courbes de niveau) elle se détourne du
+  Soleil : ombres sautées, sol éclairé par sa normale lisse. Le sol est désormais conditionné par la verticale (test
+  `lite-sun-gate.test.ts`). **Le trottoir** : les cellules « rue » donnent le trottoir d'une classe (2–3 m), pas l'emplacement des
+  façades ; entre deux rangs de bâtiments, chaque route bordée est élargie jusqu'au rang le plus proche, d'un seul rang de 2,5 m au
+  plus vers lui (une pelouse de square en face n'est pas pavée) (`pavement-reach.ts`, test
+  `pavement-reach.test.ts`), la chaussée passant toujours avant un trottoir aux carrefours, et le trottoir est posé de niveau dans
+  la lumière (sa normale vers la verticale). Reste : la géométrie du relief garde ses marches d'un mètre (visibles en silhouette
+  près des façades) — le nivellement `roadProfile/roadBank` sans lecteur, plus bas ; un côté de rue plus large que l'autre garde une
+  bande de sol (l'enregistrement est symétrique). ~~Sur l'approche du pont Alexandre III, un marquage en boucle fermée au milieu de la chaussée (`alexandre-iii-deck-low.png`).~~
   **Réglé par ffbecf26** (24 nov. 2026, soir), avec les chaînes d'anneaux blancs des bretelles de SFO (`traffic-runways`,
   `parked-above.png`) : `scenerySurface` gardait, entre segments égaux, le premier rencontré ; la bande d'un segment finit en
   demi-disques, et les morceaux de 1–2 m des courbes B2 et des fins de lignes aux carrefours peignaient leurs lignes autour de leurs
@@ -29,9 +41,13 @@ connue ou supposée, la piste. Une entrée réglée est barrée avec le commit q
   la peinture gardée à part (RP1) est celle de la route gagnante. Vu sur kerr-mini avant/après au même point de vue
   (`docs/progress/campagne-e2e-2026-11-24/marquages-sfo-{avant,apres}.jpg`, `marquages-alexandre-iii-{avant,apres}.jpg`). Les
   « fines lignes claires courbes » des rues de Paris sont probablement la même cause (bords de lignes autour des bouts de morceaux) :
-  **non revu**. Reste ouvert : un passage piéton (genre 5) a des bouts arrondis — une pilule zébrée à l'approche du pont
+  **non revu**. ~~Reste ouvert : un passage piéton (genre 5) a des bouts arrondis — une pilule zébrée à l'approche du pont
   (`marquages-alexandre-iii-apres.jpg`) : sa bande finit aussi en demi-disques (piste : couper la couverture d'un genre 5 hors de
-  son segment, `along` non borné).
+  son segment, `along` non borné).~~ **Réglé par `c02620c0`** (25 nov. 2026) : `scenerySurface` lit la bande d'une ligne par
+  `sceneryStrip` — bouts en demi-disque pour les morceaux de route (ils se raccordent), coupés droit pour la peinture d'un
+  carrefour (genre 5 : zèbre, lignes d'arrêt et de cédez-le-passage). Tests `scenery-strip-wake.test.ts` (modèle CPU : les
+  demi-disques peignaient 12,6 m² au-delà des bouts d'un zèbre de 4 m, 0 désormais), tranche GPU `strip-wake-slice` (le
+  shader égal au modèle à 2·10⁻⁴).
 - **Pont Alexandre III** : classé `monumental_alexandre_iii` (tablier lu : 150 × 24 m, à 15 m du point du classement ; l'arc sous le tablier
   présent dans le contact) ; ses quatre pylônes sont des pavés unis, l'arc à peine visible depuis la Seine à 120 m (`alexandre-iii.png`).
 - **Scène pleine à San Francisco** : ~108 s de construction sur kerr-mini (étape « forest », les collines de Marin), faite deux fois à la
@@ -79,6 +95,30 @@ connue ou supposée, la piste. Une entrée réglée est barrée avec le commit q
   l'horizon — le trait), ou un rayon du matériau qui rencontre l'appareil comme un arbre ; lire l'enregistrement d'arbre que
   `sceneryTreeLite` touche sur ces pixels (sonde du tracé d'une colonne, `colTraceFrame`) et regarder les exclusions de forêt
   autour d'un appareil posé (`forest-exclusions.ts`). Non réglé dans cette session.
+- **Suite (25 nov. 2026, kerr-mini, e2e `faron-tree-streak`, nouveau)** : le trait **suit le relèvement de l'air** (R4a/R4b) :
+  `renderer.liftOn = false` l'efface (`docs/progress/routes-defauts-2026-11-25/faron-avant.jpg` contre `faron-avant-sans-relevement.jpg`) ;
+  9 982 pixels changent entre les deux vues. Ses pixels (texture de distance du raster) : des **arbres proches en vraie géométrie
+  J9** (bit 131072, à ~10 m), le sol derrière eux à 16–56 km (`hint`) ou le ciel (0). Une incohérence trouvée en chemin est
+  corrigée (`c02620c0`) : le matériau testait l'arbre relevé à la distance du **sol** derrière lui (Λ(portée) jusqu'à ~0,3 m), plus
+  à la sienne — **le trait reste** (4 760 et 4 575 pixels après, même vue : il ne vient pas de là). Le « poteau » : le tronc d'un
+  arbre proche (~10 m), son houppier derrière lequel l'appareil est pourtant dessiné devant — une occultation appareil/arbre
+  proche à regarder (`sceneDepth` sur les pixels J9). **Piste suivante** : ce qui, pour un pixel d'arbre J9 au-dessus d'un sol
+  très lointain, dépend du relèvement — la visibilité des arbres J9 (`NearTreeGeometry`, relèvement par sommet ?), la profondeur
+  d'occultation, la finition de l'air (`liteFinish`). Non réglé.
+
+## ~~Le sillage d'un navire en anneaux concentriques réguliers~~ (relevé le 24 novembre 2026, e2e `traffic-free-camera`, campagne 1) — réglé le 25 novembre 2026 (`c02620c0`)
+
+- **Constat** : derrière « Kerlouan » (chalutier, 1,9 m/s) suivi à 76 m, un coin plein d'anneaux concentriques très réguliers,
+  très contrastés au soleil bas (`docs/progress/campagne-e2e-2026-11-24/navire-suivi-apres.jpg`).
+- **Cause** : `seaWake` donnait aux vagues de Kelvin une hauteur ∝ la longueur de la coque, quelle que soit sa vitesse : à
+  2 m/s la longueur d'onde transversale fait 2,6 m — pentes de 0,3 à 1,8 (modèle CPU) ; transversales aussi fortes que les
+  cuspides, sans aucune irrégularité.
+- **Correction** : `kelvinSlope` — la cambrure par le nombre de Froude, transversales faibles et lissées sur le sillage
+  turbulent, divergentes fortes sur les cuspides à 19,5°, crêtes brisées par le bruit de la mer, trains non résolus dans la
+  variance des pentes, somme bornée à ak 0,4 ; le remous de l'hélice aux basses vitesses. Tests `scenery-strip-wake.test.ts`
+  (l'ancien modèle témoin : pente max 1,8 contre ≤ 0,4), tranche GPU `strip-wake-slice`, e2e `ship-wake` (nouveau : le Ford
+  à 28 kt, un bateau lent) et `traffic-free-camera` : `docs/progress/routes-defauts-2026-11-25/sillage-*.jpg`. Coût GPU des
+  sillages dans le bruit d'une passe (GRAPHICS-PIPELINE). Le V d'un bateau lent reste discret par vent frais (physique).
 
 ## ~~Le navire suivi en caméra libre, sans appareil : ni coque ni sillage~~ (relevé le 24 novembre 2026, e2e `traffic-free-camera`, campagne 1) — réglé le même jour (`c716fefd`)
 
