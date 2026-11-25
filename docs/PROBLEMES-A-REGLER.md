@@ -219,13 +219,14 @@ connue ou supposée, la piste. Une entrée réglée est barrée avec le commit q
   (`chevire-lit-aplani-apres.jpg`) : ce n'était donc pas l'arête du relief ; `surfaceAt` y dit « ground » à ~609 m (juste à l'ouest de
   l'axe), aucun levier essayé ne l'ôte — **cause non trouvée**, prochaine piste : la lecture de la couleur de l'eau intérieure (le
   photographique ou la peinture d'une route sous l'eau) pixel par pixel avec un mode de débogage de `liteWater`.
-  **26 nov. — cause trouvée, réglée (`81a59623`)** : ni la photographie (`liteSkip` 128), ni le spéculaire (67108864), ni le ciel et
-  le rebond (32768) ne l'ôtent ; **le matin (Soleil à l'est, derrière la caméra) elle est plus blanche** : une surface éclairée, pas un
-  reflet — haute d'une dizaine de pixels à 600 m, une dalle d'environ 1 m. C'est **l'aire de pont d'OpenStreetMap** sous le viaduc
-  (`bridgeAreas` : une dalle à 4 m × couche au-dessus du sol), plus large que les deux chaussées relevées, son centre entre elles, son
-  contour hors d'elles : le test « sous un tablier » (centre et contour) la laissait passer. Désormais son intérieur aussi est sondé
-  (7 × 7 dans son contour — `bridge-structures.ts areaUnderDeck`) : un tablier sur n'importe quelle partie, pas de dalle. Test
-  `bridge-structures.test.ts` (témoin : l'ancien test disait « pas sous un tablier »). Vérifié : voir le compte rendu de l'e2e ci-dessous.
+  **26 nov. — toujours ouverte, mieux cernée** (ce Mac M1 Max, e2e de diagnostic non versionnés) : ni la photographie (`liteSkip` 128),
+  ni le spéculaire (67108864), ni le ciel et le rebond (32768), ni la couche lointaine des rues (`farLampsOn` false : ses dalles de ponts),
+  ni les bits `TUNE_GSKIP` (sans effet sur le raster) ne l'ôtent ; **le matin (Soleil à l'est, derrière la caméra) elle est plus
+  blanche** : une surface éclairée, pas un reflet, haute d'une dizaine de pixels à 600 m. Hypothèse essayée : l'aire de pont d'OSM
+  (deux aires sur l'axe de Cheviré, 47,184–47,199 N) en dalle — leur test « sous un tablier » sonde désormais aussi leur intérieur
+  (`81a59623`, `bridge-structures.ts areaUnderDeck`, test unitaire avec témoin) — **la bande reste après** (`chevire-sans-dalle-apres.jpg`) :
+  ce n'était pas elle (ou pas seulement). Prochaine piste : `surfaceAt` sur les lignes de la bande (y ≈ 0,59–0,60 à 1600 × 1000) avec
+  le code du raster et la feuille, puis couper une à une les passes du raster (`sea surface`, les marques de ponts, les maillages).
   **Les reflets détachés sur la Seine — règle 1** : le reflet d'une façade vient du SSR (`seaSSR`, dans `earth water` / C19, C19d) ;
   là où l'image ne montre pas la façade (son pied caché par la rive), le repli tracé (`waterMirror` → `sceneryMirror`) ne connaît que le
   relief et les arbres, pas les bâtiments proches (cellules maillées, hors du BVH du décor). Plafond : la seule part « reflet » de l'eau ;
