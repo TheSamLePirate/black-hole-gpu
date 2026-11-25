@@ -20,6 +20,25 @@ Windows/D3D12. Les numéros de ligne sont ceux de `da4e75bd`.
 
 ---
 
+### Le miroir des bâtiments proches sur l'eau calme, repris moins cher (25 novembre 2026, branche `seine-mirror-cheap`, voulu par Sam)
+
+- **`inlandWater` → `nearMirror` (`trace.wgsl`, noyau `shadeWater`)** : là où l'SSR manque (`ssr.w < 0,99`), le rayon réfléchi parcourt
+  l'index de chaque cellule proche (`near-meshes.ts cellMirrorIndex` : boîtes des feuilles par cases de 32 m, dans la région proche du
+  tampon `scenery`), murs rencontrés exactement, jusqu'à 800 m. Essai `cd8dcb14` retiré (+5,2 ms sur kerr-mini) ; repris avec trois
+  coupes exactes : (1) la liste porte une **boule par cellule** dans le repère de la scène (`mirrorBall`, w = place · 4096 + rayon) — une
+  cellule que le rayon ne traverse pas quittée en une lecture (avant : 6 lectures et le repère, ×19 cellules) ; (2) le **plus haut sommet**
+  de la cellule (en-tête) et de chaque case (un vec4 par case) : la marche s'arrête quand le rayon, qui monte, les a dépassés ; (3) les
+  murs d'une feuille testés **une seule fois**, dans la case où le rayon entre dans sa boîte.
+- **Mesuré** (ce Mac M1 Max, chauffe « Moderate », `lastGpuMs` p50 sur 90 images, A B B A A B B A, scénario de l'essai) — Grenelle :
+  essai `cd8dcb14` +1,4 à +1,6 ms ; coupes (2) +0,9 ; (1)+(2)+(3) **+0,48 ms** (allumé 20,7–21,0 sans la première série de chauffe,
+  coupé 20,2–20,6). Passe `earth water (raster)` 3,09 ms (allumé). Alexandre III (21 cellules) : non séparable du bruit (±3 ms), la passe
+  d'eau entière 1,53 ms. Image identique aux coupes près (écart moyen 0,27 contre 0,26 en A/A).
+- **Mesuré sur kerr-mini** (25 nov. 2026, 20:02 UTC, `b94d93be`, `seine-mirror.e2e`, headless, mêmes séries ;
+  `remote-results/20261125-200215-seine-mirror-cheap`) — Grenelle (19 cellules) : allumé 54,2 · 53,7 · 54,5 · 54,3 (p95 57,4–58,4), coupé
+  52,2 · 52,4 · 51,6 · 52,2 (p95 55,2–56,1) : **+2,1 ms** sous le plafond de 2,8 (essai `cd8dcb14` : +5,2) ; A/A 0,8 / 0,8. Passe
+  `earth water (raster)` 8,79 ms allumé (essai : 14,69). Alexandre III (7 cellules sur 21 résidentes) : +1,1 ms — toutes cellules
+  résidentes non mesuré. Captures `docs/progress/ponts-2026-11-25/seine-miroir-*-mini-{avant,apres}.jpg`.
+
 ### Le coût net de la journée du 25 novembre 2026 — campagne sur kerr-mini (main 091ddd33 + b8fd6cf8 contre 18a6e4dd) — mesuré
 
 **Mesuré**, kerr-mini (Mac mini M1, sans fenêtre, état thermique nominal avant la campagne, GPU 1 278 MHz), 25 nov. 2026 vers 18 h 50–20 h 40
@@ -1422,7 +1441,7 @@ Paris jusqu'à `earthSettled` » chronométré par étape.
 
 <!-- pipeline-inventory:begin (bun scripts/pipeline-inventory.ts --write) -->
 
-_Généré le 2026-11-25T14:59:52Z sur `0bd78c52` (arbre de travail). Ne pas éditer à la main : relancer l'outil._
+_Généré le 2026-11-25T19:08:05Z sur `c5180196` (arbre de travail). Ne pas éditer à la main : relancer l'outil._
 
 **130 sites de création de pipeline** (86 rendu, 44 calcul, dont 66 asynchrones) et 43 `createShaderModule` dans 32 fichiers ; **44 programmes WGSL** (16 fichiers .wgsl, 28 chaînes dans le TypeScript) ; **66 libellés de passes** du profileur GPU (+ 11 sites à libellé dynamique).
 
@@ -1504,7 +1523,7 @@ _Généré le 2026-11-25T14:59:52Z sur `0bd78c52` (arbre de travail). Ne pas éd
 | `src/renderer.ts:11212` | compute async | `clouds` | `cloudShadow` |
 | `src/renderer.ts:11294` | compute async | `sky ambient write` | `cloudLightVolume` |
 | `src/renderer.ts:11376` | compute async | — | `skyAmbient` |
-| `src/renderer.ts:13734` | compute async | — | `probe` |
+| `src/renderer.ts:13741` | compute async | — | `probe` |
 | `src/sea/fft-gpu.ts:117` | compute | — | — |
 | `src/ship.ts:858` | compute | — | `vs` |
 | `src/ship.ts:878` | render | — | `fsJetGlass` |
@@ -1604,7 +1623,7 @@ _Généré le 2026-11-25T14:59:52Z sur `0bd78c52` (arbre de travail). Ne pas éd
 
 | source | lignes | points d'entrée |
 |---|---:|---|
-| `src/shaders/trace.wgsl` | 18374 | 18 entrées : cloudLightVolume, aerial, lut, main, shade, shadeMark, shadeLiteFinish, shadeWaterFinish, shadeLiteLight, shadeLite, skyFill, shadeWater, clouds, skyAmbient, cloudShadow, env, probe, shadeStars |
+| `src/shaders/trace.wgsl` | 18517 | 18 entrées : cloudLightVolume, aerial, lut, main, shade, shadeMark, shadeLiteFinish, shadeWaterFinish, shadeLiteLight, shadeLite, skyFill, shadeWater, clouds, skyAmbient, cloudShadow, env, probe, shadeStars |
 | `src/shaders/ship.wgsl` | 2838 | 34 entrées : envCopy, envDown, envGGX, envSH, ctlVs, depthVs, vs, mirrorVs, shadowVs, fs, hullDepthVs, hullDepthFs, ownMaskFs, plumeVs, plumeFs, glowVs, glowFs, distVs, distFs, sheathVs, sheathFs, trailVs, trailFs, lampVs, lampFs, compVs, compFs, fsCabin, fsCabinGlass, fsJetGlass, motionVs, motionFs, composeColor, composeSurface |
 | `src/shaders/post.wgsl` | 1396 | 18 entrées : gatherH, atrous, beamH, beamV, polgrid, resolve, down, downShip, dof, flareMeter, up, meter, stars, motionBlur, temporal, occlusion, cloudTemporal, taau |
 | `src/system/scenery-raster.ts:208` | 1191 | 31 entrées : cull, cullBoxes, clampBoxes, shadowVs, shadowFs, proxyVs, proxyFs, boxVs, boxFs, bridgeMarkFs, boxMarkVs, boxShadowVs, meshShadowVs, meshVs, meshFs, boxSolidVs, benchCull, benchQuadVs, benchVs, benchShadowVs, farCull, farVs, farQuadVs, farFs, farLampCull, farLampVs, farCarCull, farCarVs, nearCellVs, nearCellShadowVs, farShadowVs |
@@ -1698,12 +1717,12 @@ _Généré le 2026-11-25T14:59:52Z sur `0bd78c52` (arbre de travail). Ne pas éd
 | `clouds' shadow map` | `src/renderer.ts:11244` | 1 |
 | `clouds' light volume` | `src/renderer.ts:11325` | 1 |
 | `sky ambient` | `src/renderer.ts:11407` | 1 |
-| `clouds' history` | `src/renderer.ts:12130` | 1 |
-| `body raster heights` | `src/renderer.ts:12490` | 1 |
-| `scenery raster cull` | `src/renderer.ts:12768` | 1 |
-| `ground occlusion` | `src/renderer.ts:12808` | 1 |
-| `trees' shadow map` | `src/renderer.ts:12813` | 1 |
-| `horizon bake` | `src/renderer.ts:13093` | 1 |
+| `clouds' history` | `src/renderer.ts:12137` | 1 |
+| `body raster heights` | `src/renderer.ts:12497` | 1 |
+| `scenery raster cull` | `src/renderer.ts:12775` | 1 |
+| `ground occlusion` | `src/renderer.ts:12815` | 1 |
+| `trees' shadow map` | `src/renderer.ts:12820` | 1 |
+| `horizon bake` | `src/renderer.ts:13100` | 1 |
 | `ship probe: mips` | `src/ship.ts:2054` | 1 |
 | `ship probe: GGX` | `src/ship.ts:2066` | 1 |
 | `ship probe: SH` | `src/ship.ts:2073` | 1 |
@@ -1727,11 +1746,11 @@ Libellés dynamiques (calculés à l'exécution) :
 - `src/renderer.ts:7731` — `label`
 - `src/renderer.ts:7732` — `label`
 - `src/renderer.ts:9078` — `label`
-- `src/renderer.ts:12043` — `label`
-- `src/renderer.ts:12496` — `label`
-- `src/renderer.ts:12527` — `label`
-- `src/renderer.ts:12793` — `label`
-- `src/renderer.ts:12839` — `label`
+- `src/renderer.ts:12050` — `label`
+- `src/renderer.ts:12503` — `label`
+- `src/renderer.ts:12534` — `label`
+- `src/renderer.ts:12800` — `label`
+- `src/renderer.ts:12846` — `label`
 - `src/ship.ts:811` — `label`
 
 #### A.3b Passes jamais chronométrées (ni libellé du profileur, ni horodatage transmis)
@@ -1756,7 +1775,7 @@ Leur coût n'apparaît que dans l'intervalle de complétion de la frame (ou d'un
 | render pass | `src/noise3d.ts:124` |
 | render pass | `src/renderer.ts:5748` |
 | compute pass | `src/renderer.ts:8813` |
-| compute pass | `src/renderer.ts:13753` |
+| compute pass | `src/renderer.ts:13760` |
 | compute pass | `src/sea/fft-gpu.ts:261` |
 | compute pass | `src/sea/fft-gpu.ts:265` |
 | render pass | `src/ship.ts:3477` |
@@ -1785,19 +1804,19 @@ Leur coût n'apparaît que dans l'intervalle de complétion de la frame (ou d'un
 
 | profil | noyaux (lignes inlinées, en milliers) | total |
 |---|---|---:|
-| `earth-raster` | shade 27.2 · shadeMark 0.3 · shadeLite 8.1 · shadeLiteFinish 0.8 · shadeLiteLight 2.0 · shadeWater 5.6 · shadeWaterOpen 4.9 · shadeWaterFinish 1.2 · shadeStars 0.3 · discs 29.9 · clouds 3.8 · skyFill 0.7 · main 42.5 · env 59.0 · aerial 0.7 | 187k |
-| `earth-raster-wx` | shade 32.2 · shadeMark 0.3 · shadeLite 8.1 · shadeLiteFinish 0.8 · shadeLiteLight 2.0 · shadeWater 5.6 · shadeWaterOpen 4.9 · shadeWaterFinish 1.2 · shadeStars 0.3 · discs 29.9 · clouds 3.8 · skyFill 0.7 · main 45.4 · env 59.0 · aerial 0.7 | 195k |
-| `earth-trace` | main 66.3 · env 62.8 · aerial 0.6 | 130k |
-| `earth-photo` | main 68.1 | 68k |
-| `game-space` | main 54.3 · env 50.4 · aerial 0.6 | 105k |
-| `moon` | main 76.0 · env 50.4 · aerial 0.6 · shadeLite 25.8 | 153k |
-| `moons` | main 76.9 · env 50.4 · aerial 0.6 · shadeLite 25.9 | 154k |
-| `mars` | main 87.8 · env 50.4 · aerial 0.6 · shadeLite 37.8 | 177k |
-| `titan` | main 90.9 · env 50.4 · aerial 0.6 · shadeLite 43.0 | 185k |
-| `venus` | main 90.6 · env 50.4 · aerial 0.6 · shadeLite 43.6 | 185k |
-| `earth-only` | main 50.3 · env 44.1 · aerial 0.7 | 95k |
+| `earth-raster` | shade 27.4 · shadeMark 0.3 · shadeLite 8.1 · shadeLiteFinish 0.8 · shadeLiteLight 2.0 · shadeWater 5.7 · shadeWaterOpen 4.9 · shadeWaterFinish 1.2 · shadeStars 0.3 · discs 29.9 · clouds 3.8 · skyFill 0.7 · main 42.5 · env 59.1 · aerial 0.7 | 188k |
+| `earth-raster-wx` | shade 32.5 · shadeMark 0.3 · shadeLite 8.1 · shadeLiteFinish 0.8 · shadeLiteLight 2.0 · shadeWater 5.7 · shadeWaterOpen 4.9 · shadeWaterFinish 1.2 · shadeStars 0.3 · discs 29.9 · clouds 3.8 · skyFill 0.7 · main 45.5 · env 59.1 · aerial 0.7 | 196k |
+| `earth-trace` | main 66.4 · env 63.0 · aerial 0.6 | 130k |
+| `earth-photo` | main 68.2 | 68k |
+| `game-space` | main 54.3 · env 50.5 · aerial 0.6 | 105k |
+| `moon` | main 76.0 · env 50.5 · aerial 0.6 · shadeLite 25.8 | 153k |
+| `moons` | main 76.9 · env 50.5 · aerial 0.6 · shadeLite 26.0 | 154k |
+| `mars` | main 87.9 · env 50.5 · aerial 0.6 · shadeLite 37.9 | 177k |
+| `titan` | main 90.9 · env 50.5 · aerial 0.6 · shadeLite 43.0 | 185k |
+| `venus` | main 90.6 · env 50.5 · aerial 0.6 · shadeLite 43.6 | 185k |
+| `earth-only` | main 50.3 · env 44.2 · aerial 0.7 | 95k |
 | `kerr-jet` | main 32.0 · env 27.9 · lut 28.3 | 88k |
-| `eclipse` | main 46.1 · env 37.7 · aerial 0.6 | 84k |
-| `general` | main 151.9 · env 73.9 · lut 147.6 | 373k |
+| `eclipse` | main 46.1 · env 37.8 · aerial 0.6 | 85k |
+| `general` | main 152.2 · env 74.1 · lut 147.8 | 374k |
 
 <!-- pipeline-inventory:end -->

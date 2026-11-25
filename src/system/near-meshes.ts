@@ -31,13 +31,153 @@ export const NEAR_REGION_BYTES = 48 * 1024 * 1024;
 /** a triangle without a record (no region): its leaf 0 — the generic near material */
 export const NO_RECORD = 0xffffffff;
 
-/** the region's layout [vec4s from its start]: the frames, the table (a u32 a record block), the records; the last vec4 the tail */
+/** (25 Nov 2026 — the water's mirror of the near buildings: PROBLEMES « les reflets de la Seine ») the cells whose index the mirror walks,
+ *  at most (the list's vec4s: its count, then a vec4 a cell — its ball in the scene's frame: centre, w its slot · 4096 + its radius [m]
+ *  rounded up —: the walk leaves at one read the cells the ray does not cross) */
+export const NEAR_MIRROR_CELLS = 64;
+/** the indexes' share of the region [vec4s] (12 MiB: the 19 cells about Grenelle 255 865 vec4s, the 24 about Alexandre III 436 605 —
+ *  ~13 500–18 000 a cell, measured 25 Nov 2026; a cell whose index does not fit is not mirrored) */
+export const NEAR_MIRROR_VEC4S = 786432;
+/** an index's bins [m] (the walker's contact bins' size — CONTACT_BIN_M) */
+export const MIRROR_BIN_M = 32;
+
+/** the region's layout [vec4s from its start]: the frames (each slot's: its origin — w its mirror index's vec4, 0 none —, east,
+ *  north, up), the mirror's list (right after the frames: trace.wgsl nearMirror finds it there), the mirror's indexes, the table (a u32
+ *  a record block), the records; the last vec4 the tail */
 export function nearRegionLayout(vec4s: number) {
   const frames = 0;
-  const table = NEAR_MESH_SLOTS * 4;
+  const list = NEAR_MESH_SLOTS * 4;
+  const index = list + 1 + NEAR_MIRROR_CELLS;
+  const table = index + NEAR_MIRROR_VEC4S;
   const blocks = Math.max(0, Math.floor((vec4s - table - 1) / (NEAR_REC_BLOCK + 0.25)));
   const records = table + Math.ceil(blocks / 4);
-  return { frames, table, records, blocks, tail: vec4s - 1 };
+  return { frames, list, index, table, records, blocks, tail: vec4s - 1 };
+}
+
+/**
+ * (25 Nov 2026 — PROBLEMES « les reflets de la Seine », the per-cell index designed in revue F) A cell's buildings for the water's mirror
+ * (trace.wgsl nearMirror): its leaves' boxes binned on a grid of MIRROR_BIN_M over its frame (east, north from its origin), each leaf in
+ * every bin its box touches. The vec4s: [i0, j0, nx, ny] the grid; [bin, binsAt, entriesAt, top — the cell's highest top]; the bins
+ * from binsAt, a vec4 each (start, count — in entries —, its leaves' highest top, 0: the walk leaves a bin, then the cell, the mirrored
+ * ray has risen over — 25 Nov 2026, the cost); the entries from entriesAt, two vec4s each: [min east, min north, max east, max north], [bottom, top, its
+ * record's place in the scenery buffer (u32 bits: `recordAt(o)` from the leaf's first vec4 in `rec`), 0]. Null: no leaf.
+ */
+export function cellMirrorIndex(buf: ArrayBuffer, rec: Float32Array, recordAt: (o: number) => number): Float32Array | null {
+  const h = readMeshHeader(buf);
+  if (!h) return null;
+  const leaves: { o: number; box: [number, number, number, number]; lo: number; hi: number }[] = [];
+  for (let r = 0; r < h.buildings; r++) {
+    const b = readMeshBuilding(buf, r);
+    let o = b.firstRecord;
+    for (let l = 0; l < b.records && o < h.records; l++) {
+      const base = 4 * o,
+        count = Math.round(rec[base + 2]!);
+      const np = (Math.floor(rec[base + 11]!) >> 14) & 15;
+      let minX = Infinity,
+        minY = Infinity,
+        maxX = -Infinity,
+        maxY = -Infinity;
+      for (let e = 0; e < count; e++) {
+        for (const k of [0, 2]) {
+          const x = rec[base + 12 + 4 * e + k]!,
+            y = rec[base + 13 + 4 * e + k]!;
+          minX = Math.min(minX, x);
+          maxX = Math.max(maxX, x);
+          minY = Math.min(minY, y);
+          maxY = Math.max(maxY, y);
+        }
+      }
+      if (count > 0 && Number.isFinite(minX)) leaves.push({ o, box: [minX, minY, maxX, maxY], lo: rec[base]!, hi: rec[base + 1]! });
+      o += 4 + count + np;
+    }
+  }
+  if (!leaves.length) return null;
+  const B = MIRROR_BIN_M;
+  let i0 = Infinity,
+    j0 = Infinity,
+    i1 = -Infinity,
+    j1 = -Infinity;
+  for (const L of leaves) {
+    i0 = Math.min(i0, Math.floor(L.box[0] / B));
+    j0 = Math.min(j0, Math.floor(L.box[1] / B));
+    i1 = Math.max(i1, Math.floor(L.box[2] / B));
+    j1 = Math.max(j1, Math.floor(L.box[3] / B));
+  }
+  const nx = i1 - i0 + 1,
+    ny = j1 - j0 + 1;
+  const bins: number[][] = Array.from({ length: nx * ny }, () => []);
+  leaves.forEach((L, k) => {
+    for (let j = Math.floor(L.box[1] / B); j <= Math.floor(L.box[3] / B); j++)
+      for (let i = Math.floor(L.box[0] / B); i <= Math.floor(L.box[2] / B); i++) bins[(j - j0) * nx + (i - i0)]!.push(k);
+  });
+  const entries = bins.reduce((s, b) => s + b.length, 0);
+  const binsAt = 2;
+  const entriesAt = binsAt + nx * ny;
+  const out = new Float32Array(4 * (entriesAt + 2 * entries));
+  const u = new Uint32Array(out.buffer);
+  const top = leaves.reduce((m, L) => Math.max(m, L.hi), -Infinity);
+  out.set([i0, j0, nx, ny, B, binsAt, entriesAt, top], 0);
+  let e = 0;
+  bins.forEach((list, b) => {
+    out[4 * (binsAt + b)] = e;
+    out[4 * (binsAt + b) + 1] = list.length;
+    out[4 * (binsAt + b) + 2] = list.length ? list.reduce((m, k) => Math.max(m, leaves[k]!.hi), -Infinity) : -1e9;
+    for (const k of list) {
+      const L = leaves[k]!;
+      const at = 4 * (entriesAt + 2 * e);
+      out.set(L.box, at);
+      out[at + 4] = L.lo;
+      out[at + 5] = L.hi;
+      u[at + 6] = recordAt(L.o) >>> 0;
+      e++;
+    }
+  });
+  return out;
+}
+
+/** (25 Nov 2026) a cell's mirror index's ball in its frame (east, north, up from its origin): its grid's box from the lowest bottom to
+ *  the highest top — [centre east, north, up, radius] */
+export function mirrorBall(idx: Float32Array): [number, number, number, number] {
+  const [i0, j0, nx, ny, B, , entriesAt, top] = Array.from(idx.subarray(0, 8)) as number[];
+  let lo = Infinity;
+  for (let at = 4 * entriesAt!; at < idx.length; at += 8) lo = Math.min(lo, idx[at + 4]!);
+  if (!Number.isFinite(lo)) lo = top!;
+  const hx = (nx! * B!) / 2,
+    hy = (ny! * B!) / 2,
+    hz = (top! - lo) / 2;
+  return [i0! * B! + hx, j0! * B! + hy, lo + hz, Math.hypot(hx, hy, hz)];
+}
+
+/** (25 Nov 2026) ranges of the mirror's indexes, first fit (a cell's index whole — the shader walks it contiguous) */
+class RangePool {
+  private free: [number, number][];
+  constructor(size: number) {
+    this.free = [[0, size]];
+  }
+  alloc(n: number): number | null {
+    for (let k = 0; k < this.free.length; k++) {
+      const [at, len] = this.free[k]!;
+      if (len < n) continue;
+      if (len === n) this.free.splice(k, 1);
+      else this.free[k] = [at + n, len - n];
+      return at;
+    }
+    return null;
+  }
+  release(at: number, n: number) {
+    this.free.push([at, n]);
+    this.free.sort((a, b) => a[0] - b[0]);
+    const merged: [number, number][] = [];
+    for (const r of this.free) {
+      const last = merged[merged.length - 1];
+      if (last && last[0] + last[1] === r[0]) last[1] += r[1];
+      else merged.push([r[0], r[1]]);
+    }
+    this.free = merged;
+  }
+  get freeVec4s() {
+    return this.free.reduce((s, r) => s + r[1], 0);
+  }
 }
 
 /**
@@ -186,6 +326,8 @@ interface Resident {
   triangles: number;
   /** lot (3): its buildings for the walker's contacts */
   contact?: CellContact;
+  /** (25 Nov 2026) its index for the water's mirror in the region's indexes [vec4 from their start, length] */
+  mirror?: { at: number; n: number; ball: [number, number, number, number] };
 }
 
 /** each building's box in its cell's frame (min east, min north, max east, max north; NaN: no vertex) — its ground's samples */
@@ -290,6 +432,17 @@ export class NearMeshes {
   writeRegion: ((at: number, data: Float32Array | Uint32Array) => void) | null = null;
   private layout: (ReturnType<typeof nearRegionLayout> & { base: number }) | null = null;
   private recPool: BlockPool | null = null;
+  private mirrorPool: RangePool | null = null;
+  private mirrorWanted = true;
+  /** (25 Nov 2026 — a lever, the ABBA's) the water's mirror of the near buildings (trace.wgsl nearMirror): off, its list empty — the
+   *  shader walks no cell */
+  get mirrorOn() {
+    return this.mirrorWanted;
+  }
+  set mirrorOn(on: boolean) {
+    this.mirrorWanted = on;
+    this.writeMirrorList();
+  }
 
   constructor(
     private raster: SceneryRaster,
@@ -311,6 +464,7 @@ export class NearMeshes {
     this.queue = [];
     this.layout = null;
     this.recPool = null;
+    this.mirrorPool = null;
   }
   /** the region's layout (made once it is there: its tail written — the tracer and the raster read it) */
   private regionReady(): boolean {
@@ -321,6 +475,7 @@ export class NearMeshes {
     if (L.blocks <= 0) return false;
     this.layout = { ...L, base: r.base };
     this.recPool = new BlockPool(L.blocks);
+    this.mirrorPool = new RangePool(NEAR_MIRROR_VEC4S);
     this.writeRegion(L.tail, new Float32Array([NEAR_REGION_MARK, r.base + L.frames, r.base + L.table, r.base + L.records]));
     return true;
   }
@@ -347,6 +502,8 @@ export class NearMeshes {
       this.sceneKey = key;
       this.frame = scene ? sceneryFrame(scene.lat, scene.lon) : null;
       if (this.frame) for (const r of this.residents.values()) if (r.slot >= 0) this.writeFrame(r);
+      // (the mirror's balls are in the scene's frame)
+      this.writeMirrorList();
     }
     this.raster.nearOn = !!this.frame;
     // (the region there: the cells put before it — drawn without their records — let go once, put again with them)
@@ -500,8 +657,22 @@ export class NearMeshes {
       // (the table: a u32 a block — written as whole vec4s, their four blocks' slots, from the residents)
       const touched = new Set(rec.map((b) => Math.floor(b / 4)));
       for (const v4 of touched) this.writeTable(v4, rec, slot);
+      // (25 Nov 2026: its index for the water's mirror — its leaves binned, their records' places in the scenery buffer)
+      const base = L.base + L.records;
+      const idx = cellMirrorIndex(
+        c.buf,
+        records,
+        (o) => base + rec[Math.floor(o / NEAR_REC_BLOCK)]! * NEAR_REC_BLOCK + (o % NEAR_REC_BLOCK),
+      );
+      const at = idx && this.mirrorPool ? this.mirrorPool.alloc(idx.length / 4) : null;
+      if (idx && at !== null) {
+        this.writeRegion(L.index + at, idx);
+        r.mirror = { at, n: idx.length / 4, ball: mirrorBall(idx) };
+        this.writeFrame(r);
+      }
     }
     this.residents.set(key, r);
+    this.writeMirrorList();
     this.counts.put++;
     this.counts.buildings += h.buildings;
     this.counts.triangles += h.triangles;
@@ -520,8 +691,32 @@ export class NearMeshes {
     if (!this.frame || r.slot < 0) return;
     const f = cellFrameInScene(r.x, r.y, this.frame);
     this.raster.nearFrame(r.slot, f);
-    // (lot 2b: the tracer's copy — its records turned into the scene's frame there)
-    if (this.layout && this.writeRegion) this.writeRegion(this.layout.frames + 4 * r.slot, f);
+    // (lot 2b: the tracer's copy — its records turned into the scene's frame there; 25 Nov 2026: its origin's w the place of its mirror
+    // index in the scenery buffer, 0 none)
+    if (this.layout && this.writeRegion) {
+      const t = f.slice();
+      t[3] = r.mirror ? this.layout.base + this.layout.index + r.mirror.at : 0;
+      this.writeRegion(this.layout.frames + 4 * r.slot, t);
+    }
+  }
+  /** (25 Nov 2026) the mirror's list: the slots of the cells with an index (NEAR_MIRROR_CELLS at most, the nearest put first kept), none
+   *  with the lever off */
+  private writeMirrorList() {
+    const L = this.layout;
+    if (!L || !this.writeRegion) return;
+    const out = new Float32Array(4 * (1 + NEAR_MIRROR_CELLS));
+    let n = 0;
+    if (this.mirrorWanted && this.frame)
+      for (const r of this.residents.values()) {
+        if (!r.mirror || r.slot < 0 || n >= NEAR_MIRROR_CELLS) continue;
+        const f = cellFrameInScene(r.x, r.y, this.frame);
+        const [e, no, u, rad] = r.mirror.ball;
+        for (let k = 0; k < 3; k++) out[4 + 4 * n + k] = f[k]! + f[4 + k]! * e + f[8 + k]! * no + f[12 + k]! * u;
+        out[4 + 4 * n + 3] = r.slot * 4096 + Math.min(4095, Math.ceil(rad + 1));
+        n++;
+      }
+    out[0] = n;
+    this.writeRegion(L.list, out);
   }
 
   private evict(key: string) {
@@ -537,9 +732,11 @@ export class NearMeshes {
       this.counts.records -= r.records;
     }
     if (r.slot >= 0) this.freeSlots.push(r.slot);
+    if (r.mirror) this.mirrorPool?.release(r.mirror.at, r.mirror.n);
     this.counts.buildings -= r.buildings;
     this.counts.triangles -= r.triangles;
     this.residents.delete(key);
+    if (r.mirror) this.writeMirrorList();
     this.cells().forget(r.x, r.y);
     this.counts.evicted++;
   }
@@ -579,6 +776,9 @@ export class NearMeshes {
       freeTriBlocks: this.triPool.freeBlocks,
       recBlocks: this.layout?.blocks ?? 0,
       freeRecBlocks: this.recPool?.freeBlocks ?? 0,
+      mirrorCells: [...this.residents.values()].filter((r) => r.mirror && r.slot >= 0).length,
+      mirrorVec4s: NEAR_MIRROR_VEC4S - (this.mirrorPool?.freeVec4s ?? NEAR_MIRROR_VEC4S),
+      mirrorOn: this.mirrorWanted,
       ...this.counts,
       groundMs: Math.round(this.counts.groundMs),
     };

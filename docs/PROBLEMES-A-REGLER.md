@@ -346,6 +346,10 @@ connue ou supposée, la piste. Une entrée réglée est barrée avec le commit q
   **Sam, 25 nov. 2026 (soir) : « le visuel était très bon… il faudra vraiment trouver un moyen d'avoir ce résultat »** — l'image de
   `cd8dcb14` est la cible (reflets entiers des bâtiments proches sur l'eau calme) ; le travail ouvert est de la tenir sous le plafond de
   2,8 ms sur kerr-mini (règle 1 : gain maximal lu avant d'ouvrir le lot), pas d'y renoncer.
+  **Repris le 25 nov. (soir), branche `seine-mirror-cheap`** : trois coupes exactes (boule par cellule, plus haut sommet par cellule et
+  par case, murs d'une feuille testés une fois) — ce Mac, Grenelle : +1,5 → **+0,48 ms**, image identique ; **kerr-mini, Grenelle :
+  +2,1 ms** (plafond 2,8 ; essai +5,2) — fusionné. Reste : Alexandre III avec toutes ses cellules résidentes non mesuré (7/21 : +1,1 ms) ;
+  les murs mirés sans fenêtres (couleur unie du mur).
   **Reste aussi** : les reflets de bâtiments détachés sur la Seine — l'SSR ne trouve une
   façade que là où l'image la montre (son pied caché par la rive : la moitié haute du reflet manque) ; le repli tracé (`sceneryMirror`) ne
   connaît que les arbres, et les bâtiments proches (cellules maillées) ne sont pas dans le BVH du décor : non réglé.
