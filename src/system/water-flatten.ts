@@ -111,6 +111,34 @@ export function flattenUnderWater(
   return lowered;
 }
 
+/** (25 Nov 2026) the height over the sea [m] up to which a national survey's ground in the sea is its noise: the water's own surface */
+export const SEA_NOISE_M = 1;
+
+/**
+ * (25 Nov 2026 — PROBLEMES « Nice : des stries régulières sur la baie ») A national relief tile's ground in the sea (`sea`, the sea's
+ * coverage — water-mask.ts `sea` —, the same grid) brought to the sea's level where it stands just over it (0 < h ≤ `maxM`): over the sea
+ * a survey's model holds the water's surface as it found it — the LiDAR's returns, the fill —, not the sea's mean level (the sea is the
+ * geoid's: CLAUDE.md), and Nice's bay stood at −0.3 … +0.43 m in the IGN's z 16–17 (kerr-mini, 25 Nov 2026). Those decimetres were land
+ * for the runways' level (game/runway-grade.ts levelOver: the land from 0 … 0.3 m — the bay before 04L lifted to the runway's 3.6 m, a
+ * dark plate, and partly lifted about it) and a floor just over the water's mean under its waves. Anything higher — a pier, a
+ * breakwater, an island the coverage misses — is kept; below the sea, kept (a bed). Each texel's last bit kept (markFine). Returns the
+ * texels brought down. Pure: the decode worker runs it (tile-decode.ts "flatten"), the tests too.
+ */
+export function clearSeaNoise(h: Float32Array, sea: Float32Array, maxM = SEA_NOISE_M, minCover = FLATTEN_COVER): number {
+  const n = Math.min(h.length, sea.length);
+  const hb = new Uint32Array(h.buffer, h.byteOffset, n);
+  let cleared = 0;
+  for (let i = 0; i < n; i++) {
+    const v = h[i]!;
+    if (sea[i]! >= minCover && v > 0 && v <= maxM) {
+      // (0 with the texel's own mark: +0, or the least subnormal for a survey's)
+      hb[i] = hb[i]! & 1;
+      cleared++;
+    }
+  }
+  return cleared;
+}
+
 /**
  * (25 Nov 2026 — PROBLEMES « L'eau sous Cheviré ») A far level's overground (earth-tiles.ts I6: the IGN's surface less its ground, TILE²
  * row-major, 0 where none) cleared over its inland water (`cover`, the same grid, the bridges not cut out): the surface model over a river

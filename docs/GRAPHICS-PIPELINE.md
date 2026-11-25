@@ -77,7 +77,7 @@ Windows/D3D12. Les numéros de ligne sont ceux de `da4e75bd`.
   essai `cd8dcb14` +1,4 à +1,6 ms ; coupes (2) +0,9 ; (1)+(2)+(3) **+0,48 ms** (allumé 20,7–21,0 sans la première série de chauffe,
   coupé 20,2–20,6). Passe `earth water (raster)` 3,09 ms (allumé). Alexandre III (21 cellules) : non séparable du bruit (±3 ms), la passe
   d'eau entière 1,53 ms. Image identique aux coupes près (écart moyen 0,27 contre 0,26 en A/A).
-- **Mesuré sur kerr-mini** (25 nov. 2026, 20:02 UTC, `b94d93be`, `seine-mirror.e2e`, headless, mêmes séries ;
+- **Mesuré sur kerr-mini** (25 nov. 2026, 19:02 UTC, `b94d93be`, `seine-mirror.e2e`, headless, mêmes séries ;
   `remote-results/20261125-200215-seine-mirror-cheap`) — Grenelle (19 cellules) : allumé 54,2 · 53,7 · 54,5 · 54,3 (p95 57,4–58,4), coupé
   52,2 · 52,4 · 51,6 · 52,2 (p95 55,2–56,1) : **+2,1 ms** sous le plafond de 2,8 (essai `cd8dcb14` : +5,2) ; A/A 0,8 / 0,8. Passe
   `earth water (raster)` 8,79 ms allumé (essai : 14,69). Alexandre III (7 cellules sur 21 résidentes) : +1,1 ms — *périmé : mesuré avec
@@ -91,7 +91,7 @@ Windows/D3D12. Les numéros de ligne sont ceux de `da4e75bd`.
 
 ### Le coût net de la journée du 25 novembre 2026 — campagne sur kerr-mini (main 091ddd33 + b8fd6cf8 contre 18a6e4dd) — mesuré
 
-**Mesuré**, kerr-mini (Mac mini M1, sans fenêtre, état thermique nominal avant la campagne, GPU 1 278 MHz), 25 nov. 2026 vers 18 h 50–20 h 40
+**Mesuré**, kerr-mini (Mac mini M1, sans fenêtre, état thermique nominal avant la campagne, GPU 1 278 MHz), 25 nov. 2026 vers 17 h 50–19 h 00 UTC (dossiers à l'heure de Paris)
 UTC. `scripts/ab-commit.ts` + `scripts/ab-e2e.ts`, A B B A (deux tours), A = l'arbre de 18a6e4dd (`AB_TREE_A`, le début de la journée), B =
 main 091ddd33 fusionné avec b8fd6cf8 (`aa337add`). `paris-routes-cost` et `traffic-cost` : le test de B contre les deux serveurs (échelle
 épinglée 0,75, GPU p50 sur 90 images) ; `bridges` et `bridges-notable` : chaque côté son propre test (`AB_E2E_OWN`, nouveau — l'API de
@@ -479,6 +479,15 @@ l'e2e, aucune requête IGN). GPU p50 = `renderer.lastGpuMs` sur 90 images ; le b
   ponts, `water-flatten.ts flattenUnderWater` : ouverture morphologique ±48 m, filtre de van Herk). Mesuré hors navigateur (ce Mac, 26
   nov., tuile synthétique mi-eau) : 6–19 ms la tuile selon la résolution (`scripts` non, `bun -e` ; un chiffre de CPU de worker, non
   mesuré en jeu). Pas d'eau : sortie immédiate. Tous les lecteurs (relief raster, `earthH` du traceur, contact, `groundAt`) lisent le sol aplani.
+- **Le sol dans la mer ramené à son niveau (`3508b982`, 25 nov. 2026)** : dans la même requête `flatten`, à la première passe, la
+  couverture de la mer (`waterMask(…, sea = true)` : les polygones `ocean`/`sea` d'OpenMapTiles seuls) puis `water-flatten.ts
+  clearSeaNoise` — un texel de mer (couverture ≥ 0,75) dont la hauteur nationale est entre 0 et `SEA_NOISE_M` (1 m) au-dessus de la mer
+  ramené à 0 (sa marque de relevé gardée) ; une digue, un quai plus hauts, le fond sous la mer gardés. Le relevé national tient la surface
+  de l'eau telle qu'il l'a trouvée (la baie de Nice à −0,32 … +0,46 m dans les z 16–17 de l'IGN) : ces décimètres étaient de la terre pour
+  le niveau des pistes (`runway-grade.ts levelOver`, la terre dès 0 … 0,3 m) — la baie avant 04L relevée à 3,6 m, une plaque sombre.
+  **Mesuré** hors navigateur (ce Mac M1 Max, 25 nov., la tuile OpenFreeMap z 13 de la baie, `bun`, 30 tirages) : couverture + passe
+  4,2 ms médiane (14,5 max) pour une tuile z 13, 1,6 ms (2,0) pour un carré z 17 — du CPU du worker de décodage, hors image ; **non
+  mesuré en jeu**. Aucun shader ni passe changés ; **coût GPU attendu nul, non mesuré** (pas d'A/B de temps d'image).
 - (`beb2615e`, `main` traçant les proxys de couronnes devant le ciel, **repris par `9f22bb29`** : un halo pâle au bord des couronnes.)
 - **Mesuré** (ce Mac M1 Max, 25 nov., une passe, p50 / p95 ms, `remote-results/ponts-7-local`) : `bridges` — Grenelle 26,5 / 29,6,
   Alexandre III 28,3 / 32,9, Rivoli 29,1 / 31,2, Millau 17,2 / 21,5, Golden Gate 1 km 25,9 / 33,2, 30 km 14,7 / 17,5 ; `bridges-notable` —
@@ -1515,7 +1524,7 @@ Paris jusqu'à `earthSettled` » chronométré par étape.
 
 <!-- pipeline-inventory:begin (bun scripts/pipeline-inventory.ts --write) -->
 
-_Généré le 2026-11-25T20:46:43Z sur `c81632f6` (arbre de travail). Ne pas éditer à la main : relancer l'outil._
+_Généré le 2026-11-25T21:48:42Z sur `d1cda150` (arbre de travail). Ne pas éditer à la main : relancer l'outil._
 
 **130 sites de création de pipeline** (86 rendu, 44 calcul, dont 66 asynchrones) et 43 `createShaderModule` dans 32 fichiers ; **44 programmes WGSL** (16 fichiers .wgsl, 28 chaînes dans le TypeScript) ; **66 libellés de passes** du profileur GPU (+ 11 sites à libellé dynamique).
 

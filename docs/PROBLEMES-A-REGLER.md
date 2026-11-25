@@ -3,7 +3,47 @@
 Problèmes constatés, pas encore réglés. Chaque entrée : la date (UTC), ce qui est mesuré ou observé et sa source, la cause
 connue ou supposée, la piste. Une entrée réglée est barrée avec le commit qui la règle, pas effacée.
 
-## Nice : des stries régulières sur la baie à l'ouest de l'aéroport, sur main et pas sur 18a6e4dd (relevé le 25 novembre 2026, `waterfront-runways`, kerr-mini)
+## Nice : la moitié basse de la vue d'approche de 04 en sable (relevé le 25 novembre 2026, `waterfront-runways`, kerr-mini)
+
+- **Observé** (`remote-results/20261125-223112-waterfront-runways`, A main `c972b544` et B le correctif `3508b982` pareils ; les
+  sondes du soir aussi) : la vue d'approche (1,5 km avant le seuil de 04 sur son axe, 80 m au-dessus) montre l'eau bleue jusqu'à mi-image,
+  puis, sous une limite horizontale nette, un fond beige uni — du sable — sur toute la moitié basse. Absent des deux courses de 21 h 19 UTC
+  (même code). Non diagnostiqué ; candidats : la surface de la mer (son maillage, sa portée) et la profondeur de Dean sous la caméra
+  (le fond vu à travers l'eau), selon l'état de la mer du moment (le vent réel).
+- **Piste** : la même vue avec `seaSurfaceOn` coupé, `liteSkip` 1, l'état de la mer imposé (`seaOverride`) ; journaliser
+  `seaSurfaceDrawn` et la mer (`WF_LEVERS=1`).
+
+## ~~Nice : des stries régulières sur la baie à l'ouest de l'aéroport, sur main et pas sur 18a6e4dd~~ (relevé le 25 novembre 2026, `waterfront-runways`, kerr-mini) — la plaque réglée (`3508b982`), les stries non reproduites
+
+- **25 nov. 2026, soir — ce qui a été établi** (kerr-mini, sondes sous leviers et A/B ; `docs/progress/pistes-bord-de-mer-2026-11-25/`) :
+  - **Les stries ne se reproduisent pas** : 7 courses sur le même code que la course striée (`ec302d0d` : fichiers de rendu, du relief,
+    des pistes et du trafic maritime identiques à `c972b544`, sommes SHA-1 comparées sur kerr-mini), dont la même campagne A/B
+    (`ab-commit` 18a6e4dd, les quatre aéroports dans le même ordre) : la baie lisse à chaque fois. Le motif de la course striée
+    (`nce-stries-25nov-contraste.jpg`, contraste étiré) : des bandes droites, parallèles, une zone bornée ; à l'approche, des arcs
+    concentriques. Écartés en régime établi : le champ de houle côtier (`shoreSwellOn` coupé ; six états de mer imposés — vent ou houle,
+    0,2 à 1 m, 3,5 à 8 s, du sud, du sud-ouest, de l'est — : du ressac le long des côtes, pas de bandes dans la baie), le maillage de la
+    surface de la mer (`seaSurfaceOn` coupé : pareil), le sillage de Kelvin d'un ferry injecté (`renderer.seaWakes`, 180 m à 6–9 m/s au
+    sud du bout des pistes : un V étroit, pas le motif). Les entrées qui varient d'une course à l'autre : la météo réelle (le vent → la mer :
+    pas de modèle marin ces soirs-là, `source: "wind"`), les navires AIS à 15 km (un de 258 m présent à 22 h 12 UTC), **l'arrivée des
+    tuiles fines du relief sous la baie**.
+  - **Le relief sous la baie, lui, était faux** : les z 16–17 de l'IGN y tiennent la surface de l'eau à −0,32 … +0,46 m (contactAt sur
+    une grille de 416 points en mer : 57 et 40 au-dessus de la mer, 21 et 13 au-dessus de 0,3 m, sur deux courses de main) — et la
+    course striée avait justement la baie relevée avant 04L (3,6 / 3,6 / 3,6 / 1,98 m à 50 … 600 m, toutes les reprises suivantes 0,98 / 0).
+    Au-dessus de 0,3 m c'est de la terre pour le niveau des pistes (`levelOver`, `9cf0849a`) : **la plaque sombre de 18a6e4dd revient sur
+    main** dès que ces tuiles sont là (vue basse, 150 m au-dessus de la baie, A1 et A4 : `nce-baie-plaque-main-correctif.jpg`), avec des
+    taches pâles autour ; entre 0 et 0,3 m, un fond à quelques centimètres du niveau moyen sous les vagues. Les stries de la vue d'ensemble
+    en sont **probablement** une forme (un fond partiellement relevé, juste au-dessus de la mer, à une étape de l'arrivée des tuiles) —
+    **non démontré** : pas reproduites.
+- **Réglé** (`3508b982`) au propriétaire du relief — sa préparation, dans le worker de décodage (`tile-decode.ts` op `flatten`) : la
+  couverture de la mer d'OpenMapTiles (`waterMask(…, sea = true)`) et `water-flatten.ts clearSeaNoise` — un texel de mer à 0 < h ≤ 1 m
+  ramené à la mer (une digue, un quai plus hauts gardés ; le fond gardé ; la marque du relevé gardée). Tous les lecteurs (raster, traceur,
+  contact, `groundAt`) le lisent. **Vérifié** (kerr-mini, ABBA main `c972b544` / correctif, même sonde) : la grille 0 / 0 / max 0 sur les
+  deux courses du correctif ; la plaque et ses taches disparues, les structures des feux d'approche sur l'eau. Tests `water-flatten`
+  (`clearSeaNoise`) et `water-mask` (la couverture de la mer seule). **Non vérifié** : les stries elles-mêmes (non reproduites), le
+  témoin Toulon-Hyères (vue J0) et SFO (non relancés : le code ne touche que les hauteurs nationales entre 0 et 1 m en mer — SFO a la baie
+  sous la mer), le coût en jeu (hors navigateur : 4,2 ms par tuile z 13 dans le worker ; aucun shader changé). Reste : `WF_LEVERS=1`
+  (`waterfront-runways`) journalise l'état de la mer et reprend la vue sans la surface ni la houle, pour la prochaine occurrence ; une
+  côte atlantique levée à marée haute (eau à +2–4 m NGF) n'est pas couverte par le seuil de 1 m.
 
 - **Observé** (`remote-results/20261125-211951-waterfront-ab`, midi du 21 juin, vue d'ensemble à 3 km au sud-ouest et 700 m, approche de 04 à
   1,5 km ; `docs/progress/pistes-bord-de-mer-2026-11-25/nce-baie-stries-avant-apres.jpg`, `nce-approche-avant-apres.jpg`) : sur main
@@ -16,7 +56,23 @@ connue ou supposée, la piste. Une entrée réglée est barrée avec le commit q
 - **Piste** : la même vue sur main sous leviers (`liteSkip`, surface de la mer coupée, `__bh.sys.groundBareAt` le long d'une ligne de la baie
   pour le fond), puis bissecter entre `18a6e4dd` et main si le motif tient.
 
-## Hong Kong (VHHH) : les pistes au niveau de la mer, 0–1 m au lieu de ~8,5 m (relevé le 25 novembre 2026, `waterfront-runways`, kerr-mini)
+## ~~Hong Kong (VHHH) : les pistes au niveau de la mer, 0–1 m au lieu de ~8,5 m~~ (relevé le 25 novembre 2026, `waterfront-runways`, kerr-mini) — le niveau des pistes réglé (`71c83299`) ; l'île reste au niveau de la mer
+
+- **25 nov. 2026, soir — cause** : le relief global (Terrarium, `s3.amazonaws.com/elevation-tiles-prod`) n'a pas Chek Lap Kok — décodé
+  hors du jeu à z 12–14 : −0,67 à +3,2 m sur l'île, la mer à 0 ; la troisième piste (2022) en mer. Le niveau d'une piste du monde est la
+  médiane du relief nu sous elle (`world/runways3d.ts measure`, le choix A7 : la publication est un autre datum) : 1 / 0 / 0 m. Le géoïde
+  (N ≈ −2…−3 m) est bien retiré (le niveau est au-dessus de la mer) : pas d'erreur de datum. La publication (OurAirports, `elev1/elev2` en
+  m au-dessus de la mer) : 7 / 7 / 8–9 m.
+- **Réglé au propriétaire du niveau** (`71c83299`, `runwayLevelOf`) : là où la médiane du relief est à la mer (≤ `SEA_DATA_M` 1 m) et la
+  publication au moins `SEA_DATA_GAP` (3 m) plus haut, le relief n'a pas le terrain : l'altitude publiée. Nice (publiée 3 m, mesurée
+  3–3,6), Schiphol (−3/−4 dans les deux) gardent leur mesure (test `runway-level`). **Vérifié** (kerr-mini, A/B main `c972b544` /
+  correctif, `waterfront-runways` `WF_ONLY=nce,hkg`) : Hong Kong 1/0/0 → **9 / 7 / 7 m**, Nice inchangé ; l'approche de 07 montre le bout
+  de l'île relevé (`hkg-main-correctif.jpg`).
+- **Reste** : la terre de l'île hors des pistes est celle du relief global (0–1,5 m, par endroits la mer) — le niveau ne relève que la
+  terre des données au-delà des bandes (`levelOver`) : les pistes à 7–9 m sur une île basse, des bords en talus irréguliers ; la piste
+  à peine visible à 1,5 km (l'imagerie floue). Le vrai propriétaire est la source du relief : un relief global plus récent hors des
+  pays couverts (Mapterhorn — Copernicus GLO-30 — n'est lu qu'aux États-Unis) ; non fait (hors périmètre). Autre aéroport sur terre
+  gagnée non vérifié (Kansai : Terrarium 2,3 … 23 m sous ses pistes, publiées 2–10 m — la règle ne s'y applique pas, non vu en jeu).
 
 - **Mesuré** : les trois pistes 07/25 mesurées par le jeu (`sys.runways()`, `world.measured` 2) à 1,0 / 0,0 / 0,0 m au-dessus de la mer
   (l'aérodrome publie 28 ft, 8,5 m) — sur `18a6e4dd` comme sur main ; le sol de l'île à 0–1,5 m autour, 0 à 300 m de part et d'autre.
