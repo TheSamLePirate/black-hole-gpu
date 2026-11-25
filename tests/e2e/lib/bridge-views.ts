@@ -198,7 +198,10 @@ export const widestRoad = (app: App, at: [number, number], radius: number, beari
           : `{ const br = ((Math.atan2(f[b + 2] - f[b], f[b + 3] - f[b + 1]) / D) % 180 + 180) % 180, want = ${((bearingDeg % 180) + 180) % 180};
         if (Math.min(Math.abs(br - want), 180 - Math.abs(br - want)) > 20) return; }`
       }
-      if (!best || f[b + 4] > best.w) best = { w: f[b + 4], b };
+      // (by its carriageway — data[7], ± its half-width —, not its record: a town road's record holds its pavements, widened to the
+      // façades since 25 Nov 2026 — pavement-reach.ts)
+      const w = f[b + 7] !== 0 ? Math.abs(f[b + 7]) : f[b + 4];
+      if (!best || w > best.w) best = { w, b };
     });
     if (!best) return null;
     const b = best.b;

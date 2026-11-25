@@ -134,7 +134,8 @@ function paintModel(prims: readonly Prim[], pt: [number, number], rule: "first" 
     const distance = Math.hypot(pt[0] - d[0]! - lx * along, pt[1] - d[1]! - ly * along);
     const cover = 1 - ss(Math.max(0, d[4]! - aa), d[4]! + aa, distance);
     if (cover <= 0) continue;
-    const key = d[4]! - distance;
+    const crK = d[7] !== 0 ? Math.abs(d[7]!) : d[4]!;
+    const key = distance <= crK ? 64 + crK - distance : d[4]! - distance;
     const mk = d[6]! & 32767;
     const cr = d[7] !== 0 ? Math.abs(d[7]!) : d[4]!;
     const s = along * len - d[11]!;
@@ -228,7 +229,7 @@ test("B2 rings (24 Nov 2026): a curve's markings follow its polyline — the dee
   expect(strayPaint([...prims].reverse(), "deepest", offsets)).toBe(0);
   // (the shader carries that rule — the model above mirrors it)
   const walk = trace.slice(trace.indexOf("fn scenerySurface("), trace.indexOf("fn sceneryMirror("));
-  expect(walk).toContain("key=size.x-distance;");
+  expect(walk).toContain("key=select(size.x-distance,64.0+crK-distance,distance<=crK);");
   expect(walk).toContain("rank==priority && key>best");
   expect(walk).not.toContain("cover>out.cover");
 });
