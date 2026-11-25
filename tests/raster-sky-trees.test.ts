@@ -25,8 +25,24 @@ test("a tree's pixel with no ground behind it is the material's, not the rays'",
 
 test("shadeLite seeks the crown past its proxy against the sky, and marks a miss for the sky (no ground shaded at 0 m)", () => {
   expect(lite).toContain("let tMax = select(tM, terrainRasterDepth(centre) + 60.0, tM <= 0.0);");
-  expect(lite).toContain("sceneryTreeLite(normalize(toBody(ray.look)), treeId, tMax,");
+  expect(lite).toContain("var id = treeId;");
+  expect(lite).toContain("sceneryTreeLite(normalize(toBody(ray.look)), id, tMax,");
   expect(lite).toContain("if (tM <= 0.0) {\n    moments[idx] = vec2f(RASTER_SKY,");
+});
+
+// (26 Nov 2026 — the orange dotted fringe along the crowns over the slope at Battery Spencer: a crown missed before the ground was
+// shaded as that ground, though another tree's crown stood behind the proxy's margin, hidden from the raster's depth by it)
+test("a crown missed before the ground seeks another tree drawn within 2 px, its proxy before that ground — one call site of the march", () => {
+  const loop = lite.slice(lite.indexOf("var id = treeId;"), lite.indexOf("if (tt > 0.0) {\n      tM = tt;"));
+  expect(loop).toContain("if (tt > 0.0 || id != treeId || tM <= 0.0) { break; }");
+  expect(loop).toContain("id = treeAbout(centre, treeId, tM);");
+  expect(loop).toContain("if (id == 0u) { break; }");
+  // (one call of the crown's march in shadeLite: a second copy would double its inlined code — the kernel's budget)
+  expect(lite.split("sceneryTreeLite(").length - 1).toBe(1);
+  const about = wgsl.slice(wgsl.indexOf("fn treeAbout("), wgsl.indexOf("fn rasterLiteTakes("));
+  expect(about).toContain("for (var dy = -2; dy <= 2; dy++) {");
+  expect(about).toContain("if (id != 0u && id != own && t > 0.0 && t < tG) {");
+  expect(about).toContain("terrainRasterBuilding(c)");
 });
 
 // (25 Nov 2026, later: the miss left stale — RASTER_STALE — was a pixel never shaded, its history dark: dark specks at the crowns'

@@ -15747,6 +15747,26 @@ fn rasterPoint(r: RasterRay, tM: f32) -> vec3f {
 }
 // the pixel's ground is shadeLite's: the patch's (not a tree's, a building's), not the sea's (its glint, waves, mirror are
 // shade's) — the same test in shade, shadeMark and shadeLite
+// Another tree drawn within 2 px of a pixel whose own tree is `own`, its proxy nearer than the ground there (tG [m]) — the nearest
+// such pixel's —; 0 none (shadeLite: a crown missed before the ground, the tree behind its proxy's margin)
+fn treeAbout(centre: vec2f, own: u32, tG: f32) -> u32 {
+  var best = 0u;
+  var bd = 99.0;
+  for (var dy = -2; dy <= 2; dy++) {
+    for (var dx = -2; dx <= 2; dx++) {
+      let c = centre + vec2f(f32(dx), f32(dy));
+      let d = f32(dx * dx + dy * dy);
+      if (d >= bd || any(c < vec2f(0.0)) || c.x >= P.res.x || c.y >= P.res.y || terrainRasterBuilding(c)) { continue; }
+      let id = terrainRasterId(c);
+      let t = terrainRasterDepth(c);
+      if (id != 0u && id != own && t > 0.0 && t < tG) {
+        best = id;
+        bd = d;
+      }
+    }
+  }
+  return best;
+}
 fn rasterLiteTakes(px: vec2f, k: u32) -> bool {
   if (!rasterLiteOn()) { return false; }
   if(terrainRasterTreeSurface(px)>0u){return true;}
@@ -17538,7 +17558,19 @@ fn shadeLite(@builtin(global_invocation_id) gp: vec3u, @builtin(workgroup_id) wi
     // (against the sky — no ground behind: the crown sought to 60 m past its proxy's front)
     let tMax = select(tM, terrainRasterDepth(centre) + 60.0, tM <= 0.0);
     if(surface>0u){tt=sceneryTreeGeometry(normalize(toBody(ray.look)),treeId,terrainRasterDepth(centre),surface,terrainRasterTreeShade(centre));}
-    else{tt=sceneryTreeLite(normalize(toBody(ray.look)), treeId, tMax, blueDraws(vec2u(centre), P.frame.x));}
+    else{
+      // (its crown missed with the ground behind it: another tree drawn within 2 px, its proxy before that ground, sought along this
+      // ray too — its crown behind this proxy's margin, hidden from the raster's depth by it. 26 Nov 2026: the ground shaded there, an
+      // orange dotted fringe along the crowns over the slope at Battery Spencer. One call site, a loop of runtime length — not two
+      // copies of the crown's march, shadeLite's budget)
+      var id = treeId;
+      loop {
+        tt = sceneryTreeLite(normalize(toBody(ray.look)), id, tMax, blueDraws(vec2u(centre), P.frame.x));
+        if (tt > 0.0 || id != treeId || tM <= 0.0) { break; }
+        id = treeAbout(centre, treeId, tM);
+        if (id == 0u) { break; }
+      }
+    }
     if (tt > 0.0) {
       tM = tt;
       isTree = true;

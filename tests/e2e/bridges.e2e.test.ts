@@ -92,6 +92,18 @@ const WITNESSES: (BridgeView & { label: string; witness?: boolean })[] = [
     holds: "true",
     witness: true,
   },
+  // (26 Nov 2026: a crown missed before the ground now seeks another tree drawn within 2 px — the orange fringe at Battery Spencer —:
+  // the Landes' pines over their clearings and fields from 30 m, low across them — crowns before open ground, the edges' witness)
+  {
+    key: "landes-edge",
+    label: "Witness — the Landes' pines over their clearings from 30 m, low across them: forest edges over open ground",
+    at: [44.2, -0.9],
+    aglM: 30,
+    look: [44.2035, -0.894],
+    lookAglM: 0,
+    holds: "true",
+    witness: true,
+  },
 ];
 // (BRIDGES_ONLY=<key>,<key>: those views alone — the witnesses among them —, e.g. golden-gate-1km,maures-canopy for an A/B)
 const only = process.env.BRIDGES_ONLY?.split(",").filter(Boolean);
