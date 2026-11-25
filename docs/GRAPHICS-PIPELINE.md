@@ -121,6 +121,13 @@ Dossiers : `remote-results/20261125-185006-prc2`, `…-185010-br2`, `…-185012-
 
 - **Aucune vue plus lente au-delà de l'écart A/A.** Le tablier de Millau (+1,8, p95 +5,8) reste sous l'écart de son côté A (3,2) — à surveiller,
   non bissecté ; la première campagne (main 4e95c6bc, ~16 h UTC, `…-154037-brn-day`) le donnait à +0,3.
+- **Millau remesuré seul** (kerr-mini, headless, 25 nov. 2026, 21:15–21:40 UTC ; A = `18a6e4dd`, B = main `8355e189` ; `bridges-notable`
+  réduit à la vue de Millau par `AB_E2E_TEST=Millau` (`scripts/ab-e2e.ts`), chaque côté son propre test, A B B A A B B A, `lastGpuMs` sur
+  90 images ; `remote-results/20261125-211447-millau-ab`) — GPU p50 A 33,2 · 36,5 · 35,6 · 36,5 (moyenne 35,5, étendue 3,3), B 35,2 · 38,1 ·
+  31,3 · 35,6 (35,1, étendue 6,8) : **−0,4 ms**, p95 A 36,2–49,1 (médiane 40,8), B 34,7–43,4 (41,3) : +0,5 — **bruit, aucune régression** ;
+  le +1,8 / +5,8 de la campagne était dans l'écart A/A de cette vue (3,3 à 6,8 ms), non bissecté. Limite : la vue de conducteur est posée
+  sur l'axe du tablier, où se dressent les pylônes de Millau — un pylône remplit la moitié de l'image (des deux côtés :
+  `docs/progress/perf-journee-2026-11-25/millau-tablier-avant-apres-mini.jpg`), un témoin pauvre du tablier et de son coût (PROBLEMES).
 - **Par passe** (`prc`, `tc` — les passes de calcul s'attribuent) : `earth lite: light` −2 à −4,3 ms partout (l'eau lue une fois, lot des
   ponts et rues de Paris) ; la surface maillée de la mer n'est plus dessinée à Paris ni au parking de SFO (`sea surface` 27–48 ms
   de passe de rendu chevauchée → 0 : le lot de la surface de la mer) ; `clouds (half)` −4,4 ms sous la pluie (les averses par la longueur du

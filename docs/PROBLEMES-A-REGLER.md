@@ -3,6 +3,17 @@
 Problèmes constatés, pas encore réglés. Chaque entrée : la date (UTC), ce qui est mesuré ou observé et sa source, la cause
 connue ou supposée, la piste. Une entrée réglée est barrée avec le commit qui la règle, pas effacée.
 
+## La vue de conducteur sur le tablier de Millau regarde un pylône (relevé le 25 novembre 2026, `bridges-notable`, kerr-mini)
+
+- **Observé** (`remote-results/20261125-211447-millau-ab`, 8 courses, `18a6e4dd` et `8355e189` pareils ;
+  `docs/progress/perf-journee-2026-11-25/millau-tablier-avant-apres-mini.jpg`) : la vue « deck-millau-low » est posée sur l'axe du tablier
+  (150 m avant son milieu, 6 m au-dessus, visée 200 m plus loin) — or les pylônes de Millau se dressent sur cet axe, entre les deux chaussées :
+  un pylône remplit la moitié de l'image. Le temps GPU de cette vue (p50 31–38 ms, étendue A/A 3,3 à 6,8 ms) mesure donc surtout un mur
+  proche ; c'est la vue dont la campagne du jour lisait +1,8 / +5,8 ms (bruit, remesuré seul : −0,4 ms).
+- **Cause** : `bridges-notable.e2e.test.ts` place la caméra par `deckProfile` (`centre`, `axisDeg`) sans décalage latéral.
+- **Piste** : poser la vue sur une chaussée (≈ 6–8 m à droite de l'axe) et viser le long d'elle ; la vue change alors de nature — ses
+  temps ne se comparent plus aux précédents (nouvelle référence A/A à prendre).
+
 ## ~~L'eau de la baie de San Francisco verte émeraude près de l'approche de 28L : ce n'est pas de l'eau pour le rendu~~ (relevé le 25 novembre 2026, `als-sfo-28l-day-close.jpg`) — réglé le 26 (`9cf0849a`, branche des ponts) : c'était le niveau de la piste étendu sur la baie
 
 - **Constat** (ce Mac, sonde `zz-water-colour` sous leviers, `docs/progress/etiquettes-als-2026-11-25/baie-sfo-eau-leviers.jpg`) : vue
