@@ -78,8 +78,16 @@ Windows/D3D12. Les numéros de ligne sont ceux de `da4e75bd`.
   extrémité (2 736 triangles, matériau 90), une instance de la passe de l'appareil (E12a : derrière ce que la scène tient plus près), à
   8 km de l'œil au plus. e2e `approach-lights` (ce Mac, réussi : 28L, 28R, 19L à SFO) — `als-sfo-28l-*.jpg`. Coût GPU **non mesuré**
   (trois à six instances de 2 736 triangles près d'un grand aéroport, sous le pixel au-delà de quelques centaines de mètres).
-  Limites : l'ALSF entier partout (un MALSR plus court non distingué) ; la nuit, les feux du shader sont au sol ou à l'eau, sous les têtes
-  (3,5 m à SFO) ; les structures ne portent pas de feux propres.
+  Limites : l'ALSF entier partout (un MALSR plus court non distingué) ; les structures ne portent pas de feux propres.
+- **Les feux de la rampe sur les têtes, et seulement où elle existe** (même jour, plus tard ; `trace.wgsl` `runwayPave`, `runwayLights`,
+  `renderer.nearRunways`) : au-delà de la bande, les feux d'approche évalués là où le rayon de vue croise leur niveau (celui de la piste
+  + 0,64 m : le plan des structures + le centre des têtes), plus près que le sol ou l'eau qu'il rencontre — non plus sur l'eau, 3,5 m
+  plus bas à SFO —, leur empreinte réduite d'autant ; et allumés seulement au bout d'atterrissage qui a une rampe (`runwayFlags` 64 le
+  premier bout, 128 l'autre, posés par `nearRunways` depuis `alsEnds` — les bouts des structures ; les sites du jeu : toujours). Avant,
+  « beau temps » à SFO allumait une rampe sur 10R, qui n'en a pas, et aucune sur 28L. `shadeLite` : ~+20 lignes inlinées (8,1 k, sous
+  le budget de 9 000). e2e `approach-lights` (ce Mac, réussi ; la nuit, vent de la baie : 28L en service) —
+  `docs/progress/etiquettes-als-2026-11-25/als-sfo-28l-tetes-jour-nuit.jpg` (les têtes de jour, les feux de nuit à la même hauteur),
+  `als-sfo-28l-night-lit.jpg`. Coût GPU **non mesuré** (kerr-mini injoignable).
 
 ### PERF — le trafic réel : l'air au parking, l'A320 gréé loin, les niveaux de détail (25 novembre 2026, branche de l'agent) — mesuré
 
@@ -1265,7 +1273,7 @@ Paris jusqu'à `earthSettled` » chronométré par étape.
 
 <!-- pipeline-inventory:begin (bun scripts/pipeline-inventory.ts --write) -->
 
-_Généré le 2026-11-25T09:03:58Z sur `cc358ac3` (arbre de travail). Ne pas éditer à la main : relancer l'outil._
+_Généré le 2026-11-25T12:37:45Z sur `7f75f74a` (arbre de travail). Ne pas éditer à la main : relancer l'outil._
 
 **130 sites de création de pipeline** (86 rendu, 44 calcul, dont 66 asynchrones) et 43 `createShaderModule` dans 32 fichiers ; **44 programmes WGSL** (16 fichiers .wgsl, 28 chaînes dans le TypeScript) ; **66 libellés de passes** du profileur GPU (+ 11 sites à libellé dynamique).
 
@@ -1335,19 +1343,19 @@ _Généré le 2026-11-25T09:03:58Z sur `cc358ac3` (arbre de travail). Ne pas éd
 | `src/mipgen.ts:31` | render | — | — |
 | `src/mipgen.ts:40` | render async | `mips` | — |
 | `src/noise3d.ts:110` | render | — | `vs`, `fs` |
-| `src/renderer.ts:1781` | compute async | — | `main` |
-| `src/renderer.ts:1786` | compute async | — | `lut` |
-| `src/renderer.ts:1810` | compute async | — | `env` |
-| `src/renderer.ts:1971` | render async | — | `vs`, `fs` |
-| `src/renderer.ts:1979` | compute async | — | — |
-| `src/renderer.ts:2017` | compute async | — | — |
-| `src/renderer.ts:6991` | compute async | — | `ep` |
-| `src/renderer.ts:7705` | compute | — | — |
-| `src/renderer.ts:8754` | compute | — | — |
-| `src/renderer.ts:11085` | compute async | `clouds` | `cloudShadow` |
-| `src/renderer.ts:11167` | compute async | `sky ambient write` | `cloudLightVolume` |
-| `src/renderer.ts:11249` | compute async | — | `skyAmbient` |
-| `src/renderer.ts:13607` | compute async | — | `probe` |
+| `src/renderer.ts:1783` | compute async | — | `main` |
+| `src/renderer.ts:1788` | compute async | — | `lut` |
+| `src/renderer.ts:1812` | compute async | — | `env` |
+| `src/renderer.ts:1973` | render async | — | `vs`, `fs` |
+| `src/renderer.ts:1981` | compute async | — | — |
+| `src/renderer.ts:2019` | compute async | — | — |
+| `src/renderer.ts:6997` | compute async | — | `ep` |
+| `src/renderer.ts:7711` | compute | — | — |
+| `src/renderer.ts:8760` | compute | — | — |
+| `src/renderer.ts:11178` | compute async | `clouds` | `cloudShadow` |
+| `src/renderer.ts:11260` | compute async | `sky ambient write` | `cloudLightVolume` |
+| `src/renderer.ts:11342` | compute async | — | `skyAmbient` |
+| `src/renderer.ts:13700` | compute async | — | `probe` |
 | `src/sea/fft-gpu.ts:117` | compute | — | — |
 | `src/ship.ts:857` | compute | — | `vs` |
 | `src/ship.ts:877` | render | — | `fsJetGlass` |
@@ -1447,7 +1455,7 @@ _Généré le 2026-11-25T09:03:58Z sur `cc358ac3` (arbre de travail). Ne pas éd
 
 | source | lignes | points d'entrée |
 |---|---:|---|
-| `src/shaders/trace.wgsl` | 18319 | 18 entrées : cloudLightVolume, aerial, lut, main, shade, shadeMark, shadeLiteFinish, shadeWaterFinish, shadeLiteLight, shadeLite, skyFill, shadeWater, clouds, skyAmbient, cloudShadow, env, probe, shadeStars |
+| `src/shaders/trace.wgsl` | 18345 | 18 entrées : cloudLightVolume, aerial, lut, main, shade, shadeMark, shadeLiteFinish, shadeWaterFinish, shadeLiteLight, shadeLite, skyFill, shadeWater, clouds, skyAmbient, cloudShadow, env, probe, shadeStars |
 | `src/shaders/ship.wgsl` | 2823 | 34 entrées : envCopy, envDown, envGGX, envSH, ctlVs, depthVs, vs, mirrorVs, shadowVs, fs, hullDepthVs, hullDepthFs, ownMaskFs, plumeVs, plumeFs, glowVs, glowFs, distVs, distFs, sheathVs, sheathFs, trailVs, trailFs, lampVs, lampFs, compVs, compFs, fsCabin, fsCabinGlass, fsJetGlass, motionVs, motionFs, composeColor, composeSurface |
 | `src/shaders/post.wgsl` | 1396 | 18 entrées : gatherH, atrous, beamH, beamV, polgrid, resolve, down, downShip, dof, flareMeter, up, meter, stars, motionBlur, temporal, occlusion, cloudTemporal, taau |
 | `src/system/scenery-raster.ts:208` | 1191 | 31 entrées : cull, cullBoxes, clampBoxes, shadowVs, shadowFs, proxyVs, proxyFs, boxVs, boxFs, bridgeMarkFs, boxMarkVs, boxShadowVs, meshShadowVs, meshVs, meshFs, boxSolidVs, benchCull, benchQuadVs, benchVs, benchShadowVs, farCull, farVs, farQuadVs, farFs, farLampCull, farLampVs, farCarCull, farCarVs, nearCellVs, nearCellShadowVs, farShadowVs |
@@ -1486,9 +1494,9 @@ _Généré le 2026-11-25T09:03:58Z sur `cc358ac3` (arbre de travail). Ne pas éd
 | `src/shaders/mips.wgsl` | 23 | vs (v), fs (f) |
 | `src/system/earth-tiles.ts:401` | 18 | vs (v), fs (f) |
 | `src/vegetation/tree-impostors.ts:136` | 17 | down (c) |
-| `src/renderer.ts:7710` | 16 | main (c) |
+| `src/renderer.ts:7716` | 16 | main (c) |
 | `src/system/earth-tiles.ts:1296` | 14 | main (c) |
-| `src/renderer.ts:8758` | 10 | main (c) |
+| `src/renderer.ts:8764` | 10 | main (c) |
 | `src/system/terrain-cache.ts:165` | 9 | main (c) |
 | `src/system/earth-tiles.ts:1286` | 8 | main (c) |
 
@@ -1500,63 +1508,63 @@ _Généré le 2026-11-25T09:03:58Z sur `cc358ac3` (arbre de travail). Ne pas éd
 | `character shadow on traced terrain` | `src/character-renderer.ts:956` | 1 |
 | `grass: shade, footprints, blades` | `src/character-renderer.ts:972` | 1 |
 | `low cover: clumps` | `src/character-renderer.ts:998` | 1 |
-| `post` | `src/renderer.ts:1411` | 1 |
-| `gather` | `src/renderer.ts:3511` | 1 |
-| `resolve` | `src/renderer.ts:3528` | 1 |
-| `bloom down …` | `src/renderer.ts:3551` | 1 |
-| `bloom up …` | `src/renderer.ts:3575` | 1 |
-| `ship probe: trace` | `src/renderer.ts:6099` | 1 |
-| `planet probe` | `src/renderer.ts:6158` | 1 |
-| `cockpit mask` | `src/renderer.ts:7293` | 1 |
-| `sea fft` | `src/renderer.ts:7342` | 1 |
-| `far-field LUT` | `src/renderer.ts:7358` | 1 |
-| `terrain surface cache` | `src/renderer.ts:7388` | 1 |
-| `earth horizons` | `src/renderer.ts:7404` | 1 |
-| `earth shore` | `src/renderer.ts:7416` | 1 |
-| `aerial perspective` | `src/renderer.ts:7463` | 1 |
-| `clouds (half)` | `src/renderer.ts:7513` | 1 |
-| `sky (waiting)` | `src/renderer.ts:7536` | 1 |
-| `trace (discs)` | `src/renderer.ts:7593` | 1 |
-| `stars (raster)` | `src/renderer.ts:7601` | 1 |
-| `earth water: tiles` | `src/renderer.ts:7756` | 1 |
-| `body lite (raster)` | `src/renderer.ts:7779` | 1 |
-| `earth lite (raster)` | `src/renderer.ts:7802` | 1 |
-| `earth lite: light` | `src/renderer.ts:7811` | 1 |
-| `earth lite: finishing` | `src/renderer.ts:7821` | 1 |
-| `earth water (raster)` | `src/renderer.ts:7835` | 1 |
-| `earth water open (raster)` | `src/renderer.ts:7856` | 1 |
-| `earth water: finishing` | `src/renderer.ts:7867` | 1 |
-| `beam` | `src/renderer.ts:7925` | 1 |
-| `temporal` | `src/renderer.ts:8499` | 2 |
-| `taau` | `src/renderer.ts:8672` | 1 |
-| `stars` | `src/renderer.ts:8713` | 1 |
-| `motion blur` | `src/renderer.ts:8846` | 1 |
-| `occlusion depth` | `src/renderer.ts:8879` | 1 |
-| `denoise` | `src/renderer.ts:8911` | 1 |
-| `polarization` | `src/renderer.ts:9023` | 1 |
-| `depth of field` | `src/renderer.ts:9122` | 1 |
-| `lens flare meter` | `src/renderer.ts:9132` | 1 |
-| `light meter` | `src/renderer.ts:9156` | 1 |
-| `display` | `src/renderer.ts:10713` | 2 |
-| `clouds' shadow map` | `src/renderer.ts:11117` | 1 |
-| `clouds' light volume` | `src/renderer.ts:11198` | 1 |
-| `sky ambient` | `src/renderer.ts:11280` | 1 |
-| `clouds' history` | `src/renderer.ts:12003` | 1 |
-| `body raster heights` | `src/renderer.ts:12363` | 1 |
-| `scenery raster cull` | `src/renderer.ts:12641` | 1 |
-| `ground occlusion` | `src/renderer.ts:12681` | 1 |
-| `trees' shadow map` | `src/renderer.ts:12686` | 1 |
-| `horizon bake` | `src/renderer.ts:12966` | 1 |
-| `ship probe: mips` | `src/ship.ts:2026` | 1 |
-| `ship probe: GGX` | `src/ship.ts:2038` | 1 |
-| `ship probe: SH` | `src/ship.ts:2045` | 1 |
-| `ship: shadow map` | `src/ship.ts:3034` | 1 |
-| `ship: shading (MSAA)` | `src/ship.ts:3055` | 1 |
-| `ship: own mask` | `src/ship.ts:3296` | 1 |
-| `ship: hull distance` | `src/ship.ts:3328` | 1 |
-| `ship: thrusters and plasma` | `src/ship.ts:3346` | 1 |
-| `ship: motion` | `src/ship.ts:3473` | 1 |
-| `ship: into the scene` | `src/ship.ts:3531` | 1 |
+| `post` | `src/renderer.ts:1413` | 1 |
+| `gather` | `src/renderer.ts:3514` | 1 |
+| `resolve` | `src/renderer.ts:3531` | 1 |
+| `bloom down …` | `src/renderer.ts:3554` | 1 |
+| `bloom up …` | `src/renderer.ts:3578` | 1 |
+| `ship probe: trace` | `src/renderer.ts:6105` | 1 |
+| `planet probe` | `src/renderer.ts:6164` | 1 |
+| `cockpit mask` | `src/renderer.ts:7299` | 1 |
+| `sea fft` | `src/renderer.ts:7348` | 1 |
+| `far-field LUT` | `src/renderer.ts:7364` | 1 |
+| `terrain surface cache` | `src/renderer.ts:7394` | 1 |
+| `earth horizons` | `src/renderer.ts:7410` | 1 |
+| `earth shore` | `src/renderer.ts:7422` | 1 |
+| `aerial perspective` | `src/renderer.ts:7469` | 1 |
+| `clouds (half)` | `src/renderer.ts:7519` | 1 |
+| `sky (waiting)` | `src/renderer.ts:7542` | 1 |
+| `trace (discs)` | `src/renderer.ts:7599` | 1 |
+| `stars (raster)` | `src/renderer.ts:7607` | 1 |
+| `earth water: tiles` | `src/renderer.ts:7762` | 1 |
+| `body lite (raster)` | `src/renderer.ts:7785` | 1 |
+| `earth lite (raster)` | `src/renderer.ts:7808` | 1 |
+| `earth lite: light` | `src/renderer.ts:7817` | 1 |
+| `earth lite: finishing` | `src/renderer.ts:7827` | 1 |
+| `earth water (raster)` | `src/renderer.ts:7841` | 1 |
+| `earth water open (raster)` | `src/renderer.ts:7862` | 1 |
+| `earth water: finishing` | `src/renderer.ts:7873` | 1 |
+| `beam` | `src/renderer.ts:7931` | 1 |
+| `temporal` | `src/renderer.ts:8505` | 2 |
+| `taau` | `src/renderer.ts:8678` | 1 |
+| `stars` | `src/renderer.ts:8719` | 1 |
+| `motion blur` | `src/renderer.ts:8852` | 1 |
+| `occlusion depth` | `src/renderer.ts:8885` | 1 |
+| `denoise` | `src/renderer.ts:8917` | 1 |
+| `polarization` | `src/renderer.ts:9029` | 1 |
+| `depth of field` | `src/renderer.ts:9128` | 1 |
+| `lens flare meter` | `src/renderer.ts:9138` | 1 |
+| `light meter` | `src/renderer.ts:9162` | 1 |
+| `display` | `src/renderer.ts:10719` | 2 |
+| `clouds' shadow map` | `src/renderer.ts:11210` | 1 |
+| `clouds' light volume` | `src/renderer.ts:11291` | 1 |
+| `sky ambient` | `src/renderer.ts:11373` | 1 |
+| `clouds' history` | `src/renderer.ts:12096` | 1 |
+| `body raster heights` | `src/renderer.ts:12456` | 1 |
+| `scenery raster cull` | `src/renderer.ts:12734` | 1 |
+| `ground occlusion` | `src/renderer.ts:12774` | 1 |
+| `trees' shadow map` | `src/renderer.ts:12779` | 1 |
+| `horizon bake` | `src/renderer.ts:13059` | 1 |
+| `ship probe: mips` | `src/ship.ts:2056` | 1 |
+| `ship probe: GGX` | `src/ship.ts:2068` | 1 |
+| `ship probe: SH` | `src/ship.ts:2075` | 1 |
+| `ship: shadow map` | `src/ship.ts:3068` | 1 |
+| `ship: shading (MSAA)` | `src/ship.ts:3089` | 1 |
+| `ship: own mask` | `src/ship.ts:3330` | 1 |
+| `ship: hull distance` | `src/ship.ts:3362` | 1 |
+| `ship: thrusters and plasma` | `src/ship.ts:3380` | 1 |
+| `ship: motion` | `src/ship.ts:3507` | 1 |
+| `ship: into the scene` | `src/ship.ts:3565` | 1 |
 | `terrain raster visibility` | `src/system/terrain-raster.ts:1091` | 1 |
 | `body raster visibility` | `src/system/terrain-raster.ts:1144` | 1 |
 | `terrain from the Sun` | `src/system/terrain-raster.ts:1287` | 1 |
@@ -1566,15 +1574,15 @@ _Généré le 2026-11-25T09:03:58Z sur `cc358ac3` (arbre de travail). Ne pas éd
 Libellés dynamiques (calculés à l'exécution) :
 
 - `src/gpuprof.ts:66` — `label`
-- `src/renderer.ts:7585` — `label`
-- `src/renderer.ts:7691` — `label`
-- `src/renderer.ts:7692` — `label`
-- `src/renderer.ts:9038` — `label`
-- `src/renderer.ts:11916` — `label`
-- `src/renderer.ts:12369` — `label`
-- `src/renderer.ts:12400` — `label`
-- `src/renderer.ts:12666` — `label`
-- `src/renderer.ts:12712` — `label`
+- `src/renderer.ts:7591` — `label`
+- `src/renderer.ts:7697` — `label`
+- `src/renderer.ts:7698` — `label`
+- `src/renderer.ts:9044` — `label`
+- `src/renderer.ts:12009` — `label`
+- `src/renderer.ts:12462` — `label`
+- `src/renderer.ts:12493` — `label`
+- `src/renderer.ts:12759` — `label`
+- `src/renderer.ts:12805` — `label`
 - `src/ship.ts:810` — `label`
 
 #### A.3b Passes jamais chronométrées (ni libellé du profileur, ni horodatage transmis)
@@ -1597,14 +1605,14 @@ Leur coût n'apparaît que dans l'intervalle de complétion de la frame (ou d'un
 | render pass | `src/meshbox.ts:184` |
 | render pass | `src/mipgen.ts:69` |
 | render pass | `src/noise3d.ts:124` |
-| render pass | `src/renderer.ts:5711` |
-| compute pass | `src/renderer.ts:8773` |
-| compute pass | `src/renderer.ts:13626` |
+| render pass | `src/renderer.ts:5717` |
+| compute pass | `src/renderer.ts:8779` |
+| compute pass | `src/renderer.ts:13719` |
 | compute pass | `src/sea/fft-gpu.ts:261` |
 | compute pass | `src/sea/fft-gpu.ts:265` |
-| render pass | `src/ship.ts:3427` |
-| render pass | `src/ship.ts:3440` |
-| render pass | `src/ship.ts:3501` |
+| render pass | `src/ship.ts:3461` |
+| render pass | `src/ship.ts:3474` |
+| render pass | `src/ship.ts:3535` |
 | compute pass | `src/sky.ts:166` |
 | station: shadow map | `src/station.ts:210` |
 | station | `src/station.ts:240` |
@@ -1630,7 +1638,7 @@ Leur coût n'apparaît que dans l'intervalle de complétion de la frame (ou d'un
 |---|---|---:|
 | `earth-raster` | shade 27.2 · shadeMark 0.3 · shadeLite 8.1 · shadeLiteFinish 0.8 · shadeLiteLight 2.0 · shadeWater 5.6 · shadeWaterOpen 4.9 · shadeWaterFinish 1.2 · shadeStars 0.3 · discs 29.9 · clouds 3.8 · skyFill 0.7 · main 42.5 · env 59.0 · aerial 0.7 | 187k |
 | `earth-raster-wx` | shade 32.2 · shadeMark 0.3 · shadeLite 8.1 · shadeLiteFinish 0.8 · shadeLiteLight 2.0 · shadeWater 5.6 · shadeWaterOpen 4.9 · shadeWaterFinish 1.2 · shadeStars 0.3 · discs 29.9 · clouds 3.8 · skyFill 0.7 · main 45.4 · env 59.0 · aerial 0.7 | 195k |
-| `earth-trace` | main 66.2 · env 62.7 · aerial 0.6 | 130k |
+| `earth-trace` | main 66.2 · env 62.8 · aerial 0.6 | 130k |
 | `earth-photo` | main 68.0 | 68k |
 | `game-space` | main 54.2 · env 50.4 · aerial 0.6 | 105k |
 | `moon` | main 75.9 · env 50.4 · aerial 0.6 · shadeLite 25.8 | 153k |
@@ -1641,6 +1649,6 @@ Leur coût n'apparaît que dans l'intervalle de complétion de la frame (ou d'un
 | `earth-only` | main 50.2 · env 44.1 · aerial 0.7 | 95k |
 | `kerr-jet` | main 31.9 · env 27.9 · lut 28.2 | 88k |
 | `eclipse` | main 46.1 · env 37.7 · aerial 0.6 | 84k |
-| `general` | main 151.6 · env 73.8 · lut 147.2 | 373k |
+| `general` | main 151.7 · env 73.9 · lut 147.3 | 373k |
 
 <!-- pipeline-inventory:end -->

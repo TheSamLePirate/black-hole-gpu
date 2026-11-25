@@ -6,8 +6,8 @@ import { at, W28L } from "./lib/sfo-traffic";
 // The approach lights' structures (src/world/approach-lights.ts, controller/approach-lights.ts — 25 Nov 2026): at San Francisco, the
 // free camera 25 m over the bay beside the approach of 28L, looking along it toward the field — the end's pylons, bars and lamp heads
 // standing in the water out to 900 m (its ILS in the approaches' data: world/approaches.ts ilsAt), drawn by the craft's pass as an
-// instance (`als:KSFO 10R#1` in ship.lastDraws). By day the steel; at night (22:00 PST) the runway's approach lights lit over it
-// (trace.wgsl runwayLights — the flashers' run).
+// instance (`als:KSFO 10R#1` in ship.lastDraws). By day the steel; at night (22:00 PST, AL_WEATHER windy: the bay's wind, 28L the landing
+// end) the runway's approach lights lit on its heads (trace.wgsl runwayPave: their level's crossing; runwayLights: the end that has one).
 // Steps: 1 boot · 2 the bay beside 28L's approach · 3 by day · 4 at night.
 // Shots: AL_OUT (remote-results/approach-lights): day.png, day-close.png, night.png, night-close.png (close: 110 m beside the lights).
 // Earth data: the e2e disk cache (SFO: USGS/NAIP, no IGN).
@@ -89,6 +89,9 @@ describe.skipIf(!E2E)("the approach lights' structures at SFO's 28L", () => {
 
     await app.step("at night");
     await app.js(`__bh.game.setDate("2026-11-25T06:00:00Z")`);
+    // (into the wind — the bay's west wind, AL_WEATHER: windy by default —: 28L the landing end, its approach lights lit — trace.wgsl
+    // runwayLights lights the landing end's, where it has them; in « fair » weather the runway's own first end, 10R, without)
+    await app.js(`(() => { __bh.settings.weather = ${JSON.stringify(process.env.AL_WEATHER ?? "windy")}; __bh.touch(); return 1; })()`);
     await both("night");
     expect((await drawn()).some((x) => x.id === "als:KSFO 10R#1")).toBe(true);
     expect(app.cdp.errors).toEqual([]);
