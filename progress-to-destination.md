@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 25 nov. 09:40 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 25 nov. 09:20 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous. Ce qui est fermé quitte le tableau « En cours » pour la ligne « Fermé récemment ».
@@ -78,6 +78,14 @@ l'état d'une mission ou d'un combat **non sauvé, dit** ; le réseau **« entre
 **Décidé par Sam (16 nov., 15:58 UTC)** : J8-4 allumée par défaut (quads sous 8 px), J8-5 avec une jonction choisie sur captures, J8-1b suspendu, l'e2e de J8-6 par la voie (b), J8-9 ajouté ([PLAN-J8](docs/PLAN-J8-BATIMENTS.md) §6 point 6). **But fixé par Sam (16 nov., ~16:19 UTC)** : [J8-A](docs/PLAN-J8-BATIMENTS.md), un vol Paris et Toulon-Hyères, de jour et de nuit, tous les bâtiments, lampadaires, voitures (J8-L) et rivières (J8-E) chargés avant le vol, en « high » partout, sans différence visible entre les qualités. **Décidé par Sam (16 nov., ~21:40 UTC)** : J8-8 ouvert (le proche en cellules), la jonction à 0, l'éclat de nuit lointain gardé ([PLAN-J8](docs/PLAN-J8-BATIMENTS.md) §6 point 11). **Décidé par Sam (17 nov., ~08:00 UTC)** : J8-8b ouvert, les arbres par cellule, après un vol de référence à froid sur le M1 Max (§6 point 12). **Mode speed pour finir J8, J8-VB compris** (Sam, 17 nov. ~09:20 UTC ; [CLAUDE.md](CLAUDE.md), modes de travail ; §6 point 13) : contrôles rapides par lot, un gros e2e J8-A à la fin sur kerr-mini et le M1 Max. **J8-RP, les routes et les ponts AAA** (Sam, 17 nov. ~10:20 UTC ; [PLAN-J8](docs/PLAN-J8-BATIMENTS.md) §3 bis) : ajouté à J8 en mode speed, RP1 (les routes et marquages visibles sous l'orthophoto) en tête. **Attend Sam** : les quatre premières questions de PLAN-J8 §6, réglées provisoirement (même contenu sur les deux machines, retour si > 3 ms sur le mini ; portée au pixel ; J7 en pause, les arbres proches deviennent J9 ; pas de préparation côté serveur pour l'instant) ; les trois questions de [PLAN-J7](docs/PLAN-J7-FLUIDITE.md) §4, réglées provisoirement (les 40 ms du mini en dernier, J7-6 ; les arbres proches en géométrie ensuite, désormais J9 ; l'aplanissement du détail sous les trouées jusqu'à la FAF ou 10 km) ; les seuils du mini attendent la reprise de la cible 40 ms.
 
 ## Journal
+
+### 2026-11-25 09:20 UTC — Ponts, revue E : le sol aplani sous l'eau intérieure, à la préparation du relief
+
+- Contribution : §7 (le monde possède le sol : un seul sol pour le raster, le traceur, le contact et l'eau), §20 (préparé dans le worker de décodage, hors image).
+- Réalisé (fusion sur main, agent `6723eff9`, `7429686c`, essai `beb2615e` retiré par `9f22bb29`, docs `1a9a1000`) : chaque tuile de relief national z ≥ 13 (passe du sol, pas celle des silhouettes) est aplanie sous l'eau intérieure par une ouverture morphologique (±48 m : pointes et crêtes ramenées au niveau de l'eau voisine, ni trou comblé ni berge touchée), d'après la tuile vectorielle OpenFreeMap z 13 déjà lue pour les routes de nuit (`water-flatten.ts`, op `flatten` de `tile-decode.ts`) ; sans elle, la tuile telle quelle.
+- Preuves : **observé sur ce Mac** (kerr-mini injoignable) — lit sous Cheviré 5,1 → 2,23–2,27 m (le même qu'à 150 m à l'ouest), `bridges-notable` 7/7 (vérifie désormais le lit sous le tablier), `bridges` 7/7 ; tests `water-flatten` (le positif échoue sur l'ancien code), `water-mask`. Après fusion sur main : tsc, Biome, `check-wgsl` 85/85, `pipeline-inventory --check`, tests unitaires verts. **Non mesuré** : le coût CPU dans le jeu (6–19 ms par tuile dans le worker, mesuré hors jeu sur une tuile synthétique) et l'attente ajoutée à la tuile de relief (la tuile vectorielle d'abord) ; GPU inchangé par construction, non mesuré.
+- Limites / transitions : la bande claire sous Cheviré n'était pas la crête (cause non trouvée : vue de débogage de `liteWater` à faire) ; les reflets de la Seine en morceaux (plafond écrit : la part du reflet dans les passes de l'eau, 10,6 ms d'eau sur J0 ; options a/b/c pesées, aucune juste et peu chère — (a) à chiffrer sur kerr-mini) ; points sombres au bord des couronnes (essai retiré : halo clair pire).
+- Suite : vue de débogage de l'eau sous Cheviré ; chiffrage de (a) au retour du mini.
 
 ### 2026-11-25 09:40 UTC — Routes, lot 2 : la ville à l'envers de San Francisco, le trait du mont Faron, les colonnes d'une rue de Paris
 
