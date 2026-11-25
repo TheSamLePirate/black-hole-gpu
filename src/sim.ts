@@ -16,6 +16,7 @@ import { applyF35Variant } from "./f35/variant";
 import { fleet } from "./fleet";
 import { VESSELS } from "./vessels";
 import { ourWake } from "./controller/seatraffic";
+import { approachLights } from "./controller/approach-lights";
 
 /** The flight figures the renderer takes from (controller/telemetry.ts): the re-entry glow. */
 type FlightInfo = Pick<FullFlightInfo, "surface" | "air"> | null;
@@ -106,7 +107,9 @@ export class Simulation {
     // own camera — a spectator's, else this one —, the renderer told so (othersFromView: no craft's eye to add when the
     // view has none); its wakes on the sea near the view)
     const vc = c.viewController();
-    const earthOthers = () => [...c.carrierShips(vc), ...c.trafficShips(vc), ...c.seaShips(vc)];
+    // (the approach lights' structures about the view — controller/approach-lights.ts — with them)
+    const als = () => approachLights(vc, r.ship, r.groundStamp, performance.now());
+    const earthOthers = () => [...c.carrierShips(vc), ...c.trafficShips(vc), ...c.seaShips(vc), ...als()];
     if (!flying) {
       if (r.shipThrust) changed = true;
       r.shipThrust = null;
@@ -166,7 +169,7 @@ export class Simulation {
     // fight's and the wingmen's are placed from the craft, not drawn in a spectator's view (as before)
     r.combatOthers = c.spectating
       ? earthOthers()
-      : [...c.carrierShips(), ...c.combatShips(), ...c.wingShips(), ...c.trafficShips(), ...c.seaShips()];
+      : [...c.carrierShips(), ...c.combatShips(), ...c.wingShips(), ...c.trafficShips(), ...c.seaShips(), ...als()];
     r.othersFromView = c.spectating;
     // (its flares burning, its chaff's glints — PLAN-RADAR-AAA RD8a)
     r.combatGlares = c.combatGlares();

@@ -27,6 +27,9 @@ export class ViewOverlay {
   netTags: NetTag[] = [];
   /** the real traffic's labels and lights (controller/traffic.ts — docs/PLAN-AVIATION-AAA.md T2) */
   trafficMarks: TrafficMark[] = [];
+  /** each mark's opacity now (its occlusion faded — trafficDrawn) and the clock of its last step */
+  private labelAlpha = new Map<string, number>();
+  private labelClock = 0;
   constructor(
     private overlay: HTMLCanvasElement,
     _settings: Settings,
@@ -257,7 +260,10 @@ export class ViewOverlay {
 
   /** The traffic on the screen: each aircraft's lights lit now and, within 40 km, its label over it. */
   private trafficDrawn() {
-    if (!this.trafficMarks.length || this.renderer.offlineActive || document.body.classList.contains("hide-ui")) return [];
+    if (!this.trafficMarks.length || this.renderer.offlineActive || document.body.classList.contains("hide-ui")) {
+      this.renderer.labelAsk = null;
+      return [];
+    }
     const W = this.overlay.width,
       H = this.overlay.height,
       k = devicePixelRatio;
@@ -273,10 +279,31 @@ export class ViewOverlay {
     const s = this.settings;
     const eye = s.ship && this.renderer.shipPose ? shipToCamera(this.renderer.shipPose, s.shipLookYaw, s.shipLookPitch).t : [0, 0, 0];
     const ofEye = (v: readonly number[]) => [v[0]! + eye[0]!, v[1]! + eye[1]!, v[2]! + eye[2]!];
-    const out: { x: number; y: number; label: string | null; lights: { x: number; y: number; colour: string; r: number }[] }[] = [];
+    const out: {
+      x: number;
+      y: number;
+      label: string | null;
+      lights: { x: number; y: number; colour: string; r: number }[];
+      alpha: number;
+    }[] = [];
+    // (each mark tested against the scene — renderer.labelSeen, its occlusion depth read back at the object —: hidden behind a
+    // building, a hill, a cloud, its label and lights fade out over a fifth of a second, and back in)
+    this.renderer.labelAsk = {
+      marks: this.trafficMarks.map((m) => ({ id: m.id, at: ofEye(m.at), r: m.r ?? 25 })),
+      fov: this.settings.fov,
+      mPerM: 1476.625 * (s.massSolar || 1),
+    };
+    const now = performance.now();
+    const dt = Math.min(Math.max((now - this.labelClock) / 1000, 0), 0.25);
+    this.labelClock = now;
+    const seenNow = new Map<string, number>();
     for (const m of this.trafficMarks) {
+      const want = this.renderer.labelSeen.get(m.id) === false ? 0 : 1;
+      const was = this.labelAlpha.get(m.id) ?? want;
+      const a = was + (want - was) * Math.min(1, dt / 0.2);
+      seenNow.set(m.id, a);
       const c = pr(ofEye(m.at));
-      if (!c) continue;
+      if (!c || a < 0.02) continue;
       // (each light a glow some 1.5 m across, never under two pixels)
       const lights = m.lights
         .filter((l) => l.on)
@@ -288,8 +315,9 @@ export class ViewOverlay {
         })
         .filter((l): l is NonNullable<typeof l> => !!l);
       const lift = Math.min(120 * k, Math.max(12 * k, (20 / m.dist / tanH) * (H / 2)));
-      out.push({ x: c[0], y: c[1] - lift, label: m.dist < 40_000 ? m.label : null, lights });
+      out.push({ x: c[0], y: c[1] - lift, label: m.dist < 40_000 ? m.label : null, lights, alpha: a });
     }
+    this.labelAlpha = seenNow;
     return out;
   }
 
@@ -335,6 +363,7 @@ export class ViewOverlay {
     ctx.globalCompositeOperation = "lighter";
     for (const m of marks)
       for (const l of m.lights) {
+        ctx.globalAlpha = m.alpha;
         const g = ctx.createRadialGradient(l.x, l.y, 0, l.x, l.y, l.r * 2.5);
         g.addColorStop(0, l.colour);
         g.addColorStop(0.35, l.colour.replace(/, 1\)$/, ", 0.45)"));
@@ -348,6 +377,7 @@ export class ViewOverlay {
     ctx.textBaseline = "bottom";
     for (const m of marks) {
       if (!m.label) continue;
+      ctx.globalAlpha = m.alpha;
       const w = ctx.measureText(m.label).width + 8 * k;
       ctx.fillStyle = "rgba(4, 8, 14, 0.55)";
       ctx.fillRect(m.x - w / 2, m.y - 14 * k, w, 14 * k);

@@ -3152,7 +3152,8 @@ export class Renderer {
     const accum = d.createBuffer({ size: px * 16, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC });
     // (copied from by rasterColumn — a diagnostic)
     const moments = d.createBuffer({ size: px * 8, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC }); // Σ l², depth
-    const sceneDepth = d.createBuffer({ size: px * 4, usage: GPUBufferUsage.STORAGE }); // the occlusion depth
+    // the occlusion depth (COPY_SRC: the overlay's labels' few texels read back — labelProbeFor)
+    const sceneDepth = d.createBuffer({ size: px * 4, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC });
     // (words past the image: the sky's discs' rectangles — trace.wgsl main's layers z ≥ 1, renderer discRects —, then the frame
     // the raster's open sea was last seen — the last word but one — and its sea drawn — its last word: trace.wgsl shadeWater, renderer
     // seaProbe)
@@ -10770,6 +10771,91 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
   }
   private seaProbe: GPUBuffer | null = null;
   private seaProbeBusy = false;
+
+  /** The overlay's marks to test against the scene (ui/overlay.ts — the traffic's, the ships', the carriers' labels and lights): each its
+   *  id, its anchor in the camera's axes from the eye [m] (x right, y up, z ahead) and its object's radius [m]; the image's vertical
+   *  field [°] and the scene's metres a unit (the occlusion depth's — renderer.mPerM). Asked each frame by the overlay. */
+  labelAsk: { marks: { id: string; at: readonly number[]; r: number }[]; fov: number; mPerM: number } | null = null;
+  /** Each mark seen (true) or hidden behind what the scene holds nearer at its object (false) — the occlusion depth (`occlusion depth`,
+   *  the image's nearest surface at each pixel: the ground, the buildings, the clouds over half the pixel, the craft) read at five
+   *  points over the object, a frame or two late; a mark not asked yet: absent. */
+  readonly labelSeen = new Map<string, boolean>();
+  private labelBuf: GPUBuffer | null = null;
+  private labelBusy = false;
+  private labelAt = 0;
+  /** at most this many marks a read */
+  static readonly LABEL_MAX = 48;
+  /** The marks' texels copied after the frame (5 a mark, 4 bytes each: no pass, a few copies) — every other frame, one read in flight;
+   *  null: none this frame. */
+  private labelProbeFor(enc: GPUCommandEncoder): { marks: { id: string; d: number[]; r: number; D: number }[]; mPerM: number } | null {
+    const t = this.live,
+      ask = this.labelAsk;
+    if (!t || !ask || !ask.marks.length || this.labelBusy || this.frameStamp - this.labelAt < 2) return null;
+    const W = t.width,
+      H = t.height;
+    const tanY = Math.tan((ask.fov * Math.PI) / 360),
+      tanX = tanY * (W / H);
+    const n = Math.min(ask.marks.length, Renderer.LABEL_MAX);
+    this.labelBuf ??= this.device.createBuffer({
+      size: Renderer.LABEL_MAX * 5 * 4,
+      usage: GPUBufferUsage.MAP_READ | GPUBufferUsage.COPY_DST,
+    });
+    const out: { id: string; d: number[]; r: number; D: number }[] = [];
+    let k = 0;
+    for (let i = 0; i < n; i++) {
+      const m = ask.marks[i]!;
+      const [x, y, z] = m.at as [number, number, number];
+      if (!(z > 1)) continue;
+      // (five points over the object as the camera sees it: its centre, half its radius either side and above and below)
+      const d: number[] = [];
+      for (const [ox, oy] of [
+        [0, 0],
+        [-0.5, 0],
+        [0.5, 0],
+        [0, 0.3],
+        [0, -0.3],
+      ] as const) {
+        const px = Math.floor(((x + ox * m.r) / z / tanX + 1) * 0.5 * W),
+          py = Math.floor((1 - (y + oy * m.r) / z / tanY) * 0.5 * H);
+        if (px < 0 || py < 0 || px >= W || py >= H) {
+          d.push(-1);
+          continue;
+        }
+        enc.copyBufferToBuffer(t.sceneDepth, (py * W + px) * 4, this.labelBuf, k * 4, 4);
+        d.push(k++);
+      }
+      out.push({ id: m.id, d, r: m.r, D: Math.hypot(x, y, z) });
+    }
+    if (!k) return null;
+    this.labelAt = this.frameStamp;
+    return { marks: out, mPerM: ask.mPerM };
+  }
+  /** The marks' texels read back: a mark seen where one of its five points shows nothing nearer than its object's front less a margin
+   *  (its radius, and 2 % of its distance — the depth's own spread) — the sky, beyond, or the object itself. */
+  private labelRead(q: { marks: { id: string; d: number[]; r: number; D: number }[]; mPerM: number }) {
+    const buf = this.labelBuf!;
+    this.labelBusy = true;
+    buf
+      .mapAsync(GPUMapMode.READ)
+      .then(() => {
+        const f = new Float32Array(buf.getMappedRange().slice(0));
+        buf.unmap();
+        for (const m of q.marks) {
+          const front = m.D - m.r - 0.02 * m.D;
+          let seen = false,
+            any = false;
+          for (const j of m.d) {
+            if (j < 0) continue;
+            any = true;
+            const z = f[j]! * q.mPerM;
+            if (!(z > 0) || !Number.isFinite(z) || z > 1e12 || z >= front) seen = true;
+          }
+          this.labelSeen.set(m.id, seen || !any);
+        }
+      })
+      .catch(() => {})
+      .finally(() => (this.labelBusy = false));
+  }
   private seaProbeAt = 0;
   /** the frame the raster last drew some sea (shadeWater's stamp, read back) */
   private seaSeenStamp = 0;
@@ -10784,8 +10870,10 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
     // (the frame the raster's sea was last drawn — the stamps' last word, trace.wgsl shadeWater —: read back now and then,
     // the FFT's waves computed only while some sea is in view — seaFftParams)
     const probe = this.seaProbeFor(enc);
+    const labels = this.labelProbeFor(enc);
     this.device.queue.submit([enc.finish()]);
     this.sharp?.flush();
+    if (labels) this.labelRead(labels);
     if (probe) {
       this.seaProbeBusy = true;
       probe
