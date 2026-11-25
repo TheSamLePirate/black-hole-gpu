@@ -10,7 +10,8 @@
 // the mini's own checkout — the remote runner's copies are not ones). Results in AB_OUT (remote-results/…-ab-<rev>).
 // AB_TREE_A=<tar> / AB_TREE_B=<tar>: that side laid out from a `git archive` of its commit made elsewhere, not checked out here — a
 // machine whose git does not run (kerr-mini, 24 Nov 2026: the Xcode licence not accepted, /usr/bin/git refused): e.g.
-//   git archive -o A.tar <rev> src server server.ts index.html crew pwa vendor gallery scripts package.json bun.lock bunfig.toml tsconfig.json
+//   git archive -o A.tar <rev> src server server.ts index.html crew pwa vendor gallery scripts package.json bun.lock bunfig.toml tsconfig.json \
+//     docs/aviation docs/spatial    (src imports their .md files: without them that side's server builds nothing — 25 Nov 2026), and tests with AB_E2E_OWN
 //   scp A.tar kerr-mini:kerr-lab/ab-trees/ ; … AB_TREE_A=~/kerr-lab/ab-trees/A.tar … bun scripts/ab-commit.ts <rev>
 import { $ } from "bun";
 import { existsSync, mkdirSync, rmSync, symlinkSync } from "node:fs";
