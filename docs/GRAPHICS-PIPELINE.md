@@ -425,6 +425,18 @@ l'e2e, aucune requête IGN). GPU p50 = `renderer.lastGpuMs` sur 90 images ; le b
   ne relève plus que la terre des données (0 … 0,3 m au-dessus de la mer et plus) ; l'eau garde son niveau et reste de l'eau. Le
   contact (`terrain.ts earthHeightSampler`) et les pieds du décor (`scenery-worker.ts`) suivent la même règle. Aucune passe, aucune
   ressource ; une sélection de plus par appel de `runwayGrade`. Coût non mesuré (attendu nul).
+- **Vérifié sur kerr-mini aux aéroports en bord d'eau** (25 nov. 2026, 21:20–21:28 UTC, `waterfront-runways.e2e` — le test de main contre
+  le serveur de `18a6e4dd` puis de main `8355e189`, une course chacun ; `remote-results/20261125-211951-waterfront-ab`) : LaGuardia,
+  Boston Logan, Nice, Hong Kong, 12 pistes mesurées deux fois. **Sol au-dessus de la mer** (`sys.groundAt` − géoïde) : chaque bande à son
+  niveau, à 0,00 m près des deux côtés ; sur l'axe au-delà des bouts, là où les données ont l'eau, avant → après : LaGuardia 04/22 au-delà
+  de 22 4,0 → **0** (50 à 300 m), 13 avant le seuil 2,0 → **0** ; Boston 14/32, 4R/22L, 9/27, 15R/33L 1,2–4,6 → **0** de 150 à 600 m ;
+  Nice 04L/04R au-delà de 22R/22L 3,0–3,6 → **0** dès 150–300 m ; à côté (150–300 m du bord) l'eau revenue à 0 où l'ancien niveau la
+  relevait (Boston 14/32 droite 4,0 → 0 ; LaGuardia 13/31 gauche 3,5 → 0) ; la terre des données gardée (Boston 4R au-delà 4,8 / 2,7,
+  LaGuardia 04 avant le seuil 6,9 / 7,3, Nice côté ville 3,0–4,1). **Image** : à LaGuardia, Boston et Nice, les plaques sombres sur l'eau
+  au-delà des bouts et le long des pistes (le sol relevé vu sous l'eau) ont disparu ; l'eau reste de l'eau, le remblai et la piste à leur
+  niveau (`docs/progress/pistes-bord-de-mer-2026-11-25/{lga,bos,nce,hkg}-{approche,ensemble}-avant-apres.jpg`). Hong Kong identique des
+  deux côtés — ses pistes mesurées à 0–1 m (PROBLEMES). Nice : des stries régulières sur la baie à l'ouest de l'aéroport après, pas avant
+  (PROBLEMES, cause non établie). Coût GPU du correctif toujours **non mesuré** séparément (dans le total de la journée).
 
 ### PONT-ROUTES — revue G : la bande de Cheviré (les chutes sur le sursol), la surface de la mer dessinée sur la Seine (25 novembre 2026, branche de l'agent)
 

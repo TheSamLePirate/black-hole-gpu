@@ -3,6 +3,30 @@
 Problèmes constatés, pas encore réglés. Chaque entrée : la date (UTC), ce qui est mesuré ou observé et sa source, la cause
 connue ou supposée, la piste. Une entrée réglée est barrée avec le commit qui la règle, pas effacée.
 
+## Nice : des stries régulières sur la baie à l'ouest de l'aéroport, sur main et pas sur 18a6e4dd (relevé le 25 novembre 2026, `waterfront-runways`, kerr-mini)
+
+- **Observé** (`remote-results/20261125-211951-waterfront-ab`, midi du 21 juin, vue d'ensemble à 3 km au sud-ouest et 700 m, approche de 04 à
+  1,5 km ; `docs/progress/pistes-bord-de-mer-2026-11-25/nce-baie-stries-avant-apres.jpg`, `nce-approche-avant-apres.jpg`) : sur main
+  `8355e189`, la baie entre l'embouchure du Var et le bout sud-ouest des pistes porte des rangées de vagues très régulières, contrastées, en
+  arcs (un motif plus qu'une houle) ; sur `18a6e4dd`, à la même heure, la même eau est lisse — en partie sous la plaque sombre que le
+  niveau des pistes y posait alors. Ni à LaGuardia, ni à Boston, ni à Hong Kong.
+- **Cause non établie** : la zone dépasse la plaque de l'ancien niveau (le correctif `9cf0849a` n'est donc pas seul en cause) ; candidats —
+  l'eau du jour (surface de la mer, lumière de l'eau lue une fois), un fond à 0 m sous une eau sans bathymétrie (RGE ALTI : la mer à 0) où les
+  creux des vagues découvrent le sol. Une course par côté : l'état de la mer peut différer d'une course à l'autre.
+- **Piste** : la même vue sur main sous leviers (`liteSkip`, surface de la mer coupée, `__bh.sys.groundBareAt` le long d'une ligne de la baie
+  pour le fond), puis bissecter entre `18a6e4dd` et main si le motif tient.
+
+## Hong Kong (VHHH) : les pistes au niveau de la mer, 0–1 m au lieu de ~8,5 m (relevé le 25 novembre 2026, `waterfront-runways`, kerr-mini)
+
+- **Mesuré** : les trois pistes 07/25 mesurées par le jeu (`sys.runways()`, `world.measured` 2) à 1,0 / 0,0 / 0,0 m au-dessus de la mer
+  (l'aérodrome publie 28 ft, 8,5 m) — sur `18a6e4dd` comme sur main ; le sol de l'île à 0–1,5 m autour, 0 à 300 m de part et d'autre.
+  L'approche de 07 à 1,5 km ne montre ni la piste ni ses marques, l'île floue au ras de l'eau
+  (`docs/progress/pistes-bord-de-mer-2026-11-25/hkg-{approche,ensemble}-avant-apres.jpg`).
+- **Cause supposée** : le relief global sous Chek Lap Kok (terre gagnée sur la mer, 1998 ; la troisième piste, 2022) à la mer dans les
+  données ; le niveau mesuré lit ce relief. Non vérifié dans les tuiles.
+- **Piste** : prendre l'altitude publiée (OurAirports `elevation_ft`) quand la mesure tombe à ≤ 1 m sur une île gagnée sur la mer ; la terre
+  de l'aérodrome relevée à ce niveau (son contour, pas seulement la bande).
+
 ## La vue de conducteur sur le tablier de Millau regarde un pylône (relevé le 25 novembre 2026, `bridges-notable`, kerr-mini)
 
 - **Observé** (`remote-results/20261125-211447-millau-ab`, 8 courses, `18a6e4dd` et `8355e189` pareils ;
@@ -15,6 +39,11 @@ connue ou supposée, la piste. Une entrée réglée est barrée avec le commit q
   temps ne se comparent plus aux précédents (nouvelle référence A/A à prendre).
 
 ## ~~L'eau de la baie de San Francisco verte émeraude près de l'approche de 28L : ce n'est pas de l'eau pour le rendu~~ (relevé le 25 novembre 2026, `als-sfo-28l-day-close.jpg`) — réglé le 26 (`9cf0849a`, branche des ponts) : c'était le niveau de la piste étendu sur la baie
+
+- **25 nov. 2026, vérifié ailleurs** (kerr-mini, `waterfront-runways.e2e`, `18a6e4dd` contre main `8355e189`) : à LaGuardia, Boston Logan et
+  Nice, l'eau au-delà des bouts et le long des pistes revenue à 0 m (avant : relevée au niveau de la piste, 1,2–5,1 m — des plaques sombres
+  sur l'eau), les bandes à leur niveau, la terre des données gardée (`docs/progress/pistes-bord-de-mer-2026-11-25/`). Restent deux constats
+  à part : les stries de la baie de Nice et les pistes de Hong Kong au niveau de la mer (ci-dessus).
 
 - **Constat** (ce Mac, sonde `zz-water-colour` sous leviers, `docs/progress/etiquettes-als-2026-11-25/baie-sfo-eau-leviers.jpg`) : vue
   à 10 m au-dessus de la baie, 450 m avant 28L, l'eau proche sRGB ~(31–55, 64–74, 22–41), émeraude. Elle **ne change pas** avec

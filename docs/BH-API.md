@@ -2147,7 +2147,7 @@ runways levelled, the sea at the geoid. Synchronous. (25 Nov 2026: off a real ai
 eased over 30 m — the level lifts only the land the data have, 0 … 0.3 m over the sea and up: `game/runway-grade.ts levelOver`, the
 tracer's `runwayLevelOver`; SFO's bay before 28L, its data −0.3 to −1.5 m, is the sea's again, no longer the runway's 3.1 m.)
 
-*Used in:* `geoid.e2e.test.ts`.
+*Used in:* `geoid.e2e.test.ts`, `waterfront-runways.e2e.test.ts`.
 
 ### `__bh.sys.groundBareAt(lat, lon)` → number
 
@@ -2271,7 +2271,7 @@ surface (body-fixed metres), the unit `p` (the threshold's geodetic up), `along`
 PLAN-RADAR-AAA RD13) carries `world: { field, measuring, measured }`: its airfield's code, its level being measured, and how many times
 it has been measured (`measured`: 1 at 5 s, 2 at 20 s after it was brought in — the finer relief's; a test waits for 2).
 
-*Used in:* `ground-placement.e2e.test.ts`, `runway-placement.e2e.test.ts`, `world-runway.e2e.test.ts`, `hud-runway.e2e.test.ts`.
+*Used in:* `ground-placement.e2e.test.ts`, `runway-placement.e2e.test.ts`, `world-runway.e2e.test.ts`, `hud-runway.e2e.test.ts`, `waterfront-runways.e2e.test.ts`.
 
 ### `__bh.sys.approaches(code)` → `Promise<Approach[]>`
 
