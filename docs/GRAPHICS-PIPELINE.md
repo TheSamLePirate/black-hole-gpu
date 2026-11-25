@@ -80,8 +80,14 @@ Windows/D3D12. Les numéros de ligne sont ceux de `da4e75bd`.
 - **Mesuré sur kerr-mini** (25 nov. 2026, 20:02 UTC, `b94d93be`, `seine-mirror.e2e`, headless, mêmes séries ;
   `remote-results/20261125-200215-seine-mirror-cheap`) — Grenelle (19 cellules) : allumé 54,2 · 53,7 · 54,5 · 54,3 (p95 57,4–58,4), coupé
   52,2 · 52,4 · 51,6 · 52,2 (p95 55,2–56,1) : **+2,1 ms** sous le plafond de 2,8 (essai `cd8dcb14` : +5,2) ; A/A 0,8 / 0,8. Passe
-  `earth water (raster)` 8,79 ms allumé (essai : 14,69). Alexandre III (7 cellules sur 21 résidentes) : +1,1 ms — toutes cellules
-  résidentes non mesuré. Captures `docs/progress/ponts-2026-11-25/seine-miroir-*-mini-{avant,apres}.jpg`.
+  `earth water (raster)` 8,79 ms allumé (essai : 14,69). Alexandre III (7 cellules sur 21 résidentes) : +1,1 ms — *périmé : mesuré avec
+  un tiers des cellules, remplacé ci-dessous*. Captures `docs/progress/ponts-2026-11-25/seine-miroir-*-mini-{avant,apres}.jpg`.
+- **Mesuré sur kerr-mini, Alexandre III avec ses 21 cellules résidentes et mirées** (25 nov. 2026, 21:14 UTC, main `8355e189` + test
+  `b53c0a7d` — l'e2e attend `nearCells()` complet : `missing` 0, `mirrorCells` = `cells` = `wanted` = 21, index 377 946 vec4 ; headless ;
+  `remote-results/20261125-211412-seine-a3`) — allumé 49,6 · 49,3 · 49,9 · 49,3 (p95 52,6–54,6), coupé 48,6 · 48,3 · 48,8 · 48,7
+  (p95 51,5–52,1) : **+0,9 ms** p50 (p95 ≈ +1,5), A/A 0,6 / 0,5 — sous le plafond de 2,8 ms. Passe `earth water (raster)` 4,22 ms
+  allumé. Témoin positif : le grand bâtiment de la rive gauche reflété entier allumé, absent coupé
+  (`seine-miroir-alexandre-iii-21cellules-mini-{avant,apres}.jpg`).
 
 ### Le coût net de la journée du 25 novembre 2026 — campagne sur kerr-mini (main 091ddd33 + b8fd6cf8 contre 18a6e4dd) — mesuré
 
