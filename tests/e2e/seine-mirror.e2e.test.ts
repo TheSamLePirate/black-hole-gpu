@@ -32,9 +32,28 @@ describe.skipIf(!E2E)("the Seine's mirror of the near buildings", () => {
       await app.step(key);
       const P = PLACES[key]!;
       const v = await showView(app, { key, ...P, holds: "sc.cellBridges > 0" });
-      await app.waitOptional("(__bh.renderer.nearCells()?.mirrorCells ?? 0) > 0", 60_000);
-      const st = await app.js(`JSON.stringify(__bh.renderer.nearCells())`);
-      console.log(`  ${key} near cells: ${st}`);
+      // (25 Nov 2026: every wanted cell resident and mirrored before measuring — the first kerr-mini run at Alexandre III measured 7 of
+      // its 21: bounded, its count shown every 10 s, the test failing with what is missing)
+      const full = `(() => { const s = __bh.renderer.nearCells(); return !!s && s.wanted > 0 && s.missing === 0 && s.mirrorCells >= s.cells; })()`;
+      const t0 = Date.now();
+      let st = "",
+        shown = -10;
+      for (;;) {
+        st = await app.js<string>(`JSON.stringify(__bh.renderer.nearCells())`);
+        if (await app.js<boolean>(full)) break;
+        const s = JSON.parse(st ?? "null") ?? {};
+        const waited = Math.round((Date.now() - t0) / 1000);
+        if (waited >= 120)
+          throw new Error(
+            `${key}: near cells not all resident and mirrored in 120 s — ${s.cells} resident, ${s.missing} of ${s.wanted} missing, ${s.mirrorCells} mirrored (${st})`,
+          );
+        if (waited - shown >= 10) {
+          shown = waited;
+          console.log(`  ${key} cells ${s.cells}/${s.wanted}, missing ${s.missing}, mirrored ${s.mirrorCells} · ${waited} s / 120`);
+        }
+        await Bun.sleep(2000);
+      }
+      console.log(`  ${key} near cells (all resident, ${Math.round((Date.now() - t0) / 1000)} s): ${st}`);
       for (const on of [true, false]) {
         await app.js(`(() => { __bh.renderer.nearMirrorOn = ${on}; __bh.touch(); return 1; })()`);
         await app.js(frames(30));
