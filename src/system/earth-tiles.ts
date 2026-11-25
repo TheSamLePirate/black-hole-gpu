@@ -47,6 +47,8 @@ import {
 } from "./earth-pages";
 import { L_MAX, L_MIN, ROAD_MVT_Z1, ROAD_Z0 } from "./night-roads";
 import type { DelightStats } from "./ortho-delight";
+import { STREET_CELL_Z } from "./street-level";
+import { StreetLevelBook } from "./street-level-book";
 import { type DecodeReply, type DecodeRequest, decodeTile, ORTHO_FIT, pixels as decodePixels } from "./tile-decode";
 export { EOX_FIT, eoxColour, ORTHO_FIT, orthoColour } from "./tile-decode";
 
@@ -540,13 +542,13 @@ type DecodeAsk = DecodeRequest extends infer Q ? (Q extends { id: number } ? Omi
 async function decodeOff(
   q: DecodeAsk,
   kind: DecoderKind = "decode",
-): Promise<{ heights?: Float32Array; words?: Uint32Array; water?: Uint8Array; delight?: DelightStats }> {
+): Promise<{ heights?: Float32Array; words?: Uint32Array; water?: Uint8Array; delight?: DelightStats; moved?: number; ms?: number }> {
   const w = decodeWorker(kind);
   if (!w) {
     const t0 = performance.now();
     const r = await decodeTile({ ...q, id: 0 } as DecodeRequest);
     cpuOf(q.op === "terrarium" ? "decode" : "colour", t0);
-    return r;
+    return { ...r, ms: performance.now() - t0 };
   }
   const id = decodeId++;
   const r = await new Promise<DecodeReply>((ok, no) => {
@@ -956,12 +958,10 @@ export function nationalBoxNear(lat: number, lon: number, imagery = false): Nati
 const NO_BOX: NationalSource["box"] = { west: 0, east: 0, south: 0, north: 0 };
 
 /** the relief tiles' level from which the streets are laid on them (street-level.ts: a street cell's, z 15, holds a tile there) */
-export const STREET_LEVEL_Z = 15;
-/** the streets' leveller (the page's: street-level.ts from the cached street cell holding the tile — renderer.ts), null none */
-let streetLeveller: ((z: number, x: number, y: number, h: Float32Array) => Promise<number>) | null = null;
-export function setStreetLeveller(f: ((z: number, x: number, y: number, h: Float32Array) => Promise<number>) | null) {
-  streetLeveller = f;
-}
+export const STREET_LEVEL_Z = STREET_CELL_Z;
+/** a z 15 street cell's bytes (a complete one — street-cells.ts streetCellComplete) and its building cell's, null while it is not
+ *  there: the page's caches' (renderer.ts — EarthTiles.setStreetCells) */
+export type StreetCellRead = (cx: number, cy: number) => Promise<{ street: ArrayBuffer; buildings: ArrayBuffer | null } | null>;
 
 /**
  * A tile's heights from its national source (I2, I7): its ground marked as a survey's (markFine), the global data's
@@ -990,14 +990,6 @@ async function nationalHeights(
   const r = await src.heights(z, x, y, signal, hlod, undefined, coarse);
   if (!r) return terrarium(z, x, y, signal);
   const { h, over } = r;
-  // (the streets laid on it — street-level.ts: the one ground the raster and the contact read, levelled once, here)
-  if (streetLeveller && z >= STREET_LEVEL_Z) {
-    try {
-      await streetLeveller(z, x, y, h.subarray(0, TILE * TILE));
-    } catch {
-      /* (no street cell, a broken one: the survey's ground as it is) */
-    }
-  }
   markFine(h, true);
   if (h.some((e) => Number.isNaN(e))) {
     // (CM1: Terrarium refused — the tile a stand-in —, its gaps the stand-in's heights: the national ones not lost for them)
@@ -1134,6 +1126,113 @@ export class EarthTiles {
   dropped = { loads: 0, refines: 0, ortho: 0, kept: 0 };
   /** the tiles drawn from the global data while their national source's heights come (refine) */
   private refining = new Map<string, { ctl: AbortController; L: Level; x: number; y: number; surface: boolean }>();
+  /** (26 Nov 2026) the streets laid on the national relief's tiles z ≥ 15 (street-level.ts, in the decode worker) in
+   *  street-level-book.ts's order — a tile come before its street cells levelled again from its survey when they come: the same
+   *  ground whatever arrives first, the one ground of the raster and the contact. Off: the tiles fetched after kept as surveyed. */
+  streetLevelOn = true;
+  private streetRead: StreetCellRead | null = null;
+  /** the levelling's time in the decode worker [ms]: total, longest tile, tiles; tiles levelled again at a cell's arrival and drawn */
+  readonly streetLevelCpu = { ms: 0, max: 0, n: 0, redrawn: 0 };
+  private streetBook = new StreetLevelBook<{ street: ArrayBuffer; buildings: ArrayBuffer | null }>(
+    (cx, cy) => (this.streetRead ? this.streetRead(cx, cy) : Promise.resolve(null)),
+    async (h, z, x, y, cells) => {
+      const r = await decodeOff({
+        op: "level",
+        heights: h.slice(),
+        streets: cells.map((c) => c.street),
+        buildings: cells.flatMap((c) => (c.buildings ? [c.buildings] : [])),
+        z,
+        x,
+        y,
+      });
+      if (r.heights?.length === h.length) h.set(r.heights);
+      const c = this.streetLevelCpu;
+      const ms = r.ms ?? 0;
+      c.ms += ms;
+      c.n++;
+      if (ms > c.max) c.max = ms;
+      return r.moved ?? 0;
+    },
+  );
+  /** (a diagnosis) the tiles levelled lately — key → pixels moved at its arrival, or "again" (levelled again at a cell's): the last 512 */
+  private streetLevelledKeys = new Map<string, number | "again">();
+  private noteLevelled(key: string, v: number | "again") {
+    this.streetLevelledKeys.delete(key);
+    this.streetLevelledKeys.set(key, v);
+    if (this.streetLevelledKeys.size > 512) this.streetLevelledKeys.delete(this.streetLevelledKeys.keys().next().value!);
+  }
+  /** (a diagnosis — renderer.streetLevelProbe) at a place: the finest drawn level holding it, its tile, whether that tile's published
+   *  heights are its own, and what the streets' levelling did to it (pixels moved, "again", null: nothing noted) */
+  streetLevelAt(lat: number, lon: number) {
+    for (let z = Z1; z >= STREET_LEVEL_Z; z--) {
+      const L = this.levels[z - Z0];
+      if (!L?.valid) continue;
+      const fx = ((lon + 180) / 360) * L.n;
+      const s = Math.sin((lat * Math.PI) / 180);
+      const fy = (0.5 - Math.log((1 + s) / (1 - s)) / (4 * Math.PI)) * L.n;
+      const x = Math.floor(fx),
+        y = Math.floor(fy);
+      if (!inside(L.valid, x, y)) continue;
+      const key = this.keyOf(L, x, y);
+      const slot = this.slotOf(L, x, y);
+      // (the published height at its nearest texel — rows from the north)
+      const d = L.pubData[slot];
+      const k = Math.min(TILE - 1, Math.floor((fy - y) * TILE)) * TILE + Math.min(TILE - 1, Math.floor((fx - x) * TILE));
+      return {
+        z,
+        key,
+        h: d ? +d[k]!.toFixed(3) : null,
+        published: L.pubKey[slot] === key,
+        levelled: this.streetLevelledKeys.get(key) ?? null,
+        refining: this.refining.has(key),
+      };
+    }
+    return null;
+  }
+  /** the street cells' reader (the page's caches: renderer.ts); none, no levelling */
+  setStreetCells(read: StreetCellRead | null) {
+    this.streetRead = read;
+  }
+  /** the levelling's figures: tiles levelled, pixels moved, tiles levelled again at a cell's arrival, surveys dropped and kept */
+  streetLevelStats() {
+    return { ...this.streetBook.stats, kept: this.streetBook.kept, cpu: { ...this.streetLevelCpu } };
+  }
+  /**
+   * (26 Nov 2026) Street cells arrived (z 15 — the streets' pool's, renderer.ts): the relief tiles levelled while one of them was
+   * missing levelled again from their survey (street-level-book.ts), their inland water flattened again, kept and drawn — the same
+   * ground as if the cells had come first.
+   */
+  async streetCellsArrived(cells: readonly [number, number][]) {
+    if (!this.streetLevelOn || !this.streetRead || !cells.length) return;
+    const gen = this.gen;
+    const out = await this.streetBook.arrived(cells).catch(() => []);
+    for (const t of out) {
+      if (gen !== this.gen) return;
+      const L = this.levels[t.z - Z0];
+      if (!L) continue;
+      let h = t.h;
+      if (t.z >= FLATTEN_Z0) h = await flattenInland(t.z, t.x, t.y, h, AbortSignal.timeout(NATIONAL_TIMEOUT_MS));
+      if (gen !== this.gen) return;
+      const ux = [t.x, t.x - L.n, t.x + L.n].find((u) => inside(L.want, u, t.y)) ?? t.x;
+      const s = this.slotOf(L, ux, t.y);
+      const drawn = L.key[s] === t.key;
+      const cur = drawn ? L.data[s] : this.cache.get(t.key)?.h;
+      if (!cur) continue;
+      // (its overground, if any, kept after its ground)
+      let full = h;
+      if (cur.length > TILE * TILE) {
+        full = cur.slice();
+        full.set(h, 0);
+      }
+      if (drawn) {
+        // (the packed path — heights and imagery in one texture — without the tile's imagery held: left as it is)
+        if (!this.filtered && !L.col[s]) continue;
+        this.put(t.z, ux, t.y, full, L.col[s] ?? null);
+      } else this.keep(t.key, full, null);
+      this.streetLevelCpu.redrawn++;
+      this.noteLevelled(t.key, "again");
+    }
+  }
   private nationalActive = 0;
   /** the national heights waiting for a slot: their tile, and their pass (0 the ground, 1 the far surface) — the nearest to the
    *  loads' centre now served first (the network audit, 6 Nov 2026: their distance had been fixed when they queued, the craft
@@ -1984,6 +2083,7 @@ export class EarthTiles {
   dispose() {
     this.disposed = true;
     this.gen++;
+    this.streetBook.clear();
     if (this.reqTimer !== null) clearTimeout(this.reqTimer);
     this.reqTimer = null;
     this.clear();
@@ -2040,6 +2140,7 @@ export class EarthTiles {
       this.reliefWas = this.reliefOn;
       this.hlodWas = this.hlodOn;
       this.gen++;
+      this.streetBook.clear();
       for (const c of this.inflight.values()) c.abort();
       this.inflight.clear();
       this.loadAt.clear();
@@ -2453,6 +2554,13 @@ export class EarthTiles {
         const s = this.slotOf(L, x, y);
         const fill = this.standInKeys.has(key) && L.key[s] === key ? (L.data[s] ?? undefined) : undefined;
         h = await nationalHeights(src, L.z, ((x % L.n) + L.n) % L.n, y, ctl.signal, !!ground, ground, coarse, fill);
+        // (26 Nov 2026 — the streets laid on it: street-level-book.ts, the levelling in the decode worker; its survey kept while a street
+        // cell about it is missing — levelled again when it comes, streetCellsArrived)
+        if (!ground && L.z >= STREET_LEVEL_Z && this.streetLevelOn && this.streetRead)
+          this.noteLevelled(
+            key,
+            await this.streetBook.level(key, L.z, ((x % L.n) + L.n) % L.n, y, h.subarray(0, TILE * TILE)).catch(() => 0),
+          );
         // (25 Nov 2026 — water-flatten.ts: the ground under the inland water made level here, once, for every reader of the relief)
         if (!ground && L.z >= FLATTEN_Z0) h = await flattenInland(L.z, ((x % L.n) + L.n) % L.n, y, h, ctl.signal);
       } finally {

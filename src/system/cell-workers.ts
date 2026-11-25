@@ -1,7 +1,7 @@
 // PLAN-J8 J8-3 — the building cells' pool in the page (cell-pool.ts): its executor a bounded set of workers (cell-worker.js, each one
 // cell at a time), its store the prepared cache (Cache Storage, CELL_CACHE). The workers' count: two, three on a machine with eight
 // cores or more — the scenery's worker, the CPU worker and the page's own thread keep theirs.
-import { CellPool, type CellExecutor, type CellStore, CELL_CACHE, cellCacheUrl } from "./cell-pool";
+import { CellPool, type CellExecutor, type CellPrepared, type CellStore, CELL_CACHE, cellCacheUrl } from "./cell-pool";
 import { readHeader } from "./building-cells";
 import { geoidMap } from "./geoid-grid";
 import { FOREST_CACHE, forestCacheUrl } from "./forest-cells";
@@ -141,9 +141,23 @@ export const streetStore: CellStore = {
 let streets: CellPool | null = null;
 /** the streets' pool if it was made (null: never asked — flightReady reads it without making its workers) */
 export const streetPoolMade = () => streets;
+/** (26 Nov 2026) who hears the street cells handed — the relief's levelling (renderer.ts → EarthTiles.streetCellsArrived) —, the
+ *  pool made or not yet: held here, listening once it is */
+const streetHearers = new Set<(c: CellPrepared) => void>();
+export function onStreetCell(fn: (c: CellPrepared) => void): () => void {
+  streetHearers.add(fn);
+  const off = streets?.listen(fn);
+  return () => {
+    streetHearers.delete(fn);
+    off?.();
+  };
+}
 export function streetPool(): CellPool {
-  if (!streets) void sweepStreetCaches();
-  streets ??= new CellPool(new CellWorkers(2, "cell-worker.js", "street"), streetStore);
+  if (!streets) {
+    void sweepStreetCaches();
+    streets = new CellPool(new CellWorkers(2, "cell-worker.js", "street"), streetStore);
+    for (const fn of streetHearers) streets.listen(fn);
+  }
   return streets;
 }
 

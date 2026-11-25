@@ -367,6 +367,16 @@ fn project(p0: vec3f) -> vec4f {
   return vec4f(xy, NEAR, p.z);
 }
 
+// (26 Nov 2026 — PROBLEMES « mont Faron »: the canopy and the flames seen through a near crown) The scene's occlusion distance [m]
+// along a camera-frame point or direction — the traced or rastered image's (post.wgsl occlusion): what hides the craft's hull (fs), its
+// glass (fsJetGlass) and ends its flames' march (plumeFs). None given (S.img.w 0): infinitely far.
+fn sceneDistAt(p: vec3f) -> f32 {
+  if (S.img.w <= 0.5) { return 1e30; }
+  let px = vec2f((p.x / (p.z * S.proj.x) + 1.0) * 0.5, (1.0 - p.y / (p.z * S.proj.y)) * 0.5) * S.img.xy;
+  let q = vec2u(clamp(px, vec2f(0.0), S.img.xy - 1.0));
+  return sceneDepth[q.y * u32(S.img.x) + q.x] * S.img.z;
+}
+
 /** The flight stick's turn: forward (about the ship's x), to the right (about z), twisted (about y). */
 fn stickRot(a: vec3f) -> mat3x3f {
   let cx = cos(a.x); let sx = sin(a.x);
@@ -1600,8 +1610,10 @@ fn plumeFs(in: POut) -> @location(0) vec4f {
   let t1 = (hi - o) * inv;
   let tn = max(max(min(t0.x, t1.x), min(t0.y, t1.y)), max(min(t0.z, t1.z), 0.0));
   let tf = min(min(max(t0.x, t1.x), max(t0.y, t1.y)), max(t0.z, t1.z));
-  if (tf <= tn) { discard; }
-  let tEnd = tf;
+  // (the march ends where the scene holds something nearer — a crown between the eye and the flame —: the camera-frame ray's)
+  let tScene = sceneDistAt(R * rw);
+  if (tf <= tn || tScene <= tn) { discard; }
+  let tEnd = min(tf, tScene);
   let N = 12;
   let dt = (tEnd - tn) / f32(N);
   // (interleaved gradient noise: an even, fine dither of the steps — Jimenez 2014)
@@ -2639,6 +2651,9 @@ fn fsJetGlass(in: VOut, @builtin(front_facing) front: bool) -> @location(0) vec4
   // (the pixel's footprint on the glass [m] — the canopy's scratches —, taken here: derivatives before any branch)
   let gd = GlassD(dpdx(in.q), dpdy(in.q), dpdx(in.p), dpdy(in.p));
   let qf = max(length(gd.qx), length(gd.qy));
+  // (hidden where the scene holds something nearer, as its hull is — fs: the instance's « far » bit, every craft but the one the eye
+  // is in)
+  if ((u32(inst[in.ii].flags.z + 0.5) & 1u) == 1u && sceneDistAt(in.p) < length(in.p) * 0.999) { discard; }
   // (the A320's deck: the control under the pointer lit over — a soft cyan added, its edges brighter)
   if (GLASS_MODE == 3u) {
     let gv = normalize(-in.p);
