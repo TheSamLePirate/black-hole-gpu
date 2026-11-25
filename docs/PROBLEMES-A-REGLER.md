@@ -61,11 +61,19 @@ connue ou supposée, la piste. Une entrée réglée est barrée avec le commit q
   `parking-dessus-leviers-planche.jpg`) : elles restent sans les ombres du trafic (`ship.trafficCast` false), sans l'ombre des appareils
   sur le sol (`liteSkip` 2097152) et sans les appareils (`debugSkipShip`) ; elles **disparaissent sans l'imagerie** (`liteSkip` 128) — ce
   sont les avions, passerelles et leurs ombres **photographiés** dans l'orthophoto NAIP de l'aire de trafic, plaqués à plat et vus rasants
-  (étirés) à sa résolution (floue). Nos ombres (seconde moitié de la carte) sont nettes, attachées aux roues, du bon côté. **Piste** (hors
+  (étirés) à sa résolution (floue). Nos ombres (seconde moitié de la carte) sont nettes, attachées aux roues, du bon côté. ~~**Piste** (hors
   de ce lot : le matériau des surfaces, `scenerySurface`, domaine de l'agent des routes) : sur les pavés d'aérodrome (polygones `aeroway`
   d'OpenMapTiles, genre 5, aujourd'hui de la même couleur que les places piétonnes), garder le matériau de pavage et seulement ~25 % de
   la photo près — comme la chaussée relevée (`SC_SURVEY_ROAD`, `photoSurface`) —, une couleur ou un drapeau propre aux aires d'aérodrome
-  pour les distinguer des places (dont la photo est le détail).
+  pour les distinguer des places (dont la photo est le détail).~~
+  **Réglé le 25 nov. 2026 (`093fdaa3`)** : les aires de trafic (`aeroway` classe `apron`) ont leur couleur, un béton
+  (`scenery-geometry.ts APRON_COLOUR`, `pavedAreaColour`) ; le matériau les reconnaît (`SC_APRON`) et n'y garde que 25 % de la photo près,
+  la photo entière revenue de 1,8 à 2,5 km et de 1,4 à 2 m par pixel (pas d'anneau). Places piétonnes, pistes, voies de circulation et
+  hélistations gardent la couleur et la photo d'avant (test `tests/apron-paving.test.ts` ; non revu à l'œil). Vu sur kerr-mini (A/B A B B A
+  contre `280a4600`, `traffic-cost` parked et parked-above, `docs/progress/perf-trafic-2026-11-25/parking-aire-{avant,apres}.jpg`,
+  `parking-dessus-aire-{avant,apres}.jpg`) : les avions, passerelles et ombres photographiés près des portes partis, le béton porte
+  l'ombre du terminal. Restent : les passerelles photographiées encore devinées à 25 % le long du terminal ; une tache étirée au milieu
+  de la vue basse et une au premier plan, hors du polygone de l'aire (voie de circulation ou rien : non identifié).
 
 ## La ligne sombre pointillée et l'eau verte de la baie de San Francisco en courte finale : le réel, pas un défaut (relevé le 25 novembre 2026, `finale-apres.jpg`, diagnostiqué le même jour)
 

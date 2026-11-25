@@ -20,6 +20,26 @@ Windows/D3D12. Les numéros de ligne sont ceux de `da4e75bd`.
 
 ---
 
+### Aires de trafic d'aérodrome : leur béton, un quart de la photo près (25 novembre 2026, branche de l'agent, `093fdaa3`) — mesuré
+
+- **Worker du décor → `scenerySurface` → `liteMaterial` (`trace.wgsl`)** : un polygone pavé (genre 5) `aeroway` de classe `apron` reçoit
+  la couleur `APRON_COLOUR` (béton, `scenery-geometry.ts pavedAreaColour` ; les autres pavés `PAVED_COLOUR`, inchangés). Le parcours du
+  décor marque `SC_APRON` quand ce polygone gagne le point (couleur à 10⁻³ près) ; la part de la photo y est `img.o · mix(0,25, 1,
+  max(smoothstep(1 800, 2 500 m, tM), smoothstep(1,4, 2 m, pied)))` — comme la chaussée relevée (`SC_SURVEY_ROAD`), sans anneau. Les
+  avions, passerelles et ombres que l'orthophoto NAIP tient sur l'aire ne sont plus plaqués à plat (SFO, portes G). Aucune passe, cible
+  ni liaison nouvelle ; `shadeLite` (matériau) seul touché.
+- **Mesuré** (kerr-mini, sans fenêtre, 25 nov. 2026 vers 21 h UTC, A B B A, A = `280a4600`, B = `093fdaa3`, `traffic-cost`
+  `TC_MOMENTS=parked,parked-above`, échelle 0,75, `lastGpuMs` sur 90 images, profileur sur 24 images ;
+  `remote-results/20261125-205012-apron-ab2`) :
+
+| Moment | A p50 | B p50 | Δ p50 | A p95 | B p95 | A/A | B/B | `earth lite (raster)` A → B |
+|---|---:|---:|---:|---:|---:|---:|---:|---|
+| parked | 49,8 · 50,7 | 50,1 · 50,6 | +0,1 | 77,5 · 58,7 | 72,2 · 79,1 | 0,9 | 0,5 | 14,94 · 14,99 → 15,12 · 14,98 |
+| parked-above | 53,6 · 49,5 | 53,2 · 54,1 | +2,1 | 84,9 · 81,6 | 81,4 · 80,6 | 4,1 | 0,9 | 17,80 · 18,01 → 18,02 · 18,15 |
+
+  Aucun écart au-delà de l'A/A (parked-above : A/A 4,1 ms). La passe du matériau +0,1 à +0,2 ms au profileur, dans son A/A (0,2).
+  Captures `docs/progress/perf-trafic-2026-11-25/parking-aire-*.jpg`, `parking-dessus-aire-*.jpg`.
+
 ### Couronnes manquées sans sol derrière : remplies par la passe de finition (25 novembre 2026, branche de l'agent, `280a4600`) — mesuré
 
 - **`shadeLite` → `shadeLiteFinish` (`trace.wgsl`)** : le proxy d'une couronne devant rien du raster (indice 0) dont le rayon manque l'arbre
@@ -1465,7 +1485,7 @@ Paris jusqu'à `earthSettled` » chronométré par étape.
 
 <!-- pipeline-inventory:begin (bun scripts/pipeline-inventory.ts --write) -->
 
-_Généré le 2026-11-25T19:08:05Z sur `c5180196` (arbre de travail). Ne pas éditer à la main : relancer l'outil._
+_Généré le 2026-11-25T20:04:32Z sur `093fdaa3` (arbre de travail). Ne pas éditer à la main : relancer l'outil._
 
 **130 sites de création de pipeline** (86 rendu, 44 calcul, dont 66 asynchrones) et 43 `createShaderModule` dans 32 fichiers ; **44 programmes WGSL** (16 fichiers .wgsl, 28 chaînes dans le TypeScript) ; **66 libellés de passes** du profileur GPU (+ 11 sites à libellé dynamique).
 
@@ -1647,7 +1667,7 @@ _Généré le 2026-11-25T19:08:05Z sur `c5180196` (arbre de travail). Ne pas éd
 
 | source | lignes | points d'entrée |
 |---|---:|---|
-| `src/shaders/trace.wgsl` | 18517 | 18 entrées : cloudLightVolume, aerial, lut, main, shade, shadeMark, shadeLiteFinish, shadeWaterFinish, shadeLiteLight, shadeLite, skyFill, shadeWater, clouds, skyAmbient, cloudShadow, env, probe, shadeStars |
+| `src/shaders/trace.wgsl` | 18588 | 18 entrées : cloudLightVolume, aerial, lut, main, shade, shadeMark, shadeLiteFinish, shadeWaterFinish, shadeLiteLight, shadeLite, skyFill, shadeWater, clouds, skyAmbient, cloudShadow, env, probe, shadeStars |
 | `src/shaders/ship.wgsl` | 2838 | 34 entrées : envCopy, envDown, envGGX, envSH, ctlVs, depthVs, vs, mirrorVs, shadowVs, fs, hullDepthVs, hullDepthFs, ownMaskFs, plumeVs, plumeFs, glowVs, glowFs, distVs, distFs, sheathVs, sheathFs, trailVs, trailFs, lampVs, lampFs, compVs, compFs, fsCabin, fsCabinGlass, fsJetGlass, motionVs, motionFs, composeColor, composeSurface |
 | `src/shaders/post.wgsl` | 1396 | 18 entrées : gatherH, atrous, beamH, beamV, polgrid, resolve, down, downShip, dof, flareMeter, up, meter, stars, motionBlur, temporal, occlusion, cloudTemporal, taau |
 | `src/system/scenery-raster.ts:208` | 1191 | 31 entrées : cull, cullBoxes, clampBoxes, shadowVs, shadowFs, proxyVs, proxyFs, boxVs, boxFs, bridgeMarkFs, boxMarkVs, boxShadowVs, meshShadowVs, meshVs, meshFs, boxSolidVs, benchCull, benchQuadVs, benchVs, benchShadowVs, farCull, farVs, farQuadVs, farFs, farLampCull, farLampVs, farCarCull, farCarVs, nearCellVs, nearCellShadowVs, farShadowVs |
@@ -1828,8 +1848,8 @@ Leur coût n'apparaît que dans l'intervalle de complétion de la frame (ou d'un
 
 | profil | noyaux (lignes inlinées, en milliers) | total |
 |---|---|---:|
-| `earth-raster` | shade 27.4 · shadeMark 0.3 · shadeLite 8.1 · shadeLiteFinish 0.8 · shadeLiteLight 2.0 · shadeWater 5.7 · shadeWaterOpen 4.9 · shadeWaterFinish 1.2 · shadeStars 0.3 · discs 29.9 · clouds 3.8 · skyFill 0.7 · main 42.5 · env 59.1 · aerial 0.7 | 188k |
-| `earth-raster-wx` | shade 32.5 · shadeMark 0.3 · shadeLite 8.1 · shadeLiteFinish 0.8 · shadeLiteLight 2.0 · shadeWater 5.7 · shadeWaterOpen 4.9 · shadeWaterFinish 1.2 · shadeStars 0.3 · discs 29.9 · clouds 3.8 · skyFill 0.7 · main 45.5 · env 59.1 · aerial 0.7 | 196k |
+| `earth-raster` | shade 27.4 · shadeMark 0.3 · shadeLite 8.1 · shadeLiteFinish 0.9 · shadeLiteLight 2.0 · shadeWater 5.7 · shadeWaterOpen 4.9 · shadeWaterFinish 1.2 · shadeStars 0.3 · discs 29.9 · clouds 3.8 · skyFill 0.7 · main 42.5 · env 59.1 · aerial 0.7 | 188k |
+| `earth-raster-wx` | shade 32.5 · shadeMark 0.3 · shadeLite 8.1 · shadeLiteFinish 0.9 · shadeLiteLight 2.0 · shadeWater 5.7 · shadeWaterOpen 4.9 · shadeWaterFinish 1.2 · shadeStars 0.3 · discs 29.9 · clouds 3.8 · skyFill 0.7 · main 45.5 · env 59.1 · aerial 0.7 | 196k |
 | `earth-trace` | main 66.4 · env 63.0 · aerial 0.6 | 130k |
 | `earth-photo` | main 68.2 | 68k |
 | `game-space` | main 54.3 · env 50.5 · aerial 0.6 | 105k |
