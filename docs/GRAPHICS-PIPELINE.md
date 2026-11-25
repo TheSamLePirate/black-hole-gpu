@@ -199,6 +199,16 @@ l'e2e, aucune requête IGN). GPU p50 = `renderer.lastGpuMs` sur 90 images ; le b
   0,5 → 0,2 ms — **dans le bruit d'une seule passe**, aucun gain revendiqué ; à 76 m du chalutier (`traffic-free-camera`) :
   −0,1 puis +0,8 ms selon les passes (vue en direct, bruitée). Coût GPU des autres changements **non mesuré**.
 
+### PONT-ROUTES — revue F : la bande claire de Cheviré, le plafond des reflets de la Seine (26 novembre 2026, branche de l'agent)
+
+- **Worker du décor (hors image)** : une aire de pont d'OpenStreetMap (`bridgeAreas`, une dalle) n'est plus dessinée quand un tablier
+  déjà construit couvre une partie de son intérieur (`bridge-structures.ts areaUnderDeck` : centre, contour, 7 × 7 dans le contour).
+  Cheviré : la dalle d'environ 1 m à quelques mètres au-dessus de la Loire, sous le viaduc — la « bande claire » — retirée.
+- **Mesuré** (ce Mac M1 Max, 26 nov., profileur GPU allumé — surcoût et chevauchements d'Apple : ordres de grandeur), vue de Grenelle :
+  `sea surface` 10,33 ms (!), `earth lite (raster)` 5,77, `earth water (raster)` 2,46, `earth lite: light` 2,03, `trace` 1,37,
+  `earth water: finishing` 0,38 ms. Le `sea surface` sur la Seine est à examiner (hors de ce lot). Le reflet des bâtiments proches par le
+  repli tracé (option (a) de PROBLEMES) chiffré hors de portée sans index par cellule : non fait.
+
 ### PONT-ROUTES — revue E : le lit des rivières aplani (26 novembre 2026, branche de l'agent)
 
 **Code, tests unitaires ; e2e `bridges-notable` 7/7 et `bridges` 7/7 sur ce Mac (M1 Max ; kerr-mini injoignable)**.
