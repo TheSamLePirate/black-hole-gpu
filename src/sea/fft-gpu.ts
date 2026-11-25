@@ -30,6 +30,17 @@ export interface FoamFrame {
   drift: [number, number];
   decay: number;
 }
+/**
+ * The cascades the world foam reads this frame (seafft.wgsl foamWorld: their Jacobian summed, the coarsest first): those computed
+ * (`active`) whose mips an encode has already made (`mipped`) — the foam's pass runs before this frame's mips, and reads the frame
+ * before's. A cascade never mipped holds the texture's zeros there, a Jacobian of 0: summed, the surface folded everywhere, foam made
+ * over the whole of the 1 024 m map — the sea's first frames (25 Nov 2026, kerr-mini: Nice's approach to 04 half white under a line,
+ * the map's edge, held as long as the world stood still — `animate: false`, its foam never fading).
+ */
+export function foamCascades(active: number, mipped: number): number {
+  return Math.min(Math.max(Math.round(active), 1), C, Math.max(Math.round(mipped), 0));
+}
+
 /** the device's sampled textures a stage the tracer needs to take the sea's (the surface's 18 and one) */
 export const SEA_TEXTURE_LIMIT = 19;
 
@@ -73,6 +84,9 @@ export class SeaFft {
   private foamSampler: GPUSampler;
   /** the world foam's layer pair the next frame writes (0, 1: PLAN-MER-WEBGPU S4) — the tracer reads it after */
   foamParity = 0;
+  /** the cascades (the coarsest first) whose mips an encode has made at least once: the world foam reads their Jacobian there — the
+   *  mips made after it, the frame before's —, never a mip still at the texture's zeros (foamCascades) */
+  mipped = 0;
   /** whether a spectrum is there to animate */
   ready = false;
   /** what the spectrum holds: the height's and the slopes' variance over all cascades */
@@ -249,7 +263,7 @@ export class SeaFft {
         ...[0, 1, 2, 3, 4, 5, 6, 7].map((i) => foam?.offsets[i] ?? 0),
         ...(foam ? [foam.cam[0], foam.cam[1], foam.Jt, foam.sJ] : [0, 0, -9, 1]),
         ...(foam ? [foam.drift[0], foam.drift[1], foam.decay, this.foamParity] : [0, 0, 1, 0]),
-        Math.min(Math.max(Math.round(active), 1), C),
+        foamCascades(active, this.mipped),
         0,
         0,
         0,
@@ -288,6 +302,7 @@ export class SeaFft {
       p.dispatchWorkgroups(Math.ceil(w / 8), Math.ceil(w / 8), foam ? 3 * C + 4 : 3 * A);
     }
     if (foam) this.foamParity = 1 - this.foamParity;
+    this.mipped = Math.max(this.mipped, A);
     p.end();
   }
 

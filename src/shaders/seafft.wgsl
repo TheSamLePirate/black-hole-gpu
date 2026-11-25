@@ -32,7 +32,7 @@ struct FftParams {
   fx: vec4f,
   // the foam's drift [m/s] (along the wind, across), its decay [1/s], the layer written this frame (0, 1)
   fy: vec4f,
-  // the cascades computed, unused ×3
+  // the cascades the world foam reads — computed and already mipped (fft-gpu.ts foamCascades) —, unused ×3
   fz: vec4f,
 };
 

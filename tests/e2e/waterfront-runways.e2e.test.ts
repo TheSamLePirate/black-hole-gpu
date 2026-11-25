@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { mkdirSync } from "node:fs";
 import { App, E2E, stopServer } from "./lib/app";
+import { FOAM_BASE } from "../../src/sea/fft-gpu";
 import { showView } from "./lib/bridge-views";
 
 // (25 Nov 2026 — the runway's level after 9cf0849a, game/runway-grade.ts levelOver) Airports by the water: off a real runway's paved strip
@@ -9,8 +10,10 @@ import { showView } from "./lib/bridge-views";
 // less the geoid: over the sea) on each runway's axis before and past its ends (50 … 900 m) and beside it (40 … 300 m off its edge, at a
 // quarter, half and three quarters of it) and on the strip itself; an overview and an approach shot over the water. Run against an older
 // server (scripts/ab-e2e.ts, AB_SIDE) for the before/after: the strip at its level both sides, the water past it at the sea's 0 after.
+// And the world foam's two maps under the approach read back (25 Nov 2026: the 1 024 m map white on the sea's first frames, held — the
+// approach to 04 at Nice half white under a sharp line, sea/fft-gpu.ts foamCascades): under 30 % of their texels foamed.
 // Duration: ~2–3 min an airport (kerr-mini), its tiles cached.
-// Done when: each airport's samples printed and shot; its strip at its level (±0.5 m), its runways brought in.
+// Done when: each airport's samples printed and shot; its strip at its level (±0.5 m), its runways brought in; its world foam not white.
 const OUT = `${process.env.WF_OUT ?? "remote-results/waterfront-runways"}${process.env.AB_SIDE ? `-${process.env.AB_SIDE}${process.env.AB_RUN ?? ""}` : ""}`;
 const ONLY = process.env.WF_ONLY?.split(",");
 /** the field's centre; the landing end shot (its heading [°] ±25), the approach over the water */
@@ -71,6 +74,35 @@ const sampleJs = (centre: [number, number]) => `(() => {
     });
   }
   return out;
+})()`;
+
+/** the world foam's maps as the sea's FFT holds them (sea/fft-gpu.ts: layers FOAM_BASE + 2 · parity + level, rgba16float — the foam
+ *  lying, the foam made, the Jacobian): each map's mean foam lying and its share of texels over 0.5, the two parities' worst */
+interface FoamState {
+  Jt: number | null;
+  maps: Record<string, { lying: number; over05: number }>;
+}
+const foamJs = `(async () => {
+  const R = __bh.renderer, F = R.seaFft, d = R.device, N = 256, maps = {};
+  if (!F) return { Jt: null, maps };
+  const half = (h) => { const e = (h >> 10) & 31, m = h & 1023, v = e === 0 ? m * 2 ** -24 : e === 31 ? NaN : (1 + m / 1024) * 2 ** (e - 15); return h & 0x8000 ? -v : v; };
+  for (const [name, layers] of [["128 m", [${FOAM_BASE}, ${FOAM_BASE + 2}]], ["1024 m", [${FOAM_BASE + 1}, ${FOAM_BASE + 3}]]]) {
+    let worst = { lying: 0, over05: 0 };
+    for (const layer of layers) {
+      const buf = d.createBuffer({ size: N * 8 * N, usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ });
+      const enc = d.createCommandEncoder();
+      enc.copyTextureToBuffer({ texture: F.texture, origin: [0, 0, layer] }, { buffer: buf, bytesPerRow: N * 8, rowsPerImage: N }, [N, N, 1]);
+      d.queue.submit([enc.finish()]);
+      await buf.mapAsync(GPUMapMode.READ);
+      const u = new Uint16Array(buf.getMappedRange());
+      let sum = 0, hi = 0;
+      for (let i = 0; i < N * N; i++) { const v = half(u[4 * i]); sum += Number.isFinite(v) ? v : 1; if (!(v <= 0.5)) hi++; }
+      buf.unmap(); buf.destroy();
+      if (hi / (N * N) >= worst.over05) worst = { lying: +(sum / N / N).toFixed(3), over05: +(hi / N / N).toFixed(3) };
+    }
+    maps[name] = worst;
+  }
+  return { Jt: R.seaFoamFrame ? +R.seaFoamFrame.Jt.toFixed(3) : null, maps };
 })()`;
 
 const offset = (p: [number, number], brgDeg: number, m: number): [number, number] => {
@@ -136,6 +168,7 @@ describe.skipIf(!E2E)("waterfront runways: the water past and beside them stays 
         .filter((e) => turn(e.hdg) < 25)
         .sort((x, y) => y.r.len - x.r.len)[0];
       let shot: string | null = null;
+      let foam: FoamState | null = null;
       if (pick) {
         const thr = pick.thr as [number, number];
         const N = await app.js<number>(`__bh.sys.geoid(${thr[0]}, ${thr[1]})`);
@@ -150,6 +183,12 @@ describe.skipIf(!E2E)("waterfront runways: the water past and beside them stays 
         shot = `${OUT}/${f.key}-approach.png`;
         await app.shot(shot);
         console.log(`  ${f.key} approach ${pick.hdg.toFixed(0)}°: ready ${v.ready}, data ${v.dataOk}`);
+        // (25 Nov 2026 — the approach to 04 at Nice half white under a sharp line, PROBLEMES: the world foam's 1 024 m map made whole on
+        // the sea's first frames, read from mips not yet made — sea/fft-gpu.ts foamCascades — and held, the world standing still. The
+        // world foam's two maps read back: the share of their texels with foam lying over 0.5 — a storm's whitecaps a tenth or so; 0.70
+        // on the 1 024 m map before the fix)
+        foam = await app.js<FoamState>(foamJs);
+        console.log(`  ${f.key} world foam ${JSON.stringify(foam)}`);
       } else console.log(`  ${f.key}: no runway end within 25° of ${f.shotHdg}° — no approach shot`);
       results.push({ field: f.key, brought: brought !== null, runways: rws, shot });
       const strips = rws.map((r) => Math.max(...r.strip.map((h) => Math.abs(h - r.elev))));
@@ -160,6 +199,8 @@ describe.skipIf(!E2E)("waterfront runways: the water past and beside them stays 
         rws.length > 0 && strips.every((s) => s < 0.5),
       );
       expect(rws.length, `${f.key}: no runway brought in`).toBeGreaterThan(0);
+      if (foam)
+        for (const [m, l] of Object.entries(foam.maps)) expect(l.over05, `${f.key}: the world foam's ${m} map white`).toBeLessThan(0.3);
       for (const [i, r] of rws.entries()) expect(strips[i]!, `${f.key} rwy ${r.hdg}°: the strip off its level ${r.elev}`).toBeLessThan(0.5);
     }, 360_000);
 });
