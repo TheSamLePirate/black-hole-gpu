@@ -1154,6 +1154,35 @@ export class EarthTiles {
       return r.moved ?? 0;
     },
   );
+  /** (a diagnosis) the tiles levelled lately — key → pixels moved at its arrival, or "again" (levelled again at a cell's): the last 512 */
+  private streetLevelledKeys = new Map<string, number | "again">();
+  private noteLevelled(key: string, v: number | "again") {
+    this.streetLevelledKeys.delete(key);
+    this.streetLevelledKeys.set(key, v);
+    if (this.streetLevelledKeys.size > 512) this.streetLevelledKeys.delete(this.streetLevelledKeys.keys().next().value!);
+  }
+  /** (a diagnosis — renderer.streetLevelProbe) at a place: the finest drawn level holding it, its tile, whether that tile's published
+   *  heights are its own, and what the streets' levelling did to it (pixels moved, "again", null: nothing noted) */
+  streetLevelAt(lat: number, lon: number) {
+    for (let z = Z1; z >= STREET_LEVEL_Z; z--) {
+      const L = this.levels[z - Z0];
+      if (!L?.valid) continue;
+      const x = Math.floor(((lon + 180) / 360) * L.n);
+      const s = Math.sin((lat * Math.PI) / 180);
+      const y = Math.floor((0.5 - Math.log((1 + s) / (1 - s)) / (4 * Math.PI)) * L.n);
+      if (!inside(L.valid, x, y)) continue;
+      const key = this.keyOf(L, x, y);
+      const slot = this.slotOf(L, x, y);
+      return {
+        z,
+        key,
+        published: L.pubKey[slot] === key,
+        levelled: this.streetLevelledKeys.get(key) ?? null,
+        refining: this.refining.has(key),
+      };
+    }
+    return null;
+  }
   /** the street cells' reader (the page's caches: renderer.ts); none, no levelling */
   setStreetCells(read: StreetCellRead | null) {
     this.streetRead = read;
@@ -1195,6 +1224,7 @@ export class EarthTiles {
         this.put(t.z, ux, t.y, full, L.col[s] ?? null);
       } else this.keep(t.key, full, null);
       this.streetLevelCpu.redrawn++;
+      this.noteLevelled(t.key, "again");
     }
   }
   private nationalActive = 0;
@@ -2521,7 +2551,10 @@ export class EarthTiles {
         // (26 Nov 2026 — the streets laid on it: street-level-book.ts, the levelling in the decode worker; its survey kept while a street
         // cell about it is missing — levelled again when it comes, streetCellsArrived)
         if (!ground && L.z >= STREET_LEVEL_Z && this.streetLevelOn && this.streetRead)
-          await this.streetBook.level(key, L.z, ((x % L.n) + L.n) % L.n, y, h.subarray(0, TILE * TILE)).catch(() => 0);
+          this.noteLevelled(
+            key,
+            await this.streetBook.level(key, L.z, ((x % L.n) + L.n) % L.n, y, h.subarray(0, TILE * TILE)).catch(() => 0),
+          );
         // (25 Nov 2026 — water-flatten.ts: the ground under the inland water made level here, once, for every reader of the relief)
         if (!ground && L.z >= FLATTEN_Z0) h = await flattenInland(L.z, ((x % L.n) + L.n) % L.n, y, h, ctl.signal);
       } finally {

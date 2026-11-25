@@ -39,6 +39,14 @@ export class StreetLevelBook<T> {
   private surveys = new Map<string, { z: number; x: number; y: number; h: Float32Array }>();
   /** the tiles being levelled now; a cell arrived meanwhile marks them to be levelled again from their survey at once */
   private pending = new Map<string, { z: number; x: number; y: number; again: boolean }>();
+  /** each tile's latest levelling asked: an older one finishing after it is dropped (two cells come close together) */
+  private ticket = new Map<string, number>();
+  private take(key: string) {
+    const t = (this.ticket.get(key) ?? 0) + 1;
+    this.ticket.set(key, t);
+    if (this.ticket.size > 4 * this.max) this.ticket.delete(this.ticket.keys().next().value!);
+    return t;
+  }
   readonly stats = { tiles: 0, moved: 0, relevelled: 0, dropped: 0 };
   constructor(
     /** a cell's payload (its bytes), null while it is not there */
@@ -74,6 +82,7 @@ export class StreetLevelBook<T> {
   async level(key: string, z: number, x: number, y: number, h: Float32Array): Promise<number> {
     if (z < STREET_CELL_Z) return 0;
     const survey = h.slice();
+    this.take(key);
     const mark = { z, x, y, again: false };
     this.pending.set(key, mark);
     try {
@@ -106,13 +115,15 @@ export class StreetLevelBook<T> {
     const out: Relevelled[] = [];
     for (const [key, s] of [...this.surveys]) {
       if (this.pending.has(key) || !near(s.z, s.x, s.y)) continue;
+      const tk = this.take(key);
       const { cells: got, missing } = await this.gather(s.z, s.x, s.y);
       // (levelled meanwhile by a new arrival of its own: that one's survey holds)
       if (this.pending.has(key) || this.surveys.get(key) !== s) continue;
       if (!missing) this.surveys.delete(key);
       const h = s.h.slice();
       if (got.length) await this.run(h, s.z, s.x, s.y, got);
-      if (this.pending.has(key)) continue;
+      // (a newer levelling of it asked meanwhile — a cell come after this one's reading —: this one dropped)
+      if (this.pending.has(key) || this.ticket.get(key) !== tk) continue;
       this.stats.relevelled++;
       out.push({ key, z: s.z, x: s.x, y: s.y, h });
     }

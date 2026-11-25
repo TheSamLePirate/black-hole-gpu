@@ -5216,7 +5216,13 @@ export class Renderer {
     const res = await (await caches.open(STREET_CACHE)).match(streetCacheUrl(location.origin, c.x, c.y));
     if (!res) return { cell: [c.x, c.y], present: false, complete: false, roads: [] };
     const buf = await res.arrayBuffer();
-    return { cell: [c.x, c.y], present: true, complete: streetCellComplete(buf), roads: roadsAbout(buf, lat, lon, m) };
+    return {
+      cell: [c.x, c.y],
+      present: true,
+      complete: streetCellComplete(buf),
+      roads: roadsAbout(buf, lat, lon, m),
+      tile: this.earthTiles.streetLevelAt(lat, lon),
+    };
   }
   private streetCellUnlisten: (() => void) | null = null;
   /** a z 15 street cell's bytes cached (complete) and its building cell's — null while it is not there; the last 64 present kept */

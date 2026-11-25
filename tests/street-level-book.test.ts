@@ -138,6 +138,44 @@ test("a cell arriving while the tile is being levelled: levelled again at once b
   expect(Buffer.from(h.buffer).equals(Buffer.from(ref.buffer))).toBe(true);
 });
 
+test("two cells come close together: the older levelling, finishing last, dropped — the ground the one with both", async () => {
+  const s = emptyStore();
+  s.delete(`${cellA[0]}/${cellA[1]}`);
+  s.delete(`${cellB[0]}/${cellB[1]}`);
+  // (the first levelling again — with A alone — held in its work until the second, with A and B, is done)
+  let hold: Promise<void> | null = null;
+  let release: (() => void) | null = null;
+  let runs = 0;
+  const book = new StreetLevelBook<LevelRoad[]>(
+    async (cx, cy) => s.get(`${cx}/${cy}`) ?? null,
+    async (h, z, x, y, cells) => {
+      if (cells.flat().length) runs++;
+      if (!hold && cells.flat().length === 1) {
+        hold = new Promise<void>((go) => (release = go));
+        await hold;
+      }
+      return levelTile(h, SIDE, z, x, y, cells.flat());
+    },
+  );
+  expect(await book.level("t", Z, X, Y, survey())).toBe(0);
+  s.set(`${cellA[0]}/${cellA[1]}`, [ew]);
+  const first = book.arrived([cellA]);
+  // (its reading done, its work held — 200 turns at most)
+  for (let k = 0; k < 200 && !hold; k++) await Promise.resolve();
+  expect(hold).not.toBeNull();
+  s.set(`${cellB[0]}/${cellB[1]}`, [ns]);
+  const second = await book.arrived([cellB]);
+  release!();
+  const older = await first;
+  // (positive witness: the older one did level — held, then let go — but its result is not handed)
+  expect(runs).toBe(2);
+  expect(older.length).toBe(0);
+  expect(second.length).toBe(1);
+  const ref = survey();
+  levelTile(ref, SIDE, Z, X, Y, [ew, ns]);
+  expect(Buffer.from(second[0]!.h.buffer).equals(Buffer.from(ref.buffer))).toBe(true);
+});
+
 test("the surveys bounded: the oldest dropped", async () => {
   const s = new Map<string, LevelRoad[]>();
   const book = new StreetLevelBook<LevelRoad[]>(
