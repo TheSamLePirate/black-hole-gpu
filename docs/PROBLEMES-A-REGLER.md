@@ -222,7 +222,7 @@ connue ou supposée, la piste. Une entrée réglée est barrée avec le commit q
   (`stats().bridgesDropped`). A/B kerr-mini (`remote-results/20261124-221143-ponts-ab-bridges`) : Paris 1 024 → 1 135–1 157 ponts (tous les
   candidats), 3,2–3,8 Mo sur 20,1 Mo de part ; GPU p50 des vues de Paris dans le bruit (Grenelle 55,0 → 54,1 ms, Rivoli 59,6 → 60,2 ms).
 
-## L'eau sous Cheviré (et la Seine) : bande claire sous le tablier, taches sombres flottantes (relevé le 25 novembre 2026, kerr-mini)
+## L'eau sous Cheviré (et la Seine) : ~~bande claire sous le tablier, taches sombres flottantes~~ (relevé le 25 novembre 2026, kerr-mini) — Cheviré réglé le 26 (`3bd3cf7b`, `06a919ed`) ; reflets de la Seine ouverts
 
 - **Constat** : `chevire-apres-final.jpg` — une bande claire sur la Loire à l'aplomb du tablier, des taches sombres au milieu du fleuve ;
   sur la Seine (Grenelle, Alexandre III), des reflets de bâtiments détachés de leurs objets.
@@ -256,6 +256,25 @@ connue ou supposée, la piste. Une entrée réglée est barrée avec le commit q
   (`81a59623`, `bridge-structures.ts areaUnderDeck`, test unitaire avec témoin) — **la bande reste après** (`chevire-sans-dalle-apres.jpg`) :
   ce n'était pas elle (ou pas seulement). Prochaine piste : `surfaceAt` sur les lignes de la bande (y ≈ 0,59–0,60 à 1600 × 1000) avec
   le code du raster et la feuille, puis couper une à une les passes du raster (`sea surface`, les marques de ponts, les maillages).
+  **26 nov. — cause trouvée, réglée (`06a919ed`)** (ce Mac M1 Max, e2e de diagnostic non versionnés) : `surfaceAt` y dit « ground »
+  (code 4, l'eau intérieure ombrée par `shadeWater`) ; de près (250 m plus près, `chevire-bande-avant.jpg`) la bande est **de l'eau
+  blanche striée** : les **chutes** de l'eau intérieure (`shadeWater`, `fallOn` : de l'eau blanche où le relief lu à ±25 m est raide).
+  **Témoin** : les chutes coupées (modification temporaire du shader), la bande disparaît (`chevire-bande-chutes-coupees.jpg`). Le relief
+  nu y est plat (1,8–2,2 m à toutes les empreintes, `heightAt`), mais les chutes lisent à ±25 m un niveau z 12–13 — celui des
+  **silhouettes lointaines** (I6) : le sol **plus le sursol** du modèle de surface de l'IGN, où le tablier de Cheviré fait une arête de
+  45–49 m au-dessus du fleuve (`heightAt(q, 50, true)`, mesurée après la correction sur z 11, qu'elle ne touche pas ; sur z 12–13, non relevée avant, z 12 lu plat après). **Correction**,
+  là où le relief est préparé (un seul propriétaire) : (1) le sursol des niveaux z 12–13 effacé sur l'eau intérieure (`water-flatten.ts
+  clearOverWater`, le masque d'eau sans les ponts découpés, couverture ≥ 0,75 ; z 11 gardé : sa tuile OpenFreeMap n'est pas dans les
+  zones hors ligne) — un tablier, un bateau dans le modèle de surface faisaient un barrage de relief sous le pont ; les tabliers sont
+  ceux des ponts (scène proche, couche lointaine jusqu'à 12 km), comme sur la mer depuis T7 ; seul, il laisse deux taches blanches à
+  25–50 m des rives (`chevire-bande-sursol-seul.jpg` : le viaduc d'accès sur la terre, lu à ±25 m sur des texels de 26 m) ; (2) les
+  chutes cherchent l'eau au-dessus et au-dessous aussi loin qu'elles ont lu la pente (`2·ds`, 50 m, au lieu de 12 m). **Vérifié** (ce
+  Mac M1 Max, même vue, même heure) : **plus de bande** (`chevire-bande-apres.jpg`, et de loin `chevire-bande-apres-loin.jpg`) ; reste
+  sous le tablier une bande plus sombre, l'ombre du tablier sur l'eau. Tests `water-flatten.test.ts` (témoin positif : 360 texels du
+  tablier effacés ; négatifs : la terre, les rives à demi couvertes, une tuile sans eau). **Non vérifié** : une vraie cascade (aucun
+  e2e de chutes ; la portée de 50 m peut en effacer une étroite dont l'eau tourne avant), le coût (deux lectures de plus là seulement où
+  la pente est raide, non mesuré). La règle `81a59623` (les aires de ponts d'OSM sous un tablier) reste : juste, mais ce n'était pas la
+  bande.
   **Les reflets détachés sur la Seine — règle 1** : le reflet d'une façade vient du SSR (`seaSSR`, dans `earth water` / C19, C19d) ;
   là où l'image ne montre pas la façade (son pied caché par la rive), le repli tracé (`waterMirror` → `sceneryMirror`) ne connaît que le
   relief et les arbres, pas les bâtiments proches (cellules maillées, hors du BVH du décor). Plafond : la seule part « reflet » de l'eau ;
@@ -271,6 +290,24 @@ connue ou supposée, la piste. Une entrée réglée est barrée avec le commit q
   cellule, sur ~0,5 M pixels d'eau (estimé) — ~0,75 G tests une image, des dizaines de ms : **au-delà du plafond de plusieurs ordres**.
   (a) n'est faisable qu'avec un index par cellule (une grille de ses bâtiments, préparée avec la cellule) — un lot à part, à mesurer sur
   kerr-mini. Rien de lent n'est fusionné.
+  **26 nov. — l'index par cellule : conception et coût estimé (non construit, décision de lot)**.
+  *Données* (préparées avec la cellule, dans le worker du maillage — `cell-workers.ts meshPool`, hors image —, publiées dans la région
+  des cellules proches à côté de leurs enregistrements, `NEAR_REGION_BYTES`) : pour chaque bâtiment de la cellule sa boîte (x, y min/max
+  dans le repère de la cellule, pied et sommet au-dessus de l'ellipsoïde : deux vec4, 32 o) ; une grille fixe de cases de 25 m sur le
+  carré de la cellule (z 15 : ~800 m à Paris → 32 × 32 = 1 024 cases), chaque case un début et un compte dans une liste d'indices de
+  bâtiments (u32) — un bâtiment inscrit dans toutes les cases que couvre sa boîte. Ordre de grandeur (760 bâtiments par cellule à
+  Paris, ~3 cases chacun) : 1 024 × 8 o + ~2 300 × 4 o + 760 × 32 o ≈ **42 Ko par cellule, ~0,8 Mo pour les 19 cellules** de Grenelle
+  (une fraction des 26 Mo d'enregistrements déjà résidents).
+  *Marche* (dans le repli du reflet de l'eau calme — `waterMirror` → `sceneryMirror`, là seulement où l'SSR a manqué) : le rayon réfléchi
+  descendu dans le repère de chaque cellule qu'il traverse (1–2 sur 300 m), parcouru case par case (DDA, ≤ 12 cases de 25 m sur 300 m),
+  chaque case ses boîtes testées (test des plaques, ~20 opérations), la plus proche touchée ombrée de la façade de son bâtiment par
+  `rasterBuilding` (ses faces exactes : un seul bâtiment, ~10–30 arêtes), pas de triangle.
+  *Coût estimé* (rien de mesuré) : ~2–4 boîtes par case dans le centre de Paris → **~30–50 boîtes par pixel** contre ~1 500 sans index ;
+  sur ~0,5 M pixels d'eau (estimé) dont la moitié ombrée par image (l'eau à demi-rythme, J5-5) et seulement ceux où l'SSR manque
+  (estimé 10–30 %) : **~1–4 M tests de boîte par image** — de l'ordre de **0,2–1 ms** sur M1 Max (estimé ; les lectures dispersées
+  plus que le calcul), sous le plafond de ~2,8 ms. À mesurer avant toute fusion : A/B sur kerr-mini à Grenelle et Alexandre III (eau
+  du raster, p50/p95), témoin positif (un bâtiment au bord de l'eau, son reflet entier là où l'SSR le coupait), A/A.
+  *Limites* : les bâtiments des cellules proches seulement (~2 km) ; au-delà, l'SSR et la sonde ; les arbres restent ceux du BVH du décor.
   **Reste aussi** : les reflets de bâtiments détachés sur la Seine — l'SSR ne trouve une
   façade que là où l'image la montre (son pied caché par la rive : la moitié haute du reflet manque) ; le repli tracé (`sceneryMirror`) ne
   connaît que les arbres, et les bâtiments proches (cellules maillées) ne sont pas dans le BVH du décor : non réglé.

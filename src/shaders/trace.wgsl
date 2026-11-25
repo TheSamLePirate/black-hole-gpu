@@ -17643,8 +17643,12 @@ fn shadeWater(@builtin(workgroup_id) wid: vec3u, @builtin(local_invocation_id) l
     let dL = normalize((downW * toF).xy + vec2f(1e-6, 0.0));
     // (a fall has water above it and below it; a steep bank, land on its upper side — the river's outline over its banks, the
     // relief at 30 m softening them, made their slopes white: the water looked for a few metres up and down the slope)
+    // (26 Nov 2026 — as far as the slope was read from: ±ds on a level whose texel is as wide — 26 m at ±25 m —, the land's relief
+    // reaches 2·ds into the water. At 12 m, Cheviré's approach viaduct on the banks — the far levels' overground, its 45 m — still made
+    // white water 25–50 m out from each bank under the deck; its part over the river is cleared where the relief is prepared,
+    // water-flatten.ts clearOverWater)
     if (steep > 0.0) {
-      let reach = max(12.0, 3.0 * footSea);
+      let reach = max(2.0 * ds, 3.0 * footSea);
       let above = sceneryWaterAt(vec3f(pL.xy - dL * reach, pL.z), footSea, tM).x;
       let below = sceneryWaterAt(vec3f(pL.xy + dL * reach, pL.z), footSea, tM).x;
       steep *= smoothstep(0.3, 0.8, min(above, below));

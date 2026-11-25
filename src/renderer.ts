@@ -5956,6 +5956,10 @@ export class Renderer {
    */
   private seaFftParams(frame: boolean, time: number, tSec: number, s: Settings, pixelAngle = 1e-3): Float32Array {
     const out = new Float32Array(SEAFFT_VEC4S * 4);
+    // (the frame's own, whatever it holds — the waves off below included: kept only at the end, an early return left the last
+    // waves' params to the sea's surface — encodeSeaSurface —, drawn over Paris from the boot's sea for the whole session, 26 Nov
+    // 2026: `sea surface` at Grenelle, the FFT off, seaSeen 0)
+    if (frame) this.seaFftLast = out;
     const H = this.seaHere;
     if (!this.seaFft || !s.seaFft || !H || H.weight <= 0) return out;
     // (the raster drawing the water and no sea of it for a while — over Paris, 150 km inland —: the waves not computed, ~2 ms
@@ -6088,7 +6092,6 @@ export class Renderer {
       };
     }
     out.set([active, offUC, probeNear, this.seaFoamWorldOn ? this.seaFft.foamParity : -1], 24);
-    if (frame) this.seaFftLast = out;
     // (the foam each cascade makes — sea/fft-gpu.ts: where its own Jacobian falls under the level of Monahan's cover)
     this.seaFoamJ = st.slopeC.map((v) => 1 + this.seaLambda * Math.sqrt(v) * normalQuantile(WA));
     return out;
