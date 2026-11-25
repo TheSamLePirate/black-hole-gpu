@@ -37,3 +37,11 @@ test("a thin part's edge keeps its rebuilt normal: the neighbour off the surface
   expect(rn).toContain("if ((tx <= 0.0 || abs(tx - tM) > 0.08 * tM) && px.x - 1.0 >= 0.0) {\n    sx = -sx;");
   expect(rn).toContain("if ((ty <= 0.0 || abs(ty - tM) > 0.08 * tM) && px.y - 1.0 >= 0.0) {\n    sy = -sy;");
 });
+
+test("the water's mirror from the image: its hit on the surface found, not 8 % of the depth behind it (the floating reflections)", () => {
+  const ssr = wgsl.slice(wgsl.indexOf("fn seaSSR(D: vec3f, r: vec3f) -> vec4f {"), wgsl.indexOf("// The world mirrored in calm water"));
+  expect(ssr).toContain("let dh = terrainRasterDepth(sh.xy);");
+  expect(ssr).toContain("if (dh <= 0.0 || sh.z - dh > max(SSR_HIT_SHARE * dh, SSR_HIT_M)) { return vec4f(0.0); }");
+  expect(ssr).toContain("for (var j = 0; j < 6; j++) {");
+  expect(wgsl).toContain("const SSR_HIT_SHARE = 0.01;");
+});

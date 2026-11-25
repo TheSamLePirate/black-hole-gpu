@@ -9970,6 +9970,9 @@ fn seaSkySSR(r: vec3f) -> vec4f {
   return vec4f(c.rgb / c.a, smoothstep(0.0, 0.06, min(min(uv.x, 1.0 - uv.x), min(uv.y, 1.0 - uv.y))));
 }
 
+// (25 Nov 2026) a mirrored ray's hit on the image: within this share of the depth there, or these metres, behind the surface it found
+const SSR_HIT_SHARE = 0.01;
+const SSR_HIT_M = 2.0;
 fn seaSSR(D: vec3f, r: vec3f) -> vec4f {
   let d0 = length(D);
   let s0 = 1.0 + 0.004 * d0;
@@ -9985,13 +9988,20 @@ fn seaSSR(D: vec3f, r: vec3f) -> vec4f {
       if (sc.z - dz > max(0.08 * dz, 15.0)) { return vec4f(0.0); }
       var lo = sPrev;
       var hi = s;
-      for (var j = 0; j < 4; j++) {
+      for (var j = 0; j < 6; j++) {
         let m = 0.5 * (lo + hi);
         let sm = seaScreen(D + r * m);
         let dm = terrainRasterDepth(sm.xy);
         if (dm > 0.0 && sm.z > dm) { hi = m; } else { lo = m; }
       }
       let sh = seaScreen(D + r * hi);
+      // (25 Nov 2026 — the Loire under Cheviré, the Seine at Grenelle: a light band under the deck, dark pieces mid-river, buildings'
+      // and pylons' reflections floating away from them — the ray accepted 8 % of the depth behind a surface (40 m at 500 m) after a
+      // coarse step: it had passed behind the deck, a tree, a façade, and took their colour where nothing stands. The crossing
+      // bisected, the hit must lie on the surface there — within its pixel's depth spread and a few metres — or the ray went behind
+      // it: no reflection from the image (the relief's own and the sky's then))
+      let dh = terrainRasterDepth(sh.xy);
+      if (dh <= 0.0 || sh.z - dh > max(SSR_HIT_SHARE * dh, SSR_HIT_M)) { return vec4f(0.0); }
       var px = vec2u(clamp(sh.xy, vec2f(0.0), P.res.xy - 1.0));
       // (a pixel this frame's shading writes — other threads of this very dispatch — read from its neighbour across, which
       // no rate's pattern shades in the same frame: the last frame's colour, whole, not a value torn mid-write; at every
