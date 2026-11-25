@@ -138,7 +138,12 @@ Dossiers : `remote-results/20261125-185006-prc2`, `…-185010-br2`, `…-185012-
   `remote-results/20261125-163303-prc-guard`) ; le lot en cause non trouvé.
 - **J0 Toulon** (première campagne, main 4e95c6bc contre 18a6e4dd, vol de 70 s, `J0_PHASES=flight`, `…-160208-j0-day`) : GPU p50 49,7 / 50,1
   contre 50,2 / 49,9 ms, p95 72,6 / 72,8 contre 72,7 / 72,4 — **inchangé** ; images par seconde 19,5 / 19,3 contre 19,3 / 19,4.
-- **Non mesuré** : J0 sur main 091ddd33 (seulement sur 4e95c6bc) ; le fondu du relief des routes (3e1c92e4) et le niveau de piste de SFO
+- **J0 Toulon sur main `8355e189`** (fin de journée, toutes les fusions du 25 comprises — miroir de la Seine, couronnes, aires de SFO) contre
+  18a6e4dd (kerr-mini, headless, 25 nov. 2026, 21:40–21:55 UTC, A B B A, même commande que la première campagne, `J0_PHASES=flight`, chaque
+  côté son propre test ; `remote-results/20261125-211451-j0-net`) : GPU p50 A 47,1 / 47,7, B 46,4 / 46,7 ms (**−0,85**, A/A 0,6, B/B 0,3),
+  p95 A 70,7 / 73,0, B 69,2 / 69,4 (−2,5) ; images par seconde A 20,6 / 20,2, B 21,0 / 20,7 — **inchangé, au plus un léger gain** au bord de
+  l'A/A ; image du virage identique (`docs/progress/perf-journee-2026-11-25/j0-virage-avant-apres-8355e189.jpg`).
+- **Non mesuré** : J0 sur main 091ddd33 (mesuré sur 4e95c6bc puis sur 8355e189, ci-dessus) ; le fondu du relief des routes (3e1c92e4) et le niveau de piste de SFO
   (9cf0849a) seuls — seulement dans le total ci-dessus ; les vues de Toulon des ponts (aucune).
 - Captures avant/après (A1 contre B2 de la première campagne, main 4e95c6bc — la même image que 091ddd33 sur ces vues, sauf les deux lots
   ci-dessus) : `docs/progress/perf-journee-2026-11-25/` (`paris-*`, `ponts-*`, `trafic-*`, `j0-virage-avant-apres.jpg`).
