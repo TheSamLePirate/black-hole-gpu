@@ -6822,6 +6822,30 @@ fn ridgedMFw(p0: vec3f, oct: f32, lam0: f32, res: f32) -> f32 {
   }
   return sum / norm;
 }
+// (26 Nov 2026, Sam's decision of 25 Nov — terrain.ts surveyKept, tfbmFs: one rule) the finest layer's octaves faded where a survey
+// holds them — the coarser layers' rule on the surveyed ground, whole by res ≤ DETAIL_SURVEY_RES / 2, none on the global data's
+const DETAIL_SURVEY_RES = 25.0;
+fn surveyKept(lam: f32, res: f32) -> f32 {
+  return 1.0 - (1.0 - smoothstep(0.5 * DETAIL_SURVEY_RES, DETAIL_SURVEY_RES, res)) * (1.0 - octaveKept(lam, res));
+}
+fn tfbmFs(p0: vec3f, oct: f32, lam0: f32, res: f32) -> f32 {
+  var p = p0;
+  var a = 0.5;
+  var s = 0.0;
+  var n = 0.0;
+  var lam = lam0;
+  for (var i = 0; f32(i) < oct; i++) {
+    cost(8u);
+    let fade = clamp(oct - f32(i), 0.0, 1.0);
+    let w = surveyKept(lam, res);
+    if (w > 0.0) { s += a * fade * gnoise(p) * w; }
+    n += a * fade;
+    p = p * 2.03 + vec3f(1.7, 9.2, 3.1);
+    a *= 0.5;
+    lam /= 2.03;
+  }
+  return s / max(n, 1e-6);
+}
 fn tfbmFw(p0: vec3f, oct: f32, lam0: f32, res: f32) -> f32 {
   let i0 = firstKept(lam0, res);
   var p = p0;
@@ -6896,7 +6920,8 @@ fn earthDetail(q: vec3f, h0: f32, foot: f32, res: f32) -> f32 {
   let o2 = layerOctF(20000.0, foot, EARTH_RM, 3.0);
   if (o2 > 0.0 && land > 0.0) { h += tfbmFw(q * 20000.0 + vec3f(5.0), o2, EARTH_RM / 20000.0, res) * min(o2, 1.0) * 50.0 * land * (1.0 - mount); }
   let o3 = layerOctF(200000.0, foot, EARTH_RM, 3.0);
-  if (o3 > 0.0 && land > 0.0) { h += tfbmF(q * 200000.0 + vec3f(3.0), o3) * min(o3, 1.0) * (3.0 + 8.0 * mount) * land; }
+  // (the finest, 32 → 8 m: faded where a survey holds it — surveyKept; the global data's ground unchanged)
+  if (o3 > 0.0 && land > 0.0) { h += tfbmFs(q * 200000.0 + vec3f(3.0), o3, EARTH_RM / 200000.0, res) * min(o3, 1.0) * (3.0 + 8.0 * mount) * land; }
   return h;
 }
 // ---- the runways (src/game/sites.ts: runwayWeight — the same figures, the ground graded alike for the

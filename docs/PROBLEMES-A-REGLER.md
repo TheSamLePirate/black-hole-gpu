@@ -187,10 +187,13 @@ connue ou supposée, la piste. Une entrée réglée est barrée avec le commit q
   nivelés jusqu'aux façades des cellules de bâtiments, niveaux fondus aux carrefours ; une tuile venue avant ses cellules garde son
   relevé et se nivelle de nouveau à leur arrivée (le même sol quel que soit l'ordre) ; le nivellement dans le worker de décodage —
   arrivée sur la rue (ce Mac) : plus longue image 283 → 83 ms, images > 100 ms 25 → 0. Vérifié dans la tuile : chaussée plate au
-  millimètre, bordure +0,12 m. **Reste ouvert** : le détail procédural (`earthDetail`, sa couche fine `o3`, ±3 m × terre, que la
+  millimètre, bordure +0,12 m. ~~**Reste ouvert** : le détail procédural (`earthDetail`, sa couche fine `o3`, ±3 m × terre, que la
   résolution des données n'efface pas) remet ±0,4 m en travers de la rue dans le sol du contact et celui du GPU — à décider (fondre
   `o3` selon la résolution, ou couper le détail sous les rues nivelées comme sous les pistes) ; la tache sombre au pied de la façade
-  gauche de la vue (`rue-paris-worker-apres.jpg`) reste à expliquer. ~~Sur l'approche du pont Alexandre III, un marquage en boucle fermée au milieu de la chaussée (`alexandre-iii-deck-low.png`).~~
+  gauche de la vue (`rue-paris-worker-apres.jpg`) reste à expliquer.~~ **Réglé le 25 nov. 2026 (`3e1c92e4`, décision de Sam)** : `o3`
+  fondu là où un relevé tient le sol (`surveyKept`, contact et GPU) — la chaussée plate à 2 mm dans le contact, le sol dessiné à 2 cm
+  de lui, le relief global inchangé au bit (`detail-survey.e2e`, `docs/progress/relief-detail-2026-11-26/`). La tache sombre : pas le
+  sol — la visibilité y tient un bâtiment (feuille 4182336, à 76–79 m, plus loin dans la rue : un volume bas et sombre de l'emprise). ~~Sur l'approche du pont Alexandre III, un marquage en boucle fermée au milieu de la chaussée (`alexandre-iii-deck-low.png`).~~
   **Réglé par ffbecf26** (24 nov. 2026, soir), avec les chaînes d'anneaux blancs des bretelles de SFO (`traffic-runways`,
   `parked-above.png`) : `scenerySurface` gardait, entre segments égaux, le premier rencontré ; la bande d'un segment finit en
   demi-disques, et les morceaux de 1–2 m des courbes B2 et des fins de lignes aux carrefours peignaient leurs lignes autour de leurs

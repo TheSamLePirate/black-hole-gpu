@@ -512,6 +512,32 @@ function ridgedMFw(p0: V3, oct: number, lam0: number, res: number): number {
   }
   return sum / norm;
 }
+/** (26 Nov 2026, Sam's decision of 25 Nov) the data's resolution [m] from which no survey holds the ground — the global data's
+ *  (earth-tiles.ts TILE_RES_MIN; trace.wgsl DETAIL_SURVEY_RES) */
+export const DETAIL_SURVEY_RES = 25;
+/** How much of an octave (wavelength λ [m]) of the finest layer is drawn over data of resolution res [m]: the coarser layers'
+ *  rule (octaveKept) on the surveyed ground — whole there by res ≤ DETAIL_SURVEY_RES / 2 —, none of it on the global data's (res ≥
+ *  DETAIL_SURVEY_RES: the detail unchanged where nothing is surveyed), smooth between (no seam at a survey's edge). */
+export const surveyKept = (lam: number, res: number) =>
+  1 - (1 - smooth(DETAIL_SURVEY_RES / 2, DETAIL_SURVEY_RES, res)) * (1 - octaveKept(lam, res));
+/** tfbmF with each octave weighed by surveyKept (an octave weighed 0 not computed) — the finest layer's */
+function tfbmFs(p0: V3, oct: number, lam0: number, res: number): number {
+  let p = p0;
+  let a = 0.5,
+    s = 0,
+    n = 0,
+    lam = lam0;
+  for (let i = 0; i < oct; i++) {
+    const fade = Math.min(Math.max(oct - i, 0), 1);
+    const w = surveyKept(lam, res);
+    if (w > 0) s += a * fade * gnoise(p) * w;
+    n += a * fade;
+    p = [p[0] * 2.03 + 1.7, p[1] * 2.03 + 9.2, p[2] * 2.03 + 3.1];
+    a *= 0.5;
+    lam /= 2.03;
+  }
+  return s / Math.max(n, 1e-6);
+}
 function tfbmFw(p0: V3, oct: number, lam0: number, res: number): number {
   const i0 = firstKept(lam0, res);
   let p = p0;
@@ -557,8 +583,10 @@ export function earthDetail(q: V3, h0: number, foot = 0.05, res = EARTH_MAP_RES)
   }
   const o2 = layerOctF(20000, foot, EARTH_RM, 3);
   if (o2 > 0 && land > 0) h += tfbmFw(sc(q, 20000, 5), o2, EARTH_RM / 20000, res) * Math.min(o2, 1) * 50 * land * (1 - mount);
+  // (the finest layer, 32 → 8 m: faded where a survey holds it — Sam's decision of 25 Nov 2026: it had put ±0.4 m back across the
+  // levelled streets of Paris; the global data's ground unchanged)
   const o3 = layerOctF(200000, foot, EARTH_RM, 3);
-  if (o3 > 0 && land > 0) h += tfbmF(sc(q, 200000, 3), o3) * Math.min(o3, 1) * (3 + 8 * mount) * land;
+  if (o3 > 0 && land > 0) h += tfbmFs(sc(q, 200000, 3), o3, EARTH_RM / 200000, res) * Math.min(o3, 1) * (3 + 8 * mount) * land;
   return h;
 }
 
