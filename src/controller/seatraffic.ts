@@ -419,7 +419,7 @@ function seaOverlay(this: CameraController, fmtSpd: (ms: number) => string, view
         }))
       : [];
     const label = [c.name || `MMSI ${c.mmsi}`, c.kind, c.sog > 0.3 ? fmtSpd(c.sog) : null].filter(Boolean).join(" · ");
-    out.push({ id: `ais:${c.id}`, at: rel, dist, label, lights });
+    out.push({ id: `ais:${c.id}`, at: rel, dist, label, lights, r: c.len / 2 });
   }
   return out;
 }
