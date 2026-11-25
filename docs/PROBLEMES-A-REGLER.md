@@ -194,7 +194,7 @@ connue ou supposée, la piste. Une entrée réglée est barrée avec le commit q
   (`stats().bridgesDropped`). A/B kerr-mini (`remote-results/20261124-221143-ponts-ab-bridges`) : Paris 1 024 → 1 135–1 157 ponts (tous les
   candidats), 3,2–3,8 Mo sur 20,1 Mo de part ; GPU p50 des vues de Paris dans le bruit (Grenelle 55,0 → 54,1 ms, Rivoli 59,6 → 60,2 ms).
 
-## L'eau sous Cheviré (et la Seine) : bande claire sous le tablier, taches sombres flottantes (relevé le 25 novembre 2026, kerr-mini)
+## L'eau sous Cheviré (et la Seine) : ~~bande claire sous le tablier, taches sombres flottantes~~ (relevé le 25 novembre 2026, kerr-mini) — Cheviré réglé le 26 (`3bd3cf7b`, `06a919ed`) ; reflets de la Seine ouverts
 
 - **Constat** : `chevire-apres-final.jpg` — une bande claire sur la Loire à l'aplomb du tablier, des taches sombres au milieu du fleuve ;
   sur la Seine (Grenelle, Alexandre III), des reflets de bâtiments détachés de leurs objets.
@@ -228,6 +228,25 @@ connue ou supposée, la piste. Une entrée réglée est barrée avec le commit q
   (`81a59623`, `bridge-structures.ts areaUnderDeck`, test unitaire avec témoin) — **la bande reste après** (`chevire-sans-dalle-apres.jpg`) :
   ce n'était pas elle (ou pas seulement). Prochaine piste : `surfaceAt` sur les lignes de la bande (y ≈ 0,59–0,60 à 1600 × 1000) avec
   le code du raster et la feuille, puis couper une à une les passes du raster (`sea surface`, les marques de ponts, les maillages).
+  **26 nov. — cause trouvée, réglée (`06a919ed`)** (ce Mac M1 Max, e2e de diagnostic non versionnés) : `surfaceAt` y dit « ground »
+  (code 4, l'eau intérieure ombrée par `shadeWater`) ; de près (250 m plus près, `chevire-bande-avant.jpg`) la bande est **de l'eau
+  blanche striée** : les **chutes** de l'eau intérieure (`shadeWater`, `fallOn` : de l'eau blanche où le relief lu à ±25 m est raide).
+  **Témoin** : les chutes coupées (modification temporaire du shader), la bande disparaît (`chevire-bande-chutes-coupees.jpg`). Le relief
+  nu y est plat (1,8–2,2 m à toutes les empreintes, `heightAt`), mais les chutes lisent à ±25 m un niveau z 12–13 — celui des
+  **silhouettes lointaines** (I6) : le sol **plus le sursol** du modèle de surface de l'IGN, où le tablier de Cheviré fait une arête de
+  45–49 m au-dessus du fleuve (`heightAt(q, 50, true)`, mesurée après la correction sur z 11, qu'elle ne touche pas ; sur z 12–13, non relevée avant, z 12 lu plat après). **Correction**,
+  là où le relief est préparé (un seul propriétaire) : (1) le sursol des niveaux z 12–13 effacé sur l'eau intérieure (`water-flatten.ts
+  clearOverWater`, le masque d'eau sans les ponts découpés, couverture ≥ 0,75 ; z 11 gardé : sa tuile OpenFreeMap n'est pas dans les
+  zones hors ligne) — un tablier, un bateau dans le modèle de surface faisaient un barrage de relief sous le pont ; les tabliers sont
+  ceux des ponts (scène proche, couche lointaine jusqu'à 12 km), comme sur la mer depuis T7 ; seul, il laisse deux taches blanches à
+  25–50 m des rives (`chevire-bande-sursol-seul.jpg` : le viaduc d'accès sur la terre, lu à ±25 m sur des texels de 26 m) ; (2) les
+  chutes cherchent l'eau au-dessus et au-dessous aussi loin qu'elles ont lu la pente (`2·ds`, 50 m, au lieu de 12 m). **Vérifié** (ce
+  Mac M1 Max, même vue, même heure) : **plus de bande** (`chevire-bande-apres.jpg`, et de loin `chevire-bande-apres-loin.jpg`) ; reste
+  sous le tablier une bande plus sombre, l'ombre du tablier sur l'eau. Tests `water-flatten.test.ts` (témoin positif : 360 texels du
+  tablier effacés ; négatifs : la terre, les rives à demi couvertes, une tuile sans eau). **Non vérifié** : une vraie cascade (aucun
+  e2e de chutes ; la portée de 50 m peut en effacer une étroite dont l'eau tourne avant), le coût (deux lectures de plus là seulement où
+  la pente est raide, non mesuré). La règle `81a59623` (les aires de ponts d'OSM sous un tablier) reste : juste, mais ce n'était pas la
+  bande.
   **Les reflets détachés sur la Seine — règle 1** : le reflet d'une façade vient du SSR (`seaSSR`, dans `earth water` / C19, C19d) ;
   là où l'image ne montre pas la façade (son pied caché par la rive), le repli tracé (`waterMirror` → `sceneryMirror`) ne connaît que le
   relief et les arbres, pas les bâtiments proches (cellules maillées, hors du BVH du décor). Plafond : la seule part « reflet » de l'eau ;

@@ -219,6 +219,16 @@ l'e2e, aucune requête IGN). GPU p50 = `renderer.lastGpuMs` sur 90 images ; le b
   0,5 → 0,2 ms — **dans le bruit d'une seule passe**, aucun gain revendiqué ; à 76 m du chalutier (`traffic-free-camera`) :
   −0,1 puis +0,8 ms selon les passes (vue en direct, bruitée). Coût GPU des autres changements **non mesuré**.
 
+### PONT-ROUTES — revue G : la bande de Cheviré (les chutes sur le sursol), le `sea surface` sur la Seine (26 novembre 2026, branche de l'agent)
+
+- **Préparation du relief (hors image, worker de décodage)** : à la seconde passe d'une tuile nationale (le sursol des silhouettes
+  lointaines, I6), sur z 12–13 (`OVER_WATER_Z0` = `ROAD_Z0`), le sursol est effacé sur l'eau intérieure (`tile-decode.ts` op `flatten`
+  avec `level: false` — le sol déjà aplani à la première passe —, `water-flatten.ts clearOverWater`) : la tuile OpenFreeMap déjà
+  demandée pour les niveaux de rues, aucune requête nouvelle. Le tablier d'un pont n'est plus un barrage de relief sur le fleuve.
+- **`earth water (raster)` (C19, `shadeWater`)** : les chutes de l'eau intérieure cherchent l'eau au-dessus et au-dessous de la pente à
+  `2·ds` (50 m) au lieu de 12 m. Deux lectures de `sceneryWaterAt` comme avant, seulement où la pente est raide ; coût non mesuré.
+- Vérifié en image seulement (ce Mac M1 Max, PROBLEMES « L'eau sous Cheviré ») ; aucune passe ajoutée ni retirée.
+
 ### PONT-ROUTES — revue F : aires de ponts sous un tablier, le plafond des reflets de la Seine (26 novembre 2026, branche de l'agent)
 
 - **Worker du décor (hors image)** : une aire de pont d'OpenStreetMap (`bridgeAreas`, une dalle) n'est plus dessinée quand un tablier
