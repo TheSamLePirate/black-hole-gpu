@@ -53,7 +53,7 @@ function frameOf(f: Airfield, w: Runway): RunwayFrame {
   };
   const flags = ((SURFACE_FLAG[w.surface] ?? 0) << 1) | 16 | (w.lit ? 32 : 0);
   const fr = runwayFrame(site, Math.max(w.len, 100), Math.max(w.wid / 2, w.surface === "paved" ? 10 : 8), flags);
-  fr.world = { field: f.icao || f.ident, measuring: false };
+  fr.world = { field: f.icao || f.ident, measuring: false, published: site.elev };
   return fr;
 }
 
@@ -72,10 +72,27 @@ function measure(fr: RunwayFrame): number {
     hs.push(raw[k]! - geoidN(g.lat, g.lon));
   }
   fr.world!.measuring = false;
-  hs.sort((a, b) => a - b);
-  const m = hs[5]!;
   // (no relief yet — the sea's 0 everywhere —: the published height kept)
-  return raw.every((h) => h === 0) ? fr.elev : Math.round(m * 10) / 10;
+  return raw.every((h) => h === 0) ? fr.elev : runwayLevelOf(hs, fr.world!.published ?? fr.elev);
+}
+
+/** (25 Nov 2026) the relief's median under a runway at most this over the sea [m] … */
+export const SEA_DATA_M = 1;
+/** … with the published height at least this above it [m]: the relief lacks the field (land reclaimed after its survey) */
+export const SEA_DATA_GAP = 3;
+
+/**
+ * A world runway's level [m over the sea] from the bare relief's heights over the sea down its axis (`hs`, 11 points) and its published
+ * height: their median — the sites' own way (A7: the tiles carry trees and roofs, the publication another datum) —, unless the relief
+ * has the sea there while the publication puts the strip well above it: the relief does not hold the field (Chek Lap Kok, reclaimed in
+ * 1998 and 2022, at 0–1 m in the global relief, published 7–9 m — PROBLEMES 25 Nov 2026), the published height taken. A field truly
+ * at the sea (Nice 3 m published, measured 3–3.6), below it (Schiphol, −3/−4 published and in the data) keeps its measure.
+ */
+export function runwayLevelOf(hs: readonly number[], published: number): number {
+  const s = [...hs].sort((a, b) => a - b);
+  const m = s[s.length >> 1]!;
+  if (m <= SEA_DATA_M && published - m >= SEA_DATA_GAP) return published;
+  return Math.round(m * 10) / 10;
 }
 
 /**
