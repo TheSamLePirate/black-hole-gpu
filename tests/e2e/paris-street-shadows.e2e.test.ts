@@ -63,10 +63,10 @@ describe.skipIf(!E2E)("probe: a Paris street's shadows and pavements", () => {
       for (let s = -25; s <= 25; s += 0.5) {
         const pe = ue * 10 + un * s, pn = un * 10 - ue * s;
         const lat = a[0] + pn / ky, lon = a[1] + pe / kx;
-        out.push([s, +__bh.sys.groundAt(lat, lon).toFixed(2)]);
+        out.push([s, +__bh.sys.groundAt(lat, lon).toFixed(2), __bh.renderer.earthTiles.streetLevelAt(lat, lon)?.h ?? null]);
       }
       return out; })()`);
-    console.log(`  cross-section [offset m (+ right of the way), ground m]: ${JSON.stringify(section)}`);
+    console.log(`  cross-section [offset m (+ right of the way), ground m (the contact's), the tile's published height there (its nearest texel, over the sea)]: ${JSON.stringify(section)}`);
     // (what the street cell holds at the section's middle — whether the levelling takes its roads, else why not —, and the surveys kept)
     const mid: [number, number] = [road.a[0] + (road.b[0] - road.a[0]) * (10 / lenM), road.a[1] + (road.b[1] - road.a[1]) * (10 / lenM)];
     console.log(

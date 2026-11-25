@@ -1167,15 +1167,21 @@ export class EarthTiles {
     for (let z = Z1; z >= STREET_LEVEL_Z; z--) {
       const L = this.levels[z - Z0];
       if (!L?.valid) continue;
-      const x = Math.floor(((lon + 180) / 360) * L.n);
+      const fx = ((lon + 180) / 360) * L.n;
       const s = Math.sin((lat * Math.PI) / 180);
-      const y = Math.floor((0.5 - Math.log((1 + s) / (1 - s)) / (4 * Math.PI)) * L.n);
+      const fy = (0.5 - Math.log((1 + s) / (1 - s)) / (4 * Math.PI)) * L.n;
+      const x = Math.floor(fx),
+        y = Math.floor(fy);
       if (!inside(L.valid, x, y)) continue;
       const key = this.keyOf(L, x, y);
       const slot = this.slotOf(L, x, y);
+      // (the published height at its nearest texel — rows from the north)
+      const d = L.pubData[slot];
+      const k = Math.min(TILE - 1, Math.floor((fy - y) * TILE)) * TILE + Math.min(TILE - 1, Math.floor((fx - x) * TILE));
       return {
         z,
         key,
+        h: d ? +d[k]!.toFixed(3) : null,
         published: L.pubKey[slot] === key,
         levelled: this.streetLevelledKeys.get(key) ?? null,
         refining: this.refining.has(key),
