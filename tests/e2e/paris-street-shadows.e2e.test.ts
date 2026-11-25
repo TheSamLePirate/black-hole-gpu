@@ -2,6 +2,7 @@ import { afterAll, beforeAll, describe, test } from "bun:test";
 import { mkdirSync } from "node:fs";
 import { App, E2E, stopServer } from "./lib/app";
 import { showView, widestRoad } from "./lib/bridge-views";
+import { HITCH_PROBE } from "./lib/hitch-probe";
 
 // (a probe — no assertion but its data —, 25 Nov 2026; PROBLEMES « Ponts et routes, campagne e2e 2 ») bridges' Paris street (the widest
 // road near rue de Rivoli, 2.5 m over it, dry, 14 h): the image, the raster material's shadow debug view (liteSkip 8192: red the trees'
@@ -9,7 +10,7 @@ import { showView, widestRoad } from "./lib/bridge-views";
 // scene's pavements widened to the façades (stats().pavementsWidened), and a cross-section of the contact ground across the street
 // from its axis to 25 m each side (sys.groundAt): the relief against the façades.
 // Duration: ~2 min on kerr-mini.
-// Done when: the shots and the cross-section written.
+// Done when: the shots, the cross-section, the arrival's hitches and the levelling's time written.
 
 const OUT = process.env.PSP_OUT ?? "remote-results/paris-street-shadows";
 const AT: [number, number] = [48.8628, 2.3365];
@@ -27,6 +28,10 @@ describe.skipIf(!E2E)("probe: a Paris street's shadows and pavements", () => {
 
   test("the street: its image, its shadows' debug view, its cross-section", async () => {
     const v = { key: "paris-street", at: AT, aglM: 60, look: [48.8638, 2.333] as [number, number], holds: "sc.cellRoads > 0" };
+    // (the arrival's hitches — lib/hitch-probe.ts, its witnesses in hitch-probe.e2e — from the first view's order to the street settled:
+    // the longest gap between two frames and its causes, beside the levelling's own time a tile — 26 Nov 2026, the levelling moved off
+    // the page's thread)
+    await app.js(HITCH_PROBE);
     await showView(app, v);
     const road = await widestRoad(app, AT, 120, 115);
     console.log(`  road: ${JSON.stringify(road)}`);
@@ -36,6 +41,13 @@ describe.skipIf(!E2E)("probe: a Paris street's shadows and pavements", () => {
     const ahead: [number, number] = [road.a[0] + (road.b[0] - road.a[0]) * k, road.a[1] + (road.b[1] - road.a[1]) * k];
     await showView(app, { ...v, at: road.a, aglM: 2.5, look: ahead, lookAglM: 0 });
     await app.settled(60_000);
+    const hitch = await app.js<{ frames: number; over50: number; over100: number; max: number; top: unknown[] }>(`(() => {
+      const H = window.__hitch; const top = H.gaps.slice().sort((a, b) => b.ms - a.ms).slice(0, 5).map((g) => ({ ms: +g.ms.toFixed(1), causes: g.causes }));
+      return { frames: H.frames, over50: H.over50, over100: H.over100, max: +H.max.toFixed(1), top }; })()`);
+    console.log(`  the arrival's frames: ${JSON.stringify(hitch)}`);
+    console.log(
+      `  the levelling: ${JSON.stringify(await app.js(`(() => { const R = __bh.renderer; const c = R.streetLevelCpu; return { tiles: c.n, ms: +c.ms.toFixed(1), perTile: +(c.ms / Math.max(c.n, 1)).toFixed(2), max: +c.max.toFixed(2), where: R.streetLevelWhere ?? "page", levelled: R.streetLevelled, levelledTiles: R.streetLevelTiles, relevelled: R.streetRelevelled ?? null }; })()`))}`,
+    );
     const frames = `for (let i = 0; i < 90; i++) { __bh.touch(); await new Promise((q) => requestAnimationFrame(q)); }`;
     await app.shot(`${OUT}/street.png`);
     const base = await app.js<number>(`__bh.renderer.liteSkip`);

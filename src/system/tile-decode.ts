@@ -6,6 +6,7 @@ import type { OrthoFit } from "./national";
 import { roadLightByte, roadMask, spreadLights, tileMetresPerPixel } from "./night-roads";
 import { waterMask } from "./water-mask";
 import { flattenUnderWater } from "./water-flatten";
+import { cellFootBoxes, cellLevelRoads, levelTileMarked } from "./street-level";
 import { type DelightIn, type DelightStats, delightTile } from "./ortho-delight";
 
 /** a tile's side [px] (earth-tiles.ts TILE) */
@@ -176,7 +177,10 @@ export type DecodeRequest =
   | { id: number; op: "ortho"; blob: Blob; fit: OrthoFit; delight?: DelightIn }
   /** (25 Nov 2026 — water-flatten.ts) a relief tile's ground (TILE², its row-major heights) levelled under its inland water: OpenFreeMap's
    *  vector tile over it (its square `sub` of it), its metres a texel from its z and row */
-  | { id: number; op: "flatten"; heights: Float32Array; mvt: ArrayBuffer; z: number; y: number; sub: { k: number; x: number; y: number } };
+  | { id: number; op: "flatten"; heights: Float32Array; mvt: ArrayBuffer; z: number; y: number; sub: { k: number; x: number; y: number } }
+  /** (26 Nov 2026 — street-level.ts) a relief tile's ground (TILE², its marks kept) levelled under the roads of the street cells about
+   *  it, their pavements to the façades of the building cells' footprints (street-level-book.ts orders it) */
+  | { id: number; op: "level"; heights: Float32Array; streets: ArrayBuffer[]; buildings: ArrayBuffer[]; z: number; x: number; y: number };
 export type DecodeReply = {
   id: number;
   ms: number;
@@ -185,14 +189,22 @@ export type DecodeReply = {
   /** (PLAN-J8 J8-E: a street level's inland water — water-mask.ts —, 256² bytes, its cover sRGB-encoded for the layer's view) */
   water?: Uint8Array;
   delight?: DelightStats;
+  /** (op "level") the pixels moved */
+  moved?: number;
   error?: string;
 };
 
 /** The request's work, wherever it runs: the arrays it gives (to be handed over, not copied) */
 export async function decodeTile(
   q: DecodeRequest,
-): Promise<{ heights?: Float32Array; words?: Uint32Array; water?: Uint8Array; delight?: DelightStats }> {
+): Promise<{ heights?: Float32Array; words?: Uint32Array; water?: Uint8Array; delight?: DelightStats; moved?: number }> {
   if (q.op === "terrarium") return { heights: terrariumHeights(await pixels(q.blob)) };
+  if (q.op === "level") {
+    const roads = q.streets.flatMap(cellLevelRoads);
+    const boxes = q.buildings.flatMap(cellFootBoxes);
+    const moved = levelTileMarked(q.heights, TILE, q.z, q.x, q.y, roads, boxes);
+    return { heights: q.heights, moved };
+  }
   if (q.op === "flatten") {
     const cover = waterMask(q.mvt, tileMetresPerPixel(q.z, q.y), q.sub, false);
     if (cover) flattenUnderWater(q.heights, cover, tileMetresPerPixel(q.z, q.y));

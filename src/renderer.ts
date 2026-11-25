@@ -251,8 +251,7 @@ import { RefrTableBuilder } from "./system/refraction-gpu";
 import { LIFT_FADE, liftPolynomial } from "./system/refraction-lift";
 import { type AirState, airOfModel } from "./system/refraction-layered";
 import { gpuDiagnostics } from "./gpu-diagnostics";
-import { EarthTiles, setStreetLeveller, TILE, TILE_REACH } from "./system/earth-tiles";
-import { cellLevelRoads, type LevelRoad, levelTile, STREET_CELL_Z } from "./system/street-level";
+import { EarthTiles, TILE_REACH } from "./system/earth-tiles";
 import { STREET_CACHE, streetCacheUrl, streetCellComplete } from "./system/street-cells";
 import { HORIZON_BINDINGS, HORIZON_TEXTURE_LIMIT, HorizonMaps } from "./system/horizon-maps";
 import { ORTHO_BINDINGS, ORTHO_TEXTURE_LIMIT } from "./system/earth-tiles";
@@ -267,7 +266,8 @@ import { StreetFar } from "./system/street-far";
 import { NEAR_REGION_BYTES, NearMeshes } from "./system/near-meshes";
 import { setNearBuildingsContact } from "./system/scenery-contact";
 import type { EyeState } from "./system/building-layer";
-import { cellPool, forestPool, meshPool, streetPool } from "./system/cell-workers";
+import { cellPool, forestPool, meshPool, onStreetCell, streetPool } from "./system/cell-workers";
+import { CELL_CACHE, cellCacheUrl } from "./system/cell-pool";
 import { forestWants } from "./system/forest-assembly";
 import { LANDSCAPES, LANDSCAPE_CLEARING_M } from "./system/landscapes";
 const SCENERY_EXCLUSIONS: SceneryExclusion[] = [
@@ -1902,20 +1902,12 @@ export class Renderer {
     this.endurance.onLoaded = () => this.invalidate();
     // (the imagery filtered where the device takes its textures — T9: the relief's texture its heights alone then)
     this.earthTiles = new EarthTiles(device, device.limits.maxSampledTexturesPerShaderStage >= ORTHO_TEXTURE_LIMIT);
-    // (the streets laid on the national relief's tiles as they come — street-level.ts, the one ground both the raster and the contact
-    // read: the street cells cached about the tile, its own and its eight neighbours — a road's reach crosses a cell's edge)
-    setStreetLeveller(async (z, x, y, h) => {
-      if (!this.streetLevelOn || typeof caches === "undefined") return 0;
-      const k = 2 ** (z - STREET_CELL_Z);
-      const cx = Math.floor(x / k),
-        cy = Math.floor(y / k);
-      const roads: LevelRoad[] = [];
-      for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) roads.push(...(await this.streetLevelRoads(cx + dx, cy + dy)));
-      const n = levelTile(h, TILE, z, x, y, roads);
-      this.streetLevelled += n;
-      if (n > 0) this.streetLevelTiles++;
-      return n;
-    });
+    // (the streets laid on the national relief's tiles — street-level.ts in the decode worker, street-level-book.ts's order: the tiles
+    // own their ground; the page hands them the street cells cached about a tile, with their building cells (the façades), and tells
+    // them each street cell the streets' pool hands — a tile come before its cells levelled again from its survey)
+    this.earthTiles.setStreetCells((cx, cy) => this.streetCellRead(cx, cy));
+    this.streetCellUnlisten?.();
+    this.streetCellUnlisten = onStreetCell((c) => void this.earthTiles.streetCellsArrived([[c.x, c.y]]));
     this.horizonMaps = new HorizonMaps(device);
     // (its maps made or dropped: the bind groups holding them rebuilt — the tracer reads them, H2)
     this.horizonMaps.onChange = () => {
@@ -5191,30 +5183,51 @@ export class Renderer {
   }
   /** (R4, contract C0-3) the ground's lift by the air drawn — the tracer's march, the rasters' projection, the points read back
    *  (decision 15: R4a and R4b together) —; on since Sam's decision 42 (5 Nov 2026), its ~+1 ms on an M1 accepted */
-  /** (25 Nov 2026) the streets laid on the national relief's tiles as they come (street-level.ts; off: the survey's ground as it is —
-   *  a comparison, the tiles asked again to see it) */
-  streetLevelOn = true;
-  /** the relief's pixels and tiles the streets levelled so far */
-  streetLevelled = 0;
-  streetLevelTiles = 0;
-  /** a street cell's roads to level, read once (its cache's bytes; [] none, or an incomplete cell) — the last 64 kept */
-  private streetLevelCells = new Map<string, Promise<LevelRoad[]>>();
-  private streetLevelRoads(x: number, y: number): Promise<LevelRoad[]> {
+  /** (25 Nov 2026; 26 Nov: in the decode worker, whatever arrives first — earthTiles.streetLevelOn, streetLevelStats()) the streets laid
+   *  on the national relief's tiles (off: the tiles fetched after kept as surveyed — a comparison) */
+  get streetLevelOn() {
+    return this.earthTiles.streetLevelOn;
+  }
+  set streetLevelOn(on: boolean) {
+    this.earthTiles.streetLevelOn = on;
+  }
+  /** the relief's pixels and tiles the streets levelled so far, the tiles levelled again at a cell's arrival */
+  get streetLevelled() {
+    return this.earthTiles.streetLevelStats().moved;
+  }
+  get streetLevelTiles() {
+    return this.earthTiles.streetLevelStats().tiles;
+  }
+  get streetRelevelled() {
+    return this.earthTiles.streetLevelStats().relevelled;
+  }
+  /** the levelling's time [ms] — in the decode worker since 26 Nov 2026 —: total, longest tile, tiles */
+  get streetLevelCpu() {
+    return this.earthTiles.streetLevelCpu;
+  }
+  readonly streetLevelWhere = "worker";
+  private streetCellUnlisten: (() => void) | null = null;
+  /** a z 15 street cell's bytes cached (complete) and its building cell's — null while it is not there; the last 64 present kept */
+  private streetCellBytes = new Map<string, Promise<{ street: ArrayBuffer; buildings: ArrayBuffer | null } | null>>();
+  private streetCellRead(x: number, y: number): Promise<{ street: ArrayBuffer; buildings: ArrayBuffer | null } | null> {
     const key = `${x}/${y}`;
-    let p = this.streetLevelCells.get(key);
+    let p = this.streetCellBytes.get(key);
     if (!p) {
       p = (async () => {
+        if (typeof caches === "undefined") return null;
         const res = await (await caches.open(STREET_CACHE)).match(streetCacheUrl(location.origin, x, y));
-        if (!res) return [];
-        const buf = await res.arrayBuffer();
-        return streetCellComplete(buf) ? cellLevelRoads(buf) : [];
-      })().catch(() => []);
-      // (an empty answer not kept: the streets' pool may hand the cell soon)
+        if (!res) return null;
+        const street = await res.arrayBuffer();
+        if (!streetCellComplete(street)) return null;
+        const b = await (await caches.open(CELL_CACHE)).match(cellCacheUrl(location.origin, x, y));
+        return { street, buildings: b ? await b.arrayBuffer() : null };
+      })().catch(() => null);
+      // (a missing cell not kept: the streets' pool may hand it soon)
       void p.then((r) => {
-        if (!r.length) this.streetLevelCells.delete(key);
+        if (!r) this.streetCellBytes.delete(key);
       });
-      this.streetLevelCells.set(key, p);
-      if (this.streetLevelCells.size > 64) this.streetLevelCells.delete(this.streetLevelCells.keys().next().value!);
+      this.streetCellBytes.set(key, p);
+      if (this.streetCellBytes.size > 64) this.streetCellBytes.delete(this.streetCellBytes.keys().next().value!);
     }
     return p;
   }
