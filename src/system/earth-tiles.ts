@@ -2563,7 +2563,7 @@ export class EarthTiles {
           );
         // (25 Nov 2026 — water-flatten.ts: the ground under the inland water made level here, once, for every reader of the relief)
         if (!ground && L.z >= FLATTEN_Z0) h = await flattenInland(L.z, ((x % L.n) + L.n) % L.n, y, h, ctl.signal);
-        // (26 Nov 2026 — the far levels' overground cleared over that water: a deck's surface model was a dam under the bridge, and the
+        // (25 Nov 2026 — the far levels' overground cleared over that water: a deck's surface model was a dam under the bridge, and the
         // inland water's falls took it for one — Cheviré's light band. Its ground levelled already at the first pass)
         else if (ground && h.length > TILE * TILE && L.z >= OVER_WATER_Z0)
           h = await flattenInland(L.z, ((x % L.n) + L.n) % L.n, y, h, ctl.signal, false);
@@ -3939,7 +3939,7 @@ export const roadsUrl = (z: number, x: number, y: number) => `https://tiles.open
 const roadFiles = new Map<string, Promise<ArrayBuffer | null>>();
 /** (25 Nov 2026) the relief's levels whose ground is levelled under the inland water (water-flatten.ts): a texel of 19 m and finer */
 export const FLATTEN_Z0 = 13;
-/** (26 Nov 2026) the far levels whose overground (I6, up to HLOD_Z1) is cleared over the inland water (water-flatten.ts clearOverWater):
+/** (25 Nov 2026) the far levels whose overground (I6, up to HLOD_Z1) is cleared over the inland water (water-flatten.ts clearOverWater):
  *  those whose OpenFreeMap tile the street levels fetch already (night-roads ROAD_Z0 — the offline zones hold it); z 11's kept */
 export const OVER_WATER_Z0 = ROAD_Z0;
 /**

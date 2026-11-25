@@ -2142,7 +2142,7 @@ with the Earth's maps). Synchronous.
 ### `__bh.sys.groundAt(lat, lon)` → number
 
 The Earth's ground [m over the ellipsoid] at a latitude, longitude [°], as stood on and drawn — the relief, the
-runways levelled, the sea at the geoid. Synchronous. (26 Nov 2026: off a real airfield's paved strip — past its ends, beside its sides,
+runways levelled, the sea at the geoid. Synchronous. (25 Nov 2026: off a real airfield's paved strip — past its ends, beside its sides,
 eased over 30 m — the level lifts only the land the data have, 0 … 0.3 m over the sea and up: `game/runway-grade.ts levelOver`, the
 tracer's `runwayLevelOver`; SFO's bay before 28L, its data −0.3 to −1.5 m, is the sea's again, no longer the runway's 3.1 m.)
 

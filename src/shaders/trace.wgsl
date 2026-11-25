@@ -6957,7 +6957,7 @@ fn runwayGrade(g: vec3f) -> vec4f {
     if (la * lc > lv) {
       lv = la * lc;
       el = P.runways[4u + 4u * k].w;
-      // (26 Nov 2026 — runway-grade.ts past: off a real airfield's paved strip its level lifts the land alone — SFO's bay before 28L,
+      // (25 Nov 2026 — runway-grade.ts past: off a real airfield's paved strip its level lifts the land alone — SFO's bay before 28L,
       // raised to the runway's 3.1 m out to 900 m, drawn and felt as land)
       past = select(0.0, smoothstep(0.0, 1.0, max(max(-a, a - L), max(c - hw, 0.0)) / 30.0), world);
     }
@@ -6968,7 +6968,7 @@ fn runwayGrade(g: vec3f) -> vec4f {
   RWY_PAST = past;
   return vec4f(w, lv, el, cut);
 }
-// (26 Nov 2026 — runway-grade.ts levelOver, the same figures: change both) The last runwayGrade's level `lv` at a point whose data ground
+// (25 Nov 2026 — runway-grade.ts levelOver, the same figures: change both) The last runwayGrade's level `lv` at a point whose data ground
 // is `h` [m over the sea, before the grading]: whole on the strip; off a real airfield's strip, the land's alone — the water stays its own
 fn runwayLevelOver(lv: f32, h: f32) -> f32 {
   if (RWY_PAST <= 0.0) { return lv; }
@@ -7225,7 +7225,7 @@ fn runwayShade(a0: f32, c0: f32, L: f32, hw: f32, fw: vec2f, el: f32, rev: bool,
 }
 // (the hit point from the camera [m, the Earth's squashed axes] — set by earthNear for its ground, w: on)
 var<private> RWY_HIT: vec4f = vec4f(0.0);
-// (26 Nov 2026 — runway-grade.ts Grade.past: the last runwayGrade's — how far its level's place lies off a real airfield's paved strip,
+// (25 Nov 2026 — runway-grade.ts Grade.past: the last runwayGrade's — how far its level's place lies off a real airfield's paved strip,
 // 0 on it … 1 past 30 m —; read by runwayLevelOver right after that call)
 var<private> RWY_PAST: f32 = 0.0;
 
@@ -17335,7 +17335,7 @@ fn shadeLite(@builtin(global_invocation_id) gp: vec3u, @builtin(workgroup_id) wi
   var wat = vec4f(0.0);
   if (!meshW && !isTree && (liteSkip() & 1u) == 0u) {
     let dirW0 = toBody(ray.look);
-    // (26 Nov 2026: off a real airfield's strip, levelled only where the data have land — runwayLevelOver: the ground drawn, hG, lifted
+    // (25 Nov 2026: off a real airfield's strip, levelled only where the data have land — runwayLevelOver: the ground drawn, hG, lifted
     // to the runway's level there, left at the sea over the water)
     var lvl0 = 0.0;
     if (rwyCount() > 0u) { lvl0 = runwayLevelOver(runwayGrade(gq).y, hG); }
@@ -17636,7 +17636,7 @@ fn shadeWater(@builtin(workgroup_id) wid: vec3u, @builtin(local_invocation_id) l
     let dL = normalize((downW * toF).xy + vec2f(1e-6, 0.0));
     // (a fall has water above it and below it; a steep bank, land on its upper side — the river's outline over its banks, the
     // relief at 30 m softening them, made their slopes white: the water looked for a few metres up and down the slope)
-    // (26 Nov 2026 — as far as the slope was read from: ±ds on a level whose texel is as wide — 26 m at ±25 m —, the land's relief
+    // (25 Nov 2026 — as far as the slope was read from: ±ds on a level whose texel is as wide — 26 m at ±25 m —, the land's relief
     // reaches 2·ds into the water. At 12 m, Cheviré's approach viaduct on the banks — the far levels' overground, its 45 m — still made
     // white water 25–50 m out from each bank under the deck; its part over the river is cleared where the relief is prepared,
     // water-flatten.ts clearOverWater)

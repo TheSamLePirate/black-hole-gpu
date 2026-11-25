@@ -122,7 +122,7 @@ test("runwayGrade: the near runways' list (T8c) gives the full scan's answers, a
       if (level > g.level) {
         g.level = level;
         g.elev = r.elev;
-        // (26 Nov 2026: off a real airfield's paved strip, eased over 30 m — the level lifts the land alone there: levelOver)
+        // (25 Nov 2026: off a real airfield's paved strip, eased over 30 m — the level lifts the land alone there: levelOver)
         g.past = world ? ease(Math.max(-a, a - r.len, c - r.halfWidth, 0) / 30) : 0;
       }
       g.flat = Math.max(g.flat, wa * wc, level);
@@ -207,7 +207,7 @@ test("J7-1: the approach funnel — the detail off under a real airfield's final
   }
 });
 
-// (26 Nov 2026 — PROBLEMES « L'eau de la baie de San Francisco »: SFO's bay before 28L, its data at −0.3 to −1.5 m, was raised to the
+// (25 Nov 2026 — PROBLEMES « L'eau de la baie de San Francisco »: SFO's bay before 28L, its data at −0.3 to −1.5 m, was raised to the
 // runway's 3.1 m out to 900 m past its end — drawn and felt as land. Off a real airfield's strip the level lifts the land alone. The
 // positive witness fails on the code before: the bay lifted whole)
 test("off a real airfield's strip the level lifts the land alone: the bay before SFO's 28L stays the sea's; the strip and the land lifted", () => {

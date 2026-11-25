@@ -28,11 +28,11 @@ export interface Grade {
   elev: number;
   /** the detail's share taken off: max(flat, the approach funnel's) */
   cut: number;
-  /** (26 Nov 2026) how far the level's place lies off a real airfield's paved strip (0 on it … 1 past `pavedEase` m beyond its ends or
+  /** (25 Nov 2026) how far the level's place lies off a real airfield's paved strip (0 on it … 1 past `pavedEase` m beyond its ends or
    *  sides — that of the runway levelling most): there the level lifts the land alone (levelOver), never the water */
   past: number;
 }
-/** a runway's grading's figures [m] (the shader's runwayGrade holds the same: change both); (26 Nov 2026) `pavedEase`: off a real
+/** a runway's grading's figures [m] (the shader's runwayGrade holds the same: change both); (25 Nov 2026) `pavedEase`: off a real
  *  runway's strip, the ground lifted to its level only where the data have land — `landLo` … `landHi` [m over the sea] */
 export const RUNWAY_GRADE = {
   levelPast: 300,
@@ -106,7 +106,7 @@ export function gradeAt(point: V3, runways: readonly GradeRunway[]): Grade {
 }
 
 /**
- * (26 Nov 2026) The level's share at a point whose data ground is `h` [m over the sea, before the grading]: the whole on the strip; off
+ * (25 Nov 2026) The level's share at a point whose data ground is `h` [m over the sea, before the grading]: the whole on the strip; off
  * a real airfield's strip (`past`), the land's alone — the sea, a bay, a river under the runway's level stay at their own (the water
  * drawn, a craft over it over the water). The gear (terrain.ts), the scenery's feet and the tracer (trace.wgsl runwayLevelOver) alike.
  */

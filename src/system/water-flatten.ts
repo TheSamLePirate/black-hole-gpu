@@ -112,7 +112,7 @@ export function flattenUnderWater(
 }
 
 /**
- * (26 Nov 2026 — PROBLEMES « L'eau sous Cheviré ») A far level's overground (earth-tiles.ts I6: the IGN's surface less its ground, TILE²
+ * (25 Nov 2026 — PROBLEMES « L'eau sous Cheviré ») A far level's overground (earth-tiles.ts I6: the IGN's surface less its ground, TILE²
  * row-major, 0 where none) cleared over its inland water (`cover`, the same grid, the bridges not cut out): the surface model over a river
  * is a deck, a boat, a pier — drawn as a wall of relief down to the water (a dam under the far layer's deck) —, and the inland water's
  * falls, which read the relief ±25 m about a pixel (trace.wgsl shadeWater: these levels at that footprint), took the Cheviré deck's

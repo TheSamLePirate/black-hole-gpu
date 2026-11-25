@@ -176,7 +176,7 @@ export type DecodeRequest =
   /** (L7b's prototype — ortho-delight.ts) `delight`: the canopy under it, its cast shadows lifted before its colours */
   | { id: number; op: "ortho"; blob: Blob; fit: OrthoFit; delight?: DelightIn }
   /** (25 Nov 2026 — water-flatten.ts) a relief tile's ground (TILE², its row-major heights) levelled under its inland water: OpenFreeMap's
-   *  vector tile over it (its square `sub` of it), its metres a texel from its z and row; (26 Nov) its overground after it, when the
+   *  vector tile over it (its square `sub` of it), its metres a texel from its z and row; (25 Nov) its overground after it, when the
    *  array has one (2 · TILE²), cleared over that water; `level` false: the ground as it is (a second pass's, levelled already) */
   | {
       id: number;

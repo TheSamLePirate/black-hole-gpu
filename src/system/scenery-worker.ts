@@ -2071,7 +2071,7 @@ async function prepare(q: SceneryRequest): Promise<SceneryReply> {
       const lat = outer.reduce((sum, p) => sum + p.lat, 0) / outer.length,
         lon = outer.reduce((sum, p) => sum + p.lon, 0) / outer.length;
       const step = Math.max(1, Math.floor(outer.length / 16));
-      // (review A9; 26 Nov 2026 — its inside too: bridge-structures.ts areaUnderDeck)
+      // (review A9; 25 Nov 2026 — its inside too: bridge-structures.ts areaUnderDeck)
       if (
         areaUnderDeck(
           outer.map((g) => localPoint(frame, g.lat, g.lon, 0)),
