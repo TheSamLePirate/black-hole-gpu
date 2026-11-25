@@ -3,7 +3,7 @@
 Problèmes constatés, pas encore réglés. Chaque entrée : la date (UTC), ce qui est mesuré ou observé et sa source, la cause
 connue ou supposée, la piste. Une entrée réglée est barrée avec le commit qui la règle, pas effacée.
 
-## L'eau de la baie de San Francisco verte émeraude près de l'approche de 28L : ce n'est pas de l'eau pour le rendu (relevé le 25 novembre 2026, `als-sfo-28l-day-close.jpg` ; diagnostiqué le même jour, non réglé — hors du lot : la classification de l'eau, `liteWater`)
+## ~~L'eau de la baie de San Francisco verte émeraude près de l'approche de 28L : ce n'est pas de l'eau pour le rendu~~ (relevé le 25 novembre 2026, `als-sfo-28l-day-close.jpg`) — réglé le 26 (`9cf0849a`, branche des ponts) : c'était le niveau de la piste étendu sur la baie
 
 - **Constat** (ce Mac, sonde `zz-water-colour` sous leviers, `docs/progress/etiquettes-als-2026-11-25/baie-sfo-eau-leviers.jpg`) : vue
   à 10 m au-dessus de la baie, 450 m avant 28L, l'eau proche sRGB ~(31–55, 64–74, 22–41), émeraude. Elle **ne change pas** avec
@@ -20,6 +20,25 @@ connue ou supposée, la piste. Une entrée réglée est barrée avec le commit q
 - **Piste** (au lot de l'eau — l'agent des ponts y travaille, `liteWater`) : tenir pour de l'eau un pixel sous le polygone d'eau d'OSM
   (« ocean » d'OpenMapTiles) même si le relief y dépasse la mer de quelques mètres, ou reconnaître les plans d'eau hydro-aplatis du
   relief (une étendue plate à moins de ~3 m de la mer).
+- **26 nov. — la vraie cause, réglée** (ce Mac M1 Max, e2e de diagnostic non versionné) : les **données** sous la baie sont à
+  **−0,3 à −1,5 m** (au-dessous de la mer, `earthTiles.heightAt`, nu) ; le **contact** à **+2,3 à +3,1 m** jusqu'à 600 m avant le seuil,
+  puis la mer au-delà de 700 m : c'est le **niveau de la piste** (28L, 3,1 m) — `runwayGrade`/`gradeAt` amène le relief au niveau de la
+  piste sur sa bande et **300 m au-delà de ses extrémités, adouci sur 600 m**, et 100 m sur ses côtés : à SFO le seuil est au rivage,
+  ce niveau couvrait la baie ; `liteWater` tient tout ce qui est nivelé pour de la terre (`water × (1 − lvl)`). Ni le 3DEP hydro-aplati,
+  ni le polygone d'OSM (présent : `ocean` dans la tuile z 14). **Correction** au propriétaire — le nivellement des pistes
+  (`game/runway-grade.ts` `Grade.past`/`levelOver`, son jumeau WGSL `runwayGrade`/`runwayLevelOver`) : **hors de la bande revêtue d'une
+  piste réelle** (au-delà de ses extrémités, de ses côtés, fondu sur 30 m), **le niveau ne relève que la terre des données** (0 … 0,3 m
+  au-dessus de la mer et plus) ; l'eau garde le sien. Une seule règle pour le dessin (`earthHeightExactG`/`StepG`, l'eau du raster et
+  du tracé) et le contact (`terrain.ts earthHeightSampler`, les pieds du décor) : un appareil au-dessus de la baie est au-dessus de l'eau.
+  Les pistes inventées (sans le drapeau des pistes réelles) gardent leur remblai sur la mer. **Vérifié** (ce Mac M1 Max) : sur l'axe de
+  28L, contact **0,00 MSL de 200 à 1 000 m avant le seuil** (avant : 3,10 → 0,96) et 150–300 m à côté (avant 2,3) ; le terrain de SFO
+  inchangé (3,0–3,1 m, 500 et 1 500 m le long de la piste, 250 m à côté) ; la baie dessinée en eau (`baie-sfo-28l-avant.jpg` →
+  `baie-sfo-28l-apres.jpg`, même vue que la sonde de l'agent du trafic ; `sfo-terrain-apres.jpg`) ; **Toulon-Hyères** : la même vue
+  du bout de piste de LFTH avant/après identique (`hyeres-piste-avant.jpg`, `hyeres-piste-apres.jpg`), le contact sur une grille de
+  16 × 11 points autour des pistes inchangé hors de quelques cellules de salins à 0–0,3 m (relevées avant de 0,4–0,8 m, laissées à
+  leur niveau). Tests `runway-parity.test.ts` (la parité CPU recalculée, la baie non relevée, la bande et la terre relevées, une piste
+  inventée gardée). **Non vérifié** : la parité GPU (`ellipsoid.e2e`, non relancé), le coût (attendu nul), d'autres aéroports en bord
+  d'eau (LaGuardia, Boston, Nice, Hong Kong).
 
 ## ~~Au parking de SFO, la finition du sol à 27 ms : l'air marché à chaque pixel~~ (relevé le 24 novembre 2026, e2e `traffic-runways` `TRW_COST=1`) — réglé le 25 novembre 2026 (branche d'agent)
 

@@ -269,6 +269,15 @@ l'e2e, aucune requête IGN). GPU p50 = `renderer.lastGpuMs` sur 90 images ; le b
   0,5 → 0,2 ms — **dans le bruit d'une seule passe**, aucun gain revendiqué ; à 76 m du chalutier (`traffic-free-camera`) :
   −0,1 puis +0,8 ms selon les passes (vue en direct, bruitée). Coût GPU des autres changements **non mesuré**.
 
+### PONT-ROUTES — revue H : l'eau sous le niveau des pistes (26 novembre 2026, branche de l'agent)
+
+- **Le relief nivelé par les pistes** (`9cf0849a` ; `game/runway-grade.ts` `gradeAt`/`levelOver`, et son jumeau WGSL `runwayGrade`/`runwayLevelOver`,
+  lus par `earthHeightExactG`, `earthHeightStepG`, l'eau du raster — `liteWater`, son `lvl` — et le sol tracé — `earthGround`) : hors de
+  la bande revêtue d'une piste réelle (au-delà de ses extrémités ou de ses côtés, fondu sur 30 m — `Grade.past`, `RWY_PAST`), le niveau
+  ne relève plus que la terre des données (0 … 0,3 m au-dessus de la mer et plus) ; l'eau garde son niveau et reste de l'eau. Le
+  contact (`terrain.ts earthHeightSampler`) et les pieds du décor (`scenery-worker.ts`) suivent la même règle. Aucune passe, aucune
+  ressource ; une sélection de plus par appel de `runwayGrade`. Coût non mesuré (attendu nul).
+
 ### PONT-ROUTES — revue G : la bande de Cheviré (les chutes sur le sursol), la surface de la mer dessinée sur la Seine (26 novembre 2026, branche de l'agent)
 
 - **Préparation du relief (hors image, worker de décodage ; `06a919ed`)** : à la seconde passe d'une tuile nationale (le sursol des silhouettes
