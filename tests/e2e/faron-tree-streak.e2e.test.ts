@@ -71,6 +71,9 @@ describe.skipIf(!E2E)("Mont Faron: no tree streak through a craft at rest", () =
     const base = await app.js<number>(`__bh.renderer.liteSkip`);
     const lift = await app.js<number[]>(`[...(__bh.renderer.sceneryLiftNow ?? [])]`);
     console.log(`  the scenery's lift (R4b: (x + y d) d², fade, on): ${JSON.stringify(lift)}`);
+    console.log(
+      `  the scene: ${JSON.stringify(await app.js(`(() => { const s = __bh.renderer.earthScenery.stats(); return { pylons: s.pylons, cables: s.cables, turbines: s.turbines, trees: s.trees, buildings: s.buildings }; })()`))}`,
+    );
     const set = (js: string) => app.js(`(async () => { const R = __bh.renderer; ${js} ${frames(90)} return 1; })()`);
     await set(`R.liteSkip = ${base}; R.liftOn = true;`);
     await app.shot(`${OUT}/a-as-is.png`);
@@ -134,6 +137,16 @@ describe.skipIf(!E2E)("Mont Faron: no tree streak through a craft at rest", () =
         .filter(Boolean)
         .map((v) => v.split(",").map(Number) as [number, number]),
       ...movedAt.filter((_, k) => k % Math.max(1, Math.floor(movedAt.length / 12)) === 0).slice(0, 12),
+      // (and the streak's brightest: the pale line itself)
+      ...[...movedAt]
+        .sort((p, q) => {
+          const l = (v: [number, number]) => {
+            const i = (v[1] * A.width + v[0]) * A.channels;
+            return A.data[i]! + A.data[i + 1]! + A.data[i + 2]!;
+          };
+          return l(q) - l(p);
+        })
+        .slice(0, 6),
     ];
     if (picks.length) {
       const texels = await app.js(`(async () => {
