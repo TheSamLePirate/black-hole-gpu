@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 25 nov. 10:30 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 25 nov. 11:15 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous. Ce qui est fermé quitte le tableau « En cours » pour la ligne « Fermé récemment ».
@@ -78,6 +78,14 @@ l'état d'une mission ou d'un combat **non sauvé, dit** ; le réseau **« entre
 **Décidé par Sam (16 nov., 15:58 UTC)** : J8-4 allumée par défaut (quads sous 8 px), J8-5 avec une jonction choisie sur captures, J8-1b suspendu, l'e2e de J8-6 par la voie (b), J8-9 ajouté ([PLAN-J8](docs/PLAN-J8-BATIMENTS.md) §6 point 6). **But fixé par Sam (16 nov., ~16:19 UTC)** : [J8-A](docs/PLAN-J8-BATIMENTS.md), un vol Paris et Toulon-Hyères, de jour et de nuit, tous les bâtiments, lampadaires, voitures (J8-L) et rivières (J8-E) chargés avant le vol, en « high » partout, sans différence visible entre les qualités. **Décidé par Sam (16 nov., ~21:40 UTC)** : J8-8 ouvert (le proche en cellules), la jonction à 0, l'éclat de nuit lointain gardé ([PLAN-J8](docs/PLAN-J8-BATIMENTS.md) §6 point 11). **Décidé par Sam (17 nov., ~08:00 UTC)** : J8-8b ouvert, les arbres par cellule, après un vol de référence à froid sur le M1 Max (§6 point 12). **Mode speed pour finir J8, J8-VB compris** (Sam, 17 nov. ~09:20 UTC ; [CLAUDE.md](CLAUDE.md), modes de travail ; §6 point 13) : contrôles rapides par lot, un gros e2e J8-A à la fin sur kerr-mini et le M1 Max. **J8-RP, les routes et les ponts AAA** (Sam, 17 nov. ~10:20 UTC ; [PLAN-J8](docs/PLAN-J8-BATIMENTS.md) §3 bis) : ajouté à J8 en mode speed, RP1 (les routes et marquages visibles sous l'orthophoto) en tête. **Attend Sam** : les quatre premières questions de PLAN-J8 §6, réglées provisoirement (même contenu sur les deux machines, retour si > 3 ms sur le mini ; portée au pixel ; J7 en pause, les arbres proches deviennent J9 ; pas de préparation côté serveur pour l'instant) ; les trois questions de [PLAN-J7](docs/PLAN-J7-FLUIDITE.md) §4, réglées provisoirement (les 40 ms du mini en dernier, J7-6 ; les arbres proches en géométrie ensuite, désormais J9 ; l'aplanissement du détail sous les trouées jusqu'à la FAF ou 10 km) ; les seuils du mini attendent la reprise de la cible 40 ms.
 
 ## Journal
+
+### 2026-11-25 11:15 UTC — Trafic : étiquettes cachées derrière la scène, rampes d'approche en 3D
+
+- Contribution : §19 (lisibilité et crédibilité d'un aéroport : l'étiquette d'un objet caché ne flotte plus devant le terminal ; la rampe d'approche réelle de SFO dessinée), §7 (les feux de rampe du shader et les structures aux mêmes places, lues des mêmes données d'approche).
+- Réalisé (fusion sur main, agent `45d36207`, `da780327`, `059ac797`) : chaque étiquette (trafic, navires, porte-avions) testée contre la profondeur d'occultation que le renderer a déjà (5 points sur l'objet, une image sur deux, ≤ 48 étiquettes, copies de 4 octets, aucune passe nouvelle ; `renderer.labelAsk`/`labelSeen`, `ui/overlay.ts`), fondu 0,2 s ; structures des rampes d'approche aux bouts de piste dotés d'un ILS (`approaches.ts ilsAt`, CIFP/nav.dat) : pylônes, barres et têtes tous les 30 m de 30 à 900 m, barre transversale à 300 m, 2 736 triangles par bout, ≤ 8 km de l'œil (`world/approach-lights.ts`, `controller/approach-lights.ts`, `ship.setDynamicMesh`).
+- Preuves : **observé sur ce Mac** (kerr-mini injoignable) — e2e `traffic-labels` (l'étiquette de l'A320 d'United disparaît derrière la jetée puis revient) et `approach-lights` (jour et nuit, 28L/28R/19L) réussis ; captures `docs/progress/etiquettes-als-2026-11-25/`. Suite complète de l'agent 2 876 réussis, 3 échecs de délai sous charge (repassés seuls) ; après fusion sur main : tsc, Biome, `pipeline-inventory --check`, 209 tests ciblés (dont ces trois). **Non mesuré** : le coût GPU des deux nouveautés.
+- Limites / transitions : la rampe est partout ALSF (pas de type dans nos données) ; la nuit, les feux du shader restent au sol/à l'eau (~3,5 m sous les têtes à SFO) ; la baie de SF de près en vert émeraude saturé (Kd490 0,69 : couleur de l'eau turbide à revoir sur photos de référence).
+- Suite : A/B `traffic-cost` et coût des étiquettes/rampes au retour de kerr-mini ; feux de rampe sur les têtes.
 
 ### 2026-11-25 10:30 UTC — Routes, lot 3 : l'appareil caché derrière ce qui est plus proche, trottoirs par côté, rues nivelées dans le relief ; CI réparée
 

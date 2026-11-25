@@ -430,7 +430,7 @@ function carrierOverlay(this: CameraController, fmtSpd: (ms: number) => string, 
     if (night)
       for (const l of shipLights("cargo", spec.len, spec.beam))
         lights.push({ at: at(l.at), colour: l.colour === "white" ? white : l.colour === "red" ? red : green, on: true, size: l.size });
-    out.push({ id: `cv:${sp.kind}`, at: rel, dist, label: `${spec.name} · ${fmtSpd(sp.speed)}`, lights });
+    out.push({ id: `cv:${sp.kind}`, at: rel, dist, label: `${spec.name} · ${fmtSpd(sp.speed)}`, lights, r: spec.len / 2 });
   }
   return out;
 }

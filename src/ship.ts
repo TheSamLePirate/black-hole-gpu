@@ -1141,6 +1141,36 @@ export class ShipRenderer {
   private getter: (url: string) => Promise<Response> = fetch;
 
   /** Whether a craft's mesh is there (starting its download if not). */
+  /** A mesh made by the game (src/world/approach-lights.ts — its vertices in the common layout, material 90's flat colours), drawn as
+   *  the traffic's are under its key as the instance's id; made again under the same key: replaced (the old buffers freed once the GPU
+   *  is done with them). Its levels of detail none — a few thousand triangles. */
+  setDynamicMesh(key: string, verts: Float32Array, idx: Uint32Array) {
+    const d = this.device;
+    const old = this.meshes[key as ShipMeshId];
+    const lo: V3 = [Infinity, Infinity, Infinity],
+      hi: V3 = [-Infinity, -Infinity, -Infinity];
+    for (let i = 0; i < verts.length; i += 10)
+      for (let k = 0; k < 3; k++) {
+        lo[k] = Math.min(lo[k]!, verts[i + k]!);
+        hi[k] = Math.max(hi[k]!, verts[i + k]!);
+      }
+    const vbuf = d.createBuffer({ size: verts.byteLength, usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST });
+    d.queue.writeBuffer(vbuf, 0, verts as Float32Array<ArrayBuffer>);
+    const ibuf = d.createBuffer({ size: idx.byteLength, usage: GPUBufferUsage.INDEX | GPUBufferUsage.COPY_DST });
+    d.queue.writeBuffer(ibuf, 0, idx as Uint32Array<ArrayBuffer>);
+    const c: V3 = [0, 1, 2].map((j) => (lo[j]! + hi[j]!) / 2) as V3;
+    this.meshes[key as ShipMeshId] = { vbuf, ibuf, count: idx.length, bound: { c, r: Math.hypot(...sub(hi, lo)) / 2, lo, hi } };
+    if (old)
+      void d.queue.onSubmittedWorkDone().then(() => {
+        old.vbuf.destroy();
+        old.ibuf.destroy();
+      });
+  }
+  /** whether a dynamic mesh is there under its key (setDynamicMesh) */
+  hasDynamic(key: string) {
+    return !!this.meshes[key as ShipMeshId];
+  }
+
   has(id: ShipMeshId) {
     if (this.meshes[id]) return true;
     if (!this.loadingMesh.has(id) && this.ready) {
@@ -2483,7 +2513,11 @@ export class ShipRenderer {
       // (in the shadow maps: the first half's — 1 —, the second's — 2 —; hidden behind the traced image — bit 0 —,
       // mirrored in the sea — bit 1)
       const second = i === big || group.has(i);
-      this.instData.set([kind[it.id], it.shadow ? 1 : second ? 2 : 0, (it.far ? 1 : 0) + (it.mirror ? 2 : 0), parts], i * INST_FLOATS + 16);
+      // (a dynamic mesh — setDynamicMesh: the approach lights' structures — its flat colours' kind, the ground vehicles')
+      this.instData.set(
+        [kind[it.id as keyof typeof kind] ?? 22, it.shadow ? 1 : second ? 2 : 0, (it.far ? 1 : 0) + (it.mirror ? 2 : 0), parts],
+        i * INST_FLOATS + 16,
+      );
       {
         const d = Math.hypot(...it.t);
         this.lastDraws.push({
