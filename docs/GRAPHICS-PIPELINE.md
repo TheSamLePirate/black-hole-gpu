@@ -67,6 +67,13 @@ Windows/D3D12. Les numéros de ligne sont ceux de `da4e75bd`.
   Golden Gate 43,3 / 45,1 → 43,6 / 49,0 (une passe par côté ; Grenelle et Alexandre III : plus de pièces — pylônes, arc, tous les ponts —,
   écart non séparé du bruit d'une passe). Scintillement des câbles à 30 km : sous la moitié du décalage d'un pixel des deux côtés.
 - **Non mesuré** : `levelTwinDecks`, les bouts posés sur un tablier recouvrant (`629aedc0`), `farBridges` relevé (`6f1fdcd2`).
+- **`rasterLiteTakes` / `shadeLite` (trace.wgsl, `05a44c32`)** : le proxy de couronne d'un arbre devant le ciel (id en g, sol 0, alpha 0)
+  est pris par `shadeLite` (avant : le noyau des rayons `shade`, sans arbres depuis J9 — les blocs gris de Battery Spencer) ; la couronne
+  cherchée jusqu'à 60 m au-delà du proxy ; un raté laissé `RASTER_STALE` à la reconstruction. +8 lignes ; `check-wgsl` 85/85 (ce Mac).
+- **Mesuré après tous les correctifs** (kerr-mini, 25 nov. 2026 ~00:40 UTC, `05a44c32`, `remote-results/20261125-003315-ponts-after-bridges-2`,
+  une passe, p50 / p95 ms) : Grenelle 56,4 / 63,3, Alexandre III 58,8 / 64,9, Rivoli 58,8 / 62,6, Millau 33,4 / 39,7, Golden Gate à 1 km
+  47,2 / 51,3, à 30 km 37,3 / 38,9 ; `bridgesDropped` 0 partout, Paris 1 007–1 166 ponts (les pièces jointes en comptent moins).
+  `bridges-notable` (`629aedc0`) : Cheviré 45,2 / 53,7, Golden Gate au conducteur 46,1 / 75,6 (p95 d'une seule passe).
 
 ### PONT-ROUTES — revue A : un profil, une surface, un contact (24 novembre 2026, branche de l'agent)
 
@@ -950,7 +957,7 @@ Paris jusqu'à `earthSettled` » chronométré par étape.
 
 <!-- pipeline-inventory:begin (bun scripts/pipeline-inventory.ts --write) -->
 
-_Généré le 2026-11-24T22:47:36Z sur `629aedc0` (arbre de travail). Ne pas éditer à la main : relancer l'outil._
+_Généré le 2026-11-25T02:27:28Z sur `05a44c32` (arbre de travail). Ne pas éditer à la main : relancer l'outil._
 
 **130 sites de création de pipeline** (86 rendu, 44 calcul, dont 66 asynchrones) et 43 `createShaderModule` dans 32 fichiers ; **44 programmes WGSL** (16 fichiers .wgsl, 28 chaînes dans le TypeScript) ; **66 libellés de passes** du profileur GPU (+ 11 sites à libellé dynamique).
 
@@ -1132,7 +1139,7 @@ _Généré le 2026-11-24T22:47:36Z sur `629aedc0` (arbre de travail). Ne pas éd
 
 | source | lignes | points d'entrée |
 |---|---:|---|
-| `src/shaders/trace.wgsl` | 18143 | 18 entrées : cloudLightVolume, aerial, lut, main, shade, shadeMark, shadeLiteFinish, shadeWaterFinish, shadeLiteLight, shadeLite, skyFill, shadeWater, clouds, skyAmbient, cloudShadow, env, probe, shadeStars |
+| `src/shaders/trace.wgsl` | 18156 | 18 entrées : cloudLightVolume, aerial, lut, main, shade, shadeMark, shadeLiteFinish, shadeWaterFinish, shadeLiteLight, shadeLite, skyFill, shadeWater, clouds, skyAmbient, cloudShadow, env, probe, shadeStars |
 | `src/shaders/ship.wgsl` | 2713 | 34 entrées : envCopy, envDown, envGGX, envSH, ctlVs, depthVs, vs, mirrorVs, shadowVs, fs, hullDepthVs, hullDepthFs, ownMaskFs, plumeVs, plumeFs, glowVs, glowFs, distVs, distFs, sheathVs, sheathFs, trailVs, trailFs, lampVs, lampFs, compVs, compFs, fsCabin, fsCabinGlass, fsJetGlass, motionVs, motionFs, composeColor, composeSurface |
 | `src/shaders/post.wgsl` | 1396 | 18 entrées : gatherH, atrous, beamH, beamV, polgrid, resolve, down, downShip, dof, flareMeter, up, meter, stars, motionBlur, temporal, occlusion, cloudTemporal, taau |
 | `src/system/scenery-raster.ts:208` | 1191 | 31 entrées : cull, cullBoxes, clampBoxes, shadowVs, shadowFs, proxyVs, proxyFs, boxVs, boxFs, bridgeMarkFs, boxMarkVs, boxShadowVs, meshShadowVs, meshVs, meshFs, boxSolidVs, benchCull, benchQuadVs, benchVs, benchShadowVs, farCull, farVs, farQuadVs, farFs, farLampCull, farLampVs, farCarCull, farCarVs, nearCellVs, nearCellShadowVs, farShadowVs |
@@ -1313,15 +1320,15 @@ Leur coût n'apparaît que dans l'intervalle de complétion de la frame (ou d'un
 
 | profil | noyaux (lignes inlinées, en milliers) | total |
 |---|---|---:|
-| `earth-raster` | shade 27.1 · shadeMark 0.3 · shadeLite 7.9 · shadeLiteFinish 0.8 · shadeLiteLight 2.5 · shadeWater 5.6 · shadeWaterOpen 4.9 · shadeWaterFinish 1.2 · shadeStars 0.3 · discs 29.9 · clouds 3.8 · skyFill 0.7 · main 42.4 · env 58.9 · aerial 0.7 | 187k |
+| `earth-raster` | shade 27.1 · shadeMark 0.3 · shadeLite 7.9 · shadeLiteFinish 0.8 · shadeLiteLight 2.5 · shadeWater 5.6 · shadeWaterOpen 4.9 · shadeWaterFinish 1.2 · shadeStars 0.3 · discs 29.9 · clouds 3.8 · skyFill 0.7 · main 42.5 · env 58.9 · aerial 0.7 | 187k |
 | `earth-raster-wx` | shade 32.1 · shadeMark 0.3 · shadeLite 7.9 · shadeLiteFinish 0.8 · shadeLiteLight 2.5 · shadeWater 5.6 · shadeWaterOpen 4.9 · shadeWaterFinish 1.2 · shadeStars 0.3 · discs 29.9 · clouds 3.8 · skyFill 0.7 · main 45.4 · env 58.9 · aerial 0.7 | 195k |
 | `earth-trace` | main 66.1 · env 62.4 · aerial 0.6 | 129k |
 | `earth-photo` | main 67.8 | 68k |
 | `game-space` | main 54.1 · env 50.3 · aerial 0.6 | 105k |
-| `moon` | main 75.8 · env 50.3 · aerial 0.6 · shadeLite 25.6 | 152k |
+| `moon` | main 75.8 · env 50.3 · aerial 0.6 · shadeLite 25.7 | 152k |
 | `moons` | main 76.7 · env 50.3 · aerial 0.6 · shadeLite 25.8 | 153k |
 | `mars` | main 87.6 · env 50.3 · aerial 0.6 · shadeLite 37.6 | 176k |
-| `titan` | main 90.6 · env 50.3 · aerial 0.6 · shadeLite 42.7 | 184k |
+| `titan` | main 90.6 · env 50.3 · aerial 0.6 · shadeLite 42.8 | 184k |
 | `venus` | main 90.4 · env 50.3 · aerial 0.6 · shadeLite 43.4 | 185k |
 | `earth-only` | main 50.2 · env 44.0 · aerial 0.7 | 95k |
 | `kerr-jet` | main 31.9 · env 27.9 · lut 28.2 | 88k |

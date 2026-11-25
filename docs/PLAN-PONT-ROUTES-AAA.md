@@ -19,7 +19,7 @@ avec ses montants ; **(3)** les câbles du Golden Gate ouverts en travers de leu
 (normale ronde) ; **(4)** plus de plafond de 1 024 ponts : une part de 30 % des octets du décor, la LOD grossie à mesure.
 Preuves : tests unitaires (`bridge-heights`, `bridge-cable-raster`, `bridge-structures`), A/B e2e sur kerr-mini (`bridges`,
 `bridges-notable`, A = `18a6e4dd`), captures dans [ponts-2026-11-25](progress/ponts-2026-11-25/). Restent ouverts : voir
-PROBLEMES-A-REGLER (blocs gris de Battery Spencer, latence du WFS à froid).
+PROBLEMES-A-REGLER (marche de 0,5 m à la fourche de la bretelle de Grenelle, bande claire sous Cheviré, latence du WFS à froid) ; les blocs gris de Battery Spencer réglés (`05a44c32`, proxys d'arbres devant le ciel).
 Historique : *analyse approfondie et plan proposés le 21 novembre ; aucune phase d'implémentation commencée à cette date.*
 **Mode : normal**, par défaut selon [CLAUDE.md](../CLAUDE.md). Le mode speed historique de J8 ne s'étend pas à ce chantier.
 Base examinée : **`3a86f5e1`**, avec le journal d'analyse du 21 novembre. Le code fait foi si le dépôt évolue.

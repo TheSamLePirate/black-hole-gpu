@@ -29,7 +29,12 @@ connue ou supposée, la piste. Une entrée réglée est barrée avec le commit q
   A = `18a6e4dd`, B = `698dbd22`) : crête **25,2 → 60,6 m** au-dessus de la mer, plus grande pièce **1 043 → 1 651 m**, marches > 25 cm sur
   l'axe **25 (11,1 m au plus) → 2 (0,41 m au plus, entre les deux chaussées jumelles — nivelées depuis par `629aedc0`)** ; GPU de la vue
   p50/p95 47,2/52,5 → 44,2/47,1 ms. Captures `docs/progress/ponts-2026-11-25/chevire-{avant,apres}.jpg`.
-- **Reste** : la bande claire sur l'eau sous le tablier (visible avant et après) ; à froid, la préparation des cellules attend une requête WFS
+- **Vérifié après tous les correctifs** (kerr-mini, 25 nov. ~00:05 UTC, `629aedc0`+, `remote-results/20261125-000142-ponts-after-2`) :
+  e2e Cheviré **réussi** — crête 60,4 m, plus grande pièce 1 651 m, ligne de conduite sur la travée droite 1 100 m sans marche (0,071 m au
+  plus), sans trou, appui 0 cm ; `streetMissing` 0. Capture `chevire-apres-final.jpg`.
+- **Reste** : la bande claire sur l'eau sous le tablier (visible avant et après) ; **Grenelle** : à la bretelle de l'île aux Cygnes
+  (48,8503 N), le tablier de la bretelle (descendant à 35,2 m) et celui du pont (37,5 m) se recouvrent à leur fourche : 0,43–0,54 m sur trois
+  échantillons de l'axe (e2e `bridges-notable` en échec sur ce seul point ; avant, sans relevé, les deux étaient plats au tirant) ; à froid, la préparation des cellules attend une requête WFS
   de plus (29 cellules encore en préparation à la prise de vue côté B) ; Bay Bridge, Øresund etc. à l'étranger : tirant par règle.
 
 ## Ponts et routes, campagne e2e 2 : à revoir à l'œil (relevé le 24 novembre 2026, `bridges`, `bridges-notable`, kerr-mini)
@@ -40,7 +45,12 @@ connue ou supposée, la piste. Une entrée réglée est barrée avec le commit q
   disparaissent, les blocs restent), ni les imposteurs (`treeImpostorsOn` false), ni la géométrie des arbres proches, ni la couche lointaine
   des bâtiments ; la vue de coût du traceur (`costView` 1) les montre sans travail de rayon (pixels du raster, silhouette en escalier dans la
   visibilité elle-même) et `liteSkip` 1024 (shadeLite seul) les montre hors de `shadeLite` : une surface raster ombrée par une autre passe
-  (`shadeWater` probable : de l'eau dessinée au-dessus de la colline ?). **Non réglé** ; piste : lire le code de visibilité de ces pixels.
+  (`shadeWater` probable : de l'eau dessinée au-dessus de la colline ?). **Réglé le 25 nov. (`05a44c32`)** : `surfaceAt` y lisait « tree »,
+  sol 0, plus proche 80–107 m, alpha 0 — le **proxy de couronne d'un arbre devant le ciel** ; `rasterLiteTakes` refusait un pixel sans sol,
+  il allait au noyau des rayons, dont les arbres ont été retirés avec J9 le 24 nov. (blocs couleur de ciel, au pas d'ombrage). Désormais
+  pris par `shadeLite`, qui cherche la couronne jusqu'à 60 m au-delà du proxy et laisse un raté à la reconstruction. Vu sur kerr-mini
+  (`docs/progress/ponts-2026-11-25/golden-gate-1km-apres-arbres.jpg`, e2e `bridges` 7/7, GPU de la vue 47,2 / 51,3 ms). Test
+  `tests/raster-sky-trees.test.ts`. Reste : quelques points sombres au bord des couronnes (pixels ratés laissés à la reconstruction).
 - **Golden Gate, câble porteur en ruban plat depuis le tablier** (`golden-gate-tablier.jpg`) — **réglé le 25 nov. (`698dbd22`)** : le câble
   était ouvert le long du haut du repère ; il l'est désormais en travers de sa ligne et de la vue, sa distance celle du devant d'un cylindre
   (normale ronde rebâtie par `rasterNormal`). Vu sur kerr-mini (`golden-gate-deck-low-{avant,apres}.jpg`) ; scintillement à 30 km inchangé
