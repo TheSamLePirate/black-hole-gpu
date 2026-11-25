@@ -6,15 +6,15 @@ import { readPng, writePng } from "./lib/png";
 
 // PROBLEMES-A-REGLER « Un trait clair et un « poteau » sombre à travers un F-35 posé sur le mont Faron » (24 Nov 2026): the F-35 set
 // down on Mont Faron's southern flank (j2-contact-camera's place, 11 h UTC, the J0 scene), the camera « around » 25 m in front of it
-// (yaw 180, pitch 8): a pale straight streak across the trees by the craft, drawn by the raster material (shadeLite — gone with
-// liteSkip 64). Found 25 Nov 2026: it goes with the air's lift too (renderer.liftOn false: R4a/R4b) — its pixels near trees (J9
-// geometry, ~10 m) with the far ground behind them at 16–56 km, or the sky. The material's own tree test lifted at the ground's
-// distance was fixed (c02620c0) and the streak stands: its cause is still open (PROBLEMES). Measures it: the same frozen view with
-// the lift on (A) and off (D), the pixels it changes counted (9 982, then 4 760 and 4 575 after c02620c0, kerr-mini); B, the
-// material's trees off, for the eye. Fails while the streak stands.
+// (yaw 180, pitch 8): a pale straight streak across the trees by the craft. Cause (8d4e0be1): the sea's surface kept a crest standing
+// over the land behind it testing the ground's distance alone, not the nearest surface's: the sea's horizon 25–57 km off, lifted by
+// the air (R4b), was kept over the trees 10 m from the camera — gone without the lift. Measures it: the same frozen view with the
+// lift on (A) and off (D), the pixels the lift makes paler over a dark ground (5 816 and 3 257 before the fix, kerr-mini; 9 after,
+// this Mac); B, the material's trees off, for the eye; FARON_DIAG=1 the parts found innocent (the raster's projection lift, the near
+// trees' 3D geometry, the craft).
 // Steps: 1 boot · 2 the craft set down on the flank, the relief in · 3 the view in front · 4 the images, the streak counted.
 // Duration: ~3 min on kerr-mini (the Earth data on disk).
-// Done when: the pixels the lift moves counted (under 1 500).
+// Done when: the streak's pixels counted — those the lift makes paler over a dark ground — under 200.
 
 const OUT = process.env.FARON_OUT ?? "remote-results/faron-tree-streak";
 const W = 1920,
@@ -100,19 +100,26 @@ describe.skipIf(!E2E)("Mont Faron: no tree streak through a craft at rest", () =
     const read = async (f: string) => readPng(new Uint8Array(await Bun.file(`${OUT}/${f}.png`).arrayBuffer()));
     const A = await read("a-as-is"),
       D = await read("d-no-lift");
-    // (the pixels the lift changes, the page's bar left out: the near trees must not move with it — they are tested lifted at their
-    // own distance, as the raster draws them; the far scenery's sub-pixel lift, a few)
+    // (the pixels the lift changes, the page's bars left out — the far land's own lift, by design, among them —, and the streak's: those
+    // the lift makes paler by more than 48 over a dark ground — the sea's horizon drawn over the trees)
     const mask = new Uint8Array(A.width * A.height * 3);
-    let moved = 0;
+    let moved = 0,
+      streak = 0;
     const movedAt: [number, number][] = [];
+    const lum = (P: typeof A, i: number) =>
+      0.2126 * P.data[i * P.channels]! + 0.7152 * P.data[i * P.channels + 1]! + 0.0722 * P.data[i * P.channels + 2]!;
     for (let i = 0; i < A.width * A.height; i++) {
-      if (Math.floor(i / A.width) < 60) continue;
+      if (Math.floor(i / A.width) < 90) continue;
       let m = 0;
       for (let c = 0; c < 3; c++) m = Math.max(m, Math.abs(A.data[i * A.channels + c]! - D.data[i * D.channels + c]!));
       if (m > 48) {
         moved++;
         mask[3 * i] = 255;
         movedAt.push([i % A.width, Math.floor(i / A.width)]);
+      }
+      if (lum(A, i) - lum(D, i) > 48 && lum(D, i) < 70) {
+        streak++;
+        mask[3 * i + 1] = 255;
       }
     }
     await Bun.write(`${OUT}/streak-mask.png`, writePng(A.width, A.height, mask));
@@ -162,7 +169,8 @@ describe.skipIf(!E2E)("Mont Faron: no tree streak through a craft at rest", () =
         return out; })()`);
       console.log(`  texels: ${JSON.stringify(texels)}`);
     }
-    await app.stepDone(`pixels déplacés par le relèvement : ${moved}`, moved < 1500);
-    expect(moved).toBeLessThan(1500);
+    console.log(`  the streak: pixels the lift makes paler over a dark ground ${streak} (5 816 and 3 257 before 8d4e0be1, kerr-mini)`);
+    await app.stepDone(`trait : ${streak} pixels (déplacés par le relèvement : ${moved})`, streak < 200);
+    expect(streak).toBeLessThan(200);
   }, 500_000);
 });
