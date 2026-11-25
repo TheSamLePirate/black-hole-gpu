@@ -3,6 +3,7 @@
 import { type BVHParts, TriBVH } from "./collide";
 import { type SeaCascades, type SeaPhysics, type SeaSystem, seaCascades } from "../sea/spectrum";
 import type { NoteJob } from "../audio/music/instruments";
+import type { LodLevel } from "../ship-lod";
 
 let worker: Worker | null = null;
 let failed = false;
@@ -99,4 +100,13 @@ export async function impulseOff(sampleRate: number, secs: number, bright: numbe
   if (!w) return null;
   const r = await ask<{ ir: Float32Array<ArrayBuffer>[] }>(w, { job: "ir", sampleRate, secs, bright });
   return r?.ir ?? null;
+}
+
+/** A traffic mesh's levels of detail (ship-lod.ts buildLods), made in the worker — never here: meshoptimizer's tenths of a second kept off
+ *  the page's thread —; null: no worker, or it failed (the mesh drawn whole, as before). */
+export async function meshLodsOff(verts: Float32Array, idx: Uint32Array, solid = idx.length): Promise<LodLevel[] | null> {
+  const w = the();
+  if (!w) return null;
+  const r = await ask<{ levels: LodLevel[] }>(w, { job: "lod", verts: verts.slice(), idx: idx.slice(), solid });
+  return r?.levels ?? null;
 }

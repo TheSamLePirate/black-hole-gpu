@@ -5709,6 +5709,14 @@ fn figureSunShare(ro: vec3f, light: vec3f, rs: f32, ab: f32) -> f32 {
   return 0.5 + (x * sqrt(max(1.0 - x * x, 0.0)) + asin(x)) / PI;
 }
 // a ray from ro along rd against the unit sphere (ro outside or in: the near side ahead), −1 when missed
+// (a sphere of radius rs about the world's centre, in the same units — the aerial table's columns' end)
+fn radiusHit(ro: vec3f, rd: vec3f, rs: f32) -> f32 {
+  let b = dot(ro, rd);
+  let off = ro - rd * b;
+  let h = rs * rs - dot(off, off);
+  if (h < 0.0 || b >= 0.0) { return -1.0; }
+  return -b - sqrt(h);
+}
 fn unitHit(ro: vec3f, rd: vec3f) -> f32 {
   let b = dot(ro, rd);
   let off = ro - rd * b;
@@ -12564,8 +12572,14 @@ fn aerial(@builtin(global_invocation_id) gid: vec3u) {
   let lt = nearLight(k);
   let Ls = normalize(squashed(toBody(lt.dir), ab));
   let tFar = apFar(ro);
-  // (no air within the ground: the column ends at the world's sphere)
-  let tg = unitHit(ro, rd);
+  // (no air within the ground: the column ends at the world's sphere — on the Earth, at the sea's level under the camera less 10 m (the
+  // geoid, EGM2008), not the ellipsoid's h = 0: where the geoid lies under the ellipsoid — San Francisco −32 m, the Indian Ocean −107 m —
+  // an eye a few metres over the ground could stand over h = 0, its columns then ending at h = 0 tens of times nearer than the ground
+  // they looked at, apCovers refusing them and every ground pixel marching its own air: SFO's gates, 25 Nov 2026 — `earth lite:
+  // finishing` 23–27 ms on kerr-mini, 2 ms with the eye 40 m higher. Lower than the ground, the column is only longer: the table holds
+  // the air to the ground's distance all the same)
+  let rs = select(1.0, 1.0 + min(geoidN(geoQ(normalize(ro))) - 10.0, 0.0) / P.near4.w, isEarth(k) && earthOn());
+  let tg = radiusHit(ro, rd, rs);
   let tEnd = select(tFar, min(tg, tFar), tg > 0.0);
   var T = vec3f(1.0);
   var L = vec3f(0.0);

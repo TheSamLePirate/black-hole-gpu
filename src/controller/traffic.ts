@@ -719,6 +719,8 @@ export interface TrafficInstance {
   far: boolean;
   a320?: { props: Props; spins: Props };
   alt?: { id: AirlinerId; rel: Vec3; axes: [Vec3, Vec3, Vec3] };
+  /** the aircraft's own id (its feed's): the renderer's choice of mesh held by it from frame to frame (renderer.trafficRigShare) */
+  uid?: string;
   /** on the ground or low over it (its shadow there — ship-casters.ts), its gear 0…1 (the plain meshes' — ship.wgsl
    *  trafficGearPos) and its airline's livery (traffic/livery.ts) */
   cast: boolean;
@@ -773,6 +775,7 @@ function trafficShips(this: CameraController, view: CameraController = this): Tr
         far: true,
         a320: trafficRig(c, now),
         alt: plain,
+        uid: c.id,
         ...own,
       });
       continue;
