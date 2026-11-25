@@ -117,7 +117,7 @@ le Danemark, la Belgique, la Pologne… L'Europe est donc la zone la plus riche 
 | **Tchéquie** | ČÚZK `ags.cuzk.cz/arcgis1/rest/services/ORTOFOTO_WM/MapServer/tile/{z}/{y}/{x}` — [V] écho | ImageServer DMR5G (2 m DTM) / DMP1G (DSM), `exportImage` **LERC F32** — [V] écho | CC BY 4.0 depuis 2023 [D] |
 | **Norvège** | Norge i bilder : licence restreinte [D] | WCS `wcs.geonorge.no/skwms1/wcs.hoyde-dtm-nhm-25833` (1 m) — [V] GeoTIFF `*` ; ImageServer `hoydedata.no` LERC F32 [V] écho | CC BY 4.0 (relief) [D] |
 | **Estonie** | Fotokaart WMS `kaart.maaamet.ee/wms/fotokaart` [V] `*` | WCS `teenus.maaamet.ee/ows/wcs-dtm`, `dtm-1` — [V] GeoTIFF `*` | CC BY 4.0 [D] |
-| **Luxembourg** | `wmts1.geoportail.lu/opendata/wmts/ortho_latest/GLOBAL_WEBMERCATOR_4_V3/{z}/{x}/{y}.jpeg` — [V] `*` | LiDAR 0,5–1 m (téléchargement) | CC0 [D] |
+| **Luxembourg** | `wmts1.geoportail.lu/opendata/wmts/ortho_latest/GLOBAL_WEBMERCATOR_4_V3/{z}/{x}/{y}.jpeg` — [V] `*` ; *(25/11 : = été 2025, 10 cm, z ≤ 21 ; hiver 2025 et IRC aussi — [PLAN-LUXEMBOURG-AAA](PLAN-LUXEMBOURG-AAA.md) §4)* | LiDAR 0,5–1 m (téléchargement) ; *(25/11 : terrain LiDAR 2024 en quantized-mesh `acts3.geoportail.lu`, MNT/MNS 2024 en COG par plages, CORS — même plan)* | CC0 [D] |
 | **Allemagne — NRW** | WMTS `wmts.nrw.de/geobasis/wmts_nw_dop/tiles/nw_dop/EPSG_3857_16/{z}/{x}/{y}` (DOP 10–20 cm) — [V] écho | DGM1 **COG** `opengeodata.nrw.de/…/dgm1_tiff/` — [V] Range 206, ACAO `*` ; WCS `wcs.nrw.de/geobasis/wcs_nw_dgm` [V] écho | dl-de/zero-2.0 [D] |
 | **Allemagne — Bavière** | WMTS `wmtsod1.bayernwolke.de/wmts/by_dop/smerc/{z}/{x}/{y}` DOP20 — [V] `*` | DGM1 GeoTIFF par km — [V] **sans ACAO** (proxy) | CC BY 4.0 [D] |
 

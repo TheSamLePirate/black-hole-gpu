@@ -3,6 +3,20 @@
 Problèmes constatés, pas encore réglés. Chaque entrée : la date (UTC), ce qui est mesuré ou observé et sa source, la cause
 connue ou supposée, la piste. Une entrée réglée est barrée avec le commit qui la règle, pas effacée.
 
+## Le sol du Luxembourg (et d'Arlon) posé au niveau de la mer par la source IGN (relevé le 25 novembre 2026, analyse PLAN-LUXEMBOURG-AAA)
+
+- **Constat** (ce Mac, 25/11, code du jeu exécuté sous Bun, pas vu en jeu) : `IGN.heights` sur Luxembourg-Ville rend une grille
+  **entièrement à 0,0 m** à z 12, 14 et 16 (65 536 échantillons ; le sol réel y est à 237–310 m). Sur une grille de tuiles z 13 de
+  49,40–50,25 N × 5,65–6,61 E, le WMS-R RGE ALTI répond 0,0 m exact sur 117 tuiles et en partie sur 56 (de Luxembourg-Ville à
+  Ettelbruck, et Arlon en Belgique) ; de vraies valeurs au sud (marge du RGE ALTI) ; rien au nord (Terrarium). Carte :
+  [progress/luxembourg/relief-ign-sur-luxembourg-2026-11-25.png](progress/luxembourg/relief-ign-sur-luxembourg-2026-11-25.png).
+- **Cause (lecture du code)** : la terre de la source IGN est un rectangle (`ORTHO_BOX`, `holds: () => true`, `earth-tiles.ts:160,848`)
+  placé avant Mapterhorn dans `NATIONAL` ; `ignGrid` (`earth-tiles.ts:681`) ne rejette que `< −100` ou `> 9000`, et le RGE ALTI remplit
+  de 0 une partie de son emprise hors de France. Le même rectangle barre Overture dans la scène proche et y affiche le crédit IGN.
+- **Piste** : [PLAN-LUXEMBOURG-AAA](PLAN-LUXEMBOURG-AAA.md) LU-0 — l'IGN sur le contour de la France seulement, une grille tout à 0,0
+  refusée ; Mapterhorn (0,5–1 m) prend alors le Luxembourg, la Belgique et les autres voisins du rectangle. L'étendue des 0 hors du
+  Luxembourg n'est pas cartographiée.
+
 ## Pont de Cheviré (Nantes) : tablier à 25 m au-dessus de la Loire au lieu de ~55 m, en morceaux (relevé le 24 novembre 2026, campagne e2e 2, `bridges-notable`)
 
 - **Constat** (kerr-mini, `20261124-181051-c2-bridges-notable-3`, capture `chevire.png`) : vu de 900 m à l'est, le viaduc traverse la Loire
