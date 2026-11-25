@@ -3,15 +3,34 @@
 Problèmes constatés, pas encore réglés. Chaque entrée : la date (UTC), ce qui est mesuré ou observé et sa source, la cause
 connue ou supposée, la piste. Une entrée réglée est barrée avec le commit qui la règle, pas effacée.
 
-## Nice : la moitié basse de la vue d'approche de 04 en sable (relevé le 25 novembre 2026, `waterfront-runways`, kerr-mini)
+## ~~Nice : la moitié basse de la vue d'approche de 04 en sable~~ (relevé le 25 novembre 2026, `waterfront-runways`, kerr-mini) — réglé le même soir (`c3ea0971`) : de l'écume, pas du sable
 
 - **Observé** (`remote-results/20261125-223112-waterfront-runways`, A main `c972b544` et B le correctif `3508b982` pareils ; les
   sondes du soir aussi) : la vue d'approche (1,5 km avant le seuil de 04 sur son axe, 80 m au-dessus) montre l'eau bleue jusqu'à mi-image,
   puis, sous une limite horizontale nette, un fond beige uni — du sable — sur toute la moitié basse. Absent des deux courses de 21 h 19 UTC
   (même code). Non diagnostiqué ; candidats : la surface de la mer (son maillage, sa portée) et la profondeur de Dean sous la caméra
   (le fond vu à travers l'eau), selon l'état de la mer du moment (le vent réel).
-- **Piste** : la même vue avec `seaSurfaceOn` coupé, `liteSkip` 1, l'état de la mer imposé (`seaOverride`) ; journaliser
-  `seaSurfaceDrawn` et la mer (`WF_LEVERS=1`).
+- ~~**Piste** : la même vue avec `seaSurfaceOn` coupé, `liteSkip` 1, l'état de la mer imposé (`seaOverride`) ; journaliser
+  `seaSurfaceDrawn` et la mer (`WF_LEVERS=1`).~~
+- **Cause** (25 nov. 2026, vers 22 h 20 UTC, kerr-mini, `waterfront-runways` `WF_ONLY=nce`, 13 courses sondées) : **pas une régression**
+  des fusions du soir — le défaut ne paraît que quand Nice est la **première** vue de mer après le démarrage (`WF_ONLY=nce`, `nce,hkg`) ;
+  les courses sans défaut la faisaient en troisième, après LaGuardia et Boston. Le beige est **l'écume du monde** (PLAN-MER-WEBGPU S4,
+  `seafft.wgsl foamWorld`) : sa carte de 1 024 m relue sous la vue (`seaFft.texture`, couches 13 et 15) avait 70 % de ses texels au-dessus
+  de 0,5 (moyenne 0,69), sa carte de 128 m 0 %, alors que le jacobien relu était normal (moyenne 0,997, minimum 0,92 pour un seuil de
+  0,63) : l'écume n'était plus produite, elle était **tenue** — le monde arrêté de l'e2e (`animate: false`, `freeze`) ne la fait jamais
+  décroître (6 s de `freeze(false)` : identique). Sa source : la passe d'écume somme le jacobien des cascades **aux mips de l'image
+  d'avant** (elle tourne avant les mips de l'image) ; aux premières images de la mer, ces mips sont encore les zéros de la texture — un
+  jacobien de 0 par cascade, la surface « repliée » partout, de l'écume sur toute la carte (sa limite, la ligne nette). La carte de 128 m
+  lit surtout la mip 0 des longues cascades, calculée. Leviers sans effet (captures `remote-results/…wf-diag*`, `wf-dbg*`, `wf-ssr*`) :
+  Dean (`liteSkip` 2³¹), lavage, surface maillée, miroir proche, noyau de la haute mer, imagerie, orthophotos, eau des tuiles, fond et
+  déferlement (`tune TUNE_GSKIP` 1024), SSR (4096), cadence d'ombrage à 1 ; `seaFoamWorldOn` coupé l'efface, rallumé il revient.
+  Fausse piste notée : le relief IGN z 17 tient la baie à −0,32 m sous la vue (`contactAt`) — ramené à 0 à l'essai, le beige restait.
+- **Correctif** (`c3ea0971`, `sea/fft-gpu.ts foamCascades`) : l'écume ne lit que les cascades calculées **dont un encodage a déjà fait les
+  mips** (`SeaFft.mipped`) — aucune à la première image, une cascade nouvellement calculée (une descente) une image plus tard. Après :
+  carte de 1 024 m 0 %, la vue d'approche bleue jusqu'en bas (2/2 courses, Nice d'abord ;
+  `docs/progress/pistes-bord-de-mer-2026-11-25/nce-approche-04-ecume-avant-apres.jpg`). `waterfront-runways` relit désormais les deux
+  cartes sous chaque approche et échoue au-delà de 30 % ; test unitaire `tests/sea-foam-cascades.test.ts`. En jeu, le défaut était une
+  bouffée d'écume de quelques secondes (décroissance 0,2/s) à la première vue de la mer ou à l'entrée en basse altitude ; non mesuré en vol.
 
 ## ~~Nice : des stries régulières sur la baie à l'ouest de l'aéroport, sur main et pas sur 18a6e4dd~~ (relevé le 25 novembre 2026, `waterfront-runways`, kerr-mini) — la plaque réglée (`3508b982`), les stries non reproduites
 
@@ -287,8 +306,16 @@ connue ou supposée, la piste. Une entrée réglée est barrée avec le commit q
   devant la tour nord et entre couronnes superposées : retiré. Vu sur kerr-mini (A/B A B B A contre `38c5ba52`,
   `golden-gate-1km-couronnes-ciel-{avant,apres}.jpg`, `…-zoom-avant-apres.jpg`) : les points sombres partis au bord des couronnes devant
   le ciel ; forêt des Maures vue de 60 m (témoin, aucun ciel derrière) inchangée (écart A/B 0,40 % contre A/A 0,93 %,
-  `maures-canopee-temoin-avant-apres.jpg`). Reste : quelques points sombres là où une couronne passe devant une autre sans ciel à 2 px ;
-  au bord, le ciel propre sans le flou des suspentes que la reconstruction y étalait.
+  `maures-canopee-temoin-avant-apres.jpg`). ~~Reste : quelques points sombres là où une couronne passe devant une autre sans ciel à 2 px~~
+  — **réglé le 25 nov. 2026, nuit (`7f37c7c1`)** : sans ciel ni structure à 2 px, la passe de finition emprunte la surface d'une couronne
+  que `shadeLite` a ombrée à 2 px dans cette image (`liteOut` : couleur et distance) — d'abord celle d'un autre arbre (la couronne plus
+  lointaine que le raté découvre), la plus proche, puis la plus lointaine ; sinon la sienne (le trou refermé) — et la finit le long du
+  rayon du pixel (air, nuages) : le même ombrage que les couronnes, pas de halo ; un voisin déjà rempli par cette passe (sa distance dans
+  `moments` n'est plus celle de son `liteOut`) ne prête jamais. kerr-mini, A B B A contre `f90f66f5` : la rangée de points entre deux
+  couronnes devant la tour sud partie (`golden-gate-1km-couronnes-sur-couronnes-zoom-avant-apres.jpg`), coût dans le bruit (GRAPHICS-PIPELINE).
+  Au bord, le ciel propre sans le flou des suspentes que la reconstruction y étalait. **Reste, autre cas** : une couronne manquée devant
+  une autre couronne **avec le sol derrière** (indice > 0) est ombrée comme le sol — un liseré orange pointillé le long des couronnes
+  devant la pente à Battery Spencer, avant comme après ; non traité (le rayon n'y cherche que son propre arbre).
 - **Golden Gate, câble porteur en ruban plat depuis le tablier** (`golden-gate-tablier.jpg`) — **réglé le 25 nov. (`698dbd22`)** : le câble
   était ouvert le long du haut du repère ; il l'est désormais en travers de sa ligne et de la vue, sa distance celle du devant d'un cylindre
   (normale ronde rebâtie par `rasterNormal`). Vu sur kerr-mini (`golden-gate-deck-low-{avant,apres}.jpg`) ; scintillement à 30 km inchangé

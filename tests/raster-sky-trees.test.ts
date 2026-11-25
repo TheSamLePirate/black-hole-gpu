@@ -49,7 +49,7 @@ test("the sky's mark is its own: no other pixel's mark, the water's ranges nor t
   expect(mark("LITE_SKY_M")).toBeGreaterThanOrEqual(1e8);
 });
 
-test("the finishing pass fills a missed crown from what is about it: a structure lends its colour, the sky is drawn, trees alone leave it stale", () => {
+test("the finishing pass fills a missed crown from what is about it: a structure lends its colour, the sky is drawn, else the crowns shaded about it", () => {
   const at = finish.indexOf("if (mk == RASTER_SKY) {");
   expect(at).toBeGreaterThan(0);
   // (before the split's own test returns it)
@@ -61,9 +61,18 @@ test("the finishing pass fills a missed crown from what is about it: a structure
   expect(branch).toContain("if (terrainRasterBuilding(c) || terrainRasterMesh(c)) {");
   expect(branch).toContain("} else if (terrainRasterDepth(c) <= 0.0 && terrainRasterHint(c) <= 0.0) { sd = min(sd, d); }");
   expect(branch).toContain("if (nd < 99 && nd <= sd) {");
-  // (no sky about it — a gap between leaves, a crown behind it: the sky drawn there was a blue line between crowns —: stale, as before)
-  const stale = branch.indexOf("if (sd == 99) {\n      moments[idx] = vec2f(RASTER_STALE,");
-  expect(stale).toBeGreaterThan(branch.indexOf("if (nd < 99 && nd <= sd) {"));
+  // (no sky about it — a gap between leaves, a crown behind it: the sky drawn there was a blue line between crowns; left stale, the
+  // dark points where one crown passes before another —: the crowns shaded about it this frame lend their surface, finished along this
+  // pixel's ray — another tree's first, the farther crown the miss reveals —; a pixel this pass already filled — its moments' distance
+  // no longer its liteOut's — never lends; nothing shaded about it either: stale)
+  expect(branch).toContain("let tid = terrainRasterId(centre);");
+  expect(branch).toContain("if (m.x == RASTER_SPLIT || (m.x >= 0.5 * RASTER_MARK && stamps[n] == P.frame.x)) {");
+  expect(branch).toContain("let own = abs(ta / EARTH_RM * bodyRadius(k) - m.y) <= 1e-4 * m.y;");
+  expect(branch).toContain("let other = terrainRasterId(c) != tid;");
+  const crowns = branch.indexOf("if (sd == 99 && cd < 99) {\n      g = textureLoad(lutDirIn, cb, 0);");
+  expect(crowns).toBeGreaterThan(branch.indexOf("if (nd < 99 && nd <= sd) {"));
+  const stale = branch.indexOf("if (sd == 99) {\n        moments[idx] = vec2f(RASTER_STALE,");
+  expect(stale).toBeGreaterThan(crowns);
   expect(branch).toContain("let dq = b * b - dot(ro, ro) + 1.0;");
   // (else the sky: no surface, LITE_SKY_M away, through the pass's one call — liteFinish inlined once: a second call for the sky doubled
   // the kernel, 1 716 inlined lines, 25 Nov 2026 — kernel-budget.test.ts holds it)

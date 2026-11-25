@@ -20,6 +20,43 @@ Windows/D3D12. Les numéros de ligne sont ceux de `da4e75bd`.
 
 ---
 
+### L'écume du monde ne lit plus de mips jamais faites ; couronnes manquées entre couronnes (25 novembre 2026, nuit, branche de l'agent, `c3ea0971`, `7f37c7c1`) — mesuré
+
+- **`sea fft` → `foamWorld` (`sea/fft-gpu.ts`, `seafft.wgsl`)** : la passe d'écume du monde (S4) somme le jacobien des cascades aux mips
+  que l'image d'avant a faites (elle tourne avant les mips de l'image). Aux premières images de la mer ces mips étaient les zéros de la
+  texture : un jacobien de 0 par cascade, de l'écume sur toute la carte de 1 024 m, tenue tant que le monde est arrêté (`animate: false`
+  des e2e) — la moitié basse de l'approche de 04 à Nice blanche sous une ligne nette (la limite de la carte), et le bas de la vue de
+  Battery Spencer côté A ci-dessous. L'uniforme `fz.x` (le nombre de cascades sommées, lu par `foamWorld` seul) vaut désormais
+  `foamCascades(actives, déjà mippées)` (`SeaFft.mipped`) : 0 à la première image, une cascade nouvellement calculée une image plus tard.
+  Aucune passe, cible, liaison ni noyau nouveau ; le traceur inchangé. Relu sur kerr-mini (`seaFft.texture`, couches `FOAM_BASE`…+3,
+  ~22 h 20–22 h 35 UTC) : carte de 1 024 m à 70 % de texels au-dessus de 0,5 avant, 0 % après (2/2 courses, Nice en premier) ; captures
+  `docs/progress/pistes-bord-de-mer-2026-11-25/nce-approche-04-ecume-avant-apres.jpg`. Coût : aucun changement de travail GPU par image
+  hors la première (non mesuré à part ; le J0 ci-dessous l'englobe).
+- **`shadeLiteFinish` (`trace.wgsl`, C18 `earth lite: finishing`)** : un raté de couronne sans sol derrière (`RASTER_SKY`) sans ciel ni
+  structure à 2 px était laissé `RASTER_STALE` (points entre deux couronnes). Il emprunte maintenant la surface (`liteOut` : couleur,
+  distance) d'une couronne ombrée par `shadeLite` dans cette image à 2 px — un autre arbre d'abord, le plus proche, puis le plus lointain —
+  et la finit le long de son propre rayon par le seul appel de `liteFinishAt`. Lit en plus `terrainRasterId`, `moments`, `stamps` et
+  `lutDirIn` (le `liteOut` de shadeLite) des voisins ; un voisin déjà fini par cette passe est reconnu à sa distance (`moments.y` ≠ celle
+  de son `liteOut`). Aucune passe, cible ni liaison nouvelle ; `shadeLiteFinish` 0,9 k lignes inlinées (inchangé à l'arrondi, budget 1 000).
+- **Mesuré** (kerr-mini, sans fenêtre, 25 nov. 2026 vers 22 h 40 UTC, `scripts/ab-commit.ts` + `ab-e2e.ts`, A B B A, A = `f90f66f5`,
+  B = `7f37c7c1` (les deux correctifs), `bridges` `BRIDGES_ONLY=golden-gate-1km,maures-canopy`, `lastGpuMs` sur 90 images, échelle du
+  jeu ; `remote-results/20261125-233933-bridges`) :
+
+| Vue | A p50 | B p50 | Δ p50 | A p95 | B p95 | A/A | B/B |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| Golden Gate, Battery Spencer | 43,0 · 40,5 | 41,4 · 41,1 | −0,5 | 48,8 · 46,7 | 46,9 · 45,9 | 2,5 | 0,3 |
+| Maures, 60 m (témoin) | 39,7 · 41,6 | 40,3 · 40,7 | −0,2 | 42,9 · 50,1 | 45,0 · 45,3 | 1,9 | 0,4 |
+
+  Aucun écart au-delà de l'A/A. Image : écart moyen A/B (zone des arbres de Battery Spencer) 0,27 / 0,22 % contre A/A 0,27 % et B/B
+  0,19 % ; Maures 0,17 / 0,96 % contre A/A 0,96 %, B/B 0,14 % — inchangée. Les points pâles entre la couronne haute et la couronne
+  basse devant la tour sud partis, sans halo (`docs/progress/ponts-2026-11-25/golden-gate-1km-couronnes-sur-couronnes-zoom-avant-apres.jpg`) ;
+  côté A, l'écume de la première image blanchit le bas de la mer (le premier correctif), côté B non.
+- **Témoins des deux correctifs** (kerr-mini, sans fenêtre) : **J0 Toulon-Hyères** (25 nov. 2026 vers 22 h 55 UTC, A B B A, A = `f90f66f5`,
+  B = l'arbre de la branche, `J0_PHASES=flight`, chaque côté son propre test ; `remote-results/20261125-235446-j0-reference`) : GPU p50
+  A 46,8 / 47,0, B 46,8 / 46,9 ms (**−0,05**, A/A 0,2, B/B 0,1), p95 A 71,3 / 70,9, B 69,8 / 70,4 ; image du virage A/B 1,39 / 1,50 %
+  contre A/A 1,46 %, B/B 1,42 % — inchangé. **Aire de SFO** (`traffic-cost` `TC_LOOKS=looks TC_LOOKS_ONLY=1 TC_MOMENTS=parked`, une
+  course, `remote-results/20261125-234640-traffic-cost`) : le béton des aires et la scène comme `parking-aire-apres.jpg` (`093fdaa3`).
+
 ### Aires de trafic d'aérodrome : leur béton, un quart de la photo près (25 novembre 2026, branche de l'agent, `093fdaa3`) — mesuré
 
 - **Worker du décor → `scenerySurface` → `liteMaterial` (`trace.wgsl`)** : un polygone pavé (genre 5) `aeroway` de classe `apron` reçoit
@@ -1524,7 +1561,7 @@ Paris jusqu'à `earthSettled` » chronométré par étape.
 
 <!-- pipeline-inventory:begin (bun scripts/pipeline-inventory.ts --write) -->
 
-_Généré le 2026-11-25T21:48:42Z sur `d1cda150` (arbre de travail). Ne pas éditer à la main : relancer l'outil._
+_Généré le 2026-11-25T22:35:51Z sur `7f37c7c1` (arbre de travail). Ne pas éditer à la main : relancer l'outil._
 
 **130 sites de création de pipeline** (86 rendu, 44 calcul, dont 66 asynchrones) et 43 `createShaderModule` dans 32 fichiers ; **44 programmes WGSL** (16 fichiers .wgsl, 28 chaînes dans le TypeScript) ; **66 libellés de passes** du profileur GPU (+ 11 sites à libellé dynamique).
 
@@ -1607,7 +1644,7 @@ _Généré le 2026-11-25T21:48:42Z sur `d1cda150` (arbre de travail). Ne pas éd
 | `src/renderer.ts:11294` | compute async | `sky ambient write` | `cloudLightVolume` |
 | `src/renderer.ts:11376` | compute async | — | `skyAmbient` |
 | `src/renderer.ts:13741` | compute async | — | `probe` |
-| `src/sea/fft-gpu.ts:117` | compute | — | — |
+| `src/sea/fft-gpu.ts:131` | compute | — | — |
 | `src/ship.ts:858` | compute | — | `vs` |
 | `src/ship.ts:878` | render | — | `fsJetGlass` |
 | `src/ship.ts:905` | render | — | `fs` |
@@ -1706,7 +1743,7 @@ _Généré le 2026-11-25T21:48:42Z sur `d1cda150` (arbre de travail). Ne pas éd
 
 | source | lignes | points d'entrée |
 |---|---:|---|
-| `src/shaders/trace.wgsl` | 18588 | 18 entrées : cloudLightVolume, aerial, lut, main, shade, shadeMark, shadeLiteFinish, shadeWaterFinish, shadeLiteLight, shadeLite, skyFill, shadeWater, clouds, skyAmbient, cloudShadow, env, probe, shadeStars |
+| `src/shaders/trace.wgsl` | 18619 | 18 entrées : cloudLightVolume, aerial, lut, main, shade, shadeMark, shadeLiteFinish, shadeWaterFinish, shadeLiteLight, shadeLite, skyFill, shadeWater, clouds, skyAmbient, cloudShadow, env, probe, shadeStars |
 | `src/shaders/ship.wgsl` | 2838 | 34 entrées : envCopy, envDown, envGGX, envSH, ctlVs, depthVs, vs, mirrorVs, shadowVs, fs, hullDepthVs, hullDepthFs, ownMaskFs, plumeVs, plumeFs, glowVs, glowFs, distVs, distFs, sheathVs, sheathFs, trailVs, trailFs, lampVs, lampFs, compVs, compFs, fsCabin, fsCabinGlass, fsJetGlass, motionVs, motionFs, composeColor, composeSurface |
 | `src/shaders/post.wgsl` | 1396 | 18 entrées : gatherH, atrous, beamH, beamV, polgrid, resolve, down, downShip, dof, flareMeter, up, meter, stars, motionBlur, temporal, occlusion, cloudTemporal, taau |
 | `src/system/scenery-raster.ts:208` | 1191 | 31 entrées : cull, cullBoxes, clampBoxes, shadowVs, shadowFs, proxyVs, proxyFs, boxVs, boxFs, bridgeMarkFs, boxMarkVs, boxShadowVs, meshShadowVs, meshVs, meshFs, boxSolidVs, benchCull, benchQuadVs, benchVs, benchShadowVs, farCull, farVs, farQuadVs, farFs, farLampCull, farLampVs, farCarCull, farCarVs, nearCellVs, nearCellShadowVs, farShadowVs |
@@ -1859,8 +1896,8 @@ Leur coût n'apparaît que dans l'intervalle de complétion de la frame (ou d'un
 | render pass | `src/renderer.ts:5748` |
 | compute pass | `src/renderer.ts:8813` |
 | compute pass | `src/renderer.ts:13760` |
-| compute pass | `src/sea/fft-gpu.ts:261` |
-| compute pass | `src/sea/fft-gpu.ts:265` |
+| compute pass | `src/sea/fft-gpu.ts:275` |
+| compute pass | `src/sea/fft-gpu.ts:279` |
 | render pass | `src/ship.ts:3477` |
 | render pass | `src/ship.ts:3490` |
 | render pass | `src/ship.ts:3551` |

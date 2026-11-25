@@ -17135,9 +17135,12 @@ fn shadeLiteFinish(@builtin(global_invocation_id) gp: vec3u) {
   // it told by the pixels about it (two at most), the nearest: a structure the raster drew — a bridge's tower, a building — lends its
   // colour (its pixel's this frame or the last: either the structure's), the sky — nothing drawn there — the sky itself, the air and
   // the clouds to the air's end over no surface, as skyFill draws it; only trees about it — a gap between leaves, another crown
-  // behind — or a ray meeting the Earth's figure (main's far ground): left to the reconstruction as before (RASTER_STALE).
+  // behind — with no sky about it: the crowns shadeLite shaded about it this frame lend their surface (their liteOut), finished here
+  // along this pixel's own ray — another tree's first (the farther crown the miss reveals), else its own (the gap closed) —; nothing
+  // shaded about it either, or a ray meeting the Earth's figure (main's far ground): left to the reconstruction (RASTER_STALE).
   // (25 Nov 2026: stale everywhere, dark specks at the crowns' edges against the sky, Battery Spencer; the sky everywhere, a
-  // sky-blue rim round the crowns before the Golden Gate's north tower and between overlapping crowns)
+  // sky-blue rim round the crowns before the Golden Gate's north tower and between overlapping crowns; later the same day: stale between
+  // crowns, the same dark points where one crown passes before another — tracing them in main, beb2615e, had drawn pale halos)
   // (the sky's surface: none, LITE_SKY_M away — past the air's end)
   var g = vec4f(0.0, 0.0, 0.0, LITE_SKY_M);
   if (mk == RASTER_SKY) {
@@ -17147,6 +17150,12 @@ fn shadeLiteFinish(@builtin(global_invocation_id) gp: vec3u) {
     var nb = vec2i(-1);
     var nd = 99;
     var sd = 99;
+    // (the crowns about it: the one chosen, its distance [px²], whether another tree's, its surface's distance [m])
+    let tid = terrainRasterId(centre);
+    var cb = vec2i(-1);
+    var cd = 99;
+    var co = false;
+    var ct = 0.0;
     for (var dy = -2; dy <= 2; dy++) {
       for (var dx = -2; dx <= 2; dx++) {
         let d = dx * dx + dy * dy;
@@ -17159,6 +17168,24 @@ fn shadeLiteFinish(@builtin(global_invocation_id) gp: vec3u) {
             nd = d;
           }
         } else if (terrainRasterDepth(c) <= 0.0 && terrainRasterHint(c) <= 0.0) { sd = min(sd, d); }
+        else if (terrainRasterId(c) != 0u) {
+          // (a crown shaded this frame — split, or finished already by its own thread —: its surface in liteOut, its distance the one
+          // its moments hold; a miss this pass filled already — with the sky, a structure, a crown — holds another distance than its
+          // liteOut's, an older frame's: never borrowed)
+          let n = u32(p.y) * W + u32(p.x);
+          let m = moments[n];
+          if (m.x == RASTER_SPLIT || (m.x >= 0.5 * RASTER_MARK && stamps[n] == P.frame.x)) {
+            let ta = textureLoad(lutDirIn, p, 0).a;
+            let other = terrainRasterId(c) != tid;
+            let own = abs(ta / EARTH_RM * bodyRadius(k) - m.y) <= 1e-4 * m.y;
+            if (own && ta > 0.0 && ta < 0.5 * LITE_SKY_M && ((other && !co) || (other == co && (d < cd || (d == cd && ta > ct))))) {
+              cb = p;
+              cd = d;
+              co = other;
+              ct = ta;
+            }
+          }
+        }
       }
     }
     if (nd < 99 && nd <= sd) {
@@ -17172,17 +17199,21 @@ fn shadeLiteFinish(@builtin(global_invocation_id) gp: vec3u) {
       stamps[idx] = P.frame.x;
       return;
     }
-    if (sd == 99) {
-      moments[idx] = vec2f(RASTER_STALE, terrainRasterDepth(centre) / EARTH_RM * bodyRadius(k));
-      return;
-    }
-    let ro = nearCam();
-    let rd = rasterRay(centre, k).rd;
-    let b = dot(ro, rd);
-    let dq = b * b - dot(ro, ro) + 1.0;
-    if (dq > 0.0 && -b - sqrt(dq) > 0.0) {
-      moments[idx] = vec2f(RASTER_STALE, terrainRasterDepth(centre) / EARTH_RM * bodyRadius(k));
-      return;
+    if (sd == 99 && cd < 99) {
+      g = textureLoad(lutDirIn, cb, 0);
+    } else {
+      if (sd == 99) {
+        moments[idx] = vec2f(RASTER_STALE, terrainRasterDepth(centre) / EARTH_RM * bodyRadius(k));
+        return;
+      }
+      let ro = nearCam();
+      let rd = rasterRay(centre, k).rd;
+      let b = dot(ro, rd);
+      let dq = b * b - dot(ro, ro) + 1.0;
+      if (dq > 0.0 && -b - sqrt(dq) > 0.0) {
+        moments[idx] = vec2f(RASTER_STALE, terrainRasterDepth(centre) / EARTH_RM * bodyRadius(k));
+        return;
+      }
     }
   } else {
     if (mk != RASTER_SPLIT && !wat) { return; }
