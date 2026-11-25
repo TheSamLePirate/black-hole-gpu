@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 25 nov. 09:00 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 25 nov. 09:40 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous. Ce qui est fermé quitte le tableau « En cours » pour la ligne « Fermé récemment ».
@@ -78,6 +78,14 @@ l'état d'une mission ou d'un combat **non sauvé, dit** ; le réseau **« entre
 **Décidé par Sam (16 nov., 15:58 UTC)** : J8-4 allumée par défaut (quads sous 8 px), J8-5 avec une jonction choisie sur captures, J8-1b suspendu, l'e2e de J8-6 par la voie (b), J8-9 ajouté ([PLAN-J8](docs/PLAN-J8-BATIMENTS.md) §6 point 6). **But fixé par Sam (16 nov., ~16:19 UTC)** : [J8-A](docs/PLAN-J8-BATIMENTS.md), un vol Paris et Toulon-Hyères, de jour et de nuit, tous les bâtiments, lampadaires, voitures (J8-L) et rivières (J8-E) chargés avant le vol, en « high » partout, sans différence visible entre les qualités. **Décidé par Sam (16 nov., ~21:40 UTC)** : J8-8 ouvert (le proche en cellules), la jonction à 0, l'éclat de nuit lointain gardé ([PLAN-J8](docs/PLAN-J8-BATIMENTS.md) §6 point 11). **Décidé par Sam (17 nov., ~08:00 UTC)** : J8-8b ouvert, les arbres par cellule, après un vol de référence à froid sur le M1 Max (§6 point 12). **Mode speed pour finir J8, J8-VB compris** (Sam, 17 nov. ~09:20 UTC ; [CLAUDE.md](CLAUDE.md), modes de travail ; §6 point 13) : contrôles rapides par lot, un gros e2e J8-A à la fin sur kerr-mini et le M1 Max. **J8-RP, les routes et les ponts AAA** (Sam, 17 nov. ~10:20 UTC ; [PLAN-J8](docs/PLAN-J8-BATIMENTS.md) §3 bis) : ajouté à J8 en mode speed, RP1 (les routes et marquages visibles sous l'orthophoto) en tête. **Attend Sam** : les quatre premières questions de PLAN-J8 §6, réglées provisoirement (même contenu sur les deux machines, retour si > 3 ms sur le mini ; portée au pixel ; J7 en pause, les arbres proches deviennent J9 ; pas de préparation côté serveur pour l'instant) ; les trois questions de [PLAN-J7](docs/PLAN-J7-FLUIDITE.md) §4, réglées provisoirement (les 40 ms du mini en dernier, J7-6 ; les arbres proches en géométrie ensuite, désormais J9 ; l'aplanissement du détail sous les trouées jusqu'à la FAF ou 10 km) ; les seuils du mini attendent la reprise de la cible 40 ms.
 
 ## Journal
+
+### 2026-11-25 09:40 UTC — Routes, lot 2 : la ville à l'envers de San Francisco, le trait du mont Faron, les colonnes d'une rue de Paris
+
+- Contribution : §19 (vue crédible en caméra libre et au sol), §7 (la vue possède sa pose : jamais sous le sol ; la vie marine simulée ne pose pas un bateau sur la terre).
+- Réalisé (fusion sur main, agent `9f850c5a`, `2813d883`, `8d4e0be1`, `c279f169`, `cd789643`, docs `4f441a38`) : la caméra de poursuite gardée à ≥ 2,5 m au-dessus de son sol (`aboveEarthGround`) et un bateau simulé dont le sol dépasse la mer de 2 m non dessiné (`simShipOnLand`) — un chalutier simulé sur la rive de Brisbane Lagoon (masque océan à ~8 km/pixel) mettait la caméra 19–28 m sous le sol : la ville vue par dessous ; la crête de la mer gardée devant la terre seulement si rien n'est plus proche (l'horizon marin relevé par la réfraction passait devant les arbres à 10 m) ; sur la face quasi verticale d'une marche du maillage, la photo lue sur au moins 1 m et sans le détail du revêtement.
+- Preuves : **observé sur ce Mac** (kerr-mini injoignable ; tuiles du disque) — défaut antérieur au lot prouvé (`18a6e4dd` et main sans le lot montrent la ville) ; e2e `sf-ship-sky` (hauteur caméra/sol −27,5 / −19,1 m sans correctif, +2,5 m avec ; témoin négatif > 500 m), `faron-tree-streak` vert (pixels pâlis 5 816 / 3 257 → 9 / 22), `traffic-free-camera` vert ; tests `view-ship-ground`, `sea-crest-occlusion`, `lite-sun-gate`. Captures `docs/progress/sf-ciel-inverse-2026-11-25/`. Après fusion sur main : tsc, Biome, `check-wgsl` 85/85, `pipeline-inventory --check`, 118 tests. **Non mesuré** : le coût GPU.
+- Limites / transitions : au Faron, l'aile gauche du jet dessinée devant la couronne d'un arbre proche ; marches d'un mètre du relief près des façades ; trottoir symétrique.
+- Suite : ces trois points (agent des routes).
 
 ### 2026-11-25 09:00 UTC — Ponts, revue D : fourche de Grenelle, taches sur la Loire, liseré des câbles
 
