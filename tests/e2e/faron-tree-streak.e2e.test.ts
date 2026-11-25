@@ -6,11 +6,12 @@ import { readPng, writePng } from "./lib/png";
 
 // PROBLEMES-A-REGLER « Un trait clair et un « poteau » sombre à travers un F-35 posé sur le mont Faron » (24 Nov 2026): the F-35 set
 // down on Mont Faron's southern flank (j2-contact-camera's place, 11 h UTC, the J0 scene), the camera « around » 25 m in front of it
-// (yaw 180, pitch 8): a pale straight streak across the trees by the craft, drawn by the raster material's trees (shadeLite,
-// sceneryTreeLite — gone with liteSkip 64). Cause (25 Nov 2026): the material tested each tree the raster drew lifted by the air's lift
-// (R4b) at the GROUND's distance behind it — kilometres along the rays just under the horizontal on a rise, ~0.3 m —, not at its own:
-// a band of misses, the far ground's haze through the crowns. Proves the near trees no longer move with the lift: the same frozen
-// view with the lift on (A) and off (D), the pixels it changes counted (9 982 before the fix); B, the material's trees off, for the eye.
+// (yaw 180, pitch 8): a pale straight streak across the trees by the craft, drawn by the raster material (shadeLite — gone with
+// liteSkip 64). Found 25 Nov 2026: it goes with the air's lift too (renderer.liftOn false: R4a/R4b) — its pixels near trees (J9
+// geometry, ~10 m) with the far ground behind them at 16–56 km, or the sky. The material's own tree test lifted at the ground's
+// distance was fixed (c02620c0) and the streak stands: its cause is still open (PROBLEMES). Measures it: the same frozen view with
+// the lift on (A) and off (D), the pixels it changes counted (9 982, then 4 760 and 4 575 after c02620c0, kerr-mini); B, the
+// material's trees off, for the eye. Fails while the streak stands.
 // Steps: 1 boot · 2 the craft set down on the flank, the relief in · 3 the view in front · 4 the images, the streak counted.
 // Duration: ~3 min on kerr-mini (the Earth data on disk).
 // Done when: the pixels the lift moves counted (under 1 500).
@@ -85,6 +86,7 @@ describe.skipIf(!E2E)("Mont Faron: no tree streak through a craft at rest", () =
     // own distance, as the raster draws them; the far scenery's sub-pixel lift, a few)
     const mask = new Uint8Array(A.width * A.height * 3);
     let moved = 0;
+    const movedAt: [number, number][] = [];
     for (let i = 0; i < A.width * A.height; i++) {
       if (Math.floor(i / A.width) < 60) continue;
       let m = 0;
@@ -92,15 +94,20 @@ describe.skipIf(!E2E)("Mont Faron: no tree streak through a craft at rest", () =
       if (m > 48) {
         moved++;
         mask[3 * i] = 255;
+        movedAt.push([i % A.width, Math.floor(i / A.width)]);
       }
     }
     await Bun.write(`${OUT}/streak-mask.png`, writePng(A.width, A.height, mask));
     console.log(`  pixels the lift moves: ${moved} (before the fix, 25 Nov 2026: 9 982 — the pale streak) → ${OUT}/streak-mask.png`);
     // (the points asked — FARON_POINTS "x,y;…": the raster's texel there — r the hint, g the tree, b its distance, a its code)
-    const picks = (process.env.FARON_POINTS ?? "")
-      .split(";")
-      .filter(Boolean)
-      .map((v) => v.split(",").map(Number) as [number, number]);
+    // (and a dozen of the pixels the lift moves, spread over them)
+    const picks = [
+      ...(process.env.FARON_POINTS ?? "")
+        .split(";")
+        .filter(Boolean)
+        .map((v) => v.split(",").map(Number) as [number, number]),
+      ...movedAt.filter((_, k) => k % Math.max(1, Math.floor(movedAt.length / 12)) === 0).slice(0, 12),
+    ];
     if (picks.length) {
       const texels = await app.js(`(async () => {
         const R = __bh.renderer, d = R.device, tex = R.terrainRaster.distanceTexture(); const out = [];
@@ -110,7 +117,7 @@ describe.skipIf(!E2E)("Mont Faron: no tree streak through a craft at rest", () =
           const e = d.createCommandEncoder(); e.copyTextureToBuffer({ texture: tex, origin: [tx, ty] }, { buffer: b, bytesPerRow: 256 }, [1, 1]);
           d.queue.submit([e.finish()]); await b.mapAsync(GPUMapMode.READ); const v = [...new Float32Array(b.getMappedRange().slice(0, 16))]; b.destroy();
           const s = await R.surfaceAt(x / ${A.width}, y / ${A.height});
-          out.push({ x, y, hint: v[0], id: v[1], dist: v[2], code: Math.floor(v[3] / 262144), kind: s?.kind, object: s?.object, craft: s?.craft, nearest: s?.nearest });
+          out.push({ x, y, hint: v[0], id: v[1], dist: v[2], code: Math.floor(v[3] / 262144), bits: v[3] % 262144, kind: s?.kind, object: s?.object, craft: s?.craft, nearest: s?.nearest });
         }
         return out; })()`);
       console.log(`  texels: ${JSON.stringify(texels)}`);

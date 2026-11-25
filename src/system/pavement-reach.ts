@@ -1,9 +1,10 @@
 // A town street's pavements out to its façades (25 Nov 2026; PROBLEMES « Ponts et routes, campagne e2e 2 »: the relief's grass and
 // photograph showed between a kerbed road's pavement — PAVEMENT_M by its class, 2–3 m — and the buildings along it, a green strip
 // against the façades of Paris). The street cells carry a carriageway's width and a class's pavement, not where the buildings stand;
-// the scene holds both (scenery-worker.ts: its cell roads, its footprints' grids): each kerbed segment's record is widened to the
-// façades beside it — the median, over points along it, of the nearest footprint edge met across it on either side —, within a
-// bound (a square, a park, a forecourt stays the ground's). Pure: the worker gives the segments and a footprint lookup.
+// the scene holds both (scenery-worker.ts: its cell roads, its footprints' grids): each kerbed segment between two rows of buildings
+// has its record widened to the nearer row — on each side the median, over points along it, of the nearest footprint edge met
+// across it —, within a bound; with buildings on one side only (a square, a park, a quay), the class's pavement kept. Pure: the
+// worker gives the segments and a footprint lookup.
 import type { Primitive } from "./scenery-data";
 
 /** the widest pavement a façade draws out [m] beyond the carriageway (a boulevard's ~6–8 m) */
@@ -37,7 +38,8 @@ function rayToEdges(p: [number, number], u: [number, number], poly: Primitive, l
  * The half-width a kerbed segment's record should take to meet the façades beside it [m], or null to keep its own: its axis a → b,
  * its carriageway's half-width `r` and its record's `R` (r + the class's pavement); `near(x0, y0, x1, y1)` the footprints about a box.
  * Each point along it casts across, both ways, to the nearest footprint edge within r + PAVEMENT_REACH_MAX_M; with half its points or
- * more meeting one, their median — widened only (a façade nearer than R keeps R), at most r + PAVEMENT_REACH_MAX_M.
+ * more meeting one on each side, the nearer side's median — widened only (a façade nearer than R keeps R), at most
+ * r + PAVEMENT_REACH_MAX_M.
  */
 export function facadeReach(
   a: readonly [number, number],
@@ -59,20 +61,32 @@ export function facadeReach(
   );
   if (!polys.length) return null;
   const k = Math.max(2, Math.min(SAMPLES, Math.floor(L / STEP_M) + 1));
-  const hits: number[] = [];
+  // (each side its own façade: a row of buildings on both — a town street —, else the class's pavement kept: a square's lawn, a park,
+  // a quay are not paved over)
+  const sides: number[][] = [[], []];
   for (let i = 0; i < k; i++) {
     // (inside the segment, off its ends: a junction's corner building is the cross street's)
     const f = (i + 0.5) / k;
     const p: [number, number] = [a[0] + u[0] * L * f, a[1] + u[1] * L * f];
-    let d = Infinity;
-    for (const poly of polys) {
-      d = Math.min(d, rayToEdges(p, n, poly, limit), rayToEdges(p, [-n[0], -n[1]], poly, limit));
+    for (const [side, dir] of [
+      [0, n],
+      [1, [-n[0], -n[1]] as [number, number]],
+    ] as const) {
+      let d = Infinity;
+      for (const poly of polys) d = Math.min(d, rayToEdges(p, dir, poly, limit));
+      if (d < Infinity) sides[side]!.push(d);
     }
-    if (d < Infinity) hits.push(d);
   }
-  if (hits.length * 2 < k) return null;
-  hits.sort((x, y) => x - y);
-  const m = hits[Math.floor(hits.length / 2)]!;
+  const median = (v: number[]) => {
+    if (v.length * 2 < k) return null;
+    v.sort((x, y) => x - y);
+    return v[Math.floor(v.length / 2)]!;
+  };
+  const left = median(sides[0]!),
+    right = median(sides[1]!);
+  if (left === null || right === null) return null;
+  // (the nearer row's: the record is symmetric — its pavements as wide each side —, the farther row keeps a strip of ground)
+  const m = Math.min(left, right);
   if (m <= R + 0.05) return null;
   return Math.min(m, limit);
 }

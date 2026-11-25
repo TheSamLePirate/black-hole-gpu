@@ -15557,11 +15557,16 @@ fn liteSun(q: vec3f, gq: vec3f, hG: f32, Ls: vec3f, Lp: vec3f, Esun: vec3f, fx: 
     Eg *= shade;
   }
   Eg *= sunSeen(q * (1.0 + hG / (EARTH_RM * earthSq(q))), Ls);
-  if ((liteSkip() & 4u) == 0u && dot(n, Lp) > -0.05) {
+  // (the shadows' normal: a mesh's — a building's, a runway's — its own; the ground's the vertical. 25 Nov 2026: the ground's n
+  // here was the depth image's normal (rasterNormal, its neighbours' distances), across the relief's steps — a survey's metre
+  // cells, their edges in contour lines — a face turned from the Sun: the relief's and the scenery's shadows skipped there while
+  // the smooth normal lit it — thin light lines curving across the shaded streets of Paris)
+  let nS = select(gq, n, mesh);
+  if ((liteSkip() & 4u) == 0u && dot(nS, Lp) > -0.05) {
     // (T6: the cascades from the ground itself — no nearer march here: their texels the reach's floor —, the slope's own
     // reach by the surface's normal — the mesh's: the map's triangles)
     let sn = SUN_N;
-    SUN_N = n;
+    SUN_N = nS;
     let far = sunShadowFarAt(dirW * tM, 0.0);
     SUN_N = sn;
     // (H5: past the cascades — and the blockers beyond their box —, the relief cache's horizons; their min: a penumbra both
@@ -15572,18 +15577,18 @@ fn liteSun(q: vec3f, gq: vec3f, hG: f32, Ls: vec3f, Lp: vec3f, Esun: vec3f, fx: 
     LITE_RELIEF_DBG = sunVis;
     // (the last metres under the cascades' reach: the contact shadows, in the image — lit and facing the Sun only, near)
     // (a Sun under 25°: higher, the last metres' shadows are short — under the pixel at a few hundred metres)
-    if (far.x != 0.0 && dot(n, Lp) > 0.0 && dot(gq, Lp) < 0.42 && tM < 1500.0 && (liteSkip() & 16384u) == 0u) {
-      Eg *= rasterContactShadow(dirW * tM + n * 0.05, Lp, clamp(max(far.z, 4.0), 4.0, 24.0));
+    if (far.x != 0.0 && dot(nS, Lp) > 0.0 && dot(gq, Lp) < 0.42 && tM < 1500.0 && (liteSkip() & 16384u) == 0u) {
+      Eg *= rasterContactShadow(dirW * tM + nS * 0.05, Lp, clamp(max(far.z, 4.0), 4.0, 24.0));
     }
   }
-  if (HAS_SCENERY && P.scenery[0].w > 0.5 && P.scenery[2].w > 0.5 && dot(n, Lp) > 0.0 && (liteSkip() & 2u) == 0u) {
+  if (HAS_SCENERY && P.scenery[0].w > 0.5 && P.scenery[2].w > 0.5 && dot(nS, Lp) > 0.0 && (liteSkip() & 2u) == 0u) {
     // (the scenery's local frame — sceneryLocal's, written out: compiled out with the scenery)
     let toSc = mat3x3f(P.scenery[0].xyz, P.scenery[1].xyz, P.scenery[2].xyz);
     // (a building's own face — U2 —: its triangles are in the map, the point lifted off them, along its normal and towards
     // the Sun — at 0.35 m its own depth shadowed it, a speckle over the roofs)
-    let lift = select(n * 0.35, n * 1.2 + Lp * 1.5, mesh);
+    let lift = select(nS * 0.35, n * 1.2 + Lp * 1.5, mesh);
     let sp = P.scenery[3].xyz + (dirW * tM + lift) * toSc;
-    let m = treeShadowAt(sp, dot(n, Lp));
+    let m = treeShadowAt(sp, dot(nS, Lp));
     let b = buildingShadowAt(sp);
     LITE_SH_DBG = vec2f(m, b);
     var sh = 1.0;
@@ -15595,7 +15600,7 @@ fn liteSun(q: vec3f, gq: vec3f, hG: f32, Ls: vec3f, Lp: vec3f, Esun: vec3f, fx: 
   }
   // (Q6 I3: the flown craft's shadow — and the nearest carrier's on the sea — on the raster's ground and water, as on the traced
   // ground: its shadow map — ship.wgsl —, the point back in the world's axes; nothing beyond its sphere's reach)
-  if ((liteSkip() & 2097152u) == 0u && dot(n, Lp) > 0.0) { Eg *= shipShadow(fromBody(dirW * tM)); }
+  if ((liteSkip() & 2097152u) == 0u && dot(nS, Lp) > 0.0) { Eg *= shipShadow(fromBody(dirW * tM)); }
   return Eg;
 }
 // (TUNE_LITE 8192 — a measure —: the trees' and buildings' shadow map as liteSun read it at the surface: x trees', y buildings'

@@ -61,8 +61,8 @@ test("a square, a park, a far façade: the class's pavement kept; a façade near
   expect(facadeReach([0, 0], [40, 0], 4, 7, lookup([box(0, 9, 9, 30)]))).toBeNull();
   // (a corner building across its end — the cross street's —: none of its points meets it across)
   expect(facadeReach([0, 0], [40, 0], 4, 7, lookup([box(42, -20, 60, 20)]))).toBeNull();
-  // (a park on one side, façades on the other: the façades' gap)
-  expect(facadeReach([0, 0], [40, 0], 4, 7, lookup([box(-5, -30, 45, -9.5)]))).toBeCloseTo(9.5, 6);
+  // (a park on one side, façades on the other: the class's pavement kept — the lawn not paved over)
+  expect(facadeReach([0, 0], [40, 0], 4, 7, lookup([box(-5, -30, 45, -9.5)]))).toBeNull();
   // (a bridge's road, an unkerbed one: never)
   const bridge = street();
   bridge.data[6] = 8 + 32768;
