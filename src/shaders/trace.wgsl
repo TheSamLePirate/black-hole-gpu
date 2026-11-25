@@ -16332,7 +16332,8 @@ fn liteMaterial(gq: vec3f, q: vec3f, ph: vec3f, rd: vec3f, look: vec3f, tM: f32,
   let onBridgeDeck = atBridgeMesh(at) && dot(n, gq) > 0.55;
   let deckWalk = onBridgeDeck && fpM < 2.0 && tM < 2500.0;
   SC_ON_BRIDGE = onBridgeDeck;
-  if (HAS_SCENERY && (!mesh || deckWalk) && !isTree && (liteSkip() & 134217728u) == 0u) {
+  // (a step's face — stepFace —: no road, paint or decal laid on it from above — each pixel one point of them, columns down the face)
+  if (HAS_SCENERY && (!mesh || deckWalk) && !isTree && !stepFace && (liteSkip() & 134217728u) == 0u) {
     // (the exact walk near — its stripes, sleepers, edges' antialiasing — and at night — its kinds for the streets' lights —;
     // the decals' one read beyond: the walk on every pixel under 12 m cost 0.66 ms in La Mancha)
     // (under a national photograph the map's colour is not drawn — the walk was for nothing there: France whole —; at night
@@ -16371,7 +16372,7 @@ fn liteMaterial(gq: vec3f, q: vec3f, ph: vec3f, rd: vec3f, look: vec3f, tM: f32,
   }
   // (Q7 L8 / VIPER B3: the detail scans on the ground near — the photograph's albedo times the scan's ratio, its normal tilted —,
   // where the scenery's frame is known and its scans are in; liteSkip 2147483648 none — an A/B)
-  if (DETAIL_BOUND && !mesh && !isTree && fpM < 300.0 && HAS_SCENERY && P.scenery[0].w > 0.5 && P.scenery[6].z > 0.5 && (liteSkip() & 2147483648u) == 0u) {
+  if (DETAIL_BOUND && !mesh && !isTree && !stepFace && fpM < 300.0 && HAS_SCENERY && P.scenery[0].w > 0.5 && P.scenery[6].z > 0.5 && (liteSkip() & 2147483648u) == 0u) {
     let dL = vec3f(dot(dirW, P.scenery[0].xyz), dot(dirW, P.scenery[1].xyz), dot(dirW, P.scenery[2].xyz));
     let xy = (P.scenery[3].xyz + dL * tM).xy + P.scenery[6].xy;
     // (Q7 L8: the season's snow — seasonSnow — hides it: the material read from the bare ground's albedo, its contrast and tilt
