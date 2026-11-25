@@ -955,6 +955,14 @@ export function nationalBoxNear(lat: number, lon: number, imagery = false): Nati
 }
 const NO_BOX: NationalSource["box"] = { west: 0, east: 0, south: 0, north: 0 };
 
+/** the relief tiles' level from which the streets are laid on them (street-level.ts: a street cell's, z 15, holds a tile there) */
+export const STREET_LEVEL_Z = 15;
+/** the streets' leveller (the page's: street-level.ts from the cached street cell holding the tile — renderer.ts), null none */
+let streetLeveller: ((z: number, x: number, y: number, h: Float32Array) => Promise<number>) | null = null;
+export function setStreetLeveller(f: ((z: number, x: number, y: number, h: Float32Array) => Promise<number>) | null) {
+  streetLeveller = f;
+}
+
 /**
  * A tile's heights from its national source (I2, I7): its ground marked as a survey's (markFine), the global data's
  * (Terrarium) where it has none; its overground, when it has one, after them — one array (drawnHeight). `ground`: the
@@ -982,6 +990,14 @@ async function nationalHeights(
   const r = await src.heights(z, x, y, signal, hlod, undefined, coarse);
   if (!r) return terrarium(z, x, y, signal);
   const { h, over } = r;
+  // (the streets laid on it — street-level.ts: the one ground the raster and the contact read, levelled once, here)
+  if (streetLeveller && z >= STREET_LEVEL_Z) {
+    try {
+      await streetLeveller(z, x, y, h.subarray(0, TILE * TILE));
+    } catch {
+      /* (no street cell, a broken one: the survey's ground as it is) */
+    }
+  }
   markFine(h, true);
   if (h.some((e) => Number.isNaN(e))) {
     // (CM1: Terrarium refused — the tile a stand-in —, its gaps the stand-in's heights: the national ones not lost for them)
