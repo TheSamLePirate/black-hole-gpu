@@ -88,6 +88,9 @@ try {
       AB_A_URL: "http://localhost:3101/",
       AB_B_URL: "http://localhost:3102/",
       AB_OUT: out,
+      // (each side's tree — scripts/ab-e2e.ts AB_E2E_OWN: its own test)
+      AB_A_DIR: dir,
+      AB_B_DIR: dirB,
     });
   else if (process.env.AB_DRY !== "1")
     await $`bun scripts/ab-pages.ts`.env({
