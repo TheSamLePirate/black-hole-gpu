@@ -62,7 +62,7 @@ describe.skipIf(!E2E)("probe: a Paris street's shadows and pavements", () => {
       return out; })()`);
     console.log(`  the column at x 0.93 [y, kind, distance m, level]: ${JSON.stringify(column)}`);
     console.log(
-      `  surfaces near: ${JSON.stringify(await app.js(`(() => { const s = __bh.renderer.earthScenery.stats(); return { cellRoads: s.cellRoads, pavementsWidened: s.pavementsWidened, furniture: s.furniture, buildings: s.buildings }; })()`))}`,
+      `  surfaces near: ${JSON.stringify(await app.js(`(() => { const s = __bh.renderer.earthScenery.stats(); return { cellRoads: s.cellRoads, pavementsWidened: s.pavementsWidened, furniture: s.furniture, buildings: s.buildings, streetLevelled: __bh.renderer.streetLevelled, streetLevelTiles: __bh.renderer.streetLevelTiles }; })()`))}`,
     );
   }, 400_000);
 });

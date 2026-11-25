@@ -2348,7 +2348,12 @@ export class ShipRenderer {
       ground?: ShipInstance["ground"];
       cast?: boolean;
       traffic?: ShipInstance["traffic"];
-    }[] = this.flown ? [{ id: this.vessel, R, t, shadow: true, far: !!v.place, mirror: !!sea?.flown }] : [];
+    }[] = this.flown
+      ? // (hidden where the scene holds something nearer — far — whenever the eye is outside it: a spectator's, an outside view's. 25 Nov
+        // 2026: the flown craft was tested only placed by a spectator; the « around » view 24 m before it on Mont Faron drew it over
+        // a tree's crown 5–6 m from the eye — every one of its pixels)
+        [{ id: this.vessel, R, t, shadow: true, far: !!v.place || !v.inside, mirror: !!sea?.flown }]
+      : [];
     for (const o of v.others ?? [])
       if (list.length < MAX_INST && this.meshes[o.id] && (!this.debugOthers || this.debugOthers(o)))
         list.push({

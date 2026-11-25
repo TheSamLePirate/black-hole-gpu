@@ -154,9 +154,17 @@ connue ou supposée, la piste. Une entrée réglée est barrée avec le commit q
   façades ; entre deux rangs de bâtiments, chaque route bordée est élargie jusqu'au rang le plus proche, d'un seul rang de 2,5 m au
   plus vers lui (une pelouse de square en face n'est pas pavée) (`pavement-reach.ts`, test
   `pavement-reach.test.ts`), la chaussée passant toujours avant un trottoir aux carrefours, et le trottoir est posé de niveau dans
-  la lumière (sa normale vers la verticale). Reste : la géométrie du relief garde ses marches d'un mètre (visibles en silhouette
+  la lumière (sa normale vers la verticale). ~~Reste : la géométrie du relief garde ses marches d'un mètre (visibles en silhouette
   près des façades) — le nivellement `roadProfile/roadBank` sans lecteur, plus bas ; un côté de rue plus large que l'autre garde une
-  bande de sol (l'enregistrement est symétrique). ~~Sur l'approche du pont Alexandre III, un marquage en boucle fermée au milieu de la chaussée (`alexandre-iii-deck-low.png`).~~
+  bande de sol (l'enregistrement est symétrique).~~ **Réglés le 25 nov. 2026** : chaque côté son trottoir (`c3b4cea0` :
+  l'enregistrement GPU du décor porte le côté gauche dans sa demi-largeur, le droit dans 6 bits libres de son mot — le format des
+  cellules « rue », un octet de trottoir dans un enregistrement de surface de 4 octets sans octet libre, n'a pas été changé : il
+  invaliderait toutes les cellules en cache et les zones hors ligne) ; les rues posées sur le relief national (`c87fb232`,
+  `street-level.ts` : profil `roadProfile`, dévers `roadBank`, trottoirs une bordure de 0,12 m au-dessus de la chaussée, fondus sur
+  1,5 m — dans les tuiles mêmes, le sol unique du raster et du contact ; 65 tuiles, 1 025 145 pixels nivelés dans la vue de la rue
+  de Paris, ce Mac). Reste : le nivellement suit le trottoir de la classe, pas celui élargi jusqu'aux façades (les emprises ne sont
+  pas lues là) — un reste de marche au pied d'une façade au-delà ; une tuile décodée avant que sa cellule « rue » soit en cache
+  reste non nivelée jusqu'à son prochain chargement. ~~Sur l'approche du pont Alexandre III, un marquage en boucle fermée au milieu de la chaussée (`alexandre-iii-deck-low.png`).~~
   **Réglé par ffbecf26** (24 nov. 2026, soir), avec les chaînes d'anneaux blancs des bretelles de SFO (`traffic-runways`,
   `parked-above.png`) : `scenerySurface` gardait, entre segments égaux, le premier rencontré ; la bande d'un segment finit en
   demi-disques, et les morceaux de 1–2 m des courbes B2 et des fins de lignes aux carrefours peignaient leurs lignes autour de leurs
@@ -250,9 +258,12 @@ connue ou supposée, la piste. Une entrée réglée est barrée avec le commit q
   long de l'horizon, derrière l'appareil. e2e `faron-tree-streak` : pixels rendus plus pâles par le relèvement sur un sol sombre
   5 816 et 3 257 avant, 9 après (`docs/progress/sf-ciel-inverse-2026-11-25/faron-apres.jpg` contre
   `docs/progress/routes-defauts-2026-11-25/faron-avant.jpg`) ; test `sea-crest-occlusion.test.ts`.
-- **Le « poteau » : pas un défaut** — le tronc d'un arbre proche (~10 m) dont le houppier est en haut à gauche. Reste ouvert à côté : l'aile
-  gauche de l'appareil (≈ 30 m) est dessinée devant ce houppier (≈ 10 m selon la visibilité) — une occultation appareil/arbre proche
-  à regarder (`sceneDepth` sur les pixels d'arbres J9).
+- **Le « poteau » : pas un défaut** — le tronc d'un arbre proche (~10 m) dont le houppier est en haut à gauche. ~~Reste ouvert à côté :
+  l'aile gauche de l'appareil (≈ 30 m) est dessinée devant ce houppier~~ — **réglé le 25 nov. 2026 (`599c2425`)** : les passes de
+  l'appareil cachent une instance là où la profondeur d'occultation de la scène tient plus près (`ship.wgsl`, le bit « far ») ;
+  l'appareil piloté ne l'avait que placé par un spectateur. La vue « autour », 24 m devant lui, était derrière un houppier à 5–6 m
+  de l'œil : 20 943 de ses 21 006 pixels dessinés par-dessus ; désormais caché dès que l'œil est hors de lui (pas en cabine), 64–74
+  après (le bord de son ombre, le verre de la verrière — vu, reste) ; e2e `faron-tree-streak` l'affirme, test `craft-occlusion`.
 
 
 - **Constat** : F-35 posé sur le flanc sud du mont Faron (43,1405° N, 5,942° E, scène J0, 11 h UTC), caméra « autour » à ~25 m
@@ -428,8 +439,9 @@ Relevé initial :
 pas la même surface. Le constructeur ne distingue pas les bouts ouverts de tuiles des vraies culées. La recherche
 du tablier par XY ne porte pas d'identité/niveau. Les ponts contournent le matériau routier partagé ; leur loin
 emploie des dalles sur un plan de sol de cellule, sans hauteur de tablier pour les voitures. Les phases de pointillés
-des routes repartent par segment. Le nivellement `roadProfile/roadBank` existe comme fonctions, sans lecteur de
-production appliquant ce profil au terrain et aux contacts.
+des routes repartent par segment. ~~Le nivellement `roadProfile/roadBank` existe comme fonctions, sans lecteur de
+production appliquant ce profil au terrain et aux contacts.~~ (Lu depuis le 25 nov. 2026, `c87fb232` : `street-level.ts`, dans les
+tuiles de relief nationales — le terrain et les contacts ensemble.)
 
 Sonde du constructeur réel, cas **synthétique** de 100 m : marches jusqu'à 2,75 m ; ce n'est pas une mesure d'un
 pont réel. Le cas de chaînage route/rail et la clé de dédoublonnage locale révèlent des risques reproductibles ;

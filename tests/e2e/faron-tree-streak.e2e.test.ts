@@ -14,7 +14,9 @@ import { readPng, writePng } from "./lib/png";
 // trees' 3D geometry, the craft).
 // Steps: 1 boot · 2 the craft set down on the flank, the relief in · 3 the view in front · 4 the images, the streak counted.
 // Duration: ~3 min on kerr-mini (the Earth data on disk).
-// Done when: the streak's pixels counted — those the lift makes paler over a dark ground — under 200.
+// And the craft over the near trees: its pixels (A against C, the craft's passes off) where the visibility holds a surface nearer
+// than it (20 943 of 21 006 before the flown craft was hidden from outside views, 74 after).
+// Done when: the streak's pixels counted — those the lift makes paler over a dark ground — under 200; the craft over nearer under 500.
 
 const OUT = process.env.FARON_OUT ?? "remote-results/faron-tree-streak";
 const W = 1920,
@@ -82,6 +84,14 @@ describe.skipIf(!E2E)("Mont Faron: no tree streak through a craft at rest", () =
     await set(`R.liftOn = true; R.liteSkip = ${base} | 64;`);
     await app.shot(`${OUT}/b-no-material-trees.png`);
     await set(`R.liteSkip = ${base};`);
+    // (the craft over the near trees: its passes off — C —, its pixels the image's difference; there the visibility's nearest surface
+    // (the raster's distance image, b) against the craft's own distance — its centre's from the eye less 9 m, its half-length and a
+    // margin: a surface nearer than that the craft must not be drawn over)
+    await set("R.debugSkipShip = true;");
+    await app.shot(`${OUT}/c-no-craft.png`);
+    await set("R.debugSkipShip = false;");
+    // (the « around » view's distance to the craft's centre [m] — camera.outside.dist)
+    const craftM = await app.js<number>(`__bh.camera.outside.dist`);
     // (diagnostic, FARON_DIAG=1: the parts the lift reaches, each alone — the scenery raster's projection lift zeroed (its trees and
     // buildings drawn unlifted, the tracer's kept), the near trees' 3D geometry off, the craft's passes off)
     const diag: [string, string, string][] =
@@ -169,8 +179,37 @@ describe.skipIf(!E2E)("Mont Faron: no tree streak through a craft at rest", () =
         return out; })()`);
       console.log(`  texels: ${JSON.stringify(texels)}`);
     }
+    // (the craft's pixels — A against C —, and among them those the visibility holds a surface nearer than the craft at)
+    const C = await read("c-no-craft");
+    const craftPx: number[] = [];
+    for (let i = 0; i < A.width * A.height; i++) {
+      if (Math.floor(i / A.width) < 90) continue;
+      let m = 0;
+      for (let c = 0; c < 3; c++) m = Math.max(m, Math.abs(A.data[i * A.channels + c]! - C.data[i * C.channels + c]!));
+      if (m > 40) craftPx.push(i);
+    }
+    const over = await app.js<{ over: number; samples: number[][] }>(`(async () => {
+      const R = __bh.renderer, d = R.device, tex = R.terrainRaster.distanceTexture();
+      const W = tex.width, H = tex.height, row = Math.ceil(W * 16 / 256) * 256;
+      const b = d.createBuffer({ size: row * H, usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ });
+      const e = d.createCommandEncoder(); e.copyTextureToBuffer({ texture: tex }, { buffer: b, bytesPerRow: row }, [W, H]);
+      d.queue.submit([e.finish()]); await b.mapAsync(GPUMapMode.READ); const V = new Float32Array(b.getMappedRange());
+      const px = ${JSON.stringify(craftPx)}; let over = 0; const samples = [];
+      for (const i of px) {
+        const x = i % ${A.width}, y = Math.floor(i / ${A.width});
+        const tx = Math.min(W - 1, Math.floor(x / ${A.width} * W)), ty = Math.min(H - 1, Math.floor(y / ${A.height} * H));
+        const k = ty * row / 4 + tx * 4, near = V[k + 2];
+        if (near > 0.1 && near < ${craftM.toFixed(2)} - 9) { over++; if (samples.length < 8) samples.push([x, y, +near.toFixed(2), V[k + 1], Math.floor(V[k + 3] / 262144)]); }
+      }
+      b.unmap(); b.destroy(); return { over, samples }; })()`);
+    console.log(
+      `  the craft ${craftM.toFixed(1)} m off, its pixels ${craftPx.length}; drawn over a nearer surface ${over.over} — ${JSON.stringify(over.samples)}`,
+    );
     console.log(`  the streak: pixels the lift makes paler over a dark ground ${streak} (5 816 and 3 257 before 8d4e0be1, kerr-mini)`);
-    await app.stepDone(`trait : ${streak} pixels (déplacés par le relèvement : ${moved})`, streak < 200);
+    // (20 943 of 21 006 before 25 Nov 2026 — the flown craft never hidden from an outside view —, 74 after: its shadow's edge on the
+    // ground before it, the canopy's glass)
+    await app.stepDone(`trait : ${streak} pixels · appareil sur plus proche : ${over.over}`, streak < 200 && over.over < 500);
     expect(streak).toBeLessThan(200);
+    expect(over.over).toBeLessThan(500);
   }, 500_000);
 });
