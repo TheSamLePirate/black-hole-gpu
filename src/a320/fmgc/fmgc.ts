@@ -158,8 +158,8 @@ export class Fmgc {
   phase: Phase = "preflight";
   /** the selected speed and heading shown in the FCU's windows for a while after a turn of their knobs (FlightGear's
    *  preselection: 10 s, 45 s) */
-  private spdShowT = 0;
-  private hdgShowT = 0;
+  private spdShowT = Number.NEGATIVE_INFINITY;
+  private hdgShowT = Number.NEGATIVE_INFINITY;
   private airborneT = 0;
   private n1Cmd = 0;
   private spdI = 0;
@@ -201,7 +201,9 @@ export class Fmgc {
     this.spdManaged = true;
   }
   spdPull(i?: FmgcIn) {
-    if (this.spdManaged && i) {
+    // (managed, the knob turned in the last 10 s — the window shows the preselected speed —: that one engaged, as an Airbus does;
+    // else the speed now. Before 26 Nov 2026 a turn then a pull gave the speed now, the turn lost)
+    if (this.spdManaged && i && !(this.now - this.spdShowT < 10)) {
       this.spd = Math.round(i.ias);
       this.mach = Math.round(i.mach * 100) / 100;
     }
@@ -212,7 +214,8 @@ export class Fmgc {
     if (this.lnavOk && this.lat !== "" && this.lat !== "RWY") this.setLat("NAV");
   }
   hdgPull(i?: FmgcIn) {
-    if (this.hdgManaged && i) this.hdg = Math.round(this.trkFpa ? i.trk : i.hdg) || 360;
+    // (the same for the heading: preselected in the last 45 s — shown —, that one; else the heading now)
+    if (this.hdgManaged && i && !(this.now - this.hdgShowT < 45)) this.hdg = Math.round(this.trkFpa ? i.trk : i.hdg) || 360;
     this.hdgManaged = false;
     this.latArmed = this.latArmed === "NAV" ? "" : this.latArmed;
     this.locArm = this.apprArm = false;

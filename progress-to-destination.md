@@ -45,7 +45,7 @@ J4 (fermé, sortie non atteinte), J5 et J6 (fermés).
 
 | Session (T3) | Lot | État |
 |---|---|---|
-| A320 AAA (26 nov.) | [PLAN-A320-VOL-AAA](docs/PLAN-A320-VOL-AAA.md) — vol mesuré, physique, molettes, roue, assistance, outils | **K1, W1 faits ; W2, G1 en partie** (e2e kerr-mini 4/4 et 4/4) ; V0 (vol de ligne mesuré) en cours ; V1 à faire |
+| A320 AAA (26 nov.) | [PLAN-A320-VOL-AAA](docs/PLAN-A320-VOL-AAA.md) — vol mesuré, physique, molettes, roue, assistance, outils, instruments, navigation | **V0 PASS** (vol de ligne complet 20/20), **K1, W1 faits ; W2, G1 en partie** ; I1/I2 commencés ; N1 (base de navigation : CIFP FAA + FlightGear, décision de Sam) à faire |
 | Rentrée du Ranger (26 nov.) | Demande de Sam : la rentrée automatique se pose mal ; zone d'arrivée chargée avant 10–20 km ; enregistreur de vol | **Fait et poussé (26 nov.)** : guidage vers le site d'abord, énergie de l'approche (loin de l'axe ou à court), zone d'arrivée préchargée, `camera.entryLog`. Edwards et Le Bourget posés en vol réel (avant : Edwards 4 écrasés sur 4) ; « Relief failed » de l'IGN non reproduit (e2e servi par le disque) ; apprendre-vaisseaux 9/9 ; golden périmé depuis le 20 oct. (pas par ce lot) |
 | Linux OBC embarqué (22–24 nov.) | [PLAN-LINUX-OBC](docs/PLAN-LINUX-OBC.md) — OBC-0 à OBC-21 (unkernel aarch64, Alpine/Debian, suite Rust/Ratatui, `/dev/fb0`, pont `__bh`/TARS, cockpits 3D) | **Sécurisé le 24 nov.** ([audit](docs/AUDIT-2026-11-24.md)) : relais Wisp à garde numérique, Origin exigée, ports et débits bornés ; pont invité sur racines explicites ; COOP/COEP sur demande ; FR/EN, unités du joueur. Tests unitaires 94/94 ; **e2e en cours** |
 | Points de Lagrange & JWST (22–24 nov.) | L1–L5, Halo, JWST à SE-L2, autopilote, cartes, réseau, Crew | **Corrigé le 24 nov.** : phase Halo juste en dates réelles (écart de vitesse 1 612 → 1e-6 m/s à SE-L2), L4/L5 sur modes propres, Crew sur le même couple, JWST paresseux et borné en pixels ; leçon 6 bis écrite. Tests unitaires verts ; **e2e et coût GPU en cours / non mesurés** |
@@ -80,6 +80,24 @@ l'état d'une mission ou d'un combat **non sauvé, dit** ; le réseau **« entre
 **Décidé par Sam (16 nov., 15:58 UTC)** : J8-4 allumée par défaut (quads sous 8 px), J8-5 avec une jonction choisie sur captures, J8-1b suspendu, l'e2e de J8-6 par la voie (b), J8-9 ajouté ([PLAN-J8](docs/PLAN-J8-BATIMENTS.md) §6 point 6). **But fixé par Sam (16 nov., ~16:19 UTC)** : [J8-A](docs/PLAN-J8-BATIMENTS.md), un vol Paris et Toulon-Hyères, de jour et de nuit, tous les bâtiments, lampadaires, voitures (J8-L) et rivières (J8-E) chargés avant le vol, en « high » partout, sans différence visible entre les qualités. **Décidé par Sam (16 nov., ~21:40 UTC)** : J8-8 ouvert (le proche en cellules), la jonction à 0, l'éclat de nuit lointain gardé ([PLAN-J8](docs/PLAN-J8-BATIMENTS.md) §6 point 11). **Décidé par Sam (17 nov., ~08:00 UTC)** : J8-8b ouvert, les arbres par cellule, après un vol de référence à froid sur le M1 Max (§6 point 12). **Mode speed pour finir J8, J8-VB compris** (Sam, 17 nov. ~09:20 UTC ; [CLAUDE.md](CLAUDE.md), modes de travail ; §6 point 13) : contrôles rapides par lot, un gros e2e J8-A à la fin sur kerr-mini et le M1 Max. **J8-RP, les routes et les ponts AAA** (Sam, 17 nov. ~10:20 UTC ; [PLAN-J8](docs/PLAN-J8-BATIMENTS.md) §3 bis) : ajouté à J8 en mode speed, RP1 (les routes et marquages visibles sous l'orthophoto) en tête. **Attend Sam** : les quatre premières questions de PLAN-J8 §6, réglées provisoirement (même contenu sur les deux machines, retour si > 3 ms sur le mini ; portée au pixel ; J7 en pause, les arbres proches deviennent J9 ; pas de préparation côté serveur pour l'instant) ; les trois questions de [PLAN-J7](docs/PLAN-J7-FLUIDITE.md) §4, réglées provisoirement (les 40 ms du mini en dernier, J7-6 ; les arbres proches en géométrie ensuite, désormais J9 ; l'aplanissement du détail sous les trouées jusqu'à la FAF ou 10 km) ; les seuils du mini attendent la reprise de la cible 40 ms.
 
 ## Journal
+
+### 2026-11-26 14:30 UTC — A320 : un vol de ligne complet mesuré et réussi (décollage → ILS → arrêt), l'atterrissage automatique réparé
+
+- Contribution : §19 (une expérience complète d'avion de ligne au pilote automatique), PLAN-A320-VOL-AAA V0, I1/I2 (début).
+- Constaté (kerr-mini, banc `a320-line-lfpb`, observé aussi par Sam) : l'atterrissage automatique au Bourget posait l'A320 ~10 m à gauche
+  de la piste, à 1 720 m du seuil, à 200 kt nez bas, en rebondissant quatre fois, sans freiner. Causes : l'axe de l'ILS 07 suivait le
+  cap du localizer, à **1,7°** de la piste dessinée ; la vitesse sélectée plus tôt restait, la phase du FMGC restait « croisière » ;
+  l'autofrein n'était jamais armé.
+- Réalisé : `controller/approach.ts` (l'axe de la piste dessinée quand ses seuils sont connus — F-35 et A320), `a320ap.ts` (SPD poussé et
+  phase d'approche activée à l'engagement de l'approche ; autofrein LO/MED avec le train), `fmgc.ts` (un cap ou une vitesse présélectés
+  à la molette engagés tels quels au tirage), PFD (cap sélecté, route ILS), ND (cap sélecté) ; scénario du banc corrigé (date au midi
+  solaire avant l'alignement, fins de phase lues par leur type) ; e2e `a320-fcu-knobs` renforcé (le cap présélectionné engagé).
+- Preuves : **observé** kerr-mini, fenêtre visible : `a320-line-lfpb` **PASS** — captures 0,6 ft et 3,4 ft, tenues sans oscillation
+  (0,45°, 1,3 kt), virages 25,1°, toucher 20/20 à 557 m, 0,23 m de l'axe, un contact ; `a320-fcu-knobs` 4/4 (270 → 290° tirés : 290°),
+  `a320-approach-join` 4/4 ; tests unitaires A320 et approches 183/183.
+- Limites : la décision de Sam pour la base de navigation (N1 : CIFP de la FAA + fix/awy de FlightGear) prise, rien de fait encore ;
+  les captures PFD/ND des nouveaux repères en cours (relevé `a320-du-dump`) ; le roulage à l'arrêt (longueur, freinage) non mesuré.
+- Suite : I2/I1 sans base de navigation, puis N1 → N2 → N3 → V2.
 
 ### 2026-11-26 13:40 UTC — A320 : molettes du FCU, roue de l'A320, décollage facile et assistance, outils au FMGC (PLAN-A320-VOL-AAA)
 

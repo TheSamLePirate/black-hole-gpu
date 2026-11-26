@@ -184,6 +184,37 @@ export class Nd extends Display {
     ctx.moveTo(cx, cy - R - 30);
     ctx.lineTo(cx, cy - R + 26);
     ctx.stroke();
+    // (the FCU's selected heading — blue, PLAN-A320-VOL-AAA I1 —: its triangle on the rose while selected; beyond the arc, its figure at
+    // the arc's end)
+    if (d.selHdg !== null) {
+      const sh = (((d.selHdg - d.heading + 540) % 360) - 180) * D;
+      const on = Math.abs(sh) < span * D;
+      const a = on ? sh : Math.sign(sh) * span * D;
+      ctx.save();
+      ctx.translate(cx + Math.sin(a) * (R + 4), cy - Math.cos(a) * (R + 4));
+      ctx.rotate(a);
+      ctx.strokeStyle = COL.cyan;
+      ctx.lineWidth = 4;
+      if (on) {
+        ctx.beginPath();
+        ctx.moveTo(-14, -28);
+        ctx.lineTo(0, 0);
+        ctx.lineTo(14, -28);
+        ctx.stroke();
+      }
+      ctx.restore();
+      if (!on)
+        text(
+          ctx,
+          String(Math.round(d.selHdg) % 360 || 360).padStart(3, "0"),
+          cx + Math.sin(a) * (R + 40),
+          cy - Math.cos(a) * (R + 40),
+          28,
+          COL.cyan,
+          "center",
+          "middle",
+        );
+    }
     const tr = (d.track - d.heading) * D;
     if (Math.abs(tr) < span * D) {
       ctx.save();

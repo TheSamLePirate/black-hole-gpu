@@ -70,11 +70,14 @@ async function line(lab: Lab, f: Field): Promise<Verdict> {
   // the craft, the day, calm air
   await lab.js(`(() => {
     Object.assign(__bh.settings, { vessel: "a320", a320Start: "ready", traffic: false, weather: "fair", wind: 0, earthClouds: 0 });
-    // (the field's solar noon: daylight the whole flight)
-    __bh.setDate(Date.UTC(2026, 10, 5, 12) - ${f.lon} * 240000);
     return true;
   })()`);
   await lab.app.waitProgress(`__bh.fleet.active === "a320"`, "the A320");
+  // (the field's solar noon — daylight the whole flight (Sam) —: once the A320 is the craft (its switch takes the scene's hour back) and
+  // before it is lined up (a date set after moved the ground under the parked craft: a « touchdown » at 42 m/s, 26 Nov 2026))
+  const noon = new Date(Date.UTC(2026, 10, 5, 12) - f.lon * 240000).toISOString();
+  await lab.js(`(__bh.game.setDate(${JSON.stringify(noon)}), true)`);
+  lab.note("note", `the date: ${noon} (the field's solar noon)`);
   // (its systems are made by its first frames: the sim running until they are, then held while the place's data come)
   await lab.js(`(__bh.freeze(false), __bh.game.lineUp(${JSON.stringify(f.site)}), true)`);
   await lab.app.waitProgress("!!__bh.camera.a320Sys", "the A320's systems");
@@ -114,7 +117,7 @@ async function line(lab: Lab, f: Field): Promise<Verdict> {
     return true;
   })()`);
   let e = await lab.live({ until: "!c.rolling && !c.ourLanded && (c.a320FmgcIn?.ra ?? 0) > 50", maxWall: 120, everyMs: 500 });
-  check(e.why !== "fail" && e.why !== "cap", `lift-off (${e.why})`);
+  check(e.end === "until", `lift-off (${e.end})`);
   // 2 — gear up; CL at 1 500 ft over the field; AP1 5 s after the lift-off
   await lab.js(`(__bh.camera.gearDown = false, true)`);
   e = await lab.live({ until: "(c.a320FmgcIn?.ra ?? 0) > 1500", maxWall: 120, everyMs: 500 });
@@ -134,7 +137,7 @@ async function line(lab: Lab, f: Field): Promise<Verdict> {
   lab.note("note", `FCU ALT 7000 SPD 250: ${await fcu("F.alt = 7000; F.altPull(i); F.spd = 250; F.spdPull(i); F.spd = 250")}`);
   await phase("climb7000");
   e = await lab.live({ until: "(c.a320FmgcIn?.alt ?? 0) > 6950", maxWall: 300, everyMs: 1000 });
-  check(e.why === "until", `7 000 ft reached (${e.why})`);
+  check(e.end === "until", `7 000 ft reached (${e.end})`);
   await phase("hold7000");
   const t0 = await lab.js<number>("window.__lab.sample().t");
   e = await lab.live({ until: `T.t > ${t0 + 60}`, maxWall: 120, everyMs: 1000 });
@@ -148,7 +151,7 @@ async function line(lab: Lab, f: Field): Promise<Verdict> {
     maxWall: 180,
     everyMs: 500,
   });
-  check(e.why === "until", `heading ${right}° captured (${e.why})`);
+  check(e.end === "until", `heading ${right}° captured (${e.end})`);
   await phase("holdR");
   let t1 = await lab.js<number>("window.__lab.sample().t");
   e = await lab.live({ until: `T.t > ${t1 + 30}`, maxWall: 60, everyMs: 1000 });
@@ -159,12 +162,12 @@ async function line(lab: Lab, f: Field): Promise<Verdict> {
     maxWall: 180,
     everyMs: 500,
   });
-  check(e.why === "until", `heading ${hdg0}° captured (${e.why})`);
+  check(e.end === "until", `heading ${hdg0}° captured (${e.end})`);
   // 5 — V/S −1 500 ft/min to 4 000 ft, 220 kt
   lab.note("note", `ALT 4000 V/S -1500 SPD 220: ${await fcu("F.alt = 4000; F.vsPull(i); F.vs = -1500; F.spd = 220")}`);
   await phase("descent");
   e = await lab.live({ until: "(c.a320FmgcIn?.alt ?? 1e9) < 4050", maxWall: 300, everyMs: 1000 });
-  check(e.why === "until", `4 000 ft reached (${e.why})`);
+  check(e.end === "until", `4 000 ft reached (${e.end})`);
   await phase("hold4000");
   t1 = await lab.js<number>("window.__lab.sample().t");
   e = await lab.live({ until: `T.t > ${t1 + 45}`, maxWall: 90, everyMs: 1000 });

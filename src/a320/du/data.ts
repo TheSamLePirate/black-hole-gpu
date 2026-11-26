@@ -105,8 +105,10 @@ export interface DuData {
   takeoff: boolean;
   targetSpeed: number | null;
   targetAlt: number | null;
-  // ---- the ILS: the deviations [dots], its name, the DME [NM]
-  ils: { id: string; loc: number | null; gs: number | null; dme: number } | null;
+  /** the FCU's selected heading or track [° true] while selected (HDG/TRK) — the PFD's blue index, the ND's (null: managed) */
+  selHdg: number | null;
+  // ---- the ILS: the deviations [dots], its name, the DME [NM], its course [° true]
+  ils: { id: string; loc: number | null; gs: number | null; dme: number; crs: number | null } | null;
   // ---- the engines
   eng: [DuEngine, DuEngine];
   /** the thrust limit's mode and N1 [%], the FLEX temperature [°C] */
@@ -300,7 +302,8 @@ export function duData(c: CameraController, s: Settings, deck: Props, date: Date
     takeoff: !G || G.phase === "preflight" || G.phase === "takeoff",
     targetSpeed: G && GI ? G.targetSpeed(GI) : null,
     targetAlt: G ? G.alt : null,
-    ils: ils ? { id: ils.id, loc: ils.loc, gs: ils.gs, dme: ils.dme / 1.852 } : null,
+    selHdg: G && !G.hdgManaged ? G.hdg % 360 : null,
+    ils: ils ? { id: ils.id, loc: ils.loc, gs: ils.gs, dme: ils.dme / 1.852, crs: c.a320Ils?.hdg ?? null } : null,
     eng: [eng(0), eng(1)],
     thrLimit,
     togaN1: toga,

@@ -271,6 +271,14 @@ function a320Approach(this: CameraController, W: IlsRunway): string {
   this.a320Fmgc ??= new Fmgc();
   this.a320Ils = W;
   this.ilsRun = null;
+  // (the speed managed for the approach — the SPD knob pushed, as a crew does: green dot, S, F, VAPP with the configuration. Before
+  // 26 Nov 2026 a speed selected earlier stayed: the A320 flew Le Bourget's ILS at 220 kt, flared at 200 kt nose down, bounced four
+  // times and touched down 1.7 km in)
+  if (!this.a320Fmgc.spdManaged) this.a320Fmgc.spdPush();
+  // (and the approach phase activated — the MCDU's ACTIVATE APPR PHASE —: in cruise or a V/S descent its managed speed stayed 250 kt
+  // under FL100, the flaps waited for 225 kt, the speed for the flaps)
+  const ph = this.a320Fmgc.phase;
+  if (ph === "climb" || ph === "cruise" || ph === "descent") this.a320Fmgc.phase = "approach";
   const o = onRunway(W, g);
   const altFt = Math.ceil(Math.max(W.elev * FT + 2000, legsGround(W) * FT + 1000) / 100) * 100;
   this.a320App = {
@@ -432,4 +440,8 @@ function a320AppStep(c: CameraController, F: Fmgc, i: FmgcIn, onWheels: boolean)
   else if (lever === 3 && out < ILS.faf && i.ias < 181) want = 4;
   if (want !== lever) c.airFlight.cfg.flaps = want / 4;
   if (!c.gearDown && (F.vert.startsWith("G/S") || out < 12_000) && i.ias < 230) c.gearDown = true;
+  // (and as a crew does with the gear: the autobrake LO — MED on a runway under 2 500 m — (the ground spoilers deploy by themselves on
+  // the wheels, the levers at idle: piloting.ts). Before 26 Nov 2026 none: the A320's autoland rolled from 1.7 km in at Le Bourget
+  // without braking — Sam)
+  if (c.gearDown && c.a320 && !c.a320.autobrake) c.a320.autobrake = A.rwy.len < 2500 ? 2 : 1;
 }

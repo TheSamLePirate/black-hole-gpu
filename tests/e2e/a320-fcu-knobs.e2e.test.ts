@@ -148,10 +148,14 @@ describe.skipIf(!E2E)("the A320's FCU knobs by the mouse: turned, pushed, pulled
 
   test("HDG: turned 20°, pulled with Shift: HDG on the FMA", async () => {
     const k = await aim(/^Scroll for (heading|hdg)/i);
+    const h0 = await app.js<number>("__bh.camera.a320Fmgc.hdg");
     await wheel(k, 20);
+    const h1 = await app.js<number>("__bh.camera.a320Fmgc.hdg");
     await shiftClick(k);
-    console.log(`  7. HDG pulled: ${await fma()}`);
+    console.log(`  7. HDG turned ${h0} → ${h1}°, pulled: ${await fma()}`);
     expect(await app.js<string>("__bh.camera.a320Fmgc.lat")).toMatch(/HDG|TRK/);
+    // (the heading preselected by the turn engaged — before 26 Nov 2026 the pull took the heading now, the turn lost)
+    expect(await app.js<number>("__bh.camera.a320Fmgc.hdg")).toBe(h1);
     await app.shot(`${DIR}/hdg-pulled.png`);
   }, 90_000);
 

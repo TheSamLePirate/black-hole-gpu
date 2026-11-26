@@ -16,10 +16,10 @@ import { bodyFixedOf, groundBare, groundRelief } from "../system/our-surface";
 import { wgs84Direct, wgs84Inverse } from "../system/ellipsoid";
 import { daysOf } from "../system/solar";
 import { weatherAt, windFromAt } from "../weather";
-import { type Approach, approachesFor, approachTileIn, loadApproachTile } from "../world/approaches";
+import { type Approach, approachesFor, approachTileIn, loadApproachTile, runwayEnd } from "../world/approaches";
 import { approachFixes, approachLabel, approachText, type FieldCard, holdOf, type MapApproach } from "../world/approach-draw";
 import { unitsFor } from "../ui/unitsys";
-import { type Airfield, fieldByCode, fieldCached, fieldsNear } from "../world/runways";
+import { type Airfield, fieldByCode, fieldCached, fieldsNear, runwayAxis } from "../world/runways";
 import type { CameraController } from "../controls";
 
 /** The approach chosen: each part « auto » or named. */
@@ -362,12 +362,19 @@ function pick(
 export function runwayOfApproach(f: Airfield, a: Approach, ground: (lat: number, lon: number) => number = groundMsl): IlsRunway {
   const rw = f.runways.find((r) => r.le === a.rwy || r.he === a.rwy);
   const under = ground(a.thr.lat, a.thr.lon);
+  // (the course flown down to the wheels: the runway's own axis — from its threshold to the far one, as it is drawn (world/runways
+  // runwayAxis) — when its thresholds are known and the published course is within 5° of it; the localizer's course alone took Le
+  // Bourget's 07 0.3° off the runway drawn: the A320's autoland touched down 1.7 km in, ~10 m left of the asphalt — 26 Nov 2026, Sam)
+  const end = runwayEnd(f, a.rwy);
+  const ax = end && !end.rw.approx ? runwayAxis(end.thr.lat, end.thr.lon, end.far.lat, end.far.lon) : null;
+  const off = ax ? Math.abs(((ax.hdg - a.crs + 540) % 360) - 180) : 99;
+  const hdg = ax && off < 5 ? ax.hdg : a.crs;
   const W: IlsRunway = {
     name: f.name,
     icao: f.icao || f.ident,
     lat: a.thr.lat,
     lon: a.thr.lon,
-    hdg: a.crs,
+    hdg,
     elev: under > a.thr.elev + 150 ? under : a.thr.elev,
     len: rw?.len ?? 2500,
     des: a.rwy,

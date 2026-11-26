@@ -153,12 +153,6 @@ export class Pfd extends Display {
       "tailstrikeInd",
       "FMA_lvrclb",
       "vsFMArate",
-      "ILS_HDG_L",
-      "ILS_HDG_R",
-      "CRS_pointer",
-      "HDG_digit_L",
-      "HDG_digit_R",
-      "HDG_target",
       "FMA_nodh",
       "FMA_dh",
       "FMA_dhn",
@@ -398,8 +392,28 @@ export class Pfd extends Display {
     let trk = ((d.track - hdg + 540) % 360) - 180;
     if (d.gs < 5) trk = 0;
     e("TRK_pointer").setTranslation((clamp(trk, -23.62, 23.62) / 10) * 98.5416, 0);
+    // (the FCU's selected heading — blue, PLAN-A320-VOL-AAA I2 —: its index on the tape, or its digits at the tape's end it lies
+    // beyond; managed, none. And the ILS course — magenta —, the same way, while an ILS is received or flown)
+    const onTape = (v: number | null, idx: string, left: string, right: string) => {
+      if (v === null) {
+        e(idx).hide();
+        e(left).hide();
+        e(right).hide();
+        return;
+      }
+      const dv = ((v - hdg + 540) % 360) - 180;
+      const shown = Math.abs(dv) <= 23.62;
+      e(idx)
+        .setTranslation((clamp(dv, -23.62, 23.62) / 10) * 98.5416, 0)
+        [shown ? "show" : "hide"]();
+      const txt = String(Math.round(v) % 360 || 360).padStart(3, "0");
+      e(left).setText(txt)[!shown && dv < 0 ? "show" : "hide"]();
+      e(right).setText(txt)[!shown && dv > 0 ? "show" : "hide"]();
+    };
+    onTape(d.selHdg, "HDG_target", "HDG_digit_L", "HDG_digit_R");
     // ---- the ILS: its scales with the LS button (or an ILS flown), its diamonds when received, its name and DME
     const ls = Number(d.deck[this.side === 0 ? "modes/pfd/ILS1" : "modes/pfd/ILS2"] ?? 0) > 0.5;
+    onTape((ls || !!d.ils) && d.ils?.crs != null ? d.ils.crs : null, "CRS_pointer", "ILS_HDG_L", "ILS_HDG_R");
     const ils = d.ils;
     const showIls = ls || !!ils;
     e("LOC_scale").setVisible(showIls);
