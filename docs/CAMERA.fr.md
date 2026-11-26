@@ -101,7 +101,11 @@ Le HUD et les panneaux du jeu sont cachés ; la barre du haut reste et se masque
 nouveau, il est rendu au réalisateur. En bas à gauche, un bandeau télé nomme l'avion filmé, sa piste et le temps restant avant le
 toucher ou l'envol.
 
-L'heure du jeu est réglée sur l'instant du trafic dessiné, donc la lumière est celle du lieu. Voir docs/PLAN-AEROPORT-AAA.md.
+L'heure du jeu est réglée sur l'instant du trafic dessiné, donc la lumière est celle du lieu.
+
+**Sa radio** (`src/traffic/atc.ts`) : la tour et les équipages se parlent à chaque mouvement, en anglais OACI et en bande radio
+(Réglages › Voix activées) — l'appel en finale et « cleared to land », « line up and wait », « cleared for takeoff », le passage au
+sol et au départ. Les dernières lignes s'affichent dans le panneau. Voir docs/PLAN-AEROPORT-AAA.md.
 
 ## Touches
 

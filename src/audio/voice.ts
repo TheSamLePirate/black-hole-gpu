@@ -9,7 +9,19 @@
 /** Who speaks: the landing's callouts (the aircraft's own voice), mission control (by radio), TARS, the
  *  flight computer's messages; the flight's radio roles (game/radio.ts, I4): a wingman, the AWACS, the carrier, its
  *  landing signal officer. */
-export type Speaker = "callout" | "mission" | "tower" | "tars" | "computer" | "wingman" | "awacs" | "mother" | "lso" | "tanker";
+export type Speaker =
+  | "callout"
+  | "mission"
+  | "tower"
+  | "tars"
+  | "computer"
+  | "wingman"
+  | "awacs"
+  | "mother"
+  | "lso"
+  | "tanker"
+  /** a crew on the airport's frequency (traffic/atc.ts — the airport view's radio) */
+  | "pilot";
 
 /** A line to say. */
 export interface VoiceLine {
@@ -116,6 +128,7 @@ export const SPEAKER_STYLE: Record<Speaker, { rate: number; pitch: number }> = {
   mother: { rate: 1.0, pitch: 0.85 },
   lso: { rate: 1.15, pitch: 1.0 },
   tanker: { rate: 1.0, pitch: 1.0 },
+  pilot: { rate: 1.15, pitch: 0.95 },
 };
 
 export interface SpeechHost {

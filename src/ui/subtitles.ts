@@ -15,6 +15,7 @@ const NAMES: Record<Speaker, () => string> = {
   mother: () => "MOTHER",
   lso: () => "PADDLES",
   tanker: () => "TEXACO",
+  pilot: () => t("CREW"),
 };
 
 export class Subtitles {

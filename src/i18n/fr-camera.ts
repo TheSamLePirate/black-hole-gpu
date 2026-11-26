@@ -122,6 +122,8 @@ export default {
   Cinema: "Cinéma",
   "Line-up": "Alignement",
   Wing: "Aile",
+  Radio: "Radio",
+  CREW: "ÉQUIPAGE",
   "initial climb": "montée initiale",
   "landing roll": "roulage à l'atterrissage",
   "final approach": "finale",

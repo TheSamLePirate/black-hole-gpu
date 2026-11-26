@@ -2841,3 +2841,5 @@ body.topbar-hidden .airport-ui { top: 16px; }
 .airport-bars .ab-bottom { position: absolute; left: 0; right: 0; height: max(0px, calc((100vh - 100vw / 2.39) / 2)); background: #000; }
 .airport-bars .ab-top { top: 0; }
 .airport-bars .ab-bottom { bottom: 0; }
+.airport-ui .au-radio-line { font-size: 11.5px; line-height: 1.3; margin: 2px 0; opacity: 0.85; }
+.airport-ui .au-radio-line.tower { color: #ffcf96; }

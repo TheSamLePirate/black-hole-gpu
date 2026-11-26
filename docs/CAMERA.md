@@ -97,7 +97,9 @@ climb-out), or one shot held: Tower, Threshold, Runway side, Rotation, Climb-out
 are hidden (the top bar stays, toggled as ever); a panel at the right lists the **arrivals**, the **departures** and the aircraft
 **about the airport** — one clicked is followed (clicked again: the director chooses again) and its card shown —; a broadcast
 caption at the bottom left names the one filmed, its runway and its seconds to touchdown or lift-off. The game's clock is set to
-the moment the live traffic is drawn at: the light is the place's own. docs/PLAN-AEROPORT-AAA.md.
+the moment the live traffic is drawn at: the light is the place's own. **Its radio** (`src/traffic/atc.ts`): the tower and the crews
+talk over each movement — the final's call and « cleared to land », « line up and wait », « cleared for takeoff », the hand-offs to Ground
+and Departure — in ICAO English, through the radio's band (Settings › Voices on); the last lines on the panel. docs/PLAN-AEROPORT-AAA.md.
 
 ## Keys
 

@@ -46,6 +46,8 @@ export interface AirportUiDeps {
   settings: { units?: "metric" | "imperial" };
   /** the mode left (the free camera kept where it is) */
   quit(): void;
+  /** the radio's last lines (traffic/atc.ts) */
+  radio?(): readonly { who: "tower" | "pilot"; text: string }[];
 }
 
 export class AirportUi {
@@ -94,6 +96,8 @@ export class AirportUi {
       S.queue.map((q) => `${q.c.id}:${Math.round(q.eta)}:${q.c.gnd}`).join(","),
       S.others.map((c) => `${c.id}:${c.phase}`).join(","),
       cur ? `${Math.round(U.alt(cur.msl) / 10)}:${Math.round(U.spd(Math.hypot(...cur.v)))}` : "",
+      this.d.radio?.().length ?? 0,
+      this.d.radio?.().at(-1)?.text ?? "",
     ].join("|");
     if (key === this.key) return;
     this.key = key;
@@ -155,6 +159,15 @@ export class AirportUi {
       // the one filmed: its card
       const cur = S.current ? airportCraft(S.current) : null;
       if (cur) body.push(this.card(cur, S.queue.find((q) => q.c.id === cur.id) ?? null, S.pinned === cur.id, U));
+      // the radio: its last lines (the tower amber, the crews white)
+      const R = this.d.radio?.() ?? [];
+      if (R.length) {
+        const box = h("section", "au-radio");
+        box.dataset.testid = "airport-ui-radio";
+        box.append(h("div", "au-label", t("Radio")));
+        for (const l of R.slice(-3)) box.append(h("div", `au-radio-line ${l.who}`, l.text));
+        body.push(box);
+      }
       // the queues
       const arr = S.queue.filter((q) => !q.dep);
       const dep = S.queue.filter((q) => q.dep);

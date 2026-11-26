@@ -68,6 +68,7 @@ import { terminalsOf } from "./world/terminals";
 import { airportCaption, airportHooks, airportState } from "./controller/airportview";
 import { AIRPORT_MODE_LABEL } from "./ui/camerapanel";
 import { AirportUi } from "./ui/airportui";
+import { AirportAtc, type AtcLine, towerName } from "./traffic/atc";
 import { a320Wheel } from "./ui/a320wheel";
 import type { ZoneSources } from "./system/zones";
 import { swappable } from "./util/swappable";
@@ -1897,7 +1898,7 @@ async function main() {
   });
   /** the radio's roles' system voices (I4): another of the language's voices for each, when there are several */
   function roleSystemVoice(sp: string): { name?: string } | null {
-    const k = ["wingman", "awacs", "mother", "lso", "tanker"].indexOf(sp);
+    const k = ["wingman", "awacs", "mother", "lso", "tanker", "pilot"].indexOf(sp);
     if (k < 0 || typeof speechSynthesis === "undefined") return null;
     const vs = speechSynthesis.getVoices().filter((v) => v.lang.toLowerCase().startsWith(lang));
     return vs.length > 1 ? { name: vs[(k + 1) % vs.length]!.name } : null;
@@ -9077,8 +9078,50 @@ async function main() {
     tools.setDate(new Date(Date.now() - Math.max(0, settings.trafficDelay ?? 0) * 1000).toISOString());
     tools.warp(1);
   };
-  const airportUi = new AirportUi({ settings, quit: () => panel.toast(t("Airport view left — the free camera stays here")) });
+  const airportUi = new AirportUi({
+    settings,
+    quit: () => panel.toast(t("Airport view left — the free camera stays here")),
+    radio: () => airportRadio,
+  });
+  // (the airport's radio — traffic/atc.ts, PLAN-AEROPORT-AAA V10: the tower's and the crews' exchanges made from its movements, said
+  // through the radio's band; the last lines on its panel)
+  let airportAtc: AirportAtc | null = null;
+  const airportRadio: AtcLine[] = [];
+  const airportAtcFrame = () => {
+    const S = airportState();
+    if (!S) {
+      airportAtc = null;
+      return;
+    }
+    if (!airportAtc || airportAtc.tower !== towerName(S.name)) airportAtc = new AirportAtc(towerName(S.name));
+    const lines = airportAtc.step(
+      S.queue.map((q) => ({
+        id: q.c.id,
+        cs: q.c.cs,
+        reg: q.c.reg,
+        dep: !!q.dep,
+        gnd: q.c.gnd,
+        eta: q.eta,
+        speed: Math.hypot(...q.c.v),
+        over: q.c.over,
+        runway: q.way.name.split(" ").pop() ?? "",
+      })),
+    );
+    for (const l of lines) {
+      airportRadio.push(l);
+      if (airportRadio.length > 8) airportRadio.shift();
+      voice.say({
+        id: `atc:${l.id}:${l.text}`,
+        text: l.text,
+        speaker: l.who === "tower" ? "tower" : "pilot",
+        priority: 3,
+        radio: true,
+        ttl: 25_000,
+      });
+    }
+  };
   const airportCaptionFrame = () => {
+    airportAtcFrame();
     airportUi.frame(performance.now());
     const A = airportState();
     const cap = A ? airportCaption() : null;

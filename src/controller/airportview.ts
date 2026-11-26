@@ -376,6 +376,8 @@ export function airportStep(view: CameraController, dt: number): boolean {
   S.queue = movementsOf(all, S.ways, now - Math.max(0, main.s.trafficDelay ?? 0)).filter(
     (x) => !x.dep || !(S!.t - (S!.arrived.get(x.c.id) ?? -1e9) < 600),
   );
+  // (those done — rolled out, climbed away — off the lists, but the one filmed)
+  S.queue = S.queue.filter((x) => !finished(x) || x.c.id === S!.current);
   // (an arrival past its touchdown — on the ground or still reported airborne —: no departure for it for ten minutes — a go-around's
   // climb, or reports bouncing after a landing made up through their gap, filmed as a « departure » once, 26 Nov 2026)
   for (const x of S.queue) if (!x.dep && (x.c.gnd || x.eta < 0)) S.arrived.set(x.c.id, S.t);
