@@ -83,3 +83,19 @@ Choix par défaut (à corriger par Sam) :
 | V10 | **Les radios** (`src/traffic/atc.ts`) : les échanges tour / équipages faits à partir des mouvements, chacun une fois, en phraséologie OACI anglaise — arrivée : appel en finale, « cleared to land », collationnement ; dégagement, « contact Ground » ; départ : prêt au point d'attente, « line up and wait », « cleared for takeoff » au roulage, « contact Departure » en montée —, indicatifs en radiotéléphonie (60 compagnies, sinon épelés), pistes et chiffres un par un ; dits par la file des voix (`audio/voice.ts` : la tour — Deepgram en bande radio quand joignable, sinon la voix du système —, les équipages par une autre voix, locuteur `pilot`), squelch et souffle ; les trois dernières lignes dans le panneau | unitaire `airport-atc` (mots, ordre, une fois) ; vu à KLAX (lignes envoyées à la voix ; **non écouté** : headless) | **fait** (écoute à faire) |
 | V11 | **Le mode à l'écran titre** : 5ᵉ carte « Aéroport » (entre En vaisseau et Caméra libre) ; son écran propose 12 grands aéroports avec leur heure locale (jour/nuit) et une recherche (code ou nom, `airportSearch`) ; lancé : une scène avec appareil si aucun n'est piloté (la caméra libre en sort), puis la vue en Cinéma (`TitleGame.airport`) | `title-activities` (5 modes, aéroports, heure locale) ; vu (headless, ce Mac) : titre à 5 cartes, recherche « nice » → LFMN, KLAX lancé (Cinéma, 7 en file, radio) | **fait** |
 | V12 | e2e sur kerr-mini (affiché) : un aéroport chargé, un atterrissage et un décollage filmés par le Réalisateur, la file cliquée, captures | kerr-mini | à faire |
+
+### Les avions de ligne parfaits (26 nov. 2026 — Sam : « assure-toi que les avions de ligne ont tous les effets et soient parfaits au
+décollage, à l'atterrissage », « et les effets atmosphériques »)
+
+Inventaire du 26 nov. : l'atterrissage du trafic avait son traitement AAA (L1–L5 : plan, arrondi, toucher, dérotation, spoilers,
+inverseurs, freinage) ; le décollage aucun ; les effets atmosphériques de l'A320 (vapeur, tourbillons, fumée des pneus, gerbes, flux des
+inverseurs) étaient réservés à l'A320 piloté, les traînées du trafic à moins de 30 km de l'appareil piloté — dans la vue Aéroport (un
+vaisseau en orbite) : aucun.
+
+| Lot | Contenu | Vérification | État |
+|---|---|---|---|
+| V13 | **Le décollage du trafic** : rotation au roulage (assiette 0 → 9° de VR − 10 à VR − 4 m/s), assiette limitée à 4°/s (plus de saut à l'envol), train rentré à la montée confirmée (10 m, était 150 m), aligné sur la piste : volets 1+F et phares | `traffic-runway` (rotation 9°, ≤ 4°/s, train à 10–80 m) | **fait** |
+| V14 | **Les effets du trafic** : `trafficConfig` partagé gréement/effets ; les effets de l'A320 (`a320/effects.ts`) générés pour les 6 avions de ligne en mouvement les plus proches (celui filmé d'abord), à leur taille, dans la météo du lieu ; **la vue Aéroport gare un A320 au parking** de l'aéroport (le repère des effets, la météo et les distances sont ceux de l'appareil piloté) | observé à KLAX (headless) : tourbillons en approche, fumée des pneus au toucher (ASA412) ; vapeur et gerbes non vues (temps sec ce matin-là : leur seuil d'humidité, de pluie) | **fait** |
+| V15 | Le gréement complet (volets, becs, inverseurs, phares 3D) pour l'avion filmé quelle que soit sa distance (aujourd'hui 4 au plus, à moins de 4 km de l'œil) ; feux 3D (cônes, halos dans la brume) | — | à faire |
+| V16 | Le son du trafic : réacteurs, inversion, passage (Doppler) près de la caméra | — | à faire |
+| V17 | La météo sur le trafic : dérive au vent de travers (crabe), piste mouillée, pluie | — | à faire |

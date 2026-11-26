@@ -166,6 +166,8 @@ const WINDOW = 200;
 const KNOTS_MAX = 100;
 const BANK_MAX = 30 * D;
 const ROLL_RATE = 7 * D;
+/** the take-off's rotation: the lift-off attitude [rad], VR [m/s] of a long airliner (> 30 m) and a short one, the pitch rate [rad/s] */
+const ROTATE = { pitch: 9 * D, vrLong: 74, vrShort: 66, rate: 4 * D } as const;
 const BANK_LAG = 1;
 /** under this altitude over the ellipsoid [m] a flying aircraft's ground is asked (none higher: Everest 8 849 m) */
 const FLOOR_CHECK = 9000;
@@ -287,6 +289,8 @@ const easing = new Map<
     bank: number;
     /** its pitch over the horizon the last frame in the air [rad]; when it touched down (NaN: in the air) */
     pitch: number;
+    /** its pitch as drawn [rad] (rate-limited) */
+    pd: number;
     tdAt: number;
     /** its phase the frame before (null: none yet), its gear wanted (null: none yet) and its position 0…1 */
     phase: TrafficPhase | null;
@@ -443,6 +447,7 @@ function trafficNow(this: CameraController): TrafficCraft[] {
         drawn: now,
         bank: E0?.bank ?? 0,
         pitch: E0?.pitch ?? 0,
+        pd: E0?.pd ?? Number.NaN,
         tdAt: E0?.tdAt ?? Number.NaN,
         phase: E0?.phase ?? null,
         gearT: E0?.gearT ?? null,
@@ -476,7 +481,17 @@ function trafficNow(this: CameraController): TrafficCraft[] {
     else if (!Number.isFinite(Ez.tdAt)) Ez.tdAt = dt < 1 && Ez.pitch > 0 ? now : now - DEROT.hold - DEROT.down;
     const sinceTd = gnd ? now - Ez.tdAt : Number.NaN;
     const derot = gnd ? 1 - smooth((sinceTd - DEROT.hold) / DEROT.down) : 0;
-    const alpha = !af.mesh ? 0 : gnd ? Math.max(Ez.pitch, 0) * derot : laws.alpha;
+    // (a take-off's rotation: on its roll, the nose raised from VR − 10 m/s to VR − 4 — the five seconds before the wheels leave, at its
+    // acceleration; the path drawn shows its ground speed a few m/s under the reported one there — to its lift-off attitude; before
+    // 26 Nov 2026 a departure rolled flat and lifted off with its climb's attitude in one frame)
+    const vr = af.len > 30 ? ROTATE.vrLong : ROTATE.vrShort;
+    const rot = gnd && RP.phase === "takeoff" ? ROTATE.pitch * smooth((gs - (vr - 10)) / 6) : 0;
+    const alphaT = !af.mesh ? 0 : gnd ? Math.max(Math.max(Ez.pitch, 0) * derot, rot) : laws.alpha;
+    // (the nose's attitude moved at an airliner's pitch rate at most: no jump at the lift-off, nor anywhere)
+    const pitchT = gamma + alphaT;
+    const pd = Number.isFinite(Ez.pd) ? Ez.pd + Math.max(-ROTATE.rate * dt, Math.min(ROTATE.rate * dt, pitchT - Ez.pd)) : pitchT;
+    Ez.pd = pd;
+    const alpha = !af.mesh ? 0 : gnd && pd - gamma < 0 ? 0 : pd - gamma;
     if (!gnd) Ez.pitch = gamma + alpha;
     // (its gear: wanted by its phase, moved over its travel — first seen: as wanted)
     const gearT = gearTarget(Ez.gearT, RP.phase, over, vu);
@@ -660,11 +675,19 @@ const posers = new Map<string, { P: A320Poser; at: number }>();
  * after it down to 70 kt, its engines' N1 (take-off, approach, reverse, idle), its nose's oleo free while the nose is held
  * up.
  */
-export function trafficRig(c: TrafficCraft, now: number) {
-  let R = posers.get(c.id);
-  if (!R) posers.set(c.id, (R = { P: new A320Poser(), at: now - 10 }));
-  const dt = Math.min(Math.max(now - R.at, 0), 10);
-  R.at = now;
+/**
+ * A traffic airliner's configuration as its crew would set it (its rig's and its effects' — a320/effects.ts): its flap lever (0 … 4:
+ * CONF 1+F lined up and rolling for its take-off and climbing under 900 m; 3 then FULL on its approach), its engines' N1 [%] and
+ * reversers 0…1, its ground spoilers, lined up on its runway (still or about to roll), its landing lights.
+ */
+export function trafficConfig(c: TrafficCraft): {
+  flapLever: number;
+  n1: number;
+  rev: number;
+  spoil: number;
+  nose: boolean;
+  lights: boolean;
+} {
   const gs = Math.hypot(c.v[0]!, c.v[1]!, c.v[2]!);
   const since = Number.isFinite(c.sinceTd) ? c.sinceTd : Number.POSITIVE_INFINITY;
   const landing = c.phase === "landing";
@@ -672,10 +695,12 @@ export function trafficRig(c: TrafficCraft, now: number) {
   const spoil = c.gnd && landing && since > 0.3 && gs > 15 ? 1 : 0;
   const nose = c.gnd && c.alpha < 0.3 * D;
   const out = c.phase === "takeoff" || c.phase === "climb";
+  // (lined up on its runway, still or about to roll: configured for its take-off — flaps 1+F, its lights on)
+  const linedUp = c.gnd && !landing && !!c.runway && Math.abs(c.runway.c) < 20 && gs < 15 && c.runway.a > -100;
   const flapLever = c.gnd
     ? landing && gs > 20
       ? 4
-      : c.phase === "takeoff"
+      : c.phase === "takeoff" || linedUp
         ? 1
         : 0
     : out
@@ -687,6 +712,18 @@ export function trafficRig(c: TrafficCraft, now: number) {
         : c.over < 2000 && c.gearWanted === 1
           ? 3
           : 0;
+  const n1 = rev ? 70 : c.phase === "takeoff" ? 92 : c.gnd ? 24 : out ? 85 : c.over < 900 ? 52 : 78;
+  return { flapLever, n1, rev, spoil, nose, lights: c.gnd ? c.phase === "takeoff" || landing || linedUp : c.over < 3000 };
+}
+
+export function trafficRig(c: TrafficCraft, now: number) {
+  let R = posers.get(c.id);
+  if (!R) posers.set(c.id, (R = { P: new A320Poser(), at: now - 10 }));
+  const dt = Math.min(Math.max(now - R.at, 0), 10);
+  R.at = now;
+  const gs = Math.hypot(c.v[0]!, c.v[1]!, c.v[2]!);
+  const K = trafficConfig(c);
+  const { flapLever, rev, spoil, nose } = K;
   return R.P.step({
     dt,
     pitch: 0,
@@ -702,10 +739,10 @@ export function trafficRig(c: TrafficCraft, now: number) {
     onGround: c.gnd,
     groundSpeed: c.gnd ? gs : 0,
     steer: 0,
-    n1: rev ? [70, 70] : c.phase === "takeoff" ? [92, 92] : c.gnd ? [24, 24] : out ? [85, 85] : c.over < 900 ? [52, 52] : [78, 78],
+    n1: [K.n1, K.n1],
     reverser: [rev, rev],
     alpha: c.alpha / D,
-    landingLights: c.gnd ? c.phase === "takeoff" || landing : c.over < 3000,
+    landingLights: K.lights,
   });
 }
 

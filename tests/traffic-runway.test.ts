@@ -108,15 +108,16 @@ describe("the owner: a runway, a phase, a gear (pure)", () => {
     expect(Math.abs(onWay(W28L, o.lat, o.lon).c)).toBeLessThan(0.5);
   });
 
-  test("the take-off roll on 01R, 15 m off its axis: on its axis, taking off, gear down; up past 150 m climbing, down never in cruise", () => {
+  test("the take-off roll on 01R, 15 m off its axis: on its axis, taking off, gear down; up at a positive climb past 10 m, down never in cruise", () => {
     const P = at(W01R, 900, 15);
     const o = runwayPlace({ ...P, over: 0, gnd: true, ...along(W01R, 60), vu: 0, acc: 2 }, SFO, "taxi");
     expect(o.phase).toBe("takeoff");
     expect(Math.abs(onWay(W01R, o.lat, o.lon).c)).toBeLessThan(0.5);
     expect(gearTarget(1, o.phase, 0, 0)).toBe(1);
-    // (climbing out: down to 150 m, up past it; a level-off low keeps it as it was; cruise: up)
-    expect(gearTarget(1, "climb", 100, 8)).toBe(1);
-    expect(gearTarget(1, "climb", 200, 8)).toBe(0);
+    // (climbing out: « positive climb, gear up » past 10 m — 26 Nov 2026, was 150 m —; level, low: kept as it was; cruise: up)
+    expect(gearTarget(1, "climb", 6, 8)).toBe(1);
+    expect(gearTarget(1, "climb", 20, 8)).toBe(0);
+    expect(gearTarget(1, "climb", 20, 0)).toBe(1);
     expect(gearTarget(0, "cruise", 400, 0)).toBe(0);
     expect(gearTarget(null, "cruise", 10_000, 0)).toBe(0);
     expect(gearTarget(1, "cruise", 10_000, 0)).toBe(0);
@@ -266,7 +267,7 @@ describe("drawn by the controller (controller/traffic.ts), a minute behind", () 
     expect(phases.has("landing")).toBe(true);
   });
 
-  test("a take-off from 01R 15 m off its axis, its climb 20 m high: on its axis rolling, its gear up past 150 m, moved over its travel", () => {
+  test("a take-off from 01R 15 m off its axis, its climb 20 m high: on its axis rolling, its gear up at a positive climb past 10 m, moved over its travel; rotated before the lift-off, no pitch jump", () => {
     const hist: Plane[] = [];
     let t = T0,
       a = 0,
@@ -292,7 +293,9 @@ describe("drawn by the controller (controller/traffic.ts), a minute behind", () 
       low = 1e9,
       upAt = Number.NaN,
       wantedUp = Number.NaN,
-      jump = 0;
+      jump = 0,
+      rotMax = 0,
+      pitchStep = 0;
     const phases = new Set<string>();
     for (let i = 0; i < frames.length; i++) {
       const F = frames[i]!;
@@ -303,10 +306,16 @@ describe("drawn by the controller (controller/traffic.ts), a minute behind", () 
       else if (F.k.over < 100) offClimb = Math.max(offClimb, Math.abs(onWay(W01R, F.lat, F.lon).c));
       if (F.k.gearWanted === 0 && Number.isNaN(wantedUp)) {
         wantedUp = F.t;
-        expect(F.k.over).toBeGreaterThan(GEAR.up);
+        expect(F.k.over).toBeGreaterThan(GEAR.positive);
+        expect(F.k.over).toBeLessThan(80);
         expect(F.k.gear).toBeGreaterThan(0.95);
       }
-      if (F.k.over < GEAR.up && !F.k.gnd) expect(F.k.gear).toBe(1);
+      if (F.k.over < GEAR.positive && !F.k.gnd) expect(F.k.gear).toBe(1);
+      // (the rotation: the nose up on the roll before the lift-off; the attitude moved at 4°/s at most — none jumps)
+      if (F.k.gnd) rotMax = Math.max(rotMax, F.k.pitch);
+      if (process.env.TRACE && F.k.gnd && Math.hypot(...F.k.v) > 60)
+        console.log(`   gs ${Math.hypot(...F.k.v).toFixed(1)} ${F.k.phase} pitch ${F.k.pitch} mesh ${F.k.mesh} len ${F.k.len}`);
+      if (i > 0) pitchStep = Math.max(pitchStep, Math.abs(F.k.pitch - frames[i - 1]!.k.pitch) / Math.max(F.t - frames[i - 1]!.t, 1e-3));
       if (F.k.gear === 0 && Number.isNaN(upAt)) upAt = F.t;
       if (i > 0) {
         const P0 = frames[i - 1]!.k.p,
@@ -316,8 +325,11 @@ describe("drawn by the controller (controller/traffic.ts), a minute behind", () 
     }
     console.log(
       `  phases ${[...phases].join(" → ")}; within ${offRoll.toFixed(2)} m of the axis rolling, ${offClimb.toFixed(2)} m climbing under 100 m; its origin ${low.toFixed(2)} m over the ground at lowest; ` +
-        `gear wanted up at ${(wantedUp - T0).toFixed(1)} s, up at ${(upAt - T0).toFixed(1)} s; a frame's step ${jump.toFixed(2)} m past its speed's at most`,
+        `gear wanted up at ${(wantedUp - T0).toFixed(1)} s, up at ${(upAt - T0).toFixed(1)} s; a frame's step ${jump.toFixed(2)} m past its speed's at most; ` +
+        `rotated to ${((rotMax * 180) / Math.PI).toFixed(1)}° on the roll, the pitch moved ${((pitchStep * 180) / Math.PI).toFixed(1)}°/s at most`,
     );
+    expect(rotMax).toBeGreaterThan(6 * (Math.PI / 180));
+    expect(pitchStep).toBeLessThan(4.5 * (Math.PI / 180));
     expect(phases.has("takeoff")).toBe(true);
     expect(phases.has("climb")).toBe(true);
     expect(offRoll).toBeLessThan(0.5);

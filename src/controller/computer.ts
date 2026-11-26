@@ -16,6 +16,8 @@ import { elements as kepElements, fromPNR, propagate as kepProp, type V3 as KV3 
 import type { Burn, FcContext, OpResult } from "../fc/ops";
 import { contrailPersistence, engineTrail, sheetTrail, tipTrail, type ContrailSource } from "../contrails";
 import { A320Fx, humidityOf } from "../a320/effects";
+import { trafficConfig } from "./traffic";
+import { airportState } from "./airportview";
 import { MISSILES } from "../game/combat";
 import {
   kApoapsis,
@@ -1617,6 +1619,73 @@ function contrailsFrame(this: CameraController): { data: Float32Array<ArrayBuffe
         src.push({ key: `a${c.id}${sx}`, p: [0, 1, 2].map((k) => x[k]! + E[k]! * re + N[k]! * rn + U[k]! * ru) as Vec3, kind: 0, str: e });
       }
     }
+    // (the airliners near — the airport view's, PLAN-AEROPORT-AAA V14 —: the A320's own effects — a320/effects.ts: the wing's vapour,
+    // the tip and flap vortices in humid air, the inlet vortex at take-off power, the tyres' smoke at the touchdown, a wet runway's
+    // spray, the reversers' flow — from each one's flight and configuration (trafficConfig), scaled to its size, in the weather here;
+    // the six nearest within 10 km. Before 26 Nov 2026 the flown A320's alone)
+    const toFrame = (q: readonly number[]): Vec3 => {
+      const r = q.map((v, k) => v - own.p[k]!);
+      const re = r[0]! * Eo[0]! + r[1]! * Eo[1]! + r[2]! * Eo[2]!,
+        rn = r[0]! * No[0]! + r[1]! * No[1]! + r[2]! * No[2]!,
+        ru = r[0]! * Uo[0]! + r[1]! * Uo[1]! + r[2]! * Uo[2]!;
+      return [0, 1, 2].map((k) => x[k]! + E[k]! * re + N[k]! * rn + U[k]! * ru) as Vec3;
+    };
+    // (those moving only — one at rest makes none of them; parked by the dozen about the A320 at its stand, they took the six places
+    // from the airliners landing, 26 Nov 2026 —, the one the airport view films first)
+    const filmed = airportState()?.current ?? null;
+    const dOwn = (c: (typeof TR)[number]) => Math.hypot(...c.p.map((v, k) => v - own.p[k]!)) - (c.id === filmed ? 1e9 : 0);
+    const near = TR.filter((c) => c.mesh && Math.hypot(...c.v) > 3 && Math.hypot(...c.p.map((v, k) => v - own.p[k]!)) < 12_000)
+      .sort((a, b) => dOwn(a) - dOwn(b))
+      .slice(0, 6);
+    const hum = humidityOf(this.weatherNow);
+    const wet = this.weatherNow?.rain ?? 0;
+    const FLAP_DEG = [0, 10, 15, 20, 40];
+    for (const c of near) {
+      let T = this.trafficFx.get(c.id);
+      if (!T) this.trafficFx.set(c.id, (T = { fx: new A320Fx(), at: fr.now }));
+      const dt = Math.min(Math.max(fr.now - T.at, 0), 0.25);
+      T.at = fr.now;
+      const K = trafficConfig(c);
+      const air = airAt(atm, Math.max(c.alt, 0));
+      const speed = Math.hypot(...c.v);
+      const k = c.len / 37.6;
+      // (its lift: its weight — an A320's 62 t scaled to its size — over the dynamic pressure on its wing, 122.6 m² scaled)
+      const q = 0.5 * air.rho * speed * speed;
+      const W = 62_000 * k * k * 9.81;
+      const vz = c.v[0]! * c.up[0]! + c.v[1]! * c.up[1]! + c.v[2]! * c.up[2]!;
+      const cl = c.gnd || q < 50 ? 0 : (W * Math.cos(c.pitch - c.alpha)) / (q * 122.6 * k * k);
+      for (const f of T.fx.step({
+        dt,
+        cl,
+        rho: air.rho,
+        T: air.T,
+        speed,
+        humidity: hum,
+        flap: FLAP_DEG[K.flapLever] ?? 0,
+        onGround: c.gnd,
+        gs: speed,
+        vz,
+        engines: [
+          { n1: K.n1, rev: K.rev },
+          { n1: K.n1, rev: K.rev },
+        ],
+        wet,
+        legs: c.gnd ? [K.nose ? W * 0.1 : 0, W * 0.45, W * 0.45] : null,
+      })) {
+        // (the A320 model's frame — x to the left, y up, z ahead — on the airliner's axes, at its size)
+        const at = (p: readonly number[]) =>
+          toFrame(c.p.map((v, j) => v + k * (-c.right[j]! * p[0]! + c.up[j]! * p[1]! + c.fwd[j]! * p[2]!)));
+        src.push({
+          key: `x${c.id}${f.key}`,
+          p: at(f.q),
+          kind: f.kind,
+          str: f.str,
+          ...(f.to ? { to: at(f.to) } : {}),
+          ...(f.mid ? { mid: at(f.mid) } : {}),
+        });
+      }
+    }
+    if (this.trafficFx.size > 40) for (const id of this.trafficFx.keys()) if (!TR.some((c) => c.id === id)) this.trafficFx.delete(id);
   }
   // (the room's AI wingmen shot down — controller/wingmen.ts, their host's —: burning as their wrecks fall, from their
   // tails)

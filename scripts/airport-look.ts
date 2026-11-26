@@ -29,7 +29,9 @@ try {
         if (cur && eye) { const R = 6371000, D = Math.PI / 180; const lat = Math.asin(cur.p[2] / Math.hypot(...cur.p)) / D, lon = Math.atan2(cur.p[1], cur.p[0]) / D;
           dbg = { eye: [eye.lat.toFixed(5), eye.lon.toFixed(5), Math.round(eye.alt)], craft: [lat.toFixed(5), lon.toFixed(5), Math.round(cur.alt)], dKm: (Math.hypot((eye.lat - lat) * D * R, (eye.lon - lon) * D * R * Math.cos(lat * D)) / 1000).toFixed(3) }; }
         const radio = __bh.voice.asked.filter((x) => x.speaker === "tower" || x.speaker === "pilot").slice(-2).map((x) => x.text);
-        return { radio, shot: S.shot, q: S.queue.map((x) => x.cs + (x.dep ? "↗" : "↘") + Math.round(x.eta)).join(" "), cap: __bh.airport.caption()?.title, ph }; })()`,
+        const fx = __bh.camera.trafficFx?.size ?? 0;
+        const own = __bh.settings.vessel + " " + (__bh.camera.geoNow() ? __bh.camera.geoNow().lat.toFixed(3) + "," + __bh.camera.geoNow().lon.toFixed(3) : "");
+        return { own, fx, shot: S.shot, q: S.queue.map((x) => x.cs + (x.dep ? "↗" : "↘") + Math.round(x.eta)).join(" "), cap: __bh.airport.caption()?.title, ph }; })()`,
     );
     console.log(`${k}: ${JSON.stringify(st)}`);
     await app.shot(`${out}/shot-${String(k).padStart(2, "0")}.png`);

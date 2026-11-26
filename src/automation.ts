@@ -4,7 +4,15 @@
 //   __bh.settings.spin = 0.5; __bh.touch()
 //   __bh.game.help()
 import { issCameraList } from "./camera/iss-view";
-import { airportByCode, airportCaption, airportMode, airportNext, airportStart, airportState, airportStop } from "./controller/airportview";
+import {
+  airportByCode,
+  airportCaption,
+  airportMode,
+  airportNext,
+  airportLaunch,
+  airportState,
+  airportStop,
+} from "./controller/airportview";
 import type { AirportMode } from "./cine/airport";
 import { issCameraFrame, type IssCameraId } from "./system/iss-cameras";
 import { obc } from "./obc/runtime";
@@ -1075,7 +1083,7 @@ export function installBh(c: BhContext) {
         start: async (code?: string, mode: AirportMode = "cinema") => {
           const f = await airportByCode(c.camera, code);
           if (!f) throw new Error(`no airport ${code ?? "near"}`);
-          const why = airportStart(c.camera, f, mode, () => c.spectate(true));
+          const why = await airportLaunch(c.camera, f, mode, () => c.spectate(true));
           if (why) throw new Error(why);
           return f.icao || f.ident;
         },

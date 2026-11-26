@@ -82,6 +82,17 @@ l'état d'une mission ou d'un combat **non sauvé, dit** ; le réseau **« entre
 
 ## Journal
 
+### 2026-11-26 17:23 UTC — Mode Aéroport V13–V14 : le décollage du trafic et ses effets atmosphériques
+
+- Réalisé : `controller/traffic.ts` — rotation au roulage, assiette limitée à 4°/s, `trafficConfig` (volets, N1, inverseurs,
+  spoilers, aligné, phares) ; `traffic/runway-phase.ts` — train rentré à la montée confirmée (10 m) ; `controller/computer.ts` — les
+  effets de l'A320 générés pour le trafic en mouvement (vapeur, tourbillons, tourbillon d'entrée d'air, fumée des pneus, gerbes, flux
+  des inverseurs) ; `airportview.ts` `airportLaunch` + `main.ts` — un A320 garé au parking de l'aéroport dans la vue Aéroport.
+- Preuves : `traffic-runway` (rotation à 9°, ≤ 4°/s, train) ; 77 tests trafic / aéroport / traînées verts ; observé à KLAX (headless) :
+  tourbillons et fumée des pneus du trafic dans le système des traînées (sortes 3 et 8). Vapeur et gerbes non observées (temps sec).
+  Un défaut vu et corrigé en route : les 6 avions retenus étaient ceux garés autour de l'A320.
+- Suite : V15 gréement de l'avion filmé à toute distance et feux 3D, V16 son, V17 météo (crabe, piste mouillée).
+
 ### 2026-11-26 16:56 UTC — A320 V2 : le vol n° 5 arrivé trop haut — l'approche publiée volée comme un équipage (NAV, APPR, ILS de l'approche)
 
 - Constaté (vol n° 5, kerr-mini, vu par Sam) : arrivé trop haut, remise de gaz. Relevé : la descente au-dessus du chemin (+44 → +456 ft

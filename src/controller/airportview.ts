@@ -112,7 +112,20 @@ let main: CameraController | null = null;
 /** What the game does when the view starts (main.ts sets them): the clock put on the moment the traffic is drawn at — the real
  *  time less its delay: its light the real one's (the traffic is live; the scene's own date — 2067 by default — lit Los Angeles
  *  at a winter dawn under real noon traffic, 26 Nov 2026) —, the clock's speed real time. */
-export const airportHooks: { live: () => void } = { live: () => {} };
+export const airportHooks: { live: () => void; prepare: (f: Airfield) => Promise<void> } = {
+  live: () => {},
+  prepare: async () => {},
+};
+
+/**
+ * The view opened (PLAN-AEROPORT-AAA V14): the game prepared first (main.ts — an A320 parked at the airport when the craft flown is
+ * not one near it: the effects' frame, the weather, the distances the traffic's effects are reckoned from are the craft's — with a
+ * spacecraft in orbit the airliners had no vapour, no tyre smoke, no spray), then the view started. Its message, or null.
+ */
+export async function airportLaunch(c: CameraController, f: Airfield, mode: AirportMode, out: () => void): Promise<string | null> {
+  await airportHooks.prepare(f).catch(() => {});
+  return airportStart(c, f, mode, out);
+}
 
 /** The airport view's state (null: off). */
 export function airportState() {

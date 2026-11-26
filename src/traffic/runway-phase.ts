@@ -65,7 +65,7 @@ export const RUNWAY_PHASE = {
 } as const;
 
 /** The gear's rules [m over its wheels' rest, m/s], its travel's time [s]. */
-export const GEAR = { down: 600, up: 150, climb: 1, sink: 1, high: 1_500, initial: 300, travel: 8 } as const;
+export const GEAR = { down: 600, up: 150, climb: 1, sink: 1, high: 1_500, initial: 300, travel: 8, positive: 10 } as const;
 
 /** smooth 0 → 1 from e0 to e1 */
 const ss = (e0: number, e1: number, x: number) => {
@@ -280,6 +280,9 @@ export function phaseOf(
 export function gearTarget(prev: 0 | 1 | null, phase: TrafficPhase, over: number, vu: number): 0 | 1 {
   if (phase === "parked" || phase === "taxi" || phase === "takeoff" || phase === "landing" || phase === "approach") return 1;
   if (vu < -GEAR.sink && over < GEAR.down) return 1;
+  // (a take-off's climb: « positive climb, gear up » — a few seconds after the lift-off, 10 m up; before 26 Nov 2026 at 150 m, the
+  // airport view's climb-outs filmed gear down)
+  if (phase === "climb" && vu > GEAR.climb && over > GEAR.positive) return 0;
   if (vu > GEAR.climb && over > GEAR.up) return 0;
   if (over > GEAR.high) return 0;
   return prev ?? (over < GEAR.initial ? 1 : 0);

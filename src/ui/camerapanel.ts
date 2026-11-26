@@ -22,7 +22,7 @@ import { issCameraList } from "../camera/iss-view";
 import type { IssCameraId } from "../system/iss-cameras";
 import { VESSEL_IDS } from "../vessels";
 import { AIRPORT_MODES, type AirportMode } from "../cine/airport";
-import { airportByCode, airportMode, airportNext, airportStart, airportState, airportStop } from "../controller/airportview";
+import { airportByCode, airportMode, airportNext, airportLaunch, airportState, airportStop } from "../controller/airportview";
 
 /** The airport's directors: their names and what they film (PLAN-AEROPORT-AAA). */
 export const AIRPORT_MODE_LABEL: Record<AirportMode, string> = {
@@ -737,7 +737,7 @@ export class CameraPanel {
       try {
         const f = await airportByCode(this.d.camera, code.value || undefined);
         if (!f) return this.d.toast(tf("No airport {0}", code.value || t("near")));
-        const why = airportStart(this.d.camera, f, "cinema", () => this.d.spectate?.(true));
+        const why = await airportLaunch(this.d.camera, f, "cinema", () => this.d.spectate?.(true));
         if (why) this.d.toast(why);
         else this.d.toast(tf("Watching the movements at {0}", `${f.icao || f.ident} · ${f.name}`));
       } finally {

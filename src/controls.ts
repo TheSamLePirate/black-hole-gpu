@@ -1478,6 +1478,8 @@ export class CameraController {
    *  the scene's time of their last step */
   a320Fx: import("./a320/effects").A320Fx | null = null;
   a320FxAt: number | null = null;
+  /** the traffic airliners' own effects' memories (their tyres' spin-up…), by id — controller/computer.ts, PLAN-AEROPORT-AAA V14 */
+  trafficFx = new Map<string, { fx: import("./a320/effects").A320Fx; at: number }>();
   /** the engines' and the wingtips' condensation trails (contrails.ts), kept in the air */
   readonly contrails = new Contrails();
   contrailBuf = new Float32Array(MAX_SEGMENTS * SEG_FLOATS);

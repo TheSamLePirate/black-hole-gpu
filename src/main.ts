@@ -65,7 +65,7 @@ import { afterSkyPrefetch, prefetchSkyAssets, Renderer, type FrameStats, type Of
 import { ArrivalPrefetch } from "./system/arrival-prefetch";
 import { airwayLegs, navFind, navFindSync, navResolve, navWarm } from "./world/navdb";
 import { terminalsOf } from "./world/terminals";
-import { airportByCode, airportCaption, airportHooks, airportStart, airportState } from "./controller/airportview";
+import { airportByCode, airportCaption, airportHooks, airportLaunch, airportState } from "./controller/airportview";
 import { AIRPORT_MODE_LABEL } from "./ui/camerapanel";
 import { AirportUi } from "./ui/airportui";
 import { AirportAtc, type AtcLine, towerName } from "./traffic/atc";
@@ -9074,6 +9074,31 @@ async function main() {
     return `${Math.floor(x / 60)}:${String(x % 60).padStart(2, "0")}`;
   };
   // (the airport view on: the game's clock on the moment its live traffic is drawn at, real time — controller/airportview.ts)
+  // (the airport view prepared — PLAN-AEROPORT-AAA V14: the craft flown an A320 parked at that airport — at a stand, else set down on
+  // the field —, unless one is there already: the airliners' effects, the weather and the distances are reckoned from the craft)
+  airportHooks.prepare = async (f) => {
+    const g = camera.geoNow();
+    const D = Math.PI / 180;
+    const near =
+      settings.vessel === "a320" &&
+      !!g &&
+      2 *
+        6371e3 *
+        Math.asin(
+          Math.sqrt(
+            Math.sin(((f.lat - g.lat) * D) / 2) ** 2 + Math.cos(f.lat * D) * Math.cos(g.lat * D) * Math.sin(((f.lon - g.lon) * D) / 2) ** 2,
+          ),
+        ) <
+        20_000;
+    if (near) return;
+    if (camera.spectating) setSpectator(false);
+    if (settings.vessel !== "a320") {
+      settings.vessel = "a320";
+      onSettingsChange(["vessel"]);
+      camera.switchVessel("a320");
+    }
+    await tools.atStand(f.icao || f.ident).catch(() => tools.land("earth", f.lat, f.lon));
+  };
   airportHooks.live = () => {
     tools.setDate(new Date(Date.now() - Math.max(0, settings.trafficDelay ?? 0) * 1000).toISOString());
     tools.warp(1);
@@ -10426,7 +10451,7 @@ async function main() {
           }
           const f = await airportByCode(camera, code);
           if (!f) return panel.toast(tf("No airport {0}", code));
-          const why = airportStart(camera, f, "cinema", () => setSpectator(true));
+          const why = await airportLaunch(camera, f, "cinema", () => setSpectator(true));
           panel.toast(why ?? tf("Watching the movements at {0}", `${f.icao || f.ident} · ${f.name}`));
         })(),
       freeScene: (name) => {
