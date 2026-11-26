@@ -12,6 +12,7 @@ import { flight, resetFlights } from "./helpers/flight";
 // the FMGC was fed `cstr: null`: every constraint of the plan ignored.
 
 afterEach(resetFlights);
+// (the flown ones: ~15 s here, 70 s on the CI's runner — past a 60 s limit, 26 Nov 2026: 240 s each)
 const FT = 0.3048;
 
 test("a320Cstr: the first binding constraint ahead — at or below climbing, at or above descending", () => {
@@ -82,7 +83,7 @@ test("flown: CLB to FL160 under a SID's « at or below 12 000 ft » — ALT CST 
   expect(maxBefore).toBeLessThan(12000 + 150);
   expect(F.vert).toBe("ALT");
   expect(Math.abs(i.alt - 16000)).toBeLessThan(150);
-}, 60_000);
+}, 240_000);
 
 test("flown: the descent armed in cruise, begun at the T/D, the path held (VDEV), at the IF's 3 000 ft, the approach phase at DECEL", () => {
   const g = ourGroundPose("earth", 40, -35, 0);
@@ -183,4 +184,4 @@ test("flown: the descent armed in cruise, begun at the T/D, the path held (VDEV)
   expect(Math.abs(atIf - 3000)).toBeLessThan(150);
   // (DECEL: 5 NM before the IF)
   expect(phaseApp).toMatch(/^IF [4-6]\./);
-}, 60_000);
+}, 240_000);

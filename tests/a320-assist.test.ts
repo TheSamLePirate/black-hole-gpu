@@ -71,4 +71,4 @@ test("assisted: the approach's configuration — 1, 2, the gear, 3 as the manage
   console.log(`  configuration: ${seen.join(" → ")}, ${c.a320FmgcIn!.ias.toFixed(0)} kt`);
   // (224 kt at the start: green dot + 10 at once — the first notch from the first frame; never back up: no notch fought over)
   expect(seen.filter((x) => x !== "0")).toEqual(["1", "2", "2G", "3G"]);
-}, 60_000);
+}, 240_000);
