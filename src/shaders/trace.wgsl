@@ -8532,6 +8532,8 @@ fn terrainRasterHint(px: vec2f) -> f32 { return 0.0; }
 fn terrainRasterId(px: vec2f) -> u32 { return 0u; }
 fn terrainRasterLeaf(px: vec2f) -> u32 { return 0u; }
 fn terrainRasterDepth(px: vec2f) -> f32 { return 0.0; }
+fn terrainRasterTexel(px: vec2f) -> vec4f { return vec4f(0.0); }
+const RASTER_TREE_CODE_MAX = 0.0;
 fn terrainRasterTreeSurface(px:vec2f)->u32 {return 0u;}
 fn terrainRasterTreeShade(px:vec2f)->f32 {return 0.0;}
 fn terrainRasterBuilding(px: vec2f) -> bool { return true; }
@@ -17118,6 +17120,40 @@ const LITE_SKY_M = 1e9;
 // withLiteSplit, the staged water's first step (CHALLENGE-J1-J2 idea 2, Sam's decision of 13 Nov 2026) —: RASTER_SPLIT_WATER, less
 // a half where its water covers over half the pixel (liteFinish's water mark); below RASTER_SPLIT, above RASTER_MAT)
 const RASTER_SPLIT_WATER = -10.25;
+// The pixel within 2 px of `px` — along its row and column, 1 px then 2 px, the first found — whose crown shadeLite shaded this frame,
+// another tree's than `own`, nearer than `tG` [m], `px` itself shaded as the ground behind its proxy (tG its ground's distance, the
+// raster's hint); (-1, -1) none. One texel read a neighbour — its id in g, its proxy's distance in b; a tree's proxy writes g and b alone,
+// r and a keep the ground's distance and code under it (a code under the structures', RASTER_CODE.turbine, is a tree's or the ground's
+// — the ground's g 0) —, its moments and liteOut only where it is another tree's before that ground. (shadeLiteFinish: a crown missed
+// before the ground. 26 Nov 2026: the first try took a tree's texel for code 0 alone and refused every proxy — the fringe left whole)
+const CROWN_ABOUT_M = 500.0;
+fn crownAbout(px: vec2i, own: u32, tG: f32, ground: bool) -> vec2i {
+  // (a near proxy — CROWN_ABOUT_M —: farther, its margin is under a pixel and the search costs the forests' finishing pass)
+  let tP = terrainRasterDepth(vec2f(px) + 0.5);
+  if (tP > CROWN_ABOUT_M || tG <= tP) { return vec2i(-1); }
+  // (the ground's pixel: shaded at the hint's distance — not its own crown met —; the water's never is a crown)
+  let tH = terrainRasterHint(vec2f(px) + 0.5);
+  if (ground && abs(tG - tH) > 0.03 * tH) { return vec2i(-1); }
+  let W = u32(P.res.x);
+  let k = u32(P.near1.w);
+  for (var i = 0u; i < 8u; i++) {
+    let r = i32(1u + (i >> 2u));
+    let a = i & 3u;
+    let p = px + select(vec2i(0, select(-r, r, a == 3u)), vec2i(select(-r, r, a == 1u), 0), a < 2u);
+    if (any(p < vec2i(0)) || p.x >= i32(W) || p.y >= i32(P.res.y)) { continue; }
+    let t = terrainRasterTexel(vec2f(p) + 0.5);
+    let id = u32(t.g);
+    if (t.a >= RASTER_TREE_CODE_MAX || id == 0u || id == own || t.b <= 0.0 || t.b >= tG) { continue; }
+    // (its crown met — its surface before its own ground —, shaded this frame — split, or finished already by its own thread — and
+    // still its own: the distance its moments hold its liteOut's, as the crowns between crowns of shadeLiteFinish's sky case)
+    let n = u32(p.y) * W + u32(p.x);
+    let m = moments[n];
+    if (m.x != RASTER_SPLIT && !(m.x >= 0.5 * RASTER_MARK && stamps[n] == P.frame.x)) { continue; }
+    let ta = textureLoad(lutDirIn, p, 0).a;
+    if (ta > 0.0 && ta < tG && ta < 0.97 * t.r && abs(ta / EARTH_RM * bodyRadius(k) - m.y) <= 1e-4 * m.y) { return p; }
+  }
+  return vec2i(-1);
+}
 // shadeLite's finishing pass (withLiteSplit): the air and the clouds before the surfaces it left in liteOut — read here where the
 // far field's LUT is bound (group 1, binding 2: the renderer binds liteOut there for this pass) —, its marked pixels alone. Run
 // twice a frame: after the ground — its RASTER_SPLIT pixels —, then after the water — shadeWater's, RASTER_SPLIT_WATER: not blended
@@ -17218,6 +17254,16 @@ fn shadeLiteFinish(@builtin(global_invocation_id) gp: vec3u) {
   } else {
     if (mk != RASTER_SPLIT && !wat) { return; }
     g = textureLoad(lutDirIn, vec2i(gid.xy), 0);
+    // (a tree's proxy shaded as the ground behind it — its crown missed past its edge —: another tree's crown shaded within 2 px nearer
+    // than that ground lends its surface — crownAbout —, finished along this pixel's own ray as the crowns between crowns above. The
+    // other tree stood behind this proxy's margin, hidden from the raster's depth by it. 26 Nov 2026: the ground drawn there, an orange
+    // dotted fringe along the crowns over the slope at Battery Spencer; marched again in shadeLite instead — the other tree's crown
+    // sought along the ray —, +1.5 to +4.3 ms of the material's pass over forests on kerr-mini, its registers and its work)
+    let tid = terrainRasterId(vec2f(gid.xy) + 0.5);
+    if (!wat && tid != 0u) {
+      let cb = crownAbout(vec2i(gid.xy), tid, g.a, true);
+      if (cb.x >= 0) { g = textureLoad(lutDirIn, cb, 0); }
+    }
   }
   // (one call — liteFinish inlined once: the sky's own call doubled the kernel, 1 716 inlined lines, 25 Nov 2026 —; the sky's blended
   // with its history, no water: wat false)
@@ -17257,12 +17303,24 @@ fn shadeWaterFinish(@builtin(workgroup_id) wid: vec3u, @builtin(local_invocation
   let idx = gid.y * W + gid.x;
   let mk = moments[idx].x;
   if (!waterSplit(mk)) { return; }
-  let g = textureLoad(lutDirIn, vec2i(gid.xy), 0);
+  var g = textureLoad(lutDirIn, vec2i(gid.xy), 0);
+  // (a tree's proxy shaded as the water behind it — its crown missed —: another tree's crown shaded within 2 px lends its surface, as in
+  // shadeLiteFinish — the blue-grey dotted fringe along the crowns before the bay at Battery Spencer, 26 Nov 2026 —; its reflections
+  // and its water's mark dropped. Its pair — WATER_HALF — given the same only where it is a tree's proxy too, else nothing borrowed)
+  var crown = false;
+  let tid = terrainRasterId(vec2f(gid.xy) + 0.5);
+  if (tid != 0u && (pi == 0xffffffffu || terrainRasterId(vec2f(f32(pi % W), f32(pi / W)) + 0.5) != 0u)) {
+    let cb = crownAbout(vec2i(gid.xy), tid, g.a, false);
+    if (cb.x >= 0) {
+      g = textureLoad(lutDirIn, cb, 0);
+      crown = true;
+    }
+  }
   var G = g.rgb;
   let tM = g.a;
   let r1 = textureLoad(matIn1, vec2i(gid.xy), 0);
   let r2 = textureLoad(matIn2, vec2i(gid.xy), 0);
-  let bits = u32(r2.w + 0.5);
+  let bits = select(u32(r2.w + 0.5), 0u, crown);
   let c = r1.w;
   if (bits != 0u && c > 0.0) {
     let k = u32(P.near1.w);
@@ -17319,7 +17377,7 @@ fn shadeWaterFinish(@builtin(workgroup_id) wid: vec3u, @builtin(local_invocation
     G += c * (refl - refl0);
     if (isNan(G.r + G.g + G.b)) { G = g.rgb; }
   }
-  liteFinishAt(gid.xy, G, tM, false, mk < RASTER_SPLIT_WATER - 0.25);
+  liteFinishAt(gid.xy, G, tM, false, !crown && mk < RASTER_SPLIT_WATER - 0.25);
   if (pi != 0xffffffffu) {
     accum[pi] = accum[idx];
     moments[pi] = moments[idx];

@@ -342,7 +342,13 @@ connue ou supposée, la piste. Une entrée réglée est barrée avec le commit q
   (8 voisins), matériau inchangé — **mais le liseré reste** (`golden-gate-1km-lisere-emprunt-zoom-avant-apres.jpg` ; cause du refus non
   établie : voisins rejetés par l'un des tests — couronne touchée, ombrée cette image, distance propre — non sondé). Les points bleu-gris
   le long du cyprès sont le même cas devant l'eau (`shadeWater`, `shadeWaterFinish`), hors de (4). Tout retiré ; GRAPHICS-PIPELINE
-  « Liseré des couronnes devant le sol » a les chiffres. **Reste ouvert** : pour Sam — (1) au prix mesuré, ou une sonde du refus de (4).
+  « Liseré des couronnes devant le sol » a les chiffres. ~~**Reste ouvert** : pour Sam — (1) au prix mesuré, ou une sonde du refus de (4).~~
+  **Réglé le 26 nov. 2026, matin (décision de Sam : l'emprunt, pas la marche)** : la sonde a montré le refus — un proxy d'arbre n'écrit
+  que g et b de la visibilité, son alpha garde le code du sol, et (4) n'acceptait qu'un alpha de code 0. Le test prend désormais un code
+  sous celui des structures ; l'emprunt sert aussi l'eau (`shadeWaterFinish`), pour un proxy à moins de 500 m. Vu sur kerr-mini (A B B A
+  contre `c1519dac`) : liseré orange et points bleu-gris partis (`golden-gate-1km-lisere-emprunt-regle-zoom-avant-apres.jpg`), Maures et
+  Landes inchangées ; matériau + finitions +0,13 / +0,41 / +0,33 ms (Battery Spencer, Maures, Landes ; GRAPHICS-PIPELINE « Liseré des
+  couronnes devant le sol et l'eau »).
 - **Golden Gate, câble porteur en ruban plat depuis le tablier** (`golden-gate-tablier.jpg`) — **réglé le 25 nov. (`698dbd22`)** : le câble
   était ouvert le long du haut du repère ; il l'est désormais en travers de sa ligne et de la vue, sa distance celle du devant d'un cylindre
   (normale ronde rebâtie par `rasterNormal`). Vu sur kerr-mini (`golden-gate-deck-low-{avant,apres}.jpg`) ; scintillement à 30 km inchangé

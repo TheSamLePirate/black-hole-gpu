@@ -20,6 +20,35 @@ Windows/D3D12. Les numéros de ligne sont ceux de `da4e75bd`.
 
 ---
 
+### Liseré des couronnes devant le sol et l'eau : l'emprunt des finitions réglé (26 novembre 2026, matin, branche de l'agent, décision de Sam) — mesuré
+
+- **Pourquoi l'emprunt (4) ci-dessous échouait** (sonde de couleur dans `shadeLiteFinish`, kerr-mini, ~03 h 00 UTC,
+  `docs/progress/ponts-2026-11-25/golden-gate-1km-lisere-sonde-refus.jpg`, en rouge : un voisin d'un autre arbre refusé pour son code) :
+  le proxy d'un arbre n'écrit que g et b de la cible de visibilité (`scenery-raster.ts`, `writeMask` GREEN | BLUE) — r et a gardent la
+  distance et le **code du sol** dessous. Le test « un arbre : alpha sous 2¹⁸ (code 0) » refusait donc chaque proxy voisin ; seuls les
+  triangles des arbres proches (J9, bit 17, code 0) passaient. Corrigé : un texel d'arbre a un code sous celui des structures
+  (`RASTER_TREE_CODE_MAX` = `RASTER_CODE.turbine` × 2¹⁸, `terrain-raster-hint.ts`) et son id en g.
+- **`crownAbout` (`trace.wgsl`)** : un pixel au proxy d'un arbre ombré comme ce qu'il y a derrière — le sol (sa distance celle de
+  l'indice à 3 % près) ou l'eau — emprunte la surface (`liteOut`) de la couronne d'un **autre** arbre ombrée dans cette image, avant ce sol,
+  parmi ses 8 voisins de ligne et de colonne (1 px puis 2 px, le premier trouvé ; une lecture `terrainRasterTexel` chacun), finie le long
+  de son propre rayon. Seulement pour un proxy à moins de `CROWN_ABOUT_M` (500 m). Lu par **`shadeLiteFinish`** (C18, pixels
+  `RASTER_SPLIT`) et **`shadeWaterFinish`** (`earth water: finishing`, pixels `RASTER_SPLIT_WATER` : reflets et marque d'eau
+  abandonnés ; sa paire `WATER_HALF` reçoit la même chose seulement si elle est aussi un proxy d'arbre). `shadeLite` inchangé. Aucune
+  passe, cible ni liaison nouvelle ; lectures en plus : `terrainDist` des voisins, `moments`, `stamps`, `liteOut` d'un candidat.
+  Inliné : `shadeLiteFinish` 1,0 k (budget 1 000 tenu), `shadeWaterFinish` 1,2 k (2 000).
+- **Mesuré** (kerr-mini, sans fenêtre, 26 nov. 2026 ~03 h 26–03 h 35 UTC, A B B A, A = `c1519dac` (le traceur de main `9615bd21`),
+  B = l'arbre de la branche, `bridges` `BRIDGES_PASSES=1`, épinglé 0,75, médiane de 40 images ; `remote-results/20261126-042628-bridges`) :
+
+| Vue | `earth lite (raster)` | `earth lite: finishing` | `earth water: finishing` | **Somme Δ** | A/A · B/B (finitions) | GPU p50 épinglé (p95) |
+|---|---:|---:|---:|---:|---|---|
+| Battery Spencer | 9,07 → 9,07 | 1,19 → 1,29 | 1,44 → 1,49 | **+0,13** | 0,02 · 0,01 | 40,4 → 40,9 (44,0 → 46,2), A/A 1,0 |
+| Maures (témoin) | 12,89 → 12,86 | 1,62 → 2,07 | 0,00 | **+0,41** | 0,02 · 0,01 | 38,2 → 38,2 (41,2 → 41,5) |
+| Landes (témoin) | 9,69 → 9,70 | 1,42 → 1,73 | 0,06 → 0,07 | **+0,33** | 0,00 · 0,00 | 33,7 → 34,5 (36,4 → 37,8), B/B 1,2 |
+
+  Image : le liseré orange et les points bleu-gris partis (`golden-gate-1km-lisere-emprunt-regle-zoom-avant-apres.jpg`) ; Maures écart
+  moyen A/B 0,28 / 0,30 contre A/A 0,33 — inchangée ; Landes 1,07 / 2,85 contre A/A 1,38, B/B 2,87 — au bruit. Essais du même matin :
+  sans la borne de 500 m, Maures +0,64 en finition ; la borne sur la distance du sol (et non du proxy) laissait les points devant l'eau.
+
 ### Liseré des couronnes devant le sol ; la hausse du matériau du 25 novembre bissectée (26 novembre 2026, nuit, branche de l'agent) — mesuré, rien de retenu dans le traceur
 
 Aucune passe, cible, liaison ni noyau changé au final : les variantes ci-dessous ont été mesurées puis retirées (rien de plus ne se
@@ -1614,7 +1643,7 @@ Paris jusqu'à `earthSettled` » chronométré par étape.
 
 <!-- pipeline-inventory:begin (bun scripts/pipeline-inventory.ts --write) -->
 
-_Généré le 2026-11-26T01:19:28Z sur `1c223dda` (arbre de travail). Ne pas éditer à la main : relancer l'outil._
+_Généré le 2026-11-26T03:36:58Z sur `9615bd21` (arbre de travail). Ne pas éditer à la main : relancer l'outil._
 
 **130 sites de création de pipeline** (86 rendu, 44 calcul, dont 66 asynchrones) et 43 `createShaderModule` dans 32 fichiers ; **44 programmes WGSL** (16 fichiers .wgsl, 28 chaînes dans le TypeScript) ; **66 libellés de passes** du profileur GPU (+ 11 sites à libellé dynamique).
 
@@ -1796,7 +1825,7 @@ _Généré le 2026-11-26T01:19:28Z sur `1c223dda` (arbre de travail). Ne pas éd
 
 | source | lignes | points d'entrée |
 |---|---:|---|
-| `src/shaders/trace.wgsl` | 18619 | 18 entrées : cloudLightVolume, aerial, lut, main, shade, shadeMark, shadeLiteFinish, shadeWaterFinish, shadeLiteLight, shadeLite, skyFill, shadeWater, clouds, skyAmbient, cloudShadow, env, probe, shadeStars |
+| `src/shaders/trace.wgsl` | 18677 | 18 entrées : cloudLightVolume, aerial, lut, main, shade, shadeMark, shadeLiteFinish, shadeWaterFinish, shadeLiteLight, shadeLite, skyFill, shadeWater, clouds, skyAmbient, cloudShadow, env, probe, shadeStars |
 | `src/shaders/ship.wgsl` | 2838 | 34 entrées : envCopy, envDown, envGGX, envSH, ctlVs, depthVs, vs, mirrorVs, shadowVs, fs, hullDepthVs, hullDepthFs, ownMaskFs, plumeVs, plumeFs, glowVs, glowFs, distVs, distFs, sheathVs, sheathFs, trailVs, trailFs, lampVs, lampFs, compVs, compFs, fsCabin, fsCabinGlass, fsJetGlass, motionVs, motionFs, composeColor, composeSurface |
 | `src/shaders/post.wgsl` | 1396 | 18 entrées : gatherH, atrous, beamH, beamV, polgrid, resolve, down, downShip, dof, flareMeter, up, meter, stars, motionBlur, temporal, occlusion, cloudTemporal, taau |
 | `src/system/scenery-raster.ts:208` | 1191 | 31 entrées : cull, cullBoxes, clampBoxes, shadowVs, shadowFs, proxyVs, proxyFs, boxVs, boxFs, bridgeMarkFs, boxMarkVs, boxShadowVs, meshShadowVs, meshVs, meshFs, boxSolidVs, benchCull, benchQuadVs, benchVs, benchShadowVs, farCull, farVs, farQuadVs, farFs, farLampCull, farLampVs, farCarCull, farCarVs, nearCellVs, nearCellShadowVs, farShadowVs |
@@ -1977,8 +2006,8 @@ Leur coût n'apparaît que dans l'intervalle de complétion de la frame (ou d'un
 
 | profil | noyaux (lignes inlinées, en milliers) | total |
 |---|---|---:|
-| `earth-raster` | shade 27.4 · shadeMark 0.3 · shadeLite 8.1 · shadeLiteFinish 0.9 · shadeLiteLight 2.0 · shadeWater 5.7 · shadeWaterOpen 4.9 · shadeWaterFinish 1.2 · shadeStars 0.3 · discs 29.9 · clouds 3.8 · skyFill 0.7 · main 42.5 · env 59.1 · aerial 0.7 | 188k |
-| `earth-raster-wx` | shade 32.5 · shadeMark 0.3 · shadeLite 8.1 · shadeLiteFinish 0.9 · shadeLiteLight 2.0 · shadeWater 5.7 · shadeWaterOpen 4.9 · shadeWaterFinish 1.2 · shadeStars 0.3 · discs 29.9 · clouds 3.8 · skyFill 0.7 · main 45.5 · env 59.1 · aerial 0.7 | 196k |
+| `earth-raster` | shade 27.4 · shadeMark 0.3 · shadeLite 8.1 · shadeLiteFinish 1.0 · shadeLiteLight 2.0 · shadeWater 5.7 · shadeWaterOpen 4.9 · shadeWaterFinish 1.2 · shadeStars 0.3 · discs 29.9 · clouds 3.8 · skyFill 0.7 · main 42.5 · env 59.1 · aerial 0.7 | 188k |
+| `earth-raster-wx` | shade 32.5 · shadeMark 0.3 · shadeLite 8.1 · shadeLiteFinish 1.0 · shadeLiteLight 2.0 · shadeWater 5.7 · shadeWaterOpen 4.9 · shadeWaterFinish 1.2 · shadeStars 0.3 · discs 29.9 · clouds 3.8 · skyFill 0.7 · main 45.5 · env 59.1 · aerial 0.7 | 196k |
 | `earth-trace` | main 66.4 · env 63.0 · aerial 0.6 | 130k |
 | `earth-photo` | main 68.2 | 68k |
 | `game-space` | main 54.3 · env 50.5 · aerial 0.6 | 105k |
