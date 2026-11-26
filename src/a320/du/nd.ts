@@ -398,23 +398,69 @@ export class Nd extends Display {
         ctx.stroke();
       }
       text(ctx, w.name, x + 22, y - 12, 28, c, "left");
-      if (cstr && w.alt !== undefined) {
-        ctx.strokeStyle = COL.magenta;
+      // (a constrained point circled — magenta, amber when the prediction misses it (N3) —, on the legs ahead; its figure with CSTR)
+      if (w.alt !== undefined && i >= X.active) {
+        const k = w.missed ? COL.amber : COL.magenta;
+        ctx.strokeStyle = k;
         ctx.lineWidth = 3;
         ctx.beginPath();
         ctx.arc(x, y, 26, 0, Math.PI * 2);
         ctx.stroke();
-        text(
-          ctx,
-          w.alt >= 10000 ? `FL${Math.round(w.alt / 100)}` : String(Math.round(w.alt / 10) * 10),
-          x + 22,
-          y + 26,
-          24,
-          COL.magenta,
-          "left",
-        );
+        if (cstr)
+          text(
+            ctx,
+            `${w.sign ?? ""}${w.alt >= 10000 ? `FL${Math.round(w.alt / 100)}` : String(Math.round(w.alt / 10) * 10)}`,
+            x + 22,
+            y + 26,
+            24,
+            k,
+            "left",
+          );
       }
     });
+    this.pseudo(ctx, F, X);
+  }
+
+  /** The vertical profile's pseudo-waypoints (N3, the A320's symbols): T/C a white arrow up and its level, T/D a white arrow down
+   *  (cyan: the descent armed), DECEL a circled « D » (magenta: NAV, the speed managed). */
+  private pseudo(ctx: Ctx, F: Frame, X: NdExtra) {
+    for (const p of X.pseudo) {
+      const [x, y] = this.xy(F, p.lat, p.lon);
+      if (x < -40 || x > 1064 || y < -40 || y > 1064) continue;
+      if (p.kind === "DECEL") {
+        const k = p.armed ? COL.magenta : COL.white;
+        ctx.strokeStyle = k;
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.arc(x, y, 16, 0, Math.PI * 2);
+        ctx.stroke();
+        text(ctx, "D", x, y + 10, 26, k, "center");
+        continue;
+      }
+      const k = p.kind === "TD" && p.armed ? COL.cyan : COL.white;
+      const up = p.kind === "TC";
+      ctx.strokeStyle = k;
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      // (the level line, then the arrow: up and right climbing to it, down and right leaving it)
+      ctx.moveTo(x - 30, up ? y - 14 : y - 14);
+      ctx.lineTo(x, y - 14);
+      if (up) {
+        ctx.moveTo(x - 30, y + 14);
+        ctx.lineTo(x - 2, y - 12);
+        ctx.moveTo(x - 2, y - 12);
+        ctx.lineTo(x - 14, y - 10);
+        ctx.moveTo(x - 2, y - 12);
+        ctx.lineTo(x - 4, y);
+      } else {
+        ctx.lineTo(x + 28, y + 14);
+        ctx.moveTo(x + 28, y + 14);
+        ctx.lineTo(x + 16, y + 14);
+        ctx.moveTo(x + 28, y + 14);
+        ctx.lineTo(x + 26, y + 2);
+      }
+      ctx.stroke();
+    }
   }
 
   /** The approach (PLAN-APPROCHES AP3c): the runway landed on (white), its final course drawn back 10 NM from the threshold

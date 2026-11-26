@@ -1263,6 +1263,9 @@ export class CameraController {
    *  the ILS it tunes */
   a320Fmgc: import("./a320/fmgc/fmgc").Fmgc | null = null;
   a320FmgcIn: import("./a320/fmgc/fmgc").FmgcIn | null = null;
+  /** the managed vertical profile (src/a320/fmgc/vprofile.ts — PLAN-A320-VOL-AAA N3): predictions, T/C, T/D, DECEL, VDEV; its time [s] */
+  a320Vprof: import("./a320/fmgc/vprofile").VProfile | null = null;
+  a320VprofAt = -1e9;
   a320FmgcOut: import("./a320/fmgc/fmgc").FmgcOut | null = null;
   a320Ils: import("./game/ils").IlsRunway | null = null;
   a320App: import("./controller/a320ap").A320App | null = null;

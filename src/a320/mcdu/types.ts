@@ -4,6 +4,7 @@
 
 import type { Approach } from "../../world/approaches";
 import type { Terminals } from "../../world/terminals";
+import type { VProfile } from "../fmgc/vprofile";
 import type { Airfield } from "../../world/runways";
 import type { FlightPlan } from "../../game/flightplan";
 import type { Fmgc } from "../fmgc/fmgc";
@@ -48,6 +49,8 @@ export interface McduHost {
   insertArrival?(): string;
   /** PLAN-A320-VOL-AAA N2 — an airfield's SIDs and STARs (the FAA's CIFP: US airports; elsewhere none), null while fetched */
   terminals?(code: string): Terminals | null;
+  /** PLAN-A320-VOL-AAA N3 — the managed vertical profile (predictions, T/C, T/D, DECEL), null: none */
+  vprofile?(): VProfile | null;
   /** Optional A320 Lower ECAM page override (e.g. "obcPage" or "" for automatic — PLAN-LINUX-OBC) */
   setSdPage?(page: string): void;
 }

@@ -563,7 +563,16 @@ guidages) ne donnent pas de point — le plan reprend au point suivant — ; les
 sont tenues** (26 nov. 2026) : en montée gérée (**CLB**, bouton d'altitude poussé), un « au-dessous de » du plan devant l'avion
 le fait palier à cette altitude (**ALT CST\***, **ALT CST**, chiffre **magenta** au PFD) jusqu'au point, puis il remonte vers
 l'altitude du FCU ; en descente gérée (**DES**), un « au-dessus de » fait plancher. En OP CLB/OP DES (tiré), les contraintes
-sont ignorées, comme sur l'avion. Le point de descente (T/D) et les prédictions viennent ensuite (PLAN-A320-VOL-AAA N3).
+sont ignorées, comme sur l'avion. **La descente gérée** (26 nov. 2026) : le FMS bâtit le chemin
+de descente à rebours depuis la destination (3°, avec un palier au FL100 pour ralentir à 250 kt et un autre avant le premier point de
+l'approche pour ralentir), sous et sur les contraintes des STAR et des approches. En croisière, **affiche l'altitude basse au FCU et
+pousse le bouton** avant le T/D : **DES** s'arme (bleu au FMA) et la descente commence au T/D ; poussé après, elle commence à
+l'instant. En DES, l'avion suit le chemin (le rond magenta **VDEV** à droite de la bande d'altitude montre où est le chemin) ; trop
+vite, il quitte un peu le chemin pour la vitesse et le PFD écrit **MORE DRAG** (sors les aérofreins). Au **DECEL**, la phase approche
+commence d'elle-même (vitesse vers green dot). Au ND : **T/C** et **T/D** (flèches blanches, T/D cyan quand DES est armé), **DECEL**
+(« D » cerclé, magenta en NAV), les contraintes cerclées magenta (ambre si la prédiction les manque) ; dans F-PLN, les lignes
+**(T/C)**, **(T/D)**, **(DECEL)** et l'altitude prévue à chaque point. Attention : en palier (ALT), changer l'altitude du FCU ne fait
+plus bouger l'avion ; il faut pousser ou tirer le bouton.
 
 **La roue de l'A320** (Tab maintenu, depuis le 26 nov. 2026 — avant, la roue des vaisseaux) : **Pilote auto ›** (AP1, A/THR, FD,
 LOC, APPR, EXPED, NAV), **FCU ›** (Vitesse, Cap, Altitude, V/S : des pas ±, **Sélectée/OP CLB…** = le bouton tiré, **Gérée/NAV/Palier**

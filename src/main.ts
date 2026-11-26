@@ -4796,6 +4796,7 @@ async function main() {
     insertArrival: () => camera.routeProcedures(),
     // (PLAN-A320-VOL-AAA N2: the SIDs and STARs of the FAA's CIFP)
     terminals: (code) => terminalsOf(code),
+    vprofile: () => camera.a320Vprof,
     setSdPage: (page) => {
       deckPoser.props["ecam/sd-page"] = page;
     },

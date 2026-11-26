@@ -1,3 +1,4 @@
+import { vprofile } from "../a320/fmgc/vprofile";
 import type { Waypoint } from "../game/flightplan";
 // The A320's flight guidance flown (docs/PLAN-A320.md, A8): its FMGC (src/a320/fmgc/fmgc.ts — made with its first
 // frame) fed each frame with the flight's figures — the air data, the FADEC's limits, the speeds, the ILS tuned (the
@@ -89,6 +90,26 @@ function a320FmgcStep(this: CameraController, inp: PilotInput, dt: number, onWhe
   if (onWheels && detentOf(lever) >= 4 && takeoff.hdg === null) takeoff.hdg = hdg;
   if (!onWheels || detentOf(lever) < 4) takeoff.hdg = onWheels ? null : takeoff.hdg;
   const gsKt = g.gs * KT;
+  // (the managed vertical profile, twice a second — PLAN-A320-VOL-AAA N3: the plan's predictions, its T/C, T/D, DECEL and VDEV)
+  this.a320VprofAt += dt;
+  if (this.a320VprofAt >= 0.5 || this.a320VprofAt < 0) {
+    this.a320VprofAt = 0;
+    const crz = F.fms.crzFl !== null ? F.fms.crzFl * 100 : this.nav.route.cruiseAlt * FT;
+    this.a320Vprof =
+      route.length >= 2 && lo && !lo.done
+        ? vprofile({
+            wps: route,
+            active: lo.active,
+            distTo: lo.dist ?? 0,
+            alt: g.alt * FT,
+            crz,
+            gs: gsKt,
+            vs: g.vs * FT * 60,
+            descending: F.phase === "descent" || F.phase === "approach",
+          })
+        : null;
+  }
+  const VP = this.a320Vprof;
   const i: FmgcIn = {
     dt,
     ias,
@@ -125,6 +146,7 @@ function a320FmgcStep(this: CameraController, inp: PilotInput, dt: number, onWhe
         : null,
     lnav: route.length >= 2 && lo && !lo.done ? { hdg: (((lo.hdg * D) % 360) + 360) % 360, active: route[lo.active]?.name ?? "" } : null,
     cstr: a320Cstr(route, lo && !lo.done ? lo.active : -1, g.alt * FT, F.alt),
+    vprof: VP ? { td: VP.td, decel: VP.decel, vdev: VP.vdev } : null,
     stick: [inp.pitch, inp.roll],
     rwyHdg: takeoff.hdg,
     accelAgl: 1500,

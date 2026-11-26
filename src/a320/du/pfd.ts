@@ -18,6 +18,7 @@ const D2R = Math.PI / 180;
 const AMBER = "rgb(187,97,0)";
 const GREEN = "rgb(13,192,75)";
 const MAGENTA = "#b055be";
+const clampN = (x: number, a: number, b: number) => Math.min(Math.max(x, a), b);
 const CYAN = "rgb(23,154,183)";
 const WHITE = "rgb(255,255,255)";
 const GREY = "rgb(206,205,206)";
@@ -351,6 +352,21 @@ export class Pfd extends Display {
         .setText(txt);
       for (const id of ["ALT_digit_UP", "ALT_digit_DN", "ALT_target"]) e(id).setColor(d.altCstr !== null ? MAGENTA : CYAN);
     }
+    // (VDEV — N3: the descent path's place beside the tape, magenta — the dot ±500 ft over ±270 px, a half-circle at the end past it —,
+    // the path being under the craft when it is above it)
+    const vd = d.vdev;
+    const vdOut = vd !== null && Math.abs(vd) > 500;
+    e("vdev_dot")
+      .setVisible(vd !== null && !vdOut)
+      .setTranslation(0, vd === null ? 0 : (clampN(vd, -500, 500) / 500) * 270)
+      .setColorFill(MAGENTA);
+    e("vdev_high")
+      .setVisible(vd !== null && vd > 500)
+      .setColorFill(MAGENTA);
+    e("vdev_low")
+      .setVisible(vd !== null && vd < -500)
+      .setColorFill(MAGENTA);
+    e("FMA_ctr_msg").setVisible(d.moreDrag).setText("MORE DRAG").setColor("#ffffff");
     // (the metric altitude: the FCU's METRIC ALT button on — deckgame.ts deck/metric-alt — or the game's metric units)
     const metric = Number(d.deck["deck/metric-alt"] ?? 0) > 0.5 !== (d.units === "metric");
     for (const id of ["Metric_box", "Metric_letter", "Metric_cur_alt"]) e(id).setVisible(metric);

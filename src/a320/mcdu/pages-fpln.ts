@@ -62,6 +62,27 @@ function etas(m: Mcdu): Map<number, Date> {
   return out;
 }
 
+/** F-PLN's rows: the plan's points, the vertical profile's pseudo-waypoints between them ((T/C), (T/D), (DECEL) — N3, placed by their
+ *  distance along the plan), the line after the last. */
+type FplnRow = { i: number } | { pseudo: string; along: number; alt: number };
+function fplnRows(m: Mcdu): FplnRow[] {
+  const W = m.host.route().wps;
+  const VP = m.host.vprofile?.() ?? null;
+  const rows: FplnRow[] = W.map((_, i) => ({ i }));
+  if (!VP) return rows;
+  const ps: { pseudo: string; along: number; alt: number }[] = [];
+  if (VP.tc !== null && VP.tc > 0) ps.push({ pseudo: "(T/C)", along: VP.tc, alt: VP.pathAt(VP.tc) });
+  if (VP.td !== null && VP.td > 0) ps.push({ pseudo: "(T/D)", along: VP.td, alt: VP.pathAt(VP.td) });
+  if (VP.decel !== null && VP.decel > 0) ps.push({ pseudo: "(DECEL)", along: VP.decel, alt: VP.pathAt(VP.decel) });
+  for (const p of ps.sort((a, b) => b.along - a.along)) {
+    // (before the first point of the plan farther along)
+    const next = VP.pts.find((q) => q.along > p.along);
+    const at = next ? rows.findIndex((r) => "i" in r && r.i === next.i) : rows.length;
+    rows.splice(at < 0 ? rows.length : at, 0, p);
+  }
+  return rows;
+}
+
 const fpln: Page = {
   screen(m): Screen {
     const R = m.host.route();
@@ -70,9 +91,23 @@ const fpln: Page = {
     const T = etas(m);
     const F = m.host.fms;
     const lines: Line[] = [];
-    m.fplnTop = Math.min(Math.max(m.fplnTop, 0), Math.max(W.length - 1, 0));
+    const rows = fplnRows(m);
+    const VP = m.host.vprofile?.() ?? null;
+    const now = m.host.now().getTime();
+    m.fplnTop = Math.min(Math.max(m.fplnTop, 0), Math.max(rows.length - 1, 0));
     for (let k = 0; k < 5; k++) {
-      const i = m.fplnTop + k;
+      const row = rows[m.fplnTop + k];
+      if (row && "pseudo" in row) {
+        // (a pseudo-waypoint: its name in brackets, its time, the altitude the profile passes there)
+        const t = VP ? new Date(now + (row.along / VP.gs) * 3_600_000) : null;
+        lines.push({
+          ls: [run(padR("", 9), MC.green)],
+          l: [run(padR(row.pseudo, 8), MC.green), run(t ? hhmm(t) : "----", MC.green, true)],
+          r: [run(`---/${altText(row.alt)}`, MC.green, true)],
+        });
+        continue;
+      }
+      const i = row ? row.i : W.length + (m.fplnTop + k - rows.length);
       const w = W[i];
       if (!w) {
         if (i === W.length) lines.push({ l: [run(W.length ? "------END OF F-PLN------" : "------NO F-PLN------", MC.white)] });
@@ -105,18 +140,24 @@ const fpln: Page = {
       const cstr = w.alt !== undefined || w.spd !== undefined;
       // (the published constraint's kind — PLAN-A320-VOL-AAA N2: « + » at or above, « - » at or below, none « at »)
       const sign = w.cstr ? (w.cstr[0] !== null && w.cstr[1] === null ? "+" : w.cstr[0] === null && w.cstr[1] !== null ? "-" : "") : "";
+      // (the prediction: the managed profile's — N3 —, else the field's, the cruise's; a constraint predicted missed: its « * » amber)
+      const pt = VP?.pts.find((q) => q.i === i);
       const alt =
         w.alt !== undefined
           ? `${sign}${altText(w.alt / FT)}`
-          : w.field
-            ? String(Math.round(w.field.elev / FT))
-            : `FL${String(Math.round(R.cruiseAlt / FT / 100)).padStart(3, "0")}`;
+          : pt && !w.field
+            ? altText(pt.alt)
+            : w.field
+              ? String(Math.round(w.field.elev / FT))
+              : `FL${String(Math.round(R.cruiseAlt / FT / 100)).padStart(3, "0")}`;
       const spd = w.spd !== undefined ? String(Math.round(w.spd / KT)) : "---";
       lines.push({
         ls,
         rs,
         l: [run(padR(name, 8), col), run(eta ? hhmm(eta) : "----", col, true)],
-        r: [run(`${cstr ? "*" : ""}${spd}/${alt}`, cstr ? MC.magenta : col, !cstr)],
+        r: cstr
+          ? [run("*", pt?.missed ? MC.amber : MC.magenta, false), run(`${spd}/${alt}`, MC.magenta, false)]
+          : [run(`${spd}/${alt}`, col, true)],
       });
     }
     // (the destination: its time, its distance, the fuel left there)
@@ -134,7 +175,11 @@ const fpln: Page = {
   lsk(m, side, n, sp): LskResult {
     if (n > 5) return;
     const R = m.host.route();
-    const i = m.fplnTop + n - 1;
+    const rows = fplnRows(m);
+    const row = rows[m.fplnTop + n - 1];
+    // (a pseudo-waypoint: no revision on it)
+    if (row && "pseudo" in row) return "notallowed";
+    const i = row ? row.i : R.wps.length + (m.fplnTop + n - 1 - rows.length);
     const w = R.wps[i];
     if (side === "L") {
       if (!w) {
@@ -185,8 +230,8 @@ const fpln: Page = {
     return true;
   },
   arrow(m, dir) {
-    const W = m.host.route().wps;
-    if (dir === "up") m.fplnTop = Math.min(m.fplnTop + 1, Math.max(W.length - 1, 0));
+    const n = fplnRows(m).length;
+    if (dir === "up") m.fplnTop = Math.min(m.fplnTop + 1, Math.max(n - 1, 0));
     else if (dir === "down") m.fplnTop = Math.max(m.fplnTop - 1, 0);
     else return false;
     return true;

@@ -2,7 +2,8 @@
 // making the flight plan from FROM/TO, F-PLN's insertions, deletions and constraints, INIT B's weights and PERF TAKE
 // OFF's V speeds proposed and entered, its picture's characters — on a host made for the test.
 import { describe, expect, test } from "bun:test";
-import { newPlan } from "../src/game/flightplan";
+import { newPlan, type Waypoint } from "../src/game/flightplan";
+import { vprofile } from "../src/a320/fmgc/vprofile";
 import { Fms } from "../src/a320/fmgc/fms";
 import { Mcdu } from "../src/a320/mcdu/mcdu";
 import type { McduHost } from "../src/a320/mcdu/types";
@@ -479,5 +480,37 @@ describe("A320 MCDU", () => {
     m.lsk("R", 6);
     expect(route.wps.some((w) => w.proc?.sid)).toBeFalse();
     expect(route.wps[1]!.name).not.toBe("ORYAN");
+  });
+  test("F-PLN with the managed profile (PLAN-A320-VOL-AAA N3): (T/C), (T/D), (DECEL) between the points, the predictions, no revision on them", () => {
+    const { h, route } = host();
+    const E = (name: string, nm: number, extra: Partial<Waypoint> = {}): Waypoint => ({ name, lat: 0, lon: nm / 60.04, ...extra });
+    route.wps = [
+      E("ORIG", 0, { field: { icao: "ORIG", elev: 0 } }),
+      E("AAA", 60),
+      E("BBB", 150),
+      E("CCC", 250),
+      E("IF", 290, { alt: 3000 * 0.3048, cstr: [3000 * 0.3048, 3000 * 0.3048], proc: { kind: "arr", approach: "I09", join: true } }),
+      E("DEST", 300, { field: { icao: "DEST", elev: 0 } }),
+    ];
+    const VP = vprofile({ wps: route.wps, active: 1, distTo: 50 * 1852, alt: 5000, crz: 30000, gs: 300, vs: 2000, descending: false })!;
+    Object.assign(h, { vprofile: () => VP, activeWp: () => 1 } satisfies Partial<McduHost>);
+    const m = mcdu(h);
+    m.page("f-pln");
+    const txt = (L?: { t: string }[]) => (L ?? []).map((r) => r.t).join("");
+    const all: string[] = [];
+    for (let k = 0; k < 12; k++) {
+      m.fplnTop = k;
+      all.push(txt(m.current.screen(m).lines[0]!.l).trim().split(/\s+/)[0]!);
+    }
+    console.log(`  F-PLN: ${all.join(" ")}`);
+    // (T/C after AAA — 50 NM, then 25 000 ft at 400 ft/NM: 112 NM —, T/D before CCC, DECEL 5 NM before the IF)
+    const order = ["ORIG", "AAA", "(T/C)", "BBB", "(T/D)", "CCC", "(DECEL)", "IF", "DEST"];
+    expect(all.slice(0, order.length)).toEqual(order);
+    // (BBB predicted at the cruise level; LAT REV refused on a pseudo-waypoint)
+    m.fplnTop = 3;
+    expect(txt(m.current.screen(m).lines[0]!.r)).toBe("---/FL300");
+    m.fplnTop = 2;
+    m.lsk("L", 1);
+    expect(m.pageId).toBe("fpln");
   });
 });

@@ -79,6 +79,9 @@ export interface FmgcIn {
   lnav: { hdg: number; active: string } | null;
   /** the managed altitude's constraint [ft] (null: none) */
   cstr: number | null;
+  /** the managed vertical profile (vprofile.ts — PLAN-A320-VOL-AAA N3): the T/D and DECEL ahead [NM] (null: none ahead), the deviation
+   *  from the descent path [ft, + above] past the T/D; null: no plan */
+  vprof?: { td: number | null; decel: number | null; vdev: number | null } | null;
   /** the side sticks' deflections now (−1…1): an autopilot's instinctive disconnection past ½ */
   stick: [number, number];
   /** the take-off's runway heading [deg] (RWY), the acceleration's height [ft over the field] (the FMS's PERF TO
@@ -104,7 +107,7 @@ export interface FmgcOut {
   /** the flight directors' orders: the pitch they ask more [deg], the bank they ask [deg, right +] (null: bars off) */
   fd: { pitch: number; bank: number } | null;
   /** an event this frame: the autopilot or the autothrust disconnected (the cavalry charge, the chime — A12) */
-  event: "" | "ap off" | "athr off" | "ap engaged" | "athr engaged" | "alt alert";
+  event: "" | "ap off" | "athr off" | "ap engaged" | "athr engaged" | "alt alert" | "t/d" | "decel";
 }
 
 /** The FMA's five columns as the PFD shows them. */
@@ -222,10 +225,22 @@ export class Fmgc {
     if (this.lat !== "RWY" || !this.onGround) this.setLat(this.trkFpa ? "TRK" : "HDG");
   }
   altPush(i?: FmgcIn) {
-    // (managed: CLB or DES towards the FCU's altitude by the constraints)
+    // (managed: CLB or DES towards the FCU's altitude by the constraints; a descent asked in cruise before the T/D armed — DES
+    // blue — and begun at the T/D, as the A320's: PLAN-A320-VOL-AAA N3)
     if (!i || i.onGround) return;
+    if (this.alt < i.alt - 250 && this.phase === "cruise" && (i.vprof?.td ?? 0) > 1) {
+      this.desArmed = true;
+      return;
+    }
+    this.desArmed = false;
     this.setVert(this.alt > i.alt ? "CLB" : "DES");
   }
+  /** a managed descent armed, to begin at the T/D (N3) */
+  desArmed = false;
+  /** too fast on the descent path: the speed brakes asked (the MCDU's and the PFD's « MORE DRAG ») */
+  moreDrag = false;
+  /** the altitude the ALT modes hold [ft] (captured; null: the FCU's) */
+  holdAlt: number | null = null;
   altPull(i?: FmgcIn) {
     if (!i || i.onGround) return;
     if (Math.abs(this.alt - i.alt) < 250) return;
@@ -333,6 +348,10 @@ export class Fmgc {
     if (m === "NAV" && this.latArmed === "NAV") this.latArmed = "";
   }
   private setVert(m: Vert) {
+    // (a level entered: the altitude held is the one captured — the FCU's then, unless the capture says the constraint's —, kept
+    // whatever the FCU is set to after: a new FCU altitude moves the A320 only when pushed or pulled — N3, 26 Nov 2026: a descent
+    // armed with 3 000 ft set dived from FL150 in « ALT »)
+    if (m.startsWith("ALT") && !this.vert.startsWith("ALT")) this.holdAlt = this.alt;
     this.vert = m;
     this.spdI = 0;
     if (m === "ALT" || m === "ALT*") this.vertArmed = this.vertArmed.filter((x) => x !== "ALT");
@@ -473,6 +492,22 @@ export class Fmgc {
       this.setVert("ROLL OUT");
     }
     // ---- the altitude's capture (FMGC-b.nas: within |V/S|/5, at least 50 ft; going its way) and hold
+    // ---- the T/D (N3): the armed descent begun there; the FCU's altitude raised back over the craft disarms it. DECEL: the approach
+    // phase begun by itself, NAV flown
+    if (
+      this.desArmed &&
+      (this.alt >= i.alt - 250 || i.onGround || !(this.vert === "ALT" || this.vert === "ALT CST" || this.vert === "ALT*"))
+    )
+      this.desArmed = false;
+    if (this.desArmed && (i.vprof?.td ?? 0) <= 0) {
+      this.desArmed = false;
+      this.setVert("DES");
+      this.event = this.event || "t/d";
+    }
+    if ((this.phase === "descent" || this.phase === "cruise") && this.lat === "NAV" && i.vprof?.decel != null && i.vprof.decel <= 0) {
+      this.phase = "approach";
+      this.event = this.event || "decel";
+    }
     // (the managed modes level off at the plan's constraint first — ALT CST —, then go on to the FCU's altitude when it is passed:
     // PLAN-A320-VOL-AAA N3)
     const cstrOn =
@@ -480,18 +515,22 @@ export class Fmgc {
       ["CLB", "DES", "ALT CST*", "ALT CST"].includes(this.vert) &&
       (this.alt > i.alt - 50 ? i.cstr < this.alt - 50 : i.cstr > this.alt + 50);
     if (this.vert === "ALT CST" && !cstrOn && Math.abs(this.alt - i.alt) > 150) this.setVert(this.alt > i.alt ? "CLB" : "DES");
-    const toAlt = (cstrOn ? i.cstr! : this.alt) - i.alt;
+    const holding = this.vert === "ALT" || this.vert === "ALT*" || this.vert === "ALT CST" || this.vert === "ALT CST*";
+    const toAlt = (cstrOn ? i.cstr! : holding ? (this.holdAlt ?? this.alt) : this.alt) - i.alt;
     const climbing = ["CLB", "OP CLB", "EXP CLB", "V/S", "FPA", "SRS"].includes(this.vert);
     const capt = clamp(Math.round(Math.abs(i.vs) / 5 / 100) * 100, 50, 2500);
     if (climbing || ["DES", "OP DES", "EXP DES"].includes(this.vert)) {
       if (Math.abs(toAlt) <= capt && ((toAlt >= 0 && i.vs >= -25) || (toAlt < 0 && i.vs <= 25)) && !i.onGround && (this.ap || this.fd1)) {
-        this.setVert(this.vert === "CLB" || this.vert === "DES" ? (i.cstr !== null ? "ALT CST*" : "ALT*") : "ALT*");
+        const cst = (this.vert === "CLB" || this.vert === "DES") && cstrOn;
+        this.setVert(cst ? "ALT CST*" : "ALT*");
+        this.holdAlt = cst ? i.cstr! : this.alt;
         this.event = this.event || "alt alert";
       }
     }
     if ((this.vert === "ALT*" || this.vert === "ALT CST*") && Math.abs(toAlt) < 20) this.setVert(this.vert === "ALT*" ? "ALT" : "ALT CST");
     // (ALT armed, blue, while climbing or descending towards the FCU's altitude)
-    this.vertArmed = this.vertArmed.filter((x) => x !== "ALT");
+    this.vertArmed = this.vertArmed.filter((x) => x !== "ALT" && x !== "DES");
+    if (this.desArmed) this.vertArmed.unshift("DES");
     if (["CLB", "DES", "OP CLB", "OP DES", "V/S", "FPA", "EXP CLB", "EXP DES"].includes(this.vert) && Math.abs(toAlt) > 50)
       this.vertArmed.unshift("ALT");
     if (this.apprArm) {
@@ -550,6 +589,7 @@ export class Fmgc {
       return g * D;
     };
     const vsGamma = (vs: number) => Math.asin(clamp((vs * FT) / 60 / V, -0.5, 0.5));
+    this.moreDrag = false;
     switch (this.vert) {
       case "SRS":
         // (V2 + 10 held, the pitch at most 18°: a climb the engines allow)
@@ -561,6 +601,21 @@ export class Fmgc {
         gamma = speedOnPitch(i.fpa, 0.5, 15);
         break;
       case "DES":
+        // (on the plan's descent path — N3: its 3° slope, the deviation closed by a degree and a half at most; the speed the
+        // autothrust's. Without a path (no plan, before the T/D): the idle descent, the speed on the pitch)
+        if (i.vprof?.vdev != null) {
+          // (too fast at idle: the path shallowed by the speed's excess, a degree and a half at most — the A320 goes over its path and
+          // asks for the speed brakes: MORE DRAG)
+          // (the speed's window ±15 kt the path's: past it, the slope given up to the speed — the A320's speed target range)
+          const over = i.ias - tgtSpd - 15;
+          this.moreDrag = over > 0 && (i.vprof.vdev ?? 0) > -200;
+          gamma = (-3 - clamp(i.vprof.vdev / 400, -1.5, 1.5) + clamp(over * 0.15, 0, 1.5)) * D;
+          // (a degree shallower at most when under the path: never a climb)
+          gamma = Math.min(gamma, -0.5 * D);
+          break;
+        }
+        gamma = speedOnPitch(i.fpa, -8, -0.5);
+        break;
       case "OP DES":
       case "EXP DES":
         gamma = speedOnPitch(i.fpa, -8, -0.5);
@@ -612,7 +667,9 @@ export class Fmgc {
       this.thrust = i.alphaFloor ? "A.FLOOR" : "TOGA LK";
     } else if (this.athrActive) {
       const maxN1 = i.detent >= 2 ? i.n1.clb : Math.max(i.n1.idle, (i.lever / 0.6) * i.n1.clb);
-      const idleV = ["DES", "OP DES", "EXP DES"].includes(this.vert);
+      // (DES on the path: the thrust the speed's — SPEED —, idle only when off it or without one)
+      const onPath = this.vert === "DES" && i.vprof?.vdev != null;
+      const idleV = ["DES", "OP DES", "EXP DES"].includes(this.vert) && !onPath;
       const clbV = ["CLB", "OP CLB", "EXP CLB", "SRS"].includes(this.vert);
       if (this.vert === "FLARE" && agl < 30) {
         n1 = i.n1.idle;

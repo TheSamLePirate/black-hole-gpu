@@ -10,6 +10,7 @@ import { SENSOR } from "../../radar/picture";
 import { fieldsNearCached } from "../../world/runways";
 import { navNear } from "../../world/navdb";
 import { edgesNear } from "../../game/airportnet";
+import { placeAlong } from "../fmgc/vprofile";
 
 const NM = 1852;
 const FT = 3.28084;
@@ -18,10 +19,21 @@ export interface NdWaypoint {
   name: string;
   lat: number;
   lon: number;
-  /** its altitude constraint [ft] */
+  /** its altitude constraint [ft], its sense (« + » at or above, « - » at or below, « » at); predicted missed (vprofile.ts — N3) */
   alt?: number;
+  sign?: string;
+  missed?: boolean;
   /** an airfield's point */
   field: boolean;
+}
+
+/** A pseudo-waypoint of the managed vertical profile (PLAN-A320-VOL-AAA N3): its kind and place; `armed` (T/D: the descent armed;
+ *  DECEL: NAV and the speed managed — magenta) */
+export interface NdPseudo {
+  kind: "TC" | "TD" | "DECEL";
+  lat: number;
+  lon: number;
+  armed: boolean;
 }
 
 export interface NdField {
@@ -45,6 +57,8 @@ export interface NdTraffic {
 
 export interface NdExtra {
   route: NdWaypoint[];
+  /** T/C, T/D, DECEL ahead on the plan */
+  pseudo: NdPseudo[];
   /** the active waypoint's index in route (−1: none), its distance [NM], its true bearing [°], the time there [s] */
   active: number;
   dist: number;
@@ -104,11 +118,14 @@ function build(c: CameraController): NdExtra | null {
   if (!g) return null;
   const N = c.nav;
   const W = N.route.wps;
-  const route: NdWaypoint[] = W.map((w) => ({
+  const VP = c.a320Vprof;
+  const route: NdWaypoint[] = W.map((w, i) => ({
     name: w.name,
     lat: w.lat,
     lon: w.lon,
     ...(w.alt !== undefined ? { alt: w.alt * FT } : {}),
+    ...(w.cstr ? { sign: w.cstr[0] !== null && w.cstr[1] === null ? "+" : w.cstr[0] === null && w.cstr[1] !== null ? "-" : "" } : {}),
+    ...(VP?.pts.find((p) => p.i === i)?.missed ? { missed: true } : {}),
     field: !!w.field,
   }));
   const L = N.last.l;
@@ -177,7 +194,20 @@ function build(c: CameraController): NdExtra | null {
         adviseKt: T.cue?.adviseKt ?? 0,
       }
     : null;
-  return { route, active, dist, brg, ete, nav: N.on.l, fields, aids, traffic, taxi, appr: approachOf(c) };
+  // (the profile's pseudo-waypoints on the legs ahead — N3)
+  const pseudo: NdPseudo[] = [];
+  const F = c.a320Fmgc;
+  if (VP && active >= 0) {
+    const put = (kind: NdPseudo["kind"], x: number | null, armed: boolean) => {
+      if (x === null || x <= 0) return;
+      const q = placeAlong(W, active, g, x);
+      if (q) pseudo.push({ kind, lat: q.lat, lon: q.lon, armed });
+    };
+    put("TC", VP.tc, false);
+    put("TD", VP.td, !!F?.desArmed);
+    put("DECEL", VP.decel, !!F && F.lat === "NAV" && F.spdManaged);
+  }
+  return { route, pseudo, active, dist, brg, ete, nav: N.on.l, fields, aids, traffic, taxi, appr: approachOf(c) };
 }
 
 /** The approach shown (see NdApproach) — worked out again only when what decides it changes (the choice reads the relief). */

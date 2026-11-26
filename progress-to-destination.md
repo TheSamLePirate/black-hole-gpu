@@ -45,7 +45,7 @@ J4 (fermé, sortie non atteinte), J5 et J6 (fermés).
 
 | Session (T3) | Lot | État |
 |---|---|---|
-| A320 AAA (26 nov.) | [PLAN-A320-VOL-AAA](docs/PLAN-A320-VOL-AAA.md) — vol mesuré, physique, molettes, roue, assistance, outils, instruments, navigation | **V0 PASS** (vol de ligne complet 20/20), **K1, W1 faits ; W2, G1 en partie** ; I1/I2 commencés ; **N1 fait** (base de navigation, MCDU, ND VOR.D/NDB/WPT) ; **N2 : AIRWAYS, SID, STAR faits** (CIFP, 755 aéroports US) — discontinuités, HOLD, e2e au poste à faire ; **N3 en partie** (contraintes tenues en CLB/DES, magenta au PFD) — T/D à faire |
+| A320 AAA (26 nov.) | [PLAN-A320-VOL-AAA](docs/PLAN-A320-VOL-AAA.md) — vol mesuré, physique, molettes, roue, assistance, outils, instruments, navigation | **V0 PASS** (vol de ligne complet 20/20), **K1, W1 faits ; W2, G1 en partie** ; I1/I2 commencés ; **N1 fait** (base de navigation, MCDU, ND VOR.D/NDB/WPT) ; **N2 : AIRWAYS, SID, STAR faits** (CIFP, 755 aéroports US) — discontinuités, HOLD, e2e au poste à faire ; **N3 fait en simulation** (profil vertical, T/D, DES sur chemin, DECEL ; ND, F-PLN, PFD) — vol au banc V2 à faire |
 | Rentrée du Ranger (26 nov.) | Demande de Sam : la rentrée automatique se pose mal ; zone d'arrivée chargée avant 10–20 km ; enregistreur de vol | **Fait et poussé (26 nov.)** : guidage vers le site d'abord, énergie de l'approche (loin de l'axe ou à court), zone d'arrivée préchargée, `camera.entryLog`. Edwards et Le Bourget posés en vol réel (avant : Edwards 4 écrasés sur 4) ; « Relief failed » de l'IGN non reproduit (e2e servi par le disque) ; apprendre-vaisseaux 9/9 ; golden périmé depuis le 20 oct. (pas par ce lot) |
 | Linux OBC embarqué (22–24 nov.) | [PLAN-LINUX-OBC](docs/PLAN-LINUX-OBC.md) — OBC-0 à OBC-21 (unkernel aarch64, Alpine/Debian, suite Rust/Ratatui, `/dev/fb0`, pont `__bh`/TARS, cockpits 3D) | **Sécurisé le 24 nov.** ([audit](docs/AUDIT-2026-11-24.md)) : relais Wisp à garde numérique, Origin exigée, ports et débits bornés ; pont invité sur racines explicites ; COOP/COEP sur demande ; FR/EN, unités du joueur. Tests unitaires 94/94 ; **e2e en cours** |
 | Points de Lagrange & JWST (22–24 nov.) | L1–L5, Halo, JWST à SE-L2, autopilote, cartes, réseau, Crew | **Corrigé le 24 nov.** : phase Halo juste en dates réelles (écart de vitesse 1 612 → 1e-6 m/s à SE-L2), L4/L5 sur modes propres, Crew sur le même couple, JWST paresseux et borné en pixels ; leçon 6 bis écrite. Tests unitaires verts ; **e2e et coût GPU en cours / non mesurés** |
@@ -80,6 +80,24 @@ l'état d'une mission ou d'un combat **non sauvé, dit** ; le réseau **« entre
 **Décidé par Sam (16 nov., 15:58 UTC)** : J8-4 allumée par défaut (quads sous 8 px), J8-5 avec une jonction choisie sur captures, J8-1b suspendu, l'e2e de J8-6 par la voie (b), J8-9 ajouté ([PLAN-J8](docs/PLAN-J8-BATIMENTS.md) §6 point 6). **But fixé par Sam (16 nov., ~16:19 UTC)** : [J8-A](docs/PLAN-J8-BATIMENTS.md), un vol Paris et Toulon-Hyères, de jour et de nuit, tous les bâtiments, lampadaires, voitures (J8-L) et rivières (J8-E) chargés avant le vol, en « high » partout, sans différence visible entre les qualités. **Décidé par Sam (16 nov., ~21:40 UTC)** : J8-8 ouvert (le proche en cellules), la jonction à 0, l'éclat de nuit lointain gardé ([PLAN-J8](docs/PLAN-J8-BATIMENTS.md) §6 point 11). **Décidé par Sam (17 nov., ~08:00 UTC)** : J8-8b ouvert, les arbres par cellule, après un vol de référence à froid sur le M1 Max (§6 point 12). **Mode speed pour finir J8, J8-VB compris** (Sam, 17 nov. ~09:20 UTC ; [CLAUDE.md](CLAUDE.md), modes de travail ; §6 point 13) : contrôles rapides par lot, un gros e2e J8-A à la fin sur kerr-mini et le M1 Max. **J8-RP, les routes et les ponts AAA** (Sam, 17 nov. ~10:20 UTC ; [PLAN-J8](docs/PLAN-J8-BATIMENTS.md) §3 bis) : ajouté à J8 en mode speed, RP1 (les routes et marquages visibles sous l'orthophoto) en tête. **Attend Sam** : les quatre premières questions de PLAN-J8 §6, réglées provisoirement (même contenu sur les deux machines, retour si > 3 ms sur le mini ; portée au pixel ; J7 en pause, les arbres proches deviennent J9 ; pas de préparation côté serveur pour l'instant) ; les trois questions de [PLAN-J7](docs/PLAN-J7-FLUIDITE.md) §4, réglées provisoirement (les 40 ms du mini en dernier, J7-6 ; les arbres proches en géométrie ensuite, désormais J9 ; l'aplanissement du détail sous les trouées jusqu'à la FAF ou 10 km) ; les seuils du mini attendent la reprise de la cible 40 ms.
 
 ## Journal
+
+### 2026-11-26 15:10 UTC — A320 : la descente gérée — profil vertical, T/D, chemin, DECEL ; ND, F-PLN, PFD (PLAN-A320-VOL-AAA N3)
+
+- Contribution : §19 (un vol IFR réel de bout en bout : la descente au bon endroit, sur un profil, l'approche commencée au DECEL).
+- Réalisé : `src/a320/fmgc/vprofile.ts` (chemin de descente à rebours par pas de 0,25 NM : 3°, contraintes de descente — celles de la
+  SID écartées —, palier de 5 NM au FL100 et avant le premier point d'approche ; montée prévue ; T/C, T/D, DECEL, VDEV, prédictions,
+  contraintes manquées), calculé 2×/s dans `controller/a320ap.ts` ; FMGC : DES armé en croisière et engagé au T/D, DES sur le chemin
+  (thrust SPEED, pente cédée à la vitesse au-delà de +15 kt → MORE DRAG), phase approche au DECEL, **l'ALT tient l'altitude capturée**
+  (défaut trouvé : un FCU baissé faisait descendre l'avion « en ALT ») ; ND : T/C, T/D, DECEL, contraintes magenta/ambre avec sens ;
+  F-PLN : lignes (T/C) (T/D) (DECEL), altitudes prévues, « * » ambre si manquée ; PFD : VDEV (`vdev_dot/high/low` du SVG FlightGear),
+  MORE DRAG. Docs : VOL-AVIONS (cours), plan.
+- Preuves : vérifié statiquement ; tests `a320-vprofile` (3), `a320-constraints` (descente volée en simulation : DES engagé à 0,00 NM du
+  T/D, |VDEV| ≤ 211 ft au-dessus du FL110, ≤ 271 kt sous 9 000 ft, IF à 3 000 ft, phase approche à 5,0 NM de l'IF), `a320-mcdu`
+  (F-PLN ORIG AAA (T/C) BBB (T/D) CCC (DECEL) IF DEST) ; 127 tests A320 verts. **Non vu** : ND/PFD/F-PLN en image dans le jeu ; non volé
+  au poste.
+- Limites : une seule pente (pas de modèle de poussée ralenti ni de vent) ; temps au GS actuel ; carburant par point, VERT REV, message
+  DECELERATE à faire.
+- Suite : V2 — le vol KSFO → KLAX complet au poste, de jour, ciel clair, affiché sur le mini.
 
 ### 2026-11-26 14:22 UTC — A320 : SID/STAR vus dans le jeu sur kerr-mini ; route du serveur de dev réparée ; CI rétablie
 
