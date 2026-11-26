@@ -29,6 +29,42 @@ test("shadeLite seeks the crown past its proxy against the sky, and marks a miss
   expect(lite).toContain("if (tM <= 0.0) {\n    moments[idx] = vec2f(RASTER_SKY,");
 });
 
+// (26 Nov 2026 — the orange dotted fringe along the crowns over the slope at Battery Spencer: a crown missed before the ground was
+// shaded as that ground, though another tree's crown stood behind the proxy's margin, hidden from the raster's depth by it. The
+// finishing pass lends it that crown's surface; marching it again in shadeLite cost the forests' material +1.5 to +4.3 ms, kerr-mini)
+test("a tree's proxy shaded as its ground borrows another tree's crown shaded within 2 px, nearer than that ground — in the finishing pass", () => {
+  // (shadeLite marches its own tree's crown alone, once)
+  expect(lite.split("sceneryTreeLite(").length - 1).toBe(1);
+  expect(lite).not.toContain("crownAbout(");
+  const split = finish.slice(finish.indexOf("if (mk != RASTER_SPLIT && !wat) { return; }"));
+  expect(split).toContain("let cb = crownAbout(vec2i(gid.xy), tid, g.a, true);");
+  expect(split).toContain("if (cb.x >= 0) { g = textureLoad(lutDirIn, cb, 0); }");
+  expect(split.indexOf("crownAbout(")).toBeLessThan(split.indexOf("liteFinishAt("));
+  const about = wgsl.slice(wgsl.indexOf("fn crownAbout("), wgsl.indexOf("// shadeLite's finishing pass (withLiteSplit)"));
+  // (the pixel shaded as its ground — its surface at the hint's distance, behind its proxy —, else nothing borrowed)
+  expect(about).toContain("if (tP > CROWN_ABOUT_M || tG <= tP) { return vec2i(-1); }");
+  expect(about).toContain("if (ground && abs(tG - tH) > 0.03 * tH) { return vec2i(-1); }");
+  // (eight neighbours on its row and column, the first found, one texel read each; another tree's, before that ground, its crown met,
+  // shaded this frame)
+  expect(about).toContain("for (var i = 0u; i < 8u; i++) {");
+  expect(about.split("terrainRasterTexel(").length - 1).toBe(1);
+  expect(about).toContain("if (t.a >= RASTER_TREE_CODE_MAX || id == 0u || id == own || t.b <= 0.0 || t.b >= tG) { continue; }");
+  expect(about).toContain("if (m.x != RASTER_SPLIT && !(m.x >= 0.5 * RASTER_MARK && stamps[n] == P.frame.x)) { continue; }");
+  expect(about).toContain("ta < tG && ta < 0.97 * t.r");
+});
+
+// (a tree's proxy writes the texel's g and b alone — its id, its distance —: r and a keep the ground's distance and code under it. The
+// first try took a tree's texel for alpha under 2¹⁸ — code 0 — and refused every proxy, 26 Nov 2026: the bound is the structures' code)
+test("a tree's texel is told by a code under the structures': the proxy keeps the ground's alpha", async () => {
+  const { RASTER_CODE } = await import("../src/system/terrain-raster-hint");
+  const structures = Math.min(...Object.values(RASTER_CODE));
+  expect(structures).toBe(RASTER_CODE.turbine);
+  const hint = readFileSync(new URL("../src/system/terrain-raster-hint.ts", import.meta.url), "utf8");
+  expect(hint).toContain("const RASTER_TREE_CODE_MAX = ${RASTER_CODE.turbine * RASTER_CODE_SCALE}.0;");
+  const raster = readFileSync(new URL("../src/system/scenery-raster.ts", import.meta.url), "utf8");
+  expect(raster).toContain("writeMask: GPUColorWrite.GREEN | GPUColorWrite.BLUE");
+});
+
 // (25 Nov 2026, later: the miss left stale — RASTER_STALE — was a pixel never shaded, its history dark: dark specks at the crowns'
 // edges; traced by main — beb2615e, reverted — its own pale crowns. The finishing pass now draws the sky there itself)
 const finish = wgsl.slice(wgsl.indexOf("fn shadeLiteFinish(@builtin"), wgsl.indexOf("fn shadeWaterFinish("));

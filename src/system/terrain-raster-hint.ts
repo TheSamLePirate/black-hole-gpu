@@ -52,6 +52,11 @@ fn terrainRasterFarMat(px: vec2f) -> u32 {
 }
 // The nearest surface's distance [m] at this pixel (b: the ground's, or an instance's proxy before it; 0 none).
 fn terrainRasterDepth(px: vec2f) -> f32 { return textureLoad(terrainDist, vec2i(floor(px)), 0).b; }
+// The whole texel at this pixel (r the ground's distance, g an instance's id, b the nearest surface's distance, a its code): one read
+// for a search over neighbours (shadeLiteFinish's crownAbout).
+fn terrainRasterTexel(px: vec2f) -> vec4f { return textureLoad(terrainDist, vec2i(floor(px)), 0); }
+// (a texel's alpha under it: a tree's or the ground's code — the structures', turbines and up, above)
+const RASTER_TREE_CODE_MAX = ${RASTER_CODE.turbine * RASTER_CODE_SCALE}.0;
 // J9: alpha's bit 17 marks an actual tree triangle, code 0; a proxy has alpha 0.
 fn terrainRasterTreeShade(px:vec2f)->f32 {return fract(textureLoad(terrainDist,vec2i(floor(px)),0).a)*(64.0/63.0);}
 fn terrainRasterTreeSurface(px:vec2f)->u32 {
