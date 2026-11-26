@@ -10,7 +10,8 @@ import { flight, resetFlights } from "./helpers/flight";
 
 // The A320 on a published arrival (docs/PLAN-APPROCHES.md AP3): a plan to San Francisco, its arrival put in by the plan's
 // procedures — the FAA's ILS 28R (CIFP 2611), the transition whose first fix is the nearest (ARCHI from the east), its fixes and
-// their altitudes —, flown by the FMGC in NAV, the approach engaged at the IF (CEPIN, on the axis): LOC, G/S, LAND, down on 28R.
+// their altitudes —, flown by the FMGC in NAV, APPR armed (by the assisted level in the approach phase, or the crew), LOC and G/S
+// captured from NAV, LAND, down on 28R — never the game's own join (since 26 Nov 2026: it took over at the IF, HDG instead of NAV).
 // The tiles are the repository's (fetch served from assets/), the relief flat at the sea.
 
 const realFetch = globalThis.fetch;
@@ -32,7 +33,7 @@ afterEach(resetFlights);
 const D = Math.PI / 180;
 const FT = 3.28084;
 
-test("KSFO's published ILS 28R via ARCHI: the plan's fixes, NAV, the approach engaged at CEPIN, landed on 28R", async () => {
+test("KSFO's published ILS 28R via ARCHI at the assisted level: the plan's fixes, NAV, APPR armed by itself, no game's join, landed on 28R", async () => {
   const ksfo = (await fieldByCode("KSFO"))!;
   await loadApproachTile(ksfo.lat, ksfo.lon);
   setGroundHeights("earth", () => 0);
@@ -48,6 +49,7 @@ test("KSFO's published ILS 28R via ARCHI: the plan's fixes, NAV, the approach en
   const { c, fly } = flight({ ...g, X, fwd, vel: add(g.vel, scale(fwd, 125 / C_MPS)), landed: undefined }, false, "a320");
   c.s.flightMode = "plane";
   c.s.weather = "fair";
+  c.s.a320Assist = "assisted";
   c.gearDown = false;
   c.gearExt = 0;
   c.gearInit = true;
@@ -73,6 +75,7 @@ test("KSFO's published ILS 28R via ARCHI: the plan's fixes, NAV, the approach en
   F.altPull(c.a320FmgcIn ?? undefined);
   let engagedAt = "";
   let est = Number.NaN;
+  const T: { touch: { along: number; across: number } | null } = { touch: null };
   const W = { name: "KSFO", icao: "KSFO", lat: 37.61391944, lon: -122.35805833, hdg: 297.8, elev: 4, len: 3600 };
   let k = 0;
   const t = fly(2400, () => {
@@ -85,16 +88,16 @@ test("KSFO's published ILS 28R via ARCHI: the plan's fixes, NAV, the approach en
     if (!engagedAt && c.a320App) engagedAt = c.nav.route.wps[(c.nav.last.l?.active ?? 1) - 1]?.name ?? "?";
     const o = onRunway(W, c.geoNow()!);
     if (Number.isNaN(est) && /^(LOC|LAND)/.test(F.lat) && F.vert.startsWith("G/S")) est = o.along;
-    return !!c.ilsLast;
+    if (F.lat === "ROLL OUT") T.touch = o;
+    return F.lat === "ROLL OUT" && c.a320FmgcIn!.gs < 40;
   });
-  const L = c.ilsLast;
   console.log(
-    `  the approach engaged after ${engagedAt}, established ${(-est / 1000).toFixed(1)} km out, ${L?.rwy} ${L?.score}/20, touchdown ${L?.touch?.along.toFixed(0)} m, ${t.toFixed(0)} s; FCU ${F.alt} ft`,
+    `  the game's join ${engagedAt || "never"}, established ${(-est / 1000).toFixed(1)} km out, ${F.lat}, on 28R ${T.touch ? `${T.touch.along.toFixed(0)} m along, ${T.touch.across.toFixed(1)} m across` : "—"}, ${t.toFixed(0)} s; FCU ${F.alt} ft`,
   );
-  expect(engagedAt).toBe("CEPIN");
-  expect(L?.rwy).toBe("KSFO 28R");
+  expect(engagedAt).toBe("");
   expect(est).toBeLessThan(-9300);
-  expect(L!.score).toBeGreaterThan(14);
+  expect(F.lat).toBe("ROLL OUT");
+  expect(Math.abs(T.touch!.across)).toBeLessThan(15);
   void FT;
 }, 600_000);
 

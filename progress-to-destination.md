@@ -82,6 +82,16 @@ l'état d'une mission ou d'un combat **non sauvé, dit** ; le réseau **« entre
 
 ## Journal
 
+### 2026-11-26 17:42 UTC — A320 V2 : la vraie cause du « trop haut » — la rejointe du jeu au point de jonction, jamais pour l'A320 en NAV
+
+- Constaté (vol n° 6, kerr-mini) : même HDG au « DECEL ». Relu : la phase approche venait de la rejointe du jeu (`ilsStart`, lancée par
+  `fplan.ts` au passage du point de jonction de l'approche), qui met la phase en approche et prend la main en HDG — **avant** que le
+  scénario n'arme APPR ; la garde « APPR armé » du lot précédent arrivait trop tard.
+- Corrigé : `fplan.ts` — l'A320 en NAV ne passe jamais à la rejointe du jeu (son FMGC vole l'approche publiée) ; `a320assist.ts` — au
+  niveau Assisté, APPR armé de lui-même en phase approche (ILS accordé, NAV). Test `a320-published-arrival` réécrit pour l'Assisté :
+  NAV, APPR de lui-même, jamais la rejointe, établi à 18,9 km, posé sur la 28R à 0,2 m de l'axe ; suite A320 + approches 161/161.
+- **Non revolé** au banc : le vol n° 7 suit.
+
 ### 2026-11-26 17:33 UTC — Mode Aéroport V15–V17 : l'avion filmé gréé à toute distance, le son du trafic, le crabe au vent de travers
 
 - Réalisé : `traffic.ts` — gréement A320 pour l'avion filmé quelle que soit sa distance ; `trafficSounds` + `audio/engine.ts`

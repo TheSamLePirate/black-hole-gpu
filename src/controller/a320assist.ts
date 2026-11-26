@@ -126,6 +126,8 @@ function a320AssistStep(this: CameraController, inp: PilotInput, dt: number) {
   // configuration's — 1 under green dot + 10 kt, 2 under S + 10, the gear at the glide's capture or under 2 000 ft, 3 under F + 10
   // with the gear down, FULL under F with the glide captured —, a notch every 4 s at most, as a crew calls them
   if (assisted && F && i && F.phase === "approach" && !onWheels) {
+    // (APPR pressed in the approach phase — DECEL passed —, the ILS tuned: LOC and G/S armed, NAV flown on to the localizer)
+    if (!F.apprArm && i.ils && F.lat === "NAV" && !F.lat.startsWith("LOC")) F.apprToggle();
     const glide = F.vert === "G/S*" || F.vert === "G/S" || F.vert === "LAND";
     if (this.gearDown === false && (glide || ra < 2000) && lever >= 2) this.gearDown = true;
     // (the autobrake armed with the gear: LO — as the game's own approach arms it)

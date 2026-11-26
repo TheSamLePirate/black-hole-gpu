@@ -194,10 +194,10 @@ function navStep(this: CameraController, inp: PilotInput, f: { h: number; hdg: n
     // (the arrival's initial fix passed — P4: the plan's end flown as an ILS approach to its runway)
     const end = N.route.wps.at(-1);
     const P0 = N.route.wps[o.passed];
-    // (the A320 in NAV with APPR armed — its crew flying the published approach: NAV along its fixes, LOC and G/S captured from there —
-    // left to its FMGC: before 26 Nov 2026 the game's join took over at the IF, HDG instead of NAV, and the KSFO → KLAX flight came to
-    // KOBEE 5 600 ft over its 2 200 ft, too high for the glide: a go-around)
-    const crewAppr = fmgcNav && !!this.a320Fmgc?.apprArm;
+    // (the A320 in NAV — its crew, or its assisted level, flying the published approach: NAV along its fixes, APPR armed, LOC and G/S
+    // captured from there — left to its FMGC: before 26 Nov 2026 the game's join took over at the IF, HDG instead of NAV, and the
+    // KSFO → KLAX flight came to KOBEE 5 600 ft over its 2 200 ft, too high for the glide: a go-around, twice)
+    const crewAppr = fmgcNav;
     if ((P0?.proc?.join || /^IAF\d\d[LCR]?$/.test(P0?.name ?? "")) && end?.field && (N.on.l || fmgcNav) && !crewAppr) {
       N.on = { l: false, v: false };
       // (the plan's runway flown — its IAF names it, or the published approach's IF (AP3) —, not chosen again by the wind of
