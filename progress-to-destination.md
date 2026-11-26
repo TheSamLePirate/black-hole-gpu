@@ -82,6 +82,19 @@ l'état d'une mission ou d'un combat **non sauvé, dit** ; le réseau **« entre
 
 ## Journal
 
+### 2026-11-26 16:10 UTC — A320 V2 (suite) : l'approche publiée volée comme un équipage — l'assistance configure l'approche
+
+- Réalisé : vol 4 du scénario KSFO → KLAX (kerr-mini, affiché) : plan complet, décollage, montée gérée au FL240 en 6,5 min, croisière
+  ×4, **DES armé 20 NM avant le T/D puis engagé au T/D**, **phase approche au DECEL** — observé ; puis bloqué 10 min à 2 200 ft :
+  le scénario demandait la rejointe du jeu (`ilsStart`), dont le circuit a pris la main sur NAV (HDG 242, 1,9 km de l'axe, en rond).
+  Corrigé dans le scénario (APPR armé comme un équipage, NAV jusqu'au localizer ; toucher lu par `lastTouch`) et dans **le niveau
+  Assisté**, qui ne savait pas configurer une approche (seule la rejointe du jeu sortait volets et train) : volets cran par cran selon
+  la vitesse gérée (green dot, S, F), train au glide ou sous 2 000 ft, FULL au glide, autofrein LO ; la rentrée des volets de la
+  montée limitée à la montée (elle combattait l'approche à 220 kt). `tests/a320-assist.test.ts` (configuration 1 → 2 → train → 3 en
+  vol simulé).
+- Preuves : vol 4 observé jusqu'au DECEL (journal du banc ; l'enregistrement de ce vol perdu à l'annulation) ; tests A320 verts.
+  **Vol 5 en cours** au moment d'écrire.
+
 ### 2026-11-26 15:51 UTC — Le mode Aéroport, lots V6–V8 : le trafic réel filmé, arrivées et départs, sans HUD, files et bandeau
 
 - Contribution : §19 (une expérience nouvelle, contemplative, sur le monde réel : un aéroport choisi, ses vrais mouvements filmés).

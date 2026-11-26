@@ -20,7 +20,7 @@ declare module "../controls" {
     /** the easy take-off under way (null: none) — its phase */
     a320To: { phase: "roll" | "rotate" | "climb"; liftAt: number | null; field: number } | null;
     /** the assisted level's take-off helpers since the last lift-off: what was done */
-    a320Helped: { gearUp: boolean; cl: boolean; ap: boolean; flapsUp: boolean; liftAt: number | null } | null;
+    a320Helped: { gearUp: boolean; cl: boolean; ap: boolean; flapsUp: boolean; liftAt: number | null; notchAt?: number } | null;
     a320EasyTakeoff(): string;
     a320AssistStep(inp: PilotInput, dt: number): void;
   }
@@ -108,9 +108,38 @@ function a320AssistStep(this: CameraController, inp: PilotInput, dt: number) {
   }
   // (the flaps up past S — ~210 kt at the default mass —, a notch at a time: F then S)
   const lever = Math.round((this.airFlight.cfg.flaps ?? 0) * 4);
-  if (lever > 0 && ra > 1000 && ias > (lever >= 2 ? 185 : 210)) this.airFlight.cfg.flaps = (lever - 1) / 4;
+  // (the climb's only — the approach's notches come down with the speed: before 26 Nov 2026 the two fought at 220 kt)
+  const climbing = !F || F.phase === "takeoff" || F.phase === "climb" || F.phase === "go around";
+  if (climbing && lever > 0 && ra > 1000 && ias > (lever >= 2 ? 185 : 210)) this.airFlight.cfg.flaps = (lever - 1) / 4;
   if (lever === 0) H.flapsUp = true;
   if (To && H.gearUp && H.cl && H.flapsUp) this.a320To = null;
+  // (the assisted level's approach — W2, 26 Nov 2026: before, only the game's own approach set the A320 up; flown on its plan's
+  // published approach with APPR armed it came to the runway clean, gear up): a notch at a time as the speed comes down to each
+  // configuration's — 1 under green dot + 10 kt, 2 under S + 10, the gear at the glide's capture or under 2 000 ft, 3 under F + 10
+  // with the gear down, FULL under F with the glide captured —, a notch every 4 s at most, as a crew calls them
+  if (assisted && F && i && F.phase === "approach" && !onWheels) {
+    const glide = F.vert === "G/S*" || F.vert === "G/S" || F.vert === "LAND";
+    if (this.gearDown === false && (glide || ra < 2000) && lever >= 2) this.gearDown = true;
+    // (the autobrake armed with the gear: LO — as the game's own approach arms it)
+    if (this.gearDown && this.a320 && !this.a320.autobrake) this.a320.autobrake = 1;
+    H.notchAt ??= -1e9;
+    if (now - H.notchAt > 4) {
+      const want =
+        lever === 0 && ias < i.greenDot + 10
+          ? 1
+          : lever === 1 && ias < i.s + 10
+            ? 2
+            : lever === 2 && this.gearDown && ias < i.f + 10
+              ? 3
+              : lever === 3 && glide && ias < i.f
+                ? 4
+                : lever;
+      if (want !== lever) {
+        this.airFlight.cfg.flaps = want / 4;
+        H.notchAt = now;
+      }
+    }
+  }
   // (the assisted level's landing: the ground spoilers armed with the gear down; idle at 20 ft hand-flown)
   if (assisted && this.gearDown && ra < 2000) this.groundSpoilers = true;
   // (a landing only: the approach phase, the levers under FLX/TOGA, a real sink — at the rotation the radio altimeter reads under 20 ft

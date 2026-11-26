@@ -46,3 +46,29 @@ test("assisted: a landing hand-flown — the levers to idle at 20 ft", () => {
   expect(c.pilot.throttle).toBe(0);
   void FT;
 });
+
+test("assisted: the approach's configuration — 1, 2, the gear, 3 as the managed speed comes down (FULL waits for the glide)", () => {
+  const { c, fly } = at(1500 * FT, 115, 0);
+  c.gearDown = false;
+  c.gearExt = 0;
+  c.pilot.throttle = 0.6;
+  c.airFlight.cfg.flaps = 0;
+  fly(1);
+  const F = c.a320Fmgc!;
+  c.a320ApKey("ap");
+  if (!F.athr) c.a320ApKey("athr");
+  F.altPull(c.a320FmgcIn ?? undefined);
+  F.alt = 1500;
+  F.phase = "approach";
+  if (!F.spdManaged) F.spdPush();
+  const seen: string[] = [];
+  fly(240, () => {
+    const lever = Math.round((c.airFlight.cfg.flaps ?? 0) * 4);
+    const k = `${lever}${c.gearDown ? "G" : ""}`;
+    if (seen.at(-1) !== k) seen.push(k);
+    return lever === 3;
+  });
+  console.log(`  configuration: ${seen.join(" → ")}, ${c.a320FmgcIn!.ias.toFixed(0)} kt`);
+  // (224 kt at the start: green dot + 10 at once — the first notch from the first frame; never back up: no notch fought over)
+  expect(seen.filter((x) => x !== "0")).toEqual(["1", "2", "2G", "3G"]);
+}, 60_000);

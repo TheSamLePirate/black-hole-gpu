@@ -213,19 +213,27 @@ async function ifr(lab: Lab): Promise<Verdict> {
   e = await lab.live({ until: `c.a320Fmgc.phase === "approach"`, maxWall: 1500, everyMs: 2000, fail: "!!c.airFlight.failure" });
   check(e.end === "until", `the approach phase (DECEL) (${e.end} ${e.why})`);
   await displays("decel");
-  // ---- the approach: the ILS armed (the game's approach on the selected ILS), the autoland, to a stop
+  // ---- the approach: APPR pressed as a crew does — NAV brings it along the approach's fixes onto the localizer (the ILS tuned by the
+  // plan's destination), LOC and G/S captured; the assisted level's flaps, gear, autobrake; the autoland, to a stop. (Before 26 Nov
+  // 2026 the game's own join — ilsStart — was asked here: its circuit took over from NAV and flew in circles 1.9 km off the axis)
   await phase("approach");
-  const said = await lab.js<string>(`__bh.camera.ilsStart(${JSON.stringify(DEST)})`);
-  lab.note("note", `ilsStart: ${said}`);
+  const said = await lab.js<string>(
+    `(() => { const F = __bh.camera.a320Fmgc; if (!F.apprArm) F.apprToggle(); return JSON.stringify(F.fma()); })()`,
+  );
+  lab.note("note", `APPR: ${said}`);
   e = await lab.live({ until: `["G/S", "LAND"].includes(c.a320Fmgc.vert)`, maxWall: 900, everyMs: 1000, fail: "!!c.airFlight.failure" });
   await displays("glide");
-  e = await lab.live({ until: "!!c.ilsLast || !!c.airFlight.failure", maxWall: 900, everyMs: 1000 });
+  // (the touchdown: the game's own record of it — controller/motion.ts lastTouch, its sink —, the runway's along and across then; the
+  // game's ILS grade, ilsLast, is its own join's only)
+  const n0 = await lab.js<number>("__bh.camera.lastTouch?.n ?? 0");
+  e = await lab.live({ until: `(c.lastTouch?.n ?? 0) > ${n0} || !!c.airFlight.failure`, maxWall: 900, everyMs: 1000 });
+  const touch = await lab.js<{ vs: number; along: number; across: number } | null>(
+    `(() => { const T = __bh.camera.lastTouch, R = window.__lab.sample().runway; return T ? { vs: -Math.abs(T.sink), along: R?.along ?? NaN, across: R?.across ?? NaN } : null; })()`,
+  );
   await phase("rollout");
   e = await lab.live({ until: "c.ourLanded && (c.a320FmgcIn?.ias ?? 99) < 5", maxWall: 180, everyMs: 1000 });
   await displays("stopped");
-  const L = await lab.js<{ score: number; touch: { along: number; across: number; vs: number } | null; rwy?: string } | null>(
-    "__bh.camera.ilsLast",
-  );
+  const L = { score: null as number | null, touch };
   const fail = await lab.js<string | null>("__bh.camera.airFlight.failure");
   check(!fail, `no failure (${fail ?? "—"})`);
   check(
