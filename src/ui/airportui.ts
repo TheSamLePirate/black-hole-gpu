@@ -44,6 +44,7 @@ const nameOf = (c: TrafficCraft) => callsignOf(c);
 
 export interface AirportUiDeps {
   settings: { units?: "metric" | "imperial" };
+  weather?(): { summary: string; metar: string };
   /** the mode left (the free camera kept where it is) */
   quit(): void;
   /** the radio's last lines (traffic/atc.ts) */
@@ -87,6 +88,7 @@ export class AirportUi {
     const cur = S.current ? airportCraft(S.current) : null;
     const U = unitsFor(this.d.settings);
     const key = [
+      JSON.stringify(this.d.weather?.()),
       S.code,
       S.dir.mode,
       S.shot,
@@ -128,6 +130,16 @@ export class AirportUi {
     };
     head.append(title, fold, quit);
     const body: HTMLElement[] = [];
+    const weather = this.d.weather?.();
+    if (weather) {
+      const box = h("section", "au-weather");
+      box.dataset.testid = "airport-ui-weather";
+      box.append(h("div", "au-label", t("Weather")), h("div", "", weather.summary));
+      const raw = h("div", "au-metar", weather.metar);
+      raw.dataset.testid = "airport-ui-metar";
+      box.append(raw);
+      body.push(box);
+    }
     if (!this.collapsed) {
       // the director: Auto and its shots
       const seg = h("div", "au-seg");

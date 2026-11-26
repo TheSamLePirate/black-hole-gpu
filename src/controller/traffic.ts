@@ -1,3 +1,4 @@
+import { crabStep } from "../traffic/attitude";
 // The CameraController — the real traffic in the sky (docs/PLAN-AVIATION-AAA.md, T2; traffic/feed.ts its reports):
 // each aircraft drawn a minute behind the real time (the setting), on the smoothest path near its reports of the
 // last minutes (game/flightpath.ts: a smoothing spline through their places and velocities — its turns and climbs
@@ -295,6 +296,7 @@ const easing = new Map<
     pitch: number;
     /** its pitch as drawn [rad] (rate-limited) */
     pd: number;
+    crab: number;
     tdAt: number;
     /** its phase the frame before (null: none yet), its gear wanted (null: none yet) and its position 0…1 */
     phase: TrafficPhase | null;
@@ -452,6 +454,7 @@ function trafficNow(this: CameraController): TrafficCraft[] {
         bank: E0?.bank ?? 0,
         pitch: E0?.pitch ?? 0,
         pd: E0?.pd ?? Number.NaN,
+        crab: E0?.crab ?? 0,
         tdAt: E0?.tdAt ?? Number.NaN,
         phase: E0?.phase ?? null,
         gearT: E0?.gearT ?? null,
@@ -516,7 +519,8 @@ function trafficNow(this: CameraController): TrafficCraft[] {
     // its transponder says it — in the air, 20° at most; on the ground none — PLAN-AEROPORT-AAA V17)
     const crabRaw =
       !gnd && gs > 0.1 && Number.isFinite(p.hdg) && Number.isFinite(p.trk) ? ((((p.hdg! - p.trk!) % 360) + 540) % 360) - 180 : 0;
-    const crab = Math.max(-20, Math.min(20, crabRaw)) * D;
+    const crab = crabStep(Ez.crab, crabRaw, over, gnd, dt);
+    Ez.crab = crab;
     if (crab) {
       // (the track's direction turned about the local up by the crab: east of it positive — a heading right of the track)
       const ex = [0, 1, 2].map((i) => L.U[(i + 1) % 3]! * hdir[(i + 2) % 3]! - L.U[(i + 2) % 3]! * hdir[(i + 1) % 3]!);

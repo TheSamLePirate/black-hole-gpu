@@ -34,7 +34,7 @@ export interface WeatherHost {
   changed(): void;
 }
 
-const NAMES: Record<WeatherPreset, { fr: string; en: string }> = {
+export const WEATHER_NAMES: Record<WeatherPreset, { fr: string; en: string }> = {
   fair: { fr: "Clair", en: "Fair" },
   cloudy: { fr: "Nuageux", en: "Cloudy" },
   overcast: { fr: "Couvert", en: "Overcast" },
@@ -197,7 +197,7 @@ export class WeatherPanel {
       b.dataset.testid = `weather-${p}`;
       b.setAttribute("role", "radio");
       b.title = tr(HINTS[p]);
-      b.innerHTML = `${svg(ICONS[p], "wx-ico")}<span class="wx-name">${tr(NAMES[p])}</span>`;
+      b.innerHTML = `${svg(ICONS[p], "wx-ico")}<span class="wx-name">${tr(WEATHER_NAMES[p])}</span>`;
       const sub = h("span", "wx-sub");
       b.append(sub);
       b.onclick = () => {

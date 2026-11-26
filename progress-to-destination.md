@@ -12105,3 +12105,18 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   explicite pour les attributs, au lieu des commandes bufferisées Bun Shell. Contrats et budgets conservés.
 - Preuve : script complet exécuté avec `--base origin/main`, sortie normale et code 0 ; Biome passe.
   Contribution : contrôle de livraison rétabli ; aucun gain de rendu revendiqué.
+
+### 2026-11-26 22:02 UTC — Météo/METAR aéroport et crabe progressif
+
+- Contribution : caméra et attitude lisibles, stratégie §19.6, mode aéroport V17.
+- Réalisé : panneau météo conservé avec les listes repliées, météo simulée identifiée (vent/rafales,
+  visibilité, couches AGL, T/QNH disponibles), METAR brut de la station de l'aéroport avec états chargement/indisponible.
+  `main.ts` partage le même `MetarFeed` avec `RealWeather`, sans doubler les caches ni changer la météo choisie.
+  `traffic/attitude.ts` amortit le crabe ADS-B (3 s, 2°/s maximum, ±20°), décrabe progressivement sur
+  les 15 derniers mètres et achève l'alignement au sol ; le temps d'un saut de simulation est borné.
+  État conservé entre les rapports. Référence PLAN-AEROPORT-AAA mise à jour.
+- Preuves : 20 tests METAR/traffic-runway/traffic-attitude passent (1992 assertions), dont la convergence,
+  le sens du crabe et le toucher sans saut ; Biome ciblé sans erreur ; inventaire pipeline passe.
+- Limites : pas de nouvelle mesure GPU, ni validation visuelle en navigateur (le banc airport-view a échoué
+  à entrer dans KLAX lors du lot précédent). Le cap ADS-B est restitué progressivement, aucune nouvelle
+  physique aérodynamique du trafic n'est revendiquée. Les METAR gardent le cache existant de 30 min.

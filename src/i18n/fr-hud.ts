@@ -48,6 +48,9 @@ export default {
   "M › Telemetry: the flight's curves": "M › Télémétrie : les courbes du vol",
   "Sink rate": "Taux de chute",
   Weather: "Météo",
+  "Simulated weather": "Météo simulée",
+  "METAR loading…": "Chargement du METAR…",
+  "METAR unavailable": "METAR indisponible",
   Eclipses: "Éclipses",
   "The eclipse calculator: the Sun's and the Moon's, the transits, the planets' moons, from any world":
     "Le calculateur d'éclipses : de Soleil et de Lune, les transits, les satellites des planètes, vues de tout monde",

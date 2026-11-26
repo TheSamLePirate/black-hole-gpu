@@ -1,3 +1,5 @@
+import { MetarFeed } from "./metar";
+import { windFromAt, coverWord, type WeatherState } from "./weather";
 // (first: the network counted from the first request — net-activity.ts)
 import "./net-install";
 import { NetLight } from "./ui/net-light";
@@ -137,7 +139,7 @@ import { ChallengePanel, type ChallengeHost, flyChallenge, flyFight, flyFigure }
 import { aeroBests } from "./controller/aerobatics";
 import { FIGURE_ORDER, FIGURES, type FigureId } from "./game/aerobatics";
 import { TimePanel } from "./ui/timepanel";
-import { WeatherPanel } from "./ui/weatherpanel";
+import { WeatherPanel, WEATHER_NAMES } from "./ui/weatherpanel";
 import { RealWeather } from "./realweather";
 import { EclipsePage } from "./ui/eclipses";
 import { type MxHost, runExposures } from "./photo/multiexposure";
@@ -8463,7 +8465,8 @@ async function main() {
   // the game's date — the METAR of a runway's station within 60 km when the date is now, else Open-Meteo's model
   // anywhere on the Earth (its forecast, its archive since 1940), out of their reach a plausible draw; checked
   // every 3 s (the requests cached: one per cell and day), redrawn when it changes
-  const realWeather = new RealWeather();
+  const metarFeed = new MetarFeed();
+  const realWeather = new RealWeather(metarFeed);
   const metarTick = () => {
     if (settings.weather !== "real") return;
     // (a state set by a script — the flight lab's, an e2e's — kept: the fog or the storm asked flown as it is)
@@ -9104,10 +9107,50 @@ async function main() {
     tools.setDate(new Date(Date.now() - Math.max(0, settings.trafficDelay ?? 0) * 1000).toISOString());
     tools.warp(1);
   };
+  const airportMetars = metarFeed;
+  let airportMetarCode = "",
+    airportMetarAt = -Infinity;
+  let airportMetar: WeatherState | null = null;
+  let airportMetarPending = false;
+  const airportWeather = () => {
+    const S = airportState();
+    if (!S) return { summary: "", metar: "" };
+    if (airportMetarCode !== S.code) {
+      airportMetarCode = S.code;
+      airportMetarAt = -Infinity;
+      airportMetar = null;
+      airportMetarPending = false;
+    }
+    if (!airportMetarPending && performance.now() - airportMetarAt > 30_000) {
+      const code = S.code;
+      airportMetarPending = true;
+      airportMetarAt = performance.now();
+      void airportMetars.weather(code).then((w) => {
+        if (airportMetarCode !== code) return;
+        airportMetar = w;
+        airportMetarPending = false;
+      });
+    }
+    const w = camera.weatherNow;
+    const place = camera.weatherPlace();
+    const U = unitsFor(settings);
+    const wind = w
+      ? `${Math.round(windFromAt(w, S, place?.days ?? 0))
+          .toString()
+          .padStart(3, "0")}° / ${U.fSpd(w.wind.u10)}${w.wind.gust > 0 ? ` G ${U.fSpd(w.wind.u10 + w.wind.gust)}` : ""}`
+      : "—";
+    const sky = w?.layers.map((l) => `${coverWord(l.cover)} ${U.fAlt(l.base)} AGL`).join(" · ") || "—";
+    const air = w?.air;
+    return {
+      summary: `${t("Simulated weather")} (${tr(WEATHER_NAMES[settings.weather])}) · ${t("Wind")} ${wind} · VIS ${w ? (w.visibility / 1000).toFixed(1) : "—"} km · ${sky}${air ? ` · ${air.T} °C · QNH ${Math.round(air.qnh)} hPa` : ""}`,
+      metar: airportMetar?.report ?? `${S.code} · ${t(airportMetarPending ? "METAR loading…" : "METAR unavailable")}`,
+    };
+  };
   const airportUi = new AirportUi({
     settings,
     quit: () => panel.toast(t("Airport view left — the free camera stays here")),
     radio: () => airportRadio,
+    weather: airportWeather,
   });
   // (the airport's radio — traffic/atc.ts, PLAN-AEROPORT-AAA V10: the tower's and the crews' exchanges made from its movements, said
   // through the radio's band; the last lines on its panel)
