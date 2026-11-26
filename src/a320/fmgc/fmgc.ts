@@ -473,7 +473,14 @@ export class Fmgc {
       this.setVert("ROLL OUT");
     }
     // ---- the altitude's capture (FMGC-b.nas: within |V/S|/5, at least 50 ft; going its way) and hold
-    const toAlt = this.alt - i.alt;
+    // (the managed modes level off at the plan's constraint first — ALT CST —, then go on to the FCU's altitude when it is passed:
+    // PLAN-A320-VOL-AAA N3)
+    const cstrOn =
+      i.cstr !== null &&
+      ["CLB", "DES", "ALT CST*", "ALT CST"].includes(this.vert) &&
+      (this.alt > i.alt - 50 ? i.cstr < this.alt - 50 : i.cstr > this.alt + 50);
+    if (this.vert === "ALT CST" && !cstrOn && Math.abs(this.alt - i.alt) > 150) this.setVert(this.alt > i.alt ? "CLB" : "DES");
+    const toAlt = (cstrOn ? i.cstr! : this.alt) - i.alt;
     const climbing = ["CLB", "OP CLB", "EXP CLB", "V/S", "FPA", "SRS"].includes(this.vert);
     const capt = clamp(Math.round(Math.abs(i.vs) / 5 / 100) * 100, 50, 2500);
     if (climbing || ["DES", "OP DES", "EXP DES"].includes(this.vert)) {

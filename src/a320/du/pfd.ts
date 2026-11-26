@@ -332,8 +332,9 @@ export class Pfd extends Display {
     e("ALT_thousands").setTranslation(0, geneva1k((a % 10000) / 100) * 51.61);
     e("ALT_hundreds").setTranslation(0, geneva100((a % 1000) / 100) * 51.61);
     e("ALT_tens").setTranslation(0, (a % 100) * 1.498);
-    // (the selected altitude: the FCU's — A8; within 565 ft on the tape, else its figure above or below)
-    const ta = d.targetAlt;
+    // (the selected altitude: the FCU's — A8; within 565 ft on the tape, else its figure above or below; the plan's constraint
+    // levelled off at instead, magenta — PLAN-A320-VOL-AAA N3)
+    const ta = d.altCstr ?? d.targetAlt;
     if (ta === null) for (const id of ["ALT_target", "ALT_digit_UP", "ALT_digit_DN", "ALT_digit_UP_metric"]) e(id).hide();
     else {
       const diff = ta - alt;
@@ -348,7 +349,7 @@ export class Pfd extends Display {
       e("ALT_digit_DN")
         .setVisible(diff < -565)
         .setText(txt);
-      for (const id of ["ALT_digit_UP", "ALT_digit_DN", "ALT_target"]) e(id).setColor(CYAN);
+      for (const id of ["ALT_digit_UP", "ALT_digit_DN", "ALT_target"]) e(id).setColor(d.altCstr !== null ? MAGENTA : CYAN);
     }
     // (the metric altitude: the FCU's METRIC ALT button on — deckgame.ts deck/metric-alt — or the game's metric units)
     const metric = Number(d.deck["deck/metric-alt"] ?? 0) > 0.5 !== (d.units === "metric");

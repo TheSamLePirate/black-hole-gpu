@@ -1,3 +1,4 @@
+import type { Waypoint } from "../game/flightplan";
 // The A320's flight guidance flown (docs/PLAN-A320.md, A8): its FMGC (src/a320/fmgc/fmgc.ts — made with its first
 // frame) fed each frame with the flight's figures — the air data, the FADEC's limits, the speeds, the ILS tuned (the
 // plan's destination's runway, else the nearest's), the plan's lateral guidance (controller/fplan.ts), the sticks —;
@@ -123,7 +124,7 @@ function a320FmgcStep(this: CameraController, inp: PilotInput, dt: number, onWhe
         ? { loc: r.locIn ? r.loc : null, gs: r.gsIn ? r.gs : null, course: R!.hdg, dme: r.dme / 1.852, across: r.across }
         : null,
     lnav: route.length >= 2 && lo && !lo.done ? { hdg: (((lo.hdg * D) % 360) + 360) % 360, active: route[lo.active]?.name ?? "" } : null,
-    cstr: null,
+    cstr: a320Cstr(route, lo && !lo.done ? lo.active : -1, g.alt * FT, F.alt),
     stick: [inp.pitch, inp.roll],
     rwyHdg: takeoff.hdg,
     accelAgl: 1500,
@@ -139,6 +140,26 @@ function a320FmgcStep(this: CameraController, inp: PilotInput, dt: number, onWhe
   return out;
 }
 const takeoff: { hdg: number | null } = { hdg: null };
+
+/**
+ * The managed altitude's constraint (PLAN-A320-VOL-AAA N3) [ft over the sea]: the plan's points ahead (from the active one) read in
+ * order; climbing towards the FCU's altitude, the first « at or below » between the craft and it (a SID's level-off); descending,
+ * the first « at or above » between them (a STAR's, an approach's floor). null: none binds — the FCU's altitude is the target.
+ */
+export function a320Cstr(wps: Waypoint[], active: number, altFt: number, fcuFt: number): number | null {
+  if (active < 0) return null;
+  const up = fcuFt > altFt;
+  for (let k = active; k < wps.length; k++) {
+    const c = wps[k]!.cstr;
+    if (!c) continue;
+    const ft = (up ? c[1] : c[0]) ?? null;
+    if (ft === null) continue;
+    const f = ft / 0.3048;
+    // (between the craft — 300 ft of margin: the level being held — and the FCU's altitude)
+    if (up ? f < fcuFt - 50 && f > altFt - 300 : f > fcuFt + 50 && f < altFt + 300) return Math.round(f);
+  }
+  return null;
+}
 
 /** The keys on the A320: the autopilot (AP1), the autothrust, NAV (the plan's guidance: HDG pushed, AP1 with it). */
 function a320ApKey(this: CameraController, what: "ap" | "athr" | "nav"): string {

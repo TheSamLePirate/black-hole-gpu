@@ -559,8 +559,11 @@ les SID qui servent la piste choisie (`RW19B` : les deux 19), puis leurs transit
 leurs contraintes d'altitude (`cstr`, au-dessus/au-dessous). **LAT REV** à la destination **› ARRIVAL>** : **STARS>** liste les STAR
 (celles de la piste de l'approche choisie), puis **TRANS>** leurs transitions ; leurs points se placent avant ceux de l'approche. Le nom
 de la procédure s'écrit au-dessus de ses branches dans F-PLN. Limites : les branches sans point (cap jusqu'à une altitude, « VA »,
-guidages) ne donnent pas de point — le plan reprend au point suivant — ; les limites de vitesse publiées ne sont pas reprises ; le profil
-vertical géré (contraintes tenues par le FMGC, T/D) vient ensuite (PLAN-A320-VOL-AAA N3).
+guidages) ne donnent pas de point — le plan reprend au point suivant — ; les limites de vitesse publiées ne sont pas reprises ; **les contraintes
+sont tenues** (26 nov. 2026) : en montée gérée (**CLB**, bouton d'altitude poussé), un « au-dessous de » du plan devant l'avion
+le fait palier à cette altitude (**ALT CST\***, **ALT CST**, chiffre **magenta** au PFD) jusqu'au point, puis il remonte vers
+l'altitude du FCU ; en descente gérée (**DES**), un « au-dessus de » fait plancher. En OP CLB/OP DES (tiré), les contraintes
+sont ignorées, comme sur l'avion. Le point de descente (T/D) et les prédictions viennent ensuite (PLAN-A320-VOL-AAA N3).
 
 **La roue de l'A320** (Tab maintenu, depuis le 26 nov. 2026 — avant, la roue des vaisseaux) : **Pilote auto ›** (AP1, A/THR, FD,
 LOC, APPR, EXPED, NAV), **FCU ›** (Vitesse, Cap, Altitude, V/S : des pas ±, **Sélectée/OP CLB…** = le bouton tiré, **Gérée/NAV/Palier**

@@ -105,6 +105,8 @@ export interface DuData {
   takeoff: boolean;
   targetSpeed: number | null;
   targetAlt: number | null;
+  /** the plan's constraint the managed climb or descent levels off at (PLAN-A320-VOL-AAA N3) [ft] — magenta on the tape; null: none */
+  altCstr: number | null;
   /** the FCU's selected heading or track [° true] while selected (HDG/TRK) — the PFD's blue index, the ND's (null: managed) */
   selHdg: number | null;
   // ---- the ILS: the deviations [dots], its name, the DME [NM], its course [° true]
@@ -302,6 +304,7 @@ export function duData(c: CameraController, s: Settings, deck: Props, date: Date
     takeoff: !G || G.phase === "preflight" || G.phase === "takeoff",
     targetSpeed: G && GI ? G.targetSpeed(GI) : null,
     targetAlt: G ? G.alt : null,
+    altCstr: G && GI?.cstr != null && ["CLB", "DES", "ALT CST*", "ALT CST"].includes(G.vert) ? GI.cstr : null,
     selHdg: G && !G.hdgManaged ? G.hdg % 360 : null,
     ils: ils ? { id: ils.id, loc: ils.loc, gs: ils.gs, dme: ils.dme / 1.852, crs: c.a320Ils?.hdg ?? null } : null,
     eng: [eng(0), eng(1)],
