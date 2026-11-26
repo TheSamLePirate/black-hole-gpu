@@ -366,7 +366,9 @@ c.docked;                                   // true ; c.undock() pour repartir (
   puis l'air freine. **Bouclier d'abord, nez haut** (40° d'incidence pour le Ranger) : le plasma devant.
 - Le **couloir de rentrée** : trop raide, la charge et la chaleur dépassent les limites (bouclier 1 950 K, 9 g) ;
   trop plat, le vaisseau rebondit. Le guidage règle l'**inclinaison** pour viser le site (toutes les 2 s simulées) et
-  garde la charge sous 2,4 g.
+  garde la charge sous 2,4 g ; il s'incline **d'abord du côté du site**, puis l'inverse quelques fois pour rester dans l'axe.
+- Passé loin de l'axe de la piste (plus de 20 km), le planeur **compte son énergie** (hauteur + vitesse) contre le chemin
+  qui reste : il garde l'aérofrein rentré tant qu'il n'a pas d'énergie de trop et va droit au début de la finale.
 - Sous Mach 2,5, le Ranger est un **planeur** (finesse ~6) qui se pose comme la navette : une **pente raide de 12,6°**
   (jusqu'à 19° s'il arrive haut) à **160 m/s**, vers un point de visée **≈ 3 km avant le seuil** ; une ressource vers
   **90 m** sur une pente de **1,5°** à 130 m/s ; l'arrondi à **12 m** ; le toucher **450 m après le seuil** ; hauteur
@@ -392,8 +394,8 @@ toucher : « Touchdown … · X m/s down ».
 **Réussi quand** (le dernier toucher : `c.lastTouch` → `sink`, `gear`) : `c.ourLanded`, `c.airFlight.failure === null`, taux de chute < 3 m/s, arrêt dans l'axe
 (`c.runwayView().across` < 10 m).
 
-**Erreurs** : partir trop près ou trop bas (sous énergie : remise de gaz) — l'autopilote de rentrée **ne remet jamais
-de poussée** pendant le plané ; le train oublié ; l'Endurance (pas de bouclier : elle brûle).
+**Erreurs** : partir trop près ou trop bas (sous énergie : remise de gaz) — le plané **ne remet pas de poussée**, seule
+la remise de gaz vole aux moteurs ; le train oublié ; l'Endurance (pas de bouclier : elle brûle).
 
 ## Leçon 9 — Se poser sous moteur sur la Lune (Lander)
 
@@ -781,7 +783,21 @@ Détails utiles :
   Guidage d'inclinaison toutes les **2 s de temps simulé** ; incidence 40° (Ranger) / 65° (Lander) ; plafond 2,4 g
   (Ranger) / 0,85·gMax (Lander). Passation sous Mach 2,5 (Ranger) / 1,4 (Lander). Plané vers la piste : pente raide de 12,6°
   (≤ 19°) vers un point visé ≈ 3 km avant le seuil, ressource à 90 m sur 1,5°, arrondi à 12 m, toucher 450 m après, **remise de gaz** à la hauteur de décision (2 automatiques au plus), plein gaz = TOGA.
-  **L'autopilote d'entrée ne remet jamais de poussée pendant le plané.**
+  Le plané ne remet pas de poussée ; une remise de gaz, elle, se vole aux moteurs (`missedStep`) jusqu'au retour sur l'axe.
+  - **Côté de l'inclinaison** (26 nov. 2026, `src/entry.ts` `EntryGuidance.sided`) : à la première mise à jour dans l'air, le
+    côté vers le site ; ensuite les inversions au-delà de la bande morte (max(4 km, 7 × v, 10 % du chemin restant)). Avant :
+    côté droit d'office, gardé jusqu'à la bande morte — à Edwards, site 150 km à gauche, l'écart montait à 530 km et la passation
+    tombait à 83–101 km de l'axe (4 vols sur 4 écrasés) ; après : 6,3 km, posé.
+  - **Énergie de l'approche** (26 nov. 2026, `controller/computer.ts` `approach`, `entryRun.app.energy`) : la hauteur d'énergie
+    (hauteur + v²/2g) contre ce que demande le chemin restant à la meilleure finesse (`bestGlide`, celle du Mach : ~2 supersonique,
+    ~4,5 subsonique). Passé à plus de **20 km de l'axe** (`wide`), l'aérofrein ne mange que ce qui dépasse le besoin + 3 km ; dès
+    **2,5 km sous le besoin** (`rescue`, verrouillé) : droit vers le début de la finale (plus de vent arrière parallèle), virage sur
+    l'axe anticipé (rayon × tan θ/2), pas de spirale, pas plus raide que le plané ; déjà au-delà du début de finale, l'axe rejoint
+    vers le seuil (`inside`). Près de l'axe, l'approche d'avant, inchangée. En finale : plus de 200 m au-dessus du profil, pente
+    jusqu'à 24° et aérofrein plein ; encore 150 m trop haut au seuil, **remise de gaz** (« high »). Interrupteur de mesure
+    `APPROACH` ; banc `tests/entry-glide.test.ts` (5 passations, dont les vraies d'Edwards et de Kennedy).
+  - **Enregistreur de vol** (`camera.entryLog`, `controller/entry-log.ts`) : le plan, un échantillon par seconde de vol (½ s sous
+    3 km), les événements, le résumé des écarts au plan ; `scripts/live-entry.ts` l'écrit en `entry-log.json`.
 
 ### 4.3 Enchaînements (ce que devient `auto`)
 

@@ -62,6 +62,8 @@ import { cockpitTarget } from "./cockpit/pointer";
 import { CockpitTip } from "./ui/cockpit-tip";
 import { cockpitHull } from "./system/collide";
 import { afterSkyPrefetch, prefetchSkyAssets, Renderer, type FrameStats, type OfflineStatus } from "./renderer";
+import { ArrivalPrefetch } from "./system/arrival-prefetch";
+import type { ZoneSources } from "./system/zones";
 import { swappable } from "./util/swappable";
 import { bootMark, bootReport, bootWatchStop } from "./boot-timeline";
 import { Intro, introBuild } from "./intro/intro";
@@ -983,6 +985,28 @@ async function main() {
     // (under "TARS's ear": his Deepgram key — pasted, tried, changed, forgotten)
     controlExtra: (key) => (key === "tarsEar" ? earKeyLine({ testid: "settings-ear-key", changed: () => tarsPanel?.refresh() }) : null),
   });
+  // (the Earth's sources as the game draws them now: the offline zones' URLs follow them, the landing zone's asked ahead too)
+  const earthSources = (): ZoneSources => ({
+    ortho: settings.earthOrtho,
+    relief: settings.earthIgnRelief,
+    hlod: settings.earthIgnSilhouettes,
+    span: (TILE_REACH[earthDetailFor(settings, renderer.tier).reach] ?? TILE_REACH.normal).span,
+    // (the world scenery as this device draws it: its trees and buildings flown over offline too)
+    scenery: (() => {
+      const d = earthDetailFor(settings, renderer.tier);
+      return d.scenery === "off"
+        ? null
+        : {
+            mode: d.scenery,
+            satellite: settings.earthSurface !== "off",
+            reach: DETAIL_REACH[d.reach] ?? 1,
+            overture: settings.earthOverture,
+          };
+    })(),
+  });
+  // (the landing zone asked ahead while the entry autopilot brings the craft down to a runway — system/arrival-prefetch.ts)
+  const arrival = new ArrivalPrefetch(renderer.earthTiles, earthSources);
+  renderer.arrival = arrival;
   // the offline cache and the install (PLAN-MONDE M1): off on the dev server's hot reload
   const pwa = installPwa({ toast: (m) => panel.toast(m), dev: DEV && !/[?&]sw=1/.test(location.search) });
   // (the offline zones — I8a —, once the worker is in: their downloads after the game's own tiles)
@@ -1002,24 +1026,7 @@ async function main() {
       // (the e2e harness's alone: its data from the e2e's disk — the WMS-R's spacing lifted; never a player's)
       wmsSpacingLifted: () => (globalThis as { __e2eWmsSpacingLifted?: boolean }).__e2eWmsSpacingLifted === true,
       busy: () => renderer.earthTiles.pending > 0 || renderer.earthTiles.orthoPending > 0,
-      sources: () => ({
-        ortho: settings.earthOrtho,
-        relief: settings.earthIgnRelief,
-        hlod: settings.earthIgnSilhouettes,
-        span: (TILE_REACH[earthDetailFor(settings, renderer.tier).reach] ?? TILE_REACH.normal).span,
-        // (the world scenery as this device draws it: its trees and buildings flown over offline too)
-        scenery: (() => {
-          const d = earthDetailFor(settings, renderer.tier);
-          return d.scenery === "off"
-            ? null
-            : {
-                mode: d.scenery,
-                satellite: settings.earthSurface !== "off",
-                reach: DETAIL_REACH[d.reach] ?? 1,
-                overture: settings.earthOverture,
-              };
-        })(),
-      }),
+      sources: earthSources,
     });
     // (offline, within a zone: the game's levels at most the zones' there — the finer in none, each request failing)
     renderer.earthTiles.held = (lat, lon) => (navigator.onLine ? null : (pwa.zones?.heldAt(lat, lon) ?? null));
@@ -9367,6 +9374,14 @@ async function main() {
     // tiles, surface, scenery, their shadows — follows the camera whenever it is there; the streaming's lead, the
     // camera's own motion: renderer.ts)
     renderer.shipFocus = camera.piloting && !camera.character.active ? shipFocus() : null;
+    // (the landing zone asked ahead from the deorbit's plan to the rollout: the entry autopilot to a runway of the Earth —
+    // system/arrival-prefetch.ts)
+    {
+      const R = camera.entryRun;
+      const site = camera.pilot.auto === "entry" && R?.site?.body === "earth" && R.site.runway && R.phase !== "plan" ? R.site : null;
+      if (site && settings.earthTerrain) arrival.start(site, renderer.livePixelAngle);
+      else if (arrival.key) arrival.cancel();
+    }
     renderer.subjectFocus = subjectFocus();
     // (CM3: the departure while the title or the entry's veil holds it, or while a voyage goes there)
     if (departure?.by === "title" && !titleScreen.isOpen && !gameEntry.busy) departure = null;

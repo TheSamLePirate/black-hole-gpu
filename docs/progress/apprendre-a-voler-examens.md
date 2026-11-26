@@ -191,3 +191,13 @@ borné avec un message). **Aucune de ces recettes n'est revolée par un e2e** : 
 pas ; `lagrange-jwst.e2e.test.ts` (autopilote Halo tenu 10 jours à la date du jour, ≤ 20 km et ≤ 1 m/s) est modifié mais
 pas relancé. Les Δv cités viennent des tests unitaires du planificateur (`tests/lagrange.test.ts`), pas d'un vol en jeu.
 Capture de la leçon à faire.
+
+## 2026-11-26 — Vaisseaux, leçon 8 : la rentrée guidée et l'approche du Ranger (code changé, recette non revolée)
+
+Le guidage de rentrée s'incline désormais d'abord du côté du site (`EntryGuidance.sided`), et le plané compte son énergie quand il
+est passé loin de l'axe ou à court (`controller/computer.ts` approach). VOL-VAISSEAUX (leçon 8, §4.2) et apprendre-vaisseaux.html
+(leçon 8) le disent. **Revérifié** : des vols complets de l'orbite à la piste sur kerr-mini (`scripts/live-entry.ts`) — Edwards posé
+0,4 m/s et arrêté sur l'axe (il s'écrasait 4 fois sur 4 avant), Le Bourget et Kennedy posés ; le plané au banc sans page
+(`tests/entry-glide.test.ts`, 5/5). `apprendre-vaisseaux.e2e.test.ts` relancé sur kerr-mini après le changement : **9/9**, la leçon 8 posée à 0,23 m/s.
+**Ouvert** : aucune capture de la leçon refaite pour la page.
+

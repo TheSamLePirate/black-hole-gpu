@@ -45,6 +45,7 @@ J4 (fermé, sortie non atteinte), J5 et J6 (fermés).
 
 | Session (T3) | Lot | État |
 |---|---|---|
+| Rentrée du Ranger (26 nov.) | Demande de Sam : la rentrée automatique se pose mal ; zone d'arrivée chargée avant 10–20 km ; enregistreur de vol | **Fait et poussé (26 nov.)** : guidage vers le site d'abord, énergie de l'approche (loin de l'axe ou à court), zone d'arrivée préchargée, `camera.entryLog`. Edwards et Le Bourget posés en vol réel (avant : Edwards 4 écrasés sur 4) ; « Relief failed » de l'IGN non reproduit (e2e servi par le disque) ; apprendre-vaisseaux 9/9 ; golden périmé depuis le 20 oct. (pas par ce lot) |
 | Linux OBC embarqué (22–24 nov.) | [PLAN-LINUX-OBC](docs/PLAN-LINUX-OBC.md) — OBC-0 à OBC-21 (unkernel aarch64, Alpine/Debian, suite Rust/Ratatui, `/dev/fb0`, pont `__bh`/TARS, cockpits 3D) | **Sécurisé le 24 nov.** ([audit](docs/AUDIT-2026-11-24.md)) : relais Wisp à garde numérique, Origin exigée, ports et débits bornés ; pont invité sur racines explicites ; COOP/COEP sur demande ; FR/EN, unités du joueur. Tests unitaires 94/94 ; **e2e en cours** |
 | Points de Lagrange & JWST (22–24 nov.) | L1–L5, Halo, JWST à SE-L2, autopilote, cartes, réseau, Crew | **Corrigé le 24 nov.** : phase Halo juste en dates réelles (écart de vitesse 1 612 → 1e-6 m/s à SE-L2), L4/L5 sur modes propres, Crew sur le même couple, JWST paresseux et borné en pixels ; leçon 6 bis écrite. Tests unitaires verts ; **e2e et coût GPU en cours / non mesurés** |
 | Ponts et routes AAA (21–25 nov.) | [PLAN-PONT-ROUTES-AAA](docs/PLAN-PONT-ROUTES-AAA.md) | **Fusionné le 24 nov.** (`640d7067`), **revue C fusionnée le 25 nov.** (`ec321c08`) : tabliers sur l'altitude relevée de la BD TOPO (Cheviré 25 → 60 m, un seul tablier), Alexandre III en pièces dorées, câbles du Golden Gate ronds, blocs gris corrigés, tous les ponts de Paris dessinés. **Vu en jeu le 25 nov.** (kerr-mini : `bridges` 7/7, `bridges-notable` 6/7 — marche de 0,43–0,54 m à la fourche de Grenelle, ouverte) ; coût GPU inchangé au bruit (une course par côté) |
@@ -78,6 +79,41 @@ l'état d'une mission ou d'un combat **non sauvé, dit** ; le réseau **« entre
 **Décidé par Sam (16 nov., 15:58 UTC)** : J8-4 allumée par défaut (quads sous 8 px), J8-5 avec une jonction choisie sur captures, J8-1b suspendu, l'e2e de J8-6 par la voie (b), J8-9 ajouté ([PLAN-J8](docs/PLAN-J8-BATIMENTS.md) §6 point 6). **But fixé par Sam (16 nov., ~16:19 UTC)** : [J8-A](docs/PLAN-J8-BATIMENTS.md), un vol Paris et Toulon-Hyères, de jour et de nuit, tous les bâtiments, lampadaires, voitures (J8-L) et rivières (J8-E) chargés avant le vol, en « high » partout, sans différence visible entre les qualités. **Décidé par Sam (16 nov., ~21:40 UTC)** : J8-8 ouvert (le proche en cellules), la jonction à 0, l'éclat de nuit lointain gardé ([PLAN-J8](docs/PLAN-J8-BATIMENTS.md) §6 point 11). **Décidé par Sam (17 nov., ~08:00 UTC)** : J8-8b ouvert, les arbres par cellule, après un vol de référence à froid sur le M1 Max (§6 point 12). **Mode speed pour finir J8, J8-VB compris** (Sam, 17 nov. ~09:20 UTC ; [CLAUDE.md](CLAUDE.md), modes de travail ; §6 point 13) : contrôles rapides par lot, un gros e2e J8-A à la fin sur kerr-mini et le M1 Max. **J8-RP, les routes et les ponts AAA** (Sam, 17 nov. ~10:20 UTC ; [PLAN-J8](docs/PLAN-J8-BATIMENTS.md) §3 bis) : ajouté à J8 en mode speed, RP1 (les routes et marquages visibles sous l'orthophoto) en tête. **Attend Sam** : les quatre premières questions de PLAN-J8 §6, réglées provisoirement (même contenu sur les deux machines, retour si > 3 ms sur le mini ; portée au pixel ; J7 en pause, les arbres proches deviennent J9 ; pas de préparation côté serveur pour l'instant) ; les trois questions de [PLAN-J7](docs/PLAN-J7-FLUIDITE.md) §4, réglées provisoirement (les 40 ms du mini en dernier, J7-6 ; les arbres proches en géométrie ensuite, désormais J9 ; l'aplanissement du détail sous les trouées jusqu'à la FAF ou 10 km) ; les seuils du mini attendent la reprise de la cible 40 ms.
 
 ## Journal
+
+### 2026-11-26 11:08 UTC — Rentrée du Ranger : guidage, énergie de l'approche, zone d'arrivée préchargée, enregistreur de vol
+
+- Contribution à la destination : §19 (expérience complète — une rentrée automatique qui se pose, des données prêtes à l'arrivée),
+  §7 (le monde prépare les données avant la frame : la zone d'atterrissage demandée pendant la descente), §8 (aucun coût de frame :
+  des requêtes réseau, ni décodage ni upload), outils d'analyse (enregistreur de vol).
+- Constaté (kerr-mini, plein écran, `scripts/live-entry.ts`, commit de départ 5624035e) : Le Bourget posé (A, 2 m de l'axe), Kennedy
+  posé, **Edwards 4 vols sur 4 écrasés** à 5–20 km de la piste. Cause 1 : le guidage s'inclinait à droite d'office et gardait ce côté
+  jusqu'à 10 % du chemin restant — le site à 150 km à gauche, l'écart montait à 530 km, passation à 83–101 km de l'axe. Cause 2 :
+  l'approche en planeur tenait sa vitesse quel que soit le chemin restant (vent arrière parallèle à 88 km de l'axe, aérofrein plein).
+- Réalisé : (A) `src/entry.ts` `EntryGuidance.sided` — premier côté vers le site (worker et contrôleur le portent) ; (B)
+  `controller/computer.ts` `approach` — énergie (hauteur + v²/2g) contre le besoin du chemin restant à la finesse du Mach (`bestGlide`),
+  active seulement passé à plus de 20 km de l'axe (`wide`) ou 2,5 km sous le besoin (`rescue`) : aérofrein selon la marge, droit au
+  début de finale, virage sur l'axe anticipé, pas de spirale sans énergie, axe rejoint vers le seuil, finale trop haute plus raide,
+  remise de gaz au seuil trop haut ; interrupteur de mesure `APPROACH` ; (C) `system/arrival-prefetch.ts` + `EarthTiles.arrivalTiles`
+  + main.ts : la zone d'arrivée (tuiles des fenêtres sur 8 points de l'approche, relief et orthophotos) demandée dès le plan de
+  désorbitation, IGN par sa porte de débit, après les tuiles de la vue ; (D) `controller/entry-log.ts` / `entry-record.ts` :
+  `camera.entryLog` — plan, échantillons, événements, résumé des écarts ; `scripts/live-entry.ts --align --tiles`, captures, JSON.
+  Docs : BH-API, VOL-VAISSEAUX (leçon 8 et §4.2), apprendre-vaisseaux.html, GRAPHICS-PIPELINE §7 (étape 10 c), REMOTE-TESTS, E2E.
+- Preuves : **observé** (kerr-mini) — A seul, Edwards : passation à 6,3 km de l'axe, posé 0,3 m/s, arrêté sur l'axe ; version finale
+  A+B+C+D, Edwards : posé 0,4 m/s, arrêté 2 384 m après le seuil sur l'axe, préchargement 2 400 requêtes / 93 Mo en 22 s sans échec,
+  site dessiné z17 à 57 m (avant : z14 au toucher, décor dégradé). Une première version de B (aérofrein toujours réglé par l'énergie)
+  a **écrasé** Edwards en vol réel ; elle est remplacée. **Unitaire** : `tests/entry-glide.test.ts` (banc sans page, 5 passations dont
+  celles des vols réels) 5/5, ancienne approche (`APPROACH_OFF=1`) 4/5 avec l'écrasement d'Edwards (témoins positif et négatif) ;
+  `tests/entry.test.ts` +1 (côté de départ ; ce modèle ne discrimine pas le correctif — dit dans le test) ; 47/47 tests de vol voisins.
+- Le Bourget `--tiles` (version finale, kerr-mini) : posé 0,8 m/s, arrêté 1 784 m après le seuil sur l'axe ; aucun « Relief failed »
+  — mais l'e2e sert les données de la Terre depuis le disque du mini (E2E_EARTH_DATA) : **l'échec IGN signalé par Sam n'est pas
+  reproduit ni expliqué** ; préchargement 3 726 requêtes / 706 Mo en 362 s → borné ensuite à 150 Mo (`ARRIVAL_BUDGET`, non remesuré).
+- e2e (kerr-mini) : `apprendre-vaisseaux` 9/9 (leçon 8 posée 0,23 m/s) ; `golden` 2/8 — **périmé avant ce lot** (enregistré le
+  20 oct. ; 5 des 6 écarts sur des vols que ce lot ne touche pas ; entry-glide-edwards : la même dérive, 5,5712 contre 5,4940 km,
+  avec l'énergie de l'approche coupée — A/B `APPROACH.energy`) : non réenregistré, à décider.
+- Limites / non vérifié : entre 10 et 20 km le site reste dessiné z12–13 (les fenêtres suivent la
+  caméra, à 60 km du site) — les données sont en cache, pas dessinées ; aucun gain de frame attribué ; pas d'affichage de l'enregistreur.
+- Suite : la cause des « Relief failed » de l'IGN en jeu réel (un vol sans le disque de l'e2e, `E2E_EARTH_DATA=0`) ; le golden à
+  réenregistrer (décision de Sam) ; une page de l'enregistreur (courbes plan/vol) si Sam la veut.
 
 ### 2026-11-26 03:42 UTC — Liseré orange des couronnes réglé par l'emprunt bon marché (décision de Sam)
 

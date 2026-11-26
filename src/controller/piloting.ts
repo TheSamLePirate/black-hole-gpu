@@ -1,4 +1,5 @@
 import { RING } from "./ring";
+import { entryRecordPlan, entryRecordStart, entryRecordStep } from "./entry-record";
 import { tunnelEntrySide } from "../system/wormhole-map";
 import { ASSIST } from "./assistlevel";
 import { timeRate } from "../clock";
@@ -1278,6 +1279,8 @@ function flyShip(this: CameraController, dt: number, pad: ReturnType<GamepadInpu
     if (this.landRun.cmd?.coast) this.giveBackWarp(1 / (4.925490947e-6 * s.massSolar));
     this.landRun = null;
   }
+  // (the entry autopilot's flight recorder: a sample when due, through the rollout — entry-record.ts)
+  entryRecordStep(this);
   const entryAtt = this.pilot.auto === "entry" ? this.entryStep(cam, dtPilot) : this.pilot.auto === "burns" ? this.burnsStep(cam) : null;
   if (mode !== "sf" || !sfCtx) {
     this.sfCmd = this.sfFlown = null;
@@ -1847,6 +1850,7 @@ function entryStep(
       // (a pass past the lift's reach: a trim out of the orbit's plane on the way, a quarter turn before the end)
       R.trim = plan.trim ? { t: at + plan.trim.t, dv: plan.trim.dv, done: 0, firing: false } : undefined;
       R.plan = { heat: plan.heat, shield: plan.shield, g: plan.g };
+      entryRecordPlan(this, { tBurn: R.tBurn, dv: plan.dv, heat: plan.heat, g: plan.g, shield: plan.shield, reaimed: again });
       const wait = R.tBurn - this.nowTime() * Msec;
       R.waited ??= wait;
       if (again) {
@@ -1933,6 +1937,8 @@ function entryStep(
       short: shortM,
       handover,
     };
+    // (the flight's record begun: its plan, its samples, its events — entry-record.ts)
+    entryRecordStart(this, site, { mach: handover, short: shortM });
     if (!fr.env.atm) {
       // (no air: on our side, the engines down to the site — the powered landing's coast, its descent
       // orbit and its braking; elsewhere, or no site, the pilot's G)
@@ -2080,6 +2086,7 @@ function entryStep(
         out: number;
         bank: number;
         sign: number;
+        sided: boolean;
         prev: { b: number; e: number } | null;
         miss: EntryGuidance["lastMiss"];
         path: Vec3[] | null;
@@ -2090,11 +2097,11 @@ function entryStep(
         craft,
         s: fr.s,
         place: fr.place(R.site),
-        g: { bank: G.bank, sign: G.sign, prev: G.prev, o: G.o },
+        g: { bank: G.bank, sign: G.sign, sided: G.sided, prev: G.prev, o: G.o },
       }).then((r) => {
         R.pending = false;
         if (this.entryRun !== R || !r || (r as { error?: string }).error) return;
-        Object.assign(G, { bank: r.bank, sign: r.sign, prev: r.prev, lastMiss: r.miss });
+        Object.assign(G, { bank: r.bank, sign: r.sign, sided: r.sided, prev: r.prev, lastMiss: r.miss });
         G.last = { path: r.path ?? [], track: r.track ?? [] } as unknown as EntryResult;
         R.bank = r.out;
       });

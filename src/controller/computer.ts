@@ -71,6 +71,8 @@ declare module "../controls" {
     fcBudget: typeof fcBudget;
     burnsStep: typeof burnsStep;
     glideAlpha: typeof glideAlpha;
+    bestGlide: typeof bestGlide;
+    glideCache?: { at: number; sp: number; ld: number };
     aglNow: typeof aglNow;
     approach: typeof approach;
     goAround: typeof goAround;
@@ -703,6 +705,34 @@ function glideAlpha(
   return clamp(a, 0, stall);
 }
 
+/** The approach's energy management (26 Nov 2026) — a lever for the A/B of the tests (entry-glide.test.ts): off, the approach as it
+ *  was before it (the speed held whatever the way left, the circuit's downwind whatever the offset). */
+export const APPROACH = { energy: true, brake: true, far: true, lead: true, low: true, high: true, spiral: true };
+
+/**
+ * The craft's best glide ratio now [L/D]: its lift over its drag at the angle that makes it the most, in the air it is in, at its
+ * speed through it — the gear and the flaps as they are, the air brake in (what a glide short of energy flies). Mach's own: the
+ * Ranger's ~2 supersonic, ~4.5 subsonic (the approach's energy reckoned at a fixed 4.5 thought a supersonic leg cheap — its
+ * circuit at Edwards bled 11 km of energy height in 10 km of track, 26 Nov 2026). Kept a second.
+ */
+function bestGlide(this: CameraController, spAir: number): number {
+  const LA = this.airFlight.last;
+  if (!LA || !(LA.air.rho > 0) || !(spAir > 1)) return 4;
+  const now = performance.now();
+  const C = this.glideCache;
+  if (C && now - C.at < 1000 && Math.abs(C.sp - spAir) < 20) return C.ld;
+  const A = VESSELS[fleet.active].aero;
+  const cfg = { ...this.airFlight.cfg, brake: 0 };
+  let ld = 0;
+  for (let al = 0.02; al < 0.5; al += 0.02) {
+    const o = aeroForces(A, [0, -spAir * Math.sin(al), spAir * Math.cos(al)], LA.air, [0, 0, 0], cfg);
+    if (o.D > 0) ld = Math.max(ld, o.L / o.D);
+  }
+  ld = ld > 0.5 ? ld : 4;
+  this.glideCache = { at: now, sp: spAir, ld };
+  return ld;
+}
+
 /** The gear's height over the ground below — its relief: our worlds', Gargantua's (h: over the sphere,
  *  the fallback) [m]. */
 function aglNow(this: CameraController, cam: ReturnType<typeof cameraFrame>, h: number): number {
@@ -803,6 +833,57 @@ function approach(
     this.onPilotMessage?.(tf("Missed approach done: {0} up — a new approach", `${(agl / 1000).toFixed(1)} km`));
   }
   if (R.ga) return this.missedStep(fr, R, along, rgt, sAl, xt, va, up, vh, gam, gdot, agl, dt);
+  // (the energy managed: the craft's energy height — its height and its speed through the air's v²/2g — against what the way left
+  // to the threshold asks at its best glide (Mach's own, a fifth kept for the turns), down to 130 m/s over it. Short of it, the
+  // shortest way — to the final's start, no circuit flown away from the runway —, the air brake in, no steeper than the glide.
+  // Before 26 Nov 2026 the speed alone was held, 170–230 m/s whatever the way left: handed over 106 km out at Mach 2.9, the
+  // circuit's air brake full out for four minutes, the Ranger came down 5 to 20 km beside Edwards, four flights out of four)
+  const E = APPROACH.energy && !!R.rescue;
+  const g0 = 9.81;
+  const eH = agl + (spAir * spAir) / (2 * g0);
+  const toA = sub3(lin(T, 1, along, -12e3), x);
+  const toAh = lin(toA, 1, up, -dot3(toA, up));
+  const dA = Math.hypot(...toAh);
+  // (off the final: to the final's start, the turn there onto the axis, the final; and the turn now towards that start — its radius at
+  // the speed and a 31° bank's, 30 km at most: at Mach 3 a turn back is a hundred km of glide)
+  const turnNow = Math.acos(clamp(dot3(vh, unitV(toAh)), -1, 1)) * Math.min((sp * sp) / (9.81 * Math.tan(0.6)), 30e3);
+  // (inside the final's start already, short of energy — latched, R.inside —: the axis joined towards the threshold from there, the
+  // turn onto the runway's course and the offset to close, the way left down it)
+  const turnAlong = Math.acos(clamp(dn, -1, 1)) * Math.min((sp * sp) / (9.81 * Math.tan(0.6)), 30e3);
+  const toGo = onFinal
+    ? Math.max(-sAl, 0)
+    : R.inside
+      ? turnAlong + 1.2 * Math.abs(xt) + Math.max(-sAl, 0)
+      : dA + 8e3 * Math.acos(clamp(dot3(unitV(toAh), along), -1, 1)) + 12e3 + turnNow;
+  // (the glide's range from an energy height: under ~13 km of it — Mach 0.9 at 9 km — at the subsonic best glide, over it at the mean of
+  // that and the one now: the craft slows through its supersonic glide, worst at Mach 2–3; a fifth kept for the turns. The energy the
+  // way left asks: that range's inverse, down to 130 m/s over the threshold)
+  const ld = 1.0 * this.bestGlide(spAir);
+  const ldSub = 1.0 * this.bestGlide(Math.min(spAir, 220));
+  const eEnd = (130 * 130) / (2 * g0),
+    eSub = 13e3;
+  const subRange = (eSub - eEnd) * ldSub;
+  const eNeed = toGo <= subRange ? eEnd + toGo / ldSub : eSub + (toGo - subRange) / (0.5 * (ld + ldSub));
+  const excess = eH - eNeed;
+  // (kept on the final too: short of energy there, no spiral to lose height it does not have — 26 Nov 2026, the glide test from
+  // Edwards's hand-over: on the final's start at 4.2 km and 163 m/s, its profile's height under it, a spiral, the energy gone)
+  // (the energy managed only once the approach is short of it — 2.5 km of energy height under what the way left asks, latched for
+  // the approach (R.rescue): its estimate's error on the glides that made it, 1.1–1.7 km under (26 Nov 2026, entry-glide.test.ts),
+  // the approach as it always flew them; the one that did not, 6.5 km under)
+  if (APPROACH.energy && excess < -2500) R.rescue = true;
+  if (R.wide === undefined) R.wide = Math.abs(xt) > 20e3;
+  if (!APPROACH.energy || !APPROACH.low || !R.rescue) R.lowEnergy = false;
+  else if (excess < 0) R.lowEnergy = true;
+  else if (excess > 1500) R.lowEnergy = false;
+  const low = !!R.lowEnergy;
+  // (short of energy: no spiral flown on — it is for height to lose —, the axis joined from where the craft is)
+  if (low && R.spiral) R.spiral = undefined;
+  // (short of energy inside the final's start — over 6 km off the axis, or not yet heading down it —: the axis joined towards the
+  // threshold, not the start 12 km out behind — turned back there from 7 km out, a glide came down 10 km short; latched until the
+  // final or a go-around)
+  if (onFinal || R.ga || !APPROACH.energy) R.inside = undefined;
+  else if (low && sAl > -12e3) R.inside = true;
+
   const spiralFrom = () => {
     if (!R.spiral) R.spiral = { side: Math.sign(xt) || 1, r: clamp(Math.max(sp, 180) ** 2 / (9.81 * Math.tan(0.5)), 6e3, 12e3) };
   };
@@ -847,18 +928,40 @@ function approach(
     let tdir: Vec3 | null = null,
       dGo: number;
     bank = 0;
-    if (far) {
+    if (R.inside) {
+      const rT = Math.max(sp, 120) ** 2 / (9.81 * Math.tan(0.5));
+      const off = Math.min(Math.atan2(Math.abs(xt), rT), 1.4);
+      tdir = lin(along, Math.cos(off), rgt, -Math.sign(xt) * Math.sin(off));
+      dGo = Math.max(-sAl, 1500);
+      R.side = undefined;
+      R.turning = false;
+      R.leg = "join";
+    } else if (far) {
       const off = Math.min(Math.atan2(Math.abs(xt), L0), 1.4);
       tdir = lin(along, Math.cos(off), rgt, -Math.sign(xt) * Math.sin(off));
       dGo = -12e3 - sAl + 0.5 * Math.abs(xt);
       R.side = undefined;
       R.turning = false;
       R.leg = "join";
-    } else if (dn >= 0.5) {
+    } else if ((dn >= 0.5 && !(E && R.turning && dn < 0.9)) || low || (E && APPROACH.far && !R.turning && Math.abs(xt) > 20e3)) {
+      // (and far aside of the axis — over 20 km, the circuit's offset two or three times —: straight to the final's start, not down a
+      // circuit's downwind parallel to the runway: handed over 88 km aside of Edwards, the downwind kept the 88 km for 50 km of glide)
+      // (heading down the runway, or short of energy: to the final's start — a turn begun towards the axis is flown on to
+      // 25° of it, not handed back and forth between the two at 60°)
       const toA = sub3(lin(T, 1, along, -12e3), x);
       tdir = unitV(lin(toA, 1, up, -dot3(toA, up)));
+      const dToA = Math.hypot(...lin(toA, 1, up, -dot3(toA, up)));
       // (and the turn onto the axis there: an arc of ~8 km radius)
-      dGo = Math.hypot(...lin(toA, 1, up, -dot3(toA, up))) + 8e3 * Math.acos(clamp(dot3(tdir, along), -1, 1));
+      dGo = dToA + 8e3 * Math.acos(clamp(dot3(tdir, along), -1, 1));
+      // (the turn onto the axis led — begun its radius × tan(θ/2) before the final's start, θ the angle to turn: the axis joined
+      // tangentially, as the far join flies it (atan(xt / r) off the runway's course). Flown into the start at 60–90°, the craft swung
+      // 5 km through the axis at the bank's limit and went around at the minima — 26 Nov 2026, the glide test from Edwards's hand-over)
+      const rT = Math.max(sp, 120) ** 2 / (9.81 * Math.tan(0.5));
+      const theta = Math.acos(clamp(dot3(tdir, along), -1, 1));
+      if (E && APPROACH.lead && dToA < rT * Math.tan(Math.min(theta, 2.6) / 2) + 500) {
+        const off = Math.min(Math.atan2(Math.abs(xt), rT), 1.4);
+        tdir = lin(along, Math.cos(off), rgt, -Math.sign(xt) * Math.sin(off));
+      }
       R.side = undefined;
       R.turning = false;
       R.leg = "toStart";
@@ -892,7 +995,11 @@ function approach(
     // the steepest: every final began with a dive onto it. Down to it 24° at most, the air brake out: the
     // energy of a hand-over 80 km out, 25 km up)
     gRef = clamp(-Math.atan2(Math.max(agl - hT, 0), Math.max(dGo, 1500)), -0.42, -0.035);
-    if (sp < 400 && sAl > -40e3 && agl > hT + dGo * Math.tan(0.42) + 500) spiralFrom();
+    // (short of energy: no steeper than the best glide)
+    if (low) gRef = Math.max(gRef, -Math.atan(1 / ld));
+    // (no spiral short of energy — under what the way left asks —: high on the geometry alone, a glide short of energy spiralled at the
+    // final's start and came down short of the runway)
+    if ((!E || !APPROACH.spiral || !low) && sp < 400 && sAl > -40e3 && agl > hT + dGo * Math.tan(0.42) + 500) spiralFrom();
   } else {
     R.side = undefined;
     R.turning = false;
@@ -918,9 +1025,27 @@ function approach(
     // (the height down a profile to the touchdown aimed, 450 m past the threshold — landing.ts-free:
     // landingProfile below —, its slope followed and the height's error closed over ~4 s)
     const L = landingProfile(sAl, hp, sp, R.gOuter);
-    if (R.gOuter === undefined && sAl < -6e3 && hp > landingProfile(sAl, 0, sp, { go: LANDING.goMax, lb: L.fix.lb }).h + 300) spiralFrom();
+    if (
+      (!E || !APPROACH.spiral || !low) &&
+      R.gOuter === undefined &&
+      sAl < -6e3 &&
+      hp > landingProfile(sAl, 0, sp, { go: LANDING.goMax, lb: L.fix.lb }).h + 300
+    )
+      spiralFrom();
     if (L.freeze && R.gOuter === undefined) R.gOuter = L.fix;
-    gRef = clamp(Math.atan(L.slope) + clamp((L.h - hp) / (Math.max(sp, 50) * 4), -0.12, 0.12), -0.35, 0.05);
+    // (high over the profile — over 200 m —: down to 24° and the air brake full out (below), the height lost before the pull-up; at
+    // 20° and the brake half out a final begun 800 m high was still 900 m up 1.5 km out — 26 Nov 2026, the glide test from Edwards)
+    const highBy = hp - L.h;
+    gRef = clamp(
+      Math.atan(L.slope) + clamp((L.h - hp) / (Math.max(sp, 50) * 4), -0.12, 0.12),
+      E && APPROACH.high && highBy > 200 ? -0.42 : -0.35,
+      0.05,
+    );
+    R.highBy = highBy;
+    // (over the threshold still well above the profile — 150 m and more, long and fast —: a go-around on the engines, not a landing
+    // half way down the runway, nor a glide on past it out of energy into the ground beyond)
+    if (E && APPROACH.high && !R.ga && sAl > -300 && sAl < 1500 && highBy > 150 && L.phase !== "rollout")
+      this.goAround({ what: "high", by: highBy });
     // (the last metres: the sink eased to a touchdown a real gear takes — 0.6 m/s plus the height over
     // 4 s, whatever the parabola's tracking left: under 1 m/s at the wheels. Over 2.5 s, a flare floating
     // 2 m up past the touchdown point was pushed down at 1.6 m/s, 2.6 at the wheels)
@@ -945,6 +1070,7 @@ function approach(
     R.prof = { phase: L.phase, aim: L.aim, td: LANDING.td, h: L.h };
   }
   if (!onFinal) {
+    R.highBy = undefined;
     R.gOuter = undefined;
     R.prof = undefined;
     R.trkInt = undefined;
@@ -959,7 +1085,17 @@ function approach(
       gRef = clamp(gRef, prev - rate, prev + rate);
     }
   }
-  R.app = { along: sAl, across: xt, final: onFinal, agl, hp, speed: sp, gRef, gam };
+  R.app = {
+    along: sAl,
+    across: xt,
+    final: onFinal,
+    agl,
+    hp,
+    speed: sp,
+    gRef,
+    gam,
+    energy: { e: eH, need: eNeed, toGo, ld: 0.5 * (ld + ldSub), low },
+  };
   // (the bank commanded now — the HUD's "cmd", the map's —: the approach's, not the entry guidance's last)
   R.bank = bank;
   const stall = (VESSELS[fleet.active].aero.wing?.stall ?? 0.35) - 0.05;
@@ -990,9 +1126,14 @@ function approach(
   // 500 to 90 m — a step at the pull-up's start threw the air brake from half out to full in a frame, α
   // swinging 6° under it four times in 8 s)
   const vFinal = R.prof && R.prof.phase !== "outer" ? 130 + 30 * smooth01((hp - LANDING.hC) / (500 - LANDING.hC)) : 160;
-  const vT = (!onFinal ? (circuit ? 170 : R.spiral ? 200 : 230) : vFinal) + vAdd;
+  const vT = (!onFinal ? (circuit ? 170 : R.spiral ? 200 : 230) : E && APPROACH.high && (R.highBy ?? 0) > 150 ? 120 : vFinal) + vAdd;
   // (the speed through the air held: a head wind's ground speed short of it left the brake in, the wing fast)
-  this.airBrake = clamp((spAir - vT) / 50, 0, 1);
+  // (handed over far aside of the axis — over 20 km, R.wide — or found short of energy: the brake drawn in as the energy nears what the
+  // way left asks and a 3 km margin, none under it, as before 7 km over it. Close to the axis the brake as it always was: the speed
+  // brought to the circuit's early — flown fast low, the transonic drag took more than the brake, a glide 6 km aside came down short)
+  this.airBrake =
+    clamp((spAir - vT) / 50, 0, 1) *
+    (onFinal || !APPROACH.energy || !APPROACH.brake || !(R.wide || R.rescue) ? 1 : clamp((excess - 3000) / 4000, 0, 1));
   // (the nose on the motion through the air, the wind's crab: the track kept by the bank, not by a slip;
   // the crab kicked out in the last 12 m — the nose onto the runway's track, the wheels touching straight)
   const vAir = this.airVelocity(va);
@@ -1727,6 +1868,7 @@ export function installComputer(C: { prototype: CameraController }) {
     fcBudget,
     burnsStep,
     glideAlpha,
+    bestGlide,
     aglNow,
     approach,
     goAround,

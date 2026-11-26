@@ -3680,6 +3680,7 @@ export class Renderer {
     const a = s.spin;
     const tanH = Math.tan((s.fov * Math.PI) / 360);
     const pixelAngle = (2 * tanH) / t.height;
+    if (!o.probe && t === this.live) this.livePixelAngle = pixelAngle;
     const set = (i: number, x: number, y: number, z: number, w: number) => f.set([x, y, z, w], i * 4);
 
     set(PARAMS_V4.res, t.width, t.height, o.block, o.sampleIndex);
@@ -11132,6 +11133,11 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
   ringBlocksOn = false;
   /** the live view's height over the Earth's figure [km] (writeParams) */
   private liveAltKm = 1e4;
+  /** the live view's pixel's angle [rad] (its last image's: the field of view over its height) — the landing zone's tiles asked ahead
+   *  as the windows will choose them (main.ts, system/arrival-prefetch.ts) */
+  livePixelAngle = 1e-3;
+  /** the landing zone asked ahead (main.ts sets it: system/arrival-prefetch.ts) — read by the tests and the flight's log */
+  arrival: import("./system/arrival-prefetch").ArrivalPrefetch | null = null;
   /** Mars's season as last read (writeParams: Params.mars), and when (the clock in half-Ms) */
   private marsSeason = [Math.PI / 2, -Math.PI / 2, 0, 0];
   private marsSeasonAt = Number.NaN;

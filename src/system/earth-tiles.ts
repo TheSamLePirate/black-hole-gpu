@@ -202,6 +202,8 @@ export class RateGate {
   }
 }
 const ignGate = new RateGate(20);
+/** a turn of the page's gate on the IGN's grids — the relief's own (arrival-prefetch.ts: the landing zone's grids asked ahead share it) */
+export const ignTurn = () => ignGate.take();
 /** the page's own gate on the IGN's grids opened once the Service Worker controls it (IGN_GATE_SW, scenery-data.ts) */
 let swGateOpen = false;
 export function swControls(): boolean {
@@ -3774,6 +3776,56 @@ export class EarthTiles {
     const inNational = latD > B.south - 0.1 && latD < B.north + 0.1 && lonD > B.west - 0.1 && lonD < B.east + 0.1;
     if (!this.reliefOn || !inNational) return ZG1;
     return Math.max(Math.min(Z1, this.held?.(latD, lonD)?.reliefZ1 ?? Z1), Z0);
+  }
+
+  /**
+   * The tiles the windows will want over places the craft is coming to (arrival-prefetch.ts: the landing site's approach, asked ahead
+   * during the entry), as `update` would choose them with the camera there: each place's height over the ground [m], the pixel's angle
+   * now — the relief's levels to the finest its height asks (the national survey's past z 14, in its box, its relief on), each its
+   * window's span round the place; the orthophotos' by the height, in their box. Nothing loaded, nothing changed.
+   */
+  arrivalTiles(
+    points: readonly { lat: number; lon: number; agl: number }[],
+    pixAngle: number,
+  ): { relief: [number, number, number][]; ortho: [number, number, number][] } {
+    const relief = new Map<string, [number, number, number]>(),
+      ortho = new Map<string, [number, number, number]>();
+    const add = (m: Map<string, [number, number, number]>, z: number, n: number, span: number, lonR: number, sinLat: number) => {
+      const cx = (lonR / TAU + 0.5) * n,
+        cy = mercY(sinLat, n);
+      const mid = span / 2;
+      const x0 = Math.round(cx) - mid,
+        y0 = Math.min(Math.max(Math.round(cy) - mid, 0), n - span);
+      for (let y = y0; y < y0 + span; y++)
+        for (let x = x0; x < x0 + span; x++) {
+          const xw = ((x % n) + n) % n;
+          m.set(`${z}/${xw}/${y}`, [z, xw, y]);
+        }
+    };
+    for (const p of points) {
+      const la = (p.lat * Math.PI) / 180,
+        lo = (p.lon * Math.PI) / 180;
+      const sinLat = Math.sin(la),
+        cosLat = Math.max(Math.cos(la), 1e-3);
+      const alt = Math.max(p.agl, 1);
+      const zNeed = Math.min(Math.ceil(Math.log2((TAU * R * cosLat) / (TILE * Math.max(alt * pixAngle, 0.5)))), ZG1);
+      const B = nationalBoxNear(p.lat, p.lon) ?? NO_BOX;
+      const inNational = p.lat > B.south - 0.1 && p.lat < B.north + 0.1 && p.lon > B.west - 0.1 && p.lon < B.east + 0.1;
+      const zFine =
+        this.reliefOn && inNational ? Math.min(Math.ceil(Math.log2((TAU * R * cosLat) / (TILE * Math.max(alt * pixAngle, 0.5)))), Z1) : ZG1;
+      for (const L of this.levels) {
+        if (L.z > ZG1 && L.z > zFine) continue;
+        if (L.z <= ZG1 && L.z > zNeed) continue;
+        add(relief, L.z, L.n, L.span, lo, sinLat);
+      }
+      const BO = nationalBoxNear(p.lat, p.lon, true) ?? NO_BOX;
+      if (!this.orthoOn || p.lat < BO.south - 0.1 || p.lat > BO.north + 0.1 || p.lon < BO.west - 0.1 || p.lon > BO.east + 0.1) continue;
+      const zO = Math.min(Math.ceil(Math.log2((TAU * R * cosLat) / (TILE * Math.max(alt * pixAngle, 0.1)))), ORTHO_Z1);
+      for (const O of this.ortho) if (O.z <= zO) add(ortho, O.z, O.n, O.span, lo, sinLat);
+    }
+    // (the coarse levels first: the ground seen from farthest, the fall's first)
+    const byZ = (a: [number, number, number], b: [number, number, number]) => a[0] - b[0];
+    return { relief: [...relief.values()].sort(byZ), ortho: [...ortho.values()].sort(byZ) };
   }
 
   /**

@@ -1103,7 +1103,30 @@ export class CameraController {
     /** the approach's figures (the runway's): along the axis from the threshold, across it [m], on the final;
      *  `agl` over the ground under the craft, `hp` the height its profile and minima read — over the
      *  threshold, the ground's in the last 500 m */
-    app?: { along: number; across: number; final: boolean; agl: number; hp?: number; speed: number; gRef?: number; gam?: number };
+    app?: {
+      along: number;
+      across: number;
+      final: boolean;
+      agl: number;
+      hp?: number;
+      speed: number;
+      gRef?: number;
+      gam?: number;
+      /** the energy managed (computer.ts approach): the craft's energy height [m] — its height over the ground and its speed
+       *  through the air's v²/2g —, what the way left asks of it [m], the way left to the threshold [m], the glide ratio it is
+       *  reckoned at, short of energy (the air brake in, the shortest way, the best glide) */
+      energy?: { e: number; need: number; toGo: number; ld: number; low: boolean };
+    };
+    /** short of energy on the approach (computer.ts approach): set under what the way left asks, cleared 1.5 km over it */
+    lowEnergy?: boolean;
+    /** handed over to the approach over 20 km aside of the runway's axis (computer.ts approach: its air brake by the energy) */
+    wide?: boolean;
+    /** the approach found short of energy (computer.ts approach: 2.5 km under what the way left asks) — its energy managed from then */
+    rescue?: boolean;
+    /** short of energy inside the final's start (computer.ts approach): the axis joined towards the threshold, latched until the final */
+    inside?: boolean;
+    /** on the final, the height over its profile [m] (computer.ts approach: over 150 m the air brake full out, over 200 the slope to 24°) */
+    highBy?: number;
     plan?: { heat: number; shield: number; g: number };
     /** the wait for the deorbit burn as first planned [s]; re-aimed since (a long wait's last hour and a half) */
     waited?: number;

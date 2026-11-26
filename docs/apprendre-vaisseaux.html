@@ -370,6 +370,7 @@ c.docked;    // true ; c.undock() pour repartir</pre></details>
 <ol class="steps">
 <li>Abaisser la périapside dans l'air : rétrograde (<kbd>2</kbd>), pousser jusqu'à <b>Pe &lt; 60 km</b> (Terre).</li>
 <li><kbd>⇧</kbd><kbd>G</kbd> : rentrée et atterrissage — désorbitation vers le site (onglet ATTERRIR), rentrée guidée, plané, atterrissage. <kbd>Z</kbd> (plein gaz) remet les gaz en approche.</li>
+<li>La rentrée guidée s'incline <b>d'abord du côté du site</b>, puis inverse quelques fois son inclinaison pour rester sur l'axe ; passé loin de l'axe de la piste (plus de 20 km), le planeur <b>compte son énergie</b> (hauteur + vitesse) contre le chemin qui reste et va droit au début de la finale.</li>
 <li>Sous Mach 2,5, le Ranger est un <b>planeur</b> (finesse ~6) qui se pose comme la navette : <b>pente raide de 12,6°</b> (jusqu'à 19°) à 160 m/s vers un point de visée <b>≈ 3 km avant le seuil</b>, ressource vers 90 m sur une pente de 1,5° à 130 m/s, arrondi à 12 m, toucher <b>450 m après le seuil</b>. À la main : <kbd>⌫</kbd> relâche l'autopilote (ou <kbd>⇧</kbd><kbd>F4</kbd> pour suivre son directeur) ; le Ranger vole déjà en mode avion ; <kbd>G</kbd> train <b>avant 500 m</b>, toucher <b>&lt; 3 m/s</b>. Dans l'air, le temps ne s'accélère pas au-delà de ×4.</li>
 </ol>
 <div class="grid2">
@@ -377,7 +378,7 @@ c.docked;    // true ; c.undock() pour repartir</pre></details>
 <figure><img src="img/assist/c4-final.jpg" alt="La finale du Ranger" loading="lazy"><figcaption>La finale du Ranger : la piste, la pente, le point de visée.</figcaption></figure>
 </div>
 <figure><img src="progress/145_entry_flown.jpg" alt="Une rentrée volée" loading="lazy"><figcaption>Une rentrée volée jusqu'au site : le planificateur, l'entrée guidée, le plané, l'atterrissage (courbes de la planche P6).</figcaption></figure>
-<div class="box bad"><b>Erreurs</b>Partir trop près ou trop bas (sous énergie : remise de gaz) — l'autopilote de rentrée ne remet jamais de poussée pendant le plané · oublier le train · rentrer avec l'Endurance (sans bouclier, elle brûle).</div>
+<div class="box bad"><b>Erreurs</b>Partir trop près ou trop bas (sous énergie : remise de gaz) — le plané ne remet pas de poussée, seule la remise de gaz vole aux moteurs · oublier le train · rentrer avec l'Endurance (sans bouclier, elle brûle).</div>
 <details><summary>Par <code>__bh</code></summary>
 <pre>__bh.game.glideTo("Edwards");         // 80 km, 25 km de haut, 750 m/s, l'autopilote de rentrée engagé
 // depuis l'orbite : orbit(…), puis p.auto = "none"; p.setAuto("entry") ; attendre c.entryRun.phase !== "plan"

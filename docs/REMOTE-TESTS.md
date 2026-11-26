@@ -178,6 +178,13 @@ bun scripts/remote.ts run --name live-edwards -- bun scripts/live-entry.ts --sit
 `--inc` : l'inclinaison de l'orbite, au moins la latitude du site (Le Bourget 49° N, Edwards 35° N).
 Il finit 0 arrêté sur la piste, 1 sinon (écrasé, hors piste, pas de désorbitation trouvée, plus de
 `--max-min` minutes — 75 par défaut).
+Depuis le 26 novembre 2026 : `--align` vole d'abord le changement de plan de l'ordinateur de vol qui fait passer l'orbite
+au-dessus du site (`plan_maneuver` align_over_site) ; `--tiles` laisse passer les tuiles du relief et leurs images (le
+test les bloque d'ordinaire) et journalise l'état de la zone d'atterrissage (niveau dessiné au site, tuiles en attente et
+en échec, préchargement de l'arrivée `renderer.arrival`). Chaque ligne de la rentrée dit l'écart prévu par le guidage et
+l'inclinaison ; chaque ligne du plané, la branche d'approche, l'aérofrein et l'énergie contre le besoin. Des captures
+(cockpit) à chaque étape et l'enregistrement complet du vol (`entry-log.json`, `camera.entryLog`) arrivent dans
+`remote-results/<id>/artifacts/remote-results/live-entry/<site>/`.
 
 **Un script de diagnostic hors du dépôt** — pour instrumenter la page sans toucher au code : l'écrire dans
 un dossier temporaire, le copier sur le mini, le lancer depuis la copie du job (ses imports par

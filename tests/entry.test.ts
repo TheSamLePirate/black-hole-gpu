@@ -323,3 +323,78 @@ test("the Lander from a pass 80 km off the site, past its lift's reach: a trim o
   expect(Math.abs(r.along + 8)).toBeLessThan(4);
   expect(Math.abs(r.dist - 8)).toBeLessThan(5);
 }, 120000);
+
+/**
+ * The Ranger from a 400 km orbit as the game flies it (the Earth turning; `turning` false: still): its deorbit planned to a place `acrossKm` off the orbit's
+ * ground track a third of a turn on (+ left, − right), the burn, the entry guided every 2 s, its aim 90 km short (the game's):
+ * the hand-over's distance to the place [km], its offset across the last heading [km], the bank's reversals.
+ */
+function rangerEntry(acrossKm: number, turning = true) {
+  const still: EntryEnv = turning ? earth : { ...earth, ground: () => [0, 0, 0], carry: (p) => p };
+  const r0 = R + 400e3,
+    v0 = Math.sqrt(mu / r0);
+  const s0: EntryState = { x: [r0, 0, 0], v: [0, v0, 0] };
+  const ang = 120 * D,
+    off = (acrossKm * 1e3) / R;
+  const p: V3 = [R * Math.cos(ang) * Math.cos(off), R * Math.sin(ang) * Math.cos(off), R * Math.sin(off)];
+  const plan = planDeorbit(still, ranger, s0, p, { peH: 45e3, handoverMach: 2.5, short: 90e3, orbits: 16, reach: 600e3 })!;
+  let x = s0.x,
+    v = s0.v;
+  for (let t = 0; t < plan.t; t += 1) {
+    const h = Math.min(1, plan.t - t);
+    const a = still.gravity(x, v);
+    v = [v[0] + (a[0] * h) / 2, v[1] + (a[1] * h) / 2, v[2] + (a[2] * h) / 2];
+    x = [x[0] + v[0] * h, x[1] + v[1] * h, x[2] + v[2] * h];
+    const a2 = still.gravity(x, v);
+    v = [v[0] + (a2[0] * h) / 2, v[1] + (a2[1] * h) / 2, v[2] + (a2[2] * h) / 2];
+  }
+  const l = Math.hypot(...v);
+  v = v.map((c) => c - (c / l) * plan.dv) as V3;
+  const g = new EntryGuidance({ handoverMach: 2.5, short: 90e3, gCap: 2.4 });
+  let next = 0,
+    b = 0.75,
+    flips = 0;
+  const flown = predictEntry(
+    still,
+    ranger,
+    { x, v },
+    (t, xx, vv) => {
+      if (t >= next) {
+        const nb = g.update(still, ranger, { x: xx, v: vv }, still.carry(p, plan.t + t));
+        if (Math.sign(nb) !== Math.sign(b) && Math.abs(nb) > 0.1) flips++;
+        if (process.env.TRACE && Math.round(t) % 40 < 2)
+          console.log(
+            `t ${t.toFixed(0)} h ${((Math.hypot(...xx) - R) / 1e3).toFixed(0)} km: across ${((g.lastMiss?.across ?? 0) / 1e3).toFixed(0)} km, bank ${(nb / D).toFixed(0)}°`,
+          );
+        b = nb;
+        next = t + 2;
+      }
+      return g.flown(b, still, { x: xx, v: vv });
+    },
+    { handoverMach: 2.5, tMax: 8000 },
+  );
+  const ue = flown.end.x.map((c) => c / Math.hypot(...flown.end.x)) as V3;
+  const pe = still.carry(p, plan.t + flown.t);
+  const dist = (R * Math.acos(Math.min(1, (ue[0] * pe[0] + ue[1] * pe[1] + ue[2] * pe[2]) / R))) / 1e3;
+  return { flown, dist, across: miss(flown.end, flown.end.x, pe).across / 1e3, flips, plan };
+}
+
+test("the Ranger's entry to a place 150 km aside of its track: banked towards it from the start, handed over on its aim", () => {
+  // (26 Nov 2026, live on kerr-mini: the guidance began banked right — its side 1 whatever the place's —, kept it until
+  // the place was 10 % of the way left aside (250 km), the crossrange grew from 150 to 530 km and the hand-over came 83–101 km
+  // aside of Edwards: the glide never made the runway, four flights out of four)
+  for (const across of [150, -150]) {
+    const r = rangerEntry(across);
+    console.log(
+      `across ${across} km: hand-over ${r.dist.toFixed(1)} km from the place, ${r.across.toFixed(1)} km off its heading, ${r.flips} reversals, ${r.flown.gPeak.toFixed(2)} g`,
+    );
+    expect(r.flown.handover).toBe(true);
+    expect(r.flown.gPeak).toBeLessThan(2.6);
+    // (the hand-over 90 km short of the place, on its line: within 15 km of the aim, 10 km of the line. Not a witness of the
+    // first side's fix by itself: this model's fall, its bank ~52°, recovers from the wrong side too — the live flight's,
+    // banked 12–26° for its range, did not; the live entry (scripts/live-entry.ts) is the witness)
+    expect(Math.abs(r.dist - 90)).toBeLessThan(15);
+    expect(Math.abs(r.across)).toBeLessThan(10);
+    expect(r.flips).toBeLessThanOrEqual(8);
+  }
+}, 300_000);

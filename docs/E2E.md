@@ -541,7 +541,7 @@ Bigger tools built on the same harness:
 | tool | what | doc |
 |---|---|---|
 | `scripts/flightlab.ts` | autopilot flight campaigns, scored, shardable across the two Macs, steerable mid-run (`ctl`) | [FLIGHTLAB.md](FLIGHTLAB.md) |
-| `scripts/live-entry.ts` | one whole flight live, orbit → runway (~14 min) | REMOTE-TESTS.md |
+| `scripts/live-entry.ts` | one whole flight live, orbit → runway (~14 min); `--align` (the orbit's plane over the site first), `--tiles` (the terrain on, the landing zone's data logged); shots and `entry-log.json` (the autopilot's flight record) | REMOTE-TESTS.md |
 | `scripts/bench.ts`, `scripts/trace-ab.ts` | the Kerr Bench, GPU A/B traces | [PERFORMANCE.md](PERFORMANCE.md) |
 | `scripts/ipad.ts` | the deployed site on the iPad plugged into the mini (Safari WebDriver) | [IPAD-TESTS.md](IPAD-TESTS.md) |
 | `scripts/hud-gallery.ts`, `scripts/gallery.ts` | screenshots of every HUD / scene | — |

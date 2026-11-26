@@ -319,6 +319,8 @@ export class EntryGuidance {
   last: EntryResult | null = null;
   lastMiss: { along: number; across: number; dist: number } | null = null;
   prev: { b: number; e: number } | null = null;
+  /** the first side chosen (towards the place, at the first update in the air) */
+  sided = false;
   /** `gCap`: the load the guidance keeps under [g] (2.4 by default: the Ranger's crew's; a capsule's steeper entry its own);
    *  `band`: the reversals' deadband — at least, per m/s of speed, per metre of the way left [m] (a capsule's
    *  lift moves it a few km a minute: its own, tight, or it ends 20 km aside) */
@@ -366,7 +368,13 @@ export class EntryGuidance {
     // of it, as the Shuttle's azimuth's (7 × the speed alone reversed sixteen times)
     const v = len(add(s.v, env.ground(s.x), -1));
     const left = env.R * Math.acos(Math.min(Math.max(dot(unit(s.x), unit(place)), -1), 1));
-    if (m.across * this.sign < -this.deadband(v, left)) this.sign = -this.sign;
+    // (the first side the place's — the lift turned towards it from the air's top: begun on side 1 whatever the place's, the
+    // Ranger turned away from Edwards 150 km to its left until the deadband's 250 km, the crossrange grew to 530 km and the
+    // hand-over came 83–101 km aside, the runway out of the glide's reach — 26 Nov 2026, four flights out of four)
+    if (!this.sided) {
+      this.sided = true;
+      if (Math.abs(m.across) > 1e3) this.sign = Math.sign(m.across);
+    } else if (m.across * this.sign < -this.deadband(v, left)) this.sign = -this.sign;
     return this.sign * this.bank;
   }
 

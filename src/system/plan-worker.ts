@@ -50,7 +50,7 @@ export type PlanRequest =
       craft: EntryCraft;
       s: EntryState;
       place: V3;
-      g: { bank: number; sign: number; prev: { b: number; e: number } | null; o: { handoverMach: number; short: number } };
+      g: { bank: number; sign: number; sided?: boolean; prev: { b: number; e: number } | null; o: { handoverMach: number; short: number } };
     };
 
 export function runPlan(q: PlanRequest) {
@@ -84,12 +84,13 @@ export function runPlan(q: PlanRequest) {
     const env = envOf(q.env);
     if (!env) return null;
     const g = new EntryGuidance(q.g.o);
-    Object.assign(g, { bank: q.g.bank, sign: q.g.sign, prev: q.g.prev });
+    Object.assign(g, { bank: q.g.bank, sign: q.g.sign, sided: !!q.g.sided, prev: q.g.prev });
     const bank = g.update(env, q.craft, q.s, q.place);
     return {
       out: bank,
       bank: g.bank,
       sign: g.sign,
+      sided: g.sided,
       prev: g.prev,
       miss: g.lastMiss,
       path: g.last?.path ?? null,
