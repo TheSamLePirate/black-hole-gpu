@@ -8,6 +8,7 @@ import type { CameraController } from "../../controls";
 import { gcCourse, gcDist } from "../../game/flightplan";
 import { SENSOR } from "../../radar/picture";
 import { fieldsNearCached } from "../../world/runways";
+import { navNear } from "../../world/navdb";
 import { edgesNear } from "../../game/airportnet";
 
 const NM = 1852;
@@ -52,6 +53,9 @@ export interface NdExtra {
   /** the route flown (LNAV engaged: its legs drawn green, else dashed) */
   nav: boolean;
   fields: NdField[];
+  /** the navigation database's points about the craft (world/navdb.ts — PLAN-A320-VOL-AAA N1): the radio aids within 400 km, the fixes
+   *  within 150 km — the EFIS's VOR.D, NDB and WPT layers */
+  aids: { id: string; kind: string; lat: number; lon: number }[];
   traffic: NdTraffic[];
   /** on the ground at an airport whose network is in (controller/a320taxi.ts — Airbus's OANS): its taxiways and
    *  runways within 2.5 km (lat, lon of each end, its kind), the taxi route left, the stand, the next turn's taxiway */
@@ -135,6 +139,21 @@ function build(c: CameraController): NdExtra | null {
       major: f.kind === "large" || f.kind === "medium",
       rwys: f.runways.map((r) => [r.lat1, r.lon1, r.lat2, r.lon2] as [number, number, number, number]),
     }));
+  // (the radio aids within 400 km and the fixes within 150 km, from the tiles in — main.ts asks them about the A320 once a minute)
+  const aids = [
+    ...navNear(g.lat, g.lon, 400_000, (k) => k !== "FIX"),
+    ...navNear(g.lat, g.lon, 150_000, (k) => k === "FIX").filter((p) => p.kind === "FIX"),
+  ]
+    // (a DME beside its VOR — EVX's 300 m off its VORTAC —: the VOR's symbol alone)
+    .filter(
+      (p, _i, all) =>
+        p.kind !== "D" ||
+        !all.some(
+          (q) => q.kind !== "D" && q.kind !== "FIX" && q.id === p.id && Math.abs(q.lat - p.lat) < 0.03 && Math.abs(q.lon - p.lon) < 0.03,
+        ),
+    )
+    .slice(0, 900)
+    .map((p) => ({ id: p.id, kind: p.kind, lat: p.lat, lon: p.lon }));
   // (the transponders heard: the aircraft, not the ships)
   const traffic: NdTraffic[] = (c.picture?.tracks ?? [])
     .filter((T) => T.sensors & SENSOR.TCAS && T.kind === "air" && T.side !== "dead")
@@ -158,7 +177,7 @@ function build(c: CameraController): NdExtra | null {
         adviseKt: T.cue?.adviseKt ?? 0,
       }
     : null;
-  return { route, active, dist, brg, ete, nav: N.on.l, fields, traffic, taxi, appr: approachOf(c) };
+  return { route, active, dist, brg, ete, nav: N.on.l, fields, aids, traffic, taxi, appr: approachOf(c) };
 }
 
 /** The approach shown (see NdApproach) — worked out again only when what decides it changes (the choice reads the relief). */

@@ -221,6 +221,14 @@ const server = Bun.serve({
       if (!(await file.exists())) return new Response("not found", { status: 404 });
       return new Response(file, { headers: { "content-type": "application/json", "cache-control": "max-age=86400" } });
     },
+    // the navigation database (scripts/build-navdb.ts — PLAN-A320-VOL-AAA N1): its tiles, index, idents
+    "/nav/*": async (req) => {
+      const path = new URL(req.url).pathname.replace(/^.*\/nav\//, "");
+      if (!/^v1\/(t-?\d+_-?\d+|index|idents)\.json$/.test(path)) return new Response("not found", { status: 404 });
+      const file = Bun.file(`assets/nav/${path}`);
+      if (!(await file.exists())) return new Response("not found", { status: 404 });
+      return new Response(file, { headers: { "content-type": "application/json", "cache-control": "max-age=86400" } });
+    },
     // the build's version (the benchmark's report names it); the pages build writes the same file
     "/version.json": async () => Response.json({ sha: (await Bun.$`git rev-parse --short HEAD`.nothrow().text()).trim() || "dev" }),
     // the Service Worker (src/sw.ts), the manifest and the icons (pwa/), the precache list

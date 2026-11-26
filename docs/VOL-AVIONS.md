@@ -548,6 +548,13 @@ atterrissage automatique, roulage —, en sachant ce que fait l'automatisme à c
 
 Remise de gaz : levier **TOGA** (Z — W en AZERTY) en approche → `GA TRK`, `SRS`, montée ; train et volets rentrés par étapes.
 
+**La base de navigation** (26 nov. 2026, `world/navdb.ts`, `assets/nav/v1` — les VOR, NDB, DME, points et voies aériennes de
+FlightGear, cycle 2013.10, GPL v2) : au MCDU, un **VOR ou un point** se tape par son identifiant dans F-PLN (le plus proche de
+l'avion de ce nom) ; **LAT REV › AIRWAYS>** : `VIA/GO TO` (ex. `UN872/LESDO`) insère les points de la voie aérienne après le point
+révisé, son nom écrit au-dessus de ses branches (« AWY/WPT MISMATCH » sinon) ; au ND, les boutons **VOR.D**, **NDB** et **WPT** de
+l'EFIS montrent les VOR et DME (croix, cerclée pour un VOR-DME), les NDB (triangles) et les points (losanges) en magenta. Les SID et
+STAR (CIFP de la FAA, États-Unis) et le profil vertical géré viennent ensuite (PLAN-A320-VOL-AAA N2–N3).
+
 **La roue de l'A320** (Tab maintenu, depuis le 26 nov. 2026 — avant, la roue des vaisseaux) : **Pilote auto ›** (AP1, A/THR, FD,
 LOC, APPR, EXPED, NAV), **FCU ›** (Vitesse, Cap, Altitude, V/S : des pas ±, **Sélectée/OP CLB…** = le bouton tiré, **Gérée/NAV/Palier**
 = poussé — les mêmes appels que les boutons du poste), **Configuration ›** (train, volets par cran 0–FULL, aérofreins, spoilers

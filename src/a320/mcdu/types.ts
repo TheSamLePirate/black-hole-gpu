@@ -22,6 +22,16 @@ export interface McduHost {
   onGround(): boolean;
   /** an airfield by its code (OurAirports: ICAO, IATA) — null: unknown */
   field(code: string): Airfield | null;
+  /** a radio aid or a fix of the navigation database by its ident, the nearest to the craft (world/navdb.ts navFindSync — PLAN-A320-VOL-AAA
+   *  N1); null: unknown or its tile not in yet (asked) */
+  navPoint?(id: string): import("../../world/navdb").NavPoint | null;
+  /** an airway's points from a waypoint of the plan to a point named along it, the waypoint first (world/navdb.ts airwayLegs —
+   *  PLAN-A320-VOL-AAA N2); null: not on that airway, or the point not reached */
+  airway?(
+    via: string,
+    from: import("../../game/flightplan").Waypoint,
+    to: string,
+  ): Promise<import("../../game/flightplan").Waypoint[] | null>;
   /** the gross weight [kg], the fuel on board [kg] */
   gwKg(): number;
   fobKg(): number;

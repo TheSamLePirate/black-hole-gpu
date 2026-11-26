@@ -29,6 +29,9 @@ export interface Waypoint {
   /** a procedure's point (PLAN-APPROCHES AP3): the arrival's — its runway's end and approach; `join`: the approach's IF, where
    *  the approach is engaged (on its axis) */
   proc?: { kind: "dep" | "arr"; rwy?: string; approach?: string; join?: boolean };
+  /** a point of the navigation database (world/navdb.ts — PLAN-A320-VOL-AAA N1): a radio aid's kind and frequency [kHz], or a fix;
+   *  `via` the airway it was reached by (the MCDU's F-PLN shows it) */
+  nav?: { kind: string; freq?: number; via?: string };
 }
 
 export interface FlightPlan {

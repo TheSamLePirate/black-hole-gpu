@@ -58,3 +58,5 @@ try {
   app.close();
   stopServer();
 }
+// (out at once: a handle left open kept the job alive after its pictures were written — 26 Nov 2026, kerr-mini)
+process.exit(0);

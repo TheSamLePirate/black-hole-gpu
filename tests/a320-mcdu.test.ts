@@ -120,6 +120,68 @@ describe("A320 MCDU", () => {
     expect(Math.round(route.cruiseAlt)).toBe(10668);
   });
 
+  test("F-PLN: a VOR and a fix of the navigation database inserted by their ident (PLAN-A320-VOL-AAA N1)", () => {
+    const { h, route } = host();
+    const NAV: Record<string, { id: string; kind: "VD" | "FIX"; lat: number; lon: number; freq?: number }> = {
+      PON: { id: "PON", kind: "VD", lat: 49.096, lon: 2.036, freq: 111600 },
+      KOVIN: { id: "KOVIN", kind: "FIX", lat: 49.486, lon: 3.106 },
+    };
+    h.navPoint = (id) => NAV[id] ?? null;
+    const m = mcdu(h);
+    m.page("init");
+    m.sp = "LFPG/EGLL";
+    m.lsk("R", 1);
+    m.page("f-pln");
+    m.sp = "PON";
+    m.lsk("L", 2);
+    m.sp = "KOVIN";
+    m.lsk("L", 2);
+    expect(route.wps.map((w) => w.name)).toEqual(["LFPG", "KOVIN", "PON", "EGLL"]);
+    expect(route.wps[2]!.nav).toEqual({ kind: "VD", freq: 111600 });
+    expect(route.wps[1]!.nav?.kind).toBe("FIX");
+    m.sp = "ZZZZZ";
+    m.lsk("L", 2);
+    expect(m.message).toBe("NOT IN DATA BASE");
+  });
+
+  test("LAT REV › AIRWAYS: UN872/LESDO from PON — its points inserted after it, the airway written over its legs (PLAN-A320-VOL-AAA N2)", async () => {
+    const { h, route } = host();
+    h.navPoint = (id) => (id === "PON" ? { id: "PON", kind: "VD", lat: 49.096, lon: 2.036, freq: 111600 } : null);
+    h.airway = async (via, from, to) =>
+      via === "UN872" && from.name === "PON" && to === "LESDO"
+        ? [
+            { name: "PON", lat: 49.096, lon: 2.036 },
+            { name: "KOVIN", lat: 49.486, lon: 3.106, nav: { kind: "FIX" } },
+            { name: "LESDO", lat: 49.808, lon: 3.318, nav: { kind: "FIX" } },
+          ]
+        : null;
+    const m = mcdu(h);
+    m.page("init");
+    m.sp = "LFPG/EGLL";
+    m.lsk("R", 1);
+    m.page("f-pln");
+    m.sp = "PON";
+    m.lsk("L", 2);
+    // (LAT REV from PON, the second line — its AIRWAYS>)
+    m.lsk("L", 2);
+    expect(m.pageId).toBe("latrev");
+    m.lsk("R", 5);
+    expect(m.pageId).toBe("airways");
+    m.sp = "UN872/LESDO";
+    m.lsk("L", 1);
+    await Bun.sleep(0);
+    expect(route.wps.map((w) => w.name)).toEqual(["LFPG", "PON", "KOVIN", "LESDO", "EGLL"]);
+    expect(route.wps[2]!.nav?.via).toBe("UN872");
+    // (a mismatch said)
+    m.page("f-pln");
+    m.lsk("L", 2);
+    m.lsk("R", 5);
+    m.sp = "UN872/ZZZZZ";
+    m.lsk("L", 1);
+    await Bun.sleep(0);
+    expect(m.message).toBe("AWY/WPT MISMATCH");
+  });
+
   test("F-PLN: a waypoint inserted on a line, a lat/lon, a constraint, CLR deleting; LAT REV's DIR TO", () => {
     const { h, route, dir } = host();
     const m = mcdu(h);

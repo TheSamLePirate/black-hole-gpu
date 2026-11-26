@@ -34,7 +34,10 @@ export function resolveWp(m: Mcdu, sp: string): Waypoint | "format" | "notindb" 
   const own = R.wps.find((x) => x.name === sp);
   if (own) return { name: own.name, lat: own.lat, lon: own.lon, ...(own.field ? { field: { ...own.field } } : {}) };
   const f = m.host.field(sp);
-  return f ? fieldWp(f) : "notindb";
+  if (f) return fieldWp(f);
+  // (a radio aid or a fix of the navigation database — PLAN-A320-VOL-AAA N1)
+  const n = m.host.navPoint?.(sp);
+  return n ? { name: n.id, lat: n.lat, lon: n.lon, nav: { kind: n.kind, ...(n.freq ? { freq: n.freq } : {}) } } : "notindb";
 }
 
 /** the altitude's text: a flight level above 18 000 ft ("FL350"), else feet */
@@ -78,7 +81,16 @@ const fpln: Page = {
       const leg = legInto(R, i);
       // (the columns as the real page's: the name, the time from column 8, the speed / altitude right; above each the
       // leg's course and its distance)
-      const head = k === 0 && i === 0 ? padR(" FROM", 9) : leg ? padR(` C${String(leg.crs).padStart(3, "0")}°`, 9) : padR("", 9);
+      // (a leg along an airway: its name, as the MCDU writes it; else the course)
+      const via = w.nav?.via;
+      const head =
+        k === 0 && i === 0
+          ? padR(" FROM", 9)
+          : via
+            ? padR(` ${via}`, 9)
+            : leg
+              ? padR(` C${String(leg.crs).padStart(3, "0")}°`, 9)
+              : padR("", 9);
       const ls: Run[] = [run(head, k === 0 && i === 0 ? MC.white : MC.green)];
       if (k === 0) ls.push(run("TIME", MC.white));
       else if (leg) ls.push(run(`${Math.round(leg.nm)}NM`, MC.green));
@@ -182,7 +194,7 @@ const latrev: Page = {
       { rs: [run("LL XING/INCR/NO")], r: [run("[  ]°/[ ]°/[]", MC.cyan, true)] },
       { rs: [run("NEXT WPT ")], r: [brackets(6)] },
       { rs: [run("NEW DEST ")], r: [brackets(5)] },
-      {},
+      { r: m.latRev < R.wps.length - 1 && m.host.airway ? [run("AIRWAYS>")] : [] },
       { l: [run("<RETURN")] },
     ];
     if (m.latRev === 0 && w?.field) lines[0]!.l = [run("<DEPARTURE")];
@@ -198,6 +210,8 @@ const latrev: Page = {
     const i = m.latRev;
     const key = `${side}${n}`;
     if (key === "L6") return m.open("fpln");
+    // (AIRWAYS — PLAN-A320-VOL-AAA N2: from this waypoint, VIA an airway TO a point of it)
+    if (key === "R5" && i < R.wps.length - 1 && m.host.airway) return m.open("airways");
     if (key === "R1" && i > 0 && i === R.wps.length - 1 && R.wps[i]?.field && m.host.approaches) {
       m.arrTop = 0;
       m.arrMode = "appr";
@@ -409,4 +423,54 @@ const arrival: Page = {
   },
 };
 
-export const FPLN_PAGES: Record<string, Page> = { fpln, latrev, dirto, arrival };
+/**
+ * AIRWAYS (PLAN-A320-VOL-AAA N2 — FlightGear's AIRWAYS.nas): from LAT REV's waypoint, an airway typed with the point to leave it at —
+ * « UN872/LESDO » on a VIA/GO TO line —: its points along it (world/navdb.ts airwayLegs) inserted after the waypoint, each marked by
+ * the airway (F-PLN shows it). Walked in the database (its tiles fetched as the airway goes): « AWY/WPT MISMATCH » when the waypoint is
+ * not on that airway or the point not reached along it.
+ */
+const airways: Page = {
+  screen(m): Screen {
+    const R = m.host.route();
+    const w = R.wps[m.latRev];
+    return {
+      title: [run("AIRWAYS ", MC.white), run("FROM ", MC.white, true), run(w?.name ?? "----", MC.green)],
+      lines: [
+        { ls: [run(" VIA", MC.white, true)], l: [brackets(5)], rs: [run("GO TO ", MC.white, true)], r: [brackets(5)] },
+        { ls: [run(" VIA/GO TO", MC.white, true)], l: [run("[   ]/[   ]", MC.cyan, true)] },
+        {},
+        {},
+        {},
+        { l: [run("<RETURN")] },
+      ],
+    };
+  },
+  lsk(m, side, n, sp): LskResult {
+    if (side === "L" && n === 6) return m.open("latrev");
+    if (!sp || sp === "CLR" || !m.host.airway) return sp === "CLR" ? "notallowed" : undefined;
+    const mm = /^([A-Z0-9]{2,6})\/([A-Z0-9]{2,7})$/.exec(sp);
+    if (!mm) return "format";
+    const R = m.host.route();
+    const i = m.latRev;
+    const from = R.wps[i];
+    if (!from) return "notallowed";
+    const via = mm[1]!,
+      to = mm[2]!;
+    void m.host.airway(via, from, to).then((pts) => {
+      if (!pts || pts.length < 2) {
+        m.say("AWY/WPT MISMATCH");
+        return;
+      }
+      // (the airway's points after the waypoint — the first is the waypoint itself)
+      const add = pts.slice(1).map((p) => ({ ...p, nav: { ...(p.nav ?? { kind: "FIX" }), via } }));
+      const at = R.wps.indexOf(from);
+      if (at < 0) return;
+      R.wps.splice(at + 1, 0, ...add);
+      m.host.routeChanged();
+      m.open("fpln");
+    });
+    return true;
+  },
+};
+
+export const FPLN_PAGES: Record<string, Page> = { fpln, latrev, dirto, arrival, airways };

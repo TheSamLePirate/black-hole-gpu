@@ -45,7 +45,7 @@ J4 (fermé, sortie non atteinte), J5 et J6 (fermés).
 
 | Session (T3) | Lot | État |
 |---|---|---|
-| A320 AAA (26 nov.) | [PLAN-A320-VOL-AAA](docs/PLAN-A320-VOL-AAA.md) — vol mesuré, physique, molettes, roue, assistance, outils, instruments, navigation | **V0 PASS** (vol de ligne complet 20/20), **K1, W1 faits ; W2, G1 en partie** ; I1/I2 commencés ; N1 (base de navigation : CIFP FAA + FlightGear, décision de Sam) à faire |
+| A320 AAA (26 nov.) | [PLAN-A320-VOL-AAA](docs/PLAN-A320-VOL-AAA.md) — vol mesuré, physique, molettes, roue, assistance, outils, instruments, navigation | **V0 PASS** (vol de ligne complet 20/20), **K1, W1 faits ; W2, G1 en partie** ; I1/I2 commencés ; **N1 fait** (base de navigation, MCDU, ND VOR.D/NDB/WPT) ; N2 AIRWAYS fait, SID/STAR à faire |
 | Rentrée du Ranger (26 nov.) | Demande de Sam : la rentrée automatique se pose mal ; zone d'arrivée chargée avant 10–20 km ; enregistreur de vol | **Fait et poussé (26 nov.)** : guidage vers le site d'abord, énergie de l'approche (loin de l'axe ou à court), zone d'arrivée préchargée, `camera.entryLog`. Edwards et Le Bourget posés en vol réel (avant : Edwards 4 écrasés sur 4) ; « Relief failed » de l'IGN non reproduit (e2e servi par le disque) ; apprendre-vaisseaux 9/9 ; golden périmé depuis le 20 oct. (pas par ce lot) |
 | Linux OBC embarqué (22–24 nov.) | [PLAN-LINUX-OBC](docs/PLAN-LINUX-OBC.md) — OBC-0 à OBC-21 (unkernel aarch64, Alpine/Debian, suite Rust/Ratatui, `/dev/fb0`, pont `__bh`/TARS, cockpits 3D) | **Sécurisé le 24 nov.** ([audit](docs/AUDIT-2026-11-24.md)) : relais Wisp à garde numérique, Origin exigée, ports et débits bornés ; pont invité sur racines explicites ; COOP/COEP sur demande ; FR/EN, unités du joueur. Tests unitaires 94/94 ; **e2e en cours** |
 | Points de Lagrange & JWST (22–24 nov.) | L1–L5, Halo, JWST à SE-L2, autopilote, cartes, réseau, Crew | **Corrigé le 24 nov.** : phase Halo juste en dates réelles (écart de vitesse 1 612 → 1e-6 m/s à SE-L2), L4/L5 sur modes propres, Crew sur le même couple, JWST paresseux et borné en pixels ; leçon 6 bis écrite. Tests unitaires verts ; **e2e et coût GPU en cours / non mesurés** |
@@ -80,6 +80,21 @@ l'état d'une mission ou d'un combat **non sauvé, dit** ; le réseau **« entre
 **Décidé par Sam (16 nov., 15:58 UTC)** : J8-4 allumée par défaut (quads sous 8 px), J8-5 avec une jonction choisie sur captures, J8-1b suspendu, l'e2e de J8-6 par la voie (b), J8-9 ajouté ([PLAN-J8](docs/PLAN-J8-BATIMENTS.md) §6 point 6). **But fixé par Sam (16 nov., ~16:19 UTC)** : [J8-A](docs/PLAN-J8-BATIMENTS.md), un vol Paris et Toulon-Hyères, de jour et de nuit, tous les bâtiments, lampadaires, voitures (J8-L) et rivières (J8-E) chargés avant le vol, en « high » partout, sans différence visible entre les qualités. **Décidé par Sam (16 nov., ~21:40 UTC)** : J8-8 ouvert (le proche en cellules), la jonction à 0, l'éclat de nuit lointain gardé ([PLAN-J8](docs/PLAN-J8-BATIMENTS.md) §6 point 11). **Décidé par Sam (17 nov., ~08:00 UTC)** : J8-8b ouvert, les arbres par cellule, après un vol de référence à froid sur le M1 Max (§6 point 12). **Mode speed pour finir J8, J8-VB compris** (Sam, 17 nov. ~09:20 UTC ; [CLAUDE.md](CLAUDE.md), modes de travail ; §6 point 13) : contrôles rapides par lot, un gros e2e J8-A à la fin sur kerr-mini et le M1 Max. **J8-RP, les routes et les ponts AAA** (Sam, 17 nov. ~10:20 UTC ; [PLAN-J8](docs/PLAN-J8-BATIMENTS.md) §3 bis) : ajouté à J8 en mode speed, RP1 (les routes et marquages visibles sous l'orthophoto) en tête. **Attend Sam** : les quatre premières questions de PLAN-J8 §6, réglées provisoirement (même contenu sur les deux machines, retour si > 3 ms sur le mini ; portée au pixel ; J7 en pause, les arbres proches deviennent J9 ; pas de préparation côté serveur pour l'instant) ; les trois questions de [PLAN-J7](docs/PLAN-J7-FLUIDITE.md) §4, réglées provisoirement (les 40 ms du mini en dernier, J7-6 ; les arbres proches en géométrie ensuite, désormais J9 ; l'aplanissement du détail sous les trouées jusqu'à la FAF ou 10 km) ; les seuils du mini attendent la reprise de la cible 40 ms.
 
 ## Journal
+
+### 2026-11-26 14:55 UTC — A320 : la base de navigation (VOR, NDB, points, voies aériennes) au MCDU et au ND (PLAN-A320-VOL-AAA N1, N2 en partie)
+
+- Contribution : §19 (de vrais vols IFR de l'A320 : un plan fait de VOR, de points et de voies aériennes), §7 (des données préparées
+  hors de la frame, par tuiles, chargées autour de l'avion).
+- Réalisé : `scripts/build-navdb.ts` → `assets/nav/v1` (FlightGear Navaids, cycle 2013.10, GPL v2 — `assets/nav/README.md` : 11 590 aides,
+  119 720 points, 70 291 segments, 1 443 tuiles de 5°, index des identifiants) ; `src/world/navdb.ts` (tuiles, recherche du plus proche
+  d'un identifiant, voie aérienne parcourue d'un point à un autre) ; servi `/nav/` (server.ts, build-pages, SW) ; MCDU : un VOR ou un point
+  par son identifiant dans F-PLN, **LAT REV › AIRWAYS** (VIA/GO TO, la voie écrite sur ses branches, AWY/WPT MISMATCH) ; ND : couches
+  **VOR.D, NDB, WPT** (désencombrées : points terminaux sous 20 NM, étiquettes sans chevauchement) ; `main.ts` charge l'index et les
+  tuiles à 600 km de l'A320 chaque minute. Décision de Sam : CIFP de la FAA (États-Unis) + FlightGear (monde).
+- Preuves : **unitaires** `navdb` 3/3 (PON, RSY, UN872 EVX→PON→KOVIN→LESDO), `a320-mcdu` 8/8 (VOR et point insérés, AIRWAYS) ; **observé**
+  (kerr-mini, relevés PNG du ND en vol à 80 NM au nord-ouest de Paris) : VOR.D (PON, EVX, RBT, CHW…), NDB (ORW, LMX, BV…), WPT.
+- Limites : SID/STAR (CIFP), discontinuités, HOLD, profil vertical géré, TERR/WXR non faits ; données de 2013 (points renommés depuis) ;
+  pas d'e2e du MCDU sur la vraie base (unitaires seulement).
 
 ### 2026-11-26 14:30 UTC — A320 : un vol de ligne complet mesuré et réussi (décollage → ILS → arrêt), l'atterrissage automatique réparé
 

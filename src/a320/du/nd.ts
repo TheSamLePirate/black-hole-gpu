@@ -75,6 +75,8 @@ export class Nd extends Display {
     if (X?.taxi && oans) this.taxi(ctx, F, X.taxi);
     else if (X) {
       if (layer === "arpt" || range <= 40) this.fields(ctx, F, X, d, layer === "arpt", range);
+      // (the EFIS's VOR.D, NDB, WPT: the navigation database's points — PLAN-A320-VOL-AAA N1)
+      if (/^vor/i.test(layer) || /^ndb/i.test(layer) || /^wpt/i.test(layer)) this.aids(ctx, F, X, layer.toLowerCase(), range);
       this.route(ctx, F, X, d, layer === "cstr", layer === "wpt");
       if (!plan) this.traffic(ctx, F, X);
     }
@@ -285,6 +287,49 @@ export class Nd extends Display {
   }
 
   // ------------------------------------------------------------------------------------------------ the map
+
+  /** the navigation database's points (EFIS VOR.D: the VORs and DMEs — a cross, a circle about a VOR-DME's, a VORTAC's —, NDB: the
+   *  NDBs — a triangle —, WPT: the fixes — a diamond —), magenta, their idents beside */
+  private aids(ctx: Ctx, F: Frame, X: NdExtra, layer: string, range: number) {
+    const want = (k: string) => (layer.startsWith("vor") ? /^V|^D$/.test(k) : layer.startsWith("ndb") ? k === "N" : k === "FIX");
+    ctx.strokeStyle = COL.magenta;
+    ctx.lineWidth = 3;
+    // (decluttered: past 20 NM the en-route fixes only — five letters —, the terminal ones (PG286, P0605) at short range; a point whose
+    // label would sit on another's left out — around Paris at 80 NM, hundreds of them on one another)
+    const placed: [number, number][] = [];
+    for (const p of X.aids) {
+      if (!want(p.kind)) continue;
+      if (p.kind === "FIX" && range > 20 && !/^[A-Z]{5}$/.test(p.id)) continue;
+      const [x, y] = this.xy(F, p.lat, p.lon);
+      if (x < -20 || x > 1044 || y < -20 || y > 1044) continue;
+      if (placed.some(([u, v]) => Math.abs(u - x) < 70 && Math.abs(v - y) < 26)) continue;
+      placed.push([x, y]);
+      ctx.beginPath();
+      if (p.kind === "N") {
+        ctx.moveTo(x, y - 12);
+        ctx.lineTo(x + 11, y + 8);
+        ctx.lineTo(x - 11, y + 8);
+        ctx.closePath();
+      } else if (p.kind === "FIX") {
+        ctx.moveTo(x, y - 10);
+        ctx.lineTo(x + 8, y);
+        ctx.lineTo(x, y + 10);
+        ctx.lineTo(x - 8, y);
+        ctx.closePath();
+      } else {
+        ctx.moveTo(x - 12, y);
+        ctx.lineTo(x + 12, y);
+        ctx.moveTo(x, y - 12);
+        ctx.lineTo(x, y + 12);
+        if (p.kind !== "V") {
+          ctx.moveTo(x + 9, y);
+          ctx.arc(x, y, 9, 0, Math.PI * 2);
+        }
+      }
+      ctx.stroke();
+      text(ctx, p.id, x + 16, y + 4, 24, COL.magenta, "left", "middle");
+    }
+  }
 
   /** the airfields: a magenta star and its code (EFIS ARPT), their runways at short range (white) */
   private fields(ctx: Ctx, F: Frame, X: NdExtra, d: DuData, all: boolean, range: number) {

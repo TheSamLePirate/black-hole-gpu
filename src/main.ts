@@ -63,6 +63,7 @@ import { CockpitTip } from "./ui/cockpit-tip";
 import { cockpitHull } from "./system/collide";
 import { afterSkyPrefetch, prefetchSkyAssets, Renderer, type FrameStats, type OfflineStatus } from "./renderer";
 import { ArrivalPrefetch } from "./system/arrival-prefetch";
+import { airwayLegs, navFind, navFindSync, navResolve, navWarm } from "./world/navdb";
 import { a320Wheel } from "./ui/a320wheel";
 import type { ZoneSources } from "./system/zones";
 import { swappable } from "./util/swappable";
@@ -1005,6 +1006,7 @@ async function main() {
           };
     })(),
   });
+  let navWarmAt = Number.NEGATIVE_INFINITY;
   // (the landing zone asked ahead while the entry autopilot brings the craft down to a runway — system/arrival-prefetch.ts)
   const arrival = new ArrivalPrefetch(renderer.earthTiles, earthSources);
   renderer.arrival = arrival;
@@ -4747,6 +4749,19 @@ async function main() {
       return (camera.a320Fmgc ??= new Fmgc()).fms;
     },
     fmgc: () => camera.a320Fmgc,
+    // (the navigation database's points, the nearest to the craft — PLAN-A320-VOL-AAA N1)
+    navPoint: (id) => {
+      const g = camera.geoNow();
+      return g ? navFindSync(id, g) : null;
+    },
+    // (an airway walked in the navigation database — PLAN-A320-VOL-AAA N2)
+    airway: async (via, from, to) => {
+      const start = (await navFind(from.name, from)) ?? { id: from.name, kind: "FIX" as const, lat: from.lat, lon: from.lon };
+      const legs = await airwayLegs(via, start, to);
+      if (!legs) return null;
+      const pts = await Promise.all(legs.map(navResolve));
+      return pts.map((p) => ({ name: p.id, lat: p.lat, lon: p.lon, nav: { kind: p.kind, ...(p.freq ? { freq: p.freq } : {}) } }));
+    },
     route: () => camera.nav.route,
     routeChanged: () => camera.routeChanged(),
     activeWp: () => camera.nav.last.l?.active ?? 1,
@@ -9441,6 +9456,15 @@ async function main() {
     // tiles, surface, scenery, their shadows — follows the camera whenever it is there; the streaming's lead, the
     // camera's own motion: renderer.ts)
     renderer.shipFocus = camera.piloting && !camera.character.active ? shipFocus() : null;
+    // (the A320 flown: the navigation database's index and the tiles within 600 km asked, once a minute — its MCDU's points found at
+    // the first typing, its ND's layers drawn: PLAN-A320-VOL-AAA N1)
+    if (fleet.active === "a320" && camera.piloting && now - navWarmAt > 60_000) {
+      const g = camera.geoNow();
+      if (g) {
+        navWarmAt = now;
+        navWarm(g.lat, g.lon);
+      }
+    }
     // (the landing zone asked ahead from the deorbit's plan to the rollout: the entry autopilot to a runway of the Earth —
     // system/arrival-prefetch.ts)
     {

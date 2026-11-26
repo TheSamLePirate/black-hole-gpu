@@ -40,6 +40,8 @@ await $`mkdir -p _site/earth-surface && cp -R assets/earth-surface/v1 _site/eart
 await $`mkdir -p _site/runways && cp -R assets/runways/v1 _site/runways/`;
 // (the approaches' real data — PLAN-APPROCHES AP0 —, their tiles beside the runways')
 await $`mkdir -p _site/approaches && cp -R assets/approaches/v1 _site/approaches/`;
+// (the navigation database — radio aids, fixes, airways: PLAN-A320-VOL-AAA N1 —, its tiles beside the runways')
+await $`mkdir -p _site/nav && cp -R assets/nav/v1 _site/nav/`;
 await $`cp vendor/basis/basis_transcoder.wasm _site/basis_transcoder.wasm`;
 // Embedded Linux OBC assets (docs/PLAN-LINUX-OBC.md): kernel WASM, Alpine & Debian EROFS distros, and project scripts
 await $`mkdir -p _site/obc/scripts/lib _site/obc/pilot-kit`;
