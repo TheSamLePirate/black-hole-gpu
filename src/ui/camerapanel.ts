@@ -21,6 +21,39 @@ import { t, tf } from "../i18n";
 import { issCameraList } from "../camera/iss-view";
 import type { IssCameraId } from "../system/iss-cameras";
 import { VESSEL_IDS } from "../vessels";
+import { AIRPORT_MODES, type AirportMode } from "../cine/airport";
+import { airportByCode, airportMode, airportNext, airportStart, airportState, airportStop } from "../controller/airportview";
+
+/** The airport's directors: their names and what they film (PLAN-AEROPORT-AAA). */
+export const AIRPORT_MODE_LABEL: Record<AirportMode, string> = {
+  auto: t("Director"),
+  tower: t("Tower"),
+  threshold: t("Threshold"),
+  touchdown: t("Runway side"),
+  rotation: t("Rotation"),
+  climbout: t("Climb-out"),
+  chase: t("Chase"),
+  cockpit: t("Cockpit"),
+  drone: t("Drone"),
+};
+const AIRPORT_MODE_HELP: Record<AirportMode, string> = {
+  auto: t(
+    "Cuts between the shots as it comes: a landing from the tower, behind it, under it at the threshold, the touchdown from the runway's side; a take-off from the tower, its rotation from the runway's side, under its climb-out",
+  ),
+  tower: t("From the control tower, a long lens following it all the way"),
+  threshold: t("A spotter under the approach: it passes overhead, wheels and flaps out"),
+  touchdown: t("On the runway's side at the touchdown zone: the flare, the smoke of the tyres, the reversers"),
+  rotation: t("On the runway's side where it rotates: the nose up, the wheels leaving the runway"),
+  climbout: t("Under its climb-out past the runway's end: it comes up, gear folding, overhead"),
+  chase: t("Behind it and a little above, its turns followed"),
+  cockpit: t("At its pilots' eye, looking down the runway"),
+  drone: t("A drone's slow crane round it"),
+};
+/** Seconds to the event, as m:ss. */
+const fmtEta = (s: number) => {
+  const x = Math.max(0, Math.round(s));
+  return `${Math.floor(x / 60)}:${String(x % 60).padStart(2, "0")}`;
+};
 
 /** The camera's placements without the ship: the rig's four, and falling freely (gravity). */
 export type View = Settings["rotation"] | "fall";
@@ -165,6 +198,8 @@ export interface CameraPanelDeps {
   /** the voyage to a target as the settings would make it, on straight lines (null: none there) */
   voyagePreview?(b: Target): { T: number; Tau: number; betaPeak: number; g: number } | null;
   toast(t: string): void;
+  /** the free camera out (F3) or back */
+  spectate?(on: boolean): void;
 }
 
 const svg = (body: string) => `<svg viewBox="0 0 24 24" aria-hidden="true">${body}</svg>`;
@@ -244,6 +279,10 @@ export class CameraPanel {
       s.voyageWall,
       s.subjectView,
       c.viewController().voyage ? 1 : 0,
+      (() => {
+        const A = airportState();
+        return A ? `${A.code}:${A.dir.mode}:${A.current}:${A.queue.map((q) => q.c.id).join("/")}` : "";
+      })(),
     ].join();
   }
 
@@ -273,6 +312,7 @@ export class CameraPanel {
     this.lens();
     this.targets();
     this.subjectViews();
+    this.airport();
     this.voyage();
     if (!s.ship) {
       this.motion();
@@ -664,6 +704,82 @@ export class CameraPanel {
         isec.append(back);
       }
     }
+  }
+
+  /** The airport view (controller/airportview.ts): an airport's arrivals and departures filmed one after the other. */
+  private airport() {
+    const A = airportState();
+    const sec = this.section(t("Airport"), t("each airliner landing or taking off there, filmed"));
+    sec.dataset.testid = "cp-airport";
+    const row = h("div", "cp-airport-row");
+    const code = h("input", "cp-search cp-airport-code") as HTMLInputElement;
+    code.dataset.testid = "cp-airport-code";
+    code.placeholder = t("Code (LFPG, CDG…) — empty: the nearest");
+    code.value = A?.code ?? "";
+    code.setAttribute("aria-label", t("Airport's code"));
+    const go = h("button", "cp-btn", A ? t("Stop") : t("Watch the movements"));
+    go.dataset.testid = "cp-airport-go";
+    const start = async () => {
+      if (airportState()) {
+        airportStop();
+        this.refresh(true);
+        return;
+      }
+      go.disabled = true;
+      try {
+        const f = await airportByCode(this.d.camera, code.value || undefined);
+        if (!f) return this.d.toast(tf("No airport {0}", code.value || t("near")));
+        const why = airportStart(this.d.camera, f, "auto", () => this.d.spectate?.(true));
+        if (why) this.d.toast(why);
+        else this.d.toast(tf("Watching the movements at {0}", `${f.icao || f.ident} · ${f.name}`));
+      } finally {
+        go.disabled = false;
+        this.refresh(true);
+      }
+    };
+    go.onclick = () => void start();
+    code.onkeydown = (e) => {
+      e.stopPropagation();
+      if (e.key === "Enter") void start();
+    };
+    row.append(code, go);
+    sec.append(row);
+    if (!A) return;
+    sec.append(h("div", "cp-sub", `${A.code} · ${A.name}`));
+    const seg = h("div", "cp-seg cp-seg-wrap");
+    for (const m of AIRPORT_MODES) {
+      const b = h("button", "", AIRPORT_MODE_LABEL[m]);
+      b.classList.toggle("on", A.dir.mode === m);
+      b.dataset.tip = AIRPORT_MODE_HELP[m];
+      b.dataset.testid = `cp-airport-${m}`;
+      b.onclick = () => {
+        airportMode(m);
+        this.refresh(true);
+      };
+      seg.append(b);
+    }
+    sec.append(seg);
+    const list = h("div", "cp-airport-queue");
+    list.dataset.testid = "cp-airport-queue";
+    if (!A.queue.length) list.append(h("div", "cp-sub", t("No movement on its runways yet — the approach watched from the tower")));
+    for (const q of A.queue.slice(0, 6)) {
+      const li = h("div", "cp-airport-item");
+      li.classList.toggle("on", q.c.id === A.current);
+      li.append(
+        h("b", "", `${q.dep ? "↗" : "↘"} ${q.c.cs || q.c.reg || q.c.id.toUpperCase()}`),
+        h("span", "", [q.c.type, q.way.name.split(" ").pop()].filter(Boolean).join(" · ")),
+        h("span", "cp-airport-eta", q.c.gnd && q.eta <= 0 ? t("rolling") : q.eta < 0 ? t("airborne") : fmtEta(q.eta)),
+      );
+      list.append(li);
+    }
+    sec.append(list);
+    const next = h("button", "cp-btn", t("Next movement"));
+    next.dataset.testid = "cp-airport-next";
+    next.onclick = () => {
+      airportNext();
+      this.refresh(true);
+    };
+    sec.append(next);
   }
 
   /** The voyage (camera/voyager.ts, PLAN-CAMERA-AAA CAM6): who goes, at what pace, played in how long — and go. */

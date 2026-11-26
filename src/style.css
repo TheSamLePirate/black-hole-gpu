@@ -2746,3 +2746,90 @@ body.topbar-hidden .fh-compass { top: 26px; }
 }
 #cam-pop .cp-speed input[type="number"] { width: 120px; flex: 0 0 auto; }
 #cam-pop .cp-voyage-preview { font-variant-numeric: tabular-nums; color: var(--hud-cyan); }
+
+/* ---------------------------------------------------------------- the airport view (ui/airportui.ts — PLAN-AEROPORT-AAA)
+   no HUD, no panel: the picture, the top bar (toggled as ever), the broadcast caption, the airport's own panel, the traffic's
+   credit and the toasts */
+body.airport-mode #hud,
+body.airport-mode #hint,
+body.airport-mode #panel,
+body.airport-mode #render,
+body.airport-mode #sky-card,
+body.airport-mode .gt-root,
+body.airport-mode .compile-meter,
+body.airport-mode .mission-caption,
+body.airport-mode .subtitles,
+body.airport-mode .fl-root,
+body.airport-mode .character-hud,
+body.airport-mode .fh {
+  display: none;
+}
+
+/* its broadcast caption: the lower third */
+.airport-caption {
+  position: fixed;
+  left: max(24px, env(safe-area-inset-left));
+  bottom: calc(max(28px, env(safe-area-inset-bottom)) + 24px);
+  z-index: 40;
+  pointer-events: none;
+  padding: 10px 18px 11px 14px;
+  border-left: 3px solid #ffb35c;
+  background: linear-gradient(90deg, rgba(8, 12, 20, 0.84), rgba(8, 12, 20, 0.58) 70%, rgba(8, 12, 20, 0));
+  color: #eef3ff;
+  font: 500 13px/1.35 var(--font-ui, system-ui, sans-serif);
+  min-width: 280px;
+  max-width: min(600px, calc(100vw - 48px));
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
+}
+.airport-caption[hidden] { display: none; }
+.airport-caption .ac-tag { font-size: 10.5px; letter-spacing: 0.16em; color: #ffb35c; text-transform: uppercase; }
+.airport-caption .ac-title { font-size: 22px; font-weight: 700; letter-spacing: 0.02em; margin: 1px 0 2px; }
+.airport-caption .ac-line { font-size: 13px; opacity: 0.88; font-variant-numeric: tabular-nums; }
+.airport-caption .ac-shot { margin-top: 5px; font-size: 10px; letter-spacing: 0.14em; color: #ff6b5c; }
+
+/* its panel: the airport, the director, the queues, the card */
+.airport-ui {
+  position: fixed;
+  right: max(16px, env(safe-area-inset-right));
+  top: 64px;
+  z-index: 41;
+  width: min(320px, calc(100vw - 32px));
+  /* (clear of the credits at the bottom right: the imagery's, the traffic's, the scenery's) */
+  max-height: calc(100vh - 160px);
+  overflow-y: auto;
+  padding: 10px 12px 12px;
+  border-radius: 10px;
+  background: rgba(10, 14, 22, 0.72);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: #e8eefb;
+  font: 500 12.5px/1.35 var(--font-ui, system-ui, sans-serif);
+}
+body.topbar-hidden .airport-ui { top: 16px; }
+.airport-ui[hidden] { display: none; }
+.airport-ui .au-head { display: flex; align-items: center; gap: 6px; }
+.airport-ui .au-title { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.airport-ui .au-title b { font-size: 17px; letter-spacing: 0.04em; color: #ffb35c; }
+.airport-ui .au-title span { font-size: 11.5px; opacity: 0.75; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.airport-ui .au-icon { background: rgba(255, 255, 255, 0.06); border: 0; color: inherit; width: 26px; height: 26px; border-radius: 6px; cursor: pointer; }
+.airport-ui .au-icon:hover { background: rgba(255, 255, 255, 0.14); }
+.airport-ui .au-label { margin: 10px 0 4px; font-size: 10.5px; letter-spacing: 0.14em; text-transform: uppercase; opacity: 0.6; }
+.airport-ui .au-seg { display: flex; flex-wrap: wrap; gap: 4px; }
+.airport-ui .au-seg button,
+.airport-ui .au-btn { background: rgba(255, 255, 255, 0.06); border: 1px solid transparent; color: inherit; padding: 3px 8px; border-radius: 5px; font: inherit; font-size: 11.5px; cursor: pointer; }
+.airport-ui .au-seg button.on { border-color: #ffb35c; color: #ffd29e; background: rgba(255, 179, 92, 0.14); }
+.airport-ui .au-btn { margin-top: 6px; width: 100%; }
+.airport-ui .au-list { margin-top: 2px; }
+.airport-ui .au-row { display: grid; grid-template-columns: auto 1fr auto; gap: 8px; align-items: baseline; width: 100%; text-align: left; padding: 4px 7px; border-radius: 5px; background: transparent; border: 1px solid transparent; color: inherit; font: inherit; cursor: pointer; }
+.airport-ui .au-row:hover { background: rgba(255, 255, 255, 0.07); }
+.airport-ui .au-row.on { background: rgba(255, 179, 92, 0.16); }
+.airport-ui .au-row.pin { border-color: #ffb35c; }
+.airport-ui .au-sub { opacity: 0.7; font-size: 11.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.airport-ui .au-eta { font-variant-numeric: tabular-nums; opacity: 0.9; }
+.airport-ui .au-none { opacity: 0.5; font-size: 11.5px; padding: 2px 7px; }
+.airport-ui .au-card { margin-top: 10px; padding: 8px 10px; border-radius: 8px; background: rgba(255, 179, 92, 0.08); border: 1px solid rgba(255, 179, 92, 0.25); }
+.airport-ui .au-card-title { font-size: 16px; font-weight: 700; letter-spacing: 0.03em; }
+.airport-ui .au-card-sub { opacity: 0.75; font-size: 11.5px; margin-bottom: 4px; }
+.airport-ui .au-facts { display: grid; grid-template-columns: auto 1fr; gap: 2px 10px; margin: 0; }
+.airport-ui .au-facts dt { opacity: 0.6; }
+.airport-ui .au-facts dd { margin: 0; text-align: right; font-variant-numeric: tabular-nums; }

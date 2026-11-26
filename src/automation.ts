@@ -4,6 +4,8 @@
 //   __bh.settings.spin = 0.5; __bh.touch()
 //   __bh.game.help()
 import { issCameraList } from "./camera/iss-view";
+import { airportByCode, airportCaption, airportMode, airportNext, airportStart, airportState, airportStop } from "./controller/airportview";
+import type { AirportMode } from "./cine/airport";
 import { issCameraFrame, type IssCameraId } from "./system/iss-cameras";
 import { obc } from "./obc/runtime";
 import { hudHits, scopeRange } from "./ui/hud/symbology";
@@ -1067,6 +1069,44 @@ export function installBh(c: BhContext) {
        *  seaR, who, jumps } | null, here, moves, status, at, asks: { air, sea, trace }, planes, ships } */
       trafficFocus: c.trafficFocus,
       spectate: (on: boolean) => c.spectate(on),
+      /** the airport view (controller/airportview.ts — PLAN-AEROPORT-AAA): its arrivals and departures filmed one after the other —
+       *  await __bh.airport.start("LFPG", "auto"), .mode("tower"), .next(), .state(), .caption(), .stop() */
+      airport: {
+        start: async (code?: string, mode: AirportMode = "auto") => {
+          const f = await airportByCode(c.camera, code);
+          if (!f) throw new Error(`no airport ${code ?? "near"}`);
+          const why = airportStart(c.camera, f, mode, () => c.spectate(true));
+          if (why) throw new Error(why);
+          return f.icao || f.ident;
+        },
+        stop: () => airportStop(),
+        mode: (m: AirportMode) => airportMode(m),
+        next: () => airportNext(),
+        caption: () => airportCaption(),
+        state: () => {
+          const S = airportState();
+          return S
+            ? {
+                code: S.code,
+                name: S.name,
+                mode: S.dir.mode,
+                shot: S.shot,
+                current: S.current,
+                done: [...S.done],
+                queue: S.queue.map((A) => ({
+                  id: A.c.id,
+                  cs: A.c.cs,
+                  type: A.c.type,
+                  runway: A.way.name,
+                  eta: A.eta,
+                  dep: !!A.dep,
+                  gnd: A.c.gnd,
+                  over: A.c.over,
+                })),
+              }
+            : null;
+        },
+      },
       viewAt: (lat: number, lon: number, o?: { altM?: number; heading?: number; pitch?: number; fov?: number; tripod?: boolean }) =>
         c.viewAt(lat, lon, o),
       /** (Q6-ISS ISS4) the ISS's live-stream cameras: issCamera(id) looks through one (its native framing; no craft flown),

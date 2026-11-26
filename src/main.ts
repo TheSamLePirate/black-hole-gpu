@@ -65,6 +65,9 @@ import { afterSkyPrefetch, prefetchSkyAssets, Renderer, type FrameStats, type Of
 import { ArrivalPrefetch } from "./system/arrival-prefetch";
 import { airwayLegs, navFind, navFindSync, navResolve, navWarm } from "./world/navdb";
 import { terminalsOf } from "./world/terminals";
+import { airportCaption, airportHooks, airportState } from "./controller/airportview";
+import { AIRPORT_MODE_LABEL } from "./ui/camerapanel";
+import { AirportUi } from "./ui/airportui";
 import { a320Wheel } from "./ui/a320wheel";
 import type { ZoneSources } from "./system/zones";
 import { swappable } from "./util/swappable";
@@ -2925,6 +2928,7 @@ async function main() {
     standOn,
     changed: (keys) => onSettingsChange(keys),
     toast: (t) => panel.toast(t),
+    spectate: (on) => setSpectator(on),
     // (the voyage as the settings would make it: straight to the target's framing, the worlds' bound left out)
     voyagePreview: (b) => {
       const vc = camera.viewController();
@@ -9060,6 +9064,59 @@ async function main() {
   const trafficCredit = Object.assign(document.createElement("div"), { className: "scenery-credit traffic-credit", hidden: true });
   trafficCredit.dataset.testid = "traffic-credit";
   document.body.append(trafficCredit);
+  // (the airport view's broadcast caption — controller/airportview.ts, PLAN-AEROPORT-AAA)
+  const airportCap = Object.assign(document.createElement("div"), { className: "airport-caption", hidden: true });
+  airportCap.dataset.testid = "airport-caption";
+  document.body.append(airportCap);
+  const fmtClock = (s: number) => {
+    const x = Math.max(0, Math.round(Math.abs(s)));
+    return `${Math.floor(x / 60)}:${String(x % 60).padStart(2, "0")}`;
+  };
+  // (the airport view on: the game's clock on the moment its live traffic is drawn at, real time — controller/airportview.ts)
+  airportHooks.live = () => {
+    tools.setDate(new Date(Date.now() - Math.max(0, settings.trafficDelay ?? 0) * 1000).toISOString());
+    tools.warp(1);
+  };
+  const airportUi = new AirportUi({ settings, quit: () => panel.toast(t("Airport view left — the free camera stays here")) });
+  const airportCaptionFrame = () => {
+    airportUi.frame(performance.now());
+    const A = airportState();
+    const cap = A ? airportCaption() : null;
+    const lines = A
+      ? [
+          `${A.code} · ${cap?.dep ? t("DEPARTURES") : t("ARRIVALS")}`,
+          cap ? cap.title : t("Waiting for the next movement"),
+          cap
+            ? [
+                cap.line,
+                tf("Runway {0}", cap.runway.split(" ").pop() ?? ""),
+                cap.dep
+                  ? cap.eta > 0
+                    ? tf("Lift-off in {0}", fmtClock(cap.eta))
+                    : t("Airborne")
+                  : cap.eta > 0
+                    ? tf("Touchdown in {0}", fmtClock(cap.eta))
+                    : t("Landed"),
+              ]
+                .filter(Boolean)
+                .join(" · ")
+            : A.name,
+          `● ${AIRPORT_MODE_LABEL[A.dir.mode].toUpperCase()}${A.dir.mode === "auto" ? ` · ${AIRPORT_MODE_LABEL[A.shot]}` : ""}`,
+        ]
+      : null;
+    const key = lines ? lines.join("|") : "";
+    if (airportCap.dataset.key === key) return;
+    airportCap.dataset.key = key;
+    airportCap.hidden = !lines;
+    if (!lines) return;
+    const [tag, title, line, shot] = lines;
+    airportCap.replaceChildren(
+      Object.assign(document.createElement("div"), { className: "ac-tag", textContent: tag }),
+      Object.assign(document.createElement("div"), { className: "ac-title", textContent: title }),
+      Object.assign(document.createElement("div"), { className: "ac-line", textContent: line }),
+      Object.assign(document.createElement("div"), { className: "ac-shot", textContent: shot }),
+    );
+  };
   let fpsAcc = 0;
   let fpsN = 0;
   let fps = 0;
@@ -9399,6 +9456,7 @@ async function main() {
         if (trafficCredit.textContent !== txt) trafficCredit.textContent = txt;
         trafficCredit.hidden = !live;
       }
+      airportCaptionFrame();
     });
     netGuard("match", () => netMatch.frame());
     netGuard("voice", () => netVoice.frame());
@@ -9808,6 +9866,7 @@ async function main() {
         !camera.character.active &&
         !session.paused &&
         !document.body.classList.contains("hide-ui") &&
+        !document.body.classList.contains("airport-mode") &&
         (!pil || flightHud.density < 2)
         ? phaseWatch.current
         : null,

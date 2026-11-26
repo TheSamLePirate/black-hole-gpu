@@ -8,6 +8,7 @@
 //             follow it, set down again ahead once it is far.
 // The craft's place, velocity and axes asked of the targeting (craftSubjects, the fleet, the station's tracker).
 // (Its methods: installed on the controller's prototype — `this` the controller.)
+import { airportState, airportStep } from "../controller/airportview";
 import { setHomePose } from "../camera";
 import { timeRate } from "../clock";
 import { lookQ, qAxes, qSlerp } from "../cine/follow";
@@ -86,6 +87,12 @@ export function subjectPose(s: Settings, b: Body, t: number): SubjectPose | null
 /** A view about a craft is under way (chase, aboard, tower: this module's; around: the rig's). */
 function subjectActive(this: CameraController): boolean {
   const s = this.s;
+  // (the airport's movements, one after the other — controller/airportview.ts —: whatever the target; a view saved on while
+  // none runs — the page reloaded — given back to « around »)
+  if (s.subjectView === "airport") {
+    if (airportState()) return true;
+    s.subjectView = "around";
+  }
   return (
     ((s.subjectView === "chase" || s.subjectView === "aboard" || s.subjectView === "tower") && isCraftLike(s.target)) ||
     (s.issView !== "off" && s.target === "iss")
@@ -101,6 +108,8 @@ function subjectLook(this: CameraController, dyaw: number, dpitch: number) {
 
 /** A frame of the view about a craft; false: none (the rig, the flight… place the view). */
 function subjectStep(this: CameraController, dt: number): boolean {
+  // (the airport's view: its director places the eye — controller/airportview.ts)
+  if (this.s.subjectView === "airport" && airportState()) return airportStep(this, dt);
   if (!this.subjectActive() || (this.s.subjectView !== "tower" && !(this.s.issView !== "off" && this.s.target === "iss"))) {
     // (the lens given back when the tower is left)
     if (this.subject.fov0 !== null) {

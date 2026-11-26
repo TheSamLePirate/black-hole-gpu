@@ -2602,7 +2602,8 @@ export class FlightHud {
     const ctx = c.getContext("2d")!;
     ctx.clearRect(0, 0, W, H);
     // (a spectator out: the conformal symbology is the ship's eye's — not drawn; the ship marked instead)
-    if (this.spectating) return this.drawShipMark(ctx, W, H, dpr);
+    // (the airport view: the picture alone — ui/airportui.ts)
+    if (this.spectating) return document.body.classList.contains("airport-mode") ? undefined : this.drawShipMark(ctx, W, H, dpr);
     // the speed felt first, under everything (ui/speedfx.ts) — the eye's, in every view
     this.drawSpeed(ctx, W, H, dpr, i);
     // (a view the HUD does not show in — the cockpit, the film's —: its warnings and cards only, in the DOM —

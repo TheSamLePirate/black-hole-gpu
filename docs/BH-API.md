@@ -442,6 +442,20 @@ liveries, shadows and their costs since 24 Nov 2026).
 
 Puts the camera out of the ship as a free spectator (`on: true`; the ship goes on flying) or back into it (`false`). Returns whether the spectator is out. Refused with a toast ("fly one first (K)") when no craft is being flown: the spectator starts only from a piloted ship (`startSpectator` in `controller/spectator.ts`). No e2e test calls it.
 
+### `__bh.airport` → { start, stop, mode, next, caption, state }
+
+The airport view (`src/controller/airportview.ts`, `src/cine/airport.ts`, `src/ui/airportui.ts` — docs/PLAN-AEROPORT-AAA.md): an
+airport's real arrivals and departures filmed one after the other by a director, the game's HUD and panels hidden (`body.airport-mode`),
+its own panel (the queues, the card of the one filmed) and its broadcast caption shown.
+- `await start(code?, mode = "auto")` → its code: an airport by ICAO/IATA code (none: the nearest with a paved runway of 1 800 m
+  within 80 km), the free camera out, the game's clock set to the moment the traffic is drawn at (now less `trafficDelay`), real
+  time. Throws `no airport …` or why (no paved runway, no free camera).
+- `stop()`; `mode(m)` — `"auto"` or a shot: `"tower" | "threshold" | "touchdown" | "rotation" | "climbout" | "chase" | "cockpit" |
+  "drone"`; `next()` — the next movement (the one followed let go).
+- `caption()` → `{ title, line, eta, runway, shot, dep, free } | null` — the one filmed (`eta`: seconds to its touchdown or lift-off).
+- `state()` → `{ code, name, mode, shot, current, done, queue: [{ id, cs, type, runway, eta, dep, gnd, over }] } | null`.
+*Used in:* `scripts/airport-look.ts`.
+
 ### `__bh.viewAt(lat, lon, { altM?, heading?, pitch?, fov?, tripod?, body? })` → string \| null
 
 A photograph's view on the Earth (`cameraAt` in `src/main.ts`): with `tripod`, the tripod set on the ground at the geodetic

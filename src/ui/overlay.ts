@@ -21,6 +21,9 @@ import { safeFrame } from "./hud/safe";
 import type { NetTag } from "./netsession";
 import type { TrafficMark } from "../controller/traffic";
 
+/** The interface hidden: H, or the airport view's (ui/airportui.ts — its own panel only, no labels over the picture). */
+const uiHidden = () => document.body.classList.contains("hide-ui") || document.body.classList.contains("airport-mode");
+
 export class ViewOverlay {
   private key = "";
   /** the others' name tags (ui/netsession.ts — docs/PLAN-RESEAU.md R1) */
@@ -57,7 +60,7 @@ export class ViewOverlay {
     const tele = this.telescopeView(cam);
     const tags = this.netTagsDrawn();
     const traffic = this.trafficDrawn();
-    const mag = this.renderer.offlineActive || document.body.classList.contains("hide-ui") ? [] : this.renderer.magnetoLabels;
+    const mag = this.renderer.offlineActive || uiHidden() ? [] : this.renderer.magnetoLabels;
     const key =
       guide || this.camera.flyMode || marker || lock || hover || ship || tele || sky || tags.length || traffic.length || mag.length
         ? [
@@ -153,8 +156,7 @@ export class ViewOverlay {
    * few pixels long — a diamond and its distance; off-screen, an arrow at the edge towards it.
    */
   private shipMarker() {
-    if (!this.settings.ship || !this.camera.outsideView() || this.renderer.offlineActive || document.body.classList.contains("hide-ui"))
-      return null;
+    if (!this.settings.ship || !this.camera.outsideView() || this.renderer.offlineActive || uiHidden()) return null;
     const t = shipToCamera(this.camera.shipPose(), this.settings.shipLookYaw, this.settings.shipLookPitch).t;
     const d = Math.hypot(...t);
     const W = this.overlay.width,
@@ -235,7 +237,7 @@ export class ViewOverlay {
    * craft and the distance; "signal lost" when its samples stopped.
    */
   private netTagsDrawn() {
-    if (!this.netTags.length || this.renderer.offlineActive || document.body.classList.contains("hide-ui")) return [];
+    if (!this.netTags.length || this.renderer.offlineActive || uiHidden()) return [];
     const W = this.overlay.width,
       H = this.overlay.height,
       k = devicePixelRatio;
@@ -260,7 +262,7 @@ export class ViewOverlay {
 
   /** The traffic on the screen: each aircraft's lights lit now and, within 40 km, its label over it. */
   private trafficDrawn() {
-    if (!this.trafficMarks.length || this.renderer.offlineActive || document.body.classList.contains("hide-ui")) {
+    if (!this.trafficMarks.length || this.renderer.offlineActive || uiHidden()) {
       this.renderer.labelAsk = null;
       return [];
     }
@@ -432,7 +434,7 @@ export class ViewOverlay {
    * handled, then fading, as the brackets did.
    */
   private lockDraw() {
-    if (this.renderer.offlineActive || document.body.classList.contains("hide-ui")) return null;
+    if (this.renderer.offlineActive || uiHidden()) return null;
     const idle = (performance.now() - this.camera.activity) / 1000;
     const alpha = this.settings.ship ? 1 : idle < 1.6 ? 1 : Math.max(0, 1 - (idle - 1.6) / 0.8);
     if (alpha <= 0) return null;
@@ -452,7 +454,7 @@ export class ViewOverlay {
    * arrow at the edge of the view when it is off-screen. Shown while the camera is handled, then fades.
    */
   private targetMarker() {
-    if (this.renderer.offlineActive || document.body.classList.contains("hide-ui")) return null;
+    if (this.renderer.offlineActive || uiHidden()) return null;
     const idle = (performance.now() - this.camera.activity) / 1000;
     const alpha = idle < 1.6 ? 1 : Math.max(0, 1 - (idle - 1.6) / 0.8);
     if (alpha <= 0) return null;
@@ -583,7 +585,7 @@ export class ViewOverlay {
 
   /** The telescope's overlay (ui/telescope.ts): the lens, the target where it is, the tracking. */
   private telescopeView(cam: ReturnType<typeof cameraFrame>): TelescopeView | null {
-    if (!this.settings.telescope || this.renderer.offlineActive || document.body.classList.contains("hide-ui")) return null;
+    if (!this.settings.telescope || this.renderer.offlineActive || uiHidden()) return null;
     const info = this.camera.targetInfo();
     const tanH = Math.tan((this.settings.fov * Math.PI) / 360);
     const ndc = info ? projectLook(cam, info.look, tanH, this.overlay.width / this.overlay.height) : null;

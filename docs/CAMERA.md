@@ -88,6 +88,17 @@ followed with the views above — whether a craft is flown or not.
   its sources' quotas are kept for play.
 - `__bh.trafficFocus()` — [BH-API.md](BH-API.md).
 
+## The airport view
+
+An airport chosen (the camera panel › Airport, or `__bh.airport.start("KLAX")` — the title screen's mode to come): its real
+arrivals and departures, one after the other, filmed by a director — **Director** (Auto: a landing from the tower, behind it, under
+it at the threshold, its touchdown from the runway's side; a take-off from the tower, its rotation from the runway's side, under its
+climb-out), or one shot held: Tower, Threshold, Runway side, Rotation, Climb-out, Chase, Cockpit, Drone. The game's HUD and panels
+are hidden (the top bar stays, toggled as ever); a panel at the right lists the **arrivals**, the **departures** and the aircraft
+**about the airport** — one clicked is followed (clicked again: the director chooses again) and its card shown —; a broadcast
+caption at the bottom left names the one filmed, its runway and its seconds to touchdown or lift-off. The game's clock is set to
+the moment the live traffic is drawn at: the light is the place's own. docs/PLAN-AEROPORT-AAA.md.
+
 ## Keys
 
 | key | in the free camera (F3) |

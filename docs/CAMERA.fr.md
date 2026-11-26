@@ -88,6 +88,21 @@ feux, leurs noms) depuis la vue et peuvent être suivis par les vues ci-dessus �
   les quotas du relais et de ses sources sont gardés pour le jeu.
 - `__bh.trafficFocus()` — [BH-API.md](BH-API.md).
 
+## La vue Aéroport
+
+Un aéroport choisi (panneau caméra › Aéroport, ou `__bh.airport.start("KLAX")` ; le mode de l'écran titre viendra) : ses vraies
+arrivées et ses vrais départs, l'un après l'autre, filmés par un réalisateur. **Réalisateur** (Auto) filme un atterrissage depuis la
+tour, derrière lui, dessous au seuil, puis le toucher depuis le bord de piste ; un décollage depuis la tour, sa rotation depuis le bord
+de piste, puis dessous pendant sa montée initiale. On peut aussi tenir un seul plan : Tour, Seuil, Bord de piste, Rotation, Montée
+initiale, Poursuite, Cockpit, Drone.
+
+Le HUD et les panneaux du jeu sont cachés ; la barre du haut reste et se masque comme d'habitude. À droite, un panneau liste les
+**arrivées**, les **départs** et les avions **autour de l'aéroport**. Un avion cliqué est suivi, et sa fiche s'affiche ; cliqué à
+nouveau, il est rendu au réalisateur. En bas à gauche, un bandeau télé nomme l'avion filmé, sa piste et le temps restant avant le
+toucher ou l'envol.
+
+L'heure du jeu est réglée sur l'instant du trafic dessiné, donc la lumière est celle du lieu. Voir docs/PLAN-AEROPORT-AAA.md.
+
 ## Touches
 
 | touche | dans la caméra libre (F3) |

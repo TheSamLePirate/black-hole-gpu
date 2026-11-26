@@ -443,7 +443,7 @@ export interface Settings {
   voyageWall: number; // the playback's length [s] (0: real time)
   voyageWho: "observer" | "ship";
   voyageCine: "sequence" | "montage"; // the cinematic voyage (⇧G): one continuous shot, or cuts
-  subjectView: "around" | "chase" | "aboard" | "tower"; // the view about a craft targeted (camera/subjectcam.ts)
+  subjectView: "around" | "chase" | "aboard" | "tower" | "airport"; // the view about a craft targeted (camera/subjectcam.ts); the airport's movements filmed (controller/airportview.ts)
   issView: "off" | IssCameraId; // Q6-ISS ISS4: the view through a live stream's camera on the station (system/iss-cameras.ts), the ISS targeted and no craft flown — over subjectView; saved with the scene
   camSpeedFov: number; // the softened views' lens widened with the speed and the afterburner (its gain; 0: none)
   cineShot: "auto" | "chase" | "orbit" | "pass" | "tracking" | "planet" | "system"; // the director's view (cine/brain.ts): its shot, or the director choosing
