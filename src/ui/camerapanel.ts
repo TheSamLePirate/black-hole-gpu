@@ -26,7 +26,10 @@ import { airportByCode, airportMode, airportNext, airportStart, airportState, ai
 
 /** The airport's directors: their names and what they film (PLAN-AEROPORT-AAA). */
 export const AIRPORT_MODE_LABEL: Record<AirportMode, string> = {
-  auto: t("Director"),
+  cinema: t("Cinema"),
+  auto: t("Auto"),
+  lineup: t("Line-up"),
+  wing: t("Wing"),
   tower: t("Tower"),
   threshold: t("Threshold"),
   touchdown: t("Runway side"),
@@ -37,6 +40,11 @@ export const AIRPORT_MODE_LABEL: Record<AirportMode, string> = {
   drone: t("Drone"),
 };
 const AIRPORT_MODE_HELP: Record<AirportMode, string> = {
+  cinema: t(
+    "The film's director: each phase's shots drawn by turns, held 6 to 12 s — the tower, beside it, behind it, aboard, the drone —, the threshold, the touchdown, the rotation and the climb-out never missed",
+  ),
+  lineup: t("A departure lined up, from behind it at the runway's start, a long lens down the runway"),
+  wing: t("Beside it in formation, out of its wing"),
   auto: t(
     "Cuts between the shots as it comes: a landing from the tower, behind it, under it at the threshold, the touchdown from the runway's side; a take-off from the tower, its rotation from the runway's side, under its climb-out",
   ),
@@ -729,7 +737,7 @@ export class CameraPanel {
       try {
         const f = await airportByCode(this.d.camera, code.value || undefined);
         if (!f) return this.d.toast(tf("No airport {0}", code.value || t("near")));
-        const why = airportStart(this.d.camera, f, "auto", () => this.d.spectate?.(true));
+        const why = airportStart(this.d.camera, f, "cinema", () => this.d.spectate?.(true));
         if (why) this.d.toast(why);
         else this.d.toast(tf("Watching the movements at {0}", `${f.icao || f.ident} · ${f.name}`));
       } finally {

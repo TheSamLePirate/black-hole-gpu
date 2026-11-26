@@ -94,6 +94,41 @@ describe("the airport's director", () => {
     expect(wrongSide).toBe(0);
   });
 
+  test("Cinema filming a landing (V9): its shots drawn by turns — four at least, never the same twice running, each 3 s at least —, the threshold and the touchdown never missed, the aircraft in the frame", () => {
+    const dir = new AirportDirector();
+    dir.mode = "cinema";
+    dir.follow("DAL2534");
+    const shots: { shot: AirportShot; at: number }[] = [];
+    let worst = 0,
+      shortest = 1e9;
+    let last: { shot: AirportShot; at: number } | null = null;
+    for (let t = -150; t < 20; t += 1 / 30) {
+      const L = lander(t);
+      const V = dir.step(1 / 30, W, place, L);
+      if (!last || V.shot !== last.shot) {
+        if (last) shortest = Math.min(shortest, t - last.at);
+        last = { shot: V.shot, at: t };
+        shots.push(last);
+      }
+      const look = unit3(sub3(V.aim, V.eye));
+      const to = unit3(sub3(add3(L.p, L.up, 0.15 * L.len), V.eye));
+      const off = Math.acos(Math.min(1, dot3(look, to))) / D;
+      if (V.shot !== "cockpit" && t > last.at + 1) worst = Math.max(worst, off / (V.fov / 2));
+    }
+    console.log(
+      `  ${shots.map((s) => `${s.shot}@${s.at.toFixed(0)}`).join(" → ")}; worst ${(worst * 100).toFixed(0)} %, shortest ${shortest.toFixed(1)} s`,
+    );
+    const names = shots.map((s) => s.shot);
+    expect(new Set(names).size).toBeGreaterThanOrEqual(4);
+    for (let i = 1; i < names.length; i++) expect(names[i]).not.toBe(names[i - 1]);
+    expect(shortest).toBeGreaterThanOrEqual(3);
+    // (on short final under it at the threshold, then the touchdown from the runway's side: there at the moments that matter)
+    const at = (t: number) => [...shots].reverse().find((s) => s.at <= t)!.shot;
+    expect(at(-8)).toBe("threshold");
+    expect(at(1)).toBe("touchdown");
+    expect(worst).toBeLessThan(1);
+  });
+
   test("each shot on its own: the aircraft framed from far final to the rollout", () => {
     for (const shot of AIRPORT_SHOTS) {
       if (shot === "cockpit") continue;

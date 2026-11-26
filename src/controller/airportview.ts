@@ -98,6 +98,12 @@ interface AirportState {
   pinned: string | null;
   /** the airliners about the airport in no queue: on its ground (taxiing, parked) or flying near it */
   others: TrafficCraft[];
+  /** none due: one of them moving filmed meanwhile (its id — Cinema's waiting shots, V9) */
+  filler: string | null;
+  /** those seen landing (their id → the view's time [s]): no departure for ten minutes after */
+  arrived: Map<string, number>;
+  /** the view's own time [s] */
+  t: number;
 }
 
 let S: AirportState | null = null;
@@ -228,13 +234,17 @@ export function departuresOf(list: readonly TrafficCraft[], ways: readonly Runwa
       let eta: number;
       if (c.gnd) {
         if (a < -P.short || a > W.len - 300 || Math.abs(cr) > P.cross) continue;
-        if (speed > 3 && c.phase !== "takeoff" && c.phase !== "taxi" && c.phase !== "parked") continue;
+        // (rolling: its take-off's roll only — one taxiing along the runway, a landing slowing on it, is none)
+        if (speed > 3 && c.phase !== "takeoff") continue;
         // (a landing's rollout — touched down not long ago —: not a departure)
         if (Number.isFinite(c.sinceTd) && c.sinceTd < 120) continue;
         eta = speed > 3 ? Math.max(P.vr - speed, 0) / P.accel : P.waiting;
       } else {
         const climb = dot(c.v, W.up);
-        if (climb < 1 || a < 0 || a > W.len + P.out || c.over > P.high) continue;
+        // (climbing out: its phase the climb's or the take-off's, clearly off the runway — a landing's reports bouncing a few metres
+        // over it once read as a climb-out, 26 Nov 2026)
+        if (c.phase !== "climb" && c.phase !== "takeoff") continue;
+        if (climb < 1.5 || c.over < 10 || a < 0 || a > W.len + P.out || c.over > P.high) continue;
         if (Math.abs(cr) > P.crossAir + 0.08 * Math.max(a - W.len, 0)) continue;
         eta = -(c.over / Math.max(climb, 3) + 2);
       }
@@ -297,6 +307,9 @@ export function airportStart(c: CameraController, f: Airfield, mode: AirportMode
     still: 0,
     pinned: null,
     others: [],
+    filler: null,
+    arrived: new Map(),
+    t: 0,
   };
   v.s.subjectView = "airport";
   c.s.subjectView = "airport";
@@ -359,7 +372,13 @@ export function airportStep(view: CameraController, dt: number): boolean {
   const now = main.trafficClock ? main.trafficClock() : (main.trafficT ?? Date.now() / 1000);
   // (the moment drawn: the traffic's clock less its delay — a made-up landing's touchdown is on the reports' clock)
   const all = main.trafficNow();
-  S.queue = movementsOf(all, S.ways, now - Math.max(0, main.s.trafficDelay ?? 0));
+  S.t += dt;
+  S.queue = movementsOf(all, S.ways, now - Math.max(0, main.s.trafficDelay ?? 0)).filter(
+    (x) => !x.dep || !(S!.t - (S!.arrived.get(x.c.id) ?? -1e9) < 600),
+  );
+  // (an arrival past its touchdown — on the ground or still reported airborne —: no departure for it for ten minutes — a go-around's
+  // climb, or reports bouncing after a landing made up through their gap, filmed as a « departure » once, 26 Nov 2026)
+  for (const x of S.queue) if (!x.dep && (x.c.gnd || x.eta < 0)) S.arrived.set(x.c.id, S.t);
   {
     const inQ = new Set(S.queue.map((x) => x.c.id));
     const o = geodeticToCart(WGS84_A, WGS84_F, S.lat * D, S.lon * D, 0);
@@ -400,6 +419,18 @@ export function airportStep(view: CameraController, dt: number): boolean {
   if (!S.current) {
     A = S.queue.find((x) => !S!.done.has(x.c.id) && !finished(x) && x.eta > -2);
     S.current = A?.c.id ?? null;
+  }
+  // (none due — Cinema —: one of those moving about the airport filmed meanwhile — taxiing, flying near —, the same while it moves)
+  const prevFiller = S.filler;
+  S.filler = null;
+  if (!A && !S.pinned && S.dir.mode === "cinema") {
+    const moving = (c: TrafficCraft) => Math.hypot(...c.v) > 3;
+    const f = S.others.find((c) => c.id === prevFiller && moving(c)) ?? S.others.find(moving);
+    if (f) {
+      const W0 = [...S.ways].sort((x, y) => Math.hypot(...sub(f.p, x.o)) - Math.hypot(...sub(f.p, y.o)))[0]!;
+      A = { c: f, way: W0, eta: 999, a: dot(sub(f.p, W0.o), W0.d), cross: dot(sub(f.p, W0.o), W0.r), free: true };
+      S.filler = f.id;
+    }
   }
   // (none landing: the busiest runway — the longest — watched from the tower down its approach)
   const W = A?.way ?? [...S.ways].sort((x, y) => y.len - x.len)[0]!;
@@ -452,7 +483,7 @@ export function airportCaption(): {
   const A = S.queue.find((x) => x.c.id === S!.current);
   if (!A) {
     // (one chosen in no movement: its name, its phase)
-    const c = S.pinned ? airportCraft(S.pinned) : null;
+    const c = S.pinned ? airportCraft(S.pinned) : S.filler ? airportCraft(S.filler) : null;
     if (!c) return null;
     return {
       title: [callsignOf(c), c.type].filter(Boolean).join(" · "),

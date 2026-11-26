@@ -9,10 +9,59 @@
 
 import { add3, cross3, damp, dot3, fbm, len3, scale3, Spring3, sub3, unit3, type V3 } from "./rig";
 
-export type AirportShot = "tower" | "threshold" | "touchdown" | "rotation" | "climbout" | "chase" | "cockpit" | "drone";
-export const AIRPORT_SHOTS: AirportShot[] = ["tower", "threshold", "touchdown", "rotation", "climbout", "chase", "cockpit", "drone"];
-export type AirportMode = "auto" | AirportShot;
-export const AIRPORT_MODES: AirportMode[] = ["auto", ...AIRPORT_SHOTS];
+export type AirportShot = "tower" | "threshold" | "touchdown" | "rotation" | "climbout" | "lineup" | "wing" | "chase" | "cockpit" | "drone";
+export const AIRPORT_SHOTS: AirportShot[] = [
+  "tower",
+  "threshold",
+  "touchdown",
+  "rotation",
+  "climbout",
+  "lineup",
+  "wing",
+  "chase",
+  "cockpit",
+  "drone",
+];
+/** the directors: Cinema (the shots drawn from each phase's repertoire, held 6–12 s each — V9), Auto (one shot by phase — V1), or
+ *  one shot held */
+export type AirportMode = "cinema" | "auto" | AirportShot;
+export const AIRPORT_MODES: AirportMode[] = ["cinema", "auto", ...AIRPORT_SHOTS];
+
+/** A phase's repertoire for the Cinema director: the shots it draws from, how long each is held [s] (from, to). */
+interface Repertoire {
+  shots: AirportShot[];
+  hold: [number, number];
+}
+
+/**
+ * Cinema's repertoire by the phase (V9): far out a slow alternation — the tower's long lens, beside it, behind it, aboard, the drone
+ * —; on final behind it, beside it, the tower; the short final always under it at the threshold, the touchdown always from the
+ * runway's side — the moments not to miss —; the rollout behind it or from the tower. A departure: lined up from behind it at the
+ * runway's start, the tower, aboard; its roll from the runway's side where it rotates; airborne under its climb-out, then behind it,
+ * beside it, the drone. One chosen (in no movement): behind it, beside it, the drone.
+ */
+export function repertoire(L: Lander): Repertoire {
+  if (L.free) return { shots: ["chase", "wing", "drone"], hold: [8, 12] };
+  if (L.dep) {
+    if (L.eta > DIRECTOR.roll + 10) return { shots: ["lineup", "tower", "cockpit"], hold: [6, 10] };
+    if (L.eta > -DIRECTOR.airborne) return { shots: ["rotation"], hold: [30, 30] };
+    if (L.eta > -DIRECTOR.climbed) return { shots: ["climbout"], hold: [30, 30] };
+    return { shots: ["chase", "wing", "drone"], hold: [7, 10] };
+  }
+  if (L.gnd) return L.eta > -DIRECTOR.after ? { shots: ["touchdown"], hold: [30, 30] } : { shots: ["chase", "tower"], hold: [7, 9] };
+  if (L.eta > DIRECTOR.far + 20) return { shots: ["tower", "wing", "chase", "cockpit", "drone"], hold: [7, 12] };
+  if (L.eta > DIRECTOR.final) return { shots: ["chase", "wing", "tower"], hold: [6, 9] };
+  if (L.eta > DIRECTOR.short) return { shots: ["threshold"], hold: [30, 30] };
+  return { shots: ["touchdown"], hold: [30, 30] };
+}
+
+/** A small deterministic random [0, 1) of a string and a number (the same choices on every run of the same moment). */
+function rand(id: string, n: number): number {
+  let h = 2166136261 ^ n;
+  for (let i = 0; i < id.length; i++) h = Math.imul(h ^ id.charCodeAt(i), 16777619);
+  h = Math.imul(h ^ (h >>> 15), 2246822507);
+  return ((h ^ (h >>> 13)) >>> 0) / 4294967296;
+}
 
 /** A runway as landed on: its threshold [m, fixed to the Earth], its direction, its right, the local up, its length. */
 export interface RunwayWay {
@@ -82,6 +131,10 @@ export const DIRECTOR = {
   roll: 14,
   airborne: 4,
   climbed: 26,
+  /** a departure lined up seen from behind it, low at the runway's start (along [m] before it, across, height); beside it in
+   *  formation (out of the wing by its lengths, up, ahead) */
+  lineup: [-160, 14, 3] as const,
+  wing: [1.7, 0.12, 0.25] as const,
   /** the aircraft's share of the frame's height … width (the lens framing it), the operator's lag [s], the lens's [s] */
   frame: 0.42,
   lag: 0.18,
@@ -124,6 +177,10 @@ export class AirportDirector {
   private aim = new Spring3();
   private chase = new Spring3();
   private subject = "";
+  /** Cinema's: the phase's repertoire now (its key), the hold drawn for the shot, the shots drawn so far */
+  private rep = "";
+  private holdFor = 0;
+  private drawn = 0;
 
   /** A new aircraft: the next shot a cut. */
   follow(id: string) {
@@ -143,9 +200,25 @@ export class AirportDirector {
     this.t += dt;
     this.since += dt;
     const D = DIRECTOR;
-    const want: AirportShot = !L ? "tower" : this.mode === "auto" ? autoShot(L, this.t) : this.mode;
+    let want: AirportShot = !L ? "tower" : this.mode === "auto" ? autoShot(L, this.t) : this.mode === "cinema" ? this.shot : this.mode;
+    if (L && this.mode === "cinema") {
+      // (Cinema: a new phase — its repertoire —, or the shot held its time: another of the repertoire, never the same twice running)
+      const R = repertoire(L);
+      const key = R.shots.join(",");
+      if (key !== this.rep || this.since >= this.holdFor || !R.shots.includes(this.shot)) {
+        const fresh = key !== this.rep || !R.shots.includes(this.shot);
+        if (fresh || this.since >= this.holdFor) {
+          const pool = R.shots.length > 1 ? R.shots.filter((x) => x !== this.shot) : R.shots;
+          want = pool[Math.floor(rand(this.subject, this.drawn) * pool.length)]!;
+          this.holdFor = R.hold[0] + (R.hold[1] - R.hold[0]) * rand(this.subject, this.drawn + 101);
+          this.drawn++;
+        }
+        this.rep = key;
+      }
+    }
     let cut = false;
-    if (want !== this.shot && (this.mode !== "auto" || this.since >= D.hold)) {
+    // (a director's cut after its 3 s at least — Auto's, Cinema's —; a shot chosen by hand at once)
+    if (want !== this.shot && ((this.mode !== "auto" && this.mode !== "cinema") || this.since >= D.hold)) {
       this.shot = want;
       cut = true;
     }
@@ -211,6 +284,34 @@ export class AirportDirector {
           fov = framing(L.len, len3(sub3(centre, eye)), 0.55, 4, 78);
           hand = 0.12;
           tau = 0.12;
+          break;
+        }
+        case "lineup": {
+          // (a departure lined up: from behind it, low at the runway's start, a long lens down the runway — the heat, the spool-up)
+          eye = place(D.lineup[0], s * D.lineup[1], D.lineup[2]);
+          target = add3(L.p, L.up, 0.2 * L.len);
+          // (a long lens far off; widening as it comes close — a landing chosen by hand passes overhead —, a quick aim then)
+          fov = framing(L.len, len3(sub3(target, eye)), 0.5, 2, 78);
+          hand = 0.05;
+          tau = 0.1;
+          break;
+        }
+        case "wing": {
+          // (beside it in formation: out of its wing, a little ahead, a slow drift; the ground cameras' side)
+          // (its side from its way and the runway's up — the traffic's own axes are its rig's, not the Earth's: the eye went under the
+          // ground with them, 26 Nov 2026)
+          const side = unit3(cross3(dir, W.up));
+          const out = add3(
+            add3(scale3(side, s * D.wing[0] * L.len), W.up, D.wing[1] * L.len),
+            dir,
+            D.wing[2] * L.len * Math.sin(this.since * 0.15),
+          );
+          const off = this.chase.step(out, 0.6, dt);
+          eye = add3(L.p, off);
+          target = add3(L.p, L.fwd, 0.1 * L.len);
+          fov = 34;
+          vel = L.v;
+          tau = 0.05;
           break;
         }
         case "chase": {

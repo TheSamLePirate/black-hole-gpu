@@ -53,8 +53,15 @@ export class AirportUi {
   private key = "";
   private at = -1;
   private collapsed = false;
+  /** the cinema's bars (2.39:1 — the picture letterboxed), on by default */
+  private bars: HTMLElement;
+  private barsOn = true;
 
   constructor(private d: AirportUiDeps) {
+    this.bars = h("div", "airport-bars");
+    this.bars.append(h("div", "ab-top"), h("div", "ab-bottom"));
+    this.bars.hidden = true;
+    document.body.append(this.bars);
     this.root = h("aside", "airport-ui");
     this.root.dataset.testid = "airport-ui";
     this.root.hidden = true;
@@ -68,6 +75,7 @@ export class AirportUi {
     const S = airportState();
     document.body.classList.toggle("airport-mode", !!S);
     this.root.hidden = !S;
+    this.bars.hidden = !S || !this.barsOn;
     if (!S) {
       this.key = "";
       return;
@@ -130,13 +138,20 @@ export class AirportUi {
         };
         seg.append(b);
       }
+      const bars = h("button", "au-btn", this.barsOn ? t("Cinema bars: on") : t("Cinema bars: off"));
+      bars.dataset.testid = "airport-ui-bars";
+      bars.onclick = () => {
+        this.barsOn = !this.barsOn;
+        this.key = "";
+        this.build();
+      };
       const next = h("button", "au-btn", t("Next movement"));
       next.dataset.testid = "airport-ui-next";
       next.onclick = () => {
         airportNext();
         this.key = "";
       };
-      body.push(h("div", "au-label", t("Director")), seg, next);
+      body.push(h("div", "au-label", t("Director")), seg, next, bars);
       // the one filmed: its card
       const cur = S.current ? airportCraft(S.current) : null;
       if (cur) body.push(this.card(cur, S.queue.find((q) => q.c.id === cur.id) ?? null, S.pinned === cur.id, U));
@@ -206,7 +221,21 @@ export class AirportUi {
     );
     const vs = c.v[0]! * c.up[0]! + c.v[1]! * c.up[1]! + c.v[2]! * c.up[2]!;
     const rows: [string, string][] = [
-      [t("Phase"), PHASE_LABEL[c.phase] ?? c.phase],
+      // (in a queue: its movement's phase — the traffic's own reads « cruise » low on a final, 26 Nov 2026)
+      [
+        t("Phase"),
+        q
+          ? q.dep
+            ? c.gnd
+              ? Math.hypot(...c.v) < 3
+                ? t("lined up")
+                : t("take-off roll")
+              : t("initial climb")
+            : c.gnd
+              ? t("landing roll")
+              : t("final approach")
+          : (PHASE_LABEL[c.phase] ?? c.phase),
+      ],
       [t("Altitude"), c.gnd ? t("on the ground") : U.fAlt(c.msl)],
       [t("Speed"), U.fSpd(Math.hypot(...c.v))],
       [t("Vertical speed"), U.fVs(vs)],

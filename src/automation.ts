@@ -1072,7 +1072,7 @@ export function installBh(c: BhContext) {
       /** the airport view (controller/airportview.ts — PLAN-AEROPORT-AAA): its arrivals and departures filmed one after the other —
        *  await __bh.airport.start("LFPG", "auto"), .mode("tower"), .next(), .state(), .caption(), .stop() */
       airport: {
-        start: async (code?: string, mode: AirportMode = "auto") => {
+        start: async (code?: string, mode: AirportMode = "cinema") => {
           const f = await airportByCode(c.camera, code);
           if (!f) throw new Error(`no airport ${code ?? "near"}`);
           const why = airportStart(c.camera, f, mode, () => c.spectate(true));
