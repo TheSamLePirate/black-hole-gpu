@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { mkdirSync } from "node:fs";
 import { App, E2E, stopServer } from "./lib/app";
-import { type BridgeView, gpuTimes, sceneStats, showView, widestRoad } from "./lib/bridge-views";
+import { type BridgeView, gpuTimes, passesJs, sceneStats, showView, widestRoad } from "./lib/bridge-views";
 
 // PLAN-PONT-ROUTES-AAA (review A10, B1–B3, 24 Nov 2026): the bridges and roads in their real places, the game's default setup — a
 // Seine bridge cut by a z 14 tile's edge drawn whole (Pont de Grenelle, seen from over the river), Pont Alexandre III's pylons and arch,
@@ -18,6 +18,9 @@ import { type BridgeView, gpuTimes, sceneStats, showView, widestRoad } from "./l
 
 // (an A/B — scripts/ab-e2e.ts —: each side its own folder)
 const OUT = `${process.env.BRIDGES_OUT ?? "remote-results/bridges"}${process.env.AB_SIDE ? `-${process.env.AB_SIDE}` : ""}`;
+// (BRIDGES_PASSES=1 — 26 Nov 2026, the crowns' A/B —: after each view's shot, the render scale pinned at 0.75 and 40 frames profiled —
+// each pass's median, paris-routes-cost's measure —, the game's scale given back after; results.json's `pinned` and `prof`)
+const PASSES = process.env.BRIDGES_PASSES === "1";
 
 const VIEWS: (BridgeView & { label: string })[] = [
   {
@@ -92,7 +95,7 @@ const WITNESSES: (BridgeView & { label: string; witness?: boolean })[] = [
     holds: "true",
     witness: true,
   },
-  // (26 Nov 2026: a crown missed before the ground now seeks another tree drawn within 2 px — the orange fringe at Battery Spencer —:
+  // (26 Nov 2026 — the orange fringe at Battery Spencer, a crown missed before the ground shaded as that ground: its fixes tried here —:
   // the Landes' pines over their clearings and fields from 30 m, low across them — crowns before open ground, the edges' witness)
   {
     key: "landes-edge",
@@ -157,6 +160,18 @@ describe.skipIf(!E2E)("bridges and roads AAA: real places, default setup", () =>
       const gpu = await gpuTimes(app);
       const sc = await sceneStats(app);
       await app.shot(`${OUT}/${v.key}.png`);
+      let pinned: unknown = null;
+      let prof: unknown = null;
+      if (PASSES) {
+        await app.js(`(() => { __bh.forceScale(0.75); __bh.touch(); return 1; })()`);
+        await app.settled(60_000);
+        await Bun.sleep(2000);
+        pinned = await gpuTimes(app);
+        prof = await app.js(passesJs(40));
+        console.log(`  ${v.key} pinned 0.75: ${JSON.stringify(pinned)} ${JSON.stringify(prof)}`);
+        await app.js(`(() => { __bh.forceScale(null); __bh.touch(); return 1; })()`);
+        await app.settled(30_000);
+      }
       const diag: string[] = [];
       if (v.key === "golden-gate-1km") {
         // (the grey stair-stepped blocks before the north tower — PROBLEMES, campaign 2 —: shot again with one part cut each time)
@@ -183,6 +198,8 @@ describe.skipIf(!E2E)("bridges and roads AAA: real places, default setup", () =>
         view: v.key,
         ...view,
         gpu,
+        pinned,
+        prof,
         ...sc,
         shots: [`${OUT}/${v.key}.png`, ...(v.key === "paris-wet-street" ? [`${OUT}/${v.key}-dry.png`] : []), ...diag],
       });

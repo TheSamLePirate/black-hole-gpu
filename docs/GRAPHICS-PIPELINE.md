@@ -20,6 +20,59 @@ Windows/D3D12. Les numéros de ligne sont ceux de `da4e75bd`.
 
 ---
 
+### Liseré des couronnes devant le sol ; la hausse du matériau du 25 novembre bissectée (26 novembre 2026, nuit, branche de l'agent) — mesuré, rien de retenu dans le traceur
+
+Aucune passe, cible, liaison ni noyau changé au final : les variantes ci-dessous ont été mesurées puis retirées (rien de plus ne se
+justifiait au regard de la règle 1). Outil ajouté : `bridges` `BRIDGES_PASSES=1` (après la capture, échelle épinglée 0,75, 40 images
+profilées — médiane par passe —, `pinned` et `prof` dans `results.json`) et le témoin `landes-edge` (pins des Landes à 30 m, lisières
+au-dessus des coupes). Toutes les mesures : kerr-mini (Mac mini M1, sans fenêtre), `scripts/ab-commit.ts` + `scripts/ab-e2e.ts`,
+A B B A, archives `AB_TREE_A`/`AB_TREE_B` ; chiffres = moyenne des deux courses d'un côté ; A/A et B/B = écart entre les deux courses
+d'un même côté. Dossiers `remote-results/<job>` à l'heure de Paris (UTC + 1).
+
+- **Le liseré orange pointillé à Battery Spencer** (PROBLEMES « Ponts et routes, campagne e2e 2 ») : une couronne B cachée par la marge
+  du proxy d'un arbre A (A gagne la profondeur) ; le rayon de `shadeLite` manque A et ombre le sol. `earth lite (raster)` (C17, le
+  matériau) épinglé, A = `c1519dac`, B = la variante, 25–26 nov. 2026 entre 23 h 17 et 01 h 00 UTC :
+
+| Variante (B) | Battery Spencer | Maures (témoin) | Landes (témoin) | Image | Job |
+|---|---:|---:|---:|---|---|
+| (1) l'arbre B cherché à 2 px (5 × 5) et marché dans `shadeLite` (`1c223dda`) | 9,06 → 10,73 (**+1,67**) | 12,93 → 17,23 (**+4,3**) | 9,71 → 12,38 (**+2,67**) | liseré parti | `20261126-003947-bridges` |
+| (2) recherche à 8 voisins, une lecture, avant 300 m | 9,06 → 10,52 (+1,46) | 12,91 → 15,09 (+2,18) | 9,70 → 11,34 (+1,64) | — | `20261126-010053-bridges` |
+| (3) = (2), la boucle présente mais jamais prise | 9,08 → 10,56 (**+1,48**) | 13,10 → 14,71 (+1,6) | 9,68 → 11,14 (**+1,45**) | inchangée | `20261126-014804-bridges` |
+| (4) emprunt dans `shadeLiteFinish` (8 voisins) | matériau inchangé ; `finishing` 1,20 → 1,34 | 1,65 → 2,10 | 1,43 → 1,74 | liseré **resté** | `20261126-011437-bridges` |
+| (4′) emprunt, voisinage 5 × 5 | `finishing` 1,19 → 1,49 | 1,63 → 2,74 | 1,45 → 2,14 | liseré resté | `20261126-013114-bridges` |
+
+  A/A et B/B du matériau 0,00–0,03 ms partout (une course des Maures 0,43). **La présence du code coûte (3) presque tout (1)–(2)** :
+  l'allocation de registres d'Apple, pas le travail (le travail seul ≤ 0,6 ms aux Maures). Rue de Rivoli, (1) mettait le matériau à
+  16,2 ms contre 13,2 sur `c1519dac` (+3 ms : les arbres de rue ; `pack-ab` et `bisect-4` ci-dessous). GPU p50 à l'échelle du jeu, (1) :
+  Battery Spencer 43,5 → 43,7, Maures 39,5 → 43,0, Landes 33,9 → 37,3 (`20261126-001734-bridges`, A/A 0,8 · 2,7 · 0,6). Images :
+  `docs/progress/ponts-2026-11-25/golden-gate-1km-lisere-marche-zoom-avant-apres.jpg` (1), `…-lisere-emprunt-zoom-avant-apres.jpg` (4′),
+  `landes-lisiere-temoin-marche-avant-apres.jpg` (1, témoin). Le refus de (4) n'est pas sondé ; les points bleu-gris le long du cyprès
+  sont le même cas devant l'eau (finis par `shadeWaterFinish`), hors de (4).
+- **La hausse d'`earth lite (raster)` du 25 novembre, bissectée** (section « Le coût net de la journée » ci-dessous : +0,9–1,0 ms rue de
+  Rivoli). `paris-routes-cost` `PRC_VIEWS=rivoli-dry,grenelle`, échelle épinglée 0,75, 40 images profilées ; le test de cet arbre contre
+  les deux serveurs. Matériau, rue de Rivoli (Pont de Grenelle) :
+
+| A → B | Rivoli | Δ | A/A · B/B | Grenelle Δ | Job (`remote-results/…`) |
+|---|---:|---:|---|---:|---|
+| `18a6e4dd` → `3d3c4e3f` (lot « coût de Paris ») | 12,12 → 12,64 | **+0,52** | 0,03 · 0,09 | −0,16 | `20261126-002643-paris-routes-cost` |
+| `3d3c4e3f` → `aa337add` (main du soir + `b8fd6cf8`) | 12,54 → 13,10 | **+0,56** | 0,03 · 0,07 | −0,05 | `…-004741-…` |
+| `3d3c4e3f` → `4e95c6bc` | 12,54 → 13,25 | +0,71 | 0,01 · 0,01 | +0,11 | `…-013921-…` |
+| `3d3c4e3f` → `8c21bb46` | 12,56 → 13,34 | +0,78 | 0,01 · 0,03 | +0,10 | `…-015359-…` |
+| `ec321c08` → `1d702c49` (défauts de routes 1) | 12,54 → 12,83 | **+0,29** | 0,06 · 0,11 | +0,28 (A/A 0,30) | `…-021038-…` |
+| `aa337add` → `c1519dac` (main) | 13,45 → 13,16 | −0,29 | 0,03 · 0,00 | −0,14 | `…-012024-…` |
+| `3d3c4e3f` → `091ddd33` (sans `b8fd6cf8`) | 12,53 → 16,16 | +3,6 | 0,01 · 0,06 | +2,1 | `…-003428-…` |
+
+  **Les lots en cause** : la moitié est **`3d3c4e3f`** (l'eau lue une fois — son couvert et son genre dans les drapeaux de
+  l'enregistrement : le noyau du matériau garde deux flottants de plus jusqu'à la fin ; son propre lot mesurait +0,6 rue de Rivoli, contre
+  `earth lite: light` −2,5 ici) ; **`1d702c49`** +0,29 (carrefours, trottoirs jusqu'aux façades, ombres de Paris) ; le reste (~+0,5)
+  parmi `77cb9902`, `17d13083`, `f4f246d7`, `5f76368f`, `8c21bb46`, non séparé (`ec321c08` contre `3d3c4e3f` non mesuré) ; `4e95c6bc` →
+  `aa337add` −0,15 et la suite jusqu'à `c1519dac` −0,29 : **main est à +0,5 ms sur `18a6e4dd` rue de Rivoli, −0,2 au Pont de Grenelle**.
+  `earth lite: light` suit : 3d3c4e3f → 8c21bb46 +0,57 rue de Rivoli. Le +3,6 de `091ddd33` seul est le croisement des feux d'approche
+  que `b8fd6cf8` a repris (à cette pose ; la campagne le donnait neutre à la sienne). **Plafond (règle 1) : 0,5 ms par lot — essayé** :
+  l'eau empaquetée en un entier avant le matériau (`liteWaterFlags`, un registre au lieu de deux) : 16,22 → 16,38 rue de Rivoli,
+  15,48 → 15,67 au Pont de Grenelle (A/A 0,09 · 0,04, B/B 0,38 · 0,41 ; `20261126-004900-paris-routes-cost`) — aucun gain, retiré.
+  Rien d'autre de bon marché et neutre pour l'image.
+
 ### L'écume du monde ne lit plus de mips jamais faites ; couronnes manquées entre couronnes (25 novembre 2026, nuit, branche de l'agent, `c3ea0971`, `7f37c7c1`) — mesuré
 
 - **`sea fft` → `foamWorld` (`sea/fft-gpu.ts`, `seafft.wgsl`)** : la passe d'écume du monde (S4) somme le jacobien des cascades aux mips
@@ -172,7 +225,7 @@ Dossiers : `remote-results/20261125-185006-prc2`, `…-185010-br2`, `…-185012-
   (le matériau) +0,9 à +1,0 ms rue de Rivoli, +0,25 à +0,7 ailleurs — sous le gain net de chaque vue ; ni la marche des routes (coupe
   `liteSkip` 2²⁷ : −2,25 à −3,35 ms sur 18a6e4dd comme sur main, `remote-results/20261125-170829-prc-roads`) ni la garde des feux d'approche
   (b8fd6cf8 contre main 4e95c6bc, Rivoli et Alexandre III : `earth lite (raster)` 14,4–14,6 des deux côtés, GPU p50 au bruit,
-  `remote-results/20261125-163303-prc-guard`) ; le lot en cause non trouvé.
+  `remote-results/20261125-163303-prc-guard`) ; ~~le lot en cause non trouvé~~ — **bissecté le 26 nov. 2026** (section « Liseré des couronnes devant le sol ; la hausse du matériau du 25 novembre bissectée » en tête) : `3d3c4e3f` +0,52, `1d702c49` +0,29, ~+0,5 parmi cinq lots du soir non séparés, −0,4 repris ensuite.
 - **J0 Toulon** (première campagne, main 4e95c6bc contre 18a6e4dd, vol de 70 s, `J0_PHASES=flight`, `…-160208-j0-day`) : GPU p50 49,7 / 50,1
   contre 50,2 / 49,9 ms, p95 72,6 / 72,8 contre 72,7 / 72,4 — **inchangé** ; images par seconde 19,5 / 19,3 contre 19,3 / 19,4.
 - **J0 Toulon sur main `8355e189`** (fin de journée, toutes les fusions du 25 comprises — miroir de la Seine, couronnes, aires de SFO) contre
@@ -1561,7 +1614,7 @@ Paris jusqu'à `earthSettled` » chronométré par étape.
 
 <!-- pipeline-inventory:begin (bun scripts/pipeline-inventory.ts --write) -->
 
-_Généré le 2026-11-25T22:35:51Z sur `7f37c7c1` (arbre de travail). Ne pas éditer à la main : relancer l'outil._
+_Généré le 2026-11-26T01:19:28Z sur `1c223dda` (arbre de travail). Ne pas éditer à la main : relancer l'outil._
 
 **130 sites de création de pipeline** (86 rendu, 44 calcul, dont 66 asynchrones) et 43 `createShaderModule` dans 32 fichiers ; **44 programmes WGSL** (16 fichiers .wgsl, 28 chaînes dans le TypeScript) ; **66 libellés de passes** du profileur GPU (+ 11 sites à libellé dynamique).
 
