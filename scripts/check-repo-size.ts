@@ -11,7 +11,12 @@
 // summed apart from the pointers' own sizes, a warning past WARN_LFS_MB (GitHub's LFS storage and bandwidth quotas).
 //
 // Raising a budget is a decision made in the same change, in this file, where a review sees it.
-import { $ } from "bun";
+// Capture Git output directly: Bun Shell's buffered commands can stall in the pre-push process.
+function git(...args: string[]): string {
+  const result = Bun.spawnSync(["git", ...args]);
+  if (!result.success) throw new Error(`git ${args.join(" ")}: ${result.stderr.toString()}`);
+  return result.stdout.toString();
+}
 
 const MAX_FILE_MB = 8;
 const WARN_ADDED_MB = 20;
@@ -35,7 +40,7 @@ const fail = (msg: string) => console.error(ci ? `::error title=Repository size:
 /** path → its blob (id, size) at a revision — files only */
 async function tree(rev: string) {
   const out = new Map<string, { sha: string; size: number }>();
-  for (const line of (await $`git ls-tree -r -l -z ${rev}`.quiet().text()).split("\0")) {
+  for (const line of git("ls-tree", "-r", "-l", "-z", rev).split("\0")) {
     const m = /^\d+ blob ([0-9a-f]+) +(\d+)\t(.*)$/s.exec(line);
     if (m) out.set(m[3]!, { sha: m[1]!, size: Number(m[2]) });
   }
@@ -46,9 +51,13 @@ async function binaries() {
   const out = new Set<string>(),
     lfs = new Set<string>();
   // (git check-attr -z: path, attribute, value — in threes)
-  const attrs = (await $`git ls-files -z | git check-attr --stdin -z filter`.quiet().text()).split("\0");
+  // Buffer the input explicitly: the shell pipeline can hang under the pre-push subprocess.
+  const paths = Buffer.from(git("ls-files", "-z"));
+  const checked = Bun.spawnSync(["git", "check-attr", "--stdin", "-z", "filter"], { stdin: new Uint8Array(paths) });
+  if (!checked.success) throw new Error(`git check-attr: ${checked.stderr.toString()}`);
+  const attrs = checked.stdout.toString().split("\0");
   for (let i = 0; i + 2 < attrs.length; i += 3) if (attrs[i + 2] === "lfs") lfs.add(attrs[i]!);
-  for (const line of (await $`git ls-files --eol -z`.quiet().text()).split("\0")) {
+  for (const line of git("ls-files", "--eol", "-z").split("\0")) {
     const m = /^i\/(\S*)\s+w\/\S*\s+attr\/[^\t]*\t(.*)$/s.exec(line);
     if (m && m[1] === "-text" && !lfs.has(m[2]!)) out.add(m[2]!);
   }
@@ -56,7 +65,7 @@ async function binaries() {
 }
 /** an LFS pointer's object size [bytes] (its "size" line) */
 async function lfsSize(sha: string) {
-  const m = /^size (\d+)$/m.exec(await $`git cat-file -p ${sha}`.quiet().text());
+  const m = /^size (\d+)$/m.exec(git("cat-file", "-p", sha));
   return m ? Number(m[1]) : 0;
 }
 
@@ -77,7 +86,7 @@ console.log(`check-repo-size: ${lfs.size} file(s) under Git LFS, ${mb(lfsTotal)}
 if (lfsTotal > WARN_LFS_MB * MB) warn(`the LFS objects pass ${WARN_LFS_MB} MB — GitHub's LFS quotas, see docs/ASSETS.md`);
 
 const base = arg("base");
-const baseOk = base && (await $`git rev-parse --verify --quiet ${`${base}^{commit}`}`.nothrow().quiet()).exitCode === 0;
+const baseOk = base && Bun.spawnSync(["git", "rev-parse", "--verify", "--quiet", `${base}^{commit}`]).success;
 if (base && !baseOk) warn(`no revision ${base} here (a shallow clone?) — the new blobs not checked`);
 if (baseOk) {
   const before = await tree(base);

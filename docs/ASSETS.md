@@ -127,3 +127,7 @@ in the runtime codec. Because meshoptimizer's generic triangle simplifier cannot
 LOD 1 is built directly in `treeModel(kind, aspect, seed, 1)` from the same random stream, trunk and clump anchors (`lodStudy`:
 60.1 %–64.2 % triangle reduction across all 12 species/aspect pairs while preserving optical coverage within < 3.8 %).
 Runtime gzip support already exists in `src/util/inflate.ts`.
+
+Le contrôle `scripts/check-repo-size.ts` capture les sorties de Git directement avec `Bun.spawnSync`
+(depuis le 26 novembre 2026) ; les chemins de `git check-attr --stdin -z` sont fournis en buffer NUL.
+Cela évite le blocage des commandes bufferisées Bun Shell observé lors du pre-push ; budgets inchangés.

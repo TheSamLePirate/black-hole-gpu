@@ -12096,3 +12096,12 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   toujours les géométries de substitution mises à l'échelle ; aucune fidélité à une cellule propre à chaque type
   réel n'est revendiquée. Points des modèles statiques définis dans leur repère, pas de nouvelle animation de leurs surfaces.
 - Suite : refaire la validation visuelle après résolution de l'entrée KLAX du banc, sans attribuer de gain mesuré ici.
+
+### 2026-11-26 21:53 UTC — Déblocage du contrôle de taille avant push
+
+- Le push de `5048997c` a passé Biome, TypeScript, shaders et layouts sur son commit isolé,
+  puis est resté sans sortie dans `check-repo-size`. Le processus a été arrêté, sans contourner le hook.
+- `scripts/check-repo-size.ts` capture désormais Git directement avec `Bun.spawnSync`, entrée NUL
+  explicite pour les attributs, au lieu des commandes bufferisées Bun Shell. Contrats et budgets conservés.
+- Preuve : script complet exécuté avec `--base origin/main`, sortie normale et code 0 ; Biome passe.
+  Contribution : contrôle de livraison rétabli ; aucun gain de rendu revendiqué.
