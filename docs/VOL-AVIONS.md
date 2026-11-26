@@ -574,6 +574,11 @@ commence d'elle-même (vitesse vers green dot). Au ND : **T/C** et **T/D** (flè
 **(T/C)**, **(T/D)**, **(DECEL)** et l'altitude prévue à chaque point. Attention : en palier (ALT), changer l'altitude du FCU ne fait
 plus bouger l'avion ; il faut pousser ou tirer le bouton.
 
+**Le glide dans le poste** (26 nov. 2026, réglage `a320GlideAid`, oui par défaut — Réglages › Affichage › L'A320) : l'aide « Piste
+et approche » du F-35 dessinée sur la vue du poste de l'A320 — le contour de la piste à portée, son axe prolongé sur 15 km, le point
+visé du glide et l'avion dessus, la distance et l'écart à l'axe, le vent, FLARE. Le vrai A320 n'a pas de collimateur tête haute :
+c'est une aide du jeu.
+
 **La roue de l'A320** (Tab maintenu, depuis le 26 nov. 2026 — avant, la roue des vaisseaux) : **Pilote auto ›** (AP1, A/THR, FD,
 LOC, APPR, EXPED, NAV), **FCU ›** (Vitesse, Cap, Altitude, V/S : des pas ±, **Sélectée/OP CLB…** = le bouton tiré, **Gérée/NAV/Palier**
 = poussé — les mêmes appels que les boutons du poste), **Configuration ›** (train, volets par cran 0–FULL, aérofreins, spoilers

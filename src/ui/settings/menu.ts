@@ -202,7 +202,11 @@ export const PLAYER_MENU: PlayerGroup[] = [
       "f35RadarRelief",
     ],
   },
-  { tab: "display", title: { fr: "L'A320", en: "The A320" }, keys: ["a320Livery", "a320Assist", "a320Start", "a320Effects"] },
+  {
+    tab: "display",
+    title: { fr: "L'A320", en: "The A320" },
+    keys: ["a320Livery", "a320Assist", "a320GlideAid", "a320Start", "a320Effects"],
+  },
   {
     tab: "display",
     title: { fr: "Cockpit", en: "Cockpit" },

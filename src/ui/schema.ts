@@ -3741,6 +3741,16 @@ export const SCHEMA: ControlDef[] = [
     keywords: "hud runway approach glide slope localizer aim flare landing",
   },
   {
+    key: "a320GlideAid",
+    type: "toggle",
+    section: "game",
+    group: "HUD aids",
+    label: "A320: runway & glide in the cockpit",
+    effect: "none",
+    help: "In the A320's cockpit, the F-35's runway aid drawn over the view: the runway's outline, its centreline 15 km back, the glide path's aim point and the craft on it, the offsets, FLARE (the real A320 has no head-up display: an aid of the game's).",
+    keywords: "a320 hud runway approach glide slope aim cockpit",
+  },
+  {
     key: "hudAllRunways",
     type: "toggle",
     section: "game",

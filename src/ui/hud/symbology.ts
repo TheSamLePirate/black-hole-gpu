@@ -365,7 +365,7 @@ export interface SymFrame {
   show?: Record<HudItem, boolean>;
   /** only the docking's aid — its guide and the COAS —: a view the whole HUD does not show in (the docking camera:
    *  game/hudkind.ts hudInView "bare") */
-  only?: "dock";
+  only?: "dock" | "runway";
   /** a small screen (a phone): the symbology in the view kept, the boxes, scopes, heading tape and bank
    *  scale left to the HUD's panels (set here) */
   compact?: boolean;
@@ -443,6 +443,12 @@ export function drawSymbology(F: SymFrame) {
   if (F.only === "dock") {
     if (i.dock && i.dockGuide && !i.dock.docked && s.hudDock && on(F, "dock")) drawDock(F, pr, stroke, text, inside);
     if (i.dockBore && i.dirs.dock && s.hudDock) drawCoas(F, i.dockBore as V3, i.dirs.dock as V3, pr, stroke, text, inside);
+    return;
+  }
+  // (the A320's cockpit — a view the HUD does not show in —: the runway's aid alone, the F-35's own — its outline, its centreline, the
+  // glide path's aim point, the craft on it, the offsets, FLARE —, as Sam asked on 26 Nov 2026)
+  if (F.only === "runway") {
+    if (F.runway && s.hudRunway && F.density < 2) drawRunway(F, F.runway, pr, stroke, text, inside);
     return;
   }
 

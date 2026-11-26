@@ -82,6 +82,14 @@ l'état d'une mission ou d'un combat **non sauvé, dit** ; le réseau **« entre
 
 ## Journal
 
+### 2026-11-26 17:46 UTC — A320 : le glide affiché dans le poste, comme pour le F-35 (demande de Sam)
+
+- Réalisé : `ui/hud/symbology.ts` — un mode « piste seule » (`only: "runway"`, à côté de « amarrage seul ») qui dessine l'aide
+  `drawRunway` du F-35 ; `ui/flighthud.ts` — dans la vue nue du poste de l'A320, cette aide seule ; réglage `a320GlideAid` (oui par
+  défaut ; schéma, menu « L'A320 », FR) ; VOL-AVIONS (cours).
+- Preuves : tests réglages / symbologie / i18n verts ; vu (headless, ce Mac) dans le poste de l'A320 en finale à KSFO : cartouche de
+  piste, point visé, pistes repérées. Non vu : en vol complet au banc.
+
 ### 2026-11-26 17:42 UTC — A320 V2 : la vraie cause du « trop haut » — la rejointe du jeu au point de jonction, jamais pour l'A320 en NAV
 
 - Constaté (vol n° 6, kerr-mini) : même HDG au « DECEL ». Relu : la phase approche venait de la rejointe du jeu (`ilsStart`, lancée par

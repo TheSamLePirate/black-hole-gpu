@@ -2618,6 +2618,26 @@ export class FlightHud {
       if (Math.abs(x) > 1.05 || Math.abs(y) > 1.05) return null;
       return [((x + 1) / 2) * W, ((1 - y) / 2) * H] as const;
     };
+    // (the A320's cockpit: the runway and its glide path drawn over the view, the F-35's aid — settings.a320GlideAid)
+    if (this.view === "bare" && !helmet && this.s.vessel === "a320" && this.s.a320GlideAid !== false && this.s.shipMount === "cockpit") {
+      drawSymbology({
+        ctx,
+        W,
+        H,
+        dpr,
+        fov: this.s.fov,
+        s: this.s,
+        i,
+        density: this.density,
+        show: hudShownFor(this.phase, this.kind),
+        kind: this.kind,
+        runway: this.runway?.() ?? null,
+        outside: false,
+        top: (safeFrame().top - 16) * dpr,
+        only: "runway",
+      });
+      return;
+    }
     if (this.view === "bare" && !helmet) {
       // (no symbology in this view but the docking's aid — the docking camera: its guide, the COAS, as its card stays —
       // and what a fight shows in the world: its explosions — they are not the HUD's)

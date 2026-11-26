@@ -559,6 +559,7 @@ export interface Settings {
   hudFuture: boolean; // the ship's places to come: +10, +30, +60 s, a quarter of the orbit
   hudImpact: boolean; // where the path meets the ground (or the air's top, the horizon), its countdown
   hudRunway: boolean; // the runway in reach: its outline, centreline, aim point, the offsets, FLARE
+  a320GlideAid: boolean; // the A320's cockpit: the runway's aid (its outline, centreline, glide path's aim point) drawn over the view
   hudAllRunways: boolean; // the airport's other runways too, toned down, their numbers (PLAN-APPROCHES AP7: Sam, on by default)
   approachPathOnMap: boolean; // the approach chosen or flown drawn on the tactical map, the HUD's radar, the TSD (PLAN-APPROCHES AP8)
   approachProfile: boolean; // the approach's vertical profile under the tactical map (AP4's PROF; AP8: a setting)
@@ -962,6 +963,7 @@ export function defaultSettings(): Settings {
     hudFuture: true,
     hudImpact: true,
     hudRunway: true,
+    a320GlideAid: true,
     hudAllRunways: true,
     approachPathOnMap: true,
     approachProfile: false,
@@ -2403,6 +2405,7 @@ export const SETTING_KIND: Record<keyof Settings, SettingKind> = {
   hudFuture: "pref",
   hudImpact: "pref",
   hudRunway: "pref",
+  a320GlideAid: "pref",
   hudAllRunways: "pref",
   approachPathOnMap: "pref",
   approachProfile: "pref",

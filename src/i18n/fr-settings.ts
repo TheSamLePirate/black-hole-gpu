@@ -1068,6 +1068,9 @@ export default {
   "Where the predicted path meets the ground (a red reticle on the spot, as the ground turns now) or the air's top (amber, the entry), or Gargantua's horizon — with the countdown; off screen, an arrow at the edge.":
     "Où la trajectoire prédite rencontre le sol (un réticule rouge sur le point, selon la rotation actuelle du sol) ou le sommet de l'atmosphère (ambre, l'entrée), ou l'horizon de Gargantua — avec le compte à rebours ; hors écran, une flèche au bord.",
   "Runway & approach": "Piste et approche",
+  "A320: runway & glide in the cockpit": "A320 : piste et glide dans le poste",
+  "In the A320's cockpit, the F-35's runway aid drawn over the view: the runway's outline, its centreline 15 km back, the glide path's aim point and the craft on it, the offsets, FLARE (the real A320 has no head-up display: an aid of the game's).":
+    "Dans le poste de l'A320, l'aide à la piste du F-35 dessinée sur la vue : le contour de la piste, son axe prolongé sur 15 km, le point visé du glide et l'avion dessus, les écarts, FLARE (le vrai A320 n'a pas de collimateur tête haute : une aide du jeu).",
   "All the airport's runways": "Toutes les pistes de l'aéroport",
   Approaches: "Approches",
   kt: "kt",
