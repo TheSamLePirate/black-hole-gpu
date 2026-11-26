@@ -100,10 +100,23 @@ export interface CifpProc {
   missed: Leg[];
 }
 
+/** A SID or a STAR (sections PD, PE — PLAN-A320-VOL-AAA N2): its runway transitions (« RW10L », « RW19B » both 19s, « ALL »), its common
+ *  route, its en-route transitions (named by their en-route end: a SID's last fix, a STAR's first) — each a list of legs. A SID is flown
+ *  runway → common → en-route; a STAR en-route → common → runway. */
+export interface CifpTerminal {
+  field: string;
+  kind: "SID" | "STAR";
+  id: string;
+  rwys: { name: string; legs: Leg[] }[];
+  common: Leg[];
+  enroute: { name: string; legs: Leg[] }[];
+}
+
 export interface CifpData {
   cycle: string;
   effective: string;
   procs: CifpProc[];
+  terminals: CifpTerminal[];
   report: {
     procedures: number;
     kept: number;
@@ -208,7 +221,8 @@ export function readCifp(text: string): CifpData {
   const en = new Map<string, Place>(); // ident|region (EA, D, DB)
   const vari = new Map<string, number>();
   const locs = new Map<string, CifpLoc>(); // airport|ident
-  const pf: (RawLeg & { field: string; code: string })[] = [];
+  const pf: (RawLeg & { field: string; code: string; sub: string })[] = [];
+  const pt: (RawLeg & { field: string; code: string; sub: string })[] = [];
   for (const l of lines) {
     if (l.length < 100 || l[0] !== "S") continue;
     const sec = l[4];
@@ -248,10 +262,11 @@ export function readCifp(text: string): CifpData {
         };
         locs.set(`${field}|${ident}`, loc);
         pc.set(`${field}|${ident}`, { lat: loc.lat, lon: loc.lon });
-      } else if (sub === "F") {
+      } else if (sub === "F" || sub === "D" || sub === "E") {
         if (l[38] !== "0" && l[38] !== "1") continue;
         const vang = col(l, 103, 106).trim();
-        pf.push({
+        (sub === "F" ? pf : pt).push({
+          sub,
           field,
           code: col(l, 14, 19).trim(),
           rt: l[19]!,
@@ -292,21 +307,8 @@ export function readCifp(text: string): CifpData {
     if (g) g.push(r);
     else groups.set(k, [r]);
   }
-  const report: CifpData["report"] = { procedures: groups.size, kept: 0, left: {}, converted: {}, unplaced: 0, kinds: {} };
-  const out = (why: string) => (report.left[why] = (report.left[why] ?? 0) + 1);
-  const procs: CifpProc[] = [];
-  for (const [, g] of groups) {
-    const { field, code } = g[0]!;
-    const kind = kindOfLetter(code[0]!);
-    if (!kind) {
-      out(`kind ${code[0]}`);
-      continue;
-    }
-    const pr = procRunway(code);
-    if (!pr) {
-      out("circling (no runway)");
-      continue;
-    }
+  /** The legs of an airport's procedures: their fixes placed, their courses true, their constraints. */
+  const legOf = (field: string) => {
     const v = vari.get(field) ?? 0;
     const place = (r: RawLeg): Place | null => {
       if (!r.fix) return null;
@@ -333,6 +335,24 @@ export function readCifp(text: string): CifpData {
         ...(r.spd ? { spd: Math.round(r.spd * KT) } : {}),
       };
     };
+    return leg;
+  };
+  const report: CifpData["report"] = { procedures: groups.size, kept: 0, left: {}, converted: {}, unplaced: 0, kinds: {} };
+  const out = (why: string) => (report.left[why] = (report.left[why] ?? 0) + 1);
+  const procs: CifpProc[] = [];
+  for (const [, g] of groups) {
+    const { field, code } = g[0]!;
+    const kind = kindOfLetter(code[0]!);
+    if (!kind) {
+      out(`kind ${code[0]}`);
+      continue;
+    }
+    const pr = procRunway(code);
+    if (!pr) {
+      out("circling (no runway)");
+      continue;
+    }
+    const leg = legOf(field);
     const sorted = (rs: RawLeg[]) => [...rs].sort((a, b) => a.seq - b.seq);
     const fin = sorted(g.filter((r) => r.rt !== "A"));
     const iMap = fin.findIndex((r) => r.map);
@@ -375,5 +395,34 @@ export function readCifp(text: string): CifpData {
     report.kept++;
     report.kinds[kind] = (report.kinds[kind] ?? 0) + 1;
   }
-  return { cycle, effective, procs, report };
+  // the SIDs and STARs (PD, PE): their legs by route type — ARINC 424's: a SID's 1/4/F/T a runway transition, 2/5/M its common route,
+  // 3/6/S/V an en-route transition (0, an engine-out procedure, left out); a STAR's 3/6/9/S a runway transition, 2/5/8/M common, 1/4/7/F
+  // en-route
+  const tg = new Map<string, (RawLeg & { field: string; code: string; sub: string })[]>();
+  for (const r of pt) {
+    const k = `${r.field}|${r.sub}|${r.code}`;
+    const g = tg.get(k);
+    if (g) g.push(r);
+    else tg.set(k, [r]);
+  }
+  const terminals: CifpTerminal[] = [];
+  for (const [, g] of tg) {
+    const { field, code, sub } = g[0]!;
+    const sid = sub === "D";
+    const rwyT = sid ? "14FT" : "369S",
+      comT = sid ? "25M" : "258M",
+      enrT = sid ? "36SV" : "147F";
+    const leg = legOf(field);
+    const sorted = (rs: RawLeg[]) => [...rs].sort((a, b) => a.seq - b.seq);
+    const by = (types: string) => {
+      const names = [...new Set(g.filter((r) => types.includes(r.rt)).map((r) => r.trans))];
+      return names.map((name) => ({ name, legs: sorted(g.filter((r) => types.includes(r.rt) && r.trans === name)).map(leg) }));
+    };
+    const common = by(comT)[0]?.legs ?? [];
+    const rwys = by(rwyT);
+    const enroute = by(enrT);
+    if (!common.length && !rwys.length && !enroute.length) continue;
+    terminals.push({ field, kind: sid ? "SID" : "STAR", id: code, rwys, common, enroute });
+  }
+  return { cycle, effective, procs, terminals, report };
 }

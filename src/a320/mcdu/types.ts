@@ -3,6 +3,7 @@
 // (the host: the FMS's data, the FMGC, the game's flight plan, the place, the weights, the airfields).
 
 import type { Approach } from "../../world/approaches";
+import type { Terminals } from "../../world/terminals";
 import type { Airfield } from "../../world/runways";
 import type { FlightPlan } from "../../game/flightplan";
 import type { Fmgc } from "../fmgc/fmgc";
@@ -45,6 +46,8 @@ export interface McduHost {
   selectApproach?(sel: { field: string; approach: string; via: string }): { ok: boolean; say: string };
   arrivalApproach?(): Approach | null;
   insertArrival?(): string;
+  /** PLAN-A320-VOL-AAA N2 — an airfield's SIDs and STARs (the FAA's CIFP: US airports; elsewhere none), null while fetched */
+  terminals?(code: string): Terminals | null;
   /** Optional A320 Lower ECAM page override (e.g. "obcPage" or "" for automatic — PLAN-LINUX-OBC) */
   setSdPage?(page: string): void;
 }

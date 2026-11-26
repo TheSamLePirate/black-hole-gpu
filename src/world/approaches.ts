@@ -116,6 +116,15 @@ export interface CifpRecord {
   ma: LegRecord[];
 }
 
+/** A SID or a STAR of the FAA's CIFP (assets/approaches/v1/procs/<field>.json — PLAN-A320-VOL-AAA N2): its runway transitions
+ *  (« RW10L », « RW19B » both 19s, « ALL »), its common route, its en-route transitions — a SID flown rw → c → en, a STAR en → c → rw. */
+export interface TerminalRecord {
+  id: string;
+  rw: [string, LegRecord[]][];
+  c: LegRecord[];
+  en: [string, LegRecord[]][];
+}
+
 /** A tile's leg back to a leg. */
 export function legOf(r: LegRecord): Leg {
   const [t, fix, lat, lon, crs, lo, hi, spd] = r;
@@ -369,6 +378,8 @@ let base = "approaches/v1/";
 export function setApproachesBase(url: string) {
   base = url.endsWith("/") ? url : `${url}/`;
 }
+/** Where the approaches' files are (world/terminals.ts fetches its SIDs and STARs beside them). */
+export const approachesBase = () => base;
 const tiles = new Map<string, ReturnType<typeof decodeApproachTile> & { used: number }>();
 const pending = new Map<string, Promise<void>>();
 let clock = 0;

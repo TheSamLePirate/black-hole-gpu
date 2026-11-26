@@ -64,6 +64,7 @@ import { cockpitHull } from "./system/collide";
 import { afterSkyPrefetch, prefetchSkyAssets, Renderer, type FrameStats, type OfflineStatus } from "./renderer";
 import { ArrivalPrefetch } from "./system/arrival-prefetch";
 import { airwayLegs, navFind, navFindSync, navResolve, navWarm } from "./world/navdb";
+import { terminalsOf } from "./world/terminals";
 import { a320Wheel } from "./ui/a320wheel";
 import type { ZoneSources } from "./system/zones";
 import { swappable } from "./util/swappable";
@@ -4793,6 +4794,8 @@ async function main() {
       return d?.field ? (camera.approachForField(d.field.icao ?? d.name, W.at(-2) ?? null)?.a ?? null) : null;
     },
     insertArrival: () => camera.routeProcedures(),
+    // (PLAN-A320-VOL-AAA N2: the SIDs and STARs of the FAA's CIFP)
+    terminals: (code) => terminalsOf(code),
     setSdPage: (page) => {
       deckPoser.props["ecam/sd-page"] = page;
     },

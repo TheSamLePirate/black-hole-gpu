@@ -7,6 +7,7 @@
 
 import type { Waypoint } from "../../game/flightplan";
 import type { Approach } from "../../world/approaches";
+import { insertTerminal, type Terminal, terminalsFor, terminalWaypoints } from "../../world/terminals";
 import type { LskResult, Mcdu, Page } from "./mcdu";
 import { brackets, MC, type Line, padR, type Run, run, type Screen } from "./screen";
 import { distAlong, fieldWp, hhmm, legInto, parseLatLon, parsePbd, tons, trip } from "./util";
@@ -219,7 +220,13 @@ const latrev: Page = {
       return m.open("arrival");
     }
     if (key === "L1") {
-      if (i === 0) return "notallowed";
+      if (i === 0) {
+        if (!R.wps[0]?.field || !m.host.terminals) return "notallowed";
+        m.depMode = "rwy";
+        m.depTop = 0;
+        m.depRwy = m.depSid = m.depTrans = null;
+        return m.open("departure");
+      }
       m.host.directTo(i);
       m.open("fpln");
       return;
@@ -316,6 +323,17 @@ function arrivalOf(m: Mcdu): { code: string; list: Approach[] } | null {
   const list = m.host.approaches?.(code);
   return list ? { code, list } : null;
 }
+/** The destination's STARs for the approach's runway (all while none is chosen) and the one in the plan (its points' marks). */
+function starOf(m: Mcdu, a: Approach | null): { list: Terminal[]; active: { star: string; trans: string | null } | null } {
+  const R = m.host.route();
+  const dest = R.wps.at(-1);
+  const T = dest?.field && m.host.terminals ? m.host.terminals(dest.field.icao ?? dest.name) : null;
+  const w = R.wps.find((x) => x.proc?.star);
+  return {
+    list: T ? terminalsFor(T.star, a?.rwy ?? null) : [],
+    active: w?.proc?.star ? { star: w.proc.star, trans: w.proc.trans ?? null } : null,
+  };
+}
 const srcOf = (a: Approach) => (a.source === "cifp" ? "FAA" : a.source === "navdat" ? "NAVDAT" : "BUILT");
 // (the published transitions only — the CIFP's —: a built approach's IAF on the axis is no VIA)
 const viasOf = (a: Approach) => (a.source === "cifp" ? a.transitions.map((t) => t[0]?.fix ?? "").filter(Boolean) : []);
@@ -341,24 +359,50 @@ const arrival: Page = {
       },
     ];
     const a = A?.list.find((x) => x.id === app) ?? null;
+    // (the STAR — PLAN-A320-VOL-AAA N2: the CIFP's, for the approach's runway; its en-route transition)
+    const st = starOf(m, a);
+    const star = m.arrStar ?? st.active?.star ?? null;
+    const trans = m.arrTrans ?? (m.arrStar === null ? (st.active?.trans ?? null) : null);
+    const stTmp = m.arrStar !== null || m.arrTrans !== null;
+    lines[0]!.rs = [run("STAR ")];
+    lines[0]!.r = [run(star ? `${star}${trans ? `.${trans}` : ""}` : "------", star ? (stTmp ? MC.yellow : MC.green) : MC.white)];
+    const sT = st.list.find((x) => x.id === star) ?? null;
     const items: { label: string; right: string }[] =
       m.arrMode === "via" && a
         ? [{ label: "NO VIA", right: "VECTORS" }, ...viasOf(a).map((v) => ({ label: v, right: "" }))]
-        : (A?.list ?? []).map((x) => ({
-            label: x.id,
-            right: `${x.kind}${x.loc?.cat ? ` CAT ${x.loc.cat}` : ""} ${srcOf(x)}`,
-          }));
+        : m.arrMode === "star"
+          ? [
+              { label: "NO STAR", right: "" },
+              ...st.list.map((x) => ({ label: x.id, right: x.enroute.length ? `${x.enroute.length} TRANS` : "" })),
+            ]
+          : m.arrMode === "trans" && sT
+            ? [{ label: "NO TRANS", right: "" }, ...sT.enroute.map((x) => ({ label: x.name, right: "" }))]
+            : (A?.list ?? []).map((x) => ({
+                label: x.id,
+                right: `${x.kind}${x.loc?.cat ? ` CAT ${x.loc.cat}` : ""} ${srcOf(x)}`,
+              }));
     m.arrTop = Math.min(Math.max(m.arrTop, 0), Math.max(items.length - 3, 0));
+    const right = st.list.length
+      ? m.arrMode === "star" && sT?.enroute.length
+        ? [run("TRANS>")]
+        : m.arrMode === "star"
+          ? []
+          : [run("STARS>")]
+      : [];
     lines.push(
       m.arrMode === "via"
-        ? { ls: [run(" VIAS")], l: [run("<APPR")] }
-        : { ls: [run(" APPR AVAILABLE")], l: a && viasOf(a).length ? [run("<VIAS")] : [] },
+        ? { ls: [run(" VIAS")], l: [run("<APPR")], r: right }
+        : m.arrMode === "star"
+          ? { ls: [run(" STARS")], l: [run("<APPR")], r: right }
+          : m.arrMode === "trans"
+            ? { ls: [run(" TRANS")], l: [run("<APPR")], r: [run("STARS>")] }
+            : { ls: [run(" APPR AVAILABLE")], l: a && viasOf(a).length ? [run("<VIAS")] : [], r: right },
     );
     for (let k = 0; k < 3; k++) {
       const it = items[m.arrTop + k];
       lines.push(it ? { l: [run(`<${it.label}`, MC.cyan)], r: [run(it.right, MC.green, true)] } : {});
     }
-    lines.push(tmp ? { l: [run("<TMPY", MC.amber)], r: [run("INSERT*", MC.amber)] } : { l: [run("<RETURN")] });
+    lines.push(tmp || stTmp ? { l: [run("<TMPY", MC.amber)], r: [run("INSERT*", MC.amber)] } : { l: [run("<RETURN")] });
     return {
       title: [run("ARRIVAL ", MC.white), run("TO ", MC.white, true), run(A?.code ?? "----", MC.green)],
       lines,
@@ -372,26 +416,73 @@ const arrival: Page = {
     const sel = m.host.approachSel?.();
     const app = m.arrApp ?? (sel && sel.approach !== "auto" ? sel.approach : null);
     const a = A.list.find((x) => x.id === app) ?? null;
+    const st = starOf(m, a);
     if (key === "L6") {
-      if (m.arrApp !== null || m.arrVia !== null) {
-        m.arrApp = m.arrVia = null;
+      if (m.arrApp !== null || m.arrVia !== null || m.arrStar !== null || m.arrTrans !== null) {
+        m.arrApp = m.arrVia = m.arrStar = m.arrTrans = null;
         return;
       }
       return m.open("fpln");
     }
     if (key === "R6") {
-      if (m.arrApp === null && m.arrVia === null) return;
-      const via = m.arrVia === null ? "auto" : m.arrVia === "NO VIA" ? "none" : m.arrVia;
-      const r = m.host.selectApproach?.({ field: A.code, approach: app ?? "auto", via });
-      if (!r?.ok) return "notallowed";
+      const apTmp = m.arrApp !== null || m.arrVia !== null;
+      if (!apTmp && m.arrStar === null && m.arrTrans === null) return;
+      const R = m.host.route();
+      if (m.arrStar !== null || m.arrTrans !== null) {
+        const id = m.arrStar ?? st.active?.star ?? null;
+        const T = st.list.find((x) => x.id === id);
+        const tr = m.arrTrans === "NO TRANS" ? null : (m.arrTrans ?? null);
+        insertTerminal(R.wps, T ? terminalWaypoints(T, a?.rwy ?? null, tr) : [], "STAR");
+        m.host.routeChanged();
+      }
+      if (apTmp) {
+        const via = m.arrVia === null ? "auto" : m.arrVia === "NO VIA" ? "none" : m.arrVia;
+        const r = m.host.selectApproach?.({ field: A.code, approach: app ?? "auto", via });
+        if (!r?.ok) return "notallowed";
+      }
       m.host.insertArrival?.();
-      m.arrApp = m.arrVia = null;
+      m.arrApp = m.arrVia = m.arrStar = m.arrTrans = null;
+      m.arrMode = "appr";
       return m.open("fpln");
     }
     if (key === "L2") {
-      if (m.arrMode === "via") m.arrMode = "appr";
+      if (m.arrMode !== "appr") m.arrMode = "appr";
       else if (a && viasOf(a).length) m.arrMode = "via";
       m.arrTop = 0;
+      return;
+    }
+    if (key === "R2") {
+      if (!st.list.length) return;
+      const star = m.arrStar ?? st.active?.star ?? null;
+      const T = st.list.find((x) => x.id === star);
+      m.arrMode = m.arrMode === "star" && T?.enroute.length ? "trans" : "star";
+      m.arrTop = 0;
+      return;
+    }
+    if (side === "L" && n >= 3 && n <= 5 && (m.arrMode === "star" || m.arrMode === "trans")) {
+      const k = m.arrTop + n - 3;
+      if (m.arrMode === "star") {
+        if (k === 0) {
+          m.arrStar = "NO STAR";
+          m.arrTrans = null;
+          return;
+        }
+        const T = st.list[k - 1];
+        if (!T) return;
+        m.arrStar = T.id;
+        m.arrTrans = null;
+        if (T.enroute.length) (m.arrMode = "trans"), (m.arrTop = 0);
+        return;
+      }
+      const T = st.list.find((x) => x.id === (m.arrStar ?? st.active?.star));
+      if (!T) return;
+      if (k === 0) m.arrTrans = "NO TRANS";
+      else {
+        const e = T.enroute[k - 1];
+        if (!e) return;
+        m.arrTrans = e.name;
+      }
+      if (m.arrStar === null) m.arrStar = T.id;
       return;
     }
     if (side === "L" && n >= 3 && n <= 5) {
@@ -473,4 +564,167 @@ const airways: Page = {
   },
 };
 
-export const FPLN_PAGES: Record<string, Page> = { fpln, latrev, dirto, arrival, airways };
+/** The departure's runway ends (the longest first), its SIDs, the one in the plan. */
+function departureOf(m: Mcdu) {
+  const R = m.host.route();
+  const o = R.wps[0];
+  const code = o?.field ? (o.field.icao ?? o.name) : null;
+  const f = code ? m.host.field(code) : null;
+  const ends = (f?.runways ?? [])
+    .flatMap((r) => [
+      { name: r.le, len: r.len, crs: r.hdg },
+      { name: r.he, len: r.len, crs: (r.hdg + 180) % 360 },
+    ])
+    .filter((e) => e.name)
+    .sort((x, y) => y.len - x.len || x.name.localeCompare(y.name));
+  const T = code && m.host.terminals ? m.host.terminals(code) : null;
+  const w = R.wps.find((x) => x.proc?.sid);
+  return {
+    code,
+    ends,
+    sids: T?.sid ?? null,
+    active: w?.proc?.sid ? { rwy: w.proc.rwy ?? null, sid: w.proc.sid, trans: w.proc.trans ?? null } : null,
+  };
+}
+
+/**
+ * DEPARTURE (PLAN-A320-VOL-AAA N2 — FlightGear's DEPARTURE.nas): the origin's runways, then the SIDs that serve the runway chosen (the
+ * FAA's CIFP: US airports — « NONE » elsewhere), then the SID's en-route transitions; INSERT puts its fixes after the origin (the old
+ * ones out), each with its constraint. Temporary choices yellow, the plan's green.
+ */
+const departure: Page = {
+  screen(m): Screen {
+    const D = departureOf(m);
+    const rwy = m.depRwy ?? D.active?.rwy ?? null;
+    const sid = m.depSid ?? (m.depRwy === null ? (D.active?.sid ?? null) : null);
+    const trans = m.depTrans ?? (m.depSid === null && m.depRwy === null ? (D.active?.trans ?? null) : null);
+    const tmp = m.depRwy !== null || m.depSid !== null || m.depTrans !== null;
+    const col = tmp ? MC.yellow : MC.green;
+    const lines: Line[] = [
+      {
+        ls: [run(" RWY"), run("      SID", MC.white)],
+        l: [run(rwy ?? "---", rwy ? col : MC.white), run(`  ${sid ?? "------"}`, sid ? col : MC.white)],
+        rs: [run("TRANS ")],
+        r: [run(trans ?? "------", trans ? col : MC.white)],
+      },
+    ];
+    const S = D.sids ? terminalsFor(D.sids, rwy) : [];
+    const sT = S.find((x) => x.id === sid) ?? null;
+    const items: { label: string; right: string }[] =
+      m.depMode === "sid"
+        ? [{ label: "NO SID", right: "" }, ...S.map((x) => ({ label: x.id, right: x.enroute.length ? `${x.enroute.length} TRANS` : "" }))]
+        : m.depMode === "trans" && sT
+          ? [{ label: "NO TRANS", right: "" }, ...sT.enroute.map((x) => ({ label: x.name, right: "" }))]
+          : D.ends.map((e) => ({ label: e.name, right: `${Math.round(e.len)}M  CRS${String(Math.round(e.crs) % 360).padStart(3, "0")}` }));
+    m.depTop = Math.min(Math.max(m.depTop, 0), Math.max(items.length - 3, 0));
+    const second: Line =
+      m.depMode === "rwy"
+        ? {
+            ls: [run(" AVAILABLE RUNWAYS")],
+            r: rwy ? [run(D.sids === null ? "SIDS…" : D.sids.length ? "SIDS>" : "NO SIDS", MC.white)] : [],
+          }
+        : m.depMode === "sid"
+          ? { ls: [run(" SIDS")], l: [run("<RWYS")], r: sT?.enroute.length ? [run("TRANS>")] : [] }
+          : { ls: [run(" TRANS")], l: [run("<RWYS")], r: [run("SIDS>")] };
+    lines.push(second);
+    for (let k = 0; k < 3; k++) {
+      const it = items[m.depTop + k];
+      lines.push(it ? { l: [run(`<${it.label}`, MC.cyan)], r: [run(it.right, MC.green, true)] } : {});
+    }
+    lines.push(tmp ? { l: [run("<TMPY", MC.amber)], r: [run("INSERT*", MC.amber)] } : { l: [run("<RETURN")] });
+    return {
+      title: [run("DEPARTURES ", MC.white), run("FROM ", MC.white, true), run(D.code ?? "----", MC.green)],
+      lines,
+      ud: items.length > 3,
+    };
+  },
+  lsk(m, side, n): LskResult {
+    const D = departureOf(m);
+    if (!D.code) return "notindb";
+    const key = `${side}${n}`;
+    const rwy = m.depRwy ?? D.active?.rwy ?? null;
+    const S = D.sids ? terminalsFor(D.sids, rwy) : [];
+    const sid = m.depSid ?? (m.depRwy === null ? (D.active?.sid ?? null) : null);
+    const sT = S.find((x) => x.id === sid) ?? null;
+    const tmp = m.depRwy !== null || m.depSid !== null || m.depTrans !== null;
+    if (key === "L6") {
+      if (tmp) {
+        m.depRwy = m.depSid = m.depTrans = null;
+        m.depMode = "rwy";
+        return;
+      }
+      return m.open("fpln");
+    }
+    if (key === "R6") {
+      if (!tmp) return;
+      const R = m.host.route();
+      const tr = m.depTrans === "NO TRANS" ? null : (m.depTrans ?? (m.depSid === null ? (D.active?.trans ?? null) : null));
+      insertTerminal(R.wps, sT ? terminalWaypoints(sT, rwy, tr) : [], "SID");
+      m.host.routeChanged();
+      m.depRwy = m.depSid = m.depTrans = null;
+      m.depMode = "rwy";
+      return m.open("fpln");
+    }
+    if (key === "L2") {
+      if (m.depMode === "rwy") return;
+      m.depMode = "rwy";
+      m.depTop = 0;
+      return;
+    }
+    if (key === "R2") {
+      if (m.depMode === "rwy") {
+        if (!rwy || !D.sids?.length) return;
+        m.depMode = "sid";
+      } else if (m.depMode === "sid") {
+        if (!sT?.enroute.length) return;
+        m.depMode = "trans";
+      } else m.depMode = "sid";
+      m.depTop = 0;
+      return;
+    }
+    if (side === "L" && n >= 3 && n <= 5) {
+      const k = m.depTop + n - 3;
+      if (m.depMode === "rwy") {
+        const e = D.ends[k];
+        if (!e) return;
+        m.depRwy = e.name;
+        m.depSid = m.depTrans = null;
+        if (D.sids?.length) (m.depMode = "sid"), (m.depTop = 0);
+        return;
+      }
+      if (m.depMode === "sid") {
+        if (k === 0) {
+          m.depSid = "NO SID";
+          m.depTrans = null;
+          return;
+        }
+        const T = S[k - 1];
+        if (!T) return;
+        if (m.depRwy === null) m.depRwy = rwy;
+        m.depSid = T.id;
+        m.depTrans = null;
+        if (T.enroute.length) (m.depMode = "trans"), (m.depTop = 0);
+        return;
+      }
+      if (!sT) return;
+      if (m.depRwy === null) m.depRwy = rwy;
+      if (m.depSid === null) m.depSid = sT.id;
+      if (k === 0) m.depTrans = "NO TRANS";
+      else {
+        const e = sT.enroute[k - 1];
+        if (!e) return;
+        m.depTrans = e.name;
+      }
+      return;
+    }
+    return "notallowed";
+  },
+  arrow(m, dir) {
+    if (dir === "up") m.depTop++;
+    else if (dir === "down") m.depTop = Math.max(m.depTop - 1, 0);
+    else return false;
+    return true;
+  },
+};
+
+export const FPLN_PAGES: Record<string, Page> = { fpln, latrev, dirto, arrival, airways, departure };

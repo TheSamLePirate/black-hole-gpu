@@ -548,7 +548,8 @@ function routeProcedures(this: CameraController): string {
   const W = this.nav.route.wps;
   if (W.length < 2) return t("Procedures: a plan from an airfield or to one");
   const added: string[] = [];
-  const strip = (w: (typeof W)[number]) => !!w.proc || /^(IAF|FAF|DEP)\d\d[LCR]?$/.test(w.name);
+  // (a SID's and a STAR's points kept: the MCDU's DEPARTURE and ARRIVAL put them — PLAN-A320-VOL-AAA N2)
+  const strip = (w: (typeof W)[number]) => (!!w.proc && !w.proc.sid && !w.proc.star) || /^(IAF|FAF|DEP)\d\d[LCR]?$/.test(w.name);
   this.nav.route.wps = W.filter((w) => !strip(w));
   const P = this.nav.route.wps;
   // (the game's own field, else a world airfield's by its code — its tile in: PLAN-RADAR-AAA RD13)
@@ -561,7 +562,7 @@ function routeProcedures(this: CameraController): string {
     const f = w.field.icao ? fieldCached(w.field.icao) : null;
     return (f && worldSite(f)) || undefined;
   };
-  const first = siteOf(P[0]!);
+  const first = P.some((w) => w.proc?.sid) ? undefined : siteOf(P[0]!);
   if (first) {
     const d = departureFix(runwayOf(this, first));
     P.splice(1, 0, { name: d.name, lat: d.lat, lon: d.lon, alt: d.alt });
@@ -574,6 +575,8 @@ function routeProcedures(this: CameraController): string {
   const pub = end.field ? this.approachForField(end.field.icao ?? end.name, P.at(-2) ?? null) : null;
   const pubPts = pub ? publishedArrival(pub.a, pub.via, P.at(-2) ?? end) : [];
   const last = pubPts.length ? undefined : siteOf(end);
+  // (a STAR ending at the approach's first fix: that fix once)
+  while (pubPts.length && pubPts[0]!.name === P.at(-2)?.name) pubPts.shift();
   if (pubPts.length) {
     P.splice(P.length - 1, 0, ...pubPts);
     added.push(...pubPts.map((w) => w.name));
@@ -612,6 +615,7 @@ export function publishedArrival(a: Approach, via: string | null, from: { lat: n
       lat: l.lat,
       lon: l.lon,
       ...(alt != null ? { alt } : {}),
+      ...(l.alt ? { cstr: l.alt } : {}),
       proc: { kind: "arr", rwy: a.rwy, approach: a.id, ...(l.fix === iff ? { join: true } : {}) },
     });
   }

@@ -276,6 +276,7 @@
   "III": 199
  },
  "cifp": {
+  "terminals": 4132,
   "cycle": "2611",
   "effective": "29 OCT 2026",
   "read": {
@@ -290,17 +291,19 @@
    "converted": {
     "HF→HM": 6385,
     "PI→HM": 864,
-    "AF→RF": 956,
-    "VI→CF": 1270,
-    "FC→CF": 580,
-    "VD→CA": 12,
-    "FA→CA": 23,
+    "AF→RF": 1003,
+    "VI→CF": 2442,
+    "FC→CF": 583,
+    "VD→CA": 66,
+    "FA→CA": 58,
     "CD→CA": 5,
-    "CI→CF": 11,
-    "VR→VA": 6,
-    "VM→VA": 2
+    "CI→CF": 15,
+    "VR→VA": 30,
+    "VM→VA": 1743,
+    "FM→VA": 1816,
+    "HA→HM": 79
    },
-   "unplaced": 132,
+   "unplaced": 773,
    "kinds": {
     "RNAV": 6785,
     "ILS": 1188,
@@ -380,6 +383,6 @@
    "U64 R34: field"
   ]
  },
- "bytes": 6890820,
+ "bytes": 10252707,
  "tiles": 473
 }

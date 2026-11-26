@@ -18,7 +18,7 @@
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { gunzipSync } from "node:zlib";
 import { wgs84Inverse } from "../src/system/ellipsoid";
-import { type CifpRecord, legRecord, runwayEnd } from "../src/world/approaches";
+import { type CifpRecord, legRecord, runwayEnd, type TerminalRecord } from "../src/world/approaches";
 import { type Airfield, decodeTile, type Runway, tileKey } from "../src/world/runways";
 import { readCifp } from "./cifp";
 
@@ -314,7 +314,9 @@ if (import.meta.main) {
   const zips = readdirSync(RAW)
     .filter((n) => /^CIFP_\d{6}\.zip$/.test(n))
     .sort();
+  const terms = new Map<string, { sid: TerminalRecord[]; star: TerminalRecord[] }>();
   const cifp = {
+    terminals: 0,
     cycle: "",
     effective: "",
     read: {} as object,
@@ -370,6 +372,20 @@ if (import.meta.main) {
       cifp.tied++;
       if (endName(end) !== endName(p.rwy)) cifp.renamed++;
     }
+    // (the SIDs and STARs — PLAN-A320-VOL-AAA N2: per airport, fetched when its MCDU pages ask)
+    for (const t of d.terminals) {
+      const f = byCode.get(t.field) ?? byCode.get(`K${t.field}`);
+      if (!f) continue;
+      let e = terms.get(f.ident);
+      if (!e) terms.set(f.ident, (e = { sid: [], star: [] }));
+      (t.kind === "SID" ? e.sid : e.star).push({
+        id: t.id,
+        rw: t.rwys.map((x) => [x.name, x.legs.map(legRecord)]),
+        c: t.common.map(legRecord),
+        en: t.enroute.map((x) => [x.name, x.legs.map(legRecord)]),
+      });
+      cifp.terminals++;
+    }
   }
   if (existsSync(OUT)) rmSync(OUT, { recursive: true });
   mkdirSync(OUT, { recursive: true });
@@ -382,8 +398,17 @@ if (import.meta.main) {
     bytes += json.length;
     writeFileSync(`${OUT}/t${tk}.json`, json);
   }
+  if (terms.size) {
+    mkdirSync(`${OUT}/procs`, { recursive: true });
+    for (const [id, e] of terms) {
+      const json = JSON.stringify({ v: 1, cycle: cifp.cycle, ...e });
+      bytes += json.length;
+      writeFileSync(`${OUT}/procs/${id}.json`, json);
+    }
+  }
   const index = {
     v: 1,
+    procs: [...terms.keys()].sort(),
     built: new Date().toISOString().slice(0, 10),
     credit: `nav.dat ${cycle} (Robin A. Peel, GPL v2+, via FlightGear)${cifp.cycle ? `; FAA CIFP ${cifp.cycle} (public domain, not for navigation)` : ""}`,
     tiles: Object.fromEntries(keys.map((k) => [k, (tiles.get(k)?.length ?? 0) + (pubs.get(k)?.length ?? 0)])),

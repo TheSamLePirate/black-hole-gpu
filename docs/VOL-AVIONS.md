@@ -552,8 +552,15 @@ Remise de gaz : levier **TOGA** (Z — W en AZERTY) en approche → `GA TRK`, `S
 FlightGear, cycle 2013.10, GPL v2) : au MCDU, un **VOR ou un point** se tape par son identifiant dans F-PLN (le plus proche de
 l'avion de ce nom) ; **LAT REV › AIRWAYS>** : `VIA/GO TO` (ex. `UN872/LESDO`) insère les points de la voie aérienne après le point
 révisé, son nom écrit au-dessus de ses branches (« AWY/WPT MISMATCH » sinon) ; au ND, les boutons **VOR.D**, **NDB** et **WPT** de
-l'EFIS montrent les VOR et DME (croix, cerclée pour un VOR-DME), les NDB (triangles) et les points (losanges) en magenta. Les SID et
-STAR (CIFP de la FAA, États-Unis) et le profil vertical géré viennent ensuite (PLAN-A320-VOL-AAA N2–N3).
+l'EFIS montrent les VOR et DME (croix, cerclée pour un VOR-DME), les NDB (triangles) et les points (losanges) en magenta.
+**Les SID et STAR** (26 nov. 2026, `world/terminals.ts`, `assets/approaches/v1/procs/<terrain>.json` — le CIFP de la FAA, 755
+aéroports des États-Unis ; ailleurs, aucune) : **LAT REV** au départ **› <DEPARTURE** liste les pistes (la plus longue d'abord), puis
+les SID qui servent la piste choisie (`RW19B` : les deux 19), puis leurs transitions ; **INSERT*** met leurs points après le départ, avec
+leurs contraintes d'altitude (`cstr`, au-dessus/au-dessous). **LAT REV** à la destination **› ARRIVAL>** : **STARS>** liste les STAR
+(celles de la piste de l'approche choisie), puis **TRANS>** leurs transitions ; leurs points se placent avant ceux de l'approche. Le nom
+de la procédure s'écrit au-dessus de ses branches dans F-PLN. Limites : les branches sans point (cap jusqu'à une altitude, « VA »,
+guidages) ne donnent pas de point — le plan reprend au point suivant — ; les limites de vitesse publiées ne sont pas reprises ; le profil
+vertical géré (contraintes tenues par le FMGC, T/D) vient ensuite (PLAN-A320-VOL-AAA N3).
 
 **La roue de l'A320** (Tab maintenu, depuis le 26 nov. 2026 — avant, la roue des vaisseaux) : **Pilote auto ›** (AP1, A/THR, FD,
 LOC, APPR, EXPED, NAV), **FCU ›** (Vitesse, Cap, Altitude, V/S : des pas ±, **Sélectée/OP CLB…** = le bouton tiré, **Gérée/NAV/Palier**

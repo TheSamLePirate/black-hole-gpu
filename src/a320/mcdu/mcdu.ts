@@ -59,7 +59,16 @@ export class Mcdu implements McduApi {
   arrTop = 0;
   arrApp: string | null = null;
   arrVia: string | null = null;
-  arrMode: "appr" | "via" = "appr";
+  arrMode: "appr" | "via" | "star" | "trans" = "appr";
+  /** ARRIVAL's STAR and its en-route transition chosen (temporary) — PLAN-A320-VOL-AAA N2 */
+  arrStar: string | null = null;
+  arrTrans: string | null = null;
+  /** DEPARTURE's list shown, its first, the runway, the SID and its transition chosen (temporary) before INSERT */
+  depMode: "rwy" | "sid" | "trans" = "rwy";
+  depTop = 0;
+  depRwy: string | null = null;
+  depSid: string | null = null;
+  depTrans: string | null = null;
   private clrAt = -1e9;
   /** a local message (the MCDU's own: FORMAT ERROR…), shown before the FMGC's */
   private msg: string | null = null;

@@ -45,7 +45,7 @@ J4 (fermé, sortie non atteinte), J5 et J6 (fermés).
 
 | Session (T3) | Lot | État |
 |---|---|---|
-| A320 AAA (26 nov.) | [PLAN-A320-VOL-AAA](docs/PLAN-A320-VOL-AAA.md) — vol mesuré, physique, molettes, roue, assistance, outils, instruments, navigation | **V0 PASS** (vol de ligne complet 20/20), **K1, W1 faits ; W2, G1 en partie** ; I1/I2 commencés ; **N1 fait** (base de navigation, MCDU, ND VOR.D/NDB/WPT) ; N2 AIRWAYS fait, SID/STAR à faire |
+| A320 AAA (26 nov.) | [PLAN-A320-VOL-AAA](docs/PLAN-A320-VOL-AAA.md) — vol mesuré, physique, molettes, roue, assistance, outils, instruments, navigation | **V0 PASS** (vol de ligne complet 20/20), **K1, W1 faits ; W2, G1 en partie** ; I1/I2 commencés ; **N1 fait** (base de navigation, MCDU, ND VOR.D/NDB/WPT) ; **N2 : AIRWAYS, SID, STAR faits** (CIFP, 755 aéroports US) — discontinuités, HOLD, e2e au poste à faire ; N3 ensuite |
 | Rentrée du Ranger (26 nov.) | Demande de Sam : la rentrée automatique se pose mal ; zone d'arrivée chargée avant 10–20 km ; enregistreur de vol | **Fait et poussé (26 nov.)** : guidage vers le site d'abord, énergie de l'approche (loin de l'axe ou à court), zone d'arrivée préchargée, `camera.entryLog`. Edwards et Le Bourget posés en vol réel (avant : Edwards 4 écrasés sur 4) ; « Relief failed » de l'IGN non reproduit (e2e servi par le disque) ; apprendre-vaisseaux 9/9 ; golden périmé depuis le 20 oct. (pas par ce lot) |
 | Linux OBC embarqué (22–24 nov.) | [PLAN-LINUX-OBC](docs/PLAN-LINUX-OBC.md) — OBC-0 à OBC-21 (unkernel aarch64, Alpine/Debian, suite Rust/Ratatui, `/dev/fb0`, pont `__bh`/TARS, cockpits 3D) | **Sécurisé le 24 nov.** ([audit](docs/AUDIT-2026-11-24.md)) : relais Wisp à garde numérique, Origin exigée, ports et débits bornés ; pont invité sur racines explicites ; COOP/COEP sur demande ; FR/EN, unités du joueur. Tests unitaires 94/94 ; **e2e en cours** |
 | Points de Lagrange & JWST (22–24 nov.) | L1–L5, Halo, JWST à SE-L2, autopilote, cartes, réseau, Crew | **Corrigé le 24 nov.** : phase Halo juste en dates réelles (écart de vitesse 1 612 → 1e-6 m/s à SE-L2), L4/L5 sur modes propres, Crew sur le même couple, JWST paresseux et borné en pixels ; leçon 6 bis écrite. Tests unitaires verts ; **e2e et coût GPU en cours / non mesurés** |
@@ -80,6 +80,23 @@ l'état d'une mission ou d'un combat **non sauvé, dit** ; le réseau **« entre
 **Décidé par Sam (16 nov., 15:58 UTC)** : J8-4 allumée par défaut (quads sous 8 px), J8-5 avec une jonction choisie sur captures, J8-1b suspendu, l'e2e de J8-6 par la voie (b), J8-9 ajouté ([PLAN-J8](docs/PLAN-J8-BATIMENTS.md) §6 point 6). **But fixé par Sam (16 nov., ~16:19 UTC)** : [J8-A](docs/PLAN-J8-BATIMENTS.md), un vol Paris et Toulon-Hyères, de jour et de nuit, tous les bâtiments, lampadaires, voitures (J8-L) et rivières (J8-E) chargés avant le vol, en « high » partout, sans différence visible entre les qualités. **Décidé par Sam (16 nov., ~21:40 UTC)** : J8-8 ouvert (le proche en cellules), la jonction à 0, l'éclat de nuit lointain gardé ([PLAN-J8](docs/PLAN-J8-BATIMENTS.md) §6 point 11). **Décidé par Sam (17 nov., ~08:00 UTC)** : J8-8b ouvert, les arbres par cellule, après un vol de référence à froid sur le M1 Max (§6 point 12). **Mode speed pour finir J8, J8-VB compris** (Sam, 17 nov. ~09:20 UTC ; [CLAUDE.md](CLAUDE.md), modes de travail ; §6 point 13) : contrôles rapides par lot, un gros e2e J8-A à la fin sur kerr-mini et le M1 Max. **J8-RP, les routes et les ponts AAA** (Sam, 17 nov. ~10:20 UTC ; [PLAN-J8](docs/PLAN-J8-BATIMENTS.md) §3 bis) : ajouté à J8 en mode speed, RP1 (les routes et marquages visibles sous l'orthophoto) en tête. **Attend Sam** : les quatre premières questions de PLAN-J8 §6, réglées provisoirement (même contenu sur les deux machines, retour si > 3 ms sur le mini ; portée au pixel ; J7 en pause, les arbres proches deviennent J9 ; pas de préparation côté serveur pour l'instant) ; les trois questions de [PLAN-J7](docs/PLAN-J7-FLUIDITE.md) §4, réglées provisoirement (les 40 ms du mini en dernier, J7-6 ; les arbres proches en géométrie ensuite, désormais J9 ; l'aplanissement du détail sous les trouées jusqu'à la FAF ou 10 km) ; les seuils du mini attendent la reprise de la cible 40 ms.
 
 ## Journal
+
+### 2026-11-26 14:06 UTC — A320 : les SID et STAR du CIFP au MCDU (PLAN-A320-VOL-AAA N2)
+
+- Contribution : §19 (un vol IFR réel de l'A320 : départ publié, arrivée publiée, puis l'approche) ; §7 (données préparées hors
+  frame : un fichier par aéroport, chargé quand le MCDU le demande).
+- Réalisé : `scripts/cifp.ts` lit aussi les sections PD/PE (transitions de piste, route commune, transitions en route ; SID de panne
+  moteur écartées) ; `scripts/build-approaches.ts` écrit `assets/approaches/v1/procs/<terrain>.json` (4 132 procédures, 755 aéroports,
+  3,4 Mo de JSON) ; `src/world/terminals.ts` (chargement, `rwyServes` — `RW19B` les deux 19 —, `terminalWaypoints`, `insertTerminal`) ;
+  MCDU : page **DEPARTURE** (pistes → SID → transition, INSERT) et **ARRIVAL › STARS/TRANS** ; `Waypoint.cstr` (contrainte publiée
+  entière, aussi pour les points d'approche) et `proc.sid/star/trans` ; `routeProcedures` garde les points SID/STAR, ne remet plus le
+  point DEP d'axe quand une SID est là, ne double pas le premier point de l'approche. Docs : VOL-AVIONS (cours), ASSETS, plan.
+- Preuves : vérifié statiquement (tsc, Biome) ; test unitaire `tests/a320-mcdu.test.ts` (plan KSFO 10L CIITY3.DEDHD → KLAX SADDE8.FIM :
+  `KSFO ORYAN SAHEY CIITY BCEEE DEDHD FIM SYMON SADDE BAYST SMO KLAX`, contrainte CIITY ≥ 5 000 ft, NO SID retire la SID).
+  **Non vérifié** : aucun e2e au poste ni vol avec ce plan (non volé).
+- Limites : les branches sans point (VA, guidages) ne donnent pas de point ; limites de vitesse publiées non reprises ; contraintes pas
+  encore tenues par le FMGC (N3) ; discontinuités et HOLD à faire ; hors des États-Unis, aucune SID/STAR (pas de source libre).
+- Suite : N3 (contraintes au FMGC, T/C, T/D), puis le vol IFR KSFO → KLAX au banc (V2).
 
 ### 2026-11-26 14:55 UTC — A320 : la base de navigation (VOR, NDB, points, voies aériennes) au MCDU et au ND (PLAN-A320-VOL-AAA N1, N2 en partie)
 

@@ -28,7 +28,10 @@ export interface Waypoint {
   field?: { icao?: string; elev: number; rwy?: number };
   /** a procedure's point (PLAN-APPROCHES AP3): the arrival's — its runway's end and approach; `join`: the approach's IF, where
    *  the approach is engaged (on its axis) */
-  proc?: { kind: "dep" | "arr"; rwy?: string; approach?: string; join?: boolean };
+  proc?: { kind: "dep" | "arr"; rwy?: string; approach?: string; join?: boolean; sid?: string; star?: string; trans?: string };
+  /** a published constraint (a SID's, a STAR's, an approach's — PLAN-A320-VOL-AAA N2): at or above, at or below [m above the sea]
+   *  (null: none; both the same: « at ») */
+  cstr?: [number | null, number | null];
   /** a point of the navigation database (world/navdb.ts — PLAN-A320-VOL-AAA N1): a radio aid's kind and frequency [kHz], or a fix;
    *  `via` the airway it was reached by (the MCDU's F-PLN shows it) */
   nav?: { kind: string; freq?: number; via?: string };
