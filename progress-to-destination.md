@@ -82,6 +82,21 @@ l'état d'une mission ou d'un combat **non sauvé, dit** ; le réseau **« entre
 
 ## Journal
 
+### 2026-11-26 16:56 UTC — A320 V2 : le vol n° 5 arrivé trop haut — l'approche publiée volée comme un équipage (NAV, APPR, ILS de l'approche)
+
+- Constaté (vol n° 5, kerr-mini, vu par Sam) : arrivé trop haut, remise de gaz. Relevé : la descente au-dessus du chemin (+44 → +456 ft
+  le long de la STAR, MORE DRAG) ; au point de jonction de l'approche, **la rejointe du jeu (`ilsStart`) a pris la main d'elle-même**
+  (`fplan.ts`, prévue pour tous les appareils : HDG au lieu de NAV), KOBEE passé à 7 850 ft pour 2 200 ; LOC capté, glide jamais (trop
+  haut), OP CLB.
+- Corrigé : `fplan.ts` — l'A320 en NAV avec APPR armé garde NAV au-delà du point de jonction ; `a320ap.ts` `tune` — l'ILS accordé est
+  celui de l'approche du plan (avant : la piste en service de la destination, un autre bout — en vol d'équipage, ni LOC ni glide reçus
+  sur la finale de la 28R de KSFO) ; `a320assist.ts` — en Assisté, les aérofreins sortis tant que MORE DRAG ; scénario en `tiles: true`.
+- Preuves : nouveau test `a320-published-arrival` « as a crew » (vol simulé, sans navigateur) : APPR armé, NAV jusqu'au localizer
+  (LOC* vers DUMBA), glide capté à 3 000 ft, posé sur la 28R, la rejointe du jeu jamais engagée ; suite A320 + approches 161/161. **Non
+  revolé** au banc (le vol n° 6 viendra après l'e2e Aéroport).
+- Sur les « Relief failed » : le scénario tournait en `tiles: false`, qui refuse exprès les tuiles de relief S3 (vol jugé) — attendu,
+  mais pas pour un vol qu'on regarde.
+
 ### 2026-11-26 16:26 UTC — Mode Aéroport V11 : la carte de l'écran titre
 
 - Réalisé : `ModeId` « airport » (`activities.ts` : `AIRPORTS` — 12 grands aéroports —, `localHour`), sa carte et son écran

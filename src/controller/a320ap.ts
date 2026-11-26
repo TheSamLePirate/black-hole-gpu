@@ -51,9 +51,14 @@ function tune(c: CameraController): IlsRunway | null {
   if (c.a320Ils && now - tuned.at < 20_000) return c.a320Ils;
   tuned.at = now;
   const end = c.nav.route.wps.at(-1);
+  // (the plan's destination's approach — the one selected or chosen, the arrival it flies: its own ILS, its runway's end —; before 26
+  // Nov 2026 the destination's runway in use was tuned, another end than the approach's: flown as a crew — NAV, APPR, no game's join —
+  // the KSFO 28R final never received its localizer nor its glide)
+  const pub = end?.field ? c.approachForField(end.field.icao ?? end.name, c.nav.route.wps.at(-2) ?? null) : null;
   // (the plan's destination, else the airfield the approach's choice takes — AP-R: « the nearest » retired)
-  const site = end?.field ? findRunway(c, end.field.icao ?? end.name) : null;
-  if (site) c.a320Ils = tuned.rwy = runwayOf(c, site);
+  const site = !pub && end?.field ? findRunway(c, end.field.icao ?? end.name) : null;
+  if (pub) c.a320Ils = tuned.rwy = runwayOfApproach(pub.f, pub.a);
+  else if (site) c.a320Ils = tuned.rwy = runwayOf(c, site);
   else {
     const pv = c.approachPreview();
     c.a320Ils = tuned.rwy = pv !== "loading" && !("say" in pv) ? runwayOfApproach(pv.field, pv.approach) : null;

@@ -97,3 +97,66 @@ test("KSFO's published ILS 28R via ARCHI: the plan's fixes, NAV, the approach en
   expect(L!.score).toBeGreaterThan(14);
   void FT;
 }, 600_000);
+
+test("the same arrival flown as a crew: APPR armed, NAV kept past the IF (no game's join), LOC and G/S captured from NAV, down on 28R", async () => {
+  const ksfo = (await fieldByCode("KSFO"))!;
+  await loadApproachTile(ksfo.lat, ksfo.lon);
+  setGroundHeights("earth", () => 0);
+  const lat = 37.45,
+    lon = -121.7;
+  const g = ourGroundPose("earth", lat, lon, 0);
+  const east = g.fwd;
+  const north = cross(g.up, east);
+  const hdg = 285 * D;
+  const fwd = add(scale(north, Math.cos(hdg)), scale(east, Math.sin(hdg)));
+  const X = add(g.X, scale(g.up, 2400 / M_METRES));
+  const { c, fly } = flight({ ...g, X, fwd, vel: add(g.vel, scale(fwd, 125 / C_MPS)), landed: undefined }, false, "a320");
+  c.s.flightMode = "plane";
+  c.s.weather = "fair";
+  c.s.a320Assist = "assisted";
+  c.gearDown = false;
+  c.gearExt = 0;
+  c.gearInit = true;
+  c.pilot.throttle = 0.62;
+  fly(6);
+  c.approachSelect({ field: "KSFO", approach: "I28R" }, "test");
+  const here = c.geoNow()!;
+  c.nav.route.wps = [
+    { name: "HERE", lat: here.lat, lon: here.lon },
+    { name: "KSFO", lat: ksfo.lat, lon: ksfo.lon, field: { icao: "KSFO", elev: ksfo.elev, rwy: 298 } },
+  ];
+  c.routeChanged();
+  c.routeProcedures();
+  fly(1);
+  c.a320ApKey("nav");
+  c.a320ApKey("athr");
+  const F = c.a320Fmgc!;
+  F.alt = 3000;
+  F.altPull(c.a320FmgcIn ?? undefined);
+  // (APPR pressed — the crew's: LOC and G/S armed, NAV flown on)
+  F.apprToggle();
+  let joined = false,
+    locFrom = "",
+    gsAt = Number.NaN;
+  let k = 0;
+  const t = fly(2400, () => {
+    if (process.env.TRACE && k++ % 1800 === 0) {
+      const i = c.a320FmgcIn!;
+      const fm = F.fma();
+      console.log(
+        `   ${(k / 60).toFixed(0)} s ${F.lat}/${F.vert} armed ${fm.latArmed}|${fm.vertArmed} ${F.phase} alt ${i.alt.toFixed(0)} ias ${i.ias.toFixed(0)} wp ${c.nav.route.wps[c.nav.last.l?.active ?? 0]?.name} done ${c.nav.last.l?.done} ils ${i.ils ? `${i.ils.loc?.toFixed(2)}/${i.ils.gs?.toFixed(2)} ${i.ils.dme.toFixed(1)}` : "-"} flaps ${c.airFlight.cfg.flaps} gear ${c.gearDown} vdev ${c.a320Vprof?.vdev}`,
+      );
+    }
+    if (c.a320App) joined = true;
+    if (!locFrom && F.lat.startsWith("LOC")) locFrom = c.nav.route.wps[c.nav.last.l?.active ?? 0]?.name ?? "?";
+    if (Number.isNaN(gsAt) && F.vert.startsWith("G/S")) gsAt = c.a320FmgcIn!.alt;
+    return F.lat === "ROLL OUT" && c.a320FmgcIn!.gs < 40;
+  });
+  console.log(
+    `  NAV → LOC* near ${locFrom}, G/S at ${gsAt.toFixed(0)} ft, the game's join ${joined ? "engaged" : "never"}, ${t.toFixed(0)} s; ${F.lat}/${F.vert}`,
+  );
+  expect(joined).toBeFalse();
+  expect(locFrom).not.toBe("");
+  expect(gsAt).toBeGreaterThan(1000);
+  expect(F.lat).toBe("ROLL OUT");
+}, 600_000);

@@ -20,7 +20,15 @@ declare module "../controls" {
     /** the easy take-off under way (null: none) — its phase */
     a320To: { phase: "roll" | "rotate" | "climb"; liftAt: number | null; field: number } | null;
     /** the assisted level's take-off helpers since the last lift-off: what was done */
-    a320Helped: { gearUp: boolean; cl: boolean; ap: boolean; flapsUp: boolean; liftAt: number | null; notchAt?: number } | null;
+    a320Helped: {
+      gearUp: boolean;
+      cl: boolean;
+      ap: boolean;
+      flapsUp: boolean;
+      liftAt: number | null;
+      notchAt?: number;
+      drag?: boolean;
+    } | null;
     a320EasyTakeoff(): string;
     a320AssistStep(inp: PilotInput, dt: number): void;
   }
@@ -138,6 +146,18 @@ function a320AssistStep(this: CameraController, inp: PilotInput, dt: number) {
         this.airFlight.cfg.flaps = want / 4;
         H.notchAt = now;
       }
+    }
+  }
+  // (the assisted level's speed brakes: out while the managed descent asks for them — MORE DRAG, too fast over its path —, in again
+  // once it no longer does, and always with the flaps at 3 or more; the crew's own use of them left alone otherwise)
+  if (assisted && F) {
+    const want = F.moreDrag && lever < 3 ? 1 : 0;
+    if (want) {
+      this.airBrake = 1;
+      H.drag = true;
+    } else if (H.drag) {
+      this.airBrake = 0;
+      H.drag = false;
     }
   }
   // (the assisted level's landing: the ground spoilers armed with the gear down; idle at 20 ft hand-flown)

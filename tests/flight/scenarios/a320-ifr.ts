@@ -285,7 +285,9 @@ export const A320_IFR: Scenario[] = [
     title: "A320 — IFR KSFO → KLAX: the MCDU's SID, STAR and ILS, the managed climb, cruise, descent at the T/D, the autoland",
     tags: ["a320", "plane", "runway", "live", "autopilot", "ils", "ifr"],
     minutes: 45,
-    tiles: false,
+    // (a flight watched — its relief and imagery loaded, not blocked: with tiles false the S3 terrain tiles are refused on purpose for a
+    // judged flight's same ground every day, each refusal shown « Relief failed · Scenery degraded », 26 Nov 2026)
+    tiles: true,
     run: (lab) => ifr(lab),
   },
 ];
