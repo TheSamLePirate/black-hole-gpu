@@ -1,19 +1,25 @@
 import { expect, test } from "bun:test";
 import { presets } from "../src/settings";
 import { SCENE_THUMBS } from "../src/ui/scene-thumbs";
-import { MODES, MORE, type TitleGame, VESSELS } from "../src/ui/title/activities";
+import { AIRPORTS, localHour, MODES, MORE, type TitleGame, VESSELS } from "../src/ui/title/activities";
 import { framePosition, MODE_ART, TURNTABLES } from "../src/ui/title/art";
 import { agoText } from "../src/ui/title/title";
 
 // The title screen's catalogue (PLAN-TITRE-AAA E2): every picture and every scene it names exists, every entry
 // is in French and English, and each launch reaches the game by the call it says.
 
-test("four modes, each with its picture and its entries, ids unique", () => {
-  expect(MODES.map((m) => m.id)).toEqual(["foot", "plane", "ship", "free"]);
+test("five modes, each with its picture and its entries, ids unique", () => {
+  expect(MODES.map((m) => m.id)).toEqual(["foot", "plane", "ship", "airport", "free"]);
   const ids = [...MODES.flatMap((m) => m.activities), ...MORE].map((a) => a.id);
   expect(new Set(ids).size).toBe(ids.length);
   for (const m of MODES) {
     expect(MODE_ART[m.id].card && MODE_ART[m.id].wide).toBeTruthy();
+    // (the airport's entries: its airports offered and its search — PLAN-AEROPORT-AAA V11)
+    if (m.id === "airport") {
+      expect(AIRPORTS.length).toBeGreaterThanOrEqual(8);
+      for (const a of AIRPORTS) expect(/^[A-Z]{4}$/.test(a.code) && a.city.fr && a.city.en).toBeTruthy();
+      continue;
+    }
     expect(m.activities.length).toBeGreaterThanOrEqual(4);
     for (const a of [...m.activities]) {
       if (a.art) expect(SCENE_THUMBS[a.art]).toBeTruthy();
@@ -21,6 +27,10 @@ test("four modes, each with its picture and its entries, ids unique", () => {
     }
   }
   expect(VESSELS.map((v) => v.id)).toEqual(["ranger", "lander", "endurance"]);
+  // (an airport's local hour: Los Angeles at 15:49 UTC, 07:55; Tokyo, 01:08 — night)
+  const at = Date.UTC(2026, 10, 26, 15, 49);
+  expect(localHour(-118.41, at)).toEqual({ hhmm: "07:55", day: true });
+  expect(localHour(139.78, at).day).toBeFalse();
   for (const v of VESSELS) expect(TURNTABLES[v.id]).toBeTruthy();
 });
 

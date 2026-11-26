@@ -500,3 +500,6 @@
   .tt-card, .tt-card-art, .tt-continue, .tt-scene, .tt-map-pin { transition: none; }
   .tt-map-pin::after { animation: none; }
 }
+/* the airport view's search (PLAN-AEROPORT-AAA V11): over the airports offered */
+.tt-airport-search { display: flex; flex-direction: column; gap: 6px; margin-bottom: 10px; }
+.tt-airport-search .tt-fields:empty { display: none; }

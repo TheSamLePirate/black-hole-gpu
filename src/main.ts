@@ -65,7 +65,7 @@ import { afterSkyPrefetch, prefetchSkyAssets, Renderer, type FrameStats, type Of
 import { ArrivalPrefetch } from "./system/arrival-prefetch";
 import { airwayLegs, navFind, navFindSync, navResolve, navWarm } from "./world/navdb";
 import { terminalsOf } from "./world/terminals";
-import { airportCaption, airportHooks, airportState } from "./controller/airportview";
+import { airportByCode, airportCaption, airportHooks, airportStart, airportState } from "./controller/airportview";
 import { AIRPORT_MODE_LABEL } from "./ui/camerapanel";
 import { AirportUi } from "./ui/airportui";
 import { AirportAtc, type AtcLine, towerName } from "./traffic/atc";
@@ -10416,6 +10416,19 @@ async function main() {
         missionSelect.open();
       },
       scene: (name) => panel.applyScene(name),
+      // (the airport view — PLAN-AEROPORT-AAA V11: a craft flown first when none is — the free camera goes out of one —, then the
+      // airport's take-offs and landings filmed by the Cinema director)
+      airport: (code) =>
+        void (async () => {
+          if (!camera.piloting) {
+            panel.applyScene("game:artemis");
+            for (let k = 0; k < 150 && !camera.piloting; k++) await new Promise((r) => setTimeout(r, 200));
+          }
+          const f = await airportByCode(camera, code);
+          if (!f) return panel.toast(tf("No airport {0}", code));
+          const why = airportStart(camera, f, "cinema", () => setSpectator(true));
+          panel.toast(why ?? tf("Watching the movements at {0}", `${f.icao || f.ident} · ${f.name}`));
+        })(),
       freeScene: (name) => {
         panel.applyScene(name);
         setGameMode("free", true);

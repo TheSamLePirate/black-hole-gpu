@@ -76,10 +76,12 @@ export interface TitleGame {
   bench(): void;
   /** a message on the screen */
   toast(text: string): void;
+  /** the airport view (PLAN-AEROPORT-AAA V11): an airport's real take-offs and landings filmed — its code (ICAO, IATA) */
+  airport(code: string): void;
 }
 
 export type VesselChoice = "ranger" | "lander" | "endurance";
-export type ModeId = "foot" | "plane" | "ship" | "free";
+export type ModeId = "foot" | "plane" | "ship" | "free" | "airport";
 
 export interface Activity {
   id: string;
@@ -255,6 +257,16 @@ export const MODES: Mode[] = [
     ],
   },
   {
+    id: "airport",
+    title: { fr: "Aéroport", en: "Airport" },
+    pitch: {
+      fr: "Le vrai trafic filmé : décollages, atterrissages, radio",
+      en: "The real traffic filmed: take-offs, landings, the radio",
+    },
+    // (its entries: the airports offered — AIRPORTS —, and the search: ui/title/title.ts airportScreen)
+    activities: [],
+  },
+  {
     id: "free",
     title: { fr: "Caméra libre", en: "Free camera" },
     pitch: { fr: "Les trous noirs, le trou de ver, Gargantua", en: "The black holes, the wormhole, Gargantua" },
@@ -300,6 +312,31 @@ export const MODES: Mode[] = [
     ],
   },
 ];
+
+/** The airport view's airports offered (PLAN-AEROPORT-AAA V11): busy ones about the world — their code, name, east longitude (their
+ *  local solar hour shown: the traffic is the real one, now). */
+export const AIRPORTS: { code: string; name: string; city: Text; lon: number }[] = [
+  { code: "KLAX", name: "Los Angeles", city: { fr: "Los Angeles", en: "Los Angeles" }, lon: -118.41 },
+  { code: "KJFK", name: "New York – JFK", city: { fr: "New York", en: "New York" }, lon: -73.78 },
+  { code: "KATL", name: "Atlanta", city: { fr: "Atlanta", en: "Atlanta" }, lon: -84.43 },
+  { code: "KSFO", name: "San Francisco", city: { fr: "San Francisco", en: "San Francisco" }, lon: -122.38 },
+  { code: "EGLL", name: "London Heathrow", city: { fr: "Londres", en: "London" }, lon: -0.46 },
+  { code: "LFPG", name: "Paris – Charles de Gaulle", city: { fr: "Paris", en: "Paris" }, lon: 2.55 },
+  { code: "EDDF", name: "Frankfurt", city: { fr: "Francfort", en: "Frankfurt" }, lon: 8.57 },
+  { code: "EHAM", name: "Amsterdam Schiphol", city: { fr: "Amsterdam", en: "Amsterdam" }, lon: 4.76 },
+  { code: "OMDB", name: "Dubai", city: { fr: "Dubaï", en: "Dubai" }, lon: 55.36 },
+  { code: "RJTT", name: "Tokyo Haneda", city: { fr: "Tokyo", en: "Tokyo" }, lon: 139.78 },
+  { code: "VHHH", name: "Hong Kong", city: { fr: "Hong Kong", en: "Hong Kong" }, lon: 113.92 },
+  { code: "YSSY", name: "Sydney", city: { fr: "Sydney", en: "Sydney" }, lon: 151.18 },
+];
+
+/** A place's local solar hour now (« 08:14 »), and whether the sun is up there (between 6 and 18, roughly). */
+export function localHour(lon: number, now = Date.now()): { hhmm: string; day: boolean } {
+  const h = (((now / 3_600_000 + lon / 15) % 24) + 24) % 24;
+  const hh = Math.floor(h),
+    mm = Math.floor((h - hh) * 60);
+  return { hhmm: `${String(hh).padStart(2, "0")}:${String(mm).padStart(2, "0")}`, day: h >= 6.5 && h < 17.5 };
+}
 
 export const VESSELS: { id: VesselChoice; title: string; hint: Text }[] = [
   {

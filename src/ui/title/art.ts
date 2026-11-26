@@ -41,6 +41,8 @@ export const MODE_ART: Record<ModeId, { card: string; wide: string }> = {
   plane: { card: planeCard, wide: planeWide },
   ship: { card: shipCard, wide: shipWide },
   free: { card: freeCard, wide: freeWide },
+  // (the airport view: the airfield's picture — By plane's free flight's — until its own)
+  airport: { card: fieldArt, wide: fieldArt },
 };
 
 /** On foot's planispheres (scripts/build-title-maps.py: the game's day textures, −180° at the left) */

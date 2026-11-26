@@ -13,7 +13,7 @@ import type { MenuAction } from "../menu/actions";
 import { glyph, onInputChange, watchInput } from "../menu/glyphs";
 import { type MenuScreen, MenuRouter } from "../menu/router";
 import { SCENE_THUMBS } from "../scene-thumbs";
-import { type Activity, MODES, type ModeId, MORE, type Mode, type TitleGame, type VesselChoice } from "./activities";
+import { AIRPORTS, type Activity, localHour, MODES, type ModeId, MORE, type Mode, type TitleGame, type VesselChoice } from "./activities";
 import { geocode, parseCoords } from "../../game/geocode";
 import { aircraftArt, FIELD_ART, hourArt, MODE_ART, TURNTABLES, turntable, WORLD_MAPS, weatherArt } from "./art";
 import {
@@ -94,7 +94,7 @@ const P = {
 } satisfies Record<string, Text>;
 
 /** a way to play's tips on the way in (E10): By plane's the F-35's */
-const TIPS_OF: Record<ModeId, TipSet> = { foot: "foot", plane: "jet", ship: "ship", free: "free" };
+const TIPS_OF: Record<ModeId, TipSet> = { foot: "foot", plane: "jet", ship: "ship", free: "free", airport: "free" };
 
 /** On foot's and the free camera's words (E6) */
 const F = {
@@ -326,7 +326,15 @@ export class TitleScreen {
     const m = MODES.find((x) => x.id === id)!;
     this.lastMode = m;
     this.router?.replace(
-      id === "plane" ? this.planeScreen() : id === "ship" ? this.shipScreen() : id === "foot" ? this.footScreen() : this.freeScreen(),
+      id === "plane"
+        ? this.planeScreen()
+        : id === "ship"
+          ? this.shipScreen()
+          : id === "foot"
+            ? this.footScreen()
+            : id === "airport"
+              ? this.airportScreen()
+              : this.freeScreen(),
     );
   }
 
@@ -462,7 +470,9 @@ export class TitleScreen {
                 ? this.shipScreen()
                 : m.id === "foot"
                   ? this.footScreen()
-                  : this.freeScreen(),
+                  : m.id === "airport"
+                    ? this.airportScreen()
+                    : this.freeScreen(),
           );
         });
         return b;
@@ -575,6 +585,75 @@ export class TitleScreen {
       this.foot([["confirm", T.launch]]),
     );
     return page;
+  }
+
+  // ------------------------------------------------------------------ the airport (PLAN-AEROPORT-AAA V11)
+
+  /** The airport view: busy airports of the world offered (their local hour: the traffic is the real one, now — night there is
+   *  night), and any airport searched by its code or its name; chosen: its take-offs and landings filmed. */
+  private airportScreen(): MenuScreen {
+    return {
+      id: "mode:airport",
+      build: () => {
+        const mode = MODES.find((x) => x.id === "airport")!;
+        const act = (code: string, title: string, hint: string): Activity => ({
+          id: `airport-${code}`,
+          title: { fr: title, en: title },
+          hint: { fr: hint, en: hint },
+          run: (g) => g.airport(code),
+        });
+        const items = AIRPORTS.map((a) => {
+          const L = localHour(a.lon);
+          return act(
+            a.code,
+            `${a.code} — ${a.name}`,
+            `${tr(a.city)} · ${L.hhmm} ${tr(L.day ? { fr: "(jour)", en: "(day)" } : { fr: "(nuit)", en: "(night)" })}`,
+          );
+        });
+        // (any airport: searched as the letters come — its results launched as the offered ones)
+        const input = h("input", {
+          class: "tt-search",
+          type: "search",
+          placeholder: tr({
+            fr: "Un aéroport : code ou nom (KLAX, Heathrow, Nice…)",
+            en: "An airport: code or name (KLAX, Heathrow, Nice…)",
+          }),
+          "aria-label": tr({ fr: "Chercher un aéroport", en: "Search an airport" }),
+          "data-testid": "title-airport-search",
+        }) as HTMLInputElement;
+        const found = h("nav", { class: "tt-acts tt-fields" });
+        let seq = 0;
+        input.addEventListener("input", async () => {
+          const q = input.value.trim();
+          const n = ++seq;
+          const hits = q.length >= 2 ? await airportSearch(q, 8) : [];
+          if (n !== seq) return;
+          found.replaceChildren(
+            ...hits.map((x) => {
+              const b = h(
+                "button",
+                { class: "m-item tt-act", type: "button", "data-testid": `title-airport-${x.id}` },
+                el("span", "", `${x.id} — ${x.name}`),
+                el("small", "", x.line),
+              );
+              b.addEventListener("click", () => this.choose(act(x.id, `${x.id} — ${x.name}`, x.line)));
+              return b;
+            }),
+          );
+        });
+        input.addEventListener("keydown", (e) => {
+          e.stopPropagation();
+          if (e.key === "Enter") found.querySelector<HTMLElement>("button")?.click();
+        });
+        return this.listPage(
+          "airport",
+          tr(mode.title),
+          MODE_ART.airport.wide,
+          items,
+          h("div", { class: "tt-airport-search" }, input, found),
+        );
+      },
+    };
   }
 
   // ------------------------------------------------------------------ on foot (E6)
