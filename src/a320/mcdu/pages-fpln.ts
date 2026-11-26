@@ -103,9 +103,11 @@ const fpln: Page = {
       const eta = T.get(i);
       // (the constraint, magenta; else the predicted level: the field's, the cruise's)
       const cstr = w.alt !== undefined || w.spd !== undefined;
+      // (the published constraint's kind — PLAN-A320-VOL-AAA N2: « + » at or above, « - » at or below, none « at »)
+      const sign = w.cstr ? (w.cstr[0] !== null && w.cstr[1] === null ? "+" : w.cstr[0] === null && w.cstr[1] !== null ? "-" : "") : "";
       const alt =
         w.alt !== undefined
-          ? altText(w.alt / FT)
+          ? `${sign}${altText(w.alt / FT)}`
           : w.field
             ? String(Math.round(w.field.elev / FT))
             : `FL${String(Math.round(R.cruiseAlt / FT / 100)).padStart(3, "0")}`;
@@ -161,19 +163,24 @@ const fpln: Page = {
       m.host.routeChanged();
       return true;
     }
-    // (the right: a constraint — "250/FL100", "/5000", "250/" — or CLR)
+    // (the right: a constraint — "250/FL100", "/5000", "/+5000", "250/" — or CLR)
     if (!w || !sp) return;
     if (sp === "CLR") {
       delete w.alt;
       delete w.spd;
+      delete w.cstr;
       m.host.routeChanged();
       return true;
     }
-    const p = /^(\d{3})?(?:\/(?:FL(\d{1,3})|(\d{3,5})))?$/.exec(sp);
-    if (!p || (!p[1] && !p[2] && !p[3])) return "format";
+    // (« +5000 » at or above, « -FL120 » at or below, none « at »: the constraint the FMGC holds — N3)
+    const p = /^(\d{3})?(?:\/([+-])?(?:FL(\d{1,3})|(\d{3,5})))?$/.exec(sp);
+    if (!p || (!p[1] && !p[3] && !p[4])) return "format";
     if (p[1]) w.spd = Number(p[1]) * KT;
-    if (p[2]) w.alt = Number(p[2]) * 100 * FT;
-    if (p[3]) w.alt = Number(p[3]) * FT;
+    const a = p[3] ? Number(p[3]) * 100 * FT : p[4] ? Number(p[4]) * FT : null;
+    if (a !== null) {
+      w.alt = a;
+      w.cstr = p[2] === "+" ? [a, null] : p[2] === "-" ? [null, a] : [a, a];
+    }
     m.host.routeChanged();
     return true;
   },

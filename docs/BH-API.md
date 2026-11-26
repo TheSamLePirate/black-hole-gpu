@@ -2798,7 +2798,9 @@ that point in the view (ndc, y up; null behind the eye). Null before the deck's 
 The A320's MCDU (`src/a320/mcdu/mcdu.ts`; 0 the captain's, 1 the first officer's — null on another craft): its page (`pageId`:
 `fpln`, `latrev`, `arrival`, `radnav`…), its scratchpad (`sp`), its keys (`button(k)`, `lsk("L" | "R", n)`, `page(name)`,
 `arrow(dir)`) and its screen (`current.screen(m)`: the lines' runs). ARRIVAL's temporary choices: `arrApp`, `arrVia`, `arrMode`
-(PLAN-APPROCHES AP3). *Used in:* `tests/e2e/a320-deck.e2e.test.ts` (its keys clicked on the deck, the pages read).
+(PLAN-APPROCHES AP3), its STAR and transition `arrStar`, `arrTrans` (`arrMode` `"star"`, `"trans"`); DEPARTURE's (page `departure`, from
+LAT REV at the origin): `depMode` (`"rwy"`, `"sid"`, `"trans"`), `depTop`, `depRwy`, `depSid`, `depTrans` — PLAN-A320-VOL-AAA N2 (the
+FAA's CIFP, `world/terminals.ts`). *Used in:* `scripts/dumps/ksfo-klax.js` (a320-du-dump). *Used in:* `tests/e2e/a320-deck.e2e.test.ts` (its keys clicked on the deck, the pages read).
 
 ### `__bh.audio` → SoundDirector
 

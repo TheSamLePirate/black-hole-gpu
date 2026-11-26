@@ -213,10 +213,11 @@ const server = Bun.serve({
       if (!(await file.exists())) return new Response("not found", { status: 404 });
       return new Response(file, { headers: { "content-type": "application/json", "cache-control": "max-age=86400" } });
     },
-    // the approaches' real data (scripts/build-approaches.ts — PLAN-APPROCHES AP0): their tiles, index, report
+    // the approaches' real data (scripts/build-approaches.ts — PLAN-APPROCHES AP0): their tiles, index, report; an airport's SIDs
+    // and STARs (procs/<ident>.json — PLAN-A320-VOL-AAA N2)
     "/approaches/*": async (req) => {
       const path = new URL(req.url).pathname.replace(/^.*\/approaches\//, "");
-      if (!/^v1\/(t-?\d+_-?\d+|index|report)\.json$/.test(path)) return new Response("not found", { status: 404 });
+      if (!/^v1\/(t-?\d+_-?\d+|index|report|procs\/[A-Z0-9]{2,7})\.json$/.test(path)) return new Response("not found", { status: 404 });
       const file = Bun.file(`assets/approaches/${path}`);
       if (!(await file.exists())) return new Response("not found", { status: 404 });
       return new Response(file, { headers: { "content-type": "application/json", "cache-control": "max-age=86400" } });

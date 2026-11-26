@@ -81,6 +81,18 @@ l'état d'une mission ou d'un combat **non sauvé, dit** ; le réseau **« entre
 
 ## Journal
 
+### 2026-11-26 14:22 UTC — A320 : SID/STAR vus dans le jeu sur kerr-mini ; route du serveur de dev réparée ; CI rétablie
+
+- Réalisé : le rendu des écrans dans le jeu (`scripts/a320-du-dump.ts` + `scripts/dumps/ksfo-klax.js`, plan fait au MCDU) a montré
+  que **le serveur de dev refusait `approaches/v1/procs/*.json` (404)** : aucune SID/STAR dans le jeu malgré le test unitaire vert
+  (`server.ts` : route élargie ; Pages copie déjà le dossier). F-PLN écrit le sens de la contrainte (`/+5000`, `/-FL120`) et en accepte
+  la saisie (`w.cstr`). CI : `bestGlide` (rentrée Ranger) lisait l'horloge murale → garde `flight-clock` rouge depuis `0c6feaea` ;
+  cache désormais par vitesse, densité et configuration ; le test « 150 km » coupé en deux (316 s en CI, délai 300 s) — `c53e43cc`.
+- Preuves : **observé** dans le jeu sur kerr-mini (headless, rendu des écrans) : plan `KSFO ORYAN SAHEY CIITY(+5000) BCEEE(+11000)
+  DEDHD FIM SYMON SADDE BAYST SMO(+7000) RIBBN FEKIL TURKA KLAX`, captures `docs/progress/a320/ksfo-klax-{MCDU1,ND1,PFD1}.png` ;
+  tests `a320-mcdu`, `flight-clock`, `entry` (« 150 km »), `entry-glide` verts ici. La CI de `c53e43cc` n'était pas finie à l'écriture.
+- Limites : le ND ne marque pas encore les contraintes (magenta/ambre) ; PFD magenta non vu (AP non engagé dans ce rendu) ; non volé.
+
 ### 2026-11-26 14:10 UTC — A320 : les contraintes du plan tenues par le FMGC (PLAN-A320-VOL-AAA N3, en partie)
 
 - Contribution : §19 (un vol IFR réel : une SID qui fait palier, une STAR qui fait plancher, comme sur l'avion).

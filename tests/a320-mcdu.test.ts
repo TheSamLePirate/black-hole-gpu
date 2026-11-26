@@ -433,6 +433,13 @@ describe("A320 MCDU", () => {
     m.lsk("R", 6);
     expect(m.pageId).toBe("fpln");
     expect(route.wps.map((w) => w.name)).toEqual(["KSFO", "ORYAN", "SAHEY", "CIITY", "BCEEE", "DEDHD", "KLAX"]);
+    // (F-PLN: CIITY's « at or above 5 000 ft » written « */+5000 »; a constraint typed « /-FL120 » at BCEEE: at or below)
+    const fl = () => m.current.screen(m).lines.map((L) => `${txt(L.l)}|${txt(L.r)}`);
+    expect(fl().find((x) => x.startsWith("CIITY"))).toMatch(/\*---\/\+5000$/);
+    m.sp = "/-FL120";
+    const iB = fl().findIndex((x) => x.startsWith("BCEEE"));
+    m.lsk("R", iB + 1);
+    expect(route.wps[4]!.cstr).toEqual([null, 12000 * 0.3048]);
 
     // (ARRIVAL at KLAX: STARS> — SADDE8 by the FIM transition: the transition's fixes, then SADDE, BAYST, SMO — KLAX itself once, the end)
     // (the destination's LAT REV)
