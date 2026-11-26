@@ -102,6 +102,19 @@ connue ou supposée, la piste. Une entrée réglée est barrée avec le commit q
 - **Piste** : prendre l'altitude publiée (OurAirports `elevation_ft`) quand la mesure tombe à ≤ 1 m sur une île gagnée sur la mer ; la terre
   de l'aérodrome relevée à ce niveau (son contour, pas seulement la bande).
 
+## Le matériau du sol raster (`earth lite (raster)`) +0,5 ms rue de Rivoli depuis le 25 novembre : trois lots, aucun correctif bon marché (bissecté le 26 novembre 2026, `paris-routes-cost`, kerr-mini)
+
+- **Relevé** : la campagne du 25 nov. (GRAPHICS-PIPELINE « Le coût net de la journée ») donnait la passe +0,9–1,0 ms rue de Rivoli,
+  +0,25–0,7 ailleurs, sous le gain net ; ni la marche des routes ni la garde des feux d'approche.
+- **Bissecté** (A B B A, épinglé 0,75, médiane par passe, A/A ≤ 0,1 ms rue de Rivoli) : **`3d3c4e3f`** (lot « coût de Paris » : l'eau
+  lue une fois, portée dans les drapeaux de l'enregistrement — `earth lite: light` −2,5 en échange) **+0,52** ; **`1d702c49`** (défauts
+  de routes 1 : carrefours, trottoirs, ombres de Paris) **+0,29** ; ~+0,5 parmi `77cb9902`, `17d13083`, `f4f246d7`, `5f76368f`,
+  `8c21bb46`, non séparés ; les lots suivants en reprennent 0,45 : **main (`c1519dac`) +0,5 rue de Rivoli, −0,2 au Pont de Grenelle**
+  contre `18a6e4dd`. Pont de Grenelle au bruit à chaque pas.
+- **Essayé** : l'eau empaquetée en un entier avant le matériau (un registre au lieu de deux) — aucun gain (+0,16, au bruit), retiré.
+- **Reste ouvert** : séparer les cinq lots du soir si un plafond de 0,5 ms le justifie (règle 1 : non engagé). Chiffres et dossiers :
+  GRAPHICS-PIPELINE « Liseré des couronnes devant le sol ; la hausse du matériau du 25 novembre bissectée ».
+
 ## La vue de conducteur sur le tablier de Millau regarde un pylône (relevé le 25 novembre 2026, `bridges-notable`, kerr-mini)
 
 - **Observé** (`remote-results/20261125-211447-millau-ab`, 8 courses, `18a6e4dd` et `8355e189` pareils ;
@@ -315,7 +328,21 @@ connue ou supposée, la piste. Une entrée réglée est barrée avec le commit q
   couronnes devant la tour sud partie (`golden-gate-1km-couronnes-sur-couronnes-zoom-avant-apres.jpg`), coût dans le bruit (GRAPHICS-PIPELINE).
   Au bord, le ciel propre sans le flou des suspentes que la reconstruction y étalait. **Reste, autre cas** : une couronne manquée devant
   une autre couronne **avec le sol derrière** (indice > 0) est ombrée comme le sol — un liseré orange pointillé le long des couronnes
-  devant la pente à Battery Spencer, avant comme après ; non traité (le rayon n'y cherche que son propre arbre).
+  devant la pente à Battery Spencer, avant comme après ; non traité (le rayon n'y cherche que son propre arbre). **Cause établie et
+  correctif exact mesuré, non retenu (26 nov. 2026, nuit, branche de l'agent, kerr-mini)** : le proxy de l'arbre A (son id gagne la
+  profondeur du raster) cache la couronne de l'arbre B juste derrière sa marge ; le rayon de `shadeLite` manque la couronne de A et ombre
+  le sol (indice > 0) — B n'est jamais cherché. (1) Chercher l'arbre B à 2 px (`treeAbout`, son proxy avant le sol) et marcher sa couronne
+  dans le même appel de `sceneryTreeLite` (boucle de longueur dynamique, un seul exemplaire inliné, 8,1 k lignes, budget tenu) : le liseré
+  disparaît (`docs/progress/ponts-2026-11-25/golden-gate-1km-lisere-marche-zoom-avant-apres.jpg`), la canopée des Maures plus dense
+  (`landes-lisiere-temoin-marche-avant-apres.jpg` pour le témoin des Landes) — mais `earth lite (raster)` **+1,7 ms** à Battery Spencer,
+  **+4,3** aux Maures, **+2,7** aux Landes (A/A 0,01–0,03) et +3 ms rue de Rivoli (les arbres de rue). (2) Recherche réduite (8 voisins,
+  une lecture, avant 300 m) : +1,5 / +2,2 / +1,6. (3) La même boucle présente mais jamais prise : **+1,5 / +1,6 / +1,5** — le coût est
+  celui de la présence du code (allocation de registres d'Apple), pas du travail. (4) Emprunter dans `shadeLiteFinish` la couronne d'un
+  autre arbre ombrée à 2 px (comme entre couronnes) : `earth lite: finishing` +0,3 / +1,1 / +0,7 ms (5 × 5) ou +0,14 / +0,45 / +0,31
+  (8 voisins), matériau inchangé — **mais le liseré reste** (`golden-gate-1km-lisere-emprunt-zoom-avant-apres.jpg` ; cause du refus non
+  établie : voisins rejetés par l'un des tests — couronne touchée, ombrée cette image, distance propre — non sondé). Les points bleu-gris
+  le long du cyprès sont le même cas devant l'eau (`shadeWater`, `shadeWaterFinish`), hors de (4). Tout retiré ; GRAPHICS-PIPELINE
+  « Liseré des couronnes devant le sol » a les chiffres. **Reste ouvert** : pour Sam — (1) au prix mesuré, ou une sonde du refus de (4).
 - **Golden Gate, câble porteur en ruban plat depuis le tablier** (`golden-gate-tablier.jpg`) — **réglé le 25 nov. (`698dbd22`)** : le câble
   était ouvert le long du haut du repère ; il l'est désormais en travers de sa ligne et de la vue, sa distance celle du devant d'un cylindre
   (normale ronde rebâtie par `rasterNormal`). Vu sur kerr-mini (`golden-gate-deck-low-{avant,apres}.jpg`) ; scintillement à 30 km inchangé
