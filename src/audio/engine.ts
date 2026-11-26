@@ -1085,6 +1085,81 @@ export class SoundEngine {
     }
   }
 
+  /** the traffic airliners' engines heard (PLAN-AEROPORT-AAA V16): two voices at most, each a roar and its fan's whine */
+  private jets: {
+    roar: AudioBufferSourceNode;
+    rlp: BiquadFilterNode;
+    whine: OscillatorNode;
+    wbp: BiquadFilterNode;
+    wg: GainNode;
+    g: GainNode;
+    air: BiquadFilterNode;
+    p: PannerNode;
+  }[] = [];
+  /** how loud the traffic's engines are heard now (the loudest voice's, 0…1 — the tests', the e2e's) */
+  jetLevel = 0;
+  /**
+   * The airliners heard this frame (the airport view's — none: silent): each its place in the camera's frame [m: x right, y up, z into
+   * the view], its engines' N1 [%] and reversers 0…1, its speed along the line of sight [m/s, away > 0] — the Doppler's —, two at most.
+   * A roar (brown noise, brighter with the N1 and the reversers), the fan's whine (its blade-passing tone, ~30 × N1 Hz), the air
+   * dulling the highs with the distance, the pitch shifted by the approach and the going away.
+   */
+  trafficFrame(list: { at: [number, number, number]; n1: number; rev: number; vr: number }[]) {
+    if (!this.running || !this.enabled || !this.ctx) return;
+    const ctx = this.ctx;
+    const t = ctx.currentTime;
+    if (!list.length && !this.jets.length) return;
+    while (this.jets.length < Math.min(list.length, 2)) {
+      const roar = ctx.createBufferSource();
+      roar.buffer = this.noise(ctx, 4, "brown");
+      roar.loop = true;
+      const rlp = new BiquadFilterNode(ctx, { type: "lowpass", frequency: 500, Q: 0.6 });
+      const whine = new OscillatorNode(ctx, { type: "sawtooth", frequency: 2500 });
+      const wbp = new BiquadFilterNode(ctx, { type: "bandpass", frequency: 2500, Q: 6 });
+      const wg = new GainNode(ctx, { gain: 0 });
+      const g = new GainNode(ctx, { gain: 0 });
+      const air = new BiquadFilterNode(ctx, { type: "lowpass", frequency: 12000, Q: 0.5 });
+      const p = new PannerNode(ctx, {
+        panningModel: this.hrtf ? "HRTF" : "equalpower",
+        distanceModel: "inverse",
+        refDistance: 60,
+        rolloffFactor: 1,
+      });
+      roar.connect(rlp).connect(g);
+      whine.connect(wbp).connect(wg).connect(g);
+      g.connect(air).connect(p).connect(this.busses.listener);
+      roar.start();
+      whine.start();
+      this.jets.push({ roar, rlp, whine, wbp, wg, g, air, p });
+    }
+    let loud = 0;
+    this.jets.forEach((V, k) => {
+      const o = list[k];
+      if (!o) {
+        V.g.gain.setTargetAtTime(0, t, 0.3);
+        return;
+      }
+      const n = clamp(o.n1 / 100);
+      const dist = Math.hypot(...o.at);
+      const level = clamp(0.15 + 0.85 * n * n + 0.3 * o.rev);
+      loud = Math.max(loud, level * Math.min(1, 60 / Math.max(dist, 60)));
+      // (the Doppler: c / (c + v) — coming closer higher, going away lower)
+      const dop = 343 / Math.max(343 + clamp(o.vr, -200, 200), 100);
+      V.g.gain.setTargetAtTime(level, t, 0.2);
+      V.rlp.frequency.setTargetAtTime((250 + 900 * n + 600 * o.rev) * dop, t, 0.2);
+      V.roar.playbackRate.setTargetAtTime(dop, t, 0.1);
+      const f = (600 + 26 * o.n1) * dop;
+      V.whine.frequency.setTargetAtTime(f, t, 0.1);
+      V.wbp.frequency.setTargetAtTime(f, t, 0.1);
+      V.wg.gain.setTargetAtTime(0.05 + 0.12 * n, t, 0.2);
+      V.air.frequency.setTargetAtTime(700 + 11000 * Math.exp(-dist / 1500), t, 0.3);
+      V.p.positionX.setTargetAtTime(o.at[0], t, 0.05);
+      V.p.positionY.setTargetAtTime(o.at[1], t, 0.05);
+      V.p.positionZ.setTargetAtTime(-o.at[2], t, 0.05);
+    });
+    this.jetLevel = loud;
+  }
+
   boomAt(level: number, gap: number) {
     if (!this.running || !this.enabled) return;
     this.nwave(this.busses.master, 0.95 * clamp(level), 0, Math.max(gap, 0.06));

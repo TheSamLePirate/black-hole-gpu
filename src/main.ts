@@ -9145,8 +9145,17 @@ async function main() {
       });
     }
   };
+  // (the airliners' engines heard from the view — PLAN-AEROPORT-AAA V16 —: the airport view's; silent once it is left)
+  let airportHeard = false;
+  const airportSoundFrame = () => {
+    const on = !!airportState() && settings.sound;
+    if (on) sound.trafficFrame(camera.trafficSounds(camera.viewController()));
+    else if (airportHeard) sound.trafficFrame([]);
+    airportHeard = on;
+  };
   const airportCaptionFrame = () => {
     airportAtcFrame();
+    airportSoundFrame();
     airportUi.frame(performance.now());
     const A = airportState();
     const cap = A ? airportCaption() : null;

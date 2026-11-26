@@ -82,6 +82,14 @@ l'état d'une mission ou d'un combat **non sauvé, dit** ; le réseau **« entre
 
 ## Journal
 
+### 2026-11-26 17:33 UTC — Mode Aéroport V15–V17 : l'avion filmé gréé à toute distance, le son du trafic, le crabe au vent de travers
+
+- Réalisé : `traffic.ts` — gréement A320 pour l'avion filmé quelle que soit sa distance ; `trafficSounds` + `audio/engine.ts`
+  `trafficFrame` (deux voix : grondement, sifflement de soufflante selon N1, inversion, absorption de l'air, Doppler) branchés dans la vue
+  Aéroport ; le nez du trafic sur son cap ADS-B en vol (crabe au vent de travers, 20° au plus).
+- Preuves : 91 tests trafic / aéroport / audio verts, dont le crabe (10,0° du bon côté) ; son vu à KLAX (deux voix, niveaux) — **non
+  écouté** (headless). Non fait : feux 3D (cônes, halos), écoute.
+
 ### 2026-11-26 17:23 UTC — Mode Aéroport V13–V14 : le décollage du trafic et ses effets atmosphériques
 
 - Réalisé : `controller/traffic.ts` — rotation au roulage, assiette limitée à 4°/s, `trafficConfig` (volets, N1, inverseurs,

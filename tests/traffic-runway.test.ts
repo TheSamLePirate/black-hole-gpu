@@ -466,3 +466,42 @@ describe("drawn by the controller (controller/traffic.ts), a minute behind", () 
     expect(TRAFFIC_RIG.max).toBeLessThanOrEqual(4);
   });
 });
+
+describe("the weather on the traffic (PLAN-AEROPORT-AAA V17)", () => {
+  test("a crosswind's crab: its nose on its reported heading — 10° right of its track — in the air; none on the ground", () => {
+    // (north-east of the field, 2 000 m up, its track north at 120 m/s, its heading 10° east of it — a wind from the west)
+    const hist: Plane[] = [];
+    for (let k = 0; k < 40; k++)
+      hist.push(
+        report({
+          id: "c4b0a1",
+          lat: 37.75 + k * 0.0032,
+          lon: -122.2,
+          alt: 2000,
+          gs: 120 / 0.514444,
+          trk: 0,
+          hdg: 10,
+          vs: 0,
+          t: T0 + k * 3,
+        }),
+      );
+    const { frames } = fly([hist], "c4b0a1", T0 + 20, T0 + 90);
+    const F = frames.at(-1)!;
+    // (its nose's and its velocity's directions on the local horizontal: the angle between them)
+    const U = F.k.p.map((x) => x / Math.hypot(...F.k.p));
+    const flat = (v: readonly number[]) => {
+      const d = v[0]! * U[0]! + v[1]! * U[1]! + v[2]! * U[2]!;
+      const h = v.map((x, i) => x - d * U[i]!);
+      const l = Math.hypot(...h);
+      return h.map((x) => x / l);
+    };
+    const n = flat(F.k.fwd),
+      v = flat(F.k.v);
+    const ang = (Math.acos(Math.min(1, n[0]! * v[0]! + n[1]! * v[1]! + n[2]! * v[2]!)) * 180) / Math.PI;
+    // (its side: its nose east of its track — the cross product's up component)
+    const cu = (v[1]! * n[2]! - v[2]! * n[1]!) * U[0]! + (v[2]! * n[0]! - v[0]! * n[2]!) * U[1]! + (v[0]! * n[1]! - v[1]! * n[0]!) * U[2]!;
+    console.log(`  crab ${ang.toFixed(1)}°, its nose ${cu < 0 ? "right" : "left"} of its track`);
+    expect(Math.abs(ang - 10)).toBeLessThan(1);
+    expect(cu).toBeLessThan(0);
+  });
+});

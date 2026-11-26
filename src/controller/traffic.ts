@@ -13,6 +13,7 @@
 // made up through the gap in its reports (traffic/landing.ts: lost on short final, heard again taxiing — not across the
 // grass); its gear moved by its phase — the A320 family's rig near the view (src/a320/pose.ts), its legs and doors.
 // (Its methods, out of controls.ts: installed on its prototype — `this` the controller.)
+import { airportState } from "./airportview";
 import type { AirlinerId } from "../ship";
 import { A320Poser } from "../a320/pose";
 import type { Props } from "../a320/rig";
@@ -44,6 +45,7 @@ declare module "../controls" {
     trafficStep: typeof trafficStep;
     trafficNow: typeof trafficNow;
     trafficShips: typeof trafficShips;
+    trafficSounds: typeof trafficSounds;
     trafficOverlay: typeof trafficOverlay;
     trafficLead: typeof trafficLead;
     trafficForm: typeof trafficForm;
@@ -508,6 +510,16 @@ function trafficNow(this: CameraController): TrafficCraft[] {
       gs > 0.1
         ? [0, 1, 2].map((i) => (L.E[i]! * ve + L.N[i]! * vn) / gs)
         : [0, 1, 2].map((i) => L.E[i]! * Math.sin(psi) + L.N[i]! * Math.cos(psi));
+    // (its nose on its reported heading when it has one, its path on its track: a crosswind's crab — the wind's drift, the real one, as
+    // its transponder says it — in the air, 20° at most; on the ground none — PLAN-AEROPORT-AAA V17)
+    const crabRaw =
+      !gnd && gs > 0.1 && Number.isFinite(p.hdg) && Number.isFinite(p.trk) ? ((((p.hdg! - p.trk!) % 360) + 540) % 360) - 180 : 0;
+    const crab = Math.max(-20, Math.min(20, crabRaw)) * D;
+    if (crab) {
+      // (the track's direction turned about the local up by the crab: east of it positive — a heading right of the track)
+      const ex = [0, 1, 2].map((i) => L.U[(i + 1) % 3]! * hdir[(i + 2) % 3]! - L.U[(i + 2) % 3]! * hdir[(i + 1) % 3]!);
+      for (let i = 0; i < 3; i++) hdir[i] = hdir[i]! * Math.cos(crab) - ex[i]! * Math.sin(crab);
+    }
     const fwd0 = unit([0, 1, 2].map((i) => hdir[i]! * Math.cos(gamma) + L.U[i]! * Math.sin(gamma)));
     const r0 = unit(cross(fwd0, L.U));
     const u0 = cross(r0, fwd0);
@@ -771,6 +783,41 @@ export const CAST_OVER = 60;
  *  spectator's, else this one; the free camera with no craft too) — their place and axes on the view's camera's, from its
  *  place, the axes scaled to their type's length; hidden behind what the image holds nearer. The A320's size near the view
  *  (TRAFFIC_RIG): the game's A320, its rig moving — its gear as its phase wants it. */
+/**
+ * The airliners heard from the view (PLAN-AEROPORT-AAA V16 — audio/engine.ts trafficFrame): the two nearest moving within 4 km of the
+ * view's eye — those parked at their stands silent —, each its place on the view's camera [m], its engines' N1 and reversers
+ * (trafficConfig), its speed along the line of sight [m/s, away > 0].
+ */
+function trafficSounds(
+  this: CameraController,
+  view: CameraController = this,
+): { at: [number, number, number]; n1: number; rev: number; vr: number }[] {
+  const list = this.trafficNow();
+  if (!list.length) return [];
+  const E = earthView(view);
+  if (!E) return [];
+  const cam = (b: readonly number[]) => E.toCam(E.toHome(b as Vec3));
+  const d = (c: TrafficCraft) => Math.hypot(c.p[0]! - E.p0[0], c.p[1]! - E.p0[1], c.p[2]! - E.p0[2]);
+  // (the one the airport view films first)
+  const filmed = airportState()?.current ?? null;
+  const rank = (c: TrafficCraft) => d(c) - (c.id === filmed ? 1e9 : 0);
+  return list
+    .filter((c) => c.mesh && Math.hypot(...c.v) > 2 && d(c) < 4000)
+    .sort((a, b) => rank(a) - rank(b))
+    .slice(0, 2)
+    .map((c) => {
+      const K = trafficConfig(c);
+      const r = [c.p[0]! - E.p0[0], c.p[1]! - E.p0[1], c.p[2]! - E.p0[2]];
+      const l = Math.hypot(r[0]!, r[1]!, r[2]!) || 1;
+      return {
+        at: cam(r) as [number, number, number],
+        n1: K.n1,
+        rev: K.rev,
+        vr: (c.v[0]! * r[0]! + c.v[1]! * r[1]! + c.v[2]! * r[2]!) / l,
+      };
+    });
+}
+
 function trafficShips(this: CameraController, view: CameraController = this): TrafficInstance[] {
   const list = this.trafficNow();
   if (!list.length) return [];
@@ -784,6 +831,7 @@ function trafficShips(this: CameraController, view: CameraController = this): Tr
   const now = this.trafficClock ? this.trafficClock() : (this.trafficT ?? Date.now() / 1000);
   const out: TrafficInstance[] = [];
   let rigged = 0;
+  const filmedId = airportState()?.current ?? null;
   for (const c of nearest(
     list.filter((c) => c.mesh),
     E.p0,
@@ -799,8 +847,11 @@ function trafficShips(this: CameraController, view: CameraController = this): Tr
     const d = Math.hypot(c.p[0]! - E.p0[0], c.p[1]! - E.p0[1], c.p[2]! - E.p0[2]);
     // (its gear as its phase wants it, its airline's colours by its callsign — the plain mesh's and the game's A320's alike)
     const own = { cast: c.gnd || c.over < CAST_OVER, traffic: { gear: c.gear, livery: liveryOf(c.cs, c.reg) } };
-    if (c.mesh === "a320t" && d < TRAFFIC_RIG.near && rigged < (this.trafficRigMax ?? TRAFFIC_RIG.max)) {
-      rigged++;
+    // (the one the airport view films: its rig whatever its distance — the tower's long lens, a final 8 km out: its flaps, its gear,
+    // its lights moving; the renderer still shows the plain mesh when it is a few pixels on the image — PLAN-AEROPORT-AAA V15)
+    const filmed = c.id === filmedId;
+    if (c.mesh === "a320t" && (filmed || (d < TRAFFIC_RIG.near && rigged < (this.trafficRigMax ?? TRAFFIC_RIG.max)))) {
+      if (!filmed) rigged++;
       // (the game's A320 — its origin its belly, its wheels 1.59 m under it, the plain mesh's 3.9 m —, its rig)
       const k = c.len / A320_LEN;
       const down = (MESH.a320t.wheels * c.len) / MESH.a320t.len - A320_WHEELS * k;
@@ -894,5 +945,5 @@ function trafficOverlay(this: CameraController, fmtAlt: (m: number) => string, v
 }
 
 export function installTraffic(C: { prototype: CameraController }) {
-  Object.assign(C.prototype, { trafficStep, trafficNow, trafficShips, trafficOverlay, trafficLead, trafficForm });
+  Object.assign(C.prototype, { trafficStep, trafficNow, trafficShips, trafficSounds, trafficOverlay, trafficLead, trafficForm });
 }
