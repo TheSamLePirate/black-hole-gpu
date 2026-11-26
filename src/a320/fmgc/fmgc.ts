@@ -453,7 +453,17 @@ export class Fmgc {
     if (this.lat === "NAV" && !this.lnavOk) this.setLat("HDG"), (this.hdg = Math.round(i.hdg) || 360);
     // ---- LOC and G/S captured (FMGC-b.nas checkLoc / checkGs): the localizer within 1.5 dots, closing; the glideslope
     // within 1 dot once the localizer is
-    if (this.locArm && i.ils?.loc !== null && i.ils && !i.onGround && Math.abs(i.ils.loc!) < 1.5) {
+    // (and flying towards its course — within 90° of it: a downwind beside the extended centreline, flown the other way, is no
+    // intercept; before 26 Nov 2026 the KSFO → KLAX flight captured the localizer of 24R on its downwind east, APPR armed, and lost
+    // its approach)
+    if (
+      this.locArm &&
+      i.ils?.loc !== null &&
+      i.ils &&
+      !i.onGround &&
+      Math.abs(i.ils.loc!) < 1.5 &&
+      Math.abs(wrap180(i.trk - i.ils.course)) < 90
+    ) {
       this.setLat("LOC*");
       this.locArm = false;
     }

@@ -1,4 +1,5 @@
 import { afterEach, expect, test } from "bun:test";
+import { Fmgc } from "../src/a320/fmgc/fmgc";
 import { a320Cstr } from "../src/controller/a320ap";
 import type { Waypoint } from "../src/game/flightplan";
 import { ourGroundPose } from "../src/game/place";
@@ -185,3 +186,26 @@ test("flown: the descent armed in cruise, begun at the T/D, the path held (VDEV)
   // (DECEL: 5 NM before the IF)
   expect(phaseApp).toMatch(/^IF [4-6]\./);
 }, 240_000);
+
+test("the localizer captured only flying towards its course: none on a downwind beside it flown the other way", () => {
+  // (26 Nov 2026: the KSFO → KLAX flight, APPR armed on its downwind east beside the extended centreline of 24R, captured its
+  // localizer flying the other way and lost its approach)
+  const g = ourGroundPose("earth", 40, -35, 0);
+  const X = add(g.X, scale(g.up, 1500 / M_METRES));
+  const { c, fly } = flight({ ...g, X, vel: add(g.vel, scale(g.fwd, 110 / C_MPS)), landed: undefined }, false, "a320");
+  c.s.flightMode = "plane";
+  c.gearDown = false;
+  c.gearExt = 0;
+  c.gearInit = true;
+  fly(2);
+  const i0 = c.a320FmgcIn!;
+  const ils = (loc: number) => ({ loc, gs: null, course: 270, dme: 9, across: 0 });
+  const F = new Fmgc();
+  F.apprToggle();
+  // (the other way: track 090 for a course of 270, a dot off — no capture)
+  F.step({ ...i0, trk: 90, ils: ils(1) });
+  expect(F.lat).not.toBe("LOC*");
+  // (closing at 30°: captured)
+  F.step({ ...i0, trk: 240, ils: ils(1) });
+  expect(F.lat).toBe("LOC*");
+});

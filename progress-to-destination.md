@@ -82,6 +82,17 @@ l'état d'une mission ou d'un combat **non sauvé, dit** ; le réseau **« entre
 
 ## Journal
 
+### 2026-11-26 19:24 UTC — A320 V2 : vol n° 8 — le localizer capté à contresens sur le vent arrière ; l'arrivée de KLAX reproduite en simulation
+
+- Constaté (vol n° 8, kerr-mini, vu par Sam) : APPR armé au DECEL sur le vent arrière vers l'est, à 1–2 NM de l'axe prolongé de la 24R :
+  le FMGC a capté le localizer **en volant à l'opposé** (LOC*, LOC), n'est pas allé à LIVVN, puis HDG et palier à 5 000 ft.
+- Corrigé : `a320/fmgc/fmgc.ts` — la capture du localizer exige une route à moins de 90° de son axe (convergence).
+- Preuves : test `a320-constraints` (à contresens : pas de capture ; à 30° : capture) ; **nouveau test `a320-published-arrival` « KLAX's
+  ILS 24R from SMO »** — l'arrivée du vol reproduite sans navigateur en 18 s : SMO → LIVVN (survolé) → BROUK → MERCE → KOBEE → RW24R,
+  LOC vers MERCE, glide à 2 201 ft, arrondi, roulage à 0,3 m de l'axe ; **témoin négatif** : sans la condition, il reproduit l'échec du
+  vol n° 8 (LOC à LIVVN, HDG) ; suites A320 / approches 172/172. Vol n° 9 lancé.
+- Leçon : un vol de 45 min au banc pour chaque essai est trop lent — l'arrivée se teste désormais en simulation d'abord.
+
 ### 2026-11-26 18:30 UTC — A320 V2 : vol n° 7 — l'approche ratée par la navigation latérale (demi-tour anticipé, pas de seuil de piste)
 
 - Constaté (vol n° 7, kerr-mini, vu par Sam) : NAV gardé et APPR armé (le correctif précédent tient), mais approche ratée — l'avion à

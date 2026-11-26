@@ -164,3 +164,76 @@ test("the same arrival flown as a crew: APPR armed, NAV kept past the IF (no gam
   expect(gsAt).toBeGreaterThan(1000);
   expect(F.lat).toBe("ROLL OUT");
 }, 600_000);
+
+test("KLAX's ILS 24R from SMO at the assisted level: the downwind east to LIVVN, its reversal flown over, the final back west, LOC and G/S, down on 24R", async () => {
+  // (the KSFO → KLAX flight's arrival, 26 Nov 2026: its downwind flown beside the extended centreline the other way — no localizer
+  // captured there —, LIVVN flown over, BROUK, MERCE, KOBEE on the final, the threshold RW24R)
+  const klax = (await fieldByCode("KLAX"))!;
+  await loadApproachTile(klax.lat, klax.lon);
+  setGroundHeights("earth", () => 0);
+  // (over Santa Monica's VOR, 11 000 ft, flying east at 140 m/s)
+  const g = ourGroundPose("earth", 34.0102, -118.52, 0);
+  const east = g.fwd;
+  const north = cross(g.up, east);
+  const hdg = 90 * D;
+  const fwd = add(scale(north, Math.cos(hdg)), scale(east, Math.sin(hdg)));
+  const X = add(g.X, scale(g.up, 11000 / FT / M_METRES));
+  const { c, fly } = flight({ ...g, X, fwd, vel: add(g.vel, scale(fwd, 140 / C_MPS)), landed: undefined }, false, "a320");
+  c.s.flightMode = "plane";
+  c.s.weather = "fair";
+  c.s.a320Assist = "assisted";
+  c.gearDown = false;
+  c.gearExt = 0;
+  c.gearInit = true;
+  c.pilot.throttle = 0.6;
+  // (AP1 engages 5 s after a lift-off — a flight placed in the air counts as one)
+  fly(6);
+  c.approachSelect({ field: "KLAX", approach: "I24R", via: "LIVVN" }, "test");
+  const here = c.geoNow()!;
+  c.nav.route.wps = [
+    { name: "HERE", lat: here.lat, lon: here.lon },
+    { name: "SMO", lat: 34.0102, lon: -118.4567 },
+    { name: "KLAX", lat: klax.lat, lon: klax.lon, field: { icao: "KLAX", elev: klax.elev } },
+  ];
+  c.routeChanged();
+  console.log(`  ${c.routeProcedures()}`);
+  const names = c.nav.route.wps.map((w) => w.name);
+  console.log(`  plan: ${names.join(" ")}`);
+  fly(1);
+  const F = c.a320Fmgc!;
+  if (!F.ap) c.a320ApKey("ap");
+  if (F.lat !== "NAV") c.a320ApKey("nav");
+  if (!F.athr) c.a320ApKey("athr");
+  F.fms.crzFl = 110;
+  F.alt = 2000;
+  F.altPush(c.a320FmgcIn ?? undefined);
+  const seen: string[] = [];
+  let locAt = "",
+    gsAt = Number.NaN,
+    k = 0;
+  const T: { touch: { along: number; across: number } | null } = { touch: null };
+  const t = fly(2400, () => {
+    const wp = c.nav.route.wps[c.nav.last.l?.active ?? 0]?.name ?? "";
+    if (seen.at(-1) !== wp) seen.push(wp);
+    if (process.env.TRACE && k++ % 1800 === 0) {
+      const i = c.a320FmgcIn!;
+      const o = c.a320FmgcOut;
+      console.log(
+        `   ${(k / 60).toFixed(0)} s ${F.lat}/${F.vert} ap ${F.ap} athr ${F.athrActive} ${F.thrust} thr ${c.pilot.throttle} γcmd ${o?.gammaCmd != null ? ((o.gammaCmd * 180) / Math.PI).toFixed(1) : "-"} fpa ${i.fpa.toFixed(1)} ${F.phase} alt ${i.alt.toFixed(0)} ias ${i.ias.toFixed(0)} wp ${wp} vdev ${c.a320Vprof?.vdev}`,
+      );
+    }
+    if (!locAt && F.lat.startsWith("LOC")) locAt = wp;
+    if (Number.isNaN(gsAt) && F.vert.startsWith("G/S")) gsAt = c.a320FmgcIn!.alt;
+    // (the offset from the runway's axis as its own localizer reads it — the ILS's across)
+    if (F.lat === "ROLL OUT" && c.a320FmgcIn!.ils) T.touch = { along: 0, across: c.a320FmgcIn!.ils.across };
+    return F.lat === "ROLL OUT" && c.a320FmgcIn!.gs < 40;
+  });
+  console.log(
+    `  flown: ${seen.join(" → ")}; LOC from ${locAt || "—"}, G/S at ${gsAt.toFixed(0)} ft; ${F.lat}, ${T.touch ? `${T.touch.across.toFixed(1)} m across` : "—"}, ${t.toFixed(0)} s`,
+  );
+  expect(seen).toContain("LIVVN");
+  expect(seen.indexOf("LIVVN")).toBeLessThan(seen.indexOf("KOBEE"));
+  expect(["BROUK", "MERCE", "KOBEE", "RW24R"]).toContain(locAt);
+  expect(F.lat).toBe("ROLL OUT");
+  expect(Math.abs(T.touch!.across)).toBeLessThan(15);
+}, 600_000);
