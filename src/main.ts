@@ -4776,7 +4776,9 @@ async function main() {
     },
     geo: () => camera.geoNow(),
     onGround: () => !!camera.rolling || !!camera.ourLanded,
-    field: (code) => fieldCached(code),
+    // (an airfield anywhere: its tile asked when not in — « NOT IN DATA BASE » once, found at the next typing; before 26 Nov 2026 only
+    // the tiles about the craft were searched: INIT KSFO/KLAX at San Francisco never found Los Angeles)
+    field: (code) => fieldCached(code) ?? (void fieldByCode(code), null),
     gwKg: () => fleet.massProps().mass,
     fobKg: () => camera.a320?.fuel ?? fleet.fuel.a320 ?? 0,
     now: () => dateOf(sim.time),

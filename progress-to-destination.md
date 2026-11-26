@@ -81,6 +81,19 @@ l'état d'une mission ou d'un combat **non sauvé, dit** ; le réseau **« entre
 
 ## Journal
 
+### 2026-11-26 15:27 UTC — A320 V2 en cours : deux défauts trouvés par le vol KSFO → KLAX au banc (assistance, MCDU)
+
+- Réalisé : scénario `tests/flight/scenarios/a320-ifr.ts` (`a320-ifr-ksfo-klax` : plan au MCDU — SID, STAR, ILS —, décollage, montée
+  gérée, croisière ×4, DES armé puis au T/D, chemin, DECEL, ILS, atterrissage ; PFD/ND/MCDU en images à chaque phase). Ses premiers vols
+  ont trouvé : (1) **le niveau Assisté mettait les manettes au ralenti à la rotation** (règle « ralenti à 20 ft » sans condition
+  d'atterrissage : la radiosonde sous 20 ft et le ressort du train) — l'A320 retombait de 78 m ; réglé (`a320assist.ts` : phase
+  approche, hors TOGA/FLX, vraie descente), test `tests/a320-assist.test.ts` avec **témoin négatif** (l'ancienne règle : manette 0 —
+  test rouge) ; (2) **le MCDU ne trouvait pas un aérodrome lointain** (INIT KSFO/KLAX à San Francisco : « NOT IN DATA BASE » toujours —
+  seules les tuiles autour de l'avion) ; l'hôte demande désormais la tuile (`main.ts`, trouvé à la frappe suivante).
+- Preuves : observé sur kerr-mini (vols 1–3 : chute après décollage, puis « no plan », puis STAR absente — l'attente du test) ; vol 4 :
+  plan complet `KSFO ORYAN SAHEY CIITY(+5000) BCEEE(+11000) DEDHD AVE DERBB REYES FIM SYMON SADDE BAYST SMO(+7000) LIVVN BROUK(+5000)
+  MERCE(+4000) KOBEE(+2200) KLAX`, CLB/NAV/AP1/A/THR à 1 500 ft ; **le vol n'est pas fini à l'écriture**.
+
 ### 2026-11-26 15:10 UTC — A320 : la descente gérée — profil vertical, T/D, chemin, DECEL ; ND, F-PLN, PFD (PLAN-A320-VOL-AAA N3)
 
 - Contribution : §19 (un vol IFR réel de bout en bout : la descente au bon endroit, sur un profil, l'approche commencée au DECEL).

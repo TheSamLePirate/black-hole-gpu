@@ -113,7 +113,10 @@ function a320AssistStep(this: CameraController, inp: PilotInput, dt: number) {
   if (To && H.gearUp && H.cl && H.flapsUp) this.a320To = null;
   // (the assisted level's landing: the ground spoilers armed with the gear down; idle at 20 ft hand-flown)
   if (assisted && this.gearDown && ra < 2000) this.groundSpoilers = true;
-  if (assisted && F && !F.ap && this.gearDown && ra < 20 && ra > 0 && vsFpm < 0) this.pilot.throttle = 0;
+  // (a landing only: the approach phase, the levers under FLX/TOGA, a real sink — at the rotation the radio altimeter reads under 20 ft
+  // and the gear's spring a few ft/min down: a take-off flown at the assisted level was put to idle at its lift-off, 26 Nov 2026)
+  if (assisted && F && !F.ap && F.phase === "approach" && !tookOff && this.gearDown && ra < 20 && ra > 0 && vsFpm < -100)
+    this.pilot.throttle = 0;
 }
 
 export function installA320Assist(C: { prototype: CameraController }) {
