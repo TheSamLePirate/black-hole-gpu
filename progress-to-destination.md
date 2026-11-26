@@ -82,6 +82,18 @@ l'état d'une mission ou d'un combat **non sauvé, dit** ; le réseau **« entre
 
 ## Journal
 
+### 2026-11-26 18:30 UTC — A320 V2 : vol n° 7 — l'approche ratée par la navigation latérale (demi-tour anticipé, pas de seuil de piste)
+
+- Constaté (vol n° 7, kerr-mini, vu par Sam) : NAV gardé et APPR armé (le correctif précédent tient), mais approche ratée — l'avion à
+  7 860 ft au passage de KOBEE (contrainte +2 200, VDEV +5 090 ft), puis le localizer jamais capté, NAV vers le point de référence de
+  KLAX à côté de l'axe de la 24R. Le plan : SMO (ouest), vent arrière vers l'est jusqu'à LIVVN (25 NM), demi-tour, BROUK, MERCE, KOBEE
+  sur la même ligne.
+- Causes et corrections : `game/flightplan.ts` `Lnav` — un virage de plus de 135° (demi-tour) n'est plus anticipé (R·tan(θ/2) plafonné
+  à 15 km séquençait LIVVN 8 NM avant, puis BROUK et MERCE alignés derrière : 40 NM coupés, l'avion trop haut pour son chemin) ;
+  `controller/ils.ts` `publishedArrival` — le seuil de piste (RW24R…) gardé comme dernier point de l'approche (NAV mène sur le localizer).
+- Preuves : test `flightplan` « course reversal » (LIVVN séquencé à 66 m ; **témoin négatif** : l'ancienne règle le saute — test rouge) ;
+  266 tests plan de vol / A320 / approches / ILS / F-35 / trafic verts. **Non revolé** : vol n° 8 lancé.
+
 ### 2026-11-26 17:46 UTC — A320 : le glide affiché dans le poste, comme pour le F-35 (demande de Sam)
 
 - Réalisé : `ui/hud/symbology.ts` — un mode « piste seule » (`only: "runway"`, à côté de « amarrage seul ») qui dessine l'aide

@@ -113,3 +113,27 @@ test("the F-35's cruise: its burn at the level and speed of a ferry flight, its 
   expect(hi * 3600).toBeLessThan(2600);
   expect(lo).toBeGreaterThan(hi * 1.3);
 });
+
+test("a course reversal — a downwind east, its end, the final back west on the same line: its end flown over, not anticipated", () => {
+  // (as at Los Angeles: SMO west, LIVVN 25 NM east, then BROUK, MERCE, KOBEE back west along the same latitude — before 26 Nov 2026 the
+  // 180° turn's anticipation, 15 km, sequenced LIVVN and the points behind it at once: the turn back 25 NM early)
+  const p = newPlan();
+  const deg = (km: number) => km / 111.32;
+  p.wps = [
+    { name: "SMO", lat: 34.01, lon: -118.46 },
+    { name: "LIVVN", lat: 34.0, lon: -118.46 + deg(46) },
+    { name: "BROUK", lat: 34.0, lon: -118.46 + deg(40) },
+    { name: "MERCE", lat: 34.0, lon: -118.46 + deg(34) },
+  ];
+  const L = new Lnav(p);
+  let here = { lat: 34.01, lon: -118.46 };
+  let at: number | null = null;
+  for (let t = 0; t < 600 && at === null; t++) {
+    const o = L.step(here, 140, Math.PI / 2, Math.PI / 2)!;
+    if (o.passed === 1) at = gcDist(here, p.wps[1]!);
+    here = { lat: here.lat + (p.wps[1]!.lat - here.lat) * 0.02, lon: here.lon + deg(0.14) };
+  }
+  console.log(`  LIVVN sequenced ${at?.toFixed(0)} m from it`);
+  expect(at).not.toBeNull();
+  expect(at!).toBeLessThan(500);
+});

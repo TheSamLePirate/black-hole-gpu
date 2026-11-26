@@ -220,7 +220,10 @@ export class Lnav {
       let seq = false;
       if (next) {
         const dc = Math.abs(wrapPi(gcCourse(to, next) - dtk));
-        const anticip = Math.min(turnRadius(gs) * Math.tan(Math.min(dc, 2.6) / 2), 15_000);
+        // (a turn past 135° — a course reversal: a downwind's end turning back onto the final — flown over its point, not anticipated:
+        // its anticipation, R·tan(θ/2), grew to 15 km and the points beyond on the same line were sequenced at once — the KSFO → KLAX
+        // flight turned back 25 NM before LIVVN, too high for its approach, 26 Nov 2026)
+        const anticip = dc > (135 * Math.PI) / 180 ? 0 : Math.min(turnRadius(gs) * Math.tan(dc / 2), 15_000);
         seq = dist < Math.max(anticip, 150) || (legLen > 50 && atd > legLen);
       } else if (dist < 300 || (legLen > 50 && atd > legLen)) {
         out.done = true;

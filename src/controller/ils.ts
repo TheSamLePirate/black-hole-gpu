@@ -607,7 +607,9 @@ export function publishedArrival(a: Approach, via: string | null, from: { lat: n
   const iff = a.final[0]?.fix;
   const out: Waypoint[] = [];
   for (const l of [...tr, ...a.final]) {
-    if (l.lat === undefined || l.lon === undefined || !l.fix || /^RW/.test(l.fix)) continue;
+    // (the runway's own fix — the threshold, « RW24R » — kept as the approach's last point: NAV flown to it lies on the localizer; before
+    // 26 Nov 2026 the plan went from the last fix to the airfield's reference point, off the axis of 24R at Los Angeles: no LOC capture)
+    if (l.lat === undefined || l.lon === undefined || !l.fix) continue;
     if (out.at(-1)?.name === l.fix) continue;
     const alt = l.alt?.[0] ?? l.alt?.[1] ?? undefined;
     out.push({

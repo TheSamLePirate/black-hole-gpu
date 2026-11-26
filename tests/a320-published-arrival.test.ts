@@ -65,7 +65,8 @@ test("KSFO's published ILS 28R via ARCHI at the assisted level: the plan's fixes
   const said = c.routeProcedures();
   console.log(`  ${said}`);
   const names = c.nav.route.wps.map((w) => w.name);
-  expect(names.slice(-4)).toEqual(["DUMBA", "CEPIN", "AXMUL", "KSFO"]);
+  // (the runway's threshold the approach's last point — NAV flown to it lies on the localizer)
+  expect(names.slice(-4)).toEqual(["CEPIN", "AXMUL", "RW28R", "KSFO"]);
   expect(names).toContain("ARCHI");
   // (NAV and AP1, the A/THR — a second after the plan, the FMGC's LNAV in —; the FCU down to the IF's « at or above 3 000 ft »)
   fly(1);

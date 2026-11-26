@@ -340,7 +340,7 @@ describe("A320 MCDU", () => {
     m.lsk("R", 6);
     expect(sel).toEqual({ field: "KSFO", approach: "I28R", via: "ARCHI" });
     // (the plan: the transition's fixes then the final's, its IF marked where the approach is engaged)
-    expect(route.wps.map((w) => w.name)).toEqual(["LFPG", "ARCHI", "ZILED", "GIRRR", "DUMBA", "CEPIN", "AXMUL", "KSFO"]);
+    expect(route.wps.map((w) => w.name)).toEqual(["LFPG", "ARCHI", "ZILED", "GIRRR", "DUMBA", "CEPIN", "AXMUL", "RW28R", "KSFO"]);
     expect(route.wps.find((w) => w.name === "CEPIN")!.proc).toMatchObject({ kind: "arr", rwy: "28R", join: true });
     expect(Math.round(route.wps[1]!.alt! / 0.3048)).toBe(7000);
     // (RAD NAV: the real localizer — IGWQ 111.70, its course true)
