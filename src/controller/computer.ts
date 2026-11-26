@@ -72,7 +72,7 @@ declare module "../controls" {
     burnsStep: typeof burnsStep;
     glideAlpha: typeof glideAlpha;
     bestGlide: typeof bestGlide;
-    glideCache?: { at: number; sp: number; ld: number };
+    glideCache?: { key: string; rho: number; sp: number; ld: number };
     aglNow: typeof aglNow;
     approach: typeof approach;
     goAround: typeof goAround;
@@ -713,23 +713,25 @@ export const APPROACH = { energy: true, brake: true, far: true, lead: true, low:
  * The craft's best glide ratio now [L/D]: its lift over its drag at the angle that makes it the most, in the air it is in, at its
  * speed through it — the gear and the flaps as they are, the air brake in (what a glide short of energy flies). Mach's own: the
  * Ranger's ~2 supersonic, ~4.5 subsonic (the approach's energy reckoned at a fixed 4.5 thought a supersonic leg cheap — its
- * circuit at Edwards bled 11 km of energy height in 10 km of track, 26 Nov 2026). Kept a second.
+ * circuit at Edwards bled 11 km of energy height in 10 km of track, 26 Nov 2026). Kept while the speed (20 m/s), the air's density
+ * (5 %) and the configuration stay — no wall's clock in the flight's logic (tests/flight-clock.test.ts).
  */
 function bestGlide(this: CameraController, spAir: number): number {
   const LA = this.airFlight.last;
   if (!LA || !(LA.air.rho > 0) || !(spAir > 1)) return 4;
-  const now = performance.now();
   const C = this.glideCache;
-  if (C && now - C.at < 1000 && Math.abs(C.sp - spAir) < 20) return C.ld;
-  const A = VESSELS[fleet.active].aero;
   const cfg = { ...this.airFlight.cfg, brake: 0 };
+  const key = `${fleet.active}|${cfg.flaps ?? 0}|${cfg.gear ?? 0}`;
+  const rho = LA.air.rho;
+  if (C && C.key === key && Math.abs(C.sp - spAir) < 20 && Math.abs(C.rho - rho) < 0.05 * rho) return C.ld;
+  const A = VESSELS[fleet.active].aero;
   let ld = 0;
   for (let al = 0.02; al < 0.5; al += 0.02) {
     const o = aeroForces(A, [0, -spAir * Math.sin(al), spAir * Math.cos(al)], LA.air, [0, 0, 0], cfg);
     if (o.D > 0) ld = Math.max(ld, o.L / o.D);
   }
   ld = ld > 0.5 ? ld : 4;
-  this.glideCache = { at: now, sp: spAir, ld };
+  this.glideCache = { key, rho, sp: spAir, ld };
   return ld;
 }
 

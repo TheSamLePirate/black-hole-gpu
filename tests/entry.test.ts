@@ -379,22 +379,24 @@ function rangerEntry(acrossKm: number, turning = true) {
   return { flown, dist, across: miss(flown.end, flown.end.x, pe).across / 1e3, flips, plan };
 }
 
-test("the Ranger's entry to a place 150 km aside of its track: banked towards it from the start, handed over on its aim", () => {
-  // (26 Nov 2026, live on kerr-mini: the guidance began banked right — its side 1 whatever the place's —, kept it until
-  // the place was 10 % of the way left aside (250 km), the crossrange grew from 150 to 530 km and the hand-over came 83–101 km
-  // aside of Edwards: the glide never made the runway, four flights out of four)
-  for (const across of [150, -150]) {
-    const r = rangerEntry(across);
-    console.log(
-      `across ${across} km: hand-over ${r.dist.toFixed(1)} km from the place, ${r.across.toFixed(1)} km off its heading, ${r.flips} reversals, ${r.flown.gPeak.toFixed(2)} g`,
-    );
-    expect(r.flown.handover).toBe(true);
-    expect(r.flown.gPeak).toBeLessThan(2.6);
-    // (the hand-over 90 km short of the place, on its line: within 15 km of the aim, 10 km of the line. Not a witness of the
-    // first side's fix by itself: this model's fall, its bank ~52°, recovers from the wrong side too — the live flight's,
-    // banked 12–26° for its range, did not; the live entry (scripts/live-entry.ts) is the witness)
-    expect(Math.abs(r.dist - 90)).toBeLessThan(15);
-    expect(Math.abs(r.across)).toBeLessThan(10);
-    expect(r.flips).toBeLessThanOrEqual(8);
-  }
-}, 300_000);
+// (one test a side: the two together took 220–316 s on the CI's runner, past their 300 s — 26 Nov 2026)
+for (const across of [150, -150])
+  test(`the Ranger's entry to a place 150 km ${across > 0 ? "left" : "right"} of its track: banked towards it from the start, handed over on its aim`, () => {
+    // (26 Nov 2026, live on kerr-mini: the guidance began banked right — its side 1 whatever the place's —, kept it until
+    // the place was 10 % of the way left aside (250 km), the crossrange grew from 150 to 530 km and the hand-over came 83–101 km
+    // aside of Edwards: the glide never made the runway, four flights out of four)
+    {
+      const r = rangerEntry(across);
+      console.log(
+        `across ${across} km: hand-over ${r.dist.toFixed(1)} km from the place, ${r.across.toFixed(1)} km off its heading, ${r.flips} reversals, ${r.flown.gPeak.toFixed(2)} g`,
+      );
+      expect(r.flown.handover).toBe(true);
+      expect(r.flown.gPeak).toBeLessThan(2.6);
+      // (the hand-over 90 km short of the place, on its line: within 15 km of the aim, 10 km of the line. Not a witness of the
+      // first side's fix by itself: this model's fall, its bank ~52°, recovers from the wrong side too — the live flight's,
+      // banked 12–26° for its range, did not; the live entry (scripts/live-entry.ts) is the witness)
+      expect(Math.abs(r.dist - 90)).toBeLessThan(15);
+      expect(Math.abs(r.across)).toBeLessThan(10);
+      expect(r.flips).toBeLessThanOrEqual(8);
+    }
+  }, 300_000);
