@@ -52,6 +52,8 @@ function holdsOn(c: CameraController, f: { h: number; hdg: number; V: number }) 
 /** An orbit over a point (`lat`, `lon` — else one `radius` to our right or left, so we fly onto it at once), at
  *  `radius` [m], to the right (dir 1) or the left. What to say. */
 function orbitStart(this: CameraController, o: { lat?: number; lon?: number; radius?: number; dir?: 1 | -1 } = {}): string {
+  // (the A320 flies by its FMGC — its FCU, its MCDU's hold —, never by the F-35's modes around it: PLAN-A320-VOL-AAA G1)
+  if (fleet.active === "a320") return t("Orbit: the F-35's — the A320 flies its FCU (a heading) or its MCDU's hold");
   const f = this.jetFigures();
   const g = this.geoNow();
   if (!f || !g) return t("Orbit: in the air");
@@ -72,6 +74,7 @@ function orbitStart(this: CameraController, o: { lat?: number; lon?: number; rad
 
 /** The terrain following at `agl` [m] (null: off). What to say. */
 function tfStart(this: CameraController, agl: number | null): string {
+  if (fleet.active === "a320" && agl !== null) return t("Terrain following: the F-35's — the A320 holds the FCU's altitude");
   const f = this.jetFigures();
   if (agl === null) {
     this.tfAgl = null;

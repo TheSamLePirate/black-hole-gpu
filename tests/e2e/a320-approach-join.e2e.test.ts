@@ -66,8 +66,10 @@ describe.skipIf(!E2E)("the A320's join over the relief (Nice)", () => {
         __bh.camera.ilsOff(); return { lat: lat / D, lon: lon / D }; })()`);
       const placed = await placeLow(app, [p.lat, p.lon, L.agl, L.hdg, 125]);
       console.log(`  placed ${placed.agl} m over the ground (relief z ${placed.finest})`);
+      // (the A320's autopilot engages 5 s after a lift-off — a placement is one —: 6 s flown as placed before the approach is asked, or
+      // rule 13's monitor counted its first 148 steps without an autopilot — 26 Nov 2026)
       const said = await app.js<string>(
-        `(() => { const c = __bh.camera; c.gearDown = false; c.pilot.throttle = 0.62; return c.ilsStart("LFMN"); })()`,
+        `(() => { const c = __bh.camera; c.gearDown = false; c.pilot.throttle = 0.62; for (let i = 0; i < 30 * 6; i++) __bh.step(1 / 30); return c.ilsStart("LFMN"); })()`,
       );
       console.log(`  ${said}`);
       expect(said).toMatch(/LFMN/);

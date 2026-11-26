@@ -4,6 +4,7 @@
 // break, the hold over his fix stacked by our place, the way home), and the break's and the hold's own flying
 // in the jet's step.
 // (Its methods, out of controls.ts: installed on its prototype — `this` the controller.)
+import { fleet } from "../fleet";
 import { runwaySitesNear } from "../world/fieldsite";
 import { formReshape, formationLabel } from "./formation";
 import { spacingStep } from "../game/formations";
@@ -127,6 +128,8 @@ function breakStart(this: CameraController, id: "breakL" | "breakR"): string {
 
 /** The hold: the racetrack over a fix, inbound on a course, `above` [m] over our level now (a stack). */
 function holdStart(this: CameraController, fix: { lat: number; lon: number }, inbound: number, above = 0): string {
+  // (the A320's hold is its MCDU's: not the F-35's racetrack around its FMGC — PLAN-A320-VOL-AAA G1)
+  if (fleet.active === "a320") return t("Hold: the A320's is its MCDU's (HOLD at a fix of its plan)");
   const f = this.jetFigures();
   if (!f) return t("Hold: in the air");
   this.brk = null;

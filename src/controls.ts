@@ -111,6 +111,7 @@ import { installStovl, noStovl, type StovlState } from "./controller/stovl";
 import type { A320Fcs } from "./a320/fcs";
 import { installA320 } from "./controller/a320";
 import { installA320Ap } from "./controller/a320ap";
+import { installA320Assist } from "./controller/a320assist";
 import { installA320Ground } from "./controller/a320ground";
 import { installA320Taxi } from "./controller/a320taxi";
 import { CamShake } from "./camshake";
@@ -714,6 +715,11 @@ export class CameraController {
   cockpit: { input: CockpitPointer; active(): boolean; tip(id: string | null, x: number, y: number): void } | null = null;
   /** a control held by the pointer: which pointer, where it was pressed and when, where it is */
   private ckHeld: { id: number; x0: number; y0: number; t: number; x: number; y: number } | null = null;
+  /** a control of the A320's deck held, or under the pointer: a modifier then is the knob's (pull), not the thrust levers' (modGate) */
+  get deckPointerBusy(): boolean {
+    const ck = this.cockpit;
+    return !!this.ckHeld || (!!ck?.input.middle && ck.active() && ck.input.hover !== null);
+  }
   /** a 3D cockpit screen held by the pointer (OBC / MCDU capture: prevents camera drag while clicking/dragging the screen) */
   private ckScreenHeld: { id: number; x0: number; y0: number; t: number } | null = null;
   private ckWheel = 0;
@@ -741,9 +747,13 @@ export class CameraController {
     const ck = this.cockpit;
     // (the A320's: the middle button — or Alt with the left — pulls FlightGear's knobs)
     const middle = !!ck?.input.middle && (e.button === 1 || (e.button === 0 && e.altKey));
-    if (ck && (e.button === 0 || middle) && !e.shiftKey && this.pointers.size === 0 && ck.active()) {
+    // (and Shift with the left pulls them too — FlightGear's own: `devices/status/keyboard/shift` — on a control; elsewhere Shift
+    // still turns the look. Before 26 Nov 2026 a Shift-click never reached the A320's deck: it turned the look, and a click always
+    // pushed — PLAN-A320-VOL-AAA K1)
+    const deckShift = e.shiftKey && !!ck?.input.middle;
+    if (ck && (e.button === 0 || middle) && (!e.shiftKey || deckShift) && this.pointers.size === 0 && ck.active()) {
       const [nx, ny] = this.ndcOf(e);
-      if (ck.input.down(nx, ny, middle ? 1 : 0)) {
+      if (ck.input.down(nx, ny, middle ? 1 : 0, { shift: e.shiftKey })) {
         this.canvas.setPointerCapture(e.pointerId);
         this.ckHeld = { id: e.pointerId, x0: e.clientX, y0: e.clientY, t: performance.now(), x: e.clientX, y: e.clientY };
         this.setHover(null);
@@ -1854,6 +1864,7 @@ installNetcraft(CameraController);
 installStovl(CameraController);
 installA320(CameraController);
 installA320Ap(CameraController);
+installA320Assist(CameraController);
 installA320Ground(CameraController);
 installA320Taxi(CameraController);
 installCine(CameraController);

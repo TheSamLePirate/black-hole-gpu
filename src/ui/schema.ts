@@ -5073,6 +5073,21 @@ export const SCHEMA: ControlDef[] = [
     ],
   },
   {
+    key: "a320Assist",
+    type: "choice",
+    section: "game",
+    group: "A320",
+    label: "Assistance",
+    effect: "none",
+    enabled: (s) => s.ship && s.vessel === "a320",
+    help: "What the A320 does for its crew, through its own controls: realistic — nothing; assisted — the gear up at a positive climb, the flaps up as the speed builds, the levers to CL at 1 500 ft, AP1 once it may engage, the ground spoilers armed with the gear down, the levers to idle at 20 ft flown by hand. The easy take-off (the wheel: Tab held) at either level.",
+    keywords: "a320 assist assistance easy help gear flaps autopilot realistic",
+    options: [
+      { value: "realistic", label: "Realistic", hint: "Nothing done for the crew" },
+      { value: "assisted", label: "Assisted", hint: "Gear, flaps, levers, AP1 and spoilers done at their moment" },
+    ],
+  },
+  {
     key: "a320Start",
     type: "choice",
     section: "game",

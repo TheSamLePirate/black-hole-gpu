@@ -189,6 +189,8 @@ function modGate(c: CameraController, which: "up" | "down", held: boolean): bool
         break;
       }
     if (now - c.wheelAt < 400) g.chord = true;
+    // (the pointer on a control of the A320's deck: the modifier is the knob's — Shift-click pulls it —, not the levers')
+    if (c.deckPointerBusy) g.chord = true;
   }
   return !g.chord && now - g.since >= MOD_HOLD_MS;
 }
@@ -1026,6 +1028,8 @@ function flyShip(this: CameraController, dt: number, pad: ReturnType<GamepadInpu
   this.hubWarpLimit = null;
   this.railsCap = Infinity;
   const inp = this.pilotInput(pad);
+  // (the A320's assistance and its easy take-off, through its own controls — controller/a320assist.ts)
+  if (fleet.active === "a320") this.a320AssistStep(inp, dt);
   // (G-LOC — the F-35's G effects on —: the pilot out, his hands off the controls; his law flies on)
   if (this.gStrain.gloc && fleet.active === "f35" && s.f35GEffects) {
     inp.pitch = inp.roll = inp.yaw = inp.throttle = 0;

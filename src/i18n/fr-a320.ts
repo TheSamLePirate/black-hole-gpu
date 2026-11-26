@@ -1,5 +1,18 @@
 // French for the A320 (docs/PLAN-A320.md: src/a320/, its cockpit, its avionics, its systems) — keyed by the English.
 export default {
+  "Hold: the A320's is its MCDU's (HOLD at a fix of its plan)":
+    "Attente : celle de l'A320 est celle de son MCDU (HOLD sur un point de son plan)",
+  "Orbit: the F-35's — the A320 flies its FCU (a heading) or its MCDU's hold":
+    "Orbite : celle du F-35 — l'A320 vole par son FCU (un cap) ou l'attente de son MCDU",
+  "Terrain following: the F-35's — the A320 holds the FCU's altitude": "Suivi de terrain : celui du F-35 — l'A320 tient l'altitude du FCU",
+  "What the A320 does for its crew, through its own controls: realistic — nothing; assisted — the gear up at a positive climb, the flaps up as the speed builds, the levers to CL at 1 500 ft, AP1 once it may engage, the ground spoilers armed with the gear down, the levers to idle at 20 ft flown by hand. The easy take-off (the wheel: Tab held) at either level.":
+    "Ce que l'A320 fait pour son équipage, par ses propres commandes : réaliste — rien ; assisté — le train rentré au vario positif, les volets rentrés à mesure que la vitesse monte, les manettes en CL à 1 500 ft, l'AP1 dès qu'il peut s'engager, les spoilers sol armés train sorti, les manettes au ralenti à 20 ft à la main. Le décollage facile (la roue : Tab maintenu) à l'un et l'autre niveau.",
+  "Nothing done for the crew": "Rien n'est fait à la place de l'équipage",
+  "Gear, flaps, levers, AP1 and spoilers done at their moment": "Train, volets, manettes, AP1 et spoilers à leur moment",
+  "Easy take-off: the A320's": "Décollage facile : celui de l'A320",
+  "Easy take-off stopped": "Décollage facile arrêté",
+  "Easy take-off: on a runway, lined up": "Décollage facile : sur une piste, aligné",
+  "Easy take-off: CONF 1+F, TOGA — rotation at VR": "Décollage facile : CONF 1+F, TOGA — rotation à VR",
   "FCU altitude {0} ft": "FCU : altitude {0} ft",
   "FCU heading {0}°": "FCU : cap {0}°",
   "FCU speed {0} kt": "FCU : vitesse {0} kt",

@@ -12,6 +12,7 @@
 // a load, a deletion, a teleport, the date, a scene — the game is saved as "Before TARS"; undo goes back.
 // Every result is short, and carries what the game said (its toasts) since the call.
 
+import { fleet } from "../fleet";
 import { ISS_CAMERA_IDS, type IssCameraId } from "../system/iss-cameras";
 import { apEngage, apNav, apSelect } from "../controller/jet-ap-acts";
 import { type Airfield, fieldByCode } from "../world/runways";
@@ -1185,6 +1186,9 @@ export function gameTools(h: GameHost): Tool[] {
       required: ["mode"],
       run: act((a) => {
         const mode = a.mode as Auto;
+        // (the A320's autopilot is its FMGC: jet_autopilot, approach — not a spacecraft's, PLAN-A320-VOL-AAA G1)
+        if (fleet.active === "a320" && mode !== "none")
+          throw new Error("the A320 flies by its FMGC: use jet_autopilot (AP1, A/THR, the FCU's altitude/heading/speed, NAV) or approach");
         if (a.site !== undefined) {
           const s = resolveSite(String(a.site));
           if (!s) throw new Error(`no site named "${a.site}" — list_places lists them`);
@@ -1206,6 +1210,7 @@ export function gameTools(h: GameHost): Tool[] {
       required: ["direction"],
       run: act((a) => {
         const d = a.direction as Hold;
+        if (fleet.active === "a320" && d !== "none") throw new Error("the A320 holds no spacecraft attitude: use jet_autopilot (its FCU)");
         if (d === "none") {
           if (camera.pilot.hold !== "none") h.pilotHold(camera.pilot.hold);
         } else if (camera.pilot.hold !== d) h.pilotHold(d);

@@ -491,6 +491,7 @@ export interface Settings {
   f35PcdBrightness: "auto" | "day" | "night" | "nvg"; // its brightness: the light's, or its knob's
   a320Livery: "kerr" | "white" | "SWR" | "AUA" | "DAL" | "AAL"; // the A320's livery: the house's, white, or a real airline's (docs/PLAN-A320.md)
   a320Effects: boolean; // the A320: the air and the ground it shows — the wing's vapour, its vortices, the inlets', the tyres' smoke, a wet runway's spray (A13)
+  a320Assist: "realistic" | "assisted"; // the A320's assistance (PLAN-A320-VOL-AAA W2): realistic — nothing done for the crew; assisted — gear up at a positive climb, the flaps up with the speed, CL at the thrust reduction, AP1 once allowed, the spoilers armed, idle at 20 ft (controller/a320assist.ts)
   a320Start: "cold" | "apu" | "ready"; // the A320 placed on the ground: cold and dark, the APU running, or ready for take-off (A10)
   netMenu: boolean; // the network's menu and buttons (docs/PLAN-RESEAU.md): off, the game shows no trace of it
   netFreeFight: boolean; // in a room, in the F-35, no match: the free fight — every craft a target, friendly fire on
@@ -894,6 +895,7 @@ export function defaultSettings(): Settings {
     f35HmdLook: "realistic",
     f35PcdStyle: "realistic",
     a320Livery: "kerr",
+    a320Assist: "realistic",
     a320Start: "ready",
     a320Effects: true,
     f35PcdBrightness: "auto",
@@ -2335,6 +2337,7 @@ export const SETTING_KIND: Record<keyof Settings, SettingKind> = {
   f35HmdLook: "pref",
   f35PcdStyle: "pref",
   a320Livery: "pref",
+  a320Assist: "pref",
   a320Start: "pref",
   a320Effects: "pref",
   f35PcdBrightness: "pref",

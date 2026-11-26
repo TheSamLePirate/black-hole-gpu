@@ -250,6 +250,28 @@ function routeSetPoint(
 
 /** LNAV and VNAV set on or off (not toggled: the crew's orders — A3), each through navToggle. What was said. */
 function navSet(this: CameraController, want: { l?: boolean; v?: boolean }): string {
+  // (the A320: its FMGC's — LNAV is NAV (the HDG knob pushed), off the selected heading (pulled); VNAV the ALT knob pushed (managed
+  // CLB/DES), off pulled (OP CLB/DES). Before 26 Nov 2026 `lnav: false` did nothing and `vnav` engaged NAV — PLAN-A320-VOL-AAA G1)
+  if (fleet.active === "a320") {
+    const F = this.a320Fmgc;
+    const i = this.a320FmgcIn ?? undefined;
+    if (!F) return t("NAV as it was");
+    const said: string[] = [];
+    if (want.l === true && F.lat !== "NAV" && F.latArmed !== "NAV") said.push(this.a320ApKey("nav"));
+    if (want.l === false && (F.lat === "NAV" || F.latArmed === "NAV")) {
+      F.hdgPull(i);
+      said.push(tf("FCU heading {0}°", String(F.hdg).padStart(3, "0")));
+    }
+    if (want.v === true) {
+      F.altPush(i);
+      said.push(F.vert);
+    }
+    if (want.v === false) {
+      F.altPull(i);
+      said.push(F.vert);
+    }
+    return said.join(" — ") || t("NAV as it was");
+  }
   const N = this.nav;
   const said: string[] = [];
   if (want.l !== undefined && want.l !== N.on.l) said.push(this.navToggle("l"));

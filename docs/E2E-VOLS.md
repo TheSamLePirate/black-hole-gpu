@@ -245,7 +245,7 @@ complet à Edwards prend ≈ 6 s de mur.
 | Les données du lieu | noyaux + reliefs + orthophotos + décor + cartes fines | `app.dataSettled("…")` |
 | Le relief fin, en vol bas | `earthTiles.pending === 0 && earthTiles.finest >= 12`, **tenu 3 s** | `placeLow` |
 | L'exposition | `settleExposure()` puis `exposureGap < 0.02` | `app.exposureSettled()` |
-| Le cockpit, le pont, l'A320 | `renderer.ship.cabinShown`, `ship.deckMats`, `!!camera.a320Sys`, `a320Maps.albedo.depthOrArrayLayers === 7` | à ajouter |
+| Le cockpit, le pont, l'A320 | `renderer.ship.cabinShown`, `ship.deckMats`, `!!camera.a320Sys`, `a320Maps.albedo.depthOrArrayLayers >= 8` (8 couches depuis la livrée blanche du trafic, couche 3 ; 7 avant) | à ajouter |
 
 `app.waitProgress(cond, label, o)` attend tant que quelque chose avance (tuiles, compilations, décor) : échec après
 90 s sans progrès (300 s pendant une compilation), 15 min au plus, ce qui manque écrit toutes les 10 s. C'est la forme

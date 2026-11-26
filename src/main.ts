@@ -63,6 +63,7 @@ import { CockpitTip } from "./ui/cockpit-tip";
 import { cockpitHull } from "./system/collide";
 import { afterSkyPrefetch, prefetchSkyAssets, Renderer, type FrameStats, type OfflineStatus } from "./renderer";
 import { ArrivalPrefetch } from "./system/arrival-prefetch";
+import { a320Wheel } from "./ui/a320wheel";
 import type { ZoneSources } from "./system/zones";
 import { swappable } from "./util/swappable";
 import { bootMark, bootReport, bootWatchStop } from "./boot-timeline";
@@ -5548,8 +5549,74 @@ async function main() {
       },
     );
   };
+  // (the A320's own wheel — PLAN-A320-VOL-AAA W1: its FCU, its configuration, its instruments, the easy take-off, its assistance —
+  // each item what a control of its deck does: FlightGear's call through deckCall, or its levers)
+  const a320WheelNow = (): WheelItem[] => {
+    const F = (camera.a320Fmgc ??= new Fmgc());
+    const P = deckPoser.props;
+    const A = camera.a320;
+    const say = (m: string | null | undefined) => m && panel.toast(m);
+    return a320Wheel(
+      {
+        ap: !!F.ap,
+        athr: !!F.athr,
+        fd: !!F.fd1,
+        loc: F.locArm || F.lat === "LOC" || F.lat === "LOC*",
+        appr: F.apprArm,
+        exped: F.exped,
+        vert: F.vert,
+        lat: F.lat,
+        spd: F.spd,
+        spdManaged: F.spdManaged,
+        hdg: F.hdg,
+        alt: F.alt,
+        vs: F.vs,
+        altStep: F.altStep,
+        flapLever: Math.round((camera.airFlight.cfg.flaps ?? 0) * 4),
+        gearDown: camera.gearDown,
+        speedBrake: camera.airBrake,
+        spoilersArmed: camera.groundSpoilers,
+        autobrake: A?.autobrake ?? 0,
+        reverse: (camera.a320Reverse ?? 0) > 0,
+        park: !!camera.a320Park,
+        ndMode: String(P["instrumentation/efis/nd/display-mode"] ?? "ARC"),
+        ndRange: Number(P["instrumentation/efis/inputs/range-nm"] ?? 40),
+        std: Number(P["instrumentation/altimeter/std"] ?? 0) > 0.5,
+        onGround: !!(camera.rolling || camera.ourLanded),
+        easyTakeoff: !!camera.a320To,
+        assist: settings.a320Assist,
+        approach: approachSector(),
+        route: camera.nav.route.wps.length >= 2,
+      },
+      {
+        nasal: (fn, ...args) => void deckCall(deckGame, P, { fn, args }),
+        exped: () => F.expedToggle(),
+        gear: () => setGear(!camera.gearDown),
+        flapLever: (k) => {
+          camera.airFlight.cfg.flaps = k / 4;
+          panel.toast(tf("Flaps {0}", ["0", "1", "2", "3", "FULL"][k]!));
+        },
+        speedBrake: (v) => {
+          camera.airBrake = v;
+        },
+        spoilersArm: () => {
+          camera.groundSpoilers = !camera.groundSpoilers;
+        },
+        autobrake: (k) => void deckCall(deckGame, P, { fn: "systems.Autobrake.arm_autobrake", args: [k] }),
+        reverse: () => say(camera.a320ReverseToggle()),
+        park: () => {
+          camera.a320Park = !camera.a320Park;
+        },
+        nav: () => say(camera.navToggle()),
+        easyTakeoff: () => say(camera.a320EasyTakeoff()),
+        assist: (level) => panel.setValue("a320Assist", level),
+        nextView: () => nextView(1),
+      },
+    );
+  };
   const wheelItems = (): WheelItem[] => {
     if (flying() && fleet.active === "f35") return jetWheel();
+    if (flying() && fleet.active === "a320") return a320WheelNow();
     if (flying()) return spaceWheelNow();
     return [
       { label: { fr: "Vue", en: "View" }, key: "V", run: () => nextView(1) },

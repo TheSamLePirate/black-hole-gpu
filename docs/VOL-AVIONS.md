@@ -538,7 +538,7 @@ atterrissage automatique, roulage —, en sachant ce que fait l'automatisme à c
 | 5 | Rotation | à **VR**, **S** doucement, ~3°/s, jusqu'à **15°** d'assiette | vario positif |
 | 6 | Montée initiale | **G** (train rentré) ; au-dessus de 1 500 ft, levier en **CL** : l'A/THR, **déjà armé** au décollage, devient actif ; volets rentrés par étapes **au levier du poste** en accélérant au-delà de F puis S (P ne fait que **monter** d'un cran et passe de FULL à 0) | FMA `THR CLB` · `CLB` · `NAV` |
 | 7 | Autopilote | **'** (ù) = **AP1** — accepté au sol ou **≥ 5 s après le décollage et ≥ 100 ft**. **Ne pas presser ⇧'** : l'A/THR est déjà armé (⇧' le couperait) | FMA `AP1`, `A/THR` |
-| 8 | Croisière | le **FCU** au poste (cliquer : SPD, HDG, ALT, V/S ; tirer = sélecté, pousser = géré) ; **⇧M** : NAV sur le plan de vol | FMA `ALT`, `SPEED` |
+| 8 | Croisière | le **FCU** au poste : la **molette** tourne un bouton (SPD, HDG, ALT, V/S), un **clic le pousse** (géré), **Maj tenu + clic le tire** (sélecté ; aussi le clic du milieu ou Alt + clic) — Maj tenu sur un bouton ne pousse pas les manettes ; ou Tab › **FCU** (les mêmes boutons) ; **⇧M** : NAV sur le plan de vol | FMA `ALT`, `SPEED` (tiré : `OP CLB`/`OP DES`, `HDG`, `V/S`) |
 | 8 bis | Préparer l'arrivée | MCDU : F-PLN, la ligne de la destination (LAT REV) › **ARRIVAL>** : l'approche (aux États-Unis celles de la FAA — ILS, LOC, RNAV, VOR —, ailleurs l'ILS de nav.dat ou l'approche construite), sa **VIA** (transition publiée, ou NO VIA : guidage radar), **INSERT*** | le plan reçoit la transition et la finale (leurs altitudes) ; en NAV, l'approche s'enclenche à l'IF, sur l'axe ; RAD NAV : le localizer réel (KSFO 28R : IGWQ 111.70) |
 | 9 | Descente et approche | ALT du FCU plus bas, tirer : `OP DES` ; volets par étapes à **FULL** (becs 27°, volets 35° — ~30 s), **G** train ; Tab › **Approche** › **Armer l'approche** (AP8 ; avant : Navigation › Approche ILS) : le FMGC vole la jonction comme un contrôleur la donnerait (cap et altitude du FCU : dans l'axe, ou vent arrière et base, jamais au-dessus du terrain ; APPR armé sur la dernière branche) | FMA `HDG`, puis `LOC*`→`LOC`, `G/S*`→`G/S`, vitesse VAPP |
 | 9 bis | L'approche à la main | Pendant l'approche, couper l'AP1 (**'**, ou le mini-manche au-delà de la moitié : déconnexion instinctive) : l'approche **ne le réengage plus** (avant le 15 nov. 2026 elle le remettait à l'image suivante) ; elle règle toujours le FCU (cap, altitude, APPR), la configuration et l'A/THR — les **barres du FD** (vertes) suivent la jonction puis LOC et G/S : les centrer sur la maquette. Manettes au cran **CL** (l'A/THR tient la vitesse) ; tirer fort à basse vitesse déclenche l'**α floor** (TOGA LK) | FMA `HDG`/`ALT`, puis `LOC`, `G/S`, sans `AP1` ; FD `1 FD 2` |
@@ -547,6 +547,15 @@ atterrissage automatique, roulage —, en sachant ce que fait l'automatisme à c
 | 12 | Au poste | la tour donne un poste libre ; frein de parc | — |
 
 Remise de gaz : levier **TOGA** (Z — W en AZERTY) en approche → `GA TRK`, `SRS`, montée ; train et volets rentrés par étapes.
+
+**La roue de l'A320** (Tab maintenu, depuis le 26 nov. 2026 — avant, la roue des vaisseaux) : **Pilote auto ›** (AP1, A/THR, FD,
+LOC, APPR, EXPED, NAV), **FCU ›** (Vitesse, Cap, Altitude, V/S : des pas ±, **Sélectée/OP CLB…** = le bouton tiré, **Gérée/NAV/Palier**
+= poussé — les mêmes appels que les boutons du poste), **Configuration ›** (train, volets par cran 0–FULL, aérofreins, spoilers
+sol armés, autofrein LO/MED/MAX, inverseurs, frein de parc), **Approche ›**, **Instruments ›** (mode et échelle du ND, baro STD/QNH),
+**Décollage facile** (aligné : CONF 1+F, TOGA, rotation à VR jusqu'à 12°, train rentré au vario positif, AP1 à 400 ft, manettes en
+CL à 1 500 ft, volets rentrés — par les commandes de l'avion), **Assistance ›** (Réaliste : rien n'est fait à la place de
+l'équipage ; **Assisté** : train, volets, CL, AP1, spoilers sol et ralenti à 20 ft à leur moment — `settings.a320Assist`), **Vue**.
+Par `__bh` : `__bh.camera.a320EasyTakeoff()`, `__bh.settings.a320Assist = "assisted"`.
 
 **Démarrage à froid** (`a320Start: "cold"`) : la **tablette › Systèmes** donne les check-lists de FlightGear (11
 procédures, 9 normales), chaque item montré par un anneau sur sa commande ; doc : APU disponible ~52 s après MASTER,

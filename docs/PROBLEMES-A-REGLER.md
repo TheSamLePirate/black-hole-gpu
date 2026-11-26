@@ -3,6 +3,38 @@
 Problèmes constatés, pas encore réglés. Chaque entrée : la date (UTC), ce qui est mesuré ou observé et sa source, la cause
 connue ou supposée, la piste. Une entrée réglée est barrée avec le commit qui la règle, pas effacée.
 
+## Rentrée automatique du Ranger : ce qui reste ouvert (relevé le 26 novembre 2026, après `0c6feaea`, kerr-mini et ce Mac)
+
+Après le correctif du 26 novembre (guidage incliné vers le site d'abord, énergie de l'approche, zone d'arrivée préchargée,
+enregistreur `camera.entryLog` — [journal](../progress-to-destination.md), entrée du 26 nov. 11:08 UTC), restent :
+
+- **« Relief N failed » pendant la descente, en jeu réel** — signalé par Sam, **non reproduit** : les vols `scripts/live-entry.ts
+  --tiles` prennent les données de la Terre sur le disque du mini (`E2E_EARTH_DATA`, cache e2e), sans toucher l'IGN. Piste : un vol
+  `E2E_EARTH_DATA=0 bun scripts/live-entry.ts --site Bourget --inc 55 --align --tiles` (un seul vol IGN à la fois entre les deux Macs),
+  journaliser `earthTiles.failing` et la raison de chaque échec (statut HTTP, délai de 15 s file comprise, 429 de la Géoplateforme) ;
+  regarder si l'entrée à ×4 fait demander et lâcher des fenêtres trop vite (`dropUnwanted`).
+- **La zone d'arrivée n'est dessinée finement qu'au dernier moment** : préchargée en cache dès l'orbite (Edwards 93 Mo en 22 s), elle
+  reste dessinée z 12–13 entre 10 et 20 km d'altitude (les fenêtres du relief suivent la caméra, à 60 km du site) ; z 17 sous ~60 m.
+  Si Sam veut la voir fine plus tôt : une fenêtre d'arrivée tenue autour du seuil (comme les ancres J2-2, mais pour les niveaux 13–17),
+  au prix de la mémoire des fenêtres ; à mesurer (coût, mémoire) avant.
+- **La borne du préchargement (150 Mo, `ARRIVAL_BUDGET`) n'est pas remesurée** : Le Bourget demandait 706 Mo sans elle. Revoler
+  Le Bourget `--tiles` (et un vol avec le Service Worker actif : le cache de tuiles LRU de 300 Mo) ; dire ce qui est coupé.
+- **Le décor (bâtiments, arbres) n'est pas préchargé** : son préchargement HTTP avait été mesuré inutile (le worker refetche,
+  `scenery.ts prefetchOn`) ; à faire par le cache du worker ou une zone hors ligne réduite à la piste.
+- **La finale converge lentement sur l'axe** après une spirale ou un virage large : une remise des gaz « 149 m de l'axe aux minima »
+  dans le cas synthétique « 40 km de l'axe au bout de piste » (`tests/entry-glide.test.ts`), avant comme après le correctif ; la boucle
+  latérale de la finale (`computer.ts` approach, `kB`, `want`) à revoir.
+- **L'estimation d'énergie est pessimiste de 1 à 2 km** sur les vols réussis (marge minimale −1,1 à −2,0 km sans que rien ne manque) :
+  le seuil de secours à −2,5 km est proche (Le Bourget −2,0 km). Mieux : un modèle de finesse le long d'un profil de vitesse, ou une
+  prédiction du plané par simulation courte.
+- **`golden.e2e` est périmé depuis le 20 octobre** (2/8 sur main avant ce lot ; entry-glide-edwards 5,5712 contre 5,4940 km, même
+  dérive avec l'énergie coupée) : à réenregistrer (`UPDATE=1`) après avoir expliqué chaque dérive, décision de Sam.
+- **Kennedy n'est pas revolé** après le correctif (il se posait avant, après un grand détour).
+- **L'enregistreur n'a pas d'écran** : ni courbes plan/vol dans la tablette ni export depuis le jeu ; seulement `__bh.camera.entryLog`
+  et `entry-log.json` du script.
+- **Le reste de la demande du 26 nov.** — « meilleurs PID, meilleur contrôle de vol, meilleur planificateur, meilleur ILS » — n'est
+  couvert que pour ce qui faisait échouer les vols ; pas de refonte des lois (guidage d'inclinaison, `glideAlpha`, finale).
+
 ## ~~Nice : la moitié basse de la vue d'approche de 04 en sable~~ (relevé le 25 novembre 2026, `waterfront-runways`, kerr-mini) — réglé le même soir (`c3ea0971`) : de l'écume, pas du sable
 
 - **Observé** (`remote-results/20261125-223112-waterfront-runways`, A main `c972b544` et B le correctif `3508b982` pareils ; les

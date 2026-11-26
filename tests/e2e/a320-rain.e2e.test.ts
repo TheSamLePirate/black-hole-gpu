@@ -37,7 +37,7 @@ describe.skipIf(!E2E)("the A320's windshield in the rain", () => {
     await app.waitFor("!!__bh.renderer.ship.deckMats", 60_000);
     // (the scene's tracer in, on its progress — not the pill's text: on a still scene it stayed up, 240 s lost each run, 14 Nov 2026)
     await app.settled(60_000);
-    await app.waitFor("__bh.renderer.ship.a320Maps?.albedo?.depthOrArrayLayers === 7", 60_000);
+    await app.waitFor("(__bh.renderer.ship.a320Maps?.albedo?.depthOrArrayLayers ?? 0) >= 8", 60_000);
     await app.waitFor("__bh.renderer.rain && __bh.renderer.rain.rain > 0", 60_000);
     await app.js(`(__bh.camera.setLook(0, 2), true)`);
     await Bun.sleep(4000);

@@ -170,6 +170,9 @@ export type DeckTarget =
 /** Pixels of drag a step (a switch flicked, a knob's notch, a lever's step). */
 export const DRAG_PX = 14;
 
+/** FlightGear's Shift key's property (the bindings' `devices/status/keyboard/shift` conditions) */
+const SHIFT = "devices/status/keyboard/shift";
+
 export class DeckControls {
   /** FlightGear's knobs pulled by the middle button (controls.ts: Alt with the left too) */
   readonly middle = true;
@@ -252,11 +255,13 @@ export class DeckControls {
 
   /** Pressed: on a control, it is held (true: the pointer is the deck's until let go). A pick does its click; a
    *  knob with a click of its own too; one without waits for the drag or the release (a click: a notch on). */
-  down(ndcX: number, ndcY: number, button = 0): boolean {
+  down(ndcX: number, ndcY: number, button = 0, mods: { shift?: boolean } = {}): boolean {
     const t = this.move(ndcX, ndcY);
     if (t?.kind !== "control") return false;
     const i = Number(t.id);
     const c = this.mesh.controls[i]!;
+    // (FlightGear's Shift: its bindings read it — the FCU's knobs pulled with Shift and the left button; let go with the press)
+    this.P[SHIFT] = mods.shift ? 1 : 0;
     const ups = c.type === "pick" || this.actionsFor(c, button).length ? this.press(i, button) : null;
     this.held = { i, dx: 0, dy: 0, acc: 0, ups };
     this.pressed = t.id;
@@ -288,6 +293,7 @@ export class DeckControls {
     this.pressed = null;
     if (!h) return;
     if (h.ups?.length) runBindings(h.ups, this.P, this.host);
+    this.P[SHIFT] = 0;
     const c = this.mesh.controls[h.i]!;
     if (click && c.type === "knob" && !this.actionsFor(c, 0).length && Math.hypot(h.dx, h.dy) < 5) this.turn(h.i, 1);
   }

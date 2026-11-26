@@ -27,7 +27,7 @@ describe.skipIf(!E2E)("the A320's ECAM and its failures", () => {
     // (the scene's tracer in, on its progress — not the pill's text: on a still scene it stayed up, 240 s lost each run, 14 Nov 2026)
     await app.settled(60_000);
     await app.waitFor("!!__bh.camera.a320Ecam", 30_000);
-    await app.waitFor("__bh.renderer.ship.a320Maps?.albedo?.depthOrArrayLayers === 7", 60_000);
+    await app.waitFor("(__bh.renderer.ship.a320Maps?.albedo?.depthOrArrayLayers ?? 0) >= 8", 60_000);
     await Bun.sleep(2000);
   }, 400_000);
   afterAll(() => {

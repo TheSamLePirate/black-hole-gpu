@@ -19,7 +19,8 @@ export interface CockpitPointer {
   readonly focus: string | null;
   readonly middle?: boolean;
   move(ndcX: number, ndcY: number): { kind: string } | null;
-  down(ndcX: number, ndcY: number, button?: number): boolean;
+  /** `mods.shift`: Shift held with the press (the A320's knobs: pulled) */
+  down(ndcX: number, ndcY: number, button?: number, mods?: { shift?: boolean }): boolean;
   drag(dx: number, dy: number): void;
   up(click: boolean): void;
   wheel(notches: number): boolean;
