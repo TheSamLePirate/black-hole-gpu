@@ -9690,6 +9690,17 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
     return this.combatGlares.map((g) => ({ c: [g.rel[0] + eye[0], g.rel[1] + eye[1], g.rel[2] + eye[2]] as Vec3, r: g.r, rgb: g.rgb }));
   }
 
+  /** The representation chosen for a traffic subject, shared with its lights and atmospheric attachments. */
+  trafficRigVisible(o: Renderer["combatOthers"][number], s: Settings): boolean {
+    if (!o.a320 || !this.ship.has(o.id)) return false;
+    if (!o.alt || !this.ship.has(o.alt.id) || !o.uid || !(this.trafficRigShare > 0)) return true;
+    const eye = s.ship && this.shipPose ? shipToCamera(this.shipPose, s.shipLookYaw, s.shipLookPitch).t : [0, 0, 0];
+    const scale = Math.hypot(...o.axes[2]);
+    const distance = Math.hypot(o.rel[0] + eye[0]!, o.rel[1] + eye[1]!, o.rel[2] + eye[2]!);
+    const share = (18.8 * scale) / Math.max(distance * Math.tan((s.fov * Math.PI) / 360), 1e-6);
+    return share >= this.trafficRigShare * (this.rigShown.has(o.uid) ? 0.8 : 1);
+  }
+
   /** The fight's aircraft — and the Earth's traffic — as instances: their place from the eye (the craft's; the view's own
    *  place when it has none and they were placed from it — othersFromView: the free camera, a spectator), their axes. */
   private combatShips(s: Settings): ShipInstance[] {
@@ -9697,17 +9708,10 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
     const eye: Vec3 | null =
       s.ship && this.shipPose ? shipToCamera(this.shipPose, s.shipLookYaw, s.shipLookPitch).t : this.othersFromView ? [0, 0, 0] : null;
     if (!eye) return [];
-    const tanH = Math.tan((s.fov * Math.PI) / 360);
     const rigged = new Set<string>();
     const small = (o: Renderer["combatOthers"][number]) => {
-      if (!o.uid || !(this.trafficRigShare > 0)) return false;
-      // (its half-length over the image's half-height: the A320's 18.8 m at its type's scale — its axes' length —, from the eye)
-      const k = Math.hypot(...o.axes[2]);
-      const d = Math.hypot(o.rel[0] + eye[0], o.rel[1] + eye[1], o.rel[2] + eye[2]);
-      const share = (18.8 * k) / Math.max(d * tanH, 1e-6);
-      // (a band between drawing it rigged and plain: no swap back and forth about the threshold)
-      const on = share >= this.trafficRigShare * (this.rigShown.has(o.uid) ? 0.8 : 1);
-      if (on) rigged.add(o.uid);
+      const on = this.trafficRigVisible(o, s);
+      if (on && o.uid) rigged.add(o.uid);
       return !on;
     };
     const out = this.combatOthers

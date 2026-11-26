@@ -738,6 +738,7 @@ async function main() {
     guiDirty = true;
   });
   /** the scene's time and the step that moves everything (sim.ts: the live loop, the automation, the video) */
+  camera.trafficRigVisible = (instance) => renderer.trafficRigVisible(instance, camera.viewSettings());
   const sim = new Simulation(settings, camera, renderer);
   const characterHud = new CharacterHud(camera, (text) => panel.toast(text));
   const sceneryHitboxes = new SceneryHitboxes();

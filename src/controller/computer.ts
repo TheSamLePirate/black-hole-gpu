@@ -16,6 +16,7 @@ import { elements as kepElements, fromPNR, propagate as kepProp, type V3 as KV3 
 import type { Burn, FcContext, OpResult } from "../fc/ops";
 import { contrailPersistence, engineTrail, sheetTrail, tipTrail, type ContrailSource } from "../contrails";
 import { A320Fx, humidityOf } from "../a320/effects";
+import { ATTACHMENTS, attachmentScale, effectPoint } from "../traffic/attachments";
 import { trafficConfig } from "./traffic";
 import { airportState } from "./airportview";
 import { MISSILES } from "../game/combat";
@@ -1601,6 +1602,11 @@ function contrailsFrame(this: CameraController): { data: Float32Array<ArrayBuffe
     const Uo = own.p.map((c) => c / Math.hypot(...own.p));
     const Eo = [-Uo[1]!, Uo[0]!, 0].map((c, _, a) => c / (Math.hypot(a[0]!, a[1]!) || 1));
     const No = [Uo[1]! * Eo[2]! - Uo[2]! * Eo[1]!, Uo[2]! * Eo[0]! - Uo[0]! * Eo[2]!, Uo[0]! * Eo[1]! - Uo[1]! * Eo[0]!];
+    const rigs = new Set(
+      this.trafficShips(this.viewController())
+        .filter((c) => c.a320 && (this.trafficRigVisible?.(c) ?? true))
+        .map((c) => c.uid),
+    );
     const atm = solarBody("earth")!.atmosphere;
     for (const c of TR) {
       if (c.gnd || c.alt < 6000 || !c.mesh) continue;
@@ -1609,9 +1615,13 @@ function contrailsFrame(this: CameraController): { data: Float32Array<ArrayBuffe
       const air = airAt(atm, c.alt);
       const e = engineTrail(0.8, air.rho, air.T, air.gas.R);
       if (e <= 0) continue;
-      // (its two engines under its wings, a third of the half span out, a little behind)
+      const A = attachmentScale(c.mesh, c.len, rigs.has(c.id));
+      const exhaust = ATTACHMENTS[A.model].exhaust;
       for (const sx of [1, -1]) {
-        const q = c.p.map((v, k) => v + c.right[k]! * sx * c.span * 0.17 - c.up[k]! * 1.5 - c.fwd[k]! * c.len * 0.1);
+        const q = c.p.map(
+          (v, k) =>
+            v - c.right[k]! * sx * exhaust[0] * A.scale + c.up[k]! * (exhaust[1] * A.scale - A.down) + c.fwd[k]! * exhaust[2] * A.scale,
+        );
         const r = q.map((v, k) => v - own.p[k]!);
         const re = r[0]! * Eo[0]! + r[1]! * Eo[1]! + r[2]! * Eo[2]!,
           rn = r[0]! * No[0]! + r[1]! * No[1]! + r[2]! * No[2]!,
@@ -1634,7 +1644,9 @@ function contrailsFrame(this: CameraController): { data: Float32Array<ArrayBuffe
     // from the airliners landing, 26 Nov 2026 —, the one the airport view films first)
     const filmed = airportState()?.current ?? null;
     const dOwn = (c: (typeof TR)[number]) => Math.hypot(...c.p.map((v, k) => v - own.p[k]!)) - (c.id === filmed ? 1e9 : 0);
-    const near = TR.filter((c) => c.mesh && Math.hypot(...c.v) > 3 && Math.hypot(...c.p.map((v, k) => v - own.p[k]!)) < 12_000)
+    const near = TR.filter(
+      (c) => c.mesh && Math.hypot(...c.v) > 3 && (c.id === filmed || Math.hypot(...c.p.map((v, k) => v - own.p[k]!)) < 12_000),
+    )
       .sort((a, b) => dOwn(a) - dOwn(b))
       .slice(0, 6);
     const hum = humidityOf(this.weatherNow);
@@ -1648,7 +1660,8 @@ function contrailsFrame(this: CameraController): { data: Float32Array<ArrayBuffe
       const K = trafficConfig(c);
       const air = airAt(atm, Math.max(c.alt, 0));
       const speed = Math.hypot(...c.v);
-      const k = c.len / 37.6;
+      const A = attachmentScale(c.mesh!, c.len, rigs.has(c.id));
+      const k = A.scale;
       // (its lift: its weight — an A320's 62 t scaled to its size — over the dynamic pressure on its wing, 122.6 m² scaled)
       const q = 0.5 * air.rho * speed * speed;
       const W = 62_000 * k * k * 9.81;
@@ -1672,9 +1685,12 @@ function contrailsFrame(this: CameraController): { data: Float32Array<ArrayBuffe
         wet,
         legs: c.gnd ? [K.nose ? W * 0.1 : 0, W * 0.45, W * 0.45] : null,
       })) {
+        if (A.model === "crj900" && f.key.startsWith("a320i")) continue;
         // (the A320 model's frame — x to the left, y up, z ahead — on the airliner's axes, at its size)
-        const at = (p: readonly number[]) =>
-          toFrame(c.p.map((v, j) => v + k * (-c.right[j]! * p[0]! + c.up[j]! * p[1]! + c.fwd[j]! * p[2]!)));
+        const at = (p: readonly number[]) => {
+          const q = effectPoint(A.model, f.key, p);
+          return toFrame(c.p.map((v, j) => v + k * (-c.right[j]! * q[0]! + c.up[j]! * q[1]! + c.fwd[j]! * q[2]!) - c.up[j]! * A.down));
+        };
         src.push({
           key: `x${c.id}${f.key}`,
           p: at(f.q),

@@ -17,6 +17,7 @@ import { airportState } from "./airportview";
 import type { AirlinerId } from "../ship";
 import { A320Poser } from "../a320/pose";
 import type { Props } from "../a320/rig";
+import { ATTACHMENTS, attachmentScale } from "../traffic/attachments";
 import { airframeOf, MESH, rcsOf } from "../game/airtypes";
 import { type FlightKnot, type FlightPath, fitFlight, flightAt, flightLaws } from "../game/flightpath";
 import type { FormCraft } from "../game/formation";
@@ -42,6 +43,7 @@ declare module "../controls" {
     /** (a measuring lever — tests/e2e/traffic-runways: the rigged A320s' cost) the game's A320 drawn for this many of the traffic's
      *  airliners at most (none set: TRAFFIC_RIG.max) */
     trafficRigMax?: number;
+    trafficRigVisible?: (instance: TrafficInstance) => boolean;
     trafficStep: typeof trafficStep;
     trafficNow: typeof trafficNow;
     trafficShips: typeof trafficShips;
@@ -652,11 +654,19 @@ function trafficLead(this: CameraController, id: string): FormCraft | null {
 /**
  * The `max` nearest of a list within `range` [m] of a place fixed to the Earth (each one's place `p` there), nearest first:
  * their distances found once, only the near ones sorted — the meshes, the labels and the lights made for those alone.
+ * A priority member reserves the first slot even outside range (the airport camera's subject); the total stays bounded.
  */
-export function nearest<T extends { p: readonly number[] }>(list: readonly T[], at: readonly number[], range: number, max: number): T[] {
+export function nearest<T extends { p: readonly number[] }>(
+  list: readonly T[],
+  at: readonly number[],
+  range: number,
+  max: number,
+  priority?: T,
+): T[] {
   const near: { c: T; d: number }[] = [];
   const r2 = range * range;
   for (const c of list) {
+    if (c === priority) continue;
     const x = c.p[0]! - at[0]!,
       y = c.p[1]! - at[1]!,
       z = c.p[2]! - at[2]!;
@@ -664,8 +674,8 @@ export function nearest<T extends { p: readonly number[] }>(list: readonly T[], 
     if (d < r2) near.push({ c, d });
   }
   near.sort((a, b) => a.d - b.d);
-  const out: T[] = [];
-  for (let i = 0; i < near.length && i < max; i++) out.push(near[i]!.c);
+  const out: T[] = priority && max > 0 && list.includes(priority) ? [priority] : [];
+  for (let i = 0; i < near.length && out.length < max; i++) out.push(near[i]!.c);
   return out;
 }
 
@@ -837,6 +847,7 @@ function trafficShips(this: CameraController, view: CameraController = this): Tr
     E.p0,
     25_000,
     12,
+    list.find((c) => c.mesh && c.id === filmedId),
   )) {
     const s = c.len / (c.mesh === "a320t" ? 37.7 : 36.2);
     const plain = {
@@ -905,37 +916,54 @@ function trafficOverlay(this: CameraController, fmtAlt: (m: number) => string, v
   const E = earthView(view);
   if (!E) return [];
   const cam = (b: readonly number[]) => E.toCam(E.toHome(b as Vec3));
+  const rigs = new Set(
+    this.trafficShips(view)
+      .filter((c) => c.a320 && (this.trafficRigVisible?.(c) ?? true))
+      .map((c) => c.uid),
+  );
   const tNow = performance.now() / 1000;
   const F = this.trafficAt;
   const reach = F ? lightsReach(F.alt, F.airR) : 80_000;
   const out: TrafficMark[] = [];
-  for (const c of nearest(list, E.p0, reach, 24)) {
+  const filmedId = airportState()?.current ?? null;
+  for (const c of nearest(
+    list,
+    E.p0,
+    reach,
+    24,
+    list.find((c) => c.id === filmedId),
+  )) {
     const rel = cam([c.p[0]! - E.p0[0], c.p[1]! - E.p0[1], c.p[2]! - E.p0[2]]);
     const dist = Math.hypot(...rel);
+    const A = c.mesh ? attachmentScale(c.mesh, c.len, rigs.has(c.id)) : null;
     const at = (x: number, y: number, z: number): Vec3 =>
-      cam([0, 1, 2].map((k) => c.p[k]! - E.p0[k]! + c.right[k]! * x + c.up[k]! * y + c.fwd[k]! * z));
+      cam([0, 1, 2].map((k) => c.p[k]! - E.p0[k]! + c.right[k]! * x + c.up[k]! * (y - (A?.down ?? 0)) + c.fwd[k]! * z));
     const ph = (Number.parseInt(c.id.slice(-3), 16) % 1000) / 1000;
     const beacon = (tNow + ph) % 1 < 0.12;
     const st = (tNow + ph * 1.2) % 1.2;
     const strobe = st < 0.05 || (st > 0.15 && st < 0.2);
     // (its lights where its mesh has them, to its size; a helicopter's about its middle)
-    const M = c.mesh ? MESH[c.mesh] : null;
-    const k = M ? c.len / M.len : 1;
-    const tip = M ? M.tip.map((x) => x * k) : [c.span / 2, 0, 0];
+    const M = A ? ATTACHMENTS[A.model] : null;
+    const k = A?.scale ?? 1;
+    const tip = M ? M.nav.map((x) => x * k) : [c.span / 2, 0, 0];
+    const strobeTip = A?.model === "a320" ? [16.7246 * k, 2.967212 * k, -2.03967 * k] : tip;
     const tail = M ? M.tail.map((x) => x * k) : [0, 0, -c.len / 2];
     const bcn = M ? M.beacon.map((x) => x * k) : [0, 1.5, 0];
+    const lower = M ? M.lower.map((x) => x * k) : [0, -1, 0];
     const land = M ? M.landing.map((x) => x * k) : [0, -1, c.len / 2];
     // (the mesh's x is its left: the left wingtip's light red, the right's green)
     const lights = [
       { at: at(-tip[0]!, tip[1]!, tip[2]!), colour: "rgba(255, 60, 50, 1)", on: true, size: 1 },
       { at: at(tip[0]!, tip[1]!, tip[2]!), colour: "rgba(60, 255, 120, 1)", on: true, size: 1 },
       { at: at(tail[0]!, tail[1]!, tail[2]!), colour: "rgba(255, 255, 255, 1)", on: true, size: 0.8 },
+      { at: at(lower[0]!, lower[1]!, lower[2]!), colour: "rgba(255, 40, 30, 1)", on: beacon, size: 1.3 },
       { at: at(bcn[0]!, bcn[1]!, bcn[2]!), colour: "rgba(255, 40, 30, 1)", on: beacon, size: 1.3 },
-      { at: at(-tip[0]!, tip[1]!, tip[2]!), colour: "rgba(255, 255, 255, 1)", on: strobe, size: 1.6 },
-      { at: at(tip[0]!, tip[1]!, tip[2]!), colour: "rgba(255, 255, 255, 1)", on: strobe, size: 1.6 },
+      { at: at(-strobeTip[0]!, strobeTip[1]!, strobeTip[2]!), colour: "rgba(255, 255, 255, 1)", on: strobe, size: 1.6 },
+      { at: at(strobeTip[0]!, strobeTip[1]!, strobeTip[2]!), colour: "rgba(255, 255, 255, 1)", on: strobe, size: 1.6 },
+      { at: at(tail[0]!, tail[1]!, tail[2]!), colour: "rgba(255, 255, 255, 1)", on: strobe, size: 1.6 },
       // (its landing lights: low in the air, and rolling down the runway — its take-off, its landing)
       ...((c.gnd ? c.phase === "takeoff" || c.phase === "landing" : c.over < 3000)
-        ? [{ at: at(land[0]!, land[1]!, land[2]!), colour: "rgba(255, 250, 230, 1)", on: true, size: 2.2 }]
+        ? [1, -1].map((side) => ({ at: at(side * land[0]!, land[1]!, land[2]!), colour: "rgba(255, 250, 230, 1)", on: true, size: 2.2 }))
         : []),
     ];
     const label = [c.cs, c.reg, c.type, c.gnd ? "GND" : fmtAlt(c.msl)].filter(Boolean).join(" · ");

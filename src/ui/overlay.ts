@@ -65,7 +65,12 @@ export class ViewOverlay {
       guide || this.camera.flyMode || marker || lock || hover || ship || tele || sky || tags.length || traffic.length || mag.length
         ? [
             mag.map((m) => `${m.x.toFixed(3)},${m.y.toFixed(3)},${m.text}${m.note ?? ""}`).join(";"),
-            traffic.map((m) => `${m.x.toFixed(0)},${m.y.toFixed(0)},${m.lights.length}`).join(";"),
+            traffic
+              .map(
+                (m) =>
+                  `${m.x.toFixed(0)},${m.y.toFixed(0)},${m.alpha.toFixed(2)},${m.label ?? ""}:${m.lights.map((l) => `${l.x.toFixed(1)},${l.y.toFixed(1)},${l.r.toFixed(1)},${l.colour}`).join(";")}`,
+              )
+              .join(";"),
             tags.map((g) => `${g.slot}:${g.x.toFixed(0)},${g.y.toFixed(0)},${g.label}`).join(";"),
             lock
               ? lockKey(lock.v, this.overlay.width, this.overlay.height, Math.tan((this.settings.fov * Math.PI) / 360)) +
@@ -262,7 +267,7 @@ export class ViewOverlay {
 
   /** The traffic on the screen: each aircraft's lights lit now and, within 40 km, its label over it. */
   private trafficDrawn() {
-    if (!this.trafficMarks.length || this.renderer.offlineActive || uiHidden()) {
+    if (!this.trafficMarks.length || this.renderer.offlineActive) {
       this.renderer.labelAsk = null;
       return [];
     }
@@ -317,7 +322,7 @@ export class ViewOverlay {
         })
         .filter((l): l is NonNullable<typeof l> => !!l);
       const lift = Math.min(120 * k, Math.max(12 * k, (20 / m.dist / tanH) * (H / 2)));
-      out.push({ x: c[0], y: c[1] - lift, label: m.dist < 40_000 ? m.label : null, lights, alpha: a });
+      out.push({ x: c[0], y: c[1] - lift, label: !uiHidden() && m.dist < 40_000 ? m.label : null, lights, alpha: a });
     }
     this.labelAlpha = seenNow;
     return out;

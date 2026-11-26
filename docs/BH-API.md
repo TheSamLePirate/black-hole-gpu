@@ -435,6 +435,11 @@ second half when the view looks at it — `src/ship-casters.ts`; the ships `cast
 (`src/traffic/livery.ts` `liveryOf`: `icao`, `pattern`, `tail`, `stripe`, `body`, `engine` — on the plain meshes and on the game's
 A320 drawn near the view alike). Measuring levers: `__bh.camera.trafficRigMax` (none: 4 — the game's A320 drawn for that many at
 most within 4 km; 0: all plain) and `__bh.renderer.ship.trafficCast` (true; false: the traffic's and the ships' shadows left out).
+`__bh.renderer.trafficRigVisible(instance, settings)` → boolean reports the actual rig/plain choice (mesh availability,
+projected size and hysteresis). The internal callback `__bh.camera.trafficRigVisible(instance)` delegates to it with
+`camera.viewSettings()` so traffic lights and atmospheric sources use the same model and origin as the renderer.
+The airport subject reserves the first mesh/light slot even beyond the usual selection radius; hiding the UI keeps
+physical lights and hides labels.
 e2e: `traffic-free-camera`, `traffic-runways` (a made-up feed: `camera.traffic` replaced, `camera.trafficClock` the test's — gear,
 liveries, shadows and their costs since 24 Nov 2026).
 

@@ -12076,3 +12076,23 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
 - **Suite :** PR4 — Chaussée et raster communs (matériau partagé avec la route, marquages, pluie, retrait du veto bridgeCount de liteAll).
 
 
+
+### 2026-11-26 21:48 UTC — Sujet aéroport visible, effets et feux attachés aux modèles
+
+- Contribution : continuité du sujet filmé et cohérence géométrie/effets, stratégie §7.7 et §19.6.
+- Réalisé : `controller/traffic.ts` réserve le sujet filmé dans les budgets 12 modèles/24 marques,
+  même hors rayon. `traffic/attachments.ts` définit les points des A320 articulé, A320 trafic et CRJ-900 ;
+  `controller/computer.ts` transpose effets, roues et moteurs (arrière pour le CRJ, sans vortex d'admission au sol).
+  Origine et échelle du rig corrigées ; choix rig/plain partagé avec le renderer et son hystérésis via `main.ts`.
+  Feux conservés quand l'UI est masquée, étiquettes seules cachées ; balise inférieure et strobe de queue ajoutés,
+  cache de l'overlay invalidé par les lampes. Références BH-API et GRAPHICS-PIPELINE tenues.
+- Preuves : 17 tests ciblés passent (1155 assertions, trafic/focus/effets), dont les feux du rig comparés au
+  binaire A320 livré ; TypeScript passe ; 85/85 shaders compilent sur ce Mac ; inventaire pipeline passe.
+  Biome ciblé sans erreur (avertissements existants). `bun run check` global échoue sur des scripts hors lot.
+  `bun test` global lancé, timeout 5 s du test de table de réfraction ; campagne interrompue après ce constat
+  et les tests ciblés, sans prétendre une suite complète verte. E2E `airport-view` lancé : entrée KLAX échouée
+  après 90 s, capture finale encore au Bourget ; arrêté car les étapes suivantes dépendent de cette entrée.
+- Limites : validation visuelle des trois modèles non obtenue, coût GPU non mesuré. Les types ICAO emploient
+  toujours les géométries de substitution mises à l'échelle ; aucune fidélité à une cellule propre à chaque type
+  réel n'est revendiquée. Points des modèles statiques définis dans leur repère, pas de nouvelle animation de leurs surfaces.
+- Suite : refaire la validation visuelle après résolution de l'entrée KLAX du banc, sans attribuer de gain mesuré ici.

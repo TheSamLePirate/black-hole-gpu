@@ -18,6 +18,25 @@ compilation) met ce fichier à jour dans le même lot — règle dans [CLAUDE.md
 Machines : **ce Mac** = MacBook Pro M1 Max ; **kerr-mini** = Mac mini M1 (écran 50 Hz) ; **kerr-pc** = RTX 5070 Ti,
 Windows/D3D12. Les numéros de ligne sont ceux de `da4e75bd`.
 
+### Sujet du mode aéroport conservé dans le rendu (26 novembre 2026)
+
+`controller/traffic.ts` réserve au sujet filmé la première des 12 instances 3D et des 24 marques
+(feux/étiquettes), même hors du rayon ordinaire de sélection (25 km pour les modèles).
+Les autres places restent attribuées aux plus proches : les avions du parking ne peuvent plus évincer
+le sujet lointain. Aucune passe ni ressource GPU ajoutée. Contrat vérifié par `tests/traffic-selection.test.ts` ;
+coût GPU non mesuré pour ce correctif.
+
+`traffic/attachments.ts` définit les points d'attache des trois géométries rendues (A320 articulé,
+A320 trafic, CRJ-900), leur échelle et le décalage vertical du rig. `controller/computer.ts` place
+les échappements sur les moteurs de chaque modèle et transpose les effets A320 sur ses ailes,
+volets et roues ; le vortex d'admission au sol est exclu pour les moteurs arrière du CRJ.
+Le choix rig/modèle simplifié et son hystérésis sont partagés avec le renderer via
+`trafficRigVisible(instance, settings)` (disponibilité des maillages comprise). Les feux utilisent les mêmes repères ; ceux de l'A320 articulé sont vérifiés contre les lampes du
+binaire livré. Les deux balises et le strobe de queue sont inclus. `ui/overlay.ts` conserve les feux
+avec l'interface masquée (dont le mode aéroport), masque seulement leurs étiquettes et invalide son
+cache sur les positions/couleurs/opacités des lampes. Les types ICAO restent représentés par ces
+modèles mis à l'échelle ; ce correctif n'ajoute pas de géométrie propre à chaque type réel.
+
 ---
 
 ### Liseré des couronnes devant le sol et l'eau : l'emprunt des finitions réglé (26 novembre 2026, matin, branche de l'agent, décision de Sam) — mesuré
