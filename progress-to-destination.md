@@ -45,7 +45,7 @@ J4 (fermé, sortie non atteinte), J5 et J6 (fermés).
 
 | Session (T3) | Lot | État |
 |---|---|---|
-| Mode Aéroport (27 nov.) | [PLAN-AEROPORT-AAA](docs/PLAN-AEROPORT-AAA.md) — trafic réel filmé, arrivées et départs | **V18–V24 implémentés** : météo réelle, crabe progressif, chronologie, activité SIM cartographiée, attaches communes et feux occultés ; 133 tests ciblés et deux e2e WebGPU passent. Coût GPU non mesuré ; ancien V12 sur trafic vivant non rejoué |
+| Mode Aéroport (27 nov.) | [PLAN-AEROPORT-AAA](docs/PLAN-AEROPORT-AAA.md) — trafic réel filmé, arrivées et départs | **V18–V24 implémentés** : météo réelle, crabe progressif, chronologie, activité SIM cartographiée, attaches communes et feux occultés ; 133 tests ciblés et deux e2e WebGPU passent. Attaches recalées sur les triangles et trois planches de contrôle (27 nov.) ; coût GPU non mesuré ; ancien V12 sur trafic vivant non rejoué |
 | A320 AAA (26 nov.) | [PLAN-A320-VOL-AAA](docs/PLAN-A320-VOL-AAA.md) — vol mesuré, physique, molettes, roue, assistance, outils, instruments, navigation | **V0 PASS** (vol de ligne complet 20/20), **K1, W1 faits ; W2, G1 en partie** ; I1/I2 commencés ; **N1 fait** (base de navigation, MCDU, ND VOR.D/NDB/WPT) ; **N2 : AIRWAYS, SID, STAR faits** (CIFP, 755 aéroports US) — discontinuités, HOLD, e2e au poste à faire ; **N3 fait en simulation** (profil vertical, T/D, DES sur chemin, DECEL ; ND, F-PLN, PFD) — vol au banc V2 à faire |
 | Rentrée du Ranger (26 nov.) | Demande de Sam : la rentrée automatique se pose mal ; zone d'arrivée chargée avant 10–20 km ; enregistreur de vol | **Fait et poussé (26 nov.)** : guidage vers le site d'abord, énergie de l'approche (loin de l'axe ou à court), zone d'arrivée préchargée, `camera.entryLog`. Edwards et Le Bourget posés en vol réel (avant : Edwards 4 écrasés sur 4) ; « Relief failed » de l'IGN non reproduit (e2e servi par le disque) ; apprendre-vaisseaux 9/9 ; golden périmé depuis le 20 oct. (pas par ce lot) |
 | Linux OBC embarqué (22–24 nov.) | [PLAN-LINUX-OBC](docs/PLAN-LINUX-OBC.md) — OBC-0 à OBC-21 (unkernel aarch64, Alpine/Debian, suite Rust/Ratatui, `/dev/fb0`, pont `__bh`/TARS, cockpits 3D) | **Sécurisé le 24 nov.** ([audit](docs/AUDIT-2026-11-24.md)) : relais Wisp à garde numérique, Origin exigée, ports et débits bornés ; pont invité sur racines explicites ; COOP/COEP sur demande ; FR/EN, unités du joueur. Tests unitaires 94/94 ; **e2e en cours** |
@@ -12171,3 +12171,8 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   `/tmp/airport3-final-recheck.log`, `/tmp/airport3-ship-domain.log`.
 - Limites inchangées : pas de campagne de performance GPU, pas de nouvelles silhouettes ; les données réelles
   restent prioritaires sur une seule activité SIM, bornée au réseau disponible et à la météo réelle.
+
+### 2026-11-27 11:18 UTC — Aéroport, points d’émission sur les trois maillages
+
+- Coupes des triangles livrés aux stations d’envergure des volets, des ailes et des saumons. La condensation suit l’extrados, le vortex part du bord de fuite et les traînées moteur partent des sorties de nacelle. Les strobes des modèles statiques sont séparés des feux de position.
+- Trois planches orthographiques annotées dans `docs/progress/airport-attachments/`, vues de dessus et de face. Elles montrent les origines des effets au repos. Les deux e2e WebGPU vérifient séparément l’intégration et l’occultation des lampes. Aucune mesure de performance.

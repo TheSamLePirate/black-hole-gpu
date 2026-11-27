@@ -1081,7 +1081,7 @@ function trafficOverlay(this: CameraController, fmtAlt: (m: number) => string, v
     const M = A ? ATTACHMENTS[A.model] : null;
     const k = A?.scale ?? 1;
     const tip = M ? M.nav.map((x) => x * k) : [c.span / 2, 0, 0];
-    const strobeTip = A?.model === "a320" ? [16.7246 * k, 2.967212 * k, -2.03967 * k] : tip;
+    const strobeTip = A?.model === "a320" ? [16.7246 * k, 2.967212 * k, -2.03967 * k] : M ? M.tip.map((x) => x * k) : tip;
     const tail = M ? M.tail.map((x) => x * k) : [0, 0, -c.len / 2];
     const bcn = M ? M.beacon.map((x) => x * k) : [0, 1.5, 0];
     const lower = M ? M.lower.map((x) => x * k) : [0, -1, 0];

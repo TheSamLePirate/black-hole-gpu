@@ -4,11 +4,12 @@ import type { Vec3 } from "../physics";
 
 export const ATTACHMENTS = {
   a320: {
-    tip: [17, 2.95, -2],
-    root: [4.5, 1.98, 1.3],
-    flap: [13.4, 2.5, -2.7],
+    tip: [16.7, 2.95, -3.18],
+    root: [4.5, 1.95, 2.25],
+    sheetEnd: [15, 2.91, -1.73],
+    flap: [13.4, 2.62, -2.23],
     inlet: [5.63, 0.05, 7.45],
-    exhaust: [5.63, 0.43, 3.5],
+    exhaust: [5.63, 0.42, 2.23],
     nose: [0, -1.43, 13.65],
     main: [4.326, -1.43, 1.139],
     nav: [16.6504, 2.965012, -1.89364],
@@ -18,11 +19,12 @@ export const ATTACHMENTS = {
     landing: [2.22016, 0.95766, 2.08],
   },
   a320t: {
-    tip: [16.83, 0.87, -4.14],
-    root: [4.5, 0.3, 0.2],
-    flap: [13.4, 0.7, -4.8],
-    inlet: [5.6, -1.1, 4.8],
-    exhaust: [5.6, -1.1, 0.5],
+    tip: [17, 0.84, -5.68],
+    root: [4.5, 0.02, -0.07],
+    sheetEnd: [15, 0.82, -4.1],
+    flap: [13.4, 0.52, -4.64],
+    inlet: [5.78, -1.55, 5.15],
+    exhaust: [5.78, -1.3, -0.55],
     nose: [0, -3.22, 11],
     main: [3.846, -3.22, -0.97],
     nav: MESH.a320t.tip,
@@ -32,11 +34,12 @@ export const ATTACHMENTS = {
     landing: MESH.a320t.landing,
   },
   crj900: {
-    tip: [11.58, 1, -4.62],
-    root: [2.5, -0.2, -0.8],
-    flap: [8, 0.4, -4.8],
+    tip: [11.5, 0.81, -4.78],
+    root: [2.5, -0.19, -0.3],
+    sheetEnd: [10, -0.13, -3.06],
+    flap: [8, -0.36, -3.38],
     inlet: [2.4, 1.28, -7.3],
-    exhaust: [2.4, 1.28, -11.2],
+    exhaust: [2.31, 1.13, -11.28],
     nose: [0, -2.19, 15.324],
     main: [2.085, -2.19, -1.484],
     nav: MESH.crj900.tip,
@@ -50,31 +53,27 @@ export type AttachmentModel = keyof typeof ATTACHMENTS;
 
 /** Convert an A320 effect's local point to the corresponding feature on the rendered mesh. */
 export function effectPoint(model: AttachmentModel, key: string, p: readonly number[]): Vec3 {
-  if (model === "a320") return [...p] as Vec3;
   const a = ATTACHMENTS.a320;
   const b = ATTACHMENTS[model];
   const side = p[0]! < 0 ? -1 : 1;
-  let from: readonly number[] = a.tip,
-    to: readonly number[] = b.tip;
   if (key.startsWith("a320v")) {
-    const t = Math.min(1, Math.max(0, (Math.abs(p[0]!) - 4.5) / 12.5));
+    const t = Math.min(1, Math.max(0, (Math.abs(p[0]!) - 4.5) / 10.5));
     return [
-      side * (b.root[0] + (b.tip[0] - b.root[0]) * t),
-      b.root[1] + (b.tip[1] - b.root[1]) * t + 0.12,
-      b.root[2] + (b.tip[2] - b.root[2]) * t,
+      side * (b.root[0] + (b.sheetEnd[0] - b.root[0]) * t),
+      b.root[1] + (b.sheetEnd[1] - b.root[1]) * t + 0.12,
+      b.root[2] + (b.sheetEnd[2] - b.root[2]) * t,
     ];
   }
-  if (key.startsWith("a320f")) {
-    from = a.flap;
-    to = b.flap;
+  if (key.startsWith("a320f") || key.startsWith("a320t")) {
+    const [x, y, z] = key.startsWith("a320f") ? b.flap : b.tip;
+    return [side * x, y, z];
   }
+  if (model === "a320") return [...p] as Vec3;
   if (key.startsWith("a320r")) {
     return [p[0]! + side * (b.inlet[0] - 5.63), b.inlet[1], b.inlet[2] - 2.25];
   }
-  if (key.startsWith("a320i")) {
-    from = a.inlet;
-    to = b.inlet;
-  }
+  let from: readonly number[] = a.inlet,
+    to: readonly number[] = b.inlet;
   if (key.startsWith("a320s") || key.startsWith("a320w")) {
     const nose = key.endsWith("0");
     from = nose ? a.nose : a.main;
