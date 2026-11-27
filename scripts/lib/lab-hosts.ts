@@ -33,14 +33,6 @@ export const HOSTS: LabHost[] = [
     clone: "Documents/DEV/black-hole-gpu",
     bun: "~/.bun/bin/bun",
   },
-  {
-    name: "kerr-pc",
-    os: "windows",
-    label: "PC Windows RTX 5070 Ti",
-    dir: "Desktop/sam/kerr-runner",
-    clone: "Desktop/sam/benchmark-main",
-    bun: "bun",
-  },
 ];
 
 /** A host by its name (KERR_REMOTE, else kerr-mini); an unknown name: a Mac at the default folders. */

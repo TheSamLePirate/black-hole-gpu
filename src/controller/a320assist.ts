@@ -28,6 +28,8 @@ declare module "../controls" {
       liftAt: number | null;
       notchAt?: number;
       drag?: boolean;
+      revDone?: boolean;
+      fast?: boolean;
     } | null;
     a320EasyTakeoff(): string;
     a320AssistStep(inp: PilotInput, dt: number): void;
@@ -70,7 +72,8 @@ function a320AssistStep(this: CameraController, inp: PilotInput, dt: number) {
   const F = this.a320Fmgc;
   const onWheels = !!(this.rolling || this.ourLanded);
   const ias = i?.ias ?? Math.sqrt((2 * (this.airFlight.last?.out.q ?? 0)) / 1.225) * KT;
-  const ra = i?.ra ?? 0;
+  // (the radio altimeter reads nothing over 2 500 ft: very high then — before 26 Nov 2026 it read 0 there, « under 2 000 ft » at FL100)
+  const ra = i?.ra ?? Number.POSITIVE_INFINITY;
   const vsFpm = i?.vs ?? 0;
   const pitchDeg = ((this.attitudeNow().pitch ?? 0) * 180) / Math.PI;
   const now = this.nowTime() * 4.925490947e-6 * this.s.massSolar;
@@ -93,8 +96,24 @@ function a320AssistStep(this: CameraController, inp: PilotInput, dt: number) {
   if (onWheels) {
     // (on the wheels again: the next lift-off's helpers fresh)
     if (H.liftAt !== null) Object.assign(H, { gearUp: false, cl: false, ap: false, flapsUp: false, liftAt: null });
+    // (the assisted level's rollout — a landing, ROLL OUT —: the autobrake MED if none was armed, the reversers out with the levers at
+    // idle, stowed at 70 kt; the speed brakes in. Before 26 Nov 2026 a landing too fast to have set its configuration in the air — no
+    // gear down in flight, so no autobrake — rolled 1.7 km unbraked off the end of KLAX's 24R into the water)
+    if (assisted && F?.vert === "ROLL OUT" && this.a320) {
+      if (!this.a320.autobrake && ias > 40) this.a320.autobrake = 2;
+      if (ias > 70 && this.pilot.throttle <= 0.01 && this.a320Reverse === 0 && !H.revDone) {
+        this.a320ReverseToggle();
+        H.revDone = true;
+      }
+      if (ias < 70 && this.a320Reverse > 0) this.a320ReverseToggle();
+      if (H.drag) {
+        this.airBrake = 0;
+        H.drag = false;
+      }
+    }
     return;
   }
+  H.revDone = false;
   if (H.liftAt === null) H.liftAt = now;
   if (!To && !assisted) return;
   const tookOff = this.pilot.throttle >= 0.75;
@@ -129,19 +148,31 @@ function a320AssistStep(this: CameraController, inp: PilotInput, dt: number) {
     // (APPR pressed in the approach phase — DECEL passed —, the ILS tuned: LOC and G/S armed, NAV flown on to the localizer)
     if (!F.apprArm && i.ils && F.lat === "NAV" && !F.lat.startsWith("LOC")) F.apprToggle();
     const glide = F.vert === "G/S*" || F.vert === "G/S" || F.vert === "LAND";
-    if (this.gearDown === false && (glide || ra < 2000) && lever >= 2) this.gearDown = true;
+    // (too fast for the configuration — the speed's target 10 kt behind —: the speed brakes out, in again once slow, or the flaps at 3;
+    // still too fast on the glide or under 2 500 ft, the gear down for its drag under 250 kt, as a crew does: a 3° path at idle, clean,
+    // does not slow an A320 — the KSFO → KLAX flight came over the threshold at 195 kt, no flap, no gear, 26 Nov 2026)
+    const fast = ias > F.targetSpeed(i) + 10;
+    H.fast = fast;
+    // (the gear at the glide's capture under its VLO, as a crew calls it — or under 2 000 ft with the flaps at 2)
+    if (this.gearDown === false && ((glide && ias < 245) || (ra < 2000 && lever >= 2))) this.gearDown = true;
     // (the autobrake armed with the gear: LO — as the game's own approach arms it)
     if (this.gearDown && this.a320 && !this.a320.autobrake) this.a320.autobrake = 1;
     H.notchAt ??= -1e9;
     if (now - H.notchAt > 4) {
+      // (late — the glide captured or under 2 500 ft —: the next notch as soon as its VFE allows, 5 kt under it — the speed no longer
+      // waited for: the A/THR holds green dot a few knots over it, and a clean A320 on a 3° path does not slow by itself — the KSFO →
+      // KLAX flight came down its whole ILS at 210 kt, clean, 26 Nov 2026)
+      const late = glide || ra < 2500;
+      const vfe = [230, 200, 185, 177][lever] ?? 0;
+      const ok = (spd: number) => ias < vfe - 5 && (ias < spd || late);
       const want =
-        lever === 0 && ias < i.greenDot + 10
+        lever === 0 && ok(i.greenDot + 10)
           ? 1
-          : lever === 1 && ias < i.s + 10
+          : lever === 1 && ok(i.s + 10)
             ? 2
-            : lever === 2 && this.gearDown && ias < i.f + 10
+            : lever === 2 && this.gearDown && ok(i.f + 10)
               ? 3
-              : lever === 3 && glide && ias < i.f
+              : lever === 3 && glide && ok(i.f)
                 ? 4
                 : lever;
       if (want !== lever) {
@@ -153,7 +184,9 @@ function a320AssistStep(this: CameraController, inp: PilotInput, dt: number) {
   // (the assisted level's speed brakes: out while the managed descent asks for them — MORE DRAG, too fast over its path —, in again
   // once it no longer does, and always with the flaps at 3 or more; the crew's own use of them left alone otherwise)
   if (assisted && F) {
-    const want = F.moreDrag && lever < 3 ? 1 : 0;
+    // (or too fast for the approach's configuration — its target 10 kt behind —: the same speed brakes, decided here only — before,
+    // this block put them in again each frame the approach's had put them out)
+    const want = (F.moreDrag || (F.phase === "approach" && H.fast && !onWheels)) && lever < 3 ? 1 : 0;
     if (want) {
       this.airBrake = 1;
       H.drag = true;
