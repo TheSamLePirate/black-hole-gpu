@@ -45,7 +45,7 @@ J4 (fermé, sortie non atteinte), J5 et J6 (fermés).
 
 | Session (T3) | Lot | État |
 |---|---|---|
-| Mode Aéroport (27 nov.) | [PLAN-AEROPORT-AAA](docs/PLAN-AEROPORT-AAA.md) — trafic réel filmé, arrivées et départs | **V18–V24 implémentés** : météo réelle, crabe progressif, chronologie, activité SIM cartographiée, attaches communes et feux occultés ; 133 tests ciblés et deux e2e WebGPU passent. Attaches recalées sur les triangles et trois planches de contrôle (27 nov.) ; coût GPU non mesuré ; ancien V12 sur trafic vivant non rejoué |
+| Mode Aéroport (27 nov.) | [PLAN-AEROPORT-AAA](docs/PLAN-AEROPORT-AAA.md) — trafic réel filmé, arrivées et départs | **V18–V24 implémentés** : météo réelle, crabe progressif, chronologie, activité SIM cartographiée, attaches communes et feux occultés ; 133 tests ciblés et deux e2e WebGPU passent. Attaches recalées sur les triangles et trois planches de contrôle (27 nov.) ; quatre Boeing et CRJ900 FGAddon articulés ; repère WGS84 des émissions, occlusion de toutes les silhouettes et adresse du gréement A320 corrigés ; carlingues rapprochées et vitrage CRJ revérifiés en vue Aile ; captures humide/croisière par représentation ; coût GPU non mesuré ; ancien V12 sur trafic vivant non rejoué |
 | A320 AAA (26 nov.) | [PLAN-A320-VOL-AAA](docs/PLAN-A320-VOL-AAA.md) — vol mesuré, physique, molettes, roue, assistance, outils, instruments, navigation | **V0 PASS** (vol de ligne complet 20/20), **K1, W1 faits ; W2, G1 en partie** ; I1/I2 commencés ; **N1 fait** (base de navigation, MCDU, ND VOR.D/NDB/WPT) ; **N2 : AIRWAYS, SID, STAR faits** (CIFP, 755 aéroports US) — discontinuités, HOLD, e2e au poste à faire ; **N3 fait en simulation** (profil vertical, T/D, DES sur chemin, DECEL ; ND, F-PLN, PFD) — vol au banc V2 à faire |
 | Rentrée du Ranger (26 nov.) | Demande de Sam : la rentrée automatique se pose mal ; zone d'arrivée chargée avant 10–20 km ; enregistreur de vol | **Fait et poussé (26 nov.)** : guidage vers le site d'abord, énergie de l'approche (loin de l'axe ou à court), zone d'arrivée préchargée, `camera.entryLog`. Edwards et Le Bourget posés en vol réel (avant : Edwards 4 écrasés sur 4) ; « Relief failed » de l'IGN non reproduit (e2e servi par le disque) ; apprendre-vaisseaux 9/9 ; golden périmé depuis le 20 oct. (pas par ce lot) |
 | Linux OBC embarqué (22–24 nov.) | [PLAN-LINUX-OBC](docs/PLAN-LINUX-OBC.md) — OBC-0 à OBC-21 (unkernel aarch64, Alpine/Debian, suite Rust/Ratatui, `/dev/fb0`, pont `__bh`/TARS, cockpits 3D) | **Sécurisé le 24 nov.** ([audit](docs/AUDIT-2026-11-24.md)) : relais Wisp à garde numérique, Origin exigée, ports et débits bornés ; pont invité sur racines explicites ; COOP/COEP sur demande ; FR/EN, unités du joueur. Tests unitaires 94/94 ; **e2e en cours** |
@@ -12176,3 +12176,93 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
 
 - Coupes des triangles livrés aux stations d’envergure des volets, des ailes et des saumons. La condensation suit l’extrados, le vortex part du bord de fuite et les traînées moteur partent des sorties de nacelle. Les strobes des modèles statiques sont séparés des feux de position.
 - Trois planches orthographiques annotées dans `docs/progress/airport-attachments/`, vues de dessus et de face. Elles montrent les origines des effets au repos. Les deux e2e WebGPU vérifient séparément l’intégration et l’occultation des lampes. Aucune mesure de performance.
+
+### 2026-11-27 20:12 UTC — Extérieurs Boeing pour le trafic aéroport
+
+- Contribution : silhouettes et attaches cohérentes avec les types observés, stratégie §19/§20.
+- Réalisé : quatre maillages FGAddon (B738, B744, B772, B77W), textures et couleurs de compagnie,
+  sélection par type, LOD existants, train simplifié, feux propres aux cellules et quatre sorties moteur
+  pour le 747. Conversion et provenance documentées dans `assets/traffic/boeing/README.md` ; crédits générés.
+  Correction d'un remplacement accidentel dans les effets de l'A320 pilotable et du test de garde au sol
+  du B772, qui attendait encore les dimensions de son ancien substitut A320. Publication d'un atlas plus
+  petit refusée aussi après les uploads asynchrones si un plus grand a été demandé entre-temps.
+- Preuves : 84 tests trafic/aéroport (4189 assertions), trois tests crédits (226 assertions),
+  `bun run check` (86/86 shaders Apple), inventaire graphique et `git diff --check` passent.
+  Le run précédent d'`airport-experience` avait réussi (journal `/tmp/boecaptures2`), captures des quatre
+  Boeing inspectées. Reprise : test GPU `traffic-lamps` réussi ; intégration aéroport a détecté une fixture vieillissant
+  durant les compilations (provenance « reconstructed » attendue après dépassement de son historique).
+  Horloge de la fixture bornée à 20 s (lissage du crabe conservé, échantillons dans son historique).
+  Reprise finale réussie : `airport-experience`, 41 assertions, zéro erreur GPU
+  (`/tmp/boeing-e2e3.log`). Typecheck final et lint des fichiers retouchés passent.
+- Limites : train sans cinématique articulée FG, familles voisines mises à l'échelle ; 757/767/787 et
+  gros Airbus encore sur les substituts existants. Pas de cockpit ou de modèle de vol Boeing.
+  Captures conservées dans `docs/progress/airport-boeing/` : inspection extérieure, pas validation artistique
+  exhaustive de chaque angle ni gain de performance mesuré. Suite unitaire complète non rejouée.
+
+### 2026-11-27 20:46 UTC — Avions de ligne : émissions en 3D, occlusion et articulations
+
+- Contribution à la destination : qualité du contenu et surfaces cohérentes (§19/§20), dans le pipeline existant.
+- Diagnostic corrigé : l’ENU radial des émissions différait du repère WGS84 des maillages
+  (test : écart >20 m à 8 km) ; les silhouettes du trafic n’étaient pas dessinées dans la profondeur
+  des effets avant leur composition ; l’enregistrement de livrée écrasait l’adresse du gréement A320.
+  Les trois chemins ont été corrigés. Une profondeur de scène non publiée (0) ne masque plus les rubans.
+- Réalisé : arbre rotate/translate/spin FGAddon pour les quatre Boeing et un nouveau CRJ900 articulé
+  (~50 714 triangles, 63 nœuds). Normales et profondeur utilisent les mêmes poses ; LOD séparés par
+  matériau et pièce mobile. Commandes visuelles bornées en vitesse, émissions de volets liées hors ligne
+  aux triangles des vraies pièces. Vitrage réfléchissant et chrome distingués, peinture moins métallique,
+  trains plus mats ; feux CRJ recalés sur son XML. Caméra drone rapprochée (2,7 longueurs).
+  Sources et conversions : `assets/traffic/{boeing,crj-fg}/README.md`, scripts de construction ; crédits générés.
+- Preuves : 98 tests ciblés, 35 887 assertions, sur 18 fichiers ; `bun run check` avec 86/86 WGSL Apple ;
+  `traffic-trails` : 156 pixels au témoin visible, 0 caché, 78 du côté libre d’un bord, 0 du côté caché.
+  `airliner-fx` : sept représentations isolées, humidité forte, puis deux/quatre sorties moteur en croisière,
+  train <0,05 et vitesse air >190 m/s avant les captures ; régression du pointeur des pièces A320 vérifiée.
+  Une campagne avec vues arrière supplémentaires et les contrôles lampes/aéroport termine sa vérification.
+- Limites : aucune promesse de gain GPU/cadence (pas d’A/B de coût, machine chaude). La profondeur des effets
+  garde sa demi-résolution ; pas de certification artistique AAA exhaustive. Contraintes locked-track,
+  compression réelle des amortisseurs et flexion sous charge non observée ne sont pas reconstituées par
+  ce nouvel import. Le modèle Airbus simple reste un fallback LOD ; familles non modélisées toujours
+  représentées par un substitut. Aucun cockpit ni modèle de vol Boeing/CRJ nouveau. Suite unitaire complète non rejouée.
+
+### 2026-11-27 20:50 UTC — Vérification finale des avions de ligne
+
+- 99 tests ciblés / 18 fichiers / 36 399 assertions passent ; le test supplémentaire lit les vraies
+  roues du CRJ et vérifie leur remontée dans les logements. L’import conserve désormais les noms de
+  tous les groupes d’animation : sans cela les roues restaient hors du fuselage malgré gear=0.
+  CRJ final : 63 nœuds. Reconstruction et relecture des cinq gréements effectuées.
+- `airliner-fx` complet : 21 captures, 62 assertions, zéro erreur GPU, 179,95 s sur ce Mac ;
+  CRJ revérifié après correction des groupes nommés : 43 assertions, zéro erreur GPU.
+  Images et limites : `docs/progress/airliner-quality/README.md`, galerie `index.html`.
+- GPU : `traffic-trails` et `traffic-lamps` repris dans un processus neuf passent (12 assertions).
+  Contrôle A/A du ruban identique (156 pixels), masque total 0 et bord caché 0.
+  `airport-experience` passe aussi (41 assertions). Un lancement groupé a fini 3 pass/1 fail :
+  le beforeAll de traffic-lamps a atteint 120 s en attendant le verrou Chrome derrière une autre
+  capture ; ce n’était pas une assertion GPU. Sa reprise indépendante passe.
+- `bun run check` 86/86 shaders, typecheck final, inventaire 67 passes et catalogue 540/540 passent.
+  La configuration locale du labo était headless ; elle a été remise à window selon E2E.md.
+  Les dernières reprises GPU/aéroport/CRJ se sont déroulées en fenêtre visible.
+- Aucun gain de cadence revendiqué. Limites artistiques et de modèles explicitées dans la fiche.
+
+### 2026-11-27 20:55 UTC — Carlingues rapprochées et vitrage CRJ
+
+- Suppression du rejet des pixels de carlingue quand la profondeur de scène vaut 0 (pas encore publiée).
+- Triangulation des contours AC3D concaves par découpage d’oreilles, conservation des indices UV et du sens
+  des faces ; les contours convexes gardent leur éventail. Reconstruction des quatre Boeing et du CRJ.
+- Vitrage CRJ : teinte sombre commune aux Boeing avant encodage du matériau réfléchissant 158
+  (la couleur grise 0,7938 du matériau source était conservée auparavant).
+- Deux tests Python vérifient aire et orientation des contours concaves/convexes ; 13 tests ciblés Bun passent.
+  AIRLINER_SKIN=1 active les captures en vue Aile pour les sept représentations ; première passe réussie.
+  Reprise après la garde de profondeur : 62 assertions, zéro erreur GPU ; les sept images en vue Aile ont été
+  inspectées, sans trou visible dans ces poses. `bun run check` passe, dont 86/86 shaders.
+  Galerie enrichie de `skin-*.png`. Pas de mesure de performance ni de couverture exhaustive de tous les angles.
+
+### 2026-11-27 20:59 UTC — Trous dans la nacelle A320 : prépasse des autocollants
+
+- La déclaration précédente « sans trou visible » avait laissé passer les défauts de la nacelle A320.
+  Les décals 105 écrivaient leur rectangle transparent dans la prépasse ; la peinture derrière
+  échouait au test de profondeur, puis le fragment du décal était rejeté par son alpha.
+- Matériau 105 exclu de la prépasse comme les autres overlays alpha. Son dessin normal conserve
+  le rejet alpha et la profondeur de la vraie nacelle. Pas de changement de maillage ou de culling global.
+- Test GPU utilisant depthVs de production : un rectangle 105 ne masque plus le témoin (156 pixels),
+  contrairement au vrai opaque (0). Contrôle A/A identique, bord masqué 0. 7 assertions, zéro erreur GPU.
+  Reprise A320 en vue Aile : 50 assertions, zéro erreur GPU, capture moteur inspectée après correction.
+  Captures avant/après dans docs/progress/airliner-quality/a320-engine-*.png.

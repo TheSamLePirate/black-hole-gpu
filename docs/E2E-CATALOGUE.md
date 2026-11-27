@@ -7,7 +7,9 @@ Every e2e file (`tests/e2e/*.e2e.test.ts`, the `zz-` probes apart — kept whole
 | file | what it proves | scene(s) booted | ~s on the mini | needs |
 |---|---|---|---|---|
 | traffic-lamps.e2e.test.ts | Production GPU lamp renderer: visible positive control, fully occluded source (no halo leak), foreground clipping each halo fragment; HDR with several mips. | crew page + isolated WebGPU targets | ? (3 s on this Mac) | WebGPU |
-| airport-experience.e2e.test.ts | Airport real-weather authority, fixture METAR, valid A320/CRJ/static instances, air-relative attitude, GPU lamps, weather restored on exit. | Artemis → LFPB | ? | WebGPU; Earth disk cache; fixture METAR |
+| airliner-fx.e2e.test.ts | Seven delivered representations, humid wing sources, chase occlusion views and cruise exhausts (two or four), aircraft isolated, gear retracted in cruise, 21 exterior captures; AIRLINER_SKIN=1 checks seven close wing views and no GPU errors; A320 rig pointer regression. | Artemis → LFPB | ~2–4 min locally | WebGPU, Earth cache, fixture METAR |
+| traffic-trails.e2e.test.ts | Production hullDepthVs/trailVs/trailFs: instanced opaque silhouette hides the ribbon before scene-depth publication, visible control and clipped-edge control. | crew | ~2 s locally | WebGPU |
+| airport-experience.e2e.test.ts | Airport real-weather authority, fixture METAR, valid Airbus/CRJ/B738/B744/B772/B77W instances and four Boeing drone captures, air-relative attitude, GPU lamps, weather restored on exit. | Artemis → LFPB | ? | WebGPU; Earth disk cache; fixture METAR |
 
 ### Regional satellite ground
 

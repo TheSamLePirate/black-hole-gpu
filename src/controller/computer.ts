@@ -1,5 +1,8 @@
 // The CameraController — the flight computer's operations.
 // (Its methods, out of controls.ts: installed on its prototype — `this` the controller.)
+import { earthView } from "./netcraft";
+import { trafficMatrices, posedEmission } from "../traffic/rig";
+import { pointInFrame } from "../traffic/effect-frame";
 import { combatEnu } from "./combat";
 import { GROUND_MESH } from "../game/ground-units";
 import { timeRate } from "../clock";
@@ -17,7 +20,7 @@ import type { Burn, FcContext, OpResult } from "../fc/ops";
 import { contrailPersistence, engineTrail, sheetTrail, tipTrail, type ContrailSource } from "../contrails";
 import { A320Fx, humidityOf } from "../a320/effects";
 import { ATTACHMENTS, attachmentScale, attachmentOffset, effectPoint } from "../traffic/attachments";
-import { trafficConfig } from "./traffic";
+import { trafficConfig, trafficAnimation } from "./traffic";
 import { airportState } from "./airportview";
 import { MISSILES } from "../game/combat";
 import {
@@ -1595,13 +1598,19 @@ function contrailsFrame(this: CameraController): { data: Float32Array<ArrayBuffe
   // (the real traffic — controller/traffic.ts —: the airliners' engines' trails in the air where each flies — its
   // own height's cold —, within 30 km)
   const TR = this.traffic?.planes.size ? this.trafficNow() : [];
-  const sft = TR.length ? this.sfFrame(cam) : null;
+  const earth = TR.length ? earthView(this) : null;
   const own = TR.length ? this.netOwn() : null;
-  if (sft && own) {
-    const [E, N, U] = [sft.east, sft.north, sft.up].map((v) => fr.fromLocal(sft.toLocal(v as Vec3))) as [Vec3, Vec3, Vec3];
-    const Uo = own.p.map((c) => c / Math.hypot(...own.p));
-    const Eo = [-Uo[1]!, Uo[0]!, 0].map((c, _, a) => c / (Math.hypot(a[0]!, a[1]!) || 1));
-    const No = [Uo[1]! * Eo[2]! - Uo[2]! * Eo[1]!, Uo[2]! * Eo[0]! - Uo[0]! * Eo[2]!, Uo[0]! * Eo[1]! - Uo[1]! * Eo[0]!];
+  if (earth && own) {
+    // Use the exact Earth → home → entry rotation used by the mesh. A radial ENU
+    // approximation disagrees with WGS84's surface normal and displaces remote trails.
+    const basis = (
+      [
+        [1, 0, 0],
+        [0, 1, 0],
+        [0, 0, 1],
+      ] as Vec3[]
+    ).map((v) => fr.fromLocal(earth.fr.toLocal(earth.toHome(v)))) as [Vec3, Vec3, Vec3];
+    const toFrame = (q: readonly number[]): Vec3 => pointInFrame(q, earth.p0, x, basis);
     const rigs = new Set(
       this.trafficShips(this.viewController())
         .filter((c) => c.a320 && (this.trafficRigVisible?.(c) ?? true))
@@ -1616,28 +1625,25 @@ function contrailsFrame(this: CameraController): { data: Float32Array<ArrayBuffe
       const e = engineTrail(0.8, air.rho, air.T, air.gas.R);
       if (e <= 0) continue;
       const A = attachmentScale(c.mesh, c.len, rigs.has(c.id));
-      const exhaust = ATTACHMENTS[A.model].exhaust;
-      for (const sx of [1, -1]) {
-        const offset = attachmentOffset(A, [sx * exhaust[0], exhaust[1], exhaust[2]], c.right, c.up, c.fwd);
-        const q = c.p.map((v, k) => v + offset[k]!);
-        const r = q.map((v, k) => v - own.p[k]!);
-        const re = r[0]! * Eo[0]! + r[1]! * Eo[1]! + r[2]! * Eo[2]!,
-          rn = r[0]! * No[0]! + r[1]! * No[1]! + r[2]! * No[2]!,
-          ru = r[0]! * Uo[0]! + r[1]! * Uo[1]! + r[2]! * Uo[2]!;
-        src.push({ key: `a${c.id}${sx}`, p: [0, 1, 2].map((k) => x[k]! + E[k]! * re + N[k]! * rn + U[k]! * ru) as Vec3, kind: 0, str: e });
+      const anchors = ATTACHMENTS[A.model];
+      const engines = "outerExhaust" in anchors ? [anchors.exhaust, anchors.outerExhaust] : [anchors.exhaust];
+      for (const [engine, exhaust] of engines.entries()) {
+        for (const sx of [1, -1]) {
+          const offset = attachmentOffset(A, [sx * exhaust[0], exhaust[1], exhaust[2]], c.right, c.up, c.fwd);
+          const q = c.p.map((v, k) => v + offset[k]!);
+          src.push({
+            key: `a${c.id}:${engine}:${sx}`,
+            p: toFrame(q),
+            kind: 0,
+            str: e,
+          });
+        }
       }
     }
     // (the airliners near — the airport view's, PLAN-AEROPORT-AAA V14 —: the A320's own effects — a320/effects.ts: the wing's vapour,
     // the tip and flap vortices in humid air, the inlet vortex at take-off power, the tyres' smoke at the touchdown, a wet runway's
     // spray, the reversers' flow — from each one's flight and configuration (trafficConfig), scaled to its size, in the weather here;
     // the six nearest within 10 km. Before 26 Nov 2026 the flown A320's alone)
-    const toFrame = (q: readonly number[]): Vec3 => {
-      const r = q.map((v, k) => v - own.p[k]!);
-      const re = r[0]! * Eo[0]! + r[1]! * Eo[1]! + r[2]! * Eo[2]!,
-        rn = r[0]! * No[0]! + r[1]! * No[1]! + r[2]! * No[2]!,
-        ru = r[0]! * Uo[0]! + r[1]! * Uo[1]! + r[2]! * Uo[2]!;
-      return [0, 1, 2].map((k) => x[k]! + E[k]! * re + N[k]! * rn + U[k]! * ru) as Vec3;
-    };
     // (those moving only — one at rest makes none of them; parked by the dozen about the A320 at its stand, they took the six places
     // from the airliners landing, 26 Nov 2026 —, the one the airport view films first)
     const filmed = airportState()?.current ?? airportState()?.filler ?? null;
@@ -1660,6 +1666,7 @@ function contrailsFrame(this: CameraController): { data: Float32Array<ArrayBuffe
       const speed = Math.hypot(...c.v);
       const A = attachmentScale(c.mesh!, c.len, rigs.has(c.id));
       const k = A.scale;
+      const pose = trafficMatrices(A.model, c.gear, trafficAnimation(c, this.trafficClock?.() ?? Date.now() / 1000));
       // (its lift: its weight — an A320's 62 t scaled to its size — over the dynamic pressure on its wing, 122.6 m² scaled)
       const q = 0.5 * air.rho * speed * speed;
       const W = 62_000 * k * k * 9.81;
@@ -1689,19 +1696,27 @@ function contrailsFrame(this: CameraController): { data: Float32Array<ArrayBuffe
       })) {
         if (A.model === "crj900" && f.key.startsWith("a320i")) continue;
         // (the A320 model's frame — x to the left, y up, z ahead — on the airliner's axes, at its size)
-        const at = (p: readonly number[]) => {
-          const q = effectPoint(A.model, f.key, p);
+        const anchors = ATTACHMENTS[A.model];
+        const outer = "outerInlet" in anchors && (f.key.startsWith("a320i") || f.key.startsWith("a320r")) ? anchors.outerInlet : null;
+        const at = (p: readonly number[], outerEngine: boolean) => {
+          const q = posedEmission(A.model, f.key, effectPoint(A.model, f.key, p), pose);
+          if (outerEngine && outer) {
+            q[0] += Math.sign(q[0]) * (outer[0] - anchors.inlet[0]);
+            q[1] += outer[1] - anchors.inlet[1];
+            q[2] += outer[2] - anchors.inlet[2];
+          }
           const offset = attachmentOffset(A, q, c.right, c.up, c.fwd);
           return toFrame(c.p.map((v, j) => v + offset[j]!));
         };
-        src.push({
-          key: `x${c.id}${f.key}`,
-          p: at(f.q),
-          kind: f.kind,
-          str: f.str,
-          ...(f.to ? { to: at(f.to) } : {}),
-          ...(f.mid ? { mid: at(f.mid) } : {}),
-        });
+        for (const outerEngine of outer ? [false, true] : [false])
+          src.push({
+            key: `x${c.id}${f.key}${outerEngine ? ":outer" : ""}`,
+            p: at(f.q, outerEngine),
+            kind: f.kind,
+            str: f.str,
+            ...(f.to ? { to: at(f.to, outerEngine) } : {}),
+            ...(f.mid ? { mid: at(f.mid, outerEngine) } : {}),
+          });
       }
     }
     if (this.trafficFx.size > 40) for (const id of this.trafficFx.keys()) if (!TR.some((c) => c.id === id)) this.trafficFx.delete(id);

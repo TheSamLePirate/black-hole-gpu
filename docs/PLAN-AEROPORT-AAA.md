@@ -141,5 +141,31 @@ Les résultats exacts de livraison sont consignés dans le journal.
 Limites : profils visuels plausibles, pas des performances certifiées ; réseau OSM parfois absent/incomplet ;
 activité complémentaire limitée aux routes effectivement connectées, une seule réservation synthétique ;
 prévision des conflits fondée sur les données reçues, sans connaissance des clairances du vrai contrôle aérien.
-Pas de nouveaux modèles : les types réels utilisent encore les silhouettes A320/CRJ mises à l'échelle.
+Les silhouettes A320/CRJ restent utilisées pour les types sans modèle dédié.
 Le vent en altitude reste estimé ; les balises/feux du trafic n'éclairent pas physiquement le sol.
+
+### Boeing — 27 novembre 2026
+
+B738, B744, B772 et B77W utilisent désormais quatre extérieurs FGAddon distincts, avec cartes
+neutralisées, couleurs de compagnie, attaches propres au modèle et quatre moteurs pour le 747.
+Sources, auteurs, licences et conversion : `assets/traffic/boeing/README.md`. Les autres variantes
+737/747/777 sont des représentations mises à l’échelle ; les 757/767/787 gardent le fallback.
+Trains, volets, spoilers, gouvernes et fans articulés par les fichiers FlightGear (27 nov., seconde passe). Aucun cockpit Boeing
+ni modèle de vol nouveau. Pas de coût GPU mesuré ni de validation artistique exhaustive AAA.
+
+### Qualité des avions et émissions — 27 novembre, seconde passe
+
+CRJ900 remplacé par l’extérieur articulé FGAddon (63 nœuds, ~50 714 triangles). Boeing :
+80/132/100/104 nœuds pour B738/B744/B772/B77W. La livrée ne remplace plus l’adresse du gréement
+de l’A320. Les LOD gardent les frontières de pièces mobiles, les normales suivent leurs rotations.
+Vitrage/chrome Boeing distingués, peinture moins métallique et trains plus mats.
+Les feux du CRJ reprennent ses positions XML.
+
+Traînées corrigées dans le repère WGS84 et occultées par toutes les silhouettes articulées avant
+composition de la profondeur de scène. Émissions de volets liées à leurs triangles et articulations.
+E2E `airliner-fx` : un seul avion à l’image, condensation humide et croisière par modèle ;
+`traffic-trails` : occlusion GPU avec témoin visible et bord partiellement masqué.
+Limites : certains canaux sans observation ADS-B (compression des amortisseurs, flexion sous charge,
+timonerie asservie) restent au repos ; les animations importées ici sont rotate/translate/spin.
+Les silhouettes de substitution des familles non livrées et les cockpits restent hors de ce lot.
+Le terme AAA demeure une destination, pas une certification artistique exhaustive ou de cadence.

@@ -1,3 +1,4 @@
+import type { TrafficPose } from "../traffic/rig";
 import { trafficLightVisibility } from "../traffic/lights";
 import { trafficContact } from "../traffic/contact";
 import { reportAt } from "../traffic/timeline";
@@ -870,6 +871,37 @@ export function trafficConfig(c: TrafficCraft): {
   return { flapLever, n1, rev, spoil, nose, lights: c.gnd ? c.phase === "takeoff" || landing || linedUp : c.over < 3000 };
 }
 
+const animationPoses = new Map<string, TrafficPose>();
+/** The configuration's bounded actuator motion, shared by visible surfaces and their emissions. */
+export function trafficAnimation(c: TrafficCraft, now: number): TrafficPose {
+  const k = trafficConfig(c);
+  const target: TrafficPose = {
+    flap: k.flapLever / 4,
+    spoiler: k.spoil,
+    rev: k.rev,
+    n1: k.n1,
+    speed: c.gnd ? Math.hypot(...c.v) : 0,
+    time: now,
+    roll: c.bank,
+    pitch: c.pitch / D,
+  };
+  const previous = animationPoses.get(c.id);
+  if (previous && now >= previous.time && now - previous.time < 20) {
+    const dt = now - previous.time;
+    for (const [key, rate] of [
+      ["flap", 0.125],
+      ["spoiler", 1],
+      ["rev", 0.65],
+      ["n1", 12],
+    ] as const) {
+      target[key] = previous[key] + Math.max(-rate * dt, Math.min(rate * dt, target[key] - previous[key]));
+    }
+  }
+  animationPoses.set(c.id, target);
+  if (animationPoses.size > 256) for (const [id, p] of animationPoses) if (now - p.time > 120) animationPoses.delete(id);
+  return target;
+}
+
 export function trafficRig(c: TrafficCraft, now: number) {
   let R = posers.get(c.id);
   if (!R) posers.set(c.id, (R = { P: new A320Poser(), at: now - 10 }));
@@ -982,7 +1014,7 @@ function trafficShips(this: CameraController, view: CameraController = this): Tr
     12,
     list.find((c) => c.mesh && c.id === filmedId),
   )) {
-    const s = c.len / (c.mesh === "a320t" ? 37.7 : 36.2);
+    const s = c.len / MESH[c.mesh!].len;
     const plain = {
       id: c.mesh!,
       rel: cam([c.p[0]! - E.p0[0], c.p[1]! - E.p0[1], c.p[2]! - E.p0[2]]),
@@ -990,7 +1022,10 @@ function trafficShips(this: CameraController, view: CameraController = this): Tr
     };
     const d = Math.hypot(c.p[0]! - E.p0[0], c.p[1]! - E.p0[1], c.p[2]! - E.p0[2]);
     // (its gear as its phase wants it, its airline's colours by its callsign — the plain mesh's and the game's A320's alike)
-    const own = { cast: c.gnd || c.over < CAST_OVER, traffic: { gear: c.gear, livery: liveryOf(c.cs, c.reg) } };
+    const own = {
+      cast: c.gnd || c.over < CAST_OVER,
+      traffic: { gear: c.gear, livery: liveryOf(c.cs, c.reg), pose: trafficAnimation(c, now) },
+    };
     // (the one the airport view films: its rig whatever its distance — the tower's long lens, a final 8 km out: its flaps, its gear,
     // its lights moving; the renderer still shows the plain mesh when it is a few pixels on the image — PLAN-AEROPORT-AAA V15)
     const filmed = c.id === filmedId;

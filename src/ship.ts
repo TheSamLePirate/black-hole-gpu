@@ -80,8 +80,17 @@ import { MAX_SEGMENTS, SEG_FLOATS } from "./contrails";
 import { VESSELS, type JetDef, type VesselId } from "./vessels";
 import a320Url from "../assets/traffic/a320.bin";
 import a320MapUrl from "../assets/traffic/a320.jpg";
-import crj900Url from "../assets/traffic/crj900.bin";
-import crj900MapUrl from "../assets/traffic/crj900.jpg";
+import { trafficMatrices, TRAFFIC_PARTS, type TrafficPose } from "./traffic/rig";
+import { BOEING } from "./traffic/boeing";
+import b738Url from "../assets/traffic/boeing/b738.bin";
+import b772Url from "../assets/traffic/boeing/b772.bin";
+import b77wUrl from "../assets/traffic/boeing/b77w.bin";
+import b744Url from "../assets/traffic/boeing/b744.bin";
+import b738Map from "../assets/traffic/boeing/737-800.jpg";
+import b777Map from "../assets/traffic/boeing/777.jpg";
+import b744Map from "../assets/traffic/boeing/747-400.jpg";
+import crj900Url from "../assets/traffic/crj-fg/crj900.bin";
+import crj900MapUrl from "../assets/traffic/crj-fg/crj900.jpg";
 import cargoUrl from "../assets/traffic/cargo.bin";
 import tankerUrl from "../assets/traffic/tanker.bin";
 import ferryUrl from "../assets/traffic/ferry.bin";
@@ -140,7 +149,7 @@ import implacable1Url from "../assets/carriers/implacable-1.jpg";
 
 /** The real traffic's airliners (scripts/build-airliners.ts, docs/PLAN-AVIATION-AAA.md T2) and ships
  *  (scripts/build-ships.ts, T3): drawn as the craft are. */
-export type AirlinerId = "a320t" | "crj900";
+export type AirlinerId = import("./game/airtypes").AirlinerMesh;
 export type ShipTypeId = "cargo" | "tanker" | "ferry" | "trawler" | "sailboat" | "frigate";
 /** The carriers (scripts/build-carriers.ts, docs/PLAN-AVIATION-AAA.md M2). */
 export type CarrierId = "ford" | "kiev" | "implacable";
@@ -168,6 +177,11 @@ export type ShipMeshId = VesselId | TrafficMeshId;
 const TRAFFIC_MESHES: Record<TrafficMeshId, string> = {
   a320t: a320Url,
   crj900: crj900Url,
+  b738: b738Url,
+  b772: b772Url,
+  b77w: b77wUrl,
+  b744: b744Url,
+
   cargo: cargoUrl,
   tanker: tankerUrl,
   ferry: ferryUrl,
@@ -211,6 +225,7 @@ const TRAFFIC_MESHES: Record<TrafficMeshId, string> = {
 /** The traffic's colour maps, a layer each (ship.wgsl: the materials 40, 41, 44–46); the carriers' after them
  *  (80–86), added with the first carrier drawn. */
 const TRAFFIC_MAPS = [a320MapUrl, crj900MapUrl, cargoHullUrl, cargoBridgeUrl, cargoBoxesUrl];
+const BOEING_MAPS = [b738Map, b777Map, b744Map];
 const CARRIER_MAPS = [ford0Url, ford1Url, ford2Url, kiev0Url, kiev1Url, implacable0Url, implacable1Url];
 /** The A320's liveries (assets/a320/liveries.json — scripts/build-a320-maps.py): its fuselage's paint (layer 0) and its
  *  engines' (layer 2's first cell). */
@@ -261,7 +276,7 @@ export interface ShipInstance {
   cast?: boolean;
   /** a traffic airliner (controller/traffic.ts): its gear 0 (up) … 1 (down) — a plain mesh's, folded by ship.wgsl trafficGearPos —, its
    *  airline's livery (traffic/livery.ts; null: the mesh's own) */
-  traffic?: { gear: number; livery: Livery | null };
+  traffic?: { gear: number; livery: Livery | null; pose?: TrafficPose };
 }
 
 /** PLAN-J1 J1-5 — the scene the craft goes into before the history (ShipRenderer.encodeShip's last argument): the frame's number
@@ -411,11 +426,11 @@ const SHREF_AT = GLASS_AT + 2 * 16;
 const LIFT_AT = SHREF_AT + 2 * 16;
 /** (PLAN-J3 J3-2) the craft's air: z 1 when the tracer's aerial table is written this frame */
 const AIR_AT = LIFT_AT + 16;
-/** (24 Nov 2026) then the traffic's plain airliners' gear legs (S.tgear: 12 vec4s) and their liveries' places (S.tpaint: 9) — written
+/** (24 Nov 2026) then the traffic's plain airliners' gear legs (S.tgear: 12 vec4s) and their liveries' places (S.tpaint: 18) — written
  *  once (traffic/airliner-gear.ts gearUniform, traffic/livery.ts TRAFFIC_PAINT_GEO) */
 const TGEAR_AT = AIR_AT + 16;
 const TPAINT_AT = TGEAR_AT + 12 * 16;
-const SHIP_UNIFORM_BYTES = TPAINT_AT + 9 * 16;
+const SHIP_UNIFORM_BYTES = TPAINT_AT + TRAFFIC_PAINT_GEO.byteLength;
 const INST_FLOATS = 20;
 /**
  * The craft's pass's samples (its shading's pipelines, its box's colour and depth): 4, its MSAA; 1 (a measure, read once at the
@@ -435,6 +450,7 @@ const JET_FLOATS = 16;
  *  unit's pose, a plain traffic airliner's gear and livery (traffic/livery.ts liveryRecord) the same */
 const MSL_AT = MAX_INST + JET_SLOTS * MAX_PARTS + DECK_PARTS;
 /** an A320's slot's last record (ship.wgsl A320_LIVERY_REC): a traffic airliner's livery drawn on the game's A320 (zeros: its own) */
+const TRAFFIC_POSE_AT = MSL_AT + MAX_INST;
 const A320_LIVERY_REC = MAX_PARTS - 1;
 
 const norm = (a: V3): V3 => {
@@ -589,7 +605,7 @@ export class ShipRenderer {
   private trafficMapsLayers = 0;
   /** the instances' transforms and flags (the flown craft first) */
   private instBuf: GPUBuffer;
-  private instData = new Float32Array((MAX_INST + JET_SLOTS * MAX_PARTS + DECK_PARTS + MAX_INST) * INST_FLOATS);
+  private instData = new Float32Array((MAX_INST + JET_SLOTS * MAX_PARTS + DECK_PARTS + MAX_INST + MAX_INST * TRAFFIC_PARTS) * INST_FLOATS);
   /** the F-35's mesh as built (its parts, their tracks), its maps (two layers each; 1 × 1 until loaded) */
   private jetMesh: F35Mesh | null = null;
   private jetMaps: { albedo: GPUTexture; normal: GPUTexture; mr: GPUTexture } | null = null;
@@ -1197,7 +1213,7 @@ export class ShipRenderer {
    */
   private async loadTraffic(id: TrafficMeshId) {
     const d = this.device;
-    const buf = await this.getter(TRAFFIC_MESHES[id]).then((r) => r.arrayBuffer());
+    const buf = await this.getter(TRAFFIC_MESHES[id]).then(inflated);
     if (new TextDecoder().decode(new Uint8Array(buf, 0, 4)) !== "TRFC") throw new Error(`bad mesh for ${id}`);
     const u32 = new Uint32Array(buf, 0, 4);
     const nv = u32[2]!,
@@ -1216,7 +1232,11 @@ export class ShipRenderer {
     this.meshes[id] = mesh;
     this.lodsFor(mesh, verts, idx);
     // (the maps: the traffic's with its first mesh; again with the carriers' with the first carrier)
-    const want = isCarrier(id) ? TRAFFIC_MAPS.length + CARRIER_MAPS.length : TRAFFIC_MAPS.length;
+    const want = isCarrier(id)
+      ? TRAFFIC_MAPS.length + BOEING_MAPS.length + CARRIER_MAPS.length
+      : id in BOEING
+        ? TRAFFIC_MAPS.length + BOEING_MAPS.length
+        : TRAFFIC_MAPS.length;
     if (want > this.trafficMapsLayers) {
       this.trafficMapsLayers = want;
       await this.loadTrafficMaps(want);
@@ -1240,7 +1260,7 @@ export class ShipRenderer {
   /** The traffic's colour maps: one array, a layer each, its mipmaps made from the image. */
   private async loadTrafficMaps(layers: number) {
     const d = this.device;
-    const urls = [...TRAFFIC_MAPS, ...CARRIER_MAPS].slice(0, layers);
+    const urls = [...TRAFFIC_MAPS, ...BOEING_MAPS, ...CARRIER_MAPS].slice(0, layers);
     const size = 2048;
     const levels = Math.floor(Math.log2(size)) + 1;
     // (each map's mip chain made off the page's thread — cpu-worker.ts: 115 ms of resizes held the flight's start, PLAN-J7 J7-8 —; the
@@ -1265,6 +1285,11 @@ export class ShipRenderer {
         bm.close();
       }
       if (i < urls.length - 1) await new Promise((q) => setTimeout(q, 0));
+    }
+    // A larger atlas may have been requested while uploads yielded to the page.
+    if (layers < this.trafficMapsLayers) {
+      t.destroy();
+      return;
     }
     this.trafficMaps?.destroy();
     this.trafficMaps = t;
@@ -2308,6 +2333,11 @@ export class ShipRenderer {
       a320: 21,
       a320t: 4,
       crj900: 5,
+      b738: 32,
+      b772: 33,
+      b77w: 34,
+      b744: 35,
+
       cargo: 6,
       tanker: 7,
       ferry: 8,
@@ -2497,9 +2527,22 @@ export class ShipRenderer {
         if (it.motor && it.motor.level > 0) motors.push({ R: it.R, t: it.t, shape, ...it.motor });
       }
       // (a plain traffic airliner: its gear and its livery — ship.wgsl trafficGearPos, trafficPaint)
-      if ((it.id === "a320t" || it.id === "crj900") && it.traffic) {
+      if (it.traffic && it.id !== "a320") {
         parts = MSL_AT + i;
         this.instData.set(liveryRecord(it.traffic.livery, it.traffic.gear), parts * INST_FLOATS);
+        const posed = trafficMatrices(it.id, it.traffic.gear, it.traffic.pose);
+        if (posed) {
+          const base = TRAFFIC_POSE_AT + i * TRAFFIC_PARTS;
+          this.writeParts(posed, base, TRAFFIC_PARTS);
+          this.instData[parts * INST_FLOATS + 16] = base;
+          this.device.queue.writeBuffer(
+            this.instBuf,
+            base * INST_FLOATS * 4,
+            this.instData,
+            base * INST_FLOATS,
+            (posed.length / 12) * INST_FLOATS,
+          );
+        }
         mslRecs = Math.max(mslRecs, i + 1);
       }
       // (a ground unit: its turret's and arm's pose, its rails' missiles, its burning — ship.wgsl groundPos)
@@ -3388,9 +3431,15 @@ export class ShipRenderer {
       if ((jets || re.glow || re.sheath || trails) && !this.debugSkip.has("plume-occl")) {
         pp.setPipeline(this.pipes.hullDepth);
         pp.setBindGroup(0, B.hullDepth);
-        pp.setVertexBuffer(0, occl.m.vbuf);
-        pp.setIndexBuffer(occl.m.ibuf, "uint32");
-        pp.drawIndexed(occl.n);
+        // Every rendered opaque airframe occludes trails in this pass. sceneDepth is
+        // composed only afterwards, so testing it alone cannot hide trails behind traffic.
+        for (const dr of this.draws) {
+          const own = this.flown && dr.inst === 0;
+          const hull = own ? occl.m : dr.mesh;
+          pp.setVertexBuffer(0, hull.vbuf);
+          pp.setIndexBuffer(hull.ibuf, "uint32");
+          pp.drawIndexed(own ? occl.n : dr.cabin ? this.cockpit!.solid : (hull.solid ?? hull.count), 1, 0, 0, dr.inst);
+        }
       }
       // (the flames' groups with this target's occlusion depth — 25 Nov 2026: their march ends at the scene)
       if (this.jetCount > 0 && (!res.plumeBind || res.plumeBind.gen !== this.bindGen || res.plumeBind.mb !== mb)) {

@@ -370,7 +370,7 @@ describe("drawn by the controller (controller/traffic.ts), a minute behind", () 
     const { frames } = fly([[p, later]], "aad012", T0 + 2, T0 + 10, 1);
     const k = frames.at(-1)!;
     // (its wheels under its plain mesh's origin: a 777's, 63.7 m long)
-    const wheels = (MESH.a320t.wheels * k.k.len) / MESH.a320t.len;
+    const wheels = (MESH.b772.wheels * k.k.len) / MESH.b772.len;
     console.log(
       `  N796UA: reported ${(-200 * 0.3048).toFixed(0)} m baro; drawn ${k.h.toFixed(2)} m over the ellipsoid, the ground at ${GROUND} m, its wheels ${wheels.toFixed(2)} m under its origin — ${k.k.phase}, gear ${k.k.gear}`,
     );

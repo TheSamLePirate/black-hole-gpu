@@ -15,6 +15,8 @@ them in More… › Credits.
 - [Endurance — “Interstellar | Endurance”](https://sketchfab.com/3d-models/interstellar-endurance-901fec2809704b74bec891e9a40a8726) — devPilot (Sketchfab) · CC BY 4.0
 - [F-35B — “F-35A Lightning II”](https://sketchfab.com/3d-models/f-35a-lightning-ii-a06d6113cfb44a0aa7b8f17106aca9c4) — shangus930 (Sketchfab) · CC BY 4.0
 - [A320 — FlightGear's A320-family: model, flight deck, displays, sounds, systems](https://github.com/legoboyvdlp/A320-family) — Josh Davidson, Jonathan Redpath, merspieler, Matthew Maring, Thorsten Herrmann, Semir Gebran (after Immersive Design Group) · GNU GPL v2
+- [Animated CRJ900](https://sourceforge.net/p/flightgear/fgaddon/21802/tree/trunk/Aircraft/CRJ700-family/) — Ryan "Skyop" Miller, D-JSB, Daniel M. and FlightGear CRJ700-family contributors · CC BY 4.0
+- [Boeing 737-800, 747-400, 777-200ER and 777-300ER airliners](https://sourceforge.net/p/flightgear/fgaddon/21802/tree/trunk/Aircraft/) — FlightGear FGAddon aircraft contributors · GNU GPL v2
 - [The A320's display font (ECAM)](https://github.com/flybywiresim) — FlyByWire Simulations · GNU GPL v3
 - [The astronaut](https://github.com/momentchan/false-earth) — false-earth, Ming-Jyun Hung · CGTrader licence
 - [The International Space Station](https://science.nasa.gov/3d-resources/) — NASA (NASA 3D Resources)

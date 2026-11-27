@@ -430,7 +430,7 @@ as reported [m], how far it is drawn pulled onto it —, `landing` its touchdown
 `__bh.camera.trafficOverlay(fmt, __bh.camera.viewController())`, `seaOverlay(fmt, view)` — the view's controller places
 them from the view (a spectator's, else the camera's own). What the renderer draws of them: `__bh.renderer.combatOthers`, each
 airliner's instance with (since 24 Nov 2026) `cast` (on the ground or under 60 m over it: its shadow in the craft's shadow map's
-second half when the view looks at it — `src/ship-casters.ts`; the ships `cast` too) and `traffic` `{ gear, livery }` — its gear
+second half when the view looks at it — `src/ship-casters.ts`; the ships `cast` too) and `traffic` `{ gear, livery, pose? }` — its gear
 0…1 (the plain meshes' baked gear folded by it, `ship.wgsl` `trafficGearPos`) and its airline's colours by its callsign
 (`src/traffic/livery.ts` `liveryOf`: `icao`, `pattern`, `tail`, `stripe`, `body`, `engine` — on the plain meshes and on the game's
 A320 drawn near the view alike). Measuring levers: `__bh.camera.trafficRigMax` (none: 4 — the game's A320 drawn for that many at
@@ -3347,3 +3347,10 @@ await app.js(`__bh.obc.boot()`);
 const res = await app.js(`__bh.obc.exec("uname -a && cat /obc/tau")`);
 ```
 
+
+#### Traffic visual actuator pose (27 November 2026)
+
+`renderer.combatOthers[].traffic.pose` contains `flap`, `spoiler`, `rev` (0–1), `n1` (%),
+`speed` (wheel speed, m/s), `time` (traffic clock seconds), `roll` (rad), `pitch` (deg).
+This is derived visual configuration, shared by exterior articulation and surface emissions,
+not a separate flight control or source of ADS-B measurements.

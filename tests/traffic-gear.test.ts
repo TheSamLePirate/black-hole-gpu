@@ -42,10 +42,7 @@ const legs = (m: Trfc) => {
 };
 
 describe("the plain airliners' gear: baked, placed, retracted", () => {
-  for (const [file, id] of [
-    ["a320", "a320t"],
-    ["crj900", "crj900"],
-  ] as const) {
+  for (const [file, id] of [["a320", "a320t"]] as const) {
     test(`${id}: three legs of the four finishes, their wheels on the ground MESH places it on, each hinge over its leg`, async () => {
       const m = await load(file);
       const mats = new Set<number>();
@@ -65,7 +62,6 @@ describe("the plain airliners' gear: baked, placed, retracted", () => {
       expect(Math.abs(L[0]!.lo[1]! + M.wheels)).toBeLessThan(0.05);
       // (nothing else of the airframe lower than its gear's wheels: the CRJ's stubs of its old gear cut out, the A320's engines over the ground)
       expect(other).toBeGreaterThan(-M.wheels + 0.3);
-      if (id === "crj900") expect(other).toBeGreaterThan(-1.2);
       // (each hinge inside its leg's box: over its wheels, not over its top — the nose's drag strut reaches higher —, in plan about its middle)
       const H = [M.gear.nose, M.gear.main, mirrorLeg(M.gear.main)];
       H.forEach((h, k) => {

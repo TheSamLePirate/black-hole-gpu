@@ -1,10 +1,10 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { mkdirSync } from "node:fs";
 import { App, E2E, stopServer } from "./lib/app";
-// Deterministic airport experience: real-weather authority, labelled provenance, all three aircraft representations,
+// Deterministic airport experience: real-weather authority, labelled provenance, the Airbus, CRJ and Boeing representations,
 // traffic lamps in the depth-tested GPU pass, and restoring the weather when the mode is left.
 // Duration: ~2 min (Earth and aircraft compilation; no live ADS-B required).
-// Done when: the airport panel shows its fixture METAR, the three aircraft have valid poses, GPU lamps render without errors.
+// Done when: the airport panel shows its fixture METAR, the aircraft have valid poses, GPU lamps render without errors.
 const OUT = "remote-results/airport-experience";
 describe.skipIf(!E2E)("airport experience: weather and traffic integration", () => {
   let app: App;
@@ -26,21 +26,23 @@ describe.skipIf(!E2E)("airport experience: weather and traffic integration", () 
     await app.js(`(__bh.settings.weather="fair",true)`);
     await app.js(`__bh.airport.start("LFPB","tower")`);
     await app.waitFor(`document.querySelector("[data-testid=airport-ui-metar]")?.textContent.includes("09020KT")`, 30_000);
+    // Advance attitude smoothing, then keep the delayed sample within the fixture history during slow compiles.
     await app.js(`(()=>{
-      const c=__bh.camera,T=Date.now()/1000,start=performance.now();c.trafficClock=()=>T+(performance.now()-start)/1000;c.s.trafficDelay=30;c.trafficRigMax=0;__bh.renderer.trafficRigShare=0;__bh.airport.mode("cinema");
+      const c=__bh.camera,T=Date.now()/1000,start=performance.now();c.trafficClock=()=>T+Math.min(20,(performance.now()-start)/1000);c.s.trafficDelay=30;c.trafficRigMax=1;__bh.renderer.trafficRigShare=0;__bh.airport.mode("cinema");
       c.traffic={planes:new Map(),ships:new Map()};
-      ["A320","CRJ9","B738"].forEach((type,i)=>{const p={id:"ee000"+i,cs:"TEST "+type,reg:"",type,cat:"A3",lat:48.96+i*0.004,lon:2.44+i*0.003,alt:300,gs:70,trk:0,hdg:0,vs:0,roll:0,gnd:false,t:T,src:"adsb.lol"};c.traffic.planes.set(p.id,{p,prev:null,hist:[{...p,lat:p.lat-4200/111132.95,t:T-60},p],heard:T});});
+      ["A320","CRJ9","B738","B744","B772","B77W","A321"].forEach((type,i)=>{const p={id:"ee000"+i,cs:"TEST "+type,reg:"",type,cat:"A3",lat:48.96+i*0.004,lon:2.44+i*0.003,alt:300,gs:70,trk:0,hdg:0,vs:0,roll:0,gnd:false,t:T,src:"adsb.lol"};c.traffic.planes.set(p.id,{p,prev:null,hist:[{...p,lat:p.lat-4200/111132.95,t:T-60},p],heard:T});});
       __bh.refresh();return true;
     })()`);
-    await app.waitFor(`__bh.camera.trafficNow().length===3 && __bh.renderer.trafficLamps.length>0`, 30_000);
+    await app.waitFor(`__bh.camera.trafficNow().length===7 && __bh.renderer.trafficLamps.length>0`, 30_000);
     await app.settled(120_000);
+    await app.waitFor(`["b738","b744","b772","b77w"].every(id=>__bh.renderer.ship?.has(id))`, 60000);
     const state = await app.js<any>(
       `({weather:__bh.settings.weather,source:__bh.camera.trafficAirport?.weather?.source,craft:__bh.camera.trafficNow().map(c=>({type:c.type,crab:c.crab,airspeed:c.airspeed,source:c.provenance,finite:[...c.p,...c.fwd].every(Number.isFinite)})),models:__bh.camera.trafficShips(__bh.camera.viewController()).map(c=>c.id),lamps:__bh.renderer.trafficLamps.length})`,
     );
     console.log(JSON.stringify(state));
     expect(state.weather).toBe("real");
     expect(state.source).toBe("metar");
-    expect(state.craft).toHaveLength(3);
+    expect(state.craft).toHaveLength(7);
     for (const c of state.craft) {
       expect(c.finite).toBe(true);
       expect(c.source).toBe("observed");
@@ -48,11 +50,25 @@ describe.skipIf(!E2E)("airport experience: weather and traffic integration", () 
       expect(c.crab).toBeGreaterThan(0);
     }
     expect(state.lamps).toBeGreaterThan(0);
-    for (const model of ["a320", "a320t", "crj900"]) expect(state.models).toContain(model);
+    for (const model of ["a320", "a320t", "crj900", "b738", "b744", "b772", "b77w"]) expect(state.models).toContain(model);
     const caption = await app.js<string>(`document.querySelector("[data-testid=airport-caption]")?.textContent ?? ""`);
     expect(caption).not.toContain("Landed");
     await app.shot(`${OUT}/airport.png`);
-    await app.step("2. restore weather after leaving");
+    await app.step("2. inspect each Boeing exterior from the airport drone");
+    await app.js(`(__bh.game.setDate("2026-06-21T12:00:00Z"), __bh.airport.mode("drone"), true)`);
+    for (const [index, model] of ["b738", "b744", "b772", "b77w"].entries()) {
+      const id = "ee000" + (index + 2);
+      const row = `document.querySelector('[data-testid="airport-ui-row-${id}"]')`;
+      await app.waitFor(`!!(${row})`, 10000);
+      await app.js(`(${row}.click(),true)`);
+      await app.waitFor(
+        `__bh.airport.state().current === "${id}" && __bh.airport.state().shot === "drone" && __bh.renderer.combatOthers.some(o=>o.id === "${model}" && Math.hypot(...o.rel)<400)`,
+        15000,
+      );
+      await app.settled(60000);
+      await app.shot(`${OUT}/${model}.png`);
+    }
+    await app.step("3. restore weather after leaving");
     await app.js(`(__bh.airport.stop(),true)`);
     await app.waitFor(`__bh.settings.weather==="fair"`, 5000);
     expect(app.cdp.errors).toEqual([]);

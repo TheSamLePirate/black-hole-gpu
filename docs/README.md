@@ -123,7 +123,7 @@ Les plans terminés restent comme historique des décisions. Avant de reprendre 
 |---|---|
 | [progress-to-destination.md](../progress-to-destination.md) | Journal de la destination (depuis le 3 nov.) |
 | [AAA-PROGRESS.md](AAA-PROGRESS.md) | Suivi d'exécution AAA (oct.) |
-| [progress/](progress/) | Une planche de captures par phase de plan (`progress/<plan>/`) |
+| [progress/](progress/) | Dont [avions de ligne, émissions et occlusion](progress/airliner-quality/README.md) ; une planche de captures par phase de plan (`progress/<plan>/`) |
 | [progress/apprendre-a-voler-examens.md](progress/apprendre-a-voler-examens.md) | Les examens des cours de pilotage par des LLM élèves : la méthode (à refaire quand un cours change), les résultats, ce qui reste ouvert |
 | [PROBLEMES-A-REGLER.md](PROBLEMES-A-REGLER.md), [ERRORS-TO-FIX.md](ERRORS-TO-FIX.md), [CORRECTIONS-DETAILS-SOL-VOL.md](CORRECTIONS-DETAILS-SOL-VOL.md), [BUG-IAU-RATE-LIBRATION.md](BUG-IAU-RATE-LIBRATION.md) | Problèmes ouverts et corrigés |
 | [AUDIT-2026-11-24.md](AUDIT-2026-11-24.md) | **Audit du 24 novembre 2026** : le code écrit depuis `d5a28dea` (J9, ponts et routes, Lagrange/JWST, OBC et relais Wisp) — critiques, importants, règles du projet ; lecture du code, aucun e2e ; corrections lancées le jour même | analyse datée |

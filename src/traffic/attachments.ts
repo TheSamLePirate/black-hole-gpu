@@ -2,7 +2,9 @@
 import { MESH, type AirlinerMesh } from "../game/airtypes";
 import type { Vec3 } from "../physics";
 
+import { BOEING } from "./boeing";
 export const ATTACHMENTS = {
+  ...BOEING,
   a320: {
     tip: [16.7, 2.95, -3.18],
     root: [4.5, 1.95, 2.25],
@@ -34,18 +36,18 @@ export const ATTACHMENTS = {
     landing: MESH.a320t.landing,
   },
   crj900: {
-    tip: [11.5, 0.81, -4.78],
-    root: [2.5, -0.19, -0.3],
-    sheetEnd: [10, -0.13, -3.06],
-    flap: [8, -0.36, -3.38],
-    inlet: [2.4, 1.28, -7.3],
-    exhaust: [2.31, 1.13, -11.28],
-    nose: [0, -2.19, 15.324],
-    main: [2.085, -2.19, -1.484],
+    tip: [11.6, -1.85, -4.97],
+    root: [2.5, -1.846, -0.038],
+    sheetEnd: [10, -1.804, -3.387],
+    flap: [8, -2.0, -3.69],
+    inlet: [2.251, -0.263, -7.651],
+    exhaust: [2.319, -0.433, -11.547],
+    nose: [0, -3.81, 16.172],
+    main: [2.5, -3.81, -1.356],
     nav: MESH.crj900.tip,
     tail: MESH.crj900.tail,
     beacon: MESH.crj900.beacon,
-    lower: [0, -1.3, 2],
+    lower: [0, -2.386, 8.247],
     landing: MESH.crj900.landing,
   },
 } as const;

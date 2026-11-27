@@ -114,7 +114,7 @@ struct Ship {
   // and their paint's places (src/traffic/livery.ts — ship.ts TRAFFIC_PAINT_GEO): by mesh (0 the plain A320, 1 the CRJ, 2 the game's
   // A320), three vec4s — its belly's, its windows' and its crown's heights [m], the fin's root (z, its front); the fuselage's
   // half-width, the nacelles' |x| from, to, their bottom; their top, their z from, to, the fin's half-thickness
-  tpaint: array<vec4f, 9>,
+  tpaint: array<vec4f, 18>,
 };
 
 // A craft drawn: craft → camera frame, then its kind (0 Ranger, 1 Lander, 2 Endurance, 3 F-35), in the shadow
@@ -541,14 +541,21 @@ fn trafficGearPos(v: VIn, ii: u32) -> vec3f {
 
 /** A vertex where it is drawn, in its craft's frame (the F-35's parts posed; the Ranger's gear and sticks; a missile's fins; a
  *  ground unit's turret and arm; a plain airliner's gear). */
+fn isTrafficRig(m: f32) -> bool { return m >= 150.0 && m <= 161.0; }
+fn trafficPart(v: VIn, ii: u32) -> mat4x4f {
+  let record = u32(inst[ii].flags.w + 0.5);
+  let base = u32(inst[record].flags.x + 0.5);
+  return inst[base + u32(v.ao)].model;
+}
 fn shipPos(v: VIn, ii: u32) -> vec3f {
+  if (isTrafficRig(v.mat)) { return (trafficPart(v, ii) * vec4f(v.pos, 1.0)).xyz; }
   if (isJet(v.mat)) { return jetPos(v, ii); }
   if (isTrafficGear(v.mat)) { return trafficGearPos(v, ii); }
   if (isFin(v.mat) && inst[ii].flags.w > 0.5) { return finPos(v, ii); }
   if (isTurret(v.mat) && inst[ii].flags.w > 0.5) { return groundPos(v, ii); }
   return stickPos(v);
 }
-fn jetAo(v: VIn) -> f32 { return select(v.ao, fract(v.ao), isJet(v.mat)); }
+fn jetAo(v: VIn) -> f32 { return select(v.ao, fract(v.ao), isJet(v.mat) || isTrafficRig(v.mat)); }
 
 // the cockpit's controls (cockpit/controls.ts: material 73 — the control's index in uv.x, its part in
 // uv.y: 0 the base, still; 1 the arm, 2 the knob, 3 the lit cap, moving): per control its moving part's
@@ -603,9 +610,9 @@ fn depthVs(v: VIn, @builtin(instance_index) ii: u32) -> DOut {
   var o: DOut;
   o.clip = project((inst[ii].model * vec4f(shipPos(v, ii), 1.0)).xyz);
   if (abs(v.mat - 71.0) < 0.5) { o.clip = vec4f(2.0, 2.0, 2.0, 1.0); }
-  // (the A320's flight deck's overlays — FlightGear's fd_glare, the atlas's cut-out cells —: their holes cut by the
+  // (the A320 exterior placards (105) and flight deck overlays: their alpha holes are cut by the
   // shading, not here)
-  if (abs(v.mat - 122.0) < 0.5 || abs(v.mat - 133.0) < 0.5 || abs(v.mat - 134.0) < 0.5) { o.clip = vec4f(2.0, 2.0, 2.0, 1.0); }
+  if (abs(v.mat - 105.0) < 0.5 || abs(v.mat - 122.0) < 0.5 || abs(v.mat - 133.0) < 0.5 || abs(v.mat - 134.0) < 0.5) { o.clip = vec4f(2.0, 2.0, 2.0, 1.0); }
   return o;
 }
 
@@ -627,6 +634,7 @@ fn shipVertex(v: VIn, ii: u32) -> VOut {
     let L = trafficLeg(v, ii);
     nrm = rotAbout(v.nrm, L[0].xyz, L[0].w);
   }
+  if (isTrafficRig(v.mat)) { nrm = (trafficPart(v, ii) * vec4f(nrm, 0.0)).xyz; }
   if (a320Bent(v)) { nrm = a320FlexN(pos, nrm, a320Tip(ii)); }
   let p = (M * vec4f(pos, 1.0)).xyz;
   o.p = p;
@@ -682,7 +690,7 @@ fn shadowVs(v: VIn, @builtin(instance_index) ii: u32) -> @builtin(position) vec4
   let q = select(
     select(v.pos, jetPos(v, ii), isJet(v.mat)),
     shipPos(v, ii),
-    ((isFin(v.mat) || isTurret(v.mat)) && inst[ii].flags.w > 0.5) || isTrafficGear(v.mat),
+    ((isFin(v.mat) || isTurret(v.mat)) && inst[ii].flags.w > 0.5) || isTrafficGear(v.mat) || isTrafficRig(v.mat),
   );
   // (its half: the sphere holds the caster — none crosses into the other)
   let second = inst[ii].flags.y > 1.5;
@@ -1023,7 +1031,8 @@ fn fs(in: VOut, @builtin(front_facing) front: bool) -> @location(0) vec4f {
     // (a craft not flown: hidden where the traced image holds something nearer — a planet, the disk)
     let px = vec2f((in.p.x / (in.p.z * S.proj.x) + 1.0) * 0.5, (1.0 - in.p.y / (in.p.z * S.proj.y)) * 0.5) * S.img.xy;
     let q = vec2u(clamp(px, vec2f(0.0), S.img.xy - 1.0));
-    if (sceneDepth[q.y * u32(S.img.x) + q.x] * S.img.z < length(in.p) * 0.999) { discard; }
+    let depth = sceneDepth[q.y * u32(S.img.x) + q.x] * S.img.z;
+    if (depth > 1.0 && depth < length(in.p) * 0.999) { discard; }
   }
   let side = select(-1.0, 1.0, front);
   let ng = normalize(in.n) * side;       // geometric (smoothed) normal, camera frame
@@ -1269,12 +1278,26 @@ fn fs(in: VOut, @builtin(front_facing) front: bool) -> @location(0) vec4f {
     // the carriers (scripts/build-carriers.ts): their decks, hulls, islands on their maps (the traffic's array, after
     // its five layers); every other part flat, its colour in its UV (r, g packed in u — 0…255 each —, b in v)
     case 80u, 81u, 82u, 83u, 84u, 85u, 86u: {
-      albedo = textureSampleGrad(trafficAlbedo, mapSamp, in.uv, 5 + i32(part) - 80, duvx, duvy).rgb;
+      albedo = textureSampleGrad(trafficAlbedo, mapSamp, in.uv, 8 + i32(part) - 80, duvx, duvy).rgb;
       metal = 0.1;
       rough = 0.6 + 0.15 * grime;
       coat = 0.0;
     }
-    case 90u: {
+    case 150u,151u,152u,153u,154u,155u: {
+      let layer = 5 + i32((part-150u)%3u);
+      albedo = textureSampleGrad(trafficAlbedo,mapSamp,in.uv,layer,duvx,duvy).rgb;
+      if (part <= 152u && I.flags.w > 0.5) {
+        let outerEngine = part == 152u && abs(abs(in.q.x)-21.23)<1.38 && abs(in.q.y+1.99)<1.4 && in.q.z > -10.77 && in.q.z < -3.98;
+        albedo = trafficPaint(albedo, in.q, inst[u32(I.flags.w + 0.5)].model, 3u + part - 150u, outerEngine, fw);
+      }
+      metal = 0.04; rough = select(0.32, 0.65, part >= 153u); coat *= select(0.6, 0.0, part >= 153u);
+    }
+    case 160u: {
+      albedo = textureSampleGrad(trafficAlbedo,mapSamp,in.uv,1,duvx,duvy).rgb;
+      if (I.flags.w > 0.5) { albedo = trafficPaint(albedo, in.q, inst[u32(I.flags.w + 0.5)].model, 1u, false, fw); }
+      metal = 0.05; rough = 0.3; coat *= 0.6;
+    }
+    case 90u,156u,157u,158u,159u,161u: {
       let rg = in.uv.x;
       let g = floor(rg / 256.0 + 1e-3);
       // (the mean of an sRGB map: to linear)
@@ -1282,6 +1305,8 @@ fn fs(in: VOut, @builtin(front_facing) front: bool) -> @location(0) vec4f {
       metal = 0.2;
       rough = 0.55;
       coat = 0.0;
+      if (part == 158u) { metal = 0.0; rough = 0.09; coat = 1.0; }
+      if (part == 159u) { metal = 0.95; rough = 0.16; }
     }
     // (a lamp — the refuelling pod's lights —: its flat colour glowing — display-referred, as the F-35's own lights)
     case 91u: {
@@ -1521,8 +1546,8 @@ fn projectFull(p: vec3f) -> vec4f {
 
 // the hull's depth alone, at the plumes' resolution: what hides them
 @vertex
-fn hullDepthVs(v: VIn) -> @builtin(position) @invariant vec4f {
-  return projectFull((S.model * vec4f(flownPos(v), 1.0)).xyz);
+fn hullDepthVs(v: VIn, @builtin(instance_index) ii: u32) -> @builtin(position) @invariant vec4f {
+  return projectFull((inst[ii].model * vec4f(shipPos(v, ii), 1.0)).xyz);
 }
 
 @fragment
@@ -1946,7 +1971,9 @@ fn trailFs(in: TOut) -> @location(0) vec4f {
     // (a runway's spray, a tyre's smoke: lying on the ground — the traced depth's coarse steps would cut them, a
     // margin as deep as they are wide)
     let margin = select(0.0, 8.0, in.kind > 6.5 && in.kind < 8.5);
-    if (sceneDepth[q.y * u32(S.img.x) + q.x] * S.img.z < dist - margin) { discard; }
+    let depth = sceneDepth[q.y * u32(S.img.x) + q.x] * S.img.z;
+    // Unpublished depth (zero during reconstruction) is not an occluder.
+    if (depth > 1.0 && depth < dist - margin) { discard; }
   }
   // across a round tube: the chord through it, a soft edge; puffs along it (fixed in the air) and
   // ragged edges, the wingtips' a twisting thread

@@ -3,7 +3,8 @@
 // aircraft — none for a helicopter: its lights alone) and its length [m] (the mesh scaled to it), its wingspan for a
 // formation's clearance. Pure.
 
-export type AirlinerMesh = "a320t" | "crj900";
+import { BOEING } from "../traffic/boeing";
+export type AirlinerMesh = "a320t" | "crj900" | keyof typeof BOEING;
 
 /** The meshes' own lengths and spans [m] (scripts/build-airliners.ts), and where on them [m, the mesh's frame: x its
  *  left, y up, z its nose] its lights are — a wingtip's navigation light (the left one: x > 0), the tail's, the
@@ -11,6 +12,7 @@ export type AirlinerMesh = "a320t" | "crj900";
  *  oleos in under its weight), and its gear's legs (scripts/build-traffic-gear.ts — traffic/airliner-gear.ts: the nose's and
  *  the left main's hinge, axis and angle up [°]; the right's mirrored), retracted by ship.wgsl trafficGearPos. */
 export const MESH = {
+  ...BOEING,
   a320t: {
     len: 37.7,
     span: 34.2,
@@ -26,12 +28,12 @@ export const MESH = {
   },
   crj900: {
     len: 36.2,
-    span: 23.2,
-    tip: [11.58, 1.0, -4.62],
-    tail: [0, 1.2, -18.1],
-    beacon: [0, 1.6, 2.0],
-    landing: [0, -0.9, 14.0],
-    wheels: 2.19,
+    span: 23.91,
+    tip: [11.588, -1.866, -3.647],
+    tail: [0, 2.723, -17.551],
+    beacon: [0, 0.3, 7.226],
+    landing: [1.75, -2.199, 2.406],
+    wheels: 3.81,
     gear: {
       nose: { at: [0.4, -0.3, 15.324], axis: [-1, 0, 0], up: 90 },
       main: { at: [2.085, -0.45, -1.484], axis: [0.015, -0.174, 0.985], up: -81.11 },
@@ -49,14 +51,14 @@ const TYPES: Record<string, [AirlinerMesh, number]> = {
   A19N: ["a320t", 33.8],
   A20N: ["a320t", 37.6],
   A21N: ["a320t", 44.5],
-  B736: ["a320t", 31.2],
-  B737: ["a320t", 33.6],
-  B738: ["a320t", 39.5],
-  B739: ["a320t", 42.1],
-  B37M: ["a320t", 35.6],
-  B38M: ["a320t", 39.5],
-  B39M: ["a320t", 42.2],
-  B3XM: ["a320t", 43.8],
+  B736: ["b738", 31.2],
+  B737: ["b738", 33.6],
+  B738: ["b738", 39.5],
+  B739: ["b738", 42.1],
+  B37M: ["b738", 35.6],
+  B38M: ["b738", 39.5],
+  B39M: ["b738", 42.2],
+  B3XM: ["b738", 43.8],
   B752: ["a320t", 47.3],
   B753: ["a320t", 54.4],
   C919: ["a320t", 38.9],
@@ -72,13 +74,15 @@ const TYPES: Record<string, [AirlinerMesh, number]> = {
   A359: ["a320t", 66.8],
   A35K: ["a320t", 73.8],
   A388: ["a320t", 72.7],
-  B744: ["a320t", 70.7],
-  B748: ["a320t", 76.3],
+  B744: ["b744", 70.7],
+  B748: ["b744", 76.3],
   B763: ["a320t", 54.9],
   B764: ["a320t", 61.4],
-  B772: ["a320t", 63.7],
-  B77L: ["a320t", 63.7],
-  B77W: ["a320t", 73.9],
+  B772: ["b772", 63.7],
+  B77L: ["b772", 63.7],
+  B773: ["b77w", 73.9],
+  B77F: ["b772", 63.7],
+  B77W: ["b77w", 73.9],
   B788: ["a320t", 56.7],
   B789: ["a320t", 62.8],
   B78X: ["a320t", 68.3],

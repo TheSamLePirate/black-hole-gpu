@@ -55,8 +55,8 @@ describe("each airliner its airline's colours, by its callsign", () => {
     const z = liveryRecord(null, 3);
     expect(z[0]).toBe(1);
     expect(z[1]).toBe(0);
-    // (the places' table: three vec4s for each of the three meshes)
-    expect(TRAFFIC_PAINT_GEO.length).toBe(36);
+    // (the places' table: three vec4s for each paint frame, including the shared 777 frame)
+    expect(TRAFFIC_PAINT_GEO.length).toBe(72);
   });
 });
 

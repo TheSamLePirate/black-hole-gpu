@@ -348,7 +348,7 @@ export class AirportDirector {
           // (the drone: a slow crane about it, rising, a third of a turn a minute)
           const a = 0.6 + this.since * 0.035;
           const h = cross3(W.up, dir);
-          const ring = add3(scale3(dir, Math.cos(a) * 3.4 * L.len), h, Math.sin(a) * 3.4 * L.len);
+          const ring = add3(scale3(dir, Math.cos(a) * 2.7 * L.len), h, Math.sin(a) * 2.7 * L.len);
           eye = add3(add3(L.p, ring), W.up, (0.45 + 0.01 * this.since) * L.len);
           target = L.p;
           fov = 40;

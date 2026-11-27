@@ -101,6 +101,23 @@ export const CREDITS: CreditSection[] = [
         readme: "assets/a320/README.md",
       },
       {
+        what: { fr: "CRJ900 articulé", en: "Animated CRJ900" },
+        who: 'Ryan "Skyop" Miller, D-JSB, Daniel M. and FlightGear CRJ700-family contributors',
+        licence: "CC BY 4.0",
+        url: "https://sourceforge.net/p/flightgear/fgaddon/21802/tree/trunk/Aircraft/CRJ700-family/",
+        readme: "assets/traffic/crj-fg/README.md",
+      },
+      {
+        what: {
+          fr: "Avions de ligne Boeing 737-800, 747-400, 777-200ER et 777-300ER",
+          en: "Boeing 737-800, 747-400, 777-200ER and 777-300ER airliners",
+        },
+        who: "FlightGear FGAddon aircraft contributors",
+        licence: "GNU GPL v2",
+        url: "https://sourceforge.net/p/flightgear/fgaddon/21802/tree/trunk/Aircraft/",
+        readme: "assets/traffic/boeing/README.md",
+      },
+      {
         what: { fr: "La police des écrans de l'A320 (ECAM)", en: "The A320's display font (ECAM)" },
         who: "FlyByWire Simulations",
         licence: "GNU GPL v3",

@@ -1,11 +1,12 @@
 """
-An AC3D node's polygons as triangles (docs/PLAN-A320.md, A1, A5): fanned, their corners' normals smoothed within the
+An AC3D node's polygons as triangles (docs/PLAN-A320.md, A1, A5): triangulated without crossing concave contours, their corners' normals smoothed within the
 node's crease angle (AC3D's: the faces about a vertex within it, area-weighted; flat faces their own), their UVs as the
 file has them (v up). FlightGear's model frame (fgac.py). Pure Python + numpy.
 """
 import math
 
 import numpy as np
+from .polygon import triangulate
 
 
 def triangles(geo):
@@ -18,8 +19,8 @@ def triangles(geo):
     for flags, mi, refs in geo["surfs"]:
         if len(refs) < 3:
             continue
-        for k in range(1, len(refs) - 1):
-            tris.append((flags, mi, (refs[0], refs[k], refs[k + 1])))
+        for a,b,c in triangulate(V[[r[0] for r in refs]]):
+            tris.append((flags, mi, (refs[a], refs[b], refs[c])))
     if not tris:
         return None
     vi = np.array([[r[0] for r in t[2]] for t in tris])

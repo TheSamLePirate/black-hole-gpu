@@ -24,7 +24,7 @@ export const LOD_ERRORS = [0.04, 0.16, 0.64, 2.56, 10.24];
  *  100–139: the integer of its ambient occlusion, ship.wgsl jetMap) —: the parts that move apart, the materials' seams kept */
 export function groupOf(verts: Float32Array, v: number, stride = 10): number {
   const m = Math.round(verts[stride * v + 6]!);
-  const moving = (m >= 55 && m <= 58) || (m >= 30 && m <= 39) || (m >= 100 && m <= 139);
+  const moving = (m >= 55 && m <= 58) || (m >= 30 && m <= 39) || (m >= 100 && m <= 139) || (m >= 150 && m <= 161);
   // (the part the integer of the occlusion, its fraction the occlusion itself — as ship.wgsl truncates it: no rounding up)
   return moving ? m * 4096 + Math.floor(verts[stride * v + 7]!) : m * 4096;
 }

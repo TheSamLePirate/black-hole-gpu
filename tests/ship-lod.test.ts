@@ -101,3 +101,13 @@ describe("the traffic's levels of detail", () => {
     expect(pickLod([], 1, 0.5)).toBe(-1);
   });
 });
+
+test("FG traffic rigid parts remain separate at every LOD", () => {
+  for (const mat of [150, 153, 156, 158, 160, 161]) {
+    const verts = new Float32Array(20);
+    verts[6] = verts[16] = mat;
+    verts[7] = 1.99;
+    verts[17] = 2.99;
+    expect(groupOf(verts, 0)).not.toBe(groupOf(verts, 1));
+  }
+});
