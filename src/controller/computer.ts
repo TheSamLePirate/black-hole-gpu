@@ -16,7 +16,7 @@ import { elements as kepElements, fromPNR, propagate as kepProp, type V3 as KV3 
 import type { Burn, FcContext, OpResult } from "../fc/ops";
 import { contrailPersistence, engineTrail, sheetTrail, tipTrail, type ContrailSource } from "../contrails";
 import { A320Fx, humidityOf } from "../a320/effects";
-import { ATTACHMENTS, attachmentScale, effectPoint } from "../traffic/attachments";
+import { ATTACHMENTS, attachmentScale, attachmentOffset, effectPoint } from "../traffic/attachments";
 import { trafficConfig } from "./traffic";
 import { airportState } from "./airportview";
 import { MISSILES } from "../game/combat";
@@ -1618,10 +1618,8 @@ function contrailsFrame(this: CameraController): { data: Float32Array<ArrayBuffe
       const A = attachmentScale(c.mesh, c.len, rigs.has(c.id));
       const exhaust = ATTACHMENTS[A.model].exhaust;
       for (const sx of [1, -1]) {
-        const q = c.p.map(
-          (v, k) =>
-            v - c.right[k]! * sx * exhaust[0] * A.scale + c.up[k]! * (exhaust[1] * A.scale - A.down) + c.fwd[k]! * exhaust[2] * A.scale,
-        );
+        const offset = attachmentOffset(A, [sx * exhaust[0], exhaust[1], exhaust[2]], c.right, c.up, c.fwd);
+        const q = c.p.map((v, k) => v + offset[k]!);
         const r = q.map((v, k) => v - own.p[k]!);
         const re = r[0]! * Eo[0]! + r[1]! * Eo[1]! + r[2]! * Eo[2]!,
           rn = r[0]! * No[0]! + r[1]! * No[1]! + r[2]! * No[2]!,
@@ -1642,7 +1640,7 @@ function contrailsFrame(this: CameraController): { data: Float32Array<ArrayBuffe
     };
     // (those moving only — one at rest makes none of them; parked by the dozen about the A320 at its stand, they took the six places
     // from the airliners landing, 26 Nov 2026 —, the one the airport view films first)
-    const filmed = airportState()?.current ?? null;
+    const filmed = airportState()?.current ?? airportState()?.filler ?? null;
     const dOwn = (c: (typeof TR)[number]) => Math.hypot(...c.p.map((v, k) => v - own.p[k]!)) - (c.id === filmed ? 1e9 : 0);
     const near = TR.filter(
       (c) => c.mesh && Math.hypot(...c.v) > 3 && (c.id === filmed || Math.hypot(...c.p.map((v, k) => v - own.p[k]!)) < 12_000),
@@ -1683,13 +1681,18 @@ function contrailsFrame(this: CameraController): { data: Float32Array<ArrayBuffe
           { n1: K.n1, rev: K.rev },
         ],
         wet,
-        legs: c.gnd ? [K.nose ? W * 0.1 : 0, W * 0.45, W * 0.45] : null,
+        legs: c.gnd
+          ? c.contact
+            ? c.contact.map((load, i) => (load / 0.12) * W * (i === 0 ? 0.1 : 0.45))
+            : [K.nose ? W * 0.1 : 0, W * 0.45, W * 0.45]
+          : null,
       })) {
         if (A.model === "crj900" && f.key.startsWith("a320i")) continue;
         // (the A320 model's frame — x to the left, y up, z ahead — on the airliner's axes, at its size)
         const at = (p: readonly number[]) => {
           const q = effectPoint(A.model, f.key, p);
-          return toFrame(c.p.map((v, j) => v + k * (-c.right[j]! * q[0]! + c.up[j]! * q[1]! + c.fwd[j]! * q[2]!) - c.up[j]! * A.down));
+          const offset = attachmentOffset(A, q, c.right, c.up, c.fwd);
+          return toFrame(c.p.map((v, j) => v + offset[j]!));
         };
         src.push({
           key: `x${c.id}${f.key}`,

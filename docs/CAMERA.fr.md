@@ -90,7 +90,7 @@ feux, leurs noms) depuis la vue et peuvent être suivis par les vues ci-dessus �
 
 ## La vue Aéroport
 
-Un aéroport choisi (panneau caméra › Aéroport, ou `__bh.airport.start("KLAX")` ; le mode de l'écran titre viendra) : ses vraies
+Un aéroport choisi (panneau caméra › Aéroport, ou `__bh.airport.start("KLAX")` ou carte Aéroport de l’écran titre) : ses vraies
 arrivées et ses vrais départs, l'un après l'autre, filmés par un réalisateur. **Réalisateur** (Auto) filme un atterrissage depuis la
 tour, derrière lui, dessous au seuil, puis le toucher depuis le bord de piste ; un décollage depuis la tour, sa rotation depuis le bord
 de piste, puis dessous pendant sa montée initiale. On peut aussi tenir un seul plan : Tour, Seuil, Bord de piste, Rotation, Montée
@@ -106,6 +106,13 @@ L'heure du jeu est réglée sur l'instant du trafic dessiné, donc la lumière e
 **Sa radio** (`src/traffic/atc.ts`) : la tour et les équipages se parlent à chaque mouvement, en anglais OACI et en bande radio
 (Réglages › Voix activées) — l'appel en finale et « cleared to land », « line up and wait », « cleared for takeoff », le passage au
 sol et au départ. Les dernières lignes s'affichent dans le panneau. Voir docs/PLAN-AEROPORT-AAA.md.
+
+La météo réelle de l'aéroport et son METAR apparaissent dans le panneau. Ce mode utilise cette météo
+pour les attitudes des avions et restaure votre ancien choix météo à la sortie. Les vols observés gardent
+priorité ; les passages reconstruits portent « Reconstitué », les avions complémentaires « Simulé ».
+Le bouton « Trafic complémentaire » active les mouvements simulés sur le réseau cartographié : recul,
+roulage, attente au point d'arrêt puis départ si le chemin et la piste sont disponibles. Sans réseau connu,
+aucun parcours au sol n'est inventé. Les feux sont cachés par le fuselage et les obstacles.
 
 ## Touches
 

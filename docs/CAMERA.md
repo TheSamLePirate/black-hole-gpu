@@ -90,7 +90,7 @@ followed with the views above — whether a craft is flown or not.
 
 ## The airport view
 
-An airport chosen (the camera panel › Airport, or `__bh.airport.start("KLAX")` — the title screen's mode to come): its real
+An airport chosen (the camera panel › Airport, or `__bh.airport.start("KLAX")` or the title screen’s Airport card): its real
 arrivals and departures, one after the other, filmed by a director — **Director** (Auto: a landing from the tower, behind it, under
 it at the threshold, its touchdown from the runway's side; a take-off from the tower, its rotation from the runway's side, under its
 climb-out), or one shot held: Tower, Threshold, Runway side, Rotation, Climb-out, Chase, Cockpit, Drone. The game's HUD and panels
@@ -100,6 +100,12 @@ caption at the bottom left names the one filmed, its runway and its seconds to t
 the moment the live traffic is drawn at: the light is the place's own. **Its radio** (`src/traffic/atc.ts`): the tower and the crews
 talk over each movement — the final's call and « cleared to land », « line up and wait », « cleared for takeoff », the hand-offs to Ground
 and Departure — in ICAO English, through the radio's band (Settings › Voices on); the last lines on the panel. docs/PLAN-AEROPORT-AAA.md.
+
+The panel shows real airport weather and its METAR. Airport mode uses that weather for aircraft attitudes
+and restores your previous weather selection on exit. Observed flights have priority; inferred segments
+are labelled Reconstructed and supplemental aircraft Synthetic. The Supplemental traffic button enables
+mapped pushback/taxi/holding/departure activity when a connected route and a free runway are available.
+Without a known network, ground routes are not invented. Aircraft hulls and obstacles hide their lamps.
 
 ## Keys
 

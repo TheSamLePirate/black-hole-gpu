@@ -1260,3 +1260,24 @@ test("the F-35's panoramic display through TARS (TA-17): its pages read, a page 
   vessel = "ranger";
   await expect(run({ action: "status" })).rejects.toThrow(/F-35/);
 });
+
+test("airport activity is inspectable and controllable through TARS with explicit provenance", async () => {
+  const { gameTools } = await import("../src/ai/game-tools");
+  let cleared = false;
+  const activity = {
+    enabled: true,
+    clear: () => {
+      cleared = true;
+    },
+  };
+  const camera = {
+    trafficAirport: { code: "TEST", net: { source: "osm" }, activity, weather: null },
+    trafficNow: () => [{ id: "sim-1", type: "A320", provenance: "synthetic", phase: "taxi", crab: 0, airspeed: 3, age: 0 }],
+  };
+  const host = { settings: defaultSettings(), camera, tools: {} } as unknown as GameHost;
+  const tool = gameTools(host).find((t) => t.name === "airport_activity")!;
+  const info = tool.run({ enabled: false }, new AbortController().signal) as any;
+  expect(cleared).toBe(true);
+  expect(info.enabled).toBe(false);
+  expect(info.aircraft[0].source).toBe("synthetic");
+});

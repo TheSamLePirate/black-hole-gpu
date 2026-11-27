@@ -1,3 +1,6 @@
+import { airportExperience } from "./traffic/experience";
+import { loadAirportNet } from "./game/airportfetch";
+import { AirportActivity } from "./traffic/airport-activity";
 import { MetarFeed } from "./metar";
 import { windFromAt, coverWord, type WeatherState } from "./weather";
 // (first: the network counted from the first request — net-activity.ts)
@@ -9080,6 +9083,7 @@ async function main() {
   // (the airport view on: the game's clock on the moment its live traffic is drawn at, real time — controller/airportview.ts)
   // (the airport view prepared — PLAN-AEROPORT-AAA V14: the craft flown an A320 parked at that airport — at a stand, else set down on
   // the field —, unless one is there already: the airliners' effects, the weather and the distances are reckoned from the craft)
+  airportHooks.visible = (id) => renderer.labelSeen.get(id) !== false;
   airportHooks.prepare = async (f) => {
     const g = camera.geoNow();
     const D = Math.PI / 180;
@@ -9101,13 +9105,16 @@ async function main() {
       onSettingsChange(["vessel"]);
       camera.switchVessel("a320");
     }
-    await tools.atStand(f.icao || f.ident).catch(() => tools.land("earth", f.lat, f.lon));
+    tools.land("earth", f.lat, f.lon);
   };
+  let airportPreviousWeather: typeof settings.weather | null = null;
   airportHooks.live = () => {
+    airportPreviousWeather ??= settings.weather;
+    settings.weather = "real";
+    metarTick();
     tools.setDate(new Date(Date.now() - Math.max(0, settings.trafficDelay ?? 0) * 1000).toISOString());
     tools.warp(1);
   };
-  const airportMetars = metarFeed;
   let airportMetarCode = "",
     airportMetarAt = -Infinity;
   let airportMetar: WeatherState | null = null;
@@ -9125,7 +9132,7 @@ async function main() {
       const code = S.code;
       airportMetarPending = true;
       airportMetarAt = performance.now();
-      void airportMetars.weather(code).then((w) => {
+      void realWeather.stationWeather(code).then((w) => {
         if (airportMetarCode !== code) return;
         airportMetar = w;
         airportMetarPending = false;
@@ -9146,10 +9153,46 @@ async function main() {
       metar: airportMetar?.report ?? `${S.code} · ${t(airportMetarPending ? "METAR loading…" : "METAR unavailable")}`,
     };
   };
+  const airportSceneFrame = () => {
+    const S = airportState();
+    if (!S) {
+      if (airportPreviousWeather !== null) {
+        settings.weather = airportPreviousWeather;
+        airportPreviousWeather = null;
+        touch();
+      }
+      camera.trafficAirport = undefined;
+      return;
+    }
+    settings.weather = "real";
+    if (camera.trafficAirport?.code !== S.code) {
+      const state = {
+        code: S.code,
+        net: null as import("./game/airportnet").AirportNet | null,
+        weather: null as WeatherState | null,
+        activity: null as AirportActivity | null,
+      };
+      camera.trafficAirport = state;
+      void loadAirportNet(S.code, S.lat, S.lon).then((net) => {
+        if (camera.trafficAirport !== state) return;
+        state.net = net;
+        state.activity = net ? new AirportActivity(net, S.code) : null;
+      });
+    }
+    const place = camera.weatherPlace();
+    const real = place ? realWeather.at({ ...place, lat: S.lat, lon: S.lon, h: 0 }, settings.wind).state : null;
+    const w = airportMetarCode === S.code && airportMetar ? airportMetar : real;
+    camera.trafficAirport!.weather = w;
+    if (w && camera.weatherReal !== w) {
+      camera.weatherReal = renderer.weatherReal = w;
+      touch();
+    }
+  };
   const airportUi = new AirportUi({
     settings,
     quit: () => panel.toast(t("Airport view left — the free camera stays here")),
     radio: () => airportRadio,
+    activity: (enabled) => airportExperience(camera, enabled),
     weather: airportWeather,
   });
   // (the airport's radio — traffic/atc.ts, PLAN-AEROPORT-AAA V10: the tower's and the crews' exchanges made from its movements, said
@@ -9205,22 +9248,24 @@ async function main() {
     const cap = A ? airportCaption() : null;
     const lines = A
       ? [
-          `${A.code} · ${cap?.dep ? t("DEPARTURES") : t("ARRIVALS")}`,
+          `${A.code} · ${cap?.free ? t("About the airport").toUpperCase() : cap?.dep ? t("DEPARTURES") : t("ARRIVALS")}`,
           cap ? cap.title : t("Waiting for the next movement"),
           cap
-            ? [
-                cap.line,
-                tf("Runway {0}", cap.runway.split(" ").pop() ?? ""),
-                cap.dep
-                  ? cap.eta > 0
-                    ? tf("Lift-off in {0}", fmtClock(cap.eta))
-                    : t("Airborne")
-                  : cap.eta > 0
-                    ? tf("Touchdown in {0}", fmtClock(cap.eta))
-                    : t("Landed"),
-              ]
-                .filter(Boolean)
-                .join(" · ")
+            ? cap.free
+              ? [cap.line, t("Following aircraft")].filter(Boolean).join(" · ")
+              : [
+                  cap.line,
+                  tf("Runway {0}", cap.runway.split(" ").pop() ?? ""),
+                  cap.dep
+                    ? cap.eta > 0
+                      ? tf("Lift-off in {0}", fmtClock(cap.eta))
+                      : t("Airborne")
+                    : cap.eta > 0
+                      ? tf("Touchdown in {0}", fmtClock(cap.eta))
+                      : t("Landed"),
+                ]
+                  .filter(Boolean)
+                  .join(" · ")
             : A.name,
           `● ${AIRPORT_MODE_LABEL[A.dir.mode].toUpperCase()}${A.dir.mode === "auto" ? ` · ${AIRPORT_MODE_LABEL[A.shot]}` : ""}`,
         ]
@@ -9577,6 +9622,7 @@ async function main() {
         if (trafficCredit.textContent !== txt) trafficCredit.textContent = txt;
         trafficCredit.hidden = !live;
       }
+      airportSceneFrame();
       airportCaptionFrame();
     });
     netGuard("match", () => netMatch.frame());
@@ -9594,6 +9640,16 @@ async function main() {
               ...camera.carrierOverlay(u.fSpd, vc),
             ]
           : [];
+      renderer.trafficLamps = viewOverlay.trafficMarks.flatMap((m) =>
+        m.id.startsWith("sea:")
+          ? []
+          : m.lights
+              .filter((l) => l.on)
+              .map((l) => {
+                const c = (l.colour.match(/[\d.]+/g) ?? []).slice(0, 3).map(Number);
+                return { at: l.at, colour: c.map((x) => (x / 255) ** 2.2 * 3), size: l.size };
+              }),
+      );
       viewOverlay.netTags = netSession.tags.map((g) => (netVoice.speaking(g.slot) ? { ...g, name: `◉ ${g.name}` } : g));
     });
     if (netSession.ships.length) changed = true;

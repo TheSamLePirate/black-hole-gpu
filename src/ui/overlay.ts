@@ -367,17 +367,6 @@ export class ViewOverlay {
   private drawTraffic(ctx: CanvasRenderingContext2D, marks: ReturnType<ViewOverlay["trafficDrawn"]>) {
     const k = devicePixelRatio;
     ctx.save();
-    ctx.globalCompositeOperation = "lighter";
-    for (const m of marks)
-      for (const l of m.lights) {
-        ctx.globalAlpha = m.alpha;
-        const g = ctx.createRadialGradient(l.x, l.y, 0, l.x, l.y, l.r * 2.5);
-        g.addColorStop(0, l.colour);
-        g.addColorStop(0.35, l.colour.replace(/, 1\)$/, ", 0.45)"));
-        g.addColorStop(1, l.colour.replace(/, 1\)$/, ", 0)"));
-        ctx.fillStyle = g;
-        ctx.fillRect(l.x - l.r * 2.5, l.y - l.r * 2.5, l.r * 5, l.r * 5);
-      }
     ctx.globalCompositeOperation = "source-over";
     ctx.font = `600 ${10 * k}px ${MONO}`;
     ctx.textAlign = "center";

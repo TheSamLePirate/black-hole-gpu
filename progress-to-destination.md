@@ -25,7 +25,7 @@ Références : [consignes permanentes](CLAUDE.md), [analyse stratégique](docs/A
 - Suite : prochaine étape proposée, distincte du travail réalisé.
 ```
 
-## État courant (tenu à jour à chaque lot — dernière mise à jour : 26 nov. 03:42 UTC)
+## État courant (tenu à jour à chaque lot — dernière mise à jour : 27 nov. 03:11 UTC)
 
 Un écran pour savoir où on en est (décision de Sam, 13 novembre 2026). Chaque session met à jour **ses lignes** à chaque lot ; le détail et
 les preuves restent dans les entrées datées du journal, dessous. Ce qui est fermé quitte le tableau « En cours » pour la ligne « Fermé récemment ».
@@ -45,7 +45,7 @@ J4 (fermé, sortie non atteinte), J5 et J6 (fermés).
 
 | Session (T3) | Lot | État |
 |---|---|---|
-| Mode Aéroport (26 nov.) | [PLAN-AEROPORT-AAA](docs/PLAN-AEROPORT-AAA.md) — trafic réel filmé, arrivées et départs | **V6–V9 faits** (reprise, décollages, UI sans HUD, files, bandeau, réalisateur Cinéma, radios — non écoutées, carte de l'écran titre) ; V12 e2e à faire |
+| Mode Aéroport (27 nov.) | [PLAN-AEROPORT-AAA](docs/PLAN-AEROPORT-AAA.md) — trafic réel filmé, arrivées et départs | **V18–V24 implémentés** : météo réelle, crabe progressif, chronologie, activité SIM cartographiée, attaches communes et feux occultés ; 133 tests ciblés et deux e2e WebGPU passent. Coût GPU non mesuré ; ancien V12 sur trafic vivant non rejoué |
 | A320 AAA (26 nov.) | [PLAN-A320-VOL-AAA](docs/PLAN-A320-VOL-AAA.md) — vol mesuré, physique, molettes, roue, assistance, outils, instruments, navigation | **V0 PASS** (vol de ligne complet 20/20), **K1, W1 faits ; W2, G1 en partie** ; I1/I2 commencés ; **N1 fait** (base de navigation, MCDU, ND VOR.D/NDB/WPT) ; **N2 : AIRWAYS, SID, STAR faits** (CIFP, 755 aéroports US) — discontinuités, HOLD, e2e au poste à faire ; **N3 fait en simulation** (profil vertical, T/D, DES sur chemin, DECEL ; ND, F-PLN, PFD) — vol au banc V2 à faire |
 | Rentrée du Ranger (26 nov.) | Demande de Sam : la rentrée automatique se pose mal ; zone d'arrivée chargée avant 10–20 km ; enregistreur de vol | **Fait et poussé (26 nov.)** : guidage vers le site d'abord, énergie de l'approche (loin de l'axe ou à court), zone d'arrivée préchargée, `camera.entryLog`. Edwards et Le Bourget posés en vol réel (avant : Edwards 4 écrasés sur 4) ; « Relief failed » de l'IGN non reproduit (e2e servi par le disque) ; apprendre-vaisseaux 9/9 ; golden périmé depuis le 20 oct. (pas par ce lot) |
 | Linux OBC embarqué (22–24 nov.) | [PLAN-LINUX-OBC](docs/PLAN-LINUX-OBC.md) — OBC-0 à OBC-21 (unkernel aarch64, Alpine/Debian, suite Rust/Ratatui, `/dev/fb0`, pont `__bh`/TARS, cockpits 3D) | **Sécurisé le 24 nov.** ([audit](docs/AUDIT-2026-11-24.md)) : relais Wisp à garde numérique, Origin exigée, ports et débits bornés ; pont invité sur racines explicites ; COOP/COEP sur demande ; FR/EN, unités du joueur. Tests unitaires 94/94 ; **e2e en cours** |
@@ -12120,3 +12120,54 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
 - Limites : pas de nouvelle mesure GPU, ni validation visuelle en navigateur (le banc airport-view a échoué
   à entrer dans KLAX lors du lot précédent). Le cap ADS-B est restitué progressivement, aucune nouvelle
   physique aérodynamique du trafic n'est revendiquée. Les METAR gardent le cache existant de 30 min.
+
+### 2026-11-27 02:50 UTC — Aéroport enrichi, mouvement cohérent et feux occultés
+
+- Contribution : stratégie §7.7 (représentations), §19.6 (caméras) et §19.13 (parcours), lots V18–V24
+  de PLAN-AEROPORT-AAA. Choix de Sam : spectacle réaliste enrichi, météo réelle locale faisant autorité.
+- Réalisé : chronologie commune des attitudes ADS-B, valeurs nulles préservées ; profils de restitution par
+  famille ; vitesse dans l'air calculée sol − vent réel avec profil vertical estimé ; décrabage anticipé selon
+  le temps au contact, contacts gauche/droit/nez, roulette selon courbure. Vitesse publiée estimée depuis le
+  mouvement dessiné, filtrée et limitée pour éviter le bruit des différences finies (test de raccordement posé conservé).
+- Réseau : airportnet partagé ; trous de roulage raccordés sur des chemins faisables. Un avion complémentaire
+  identifié SIM à la fois : recul, pause, roulage, point d'arrêt, attente d'une piste libre selon les observations
+  et leur projection, alignement cartographié, décollage et montée progressive. Un chemin manquant ou une piste
+  trop courte n'autorise pas un départ. Bouton du panneau, `__bh.airport.activity`, TARS `airport_activity`.
+  Météo réelle forcée dans ce mode et ancien choix restauré à la sortie ; cache METAR partagé et état possédé
+  par RealWeather, y compris après sortie. Caméra tenue au-dessus du relief, essai d'une vue alternative si
+  sujet durablement masqué en automatique.
+- Rendu : feux du trafic retirés du canvas. Passe GPU `traffic lamps` après la profondeur des avions ET les
+  deux historiques temporels : centre de source puis fragments du halo testés contre la profondeur actuelle,
+  aucune rémanence de halo héritée au-dessus du fuselage. Résolutions sortie/profondeur séparées (TAAU), mip 0
+  explicitement choisi. Aucun nouvel historique ni cible, uniforme 48 octets et buffer de 256 lampes.
+  Secteurs de visibilité ; transformation d'attache partagée feux/traînées pour A320 articulé, A320 statique,
+  CRJ, avec échelle, axes et origine ; priorité au sujet de remplissage aussi.
+- Preuves obtenues sur ce Mac : 129 tests du domaine passent sur 18 fichiers (4766 assertions), puis test
+  supplémentaire de propriété du METAR passe. E2E `traffic-lamps` et `airport-experience` passent : témoin
+  visible, source masquée sans halo, halo coupé au premier plan, HDR à plusieurs mips ; météo METAR, crabe non
+  nul progressif et A320/CRJ/A320 statique, sortie du mode sans erreur WebGPU. Capture :
+  `remote-results/airport-experience/airport.png`. Inventaire 67 passes / 33 fichiers de pipelines / 17 WGSL,
+  catalogue 538 e2e complet. Vérifications finales et suite complète en cours au moment de cette entrée.
+- Limites : pas de gain GPU/cadence revendiqué ni de campagne de coût ; profils visuels, pas performances
+  certifiées. Vent en altitude estimé, pas mesuré par le METAR. Réseau OSM parfois absent/incomplet et
+  prédiction des conflits limitée aux données reçues ; aucun accès aux vraies clairances ATC. Les silhouettes
+  restent les modèles A320/CRJ mis à l'échelle ; pas de nouveaux modèles, ni de remorqueur animé du trafic.
+  La capture prouve l'intégration, pas une inspection artistique exhaustive des trois cellules par tous les angles.
+
+### 2026-11-27 03:11 UTC — Aéroport V18–V24 : vérifications finales
+
+- Vérifié : 133 tests ciblés / 18 fichiers / 4773 assertions passent ; les deux e2e WebGPU
+  `traffic-lamps` et `airport-experience` passent (ce dernier revérifié après correction du bandeau).
+  `bun run check` passe, dont 86/86 shaders compilés. Catalogue 538/538 et inventaire graphique à jour.
+  Ajout final : exclusion géométrique des traversées de pistes même sans nœud OSM commun ; un acteur
+  complémentaire trop proche d'une nouvelle observation est retiré au profit du trafic réel.
+- Suite complète exécutée : 2959 pass, 2142 skip, 3 fail, 1 error, 5104 tests / 1153 fichiers.
+  Un échec A320-assist provient du fichier `src/controller/a320assist.ts` déjà modifié hors de ce lot :
+  son test passe dans une copie isolée de HEAD, ainsi qu'avec notre patch seul. Ce fichier est préservé.
+  Deux diagnostics du processus long venaient de modifications faites pendant son exécution : export
+  `crossesRunway` absent du module déjà chargé, et traduction `Following aircraft` absente du dictionnaire
+  déjà chargé. Reprise fraîche des deux fichiers concernés : 17 pass, 0 fail, 103 assertions.
+  La suite globale n'est donc pas présentée comme verte ; logs `/tmp/airport3-full-tests.log`,
+  `/tmp/airport3-final-recheck.log`, `/tmp/airport3-ship-domain.log`.
+- Limites inchangées : pas de campagne de performance GPU, pas de nouvelles silhouettes ; les données réelles
+  restent prioritaires sur une seule activité SIM, bornée au réseau disponible et à la météo réelle.

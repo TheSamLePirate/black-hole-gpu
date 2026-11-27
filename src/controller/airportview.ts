@@ -94,6 +94,7 @@ interface AirportState {
   fov0: number | null;
   /** the one filmed still on its runway this long [s] (a departure waiting) */
   still: number;
+  obstructed: number;
   /** the one chosen in the list (its id): followed whatever it does, until let go (null: the director's choice) */
   pinned: string | null;
   /** the airliners about the airport in no queue: on its ground (taxiing, parked) or flying near it */
@@ -112,7 +113,8 @@ let main: CameraController | null = null;
 /** What the game does when the view starts (main.ts sets them): the clock put on the moment the traffic is drawn at — the real
  *  time less its delay: its light the real one's (the traffic is live; the scene's own date — 2067 by default — lit Los Angeles
  *  at a winter dawn under real noon traffic, 26 Nov 2026) —, the clock's speed real time. */
-export const airportHooks: { live: () => void; prepare: (f: Airfield) => Promise<void> } = {
+export const airportHooks: { visible: (id: string) => boolean; live: () => void; prepare: (f: Airfield) => Promise<void> } = {
+  visible: () => true,
   live: () => {},
   prepare: async () => {},
 };
@@ -318,6 +320,7 @@ export function airportStart(c: CameraController, f: Airfield, mode: AirportMode
     shot: "tower",
     fov0: v.s.fov,
     still: 0,
+    obstructed: 0,
     pinned: null,
     others: [],
     filler: null,
@@ -465,7 +468,15 @@ export function airportStep(view: CameraController, dt: number): boolean {
         ...(A.free ? { free: true } : {}),
       }
     : null;
+  S.obstructed = A && !airportHooks.visible(A.c.id) ? S.obstructed + dt : 0;
+  if (S.obstructed > 2) {
+    S.dir.avoidObstruction();
+    S.obstructed = 0;
+  }
   const P = S.dir.step(dt, W, placeOn(W), L);
+  const eyeGeo = cartToGeodetic(WGS84_A, WGS84_F, P.eye);
+  const floor = groundRelief("earth", bodyFixedOf("earth", eyeGeo.lat / D, eyeGeo.lon / D, 0));
+  if (eyeGeo.h < floor + 1.6) P.eye = geodeticToCart(WGS84_A, WGS84_F, eyeGeo.lat, eyeGeo.lon, floor + 1.6) as V3;
   S.shot = P.shot;
   // (into the home frame at the frame's time: the Earth's axes then, its ground's velocity under the eye)
   const t = Number.isFinite(view.frameEnd) ? view.frameEnd : view.nowTime();

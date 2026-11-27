@@ -1,4 +1,12 @@
-import { crabStep } from "../traffic/attitude";
+import { trafficLightVisibility } from "../traffic/lights";
+import { trafficContact } from "../traffic/contact";
+import { reportAt } from "../traffic/timeline";
+import { profileOf } from "../traffic/profile";
+import { observedGround } from "../traffic/ground-path";
+import type { AirportNet } from "../game/airportnet";
+import type { WeatherState } from "../weather";
+import type { AirportActivity } from "../traffic/airport-activity";
+import { crabStep, trafficWind, windCrab } from "../traffic/attitude";
 // The CameraController — the real traffic in the sky (docs/PLAN-AVIATION-AAA.md, T2; traffic/feed.ts its reports):
 // each aircraft drawn a minute behind the real time (the setting), on the smoothest path near its reports of the
 // last minutes (game/flightpath.ts: a smoothing spline through their places and velocities — its turns and climbs
@@ -18,13 +26,13 @@ import { airportState } from "./airportview";
 import type { AirlinerId } from "../ship";
 import { A320Poser } from "../a320/pose";
 import type { Props } from "../a320/rig";
-import { ATTACHMENTS, attachmentScale } from "../traffic/attachments";
+import { ATTACHMENTS, attachmentScale, attachmentOffset } from "../traffic/attachments";
 import { airframeOf, MESH, rcsOf } from "../game/airtypes";
 import { type FlightKnot, type FlightPath, fitFlight, flightAt, flightLaws } from "../game/flightpath";
 import type { FormCraft } from "../game/formation";
 import type { RadarObject } from "../game/radar";
 import { bodyFixedOf, groundRelief } from "../system/our-surface";
-import { geodeticToCart, WGS84_A, WGS84_F } from "../system/ellipsoid";
+import { cartToGeodetic, geodeticToCart, WGS84_A, WGS84_F } from "../system/ellipsoid";
 import { geoidDeg } from "../system/geoid-grid";
 import { EARTH_RUNWAYS } from "../game/sites";
 import { type Way, withLanding } from "../traffic/landing";
@@ -44,6 +52,7 @@ declare module "../controls" {
     /** (a measuring lever — tests/e2e/traffic-runways: the rigged A320s' cost) the game's A320 drawn for this many of the traffic's
      *  airliners at most (none set: TRAFFIC_RIG.max) */
     trafficRigMax?: number;
+    trafficAirport?: { code: string; net: AirportNet | null; weather: WeatherState | null; activity: AirportActivity | null };
     trafficRigVisible?: (instance: TrafficInstance) => boolean;
     trafficStep: typeof trafficStep;
     trafficNow: typeof trafficNow;
@@ -56,6 +65,10 @@ declare module "../controls" {
 }
 
 const D = Math.PI / 180;
+const geographicOf = (p: readonly number[]) => {
+  const g = cartToGeodetic(WGS84_A, WGS84_F, [...p] as Vec3);
+  return { lat: g.lat / D, lon: g.lon / D };
+};
 const G = 9.80665;
 const dot = (a: readonly number[], b: readonly number[]) => a[0]! * b[0]! + a[1]! * b[1]! + a[2]! * b[2]!;
 const unit = (a: readonly number[]) => {
@@ -71,6 +84,11 @@ export const wrap = (a: number) => a - 2 * Math.PI * Math.floor((a + Math.PI) / 
 
 /** A traffic aircraft now: who it is, its mesh and size, its place, velocity and axes (fixed to the Earth). */
 export interface TrafficCraft {
+  provenance?: "observed" | "reconstructed" | "synthetic";
+  airspeed?: number;
+  yawRate?: number;
+  crab?: number;
+  contact?: [number, number, number];
   id: string;
   cs: string;
   reg: string;
@@ -170,9 +188,9 @@ const GAP_MAX = 120;
 const WINDOW = 200;
 const KNOTS_MAX = 100;
 const BANK_MAX = 30 * D;
-const ROLL_RATE = 7 * D;
+
 /** the take-off's rotation: the lift-off attitude [rad], VR [m/s] of a long airliner (> 30 m) and a short one, the pitch rate [rad/s] */
-const ROTATE = { pitch: 9 * D, vrLong: 74, vrShort: 66, rate: 4 * D } as const;
+
 const BANK_LAG = 1;
 /** under this altitude over the ellipsoid [m] a flying aircraft's ground is asked (none higher: Everest 8 849 m) */
 const FLOOR_CHECK = 9000;
@@ -325,19 +343,70 @@ const RUNWAY_LOW = 1200;
  * eased out; against the game's runways (traffic/runway-phase.ts: its axis, its glide, its phase, its gear). Cached a
  * frame.
  */
-let cache: { at: number; list: TrafficCraft[]; of: unknown } = { at: -1, list: [], of: null };
+let cache: {
+  at: number;
+  list: TrafficCraft[];
+  of: unknown;
+  scene?: object;
+  weather?: WeatherState | null;
+  net?: AirportNet | null;
+  enabled?: boolean;
+} = { at: -1, list: [], of: null };
 function trafficNow(this: CameraController): TrafficCraft[] {
   const F = this.traffic;
-  if (!F || !F.planes.size) return [];
+  if (!F || this.s.traffic === false) return [];
   // (the real traffic's time: the wall clock's — a test's own)
   const now = this.trafficClock ? this.trafficClock() : (this.trafficT ?? Date.now() / 1000);
   // (the same moment: the same list — the radar, the renderer and the overlay all read it)
-  if (cache.at === now && cache.of === F) return cache.list;
+  const scene = this.trafficAirport;
+  if (
+    cache.at === now &&
+    cache.of === F &&
+    cache.scene === scene &&
+    cache.weather === scene?.weather &&
+    cache.net === scene?.net &&
+    cache.enabled === scene?.activity?.enabled
+  )
+    return cache.list;
   const td = now - Math.max(0, this.s.trafficDelay ?? 0);
   const out: TrafficCraft[] = [];
   fitBudget.start();
-  for (const T of F.planes.values()) {
+  const observed = [...F.planes.values()];
+  const A = this.trafficAirport;
+  const firstWay = [...(airportState()?.ways ?? [])].sort((a, b) => {
+    const heading = (w: typeof a) => {
+      const f = enuAt(A?.net?.origin.lat ?? 0, A?.net?.origin.lon ?? 0);
+      return Math.atan2(dot(w.d, f.E), dot(w.d, f.N)) / D;
+    };
+    const windFrom = A?.weather?.wind.from ?? 0;
+    return Math.cos((heading(b) - windFrom) * D) - Math.cos((heading(a) - windFrom) * D);
+  })[0];
+  const end = firstWay
+    ? {
+        ...(() => {
+          const g = geographicOf(firstWay.o);
+          return g;
+        })(),
+        hdg:
+          Math.atan2(
+            dot(firstWay.d, enuAt(A?.net?.origin.lat ?? 0, A?.net?.origin.lon ?? 0).E),
+            dot(firstWay.d, enuAt(A?.net?.origin.lat ?? 0, A?.net?.origin.lon ?? 0).N),
+          ) / D,
+      }
+    : null;
+  const supplemental =
+    (A?.weather && (A.weather.source === "metar" || A.weather.source === "model")
+      ? A.activity?.step(
+          td,
+          observed.map((T) => reportAt(T.hist, T.p, td)),
+          end,
+          A.weather,
+        )
+      : undefined) ?? [];
+  for (const T of [...observed, ...supplemental]) {
     const p = T.p;
+    const timed = reportAt(T.hist, p, td);
+    const profile = profileOf(p.type, airframeOf(p.type, p.cat).len);
     // (taken over by a mission — controller/mission.ts —: flown by the game from there, not by its reports)
     if (this.trafficTaken?.has(p.id)) continue;
     const af = airframeOf(p.type, p.cat);
@@ -345,6 +414,9 @@ function trafficNow(this: CameraController): TrafficCraft[] {
     const wheels = af.mesh ? (MESH[af.mesh].wheels * af.len) / MESH[af.mesh].len : 1.5;
     const restAt = (lat: number, lon: number) => groundRelief("earth", bodyFixedOf("earth", lat, lon, 0)) + wheels;
     const E0 = easing.get(p.id);
+    const previousPosition = E0?.last;
+    const previousVelocity = E0?.v;
+    const previousDrawn = E0?.drawn;
     // (its landing made up through the gap in its reports — onto the runway it lined up with, not across the grass —:
     // flown on its path live too, as far as it goes)
     const H = landingOf(T, restAt);
@@ -402,6 +474,22 @@ function trafficNow(this: CameraController): TrafficCraft[] {
       [ae, an, au] = c.down ? [-ROLLOUT * Math.sin(c.trk), -ROLLOUT * Math.cos(c.trk), 0] : [rate * vn, -rate * ve, 0];
       omega = c.down ? 0 : rate;
       key = `${back ? "b" : "c"}${q.t}`;
+    }
+    const ground = T.groundPose ?? (A?.net ? observedGround(A.net, T.hist, td) : null);
+    if (ground) {
+      la = ground.lat;
+      lo = ground.lon;
+      L = enuAt(la, lo);
+      ve = ground.ve;
+      vn = ground.vn;
+      vu = ground.vu ?? 0;
+      ae = ground.omega * vn;
+      an = -ground.omega * ve;
+      au = 0;
+      omega = ground.omega;
+      gnd = !ground.airborne;
+      sure = true;
+      altR = restAt(la, lo) + (ground.over ?? 0);
     }
     // (against the runways — traffic/runway-phase.ts, the one owner of its runway, its phase, its gear —: on the axis of
     // the one it lines up with, onto its glide, rolled out on it; its wheels never under the ground — high enough, no
@@ -473,13 +561,20 @@ function trafficNow(this: CameraController): TrafficCraft[] {
     }
     P = P.map((x, i) => x + off[i]!);
     // (the flight's laws: its coordinated turn's bank — eased, at an airliner's roll rate —, its incidence)
-    const laws = flightLaws([ve, vn, vu], [ae, an, au], alt, af.len > 30 ? 5500 : af.len > 18 ? 4000 : 1000, omega);
+    const wind = trafficWind(A?.weather, over);
+    const av = wind ? [ve - wind[0], vn - wind[1], vu] : [ve, vn, vu];
+    const airspeed = Math.hypot(...av);
+    const laws = flightLaws(av, [ae, an, au], alt, profile.wingLoad, omega);
     // (near the ground: no more bank than its wingtip's height allows)
     const bankMax = Math.min(BANK_MAX, Math.asin(Math.min(1, (Math.max(over, 0) + wheels) / Math.max(af.span / 2, 1))));
-    const bankTo = gnd ? 0 : Math.max(-bankMax, Math.min(bankMax, laws.bank));
+    const crossRoll =
+      !gnd && wind && vu < -0.3 && over < 25
+        ? Math.max(-5 * D, Math.min(5 * D, windCrab(ve, vn, wind) * D * 0.25)) * (1 - Math.min(1, over / 25))
+        : 0;
+    const bankTo = gnd ? 0 : Math.max(-bankMax, Math.min(bankMax, laws.bank + crossRoll));
     const dt = Math.max(0, now - Ez.drawn);
     const step = (bankTo - Ez.bank) * (1 - Math.exp(-dt / BANK_LAG));
-    const bank = Ez.bank + Math.max(-ROLL_RATE * dt, Math.min(ROLL_RATE * dt, step));
+    const bank = Ez.bank + Math.max(-profile.rollRate * D * dt, Math.min(profile.rollRate * D * dt, step));
     // (its nose: above its path by its incidence in the air; down, its mains on the runway first, its nose held up a
     // second and lowered over three — the derotation —, not dropped)
     const gs = Math.hypot(ve, vn);
@@ -491,12 +586,14 @@ function trafficNow(this: CameraController): TrafficCraft[] {
     // (a take-off's rotation: on its roll, the nose raised from VR − 10 m/s to VR − 4 — the five seconds before the wheels leave, at its
     // acceleration; the path drawn shows its ground speed a few m/s under the reported one there — to its lift-off attitude; before
     // 26 Nov 2026 a departure rolled flat and lifted off with its climb's attitude in one frame)
-    const vr = af.len > 30 ? ROTATE.vrLong : ROTATE.vrShort;
-    const rot = gnd && RP.phase === "takeoff" ? ROTATE.pitch * smooth((gs - (vr - 10)) / 6) : 0;
+    const vr = profile.vr;
+    const rot = gnd && RP.phase === "takeoff" ? profile.rotation * D * smooth((airspeed - (vr - 10)) / 6) : 0;
     const alphaT = !af.mesh ? 0 : gnd ? Math.max(Math.max(Ez.pitch, 0) * derot, rot) : laws.alpha;
     // (the nose's attitude moved at an airliner's pitch rate at most: no jump at the lift-off, nor anywhere)
     const pitchT = gamma + alphaT;
-    const pd = Number.isFinite(Ez.pd) ? Ez.pd + Math.max(-ROTATE.rate * dt, Math.min(ROTATE.rate * dt, pitchT - Ez.pd)) : pitchT;
+    const pd = Number.isFinite(Ez.pd)
+      ? Ez.pd + Math.max(-profile.pitchRate * D * dt, Math.min(profile.pitchRate * D * dt, pitchT - Ez.pd))
+      : pitchT;
     Ez.pd = pd;
     const alpha = !af.mesh ? 0 : gnd && pd - gamma < 0 ? 0 : pd - gamma;
     if (!gnd) Ez.pitch = gamma + alpha;
@@ -510,16 +607,19 @@ function trafficNow(this: CameraController): TrafficCraft[] {
     Ez.drawn = now;
     Ez.bank = bank;
     // (standing: its reported heading)
-    const psi = (p.hdg ?? p.trk) * D;
+    const psi = (timed.hdg ?? timed.trk) * D;
+    const reversing = gnd && gs < 3 && timed.hdg !== null && Math.abs(wrap((timed.hdg - timed.trk) * D)) > Math.PI / 2;
     const hdir =
-      gs > 0.1
+      gs > 0.1 && !reversing
         ? [0, 1, 2].map((i) => (L.E[i]! * ve + L.N[i]! * vn) / gs)
         : [0, 1, 2].map((i) => L.E[i]! * Math.sin(psi) + L.N[i]! * Math.cos(psi));
     // (its nose on its reported heading when it has one, its path on its track: a crosswind's crab — the wind's drift, the real one, as
     // its transponder says it — in the air, 20° at most; on the ground none — PLAN-AEROPORT-AAA V17)
     const crabRaw =
-      !gnd && gs > 0.1 && Number.isFinite(p.hdg) && Number.isFinite(p.trk) ? ((((p.hdg! - p.trk!) % 360) + 540) % 360) - 180 : 0;
-    const crab = crabStep(Ez.crab, crabRaw, over, gnd, dt);
+      !gnd && gs > 0.1 && Number.isFinite(timed.hdg) && Number.isFinite(timed.trk)
+        ? ((((timed.hdg! - timed.trk!) % 360) + 540) % 360) - 180
+        : 0;
+    const crab = crabStep(Ez.crab, !gnd && wind ? windCrab(ve, vn, wind) : crabRaw, over, gnd, dt, Math.max(0, -vu));
     Ez.crab = crab;
     if (crab) {
       // (the track's direction turned about the local up by the crab: east of it positive — a heading right of the track)
@@ -534,7 +634,34 @@ function trafficNow(this: CameraController): TrafficCraft[] {
     // (its nose above its path by its incidence, about its wings' axis)
     const fwd = [0, 1, 2].map((i) => fwd0[i]! * Math.cos(alpha) + up1[i]! * Math.sin(alpha));
     const up = [0, 1, 2].map((i) => up1[i]! * Math.cos(alpha) - fwd0[i]! * Math.sin(alpha));
+    const contact = trafficContact(gnd, gamma + alpha, bank, profile.wheelbase, Math.max(1, af.span * 0.12), sinceTd, Math.abs(p.vs));
+    if (contact.lift > 0) P = P.map((x, i) => x + L.U[i]! * contact.lift);
+    let flownVelocity = v;
+    if (previousPosition && previousVelocity && previousDrawn !== undefined && now > previousDrawn && now - previousDrawn < 0.5) {
+      const delta = now - previousDrawn;
+      const estimate = P.map((x, i) => (x - previousPosition[i]!) / delta);
+      const speed = Math.hypot(...estimate),
+        before = Math.hypot(...previousVelocity);
+      const bounded = Math.max(0, Math.max(before - 4 * delta, Math.min(before + 4 * delta, speed)));
+      const blend = 1 - Math.exp(-delta / 0.2);
+      const direction = previousVelocity.map((v, i) => v + (estimate[i]! - v) * blend);
+      const norm = Math.hypot(...direction);
+      flownVelocity = norm > 1e-6 ? direction.map((v) => (v / norm) * bounded) : [0, 0, 0];
+    }
+    Ez.v = flownVelocity;
+    Ez.last = P;
+    const drawnGeo = cartToGeodetic(WGS84_A, WGS84_F, P as Vec3);
     out.push({
+      provenance:
+        T.origin === "synthetic"
+          ? "synthetic"
+          : ground || (H.td !== undefined && td >= H.from) || td > p.t + 2 || td < (T.hist[0]?.t ?? p.t)
+            ? "reconstructed"
+            : "observed",
+      airspeed,
+      yawRate: omega,
+      crab,
+      contact: contact.comp,
       id: p.id,
       cs: p.cs,
       reg: p.reg,
@@ -543,15 +670,15 @@ function trafficNow(this: CameraController): TrafficCraft[] {
       len: af.len,
       span: af.span,
       p: P,
-      v,
+      v: flownVelocity,
       fwd,
       up,
       right,
-      alt,
-      msl: alt - geoidDeg(la, lo),
+      alt: drawnGeo.h,
+      msl: drawnGeo.h - geoidDeg(drawnGeo.lat / D, drawnGeo.lon / D),
       gnd,
       bank,
-      age: now - p.t,
+      age: Math.max(0, td - T.p.t),
       over: gnd ? 0 : over,
       alpha,
       pitch: gamma + alpha,
@@ -571,7 +698,7 @@ function trafficNow(this: CameraController): TrafficCraft[] {
         landings.delete(k);
         posers.delete(k);
       }
-  cache = { at: now, list: out, of: F };
+  cache = { at: now, list: out, of: F, scene, weather: scene?.weather, net: scene?.net, enabled: scene?.activity?.enabled };
   return out;
 }
 
@@ -717,6 +844,7 @@ export function trafficConfig(c: TrafficCraft): {
   const gs = Math.hypot(c.v[0]!, c.v[1]!, c.v[2]!);
   const since = Number.isFinite(c.sinceTd) ? c.sinceTd : Number.POSITIVE_INFINITY;
   const landing = c.phase === "landing";
+  const profile = profileOf(c.type, c.len);
   const rev = c.gnd && landing && since > 1.5 && gs > 36 ? 1 : 0;
   const spoil = c.gnd && landing && since > 0.3 && gs > 15 ? 1 : 0;
   const nose = c.gnd && c.alpha < 0.3 * D;
@@ -738,7 +866,7 @@ export function trafficConfig(c: TrafficCraft): {
         : c.over < 2000 && c.gearWanted === 1
           ? 3
           : 0;
-  const n1 = rev ? 70 : c.phase === "takeoff" ? 92 : c.gnd ? 24 : out ? 85 : c.over < 900 ? 52 : 78;
+  const n1 = rev ? 70 : c.phase === "takeoff" ? profile.takeoff : c.gnd ? profile.idle : out ? 85 : c.over < 900 ? 52 : 78;
   return { flapLever, n1, rev, spoil, nose, lights: c.gnd ? c.phase === "takeoff" || landing || linedUp : c.over < 3000 };
 }
 
@@ -752,19 +880,20 @@ export function trafficRig(c: TrafficCraft, now: number) {
   const { flapLever, rev, spoil, nose } = K;
   return R.P.step({
     dt,
-    pitch: 0,
-    yaw: 0,
+    pitch: Math.max(-0.4, Math.min(0.4, c.alpha / (15 * D))),
+    yaw: Math.max(-0.5, Math.min(0.5, (c.crab ?? 0) / (20 * D))),
     roll: Math.max(-1, Math.min(1, -c.bank / (25 * D))),
     trim: 0,
     flapLever,
-    ias: gs / 0.514444,
+    ias: ((c.airspeed ?? gs) * Math.exp(-Math.max(0, c.msl) / 17000)) / 0.514444,
     speedBrake: 0,
     groundSpoilers: spoil,
     gear: c.gear,
-    comp: c.gnd ? [nose ? 0.12 : 0, 0.12, 0.12] : [0, 0, 0],
+    comp: c.contact ?? (c.gnd ? [nose ? 0.12 : 0, 0.12, 0.12] : [0, 0, 0]),
     onGround: c.gnd,
     groundSpeed: c.gnd ? gs : 0,
-    steer: 0,
+    steer:
+      c.gnd && gs > 0.3 ? Math.max(-1, Math.min(1, Math.atan((profileOf(c.type, c.len).wheelbase * (c.yawRate ?? 0)) / gs) / (70 * D))) : 0,
     n1: [K.n1, K.n1],
     reverser: [rev, rev],
     alpha: c.alpha / D,
@@ -813,7 +942,7 @@ function trafficSounds(
   const cam = (b: readonly number[]) => E.toCam(E.toHome(b as Vec3));
   const d = (c: TrafficCraft) => Math.hypot(c.p[0]! - E.p0[0], c.p[1]! - E.p0[1], c.p[2]! - E.p0[2]);
   // (the one the airport view films first)
-  const filmed = airportState()?.current ?? null;
+  const filmed = airportState()?.current ?? airportState()?.filler ?? null;
   const rank = (c: TrafficCraft) => d(c) - (c.id === filmed ? 1e9 : 0);
   return list
     .filter((c) => c.mesh && Math.hypot(...c.v) > 2 && d(c) < 4000)
@@ -845,7 +974,7 @@ function trafficShips(this: CameraController, view: CameraController = this): Tr
   const now = this.trafficClock ? this.trafficClock() : (this.trafficT ?? Date.now() / 1000);
   const out: TrafficInstance[] = [];
   let rigged = 0;
-  const filmedId = airportState()?.current ?? null;
+  const filmedId = airportState()?.current ?? airportState()?.filler ?? null;
   for (const c of nearest(
     list.filter((c) => c.mesh),
     E.p0,
@@ -929,7 +1058,7 @@ function trafficOverlay(this: CameraController, fmtAlt: (m: number) => string, v
   const F = this.trafficAt;
   const reach = F ? lightsReach(F.alt, F.airR) : 80_000;
   const out: TrafficMark[] = [];
-  const filmedId = airportState()?.current ?? null;
+  const filmedId = airportState()?.current ?? airportState()?.filler ?? null;
   for (const c of nearest(
     list,
     E.p0,
@@ -940,8 +1069,10 @@ function trafficOverlay(this: CameraController, fmtAlt: (m: number) => string, v
     const rel = cam([c.p[0]! - E.p0[0], c.p[1]! - E.p0[1], c.p[2]! - E.p0[2]]);
     const dist = Math.hypot(...rel);
     const A = c.mesh ? attachmentScale(c.mesh, c.len, rigs.has(c.id)) : null;
-    const at = (x: number, y: number, z: number): Vec3 =>
-      cam([0, 1, 2].map((k) => c.p[k]! - E.p0[k]! + c.right[k]! * x + c.up[k]! * (y - (A?.down ?? 0)) + c.fwd[k]! * z));
+    const at = (x: number, y: number, z: number): Vec3 => {
+      const offset = attachmentOffset({ model: A?.model ?? "a320t", scale: 1, down: A?.down ?? 0 }, [-x, y, z], c.right, c.up, c.fwd);
+      return cam(c.p.map((v, k) => v - E.p0[k]! + offset[k]!));
+    };
     const ph = (Number.parseInt(c.id.slice(-3), 16) % 1000) / 1000;
     const beacon = (tNow + ph) % 1 < 0.12;
     const st = (tNow + ph * 1.2) % 1.2;
@@ -955,22 +1086,41 @@ function trafficOverlay(this: CameraController, fmtAlt: (m: number) => string, v
     const bcn = M ? M.beacon.map((x) => x * k) : [0, 1.5, 0];
     const lower = M ? M.lower.map((x) => x * k) : [0, -1, 0];
     const land = M ? M.landing.map((x) => x * k) : [0, -1, c.len / 2];
+    const observer = E.p0.map((x, i) => x - c.p[i]!);
+    const visible = trafficLightVisibility(
+      Math.atan2(dot(observer, c.right), dot(observer, c.fwd)) / D,
+      dot(observer, c.up) / (Math.hypot(...observer) || 1),
+    );
+    const powered = c.phase !== "parked";
     // (the mesh's x is its left: the left wingtip's light red, the right's green)
     const lights = [
-      { at: at(-tip[0]!, tip[1]!, tip[2]!), colour: "rgba(255, 60, 50, 1)", on: true, size: 1 },
-      { at: at(tip[0]!, tip[1]!, tip[2]!), colour: "rgba(60, 255, 120, 1)", on: true, size: 1 },
-      { at: at(tail[0]!, tail[1]!, tail[2]!), colour: "rgba(255, 255, 255, 1)", on: true, size: 0.8 },
-      { at: at(lower[0]!, lower[1]!, lower[2]!), colour: "rgba(255, 40, 30, 1)", on: beacon, size: 1.3 },
-      { at: at(bcn[0]!, bcn[1]!, bcn[2]!), colour: "rgba(255, 40, 30, 1)", on: beacon, size: 1.3 },
-      { at: at(-strobeTip[0]!, strobeTip[1]!, strobeTip[2]!), colour: "rgba(255, 255, 255, 1)", on: strobe, size: 1.6 },
-      { at: at(strobeTip[0]!, strobeTip[1]!, strobeTip[2]!), colour: "rgba(255, 255, 255, 1)", on: strobe, size: 1.6 },
-      { at: at(tail[0]!, tail[1]!, tail[2]!), colour: "rgba(255, 255, 255, 1)", on: strobe, size: 1.6 },
+      { at: at(-tip[0]!, tip[1]!, tip[2]!), colour: "rgba(255, 60, 50, 1)", on: visible.port, size: 1 },
+      { at: at(tip[0]!, tip[1]!, tip[2]!), colour: "rgba(60, 255, 120, 1)", on: visible.starboard, size: 1 },
+      { at: at(tail[0]!, tail[1]!, tail[2]!), colour: "rgba(255, 255, 255, 1)", on: visible.tail, size: 0.8 },
+      { at: at(lower[0]!, lower[1]!, lower[2]!), colour: "rgba(255, 40, 30, 1)", on: beacon && powered && visible.lower, size: 1.3 },
+      { at: at(bcn[0]!, bcn[1]!, bcn[2]!), colour: "rgba(255, 40, 30, 1)", on: beacon && powered && visible.upper, size: 1.3 },
+      { at: at(-strobeTip[0]!, strobeTip[1]!, strobeTip[2]!), colour: "rgba(255, 255, 255, 1)", on: strobe && powered, size: 1.6 },
+      { at: at(strobeTip[0]!, strobeTip[1]!, strobeTip[2]!), colour: "rgba(255, 255, 255, 1)", on: strobe && powered, size: 1.6 },
+      { at: at(tail[0]!, tail[1]!, tail[2]!), colour: "rgba(255, 255, 255, 1)", on: strobe && powered, size: 1.6 },
       // (its landing lights: low in the air, and rolling down the runway — its take-off, its landing)
       ...((c.gnd ? c.phase === "takeoff" || c.phase === "landing" : c.over < 3000)
-        ? [1, -1].map((side) => ({ at: at(side * land[0]!, land[1]!, land[2]!), colour: "rgba(255, 250, 230, 1)", on: true, size: 2.2 }))
+        ? [1, -1].map((side) => ({
+            at: at(side * land[0]!, land[1]!, land[2]!),
+            colour: "rgba(255, 250, 230, 1)",
+            on: visible.landing,
+            size: 2.2,
+          }))
         : []),
     ];
-    const label = [c.cs, c.reg, c.type, c.gnd ? "GND" : fmtAlt(c.msl)].filter(Boolean).join(" · ");
+    const label = [
+      c.provenance === "synthetic" ? t("Synthetic") : c.provenance === "reconstructed" ? t("Reconstructed") : "",
+      c.cs,
+      c.reg,
+      c.type,
+      c.gnd ? "GND" : fmtAlt(c.msl),
+    ]
+      .filter(Boolean)
+      .join(" · ");
     out.push({ id: c.id, at: rel, dist, label, lights, r: c.len / 2 });
   }
   return out;

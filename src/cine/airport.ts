@@ -173,6 +173,15 @@ export class AirportDirector {
   side = 1;
   private since = 1e9;
   private t = 0;
+  private avoidUntil = 0;
+  private alternate: AirportShot = "drone";
+  /** Hold an alternate automatic view briefly after the subject is occluded. Manual shots stay manual. */
+  avoidObstruction() {
+    if (this.mode !== "auto" && this.mode !== "cinema") return;
+    this.alternate = this.shot === "drone" ? "chase" : "drone";
+    this.avoidUntil = this.t + 6;
+    this.since = 1e9;
+  }
   private fov = 30;
   private aim = new Spring3();
   private chase = new Spring3();
@@ -216,6 +225,7 @@ export class AirportDirector {
         this.rep = key;
       }
     }
+    if (this.t < this.avoidUntil && (this.mode === "auto" || this.mode === "cinema")) want = this.alternate;
     let cut = false;
     // (a director's cut after its 3 s at least — Auto's, Cinema's —; a shot chosen by hand at once)
     if (want !== this.shot && ((this.mode !== "auto" && this.mode !== "cinema") || this.since >= D.hold)) {

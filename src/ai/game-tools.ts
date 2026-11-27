@@ -1,3 +1,4 @@
+import { airportExperience } from "../traffic/experience";
 // TARS's tools (PLAN-TARS-AGENT A2): the whole game, as the agent calls it.
 //   - read: the flight's state, the places and runways, the bodies, the weather, the settings, the saves
 //     and scenes, the journal, the last flight report, the keys;
@@ -625,6 +626,13 @@ export function gameTools(h: GameHost): Tool[] {
 
   const tools_: Tool[] = [
     // ------------------------------------------------------------------ reading
+    {
+      name: "airport_activity",
+      description:
+        "Inspect airport traffic provenance, real weather, crab and mapped ground network. Optional enabled toggles supplemental airport activity; observed traffic always has priority. Synthetic aircraft are explicitly labelled.",
+      params: { enabled: { type: "boolean" } },
+      run: (a) => airportExperience(camera, a.enabled as boolean | undefined),
+    },
     {
       name: "get_state",
       description:

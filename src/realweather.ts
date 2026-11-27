@@ -41,6 +41,12 @@ export class RealWeather {
     private now: () => number = () => Date.now(),
   ) {}
 
+  /** Exact airport station, sharing the normal METAR cache and ownership of live states. */
+  async stationWeather(icao: string): Promise<WeatherState | null> {
+    const w = await this.metar.weather(icao);
+    return w ? this.mine(w) : null;
+  }
+
   /** The model's weather at another place, the same game's day (the map's stations): fetched when not in;
    *  null meanwhile, or out of its reach. */
   modelAt(lat: number, lon: number, days: number): WeatherState | null {

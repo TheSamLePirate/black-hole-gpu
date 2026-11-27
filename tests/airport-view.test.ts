@@ -246,3 +246,16 @@ describe("the airport's arrivals", () => {
     expect(M.map((x) => x.c.id)).toEqual(["climb", "rollout", "roll", "near", "lined"]);
   });
 });
+
+test("automatic cameras change view when obstructed, manual cameras stay selected", () => {
+  const director = new AirportDirector();
+  director.mode = "auto";
+  const first = director.step(1, W, place, lander(-100));
+  director.avoidObstruction();
+  const next = director.step(1 / 60, W, place, lander(-100));
+  expect(next.shot).not.toBe(first.shot);
+  expect(next.cut).toBe(true);
+  director.mode = "tower";
+  director.avoidObstruction();
+  expect(director.step(1, W, place, lander(-100)).shot).toBe("tower");
+});

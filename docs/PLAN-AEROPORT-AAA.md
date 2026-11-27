@@ -106,3 +106,40 @@ de la station choisie, consulté indépendamment du mode météo. Chargement et 
 le bulletin garde son groupe horaire UTC. Cache METAR existant conservé (30 min, échec 5 min).
 La section météo reste visible quand les listes sont repliées. Le crabe est une attitude de restitution ADS-B,
 pas une nouvelle simulation aérodynamique du trafic ; aucune dérive inventée sans cap rapporté.
+
+## V18–V24 — Expérience enrichie (Sam, 26–27 novembre 2026)
+
+Choix : compléter l'activité quand les données manquent ; météo réelle de l'aéroport faisant autorité.
+Les observations gardent priorité, aucun mouvement complémentaire n'est attribué à un vrai vol.
+
+- **V18, chronologie** : cap, route, vitesse et roulis interpolés sur l'instant retardé ; cap absent conservé nul,
+  correction du parseur `null → 0`. Position ADS-B non dérivée une seconde fois par le vent. La vitesse publiée
+  estime le déplacement dessiné, filtré et borné en accélération pour éviter le bruit des différences finies.
+- **V19, météo/crabe** : météo réelle forcée dans ce mode, préréglage précédent restauré à la sortie. Vent
+  local estimé avec le profil vertical existant, vitesse dans l'air = sol − vent. Crabe amorti, décrabage selon
+  le temps estimé avant le contact (vitesse de lacet plafonnée à 6°/s dans cette phase). Légère aile au vent.
+- **V20, familles/contact** : profils light/regional/narrow/heavy, rotations et vitesses de roulis distinctes,
+  vitesse équivalente estimée pour le rig, roulette selon courbure/empattement, contacts indépendants des trois
+  trains et compression d'impact amortie ; fumée des pneus pilotée par ces contacts.
+- **V21, roulage observé** : réseau `airportnet` partagé, raccordement des trous entre rapports au sol sur un
+  chemin faisable, virages arrondis ; sans réseau, trajet déconnecté ou vitesse impossible : observations conservées.
+- **V22, activité complémentaire** : un seul avion explicitement `SIM` à la fois, réseau et poste cartographiés
+  requis ; recul, pause, taxi, point d'arrêt, piste libre durablement selon les positions observées et leur projection,
+  alignement par le réseau, accélération puis montée. Pas de traversée de piste pendant le taxi libre. Piste trop
+  courte ou raccordement inconnu : attente. Priorité aux observations, arrêt devant un conflit ; retrait de l'acteur complémentaire si une nouvelle observation apparaît à moins de 60 m au sol. Bouton du panneau,
+  `__bh.airport.activity` et TARS `airport_activity` permettent l'inspection et l'arrêt de cette activité.
+- **V23, feux/effets** : feux retirés du canvas, nouvelle passe `traffic lamps` après la profondeur des avions et les historiques temporels,
+  source et halo occultés ; secteurs directionnels. Transformation d'attache partagée entre feux et traînées,
+  modèle statique/rig, échelle et décalage vertical compris ; sujet d'attente (`filler`) conservé aussi.
+- **V24, caméra** : hauteur minimale au-dessus du relief ; en Auto/Cinéma, sujet masqué durablement : essai
+  d'un autre point de vue pendant quelques secondes. Un plan choisi manuellement reste choisi.
+
+Preuves : tests `traffic-experience`, `traffic-attitude`, `traffic-runway`, `traffic-selection`, `airport-view`,
+`tars-tools` ; e2e `traffic-lamps` (occlusion WebGPU) et `airport-experience` (météo, modèles, sources, sortie du mode).
+Les résultats exacts de livraison sont consignés dans le journal.
+
+Limites : profils visuels plausibles, pas des performances certifiées ; réseau OSM parfois absent/incomplet ;
+activité complémentaire limitée aux routes effectivement connectées, une seule réservation synthétique ;
+prévision des conflits fondée sur les données reçues, sans connaissance des clairances du vrai contrôle aérien.
+Pas de nouveaux modèles : les types réels utilisent encore les silhouettes A320/CRJ mises à l'échelle.
+Le vent en altitude reste estimé ; les balises/feux du trafic n'éclairent pas physiquement le sol.

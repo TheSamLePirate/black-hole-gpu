@@ -40,10 +40,12 @@ const mmss = (s: number) => {
   const x = Math.max(0, Math.round(Math.abs(s)));
   return `${Math.floor(x / 60)}:${String(x % 60).padStart(2, "0")}`;
 };
-const nameOf = (c: TrafficCraft) => callsignOf(c);
+const nameOf = (c: TrafficCraft) =>
+  `${c.provenance === "synthetic" ? `${t("Synthetic")} · ` : c.provenance === "reconstructed" ? `${t("Reconstructed")} · ` : ""}${callsignOf(c)}`;
 
 export interface AirportUiDeps {
   settings: { units?: "metric" | "imperial" };
+  activity?(enabled?: boolean): { enabled: boolean; network: unknown };
   weather?(): { summary: string; metar: string };
   /** the mode left (the free camera kept where it is) */
   quit(): void;
@@ -89,6 +91,7 @@ export class AirportUi {
     const U = unitsFor(this.d.settings);
     const key = [
       JSON.stringify(this.d.weather?.()),
+      `${this.d.activity?.().enabled}:${this.d.activity?.().network}`,
       S.code,
       S.dir.mode,
       S.shot,
@@ -141,6 +144,18 @@ export class AirportUi {
       body.push(box);
     }
     if (!this.collapsed) {
+      const activity = this.d.activity?.();
+      if (activity) {
+        const button = h("button", "au-btn", t(activity.enabled ? "Supplemental traffic: on" : "Supplemental traffic: off"));
+        button.dataset.testid = "airport-ui-activity";
+        button.disabled = !activity.network;
+        button.onclick = () => {
+          this.d.activity?.(!activity.enabled);
+          this.key = "";
+          this.build();
+        };
+        body.push(button);
+      }
       // the director: Auto and its shots
       const seg = h("div", "au-seg");
       for (const m of AIRPORT_MODES as AirportMode[]) {

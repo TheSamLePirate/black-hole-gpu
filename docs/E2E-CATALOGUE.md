@@ -2,6 +2,13 @@
 
 Every e2e file (`tests/e2e/*.e2e.test.ts`, the `zz-` probes apart — kept whole by `tests/e2e-catalogue.test.ts`, `bun scripts/e2e-catalogue.ts --check`; QA-11), by theme: what it proves, the scene it boots, its usual time on kerr-mini, what it needs beyond Chrome and the production server. Guide: [E2E.md](E2E.md). Times: the sum of the tests' own times in the last full run (2026-10-09, 58 files, 1137 s wall); a file's boot (about 5–15 s) comes on top. `bun run e2e --each` measures whole files. `?`: not in that run. A new e2e file gets its row here.
 
+### Airport experience and physical traffic lamps
+
+| file | what it proves | scene(s) booted | ~s on the mini | needs |
+|---|---|---|---|---|
+| traffic-lamps.e2e.test.ts | Production GPU lamp renderer: visible positive control, fully occluded source (no halo leak), foreground clipping each halo fragment; HDR with several mips. | crew page + isolated WebGPU targets | ? (3 s on this Mac) | WebGPU |
+| airport-experience.e2e.test.ts | Airport real-weather authority, fixture METAR, valid A320/CRJ/static instances, air-relative attitude, GPU lamps, weather restored on exit. | Artemis → LFPB | ? | WebGPU; Earth disk cache; fixture METAR |
+
 ### Regional satellite ground
 
 | file | what it proves | scene(s) booted | ~s on the mini | needs |

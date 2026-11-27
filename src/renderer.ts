@@ -1,3 +1,4 @@
+import { TrafficLightRenderer, type TrafficLamp } from "./traffic/light-renderer";
 import { holeFleet } from "./holefleet";
 import { alsEnds } from "./world/approach-lights";
 import { ilsAt } from "./world/approaches";
@@ -8653,7 +8654,11 @@ fn main(@builtin(global_invocation_id) g: vec3u, @builtin(workgroup_id) w: vec3u
           size: [W, H],
           format: "rgba16float",
           // (COPY_SRC: the image read back — sceneColor, PLAN-J1 J1-6)
-          usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.STORAGE_BINDING | GPUTextureUsage.COPY_SRC,
+          usage:
+            GPUTextureUsage.TEXTURE_BINDING |
+            GPUTextureUsage.STORAGE_BINDING |
+            GPUTextureUsage.COPY_SRC |
+            (label === "taau image" ? GPUTextureUsage.RENDER_ATTACHMENT : 0),
         });
       t.taau = {
         w: W,
@@ -9137,6 +9142,24 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
       if (s && i === r0 + t.bloomLevels - 1) this.encodeBeam(enc, t, s);
     });
     // the depth of field, from the finished image and its depths (the Ranger, composited later, sharp)
+    // Physical lamps after both temporal histories: no history can carry a glow through a moving hull.
+    if (s && t === this.live && this.trafficLamps.length) {
+      this.trafficLampRenderer ??= new TrafficLightRenderer(this.device);
+      this.trafficLampRenderer.encode(
+        enc,
+        t.taau?.on ? t.taau.out : t.hdr,
+        t.sceneDepth,
+        this.trafficLamps.map((l) => {
+          const eye = s.ship && this.shipPose ? shipToCamera(this.shipPose, s.shipLookYaw, s.shipLookPitch).t : [0, 0, 0];
+          return { ...l, at: l.at.map((x, i) => x + eye[i]!) };
+        }),
+        s.fov,
+        1476.625 * (s.massSolar || 1),
+        preExposure(this.ev(s)) / 2 ** this.ev(s),
+        this.prof.pass("traffic lamps").timestampWrites,
+        [t.width, t.height],
+      );
+    }
     if (s && this.dofOn(s, t)) {
       const dof = t.dof!;
       // (the largest circle: the aperture × 3 % of the image's height)
@@ -10819,6 +10842,9 @@ fn main(@builtin(global_invocation_id) g: vec3u) {
   /** The overlay's marks to test against the scene (ui/overlay.ts — the traffic's, the ships', the carriers' labels and lights): each its
    *  id, its anchor in the camera's axes from the eye [m] (x right, y up, z ahead) and its object's radius [m]; the image's vertical
    *  field [°] and the scene's metres a unit (the occlusion depth's — renderer.mPerM). Asked each frame by the overlay. */
+  /** Physical traffic lamps on the view axes, rendered against the current scene's complete depth. */
+  trafficLamps: TrafficLamp[] = [];
+  private trafficLampRenderer: TrafficLightRenderer | null = null;
   labelAsk: { marks: { id: string; at: readonly number[]; r: number }[]; fov: number; mPerM: number } | null = null;
   /** Each mark seen (true) or hidden behind what the scene holds nearer at its object (false) — the occlusion depth (`occlusion depth`,
    *  the image's nearest surface at each pixel: the ground, the buildings, the clouds over half the pixel, the craft) read at five

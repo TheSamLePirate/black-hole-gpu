@@ -89,3 +89,14 @@ export function attachmentScale(mesh: AirlinerMesh, len: number, rigged: boolean
   const down = rigged ? (MESH[mesh].wheels * len) / MESH[mesh].len - 1.59 * scale : 0;
   return { model, scale, down };
 }
+
+/** A model-local attachment on the traffic's body-fixed axes. Shared by lamps, exhausts and surface effects. */
+export function attachmentOffset(
+  a: ReturnType<typeof attachmentScale>,
+  point: readonly number[],
+  right: readonly number[],
+  up: readonly number[],
+  forward: readonly number[],
+): Vec3 {
+  return [0, 1, 2].map((i) => a.scale * (-right[i]! * point[0]! + up[i]! * point[1]! + forward[i]! * point[2]!) - up[i]! * a.down) as Vec3;
+}

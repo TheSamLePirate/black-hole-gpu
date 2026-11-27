@@ -16,6 +16,8 @@ export type { Plane, Ship };
 /** A tracked aircraft: its last report and the one before, its reports in time's order (the last quarter of an
  *  hour), when we heard it [s, the page's clock]. */
 export interface TrackedPlane {
+  origin?: "synthetic";
+  groundPose?: import("./ground-path").GroundPose;
   p: Plane;
   prev: Plane | null;
   hist: Plane[];

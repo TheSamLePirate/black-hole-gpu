@@ -678,7 +678,7 @@ main, la catapulte et les brins du F-35C, la navigation (leçon 9), le démarrag
 | `ranger` | le vaisseau ailé | aérodynamique générique + fusée ; vole avec la loi avion (`isPlane`) | [VOL-VAISSEAUX.md](VOL-VAISSEAUX.md) |
 | ailiers IA | `AiJet` (`game/aijet.ts`) | point matériel sur l'ECEF WGS84, aéro et F135 du F-35 ; +7/−2 g, α 25°, rotation à 70 m/s | `controller/wingmen.ts` |
 | cibles de combat | drones, chasseurs, avions de ligne, le ravitailleur TEXACO 11 | cinématiques, dans le repère plat E/N/U du combat | `game/combat.ts` |
-| trafic réel | ADS-B lissé par une spline, affiché derrière le temps réel | non simulé (`airtypes.ts` ne fait qu'associer un type OACI à deux maillages) | `controller/traffic.ts` |
+| trafic aéroport | ADS-B lissé sur une chronologie commune ; activité complémentaire identifiée | profils visuels par famille, vent réel estimé en altitude, crabe/décrabage, contact et roulage sur le réseau ; silhouettes A320/CRJ de substitution | `controller/traffic.ts`, `traffic/profile.ts`, `traffic/airport-activity.ts` |
 
 | | F-35B | F-35C | A320 |
 |---|---|---|---|

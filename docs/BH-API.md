@@ -447,7 +447,7 @@ liveries, shadows and their costs since 24 Nov 2026).
 
 Puts the camera out of the ship as a free spectator (`on: true`; the ship goes on flying) or back into it (`false`). Returns whether the spectator is out. Refused with a toast ("fly one first (K)") when no craft is being flown: the spectator starts only from a piloted ship (`startSpectator` in `controller/spectator.ts`). No e2e test calls it.
 
-### `__bh.airport` → { start, stop, mode, next, caption, state }
+### `__bh.airport` → { start, stop, mode, next, caption, state, activity }
 
 The airport view (`src/controller/airportview.ts`, `src/cine/airport.ts`, `src/ui/airportui.ts` — docs/PLAN-AEROPORT-AAA.md): an
 airport's real arrivals and departures filmed one after the other by a director, the game's HUD and panels hidden (`body.airport-mode`),
@@ -459,7 +459,18 @@ its own panel (the queues, the card of the one filmed) and its broadcast caption
   "drone"`; `next()` — the next movement (the one followed let go).
 - `caption()` → `{ title, line, eta, runway, shot, dep, free } | null` — the one filmed (`eta`: seconds to its touchdown or lift-off).
 - `state()` → `{ code, name, mode, shot, current, done, queue: [{ id, cs, type, runway, eta, dep, gnd, over }] } | null`.
-*Used in:* `scripts/airport-look.ts`.
+- `activity(enabled?: boolean)` → `{ active, code?, enabled, network, weather, aircraft }` : lit l'expérience
+  aéroport ; active/désactive les mouvements complémentaires seulement. Réseau `osm|tiles|null`, météo avec
+  source/bulletin/vent ; chaque avion donne `id`, `type`, `source` (`observed|reconstructed|synthetic`), phase,
+  `crabDeg`, vitesse dans l'air [m/s], âge des données [s]. `state().experience` donne le même état et
+  `state().queue[].provenance` distingue les mouvements. L'outil TARS `airport_activity` utilise la même action.
+- Pendant ce mode, la météo réelle fait autorité ; l'ancien préréglage est restauré à la sortie. Le vent en
+  altitude est un profil estimé à partir du vent de surface, pas une observation ADS-B.
+- `camera.trafficAirport` porte `code`, `net`, `weather`, `activity` ; `TrafficCraft` ajoute `provenance`,
+  `airspeed` [m/s], `yawRate` [rad/s], `crab` [rad], `contact` (compressions nez/gauche/droite [m]).
+- `renderer.trafficLamps` contient les sources physiques `{at, colour, size}` en axes caméra [m], RGB linéaire.
+  Elles passent par la profondeur GPU complète, jamais par le canvas d'étiquettes.
+*Used in:* `scripts/airport-look.ts`, `tests/e2e/airport-experience.e2e.test.ts`, `tests/e2e/traffic-lamps.e2e.test.ts`.
 
 ### `__bh.viewAt(lat, lon, { altM?, heading?, pitch?, fov?, tripod?, body? })` → string \| null
 

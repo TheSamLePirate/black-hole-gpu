@@ -1,3 +1,4 @@
+import { airportExperience } from "./traffic/experience";
 // The automation handle, globalThis.__bh: what the devtools, the end-to-end tests (tests/e2e), the
 // benchmark and the scripts (scripts/*.ts) drive the app with — the scenes, the settings, the
 // simulation frozen and stepped, offline renders and videos posted to the dev server, the bench.
@@ -1091,10 +1092,12 @@ export function installBh(c: BhContext) {
         mode: (m: AirportMode) => airportMode(m),
         next: () => airportNext(),
         caption: () => airportCaption(),
+        activity: (enabled?: boolean) => airportExperience(c.camera, enabled),
         state: () => {
           const S = airportState();
           return S
             ? {
+                experience: airportExperience(c.camera),
                 code: S.code,
                 name: S.name,
                 mode: S.dir.mode,
@@ -1102,6 +1105,7 @@ export function installBh(c: BhContext) {
                 current: S.current,
                 done: [...S.done],
                 queue: S.queue.map((A) => ({
+                  provenance: A.c.provenance ?? "observed",
                   id: A.c.id,
                   cs: A.c.cs,
                   type: A.c.type,

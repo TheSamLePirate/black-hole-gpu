@@ -35,7 +35,7 @@ export interface Plane {
   gnd: boolean;
   /** when its position was measured [s since 1970] */
   t: number;
-  src: "adsb.lol" | "opensky";
+  src: "adsb.lol" | "opensky" | "synthetic";
 }
 
 export interface Ship {
@@ -89,13 +89,14 @@ const SHIP_KEEP = 15 * 60;
 const ZONE_KEEP = 120;
 const ZONES_MAX = 12;
 
+const numeric = (v:unknown):number|null => v!==null && v!==undefined && v!=="" && Number.isFinite(Number(v)) ? Number(v):null;
 /** adsb.lol's aircraft → ours (null: no position). */
 export function fromAdsbLol(a: Record<string, unknown>, now: number): Plane | null {
-  const lat = Number(a.lat),
-    lon = Number(a.lon);
-  if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
+  const lat = numeric(a.lat),
+    lon = numeric(a.lon);
+  if (lat===null || lon===null) return null;
   const gnd = a.alt_baro === "ground";
-  const altFt = Number.isFinite(Number(a.alt_geom)) ? Number(a.alt_geom) : Number.isFinite(Number(a.alt_baro)) ? Number(a.alt_baro) : 0;
+  const altFt = numeric(a.alt_geom) ?? numeric(a.alt_baro) ?? 0;
   const rate = Number.isFinite(Number(a.geom_rate)) ? Number(a.geom_rate) : Number(a.baro_rate);
   const seen = Number(a.seen_pos ?? a.seen ?? 0);
   return {
@@ -107,13 +108,13 @@ export function fromAdsbLol(a: Record<string, unknown>, now: number): Plane | nu
     lat,
     lon,
     alt: gnd ? 0 : altFt * FT,
-    ...(!gnd && !Number.isFinite(Number(a.alt_geom)) && Number.isFinite(Number(a.alt_baro)) ? { baro: true } : {}),
+    ...(!gnd && numeric(a.alt_geom)===null && numeric(a.alt_baro)!==null ? { baro: true } : {}),
     gs: Number(a.gs ?? 0) * KT,
     trk: Number(a.track ?? a.true_heading ?? 0),
-    hdg: Number.isFinite(Number(a.true_heading)) ? Number(a.true_heading) : null,
+    hdg: numeric(a.true_heading),
     vs: Number.isFinite(rate) ? (rate * FT) / 60 : 0,
-    roll: Number.isFinite(Number(a.roll)) ? Number(a.roll) : null,
-    rate: Number.isFinite(Number(a.track_rate)) ? Number(a.track_rate) : null,
+    roll: numeric(a.roll),
+    rate: numeric(a.track_rate),
     gnd,
     t: now - (Number.isFinite(seen) ? seen : 0),
     src: "adsb.lol",
