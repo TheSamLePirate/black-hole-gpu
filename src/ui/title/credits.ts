@@ -390,6 +390,12 @@ export const CREDITS: CreditSection[] = [
         licence: "MIT",
         url: "https://github.com/zeux/meshoptimizer",
       },
+      {
+        what: { fr: "Fuseaux horaires — tz-lookup", en: "Time zones — tz-lookup" },
+        who: "The Dark Sky Company",
+        licence: "CC0-1.0",
+        url: "https://github.com/darkskyapp/tz-lookup-oss",
+      },
       { what: { fr: "Inter", en: "Inter" }, who: "Rasmus Andersson", licence: "SIL OFL 1.1" },
       { what: { fr: "JetBrains Mono", en: "JetBrains Mono" }, who: "JetBrains", licence: "SIL OFL 1.1" },
       { what: { fr: "Rajdhani", en: "Rajdhani" }, who: "Indian Type Foundry", licence: "SIL OFL 1.1" },

@@ -2,7 +2,7 @@ import { airportExperience } from "./traffic/experience";
 import { loadAirportNet } from "./game/airportfetch";
 import { AirportActivity } from "./traffic/airport-activity";
 import { MetarFeed } from "./metar";
-import { windFromAt, coverWord, type WeatherState } from "./weather";
+import { weatherAt, windFromAt, coverWord, type WeatherState } from "./weather";
 // (first: the network counted from the first request — net-activity.ts)
 import "./net-install";
 import { NetLight } from "./ui/net-light";
@@ -9149,6 +9149,8 @@ async function main() {
     const sky = w?.layers.map((l) => `${coverWord(l.cover)} ${U.fAlt(l.base)} AGL`).join(" · ") || "—";
     const air = w?.air;
     return {
+      state: w ?? undefined,
+      direction: w ? windFromAt(w, S, place?.days ?? 0) : 0,
       summary: `${t("Simulated weather")} (${tr(WEATHER_NAMES[settings.weather])}) · ${t("Wind")} ${wind} · VIS ${w ? (w.visibility / 1000).toFixed(1) : "—"} km · ${sky}${air ? ` · ${air.T} °C · QNH ${Math.round(air.qnh)} hPa` : ""}`,
       metar: airportMetar?.report ?? `${S.code} · ${t(airportMetarPending ? "METAR loading…" : "METAR unavailable")}`,
     };
@@ -9164,7 +9166,6 @@ async function main() {
       camera.trafficAirport = undefined;
       return;
     }
-    settings.weather = "real";
     if (camera.trafficAirport?.code !== S.code) {
       const state = {
         code: S.code,
@@ -9182,7 +9183,8 @@ async function main() {
     const place = camera.weatherPlace();
     const real = place ? realWeather.at({ ...place, lat: S.lat, lon: S.lon, h: 0 }, settings.wind).state : null;
     const w = airportMetarCode === S.code && airportMetar ? airportMetar : real;
-    camera.trafficAirport!.weather = w;
+    camera.trafficAirport!.weather =
+      settings.weather === "real" ? w : place ? weatherAt(settings, { ...place, lat: S.lat, lon: S.lon }, place.days, null) : null;
     if (w && camera.weatherReal !== w) {
       camera.weatherReal = renderer.weatherReal = w;
       touch();
@@ -9194,6 +9196,12 @@ async function main() {
     radio: () => airportRadio,
     activity: (enabled) => airportExperience(camera, enabled),
     weather: airportWeather,
+    cameraSettings: () => camPanel?.toggle(true),
+    changeWeather: (preset, wind) => {
+      settings.weather = preset;
+      if (wind !== undefined) settings.wind = wind;
+      touch();
+    },
   });
   // (the airport's radio — traffic/atc.ts, PLAN-AEROPORT-AAA V10: the tower's and the crews' exchanges made from its movements, said
   // through the radio's band; the last lines on its panel)

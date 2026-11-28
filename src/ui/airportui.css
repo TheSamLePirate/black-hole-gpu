@@ -1,0 +1,102 @@
+/* Airport camera overlay: the game's amber HUD language, four edges around an unobstructed scene. */
+.airport-ui {
+  --au-line: rgba(232,239,248,.22);
+  position: fixed; inset: 76px 28px 34px; z-index: 41;
+  pointer-events: none; color: var(--text); font: 12px/1.4 var(--font);
+  text-shadow: 0 1px 5px #000; font-variant-numeric: tabular-nums;
+}
+.airport-ui[hidden], .airport-ui [hidden] { display: none !important; }
+.airport-ui > * { pointer-events: auto; }
+.airport-ui button, .airport-ui select { font: inherit; color: inherit; cursor: pointer; }
+.airport-ui button { border: 0; border-radius: 0; background: transparent; padding: 7px 9px; }
+.airport-ui button:hover { background: #ffffff0d; color: #fff; }
+.airport-ui button:focus-visible, .airport-ui select:focus-visible, .airport-ui summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+.airport-ui .au-head { position: absolute; top: 0; left: 0; display: flex; align-items: center; gap: 8px; width: 330px; padding: 0 0 12px; border-bottom: 1px solid var(--au-line); }
+.airport-ui .au-title { flex: 1; display: flex; flex-direction: column; }
+.airport-ui .au-eyebrow { color: var(--accent); font: 10px var(--mono); letter-spacing: .16em; margin-bottom: 8px; }
+.airport-ui .au-title b { font: 500 40px/1 var(--hud-font, var(--font)); letter-spacing: .06em; }
+.airport-ui .au-title > span { margin-top: 8px; color: #d1d8e3; font-size: 11px; }
+.airport-ui .au-icon { align-self: flex-start; font-size: 20px; min-width: 32px; }
+.airport-ui .au-clock { position: absolute; top: 121px; left: 0; display: flex; align-items: baseline; gap: 12px; }
+.airport-ui .au-clock b { font: 16px var(--mono); letter-spacing: .04em; }
+.airport-ui .au-clock small { font: 10px var(--mono); color: #b7c1cf; }
+.airport-ui .au-weather { position: absolute; top: 0; right: 0; width: 286px; padding: 10px 0 12px 16px; border-left: 1px solid var(--au-line); background: linear-gradient(90deg,#090d14a8,#090d1438); }
+.airport-ui .au-label { font: 10px var(--mono); letter-spacing: .16em; text-transform: uppercase; color: var(--accent); margin-bottom: 10px; }
+.airport-ui .au-seg { display: flex; flex-wrap: wrap; gap: 2px; }
+.airport-ui .au-seg button { font: 10px var(--mono); color: #b4bdcb; border-bottom: 1px solid transparent; padding: 7px 9px; }
+.airport-ui .au-seg button.on { color: var(--accent); border-bottom-color: var(--accent); background: #ffb35c0b; }
+.airport-ui .au-select { border: 0; border-bottom: 1px solid var(--au-line); background: #111722; padding: 6px 8px; margin-top: 8px; width: 100%; font: 11px var(--mono); color-scheme: dark; }
+.airport-ui .au-weather-graphic { display: grid; grid-template-columns: 52px 56px 1fr; gap: 10px; align-items: center; margin: 16px 0 12px; }
+.airport-ui .au-compass { width: 50px; height: 50px; border: 1px solid #ffffff50; border-radius: 50%; position: relative; display: grid; place-items: center; }
+.airport-ui .au-compass span { position: absolute; top: -7px; font: 9px var(--mono); color: var(--accent); background: #111722; padding: 0 3px; }
+.airport-ui .au-compass b { font-size: 29px; font-weight: 300; color: var(--accent); }
+.airport-ui .au-sky { display: flex; flex-direction: column; align-items: center; font-size: 9px; color: #bac4d2; }
+.airport-ui .au-weather-symbol { display: block; width: 42px; height: 36px; color: #e4e9f0; }
+.airport-ui .au-weather-symbol svg { width: 100%; height: 100%; }
+.airport-ui .au-weather-facts { display: flex; flex-direction: column; gap: 4px; font: 10px var(--mono); }
+.airport-ui .au-weather-facts b { font-weight: 500; color: var(--accent); }
+.airport-ui summary { cursor: pointer; font: 10px var(--mono); letter-spacing: .06em; color: #b7c1cf; }
+.airport-ui .au-weather-details { font-size: 10px; max-width: 100%; overflow-wrap: anywhere; }
+.airport-ui .au-metar { padding-top: 10px; font-family: var(--mono); }
+.airport-ui .au-card { position: absolute; bottom: 46px; left: 0; width: 390px; max-height: 48%; overflow-y: auto; scrollbar-width: thin; padding: 14px 20px 12px 14px; border-left: 2px solid var(--accent); background: linear-gradient(90deg,#090d14e8,#090d1490 75%,transparent); }
+.airport-ui .au-card-title { font: 500 32px/1.2 var(--hud-font, var(--font)); letter-spacing: .025em; }
+.airport-ui .au-card-sub { margin-top: 5px; color: #b8c3d1; font: 11px var(--mono); }
+.airport-ui .au-telemetry { display: flex; gap: 24px; margin: 20px 0 14px; }
+.airport-ui .au-telemetry > div { display: flex; flex-direction: column; gap: 6px; }
+.airport-ui .au-telemetry small { font: 9px var(--mono); text-transform: uppercase; letter-spacing: .08em; color: #aeb9c8; }
+.airport-ui .au-telemetry strong { font: 18px var(--mono); font-weight: 400; white-space: nowrap; }
+.airport-ui .au-facts { display: grid; grid-template-columns: 1fr auto; gap: 7px 18px; margin: 14px 0 0; font-size: 11px; }
+.airport-ui .au-facts dt { color: #aeb9c8; } .airport-ui .au-facts dd { margin: 0; font-family: var(--mono); text-align: right; }
+.airport-ui .au-traffic { position: absolute; right: 0; bottom: 46px; width: 322px; max-height: 40%; overflow-y: auto; scrollbar-width: thin; background: linear-gradient(270deg,#090d14cb,#090d1480); padding: 12px 0 10px 12px; border-top: 1px solid var(--au-line); }
+.airport-ui .au-traffic-tabs { display: flex; border-bottom: 1px solid var(--au-line); margin-bottom: 8px; }
+.airport-ui .au-traffic-tabs button { flex: 1; font: 9px var(--mono); padding: 8px 4px; text-align: left; border-bottom: 1px solid transparent; }
+.airport-ui .au-traffic-tabs button.on { color: var(--accent); border-bottom-color: var(--accent); }
+.airport-ui .au-list > .au-label { display: none; }
+.airport-ui .au-row { display: grid; grid-template-columns: 1fr 70px 64px; align-items: baseline; width: 100%; text-align: left; gap: 8px; padding: 8px 6px; border-left: 2px solid transparent; }
+.airport-ui .au-row b { font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.airport-ui .au-sub { font: 10px var(--mono); color: #aeb9c8; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.airport-ui .au-eta { text-align: right; font: 10px var(--mono); }
+.airport-ui .au-row.on, .airport-ui .au-row.pin { border-left-color: var(--accent); background: #ffb35c10; }
+.airport-ui .au-none { padding: 14px 6px; color: #9ba5b4; font-size: 11px; }
+.airport-ui .au-radio { font-size: 10px; padding-bottom: 12px; margin-bottom: 10px; border-bottom: 1px solid var(--au-line); }
+.airport-ui .au-radio-line { margin-top: 5px; color: #bdc7d4; } .airport-ui .au-radio-line.tower { color: #dfba8c; }
+/* Persistent production desk: all twelve modes remain one click away. */
+.airport-ui .au-director { position: absolute; bottom: 0; left: 0; right: 0; padding: 12px 14px 8px; border-top: 1px solid #ffb35c70; background: linear-gradient(0deg,#090d14f0,#090d14c0); }
+.airport-ui .au-dock-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.airport-ui .au-dock-head .au-label { margin: 0; }
+.airport-ui .au-shot-status { font: 10px var(--mono); color: #b4bdcb; }
+.airport-ui .au-camera-modes { display: flex; align-items: stretch; gap: 16px; margin-top: 10px; }
+.airport-ui .au-camera-modes > .au-seg:first-child { flex-shrink: 0; border-right: 1px solid var(--au-line); padding-right: 16px; }
+.airport-ui .au-camera-modes .au-seg button { min-height: 32px; padding: 7px 11px; }
+.airport-ui .au-dock-actions { display: flex; flex-wrap: wrap; gap: 4px; border-top: 1px solid #ffffff12; margin-top: 9px; padding-top: 5px; }
+.airport-ui .au-btn { color: #bcc6d3; font: 10px var(--mono); border-right: 1px solid var(--au-line); }
+.airport-ui button:disabled { opacity: .35; cursor: default; }
+.airport-ui .au-btn[aria-pressed=true] { color: var(--accent); }
+.airport-ui .au-card, .airport-ui .au-traffic { bottom: 144px; }
+@media (min-width: 901px) and (max-width: 1350px) { .airport-ui .au-card, .airport-ui .au-traffic { bottom: 176px; } }
+@media (min-width: 621px) and (max-width: 900px) { .airport-ui .au-card, .airport-ui .au-traffic { bottom: 218px; max-height: 30%; } }
+body.airport-mode .airport-caption { display: none; } /* one flight identity, owned by this overlay */
+body.topbar-hidden .airport-ui { top: 28px; }
+.airport-ui.au-folded .au-weather { display: none; }
+@media (max-width: 900px) {
+  .airport-ui { inset: 64px 16px 24px; }
+  .airport-ui .au-head { width: 250px; } .airport-ui .au-title b { font-size: 30px; }
+  .airport-ui .au-weather { width: 250px; }
+  .airport-ui .au-card { width: 320px; } .airport-ui .au-telemetry { gap: 16px; }
+  .airport-ui .au-telemetry strong { font-size: 14px; }
+  .airport-ui .au-traffic { width: 260px; }
+}
+@media (max-width: 620px) {
+  .airport-ui { overflow-y: auto; pointer-events: auto; }
+  .airport-ui .au-head { position: relative; width: auto; }
+  .airport-ui .au-clock { position: static; margin: 12px 0; }
+  .airport-ui .au-weather, .airport-ui .au-card, .airport-ui .au-traffic, .airport-ui .au-director { position: static; width: auto; max-height: none; margin-top: 18px; }
+  .airport-ui .au-weather { padding: 10px; } .airport-ui .au-card { margin-top: 26px; }
+}
+
+@media (max-width: 620px) { .airport-ui .au-camera-modes { flex-direction: column; gap: 8px; } .airport-ui .au-camera-modes > .au-seg:first-child { border-right: 0; padding: 0; } .airport-ui .au-dock-head { flex-wrap: wrap; } }
+
+body.airport-mode #cam-pop { z-index: 42; }
+
+.airport-ui .au-content { display: contents; }
+.airport-ui .au-content > * { pointer-events: auto; }

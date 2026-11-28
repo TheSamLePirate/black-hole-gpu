@@ -45,7 +45,7 @@ J4 (fermé, sortie non atteinte), J5 et J6 (fermés).
 
 | Session (T3) | Lot | État |
 |---|---|---|
-| Mode Aéroport (27 nov.) | [PLAN-AEROPORT-AAA](docs/PLAN-AEROPORT-AAA.md) — trafic réel filmé, arrivées et départs | **V18–V24 implémentés** : météo réelle, crabe progressif, chronologie, activité SIM cartographiée, attaches communes et feux occultés ; 133 tests ciblés et deux e2e WebGPU passent. Attaches recalées sur les triangles et trois planches de contrôle (27 nov.) ; quatre Boeing et CRJ900 FGAddon articulés ; repère WGS84 des émissions, occlusion de toutes les silhouettes et adresse du gréement A320 corrigés ; carlingues rapprochées et vitrage CRJ revérifiés en vue Aile ; captures humide/croisière par représentation ; coût GPU non mesuré ; ancien V12 sur trafic vivant non rejoué |
+| Mode Aéroport (27–28 nov.) | [PLAN-AEROPORT-AAA](docs/PLAN-AEROPORT-AAA.md) — trafic réel filmé, arrivées et départs | **V18–V24 implémentés** : météo réelle, crabe progressif, chronologie, activité SIM cartographiée, attaches communes et feux occultés ; 133 tests ciblés et deux e2e WebGPU passent. Attaches recalées sur les triangles et trois planches de contrôle (27 nov.) ; quatre Boeing et CRJ900 FGAddon articulés ; repère WGS84 des émissions, occlusion de toutes les silhouettes et adresse du gréement A320 corrigés ; carlingues rapprochées et vitrage CRJ revérifiés en vue Aile ; captures humide/croisière par représentation ; coût GPU non mesuré ; ancien V12 sur trafic vivant non rejoué |
 | A320 AAA (26 nov.) | [PLAN-A320-VOL-AAA](docs/PLAN-A320-VOL-AAA.md) — vol mesuré, physique, molettes, roue, assistance, outils, instruments, navigation | **V0 PASS** (vol de ligne complet 20/20), **K1, W1 faits ; W2, G1 en partie** ; I1/I2 commencés ; **N1 fait** (base de navigation, MCDU, ND VOR.D/NDB/WPT) ; **N2 : AIRWAYS, SID, STAR faits** (CIFP, 755 aéroports US) — discontinuités, HOLD, e2e au poste à faire ; **N3 fait en simulation** (profil vertical, T/D, DES sur chemin, DECEL ; ND, F-PLN, PFD) — vol au banc V2 à faire |
 | Rentrée du Ranger (26 nov.) | Demande de Sam : la rentrée automatique se pose mal ; zone d'arrivée chargée avant 10–20 km ; enregistreur de vol | **Fait et poussé (26 nov.)** : guidage vers le site d'abord, énergie de l'approche (loin de l'axe ou à court), zone d'arrivée préchargée, `camera.entryLog`. Edwards et Le Bourget posés en vol réel (avant : Edwards 4 écrasés sur 4) ; « Relief failed » de l'IGN non reproduit (e2e servi par le disque) ; apprendre-vaisseaux 9/9 ; golden périmé depuis le 20 oct. (pas par ce lot) |
 | Linux OBC embarqué (22–24 nov.) | [PLAN-LINUX-OBC](docs/PLAN-LINUX-OBC.md) — OBC-0 à OBC-21 (unkernel aarch64, Alpine/Debian, suite Rust/Ratatui, `/dev/fb0`, pont `__bh`/TARS, cockpits 3D) | **Sécurisé le 24 nov.** ([audit](docs/AUDIT-2026-11-24.md)) : relais Wisp à garde numérique, Origin exigée, ports et débits bornés ; pont invité sur racines explicites ; COOP/COEP sur demande ; FR/EN, unités du joueur. Tests unitaires 94/94 ; **e2e en cours** |
@@ -12266,3 +12266,20 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
   contrairement au vrai opaque (0). Contrôle A/A identique, bord masqué 0. 7 assertions, zéro erreur GPU.
   Reprise A320 en vue Aile : 50 assertions, zéro erreur GPU, capture moteur inspectée après correction.
   Captures avant/après dans docs/progress/airliner-quality/a320-engine-*.png.
+
+### 2026-11-28 14:25 UTC — Airport : météo choisie et interface observatoire
+
+- Contribution : expérience complète §19, hiérarchie visuelle et état météo cohérent.
+- Réalisé : `src/ui/airportui.ts`, `src/style.css`, `src/main.ts` : réelle/jeu, préréglages et vent par temps clair, météo graphique et METAR distinct, heure civile IANA, fiche du vol même en plan d’attente, commandes caméra dépliables. TARS conserve les mêmes réglages `set_settings`. `tz-lookup` 6.1.25 CC0, navigateur sans réseau pour le fuseau ; limites géographiques documentées dans le plan.
+- Preuves : 22 tests unitaires météo/airport (279 assertions). Premier e2e : 43 assertions, bascule storm persistante et retour METAR/restauration. Finition visuelle revérifiée au même e2e (43 assertions, zéro erreur GPU) ; TypeScript et Biome passent (avertissements préexistants). Pas de campagne de performance ; destination AAA visée, pas de certification exhaustive.
+
+### 2026-11-28 14:35 UTC — Airport : intégration au langage du HUD
+
+- Retour de Sam : la colonne ressemblait à une interface web. Retirée au profit d’un overlay aux quatre bords, ambre et polices du jeu, météo vectorielle, télémétrie sans carte arrondie, mouvements par onglets, détails et réalisateur dépliables. CSS isolée dans `src/ui/airportui.css` ; ancien bloc retiré de `style.css`.
+- Contribution : lisibilité et place laissée à la scène (§19), réutilisation des variables du jeu. Révision vérifiée : TypeScript, Biome et e2e `airport-experience` passent (43 assertions, zéro erreur GPU). Capture du nouvel overlay dans `remote-results/airport-experience/airport-game-weather.png`. Aucun gain de performance revendiqué.
+
+### 2026-11-28 14:32 UTC — Airport : commandes caméra permanentes
+
+- Contribution §19 : conserver la richesse fonctionnelle dans le nouvel habillage de jeu.
+- Réalisé : douze modes en accès direct, aide des modes partagée avec `CameraPanel`, état réalisateur/plan, suivi libérable, mouvement suivant, bandes, activité et ouverture du panneau caméra commun. Dock conservé quand les listes sont repliées, zones d’information remontées pour lui réserver la place.
+- Preuves : TypeScript et Biome ; e2e étendu aux clics des douze modes, au repli, au panneau complet, aux bandes et à la séparation dock/télémétrie : 57 assertions passent, zéro erreur GPU. Le premier run a révélé la reconstruction des boutons pendant les clics ; dock désormais conservé entre les rafraîchissements de télémétrie. Aucun gain GPU revendiqué.

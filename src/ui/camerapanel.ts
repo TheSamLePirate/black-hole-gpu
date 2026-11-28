@@ -39,7 +39,7 @@ export const AIRPORT_MODE_LABEL: Record<AirportMode, string> = {
   cockpit: t("Cockpit"),
   drone: t("Drone"),
 };
-const AIRPORT_MODE_HELP: Record<AirportMode, string> = {
+export const AIRPORT_MODE_HELP: Record<AirportMode, string> = {
   cinema: t(
     "The film's director: each phase's shots drawn by turns, held 6 to 12 s — the tower, beside it, behind it, aboard, the drone —, the threshold, the touchdown, the rotation and the climb-out never missed",
   ),

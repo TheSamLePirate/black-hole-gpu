@@ -68,6 +68,59 @@ describe.skipIf(!E2E)("airport experience: weather and traffic integration", () 
       await app.settled(60000);
       await app.shot(`${OUT}/${model}.png`);
     }
+    await app.step("3. all twelve camera modes remain directly accessible");
+    for (const mode of [
+      "cinema",
+      "auto",
+      "tower",
+      "threshold",
+      "touchdown",
+      "rotation",
+      "climbout",
+      "lineup",
+      "wing",
+      "chase",
+      "cockpit",
+      "drone",
+    ]) {
+      await app.click(`[data-testid=airport-ui-mode-${mode}]`);
+      await app.waitFor(`__bh.airport.state().mode === "${mode}"`, 5000);
+      expect(await app.js<string>(`document.querySelector('[data-testid=airport-ui-mode-${mode}]').getAttribute('aria-pressed')`)).toBe(
+        "true",
+      );
+    }
+    await app.click("[data-testid=airport-ui-fold]");
+    expect(
+      await app.js<number>(
+        `[...document.querySelectorAll('[data-testid^=airport-ui-mode-]')].filter(e=>e.getBoundingClientRect().height>0).length`,
+      ),
+    ).toBe(12);
+    await app.click("[data-testid=airport-ui-fold]");
+    await app.click("[data-testid=airport-ui-camera-settings]");
+    await app.waitFor(`!document.querySelector('#cam-pop').hidden`, 5000);
+    await app.click("#cam-pop .cp-x");
+    await app.click("[data-testid=airport-ui-bars]");
+    await app.waitFor(`document.querySelector('.airport-bars').hidden`, 5000);
+    await app.click("[data-testid=airport-ui-bars]");
+    await app.waitFor(`!document.querySelector('.airport-bars').hidden`, 5000);
+    expect(
+      await app.js<boolean>(
+        `(()=>{const card=document.querySelector('.au-card').getBoundingClientRect(),dock=document.querySelector('.au-director').getBoundingClientRect();return card.bottom<=dock.top})()`,
+      ),
+    ).toBe(true);
+    await app.step("3. switch between game weather and METAR without a frame overriding the choice");
+    await app.click("[data-testid=airport-weather-game]");
+    await app.waitFor(`__bh.settings.weather === "fair"`, 5000);
+    await app.js(
+      `(()=>{const s=document.querySelector('[data-testid=airport-weather-preset]');s.value='storm';s.dispatchEvent(new Event('change'));return true})()`,
+    );
+    await app.waitFor(`__bh.settings.weather === "storm" && __bh.camera.trafficAirport?.weather?.kind === "storm"`, 5000);
+    await app.settled(60000);
+    expect(await app.js<string>(`__bh.settings.weather`)).toBe("storm");
+    expect(await app.js<string>(`document.querySelector('[data-testid=airport-ui-clock]').textContent`)).toContain("Europe/Paris");
+    await app.shot(`${OUT}/airport-game-weather.png`);
+    await app.click("[data-testid=airport-weather-real]");
+    await app.waitFor(`__bh.settings.weather === "real" && __bh.camera.trafficAirport?.weather?.source === "metar"`, 5000);
     await app.step("3. restore weather after leaving");
     await app.js(`(__bh.airport.stop(),true)`);
     await app.waitFor(`__bh.settings.weather==="fair"`, 5000);

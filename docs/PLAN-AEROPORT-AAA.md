@@ -169,3 +169,17 @@ Limites : certains canaux sans observation ADS-B (compression des amortisseurs, 
 timonerie asservie) restent au repos ; les animations importées ici sont rotate/translate/spin.
 Les silhouettes de substitution des familles non livrées et les cockpits restent hors de ce lot.
 Le terme AAA demeure une destination, pas une certification artistique exhaustive ou de cadence.
+
+### 28 novembre 2026 — interface observatoire et météo choisie
+
+Le panneau Airport propose météo réelle ou météo du jeu (préréglages communs ; vent réglable pour le temps clair). La boucle Airport ne réimpose plus `real`. Le trafic supplémentaire lit la météo choisie ; le rendu et la physique gardent leur autorité commune. La météo précédente est restaurée à la sortie. Les réglages restent accessibles par TARS `set_settings` (`weather`, `wind`).
+
+Habillage observatoire sombre, météo graphique (direction du vent, ciel, visibilité, température/QNH si disponibles), METAR dépliable distinct des conditions effectivement simulées. Horloge civile réelle de l’aéroport, fuseau IANA par `tz-lookup` CC0 puis `Intl` pour le changement saisonnier (frontières géographiques approximatives de la bibliothèque). Fiche du vol filmé aussi pour les plans d’attente : télémétrie principale, phase, hauteur sol, dimensions, train, provenance et âge du relevé. Commandes réalisateur dépliables. Aucun itinéraire ou horaire commercial inventé.
+
+#### Révision visuelle — 28 novembre, retour de Sam
+
+La colonne de cartes a été retirée : overlay aux quatre bords de l’image, typographie et ambre du HUD (`--font`, `--mono`, `--hud-font`, `--accent`), fonds en dégradés discrets et traits fins. Identité/heure à gauche, météo à droite, télémétrie du vol en bas à gauche, listes d’arrivées/départs/proximité par onglets en bas à droite ; réalisateur au bord inférieur. Le bandeau historique est masqué pour éviter une seconde identité du même vol. Les faits secondaires du vol sont dépliables. Icônes météo vectorielles, pas d’emoji. Sous 620 px, repli en disposition verticale scrollable.
+
+#### Commandes complètes toujours accessibles — 28 novembre
+
+La barre inférieure reste visible, même lorsque les listes sont repliées : Cinéma, Auto et les dix angles fixes, descriptions au survol et état sélectionné, mode réalisateur / angle effectivement filmé, mouvement suivant, libération du suivi, bandes cinéma et trafic complémentaire. Bouton « Réglages caméra » vers le panneau caméra commun (objectifs et autres réglages existants), au-dessus de l’overlay. Le réalisateur conserve l’autorité sur le cadrage de ses plans. Les zones télémétrie/mouvements sont relevées pour laisser cette barre accessible.

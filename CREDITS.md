@@ -83,6 +83,7 @@ them in More… › Credits.
 - [The terminal — xterm.js](https://github.com/xtermjs/xterm.js) — The xterm.js authors · MIT
 - [The on-board computer's Rust apps — Ratatui, crossterm](https://ratatui.rs) — The Ratatui and crossterm developers · MIT
 - [Mesh preparation — meshoptimizer](https://github.com/zeux/meshoptimizer) — Arseny Kapoulkine · MIT
+- [Time zones — tz-lookup](https://github.com/darkskyapp/tz-lookup-oss) — The Dark Sky Company · CC0-1.0
 - Inter — Rasmus Andersson · SIL OFL 1.1
 - JetBrains Mono — JetBrains · SIL OFL 1.1
 - Rajdhani — Indian Type Foundry · SIL OFL 1.1
