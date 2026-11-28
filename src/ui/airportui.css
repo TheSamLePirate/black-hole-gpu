@@ -100,3 +100,11 @@ body.airport-mode #cam-pop { z-index: 42; }
 
 .airport-ui .au-content { display: contents; }
 .airport-ui .au-content > * { pointer-events: auto; }
+.airport-ui .au-reconstruction { color: #6fe3a1; font-size: 11px; vertical-align: middle; margin-left: 8px; text-shadow: 0 0 8px #6fe3a144; }
+.airport-transition { position: fixed; inset: 0; z-index: 49; background: #000; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px; pointer-events: none; color: var(--text); }
+.airport-transition[hidden] { display: none; }
+.airport-transition small { color: var(--accent); font: 11px var(--mono); letter-spacing: .25em; }
+.airport-transition strong { font: 500 clamp(28px,5vw,64px) var(--hud-font,var(--font)); letter-spacing: .05em; }
+.airport-transition span { font: 13px var(--mono); color: var(--dim); }
+.airport-transition.playing { animation: airport-flight-change 1.1s both; }
+@keyframes airport-flight-change { 0% { opacity: 0; } 18%, 70% { opacity: 1; } 100% { opacity: 0; } }

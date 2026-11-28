@@ -1,3 +1,4 @@
+import { frameNow } from "../frameclock";
 // The airport view (docs/PLAN-AEROPORT-AAA.md V2, V7): an airport of the world chosen — by its code, or the nearest —,
 // the free camera watching each airliner that lands there or takes off from it, one after the other, filmed by the director
 // chosen (cine/airport.ts). Its movements: the real traffic (controller/traffic.ts, drawn a minute behind the real time)
@@ -79,6 +80,9 @@ export const ARRIVALS = {
 } as const;
 
 interface AirportState {
+  presented?: Arrival;
+  transitionTo?: string;
+  transitionUntil?: number;
   code: string;
   name: string;
   lat: number;
@@ -113,7 +117,12 @@ let main: CameraController | null = null;
 /** What the game does when the view starts (main.ts sets them): the clock put on the moment the traffic is drawn at — the real
  *  time less its delay: its light the real one's (the traffic is live; the scene's own date — 2067 by default — lit Los Angeles
  *  at a winter dawn under real noon traffic, 26 Nov 2026) —, the clock's speed real time. */
-export const airportHooks: { visible: (id: string) => boolean; live: () => void; prepare: (f: Airfield) => Promise<void> } = {
+export const airportHooks: {
+  transition?: (c: TrafficCraft) => void;
+  visible: (id: string) => boolean;
+  live: () => void;
+  prepare: (f: Airfield) => Promise<void>;
+} = {
   visible: () => true,
   live: () => {},
   prepare: async () => {},
@@ -378,6 +387,7 @@ export const callsignOf = (c: TrafficCraft) => (c.cs && !/^0+$/.test(c.cs.trim()
 
 /** about the airport: on its ground within this [m], flying within this [m] and under this height [m] */
 const NEAR = { ground: 6000, air: 25_000, high: 3000 } as const;
+export const criticalMovement = (x: Arrival) => x.eta > -8 && x.eta < 18 && (!x.dep || Math.hypot(...x.c.v) > 25);
 
 /**
  * A frame of the view (the free camera's — camera/subjectcam.ts): the arrivals, the one filmed (kept until rolled out,
@@ -434,6 +444,18 @@ export function airportStep(view: CameraController, dt: number): boolean {
       A = undefined;
     }
   }
+  // Never abandon a pinned subject or a critical event already on screen. Preempt uneventful cruising/waiting
+  // only for a confirmed runway movement.
+
+  if (!S.pinned && (S.dir.mode === "auto" || S.dir.mode === "cinema") && (!A || !criticalMovement(A))) {
+    const urgent = S.queue
+      .filter((x) => !S!.done.has(x.c.id) && !finished(x) && criticalMovement(x))
+      .sort((a, b) => Math.abs(a.eta) - Math.abs(b.eta))[0];
+    if (urgent && urgent.c.id !== S.current && (!A || Math.abs(A.eta) > 35)) {
+      S.current = urgent.c.id;
+      A = urgent;
+    }
+  }
   if (!S.current) {
     A = S.queue.find((x) => !S!.done.has(x.c.id) && !finished(x) && x.eta > -2);
     S.current = A?.c.id ?? null;
@@ -441,7 +463,7 @@ export function airportStep(view: CameraController, dt: number): boolean {
   // (none due — Cinema —: one of those moving about the airport filmed meanwhile — taxiing, flying near —, the same while it moves)
   const prevFiller = S.filler;
   S.filler = null;
-  if (!A && !S.pinned && S.dir.mode === "cinema") {
+  if (!A && !S.pinned && (S.dir.mode === "cinema" || S.dir.mode === "auto")) {
     const moving = (c: TrafficCraft) => Math.hypot(...c.v) > 3;
     const f = S.others.find((c) => c.id === prevFiller && moving(c)) ?? S.others.find(moving);
     if (f) {
@@ -451,6 +473,20 @@ export function airportStep(view: CameraController, dt: number): boolean {
     }
   }
   // (none landing: the busiest runway — the longest — watched from the tower down its approach)
+  if (A && S.presented && A.c.id !== S.presented.c.id) {
+    if (S.transitionTo !== A.c.id) {
+      S.transitionTo = A.c.id;
+      S.transitionUntil = frameNow() + 220;
+      airportHooks.transition?.(A.c);
+    }
+    if (frameNow() < (S.transitionUntil ?? 0)) {
+      const previous = all.find((c) => c.id === S!.presented!.c.id);
+      if (previous) A = { ...S.presented, c: previous };
+    } else S.presented = A;
+  } else if (A) {
+    S.presented = A;
+    S.transitionTo = undefined;
+  } else S.presented = undefined;
   const W = A?.way ?? [...S.ways].sort((x, y) => y.len - x.len)[0]!;
   if (A) S.dir.follow(A.c.id);
   const L: Lander | null = A

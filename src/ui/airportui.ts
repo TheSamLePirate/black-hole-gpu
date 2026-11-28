@@ -12,6 +12,7 @@ import { AIRPORT_MODES } from "../cine/airport";
 import {
   type Arrival,
   airportCraft,
+  airportHooks,
   airportFollow,
   airportMode,
   airportNext,
@@ -45,8 +46,7 @@ const mmss = (s: number) => {
   const x = Math.max(0, Math.round(Math.abs(s)));
   return `${Math.floor(x / 60)}:${String(x % 60).padStart(2, "0")}`;
 };
-const nameOf = (c: TrafficCraft) =>
-  `${c.provenance === "synthetic" ? `${t("Synthetic")} · ` : c.provenance === "reconstructed" ? `${t("Reconstructed")} · ` : ""}${callsignOf(c)}`;
+const nameOf = (c: TrafficCraft) => `${c.provenance === "synthetic" ? `${t("Synthetic")} · ` : ""}${callsignOf(c)}`;
 
 export interface AirportUiDeps {
   settings: { units?: "metric" | "imperial"; weather?: WeatherPreset; wind?: 0 | 1 | 2 | 3 };
@@ -64,6 +64,8 @@ export class AirportUi {
   readonly root: HTMLElement;
   private key = "";
   private at = -1;
+  private interacting = false;
+  private transition: HTMLElement;
   private collapsed = false;
   private trafficTab = "arr";
   private headKey = "";
@@ -83,6 +85,49 @@ export class AirportUi {
     this.root.hidden = true;
     // (its keys, its clicks: the panel's own — not the flight's, not the camera's drag)
     for (const ev of ["keydown", "pointerdown", "wheel"] as const) this.root.addEventListener(ev, (e) => e.stopPropagation());
+    const fade = (this.transition = h("div", "airport-transition"));
+    fade.hidden = true;
+    fade.setAttribute("aria-live", "polite");
+    document.body.append(fade);
+    airportHooks.transition = (c) => {
+      fade.replaceChildren(
+        h("small", "", tr({ fr: "PROCHAIN VOL", en: "NEXT FLIGHT" })),
+        h("strong", "", callsignOf(c)),
+        h("span", "", [airlineOf(c.cs), c.type, c.reg].filter(Boolean).join(" · ")),
+      );
+      fade.hidden = false;
+      fade.classList.remove("playing");
+      void fade.offsetWidth;
+      fade.classList.add("playing");
+    };
+    fade.addEventListener("animationend", () => {
+      fade.hidden = true;
+    });
+    this.root.addEventListener(
+      "pointerdown",
+      () => {
+        this.interacting = true;
+      },
+      true,
+    );
+    const release = () => {
+      setTimeout(() => {
+        this.interacting = false;
+      }, 80);
+    };
+    document.addEventListener("pointerup", release, true);
+    document.addEventListener("pointercancel", release, true);
+    this.root.addEventListener(
+      "keydown",
+      () => {
+        this.interacting = true;
+      },
+      true,
+    );
+    document.addEventListener("keyup", release, true);
+    window.addEventListener("blur", () => {
+      this.interacting = false;
+    });
     document.body.append(this.root);
   }
 
@@ -93,10 +138,11 @@ export class AirportUi {
     this.root.hidden = !S;
     this.bars.hidden = !S || !this.barsOn;
     if (!S) {
+      this.transition.hidden = true;
       this.key = "";
       return;
     }
-    if (nowMs - this.at < 250) return;
+    if (this.interacting || nowMs - this.at < 250) return;
     this.at = nowMs;
     const clock = this.root.querySelector(".au-clock b");
     if (clock)
@@ -108,7 +154,7 @@ export class AirportUi {
         hourCycle: "h23",
       }).format(new Date());
     if (this.root.contains(document.activeElement) && document.activeElement?.tagName === "SELECT") return;
-    const filmed = S.pinned ?? S.current ?? S.filler;
+    const filmed = S.presented?.c.id ?? S.pinned ?? S.current ?? S.filler;
     const cur = filmed ? airportCraft(filmed) : null;
     const U = unitsFor(this.d.settings);
     const key = [
@@ -265,7 +311,7 @@ export class AirportUi {
       body.push(box);
     }
     if (!this.collapsed) {
-      const filmed = S.pinned ?? S.current ?? S.filler;
+      const filmed = S.presented?.c.id ?? S.pinned ?? S.current ?? S.filler;
       const cur = filmed ? airportCraft(filmed) : null;
       if (cur) body.push(this.card(cur, S.queue.find((q) => q.c.id === cur.id) ?? null, S.pinned === cur.id, U));
       // the radio: its last lines (the tower amber, the crews white)
@@ -413,6 +459,12 @@ export class AirportUi {
     r.classList.toggle("on", c.id === cur);
     r.classList.toggle("pin", c.id === pinned);
     r.append(h("b", "", nameOf(c)), h("span", "au-sub", sub), h("span", "au-eta", right));
+    if (c.provenance === "reconstructed") {
+      const mark = h("span", "au-reconstruction", "●");
+      mark.title = tr({ fr: "Trajectoire interpolée ou estimée", en: "Interpolated or estimated trajectory" });
+      mark.setAttribute("aria-label", mark.title);
+      r.querySelector("b")?.append(mark);
+    }
     r.title = c.id === pinned ? t("Followed — click to let the director choose again") : t("Follow it");
     r.onclick = () => {
       airportFollow(c.id === pinned ? null : c.id);
@@ -463,6 +515,21 @@ export class AirportUi {
     const geo = cartToGeodetic(WGS84_A, WGS84_F, c.p as [number, number, number]);
     const vertical = [Math.cos(geo.lat) * Math.cos(geo.lon), Math.cos(geo.lat) * Math.sin(geo.lon), Math.sin(geo.lat)];
     const vs = c.gnd ? 0 : c.v.reduce((sum, value, i) => sum + value * vertical[i]!, 0);
+    const east = [-Math.sin(geo.lon), Math.cos(geo.lon), 0];
+    const north = [-Math.sin(geo.lat) * Math.cos(geo.lon), -Math.sin(geo.lat) * Math.sin(geo.lon), Math.cos(geo.lat)];
+    const bearing = (v: readonly number[]) =>
+      `${(
+        ((Math.atan2(
+          v.reduce((s, x, i) => s + x * east[i]!, 0),
+          v.reduce((s, x, i) => s + x * north[i]!, 0),
+        ) *
+          180) /
+          Math.PI +
+          360) %
+        360
+      )
+        .toFixed(0)
+        .padStart(3, "0")}°`;
     const rows: [string, string][] = [
       // (in a queue: its movement's phase — the traffic's own reads « cruise » low on a final, 26 Nov 2026)
       [
@@ -479,10 +546,25 @@ export class AirportUi {
               : t("final approach")
           : (PHASE_LABEL[c.phase] ?? c.phase),
       ],
+      [tr({ fr: "Adresse ICAO", en: "ICAO address" }), c.id.toUpperCase()],
+      [
+        tr({ fr: "Position WGS84", en: "WGS84 position" }),
+        `${((geo.lat * 180) / Math.PI).toFixed(5)}°, ${((geo.lon * 180) / Math.PI).toFixed(5)}°`,
+      ],
+      [tr({ fr: "Cap / route", en: "Heading / track" }), `${bearing(c.fwd)} / ${Math.hypot(...c.v) > 1 ? bearing(c.v) : "—"}`],
+      [tr({ fr: "Vitesse air estimée", en: "Estimated airspeed" }), c.airspeed === undefined ? "—" : U.fSpd(c.airspeed)],
+      [
+        tr({ fr: "Assiette / inclinaison", en: "Pitch / bank" }),
+        `${((c.pitch * 180) / Math.PI).toFixed(1)}° / ${((c.bank * 180) / Math.PI).toFixed(1)}°`,
+      ],
+      [tr({ fr: "Crabe", en: "Crab" }), c.crab === undefined ? "—" : `${((c.crab * 180) / Math.PI).toFixed(1)}°`],
       [tr({ fr: "Hauteur sol", en: "Height AGL" }), U.fAlt(c.over)],
       [tr({ fr: "Envergure / longueur", en: "Span / length" }), `${c.span.toFixed(1)} / ${c.len.toFixed(1)} m`],
+      [tr({ fr: "Taux de virage", en: "Turn rate" }), c.yawRate === undefined ? "—" : `${((c.yawRate * 180) / Math.PI).toFixed(2)}°/s`],
+      [tr({ fr: "Commande du train", en: "Gear target" }), c.gearWanted ? tr({ fr: "Sorti", en: "Down" }) : tr({ fr: "Rentré", en: "Up" })],
+      [tr({ fr: "Depuis le toucher", en: "Since touchdown" }), Number.isFinite(c.sinceTd) ? `${Math.round(c.sinceTd)} s` : "—"],
       [tr({ fr: "Train", en: "Landing gear" }), `${Math.round(c.gear * 100)} %`],
-      [tr({ fr: "Données", en: "Data source" }), c.provenance ?? "observed"],
+      [tr({ fr: "Données", en: "Data source" }), c.provenance === "reconstructed" ? "●" : (c.provenance ?? "observed")],
       [tr({ fr: "Âge du relevé", en: "Report age" }), `${Math.round(c.age)} s`],
     ];
     if (q) {
@@ -503,9 +585,15 @@ export class AirportUi {
       tile.append(h("small", "", label), h("strong", "", value));
       telemetry.append(tile);
     }
+    if (c.provenance === "reconstructed") {
+      const badge = h("span", "au-reconstruction", "●");
+      badge.title = tr({ fr: "Trajectoire interpolée ou estimée", en: "Interpolated or estimated trajectory" });
+      badge.setAttribute("aria-label", badge.title);
+      box.querySelector(".au-card-title")?.append(badge);
+    }
     box.append(telemetry);
     const dl = h("dl", "au-facts");
-    for (const [k, v] of rows) dl.append(h("dt", "", k), h("dd", "", v));
+    for (const [k, v] of rows) dl.append(h("dt", "", k), h("dd", v === "●" ? "au-reconstruction" : "", v));
     const details = h("details", "au-flight-details");
     details.open = this.root.querySelector<HTMLDetailsElement>(".au-flight-details")?.open ?? false;
     details.append(h("summary", "", tr({ fr: "Détails du vol", en: "Flight details" })), dl);

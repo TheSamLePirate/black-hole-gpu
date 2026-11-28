@@ -55,13 +55,31 @@ describe.skipIf(!E2E)("airport experience: weather and traffic integration", () 
     const caption = await app.js<string>(`document.querySelector("[data-testid=airport-caption]")?.textContent ?? ""`);
     expect(caption).not.toContain("Landed");
     await app.shot(`${OUT}/airport.png`);
+    const weatherHit = await app.hit("[data-testid=airport-weather-game]");
+    await app.cdp.send("Input.dispatchMouseEvent", { type: "mouseMoved", ...weatherHit });
+    await app.cdp.send("Input.dispatchMouseEvent", { type: "mousePressed", ...weatherHit, button: "left", clickCount: 1 });
+    await Bun.sleep(400); // intentionally hold across a complete 250 ms telemetry refresh
+    await app.cdp.send("Input.dispatchMouseEvent", { type: "mouseReleased", ...weatherHit, button: "left", clickCount: 1 });
+    await app.waitFor(`__bh.settings.weather==='fair'`, 5000);
+    await app.click("[data-testid=airport-weather-real]");
     await app.step("2. inspect each Boeing exterior from the airport drone");
     await app.js(`(__bh.game.setDate("2026-06-21T12:00:00Z"), __bh.airport.mode("drone"), true)`);
+    await app.waitFor(`!!document.querySelector('[data-testid=airport-ui-row-ee0000]')`, 10000);
+    await app.js(`(document.querySelector('[data-testid=airport-ui-row-ee0000]').click(),true)`);
+    await app.waitFor(
+      `document.querySelector('.au-card-title')?.textContent.includes('A320') && document.querySelector('.airport-transition').hidden`,
+      10000,
+    );
     for (const [index, model] of ["b738", "b744", "b772", "b77w"].entries()) {
       const id = "ee000" + (index + 2);
       const row = `document.querySelector('[data-testid="airport-ui-row-${id}"]')`;
       await app.waitFor(`!!(${row})`, 10000);
       await app.js(`(${row}.click(),true)`);
+      if (index === 0) {
+        await app.waitFor(`!document.querySelector('.airport-transition').hidden`, 5000);
+        expect(await app.js<string>(`document.querySelector('.airport-transition').textContent`)).toContain("B738");
+        await app.shot(`${OUT}/flight-transition.png`);
+      }
       await app.waitFor(
         `__bh.airport.state().current === "${id}" && __bh.airport.state().shot === "drone" && __bh.renderer.combatOthers.some(o=>o.id === "${model}" && Math.hypot(...o.rel)<400)`,
         15000,

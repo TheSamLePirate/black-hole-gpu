@@ -41,7 +41,7 @@ interface Repertoire {
  * beside it, the drone. One chosen (in no movement): behind it, beside it, the drone.
  */
 export function repertoire(L: Lander): Repertoire {
-  if (L.free) return { shots: ["chase", "wing", "drone"], hold: [8, 12] };
+  if (L.free) return { shots: ["chase", "wing", "drone"], hold: [10, 14] };
   if (L.dep) {
     if (L.eta > DIRECTOR.roll + 10) return { shots: ["lineup", "tower", "cockpit"], hold: [6, 10] };
     if (L.eta > -DIRECTOR.airborne) return { shots: ["rotation"], hold: [30, 30] };
@@ -49,7 +49,7 @@ export function repertoire(L: Lander): Repertoire {
     return { shots: ["chase", "wing", "drone"], hold: [7, 10] };
   }
   if (L.gnd) return L.eta > -DIRECTOR.after ? { shots: ["touchdown"], hold: [30, 30] } : { shots: ["chase", "tower"], hold: [7, 9] };
-  if (L.eta > DIRECTOR.far + 20) return { shots: ["tower", "wing", "chase", "cockpit", "drone"], hold: [7, 12] };
+  if (L.eta > DIRECTOR.far + 20) return { shots: ["tower", "chase", "drone"], hold: [9, 13] };
   if (L.eta > DIRECTOR.final) return { shots: ["chase", "wing", "tower"], hold: [6, 9] };
   if (L.eta > DIRECTOR.short) return { shots: ["threshold"], hold: [30, 30] };
   return { shots: ["touchdown"], hold: [30, 30] };
@@ -314,9 +314,9 @@ export class AirportDirector {
           const out = add3(
             add3(scale3(side, s * D.wing[0] * L.len), W.up, D.wing[1] * L.len),
             dir,
-            D.wing[2] * L.len * Math.sin(this.since * 0.15),
+            D.wing[2] * L.len * Math.sin(this.since * 0.085),
           );
-          const off = this.chase.step(out, 0.6, dt);
+          const off = this.chase.step(out, 1.1, dt);
           eye = add3(L.p, off);
           target = add3(L.p, L.fwd, 0.1 * L.len);
           fov = 34;
@@ -327,7 +327,7 @@ export class AirportDirector {
         case "chase": {
           // (behind it and a little above, on the ground cameras' side; its turns followed with a lag)
           const back = add3(add3(scale3(dir, -2.6 * L.len), W.up, 0.32 * L.len), L.right, s * 0.55 * L.len);
-          const off = this.chase.step(back, 0.5, dt);
+          const off = this.chase.step(back, 0.9, dt);
           eye = add3(L.p, off);
           target = add3(L.p, L.fwd, 0.35 * L.len);
           fov = 42;
@@ -346,11 +346,14 @@ export class AirportDirector {
         }
         default: {
           // (the drone: a slow crane about it, rising, a third of a turn a minute)
-          const a = 0.6 + this.since * 0.035;
+          const push = Math.sin((Math.min(this.since / 8, 1) * Math.PI) / 2) ** 2;
+          const a = 0.6 + 0.32 * Math.sin(this.since * 0.045);
           const h = cross3(W.up, dir);
-          const ring = add3(scale3(dir, Math.cos(a) * 2.7 * L.len), h, Math.sin(a) * 2.7 * L.len);
-          eye = add3(add3(L.p, ring), W.up, (0.45 + 0.01 * this.since) * L.len);
-          target = L.p;
+          const radius = (2.9 - 0.35 * push) * L.len;
+          const ring = add3(scale3(dir, Math.cos(a) * radius), h, Math.sin(a) * radius);
+          const off = this.chase.step(add3(ring, W.up, (0.45 + 0.18 * push) * L.len), 1.2, dt);
+          eye = add3(L.p, off);
+          target = add3(L.p, dir, 0.12 * L.len);
           fov = 40;
           vel = L.v;
           tau = 0.08;

@@ -12296,3 +12296,18 @@ Stratégie §7.7 (la forêt de moyenne distance), [PLAN-VEGETATION-V2](docs/PLAN
 - Run `46155613837` : échec transitoire du téléchargement de l’artefact par le job serveur ; relance réussie signalée par Sam. La modification envisagée du workflow et son test ont été retirés : aucune modification CI livrée.
 - Vérification avant commit : `CI=true bun test --parallel --timeout 30000` passe (2 981 tests, 2 153 ignorés, zéro échec, 20 846 501 assertions). `bun run check` (86 shaders), installation figée, taille du dépôt, contrôle forêt (2 000 rayons) et build Pages passent ; le site compilé atteint le renderer et une première image sans erreur (smoke).
 - Essais intermédiaires : une première suite a rencontré un fichier de test du workflow retiré pendant son exécution ; un passage sans `CI=true` a rencontré le scénario aléatoire du porte-avions déjà explicitement exclu de GitHub Actions. Aucun test n’a été affaibli ni workflow modifié ; le passage final utilise le mode CI, sur une liste de fichiers stable.
+
+### 2026-11-28 — Airport : fiche enrichie et réalisateur orienté événements
+
+- Contribution §19 : lisibilité du vol observé, continuité cinématographique et mise en avant des mouvements de piste. Fiche enrichie des champs réellement disponibles, provenance reconstruite en point vert accessible ; priorité aux événements imminents dans Auto/Cinéma avec respect du suivi manuel ; plans d’attente Auto et tenues Cinéma plus longues.
+- Vérifications : TypeScript passe ; 11 tests du réalisateur (66 assertions) et 2 e2e Airport (63 assertions, zéro erreur GPU) passent ; Biome sans erreur (un avertissement existant). Pas de gain de performance revendiqué ; les destinations et horaires absents de la source ne sont pas inventés.
+
+### 2026-11-28 15:50 UTC — Airport : gestes fiables, grue bornée et transition de vol
+
+- Contribution §19 : interactions fiables et continuité de mise en scène. Rafraîchissement différé pendant les gestes, caméra Aile/Chasse amortie, drone avec avancée et élévation bornées ; changement de sujet masqué par fondu noir et splash des seules informations disponibles (1,1 s, coupe à 220 ms).
+- Vérifications : TypeScript et 11 tests réalisateur passent ; e2e enrichi de l’appui maintenu 400 ms et du changement de sujet/splash : 2 tests passent, 64 assertions, zéro erreur GPU ; capture `docs/progress/airport-motion/transition.png`. Premier témoin de splash corrigé : il choisissait parfois le sujet déjà actif, qui ne doit justement pas déclencher de transition. Pas de gain de performance revendiqué.
+
+### 2026-11-28 16:00 UTC — Préparation du push et audit des sources de trafic
+
+- Analyse du relais ADS-B/AIS et documentation des enrichissements possibles dans PLAN-AEROPORT-AAA ; état public `/traffic/health` lu, documentations officielles actuelles consultées. Aucun abonnement ni nouveau fournisseur activé.
+- Contrôle complet : le contrat d’horloge a détecté `performance.now()` dans la transition du contrôleur ; remplacé par `frameNow()`, tests d’horloge/réalisateur verts sans dérogation. Nouvelle suite complète en mode CI en cours avant commit.

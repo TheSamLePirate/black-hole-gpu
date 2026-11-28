@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { AIRPORT_SHOTS, type AirportShot, AirportDirector, autoShot, framing, type Lander, type RunwayWay } from "../src/cine/airport";
 import { add3, dot3, len3, scale3, sub3, unit3, type V3 } from "../src/cine/rig";
-import { arrivalsOf, departuresOf, etaOf, movementsOf } from "../src/controller/airportview";
+import { criticalMovement, type Arrival, arrivalsOf, departuresOf, etaOf, movementsOf } from "../src/controller/airportview";
 import type { TrafficCraft } from "../src/controller/traffic";
 
 // The airport view (docs/PLAN-AEROPORT-AAA.md V1–V2): its director films an airliner landing — every frame the
@@ -258,4 +258,13 @@ test("automatic cameras change view when obstructed, manual cameras stay selecte
   director.mode = "tower";
   director.avoidObstruction();
   expect(director.step(1, W, place, lander(-100)).shot).toBe("tower");
+});
+
+test("the director prioritises imminent runway events, not a departure waiting for clearance", () => {
+  const movement = (eta: number, dep: boolean, speed: number) => ({ eta, dep, c: { v: [speed, 0, 0] } }) as Arrival;
+  expect(criticalMovement(movement(10, false, 70))).toBe(true);
+  expect(criticalMovement(movement(-3, true, 80))).toBe(true);
+  expect(criticalMovement(movement(10, true, 0))).toBe(false);
+  expect(criticalMovement(movement(60, false, 70))).toBe(false);
+  expect(criticalMovement(movement(-20, false, 30))).toBe(false);
 });
