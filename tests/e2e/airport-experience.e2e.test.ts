@@ -1,4 +1,5 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import observations from "../../docs/progress/airport-motion/observations.json";
 import { mkdirSync } from "node:fs";
 import { App, E2E, stopServer } from "./lib/app";
 // Deterministic airport experience: real-weather authority, labelled provenance, the Airbus, CRJ and Boeing representations,
@@ -103,6 +104,7 @@ describe.skipIf(!E2E)("airport experience: weather and traffic integration", () 
     await app.waitFor(`document.querySelector('.airport-bars').hidden`, 5000);
     await app.click("[data-testid=airport-ui-bars]");
     await app.waitFor(`!document.querySelector('.airport-bars').hidden`, 5000);
+    await app.waitFor(`!!document.querySelector('.au-card')`, 10000);
     expect(
       await app.js<boolean>(
         `(()=>{const card=document.querySelector('.au-card').getBoundingClientRect(),dock=document.querySelector('.au-director').getBoundingClientRect();return card.bottom<=dock.top})()`,
@@ -126,4 +128,42 @@ describe.skipIf(!E2E)("airport experience: weather and traffic integration", () 
     await app.waitFor(`__bh.settings.weather==="fair"`, 5000);
     expect(app.cdp.errors).toEqual([]);
   }, 200_000);
+  test("five-minute Heathrow observation replay: delayed departure rolls before lifting off", async () => {
+    const history = observations.tracks["4b1806"];
+    const i = history.findIndex((p, i) => i > 0 && !p.gnd && history[i - 1]!.gnd);
+    const a = history[i - 1]!,
+      b = history[i]!;
+    await app.js(`__bh.airport.start("EGLL", "wing")`);
+    await app.js(
+      `(()=>{const c=__bh.camera,h=${JSON.stringify(history)}.map(p=>({...p,type:'A320',cs:'REPLAY SWR46K'}));globalThis.__motionT=${a.t + 5};c.trafficClock=()=>globalThis.__motionT+120;c.s.trafficDelay=120;c.s.weather='fair';c.traffic={planes:new Map([['4b1806',{p:h.at(-1),prev:h.at(-2),hist:h,heard:${b.t}}]]),ships:new Map()};__bh.airport.activity(false);__bh.refresh();return true})()`,
+    );
+    await app.waitFor(`!!document.querySelector('[data-testid=airport-ui-row-4b1806]')`, 10000);
+    await app.js(`(document.querySelector('[data-testid=airport-ui-row-4b1806]').click(),true)`);
+    await app.waitFor(`__bh.camera.trafficNow().find(c=>c.id==='4b1806')?.phase === 'takeoff'`, 30000);
+    const early = await app.js<{ gnd: boolean; over: number }>(
+      `(()=>{const c=__bh.camera.trafficNow().find(c=>c.id==='4b1806');return {gnd:c.gnd,over:c.over}})()`,
+    );
+    expect(early.gnd).toBe(true);
+    expect(early.over).toBe(0);
+    await app.settled(60000);
+    await app.shot(`${OUT}/observed-departure-roll.png`);
+    await app.js(
+      `(()=>{const c=__bh.camera;for(let t=${a.t + 5};t<${b.t - 0.1};t+=.1){globalThis.__motionT=t;c.trafficNow()}return true})()`,
+    );
+    await app.waitFor(`__bh.camera.trafficNow().find(c=>c.id==='4b1806')?.gnd === false`, 10000);
+    const air = await app.js<{ over: number; gear: number; pitch: number }>(
+      `(()=>{const c=__bh.camera.trafficNow().find(c=>c.id==='4b1806');return {over:c.over,gear:c.gear,pitch:c.pitch}})()`,
+    );
+    expect(air.over).toBeGreaterThan(0);
+    expect(air.gear).toBeGreaterThan(0.9);
+    expect(air.pitch).toBeGreaterThan(0);
+    await app.waitFor(
+      `(()=>{const c=__bh.camera.trafficNow().find(c=>c.id==='4b1806');const r=Math.hypot(...c.p);return c.v.reduce((s,v,i)=>s+v*c.p[i]/r,0)>1})()`,
+      10000,
+    );
+    await app.waitFor(`parseFloat(document.querySelector('.au-card .au-telemetry > div:last-child strong')?.textContent ?? '') > 1`, 10000);
+    await app.shot(`${OUT}/observed-departure-air.png`);
+    expect(app.cdp.errors).toEqual([]);
+    await app.js(`(__bh.airport.stop(),true)`);
+  }, 180000);
 });

@@ -183,3 +183,7 @@ La colonne de cartes a été retirée : overlay aux quatre bords de l’image, t
 #### Commandes complètes toujours accessibles — 28 novembre
 
 La barre inférieure reste visible, même lorsque les listes sont repliées : Cinéma, Auto et les dix angles fixes, descriptions au survol et état sélectionné, mode réalisateur / angle effectivement filmé, mouvement suivant, libération du suivi, bandes cinéma et trafic complémentaire. Bouton « Réglages caméra » vers le panneau caméra commun (objectifs et autres réglages existants), au-dessus de l’overlay. Le réalisateur conserve l’autorité sur le cadrage de ses plans. Les zones télémétrie/mouvements sont relevées pour laisser cette barre accessible.
+
+### 28 novembre — reconstruction après cinq minutes de trafic observé
+
+[Compte rendu et relevés sélectionnés](progress/airport-motion/README.md) : 21 réponses autour de Heathrow, 300 s. Reconstruction explicite du roulage/décollage entre observations connues, arrêts stabilisés, attitude liée à la courbure corrigée, propriétés retardées alignées sur la même limite de lacune de 120 s que la trajectoire. Les taxiways, approches et atterrissages réutilisent les lecteurs existants ; aucun départ sans future observation en l’air n’est créé. Limites et preuves dans le compte rendu.

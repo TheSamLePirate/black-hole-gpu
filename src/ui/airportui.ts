@@ -1,3 +1,4 @@
+import { cartToGeodetic, WGS84_A, WGS84_F } from "../system/ellipsoid";
 import "./airportui.css";
 // The airport mode's interface (docs/PLAN-AEROPORT-AAA.md V8 — Sam, 26 Nov 2026: « dans ce mode, pas de HUD ni d'UI, à part le menu
 // du haut qui se masque comme d'habitude ; une UI avec la liste des avions, les files — sélectionnables pour voir leurs infos et les
@@ -65,6 +66,7 @@ export class AirportUi {
   private at = -1;
   private collapsed = false;
   private trafficTab = "arr";
+  private headKey = "";
   private dockKey = "";
   private dock: HTMLElement | null = null;
   /** the cinema's bars (2.39:1 — the picture letterboxed), on by default */
@@ -313,7 +315,13 @@ export class AirportUi {
       content = h("div", "au-content");
       this.root.append(content);
     }
-    content.replaceChildren(head, ...body);
+    content.replaceChildren(...body);
+    const headKey = `${S.code}|${S.name}|${this.collapsed}`;
+    if (headKey !== this.headKey) {
+      this.root.querySelector(".au-head")?.remove();
+      this.root.prepend(head);
+      this.headKey = headKey;
+    }
     if (dock.parentElement !== this.root) {
       this.root.querySelector(".au-director")?.remove();
       this.root.append(dock);
@@ -452,7 +460,9 @@ export class AirportUi {
       h("div", "au-card-title", `${pinned ? "• " : ""}${nameOf(c)}`),
       h("div", "au-card-sub", [al, c.reg, c.type].filter(Boolean).join(" · ")),
     );
-    const vs = c.v[0]! * c.up[0]! + c.v[1]! * c.up[1]! + c.v[2]! * c.up[2]!;
+    const geo = cartToGeodetic(WGS84_A, WGS84_F, c.p as [number, number, number]);
+    const vertical = [Math.cos(geo.lat) * Math.cos(geo.lon), Math.cos(geo.lat) * Math.sin(geo.lon), Math.sin(geo.lat)];
+    const vs = c.gnd ? 0 : c.v.reduce((sum, value, i) => sum + value * vertical[i]!, 0);
     const rows: [string, string][] = [
       // (in a queue: its movement's phase — the traffic's own reads « cruise » low on a final, 26 Nov 2026)
       [

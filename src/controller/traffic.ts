@@ -1,3 +1,4 @@
+import { observedDeparture, observedStop } from "../traffic/observed-motion";
 import type { TrafficPose } from "../traffic/rig";
 import { trafficLightVisibility } from "../traffic/lights";
 import { trafficContact } from "../traffic/contact";
@@ -476,7 +477,10 @@ function trafficNow(this: CameraController): TrafficCraft[] {
       omega = c.down ? 0 : rate;
       key = `${back ? "b" : "c"}${q.t}`;
     }
-    const ground = T.groundPose ?? (A?.net ? observedGround(A.net, T.hist, td) : null);
+    const ground =
+      T.groundPose ??
+      (A ? (observedStop(T.hist, td) ?? observedDeparture(T.hist, td, EARTH_RUNWAYS, restAt)) : null) ??
+      (A?.net ? observedGround(A.net, T.hist, td) : null);
     if (ground) {
       la = ground.lat;
       lo = ground.lon;
@@ -488,8 +492,10 @@ function trafficNow(this: CameraController): TrafficCraft[] {
       an = -ground.omega * ve;
       au = 0;
       omega = ground.omega;
+      key = `ground:${key}:${ground.airborne ? "air" : "surface"}`;
       gnd = !ground.airborne;
       sure = true;
+      ramp = 1;
       altR = restAt(la, lo) + (ground.over ?? 0);
     }
     // (against the runways — traffic/runway-phase.ts, the one owner of its runway, its phase, its gear —: on the axis of
@@ -608,7 +614,7 @@ function trafficNow(this: CameraController): TrafficCraft[] {
     Ez.drawn = now;
     Ez.bank = bank;
     // (standing: its reported heading)
-    const psi = (timed.hdg ?? timed.trk) * D;
+    const psi = (ground?.heading ?? timed.hdg ?? timed.trk) * D;
     const reversing = gnd && gs < 3 && timed.hdg !== null && Math.abs(wrap((timed.hdg - timed.trk) * D)) > Math.PI / 2;
     const hdir =
       gs > 0.1 && !reversing

@@ -678,4 +678,4 @@ already going (they end on their own; their logs stay in `remote-results/dash/`)
 
 ### Interaction d’un overlay à télémétrie (Airport, 28 novembre 2026)
 
-Si un clic sur une caméra semble ignoré pendant que les données se rafraîchissent, vérifier l’identité du nœud DOM entre le pointage et le relâchement : reconstruire tout le panneau à 4 Hz peut détruire sa cible. Airport garde désormais le dock caméra monté tant que ses commandes n’ont pas changé ; seules les informations de vol sont reconstruites. `airport-experience` clique les douze modes et vérifie leur état actif.
+Si un clic sur une caméra semble ignoré pendant que les données se rafraîchissent, vérifier l’identité du nœud DOM entre le pointage et le relâchement : reconstruire tout le panneau à 4 Hz peut détruire sa cible. Airport garde désormais l’en-tête de repli et le dock caméra montés tant que ses commandes n’ont pas changé ; seules les informations de vol sont reconstruites. `airport-experience` clique les douze modes et vérifie leur état actif.

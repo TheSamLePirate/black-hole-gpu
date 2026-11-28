@@ -281,13 +281,19 @@ export function flightAt(F: FlightPath, t: number) {
     (v.d * Math.cos(p.y) - V * w * Math.sin(p.y)) * kn + r[1]!.dd,
     c.d + r[2]!.dd,
   ];
+  const velocity = vf.map((q, j) => q + r[j]!.d);
+  // The correction is part of the flown path, so its curvature must also bank the aircraft.
+  const east = velocity[0]! / ke,
+    north = velocity[1]! / kn;
+  const speed2 = east * east + north * north;
+  const omega = speed2 > 1 ? ((a[0]! / ke) * north - (a[1]! / kn) * east) / speed2 : 0;
   return {
     x,
-    v: vf.map((q, j) => q + r[j]!.d),
+    v: velocity,
     a,
     gs: V,
     trk: p.y,
-    omega: w,
+    omega,
     vs: c.y + r[2]!.d,
   };
 }

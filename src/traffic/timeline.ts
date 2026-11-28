@@ -8,13 +8,13 @@ export function reportAt(hist: readonly Plane[], fallback: Plane, t: number): Pl
   const a = hist[i]!;
   const b = hist[i + 1];
   if (t < a.t) return { ...a, hdg: null };
-  if (!b || b.t - a.t > 30) return { ...a, hdg: t - a.t <= 15 ? a.hdg : null };
+  if (!b || b.t - a.t > 120) return { ...a, hdg: t - a.t <= 15 ? a.hdg : null };
   const k = Math.min(1, (t - a.t) / Math.max(0.001, b.t - a.t));
   return {
     ...a,
     t,
     lat: a.lat + (b.lat - a.lat) * k,
-    lon: a.lon + (b.lon - a.lon) * k,
+    lon: ((turn(a.lon, b.lon, k) + 540) % 360) - 180,
     alt: a.alt + (b.alt - a.alt) * k,
     trk: turn(a.trk, b.trk, k),
     hdg: a.hdg !== null && b.hdg !== null ? turn(a.hdg, b.hdg, k) : null,
